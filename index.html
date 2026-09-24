@@ -6109,6 +6109,72 @@ function viewBooks24Q(b){
       '</td><td class="n">' + money(e.taxable) + '</td><td class="n">' + money(e.tds) + "</td></tr>").join("") + "</tbody></table></div></section>";
   return h;
 }
+function tdsFiltered(rows){
+  const f = S.tdsF || {}, q = String(f.q || "").toLowerCase();
+  return rows.filter(r => {
+    if (q && ![r.party, r.pan, r.section, r.voucher].join(" ").toLowerCase().includes(q)) return false;
+    if (f.section && r.section !== f.section) return false;
+    if (f.challan === "no" && r.challan) return false;
+    if (f.challan === "yes" && !r.challan) return false;
+    if (f.pan === "no" && Certs.validPan(r.pan)) return false;
+    if (f.pan === "yes" && !Certs.validPan(r.pan)) return false;
+    return true;
+  });
+}
+// one row per deductee; the deductions appear when you open it
+function viewDeducteeTable(all, ch, money){
+  const rows = tdsFiltered(all), by = {};
+  rows.forEach(r => {
+    const k = (r.pan || normName(r.party)) + "|" + r.section;
+    const p = by[k] = by[k] || {key: k, party: r.party, pan: r.pan, section: r.section, n: 0, paid: 0, tds: 0, unallocated: 0, rows: []};
+    p.n++; p.paid = r2(p.paid + r.paid); p.tds = r2(p.tds + r.tds); if (!r.challan) p.unallocated = r2(p.unallocated + r.tds);
+    p.rows.push(r);
+  });
+  const parties = Object.values(by).sort((a, b) => b.tds - a.tds);
+  const open = S.tdsOpen || "", f = S.tdsF || {};
+  const secs = Array.from(new Set(all.map(r => r.section))).sort();
+  let h = '<div class="revfilter"><input type="search" id="tdsq" data-fk="tdsq" data-keeptyped value="' + esc(f.q || "") + '" placeholder="Find a deductee, PAN, section or voucher">' +
+    '<select data-tdsfsec><option value="">Every section</option>' + secs.map(x => '<option value="' + x + '"' + (f.section === x ? " selected" : "") + ">" + esc(x) + "</option>").join("") + "</select>" +
+    '<select data-tdsfch><option value="">Challan: any</option><option value="no"' + (f.challan === "no" ? " selected" : "") + '>Not against a challan</option><option value="yes"' + (f.challan === "yes" ? " selected" : "") + ">Against a challan</option></select>" +
+    '<select data-tdsfpan><option value="">PAN: any</option><option value="no"' + (f.pan === "no" ? " selected" : "") + '>No valid PAN</option><option value="yes"' + (f.pan === "yes" ? " selected" : "") + ">Has a PAN</option></select>" +
+    '<span class="note">' + parties.length + " deductees \u00b7 " + rows.length + " of " + all.length + " deductions</span>" +
+    (Object.keys(f).some(k => f[k]) ? '<button class="linkbtn" data-act="tdsFClear">Clear</button>' : "") +
+    '<button class="btn small" data-act="tdsPrint">Print or save as PDF</button></div>';
+  h += '<div class="bk-tablewrap"><table class="bk-table" id="tdsTable"><thead><tr><th>Deductee</th><th>PAN</th><th>Section</th><th class="n">Deductions</th><th class="n">Paid or credited</th><th class="n">TDS</th><th class="n">Not against a challan</th></tr></thead><tbody>' +
+    parties.map(p => {
+      const isOpen = open === p.key;
+      let row = "<tr><td>" + '<button class="linkbtn" data-tdsopen="' + esc(p.key) + '">' + (isOpen ? "\u25be " : "\u25b8 ") + esc(p.party) + "</button></td>" +
+        "<td>" + (Certs.validPan(p.pan) ? esc(p.pan) : '<span class="tag warn">no PAN</span>') + "</td><td>" + esc(p.section) + "</td>" +
+        '<td class="n"><button class="linkbtn" data-tdsopen="' + esc(p.key) + '">' + p.n + '</button></td><td class="n">' + money(p.paid) + '</td><td class="n"><b>' + money(p.tds) + "</b></td>" +
+        '<td class="n' + (p.unallocated ? " bad" : "") + '">' + (p.unallocated ? money(p.unallocated) : "\u2014") + "</td></tr>";
+      if (isOpen){
+        row += '<tr><td colspan="7" style="background:var(--paper);padding:0">' +
+          '<table class="bk-table" style="margin:0"><thead><tr><th class="dt">Date</th><th>Voucher</th><th class="n">Paid or credited</th><th class="n">Rate</th><th class="n">TDS</th><th>Challan</th></tr></thead><tbody>' +
+          p.rows.map(r => "<tr><td>" + fmtDate(tallyDate(r.date)) + "</td><td>" + esc(r.voucher || "") + '</td><td class="n">' + money(r.paid) +
+            '</td><td class="n">' + (r.rate != null ? r.rate + "%" : "") + '</td><td class="n">' + money(r.tds) + "</td>" +
+            '<td><select data-alloc="' + esc(r.id) + '"><option value="">\u2014 not yet \u2014</option>' + ch.map(x => '<option value="' + x.id + '"' + (r.challan === x.id ? " selected" : "") + ">" + esc(x.bsr + "/" + x.serial) + "</option>").join("") + "</select></td></tr>").join("") +
+          "</tbody></table></td></tr>";
+      }
+      return row;
+    }).join("") +
+    '<tr><td><b>Total</b></td><td></td><td></td><td class="n">' + rows.length + '</td><td class="n">' + money(rows.reduce((a, r) => a + r.paid, 0)) +
+    '</td><td class="n"><b>' + money(rows.reduce((a, r) => a + r.tds, 0)) + '</b></td><td class="n">' + money(rows.filter(r => !r.challan).reduce((a, r) => a + r.tds, 0)) + "</td></tr>" +
+    "</tbody></table>" + (parties.length ? "" : '<div class="bk-none">Nothing matches these filters.</div>') + "</div>";
+  return h;
+}
+// printing, which is also how a PDF is made
+function printView(title, html){
+  const w = window.open("", "_blank");
+  if (!w){ toast("Allow pop-ups for this site to print."); return; }
+  w.document.write("<html><head><title>" + esc(title) + "</title><style>" +
+    "body{font:13px/1.4 -apple-system,Segoe UI,Roboto,sans-serif;color:#15201B;padding:18px}" +
+    "h1{font-size:17px;margin:0 0 2px}p.note{color:#5A6B63;font-size:12px;margin:0 0 10px}" +
+    "table{border-collapse:collapse;width:100%;font-size:11.5px;margin-bottom:10px}th,td{border:1px solid #D7DEDA;padding:4px 6px;text-align:left}" +
+    "th{background:#EEF3F0}td.n,th.n{text-align:right}button,select{border:0;background:none;font:inherit;padding:0;color:inherit;appearance:none}" +
+    "@page{size:A4 landscape;margin:12mm}</style></head><body>" + html + "</body></html>");
+  w.document.close();
+  setTimeout(() => { w.focus(); w.print(); }, 400);
+}
 function viewBooks26Q(b){
   const fy = S.tdsFy || "", q = S.tdsQ || "";
   const rows = TDS.rows().filter(r => (!fy || r.fy === fy) && (!q || r.q === q));
@@ -6144,13 +6210,7 @@ function viewBooks26Q(b){
     '<td class="n"><input type="text" inputmode="decimal" id="chInt" data-fk="chInt" placeholder="interest" style="width:110px;text-align:right"></td><td colspan="2"></td>' +
     '<td class="ac"><button class="btn small" data-act="chAdd">Add</button></td></tr>' +
     "</tbody></table></div></section>";
-  h += '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th class="dt">Date</th><th>Deductee</th><th>PAN</th><th>Section</th><th class="n">Paid or credited</th><th class="n">Rate</th><th class="n">TDS</th><th>Challan</th></tr></thead><tbody>' +
-    rows.slice(0, 500).map(r => {
-      const c = ch.find(x => x.id === r.challan);
-      return "<tr><td>" + fmtDate(tallyDate(r.date)) + "</td><td>" + esc(r.party) + '</td><td>' + (r.pan ? esc(r.pan) : '<span class="tag warn">no PAN</span>') + "</td><td>" + esc(r.section) + '</td>' +
-        '<td class="n">' + money(r.paid) + '</td><td class="n">' + (r.rate != null ? r.rate + "%" : "") + '</td><td class="n">' + money(r.tds) + "</td>" +
-        '<td><select data-alloc="' + esc(r.id) + '"><option value="">— not yet —</option>' + ch.map(x => '<option value="' + x.id + '"' + (r.challan === x.id ? " selected" : "") + ">" + esc(x.bsr + "/" + x.serial) + "</option>").join("") + "</select></td></tr>";
-    }).join("") + "</tbody></table>" + (rows.length > 500 ? '<p class="note">Showing the first 500. The download has them all.</p>' : "") + "</div>";
+  h += viewDeducteeTable(rows, ch, money);
   {
     const int1A = TDS.interest(fy, q), fee = fy && q ? TDS.lateFee(fy, q, (b.filedOn || {})[fy + q]) : null;
     const total = r2(int1A.reduce((a, x) => a + x.amount, 0));
@@ -13822,6 +13882,7 @@ document.addEventListener("click", ev => {
   if (t.dataset.bookstab){ S.booksTab = t.dataset.bookstab; render(); return; }
   if (t.dataset.gstpart){ S.gstPart = t.dataset.gstpart; render(); return; }
   if (t.dataset.tdspart){ S.tdsPart = t.dataset.tdspart; render(); return; }
+  if (t.dataset.tdsopen){ S.tdsOpen = S.tdsOpen === t.dataset.tdsopen ? "" : t.dataset.tdsopen; render(); return; }
   if (t.dataset.qgo){ S.tdsQ = t.dataset.qgo; S.tdsPart = "q26"; render(); return; }
   if (t.dataset.certdel){ S.books.certs = (S.books.certs || []).filter(c => c.id !== t.dataset.certdel); saveBooks(); render(); return; }
   if (t.dataset["2btab"]){ S.twoBTab = t.dataset["2btab"]; render(); return; }
@@ -14083,6 +14144,14 @@ document.addEventListener("click", ev => {
     case "booksClear": askConfirm({title: "Remove the books read from Tally?", ok: "Remove", body: '<p class="note">Challans and what you corrected stay. The day book can be brought in again.</p>'}).then(ok => {
       if (!ok) return; S.books.vouchers = []; S.books.meta = null; S.books.reco = null; saveBooks(); toast("Removed."); render(); }); break;
     case "fvuClose": S.fvuResult = null; render(); break;
+    case "tdsFClear": S.tdsF = {}; render(); break;
+    case "tdsPrint": {
+      const co = CO(), t = document.getElementById("tdsTable");
+      printView(co.name + " TDS " + (S.tdsQ || "") + " " + (S.tdsFy || ""),
+        "<h1>" + esc(co.name) + '</h1><p class="note">TDS other than salary \u00b7 ' + esc(S.tdsQ || "all quarters") + " " + esc(S.tdsFy || "") +
+        " \u00b7 printed " + fmtDate(new Date().toISOString().slice(0, 10)) + "</p>" + (t ? t.outerHTML : ""));
+      break;
+    }
     case "tdsAuto": { const n = TDS.autoAllocate(); saveBooks(); toast(n ? n + " deduction" + (n === 1 ? "" : "s") + " put against challans." : "Nothing could be matched to a challan. Check the amounts and dates."); render(); break; }
     case "certAdd": {
       const g = id => (document.getElementById(id) || {}).value || "";
@@ -14336,6 +14405,10 @@ document.addEventListener("input", ev => {
   if (t && t.id === "revq"){ S.revQuery = t.value; softRender(); return; }
   if (t && t.id === "txnq"){ S.txnQ = t.value; later("txnq", render, 250); return; }
   if (t && t.id === "ledq"){ S.ledQ = t.value; later("ledq", render, 250); return; }
+  if (t && t.id === "tdsq"){ S.tdsF = Object.assign({}, S.tdsF, {q: t.value}); later("tdsq", render, 250); return; }
+  if (t && t.dataset && t.dataset.tdsfsec !== undefined){ S.tdsF = Object.assign({}, S.tdsF, {section: t.value}); render(); return; }
+  if (t && t.dataset && t.dataset.tdsfch !== undefined){ S.tdsF = Object.assign({}, S.tdsF, {challan: t.value}); render(); return; }
+  if (t && t.dataset && t.dataset.tdsfpan !== undefined){ S.tdsF = Object.assign({}, S.tdsF, {pan: t.value}); render(); return; }
   if (t && t.dataset && t.dataset.gstym !== undefined){ S.gstYm = t.value; S.books.reco = null; render(); return; }
   if (t && t.dataset && t.dataset.gstreg !== undefined){ S.gstReg = t.value; S.books.reco = null; render(); return; }
   if (t && t.dataset && t.dataset.tdsfy !== undefined){ S.tdsFy = t.value; render(); return; }
