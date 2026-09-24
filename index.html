@@ -756,7 +756,7 @@ const DEFAULT_FIRM = {firmName:"Garg Shekhar & Company", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "TEST · 24 Sep 2026 · build 112 (24Q: salary, employee by employee, with Annexure I and II)";
+const APP_VERSION = "TEST · 24 Sep 2026 · build 113 (quarter by quarter, the year in one file, certificates under 197 and 206AA)";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;
@@ -5748,6 +5748,102 @@ const TDS24Q = {
   }
 };
 
+/* ================================================================== */
+/* Certificates under 197, and 206AA where there is no PAN            */
+/* ================================================================== */
+const Certs = {
+  all(){ return ((S.books || {}).certs || []).slice().sort((a, b) => String(a.party).localeCompare(String(b.party))); },
+  // the certificate that covers this payment, if there is one
+  forRow(r){
+    return this.all().find(c => (!c.section || c.section === r.section) &&
+      normName(c.party) === normName(r.party) &&
+      (!c.from || TDS.ymd(r.date) >= TDS.ymd(c.from)) && (!c.to || TDS.ymd(r.date) <= TDS.ymd(c.to)));
+  },
+  validPan(p){ return /^[A-Z]{5}\d{4}[A-Z]$/.test(String(p || "").toUpperCase()); },
+  // what the rate should have been, and why
+  expected(r){
+    const cert = this.forRow(r);
+    if (cert) return {rate: num(cert.rate), why: "certificate " + (cert.certNo || "under 197"), cert};
+    if (!this.validPan(r.pan)) return {rate: 20, why: "no valid PAN, section 206AA"};
+    const std = (TDS.STD[String(r.section).replace(/\s.*$/, "")] || []);
+    if (!std.length) return {rate: null, why: ""};
+    const near = std.slice().sort((a, b) => Math.abs(a - (r.rate || 0)) - Math.abs(b - (r.rate || 0)))[0];
+    return {rate: near, why: "usual rate for " + r.section};
+  },
+  // where the books deducted at a different rate from the one that applies
+  issues(fy, q){
+    const out = [];
+    TDS.rows().filter(r => (!fy || r.fy === fy) && (!q || r.q === q)).forEach(r => {
+      const e = this.expected(r);
+      if (e.rate == null || r.rate == null) return;
+      const short = r2(r.paid * (e.rate - r.rate) / 100);
+      if (Math.abs(e.rate - r.rate) < 0.05 || Math.abs(short) < 1) return;
+      out.push({row: r, expected: e.rate, why: e.why, short});
+    });
+    return out.sort((a, b) => Math.abs(b.short) - Math.abs(a.short));
+  }
+};
+/* ---------- quarter by quarter, and the year in one file ---------- */
+const TDSYear = {
+  quarters(fy){
+    const ch = TDS.challans().filter(c => TDS.fyOf(c.date) === fy), use = TDS.challanUse();
+    return ["Q1", "Q2", "Q3", "Q4"].map(q => {
+      const rows = TDS.rows().filter(r => r.fy === fy && r.q === q);
+      const sal = TDS24Q.annexI(fy, q);
+      const mine = ch.filter(c => TDS.qOf(c.date) === q);
+      return {q, deductions: rows.length, paid: r2(rows.reduce((a, r) => a + r.paid, 0)), tds: r2(rows.reduce((a, r) => a + r.tds, 0)),
+        unallocated: r2(rows.filter(r => !r.challan).reduce((a, r) => a + r.tds, 0)), noPan: rows.filter(r => !Certs.validPan(r.pan)).length,
+        challans: mine.length, challanTax: r2(mine.reduce((a, c) => a + num(c.tax), 0)),
+        used: r2(mine.reduce((a, c) => a + (use[c.id] || 0), 0)),
+        salaryEmployees: sal.length, salaryPaid: r2(sal.reduce((a, e) => a + e.paid, 0)), salaryTds: r2(sal.reduce((a, e) => a + e.tds, 0)),
+        issues: Certs.issues(fy, q).length};
+    });
+  },
+  async toExcel(fy, which){
+    await ensureXlsx();
+    const d = s => { const t = TDS.ymd(s); return t.length === 8 ? t.slice(6, 8) + "/" + t.slice(4, 6) + "/" + t.slice(0, 4) : ""; };
+    const wb = XLSX.utils.book_new();
+    const add = (name, head, body) => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([head].concat(body)), name.slice(0, 31));
+    const qs = this.quarters(fy);
+    add("Year " + fy, ["Quarter", "Deductions", "Amount paid", "TDS", "Not against a challan", "Without PAN", "Challans", "Challan tax",
+      "Salary employees", "Salary paid", "Salary TDS", "Rate questions"],
+      qs.map(x => [x.q, x.deductions, x.paid, x.tds, x.unallocated, x.noPan, x.challans, x.challanTax, x.salaryEmployees, x.salaryPaid, x.salaryTds, x.issues]));
+    if (which !== "24Q"){
+      ["Q1", "Q2", "Q3", "Q4"].forEach(q => {
+        const rows = TDS.rows().filter(r => r.fy === fy && r.q === q);
+        if (!rows.length) return;
+        const ch = TDS.challans().filter(c => TDS.fyOf(c.date) === fy && TDS.qOf(c.date) === q);
+        add("26Q " + q, ["Sl.", "Deductee code", "PAN", "Deductee", "Section", "Date", "Amount paid", "TDS", "Rate", "Rate that applies", "Why", "Challan BSR", "Challan serial", "Challan date"],
+          rows.map((r, i) => {
+            const c = ch.find(x => x.id === r.challan) || {}, e = Certs.expected(r);
+            return [i + 1, Certs.validPan(r.pan) ? (/^[A-Z]{3}C/.test(r.pan) ? "01" : "02") : "02", r.pan || "PANNOTAVBL", r.party,
+              "9" + String(r.section).replace(/^19/, ""), d(r.date), r.paid, r.tds, r.rate, e.rate, e.why, c.bsr || "", c.serial || "", d(c.date || "")];
+          }));
+      });
+      const ch = TDS.challans().filter(c => TDS.fyOf(c.date) === fy), use = TDS.challanUse();
+      add("Challans " + fy, ["Quarter", "BSR code", "Serial", "Deposited", "Tax", "Interest", "Allocated", "Left"],
+        ch.map(c => [TDS.qOf(c.date), c.bsr, c.serial, d(c.date), num(c.tax), num(c.interest), use[c.id] || 0, r2(num(c.tax) - (use[c.id] || 0))]));
+      const iss = Certs.issues(fy, "");
+      if (iss.length) add("Rate questions", ["Date", "Deductee", "PAN", "Section", "Paid", "Rate used", "Rate that applies", "Why", "Short or excess"],
+        iss.map(x => [d(x.row.date), x.row.party, x.row.pan || "", x.row.section, x.row.paid, x.row.rate, x.expected, x.why, x.short]));
+    }
+    if (which !== "26Q" && (S.books.salary || []).length){
+      ["Q1", "Q2", "Q3", "Q4"].forEach(q => {
+        const a1 = TDS24Q.annexI(fy, q);
+        if (!a1.length) return;
+        add("24Q " + q, ["Sl.", "Employee", "PAN", "Code", "Months", "Amount paid", "TDS"],
+          a1.map((e, i) => [i + 1, e.name, e.pan || "PANNOTAVBL", e.code, e.months, e.paid, e.tds]));
+      });
+      const a2 = TDS24Q.annexII(fy);
+      if (a2.length) add("Annexure II " + fy, ["Employee", "PAN", "Regime", "Gross", "Exempt", "Standard", "Professional tax", "Chapter VI-A", "Taxable", "TDS", "Surcharge", "Cess"],
+        a2.map(e => [e.name, e.pan || "PANNOTAVBL", e.regime === "N" ? "New" : e.regime === "O" ? "Old" : "", e.gross, e.exempt, e.standard, e.profTax, e.chapter6, e.taxable, e.tds, e.surcharge, e.cess]));
+    }
+    const out = XLSX.write(wb, {bookType: "xlsx", type: "array"});
+    saveFile(CO().name.replace(/[^A-Za-z0-9]+/g, "-") + "-TDS-" + (which || "year") + "-" + fy.replace("-", "") + ".xlsx",
+      new Blob([out], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
+  }
+};
+
 /* ---------- Books, TDS and GST: the screens ---------- */
 function booksTab(){ return S.booksTab || "import"; }
 async function openBooks(cid){
@@ -5836,10 +5932,60 @@ function viewBooksLedgers(b){
 }
 function viewBooksTds(b){
   const part = S.tdsPart || "q26";
-  let nav = '<nav class="sbar" aria-label="TDS">' + [["q26", "26Q, other than salary", TDS.rows().length], ["q24", "24Q, salary", (b.salary || []).length]]
+  let nav = '<nav class="sbar" aria-label="TDS">' + [["q26", "26Q, other than salary", TDS.rows().length], ["q24", "24Q, salary", (b.salary || []).length], ["year", "Quarter by quarter", null], ["certs", "Certificates and 206AA", Certs.all().length]]
     .map(([id, l, n]) => '<button data-tdspart="' + id + '" aria-selected="' + (part === id) + '">' + l + (n ? ' <span class="sbar-n">' + n + "</span>" : "") + "</button>").join("") + "</nav>";
   if (part === "q24") return nav + viewBooks24Q(b);
+  if (part === "year") return nav + viewTdsYear(b);
+  if (part === "certs") return nav + viewTdsCerts(b);
   return nav + viewBooks26Q(b);
+}
+function viewTdsYear(b){
+  const fys = Array.from(new Set(TDS.rows().map(r => r.fy).concat((b.salary || []).map(r => TDS.fyOf(r.date))))).filter(Boolean).sort();
+  const fy = S.tdsFy || fys[fys.length - 1] || "";
+  const money = v => INR.format(r2(v || 0));
+  const qs = fy ? TDSYear.quarters(fy) : [];
+  let h = '<div class="revfilter"><select data-tdsfy>' + fys.map(f => '<option value="' + f + '"' + (fy === f ? " selected" : "") + ">" + f + "</option>").join("") + "</select>" +
+    '<button class="btn small" data-act="yearExcel26">Download the year, 26Q</button>' +
+    '<button class="btn small" data-act="yearExcel24">Download the year, 24Q</button>' +
+    '<button class="btn small primary" data-act="yearExcelAll">Download the whole year</button></div>';
+  if (!fy) return h + '<div class="bk-none">Bring in the books or a salary sheet first.</div>';
+  h += '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Quarter</th><th class="n">Deductions</th><th class="n">Paid or credited</th><th class="n">TDS</th>' +
+    '<th class="n">Not against a challan</th><th class="n">Without PAN</th><th class="n">Challans</th><th class="n">Challan tax</th><th class="n">Rate questions</th><th class="ac"></th></tr></thead><tbody>' +
+    qs.map(x => "<tr><td><b>" + x.q + "</b>" + (x.salaryEmployees ? '<div class="nr">' + x.salaryEmployees + " on salary \u00b7 " + money(x.salaryTds) + "</div>" : "") + "</td>" +
+      '<td class="n">' + x.deductions + '</td><td class="n">' + money(x.paid) + '</td><td class="n">' + money(x.tds) + "</td>" +
+      '<td class="n' + (x.unallocated ? " bad" : "") + '">' + money(x.unallocated) + '</td><td class="n' + (x.noPan ? " bad" : "") + '">' + x.noPan + "</td>" +
+      '<td class="n">' + x.challans + '</td><td class="n">' + money(x.challanTax) + '</td><td class="n' + (x.issues ? " bad" : "") + '">' + x.issues + "</td>" +
+      '<td class="ac"><button class="btn small" data-qgo="' + x.q + '">Open</button></td></tr>').join("") +
+    '<tr><td><b>Year</b></td><td class="n">' + qs.reduce((a, x) => a + x.deductions, 0) + '</td><td class="n">' + money(qs.reduce((a, x) => a + x.paid, 0)) +
+    '</td><td class="n"><b>' + money(qs.reduce((a, x) => a + x.tds, 0)) + '</b></td><td class="n">' + money(qs.reduce((a, x) => a + x.unallocated, 0)) +
+    '</td><td class="n">' + qs.reduce((a, x) => a + x.noPan, 0) + '</td><td class="n">' + qs.reduce((a, x) => a + x.challans, 0) + '</td><td class="n">' + money(qs.reduce((a, x) => a + x.challanTax, 0)) +
+    '</td><td class="n">' + qs.reduce((a, x) => a + x.issues, 0) + "</td><td></td></tr></tbody></table></div>";
+  return h;
+}
+function viewTdsCerts(b){
+  const list = Certs.all(), money = v => INR.format(r2(v || 0));
+  const iss = Certs.issues(S.tdsFy || "", "");
+  let h = '<section class="dash-card" style="margin-bottom:12px"><h3>Certificates under section 197</h3>' +
+    '<p class="note">A deductee with a certificate for a lower rate, or nil. Where a payment is covered by one, that rate is what the system expects instead of the usual rate.</p>' +
+    '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Deductee</th><th>PAN</th><th>Section</th><th>Certificate no.</th><th class="n">Rate</th><th>From</th><th>To</th><th class="ac"></th></tr></thead><tbody>' +
+    list.map(c => "<tr><td>" + esc(c.party) + "</td><td>" + esc(c.pan || "") + "</td><td>" + esc(c.section || "any") + "</td><td>" + esc(c.certNo || "") +
+      '</td><td class="n">' + num(c.rate) + "%</td><td>" + (c.from ? fmtDate(c.from) : "") + "</td><td>" + (c.to ? fmtDate(c.to) : "") +
+      '</td><td class="ac"><button class="icon danger" data-certdel="' + c.id + '">\u2715</button></td></tr>').join("") +
+    '<tr><td><input type="text" id="ctParty" data-fk="ctParty" placeholder="deductee as named in Tally" style="width:190px"></td>' +
+    '<td><input type="text" id="ctPan" data-fk="ctPan" placeholder="PAN" style="width:110px"></td>' +
+    '<td><input type="text" id="ctSec" data-fk="ctSec" placeholder="194C" style="width:80px"></td>' +
+    '<td><input type="text" id="ctNo" data-fk="ctNo" placeholder="certificate no." style="width:140px"></td>' +
+    '<td class="n"><input type="text" inputmode="decimal" id="ctRate" data-fk="ctRate" placeholder="0.5" style="width:70px;text-align:right"></td>' +
+    '<td><input type="date" id="ctFrom" data-fk="ctFrom"></td><td><input type="date" id="ctTo" data-fk="ctTo"></td>' +
+    '<td class="ac"><button class="btn small" data-act="certAdd">Add</button></td></tr></tbody></table></div></section>';
+  h += '<section class="dash-card"><h3>Rate questions</h3>' +
+    '<p class="note">Where the books deducted at a rate different from the one that applies: a certificate, 20% under section 206AA when there is no valid PAN, or the usual rate for the section.</p>' +
+    '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th class="dt">Date</th><th>Deductee</th><th>PAN</th><th>Section</th><th class="n">Paid</th><th class="n">Rate used</th><th class="n">Rate that applies</th><th>Why</th><th class="n">Short or excess</th></tr></thead><tbody>' +
+    iss.slice(0, 200).map(x => "<tr><td>" + fmtDate(tallyDate(x.row.date)) + "</td><td>" + esc(x.row.party) + "</td><td>" + (Certs.validPan(x.row.pan) ? esc(x.row.pan) : '<span class="tag warn">no PAN</span>') +
+      "</td><td>" + esc(x.row.section) + '</td><td class="n">' + money(x.row.paid) + '</td><td class="n">' + (x.row.rate == null ? "" : x.row.rate + "%") + '</td><td class="n">' + x.expected + "%</td><td>" + esc(x.why) +
+      '</td><td class="n' + (x.short > 0 ? " bad" : "") + '">' + money(x.short) + "</td></tr>").join("") +
+    "</tbody></table>" + (iss.length ? "" : '<div class="bk-none">Every deduction matches the rate that applies.</div>') + "</div></section>";
+  return h;
 }
 function viewBooks24Q(b){
   const fy = S.tdsFy || (TDS.rows()[0] || {}).fy || "", q = S.tdsQ || "Q4";
@@ -13560,6 +13706,8 @@ document.addEventListener("click", ev => {
   if (t.dataset.bookstab){ S.booksTab = t.dataset.bookstab; render(); return; }
   if (t.dataset.gstpart){ S.gstPart = t.dataset.gstpart; render(); return; }
   if (t.dataset.tdspart){ S.tdsPart = t.dataset.tdspart; render(); return; }
+  if (t.dataset.qgo){ S.tdsQ = t.dataset.qgo; S.tdsPart = "q26"; render(); return; }
+  if (t.dataset.certdel){ S.books.certs = (S.books.certs || []).filter(c => c.id !== t.dataset.certdel); saveBooks(); render(); return; }
   if (t.dataset["2btab"]){ S.twoBTab = t.dataset["2btab"]; render(); return; }
   if (t.dataset.paymake){
     const p = TDS.paymentsFromBooks().find(x => x.vid === t.dataset.paymake);
@@ -13820,6 +13968,17 @@ document.addEventListener("click", ev => {
       if (!ok) return; S.books.vouchers = []; S.books.meta = null; S.books.reco = null; saveBooks(); toast("Removed."); render(); }); break;
     case "fvuClose": S.fvuResult = null; render(); break;
     case "tdsAuto": { const n = TDS.autoAllocate(); saveBooks(); toast(n ? n + " deduction" + (n === 1 ? "" : "s") + " put against challans." : "Nothing could be matched to a challan. Check the amounts and dates."); render(); break; }
+    case "certAdd": {
+      const g = id => (document.getElementById(id) || {}).value || "";
+      const party = g("ctParty").trim();
+      if (!party){ toast("Name the deductee as it appears in Tally."); break; }
+      S.books.certs = (S.books.certs || []).concat([{id: uid("ct"), party, pan: g("ctPan").toUpperCase().trim(), section: g("ctSec").toUpperCase().trim(),
+        certNo: g("ctNo").trim(), rate: num(g("ctRate")), from: g("ctFrom"), to: g("ctTo")}]);
+      saveBooks(); toast("Certificate added."); render(); break;
+    }
+    case "yearExcel26": TDSYear.toExcel(S.tdsFy || "", "26Q").then(() => toast("Downloaded."), e => toast("Could not build it: " + (e && e.message))); break;
+    case "yearExcel24": TDSYear.toExcel(S.tdsFy || "", "24Q").then(() => toast("Downloaded."), e => toast("Could not build it: " + (e && e.message))); break;
+    case "yearExcelAll": TDSYear.toExcel(S.tdsFy || "", "").then(() => toast("Downloaded."), e => toast("Could not build it: " + (e && e.message))); break;
     case "salaryPick": { const i = document.getElementById("salaryIn"); if (i){ i.value = ""; i.click(); } break; }
     case "salaryClear": askConfirm({title: "Remove the salary sheet?", ok: "Remove", body: '<p class="note">The challans and everything else stay.</p>'}).then(ok => {
       if (!ok) return; S.books.salary = []; saveBooks(); toast("Removed."); render(); }); break;
