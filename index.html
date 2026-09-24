@@ -757,7 +757,7 @@ const DEFAULT_FIRM = {firmName:"Garg Shekhar & Company", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "TEST · 24 Sep 2026 · build 120 (GSTR-2B reconciliation: every month or the year, supplier by supplier, with matches to confirm)";
+const APP_VERSION = "TEST · 24 Sep 2026 · build 121 (Tally ledgers: GST and TDS masters, guessed from Tally, confirmed by you)";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;
@@ -5033,7 +5033,7 @@ const Books = {
   },
   async importMasters(file, onProgress){
     const dec = await this.decoder(file);
-    const pans = {}, gstins = {}, under = {}, states = {}, groups = {};
+    const pans = {}, gstins = {}, under = {}, states = {}, groups = {}, info = {};
     let buf = "", n = 0;
     const take = whole => {
       // the groups come before the ledgers; keep the tree, to know a customer from a supplier
@@ -5053,6 +5053,8 @@ const Books = {
       if (pan) pans[name] = pan;
       if (gst) gstins[name] = gst;
       if (par) under[name] = par;
+      const tt = this.one(piece, "TAXTYPE").replace(/[^A-Za-z ]/g, "").trim();
+      info[name] = {group: par, taxType: tt, dutyHead: this.one(piece, "GSTDUTYHEAD"), tdsNature: this.one(piece, "TDSNATUREOFPAYMENT") || this.one(piece, "NATUREOFPAYMENT"), gstin: gst, pan};
       if (st) states[name] = st;
       n++;
     };
@@ -5074,7 +5076,7 @@ const Books = {
       const piece = buf.slice(0, cut + 9); buf = buf.slice(cut + 9);
       take(piece);
     }
-    return {pans, gstins, under, states, groups, count: n};
+    return {pans, gstins, under, states, groups, info, count: n};
   },
   // what each ledger is: TDS section, GST tax, party or expense
   mapLedgers(vouchers, saved){
@@ -5119,6 +5121,7 @@ const Books = {
         return;
       }
       if (m.kind === "roundoff"){ out.roundoff = r2(out.roundoff + e.a); return; }
+      if (m.kind === "tax_other" || m.kind === "tcs_payable" || m.kind === "tcs_receivable") return;
       if (e.l === v.party){ out.party = amt; return; }
       if (m.kind === "bank" || m.kind === "tds_receivable") return;
       out.taxable = r2(out.taxable + amt);
@@ -5148,6 +5151,154 @@ const Books = {
   async load(cid){
     try { return await IDBStore.get("books:" + cid); } catch (e){ return null; }
   }
+};
+
+/* ================================================================== */
+/* Tally ledger master: which ledgers are GST and TDS, confirmed once */
+/* ================================================================== */
+const LedMaster = {
+  WHAT: [
+    ["gst", "GST", "gst"], ["gst_rcm", "GST, reverse charge", "gst"], ["gst_import", "GST on imports", "gst"], ["gst_common", "GST, common credit (rule 42)", "gst_common"],
+    ["ineligible", "GST, ITC not to be taken", "ineligible"], ["gst_control", "GST control or provisional account", "tax_other"], ["gst_setoff", "GST set-off or electronic ledger", "tax_other"],
+    ["gst_interest", "GST interest or late fee", "tax_other"],
+    ["tds_payable", "TDS payable", "tds_payable"], ["tds_receivable", "TDS receivable", "tds_receivable"], ["tcs_payable", "TCS payable", "tcs_payable"], ["tcs_receivable", "TCS receivable", "tcs_receivable"],
+    ["tds_interest", "TDS interest or late fee", "tax_other"], ["bank", "Bank or cash", "bank"], ["roundoff", "Round off", "roundoff"], ["none", "Not a tax ledger", ""]],
+  isGst(w){ return /^gst|^ineligible$/.test(w || ""); },
+  isTds(w){ return /^tds_|^tcs_/.test(w || ""); },
+  kindOf(w){ const x = this.WHAT.find(z => z[0] === w); return x ? x[2] : ""; },
+  label(w){ const x = this.WHAT.find(z => z[0] === w); return x ? x[1] : "\u2014"; },
+  // a ledger that should be in one of the two masters
+  taxLike(name, m, info){
+    if (m && m.what && m.what !== "none" && m.what !== "bank" && m.what !== "roundoff") return true;
+    if (m && m.what === "none") return false;
+    if (info && /^(GST|TDS|TCS)$/i.test(info.taxType || "")) return true;
+    return /\b(C|S|I|UT)\s*\.?\s*GST\b|\bGST\b|\bCESS\b|\bTDS\b|\bTCS\b|\b19[2-9][A-Z]{0,2}\b|\b206C/i.test(name) && !/\bSALARY\s+PAYABLE\b/i.test(name);
+  },
+  // how each ledger is used in the day book: which side, which registration, which rate
+  usage(b){
+    const u = {};
+    (b.vouchers || []).forEach(v => {
+      const sale = Books.isSale(v), purch = Books.isPurchase(v), reg = (sale || purch) ? String(v.cmp || "").slice(0, 2) : "";
+      let value = 0;
+      v.ent.forEach(e => { const k = (b.map[e.l] || {}).kind; if (!k && e.l !== v.party) value += Math.abs(e.a); });
+      v.ent.forEach(e => {
+        const x = u[e.l] = u[e.l] || {n: 0, sale: 0, purch: 0, dr: 0, cr: 0, regs: {}, rates: {}, rcm: 0, onSaleCr: 0, onPurchDr: 0};
+        x.n++; if (sale) x.sale++; if (purch) x.purch++; if (e.a < 0) x.dr++; else x.cr++;
+        if (reg) x.regs[reg] = (x.regs[reg] || 0) + 1;
+        if (v.rcm) x.rcm++;
+        if (sale && e.a > 0) x.onSaleCr++;
+        if (purch && e.a < 0) x.onPurchDr++;
+        const r = e.r || (value ? Math.round(Math.abs(e.a) / value * 10000) / 100 : 0);
+        if (r){ const k = String(r); x.rates[k] = (x.rates[k] || 0) + 1; }
+      });
+    });
+    return u;
+  },
+  top(obj){ const e = Object.entries(obj || {}).sort((a, c) => c[1] - a[1]); return e.length ? e[0] : null; },
+  RATES: [0.1, 0.25, 1, 1.5, 2.5, 3, 5, 6, 9, 12, 14, 18, 28],
+  // the best guess for one ledger, and why
+  propose(name, info, u, regs){
+    const up = name.toUpperCase(), why = [];
+    info = info || {}; u = u || {n: 0, regs: {}, rates: {}};
+    const tt = String(info.taxType || "").toUpperCase(), dh = String(info.dutyHead || "").toUpperCase();
+    const p = {what: "none", tax: "", side: "", reg: "", section: "", rate: null, gstRate: null};
+    if (tt === "GST" || /\bGST\b|\bCESS\b|\b(C|S|I|UT)\s*\.?\s*GST/.test(up)){
+      p.what = "gst";
+      if (tt === "GST") why.push("Tally: tax type GST");
+      if (/ELECTRONIC|CASH\s*LEDGER|CREDIT\s*LEDGER|CURRENT\s*GST\s*PAYABLE|GST\s*PAYABLE|SET\s*OFF/.test(up)) p.what = "gst_setoff";
+      else if (/INTEREST|LATE\s*FEE|PENALTY/.test(up)) p.what = "gst_interest";
+      else if (/CONTROL|PROVISIONAL|PENDING|SUSPENSE|UNCLAIMED/.test(up)) p.what = "gst_control";
+      else if (/\bRCM\b|REVERSE/.test(up)) p.what = "gst_rcm";
+      else if (/IMPORT|CUSTOMS|\bBOE\b/.test(up)) p.what = "gst_import";
+      else if (/INELIGIBLE|BLOCKED|NOT\s*CLAIM|17\s*\(?5/.test(up)) p.what = "ineligible";
+      else if (/COMMON/.test(up)) p.what = "gst_common";
+      p.tax = /INTEGRATED|IGST/.test(dh) || /\bIGST\b|I\s*GST/.test(up) ? "IGST" : /CENTRAL|CGST/.test(dh) || /\bCGST\b|C\s*GST/.test(up) ? "CGST" :
+        /STATE|UT|SGST|UTGST/.test(dh) || /\b(S|UT)GST\b|S\s*GST/.test(up) ? "SGST" : /CESS/.test(dh + up) ? "CESS" : "";
+      if (dh) why.push("Tally: duty head " + info.dutyHead); else if (p.tax) why.push("name says " + p.tax);
+      if (/\bINPUT\b|\bITC\b|RECEIVABLE/.test(up)){ p.side = "input"; why.push("name says input"); }
+      else if (/OUTPUT|PAYABLE/.test(up)){ p.side = "output"; why.push("name says output"); }
+      else if (u.onPurchDr > u.onSaleCr){ p.side = "input"; why.push("debited on " + u.onPurchDr + " purchases"); }
+      else if (u.onSaleCr){ p.side = "output"; why.push("credited on " + u.onSaleCr + " sales"); }
+      const pre = up.match(/(?:^|\D)(\d{2})\s/);
+      const grp = String(info.group || "").match(/(?:^|\D)(\d{2})(?:\D|$)/);
+      const used = this.top(u.regs);
+      if (pre && regs.includes(pre[1])){ p.reg = pre[1]; why.push("name starts " + pre[1]); }
+      else if (grp && regs.includes(grp[1])){ p.reg = grp[1]; why.push("group " + info.group); }
+      else if (used){ p.reg = used[0]; why.push("used on " + used[1] + " vouchers of " + used[0]); }
+      else if (regs.length === 1) p.reg = regs[0];
+      const rn = up.match(/(\d+(?:\.\d+)?)\s*%/);
+      if (rn){ p.gstRate = num(rn[1]); why.push("rate " + rn[1] + "% in the name"); }
+    } else if (tt === "TDS" || tt === "TCS" || /\bTDS\b|\bTCS\b/.test(up) || /\b19[2-9][A-Z]{0,2}\b|\b206C/.test(up)){
+      const tcs = tt === "TCS" || /\bTCS\b|206C/.test(up);
+      p.what = /INTEREST\s+(ON|FOR)\s+(LATE\s+)?(TDS|TCS)|LATE\s*FEE|PENALTY|234E|201\s*\(?1A/.test(up) ? "tds_interest" : tcs ? (/RECEIVABLE|ADVANCE|PAID/.test(up) ? "tcs_receivable" : "tcs_payable") : (/RECEIVABLE|ADVANCE|REFUND|\bA\.?\s*Y\b|\bT\.?\s*Y\b/.test(up) ? "tds_receivable" : "tds_payable");
+      if (tt) why.push("Tally: tax type " + info.taxType);
+      const sec = up.match(/\b(19[2-9][A-Z]{0,2}|206C[A-Z]{0,2})\b/);
+      if (sec){ p.section = sec[1]; why.push("section " + sec[1] + " in the name"); }
+      else if (/\b(393|389|394|392)\b/.test(up)){
+        // a ledger named under the Income-tax Act, 2025: the section it replaces, from what it is for
+        const NAT = [[/SALARY|PERQUISITE\s*.*SALARY/, "192"], [/NON\s*RESIDENT|\b394\b/, "195"], [/PERQUISITE|BENEFIT/, "194R"], [/CONTRACT/, "194C"], [/PROF|TECH|FEES/, "194J"],
+          [/INSURANCE\s*COMM/, "194D"], [/COMM|BROKER/, "194H"], [/RENT/, "194I"], [/INTEREST/, "194A"], [/PURCHASE\s*OF\s*GOOD/, "194Q"], [/PROPERTY/, "194IA"], [/E.?COMMERCE/, "194O"], [/DIVIDEND/, "194"]];
+        const hit = NAT.find(([re]) => re.test(up.replace(/\b(389|392|393|394)\b/g, " ")) || (re.source === "NON\\s*RESIDENT|\\b394\\b" && /\b394\b/.test(up)));
+        if (hit){ p.section = hit[1]; why.push("named under the new Act; " + hit[1] + " from the words in the name"); }
+      }
+      else if (info.tdsNature){ p.section = (String(info.tdsNature).match(/19[2-9][A-Z]{0,2}|206C[A-Z]{0,2}/) || [""])[0]; if (p.section) why.push("Tally: nature " + info.tdsNature); }
+      const rn = up.match(/(\d+(?:\.\d+)?)\s*%/);
+      if (rn){ p.rate = num(rn[1]); why.push("rate " + rn[1] + "%"); }
+      if (p.what === "tds_payable" && !p.section) why.push("no section: choose one, or mark it a general TDS account");
+    } else if (/\bROUND\s*(ED)?\s*OFF\b/.test(up)){ p.what = "roundoff"; why.push("name"); }
+    else if (/\bBANK\b|\bCASH\b/.test(up) || /bank|cash/i.test(info.group || "")){ p.what = "bank"; why.push(info.group ? "group " + info.group : "name"); }
+    if (u.n) why.push("used " + u.n + " times");
+    p.why = why.join("; ");
+    return p;
+  },
+  // turn a choice into what the returns read
+  applyWhat(m, w){
+    m.what = w; m.kind = this.kindOf(w); m.rcm = w === "gst_rcm";
+    if (this.isGst(w)){ m.tax = m.tax || "IGST"; m.side = m.side || (w === "gst_rcm" ? "output" : "input"); }
+    if (!this.isTds(w)){ delete m.section; delete m.rate; }
+    if (!this.isGst(w)){ delete m.tax; delete m.side; delete m.gstRate; }
+    return m;
+  },
+  // fill every ledger not yet confirmed with the best guess; what the user set by hand is kept
+  refresh(b){
+    b.map = b.map || {};
+    const regs = ((b.meta || {}).gstins || []).map(g => g.slice(0, 2)), info = b.ledInfo || {}, u = this.usage(b);
+    const names = new Set(Object.keys(b.map).concat(Object.keys(info).filter(n => this.taxLike(n, null, info[n]))));
+    names.forEach(n => {
+      const m = b.map[n] = b.map[n] || {n: 0};
+      m.n = (u[n] || {}).n || m.n || 0;
+      // a client set up before the masters: what its ledgers were already marked as
+      if (!m.what && m.kind) m.what = ({gst: m.rcm ? "gst_rcm" : "gst", gst_common: "gst_common", ineligible: "ineligible", tds_payable: "tds_payable", tds_receivable: "tds_receivable", bank: "bank", roundoff: "roundoff"})[m.kind] || "";
+      if (m.ok || m.byHand) return;
+      const p = this.propose(n, info[n], u[n], regs);
+      this.applyWhat(m, p.what);
+      if (this.isGst(p.what)){ m.tax = p.tax || m.tax; m.side = p.side || m.side; m.reg = p.reg; if (p.gstRate != null) m.gstRate = p.gstRate; }
+      if (this.isTds(p.what)){ m.section = p.section; m.rate = p.rate; }
+      m.why = p.why;
+    });
+    b.mapV = (b.mapV || 0) + 1;
+    return b.map;
+  },
+  // what is still to be confirmed, and what the day book says against a choice
+  pending(b){ return Object.entries((b && b.map) || {}).filter(([n, m]) => !m.ok && this.taxLike(n, m, (b.ledInfo || {})[n])); },
+  checks(b, n, m){
+    const u = (this._u && this._u.b === b.vouchers ? this._u.u : (this._u = {b: b.vouchers, u: this.usage(b)}).u)[n] || {regs: {}, rates: {}};
+    const out = [];
+    if (this.isGst(m.what)){
+      if (m.side === "input" && u.onSaleCr) out.push("credited on " + u.onSaleCr + " sale" + (u.onSaleCr === 1 ? "" : "s"));
+      if (m.side === "output" && u.onPurchDr && m.what !== "gst_rcm") out.push("debited on " + u.onPurchDr + " purchase" + (u.onPurchDr === 1 ? "" : "s"));
+      const other = Object.entries(u.regs).filter(([r]) => m.reg && r !== m.reg);
+      if (other.length) out.push("on " + other.reduce((a, x) => a + x[1], 0) + " vouchers Tally's voucher GSTIN is " + other.map(x => x[0]).join(", ") + "; the returns go by this ledger's registration");
+      if (m.gstRate){
+        const half = m.tax === "IGST" ? m.gstRate : m.gstRate / 2;
+        const off = Object.entries(u.rates).filter(([r]) => Math.abs(num(r) - half) > 0.6).reduce((s, [, c]) => s + c, 0);
+        if (off) out.push(off + " voucher" + (off === 1 ? "" : "s") + " at another rate");
+      }
+    }
+    if (m.what === "tds_payable" && !m.section) out.push("no section: its deductions are left out of 26Q");
+    return out;
+  },
+  confirm(b, names, yes){ names.forEach(n => { const m = b.map[n]; if (m){ m.ok = !!yes; m.byHand = true; m.okAt = yes ? new Date().toISOString() : undefined; } }); b.mapV = (b.mapV || 0) + 1; }
 };
 
 /* ================================================================== */
@@ -5579,7 +5730,11 @@ const GSTR = {
     return Array.from(new Set(b.vouchers.map(v => this.ym(v.date)).filter(x => x.length === 6))).sort();
   },
   label(ym){ return fmtDate(ym.slice(0, 4) + "-" + ym.slice(4, 6) + "-01").replace(/^\d+\s/, ""); },
-  regOf(v){ return String(v.cmp || "").slice(0, 2); },
+  regOf(v){
+    let r = "";
+    for (const e of v.ent){ const m = Books.ledgerOf(e.l); if ((m.kind === "gst" || m.kind === "gst_common" || m.kind === "ineligible") && m.reg){ if (r && r !== m.reg){ r = ""; break; } r = m.reg; } }
+    return r || String(v.cmp || "").slice(0, 2);
+  },
   // one row per invoice and rate, from the sales side
   outward(ym, reg){
     const b = S.books, out = [];
@@ -6595,16 +6750,17 @@ async function openBooks(cid){
   render();
   const saved = await Books.load(cid);
   S.books = saved && saved.cid === cid ? Object.assign({loading: false}, saved) : {cid, loading: false, vouchers: [], map: {}, challans: [], alloc: {}, pans: {}};
+  if (S.books.vouchers && S.books.vouchers.length) try { LedMaster.refresh(S.books); } catch (e){}
   render();
 }
 async function saveBooks(){ const b = S.books; if (b && b.cid) await Books.save(b.cid, {cid: b.cid, vouchers: b.vouchers, map: b.map, meta: b.meta, challans: b.challans, alloc: b.alloc, pans: b.pans, twoB: b.twoB,
   gstins: b.gstins, under: b.under, states: b.states, groups: b.groups, salary: b.salary, certs: b.certs, advFix: b.advFix, assets: b.assets, rev: b.rev,
-  filed: b.filed, amendFix: b.amendFix, twoBs: b.twoBs, reco2b: b.reco2b}); }
+  filed: b.filed, amendFix: b.amendFix, twoBs: b.twoBs, reco2b: b.reco2b, ledInfo: b.ledInfo, ledInfoAt: b.ledInfoAt}); }
 function viewBooks(){
   const co = CO();
   if (!S.books || S.books.cid !== co.id){ openBooks(co.id); return '<p class="note">Opening the books…</p>'; }
   const b = S.books, tab = booksTab(), n = (b.vouchers || []).length;
-  let h = '<nav class="sbar" aria-label="Books">' + [["import", "From Tally", n || null], ["ledgers", "Ledgers", n ? Object.keys(b.map || {}).length : null], ["tds", "TDS", n ? TDS.rows().length : ((b.salary || []).length || null)], ["gst", "GST", null]]
+  let h = '<nav class="sbar" aria-label="Books">' + [["import", "From Tally", n || null], ["ledgers", "Tally ledgers", n ? (LedMaster.pending(b).length ? LedMaster.pending(b).length + " to confirm" : "\u2713") : null], ["tds", "TDS", n ? TDS.rows().length : ((b.salary || []).length || null)], ["gst", "GST", null]]
     .map(([id, label, c]) => '<button data-bookstab="' + id + '" aria-selected="' + (tab === id) + '">' + label + (c == null ? "" : ' <span class="sbar-n">' + c + "</span>") + "</button>").join("") + "</nav>";
   if (b.busy) h += busyCard("Reading the books…", b.busy, 0, 0);
   if (tab === "import") h += viewBooksImport(b);
@@ -6631,50 +6787,76 @@ function viewBooksImport(b){
       : '<p class="note">Nothing here yet.</p>') + "</section>";
 }
 function tallyDate(s){ return s && String(s).length === 8 ? String(s).slice(0, 4) + "-" + String(s).slice(4, 6) + "-" + String(s).slice(6, 8) : ""; }
-function ledgerSetup(b){
-  const list = Object.entries(b.map || {});
-  const regs = (b.meta && b.meta.gstins) || [];
-  const tds = list.filter(([, m]) => m.kind === "tds_payable");
-  const gst = list.filter(([, m]) => m.kind === "gst" || m.kind === "gst_common" || m.kind === "ineligible");
-  const secs = Array.from(new Set(tds.map(([, m]) => m.section).filter(Boolean))).sort();
-  const noSec = tds.filter(([, m]) => !m.section);
-  const noReg = regs.length > 1 ? gst.filter(([, m]) => !m.reg) : [];
-  const perReg = regs.map(g => {
-    const pre = g.slice(0, 2), mine = gst.filter(([, m]) => (m.reg || "") === pre);
-    return {gstin: g, input: mine.filter(([, m]) => m.side === "input").length, output: mine.filter(([, m]) => m.side === "output").length};
-  });
-  const done = !noSec.length && !noReg.length && tds.length && gst.length;
-  return '<section class="dash-card" style="margin-bottom:12px"><h3>Setting up this client, once</h3>' +
-    '<div class="dash-row"><span>TDS sections found</span><b>' + esc(secs.join(", ") || "none yet") + "</b></div>" +
-    perReg.map(r => '<div class="dash-row"><span>GST ' + esc(r.gstin) + "</span><b>" + r.input + " input, " + r.output + " output</b></div>").join("") +
-    (regs.length <= 1 && gst.length ? '<div class="dash-row"><span>GST ledgers</span><b>' + gst.filter(([, m]) => m.side === "input").length + " input, " + gst.filter(([, m]) => m.side === "output").length + " output</b></div>" : "") +
-    (noSec.length ? '<p class="note" style="color:#B9541B">' + noSec.length + " TDS ledger" + (noSec.length === 1 ? " has" : "s have") + " no section yet: " + esc(noSec.slice(0, 3).map(x => x[0]).join(", ")) + ". Set it in the list below.</p>" : "") +
-    (noReg.length ? '<p class="note" style="color:#B9541B">' + noReg.length + " GST ledger" + (noReg.length === 1 ? " is" : "s are") + " not tied to a registration: " + esc(noReg.slice(0, 3).map(x => x[0]).join(", ")) + ".</p>" : "") +
-    (done ? '<p class="note">Everything needed is set. Any new ledger that appears later is flagged here.</p>' : "") + "</section>";
-}
 function viewBooksLedgers(b){
-  const kinds = [["", "—"], ["tds_payable", "TDS payable"], ["tds_receivable", "TDS receivable"], ["gst", "GST"], ["gst_common", "GST, common credit"], ["ineligible", "GST, ITC not to be taken"], ["bank", "Bank or cash"], ["roundoff", "Round off"]];
-  const regs = (b.meta && b.meta.gstins) || [];
-  const list = Object.entries(b.map).sort((a, c) => c[1].n - a[1].n);
+  const regs = ((b.meta && b.meta.gstins) || []).map(g => g.slice(0, 2)), info = b.ledInfo || {};
+  const all = Object.entries(b.map || {});
+  const isTax = ([n, m]) => LedMaster.taxLike(n, m, info[n]);
+  const gst = all.filter(([n, m]) => LedMaster.isGst(m.what) && isTax([n, m])), tds = all.filter(([n, m]) => LedMaster.isTds(m.what) && isTax([n, m]));
+  const pend = LedMaster.pending(b), other = all.filter(x => !isTax(x));
+  const view = S.lmView || (pend.length ? "pending" : "gst");
   const q = String(S.ledQ || "").toLowerCase();
-  const shown = list.filter(([name, m]) => !q || name.toLowerCase().includes(q) || String(m.section || "").toLowerCase().includes(q));
-  const guessed = list.filter(([, m]) => m.kind && !m.byHand).length;
-  return ledgerSetup(b) + '<section><p class="note">What each ledger means. ' + guessed + ' of ' + list.length + ' were recognised from their names; correct any that are wrong and it is remembered for this client.</p>' +
-    '<div class="revfilter"><input type="search" id="ledq" data-fk="ledq" data-keeptyped value="' + esc(S.ledQ || "") + '" placeholder="Find a ledger"><span class="note">' + shown.length + " of " + list.length + "</span></div>" +
-    '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Ledger</th><th class="n">Used</th><th>Means</th><th>Section</th><th class="n">Rate</th></tr></thead><tbody>' +
-    shown.slice(0, 400).map(([name, m]) => "<tr><td>" + esc(name) + '</td><td class="n">' + m.n + "</td>" +
-      '<td><select data-ledkind="' + esc(name) + '">' + kinds.map(([v, l]) => '<option value="' + v + '"' + ((m.kind || "") === v ? " selected" : "") + ">" + l + "</option>").join("") + "</select></td>" +
-      '<td>' + (m.kind === "tds_payable" || m.kind === "tds_receivable"
-        ? '<input type="text" data-ledsec="' + esc(name) + '" data-fk="sec-' + esc(name) + '" value="' + esc(m.section || "") + '" placeholder="194C" style="width:80px">'
-        : (m.kind === "gst" || m.kind === "gst_common" || m.kind === "ineligible")
-        ? '<span style="display:flex;gap:4px">' +
-          '<select data-ledtax="' + esc(name) + '">' + ["CGST", "SGST", "IGST", "CESS"].map(x => '<option value="' + x + '"' + (m.tax === x ? " selected" : "") + ">" + x + "</option>").join("") + "</select>" +
-          '<select data-ledside="' + esc(name) + '"><option value="input"' + (m.side === "input" ? " selected" : "") + '>input</option><option value="output"' + (m.side === "output" ? " selected" : "") + ">output</option></select>" +
-          (regs.length > 1 ? '<select data-ledreg="' + esc(name) + '"><option value="">any</option>' + regs.map(g => '<option value="' + g.slice(0, 2) + '"' + (m.reg === g.slice(0, 2) ? " selected" : "") + ">" + esc(g.slice(0, 2)) + "</option>").join("") + "</select>" : "") + "</span>"
-        : "") + "</td>" +
-      '<td class="n">' + (m.rate != null && m.kind === "tds_payable" ? m.rate + "%" : "") + "</td></tr>").join("") +
-    "</tbody></table></div></section>";
+  const pool = {pending: pend, gst, tds, done: all.filter(([n, m]) => m.ok && isTax([n, m])), other}[view] || pend;
+  const shown = pool.filter(([n, m]) => !q || n.toLowerCase().includes(q) || String(m.section || "").toLowerCase().includes(q) || String((info[n] || {}).group || "").toLowerCase().includes(q))
+    .sort((a, c) => (LedMaster.isGst(a[1].what) ? 0 : 1) - (LedMaster.isGst(c[1].what) ? 0 : 1) || (c[1].n || 0) - (a[1].n || 0) || a[0].localeCompare(c[0]));
+  const fromTally = Object.keys(info).length;
+  const live = typeof bridgeLive === "function" && bridgeLive(CO());
+  let h = '<section class="dash-card" style="margin-bottom:12px"><h3>GST and TDS ledgers: confirm once for this client</h3>' +
+    '<p class="note">Each ledger is guessed from Tally \u2014 its tax type, duty head and group \u2014 and from how the day book uses it. Check the guess and confirm it. Returns count only confirmed ledgers; anything still to confirm is shown on the TDS and GST screens, and their files wait until it is done.</p>' +
+    '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">' +
+    '<button class="btn small' + (live ? " primary" : "") + '" data-act="ledRead"' + (live ? "" : ' title="Needs the Tally Bridge and this company open in Tally"') + ">Read ledgers from Tally</button>" +
+    '<span class="note">' + (fromTally ? fromTally + " ledgers read from Tally" + (b.ledInfoAt ? " on " + fmtDate(String(b.ledInfoAt).slice(0, 10)) : "") : live ? "not read yet" : "Tally is not connected; the ledger masters XML under \u201cFrom Tally\u201d does the same") + "</span></div>" +
+    '<div class="dash-tiles" style="margin-top:10px">' +
+    '<button class="dtile' + (pend.length ? " warn" : "") + '" data-lmview="pending" style="text-align:left"><span>To confirm</span><b>' + pend.length + "</b><small>" + (pend.length ? "returns wait for these" : "all done") + "</small></button>" +
+    '<button class="dtile" data-lmview="gst" style="text-align:left"><span>GST ledgers</span><b>' + gst.length + "</b><small>" + gst.filter(x => x[1].ok).length + " confirmed</small></button>" +
+    '<button class="dtile" data-lmview="tds" style="text-align:left"><span>TDS and TCS ledgers</span><b>' + tds.length + "</b><small>" + tds.filter(x => x[1].ok).length + " confirmed</small></button>" +
+    '<button class="dtile" data-lmview="other" style="text-align:left"><span>Other ledgers</span><b>' + other.length + "</b><small>add one to GST or TDS</small></button></div></section>";
+  h += '<nav class="sbar" aria-label="Ledgers">' + [["pending", "To confirm", pend.length], ["gst", "GST", gst.length], ["tds", "TDS and TCS", tds.length], ["done", "Confirmed", null], ["other", "Other ledgers", other.length]]
+    .map(([id, l, c]) => '<button data-lmview="' + id + '" aria-selected="' + (view === id) + '">' + l + (c != null ? ' <span class="sbar-n">' + c + "</span>" : "") + "</button>").join("") + "</nav>";
+  h += '<div class="revfilter" style="flex-wrap:wrap;row-gap:6px"><input type="search" id="ledq" data-fk="ledq" data-keeptyped value="' + esc(S.ledQ || "") + '" placeholder="Find a ledger, section or group" style="width:260px;flex:0 0 auto">' +
+    '<span class="note">' + shown.length + " ledger" + (shown.length === 1 ? "" : "s") + "</span>" +
+    (view !== "other" && shown.some(([, m]) => !m.ok) ? '<button class="btn small primary" data-act="lmConfirmShown">Confirm the ' + shown.filter(([, m]) => !m.ok).length + " shown</button>" : "") + "</div>";
+  const whatSel = (n, m) => '<select style="width:auto;min-width:180px" data-lmwhat="' + esc(n) + '">' + (view === "other" ? '<option value="">\u2014</option>' : "") +
+    '<optgroup label="GST">' + LedMaster.WHAT.filter(w => LedMaster.isGst(w[0])).map(w => '<option value="' + w[0] + '"' + (m.what === w[0] ? " selected" : "") + ">" + w[1] + "</option>").join("") + "</optgroup>" +
+    '<optgroup label="TDS and TCS">' + LedMaster.WHAT.filter(w => LedMaster.isTds(w[0]) || w[0] === "tds_interest").map(w => '<option value="' + w[0] + '"' + (m.what === w[0] ? " selected" : "") + ">" + w[1] + "</option>").join("") + "</optgroup>" +
+    '<optgroup label="Other">' + LedMaster.WHAT.filter(w => ["bank", "roundoff", "none"].includes(w[0])).map(w => '<option value="' + w[0] + '"' + ((m.what || (view === "other" ? "" : "none")) === w[0] && view !== "other" ? " selected" : "") + ">" + w[1] + "</option>").join("") + "</optgroup></select>";
+  const detail = (n, m) => {
+    if (LedMaster.isGst(m.what) && !/^gst_(setoff|interest|control)$/.test(m.what)) return '<span style="display:flex;gap:4px;flex-wrap:nowrap">' +
+      '<select style="width:auto" data-lmtax="' + esc(n) + '">' + ["IGST", "CGST", "SGST", "CESS"].map(x => '<option' + (m.tax === x ? " selected" : "") + ">" + x + "</option>").join("") + "</select>" +
+      '<select style="width:auto" data-lmside="' + esc(n) + '"><option value="input"' + (m.side === "input" ? " selected" : "") + '>input</option><option value="output"' + (m.side === "output" ? " selected" : "") + ">output</option></select>" +
+      (regs.length > 1 ? '<select style="width:auto" data-lmreg="' + esc(n) + '"><option value="">registration?</option>' + regs.map(r => '<option value="' + r + '"' + (m.reg === r ? " selected" : "") + ">" + r + "</option>").join("") + "</select>" : "") +
+      '<select style="width:auto" data-lmgrate="' + esc(n) + '" title="Only if this ledger is for one rate"><option value="">any rate</option>' + LedMaster.RATES.map(r => '<option value="' + r + '"' + (num(m.gstRate) === r ? " selected" : "") + ">" + r + "%</option>").join("") + "</select></span>";
+    if (LedMaster.isGst(m.what) && regs.length > 1) return '<select style="width:auto" data-lmreg="' + esc(n) + '"><option value="">registration?</option>' + regs.map(r => '<option value="' + r + '"' + (m.reg === r ? " selected" : "") + ">" + r + "</option>").join("") + "</select>";
+    if (m.what === "tds_payable" || m.what === "tcs_payable") return '<span style="display:flex;gap:4px"><input type="text" data-lmsec="' + esc(n) + '" data-fk="lmsec-' + esc(n) + '" value="' + esc(m.section || "") + '" placeholder="' + (m.what === "tcs_payable" ? "206C(1H)" : "194C") + '" style="width:90px">' +
+      '<input type="number" step="0.01" min="0" data-lmrate="' + esc(n) + '" value="' + esc(m.rate == null ? "" : m.rate) + '" placeholder="rate %" style="width:80px"></span>';
+    return "";
+  };
+  h += '<div class="bk-tablewrap"><table class="bk-table" id="lmTable"><thead><tr><th>Tally ledger</th><th>What it is</th><th>Head, side, registration, rate or section</th><th class="n">Used</th><th>Why, and checks</th><th class="ac">Confirmed</th></tr></thead><tbody>' +
+    shown.slice(0, 400).map(([n, m]) => {
+      const warn = LedMaster.checks(b, n, m), inf = info[n] || {};
+      return "<tr><td>" + esc(n) + (inf.group ? '<div class="nr">' + esc(inf.group) + (inf.taxType && !/^(others|not applicable)$/i.test(String(inf.taxType).replace(/[^A-Za-z ]/g, "").trim()) ? " \u00b7 Tally: " + esc(inf.taxType) + (inf.dutyHead ? " " + esc(inf.dutyHead) : "") : "") + "</div>" : "") +
+        "</td><td>" + whatSel(n, m) + "</td><td>" + detail(n, m) + '</td><td class="n">' + (m.n || 0) + "</td>" +
+        '<td style="min-width:200px">' + (m.why ? '<div class="nr" style="white-space:normal">' + esc(m.why) + "</div>" : "") + warn.map(w => '<div class="nr bad" style="white-space:normal">' + esc(w) + "</div>").join("") + "</td>" +
+        '<td class="ac">' + (view === "other" ? "" : m.ok ? '<button class="linkbtn" data-lmok="' + esc(n) + '" title="Undo">\u2713 confirmed</button>' : '<button class="btn small" data-lmok="' + esc(n) + '">Confirm</button>') + "</td></tr>";
+    }).join("") + "</tbody></table>" + (shown.length > 400 ? '<p class="note">The first 400 are shown; find the rest by name.</p>' : "") + (shown.length ? "" : '<div class="bk-none">' + (view === "pending" ? "Every GST and TDS ledger is confirmed." : "Nothing here.") + "</div>") + "</div>";
+  h += '<p class="note">Add a ledger that was missed from \u201cOther ledgers\u201d by choosing what it is. Several ledgers for one head are fine \u2014 reverse-charge ledgers, or one ledger per rate. To take a ledger out, choose \u201cNot a tax ledger\u201d.</p>';
+  return h;
 }
+// the line shown on the TDS and GST screens while ledgers are still to be confirmed
+function ledgerBanner(b, which){
+  const p = LedMaster.pending(b).filter(([, m]) => !which || (which === "gst" ? LedMaster.isGst(m.what) || !m.what || m.what === "none" : LedMaster.isTds(m.what) || !m.what || m.what === "none"));
+  if (!p.length) return "";
+  return '<div class="bk-alert bad" style="margin-bottom:12px"><b>' + p.length + " ledger" + (p.length === 1 ? " is" : "s are") + " still to be confirmed.</b> The figures below use the guesses; the return files wait until they are confirmed. " +
+    '<button class="linkbtn" data-bookstab="ledgers">Confirm them</button><div class="nr" style="white-space:normal">' + esc(p.slice(0, 6).map(x => x[0]).join(", ") + (p.length > 6 ? " and " + (p.length - 6) + " more" : "")) + "</div></div>";
+}
+// the files for filing are made only from confirmed ledgers
+function ledgersReady(which){
+  const p = LedMaster.pending(S.books).filter(([, m]) => which === "gst" ? !LedMaster.isTds(m.what) : !LedMaster.isGst(m.what));
+  if (!p.length) return true;
+  toast(p.length + " ledger" + (p.length === 1 ? " is" : "s are") + " still to be confirmed. Confirm them first, so the file is right.");
+  S.booksTab = "ledgers"; S.lmView = "pending"; render();
+  return false;
+}
+
 /* ---------- TDS, the way TDS software is laid out: year, then quarter, then the return, then its tabs ---------- */
 function tdsYears(b, rows){
   return Array.from(new Set(rows.map(r => r.fy).concat((b.salary || []).map(r => TDS.fyOf(r.date))).concat(TDS.challans().map(c => TDS.fyOf(c.date)))))
@@ -6692,7 +6874,7 @@ function viewBooksTds(b){
   if (!S.tdsView) S.tdsView = fys.length === 1 ? "year" : "years";
   if ((S.tdsView === "year" || S.tdsView === "return" || S.tdsView === "certs") && !fys.includes(S.tdsFy)) S.tdsFy = fys[0] || "";
   if (!S.tdsFy && S.tdsView !== "years") S.tdsView = "years";
-  let h = tdsCrumbs();
+  let h = ledgerBanner(b, "tds") + tdsCrumbs();
   if (S.tdsView === "years") return h + viewTdsYears(b, rows, fys);
   if (S.tdsView === "certs") return h + viewTdsCerts(b);
   if (S.tdsView === "return") return h + (S.tdsForm === "24Q" ? viewTdsReturn24(b) : viewTdsReturn26(b, rows));
@@ -7069,7 +7251,7 @@ function viewBooksGst(b){
   const months = GSTR.months(), regs = (b.meta && b.meta.gstins) || [];
   if (!S.gstYm && months.length) S.gstYm = months[months.length - 1];
   if (!S.gstReg && regs.length === 1) S.gstReg = regs[0].slice(0, 2);
-  let h = '<nav class="sbar" aria-label="GST">' + [["r1", "GSTR-1"], ["r3b", "GSTR-3B"], ["r2b", "2B reconciliation"], ["adv", "Advances"], ["rev", "Reversal"], ["amend", "Amendments"]]
+  let h = ledgerBanner(b, "gst") + '<nav class="sbar" aria-label="GST">' + [["r1", "GSTR-1"], ["r3b", "GSTR-3B"], ["r2b", "2B reconciliation"], ["adv", "Advances"], ["rev", "Reversal"], ["amend", "Amendments"]]
     .map(([id, l]) => '<button data-gstpart="' + id + '" aria-selected="' + (part === id) + '">' + l + "</button>").join("") + "</nav>";
   h += '<div class="revfilter"><select data-gstym>' + months.map(m => '<option value="' + m + '"' + (S.gstYm === m ? " selected" : "") + ">" + GSTR.label(m) + "</option>").join("") + "</select>" +
     (regs.length > 1 ? '<select data-gstreg><option value="">Both registrations</option>' + regs.map(g => '<option value="' + g.slice(0, 2) + '"' + (S.gstReg === g.slice(0, 2) ? " selected" : "") + ">" + esc(g) + "</option>").join("") + "</select>" : "") +
@@ -11816,6 +11998,20 @@ function bulkLedgerFrom(inp){
 // what the user corrects on the Advances and Reversal screens
 function gstFixChange(t){
   const d = t.dataset, b = S.books;
+  const lmName = d.lmwhat || d.lmtax || d.lmside || d.lmreg || d.lmgrate || d.lmsec || d.lmrate;
+  if (lmName){
+    const m = b.map[lmName] = b.map[lmName] || {n: 0};
+    if (d.lmwhat) LedMaster.applyWhat(m, t.value || "none");
+    if (d.lmtax) m.tax = t.value;
+    if (d.lmside) m.side = t.value;
+    if (d.lmreg) m.reg = t.value;
+    if (d.lmgrate) m.gstRate = t.value ? num(t.value) : null;
+    if (d.lmsec) m.section = t.value.toUpperCase().replace(/\s+/g, "");
+    if (d.lmrate) m.rate = t.value === "" ? null : num(t.value);
+    // a choice made here is the user's own: it counts as confirmed
+    m.byHand = true; m.ok = true; m.okAt = new Date().toISOString();
+    b.mapV = (b.mapV || 0) + 1; b.reco = null; saveBooks(); render(); return true;
+  }
   if (d.r2link !== undefined){ const st = GST2B.state(); if (t.value){ st.link[d.r2link] = [t.value]; delete st.confirm[d.r2link]; } saveBooks(); render(); return true; }
   if (d.r2tag !== undefined){ const st = GST2B.state(); if (t.value) st.tag[d.r2tag] = {tag: t.value, at: new Date().toISOString()}; else delete st.tag[d.r2tag]; saveBooks(); render(); return true; }
   if (d.r2tol !== undefined){ const st = GST2B.state(); st.opt = Object.assign({}, st.opt, {tol: Math.max(0, num(t.value))}); saveBooks(); render(); return true; }
@@ -11848,7 +12044,7 @@ function booksChange(t){
     const b = S.books; b.busy = "Opening " + f.name + "\u2026"; render();
     Books.importDayBook(f, m => { b.busy = m; softRender(); }).then(async res => {
       b.vouchers = res.vouchers; b.meta = Object.assign(res.meta, {at: new Date().toISOString(), file: f.name});
-      b.map = Books.mapLedgers(res.vouchers, b.map); b.reco = null; b.busy = "";
+      b.map = Books.mapLedgers(res.vouchers, b.map); LedMaster.refresh(b); b.reco = null; b.busy = "";
       await saveBooks();
       toast(res.vouchers.length + " vouchers read, " + Object.keys(b.map).length + " ledgers found. Check the ledgers, then TDS and GST.");
       S.booksTab = "ledgers"; render();
@@ -11861,6 +12057,7 @@ function booksChange(t){
     const b = S.books; b.busy = "Opening " + f.name + "\u2026"; render();
     Books.importMasters(f, m => { b.busy = m; softRender(); }).then(async res => {
       b.pans = res.pans; b.gstins = res.gstins; b.under = res.under; b.states = res.states; b.groups = res.groups; b.busy = "";
+      b.ledInfo = res.info; b.ledInfoAt = new Date().toISOString(); LedMaster.refresh(b);
       await saveBooks();
       const rows = TDS.rows(), withPan = rows.filter(r => r.pan).length;
       toast(res.count + " ledgers read. " + Object.keys(res.pans).length + " carry a PAN; " + withPan + " of " + rows.length + " deductions now have one.");
@@ -15084,6 +15281,8 @@ document.addEventListener("click", ev => {
     const [tab, k] = t.dataset.tdssort.split("|"), cur = (S.tdsSort || {})[tab] || {};
     S.tdsSort = Object.assign({}, S.tdsSort, {[tab]: {k, d: cur.k === k ? -(cur.d || 1) : 1}}); render(); return;
   }
+  if (t.dataset.lmview){ S.lmView = t.dataset.lmview; S.booksTab = "ledgers"; render(); return; }
+  if (t.dataset.lmok){ const m = S.books.map[t.dataset.lmok]; if (m){ LedMaster.confirm(S.books, [t.dataset.lmok], !m.ok); S.books.reco = null; saveBooks(); render(); } return; }
   if (t.dataset.r2tab){ S.r2Tab = t.dataset.r2tab; render(); return; }
   if (t.dataset.r2scope){ S.r2Scope = t.dataset.r2scope; render(); return; }
   if (t.dataset.r2open){ S.r2Open = S.r2Open === t.dataset.r2open ? "" : t.dataset.r2open; render(); return; }
@@ -15376,6 +15575,31 @@ document.addEventListener("click", ev => {
     case "mastersPick": { const i = document.getElementById("mastersIn"); if (i){ i.value = ""; i.click(); } break; }
     case "filedPick": { const i = document.getElementById("filedIn"); if (i){ i.value = ""; i.click(); } break; }
     case "twoBPick": { const i = document.getElementById("twoBIn"); if (i){ i.value = ""; i.click(); } break; }
+    case "lmConfirmShown": {
+      const b = S.books, info = b.ledInfo || {}, q = String(S.ledQ || "").toLowerCase(), view = S.lmView || "pending";
+      const pool = view === "gst" ? Object.entries(b.map).filter(([nm, m]) => LedMaster.isGst(m.what) && LedMaster.taxLike(nm, m, info[nm])) :
+        view === "tds" ? Object.entries(b.map).filter(([nm, m]) => LedMaster.isTds(m.what) && LedMaster.taxLike(nm, m, info[nm])) : LedMaster.pending(b);
+      const names = pool.filter(([nm, m]) => !m.ok && (!q || nm.toLowerCase().includes(q) || String(m.section || "").toLowerCase().includes(q) || String((info[nm] || {}).group || "").toLowerCase().includes(q))).map(x => x[0]);
+      LedMaster.confirm(b, names, true); b.reco = null; saveBooks(); toast(names.length + " ledger" + (names.length === 1 ? "" : "s") + " confirmed."); render(); break;
+    }
+    case "ledRead": {
+      const co = CO(), b = S.books;
+      if (!bridgeLive(co)){ toast("Connect the Tally Bridge and open this company in Tally, or bring in the ledger masters XML under \u201cFrom Tally\u201d."); break; }
+      b.busy = "Reading the ledgers from Tally\u2026"; render();
+      Bridge.call("/ledgers?company=" + encodeURIComponent(Bridge.openFor(co).name) + Bridge.pinQ(), null, 180000).then(async j => {
+        const info = {}, groups = {};
+        [].concat(j.ledgers || []).forEach(l => { if (!l || !l.name) return;
+          info[l.name] = {group: l.group || "", taxType: String(l.taxType || "").replace(/[^A-Za-z ]/g, "").trim(), dutyHead: l.dutyHead || "", tdsNature: l.tdsNature || "", gstin: l.gstin || "", pan: l.pan || ""};
+          if (l.gstin) (b.gstins = b.gstins || {})[l.name] = String(l.gstin).toUpperCase();
+          if (l.pan) (b.pans = b.pans || {})[l.name] = String(l.pan).toUpperCase();
+          if (l.group) (b.under = b.under || {})[l.name] = l.group; });
+        [].concat(j.groups || []).forEach(g => { if (g && g.name) groups[g.name] = g.parent || ""; });
+        b.ledInfo = info; b.ledInfoAt = new Date().toISOString(); if (Object.keys(groups).length) b.groups = groups;
+        LedMaster.refresh(b); b.busy = ""; b.reco = null; await saveBooks();
+        toast(Object.keys(info).length + " ledgers read from Tally. " + LedMaster.pending(b).length + " GST or TDS ledgers to confirm."); render();
+      }, e => { b.busy = ""; toast("Could not read Tally: " + (e && e.message || e)); render(); });
+      break;
+    }
     case "assetAdd": { const b = S.books; b.assets = (b.assets || []).concat([{id: uid("as"), name: "", date: "", igst: 0, cgst: 0, sgst: 0, cess: 0, use: "common", reg: S.gstReg || "", sold: ""}]); saveBooks(); render(); break; }
     case "booksClear": askConfirm({title: "Remove the books read from Tally?", ok: "Remove", body: '<p class="note">Challans and what you corrected stay. The day book can be brought in again.</p>'}).then(ok => {
       if (!ok) return; S.books.vouchers = []; S.books.meta = null; S.books.reco = null; saveBooks(); toast("Removed."); render(); }); break;
@@ -15404,7 +15628,7 @@ document.addEventListener("click", ev => {
     case "salaryClear": askConfirm({title: "Remove the salary sheet?", ok: "Remove", body: '<p class="note">The challans and everything else stay.</p>'}).then(ok => {
       if (!ok) return; S.books.salary = []; saveBooks(); toast("Removed."); render(); }); break;
     case "q24Excel": TDS24Q.toExcel(S.tdsFy || "", S.tdsQ || "Q4").then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break;
-    case "tdsTxt": {
+    case "tdsTxt": { if (!ledgersReady("tds")) break;
       const q = S.tdsQ || "", fy = S.tdsFy || "";
       if (!q || !fy){ toast("Choose the year and the quarter first."); break; }
       const r = TDS26Q.build(fy, q, TDS26Q.firmDetails());
@@ -15413,7 +15637,7 @@ document.addEventListener("click", ev => {
       toast(r.rows + " deductions under " + r.challans + " challan" + (r.challans === 1 ? "" : "s") + ". Check it with the FVU before filing.");
       break;
     }
-    case "tdsFvu": {
+    case "tdsFvu": { if (!ledgersReady("tds")) break;
       const q = S.tdsQ || "", fy = S.tdsFy || "";
       if (!q || !fy){ toast("Choose the year and the quarter first."); break; }
       const r = TDS26Q.build(fy, q, TDS26Q.firmDetails());
@@ -15428,8 +15652,8 @@ document.addEventListener("click", ev => {
       break;
     }
     case "tdsExcel": TDS.toExcel(S.tdsFy || "", S.tdsQ || "").then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break;
-    case "gstJson": GSTR.toJsonFile(S.gstYm || "", S.gstReg || "").then(j => toast("GSTR-1 JSON for " + j.fp + " downloaded. Check it on the portal's offline tool before filing."), e => toast("Could not build the file: " + (e && e.message))); break;
-    case "gst3bJson": {
+    case "gstJson": if (!ledgersReady("gst")) break; GSTR.toJsonFile(S.gstYm || "", S.gstReg || "").then(j => toast("GSTR-1 JSON for " + j.fp + " downloaded. Check it on the portal's offline tool before filing."), e => toast("Could not build the file: " + (e && e.message))); break;
+    case "gst3bJson": { if (!ledgersReady("gst")) break;
       const j = GSTR.threeBJson(S.gstYm || "", S.gstReg || "");
       saveFile("GSTR3B_" + (j.gstin || "") + "_" + j.ret_period + ".json", new Blob([JSON.stringify(j)], {type: "application/json"}));
       toast("GSTR-3B JSON for " + j.ret_period + " downloaded. Check it in the portal's offline tool before filing.");
