@@ -751,7 +751,7 @@ const DEFAULT_FIRM = {firmName:"Garg Shekhar & Company", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "TEST · 24 Sep 2026 · build 102 (TDS and GST from the Tally books: deductions, challans, 2B reconciliation)";
+const APP_VERSION = "TEST · 24 Sep 2026 · build 103 (ledger masters bring the deductees\u2019 PAN)";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;
@@ -4803,7 +4803,7 @@ function viewCollect(){
   const inbox = docqPanel(S.coId);
   const card = t === "bank"
     ? '<section class="collect-card"><h3>Upload a bank statement</h3><div class="drop" id="bankDrop" tabindex="0" role="button" data-act="bankPick" aria-label="Upload a bank statement"><strong>Drop a statement here, or click to choose</strong>' +
-      '<div class="note">Excel, CSV or PDF from any bank. The balances are checked, and the statement is filed under the right account.</div></div><input type="file" id="booksIn" accept=".xml" hidden><input type="file" id="twoBIn" accept=".json" hidden><input type="file" id="bankIn" accept=".xls,.xlsx,.csv,.pdf,.txt" multiple class="hidden"></section>'
+      '<div class="note">Excel, CSV or PDF from any bank. The balances are checked, and the statement is filed under the right account.</div></div><input type="file" id="booksIn" accept=".xml" hidden><input type="file" id="mastersIn" accept=".xml" hidden><input type="file" id="twoBIn" accept=".json" hidden><input type="file" id="bankIn" accept=".xls,.xlsx,.csv,.pdf,.txt" multiple class="hidden"></section>'
     : '<section class="collect-card"><h3>Upload purchase bills</h3>' + uploadBlock(CO()) + "</section>";
   const mine = viewJobs(j => j.target === S.coId || j.cid === S.coId || j.target === "auto");
   return '<div class="collect">' + (inbox || '<p class="note" style="margin:0 0 12px">Nothing waiting in the inbox for ' + esc(CO().name) + ".</p>") + card +
@@ -4994,6 +4994,44 @@ const Books = {
     });
     if (v.ent.length) out.push(v);
   },
+  async importMasters(file, onProgress){
+    const dec = await this.decoder(file);
+    const pans = {}, gstins = {}, under = {};
+    let buf = "", n = 0;
+    const take = piece => {
+      const raw = (piece.match(/<LEDGER NAME="([^"]*)"/) || [])[1];
+      if (!raw) return;
+      const name = raw.replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").trim();
+      const pan = this.one(piece, "INCOMETAXNUMBER").toUpperCase();
+      const gst = this.one(piece, "PARTYGSTIN").toUpperCase();
+      const par = this.one(piece, "PARENT");
+      if (pan) pans[name] = pan;
+      if (gst) gstins[name] = gst;
+      if (par) under[name] = par;
+      n++;
+    };
+    const reader = file.stream().getReader();
+    for (;;){
+      const {done, value} = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, {stream: true});
+      let cut;
+      while ((cut = buf.indexOf("</LEDGER>")) >= 0){
+        const piece = buf.slice(0, cut + 9); buf = buf.slice(cut + 9);
+        const start = piece.lastIndexOf("<LEDGER ");
+        if (start >= 0) take(piece.slice(start));
+      }
+      if (onProgress && n % 300 === 0) onProgress("Read " + n + " ledgers\u2026");
+    }
+    buf += dec.decode();
+    let cut;
+    while ((cut = buf.indexOf("</LEDGER>")) >= 0){
+      const piece = buf.slice(0, cut + 9); buf = buf.slice(cut + 9);
+      const start = piece.lastIndexOf("<LEDGER ");
+      if (start >= 0) take(piece.slice(start));
+    }
+    return {pans, gstins, under, count: n};
+  },
   // what each ledger is: TDS section, GST tax, party or expense
   mapLedgers(vouchers, saved){
     const seen = new Map();
@@ -5158,7 +5196,7 @@ const TDS = {
       "TDS", "Total tax deducted", "Date of deduction", "Rate", "Voucher", "Challan BSR", "Challan serial", "Challan date"];
     const body = rows.map((r, i) => {
       const c = ch.find(x => x.id === r.challan) || {};
-      return [i + 1, r.pan && /^[A-Z]{3}C/.test(r.pan) ? "01" : "02", r.pan || "PANNOTAVBL", r.party, "9" + String(r.section).replace(/^19/, ""),
+      return [i + 1, /^[A-Z]{3}C/.test(r.pan || "") ? "01" : "02", r.pan || "PANNOTAVBL", r.party, "9" + String(r.section).replace(/^19/, ""),
         d(r.date), r.paid, r.tds, r.tds, d(r.date), r.rate, r.voucher, c.bsr || "", c.serial || "", d(c.date || "")];
     });
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([head].concat(body)), "Deductees");
@@ -5289,14 +5327,16 @@ function viewBooks(){
 function viewBooksImport(b){
   const m = b.meta || {};
   return '<section class="dash-card" style="max-width:760px"><h3>Bring the books in from Tally</h3>' +
-    '<p class="note">In Tally: <b>Display → Day Book</b>, set the period, then <b>Export</b> as XML. Bring that file here. Nothing is sent anywhere; it is read on this computer.</p>' +
+    '<p class="note">In Tally: <b>Display → Day Book</b>, set the period, then <b>Export</b> as XML. For the deductees’ PAN, also export <b>Display → List of Accounts</b> as XML. Nothing is sent anywhere; both are read on this computer.</p>' +
     '<div class="row" style="gap:8px;margin:10px 0"><button class="btn primary" data-act="booksPick">Choose the day book XML</button>' +
+    '<button class="btn" data-act="mastersPick">Choose the ledger masters XML</button>' +
     (b.vouchers && b.vouchers.length ? '<button class="btn small" data-act="booksClear">Remove what is here</button>' : "") + "</div>" +
     (b.vouchers && b.vouchers.length
       ? '<div class="dash-row"><span>Vouchers</span><b>' + b.vouchers.length + "</b></div>" +
         '<div class="dash-row"><span>Period</span><b>' + fmtDate(tallyDate(m.from)) + " to " + fmtDate(tallyDate(m.to)) + "</b></div>" +
         '<div class="dash-row"><span>Registrations in the file</span><b>' + esc((m.gstins || []).join(", ") || "—") + "</b></div>" +
-        '<div class="dash-row"><span>Read on</span><b>' + esc(m.at ? fmtDate(String(m.at).slice(0, 10)) : "—") + "</b></div>"
+        '<div class="dash-row"><span>Read on</span><b>' + esc(m.at ? fmtDate(String(m.at).slice(0, 10)) : "—") + "</b></div>" +
+        '<div class="dash-row"><span>Ledger masters</span><b>' + (Object.keys(b.pans || {}).length ? Object.keys(b.pans).length + " with PAN, " + Object.keys(b.gstins || {}).length + " with GSTIN" : "not brought in yet") + "</b></div>"
       : '<p class="note">Nothing here yet.</p>') + "</section>";
 }
 function tallyDate(s){ return s && String(s).length === 8 ? String(s).slice(0, 4) + "-" + String(s).slice(4, 6) + "-" + String(s).slice(6, 8) : ""; }
@@ -9724,6 +9764,19 @@ function bankChange(t){
     }, e => { b.busy = ""; toast("Could not read that file: " + (e && e.message || e)); render(); });
     return true;
   }
+  if (t.id === "mastersIn"){
+    const f = (t.files || [])[0]; t.value = "";
+    if (!f) return true;
+    const b = S.books; b.busy = "Opening " + f.name + "\u2026"; render();
+    Books.importMasters(f, m => { b.busy = m; softRender(); }).then(async res => {
+      b.pans = res.pans; b.gstins = res.gstins; b.under = res.under; b.busy = "";
+      await saveBooks();
+      const rows = TDS.rows(), withPan = rows.filter(r => r.pan).length;
+      toast(res.count + " ledgers read. " + Object.keys(res.pans).length + " carry a PAN; " + withPan + " of " + rows.length + " deductions now have one.");
+      render();
+    }, e => { b.busy = ""; toast("Could not read that file: " + (e && e.message || e)); render(); });
+    return true;
+  }
   if (t.id === "twoBIn"){
     const f = (t.files || [])[0]; t.value = "";
     if (!f) return true;
@@ -12995,6 +13048,7 @@ document.addEventListener("click", ev => {
     case "bridgeOff": Bridge.setCfg({key: ""}); clearInterval(bridgeTimer); Bridge.st = {state: "off", sessions: [], open: [], at: Date.now(), error: ""}; render(); break;
     case "billPost": postBillsToTally(); break;
     case "booksPick": { const i = document.getElementById("booksIn"); if (i){ i.value = ""; i.click(); } break; }
+    case "mastersPick": { const i = document.getElementById("mastersIn"); if (i){ i.value = ""; i.click(); } break; }
     case "twoBPick": { const i = document.getElementById("twoBIn"); if (i){ i.value = ""; i.click(); } break; }
     case "booksClear": askConfirm({title: "Remove the books read from Tally?", ok: "Remove", body: '<p class="note">Challans and what you corrected stay. The day book can be brought in again.</p>'}).then(ok => {
       if (!ok) return; S.books.vouchers = []; S.books.meta = null; S.books.reco = null; saveBooks(); toast("Removed."); render(); }); break;
