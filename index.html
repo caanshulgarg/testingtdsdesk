@@ -756,7 +756,7 @@ const DEFAULT_FIRM = {firmName:"Garg Shekhar & Company", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "TEST · 24 Sep 2026 · build 117 (GST on advances, 11A and 11B; ITC reversal under rules 42 and 43)";
+const APP_VERSION = "TEST · 24 Sep 2026 · build 118 (TDS by year, quarter and return, with challans, deductees and deductions on their own tabs)";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;
@@ -5188,8 +5188,12 @@ const TDS = {
   ymd(d){ const t = String(d || "").replace(/[^0-9]/g, ""); return t.length >= 6 ? t : ""; },
   qOf(d){ const m = num(this.ymd(d).slice(4, 6)); return m >= 4 && m <= 6 ? "Q1" : m >= 7 && m <= 9 ? "Q2" : m >= 10 && m <= 12 ? "Q3" : "Q4"; },
   fyOf(d){ const t = this.ymd(d), y = num(t.slice(0, 4)), m = num(t.slice(4, 6)); return (m >= 4 ? y : y - 1) + "-" + String((m >= 4 ? y + 1 : y)).slice(2); },
+  // 26Q: every deduction other than salary
+  rows(){ return this.allRows().filter(r => !/^192/.test(String(r.section || ""))); },
+  // salary TDS the books carry under section 192; 24Q takes the detail from the salary sheet
+  salaryRows(){ return this.allRows().filter(r => /^192/.test(String(r.section || ""))); },
   // every voucher that carries a TDS ledger becomes one deduction row
-  rows(){
+  allRows(){
     const b = S.books;
     if (!b || !b.vouchers) return [];
     const out = [];
@@ -6327,38 +6331,336 @@ function viewBooksLedgers(b){
       '<td class="n">' + (m.rate != null && m.kind === "tds_payable" ? m.rate + "%" : "") + "</td></tr>").join("") +
     "</tbody></table></div></section>";
 }
-function viewBooksTds(b){
-  const part = S.tdsPart || "q26";
-  let nav = '<nav class="sbar" aria-label="TDS">' + [["q26", "26Q, other than salary", TDS.rows().length], ["q24", "24Q, salary", (b.salary || []).length], ["year", "Quarter by quarter", null], ["certs", "Certificates and 206AA", Certs.all().length]]
-    .map(([id, l, n]) => '<button data-tdspart="' + id + '" aria-selected="' + (part === id) + '">' + l + (n ? ' <span class="sbar-n">' + n + "</span>" : "") + "</button>").join("") + "</nav>";
-  if (part === "q24") return nav + viewBooks24Q(b);
-  if (part === "year") return nav + viewTdsYear(b);
-  if (part === "certs") return nav + viewTdsCerts(b);
-  return nav + viewBooks26Q(b);
+/* ---------- TDS, the way TDS software is laid out: year, then quarter, then the return, then its tabs ---------- */
+function tdsYears(b, rows){
+  return Array.from(new Set(rows.map(r => r.fy).concat((b.salary || []).map(r => TDS.fyOf(r.date))).concat(TDS.challans().map(c => TDS.fyOf(c.date)))))
+    .filter(f => /^\d{4}-\d{2}$/.test(f)).sort().reverse();
 }
-function viewTdsYear(b){
-  const fys = Array.from(new Set(TDS.rows().map(r => r.fy).concat((b.salary || []).map(r => TDS.fyOf(r.date))))).filter(Boolean).sort();
-  const fy = S.tdsFy || fys[fys.length - 1] || "";
+function tdsCrumbs(){
+  const v = S.tdsView, parts = ['<button class="linkbtn" data-tdsnav="years">TDS</button>'];
+  if (S.tdsFy && v !== "years") parts.push('<button class="linkbtn" data-tdsnav="year">' + esc(S.tdsFy) + "</button>");
+  if (v === "certs") parts.push("<b>Certificates and rate questions</b>");
+  if (v === "return") parts.push("<b>" + esc(S.tdsQ) + " \u00b7 " + esc(S.tdsForm) + "</b>");
+  return '<div class="tds-crumbs" style="display:flex;gap:8px;align-items:center;margin:0 0 12px;font-size:15px">' + parts.join('<span class="note">\u203a</span>') + "</div>";
+}
+function viewBooksTds(b){
+  const rows = TDS.rows(), fys = tdsYears(b, rows);
+  if (!S.tdsView) S.tdsView = fys.length === 1 ? "year" : "years";
+  if ((S.tdsView === "year" || S.tdsView === "return" || S.tdsView === "certs") && !fys.includes(S.tdsFy)) S.tdsFy = fys[0] || "";
+  if (!S.tdsFy && S.tdsView !== "years") S.tdsView = "years";
+  let h = tdsCrumbs();
+  if (S.tdsView === "years") return h + viewTdsYears(b, rows, fys);
+  if (S.tdsView === "certs") return h + viewTdsCerts(b);
+  if (S.tdsView === "return") return h + (S.tdsForm === "24Q" ? viewTdsReturn24(b) : viewTdsReturn26(b, rows));
+  return h + viewTdsYearPage(b, rows);
+}
+function viewTdsYears(b, rows, fys){
   const money = v => INR.format(r2(v || 0));
-  const qs = fy ? TDSYear.quarters(fy) : [];
-  let h = '<div class="revfilter"><select data-tdsfy>' + fys.map(f => '<option value="' + f + '"' + (fy === f ? " selected" : "") + ">" + f + "</option>").join("") + "</select>" +
-    '<button class="btn small" data-act="yearExcel26">Download the year, 26Q</button>' +
-    '<button class="btn small" data-act="yearExcel24">Download the year, 24Q</button>' +
+  if (!fys.length) return '<div class="bk-none">Bring in the day book, or a salary sheet under 24Q, and the years appear here.</div>' +
+    '<div class="row" style="gap:8px;margin-top:10px"><button class="btn small primary" data-act="salaryPick">Bring in the salary sheet</button></div>';
+  return '<section class="dash-card"><h3>Choose the financial year</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Year</th><th class="n">Deductions</th><th class="n">TDS</th><th class="n">Challans</th><th class="n">Not against a challan</th><th class="n">Without PAN</th><th class="n">Salary employees</th><th class="ac"></th></tr></thead><tbody>' +
+    fys.map(fy => {
+      const r = rows.filter(x => x.fy === fy), ch = TDS.challans().filter(c => TDS.fyOf(c.date) === fy);
+      const emp = new Set(TDS24Q.rows().filter(x => TDS.fyOf(x.date) === fy).map(x => x.pan || x.name)).size;
+      const un = r2(r.filter(x => !x.challan).reduce((a, x) => a + x.tds, 0));
+      return '<tr><td><button class="linkbtn" data-tdsgo="' + fy + '"><b>' + esc(fy) + '</b></button></td><td class="n">' + r.length + '</td><td class="n">' + money(r.reduce((a, x) => a + x.tds, 0)) +
+        '</td><td class="n">' + ch.length + '</td><td class="n' + (un ? " bad" : "") + '">' + (un ? money(un) : "\u2014") + '</td><td class="n' + (r.some(x => !Certs.validPan(x.pan)) ? " bad" : "") + '">' +
+        r.filter(x => !Certs.validPan(x.pan)).length + '</td><td class="n">' + (emp || "\u2014") + '</td><td class="ac"><button class="btn small" data-tdsgo="' + fy + '">Open</button></td></tr>';
+    }).join("") + "</tbody></table></div></section>";
+}
+function viewTdsYearPage(b, rows){
+  const fy = S.tdsFy, money = v => INR.format(r2(v || 0)), qs = TDSYear.quarters(fy);
+  const cell = (x, form) => {
+    if (form === "26Q"){
+      if (!x.deductions && !x.challans) return '<td class="note">nothing</td>';
+      return '<td><button class="linkbtn" data-tdsgo="' + fy + "|" + x.q + '|26Q"><b>' + money(x.tds) + "</b></button>" +
+        '<div class="nr">' + x.deductions + " deductions \u00b7 " + x.challans + " challan" + (x.challans === 1 ? "" : "s") + "</div>" +
+        ((x.unallocated || x.noPan || x.issues) ? [x.unallocated ? money(x.unallocated) + " not against a challan" : "", x.noPan ? x.noPan + " without PAN" : "", x.issues ? x.issues + " rate question" + (x.issues === 1 ? "" : "s") : ""].filter(Boolean).map(w => '<div class="nr bad" style="white-space:normal">' + w + "</div>").join("") : '<div class="nr">ready</div>') + "</td>";
+    }
+    const inBooks = TDS.salaryRows().filter(r => r.fy === fy && r.q === x.q), booksTds = r2(inBooks.reduce((a, r) => a + r.tds, 0));
+    if (!x.salaryEmployees) return "<td>" + (booksTds ? '<button class="linkbtn" data-tdsgo="' + fy + "|" + x.q + '|24Q"><b>' + money(booksTds) + '</b></button><div class="nr">in the books under 192</div>' : "") +
+      '<div class="nr">' + ((b.salary || []).length ? (booksTds ? "" : "nothing") : '<button class="linkbtn" data-tdsgo="' + fy + "|" + x.q + '|24Q">bring in the salary sheet</button>') + "</div></td>";
+    return '<td><button class="linkbtn" data-tdsgo="' + fy + "|" + x.q + '|24Q"><b>' + money(x.salaryTds) + '</b></button><div class="nr">' + x.salaryEmployees + " employee" + (x.salaryEmployees === 1 ? "" : "s") + "</div></td>";
+  };
+  let h = '<div class="revfilter"><select data-tdsfy>' + tdsYears(b, rows).map(f => '<option value="' + f + '"' + (fy === f ? " selected" : "") + ">" + f + "</option>").join("") + "</select>" +
+    '<button class="btn small" data-tdsnav="certs">Certificates and rate questions</button>' +
+    '<button class="btn small" data-act="yearExcel26">Download the year, 26Q</button><button class="btn small" data-act="yearExcel24">Download the year, 24Q</button>' +
     '<button class="btn small primary" data-act="yearExcelAll">Download the whole year</button></div>';
-  if (!fy) return h + '<div class="bk-none">Bring in the books or a salary sheet first.</div>';
-  h += '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Quarter</th><th class="n">Deductions</th><th class="n">Paid or credited</th><th class="n">TDS</th>' +
-    '<th class="n">Not against a challan</th><th class="n">Without PAN</th><th class="n">Challans</th><th class="n">Challan tax</th><th class="n">Rate questions</th><th class="ac"></th></tr></thead><tbody>' +
-    qs.map(x => "<tr><td><b>" + x.q + "</b>" + (x.salaryEmployees ? '<div class="nr">' + x.salaryEmployees + " on salary \u00b7 " + money(x.salaryTds) + "</div>" : "") + "</td>" +
-      '<td class="n">' + x.deductions + '</td><td class="n">' + money(x.paid) + '</td><td class="n">' + money(x.tds) + "</td>" +
-      '<td class="n' + (x.unallocated ? " bad" : "") + '">' + money(x.unallocated) + '</td><td class="n' + (x.noPan ? " bad" : "") + '">' + x.noPan + "</td>" +
-      '<td class="n">' + x.challans + '</td><td class="n">' + money(x.challanTax) + '</td><td class="n' + (x.issues ? " bad" : "") + '">' + x.issues + "</td>" +
-      '<td class="ac"><button class="btn small" data-qgo="' + x.q + '">Open</button></td></tr>').join("") +
-    '<tr><td><b>Year</b></td><td class="n">' + qs.reduce((a, x) => a + x.deductions, 0) + '</td><td class="n">' + money(qs.reduce((a, x) => a + x.paid, 0)) +
-    '</td><td class="n"><b>' + money(qs.reduce((a, x) => a + x.tds, 0)) + '</b></td><td class="n">' + money(qs.reduce((a, x) => a + x.unallocated, 0)) +
-    '</td><td class="n">' + qs.reduce((a, x) => a + x.noPan, 0) + '</td><td class="n">' + qs.reduce((a, x) => a + x.challans, 0) + '</td><td class="n">' + money(qs.reduce((a, x) => a + x.challanTax, 0)) +
-    '</td><td class="n">' + qs.reduce((a, x) => a + x.issues, 0) + "</td><td></td></tr></tbody></table></div>";
+  h += '<section class="dash-card"><h3>' + esc(fy) + ": returns by quarter</h3>" +
+    '<p class="note">Open a return to see its challans, deductees and deductions on separate tabs.</p>' +
+    '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Quarter</th><th>26Q, other than salary</th><th>24Q, salary</th><th>Due</th></tr></thead><tbody>' +
+    qs.map(x => {
+      const due = {Q1: "31 Jul", Q2: "31 Oct", Q3: "31 Jan", Q4: "31 May"}[x.q];
+      return "<tr><td><b>" + x.q + '</b><div class="nr">' + {Q1: "Apr to Jun", Q2: "Jul to Sep", Q3: "Oct to Dec", Q4: "Jan to Mar"}[x.q] + "</div></td>" + cell(x, "26Q") + cell(x, "24Q") + "<td>" + due + "</td></tr>";
+    }).join("") +
+    '<tr><td><b>Year</b></td><td><b>' + money(qs.reduce((a, x) => a + x.tds, 0)) + '</b><div class="nr">' + qs.reduce((a, x) => a + x.deductions, 0) + " deductions</div></td><td><b>" +
+    money(qs.reduce((a, x) => a + x.salaryTds, 0)) + "</b></td><td></td></tr></tbody></table></div></section>";
   return h;
 }
+// one filter bar for every tab of a return; each tab keeps its own filters
+function tdsFilterBar(tab, opts){
+  const f = ((S.tdsFl || {})[tab]) || {};
+  return '<div class="revfilter" style="flex-wrap:wrap;row-gap:6px"><input type="search" data-tdsf="q" data-fk="tdsf-' + tab + '" data-keeptyped value="' + esc(f.q || "") + '" placeholder="' + esc(opts.placeholder) + '" style="width:260px;flex:0 0 auto">' +
+    (opts.selects || []).map(sel => '<select style="width:auto;flex:0 0 auto" data-tdsf="' + sel.key + '" aria-label="' + esc(sel.label || sel.key) + '">' + sel.options.map(([v, l]) => '<option value="' + esc(v) + '"' + ((f[sel.key] || "") === v ? " selected" : "") + ">" + esc(l) + "</option>").join("") + "</select>").join("") +
+    '<span class="note">' + esc(opts.count || "") + "</span>" +
+    (Object.keys(f).some(k => f[k]) ? '<button class="linkbtn" data-tdsfclear="' + tab + '">Clear filters</button>' : "") +
+    '<button class="btn small" data-printid="' + opts.table + '" data-printtitle="' + esc(opts.title || "") + '">Print or save as PDF</button>' +
+    (opts.excel ? '<button class="btn small" data-act="' + opts.excel + '">Excel</button>' : "") + "</div>";
+}
+function tdsTabs(tabs){
+  const cur = S.tdsTab;
+  return '<nav class="sbar" aria-label="Return" style="margin-top:4px">' + tabs.map(([id, l, n]) => '<button data-tdstab="' + id + '" aria-selected="' + (cur === id) + '">' + l +
+    (n != null ? ' <span class="sbar-n">' + n + "</span>" : "") + "</button>").join("") + "</nav>";
+}
+function tdsSortHead(tab, key, label, cls){
+  const s = ((S.tdsSort || {})[tab]) || {}, on = s.k === key;
+  return '<th' + (cls ? ' class="' + cls + '"' : "") + '><button class="linkbtn" data-tdssort="' + tab + "|" + key + '" style="font:inherit;color:inherit;text-transform:inherit;letter-spacing:inherit">' + label + (on ? (s.d < 0 ? " \u2193" : " \u2191") : "") + "</button></th>";
+}
+function tdsSorted(tab, list, get){
+  const s = ((S.tdsSort || {})[tab]) || {};
+  if (!s.k) return list;
+  return list.slice().sort((a, c) => { const x = get(a, s.k), y = get(c, s.k); return (typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y))) * (s.d || 1); });
+}
+function tdsMonths(fy, q){
+  const y = num(fy.slice(0, 4)), start = {Q1: 4, Q2: 7, Q3: 10, Q4: 1}[q], yy = q === "Q4" ? y + 1 : y;
+  return [0, 1, 2].map(i => String(yy) + String(start + i).padStart(2, "0"));
+}
+function monthName(ym){ return ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][num(ym.slice(4, 6)) - 1] + " " + ym.slice(0, 4); }
+// the challans a quarter uses: deposited in it, or paying one of its deductions
+function tdsQuarterChallans(fy, q, rows){
+  const used = new Set(rows.map(r => r.challan).filter(Boolean));
+  return TDS.challans().filter(c => (TDS.fyOf(c.date) === fy && TDS.qOf(c.date) === q) || used.has(c.id));
+}
+function viewTdsReturn26(b, allRows){
+  const fy = S.tdsFy, q = S.tdsQ, money = v => INR.format(r2(v || 0));
+  const rows = allRows.filter(r => r.fy === fy && r.q === q);
+  const ch = tdsQuarterChallans(fy, q, rows), use = TDS.challanUse(), allCh = TDS.challans();
+  const issues = Certs.issues(fy, q), issueOf = {};
+  issues.forEach(x => { issueOf[x.row.id] = x; });
+  const deductees = new Set(rows.map(r => r.pan && Certs.validPan(r.pan) ? r.pan : normName(r.party))).size;
+  if (!["challans", "deductees", "deductions", "checks"].includes(S.tdsTab)) S.tdsTab = "challans";
+  const tds = r2(rows.reduce((a, r) => a + r.tds, 0)), un = rows.filter(r => !r.challan), chTax = r2(ch.reduce((a, c) => a + num(c.tax), 0));
+  const int1A = TDS.interest(fy, q), fee = TDS.lateFee(fy, q, (b.filedOn || {})[fy + q]);
+  let h = '<div class="revfilter">' +
+    '<button class="btn small" data-act="tdsAuto">Put them against challans</button><button class="btn small" data-act="tdsExcel">Download the 26Q working</button>' +
+    '<button class="btn small" data-act="tdsTxt">Download the 26Q text file</button>' +
+    '<button class="btn small primary" data-act="tdsFvu"' + (Bridge.on() ? "" : " disabled title=\"Needs the Tally Bridge\"") + ">Check it with the FVU</button></div>";
+  h += '<div class="dash-tiles">' +
+    '<div class="dtile"><span>TDS deducted</span><b>' + money(tds) + "</b><small>" + rows.length + " deductions, " + deductees + " deductees</small></div>" +
+    '<div class="dtile"><span>Challans</span><b>' + money(chTax) + "</b><small>" + ch.length + " challan" + (ch.length === 1 ? "" : "s") + "</small></div>" +
+    '<div class="dtile' + (un.length ? " warn" : "") + '"><span>Not against a challan</span><b>' + money(un.reduce((a, r) => a + r.tds, 0)) + "</b><small>" + un.length + " deductions</small></div>" +
+    '<div class="dtile' + (issues.length || rows.some(r => !Certs.validPan(r.pan)) ? " warn" : "") + '"><span>To look at</span><b>' + (issues.length + rows.filter(r => !Certs.validPan(r.pan)).length) + "</b><small>" +
+    rows.filter(r => !Certs.validPan(r.pan)).length + " without PAN, " + issues.length + " rate questions</small></div></div>";
+  h += tdsTabs([["challans", "Challans", ch.length], ["deductees", "Deductees", deductees], ["deductions", "Deductions", rows.length],
+    ["checks", "Interest, late fee and checks", (int1A.length || (fee && fee.days > 0) || issues.length) ? int1A.length + issues.length + (fee && fee.days > 0 ? 1 : 0) : null]]);
+  const title = CO().name + " 26Q " + q + " " + fy;
+  if (S.tdsTab === "challans"){
+    const f = (S.tdsFl || {}).challans || {}, qq = String(f.q || "").toLowerCase();
+    const shown = tdsSorted("challans", ch.filter(c => {
+      const left = r2(num(c.tax) - (use[c.id] || 0));
+      if (qq && ![c.bsr, c.serial, c.section || ""].join(" ").toLowerCase().includes(qq)) return false;
+      if (f.state === "unused" && (use[c.id] || 0) > 0) return false;
+      if (f.state === "part" && !((use[c.id] || 0) > 0 && left > 0.5)) return false;
+      if (f.state === "full" && Math.abs(left) > 0.5) return false;
+      if (f.state === "over" && left >= -0.5) return false;
+      if (f.month && TDS.ymd(c.date).slice(0, 6) !== f.month) return false;
+      return true;
+    }), (c, k) => k === "date" ? TDS.ymd(c.date) : k === "tax" ? num(c.tax) : k === "left" ? num(c.tax) - (use[c.id] || 0) : k === "used" ? (use[c.id] || 0) : String(c[k] || ""));
+    const pays = TDS.paymentsFromBooks().filter(p => TDS.fyOf(p.date) === fy && TDS.qOf(p.date) === q)
+      .filter(p => !allCh.some(c => TDS.ymd(c.date) === TDS.ymd(p.date) && Math.abs(num(c.tax) - p.tax) < 1));
+    if (pays.length) h += '<section class="dash-card" style="margin-bottom:12px"><h3>Paid to the government, from the books</h3>' +
+      '<p class="note">TDS payment vouchers in Tally for this quarter. Add the BSR code and challan serial number and each becomes a challan.</p>' +
+      '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Date</th><th class="n">Tax</th><th>Sections</th><th>Voucher</th><th>BSR code</th><th>Serial</th><th class="ac"></th></tr></thead><tbody>' +
+      pays.map(p => "<tr><td>" + fmtDate(tallyDate(p.date)) + '</td><td class="n">' + money(p.tax) + "</td><td>" + esc(p.sections.join(", ")) + "</td><td>" + esc(p.voucher) + "</td>" +
+        '<td><input type="text" data-paybsr="' + p.vid + '" data-fk="pb-' + p.vid + '" placeholder="0240020" style="width:100px"></td>' +
+        '<td><input type="text" data-payser="' + p.vid + '" data-fk="ps-' + p.vid + '" placeholder="00979" style="width:90px"></td>' +
+        '<td class="ac"><button class="btn small" data-paymake="' + p.vid + '">Make it a challan</button></td></tr>').join("") + "</tbody></table></div></section>";
+    h += tdsFilterBar("challans", {placeholder: "Find a BSR code or serial", table: "tdsChTable", title: title + " challans", excel: "tdsExcel",
+      count: shown.length + " of " + ch.length + " challans",
+      selects: [{key: "month", label: "Month", options: [["", "Every month"]].concat(tdsMonths(fy, q).map(m => [m, monthName(m)]))},
+        {key: "state", label: "Use", options: [["", "Used: any"], ["unused", "Not used"], ["part", "Part used"], ["full", "Fully used"], ["over", "Used more than paid"]]}]});
+    const open = S.chOpen || "";
+    h += '<div class="bk-tablewrap"><table class="bk-table" id="tdsChTable"><thead><tr><th class="n">Sl.</th>' + tdsSortHead("challans", "bsr", "BSR code") + tdsSortHead("challans", "serial", "Serial") + tdsSortHead("challans", "date", "Deposited", "dt") +
+      '<th>Sections</th>' + tdsSortHead("challans", "tax", "Tax", "n") + '<th class="n">Interest</th>' + tdsSortHead("challans", "used", "Used", "n") + tdsSortHead("challans", "left", "Left", "n") + '<th class="n">Deductions</th><th class="ac"></th></tr></thead><tbody>' +
+      shown.map((c, i) => {
+        const mine = allRows.filter(r => r.challan === c.id), left = r2(num(c.tax) - (use[c.id] || 0)), isOpen = open === c.id;
+        const secs = Array.from(new Set(mine.map(r => r.section))).join(", ") || c.section || "\u2014";
+        let row = '<tr><td class="n">' + (i + 1) + '</td><td><button class="linkbtn" data-chopen="' + c.id + '">' + (isOpen ? "\u25be " : "\u25b8 ") + esc(c.bsr) + "</button></td><td>" + esc(c.serial) + "</td><td>" + fmtDate(tallyDate(c.date)) +
+          "</td><td>" + esc(secs) + '</td><td class="n">' + money(c.tax) + '</td><td class="n">' + money(c.interest) + '</td><td class="n">' + money(use[c.id] || 0) +
+          '</td><td class="n' + (left < -0.5 ? " bad" : "") + '">' + money(left) + '</td><td class="n"><button class="linkbtn" data-chopen="' + c.id + '">' + mine.length + "</button></td>" +
+          '<td class="ac"><button class="icon danger" data-chdel="' + c.id + '" title="Remove this challan">\u2715</button></td></tr>';
+        if (isOpen) row += '<tr><td colspan="11" style="background:var(--paper);padding:0">' + (mine.length ? '<table class="bk-table" style="margin:0"><thead><tr><th class="dt">Date</th><th>Deductee</th><th>PAN</th><th>Section</th><th class="n">Paid or credited</th><th class="n">TDS</th></tr></thead><tbody>' +
+          mine.map(r => "<tr><td>" + fmtDate(tallyDate(r.date)) + "</td><td>" + esc(r.party) + "</td><td>" + (Certs.validPan(r.pan) ? esc(r.pan) : '<span class="tag warn">no PAN</span>') + "</td><td>" + esc(r.section) + '</td><td class="n">' + money(r.paid) + '</td><td class="n">' + money(r.tds) + "</td></tr>").join("") +
+          "</tbody></table>" : '<p class="note" style="margin:8px">No deduction is against this challan yet.</p>') + "</td></tr>";
+        return row;
+      }).join("") +
+      '<tr><td></td><td colspan="4"><b>Total</b></td><td class="n"><b>' + money(shown.reduce((a, c) => a + num(c.tax), 0)) + '</b></td><td class="n">' + money(shown.reduce((a, c) => a + num(c.interest), 0)) +
+      '</td><td class="n">' + money(shown.reduce((a, c) => a + (use[c.id] || 0), 0)) + '</td><td class="n">' + money(shown.reduce((a, c) => a + num(c.tax) - (use[c.id] || 0), 0)) + "</td><td></td><td></td></tr>" +
+      '<tr><td></td><td><input type="text" id="chBsr" data-fk="chBsr" placeholder="0240020" style="width:100px"></td><td><input type="text" id="chSer" data-fk="chSer" placeholder="00979" style="width:90px"></td>' +
+      '<td><input type="date" id="chDate" data-fk="chDate"></td><td></td><td class="n"><input type="text" inputmode="decimal" id="chTax" data-fk="chTax" placeholder="tax" style="width:110px;text-align:right"></td>' +
+      '<td class="n"><input type="text" inputmode="decimal" id="chInt" data-fk="chInt" placeholder="interest" style="width:100px;text-align:right"></td><td colspan="3"></td>' +
+      '<td class="ac"><button class="btn small" data-act="chAdd">Add</button></td></tr></tbody></table>' + (shown.length || !ch.length ? "" : '<div class="bk-none">No challan matches these filters.</div>') + "</div>";
+    return h;
+  }
+  const chOpts = ch.concat(allCh.filter(c => !ch.includes(c) && TDS.fyOf(c.date) === fy));
+  const chSel = r => '<select data-alloc="' + esc(r.id) + '"><option value="">\u2014 not yet \u2014</option>' + chOpts.map(x => '<option value="' + x.id + '"' + (r.challan === x.id ? " selected" : "") + ">" +
+    esc(x.bsr + "/" + x.serial + " \u00b7 " + fmtDate(tallyDate(x.date))) + "</option>").join("") + "</select>";
+  const secs = Array.from(new Set(rows.map(r => r.section))).sort();
+  const common = [{key: "section", label: "Section", options: [["", "Every section"]].concat(secs.map(x => [x, x]))},
+    {key: "pan", label: "PAN", options: [["", "PAN: any"], ["no", "No valid PAN"], ["yes", "Has a PAN"]]},
+    {key: "challan", label: "Challan", options: [["", "Challan: any"], ["no", "Not against a challan"], ["yes", "Against a challan"]]}];
+  const pass = (r, f) => {
+    const qq = String(f.q || "").toLowerCase();
+    if (qq && ![r.party, r.pan, r.section, r.voucher, r.ledger].join(" ").toLowerCase().includes(qq)) return false;
+    if (f.section && r.section !== f.section) return false;
+    if (f.pan === "no" && Certs.validPan(r.pan)) return false;
+    if (f.pan === "yes" && !Certs.validPan(r.pan)) return false;
+    if (f.challan === "no" && r.challan) return false;
+    if (f.challan === "yes" && !r.challan) return false;
+    if (f.month && TDS.ymd(r.date).slice(0, 6) !== f.month) return false;
+    if (f.rate === "q" && !issueOf[r.id]) return false;
+    if (f.rate === "ok" && issueOf[r.id]) return false;
+    return true;
+  };
+  if (S.tdsTab === "deductees"){
+    const f = (S.tdsFl || {}).deductees || {};
+    const by = {};
+    rows.filter(r => pass(r, f)).forEach(r => {
+      const k = Certs.validPan(r.pan) ? r.pan : "name:" + normName(r.party);
+      const p = by[k] = by[k] || {key: k, party: r.party, pan: r.pan, secs: new Set(), n: 0, paid: 0, tds: 0, unallocated: 0, issues: 0, rows: []};
+      p.secs.add(r.section); p.n++; p.paid = r2(p.paid + r.paid); p.tds = r2(p.tds + r.tds);
+      if (!r.challan) p.unallocated = r2(p.unallocated + r.tds);
+      if (issueOf[r.id]) p.issues++;
+      p.rows.push(r);
+    });
+    const list = tdsSorted("deductees", Object.values(by).sort((a, c) => c.tds - a.tds), (p, k) => k === "secs" ? Array.from(p.secs).join(",") : p[k]);
+    const open = S.tdsOpen || "";
+    h += tdsFilterBar("deductees", {placeholder: "Find a deductee, PAN or voucher", table: "tdsDeTable", title: title + " deductees", excel: "tdsExcel",
+      count: list.length + " of " + deductees + " deductees", selects: common.concat([{key: "rate", label: "Rate", options: [["", "Rate: any"], ["q", "Rate questions"], ["ok", "Rate as expected"]]}])});
+    h += '<div class="bk-tablewrap"><table class="bk-table" id="tdsDeTable"><thead><tr>' + tdsSortHead("deductees", "party", "Deductee") + tdsSortHead("deductees", "pan", "PAN") + "<th>Code</th>" + tdsSortHead("deductees", "secs", "Sections") +
+      tdsSortHead("deductees", "n", "Deductions", "n") + tdsSortHead("deductees", "paid", "Paid or credited", "n") + tdsSortHead("deductees", "tds", "TDS", "n") + tdsSortHead("deductees", "unallocated", "Not against a challan", "n") + "</tr></thead><tbody>" +
+      list.map(p => {
+        const isOpen = open === p.key;
+        let row = '<tr><td><button class="linkbtn" data-tdsopen="' + esc(p.key) + '">' + (isOpen ? "\u25be " : "\u25b8 ") + esc(p.party) + "</button>" + (p.issues ? ' <span class="tag warn">' + p.issues + " rate</span>" : "") + "</td><td>" +
+          (Certs.validPan(p.pan) ? esc(p.pan) : '<span class="tag warn">no PAN</span>') + "</td><td>" + (Certs.validPan(p.pan) ? (/^[A-Z]{3}C/.test(p.pan) ? "01 company" : "02 other") : "\u2014") + "</td><td>" + esc(Array.from(p.secs).join(", ")) +
+          '</td><td class="n"><button class="linkbtn" data-tdsopen="' + esc(p.key) + '">' + p.n + '</button></td><td class="n">' + money(p.paid) + '</td><td class="n"><b>' + money(p.tds) + "</b></td>" +
+          '<td class="n' + (p.unallocated ? " bad" : "") + '">' + (p.unallocated ? money(p.unallocated) : "\u2014") + "</td></tr>";
+        if (isOpen) row += '<tr><td colspan="8" style="background:var(--paper);padding:0"><table class="bk-table" style="margin:0"><thead><tr><th class="dt">Date</th><th>Voucher</th><th>Section</th><th class="n">Paid or credited</th><th class="n">Rate</th><th class="n">TDS</th><th>Challan</th></tr></thead><tbody>' +
+          p.rows.map(r => "<tr><td>" + fmtDate(tallyDate(r.date)) + "</td><td>" + esc(r.voucher || "") + "</td><td>" + esc(r.section) + '</td><td class="n">' + money(r.paid) + '</td><td class="n">' + (r.rate != null ? r.rate + "%" : "") +
+            (issueOf[r.id] ? '<div class="nr bad">should be ' + issueOf[r.id].expected + "%</div>" : "") + '</td><td class="n">' + money(r.tds) + "</td><td>" + chSel(r) + "</td></tr>").join("") + "</tbody></table></td></tr>";
+        return row;
+      }).join("") +
+      '<tr><td colspan="4"><b>Total</b></td><td class="n">' + list.reduce((a, p) => a + p.n, 0) + '</td><td class="n">' + money(list.reduce((a, p) => a + p.paid, 0)) + '</td><td class="n"><b>' + money(list.reduce((a, p) => a + p.tds, 0)) +
+      '</b></td><td class="n">' + money(list.reduce((a, p) => a + p.unallocated, 0)) + "</td></tr></tbody></table>" + (list.length ? "" : '<div class="bk-none">No deductee matches these filters.</div>') + "</div>";
+    return h;
+  }
+  if (S.tdsTab === "deductions"){
+    const f = (S.tdsFl || {}).deductions || {};
+    const shown = tdsSorted("deductions", rows.filter(r => pass(r, f)), (r, k) => k === "date" ? TDS.ymd(r.date) : k === "challan" ? (r.challan ? 1 : 0) : r[k] == null ? "" : r[k]);
+    const LIMIT = 500, page = shown.slice(0, LIMIT);
+    h += tdsFilterBar("deductions", {placeholder: "Find a deductee, PAN, voucher or ledger", table: "tdsDnTable", title: title + " deductions", excel: "tdsExcel",
+      count: shown.length + " of " + rows.length + " deductions \u00b7 TDS " + money(shown.reduce((a, r) => a + r.tds, 0)),
+      selects: [{key: "month", label: "Month", options: [["", "Every month"]].concat(tdsMonths(fy, q).map(m => [m, monthName(m)]))}].concat(common)
+        .concat([{key: "rate", label: "Rate", options: [["", "Rate: any"], ["q", "Rate questions"], ["ok", "Rate as expected"]]}])});
+    h += '<div class="bk-tablewrap"><table class="bk-table" id="tdsDnTable"><thead><tr><th class="n">Sl.</th>' + tdsSortHead("deductions", "date", "Date", "dt") + tdsSortHead("deductions", "voucher", "Voucher") + tdsSortHead("deductions", "party", "Deductee") +
+      tdsSortHead("deductions", "pan", "PAN") + tdsSortHead("deductions", "section", "Section") + tdsSortHead("deductions", "paid", "Paid or credited", "n") + tdsSortHead("deductions", "rate", "Rate", "n") + tdsSortHead("deductions", "tds", "TDS", "n") +
+      tdsSortHead("deductions", "challan", "Challan") + "</tr></thead><tbody>" +
+      page.map((r, i) => '<tr><td class="n">' + (i + 1) + "</td><td>" + fmtDate(tallyDate(r.date)) + "</td><td>" + esc(r.voucher || "") + "</td><td>" + esc(r.party) + "</td><td>" + (Certs.validPan(r.pan) ? esc(r.pan) : '<span class="tag warn">no PAN</span>') +
+        "</td><td>" + esc(r.section) + '</td><td class="n">' + money(r.paid) + '</td><td class="n">' + (r.rate != null ? r.rate + "%" : "") + (issueOf[r.id] ? '<div class="nr bad" title="' + esc(issueOf[r.id].why) + '">should be ' + issueOf[r.id].expected + "%</div>" : "") +
+        '</td><td class="n">' + money(r.tds) + "</td><td>" + chSel(r) + "</td></tr>").join("") +
+      '<tr><td></td><td colspan="5"><b>Total</b></td><td class="n">' + money(shown.reduce((a, r) => a + r.paid, 0)) + '</td><td></td><td class="n"><b>' + money(shown.reduce((a, r) => a + r.tds, 0)) + "</b></td><td></td></tr></tbody></table>" +
+      (shown.length > LIMIT ? '<p class="note">The first ' + LIMIT + " are shown. Narrow them with the filters, or download the Excel for all " + shown.length + ".</p>" : "") +
+      (shown.length ? "" : '<div class="bk-none">No deduction matches these filters.</div>') + "</div>";
+    return h;
+  }
+  // interest, late fee, rate questions, by section, and the FVU result
+  const total = r2(int1A.reduce((a, x) => a + x.amount, 0));
+  if (S.fvuResult){
+    const fr = S.fvuResult;
+    h += '<section class="bk-alert ' + (fr.ok ? "" : "bad") + '"><b>' + (fr.ok ? "The FVU accepted the " + esc(fr.q) + " file." : "The FVU found problems in the " + esc(fr.q || "") + " file.") + "</b>" +
+      (fr.fvu ? '<p class="note">Upload file: ' + esc(fr.fvu) + "</p>" : "") +
+      (fr.errors ? '<pre style="white-space:pre-wrap;font-size:12px;max-height:220px;overflow:auto;margin:8px 0 0">' + esc(String(fr.errors).slice(0, 4000)) + "</pre>" : "") +
+      (!fr.errors && !fr.ok && fr.output ? '<pre style="white-space:pre-wrap;font-size:12px;max-height:160px;overflow:auto">' + esc(String(fr.output).slice(0, 2000)) + "</pre>" : "") +
+      '<div class="row" style="margin-top:8px"><button class="linkbtn" data-act="fvuClose">Hide this</button></div></section>';
+  }
+  h += '<section class="dash-card" style="margin-bottom:12px"><h3>Interest and late fee</h3>' +
+    '<div class="dash-row"><span>Interest under 201(1A), paid after the due date</span><b>' + money(total) + "</b></div>" +
+    '<div class="dash-row"><span>Late filing fee under 234E, if filed today</span><b>' + money(fee && fee.days > 0 ? fee.fee : 0) + "</b></div>" +
+    (fee && fee.days > 0 ? '<p class="note">' + fee.days + " day" + (fee.days === 1 ? "" : "s") + " past " + fmtDate(tallyDate(fee.due)) + " at 200 a day, capped at the TDS of the quarter (" + money(fee.cap) + ").</p>" : "") +
+    (int1A.length ? '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th class="dt">Deducted</th><th>Deductee</th><th class="n">TDS</th><th>Due</th><th>Paid</th><th class="n">Months</th><th class="n">Interest</th></tr></thead><tbody>' +
+      int1A.slice(0, 100).map(x => "<tr><td>" + fmtDate(tallyDate(x.row.date)) + "</td><td>" + esc(x.row.party) + '</td><td class="n">' + money(x.row.tds) + "</td><td>" + fmtDate(tallyDate(x.due)) + "</td><td>" + fmtDate(tallyDate(x.challan.date)) +
+        '</td><td class="n">' + x.months + '</td><td class="n bad">' + money(x.amount) + "</td></tr>").join("") + "</tbody></table></div>" : '<p class="note">No deduction was paid late.</p>') + "</section>";
+  h += '<section class="dash-card" style="margin-bottom:12px"><h3>Rate questions</h3>' + (issues.length ? '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th class="dt">Date</th><th>Deductee</th><th>PAN</th><th>Section</th><th class="n">Paid</th><th class="n">Rate used</th><th class="n">Rate that applies</th><th>Why</th><th class="n">Short or excess</th></tr></thead><tbody>' +
+    issues.map(x => "<tr><td>" + fmtDate(tallyDate(x.row.date)) + "</td><td>" + esc(x.row.party) + "</td><td>" + (Certs.validPan(x.row.pan) ? esc(x.row.pan) : '<span class="tag warn">no PAN</span>') + "</td><td>" + esc(x.row.section) +
+      '</td><td class="n">' + money(x.row.paid) + '</td><td class="n">' + x.row.rate + '%</td><td class="n">' + x.expected + "%</td><td>" + esc(x.why) + '</td><td class="n' + (x.short > 0 ? " bad" : "") + '">' + money(x.short) + "</td></tr>").join("") +
+    "</tbody></table></div>" : '<p class="note">Every deduction matches the rate that applies.</p>') + "</section>";
+  const sum = TDS.summary(fy, q);
+  h += '<section class="dash-card"><h3>By section</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Section</th><th class="n">Deductions</th><th class="n">Paid or credited</th><th class="n">TDS</th><th class="n">Not against a challan</th></tr></thead><tbody>' +
+    sum.map(s => "<tr><td>" + esc(s.section) + '</td><td class="n">' + s.count + '</td><td class="n">' + money(s.paid) + '</td><td class="n">' + money(s.tds) + '</td><td class="n">' + money(s.unallocated) + "</td></tr>").join("") + "</tbody></table></div></section>";
+  return h;
+}
+function viewTdsReturn24(b){
+  const fy = S.tdsFy, q = S.tdsQ, money = v => INR.format(r2(v || 0));
+  const tabs = [["employees", "Employees"], ["challans", "Challans"]].concat(q === "Q4" ? [["annex2", "Annexure II, the year"]] : []).concat([["checks", "Checks"]]);
+  if (!tabs.some(t => t[0] === S.tdsTab)) S.tdsTab = "employees";
+  let h = '<div class="revfilter"><button class="btn small primary" data-act="salaryPick">Bring in the salary sheet</button>' +
+    ((b.salary || []).length ? '<button class="btn small" data-act="q24Excel">Download the 24Q working</button><button class="btn small" data-act="salaryClear">Remove the sheet</button>' : "") + "</div>";
+  if (!(b.salary || []).length){
+    const inB = TDS.salaryRows().filter(r => r.fy === fy && r.q === q);
+    return h + (inB.length ? '<section class="dash-card" style="max-width:760px;margin-bottom:12px"><h3>Salary TDS in the books</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th class="dt">Date</th><th>Employee</th><th>PAN</th><th class="n">Paid</th><th class="n">TDS</th></tr></thead><tbody>' +
+      inB.map(r => "<tr><td>" + fmtDate(tallyDate(r.date)) + "</td><td>" + esc(r.party) + "</td><td>" + esc(r.pan || "\u2014") + '</td><td class="n">' + money(r.paid) + '</td><td class="n">' + money(r.tds) + "</td></tr>").join("") +
+      '</tbody></table></div><p class="note">These are kept out of 26Q. For Annexure I and II, bring in the salary sheet.</p></section>' : "") +
+      '<section class="dash-card" style="max-width:760px"><h3>24Q needs the salary sheet</h3>' +
+      '<p class="note">Tally credits each employee their net pay and the TDS as one figure, so the books cannot say how much was deducted from whom. Bring in the payroll sheet you already prepare \u2014 Excel or CSV \u2014 and the columns are found by their names: employee, PAN, month, gross salary, exempt allowances, standard deduction, professional tax, Chapter VI-A, taxable income and TDS.</p></section>';
+  }
+  const a1 = TDS24Q.annexI(fy, q), checks = TDS24Q.checks(fy, q), ch = TDS.challans().filter(c => TDS.fyOf(c.date) === fy && TDS.qOf(c.date) === q);
+  const inBooks = TDS.salaryRows().filter(r => r.fy === fy && r.q === q), booksTds = r2(inBooks.reduce((a, r) => a + r.tds, 0)), sheetTds = r2(a1.reduce((s2, e) => s2 + e.tds, 0));
+  if (inBooks.length && Math.abs(booksTds - sheetTds) >= 1) checks.push({what: "Salary TDS in the books differs from the salary sheet", n: inBooks.length,
+    how: "Tally has " + money(booksTds) + " under section 192 this quarter; the sheet has " + money(sheetTds) + ".", who: Array.from(new Set(inBooks.map(r => r.party))).slice(0, 3)});
+  h += '<div class="dash-tiles" style="grid-template-columns:repeat(3,minmax(0,1fr))">' +
+    '<div class="dtile"><span>Employees this quarter</span><b>' + a1.length + "</b><small>" + money(a1.reduce((s, e) => s + e.paid, 0)) + " paid</small></div>" +
+    '<div class="dtile"><span>TDS deducted</span><b>' + money(a1.reduce((s, e) => s + e.tds, 0)) + "</b><small>" + esc(q) + " " + esc(fy) + "</small></div>" +
+    '<div class="dtile' + (checks.length ? " warn" : "") + '"><span>Before filing</span><b>' + checks.length + "</b><small>" + (checks.length ? esc(checks[0].what) : "nothing to fix") + "</small></div></div>";
+  h += tdsTabs(tabs.map(([id, l]) => [id, l, id === "employees" ? a1.length : id === "challans" ? ch.length : id === "checks" ? (checks.length || null) : null]));
+  if (S.tdsTab === "employees"){
+    const f = (S.tdsFl || {}).employees || {}, qq = String(f.q || "").toLowerCase();
+    const shown = tdsSorted("employees", a1.filter(e => (!qq || (e.name + " " + e.pan).toLowerCase().includes(qq)) &&
+      (f.pan !== "no" || !Certs.validPan(e.pan)) && (f.pan !== "yes" || Certs.validPan(e.pan)) && (f.tds !== "yes" || e.tds > 0) && (f.tds !== "no" || !e.tds)), (e, k) => e[k]);
+    h += tdsFilterBar("employees", {placeholder: "Find an employee or PAN", table: "q24Table", title: CO().name + " 24Q " + q + " " + fy, excel: "q24Excel",
+      count: shown.length + " of " + a1.length + " employees",
+      selects: [{key: "pan", label: "PAN", options: [["", "PAN: any"], ["no", "No valid PAN"], ["yes", "Has a PAN"]]}, {key: "tds", label: "TDS", options: [["", "TDS: any"], ["yes", "TDS deducted"], ["no", "No TDS"]]}]});
+    h += '<div class="bk-tablewrap"><table class="bk-table" id="q24Table"><thead><tr>' + tdsSortHead("employees", "name", "Employee") + tdsSortHead("employees", "pan", "PAN") + tdsSortHead("employees", "months", "Months", "n") +
+      tdsSortHead("employees", "paid", "Paid", "n") + tdsSortHead("employees", "tds", "TDS", "n") + "</tr></thead><tbody>" +
+      shown.map(e => {
+        const key = e.pan || e.name, isOpen = S.q24Open === key;
+        let row = '<tr><td><button class="linkbtn" data-q24open="' + esc(key) + '">' + (isOpen ? "\u25be " : "\u25b8 ") + esc(e.name) + "</button></td><td>" + (Certs.validPan(e.pan) ? esc(e.pan) : '<span class="tag warn">no PAN</span>') +
+          '</td><td class="n">' + e.months + '</td><td class="n">' + money(e.paid) + '</td><td class="n"><b>' + money(e.tds) + "</b></td></tr>";
+        if (isOpen) row += '<tr><td colspan="5" style="background:var(--paper);padding:0"><table class="bk-table" style="margin:0"><thead><tr><th class="dt">Month</th><th class="n">Gross</th><th class="n">Exempt</th><th class="n">Chapter VI-A</th><th class="n">TDS</th></tr></thead><tbody>' +
+          e.rows.map(r => "<tr><td>" + fmtDate(r.date) + '</td><td class="n">' + money(r.gross) + '</td><td class="n">' + money(r.exempt) + '</td><td class="n">' + money(r.chapter6) + '</td><td class="n">' + money(r.tds) + "</td></tr>").join("") + "</tbody></table></td></tr>";
+        return row;
+      }).join("") +
+      '<tr><td><b>Total</b></td><td></td><td class="n">' + shown.reduce((a, e) => a + e.months, 0) + '</td><td class="n">' + money(shown.reduce((a, e) => a + e.paid, 0)) + '</td><td class="n"><b>' + money(shown.reduce((a, e) => a + e.tds, 0)) + "</b></td></tr></tbody></table>" +
+      (shown.length ? "" : '<div class="bk-none">No employee matches these filters.</div>') + "</div>";
+    return h;
+  }
+  if (S.tdsTab === "challans"){
+    const use = TDS.challanUse();
+    h += '<p class="note">Challans deposited in ' + esc(q) + ". Salary TDS is paid under section 192; add a challan under 26Q’s Challans tab if it is not here.</p>" +
+      '<div class="bk-tablewrap"><table class="bk-table" id="q24ChTable"><thead><tr><th>BSR code</th><th>Serial</th><th class="dt">Deposited</th><th>Section</th><th class="n">Tax</th><th class="n">Interest</th><th class="n">Used in 26Q</th></tr></thead><tbody>' +
+      ch.map(c => "<tr><td>" + esc(c.bsr) + "</td><td>" + esc(c.serial) + "</td><td>" + fmtDate(tallyDate(c.date)) + "</td><td>" + esc(c.section || "\u2014") + '</td><td class="n">' + money(c.tax) + '</td><td class="n">' + money(c.interest) + '</td><td class="n">' + money(use[c.id] || 0) + "</td></tr>").join("") +
+      "</tbody></table>" + (ch.length ? "" : '<div class="bk-none">No challan deposited in this quarter.</div>') + "</div>";
+    return h;
+  }
+  if (S.tdsTab === "annex2"){
+    const a2 = TDS24Q.annexII(fy);
+    return h + '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Employee</th><th>PAN</th><th>Regime</th><th class="n">Gross</th><th class="n">Exempt</th><th class="n">Standard</th><th class="n">Chapter VI-A</th><th class="n">Taxable</th><th class="n">TDS</th></tr></thead><tbody>' +
+      a2.map(e => "<tr><td>" + esc(e.name) + "</td><td>" + esc(e.pan || "\u2014") + "</td><td>" + (e.regime === "N" ? "New" : e.regime === "O" ? "Old" : "\u2014") + '</td><td class="n">' + money(e.gross) + '</td><td class="n">' + money(e.exempt) +
+        '</td><td class="n">' + money(e.standard) + '</td><td class="n">' + money(e.chapter6) + '</td><td class="n">' + money(e.taxable) + '</td><td class="n">' + money(e.tds) + "</td></tr>").join("") + "</tbody></table></div>";
+  }
+  return h + (checks.length ? '<section class="dash-card"><h3>Before filing</h3>' + checks.map(c => '<div class="dash-row"><span>' + esc(c.what) + "</span><b>" + c.n + '</b></div><p class="note">' + esc(c.how) + (c.who.length ? " e.g. " + esc(c.who.join(", ")) : "") + "</p>").join("") + "</section>"
+    : '<p class="note">Nothing to fix for this quarter.</p>');
+}
+
 function viewTdsCerts(b){
   const list = Certs.all(), money = v => INR.format(r2(v || 0));
   const iss = Certs.issues(S.tdsFy || "", "");
@@ -6384,56 +6686,6 @@ function viewTdsCerts(b){
     "</tbody></table>" + (iss.length ? "" : '<div class="bk-none">Every deduction matches the rate that applies.</div>') + "</div></section>";
   return h;
 }
-function viewBooks24Q(b){
-  const fy = S.tdsFy || (TDS.rows()[0] || {}).fy || "", q = S.tdsQ || "Q4";
-  const fys = Array.from(new Set(TDS.rows().map(r => r.fy).concat(TDS24Q.rows().map(r => TDS.fyOf(r.date))))).filter(Boolean).sort();
-  const money = v => INR.format(r2(v || 0));
-  let h = '<div class="revfilter"><select data-tdsfy><option value="">Choose a year</option>' + fys.map(f => '<option value="' + f + '"' + (fy === f ? " selected" : "") + ">" + f + "</option>").join("") + "</select>" +
-    '<select data-tdsq>' + ["Q1", "Q2", "Q3", "Q4"].map(x => '<option value="' + x + '"' + (q === x ? " selected" : "") + ">" + x + "</option>").join("") + "</select>" +
-    '<button class="btn small primary" data-act="salaryPick">Bring in the salary sheet</button>' +
-    ((b.salary || []).length ? '<button class="btn small" data-act="q24Excel">Download the 24Q working</button><button class="btn small" data-act="salaryClear">Remove the sheet</button>' : "") + "</div>";
-  if (!(b.salary || []).length){
-    return h + '<section class="dash-card" style="max-width:760px"><h3>24Q needs the salary sheet</h3>' +
-      '<p class="note">Tally credits each employee their net pay and the TDS as one figure, so the books cannot say how much was deducted from whom. Bring in the payroll sheet you already prepare \u2014 Excel or CSV \u2014 and the columns are found by their names: employee, PAN, month, gross salary, exempt allowances, standard deduction, professional tax, Chapter VI-A, taxable income and TDS.</p>' +
-      '<p class="note">Annexure I is built from the months in the quarter; Annexure II, filed with the fourth quarter, from the whole year.</p></section>';
-  }
-  const a1 = TDS24Q.annexI(fy, q), a2 = TDS24Q.annexII(fy);
-  const checks = TDS24Q.checks(fy, q);
-  h += '<div class="dash-tiles" style="grid-template-columns:repeat(3,minmax(0,1fr))">' +
-    '<div class="dtile"><span>Employees this quarter</span><b>' + a1.length + "</b><small>" + money(a1.reduce((s, e) => s + e.paid, 0)) + " paid</small></div>" +
-    '<div class="dtile"><span>TDS deducted</span><b>' + money(a1.reduce((s, e) => s + e.tds, 0)) + "</b><small>" + esc(q) + " " + esc(fy) + "</small></div>" +
-    '<div class="dtile' + (checks.length ? " warn" : "") + '"><span>Before filing</span><b>' + checks.length + "</b><small>" + (checks.length ? esc(checks[0].what) : "nothing to fix") + "</small></div></div>";
-  if (checks.length) h += '<section class="dash-card" style="margin-bottom:12px"><h3>Before filing</h3>' +
-    checks.map(c => '<div class="dash-row"><span>' + esc(c.what) + "</span><b>" + c.n + '</b></div><p class="note">' + esc(c.how) + (c.who.length ? " e.g. " + esc(c.who.join(", ")) : "") + "</p>").join("") + "</section>";
-  {
-    const f = S.q24F || {}, qq = String(f.q || "").toLowerCase();
-    const shown = a1.filter(e => (!qq || (e.name + " " + e.pan).toLowerCase().includes(qq)) &&
-      (f.pan !== "no" || !TDS24Q.rows().length || !/^[A-Z]{5}\d{4}[A-Z]$/.test(e.pan)) && (f.pan !== "yes" || /^[A-Z]{5}\d{4}[A-Z]$/.test(e.pan)));
-    h += filterBar("q24F", {placeholder: "Find an employee or PAN", table: "q24Table", title: CO().name + " 24Q " + q + " " + fy, excel: "q24Excel",
-      count: shown.length + " of " + a1.length + " employees",
-      selects: [{key: "pan", options: [["", "PAN: any"], ["no", "No valid PAN"], ["yes", "Has a PAN"]]}]});
-    h += '<section class="dash-card" style="margin-bottom:12px"><h3>Annexure I \u00b7 ' + esc(q) + '</h3>' +
-      '<div class="bk-tablewrap"><table class="bk-table" id="q24Table"><thead><tr><th>Employee</th><th>PAN</th><th class="n">Months</th><th class="n">Paid</th><th class="n">TDS</th></tr></thead><tbody>' +
-      shown.map(e => {
-        const key = e.pan || e.name, isOpen = S.q24Open === key;
-        let row = "<tr><td>" + '<button class="linkbtn" data-q24open="' + esc(key) + '">' + (isOpen ? "\u25be " : "\u25b8 ") + esc(e.name) + "</button></td><td>" +
-          (/^[A-Z]{5}\d{4}[A-Z]$/.test(e.pan) ? esc(e.pan) : '<span class="tag warn">no PAN</span>') +
-          '</td><td class="n"><button class="linkbtn" data-q24open="' + esc(key) + '">' + e.months + '</button></td><td class="n">' + money(e.paid) + '</td><td class="n"><b>' + money(e.tds) + "</b></td></tr>";
-        if (isOpen) row += '<tr><td colspan="5" style="background:var(--paper);padding:0"><table class="bk-table" style="margin:0"><thead><tr><th class="dt">Month</th><th class="n">Gross</th><th class="n">Exempt</th><th class="n">Chapter VI-A</th><th class="n">TDS</th></tr></thead><tbody>' +
-          e.rows.map(r => "<tr><td>" + fmtDate(r.date) + '</td><td class="n">' + money(r.gross) + '</td><td class="n">' + money(r.exempt) + '</td><td class="n">' + money(r.chapter6) + '</td><td class="n">' + money(r.tds) + "</td></tr>").join("") +
-          "</tbody></table></td></tr>";
-        return row;
-      }).join("") +
-      '<tr><td><b>Total</b></td><td></td><td class="n">' + shown.reduce((a, e) => a + e.months, 0) + '</td><td class="n">' + money(shown.reduce((a, e) => a + e.paid, 0)) +
-      '</td><td class="n"><b>' + money(shown.reduce((a, e) => a + e.tds, 0)) + "</b></td></tr>" +
-      "</tbody></table>" + (shown.length ? "" : '<div class="bk-none">Nothing matches.</div>') + "</div></section>";
-  }
-  h += '<section class="dash-card"><h3>Annexure II \u00b7 the year ' + esc(fy) + ' <span class="note">(filed with the fourth quarter)</span></h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Employee</th><th>PAN</th><th>Regime</th><th class="n">Gross</th><th class="n">Exempt</th><th class="n">Standard</th><th class="n">Chapter VI-A</th><th class="n">Taxable</th><th class="n">TDS</th></tr></thead><tbody>' +
-    a2.map(e => "<tr><td>" + esc(e.name) + "</td><td>" + esc(e.pan || "\u2014") + "</td><td>" + (e.regime === "N" ? "New" : e.regime === "O" ? "Old" : "\u2014") +
-      '</td><td class="n">' + money(e.gross) + '</td><td class="n">' + money(e.exempt) + '</td><td class="n">' + money(e.standard) + '</td><td class="n">' + money(e.chapter6) +
-      '</td><td class="n">' + money(e.taxable) + '</td><td class="n">' + money(e.tds) + "</td></tr>").join("") + "</tbody></table></div></section>";
-  return h;
-}
 function filterBar(id, opts){
   const f = S[id] || {};
   return '<div class="revfilter"><input type="search" id="' + id + 'q" data-fk="' + id + 'q" data-keeptyped value="' + esc(f.q || "") + '" placeholder="' + esc(opts.placeholder || "Find") + '">' +
@@ -6455,47 +6707,6 @@ function tdsFiltered(rows){
     return true;
   });
 }
-// one row per deductee; the deductions appear when you open it
-function viewDeducteeTable(all, ch, money){
-  const rows = tdsFiltered(all), by = {};
-  rows.forEach(r => {
-    const k = (r.pan || normName(r.party)) + "|" + r.section;
-    const p = by[k] = by[k] || {key: k, party: r.party, pan: r.pan, section: r.section, n: 0, paid: 0, tds: 0, unallocated: 0, rows: []};
-    p.n++; p.paid = r2(p.paid + r.paid); p.tds = r2(p.tds + r.tds); if (!r.challan) p.unallocated = r2(p.unallocated + r.tds);
-    p.rows.push(r);
-  });
-  const parties = Object.values(by).sort((a, b) => b.tds - a.tds);
-  const open = S.tdsOpen || "", f = S.tdsF || {};
-  const secs = Array.from(new Set(all.map(r => r.section))).sort();
-  let h = '<div class="revfilter"><input type="search" id="tdsq" data-fk="tdsq" data-keeptyped value="' + esc(f.q || "") + '" placeholder="Find a deductee, PAN, section or voucher">' +
-    '<select data-tdsfsec><option value="">Every section</option>' + secs.map(x => '<option value="' + x + '"' + (f.section === x ? " selected" : "") + ">" + esc(x) + "</option>").join("") + "</select>" +
-    '<select data-tdsfch><option value="">Challan: any</option><option value="no"' + (f.challan === "no" ? " selected" : "") + '>Not against a challan</option><option value="yes"' + (f.challan === "yes" ? " selected" : "") + ">Against a challan</option></select>" +
-    '<select data-tdsfpan><option value="">PAN: any</option><option value="no"' + (f.pan === "no" ? " selected" : "") + '>No valid PAN</option><option value="yes"' + (f.pan === "yes" ? " selected" : "") + ">Has a PAN</option></select>" +
-    '<span class="note">' + parties.length + " deductees \u00b7 " + rows.length + " of " + all.length + " deductions</span>" +
-    (Object.keys(f).some(k => f[k]) ? '<button class="linkbtn" data-act="tdsFClear">Clear</button>' : "") +
-    '<button class="btn small" data-act="tdsPrint">Print or save as PDF</button></div>';
-  h += '<div class="bk-tablewrap"><table class="bk-table" id="tdsTable"><thead><tr><th>Deductee</th><th>PAN</th><th>Section</th><th class="n">Deductions</th><th class="n">Paid or credited</th><th class="n">TDS</th><th class="n">Not against a challan</th></tr></thead><tbody>' +
-    parties.map(p => {
-      const isOpen = open === p.key;
-      let row = "<tr><td>" + '<button class="linkbtn" data-tdsopen="' + esc(p.key) + '">' + (isOpen ? "\u25be " : "\u25b8 ") + esc(p.party) + "</button></td>" +
-        "<td>" + (Certs.validPan(p.pan) ? esc(p.pan) : '<span class="tag warn">no PAN</span>') + "</td><td>" + esc(p.section) + "</td>" +
-        '<td class="n"><button class="linkbtn" data-tdsopen="' + esc(p.key) + '">' + p.n + '</button></td><td class="n">' + money(p.paid) + '</td><td class="n"><b>' + money(p.tds) + "</b></td>" +
-        '<td class="n' + (p.unallocated ? " bad" : "") + '">' + (p.unallocated ? money(p.unallocated) : "\u2014") + "</td></tr>";
-      if (isOpen){
-        row += '<tr><td colspan="7" style="background:var(--paper);padding:0">' +
-          '<table class="bk-table" style="margin:0"><thead><tr><th class="dt">Date</th><th>Voucher</th><th class="n">Paid or credited</th><th class="n">Rate</th><th class="n">TDS</th><th>Challan</th></tr></thead><tbody>' +
-          p.rows.map(r => "<tr><td>" + fmtDate(tallyDate(r.date)) + "</td><td>" + esc(r.voucher || "") + '</td><td class="n">' + money(r.paid) +
-            '</td><td class="n">' + (r.rate != null ? r.rate + "%" : "") + '</td><td class="n">' + money(r.tds) + "</td>" +
-            '<td><select data-alloc="' + esc(r.id) + '"><option value="">\u2014 not yet \u2014</option>' + ch.map(x => '<option value="' + x.id + '"' + (r.challan === x.id ? " selected" : "") + ">" + esc(x.bsr + "/" + x.serial) + "</option>").join("") + "</select></td></tr>").join("") +
-          "</tbody></table></td></tr>";
-      }
-      return row;
-    }).join("") +
-    '<tr><td><b>Total</b></td><td></td><td></td><td class="n">' + rows.length + '</td><td class="n">' + money(rows.reduce((a, r) => a + r.paid, 0)) +
-    '</td><td class="n"><b>' + money(rows.reduce((a, r) => a + r.tds, 0)) + '</b></td><td class="n">' + money(rows.filter(r => !r.challan).reduce((a, r) => a + r.tds, 0)) + "</td></tr>" +
-    "</tbody></table>" + (parties.length ? "" : '<div class="bk-none">Nothing matches these filters.</div>') + "</div>";
-  return h;
-}
 // printing, which is also how a PDF is made
 function printView(title, html){
   const w = window.open("", "_blank");
@@ -6508,70 +6719,6 @@ function printView(title, html){
     "@page{size:A4 landscape;margin:12mm}</style></head><body>" + html + "</body></html>");
   w.document.close();
   setTimeout(() => { w.focus(); w.print(); }, 400);
-}
-function viewBooks26Q(b){
-  const fy = S.tdsFy || "", q = S.tdsQ || "";
-  const rows = TDS.rows().filter(r => (!fy || r.fy === fy) && (!q || r.q === q));
-  const fys = Array.from(new Set(TDS.rows().map(r => r.fy))).sort();
-  const sum = TDS.summary(fy, q), ch = TDS.challans(), use = TDS.challanUse();
-  const money = v => INR.format(r2(v || 0));
-  let h = '<div class="revfilter"><select data-tdsfy><option value="">All years</option>' + fys.map(f => '<option value="' + f + '"' + (fy === f ? " selected" : "") + ">" + f + "</option>").join("") + "</select>" +
-    '<select data-tdsq><option value="">All quarters</option>' + ["Q1", "Q2", "Q3", "Q4"].map(x => '<option value="' + x + '"' + (q === x ? " selected" : "") + ">" + x + "</option>").join("") + "</select>" +
-    '<span class="note">' + rows.length + " deductions</span>" +
-    '<button class="btn small" data-act="tdsAuto">Put them against challans</button><button class="btn small" data-act="tdsExcel">Download the 26Q working</button>' +
-    '<button class="btn small" data-act="tdsTxt">Download the 26Q text file</button>' +
-    '<button class="btn small primary" data-act="tdsFvu"' + (Bridge.on() ? "" : " disabled title=\"Needs the Tally Bridge\"") + ">Check it with the FVU</button></div>";
-  h += '<div class="dash-tiles" style="grid-template-columns:repeat(3,minmax(0,1fr))">' +
-    '<div class="dtile"><span>TDS deducted</span><b>' + money(rows.reduce((a, r) => a + r.tds, 0)) + '</b><small>on ' + money(rows.reduce((a, r) => a + r.paid, 0)) + " paid or credited</small></div>" +
-    '<div class="dtile' + (rows.some(r => !r.challan) ? " warn" : "") + '"><span>Not against a challan</span><b>' + money(rows.filter(r => !r.challan).reduce((a, r) => a + r.tds, 0)) + "</b><small>" + rows.filter(r => !r.challan).length + " deductions</small></div>" +
-    '<div class="dtile' + (rows.some(r => !r.pan) ? " warn" : "") + '"><span>Without PAN</span><b>' + rows.filter(r => !r.pan).length + "</b><small>bring in the ledger masters</small></div></div>";
-  const pays = TDS.paymentsFromBooks().filter(p => (!fy || TDS.fyOf(p.date) === fy) && (!q || TDS.qOf(p.date) === q))
-    .filter(p => !ch.some(c => c.date === p.date && Math.abs(num(c.tax) - p.tax) < 1));
-  if (pays.length) h += '<section class="dash-card" style="margin-bottom:12px"><h3>Paid to the government, from the books</h3>' +
-    '<p class="note">These are the TDS payment vouchers in Tally. Add the BSR code and challan serial number to each and it becomes a challan.</p>' +
-    '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Date</th><th class="n">Tax</th><th>Sections</th><th>Voucher</th><th>BSR code</th><th>Serial</th><th class="ac"></th></tr></thead><tbody>' +
-    pays.map(p => '<tr><td>' + fmtDate(tallyDate(p.date)) + '</td><td class="n">' + money(p.tax) + "</td><td>" + esc(p.sections.join(", ")) + "</td><td>" + esc(p.voucher) + "</td>" +
-      '<td><input type="text" data-paybsr="' + p.vid + '" data-fk="pb-' + p.vid + '" placeholder="0240020" style="width:100px"></td>' +
-      '<td><input type="text" data-payser="' + p.vid + '" data-fk="ps-' + p.vid + '" placeholder="00979" style="width:90px"></td>' +
-      '<td class="ac"><button class="btn small" data-paymake="' + p.vid + '">Make it a challan</button></td></tr>').join("") +
-    "</tbody></table></div></section>";
-  h += '<section class="dash-card" style="margin-bottom:12px"><h3>Challans</h3>' +
-    '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>BSR code</th><th>Serial</th><th>Deposited</th><th class="n">Tax</th><th class="n">Interest</th><th class="n">Used</th><th class="n">Left</th><th class="ac"></th></tr></thead><tbody>' +
-    ch.map(c => '<tr><td>' + esc(c.bsr) + '</td><td>' + esc(c.serial) + '</td><td>' + fmtDate(tallyDate(c.date)) + '</td><td class="n">' + money(c.tax) + '</td><td class="n">' + money(c.interest) +
-      '</td><td class="n">' + money(use[c.id] || 0) + '</td><td class="n">' + money(num(c.tax) - (use[c.id] || 0)) + '</td><td class="ac"><button class="icon danger" data-chdel="' + c.id + '">\u2715</button></td></tr>').join("") +
-    '<tr><td><input type="text" id="chBsr" data-fk="chBsr" placeholder="0240020" style="width:100px"></td><td><input type="text" id="chSer" data-fk="chSer" placeholder="00979" style="width:90px"></td>' +
-    '<td><input type="date" id="chDate" data-fk="chDate"></td><td class="n"><input type="text" inputmode="decimal" id="chTax" data-fk="chTax" placeholder="tax" style="width:110px;text-align:right"></td>' +
-    '<td class="n"><input type="text" inputmode="decimal" id="chInt" data-fk="chInt" placeholder="interest" style="width:110px;text-align:right"></td><td colspan="2"></td>' +
-    '<td class="ac"><button class="btn small" data-act="chAdd">Add</button></td></tr>' +
-    "</tbody></table></div></section>";
-  h += viewDeducteeTable(rows, ch, money);
-  {
-    const int1A = TDS.interest(fy, q), fee = fy && q ? TDS.lateFee(fy, q, (b.filedOn || {})[fy + q]) : null;
-    const total = r2(int1A.reduce((a, x) => a + x.amount, 0));
-    if (int1A.length || (fee && fee.days > 0)){
-      h += '<section class="dash-card" style="margin-bottom:12px"><h3>Interest and late fee</h3>' +
-        (int1A.length ? '<div class="dash-row"><span>Interest under 201(1A), paid after the due date</span><b>' + money(total) + "</b></div>" +
-          '<p class="note">1.5% a month, counting part of a month as a month, from the month of deduction to the month of payment. Worst: ' +
-          esc(int1A[0].row.party) + " " + money(int1A[0].amount) + " over " + int1A[0].months + " month" + (int1A[0].months === 1 ? "" : "s") + ".</p>" : "") +
-        (fee && fee.days > 0 ? '<div class="dash-row"><span>Late filing fee under 234E, if filed today</span><b>' + money(fee.fee) + "</b></div>" +
-          '<p class="note">' + fee.days + " day" + (fee.days === 1 ? "" : "s") + " past " + fmtDate(tallyDate(fee.due)) + " at 200 a day, capped at the TDS of the quarter (" + money(fee.cap) + ").</p>" : "") +
-        '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th class="dt">Deducted</th><th>Deductee</th><th class="n">TDS</th><th>Due</th><th>Paid</th><th class="n">Months</th><th class="n">Interest</th></tr></thead><tbody>' +
-        int1A.slice(0, 60).map(x => "<tr><td>" + fmtDate(tallyDate(x.row.date)) + "</td><td>" + esc(x.row.party) + '</td><td class="n">' + money(x.row.tds) +
-          "</td><td>" + fmtDate(tallyDate(x.due)) + "</td><td>" + fmtDate(tallyDate(x.challan.date)) + '</td><td class="n">' + x.months + '</td><td class="n bad">' + money(x.amount) + "</td></tr>").join("") +
-        "</tbody></table></div></section>";
-    }
-  }
-  if (S.fvuResult){
-    const f = S.fvuResult;
-    h += '<section class="bk-alert ' + (f.ok ? "" : "bad") + '"><b>' + (f.ok ? "The FVU accepted the " + esc(f.q) + " file." : "The FVU found problems in the " + esc(f.q || "") + " file.") + "</b>" +
-      (f.fvu ? '<p class="note">Upload file: ' + esc(f.fvu) + "</p>" : "") +
-      (f.errors ? '<pre style="white-space:pre-wrap;font-size:12px;max-height:220px;overflow:auto;margin:8px 0 0">' + esc(String(f.errors).slice(0, 4000)) + "</pre>" : "") +
-      (!f.errors && !f.ok && f.output ? '<pre style="white-space:pre-wrap;font-size:12px;max-height:160px;overflow:auto">' + esc(String(f.output).slice(0, 2000)) + "</pre>" : "") +
-      '<div class="row" style="margin-top:8px"><button class="linkbtn" data-act="fvuClose">Hide this</button></div></section>';
-  }
-  h += '<section class="dash-card" style="margin-top:12px"><h3>By section</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Section</th><th class="n">Deductions</th><th class="n">Paid or credited</th><th class="n">TDS</th><th class="n">Not against a challan</th></tr></thead><tbody>' +
-    sum.map(s => "<tr><td>" + esc(s.section) + '</td><td class="n">' + s.count + '</td><td class="n">' + money(s.paid) + '</td><td class="n">' + money(s.tds) + '</td><td class="n">' + money(s.unallocated) + "</td></tr>").join("") + "</tbody></table></div></section>";
-  return h;
 }
 function viewBooksGst(b){
   const part = S.gstPart || "r1";
@@ -14423,6 +14570,21 @@ document.addEventListener("click", ev => {
   if (t.dataset.bookstab){ S.booksTab = t.dataset.bookstab; render(); return; }
   if (t.dataset.gstpart){ S.gstPart = t.dataset.gstpart; render(); return; }
   if (t.dataset.tdspart){ S.tdsPart = t.dataset.tdspart; render(); return; }
+  if (t.dataset.tdsnav){ S.tdsView = t.dataset.tdsnav; render(); window.scrollTo(0, 0); return; }
+  if (t.dataset.tdsgo){
+    const [fy, q, form] = t.dataset.tdsgo.split("|");
+    S.tdsFy = fy;
+    if (q){ S.tdsQ = q; S.tdsForm = form || "26Q"; S.tdsView = "return"; S.tdsTab = ""; S.tdsOpen = ""; S.chOpen = ""; }
+    else S.tdsView = "year";
+    render(); window.scrollTo(0, 0); return;
+  }
+  if (t.dataset.tdstab){ S.tdsTab = t.dataset.tdstab; render(); return; }
+  if (t.dataset.tdsfclear){ S.tdsFl = Object.assign({}, S.tdsFl, {[t.dataset.tdsfclear]: {}}); render(); return; }
+  if (t.dataset.tdssort){
+    const [tab, k] = t.dataset.tdssort.split("|"), cur = (S.tdsSort || {})[tab] || {};
+    S.tdsSort = Object.assign({}, S.tdsSort, {[tab]: {k, d: cur.k === k ? -(cur.d || 1) : 1}}); render(); return;
+  }
+  if (t.dataset.chopen){ S.chOpen = S.chOpen === t.dataset.chopen ? "" : t.dataset.chopen; render(); return; }
   if (t.dataset.q24open){ S.q24Open = S.q24Open === t.dataset.q24open ? "" : t.dataset.q24open; render(); return; }
   if (t.dataset.r1open){ S.r1Open = S.r1Open === t.dataset.r1open ? "" : t.dataset.r1open; render(); return; }
   if (t.dataset.b2open){ S.b2Open = S.b2Open === t.dataset.b2open ? "" : t.dataset.b2open; render(); return; }
@@ -14433,7 +14595,7 @@ document.addEventListener("click", ev => {
     return;
   }
   if (t.dataset.tdsopen){ S.tdsOpen = S.tdsOpen === t.dataset.tdsopen ? "" : t.dataset.tdsopen; render(); return; }
-  if (t.dataset.qgo){ S.tdsQ = t.dataset.qgo; S.tdsPart = "q26"; render(); return; }
+  if (t.dataset.qgo){ S.tdsQ = t.dataset.qgo; S.tdsForm = "26Q"; S.tdsView = "return"; S.tdsTab = ""; render(); return; }
   if (t.dataset.assetdel){ S.books.assets = (S.books.assets || []).filter(a => a.id !== t.dataset.assetdel); saveBooks(); render(); return; }
   if (t.dataset.certdel){ S.books.certs = (S.books.certs || []).filter(c => c.id !== t.dataset.certdel); saveBooks(); render(); return; }
   if (t.dataset["2btab"]){ S.twoBTab = t.dataset["2btab"]; render(); return; }
@@ -14954,6 +15116,12 @@ document.addEventListener("keydown", ev => {
 
 document.addEventListener("input", ev => {
   const t = ev.target;
+  if (t && t.dataset && t.dataset.tdsf){
+    const tab = S.tdsTab || "deductions";
+    S.tdsFl = Object.assign({}, S.tdsFl, {[tab]: Object.assign({}, (S.tdsFl || {})[tab], {[t.dataset.tdsf]: t.value})});
+    if (t.type === "search" || t.type === "text") later("tdsf", render, 250); else render();
+    return;
+  }
   if (t && t.id === "revq"){ S.revQuery = t.value; softRender(); return; }
   if (t && t.id === "txnq"){ S.txnQ = t.value; later("txnq", render, 250); return; }
   if (t && t.id === "ledq"){ S.ledQ = t.value; later("ledq", render, 250); return; }
@@ -14974,7 +15142,7 @@ document.addEventListener("input", ev => {
   if (t && t.dataset && t.dataset.tdsfpan !== undefined){ S.tdsF = Object.assign({}, S.tdsF, {pan: t.value}); render(); return; }
   if (t && t.dataset && t.dataset.gstym !== undefined){ S.gstYm = t.value; S.books.reco = null; render(); return; }
   if (t && t.dataset && t.dataset.gstreg !== undefined){ S.gstReg = t.value; S.books.reco = null; render(); return; }
-  if (t && t.dataset && t.dataset.tdsfy !== undefined){ S.tdsFy = t.value; render(); return; }
+  if (t && t.dataset && t.dataset.tdsfy !== undefined){ S.tdsFy = t.value; if (S.tdsView === "return") S.tdsView = "year"; render(); return; }
   if (t && t.dataset && t.dataset.tdsq !== undefined){ S.tdsQ = t.value; render(); return; }
   if (t && t.dataset && t.dataset.ledkind){ const m = S.books.map[t.dataset.ledkind]; if (m){ m.kind = t.value; m.byHand = true; if (m.kind !== "tds_payable") delete m.section;
     if (/^(gst|gst_common|ineligible)$/.test(m.kind)){ const gg = Books.guess(t.dataset.ledkind); if (!m.tax) m.tax = gg.tax || "IGST"; if (!m.side) m.side = gg.side || "input"; if (m.reg == null && gg.reg) m.reg = gg.reg; }
