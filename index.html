@@ -754,7 +754,7 @@ const DEFAULT_FIRM = {firmName:"Garg Shekhar & Company", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "TEST · 24 Sep 2026 · build 107 (every part of GSTR-1 and 3B: reverse charge, HSN, imports, blocked credit, and checks before filing)";
+const APP_VERSION = "TEST · 24 Sep 2026 · build 108 (GSTR-1 JSON for the portal)";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;
@@ -5334,6 +5334,11 @@ const GST2B = {
 /* ================================================================== */
 /* GSTR-1 and GSTR-3B, worked out from the books and the ledger setup */
 /* ================================================================== */
+const STATE_CODES = {"JAMMU AND KASHMIR": "01", "HIMACHAL PRADESH": "02", "PUNJAB": "03", "CHANDIGARH": "04", "UTTARAKHAND": "05", "HARYANA": "06", "DELHI": "07",
+  "RAJASTHAN": "08", "UTTAR PRADESH": "09", "BIHAR": "10", "SIKKIM": "11", "ARUNACHAL PRADESH": "12", "NAGALAND": "13", "MANIPUR": "14", "MIZORAM": "15",
+  "TRIPURA": "16", "MEGHALAYA": "17", "ASSAM": "18", "WEST BENGAL": "19", "JHARKHAND": "20", "ODISHA": "21", "CHHATTISGARH": "22", "MADHYA PRADESH": "23",
+  "GUJARAT": "24", "DADRA AND NAGAR HAVELI AND DAMAN AND DIU": "26", "MAHARASHTRA": "27", "KARNATAKA": "29", "GOA": "30", "LAKSHADWEEP": "31",
+  "KERALA": "32", "TAMIL NADU": "33", "PUDUCHERRY": "34", "ANDAMAN AND NICOBAR ISLANDS": "35", "TELANGANA": "36", "ANDHRA PRADESH": "37", "LADAKH": "38", "OTHER TERRITORY": "97"};
 const GSTR = {
   ym(d){ return String(d).slice(0, 6); },
   months(){
@@ -5455,6 +5460,56 @@ const GSTR = {
     add("Purchases marked ITC not to be taken", inn.filter(r => r.blocked), "These are kept out of the credit claimed.");
     add("Inward supplies under reverse charge", inn.filter(r => r.rcm), "Tax on these is payable by you and shown in 3.1(d).");
     return list;
+  },
+  // the file the portal takes: GSTR-1 as JSON
+  toJson(ym, reg){
+    const g = this.one(ym, reg);
+    const gstin = ((S.books.meta || {}).gstins || []).find(x => !reg || x.slice(0, 2) === reg) || "";
+    const dmy = d => String(d).length === 8 ? String(d).slice(6, 8) + "-" + String(d).slice(4, 6) + "-" + String(d).slice(0, 4) : d;
+    const items = r => [{num: 1, itm_det: Object.assign({rt: r.rate, txval: r2(r.taxable), csamt: r2(r.cess)},
+      r.igst ? {iamt: r2(r.igst)} : {camt: r2(r.cgst), samt: r2(r.sgst)})}];
+    const posOf = r => { const st = STATE_CODES[(r.pos || "").toUpperCase()] || (r.gstin || "").slice(0, 2); return String(st || "").padStart(2, "0"); };
+    const byParty = (rows, wrap) => {
+      const m = {};
+      rows.forEach(r => { (m[r.gstin] = m[r.gstin] || []).push(r); });
+      return Object.entries(m).map(([ctin, rs]) => ({ctin, [wrap]: rs.map(r => wrap === "nt" ? {
+        ntty: r.note === "credit" ? "C" : "D", nt_num: String(r.no), nt_dt: dmy(r.date), val: r2(Math.abs(r.total)),
+        pos: posOf(r), rchrg: r.rcm ? "Y" : "N", inv_typ: "R", itms: items(r)
+      } : {
+        inum: String(r.no), idt: dmy(r.date), val: r2(r.total), pos: posOf(r),
+        rchrg: r.rcm ? "Y" : "N", inv_typ: r.cls === "sez" ? "SEWP" : "R", itms: items(r)
+      })}));
+    };
+    const b2csMap = {};
+    g.b2c.forEach(r => {
+      const pos = posOf(r), key = pos + "|" + r.rate + "|" + (r.igst ? "INTER" : "INTRA");
+      const x = b2csMap[key] = b2csMap[key] || {sply_ty: r.igst ? "INTER" : "INTRA", pos, typ: "OE", rt: r.rate, txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0};
+      x.txval = r2(x.txval + r.taxable); x.iamt = r2(x.iamt + r.igst); x.camt = r2(x.camt + r.cgst); x.samt = r2(x.samt + r.sgst); x.csamt = r2(x.csamt + r.cess);
+    });
+    const nilSum = g.nil.reduce((a, r) => ({expt_amt: r2(a.expt_amt + (r.cls === "exempt" ? r.taxable : 0)),
+      nil_amt: r2(a.nil_amt + (r.cls === "nil" ? r.taxable : 0)), ngsup_amt: r2(a.ngsup_amt + (r.cls === "nongst" ? r.taxable : 0))}),
+      {expt_amt: 0, nil_amt: 0, ngsup_amt: 0});
+    const out = {gstin, fp: ym.slice(4, 6) + ym.slice(0, 4), version: "GST3.2.1", hash: "hash"};
+    if (g.b2b.length) out.b2b = byParty(g.b2b, "inv");
+    if (g.b2cl.length){
+      const m = {};
+      g.b2cl.forEach(r => { const pos = posOf(r); (m[pos] = m[pos] || []).push(r); });
+      out.b2cl = Object.entries(m).map(([pos, rs]) => ({pos, inv: rs.map(r => ({inum: String(r.no), idt: dmy(r.date), val: r2(r.total), itms: items(r)}))}));
+    }
+    if (Object.keys(b2csMap).length) out.b2cs = Object.values(b2csMap);
+    if (g.cdnr.length) out.cdnr = byParty(g.cdnr.filter(r => r.gstin), "nt");
+    if (g.exp.length) out.exp = [{exp_typ: "WPAY", inv: g.exp.map(r => ({inum: String(r.no), idt: dmy(r.date), val: r2(r.total), itms: items(r)}))}];
+    if (nilSum.expt_amt || nilSum.nil_amt || nilSum.ngsup_amt) out.nil = {inv: [Object.assign({sply_ty: "INTRB2B"}, nilSum)]};
+    if (g.hsn.length) out.hsn = {data: g.hsn.map((h, i) => Object.assign({num: i + 1, hsn_sc: h.hsn || "", desc: h.supply || "", uqc: h.supply === "Goods" ? "NOS" : "OTH",
+      qty: 0, val: r2(h.taxable + h.igst + h.cgst + h.sgst + h.cess), txval: r2(h.taxable), csamt: r2(h.cess)},
+      h.igst ? {iamt: r2(h.igst)} : {camt: r2(h.cgst), samt: r2(h.sgst)}))};
+    if (g.series.length) out.doc_issue = {doc_det: [{doc_num: 1, docs: g.series.map((x, i) => ({num: i + 1, from: String(x.from), to: String(x.to), totnum: x.n, cancel: 0, net_issue: x.n}))}]};
+    return out;
+  },
+  async toJsonFile(ym, reg){
+    const j = this.toJson(ym, reg);
+    saveFile("GSTR1_" + (j.gstin || "") + "_" + j.fp + ".json", new Blob([JSON.stringify(j)], {type: "application/json"}));
+    return j;
   },
   async toExcel(ym, reg){
     await ensureXlsx();
@@ -5633,7 +5688,8 @@ function viewBooksGst(b){
     .map(([id, l]) => '<button data-gstpart="' + id + '" aria-selected="' + (part === id) + '">' + l + "</button>").join("") + "</nav>";
   h += '<div class="revfilter"><select data-gstym>' + months.map(m => '<option value="' + m + '"' + (S.gstYm === m ? " selected" : "") + ">" + GSTR.label(m) + "</option>").join("") + "</select>" +
     (regs.length > 1 ? '<select data-gstreg><option value="">Both registrations</option>' + regs.map(g => '<option value="' + g.slice(0, 2) + '"' + (S.gstReg === g.slice(0, 2) ? " selected" : "") + ">" + esc(g) + "</option>").join("") + "</select>" : "") +
-    (part === "r2b" ? "" : '<button class="btn small" data-act="gstExcel">Download GSTR-1 and 3B</button>') + "</div>";
+    (part === "r2b" ? "" : '<button class="btn small" data-act="gstExcel">Download GSTR-1 and 3B</button>') +
+    (part === "r1" ? '<button class="btn small primary" data-act="gstJson">Download GSTR-1 JSON for the portal</button>' : "") + "</div>";
   if (part === "r2b") return h + viewBooks2B(b);
   return h + (part === "r1" ? viewGstr1(b) : viewGstr3b(b));
 }
@@ -13349,6 +13405,7 @@ document.addEventListener("click", ev => {
       if (!ok) return; S.books.vouchers = []; S.books.meta = null; S.books.reco = null; saveBooks(); toast("Removed."); render(); }); break;
     case "tdsAuto": { const n = TDS.autoAllocate(); saveBooks(); toast(n ? n + " deduction" + (n === 1 ? "" : "s") + " put against challans." : "Nothing could be matched to a challan. Check the amounts and dates."); render(); break; }
     case "tdsExcel": TDS.toExcel(S.tdsFy || "", S.tdsQ || "").then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break;
+    case "gstJson": GSTR.toJsonFile(S.gstYm || "", S.gstReg || "").then(j => toast("GSTR-1 JSON for " + j.fp + " downloaded. Check it on the portal's offline tool before filing."), e => toast("Could not build the file: " + (e && e.message))); break;
     case "gstExcel": GSTR.toExcel(S.gstYm || "", S.gstReg || "").then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break;
     case "twoBExcel": GST2B.toExcel(S.books.reco, S.books.twoB && S.books.twoB.period).then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break;
     case "chAdd": {
