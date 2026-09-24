@@ -709,6 +709,9 @@ img.preview{display:block;max-width:100%;max-height:70vh;margin:0 auto;border:1p
 <div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
 <input type="file" id="fileIn" accept="application/pdf,image/*,.jpg,.jpeg,.jfif,.png,.webp,.heic" multiple class="hidden">
 <input type="file" id="camIn" accept="image/*" capture="environment" class="hidden">
+<input type="file" id="booksIn" accept=".xml" class="hidden">
+<input type="file" id="mastersIn" accept=".xml" class="hidden">
+<input type="file" id="twoBIn" accept=".json,application/json" class="hidden">
 
 <!-- PDF reader: pdf.js 3.11.174 (Apache License 2.0), built in -->
 
@@ -4124,7 +4127,7 @@ async function downloadStandalone(){
       (tag === "link" && /fonts\.(googleapis|gstatic)\.com/.test(el.getAttribute("href") || "")) || (tag === "style" && el.id === "app-style") || (tag === "script" && keepScript(el));
     if (!keep) el.remove();
   });
-  const bodyKeep = new Set(["app", "modal", "toast", "fileIn", "camIn", "bankIn", "ledIn", "bookIn", "salesIn", "app-main", "tess-core", "tess-eng", "pdfjs-lib", "pdfjs-worker", "xlsx-lib", "sample-jpg", "sample-pdf"]);
+  const bodyKeep = new Set(["app", "modal", "toast", "fileIn", "camIn", "bankIn", "ledIn", "bookIn", "salesIn", "booksIn", "mastersIn", "twoBIn", "app-main", "tess-core", "tess-eng", "pdfjs-lib", "pdfjs-worker", "xlsx-lib", "sample-jpg", "sample-pdf"]);
   Array.from(root.querySelector("body").children).forEach(el => {
     if (el.tagName.toLowerCase() === "header" && el.classList.contains("top")) return;
     if (el.tagName.toLowerCase() === "script" && keepScript(el)) return;
@@ -4803,7 +4806,7 @@ function viewCollect(){
   const inbox = docqPanel(S.coId);
   const card = t === "bank"
     ? '<section class="collect-card"><h3>Upload a bank statement</h3><div class="drop" id="bankDrop" tabindex="0" role="button" data-act="bankPick" aria-label="Upload a bank statement"><strong>Drop a statement here, or click to choose</strong>' +
-      '<div class="note">Excel, CSV or PDF from any bank. The balances are checked, and the statement is filed under the right account.</div></div><input type="file" id="booksIn" accept=".xml" hidden><input type="file" id="mastersIn" accept=".xml" hidden><input type="file" id="twoBIn" accept=".json" hidden><input type="file" id="bankIn" accept=".xls,.xlsx,.csv,.pdf,.txt" multiple class="hidden"></section>'
+      '<div class="note">Excel, CSV or PDF from any bank. The balances are checked, and the statement is filed under the right account.</div></div><input type="file" id="bankIn" accept=".xls,.xlsx,.csv,.pdf,.txt" multiple class="hidden"></section>'
     : '<section class="collect-card"><h3>Upload purchase bills</h3>' + uploadBlock(CO()) + "</section>";
   const mine = viewJobs(j => j.target === S.coId || j.cid === S.coId || j.target === "auto");
   return '<div class="collect">' + (inbox || '<p class="note" style="margin:0 0 12px">Nothing waiting in the inbox for ' + esc(CO().name) + ".</p>") + card +
@@ -9749,8 +9752,7 @@ function bulkLedgerFrom(inp){
   acClose();
   bulkAction("ledger", l);
 }
-function bankChange(t){
-  const b = B(); if (!b) return false;
+function booksChange(t){
   if (t.id === "booksIn"){
     const f = (t.files || [])[0]; t.value = "";
     if (!f) return true;
@@ -9789,6 +9791,10 @@ function bankChange(t){
     }, e => toast("That file could not be read as a 2B JSON."));
     return true;
   }
+  return false;
+}
+function bankChange(t){
+  const b = B(); if (!b) return false;
   if (t.id === "bankIn"){
     const files = Array.from(t.files || []).filter(isBankFile); t.value = "";
     const bnk = B();
@@ -13303,6 +13309,7 @@ document.addEventListener("input", ev => {
 function setPath(o, path, v){ const k = path.split("."); if (k.length === 2) o[k[0]][k[1]] = v; else o[k[0]] = v; }
 
 document.addEventListener("change", ev => {
+  if (ev.target && ev.target.id && ["booksIn", "mastersIn", "twoBIn"].includes(ev.target.id)){ booksChange(ev.target); return; }
   const t = ev.target, e = curEntry(), cid = S.coId;
   if (t.dataset && t.dataset.adminplan){
     Cloud.rpc("admin_set_plan", {p_firm: t.dataset.adminplan, p_plan: t.value}).then(() => { toast("Plan changed."); loadAdminOverview(); }, e => toast(e.message));
