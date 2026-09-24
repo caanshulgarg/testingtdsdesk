@@ -754,7 +754,7 @@ const DEFAULT_FIRM = {firmName:"Garg Shekhar & Company", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "TEST · 24 Sep 2026 · build 103 (ledger masters bring the deductees\u2019 PAN)";
+const APP_VERSION = "TEST · 24 Sep 2026 · build 105 (GST ledgers set once too: tax, input or output, registration)";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;
@@ -5066,6 +5066,7 @@ const Books = {
     const out = {taxable: 0, tax: {CGST: 0, SGST: 0, IGST: 0, CESS: 0}, tds: [], tdsPaid: [], party: 0, rates: {}, roundoff: 0};
     v.ent.forEach(e => {
       const m = Books.ledgerOf(e.l), amt = Math.abs(e.a), sign = e.a < 0 ? -1 : 1;
+      if (m.kind === "ineligible"){ out.ineligible = r2((out.ineligible || 0) + amt); out.taxable = r2(out.taxable + amt); return; }
       if (m.kind === "gst"){ out.tax[m.tax] = r2(out.tax[m.tax] + amt); return; }
       if (m.kind === "tds_payable"){
         if (e.a > 0) out.tds.push({ledger: e.l, section: m.section, rate: m.rate, amount: amt});   // credited: tax deducted
@@ -5343,18 +5344,47 @@ function viewBooksImport(b){
       : '<p class="note">Nothing here yet.</p>') + "</section>";
 }
 function tallyDate(s){ return s && String(s).length === 8 ? String(s).slice(0, 4) + "-" + String(s).slice(4, 6) + "-" + String(s).slice(6, 8) : ""; }
+function ledgerSetup(b){
+  const list = Object.entries(b.map || {});
+  const regs = (b.meta && b.meta.gstins) || [];
+  const tds = list.filter(([, m]) => m.kind === "tds_payable");
+  const gst = list.filter(([, m]) => m.kind === "gst" || m.kind === "ineligible");
+  const secs = Array.from(new Set(tds.map(([, m]) => m.section).filter(Boolean))).sort();
+  const noSec = tds.filter(([, m]) => !m.section);
+  const noReg = regs.length > 1 ? gst.filter(([, m]) => !m.reg) : [];
+  const perReg = regs.map(g => {
+    const pre = g.slice(0, 2), mine = gst.filter(([, m]) => (m.reg || "") === pre);
+    return {gstin: g, input: mine.filter(([, m]) => m.side === "input").length, output: mine.filter(([, m]) => m.side === "output").length};
+  });
+  const done = !noSec.length && !noReg.length && tds.length && gst.length;
+  return '<section class="dash-card" style="margin-bottom:12px"><h3>Setting up this client, once</h3>' +
+    '<div class="dash-row"><span>TDS sections found</span><b>' + esc(secs.join(", ") || "none yet") + "</b></div>" +
+    perReg.map(r => '<div class="dash-row"><span>GST ' + esc(r.gstin) + "</span><b>" + r.input + " input, " + r.output + " output</b></div>").join("") +
+    (regs.length <= 1 && gst.length ? '<div class="dash-row"><span>GST ledgers</span><b>' + gst.filter(([, m]) => m.side === "input").length + " input, " + gst.filter(([, m]) => m.side === "output").length + " output</b></div>" : "") +
+    (noSec.length ? '<p class="note" style="color:#B9541B">' + noSec.length + " TDS ledger" + (noSec.length === 1 ? " has" : "s have") + " no section yet: " + esc(noSec.slice(0, 3).map(x => x[0]).join(", ")) + ". Set it in the list below.</p>" : "") +
+    (noReg.length ? '<p class="note" style="color:#B9541B">' + noReg.length + " GST ledger" + (noReg.length === 1 ? " is" : "s are") + " not tied to a registration: " + esc(noReg.slice(0, 3).map(x => x[0]).join(", ")) + ".</p>" : "") +
+    (done ? '<p class="note">Everything needed is set. Any new ledger that appears later is flagged here.</p>' : "") + "</section>";
+}
 function viewBooksLedgers(b){
-  const kinds = [["", "—"], ["tds_payable", "TDS payable"], ["tds_receivable", "TDS receivable"], ["gst", "GST"], ["bank", "Bank or cash"], ["roundoff", "Round off"]];
+  const kinds = [["", "—"], ["tds_payable", "TDS payable"], ["tds_receivable", "TDS receivable"], ["gst", "GST"], ["ineligible", "GST, ITC not to be taken"], ["bank", "Bank or cash"], ["roundoff", "Round off"]];
+  const regs = (b.meta && b.meta.gstins) || [];
   const list = Object.entries(b.map).sort((a, c) => c[1].n - a[1].n);
   const q = String(S.ledQ || "").toLowerCase();
   const shown = list.filter(([name, m]) => !q || name.toLowerCase().includes(q) || String(m.section || "").toLowerCase().includes(q));
   const guessed = list.filter(([, m]) => m.kind && !m.byHand).length;
-  return '<section><p class="note">What each ledger means. ' + guessed + ' of ' + list.length + ' were recognised from their names; correct any that are wrong and it is remembered.</p>' +
+  return ledgerSetup(b) + '<section><p class="note">What each ledger means. ' + guessed + ' of ' + list.length + ' were recognised from their names; correct any that are wrong and it is remembered for this client.</p>' +
     '<div class="revfilter"><input type="search" id="ledq" data-fk="ledq" data-keeptyped value="' + esc(S.ledQ || "") + '" placeholder="Find a ledger"><span class="note">' + shown.length + " of " + list.length + "</span></div>" +
     '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Ledger</th><th class="n">Used</th><th>Means</th><th>Section</th><th class="n">Rate</th></tr></thead><tbody>' +
     shown.slice(0, 400).map(([name, m]) => "<tr><td>" + esc(name) + '</td><td class="n">' + m.n + "</td>" +
       '<td><select data-ledkind="' + esc(name) + '">' + kinds.map(([v, l]) => '<option value="' + v + '"' + ((m.kind || "") === v ? " selected" : "") + ">" + l + "</option>").join("") + "</select></td>" +
-      '<td>' + (m.kind === "tds_payable" || m.kind === "tds_receivable" ? '<input type="text" data-ledsec="' + esc(name) + '" data-fk="sec-' + esc(name) + '" value="' + esc(m.section || "") + '" style="width:80px">' : m.kind === "gst" ? esc((m.reg ? m.reg + " " : "") + (m.tax || "") + " " + (m.side || "")) : "") + "</td>" +
+      '<td>' + (m.kind === "tds_payable" || m.kind === "tds_receivable"
+        ? '<input type="text" data-ledsec="' + esc(name) + '" data-fk="sec-' + esc(name) + '" value="' + esc(m.section || "") + '" placeholder="194C" style="width:80px">'
+        : (m.kind === "gst" || m.kind === "ineligible")
+        ? '<span style="display:flex;gap:4px">' +
+          '<select data-ledtax="' + esc(name) + '">' + ["CGST", "SGST", "IGST", "CESS"].map(x => '<option value="' + x + '"' + (m.tax === x ? " selected" : "") + ">" + x + "</option>").join("") + "</select>" +
+          '<select data-ledside="' + esc(name) + '"><option value="input"' + (m.side === "input" ? " selected" : "") + '>input</option><option value="output"' + (m.side === "output" ? " selected" : "") + ">output</option></select>" +
+          (regs.length > 1 ? '<select data-ledreg="' + esc(name) + '"><option value="">any</option>' + regs.map(g => '<option value="' + g.slice(0, 2) + '"' + (m.reg === g.slice(0, 2) ? " selected" : "") + ">" + esc(g.slice(0, 2)) + "</option>").join("") + "</select>" : "") + "</span>"
+        : "") + "</td>" +
       '<td class="n">' + (m.rate != null && m.kind === "tds_payable" ? m.rate + "%" : "") + "</td></tr>").join("") +
     "</tbody></table></div></section>";
 }
@@ -13268,6 +13298,16 @@ document.addEventListener("input", ev => {
   if (t && t.dataset && t.dataset.tdsfy !== undefined){ S.tdsFy = t.value; render(); return; }
   if (t && t.dataset && t.dataset.tdsq !== undefined){ S.tdsQ = t.value; render(); return; }
   if (t && t.dataset && t.dataset.ledkind){ const m = S.books.map[t.dataset.ledkind]; if (m){ m.kind = t.value; m.byHand = true; if (m.kind !== "tds_payable") delete m.section; S.books.reco = null; saveBooks(); render(); } return; }
+  if (t && t.dataset && (t.dataset.ledtax || t.dataset.ledside || t.dataset.ledreg)){
+    const key = t.dataset.ledtax || t.dataset.ledside || t.dataset.ledreg, m = S.books.map[key];
+    if (m){
+      if (t.dataset.ledtax) m.tax = t.value;
+      if (t.dataset.ledside) m.side = t.value;
+      if (t.dataset.ledreg) m.reg = t.value;
+      m.byHand = true; S.books.reco = null; saveBooks(); render();
+    }
+    return;
+  }
   if (t && t.dataset && t.dataset.ledsec){ const m = S.books.map[t.dataset.ledsec]; if (m){ m.section = t.value.toUpperCase(); m.byHand = true; later("ledsec", () => { saveBooks(); render(); }, 500); } return; }
   if (t && t.dataset && t.dataset.alloc){ S.books.alloc = S.books.alloc || {}; if (t.value) S.books.alloc[t.dataset.alloc] = t.value; else delete S.books.alloc[t.dataset.alloc]; saveBooks(); render(); return; }
   if (t && t.dataset && t.dataset.txnstatus !== undefined){ S.txnStatus = t.value; render(); return; }
