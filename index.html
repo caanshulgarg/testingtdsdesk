@@ -713,6 +713,7 @@ img.preview{display:block;max-width:100%;max-height:70vh;margin:0 auto;border:1p
 <input type="file" id="marketIn" accept=".csv,.txt,.xlsx,.xls" class="hidden">
 <input type="file" id="salaryIn" accept=".csv,.txt,.xlsx,.xls" class="hidden">
 <input type="file" id="mastersIn" accept=".xml" class="hidden">
+<input type="file" id="filedIn" accept=".json,application/json" multiple class="hidden">
 <input type="file" id="twoBIn" accept=".json,application/json" class="hidden">
 
 <!-- PDF reader: pdf.js 3.11.174 (Apache License 2.0), built in -->
@@ -756,7 +757,7 @@ const DEFAULT_FIRM = {firmName:"Garg Shekhar & Company", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "TEST · 24 Sep 2026 · build 118 (TDS by year, quarter and return, with challans, deductees and deductions on their own tabs)";
+const APP_VERSION = "TEST · 24 Sep 2026 · build 119 (GSTR-1 amendments: 9A, 9C and 10, against the returns filed)";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;
@@ -4129,7 +4130,7 @@ async function downloadStandalone(){
       (tag === "link" && /fonts\.(googleapis|gstatic)\.com/.test(el.getAttribute("href") || "")) || (tag === "style" && el.id === "app-style") || (tag === "script" && keepScript(el));
     if (!keep) el.remove();
   });
-  const bodyKeep = new Set(["app", "modal", "toast", "fileIn", "camIn", "bankIn", "ledIn", "bookIn", "salesIn", "booksIn", "mastersIn", "twoBIn", "marketIn", "salaryIn", "app-main", "tess-core", "tess-eng", "pdfjs-lib", "pdfjs-worker", "xlsx-lib", "sample-jpg", "sample-pdf"]);
+  const bodyKeep = new Set(["app", "modal", "toast", "fileIn", "camIn", "bankIn", "ledIn", "bookIn", "salesIn", "booksIn", "mastersIn", "twoBIn", "filedIn", "marketIn", "salaryIn", "app-main", "tess-core", "tess-eng", "pdfjs-lib", "pdfjs-worker", "xlsx-lib", "sample-jpg", "sample-pdf"]);
   Array.from(root.querySelector("body").children).forEach(el => {
     if (el.tagName.toLowerCase() === "header" && el.classList.contains("top")) return;
     if (el.tagName.toLowerCase() === "script" && keepScript(el)) return;
@@ -5582,7 +5583,7 @@ const GSTR = {
     return list;
   },
   // the file the portal takes: GSTR-1 as JSON
-  toJson(ym, reg){
+  toJson(ym, reg, opts){
     const g = this.one(ym, reg);
     const gstin = ((S.books.meta || {}).gstins || []).find(x => !reg || x.slice(0, 2) === reg) || "";
     const dmy = d => String(d).length === 8 ? String(d).slice(6, 8) + "-" + String(d).slice(4, 6) + "-" + String(d).slice(0, 4) : d;
@@ -5627,10 +5628,13 @@ const GSTR = {
       qty: 0, val: r2(h.taxable + h.igst + h.cgst + h.sgst + h.cess), txval: r2(h.taxable), csamt: r2(h.cess)},
       h.igst ? {iamt: r2(h.igst)} : {camt: r2(h.cgst), samt: r2(h.sgst)}))};
     if (g.series.length) out.doc_issue = {doc_det: [{doc_num: 1, docs: g.series.map((x, i) => ({num: i + 1, from: String(x.from), to: String(x.to), totnum: x.n, cancel: 0, net_issue: x.n}))}]};
+    if (!(opts && opts.plain) && reg) GSTAmend.addTo(out, ym, reg);
     return out;
   },
   async toJsonFile(ym, reg){
     const j = this.toJson(ym, reg);
+    // the copy kept here is what later months' amendments are measured against
+    if (reg && j.gstin){ try { GSTAmend.keep(JSON.parse(JSON.stringify(j)), "downloaded"); saveBooks(); } catch (e){} }
     saveFile("GSTR1_" + (j.gstin || "") + "_" + j.fp + ".json", new Blob([JSON.stringify(j)], {type: "application/json"}));
     return j;
   },
@@ -5683,6 +5687,11 @@ const GSTR = {
       if (a.txpd.length) add("11B Advances adjusted", ["Adjusted on", "By"].concat(ah), a.txpd.map(r => [d(r.adjDate), r.by].concat(al(r))));
     }
     add("Before filing", ["What", "How many", "What to do"], GSTR.checks(ym, reg).map(c => [c.what, c.n, c.how]));
+    if (reg){
+      const p = GSTAmend.pending(ym, reg);
+      if (p.rows.length) add("Amendments", ["Month filed", "Document", "GSTIN", "Number", "Date", "Taxable now", "What differs", "Reported as"],
+        p.rows.map(r => { const x = r.now || r.was; return [GSTR.label(r.P), x.kind, x.ctin || "", x.num, d(x.date), r.now ? r.now.txval : 0, r.changes.join("; "), r.act]; }));
+    }
     add("GSTR-3B", ["", "Taxable", "IGST", "CGST", "SGST", "Cess"], [
       ["3.1(a) Outward taxable supplies", t.sale.taxable, t.sale.igst, t.sale.cgst, t.sale.sgst, t.sale.cess],
       ["Add: tax on advances, 11A less 11B", t.adv.taxable, t.adv.igst, t.adv.cgst, t.adv.sgst, t.adv.cess],
@@ -5704,6 +5713,198 @@ const GSTR = {
     const outBin = XLSX.write(wb, {bookType: "xlsx", type: "array"});
     saveFile(CO().name.replace(/[^A-Za-z0-9]+/g, "-") + "-GSTR1-3B-" + (ym || "all") + (reg ? "-" + reg : "") + ".xlsx",
       new Blob([outBin], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
+  }
+};
+
+/* ================================================================== */
+/* GSTR-1 amendments: what was filed, against the books now           */
+/*   9A amended B2B / B2C large / export invoices, 9C amended notes,  */
+/*   10 amended B2C small, and documents missed in the month's return */
+/* ================================================================== */
+const GSTAmend = {
+  fpOf(ym){ return String(ym).slice(4, 6) + String(ym).slice(0, 4); },
+  ymOf(fp){ return String(fp).slice(2, 6) + String(fp).slice(0, 2); },
+  ymd(dmy){ const m = String(dmy || "").match(/^(\d{2})-(\d{2})-(\d{4})$/); return m ? m[3] + m[2] + m[1] : String(dmy || "").replace(/-/g, ""); },
+  dmy(d){ d = String(d || ""); return d.length === 8 ? d.slice(6, 8) + "-" + d.slice(4, 6) + "-" + d.slice(0, 4) : d; },
+  numKey(n){ return String(n == null ? "" : n).toUpperCase().replace(/\s+/g, ""); },
+  // the last month a year's invoices can still be amended in: November after the year ends (section 37(3))
+  lastYm(ym){ const y = num(ym.slice(0, 4)), m = num(ym.slice(4, 6)); return String((m >= 4 ? y + 1 : y)) + "11"; },
+  filed(reg){
+    return Object.values((S.books && S.books.filed) || {}).filter(f => (!reg || String(f.gstin).slice(0, 2) === reg)).sort((a, c) => a.ym.localeCompare(c.ym));
+  },
+  // keep a GSTR-1 JSON as filed: one per registration and month
+  keep(json, source){
+    const b = S.books, gstin = String(json.gstin || "").toUpperCase(), fp = String(json.fp || "");
+    if (!/^\d{2}[A-Z0-9]{13}$/.test(gstin) || !/^\d{6}$/.test(fp)) throw new Error("This does not look like a GSTR-1 JSON: it needs a GSTIN and a period (fp).");
+    b.filed = b.filed || {};
+    const k = gstin + "|" + fp, old = b.filed[k];
+    // a copy from the portal is not replaced by a later download from here
+    if (old && old.source === "portal" && source === "downloaded") return old;
+    b.filed[k] = {gstin, fp, ym: this.ymOf(fp), source, at: new Date().toISOString(), json, notFiled: false};
+    return b.filed[k];
+  },
+  // one flat list of documents from a GSTR-1 JSON, amendments folded onto the original number
+  norm(json){
+    const docs = new Map(), b2cs = new Map(), b2csa = [];
+    const sumItems = itms => {
+      const t = {txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0, rates: []};
+      (itms || []).forEach(it => {
+        const d = it.itm_det || it;
+        t.txval = r2(t.txval + num(d.txval)); t.iamt = r2(t.iamt + num(d.iamt)); t.camt = r2(t.camt + num(d.camt)); t.samt = r2(t.samt + num(d.samt)); t.csamt = r2(t.csamt + num(d.csamt));
+        if (!t.rates.includes(num(d.rt))) t.rates.push(num(d.rt));
+      });
+      t.rates.sort((a, c) => a - c);
+      return t;
+    };
+    const put = (kind, key, x, extra) => docs.set(key, Object.assign({kind, key, num: String(x.inum || x.nt_num || ""), date: this.ymd(x.idt || x.nt_dt), val: num(x.val),
+      pos: String(x.pos || "").padStart(2, "0"), rchrg: x.rchrg || "N", inv_typ: x.inv_typ || "R", itms: x.itms || []}, sumItems(x.itms), extra || {}));
+    (json.b2b || []).forEach(g => (g.inv || []).forEach(x => put("B2B", "B2B|" + String(g.ctin).toUpperCase() + "|" + this.numKey(x.inum), x, {ctin: String(g.ctin).toUpperCase()})));
+    (json.b2ba || []).forEach(g => (g.inv || []).forEach(x => put("B2B", "B2B|" + String(g.ctin).toUpperCase() + "|" + this.numKey(x.oinum), x, {ctin: String(g.ctin).toUpperCase()})));
+    (json.b2cl || []).forEach(g => (g.inv || []).forEach(x => put("B2CL", "B2CL|" + this.numKey(x.inum), Object.assign({pos: g.pos}, x))));
+    (json.b2cla || []).forEach(g => (g.inv || []).forEach(x => put("B2CL", "B2CL|" + this.numKey(x.oinum), Object.assign({pos: g.pos}, x))));
+    (json.exp || []).forEach(g => (g.inv || []).forEach(x => put("EXP", "EXP|" + this.numKey(x.inum), x, {exp_typ: g.exp_typ || "WPAY"})));
+    (json.expa || []).forEach(g => (g.inv || []).forEach(x => put("EXP", "EXP|" + this.numKey(x.oinum), x, {exp_typ: g.exp_typ || "WPAY"})));
+    (json.cdnr || []).forEach(g => (g.nt || []).forEach(x => put("CDNR", "CDNR|" + String(g.ctin).toUpperCase() + "|" + this.numKey(x.nt_num), x, {ctin: String(g.ctin).toUpperCase(), ntty: x.ntty})));
+    (json.cdnra || []).forEach(g => (g.nt || []).forEach(x => put("CDNR", "CDNR|" + String(g.ctin).toUpperCase() + "|" + this.numKey(x.ont_num), x, {ctin: String(g.ctin).toUpperCase(), ntty: x.ntty})));
+    (json.b2cs || []).forEach(x => {
+      const k = String(x.pos).padStart(2, "0") + "|" + num(x.rt) + "|" + (x.sply_ty || "");
+      const o = b2cs.get(k) || {pos: String(x.pos).padStart(2, "0"), rt: num(x.rt), sply_ty: x.sply_ty, txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0};
+      o.txval = r2(o.txval + num(x.txval)); o.iamt = r2(o.iamt + num(x.iamt)); o.camt = r2(o.camt + num(x.camt)); o.samt = r2(o.samt + num(x.samt)); o.csamt = r2(o.csamt + num(x.csamt));
+      b2cs.set(k, o);
+    });
+    (json.b2csa || []).forEach(x => (x.itms || []).forEach(it => b2csa.push({omon: x.omon, pos: String(x.pos).padStart(2, "0"), rt: num(it.rt), sply_ty: x.sply_ty,
+      txval: num(it.txval), iamt: num(it.iamt), camt: num(it.camt), samt: num(it.samt), csamt: num(it.csamt)})));
+    return {docs, b2cs, b2csa};
+  },
+  // what the portal holds, as of the returns filed before a month
+  state(reg, beforeYm, inclusive){
+    const docs = new Map(), b2cs = {}, periods = new Set();
+    this.filed(reg).filter(f => !f.notFiled && (inclusive ? f.ym <= beforeYm : f.ym < beforeYm)).forEach(f => {
+      const n = this.norm(f.json);
+      periods.add(f.ym);
+      n.docs.forEach((d, k) => docs.set(k, Object.assign({}, d, {filedIn: f.ym})));
+      b2cs[f.ym] = n.b2cs;
+      n.b2csa.forEach(a => {
+        const m = b2cs[this.ymOf(a.omon)] = b2cs[this.ymOf(a.omon)] || new Map();
+        m.set(a.pos + "|" + a.rt + "|" + a.sply_ty, a);
+      });
+    });
+    return {docs, b2cs, periods};
+  },
+  same(a, c){ return Math.abs(num(a) - num(c)) < 1.005; },
+  changes(was, now){
+    const out = [], m = v => INR.format(r2(v || 0));
+    if (was.date !== now.date) out.push("date " + this.dmy(was.date) + " \u2192 " + this.dmy(now.date));
+    if (was.pos !== now.pos) out.push("place of supply " + was.pos + " \u2192 " + now.pos);
+    if (!this.same(was.txval, now.txval)) out.push("taxable " + m(was.txval) + " \u2192 " + m(now.txval));
+    ["iamt", "camt", "samt", "csamt"].forEach((k, i) => { if (!this.same(was[k], now[k])) out.push(["IGST", "CGST", "SGST", "cess"][i] + " " + m(was[k]) + " \u2192 " + m(now[k])); });
+    if (!this.same(was.val, now.val) && !out.length) out.push("value " + m(was.val) + " \u2192 " + m(now.val));
+    if (was.rates.join(",") !== now.rates.join(",") && out.length) out.push("rate " + was.rates.join("/") + "% \u2192 " + now.rates.join("/") + "%");
+    if ((was.rchrg || "N") !== (now.rchrg || "N")) out.push("reverse charge " + was.rchrg + " \u2192 " + now.rchrg);
+    if (was.kind === "CDNR" && was.ntty !== now.ntty) out.push("note type " + was.ntty + " \u2192 " + now.ntty);
+    return out;
+  },
+  // every difference between the books and the portal, for months before the return being prepared
+  pending(ym, reg){
+    const res = {rows: [], periods: [], noCopy: [], late: [], ready: !!reg};
+    if (!reg || !ym) return res;
+    const st = this.state(reg, ym, false), fix = (S.books && S.books.amendFix) || {};
+    const months = GSTR.months().filter(m => m < ym);
+    months.forEach(P => {
+      if (!st.periods.has(P)){ if (this.filed(reg).length) res.noCopy.push(P); return; }
+      if (ym > this.lastYm(P)){ res.late.push(P); return; }
+      res.periods.push(P);
+      const books = this.norm(GSTR.toJson(P, reg, {plain: true})).docs;
+      const filedP = new Map(Array.from(st.docs).filter(([, d]) => GSTR.ym(d.date) === P || (d.filedIn === P && !GSTR.ym(d.date))));
+      const b2csP = st.b2cs[P] || new Map();
+      books.forEach((d, k) => {
+        const was = filedP.get(k) || (st.docs.has(k) ? st.docs.get(k) : null);
+        const id = P + "|" + k;
+        if (was){
+          const ch = this.changes(was, d);
+          if (ch.length) res.rows.push({id, P, kind: d.kind, what: "amend", was, now: d, changes: ch, act: fix[id] || "amend"});
+          return;
+        }
+        // not in the filed return: a B2B invoice may have gone in B2C small, or been missed
+        let guess = "missed";
+        if (d.kind === "B2B" && d.rates.length === 1){
+          const sply = d.iamt ? "INTER" : "INTRA", g = b2csP.get(d.pos + "|" + d.rates[0] + "|" + sply);
+          if (g && num(g.txval) + 1 >= d.txval) guess = "b2c";
+        }
+        res.rows.push({id, P, kind: d.kind, what: "missing", was: null, now: d, changes: [guess === "b2c" ? "filed in B2C small, now has a GSTIN" : "not in the filed return"], act: fix[id] || guess});
+      });
+      filedP.forEach((d, k) => {
+        if (books.has(k) || GSTR.ym(d.date) !== P) return;
+        if (!num(d.val) && !num(d.txval)) return;                     // already amended to nil
+        const id = P + "|" + k;
+        res.rows.push({id, P, kind: d.kind, what: "gone", was: d, now: null, changes: ["filed, but no longer in the books"], act: fix[id] || "nil"});
+      });
+    });
+    res.rows.sort((a, c) => a.P.localeCompare(c.P) || a.kind.localeCompare(c.kind) || String(a.now ? a.now.num : a.was.num).localeCompare(String(c.now ? c.now.num : c.was.num)));
+    return res;
+  },
+  // the month's own return: the books now against the copy filed for it
+  check(ym, reg){
+    if (!reg || !ym) return null;
+    const f = this.filed(reg).find(x => x.ym === ym && !x.notFiled);
+    if (!f) return null;
+    const filed = this.norm(f.json), books = this.norm(GSTR.toJson(ym, reg, {plain: true}));
+    const rows = [];
+    books.docs.forEach((d, k) => { const w = filed.docs.get(k); if (!w) rows.push({kind: d.kind, doc: d, changes: ["in the books, not in the filed return"]}); else { const c = this.changes(w, d); if (c.length) rows.push({kind: d.kind, doc: d, changes: c}); } });
+    filed.docs.forEach((d, k) => { if (!books.docs.has(k) && (num(d.val) || num(d.txval))) rows.push({kind: d.kind, doc: d, changes: ["in the filed return, not in the books"]}); });
+    const tot = m => { let t = 0; m.forEach(x => { t += num(x.txval); }); return r2(t); };
+    let b2csF = 0, b2csB = 0; filed.b2cs.forEach(x => { b2csF += num(x.txval); }); books.b2cs.forEach(x => { b2csB += num(x.txval); });
+    return {file: f, rows, filedTotal: r2(tot(filed.docs) + b2csF), booksTotal: r2(tot(books.docs) + b2csB), b2csF: r2(b2csF), b2csB: r2(b2csB)};
+  },
+  zeroItems(d){ return [{num: 1, itm_det: Object.assign({rt: d.rates[0] || 0, txval: 0, csamt: 0}, d.iamt ? {iamt: 0} : {camt: 0, samt: 0})}]; },
+  // put what is pending into the month's GSTR-1 JSON
+  addTo(out, ym, reg){
+    const p = this.pending(ym, reg);
+    const groups = {}, push = (sec, gk, head, item) => { const s = groups[sec] = groups[sec] || {}; (s[gk] = s[gk] || Object.assign({}, head, {list: []})).list.push(item); };
+    const moved = {};
+    p.rows.forEach(r => {
+      if (r.act === "skip") return;
+      const d = r.now, w = r.was;
+      if (r.what === "amend" || (r.what === "gone" && r.act === "nil")){
+        const x = d || w, itms = d ? d.itms : this.zeroItems(w), val = d ? d.val : 0;
+        const base = {oinum: w.num, oidt: this.dmy(w.date), inum: x.num, idt: this.dmy(x.date), val};
+        if (x.kind === "B2B") push("b2ba", x.ctin, {ctin: x.ctin}, Object.assign(base, {pos: x.pos, rchrg: x.rchrg, inv_typ: x.inv_typ, itms}));
+        else if (x.kind === "B2CL") push("b2cla", x.pos, {pos: x.pos}, Object.assign(base, {itms}));
+        else if (x.kind === "EXP") push("expa", x.exp_typ || "WPAY", {exp_typ: x.exp_typ || "WPAY"}, Object.assign(base, {itms}));
+        else if (x.kind === "CDNR") push("cdnra", x.ctin, {ctin: x.ctin}, {ont_num: w.num, ont_dt: this.dmy(w.date), ntty: x.ntty, nt_num: x.num, nt_dt: this.dmy(x.date), val, pos: x.pos, rchrg: x.rchrg, inv_typ: x.inv_typ, itms});
+        return;
+      }
+      if (r.what === "missing" && (r.act === "missed" || r.act === "b2c")){
+        // reported now, in the month's own tables, with its original number and date
+        if (d.kind === "B2B") push("b2b", d.ctin, {ctin: d.ctin}, {inum: d.num, idt: this.dmy(d.date), val: d.val, pos: d.pos, rchrg: d.rchrg, inv_typ: d.inv_typ, itms: d.itms});
+        else if (d.kind === "B2CL") push("b2cl", d.pos, {pos: d.pos}, {inum: d.num, idt: this.dmy(d.date), val: d.val, itms: d.itms});
+        else if (d.kind === "EXP") push("exp", d.exp_typ || "WPAY", {exp_typ: d.exp_typ || "WPAY"}, {inum: d.num, idt: this.dmy(d.date), val: d.val, itms: d.itms});
+        else if (d.kind === "CDNR") push("cdnr", d.ctin, {ctin: d.ctin}, {ntty: d.ntty, nt_num: d.num, nt_dt: this.dmy(d.date), val: d.val, pos: d.pos, rchrg: d.rchrg, inv_typ: d.inv_typ, itms: d.itms});
+        if (r.act === "b2c"){
+          const sply = d.iamt ? "INTER" : "INTRA", k = r.P + "|" + d.pos + "|" + d.rates[0] + "|" + sply;
+          const m = moved[k] = moved[k] || {P: r.P, pos: d.pos, rt: d.rates[0], sply_ty: sply, txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0};
+          ["txval", "iamt", "camt", "samt", "csamt"].forEach(f => { m[f] = r2(m[f] + num(d[f])); });
+        }
+      }
+    });
+    const inner = {b2b: "inv", b2ba: "inv", b2cl: "inv", b2cla: "inv", exp: "inv", expa: "inv", cdnr: "nt", cdnra: "nt"};
+    Object.keys(groups).forEach(sec => {
+      const list = out[sec] = out[sec] || [];
+      Object.values(groups[sec]).forEach(g => {
+        const key = Object.keys(g).find(k => k !== "list"), hit = list.find(x => x[key] === g[key]);
+        if (hit) hit[inner[sec]] = (hit[inner[sec]] || []).concat(g.list);
+        else { const o = {}; o[key] = g[key]; o[inner[sec]] = g.list; list.push(o); }
+      });
+    });
+    // table 10: the B2C small figures of the original month, less what moved to B2B
+    const st = this.state(reg, ym, false);
+    Object.values(moved).forEach(m => {
+      const g = (st.b2cs[m.P] || new Map()).get(m.pos + "|" + m.rt + "|" + m.sply_ty) || {txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0};
+      const it = {rt: m.rt, txval: r2(num(g.txval) - m.txval), csamt: r2(num(g.csamt) - m.csamt)};
+      if (m.sply_ty === "INTER") it.iamt = r2(num(g.iamt) - m.iamt); else { it.camt = r2(num(g.camt) - m.camt); it.samt = r2(num(g.samt) - m.samt); }
+      (out.b2csa = out.b2csa || []).push({omon: this.fpOf(m.P), sply_ty: m.sply_ty, pos: m.pos, typ: "OE", itms: [it]});
+    });
+    return p;
   }
 };
 
@@ -6255,7 +6456,8 @@ async function openBooks(cid){
   render();
 }
 async function saveBooks(){ const b = S.books; if (b && b.cid) await Books.save(b.cid, {cid: b.cid, vouchers: b.vouchers, map: b.map, meta: b.meta, challans: b.challans, alloc: b.alloc, pans: b.pans, twoB: b.twoB,
-  gstins: b.gstins, under: b.under, states: b.states, groups: b.groups, salary: b.salary, certs: b.certs, advFix: b.advFix, assets: b.assets, rev: b.rev}); }
+  gstins: b.gstins, under: b.under, states: b.states, groups: b.groups, salary: b.salary, certs: b.certs, advFix: b.advFix, assets: b.assets, rev: b.rev,
+  filed: b.filed, amendFix: b.amendFix}); }
 function viewBooks(){
   const co = CO();
   if (!S.books || S.books.cid !== co.id){ openBooks(co.id); return '<p class="note">Opening the books…</p>'; }
@@ -6725,17 +6927,75 @@ function viewBooksGst(b){
   const months = GSTR.months(), regs = (b.meta && b.meta.gstins) || [];
   if (!S.gstYm && months.length) S.gstYm = months[months.length - 1];
   if (!S.gstReg && regs.length === 1) S.gstReg = regs[0].slice(0, 2);
-  let h = '<nav class="sbar" aria-label="GST">' + [["r1", "GSTR-1"], ["r3b", "GSTR-3B"], ["r2b", "2B reconciliation"], ["adv", "Advances"], ["rev", "Reversal"]]
+  let h = '<nav class="sbar" aria-label="GST">' + [["r1", "GSTR-1"], ["r3b", "GSTR-3B"], ["r2b", "2B reconciliation"], ["adv", "Advances"], ["rev", "Reversal"], ["amend", "Amendments"]]
     .map(([id, l]) => '<button data-gstpart="' + id + '" aria-selected="' + (part === id) + '">' + l + "</button>").join("") + "</nav>";
   h += '<div class="revfilter"><select data-gstym>' + months.map(m => '<option value="' + m + '"' + (S.gstYm === m ? " selected" : "") + ">" + GSTR.label(m) + "</option>").join("") + "</select>" +
     (regs.length > 1 ? '<select data-gstreg><option value="">Both registrations</option>' + regs.map(g => '<option value="' + g.slice(0, 2) + '"' + (S.gstReg === g.slice(0, 2) ? " selected" : "") + ">" + esc(g) + "</option>").join("") + "</select>" : "") +
     (part === "r2b" || part === "rev" ? "" : '<button class="btn small" data-act="gstExcel">Download GSTR-1 and 3B</button>') +
+    (part === "amend" ? '<button class="btn small primary" data-act="gstJson">Download GSTR-1 JSON with these</button>' : "") +
     (part === "r1" ? '<button class="btn small primary" data-act="gstJson">Download GSTR-1 JSON for the portal</button>' : "") +
     (part === "r3b" ? '<button class="btn small primary" data-act="gst3bJson">Download GSTR-3B JSON for the portal</button>' : "") + "</div>";
   if (part === "r2b") return h + viewBooks2B(b);
   if (part === "adv") return h + viewGstAdv(b);
   if (part === "rev") return h + viewGstRev(b);
+  if (part === "amend") return h + viewGstAmend(b);
   return h + (part === "r1" ? viewGstr1(b) : viewGstr3b(b));
+}
+
+function viewGstAmend(b){
+  const money = v => INR.format(r2(v || 0)), ym = S.gstYm || "", reg = S.gstReg || "", regs = (b.meta && b.meta.gstins) || [];
+  const kindName = {B2B: "B2B invoice", B2CL: "B2C large invoice", EXP: "Export invoice", CDNR: "Credit or debit note"};
+  const table = {B2B: "9A", B2CL: "9A", EXP: "9A", CDNR: "9C"};
+  let h = "";
+  const all = GSTAmend.filed(reg);
+  h += '<section class="dash-card"><h3>Filed GSTR-1 returns kept here</h3>' +
+    '<p class="note">Amendments are found by comparing the books now with what was filed. A copy is kept each time the GSTR-1 JSON is downloaded here; for a month filed some other way, bring in the JSON that was uploaded to the portal.</p>' +
+    '<div class="row" style="gap:8px;margin:8px 0"><button class="btn small primary" data-act="filedPick">Bring in filed GSTR-1 JSON</button></div>' +
+    (all.length ? '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Month</th><th>Registration</th><th>Copy from</th><th class="dt">Kept on</th><th class="n">Documents</th><th class="n">B2C small</th><th>Not filed</th></tr></thead><tbody>' +
+      all.map(f => {
+        const n = GSTAmend.norm(f.json); let bs = 0; n.b2cs.forEach(x => { bs += num(x.txval); });
+        return "<tr><td>" + GSTR.label(f.ym) + "</td><td>" + esc(f.gstin) + "</td><td>" + (f.source === "portal" ? "brought in" : "downloaded here") + "</td><td>" + fmtDate(String(f.at).slice(0, 10)) +
+          '</td><td class="n">' + n.docs.size + '</td><td class="n">' + money(bs) + '</td><td><input type="checkbox" data-filednot="' + esc(f.gstin + "|" + f.fp) + '"' + (f.notFiled ? " checked" : "") +
+          ' aria-label="This copy was not filed"></td></tr>';
+      }).join("") + "</tbody></table></div>" : '<p class="note">None yet.</p>') + "</section>";
+  if (regs.length > 1 && !reg) return h + '<p class="note" style="margin-top:12px">Choose a registration above to see its amendments.</p>';
+  if (!ym) return h;
+  const c = GSTAmend.check(ym, reg);
+  if (c){
+    h += '<section class="dash-card" style="margin-top:12px"><h3>' + GSTR.label(ym) + ": the books against the return filed</h3>" +
+      '<div class="dash-row"><span>Taxable value filed</span><b>' + money(c.filedTotal) + '</b></div><div class="dash-row"><span>Taxable value in the books now</span><b>' + money(c.booksTotal) + "</b></div>" +
+      (Math.abs(c.b2csF - c.b2csB) >= 1 ? '<div class="dash-row"><span>B2C small: filed / books</span><b>' + money(c.b2csF) + " / " + money(c.b2csB) + "</b></div>" : "") +
+      (c.rows.length ? '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Document</th><th>Party</th><th>Number</th><th class="dt">Date</th><th>What differs</th></tr></thead><tbody>' +
+        c.rows.slice(0, 200).map(r => "<tr><td>" + esc(kindName[r.kind] || r.kind) + "</td><td>" + esc(r.doc.ctin || "\u2014") + "</td><td>" + esc(r.doc.num) + "</td><td>" + fmtDate(tallyDate(r.doc.date)) + "</td><td>" + esc(r.changes.join("; ")) + "</td></tr>").join("") +
+        "</tbody></table></div>" : '<p class="note">Every document in the books matches the return filed.</p>') +
+      '<p class="note">Differences here are reported as amendments in a later month’s return, not by filing this month again.</p></section>';
+  }
+  const p = GSTAmend.pending(ym, reg);
+  const live = p.rows.filter(r => r.act !== "skip");
+  const count = f => live.filter(f).length;
+  h += '<div class="dash-tiles" style="margin-top:12px">' +
+    '<div class="dtile"><span>9A amended invoices</span><b>' + count(r => r.kind !== "CDNR" && (r.what === "amend" || r.what === "gone")) + "</b><small>B2B, B2C large and exports</small></div>" +
+    '<div class="dtile"><span>9C amended notes</span><b>' + count(r => r.kind === "CDNR" && (r.what === "amend" || r.what === "gone")) + "</b><small>credit and debit notes</small></div>" +
+    '<div class="dtile"><span>Missed, reported now</span><b>' + count(r => r.what === "missing") + "</b><small>with their original number and date</small></div>" +
+    '<div class="dtile"><span>10 B2C small corrected</span><b>' + count(r => r.what === "missing" && r.act === "b2c") + "</b><small>invoices moved to B2B</small></div></div>";
+  h += '<section class="dash-card" style="margin-top:12px"><h3>To report in ' + GSTR.label(ym) + "’s GSTR-1</h3>" +
+    '<p class="note">Earlier months’ documents that differ from what was filed. Each goes into this month’s JSON as chosen; an amendment already filed in an earlier month’s return is not repeated.</p>' +
+    (p.periods.length ? '<p class="note">Compared: ' + p.periods.map(GSTR.label).join(", ") + ".</p>" : "") +
+    (p.noCopy.length ? '<p class="note" style="color:#B9541B">No filed copy for ' + p.noCopy.map(GSTR.label).join(", ") + ", so those months are not compared.</p>" : "") +
+    (p.late.length ? '<p class="note">Past the time to amend (November after the year): ' + p.late.map(GSTR.label).join(", ") + ".</p>" : "") +
+    (p.rows.length ? '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Month filed</th><th>Document</th><th>GSTIN</th><th>Number</th><th class="dt">Date</th><th class="n">Taxable now</th><th>What differs</th><th>Report it as</th></tr></thead><tbody>' +
+      p.rows.map(r => {
+        const d = r.now || r.was;
+        const opts = r.what === "amend" ? [["amend", "amendment (" + table[r.kind] + ")"], ["skip", "leave it"]]
+          : r.what === "gone" ? [["nil", "amendment to nil (" + table[r.kind] + ")"], ["skip", "leave it"]]
+          : (r.kind === "B2B" ? [["b2c", "was in B2C small: 4A now and table 10"], ["missed", "missed: 4A now"]] : [["missed", "missed: report now"]]).concat([["skip", "leave it"]]);
+        return "<tr><td>" + GSTR.label(r.P) + "</td><td>" + esc(kindName[r.kind] || r.kind) + "</td><td>" + esc(d.ctin || "\u2014") + "</td><td>" + esc(d.num) + "</td><td>" + fmtDate(tallyDate(d.date)) +
+          '</td><td class="n">' + (r.now ? money(r.now.txval) : "\u2014") + "</td><td>" + esc(r.changes.join("; ")) + '</td><td><select data-amendact="' + esc(r.id) + '">' +
+          opts.map(([v, l]) => '<option value="' + v + '"' + (r.act === v ? " selected" : "") + ">" + esc(l) + "</option>").join("") + "</select></td></tr>";
+      }).join("") + "</tbody></table></div>"
+      : '<p class="note">' + (p.periods.length ? "Nothing to amend: the books agree with what was filed." : "Nothing to compare yet.") + "</p>") + "</section>";
+  h += '<p class="note">Amendments can be made up to 30 November after the end of the year (section 37(3)). A B2B invoice whose GSTIN was removed shows as filed but no longer in the books; add it to B2C small by hand in table 10.</p>';
+  return h;
 }
 function viewGstAdv(b){
   const money = v => INR.format(r2(v || 0));
@@ -6854,6 +7114,10 @@ function viewGstr1(b){
   const box = (label, s, cls) => '<div class="dtile' + (cls || "") + '"><span>' + label + "</span><b>" + s.n + "</b><small>" + money(s.taxable) + " + " + money(s.igst + s.cgst + s.sgst) + " tax</small></div>";
   let h = '<div class="dash-tiles">' + box("B2B (4A)", GSTR.sum(g.b2b)) + box("B2C large (5)", GSTR.sum(g.b2cl)) + box("B2C small (7)", GSTR.sum(g.b2c)) + box("Notes (9B)", GSTR.sum(g.cdnr)) + "</div>" +
     '<div class="dash-tiles">' + box("Exports and SEZ (6)", GSTR.sum(g.exp)) + box("Nil, exempt, non-GST (8)", GSTR.sum(g.nil)) + box("Reverse charge (4B)", GSTR.sum(g.rcm)) + box("All outward", g.total) + "</div>";
+  if (S.gstReg && GSTAmend.filed(S.gstReg).length){
+    const p = GSTAmend.pending(S.gstYm || "", S.gstReg), live = p.rows.filter(r => r.act !== "skip");
+    if (live.length) h += '<div class="dash-tiles"><div class="dtile warn"><span>Earlier months to amend</span><b>' + live.length + '</b><small><button class="linkbtn" data-gstpart="amend">See them</button>; they go into this month\u2019s JSON</small></div></div>';
+  }
   if (GSTAdv.ready()){
     const a = GSTAdv.month(S.gstYm || "", S.gstReg || "");
     if (a.at.length || a.txpd.length) h += '<div class="dash-tiles">' + box("Advances received (11A)", a.atSum) + box("Advances adjusted (11B)", a.txpdSum) +
@@ -11333,6 +11597,8 @@ function bulkLedgerFrom(inp){
 // what the user corrects on the Advances and Reversal screens
 function gstFixChange(t){
   const d = t.dataset, b = S.books;
+  if (d.amendact){ b.amendFix = Object.assign({}, b.amendFix, {[d.amendact]: t.value}); saveBooks(); render(); return true; }
+  if (d.filednot){ const f = (b.filed || {})[d.filednot]; if (f){ f.notFiled = !!t.checked; saveBooks(); render(); } return true; }
   const id = d.advrate || d.advskip || d.advtake || d.advadj;
   if (id){
     b.advFix = b.advFix || {};
@@ -11378,6 +11644,13 @@ function booksChange(t){
       toast(res.count + " ledgers read. " + Object.keys(res.pans).length + " carry a PAN; " + withPan + " of " + rows.length + " deductions now have one.");
       render();
     }, e => { b.busy = ""; toast("Could not read that file: " + (e && e.message || e)); render(); });
+    return true;
+  }
+  if (t.id === "filedIn"){
+    const files = Array.from(t.files || []); t.value = "";
+    if (!files.length) return true;
+    Promise.all(files.map(f => f.text().then(txt => { const k = GSTAmend.keep(JSON.parse(txt), "portal"); return GSTR.label(k.ym) + " " + k.gstin.slice(0, 2); }).catch(e => "not read: " + f.name)))
+      .then(list => { saveBooks(); toast("Filed GSTR-1 kept: " + list.join(", ") + "."); render(); });
     return true;
   }
   if (t.id === "twoBIn"){
@@ -14853,6 +15126,7 @@ document.addEventListener("click", ev => {
     case "marketPick": { const i = document.getElementById("marketIn"); if (i){ i.value = ""; i.click(); } break; }
     case "booksPick": { const i = document.getElementById("booksIn"); if (i){ i.value = ""; i.click(); } break; }
     case "mastersPick": { const i = document.getElementById("mastersIn"); if (i){ i.value = ""; i.click(); } break; }
+    case "filedPick": { const i = document.getElementById("filedIn"); if (i){ i.value = ""; i.click(); } break; }
     case "twoBPick": { const i = document.getElementById("twoBIn"); if (i){ i.value = ""; i.click(); } break; }
     case "assetAdd": { const b = S.books; b.assets = (b.assets || []).concat([{id: uid("as"), name: "", date: "", igst: 0, cgst: 0, sgst: 0, cess: 0, use: "common", reg: S.gstReg || "", sold: ""}]); saveBooks(); render(); break; }
     case "booksClear": askConfirm({title: "Remove the books read from Tally?", ok: "Remove", body: '<p class="note">Challans and what you corrected stay. The day book can be brought in again.</p>'}).then(ok => {
@@ -15198,7 +15472,7 @@ document.addEventListener("input", ev => {
 function setPath(o, path, v){ const k = path.split("."); if (k.length === 2) o[k[0]][k[1]] = v; else o[k[0]] = v; }
 
 document.addEventListener("change", ev => {
-  if (ev.target && ev.target.id && ["booksIn", "mastersIn", "twoBIn"].includes(ev.target.id)){ booksChange(ev.target); return; }
+  if (ev.target && ev.target.id && ["booksIn", "mastersIn", "twoBIn", "filedIn"].includes(ev.target.id)){ booksChange(ev.target); return; }
   if (ev.target && ev.target.dataset && S.books && gstFixChange(ev.target)) return;
   if (ev.target && ev.target.id === "marketIn"){ const f = (ev.target.files || [])[0]; ev.target.value = ""; if (f) importMarketFile(f); return; }
   if (ev.target && ev.target.id === "salaryIn"){
