@@ -756,7 +756,7 @@ const DEFAULT_FIRM = {firmName:"Garg Shekhar & Company", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "TEST · 24 Sep 2026 · build 114 (Table 14 and TCS, GSTR-3B JSON, interest under 201(1A) and the late fee)";
+const APP_VERSION = "TEST · 24 Sep 2026 · build 117 (GST on advances, 11A and 11B; ITC reversal under rules 42 and 43)";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;
@@ -4941,7 +4941,7 @@ const Books = {
   // Tally exports can be very large, so the file is read in pieces and only what we use is kept
   async importDayBook(file, onProgress){
     const dec = await this.decoder(file);
-    const out = [], meta = {company: "", from: "", to: "", gstins: new Set()};
+    const out = [], meta = {company: "", from: "", to: "", gstins: new Set(), bills: 1};
     let buf = "", read = 0;
     const reader = file.stream().getReader();
     for (;;){
@@ -4979,6 +4979,8 @@ const Books = {
   },
   // Tally writes "Applicable" or "Not Applicable", sometimes with a stray character in front
   yesFlag(v){ const t = String(v || "").replace(/[^A-Za-z ]/g, " ").trim().toLowerCase(); return /\bapplicable\b/.test(t) && !/\bnot\b/.test(t); },
+  // "$17000.00 @ ₹ 86.40/$ = ₹ 1468800.00" is 1468800: the rupee value after the last "="
+  amt(v){ const t = String(v || ""), i = t.lastIndexOf("="); return num(i >= 0 ? t.slice(i + 1) : t); },
   one(s, tag){ const m = s.match(new RegExp("<" + tag + ">([^<]*)</" + tag + ">")); return m ? this.unesc(m[1]) : ""; },
   unesc(v){
     return String(v || "").replace(/&apos;/g, "'").replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">")
@@ -5009,7 +5011,16 @@ const Books = {
         const e = p.split(close)[0];
         const name = this.one(e, "LEDGERNAME");
         if (!name) return;
-        v.ent.push({l: name, a: num(this.one(e, "AMOUNT")), r: num(this.one(e, "GSTRATE")) || null});
+        const x = {l: name, a: this.amt(this.one(e, "AMOUNT")), r: num(this.one(e, "GSTRATE")) || null};
+        // bill-wise details: [ref name, New Ref / Agst Ref / Advance / On Account, amount]
+        if (e.indexOf("<BILLALLOCATIONS.LIST>") >= 0){
+          const bl = e.split("<BILLALLOCATIONS.LIST>").slice(1).map(p2 => {
+            const q = p2.split("</BILLALLOCATIONS.LIST>")[0];
+            return [this.one(q, "NAME"), this.one(q, "BILLTYPE"), this.amt(this.one(q, "AMOUNT"))];
+          }).filter(z => z[1] && z[2]);
+          if (bl.length) x.b = bl;
+        }
+        v.ent.push(x);
       });
     });
     // the rate on an item line, when the tax ledgers do not carry one
@@ -5021,18 +5032,27 @@ const Books = {
   },
   async importMasters(file, onProgress){
     const dec = await this.decoder(file);
-    const pans = {}, gstins = {}, under = {};
+    const pans = {}, gstins = {}, under = {}, states = {}, groups = {};
     let buf = "", n = 0;
-    const take = piece => {
+    const take = whole => {
+      // the groups come before the ledgers; keep the tree, to know a customer from a supplier
+      if (whole.indexOf("<GROUP NAME=") >= 0) (whole.match(/<GROUP NAME="[^"]*"[\s\S]*?<\/GROUP>/g) || []).forEach(g => {
+        groups[this.unesc(g.match(/<GROUP NAME="([^"]*)"/)[1])] = this.one(g, "PARENT");
+      });
+      const at = whole.lastIndexOf("<LEDGER ");
+      if (at < 0) return;
+      const piece = whole.slice(at);
       const raw = (piece.match(/<LEDGER NAME="([^"]*)"/) || [])[1];
       if (!raw) return;
       const name = this.unesc(raw);
       const pan = this.one(piece, "INCOMETAXNUMBER").toUpperCase();
       const gst = this.one(piece, "PARTYGSTIN").toUpperCase();
       const par = this.one(piece, "PARENT");
+      const st = this.one(piece, "LEDSTATENAME") || ((piece.match(/<STATE>[^<]*<\/STATE>/g) || []).map(x => this.unesc(x.replace(/<[^>]*>/g, ""))).filter(Boolean).pop() || "");
       if (pan) pans[name] = pan;
       if (gst) gstins[name] = gst;
       if (par) under[name] = par;
+      if (st) states[name] = st;
       n++;
     };
     const reader = file.stream().getReader();
@@ -5043,8 +5063,7 @@ const Books = {
       let cut;
       while ((cut = buf.indexOf("</LEDGER>")) >= 0){
         const piece = buf.slice(0, cut + 9); buf = buf.slice(cut + 9);
-        const start = piece.lastIndexOf("<LEDGER ");
-        if (start >= 0) take(piece.slice(start));
+        take(piece);
       }
       if (onProgress && n % 300 === 0) onProgress("Read " + n + " ledgers\u2026");
     }
@@ -5052,10 +5071,9 @@ const Books = {
     let cut;
     while ((cut = buf.indexOf("</LEDGER>")) >= 0){
       const piece = buf.slice(0, cut + 9); buf = buf.slice(cut + 9);
-      const start = piece.lastIndexOf("<LEDGER ");
-      if (start >= 0) take(piece.slice(start));
+      take(piece);
     }
-    return {pans, gstins, under, count: n};
+    return {pans, gstins, under, states, groups, count: n};
   },
   // what each ledger is: TDS section, GST tax, party or expense
   mapLedgers(vouchers, saved){
@@ -5089,7 +5107,11 @@ const Books = {
     v.ent.forEach(e => {
       const m = Books.ledgerOf(e.l), amt = Math.abs(e.a), sign = e.a < 0 ? -1 : 1;
       if (m.kind === "ineligible"){ out.ineligible = r2((out.ineligible || 0) + amt); out.taxable = r2(out.taxable + amt); return; }
-      if (m.kind === "gst"){ out.tax[m.tax] = r2(out.tax[m.tax] + amt); return; }
+      if (m.kind === "gst" || m.kind === "gst_common"){
+        out.tax[m.tax] = r2(out.tax[m.tax] + amt);
+        if (m.kind === "gst_common"){ out.common = out.common || {CGST: 0, SGST: 0, IGST: 0, CESS: 0}; out.common[m.tax] = r2(out.common[m.tax] + amt); }
+        return;
+      }
       if (m.kind === "tds_payable"){
         if (e.a > 0) out.tds.push({ledger: e.l, section: m.section, rate: m.rate, amount: amt});   // credited: tax deducted
         else out.tdsPaid.push({ledger: e.l, section: m.section, amount: amt});                      // debited: tax paid over
@@ -5465,7 +5487,7 @@ const GSTR = {
         taxable: L.taxable, cgst: L.tax.CGST, sgst: L.tax.SGST, igst: L.tax.IGST, cess: L.tax.CESS,
         cls: Books.supplyClass(v), rcm: Books.isRcm(v), import: Books.isImport(v), supply: v.supply || "",
         blocked: !!v.ineligibleFlag, hsn: (v.hsn || [])[0] || "",
-        ineligible: L.ineligible || 0, note: /DEBIT NOTE/i.test(v.type) ? "debit" : ""});
+        ineligible: L.ineligible || 0, common: L.common || null, note: /DEBIT NOTE/i.test(v.type) ? "debit" : ""});
     });
     return out;
   },
@@ -5523,12 +5545,16 @@ const GSTR = {
     const impServ = S2(r => r.import && r.supply !== "Goods");
     const other = S2(r => !r.import && !r.rcm);
     const blocked = S2(r => r.blocked);
-    const net = {taxable: r2(taxableOut.taxable - cn.taxable), cgst: r2(taxableOut.cgst - cn.cgst), sgst: r2(taxableOut.sgst - cn.sgst), igst: r2(taxableOut.igst - cn.igst), cess: r2(taxableOut.cess - cn.cess)};
+    const adv = GSTAdv.month(ym, reg).net;                           // 11A less 11B goes into 3.1(a)
+    const rul = GSTRev.month(ym, reg);                               // rules 42 and 43 go into 4(B)(1)
+    const net = {taxable: r2(taxableOut.taxable - cn.taxable + adv.taxable), cgst: r2(taxableOut.cgst - cn.cgst + adv.cgst), sgst: r2(taxableOut.sgst - cn.sgst + adv.sgst),
+      igst: r2(taxableOut.igst - cn.igst + adv.igst), cess: r2(taxableOut.cess - cn.cess + adv.cess)};
     const itc = {cgst: r2(impGoods.cgst + impServ.cgst + rcmOut.cgst + other.cgst), sgst: r2(impGoods.sgst + impServ.sgst + rcmOut.sgst + other.sgst),
                  igst: r2(impGoods.igst + impServ.igst + rcmOut.igst + other.igst), cess: r2(impGoods.cess + impServ.cess + rcmOut.cess + other.cess)};
     const reversal = {cgst: r2(blocked.cgst + this.sum(inn).ineligible ? blocked.cgst : blocked.cgst), sgst: blocked.sgst, igst: blocked.igst, cess: blocked.cess};
-    const netItc = {cgst: r2(itc.cgst - reversal.cgst), sgst: r2(itc.sgst - reversal.sgst), igst: r2(itc.igst - reversal.igst), cess: r2(itc.cess - reversal.cess)};
-    return {sale: taxableOut, cn, net, zero, nil, nongst, rcmOut, toUnreg, impGoods, impServ, other, blocked,
+    const rules = rul.total;
+    const netItc = {cgst: r2(itc.cgst - reversal.cgst - rules.cgst), sgst: r2(itc.sgst - reversal.sgst - rules.sgst), igst: r2(itc.igst - reversal.igst - rules.igst), cess: r2(itc.cess - reversal.cess - rules.cess)};
+    return {sale: taxableOut, cn, net, adv, rules, r42: rul.r42, r43: rul.r43, zero, nil, nongst, rcmOut, toUnreg, impGoods, impServ, other, blocked,
       buy: this.sum(inn), itc, reversal, netItc, ineligible: this.sum(inn).ineligible,
       payable: {cgst: r2(net.cgst + rcmOut.cgst - netItc.cgst), sgst: r2(net.sgst + rcmOut.sgst - netItc.sgst),
                 igst: r2(net.igst + rcmOut.igst - netItc.igst), cess: r2(net.cess + rcmOut.cess - netItc.cess)}};
@@ -5544,6 +5570,11 @@ const GSTR = {
     add("Purchases with no supplier GSTIN", inn.filter(r => !r.gstin && (r.cgst || r.sgst || r.igst)), "Needed to match against 2B.");
     add("Purchases marked ITC not to be taken", inn.filter(r => r.blocked), "These are kept out of the credit claimed.");
     add("Inward supplies under reverse charge", inn.filter(r => r.rcm), "Tax on these is payable by you and shown in 3.1(d).");
+    if (GSTAdv.ready()){
+      const a = GSTAdv.month(ym, reg);
+      add("Advances where the rate was assumed at 18%", a.at.filter(r => r.rateFrom === "assumed").map(r => ({no: r.no, party: r.party})), "The customer has no invoice to take a rate from. Set it under Advances.");
+      add("Advances kept on account, not counted", a.untaxed.filter(r => /on account/.test(r.why)).map(r => ({no: r.ref, party: r.party})), "Mark any that are advances under Advances.");
+    }
     return list;
   },
   // the file the portal takes: GSTR-1 as JSON
@@ -5585,6 +5616,9 @@ const GSTR = {
     if (g.cdnr.length) out.cdnr = byParty(g.cdnr.filter(r => r.gstin), "nt");
     if (g.exp.length) out.exp = [{exp_typ: "WPAY", inv: g.exp.map(r => ({inum: String(r.no), idt: dmy(r.date), val: r2(r.total), itms: items(r)}))}];
     if (nilSum.expt_amt || nilSum.nil_amt || nilSum.ngsup_amt) out.nil = {inv: [Object.assign({sply_ty: "INTRB2B"}, nilSum)]};
+    const adv = GSTAdv.month(ym, reg);
+    if (adv.at.length) out.at = GSTAdv.json(adv.at);
+    if (adv.txpd.length) out.txpd = GSTAdv.json(adv.txpd);
     if (g.hsn.length) out.hsn = {data: g.hsn.map((h, i) => Object.assign({num: i + 1, hsn_sc: h.hsn || "", desc: h.supply || "", uqc: h.supply === "Goods" ? "NOS" : "OTH",
       qty: 0, val: r2(h.taxable + h.igst + h.cgst + h.sgst + h.cess), txval: r2(h.taxable), csamt: r2(h.cess)},
       h.igst ? {iamt: r2(h.igst)} : {camt: r2(h.cgst), samt: r2(h.sgst)}))};
@@ -5614,7 +5648,8 @@ const GSTR = {
         {ty: "IMPS", iamt: r2(t.impServ.igst), camt: 0, samt: 0, csamt: r2(t.impServ.cess)},
         {ty: "ISRC", iamt: r2(t.rcmOut.igst), camt: r2(t.rcmOut.cgst), samt: r2(t.rcmOut.sgst), csamt: r2(t.rcmOut.cess)},
         {ty: "OTH", iamt: r2(t.other.igst), camt: r2(t.other.cgst), samt: r2(t.other.sgst), csamt: r2(t.other.cess)}
-      ], itc_rev: [{ty: "OTH", iamt: r2(t.reversal.igst), camt: r2(t.reversal.cgst), samt: r2(t.reversal.sgst), csamt: r2(t.reversal.cess)}],
+      ], itc_rev: [{ty: "RUL", iamt: r2(t.rules.igst), camt: r2(t.rules.cgst), samt: r2(t.rules.sgst), csamt: r2(t.rules.cess)},
+        {ty: "OTH", iamt: r2(t.reversal.igst), camt: r2(t.reversal.cgst), samt: r2(t.reversal.sgst), csamt: r2(t.reversal.cess)}],
         itc_net: sup(0, t.netItc.igst, t.netItc.cgst, t.netItc.sgst, t.netItc.cess)}
     };
     if (t.toUnreg.taxable) out.inter_sup = {unreg_details: [{pos: "", txval: r2(t.toUnreg.taxable), iamt: r2(t.toUnreg.igst)}]};
@@ -5637,9 +5672,16 @@ const GSTR = {
     if (g.exp.length) add("Exports", cols, g.exp.map(line));
     add("HSN summary", ["HSN", "Goods or services", "Rate", "Invoices", "Taxable", "IGST", "CGST", "SGST", "Cess"], g.hsn.map(h => [h.hsn, h.supply, h.rate, h.n, h.taxable, h.igst, h.cgst, h.sgst, h.cess]));
     add("Documents issued", ["Series", "From", "To", "Issued"], g.series.map(x => [x.pre, x.from, x.to, x.n]));
+    {
+      const a = GSTAdv.month(ym, reg), ah = ["Date", "Receipt", "Customer", "GSTIN", "Bill ref", "Received", "Rate", "Rate from", "Place of supply", "Advance less tax", "IGST", "CGST", "SGST"];
+      const al = r => [d(r.date), r.no, r.party, r.gstin, r.ref, r.received, r.rate, r.rateFrom, r.pos, r.taxable, r.igst, r.cgst, r.sgst];
+      if (a.at.length) add("11A Advances received", ah, a.at.map(al));
+      if (a.txpd.length) add("11B Advances adjusted", ["Adjusted on", "By"].concat(ah), a.txpd.map(r => [d(r.adjDate), r.by].concat(al(r))));
+    }
     add("Before filing", ["What", "How many", "What to do"], GSTR.checks(ym, reg).map(c => [c.what, c.n, c.how]));
     add("GSTR-3B", ["", "Taxable", "IGST", "CGST", "SGST", "Cess"], [
       ["3.1(a) Outward taxable supplies", t.sale.taxable, t.sale.igst, t.sale.cgst, t.sale.sgst, t.sale.cess],
+      ["Add: tax on advances, 11A less 11B", t.adv.taxable, t.adv.igst, t.adv.cgst, t.adv.sgst, t.adv.cess],
       ["Less: credit notes", -t.cn.taxable, -t.cn.igst, -t.cn.cgst, -t.cn.sgst, -t.cn.cess],
       ["3.1(b) Zero rated: exports and SEZ", t.zero.taxable, t.zero.igst, t.zero.cgst, t.zero.sgst, t.zero.cess],
       ["3.1(c) Nil rated and exempt", t.nil.taxable, "", "", "", ""],
@@ -5650,12 +5692,275 @@ const GSTR = {
       ["4(A)(2) Import of services", t.impServ.taxable, t.impServ.igst, t.impServ.cgst, t.impServ.sgst, t.impServ.cess],
       ["4(A)(3) Inward on reverse charge", t.rcmOut.taxable, t.rcmOut.igst, t.rcmOut.cgst, t.rcmOut.sgst, t.rcmOut.cess],
       ["4(A)(5) All other ITC", t.other.taxable, t.other.igst, t.other.cgst, t.other.sgst, t.other.cess],
+      ["4(B)(1) Reversed: rule 42", "", t.r42.igst, t.r42.cgst, t.r42.sgst, t.r42.cess],
+      ["4(B)(1) Reversed: rule 43", "", t.r43.igst, t.r43.cgst, t.r43.sgst, t.r43.cess],
       ["4(B)(2) Reversed: ITC not to be taken", t.blocked.taxable, t.reversal.igst, t.reversal.cgst, t.reversal.sgst, t.reversal.cess],
       ["4(C) Net ITC available", "", t.netItc.igst, t.netItc.cgst, t.netItc.sgst, t.netItc.cess],
       [], ["Tax payable", "", t.payable.igst, t.payable.cgst, t.payable.sgst, t.payable.cess]]);
     const outBin = XLSX.write(wb, {bookType: "xlsx", type: "array"});
     saveFile(CO().name.replace(/[^A-Za-z0-9]+/g, "-") + "-GSTR1-3B-" + (ym || "all") + (reg ? "-" + reg : "") + ".xlsx",
       new Blob([outBin], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
+  }
+};
+
+/* ================================================================== */
+/* GST on advances: GSTR-1 tables 11A (received) and 11B (adjusted)   */
+/* ================================================================== */
+const GSTAdv = {
+  RATES: [0, 0.1, 0.25, 1, 1.5, 3, 5, 6, 7.5, 12, 18, 28, 40],
+  ready(){ const b = S.books; return !!(b && b.meta && b.meta.bills); },
+  nearRate(x){ let best = 18, d = 1e9; this.RATES.forEach(r => { if (Math.abs(r - x) < d){ d = Math.abs(r - x); best = r; } }); return d < 0.6 ? best : r2(x); },
+  // a ledger is a customer when it sits under Sundry Debtors; without the masters, when it was billed
+  isCustomer(name, billed){
+    const b = S.books, under = b.under || {}, groups = b.groups || {};
+    let p = under[name];
+    if (p == null) return billed.has(name);
+    for (let i = 0; p && i < 15; i++){
+      if (/^sundry\s+debtors$/i.test(p.trim())) return true;
+      p = groups[p];
+    }
+    return false;
+  },
+  stateCode(name){ return STATE_CODES[String(name || "").toUpperCase().trim()] || ""; },
+  _memo: null,
+  // every advance received, and what later used it up
+  build(){
+    const b = S.books;
+    if (!b || !b.vouchers) return {pieces: [], billed: new Map()};
+    const key = [b.vouchers.length, b.mapV || 0, JSON.stringify(b.advFix || {}), Object.keys(b.under || {}).length, Object.keys(b.states || {}).length, S.coId].join("|");
+    if (this._memo && this._memo.key === key && this._memo.v === b.vouchers) return this._memo.res;
+    const fix = b.advFix || {};
+    const vs = b.vouchers.map((v, i) => [v, i]).sort((a, c) => String(a[0].date).localeCompare(String(c[0].date)) || a[1] - c[1]).map(x => x[0]);
+    // what each customer was billed, for the rate, registration and place of supply of an advance
+    const billed = new Map();
+    const firstSupply = {Goods: 0, Services: 0};
+    vs.forEach(v => {
+      if (!Books.isSale(v) || /CREDIT NOTE/i.test(v.type)) return;
+      const L = Books.lines(v), tax = L.tax.CGST + L.tax.SGST + L.tax.IGST;
+      const supply = v.supply || ((v.hsn || []).some(h => /^99/.test(h)) ? "Services" : (v.hsn || []).length ? "Goods" : "");
+      if (supply) firstSupply[supply]++;
+      const list = billed.get(v.party) || [];
+      list.push({date: v.date, rate: L.taxable ? this.nearRate(tax / L.taxable * 100) : null, reg: GSTR.regOf(v), gstin: (v.gstin || "").toUpperCase(),
+        pos: v.pos || "", supply, cls: Books.supplyClass(v)});
+      billed.set(v.party, list);
+    });
+    const refs = new Map(), pieces = [];
+    const take = (r, amount, ym, date, by, how) => {
+      let need = amount;
+      r.pieces.forEach(p => {
+        if (need <= 0.004 || p.left <= 0.004) return;
+        const t = r2(Math.min(need, p.left));
+        p.left = r2(p.left - t); need = r2(need - t);
+        p.adj.push({ym, date, amount: t, by, how});
+      });
+    };
+    vs.forEach(v => {
+      const rcpt = /RECEIPT/i.test(v.type) && !/CONTRA/i.test(v.type);
+      const sale = Books.isSale(v) && !/CREDIT NOTE/i.test(v.type);
+      const refund = /PAYMENT/i.test(v.type) || /CREDIT NOTE/i.test(v.type);
+      if (!rcpt && !sale && !refund) return;
+      const ym = GSTR.ym(v.date);
+      v.ent.forEach((e, ei) => {
+        if (!e.b) return;
+        if (rcpt && !this.isCustomer(e.l, billed)) return;
+        if (sale && e.l !== v.party) return;
+        e.b.forEach((x, bi) => {
+          const name = x[0], type = x[1], amt = x[2];
+          const k = e.l + "|" + (type === "On Account" ? "\u0000on-account" : name);
+          let r = refs.get(k);
+          if (rcpt){
+            if (amt <= 0) return;                                   // a debit on a receipt is not money received
+            const early = type === "Advance" || type === "On Account" || (type === "New Ref" && !(r && r.billed)) || (type === "Agst Ref" && r && !r.billed && r.pieces.length);
+            if (!early) return;
+            const id = v.id + ":" + ei + ":" + bi;
+            const p = {id, vid: v.id, date: v.date, ym, no: v.no, party: e.l, ref: type === "On Account" ? "" : name, type, amount: r2(amt), left: r2(amt), adj: [],
+              cmpReg: GSTR.regOf(v), fix: fix[id] || {}};
+            pieces.push(p);
+            if (!r){ r = {pieces: [], billed: false}; refs.set(k, r); }
+            r.pieces.push(p);
+          } else if (sale){
+            if (type === "Agst Ref" && r && r.pieces.length) take(r, Math.abs(amt), ym, v.date, v.no, "invoice");
+            if (r) r.billed = true; else refs.set(k, {pieces: [], billed: true});
+          } else if (refund){
+            if (amt < 0 && type === "Agst Ref" && r && !r.billed && r.pieces.length) take(r, Math.abs(amt), ym, v.date, v.no, "refund");
+          }
+        });
+      });
+    });
+    const regs = ((b.meta || {}).gstins || []).map(g => g.slice(0, 2));
+    const mostly = firstSupply.Goods > firstSupply.Services ? "Goods" : "Services";
+    pieces.forEach(p => {
+      const f = p.fix;
+      if (f.adjYm && p.left > 0.004){ p.adj.push({ym: f.adjYm, date: f.adjYm + "01", amount: p.left, by: "", how: "marked"}); p.left = 0; }
+      const hist = billed.get(p.party) || [];
+      const before = hist.filter(h => h.date <= p.date), after = hist.filter(h => h.date > p.date);
+      const s = before.length ? before[before.length - 1] : after[0] || null;
+      p.supply = s && s.supply ? s.supply : mostly;
+      p.zero = !!(s && (s.cls === "export" || s.cls === "sez"));
+      p.exempt = !!(s && (s.cls === "exempt" || s.cls === "nil" || s.cls === "nongst"));
+      p.rate = f.rate != null && f.rate !== "" ? num(f.rate) : s && s.rate != null ? s.rate : 18;
+      p.rateFrom = f.rate != null && f.rate !== "" ? "set" : s && s.rate != null ? (before.length ? "last invoice" : "next invoice") : "assumed";
+      p.reg = s && s.reg ? s.reg : p.cmpReg || regs[0] || "";
+      const gstin = ((b.gstins || {})[p.party] || (s && s.gstin) || "").toUpperCase();
+      p.gstin = gstin;
+      p.pos = f.pos || (gstin ? gstin.slice(0, 2) : "") || this.stateCode((b.states || {})[p.party]) || (s ? this.stateCode(s.pos) : "") || p.reg;
+      p.guessed = p.rateFrom === "assumed" || !s;
+      p.skip = !!f.skip;
+      // money kept on account is usually a collection nobody tied to its invoice; it counts only when marked
+      p.onAccount = p.type === "On Account" && !f.isAdv;
+      p.taxed = !p.skip && !p.onAccount && p.supply !== "Goods" && !p.zero && !p.exempt && p.rate > 0;
+      p.why = p.skip ? "marked as not an advance" : p.onAccount ? "on account, not tied to a bill: mark it if it is an advance" : p.supply === "Goods" ? "goods: no tax on advances" : p.zero ? "export or SEZ" : p.exempt ? "exempt supply" : p.rate > 0 ? "" : "nil rate";
+    });
+    const res = {pieces, billed};
+    this._memo = {key, v: b.vouchers, res};
+    return res;
+  },
+  // tax inside an amount received, at the rate, split by whether the supply is inter-state
+  taxOf(amount, rate, pos, reg){
+    const taxable = r2(amount * 100 / (100 + rate)), inter = !!(pos && reg && pos !== reg);
+    const tax = r2(taxable * rate / 100);
+    return inter ? {taxable, igst: tax, cgst: 0, sgst: 0, cess: 0, inter} : {taxable, igst: 0, cgst: r2(tax / 2), sgst: r2(tax - r2(tax / 2)), cess: 0, inter};
+  },
+  row(p, amount, extra){
+    return Object.assign({id: p.id, party: p.party, gstin: p.gstin, date: p.date, no: p.no, ref: p.ref, type: p.type, rate: p.rate, rateFrom: p.rateFrom,
+      pos: p.pos, reg: p.reg, received: amount}, this.taxOf(amount, p.rate, p.pos, p.reg), extra || {});
+  },
+  // one month: 11A is what came in and was not billed in the same month; 11B is an earlier advance billed now
+  month(ym, reg){
+    const zero = {n: 0, taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, received: 0};
+    if (!this.ready()) return {ready: false, at: [], txpd: [], atSum: zero, txpdSum: zero, net: zero, untaxed: [], open: []};
+    const months = ym ? [ym] : GSTR.months();
+    const {pieces} = this.build();
+    const at = [], txpd = [], untaxed = [];
+    pieces.forEach(p => {
+      if (reg && p.reg !== reg) return;
+      months.forEach(m => {
+        if (p.ym === m){
+          const sameMonth = p.adj.filter(a => a.ym === m).reduce((s, a) => s + a.amount, 0);
+          const amount = r2(p.amount - sameMonth);
+          if (amount > 0.004){
+            if (p.taxed) at.push(this.row(p, amount));
+            else untaxed.push(this.row(p, amount, {why: p.why}));
+          }
+        }
+        p.adj.forEach(a => {
+          if (a.ym === m && p.ym < m && p.taxed) txpd.push(this.row(p, a.amount, {receivedYm: p.ym, adjDate: a.date, by: a.by, how: a.how}));
+        });
+      });
+    });
+    const sum = rows => rows.reduce((s, r) => ({n: s.n + 1, received: r2(s.received + r.received), taxable: r2(s.taxable + r.taxable), igst: r2(s.igst + r.igst),
+      cgst: r2(s.cgst + r.cgst), sgst: r2(s.sgst + r.sgst), cess: r2(s.cess + r.cess)}), zero);
+    const atSum = sum(at), txpdSum = sum(txpd);
+    const net = {n: 0, received: r2(atSum.received - txpdSum.received), taxable: r2(atSum.taxable - txpdSum.taxable), igst: r2(atSum.igst - txpdSum.igst),
+      cgst: r2(atSum.cgst - txpdSum.cgst), sgst: r2(atSum.sgst - txpdSum.sgst), cess: r2(atSum.cess - txpdSum.cess)};
+    const last = months[months.length - 1] || "";
+    const open = pieces.filter(p => (!reg || p.reg === reg) && p.taxed && p.ym <= last && r2(p.amount - p.adj.filter(a => a.ym <= last).reduce((s, a) => s + a.amount, 0)) > 0.004);
+    return {ready: true, at, txpd, atSum, txpdSum, net, untaxed, open};
+  },
+  // GSTR-1 JSON parts: grouped by place of supply and rate, the advance shown without its tax
+  json(rows){
+    const m = {};
+    rows.forEach(r => {
+      const k = r.pos + "|" + (r.inter ? "INTER" : "INTRA");
+      const g = m[k] = m[k] || {pos: String(r.pos).padStart(2, "0"), sply_ty: r.inter ? "INTER" : "INTRA", rates: {}};
+      const it = g.rates[r.rate] = g.rates[r.rate] || {rt: r.rate, ad_amt: 0, iamt: 0, camt: 0, samt: 0, csamt: 0};
+      it.ad_amt = r2(it.ad_amt + r.taxable); it.iamt = r2(it.iamt + r.igst); it.camt = r2(it.camt + r.cgst); it.samt = r2(it.samt + r.sgst); it.csamt = r2(it.csamt + r.cess);
+    });
+    return Object.values(m).map(g => ({pos: g.pos, sply_ty: g.sply_ty, itms: Object.values(g.rates).map(it => g.sply_ty === "INTER"
+      ? {rt: it.rt, ad_amt: it.ad_amt, iamt: it.iamt, csamt: it.csamt} : {rt: it.rt, ad_amt: it.ad_amt, camt: it.camt, samt: it.samt, csamt: it.csamt})}));
+  }
+};
+
+/* ================================================================== */
+/* ITC reversal: rule 42 (common inputs) and rule 43 (capital goods)  */
+/* ================================================================== */
+const GSTRev = {
+  HEADS: ["igst", "cgst", "sgst", "cess"],
+  z(){ return {igst: 0, cgst: 0, sgst: 0, cess: 0}; },
+  add(a, c, k){ const o = {}; this.HEADS.forEach(h => { o[h] = r2(num(a[h]) + num(c[h]) * (k == null ? 1 : k)); }); return o; },
+  total(x){ return r2(this.HEADS.reduce((s, h) => s + num(x[h]), 0)); },
+  settings(){ return Object.assign({d2: true}, (S.books && S.books.rev) || {}); },
+  // turnover of the month: E is exempt, nil rated and non-GST; F is all of it, exports included
+  turnover(ym, reg){
+    let T = 0, Z = 0, E = 0;
+    GSTR.outward(ym, reg).forEach(r => {
+      const sign = r.kind === "CDNR" ? -1 : 1, v = num(r.taxable) * sign;
+      if (r.cls === "export" || r.cls === "sez") Z += v;
+      else if (r.cls === "exempt" || r.cls === "nil" || r.cls === "nongst") E += v;
+      else T += v;
+    });
+    return {taxable: r2(T), zero: r2(Z), exempt: r2(E), total: r2(T + Z + E)};
+  },
+  // rule 42(1)(h): a month with no turnover takes E and F of the last month that had some
+  ratio(ym, reg){
+    const t = this.turnover(ym, reg);
+    if (t.total > 0) return {E: t.exempt, F: t.total, from: ym, t};
+    const earlier = GSTR.months().filter(m => m < ym).reverse();
+    for (const m of earlier){ const x = this.turnover(m, reg); if (x.total > 0) return {E: x.exempt, F: x.total, from: m, t}; }
+    return {E: 0, F: 0, from: "", t};
+  },
+  common(ym, reg){
+    let c = this.z(), n = 0;
+    GSTR.inward(ym, reg).forEach(r => {
+      if (!r.common) return;
+      n++;
+      c = this.add(c, {igst: r.common.IGST, cgst: r.common.CGST, sgst: r.common.SGST, cess: r.common.CESS}, r.note === "debit" ? -1 : 1);
+    });
+    return {c, n};
+  },
+  rule42(ym, reg){
+    const {c, n} = this.common(ym, reg), q = this.ratio(ym, reg), k = q.F ? q.E / q.F : 0;
+    const D1 = {}, D2 = {}, C3 = {};
+    const d2on = this.settings().d2;
+    this.HEADS.forEach(h => { D1[h] = r2(c[h] * k); D2[h] = d2on ? r2(c[h] * 0.05) : 0; C3[h] = r2(c[h] - D1[h] - D2[h]); });
+    return {C2: c, n, ratio: q, share: k, D1, D2, C3, reverse: this.add(D1, D2)};
+  },
+  // the months a capital good's credit is spread over: 60 from the month it is put to use
+  assets(reg){ return ((S.books && S.books.assets) || []).filter(a => !reg || !a.reg || a.reg === reg); },
+  tm(a, ym){
+    const start = String(a.date || "").replace(/-/g, "").slice(0, 6);
+    if (a.use !== "common" || start.length !== 6 || ym < start) return null;
+    const idx = (num(ym.slice(0, 4)) - num(start.slice(0, 4))) * 12 + num(ym.slice(4, 6)) - num(start.slice(4, 6));
+    if (idx >= 60) return null;
+    const sold = String(a.sold || "").replace(/-/g, "").slice(0, 6);
+    if (sold && ym > sold) return null;
+    const o = {};
+    this.HEADS.forEach(h => { o[h] = r2(num(a[h]) / 60); });
+    return o;
+  },
+  rule43(ym, reg){
+    let Tr = this.z(); const used = [];
+    this.assets(reg).forEach(a => { const t = this.tm(a, ym); if (t){ Tr = this.add(Tr, t); used.push({a, tm: t}); } });
+    const q = this.ratio(ym, reg), k = q.F ? q.E / q.F : 0, Te = {};
+    this.HEADS.forEach(h => { Te[h] = r2(Tr[h] * k); });
+    return {Tr, Te, used, ratio: q, share: k};
+  },
+  // what goes into 3B 4(B)(1) for the month (or every month when none is chosen)
+  month(ym, reg){
+    const months = ym ? [ym] : GSTR.months();
+    let r42 = this.z(), r43 = this.z();
+    months.forEach(m => { r42 = this.add(r42, this.rule42(m, reg).reverse); r43 = this.add(r43, this.rule43(m, reg).Te); });
+    return {r42, r43, total: this.add(r42, r43)};
+  },
+  fyMonths(ym){
+    const y = num(ym.slice(0, 4)), mo = num(ym.slice(4, 6)), start = mo >= 4 ? y : y - 1;
+    const out = [];
+    for (let i = 0; i < 12; i++){ const m = 4 + i, yy = m > 12 ? start + 1 : start; out.push(String(yy) + String(m > 12 ? m - 12 : m).padStart(2, "0")); }
+    return out;
+  },
+  // rule 42(2): the year worked out again on the year's turnover, and the difference
+  year(ym, reg){
+    const have = new Set(GSTR.months()), months = this.fyMonths(ym).filter(m => have.has(m));
+    let C2 = this.z(), monthly = this.z(), E = 0, F = 0;
+    const rows = months.map(m => {
+      const r = this.rule42(m, reg), t = r.ratio.t;
+      C2 = this.add(C2, r.C2); monthly = this.add(monthly, r.D1); E += t.exempt; F += t.total;
+      return {ym: m, C2: r.C2, share: r.share, D1: r.D1, D2: r.D2, from: r.ratio.from};
+    });
+    const k = F ? E / F : 0, annual = {};
+    this.HEADS.forEach(h => { annual[h] = r2(C2[h] * k); });
+    const diff = this.add(annual, monthly, -1);
+    return {months, rows, C2, E: r2(E), F: r2(F), share: k, annual, monthly, diff, fy: months.length ? months[0].slice(0, 4) : ""};
   }
 };
 
@@ -5945,7 +6250,8 @@ async function openBooks(cid){
   S.books = saved && saved.cid === cid ? Object.assign({loading: false}, saved) : {cid, loading: false, vouchers: [], map: {}, challans: [], alloc: {}, pans: {}};
   render();
 }
-async function saveBooks(){ const b = S.books; if (b && b.cid) await Books.save(b.cid, {cid: b.cid, vouchers: b.vouchers, map: b.map, meta: b.meta, challans: b.challans, alloc: b.alloc, pans: b.pans, twoB: b.twoB}); }
+async function saveBooks(){ const b = S.books; if (b && b.cid) await Books.save(b.cid, {cid: b.cid, vouchers: b.vouchers, map: b.map, meta: b.meta, challans: b.challans, alloc: b.alloc, pans: b.pans, twoB: b.twoB,
+  gstins: b.gstins, under: b.under, states: b.states, groups: b.groups, salary: b.salary, certs: b.certs, advFix: b.advFix, assets: b.assets, rev: b.rev}); }
 function viewBooks(){
   const co = CO();
   if (!S.books || S.books.cid !== co.id){ openBooks(co.id); return '<p class="note">Opening the books…</p>'; }
@@ -5981,7 +6287,7 @@ function ledgerSetup(b){
   const list = Object.entries(b.map || {});
   const regs = (b.meta && b.meta.gstins) || [];
   const tds = list.filter(([, m]) => m.kind === "tds_payable");
-  const gst = list.filter(([, m]) => m.kind === "gst" || m.kind === "ineligible");
+  const gst = list.filter(([, m]) => m.kind === "gst" || m.kind === "gst_common" || m.kind === "ineligible");
   const secs = Array.from(new Set(tds.map(([, m]) => m.section).filter(Boolean))).sort();
   const noSec = tds.filter(([, m]) => !m.section);
   const noReg = regs.length > 1 ? gst.filter(([, m]) => !m.reg) : [];
@@ -5999,7 +6305,7 @@ function ledgerSetup(b){
     (done ? '<p class="note">Everything needed is set. Any new ledger that appears later is flagged here.</p>' : "") + "</section>";
 }
 function viewBooksLedgers(b){
-  const kinds = [["", "—"], ["tds_payable", "TDS payable"], ["tds_receivable", "TDS receivable"], ["gst", "GST"], ["ineligible", "GST, ITC not to be taken"], ["bank", "Bank or cash"], ["roundoff", "Round off"]];
+  const kinds = [["", "—"], ["tds_payable", "TDS payable"], ["tds_receivable", "TDS receivable"], ["gst", "GST"], ["gst_common", "GST, common credit"], ["ineligible", "GST, ITC not to be taken"], ["bank", "Bank or cash"], ["roundoff", "Round off"]];
   const regs = (b.meta && b.meta.gstins) || [];
   const list = Object.entries(b.map).sort((a, c) => c[1].n - a[1].n);
   const q = String(S.ledQ || "").toLowerCase();
@@ -6012,7 +6318,7 @@ function viewBooksLedgers(b){
       '<td><select data-ledkind="' + esc(name) + '">' + kinds.map(([v, l]) => '<option value="' + v + '"' + ((m.kind || "") === v ? " selected" : "") + ">" + l + "</option>").join("") + "</select></td>" +
       '<td>' + (m.kind === "tds_payable" || m.kind === "tds_receivable"
         ? '<input type="text" data-ledsec="' + esc(name) + '" data-fk="sec-' + esc(name) + '" value="' + esc(m.section || "") + '" placeholder="194C" style="width:80px">'
-        : (m.kind === "gst" || m.kind === "ineligible")
+        : (m.kind === "gst" || m.kind === "gst_common" || m.kind === "ineligible")
         ? '<span style="display:flex;gap:4px">' +
           '<select data-ledtax="' + esc(name) + '">' + ["CGST", "SGST", "IGST", "CESS"].map(x => '<option value="' + x + '"' + (m.tax === x ? " selected" : "") + ">" + x + "</option>").join("") + "</select>" +
           '<select data-ledside="' + esc(name) + '"><option value="input"' + (m.side === "input" ? " selected" : "") + '>input</option><option value="output"' + (m.side === "output" ? " selected" : "") + ">output</option></select>" +
@@ -6272,21 +6578,140 @@ function viewBooksGst(b){
   const months = GSTR.months(), regs = (b.meta && b.meta.gstins) || [];
   if (!S.gstYm && months.length) S.gstYm = months[months.length - 1];
   if (!S.gstReg && regs.length === 1) S.gstReg = regs[0].slice(0, 2);
-  let h = '<nav class="sbar" aria-label="GST">' + [["r1", "GSTR-1"], ["r3b", "GSTR-3B"], ["r2b", "2B reconciliation"]]
+  let h = '<nav class="sbar" aria-label="GST">' + [["r1", "GSTR-1"], ["r3b", "GSTR-3B"], ["r2b", "2B reconciliation"], ["adv", "Advances"], ["rev", "Reversal"]]
     .map(([id, l]) => '<button data-gstpart="' + id + '" aria-selected="' + (part === id) + '">' + l + "</button>").join("") + "</nav>";
   h += '<div class="revfilter"><select data-gstym>' + months.map(m => '<option value="' + m + '"' + (S.gstYm === m ? " selected" : "") + ">" + GSTR.label(m) + "</option>").join("") + "</select>" +
     (regs.length > 1 ? '<select data-gstreg><option value="">Both registrations</option>' + regs.map(g => '<option value="' + g.slice(0, 2) + '"' + (S.gstReg === g.slice(0, 2) ? " selected" : "") + ">" + esc(g) + "</option>").join("") + "</select>" : "") +
-    (part === "r2b" ? "" : '<button class="btn small" data-act="gstExcel">Download GSTR-1 and 3B</button>') +
+    (part === "r2b" || part === "rev" ? "" : '<button class="btn small" data-act="gstExcel">Download GSTR-1 and 3B</button>') +
     (part === "r1" ? '<button class="btn small primary" data-act="gstJson">Download GSTR-1 JSON for the portal</button>' : "") +
     (part === "r3b" ? '<button class="btn small primary" data-act="gst3bJson">Download GSTR-3B JSON for the portal</button>' : "") + "</div>";
   if (part === "r2b") return h + viewBooks2B(b);
+  if (part === "adv") return h + viewGstAdv(b);
+  if (part === "rev") return h + viewGstRev(b);
   return h + (part === "r1" ? viewGstr1(b) : viewGstr3b(b));
 }
+function viewGstAdv(b){
+  const money = v => INR.format(r2(v || 0));
+  if (!GSTAdv.ready()) return '<section class="dash-card"><h3>Advances need the day book read again</h3><p class="note">Advances are worked out from the bill-wise details in Tally (New Ref, Advance, On Account, Agst Ref). The day book here was read before those were kept. Under “From Tally”, choose the same day book XML again; nothing you set is lost.</p></section>';
+  const ym = S.gstYm || "", reg = S.gstReg || "", a = GSTAdv.month(ym, reg);
+  const tile = (label, s, note) => '<div class="dtile"><span>' + label + "</span><b>" + s.n + "</b><small>" + money(s.received) + " received, " + money(s.igst + s.cgst + s.sgst + s.cess) + " tax</small>" + (note ? "<small>" + note + "</small>" : "") + "</div>";
+  const netTax = r2(a.net.igst + a.net.cgst + a.net.sgst + a.net.cess);
+  let h = '<div class="dash-tiles">' + tile("Received, not billed this month (11A)", a.atSum) + tile("Billed now, received earlier (11B)", a.txpdSum) +
+    '<div class="dtile"><span>Into 3B 3.1(a)</span><b>' + money(netTax) + '</b><small>tax on ' + money(a.net.taxable) + " net of 11B</small></div>" +
+    '<div class="dtile"><span>Left out</span><b>' + a.untaxed.length + '</b><small>goods, exports, on account or marked</small></div></div>';
+  const months = GSTR.months();
+  const rateSel = r => '<select data-advrate="' + esc(r.id) + '" title="Rate: ' + esc(r.rateFrom) + '">' + GSTAdv.RATES.filter(x => x > 0).map(x => '<option value="' + x + '"' + (x === r.rate ? " selected" : "") + ">" + x + "%</option>").join("") + "</select>" +
+    (r.rateFrom === "set" ? "" : '<br><small class="note"' + (r.rateFrom === "assumed" ? ' style="color:#B9541B"' : "") + ">" + (r.rateFrom === "assumed" ? "assumed, no invoice" : "from the " + esc(r.rateFrom)) + "</small>");
+  const head = '<th class="dt">Date</th><th>Receipt</th><th>Customer</th><th>Bill ref</th><th class="n">Received</th><th class="n">Rate</th><th>Place of supply</th><th class="n">Advance, less tax</th><th class="n">IGST</th><th class="n">CGST</th><th class="n">SGST</th>';
+  const cells = r => '<td class="n">' + money(r.taxable) + '</td><td class="n">' + money(r.igst) + '</td><td class="n">' + money(r.cgst) + '</td><td class="n">' + money(r.sgst) + "</td>";
+  h += '<section class="dash-card" style="margin-top:12px"><h3>11A Advances received</h3>' +
+    '<p class="note">Money a customer paid before the invoice, for services. An advance billed in the same month is left out, as the return asks. The rate is taken from the customer’s invoice nearest the receipt; change it where it is wrong.</p>' +
+    (a.at.length ? '<div class="bk-tablewrap"><table class="bk-table"><thead><tr>' + head + '<th>Not an advance</th></tr></thead><tbody>' +
+      a.at.map(r => "<tr><td>" + fmtDate(tallyDate(r.date)) + "</td><td>" + esc(r.no) + "</td><td>" + esc(r.party) + (r.gstin ? '<br><small class="note">' + esc(r.gstin) + "</small>" : "") + "</td><td>" + esc(r.ref || "\u2014") +
+        '</td><td class="n">' + money(r.received) + '</td><td class="n">' + rateSel(r) + "</td><td>" + esc(r.pos) + '<br><small class="note">' + (r.inter ? "inter-state" : "same state") + "</small></td>" + cells(r) +
+        '<td><input type="checkbox" data-advskip="' + esc(r.id) + '" aria-label="Not an advance"></td></tr>').join("") +
+      '<tr><td colspan="4"><b>Total</b></td><td class="n"><b>' + money(a.atSum.received) + '</b></td><td></td><td></td>' + cells(a.atSum) + "<td></td></tr></tbody></table></div>"
+      : '<p class="note">No advance received this month.</p>') + "</section>";
+  h += '<section class="dash-card" style="margin-top:12px"><h3>11B Advances adjusted</h3>' +
+    '<p class="note">An advance from an earlier month that an invoice (or a refund) used up this month. The tax paid on it then comes off now, at the same rate.</p>' +
+    (a.txpd.length ? '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th class="dt">Adjusted on</th><th>By</th><th>Customer</th><th>Received in</th><th class="n">Amount</th><th class="n">Rate</th><th>Place of supply</th><th class="n">Advance, less tax</th><th class="n">IGST</th><th class="n">CGST</th><th class="n">SGST</th></tr></thead><tbody>' +
+      a.txpd.map(r => "<tr><td>" + fmtDate(tallyDate(r.adjDate)) + "</td><td>" + esc(r.how === "marked" ? "marked by hand" : (r.how === "refund" ? "refund " : "") + (r.by || "")) + "</td><td>" + esc(r.party) + "</td><td>" + GSTR.label(r.receivedYm) +
+        '</td><td class="n">' + money(r.received) + '</td><td class="n">' + r.rate + "%</td><td>" + esc(r.pos) + "</td>" + cells(r) + "</tr>").join("") +
+      '<tr><td colspan="4"><b>Total</b></td><td class="n"><b>' + money(a.txpdSum.received) + '</b></td><td></td><td></td>' + cells(a.txpdSum) + "</tr></tbody></table></div>"
+      : '<p class="note">No earlier advance was adjusted this month.</p>') + "</section>";
+  if (a.open.length && ym){
+    const later = months.filter(m => m > ym);
+    h += '<section class="dash-card" style="margin-top:12px"><h3>Advances still open at the end of ' + GSTR.label(ym) + "</h3>" +
+      '<p class="note">Not yet billed or refunded in these books. If one was used up by an invoice that is not tied to it in Tally, pick the month it was billed.</p>' +
+      '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th class="dt">Received</th><th>Customer</th><th>Bill ref</th><th class="n">Amount</th><th class="n">Still open</th><th>Billed in</th></tr></thead><tbody>' +
+      a.open.map(p => {
+        const left = r2(p.amount - p.adj.filter(x => x.ym <= ym).reduce((s, x) => s + x.amount, 0));
+        return "<tr><td>" + fmtDate(tallyDate(p.date)) + "</td><td>" + esc(p.party) + "</td><td>" + esc(p.ref || "\u2014") + '</td><td class="n">' + money(p.amount) + '</td><td class="n">' + money(left) +
+          '</td><td><select data-advadj="' + esc(p.id) + '"><option value="">not yet</option>' + later.concat(p.fix.adjYm && !later.includes(p.fix.adjYm) ? [p.fix.adjYm] : [])
+            .map(m => '<option value="' + m + '"' + (p.fix.adjYm === m ? " selected" : "") + ">" + GSTR.label(m) + "</option>").join("") + "</select></td></tr>";
+      }).join("") + "</tbody></table></div></section>";
+  }
+  if (a.untaxed.length){
+    h += '<section class="dash-card" style="margin-top:12px"><h3>Received early, but not in 11A</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th class="dt">Date</th><th>Customer</th><th>Bill ref</th><th class="n">Received</th><th>Why</th><th>Count it</th></tr></thead><tbody>' +
+      a.untaxed.map(r => {
+        const p = GSTAdv.build().pieces.find(x => x.id === r.id) || {fix: {}};
+        const ctl = p.skip ? '<input type="checkbox" data-advskip="' + esc(r.id) + '" checked aria-label="Not an advance"> not an advance'
+          : p.type === "On Account" ? '<input type="checkbox" data-advtake="' + esc(r.id) + '"' + (p.fix.isAdv ? " checked" : "") + ' aria-label="Count as an advance"> it is an advance' : "";
+        return "<tr><td>" + fmtDate(tallyDate(r.date)) + "</td><td>" + esc(r.party) + "</td><td>" + esc(r.ref || r.type) + '</td><td class="n">' + money(r.received) + "</td><td>" + esc(r.why) + "</td><td>" + ctl + "</td></tr>";
+      }).join("") + "</tbody></table></div></section>";
+  }
+  h += '<p class="note">Read from receipts against a customer before the invoice: a New Ref, an Advance, or an Agst Ref to such a ref before it is billed. A receipt from a ledger not under Sundry Debtors is not counted; bring the ledger masters in for this. Tax on advances for goods is not payable (notification 66/2017).</p>';
+  return h;
+}
+function viewGstRev(b){
+  const money = v => INR.format(r2(v || 0)), ym = S.gstYm || "", reg = S.gstReg || "";
+  const pct = k => (Math.round(k * 10000) / 100) + "%";
+  const heads = x => '<td class="n">' + money(x.igst) + '</td><td class="n">' + money(x.cgst) + '</td><td class="n">' + money(x.sgst) + '</td><td class="n">' + money(x.cess) + "</td>";
+  const th = '<th class="n">IGST</th><th class="n">CGST</th><th class="n">SGST</th><th class="n">Cess</th>';
+  if (!ym) return '<p class="note">Pick a month.</p>';
+  const r42 = GSTRev.rule42(ym, reg), r43 = GSTRev.rule43(ym, reg), q = r42.ratio, t = q.t, set = GSTRev.settings();
+  const commonLeds = Object.values(b.map || {}).filter(m => m.kind === "gst_common").length;
+  const tot = GSTRev.add(r42.reverse, r43.Te);
+  let h = '<div class="dash-tiles"><div class="dtile"><span>Exempt share of turnover (E ÷ F)</span><b>' + pct(r42.share) + "</b><small>" + money(q.E) + " of " + money(q.F) + (q.from && q.from !== ym ? ", taken from " + GSTR.label(q.from) : "") + "</small></div>" +
+    '<div class="dtile"><span>Rule 42, reversed</span><b>' + money(GSTRev.total(r42.reverse)) + "</b><small>on common credit of " + money(GSTRev.total(r42.C2)) + "</small></div>" +
+    '<div class="dtile"><span>Rule 43, reversed</span><b>' + money(GSTRev.total(r43.Te)) + "</b><small>" + r43.used.length + " capital good" + (r43.used.length === 1 ? "" : "s") + " in use</small></div>" +
+    '<div class="dtile"><span>Into 3B 4(B)(1)</span><b>' + money(GSTRev.total(tot)) + "</b><small>" + GSTR.label(ym) + "</small></div></div>";
+  h += '<section class="dash-card" style="margin-top:12px"><h3>Turnover of the month</h3><div class="bk-tablewrap"><table class="bk-table"><tbody>' +
+    '<tr><td>Taxable, net of credit notes</td><td class="n">' + money(t.taxable) + "</td></tr><tr><td>Exports and SEZ</td><td class=\"n\">" + money(t.zero) + "</td></tr>" +
+    "<tr><td>Exempt, nil rated and non-GST (E)</td><td class=\"n\">" + money(t.exempt) + "</td></tr><tr><td><b>Total turnover (F)</b></td><td class=\"n\"><b>" + money(t.total) + "</b></td></tr></tbody></table></div>" +
+    (t.total ? "" : '<p class="note">No turnover this month, so E and F of ' + (q.from ? GSTR.label(q.from) : "no earlier month") + " are used, as rule 42(1)(h) says.</p>") + "</section>";
+  h += '<section class="dash-card" style="margin-top:12px"><h3>Rule 42: common inputs and input services</h3>' +
+    (commonLeds ? "" : '<p class="note" style="color:#B9541B">No ledger is marked “GST, common credit” yet. On the Ledgers tab, mark the input tax ledgers that carry credit used for both taxable and exempt (or non-business) supplies.</p>') +
+    '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th></th>' + th + "</tr></thead><tbody>" +
+    "<tr><td>C2 Common credit (" + r42.n + " voucher" + (r42.n === 1 ? "" : "s") + ")</td>" + heads(r42.C2) + "</tr>" +
+    "<tr><td>D1 For exempt supplies: C2 × E ÷ F</td>" + heads(r42.D1) + "</tr>" +
+    "<tr><td>D2 For non-business use: 5% of C2</td>" + heads(r42.D2) + "</tr>" +
+    "<tr><td><b>Reversed: D1 + D2</b></td>" + heads(r42.reverse) + "</tr>" +
+    "<tr><td>C3 Credit kept</td>" + heads(r42.C3) + "</tr></tbody></table></div>" +
+    '<label class="note" style="display:flex;gap:6px;align-items:center;margin-top:8px"><input type="checkbox" data-revd2' + (set.d2 ? " checked" : "") + "> Some of the common credit is used for non-business purposes, so D2 (5%) applies</label></section>";
+  const y = GSTRev.year(ym, reg);
+  if (y.rows.length){
+    const fyLabel = y.fy + "-" + String(num(y.fy) + 1).slice(2);
+    const more = GSTRev.total(y.diff);
+    h += '<section class="dash-card" style="margin-top:12px"><h3>Rule 42(2): the year ' + esc(fyLabel) + " worked out again</h3>" +
+      '<p class="note">After the year, D1 is worked out on the whole year’s turnover. ' + y.rows.length + " of 12 months are in these books.</p>" +
+      '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Month</th><th class="n">Common credit</th><th class="n">E ÷ F</th><th class="n">D1</th></tr></thead><tbody>' +
+      y.rows.map(r => "<tr><td>" + GSTR.label(r.ym) + '</td><td class="n">' + money(GSTRev.total(r.C2)) + '</td><td class="n">' + pct(r.share) + '</td><td class="n">' + money(GSTRev.total(r.D1)) + "</td></tr>").join("") +
+      '<tr><td><b>Year</b></td><td class="n"><b>' + money(GSTRev.total(y.C2)) + '</b></td><td class="n"><b>' + pct(y.share) + '</b></td><td class="n"><b>' + money(GSTRev.total(y.monthly)) + "</b></td></tr></tbody></table></div>" +
+      '<div class="bk-tablewrap" style="margin-top:8px"><table class="bk-table"><thead><tr><th></th>' + th + "</tr></thead><tbody>" +
+      "<tr><td>D1 on the year’s turnover</td>" + heads(y.annual) + "</tr><tr><td>Less: D1 reversed month by month</td>" + heads(y.monthly) + "</tr>" +
+      "<tr><td><b>" + (more > 0 ? "To reverse more, with interest under section 50" : more < 0 ? "To take back as credit" : "Difference") + "</b></td>" + heads(y.diff) + "</tr></tbody></table></div>" +
+      '<p class="note">Reverse the extra in 4(B)(1), or take the excess back in 4(A)(5), in a return up to September after the year ends.</p></section>';
+  }
+  const regs = (b.meta && b.meta.gstins) || [], assets = b.assets || [];
+  h += '<section class="dash-card" style="margin-top:12px"><h3>Rule 43: capital goods</h3>' +
+    '<p class="note">The credit on a capital good used for both taxable and exempt supplies is spread over 60 months, 5% a quarter, from the month it is put to use. Each month, the exempt share of that month’s part (Tr × E ÷ F) is reversed. A good used only for taxable supplies keeps all its credit; one used only for exempt or non-business supplies gets none, so mark those and they are left out.</p>' +
+    '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Capital good</th><th class="dt">Put to use</th>' + th + "<th>Used for</th>" + (regs.length > 1 ? "<th>Registration</th>" : "") + '<th class="dt">Sold on</th><th class="n">This month (Tm)</th><th></th></tr></thead><tbody>' +
+    assets.map(a => {
+      const f = (k, type, w) => '<input type="' + type + '" data-asset="' + esc(a.id) + ":" + k + '" value="' + esc(a[k] == null ? "" : a[k]) + '" style="width:' + w + '"' + (type === "number" ? ' step="0.01" min="0"' : "") + ">";
+      const tmv = GSTRev.tm(a, ym);
+      return "<tr><td>" + f("name", "text", "130px") + "</td><td>" + f("date", "date", "128px") + "</td><td>" + f("igst", "number", "88px") + "</td><td>" + f("cgst", "number", "80px") + "</td><td>" + f("sgst", "number", "80px") + "</td><td>" + f("cess", "number", "64px") + "</td>" +
+        '<td><select style="min-width:150px" data-asset="' + esc(a.id) + ':use">' + [["common", "taxable and exempt"], ["taxable", "taxable only"], ["exempt", "exempt or non-business only"]].map(([v, l]) => '<option value="' + v + '"' + ((a.use || "common") === v ? " selected" : "") + ">" + l + "</option>").join("") + "</select></td>" +
+        (regs.length > 1 ? '<td><select data-asset="' + esc(a.id) + ':reg"><option value="">any</option>' + regs.map(g => '<option value="' + g.slice(0, 2) + '"' + (a.reg === g.slice(0, 2) ? " selected" : "") + ">" + esc(g.slice(0, 2)) + "</option>").join("") + "</select></td>" : "") +
+        "<td>" + f("sold", "date", "130px") + '</td><td class="n">' + (tmv ? money(GSTRev.total(tmv)) : "\u2014") + '</td><td><button class="btn small" data-assetdel="' + esc(a.id) + '">Remove</button></td></tr>';
+    }).join("") + "</tbody></table></div>" +
+    '<div class="row" style="gap:8px;margin-top:8px"><button class="btn small" data-act="assetAdd">Add a capital good</button></div>' +
+    (r43.used.length ? '<div class="bk-tablewrap" style="margin-top:8px"><table class="bk-table"><thead><tr><th></th>' + th + "</tr></thead><tbody><tr><td>Tr, credit of the month on common capital goods</td>" + heads(r43.Tr) +
+      "</tr><tr><td><b>Te, reversed: Tr × E ÷ F</b></td>" + heads(r43.Te) + "</tr></tbody></table></div>" : "") + "</section>";
+  h += '<p class="note">Both rules go into 3B table 4(B)(1). Credit marked “GST, ITC not to be taken” stays in 4(B)(2), as before.</p>';
+  return h;
+}
+
 function viewGstr1(b){
   const g = GSTR.one(S.gstYm || "", S.gstReg || ""), money = v => INR.format(r2(v || 0));
   const box = (label, s, cls) => '<div class="dtile' + (cls || "") + '"><span>' + label + "</span><b>" + s.n + "</b><small>" + money(s.taxable) + " + " + money(s.igst + s.cgst + s.sgst) + " tax</small></div>";
   let h = '<div class="dash-tiles">' + box("B2B (4A)", GSTR.sum(g.b2b)) + box("B2C large (5)", GSTR.sum(g.b2cl)) + box("B2C small (7)", GSTR.sum(g.b2c)) + box("Notes (9B)", GSTR.sum(g.cdnr)) + "</div>" +
     '<div class="dash-tiles">' + box("Exports and SEZ (6)", GSTR.sum(g.exp)) + box("Nil, exempt, non-GST (8)", GSTR.sum(g.nil)) + box("Reverse charge (4B)", GSTR.sum(g.rcm)) + box("All outward", g.total) + "</div>";
+  if (GSTAdv.ready()){
+    const a = GSTAdv.month(S.gstYm || "", S.gstReg || "");
+    if (a.at.length || a.txpd.length) h += '<div class="dash-tiles">' + box("Advances received (11A)", a.atSum) + box("Advances adjusted (11B)", a.txpdSum) +
+      '<div class="dtile"><span>Advances</span><b><button class="linkbtn" data-gstpart="adv">See them</button></b><small>in the JSON as at and txpd</small></div></div>';
+  }
   const rows = g.b2b.concat(g.b2cl).concat(g.b2c).concat(g.cdnr).concat(g.exp).concat(g.nil);
   {
     const f = S.r1F || {}, qq = String(f.q || "").toLowerCase();
@@ -6344,6 +6769,7 @@ function viewGstr3b(b){
   const gap = '<tr><td colspan="5" style="height:8px"></td></tr>';
   let h = '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>3.1 Outward supplies and inward on reverse charge</th><th class="n">Taxable</th><th class="n">IGST</th><th class="n">CGST</th><th class="n">SGST</th></tr></thead><tbody>' +
     row("(a) Outward taxable supplies, other than zero rated, nil and exempt", t.sale) +
+    (t.adv.taxable || t.adv.igst || t.adv.cgst ? row("Add: tax on advances, 11A less 11B", t.adv) : "") +
     row("Less: credit notes", {taxable: -t.cn.taxable, igst: -t.cn.igst, cgst: -t.cn.cgst, sgst: -t.cn.sgst}) +
     row("(b) Outward zero rated: exports and SEZ", t.zero) +
     row("(c) Other outward: nil rated and exempt", t.nil) +
@@ -6358,7 +6784,8 @@ function viewGstr3b(b){
     row("(A)(2) Import of services", {taxable: t.impServ.taxable, igst: t.impServ.igst, cgst: t.impServ.cgst, sgst: t.impServ.sgst}) +
     row("(A)(3) Inward supplies on reverse charge", {taxable: t.rcmOut.taxable, igst: t.rcmOut.igst, cgst: t.rcmOut.cgst, sgst: t.rcmOut.sgst}) +
     row("(A)(5) All other ITC", {taxable: t.other.taxable, igst: t.other.igst, cgst: t.other.cgst, sgst: t.other.sgst}) +
-    gap + row("(B)(2) Reversed: ITC not to be taken", {taxable: t.blocked.taxable, igst: t.reversal.igst, cgst: t.reversal.cgst, sgst: t.reversal.sgst}) +
+    gap + row("(B)(1) Reversed: rules 42 and 43", {taxable: "", igst: t.rules.igst, cgst: t.rules.cgst, sgst: t.rules.sgst}) +
+    row("(B)(2) Reversed: ITC not to be taken", {taxable: t.blocked.taxable, igst: t.reversal.igst, cgst: t.reversal.cgst, sgst: t.reversal.sgst}) +
     gap + row("(C) Net ITC available", {taxable: "", igst: t.netItc.igst, cgst: t.netItc.cgst, sgst: t.netItc.sgst}, true) +
     (t.ineligible ? '<tr><td>(D) Ineligible: tax charged to cost in the books</td><td class="n">' + money(t.ineligible) + '</td><td colspan="3"></td></tr>' : "") +
     "</tbody></table></div>";
@@ -10756,6 +11183,29 @@ function bulkLedgerFrom(inp){
   acClose();
   bulkAction("ledger", l);
 }
+// what the user corrects on the Advances and Reversal screens
+function gstFixChange(t){
+  const d = t.dataset, b = S.books;
+  const id = d.advrate || d.advskip || d.advtake || d.advadj;
+  if (id){
+    b.advFix = b.advFix || {};
+    const f = Object.assign({}, b.advFix[id]);
+    if (d.advrate) f.rate = t.value;
+    if (d.advskip) f.skip = !!t.checked;
+    if (d.advtake) f.isAdv = !!t.checked;
+    if (d.advadj) f.adjYm = t.value;
+    Object.keys(f).forEach(k => { if (f[k] === "" || f[k] === false || f[k] == null) delete f[k]; });
+    if (Object.keys(f).length) b.advFix[id] = f; else delete b.advFix[id];
+    saveBooks(); render(); return true;
+  }
+  if (d.asset){
+    const [aid, k] = d.asset.split(":"), a = (b.assets || []).find(x => x.id === aid);
+    if (a){ a[k] = /^(igst|cgst|sgst|cess)$/.test(k) ? r2(num(t.value)) : t.value; saveBooks(); render(); }
+    return true;
+  }
+  if (d.revd2 !== undefined){ b.rev = Object.assign({}, b.rev, {d2: !!t.checked}); saveBooks(); render(); return true; }
+  return false;
+}
 function booksChange(t){
   if (t.id === "booksIn"){
     const f = (t.files || [])[0]; t.value = "";
@@ -10775,7 +11225,7 @@ function booksChange(t){
     if (!f) return true;
     const b = S.books; b.busy = "Opening " + f.name + "\u2026"; render();
     Books.importMasters(f, m => { b.busy = m; softRender(); }).then(async res => {
-      b.pans = res.pans; b.gstins = res.gstins; b.under = res.under; b.busy = "";
+      b.pans = res.pans; b.gstins = res.gstins; b.under = res.under; b.states = res.states; b.groups = res.groups; b.busy = "";
       await saveBooks();
       const rows = TDS.rows(), withPan = rows.filter(r => r.pan).length;
       toast(res.count + " ledgers read. " + Object.keys(res.pans).length + " carry a PAN; " + withPan + " of " + rows.length + " deductions now have one.");
@@ -13984,6 +14434,7 @@ document.addEventListener("click", ev => {
   }
   if (t.dataset.tdsopen){ S.tdsOpen = S.tdsOpen === t.dataset.tdsopen ? "" : t.dataset.tdsopen; render(); return; }
   if (t.dataset.qgo){ S.tdsQ = t.dataset.qgo; S.tdsPart = "q26"; render(); return; }
+  if (t.dataset.assetdel){ S.books.assets = (S.books.assets || []).filter(a => a.id !== t.dataset.assetdel); saveBooks(); render(); return; }
   if (t.dataset.certdel){ S.books.certs = (S.books.certs || []).filter(c => c.id !== t.dataset.certdel); saveBooks(); render(); return; }
   if (t.dataset["2btab"]){ S.twoBTab = t.dataset["2btab"]; render(); return; }
   if (t.dataset.paymake){
@@ -14241,6 +14692,7 @@ document.addEventListener("click", ev => {
     case "booksPick": { const i = document.getElementById("booksIn"); if (i){ i.value = ""; i.click(); } break; }
     case "mastersPick": { const i = document.getElementById("mastersIn"); if (i){ i.value = ""; i.click(); } break; }
     case "twoBPick": { const i = document.getElementById("twoBIn"); if (i){ i.value = ""; i.click(); } break; }
+    case "assetAdd": { const b = S.books; b.assets = (b.assets || []).concat([{id: uid("as"), name: "", date: "", igst: 0, cgst: 0, sgst: 0, cess: 0, use: "common", reg: S.gstReg || "", sold: ""}]); saveBooks(); render(); break; }
     case "booksClear": askConfirm({title: "Remove the books read from Tally?", ok: "Remove", body: '<p class="note">Challans and what you corrected stay. The day book can be brought in again.</p>'}).then(ok => {
       if (!ok) return; S.books.vouchers = []; S.books.meta = null; S.books.reco = null; saveBooks(); toast("Removed."); render(); }); break;
     case "fvuClose": S.fvuResult = null; render(); break;
@@ -14524,14 +14976,16 @@ document.addEventListener("input", ev => {
   if (t && t.dataset && t.dataset.gstreg !== undefined){ S.gstReg = t.value; S.books.reco = null; render(); return; }
   if (t && t.dataset && t.dataset.tdsfy !== undefined){ S.tdsFy = t.value; render(); return; }
   if (t && t.dataset && t.dataset.tdsq !== undefined){ S.tdsQ = t.value; render(); return; }
-  if (t && t.dataset && t.dataset.ledkind){ const m = S.books.map[t.dataset.ledkind]; if (m){ m.kind = t.value; m.byHand = true; if (m.kind !== "tds_payable") delete m.section; S.books.reco = null; saveBooks(); render(); } return; }
+  if (t && t.dataset && t.dataset.ledkind){ const m = S.books.map[t.dataset.ledkind]; if (m){ m.kind = t.value; m.byHand = true; if (m.kind !== "tds_payable") delete m.section;
+    if (/^(gst|gst_common|ineligible)$/.test(m.kind)){ const gg = Books.guess(t.dataset.ledkind); if (!m.tax) m.tax = gg.tax || "IGST"; if (!m.side) m.side = gg.side || "input"; if (m.reg == null && gg.reg) m.reg = gg.reg; }
+    S.books.mapV = (S.books.mapV || 0) + 1; S.books.reco = null; saveBooks(); render(); } return; }
   if (t && t.dataset && (t.dataset.ledtax || t.dataset.ledside || t.dataset.ledreg)){
     const key = t.dataset.ledtax || t.dataset.ledside || t.dataset.ledreg, m = S.books.map[key];
     if (m){
       if (t.dataset.ledtax) m.tax = t.value;
       if (t.dataset.ledside) m.side = t.value;
       if (t.dataset.ledreg) m.reg = t.value;
-      m.byHand = true; S.books.reco = null; saveBooks(); render();
+      m.byHand = true; S.books.mapV = (S.books.mapV || 0) + 1; S.books.reco = null; saveBooks(); render();
     }
     return;
   }
@@ -14577,6 +15031,7 @@ function setPath(o, path, v){ const k = path.split("."); if (k.length === 2) o[k
 
 document.addEventListener("change", ev => {
   if (ev.target && ev.target.id && ["booksIn", "mastersIn", "twoBIn"].includes(ev.target.id)){ booksChange(ev.target); return; }
+  if (ev.target && ev.target.dataset && S.books && gstFixChange(ev.target)) return;
   if (ev.target && ev.target.id === "marketIn"){ const f = (ev.target.files || [])[0]; ev.target.value = ""; if (f) importMarketFile(f); return; }
   if (ev.target && ev.target.id === "salaryIn"){
     const f = (ev.target.files || [])[0]; ev.target.value = "";
