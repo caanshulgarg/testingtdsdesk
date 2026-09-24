@@ -754,7 +754,7 @@ const DEFAULT_FIRM = {firmName:"Garg Shekhar & Company", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "TEST · 24 Sep 2026 · build 106 (GSTR-1 and GSTR-3B from the books; sales vouchers with items are read too)";
+const APP_VERSION = "TEST · 24 Sep 2026 · build 107 (every part of GSTR-1 and 3B: reverse charge, HSN, imports, blocked credit, and checks before filing)";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;
@@ -4975,6 +4975,8 @@ const Books = {
     if (head[0] === 0xFE && head[1] === 0xFF) return new TextDecoder("utf-16be");
     return new TextDecoder("utf-8");
   },
+  // Tally writes "Applicable" or "Not Applicable", sometimes with a stray character in front
+  yesFlag(v){ const t = String(v || "").replace(/[^A-Za-z ]/g, " ").trim().toLowerCase(); return /\bapplicable\b/.test(t) && !/\bnot\b/.test(t); },
   one(s, tag){ const m = s.match(new RegExp("<" + tag + ">([^<]*)</" + tag + ">")); return m ? m[1].replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").trim() : ""; },
   takeVoucher(s, out, meta){
     const type = (s.match(/VCHTYPE="([^"]*)"/) || [])[1] || "";
@@ -4985,6 +4987,13 @@ const Books = {
       party: this.one(s, "PARTYNAME") || this.one(s, "PARTYLEDGERNAME"),
       gstin: this.one(s, "PARTYGSTIN"), pos: this.one(s, "PLACEOFSUPPLY"),
       cmp: this.one(s, "CMPGSTIN"), narr: this.one(s, "NARRATION").slice(0, 120),
+      regType: this.one(s, "GSTREGISTRATIONTYPE"),
+      country: this.one(s, "COUNTRYOFRESIDENCE"),
+      rcm: this.yesFlag(this.one(s, "GSTOVRDNISREVCHARGEAPPL")) || this.one(s, "ISREVERSECHARGEAPPLICABLE") === "Yes",
+      taxability: this.one(s, "GSTOVRDNTAXABILITY"),
+      supply: this.one(s, "GSTOVRDNTYPEOFSUPPLY"),
+      ineligibleFlag: this.yesFlag(this.one(s, "GSTOVRDNINELIGIBLEITC")),
+      hsn: Array.from(new Set((s.match(/<GSTHSNNAME>([^<]*)<\/GSTHSNNAME>/g) || []).map(x => x.replace(/<[^>]*>/g, "").trim()).filter(Boolean))),
       ent: []
     };
     if (v.cmp) meta.gstins.add(v.cmp);
@@ -5088,6 +5097,19 @@ const Books = {
     out.total = r2(out.taxable + out.tax.CGST + out.tax.SGST + out.tax.IGST + out.tax.CESS + out.roundoff);
     return out;
   },
+  // what part of the return a voucher belongs to
+  supplyClass(v){
+    const country = String(v.country || "").toLowerCase();
+    const exportish = /EXPORT/i.test(v.type) || (country && country !== "india");
+    if (exportish) return "export";
+    if (/SEZ/i.test(v.type) || /SEZ/i.test(v.regType || "")) return "sez";
+    if (/exempt/i.test(v.taxability || "")) return "exempt";
+    if (/nil/i.test(v.taxability || "")) return "nil";
+    if (/non.?gst/i.test(v.taxability || "")) return "nongst";
+    return "taxable";
+  },
+  isRcm(v){ return !!v.rcm; },
+  isImport(v){ const c = String(v.country || "").toLowerCase(); return !!c && c !== "india"; },
   isPurchase(v){ return /PUR|PURCHASE/i.test(v.type) || /DEBIT NOTE/i.test(v.type); },
   isSale(v){ return /SALE|SALES|CREDIT NOTE|EXPORT/i.test(v.type); },
   async save(cid, data){
@@ -5335,8 +5357,12 @@ const GSTR = {
       const exp = /EXPORT/i.test(v.type);
       const gstin = (v.gstin || "").toUpperCase();
       const rate = L.taxable ? Math.round(tax / L.taxable * 10000) / 100 : 0;
+      const cls = Books.supplyClass(v);
+      const interState = !!(gstin && v.cmp && gstin.slice(0, 2) !== String(v.cmp).slice(0, 2)) || (!gstin && v.pos && v.pos !== (b.stateOf || v.pos) && L.igst > 0);
+      const b2cl = !gstin && L.igst > 0 && L.total > 250000;
       out.push({id: v.id, date: v.date, no: v.no || v.ref || "", party: v.party, gstin, pos: v.pos || "",
-        kind: note ? (note === "credit" ? "CDNR" : "DBNR") : exp ? "EXP" : gstin ? "B2B" : "B2C",
+        cls, rcm: Books.isRcm(v), hsn: (v.hsn || [])[0] || "", supply: v.supply || "",
+        kind: note ? (note === "credit" ? "CDNR" : "DBNR") : (cls === "export" || cls === "sez") ? "EXP" : (cls === "exempt" || cls === "nil" || cls === "nongst") ? "NIL" : gstin ? "B2B" : b2cl ? "B2CL" : "B2C",
         taxable: L.taxable, cgst: L.tax.CGST, sgst: L.tax.SGST, igst: L.tax.IGST, cess: L.tax.CESS,
         rate, total: L.total, note, type: v.type});
     });
@@ -5354,6 +5380,8 @@ const GSTR = {
       if (!L.taxable && !tax) return;
       out.push({id: v.id, date: v.date, no: v.ref || v.no || "", party: v.party, gstin: (v.gstin || "").toUpperCase(),
         taxable: L.taxable, cgst: L.tax.CGST, sgst: L.tax.SGST, igst: L.tax.IGST, cess: L.tax.CESS,
+        cls: Books.supplyClass(v), rcm: Books.isRcm(v), import: Books.isImport(v), supply: v.supply || "",
+        blocked: !!v.ineligibleFlag, hsn: (v.hsn || [])[0] || "",
         ineligible: L.ineligible || 0, note: /DEBIT NOTE/i.test(v.type) ? "debit" : ""});
     });
     return out;
@@ -5372,19 +5400,61 @@ const GSTR = {
       list.forEach(r => { const k = String(r.rate); (m[k] = m[k] || []).push(r); });
       return Object.entries(m).sort((a, c) => num(a[0]) - num(c[0])).map(([rate, rs]) => Object.assign({rate: num(rate)}, this.sum(rs)));
     };
-    return {rows, b2b: part("B2B"), b2c: part("B2C"), cdnr: part("CDNR").concat(part("DBNR")), exp: part("EXP"),
-      b2cRates: byRate(part("B2C")), hsn: byRate(rows), total: this.sum(rows)};
+    const hsnRows = {};
+    rows.forEach(r => {
+      const key = (r.hsn || "no HSN") + "|" + r.rate;
+      const h = hsnRows[key] = hsnRows[key] || {hsn: r.hsn || "", rate: r.rate, supply: r.supply, n: 0, taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0};
+      h.n++; h.taxable = r2(h.taxable + r.taxable); h.igst = r2(h.igst + r.igst); h.cgst = r2(h.cgst + r.cgst); h.sgst = r2(h.sgst + r.sgst); h.cess = r2(h.cess + r.cess);
+    });
+    const series = {};
+    rows.forEach(r => {
+      const pre = String(r.no).replace(/\d+$/, ""), sr = series[pre] = series[pre] || {pre, from: r.no, to: r.no, n: 0, cancelled: 0};
+      sr.n++;
+      if (String(r.no) < String(sr.from)) sr.from = r.no;
+      if (String(r.no) > String(sr.to)) sr.to = r.no;
+    });
+    return {rows, b2b: part("B2B"), b2cl: part("B2CL"), b2c: part("B2C"), cdnr: part("CDNR").concat(part("DBNR")),
+      exp: part("EXP"), nil: part("NIL"), rcm: rows.filter(r => r.rcm),
+      b2cRates: byRate(part("B2C")), hsn: Object.values(hsnRows).sort((a, c) => c.taxable - a.taxable),
+      series: Object.values(series), total: this.sum(rows)};
   },
   // GSTR-3B: what goes out, what comes in, and what is left to pay
   threeB(ym, reg){
     const out = this.outward(ym, reg), inn = this.inward(ym, reg);
-    const sale = this.sum(out.filter(r => r.kind !== "CDNR"));
-    const cn = this.sum(out.filter(r => r.kind === "CDNR"));
-    const buy = this.sum(inn);
-    const net = {taxable: r2(sale.taxable - cn.taxable), cgst: r2(sale.cgst - cn.cgst), sgst: r2(sale.sgst - cn.sgst), igst: r2(sale.igst - cn.igst), cess: r2(sale.cess - cn.cess)};
-    const itc = {cgst: buy.cgst, sgst: buy.sgst, igst: buy.igst, cess: buy.cess, ineligible: buy.ineligible};
-    return {sale, cn, net, buy, itc,
-      payable: {cgst: r2(net.cgst - itc.cgst), sgst: r2(net.sgst - itc.sgst), igst: r2(net.igst - itc.igst), cess: r2(net.cess - itc.cess)}};
+    const S1 = f => this.sum(out.filter(f)), S2 = f => this.sum(inn.filter(f));
+    const taxableOut = S1(r => r.cls === "taxable" && r.kind !== "CDNR");
+    const cn = S1(r => r.kind === "CDNR");
+    const zero = S1(r => r.cls === "export" || r.cls === "sez");
+    const nil = S1(r => r.cls === "exempt" || r.cls === "nil");
+    const nongst = S1(r => r.cls === "nongst");
+    const rcmOut = S2(r => r.rcm);                                   // tax payable by us on inward supplies
+    const toUnreg = S1(r => !r.gstin && r.igst > 0);                 // 3.2 inter-state to unregistered
+    const impGoods = S2(r => r.import && r.supply === "Goods");
+    const impServ = S2(r => r.import && r.supply !== "Goods");
+    const other = S2(r => !r.import && !r.rcm);
+    const blocked = S2(r => r.blocked);
+    const net = {taxable: r2(taxableOut.taxable - cn.taxable), cgst: r2(taxableOut.cgst - cn.cgst), sgst: r2(taxableOut.sgst - cn.sgst), igst: r2(taxableOut.igst - cn.igst), cess: r2(taxableOut.cess - cn.cess)};
+    const itc = {cgst: r2(impGoods.cgst + impServ.cgst + rcmOut.cgst + other.cgst), sgst: r2(impGoods.sgst + impServ.sgst + rcmOut.sgst + other.sgst),
+                 igst: r2(impGoods.igst + impServ.igst + rcmOut.igst + other.igst), cess: r2(impGoods.cess + impServ.cess + rcmOut.cess + other.cess)};
+    const reversal = {cgst: r2(blocked.cgst + this.sum(inn).ineligible ? blocked.cgst : blocked.cgst), sgst: blocked.sgst, igst: blocked.igst, cess: blocked.cess};
+    const netItc = {cgst: r2(itc.cgst - reversal.cgst), sgst: r2(itc.sgst - reversal.sgst), igst: r2(itc.igst - reversal.igst), cess: r2(itc.cess - reversal.cess)};
+    return {sale: taxableOut, cn, net, zero, nil, nongst, rcmOut, toUnreg, impGoods, impServ, other, blocked,
+      buy: this.sum(inn), itc, reversal, netItc, ineligible: this.sum(inn).ineligible,
+      payable: {cgst: r2(net.cgst + rcmOut.cgst - netItc.cgst), sgst: r2(net.sgst + rcmOut.sgst - netItc.sgst),
+                igst: r2(net.igst + rcmOut.igst - netItc.igst), cess: r2(net.cess + rcmOut.cess - netItc.cess)}};
+  },
+  // what would be rejected or questioned, before it is filed
+  checks(ym, reg){
+    const out = this.outward(ym, reg), inn = this.inward(ym, reg), list = [];
+    const add = (what, rows, how) => { if (rows.length) list.push({what, n: rows.length, how, rows: rows.slice(0, 5)}); };
+    add("Invoices to a registered party with no GSTIN", out.filter(r => r.kind === "B2B" && !r.gstin), "Fill the GSTIN on the party ledger in Tally.");
+    add("Outward invoices with no place of supply", out.filter(r => !r.pos && r.kind !== "NIL"), "Set the place of supply on the voucher.");
+    add("Outward invoices with no HSN", out.filter(r => !r.hsn && r.cls === "taxable"), "HSN is needed in the GSTR-1 summary.");
+    add("Tax that does not fit the taxable value", out.filter(r => r.taxable && ![0, 0.1, 0.25, 1, 1.5, 3, 5, 6, 7.5, 12, 18, 28].some(x => Math.abs(r.rate - x) < 0.3)), "Check the rate on these invoices.");
+    add("Purchases with no supplier GSTIN", inn.filter(r => !r.gstin && (r.cgst || r.sgst || r.igst)), "Needed to match against 2B.");
+    add("Purchases marked ITC not to be taken", inn.filter(r => r.blocked), "These are kept out of the credit claimed.");
+    add("Inward supplies under reverse charge", inn.filter(r => r.rcm), "Tax on these is payable by you and shown in 3.1(d).");
+    return list;
   },
   async toExcel(ym, reg){
     await ensureXlsx();
@@ -5395,17 +5465,30 @@ const GSTR = {
     const wb = XLSX.utils.book_new();
     const add = (name, head, body) => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([head].concat(body)), name);
     add("B2B", cols, g.b2b.map(line));
-    add("B2C", cols, g.b2c.map(line));
+    add("B2C large", cols, g.b2cl.map(line));
+    add("B2C small", cols, g.b2c.map(line));
+    if (g.nil.length) add("Nil, exempt, non-GST", cols, g.nil.map(line));
+    if (g.rcm.length) add("Reverse charge", cols, g.rcm.map(line));
     add("Credit and debit notes", cols.concat(["Kind"]), g.cdnr.map(r => line(r).concat([r.note])));
     if (g.exp.length) add("Exports", cols, g.exp.map(line));
-    add("Rate summary", ["Rate", "Invoices", "Taxable", "IGST", "CGST", "SGST", "Cess"], g.hsn.map(h => [h.rate, h.n, h.taxable, h.igst, h.cgst, h.sgst, h.cess]));
+    add("HSN summary", ["HSN", "Goods or services", "Rate", "Invoices", "Taxable", "IGST", "CGST", "SGST", "Cess"], g.hsn.map(h => [h.hsn, h.supply, h.rate, h.n, h.taxable, h.igst, h.cgst, h.sgst, h.cess]));
+    add("Documents issued", ["Series", "From", "To", "Issued"], g.series.map(x => [x.pre, x.from, x.to, x.n]));
+    add("Before filing", ["What", "How many", "What to do"], GSTR.checks(ym, reg).map(c => [c.what, c.n, c.how]));
     add("GSTR-3B", ["", "Taxable", "IGST", "CGST", "SGST", "Cess"], [
       ["3.1(a) Outward taxable supplies", t.sale.taxable, t.sale.igst, t.sale.cgst, t.sale.sgst, t.sale.cess],
       ["Less: credit notes", -t.cn.taxable, -t.cn.igst, -t.cn.cgst, -t.cn.sgst, -t.cn.cess],
-      ["Net outward", t.net.taxable, t.net.igst, t.net.cgst, t.net.sgst, t.net.cess],
-      [], ["4(A)(5) ITC on other inward supplies", t.buy.taxable, t.itc.igst, t.itc.cgst, t.itc.sgst, t.itc.cess],
-      ["Of which ITC not to be taken", t.itc.ineligible, "", "", "", ""],
-      [], ["Tax payable after ITC", "", t.payable.igst, t.payable.cgst, t.payable.sgst, t.payable.cess]]);
+      ["3.1(b) Zero rated: exports and SEZ", t.zero.taxable, t.zero.igst, t.zero.cgst, t.zero.sgst, t.zero.cess],
+      ["3.1(c) Nil rated and exempt", t.nil.taxable, "", "", "", ""],
+      ["3.1(d) Inward on reverse charge", t.rcmOut.taxable, t.rcmOut.igst, t.rcmOut.cgst, t.rcmOut.sgst, t.rcmOut.cess],
+      ["3.1(e) Non-GST outward", t.nongst.taxable, "", "", "", ""],
+      ["3.2 Inter-state to unregistered", t.toUnreg.taxable, t.toUnreg.igst, "", "", ""],
+      [], ["4(A)(1) Import of goods", t.impGoods.taxable, t.impGoods.igst, t.impGoods.cgst, t.impGoods.sgst, t.impGoods.cess],
+      ["4(A)(2) Import of services", t.impServ.taxable, t.impServ.igst, t.impServ.cgst, t.impServ.sgst, t.impServ.cess],
+      ["4(A)(3) Inward on reverse charge", t.rcmOut.taxable, t.rcmOut.igst, t.rcmOut.cgst, t.rcmOut.sgst, t.rcmOut.cess],
+      ["4(A)(5) All other ITC", t.other.taxable, t.other.igst, t.other.cgst, t.other.sgst, t.other.cess],
+      ["4(B)(2) Reversed: ITC not to be taken", t.blocked.taxable, t.reversal.igst, t.reversal.cgst, t.reversal.sgst, t.reversal.cess],
+      ["4(C) Net ITC available", "", t.netItc.igst, t.netItc.cgst, t.netItc.sgst, t.netItc.cess],
+      [], ["Tax payable", "", t.payable.igst, t.payable.cgst, t.payable.sgst, t.payable.cess]]);
     const outBin = XLSX.write(wb, {bookType: "xlsx", type: "array"});
     saveFile(CO().name.replace(/[^A-Za-z0-9]+/g, "-") + "-GSTR1-3B-" + (ym || "all") + (reg ? "-" + reg : "") + ".xlsx",
       new Blob([outBin], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
@@ -5557,29 +5640,54 @@ function viewBooksGst(b){
 function viewGstr1(b){
   const g = GSTR.one(S.gstYm || "", S.gstReg || ""), money = v => INR.format(r2(v || 0));
   const box = (label, s, cls) => '<div class="dtile' + (cls || "") + '"><span>' + label + "</span><b>" + s.n + "</b><small>" + money(s.taxable) + " + " + money(s.igst + s.cgst + s.sgst) + " tax</small></div>";
-  let h = '<div class="dash-tiles">' + box("B2B", GSTR.sum(g.b2b)) + box("B2C", GSTR.sum(g.b2c)) + box("Credit and debit notes", GSTR.sum(g.cdnr)) + box("All outward", g.total) + "</div>";
-  const rows = g.b2b.concat(g.b2c).concat(g.cdnr).concat(g.exp);
+  let h = '<div class="dash-tiles">' + box("B2B (4A)", GSTR.sum(g.b2b)) + box("B2C large (5)", GSTR.sum(g.b2cl)) + box("B2C small (7)", GSTR.sum(g.b2c)) + box("Notes (9B)", GSTR.sum(g.cdnr)) + "</div>" +
+    '<div class="dash-tiles">' + box("Exports and SEZ (6)", GSTR.sum(g.exp)) + box("Nil, exempt, non-GST (8)", GSTR.sum(g.nil)) + box("Reverse charge (4B)", GSTR.sum(g.rcm)) + box("All outward", g.total) + "</div>";
+  const rows = g.b2b.concat(g.b2cl).concat(g.b2c).concat(g.cdnr).concat(g.exp).concat(g.nil);
   h += '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Part</th><th class="dt">Date</th><th>Invoice</th><th>Party</th><th>GSTIN</th><th class="n">Rate</th><th class="n">Taxable</th><th class="n">IGST</th><th class="n">CGST</th><th class="n">SGST</th></tr></thead><tbody>' +
     rows.slice(0, 300).map(r => "<tr><td>" + r.kind + "</td><td>" + fmtDate(tallyDate(r.date)) + "</td><td>" + esc(r.no) + "</td><td>" + esc(r.party) + "</td><td>" + esc(r.gstin || "\u2014") + '</td><td class="n">' + r.rate + '%</td><td class="n">' + money(r.taxable) + '</td><td class="n">' + money(r.igst) + '</td><td class="n">' + money(r.cgst) + '</td><td class="n">' + money(r.sgst) + "</td></tr>").join("") +
     "</tbody></table>" + (rows.length ? "" : '<div class="bk-none">No outward supplies in this month.</div>') + "</div>";
-  h += '<section class="dash-card" style="margin-top:12px"><h3>Rate-wise summary</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th class="n">Rate</th><th class="n">Invoices</th><th class="n">Taxable</th><th class="n">IGST</th><th class="n">CGST</th><th class="n">SGST</th></tr></thead><tbody>' +
-    g.hsn.map(x => '<tr><td class="n">' + x.rate + '%</td><td class="n">' + x.n + '</td><td class="n">' + money(x.taxable) + '</td><td class="n">' + money(x.igst) + '</td><td class="n">' + money(x.cgst) + '</td><td class="n">' + money(x.sgst) + "</td></tr>").join("") + "</tbody></table></div></section>";
+  h += '<section class="dash-card" style="margin-top:12px"><h3>HSN summary (12)</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>HSN</th><th>Goods or services</th><th class="n">Rate</th><th class="n">Invoices</th><th class="n">Taxable</th><th class="n">IGST</th><th class="n">CGST</th><th class="n">SGST</th></tr></thead><tbody>' +
+    g.hsn.map(x => "<tr><td>" + (x.hsn ? esc(x.hsn) : '<span class="tag warn">no HSN</span>') + "</td><td>" + esc(x.supply || "") + '</td><td class="n">' + x.rate + '%</td><td class="n">' + x.n + '</td><td class="n">' + money(x.taxable) + '</td><td class="n">' + money(x.igst) + '</td><td class="n">' + money(x.cgst) + '</td><td class="n">' + money(x.sgst) + "</td></tr>").join("") + "</tbody></table></div></section>";
+  h += '<section class="dash-card" style="margin-top:12px"><h3>Documents issued (13)</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Series</th><th>From</th><th>To</th><th class="n">Issued</th></tr></thead><tbody>' +
+    g.series.map(x => "<tr><td>" + esc(x.pre || "\u2014") + "</td><td>" + esc(x.from) + "</td><td>" + esc(x.to) + '</td><td class="n">' + x.n + "</td></tr>").join("") + "</tbody></table></div></section>";
+  h += viewGstChecks();
   return h;
+}
+function viewGstChecks(){
+  const list = GSTR.checks(S.gstYm || "", S.gstReg || "");
+  if (!list.length) return '<section class="dash-card" style="margin-top:12px"><h3>Before filing</h3><p class="note">Nothing to fix for this month.</p></section>';
+  return '<section class="dash-card" style="margin-top:12px"><h3>Before filing</h3>' +
+    list.map(c => '<div class="dash-row"><span>' + esc(c.what) + '</span><b>' + c.n + "</b></div>" +
+      '<p class="note" style="margin:0 0 8px">' + esc(c.how) + " e.g. " + esc(c.rows.map(r => (r.no || r.party || "").slice(0, 22)).join(", ")) + "</p>").join("") + "</section>";
 }
 function viewGstr3b(b){
   const t = GSTR.threeB(S.gstYm || "", S.gstReg || ""), money = v => INR.format(r2(v || 0));
   const row = (label, x, bold) => "<tr><td>" + (bold ? "<b>" + label + "</b>" : label) + '</td><td class="n">' + money(x.taxable) + '</td><td class="n">' + money(x.igst) + '</td><td class="n">' + money(x.cgst) + '</td><td class="n">' + money(x.sgst) + "</td></tr>";
-  let h = '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th></th><th class="n">Taxable</th><th class="n">IGST</th><th class="n">CGST</th><th class="n">SGST</th></tr></thead><tbody>' +
-    row("3.1(a) Outward taxable supplies", t.sale) +
+  const gap = '<tr><td colspan="5" style="height:8px"></td></tr>';
+  let h = '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>3.1 Outward supplies and inward on reverse charge</th><th class="n">Taxable</th><th class="n">IGST</th><th class="n">CGST</th><th class="n">SGST</th></tr></thead><tbody>' +
+    row("(a) Outward taxable supplies, other than zero rated, nil and exempt", t.sale) +
     row("Less: credit notes", {taxable: -t.cn.taxable, igst: -t.cn.igst, cgst: -t.cn.cgst, sgst: -t.cn.sgst}) +
-    row("Net outward", t.net, true) +
-    '<tr><td colspan="5" style="height:8px"></td></tr>' +
-    row("4(A)(5) ITC on inward supplies", {taxable: t.buy.taxable, igst: t.itc.igst, cgst: t.itc.cgst, sgst: t.itc.sgst}) +
-    (t.itc.ineligible ? '<tr><td>Of which ITC not to be taken</td><td class="n">' + money(t.itc.ineligible) + '</td><td colspan="3"></td></tr>' : "") +
-    '<tr><td colspan="5" style="height:8px"></td></tr>' +
-    row("Tax payable after ITC", {taxable: "", igst: t.payable.igst, cgst: t.payable.cgst, sgst: t.payable.sgst}, true) +
+    row("(b) Outward zero rated: exports and SEZ", t.zero) +
+    row("(c) Other outward: nil rated and exempt", t.nil) +
+    row("(d) Inward supplies on which tax is payable by you (reverse charge)", t.rcmOut) +
+    row("(e) Non-GST outward supplies", t.nongst) +
+    gap + row("Net outward, taxable", t.net, true) +
     "</tbody></table></div>";
-  h += '<p class="note">Worked out from the books for the month chosen. Reverse charge, imports, exempt and nil-rated are not separated yet, and the cash and credit ledgers on the portal are not read.</p>';
+  h += '<div class="bk-tablewrap" style="margin-top:12px"><table class="bk-table"><thead><tr><th>3.2 Of 3.1(a), supplies to unregistered persons in other states</th><th class="n">Taxable</th><th class="n">IGST</th><th class="n"></th><th class="n"></th></tr></thead><tbody>' +
+    row("Inter-state supplies to unregistered persons", {taxable: t.toUnreg.taxable, igst: t.toUnreg.igst, cgst: "", sgst: ""}) + "</tbody></table></div>";
+  h += '<div class="bk-tablewrap" style="margin-top:12px"><table class="bk-table"><thead><tr><th>4 Input tax credit</th><th class="n">Value</th><th class="n">IGST</th><th class="n">CGST</th><th class="n">SGST</th></tr></thead><tbody>' +
+    row("(A)(1) Import of goods", {taxable: t.impGoods.taxable, igst: t.impGoods.igst, cgst: t.impGoods.cgst, sgst: t.impGoods.sgst}) +
+    row("(A)(2) Import of services", {taxable: t.impServ.taxable, igst: t.impServ.igst, cgst: t.impServ.cgst, sgst: t.impServ.sgst}) +
+    row("(A)(3) Inward supplies on reverse charge", {taxable: t.rcmOut.taxable, igst: t.rcmOut.igst, cgst: t.rcmOut.cgst, sgst: t.rcmOut.sgst}) +
+    row("(A)(5) All other ITC", {taxable: t.other.taxable, igst: t.other.igst, cgst: t.other.cgst, sgst: t.other.sgst}) +
+    gap + row("(B)(2) Reversed: ITC not to be taken", {taxable: t.blocked.taxable, igst: t.reversal.igst, cgst: t.reversal.cgst, sgst: t.reversal.sgst}) +
+    gap + row("(C) Net ITC available", {taxable: "", igst: t.netItc.igst, cgst: t.netItc.cgst, sgst: t.netItc.sgst}, true) +
+    (t.ineligible ? '<tr><td>(D) Ineligible: tax charged to cost in the books</td><td class="n">' + money(t.ineligible) + '</td><td colspan="3"></td></tr>' : "") +
+    "</tbody></table></div>";
+  h += '<div class="bk-tablewrap" style="margin-top:12px"><table class="bk-table"><thead><tr><th>Tax payable</th><th class="n"></th><th class="n">IGST</th><th class="n">CGST</th><th class="n">SGST</th></tr></thead><tbody>' +
+    row("Output plus reverse charge, less net ITC", {taxable: "", igst: t.payable.igst, cgst: t.payable.cgst, sgst: t.payable.sgst}, true) + "</tbody></table></div>";
+  h += '<p class="note">Worked out from the books for the month chosen. The cash and credit ledgers on the portal are not read, so interest, late fee and the balances there are not included.</p>';
+  h += viewGstChecks();
   return h;
 }
 function viewBooks2B(b){
