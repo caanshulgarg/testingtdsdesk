@@ -755,7 +755,7 @@ const DEFAULT_FIRM = {firmName:"Garg Shekhar & Company", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "TEST · 24 Sep 2026 · build 110 (marketplace sales reports: Amazon, Flipkart and Shopify, into Sales)";
+const APP_VERSION = "TEST · 24 Sep 2026 · build 111 (Amazon MTR read by its own published columns, with shipping, gift wrap and TCS)";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;
@@ -11412,11 +11412,15 @@ const Market = {
     const head = grid[0] || [], rows = grid.slice(1);
     const at = names => this.pick(head, names);
     const C = {
-      amazon: {no: ["invoicenumber", "vatinvoicenumber"], date: ["invoicedate", "shipmentdate", "orderdate"], party: ["buyername", "customername", "shiptoname"],
-        gstin: ["customerbstn", "buyergstin", "customergstin", "billtogstid"], pos: ["shiptostate", "shipfromstate", "placeofsupply"],
-        taxable: ["taxexclusivegross", "principalamountbasis", "taxablevalue", "principalamount"], cgst: ["cgsttaxamount", "cgstamount"], sgst: ["sgsttaxamount", "utgsttaxamount", "sgstamount"],
-        igst: ["igsttaxamount", "igstamount"], cess: ["cesstaxamount", "compensatorycessamount"], rate: ["cgstrate", "igstrate", "taxrate"],
-        hsn: ["hsnsac", "hsn"], total: ["invoiceamount", "totalamount"], type: ["transactiontype"], order: ["orderid"]},
+      amazon: {no: ["invoicenumber", "creditnoteno", "vatinvoicenumber"], date: ["invoicedate", "creditnotedate", "shipmentdate", "orderdate"],
+        party: ["buyername", "customername", "shiptoname"],
+        gstin: ["customerbilltogstid", "customershiptogstid", "customerbstn", "buyergstin", "customergstin"],
+        pos: ["shiptostate", "billtostate", "shipfromstate", "placeofsupply"],
+        taxable: ["taxexclusivegross"], taxableParts: ["principalamount", "shippingamount", "giftwrapamount"],
+        cgst: ["cgsttax", "shippingcgsttax", "giftwrapcgsttax"], sgst: ["sgsttax", "utgsttax", "shippingsgsttax", "shippingutgsttax", "giftwrapsgsttax", "giftwraputgsttax"],
+        igst: ["igsttax", "shippingigsttax", "giftwrapigsttax"], cess: ["compensatorycesstax", "shippingcesstaxamount", "giftwrapcompensatorycesstax"],
+        tcs: ["tcscgstamount", "tcssgstamount", "tcsigstamount", "tcsutgstamount"],
+        rate: ["cgstrate", "igstrate", "taxrate"], hsn: ["hsnsac", "hsncode"], total: ["invoiceamount"], type: ["transactiontype"], order: ["orderid"]},
       flipkart: {no: ["invoiceno", "invoicenumber"], date: ["invoicedate", "orderdate"], party: ["customername", "buyername"], gstin: ["customergstin", "buyergstin"],
         pos: ["customerstate", "shiptostate", "placeofsupply"], taxable: ["taxablevalue", "productvaluebeforetax", "sellingprice"], cgst: ["cgstamount", "cgst"], sgst: ["sgstamount", "sgst"],
         igst: ["igstamount", "igst"], cess: ["cessamount"], rate: ["taxrate", "gstrate"], hsn: ["hsncode", "hsn"], total: ["invoiceamount", "finalinvoiceamount"], type: ["eventtype", "transactiontype"], order: ["orderid"]},
@@ -11428,27 +11432,42 @@ const Market = {
         pos: ["placeofsupply", "state"], taxable: ["taxablevalue", "taxable"], cgst: ["cgst"], sgst: ["sgst"], igst: ["igst"], cess: ["cess"],
         rate: ["rate", "taxrate"], hsn: ["hsn", "hsncode"], total: ["invoicevalue", "total"], type: ["type"], order: ["orderid"]}
     }[kind] || {};
-    const idx = {}; Object.keys(C).forEach(k => { idx[k] = at(C[k]); });
+    const idx = {}, many = {};
+    Object.keys(C).forEach(k => {
+      idx[k] = at(C[k]);
+      many[k] = C[k].map(n => head.findIndex(x => String(x || "").toLowerCase().replace(/[^a-z0-9]/g, "") === n)).filter(i => i >= 0);
+    });
     const get = (r, k) => idx[k] >= 0 ? r[idx[k]] : "";
+    // a figure that arrives in pieces, like Amazon's item, shipping and gift wrap
+    const sum = (r, k) => (many[k] || []).reduce((a, i) => a + num(r[i]), 0);
+    const amount = (r, k) => {
+      if ((many[k] || []).length > 1) return sum(r, k);
+      return num(get(r, k));
+    };
     const byInvoice = new Map();
     rows.forEach(r => {
       if (!r || !r.length) return;
-      const no = String(get(r, "no") || get(r, "order") || "").trim();
-      if (!no) return;
       const typ = String(get(r, "type") || "").toLowerCase();
       const back = /refund|return|cancel|credit/.test(typ);
+      const cnIdx = at(["creditnoteno", "creditnotenumber"]);
+      const cn = back && cnIdx >= 0 ? String(r[cnIdx] || "").trim() : "";
+      const no = cn || String(get(r, "no") || get(r, "order") || "").trim();
+      if (!no) return;
+      const against = cn ? String(get(r, "no") || "").trim() : "";
       const sign = back ? -1 : 1;
       const key = no + "|" + (back ? "CN" : "INV");
-      const inv = byInvoice.get(key) || {no, date: this.date(get(r, "date")), party: String(get(r, "party") || "").trim(),
+      const inv = byInvoice.get(key) || {no, against, date: this.date(get(r, "date")), party: String(get(r, "party") || "").trim(),
         gstin: String(get(r, "gstin") || "").toUpperCase().replace(/[^A-Z0-9]/g, ""), pos: String(get(r, "pos") || "").trim(),
         hsn: String(get(r, "hsn") || "").trim(), taxable: 0, cgst: 0, sgst: 0, igst: 0, cess: 0, total: 0,
-        note: back ? "credit" : "", market: kind, lines: 0};
-      inv.taxable = r2(inv.taxable + sign * Math.abs(num(get(r, "taxable"))));
-      inv.cgst = r2(inv.cgst + sign * Math.abs(num(get(r, "cgst"))));
-      inv.sgst = r2(inv.sgst + sign * Math.abs(num(get(r, "sgst"))));
-      inv.igst = r2(inv.igst + sign * Math.abs(num(get(r, "igst"))));
-      inv.cess = r2(inv.cess + sign * Math.abs(num(get(r, "cess"))));
-      inv.total = r2(inv.total + sign * Math.abs(num(get(r, "total")) || (num(get(r, "taxable")) + num(get(r, "cgst")) + num(get(r, "sgst")) + num(get(r, "igst")))));
+        note: back ? "credit" : "", market: kind, lines: 0, tcs: 0};
+      const taxable = num(get(r, "taxable")) || sum(r, "taxableParts");
+      inv.taxable = r2(inv.taxable + sign * Math.abs(taxable));
+      inv.cgst = r2(inv.cgst + sign * Math.abs(amount(r, "cgst")));
+      inv.sgst = r2(inv.sgst + sign * Math.abs(amount(r, "sgst")));
+      inv.igst = r2(inv.igst + sign * Math.abs(amount(r, "igst")));
+      inv.cess = r2(inv.cess + sign * Math.abs(amount(r, "cess")));
+      inv.tcs = r2((inv.tcs || 0) + sign * Math.abs(sum(r, "tcs")));
+      inv.total = r2(inv.total + sign * Math.abs(num(get(r, "total")) || (taxable + amount(r, "cgst") + amount(r, "sgst") + amount(r, "igst"))));
       inv.lines++;
       if (!inv.date) inv.date = this.date(get(r, "date"));
       byInvoice.set(key, inv);
@@ -11502,11 +11521,11 @@ async function importMarketFile(file){
     r.invoices.forEach(inv => {
       const no = normInv(inv.no + (inv.note === "credit" ? "-CN" : ""));
       if (s.list.some(v => normInv(v.x.number) === no)){ again++; return; }
-      const x = {number: inv.no + (inv.note === "credit" ? " (CN)" : ""), date: inv.date, customerName: inv.party || (inv.gstin ? "" : "Retail customer"),
+      const x = {number: inv.no + (inv.note === "credit" && !/^cn/i.test(inv.no) ? " (CN)" : ""), againstInvoice: inv.against || "", date: inv.date, customerName: inv.party || (inv.gstin ? "" : "Retail customer"),
         customerGstin: /^\d{2}[A-Z]{5}\d{4}[A-Z][A-Z\d]Z[A-Z\d]$/.test(inv.gstin) ? inv.gstin : "",
         placeOfSupply: inv.pos, hsn: inv.hsn, taxable: Math.abs(inv.taxable), cgst: Math.abs(inv.cgst), sgst: Math.abs(inv.sgst),
         igst: Math.abs(inv.igst), cess: Math.abs(inv.cess), total: Math.abs(inv.total), rate: inv.rate,
-        noteKind: inv.note || "", ecommerce: inv.market};
+        noteKind: inv.note || "", ecommerce: inv.market, tcs: Math.abs(inv.tcs || 0)};
       const v = newInvoice(x, "market", {fileName: file.name, market: inv.market});
       s.list.push(v); mapInvoice(v); added++;
     });
