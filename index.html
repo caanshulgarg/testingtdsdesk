@@ -6099,15 +6099,43 @@ function viewBooks24Q(b){
     '<div class="dtile' + (checks.length ? " warn" : "") + '"><span>Before filing</span><b>' + checks.length + "</b><small>" + (checks.length ? esc(checks[0].what) : "nothing to fix") + "</small></div></div>";
   if (checks.length) h += '<section class="dash-card" style="margin-bottom:12px"><h3>Before filing</h3>' +
     checks.map(c => '<div class="dash-row"><span>' + esc(c.what) + "</span><b>" + c.n + '</b></div><p class="note">' + esc(c.how) + (c.who.length ? " e.g. " + esc(c.who.join(", ")) : "") + "</p>").join("") + "</section>";
-  h += '<section class="dash-card" style="margin-bottom:12px"><h3>Annexure I \u00b7 ' + esc(q) + '</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th class="n">Sl.</th><th>Employee</th><th>PAN</th><th class="n">Months</th><th class="n">Paid</th><th class="n">TDS</th></tr></thead><tbody>' +
-    a1.map((e, i) => '<tr><td class="n">' + (i + 1) + "</td><td>" + esc(e.name) + "</td><td>" + (/^[A-Z]{5}\d{4}[A-Z]$/.test(e.pan) ? esc(e.pan) : '<span class="tag warn">no PAN</span>') +
-      '</td><td class="n">' + e.months + '</td><td class="n">' + money(e.paid) + '</td><td class="n">' + money(e.tds) + "</td></tr>").join("") +
-    "</tbody></table>" + (a1.length ? "" : '<div class="bk-none">No salary rows in this quarter.</div>') + "</div></section>";
+  {
+    const f = S.q24F || {}, qq = String(f.q || "").toLowerCase();
+    const shown = a1.filter(e => (!qq || (e.name + " " + e.pan).toLowerCase().includes(qq)) &&
+      (f.pan !== "no" || !TDS24Q.rows().length || !/^[A-Z]{5}\d{4}[A-Z]$/.test(e.pan)) && (f.pan !== "yes" || /^[A-Z]{5}\d{4}[A-Z]$/.test(e.pan)));
+    h += filterBar("q24F", {placeholder: "Find an employee or PAN", table: "q24Table", title: CO().name + " 24Q " + q + " " + fy, excel: "q24Excel",
+      count: shown.length + " of " + a1.length + " employees",
+      selects: [{key: "pan", options: [["", "PAN: any"], ["no", "No valid PAN"], ["yes", "Has a PAN"]]}]});
+    h += '<section class="dash-card" style="margin-bottom:12px"><h3>Annexure I \u00b7 ' + esc(q) + '</h3>' +
+      '<div class="bk-tablewrap"><table class="bk-table" id="q24Table"><thead><tr><th>Employee</th><th>PAN</th><th class="n">Months</th><th class="n">Paid</th><th class="n">TDS</th></tr></thead><tbody>' +
+      shown.map(e => {
+        const key = e.pan || e.name, isOpen = S.q24Open === key;
+        let row = "<tr><td>" + '<button class="linkbtn" data-q24open="' + esc(key) + '">' + (isOpen ? "\u25be " : "\u25b8 ") + esc(e.name) + "</button></td><td>" +
+          (/^[A-Z]{5}\d{4}[A-Z]$/.test(e.pan) ? esc(e.pan) : '<span class="tag warn">no PAN</span>') +
+          '</td><td class="n"><button class="linkbtn" data-q24open="' + esc(key) + '">' + e.months + '</button></td><td class="n">' + money(e.paid) + '</td><td class="n"><b>' + money(e.tds) + "</b></td></tr>";
+        if (isOpen) row += '<tr><td colspan="5" style="background:var(--paper);padding:0"><table class="bk-table" style="margin:0"><thead><tr><th class="dt">Month</th><th class="n">Gross</th><th class="n">Exempt</th><th class="n">Chapter VI-A</th><th class="n">TDS</th></tr></thead><tbody>' +
+          e.rows.map(r => "<tr><td>" + fmtDate(r.date) + '</td><td class="n">' + money(r.gross) + '</td><td class="n">' + money(r.exempt) + '</td><td class="n">' + money(r.chapter6) + '</td><td class="n">' + money(r.tds) + "</td></tr>").join("") +
+          "</tbody></table></td></tr>";
+        return row;
+      }).join("") +
+      '<tr><td><b>Total</b></td><td></td><td class="n">' + shown.reduce((a, e) => a + e.months, 0) + '</td><td class="n">' + money(shown.reduce((a, e) => a + e.paid, 0)) +
+      '</td><td class="n"><b>' + money(shown.reduce((a, e) => a + e.tds, 0)) + "</b></td></tr>" +
+      "</tbody></table>" + (shown.length ? "" : '<div class="bk-none">Nothing matches.</div>') + "</div></section>";
+  }
   h += '<section class="dash-card"><h3>Annexure II \u00b7 the year ' + esc(fy) + ' <span class="note">(filed with the fourth quarter)</span></h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Employee</th><th>PAN</th><th>Regime</th><th class="n">Gross</th><th class="n">Exempt</th><th class="n">Standard</th><th class="n">Chapter VI-A</th><th class="n">Taxable</th><th class="n">TDS</th></tr></thead><tbody>' +
     a2.map(e => "<tr><td>" + esc(e.name) + "</td><td>" + esc(e.pan || "\u2014") + "</td><td>" + (e.regime === "N" ? "New" : e.regime === "O" ? "Old" : "\u2014") +
       '</td><td class="n">' + money(e.gross) + '</td><td class="n">' + money(e.exempt) + '</td><td class="n">' + money(e.standard) + '</td><td class="n">' + money(e.chapter6) +
       '</td><td class="n">' + money(e.taxable) + '</td><td class="n">' + money(e.tds) + "</td></tr>").join("") + "</tbody></table></div></section>";
   return h;
+}
+function filterBar(id, opts){
+  const f = S[id] || {};
+  return '<div class="revfilter"><input type="search" id="' + id + 'q" data-fk="' + id + 'q" data-keeptyped value="' + esc(f.q || "") + '" placeholder="' + esc(opts.placeholder || "Find") + '">' +
+    (opts.selects || []).map(sel => '<select data-' + id + sel.key + '>' + sel.options.map(([v, l]) => '<option value="' + v + '"' + ((f[sel.key] || "") === v ? " selected" : "") + ">" + esc(l) + "</option>").join("") + "</select>").join("") +
+    '<span class="note">' + esc(opts.count || "") + "</span>" +
+    (Object.keys(f).some(k => f[k]) ? '<button class="linkbtn" data-clearf="' + id + '">Clear</button>' : "") +
+    '<button class="btn small" data-printid="' + opts.table + '" data-printtitle="' + esc(opts.title || "") + '">Print or save as PDF</button>' +
+    (opts.excel ? '<button class="btn small" data-act="' + opts.excel + '">Excel</button>' : "") + "</div>";
 }
 function tdsFiltered(rows){
   const f = S.tdsF || {}, q = String(f.q || "").toLowerCase();
@@ -6260,9 +6288,34 @@ function viewGstr1(b){
   let h = '<div class="dash-tiles">' + box("B2B (4A)", GSTR.sum(g.b2b)) + box("B2C large (5)", GSTR.sum(g.b2cl)) + box("B2C small (7)", GSTR.sum(g.b2c)) + box("Notes (9B)", GSTR.sum(g.cdnr)) + "</div>" +
     '<div class="dash-tiles">' + box("Exports and SEZ (6)", GSTR.sum(g.exp)) + box("Nil, exempt, non-GST (8)", GSTR.sum(g.nil)) + box("Reverse charge (4B)", GSTR.sum(g.rcm)) + box("All outward", g.total) + "</div>";
   const rows = g.b2b.concat(g.b2cl).concat(g.b2c).concat(g.cdnr).concat(g.exp).concat(g.nil);
-  h += '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Part</th><th class="dt">Date</th><th>Invoice</th><th>Party</th><th>GSTIN</th><th class="n">Rate</th><th class="n">Taxable</th><th class="n">IGST</th><th class="n">CGST</th><th class="n">SGST</th></tr></thead><tbody>' +
-    rows.slice(0, 300).map(r => "<tr><td>" + r.kind + "</td><td>" + fmtDate(tallyDate(r.date)) + "</td><td>" + esc(r.no) + "</td><td>" + esc(r.party) + "</td><td>" + esc(r.gstin || "\u2014") + '</td><td class="n">' + r.rate + '%</td><td class="n">' + money(r.taxable) + '</td><td class="n">' + money(r.igst) + '</td><td class="n">' + money(r.cgst) + '</td><td class="n">' + money(r.sgst) + "</td></tr>").join("") +
-    "</tbody></table>" + (rows.length ? "" : '<div class="bk-none">No outward supplies in this month.</div>') + "</div>";
+  {
+    const f = S.r1F || {}, qq = String(f.q || "").toLowerCase();
+    const shown = rows.filter(r => (!qq || (r.party + " " + r.no + " " + r.gstin).toLowerCase().includes(qq)) && (!f.part || r.kind === f.part));
+    const by = {};
+    shown.forEach(r => {
+      const k = r.gstin || normName(r.party) || "retail";
+      const p = by[k] = by[k] || {party: r.party || "Retail customers", gstin: r.gstin, n: 0, taxable: 0, tax: 0, rows: []};
+      p.n++; p.taxable = r2(p.taxable + r.taxable); p.tax = r2(p.tax + r.igst + r.cgst + r.sgst); p.rows.push(r);
+    });
+    const parties = Object.values(by).sort((a, b) => b.taxable - a.taxable);
+    h += filterBar("r1F", {placeholder: "Find a customer, invoice or GSTIN", table: "r1Table", title: CO().name + " GSTR-1 " + GSTR.label(S.gstYm || ""), excel: "gstExcel",
+      count: parties.length + " customers \u00b7 " + shown.length + " of " + rows.length + " documents",
+      selects: [{key: "part", options: [["", "Every part"], ["B2B", "B2B (4A)"], ["B2CL", "B2C large (5)"], ["B2C", "B2C small (7)"], ["CDNR", "Credit notes (9B)"], ["EXP", "Exports (6)"], ["NIL", "Nil and exempt (8)"]]}]});
+    h += '<div class="bk-tablewrap"><table class="bk-table" id="r1Table"><thead><tr><th>Customer</th><th>GSTIN</th><th class="n">Documents</th><th class="n">Taxable</th><th class="n">Tax</th></tr></thead><tbody>' +
+      parties.map(p => {
+        const key = p.gstin || normName(p.party), isOpen = S.r1Open === key;
+        let row = "<tr><td>" + '<button class="linkbtn" data-r1open="' + esc(key) + '">' + (isOpen ? "\u25be " : "\u25b8 ") + esc(p.party) + "</button></td><td>" + esc(p.gstin || "\u2014") +
+          '</td><td class="n"><button class="linkbtn" data-r1open="' + esc(key) + '">' + p.n + '</button></td><td class="n">' + money(p.taxable) + '</td><td class="n"><b>' + money(p.tax) + "</b></td></tr>";
+        if (isOpen) row += '<tr><td colspan="5" style="background:var(--paper);padding:0"><table class="bk-table" style="margin:0"><thead><tr><th>Part</th><th class="dt">Date</th><th>Invoice</th><th>Place of supply</th><th class="n">Rate</th><th class="n">Taxable</th><th class="n">IGST</th><th class="n">CGST</th><th class="n">SGST</th></tr></thead><tbody>' +
+          p.rows.map(r => "<tr><td>" + r.kind + "</td><td>" + fmtDate(tallyDate(r.date)) + "</td><td>" + esc(r.no) + "</td><td>" + esc(r.pos || "") + '</td><td class="n">' + r.rate +
+            '%</td><td class="n">' + money(r.taxable) + '</td><td class="n">' + money(r.igst) + '</td><td class="n">' + money(r.cgst) + '</td><td class="n">' + money(r.sgst) + "</td></tr>").join("") +
+          "</tbody></table></td></tr>";
+        return row;
+      }).join("") +
+      '<tr><td><b>Total</b></td><td></td><td class="n">' + shown.length + '</td><td class="n">' + money(shown.reduce((a, r) => a + r.taxable, 0)) +
+      '</td><td class="n"><b>' + money(shown.reduce((a, r) => a + r.igst + r.cgst + r.sgst, 0)) + "</b></td></tr>" +
+      "</tbody></table>" + (parties.length ? "" : '<div class="bk-none">Nothing matches.</div>') + "</div>";
+  }
   h += '<section class="dash-card" style="margin-top:12px"><h3>HSN summary (12)</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>HSN</th><th>Goods or services</th><th class="n">Rate</th><th class="n">Invoices</th><th class="n">Taxable</th><th class="n">IGST</th><th class="n">CGST</th><th class="n">SGST</th></tr></thead><tbody>' +
     g.hsn.map(x => "<tr><td>" + (x.hsn ? esc(x.hsn) : '<span class="tag warn">no HSN</span>') + "</td><td>" + esc(x.supply || "") + '</td><td class="n">' + x.rate + '%</td><td class="n">' + x.n + '</td><td class="n">' + money(x.taxable) + '</td><td class="n">' + money(x.igst) + '</td><td class="n">' + money(x.cgst) + '</td><td class="n">' + money(x.sgst) + "</td></tr>").join("") + "</tbody></table></div></section>";
   if (g.ecoBy && g.ecoBy.length){
@@ -6351,6 +6404,44 @@ function viewBooks2B(b){
     '<td class="n">' + money(m.portal.igst + m.portal.cgst + m.portal.sgst) + '</td><td class="n">' + money(m.book.igst + m.book.cgst + m.book.sgst) + '</td><td class="n' + (Math.abs(m.d.igst + m.d.cgst + m.d.sgst) > 1 ? " bad" : "") + '">' + money(m.d.igst + m.d.cgst + m.d.sgst) + "</td></tr>";
   const oneRow = r => "<tr><td>" + esc(r.gstin) + "</td><td>" + esc(r.party) + "</td><td>" + esc(r.no) + "</td><td>" + esc(String(r.date).length === 8 ? fmtDate(tallyDate(r.date)) : r.date) + '</td><td class="n">' + r.rate + "%</td>" +
     '<td class="n">' + money(r.taxable) + '</td><td class="n">' + money(r.igst + r.cgst + r.sgst) + "</td><td>" + esc(r.itcavl === "N" ? "ITC not available" : r.rsn || r.type || "") + "</td></tr>";
+  {
+    const f = S.b2F || {}, qq = String(f.q || "").toLowerCase();
+    const pick = r => (r.portal || r);
+    const list = rowsFor.filter(r => !qq || ((pick(r).party || "") + " " + (pick(r).gstin || "") + " " + (pick(r).no || "")).toLowerCase().includes(qq));
+    const by = {};
+    list.forEach(r => {
+      const o = pick(r), k = o.gstin || normName(o.party);
+      const p = by[k] = by[k] || {party: o.party || "", gstin: o.gstin, n: 0, taxable: 0, tax: 0, diff: 0, rows: []};
+      p.n++; p.taxable = r2(p.taxable + num(o.taxable)); p.tax = r2(p.tax + num(o.igst) + num(o.cgst) + num(o.sgst));
+      if (r.d) p.diff = r2(p.diff + num(r.d.taxable));
+      p.rows.push(r);
+    });
+    const sup = Object.values(by).sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff) || b.taxable - a.taxable);
+    h += filterBar("b2F", {placeholder: "Find a supplier, GSTIN or invoice", table: "b2Table", title: CO().name + " GSTR-2B reconciliation " + (b.twoB.period || ""), excel: "twoBExcel",
+      count: sup.length + " suppliers \u00b7 " + list.length + " of " + rowsFor.length + " documents"});
+    h += '<div class="bk-tablewrap"><table class="bk-table" id="b2Table"><thead><tr><th>Supplier</th><th>GSTIN</th><th class="n">Documents</th><th class="n">Taxable</th><th class="n">Tax</th>' +
+      (show === "diff" ? '<th class="n">Difference</th>' : "") + "</tr></thead><tbody>" +
+      sup.map(p => {
+        const key = p.gstin || normName(p.party), isOpen = S.b2Open === key;
+        let row = "<tr><td>" + '<button class="linkbtn" data-b2open="' + esc(key) + '">' + (isOpen ? "\u25be " : "\u25b8 ") + esc(p.party || "\u2014") + "</button></td><td>" + esc(p.gstin || "") +
+          '</td><td class="n"><button class="linkbtn" data-b2open="' + esc(key) + '">' + p.n + '</button></td><td class="n">' + money(p.taxable) + '</td><td class="n">' + money(p.tax) + "</td>" +
+          (show === "diff" ? '<td class="n bad">' + money(p.diff) + "</td>" : "") + "</tr>";
+        if (isOpen){
+          row += '<tr><td colspan="6" style="background:var(--paper);padding:0"><table class="bk-table" style="margin:0">' +
+            (show === "matched" || show === "diff"
+              ? '<thead><tr><th>Invoice</th><th>Date</th><th class="n">Rate</th><th class="n">Taxable 2B</th><th class="n">Taxable books</th><th class="n">Difference</th><th class="n">Tax 2B</th><th class="n">Tax books</th></tr></thead><tbody>' +
+                p.rows.map(m => "<tr><td>" + esc(m.portal.no) + "</td><td>" + esc(m.portal.date) + '</td><td class="n">' + m.portal.rate + '%</td><td class="n">' + money(m.portal.taxable) +
+                  '</td><td class="n">' + money(m.book.taxable) + '</td><td class="n' + (Math.abs(m.d.taxable) > 1 ? " bad" : "") + '">' + money(m.d.taxable) +
+                  '</td><td class="n">' + money(m.portal.igst + m.portal.cgst + m.portal.sgst) + '</td><td class="n">' + money(m.book.igst + m.book.cgst + m.book.sgst) + "</td></tr>").join("")
+              : '<thead><tr><th>Invoice</th><th>Date</th><th class="n">Rate</th><th class="n">Taxable</th><th class="n">Tax</th><th>Note</th></tr></thead><tbody>' +
+                p.rows.map(r => "<tr><td>" + esc(r.no) + "</td><td>" + esc(String(r.date).length === 8 ? fmtDate(tallyDate(r.date)) : r.date) + '</td><td class="n">' + r.rate +
+                  '%</td><td class="n">' + money(r.taxable) + '</td><td class="n">' + money(r.igst + r.cgst + r.sgst) + "</td><td>" + esc(r.itcavl === "N" ? "ITC not available" : r.rsn || r.type || "") + "</td></tr>").join("")) +
+            "</tbody></table></td></tr>";
+        }
+        return row;
+      }).join("") + "</tbody></table>" + (sup.length ? "" : '<div class="bk-none">Nothing in this list.</div>') + "</div>";
+    return h;
+  }
   h += '<div class="bk-tablewrap"><table class="bk-table">' + (show === "matched" || show === "diff"
     ? '<thead><tr><th>GSTIN</th><th>Party</th><th>Invoice</th><th>Date</th><th class="n">Rate</th><th class="n">Taxable 2B</th><th class="n">Taxable books</th><th class="n">Difference</th><th class="n">Tax 2B</th><th class="n">Tax books</th><th class="n">Difference</th></tr></thead><tbody>' + rowsFor.slice(0, 300).map(pairRow).join("")
     : '<thead><tr><th>GSTIN</th><th>Party</th><th>Invoice</th><th>Date</th><th class="n">Rate</th><th class="n">Taxable</th><th class="n">Tax</th><th>Note</th></tr></thead><tbody>' + rowsFor.slice(0, 300).map(oneRow).join("")) +
@@ -13882,6 +13973,15 @@ document.addEventListener("click", ev => {
   if (t.dataset.bookstab){ S.booksTab = t.dataset.bookstab; render(); return; }
   if (t.dataset.gstpart){ S.gstPart = t.dataset.gstpart; render(); return; }
   if (t.dataset.tdspart){ S.tdsPart = t.dataset.tdspart; render(); return; }
+  if (t.dataset.q24open){ S.q24Open = S.q24Open === t.dataset.q24open ? "" : t.dataset.q24open; render(); return; }
+  if (t.dataset.r1open){ S.r1Open = S.r1Open === t.dataset.r1open ? "" : t.dataset.r1open; render(); return; }
+  if (t.dataset.b2open){ S.b2Open = S.b2Open === t.dataset.b2open ? "" : t.dataset.b2open; render(); return; }
+  if (t.dataset.clearf){ S[t.dataset.clearf] = {}; render(); return; }
+  if (t.dataset.printid){
+    const co = CO(), el = document.getElementById(t.dataset.printid);
+    printView(t.dataset.printtitle || co.name, "<h1>" + esc(co.name) + '</h1><p class="note">' + esc(t.dataset.printtitle || "") + " \u00b7 printed " + fmtDate(new Date().toISOString().slice(0, 10)) + "</p>" + (el ? el.outerHTML : ""));
+    return;
+  }
   if (t.dataset.tdsopen){ S.tdsOpen = S.tdsOpen === t.dataset.tdsopen ? "" : t.dataset.tdsopen; render(); return; }
   if (t.dataset.qgo){ S.tdsQ = t.dataset.qgo; S.tdsPart = "q26"; render(); return; }
   if (t.dataset.certdel){ S.books.certs = (S.books.certs || []).filter(c => c.id !== t.dataset.certdel); saveBooks(); render(); return; }
@@ -14405,6 +14505,17 @@ document.addEventListener("input", ev => {
   if (t && t.id === "revq"){ S.revQuery = t.value; softRender(); return; }
   if (t && t.id === "txnq"){ S.txnQ = t.value; later("txnq", render, 250); return; }
   if (t && t.id === "ledq"){ S.ledQ = t.value; later("ledq", render, 250); return; }
+  if (t && t.id && /^(q24F|r1F|b2F)q$/.test(t.id)){ const k = t.id.slice(0, -1); S[k] = Object.assign({}, S[k], {q: t.value}); later(t.id, render, 250); return; }
+  if (t && t.dataset){
+    // the browser lowercases attribute names, so match without case
+    const key = Object.keys(t.dataset).find(k => /^(q24f|r1f|b2f)./i.test(k));
+    if (key){
+      const which = key.toLowerCase().startsWith("q24f") ? ["q24F", 4] : key.toLowerCase().startsWith("r1f") ? ["r1F", 3] : ["b2F", 3];
+      const field = key.slice(which[1]);
+      S[which[0]] = Object.assign({}, S[which[0]], {[field]: t.value});
+      render(); return;
+    }
+  }
   if (t && t.id === "tdsq"){ S.tdsF = Object.assign({}, S.tdsF, {q: t.value}); later("tdsq", render, 250); return; }
   if (t && t.dataset && t.dataset.tdsfsec !== undefined){ S.tdsF = Object.assign({}, S.tdsF, {section: t.value}); render(); return; }
   if (t && t.dataset && t.dataset.tdsfch !== undefined){ S.tdsF = Object.assign({}, S.tdsF, {challan: t.value}); render(); return; }
