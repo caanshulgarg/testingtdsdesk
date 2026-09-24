@@ -751,7 +751,7 @@ const DEFAULT_FIRM = {firmName:"Garg Shekhar & Company", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "TEST · 24 Sep 2026 · build 101 (the reading card shows on every client screen, and keeps ticking)";
+const APP_VERSION = "TEST · 24 Sep 2026 · build 102 (TDS and GST from the Tally books: deductions, challans, 2B reconciliation)";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;
@@ -4554,7 +4554,9 @@ function render(){
   const banner = creditBanner() + (S.storeKind === "db" || (Cloud.on() && Cloud.st && !Cloud.st.error) ? "" :
     '<p class="banner">' + (S.storeKind === "local" || S.storeKind === "idb" ? "Your work is saved in this browser only. Clearing browser data will remove it." : "Your work is not being saved. It will be lost when you close this page.") + "</p>");
   let body;
-  if (S.view === "company" && CO() && !S.loadingCo && S.tab === "txn"){
+  if (S.view === "company" && CO() && !S.loadingCo && S.tab === "books"){
+    body = viewBooks();
+  } else if (S.view === "company" && CO() && !S.loadingCo && S.tab === "txn"){
     body = viewTransactions();
   } else if (S.view === "company" && CO() && !S.loadingCo && S.tab === "dash"){
     body = viewClientDash();
@@ -4619,6 +4621,7 @@ function renderSide(){
     inbox: '<path d="M3 13l3-8h12l3 8v6H3z"/><path d="M3 13h5l1.5 2.5h5L16 13h5"/>',
     setup: '<path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="8" cy="18" r="2"/>',
     txn: '<path d="M4 5h16v14H4z"/><path d="M4 9h16M9 9v10"/>',
+    books: '<path d="M5 4h9l5 5v11H5z"/><path d="M13 4v5h5"/><path d="M8 13h7M8 17h5"/>',
     clients: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.6c2.6.2 4.6 1.9 5.3 5.4"/>'
   };
   const item = (id, label, on, n, kind, attr) => '<button class="side-link" ' + (attr || ("data-nav=\"" + id + "\"")) + (on ? ' aria-current="page"' : "") + ">" +
@@ -4634,6 +4637,7 @@ function renderSide(){
       item("sales", "Sales", inCo && mod === "sales" && !isSetupTab(S.tab), 0, "sales", 'data-goclient="sales"') +
       item("inbox", "Inbox", inCo && S.tab === "clientInbox", docqCount(open.id), "inbox", 'data-goclient="inbox"') +
       item("txn", "Transactions", inCo && S.tab === "txn", 0, "txn", 'data-goclient="txn"') +
+      item("books", "TDS & GST", inCo && S.tab === "books", 0, "books", 'data-goclient="books"') +
       item("setup", "Client setup", inCo && isSetupTab(S.tab), 0, "setup", 'data-act="setup"');
   }
   h += '<div class="side-sep"></div>' + item("clients", "All clients", S.view === "home" && S.homeTab !== "rules", 0, "clients");
@@ -4724,11 +4728,11 @@ function clientHeader(){
   const co = CO(), setup = isSetupTab(S.tab), t = docType();
   const names = {bills: "Purchase bills", bank: "Bank", sales: "Sales invoices"};
   const inbox = docqCount(S.coId);
-  const title = S.tab === "dash" ? "Dashboard" : S.tab === "clientInbox" ? "Inbox" : S.tab === "txn" ? "Transactions" : setup ? "Client setup" : names[t];
+  const title = S.tab === "dash" ? "Dashboard" : S.tab === "clientInbox" ? "Inbox" : S.tab === "txn" ? "Transactions" : S.tab === "books" ? "TDS & GST from the books" : setup ? "Client setup" : names[t];
   let h = '<div class="tbar"><div class="tbar-title"><h2>' + title + '</h2><span class="note">' + esc(co.name) + "</span></div>" +
     '<div class="tbar-actions">' + (inbox && !setup && S.tab !== "clientInbox" ? '<button class="btn small" data-step="collect">\u{1F4E5} ' + inbox + " in inbox</button>" : "") +
     (setup ? '<button class="btn small" data-act="setup">Back to the work</button>' : (t === "sales" ? "" : '<button class="btn primary small" data-act="uploadHere">' + (t === "bank" ? "Upload statement" : "Upload bills") + "</button>")) + "</div></div>";
-  if (S.tab === "dash" || S.tab === "clientInbox" || S.tab === "txn") return h;
+  if (S.tab === "dash" || S.tab === "clientInbox" || S.tab === "txn" || S.tab === "books") return h;
   if (setup){
     return h + '<nav class="sbar" aria-label="Client setup">' + SETUP_TABS.map(([id, l]) => '<button data-tab="' + id + '" aria-selected="' + (S.tab === id) + '">' + l + "</button>").join("") + "</nav>";
   }
@@ -4799,7 +4803,7 @@ function viewCollect(){
   const inbox = docqPanel(S.coId);
   const card = t === "bank"
     ? '<section class="collect-card"><h3>Upload a bank statement</h3><div class="drop" id="bankDrop" tabindex="0" role="button" data-act="bankPick" aria-label="Upload a bank statement"><strong>Drop a statement here, or click to choose</strong>' +
-      '<div class="note">Excel, CSV or PDF from any bank. The balances are checked, and the statement is filed under the right account.</div></div><input type="file" id="bankIn" accept=".xls,.xlsx,.csv,.pdf,.txt" multiple class="hidden"></section>'
+      '<div class="note">Excel, CSV or PDF from any bank. The balances are checked, and the statement is filed under the right account.</div></div><input type="file" id="booksIn" accept=".xml" hidden><input type="file" id="twoBIn" accept=".json" hidden><input type="file" id="bankIn" accept=".xls,.xlsx,.csv,.pdf,.txt" multiple class="hidden"></section>'
     : '<section class="collect-card"><h3>Upload purchase bills</h3>' + uploadBlock(CO()) + "</section>";
   const mine = viewJobs(j => j.target === S.coId || j.cid === S.coId || j.target === "auto");
   return '<div class="collect">' + (inbox || '<p class="note" style="margin:0 0 12px">Nothing waiting in the inbox for ' + esc(CO().name) + ".</p>") + card +
@@ -4923,6 +4927,479 @@ function txnCsv(){
   const body = rows.map((r, i) => [i + 1, r.date, r.up, r.vch, r.no, r.party, tab === "bank" ? r.dr : r.taxable, tab === "bank" ? r.cr : r.gst, r.total, r.label, r.file]);
   const csv = [head].concat(body).map(line => line.map(v => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"').join(",")).join("\r\n");
   saveFile(co.name.replace(/[^A-Za-z0-9]+/g, "-") + "-" + tab + "-" + new Date().toISOString().slice(0, 10) + ".csv", new Blob(["\ufeff" + csv], {type: "text/csv"}));
+}
+
+/* ================================================================== */
+/* The client's books, read from Tally: vouchers, ledgers, mapping    */
+/* ================================================================== */
+const Books = {
+  // Tally exports can be very large, so the file is read in pieces and only what we use is kept
+  async importDayBook(file, onProgress){
+    const dec = await this.decoder(file);
+    const out = [], meta = {company: "", from: "", to: "", gstins: new Set()};
+    let buf = "", read = 0;
+    const reader = file.stream().getReader();
+    for (;;){
+      const {done, value} = await reader.read();
+      if (done) break;
+      read += value.length;
+      buf += dec.decode(value, {stream: true});
+      let cut;
+      while ((cut = buf.indexOf("</VOUCHER>")) >= 0){
+        const piece = buf.slice(0, cut + 10);
+        buf = buf.slice(cut + 10);
+        const start = piece.lastIndexOf("<VOUCHER ");
+        if (start >= 0) this.takeVoucher(piece.slice(start), out, meta);
+      }
+      if (buf.length > 400000) buf = buf.slice(-200000);
+      if (onProgress && out.length % 250 === 0) onProgress("Read " + out.length + " vouchers (" + Math.round(read / 1048576) + " MB)…");
+    }
+    buf += dec.decode();
+    let cut;
+    while ((cut = buf.indexOf("</VOUCHER>")) >= 0){
+      const piece = buf.slice(0, cut + 10); buf = buf.slice(cut + 10);
+      const start = piece.lastIndexOf("<VOUCHER ");
+      if (start >= 0) this.takeVoucher(piece.slice(start), out, meta);
+    }
+    meta.gstins = Array.from(meta.gstins);
+    const dates = out.map(v => v.date).filter(Boolean).sort();
+    meta.from = dates[0] || ""; meta.to = dates[dates.length - 1] || "";
+    return {vouchers: out, meta};
+  },
+  async decoder(file){
+    const head = new Uint8Array(await file.slice(0, 4).arrayBuffer());
+    if (head[0] === 0xFF && head[1] === 0xFE) return new TextDecoder("utf-16le");
+    if (head[0] === 0xFE && head[1] === 0xFF) return new TextDecoder("utf-16be");
+    return new TextDecoder("utf-8");
+  },
+  one(s, tag){ const m = s.match(new RegExp("<" + tag + ">([^<]*)</" + tag + ">")); return m ? m[1].replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").trim() : ""; },
+  takeVoucher(s, out, meta){
+    const type = (s.match(/VCHTYPE="([^"]*)"/) || [])[1] || "";
+    const v = {
+      id: this.one(s, "GUID") || (s.match(/REMOTEID="([^"]*)"/) || [])[1] || "",
+      date: this.one(s, "DATE"), type,
+      no: this.one(s, "VOUCHERNUMBER"), ref: this.one(s, "REFERENCE"), refDate: this.one(s, "REFERENCEDATE"),
+      party: this.one(s, "PARTYNAME") || this.one(s, "PARTYLEDGERNAME"),
+      gstin: this.one(s, "PARTYGSTIN"), pos: this.one(s, "PLACEOFSUPPLY"),
+      cmp: this.one(s, "CMPGSTIN"), narr: this.one(s, "NARRATION").slice(0, 120),
+      ent: []
+    };
+    if (v.cmp) meta.gstins.add(v.cmp);
+    const parts = s.split("<ALLLEDGERENTRIES.LIST>").slice(1);
+    parts.forEach(p => {
+      const e = p.split("</ALLLEDGERENTRIES.LIST>")[0];
+      const name = this.one(e, "LEDGERNAME");
+      if (!name) return;
+      v.ent.push({l: name, a: num(this.one(e, "AMOUNT")), r: num(this.one(e, "GSTRATE")) || null});
+    });
+    if (v.ent.length) out.push(v);
+  },
+  // what each ledger is: TDS section, GST tax, party or expense
+  mapLedgers(vouchers, saved){
+    const seen = new Map();
+    vouchers.forEach(v => v.ent.forEach(e => seen.set(e.l, (seen.get(e.l) || 0) + 1)));
+    const map = {};
+    seen.forEach((n, name) => {
+      const keep = (saved || {})[name];
+      if (keep && keep.byHand){ map[name] = Object.assign({n}, keep); return; }
+      map[name] = Object.assign({n}, this.guess(name), keep && keep.byHand ? keep : {});
+    });
+    return map;
+  },
+  guess(name){
+    const u = name.toUpperCase();
+    const sec = u.match(/\b(19[2-9][A-Z]{0,2}|206C[A-Z]?)\b/);
+    if (/TDS|TCS/.test(u) && sec){
+      const rate = (u.match(/(\d+(?:\.\d+)?)\s*%/) || [])[1];
+      return {kind: /RECEIVABLE/.test(u) ? "tds_receivable" : "tds_payable", section: sec[1], rate: rate ? num(rate) : null};
+    }
+    const gst = u.match(/\b(\d{2})?\s*(CGST|SGST|UTGST|IGST|CESS)\s*(INPUT|OUTPUT)?\b/);
+    if (gst && /INPUT|OUTPUT/.test(u)) return {kind: "gst", reg: gst[1] || "", tax: gst[2] === "UTGST" ? "SGST" : gst[2], side: gst[3] === "INPUT" ? "input" : "output"};
+    if (/\bROUND\s*(ED)?\s*OFF\b/.test(u)) return {kind: "roundoff"};
+    if (/BANK|CASH\b/.test(u)) return {kind: "bank"};
+    return {kind: ""};
+  },
+  ledgerOf(name){ return (S.books && S.books.map && S.books.map[name]) || {}; },
+  // the purchase and sales side of a voucher, ready for GST and TDS
+  lines(v){
+    const out = {taxable: 0, tax: {CGST: 0, SGST: 0, IGST: 0, CESS: 0}, tds: [], tdsPaid: [], party: 0, rates: {}, roundoff: 0};
+    v.ent.forEach(e => {
+      const m = Books.ledgerOf(e.l), amt = Math.abs(e.a), sign = e.a < 0 ? -1 : 1;
+      if (m.kind === "gst"){ out.tax[m.tax] = r2(out.tax[m.tax] + amt); return; }
+      if (m.kind === "tds_payable"){
+        if (e.a > 0) out.tds.push({ledger: e.l, section: m.section, rate: m.rate, amount: amt});   // credited: tax deducted
+        else out.tdsPaid.push({ledger: e.l, section: m.section, amount: amt});                      // debited: tax paid over
+        return;
+      }
+      if (m.kind === "roundoff"){ out.roundoff = r2(out.roundoff + e.a); return; }
+      if (e.l === v.party){ out.party = amt; return; }
+      if (m.kind === "bank" || m.kind === "tds_receivable") return;
+      out.taxable = r2(out.taxable + amt);
+      if (e.r){ const key = String(r2(e.r * 2)); out.rates[key] = r2((out.rates[key] || 0) + amt); }
+    });
+    out.total = r2(out.taxable + out.tax.CGST + out.tax.SGST + out.tax.IGST + out.tax.CESS + out.roundoff);
+    return out;
+  },
+  isPurchase(v){ return /PUR|PURCHASE/i.test(v.type) || /DEBIT NOTE/i.test(v.type); },
+  isSale(v){ return /SALE|SALES|CREDIT NOTE|EXPORT/i.test(v.type); },
+  async save(cid, data){
+    await IDBStore.write([["books:" + cid, data]]);
+  },
+  async load(cid){
+    try { return await IDBStore.get("books:" + cid); } catch (e){ return null; }
+  }
+};
+
+/* ================================================================== */
+/* TDS: deductions from the books, challans, and what is paid by what */
+/* ================================================================== */
+const TDS = {
+  STD: {"192B": [], "194A": [10], "194C": [1, 2], "194D": [5, 10], "194H": [2, 5], "194I": [2, 10], "194IA": [1], "194IB": [5], "194J": [2, 10], "194Q": [0.1], "194M": [2], "194N": [2, 5], "206C": [0.1, 1]},
+  // what was paid or credited: from the ledger's own rate, else from the section's usual rates, else the voucher's expense
+  baseFor(t, L, v){
+    if (t.rate) return {paid: r2(t.amount / (t.rate / 100)), rate: t.rate, how: "ledger"};
+    const cand = [];
+    if (L.taxable) cand.push(L.taxable);
+    v.ent.forEach(e => { const m = Books.ledgerOf(e.l); if (!m.kind && Math.abs(e.a) > 0) cand.push(Math.abs(e.a)); });
+    const std = this.STD[String(t.section).replace(/\s.*$/, "")] || [];
+    for (const rate of std){
+      const want = r2(t.amount / (rate / 100));
+      const hit = cand.find(c => Math.abs(c - want) <= Math.max(2, want * 0.005));
+      if (hit) return {paid: r2(hit), rate, how: "section"};
+      if (!cand.length) continue;
+    }
+    if (std.length && L.tds.length === 1 && !cand.some(c => std.some(rate => Math.abs(r2(t.amount / (rate / 100)) - c) <= 2))){
+      // the expense does not fit any usual rate: show the rate the books imply
+      const paid = L.taxable || 0;
+      return {paid, rate: paid ? r2(t.amount / paid * 100) : null, how: "books"};
+    }
+    const paid = L.tds.length === 1 ? L.taxable : 0;
+    return {paid, rate: paid ? r2(t.amount / paid * 100) : null, how: "books"};
+  },
+  qOf(d){ const m = num(String(d).slice(4, 6)); return m >= 4 && m <= 6 ? "Q1" : m >= 7 && m <= 9 ? "Q2" : m >= 10 && m <= 12 ? "Q3" : "Q4"; },
+  fyOf(d){ const y = num(String(d).slice(0, 4)), m = num(String(d).slice(4, 6)); return (m >= 4 ? y : y - 1) + "-" + String((m >= 4 ? y + 1 : y)).slice(2); },
+  // every voucher that carries a TDS ledger becomes one deduction row
+  rows(){
+    const b = S.books;
+    if (!b || !b.vouchers) return [];
+    const out = [];
+    b.vouchers.forEach(v => {
+      const L = Books.lines(v);
+      if (!L.tds.length) return;
+      L.tds.forEach(t => {
+        const B = this.baseFor(t, L, v), paid = B.paid;
+        out.push({
+          id: v.id + "|" + t.ledger, date: v.date, q: this.qOf(v.date), fy: this.fyOf(v.date),
+          party: v.party, pan: (b.pans || {})[v.party] || "", section: t.section, ledger: t.ledger,
+          paid: r2(paid), tds: r2(t.amount), rate: B.rate, rateFrom: B.how,
+          voucher: v.no || v.ref || "", type: v.type, challan: (b.alloc || {})[v.id + "|" + t.ledger] || ""
+        });
+      });
+    });
+    return out.sort((a, c) => String(a.date).localeCompare(String(c.date)));
+  },
+  // the TDS payment vouchers in the books: the challan's amount and date are already there
+  paymentsFromBooks(){
+    const b = S.books;
+    if (!b || !b.vouchers) return [];
+    const out = [];
+    b.vouchers.forEach(v => {
+      const L = Books.lines(v);
+      if (!L.tdsPaid.length) return;
+      const tax = r2(L.tdsPaid.reduce((a, t) => a + t.amount, 0));
+      if (!tax) return;
+      out.push({vid: v.id, date: v.date, tax, sections: Array.from(new Set(L.tdsPaid.map(t => t.section))), voucher: v.no || v.ref || "", narr: v.narr});
+    });
+    return out.sort((a, c) => String(a.date).localeCompare(String(c.date)));
+  },
+  challans(){ return ((S.books || {}).challans || []).slice().sort((a, b) => String(a.date).localeCompare(String(b.date))); },
+  // a challan pays several deductions; what is left of it matters
+  challanUse(){
+    const rows = this.rows(), used = {};
+    rows.forEach(r => { if (r.challan) used[r.challan] = r2((used[r.challan] || 0) + r.tds); });
+    return used;
+  },
+  // put deductions against challans of the same quarter and section, as a person would
+  autoAllocate(){
+    const b = S.books, rows = this.rows().filter(r => !r.challan), use = this.challanUse();
+    const ch = this.challans();
+    b.alloc = b.alloc || {};
+    let n = 0;
+    rows.forEach(r => {
+      const fit = ch.find(c => this.qOf(c.date) === r.q && this.fyOf(c.date) === r.fy &&
+        (!c.section || c.section === r.section) && r2(num(c.tax) - (use[c.id] || 0)) >= r.tds - 0.01);
+      if (fit){ b.alloc[r.id] = fit.id; use[fit.id] = r2((use[fit.id] || 0) + r.tds); n++; }
+    });
+    return n;
+  },
+  summary(fy, q){
+    const rows = this.rows().filter(r => (!fy || r.fy === fy) && (!q || r.q === q));
+    const bySec = {};
+    rows.forEach(r => {
+      const s = bySec[r.section] = bySec[r.section] || {section: r.section, count: 0, paid: 0, tds: 0, unallocated: 0, noPan: 0};
+      s.count++; s.paid = r2(s.paid + r.paid); s.tds = r2(s.tds + r.tds);
+      if (!r.challan) s.unallocated = r2(s.unallocated + r.tds);
+      if (!r.pan) s.noPan++;
+    });
+    return Object.values(bySec).sort((a, b) => a.section.localeCompare(b.section));
+  },
+  // the working file: challan table and the deductee annexure under each challan, as in Form 26Q
+  async toExcel(fy, q){
+    await ensureXlsx();
+    const rows = this.rows().filter(r => (!fy || r.fy === fy) && (!q || r.q === q));
+    const ch = this.challans().filter(c => (!fy || this.fyOf(c.date) === fy) && (!q || this.qOf(c.date) === q));
+    const use = this.challanUse();
+    const d = s => s ? String(s).slice(6, 8) + "/" + String(s).slice(4, 6) + "/" + String(s).slice(0, 4) : "";
+    const wb = XLSX.utils.book_new();
+    const cs = [["Challans", "", "", "", "", "", ""], ["BSR code", "Challan serial", "Date deposited", "Tax", "Interest", "Total", "Allocated", "Left"]]
+      .concat(ch.map(c => [c.bsr, c.serial, d(c.date), num(c.tax), num(c.interest), r2(num(c.tax) + num(c.interest)), use[c.id] || 0, r2(num(c.tax) - (use[c.id] || 0))]));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(cs), "Challans");
+    const head = ["Sl. No.", "Deductee code", "PAN", "Name of the deductee", "Section", "Date of payment or credit", "Amount paid or credited",
+      "TDS", "Total tax deducted", "Date of deduction", "Rate", "Voucher", "Challan BSR", "Challan serial", "Challan date"];
+    const body = rows.map((r, i) => {
+      const c = ch.find(x => x.id === r.challan) || {};
+      return [i + 1, r.pan && /^[A-Z]{3}C/.test(r.pan) ? "01" : "02", r.pan || "PANNOTAVBL", r.party, "9" + String(r.section).replace(/^19/, ""),
+        d(r.date), r.paid, r.tds, r.tds, d(r.date), r.rate, r.voucher, c.bsr || "", c.serial || "", d(c.date || "")];
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([head].concat(body)), "Deductees");
+    const sum = [["Section", "Deductions", "Amount paid", "TDS", "Not against a challan", "Without PAN"]]
+      .concat(this.summary(fy, q).map(s => [s.section, s.count, s.paid, s.tds, s.unallocated, s.noPan]));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sum), "Summary");
+    const out = XLSX.write(wb, {bookType: "xlsx", type: "array"});
+    saveFile(CO().name.replace(/[^A-Za-z0-9]+/g, "-") + "-26Q-" + (q || "all") + "-" + (fy || "") + ".xlsx", new Blob([out], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
+  }
+};
+
+/* ================================================================== */
+/* GSTR-2B against the books, matched rate-wise, in three buckets     */
+/* ================================================================== */
+const GST2B = {
+  normNo(s){ return String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, ""); },
+  dmy(s){ const p = String(s || "").split("-"); return p.length === 3 ? p[2] + p[1] + p[0] : ""; },
+  // the portal's JSON, flattened to one row per invoice and rate
+  fromJson(j){
+    const d = (j && j.data) || j || {};
+    const rows = [], dd = d.docdata || {};
+    const push = (sup, inv, kind) => {
+      const tax = r2(num(inv.igst) + num(inv.cgst) + num(inv.sgst));
+      const rate = num(inv.txval) ? r2(tax / num(inv.txval) * 100) : 0;
+      rows.push({kind, gstin: sup.ctin, party: sup.trdnm || "", no: inv.inum || inv.nt_num || "", noN: this.normNo(inv.inum || inv.nt_num),
+        date: this.dmy(inv.dt || inv.nt_dt), val: num(inv.val), rate: Math.round(rate * 100) / 100, taxable: num(inv.txval),
+        igst: num(inv.igst), cgst: num(inv.cgst), sgst: num(inv.sgst), cess: num(inv.cess),
+        itcavl: inv.itcavl, rsn: inv.rsn || "", pos: inv.pos || "", filed: sup.supfildt || "", typ: inv.typ || ""});
+    };
+    (dd.b2b || []).forEach(s => (s.inv || []).forEach(i => push(s, i, "b2b")));
+    (dd.cdnr || []).forEach(s => (s.nt || s.inv || []).forEach(i => push(s, i, "cdnr")));
+    (dd.b2ba || []).forEach(s => (s.inv || []).forEach(i => push(s, i, "b2ba")));
+    return {rows, period: d.rtnprd || "", gstin: d.gstin || "", generated: d.gendt || "", summary: d.itcsumm || null};
+  },
+  // the purchase side of the books, one row per invoice and rate
+  bookRows(period){
+    const b = S.books;
+    if (!b || !b.vouchers) return [];
+    const out = [];
+    b.vouchers.forEach(v => {
+      if (!Books.isPurchase(v) || !v.gstin) return;
+      if (period && String(v.date).slice(0, 6) !== period) return;
+      const L = Books.lines(v);
+      const tax = r2(L.tax.CGST + L.tax.SGST + L.tax.IGST);
+      if (!L.taxable && !tax) return;
+      const rate = L.taxable ? Math.round(tax / L.taxable * 10000) / 100 : 0;
+      out.push({id: v.id, gstin: v.gstin, party: v.party, no: v.ref || v.no || "", noN: this.normNo(v.ref || v.no),
+        date: v.date, rate, taxable: L.taxable, igst: L.tax.IGST, cgst: L.tax.CGST, sgst: L.tax.SGST, cess: L.tax.CESS,
+        val: L.total, voucher: v.no || "", type: v.type});
+    });
+    return out;
+  },
+  // matched, matched with a difference, only in 2B, only in the books
+  reconcile(portal, books){
+    const left = books.slice(), matched = [], diff = [], only2b = [];
+    const key = r => r.gstin + "|" + r.noN;
+    const byKey = new Map();
+    left.forEach((r, i) => { const k = key(r); (byKey.get(k) || byKey.set(k, []).get(k)).push(i); });
+    const taken = new Set();
+    portal.forEach(p => {
+      const cands = (byKey.get(key(p)) || []).filter(i => !taken.has(i));
+      let pick = cands.find(i => Math.abs(left[i].taxable - p.taxable) <= 1 && Math.abs((left[i].igst + left[i].cgst + left[i].sgst) - (p.igst + p.cgst + p.sgst)) <= 1);
+      if (pick === undefined) pick = cands[0];
+      if (pick === undefined){
+        // the number may differ by its prefix, so try the last digits with the same amount
+        const loose = books.findIndex((r, i) => !taken.has(i) && r.gstin === p.gstin && Math.abs(r.taxable - p.taxable) <= 1 &&
+          (r.noN.endsWith(p.noN.slice(-6)) || p.noN.endsWith(r.noN.slice(-6))));
+        if (loose >= 0) pick = loose;
+      }
+      if (pick === undefined){ only2b.push(p); return; }
+      taken.add(pick);
+      const bk = left[pick];
+      const d = {taxable: r2(p.taxable - bk.taxable), igst: r2(p.igst - bk.igst), cgst: r2(p.cgst - bk.cgst), sgst: r2(p.sgst - bk.sgst)};
+      const same = Math.abs(d.taxable) <= 1 && Math.abs(d.igst) <= 1 && Math.abs(d.cgst) <= 1 && Math.abs(d.sgst) <= 1;
+      (same ? matched : diff).push({portal: p, book: bk, d});
+    });
+    const onlyBooks = books.filter((r, i) => !taken.has(i));
+    return {matched, diff, only2b, onlyBooks};
+  },
+  totals(rows, f){ return rows.reduce((a, r) => { const x = f ? f(r) : r; return {taxable: r2(a.taxable + num(x.taxable)), tax: r2(a.tax + num(x.igst) + num(x.cgst) + num(x.sgst))}; }, {taxable: 0, tax: 0}); },
+  async toExcel(res, period){
+    await ensureXlsx();
+    const d = s => String(s).length === 8 ? String(s).slice(6, 8) + "-" + String(s).slice(4, 6) + "-" + String(s).slice(0, 4) : s;
+    const head = ["AS PER GST-2B", "", "", "", "", "", "", "", "", "", "AS PER TALLY", "", "", "", "", "DIFFERENCE", "", "", ""];
+    const cols = ["GSTIN NO.", "PARTY NAME", "INV. NO.", "INV DATE", "INV VALUE", "RATE", "TAXABLE", "IGST", "CGST", "SGST",
+      "INV. NO.", "INV DATE", "TAXABLE", "IGST", "CGST", "SGST", "TAXABLE", "IGST", "CGST", "SGST"];
+    const pair = m => [m.portal.gstin, m.portal.party, m.portal.no, m.portal.date, m.portal.val, m.portal.rate, m.portal.taxable, m.portal.igst, m.portal.cgst, m.portal.sgst,
+      m.book.no, d(m.book.date), m.book.taxable, m.book.igst, m.book.cgst, m.book.sgst, m.d.taxable, m.d.igst, m.d.cgst, m.d.sgst];
+    const wb = XLSX.utils.book_new();
+    const b2b = res.matched.concat(res.diff).filter(m => m.portal.kind !== "cdnr").map(pair);
+    const cdnr = res.matched.concat(res.diff).filter(m => m.portal.kind === "cdnr").map(pair);
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([head, cols].concat(b2b)), "B2B");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([head, cols].concat(cdnr)), "CDNR");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["GSTIN NO.", "PARTY NAME", "VCH NO.", "INV DATE", "INV VALUE", "RATE", "TAXABLE", "IGST", "CGST", "SGST", "Remarks"]]
+      .concat(res.onlyBooks.map(r => [r.gstin, r.party, r.no, d(r.date), r.val, r.rate, r.taxable, r.igst, r.cgst, r.sgst, "ITC BOOKED IN TALLY"]))), "ITC Taken But Not Shown In 2B");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["GSTIN NO.", "PARTY NAME", "INV. NO.", "INV DATE", "INV VALUE", "RATE", "TAXABLE", "IGST", "CGST", "SGST", "ITC available", "Reason", "Supplier filed"]]
+      .concat(res.only2b.map(r => [r.gstin, r.party, r.no, r.date, r.val, r.rate, r.taxable, r.igst, r.cgst, r.sgst, r.itcavl, r.rsn, r.filed]))), "In 2B Not In Books");
+    const out = XLSX.write(wb, {bookType: "xlsx", type: "array"});
+    saveFile(CO().name.replace(/[^A-Za-z0-9]+/g, "-") + "-2B-reco-" + (period || "") + ".xlsx", new Blob([out], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
+  }
+};
+
+/* ---------- Books, TDS and GST: the screens ---------- */
+function booksTab(){ return S.booksTab || "import"; }
+async function openBooks(cid){
+  if (S.books && S.books.cid === cid) return;
+  S.books = {cid, loading: true};
+  render();
+  const saved = await Books.load(cid);
+  S.books = saved && saved.cid === cid ? Object.assign({loading: false}, saved) : {cid, loading: false, vouchers: [], map: {}, challans: [], alloc: {}, pans: {}};
+  render();
+}
+async function saveBooks(){ const b = S.books; if (b && b.cid) await Books.save(b.cid, {cid: b.cid, vouchers: b.vouchers, map: b.map, meta: b.meta, challans: b.challans, alloc: b.alloc, pans: b.pans, twoB: b.twoB}); }
+function viewBooks(){
+  const co = CO();
+  if (!S.books || S.books.cid !== co.id){ openBooks(co.id); return '<p class="note">Opening the books…</p>'; }
+  const b = S.books, tab = booksTab(), n = (b.vouchers || []).length;
+  let h = '<nav class="sbar" aria-label="Books">' + [["import", "From Tally", n || null], ["ledgers", "Ledgers", n ? Object.keys(b.map || {}).length : null], ["tds", "TDS", n ? TDS.rows().length : null], ["gst", "GST 2B", b.twoB ? b.twoB.rows.length : null]]
+    .map(([id, label, c]) => '<button data-bookstab="' + id + '" aria-selected="' + (tab === id) + '">' + label + (c == null ? "" : ' <span class="sbar-n">' + c + "</span>") + "</button>").join("") + "</nav>";
+  if (b.busy) h += busyCard("Reading the books…", b.busy, 0, 0);
+  if (tab === "import") h += viewBooksImport(b);
+  else if (!n) h += '<div class="bk-none">Bring the day book in first, under “From Tally”.</div>';
+  else if (tab === "ledgers") h += viewBooksLedgers(b);
+  else if (tab === "tds") h += viewBooksTds(b);
+  else h += viewBooks2B(b);
+  return h;
+}
+function viewBooksImport(b){
+  const m = b.meta || {};
+  return '<section class="dash-card" style="max-width:760px"><h3>Bring the books in from Tally</h3>' +
+    '<p class="note">In Tally: <b>Display → Day Book</b>, set the period, then <b>Export</b> as XML. Bring that file here. Nothing is sent anywhere; it is read on this computer.</p>' +
+    '<div class="row" style="gap:8px;margin:10px 0"><button class="btn primary" data-act="booksPick">Choose the day book XML</button>' +
+    (b.vouchers && b.vouchers.length ? '<button class="btn small" data-act="booksClear">Remove what is here</button>' : "") + "</div>" +
+    (b.vouchers && b.vouchers.length
+      ? '<div class="dash-row"><span>Vouchers</span><b>' + b.vouchers.length + "</b></div>" +
+        '<div class="dash-row"><span>Period</span><b>' + fmtDate(tallyDate(m.from)) + " to " + fmtDate(tallyDate(m.to)) + "</b></div>" +
+        '<div class="dash-row"><span>Registrations in the file</span><b>' + esc((m.gstins || []).join(", ") || "—") + "</b></div>" +
+        '<div class="dash-row"><span>Read on</span><b>' + esc(m.at ? fmtDate(String(m.at).slice(0, 10)) : "—") + "</b></div>"
+      : '<p class="note">Nothing here yet.</p>') + "</section>";
+}
+function tallyDate(s){ return s && String(s).length === 8 ? String(s).slice(0, 4) + "-" + String(s).slice(4, 6) + "-" + String(s).slice(6, 8) : ""; }
+function viewBooksLedgers(b){
+  const kinds = [["", "—"], ["tds_payable", "TDS payable"], ["tds_receivable", "TDS receivable"], ["gst", "GST"], ["bank", "Bank or cash"], ["roundoff", "Round off"]];
+  const list = Object.entries(b.map).sort((a, c) => c[1].n - a[1].n);
+  const q = String(S.ledQ || "").toLowerCase();
+  const shown = list.filter(([name, m]) => !q || name.toLowerCase().includes(q) || String(m.section || "").toLowerCase().includes(q));
+  const guessed = list.filter(([, m]) => m.kind && !m.byHand).length;
+  return '<section><p class="note">What each ledger means. ' + guessed + ' of ' + list.length + ' were recognised from their names; correct any that are wrong and it is remembered.</p>' +
+    '<div class="revfilter"><input type="search" id="ledq" data-fk="ledq" data-keeptyped value="' + esc(S.ledQ || "") + '" placeholder="Find a ledger"><span class="note">' + shown.length + " of " + list.length + "</span></div>" +
+    '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Ledger</th><th class="n">Used</th><th>Means</th><th>Section</th><th class="n">Rate</th></tr></thead><tbody>' +
+    shown.slice(0, 400).map(([name, m]) => "<tr><td>" + esc(name) + '</td><td class="n">' + m.n + "</td>" +
+      '<td><select data-ledkind="' + esc(name) + '">' + kinds.map(([v, l]) => '<option value="' + v + '"' + ((m.kind || "") === v ? " selected" : "") + ">" + l + "</option>").join("") + "</select></td>" +
+      '<td>' + (m.kind === "tds_payable" || m.kind === "tds_receivable" ? '<input type="text" data-ledsec="' + esc(name) + '" data-fk="sec-' + esc(name) + '" value="' + esc(m.section || "") + '" style="width:80px">' : m.kind === "gst" ? esc((m.reg ? m.reg + " " : "") + (m.tax || "") + " " + (m.side || "")) : "") + "</td>" +
+      '<td class="n">' + (m.rate != null && m.kind === "tds_payable" ? m.rate + "%" : "") + "</td></tr>").join("") +
+    "</tbody></table></div></section>";
+}
+function viewBooksTds(b){
+  const fy = S.tdsFy || "", q = S.tdsQ || "";
+  const rows = TDS.rows().filter(r => (!fy || r.fy === fy) && (!q || r.q === q));
+  const fys = Array.from(new Set(TDS.rows().map(r => r.fy))).sort();
+  const sum = TDS.summary(fy, q), ch = TDS.challans(), use = TDS.challanUse();
+  const money = v => INR.format(r2(v || 0));
+  let h = '<div class="revfilter"><select data-tdsfy><option value="">All years</option>' + fys.map(f => '<option value="' + f + '"' + (fy === f ? " selected" : "") + ">" + f + "</option>").join("") + "</select>" +
+    '<select data-tdsq><option value="">All quarters</option>' + ["Q1", "Q2", "Q3", "Q4"].map(x => '<option value="' + x + '"' + (q === x ? " selected" : "") + ">" + x + "</option>").join("") + "</select>" +
+    '<span class="note">' + rows.length + " deductions</span>" +
+    '<button class="btn small" data-act="tdsAuto">Put them against challans</button><button class="btn small" data-act="tdsExcel">Download the 26Q working</button></div>';
+  h += '<div class="dash-tiles" style="grid-template-columns:repeat(3,minmax(0,1fr))">' +
+    '<div class="dtile"><span>TDS deducted</span><b>' + money(rows.reduce((a, r) => a + r.tds, 0)) + '</b><small>on ' + money(rows.reduce((a, r) => a + r.paid, 0)) + " paid or credited</small></div>" +
+    '<div class="dtile' + (rows.some(r => !r.challan) ? " warn" : "") + '"><span>Not against a challan</span><b>' + money(rows.filter(r => !r.challan).reduce((a, r) => a + r.tds, 0)) + "</b><small>" + rows.filter(r => !r.challan).length + " deductions</small></div>" +
+    '<div class="dtile' + (rows.some(r => !r.pan) ? " warn" : "") + '"><span>Without PAN</span><b>' + rows.filter(r => !r.pan).length + "</b><small>bring in the ledger masters</small></div></div>";
+  const pays = TDS.paymentsFromBooks().filter(p => (!fy || TDS.fyOf(p.date) === fy) && (!q || TDS.qOf(p.date) === q))
+    .filter(p => !ch.some(c => c.date === p.date && Math.abs(num(c.tax) - p.tax) < 1));
+  if (pays.length) h += '<section class="dash-card" style="margin-bottom:12px"><h3>Paid to the government, from the books</h3>' +
+    '<p class="note">These are the TDS payment vouchers in Tally. Add the BSR code and challan serial number to each and it becomes a challan.</p>' +
+    '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Date</th><th class="n">Tax</th><th>Sections</th><th>Voucher</th><th>BSR code</th><th>Serial</th><th class="ac"></th></tr></thead><tbody>' +
+    pays.map(p => '<tr><td>' + fmtDate(tallyDate(p.date)) + '</td><td class="n">' + money(p.tax) + "</td><td>" + esc(p.sections.join(", ")) + "</td><td>" + esc(p.voucher) + "</td>" +
+      '<td><input type="text" data-paybsr="' + p.vid + '" data-fk="pb-' + p.vid + '" placeholder="0240020" style="width:100px"></td>' +
+      '<td><input type="text" data-payser="' + p.vid + '" data-fk="ps-' + p.vid + '" placeholder="00979" style="width:90px"></td>' +
+      '<td class="ac"><button class="btn small" data-paymake="' + p.vid + '">Make it a challan</button></td></tr>').join("") +
+    "</tbody></table></div></section>";
+  h += '<section class="dash-card" style="margin-bottom:12px"><h3>Challans</h3>' +
+    '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>BSR code</th><th>Serial</th><th>Deposited</th><th class="n">Tax</th><th class="n">Interest</th><th class="n">Used</th><th class="n">Left</th><th class="ac"></th></tr></thead><tbody>' +
+    ch.map(c => '<tr><td>' + esc(c.bsr) + '</td><td>' + esc(c.serial) + '</td><td>' + fmtDate(tallyDate(c.date)) + '</td><td class="n">' + money(c.tax) + '</td><td class="n">' + money(c.interest) +
+      '</td><td class="n">' + money(use[c.id] || 0) + '</td><td class="n">' + money(num(c.tax) - (use[c.id] || 0)) + '</td><td class="ac"><button class="icon danger" data-chdel="' + c.id + '">\u2715</button></td></tr>').join("") +
+    '<tr><td><input type="text" id="chBsr" data-fk="chBsr" placeholder="0240020" style="width:100px"></td><td><input type="text" id="chSer" data-fk="chSer" placeholder="00979" style="width:90px"></td>' +
+    '<td><input type="date" id="chDate" data-fk="chDate"></td><td class="n"><input type="text" inputmode="decimal" id="chTax" data-fk="chTax" placeholder="tax" style="width:110px;text-align:right"></td>' +
+    '<td class="n"><input type="text" inputmode="decimal" id="chInt" data-fk="chInt" placeholder="interest" style="width:110px;text-align:right"></td><td colspan="2"></td>' +
+    '<td class="ac"><button class="btn small" data-act="chAdd">Add</button></td></tr>' +
+    "</tbody></table></div></section>";
+  h += '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th class="dt">Date</th><th>Deductee</th><th>PAN</th><th>Section</th><th class="n">Paid or credited</th><th class="n">Rate</th><th class="n">TDS</th><th>Challan</th></tr></thead><tbody>' +
+    rows.slice(0, 500).map(r => {
+      const c = ch.find(x => x.id === r.challan);
+      return "<tr><td>" + fmtDate(tallyDate(r.date)) + "</td><td>" + esc(r.party) + '</td><td>' + (r.pan ? esc(r.pan) : '<span class="tag warn">no PAN</span>') + "</td><td>" + esc(r.section) + '</td>' +
+        '<td class="n">' + money(r.paid) + '</td><td class="n">' + (r.rate != null ? r.rate + "%" : "") + '</td><td class="n">' + money(r.tds) + "</td>" +
+        '<td><select data-alloc="' + esc(r.id) + '"><option value="">— not yet —</option>' + ch.map(x => '<option value="' + x.id + '"' + (r.challan === x.id ? " selected" : "") + ">" + esc(x.bsr + "/" + x.serial) + "</option>").join("") + "</select></td></tr>";
+    }).join("") + "</tbody></table>" + (rows.length > 500 ? '<p class="note">Showing the first 500. The download has them all.</p>' : "") + "</div>";
+  h += '<section class="dash-card" style="margin-top:12px"><h3>By section</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Section</th><th class="n">Deductions</th><th class="n">Paid or credited</th><th class="n">TDS</th><th class="n">Not against a challan</th></tr></thead><tbody>' +
+    sum.map(s => "<tr><td>" + esc(s.section) + '</td><td class="n">' + s.count + '</td><td class="n">' + money(s.paid) + '</td><td class="n">' + money(s.tds) + '</td><td class="n">' + money(s.unallocated) + "</td></tr>").join("") + "</tbody></table></div></section>";
+  return h;
+}
+function viewBooks2B(b){
+  if (!b.twoB) return '<section class="dash-card" style="max-width:720px"><h3>GSTR-2B reconciliation</h3>' +
+    '<p class="note">Download the GSTR-2B JSON from the portal (Returns → GSTR-2B → Download JSON) and bring it here. It is matched against the purchases in the books, rate by rate.</p>' +
+    '<button class="btn primary" data-act="twoBPick">Choose the 2B JSON</button></section>';
+  // the 2B must belong to this company and to a period the books cover
+  const regs = (b.meta && b.meta.gstins) || [];
+  const period = b.twoB.period || "";
+  const pYm = period.length === 6 ? period.slice(2) + period.slice(0, 2) : "";
+  const inBooks = !pYm || !b.meta || (pYm >= String(b.meta.from).slice(0, 6) && pYm <= String(b.meta.to).slice(0, 6));
+  const rightCo = !regs.length || regs.includes(b.twoB.gstin);
+  let warn = "";
+  if (!rightCo) warn = "This 2B is for " + esc(b.twoB.gstin) + ", but the books here are for " + esc(regs.join(" and ")) + ". Nothing will match.";
+  else if (!inBooks) warn = "This 2B is for " + esc(fmtDate(pYm.slice(0, 4) + "-" + pYm.slice(4, 6) + "-01")).replace(/^\d+ /, "") + ", and the books here run " +
+    fmtDate(tallyDate(b.meta.from)) + " to " + fmtDate(tallyDate(b.meta.to)) + ". Nothing will match.";
+  const res = b.reco || GST2B.reconcile(b.twoB.rows, GST2B.bookRows(rightCo && inBooks ? pYm : ""));
+  b.reco = res;
+  const money = v => INR.format(r2(v || 0));
+  const t = (rows, f) => GST2B.totals(rows, f);
+  const tile = (label, rows, f, cls) => '<button class="dtile' + (cls || "") + '" data-2btab="' + label.replace(/\W/g, "") + '"><span>' + label + "</span><b>" + rows.length + "</b><small>" + money(t(rows, f).tax) + " tax</small></button>";
+  let h = warn ? '<div class="bk-alert bad"><b>' + warn + "</b> Load the 2B for this company and a month inside the books, or bring in the matching day book.</div>" : "";
+  h += '<div class="revfilter"><span class="note">2B for ' + esc(b.twoB.period) + " · " + esc(b.twoB.gstin) + " · " + b.twoB.rows.length + " documents</span>" +
+    '<button class="btn small" data-act="twoBPick">Load another 2B</button><button class="btn small" data-act="twoBExcel">Download the reconciliation</button></div>';
+  h += '<div class="dash-tiles">' +
+    tile("Matched", res.matched, m => m.portal) +
+    tile("With a difference", res.diff, m => m.portal, " warn") +
+    tile("In 2B, not in books", res.only2b, null, " warn") +
+    tile("In books, not in 2B", res.onlyBooks, null, " warn") + "</div>";
+  const show = S.twoBTab || "diff";
+  const rowsFor = {matched: res.matched, diff: res.diff, only2b: res.only2b, books: res.onlyBooks}[show] || res.diff;
+  h += '<nav class="sbar">' + [["matched", "Matched"], ["diff", "With a difference"], ["only2b", "In 2B, not in books"], ["books", "In books, not in 2B"]]
+    .map(([id, l]) => '<button data-2btab="' + id + '" aria-selected="' + (show === id) + '">' + l + "</button>").join("") + "</nav>";
+  const pairRow = m => "<tr><td>" + esc(m.portal.gstin) + "</td><td>" + esc(m.portal.party) + "</td><td>" + esc(m.portal.no) + "</td><td>" + esc(m.portal.date) + '</td><td class="n">' + m.portal.rate + "%</td>" +
+    '<td class="n">' + money(m.portal.taxable) + '</td><td class="n">' + money(m.book.taxable) + '</td><td class="n' + (Math.abs(m.d.taxable) > 1 ? " bad" : "") + '">' + money(m.d.taxable) + "</td>" +
+    '<td class="n">' + money(m.portal.igst + m.portal.cgst + m.portal.sgst) + '</td><td class="n">' + money(m.book.igst + m.book.cgst + m.book.sgst) + '</td><td class="n' + (Math.abs(m.d.igst + m.d.cgst + m.d.sgst) > 1 ? " bad" : "") + '">' + money(m.d.igst + m.d.cgst + m.d.sgst) + "</td></tr>";
+  const oneRow = r => "<tr><td>" + esc(r.gstin) + "</td><td>" + esc(r.party) + "</td><td>" + esc(r.no) + "</td><td>" + esc(String(r.date).length === 8 ? fmtDate(tallyDate(r.date)) : r.date) + '</td><td class="n">' + r.rate + "%</td>" +
+    '<td class="n">' + money(r.taxable) + '</td><td class="n">' + money(r.igst + r.cgst + r.sgst) + "</td><td>" + esc(r.itcavl === "N" ? "ITC not available" : r.rsn || r.type || "") + "</td></tr>";
+  h += '<div class="bk-tablewrap"><table class="bk-table">' + (show === "matched" || show === "diff"
+    ? '<thead><tr><th>GSTIN</th><th>Party</th><th>Invoice</th><th>Date</th><th class="n">Rate</th><th class="n">Taxable 2B</th><th class="n">Taxable books</th><th class="n">Difference</th><th class="n">Tax 2B</th><th class="n">Tax books</th><th class="n">Difference</th></tr></thead><tbody>' + rowsFor.slice(0, 300).map(pairRow).join("")
+    : '<thead><tr><th>GSTIN</th><th>Party</th><th>Invoice</th><th>Date</th><th class="n">Rate</th><th class="n">Taxable</th><th class="n">Tax</th><th>Note</th></tr></thead><tbody>' + rowsFor.slice(0, 300).map(oneRow).join("")) +
+    "</tbody></table>" + (rowsFor.length ? "" : '<div class="bk-none">Nothing in this list.</div>') + "</div>";
+  return h;
 }
 
 /* ---------- The client's dashboard ---------- */
@@ -9234,6 +9711,31 @@ function bulkLedgerFrom(inp){
 }
 function bankChange(t){
   const b = B(); if (!b) return false;
+  if (t.id === "booksIn"){
+    const f = (t.files || [])[0]; t.value = "";
+    if (!f) return true;
+    const b = S.books; b.busy = "Opening " + f.name + "\u2026"; render();
+    Books.importDayBook(f, m => { b.busy = m; softRender(); }).then(async res => {
+      b.vouchers = res.vouchers; b.meta = Object.assign(res.meta, {at: new Date().toISOString(), file: f.name});
+      b.map = Books.mapLedgers(res.vouchers, b.map); b.reco = null; b.busy = "";
+      await saveBooks();
+      toast(res.vouchers.length + " vouchers read, " + Object.keys(b.map).length + " ledgers found. Check the ledgers, then TDS and GST.");
+      S.booksTab = "ledgers"; render();
+    }, e => { b.busy = ""; toast("Could not read that file: " + (e && e.message || e)); render(); });
+    return true;
+  }
+  if (t.id === "twoBIn"){
+    const f = (t.files || [])[0]; t.value = "";
+    if (!f) return true;
+    f.text().then(txt => {
+      const j = JSON.parse(txt);
+      S.books.twoB = GST2B.fromJson(j);
+      S.books.reco = null; saveBooks();
+      toast("2B for " + S.books.twoB.period + " read: " + S.books.twoB.rows.length + " documents.");
+      render();
+    }, e => toast("That file could not be read as a 2B JSON."));
+    return true;
+  }
   if (t.id === "bankIn"){
     const files = Array.from(t.files || []).filter(isBankFile); t.value = "";
     const bnk = B();
@@ -12239,6 +12741,20 @@ document.addEventListener("click", ev => {
   if (S.view === "company" && S.tab === "sales" && salesClick(t)) return;
   if (t.id === "modal"){ if (ev.target.id === "modal") closeSwitcher(); return; }
   if (t.dataset.open){ openCompany(t.dataset.open); return; }
+  if (t.dataset.bookstab){ S.booksTab = t.dataset.bookstab; render(); return; }
+  if (t.dataset["2btab"]){ S.twoBTab = t.dataset["2btab"]; render(); return; }
+  if (t.dataset.paymake){
+    const p = TDS.paymentsFromBooks().find(x => x.vid === t.dataset.paymake);
+    const bsr = (document.querySelector('[data-paybsr="' + t.dataset.paymake + '"]') || {}).value || "";
+    const ser = (document.querySelector('[data-payser="' + t.dataset.paymake + '"]') || {}).value || "";
+    if (!p) return;
+    if (!bsr.trim() || !ser.trim()){ toast("Fill the BSR code and the challan serial number first."); return; }
+    S.books.challans = (S.books.challans || []).concat([{id: uid("ch"), bsr: bsr.trim(), serial: ser.trim(), date: p.date, tax: p.tax, interest: 0, fromVoucher: p.vid}]);
+    saveBooks(); toast("Challan added from the books."); render(); return;
+  }
+  if (t.dataset.chdel){ S.books.challans = (S.books.challans || []).filter(c => c.id !== t.dataset.chdel);
+    Object.keys(S.books.alloc || {}).forEach(k => { if (S.books.alloc[k] === t.dataset.chdel) delete S.books.alloc[k]; });
+    saveBooks(); render(); return; }
   if (t.dataset.txntab){ S.txnTab = t.dataset.txntab; render(); return; }
   if (t.dataset.txngo){
     const id = t.dataset.txngo, kind = t.dataset.txnkind;
@@ -12263,6 +12779,7 @@ document.addEventListener("click", ev => {
       if (to === "dash"){ S.tab = "dash"; S.step = null; render(); window.scrollTo(0, 0); return; }
       if (to === "inbox"){ S.tab = "clientInbox"; S.step = null; render(); window.scrollTo(0, 0); return; }
       if (to === "txn"){ S.tab = "txn"; S.step = null; render(); window.scrollTo(0, 0); return; }
+      if (to === "books"){ S.tab = "books"; S.step = null; render(); window.scrollTo(0, 0); return; }
       if (to === "post"){ goStep("post", "bills"); return; }
       if (to === "bank" && (!S.bank || S.bank.cid !== cid)) loadBank(cid).then(() => render());
       goStep(to === "bills" ? "review" : "review", to === "bills" ? "bills" : to);
@@ -12477,6 +12994,20 @@ document.addEventListener("click", ev => {
     }
     case "bridgeOff": Bridge.setCfg({key: ""}); clearInterval(bridgeTimer); Bridge.st = {state: "off", sessions: [], open: [], at: Date.now(), error: ""}; render(); break;
     case "billPost": postBillsToTally(); break;
+    case "booksPick": { const i = document.getElementById("booksIn"); if (i){ i.value = ""; i.click(); } break; }
+    case "twoBPick": { const i = document.getElementById("twoBIn"); if (i){ i.value = ""; i.click(); } break; }
+    case "booksClear": askConfirm({title: "Remove the books read from Tally?", ok: "Remove", body: '<p class="note">Challans and what you corrected stay. The day book can be brought in again.</p>'}).then(ok => {
+      if (!ok) return; S.books.vouchers = []; S.books.meta = null; S.books.reco = null; saveBooks(); toast("Removed."); render(); }); break;
+    case "tdsAuto": { const n = TDS.autoAllocate(); saveBooks(); toast(n ? n + " deduction" + (n === 1 ? "" : "s") + " put against challans." : "Nothing could be matched to a challan. Check the amounts and dates."); render(); break; }
+    case "tdsExcel": TDS.toExcel(S.tdsFy || "", S.tdsQ || "").then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break;
+    case "twoBExcel": GST2B.toExcel(S.books.reco, S.books.twoB && S.books.twoB.period).then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break;
+    case "chAdd": {
+      const g = id => (document.getElementById(id) || {}).value || "";
+      const bsr = g("chBsr").trim(), ser = g("chSer").trim(), dt = g("chDate").replace(/-/g, ""), tax = num(g("chTax"));
+      if (!bsr || !ser || !dt || !tax){ toast("Fill the BSR code, serial number, date and tax."); break; }
+      S.books.challans = (S.books.challans || []).concat([{id: uid("ch"), bsr, serial: ser, date: dt, tax, interest: num(g("chInt"))}]);
+      saveBooks(); toast("Challan added."); render(); break;
+    }
     case "txnCsv": txnCsv(); break;
     case "txnClear": S.txnQ = ""; S.txnStatus = ""; S.txnF = S.txnF || {}; S.txnF[txnTab()] = {}; render(); break;
     case "tallyPanel": S.tallyPanel = !S.tallyPanel; S.firmMenu = false; render(); break;
@@ -12673,6 +13204,12 @@ document.addEventListener("input", ev => {
   const t = ev.target;
   if (t && t.id === "revq"){ S.revQuery = t.value; softRender(); return; }
   if (t && t.id === "txnq"){ S.txnQ = t.value; later("txnq", render, 250); return; }
+  if (t && t.id === "ledq"){ S.ledQ = t.value; later("ledq", render, 250); return; }
+  if (t && t.dataset && t.dataset.tdsfy !== undefined){ S.tdsFy = t.value; render(); return; }
+  if (t && t.dataset && t.dataset.tdsq !== undefined){ S.tdsQ = t.value; render(); return; }
+  if (t && t.dataset && t.dataset.ledkind){ const m = S.books.map[t.dataset.ledkind]; if (m){ m.kind = t.value; m.byHand = true; if (m.kind !== "tds_payable") delete m.section; S.books.reco = null; saveBooks(); render(); } return; }
+  if (t && t.dataset && t.dataset.ledsec){ const m = S.books.map[t.dataset.ledsec]; if (m){ m.section = t.value.toUpperCase(); m.byHand = true; later("ledsec", () => { saveBooks(); render(); }, 500); } return; }
+  if (t && t.dataset && t.dataset.alloc){ S.books.alloc = S.books.alloc || {}; if (t.value) S.books.alloc[t.dataset.alloc] = t.value; else delete S.books.alloc[t.dataset.alloc]; saveBooks(); render(); return; }
   if (t && t.dataset && t.dataset.txnstatus !== undefined){ S.txnStatus = t.value; render(); return; }
   if (t && t.dataset && t.dataset.rf){ S.revF = S.revF || {}; S.revF[t.dataset.rf] = t.value; S.revSel = new Set(); softRender(); return; }
   if (t && t.dataset && ["email", "password", "firm", "name"].includes(t.dataset.cloud)){ S.cloudForm = Object.assign({}, S.cloudForm, {[t.dataset.cloud]: t.value}); }
