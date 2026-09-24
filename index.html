@@ -711,6 +711,7 @@ img.preview{display:block;max-width:100%;max-height:70vh;margin:0 auto;border:1p
 <input type="file" id="camIn" accept="image/*" capture="environment" class="hidden">
 <input type="file" id="booksIn" accept=".xml" class="hidden">
 <input type="file" id="marketIn" accept=".csv,.txt,.xlsx,.xls" class="hidden">
+<input type="file" id="salaryIn" accept=".csv,.txt,.xlsx,.xls" class="hidden">
 <input type="file" id="mastersIn" accept=".xml" class="hidden">
 <input type="file" id="twoBIn" accept=".json,application/json" class="hidden">
 
@@ -755,7 +756,7 @@ const DEFAULT_FIRM = {firmName:"Garg Shekhar & Company", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "TEST · 24 Sep 2026 · build 111 (Amazon MTR read by its own published columns, with shipping, gift wrap and TCS)";
+const APP_VERSION = "TEST · 24 Sep 2026 · build 112 (24Q: salary, employee by employee, with Annexure I and II)";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;
@@ -4128,7 +4129,7 @@ async function downloadStandalone(){
       (tag === "link" && /fonts\.(googleapis|gstatic)\.com/.test(el.getAttribute("href") || "")) || (tag === "style" && el.id === "app-style") || (tag === "script" && keepScript(el));
     if (!keep) el.remove();
   });
-  const bodyKeep = new Set(["app", "modal", "toast", "fileIn", "camIn", "bankIn", "ledIn", "bookIn", "salesIn", "booksIn", "mastersIn", "twoBIn", "marketIn", "app-main", "tess-core", "tess-eng", "pdfjs-lib", "pdfjs-worker", "xlsx-lib", "sample-jpg", "sample-pdf"]);
+  const bodyKeep = new Set(["app", "modal", "toast", "fileIn", "camIn", "bankIn", "ledIn", "bookIn", "salesIn", "booksIn", "mastersIn", "twoBIn", "marketIn", "salaryIn", "app-main", "tess-core", "tess-eng", "pdfjs-lib", "pdfjs-worker", "xlsx-lib", "sample-jpg", "sample-pdf"]);
   Array.from(root.querySelector("body").children).forEach(el => {
     if (el.tagName.toLowerCase() === "header" && el.classList.contains("top")) return;
     if (el.tagName.toLowerCase() === "script" && keepScript(el)) return;
@@ -5162,8 +5163,9 @@ const TDS = {
     }
     return b.panIndex[String(party).toUpperCase().replace(/[^A-Z0-9]/g, "")] || "";
   },
-  qOf(d){ const m = num(String(d).slice(4, 6)); return m >= 4 && m <= 6 ? "Q1" : m >= 7 && m <= 9 ? "Q2" : m >= 10 && m <= 12 ? "Q3" : "Q4"; },
-  fyOf(d){ const y = num(String(d).slice(0, 4)), m = num(String(d).slice(4, 6)); return (m >= 4 ? y : y - 1) + "-" + String((m >= 4 ? y + 1 : y)).slice(2); },
+  ymd(d){ const t = String(d || "").replace(/[^0-9]/g, ""); return t.length >= 6 ? t : ""; },
+  qOf(d){ const m = num(this.ymd(d).slice(4, 6)); return m >= 4 && m <= 6 ? "Q1" : m >= 7 && m <= 9 ? "Q2" : m >= 10 && m <= 12 ? "Q3" : "Q4"; },
+  fyOf(d){ const t = this.ymd(d), y = num(t.slice(0, 4)), m = num(t.slice(4, 6)); return (m >= 4 ? y : y - 1) + "-" + String((m >= 4 ? y + 1 : y)).slice(2); },
   // every voucher that carries a TDS ledger becomes one deduction row
   rows(){
     const b = S.books;
@@ -5620,6 +5622,132 @@ const TDS26Q = {
   }
 };
 
+/* ================================================================== */
+/* 24Q: salary, employee by employee                                  */
+/* ================================================================== */
+const TDS24Q = {
+  // the salary sheet, in whatever column names the office uses
+  cols: {
+    name: ["employeename", "name", "nameofemployee", "employee"],
+    pan: ["pan", "pannumber", "panofemployee", "employeepan"],
+    code: ["employeecode", "empcode", "code", "employeeid"],
+    month: ["month", "salarymonth", "period"],
+    date: ["date", "paymentdate", "dateofpayment"],
+    gross: ["grosssalary", "gross", "totalsalary", "salary", "grossearnings"],
+    exempt: ["exemptallowances", "exempt", "hraexempt", "exemption", "allowancesexempt"],
+    standard: ["standarddeduction", "standard"],
+    profTax: ["professionaltax", "ptax", "pt"],
+    chapter6: ["chaptervia", "deductionschaptervia", "deductions", "80c", "totaldeductions"],
+    taxable: ["taxableincome", "taxable", "netincome", "totalincome"],
+    tds: ["tdsdeducted", "tds", "taxdeducted", "incometax", "tdsamount"],
+    surcharge: ["surcharge"], cess: ["cess", "healthandeducationcess", "educationcess"],
+    regime: ["regime", "taxregime", "newregime"]
+  },
+  pick(head, names){
+    const h = head.map(x => String(x || "").toLowerCase().replace(/[^a-z0-9]/g, ""));
+    for (const n of names){ const i = h.indexOf(n); if (i >= 0) return i; }
+    for (const n of names){ const i = h.findIndex(x => x.includes(n)); if (i >= 0) return i; }
+    return -1;
+  },
+  async fromFile(file){
+    let grid;
+    if (/\.(xlsx|xls)$/i.test(file.name)){
+      await ensureXlsx();
+      const wb = XLSX.read(await file.arrayBuffer(), {type: "array", cellDates: true});
+      grid = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header: 1, raw: true, defval: ""});
+    } else {
+      const t = await file.text();
+      grid = t.split(/\r?\n/).filter(Boolean).map(l => l.split(l.includes("\t") ? "\t" : ","));
+    }
+    let hi = -1;
+    for (let i = 0; i < Math.min(10, grid.length); i++){
+      if (this.pick(grid[i], this.cols.name) >= 0 && this.pick(grid[i], this.cols.tds) >= 0){ hi = i; break; }
+    }
+    if (hi < 0) return {error: "That sheet needs at least an employee name column and a TDS column."};
+    const head = grid[hi], idx = {};
+    Object.keys(this.cols).forEach(k => { idx[k] = this.pick(head, this.cols[k]); });
+    const get = (r, k) => idx[k] >= 0 ? r[idx[k]] : "";
+    const rows = [];
+    grid.slice(hi + 1).forEach(r => {
+      const name = String(get(r, "name") || "").trim();
+      if (!name || /^total/i.test(name)) return;
+      const tds = num(get(r, "tds"));
+      const when = Market.date(get(r, "date")) || this.monthDate(get(r, "month"));
+      rows.push({name, pan: String(get(r, "pan") || "").toUpperCase().replace(/[^A-Z0-9]/g, ""), code: String(get(r, "code") || "").trim(),
+        date: when, gross: num(get(r, "gross")), exempt: num(get(r, "exempt")), standard: num(get(r, "standard")),
+        profTax: num(get(r, "profTax")), chapter6: num(get(r, "chapter6")), taxable: num(get(r, "taxable")),
+        tds, surcharge: num(get(r, "surcharge")), cess: num(get(r, "cess")),
+        regime: /new/i.test(String(get(r, "regime") || "")) ? "N" : /old/i.test(String(get(r, "regime") || "")) ? "O" : ""});
+    });
+    return {rows: rows.filter(r => r.tds || r.gross)};
+  },
+  monthDate(v){
+    const s = String(v || "").trim();
+    if (!s) return "";
+    const m = s.match(/([A-Za-z]{3,})[^0-9]*(\d{2,4})/);
+    if (m){
+      const mo = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"].indexOf(m[1].slice(0, 3).toLowerCase()) + 1;
+      const y = m[2].length === 2 ? "20" + m[2] : m[2];
+      if (mo) return y + "-" + String(mo).padStart(2, "0") + "-" + new Date(num(y), mo, 0).getDate();
+    }
+    return Market.date(s);
+  },
+  rows(){ return ((S.books || {}).salary || []).slice().sort((a, b) => String(a.date).localeCompare(String(b.date))); },
+  // Annexure I: employee-wise deductions for the quarter
+  annexI(fy, q){
+    const rows = this.rows().filter(r => r.date && TDS.fyOf(r.date) === fy && TDS.qOf(r.date) === q);
+    const by = {};
+    rows.forEach(r => {
+      const k = (r.pan || r.name).toUpperCase();
+      const e = by[k] = by[k] || {name: r.name, pan: r.pan, code: r.code, paid: 0, tds: 0, months: 0, rows: []};
+      e.paid = r2(e.paid + r.gross); e.tds = r2(e.tds + r.tds); e.months++; e.rows.push(r);
+    });
+    return Object.values(by).sort((a, b) => a.name.localeCompare(b.name));
+  },
+  // Annexure II: the year's salary details, filed with the fourth quarter
+  annexII(fy){
+    const rows = this.rows().filter(r => r.date && TDS.fyOf(r.date) === fy);
+    const by = {};
+    rows.forEach(r => {
+      const k = (r.pan || r.name).toUpperCase();
+      const e = by[k] = by[k] || {name: r.name, pan: r.pan, code: r.code, gross: 0, exempt: 0, standard: 0, profTax: 0, chapter6: 0, taxable: 0, tds: 0, surcharge: 0, cess: 0, regime: ""};
+      ["gross", "exempt", "standard", "profTax", "chapter6", "tds", "surcharge", "cess"].forEach(f => { e[f] = r2(e[f] + r[f]); });
+      e.taxable = r2(e.taxable + (r.taxable || 0));
+      if (r.regime) e.regime = r.regime;
+    });
+    return Object.values(by).map(e => {
+      if (!e.taxable) e.taxable = r2(e.gross - e.exempt - e.standard - e.profTax - e.chapter6);
+      return e;
+    }).sort((a, b) => a.name.localeCompare(b.name));
+  },
+  checks(fy, q){
+    const a = this.annexI(fy, q), out = [];
+    const noPan = a.filter(e => !/^[A-Z]{5}\d{4}[A-Z]$/.test(e.pan));
+    if (noPan.length) out.push({what: "Employees without a valid PAN", n: noPan.length, how: "Tax is 20% under section 206AA without one.", who: noPan.slice(0, 4).map(e => e.name)});
+    const chs = TDS.challans().filter(c => TDS.fyOf(c.date) === fy && TDS.qOf(c.date) === q);
+    const paid = chs.reduce((s, c) => s + num(c.tax), 0), ded = a.reduce((s, e) => s + e.tds, 0);
+    if (Math.abs(paid - ded) > 1) out.push({what: "Salary TDS deducted and the challans do not agree", n: 1,
+      how: "Deducted " + INR.format(ded) + ", challans " + INR.format(paid) + ". Some challans may belong to 26Q.", who: []});
+    return out;
+  },
+  async toExcel(fy, q){
+    await ensureXlsx();
+    const a1 = this.annexI(fy, q), a2 = this.annexII(fy);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(
+      [["Sl.", "Employee", "PAN", "Code", "Months paid", "Amount paid or credited", "TDS deducted"]].concat(
+        a1.map((e, i) => [i + 1, e.name, e.pan || "PANNOTAVBL", e.code, e.months, e.paid, e.tds]))), "Annexure I " + q);
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(
+      [["Sl.", "Employee", "PAN", "Regime", "Gross salary", "Exempt allowances", "Standard deduction", "Professional tax",
+        "Chapter VI-A", "Taxable income", "TDS", "Surcharge", "Cess"]].concat(
+        a2.map((e, i) => [i + 1, e.name, e.pan || "PANNOTAVBL", e.regime === "N" ? "New" : e.regime === "O" ? "Old" : "", e.gross, e.exempt,
+          e.standard, e.profTax, e.chapter6, e.taxable, e.tds, e.surcharge, e.cess]))), "Annexure II " + fy);
+    const out = XLSX.write(wb, {bookType: "xlsx", type: "array"});
+    saveFile(CO().name.replace(/[^A-Za-z0-9]+/g, "-") + "-24Q-" + q + "-" + fy.replace("-", "") + ".xlsx",
+      new Blob([out], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
+  }
+};
+
 /* ---------- Books, TDS and GST: the screens ---------- */
 function booksTab(){ return S.booksTab || "import"; }
 async function openBooks(cid){
@@ -5635,11 +5763,12 @@ function viewBooks(){
   const co = CO();
   if (!S.books || S.books.cid !== co.id){ openBooks(co.id); return '<p class="note">Opening the books…</p>'; }
   const b = S.books, tab = booksTab(), n = (b.vouchers || []).length;
-  let h = '<nav class="sbar" aria-label="Books">' + [["import", "From Tally", n || null], ["ledgers", "Ledgers", n ? Object.keys(b.map || {}).length : null], ["tds", "TDS", n ? TDS.rows().length : null], ["gst", "GST", n ? null : null]]
+  let h = '<nav class="sbar" aria-label="Books">' + [["import", "From Tally", n || null], ["ledgers", "Ledgers", n ? Object.keys(b.map || {}).length : null], ["tds", "TDS", n ? TDS.rows().length : ((b.salary || []).length || null)], ["gst", "GST", null]]
     .map(([id, label, c]) => '<button data-bookstab="' + id + '" aria-selected="' + (tab === id) + '">' + label + (c == null ? "" : ' <span class="sbar-n">' + c + "</span>") + "</button>").join("") + "</nav>";
   if (b.busy) h += busyCard("Reading the books…", b.busy, 0, 0);
   if (tab === "import") h += viewBooksImport(b);
-  else if (!n) h += '<div class="bk-none">Bring the day book in first, under “From Tally”.</div>';
+  else if (!n && !(tab === "tds" && (b.salary || []).length)) h += '<div class="bk-none">Bring the day book in first, under “From Tally”. Salary for 24Q can be brought in on its own, under TDS.</div>';
+  else if (!n && tab === "tds") h += viewBooksTds(b);
   else if (tab === "ledgers") h += viewBooksLedgers(b);
   else if (tab === "tds") h += viewBooksTds(b);
   else h += viewBooksGst(b);
@@ -5706,6 +5835,44 @@ function viewBooksLedgers(b){
     "</tbody></table></div></section>";
 }
 function viewBooksTds(b){
+  const part = S.tdsPart || "q26";
+  let nav = '<nav class="sbar" aria-label="TDS">' + [["q26", "26Q, other than salary", TDS.rows().length], ["q24", "24Q, salary", (b.salary || []).length]]
+    .map(([id, l, n]) => '<button data-tdspart="' + id + '" aria-selected="' + (part === id) + '">' + l + (n ? ' <span class="sbar-n">' + n + "</span>" : "") + "</button>").join("") + "</nav>";
+  if (part === "q24") return nav + viewBooks24Q(b);
+  return nav + viewBooks26Q(b);
+}
+function viewBooks24Q(b){
+  const fy = S.tdsFy || (TDS.rows()[0] || {}).fy || "", q = S.tdsQ || "Q4";
+  const fys = Array.from(new Set(TDS.rows().map(r => r.fy).concat(TDS24Q.rows().map(r => TDS.fyOf(r.date))))).filter(Boolean).sort();
+  const money = v => INR.format(r2(v || 0));
+  let h = '<div class="revfilter"><select data-tdsfy><option value="">Choose a year</option>' + fys.map(f => '<option value="' + f + '"' + (fy === f ? " selected" : "") + ">" + f + "</option>").join("") + "</select>" +
+    '<select data-tdsq>' + ["Q1", "Q2", "Q3", "Q4"].map(x => '<option value="' + x + '"' + (q === x ? " selected" : "") + ">" + x + "</option>").join("") + "</select>" +
+    '<button class="btn small primary" data-act="salaryPick">Bring in the salary sheet</button>' +
+    ((b.salary || []).length ? '<button class="btn small" data-act="q24Excel">Download the 24Q working</button><button class="btn small" data-act="salaryClear">Remove the sheet</button>' : "") + "</div>";
+  if (!(b.salary || []).length){
+    return h + '<section class="dash-card" style="max-width:760px"><h3>24Q needs the salary sheet</h3>' +
+      '<p class="note">Tally credits each employee their net pay and the TDS as one figure, so the books cannot say how much was deducted from whom. Bring in the payroll sheet you already prepare \u2014 Excel or CSV \u2014 and the columns are found by their names: employee, PAN, month, gross salary, exempt allowances, standard deduction, professional tax, Chapter VI-A, taxable income and TDS.</p>' +
+      '<p class="note">Annexure I is built from the months in the quarter; Annexure II, filed with the fourth quarter, from the whole year.</p></section>';
+  }
+  const a1 = TDS24Q.annexI(fy, q), a2 = TDS24Q.annexII(fy);
+  const checks = TDS24Q.checks(fy, q);
+  h += '<div class="dash-tiles" style="grid-template-columns:repeat(3,minmax(0,1fr))">' +
+    '<div class="dtile"><span>Employees this quarter</span><b>' + a1.length + "</b><small>" + money(a1.reduce((s, e) => s + e.paid, 0)) + " paid</small></div>" +
+    '<div class="dtile"><span>TDS deducted</span><b>' + money(a1.reduce((s, e) => s + e.tds, 0)) + "</b><small>" + esc(q) + " " + esc(fy) + "</small></div>" +
+    '<div class="dtile' + (checks.length ? " warn" : "") + '"><span>Before filing</span><b>' + checks.length + "</b><small>" + (checks.length ? esc(checks[0].what) : "nothing to fix") + "</small></div></div>";
+  if (checks.length) h += '<section class="dash-card" style="margin-bottom:12px"><h3>Before filing</h3>' +
+    checks.map(c => '<div class="dash-row"><span>' + esc(c.what) + "</span><b>" + c.n + '</b></div><p class="note">' + esc(c.how) + (c.who.length ? " e.g. " + esc(c.who.join(", ")) : "") + "</p>").join("") + "</section>";
+  h += '<section class="dash-card" style="margin-bottom:12px"><h3>Annexure I \u00b7 ' + esc(q) + '</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th class="n">Sl.</th><th>Employee</th><th>PAN</th><th class="n">Months</th><th class="n">Paid</th><th class="n">TDS</th></tr></thead><tbody>' +
+    a1.map((e, i) => '<tr><td class="n">' + (i + 1) + "</td><td>" + esc(e.name) + "</td><td>" + (/^[A-Z]{5}\d{4}[A-Z]$/.test(e.pan) ? esc(e.pan) : '<span class="tag warn">no PAN</span>') +
+      '</td><td class="n">' + e.months + '</td><td class="n">' + money(e.paid) + '</td><td class="n">' + money(e.tds) + "</td></tr>").join("") +
+    "</tbody></table>" + (a1.length ? "" : '<div class="bk-none">No salary rows in this quarter.</div>') + "</div></section>";
+  h += '<section class="dash-card"><h3>Annexure II \u00b7 the year ' + esc(fy) + ' <span class="note">(filed with the fourth quarter)</span></h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Employee</th><th>PAN</th><th>Regime</th><th class="n">Gross</th><th class="n">Exempt</th><th class="n">Standard</th><th class="n">Chapter VI-A</th><th class="n">Taxable</th><th class="n">TDS</th></tr></thead><tbody>' +
+    a2.map(e => "<tr><td>" + esc(e.name) + "</td><td>" + esc(e.pan || "\u2014") + "</td><td>" + (e.regime === "N" ? "New" : e.regime === "O" ? "Old" : "\u2014") +
+      '</td><td class="n">' + money(e.gross) + '</td><td class="n">' + money(e.exempt) + '</td><td class="n">' + money(e.standard) + '</td><td class="n">' + money(e.chapter6) +
+      '</td><td class="n">' + money(e.taxable) + '</td><td class="n">' + money(e.tds) + "</td></tr>").join("") + "</tbody></table></div></section>";
+  return h;
+}
+function viewBooks26Q(b){
   const fy = S.tdsFy || "", q = S.tdsQ || "";
   const rows = TDS.rows().filter(r => (!fy || r.fy === fy) && (!q || r.q === q));
   const fys = Array.from(new Set(TDS.rows().map(r => r.fy))).sort();
@@ -13392,6 +13559,7 @@ document.addEventListener("click", ev => {
   if (t.dataset.open){ openCompany(t.dataset.open); return; }
   if (t.dataset.bookstab){ S.booksTab = t.dataset.bookstab; render(); return; }
   if (t.dataset.gstpart){ S.gstPart = t.dataset.gstpart; render(); return; }
+  if (t.dataset.tdspart){ S.tdsPart = t.dataset.tdspart; render(); return; }
   if (t.dataset["2btab"]){ S.twoBTab = t.dataset["2btab"]; render(); return; }
   if (t.dataset.paymake){
     const p = TDS.paymentsFromBooks().find(x => x.vid === t.dataset.paymake);
@@ -13652,6 +13820,10 @@ document.addEventListener("click", ev => {
       if (!ok) return; S.books.vouchers = []; S.books.meta = null; S.books.reco = null; saveBooks(); toast("Removed."); render(); }); break;
     case "fvuClose": S.fvuResult = null; render(); break;
     case "tdsAuto": { const n = TDS.autoAllocate(); saveBooks(); toast(n ? n + " deduction" + (n === 1 ? "" : "s") + " put against challans." : "Nothing could be matched to a challan. Check the amounts and dates."); render(); break; }
+    case "salaryPick": { const i = document.getElementById("salaryIn"); if (i){ i.value = ""; i.click(); } break; }
+    case "salaryClear": askConfirm({title: "Remove the salary sheet?", ok: "Remove", body: '<p class="note">The challans and everything else stay.</p>'}).then(ok => {
+      if (!ok) return; S.books.salary = []; saveBooks(); toast("Removed."); render(); }); break;
+    case "q24Excel": TDS24Q.toExcel(S.tdsFy || "", S.tdsQ || "Q4").then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break;
     case "tdsTxt": {
       const q = S.tdsQ || "", fy = S.tdsFy || "";
       if (!q || !fy){ toast("Choose the year and the quarter first."); break; }
@@ -13941,6 +14113,20 @@ function setPath(o, path, v){ const k = path.split("."); if (k.length === 2) o[k
 document.addEventListener("change", ev => {
   if (ev.target && ev.target.id && ["booksIn", "mastersIn", "twoBIn"].includes(ev.target.id)){ booksChange(ev.target); return; }
   if (ev.target && ev.target.id === "marketIn"){ const f = (ev.target.files || [])[0]; ev.target.value = ""; if (f) importMarketFile(f); return; }
+  if (ev.target && ev.target.id === "salaryIn"){
+    const f = (ev.target.files || [])[0]; ev.target.value = "";
+    if (!f) return;
+    const b = S.books; b.busy = "Reading " + f.name + "\u2026"; render();
+    TDS24Q.fromFile(f).then(async r => {
+      b.busy = "";
+      if (r.error){ toast(r.error); render(); return; }
+      b.salary = r.rows; await saveBooks();
+      const noPan = r.rows.filter(x => !/^[A-Z]{5}\d{4}[A-Z]$/.test(x.pan)).length;
+      toast(r.rows.length + " salary rows read" + (noPan ? ", " + noPan + " without a valid PAN" : "") + ".");
+      render();
+    }, e => { b.busy = ""; toast("Could not read that sheet: " + ((e && e.message) || e)); render(); });
+    return;
+  }
   const t = ev.target, e = curEntry(), cid = S.coId;
   if (t.dataset && t.dataset.adminplan){
     Cloud.rpc("admin_set_plan", {p_firm: t.dataset.adminplan, p_plan: t.value}).then(() => { toast("Plan changed."); loadAdminOverview(); }, e => toast(e.message));
