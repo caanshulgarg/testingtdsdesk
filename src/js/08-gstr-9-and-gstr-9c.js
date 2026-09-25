@@ -47,7 +47,7 @@ const GST9 = {
     const kindOf = r => cap(r) ? "cg" : (r.supply === "Services" || /^99/.test(r.hsn || "")) ? "is" : "in";
     const inward = inn.filter(r => !r.rcm && !r.import && !r.blocked), sgn = r => r.note === "debit" ? -1 : 1;
     ["in", "cg", "is"].forEach(k => { T["6B-" + k] = inward.filter(r => kindOf(r) === k).reduce((a, r) => this.add(a, r, sgn(r)), this.Z()); });
-    const rc = inn.filter(r => r.rcm);
+    const rc = inn.filter(r => r.rcm && !r.import);                 // imported services are 6F, not 6C or 6D
     T["6C"] = rc.filter(r => !r.gstin).reduce((a, r) => this.add(a, r, sgn(r)), this.Z());
     T["6D"] = rc.filter(r => r.gstin).reduce((a, r) => this.add(a, r, sgn(r)), this.Z());
     T["6E"] = inn.filter(r => r.import && r.supply !== "Services").reduce((a, r) => this.add(a, r), this.Z());
@@ -78,14 +78,15 @@ const GST9 = {
     const pay = {};
     ["igst", "cgst", "sgst", "cess"].forEach(h => {
       const due = inBooks.reduce((s2, m) => s2 + num(t3[m].net[h]) + num(t3[m].rcmOut[h]), 0);
-      const cash = inBooks.reduce((s2, m) => s2 + Math.max(0, num(t3[m].payable[h])), 0);
-      pay[h] = {due: r2(due), cash: r2(cash), itc: r2(due - cash)};
+      const cash = inBooks.reduce((s2, m) => s2 + num(t3[m].pay.cash[h]), 0);
+      const by = {}; ["igst", "cgst", "sgst", "cess"].forEach(f => { by[f] = r2(inBooks.reduce((s2, m) => s2 + num(((t3[m].pay.use[f] || {})[h]) || 0), 0)); });
+      pay[h] = {due: r2(due), cash: r2(cash), itc: r2(by.igst + by.cgst + by.sgst + by.cess), by};
     });
     // Part VI: HSN summaries
     const hsn = {};
     inBooks.forEach(m => GSTR.one(m, reg).hsn.forEach(h => { const k = h.hsn + "|" + h.rate, x = hsn[k] = hsn[k] || {hsn: h.hsn, rate: h.rate, taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0}; ["taxable", "igst", "cgst", "sgst", "cess"].forEach(f => { x[f] = r2(x[f] + h[f]); }); }));
     const hin = {};
-    inn.forEach(r => { const k = (r.hsn || "no HSN"), x = hin[k] = hin[k] || {hsn: r.hsn || "", taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0}; ["taxable", "igst", "cgst", "sgst", "cess"].forEach(f => { x[f] = r2(x[f] + num(r[f]) * sgn(r)); }); });
+    GSTR.partsOf(inn).forEach(q => { const r = q.row, k = (q.hsn || "no HSN") + "|" + q.rate, x = hin[k] = hin[k] || {hsn: q.hsn || "", rate: q.rate, taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0}; ["taxable", "igst", "cgst", "sgst", "cess"].forEach(f => { x[f] = r2(x[f] + num(q[f]) * sgn(r)); }); });
     return {fy, reg, months, inBooks, missing: months.filter(m => !have.has(m)), T, pay, twoB,
       hsnOut: Object.values(hsn).sort((a, c) => c.taxable - a.taxable), hsnIn: Object.values(hin).sort((a, c) => c.taxable - a.taxable)};
   },
@@ -100,7 +101,7 @@ const GST9 = {
     ["5D", "Exempted"], ["5E", "Nil rated"], ["5F", "Non-GST supply"], ["5G", "Sub-total (A to F)", 1], ["5H", "Credit notes issued (-)"], ["5M", "Supplies on which tax is not to be paid", 1],
     ["5N", "Total turnover (including advances) (4N + 5M)", 1],
     ["III", "6", "ITC availed during the year"],
-    ["6A", "Total amount of ITC availed through GSTR-3B"], ["6B-in", "6B Inward supplies other than imports and reverse charge: inputs"], ["6B-cg", "6B \u2026 capital goods"], ["6B-is", "6B \u2026 input services"],
+    ["6A", "Total amount of ITC availed through GSTR-3B"], ["6B-in", "Inward supplies other than imports and reverse charge: inputs"], ["6B-cg", "\u2026 capital goods"], ["6B-is", "\u2026 input services"],
     ["6C", "Inward supplies from unregistered persons on reverse charge"], ["6D", "Inward supplies from registered persons on reverse charge"], ["6E", "Import of goods"], ["6F", "Import of services"],
     ["6G", "Input tax credit received from ISD"], ["6H", "ITC reclaimed"], ["6I", "Sub-total (B to H)", 1], ["6J", "Difference (A \u2013 I)", 1],
     ["III", "7", "ITC reversed and ineligible for the year"],
@@ -115,11 +116,16 @@ const GST9 = {
     this.ROWS.forEach(r => {
       if (r.length === 3 && /^(II|III|IV|V|VI)$/.test(r[0])) { h += '<tr><td colspan="7" style="background:var(--paper)"><b>Part ' + r[0] + " \u00b7 " + r[1] + ". " + esc(r[2]) + "</b></td></tr>"; return; }
       const x = d.T[r[0]] || this.Z(), b = r[2] ? "b" : "span";
+      // with no 2B here, 8A is not known: say so, rather than show the whole credit as a difference
+      if (!d.twoB && (r[0] === "8A" || r[0] === "8D")){ h += "<tr><td>" + r[0] + "</td><td>" + esc(r[1]) + '</td><td></td><td class="n" colspan="4"><span class="nr">no 2B brought in for this year</span></td></tr>'; return; }
       h += "<tr><td>" + esc(r[0].replace(/-.*/, "")) + "</td><td><" + b + ">" + esc(r[1]) + "</" + b + '></td><td class="n">' + (/^[678]|^13/.test(r[0]) ? "" : m(x.taxable)) + '</td><td class="n">' + m(x.igst) + '</td><td class="n">' + m(x.cgst) + '</td><td class="n">' + m(x.sgst) + '</td><td class="n">' + m(x.cess) + "</td></tr>";
     });
-    h += '<tr><td colspan="7" style="background:var(--paper)"><b>Part IV \u00b7 9. Details of tax paid</b></td></tr>' +
-      [["igst", "Integrated tax"], ["cgst", "Central tax"], ["sgst", "State/UT tax"], ["cess", "Cess"]].map(([k, l]) => "<tr><td>9</td><td>" + l + ' \u2014 payable ' + m(d.pay[k].due) + '</td><td class="n"></td><td class="n" colspan="2">paid in cash ' + m(d.pay[k].cash) + '</td><td class="n" colspan="2">through credit ' + m(d.pay[k].itc) + "</td></tr>").join("");
-    return h + "</tbody></table></div>";
+    h += "</tbody></table></div>";
+    // table 9 in the return's own columns
+    h += '<h3 style="margin-top:12px">Part IV \u00b7 9. Details of tax paid</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Tax</th><th class="n">Tax payable</th><th class="n">Paid in cash</th><th class="n">Paid through ITC: IGST</th><th class="n">CGST</th><th class="n">SGST</th><th class="n">Cess</th></tr></thead><tbody>' +
+      [["igst", "Integrated tax"], ["cgst", "Central tax"], ["sgst", "State/UT tax"], ["cess", "Cess"]].map(([k, l]) => { const p = d.pay[k], by = p.by || {}; return "<tr><td>" + l + '</td><td class="n">' + m(p.due) + '</td><td class="n">' + m(p.cash) + '</td><td class="n">' + m(by.igst) + '</td><td class="n">' + m(by.cgst) + '</td><td class="n">' + m(by.sgst) + '</td><td class="n">' + m(by.cess) + "</td></tr>"; }).join("") +
+      "</tbody></table></div>";
+    return h;
   }
 };
 const GST9C = {
@@ -143,7 +149,7 @@ const GST9C = {
     const e7 = r2(o5 - exempt - zero - rcm), f7 = r2(T["4N"].taxable - T["4G"].taxable);
     // 9: tax by rate in the books against the annual return (the same months, so a difference is an adjustment above)
     const rates = {};
-    d9.inBooks.forEach(m => GSTR.outward(m, reg).filter(r => r.cls === "taxable" && !r.rcm).forEach(r => { const k = String(r.rate), x = rates[k] = rates[k] || {rate: r.rate, taxable: 0, tax: 0}; const sg = r.kind === "CDNR" ? -1 : 1; x.taxable = r2(x.taxable + sg * r.taxable); x.tax = r2(x.tax + sg * (r.igst + r.cgst + r.sgst + r.cess)); }));
+    d9.inBooks.forEach(m => GSTR.partsOf(GSTR.outward(m, reg).filter(r => r.cls === "taxable" && !r.rcm)).forEach(q => { const r = q.row, k = String(q.rate), x = rates[k] = rates[k] || {rate: q.rate, taxable: 0, tax: 0}; const sg = r.kind === "CDNR" ? -1 : 1; x.taxable = r2(x.taxable + sg * q.taxable); x.tax = r2(x.tax + sg * (q.igst + q.cgst + q.sgst + q.cess)); }));
     // 12: credit in the books against the annual return
     const itcBooks = st.itcBooks != null && st.itcBooks !== "" ? num(st.itcBooks) : r2(T["6I"].igst + T["6I"].cgst + T["6I"].sgst + T["6I"].cess - T["6C"].igst - T["6C"].cgst - T["6C"].sgst - T["6D"].igst - T["6D"].cgst - T["6D"].sgst);
     const d12 = r2(itcBooks + num(st.adj["12B"]) - num(st.adj["12C"])), e12 = r2(T["7J"].igst + T["7J"].cgst + T["7J"].sgst + T["7J"].cess);

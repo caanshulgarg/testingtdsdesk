@@ -50,7 +50,8 @@ const GST2B = {
       let signed = 0, reg = "", inel = 0, any = false, setOff = false;
       v.ent.forEach(e => {
         const m = Books.ledgerOf(e.l);
-        if ((m.kind === "gst" || m.kind === "gst_common") && m.side === "output") setOff = true;
+        if ((m.kind === "gst" || m.kind === "gst_common") && m.side === "output" && !m.rcm) setOff = true;
+        if (m.kind === "gst" && m.rcm && m.side === "output") return;
         if (!((m.kind === "gst" || m.kind === "gst_common") && m.side === "input") && m.kind !== "ineligible") return;
         any = true;
         const amt = Math.abs(e.a), t = m.tax || "IGST";
@@ -75,7 +76,7 @@ const GST2B = {
       out.push({id: v.id, voucher: v.no || "", type: v.type, party: party || "", gstin, no: String(no), noN: this.normNo(no), core: this.coreNo(no),
         date: v.refDate || v.date, bookDate: v.date, ym: String(v.date).slice(0, 6), reg,
         taxable, igst: tax.IGST, cgst: tax.CGST, sgst: tax.SGST, cess: tax.CESS,
-        dir: signed <= 0 ? 1 : -1, rcm: !!v.rcm, ineligible: inel > 0, narr: v.narr || ""});
+        dir: signed <= 0 ? 1 : -1, rcm: Books.isRcm(v), ineligible: inel > 0, narr: v.narr || ""});
     });
     return out;
   },

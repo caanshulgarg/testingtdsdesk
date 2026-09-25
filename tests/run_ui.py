@@ -89,10 +89,11 @@ with sync_playwright() as p:
     # Reversal screen
     pg.evaluate("S.booksTab = 'gst'; S.gstPart = 'rev'; S.gstYm = '202506'; render();"); pg.wait_for_timeout(600)
     txt = pg.inner_text("#app")
-    ok("Rule 42: common inputs" in txt and "16,09,964.58" in txt, "Rule 42 shows June C2 of 16,09,964.58")
-    ok("80,498.23" in txt, "D2 = 5% = 80,498.23")
+    # build 134: the June journal reversing an expense bill (input IGST 792 credited) now reduces credit too
+    ok("Rule 42: common inputs" in txt and "16,09,172.58" in txt, "Rule 42 shows June C2 of 16,09,172.58")
+    ok("80,458.63" in txt, "D2 = 5% = 80,458.63")
     pg.locator("input[data-revd2]").uncheck(); pg.wait_for_timeout(400)
-    ok(pg.evaluate("S.books.rev && S.books.rev.d2") is False and "80,498.23" not in pg.inner_text("#app"), "D2 switched off")
+    ok(pg.evaluate("S.books.rev && S.books.rev.d2") is False and "80,458.63" not in pg.inner_text("#app"), "D2 switched off")
     pg.locator("input[data-revd2]").check(); pg.wait_for_timeout(300)
     # add a capital good and fill it in
     pg.click('button[data-act="assetAdd"]'); pg.wait_for_timeout(300)

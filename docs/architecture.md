@@ -54,6 +54,15 @@ Everything is plain JavaScript in one scope, no framework and no bundler. State 
 5. **Nothing is deleted without a trace.** Inbox records only change status; the bridge's FVU runs each get their own folder.
 6. **Live stays untouched until test is checked.** Build, run the tests, push to the test site, check against the ZZ TEST company, then copy the identical build to live.
 
+## GST: what each return is built from (build 134)
+
+- **Lines.** The day book reader keeps, on every ledger line, the HSN (`h`), the GST rate (`gr`, the IGST rate from the rate details) and goods or services (`sp`): from the item for an item invoice, from the ledger line for a ledger invoice. `Books.lines(v).parts` splits a voucher rate by rate and HSN by HSN; the tax on the voucher is shared in proportion to what each part should carry, so the parts always add up to the voucher. A line with no rate takes whatever tax the rated lines do not explain.
+- **Outward.** One row per invoice (`GSTR.outward`), with its parts. GSTR-1 items, B2CS, the HSN summary and 9C table 9 are built from the parts (`GSTR.partsOf`).
+- **Inward.** `GSTR.inward` takes every purchase bill and every journal or payment that carries input tax, except the month's set-off (output tax on the same voucher) and tax only moved between ledgers (to a control account, or a rounding). This one list is 3B table 4, the input register and GSTR-9 table 6.
+- **Reverse charge.** A voucher is reverse charge when Tally marks it so, or when it credits a ledger of type "GST, reverse charge" on the output side (a name like "07 RCM PAYABLE"). That credit is the liability (3.1(d)), not tax on the bill; the input tax beside it is 4(A)(3). A tax-only RCM journal gets its value from the rate in the narration, else 18%, marked as worked out.
+- **Payment.** `GSTR.setOff` follows sections 49 and 49A with rule 88A. Reverse charge is paid in cash. Credit left over is carried to the next month (`GSTR.creditIn`), starting from the balance typed for the first month in the books (`books.gstOpen[reg]`).
+- **Bank ledgers** are decided by the Tally group (Bank Accounts, Bank OD A/c, Bank OCC A/c, Cash-in-Hand), by name only where the masters have not been read.
+
 ## The Tally Bridge
 
 `bridge/TDSBridge.ps1`, version 1.10.0, runs under Windows PowerShell 5.1, listens only on 127.0.0.1:9100, and needs the key shown in its window for everything except `/ping`. It finds which Tally (port) has the company open, in the signed-in Windows user's session.

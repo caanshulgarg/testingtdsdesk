@@ -33,7 +33,7 @@ const DEFAULT_FIRM = {firmName:"Garg Shekhar & Company", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "25 Sep 2026 · build 133 (financial statements: Schedule III for companies, the ICAI format for non-corporate entities; MIS reads the company’s own primary groups)";
+const APP_VERSION = "25 Sep 2026 · build 134 (GST: reverse charge from the RCM payable ledger, set-off in the order the law sets with credit carried, items at more than one rate split, input register tied to 3B and 2B, one GSTIN at a time)";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;

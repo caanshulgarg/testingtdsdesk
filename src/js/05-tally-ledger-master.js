@@ -91,10 +91,29 @@ const LedMaster = {
       if (rn){ p.rate = num(rn[1]); why.push("rate " + rn[1] + "%"); }
       if (p.what === "tds_payable" && !p.section) why.push("no section: choose one, or mark it a general TDS account");
     } else if (/\bROUND\s*(ED)?\s*OFF\b/.test(up)){ p.what = "roundoff"; why.push("name"); }
-    else if (/\bBANK\b|\bCASH\b/.test(up) || /bank|cash/i.test(info.group || "")){ p.what = "bank"; why.push(info.group ? "group " + info.group : "name"); }
+    else if (!/GST|\bTDS\b|\bTCS\b/.test(up) && /\bRCM\b|REVERSE\s*CHARGE/.test(up) && /PAYABLE|LIABILITY|OUTPUT/.test(up)){
+      // "07 RCM PAYABLE": the tax owed on reverse charge, credited beside the input tax on the bill
+      p.what = "gst_rcm"; p.side = "output"; p.tax = /\bIGST\b/.test(up) ? "IGST" : /\bCGST\b/.test(up) ? "CGST" : /\bSGST\b/.test(up) ? "SGST" : "";
+      const pre = up.match(/(?:^|\D)(\d{2})\s/); if (pre && regs.includes(pre[1])) p.reg = pre[1]; else if (regs.length === 1) p.reg = regs[0];
+      why.push("name says reverse charge payable");
+    }
+    else if (this.bankByGroup(name, info)){ p.what = "bank"; why.push(info.group ? "group " + info.group : "name"); }
     if (u.n) why.push("used " + u.n + " times");
     p.why = why.join("; ");
     return p;
+  },
+  // a bank or cash account: by its Tally group where the masters are read, by its name only where they are not.
+  // "BANK CHARGES" is an expense and "ICICI BANK (CREDITORS)" a supplier, whatever the name says
+  bankByGroup(name, info){
+    const b = S.books || {}, groups = b.groups || {};
+    let g = String((info && info.group) || (b.under || {})[name] || "");
+    if (!g) return /\bBANK\b|\bCASH\b/i.test(name) && !/CHARGE|COMMISSION|INTEREST|CREDITOR|DEBTOR|LOAN|FEE/i.test(name);
+    for (let i = 0; i < 12 && g; i++){
+      if (/^(bank accounts|bank od a\/c|bank occ a\/c|cash-in-hand|bank overdraft)$/i.test(g.trim())) return true;
+      if (!groups[g] || groups[g] === g || /^primary$/i.test(groups[g])) break;
+      g = groups[g];
+    }
+    return /^(bank accounts|bank od a\/c|bank occ a\/c|cash-in-hand)$/i.test(g.trim());
   },
   // turn a choice into what the returns read
   applyWhat(m, w){

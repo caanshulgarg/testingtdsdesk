@@ -926,6 +926,10 @@ function gstFixChange(t){
   if (d.misbud !== undefined){ const [h2, mm] = d.misbud.split("|"), fy = Audit.fyStart(mm + "01").slice(0, 4); b.budget = b.budget || {}; b.budget[fy] = b.budget[fy] || {}; b.budget[fy][h2] = Object.assign({}, b.budget[fy][h2], {[mm]: t.value === "" ? "" : num(t.value)}); saveBooks(); render(); return true; }
   if (d.misf !== undefined){ S.misF = t.value; render(); return true; }
   if (d.mismsme !== undefined){ b.msme = Object.assign({}, b.msme, {[d.mismsme]: t.value}); const r = (b.mis || {}).last; if (r) MIS.run(r.from, r.to, r.how); saveBooks(); render(); return true; }
+  if (d.gstopen !== undefined){ const k = S.gstReg || ""; b.gstOpen = Object.assign({}, b.gstOpen); b.gstOpen[k] = Object.assign({}, b.gstOpen[k], {[d.gstopen]: t.value === "" ? "" : num(t.value)}); saveBooks(); render(); return true; }
+  if (d.inregscope !== undefined){ S.inregScope = t.value; render(); return true; }
+  if (d.inregf !== undefined){ S.inregF = t.value; render(); return true; }
+  if (d.inregq !== undefined){ S.inregQ = t.value; render(); return true; }
   if (d.g9c !== undefined){
     const fy = GST9.fyOf(S.gstYm || GSTR.months().slice(-1)[0]), reg = S.gstReg || (((b.meta || {}).gstins || [])[0] || "").slice(0, 2), st = GST9C.st(fy, reg), k = d.g9c;
     const v = t.tagName === "TEXTAREA" ? t.value : (t.value === "" ? "" : num(t.value));

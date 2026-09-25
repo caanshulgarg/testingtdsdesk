@@ -45,6 +45,8 @@ const Books = {
   yesFlag(v){ const t = String(v || "").replace(/[^A-Za-z ]/g, " ").trim().toLowerCase(); return /\bapplicable\b/.test(t) && !/\bnot\b/.test(t); },
   // "$17000.00 @ ₹ 86.40/$ = ₹ 1468800.00" is 1468800: the rupee value after the last "="
   amt(v){ const t = String(v || ""), i = t.lastIndexOf("="); return num(i >= 0 ? t.slice(i + 1) : t); },
+  // the IGST rate in a block's rate details, which is the whole GST rate; null when not set
+  igstRate(s){ const m = String(s || "").match(/<GSTRATEDUTYHEAD>IGST<\/GSTRATEDUTYHEAD>\s*<GSTRATEVALUATIONTYPE>[^<]*<\/GSTRATEVALUATIONTYPE>\s*<GSTRATE>\s*([\d.]+)\s*<\/GSTRATE>/); return m ? num(m[1]) : null; },
   one(s, tag){ const m = s.match(new RegExp("<" + tag + ">([^<]*)</" + tag + ">")); return m ? this.unesc(m[1]) : ""; },
   unesc(v){
     return String(v || "").replace(/&apos;/g, "'").replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">")
@@ -72,13 +74,33 @@ const Books = {
       ent: []
     };
     if (v.cmp) meta.gstins.add(v.cmp);
+    // each item's HSN, rate and goods or services, for the accounting allocation inside it
+    const items = [];
+    if (s.indexOf("<ALLINVENTORYENTRIES.LIST>") >= 0){
+      let at = 0;
+      for (;;){
+        const a = s.indexOf("<ALLINVENTORYENTRIES.LIST>", at); if (a < 0) break;
+        const z = s.indexOf("</ALLINVENTORYENTRIES.LIST>", a); if (z < 0) break;
+        const own = s.slice(a, z).replace(/<ACCOUNTINGALLOCATIONS\.LIST>[\s\S]*?<\/ACCOUNTINGALLOCATIONS\.LIST>/g, "");
+        items.push({a, z, h: this.one(own, "GSTHSNNAME"), gr: this.igstRate(own), sp: this.one(own, "GSTOVRDNTYPEOFSUPPLY")});
+        at = z + 1;
+      }
+    }
     // an item invoice keeps the purchase or sales ledger inside each item, in its accounting allocation
     [["<ALLLEDGERENTRIES.LIST>", "</ALLLEDGERENTRIES.LIST>"], ["<LEDGERENTRIES.LIST>", "</LEDGERENTRIES.LIST>"], ["<ACCOUNTINGALLOCATIONS.LIST>", "</ACCOUNTINGALLOCATIONS.LIST>"]].forEach(([open2, close]) => {
+      let pos = -1;
       s.split(open2).slice(1).forEach(p => {
+        pos = s.indexOf(open2, pos + 1);
         const e = p.split(close)[0];
         const name = this.one(e, "LEDGERNAME");
         if (!name) return;
         const x = {l: name, a: this.amt(this.one(e, "AMOUNT")), r: num(this.one(e, "GSTRATE")) || null};
+        // the line's own HSN and rate (a ledger invoice), else the item's it sits in
+        const it = open2 === "<ACCOUNTINGALLOCATIONS.LIST>" ? items.find(q => pos > q.a && pos < q.z) : null;
+        const lh = it ? it.h : this.one(e, "GSTHSNNAME"), lr = it ? it.gr : this.igstRate(e), ls = it ? it.sp : this.one(e, "GSTOVRDNTYPEOFSUPPLY");
+        if (lh) x.h = lh;
+        if (lr != null) x.gr = lr;
+        if (ls) x.sp = ls;
         // bill-wise details: [ref name, New Ref / Agst Ref / Advance / On Account, amount]
         if (e.indexOf("<BILLALLOCATIONS.LIST>") >= 0){
           const bl = e.split("<BILLALLOCATIONS.LIST>").slice(1).map(p2 => {
@@ -185,10 +207,12 @@ const Books = {
   ledgerOf(name){ return (S.books && S.books.map && S.books.map[name]) || {}; },
   // the purchase and sales side of a voucher, ready for GST and TDS
   lines(v){
-    const out = {taxable: 0, tax: {CGST: 0, SGST: 0, IGST: 0, CESS: 0}, tds: [], tdsPaid: [], party: 0, rates: {}, roundoff: 0};
+    const out = {taxable: 0, tax: {CGST: 0, SGST: 0, IGST: 0, CESS: 0}, tds: [], tdsPaid: [], party: 0, rates: {}, roundoff: 0}, vals = [];
     v.ent.forEach(e => {
       const m = Books.ledgerOf(e.l), amt = Math.abs(e.a), sign = e.a < 0 ? -1 : 1;
       if (m.kind === "ineligible"){ out.ineligible = r2((out.ineligible || 0) + amt); out.taxable = r2(out.taxable + amt); return; }
+      // the reverse-charge liability credited beside the input tax is what we owe, not tax on the bill
+      if (m.kind === "gst" && m.rcm && m.side === "output"){ out.rcmOwed = r2((out.rcmOwed || 0) + amt); return; }
       if (m.kind === "gst" || m.kind === "gst_common"){
         out.tax[m.tax] = r2(out.tax[m.tax] + amt);
         if (m.kind === "gst_common"){ out.common = out.common || {CGST: 0, SGST: 0, IGST: 0, CESS: 0}; out.common[m.tax] = r2(out.common[m.tax] + amt); }
@@ -212,8 +236,42 @@ const Books = {
       if (m.kind === "bank" || m.kind === "tds_receivable") return;
       out.taxable = r2(out.taxable + amt);
       if (e.r){ const key = String(r2(e.r * 2)); out.rates[key] = r2((out.rates[key] || 0) + amt); }
+      vals.push({amt, h: e.h || "", gr: e.gr, sp: e.sp || ""});
     });
     out.total = r2(out.taxable + out.tax.CGST + out.tax.SGST + out.tax.IGST + out.tax.CESS + out.roundoff);
+    out.parts = this.parts(vals, out, v);
+    return out;
+  },
+  GST_RATES: [0, 0.1, 0.25, 1, 1.5, 3, 5, 6, 7.5, 12, 18, 28, 40],
+  // the nearest GST rate, when a worked-out rate is within a rounding of it
+  snapRate(r){ const n = this.GST_RATES.reduce((a, c) => Math.abs(c - r) < Math.abs(a - r) ? c : a, 0); return Math.abs(n - r) <= 0.05 ? n : r; },
+  // the value and tax of a voucher, rate by rate and HSN by HSN: from each item's rate where Tally has it,
+  // with the tax on the voucher shared out in proportion, so the parts always add up to the voucher
+  parts(vals, L, v){
+    const heads = ["IGST", "CGST", "SGST", "CESS"], taxAll = r2(heads.reduce((a, h) => a + L.tax[h], 0));
+    const g = {};
+    vals.forEach(x => { const k = (x.gr == null ? "?" : x.gr) + "|" + x.h; const q = g[k] = g[k] || {gr: x.gr, hsn: x.h, supply: x.sp, taxable: 0}; q.taxable = r2(q.taxable + x.amt); if (!q.supply) q.supply = x.sp; });
+    let list = Object.values(g);
+    const vh = (v && v.hsn || [])[0] || "", vs = (v && v.supply) || "";
+    if (!list.length) list = [{gr: null, hsn: vh, supply: vs, taxable: 0}];
+    list.forEach(q => { if (!q.hsn) q.hsn = vh; if (!q.supply) q.supply = vs; });
+    // lines with no rate take whatever tax the rated lines do not explain
+    const known = list.filter(q => q.gr != null), unknown = list.filter(q => q.gr == null);
+    const expKnown = r2(known.reduce((a, q) => a + q.taxable * q.gr / 100, 0));
+    const unkTaxable = r2(unknown.reduce((a, q) => a + q.taxable, 0));
+    const unkTax = Math.max(0, r2(taxAll - expKnown - num(L.tax.CESS)));
+    const unkRate = unkTaxable ? this.snapRate(Math.round(unkTax / unkTaxable * 10000) / 100) : (known.length ? 0 : (L.taxable ? this.snapRate(Math.round(r2(taxAll - L.tax.CESS) / L.taxable * 10000) / 100) : 0));
+    unknown.forEach(q => { q.gr = unkRate; q.guessed = true; });
+    // one line per rate and HSN, the voucher's tax shared by what each should carry
+    const m = {};
+    list.forEach(q => { const k = q.gr + "|" + q.hsn; const x = m[k] = m[k] || {rate: q.gr, hsn: q.hsn, supply: q.supply, taxable: 0, guessed: !!q.guessed}; x.taxable = r2(x.taxable + q.taxable); });
+    const out = Object.values(m).sort((a, c) => c.taxable - a.taxable);
+    const w = out.map(x => x.taxable * x.rate), ws = w.reduce((a, c) => a + c, 0), ts = out.reduce((a, x) => a + x.taxable, 0);
+    heads.forEach(h => {
+      const k = h === "IGST" ? "igst" : h === "CGST" ? "cgst" : h === "SGST" ? "sgst" : "cess";
+      let left = L.tax[h];
+      out.forEach((x, i) => { const share = i === out.length - 1 ? left : r2(L.tax[h] * (h === "CESS" || !ws ? (ts ? x.taxable / ts : 1 / out.length) : w[i] / ws)); x[k] = share; left = r2(left - share); });
+    });
     return out;
   },
   // what part of the return a voucher belongs to
@@ -227,7 +285,12 @@ const Books = {
     if (/non.?gst/i.test(v.taxability || "")) return "nongst";
     return "taxable";
   },
-  isRcm(v){ return !!v.rcm; },
+  // reverse charge: marked so in Tally, or the tax on the bill credited to a reverse-charge payable ledger
+  isRcm(v){
+    if (v.rcm) return true;
+    // a reverse-charge ledger on the voucher: the payable credited, or a reverse-charge input debited
+    return v.ent.some(e => { const m = this.ledgerOf(e.l); return m.kind === "gst" && m.rcm && (m.side === "output" ? e.a > 0.004 : e.a < -0.004); });
+  },
   isImport(v){ const c = String(v.country || "").toLowerCase(); return !!c && c !== "india"; },
   // orders and stock movements carry no accounts; they are never purchases or sales
   NONACC: /ORDER|DELIVERY NOTE|RECEIPT NOTE|REJECTION|STOCK JOURNAL|PHYSICAL STOCK|MATERIAL (IN|OUT)|MEMO/i,
