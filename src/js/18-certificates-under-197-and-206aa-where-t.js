@@ -109,7 +109,8 @@ async function openBooks(cid){
 async function saveBooks(){ const b = S.books; if (b && b.cid) await Books.save(b.cid, {cid: b.cid, vouchers: b.vouchers, map: b.map, meta: b.meta, challans: b.challans, alloc: b.alloc, pans: b.pans, twoB: b.twoB,
   gstins: b.gstins, under: b.under, states: b.states, groups: b.groups, salary: b.salary, certs: b.certs, advFix: b.advFix, assets: b.assets, rev: b.rev,
   filed: b.filed, amendFix: b.amendFix, twoBs: b.twoBs, reco2b: b.reco2b, ledInfo: b.ledInfo, ledInfoAt: b.ledInfoAt,
-  audit: b.audit, auditCfg: b.auditCfg, auditRel: b.auditRel, ledSnaps: b.ledSnaps, gst9c: b.gst9c, groupInfo: b.groupInfo, fs: b.fs, tb: b.tb, mis: b.mis, misCfg: b.misCfg, msme: b.msme, budget: b.budget}); }
+  audit: b.audit, auditCfg: b.auditCfg, auditRel: b.auditRel, ledSnaps: b.ledSnaps, gst9c: b.gst9c, groupInfo: b.groupInfo, fs: b.fs, tb: b.tb, mis: b.mis, misCfg: b.misCfg, msme: b.msme, budget: b.budget,
+  gst3b: b.gst3b, gst9: b.gst9, gstOpen: b.gstOpen, itcBasis: b.itcBasis, itcTrack: b.itcTrack, outRej: b.outRej}); }
 function viewBooks(){
   const co = CO();
   if (!S.books || S.books.cid !== co.id){ openBooks(co.id); return '<p class="note">Opening the books…</p>'; }
@@ -1167,7 +1168,7 @@ function viewBooksGst(b){
   if (part === "amend") return h + viewGstAmend(b);
   if (part === "g9") return h + viewGst9(b);
   if (part === "g9c") return h + viewGst9c(b);
-  return h + (part === "r1" ? viewGstr1(b) : viewGstr3b(b));
+  return h + (part === "r1" ? viewGstr1(b) + viewCustRejections(b) : viewGstr3b(b));
 }
 
 function viewGstAmend(b){
@@ -1414,6 +1415,8 @@ function viewGstr3b(b){
     row("(a) Outward taxable supplies, other than zero rated, nil and exempt", t.sale) +
     (t.adv.taxable || t.adv.igst || t.adv.cgst ? row("Add: tax on advances, 11A less 11B", t.adv) : "") +
     row("Less: credit notes", {taxable: -t.cn.taxable, igst: -t.cn.igst, cgst: -t.cn.cgst, sgst: -t.cn.sgst}) +
+    (t.custRej && t.custRej.add.n ? row("Add: our credit notes rejected by customers in IMS (" + t.custRej.add.n + ")", t.custRej.add) : "") +
+    (t.custRej && t.custRej.back.n ? row("Less: of those, accepted later (" + t.custRej.back.n + ")", {taxable: -t.custRej.back.taxable, igst: -t.custRej.back.igst, cgst: -t.custRej.back.cgst, sgst: -t.custRej.back.sgst}) : "") +
     row("(b) Outward zero rated: exports and SEZ", t.zero) +
     row("(c) Other outward: nil rated and exempt", t.nil) +
     row("(d) Inward supplies on which tax is payable by you (reverse charge)", t.rcmOut) +

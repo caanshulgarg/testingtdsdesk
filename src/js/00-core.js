@@ -33,7 +33,7 @@ const DEFAULT_FIRM = {firmName:"Garg Shekhar & Company", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "25 Sep 2026 · build 140 (IMS rejections read from 2B: a rejected invoice gives no credit, a rejected credit note does not reduce it; followed up with the supplier)";
+const APP_VERSION = "25 Sep 2026 · build 141 (customers’ IMS rejections; GST typed figures now saved; How this tab works on every GST and TDS tab)";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;

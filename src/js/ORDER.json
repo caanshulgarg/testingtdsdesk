@@ -30,5 +30,7 @@
  "29-financial-statements.js",
  "30-accounts-screen.js",
  "31-grid-filters.js",
- "32-itc-follow-up.js"
+ "32-itc-follow-up.js",
+ "33-customer-ims.js",
+ "34-help.js"
 ]

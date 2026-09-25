@@ -225,8 +225,11 @@ const GSTR = {
     this.partsOf(out.filter(r => !r.gstin && r.igst > 0 && r.cls === "taxable")).forEach(q => { const r = q.row, k = posOf(r) || "97", sg = r.kind === "CDNR" ? -1 : 1, x = unregPos[k] = unregPos[k] || {pos: k, taxable: 0, igst: 0}; x.taxable = r2(x.taxable + sg * q.taxable); x.igst = r2(x.igst + sg * q.igst); });
     const adv = GSTAdv.month(ym, reg).net;                           // 11A less 11B goes into 3.1(a)
     const rul = GSTRev.month(ym, reg);                               // rules 42 and 43 go into 4(B)(1)
-    const net = {taxable: r2(taxableOut.taxable - cn.taxable + adv.taxable), cgst: r2(taxableOut.cgst - cn.cgst + adv.cgst), sgst: r2(taxableOut.sgst - cn.sgst + adv.sgst),
-      igst: r2(taxableOut.igst - cn.igst + adv.igst), cess: r2(taxableOut.cess - cn.cess + adv.cess)};
+    // our credit notes rejected by the customer in IMS: the portal adds the tax back to 3.1(a)
+    const cust = typeof CustIMS === "object" ? CustIMS.month(ym, reg) : {add: {taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, n: 0}, back: {taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, n: 0}};
+    const cx = k => r2(cust.add[k] - cust.back[k]);
+    const net = {taxable: r2(taxableOut.taxable - cn.taxable + adv.taxable + cx("taxable")), cgst: r2(taxableOut.cgst - cn.cgst + adv.cgst + cx("cgst")), sgst: r2(taxableOut.sgst - cn.sgst + adv.sgst + cx("sgst")),
+      igst: r2(taxableOut.igst - cn.igst + adv.igst + cx("igst")), cess: r2(taxableOut.cess - cn.cess + adv.cess + cx("cess"))};
     const itc = {cgst: r2(impGoods.cgst + impServ.cgst + rcmIn.cgst + other.cgst), sgst: r2(impGoods.sgst + impServ.sgst + rcmIn.sgst + other.sgst),
                  igst: r2(impGoods.igst + impServ.igst + rcmIn.igst + other.igst), cess: r2(impGoods.cess + impServ.cess + rcmIn.cess + other.cess)};
     // 4(B)(1): rules 38, 42 and 43 and section 17(5), reversed for good; 4(B)(2): other reversals, which may come back
@@ -236,7 +239,7 @@ const GSTR = {
     const netItc = {cgst: r2(itc.cgst - rev1.cgst - rev2.cgst), sgst: r2(itc.sgst - rev1.sgst - rev2.sgst), igst: r2(itc.igst - rev1.igst - rev2.igst), cess: r2(itc.cess - rev1.cess - rev2.cess)};
     const opening = this.creditIn(ym, reg);
     const pay = this.setOff(net, rcmOut, netItc, opening);
-    return {sale: taxableOut, cn, net, adv, rules, r42: rul.r42, r43: rul.r43, zero, nil, nongst, rcmOut, rcmIn, toUnreg, impGoods, impServ, other, blocked,
+    return {sale: taxableOut, cn, net, adv, custRej: cust, rules, r42: rul.r42, r43: rul.r43, zero, nil, nongst, rcmOut, rcmIn, toUnreg, impGoods, impServ, other, blocked,
       buy: this.sum(inn), itc, reversal, rev1, rev2, reclaim, na, inw5, unregPos: Object.values(unregPos).sort((a, c) => a.pos.localeCompare(c.pos)),
       basis: basis.on ? "2b" : basis.why, held, released, cn2b, rejBack, netItc, ineligible: this.sum(inn).ineligible, opening, pay, payable: pay.cash};
   },

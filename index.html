@@ -422,7 +422,7 @@ th.n .colh{flex-direction:row-reverse}
 .bk-frow input[type="text"]:not(:placeholder-shown),.bk-frow input[type="number"]:not(:placeholder-shown),.bk-frow .on{border-color:var(--ledger);background:var(--ledger-soft)}
 .revtbl td.pt .pn{white-space:normal;text-align:left;display:block}
 .bk-cols input[type="text"],.bk-cols input[type="number"]{height:32px;border:1px solid var(--rule);border-radius:7px;padding:0 8px;font:inherit;font-size:13.5px;background:var(--sheet);color:var(--ink)}
-.revfilter{display:flex;align-items:center;gap:12px;margin:0 0 10px}
+.revfilter{display:flex;align-items:center;gap:12px;margin:0 0 10px;flex-wrap:wrap;row-gap:8px}
 .revfilter input{flex:1;max-width:520px;height:36px;border:1px solid var(--rule);border-radius:8px;padding:0 12px;font:inherit;font-size:14px;background:var(--sheet)}
 .bk-table tr.open td{background:var(--ledger-soft)}
 .bk-table .pn.linkbtn{font-weight:600;color:var(--ink);text-decoration:none;text-align:left;padding:0}
@@ -488,7 +488,7 @@ th.n .colh{flex-direction:row-reverse}
 .tbar-title{display:flex;align-items:baseline;gap:12px}
 .tbar-title h2{margin:0;font-family:var(--sans);font-size:19px;font-weight:650}
 .tbar-actions{display:flex;gap:8px;align-items:center}
-.sbar{display:flex;gap:0;margin:10px 0 0;border-bottom:0}
+.sbar{display:flex;flex-wrap:wrap;gap:0;margin:10px 0 0;border-bottom:0}
 .sbar button{border:0;border-bottom:2px solid transparent;background:transparent;padding:9px 16px 9px 0;margin-right:18px;font:inherit;font-size:14px;color:var(--muted);cursor:pointer}
 .sbar button:hover{color:var(--ink)}
 .sbar button[aria-selected="true"]{color:var(--ink);font-weight:600;border-bottom-color:var(--ledger)}
@@ -723,6 +723,14 @@ img.preview{display:block;max-width:100%;max-height:70vh;margin:0 auto;border:1p
 .bk-table.compact.fixed td{white-space:normal}
 .bk-table.compact.fixed td.n,.bk-table.compact.fixed td.hr,.bk-table.compact.fixed td:first-child{white-space:nowrap}
 .bk-table.compact.fixed th.n,.bk-table.compact.fixed td.n{width:auto}
+/* how this tab works */
+.help-btn{margin-left:auto;border:1px solid var(--rule);background:var(--sheet);color:var(--stamp);border-radius:14px;padding:3px 12px;font-size:12.5px;cursor:pointer;white-space:nowrap;align-self:center}
+.help-btn:hover{background:var(--stamp-soft)}
+.help-panel{position:fixed;top:0;right:0;bottom:0;width:min(420px,100vw);background:var(--sheet);color:var(--ink);border-left:1px solid var(--rule);box-shadow:-6px 0 24px rgba(0,0,0,.12);z-index:60;overflow:auto;padding:16px 18px 24px;font-size:14px;line-height:1.5}
+.help-panel .help-head{display:flex;justify-content:space-between;align-items:center;gap:10px;position:sticky;top:-16px;background:var(--sheet);padding:4px 0 8px;border-bottom:1px solid var(--rule-soft);margin-bottom:6px}
+.help-panel h4{margin:14px 0 4px;font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.help-panel ol,.help-panel ul{padding-left:20px;margin:4px 0}.help-panel li{margin:4px 0}
+@media (min-width:1100px){ body.help-on{padding-right:420px} }
 </style>
 <style>.is-test .side-brand::after{content:"TEST";display:block;margin-top:4px;font-size:11px;letter-spacing:.14em;color:#E9A06A}.is-test header.top{box-shadow:inset 0 3px 0 #E2761B}body.is-test::after{content:"TESTING SITE · not for real client work · post only to a ZZ TEST company in Tally";position:fixed;left:0;right:0;bottom:0;z-index:70;background:#E2761B;color:#fff;font-size:12.5px;text-align:center;padding:3px 8px;letter-spacing:.04em;pointer-events:none}.is-test .actionbar{bottom:22px}.is-test #app{padding-bottom:34px}</style></head>
 <body class="is-test">
@@ -796,7 +804,7 @@ const DEFAULT_FIRM = {firmName:"Garg Shekhar & Company", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "TEST · 25 Sep 2026 · build 140 (IMS rejections read from 2B: a rejected invoice gives no credit, a rejected credit note does not reduce it; followed up with the supplier)";
+const APP_VERSION = "TEST · 25 Sep 2026 · build 141 (customers’ IMS rejections; GST typed figures now saved; How this tab works on every GST and TDS tab)";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;
@@ -4636,6 +4644,7 @@ function render(){
   }
   if (typeof acAfterRender === "function") acAfterRender();
   if (typeof GridF === "object") GridF.after();
+  if (typeof Help === "object") Help.after();
   if (S.view === "company" && ["bank", "invoices", "export", "sales"].includes(S.tab) && typeof maybeLiveSync === "function") maybeLiveSync();
 }
 
@@ -7631,8 +7640,11 @@ const GSTR = {
     this.partsOf(out.filter(r => !r.gstin && r.igst > 0 && r.cls === "taxable")).forEach(q => { const r = q.row, k = posOf(r) || "97", sg = r.kind === "CDNR" ? -1 : 1, x = unregPos[k] = unregPos[k] || {pos: k, taxable: 0, igst: 0}; x.taxable = r2(x.taxable + sg * q.taxable); x.igst = r2(x.igst + sg * q.igst); });
     const adv = GSTAdv.month(ym, reg).net;                           // 11A less 11B goes into 3.1(a)
     const rul = GSTRev.month(ym, reg);                               // rules 42 and 43 go into 4(B)(1)
-    const net = {taxable: r2(taxableOut.taxable - cn.taxable + adv.taxable), cgst: r2(taxableOut.cgst - cn.cgst + adv.cgst), sgst: r2(taxableOut.sgst - cn.sgst + adv.sgst),
-      igst: r2(taxableOut.igst - cn.igst + adv.igst), cess: r2(taxableOut.cess - cn.cess + adv.cess)};
+    // our credit notes rejected by the customer in IMS: the portal adds the tax back to 3.1(a)
+    const cust = typeof CustIMS === "object" ? CustIMS.month(ym, reg) : {add: {taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, n: 0}, back: {taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, n: 0}};
+    const cx = k => r2(cust.add[k] - cust.back[k]);
+    const net = {taxable: r2(taxableOut.taxable - cn.taxable + adv.taxable + cx("taxable")), cgst: r2(taxableOut.cgst - cn.cgst + adv.cgst + cx("cgst")), sgst: r2(taxableOut.sgst - cn.sgst + adv.sgst + cx("sgst")),
+      igst: r2(taxableOut.igst - cn.igst + adv.igst + cx("igst")), cess: r2(taxableOut.cess - cn.cess + adv.cess + cx("cess"))};
     const itc = {cgst: r2(impGoods.cgst + impServ.cgst + rcmIn.cgst + other.cgst), sgst: r2(impGoods.sgst + impServ.sgst + rcmIn.sgst + other.sgst),
                  igst: r2(impGoods.igst + impServ.igst + rcmIn.igst + other.igst), cess: r2(impGoods.cess + impServ.cess + rcmIn.cess + other.cess)};
     // 4(B)(1): rules 38, 42 and 43 and section 17(5), reversed for good; 4(B)(2): other reversals, which may come back
@@ -7642,7 +7654,7 @@ const GSTR = {
     const netItc = {cgst: r2(itc.cgst - rev1.cgst - rev2.cgst), sgst: r2(itc.sgst - rev1.sgst - rev2.sgst), igst: r2(itc.igst - rev1.igst - rev2.igst), cess: r2(itc.cess - rev1.cess - rev2.cess)};
     const opening = this.creditIn(ym, reg);
     const pay = this.setOff(net, rcmOut, netItc, opening);
-    return {sale: taxableOut, cn, net, adv, rules, r42: rul.r42, r43: rul.r43, zero, nil, nongst, rcmOut, rcmIn, toUnreg, impGoods, impServ, other, blocked,
+    return {sale: taxableOut, cn, net, adv, custRej: cust, rules, r42: rul.r42, r43: rul.r43, zero, nil, nongst, rcmOut, rcmIn, toUnreg, impGoods, impServ, other, blocked,
       buy: this.sum(inn), itc, reversal, rev1, rev2, reclaim, na, inw5, unregPos: Object.values(unregPos).sort((a, c) => a.pos.localeCompare(c.pos)),
       basis: basis.on ? "2b" : basis.why, held, released, cn2b, rejBack, netItc, ineligible: this.sum(inn).ineligible, opening, pay, payable: pay.cash};
   },
@@ -8634,7 +8646,8 @@ async function openBooks(cid){
 async function saveBooks(){ const b = S.books; if (b && b.cid) await Books.save(b.cid, {cid: b.cid, vouchers: b.vouchers, map: b.map, meta: b.meta, challans: b.challans, alloc: b.alloc, pans: b.pans, twoB: b.twoB,
   gstins: b.gstins, under: b.under, states: b.states, groups: b.groups, salary: b.salary, certs: b.certs, advFix: b.advFix, assets: b.assets, rev: b.rev,
   filed: b.filed, amendFix: b.amendFix, twoBs: b.twoBs, reco2b: b.reco2b, ledInfo: b.ledInfo, ledInfoAt: b.ledInfoAt,
-  audit: b.audit, auditCfg: b.auditCfg, auditRel: b.auditRel, ledSnaps: b.ledSnaps, gst9c: b.gst9c, groupInfo: b.groupInfo, fs: b.fs, tb: b.tb, mis: b.mis, misCfg: b.misCfg, msme: b.msme, budget: b.budget}); }
+  audit: b.audit, auditCfg: b.auditCfg, auditRel: b.auditRel, ledSnaps: b.ledSnaps, gst9c: b.gst9c, groupInfo: b.groupInfo, fs: b.fs, tb: b.tb, mis: b.mis, misCfg: b.misCfg, msme: b.msme, budget: b.budget,
+  gst3b: b.gst3b, gst9: b.gst9, gstOpen: b.gstOpen, itcBasis: b.itcBasis, itcTrack: b.itcTrack, outRej: b.outRej}); }
 function viewBooks(){
   const co = CO();
   if (!S.books || S.books.cid !== co.id){ openBooks(co.id); return '<p class="note">Opening the books…</p>'; }
@@ -9692,7 +9705,7 @@ function viewBooksGst(b){
   if (part === "amend") return h + viewGstAmend(b);
   if (part === "g9") return h + viewGst9(b);
   if (part === "g9c") return h + viewGst9c(b);
-  return h + (part === "r1" ? viewGstr1(b) : viewGstr3b(b));
+  return h + (part === "r1" ? viewGstr1(b) + viewCustRejections(b) : viewGstr3b(b));
 }
 
 function viewGstAmend(b){
@@ -9939,6 +9952,8 @@ function viewGstr3b(b){
     row("(a) Outward taxable supplies, other than zero rated, nil and exempt", t.sale) +
     (t.adv.taxable || t.adv.igst || t.adv.cgst ? row("Add: tax on advances, 11A less 11B", t.adv) : "") +
     row("Less: credit notes", {taxable: -t.cn.taxable, igst: -t.cn.igst, cgst: -t.cn.cgst, sgst: -t.cn.sgst}) +
+    (t.custRej && t.custRej.add.n ? row("Add: our credit notes rejected by customers in IMS (" + t.custRej.add.n + ")", t.custRej.add) : "") +
+    (t.custRej && t.custRej.back.n ? row("Less: of those, accepted later (" + t.custRej.back.n + ")", {taxable: -t.custRej.back.taxable, igst: -t.custRej.back.igst, cgst: -t.custRej.back.cgst, sgst: -t.custRej.back.sgst}) : "") +
     row("(b) Outward zero rated: exports and SEZ", t.zero) +
     row("(c) Other outward: nil rated and exempt", t.nil) +
     row("(d) Inward supplies on which tax is payable by you (reverse charge)", t.rcmOut) +
@@ -19374,6 +19389,201 @@ async function itctExcel(){
   const g = ((S.books.meta || {}).gstins || []).find(z => z.slice(0, 2) === reg) || reg;
   saveFile(CO().name.replace(/[^A-Za-z0-9]+/g, "-") + "-ITC-follow-up-" + g + "-" + ITCT.today() + ".xlsx", new Blob([XLSX.write(wb, {bookType: "xlsx", type: "array"})], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
 }
+/* ================================================================== */
+/* Our invoices and credit notes rejected by the customer in IMS      */
+/* ================================================================== */
+// The customer's IMS is theirs: nothing about their action comes to us in a file, so the rejections are marked
+// here by hand, document by document, from the books' own sales. What each one does:
+//  - an invoice rejected: our tax stays as reported. If the invoice is right, the customer accepts it (before their 3B)
+//    or we send it again by amending it; if it is wrong, it is corrected in Tally (reported as an amendment) or cancelled
+//    by a credit note.
+//  - a credit note rejected: the portal adds its tax back to our liability, in the 3B of the month after the customer
+//    rejected it. That add-back is put into 3.1(a) here in the same month, and taken out again if the customer later
+//    accepts it (usually after we amend and send it again).
+const CustIMS = {
+  ACTS: {
+    inv: [["ask", "Invoice is right: ask the customer to accept it, or send it again by amendment"], ["amend", "Details wrong: correct it in Tally, it goes as an amendment"], ["cancel", "Not a supply: issue a credit note"], ["done", "Settled"]],
+    cn: [["rejected", "Rejected: its tax is added back to 3.1(a)"], ["accepted", "Customer accepted it later"]]
+  },
+  store(reg){ const b = S.books; b.outRej = b.outRej || {}; return b.outRej[reg || ""] = b.outRej[reg || ""] || {}; },
+  // documents the customer can act on in IMS: invoices and notes to registered customers
+  docs(reg){ return GSTR.outward(null, reg).filter(r => r.gstin && (r.kind === "B2B" || r.kind === "CDNR" || r.kind === "DBNR" || (r.kind === "EXP" && r.cls === "sez"))); },
+  nextYm(ym){ const y = +ym.slice(0, 4), m = +ym.slice(4, 6); return m === 12 ? (y + 1) + "01" : y + String(m + 1).padStart(2, "0"); },
+  find(reg, q){ const n = GST2B.normNo(q); if (!n) return []; return this.docs(reg).filter(r => GST2B.normNo(r.no) === n || GST2B.normNo(r.no).endsWith(n)).slice(0, 12); },
+  add(reg, id){
+    const r = this.docs(reg).find(z => z.id === id); if (!r) return null;
+    const st = this.store(reg); if (st[id]) return st[id];
+    const ym = GSTR.ym(r.date), today = ITCT.today(), rejYm = today.slice(0, 7).replace("-", "") > ym ? today.slice(0, 7).replace("-", "") : ym;
+    return st[id] = {kind: r.kind === "CDNR" ? "cn" : "inv", no: r.no, date: r.date, party: r.party, gstin: r.gstin, rejYm, addYm: this.nextYm(rejYm), act: r.kind === "CDNR" ? "rejected" : "ask", remark: "", doneYm: "", at: today};
+  },
+  items(reg){
+    const st = this.store(reg), byId = new Map(this.docs(reg).map(r => [r.id, r]));
+    return Object.keys(st).map(id => { const s = st[id], r = byId.get(id);
+      const tax = r ? {igst: r.igst, cgst: r.cgst, sgst: r.sgst, cess: r.cess || 0, taxable: r.taxable} : {igst: 0, cgst: 0, sgst: 0, cess: 0, taxable: 0};
+      const open = s.kind === "cn" ? s.act !== "accepted" : s.act !== "done";
+      return Object.assign({id, gone: !r}, s, tax, {tax: r2(tax.igst + tax.cgst + tax.sgst + tax.cess), open}); })
+      .sort((a, c) => String(a.date).localeCompare(String(c.date)));
+  },
+  // 3.1(a) for a month: rejected credit notes added back, and taken out again in the month the customer accepts them
+  month(ym, reg){
+    const add = {taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, n: 0, list: []}, back = {taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, n: 0, list: []};
+    const put = (o, x) => { ["taxable", "igst", "cgst", "sgst", "cess"].forEach(k => { o[k] = r2(o[k] + num(x[k])); }); o.n++; o.list.push(x); };
+    if (!S.books || !S.books.outRej) return {add, back};
+    this.items(reg).filter(x => x.kind === "cn" && !x.gone).forEach(x => { if (x.addYm === ym) put(add, x); if (x.act === "accepted" && x.doneYm === ym) put(back, x); });
+    return {add, back};
+  },
+  letter(reg, gstin, party, list){
+    const co = CO() || {}, g = ((S.books.meta || {}).gstins || []).find(z => z.slice(0, 2) === reg) || reg, m = v => "\u20b9" + INR.format(r2(v));
+    let t = "Dear Sir/Madam,\n\nThe following documents issued by " + (co.name || "us") + " (GSTIN " + g + ") to " + party + " (GSTIN " + gstin + ") are shown as rejected in your Invoice Management System:\n\n";
+    t += list.map((x, i) => "   " + (i + 1) + ". " + (x.kind === "cn" ? "Credit note " : "Invoice ") + x.no + " dated " + GSTAmend.dmy(x.date) + ", taxable " + m(x.taxable) + ", tax " + m(x.tax) + (x.remark ? " (your remark: " + x.remark + ")" : "")).join("\n");
+    t += "\n\nWe have checked them against our books and they are correct. Please accept them in IMS before you file GSTR-3B; if your return for that month is already filed, please let us know and we will report them again so that they come back to your IMS.\n\nRegards,\n" + (co.name || "");
+    return t;
+  },
+  customers(reg){
+    const m = {};
+    this.items(reg).filter(x => x.open && ((x.kind === "inv" && x.act === "ask") || (x.kind === "cn" && x.act === "rejected"))).forEach(x => { const k = x.gstin; (m[k] = m[k] || {gstin: x.gstin, party: x.party, items: []}).items.push(x); });
+    return Object.values(m).map(c => Object.assign(c, {email: ITCT.tallyEmail(c.party), phone: ITCT.tallyPhone(c.party), tax: r2(c.items.reduce((a, x) => a + x.tax, 0))}));
+  }
+};
+function viewCustRejections(b){
+  const reg = S.gstReg || "", money = v => INR.format(r2(v || 0)), list = CustIMS.items(reg), ym = S.gstYm || "", mo = CustIMS.month(ym, reg);
+  const q = S.custImsQ || "", hits = q ? CustIMS.find(reg, q) : [];
+  let h = '<section class="dash-card" style="margin-top:12px"><h3>Rejected by customers in IMS</h3>' +
+    '<p class="note">Your customer\u2019s IMS actions do not come to you in a file. When a customer tells you, or the portal shows, that they rejected one of your invoices or credit notes, find it here. A rejected credit note has its tax added back to your liability by the portal in the month after the rejection; that is put into 3.1(a) here too.</p>' +
+    '<div class="row" style="gap:8px;margin:8px 0;flex-wrap:wrap"><input type="search" data-custimsq data-fk="custimsq" data-keeptyped value="' + esc(q) + '" placeholder="Invoice or credit note number" style="width:260px"></div>';
+  if (q) h += hits.length ? '<div class="bk-tablewrap"><table class="bk-table compact"><thead><tr><th>Document</th><th>Number</th><th class="dt">Date</th><th>Customer</th><th class="n">Tax</th><th></th></tr></thead><tbody>' +
+    hits.map(r => "<tr><td>" + (r.kind === "CDNR" ? "Credit note" : r.kind === "DBNR" ? "Debit note" : "Invoice") + "</td><td>" + esc(r.no) + "</td><td>" + fmtDate(tallyDate(r.date)) + "</td><td>" + esc(r.party) + '<div class="nr">' + esc(r.gstin) + '</div></td><td class="n">' + money(r.igst + r.cgst + r.sgst + (r.cess || 0)) +
+      '</td><td>' + (CustIMS.store(reg)[r.id] ? '<span class="nr">already marked</span>' : '<button class="btn small" data-custimsadd="' + esc(r.id) + '">Mark as rejected</button>') + "</td></tr>").join("") + "</tbody></table></div>"
+    : '<p class="note">No invoice or note to a registered customer has that number.</p>';
+  if (mo.add.n || mo.back.n) h += '<p class="note"><b>' + GSTR.label(ym) + ", 3.1(a):</b> " + (mo.add.n ? "credit notes rejected by customers added back \u20b9" + money(mo.add.igst + mo.add.cgst + mo.add.sgst + mo.add.cess) + " (" + mo.add.n + ")" : "") + (mo.add.n && mo.back.n ? "; " : "") + (mo.back.n ? "accepted later, taken out again \u20b9" + money(mo.back.igst + mo.back.cgst + mo.back.sgst + mo.back.cess) + " (" + mo.back.n + ")" : "") + ".</p>";
+  if (list.length) h += '<div class="bk-tablewrap"><table class="bk-table compact"><thead><tr><th>Document</th><th>Number</th><th class="dt">Date</th><th>Customer</th><th class="n">Tax</th><th>Rejected in</th><th>Added back in</th><th>What to do</th><th>Customer\u2019s remark</th></tr></thead><tbody>' +
+    list.map(x => {
+      const mSel = (attr, v) => '<select data-custims="' + esc(x.id) + '" data-cf="' + attr + '">' + GSTR.months().concat([CustIMS.nextYm(GSTR.months().slice(-1)[0] || x.rejYm)]).filter((z, i, a) => a.indexOf(z) === i).map(z => '<option value="' + z + '"' + (v === z ? " selected" : "") + ">" + GSTR.label(z) + "</option>").join("") + "</select>";
+      const acts = '<select data-custims="' + esc(x.id) + '" data-cf="act">' + CustIMS.ACTS[x.kind].map(([v, l]) => '<option value="' + v + '"' + (x.act === v ? " selected" : "") + ">" + esc(l) + "</option>").join("") + "</select>" +
+        (x.kind === "cn" && x.act === "accepted" ? '<div class="nr">accepted in ' + mSel("doneYm", x.doneYm || x.addYm) + "</div>" : "") +
+        '<div><button class="linkbtn" data-custimsdel="' + esc(x.id) + '">not rejected after all</button></div>';
+      return "<tr><td>" + (x.kind === "cn" ? "Credit note" : "Invoice") + (x.gone ? '<div class="bad">no longer in Tally</div>' : "") + "</td><td>" + esc(x.no) + "</td><td>" + fmtDate(tallyDate(x.date)) + "</td><td>" + esc(x.party) + '<div class="nr">' + esc(x.gstin) + '</div></td><td class="n">' + money(x.tax) +
+        "</td><td>" + mSel("rejYm", x.rejYm) + "</td><td>" + (x.kind === "cn" ? mSel("addYm", x.addYm) : '<span class="nr">tax stays</span>') + "</td><td>" + acts +
+        '</td><td><input type="text" data-custims="' + esc(x.id) + '" data-cf="remark" data-fk="custimsr-' + esc(x.id) + '" value="' + esc(x.remark || "") + '" placeholder="remark" style="width:100%"></td></tr>';
+    }).join("") + "</tbody></table></div>";
+  const cs = CustIMS.customers(reg);
+  if (cs.length) h += '<p class="note" style="margin-top:8px">Customers to write to, asking them to accept: ' + cs.map(c => esc(c.party) + " (" + c.items.length + ') <button class="linkbtn" data-custimsletter="' + esc(c.gstin) + '">copy letter</button>' + (c.email ? ' \u00b7 <a href="mailto:' + esc(c.email) + "?subject=" + encodeURIComponent("Documents rejected in IMS") + "&body=" + encodeURIComponent(CustIMS.letter(reg, c.gstin, c.party, c.items)) + '">email</a>' : "")).join("; ") + "</p>";
+  return h + "</section>";
+}
+if (typeof document !== "undefined") document.addEventListener("click", e => {
+  const t = e.target.closest("[data-custimsadd],[data-custimsdel],[data-custimsletter]"); if (!t || !S.books) return;
+  const reg = S.gstReg || "";
+  if (t.dataset.custimsadd){ CustIMS.add(reg, t.dataset.custimsadd); S.custImsQ = ""; GSTR._carry = null; saveBooks(); render(); return; }
+  if (t.dataset.custimsdel){ delete CustIMS.store(reg)[t.dataset.custimsdel]; GSTR._carry = null; saveBooks(); render(); return; }
+  if (t.dataset.custimsletter){ const c = CustIMS.customers(reg).find(z => z.gstin === t.dataset.custimsletter); if (!c) return;
+    (navigator.clipboard ? navigator.clipboard.writeText(CustIMS.letter(reg, c.gstin, c.party, c.items)) : Promise.reject()).then(() => toast("Letter copied."), () => toast("Could not copy.")); }
+});
+if (typeof document !== "undefined") document.addEventListener("input", e => { const t = e.target; if (t.matches && t.matches("[data-custimsq]")){ S.custImsQ = t.value; render(); } });
+if (typeof document !== "undefined") document.addEventListener("change", e => {
+  const t = e.target; if (!t.dataset || t.dataset.custims === undefined || !S.books) return;
+  const s = CustIMS.store(S.gstReg || "")[t.dataset.custims]; if (!s) return;
+  s[t.dataset.cf] = t.value; if (t.dataset.cf === "act" && t.value === "accepted" && !s.doneYm) s.doneYm = s.addYm;
+  GSTR._carry = null; saveBooks(); if (t.dataset.cf !== "remark") render();
+});
+/* ================================================================== */
+/* "How this tab works": a guide to every GST and TDS tab, one tap    */
+/* away, kept open while you move between tabs                        */
+/* ================================================================== */
+const Help = {
+  // each tab: what it is for, what to do step by step, where its figures come from, what to watch
+  T: {
+    "gst:r1": {t: "GSTR-1", what: "Your outward supplies for the month, worked out from Tally\u2019s sales vouchers and credit and debit notes, table by table as the return asks: 4A B2B, 5 B2C large, 6 exports and SEZ, 7 B2C small by place of supply and rate, 8 nil, exempt and non-GST, 9B notes, 11 advances, 12 HSN and 13 documents issued. It gives you the JSON the portal takes.",
+      steps: ["Choose the month and, if the client has more than one, the GSTIN.", "Read the checks at the top \u2014 customers without a GSTIN or with a wrong one, place of supply, rates that cannot be right. Correct them in Tally and read the day book again; do not correct them here.", "Tie the totals to the sales register in Tally for the month.", "Look at B2C large: inter-state sales to unregistered customers above \u20b91 lakh (\u20b92.5 lakh before 1 August 2024) go invoice by invoice.", "Download the GSTR-1 JSON and upload it on the portal (Returns \u2192 GSTR-1 \u2192 Prepare offline \u2192 Upload). Use the Excel to review with the client first.", "After filing, a copy is kept here; later changes in Tally show up under Amendments.", "If a customer tells you they rejected one of your invoices or credit notes in their IMS, find it under \u201cRejected by customers in IMS\u201d at the bottom."],
+      from: "Tally sales, credit note and debit note vouchers; HSN, rate and unit from each item or ledger line; the customer\u2019s GSTIN and state from the ledger master (Tally\u2019s dated registration details); marketplace sales from the Sales tab.",
+      watch: ["A voucher changed after the month is filed is an amendment in a later month, never a second filing of that month.", "Cancelled vouchers are counted in table 13.", "An invoice with two rates is split rate by rate in the JSON.", "A credit note rejected by the customer in IMS: the portal adds its tax back to your liability in the next month; that is put into 3.1(a) here."]},
+    "gst:r3b": {t: "GSTR-3B", what: "The month\u2019s summary return and the tax to pay: 3.1 outward supplies and reverse charge, 3.2 inter-state supplies to unregistered persons, 4 input tax credit, 5 exempt and non-GST inward supplies, and 6 payment with the credit set off.",
+      steps: ["Choose the basis for credit at the top: \u201cas far as 2B shows it\u201d (the law, section 16(2)(aa)) whenever the month\u2019s 2B is here, or \u201cas booked\u201d.", "In the first month only, type the opening balance of the electronic credit ledger for each tax; later months carry it forward.", "Check 4(A)(5) and the lines for bills held back (not in 2B yet) and released (from an earlier month, now in 2B).", "Type 4(B)(2) and 4(D)(1) if there is anything to reverse or reclaim; rules 42 and 43 come from the Reversal tab.", "Check the set-off and the cash to pay in table 6.", "Pay the cash through a challan (PMT-06), then download the 3B JSON or fill the return from the Excel."],
+      from: "3.1(a) from sales less credit notes, plus tax on advances; 3.1(d) from the reverse charge payable ledger; table 4 from every voucher carrying input tax, limited to what 2B shows; 4(D)(2) from 2B\u2019s not-available lines; rules 42/43 from Reversal.",
+      watch: ["A bill not in 2B gives no credit that month; it is taken in the month its 2B carries it.", "Documents rejected in IMS give no credit; a rejected supplier credit note does not reduce it.", "Credit is used in the order the law sets: IGST first, then CGST and SGST (sections 49 and 49A, rule 88A).", "Our own credit notes rejected by customers are added back to 3.1(a) in the month the portal adds them."]},
+    "gst:inreg": {t: "Input register", what: "Every purchase-side document with input tax, line by line \u2014 rate by rate and HSN by HSN \u2014 with whether it is in 2B.",
+      steps: ["Choose the month.", "Use the funnel on any column to narrow the list: supplier, rate, status, amount range.", "Look at \u201cNot in 2B\u201d and \u201cIn 2B, differs\u201d first; they are followed up under ITC follow-up.", "Download the Excel for the file or the client."],
+      from: "Tally purchases, journals and payments carrying input tax; the 2B for the month.", watch: ["Status needs that month\u2019s 2B; without it every line says \u201c2B not brought in\u201d.", "Reverse charge and blocked credit (section 17(5)) are shown but are not expected in 2B the same way."]},
+    "gst:r2b": {t: "2B reconciliation", what: "The portal\u2019s GSTR-2B set against the bills in Tally, bill by bill.",
+      steps: ["Download GSTR-2B as JSON from the portal (Returns \u2192 GSTR-2B \u2192 Download JSON), month by month, and bring the files in here. Several at once is fine.", "Read the matched count, then the differences: amounts differ, probably the same bill (confirm or say no), in 2B not in Tally, in Tally not in 2B.", "Confirm the probable matches \u2014 they are usually a number written differently or a supplier without GSTIN in Tally.", "Fill missing supplier GSTINs in Tally\u2019s ledger masters; that alone clears most differences.", "Download the Excel of the reconciliation, then work the open items under ITC follow-up."],
+      from: "The 2B JSON files and Tally\u2019s inward vouchers.", watch: ["Bills are matched on the supplier\u2019s GSTIN and the bill number, allowing prefixes like EXP/IN/39/2025-26 against 39.", "A bill booked and exactly reversed is set aside, not treated as missing.", "Documents rejected in IMS are shown apart; they give no credit."]},
+    "gst:follow": {t: "ITC follow-up", what: "Everything 2B and Tally do not agree on, across every month, carried until it is settled \u2014 with the last date to take the credit and one letter per supplier.",
+      steps: ["Click a category chip to see its items; the red ones need action.", "For each item choose what to do: follow up the supplier, book it in Tally, reject in IMS, take the credit, and so on. Your choice follows the bill from month to month.", "Before filing 3B, open the Excel\u2019s \u201cIMS actions\u201d sheet and do those actions on the portal\u2019s IMS.", "Under \u201cSuppliers to write to\u201d, copy, email or WhatsApp the letter; the date is kept.", "Bring in the 2B for months not yet checked; until then those bills sit in \u201cNot checked yet\u201d."],
+      from: "Worked out again each time from the books and every 2B brought in. Only your decisions, notes, contacts and the dates you wrote are kept.",
+      watch: ["Credit for a year\u2019s bills can be taken only up to 30 November after the year (section 16(4)); items near that date are marked.", "Once 3B is filed, an IMS action for that month cannot be changed."]},
+    "gst:adv": {t: "Advances", what: "Money received before the invoice for services, and the tax on it (tables 11A and 11B of GSTR-1, carried into 3.1(a)).",
+      steps: ["Check each receipt listed as an advance.", "Tick \u201cNot an advance\u201d for a receipt against an earlier invoice or a loan.", "Correct the rate where the nearest invoice gives the wrong one.", "When the invoice is issued, the advance is adjusted in 11B."],
+      from: "Receipts from customers in Tally, before the customer\u2019s invoice.", watch: ["An advance billed in the same month is left out, as the return asks.", "Advances for goods are not taxed on receipt."]},
+    "gst:rev": {t: "Reversal", what: "Credit to reverse on common inputs and services used for exempt and taxable supplies (rule 42) and on common capital goods (rule 43), month by month and for the year.",
+      steps: ["Check which ledgers are marked common and which supplies are exempt.", "Check the month\u2019s turnover split.", "Read the reversal worked out; it goes into 4(B)(1) of 3B.", "After the year, compare the annual figure with the monthly total and reverse or reclaim the difference by the September return."],
+      from: "Tally input tax ledgers and turnover by class of supply.", watch: ["Credit on exclusively exempt supplies is not common; it is reversed in full."]},
+    "gst:amend": {t: "Amendments", what: "Your books now, set against each GSTR-1 already filed, and the amendments that follow (9A invoices, 9C notes, 10 B2C small).",
+      steps: ["Returns downloaded here are kept automatically. For a month filed some other way, bring in the JSON that was uploaded.", "Choose the month to see what has changed since it was filed.", "Download the GSTR-1 JSON with these amendments for the current month."],
+      from: "The filed copies and the books as they stand.", watch: ["A renumbered invoice or a corrected customer GSTIN is one amendment.", "Amendments for a year are possible up to 30 November after the year."]},
+    "gst:g9": {t: "GSTR-9", what: "The annual return for the year, from the books month by month, with 8A from 2B.",
+      steps: ["Choose any month of the year and the GSTIN.", "Check tables 4 and 5 (outward) against the year\u2019s GSTR-1s, and 6 to 8 (credit) against the 3Bs.", "Type what the books cannot give under \u201cFigures not in the books\u201d: 4K/4L, 10, 11, 14, 15, 16, 19 and the like.", "Download the PDF or Excel and fill the offline tool from it."],
+      from: "The year\u2019s vouchers, the 3B working, every 2B for 8A.", watch: ["8A needs every 2B of the year here.", "Due 31 December after the year."]},
+    "gst:g9c": {t: "GSTR-9C", what: "The reconciliation of the annual return with the audited accounts: turnover (5 and 7), tax (9) and credit (12).",
+      steps: ["Type the turnover as per the audited financial statements.", "Enter the adjustments and the reasons for each unreconciled figure.", "Download the PDF or Excel for the self-certified statement."],
+      from: "GSTR-9 as worked out here, and your typed figures.", watch: ["Needed when the year\u2019s turnover is above \u20b95 crore."]},
+    "tds:years": {t: "TDS \u2014 the years", what: "Every financial year in the books with its deductions, TDS, challans and what is still open.",
+      steps: ["Click a year to open it.", "A red figure under \u201cNot against a challan\u201d or \u201cWithout PAN\u201d is work before the returns."], from: "Tally\u2019s TDS payable ledgers and the salary sheet.", watch: []},
+    "tds:year": {t: "TDS \u2014 the year", what: "The year\u2019s four quarters with 26Q (other than salary) and 24Q (salary), and the due dates.",
+      steps: ["Click the amount in a quarter to open that return.", "Use \u201cCertificates and rate questions\u201d for lower-deduction certificates.", "Download the year\u2019s working for the file."],
+      from: "Tally vouchers with TDS; the salary sheet for 24Q.", watch: ["Due: Q1 31 July, Q2 31 October, Q3 31 January, Q4 31 May."]},
+    "tds:certs": {t: "Certificates and rate questions", what: "Lower or nil deduction certificates (section 197) and deductions made at a rate that does not match the law.",
+      steps: ["Add each certificate: number, PAN, section, rate, limit and period.", "Deductions under a certificate stop being flagged as short.", "Correct the rest in Tally, or note why the rate is right."],
+      from: "Tally deductions and the certificates typed here.", watch: ["A deductee without a valid PAN is deducted at 20% or the rate in force, whichever is higher (section 206AA).", "A certificate applies only up to its amount and within its period."]},
+    "tds:26Q:challans": {t: "26Q \u2014 Challans", what: "The TDS deposited for the quarter and which deductions each challan pays.",
+      steps: ["Check each challan\u2019s date, BSR code and serial number against the counterfoil or OLTAS.", "Click \u201cPut them against challans\u201d to set deductions against challans by section and date.", "Look at \u201cNot against a challan\u201d \u2014 either the TDS is unpaid or a challan is missing from the books."],
+      from: "Payments debiting the TDS payable ledgers in Tally.", watch: ["A challan paid late brings interest under section 201(1A); see the checks tab."]},
+    "tds:26Q:deductees": {t: "26Q \u2014 Deductees", what: "Each deductee\u2019s payments and TDS for the quarter.", steps: ["Fill any missing or wrong PAN in Tally.", "Check the section chosen for each deductee."], from: "Tally deductions grouped by PAN, or by name where there is none.", watch: ["Without a valid PAN the return carries higher-rate flags and the deductee gets no credit."]},
+    "tds:26Q:deductions": {t: "26Q \u2014 Deductions", what: "Every deduction line that goes into the return.", steps: ["Filter by section, deductee or challan.", "Check dates of payment or credit and the amounts."], from: "Each Tally voucher with TDS.", watch: []},
+    "tds:26Q:checks": {t: "26Q \u2014 Interest, late fee and checks", what: "Interest for late deduction or late payment, the late filing fee, and rate questions for the quarter.",
+      steps: ["Read the interest under section 201(1A): 1% a month for late deduction, 1.5% a month for late payment.", "Read the late fee under section 234E: \u20b9200 a day, not more than the TDS.", "Pay these with the challan before filing, and settle the rate questions."],
+      from: "Deduction and challan dates.", watch: []},
+    "tds:24Q:employees": {t: "24Q \u2014 Employees", what: "Each employee\u2019s salary and TDS for the quarter, from the salary sheet.", steps: ["Bring in the payroll sheet you already prepare (Excel or CSV).", "Check each employee\u2019s PAN and TDS."], from: "The salary sheet; Tally only shows net pay.", watch: []},
+    "tds:24Q:challans": {t: "24Q \u2014 Challans", what: "Challans for salary TDS in the quarter.", steps: ["Check each challan against the counterfoil."], from: "Tally\u2019s salary TDS payments.", watch: []},
+    "tds:24Q:annex2": {t: "24Q \u2014 Annexure II", what: "The whole year\u2019s salary details per employee, filed with Q4.", steps: ["Check gross salary, exemptions, deductions and tax for each employee.", "Tie the TDS to what was deducted over the year."], from: "The salary sheet for the year.", watch: []},
+    "tds:24Q:checks": {t: "24Q \u2014 Checks", what: "What to fix before filing: missing PANs, TDS that differs from the books, and the like.", steps: ["Fix each item listed, in the sheet or in Tally."], from: "The salary sheet and the books.", watch: []}
+  },
+  key(){
+    if (S.view !== "company" || S.tab !== "books" || !S.books || S.books.loading) return "";
+    const t = typeof booksTab === "function" ? booksTab() : "";
+    if (t === "gst") return "gst:" + (S.gstPart || "r1");
+    if (t === "tds"){ const v = S.tdsView || "years"; return v === "return" ? "tds:" + (S.tdsForm || "26Q") + ":" + (S.tdsTab || "") : "tds:" + v; }
+    return "";
+  },
+  html(k){
+    const x = this.T[k]; if (!x) return "";
+    return '<div class="help-head"><b>How this tab works: ' + esc(x.t) + '</b><button class="linkbtn" data-help="close" aria-label="Close">\u2715</button></div>' +
+      "<h4>What it is for</h4><p>" + esc(x.what) + "</p>" +
+      (x.steps && x.steps.length ? "<h4>What to do</h4><ol>" + x.steps.map(s => "<li>" + esc(s) + "</li>").join("") + "</ol>" : "") +
+      (x.from ? "<h4>Where the figures come from</h4><p>" + esc(x.from) + "</p>" : "") +
+      (x.watch && x.watch.length ? "<h4>Watch for</h4><ul>" + x.watch.map(s => "<li>" + esc(s) + "</li>").join("") + "</ul>" : "");
+  },
+  // after every render: a button beside the tab bar, and the panel kept in step with the tab shown
+  after(){
+    const k = this.key(), has = !!this.T[k];
+    let p = document.getElementById("helpPanel");
+    if (has){
+      // on the row of month and downloads under the GST tabs, where there is room; on TDS, the line of years and quarters
+      const gnav = document.querySelector('#app nav.sbar[aria-label="GST"]'), grow = gnav && gnav.nextElementSibling && gnav.nextElementSibling.classList.contains("revfilter") ? gnav.nextElementSibling : null;
+      const bar = grow || gnav || document.querySelector("#app .tds-crumbs");
+      if (bar && !bar.querySelector("[data-help]")) bar.insertAdjacentHTML("beforeend", '<button class="help-btn" data-help="open" title="How this tab works">? How this tab works</button>');
+    }
+    if (S.helpOpen && has){
+      if (!p){ p = document.createElement("aside"); p.id = "helpPanel"; p.className = "help-panel"; p.setAttribute("aria-label", "How this tab works"); document.body.appendChild(p); }
+      if (p.dataset.k !== k){ p.innerHTML = this.html(k); p.dataset.k = k; }
+    } else if (p) p.remove();
+    document.body.classList.toggle("help-on", !!(S.helpOpen && has));
+  }
+};
+if (typeof document !== "undefined") document.addEventListener("click", e => {
+  const t = e.target.closest("[data-help]"); if (!t) return;
+  S.helpOpen = t.dataset.help === "open" ? !S.helpOpen : false; Help.after();
+});
+// Esc closes the guide and nothing else: the app's own Esc (which leaves the screen) must not run as well
+if (typeof document !== "undefined") document.addEventListener("keydown", e => { if (e.key === "Escape" && S.helpOpen && document.getElementById("helpPanel")){ e.stopImmediatePropagation(); e.preventDefault(); S.helpOpen = false; Help.after(); } }, true);
 </script>
 </body>
 </html>
