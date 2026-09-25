@@ -152,16 +152,24 @@ const Books = {
       if (!raw) return;
       const name = this.unesc(raw);
       const pan = this.one(piece, "INCOMETAXNUMBER").toUpperCase();
-      const gst = this.one(piece, "PARTYGSTIN").toUpperCase();
+      // TallyPrime keeps the GSTIN, registration type and state in dated registration details;
+      // older releases in PARTYGSTIN. The latest dated one is the one in force.
+      const regs = (piece.match(/<LEDGSTREGDETAILS\.LIST>[\s\S]*?<\/LEDGSTREGDETAILS\.LIST>/g) || []).map(bk => ({from: this.one(bk, "APPLICABLEFROM"), gstin: this.one(bk, "GSTIN").toUpperCase(), type: this.one(bk, "GSTREGISTRATIONTYPE"), state: this.one(bk, "STATE")}))
+        .filter(x => x.gstin || x.type).sort((a, c) => String(a.from).localeCompare(String(c.from)));
+      const lastReg = regs.filter(x => x.gstin).pop() || null;
+      const gst = (this.one(piece, "PARTYGSTIN") || (lastReg ? lastReg.gstin : "")).toUpperCase();
       const par = this.one(piece, "PARENT");
       const st = this.one(piece, "LEDSTATENAME") || ((piece.match(/<STATE>[^<]*<\/STATE>/g) || []).map(x => this.unesc(x.replace(/<[^>]*>/g, ""))).filter(Boolean).pop() || "");
-      if (pan) pans[name] = pan;
+      // a PAN not typed in Tally is the one inside a valid GSTIN
+      const panG = /^\d{2}[A-Z]{5}\d{4}[A-Z][0-9A-Z]Z[0-9A-Z]$/.test(gst) ? gst.slice(2, 12) : "";
+      if (pan) pans[name] = pan; else if (panG) pans[name] = panG;
       if (gst) gstins[name] = gst;
       if (par) under[name] = par;
       const tt = this.one(piece, "TAXTYPE").replace(/[^A-Za-z ]/g, "").trim();
       info[name] = {group: par, taxType: tt, dutyHead: this.one(piece, "GSTDUTYHEAD"), tdsNature: this.one(piece, "TDSNATUREOFPAYMENT") || this.one(piece, "NATUREOFPAYMENT"), gstin: gst, pan,
         ob: this.amt(this.one(piece, "OPENINGBALANCE")), from: this.one(piece, "STARTINGFROM"),
-        msme: this.one(piece, "UDYAMREGNUMBER") ? (this.one(piece, "ENTERPRISETYPE") || "Micro") : "", regType: this.one(piece, "GSTREGISTRATIONTYPE")};
+        msme: this.one(piece, "UDYAMREGNUMBER") ? (this.one(piece, "ENTERPRISETYPE") || "Micro") : "", regType: (lastReg && lastReg.type) || (regs.length ? regs[regs.length - 1].type : "") || this.one(piece, "GSTREGISTRATIONTYPE"),
+        panFrom: pan ? "Tally" : panG ? "GSTIN" : "", gstinHistory: regs.filter(x => x.gstin).length > 1 ? regs.filter(x => x.gstin).map(x => x.from + ":" + x.gstin) : undefined};
       if (st) states[name] = st;
       n++;
     };

@@ -96,7 +96,8 @@ const GSTAmend = {
       if (!st.periods.has(P)){ if (this.filed(reg).length) res.noCopy.push(P); return; }
       if (ym > this.lastYm(P)){ res.late.push(P); return; }
       res.periods.push(P);
-      const books = this.norm(GSTR.toJson(P, reg, {plain: true})).docs;
+      const bn = this.norm(GSTR.toJson(P, reg, {plain: true})), books = bn.docs;
+      const before = res.rows.length;
       const filedP = new Map(Array.from(st.docs).filter(([, d]) => GSTR.ym(d.date) === P || (d.filedIn === P && !GSTR.ym(d.date))));
       const b2csP = st.b2cs[P] || new Map();
       books.forEach((d, k) => {
@@ -120,6 +121,39 @@ const GSTAmend = {
         if (!num(d.val) && !num(d.txval)) return;                     // already amended to nil
         const id = P + "|" + k;
         res.rows.push({id, P, kind: d.kind, what: "gone", was: d, now: null, changes: ["filed, but no longer in the books"], act: fix[id] || "nil"});
+      });
+      // a filed document that is gone and a new one that is missing are one amendment when they are the same document:
+      // renumbered (same party, date and value), or its GSTIN corrected (same number and value)
+      const mine = res.rows.slice(before), gone = mine.filter(r => r.what === "gone"), miss = mine.filter(r => r.what === "missing");
+      gone.forEach(g => {
+        const w = g.was, hit = miss.find(m => m.kind === g.kind && !m.paired && this.same(m.now.val, w.val) && (
+          ((m.now.ctin || "") === (w.ctin || "") && m.now.date === w.date && this.numKey(m.now.num) !== this.numKey(w.num)) ||
+          (this.numKey(m.now.num) === this.numKey(w.num) && (m.now.ctin || "") !== (w.ctin || ""))));
+        if (!hit) return;
+        hit.paired = true; g.paired = true;
+        const d = hit.now, ch = this.changes(w, d);
+        if (this.numKey(d.num) !== this.numKey(w.num)) ch.unshift("number " + w.num + " \u2192 " + d.num);
+        if ((d.ctin || "") !== (w.ctin || "")) ch.unshift("GSTIN " + (w.ctin || "none") + " \u2192 " + (d.ctin || "none"));
+        const id = P + "|" + g.kind + "|" + (w.ctin || "") + "|" + this.numKey(w.num) + ">" + this.numKey(d.num);
+        res.rows.push({id, P, kind: d.kind, what: "amend", was: w, now: d, changes: ch, act: fix[id] || "amend"});
+      });
+      for (let i = res.rows.length - 1; i >= before; i--) if (res.rows[i].paired) res.rows.splice(i, 1);
+      // B2C small (table 7) of the month: when the books now differ from what was filed (an invoice lost or gained a GSTIN,
+      // or a B2C invoice changed), table 10 carries the month's revised figures, rate by rate and place by place
+      const fb = st.b2cs[P] || new Map(), keys = new Set(Array.from(fb.keys()).concat(Array.from(bn.b2cs.keys())));
+      keys.forEach(k => {
+        const w = fb.get(k), d = bn.b2cs.get(k), z = {txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0};
+        const a = Object.assign({}, z, w || {}), c = Object.assign({}, z, d || {});
+        if (["txval", "iamt", "camt", "samt", "csamt"].every(f => this.same(a[f], c[f]))) return;
+        const [pos, rt, sply] = k.split("|"), id = P + "|B2CS|" + k, m = v => INR.format(r2(v || 0));
+        // a B2B invoice you marked as missed was never in B2C small: its value is not a change to table 7
+        const rel = mine.filter(r => !r.paired && r.what === "missing" && r.kind === "B2B" && r.now.rates.length === 1 && r.now.pos + "|" + r.now.rates[0] + "|" + (r.now.iamt ? "INTER" : "INTRA") === k);
+        const relMissed = rel.filter(r => r.act === "missed"), movedOut = r2(relMissed.reduce((q, r) => q + num(r.now.txval), 0));
+        if (relMissed.length && this.same(a.txval - c.txval, movedOut) && !fix[id]) return;
+        const lab = "place " + pos + ", " + rt + "%, " + (sply === "INTER" ? "inter-state" : "intra-state");
+        res.rows.push({id, P, kind: "B2CS", what: "amend", b2cs: {pos, rt: num(rt), sply_ty: sply, now: c},
+          was: {num: lab, date: "", txval: a.txval, val: a.txval}, now: {num: lab, date: "", txval: c.txval, val: c.txval},
+          changes: ["taxable " + m(a.txval) + " \u2192 " + m(c.txval)], act: fix[id] || "amend"});
       });
     });
     res.rows.sort((a, c) => a.P.localeCompare(c.P) || a.kind.localeCompare(c.kind) || String(a.now ? a.now.num : a.was.num).localeCompare(String(c.now ? c.now.num : c.was.num)));
@@ -146,6 +180,12 @@ const GSTAmend = {
     const moved = {};
     p.rows.forEach(r => {
       if (r.act === "skip") return;
+      if (r.kind === "B2CS"){
+        const x = r.b2cs, c = x.now, it = {rt: x.rt, txval: r2(c.txval), csamt: r2(c.csamt)};
+        if (x.sply_ty === "INTER") it.iamt = r2(c.iamt); else { it.camt = r2(c.camt); it.samt = r2(c.samt); }
+        (out.b2csa = out.b2csa || []).push({omon: this.fpOf(r.P), sply_ty: x.sply_ty, pos: x.pos, typ: "OE", itms: [it]});
+        return;
+      }
       const d = r.now, w = r.was;
       if (r.what === "amend" || (r.what === "gone" && r.act === "nil")){
         const x = d || w, itms = d ? d.itms : this.zeroItems(w), val = d ? d.val : 0;
@@ -178,14 +218,7 @@ const GSTAmend = {
         else { const o = {}; o[key] = g[key]; o[inner[sec]] = g.list; list.push(o); }
       });
     });
-    // table 10: the B2C small figures of the original month, less what moved to B2B
-    const st = this.state(reg, ym, false);
-    Object.values(moved).forEach(m => {
-      const g = (st.b2cs[m.P] || new Map()).get(m.pos + "|" + m.rt + "|" + m.sply_ty) || {txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0};
-      const it = {rt: m.rt, txval: r2(num(g.txval) - m.txval), csamt: r2(num(g.csamt) - m.csamt)};
-      if (m.sply_ty === "INTER") it.iamt = r2(num(g.iamt) - m.iamt); else { it.camt = r2(num(g.camt) - m.camt); it.samt = r2(num(g.samt) - m.samt); }
-      (out.b2csa = out.b2csa || []).push({omon: this.fpOf(m.P), sply_ty: m.sply_ty, pos: m.pos, typ: "OE", itms: [it]});
-    });
+    // table 10 comes from the B2C small rows above: the month's revised figures, whatever moved in or out
     return p;
   }
 };

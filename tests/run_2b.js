@@ -46,7 +46,7 @@ const junRows = J.filter(d => d !== plant.late).map(d => {
 // a supplier missing its GSTIN in Tally: remove it from one July voucher and from the masters
 const noG = jul.find(d => /^[A-Z0-9/-]{3,}$/.test(d.no) && !Object.values(plant).includes(d));
 const vNoG = b.vouchers.find(v => v.id === noG.id); const oldG = vNoG.gstin; vNoG.gstin = "";
-Object.keys(b.gstins).forEach(k => { if (b.gstins[k] === oldG) delete b.gstins[k]; });
+Object.keys(b.gstins).forEach(k => { if (b.gstins[k] === oldG) delete b.gstins[k]; }); delete b.gstins[vNoG.party];   // the masters now carry it too (registration details)
 const extra = [{ctin: "27AAACX0000X1Z5", trdnm: "NOT OUR SUPPLIER PVT LTD", supfildt: "11-07-2025", supprd: "062025", inv: [
   {inum: "N/1", dt: "05-06-2025", val: 1180, txval: 1000, igst: 180, cgst: 0, sgst: 0, cess: 0, rev: "N", itcavl: "Y", rsn: "", typ: "R", pos: "07", imsStatus: "R"},
   {inum: "N/2", dt: "06-06-2025", val: 11800, txval: 10000, igst: 1800, cgst: 0, sgst: 0, cess: 0, rev: "N", itcavl: "N", rsn: "C", typ: "R", pos: "07", imsStatus: "N"}]}];

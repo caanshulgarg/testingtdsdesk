@@ -76,7 +76,7 @@ with sync_playwright() as p:
     pg.screenshot(path=OUT + "/r1-jan.png", full_page=False)
     pg.evaluate("S.gstPart = 'r3b'; render();"); pg.wait_for_timeout(500)
     txt = pg.inner_text("#app")
-    ok("Add: tax on advances, 11A less 11B" in txt and "(B)(1) Reversed: rules 42 and 43" in txt, "3B shows advances and 4(B)(1)")
+    ok("Add: tax on advances, 11A less 11B" in txt and "(B)(1) Reversed: rules 38, 42, 43 and section 17(5)" in txt, "3B shows advances and 4(B)(1)")
     pg.screenshot(path=OUT + "/r3b-jan.png", full_page=True)
     # Ledgers: mark 07 IGST INPUT as common credit through the select
     pg.evaluate("LedMaster.refresh(S.books); S.booksTab = 'ledgers'; S.lmView = 'gst'; S.ledQ = '07 IGST INPUT'; render();"); pg.wait_for_timeout(500)

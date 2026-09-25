@@ -84,7 +84,7 @@ const nm = A.norm(multi).docs.get("B2B|09AAGCS0920E1ZN|X/1");
 ok(nm && nm.txval === 2000 && nm.iamt === 300 && nm.rates.join() === "12,18", "portal JSON with two rates on an invoice is summed");
 // 10. a B2C small invoice later given a GSTIN (moved from 7 to 4A, with table 10)
 {
-  const v = b.vouchers.find(z => G.ym(z.date) === "202507" && x.Books.isSale(z) && !/CREDIT/i.test(z.type) && z.gstin && G.regOf(z) === reg);
+  const v = b.vouchers.find(z => G.ym(z.date) === "202507" && x.Books.isSale(z) && !/CREDIT/i.test(z.type) && z.gstin && G.regOf(z) === reg && x.Books.lines(z).total <= 100000);   // over Rs 1 lakh it would be B2C large
   const keep = v.gstin; v.gstin = "";
   const julAsFiled = G.toJson("202507", reg, {plain: true});
   ok(!(julAsFiled.b2b || []).flatMap(g => g.inv).some(i => i.inum === String(v.no)) && (julAsFiled.b2cs || []).length > 0, "set-up: a July invoice filed in B2C small");

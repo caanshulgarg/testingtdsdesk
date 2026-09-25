@@ -33,7 +33,7 @@ const DEFAULT_FIRM = {firmName:"Garg Shekhar & Company", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "25 Sep 2026 · build 137 (a filter on every column of every table, long tables scroll with the heading in view; the input register on the first screen, matched bills marked In 2B)";
+const APP_VERSION = "25 Sep 2026 · build 138 (GST complete: GSTINs from Tally’s registration details, 3B credit as far as 2B shows it, table 4 and 5 as the form is now, 3.2 by place of supply, B2C large at Rs 1 lakh, GSTR-9 tables 10 to 19, amendments for renumbered invoices and GSTIN changes)";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;

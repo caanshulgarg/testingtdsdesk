@@ -35,8 +35,9 @@ const GSTR = {
       const parts = L.parts || [];
       const rate = parts.length === 1 ? parts[0].rate : L.taxable ? Books.snapRate(Math.round(tax / L.taxable * 10000) / 100) : 0;
       const cls = Books.supplyClass(v);
-      const interState = !!(gstin && v.cmp && gstin.slice(0, 2) !== String(v.cmp).slice(0, 2)) || (!gstin && v.pos && v.pos !== (b.stateOf || v.pos) && L.igst > 0);
-      const b2cl = !gstin && L.igst > 0 && L.total > 250000;
+      const interState = !!(gstin && v.cmp && gstin.slice(0, 2) !== String(v.cmp).slice(0, 2)) || (!gstin && v.pos && v.pos !== (b.stateOf || v.pos) && L.tax.IGST > 0);
+      // B2C large: inter-state to an unregistered person above Rs 1 lakh from 1 August 2024 (Rs 2.5 lakh before)
+      const b2cl = !gstin && L.tax.IGST > 0 && L.total > (String(v.date) >= "20240801" ? 100000 : 250000);
       out.push({id: v.id, date: v.date, no: v.no || v.ref || "", party: v.party, gstin, pos: v.pos || "",
         cls, rcm: Books.isRcm(v), hsn: (parts[0] && parts[0].hsn) || (v.hsn || [])[0] || "", supply: (parts[0] && parts[0].supply) || v.supply || "", eco: "", tcs: 0, parts, mixed: new Set(parts.map(q => q.rate)).size > 1,
         kind: note ? (note === "credit" ? "CDNR" : "DBNR") : (cls === "export" || cls === "sez") ? "EXP" : (cls === "exempt" || cls === "nil" || cls === "nongst") ? "NIL" : gstin ? "B2B" : b2cl ? "B2CL" : "B2C",
@@ -175,21 +176,60 @@ const GSTR = {
     const toUnreg = S1(r => !r.gstin && r.igst > 0);                 // 3.2 inter-state to unregistered
     const impGoods = S2(r => r.import && r.supply === "Goods");
     const impServ = S2(r => r.import && r.supply !== "Goods");
-    const other = S2(r => !r.import && !r.rcm);
+    let other = S2(r => !r.import && !r.rcm);
     const blocked = S2(r => r.blocked);
+    // credit only as far as 2B shows it (section 16(2)(aa), rule 36(4)): bills not yet in 2B are held back,
+    // and taken in the month their 2B carries them
+    const basis = this.itcBasis(ym, reg), held = {igst: 0, cgst: 0, sgst: 0, cess: 0, n: 0, list: []}, released = {igst: 0, cgst: 0, sgst: 0, cess: 0, n: 0, list: []};
+    if (basis.on){
+      const add = (o, d) => { o.igst = r2(o.igst + d.igst); o.cgst = r2(o.cgst + d.cgst); o.sgst = r2(o.sgst + d.sgst); o.cess = r2(o.cess + d.cess); o.n++; o.list.push(d); };
+      const vById = new Map((S.books.vouchers || []).map(v => [v.id, v]));
+      const claimable = d => d.dir > 0 && !d.rcm && !d.ineligible && !(vById.get(d.id) && Books.isImport(vById.get(d.id)));
+      basis.res.onlyBooks.filter(d => d.ym === ym && claimable(d)).forEach(d => add(held, d));
+      basis.res.pairs.forEach(x => { if (x.p.ym > ym) x.books.filter(d => d.ym === ym && claimable(d)).forEach(d => add(held, d));
+        if (x.p.ym === ym) x.books.filter(d => d.ym < ym && basis.loaded.has(d.ym) && this.itcBasis(d.ym, reg, true) && claimable(d)).forEach(d => add(released, d)); });
+      other = Object.assign({}, other, {igst: r2(other.igst - held.igst + released.igst), cgst: r2(other.cgst - held.cgst + released.cgst), sgst: r2(other.sgst - held.sgst + released.sgst), cess: r2(other.cess - held.cess + released.cess)});
+    }
+    // 4(D)(2): credit 2B says is not available (place of supply in another state, or after the section 16(4) time limit)
+    const na = {igst: 0, cgst: 0, sgst: 0, cess: 0};
+    (typeof GST2B === "object" ? GST2B.all2b(reg) : []).filter(t => t.ym === ym).forEach(t => t.rows.filter(r => r.itcavl === "N").forEach(r => { ["igst", "cgst", "sgst", "cess"].forEach(k => { na[k] = r2(na[k] + r.dir * num(r[k])); }); }));
+    const typed = ((S.books.gst3b || {})[(reg || "") + "|" + ym]) || {}, tv = (k, h) => num(((typed[k] || {})[h]));
+    const rev2 = {igst: tv("rev2", "igst"), cgst: tv("rev2", "cgst"), sgst: tv("rev2", "sgst"), cess: tv("rev2", "cess")};
+    const reclaim = {igst: tv("reclaim", "igst"), cgst: tv("reclaim", "cgst"), sgst: tv("reclaim", "sgst"), cess: tv("reclaim", "cess")};
+    // table 5: inward supplies with no tax (from unregistered or composition suppliers, exempt, nil, non-GST), inter- and intra-state
+    const own = String(reg || "").slice(0, 2), gstOf = r => String(r.gstin || "").slice(0, 2);
+    const noTax = inn.filter(r => r.bill && !r.import && !r.rcm && r.dir > 0 && !(num(r.igst) || num(r.cgst) || num(r.sgst)) && r.taxable);
+    const inw5 = {gstInter: 0, gstIntra: 0, ngInter: 0, ngIntra: 0};
+    noTax.forEach(r => { const inter = gstOf(r) && gstOf(r) !== own; const k = (r.cls === "nongst" ? "ng" : "gst") + (inter ? "Inter" : "Intra"); inw5[k] = r2(inw5[k] + num(r.taxable)); });
+    // 3.2: inter-state supplies to unregistered persons, place of supply by place of supply
+    const posOf = r => String(STATE_CODES[String(r.pos || "").toUpperCase()] || "").padStart(2, "0");
+    const unregPos = {};
+    this.partsOf(out.filter(r => !r.gstin && r.igst > 0 && r.cls === "taxable")).forEach(q => { const r = q.row, k = posOf(r) || "97", sg = r.kind === "CDNR" ? -1 : 1, x = unregPos[k] = unregPos[k] || {pos: k, taxable: 0, igst: 0}; x.taxable = r2(x.taxable + sg * q.taxable); x.igst = r2(x.igst + sg * q.igst); });
     const adv = GSTAdv.month(ym, reg).net;                           // 11A less 11B goes into 3.1(a)
     const rul = GSTRev.month(ym, reg);                               // rules 42 and 43 go into 4(B)(1)
     const net = {taxable: r2(taxableOut.taxable - cn.taxable + adv.taxable), cgst: r2(taxableOut.cgst - cn.cgst + adv.cgst), sgst: r2(taxableOut.sgst - cn.sgst + adv.sgst),
       igst: r2(taxableOut.igst - cn.igst + adv.igst), cess: r2(taxableOut.cess - cn.cess + adv.cess)};
     const itc = {cgst: r2(impGoods.cgst + impServ.cgst + rcmIn.cgst + other.cgst), sgst: r2(impGoods.sgst + impServ.sgst + rcmIn.sgst + other.sgst),
                  igst: r2(impGoods.igst + impServ.igst + rcmIn.igst + other.igst), cess: r2(impGoods.cess + impServ.cess + rcmIn.cess + other.cess)};
-    const reversal = {cgst: r2(blocked.cgst + this.sum(inn).ineligible ? blocked.cgst : blocked.cgst), sgst: blocked.sgst, igst: blocked.igst, cess: blocked.cess};
+    // 4(B)(1): rules 38, 42 and 43 and section 17(5), reversed for good; 4(B)(2): other reversals, which may come back
+    const reversal = {cgst: blocked.cgst, sgst: blocked.sgst, igst: blocked.igst, cess: blocked.cess};
     const rules = rul.total;
-    const netItc = {cgst: r2(itc.cgst - reversal.cgst - rules.cgst), sgst: r2(itc.sgst - reversal.sgst - rules.sgst), igst: r2(itc.igst - reversal.igst - rules.igst), cess: r2(itc.cess - reversal.cess - rules.cess)};
+    const rev1 = {igst: r2(rules.igst + reversal.igst), cgst: r2(rules.cgst + reversal.cgst), sgst: r2(rules.sgst + reversal.sgst), cess: r2(rules.cess + reversal.cess)};
+    const netItc = {cgst: r2(itc.cgst - rev1.cgst - rev2.cgst), sgst: r2(itc.sgst - rev1.sgst - rev2.sgst), igst: r2(itc.igst - rev1.igst - rev2.igst), cess: r2(itc.cess - rev1.cess - rev2.cess)};
     const opening = this.creditIn(ym, reg);
     const pay = this.setOff(net, rcmOut, netItc, opening);
     return {sale: taxableOut, cn, net, adv, rules, r42: rul.r42, r43: rul.r43, zero, nil, nongst, rcmOut, rcmIn, toUnreg, impGoods, impServ, other, blocked,
-      buy: this.sum(inn), itc, reversal, netItc, ineligible: this.sum(inn).ineligible, opening, pay, payable: pay.cash};
+      buy: this.sum(inn), itc, reversal, rev1, rev2, reclaim, na, inw5, unregPos: Object.values(unregPos).sort((a, c) => a.pos.localeCompare(c.pos)),
+      basis: basis.on ? "2b" : basis.why, held, released, netItc, ineligible: this.sum(inn).ineligible, opening, pay, payable: pay.cash};
+  },
+  // credit on the 2B basis for a month: on when that month's 2B is here and the client has not chosen the books basis
+  itcBasis(ym, reg, quick){
+    const b = S.books, choice = ((b.itcBasis || {})[reg || ""]) || "2b";
+    if (!reg || typeof GST2B !== "object") return quick ? false : {on: false, why: "no registration chosen"};
+    const loaded = new Set(GST2B.all2b(reg).map(t => t.ym));
+    const on = choice === "2b" && loaded.has(ym);
+    if (quick) return on;
+    return on ? {on, loaded, res: GST2B.run(reg)} : {on: false, why: choice === "books" ? "books" : "no 2B"};
   },
   HEADS: ["igst", "cgst", "sgst", "cess"],
   // payment of tax, sections 49 and 49A with rule 88A: IGST credit first against IGST, what is left of it against
@@ -213,7 +253,7 @@ const GSTR = {
   },
   // the credit carried into a month: the balance typed for the first month here, then each month's left-over
   creditIn(ym, reg){
-    const b = S.books, key = [reg, b.vouchers && b.vouchers.length, b.mapV || 0, JSON.stringify((b.gstOpen || {})[reg || ""] || {}), JSON.stringify(b.gstRev || {}).length, JSON.stringify(b.gstAdv || {}).length].join("|");
+    const b = S.books, key = [reg, b.vouchers && b.vouchers.length, b.mapV || 0, JSON.stringify((b.gstOpen || {})[reg || ""] || {}), JSON.stringify(b.gstRev || {}).length, JSON.stringify(b.gstAdv || {}).length, JSON.stringify(b.itcBasis || {}), JSON.stringify(b.gst3b || {}), Object.keys(b.twoBs || {}).join(","), JSON.stringify(((b.reco2b || {}).confirm) || {}).length, JSON.stringify(((b.reco2b || {}).link) || {}).length].join("|");
     if (!this._carry || this._carry.key !== key || this._carry.v !== b.vouchers) this._carry = {key, v: b.vouchers, m: {}};
     if (this._carry.m[ym]) return this._carry.m[ym];
     const months = this.months(), i = months.indexOf(ym), open = (b.gstOpen || {})[reg || ""] || {};
@@ -328,11 +368,16 @@ const GSTR = {
         {ty: "IMPS", iamt: r2(t.impServ.igst), camt: 0, samt: 0, csamt: r2(t.impServ.cess)},
         {ty: "ISRC", iamt: r2(t.rcmOut.igst), camt: r2(t.rcmOut.cgst), samt: r2(t.rcmOut.sgst), csamt: r2(t.rcmOut.cess)},
         {ty: "OTH", iamt: r2(t.other.igst), camt: r2(t.other.cgst), samt: r2(t.other.sgst), csamt: r2(t.other.cess)}
-      ], itc_rev: [{ty: "RUL", iamt: r2(t.rules.igst), camt: r2(t.rules.cgst), samt: r2(t.rules.sgst), csamt: r2(t.rules.cess)},
-        {ty: "OTH", iamt: r2(t.reversal.igst), camt: r2(t.reversal.cgst), samt: r2(t.reversal.sgst), csamt: r2(t.reversal.cess)}],
-        itc_net: sup(0, t.netItc.igst, t.netItc.cgst, t.netItc.sgst, t.netItc.cess)}
+      ], itc_rev: [{ty: "RUL", iamt: r2(t.rev1.igst), camt: r2(t.rev1.cgst), samt: r2(t.rev1.sgst), csamt: r2(t.rev1.cess)},
+        {ty: "OTH", iamt: r2(t.rev2.igst), camt: r2(t.rev2.cgst), samt: r2(t.rev2.sgst), csamt: r2(t.rev2.cess)}],
+        itc_net: sup(0, t.netItc.igst, t.netItc.cgst, t.netItc.sgst, t.netItc.cess),
+        // 4(D)(1) credit reclaimed (ty RUL) and 4(D)(2) ineligible under 16(4) or place of supply (ty OTH)
+        itc_inelg: [{ty: "RUL", iamt: r2(t.reclaim.igst), camt: r2(t.reclaim.cgst), samt: r2(t.reclaim.sgst), csamt: r2(t.reclaim.cess)},
+          {ty: "OTH", iamt: r2(t.na.igst), camt: r2(t.na.cgst), samt: r2(t.na.sgst), csamt: r2(t.na.cess)}]},
+      inward_sup: {isup_details: [{ty: "GST", inter: r2(t.inw5.gstInter), intra: r2(t.inw5.gstIntra)}, {ty: "NONGST", inter: r2(t.inw5.ngInter), intra: r2(t.inw5.ngIntra)}]}
     };
-    if (t.toUnreg.taxable) out.inter_sup = {unreg_details: [{pos: "", txval: r2(t.toUnreg.taxable), iamt: r2(t.toUnreg.igst)}]};
+    out.itc_elg.itc_avl.splice(3, 0, {ty: "ISD", iamt: 0, camt: 0, samt: 0, csamt: 0});
+    if (t.unregPos.length) out.inter_sup = {unreg_details: t.unregPos.filter(x => Math.abs(x.taxable) >= 0.01).map(x => ({pos: x.pos, txval: r2(x.taxable), iamt: r2(x.igst)})), comp_details: [], uin_details: []};
     return out;
   },
   async toExcel(ym, reg){

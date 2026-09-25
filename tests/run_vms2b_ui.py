@@ -37,6 +37,18 @@ with sync_playwright() as p:
     pg.click('button[data-r2tab="only2b"]'); pg.wait_for_timeout(3000); t = pg.inner_text("#app")
     ok("booked without credit" in t, "2B screen, in 2B only: says where it is booked without credit")
     pg.screenshot(path=OUT + "/vms2b-feb-only2b.png", full_page=False)
+    # 3B on the 2B basis, and GSTR-9's typed figures
+    pg.click('button[data-gstpart="r3b"]'); pg.select_option('select[data-gstym]', "202603"); pg.wait_for_timeout(5000); t = pg.inner_text("#app")
+    ok("as far as 2B shows it" in t and "Held back, not yet in 2B" in t and "Taken now, booked earlier" in t, "3B March: credit on the 2B basis, held back and released shown")
+    ok("(D)(2) Ineligible" in t and "rules 38, 42, 43 and section 17(5)" in t and "5 EXEMPT, NIL AND NON-GST INWARD" in t.upper(), "3B table 4 as the form is now, and table 5")
+    pg.select_option('select[data-itcbasis]', "books"); pg.wait_for_timeout(4000)
+    ok("Held back" not in pg.inner_text("#app") and pg.evaluate("S.books.itcBasis['07']") == "books", "switched to the books basis")
+    pg.select_option('select[data-itcbasis]', "2b"); pg.wait_for_timeout(3000)
+    pg.click('button[data-gstpart="g9"]'); pg.wait_for_timeout(6000)
+    ok("Figures not in the books" in pg.inner_text("#app"), "GSTR-9: the typed figures section")
+    pg.fill('input[data-g9t="15E.igst"]', "5000"); pg.press('input[data-g9t="15E.igst"]', "Tab"); pg.wait_for_timeout(5000)
+    ok(pg.evaluate("S.books.gst9['2025|07']['15E'].igst") == 5000 and "15E Total demand of taxes" in pg.inner_text("#app"), "a typed figure is kept and shown in Part VI")
+    pg.screenshot(path=OUT + "/b138-gst9.png", full_page=False)
     br.close()
 errs = [e for e in errors if "supabase" not in e and "Failed to load" not in e]
 ok(not errs, "no page errors" + ("" if not errs else ": " + " | ".join(errs[:4])))

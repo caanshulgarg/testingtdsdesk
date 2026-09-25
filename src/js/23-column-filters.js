@@ -926,6 +926,9 @@ function gstFixChange(t){
   if (d.misbud !== undefined){ const [h2, mm] = d.misbud.split("|"), fy = Audit.fyStart(mm + "01").slice(0, 4); b.budget = b.budget || {}; b.budget[fy] = b.budget[fy] || {}; b.budget[fy][h2] = Object.assign({}, b.budget[fy][h2], {[mm]: t.value === "" ? "" : num(t.value)}); saveBooks(); render(); return true; }
   if (d.misf !== undefined){ S.misF = t.value; render(); return true; }
   if (d.mismsme !== undefined){ b.msme = Object.assign({}, b.msme, {[d.mismsme]: t.value}); const r = (b.mis || {}).last; if (r) MIS.run(r.from, r.to, r.how); saveBooks(); render(); return true; }
+  if (d.g9t !== undefined){ const fy = GST9.fyOf(S.gstYm || GSTR.months().slice(-1)[0]), reg = S.gstReg || "", st = GST9.typed(fy, reg), [k, f] = d.g9t.split("."); st[k] = Object.assign({}, st[k], {[f]: t.value === "" ? "" : num(t.value)}); if (Object.values(st[k]).every(v => v === "")) delete st[k]; saveBooks(); render(); return true; }
+  if (d.itcbasis !== undefined){ b.itcBasis = Object.assign({}, b.itcBasis, {[S.gstReg || ""]: t.value}); saveBooks(); render(); return true; }
+  if (d.g3b !== undefined){ const k = (S.gstReg || "") + "|" + S.gstYm, [grp, hd] = d.g3b.split("."); b.gst3b = Object.assign({}, b.gst3b); b.gst3b[k] = Object.assign({}, b.gst3b[k]); b.gst3b[k][grp] = Object.assign({}, b.gst3b[k][grp], {[hd]: t.value === "" ? "" : num(t.value)}); saveBooks(); render(); return true; }
   if (d.gstopen !== undefined){ const k = S.gstReg || ""; b.gstOpen = Object.assign({}, b.gstOpen); b.gstOpen[k] = Object.assign({}, b.gstOpen[k], {[d.gstopen]: t.value === "" ? "" : num(t.value)}); saveBooks(); render(); return true; }
   if (d.inregscope !== undefined){ S.inregScope = t.value; render(); return true; }
   if (d.inregf !== undefined){ S.inregF = t.value; render(); return true; }

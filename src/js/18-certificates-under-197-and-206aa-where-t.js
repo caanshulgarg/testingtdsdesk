@@ -1074,7 +1074,13 @@ function viewGst9(b){
     (d.twoB ? d.twoB + " months of 2B here for table 8A." : '<span class="bad">No 2B here for this year, so table 8A is empty; bring the 2B files in under 2B reconciliation.</span>') + "</p>" +
     '<div class="row" style="gap:8px;margin:8px 0"><button class="btn small primary" data-act="gst9Pdf">Download (PDF)</button><button class="btn small" data-act="gst9Excel">Excel</button></div>' + GST9.html(d) +
     (Math.abs(d.T["6J"].igst + d.T["6J"].cgst + d.T["6J"].sgst + d.T["6J"].cess) >= 1 ? '<p class="bk-alert">6J: \u20b9' + m(d.T["6J"].igst + d.T["6J"].cgst + d.T["6J"].sgst + d.T["6J"].cess) + " of the credit in the 3Bs is not in 6B to 6H. It usually comes from bills marked as ITC not available, or credit entered in a 3B that is not in the books; check before filing.</p>" : "") +
-    '<p class="note">Tables 4K, 4L, 6G, 6H, 7A, 7B and 7H are not in the books; fill them on the portal where they apply. Table 8C counts bills of this year booked in Tally from April to November of the next year.</p></section>';
+    (d.heldEnd && Math.abs(d.T["6J"].igst + d.T["6J"].cgst + d.T["6J"].sgst + d.T["6J"].cess + d.heldEnd) < 2 ? '<p class="note">6J: \u20b9' + m(d.heldEnd) + " of this year\u2019s bills was held back from 3B because it was not in 2B by March; it is taken in next year\u2019s returns and belongs in 8C and 13 when it is.</p>" : "") +
+    '<p class="note">Table 8C and 13 count bills of this year booked in Tally from April to November of the next year; table 12, this year\u2019s credit reversed then (\u20b9' + m(d.T["12books"].igst + d.T["12books"].cgst + d.T["12books"].sgst + d.T["12books"].cess) + " in the books). Figures that are not in the books are typed below.</p></section>";
+  // what is not in the books, typed once for the year
+  const ty = d.typed || {}, cell = (k, f) => '<input type="number" step="0.01" data-g9t="' + k + "." + f + '" value="' + esc(ty[k] && ty[k][f] != null ? ty[k][f] : "") + '" placeholder="0" style="width:105px;text-align:right">';
+  h += '<section class="dash-card" style="margin-top:12px"><h3>Figures not in the books</h3><p class="note">Amendments made on the portal, credit from an ISD, reversals under rules 37 and 39, refunds and demands, late fee. Typed here, they go into the tables above and into the PDF and Excel.' + (d.T["12books"] && (d.T["12books"].igst + d.T["12books"].cgst + d.T["12books"].sgst) ? " Table 12 is taken from the books unless typed." : "") + '</p><div class="bk-tablewrap"><table class="bk-table gf-off"><thead><tr><th>Table</th><th class="n">Value</th><th class="n">IGST</th><th class="n">CGST</th><th class="n">SGST</th><th class="n">Cess</th></tr></thead><tbody>' +
+    GST9.TYPED.map(([k, l]) => "<tr><td>" + esc(/^\d+[A-Z]? /.test(l) ? l : k + " " + l) + "</td>" + ["taxable", "igst", "cgst", "sgst", "cess"].map(f => '<td class="n">' + cell(k, f) + "</td>").join("") + "</tr>").join("") +
+    "<tr><td>14 Differential tax on 10 and 11: payable / paid</td><td class=\"n\">" + cell("14", "payable") + '</td><td class="n">' + cell("14", "paid") + '</td><td colspan="3"></td></tr></tbody></table></div></section>';
   h += '<section class="dash-card" style="margin-top:12px"><h3>17. HSN summary of outward supplies</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>HSN</th><th class="n">Rate</th><th class="n">Taxable value</th><th class="n">IGST</th><th class="n">CGST</th><th class="n">SGST</th></tr></thead><tbody>' +
     d.hsnOut.slice(0, 100).map(x => "<tr><td>" + esc(x.hsn || "\u2014") + '</td><td class="n">' + x.rate + '%</td><td class="n">' + m(x.taxable) + '</td><td class="n">' + m(x.igst) + '</td><td class="n">' + m(x.cgst) + '</td><td class="n">' + m(x.sgst) + "</td></tr>").join("") + "</tbody></table></div></section>";
   h += '<section class="dash-card" style="margin-top:12px"><h3>18. HSN summary of inward supplies</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>HSN</th><th class="n">Taxable value</th><th class="n">IGST</th><th class="n">CGST</th><th class="n">SGST</th></tr></thead><tbody>' +
@@ -1121,6 +1127,11 @@ async function gst9Excel(which){
   if (which === "9"){
     const d = GST9.build(fy, reg), rows = [["Table", "Details", "Taxable value", "IGST", "CGST", "SGST", "Cess"]];
     GST9.ROWS.forEach(r => { if (r.length === 3 && /^(II|III|IV|V|VI)$/.test(r[0])){ rows.push(["Part " + r[0], r[1] + ". " + r[2]]); return; } const x = d.T[r[0]] || GST9.Z(); rows.push([r[0].replace(/-.*/, ""), r[1], x.taxable, x.igst, x.cgst, x.sgst, x.cess]); });
+    rows.push([]); rows.push(["Part IV", "9. Tax paid", "Tax payable", "Paid in cash", "Through IGST credit", "Through CGST credit", "Through SGST credit", "Through cess credit"]);
+    [["igst", "Integrated tax"], ["cgst", "Central tax"], ["sgst", "State/UT tax"], ["cess", "Cess"]].forEach(([k, l]) => { const p = d.pay[k], by = p.by || {}; rows.push(["9", l, p.due, p.cash, by.igst || 0, by.cgst || 0, by.sgst || 0, by.cess || 0]); });
+    const T14 = d.T["14"] || {}; rows.push([]); rows.push(["14", "Differential tax paid on 10 and 11", "payable " + num(T14.payable), "paid " + num(T14.paid)]);
+    rows.push([]); rows.push(["Part VI", "15, 16 and 19", "Value / amount", "IGST", "CGST", "SGST", "Cess"]);
+    GST9.TYPED.filter(([k]) => /^1[569]/.test(k)).forEach(([k, l]) => { const x = d.part6[k] || {}; rows.push([k, l.replace(/^\d+[A-Z]? /, ""), num(x.taxable), num(x.igst), num(x.cgst), num(x.sgst), num(x.cess)]); });
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), "GSTR-9");
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["HSN", "Rate", "Taxable", "IGST", "CGST", "SGST", "Cess"]].concat(d.hsnOut.map(x => [x.hsn, x.rate, x.taxable, x.igst, x.cgst, x.sgst, x.cess]))), "17 HSN outward");
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["HSN", "Taxable", "IGST", "CGST", "SGST", "Cess"]].concat(d.hsnIn.map(x => [x.hsn, x.taxable, x.igst, x.cgst, x.sgst, x.cess]))), "18 HSN inward");
@@ -1160,8 +1171,8 @@ function viewBooksGst(b){
 
 function viewGstAmend(b){
   const money = v => INR.format(r2(v || 0)), ym = S.gstYm || "", reg = S.gstReg || "", regs = (b.meta && b.meta.gstins) || [];
-  const kindName = {B2B: "B2B invoice", B2CL: "B2C large invoice", EXP: "Export invoice", CDNR: "Credit or debit note"};
-  const table = {B2B: "9A", B2CL: "9A", EXP: "9A", CDNR: "9C"};
+  const kindName = {B2B: "B2B invoice", B2CL: "B2C large invoice", EXP: "Export invoice", CDNR: "Credit or debit note", B2CS: "B2C small, month total"};
+  const table = {B2B: "9A", B2CL: "9A", EXP: "9A", CDNR: "9C", B2CS: "10"};
   let h = "";
   const all = GSTAmend.filed(reg);
   h += '<section class="dash-card"><h3>Filed GSTR-1 returns kept here</h3>' +
@@ -1193,7 +1204,7 @@ function viewGstAmend(b){
     '<div class="dtile"><span>9A amended invoices</span><b>' + count(r => r.kind !== "CDNR" && (r.what === "amend" || r.what === "gone")) + "</b><small>B2B, B2C large and exports</small></div>" +
     '<div class="dtile"><span>9C amended notes</span><b>' + count(r => r.kind === "CDNR" && (r.what === "amend" || r.what === "gone")) + "</b><small>credit and debit notes</small></div>" +
     '<div class="dtile"><span>Missed, reported now</span><b>' + count(r => r.what === "missing") + "</b><small>with their original number and date</small></div>" +
-    '<div class="dtile"><span>10 B2C small corrected</span><b>' + count(r => r.what === "missing" && r.act === "b2c") + "</b><small>invoices moved to B2B</small></div></div>";
+    '<div class="dtile"><span>10 B2C small corrected</span><b>' + count(r => r.kind === "B2CS") + "</b><small>months, rates and places revised</small></div></div>";
   h += '<section class="dash-card" style="margin-top:12px"><h3>To report in ' + GSTR.label(ym) + "’s GSTR-1</h3>" +
     '<p class="note">Earlier months’ documents that differ from what was filed. Each goes into this month’s JSON as chosen; an amendment already filed in an earlier month’s return is not repeated.</p>' +
     (p.periods.length ? '<p class="note">Compared: ' + p.periods.map(GSTR.label).join(", ") + ".</p>" : "") +
@@ -1210,7 +1221,7 @@ function viewGstAmend(b){
           opts.map(([v, l]) => '<option value="' + v + '"' + (r.act === v ? " selected" : "") + ">" + esc(l) + "</option>").join("") + "</select></td></tr>";
       }).join("") + "</tbody></table></div>"
       : '<p class="note">' + (p.periods.length ? "Nothing to amend: the books agree with what was filed." : "Nothing to compare yet.") + "</p>") + "</section>";
-  h += '<p class="note">Amendments can be made up to 30 November after the end of the year (section 37(3)). A B2B invoice whose GSTIN was removed shows as filed but no longer in the books; add it to B2C small by hand in table 10.</p>';
+  h += '<p class="note">Amendments can be made up to 30 November after the end of the year (section 37(3)). A renumbered invoice, or one whose GSTIN was corrected, is one amendment (9A, with the original number). When B2C small figures of a month change \u2014 an invoice lost its GSTIN, or gained one \u2014 table 10 carries the month\u2019s revised figures.</p>';
   return h;
 }
 function viewGstAdv(b){
@@ -1393,9 +1404,12 @@ function viewGstChecks(){
 }
 function viewGstr3b(b){
   const t = GSTR.threeB(S.gstYm || "", S.gstReg || ""), money = v => INR.format(r2(v || 0));
+  const choice = ((b.itcBasis || {})[S.gstReg || ""]) || "2b";
+  const basisBar = '<div class="gf-ctl" style="margin-bottom:10px"><span class="note">Credit in table 4:</span><select data-itcbasis><option value="2b"' + (choice === "2b" ? " selected" : "") + '>as far as 2B shows it (section 16(2)(aa))</option><option value="books"' + (choice === "books" ? " selected" : "") + ">as booked in Tally</option></select>" +
+    '<span class="note">' + (t.basis === "2b" ? "This month\u2019s 2B is here; bills not in it are held back." : t.basis === "no 2B" ? "No 2B for this month here, so the books are used; bring it in under 2B reconciliation." : "As booked.") + "</span></div>";
   const row = (label, x, bold) => "<tr><td>" + (bold ? "<b>" + label + "</b>" : label) + '</td><td class="n">' + money(x.taxable) + '</td><td class="n">' + money(x.igst) + '</td><td class="n">' + money(x.cgst) + '</td><td class="n">' + money(x.sgst) + "</td></tr>";
   const gap = '<tr><td colspan="5" style="height:8px"></td></tr>';
-  let h = '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>3.1 Outward supplies and inward on reverse charge</th><th class="n">Taxable</th><th class="n">IGST</th><th class="n">CGST</th><th class="n">SGST</th></tr></thead><tbody>' +
+  let h = basisBar + '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>3.1 Outward supplies and inward on reverse charge</th><th class="n">Taxable</th><th class="n">IGST</th><th class="n">CGST</th><th class="n">SGST</th></tr></thead><tbody>' +
     row("(a) Outward taxable supplies, other than zero rated, nil and exempt", t.sale) +
     (t.adv.taxable || t.adv.igst || t.adv.cgst ? row("Add: tax on advances, 11A less 11B", t.adv) : "") +
     row("Less: credit notes", {taxable: -t.cn.taxable, igst: -t.cn.igst, cgst: -t.cn.cgst, sgst: -t.cn.sgst}) +
@@ -1405,18 +1419,25 @@ function viewGstr3b(b){
     row("(e) Non-GST outward supplies", t.nongst) +
     gap + row("Net outward, taxable", t.net, true) +
     "</tbody></table></div>";
-  h += '<div class="bk-tablewrap" style="margin-top:12px"><table class="bk-table"><thead><tr><th>3.2 Of 3.1(a), supplies to unregistered persons in other states</th><th class="n">Taxable</th><th class="n">IGST</th><th class="n"></th><th class="n"></th></tr></thead><tbody>' +
-    row("Inter-state supplies to unregistered persons", {taxable: t.toUnreg.taxable, igst: t.toUnreg.igst, cgst: "", sgst: ""}) + "</tbody></table></div>";
+  h += '<div class="bk-tablewrap" style="margin-top:12px"><table class="bk-table"><thead><tr><th>3.2 Of 3.1(a), inter-state supplies to unregistered persons, by place of supply</th><th class="n">Taxable</th><th class="n">IGST</th></tr></thead><tbody>' +
+    (t.unregPos.length ? t.unregPos.map(x => "<tr><td>" + esc(x.pos + " " + (Object.keys(STATE_CODES).find(k => STATE_CODES[k] === x.pos) || "").toLowerCase().replace(/\b\w/g, c => c.toUpperCase())) + '</td><td class="n">' + money(x.taxable) + '</td><td class="n">' + money(x.igst) + "</td></tr>").join("") : '<tr><td colspan="3" class="nr">None this month.</td></tr>') + "</tbody></table></div>";
   h += '<div class="bk-tablewrap" style="margin-top:12px"><table class="bk-table"><thead><tr><th>4 Input tax credit</th><th class="n">Value</th><th class="n">IGST</th><th class="n">CGST</th><th class="n">SGST</th></tr></thead><tbody>' +
     row("(A)(1) Import of goods", {taxable: t.impGoods.taxable, igst: t.impGoods.igst, cgst: t.impGoods.cgst, sgst: t.impGoods.sgst}) +
     row("(A)(2) Import of services", {taxable: t.impServ.taxable, igst: t.impServ.igst, cgst: t.impServ.cgst, sgst: t.impServ.sgst}) +
     row("(A)(3) Inward supplies on reverse charge", {taxable: t.rcmIn.taxable, igst: t.rcmIn.igst, cgst: t.rcmIn.cgst, sgst: t.rcmIn.sgst}) +
     row("(A)(5) All other ITC", {taxable: t.other.taxable, igst: t.other.igst, cgst: t.other.cgst, sgst: t.other.sgst}) +
-    gap + row("(B)(1) Reversed: rules 42 and 43", {taxable: "", igst: t.rules.igst, cgst: t.rules.cgst, sgst: t.rules.sgst}) +
-    row("(B)(2) Reversed: ITC not to be taken", {taxable: t.blocked.taxable, igst: t.reversal.igst, cgst: t.reversal.cgst, sgst: t.reversal.sgst}) +
+    (t.basis === "2b" && (t.held.n || t.released.n) ? '<tr><td colspan="5" class="nr" style="white-space:normal">' + (t.held.n ? "Held back, not yet in 2B: " + t.held.n + " bill" + (t.held.n === 1 ? "" : "s") + ", \u20b9" + money(t.held.igst + t.held.cgst + t.held.sgst + t.held.cess) + ". " : "") +
+      (t.released.n ? "Taken now, booked earlier and in this month\u2019s 2B: " + t.released.n + ", \u20b9" + money(t.released.igst + t.released.cgst + t.released.sgst + t.released.cess) + "." : "") + "</td></tr>" : "") +
+    gap + row("(B)(1) Reversed: rules 38, 42, 43 and section 17(5)", {taxable: "", igst: t.rev1.igst, cgst: t.rev1.cgst, sgst: t.rev1.sgst}) +
+    '<tr><td>(B)(2) Reversed: others (rule 37, and credit that may come back)<div class="nr">type any here</div></td><td class="n"></td>' + ["igst", "cgst", "sgst"].map(k => '<td class="n"><input type="number" step="0.01" data-g3b="rev2.' + k + '" value="' + esc((((b.gst3b || {})[(S.gstReg || "") + "|" + S.gstYm] || {}).rev2 || {})[k] || "") + '" placeholder="0" style="width:100px;text-align:right"></td>').join("") + "</tr>" +
     gap + row("(C) Net ITC available", {taxable: "", igst: t.netItc.igst, cgst: t.netItc.cgst, sgst: t.netItc.sgst}, true) +
-    (t.ineligible ? '<tr><td>(D) Ineligible: tax charged to cost in the books</td><td class="n">' + money(t.ineligible) + '</td><td colspan="3"></td></tr>' : "") +
+    '<tr><td>(D)(1) ITC reclaimed, reversed under 4(B)(2) earlier<div class="nr">type any here</div></td><td class="n"></td>' + ["igst", "cgst", "sgst"].map(k => '<td class="n"><input type="number" step="0.01" data-g3b="reclaim.' + k + '" value="' + esc((((b.gst3b || {})[(S.gstReg || "") + "|" + S.gstYm] || {}).reclaim || {})[k] || "") + '" placeholder="0" style="width:100px;text-align:right"></td>').join("") + "</tr>" +
+    row("(D)(2) Ineligible: section 16(4) and place of supply" + (GST2B.all2b(S.gstReg || "").some(z => z.ym === S.gstYm) ? " (from 2B)" : " (bring in 2B)"), {taxable: "", igst: t.na.igst, cgst: t.na.cgst, sgst: t.na.sgst}) +
+    (t.ineligible ? '<tr><td class="nr">Tax charged to cost in the books</td><td class="n">' + money(t.ineligible) + '</td><td colspan="3"></td></tr>' : "") +
     "</tbody></table></div>";
+  h += '<div class="bk-tablewrap" style="margin-top:12px"><table class="bk-table"><thead><tr><th>5 Exempt, nil and non-GST inward supplies</th><th class="n">Inter-state</th><th class="n">Intra-state</th></tr></thead><tbody>' +
+    "<tr><td>From a supplier under composition, exempt and nil rated</td><td class=\"n\">" + money(t.inw5.gstInter) + '</td><td class="n">' + money(t.inw5.gstIntra) + "</td></tr>" +
+    "<tr><td>Non-GST supply</td><td class=\"n\">" + money(t.inw5.ngInter) + '</td><td class="n">' + money(t.inw5.ngIntra) + "</td></tr></tbody></table></div>";
   // 6.1: how the tax is paid, in the order the law sets, and the credit carried to next month
   const P = t.pay, months = GSTR.months(), first = months[0] === S.gstYm, open = (b.gstOpen || {})[S.gstReg || ""] || {};
   const hd = [["igst", "Integrated tax"], ["cgst", "Central tax"], ["sgst", "State/UT tax"], ["cess", "Cess"]];
@@ -1476,7 +1497,8 @@ function viewInputRegister(b){
   if (q) list = list.filter(r => [r.party, r.gstin, r.no, r.voucher, r.hsn, r.type].join(" ").toLowerCase().includes(q));
   const all = tot(R.rows), shown = tot(list);
   // it ties to 3B table 4: what the register gives against what the 3B takes
-  const t3 = R.months.reduce((a, m) => { const t = GSTR.threeB(m, R.reg); ["igst", "cgst", "sgst", "cess"].forEach(k => { a[k] = r2(a[k] + num(t.itc[k]) - num(t.reversal[k])); }); return a; }, {igst: 0, cgst: 0, sgst: 0, cess: 0});
+  const hr = {held: 0, rel: 0};
+  const t3 = R.months.reduce((a, m) => { const t = GSTR.threeB(m, R.reg); ["igst", "cgst", "sgst", "cess"].forEach(k => { a[k] = r2(a[k] + num(t.itc[k]) - num(t.reversal[k])); }); hr.held = r2(hr.held + t.held.igst + t.held.cgst + t.held.sgst + t.held.cess); hr.rel = r2(hr.rel + t.released.igst + t.released.cgst + t.released.sgst + t.released.cess); return a; }, {igst: 0, cgst: 0, sgst: 0, cess: 0});
   const reg = tot(R.rows.filter(r => r.kindL !== "Not to be taken"));
   const gap = r2(reg.igst + reg.cgst + reg.sgst + reg.cess - (t3.igst + t3.cgst + t3.sgst + t3.cess));
   const tx4 = x => money(x.igst + x.cgst + x.sgst + x.cess);
@@ -1493,7 +1515,7 @@ function viewInputRegister(b){
       (R.only2b.length ? '<a class="gf-chip warn" href="#inreg2b">In 2B, not in the books <b>' + R.only2b.length + "</b> \u00b7 \u20b9" + money(R.only2b.reduce((a, p) => a + p.dir * (p.igst + p.cgst + p.sgst + p.cess), 0)) + "</a>" : "") : "") +
     chip("Booked more than once", dupes.length, money(dupes.reduce((a, r) => a + r.tax, 0) / 2), true, "Booked more than once") +
     (notTaken.length ? '<a class="gf-chip warn" href="#inreg2b">Credit in 2B not taken <b>' + notTaken.length + "</b> \u00b7 \u20b9" + money(notTaken.reduce((a, p) => a + p.dir * (p.igst + p.cgst + p.sgst + p.cess), 0)) + "</a>" : "") + "</div>" +
-    '<p class="note" style="margin:4px 0 8px">Net credit \u20b9' + money(reg.igst + reg.cgst + reg.sgst + reg.cess) + "; GSTR-3B table 4 \u20b9" + money(t3.igst + t3.cgst + t3.sgst + t3.cess) + (Math.abs(gap) >= 1 ? ' <span class="bad">Difference \u20b9' + money(gap) + ", from reversals under rules 42 and 43 taken in 3B.</span>" : " \u2014 they agree.") +
+    '<p class="note" style="margin:4px 0 8px">Register \u20b9' + money(reg.igst + reg.cgst + reg.sgst + reg.cess) + "; 3B table 4 \u20b9" + money(t3.igst + t3.cgst + t3.sgst + t3.cess) + (Math.abs(gap) >= 1 ? (Math.abs(gap - r2(hr.held - hr.rel)) < 1 ? " \u2014 held for 2B \u20b9" + money(hr.held) + (hr.rel ? ", taken from earlier \u20b9" + money(hr.rel) : "") + "." : ' <span class="bad">Difference \u20b9' + money(gap) + (hr.held || hr.rel ? ": held back for 2B \u20b9" + money(hr.held - hr.rel) + ", the rest from reversals under rules 42 and 43." : ", from reversals under rules 42 and 43 taken in 3B.") + "</span>") : " \u2014 they agree.") +
     (R.loaded.size ? "" : ' <span class="bad">No 2B for this registration yet; bring it in under 2B reconciliation.</span>') +
     ' <details style="display:inline"><summary class="linkbtn" style="display:inline">What is in it</summary>Every document in Tally that takes input tax for this registration: purchase bills, and journals or payments that carry input tax (reverse charge on rent, bank charges, an expense booked in a journal). GSTR-3B table 4 is made from it, and it is what is matched against 2B. Use the funnel on any column heading to filter.</details></p>';
   // narrow enough for the amounts to be on screen: voucher number only (type on hover), HSN and rate together, cess only when there is any
