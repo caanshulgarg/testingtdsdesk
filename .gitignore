@@ -1,5 +1,6 @@
 site/
 site-test/
-tests/
+tests/out/
+tests/data/
 *.pkl
 __pycache__/
