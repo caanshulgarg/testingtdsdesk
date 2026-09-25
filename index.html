@@ -757,7 +757,7 @@ const DEFAULT_FIRM = {firmName:"Garg Shekhar & Company", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "TEST · 25 Sep 2026 · build 127 (audit: MSME 43B(h), related parties, penalties, last year, and the Form 3CD draft)";
+const APP_VERSION = "TEST · 25 Sep 2026 · build 128 (ledger master: what TDS Desk posts to, templates across clients, a copy at every filing)";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;
@@ -5283,7 +5283,14 @@ const LedMaster = {
       // a client set up before the masters: what its ledgers were already marked as
       if (!m.what && m.kind) m.what = ({gst: m.rcm ? "gst_rcm" : "gst", gst_common: "gst_common", ineligible: "ineligible", tds_payable: "tds_payable", tds_receivable: "tds_receivable", bank: "bank", roundoff: "roundoff"})[m.kind] || "";
       if (m.ok || m.byHand) return;
-      const p = this.propose(n, info[n], u[n], regs);
+      const p = this.propose(n, info[n], u[n], regs), tp = typeof this.tplFor === "function" ? this.tplFor(b, n) : null;
+      if (tp && tp.what){
+        this.applyWhat(m, tp.what);
+        if (this.isGst(tp.what)){ m.tax = tp.tax || p.tax || m.tax; m.side = tp.side || p.side || m.side; m.reg = p.reg; m.gstRate = tp.gstRate || null; }
+        if (this.isTds(tp.what)){ m.section = tp.section; m.rate = tp.rate; }
+        m.why = "confirmed this way for " + tp.others + " other client" + (tp.others === 1 ? "" : "s") + (p.why ? "; " + p.why : "");
+        return;
+      }
       this.applyWhat(m, p.what);
       if (this.isGst(p.what)){ m.tax = p.tax || m.tax; m.side = p.side || m.side; m.reg = p.reg; if (p.gstRate != null) m.gstRate = p.gstRate; }
       if (this.isTds(p.what)){ m.section = p.section; m.rate = p.rate; }
@@ -5311,7 +5318,8 @@ const LedMaster = {
     if (m.what === "tds_payable" && !m.section) out.push("no section: its deductions are left out of 26Q");
     return out;
   },
-  confirm(b, names, yes){ names.forEach(n => { const m = b.map[n]; if (m){ m.ok = !!yes; m.byHand = true; m.okAt = yes ? new Date().toISOString() : undefined; } }); b.mapV = (b.mapV || 0) + 1; }
+  confirm(b, names, yes){ names.forEach(n => { const m = b.map[n]; if (m){ m.ok = !!yes; m.byHand = true; m.okAt = yes ? new Date().toISOString() : undefined; } }); b.mapV = (b.mapV || 0) + 1;
+    if (yes && typeof this.tplLearn === "function"){ this.tplLearn(b, names); try { const co = CO(); if (co && co.id === b.cid) this.applyPosting(b, co, "empty"); } catch (e){} } }
 };
 
 /* ================================================================== */
@@ -6496,6 +6504,78 @@ Object.assign(Audit, {
       if (c.note) h += '<p class="note">' + esc(c.note) + "</p>";
     });
     return h;
+  }
+});
+
+/* ---------- the ledger master, phase 2: what TDS Desk posts to, templates across clients, and a copy at each filing ---------- */
+Object.assign(LedMaster, {
+  // what TDS Desk posts bills into Tally with, taken from the confirmed master
+  POST_SLOTS: [["gst.cgst", "Input CGST"], ["gst.sgst", "Input SGST"], ["gst.igst", "Input IGST"], ["gst.rcmCgstIn", "Reverse charge CGST, credit"], ["gst.rcmSgstIn", "Reverse charge SGST, credit"], ["gst.rcmIgstIn", "Reverse charge IGST, credit"],
+    ["gst.rcmCgstOut", "Reverse charge CGST, payable"], ["gst.rcmSgstOut", "Reverse charge SGST, payable"], ["gst.rcmIgstOut", "Reverse charge IGST, payable"], ["roundOff", "Round off"]],
+  getSlot(co, k){ const [a, c] = k.split("."); return c ? ((co[a] || {})[c] || "") : (co[a] || ""); },
+  setSlot(co, k, v){ const [a, c] = k.split("."); if (c){ co[a] = co[a] || {}; co[a][c] = v; } else co[a] = v; },
+  posting(b, co){
+    const regs = ((b.meta || {}).gstins || []).map(g => g.slice(0, 2)), reg = String(co.gstin || "").slice(0, 2) || regs[0] || "";
+    const ok = Object.entries(b.map || {}).filter(([, m]) => m.ok);
+    const pick = (list, why) => { if (!list.length) return {v: "", why: "nothing confirmed for this"}; const plain = list.filter(([, m]) => !m.gstRate && m.rate == null); const pool = plain.length ? plain : list; const best = pool.slice().sort((a, c) => (c[1].n || 0) - (a[1].n || 0) || a[0].localeCompare(c[0]))[0];
+      return {v: best[0], why: why + (list.length > 1 ? "; " + (list.length - 1) + " other" + (list.length > 2 ? "s" : "") + " of the same kind: " + list.filter(x => x !== best).map(x => x[0]).slice(0, 3).join(", ") : "")}; };
+    const out = [];
+    const H = {cgst: "CGST", sgst: "SGST", igst: "IGST"};
+    ["cgst", "sgst", "igst"].forEach(h => out.push(["gst." + h, pick(ok.filter(([, m]) => m.what === "gst" && m.side === "input" && m.tax === H[h] && (!m.reg || m.reg === reg)), "GST, " + H[h] + ", input" + (reg ? ", " + reg : ""))]));
+    ["Cgst", "Sgst", "Igst"].forEach(h => ["In", "Out"].forEach(sd => out.push(["gst.rcm" + h + sd, pick(ok.filter(([, m]) => m.what === "gst_rcm" && m.tax === h.toUpperCase() && m.side === (sd === "In" ? "input" : "output") && (!m.reg || m.reg === reg)), "GST, reverse charge, " + h.toUpperCase() + ", " + (sd === "In" ? "input" : "output"))])));
+    out.push(["roundOff", pick(ok.filter(([, m]) => m.what === "roundoff"), "round off")]);
+    RULE_DEFAULTS.filter(r => r.old && r.old !== "\u2014").forEach(r => {
+      const sec = r.old.replace(/-/g, "");
+      const list = ok.filter(([, m]) => m.what === "tds_payable" && String(m.section || "").replace(/-/g, "").toUpperCase() === sec);
+      const byRate = list.filter(([, m]) => m.rate == null || num(m.rate) === r.rateOth || num(m.rate) === r.rateInd);
+      out.push(["tdsLedgers." + r.id, pick(byRate.length ? byRate : list, "TDS payable, section " + r.old)]);
+    });
+    return out.map(([k, p]) => ({k, label: (this.POST_SLOTS.find(z => z[0] === k) || [0, "TDS: " + (RULE_DEFAULTS.find(r => "tdsLedgers." + r.id === k) || {}).label])[1], now: this.getSlot(co, k), from: p.v, why: p.why}));
+  },
+  // "empty" also covers the standard names a new client starts with, when no such ledger is in its Tally
+  applyPosting(b, co, only){
+    let n = 0;
+    this.posting(b, co).forEach(x => { if (x.from && x.from !== x.now && (!only || only === x.k || (only === "empty" && (!x.now || !(b.ledInfo || {})[x.now] && !(b.map || {})[x.now])))){ this.setSlot(co, x.k, x.from); n++; } });
+    if (n) Store.saveCompany(co);
+    return n;
+  },
+  // what the firm has confirmed for other clients, by ledger name
+  tplKey(name){ return String(name || "").toUpperCase().replace(/^\s*\d{2}\s+/, "").replace(/\s+/g, " ").trim(); },
+  tplAll(){ try { return JSON.parse(lsGet("tdsdesk-test:ledtpl") || "{}"); } catch (e){ return {}; } },
+  tplSave(t){ try { lsSet("tdsdesk-test:ledtpl", JSON.stringify(t)); } catch (e){} },
+  tplLearn(b, names){
+    const t = this.tplAll(), cid = b.cid || "";
+    names.forEach(n => {
+      const m = b.map[n]; if (!m || !m.ok) return;
+      const k = this.tplKey(n), x = t[k] = t[k] || {cids: []};
+      Object.assign(x, {what: m.what, tax: m.tax || "", side: m.side || "", section: m.section || "", rate: m.rate == null ? null : m.rate, gstRate: m.gstRate || null, at: new Date().toISOString()});
+      if (!x.cids.includes(cid)) x.cids.push(cid);
+    });
+    this.tplSave(t);
+  },
+  tplFor(b, name){ const x = this.tplAll()[this.tplKey(name)]; if (!x) return null; const others = x.cids.filter(c => c !== b.cid); return others.length ? Object.assign({}, x, {others: others.length}) : null; },
+  // a copy of the master each time a return file is made
+  snap(b, label){
+    const map = {};
+    Object.entries(b.map || {}).forEach(([n, m]) => { if (m.what && m.what !== "none") map[n] = {what: m.what, tax: m.tax || "", side: m.side || "", reg: m.reg || "", section: m.section || "", rate: m.rate == null ? null : m.rate, gstRate: m.gstRate || null}; });
+    b.ledSnaps = [{at: new Date().toISOString(), label, map}].concat(b.ledSnaps || []).slice(0, 36);
+  },
+  // what changed in the master after a return was made from it
+  changesSince(b){
+    const cur = {};
+    Object.entries(b.map || {}).forEach(([n, m]) => { if (m.what && m.what !== "none") cur[n] = {what: m.what, tax: m.tax || "", side: m.side || "", reg: m.reg || "", section: m.section || "", rate: m.rate == null ? null : m.rate, gstRate: m.gstRate || null}; });
+    const byLed = {};
+    (b.ledSnaps || []).forEach(sn => {
+      Array.from(new Set(Object.keys(sn.map).concat(Object.keys(cur)))).forEach(n => {
+        const a = sn.map[n], c = cur[n];
+        const d = !a ? "added as " + this.label(c.what) : !c ? "taken out (was " + this.label(a.what) + ")" :
+          ["what", "tax", "side", "reg", "section", "rate", "gstRate"].filter(k => String(a[k] == null ? "" : a[k]) !== String(c[k] == null ? "" : c[k])).map(k => ({what: "type", tax: "head", side: "side", reg: "registration", section: "section", rate: "rate", gstRate: "GST rate"}[k] + " " + (k === "what" ? this.label(a[k]) : a[k] || "\u2014") + " \u2192 " + (k === "what" ? this.label(c[k]) : c[k] || "\u2014"))).join("; ");
+        if (!d) return;
+        const x = byLed[n] = byLed[n] || {name: n, change: d, returns: []};
+        x.returns.push(sn.label + " (" + fmtDate(sn.at.slice(0, 10)) + ")");
+      });
+    });
+    return Object.values(byLed).sort((a, c) => a.name.localeCompare(c.name));
   }
 });
 
@@ -7955,7 +8035,7 @@ async function openBooks(cid){
 async function saveBooks(){ const b = S.books; if (b && b.cid) await Books.save(b.cid, {cid: b.cid, vouchers: b.vouchers, map: b.map, meta: b.meta, challans: b.challans, alloc: b.alloc, pans: b.pans, twoB: b.twoB,
   gstins: b.gstins, under: b.under, states: b.states, groups: b.groups, salary: b.salary, certs: b.certs, advFix: b.advFix, assets: b.assets, rev: b.rev,
   filed: b.filed, amendFix: b.amendFix, twoBs: b.twoBs, reco2b: b.reco2b, ledInfo: b.ledInfo, ledInfoAt: b.ledInfoAt,
-  audit: b.audit, auditCfg: b.auditCfg, auditRel: b.auditRel, tb: b.tb, mis: b.mis, misCfg: b.misCfg, msme: b.msme, budget: b.budget}); }
+  audit: b.audit, auditCfg: b.auditCfg, auditRel: b.auditRel, ledSnaps: b.ledSnaps, tb: b.tb, mis: b.mis, misCfg: b.misCfg, msme: b.msme, budget: b.budget}); }
 function viewBooks(){
   const co = CO();
   if (!S.books || S.books.cid !== co.id){ openBooks(co.id); return '<p class="note">Opening the books…</p>'; }
@@ -8089,8 +8169,10 @@ function viewBooksLedgers(b){
     '<button class="dtile" data-lmview="gst" style="text-align:left"><span>GST ledgers</span><b>' + gst.length + "</b><small>" + gst.filter(x => x[1].ok).length + " confirmed</small></button>" +
     '<button class="dtile" data-lmview="tds" style="text-align:left"><span>TDS and TCS ledgers</span><b>' + tds.length + "</b><small>" + tds.filter(x => x[1].ok).length + " confirmed</small></button>" +
     '<button class="dtile" data-lmview="other" style="text-align:left"><span>Other ledgers</span><b>' + other.length + "</b><small>add one to GST or TDS</small></button></div></section>";
-  h += '<nav class="sbar" aria-label="Ledgers">' + [["pending", "To confirm", pend.length], ["gst", "GST", gst.length], ["tds", "TDS and TCS", tds.length], ["done", "Confirmed", null], ["other", "Other ledgers", other.length]]
+  h = ledChangedBanner(b) + h;
+  h += '<nav class="sbar" aria-label="Ledgers">' + [["pending", "To confirm", pend.length], ["gst", "GST", gst.length], ["tds", "TDS and TCS", tds.length], ["done", "Confirmed", null], ["other", "Other ledgers", other.length], ["post", "What TDS Desk posts to", null]]
     .map(([id, l, c]) => '<button data-lmview="' + id + '" aria-selected="' + (view === id) + '">' + l + (c != null ? ' <span class="sbar-n">' + c + "</span>" : "") + "</button>").join("") + "</nav>";
+  if (view === "post") return h + viewLedPosting(b);
   h += '<div class="revfilter" style="flex-wrap:wrap;row-gap:6px"><input type="search" id="ledq" data-fk="ledq" data-keeptyped value="' + esc(S.ledQ || "") + '" placeholder="Find a ledger, section or group" style="width:260px;flex:0 0 auto">' +
     '<span class="note">' + shown.length + " ledger" + (shown.length === 1 ? "" : "s") + "</span>" +
     (view !== "other" && shown.some(([, m]) => !m.ok) ? '<button class="btn small primary" data-act="lmConfirmShown">Confirm the ' + shown.filter(([, m]) => !m.ok).length + " shown</button>" : "") + "</div>";
@@ -8892,6 +8974,21 @@ function viewAudit3cd(b){
   const d = Audit.form3cd(run);
   return '<section class="dash-card"><div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:8px"><button class="btn small primary" data-act="audit3cdPdf">Download the draft (PDF)</button><button class="btn small" data-act="audit3cdExcel">Excel</button></div>' +
     '<div class="audit3cd">' + Audit.form3cdHtml(d).replace(/<table>/g, '<div class="bk-tablewrap"><table class="bk-table">').replace(/<\/table>/g, "</table></div>") + "</div></section>";
+}
+function viewLedPosting(b){
+  const co = CO(), rows = LedMaster.posting(b, co), diff = rows.filter(x => x.from && x.from !== x.now);
+  return '<section class="dash-card"><h3>What TDS Desk posts bills to</h3><p class="note">When TDS Desk posts a bill into Tally, these are the ledgers it uses. They come from the ledgers confirmed here; an empty one is filled in as soon as its ledger is confirmed, and one set by hand in Client setup is kept until you choose the master\u2019s.</p>' +
+    (diff.length ? '<div class="row" style="margin:8px 0"><button class="btn small primary" data-act="lmPostAll">Use the master\u2019s for all ' + diff.length + "</button></div>" : "") +
+    '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Used for</th><th>Now</th><th>From the master</th><th>Why</th><th class="ac"></th></tr></thead><tbody>' +
+    rows.map(x => "<tr><td>" + esc(x.label) + "</td><td>" + (x.now ? esc(x.now) + ((b.ledInfo || {})[x.now] || (b.map || {})[x.now] ? "" : ' <span class="tag warn">not in Tally</span>') : '<span class="note">\u2014</span>') + "</td><td>" + (x.from ? (x.from === x.now ? '<span style="color:#1F7A4D">\u2713 same</span>' : "<b>" + esc(x.from) + "</b>") : '<span class="note">none confirmed</span>') +
+      '</td><td><div class="nr" style="white-space:normal">' + esc(x.why) + '</div></td><td class="ac">' + (x.from && x.from !== x.now ? '<button class="btn small" data-lmpost="' + esc(x.k) + '">Use it</button>' : "") + "</td></tr>").join("") + "</tbody></table></div></section>";
+}
+function ledChangedBanner(b){
+  const ch = LedMaster.changesSince(b);
+  if (!ch.length) return "";
+  return '<section class="bk-alert" style="margin-bottom:12px"><b>' + ch.length + " ledger" + (ch.length === 1 ? " was" : "s were") + " changed after returns were made from them.</b> Check whether those returns need a revision or an amendment." +
+    '<div class="bk-tablewrap" style="margin-top:6px"><table class="bk-table"><thead><tr><th>Ledger</th><th>What changed</th><th>Returns made before the change</th></tr></thead><tbody>' +
+    ch.slice(0, 30).map(x => "<tr><td>" + esc(x.name) + "</td><td>" + esc(x.change) + "</td><td>" + esc(x.returns.slice(0, 4).join("; ") + (x.returns.length > 4 ? " and " + (x.returns.length - 4) + " more" : "")) + "</td></tr>").join("") + "</tbody></table></div></section>";
 }
 function viewBooksGst(b){
   const part = S.gstPart || "r1";
@@ -13676,6 +13773,7 @@ function gstFixChange(t){
     if (d.lmrate) m.rate = t.value === "" ? null : num(t.value);
     // a choice made here is the user's own: it counts as confirmed
     m.byHand = true; m.ok = true; m.okAt = new Date().toISOString();
+    LedMaster.tplLearn(b, [lmName]); try { LedMaster.applyPosting(b, CO(), "empty"); } catch (e){}
     b.mapV = (b.mapV || 0) + 1; b.reco = null; saveBooks(); render(); return true;
   }
   if (d.r2link !== undefined){ const st = GST2B.state(); if (t.value){ st.link[d.r2link] = [t.value]; delete st.confirm[d.r2link]; } saveBooks(); render(); return true; }
@@ -16961,6 +17059,7 @@ document.addEventListener("click", ev => {
   if (t.dataset.reldel !== undefined){ const b = S.books; b.auditRel = (b.auditRel || []).filter(x => x.name !== t.dataset.reldel); saveBooks(); render(); return; }
   if (t.dataset.auditopen){ S.auditOpen = S.auditOpen === t.dataset.auditopen ? "" : t.dataset.auditopen; render(); return; }
   if (t.dataset.auditarea !== undefined && t.tagName === "BUTTON"){ S.auditArea = t.dataset.auditarea; render(); return; }
+  if (t.dataset.lmpost){ LedMaster.applyPosting(S.books, CO(), t.dataset.lmpost); render(); return; }
   if (t.dataset.lmview){ S.lmView = t.dataset.lmview; S.booksTab = "ledgers"; render(); return; }
   if (t.dataset.lmok){ const m = S.books.map[t.dataset.lmok]; if (m){ LedMaster.confirm(S.books, [t.dataset.lmok], !m.ok); S.books.reco = null; saveBooks(); render(); } return; }
   if (t.dataset.r2tab){ S.r2Tab = t.dataset.r2tab; render(); return; }
@@ -17351,6 +17450,7 @@ document.addEventListener("click", ev => {
       break;
     }
     case "auditUnlock": { const run = (S.books.audit || {}).last; if (run && S.books.audit.final){ delete S.books.audit.final[run.from + "-" + run.to]; saveBooks(); toast("Unlocked."); render(); } break; }
+    case "lmPostAll": { const n2 = LedMaster.applyPosting(S.books, CO()); toast(n2 + " posting ledger" + (n2 === 1 ? "" : "s") + " set from the master."); render(); break; }
     case "lmConfirmShown": {
       const b = S.books, info = b.ledInfo || {}, q = String(S.ledQ || "").toLowerCase(), view = S.lmView || "pending";
       const pool = view === "gst" ? Object.entries(b.map).filter(([nm, m]) => LedMaster.isGst(m.what) && LedMaster.taxLike(nm, m, info[nm])) :
@@ -17404,7 +17504,7 @@ document.addEventListener("click", ev => {
     case "salaryClear": askConfirm({title: "Remove the salary sheet?", ok: "Remove", body: '<p class="note">The challans and everything else stay.</p>'}).then(ok => {
       if (!ok) return; S.books.salary = []; saveBooks(); toast("Removed."); render(); }); break;
     case "q24Excel": TDS24Q.toExcel(S.tdsFy || "", S.tdsQ || "Q4").then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break;
-    case "tdsTxt": { if (!ledgersReady("tds")) break;
+    case "tdsTxt": { if (!ledgersReady("tds")) break; LedMaster.snap(S.books, "26Q " + (S.tdsQ || "") + " " + (S.tdsFy || "")); saveBooks();
       const q = S.tdsQ || "", fy = S.tdsFy || "";
       if (!q || !fy){ toast("Choose the year and the quarter first."); break; }
       const r = TDS26Q.build(fy, q, TDS26Q.firmDetails());
@@ -17429,8 +17529,8 @@ document.addEventListener("click", ev => {
       break;
     }
     case "tdsExcel": TDS.toExcel(S.tdsFy || "", S.tdsQ || "").then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break;
-    case "gstJson": if (!ledgersReady("gst")) break; GSTR.toJsonFile(S.gstYm || "", S.gstReg || "").then(j => toast("GSTR-1 JSON for " + j.fp + " downloaded. Check it on the portal's offline tool before filing."), e => toast("Could not build the file: " + (e && e.message))); break;
-    case "gst3bJson": { if (!ledgersReady("gst")) break;
+    case "gstJson": if (!ledgersReady("gst")) break; LedMaster.snap(S.books, "GSTR-1 " + GSTR.label(S.gstYm || "") + (S.gstReg ? " " + S.gstReg : "")); saveBooks(); GSTR.toJsonFile(S.gstYm || "", S.gstReg || "").then(j => toast("GSTR-1 JSON for " + j.fp + " downloaded. Check it on the portal's offline tool before filing."), e => toast("Could not build the file: " + (e && e.message))); break;
+    case "gst3bJson": { if (!ledgersReady("gst")) break; LedMaster.snap(S.books, "GSTR-3B " + GSTR.label(S.gstYm || "") + (S.gstReg ? " " + S.gstReg : "")); saveBooks();
       const j = GSTR.threeBJson(S.gstYm || "", S.gstReg || "");
       saveFile("GSTR3B_" + (j.gstin || "") + "_" + j.ret_period + ".json", new Blob([JSON.stringify(j)], {type: "application/json"}));
       toast("GSTR-3B JSON for " + j.ret_period + " downloaded. Check it in the portal's offline tool before filing.");
