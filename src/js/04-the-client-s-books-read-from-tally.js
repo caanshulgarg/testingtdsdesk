@@ -108,12 +108,14 @@ const Books = {
   },
   async importMasters(file, onProgress){
     const dec = await this.decoder(file);
-    const pans = {}, gstins = {}, under = {}, states = {}, groups = {}, info = {};
+    const pans = {}, gstins = {}, under = {}, states = {}, groups = {}, info = {}, groupInfo = {};
     let buf = "", n = 0;
     const take = whole => {
       // the groups come before the ledgers; keep the tree, to know a customer from a supplier
       if (whole.indexOf("<GROUP NAME=") >= 0) (whole.match(/<GROUP NAME="[^"]*"[\s\S]*?<\/GROUP>/g) || []).forEach(g => {
-        groups[this.unesc(g.match(/<GROUP NAME="([^"]*)"/)[1])] = this.one(g, "PARENT");
+        const gn = this.unesc(g.match(/<GROUP NAME="([^"]*)"/)[1]);
+        groups[gn] = this.one(g, "PARENT");
+        groupInfo[gn] = {rev: this.one(g, "ISREVENUE") === "Yes", gp: this.one(g, "AFFECTSGROSSPROFIT") === "Yes", dr: this.one(g, "ISDEEMEDPOSITIVE") === "Yes"};
       });
       const at = whole.lastIndexOf("<LEDGER ");
       if (at < 0) return;
@@ -153,7 +155,7 @@ const Books = {
       const piece = buf.slice(0, cut + 9); buf = buf.slice(cut + 9);
       take(piece);
     }
-    return {pans, gstins, under, states, groups, info, count: n};
+    return {pans, gstins, under, states, groups, groupInfo, info, count: n};
   },
   // what each ledger is: TDS section, GST tax, party or expense
   mapLedgers(vouchers, saved){

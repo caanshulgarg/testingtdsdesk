@@ -1007,6 +1007,8 @@ document.addEventListener("click", ev => {
   if (t.dataset.misweek !== undefined){ const w = num(t.dataset.misweek); S.misWeek = S.misWeek === w ? -1 : w; render(); return; }
   if (t.dataset.miscf !== undefined){ S.misCf = S.misCf === t.dataset.miscf ? "" : t.dataset.miscf; render(); return; }
   if (t.dataset.miscc !== undefined){ S.misCc = S.misCc === t.dataset.miscc ? "" : t.dataset.miscc; render(); return; }
+  if (t.dataset.fstab){ S.fsTab = t.dataset.fstab; render(); return; }
+  if (t.dataset.fsunmap !== undefined){ const c = FS.cfg(S.books); delete c.map[t.dataset.fsunmap]; S.books.fs = c; S.fsRun = S.fsRun ? {fy: S.fsRun.fy, kind: c.kind, d: FS.build(S.fsRun.fy)} : null; saveBooks(); render(); return; }
   if (t.dataset.mistab){ S.misTab = t.dataset.mistab; S.misQ = ""; S.misF = ""; render(); return; }
   if (t.dataset.misquick){ const x = misRangeQuick(t.dataset.misquick, S.books); S.misRange = {from: Audit.iso(x.from), to: Audit.iso(x.to)}; render(); return; }
   if (t.dataset.misopen !== undefined){ S.misOpen = S.misOpen === t.dataset.misopen ? "" : t.dataset.misopen; render(); return; }
@@ -1340,6 +1342,9 @@ document.addEventListener("click", ev => {
         e => toast("The bridge could not set it: " + (e && e.message || e)));
       break;
     }
+    case "fsRun": { const y = S.fsFy || fsYears()[0], c = FS.cfg(S.books); S.fsRun = {fy: y, kind: c.kind, d: FS.build(y)}; render(); break; }
+    case "fsPdf": { const d = S.fsRun && S.fsRun.d; if (d && !d.error) printView(CO().name + " financial statements " + d.fy, "<style>@page{size:A4 portrait;margin:14mm}h2{font-size:14px;margin:14px 0 6px;border-bottom:1px solid #D7DEDA}</style>" + FS.html(d)); break; }
+    case "fsExcel": { const d = S.fsRun && S.fsRun.d; if (d && !d.error) fsExcel(d).then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break; }
     case "misRun": {
       const b = S.books, rg = S.misRange || (x => ({from: Audit.iso(x.from), to: Audit.iso(x.to)}))(misRangeQuick("ytd", b));
       if (!rg.from || !rg.to || rg.from > rg.to){ toast("Choose a period: from a date to a later one."); break; }
@@ -1713,6 +1718,7 @@ document.addEventListener("input", ev => {
   }
   if (t && t.id === "revq"){ S.revQuery = t.value; softRender(); return; }
   if (t && t.id === "txnq"){ S.txnQ = t.value; later("txnq", render, 250); return; }
+  if (t && t.id === "fsq"){ S.fsQ = t.value; later("fsq", render, 250); return; }
   if (t && t.id === "misq"){ S.misQ = t.value; later("misq", render, 250); return; }
   if (t && t.id === "ledq"){ S.ledQ = t.value; later("ledq", render, 250); return; }
   if (t && t.id && /^(q24F|r1F|b2F)q$/.test(t.id)){ const k = t.id.slice(0, -1); S[k] = Object.assign({}, S[k], {q: t.value}); later(t.id, render, 250); return; }

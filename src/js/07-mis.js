@@ -18,10 +18,16 @@ const MIS = {
     if (has("direct expenses")) return "dir";
     if (has("indirect expenses")){
       if (/SALAR|WAGES|BONUS|STAFF|GRATUITY|\bPF\b|\bESI\b|EMPLOYEE|INCENTIVE|LEAVE/i.test(l)) return "emp";
-      if (/INTEREST|FINANCE CHARGE|PROCESSING FEE|LOAN CHARGE/i.test(l)) return "fin";
+      if (/INTEREST|FINANCE CHARGE|PROCESSING FEE|LOAN CHARGE/i.test(l) && !/INTEREST ON (TDS|GST|INCOME TAX)/i.test(l)) return "fin";
       if (/DEPRECIATION|AMORTI/i.test(l)) return "dep";
       if (/INCOME TAX|PROVISION FOR TAX|DEFERRED TAX/i.test(l)) return "tax";
       return "exp";
+    }
+    // a group of the company's own under Primary: its nature in Tally says what it is
+    if (p.length && typeof FS !== "undefined"){
+      const n = FS.nature(l);
+      if (n.rev){ const w = FS.place(l, 0, "co"); return w === "mat" ? "pur" : w === "exc" ? "exp" : w; }
+      if ((S.books || {}).groupInfo && S.books.groupInfo[n.top]) return "";
     }
     if (!p.length){
       const k = Books.ledgerOf(l).kind;

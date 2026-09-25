@@ -26,5 +26,7 @@
  "24-tally-bridge.js",
  "25-sales.js",
  "26-sales-from-a-marketplace.js",
- "27-firm-account.js"
+ "27-firm-account.js",
+ "29-financial-statements.js",
+ "30-accounts-screen.js"
 ]

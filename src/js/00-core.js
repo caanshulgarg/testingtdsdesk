@@ -33,7 +33,7 @@ const DEFAULT_FIRM = {firmName:"Garg Shekhar & Company", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "25 Sep 2026 · build 132 (item invoices read in full; purchases and sales known by what the voucher does, not only by its type’s name)";
+const APP_VERSION = "25 Sep 2026 · build 133 (financial statements: Schedule III for companies, the ICAI format for non-corporate entities; MIS reads the company’s own primary groups)";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;

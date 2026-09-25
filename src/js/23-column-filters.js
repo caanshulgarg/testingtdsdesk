@@ -913,6 +913,12 @@ function gstFixChange(t){
   const d = t.dataset, b = S.books;
   if (d.tallyfrom !== undefined || d.tallyto !== undefined){ const t0 = Audit.today(); S.tallyRange = Object.assign({from: Audit.iso(Audit.fyStart(t0)), to: Audit.iso(t0)}, S.tallyRange, d.tallyfrom !== undefined ? {from: t.value} : {to: t.value}); return true; }
   if (d.tallytime !== undefined){ S.tallyCopy = Object.assign({}, S.tallyCopy, {time: t.value}); return true; }
+  if (d.fskind !== undefined){ b.fs = Object.assign({}, FS.cfg(b), {kind: t.value}); S.fsRun = null; saveBooks(); render(); return true; }
+  if (d.fsfy !== undefined){ S.fsFy = t.value; S.fsRun = null; render(); return true; }
+  if (d.fsstock !== undefined){ const c = FS.cfg(b); c.stock = Object.assign({}, c.stock, {[d.fsstock]: t.value === "" ? "" : num(t.value)}); b.fs = c; saveBooks(); return true; }
+  if (d.fsmfg !== undefined){ b.fs = Object.assign({}, FS.cfg(b), {mfg: !!t.checked}); saveBooks(); return true; }
+  if (d.fsshares !== undefined){ b.fs = Object.assign({}, FS.cfg(b), {shares: t.value}); saveBooks(); return true; }
+  if (d.fsmap !== undefined){ const c = FS.cfg(b); c.map = Object.assign({}, c.map, {[d.fsmap]: t.value}); b.fs = c; S.fsRun = S.fsRun ? {fy: S.fsRun.fy, kind: c.kind, d: FS.build(S.fsRun.fy)} : null; saveBooks(); render(); return true; }
   if (d.misfrom !== undefined || d.misto !== undefined){ const x = misRangeQuick("ytd", b); S.misRange = Object.assign({from: Audit.iso(x.from), to: Audit.iso(x.to)}, S.misRange, d.misfrom !== undefined ? {from: t.value} : {to: t.value}); return true; }
   if (d.misfreq !== undefined){ b.misCfg = Object.assign({}, b.misCfg, {freq: t.value}); saveBooks(); render(); return true; }
   if (d.miscat !== undefined){ S.misCat = t.value; render(); return true; }
@@ -996,7 +1002,7 @@ function booksChange(t){
     if (!f) return true;
     const b = S.books; b.busy = "Opening " + f.name + "\u2026"; render();
     Books.importMasters(f, m => { b.busy = m; softRender(); }).then(async res => {
-      b.pans = res.pans; b.gstins = res.gstins; b.under = res.under; b.states = res.states; b.groups = res.groups; b.busy = "";
+      b.pans = res.pans; b.gstins = res.gstins; b.under = res.under; b.states = res.states; b.groups = res.groups; b.groupInfo = res.groupInfo; b.busy = "";
       b.ledInfo = res.info; b.ledInfoAt = new Date().toISOString(); LedMaster.refresh(b);
       await saveBooks();
       const rows = TDS.rows(), withPan = rows.filter(r => r.pan).length;
