@@ -73,7 +73,7 @@ const GSTR = {
         taxable: L.taxable, cgst: L.tax.CGST, sgst: L.tax.SGST, igst: L.tax.IGST, cess: L.tax.CESS,
         cls: Books.supplyClass(v), rcm: Books.isRcm(v), import: Books.isImport(v), supply: v.supply || "",
         blocked: !!v.ineligibleFlag, hsn: (v.hsn || [])[0] || "",
-        ineligible: L.ineligible || 0, common: L.common || null, note: /DEBIT NOTE/i.test(v.type) ? "debit" : ""});
+        ineligible: L.ineligible || 0, common: L.common || null, dir: this.itcDir(v), note: this.itcDir(v) < 0 ? "debit" : ""});
     });
     return out;
   },
@@ -117,8 +117,16 @@ const GSTR = {
       series: Object.values(series), total: this.sum(rows)};
   },
   // GSTR-3B: what goes out, what comes in, and what is left to pay
+  // which way a purchase-side voucher moves credit: input tax debited adds to it (a bill, or the supplier's debit note);
+  // input tax credited takes it away (the supplier's credit note, or a return), whatever the voucher type is called
+  itcDir(v){
+    let signed = 0;
+    v.ent.forEach(e => { const m = Books.ledgerOf(e.l); if (((m.kind === "gst" || m.kind === "gst_common") && m.side === "input") || m.kind === "ineligible") signed += e.a; });
+    return signed > 0.004 ? -1 : signed < -0.004 ? 1 : (/DEBIT NOTE/i.test(v.type) ? -1 : 1);
+  },
+  signedIn(r){ return r.dir < 0 ? Object.assign({}, r, {taxable: -r.taxable, cgst: -r.cgst, sgst: -r.sgst, igst: -r.igst, cess: -r.cess, ineligible: -(r.ineligible || 0)}) : r; },
   threeB(ym, reg){
-    const out = this.outward(ym, reg), inn = this.inward(ym, reg);
+    const out = this.outward(ym, reg), inn = this.inward(ym, reg).map(r => this.signedIn(r));
     const S1 = f => this.sum(out.filter(f)), S2 = f => this.sum(inn.filter(f));
     const taxableOut = S1(r => r.cls === "taxable" && r.kind !== "CDNR");
     const cn = S1(r => r.kind === "CDNR");

@@ -23,15 +23,17 @@ const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fai
     });
     const ta = old.x.GSTR.threeB(m, reg), tc = neu.x.GSTR.threeB(m, reg);
     ["igst", "cgst", "sgst"].forEach(hd => {
-      if (Math.abs(ta.itc[hd] - tc.itc[hd]) > 0.01){ diffs++; console.log("  itc diff " + m + " " + reg + " " + hd, ta.itc[hd], tc.itc[hd]); }
-      if (Math.abs(ta.netItc[hd] - tc.netItc[hd]) > 0.01){ diffs++; console.log("  net itc diff " + m + " " + reg + " " + hd, ta.netItc[hd], tc.netItc[hd]); }
+      // build 131: a supplier's credit note (input tax credited) reduces credit instead of adding to it, so ITC falls by twice its tax
+      const back = neu.x.GSTR.inward(m, reg).filter(r => r.dir < 0 && !r.import).reduce((a, r) => a + r[hd], 0) * 2;
+      if (Math.abs(ta.itc[hd] - tc.itc[hd] - back) > 0.02){ diffs++; console.log("  itc diff " + m + " " + reg + " " + hd, ta.itc[hd], tc.itc[hd], back); }
+      if (Math.abs(ta.netItc[hd] - tc.netItc[hd] - back) > 0.02){ diffs++; console.log("  net itc diff " + m + " " + reg + " " + hd, ta.netItc[hd], tc.netItc[hd], back); }
       const advTax = tc.adv[hd];
       if (Math.abs((tc.net[hd] - advTax) - ta.net[hd]) > 0.01){ diffs++; console.log("  3.1(a) diff beyond advances " + m + " " + reg + " " + hd, ta.net[hd], tc.net[hd], advTax); }
     });
     const za = ta.zero.taxable, zc = tc.zero.taxable;
     if (Math.abs(za - zc) > 0.01) console.log("  exports " + m + " " + reg + ": build 116 " + za + ", now " + zc + " (foreign currency now read as rupees)");
   }));
-  ok(diffs === 0, "both registrations together: GSTR-1 parts, ITC and 3.1(a) apart from advances are the same as build 116");
+  ok(diffs === 0, "both registrations together: GSTR-1 parts and 3.1(a) apart from advances are the same as build 116; ITC differs by exactly twice the suppliers\u2019 credit notes");
   // per registration, ITC moves where Tally's voucher GSTIN disagreed with the tax ledger's registration
   ["07", "09"].forEach(reg => { let a = 0, c = 0; months.forEach(m => { a += old.x.GSTR.threeB(m, reg).itc.cgst + old.x.GSTR.threeB(m, reg).itc.igst; c += neu.x.GSTR.threeB(m, reg).itc.cgst + neu.x.GSTR.threeB(m, reg).itc.igst; });
     console.log("  ITC (IGST + CGST) for the year, " + reg + ": build 116 " + a.toFixed(2) + ", now " + c.toFixed(2)); });

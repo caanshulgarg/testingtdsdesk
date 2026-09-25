@@ -18,7 +18,7 @@ with sync_playwright() as p:
     pg.wait_for_timeout(1500); pg.evaluate("S.books = window.__bk; render();"); pg.wait_for_timeout(2500)
     t = pg.inner_text("#app")
     ok("GSTR-9 for 2025-26" in t and "Supplies made to registered persons (B2B)" in t and "17. HSN summary of outward supplies" in t, "GSTR-9 renders, parts II to VI")
-    ok("6J:" in t and "purchase debit notes" in t, "6J difference explained")
+    ok("6J:" not in t, "no 6J difference: credit notes from suppliers reduce credit in 3B as in 6B")
     pg.screenshot(path=OUT + "/gst9.png", full_page=False)
     pg.click('button[data-gstpart="g9c"]'); pg.wait_for_timeout(2500)
     t = pg.inner_text("#app")
