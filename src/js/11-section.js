@@ -33,6 +33,12 @@ const GST2B = {
     (dd.cdnra || []).forEach(s => (s.nt || s.inv || []).forEach(x => add("cdnra", s, x, {dir: x.typ === "D" ? 1 : -1, oNo: x.ontnum || x.ont_num || "", oDate: this.dmy(x.ontdt || x.ont_dt)})));
     (dd.isd || []).forEach(s => (s.doclist || []).forEach(x => add("isd", s, x, {dir: x.doctyp === "C" ? -1 : 1})));
     (dd.impg || []).forEach(x => add("impg", {ctin: "", trdnm: "Import of goods (" + (x.portcode || "") + ")"}, x));
+    // documents rejected in IMS: 2B keeps them apart (docRejdata); they give no credit, and a rejected credit note does not reduce it
+    const rj = d.docRejdata || {};
+    (rj.b2b || []).forEach(s => (s.inv || []).forEach(x => add("b2b", s, x, {rej: true, ims: "R", itcavl: "N", remarks: x.remarks || ""})));
+    (rj.b2ba || []).forEach(s => (s.inv || []).forEach(x => add("b2ba", s, x, {rej: true, ims: "R", itcavl: "N", remarks: x.remarks || "", oNo: x.oinum || "", oDate: this.dmy(x.oidt)})));
+    (rj.cdnr || []).forEach(s => (s.nt || s.inv || []).forEach(x => add("cdnr", s, x, {rej: true, ims: "R", itcavl: "N", remarks: x.remarks || "", dir: x.typ === "D" ? 1 : -1})));
+    (rj.cdnra || []).forEach(s => (s.nt || s.inv || []).forEach(x => add("cdnra", s, x, {rej: true, ims: "R", itcavl: "N", remarks: x.remarks || "", dir: x.typ === "D" ? 1 : -1})));
     (dd.impgsez || []).forEach(s => (s.boe || []).forEach(x => add("impgsez", s, x)));
     rows.forEach((r, i) => { r.key = period + "|" + r.sec + "|" + r.gstin + "|" + r.noN + "|" + r.date + "|" + i; });
     return {rows, period, ym, gstin: String(d.gstin || "").toUpperCase(), generated: d.gendt || "", summary: d.itcsumm || null};
@@ -91,8 +97,8 @@ const GST2B = {
     const b = S.books, st = this.state(), tol = num(this.settings().tol) || 1;
     const key = [reg, b.vouchers && b.vouchers.length, b.mapV || 0, Object.keys(b.gstins || {}).length, Object.keys(b.twoBs || {}).join(","), JSON.stringify(st.confirm), JSON.stringify(st.link), tol, S.coId].join("|");
     if (this._memo && this._memo.key === key && this._memo.v === b.vouchers) return this._memo.res;
-    const portal = [];
-    this.all2b(reg).forEach(t => t.rows.forEach(r => portal.push(r)));
+    const portal = [], rejRows = [];
+    this.all2b(reg).forEach(t => t.rows.forEach(r => (r.rej ? rejRows : portal).push(r)));
     const regs = ((b.meta || {}).gstins || []).map(g => g.slice(0, 2));
     const books = this.bookDocs().filter(d => !reg || d.reg === reg || (!d.reg && regs.length <= 1));
     const byId = new Map(books.map(d => [d.id, d]));
@@ -183,6 +189,13 @@ const GST2B = {
       const c = books.filter(d => free(d) && d.dir === 1 && (d.noN === p.noN || (!d.gstin && near(d.igst, p.igst) && d.igst > 0)));
       if (c.length && !rejected(p, [c[0]])) pair(p, [c[0]], c[0].noN === p.noN ? 2 : 4, c[0].noN === p.noN ? "number" : "probable");
     });
+    // rejected in IMS: found in Tally by supplier and number (or number written differently), else on its own
+    const rejList = [];
+    rejRows.forEach(p => {
+      const c = (byG.get(p.gstin) || []).filter(d => free(d) && d.dir === p.dir && (d.noN === p.noN || (d.core === this.coreNo(p.no) && this.coreNo(p.no) !== "|")));
+      c.forEach(d => taken.add(d.id));
+      rejList.push({p, books: c, sum: sumOf(c)});
+    });
     const only2b = portal.filter(p => !used2b.has(p.key));
     const onlyBooks = books.filter(d => !taken.has(d.id));
     // the same supplier's bill, same number and tax, booked more than once
@@ -199,7 +212,7 @@ const GST2B = {
       const c = (noCredit.get(p.noN) || []).filter(v => (!p.date || days(p.date, v.date) <= 62) && (!gstMap[v.party] || String(gstMap[v.party]).toUpperCase() === p.gstin || pan(gstMap[v.party]) === pan(p.gstin)));
       if (c.length){ const v = c[0]; p.bookedNoCredit = {id: v.id, type: v.type, no: v.no, date: v.date, party: v.party}; }
     });
-    const res = {pairs, only2b, onlyBooks, portal, books, taxOf, dupes, reversed, loaded: this.all2b(reg).map(t => t.ym)};
+    const res = {pairs, only2b, onlyBooks, portal, books, taxOf, dupes, reversed, rejected: rejList, loaded: this.all2b(reg).map(t => t.ym)};
     this._memo = {key, v: b.vouchers, res};
     return res;
   },
@@ -210,7 +223,7 @@ const GST2B = {
     const lastLoaded = r.loaded[r.loaded.length - 1] || "";
     return {all: r, pairs, matched: pairs.filter(x => x.status === "matched"), diff: pairs.filter(x => x.status === "diff"), probable: pairs.filter(x => x.status === "probable"),
       timing: pairs.filter(x => x.timing), only2b: r.only2b.filter(p => inM(p.ym)), onlyBooks: r.onlyBooks.filter(d => inM(d.ym)),
-      laterMissing: r.onlyBooks.filter(d => inM(d.ym) && d.ym >= lastLoaded).length, taxOf: r.taxOf, reversed: (r.reversed || []).filter(pr => pr.some(d => inM(d.ym)))};
+      laterMissing: r.onlyBooks.filter(d => inM(d.ym) && d.ym >= lastLoaded).length, taxOf: r.taxOf, reversed: (r.reversed || []).filter(pr => pr.some(d => inM(d.ym))), rejected: (r.rejected || []).filter(x => inM(x.p.ym) || x.books.some(d => inM(d.ym)))};
   },
   totals(list, f){ return list.reduce((a, x) => { const o = f ? f(x) : x; return {n: a.n + 1, taxable: r2(a.taxable + num(o.taxable) * (o.dir || 1)), tax: r2(a.tax + (num(o.igst) + num(o.cgst) + num(o.sgst) + num(o.cess)) * (o.dir || 1))}; }, {n: 0, taxable: 0, tax: 0}); },
   // supplier by supplier, 2B against the books

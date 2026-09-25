@@ -796,7 +796,7 @@ const DEFAULT_FIRM = {firmName:"Garg Shekhar & Company", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "TEST · 25 Sep 2026 · build 139 (ITC follow-up: every bill 2B and Tally disagree on, carried month to month with its decision, last date and supplier letters; 3B takes the lower on a difference and suppliers’ credit notes from 2B)";
+const APP_VERSION = "TEST · 25 Sep 2026 · build 140 (IMS rejections read from 2B: a rejected invoice gives no credit, a rejected credit note does not reduce it; followed up with the supplier)";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;
@@ -7164,6 +7164,12 @@ const GST2B = {
     (dd.cdnra || []).forEach(s => (s.nt || s.inv || []).forEach(x => add("cdnra", s, x, {dir: x.typ === "D" ? 1 : -1, oNo: x.ontnum || x.ont_num || "", oDate: this.dmy(x.ontdt || x.ont_dt)})));
     (dd.isd || []).forEach(s => (s.doclist || []).forEach(x => add("isd", s, x, {dir: x.doctyp === "C" ? -1 : 1})));
     (dd.impg || []).forEach(x => add("impg", {ctin: "", trdnm: "Import of goods (" + (x.portcode || "") + ")"}, x));
+    // documents rejected in IMS: 2B keeps them apart (docRejdata); they give no credit, and a rejected credit note does not reduce it
+    const rj = d.docRejdata || {};
+    (rj.b2b || []).forEach(s => (s.inv || []).forEach(x => add("b2b", s, x, {rej: true, ims: "R", itcavl: "N", remarks: x.remarks || ""})));
+    (rj.b2ba || []).forEach(s => (s.inv || []).forEach(x => add("b2ba", s, x, {rej: true, ims: "R", itcavl: "N", remarks: x.remarks || "", oNo: x.oinum || "", oDate: this.dmy(x.oidt)})));
+    (rj.cdnr || []).forEach(s => (s.nt || s.inv || []).forEach(x => add("cdnr", s, x, {rej: true, ims: "R", itcavl: "N", remarks: x.remarks || "", dir: x.typ === "D" ? 1 : -1})));
+    (rj.cdnra || []).forEach(s => (s.nt || s.inv || []).forEach(x => add("cdnra", s, x, {rej: true, ims: "R", itcavl: "N", remarks: x.remarks || "", dir: x.typ === "D" ? 1 : -1})));
     (dd.impgsez || []).forEach(s => (s.boe || []).forEach(x => add("impgsez", s, x)));
     rows.forEach((r, i) => { r.key = period + "|" + r.sec + "|" + r.gstin + "|" + r.noN + "|" + r.date + "|" + i; });
     return {rows, period, ym, gstin: String(d.gstin || "").toUpperCase(), generated: d.gendt || "", summary: d.itcsumm || null};
@@ -7222,8 +7228,8 @@ const GST2B = {
     const b = S.books, st = this.state(), tol = num(this.settings().tol) || 1;
     const key = [reg, b.vouchers && b.vouchers.length, b.mapV || 0, Object.keys(b.gstins || {}).length, Object.keys(b.twoBs || {}).join(","), JSON.stringify(st.confirm), JSON.stringify(st.link), tol, S.coId].join("|");
     if (this._memo && this._memo.key === key && this._memo.v === b.vouchers) return this._memo.res;
-    const portal = [];
-    this.all2b(reg).forEach(t => t.rows.forEach(r => portal.push(r)));
+    const portal = [], rejRows = [];
+    this.all2b(reg).forEach(t => t.rows.forEach(r => (r.rej ? rejRows : portal).push(r)));
     const regs = ((b.meta || {}).gstins || []).map(g => g.slice(0, 2));
     const books = this.bookDocs().filter(d => !reg || d.reg === reg || (!d.reg && regs.length <= 1));
     const byId = new Map(books.map(d => [d.id, d]));
@@ -7314,6 +7320,13 @@ const GST2B = {
       const c = books.filter(d => free(d) && d.dir === 1 && (d.noN === p.noN || (!d.gstin && near(d.igst, p.igst) && d.igst > 0)));
       if (c.length && !rejected(p, [c[0]])) pair(p, [c[0]], c[0].noN === p.noN ? 2 : 4, c[0].noN === p.noN ? "number" : "probable");
     });
+    // rejected in IMS: found in Tally by supplier and number (or number written differently), else on its own
+    const rejList = [];
+    rejRows.forEach(p => {
+      const c = (byG.get(p.gstin) || []).filter(d => free(d) && d.dir === p.dir && (d.noN === p.noN || (d.core === this.coreNo(p.no) && this.coreNo(p.no) !== "|")));
+      c.forEach(d => taken.add(d.id));
+      rejList.push({p, books: c, sum: sumOf(c)});
+    });
     const only2b = portal.filter(p => !used2b.has(p.key));
     const onlyBooks = books.filter(d => !taken.has(d.id));
     // the same supplier's bill, same number and tax, booked more than once
@@ -7330,7 +7343,7 @@ const GST2B = {
       const c = (noCredit.get(p.noN) || []).filter(v => (!p.date || days(p.date, v.date) <= 62) && (!gstMap[v.party] || String(gstMap[v.party]).toUpperCase() === p.gstin || pan(gstMap[v.party]) === pan(p.gstin)));
       if (c.length){ const v = c[0]; p.bookedNoCredit = {id: v.id, type: v.type, no: v.no, date: v.date, party: v.party}; }
     });
-    const res = {pairs, only2b, onlyBooks, portal, books, taxOf, dupes, reversed, loaded: this.all2b(reg).map(t => t.ym)};
+    const res = {pairs, only2b, onlyBooks, portal, books, taxOf, dupes, reversed, rejected: rejList, loaded: this.all2b(reg).map(t => t.ym)};
     this._memo = {key, v: b.vouchers, res};
     return res;
   },
@@ -7341,7 +7354,7 @@ const GST2B = {
     const lastLoaded = r.loaded[r.loaded.length - 1] || "";
     return {all: r, pairs, matched: pairs.filter(x => x.status === "matched"), diff: pairs.filter(x => x.status === "diff"), probable: pairs.filter(x => x.status === "probable"),
       timing: pairs.filter(x => x.timing), only2b: r.only2b.filter(p => inM(p.ym)), onlyBooks: r.onlyBooks.filter(d => inM(d.ym)),
-      laterMissing: r.onlyBooks.filter(d => inM(d.ym) && d.ym >= lastLoaded).length, taxOf: r.taxOf, reversed: (r.reversed || []).filter(pr => pr.some(d => inM(d.ym)))};
+      laterMissing: r.onlyBooks.filter(d => inM(d.ym) && d.ym >= lastLoaded).length, taxOf: r.taxOf, reversed: (r.reversed || []).filter(pr => pr.some(d => inM(d.ym))), rejected: (r.rejected || []).filter(x => inM(x.p.ym) || x.books.some(d => inM(d.ym)))};
   },
   totals(list, f){ return list.reduce((a, x) => { const o = f ? f(x) : x; return {n: a.n + 1, taxable: r2(a.taxable + num(o.taxable) * (o.dir || 1)), tax: r2(a.tax + (num(o.igst) + num(o.cgst) + num(o.sgst) + num(o.cess)) * (o.dir || 1))}; }, {n: 0, taxable: 0, tax: 0}); },
   // supplier by supplier, 2B against the books
@@ -7573,7 +7586,7 @@ const GSTR = {
     const blocked = S2(r => r.blocked);
     // credit only as far as 2B shows it (section 16(2)(aa), rule 36(4)): bills not yet in 2B are held back,
     // and taken in the month their 2B carries them
-    const basis = this.itcBasis(ym, reg), held = {igst: 0, cgst: 0, sgst: 0, cess: 0, n: 0, list: []}, released = {igst: 0, cgst: 0, sgst: 0, cess: 0, n: 0, list: []}, cn2b = {igst: 0, cgst: 0, sgst: 0, cess: 0, n: 0, list: []};
+    const basis = this.itcBasis(ym, reg), held = {igst: 0, cgst: 0, sgst: 0, cess: 0, n: 0, list: []}, released = {igst: 0, cgst: 0, sgst: 0, cess: 0, n: 0, list: []}, cn2b = {igst: 0, cgst: 0, sgst: 0, cess: 0, n: 0, list: []}, rejBack = {igst: 0, cgst: 0, sgst: 0, cess: 0, n: 0, list: []};
     if (basis.on){
       const add = (o, d) => { o.igst = r2(o.igst + d.igst); o.cgst = r2(o.cgst + d.cgst); o.sgst = r2(o.sgst + d.sgst); o.cess = r2(o.cess + d.cess); o.n++; o.list.push(d); };
       const vById = new Map((S.books.vouchers || []).map(v => [v.id, v]));
@@ -7588,13 +7601,22 @@ const GSTR = {
         if (ex < 1 || bt <= 0) return;
         const f = ex / bt; bks.forEach(d => add(held, {id: d.id, no: d.no, party: d.party, igst: r2(d.igst * f), cgst: r2(d.cgst * f), sgst: r2(d.sgst * f), cess: r2(d.cess * f), excess: true}));
       });
+      // rejected in IMS: an invoice in Tally gives no credit (held, never released unless accepted again);
+      // a credit note booked in Tally (as our debit note) does not reduce credit while it stays rejected
+      (basis.res.rejected || []).forEach(x => { const dk = typeof ITCT === "object" ? ITCT.dec(reg, "R|" + x.p.key).act : "";
+        if (dk === "accept") return;
+        x.books.filter(d => !d.rcm && !d.ineligible).forEach(d => {
+          // in the month the bill was booked, if that month is on the 2B basis; else in the month of the 2B that shows the rejection
+          const here = d.ym === ym || (x.p.ym === ym && d.ym < ym && !this.itcBasis(d.ym, reg, true));
+          if (!here || (d.ym !== ym && d.ym > x.p.ym)) return;
+          if (d.dir > 0) add(held, Object.assign({}, d, {rejected: true})); else if (x.p.ym === ym || d.ym === ym) add(rejBack, d); }); });
       // a supplier's credit note in this month's 2B, not in Tally, reduces credit unless it is rejected in IMS
       basis.res.only2b.filter(p => p.ym === ym && p.dir < 0 && p.itcavl !== "N" && (typeof ITCT !== "object" || ITCT.dec(reg, "P|" + p.gstin + "|" + p.noN + "|" + p.dir).act !== "reject")).forEach(p => add(cn2b, p));
-      other = Object.assign({}, other, {igst: r2(other.igst - held.igst + released.igst - cn2b.igst), cgst: r2(other.cgst - held.cgst + released.cgst - cn2b.cgst), sgst: r2(other.sgst - held.sgst + released.sgst - cn2b.sgst), cess: r2(other.cess - held.cess + released.cess - cn2b.cess)});
+      other = Object.assign({}, other, {igst: r2(other.igst - held.igst + released.igst - cn2b.igst + rejBack.igst), cgst: r2(other.cgst - held.cgst + released.cgst - cn2b.cgst + rejBack.cgst), sgst: r2(other.sgst - held.sgst + released.sgst - cn2b.sgst + rejBack.sgst), cess: r2(other.cess - held.cess + released.cess - cn2b.cess + rejBack.cess)});
     }
     // 4(D)(2): credit 2B says is not available (place of supply in another state, or after the section 16(4) time limit)
     const na = {igst: 0, cgst: 0, sgst: 0, cess: 0};
-    (typeof GST2B === "object" ? GST2B.all2b(reg) : []).filter(t => t.ym === ym).forEach(t => t.rows.filter(r => r.itcavl === "N").forEach(r => { ["igst", "cgst", "sgst", "cess"].forEach(k => { na[k] = r2(na[k] + r.dir * num(r[k])); }); }));
+    (typeof GST2B === "object" ? GST2B.all2b(reg) : []).filter(t => t.ym === ym).forEach(t => t.rows.filter(r => r.itcavl === "N" && !r.rej).forEach(r => { ["igst", "cgst", "sgst", "cess"].forEach(k => { na[k] = r2(na[k] + r.dir * num(r[k])); }); }));
     const typed = ((S.books.gst3b || {})[(reg || "") + "|" + ym]) || {}, tv = (k, h) => num(((typed[k] || {})[h]));
     const rev2 = {igst: tv("rev2", "igst"), cgst: tv("rev2", "cgst"), sgst: tv("rev2", "sgst"), cess: tv("rev2", "cess")};
     const reclaim = {igst: tv("reclaim", "igst"), cgst: tv("reclaim", "cgst"), sgst: tv("reclaim", "sgst"), cess: tv("reclaim", "cess")};
@@ -7622,7 +7644,7 @@ const GSTR = {
     const pay = this.setOff(net, rcmOut, netItc, opening);
     return {sale: taxableOut, cn, net, adv, rules, r42: rul.r42, r43: rul.r43, zero, nil, nongst, rcmOut, rcmIn, toUnreg, impGoods, impServ, other, blocked,
       buy: this.sum(inn), itc, reversal, rev1, rev2, reclaim, na, inw5, unregPos: Object.values(unregPos).sort((a, c) => a.pos.localeCompare(c.pos)),
-      basis: basis.on ? "2b" : basis.why, held, released, cn2b, netItc, ineligible: this.sum(inn).ineligible, opening, pay, payable: pay.cash};
+      basis: basis.on ? "2b" : basis.why, held, released, cn2b, rejBack, netItc, ineligible: this.sum(inn).ineligible, opening, pay, payable: pay.cash};
   },
   // credit on the 2B basis for a month: on when that month's 2B is here and the client has not chosen the books basis
   itcBasis(ym, reg, quick){
@@ -9930,8 +9952,9 @@ function viewGstr3b(b){
     row("(A)(2) Import of services", {taxable: t.impServ.taxable, igst: t.impServ.igst, cgst: t.impServ.cgst, sgst: t.impServ.sgst}) +
     row("(A)(3) Inward supplies on reverse charge", {taxable: t.rcmIn.taxable, igst: t.rcmIn.igst, cgst: t.rcmIn.cgst, sgst: t.rcmIn.sgst}) +
     row("(A)(5) All other ITC", {taxable: t.other.taxable, igst: t.other.igst, cgst: t.other.cgst, sgst: t.other.sgst}) +
-    (t.basis === "2b" && (t.held.n || t.released.n || (t.cn2b && t.cn2b.n)) ? '<tr><td colspan="5" class="nr" style="white-space:normal">' + (t.held.n ? "Held back, not yet in 2B: " + t.held.n + " bill" + (t.held.n === 1 ? "" : "s") + ", \u20b9" + money(t.held.igst + t.held.cgst + t.held.sgst + t.held.cess) + ". " : "") +
+    (t.basis === "2b" && (t.held.n || t.released.n || (t.cn2b && t.cn2b.n) || (t.rejBack && t.rejBack.n)) ? '<tr><td colspan="5" class="nr" style="white-space:normal">' + (t.held.n ? "Held back, not yet in 2B: " + t.held.n + " bill" + (t.held.n === 1 ? "" : "s") + ", \u20b9" + money(t.held.igst + t.held.cgst + t.held.sgst + t.held.cess) + ". " : "") +
       (t.released.n ? "Taken now, booked earlier and in this month\u2019s 2B: " + t.released.n + ", \u20b9" + money(t.released.igst + t.released.cgst + t.released.sgst + t.released.cess) + ". " : "") +
+      (t.rejBack && t.rejBack.n ? "Credit notes rejected in IMS, not reducing credit: " + t.rejBack.n + ", \u20b9" + money(t.rejBack.igst + t.rejBack.cgst + t.rejBack.sgst + t.rejBack.cess) + ". " : "") +
       (t.cn2b && t.cn2b.n ? "Less suppliers\u2019 credit notes in 2B, not in Tally: " + t.cn2b.n + ", \u20b9" + money(t.cn2b.igst + t.cn2b.cgst + t.cn2b.sgst + t.cn2b.cess) + ". " : "") + '<button class="linkbtn" data-gstpart="follow">See them</button></td></tr>' : "") +
     gap + row("(B)(1) Reversed: rules 38, 42, 43 and section 17(5)", {taxable: "", igst: t.rev1.igst, cgst: t.rev1.cgst, sgst: t.rev1.sgst}) +
     '<tr><td>(B)(2) Reversed: others (rule 37, and credit that may come back)<div class="nr">type any here</div></td><td class="n"></td>' + ["igst", "cgst", "sgst"].map(k => '<td class="n"><input type="number" step="0.01" data-g3b="rev2.' + k + '" value="' + esc((((b.gst3b || {})[(S.gstReg || "") + "|" + S.gstYm] || {}).rev2 || {})[k] || "") + '" placeholder="0" style="width:100px;text-align:right"></td>').join("") + "</tr>" +
@@ -9968,12 +9991,13 @@ function inregRows(b){
     res.pairs.forEach(x => x.books.forEach(d => { st[d.id] = {s: x.status, p: x.p, issues: x.issues}; }));
     res.only2b.filter(p => months.includes(p.ym)).forEach(p => only2b.push(p));
     R0.dupes = res.dupes || {};
+    (res.rejected || []).forEach(x => x.books.forEach(d => { st[d.id] = {s: "rejected", issues: ["rejected in IMS" + (x.p.remarks ? ": " + x.p.remarks : "")]}; }));
     (res.reversed || []).forEach(([a, c]) => { st[a.id] = {s: "reversed", issues: ["reversed by voucher " + c.voucher + " of " + GSTAmend.dmy(c.bookDate)]}; st[c.id] = {s: "reversed", issues: ["reverses voucher " + a.voucher + " of " + GSTAmend.dmy(a.bookDate)]}; });
   }
   rows.forEach(r => {
     r.kindL = r.import ? (r.supply === "Goods" ? "Import of goods" : "Import of services") : r.rcm ? "Reverse charge" : r.blocked || r.ineligible ? "Not to be taken" : r.dir < 0 ? "Credit reduced" : "Eligible";
     const x = st[r.id];
-    r.twoB = x ? ({matched: "In 2B", diff: "In 2B, differs", probable: "In 2B? confirm", reversed: "Booked and reversed"})[x.s] || x.s : (r.rcm && !r.gstin) || r.import ? "not expected in 2B" : loaded.has(r.ym) ? "Not in 2B" : "2B not brought in";
+    r.twoB = x ? ({matched: "In 2B", diff: "In 2B, differs", probable: "In 2B? confirm", reversed: "Booked and reversed", rejected: "Rejected in IMS"})[x.s] || x.s : (r.rcm && !r.gstin) || r.import ? "not expected in 2B" : loaded.has(r.ym) ? "Not in 2B" : "2B not brought in";
     r.twoBWhy = x && x.issues ? x.issues.join("; ") : "";
     const dp = R0.dupes[r.id];
     if (dp){ r.dupe = dp; r.twoBWhy = ("booked " + dp.n + " times: also voucher " + dp.others.join(", ") + (r.twoBWhy ? "; " + r.twoBWhy : "")); }
@@ -9997,7 +10021,7 @@ function viewInputRegister(b){
   const sgn = r => r.dir < 0 ? -1 : 1;
   const tot = list => list.reduce((a, r) => ({n: a.n + 1, taxable: r2(a.taxable + sgn(r) * r.taxable), igst: r2(a.igst + sgn(r) * r.igst), cgst: r2(a.cgst + sgn(r) * r.cgst), sgst: r2(a.sgst + sgn(r) * r.sgst), cess: r2(a.cess + sgn(r) * r.cess)}), {n: 0, taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0});
   const kinds = ["Eligible", "Credit reduced", "Reverse charge", "Import of goods", "Import of services", "Not to be taken"];
-  const statuses = ["In 2B", "In 2B, differs", "In 2B? confirm", "Not in 2B", "Booked and reversed", "2B not brought in", "not expected in 2B"];
+  const statuses = ["In 2B", "In 2B, differs", "In 2B? confirm", "Not in 2B", "Rejected in IMS", "Booked and reversed", "2B not brought in", "not expected in 2B"];
   let list = R.rows.filter(r => !f || r.kindL === f || r.twoB === f || (f === "Booked more than once" && r.dupe));
   if (q) list = list.filter(r => [r.party, r.gstin, r.no, r.voucher, r.hsn, r.type].join(" ").toLowerCase().includes(q));
   const all = tot(R.rows), shown = tot(list);
@@ -10099,6 +10123,8 @@ function viewBooks2B(b){
     '<div class="dtile"><span>ITC in 2B, ' + esc(sc0.label) + "</span><b>" + money(sumTx(avl)) + "</b><small>" + avl.length + " documents" + (S2b.length > avl.length ? ", " + (S2b.length - avl.length) + " not available" : "") + "</small></div>" +
     '<div class="dtile"><span>ITC in Tally</span><b>' + money(sumTx(booksIn)) + "</b><small>" + booksIn.length + " documents</small></div>" +
     '<div class="dtile' + (Math.abs(sumTx(avl) - sumTx(booksIn)) > 1 ? " warn" : "") + '"><span>Gap, 2B less Tally</span><b>' + money(r2(sumTx(avl) - sumTx(booksIn))) + "</b><small>" + sc.timing.length + " matched in another month</small></div></div>";
+  const rjs = sc.rejected || [];
+  if (rjs.length) h += '<p class="note">Rejected in IMS: ' + rjs.length + " document" + (rjs.length === 1 ? "" : "s") + ", tax \u20b9" + money(r2(rjs.reduce((a, x) => a + x.p.dir * tx(x.p), 0))) + " \u2014 no credit from them" + (rjs.some(x => x.books.length) ? "; " + rjs.filter(x => x.books.length).length + " booked in Tally" : "") + '. <button class="linkbtn" data-gstpart="follow">See them under ITC follow-up</button></p>';
   const sk = GST2B.skipped || {};
   if (sk.setOff || sk.taxOnly) h += '<p class="note">Left out of Tally\u2019s side: ' + [sk.setOff ? sk.setOff + " set-off entr" + (sk.setOff === 1 ? "y" : "ies") + " (output tax against credit)" : "", sk.taxOnly ? sk.taxOnly + " tax-only entr" + (sk.taxOnly === 1 ? "y" : "ies") + " with no supplier GSTIN or value (rounding, reversals)" : ""].filter(Boolean).join(" and ") + ".</p>";
   h += '<div class="dash-tiles">' +
@@ -19188,6 +19214,10 @@ const ITCT = {
                 acts: [["accept", "Accept in IMS; book it in Tally"], ["reject", "Reject in IMS: disputed"]]},
     ournote:   {label: "Note in Tally, not in 2B", law: "Credit is already reduced in the books; the supplier still has to report the note.", warn: false,
                 acts: [["follow", "Follow up the supplier"], ["ok", "Nothing to do"]]},
+    rejinv:    {label: "Invoice rejected in IMS", law: "A rejected invoice gives no credit. The supplier\u2019s tax stays until they amend or cancel it in GSTR-1A or a later GSTR-1; the amended document comes back to IMS. Once 3B is filed the rejection is final for that month.", warn: true,
+                acts: [["keep", "Keep rejected: no credit; reverse the input tax in Tally"], ["accept", "Change to accept in IMS before filing 3B"]]},
+    rejcn:     {label: "Credit note rejected in IMS", law: "A rejected credit note does not reduce your credit; the supplier\u2019s tax goes back up in their 3B. Reverse the debit note in Tally, or accept it in IMS if it is right.", warn: true,
+                acts: [["keep", "Keep rejected: credit not reduced; reverse it in Tally"], ["accept", "Accept in IMS: credit reduced"]]},
     confirm:   {label: "To confirm", law: "Probably the same bill with a different number or no GSTIN in Tally: confirm it under 2B reconciliation.", warn: true, acts: []},
     unchecked: {label: "Not checked yet", law: "The 2B for the bill\u2019s month is not here, so it cannot be said whether the supplier reported it. Bring in that month\u2019s 2B.", warn: false, acts: []},
     na:        {label: "In 2B, credit not available", law: "2B marks it not available (place of supply in another state, or after the time limit); no credit, nothing to follow up.", warn: false, acts: []},
@@ -19228,6 +19258,16 @@ const ITCT = {
       else if (x.status === "diff") add("diff", Object.assign(base, {key: "D|" + x.p.gstin + "|" + x.p.noN + "|" + x.p.dir, where: "both", gap: r2(t1 - t2), claim: Math.min(t1, t2)}));
       if (x.status !== "probable" && x.books.some(z => z.ym < x.p.ym)) add("later", Object.assign({}, base, {key: "L|" + x.p.key, where: "both", claimedIn: x.p.ym}));
     });
+    // rejected in IMS
+    (res.rejected || []).forEach(x => {
+      const p = x.p, inT = x.books.length > 0, s2 = x.sum;
+      const o = {supplier: p.party, gstin: p.gstin, no: p.no, date: p.date, ym: p.ym, ym2b: p.ym, taxable: inT ? s2.taxable : p.taxable, igst: inT ? s2.igst : p.igst, cgst: inT ? s2.cgst : p.cgst, sgst: inT ? s2.sgst : p.sgst, cess: inT ? s2.cess : p.cess,
+        tax: inT ? this.tax(s2) : this.tax(p), tax2b: this.tax(p), where: inT ? "both" : "2B", key: "R|" + p.key, deadline: this.deadline(p.date), ims: "rejected", remarks: p.remarks || "",
+        booked: inT ? x.books[0].bookDate : "", voucher: x.books.map(d => d.voucher).join(", "), bookedAs: inT ? "" : "not booked", issues: p.remarks ? ["your remark: " + p.remarks] : []};
+      const cat = p.dir < 0 ? "rejcn" : "rejinv";
+      add(cat, o);
+      if (!inT){ const last = out[out.length - 1]; last.open = false; last.act = "keep"; }
+    });
     // in 2B, not in Tally
     res.only2b.forEach(p => {
       const base = {supplier: p.party, gstin: p.gstin, no: p.no, date: p.date, ym: p.ym, ym2b: p.ym, taxable: p.taxable, igst: p.igst, cgst: p.cgst, sgst: p.sgst, cess: p.cess, tax: this.tax(p), tax2b: this.tax(p),
@@ -19246,19 +19286,21 @@ const ITCT = {
   // what to write to one supplier: its bills not in 2B, and the ones that differ
   letter(reg, gstin, party, items){
     const co = CO(), m = v => INR.format(r2(v || 0));
-    const w = items.filter(x => x.cat === "waiting" && x.act === "follow"), d = items.filter(x => x.cat === "diff" && x.act === "supplier"), n = items.filter(x => x.cat === "ournote" && x.act === "follow");
+    const w = items.filter(x => x.cat === "waiting" && x.act === "follow"), d = items.filter(x => x.cat === "diff" && x.act === "supplier"), n = items.filter(x => x.cat === "ournote" && x.act === "follow"),
+      rj = items.filter(x => (x.cat === "rejinv" || x.cat === "rejcn") && x.act === "keep");
     let t = "Dear " + (party || "Sir/Madam") + ",\n\nWe are " + co.name + (co.gstin || gstin ? " (GSTIN " + (((S.books.meta || {}).gstins || []).find(g => g.slice(0, 2) === reg) || co.gstin || "") + ")" : "") + ". Our GST credit depends on your returns, so please look at the following:\n";
     if (w.length) t += "\n1. Invoices in our books that do not appear in our GSTR-2B. Please report them in your GSTR-1 / IFF:\n" + w.map((x, i) => "   " + (i + 1) + ". Invoice " + x.no + " dated " + GSTAmend.dmy(x.date) + ", taxable " + m(x.taxable) + ", tax " + m(x.tax)).join("\n") + "\n";
     if (d.length) t += "\n" + (w.length ? "2" : "1") + ". Invoices reported with different figures. Please amend them in your GSTR-1:\n" + d.map((x, i) => "   " + (i + 1) + ". Invoice " + x.no + " dated " + GSTAmend.dmy(x.date) + ": tax " + m(x.tax) + " in our books, " + m(x.tax2b) + " in your return" + (x.issues && x.issues.length ? " (" + x.issues.filter(z => !/^booked in|^value differs/.test(z)).join("; ") + ")" : "")).join("\n") + "\n";
     if (n.length) t += "\n" + (1 + (w.length ? 1 : 0) + (d.length ? 1 : 0)) + ". Credit notes you issued to us that are not in your return:\n" + n.map((x, i) => "   " + (i + 1) + ". Note " + x.no + " dated " + GSTAmend.dmy(x.date) + ", tax " + m(x.tax)).join("\n") + "\n";
+    if (rj.length) t += "\n" + (1 + (w.length ? 1 : 0) + (d.length ? 1 : 0) + (n.length ? 1 : 0)) + ". Documents we have rejected in the Invoice Management System. Please amend or cancel them in your GSTR-1A / GSTR-1:\n" + rj.map((x, i) => "   " + (i + 1) + ". " + (x.cat === "rejcn" ? "Credit note " : "Invoice ") + x.no + " dated " + GSTAmend.dmy(x.date) + ", tax " + m(x.tax2b) + (x.remarks ? " (" + x.remarks + ")" : "")).join("\n") + "\n";
     t += "\nThe last date for us to take this credit is 30 November after the end of the year of each invoice. Please confirm once reported.\n\nRegards,\n" + co.name;
-    return {text: t, n: w.length + d.length + n.length};
+    return {text: t, n: w.length + d.length + n.length + rj.length};
   },
   suppliers(reg, items){
     const m = {};
-    items.filter(x => x.open && ((x.cat === "waiting" && x.act === "follow") || (x.cat === "diff" && x.act === "supplier") || (x.cat === "ournote" && x.act === "follow"))).forEach(x => {
+    items.filter(x => x.open && ((x.cat === "waiting" && x.act === "follow") || (x.cat === "diff" && x.act === "supplier") || (x.cat === "ournote" && x.act === "follow") || ((x.cat === "rejinv" || x.cat === "rejcn") && x.act === "keep"))).forEach(x => {
       const k = x.gstin || x.supplier, s = m[k] = m[k] || {key: k, gstin: x.gstin, party: x.supplier, items: [], tax: 0, oldest: x.date, deadline: x.deadline};
-      s.items.push(x); s.tax = r2(s.tax + (x.cat === "diff" ? Math.abs(x.gap) : x.tax)); if (String(x.date) < String(s.oldest)) s.oldest = x.date; if (x.deadline && (!s.deadline || x.deadline < s.deadline)) s.deadline = x.deadline;
+      s.items.push(x); s.tax = r2(s.tax + (x.cat === "diff" ? Math.abs(x.gap) : x.cat === "rejcn" || x.cat === "rejinv" ? x.tax2b : x.tax)); if (String(x.date) < String(s.oldest)) s.oldest = x.date; if (x.deadline && (!s.deadline || x.deadline < s.deadline)) s.deadline = x.deadline;
     });
     const st = this.store(reg), b = S.books, info = b.ledInfo || {};
     return Object.values(m).map(s => { const c = st.contact[s.key] || {}, email = c.email || this.tallyEmail(s.party), sent = st.sent[s.key] || [];
@@ -19295,7 +19337,7 @@ function viewItcFollow(b){
     list.slice(0, 3000).map(x => {
       const c = ITCT.CATS[x.cat], dlCls = x.deadline && x.deadline < today ? "bad" : soon(x.deadline) ? "bad" : "nr";
       const tallyCell = x.where === "2B" ? (x.bookedAs ? '<span class="nr">' + esc(x.bookedAs) + "</span>" : '<span class="nr">not booked</span>') : esc(GSTAmend.dmy(x.booked || x.date)) + '<div class="nr">' + esc(x.voucher || "") + "</div>";
-      const twoB = x.where === "Tally" ? '<span class="' + (x.covered ? "bad" : "nr") + '">' + esc(x.covered ? "not in 2B" : "no 2B yet") + "</span>" : esc(GSTR.label(x.ym2b || x.ym)) + (x.claimedIn ? '<div class="nr">taken then</div>' : x.reason ? '<div class="nr">' + esc(x.reason) + "</div>" : x.ims ? '<div class="nr">IMS: ' + esc(x.ims) + "</div>" : "");
+      const twoB = x.where === "Tally" ? '<span class="' + (x.covered ? "bad" : "nr") + '">' + esc(x.covered ? "not in 2B" : "no 2B yet") + "</span>" : esc(GSTR.label(x.ym2b || x.ym)) + (x.ims === "rejected" ? '<div class="bad">rejected in IMS</div>' : x.claimedIn ? '<div class="nr">taken then</div>' : x.reason ? '<div class="nr">' + esc(x.reason) + "</div>" : x.ims ? '<div class="nr">IMS: ' + esc(x.ims) + "</div>" : "");
       const taxCell = money(x.tax) + (x.cat === "diff" ? '<div class="nr">2B ' + money(x.tax2b) + "</div>" : "");
       const acts = c.acts.length ? '<select data-itctact="' + esc(x.key) + '">' + c.acts.map(([v, l]) => '<option value="' + v + '"' + (x.act === v ? " selected" : "") + ">" + esc(l) + "</option>").join("") + "</select>" : (x.cat === "confirm" ? '<button class="linkbtn" data-gstpart="r2b">confirm under 2B</button>' : '<span class="nr">nothing to do</span>');
       return "<tr><td>" + esc(c.label) + (x.issues && x.cat === "diff" ? '<div class="nr" title="' + esc(x.issues.join("; ")) + '">' + esc(x.issues.filter(z => !/^booked in|^value differs/.test(z)).join("; ")) + "</div>" : "") + "</td><td>" + esc(x.supplier || "") + '<div class="nr">' + esc(x.gstin || "no GSTIN") + "</div></td><td>" + esc(x.no || "") + '<div class="nr">' + esc(GSTAmend.dmy(x.date)) + "</div></td><td>" + tallyCell + "</td><td>" + twoB +
@@ -19323,8 +19365,8 @@ async function itctExcel(){
   const head = ["What", "Supplier", "GSTIN", "Bill no.", "Bill date", "In Tally", "In 2B", "Taxable", "IGST", "CGST", "SGST", "Cess", "Tax", "Tax in 2B", "Last date for credit", "What to do", "Note", "Differences"];
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([head].concat(R.items.filter(x => x.open).map(row))), "Open");
   // what to do on the portal's IMS, taken from the decisions
-  const ims = R.items.filter(x => x.where === "2B" && (x.cat === "tobook" || x.cat === "suppcn" || x.cat === "nocredit")).map(x => [x.supplier, x.gstin, x.no, d(x.date), GSTR.label(x.ym2b), x.tax,
-    x.cat === "suppcn" ? (x.act === "reject" ? "Reject" : "Accept") : x.act === "reject" ? "Reject" : x.act === "pending" ? "Pending" : "Accept", actLabel(x), x.ims || ""]);
+  const ims = R.items.filter(x => (x.where === "2B" && (x.cat === "tobook" || x.cat === "suppcn" || x.cat === "nocredit")) || x.cat === "rejinv" || x.cat === "rejcn").map(x => [x.supplier, x.gstin, x.no, d(x.date), GSTR.label(x.ym2b), x.tax2b != null ? x.tax2b : x.tax,
+    x.cat === "rejinv" || x.cat === "rejcn" ? (x.act === "accept" ? "Change to Accept" : "Leave rejected") : x.cat === "suppcn" ? (x.act === "reject" ? "Reject" : "Accept") : x.act === "reject" ? "Reject" : x.act === "pending" ? "Pending" : "Accept", actLabel(x), (x.ims || "") + (x.remarks ? " \u00b7 " + x.remarks : "")]);
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Supplier", "GSTIN", "Document", "Date", "2B month", "Tax", "IMS action", "Why", "IMS status in 2B"]].concat(ims)), "IMS actions");
   const sups = ITCT.suppliers(reg, R.items);
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Supplier", "GSTIN", "Email", "Phone", "Bills", "Tax waiting", "Last written", "Letter"]].concat(sups.map(s => [s.party, s.gstin, s.email, s.phone, s.items.length, s.tax, s.lastSent ? d(s.lastSent) : "", ITCT.letter(reg, s.gstin, s.party, s.items).text]))), "Letters");

@@ -1427,8 +1427,9 @@ function viewGstr3b(b){
     row("(A)(2) Import of services", {taxable: t.impServ.taxable, igst: t.impServ.igst, cgst: t.impServ.cgst, sgst: t.impServ.sgst}) +
     row("(A)(3) Inward supplies on reverse charge", {taxable: t.rcmIn.taxable, igst: t.rcmIn.igst, cgst: t.rcmIn.cgst, sgst: t.rcmIn.sgst}) +
     row("(A)(5) All other ITC", {taxable: t.other.taxable, igst: t.other.igst, cgst: t.other.cgst, sgst: t.other.sgst}) +
-    (t.basis === "2b" && (t.held.n || t.released.n || (t.cn2b && t.cn2b.n)) ? '<tr><td colspan="5" class="nr" style="white-space:normal">' + (t.held.n ? "Held back, not yet in 2B: " + t.held.n + " bill" + (t.held.n === 1 ? "" : "s") + ", \u20b9" + money(t.held.igst + t.held.cgst + t.held.sgst + t.held.cess) + ". " : "") +
+    (t.basis === "2b" && (t.held.n || t.released.n || (t.cn2b && t.cn2b.n) || (t.rejBack && t.rejBack.n)) ? '<tr><td colspan="5" class="nr" style="white-space:normal">' + (t.held.n ? "Held back, not yet in 2B: " + t.held.n + " bill" + (t.held.n === 1 ? "" : "s") + ", \u20b9" + money(t.held.igst + t.held.cgst + t.held.sgst + t.held.cess) + ". " : "") +
       (t.released.n ? "Taken now, booked earlier and in this month\u2019s 2B: " + t.released.n + ", \u20b9" + money(t.released.igst + t.released.cgst + t.released.sgst + t.released.cess) + ". " : "") +
+      (t.rejBack && t.rejBack.n ? "Credit notes rejected in IMS, not reducing credit: " + t.rejBack.n + ", \u20b9" + money(t.rejBack.igst + t.rejBack.cgst + t.rejBack.sgst + t.rejBack.cess) + ". " : "") +
       (t.cn2b && t.cn2b.n ? "Less suppliers\u2019 credit notes in 2B, not in Tally: " + t.cn2b.n + ", \u20b9" + money(t.cn2b.igst + t.cn2b.cgst + t.cn2b.sgst + t.cn2b.cess) + ". " : "") + '<button class="linkbtn" data-gstpart="follow">See them</button></td></tr>' : "") +
     gap + row("(B)(1) Reversed: rules 38, 42, 43 and section 17(5)", {taxable: "", igst: t.rev1.igst, cgst: t.rev1.cgst, sgst: t.rev1.sgst}) +
     '<tr><td>(B)(2) Reversed: others (rule 37, and credit that may come back)<div class="nr">type any here</div></td><td class="n"></td>' + ["igst", "cgst", "sgst"].map(k => '<td class="n"><input type="number" step="0.01" data-g3b="rev2.' + k + '" value="' + esc((((b.gst3b || {})[(S.gstReg || "") + "|" + S.gstYm] || {}).rev2 || {})[k] || "") + '" placeholder="0" style="width:100px;text-align:right"></td>').join("") + "</tr>" +
@@ -1465,12 +1466,13 @@ function inregRows(b){
     res.pairs.forEach(x => x.books.forEach(d => { st[d.id] = {s: x.status, p: x.p, issues: x.issues}; }));
     res.only2b.filter(p => months.includes(p.ym)).forEach(p => only2b.push(p));
     R0.dupes = res.dupes || {};
+    (res.rejected || []).forEach(x => x.books.forEach(d => { st[d.id] = {s: "rejected", issues: ["rejected in IMS" + (x.p.remarks ? ": " + x.p.remarks : "")]}; }));
     (res.reversed || []).forEach(([a, c]) => { st[a.id] = {s: "reversed", issues: ["reversed by voucher " + c.voucher + " of " + GSTAmend.dmy(c.bookDate)]}; st[c.id] = {s: "reversed", issues: ["reverses voucher " + a.voucher + " of " + GSTAmend.dmy(a.bookDate)]}; });
   }
   rows.forEach(r => {
     r.kindL = r.import ? (r.supply === "Goods" ? "Import of goods" : "Import of services") : r.rcm ? "Reverse charge" : r.blocked || r.ineligible ? "Not to be taken" : r.dir < 0 ? "Credit reduced" : "Eligible";
     const x = st[r.id];
-    r.twoB = x ? ({matched: "In 2B", diff: "In 2B, differs", probable: "In 2B? confirm", reversed: "Booked and reversed"})[x.s] || x.s : (r.rcm && !r.gstin) || r.import ? "not expected in 2B" : loaded.has(r.ym) ? "Not in 2B" : "2B not brought in";
+    r.twoB = x ? ({matched: "In 2B", diff: "In 2B, differs", probable: "In 2B? confirm", reversed: "Booked and reversed", rejected: "Rejected in IMS"})[x.s] || x.s : (r.rcm && !r.gstin) || r.import ? "not expected in 2B" : loaded.has(r.ym) ? "Not in 2B" : "2B not brought in";
     r.twoBWhy = x && x.issues ? x.issues.join("; ") : "";
     const dp = R0.dupes[r.id];
     if (dp){ r.dupe = dp; r.twoBWhy = ("booked " + dp.n + " times: also voucher " + dp.others.join(", ") + (r.twoBWhy ? "; " + r.twoBWhy : "")); }
@@ -1494,7 +1496,7 @@ function viewInputRegister(b){
   const sgn = r => r.dir < 0 ? -1 : 1;
   const tot = list => list.reduce((a, r) => ({n: a.n + 1, taxable: r2(a.taxable + sgn(r) * r.taxable), igst: r2(a.igst + sgn(r) * r.igst), cgst: r2(a.cgst + sgn(r) * r.cgst), sgst: r2(a.sgst + sgn(r) * r.sgst), cess: r2(a.cess + sgn(r) * r.cess)}), {n: 0, taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0});
   const kinds = ["Eligible", "Credit reduced", "Reverse charge", "Import of goods", "Import of services", "Not to be taken"];
-  const statuses = ["In 2B", "In 2B, differs", "In 2B? confirm", "Not in 2B", "Booked and reversed", "2B not brought in", "not expected in 2B"];
+  const statuses = ["In 2B", "In 2B, differs", "In 2B? confirm", "Not in 2B", "Rejected in IMS", "Booked and reversed", "2B not brought in", "not expected in 2B"];
   let list = R.rows.filter(r => !f || r.kindL === f || r.twoB === f || (f === "Booked more than once" && r.dupe));
   if (q) list = list.filter(r => [r.party, r.gstin, r.no, r.voucher, r.hsn, r.type].join(" ").toLowerCase().includes(q));
   const all = tot(R.rows), shown = tot(list);
@@ -1596,6 +1598,8 @@ function viewBooks2B(b){
     '<div class="dtile"><span>ITC in 2B, ' + esc(sc0.label) + "</span><b>" + money(sumTx(avl)) + "</b><small>" + avl.length + " documents" + (S2b.length > avl.length ? ", " + (S2b.length - avl.length) + " not available" : "") + "</small></div>" +
     '<div class="dtile"><span>ITC in Tally</span><b>' + money(sumTx(booksIn)) + "</b><small>" + booksIn.length + " documents</small></div>" +
     '<div class="dtile' + (Math.abs(sumTx(avl) - sumTx(booksIn)) > 1 ? " warn" : "") + '"><span>Gap, 2B less Tally</span><b>' + money(r2(sumTx(avl) - sumTx(booksIn))) + "</b><small>" + sc.timing.length + " matched in another month</small></div></div>";
+  const rjs = sc.rejected || [];
+  if (rjs.length) h += '<p class="note">Rejected in IMS: ' + rjs.length + " document" + (rjs.length === 1 ? "" : "s") + ", tax \u20b9" + money(r2(rjs.reduce((a, x) => a + x.p.dir * tx(x.p), 0))) + " \u2014 no credit from them" + (rjs.some(x => x.books.length) ? "; " + rjs.filter(x => x.books.length).length + " booked in Tally" : "") + '. <button class="linkbtn" data-gstpart="follow">See them under ITC follow-up</button></p>';
   const sk = GST2B.skipped || {};
   if (sk.setOff || sk.taxOnly) h += '<p class="note">Left out of Tally\u2019s side: ' + [sk.setOff ? sk.setOff + " set-off entr" + (sk.setOff === 1 ? "y" : "ies") + " (output tax against credit)" : "", sk.taxOnly ? sk.taxOnly + " tax-only entr" + (sk.taxOnly === 1 ? "y" : "ies") + " with no supplier GSTIN or value (rounding, reversals)" : ""].filter(Boolean).join(" and ") + ".</p>";
   h += '<div class="dash-tiles">' +
