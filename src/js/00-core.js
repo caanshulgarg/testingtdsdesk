@@ -33,7 +33,7 @@ const DEFAULT_FIRM = {firmName:"Garg Shekhar & Company", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "25 Sep 2026 · build 136 (2B matching: a bill and its reversal set aside, numbers with a prefix, same tax on a different value, bills booked twice, bills in 2B booked without taking the credit)";
+const APP_VERSION = "25 Sep 2026 · build 137 (a filter on every column of every table, long tables scroll with the heading in view; the input register on the first screen, matched bills marked In 2B)";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;

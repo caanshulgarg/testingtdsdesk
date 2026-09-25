@@ -684,6 +684,45 @@ label.f.unsure > span::after{content:" · check";color:var(--flag)}
 .prevbox summary{cursor:pointer;font-size:13px;color:var(--muted);margin-bottom:6px}
 img.preview{display:block;max-width:100%;max-height:70vh;margin:0 auto;border:1px solid var(--rule);border-radius:4px;background:#fff}
 .swfoot{display:flex;gap:8px;padding:10px 16px;border-top:1px solid var(--rule-soft)}
+
+/* column filters on every table (GridF), and long tables boxed with the heading in view */
+.bk-tablewrap.gf-scroll{max-height:calc(100vh - 170px);overflow:auto}
+.gf-scroll .bk-table thead th{position:sticky;top:0;z-index:2;box-shadow:inset 0 -1px 0 var(--rule)}
+.gf-bar{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;margin:0 0 6px;padding:6px 10px;border:1px solid var(--ledger);border-radius:8px;background:var(--ledger-soft);font-size:13px}
+.gf-bar .gf-sums{color:var(--muted)}
+.gf-bar .gf-sums b{color:var(--ink)}
+#gfpop .cp-head{display:flex;justify-content:space-between;align-items:center;padding:10px 12px 4px}
+#gfpop .cp-body{padding:4px 12px 8px;display:flex;flex-direction:column;gap:6px}
+#gfpop .cp-foot{display:flex;justify-content:flex-end;gap:6px;padding:8px 12px;border-top:1px solid var(--rule-soft)}
+#gfpop .cp-row{display:flex;gap:6px}
+#gfpop .cp-row select{width:auto;flex:0 0 auto}
+#gfpop .cp-list{max-height:240px;overflow:auto}
+.gf-chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 2px}
+.gf-chip{border:1px solid var(--rule);background:var(--sheet);border-radius:999px;padding:3px 10px;font:inherit;font-size:12.5px;color:var(--ink);cursor:pointer;text-decoration:none}
+.gf-chip.warn{border-color:#E4B85C;background:#FFF9EC}
+.gf-chip.on{border-color:var(--ledger);background:var(--ledger-soft)}
+.gf-ctl{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.gf-ctl h3{margin:0 10px 0 0}
+.gf-ctl select,.gf-ctl input[type="search"]{width:auto;max-width:260px}
+.bk-table.compact{font-size:13px}
+.bk-table.compact td{padding:5px 8px;line-height:1.3}
+.bk-table.compact th{padding:8px}
+.bk-table.compact td:nth-child(-n+2),.bk-table.compact td.hr{white-space:nowrap}
+.bk-table.compact th.n,.bk-table.compact td.n{width:1%;padding-left:6px;padding-right:6px}
+.bk-table.compact td:last-child .nr{max-width:240px}
+.bk-table.compact td:last-child{min-width:120px}
+.bk-table.compact td:nth-child(2){max-width:130px;overflow:hidden;text-overflow:ellipsis}
+.bk-table.compact td:nth-child(4){max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bk-table.compact td:nth-child(3){min-width:180px;max-width:280px}
+.bk-table.compact tbody tr{contain-intrinsic-size:auto 30px}
+.bk-table.fixed{table-layout:fixed}
+.bk-table.fixed td,.bk-table.fixed th{overflow:hidden;text-overflow:ellipsis}
+.bk-table.fixed td .nr{max-width:100%}
+.bk-table.fixed th .colh{max-width:100%}
+.bk-table.fixed th .gfl{overflow:hidden;text-overflow:ellipsis}
+.bk-table.compact.fixed td{white-space:normal}
+.bk-table.compact.fixed td.n,.bk-table.compact.fixed td.hr,.bk-table.compact.fixed td:first-child{white-space:nowrap}
+.bk-table.compact.fixed th.n,.bk-table.compact.fixed td.n{width:auto}
 </style>
 <style>.is-test .side-brand::after{content:"TEST";display:block;margin-top:4px;font-size:11px;letter-spacing:.14em;color:#E9A06A}.is-test header.top{box-shadow:inset 0 3px 0 #E2761B}body.is-test::after{content:"TESTING SITE · not for real client work · post only to a ZZ TEST company in Tally";position:fixed;left:0;right:0;bottom:0;z-index:70;background:#E2761B;color:#fff;font-size:12.5px;text-align:center;padding:3px 8px;letter-spacing:.04em;pointer-events:none}.is-test .actionbar{bottom:22px}.is-test #app{padding-bottom:34px}</style></head>
 <body class="is-test">
@@ -757,7 +796,7 @@ const DEFAULT_FIRM = {firmName:"Garg Shekhar & Company", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "TEST · 25 Sep 2026 · build 136 (2B matching: a bill and its reversal set aside, numbers with a prefix, same tax on a different value, bills booked twice, bills in 2B booked without taking the credit)";
+const APP_VERSION = "TEST · 25 Sep 2026 · build 137 (a filter on every column of every table, long tables scroll with the heading in view; the input register on the first screen, matched bills marked In 2B)";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;
@@ -4596,6 +4635,7 @@ function render(){
     if (el && el !== document.activeElement){ el.focus(); try { if (pos != null) el.setSelectionRange(pos, pos); } catch(e){} }
   }
   if (typeof acAfterRender === "function") acAfterRender();
+  if (typeof GridF === "object") GridF.after();
   if (S.view === "company" && ["bank", "invoices", "export", "sales"].includes(S.tab) && typeof maybeLiveSync === "function") maybeLiveSync();
 }
 
@@ -9789,7 +9829,7 @@ function inregRows(b){
   rows.forEach(r => {
     r.kindL = r.import ? (r.supply === "Goods" ? "Import of goods" : "Import of services") : r.rcm ? "Reverse charge" : r.blocked || r.ineligible ? "Not to be taken" : r.dir < 0 ? "Credit reduced" : "Eligible";
     const x = st[r.id];
-    r.twoB = x ? ({matched: "In 2B", diff: "In 2B, differs", probable: "In 2B? confirm"})[x.status] || (x.s === "reversed" ? "Booked and reversed" : x.status) : (r.rcm && !r.gstin) || r.import ? "not expected in 2B" : loaded.has(r.ym) ? "Not in 2B" : "2B not brought in";
+    r.twoB = x ? ({matched: "In 2B", diff: "In 2B, differs", probable: "In 2B? confirm", reversed: "Booked and reversed"})[x.s] || x.s : (r.rcm && !r.gstin) || r.import ? "not expected in 2B" : loaded.has(r.ym) ? "Not in 2B" : "2B not brought in";
     r.twoBWhy = x && x.issues ? x.issues.join("; ") : "";
     const dp = R0.dupes[r.id];
     if (dp){ r.dupe = dp; r.twoBWhy = ("booked " + dp.n + " times: also voucher " + dp.others.join(", ") + (r.twoBWhy ? "; " + r.twoBWhy : "")); }
@@ -9821,28 +9861,35 @@ function viewInputRegister(b){
   const t3 = R.months.reduce((a, m) => { const t = GSTR.threeB(m, R.reg); ["igst", "cgst", "sgst", "cess"].forEach(k => { a[k] = r2(a[k] + num(t.itc[k]) - num(t.reversal[k])); }); return a; }, {igst: 0, cgst: 0, sgst: 0, cess: 0});
   const reg = tot(R.rows.filter(r => r.kindL !== "Not to be taken"));
   const gap = r2(reg.igst + reg.cgst + reg.sgst + reg.cess - (t3.igst + t3.cgst + t3.sgst + t3.cess));
-  let h = '<section class="dash-card"><h3>Input register, ' + esc(R.months.length > 1 ? "the year " + GSTR.label(R.months[0]) + " to " + GSTR.label(R.months[R.months.length - 1]) : GSTR.label(R.months[0] || "")) + '</h3>' +
-    '<p class="note">Every document in Tally that takes input tax for this registration: purchase bills, and journals or payments that carry input tax (reverse charge on rent, bank charges, an expense booked in a journal). This is what GSTR-3B table 4 is made from, and what is matched against 2B.' +
-    (R.loaded.size ? "" : ' <span class="bad">No 2B brought in for this registration yet; bring it in under 2B reconciliation to see each bill\u2019s 2B status here.</span>') + "</p>" +
-    '<div class="row" style="gap:8px;flex-wrap:wrap;margin:8px 0"><select data-inregscope><option value="month"' + ((S.inregScope || "month") === "month" ? " selected" : "") + '>This month</option><option value="year"' + (S.inregScope === "year" ? " selected" : "") + '>The whole year</option></select>' +
+  const tx4 = x => money(x.igst + x.cgst + x.sgst + x.cess);
+  // one line of chips instead of a row of tiles, so the bills are on the first screen
+  const chip = (label, n, amt, warn, filt) => n ? '<button class="gf-chip' + (warn ? " warn" : "") + (f === filt ? " on" : "") + '" data-inregchip="' + esc(filt || "") + '">' + label + " <b>" + n + "</b> \u00b7 \u20b9" + amt + "</button>" : "";
+  const dupes = R.rows.filter(r => r.dupe), notTaken = R.only2b.filter(p => p.itcavl !== "N" && p.bookedNoCredit);
+  let h = '<section class="dash-card"><div class="gf-ctl"><h3>Input register, ' + esc(R.months.length > 1 ? "the year " + GSTR.label(R.months[0]) + " to " + GSTR.label(R.months[R.months.length - 1]) : GSTR.label(R.months[0] || "")) + "</h3>" +
+    '<select data-inregscope><option value="month"' + ((S.inregScope || "month") === "month" ? " selected" : "") + '>This month</option><option value="year"' + (S.inregScope === "year" ? " selected" : "") + '>The whole year</option></select>' +
     '<select data-inregf><option value="">Every document</option><optgroup label="Kind">' + kinds.map(k => '<option' + (f === k ? " selected" : "") + ">" + k + "</option>").join("") + '</optgroup><optgroup label="2B">' + statuses.map(k => '<option' + (f === k ? " selected" : "") + ">" + k + "</option>").join("") + '</optgroup><option' + (f === "Booked more than once" ? " selected" : "") + ">Booked more than once</option></select>" +
-    '<input type="search" data-inregq placeholder="Supplier, GSTIN, bill no." value="' + esc(S.inregQ || "") + '" style="min-width:220px">' +
+    '<input type="search" data-inregq data-fk="inregq" placeholder="Supplier, GSTIN, bill no." value="' + esc(S.inregQ || "") + '" style="min-width:200px">' +
     '<button class="btn small primary" data-act="inregExcel">Excel</button></div>' +
-    '<div class="dash-tiles">' + kinds.map(k => { const x = tot(R.rows.filter(r => r.kindL === k)); return x.n ? '<div class="dtile"><span>' + k + "</span><b>" + x.n + "</b><small>tax " + money(x.igst + x.cgst + x.sgst + x.cess) + "</small></div>" : ""; }).join("") +
-    (R.loaded.size ? statuses.slice(0, 4).map(k => { const x = tot(R.rows.filter(r => r.twoB === k)); return x.n ? '<div class="dtile' + (k === "In 2B" ? "" : " warn") + '"><span>' + k + "</span><b>" + x.n + "</b><small>tax " + money(x.igst + x.cgst + x.sgst + x.cess) + "</small></div>" : ""; }).join("") +
-      (R.only2b.length ? '<div class="dtile warn"><span>In 2B, not in the books</span><b>' + R.only2b.length + "</b><small>tax " + money(R.only2b.reduce((a, p) => a + p.dir * (p.igst + p.cgst + p.sgst + p.cess), 0)) + "</small></div>" : "") : "") +
-    (() => { const d = R.rows.filter(r => r.dupe), extra = d.filter(r => !r.dupe.first && r.dupe.first !== undefined), sx = (extra.length ? extra : d.slice(Math.ceil(d.length / 2))).reduce((a, r) => a + r.tax, 0);
-      return d.length ? '<div class="dtile warn"><span>Booked more than once</span><b>' + d.length + "</b><small>credit counted twice \u20b9" + money(sx) + "</small></div>" : ""; })() +
-    (() => { const nt = R.only2b.filter(p => p.itcavl !== "N" && p.bookedNoCredit), t = nt.reduce((a, p) => a + p.dir * (p.igst + p.cgst + p.sgst + p.cess), 0);
-      return nt.length ? '<div class="dtile warn"><span>In 2B and in Tally, credit not taken</span><b>' + nt.length + "</b><small>available \u20b9" + money(t) + "</small></div>" : ""; })() + "</div>" +
-    '<p class="note">Credit in the register, less what is not to be taken: \u20b9' + money(reg.igst + reg.cgst + reg.sgst + reg.cess) + ". Net credit in GSTR-3B table 4 for the same " + (R.months.length > 1 ? "months" : "month") + ": \u20b9" + money(t3.igst + t3.cgst + t3.sgst + t3.cess) + (Math.abs(gap) >= 1 ? ' <span class="bad">Difference \u20b9' + money(gap) + ", from reversals under rules 42 and 43 taken in 3B.</span>" : " They agree.") + "</p>";
-  const cols = ["Booked", "Voucher", "Supplier", "GSTIN", "Bill no.", "Bill date", "HSN", "Rate", "Value", "IGST", "CGST", "SGST", "Cess", "Kind", "2B"];
-  h += '<div class="bk-tablewrap"><table class="bk-table"><thead><tr>' + cols.map((c, i) => "<th" + (i >= 7 && i <= 12 ? ' class="n"' : "") + ">" + c + "</th>").join("") + "</tr></thead><tbody>" +
-    list.slice(0, 600).map(r => { const s2 = sgn(r), rates = Array.from(new Set((r.parts || []).map(x => x.rate))).join(", ");
-      return "<tr><td>" + esc(fmtDate(tallyDate(r.date))) + "</td><td>" + esc(r.type + " " + (r.voucher || "")) + "</td><td>" + esc(r.party || "") + "</td><td>" + esc(r.gstin || "\u2014") + "</td><td>" + esc(r.no || "") + "</td><td>" + esc(r.refDate ? fmtDate(tallyDate(r.refDate)) : "") + "</td><td>" + esc(r.hsn || "") + '</td><td class="n">' + esc(rates ? rates + "%" : "") + '</td><td class="n">' + money(s2 * r.taxable) + (r.valueGuessed ? '<div class="nr">from the tax</div>' : "") + '</td><td class="n">' + money(s2 * r.igst) + '</td><td class="n">' + money(s2 * r.cgst) + '</td><td class="n">' + money(s2 * r.sgst) + '</td><td class="n">' + money(s2 * r.cess) + "</td><td>" + esc(r.kindL) + '</td><td><span class="' + ((r.twoB === "In 2B" || r.twoB === "not expected in 2B" || r.twoB === "Booked and reversed") && !r.dupe ? "" : r.twoB === "2B not brought in" && !r.dupe ? "nr" : "bad") + '">' + esc(r.dupe ? "Booked " + r.dupe.n + " times" : r.twoB) + "</span>" + (r.twoBWhy ? '<div class="nr">' + esc(r.twoBWhy) + "</div>" : "") + "</td></tr>"; }).join("") +
-    '<tr><td colspan="8"><b>' + shown.n + " document" + (shown.n === 1 ? "" : "s") + (shown.n !== all.n ? " of " + all.n : "") + '</b></td><td class="n"><b>' + money(shown.taxable) + '</b></td><td class="n"><b>' + money(shown.igst) + '</b></td><td class="n"><b>' + money(shown.cgst) + '</b></td><td class="n"><b>' + money(shown.sgst) + '</b></td><td class="n"><b>' + money(shown.cess) + "</b></td><td colspan=\"2\"></td></tr></tbody></table></div>" +
-    (list.length > 600 ? '<p class="note">The first 600 are shown; the Excel has all ' + list.length + ".</p>" : "");
-  if (R.only2b.length && (!f || f === "Not in 2B")) h += '<h3 style="margin-top:14px">In 2B, not in the books</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>2B month</th><th>Supplier</th><th>GSTIN</th><th>Bill no.</th><th>Date</th><th class="n">Value</th><th class="n">Tax</th><th>In Tally</th></tr></thead><tbody>' +
+    '<div class="gf-chips">' + kinds.map(k => { const x = tot(R.rows.filter(r => r.kindL === k)); return chip(k, x.n, tx4(x), false, k); }).join("") +
+    (R.loaded.size ? statuses.slice(0, 5).map(k => { const x = tot(R.rows.filter(r => r.twoB === k)); return chip(k, x.n, tx4(x), k !== "In 2B" && k !== "Booked and reversed", k); }).join("") +
+      (R.only2b.length ? '<a class="gf-chip warn" href="#inreg2b">In 2B, not in the books <b>' + R.only2b.length + "</b> \u00b7 \u20b9" + money(R.only2b.reduce((a, p) => a + p.dir * (p.igst + p.cgst + p.sgst + p.cess), 0)) + "</a>" : "") : "") +
+    chip("Booked more than once", dupes.length, money(dupes.reduce((a, r) => a + r.tax, 0) / 2), true, "Booked more than once") +
+    (notTaken.length ? '<a class="gf-chip warn" href="#inreg2b">Credit in 2B not taken <b>' + notTaken.length + "</b> \u00b7 \u20b9" + money(notTaken.reduce((a, p) => a + p.dir * (p.igst + p.cgst + p.sgst + p.cess), 0)) + "</a>" : "") + "</div>" +
+    '<p class="note" style="margin:4px 0 8px">Net credit \u20b9' + money(reg.igst + reg.cgst + reg.sgst + reg.cess) + "; GSTR-3B table 4 \u20b9" + money(t3.igst + t3.cgst + t3.sgst + t3.cess) + (Math.abs(gap) >= 1 ? ' <span class="bad">Difference \u20b9' + money(gap) + ", from reversals under rules 42 and 43 taken in 3B.</span>" : " \u2014 they agree.") +
+    (R.loaded.size ? "" : ' <span class="bad">No 2B for this registration yet; bring it in under 2B reconciliation.</span>') +
+    ' <details style="display:inline"><summary class="linkbtn" style="display:inline">What is in it</summary>Every document in Tally that takes input tax for this registration: purchase bills, and journals or payments that carry input tax (reverse charge on rent, bank charges, an expense booked in a journal). GSTR-3B table 4 is made from it, and it is what is matched against 2B. Use the funnel on any column heading to filter.</details></p>';
+  // narrow enough for the amounts to be on screen: voucher number only (type on hover), HSN and rate together, cess only when there is any
+  const cess = list.some(r => Math.abs(r.cess) >= 0.01);
+  const cols = ["Booked \u00b7 voucher", "Supplier \u00b7 GSTIN", "Bill no. \u00b7 date", "HSN \u00b7 rate", "Value", "IGST", "CGST", "SGST"].concat(cess ? ["Cess"] : []).concat(["Kind", "2B"]);
+  const numFrom = 4, numTo = cess ? 8 : 7;
+  // fixed widths, so the amounts are always on screen
+  const widths = [10, 17, 12, 11, 9, 8, 7, 7].concat(cess ? [5] : []).concat([8, 11]);
+  h += '<div class="bk-tablewrap"><table class="bk-table compact fixed"><colgroup>' + widths.map(w => '<col style="width:' + w + '%">').join("") + "</colgroup><thead><tr>" + cols.map((c, i) => "<th" + (i >= numFrom && i <= numTo ? ' class="n"' : "") + ">" + c + "</th>").join("") + "</tr></thead><tbody>" +
+    list.slice(0, 5000).map(r => { const s2 = sgn(r), rates = Array.from(new Set((r.parts || []).map(x => x.rate))).join(", ");
+      return "<tr><td>" + esc(fmtDate(tallyDate(r.date))) + '<div class="nr" title="' + esc(r.type + " " + (r.voucher || "")) + '">' + esc(r.voucher || "") + "</div></td><td>" + esc(r.party || "") + '<div class="nr">' + esc(r.gstin || "no GSTIN") + "</div></td><td>" + esc(r.no || "") + (r.refDate ? '<div class="nr">' + esc(fmtDate(tallyDate(r.refDate))) + "</div>" : "") + '</td><td class="hr">' + esc([r.hsn, rates ? rates + "%" : ""].filter(Boolean).join(" \u00b7 ")) + '</td><td class="n">' + money(s2 * r.taxable) + (r.valueGuessed ? '<div class="nr">from the tax</div>' : "") + '</td><td class="n">' + money(s2 * r.igst) + '</td><td class="n">' + money(s2 * r.cgst) + '</td><td class="n">' + money(s2 * r.sgst) + "</td>" + (cess ? '<td class="n">' + money(s2 * r.cess) + "</td>" : "") + "<td>" + esc(r.kindL) + '</td><td><span class="' + ((r.twoB === "In 2B" || r.twoB === "not expected in 2B" || r.twoB === "Booked and reversed") && !r.dupe ? "" : r.twoB === "2B not brought in" && !r.dupe ? "nr" : "bad") + '">' + esc(r.dupe ? "Booked " + r.dupe.n + " times" : r.twoB) + "</span>" + (r.twoBWhy ? '<div class="nr" title="' + esc(r.twoBWhy) + '">' + esc(r.twoBWhy) + "</div>" : "") + "</td></tr>"; }).join("") +
+    '<tr><td colspan="4"><b>' + shown.n + " document" + (shown.n === 1 ? "" : "s") + (shown.n !== all.n ? " of " + all.n : "") + '</b></td><td class="n"><b>' + money(shown.taxable) + '</b></td><td class="n"><b>' + money(shown.igst) + '</b></td><td class="n"><b>' + money(shown.cgst) + '</b></td><td class="n"><b>' + money(shown.sgst) + "</b></td>" + (cess ? '<td class="n"><b>' + money(shown.cess) + "</b></td>" : "") + '<td colspan="2"></td></tr></tbody></table></div>' +
+    (list.length > 5000 ? '<p class="note">The first 5,000 are shown; the Excel has all ' + list.length + ".</p>" : "");
+  if (R.only2b.length && (!f || f === "Not in 2B")) h += '<h3 id="inreg2b" style="margin-top:14px">In 2B, not in the books</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>2B month</th><th>Supplier</th><th>GSTIN</th><th>Bill no.</th><th>Date</th><th class="n">Value</th><th class="n">Tax</th><th>In Tally</th></tr></thead><tbody>' +
     R.only2b.slice().sort((a, c) => (c.igst + c.cgst + c.sgst) - (a.igst + a.cgst + a.sgst)).slice(0, 300).map(p => "<tr><td>" + esc(GSTR.label(p.ym)) + "</td><td>" + esc(p.party) + "</td><td>" + esc(p.gstin) + "</td><td>" + esc(p.no) + "</td><td>" + esc(p.date ? fmtDate(tallyDate(p.date)) : "") + '</td><td class="n">' + money(p.dir * p.taxable) + '</td><td class="n">' + money(p.dir * (p.igst + p.cgst + p.sgst + p.cess)) + "</td><td>" + only2bNote(p) + "</td></tr>").join("") + "</tbody></table></div>";
   return h + "</section>";
 }
@@ -17635,6 +17682,7 @@ document.addEventListener("click", ev => {
   if (t.dataset.open){ openCompany(t.dataset.open); return; }
   if (t.dataset.bookstab){ S.booksTab = t.dataset.bookstab; render(); return; }
   if (t.dataset.gstpart){ S.gstPart = t.dataset.gstpart; render(); return; }
+  if (t.dataset.inregchip !== undefined){ S.inregF = S.inregF === t.dataset.inregchip ? "" : t.dataset.inregchip; render(); return; }
   if (t.dataset.tdspart){ S.tdsPart = t.dataset.tdspart; render(); return; }
   if (t.dataset.tdsnav){ S.tdsView = t.dataset.tdsnav; render(); window.scrollTo(0, 0); return; }
   if (t.dataset.tdsgo){
@@ -18846,6 +18894,120 @@ async function fsExcel(d){
   if (d.fa.length) add("Fixed assets", [["Asset", "Opening", "Additions", "Deductions", "Closing"]].concat(d.fa.map(x => [x.l, x.open, x.add, x.del, x.close])));
   saveFile(CO().name.replace(/[^A-Za-z0-9]+/g, "-") + "-financial-statements-" + d.fy + ".xlsx", new Blob([XLSX.write(wb, {bookType: "xlsx", type: "array"})], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
 }
+/* ================================================================== */
+/* A filter on every column of every table, and long tables that     */
+/* scroll inside their own box with the heading kept in view         */
+/* ================================================================== */
+// Tables that already have their own filters (bills, bank, sales) are left as they are.
+const GridF = {
+  pop: null,
+  // which screen this is, so a filter stays with its own table
+  where(){ const s = [S.view, S.tab, S.homeTab]; Object.keys(S).filter(k => /(Tab|Part|Scope)$/.test(k) && typeof S[k] === "string").sort().forEach(k => s.push(k + "=" + S[k])); return s.join("|"); },
+  heads(t){ const tr = t.tHead && t.tHead.rows[t.tHead.rows.length - 1]; return tr ? Array.from(tr.cells) : []; },
+  label(th){ return String((th.querySelector(".gfl") || th).textContent || "").trim(); },
+  key(t, i){ return this.where() + "|" + i + "|" + this.heads(t).map(th => this.label(th)).join("/"); },
+  st(t){ S.gridF = S.gridF || {}; const k = t.dataset.gfkey; return S.gridF[k] = S.gridF[k] || {}; },
+  // data rows: one cell per heading, none spanning; totals and section rows are left alone
+  rows(t){ const n = this.heads(t).length; return Array.from(t.tBodies).flatMap(tb => Array.from(tb.rows)).filter(r => r.cells.length === n && !Array.from(r.cells).some(c => c.colSpan > 1) && !r.classList.contains("gf-sum")); },
+  first(c){ const tx = String(c.innerText || c.textContent || "").trim(); return tx.split("\n")[0].trim(); },
+  num(s){ let t = String(s || "").replace(/[₹,\s%]/g, ""); const neg = /^\(.*\)$/.test(t); t = t.replace(/[()]/g, ""); if (!/^-?\d+(\.\d+)?$/.test(t)) return null; return (neg ? -1 : 1) * Number(t); },
+  isNum(t, i, rows){ const th = this.heads(t)[i]; if (th && th.classList.contains("n")) return true; let n = 0, k = 0; rows.forEach(r => { const v = this.first(r.cells[i]); if (v && v !== "\u2014"){ n++; if (this.num(v) != null) k++; } }); return n > 0 && k / n >= 0.9; },
+  active(f){ return !!f && ((f.sel && f.sel.length) || f.q || f.min !== undefined && f.min !== "" || f.max !== undefined && f.max !== ""); },
+  pass(r, f, i, num){
+    const c = r.cells[i], v = this.first(c), all = String(c.innerText || "").toLowerCase();
+    if (f.sel && f.sel.length && !f.sel.includes(v)) return false;
+    if (f.q){ const words = String(f.q).toLowerCase().split(",").map(z => z.trim()).filter(Boolean); const hit = words.some(w => all.includes(w)); if (f.not ? hit : !hit) return false; }
+    if (num && (f.min !== undefined && f.min !== "" || f.max !== undefined && f.max !== "")){ const x = this.num(v); if (x == null) return false; if (f.min !== "" && f.min !== undefined && x < Number(f.min)) return false; if (f.max !== "" && f.max !== undefined && x > Number(f.max)) return false; }
+    return true;
+  },
+  // after every render: funnels on the headings, filters applied, long tables boxed
+  after(){
+    const tables = Array.from(document.querySelectorAll("#app table.bk-table"));
+    tables.forEach((t, ti) => {
+      if (t.querySelector(".colf") || t.classList.contains("gf-off")) return;
+      const hs = this.heads(t); if (!hs.length) return;
+      const rows = this.rows(t);
+      t.dataset.gfkey = this.key(t, ti);
+      if (rows.length >= 4) hs.forEach((th, i) => {
+        if (th.querySelector(".gff") || !this.label(th) || th.querySelector("input")) return;
+        th.innerHTML = '<span class="colh"><span class="gfl">' + th.innerHTML + '</span><button class="colf gff" data-gfi="' + i + '" aria-label="Filter" title="Filter this column">' + FUNNEL + "</button></span>";
+      });
+      this.apply(t);
+      const wrap = t.closest(".bk-tablewrap");
+      if (wrap && rows.length > 18) wrap.classList.add("gf-scroll");
+    });
+    if (this.pop){ const t = document.querySelector('#app table.bk-table[data-gfkey="' + CSS.escape(this.pop.key) + '"]'); if (!t) this.close(); else this.place(t); }
+  },
+  apply(t){
+    const f = this.st(t), rows = this.rows(t), hs = this.heads(t), on = Object.keys(f).filter(i => this.active(f[i]));
+    const nums = {}; on.forEach(i => { nums[i] = this.isNum(t, +i, rows); });
+    let shown = 0;
+    rows.forEach(r => { const ok = on.every(i => this.pass(r, f[i], +i, nums[i])); r.style.display = ok ? "" : "none"; if (ok) shown++; });
+    hs.forEach((th, i) => { const b = th.querySelector(".gff"); if (b) b.classList.toggle("on", this.active(f[i])); });
+    // what is shown, and its sums, just above the table
+    const wrap = t.closest(".bk-tablewrap") || t;
+    let bar = wrap.previousElementSibling && wrap.previousElementSibling.classList.contains("gf-bar") ? wrap.previousElementSibling : null;
+    if (!on.length){ if (bar) bar.remove(); return; }
+    if (!bar){ bar = document.createElement("div"); bar.className = "gf-bar"; wrap.parentNode.insertBefore(bar, wrap); }
+    const sums = [];
+    hs.forEach((th, i) => { if (!this.isNum(t, i, rows) || /rate|%|days|no\.?$|number/i.test(this.label(th))) return; let s = 0, any = false; rows.forEach(r => { if (r.style.display === "none") return; const x = this.num(this.first(r.cells[i])); if (x != null){ s += x; any = true; } }); if (any) sums.push(esc(this.label(th)) + " <b>" + INR.format(r2(s)) + "</b>"); });
+    bar.innerHTML = "<span>Showing <b>" + shown + "</b> of " + rows.length + "</span>" + (sums.length ? '<span class="gf-sums">' + sums.join(" \u00b7 ") + "</span>" : "") + '<button class="linkbtn" data-gfclear="' + esc(t.dataset.gfkey) + '">Clear filters</button>';
+  },
+  open(btn){
+    const t = btn.closest("table"), i = +btn.dataset.gfi;
+    if (this.pop && this.pop.key === t.dataset.gfkey && this.pop.i === i){ this.close(); return; }
+    this.pop = {key: t.dataset.gfkey, i, search: ""};
+    this.draw(t); this.place(t);
+  },
+  values(t, i){ const m = new Map(); this.rows(t).forEach(r => { const v = this.first(r.cells[i]); m.set(v, (m.get(v) || 0) + 1); }); return Array.from(m.entries()).sort((a, c) => c[1] - a[1] || String(a[0]).localeCompare(String(c[0]))); },
+  draw(t){
+    const p = this.pop, i = p.i, f = this.st(t)[i] || {}, rows = this.rows(t), num = this.isNum(t, i, rows), label = this.label(this.heads(t)[i]);
+    let el = document.getElementById("gfpop");
+    if (!el){ el = document.createElement("div"); el.id = "gfpop"; el.className = "colpop"; document.body.appendChild(el); }
+    const vals = this.values(t, i), q = p.search.toLowerCase(), many = vals.length > 400;
+    const shown = (q ? vals.filter(([v]) => String(v).toLowerCase().includes(q) || (f.sel || []).includes(v)) : vals).slice(0, 400);
+    el.innerHTML = '<div class="cp-head"><b>' + esc(label) + '</b><button class="linkbtn" data-gfx="close" aria-label="Close">\u00d7</button></div><div class="cp-body">' +
+      (num ? '<div class="cp-range"><label>From<input type="text" inputmode="decimal" data-gfin="min" value="' + esc(f.min || "") + '" placeholder="any"></label><label>To<input type="text" inputmode="decimal" data-gfin="max" value="' + esc(f.max || "") + '" placeholder="any"></label></div>' : "") +
+      '<div class="cp-row"><select data-gfin="not"><option value="">Has</option><option value="1"' + (f.not ? " selected" : "") + '>Does not have</option></select><input type="text" data-gfin="q" value="' + esc(f.q || "") + '" placeholder="words, commas between"></div>' +
+      (vals.length > 1 && !(num && vals.length > 60) ? '<p class="cp-sub">Or only these' + (many ? " (the first 400; search to narrow)" : "") + ':</p><input type="search" class="cp-search" data-gfin="search" value="' + esc(p.search) + '" placeholder="Search\u2026">' +
+        '<div class="cp-list">' + shown.map(([v, n]) => '<label class="cp-item"><input type="checkbox" data-gfv="' + esc(v) + '"' + ((f.sel || []).includes(v) ? " checked" : "") + "><span>" + esc(v === "" ? "(blank)" : v) + "</span><small>" + n + "</small></label>").join("") + "</div>" : "") +
+      '</div><div class="cp-foot"><button class="btn small" data-gfx="clear">Clear</button><button class="btn small primary" data-gfx="close">Done</button></div>';
+  },
+  place(t){
+    const el = document.getElementById("gfpop"), b = t.querySelector('.gff[data-gfi="' + this.pop.i + '"]');
+    if (!el || !b) return;
+    const r = b.getBoundingClientRect(), w = 252;
+    el.style.left = Math.max(12, Math.min(window.innerWidth - w - 12, r.left - 8)) + "px";
+    el.style.top = Math.min(window.innerHeight - 80, r.bottom + 6) + "px";
+  },
+  close(){ this.pop = null; const el = document.getElementById("gfpop"); if (el) el.remove(); },
+  table(){ return this.pop ? document.querySelector('#app table.bk-table[data-gfkey="' + CSS.escape(this.pop.key) + '"]') : null; },
+  set(k, v){
+    const t = this.table(); if (!t) return;
+    const st = this.st(t), f = st[this.pop.i] = st[this.pop.i] || {};
+    if (k === "search"){ this.pop.search = v; this.draw(t); const s = document.querySelector('#gfpop [data-gfin="search"]'); if (s){ s.focus(); s.setSelectionRange(v.length, v.length); } return; }
+    if (k === "not") f.not = !!v; else f[k] = v;
+    this.apply(t);
+  }
+};
+document.addEventListener("click", e => {
+  const b = e.target.closest && e.target.closest(".gff");
+  if (b){ e.preventDefault(); e.stopPropagation(); GridF.open(b); return; }
+  const c = e.target.closest && e.target.closest("[data-gfclear]");
+  if (c){ const t = document.querySelector('#app table.bk-table[data-gfkey="' + CSS.escape(c.dataset.gfclear) + '"]'); if (t){ S.gridF[t.dataset.gfkey] = {}; GridF.apply(t); } GridF.close(); return; }
+  const x = e.target.closest && e.target.closest("#gfpop [data-gfx]");
+  if (x){ const t = GridF.table(); if (x.dataset.gfx === "clear" && t){ delete GridF.st(t)[GridF.pop.i]; GridF.apply(t); GridF.draw(t); } else GridF.close(); return; }
+  if (GridF.pop && !(e.target.closest && e.target.closest("#gfpop"))) GridF.close();
+}, true);
+document.addEventListener("input", e => {
+  const el = e.target;
+  if (!el.closest || !el.closest("#gfpop")) return;
+  if (el.dataset.gfin) GridF.set(el.dataset.gfin, el.value);
+  if (el.dataset.gfv !== undefined){ const t = GridF.table(); if (!t) return; const st = GridF.st(t), f = st[GridF.pop.i] = st[GridF.pop.i] || {}; f.sel = f.sel || [];
+    if (el.checked){ if (!f.sel.includes(el.dataset.gfv)) f.sel.push(el.dataset.gfv); } else f.sel = f.sel.filter(v => v !== el.dataset.gfv); GridF.apply(t); }
+}, true);
+document.addEventListener("keydown", e => { if (e.key === "Escape" && GridF.pop) GridF.close(); });
+window.addEventListener("resize", () => { const t = GridF.table(); if (t) GridF.place(t); });
 </script>
 </body>
 </html>

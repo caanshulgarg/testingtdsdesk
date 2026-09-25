@@ -63,6 +63,10 @@ Everything is plain JavaScript in one scope, no framework and no bundler. State 
 - **Payment.** `GSTR.setOff` follows sections 49 and 49A with rule 88A. Reverse charge is paid in cash. Credit left over is carried to the next month (`GSTR.creditIn`), starting from the balance typed for the first month in the books (`books.gstOpen[reg]`).
 - **Bank ledgers** are decided by the Tally group (Bank Accounts, Bank OD A/c, Bank OCC A/c, Cash-in-Hand), by name only where the masters have not been read.
 
+## Column filters on every table (build 137)
+
+`src/js/31-grid-filters.js` (`GridF`) runs after every render and gives each `table.bk-table` a funnel on each heading, unless the table already has its own filters (bills, bank, sales: those use `colHead` in `23-column-filters.js`) or carries the class `gf-off`. It works on what is drawn: a column's values come from the first line of each cell, a column is treated as amounts when its heading has class `n` or nine in ten of its cells are numbers. Only data rows (one cell per heading, none spanning) are filtered; totals and section rows stay. The filter is kept in `S.gridF`, keyed by the screen (every `...Tab`, `...Part` and `...Scope` in `S`) and the table's headings, so it survives the screen being drawn again. A table with more than 18 rows scrolls inside its own box with the heading fixed (`gf-scroll`). A table that shows only its first rows is filtered on those rows only, so tables meant to be filtered should draw all of them.
+
 ## The Tally Bridge
 
 `bridge/TDSBridge.ps1`, version 1.10.0, runs under Windows PowerShell 5.1, listens only on 127.0.0.1:9100, and needs the key shown in its window for everything except `/ping`. It finds which Tally (port) has the company open, in the signed-in Windows user's session.

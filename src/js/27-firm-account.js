@@ -989,6 +989,7 @@ document.addEventListener("click", ev => {
   if (t.dataset.open){ openCompany(t.dataset.open); return; }
   if (t.dataset.bookstab){ S.booksTab = t.dataset.bookstab; render(); return; }
   if (t.dataset.gstpart){ S.gstPart = t.dataset.gstpart; render(); return; }
+  if (t.dataset.inregchip !== undefined){ S.inregF = S.inregF === t.dataset.inregchip ? "" : t.dataset.inregchip; render(); return; }
   if (t.dataset.tdspart){ S.tdsPart = t.dataset.tdspart; render(); return; }
   if (t.dataset.tdsnav){ S.tdsView = t.dataset.tdsnav; render(); window.scrollTo(0, 0); return; }
   if (t.dataset.tdsgo){

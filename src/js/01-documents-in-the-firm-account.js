@@ -3684,6 +3684,7 @@ function render(){
     if (el && el !== document.activeElement){ el.focus(); try { if (pos != null) el.setSelectionRange(pos, pos); } catch(e){} }
   }
   if (typeof acAfterRender === "function") acAfterRender();
+  if (typeof GridF === "object") GridF.after();
   if (S.view === "company" && ["bank", "invoices", "export", "sales"].includes(S.tab) && typeof maybeLiveSync === "function") maybeLiveSync();
 }
 
