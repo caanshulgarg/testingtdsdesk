@@ -757,7 +757,7 @@ const DEFAULT_FIRM = {firmName:"Garg Shekhar & Company", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "TEST · 25 Sep 2026 · build 123 (audit: the same result every run, what is put right shows as solved, final report locked; read straight from Tally with bridge 1.10)";
+const APP_VERSION = "TEST · 25 Sep 2026 · build 124 (MIS: any period, run now or on its own; summary, profit and loss, ageing, sales, purchases, compliance; the monthly pack)";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;
@@ -5057,7 +5057,8 @@ const Books = {
       if (par) under[name] = par;
       const tt = this.one(piece, "TAXTYPE").replace(/[^A-Za-z ]/g, "").trim();
       info[name] = {group: par, taxType: tt, dutyHead: this.one(piece, "GSTDUTYHEAD"), tdsNature: this.one(piece, "TDSNATUREOFPAYMENT") || this.one(piece, "NATUREOFPAYMENT"), gstin: gst, pan,
-        ob: this.amt(this.one(piece, "OPENINGBALANCE")), from: this.one(piece, "STARTINGFROM")};
+        ob: this.amt(this.one(piece, "OPENINGBALANCE")), from: this.one(piece, "STARTINGFROM"),
+        msme: this.one(piece, "UDYAMREGNUMBER") ? (this.one(piece, "ENTERPRISETYPE") || "Micro") : ""};
       if (st) states[name] = st;
       n++;
     };
@@ -5887,6 +5888,244 @@ const Audit = {
       [i + 1, f.title, k ? "" : d(j.date), l.l, l.dr || "", l.cr || "", k ? "" : j.narr, this.exists(l.l) ? "yes" : "to create"])))));
     const out = XLSX.write(wb, {bookType: "xlsx", type: "array"});
     saveFile(CO().name.replace(/[^A-Za-z0-9]+/g, "-") + "-audit-" + run.from + "-" + run.to + ".xlsx", new Blob([out], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
+  }
+};
+
+/* ================================================================== */
+/* MIS: the books summed up for the owner, for any period, by rules   */
+/* ================================================================== */
+const MIS = {
+  cfg(b){ return Object.assign({freq: "monthly", msmeDays: 45}, (b && b.misCfg) || {}); },
+  ym(d){ return String(d).slice(0, 6); },
+  monthsOf(from, to){ const out = []; let y = num(from.slice(0, 4)), m = num(from.slice(4, 6)); while (String(y) + String(m).padStart(2, "0") <= to.slice(0, 6)){ out.push(String(y) + String(m).padStart(2, "0")); m++; if (m > 12){ m = 1; y++; } } return out; },
+  shift(d, years, days){ const t = new Date(Audit.iso(d) + "T00:00:00"); if (years) t.setFullYear(t.getFullYear() + years); if (days) t.setDate(t.getDate() + days); return t.getFullYear() + String(t.getMonth() + 1).padStart(2, "0") + String(t.getDate()).padStart(2, "0"); },
+  covered(from){ const f = String((S.books.meta || {}).from || ""); return !!f && f <= from; },
+  // what each ledger is, for the profit and loss
+  head(l){
+    const A = Audit, p = A.path(l).map(g => g.toLowerCase());
+    const has = g => p.includes(g);
+    if (has("sales accounts")) return "rev";
+    if (has("direct incomes")) return "rev";
+    if (has("indirect incomes")) return "oth";
+    if (has("purchase accounts")) return "pur";
+    if (has("direct expenses")) return "dir";
+    if (has("indirect expenses")){
+      if (/SALAR|WAGES|BONUS|STAFF|GRATUITY|\bPF\b|\bESI\b|EMPLOYEE|INCENTIVE|LEAVE/i.test(l)) return "emp";
+      if (/INTEREST|FINANCE CHARGE|PROCESSING FEE|LOAN CHARGE/i.test(l)) return "fin";
+      if (/DEPRECIATION|AMORTI/i.test(l)) return "dep";
+      if (/INCOME TAX|PROVISION FOR TAX|DEFERRED TAX/i.test(l)) return "tax";
+      return "exp";
+    }
+    if (!p.length){
+      const k = Books.ledgerOf(l).kind;
+      if (k) return "";
+      if (/^SALES|SERVICE RENDERED|REVENUE/i.test(l)) return "rev";
+      if (/^PURCHASE/i.test(l)) return "pur";
+    }
+    return "";
+  },
+  HEADS: [["rev", "Revenue from operations", 1], ["oth", "Other income", 1], ["pur", "Purchases", -1], ["dir", "Direct expenses", -1], ["emp", "Employee costs", -1],
+    ["exp", "Other expenses", -1], ["fin", "Finance costs", -1], ["dep", "Depreciation", -1], ["tax", "Tax", -1]],
+  // amounts by ledger and month for a set of vouchers (credit positive, as Tally keeps it)
+  moves(from, to){
+    const out = {};
+    (S.books.vouchers || []).forEach(v => {
+      if (v.date < from || v.date > to || v.opt || v.cancel) return;
+      const ym = this.ym(v.date);
+      v.ent.forEach(e => { const x = out[e.l] = out[e.l] || {}; x[ym] = r2((x[ym] || 0) + e.a); x.t = r2((x.t || 0) + e.a); });
+    });
+    return out;
+  },
+  pl(from, to){
+    const mv = this.moves(from, to), months = this.monthsOf(from, to), heads = {};
+    Object.entries(mv).forEach(([l, x]) => {
+      const h = this.head(l); if (!h) return;
+      const sign = (this.HEADS.find(z => z[0] === h) || [0, 0, -1])[2];
+      const H = heads[h] = heads[h] || {t: 0, m: {}, led: []};
+      const row = {l, t: r2(x.t * sign), m: {}};
+      months.forEach(m => { row.m[m] = r2((x[m] || 0) * sign); H.m[m] = r2((H.m[m] || 0) + row.m[m]); });
+      H.t = r2(H.t + row.t); H.led.push(row);
+    });
+    Object.values(heads).forEach(H => H.led.sort((a, c) => Math.abs(c.t) - Math.abs(a.t) || a.l.localeCompare(c.l)));
+    const g = k => (heads[k] || {t: 0}).t, gm = (k, m) => ((heads[k] || {m: {}}).m[m] || 0);
+    const calc = f => ({t: r2(f(g)), m: Object.fromEntries(months.map(m => [m, r2(f(k => gm(k, m)))]))});
+    return {months, heads,
+      income: calc(x => x("rev") + x("oth")),
+      gross: calc(x => x("rev") - x("pur") - x("dir")),
+      ebitda: calc(x => x("rev") + x("oth") - x("pur") - x("dir") - x("emp") - x("exp")),
+      pbt: calc(x => x("rev") + x("oth") - x("pur") - x("dir") - x("emp") - x("exp") - x("fin") - x("dep")),
+      pat: calc(x => x("rev") + x("oth") - x("pur") - x("dir") - x("emp") - x("exp") - x("fin") - x("dep") - x("tax"))};
+  },
+  // bill by bill: what each party owed or was owed on a date
+  bills(asOn, side){
+    const A = Audit, b = S.books, ref = {};
+    const want = l => side === "r" ? A.isDebtor(l) : A.isCreditor(l);
+    (b.vouchers || []).forEach(v => {
+      if (v.date > asOn || v.opt || v.cancel) return;
+      v.ent.forEach(e => {
+        if (!want(e.l)) return;
+        const alloc = e.b && e.b.length ? e.b : [["", "On Account", e.a]];
+        alloc.forEach(([name, type, amt]) => {
+          const k = e.l + "|" + (type === "On Account" || !name ? "\u0000" : name);
+          const x = ref[k] = ref[k] || {party: e.l, ref: type === "On Account" || !name ? "" : name, date: "", amt: 0, first: v.date, no: ""};
+          const signed = side === "r" ? -amt : amt;            // what is owed to us (r) or by us (p)
+          if ((type === "New Ref" || type === "Advance") && !x.date){ x.date = v.date; x.no = v.no; x.hasNew = true; }
+          x.amt = r2(x.amt + signed);
+        });
+      });
+    });
+    return Object.values(ref).filter(x => Math.abs(x.amt) >= 0.5).map(x => Object.assign(x, {date: x.date || x.first, age: Audit.days(x.date || x.first, asOn)}));
+  },
+  BUCKETS: [[30, "0\u201330"], [60, "31\u201360"], [90, "61\u201390"], [180, "91\u2013180"], [1e9, "over 180"]],
+  ageing(asOn, side, bal){
+    const bills = this.bills(asOn, side), by = {}, msme = this.msme();
+    bills.forEach(x => {
+      const p = by[x.party] = by[x.party] || {party: x.party, total: 0, b: [0, 0, 0, 0, 0], adv: 0, unalloc: 0, pre: 0, oldest: 0, bills: [], msme: msme[x.party] || ""};
+      if (!x.ref){ p.unalloc = r2(p.unalloc + x.amt); }
+      else if (!x.hasNew){ p.pre = r2(p.pre + x.amt); }                // a bill from before the books read here
+      else if (x.amt < 0){ p.adv = r2(p.adv + x.amt); }
+      else { const i = this.BUCKETS.findIndex(([d]) => x.age <= d); p.b[i] = r2(p.b[i] + x.amt); p.oldest = Math.max(p.oldest, x.age); }
+      p.total = r2(p.total + x.amt); p.bills.push(x);
+    });
+    const rows = Object.values(by);
+    // the control: the party's balance in Tally against the bills
+    if (bal) rows.forEach(p => { const tb = bal[p.party]; if (tb != null){ p.tally = r2(side === "r" ? -tb : tb); p.diff = r2(p.tally - p.total); } });
+    rows.forEach(p => { p.bills.sort((a, c) => String(a.date).localeCompare(String(c.date)) || String(a.ref).localeCompare(String(c.ref))); });
+    rows.sort((a, c) => c.total - a.total || a.party.localeCompare(c.party));
+    const sum = rows.reduce((s, p) => ({total: r2(s.total + p.total), b: s.b.map((v, i) => r2(v + p.b[i])), adv: r2(s.adv + p.adv), unalloc: r2(s.unalloc + p.unalloc), pre: r2(s.pre + p.pre), tally: p.tally != null ? r2((s.tally || 0) + p.tally) : s.tally}), {total: 0, b: [0, 0, 0, 0, 0], adv: 0, unalloc: 0, pre: 0, tally: null});
+    sum.open = r2(sum.b.reduce((a, v) => a + v, 0));
+    return {rows, sum};
+  },
+  msme(){
+    const out = {}, info = S.books.ledInfo || {}, set = S.books.msme || {};
+    Object.entries(info).forEach(([n, x]) => { if (x.msme) out[n] = x.msme; });
+    Object.entries(set).forEach(([n, v]) => { if (v) out[n] = v; else delete out[n]; });
+    return out;
+  },
+  sales(from, to){
+    const by = {}, months = this.monthsOf(from, to), byState = {}, byReg = {};
+    (S.books.vouchers || []).forEach(v => {
+      if (v.date < from || v.date > to || !Books.isSale(v) || v.opt || v.cancel) return;
+      const L = Books.lines(v), sign = /CREDIT NOTE/i.test(v.type) ? -1 : 1, amt = r2(L.taxable * sign), ym = this.ym(v.date);
+      const p = by[v.party] = by[v.party] || {party: v.party, t: 0, m: {}, n: 0}; p.t = r2(p.t + amt); p.m[ym] = r2((p.m[ym] || 0) + amt); p.n++;
+      const st = v.pos || "\u2014"; byState[st] = r2((byState[st] || 0) + amt);
+      const rg = GSTR.regOf(v) || "\u2014"; byReg[rg] = r2((byReg[rg] || 0) + amt);
+    });
+    const rows = Object.values(by).sort((a, c) => c.t - a.t || a.party.localeCompare(c.party));
+    const total = r2(rows.reduce((s, x) => s + x.t, 0));
+    const before = new Set((S.books.vouchers || []).filter(v => v.date < from && Books.isSale(v)).map(v => v.party));
+    return {rows, total, months, byState: Object.entries(byState).sort((a, c) => c[1] - a[1]), byReg: Object.entries(byReg).sort((a, c) => a[0].localeCompare(c[0])),
+      top5: rows.slice(0, 5).reduce((s, x) => s + x.t, 0), fresh: this.covered(this.shift(from, -1)) ? rows.filter(x => !before.has(x.party)).length : null};
+  },
+  purchases(from, to){
+    const A = Audit, by = {}, months = this.monthsOf(from, to);
+    (S.books.vouchers || []).forEach(v => {
+      if (v.date < from || v.date > to || Books.isSale(v) || v.opt || v.cancel) return;
+      const p = v.ent.find(e => e.a > 0 && A.isCreditor(e.l));
+      if (!p) return;
+      const val = r2(v.ent.filter(e => e.a < 0 && (A.isExpense(e.l) || A.under(e.l, /^purchase accounts$/i) || A.isFixed(e.l))).reduce((s, e) => s - e.a, 0));
+      if (!val) return;
+      const ym = this.ym(v.date), x = by[p.l] = by[p.l] || {party: p.l, t: 0, m: {}, n: 0};
+      x.t = r2(x.t + val); x.m[ym] = r2((x.m[ym] || 0) + val); x.n++;
+    });
+    const rows = Object.values(by).sort((a, c) => c.t - a.t || a.party.localeCompare(c.party));
+    // expense heads by month, and the months that jumped
+    const mv = this.moves(from, to), heads = [];
+    Object.entries(mv).forEach(([l, x]) => {
+      if (!(A.isExpense(l) || A.under(l, /^purchase accounts$/i))) return;
+      const row = {l, t: r2(-x.t), m: {}}; months.forEach(m => { row.m[m] = r2(-(x[m] || 0)); });
+      const vals = months.map(m => row.m[m]);
+      row.jumps = months.filter((m, i) => { const others = vals.filter((_, j) => j !== i); const avg = others.length ? others.reduce((s, v) => s + v, 0) / others.length : 0; return vals[i] >= 50000 && avg > 0 && vals[i] > avg * 1.5; });
+      heads.push(row);
+    });
+    heads.sort((a, c) => c.t - a.t || a.l.localeCompare(c.l));
+    return {rows, months, heads, total: r2(rows.reduce((s, x) => s + x.t, 0))};
+  },
+  cashflow(from, to){
+    let rec = 0, pay = 0;
+    (S.books.vouchers || []).forEach(v => {
+      if (v.date < from || v.date > to || v.opt || v.cancel || /CONTRA/i.test(v.type)) return;
+      v.ent.forEach(e => { if (Audit.isCash(e.l) || Audit.isBankL(e.l)){ if (e.a < 0) rec = r2(rec - e.a); else pay = r2(pay + e.a); } });
+    });
+    return {rec, pay};
+  },
+  compliance(from, to){
+    const months = this.monthsOf(from, to);
+    const gst = months.map(m => { try { const t = GSTR.threeB(m, ""); return {ym: m, out: r2(t.net.igst + t.net.cgst + t.net.sgst + t.net.cess), itc: r2(t.netItc.igst + t.netItc.cgst + t.netItc.sgst + t.netItc.cess), pay: r2(Math.max(0, t.net.igst + t.net.cgst + t.net.sgst + t.net.cess - (t.netItc.igst + t.netItc.cgst + t.netItc.sgst + t.netItc.cess)))}; } catch (e){ return {ym: m, out: 0, itc: 0, pay: 0}; } });
+    const tds = months.map(m => {
+      const ded = r2(TDS.rows().filter(r => this.ym(r.date) === m).reduce((s, r) => s + r.tds, 0));
+      const dep = r2(TDS.challans().filter(c => this.ym(TDS.ymd(c.date)) === m).reduce((s, c) => s + num(c.tax), 0));
+      return {ym: m, ded, dep};
+    });
+    const au = (S.books.audit || {}).last;
+    return {gst, tds, audit: au ? {at: au.at, open: au.findings.filter(f => Audit.status(f.id).s === "open").length, high: au.findings.filter(f => f.sev === "high").length, solved: (au.solved || []).reduce((s, x) => s + x.n, 0)} : null};
+  },
+  // the fixed dates of the month after the period
+  dues(to){
+    const t = new Date(Audit.iso(to) + "T00:00:00"), y = t.getFullYear(), m = t.getMonth(), nx = new Date(y, m + 1, 1), ny = nx.getFullYear(), nm = nx.getMonth();
+    const d = (dd, mm, yy) => yy + String(mm + 1).padStart(2, "0") + String(dd).padStart(2, "0");
+    const out = [[d(7, nm, ny), "TDS and TCS deposit for " + GSTR.label(this.ym(to))], [d(11, nm, ny), "GSTR-1 for " + GSTR.label(this.ym(to))], [d(20, nm, ny), "GSTR-3B and tax for " + GSTR.label(this.ym(to))]];
+    const q = {5: d(31, 6, y), 8: d(31, 9, y), 11: d(31, 0, y + 1), 2: d(31, 4, y)}[m];
+    if (q) out.push([q, "TDS returns for the quarter"]);
+    [y, y + 1].forEach(yy => [[5, 15], [8, 15], [11, 15], [2, 15]].forEach(([mm, dd]) => { const s2 = d(dd, mm, yy); if (s2 > to && Audit.days(to, s2) <= 45) out.push([s2, "Advance tax instalment"]); }));
+    return out.sort((a, c) => a[0].localeCompare(c[0]));
+  },
+  // one run: every table for the period, the same every time for the same books
+  run(from, to, how){
+    const b = S.books;
+    from = Audit.ymd(from); to = Audit.ymd(to);
+    const days = Audit.days(from, to) + 1, lyFrom = this.shift(from, -1), lyTo = this.shift(to, -1);
+    // the period before: whole months when the period is whole months, else the same number of days
+    let pFrom = this.shift(from, 0, -days), pTo = this.shift(from, 0, -1);
+    const endOfMonth = d => { const t = new Date(Audit.iso(d) + "T00:00:00"); t.setDate(t.getDate() + 1); return t.getDate() === 1; };
+    if (from.slice(6) === "01" && endOfMonth(to)){
+      const k = this.monthsOf(from, to).length, st = new Date(Audit.iso(from) + "T00:00:00"), a = new Date(st.getFullYear(), st.getMonth() - k, 1), e2 = new Date(st.getFullYear(), st.getMonth(), 0);
+      const f = z => z.getFullYear() + String(z.getMonth() + 1).padStart(2, "0") + String(z.getDate()).padStart(2, "0");
+      pFrom = f(a); pTo = f(e2);
+    }
+    const bal = Audit.balances(from, to), balTo = bal.ok ? bal.at(to) : null;
+    const fyFrom = Audit.fyStart(to), mFrom = to.slice(0, 6) + "01";
+    const s = this.sales(from, to), pr = this.purchases(from, to), pl = this.pl(from, to);
+    const cmp = (f, t2) => this.covered(f) ? {sales: this.sales(f, t2).total, pl: this.pl(f, t2)} : null;
+    const r = {at: new Date().toISOString(), how: how || "run now", from, to, company: (b.meta || {}).company || CO().name,
+      sales: s, purchases: pr, pl, prev: cmp(pFrom, pTo), ly: cmp(lyFrom, lyTo), prevRange: [pFrom, pTo], lyRange: [lyFrom, lyTo],
+      mtd: this.covered(mFrom) ? this.sales(mFrom, to).total : null, ytd: this.covered(fyFrom) ? this.sales(fyFrom, to).total : null,
+      cash: this.cashflow(from, to), recv: this.ageing(to, "r", balTo), pay: this.ageing(to, "p", balTo), comp: this.compliance(from, to), dues: this.dues(to),
+      balances: bal.ok ? {src: bal.src, cash: Object.keys(balTo).filter(l => Audit.isCash(l)).sort().map(l => [l, r2(-balTo[l])]), bank: Object.keys(balTo).filter(l => Audit.isBankL(l)).sort().map(l => [l, r2(-balTo[l])])} : {why: bal.why}};
+    r.dso = r.recv.sum.total && s.total ? Math.round(r.recv.sum.total / (s.total / days)) : null;
+    r.dpo = r.pay.sum.total && pr.total ? Math.round(r.pay.sum.total / (pr.total / days)) : null;
+    const md = this.cfg(b).msmeDays, msme = this.msme();
+    r.msme = r.pay.rows.filter(p => /micro|small/i.test(msme[p.party] || "")).map(p => ({party: p.party, type: msme[p.party], bills: p.bills.filter(x => x.ref && x.amt > 0 && x.age > md)})).filter(x => x.bills.length)
+      .map(x => Object.assign(x, {amt: r2(x.bills.reduce((s2, y) => s2 + y.amt, 0))}));
+    // the control: every ledger's movement here against Tally's own balances
+    if (b.tb && b.tb.from === from && b.tb.to === to){
+      const mv = this.moves(from, to); let n = 0, amt = 0; const list = [];
+      Object.entries(b.tb.led).forEach(([l, x]) => { const d = r2((num(x.close) - num(x.open)) - ((mv[l] || {}).t || 0)); if (Math.abs(d) >= 1){ n++; amt = r2(amt + Math.abs(d)); list.push([l, d]); } });
+      r.control = {ok: n === 0, n, amt, list: list.slice(0, 50)};
+    } else r.control = null;
+    r.code = Audit.hash(JSON.stringify([s.total, pr.total, pl.pat.t, r.recv.sum, r.pay.sum, s.rows.slice(0, 50).map(x => [x.party, x.t])]));
+    const m = b.mis = b.mis || {};
+    m.last = r; m.history = [{at: r.at, from, to, how: r.how, sales: s.total, pat: pl.pat.t, code: r.code}].concat(m.history || []).slice(0, 24);
+    return r;
+  },
+  due(b){
+    const c = this.cfg(b), last = b.mis && b.mis.last ? String(b.mis.last.at).slice(0, 10).replace(/-/g, "") : "", t = Audit.today();
+    if (c.freq === "off" || !(b.vouchers || []).length) return false;
+    if (!last) return true;
+    if (c.freq === "daily") return last < t;
+    if (c.freq === "weekly") return Audit.days(last, t) >= 7;
+    return last.slice(0, 6) < t.slice(0, 6);
+  },
+  // on its own: the month just ended for the monthly pack, else the year so far
+  autoRange(b){
+    const t = Audit.today(), c = this.cfg(b), last = String((b.meta || {}).to || t), end = last < t ? last : t;
+    if (c.freq === "monthly"){ const d = new Date(Audit.iso(t) + "T00:00:00"); const pm = new Date(d.getFullYear(), d.getMonth(), 0); const to = pm.getFullYear() + String(pm.getMonth() + 1).padStart(2, "0") + String(pm.getDate()).padStart(2, "0"); const upto = to <= end ? to : end; return {from: upto.slice(0, 6) + "01", to: upto}; }   // the month just ended, or the last month in the books
+    return {from: Audit.fyStart(end), to: end};
+  },
+  maybeRun(){
+    const b = S.books;
+    if (!b || !b.vouchers || !this.due(b)) return;
+    const r = this.autoRange(b); this.run(r.from, r.to, "on its own (" + this.cfg(b).freq + ")"); saveBooks();
   }
 };
 
@@ -7340,18 +7579,18 @@ async function openBooks(cid){
   const saved = await Books.load(cid);
   S.books = saved && saved.cid === cid ? Object.assign({loading: false}, saved) : {cid, loading: false, vouchers: [], map: {}, challans: [], alloc: {}, pans: {}};
   if (S.books.vouchers && S.books.vouchers.length) try { LedMaster.refresh(S.books); } catch (e){}
-  setTimeout(() => { try { if (S.books && S.books.cid === cid) Audit.maybeRun(); } catch (e){} }, 400);
+  setTimeout(() => { try { if (S.books && S.books.cid === cid){ Audit.maybeRun(); MIS.maybeRun(); } } catch (e){} }, 400);
   render();
 }
 async function saveBooks(){ const b = S.books; if (b && b.cid) await Books.save(b.cid, {cid: b.cid, vouchers: b.vouchers, map: b.map, meta: b.meta, challans: b.challans, alloc: b.alloc, pans: b.pans, twoB: b.twoB,
   gstins: b.gstins, under: b.under, states: b.states, groups: b.groups, salary: b.salary, certs: b.certs, advFix: b.advFix, assets: b.assets, rev: b.rev,
   filed: b.filed, amendFix: b.amendFix, twoBs: b.twoBs, reco2b: b.reco2b, ledInfo: b.ledInfo, ledInfoAt: b.ledInfoAt,
-  audit: b.audit, auditCfg: b.auditCfg, tb: b.tb}); }
+  audit: b.audit, auditCfg: b.auditCfg, tb: b.tb, mis: b.mis, misCfg: b.misCfg, msme: b.msme}); }
 function viewBooks(){
   const co = CO();
   if (!S.books || S.books.cid !== co.id){ openBooks(co.id); return '<p class="note">Opening the books…</p>'; }
   const b = S.books, tab = booksTab(), n = (b.vouchers || []).length;
-  let h = '<nav class="sbar" aria-label="Books">' + [["import", "From Tally", n || null], ["ledgers", "Tally ledgers", n ? (LedMaster.pending(b).length ? LedMaster.pending(b).length + " to confirm" : "\u2713") : null], ["tds", "TDS", n ? TDS.rows().length : ((b.salary || []).length || null)], ["gst", "GST", null], ["audit", "Audit", b.audit && b.audit.last ? (b.audit.last.findings.filter(f => f.sev === "high" && Audit.status(f.id).s === "open").length || null) : null]]
+  let h = '<nav class="sbar" aria-label="Books">' + [["import", "From Tally", n || null], ["ledgers", "Tally ledgers", n ? (LedMaster.pending(b).length ? LedMaster.pending(b).length + " to confirm" : "\u2713") : null], ["tds", "TDS", n ? TDS.rows().length : ((b.salary || []).length || null)], ["gst", "GST", null], ["mis", "MIS", null], ["audit", "Audit", b.audit && b.audit.last ? (b.audit.last.findings.filter(f => f.sev === "high" && Audit.status(f.id).s === "open").length || null) : null]]
     .map(([id, label, c]) => '<button data-bookstab="' + id + '" aria-selected="' + (tab === id) + '">' + label + (c == null ? "" : ' <span class="sbar-n">' + c + "</span>") + "</button>").join("") + "</nav>";
   if (b.busy) h += busyCard("Reading the books…", b.busy, 0, 0);
   if (tab === "import") h += viewBooksImport(b);
@@ -7360,6 +7599,7 @@ function viewBooks(){
   else if (tab === "ledgers") h += viewBooksLedgers(b);
   else if (tab === "tds") h += viewBooksTds(b);
   else if (tab === "audit") h += viewBooksAudit(b);
+  else if (tab === "mis") h += viewBooksMis(b);
   else h += viewBooksGst(b);
   return h;
 }
@@ -7985,6 +8225,174 @@ function viewBooksAudit(b){
   if ((au.history || []).length > 1) h += '<section class="dash-card" style="margin-top:12px"><h3>Earlier runs</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Run on</th><th>How</th><th>Period</th><th class="n">Findings</th><th class="n">Serious</th><th class="n">Amount involved</th></tr></thead><tbody>' +
     au.history.slice(0, 12).map(x => "<tr><td>" + fmtDate(x.at.slice(0, 10)) + " " + x.at.slice(11, 16) + "</td><td>" + esc(x.how) + "</td><td>" + fmtDate(tallyDate(x.from)) + " to " + fmtDate(tallyDate(x.to)) + '</td><td class="n">' + x.n + '</td><td class="n">' + x.high + '</td><td class="n">' + m(x.amount) + "</td></tr>").join("") + "</tbody></table></div></section>";
   return h;
+}
+
+function misRangeQuick(k, b){
+  const t = Audit.today(), last = String((b.meta || {}).to || t), end = last < t ? last : t;
+  const d = new Date(Audit.iso(end) + "T00:00:00"), ymd = x => x.getFullYear() + String(x.getMonth() + 1).padStart(2, "0") + String(x.getDate()).padStart(2, "0");
+  if (k === "month") return {from: end.slice(0, 6) + "01", to: end};
+  if (k === "lastmonth"){ const pm = new Date(d.getFullYear(), d.getMonth(), 0); return {from: ymd(pm).slice(0, 6) + "01", to: ymd(pm)}; }
+  if (k === "quarter"){ const qm = Math.floor(d.getMonth() / 3) * 3; return {from: ymd(new Date(d.getFullYear(), qm, 1)), to: end}; }
+  if (k === "ytd") return {from: Audit.fyStart(end), to: end};
+  if (k === "lastyear"){ const fs = Audit.fyStart(t), y = num(fs.slice(0, 4)); return {from: (y - 1) + "0401", to: y + "0331"}; }   // the last complete financial year
+  return null;
+}
+function viewBooksMis(b){
+  const m = v => INR.format(r2(v || 0)), r = (b.mis || {}).last, c = MIS.cfg(b);
+  const rg = S.misRange || (r ? {from: Audit.iso(r.from), to: Audit.iso(r.to)} : (x => ({from: Audit.iso(x.from), to: Audit.iso(x.to)}))(misRangeQuick("ytd", b)));
+  let h = '<section class="dash-card"><h3>MIS</h3>' +
+    '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">' +
+    '<label class="note">From <input type="date" data-misfrom value="' + esc(rg.from) + '"></label><label class="note">to <input type="date" data-misto value="' + esc(rg.to) + '"></label>' +
+    [["month", "This month"], ["lastmonth", "Last month"], ["quarter", "This quarter"], ["ytd", "Year to date"], ["lastyear", "Last year"]].map(([k, l]) => '<button class="btn small" data-misquick="' + k + '">' + l + "</button>").join("") +
+    '<button class="btn small primary" data-act="misRun">Run now</button></div>' +
+    '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px"><span class="note">Run on its own</span><select data-misfreq style="width:auto">' +
+    [["monthly", "on the 1st, for the month just ended"], ["weekly", "every week, the year so far"], ["daily", "every day, the year so far"], ["off", "only when I run it"]].map(([v, l]) => '<option value="' + v + '"' + (c.freq === v ? " selected" : "") + ">" + l + "</option>").join("") + "</select>" +
+    (r ? '<button class="btn small primary" data-act="misPack">Download the MIS pack (PDF)</button><button class="btn small" data-act="misExcel">Excel</button>' : "") + "</div></section>";
+  if (!r) return h + '<div class="bk-none" style="margin-top:12px">Choose a period and press Run now.</div>';
+  h += '<p class="note" style="margin:10px 0">' + fmtDate(tallyDate(r.from)) + " to " + fmtDate(tallyDate(r.to)) + " \u00b7 " + esc(r.how) + " on " + fmtDate(r.at.slice(0, 10)) + " at " + r.at.slice(11, 16) + " \u00b7 result code <b>" + esc(r.code) + "</b>" +
+    (r.control ? (r.control.ok ? ' \u00b7 <span style="color:#1F7A4D">agrees with Tally\u2019s balances, ledger by ledger</span>' : ' \u00b7 <span class="bad">' + r.control.n + " ledgers differ from Tally by \u20b9" + m(r.control.amt) + "</span>") : " \u00b7 read the period from Tally through the bridge to check it against Tally\u2019s balances") + "</p>";
+  const tab = S.misTab || "summary";
+  h += '<nav class="sbar" aria-label="MIS">' + [["summary", "Summary"], ["pl", "Profit and loss"], ["recv", "Receivables"], ["pay", "Payables"], ["sales", "Sales"], ["purch", "Purchases and expenses"], ["comp", "Compliance"]]
+    .map(([id, l]) => '<button data-mistab="' + id + '" aria-selected="' + (tab === id) + '">' + l + "</button>").join("") + "</nav>";
+  const pct = (a, c2) => c2 ? (Math.round((a - c2) / Math.abs(c2) * 1000) / 10) + "%" : "\u2014";
+  const q = String(S.misQ || "").toLowerCase();
+  const search = ph => '<div class="revfilter"><input type="search" id="misq" data-fk="misq" data-keeptyped value="' + esc(S.misQ || "") + '" placeholder="' + esc(ph) + '" style="width:260px">' + (tab === "recv" || tab === "pay" ?
+    '<select data-misf style="width:auto"><option value="">Every party</option><option value="90"' + (S.misF === "90" ? " selected" : "") + ">Over 90 days due</option>" + (tab === "pay" ? '<option value="msme"' + (S.misF === "msme" ? " selected" : "") + ">MSME suppliers</option>" : "") + "</select>" : "") + "</div>";
+  if (tab === "summary"){
+    const tile = (l, v, sub) => '<div class="dtile"><span>' + l + "</span><b>" + v + "</b><small>" + (sub || "") + "</small></div>";
+    h += '<div class="dash-tiles">' + tile("Sales, the period", m(r.sales.total), (r.prev ? "previous period " + m(r.prev.sales) + " (" + pct(r.sales.total, r.prev.sales) + ")" : "") + (r.ly ? " \u00b7 last year " + m(r.ly.sales) + " (" + pct(r.sales.total, r.ly.sales) + ")" : "")) +
+      tile("Profit before tax", m(r.pl.pbt.t), "gross profit " + m(r.pl.gross.t) + (r.pl.heads.rev ? " (" + (Math.round(r.pl.gross.t / r.pl.heads.rev.t * 1000) / 10) + "% of revenue)" : "")) +
+      tile("Month to date \u00b7 year to date", r.mtd != null ? m(r.mtd) : "\u2014", r.ytd != null ? "year to date " + m(r.ytd) : "") +
+      tile("Received \u00b7 paid", m(r.cash.rec), "paid out " + m(r.cash.pay) + ", net " + m(r.cash.rec - r.cash.pay)) + "</div>";
+    const owed = A => A.sum.tally != null ? A.sum.tally : A.sum.open;
+    const owedNote = A => A.sum.tally != null ? "as in Tally" : "bills raised in these books still open" + (Math.abs(A.sum.pre) >= 1 ? "; " + m(Math.abs(A.sum.pre)) + " settled against older bills not in these books" : "");
+    h += '<div class="dash-tiles">' + tile("Owed to you", m(owed(r.recv)), owedNote(r.recv) + " \u00b7 over 90 days " + m(r.recv.sum.b[3] + r.recv.sum.b[4]) + (r.dso != null ? " \u00b7 " + r.dso + " days of sales" : "")) +
+      tile("You owe", m(owed(r.pay)), owedNote(r.pay) + " \u00b7 over 90 days " + m(r.pay.sum.b[3] + r.pay.sum.b[4]) + (r.dpo != null ? " \u00b7 " + r.dpo + " days of purchases" : "")) +
+      tile("MSME suppliers past " + MIS.cfg(b).msmeDays + " days", m(r.msme.reduce((s, x) => s + x.amt, 0)), r.msme.length + " suppliers \u00b7 section 43B(h)") +
+      tile("GST payable, last month", m((r.comp.gst[r.comp.gst.length - 1] || {}).pay), "after credit, as per 3B") + "</div>";
+    if (r.balances.cash || r.balances.bank) h += '<section class="dash-card" style="margin-top:12px"><h3>Cash and bank on ' + fmtDate(tallyDate(r.to)) + '</h3><div class="bk-tablewrap"><table class="bk-table"><tbody>' +
+      r.balances.cash.concat(r.balances.bank).filter(x => Math.abs(x[1]) >= 1).map(([l, v]) => "<tr><td>" + esc(l) + '</td><td class="n' + (v < 0 ? " bad" : "") + '">' + m(v) + "</td></tr>").join("") +
+      '<tr><td><b>Total</b></td><td class="n"><b>' + m(r.balances.cash.concat(r.balances.bank).reduce((s, x) => s + x[1], 0)) + '</b></td></tr></tbody></table></div><p class="note">From ' + esc(r.balances.src) + ".</p></section>";
+    else h += '<p class="note">Cash and bank balances: ' + esc(r.balances.why || "") + ".</p>";
+    h += '<section class="dash-card" style="margin-top:12px"><h3>Due in the coming weeks</h3>' + r.dues.map(([d, l]) => '<div class="dash-row"><span>' + esc(l) + "</span><b>" + fmtDate(tallyDate(d)) + "</b></div>").join("") + "</section>";
+    return h;
+  }
+  if (tab === "pl"){
+    const months = r.pl.months, cols = months.length <= 12;
+    const row = (label, x, bold, key) => "<tr><td>" + (bold ? "<b>" + esc(label) + "</b>" : key ? '<button class="linkbtn" data-misled="' + esc(key) + '">' + esc(label) + "</button>" : esc(label)) + "</td>" +
+      (cols ? months.map(mm => '<td class="n">' + m((x.m || {})[mm]) + "</td>").join("") : "") + '<td class="n">' + (bold ? "<b>" + m(x.t) + "</b>" : m(x.t)) + "</td>" +
+      (r.prev ? '<td class="n">' + (x.p != null ? m(x.p) : "") + "</td>" : "") + (r.ly ? '<td class="n">' + (x.y != null ? m(x.y) : "") + "</td>" : "") + "</tr>";
+    const pv = k => r.prev && r.prev.pl.heads[k] ? r.prev.pl.heads[k].t : (r.prev ? 0 : null), lv = k => r.ly && r.ly.pl.heads[k] ? r.ly.pl.heads[k].t : (r.ly ? 0 : null);
+    let body = "";
+    const block = keys => keys.forEach(k => { const H = r.pl.heads[k]; if (!H) return; const lab = MIS.HEADS.find(z => z[0] === k)[1];
+      body += row(lab, Object.assign({}, H, {p: pv(k), y: lv(k)}), true);
+      if (S.misOpenHead === k) H.led.forEach(x => { body += row("\u2003" + x.l, x, false, x.l); }); else body += '<tr><td colspan="' + (2 + (cols ? months.length : 0) + (r.prev ? 1 : 0) + (r.ly ? 1 : 0)) + '"><button class="linkbtn" data-misopenhead="' + k + '">\u25b8 ' + H.led.length + " ledgers</button></td></tr>"; });
+    block(["rev", "oth"]); body += row("Total income", Object.assign({}, r.pl.income, {p: r.prev ? r.prev.pl.income.t : null, y: r.ly ? r.ly.pl.income.t : null}), true);
+    block(["pur", "dir"]); body += row("Gross profit", Object.assign({}, r.pl.gross, {p: r.prev ? r.prev.pl.gross.t : null, y: r.ly ? r.ly.pl.gross.t : null}), true);
+    block(["emp", "exp"]); body += row("Profit before interest and depreciation", Object.assign({}, r.pl.ebitda, {p: r.prev ? r.prev.pl.ebitda.t : null, y: r.ly ? r.ly.pl.ebitda.t : null}), true);
+    block(["fin", "dep"]); body += row("Profit before tax", Object.assign({}, r.pl.pbt, {p: r.prev ? r.prev.pl.pbt.t : null, y: r.ly ? r.ly.pl.pbt.t : null}), true);
+    block(["tax"]); body += row("Profit after tax", Object.assign({}, r.pl.pat, {p: r.prev ? r.prev.pl.pat.t : null, y: r.ly ? r.ly.pl.pat.t : null}), true);
+    h += '<div class="bk-tablewrap"><table class="bk-table" id="misPl"><thead><tr><th></th>' + (cols ? months.map(mm => '<th class="n">' + GSTR.label(mm) + "</th>").join("") : "") + '<th class="n">Period</th>' +
+      (r.prev ? '<th class="n">Previous period</th>' : "") + (r.ly ? '<th class="n">Last year</th>' : "") + "</tr></thead><tbody>" + body + "</tbody></table></div>" +
+      '<p class="note">Opening and closing stock are not in the day book, so gross profit is before the change in stock. Ledgers are placed by their group in Tally.' + (r.ly ? "" : " Last year is shown once last year\u2019s books are read.") + "</p>";
+    if (S.misLed){
+      const vs = (b.vouchers || []).filter(v => v.date >= r.from && v.date <= r.to && v.ent.some(e => e.l === S.misLed)).sort((a, c) => a.date.localeCompare(c.date));
+      h += '<section class="dash-card" style="margin-top:12px"><h3>' + esc(S.misLed) + ' <button class="linkbtn" data-misled="">close</button></h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th class="dt">Date</th><th>Voucher</th><th>Party</th><th class="n">Debit</th><th class="n">Credit</th><th>Narration</th></tr></thead><tbody>' +
+        vs.slice(0, 300).map(v => { const a = v.ent.filter(e => e.l === S.misLed).reduce((s, e) => s + e.a, 0); return "<tr><td>" + fmtDate(tallyDate(v.date)) + "</td><td>" + esc(v.no) + '<div class="nr">' + esc(v.type) + "</div></td><td>" + esc(v.party || "") + '</td><td class="n">' + (a < 0 ? m(-a) : "") + '</td><td class="n">' + (a > 0 ? m(a) : "") + "</td><td>" + esc(v.narr || "") + "</td></tr>"; }).join("") +
+        "</tbody></table></div>" + (vs.length > 300 ? '<p class="note">The first 300 of ' + vs.length + ".</p>" : "") + "</section>";
+    }
+    return h;
+  }
+  if (tab === "recv" || tab === "pay"){
+    const A = tab === "recv" ? r.recv : r.pay;
+    const list = A.rows.filter(p => (!q || p.party.toLowerCase().includes(q)) && (S.misF !== "90" || p.b[3] + p.b[4] > 0) && (S.misF !== "msme" || /micro|small/i.test(p.msme)));
+    h += search("Find a " + (tab === "recv" ? "customer" : "supplier"));
+    h += '<div class="bk-tablewrap"><table class="bk-table" id="misAge"><thead><tr><th>' + (tab === "recv" ? "Customer" : "Supplier") + "</th>" + MIS.BUCKETS.map(z => '<th class="n">' + z[1] + " days</th>").join("") +
+      '<th class="n">Before these books</th><th class="n">Advances</th><th class="n">On account</th><th class="n">Total</th>' + (A.rows.some(p => p.tally != null) ? '<th class="n">Tally balance</th>' : "") + (tab === "pay" ? "<th>MSME</th>" : "") + "</tr></thead><tbody>" +
+      list.slice(0, 400).map(p => {
+        const open = S.misOpen === p.party;
+        let x = '<tr><td><button class="linkbtn" data-misopen="' + esc(p.party) + '">' + (open ? "\u25be " : "\u25b8 ") + esc(p.party) + "</button></td>" + p.b.map((v, i) => '<td class="n' + (i >= 3 && v > 0 ? " bad" : "") + '">' + (v ? m(v) : "") + "</td>").join("") +
+          '<td class="n">' + (p.pre ? m(p.pre) : "") + '</td><td class="n">' + (p.adv ? m(p.adv) : "") + '</td><td class="n">' + (p.unalloc ? m(p.unalloc) : "") + '</td><td class="n"><b>' + m(p.total) + "</b></td>" +
+          (A.rows.some(z => z.tally != null) ? '<td class="n' + (p.diff && Math.abs(p.diff) >= 1 ? " bad" : "") + '" title="' + (p.diff ? "differs from the bills by " + m(p.diff) : "") + '">' + (p.tally != null ? m(p.tally) : "") + "</td>" : "") +
+          (tab === "pay" ? '<td><select data-mismsme="' + esc(p.party) + '" style="width:auto"><option value="">\u2014</option>' + ["Micro", "Small", "Medium"].map(t => '<option' + (p.msme === t ? " selected" : "") + ">" + t + "</option>").join("") + "</select></td>" : "") + "</tr>";
+        if (open) x += '<tr><td colspan="12" style="background:var(--paper);padding:0"><table class="bk-table" style="margin:0"><thead><tr><th>Bill</th><th class="dt">Date</th><th class="n">Days</th><th class="n">Outstanding</th></tr></thead><tbody>' +
+          p.bills.map(z => "<tr><td>" + esc(z.ref || "on account") + (z.no ? '<div class="nr">vch ' + esc(z.no) + "</div>" : "") + "</td><td>" + fmtDate(tallyDate(z.date)) + '</td><td class="n">' + z.age + '</td><td class="n">' + m(z.amt) + "</td></tr>").join("") + "</tbody></table></td></tr>";
+        return x;
+      }).join("") +
+      '<tr><td><b>Total</b></td>' + A.sum.b.map(v => '<td class="n"><b>' + m(v) + "</b></td>").join("") + '<td class="n">' + m(A.sum.pre) + '</td><td class="n">' + m(A.sum.adv) + '</td><td class="n">' + m(A.sum.unalloc) + '</td><td class="n"><b>' + m(A.sum.total) + "</b></td></tr></tbody></table></div>" +
+      (Math.abs(A.sum.pre) >= 1 && A.sum.tally == null ? '<p class="bk-alert" style="margin-top:8px">' + m(Math.abs(A.sum.pre)) + " was " + (tab === "recv" ? "received" : "paid") + " against bills raised before the day book read here, so the total is not the balance. Read the books through the bridge (its balances fix the total), or a day book from when those bills were raised.</p>" : "") +
+      '<p class="note">Age is counted from the bill date to ' + fmtDate(tallyDate(r.to)) + ". \u201cBefore these books\u201d are payments or receipts against bills older than the day book read here." + (tab === "pay" ? " MSME comes from the Udyam details in Tally; mark others here." : "") + "</p>";
+    if (tab === "pay" && r.msme.length) h += '<section class="dash-card" style="margin-top:12px"><h3>MSME suppliers unpaid past ' + MIS.cfg(b).msmeDays + ' days</h3><p class="note">Under section 43B(h), what is owed to a micro or small enterprise and unpaid beyond the agreed period (at most 45 days) is allowed only when paid.</p><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Supplier</th><th>Type</th><th class="n">Bills</th><th class="n">Amount</th><th class="n">Oldest, days</th></tr></thead><tbody>' +
+      r.msme.map(x => "<tr><td>" + esc(x.party) + "</td><td>" + esc(x.type) + '</td><td class="n">' + x.bills.length + '</td><td class="n">' + m(x.amt) + '</td><td class="n">' + Math.max.apply(null, x.bills.map(z => z.age)) + "</td></tr>").join("") + "</tbody></table></div></section>";
+    return h;
+  }
+  if (tab === "sales" || tab === "purch"){
+    const S2 = tab === "sales" ? r.sales : r.purchases, months = S2.months, cols = months.length <= 12;
+    const list = S2.rows.filter(x => !q || x.party.toLowerCase().includes(q));
+    h += search("Find a " + (tab === "sales" ? "customer" : "supplier"));
+    if (tab === "sales") h += '<div class="dash-tiles"><div class="dtile"><span>Customers</span><b>' + S2.rows.length + "</b><small>" + (S2.fresh != null ? S2.fresh + " new in the period" : "") + '</small></div><div class="dtile"><span>Top five customers</span><b>' + (S2.total ? Math.round(S2.top5 / S2.total * 1000) / 10 : 0) + "%</b><small>of sales</small></div>" +
+      '<div class="dtile"><span>By registration</span><b>' + S2.byReg.length + "</b><small>" + S2.byReg.map(([k, v]) => esc(k) + " " + m(v)).join(" \u00b7 ") + '</small></div><div class="dtile"><span>By state of the customer</span><b>' + S2.byState.length + "</b><small>" + S2.byState.slice(0, 4).map(([k, v]) => esc(k) + " " + m(v)).join(" \u00b7 ") + "</small></div></div>";
+    h += '<div class="bk-tablewrap"><table class="bk-table" id="misParty"><thead><tr><th>' + (tab === "sales" ? "Customer" : "Supplier") + "</th>" + (cols ? months.map(mm => '<th class="n">' + GSTR.label(mm) + "</th>").join("") : "") + '<th class="n">Total</th><th class="n">Share</th></tr></thead><tbody>' +
+      list.slice(0, 400).map(x => "<tr><td>" + esc(x.party || "\u2014") + "</td>" + (cols ? months.map(mm => '<td class="n">' + (x.m[mm] ? m(x.m[mm]) : "") + "</td>").join("") : "") + '<td class="n"><b>' + m(x.t) + '</b></td><td class="n">' + (S2.total ? Math.round(x.t / S2.total * 1000) / 10 + "%" : "") + "</td></tr>").join("") +
+      '<tr><td><b>Total</b></td>' + (cols ? months.map(mm => '<td class="n">' + m(S2.rows.reduce((s, x) => s + (x.m[mm] || 0), 0)) + "</td>").join("") : "") + '<td class="n"><b>' + m(S2.total) + "</b></td><td></td></tr></tbody></table></div>" +
+      '<p class="note">' + (tab === "sales" ? "Sales are shown without GST, less credit notes." : "Purchases and expenses booked against suppliers, without GST.") + "</p>";
+    if (tab === "purch") h += '<section class="dash-card" style="margin-top:12px"><h3>Expense heads by month</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Ledger</th>' + (cols ? months.map(mm => '<th class="n">' + GSTR.label(mm) + "</th>").join("") : "") + '<th class="n">Total</th></tr></thead><tbody>' +
+      S2.heads.filter(x => !q || x.l.toLowerCase().includes(q)).slice(0, 200).map(x => "<tr><td>" + esc(x.l) + (x.jumps.length ? ' <span class="tag warn">jumped</span>' : "") + "</td>" + (cols ? months.map(mm => '<td class="n' + (x.jumps.includes(mm) ? " bad" : "") + '">' + (x.m[mm] ? m(x.m[mm]) : "") + "</td>").join("") : "") + '<td class="n"><b>' + m(x.t) + "</b></td></tr>").join("") +
+      '</tbody></table></div><p class="note">\u201cJumped\u201d: a month at least \u20b950,000 and more than one and a half times the average of the other months.</p></section>';
+    return h;
+  }
+  const C = r.comp;
+  h += '<section class="dash-card"><h3>GST by month</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Month</th><th class="n">Output tax</th><th class="n">Credit</th><th class="n">Payable in cash</th></tr></thead><tbody>' +
+    C.gst.map(x => "<tr><td>" + GSTR.label(x.ym) + '</td><td class="n">' + m(x.out) + '</td><td class="n">' + m(x.itc) + '</td><td class="n">' + m(x.pay) + "</td></tr>").join("") + "</tbody></table></div></section>";
+  h += '<section class="dash-card" style="margin-top:12px"><h3>TDS by month</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Month</th><th class="n">Deducted</th><th class="n">Deposited (challans here)</th><th class="n">Difference</th></tr></thead><tbody>' +
+    C.tds.map(x => "<tr><td>" + GSTR.label(x.ym) + '</td><td class="n">' + m(x.ded) + '</td><td class="n">' + m(x.dep) + '</td><td class="n' + (Math.abs(x.ded - x.dep) >= 1 ? " bad" : "") + '">' + m(x.ded - x.dep) + "</td></tr>").join("") + "</tbody></table></div></section>";
+  h += '<section class="dash-card" style="margin-top:12px"><h3>Audit</h3>' + (C.audit ? '<div class="dash-row"><span>Findings open</span><b>' + C.audit.open + '</b></div><div class="dash-row"><span>Serious</span><b>' + C.audit.high + '</b></div><div class="dash-row"><span>Put right</span><b>' + C.audit.solved + "</b></div>" : '<p class="note">Not run yet.</p>') + "</section>";
+  return h;
+}
+// the monthly pack: one document for the owner
+function misPackHtml(r){
+  const m = v => INR.format(r2(v || 0)), co = CO();
+  const pl = [["Revenue from operations", (r.pl.heads.rev || {t: 0}).t], ["Other income", (r.pl.heads.oth || {t: 0}).t], ["Purchases and direct expenses", ((r.pl.heads.pur || {t: 0}).t + (r.pl.heads.dir || {t: 0}).t)], ["Gross profit", r.pl.gross.t, 1],
+    ["Employee costs", (r.pl.heads.emp || {t: 0}).t], ["Other expenses", (r.pl.heads.exp || {t: 0}).t], ["Finance costs", (r.pl.heads.fin || {t: 0}).t], ["Depreciation", (r.pl.heads.dep || {t: 0}).t], ["Profit before tax", r.pl.pbt.t, 1]];
+  const owed = A => A.sum.tally != null ? A.sum.tally : A.sum.open;
+  let h = '<div style="border-bottom:2px solid #15201B;padding-bottom:8px;margin-bottom:12px"><div style="font-size:12px;color:#5A6B63">MIS</div><h1 style="font-size:22px;margin:4px 0">' + esc(co.name) + "</h1>" +
+    '<div>' + fmtDate(tallyDate(r.from)) + " to " + fmtDate(tallyDate(r.to)) + " \u00b7 prepared " + fmtDate(r.at.slice(0, 10)) + " \u00b7 result code " + esc(r.code) + (r.control ? (r.control.ok ? " \u00b7 agrees with Tally\u2019s balances" : " \u00b7 " + r.control.n + " ledgers differ from Tally") : "") + "</div></div>";
+  h += "<h2>At a glance</h2><table><tbody>" + [["Sales", m(r.sales.total) + (r.prev ? " (previous period " + m(r.prev.sales) + ")" : "") + (r.ly ? " (last year " + m(r.ly.sales) + ")" : "")], ["Profit before tax", m(r.pl.pbt.t)],
+    ["Received / paid", m(r.cash.rec) + " / " + m(r.cash.pay)], ["Owed to you", m(owed(r.recv)) + " (over 90 days " + m(r.recv.sum.b[3] + r.recv.sum.b[4]) + ")"], ["You owe", m(owed(r.pay)) + " (MSME past " + MIS.cfg(S.books).msmeDays + " days " + m(r.msme.reduce((s, x) => s + x.amt, 0)) + ")"]]
+    .map(([a, c]) => "<tr><td>" + a + "</td><td>" + c + "</td></tr>").join("") + "</tbody></table>";
+  h += "<h2>Profit and loss</h2><table><tbody>" + pl.map(([a, v, bold]) => "<tr><td>" + (bold ? "<b>" + a + "</b>" : a) + '</td><td class="n">' + (bold ? "<b>" + m(v) + "</b>" : m(v)) + "</td></tr>").join("") + "</tbody></table>" +
+    '<p class="note">Before the change in stock.</p>';
+  if (r.balances.cash) h += "<h2>Cash and bank</h2><table><tbody>" + r.balances.cash.concat(r.balances.bank).filter(x => Math.abs(x[1]) >= 1).map(([l, v]) => "<tr><td>" + esc(l) + '</td><td class="n">' + m(v) + "</td></tr>").join("") + "</tbody></table>";
+  // open bills by age: the parties with the most outstanding
+  const age = (t, A) => { const open = p => p.b.reduce((a, v) => a + v, 0), rows = A.rows.filter(p => open(p) > 0).sort((a, c) => open(c) - open(a) || a.party.localeCompare(c.party));
+    return "<h2>" + t + "</h2><table><thead><tr><th>Party</th>" + MIS.BUCKETS.map(z => '<th class="n">' + z[1] + "</th>").join("") + '<th class="n">Open bills</th></tr></thead><tbody>' +
+    rows.slice(0, 15).map(p => "<tr><td>" + esc(p.party) + "</td>" + p.b.map(v => '<td class="n">' + (v ? m(v) : "") + "</td>").join("") + '<td class="n">' + m(open(p)) + "</td></tr>").join("") +
+    "<tr><td><b>All</b></td>" + A.sum.b.map(v => '<td class="n"><b>' + m(v) + "</b></td>").join("") + '<td class="n"><b>' + m(A.sum.open) + "</b></td></tr></tbody></table>" +
+    (Math.abs(A.sum.pre) >= 1 && A.sum.tally == null ? '<p class="note">' + m(Math.abs(A.sum.pre)) + " was settled against bills from before the books read here; they are not in these figures.</p>" : ""); };
+  h += age("Receivables, largest 15", r.recv) + age("Payables, largest 15", r.pay);
+  h += "<h2>Top customers</h2><table><tbody>" + r.sales.rows.slice(0, 10).map(x => "<tr><td>" + esc(x.party) + '</td><td class="n">' + m(x.t) + '</td><td class="n">' + (r.sales.total ? Math.round(x.t / r.sales.total * 1000) / 10 + "%" : "") + "</td></tr>").join("") + "</tbody></table>";
+  h += "<h2>Compliance</h2><table><thead><tr><th>Month</th><th class=\"n\">GST payable in cash</th><th class=\"n\">TDS deducted</th><th class=\"n\">TDS deposited</th></tr></thead><tbody>" +
+    r.comp.gst.map((x, i) => "<tr><td>" + GSTR.label(x.ym) + '</td><td class="n">' + m(x.pay) + '</td><td class="n">' + m(r.comp.tds[i].ded) + '</td><td class="n">' + m(r.comp.tds[i].dep) + "</td></tr>").join("") + "</tbody></table>" +
+    "<h2>Due in the coming weeks</h2><table><tbody>" + r.dues.map(([d, l]) => "<tr><td>" + fmtDate(tallyDate(d)) + "</td><td>" + esc(l) + "</td></tr>").join("") + "</tbody></table>";
+  return h + '<p class="note" style="margin-top:16px">Prepared from the books in Tally by ' + esc(co.firm || "Garg Shekhar & Company") + ".</p>";
+}
+async function misExcel(r){
+  await ensureXlsx();
+  const wb = XLSX.utils.book_new(), add = (n, rows) => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), n.slice(0, 31)), months = r.pl.months;
+  const pl = [["Head", "Ledger"].concat(months.map(GSTR.label)).concat(["Period"])];
+  MIS.HEADS.forEach(([k, l]) => { const H = r.pl.heads[k]; if (!H) return; pl.push([l, ""].concat(months.map(mm => H.m[mm] || 0)).concat([H.t])); H.led.forEach(x => pl.push(["", x.l].concat(months.map(mm => x.m[mm] || 0)).concat([x.t]))); });
+  [["Gross profit", r.pl.gross], ["Profit before tax", r.pl.pbt], ["Profit after tax", r.pl.pat]].forEach(([l, x]) => pl.push([l, ""].concat(months.map(mm => x.m[mm] || 0)).concat([x.t])));
+  add("Profit and loss", pl);
+  const age = A => [["Party"].concat(MIS.BUCKETS.map(z => z[1] + " days")).concat(["Before these books", "Advances", "On account", "Total", "Tally balance"])].concat(A.rows.map(p => [p.party].concat(p.b).concat([p.pre, p.adv, p.unalloc, p.total, p.tally == null ? "" : p.tally])));
+  add("Receivables", age(r.recv)); add("Payables", age(r.pay));
+  add("Bills owed to you", [["Customer", "Bill", "Date", "Days", "Outstanding"]].concat(r.recv.rows.flatMap(p => p.bills.map(z => [p.party, z.ref || "on account", Audit.iso(z.date), z.age, z.amt]))));
+  add("Bills you owe", [["Supplier", "Bill", "Date", "Days", "Outstanding", "MSME"]].concat(r.pay.rows.flatMap(p => p.bills.map(z => [p.party, z.ref || "on account", Audit.iso(z.date), z.age, z.amt, p.msme || ""]))));
+  add("Sales by customer", [["Customer"].concat(r.sales.months.map(GSTR.label)).concat(["Total"])].concat(r.sales.rows.map(x => [x.party].concat(r.sales.months.map(mm => x.m[mm] || 0)).concat([x.t]))));
+  add("Purchases by supplier", [["Supplier"].concat(r.purchases.months.map(GSTR.label)).concat(["Total"])].concat(r.purchases.rows.map(x => [x.party].concat(r.purchases.months.map(mm => x.m[mm] || 0)).concat([x.t]))));
+  add("Expense heads", [["Ledger"].concat(r.purchases.months.map(GSTR.label)).concat(["Total", "Jumped in"])].concat(r.purchases.heads.map(x => [x.l].concat(r.purchases.months.map(mm => x.m[mm] || 0)).concat([x.t, x.jumps.map(GSTR.label).join(", ")]))));
+  add("Compliance", [["Month", "GST output", "GST credit", "GST payable in cash", "TDS deducted", "TDS deposited"]].concat(r.comp.gst.map((x, i) => [GSTR.label(x.ym), x.out, x.itc, x.pay, r.comp.tds[i].ded, r.comp.tds[i].dep])));
+  const out = XLSX.write(wb, {bookType: "xlsx", type: "array"});
+  saveFile(CO().name.replace(/[^A-Za-z0-9]+/g, "-") + "-MIS-" + r.from + "-" + r.to + ".xlsx", new Blob([out], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
 }
 function viewBooksGst(b){
   const part = S.gstPart || "r1";
@@ -12740,6 +13148,10 @@ function gstFixChange(t){
   const d = t.dataset, b = S.books;
   if (d.tallyfrom !== undefined || d.tallyto !== undefined){ const t0 = Audit.today(); S.tallyRange = Object.assign({from: Audit.iso(Audit.fyStart(t0)), to: Audit.iso(t0)}, S.tallyRange, d.tallyfrom !== undefined ? {from: t.value} : {to: t.value}); return true; }
   if (d.tallytime !== undefined){ S.tallyCopy = Object.assign({}, S.tallyCopy, {time: t.value}); return true; }
+  if (d.misfrom !== undefined || d.misto !== undefined){ const x = misRangeQuick("ytd", b); S.misRange = Object.assign({from: Audit.iso(x.from), to: Audit.iso(x.to)}, S.misRange, d.misfrom !== undefined ? {from: t.value} : {to: t.value}); return true; }
+  if (d.misfreq !== undefined){ b.misCfg = Object.assign({}, b.misCfg, {freq: t.value}); saveBooks(); render(); return true; }
+  if (d.misf !== undefined){ S.misF = t.value; render(); return true; }
+  if (d.mismsme !== undefined){ b.msme = Object.assign({}, b.msme, {[d.mismsme]: t.value}); const r = (b.mis || {}).last; if (r) MIS.run(r.from, r.to, r.how); saveBooks(); render(); return true; }
   if (d.auditfreq !== undefined){ b.auditCfg = Object.assign({}, b.auditCfg, {freq: t.value}); saveBooks(); render(); return true; }
   if (d.auditfrom !== undefined || d.auditto !== undefined){ const dr = Audit.defaultRange(b); S.auditRange = Object.assign({from: Audit.iso(dr.from), to: Audit.iso(dr.to)}, S.auditRange, d.auditfrom !== undefined ? {from: t.value} : {to: t.value}); return true; }
   if (d.auditst !== undefined){ S.auditSt = t.value; render(); return true; }
@@ -16033,6 +16445,11 @@ document.addEventListener("click", ev => {
     const [tab, k] = t.dataset.tdssort.split("|"), cur = (S.tdsSort || {})[tab] || {};
     S.tdsSort = Object.assign({}, S.tdsSort, {[tab]: {k, d: cur.k === k ? -(cur.d || 1) : 1}}); render(); return;
   }
+  if (t.dataset.mistab){ S.misTab = t.dataset.mistab; S.misQ = ""; S.misF = ""; render(); return; }
+  if (t.dataset.misquick){ const x = misRangeQuick(t.dataset.misquick, S.books); S.misRange = {from: Audit.iso(x.from), to: Audit.iso(x.to)}; render(); return; }
+  if (t.dataset.misopen !== undefined){ S.misOpen = S.misOpen === t.dataset.misopen ? "" : t.dataset.misopen; render(); return; }
+  if (t.dataset.misopenhead !== undefined){ S.misOpenHead = S.misOpenHead === t.dataset.misopenhead ? "" : t.dataset.misopenhead; render(); return; }
+  if (t.dataset.misled !== undefined){ S.misLed = t.dataset.misled; render(); return; }
   if (t.dataset.auditopen){ S.auditOpen = S.auditOpen === t.dataset.auditopen ? "" : t.dataset.auditopen; render(); return; }
   if (t.dataset.auditarea !== undefined && t.tagName === "BUTTON"){ S.auditArea = t.dataset.auditarea; render(); return; }
   if (t.dataset.lmview){ S.lmView = t.dataset.lmview; S.booksTab = "ledgers"; render(); return; }
@@ -16357,6 +16774,13 @@ document.addEventListener("click", ev => {
         e => toast("The bridge could not set it: " + (e && e.message || e)));
       break;
     }
+    case "misRun": {
+      const b = S.books, rg = S.misRange || (x => ({from: Audit.iso(x.from), to: Audit.iso(x.to)}))(misRangeQuick("ytd", b));
+      if (!rg.from || !rg.to || rg.from > rg.to){ toast("Choose a period: from a date to a later one."); break; }
+      MIS.run(rg.from, rg.to, "run now"); saveBooks(); render(); break;
+    }
+    case "misPack": { const r = (S.books.mis || {}).last; if (r) printView(CO().name + " MIS " + r.from + "-" + r.to, "<style>@page{size:A4 portrait;margin:14mm}h2{font-size:15px;margin:14px 0 6px;border-bottom:1px solid #D7DEDA;padding-bottom:3px}</style>" + misPackHtml(r)); break; }
+    case "misExcel": { const r = (S.books.mis || {}).last; if (r) misExcel(r).then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break; }
     case "auditRun": {
       const b = S.books, dr = Audit.defaultRange(b), r = S.auditRange || {from: Audit.iso(dr.from), to: Audit.iso(dr.to)};
       if (!r.from || !r.to || r.from > r.to){ toast("Choose a period: from a date to a later one."); break; }
@@ -16686,6 +17110,7 @@ document.addEventListener("input", ev => {
   }
   if (t && t.id === "revq"){ S.revQuery = t.value; softRender(); return; }
   if (t && t.id === "txnq"){ S.txnQ = t.value; later("txnq", render, 250); return; }
+  if (t && t.id === "misq"){ S.misQ = t.value; later("misq", render, 250); return; }
   if (t && t.id === "ledq"){ S.ledQ = t.value; later("ledq", render, 250); return; }
   if (t && t.id && /^(q24F|r1F|b2F)q$/.test(t.id)){ const k = t.id.slice(0, -1); S[k] = Object.assign({}, S[k], {q: t.value}); later(t.id, render, 250); return; }
   if (t && t.dataset){
