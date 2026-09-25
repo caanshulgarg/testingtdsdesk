@@ -757,7 +757,7 @@ const DEFAULT_FIRM = {firmName:"Garg Shekhar & Company", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "TEST · 25 Sep 2026 · build 122 (Audit: checks on the books, each with what to do and the entry to pass, and a report to download)";
+const APP_VERSION = "TEST · 25 Sep 2026 · build 123 (audit: the same result every run, what is put right shows as solved, final report locked; read straight from Tally with bridge 1.10)";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;
@@ -5338,19 +5338,27 @@ const Audit = {
   isIncome(l){ return this.under(l, /^(sales accounts|direct incomes|indirect incomes)$/i); },
   mastersIn(){ return Object.keys(S.books.under || {}).length > 0; },
   // balances need the opening balances and every voucher since the books began
-  balancesOk(){
-    const b = S.books, info = b.ledInfo || {}, starts = Object.values(info).map(x => x.from).filter(Boolean).sort();
-    if (!Object.values(info).some(x => x.ob != null)) return {ok: false, why: "the ledger masters with opening balances are not read yet"};
-    const begin = starts[0] || "", from = String((b.meta || {}).from || "");
-    if (begin && from && from > begin) return {ok: false, why: "the books begin on " + fmtDate(tallyDate(begin)) + " but the day book starts on " + fmtDate(tallyDate(from)) + "; read a day book from " + fmtDate(tallyDate(begin))};
-    return {ok: true};
+  // balances at any date in the period: from Tally's own balances when the bridge has read them,
+  // else from the opening balances in the masters, when the day book starts where the books begin
+  balances(from, to){
+    const b = S.books, tb = b.tb;
+    const move = (base, start, d) => {
+      const bal = Object.assign({}, base);
+      (b.vouchers || []).forEach(v => { if (v.date < start || v.date > d || v.opt || v.cancel) return; v.ent.forEach(e => { bal[e.l] = r2((bal[e.l] || 0) + e.a); }); });
+      return bal;
+    };
+    if (tb && tb.from <= from && tb.to >= to){
+      const open = {}; Object.entries(tb.led || {}).forEach(([n, x]) => { open[n] = num(x.open); });
+      return {ok: true, src: "Tally's balances read on " + fmtDate(String(tb.at).slice(0, 10)), at: d => move(open, tb.from, d)};
+    }
+    const info = b.ledInfo || {}, starts = Object.values(info).map(x => x.from).filter(Boolean).sort();
+    if (!Object.values(info).some(x => x.ob != null)) return {ok: false, why: "the ledger balances are not read yet; read the day book and balances from Tally through the bridge, or bring in the ledger masters"};
+    const begin = starts[0] || "", first = String((b.meta || {}).from || "");
+    if (begin && first && first > begin) return {ok: false, why: "the books begin on " + fmtDate(tallyDate(begin)) + " but the day book starts on " + fmtDate(tallyDate(first)) + "; read the day book and balances from Tally through the bridge, or a day book from " + fmtDate(tallyDate(begin))};
+    const ob = {}; Object.entries(info).forEach(([n, x]) => { if (x.ob) ob[n] = num(x.ob); });
+    return {ok: true, src: "opening balances in the masters", at: d => move(ob, "00000000", d)};
   },
-  balanceAt(to){
-    const b = S.books, bal = {};
-    Object.entries(b.ledInfo || {}).forEach(([n, x]) => { if (x.ob) bal[n] = num(x.ob); });
-    (b.vouchers || []).forEach(v => { if (v.date > to || v.opt || v.cancel) return; v.ent.forEach(e => { bal[e.l] = r2((bal[e.l] || 0) + e.a); }); });
-    return bal;                                               // Tally's sign: a debit is negative
-  },
+  dayBefore(d){ const t = new Date(this.iso(d) + "T00:00:00"); t.setDate(t.getDate() - 1); return this.ymd(t.getFullYear() + String(t.getMonth() + 1).padStart(2, "0") + String(t.getDate()).padStart(2, "0")); },
   vouchers(from, to){ return (S.books.vouchers || []).filter(v => v.date >= from && v.date <= to && !v.opt && !v.cancel); },
   row(v, extra){ return Object.assign({vid: v.id, date: v.date, no: v.no, type: v.type, party: v.party, narr: v.narr}, extra || {}); },
   money(v){ return INR.format(r2(v || 0)); },
@@ -5423,11 +5431,11 @@ const Audit = {
     },
     cashNegative(A, V, ctx){
       if (!ctx.bal.ok) return null;
-      const cash = Object.keys(S.books.ledInfo || {}).filter(l => A.isCash(l));
+      const cash = Array.from(new Set(Object.keys(S.books.ledInfo || {}).concat(Object.keys((S.books.tb || {}).led || {})))).filter(l => A.isCash(l)).sort();
       if (!cash.length) return null;
-      const bal = {}; cash.forEach(l => { bal[l] = num((S.books.ledInfo[l] || {}).ob); });
+      const start = ctx.bal.at(A.dayBefore(ctx.from)), bal = {}; cash.forEach(l => { bal[l] = num(start[l]); });
       const rows = [];
-      const all = (S.books.vouchers || []).filter(v => v.date <= ctx.to && !v.opt && !v.cancel).sort((a, c) => a.date.localeCompare(c.date));
+      const all = (S.books.vouchers || []).filter(v => v.date >= ctx.from && v.date <= ctx.to && !v.opt && !v.cancel).sort((a, c) => a.date.localeCompare(c.date) || String(a.no).localeCompare(String(c.no)));
       let day = "";
       const close = () => { if (day >= ctx.from) cash.forEach(l => { if (bal[l] > 1) rows.push({vid: "", date: day, no: "", type: "", party: l, amount: bal[l], note: "cash balance at the end of the day: " + A.money(-bal[l])}); }); };
       all.forEach(v => { if (v.date !== day){ if (day) close(); day = v.date; } v.ent.forEach(e => { if (bal[e.l] != null) bal[e.l] = r2(bal[e.l] + e.a); }); });
@@ -5701,7 +5709,7 @@ const Audit = {
     },
     balances(A, V, ctx){
       if (!ctx.bal.ok) return null;
-      const bal = A.balanceAt(ctx.to), out = [];
+      const bal = ctx.bal.at(ctx.to), out = [];
       const cr = Object.entries(bal).filter(([l, v]) => A.isCreditor(l) && v < -10000), dr = Object.entries(bal).filter(([l, v]) => A.isDebtor(l) && v > 10000);
       if (cr.length) out.push({key: "crDr", area: "bal", sev: "low", clause: "Schedule III", title: "Suppliers with a debit balance", problem: cr.length + " suppliers owe you money.",
         impact: "In the balance sheet these are advances to suppliers, not a reduction of trade payables.", amount: cr.reduce((s, [, v]) => s - v, 0),
@@ -5722,28 +5730,73 @@ const Audit = {
       return out;
     }
   },
-  // run every check for a period
+  // the fingerprint of a result: the same books give the same code, every time
+  hash(str){ let h = 2166136261; for (let i = 0; i < str.length; i++){ h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(16).toUpperCase().padStart(8, "0"); },
+  itemKey(f, r){ return f.id + "|" + [r.vid || "", r.party || "", r.date || "", r.no || "", r.type || ""].join("|"); },
+  // run every check for a period; rules only, so the same books always give the same findings
   run(from, to, how){
     const b = S.books;
     from = this.ymd(from); to = this.ymd(to);
-    const V = this.vouchers(from, to), ctx = {from, to, bal: this.balancesOk()};
-    const findings = [], errors = [];
-    Object.entries(this.checks).forEach(([id, fn]) => {
+    const V = this.vouchers(from, to).sort((a, c) => a.date.localeCompare(c.date) || String(a.id).localeCompare(String(c.id)));
+    const ctx = {from, to, bal: this.balances(from, to)};
+    const order = Object.keys(this.checks), findings = [], errors = [], ran = new Set();
+    order.forEach((id, k) => {
       try {
-        const r = fn(this, V, ctx);
-        [].concat(r || []).filter(Boolean).forEach(f => { f.id = id + (f.key ? ":" + f.key : ""); f.count = f.total || (f.rows || []).length; findings.push(f); });
+        const r = this.checks[id](this, V, ctx);
+        ran.add(id);
+        [].concat(r || []).filter(Boolean).forEach(f => {
+          f.id = id + (f.key ? ":" + f.key : ""); f.check = id; f.order = k; f.amount = r2(f.amount || 0);
+          (f.rows || []).forEach(x => { x.key = this.itemKey(f, x); if (x.amount != null) x.amount = r2(x.amount); });
+          f.rows = (f.rows || []).sort((a, c) => String(a.date || "").localeCompare(String(c.date || "")) || String(a.no || "").localeCompare(String(c.no || "")) || String(a.party || "").localeCompare(String(c.party || "")) || a.key.localeCompare(c.key));
+          f.count = f.total || f.rows.length;
+          findings.push(f);
+        });
       } catch (e){ errors.push(id + ": " + (e && e.message)); }
     });
-    findings.sort((a, c) => this.SEV[c.sev] - this.SEV[a.sev] || c.amount - a.amount);
+    findings.sort((a, c) => this.SEV[c.sev] - this.SEV[a.sev] || a.order - c.order || a.id.localeCompare(c.id));
     const au = b.audit = b.audit || {st: {}, history: []};
+    au.items = au.items || {};
+    const at = new Date().toISOString(), seen = new Set();
     const prev = au.last ? Object.fromEntries(au.last.findings.map(f => [f.id, f.count])) : {};
-    findings.forEach(f => { f.isNew = !(f.id in prev); f.more = prev[f.id] != null ? f.count - prev[f.id] : 0; (f.rows || []).splice(1000); });
-    const run = {at: new Date().toISOString(), from, to, how: how || "run now", findings, errors, notes: [ctx.bal.ok ? "" : "Balance checks were not run: " + ctx.bal.why + ".", this.mastersIn() ? "" : "The ledger masters are not read, so ledgers are recognised by name only."].filter(Boolean),
-      vouchers: V.length};
+    findings.forEach(f => {
+      f.isNew = !(f.id in prev); f.more = prev[f.id] != null ? f.count - prev[f.id] : 0;
+      f.rows.forEach(r => {
+        seen.add(r.key);
+        const it = au.items[r.key];
+        if (!it) au.items[r.key] = {f: f.id, title: f.title, area: f.area, sev: f.sev, first: at, last: at, from, to, row: {date: r.date, no: r.no, party: r.party, amount: r.amount, note: r.note, type: r.type}};
+        else { it.last = at; it.to = to; if (it.solved){ it.reopened = at; delete it.solved; } it.row = {date: r.date, no: r.no, party: r.party, amount: r.amount, note: r.note, type: r.type}; }
+      });
+      f.rows.splice(1000);
+    });
+    // an item found before and not found now, in a period this run covers, has been put right
+    Object.entries(au.items).forEach(([k, it]) => {
+      if (seen.has(k) || it.solved || !ran.has(String(it.f).split(":")[0])) return;
+      const d = it.row && it.row.date;
+      if (d ? (d >= from && d <= to) : (to >= it.to && from <= it.from)) it.solved = at;
+    });
+    const solvedBy = {};
+    Object.values(au.items).filter(it => it.solved).forEach(it => { (solvedBy[it.f] = solvedBy[it.f] || []).push(it); });
+    const run = {at, from, to, how: how || "run now", findings, errors, vouchers: V.length, balances: ctx.bal.ok ? ctx.bal.src : "",
+      notes: [ctx.bal.ok ? "" : "Balance checks were not run: " + ctx.bal.why + ".", this.mastersIn() ? "" : "The ledger masters are not read, so ledgers are recognised by name only."].filter(Boolean),
+      solved: Object.entries(solvedBy).map(([fid, list]) => ({id: fid, title: list[0].title || fid, area: list[0].area, sev: list[0].sev, n: list.length, amount: r2(list.reduce((s2, it) => s2 + num(it.row && it.row.amount), 0)),
+        items: list.sort((a, c) => String(a.solved).localeCompare(String(c.solved)) || String((a.row || {}).date).localeCompare(String((c.row || {}).date))).slice(-300)}))};
+    run.code = this.hash(JSON.stringify(findings.map(f => [f.id, f.count, f.amount, f.rows.map(r => r.key + "=" + r.amount)])));
     au.last = run;
-    au.history = [{at: run.at, from, to, how: run.how, n: findings.length, high: findings.filter(f => f.sev === "high").length, amount: r2(findings.reduce((s, f) => s + f.amount, 0))}].concat(au.history || []).slice(0, 30);
+    au.history = [{at, from, to, how: run.how, n: findings.length, high: findings.filter(f => f.sev === "high").length, amount: r2(findings.reduce((s2, f) => s2 + f.amount, 0)), code: run.code,
+      solved: Object.values(au.items).filter(it => it.solved === at).length}].concat(au.history || []).slice(0, 30);
     return run;
   },
+  solvedOf(fid){ const r = (S.books.audit || {}).last; const x = r && (r.solved || []).find(z => z.id === fid); return x || {n: 0, items: [], amount: 0}; },
+  titleOf(fid){ const it = Object.values((S.books.audit || {}).items || {}).find(z => z.f === fid); return it ? it.title || fid : fid; },
+  finalise(){
+    const au = S.books.audit, run = au && au.last;
+    if (!run) return null;
+    au.final = au.final || {};
+    const k = run.from + "-" + run.to;
+    au.final[k] = {at: new Date().toISOString(), run: JSON.parse(JSON.stringify(run)), st: JSON.parse(JSON.stringify(au.st || {}))};
+    return au.final[k];
+  },
+  finalFor(from, to){ return ((S.books.audit || {}).final || {})[this.ymd(from) + "-" + this.ymd(to)] || null; },
   due(b){
     const c = this.cfg(b), last = b.audit && b.audit.last ? String(b.audit.last.at).slice(0, 10).replace(/-/g, "") : "";
     if (c.freq === "off" || !(b.vouchers || []).length) return false;
@@ -5785,8 +5838,8 @@ const Audit = {
   jesToPass(run){ return run.findings.filter(f => f.je && this.status(f.id).s === "pass").flatMap(f => f.je); },
   missingLedgers(jes){ return Array.from(new Set(jes.flatMap(j => j.lines.map(l => l.l)).filter(l => !this.exists(l)))); },
   // the report: a cover, a summary by area, then each finding with what to do
-  reportHtml(run){
-    const co = CO(), b = S.books, m = v => INR.format(r2(v || 0)), st = id => this.status(id);
+  reportHtml(run, stSnap){
+    const co = CO(), b = S.books, m = v => INR.format(r2(v || 0)), st = id => (stSnap ? stSnap[id] : null) || this.status(id);
     const sevL = {high: "High", medium: "Medium", low: "Low"}, sevC = {high: "#B42318", medium: "#B9541B", low: "#5A6B63"};
     let h = '<div style="border-bottom:2px solid #15201B;padding-bottom:10px;margin-bottom:14px"><div style="font-size:12px;color:#5A6B63">AUDIT OBSERVATIONS</div><h1 style="font-size:22px;margin:4px 0">' + esc(co.name) + "</h1>" +
       '<div style="font-size:13px">' + esc(((b.meta || {}).gstins || []).join(", ")) + (co.pan ? " \u00b7 PAN " + esc(co.pan) : "") + "</div>" +
@@ -5807,12 +5860,20 @@ const Audit = {
         (f.je && f.je.length ? "<p><b>Suggested entr" + (f.je.length === 1 ? "y" : "ies") + ".</b></p><table><thead><tr><th>Date</th><th>Ledger</th><th class=\"n\">Debit</th><th class=\"n\">Credit</th></tr></thead><tbody>" +
           f.je.slice(0, 12).map(j => j.lines.map((l, k) => "<tr><td>" + (k ? "" : fmtDate(tallyDate(j.date))) + "</td><td>" + (l.cr ? "&nbsp;&nbsp;&nbsp;To " : "") + esc(l.l) + (this.exists(l.l) ? "" : " <i>(create)</i>") + '</td><td class="n">' + (l.dr ? m(l.dr) : "") + '</td><td class="n">' + (l.cr ? m(l.cr) : "") + "</td></tr>").join("") +
             '<tr><td></td><td colspan="3" style="color:#5A6B63;font-size:11px">(' + esc(j.narr) + ")</td></tr>").join("") + "</tbody></table>" + (f.je.length > 12 ? '<p class="note">' + (f.je.length - 12) + " more entries in the Excel.</p>" : "") : "") +
+        (this.solvedOf(f.id).n ? "<p><b>Put right since first found.</b> " + this.solvedOf(f.id).n + " item" + (this.solvedOf(f.id).n === 1 ? "" : "s") + "; " + f.count + " still open.</p>" : "") +
         "<p><b>Management response.</b> " + esc((this.STATUS.find(x => x[0] === s.s) || [])[1] || "Open") + (s.note ? ": " + esc(s.note) : "") + "</p>" +
         (f.rows && f.rows.length ? '<table><thead><tr><th>Date</th><th>Voucher</th><th>Party or ledger</th><th class="n">Amount</th><th>Detail</th></tr></thead><tbody>' +
           f.rows.slice(0, 15).map(r => "<tr><td>" + (r.date ? fmtDate(tallyDate(r.date)) : "") + "</td><td>" + esc(r.no || "") + (r.type ? '<br><span style="color:#5A6B63">' + esc(r.type) + "</span>" : "") + "</td><td>" + esc(r.party || "") + '</td><td class="n">' + (r.amount ? m(r.amount) : "") + "</td><td>" + esc(r.note || "") + "</td></tr>").join("") +
           "</tbody></table>" + (f.rows.length > 15 ? '<p class="note">Showing 15 of ' + f.rows.length + "; all are in the Excel annexure.</p>" : "") : "") + "</div>";
     });
-    h += '<p class="note" style="margin-top:18px">Prepared from the books in Tally by ' + esc(co.firm || "Garg Shekhar & Company") + ". These are observations for review; each is to be confirmed against the documents before any adjustment is made.</p>";
+    const done = (run.solved || []).filter(x => x.n);
+    if (done.length){
+      h += "<h2>Put right</h2><p class=\"note\">Found in an earlier run and no longer in the books when checked again.</p><table><thead><tr><th>Observation</th><th>Item</th><th>Date</th><th class=\"n\">Amount</th><th>Put right by</th></tr></thead><tbody>" +
+        done.flatMap(x => x.items.slice(-40).map(it => "<tr><td>" + esc(x.title) + "</td><td>" + esc([(it.row || {}).no, (it.row || {}).party].filter(Boolean).join(" \u00b7 ")) + "</td><td>" + ((it.row || {}).date ? fmtDate(tallyDate(it.row.date)) : "") +
+          '</td><td class="n">' + ((it.row || {}).amount ? m(it.row.amount) : "") + "</td><td>" + fmtDate(String(it.solved).slice(0, 10)) + "</td></tr>")).join("") + "</tbody></table>";
+    }
+    h += '<p class="note" style="margin-top:18px">Result code ' + esc(run.code || "") + ": the same books give the same code. Rules only; nothing in this report is guessed by a machine." + (run.balances ? " Balances: " + esc(run.balances) + "." : "") + "</p>";
+    h += '<p class="note" style="margin-top:6px">Prepared from the books in Tally by ' + esc(co.firm || "Garg Shekhar & Company") + ". These are observations for review; each is to be confirmed against the documents before any adjustment is made.</p>";
     return h;
   },
   async toExcel(run){
@@ -7285,7 +7346,7 @@ async function openBooks(cid){
 async function saveBooks(){ const b = S.books; if (b && b.cid) await Books.save(b.cid, {cid: b.cid, vouchers: b.vouchers, map: b.map, meta: b.meta, challans: b.challans, alloc: b.alloc, pans: b.pans, twoB: b.twoB,
   gstins: b.gstins, under: b.under, states: b.states, groups: b.groups, salary: b.salary, certs: b.certs, advFix: b.advFix, assets: b.assets, rev: b.rev,
   filed: b.filed, amendFix: b.amendFix, twoBs: b.twoBs, reco2b: b.reco2b, ledInfo: b.ledInfo, ledInfoAt: b.ledInfoAt,
-  audit: b.audit, auditCfg: b.auditCfg}); }
+  audit: b.audit, auditCfg: b.auditCfg, tb: b.tb}); }
 function viewBooks(){
   const co = CO();
   if (!S.books || S.books.cid !== co.id){ openBooks(co.id); return '<p class="note">Opening the books…</p>'; }
@@ -7302,9 +7363,84 @@ function viewBooks(){
   else h += viewBooksGst(b);
   return h;
 }
+
+/* ---------- straight from Tally through the bridge: the day book month by month, and Tally's own balances ---------- */
+const TallyRead = {
+  months(from, to){
+    const out = []; let y = num(from.slice(0, 4)), m = num(from.slice(4, 6));
+    while (String(y) + String(m).padStart(2, "0") <= to.slice(0, 6)){
+      const ym = String(y) + String(m).padStart(2, "0"), last = new Date(y, m, 0).getDate();
+      out.push({ym, from: ym + "01" < from ? from : ym + "01", to: ym + String(last) > to ? to : ym + String(last)});
+      m++; if (m > 12){ m = 1; y++; }
+    }
+    return out;
+  },
+  async raw(path, ms){
+    const c = Bridge.cfg(), ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), ms || 900000);
+    try {
+      const r = await fetch(c.url.replace(/\/+$/, "") + path, {headers: {"X-Bridge-Key": c.key}, signal: ctl.signal, cache: "no-store"});
+      const t = await r.text();
+      if (!r.ok){ let e = t; try { e = JSON.parse(t).error; } catch (x){} throw new Error(e || ("The bridge answered with error " + r.status)); }
+      return t;
+    } finally { clearTimeout(timer); }
+  },
+  // put a month's vouchers in place of what was there for those dates
+  merge(b, res, from, to){
+    b.vouchers = (b.vouchers || []).filter(v => v.date < from || v.date > to).concat(res.vouchers);
+    const m = b.meta = b.meta || {};
+    const g = new Set((m.gstins || []).concat(res.meta.gstins || []));
+    m.gstins = Array.from(g).sort(); m.bills = 1; m.company = res.meta.company || m.company;
+    m.from = !m.from || from < m.from ? from : m.from; m.to = !m.to || to > m.to ? to : m.to;
+  },
+  balances(b, j, from, to){
+    const led = {};
+    [].concat(j.ledgers || []).forEach(l => { led[l.name] = {open: Books.amt(l.open), close: Books.amt(l.close), parent: l.parent || ""}; });
+    b.tb = {from, to, at: new Date().toISOString(), led};
+    Object.entries(led).forEach(([n, x]) => { if (x.parent) (b.under = b.under || {})[n] = (b.under[n] || x.parent); });
+  },
+  // read a period: each month's day book, then the balances
+  async read(from, to, how){
+    const b = S.books, co = CO(), name = Bridge.openFor(co).name, q = "?company=" + encodeURIComponent(name) + Bridge.pinQ();
+    const ms = this.months(from, to);
+    for (let i = 0; i < ms.length; i++){
+      const x = ms[i];
+      b.busy = "Reading " + GSTR.label(x.ym) + " from Tally (" + (i + 1) + " of " + ms.length + ")\u2026"; render();
+      const text = how === "copy" ? await this.raw("/syncfile" + q + "&file=daybook-" + x.ym + ".xml") : await this.raw("/daybook" + q + "&from=" + x.from + "&to=" + x.to);
+      const res = await Books.importDayBook(new Blob([text], {type: "text/xml"}));
+      this.merge(b, res, x.from, x.to);
+    }
+    b.busy = "Reading the balances from Tally\u2026"; render();
+    const j = how === "copy" ? JSON.parse(await this.raw("/syncfile" + q + "&file=balances.json")) : await Bridge.call("/balances" + q + "&from=" + from + "&to=" + to, null, 600000);
+    this.balances(b, j, j.from || from, j.to || to);
+    b.map = Books.mapLedgers(b.vouchers, b.map); LedMaster.refresh(b);
+    b.meta.at = new Date().toISOString(); b.meta.file = how === "copy" ? "last night's copy from Tally" : "read from Tally";
+    b.busy = ""; b.reco = null;
+    if (Audit.cfg(b).freq !== "off"){ try { Audit.run(j.from || from, j.to || to, how === "copy" ? "after last night's copy was read" : "after reading from Tally"); } catch (e){} }
+    await saveBooks();
+    return b.vouchers.length;
+  }
+};
+function viewTallyRead(b){
+  const co = CO(), live = typeof bridgeLive === "function" && bridgeLive(co);
+  const t = Audit.today(), r = S.tallyRange || {from: Audit.iso(Audit.fyStart(t)), to: Audit.iso(t)};
+  const cp = S.tallyCopy || null;
+  let h = '<section class="dash-card" style="max-width:760px;margin-bottom:12px"><h3>Straight from Tally</h3>';
+  if (!live) return h + '<p class="note">With the Tally Bridge running and this company open in Tally, the day book and Tally\u2019s own balances are read here directly, month by month \u2014 no exporting. Set it up under Settings \u2192 Tally Bridge.</p></section>';
+  h += '<p class="note">Reads every voucher of the period, and each ledger\u2019s balance as Tally works it out, from <b>' + esc(Bridge.openFor(co).name) + "</b>.</p>" +
+    '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><label class="note">From <input type="date" data-tallyfrom value="' + esc(r.from) + '"></label><label class="note">to <input type="date" data-tallyto value="' + esc(r.to) + '"></label>' +
+    '<button class="btn primary" data-act="tallyRead">Read from Tally</button></div>' +
+    '<div style="margin-top:10px;border-top:1px solid var(--line);padding-top:10px"><b>Every night</b><p class="note">The bridge on the Tally server copies each open company\u2019s day book and balances at night, so in the morning they are read in seconds and the audit is ready. The companies have to be open in Tally at that hour.</p>' +
+    '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><button class="btn small" data-act="tallyCopyCheck">See last night\u2019s copy</button>' +
+    '<label class="note">at <input type="time" data-tallytime value="' + esc((cp && cp.time) || "02:00") + '" style="width:110px"></label>' +
+    '<button class="btn small" data-act="tallyScheduleOn">Copy every night</button><button class="btn small" data-act="tallyScheduleOff">Stop</button></div>' +
+    (cp ? '<div class="note" style="margin-top:6px">' + (cp.error ? '<span class="bad">' + esc(cp.error) + "</span>" : cp.none ? "No copy for this company yet." :
+      "Copy made " + esc(String(cp.at || "").replace("T", " ").slice(0, 16)) + " for " + fmtDate(tallyDate(cp.from)) + " to " + fmtDate(tallyDate(cp.to)) + ", " + (cp.months || []).length + ' months. <button class="btn small primary" data-act="tallyCopyUse">Use it</button>') +
+      (cp.schedule ? " \u00b7 Nightly: " + (cp.schedule.on ? "on, next " + esc(cp.schedule.next || "") : "off") : "") + "</div>" : "") + "</div></section>";
+  return h;
+}
 function viewBooksImport(b){
   const m = b.meta || {};
-  return '<section class="dash-card" style="max-width:760px"><h3>Bring the books in from Tally</h3>' +
+  return viewTallyRead(b) + '<section class="dash-card" style="max-width:760px"><h3>Or bring in files exported from Tally</h3>' +
     '<p class="note">In Tally: <b>Display → Day Book</b>, set the period, then <b>Export</b> as XML. For the deductees’ PAN, also export <b>Display → List of Accounts</b> as XML. Nothing is sent anywhere; both are read on this computer.</p>' +
     '<div class="row" style="gap:8px;margin:10px 0"><button class="btn primary" data-act="booksPick">Choose the day book XML</button>' +
     '<button class="btn" data-act="mastersPick">Choose the ledger masters XML</button>' +
@@ -7790,17 +7926,22 @@ function viewBooksAudit(b){
     [["daily", "every day"], ["weekly", "every week"], ["monthly", "every month"], ["off", "only when I run it"]].map(([v, l]) => '<option value="' + v + '"' + (c.freq === v ? " selected" : "") + ">" + l + "</option>").join("") + "</select></div>" +
     '<p class="note" style="margin-top:6px">On its own, it runs the first time this client is opened on a new ' + ({daily: "day", weekly: "week", monthly: "month"}[c.freq] || "day") + ", and each time the day book is read. To run overnight with nobody here, the bridge on the Tally server will have to send the day book on a timer.</p>" +
     (run ? '<div class="row" style="gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn small primary" data-act="auditReport">Download the report (PDF)</button><button class="btn small" data-act="auditExcel">Excel with the annexures</button>' +
-      '<button class="btn small" data-act="auditJe">Tally file of entries to pass (' + Audit.jesToPass(run).length + ")</button></div>" : "") + "</section>";
+      '<button class="btn small" data-act="auditJe">Tally file of entries to pass (' + Audit.jesToPass(run).length + ")</button>" +
+      '<button class="btn small" data-act="auditFinal">Finalise this report</button></div>' : "") +
+    (run && Audit.finalFor(run.from, run.to) ? '<div class="bk-alert" style="margin-top:10px"><b>The report for ' + fmtDate(tallyDate(run.from)) + " to " + fmtDate(tallyDate(run.to)) + " is final</b>, locked on " + fmtDate(Audit.finalFor(run.from, run.to).at.slice(0, 10)) +
+      " (result code " + esc(Audit.finalFor(run.from, run.to).run.code || "") + '). Later runs track what gets put right, but the final report stays as it was. <button class="linkbtn" data-act="auditFinalPdf">Download the final report</button> \u00b7 <button class="linkbtn" data-act="auditUnlock">Unlock</button></div>' : "") + "</section>";
   if (!run) return h + '<div class="bk-none" style="margin-top:12px">Not run yet. Choose the period and press Run now.</div>';
   const f0 = run.findings, sev = s => f0.filter(f => f.sev === s);
   h += '<p class="note" style="margin:10px 0">Last run ' + esc(run.how) + " on " + fmtDate(run.at.slice(0, 10)) + " at " + run.at.slice(11, 16) + " for " + fmtDate(tallyDate(run.from)) + " to " + fmtDate(tallyDate(run.to)) + ", " + run.vouchers + " vouchers." +
+    " Result code <b>" + esc(run.code || "") + "</b>: the same books always give the same code." + (run.balances ? " Balances from " + esc(run.balances) + "." : "") +
     (run.notes.length ? " " + esc(run.notes.join(" ")) : "") + (run.errors.length ? ' <span class="bad">Some checks could not run: ' + esc(run.errors.join("; ")) + "</span>" : "") + "</p>";
   const open = f0.filter(f => Audit.status(f.id).s === "open").length;
   h += '<div class="dash-tiles">' +
     '<div class="dtile' + (sev("high").length ? " warn" : "") + '"><span>Serious</span><b>' + sev("high").length + "</b><small>" + m(sev("high").reduce((s, f) => s + f.amount, 0)) + " involved</small></div>" +
     '<div class="dtile"><span>To look at</span><b>' + sev("medium").length + "</b><small>" + m(sev("medium").reduce((s, f) => s + f.amount, 0)) + "</small></div>" +
     '<div class="dtile"><span>Minor</span><b>' + sev("low").length + "</b><small>for good books</small></div>" +
-    '<div class="dtile"><span>Still open</span><b>' + open + "</b><small>of " + f0.length + " findings" + (f0.filter(f => f.isNew).length ? ", " + f0.filter(f => f.isNew).length + " new since the last run" : "") + "</small></div></div>";
+    '<div class="dtile"><span>Still open</span><b>' + open + "</b><small>of " + f0.length + " findings" + (f0.filter(f => f.isNew).length ? ", " + f0.filter(f => f.isNew).length + " new since the last run" : "") + "</small></div>" +
+    '<div class="dtile"><span>Put right</span><b>' + (run.solved || []).reduce((s2, x) => s2 + x.n, 0) + "</b><small>items found earlier and gone when checked again</small></div></div>";
   const area = S.auditArea || "", fs = S.auditSt || "";
   h += '<nav class="sbar" aria-label="Areas"><button data-auditarea="" aria-selected="' + (!area) + '">All <span class="sbar-n">' + f0.length + "</span></button>" +
     Audit.AREAS.map(([a, l]) => { const n = f0.filter(f => f.area === a).length; return n ? '<button data-auditarea="' + a + '" aria-selected="' + (area === a) + '">' + l + ' <span class="sbar-n">' + n + "</span></button>" : ""; }).join("") + "</nav>";
@@ -7814,7 +7955,7 @@ function viewBooksAudit(b){
       '<div class="nr" style="color:' + col[f.sev] + ';font-weight:700">' + {high: "SERIOUS", medium: "TO LOOK AT", low: "MINOR"}[f.sev] + " \u00b7 " + esc((Audit.AREAS.find(a => a[0] === f.area) || [])[1]) + (f.clause ? " \u00b7 " + esc(f.clause) : "") +
       (f.isNew ? ' <span class="tag warn">new</span>' : f.more > 0 ? ' <span class="tag warn">+' + f.more + "</span>" : "") + "</div>" +
       '<button class="linkbtn" data-auditopen="' + esc(f.id) + '" style="font-size:16px;font-weight:600;text-align:left">' + (isOpen ? "\u25be " : "\u25b8 ") + esc(f.title) + "</button>" +
-      '<div class="note">' + esc(f.problem) + (f.amount ? " \u00b7 \u20b9" + m(f.amount) : "") + "</div></div>" +
+      '<div class="note">' + esc(f.problem) + (f.amount ? " \u00b7 \u20b9" + m(f.amount) : "") + (Audit.solvedOf(f.id).n ? ' \u00b7 <span style="color:#1F7A4D">' + Audit.solvedOf(f.id).n + " put right</span>" : "") + "</div></div>" +
       '<div><select data-auditstatus="' + esc(f.id) + '" style="width:auto">' + Audit.STATUS.map(([v, l]) => '<option value="' + v + '"' + (st.s === v ? " selected" : "") + ">" + l + "</option>").join("") + "</select>" +
       (f.je ? '<div class="nr">' + f.je.length + " suggested entr" + (f.je.length === 1 ? "y" : "ies") + "</div>" : "") + "</div></div>";
     if (isOpen){
@@ -7830,10 +7971,17 @@ function viewBooksAudit(b){
       if (f.rows && f.rows.length) x += "<p><b>The entries behind it</b></p>" + '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th class="dt">Date</th><th>Voucher</th><th>Party or ledger</th><th class="n">Amount</th><th>Detail</th></tr></thead><tbody>' +
         f.rows.slice(0, 100).map(r => "<tr><td>" + (r.date ? fmtDate(tallyDate(r.date)) : "") + "</td><td>" + esc(r.no || "") + (r.type ? '<div class="nr">' + esc(r.type) + "</div>" : "") + "</td><td>" + esc(r.party || "") + '</td><td class="n">' + (r.amount ? m(r.amount) : "") + "</td><td>" + esc(r.note || "") + "</td></tr>").join("") +
         "</tbody></table></div>" + (f.rows.length > 100 ? '<p class="note">The first 100 of ' + f.rows.length + "; all are in the Excel.</p>" : "");
+      const sv = Audit.solvedOf(f.id);
+      if (sv.n) x += '<p><b style="color:#1F7A4D">Put right</b> <span class="note">found earlier, gone when checked again</span></p><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th class="dt">Date</th><th>Voucher</th><th>Party or ledger</th><th class="n">Amount</th><th>Put right by</th></tr></thead><tbody>' +
+        sv.items.slice(-100).map(it => { const r = it.row || {}; return '<tr style="color:#5A6B63"><td>' + (r.date ? fmtDate(tallyDate(r.date)) : "") + "</td><td><s>" + esc(r.no || "") + "</s></td><td>" + esc(r.party || "") + '</td><td class="n">' + (r.amount ? m(r.amount) : "") + "</td><td>" + fmtDate(String(it.solved).slice(0, 10)) + "</td></tr>"; }).join("") + "</tbody></table></div>";
       x += "</div>";
     }
     return x + "</section>";
   }).join("") + (list.length ? "" : '<div class="bk-none" style="margin-top:10px">Nothing here.</div>');
+  // findings where every item has been put right
+  const gone = (run.solved || []).filter(x => x.n && !f0.some(f => f.id === x.id) && (!area || x.area === area));
+  if (gone.length) h += '<section class="dash-card" style="margin-top:12px;border-left:4px solid #1F7A4D"><h3 style="color:#1F7A4D">Solved</h3><p class="note">Every item of these was put right in the books.</p><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Observation</th><th class="n">Items</th><th class="n">Amount</th><th>Last put right</th></tr></thead><tbody>' +
+    gone.map(x => "<tr><td>" + esc(x.title) + '</td><td class="n">' + x.n + '</td><td class="n">' + m(x.amount) + "</td><td>" + fmtDate(String(x.items[x.items.length - 1].solved).slice(0, 10)) + "</td></tr>").join("") + "</tbody></table></div></section>";
   if ((au.history || []).length > 1) h += '<section class="dash-card" style="margin-top:12px"><h3>Earlier runs</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Run on</th><th>How</th><th>Period</th><th class="n">Findings</th><th class="n">Serious</th><th class="n">Amount involved</th></tr></thead><tbody>' +
     au.history.slice(0, 12).map(x => "<tr><td>" + fmtDate(x.at.slice(0, 10)) + " " + x.at.slice(11, 16) + "</td><td>" + esc(x.how) + "</td><td>" + fmtDate(tallyDate(x.from)) + " to " + fmtDate(tallyDate(x.to)) + '</td><td class="n">' + x.n + '</td><td class="n">' + x.high + '</td><td class="n">' + m(x.amount) + "</td></tr>").join("") + "</tbody></table></div></section>";
   return h;
@@ -12590,6 +12738,8 @@ function bulkLedgerFrom(inp){
 // what the user corrects on the Advances and Reversal screens
 function gstFixChange(t){
   const d = t.dataset, b = S.books;
+  if (d.tallyfrom !== undefined || d.tallyto !== undefined){ const t0 = Audit.today(); S.tallyRange = Object.assign({from: Audit.iso(Audit.fyStart(t0)), to: Audit.iso(t0)}, S.tallyRange, d.tallyfrom !== undefined ? {from: t.value} : {to: t.value}); return true; }
+  if (d.tallytime !== undefined){ S.tallyCopy = Object.assign({}, S.tallyCopy, {time: t.value}); return true; }
   if (d.auditfreq !== undefined){ b.auditCfg = Object.assign({}, b.auditCfg, {freq: t.value}); saveBooks(); render(); return true; }
   if (d.auditfrom !== undefined || d.auditto !== undefined){ const dr = Audit.defaultRange(b); S.auditRange = Object.assign({from: Audit.iso(dr.from), to: Audit.iso(dr.to)}, S.auditRange, d.auditfrom !== undefined ? {from: t.value} : {to: t.value}); return true; }
   if (d.auditst !== undefined){ S.auditSt = t.value; render(); return true; }
@@ -16179,6 +16329,34 @@ document.addEventListener("click", ev => {
     case "mastersPick": { const i = document.getElementById("mastersIn"); if (i){ i.value = ""; i.click(); } break; }
     case "filedPick": { const i = document.getElementById("filedIn"); if (i){ i.value = ""; i.click(); } break; }
     case "twoBPick": { const i = document.getElementById("twoBIn"); if (i){ i.value = ""; i.click(); } break; }
+    case "tallyRead": {
+      const b = S.books, t = Audit.today(), r = S.tallyRange || {from: Audit.iso(Audit.fyStart(t)), to: Audit.iso(t)};
+      const from = Audit.ymd(r.from), to = Audit.ymd(r.to);
+      if (!from || !to || from > to){ toast("Choose a period: from a date to a later one."); break; }
+      if (!bridgeLive(CO())){ toast("Open this company in Tally with the bridge running."); break; }
+      TallyRead.read(from, to, "live").then(n2 => { toast(n2 + " vouchers and Tally's balances read."); render(); },
+        e => { b.busy = ""; const msg = String(e && e.message || e); toast(/Unknown address/.test(msg) ? "This needs Tally Bridge 1.10. Update the bridge on the Tally computer." : "Could not read Tally: " + msg); render(); });
+      break;
+    }
+    case "tallyCopyCheck": {
+      const co = CO(); if (!bridgeLive(co)) break;
+      const q = "?company=" + encodeURIComponent(Bridge.openFor(co).name) + Bridge.pinQ();
+      Promise.all([Bridge.call("/synced" + q, null, 30000), Bridge.call("/schedule", null, 30000).catch(() => null)]).then(([c, sc]) => {
+        S.tallyCopy = Object.assign({}, c, {schedule: sc, time: (S.tallyCopy || {}).time}); render();
+      }, e => { S.tallyCopy = {error: /Unknown address/.test(String(e && e.message)) ? "This needs Tally Bridge 1.10." : String(e && e.message || e)}; render(); });
+      break;
+    }
+    case "tallyCopyUse": {
+      const cp = S.tallyCopy; if (!cp || !cp.from) break;
+      TallyRead.read(cp.from, cp.to, "copy").then(n2 => { toast(n2 + " vouchers read from last night's copy."); render(); }, e => { S.books.busy = ""; toast("Could not read the copy: " + (e && e.message || e)); render(); });
+      break;
+    }
+    case "tallyScheduleOn": case "tallyScheduleOff": {
+      const on = act === "tallyScheduleOn", time = (S.tallyCopy || {}).time || "02:00";
+      Bridge.call("/schedule", {on, time}, 60000).then(sc => { S.tallyCopy = Object.assign({}, S.tallyCopy, {schedule: sc}); toast(on ? "The bridge will copy every open company at " + time + " each night." : "Nightly copy stopped."); render(); },
+        e => toast("The bridge could not set it: " + (e && e.message || e)));
+      break;
+    }
     case "auditRun": {
       const b = S.books, dr = Audit.defaultRange(b), r = S.auditRange || {from: Audit.iso(dr.from), to: Audit.iso(dr.to)};
       if (!r.from || !r.to || r.from > r.to){ toast("Choose a period: from a date to a later one."); break; }
@@ -16200,6 +16378,13 @@ document.addEventListener("click", ev => {
       toast(jes.length + " entries in the file. In Tally: Import \u2192 Transactions." + (miss.length ? " Create these ledgers first: " + miss.join(", ") + "." : ""));
       break;
     }
+    case "auditFinal": { const fz = Audit.finalise(); if (fz){ saveBooks(); toast("Final report locked for this period (result code " + fz.run.code + ")."); render(); } break; }
+    case "auditFinalPdf": {
+      const run = (S.books.audit || {}).last, fz = run && Audit.finalFor(run.from, run.to); if (!fz) break;
+      printView(CO().name + " audit final " + fz.run.from + "-" + fz.run.to, "<style>@page{size:A4 portrait;margin:14mm}h2{font-size:15px;margin:16px 0 8px;border-bottom:1px solid #D7DEDA;padding-bottom:3px}p{margin:0 0 6px}</style>" + '<p class="note">FINAL &middot; locked on ' + fmtDate(fz.at.slice(0, 10)) + "</p>" + Audit.reportHtml(fz.run, fz.st));
+      break;
+    }
+    case "auditUnlock": { const run = (S.books.audit || {}).last; if (run && S.books.audit.final){ delete S.books.audit.final[run.from + "-" + run.to]; saveBooks(); toast("Unlocked."); render(); } break; }
     case "lmConfirmShown": {
       const b = S.books, info = b.ledInfo || {}, q = String(S.ledQ || "").toLowerCase(), view = S.lmView || "pending";
       const pool = view === "gst" ? Object.entries(b.map).filter(([nm, m]) => LedMaster.isGst(m.what) && LedMaster.taxLike(nm, m, info[nm])) :
