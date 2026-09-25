@@ -1378,8 +1378,9 @@ function viewGstr1(b){
         '</td><td class="n">' + money(e.tcs) + "</td></tr>").join("") + "</tbody></table></div>" +
       '<p class="note">The operator pays this TCS under section 52; claim it from your cash ledger after checking it against GSTR-2B or the TCS statement.</p></section>';
   }
-  h += '<section class="dash-card" style="margin-top:12px"><h3>Documents issued (13)</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Series</th><th>From</th><th>To</th><th class="n">Issued</th></tr></thead><tbody>' +
-    g.series.map(x => "<tr><td>" + esc(x.pre || "\u2014") + "</td><td>" + esc(x.from) + "</td><td>" + esc(x.to) + '</td><td class="n">' + x.n + "</td></tr>").join("") + "</tbody></table></div></section>";
+  h += '<section class="dash-card" style="margin-top:12px"><h3>Documents issued (13)</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Nature</th><th>Series</th><th>From</th><th>To</th><th class="n">Total</th><th class="n">Cancelled</th><th class="n">Net issued</th></tr></thead><tbody>' +
+    g.series.slice().sort((a, c) => a.nat - c.nat).map(x => "<tr><td>" + ({1: "Invoices for outward supply", 4: "Debit notes", 5: "Credit notes"})[x.nat] + "</td><td>" + esc(x.pre || "\u2014") + "</td><td>" + esc(x.from) + "</td><td>" + esc(x.to) + '</td><td class="n">' + x.n + '</td><td class="n">' + x.cancelled + '</td><td class="n">' + (x.n - x.cancelled) + "</td></tr>").join("") + "</tbody></table></div>" +
+    '<p class="note">Cancelled vouchers are counted from Tally (marked cancelled there); a number missing from a series is not, so enter or cancel it in Tally first.</p></section>';
   h += viewGstChecks();
   return h;
 }

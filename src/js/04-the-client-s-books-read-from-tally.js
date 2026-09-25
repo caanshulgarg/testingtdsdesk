@@ -82,7 +82,9 @@ const Books = {
         const a = s.indexOf("<ALLINVENTORYENTRIES.LIST>", at); if (a < 0) break;
         const z = s.indexOf("</ALLINVENTORYENTRIES.LIST>", a); if (z < 0) break;
         const own = s.slice(a, z).replace(/<ACCOUNTINGALLOCATIONS\.LIST>[\s\S]*?<\/ACCOUNTINGALLOCATIONS\.LIST>/g, "");
-        items.push({a, z, h: this.one(own, "GSTHSNNAME"), gr: this.igstRate(own), sp: this.one(own, "GSTOVRDNTYPEOFSUPPLY")});
+        const qm = this.one(own, "BILLEDQTY").match(/^\s*(-?[\d.,]+)\s*([A-Za-z][A-Za-z.]*)?/);
+        items.push({a, z, h: this.one(own, "GSTHSNNAME"), hd: this.one(own, "GSTHSNDESCRIPTION"), gr: this.igstRate(own), sp: this.one(own, "GSTOVRDNTYPEOFSUPPLY"),
+          q: qm ? Math.abs(num(qm[1].replace(/,/g, ""))) : 0, u: qm && qm[2] ? qm[2].replace(/\./g, "").toUpperCase() : ""});
         at = z + 1;
       }
     }
@@ -101,6 +103,9 @@ const Books = {
         if (lh) x.h = lh;
         if (lr != null) x.gr = lr;
         if (ls) x.sp = ls;
+        const ld = it ? it.hd : this.one(e, "GSTHSNDESCRIPTION");
+        if (ld) x.hd = ld;
+        if (it && it.q){ x.q = it.q; if (it.u) x.u = it.u; it.q = 0; }   // the item's quantity, once, on its first allocation
         // bill-wise details: [ref name, New Ref / Agst Ref / Advance / On Account, amount]
         if (e.indexOf("<BILLALLOCATIONS.LIST>") >= 0){
           const bl = e.split("<BILLALLOCATIONS.LIST>").slice(1).map(p2 => {
@@ -126,7 +131,8 @@ const Books = {
       const rate = this.one(s, "GSTRATE");
       if (rate) v.rate = num(rate);
     }
-    if (v.ent.length) out.push(v);
+    // a cancelled voucher has no entries; it is kept for the documents issued (GSTR-1 table 13)
+    if (v.ent.length || (v.cancel && v.no)) out.push(v);
   },
   async importMasters(file, onProgress){
     const dec = await this.decoder(file);
@@ -236,7 +242,7 @@ const Books = {
       if (m.kind === "bank" || m.kind === "tds_receivable") return;
       out.taxable = r2(out.taxable + amt);
       if (e.r){ const key = String(r2(e.r * 2)); out.rates[key] = r2((out.rates[key] || 0) + amt); }
-      vals.push({amt, h: e.h || "", gr: e.gr, sp: e.sp || ""});
+      vals.push({amt, h: e.h || "", gr: e.gr, sp: e.sp || "", hd: e.hd || "", q: num(e.q), u: e.u || ""});
     });
     out.total = r2(out.taxable + out.tax.CGST + out.tax.SGST + out.tax.IGST + out.tax.CESS + out.roundoff);
     out.parts = this.parts(vals, out, v);
@@ -250,7 +256,8 @@ const Books = {
   parts(vals, L, v){
     const heads = ["IGST", "CGST", "SGST", "CESS"], taxAll = r2(heads.reduce((a, h) => a + L.tax[h], 0));
     const g = {};
-    vals.forEach(x => { const k = (x.gr == null ? "?" : x.gr) + "|" + x.h; const q = g[k] = g[k] || {gr: x.gr, hsn: x.h, supply: x.sp, taxable: 0}; q.taxable = r2(q.taxable + x.amt); if (!q.supply) q.supply = x.sp; });
+    vals.forEach(x => { const k = (x.gr == null ? "?" : x.gr) + "|" + x.h; const q = g[k] = g[k] || {gr: x.gr, hsn: x.h, supply: x.sp, desc: x.hd, qty: 0, unit: x.u, taxable: 0};
+      q.taxable = r2(q.taxable + x.amt); q.qty = r2(q.qty + x.q); if (!q.supply) q.supply = x.sp; if (!q.desc) q.desc = x.hd; if (!q.unit) q.unit = x.u; });
     let list = Object.values(g);
     const vh = (v && v.hsn || [])[0] || "", vs = (v && v.supply) || "";
     if (!list.length) list = [{gr: null, hsn: vh, supply: vs, taxable: 0}];
@@ -264,7 +271,8 @@ const Books = {
     unknown.forEach(q => { q.gr = unkRate; q.guessed = true; });
     // one line per rate and HSN, the voucher's tax shared by what each should carry
     const m = {};
-    list.forEach(q => { const k = q.gr + "|" + q.hsn; const x = m[k] = m[k] || {rate: q.gr, hsn: q.hsn, supply: q.supply, taxable: 0, guessed: !!q.guessed}; x.taxable = r2(x.taxable + q.taxable); });
+    list.forEach(q => { const k = q.gr + "|" + q.hsn; const x = m[k] = m[k] || {rate: q.gr, hsn: q.hsn, supply: q.supply, desc: q.desc || "", qty: 0, unit: q.unit || "", taxable: 0, guessed: !!q.guessed};
+      x.taxable = r2(x.taxable + q.taxable); x.qty = r2(x.qty + num(q.qty)); if (!x.desc) x.desc = q.desc || ""; if (!x.unit) x.unit = q.unit || ""; });
     const out = Object.values(m).sort((a, c) => c.taxable - a.taxable);
     const w = out.map(x => x.taxable * x.rate), ws = w.reduce((a, c) => a + c, 0), ts = out.reduce((a, x) => a + x.taxable, 0);
     heads.forEach(h => {

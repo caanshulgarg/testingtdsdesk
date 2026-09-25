@@ -117,17 +117,23 @@ const GSTR = {
     const hsnRows = {};
     this.partsOf(rows.filter(r => r.cls === "taxable" || r.cls === "export" || r.cls === "sez" || r.cls === "exempt" || r.cls === "nil")).forEach(q => {
       const key = (q.hsn || "no HSN") + "|" + q.rate, sg = q.row.kind === "CDNR" ? -1 : 1, reg2 = q.row.gstin ? "b2b" : "b2c";
-      const h = hsnRows[key] = hsnRows[key] || {hsn: q.hsn || "", rate: q.rate, supply: q.supply, n: 0, taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, b2b: {taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0}, b2c: {taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0}};
-      h.n++; ["taxable", "igst", "cgst", "sgst", "cess"].forEach(f => { h[f] = r2(h[f] + sg * num(q[f])); h[reg2][f] = r2(h[reg2][f] + sg * num(q[f])); });
-      if (!h.supply) h.supply = q.supply;
+      const h = hsnRows[key] = hsnRows[key] || {hsn: q.hsn || "", rate: q.rate, supply: q.supply, desc: q.desc || "", unit: q.unit || "", n: 0, taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, qty: 0,
+        b2b: {taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, qty: 0}, b2c: {taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, qty: 0}};
+      h.n++; ["taxable", "igst", "cgst", "sgst", "cess", "qty"].forEach(f => { h[f] = r2(h[f] + sg * num(q[f])); h[reg2][f] = r2(h[reg2][f] + sg * num(q[f])); });
+      if (!h.supply) h.supply = q.supply; if (!h.desc) h.desc = q.desc || ""; if (!h.unit) h.unit = q.unit || "";
     });
-    const series = {};
-    rows.forEach(r => {
-      const pre = String(r.no).replace(/\d+$/, ""), sr = series[pre] = series[pre] || {pre, from: r.no, to: r.no, n: 0, cancelled: 0};
-      sr.n++;
-      if (String(r.no) < String(sr.from)) sr.from = r.no;
-      if (String(r.no) > String(sr.to)) sr.to = r.no;
-    });
+    // documents issued (table 13), by nature: invoices 1, debit notes 4, credit notes 5; cancelled numbers counted in their series
+    const series = {}, natOf = r => r.kind === "CDNR" ? 5 : r.kind === "DBNR" ? 4 : 1;
+    const inSeries = (no, nat, cancelled) => {
+      const pre = String(no).replace(/\d+[A-Za-z]?$/, ""), k = nat + "|" + pre, sr = series[k] = series[k] || {nat, pre, from: no, to: no, n: 0, cancelled: 0};
+      sr.n++; if (cancelled) sr.cancelled++;
+      const key = x => pre + String(String(x).slice(pre.length)).padStart(12, "0");
+      if (key(no) < key(sr.from)) sr.from = no;
+      if (key(no) > key(sr.to)) sr.to = no;
+    };
+    rows.filter(r => r.no && !r.eco).forEach(r => inSeries(r.no, natOf(r), false));
+    ((S.books || {}).vouchers || []).filter(v => v.cancel && v.no && (!ym || this.ym(v.date) === ym) && Books.isSale(v) && (!reg || String(v.cmp || "").slice(0, 2) === reg || !v.cmp))
+      .forEach(v => inSeries(v.no, /CREDIT NOTE/i.test(v.type) ? 5 : /DEBIT NOTE/i.test(v.type) ? 4 : 1, true));
     const eco = rows.filter(r => r.eco);
     const ecoBy = {};
     eco.forEach(r => {
@@ -279,14 +285,21 @@ const GSTR = {
     const adv = GSTAdv.month(ym, reg);
     if (adv.at.length) out.at = GSTAdv.json(adv.at);
     if (adv.txpd.length) out.txpd = GSTAdv.json(adv.txpd);
-    // table 12: HSN with its rate; from May 2025 in two lists, supplies to registered (B2B) and to unregistered (B2C) persons
-    const hsnLine = (h, x, i) => ({num: i + 1, hsn_sc: h.hsn || "", desc: h.supply || "", uqc: h.supply === "Goods" ? "NOS" : "OTH", qty: 0, rt: h.rate,
-      val: r2(x.taxable + x.igst + x.cgst + x.sgst + x.cess), txval: r2(x.taxable), iamt: r2(x.igst), camt: r2(x.cgst), samt: r2(x.sgst), csamt: r2(x.cess)});
+    // table 12: HSN with its rate, no total value; from the January 2025 return period in two lists, supplies to registered (B2B) and to unregistered (B2C) persons
+    // the unit as the portal's list has it: "NA" for services, as the portal's own file does
+    const UQC = ["BAG", "BAL", "BDL", "BKL", "BOU", "BOX", "BTL", "BUN", "CAN", "CBM", "CCM", "CMS", "CTN", "DOZ", "DRM", "GGK", "GMS", "GRS", "GYD", "KGS", "KLR", "KME", "LTR", "MLT", "MTR", "MTS", "NOS", "OTH", "PAC", "PCS", "PRS", "QTL", "ROL", "SET", "SQF", "SQM", "SQY", "TBS", "TGM", "THD", "TON", "TUB", "UGS", "UNT", "YDS"];
+    const ALIAS = {NO: "NOS", NUMBERS: "NOS", PC: "PCS", PIECE: "PCS", PIECES: "PCS", KG: "KGS", KGS: "KGS", KILOGRAM: "KGS", GM: "GMS", GRAM: "GMS", GRAMS: "GMS", MT: "MTS", TONNE: "TON", LTRS: "LTR", LITRE: "LTR", L: "LTR", ML: "MLT", MTRS: "MTR", METER: "MTR", METRE: "MTR", M: "MTR", SQFT: "SQF", SQMT: "SQM", PKT: "PAC", PACK: "PAC", PACKET: "PAC", BOXES: "BOX", SETS: "SET", PAIR: "PRS", PAIRS: "PRS", ROLL: "ROL", ROLLS: "ROL", DOZEN: "DOZ", BOTTLE: "BTL", CARTON: "CTN", UNIT: "UNT", UNITS: "UNT", QUINTAL: "QTL"};
+    const uqcOf = h => (h.supply === "Services" || /^99/.test(h.hsn || "")) ? "NA" : UQC.includes(String(h.unit || "").toUpperCase()) ? String(h.unit).toUpperCase() : ALIAS[String(h.unit || "").toUpperCase()] || (h.unit ? "OTH" : "NOS");
+    const hsnLine = (h, x, i) => ({num: i + 1, hsn_sc: h.hsn || "", desc: String(h.desc || "").slice(0, 30), uqc: uqcOf(h), qty: uqcOf(h) === "NA" ? 0 : r2(Math.abs(num(x.qty))), rt: h.rate,
+      txval: r2(x.taxable), iamt: r2(x.igst), camt: r2(x.cgst), samt: r2(x.sgst), csamt: r2(x.cess)});
     if (g.hsn.length){
-      if (ym >= "202505") out.hsn = {hsn_b2b: g.hsn.filter(h => Math.abs(h.b2b.taxable) >= 0.01).map((h, i) => hsnLine(h, h.b2b, i)), hsn_b2c: g.hsn.filter(h => Math.abs(h.b2c.taxable) >= 0.01).map((h, i) => hsnLine(h, h.b2c, i))};
+      if (ym >= "202501") out.hsn = {hsn_b2b: g.hsn.filter(h => Math.abs(h.b2b.taxable) >= 0.01).map((h, i) => hsnLine(h, h.b2b, i)), hsn_b2c: g.hsn.filter(h => Math.abs(h.b2c.taxable) >= 0.01).map((h, i) => hsnLine(h, h.b2c, i))};
       else out.hsn = {data: g.hsn.map((h, i) => hsnLine(h, h, i))};
     }
-    if (g.series.length) out.doc_issue = {doc_det: [{doc_num: 1, docs: g.series.map((x, i) => ({num: i + 1, from: String(x.from), to: String(x.to), totnum: x.n, cancel: 0, net_issue: x.n}))}]};
+    if (g.series.length){
+      const nats = Array.from(new Set(g.series.map(x => x.nat))).sort((a, c) => a - c);
+      out.doc_issue = {doc_det: nats.map(n => ({doc_num: n, docs: g.series.filter(x => x.nat === n).map((x, i) => ({num: i + 1, from: String(x.from), to: String(x.to), totnum: x.n, cancel: x.cancelled, net_issue: x.n - x.cancelled}))}))};
+    }
     if (!(opts && opts.plain) && reg) GSTAmend.addTo(out, ym, reg);
     return out;
   },

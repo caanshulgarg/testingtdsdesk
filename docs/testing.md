@@ -78,3 +78,7 @@ Table headers are shown in capitals by the stylesheet, so compare header text in
 ## Writing a bridge test
 
 `tests/fake_tally.py` answers the bridge the way TallyPrime does, from `DayBook.xml` and `Master.xml`: the company list, Day Book exports by date, ledger balances and the ledger list. `tests/fake.json` makes the bridge believe one Tally runs in the current Windows session. Start the bridge with `pwsh -File TDSBridge.ps1`, read its key from `tds-bridge.config.json`, and call it over HTTP. Before any change to the bridge ships, run `pwsh bridge/ps5check.ps1 -File bridge/TDSBridge.ps1`; it fails on syntax Windows PowerShell 5.1 cannot run.
+
+## Portal files
+
+`run_r1layout.js` checks the GSTR-1 JSON against a GSTR-1 downloaded from the portal (`TDSDESK_R1`, default `returns_25092026_R1_09AASCA7501M2Z4_offline_others_0-2.json` in `TDSDESK_DATA`) field for field, and reads any `returns_R2B_09AASCA7501M2Z4_<MMYYYY>.json` there against the portal's own 2B summary. Like the Tally files, these stay out of the repository.

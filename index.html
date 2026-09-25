@@ -757,7 +757,7 @@ const DEFAULT_FIRM = {firmName:"Garg Shekhar & Company", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "TEST · 25 Sep 2026 · build 134 (GST: reverse charge from the RCM payable ledger, set-off in the order the law sets with credit carried, items at more than one rate split, input register tied to 3B and 2B, one GSTIN at a time)";
+const APP_VERSION = "TEST · 25 Sep 2026 · build 135 (GSTR-1 JSON as the portal writes it: HSN with Tally’s description, unit and quantity, no total value, B2B and B2C apart from January 2025; documents issued by nature with cancelled vouchers)";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;
@@ -5019,7 +5019,9 @@ const Books = {
         const a = s.indexOf("<ALLINVENTORYENTRIES.LIST>", at); if (a < 0) break;
         const z = s.indexOf("</ALLINVENTORYENTRIES.LIST>", a); if (z < 0) break;
         const own = s.slice(a, z).replace(/<ACCOUNTINGALLOCATIONS\.LIST>[\s\S]*?<\/ACCOUNTINGALLOCATIONS\.LIST>/g, "");
-        items.push({a, z, h: this.one(own, "GSTHSNNAME"), gr: this.igstRate(own), sp: this.one(own, "GSTOVRDNTYPEOFSUPPLY")});
+        const qm = this.one(own, "BILLEDQTY").match(/^\s*(-?[\d.,]+)\s*([A-Za-z][A-Za-z.]*)?/);
+        items.push({a, z, h: this.one(own, "GSTHSNNAME"), hd: this.one(own, "GSTHSNDESCRIPTION"), gr: this.igstRate(own), sp: this.one(own, "GSTOVRDNTYPEOFSUPPLY"),
+          q: qm ? Math.abs(num(qm[1].replace(/,/g, ""))) : 0, u: qm && qm[2] ? qm[2].replace(/\./g, "").toUpperCase() : ""});
         at = z + 1;
       }
     }
@@ -5038,6 +5040,9 @@ const Books = {
         if (lh) x.h = lh;
         if (lr != null) x.gr = lr;
         if (ls) x.sp = ls;
+        const ld = it ? it.hd : this.one(e, "GSTHSNDESCRIPTION");
+        if (ld) x.hd = ld;
+        if (it && it.q){ x.q = it.q; if (it.u) x.u = it.u; it.q = 0; }   // the item's quantity, once, on its first allocation
         // bill-wise details: [ref name, New Ref / Agst Ref / Advance / On Account, amount]
         if (e.indexOf("<BILLALLOCATIONS.LIST>") >= 0){
           const bl = e.split("<BILLALLOCATIONS.LIST>").slice(1).map(p2 => {
@@ -5063,7 +5068,8 @@ const Books = {
       const rate = this.one(s, "GSTRATE");
       if (rate) v.rate = num(rate);
     }
-    if (v.ent.length) out.push(v);
+    // a cancelled voucher has no entries; it is kept for the documents issued (GSTR-1 table 13)
+    if (v.ent.length || (v.cancel && v.no)) out.push(v);
   },
   async importMasters(file, onProgress){
     const dec = await this.decoder(file);
@@ -5173,7 +5179,7 @@ const Books = {
       if (m.kind === "bank" || m.kind === "tds_receivable") return;
       out.taxable = r2(out.taxable + amt);
       if (e.r){ const key = String(r2(e.r * 2)); out.rates[key] = r2((out.rates[key] || 0) + amt); }
-      vals.push({amt, h: e.h || "", gr: e.gr, sp: e.sp || ""});
+      vals.push({amt, h: e.h || "", gr: e.gr, sp: e.sp || "", hd: e.hd || "", q: num(e.q), u: e.u || ""});
     });
     out.total = r2(out.taxable + out.tax.CGST + out.tax.SGST + out.tax.IGST + out.tax.CESS + out.roundoff);
     out.parts = this.parts(vals, out, v);
@@ -5187,7 +5193,8 @@ const Books = {
   parts(vals, L, v){
     const heads = ["IGST", "CGST", "SGST", "CESS"], taxAll = r2(heads.reduce((a, h) => a + L.tax[h], 0));
     const g = {};
-    vals.forEach(x => { const k = (x.gr == null ? "?" : x.gr) + "|" + x.h; const q = g[k] = g[k] || {gr: x.gr, hsn: x.h, supply: x.sp, taxable: 0}; q.taxable = r2(q.taxable + x.amt); if (!q.supply) q.supply = x.sp; });
+    vals.forEach(x => { const k = (x.gr == null ? "?" : x.gr) + "|" + x.h; const q = g[k] = g[k] || {gr: x.gr, hsn: x.h, supply: x.sp, desc: x.hd, qty: 0, unit: x.u, taxable: 0};
+      q.taxable = r2(q.taxable + x.amt); q.qty = r2(q.qty + x.q); if (!q.supply) q.supply = x.sp; if (!q.desc) q.desc = x.hd; if (!q.unit) q.unit = x.u; });
     let list = Object.values(g);
     const vh = (v && v.hsn || [])[0] || "", vs = (v && v.supply) || "";
     if (!list.length) list = [{gr: null, hsn: vh, supply: vs, taxable: 0}];
@@ -5201,7 +5208,8 @@ const Books = {
     unknown.forEach(q => { q.gr = unkRate; q.guessed = true; });
     // one line per rate and HSN, the voucher's tax shared by what each should carry
     const m = {};
-    list.forEach(q => { const k = q.gr + "|" + q.hsn; const x = m[k] = m[k] || {rate: q.gr, hsn: q.hsn, supply: q.supply, taxable: 0, guessed: !!q.guessed}; x.taxable = r2(x.taxable + q.taxable); });
+    list.forEach(q => { const k = q.gr + "|" + q.hsn; const x = m[k] = m[k] || {rate: q.gr, hsn: q.hsn, supply: q.supply, desc: q.desc || "", qty: 0, unit: q.unit || "", taxable: 0, guessed: !!q.guessed};
+      x.taxable = r2(x.taxable + q.taxable); x.qty = r2(x.qty + num(q.qty)); if (!x.desc) x.desc = q.desc || ""; if (!x.unit) x.unit = q.unit || ""; });
     const out = Object.values(m).sort((a, c) => c.taxable - a.taxable);
     const w = out.map(x => x.taxable * x.rate), ws = w.reduce((a, c) => a + c, 0), ts = out.reduce((a, x) => a + x.taxable, 0);
     heads.forEach(h => {
@@ -7398,17 +7406,23 @@ const GSTR = {
     const hsnRows = {};
     this.partsOf(rows.filter(r => r.cls === "taxable" || r.cls === "export" || r.cls === "sez" || r.cls === "exempt" || r.cls === "nil")).forEach(q => {
       const key = (q.hsn || "no HSN") + "|" + q.rate, sg = q.row.kind === "CDNR" ? -1 : 1, reg2 = q.row.gstin ? "b2b" : "b2c";
-      const h = hsnRows[key] = hsnRows[key] || {hsn: q.hsn || "", rate: q.rate, supply: q.supply, n: 0, taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, b2b: {taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0}, b2c: {taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0}};
-      h.n++; ["taxable", "igst", "cgst", "sgst", "cess"].forEach(f => { h[f] = r2(h[f] + sg * num(q[f])); h[reg2][f] = r2(h[reg2][f] + sg * num(q[f])); });
-      if (!h.supply) h.supply = q.supply;
+      const h = hsnRows[key] = hsnRows[key] || {hsn: q.hsn || "", rate: q.rate, supply: q.supply, desc: q.desc || "", unit: q.unit || "", n: 0, taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, qty: 0,
+        b2b: {taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, qty: 0}, b2c: {taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, qty: 0}};
+      h.n++; ["taxable", "igst", "cgst", "sgst", "cess", "qty"].forEach(f => { h[f] = r2(h[f] + sg * num(q[f])); h[reg2][f] = r2(h[reg2][f] + sg * num(q[f])); });
+      if (!h.supply) h.supply = q.supply; if (!h.desc) h.desc = q.desc || ""; if (!h.unit) h.unit = q.unit || "";
     });
-    const series = {};
-    rows.forEach(r => {
-      const pre = String(r.no).replace(/\d+$/, ""), sr = series[pre] = series[pre] || {pre, from: r.no, to: r.no, n: 0, cancelled: 0};
-      sr.n++;
-      if (String(r.no) < String(sr.from)) sr.from = r.no;
-      if (String(r.no) > String(sr.to)) sr.to = r.no;
-    });
+    // documents issued (table 13), by nature: invoices 1, debit notes 4, credit notes 5; cancelled numbers counted in their series
+    const series = {}, natOf = r => r.kind === "CDNR" ? 5 : r.kind === "DBNR" ? 4 : 1;
+    const inSeries = (no, nat, cancelled) => {
+      const pre = String(no).replace(/\d+[A-Za-z]?$/, ""), k = nat + "|" + pre, sr = series[k] = series[k] || {nat, pre, from: no, to: no, n: 0, cancelled: 0};
+      sr.n++; if (cancelled) sr.cancelled++;
+      const key = x => pre + String(String(x).slice(pre.length)).padStart(12, "0");
+      if (key(no) < key(sr.from)) sr.from = no;
+      if (key(no) > key(sr.to)) sr.to = no;
+    };
+    rows.filter(r => r.no && !r.eco).forEach(r => inSeries(r.no, natOf(r), false));
+    ((S.books || {}).vouchers || []).filter(v => v.cancel && v.no && (!ym || this.ym(v.date) === ym) && Books.isSale(v) && (!reg || String(v.cmp || "").slice(0, 2) === reg || !v.cmp))
+      .forEach(v => inSeries(v.no, /CREDIT NOTE/i.test(v.type) ? 5 : /DEBIT NOTE/i.test(v.type) ? 4 : 1, true));
     const eco = rows.filter(r => r.eco);
     const ecoBy = {};
     eco.forEach(r => {
@@ -7560,14 +7574,21 @@ const GSTR = {
     const adv = GSTAdv.month(ym, reg);
     if (adv.at.length) out.at = GSTAdv.json(adv.at);
     if (adv.txpd.length) out.txpd = GSTAdv.json(adv.txpd);
-    // table 12: HSN with its rate; from May 2025 in two lists, supplies to registered (B2B) and to unregistered (B2C) persons
-    const hsnLine = (h, x, i) => ({num: i + 1, hsn_sc: h.hsn || "", desc: h.supply || "", uqc: h.supply === "Goods" ? "NOS" : "OTH", qty: 0, rt: h.rate,
-      val: r2(x.taxable + x.igst + x.cgst + x.sgst + x.cess), txval: r2(x.taxable), iamt: r2(x.igst), camt: r2(x.cgst), samt: r2(x.sgst), csamt: r2(x.cess)});
+    // table 12: HSN with its rate, no total value; from the January 2025 return period in two lists, supplies to registered (B2B) and to unregistered (B2C) persons
+    // the unit as the portal's list has it: "NA" for services, as the portal's own file does
+    const UQC = ["BAG", "BAL", "BDL", "BKL", "BOU", "BOX", "BTL", "BUN", "CAN", "CBM", "CCM", "CMS", "CTN", "DOZ", "DRM", "GGK", "GMS", "GRS", "GYD", "KGS", "KLR", "KME", "LTR", "MLT", "MTR", "MTS", "NOS", "OTH", "PAC", "PCS", "PRS", "QTL", "ROL", "SET", "SQF", "SQM", "SQY", "TBS", "TGM", "THD", "TON", "TUB", "UGS", "UNT", "YDS"];
+    const ALIAS = {NO: "NOS", NUMBERS: "NOS", PC: "PCS", PIECE: "PCS", PIECES: "PCS", KG: "KGS", KGS: "KGS", KILOGRAM: "KGS", GM: "GMS", GRAM: "GMS", GRAMS: "GMS", MT: "MTS", TONNE: "TON", LTRS: "LTR", LITRE: "LTR", L: "LTR", ML: "MLT", MTRS: "MTR", METER: "MTR", METRE: "MTR", M: "MTR", SQFT: "SQF", SQMT: "SQM", PKT: "PAC", PACK: "PAC", PACKET: "PAC", BOXES: "BOX", SETS: "SET", PAIR: "PRS", PAIRS: "PRS", ROLL: "ROL", ROLLS: "ROL", DOZEN: "DOZ", BOTTLE: "BTL", CARTON: "CTN", UNIT: "UNT", UNITS: "UNT", QUINTAL: "QTL"};
+    const uqcOf = h => (h.supply === "Services" || /^99/.test(h.hsn || "")) ? "NA" : UQC.includes(String(h.unit || "").toUpperCase()) ? String(h.unit).toUpperCase() : ALIAS[String(h.unit || "").toUpperCase()] || (h.unit ? "OTH" : "NOS");
+    const hsnLine = (h, x, i) => ({num: i + 1, hsn_sc: h.hsn || "", desc: String(h.desc || "").slice(0, 30), uqc: uqcOf(h), qty: uqcOf(h) === "NA" ? 0 : r2(Math.abs(num(x.qty))), rt: h.rate,
+      txval: r2(x.taxable), iamt: r2(x.igst), camt: r2(x.cgst), samt: r2(x.sgst), csamt: r2(x.cess)});
     if (g.hsn.length){
-      if (ym >= "202505") out.hsn = {hsn_b2b: g.hsn.filter(h => Math.abs(h.b2b.taxable) >= 0.01).map((h, i) => hsnLine(h, h.b2b, i)), hsn_b2c: g.hsn.filter(h => Math.abs(h.b2c.taxable) >= 0.01).map((h, i) => hsnLine(h, h.b2c, i))};
+      if (ym >= "202501") out.hsn = {hsn_b2b: g.hsn.filter(h => Math.abs(h.b2b.taxable) >= 0.01).map((h, i) => hsnLine(h, h.b2b, i)), hsn_b2c: g.hsn.filter(h => Math.abs(h.b2c.taxable) >= 0.01).map((h, i) => hsnLine(h, h.b2c, i))};
       else out.hsn = {data: g.hsn.map((h, i) => hsnLine(h, h, i))};
     }
-    if (g.series.length) out.doc_issue = {doc_det: [{doc_num: 1, docs: g.series.map((x, i) => ({num: i + 1, from: String(x.from), to: String(x.to), totnum: x.n, cancel: 0, net_issue: x.n}))}]};
+    if (g.series.length){
+      const nats = Array.from(new Set(g.series.map(x => x.nat))).sort((a, c) => a - c);
+      out.doc_issue = {doc_det: nats.map(n => ({doc_num: n, docs: g.series.filter(x => x.nat === n).map((x, i) => ({num: i + 1, from: String(x.from), to: String(x.to), totnum: x.n, cancel: x.cancelled, net_issue: x.n - x.cancelled}))}))};
+    }
     if (!(opts && opts.plain) && reg) GSTAmend.addTo(out, ym, reg);
     return out;
   },
@@ -9669,8 +9690,9 @@ function viewGstr1(b){
         '</td><td class="n">' + money(e.tcs) + "</td></tr>").join("") + "</tbody></table></div>" +
       '<p class="note">The operator pays this TCS under section 52; claim it from your cash ledger after checking it against GSTR-2B or the TCS statement.</p></section>';
   }
-  h += '<section class="dash-card" style="margin-top:12px"><h3>Documents issued (13)</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Series</th><th>From</th><th>To</th><th class="n">Issued</th></tr></thead><tbody>' +
-    g.series.map(x => "<tr><td>" + esc(x.pre || "\u2014") + "</td><td>" + esc(x.from) + "</td><td>" + esc(x.to) + '</td><td class="n">' + x.n + "</td></tr>").join("") + "</tbody></table></div></section>";
+  h += '<section class="dash-card" style="margin-top:12px"><h3>Documents issued (13)</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Nature</th><th>Series</th><th>From</th><th>To</th><th class="n">Total</th><th class="n">Cancelled</th><th class="n">Net issued</th></tr></thead><tbody>' +
+    g.series.slice().sort((a, c) => a.nat - c.nat).map(x => "<tr><td>" + ({1: "Invoices for outward supply", 4: "Debit notes", 5: "Credit notes"})[x.nat] + "</td><td>" + esc(x.pre || "\u2014") + "</td><td>" + esc(x.from) + "</td><td>" + esc(x.to) + '</td><td class="n">' + x.n + '</td><td class="n">' + x.cancelled + '</td><td class="n">' + (x.n - x.cancelled) + "</td></tr>").join("") + "</tbody></table></div>" +
+    '<p class="note">Cancelled vouchers are counted from Tally (marked cancelled there); a number missing from a series is not, so enter or cancel it in Tally first.</p></section>';
   h += viewGstChecks();
   return h;
 }
