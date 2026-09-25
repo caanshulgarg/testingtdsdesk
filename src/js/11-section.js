@@ -111,8 +111,10 @@ const GST2B = {
       const s = sumOf(list);
       const diff = {taxable: r2(p.taxable - s.taxable), igst: r2(p.igst - s.igst), cgst: r2(p.cgst - s.cgst), sgst: r2(p.sgst - s.sgst), cess: r2(p.cess - s.cess)};
       const issues = [];
-      if (!near(p.taxable, s.taxable)) issues.push("taxable differs by " + INR.format(diff.taxable));
-      if (!near(taxOf(p), taxOf(s))) issues.push("tax differs by " + INR.format(r2(taxOf(p) - taxOf(s))));
+      const taxSame = near(taxOf(p), taxOf(s));
+      // the same tax on a different value: the bill has a part without GST (a reimbursement, a ticket) that Tally counts in the value
+      if (!near(p.taxable, s.taxable)) issues.push((taxSame ? "value differs by " : "taxable differs by ") + INR.format(diff.taxable) + (taxSame ? " (the tax is the same)" : ""));
+      if (!taxSame) issues.push("tax differs by " + INR.format(r2(taxOf(p) - taxOf(s))));
       else if (!near(p.igst, s.igst)) issues.push(p.igst ? "IGST in 2B, CGST and SGST in the books" : "CGST and SGST in 2B, IGST in the books");
       const bd = list[0];
       if (p.date && bd.date && p.date !== bd.date && days(p.date, bd.date) > 0) issues.push("date " + GSTAmend.dmy(p.date) + " in 2B, " + GSTAmend.dmy(bd.date) + " in Tally");
@@ -122,9 +124,19 @@ const GST2B = {
       if (list.length > 1) issues.push("booked in " + list.length + " vouchers");
       const timing = list.some(d => d.ym !== p.ym);
       const confirmed = st.confirm[p.key] === "yes";
-      const status = (how === "probable" && !confirmed) ? "probable" : (issues.filter(x => !/^date |^booked in |^number /.test(x)).length ? "diff" : "matched");
+      if (list.length > 1 && list.every(d => d.noN === list[0].noN && near(taxOf(d), taxOf(list[0])))) issues.push("the same bill booked " + list.length + " times");
+      const status = (how === "probable" && !confirmed) ? "probable" : (issues.filter(x => !/^date |^booked in |^number |^value differs /.test(x)).length ? "diff" : "matched");
       pairs.push({p, books: list, sum: s, diff, issues, tier, how, status, timing, confirmed, manual: how === "manual"});
     };
+    // a bill and its exact reversal (same supplier, number and tax, the other way) cancel out: set both aside,
+    // so a bill booked, reversed and booked again at a revised value is matched on what is left
+    const reversed = [];
+    const rk = d => (d.gstin || d.party) + "|" + d.noN + "|" + Math.round(taxOf(d));
+    const pos = new Map();
+    books.filter(d => d.dir > 0 && d.noN).forEach(d => { const k = rk(d); (pos.get(k) || pos.set(k, []).get(k)).push(d); });
+    // not when 2B has a credit note from the supplier for that tax: then it is the supplier's credit note, to be matched
+    const cn2b = new Set(portal.filter(p => p.dir < 0).map(p => p.gstin + "|" + Math.round(taxOf(p))));
+    books.filter(d => d.dir < 0 && d.noN && !cn2b.has(d.gstin + "|" + Math.round(taxOf(d)))).forEach(d => { const l = pos.get(rk(d)); const hit = l && l.find(z => !taken.has(z.id)); if (hit){ taken.add(hit.id); taken.add(d.id); reversed.push([hit, d]); } });
     // 0. what the user linked by hand, and what they said is not the same
     portal.forEach(p => {
       const ids = st.link[p.key];
@@ -140,6 +152,10 @@ const GST2B = {
       p => { const c = (byG.get(p.gstin) || []).filter(d => free(d) && d.dir === p.dir && d.noN === p.noN); return c.length ? [c, 2, "number"] : null; },
       // 3. same GSTIN, the number written differently
       p => { const core = this.coreNo(p.no); const c = (byG.get(p.gstin) || []).filter(d => free(d) && d.dir === p.dir && d.core === core && core !== "|"); return c.length ? [c, 3, "number"] : null; },
+      // 3b. same GSTIN, one number the other with a prefix or suffix added ("39/2025-26" and "EXP/IN/39/2025-26")
+      p => { const a = p.noN; if (a.length < 3) return null;
+        const c = (byG.get(p.gstin) || []).filter(d => free(d) && d.dir === p.dir && d.noN.length >= 3 && d.noN !== a && (d.noN.endsWith(a) || a.endsWith(d.noN) || d.noN.startsWith(a) || a.startsWith(d.noN)) && this.lastDigits(d.no) === this.lastDigits(p.no));
+        return c.length ? [c, 3, "number"] : null; },
       // 4. same GSTIN and amounts, near in date, number different: to confirm
       p => { const c = (byG.get(p.gstin) || []).filter(d => free(d) && d.dir === p.dir && near(d.taxable, p.taxable) && near(taxOf(d), taxOf(p)) && (!p.date || !d.date || days(p.date, d.date) <= 31));
         return c.length ? [[c.sort((a, x) => days(a.date, p.date) - days(x.date, p.date))[0]], 4, "probable"] : null; },
@@ -169,7 +185,21 @@ const GST2B = {
     });
     const only2b = portal.filter(p => !used2b.has(p.key));
     const onlyBooks = books.filter(d => !taken.has(d.id));
-    const res = {pairs, only2b, onlyBooks, portal, books, taxOf, loaded: this.all2b(reg).map(t => t.ym)};
+    // the same supplier's bill, same number and tax, booked more than once
+    const dupes = {}, dk = {};
+    const revIds = new Set(reversed.flat().map(d => d.id));
+    books.forEach(d => { if (!d.noN || revIds.has(d.id)) return; const k = (d.gstin || d.party) + "|" + d.noN + "|" + d.dir + "|" + Math.round(taxOf(d)); (dk[k] = dk[k] || []).push(d); });
+    Object.values(dk).filter(l => l.length > 1 && taxOf(l[0]) > 0).forEach(l => l.forEach((d, i) => { dupes[d.id] = {n: l.length, first: i === 0, others: l.filter(z => z !== d).map(z => z.voucher + " of " + GSTAmend.dmy(z.bookDate))}; }));
+    // a bill in 2B and in Tally, but booked with no input tax (the tax charged to the expense)
+    const docIds = new Set(books.map(d => d.id)), gstMap = b.gstins || {};
+    const noCredit = new Map();
+    (b.vouchers || []).forEach(v => { if (docIds.has(v.id) || Books.isSale(v) || v.cancel) return; const k = this.normNo(v.ref || v.no); if (k.length >= 3) (noCredit.get(k) || noCredit.set(k, []).get(k)).push(v); });
+    portal.forEach(p => { delete p.bookedNoCredit; });
+    only2b.forEach(p => {
+      const c = (noCredit.get(p.noN) || []).filter(v => (!p.date || days(p.date, v.date) <= 62) && (!gstMap[v.party] || String(gstMap[v.party]).toUpperCase() === p.gstin || pan(gstMap[v.party]) === pan(p.gstin)));
+      if (c.length){ const v = c[0]; p.bookedNoCredit = {id: v.id, type: v.type, no: v.no, date: v.date, party: v.party}; }
+    });
+    const res = {pairs, only2b, onlyBooks, portal, books, taxOf, dupes, reversed, loaded: this.all2b(reg).map(t => t.ym)};
     this._memo = {key, v: b.vouchers, res};
     return res;
   },
@@ -180,7 +210,7 @@ const GST2B = {
     const lastLoaded = r.loaded[r.loaded.length - 1] || "";
     return {all: r, pairs, matched: pairs.filter(x => x.status === "matched"), diff: pairs.filter(x => x.status === "diff"), probable: pairs.filter(x => x.status === "probable"),
       timing: pairs.filter(x => x.timing), only2b: r.only2b.filter(p => inM(p.ym)), onlyBooks: r.onlyBooks.filter(d => inM(d.ym)),
-      laterMissing: r.onlyBooks.filter(d => inM(d.ym) && d.ym >= lastLoaded).length, taxOf: r.taxOf};
+      laterMissing: r.onlyBooks.filter(d => inM(d.ym) && d.ym >= lastLoaded).length, taxOf: r.taxOf, reversed: (r.reversed || []).filter(pr => pr.some(d => inM(d.ym)))};
   },
   totals(list, f){ return list.reduce((a, x) => { const o = f ? f(x) : x; return {n: a.n + 1, taxable: r2(a.taxable + num(o.taxable) * (o.dir || 1)), tax: r2(a.tax + (num(o.igst) + num(o.cgst) + num(o.sgst) + num(o.cess)) * (o.dir || 1))}; }, {n: 0, taxable: 0, tax: 0}); },
   // supplier by supplier, 2B against the books
