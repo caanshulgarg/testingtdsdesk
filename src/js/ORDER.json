@@ -29,5 +29,6 @@
  "27-firm-account.js",
  "29-financial-statements.js",
  "30-accounts-screen.js",
- "31-grid-filters.js"
+ "31-grid-filters.js",
+ "32-itc-follow-up.js"
 ]

@@ -989,6 +989,7 @@ document.addEventListener("click", ev => {
   if (t.dataset.open){ openCompany(t.dataset.open); return; }
   if (t.dataset.bookstab){ S.booksTab = t.dataset.bookstab; render(); return; }
   if (t.dataset.gstpart){ S.gstPart = t.dataset.gstpart; render(); return; }
+  if (t.dataset.itctcat !== undefined){ S.itctCat = S.itctCat === t.dataset.itctcat ? "" : t.dataset.itctcat; render(); return; }
   if (t.dataset.inregchip !== undefined){ S.inregF = S.inregF === t.dataset.inregchip ? "" : t.dataset.inregchip; render(); return; }
   if (t.dataset.tdspart){ S.tdsPart = t.dataset.tdspart; render(); return; }
   if (t.dataset.tdsnav){ S.tdsView = t.dataset.tdsnav; render(); window.scrollTo(0, 0); return; }
@@ -1415,6 +1416,13 @@ document.addEventListener("click", ev => {
     }
     case "auditUnlock": { const run = (S.books.audit || {}).last; if (run && S.books.audit.final){ delete S.books.audit.final[run.from + "-" + run.to]; saveBooks(); toast("Unlocked."); render(); } break; }
     case "gst9Pdf": case "gst9cPdf": { const w = act === "gst9Pdf" ? "9" : "9C"; printView(CO().name + " GSTR-" + w, "<style>@page{size:A4 portrait;margin:12mm}</style>" + gst9PackHtml(w)); break; }
+    case "itctExcel": itctExcel().then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break;
+    case "itctCopy": case "itctMail": case "itctWa": {
+      const x = itctSupplier(t.dataset.sup); if (!x) break;
+      if (act === "itctCopy") (navigator.clipboard ? navigator.clipboard.writeText(x.L.text) : Promise.reject()).then(() => toast("Letter copied."), () => toast("Could not copy; use the Excel."));
+      if (act === "itctMail"){ if (!x.s.email){ toast("Type the supplier's email first."); break; } window.open("mailto:" + encodeURIComponent(x.s.email) + "?subject=" + encodeURIComponent("GST: invoices not in our GSTR-2B") + "&body=" + encodeURIComponent(x.L.text), "_blank"); }
+      if (act === "itctWa"){ const ph = String(x.s.phone || "").replace(/\D/g, ""); if (!ph){ toast("Type the supplier's phone first."); break; } window.open("https://wa.me/" + (ph.length === 10 ? "91" + ph : ph) + "?text=" + encodeURIComponent(x.L.text), "_blank"); }
+      itctLogSent(x.reg, x.s.key); render(); break; }
     case "inregExcel": inregExcel().then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break;
     case "gst9Excel": case "gst9cExcel": gst9Excel(act === "gst9Excel" ? "9" : "9C").then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break;
     case "lmPostAll": { const n2 = LedMaster.applyPosting(S.books, CO()); toast(n2 + " posting ledger" + (n2 === 1 ? "" : "s") + " set from the master."); render(); break; }

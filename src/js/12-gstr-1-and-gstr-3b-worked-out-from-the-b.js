@@ -180,7 +180,7 @@ const GSTR = {
     const blocked = S2(r => r.blocked);
     // credit only as far as 2B shows it (section 16(2)(aa), rule 36(4)): bills not yet in 2B are held back,
     // and taken in the month their 2B carries them
-    const basis = this.itcBasis(ym, reg), held = {igst: 0, cgst: 0, sgst: 0, cess: 0, n: 0, list: []}, released = {igst: 0, cgst: 0, sgst: 0, cess: 0, n: 0, list: []};
+    const basis = this.itcBasis(ym, reg), held = {igst: 0, cgst: 0, sgst: 0, cess: 0, n: 0, list: []}, released = {igst: 0, cgst: 0, sgst: 0, cess: 0, n: 0, list: []}, cn2b = {igst: 0, cgst: 0, sgst: 0, cess: 0, n: 0, list: []};
     if (basis.on){
       const add = (o, d) => { o.igst = r2(o.igst + d.igst); o.cgst = r2(o.cgst + d.cgst); o.sgst = r2(o.sgst + d.sgst); o.cess = r2(o.cess + d.cess); o.n++; o.list.push(d); };
       const vById = new Map((S.books.vouchers || []).map(v => [v.id, v]));
@@ -188,7 +188,16 @@ const GSTR = {
       basis.res.onlyBooks.filter(d => d.ym === ym && claimable(d)).forEach(d => add(held, d));
       basis.res.pairs.forEach(x => { if (x.p.ym > ym) x.books.filter(d => d.ym === ym && claimable(d)).forEach(d => add(held, d));
         if (x.p.ym === ym) x.books.filter(d => d.ym < ym && basis.loaded.has(d.ym) && this.itcBasis(d.ym, reg, true) && claimable(d)).forEach(d => add(released, d)); });
-      other = Object.assign({}, other, {igst: r2(other.igst - held.igst + released.igst), cgst: r2(other.cgst - held.cgst + released.cgst), sgst: r2(other.sgst - held.sgst + released.sgst), cess: r2(other.cess - held.cess + released.cess)});
+      // in both, but more tax in Tally than in 2B: the excess waits (the lower of the two is taken)
+      basis.res.pairs.filter(x => x.status === "diff").forEach(x => {
+        const bks = x.books.filter(d => d.ym === ym && claimable(d)); if (!bks.length || x.p.ym > ym) return;
+        const bt = bks.reduce((a, d) => a + d.igst + d.cgst + d.sgst + d.cess, 0), pt = num(x.p.igst) + num(x.p.cgst) + num(x.p.sgst) + num(x.p.cess), ex = r2(bt - pt);
+        if (ex < 1 || bt <= 0) return;
+        const f = ex / bt; bks.forEach(d => add(held, {id: d.id, no: d.no, party: d.party, igst: r2(d.igst * f), cgst: r2(d.cgst * f), sgst: r2(d.sgst * f), cess: r2(d.cess * f), excess: true}));
+      });
+      // a supplier's credit note in this month's 2B, not in Tally, reduces credit unless it is rejected in IMS
+      basis.res.only2b.filter(p => p.ym === ym && p.dir < 0 && p.itcavl !== "N" && (typeof ITCT !== "object" || ITCT.dec(reg, "P|" + p.gstin + "|" + p.noN + "|" + p.dir).act !== "reject")).forEach(p => add(cn2b, p));
+      other = Object.assign({}, other, {igst: r2(other.igst - held.igst + released.igst - cn2b.igst), cgst: r2(other.cgst - held.cgst + released.cgst - cn2b.cgst), sgst: r2(other.sgst - held.sgst + released.sgst - cn2b.sgst), cess: r2(other.cess - held.cess + released.cess - cn2b.cess)});
     }
     // 4(D)(2): credit 2B says is not available (place of supply in another state, or after the section 16(4) time limit)
     const na = {igst: 0, cgst: 0, sgst: 0, cess: 0};
@@ -220,7 +229,7 @@ const GSTR = {
     const pay = this.setOff(net, rcmOut, netItc, opening);
     return {sale: taxableOut, cn, net, adv, rules, r42: rul.r42, r43: rul.r43, zero, nil, nongst, rcmOut, rcmIn, toUnreg, impGoods, impServ, other, blocked,
       buy: this.sum(inn), itc, reversal, rev1, rev2, reclaim, na, inw5, unregPos: Object.values(unregPos).sort((a, c) => a.pos.localeCompare(c.pos)),
-      basis: basis.on ? "2b" : basis.why, held, released, netItc, ineligible: this.sum(inn).ineligible, opening, pay, payable: pay.cash};
+      basis: basis.on ? "2b" : basis.why, held, released, cn2b, netItc, ineligible: this.sum(inn).ineligible, opening, pay, payable: pay.cash};
   },
   // credit on the 2B basis for a month: on when that month's 2B is here and the client has not chosen the books basis
   itcBasis(ym, reg, quick){

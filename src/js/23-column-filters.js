@@ -927,6 +927,10 @@ function gstFixChange(t){
   if (d.misf !== undefined){ S.misF = t.value; render(); return true; }
   if (d.mismsme !== undefined){ b.msme = Object.assign({}, b.msme, {[d.mismsme]: t.value}); const r = (b.mis || {}).last; if (r) MIS.run(r.from, r.to, r.how); saveBooks(); render(); return true; }
   if (d.g9t !== undefined){ const fy = GST9.fyOf(S.gstYm || GSTR.months().slice(-1)[0]), reg = S.gstReg || "", st = GST9.typed(fy, reg), [k, f] = d.g9t.split("."); st[k] = Object.assign({}, st[k], {[f]: t.value === "" ? "" : num(t.value)}); if (Object.values(st[k]).every(v => v === "")) delete st[k]; saveBooks(); render(); return true; }
+  if (d.itctact !== undefined){ const st = ITCT.store(S.gstReg || ""); st.dec[d.itctact] = Object.assign({}, st.dec[d.itctact], {act: t.value, at: ITCT.today()}); saveBooks(); render(); return true; }
+  if (d.itctnote !== undefined){ const st = ITCT.store(S.gstReg || ""); st.dec[d.itctnote] = Object.assign({}, st.dec[d.itctnote], {note: t.value}); saveBooks(); return true; }
+  if (d.itctemail !== undefined || d.itctphone !== undefined){ const st = ITCT.store(S.gstReg || ""), k = d.itctemail !== undefined ? d.itctemail : d.itctphone; st.contact[k] = Object.assign({}, st.contact[k], d.itctemail !== undefined ? {email: t.value.trim()} : {phone: t.value.trim()}); saveBooks(); return true; }
+  if (d.itctshow !== undefined){ S.itctShow = t.value; render(); return true; }
   if (d.itcbasis !== undefined){ b.itcBasis = Object.assign({}, b.itcBasis, {[S.gstReg || ""]: t.value}); saveBooks(); render(); return true; }
   if (d.g3b !== undefined){ const k = (S.gstReg || "") + "|" + S.gstYm, [grp, hd] = d.g3b.split("."); b.gst3b = Object.assign({}, b.gst3b); b.gst3b[k] = Object.assign({}, b.gst3b[k]); b.gst3b[k][grp] = Object.assign({}, b.gst3b[k][grp], {[hd]: t.value === "" ? "" : num(t.value)}); saveBooks(); render(); return true; }
   if (d.gstopen !== undefined){ const k = S.gstReg || ""; b.gstOpen = Object.assign({}, b.gstOpen); b.gstOpen[k] = Object.assign({}, b.gstOpen[k], {[d.gstopen]: t.value === "" ? "" : num(t.value)}); saveBooks(); render(); return true; }

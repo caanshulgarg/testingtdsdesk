@@ -38,7 +38,7 @@ const M = v => Math.round(v || 0).toLocaleString("en-IN");
     b.itcBasis = {"07": "books"}; const marB = x.GSTR.threeB("202603", "07"); b.itcBasis = {};
     const hold = mar.held.igst + mar.held.cgst + mar.held.sgst, rel = mar.released.igst + mar.released.cgst + mar.released.sgst;
     ok(mar.basis === "2b" && hold > 1000000, "March on the 2B basis: " + mar.held.n + " bills not in 2B held back, Rs " + M(hold));
-    ok(Math.abs((marB.other.igst + marB.other.cgst + marB.other.sgst) - (mar.other.igst + mar.other.cgst + mar.other.sgst) - (hold - rel)) < 1, "4(A)(5) on the books basis less the 2B basis = held less released");
+    ok(Math.abs((marB.other.igst + marB.other.cgst + marB.other.sgst) - (mar.other.igst + mar.other.cgst + mar.other.sgst) - (hold - rel + mar.cn2b.igst + mar.cn2b.cgst + mar.cn2b.sgst)) < 1, "4(A)(5) on the books basis less the 2B basis = held, less released, plus suppliers' credit notes in 2B");
     ok(mar.released.n > 0, "bills booked in February and in March's 2B are taken in March: " + mar.released.n + ", Rs " + M(rel));
     const na = mar.na.igst + mar.na.cgst + mar.na.sgst;
     ok(Math.abs(na - 343517) < 2, "4(D)(2) from 2B's not-available lines: Rs " + M(na));
