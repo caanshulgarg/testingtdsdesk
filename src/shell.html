@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TDS Desk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap" rel="stylesheet">
+<style id="app-style">{{CSS}}</style>
+</head>
+<body>
+<div class="shell">
+<nav class="side" id="side" aria-label="Main"></nav>
+<div class="mainwrap">
+<header class="top">
+  <div class="wrap">
+    <div class="toprow">
+      <div class="brand">
+        <h1>TDS Desk</h1>
+        <p id="firmLine"></p>
+      </div>
+      <div class="cobar" id="cobar"></div>
+    </div>
+    <nav class="tabs" role="tablist" id="tabs"></nav>
+  </div>
+</header>
+<main class="wrap" id="app"><p class="note">Loading…</p></main>
+</div>
+</div>
+<div id="modal" class="hidden"></div>
+<div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
+<input type="file" id="fileIn" accept="application/pdf,image/*,.jpg,.jpeg,.jfif,.png,.webp,.heic" multiple class="hidden">
+<input type="file" id="camIn" accept="image/*" capture="environment" class="hidden">
+<input type="file" id="booksIn" accept=".xml" class="hidden">
+<input type="file" id="marketIn" accept=".csv,.txt,.xlsx,.xls" class="hidden">
+<input type="file" id="salaryIn" accept=".csv,.txt,.xlsx,.xls" class="hidden">
+<input type="file" id="mastersIn" accept=".xml" class="hidden">
+<input type="file" id="filedIn" accept=".json,application/json" multiple class="hidden">
+<input type="file" id="twoBIn" accept=".json,application/json" multiple class="hidden">
+
+<!-- PDF reader: pdf.js 3.11.174 (Apache License 2.0), built in -->
+
+
+<!-- Excel reader: SheetJS Community Edition 0.18.5 (Apache License 2.0), built in -->
+
+<script>window.TDS_ASSETS = "assets/";</script>
+<script id="app-main">{{JS}}</script>
+</body>
+</html>

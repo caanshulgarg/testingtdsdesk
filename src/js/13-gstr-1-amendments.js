@@ -1,0 +1,192 @@
+/* ================================================================== */
+/* GSTR-1 amendments: what was filed, against the books now           */
+/*   9A amended B2B / B2C large / export invoices, 9C amended notes,  */
+/*   10 amended B2C small, and documents missed in the month's return */
+/* ================================================================== */
+const GSTAmend = {
+  fpOf(ym){ return String(ym).slice(4, 6) + String(ym).slice(0, 4); },
+  ymOf(fp){ return String(fp).slice(2, 6) + String(fp).slice(0, 2); },
+  ymd(dmy){ const m = String(dmy || "").match(/^(\d{2})-(\d{2})-(\d{4})$/); return m ? m[3] + m[2] + m[1] : String(dmy || "").replace(/-/g, ""); },
+  dmy(d){ d = String(d || ""); return d.length === 8 ? d.slice(6, 8) + "-" + d.slice(4, 6) + "-" + d.slice(0, 4) : d; },
+  numKey(n){ return String(n == null ? "" : n).toUpperCase().replace(/\s+/g, ""); },
+  // the last month a year's invoices can still be amended in: November after the year ends (section 37(3))
+  lastYm(ym){ const y = num(ym.slice(0, 4)), m = num(ym.slice(4, 6)); return String((m >= 4 ? y + 1 : y)) + "11"; },
+  filed(reg){
+    return Object.values((S.books && S.books.filed) || {}).filter(f => (!reg || String(f.gstin).slice(0, 2) === reg)).sort((a, c) => a.ym.localeCompare(c.ym));
+  },
+  // keep a GSTR-1 JSON as filed: one per registration and month
+  keep(json, source){
+    const b = S.books, gstin = String(json.gstin || "").toUpperCase(), fp = String(json.fp || "");
+    if (!/^\d{2}[A-Z0-9]{13}$/.test(gstin) || !/^\d{6}$/.test(fp)) throw new Error("This does not look like a GSTR-1 JSON: it needs a GSTIN and a period (fp).");
+    b.filed = b.filed || {};
+    const k = gstin + "|" + fp, old = b.filed[k];
+    // a copy from the portal is not replaced by a later download from here
+    if (old && old.source === "portal" && source === "downloaded") return old;
+    b.filed[k] = {gstin, fp, ym: this.ymOf(fp), source, at: new Date().toISOString(), json, notFiled: false};
+    return b.filed[k];
+  },
+  // one flat list of documents from a GSTR-1 JSON, amendments folded onto the original number
+  norm(json){
+    const docs = new Map(), b2cs = new Map(), b2csa = [];
+    const sumItems = itms => {
+      const t = {txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0, rates: []};
+      (itms || []).forEach(it => {
+        const d = it.itm_det || it;
+        t.txval = r2(t.txval + num(d.txval)); t.iamt = r2(t.iamt + num(d.iamt)); t.camt = r2(t.camt + num(d.camt)); t.samt = r2(t.samt + num(d.samt)); t.csamt = r2(t.csamt + num(d.csamt));
+        if (!t.rates.includes(num(d.rt))) t.rates.push(num(d.rt));
+      });
+      t.rates.sort((a, c) => a - c);
+      return t;
+    };
+    const put = (kind, key, x, extra) => docs.set(key, Object.assign({kind, key, num: String(x.inum || x.nt_num || ""), date: this.ymd(x.idt || x.nt_dt), val: num(x.val),
+      pos: String(x.pos || "").padStart(2, "0"), rchrg: x.rchrg || "N", inv_typ: x.inv_typ || "R", itms: x.itms || []}, sumItems(x.itms), extra || {}));
+    (json.b2b || []).forEach(g => (g.inv || []).forEach(x => put("B2B", "B2B|" + String(g.ctin).toUpperCase() + "|" + this.numKey(x.inum), x, {ctin: String(g.ctin).toUpperCase()})));
+    (json.b2ba || []).forEach(g => (g.inv || []).forEach(x => put("B2B", "B2B|" + String(g.ctin).toUpperCase() + "|" + this.numKey(x.oinum), x, {ctin: String(g.ctin).toUpperCase()})));
+    (json.b2cl || []).forEach(g => (g.inv || []).forEach(x => put("B2CL", "B2CL|" + this.numKey(x.inum), Object.assign({pos: g.pos}, x))));
+    (json.b2cla || []).forEach(g => (g.inv || []).forEach(x => put("B2CL", "B2CL|" + this.numKey(x.oinum), Object.assign({pos: g.pos}, x))));
+    (json.exp || []).forEach(g => (g.inv || []).forEach(x => put("EXP", "EXP|" + this.numKey(x.inum), x, {exp_typ: g.exp_typ || "WPAY"})));
+    (json.expa || []).forEach(g => (g.inv || []).forEach(x => put("EXP", "EXP|" + this.numKey(x.oinum), x, {exp_typ: g.exp_typ || "WPAY"})));
+    (json.cdnr || []).forEach(g => (g.nt || []).forEach(x => put("CDNR", "CDNR|" + String(g.ctin).toUpperCase() + "|" + this.numKey(x.nt_num), x, {ctin: String(g.ctin).toUpperCase(), ntty: x.ntty})));
+    (json.cdnra || []).forEach(g => (g.nt || []).forEach(x => put("CDNR", "CDNR|" + String(g.ctin).toUpperCase() + "|" + this.numKey(x.ont_num), x, {ctin: String(g.ctin).toUpperCase(), ntty: x.ntty})));
+    (json.b2cs || []).forEach(x => {
+      const k = String(x.pos).padStart(2, "0") + "|" + num(x.rt) + "|" + (x.sply_ty || "");
+      const o = b2cs.get(k) || {pos: String(x.pos).padStart(2, "0"), rt: num(x.rt), sply_ty: x.sply_ty, txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0};
+      o.txval = r2(o.txval + num(x.txval)); o.iamt = r2(o.iamt + num(x.iamt)); o.camt = r2(o.camt + num(x.camt)); o.samt = r2(o.samt + num(x.samt)); o.csamt = r2(o.csamt + num(x.csamt));
+      b2cs.set(k, o);
+    });
+    (json.b2csa || []).forEach(x => (x.itms || []).forEach(it => b2csa.push({omon: x.omon, pos: String(x.pos).padStart(2, "0"), rt: num(it.rt), sply_ty: x.sply_ty,
+      txval: num(it.txval), iamt: num(it.iamt), camt: num(it.camt), samt: num(it.samt), csamt: num(it.csamt)})));
+    return {docs, b2cs, b2csa};
+  },
+  // what the portal holds, as of the returns filed before a month
+  state(reg, beforeYm, inclusive){
+    const docs = new Map(), b2cs = {}, periods = new Set();
+    this.filed(reg).filter(f => !f.notFiled && (inclusive ? f.ym <= beforeYm : f.ym < beforeYm)).forEach(f => {
+      const n = this.norm(f.json);
+      periods.add(f.ym);
+      n.docs.forEach((d, k) => docs.set(k, Object.assign({}, d, {filedIn: f.ym})));
+      b2cs[f.ym] = n.b2cs;
+      n.b2csa.forEach(a => {
+        const m = b2cs[this.ymOf(a.omon)] = b2cs[this.ymOf(a.omon)] || new Map();
+        m.set(a.pos + "|" + a.rt + "|" + a.sply_ty, a);
+      });
+    });
+    return {docs, b2cs, periods};
+  },
+  same(a, c){ return Math.abs(num(a) - num(c)) < 1.005; },
+  changes(was, now){
+    const out = [], m = v => INR.format(r2(v || 0));
+    if (was.date !== now.date) out.push("date " + this.dmy(was.date) + " \u2192 " + this.dmy(now.date));
+    if (was.pos !== now.pos) out.push("place of supply " + was.pos + " \u2192 " + now.pos);
+    if (!this.same(was.txval, now.txval)) out.push("taxable " + m(was.txval) + " \u2192 " + m(now.txval));
+    ["iamt", "camt", "samt", "csamt"].forEach((k, i) => { if (!this.same(was[k], now[k])) out.push(["IGST", "CGST", "SGST", "cess"][i] + " " + m(was[k]) + " \u2192 " + m(now[k])); });
+    if (!this.same(was.val, now.val) && !out.length) out.push("value " + m(was.val) + " \u2192 " + m(now.val));
+    if (was.rates.join(",") !== now.rates.join(",") && out.length) out.push("rate " + was.rates.join("/") + "% \u2192 " + now.rates.join("/") + "%");
+    if ((was.rchrg || "N") !== (now.rchrg || "N")) out.push("reverse charge " + was.rchrg + " \u2192 " + now.rchrg);
+    if (was.kind === "CDNR" && was.ntty !== now.ntty) out.push("note type " + was.ntty + " \u2192 " + now.ntty);
+    return out;
+  },
+  // every difference between the books and the portal, for months before the return being prepared
+  pending(ym, reg){
+    const res = {rows: [], periods: [], noCopy: [], late: [], ready: !!reg};
+    if (!reg || !ym) return res;
+    const st = this.state(reg, ym, false), fix = (S.books && S.books.amendFix) || {};
+    const months = GSTR.months().filter(m => m < ym);
+    months.forEach(P => {
+      if (!st.periods.has(P)){ if (this.filed(reg).length) res.noCopy.push(P); return; }
+      if (ym > this.lastYm(P)){ res.late.push(P); return; }
+      res.periods.push(P);
+      const books = this.norm(GSTR.toJson(P, reg, {plain: true})).docs;
+      const filedP = new Map(Array.from(st.docs).filter(([, d]) => GSTR.ym(d.date) === P || (d.filedIn === P && !GSTR.ym(d.date))));
+      const b2csP = st.b2cs[P] || new Map();
+      books.forEach((d, k) => {
+        const was = filedP.get(k) || (st.docs.has(k) ? st.docs.get(k) : null);
+        const id = P + "|" + k;
+        if (was){
+          const ch = this.changes(was, d);
+          if (ch.length) res.rows.push({id, P, kind: d.kind, what: "amend", was, now: d, changes: ch, act: fix[id] || "amend"});
+          return;
+        }
+        // not in the filed return: a B2B invoice may have gone in B2C small, or been missed
+        let guess = "missed";
+        if (d.kind === "B2B" && d.rates.length === 1){
+          const sply = d.iamt ? "INTER" : "INTRA", g = b2csP.get(d.pos + "|" + d.rates[0] + "|" + sply);
+          if (g && num(g.txval) + 1 >= d.txval) guess = "b2c";
+        }
+        res.rows.push({id, P, kind: d.kind, what: "missing", was: null, now: d, changes: [guess === "b2c" ? "filed in B2C small, now has a GSTIN" : "not in the filed return"], act: fix[id] || guess});
+      });
+      filedP.forEach((d, k) => {
+        if (books.has(k) || GSTR.ym(d.date) !== P) return;
+        if (!num(d.val) && !num(d.txval)) return;                     // already amended to nil
+        const id = P + "|" + k;
+        res.rows.push({id, P, kind: d.kind, what: "gone", was: d, now: null, changes: ["filed, but no longer in the books"], act: fix[id] || "nil"});
+      });
+    });
+    res.rows.sort((a, c) => a.P.localeCompare(c.P) || a.kind.localeCompare(c.kind) || String(a.now ? a.now.num : a.was.num).localeCompare(String(c.now ? c.now.num : c.was.num)));
+    return res;
+  },
+  // the month's own return: the books now against the copy filed for it
+  check(ym, reg){
+    if (!reg || !ym) return null;
+    const f = this.filed(reg).find(x => x.ym === ym && !x.notFiled);
+    if (!f) return null;
+    const filed = this.norm(f.json), books = this.norm(GSTR.toJson(ym, reg, {plain: true}));
+    const rows = [];
+    books.docs.forEach((d, k) => { const w = filed.docs.get(k); if (!w) rows.push({kind: d.kind, doc: d, changes: ["in the books, not in the filed return"]}); else { const c = this.changes(w, d); if (c.length) rows.push({kind: d.kind, doc: d, changes: c}); } });
+    filed.docs.forEach((d, k) => { if (!books.docs.has(k) && (num(d.val) || num(d.txval))) rows.push({kind: d.kind, doc: d, changes: ["in the filed return, not in the books"]}); });
+    const tot = m => { let t = 0; m.forEach(x => { t += num(x.txval); }); return r2(t); };
+    let b2csF = 0, b2csB = 0; filed.b2cs.forEach(x => { b2csF += num(x.txval); }); books.b2cs.forEach(x => { b2csB += num(x.txval); });
+    return {file: f, rows, filedTotal: r2(tot(filed.docs) + b2csF), booksTotal: r2(tot(books.docs) + b2csB), b2csF: r2(b2csF), b2csB: r2(b2csB)};
+  },
+  zeroItems(d){ return [{num: 1, itm_det: Object.assign({rt: d.rates[0] || 0, txval: 0, csamt: 0}, d.iamt ? {iamt: 0} : {camt: 0, samt: 0})}]; },
+  // put what is pending into the month's GSTR-1 JSON
+  addTo(out, ym, reg){
+    const p = this.pending(ym, reg);
+    const groups = {}, push = (sec, gk, head, item) => { const s = groups[sec] = groups[sec] || {}; (s[gk] = s[gk] || Object.assign({}, head, {list: []})).list.push(item); };
+    const moved = {};
+    p.rows.forEach(r => {
+      if (r.act === "skip") return;
+      const d = r.now, w = r.was;
+      if (r.what === "amend" || (r.what === "gone" && r.act === "nil")){
+        const x = d || w, itms = d ? d.itms : this.zeroItems(w), val = d ? d.val : 0;
+        const base = {oinum: w.num, oidt: this.dmy(w.date), inum: x.num, idt: this.dmy(x.date), val};
+        if (x.kind === "B2B") push("b2ba", x.ctin, {ctin: x.ctin}, Object.assign(base, {pos: x.pos, rchrg: x.rchrg, inv_typ: x.inv_typ, itms}));
+        else if (x.kind === "B2CL") push("b2cla", x.pos, {pos: x.pos}, Object.assign(base, {itms}));
+        else if (x.kind === "EXP") push("expa", x.exp_typ || "WPAY", {exp_typ: x.exp_typ || "WPAY"}, Object.assign(base, {itms}));
+        else if (x.kind === "CDNR") push("cdnra", x.ctin, {ctin: x.ctin}, {ont_num: w.num, ont_dt: this.dmy(w.date), ntty: x.ntty, nt_num: x.num, nt_dt: this.dmy(x.date), val, pos: x.pos, rchrg: x.rchrg, inv_typ: x.inv_typ, itms});
+        return;
+      }
+      if (r.what === "missing" && (r.act === "missed" || r.act === "b2c")){
+        // reported now, in the month's own tables, with its original number and date
+        if (d.kind === "B2B") push("b2b", d.ctin, {ctin: d.ctin}, {inum: d.num, idt: this.dmy(d.date), val: d.val, pos: d.pos, rchrg: d.rchrg, inv_typ: d.inv_typ, itms: d.itms});
+        else if (d.kind === "B2CL") push("b2cl", d.pos, {pos: d.pos}, {inum: d.num, idt: this.dmy(d.date), val: d.val, itms: d.itms});
+        else if (d.kind === "EXP") push("exp", d.exp_typ || "WPAY", {exp_typ: d.exp_typ || "WPAY"}, {inum: d.num, idt: this.dmy(d.date), val: d.val, itms: d.itms});
+        else if (d.kind === "CDNR") push("cdnr", d.ctin, {ctin: d.ctin}, {ntty: d.ntty, nt_num: d.num, nt_dt: this.dmy(d.date), val: d.val, pos: d.pos, rchrg: d.rchrg, inv_typ: d.inv_typ, itms: d.itms});
+        if (r.act === "b2c"){
+          const sply = d.iamt ? "INTER" : "INTRA", k = r.P + "|" + d.pos + "|" + d.rates[0] + "|" + sply;
+          const m = moved[k] = moved[k] || {P: r.P, pos: d.pos, rt: d.rates[0], sply_ty: sply, txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0};
+          ["txval", "iamt", "camt", "samt", "csamt"].forEach(f => { m[f] = r2(m[f] + num(d[f])); });
+        }
+      }
+    });
+    const inner = {b2b: "inv", b2ba: "inv", b2cl: "inv", b2cla: "inv", exp: "inv", expa: "inv", cdnr: "nt", cdnra: "nt"};
+    Object.keys(groups).forEach(sec => {
+      const list = out[sec] = out[sec] || [];
+      Object.values(groups[sec]).forEach(g => {
+        const key = Object.keys(g).find(k => k !== "list"), hit = list.find(x => x[key] === g[key]);
+        if (hit) hit[inner[sec]] = (hit[inner[sec]] || []).concat(g.list);
+        else { const o = {}; o[key] = g[key]; o[inner[sec]] = g.list; list.push(o); }
+      });
+    });
+    // table 10: the B2C small figures of the original month, less what moved to B2B
+    const st = this.state(reg, ym, false);
+    Object.values(moved).forEach(m => {
+      const g = (st.b2cs[m.P] || new Map()).get(m.pos + "|" + m.rt + "|" + m.sply_ty) || {txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0};
+      const it = {rt: m.rt, txval: r2(num(g.txval) - m.txval), csamt: r2(num(g.csamt) - m.csamt)};
+      if (m.sply_ty === "INTER") it.iamt = r2(num(g.iamt) - m.iamt); else { it.camt = r2(num(g.camt) - m.camt); it.samt = r2(num(g.samt) - m.samt); }
+      (out.b2csa = out.b2csa || []).push({omon: this.fpOf(m.P), sply_ty: m.sply_ty, pos: m.pos, typ: "OE", itms: [it]});
+    });
+    return p;
+  }
+};
+
