@@ -757,7 +757,7 @@ const DEFAULT_FIRM = {firmName:"Garg Shekhar & Company", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "TEST · 25 Sep 2026 · build 129 (TDS clearing accounts: month-end transfers are not deductions, and payments are counted once)";
+const APP_VERSION = "TEST · 25 Sep 2026 · build 130 (GSTR-9 and GSTR-9C, built from the monthly figures)";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;
@@ -6596,6 +6596,160 @@ Object.assign(LedMaster, {
 });
 
 /* ================================================================== */
+/* GSTR-9 and GSTR-9C: the year, built from the monthly figures       */
+/* ================================================================== */
+const GST9 = {
+  Z(){ return {taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0}; },
+  add(a, r, k){ const o = Object.assign({}, a); ["taxable", "igst", "cgst", "sgst", "cess"].forEach(f => { o[f] = r2(num(o[f]) + num(r[f]) * (k == null ? 1 : k)); }); return o; },
+  sumRows(rows, k){ return rows.reduce((a, r) => this.add(a, r, k), this.Z()); },
+  fyOf(ym){ return Audit.fyStart(String(ym).slice(0, 6) + "01").slice(0, 4); },
+  label(fy){ return fy + "-" + String(num(fy) + 1).slice(2); },
+  months(fy){ return GSTRev.fyMonths(fy + "04"); },
+  build(fy, reg){
+    const months = this.months(fy), have = new Set(GSTR.months()), inBooks = months.filter(m => have.has(m));
+    const out = [], inn = [], t3 = {};
+    inBooks.forEach(m => { GSTR.outward(m, reg).forEach(r => out.push(r)); GSTR.inward(m, reg).forEach(r => inn.push(Object.assign({ym: m}, r))); t3[m] = GSTR.threeB(m, reg); });
+    const S1 = f => this.sumRows(out.filter(f));
+    const taxable = r => r.cls === "taxable" && !r.rcm;
+    const T = {};
+    // Part II: outward and inward supplies on which tax is payable (4), and on which it is not (5)
+    T["4A"] = S1(r => taxable(r) && (r.kind === "B2C" || r.kind === "B2CL"));
+    T["4B"] = S1(r => taxable(r) && r.kind === "B2B");
+    T["4C"] = S1(r => r.cls === "export" && r.kind !== "CDNR" && r.kind !== "DBNR" && r.igst > 0);
+    T["4D"] = S1(r => r.cls === "sez" && r.kind !== "CDNR" && r.kind !== "DBNR" && r.igst > 0);
+    T["4E"] = this.Z();
+    const adv = inBooks.reduce((a, m) => { const x = GSTAdv.month(m, reg).net; return this.add(a, x); }, this.Z());
+    T["4F"] = adv;
+    T["4G"] = inBooks.reduce((a, m) => this.add(a, Object.assign({taxable: 0}, t3[m].rcmOut)), this.Z());
+    T["4H"] = ["4A", "4B", "4C", "4D", "4E", "4F", "4G"].reduce((a, k) => this.add(a, T[k]), this.Z());
+    T["4I"] = S1(r => r.kind === "CDNR" && r.cls !== "exempt" && r.cls !== "nil" && r.cls !== "nongst" && !r.rcm);
+    T["4J"] = S1(r => r.kind === "DBNR" && !r.rcm);
+    T["4K"] = this.Z(); T["4L"] = this.Z();
+    T["4N"] = this.add(this.add(T["4H"], T["4I"], -1), T["4J"]);
+    T["5A"] = S1(r => r.cls === "export" && r.kind !== "CDNR" && r.kind !== "DBNR" && !(r.igst > 0));
+    T["5B"] = S1(r => r.cls === "sez" && r.kind !== "CDNR" && r.kind !== "DBNR" && !(r.igst > 0));
+    T["5C"] = S1(r => r.rcm && r.kind !== "CDNR");
+    T["5D"] = S1(r => r.cls === "exempt" && r.kind !== "CDNR");
+    T["5E"] = S1(r => r.cls === "nil" && r.kind !== "CDNR");
+    T["5F"] = S1(r => r.cls === "nongst" && r.kind !== "CDNR");
+    T["5G"] = ["5A", "5B", "5C", "5D", "5E", "5F"].reduce((a, k) => this.add(a, T[k]), this.Z());
+    T["5H"] = S1(r => r.kind === "CDNR" && (r.rcm || r.cls === "exempt" || r.cls === "nil" || r.cls === "nongst"));
+    T["5I"] = this.Z(); T["5J"] = this.Z(); T["5K"] = this.Z();
+    T["5M"] = this.add(T["5G"], T["5H"], -1);
+    T["5N"] = this.add(T["4N"], T["5M"]);
+    // Part III: credit taken (6), reversed (7), and against 2B (8)
+    const sumT = f => inBooks.reduce((a, m) => this.add(a, Object.assign({taxable: 0}, f(t3[m]))), this.Z());
+    T["6A"] = sumT(t => t.itc);
+    const cap = r => { const v = (S.books.vouchers || []).find(z => z.id === r.id); return !!(v && v.ent.some(e => e.a < 0 && Audit.isFixed(e.l))); };
+    const kindOf = r => cap(r) ? "cg" : (r.supply === "Services" || /^99/.test(r.hsn || "")) ? "is" : "in";
+    const inward = inn.filter(r => !r.rcm && !r.import && !r.blocked), sgn = r => r.note === "debit" ? -1 : 1;
+    ["in", "cg", "is"].forEach(k => { T["6B-" + k] = inward.filter(r => kindOf(r) === k).reduce((a, r) => this.add(a, r, sgn(r)), this.Z()); });
+    const rc = inn.filter(r => r.rcm);
+    T["6C"] = rc.filter(r => !r.gstin).reduce((a, r) => this.add(a, r, sgn(r)), this.Z());
+    T["6D"] = rc.filter(r => r.gstin).reduce((a, r) => this.add(a, r, sgn(r)), this.Z());
+    T["6E"] = inn.filter(r => r.import && r.supply !== "Services").reduce((a, r) => this.add(a, r), this.Z());
+    T["6F"] = inn.filter(r => r.import && r.supply === "Services").reduce((a, r) => this.add(a, r), this.Z());
+    T["6G"] = this.Z(); T["6H"] = this.Z();
+    T["6I"] = ["6B-in", "6B-cg", "6B-is", "6C", "6D", "6E", "6F", "6G", "6H"].reduce((a, k) => this.add(a, T[k]), this.Z());
+    T["6J"] = this.add(T["6A"], T["6I"], -1);
+    T["6O"] = T["6I"];
+    T["7C"] = sumT(t => t.r42); T["7D"] = sumT(t => t.r43); T["7E"] = sumT(t => t.reversal);
+    T["7A"] = this.Z(); T["7B"] = this.Z(); T["7H"] = this.Z();
+    T["7I"] = ["7A", "7B", "7C", "7D", "7E", "7H"].reduce((a, k) => this.add(a, T[k]), this.Z());
+    T["7J"] = this.add(T["6O"], T["7I"], -1);
+    // 8A: credit in 2B for the year's months
+    let a8 = this.Z(), twoB = 0;
+    GST2B.all2b(reg).filter(t => months.includes(t.ym)).forEach(t => { twoB++; t.rows.filter(r => r.itcavl !== "N" && r.sec !== "impg" && r.sec !== "impgsez").forEach(r => { a8 = this.add(a8, {taxable: r.taxable, igst: r.igst, cgst: r.cgst, sgst: r.sgst, cess: r.cess}, r.dir); }); });
+    T["8A"] = a8;
+    T["8B"] = this.add(this.add(this.add(T["6B-in"], T["6B-cg"]), T["6B-is"]), T["6H"]);
+    // 8C: credit on the year's bills taken in the next year's returns, up to November
+    const nextFrom = String(num(fy) + 1) + "0401", nextTo = String(num(fy) + 1) + "1130";
+    let c8 = this.Z();
+    GST2B.bookDocs().filter(d => (!reg || d.reg === reg) && d.bookDate >= nextFrom && d.bookDate <= nextTo && String(d.date) >= fy + "0401" && String(d.date) < nextFrom && !d.rcm)
+      .forEach(d => { c8 = this.add(c8, {taxable: d.taxable, igst: d.igst, cgst: d.cgst, sgst: d.sgst, cess: d.cess}, d.dir); });
+    T["8C"] = c8;
+    T["8D"] = this.add(T["8A"], this.add(T["8B"], T["8C"]), -1);
+    T["8G"] = T["6E"]; T["8H"] = T["6E"]; T["8I"] = this.Z();
+    T["13"] = T["8C"];
+    // Part IV: tax payable and paid
+    const pay = {};
+    ["igst", "cgst", "sgst", "cess"].forEach(h => {
+      const due = inBooks.reduce((s2, m) => s2 + num(t3[m].net[h]) + num(t3[m].rcmOut[h]), 0);
+      const cash = inBooks.reduce((s2, m) => s2 + Math.max(0, num(t3[m].payable[h])), 0);
+      pay[h] = {due: r2(due), cash: r2(cash), itc: r2(due - cash)};
+    });
+    // Part VI: HSN summaries
+    const hsn = {};
+    inBooks.forEach(m => GSTR.one(m, reg).hsn.forEach(h => { const k = h.hsn + "|" + h.rate, x = hsn[k] = hsn[k] || {hsn: h.hsn, rate: h.rate, taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0}; ["taxable", "igst", "cgst", "sgst", "cess"].forEach(f => { x[f] = r2(x[f] + h[f]); }); }));
+    const hin = {};
+    inn.forEach(r => { const k = (r.hsn || "no HSN"), x = hin[k] = hin[k] || {hsn: r.hsn || "", taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0}; ["taxable", "igst", "cgst", "sgst", "cess"].forEach(f => { x[f] = r2(x[f] + num(r[f]) * sgn(r)); }); });
+    return {fy, reg, months, inBooks, missing: months.filter(m => !have.has(m)), T, pay, twoB,
+      hsnOut: Object.values(hsn).sort((a, c) => c.taxable - a.taxable), hsnIn: Object.values(hin).sort((a, c) => c.taxable - a.taxable)};
+  },
+  ROWS: [
+    ["II", "4", "Outward and inward supplies on which tax is payable"],
+    ["4A", "Supplies made to unregistered persons (B2C)"], ["4B", "Supplies made to registered persons (B2B)"], ["4C", "Zero rated supply (export) on payment of tax"],
+    ["4D", "Supplies to SEZ on payment of tax"], ["4E", "Deemed exports"], ["4F", "Advances on which tax has been paid but invoice has not been issued"],
+    ["4G", "Inward supplies on which tax is to be paid on reverse charge"], ["4H", "Sub-total (A to G)", 1], ["4I", "Credit notes issued (-)"], ["4J", "Debit notes issued (+)"],
+    ["4K", "Supplies declared through amendments (+)"], ["4L", "Supplies reduced through amendments (-)"], ["4N", "Supplies and advances on which tax is to be paid", 1],
+    ["II", "5", "Outward supplies on which tax is not payable"],
+    ["5A", "Zero rated supply (export) without payment of tax"], ["5B", "Supply to SEZs without payment of tax"], ["5C", "Supplies on which tax is to be paid by the recipient on reverse charge"],
+    ["5D", "Exempted"], ["5E", "Nil rated"], ["5F", "Non-GST supply"], ["5G", "Sub-total (A to F)", 1], ["5H", "Credit notes issued (-)"], ["5M", "Supplies on which tax is not to be paid", 1],
+    ["5N", "Total turnover (including advances) (4N + 5M)", 1],
+    ["III", "6", "ITC availed during the year"],
+    ["6A", "Total amount of ITC availed through GSTR-3B"], ["6B-in", "6B Inward supplies other than imports and reverse charge: inputs"], ["6B-cg", "6B \u2026 capital goods"], ["6B-is", "6B \u2026 input services"],
+    ["6C", "Inward supplies from unregistered persons on reverse charge"], ["6D", "Inward supplies from registered persons on reverse charge"], ["6E", "Import of goods"], ["6F", "Import of services"],
+    ["6G", "Input tax credit received from ISD"], ["6H", "ITC reclaimed"], ["6I", "Sub-total (B to H)", 1], ["6J", "Difference (A \u2013 I)", 1],
+    ["III", "7", "ITC reversed and ineligible for the year"],
+    ["7A", "As per rule 37"], ["7B", "As per rule 39"], ["7C", "As per rule 42"], ["7D", "As per rule 43"], ["7E", "As per section 17(5)"], ["7H", "Other reversals"], ["7I", "Total ITC reversed", 1], ["7J", "Net ITC available for utilisation (6O \u2013 7I)", 1],
+    ["III", "8", "Other ITC related information"],
+    ["8A", "ITC as per GSTR-2B"], ["8B", "ITC as per 6(B) and 6(H)"], ["8C", "ITC on inward supplies of this year availed in the next year up to the time limit"], ["8D", "Difference [A \u2013 (B + C)]", 1],
+    ["8G", "IGST paid on import of goods"], ["8H", "IGST credit availed on import of goods (6E)"], ["8I", "Difference (G \u2013 H)", 1],
+    ["V", "13", "Particulars of the transactions for the previous year declared in the next year"], ["13", "ITC availed for the previous year"]],
+  html(d){
+    const m = v => INR.format(r2(v || 0));
+    let h = '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Table</th><th>Details</th><th class="n">Taxable value</th><th class="n">IGST</th><th class="n">CGST</th><th class="n">SGST</th><th class="n">Cess</th></tr></thead><tbody>';
+    this.ROWS.forEach(r => {
+      if (r.length === 3 && /^(II|III|IV|V|VI)$/.test(r[0])) { h += '<tr><td colspan="7" style="background:var(--paper)"><b>Part ' + r[0] + " \u00b7 " + r[1] + ". " + esc(r[2]) + "</b></td></tr>"; return; }
+      const x = d.T[r[0]] || this.Z(), b = r[2] ? "b" : "span";
+      h += "<tr><td>" + esc(r[0].replace(/-.*/, "")) + "</td><td><" + b + ">" + esc(r[1]) + "</" + b + '></td><td class="n">' + (/^[678]|^13/.test(r[0]) ? "" : m(x.taxable)) + '</td><td class="n">' + m(x.igst) + '</td><td class="n">' + m(x.cgst) + '</td><td class="n">' + m(x.sgst) + '</td><td class="n">' + m(x.cess) + "</td></tr>";
+    });
+    h += '<tr><td colspan="7" style="background:var(--paper)"><b>Part IV \u00b7 9. Details of tax paid</b></td></tr>' +
+      [["igst", "Integrated tax"], ["cgst", "Central tax"], ["sgst", "State/UT tax"], ["cess", "Cess"]].map(([k, l]) => "<tr><td>9</td><td>" + l + ' \u2014 payable ' + m(d.pay[k].due) + '</td><td class="n"></td><td class="n" colspan="2">paid in cash ' + m(d.pay[k].cash) + '</td><td class="n" colspan="2">through credit ' + m(d.pay[k].itc) + "</td></tr>").join("");
+    return h + "</tbody></table></div>";
+  }
+};
+const GST9C = {
+  ADJ: [["5B", "Unbilled revenue at the beginning of the year", 1], ["5C", "Unadjusted advances at the end of the year", 1], ["5D", "Deemed supply under Schedule I", 1],
+    ["5E", "Credit notes issued after the end of the year but reflected in the annual return", 1], ["5F", "Trade discounts accounted for in the financial statements but not permissible under GST", 1],
+    ["5H", "Unbilled revenue at the end of the year", -1], ["5I", "Credit notes accounted for in the financial statements but not permissible under GST", 1],
+    ["5J", "Adjustments on account of supply of goods by SEZ units to DTA units", -1], ["5K", "Turnover for the period under composition", -1],
+    ["5L", "Adjustments in turnover under section 15 and its rules (+/-)", 1], ["5M", "Adjustments in turnover on account of foreign exchange fluctuations (+/-)", 1], ["5N", "Adjustments on account of other reasons (+/-)", 1]],
+  st(fy, reg){ const b = S.books; b.gst9c = b.gst9c || {}; return b.gst9c[fy + "|" + reg] = b.gst9c[fy + "|" + reg] || {adj: {}, reasons: {}}; },
+  build(fy, reg){
+    const d9 = GST9.build(fy, reg), st = this.st(fy, reg), T = d9.T;
+    // 5A: the turnover of this registration in the books, net of credit notes; replace it with the audited figure
+    const booksTurnover = r2(T["5N"].taxable - T["4G"].taxable - T["4F"].taxable);
+    const a5 = st.turnover != null && st.turnover !== "" ? num(st.turnover) : booksTurnover;
+    // 5C: advances on which tax was paid and not yet billed, as in table 4F, unless typed
+    const def = {"5C": T["4F"].taxable}, adjOf = k => st.adj[k] != null && st.adj[k] !== "" ? num(st.adj[k]) : (def[k] || 0);
+    let o5 = a5; this.ADJ.forEach(([k, , sg]) => { o5 += sg * adjOf(k); });
+    o5 = r2(o5);
+    const p5 = r2(T["5N"].taxable - T["4G"].taxable);
+    const zero = r2(T["5A"].taxable + T["5B"].taxable), exempt = r2(T["5D"].taxable + T["5E"].taxable + T["5F"].taxable - T["5H"].taxable), rcm = T["5C"].taxable;
+    const e7 = r2(o5 - exempt - zero - rcm), f7 = r2(T["4N"].taxable - T["4G"].taxable);
+    // 9: tax by rate in the books against the annual return (the same months, so a difference is an adjustment above)
+    const rates = {};
+    d9.inBooks.forEach(m => GSTR.outward(m, reg).filter(r => r.cls === "taxable" && !r.rcm).forEach(r => { const k = String(r.rate), x = rates[k] = rates[k] || {rate: r.rate, taxable: 0, tax: 0}; const sg = r.kind === "CDNR" ? -1 : 1; x.taxable = r2(x.taxable + sg * r.taxable); x.tax = r2(x.tax + sg * (r.igst + r.cgst + r.sgst + r.cess)); }));
+    // 12: credit in the books against the annual return
+    const itcBooks = st.itcBooks != null && st.itcBooks !== "" ? num(st.itcBooks) : r2(T["6I"].igst + T["6I"].cgst + T["6I"].sgst + T["6I"].cess - T["6C"].igst - T["6C"].cgst - T["6C"].sgst - T["6D"].igst - T["6D"].cgst - T["6D"].sgst);
+    const d12 = r2(itcBooks + num(st.adj["12B"]) - num(st.adj["12C"])), e12 = r2(T["7J"].igst + T["7J"].cgst + T["7J"].sgst + T["7J"].cess);
+    return {d9, st, a5, booksTurnover, def, adjOf, o5, p5, q5: r2(o5 - p5), zero, exempt, rcm, e7, f7, g7: r2(e7 - f7), rates: Object.values(rates).sort((a, c) => a.rate - c.rate),
+      itcBooks, d12, e12, f12: r2(d12 - e12)};
+  }
+};
+
+/* ================================================================== */
 /* TDS: deductions from the books, challans, and what is paid by what */
 /* ================================================================== */
 const TDS = {
@@ -8051,7 +8205,7 @@ async function openBooks(cid){
 async function saveBooks(){ const b = S.books; if (b && b.cid) await Books.save(b.cid, {cid: b.cid, vouchers: b.vouchers, map: b.map, meta: b.meta, challans: b.challans, alloc: b.alloc, pans: b.pans, twoB: b.twoB,
   gstins: b.gstins, under: b.under, states: b.states, groups: b.groups, salary: b.salary, certs: b.certs, advFix: b.advFix, assets: b.assets, rev: b.rev,
   filed: b.filed, amendFix: b.amendFix, twoBs: b.twoBs, reco2b: b.reco2b, ledInfo: b.ledInfo, ledInfoAt: b.ledInfoAt,
-  audit: b.audit, auditCfg: b.auditCfg, auditRel: b.auditRel, ledSnaps: b.ledSnaps, tb: b.tb, mis: b.mis, misCfg: b.misCfg, msme: b.msme, budget: b.budget}); }
+  audit: b.audit, auditCfg: b.auditCfg, auditRel: b.auditRel, ledSnaps: b.ledSnaps, gst9c: b.gst9c, tb: b.tb, mis: b.mis, misCfg: b.misCfg, msme: b.msme, budget: b.budget}); }
 function viewBooks(){
   const co = CO();
   if (!S.books || S.books.cid !== co.id){ openBooks(co.id); return '<p class="note">Opening the books…</p>'; }
@@ -9006,12 +9160,81 @@ function ledChangedBanner(b){
     '<div class="bk-tablewrap" style="margin-top:6px"><table class="bk-table"><thead><tr><th>Ledger</th><th>What changed</th><th>Returns made before the change</th></tr></thead><tbody>' +
     ch.slice(0, 30).map(x => "<tr><td>" + esc(x.name) + "</td><td>" + esc(x.change) + "</td><td>" + esc(x.returns.slice(0, 4).join("; ") + (x.returns.length > 4 ? " and " + (x.returns.length - 4) + " more" : "")) + "</td></tr>").join("") + "</tbody></table></div></section>";
 }
+function viewGst9(b){
+  const reg = S.gstReg || (((b.meta || {}).gstins || []).length === 1 ? b.meta.gstins[0].slice(0, 2) : "");
+  if (!reg) return '<p class="note">Choose a registration above; the annual return is filed for each GSTIN.</p>';
+  const fy = GST9.fyOf(S.gstYm || GSTR.months().slice(-1)[0]), d = GST9.build(fy, reg), m = v => INR.format(r2(v || 0));
+  let h = '<section class="dash-card"><h3>GSTR-9 for ' + GST9.label(fy) + ", " + esc(((b.meta || {}).gstins || []).find(g => g.slice(0, 2) === reg) || reg) + "</h3>" +
+    '<p class="note">Built from the months in the books, the same figures as each month\u2019s GSTR-1 and 3B. ' + (d.missing.length ? '<span class="bad">Not in the books: ' + d.missing.map(GSTR.label).join(", ") + ".</span> " : "") +
+    (d.twoB ? d.twoB + " months of 2B here for table 8A." : '<span class="bad">No 2B here for this year, so table 8A is empty; bring the 2B files in under 2B reconciliation.</span>') + "</p>" +
+    '<div class="row" style="gap:8px;margin:8px 0"><button class="btn small primary" data-act="gst9Pdf">Download (PDF)</button><button class="btn small" data-act="gst9Excel">Excel</button></div>' + GST9.html(d) +
+    (Math.abs(d.T["6J"].igst + d.T["6J"].cgst + d.T["6J"].sgst + d.T["6J"].cess) >= 1 ? '<p class="bk-alert">6J: \u20b9' + m(d.T["6J"].igst + d.T["6J"].cgst + d.T["6J"].sgst + d.T["6J"].cess) + " of the credit in the 3Bs is not in 6B to 6H. In these books that comes from purchase debit notes counted as credit in 3B, and bills marked as ITC not available; check before filing.</p>" : "") +
+    '<p class="note">Tables 4K, 4L, 6G, 6H, 7A, 7B and 7H are not in the books; fill them on the portal where they apply. Table 8C counts bills of this year booked in Tally from April to November of the next year.</p></section>';
+  h += '<section class="dash-card" style="margin-top:12px"><h3>17. HSN summary of outward supplies</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>HSN</th><th class="n">Rate</th><th class="n">Taxable value</th><th class="n">IGST</th><th class="n">CGST</th><th class="n">SGST</th></tr></thead><tbody>' +
+    d.hsnOut.slice(0, 100).map(x => "<tr><td>" + esc(x.hsn || "\u2014") + '</td><td class="n">' + x.rate + '%</td><td class="n">' + m(x.taxable) + '</td><td class="n">' + m(x.igst) + '</td><td class="n">' + m(x.cgst) + '</td><td class="n">' + m(x.sgst) + "</td></tr>").join("") + "</tbody></table></div></section>";
+  h += '<section class="dash-card" style="margin-top:12px"><h3>18. HSN summary of inward supplies</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>HSN</th><th class="n">Taxable value</th><th class="n">IGST</th><th class="n">CGST</th><th class="n">SGST</th></tr></thead><tbody>' +
+    d.hsnIn.slice(0, 100).map(x => "<tr><td>" + esc(x.hsn || "no HSN in Tally") + '</td><td class="n">' + m(x.taxable) + '</td><td class="n">' + m(x.igst) + '</td><td class="n">' + m(x.cgst) + '</td><td class="n">' + m(x.sgst) + "</td></tr>").join("") + "</tbody></table></div></section>";
+  return h;
+}
+function viewGst9c(b){
+  const reg = S.gstReg || (((b.meta || {}).gstins || []).length === 1 ? b.meta.gstins[0].slice(0, 2) : "");
+  if (!reg) return '<p class="note">Choose a registration above.</p>';
+  const fy = GST9.fyOf(S.gstYm || GSTR.months().slice(-1)[0]), c = GST9C.build(fy, reg), m = v => INR.format(r2(v || 0)), st = c.st;
+  const inp = (k, v, ph) => '<input type="number" step="0.01" data-g9c="' + k + '" value="' + esc(v == null ? "" : v) + '" placeholder="' + esc(ph || "0") + '" style="width:140px;text-align:right">';
+  const row = (no, l, v, bold, bad) => "<tr><td>" + no + "</td><td>" + (bold ? "<b>" + l + "</b>" : l) + '</td><td class="n' + (bad && Math.abs(v) >= 1 ? " bad" : "") + '">' + (bold ? "<b>" + m(v) + "</b>" : m(v)) + "</td></tr>";
+  let h = '<section class="dash-card"><h3>GSTR-9C for ' + GST9.label(fy) + '</h3><p class="note">The reconciliation of the audited accounts with the annual return. The books give each figure; type the audited turnover and the adjustments where they apply. Reasons for any difference go in the boxes below each table.</p>' +
+    '<div class="row" style="gap:8px;margin:8px 0"><button class="btn small primary" data-act="gst9cPdf">Download (PDF)</button><button class="btn small" data-act="gst9cExcel">Excel</button></div>' +
+    '<h3 style="margin-top:10px">5. Reconciliation of gross turnover</h3><div class="bk-tablewrap"><table class="bk-table"><tbody>' +
+    "<tr><td>5A</td><td>Turnover (including exports) as per the audited financial statements<div class=\"nr\">from the books: " + m(c.booksTurnover) + '</div></td><td class="n">' + inp("turnover", st.turnover, String(c.booksTurnover)) + "</td></tr>" +
+    GST9C.ADJ.map(([k, l, sg]) => "<tr><td>" + k + "</td><td>" + esc(l) + " (" + (sg > 0 ? "+" : "\u2013") + ")" + (c.def[k] != null ? '<div class="nr">from the books (table 4F): ' + m(c.def[k]) + "</div>" : "") + '</td><td class="n">' + inp("adj." + k, st.adj[k], c.def[k] != null ? String(c.def[k]) : "0") + "</td></tr>").join("") +
+    row("5O", "Annual turnover after adjustments", c.o5, 1) + row("5P", "Turnover as declared in the annual return (GSTR-9)", c.p5) + row("5Q", "Unreconciled turnover (5O \u2013 5P)", c.q5, 1, 1) + "</tbody></table></div>" +
+    '<label class="note" style="display:block">6. Reasons for the unreconciled difference<textarea data-g9c="reasons.6" rows="2" style="width:100%">' + esc(st.reasons["6"] || "") + "</textarea></label>" +
+    '<h3 style="margin-top:12px">7. Reconciliation of taxable turnover</h3><div class="bk-tablewrap"><table class="bk-table"><tbody>' +
+    row("7A", "Annual turnover after adjustments (5O)", c.o5) + row("7B", "Exempted, nil rated, non-GST supplies", c.exempt) + row("7C", "Zero rated supplies without payment of tax", c.zero) + row("7D", "Supplies on which tax is paid by the recipient on reverse charge", c.rcm) +
+    row("7E", "Taxable turnover as per adjustments (A \u2013 (B + C + D))", c.e7, 1) + row("7F", "Taxable turnover as per liability declared in the annual return", c.f7) + row("7G", "Unreconciled taxable turnover (E \u2013 F)", c.g7, 1, 1) + "</tbody></table></div>" +
+    '<label class="note" style="display:block">8. Reasons<textarea data-g9c="reasons.8" rows="2" style="width:100%">' + esc(st.reasons["8"] || "") + "</textarea></label>" +
+    '<h3 style="margin-top:12px">9. Reconciliation of tax paid, rate by rate</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th class="n">Rate</th><th class="n">Taxable value</th><th class="n">Tax payable</th></tr></thead><tbody>' +
+    c.rates.map(x => '<tr><td class="n">' + x.rate + '%</td><td class="n">' + m(x.taxable) + '</td><td class="n">' + m(x.tax) + "</td></tr>").join("") + "</tbody></table></div>" +
+    '<label class="note" style="display:block">10. Reasons<textarea data-g9c="reasons.10" rows="2" style="width:100%">' + esc(st.reasons["10"] || "") + "</textarea></label>" +
+    '<h3 style="margin-top:12px">12. Reconciliation of input tax credit</h3><div class="bk-tablewrap"><table class="bk-table"><tbody>' +
+    "<tr><td>12A</td><td>ITC availed as per the audited financial statements<div class=\"nr\">from the books: " + m(c.itcBooks) + '</div></td><td class="n">' + inp("itcBooks", st.itcBooks, String(c.itcBooks)) + "</td></tr>" +
+    "<tr><td>12B</td><td>ITC booked in earlier years claimed in this year (+)</td><td class=\"n\">" + inp("adj.12B", st.adj["12B"]) + "</td></tr>" +
+    "<tr><td>12C</td><td>ITC booked in this year to be claimed in later years (\u2013)</td><td class=\"n\">" + inp("adj.12C", st.adj["12C"]) + "</td></tr>" +
+    row("12D", "ITC as per the audited financial statements after adjustments", c.d12, 1) + row("12E", "ITC claimed in the annual return (7J)", c.e12) + row("12F", "Unreconciled ITC", c.f12, 1, 1) + "</tbody></table></div>" +
+    '<label class="note" style="display:block">13. Reasons<textarea data-g9c="reasons.13" rows="2" style="width:100%">' + esc(st.reasons["13"] || "") + "</textarea></label></section>";
+  return h;
+}
+function gst9PackHtml(which){
+  const b = S.books, reg = S.gstReg || (((b.meta || {}).gstins || [])[0] || "").slice(0, 2), fy = GST9.fyOf(S.gstYm || GSTR.months().slice(-1)[0]), co = CO();
+  const head = (t) => '<div style="border-bottom:2px solid #15201B;padding-bottom:8px;margin-bottom:10px"><div style="font-size:12px;color:#5A6B63">' + t + ' \u2014 WORKING FROM THE BOOKS</div><h1 style="font-size:20px;margin:4px 0">' + esc(co.name) + "</h1><div>" + esc(((b.meta || {}).gstins || []).find(g => g.slice(0, 2) === reg) || reg) + " \u00b7 " + GST9.label(fy) + "</div></div>";
+  if (which === "9") return head("GSTR-9") + GST9.html(GST9.build(fy, reg)).replace(/<div class="bk-tablewrap">|<\/div>/g, "");
+  return head("GSTR-9C") + viewGst9c(b).replace(/<input[^>]*value="([^"]*)"[^>]*>/g, "$1").replace(/<textarea[^>]*>([^<]*)<\/textarea>/g, "<p>$1</p>").replace(/<button[^>]*>[^<]*<\/button>/g, "").replace(/class="bk-tablewrap"/g, "");
+}
+async function gst9Excel(which){
+  await ensureXlsx();
+  const b = S.books, reg = S.gstReg || (((b.meta || {}).gstins || [])[0] || "").slice(0, 2), fy = GST9.fyOf(S.gstYm || GSTR.months().slice(-1)[0]), wb = XLSX.utils.book_new();
+  if (which === "9"){
+    const d = GST9.build(fy, reg), rows = [["Table", "Details", "Taxable value", "IGST", "CGST", "SGST", "Cess"]];
+    GST9.ROWS.forEach(r => { if (r.length === 3 && /^(II|III|IV|V|VI)$/.test(r[0])){ rows.push(["Part " + r[0], r[1] + ". " + r[2]]); return; } const x = d.T[r[0]] || GST9.Z(); rows.push([r[0].replace(/-.*/, ""), r[1], x.taxable, x.igst, x.cgst, x.sgst, x.cess]); });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), "GSTR-9");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["HSN", "Rate", "Taxable", "IGST", "CGST", "SGST", "Cess"]].concat(d.hsnOut.map(x => [x.hsn, x.rate, x.taxable, x.igst, x.cgst, x.sgst, x.cess]))), "17 HSN outward");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["HSN", "Taxable", "IGST", "CGST", "SGST", "Cess"]].concat(d.hsnIn.map(x => [x.hsn, x.taxable, x.igst, x.cgst, x.sgst, x.cess]))), "18 HSN inward");
+  } else {
+    const c = GST9C.build(fy, reg), rows = [["Table", "Details", "Amount"], ["5A", "Turnover as per audited financial statements", c.a5]].concat(GST9C.ADJ.map(([k, l, sg]) => [k, l + (sg > 0 ? " (+)" : " (-)"), c.adjOf(k)]))
+      .concat([["5O", "Annual turnover after adjustments", c.o5], ["5P", "Turnover as per GSTR-9", c.p5], ["5Q", "Unreconciled", c.q5], ["6", "Reasons", c.st.reasons["6"] || ""],
+        ["7A", "Annual turnover after adjustments", c.o5], ["7B", "Exempted, nil, non-GST", c.exempt], ["7C", "Zero rated without payment", c.zero], ["7D", "Reverse charge supplies", c.rcm], ["7E", "Taxable turnover as per adjustments", c.e7], ["7F", "Taxable turnover as per GSTR-9", c.f7], ["7G", "Unreconciled", c.g7], ["8", "Reasons", c.st.reasons["8"] || ""],
+        ["12A", "ITC as per audited financial statements", c.itcBooks], ["12B", "ITC of earlier years claimed this year", num(c.st.adj["12B"])], ["12C", "ITC of this year to be claimed later", num(c.st.adj["12C"])], ["12D", "After adjustments", c.d12], ["12E", "ITC claimed in GSTR-9", c.e12], ["12F", "Unreconciled", c.f12], ["13", "Reasons", c.st.reasons["13"] || ""]]);
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), "GSTR-9C");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Rate", "Taxable", "Tax payable"]].concat(c.rates.map(x => [x.rate, x.taxable, x.tax]))), "9 Tax by rate");
+  }
+  saveFile(CO().name.replace(/[^A-Za-z0-9]+/g, "-") + "-GSTR-" + which + "-" + fy + "-" + reg + ".xlsx", new Blob([XLSX.write(wb, {bookType: "xlsx", type: "array"})], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
+}
 function viewBooksGst(b){
   const part = S.gstPart || "r1";
   const months = GSTR.months(), regs = (b.meta && b.meta.gstins) || [];
   if (!S.gstYm && months.length) S.gstYm = months[months.length - 1];
   if (!S.gstReg && regs.length === 1) S.gstReg = regs[0].slice(0, 2);
-  let h = ledgerBanner(b, "gst") + '<nav class="sbar" aria-label="GST">' + [["r1", "GSTR-1"], ["r3b", "GSTR-3B"], ["r2b", "2B reconciliation"], ["adv", "Advances"], ["rev", "Reversal"], ["amend", "Amendments"]]
+  let h = ledgerBanner(b, "gst") + '<nav class="sbar" aria-label="GST">' + [["r1", "GSTR-1"], ["r3b", "GSTR-3B"], ["r2b", "2B reconciliation"], ["adv", "Advances"], ["rev", "Reversal"], ["amend", "Amendments"], ["g9", "GSTR-9"], ["g9c", "GSTR-9C"]]
     .map(([id, l]) => '<button data-gstpart="' + id + '" aria-selected="' + (part === id) + '">' + l + "</button>").join("") + "</nav>";
   h += '<div class="revfilter"><select data-gstym>' + months.map(m => '<option value="' + m + '"' + (S.gstYm === m ? " selected" : "") + ">" + GSTR.label(m) + "</option>").join("") + "</select>" +
     (regs.length > 1 ? '<select data-gstreg><option value="">Both registrations</option>' + regs.map(g => '<option value="' + g.slice(0, 2) + '"' + (S.gstReg === g.slice(0, 2) ? " selected" : "") + ">" + esc(g) + "</option>").join("") + "</select>" : "") +
@@ -9023,6 +9246,8 @@ function viewBooksGst(b){
   if (part === "adv") return h + viewGstAdv(b);
   if (part === "rev") return h + viewGstRev(b);
   if (part === "amend") return h + viewGstAmend(b);
+  if (part === "g9") return h + viewGst9(b);
+  if (part === "g9c") return h + viewGst9c(b);
   return h + (part === "r1" ? viewGstr1(b) : viewGstr3b(b));
 }
 
@@ -13767,6 +13992,12 @@ function gstFixChange(t){
   if (d.misbud !== undefined){ const [h2, mm] = d.misbud.split("|"), fy = Audit.fyStart(mm + "01").slice(0, 4); b.budget = b.budget || {}; b.budget[fy] = b.budget[fy] || {}; b.budget[fy][h2] = Object.assign({}, b.budget[fy][h2], {[mm]: t.value === "" ? "" : num(t.value)}); saveBooks(); render(); return true; }
   if (d.misf !== undefined){ S.misF = t.value; render(); return true; }
   if (d.mismsme !== undefined){ b.msme = Object.assign({}, b.msme, {[d.mismsme]: t.value}); const r = (b.mis || {}).last; if (r) MIS.run(r.from, r.to, r.how); saveBooks(); render(); return true; }
+  if (d.g9c !== undefined){
+    const fy = GST9.fyOf(S.gstYm || GSTR.months().slice(-1)[0]), reg = S.gstReg || (((b.meta || {}).gstins || [])[0] || "").slice(0, 2), st = GST9C.st(fy, reg), k = d.g9c;
+    const v = t.tagName === "TEXTAREA" ? t.value : (t.value === "" ? "" : num(t.value));
+    if (k.startsWith("adj.")) st.adj[k.slice(4)] = v; else if (k.startsWith("reasons.")) st.reasons[k.slice(8)] = v; else st[k] = v;
+    saveBooks(); render(); return true;
+  }
   if (d.relrel !== undefined){ const x = (b.auditRel || []).find(z => z.name === d.relrel); if (x){ x.relation = t.value; saveBooks(); render(); } return true; }
   if (d.auditfreq !== undefined){ b.auditCfg = Object.assign({}, b.auditCfg, {freq: t.value}); saveBooks(); render(); return true; }
   if (d.auditfrom !== undefined || d.auditto !== undefined){ const dr = Audit.defaultRange(b); S.auditRange = Object.assign({from: Audit.iso(dr.from), to: Audit.iso(dr.to)}, S.auditRange, d.auditfrom !== undefined ? {from: t.value} : {to: t.value}); return true; }
@@ -17466,6 +17697,8 @@ document.addEventListener("click", ev => {
       break;
     }
     case "auditUnlock": { const run = (S.books.audit || {}).last; if (run && S.books.audit.final){ delete S.books.audit.final[run.from + "-" + run.to]; saveBooks(); toast("Unlocked."); render(); } break; }
+    case "gst9Pdf": case "gst9cPdf": { const w = act === "gst9Pdf" ? "9" : "9C"; printView(CO().name + " GSTR-" + w, "<style>@page{size:A4 portrait;margin:12mm}</style>" + gst9PackHtml(w)); break; }
+    case "gst9Excel": case "gst9cExcel": gst9Excel(act === "gst9Excel" ? "9" : "9C").then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break;
     case "lmPostAll": { const n2 = LedMaster.applyPosting(S.books, CO()); toast(n2 + " posting ledger" + (n2 === 1 ? "" : "s") + " set from the master."); render(); break; }
     case "lmConfirmShown": {
       const b = S.books, info = b.ledInfo || {}, q = String(S.ledQ || "").toLowerCase(), view = S.lmView || "pending";
