@@ -17,10 +17,18 @@ const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fai
   let diffs = 0;
   months.forEach(m => [""].forEach(reg => {
     const a = old.x.GSTR.one(m, reg), c = neu.x.GSTR.one(m, reg);
+    // build 132 reads the sales ledger inside item invoices: tax stays the same, the value rises by those lines
+    let valA = 0, valC = 0;
     ["b2b", "b2cl", "b2c", "cdnr", "nil"].forEach(k => {
       const sa = old.x.GSTR.sum(a[k]), sc = neu.x.GSTR.sum(c[k]);
-      if (Math.abs(sa.taxable - sc.taxable) > 0.01 || Math.abs(sa.igst - sc.igst) > 0.01 || Math.abs(sa.cgst - sc.cgst) > 0.01){ diffs++; console.log("  diff " + m + " " + reg + " " + k, JSON.stringify(sa), JSON.stringify(sc)); }
+      if (Math.abs(sa.igst - sc.igst) > 0.01 || Math.abs(sa.cgst - sc.cgst) > 0.01 || Math.abs(sa.sgst - sc.sgst) > 0.01){ diffs++; console.log("  tax diff " + m + " " + reg + " " + k, JSON.stringify(sa), JSON.stringify(sc)); }
+      const sg = k === "cdnr" ? -1 : 1; valA += sg * sa.taxable; valC += sg * sc.taxable;
     });
+    const oldById = new Map(old.ctx.S.books.vouchers.map(v => [v.id, v]));
+    const itemVal = neu.ctx.S.books.vouchers.filter(v => neu.x.GSTR.ym(v.date) === m && neu.x.Books.isSale(v)).reduce((s2, v) => { const o = oldById.get(v.id); if (!o) return s2;
+      return s2 + v.ent.filter(e => !o.ent.some(z => z.l === e.l && z.a === e.a)).reduce((q, e) => q + e.a, 0); }, 0);
+    if (Math.abs((valC - valA) - itemVal) > 1){ diffs++; console.log("  value diff " + m + " " + (valC - valA) + " expected " + itemVal); }
+    if (itemVal) console.log("  " + m + ": sales value in item invoices now read: " + itemVal);
     const ta = old.x.GSTR.threeB(m, reg), tc = neu.x.GSTR.threeB(m, reg);
     ["igst", "cgst", "sgst"].forEach(hd => {
       // build 131: a supplier's credit note (input tax credited) reduces credit instead of adding to it, so ITC falls by twice its tax
@@ -33,7 +41,7 @@ const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fai
     const za = ta.zero.taxable, zc = tc.zero.taxable;
     if (Math.abs(za - zc) > 0.01) console.log("  exports " + m + " " + reg + ": build 116 " + za + ", now " + zc + " (foreign currency now read as rupees)");
   }));
-  ok(diffs === 0, "both registrations together: GSTR-1 parts and 3.1(a) apart from advances are the same as build 116; ITC differs by exactly twice the suppliers\u2019 credit notes");
+  ok(diffs === 0, "both registrations together: GSTR-1 tax the same as build 116, the value higher by exactly the item-invoice lines now read; ITC differs by exactly twice the suppliers\u2019 credit notes");
   // per registration, ITC moves where Tally's voucher GSTIN disagreed with the tax ledger's registration
   ["07", "09"].forEach(reg => { let a = 0, c = 0; months.forEach(m => { a += old.x.GSTR.threeB(m, reg).itc.cgst + old.x.GSTR.threeB(m, reg).itc.igst; c += neu.x.GSTR.threeB(m, reg).itc.cgst + neu.x.GSTR.threeB(m, reg).itc.igst; });
     console.log("  ITC (IGST + CGST) for the year, " + reg + ": build 116 " + a.toFixed(2) + ", now " + c.toFixed(2)); });

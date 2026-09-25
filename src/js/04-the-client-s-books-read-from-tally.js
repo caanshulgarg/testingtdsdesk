@@ -72,7 +72,8 @@ const Books = {
       ent: []
     };
     if (v.cmp) meta.gstins.add(v.cmp);
-    [["<ALLLEDGERENTRIES.LIST>", "</ALLLEDGERENTRIES.LIST>"], ["<LEDGERENTRIES.LIST>", "</LEDGERENTRIES.LIST>"]].forEach(([open2, close]) => {
+    // an item invoice keeps the purchase or sales ledger inside each item, in its accounting allocation
+    [["<ALLLEDGERENTRIES.LIST>", "</ALLLEDGERENTRIES.LIST>"], ["<LEDGERENTRIES.LIST>", "</LEDGERENTRIES.LIST>"], ["<ACCOUNTINGALLOCATIONS.LIST>", "</ACCOUNTINGALLOCATIONS.LIST>"]].forEach(([open2, close]) => {
       s.split(open2).slice(1).forEach(p => {
         const e = p.split(close)[0];
         const name = this.one(e, "LEDGERNAME");
@@ -226,8 +227,27 @@ const Books = {
   },
   isRcm(v){ return !!v.rcm; },
   isImport(v){ const c = String(v.country || "").toLowerCase(); return !!c && c !== "india"; },
-  isPurchase(v){ return /PUR|PURCHASE/i.test(v.type) || /DEBIT NOTE/i.test(v.type); },
-  isSale(v){ return /SALE|SALES|CREDIT NOTE|EXPORT/i.test(v.type); },
+  // orders and stock movements carry no accounts; they are never purchases or sales
+  NONACC: /ORDER|DELIVERY NOTE|RECEIPT NOTE|REJECTION|STOCK JOURNAL|PHYSICAL STOCK|MATERIAL (IN|OUT)|MEMO/i,
+  groupPath(l){ const b = S.books || {}, under = b.under || {}, groups = b.groups || {}, out = []; let p = under[l]; for (let i = 0; p && i < 15; i++){ out.push(p); p = groups[p]; } return out; },
+  // a voucher type with its own name ("GST INWARD", "LOCAL", "IMPORT") is known by what it does:
+  // it debits a ledger under Purchase Accounts, or credits one under Sales Accounts
+  byContent(v, re, debit){
+    if (/JOURNAL|PAYMENT|RECEIPT|CONTRA/i.test(v.type)) return false;
+    return v.ent.some(e => (debit ? e.a < 0 : e.a > 0) && (this.groupPath(e.l).some(g => re.test(g)) || (!this.groupPath(e.l).length && (debit ? /PURCHASE/i : /\bSALES?\b/i).test(e.l))));
+  },
+  isPurchase(v){
+    if (this.NONACC.test(v.type)) return false;
+    if (/PUR|PURCHASE/i.test(v.type) || /DEBIT NOTE/i.test(v.type)) return true;
+    if (/SALE|SALES|CREDIT NOTE|EXPORT/i.test(v.type)) return false;
+    return this.byContent(v, /^purchase accounts$/i, true);
+  },
+  isSale(v){
+    if (this.NONACC.test(v.type)) return false;
+    if (/SALE|SALES|CREDIT NOTE|EXPORT/i.test(v.type)) return true;
+    if (/PUR|PURCHASE|DEBIT NOTE/i.test(v.type)) return false;
+    return this.byContent(v, /^sales accounts$/i, false);
+  },
   async save(cid, data){
     await IDBStore.write([["books:" + cid, data]]);
   },

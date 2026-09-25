@@ -26,7 +26,7 @@ with sync_playwright() as p:
     ok(pg.evaluate("S.misRange.from") == "2025-04-01" and pg.evaluate("S.misRange.to") == "2026-03-31", "Last year sets 1 Apr 2025 to 31 Mar 2026")
     pg.click('button[data-act="misRun"]'); pg.wait_for_timeout(3000)
     t = pg.inner_text("#app")
-    ok("sales, the period" in t.lower() and "56,04,23,096.16" in t, "summary: sales for the year")
+    ok("sales, the period" in t.lower() and "56,39,22,176.16" in t, "summary: sales for the year")
     ok("settled against older bills" in t, "says plainly that receivables miss bills from before the books")
     pg.screenshot(path=OUT + "/mis-summary.png", full_page=True)
     pg.click('button[data-mistab="pl"]'); pg.wait_for_timeout(500)
