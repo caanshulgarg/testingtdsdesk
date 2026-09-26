@@ -38,7 +38,7 @@ function renderSide(){
   if (open){
     h += '<div class="side-client"><span class="side-label">Client</span><button class="side-co" data-act="switch" title="Change client (F3)"><b>' + esc(open.name) + "</b><small>" + esc(open.gstin || "No GSTIN") + " \u00b7 change</small></button></div>" +
       item("dash", "Dashboard", onDash, 0, "dash", 'data-goclient="dash"') +
-      item("bills", "Purchase", inCo && mod === "bills" && !onDash && !isSetupTab(S.tab), st.drafts || 0, "bills", 'data-goclient="bills"') +
+      item("bills", "Purchase", inCo && mod === "bills" && !onDash && !isSetupTab(S.tab) && !["clientInbox", "txn", "books"].includes(S.tab), st.drafts || 0, "bills", 'data-goclient="bills"') +
       item("bank", "Bank", inCo && mod === "bank" && !isSetupTab(S.tab), S.bank && S.bank.cid === open.id ? tabCounts(S.bank.rows).review : 0, "bank", 'data-goclient="bank"') +
       item("sales", "Sales", inCo && mod === "sales" && !isSetupTab(S.tab), 0, "sales", 'data-goclient="sales"') +
       item("inbox", "Inbox", inCo && S.tab === "clientInbox", docqCount(open.id), "inbox", 'data-goclient="inbox"') +
