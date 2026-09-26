@@ -875,6 +875,8 @@ tr.rowlink td,.bk-table td{transition:background-color .12s ease}
 /* the bill list and the bill stack on narrow screens (an earlier rule kept two columns on phones) */
 @media (max-width:860px){.desk{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:640px){.side{width:100%}}
+/* the company switcher sits above the bottom action bar */
+#modal{z-index:50}
 </style>
 <style>.is-test .side-brand::after{content:"TEST";display:block;margin-top:4px;font-size:11px;letter-spacing:.14em;color:#E9A06A}.is-test header.top{box-shadow:inset 0 3px 0 #E2761B}body.is-test::after{content:"TESTING SITE · not for real client work · post only to a ZZ TEST company in Tally";position:fixed;left:0;right:0;bottom:0;z-index:70;background:#E2761B;color:#fff;font-size:12.5px;text-align:center;padding:3px 8px;letter-spacing:.04em;pointer-events:none}.is-test .actionbar{bottom:22px}.is-test #app{padding-bottom:34px}</style></head>
 <body class="is-test">

@@ -866,3 +866,5 @@ tr.rowlink td,.bk-table td{transition:background-color .12s ease}
 /* the bill list and the bill stack on narrow screens (an earlier rule kept two columns on phones) */
 @media (max-width:860px){.desk{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:640px){.side{width:100%}}
+/* the company switcher sits above the bottom action bar */
+#modal{z-index:50}
