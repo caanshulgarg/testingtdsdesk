@@ -1592,8 +1592,9 @@ function viewBooks2B(b){
   const money = v => INR.format(r2(v || 0)), tx = o => r2((num(o.igst) + num(o.cgst) + num(o.sgst) + num(o.cess)));
   const loadedAll = GST2B.all2b("");
   const pick = '<button class="btn small primary" data-act="twoBPick">Bring in 2B JSON</button>';
+  const apiCard = typeof viewGstApiCard === "function" ? viewGstApiCard(b) : "";
   if (!loadedAll.length){
-    return '<section class="dash-card" style="max-width:760px"><h3>GSTR-2B reconciliation</h3>' +
+    return apiCard + '<section class="dash-card" style="max-width:760px"><h3>GSTR-2B reconciliation</h3>' +
       '<p class="note">On the portal: Returns Dashboard \u2192 the month \u2192 GSTR-2B \u2192 View \u2192 Download \u2192 <b>Generate JSON</b>. Bring in one month, a quarter, or the whole year at once \u2014 select all the files together.</p>' +
       '<p class="note">Every document in Tally that takes input tax is compared: purchases, and expenses booked in journals or payments. Invoices are matched on the supplier\u2019s GSTIN and invoice number, then on the number written differently, then on the amount; anything less than certain is put to you to confirm.</p>' +
       (b.twoB ? '<p class="note" style="color:#B9541B">A 2B brought in before this build was read the old way. Bring it in again.</p>' : "") + pick + "</section>";
@@ -1605,7 +1606,7 @@ function viewBooks2B(b){
   const wrong = loadedAll.filter(t => regs.length && !regs.includes(t.gstin));
   // which months of the year have a 2B here
   const fyM = S.gstYm ? GSTRev.fyMonths(S.gstYm) : [], have = new Set(mine.map(t => t.ym));
-  let h = '<section class="dash-card"><div class="row" style="gap:8px;align-items:center;flex-wrap:wrap">' + pick +
+  let h = apiCard + '<section class="dash-card"><div class="row" style="gap:8px;align-items:center;flex-wrap:wrap">' + pick +
     '<span class="note">2B here for ' + (regs.length > 1 ? esc(reg) + ": " : "") + "</span>" +
     (fyM.length ? fyM.map(m => '<span class="tag' + (have.has(m) ? "" : " warn") + '" title="' + (have.has(m) ? "brought in" : "not brought in yet") + '">' + esc(GSTR.label(m).replace(/ \d{4}$/, "")) + "</span>").join("") : "") +
     "</div>" + (wrong.length ? '<p class="note" style="color:#B9541B">' + wrong.length + " 2B file" + (wrong.length === 1 ? " is" : "s are") + " for " + esc(Array.from(new Set(wrong.map(t => t.gstin))).join(", ")) + ", not this client\u2019s registration.</p>" : "") +

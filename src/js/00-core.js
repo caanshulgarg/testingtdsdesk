@@ -33,7 +33,7 @@ const DEFAULT_FIRM = {firmName:"Garg Shekhar & Company", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "26 Sep 2026 · build 149 (Returns filed: the portal’s PDFs of every GST return kept per GSTIN and period, with the year’s checklist)";
+const APP_VERSION = "26 Sep 2026 · build 150 (GST API through FYN Gateway: taxpayer OTP sign-in and 2B fetched from the portal)";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;

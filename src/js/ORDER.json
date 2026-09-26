@@ -36,5 +36,6 @@
  "35-gst-filing.js",
  "36-gst-settings.js",
  "37-gst-periodic.js",
- "38-gst-returns-filed.js"
+ "38-gst-returns-filed.js",
+ "39-gst-api.js"
 ]
