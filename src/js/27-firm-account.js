@@ -352,6 +352,7 @@ async function loadAccount(quiet){
     S.account = a || null;
     try { pickEngine(); } catch (e){}      // the plan may provide Claude
     if (a && a.superadmin && !S.adminData) loadAdminOverview(true);
+    if (typeof SUP === "object") SUP.load(true);          // the Help count: tickets awaiting an answer
     if (!quiet) render();
     return a;
   } catch (e){ if (!quiet) toast("Could not read the account: " + e.message); return null; }

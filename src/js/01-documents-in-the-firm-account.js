@@ -3674,7 +3674,7 @@ function render(){
       (S.tab === "invoices" ? viewInvoices() : S.tab === "bank" ? viewBank() : S.tab === "sales" ? viewSales() : S.tab === "deductees" ? viewParties() : S.tab === "settings" ? viewCompanySettings() : S.tab === "gstset" ? viewGstSettings() : viewExport());
   } else {
     S.view = "home";
-    body = S.homeTab === "today" ? viewToday() : S.homeTab === "inbox" ? viewInboxAll() : S.homeTab === "tally" ? viewTallyHome() : S.homeTab === "rules" ? viewRules() : viewClients();
+    body = S.homeTab === "help" && typeof viewHelp === "function" ? viewHelp() : S.homeTab === "today" ? viewToday() : S.homeTab === "inbox" ? viewInboxAll() : S.homeTab === "tally" ? viewTallyHome() : S.homeTab === "rules" ? viewRules() : viewClients();
   }
   const working = S.view === "company" && CO() ? billsBusyCard() + docsBusyCard() : "";
   app.innerHTML = selfTestBanner() + banner + working + body + drawerHtml() + actionBar() + colPopHtml() + tallyPanelHtml() + firmMenuHtml();

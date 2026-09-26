@@ -1833,7 +1833,7 @@ function renderTop(){
   if (top) top.style.display = signInNeeded() ? "none" : "";
   if (S.view === "company" && CO()){ bar.innerHTML = '<div class="headrow">' + clientHeader() + topRight() + "</div>"; tabs.innerHTML = ""; }
   else {
-    const title = {clients: "Clients", today: "Today", inbox: "Inbox", tally: "Tally", rules: "Settings"}[S.homeTab] || "Clients";
+    const title = {clients: "Clients", today: "Today", inbox: "Inbox", tally: "Tally", rules: "Settings", help: "Help"}[S.homeTab] || "Clients";
     bar.innerHTML = '<div class="headrow"><div class="tbar"><div class="tbar-title"><h2>' + title + '</h2><span class="note">' + esc(S.firm.firmName || "") + "</span></div></div>" + topRight() + "</div>";
     tabs.innerHTML = "";
   }

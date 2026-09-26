@@ -27,6 +27,7 @@ function renderSide(){
     setup: '<path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="8" cy="18" r="2"/>',
     txn: '<path d="M4 5h16v14H4z"/><path d="M4 9h16M9 9v10"/>',
     books: '<path d="M5 4h9l5 5v11H5z"/><path d="M13 4v5h5"/><path d="M8 13h7M8 17h5"/>',
+    help: '<circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.5v.6"/><circle cx="12" cy="17" r=".6"/>',
     clients: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.6c2.6.2 4.6 1.9 5.3 5.4"/>'
   };
   const item = (id, label, on, n, kind, attr) => '<button class="side-link" ' + (attr || ("data-nav=\"" + id + "\"")) + (on ? ' aria-current="page"' : "") + ">" +
@@ -45,7 +46,8 @@ function renderSide(){
       item("books", "TDS & GST", inCo && S.tab === "books", 0, "books", 'data-goclient="books"') +
       item("setup", "Client setup", inCo && isSetupTab(S.tab), 0, "setup", 'data-act="setup"');
   }
-  h += '<div class="side-sep"></div>' + item("clients", "All clients", S.view === "home" && S.homeTab !== "rules", 0, "clients");
+  h += '<div class="side-sep"></div>' + item("clients", "All clients", S.view === "home" && !["rules", "help"].includes(S.homeTab), 0, "clients");
+  h += item("help", "Help", S.view === "home" && S.homeTab === "help", typeof SUP === "object" ? SUP.counts() : 0, "help");
   h += '<div class="side-grow"></div><div class="side-ver">' + esc(APP_VERSION.split("\u00b7")[1] || APP_VERSION) + "</div>";
   side.innerHTML = h;
 }
