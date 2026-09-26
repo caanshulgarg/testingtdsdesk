@@ -51,7 +51,7 @@ const CustIMS = {
   customers(reg){
     const m = {};
     this.items(reg).filter(x => x.open && ((x.kind === "inv" && x.act === "ask") || (x.kind === "cn" && x.act === "rejected"))).forEach(x => { const k = x.gstin; (m[k] = m[k] || {gstin: x.gstin, party: x.party, items: []}).items.push(x); });
-    return Object.values(m).map(c => Object.assign(c, {email: ITCT.tallyEmail(c.party), phone: ITCT.tallyPhone(c.party), tax: r2(c.items.reduce((a, x) => a + x.tax, 0))}));
+    return Object.values(m).map(c => { const k = GSTSet.contact(c.gstin, c.party); return Object.assign(c, {email: k.email, phone: k.phone, tax: r2(c.items.reduce((a, x) => a + x.tax, 0))}); });
   }
 };
 function viewCustRejections(b){

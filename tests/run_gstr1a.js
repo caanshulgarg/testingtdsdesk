@@ -1,6 +1,6 @@
 // node run_gstr1a.js - GSTR-1A: the month's own differences after its GSTR-1, before its 3B
 const fs = require("fs"), {load, openBlob, HTML, DATA, CACHE} = require("./harness");
-const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "INR", "normName", "ITCT", "CustIMS", "GSTF", "CO"];
+const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "INR", "normName", "ITCT", "GSTSet", "CustIMS", "GSTF", "CO"];
 let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 (async () => {
   const {ctx, x} = load(HTML, NAMES);

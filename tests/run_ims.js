@@ -1,6 +1,6 @@
 // node run_ims.js - documents rejected in IMS: read from 2B's rejected section, found in Tally, kept out of credit
 const fs = require("fs"), {load, openBlob} = require("./harness"), {HTML, DATA, CACHE} = require("./harness");
-const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "INR", "NORM_CACHE", "normName", "gramsOf", "normNameRaw", "nameSim", "ITCT", "CO"];
+const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "INR", "NORM_CACHE", "normName", "gramsOf", "normNameRaw", "nameSim", "ITCT", "GSTSet", "CO"];
 let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 const clone = o => JSON.parse(JSON.stringify(o));
 (async () => {

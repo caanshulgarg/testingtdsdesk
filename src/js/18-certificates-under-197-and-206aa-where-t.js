@@ -110,7 +110,7 @@ async function saveBooks(){ const b = S.books; if (b && b.cid) await Books.save(
   gstins: b.gstins, under: b.under, states: b.states, groups: b.groups, salary: b.salary, certs: b.certs, advFix: b.advFix, assets: b.assets, rev: b.rev,
   filed: b.filed, amendFix: b.amendFix, twoBs: b.twoBs, reco2b: b.reco2b, ledInfo: b.ledInfo, ledInfoAt: b.ledInfoAt,
   audit: b.audit, auditCfg: b.auditCfg, auditRel: b.auditRel, ledSnaps: b.ledSnaps, gst9c: b.gst9c, groupInfo: b.groupInfo, fs: b.fs, tb: b.tb, mis: b.mis, misCfg: b.misCfg, msme: b.msme, budget: b.budget,
-  gst3b: b.gst3b, gst9: b.gst9, gstOpen: b.gstOpen, itcBasis: b.itcBasis, itcTrack: b.itcTrack, outRej: b.outRej, gstFiled: b.gstFiled, gstAato: b.gstAato, filed1a: b.filed1a, rule37On: b.rule37On, gstCashLedger: b.gstCashLedger}); }
+  gst3b: b.gst3b, gst9: b.gst9, gstOpen: b.gstOpen, itcBasis: b.itcBasis, itcTrack: b.itcTrack, outRej: b.outRej, gstFiled: b.gstFiled, gstAato: b.gstAato, filed1a: b.filed1a, rule37On: b.rule37On, gstCashLedger: b.gstCashLedger, gstSet: b.gstSet, gstContacts: b.gstContacts}); }
 function viewBooks(){
   const co = CO();
   if (!S.books || S.books.cid !== co.id){ openBooks(co.id); return '<p class="note">Opening the books…</p>'; }
@@ -1160,6 +1160,9 @@ function viewBooksGst(b){
     (part === "amend" ? '<button class="btn small primary" data-act="gstJson">Download GSTR-1 JSON with these</button>' : "") +
     (part === "r1" ? '<button class="btn small primary" data-act="gstJson">Download GSTR-1 JSON for the portal</button>' : "") +
     (part === "r3b" ? '<button class="btn small primary" data-act="gst3bJson">Download GSTR-3B JSON for the portal</button>' : "") + "</div>";
+  // a GSTIN that is not a monthly filer: say so on every part, until its own returns are built
+  const ftp = typeof GSTSet === "object" && S.gstYm ? GSTSet.typeOf(S.gstYm, S.gstReg || "") : "monthly";
+  if (ftp !== "monthly") h += '<p class="banner" style="margin:0 0 10px">' + (ftp === "qrmp" ? "This GSTIN files <b>quarterly (QRMP)</b>, " + esc(GSTSet.qLabel(S.gstYm)) + ". The working below is month by month; quarterly GSTR-1, IFF and PMT-06 are not prepared here yet." : "This GSTIN is under <b>composition</b>: GSTR-1 and 3B do not apply, and CMP-08 and GSTR-4 are not prepared here yet.") + " " + gstSetLink() + "</p>";
   if (part === "r2b") return h + viewBooks2B(b);
   if (part === "inreg") return h + viewInputRegister(b);
   if (part === "follow") return h + viewItcFollow(b);
@@ -1305,7 +1308,7 @@ function viewGstRev(b){
     "<tr><td>D2 For non-business use: 5% of C2</td>" + heads(r42.D2) + "</tr>" +
     "<tr><td><b>Reversed: D1 + D2</b></td>" + heads(r42.reverse) + "</tr>" +
     "<tr><td>C3 Credit kept</td>" + heads(r42.C3) + "</tr></tbody></table></div>" +
-    '<label class="note" style="display:flex;gap:6px;align-items:center;margin-top:8px"><input type="checkbox" data-revd2' + (set.d2 ? " checked" : "") + "> Some of the common credit is used for non-business purposes, so D2 (5%) applies</label></section>";
+    '<p class="note" style="margin-top:8px">D2 (5% for non-business use): <b>' + (set.d2 ? "applies" : "does not apply") + "</b> \u00b7 " + (typeof gstSetLink === "function" ? gstSetLink() : "") + "</p></section>";
   const y = GSTRev.year(ym, reg);
   if (y.rows.length){
     const fyLabel = y.fy + "-" + String(num(y.fy) + 1).slice(2);
@@ -1408,7 +1411,8 @@ function viewGstChecks(){
 function viewGstr3b(b){
   const t = GSTR.threeB(S.gstYm || "", S.gstReg || ""), money = v => INR.format(r2(v || 0));
   const choice = ((b.itcBasis || {})[S.gstReg || ""]) || "2b";
-  const basisBar = '<div class="gf-ctl" style="margin-bottom:10px"><span class="note">Credit in table 4:</span><select data-itcbasis><option value="2b"' + (choice === "2b" ? " selected" : "") + '>as far as 2B shows it (section 16(2)(aa))</option><option value="books"' + (choice === "books" ? " selected" : "") + ">as booked in Tally</option></select>" +
+  const ft = typeof GSTSet === "object" ? GSTSet.typeOf(S.gstYm || "", S.gstReg || "") : "monthly";
+  const basisBar = '<div class="gf-ctl" style="margin-bottom:10px"><span class="note">Credit in table 4: <b>' + (choice === "2b" ? "as far as 2B shows it" : "as booked in Tally") + "</b> \u00b7 filing " + esc(typeof GSTSet === "object" ? GSTSet.typeLabel(ft).toLowerCase() : "monthly") + " \u00b7 " + (typeof gstSetLink === "function" ? gstSetLink() : "") + "</span>" +
     '<span class="note">' + (t.basis === "2b" ? "This month\u2019s 2B is here; bills not in it are held back." : t.basis === "no 2B" ? "No 2B for this month here, so the books are used; bring it in under 2B reconciliation." : "As booked.") + "</span></div>";
   const row = (label, x, bold) => "<tr><td>" + (bold ? "<b>" + label + "</b>" : label) + '</td><td class="n">' + money(x.taxable) + '</td><td class="n">' + money(x.igst) + '</td><td class="n">' + money(x.cgst) + '</td><td class="n">' + money(x.sgst) + "</td></tr>";
   const gap = '<tr><td colspan="5" style="height:8px"></td></tr>';
@@ -1452,7 +1456,7 @@ function viewGstr3b(b){
     hd.map(([k, l]) => "<tr><td>" + l + '</td><td class="n">' + money(num(t.net[k]) + num(t.rcmOut[k])) + '</td><td class="n">' + money((P.use.igst || {})[k]) + '</td><td class="n">' + money((P.use.cgst || {})[k]) + '</td><td class="n">' + money((P.use.sgst || {})[k]) + '</td><td class="n">' + money((P.use.cess || {})[k]) + '</td><td class="n"><b>' + money(r2(P.cash[k] - P.rcmCash[k])) + '</b></td><td class="n"><b>' + money(P.rcmCash[k]) + "</b></td></tr>").join("") +
     '<tr><td colspan="8" style="height:6px"></td></tr>' +
     "<tr><td>Credit brought forward" + (first ? '<div class="nr">the balance in the electronic credit ledger at the start of ' + esc(GSTR.label(S.gstYm)) + ", from the portal</div>" : '<div class="nr">left over from ' + esc(GSTR.label(months[months.indexOf(S.gstYm) - 1] || "")) + "</div>") + '</td><td></td>' +
-    hd.map(([k]) => '<td class="n">' + (first ? '<input type="number" step="0.01" data-gstopen="' + k + '" value="' + esc(open[k] == null ? "" : open[k]) + '" placeholder="0" style="width:110px;text-align:right">' : money(t.opening[k])) + "</td>").join("") + "<td></td><td></td></tr>" +
+    hd.map(([k]) => '<td class="n">' + money(t.opening[k]) + "</td>").join("") + "<td>" + (first && typeof gstSetLink === "function" ? gstSetLink("typed in GST settings") : "") + "</td><td></td></tr>" +
     "<tr><td><b>Credit carried to next month</b></td><td></td>" + hd.map(([k]) => '<td class="n"><b>' + money(P.carry[k]) + "</b></td>").join("") + "<td></td><td></td></tr></tbody></table></div>";
   h += '<p class="note">Worked out from the books. Credit is used as sections 49 and 49A and rule 88A require: IGST credit first against IGST, the rest against CGST and SGST; then CGST and SGST credit against their own tax and then IGST; CGST never against SGST. Reverse charge is paid in cash. Interest and late fee, and anything paid outside the books, are not included; check the ledgers on the portal before paying.</p>';
   h += viewGstChecks();

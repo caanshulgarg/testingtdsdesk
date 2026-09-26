@@ -36,13 +36,16 @@ with sync_playwright() as p:
     pg.evaluate("GST2B._memo = null; render()"); pg.wait_for_timeout(5000)
     ok(pg.evaluate("ITCT.items('07').items.find(x => x.key === %s).act" % json.dumps(key)) == "expense" and pg.evaluate("document.querySelector('input[data-itctnote=' + JSON.stringify(%s) + ']').value" % json.dumps(k2)) == "Bill with Rahul, to book Monday", "decisions and notes are still there when the list is worked out again")
     # a supplier letter, logged
-    sup = pg.evaluate("ITCT.suppliers('07', ITCT.items('07').items)[0].key")
-    pg.fill('input[data-itctemail=%s]' % json.dumps(sup), "accounts@supplier.example"); pg.press('input[data-itctemail=%s]' % json.dumps(sup), "Tab"); pg.wait_for_timeout(800)
+    sup = pg.evaluate("ITCT.suppliers('07', ITCT.items('07').items)[0].key"); sg = pg.evaluate("ITCT.suppliers('07', ITCT.items('07').items)[0].gstin")
+    pg.evaluate("S.tab = 'gstset'; render()"); pg.wait_for_timeout(2500)
+    pg.fill('input[data-gcontq]', sg); pg.wait_for_timeout(2500)
+    pg.fill('input[data-gcont=%s][data-cf="email"]' % json.dumps(sg), "accounts@supplier.example"); pg.press('input[data-gcont=%s][data-cf="email"]' % json.dumps(sg), "Tab"); pg.wait_for_timeout(800)
+    pg.evaluate("S.tab = 'books'; render()"); pg.wait_for_timeout(4000)
     ctx.grant_permissions(["clipboard-read", "clipboard-write"])
     pg.click('button[data-act="itctCopy"][data-sup=%s]' % json.dumps(sup)); pg.wait_for_timeout(2500)
     clip = pg.evaluate("navigator.clipboard.readText()")
     ok("do not appear in our GSTR-2B" in clip and "30 November" in clip, "the letter lists the bills and the last date for credit")
-    ok(len(pg.evaluate("S.books.itcTrack['07'].sent[%s]" % json.dumps(sup)) or []) == 1 and pg.evaluate("S.books.itcTrack['07'].contact[%s].email" % json.dumps(sup)) == "accounts@supplier.example", "writing is logged, and the email kept for next time")
+    ok(len(pg.evaluate("S.books.itcTrack['07'].sent[%s]" % json.dumps(sup)) or []) == 1 and pg.evaluate("S.books.gstContacts[%s].email" % json.dumps(sg)) == "accounts@supplier.example" and "accounts@supplier.example" in pg.inner_text("#app"), "writing is logged; the email typed in GST settings is used")
     # 3B: a supplier's credit note in 2B reduces credit; rejecting it in IMS takes it back out
     cnk = pg.evaluate("(ITCT.items('07').items.find(x => x.cat === 'suppcn') || {}).key || ''")
     if cnk:

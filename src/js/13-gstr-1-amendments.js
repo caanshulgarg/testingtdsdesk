@@ -178,7 +178,7 @@ const GSTAmend = {
   // GSTR-1A (section 37A, from the July 2024 period): after the month's GSTR-1 is filed and before its 3B
   can1a(ym, reg){
     const f = this.filed(reg).find(x => x.ym === ym && !x.notFiled), r = typeof GSTF === "object" ? GSTF.peek(ym, reg) : {};
-    return {period: ym >= "202407", filed1: !!f, threeB: !!(r.r3b || r.snap), kept: !!(((S.books || {}).filed1a || {})[(f ? String(f.gstin).toUpperCase() + "|" + f.fp : "")]), due: typeof GSTF === "object" ? GSTF.due(ym, "r3b") : ""};
+    return {period: ym >= "202407", filed1: !!f, threeB: !!(r.r3b || r.snap), kept: !!(((S.books || {}).filed1a || {})[(f ? String(f.gstin).toUpperCase() + "|" + f.fp : "")]), due: typeof GSTF === "object" ? GSTF.due(ym, "r3b", reg) : ""};
   },
   json1a(ym, reg){
     const f = this.filed(reg).find(x => x.ym === ym && !x.notFiled); if (!f) return null;

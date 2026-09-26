@@ -1,7 +1,7 @@
 // node run_gstfiling.js - filing a GST month: due dates, late fee, interest, rule 37, DRC-01B/01C, filed 3B copies,
 // section 34(2) on credit notes, and the set-off journal for Tally
 const fs = require("fs"), {load, openBlob, HTML, DATA, CACHE} = require("./harness");
-const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "GST9", "INR", "normName", "ITCT", "CustIMS", "GSTF", "Audit", "CO"];
+const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "GST9", "INR", "normName", "ITCT", "GSTSet", "CustIMS", "GSTF", "Audit", "CO"];
 let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 const near = (a, b2, t) => Math.abs(a - b2) <= (t || 0.02);
 (async () => {

@@ -107,8 +107,8 @@ const ITCT = {
       s.items.push(x); s.tax = r2(s.tax + (x.cat === "diff" ? Math.abs(x.gap) : x.cat === "rejcn" || x.cat === "rejinv" ? x.tax2b : x.tax)); if (String(x.date) < String(s.oldest)) s.oldest = x.date; if (x.deadline && (!s.deadline || x.deadline < s.deadline)) s.deadline = x.deadline;
     });
     const st = this.store(reg), b = S.books, info = b.ledInfo || {};
-    return Object.values(m).map(s => { const c = st.contact[s.key] || {}, email = c.email || this.tallyEmail(s.party), sent = st.sent[s.key] || [];
-      return Object.assign(s, {email, phone: c.phone || this.tallyPhone(s.party), sent, lastSent: sent[sent.length - 1] || ""}); }).sort((a, c) => c.tax - a.tax);
+    return Object.values(m).map(s => { const k = GSTSet.contact(s.gstin, s.party, st.contact[s.key]), sent = st.sent[s.key] || [];
+      return Object.assign(s, {email: k.email, phone: k.phone, sent, lastSent: sent[sent.length - 1] || ""}); }).sort((a, c) => c.tax - a.tax);
   },
   tallyEmail(party){ const i = ((S.books.ledInfo || {})[party]) || {}; return i.email || ""; },
   tallyPhone(party){ const i = ((S.books.ledInfo || {})[party]) || {}; return i.phone || ""; }
@@ -149,10 +149,10 @@ function viewItcFollow(b){
     }).join("") + (list.length ? "" : '<tr><td colspan="9" class="nr">Nothing ' + (show === "open" ? "open" : "here") + ".</td></tr>") + "</tbody></table></div></section>";
   // one letter per supplier, with every bill still waiting on them
   const sups = ITCT.suppliers(reg, all);
-  h += '<section class="dash-card" style="margin-top:12px"><h3>Suppliers to write to</h3><p class="note">Every bill set to \u201cfollow up\u201d or \u201cask the supplier to amend\u201d, supplier by supplier, in one letter. Email and phone come from Tally where it has them; type them here once otherwise. Writing is logged, so the next month shows when each was last chased.</p>' +
+  h += '<section class="dash-card" style="margin-top:12px"><h3>Suppliers to write to</h3><p class="note">Every bill set to \u201cfollow up\u201d or \u201cask the supplier to amend\u201d, supplier by supplier, in one letter. Email and phone come from Tally, or from GST settings (' + gstSetLink("contacts") + "). Writing is logged, so the next month shows when each was last chased.</p>" +
     (sups.length ? '<div class="bk-tablewrap"><table class="bk-table compact fixed"><colgroup>' + [20, 7, 10, 10, 18, 12, 10, 13].map(w => '<col style="width:' + w + '%">').join("") + '</colgroup><thead><tr><th>Supplier \u00b7 GSTIN</th><th class="n">Bills</th><th class="n">Tax waiting</th><th>Last date</th><th>Email</th><th>Phone</th><th>Last written</th><th>Write</th></tr></thead><tbody>' +
       sups.map(s => "<tr><td>" + esc(s.party || "") + '<div class="nr">' + esc(s.gstin || "no GSTIN") + '</div></td><td class="n">' + s.items.length + '</td><td class="n">' + money(s.tax) + '</td><td><span class="' + (s.deadline && s.deadline < today ? "bad" : "nr") + '">' + esc(GSTAmend.dmy(s.deadline)) + "</span></td>" +
-        '<td><input type="email" data-itctemail="' + esc(s.key) + '" value="' + esc(s.email || "") + '" placeholder="email" style="width:100%"></td><td><input type="tel" data-itctphone="' + esc(s.key) + '" value="' + esc(s.phone || "") + '" placeholder="phone" style="width:100%"></td>' +
+        "<td>" + (s.email ? esc(s.email) : '<span class="nr">none</span>') + "</td><td>" + (s.phone ? esc(s.phone) : '<span class="nr">none</span>') + "</td>" +
         "<td>" + (s.lastSent ? esc(GSTAmend.dmy(s.lastSent)) + (s.sent.length > 1 ? '<div class="nr">' + s.sent.length + " times</div>" : "") : '<span class="nr">not yet</span>') + "</td>" +
         '<td><button class="linkbtn" data-act="itctCopy" data-sup="' + esc(s.key) + '">copy</button> \u00b7 <button class="linkbtn" data-act="itctMail" data-sup="' + esc(s.key) + '">email</button> \u00b7 <button class="linkbtn" data-act="itctWa" data-sup="' + esc(s.key) + '">WhatsApp</button></td></tr>').join("") + "</tbody></table></div>"
       : '<p class="note">No supplier to write to.</p>') + "</section>";

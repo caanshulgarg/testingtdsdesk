@@ -190,7 +190,7 @@ function viewDoneStep(){
     viewPostLog() + "</section>";
 }
 /* ---------- Client setup: four tabs, out of the daily path ---------- */
-const SETUP_TABS = [["settings", "Company and Tally"], ["bankset", "Bank accounts"], ["bankrules", "Bank rules"], ["deductees", "Suppliers and TDS"]];
+const SETUP_TABS = [["settings", "Company and Tally"], ["gstset", "GST"], ["bankset", "Bank accounts"], ["bankrules", "Bank rules"], ["deductees", "Suppliers and TDS"]];
 function isSetupTab(t){ return SETUP_TABS.some(x => x[0] === t); }
 function viewBankSetup(which){
   const co = CO();
