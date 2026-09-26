@@ -1307,11 +1307,17 @@ document.addEventListener("click", ev => {
     case "bridgeSetupFile": saveBridgeSetup(); break;
     case "adminCreditGo": break;
     case "bridgeConnect": {
-      toast("Looking for the bridge on this computer\u2026");
-      Bridge.pair().then(j => {
+      askConfirm({title: "Connect to the Tally Bridge", ok: "Connect",
+        body: '<p class="note">Type the 6-digit code shown in the bridge window on this computer (the window titled TDS Desk - Tally Bridge). It works once, for 15 minutes after the bridge starts.</p><input type="text" id="bridgeCode" inputmode="numeric" maxlength="7" autocomplete="off" placeholder="6-digit code" style="width:160px;font-size:18px;letter-spacing:3px">',
+        read: () => String((document.getElementById("bridgeCode") || {}).value || "").replace(/\D/g, ""),
+        validate: v => /^\d{6}$/.test(v) ? "" : "Type the 6 digits shown in the bridge window."}).then(a => {
+      if (!a) return;
+      toast("Connecting to the bridge on this computer\u2026");
+      Bridge.pair(a.data).then(j => {
         Bridge.lastOpenKey = null;
         return Bridge.refresh().then(() => { toast("Connected to the bridge on " + (j.computer || "this computer") + "."); startBridgePolling(); render(); });
       }, err => { Bridge.st.error = err.message; toast(err.message); render(); });
+      });
       break;
     }
     case "bridgeOff": Bridge.setCfg({key: ""}); clearInterval(bridgeTimer); Bridge.st = {state: "off", sessions: [], open: [], at: Date.now(), error: ""}; render(); break;

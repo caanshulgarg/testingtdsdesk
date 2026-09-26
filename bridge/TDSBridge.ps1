@@ -25,7 +25,7 @@ trap {
   try { Stop-Transcript | Out-Null } catch { }
   break
 }
-$BridgeVersion = '1.10.0'
+$BridgeVersion = '1.11.0'
 
 # ------------------------------------------------------------------ settings
 function New-BridgeKey {
@@ -53,6 +53,7 @@ $defaults = [ordered]@{
   AllowImport     = $true
   SyncDir         = ''
   SyncCompanies   = @()
+  AllowedOrigins  = @('https://caanshulgarg.github.io', 'http://localhost', 'null')
 }
 $needSave = $false
 if (Test-Path $ConfigPath) {
@@ -770,11 +771,10 @@ function Get-QueryValues([string]$query) {
 function Send-Response($stream, [int]$status, [string]$body, [string]$origin) {
   $reason = @{ 200 = 'OK'; 204 = 'No Content'; 400 = 'Bad Request'; 401 = 'Unauthorized'; 404 = 'Not Found'; 500 = 'Internal Server Error'; 502 = 'Bad Gateway' }[$status]
   $bytes = [Text.Encoding]::UTF8.GetBytes($body)
-  if (-not $origin) { $origin = '*' }
   $head = "HTTP/1.1 $status $reason`r`n" +
     "Content-Type: application/json; charset=utf-8`r`n" +
     "Content-Length: $($bytes.Length)`r`n" +
-    "Access-Control-Allow-Origin: $origin`r`n" +
+    $(if ($origin) { "Access-Control-Allow-Origin: $origin`r`n" } else { '' }) +
     "Access-Control-Allow-Methods: GET, POST, OPTIONS`r`n" +
     "Access-Control-Allow-Headers: Content-Type, X-Bridge-Key`r`n" +
     "Access-Control-Allow-Private-Network: true`r`n" +
@@ -786,6 +786,17 @@ function Send-Response($stream, [int]$status, [string]$body, [string]$origin) {
   $stream.Write($hb, 0, $hb.Length)
   if ($bytes.Length) { $stream.Write($bytes, 0, $bytes.Length) }
   $stream.Flush()
+}
+
+# the pages allowed to talk to the bridge: TDS Desk's own addresses (settings: AllowedOrigins); 'http://localhost' allows any port
+function Test-AllowedOrigin([string]$o) {
+  if (-not $o) { return $true }
+  foreach ($a in @($Cfg.AllowedOrigins)) {
+    $a = [string]$a
+    if ($o -eq $a) { return $true }
+    if (($a -eq 'http://localhost') -and ($o -match '^http://(localhost|127\.0\.0\.1)(:\d+)?$')) { return $true }
+  }
+  return $false
 }
 
 function ConvertTo-JsonText($obj) { return (ConvertTo-Json -InputObject $obj -Depth 12 -Compress) }
@@ -841,8 +852,11 @@ function Invoke-Client($client) {
   $body = ''
   if ($len -gt 0) { $body = [Text.Encoding]::UTF8.GetString($all, $bodyStart, [Math]::Min($len, $all.Length - $bodyStart)) }
 
-  $origin = '*'
-  if ($headers.ContainsKey('origin')) { $origin = $headers['origin'] }
+  # a browser always says which page is asking; only TDS Desk's own pages (the allowed origins) are answered in a way the page can read
+  $sentOrigin = ''
+  if ($headers.ContainsKey('origin')) { $sentOrigin = [string]$headers['origin'] }
+  $originOk = Test-AllowedOrigin $sentOrigin
+  $origin = $(if ($sentOrigin -and $originOk) { $sentOrigin } else { '' })
   $path = $target
   $query = ''
   $q = $target.IndexOf('?')
@@ -852,9 +866,24 @@ function Invoke-Client($client) {
   if ($method -eq 'OPTIONS') { Send-Response $stream 204 '' $origin; return }
   if ($path -eq '/ping') { Send-Response $stream 200 (ConvertTo-JsonText ([ordered]@{ ok = $true; bridge = 'TDS Desk Tally Bridge'; version = $BridgeVersion })) $origin; return }
   # TDS Desk on this same computer may fetch the key itself for a while after the bridge starts
+  if ($sentOrigin -and -not $originOk -and $path -ne '/ping') {
+    Write-Log ('Refused a request from the web page ' + $sentOrigin + ' (not TDS Desk).')
+    Send-Response $stream 403 (ConvertTo-JsonText ([ordered]@{ ok = $false; error = 'This bridge answers TDS Desk only.' })) $origin
+    return
+  }
   if ($path -eq '/pair') {
+    $code = [string]$qs['code']
+    if ((Get-Date) -gt $script:PairUntil) { }
+    elseif ($code -ne $script:PairCode) {
+      $script:PairTries++
+      Write-Log ('A wrong connect code was typed (' + $script:PairTries + ' of 5).')
+      if ($script:PairTries -ge 5) { $script:PairUntil = (Get-Date).AddMinutes(-1); Write-Log 'Five wrong codes: connecting is closed until the bridge is started again.' }
+      Send-Response $stream 403 (ConvertTo-JsonText ([ordered]@{ ok = $false; error = $(if ($code) { 'That is not the code shown in the bridge window.' } else { 'Type the 6-digit code shown in the bridge window.' }); needCode = $true })) $origin
+      return
+    }
     if ((Get-Date) -le $script:PairUntil) {
-      Write-Log 'TDS Desk on this computer connected itself (no key typed).'
+      $script:PairUntil = (Get-Date).AddMinutes(-1)      # one connection per start
+      Write-Log ('TDS Desk connected with the code (' + $sentOrigin + ').')
       Send-Response $stream 200 (ConvertTo-JsonText ([ordered]@{ ok = $true; key = $Cfg.Key; computer = $env:COMPUTERNAME; user = $env:USERNAME; version = $BridgeVersion })) $origin
     } else {
       Send-Response $stream 403 (ConvertTo-JsonText ([ordered]@{ ok = $false; error = 'The connect window has closed. Start the bridge again (Start-TDS-Bridge), then press Connect in TDS Desk within ' + $Cfg.PairWindowMin + ' minutes.' })) $origin
@@ -999,12 +1028,11 @@ function Get-Balances([string]$Company, [string]$From, [string]$To, [int]$Prefer
 # Text back as it is (the Day Book is too large to wrap in JSON)
 function Send-Raw($stream, [int]$status, [string]$body, [string]$origin, [string]$type) {
   $bytes = [Text.Encoding]::UTF8.GetBytes($body)
-  if (-not $origin) { $origin = '*' }
   if (-not $type) { $type = 'text/xml; charset=utf-8' }
   $head = "HTTP/1.1 $status OK`r`n" +
     "Content-Type: $type`r`n" +
     "Content-Length: $($bytes.Length)`r`n" +
-    "Access-Control-Allow-Origin: $origin`r`n" +
+    $(if ($origin) { "Access-Control-Allow-Origin: $origin`r`n" } else { '' }) +
     "Access-Control-Allow-Methods: GET, POST, OPTIONS`r`n" +
     "Access-Control-Allow-Headers: Content-Type, X-Bridge-Key`r`n" +
     "Access-Control-Allow-Private-Network: true`r`n" +
@@ -1178,7 +1206,10 @@ Write-Host ''
 Write-Host ('  READY - the bridge is running. Waiting for TDS Desk at http://127.0.0.1:' + $Cfg.Port) -ForegroundColor Green
 if ($script:PlanMode -eq 'fallback') { Write-Log 'Windows did not say which Tally belongs to you; ports from the settings are used. Choose your Tally in TDS Desk.' }
 $script:PairUntil = (Get-Date).AddMinutes([int]$Cfg.PairWindowMin)
-Write-Host ('  TDS Desk on this computer can connect by itself until ' + $script:PairUntil.ToString('HH:mm') + ' - no key to copy.') -ForegroundColor Green
+$script:PairTries = 0
+$rng = [Security.Cryptography.RandomNumberGenerator]::Create(); $b4 = New-Object byte[] 4; $rng.GetBytes($b4)
+$script:PairCode = ([BitConverter]::ToUInt32($b4, 0) % 1000000).ToString('000000')
+Write-Host ('  To connect TDS Desk: press Connect there and type the code  ' + $script:PairCode + '  (until ' + $script:PairUntil.ToString('HH:mm') + ').') -ForegroundColor Green
 Write-Host ''
 $lastCheck = Get-Date
 while ($true) {

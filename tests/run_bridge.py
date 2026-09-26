@@ -1,4 +1,4 @@
-"""Run bridge 1.10.0 under PowerShell against the stand-in Tally, and call the new addresses."""
+"""Run bridge 1.11.0 under PowerShell against the stand-in Tally, and call the new addresses."""
 import os as _os, shutil as _sh
 HERE = _os.path.dirname(_os.path.abspath(__file__))
 BRUN = _os.environ.get("TDSDESK_BRIDGE_RUN", _os.path.join(HERE, "out", "bridgerun"))
@@ -15,6 +15,9 @@ os.environ["TDSBRIDGE_FAKE"] = _os.path.join(BRUN, "fake.json")
 for f in ["tds-bridge.config.json"]:
     if _os.path.exists(_os.path.join(BRUN, f)): os.remove(_os.path.join(BRUN, f))
 p = subprocess.Popen([_os.environ.get("PWSH", "/opt/pwsh/pwsh"), "-NoProfile", "-File", _os.path.join(BRUN, "TDSBridge.ps1")], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=BRUN)
+import threading
+OUT_LINES = []
+threading.Thread(target=lambda: [OUT_LINES.append(l.decode("utf-8", "replace")) for l in iter(p.stdout.readline, b"")], daemon=True).start()
 fails = []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w); (None if c else fails.append(w))
@@ -30,7 +33,30 @@ try:
         r = urllib.request.urlopen(req, timeout=t); d = r.read().decode("utf-8")
         return (d, r.headers.get("Content-Type")) if raw else json.loads(d)
     ping = json.loads(urllib.request.urlopen("http://127.0.0.1:9100/ping").read())
-    ok(ping["version"] == "1.10.0", "bridge 1.10.0 answers")
+    ok(ping["version"] == "1.11.0", "bridge 1.11.0 answers")
+    # connecting: only TDS Desk's own pages, and only with the code shown in the bridge window
+    def raw(path, origin=None, key=None):
+        h = {}
+        if origin: h["Origin"] = origin
+        if key: h["X-Bridge-Key"] = key
+        try: r = urllib.request.urlopen(urllib.request.Request("http://127.0.0.1:9100" + path, headers=h), timeout=10); return r.status, dict(r.headers), json.loads(r.read() or b"{}")
+        except urllib.error.HTTPError as e: return e.code, dict(e.headers), json.loads(e.read() or b"{}")
+    code = next((m.group(1) for l in OUT_LINES for m in [re.search(r"type the code\s+(\d{6})", l)] if m), None)
+    ok(code is not None, "the bridge window shows a 6-digit connect code")
+    st_, hd, j = raw("/pair?code=" + (code or ""), origin="https://evil.example")
+    ok(st_ == 403 and "key" not in j and "Access-Control-Allow-Origin" not in hd, "another web page is refused, even with the right code, and cannot read the answer")
+    st_, hd, j = raw("/pair", origin="https://caanshulgarg.github.io")
+    ok(st_ == 403 and j.get("needCode") and "key" not in j, "TDS Desk without the code: asked for it, no key")
+    st_, hd, j = raw("/pair?code=000000" if code != "000000" else "/pair?code=111111", origin="https://caanshulgarg.github.io")
+    ok(st_ == 403 and "not the code" in j.get("error", ""), "a wrong code: refused")
+    st_, hd, j = raw("/pair?code=" + (code or ""), origin="https://caanshulgarg.github.io")
+    ok(st_ == 200 and j.get("key") == key and hd.get("Access-Control-Allow-Origin") == "https://caanshulgarg.github.io", "TDS Desk with the right code gets the key")
+    st_, hd, j = raw("/pair?code=" + (code or ""), origin="https://caanshulgarg.github.io")
+    ok(st_ == 403 and "key" not in j, "the code works once; connecting again needs the bridge started again")
+    st_, hd, j = raw("/companies", origin="https://evil.example", key=key)
+    ok(st_ == 403 and "Access-Control-Allow-Origin" not in hd, "another web page is refused even with the key")
+    st_, hd, j = raw("/companies", origin="http://localhost:8150", key=key)
+    ok(st_ == 200 and hd.get("Access-Control-Allow-Origin") == "http://localhost:8150", "TDS Desk run from this computer (localhost) is answered")
     co = urllib.parse.quote(fake_tally.COMPANY)
     st = get("/companies"); ok(any(c["name"] == fake_tally.COMPANY for c in st["companies"]), "company seen in the stand-in Tally")
     t0 = time.time(); x, ct = get("/daybook?company=%s&from=20250601&to=20250630" % co, raw=True)
@@ -47,7 +73,7 @@ try:
     f, ct = get("/syncfile?company=%s&file=daybook-202506.xml" % co, raw=True); ok(f.count("</VOUCHER>") == want, "a month of the copy is read back")
     # the FVU: only with the bridge key; errors come back as a list, a good file gives the .fvu
     try:
-        urllib.request.urlopen(urllib.request.Request("http://127.0.0.1:9100/fvu", data=b'{"text":"x"}', headers={"Content-Type": "application/json", "Origin": "https://evil.example"}), timeout=10); ok(False, "FVU without the key refused")
+        urllib.request.urlopen(urllib.request.Request("http://127.0.0.1:9100/fvu", data=b'{"text":"x"}', headers={"Content-Type": "application/json", "Origin": "https://caanshulgarg.github.io"}), timeout=10); ok(False, "FVU without the key refused")
     except urllib.error.HTTPError as e: ok(e.code == 401, "FVU without the bridge key is refused (%d)" % e.code)
     good = get("/fvu", body={"text": "FH^NS^R^...^valid", "name": "26Q_Q1.txt", "fvuJar": FVU_JAR, "outDir": _os.path.join(BRUN, "fvuout")}, t=120)
     ok(good["ok"] and good["accepted"] and good["fvu"].endswith("return.fvu"), "a good file: accepted, .fvu made in its own folder " + good["folder"][-15:])

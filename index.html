@@ -877,7 +877,7 @@ const DEFAULT_FIRM = {firmName:"Garg Shekhar & Company", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "TEST · 26 Sep 2026 · build 157 (test site on the staging database; shared TDS and GST work switched on there)";
+const APP_VERSION = "TEST · 26 Sep 2026 · build 158 (Tally Bridge 1.11: other web pages refused; connecting needs the code from the bridge window)";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;
@@ -15031,11 +15031,12 @@ const Bridge = {
     catch (e){ this.diag = {at: Date.now(), error: e.message, findings: []}; }
     return this.diag;
   },
-  // ask the bridge on this computer for its key (it answers for a few minutes after it starts)
-  async pair(){
+  // ask the bridge on this computer for its key, with the 6-digit code shown in the bridge window
+  // (bridge 1.11: only for a few minutes after it starts, once, and never for another web page)
+  async pair(code){
     const c = this.cfg();
     const base = c.url.replace(/\/+$/, "");
-    const r = await fetch(base + "/pair", {cache: "no-store"}).catch(() => null);
+    const r = await fetch(base + "/pair?code=" + encodeURIComponent(String(code || "").trim()), {cache: "no-store"}).catch(() => null);
     if (!r) throw {code: "bridge_down", message: "No bridge is running on this computer yet. Install it with the button below."};
     const j = await r.json().catch(() => null);
     if (!j || !j.ok) throw {code: "pair", message: (j && j.error) || "The bridge would not hand over its key."};
@@ -15636,7 +15637,7 @@ function bridgeSetupSteps(){
     step(2, connected && st.tallyUp, "Open TallyPrime and your company",
       "In TallyPrime: F1 Help \u2192 Settings \u2192 Connectivity \u2192 <b>TallyPrime acts as: Both</b>. Each user's Tally needs its own port (9000, 9001, \u2026).") +
     step(3, connected, "Press Connect here",
-      'TDS Desk finds the bridge on this computer and takes its key by itself. <button class="btn small primary" data-act="bridgeConnect">Connect</button>') +
+      'Press <button class="btn small primary" data-act="bridgeConnect">Connect</button> and type the 6-digit code shown in the bridge window. The code works once, for 15 minutes after the bridge starts; no other web page can connect.') +
     "</ol></div>";
 }
 function viewBridgeSettings(){
@@ -18381,11 +18382,17 @@ document.addEventListener("click", ev => {
     case "bridgeSetupFile": saveBridgeSetup(); break;
     case "adminCreditGo": break;
     case "bridgeConnect": {
-      toast("Looking for the bridge on this computer\u2026");
-      Bridge.pair().then(j => {
+      askConfirm({title: "Connect to the Tally Bridge", ok: "Connect",
+        body: '<p class="note">Type the 6-digit code shown in the bridge window on this computer (the window titled TDS Desk - Tally Bridge). It works once, for 15 minutes after the bridge starts.</p><input type="text" id="bridgeCode" inputmode="numeric" maxlength="7" autocomplete="off" placeholder="6-digit code" style="width:160px;font-size:18px;letter-spacing:3px">',
+        read: () => String((document.getElementById("bridgeCode") || {}).value || "").replace(/\D/g, ""),
+        validate: v => /^\d{6}$/.test(v) ? "" : "Type the 6 digits shown in the bridge window."}).then(a => {
+      if (!a) return;
+      toast("Connecting to the bridge on this computer\u2026");
+      Bridge.pair(a.data).then(j => {
         Bridge.lastOpenKey = null;
         return Bridge.refresh().then(() => { toast("Connected to the bridge on " + (j.computer || "this computer") + "."); startBridgePolling(); render(); });
       }, err => { Bridge.st.error = err.message; toast(err.message); render(); });
+      });
       break;
     }
     case "bridgeOff": Bridge.setCfg({key: ""}); clearInterval(bridgeTimer); Bridge.st = {state: "off", sessions: [], open: [], at: Date.now(), error: ""}; render(); break;

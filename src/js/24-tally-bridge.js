@@ -59,11 +59,12 @@ const Bridge = {
     catch (e){ this.diag = {at: Date.now(), error: e.message, findings: []}; }
     return this.diag;
   },
-  // ask the bridge on this computer for its key (it answers for a few minutes after it starts)
-  async pair(){
+  // ask the bridge on this computer for its key, with the 6-digit code shown in the bridge window
+  // (bridge 1.11: only for a few minutes after it starts, once, and never for another web page)
+  async pair(code){
     const c = this.cfg();
     const base = c.url.replace(/\/+$/, "");
-    const r = await fetch(base + "/pair", {cache: "no-store"}).catch(() => null);
+    const r = await fetch(base + "/pair?code=" + encodeURIComponent(String(code || "").trim()), {cache: "no-store"}).catch(() => null);
     if (!r) throw {code: "bridge_down", message: "No bridge is running on this computer yet. Install it with the button below."};
     const j = await r.json().catch(() => null);
     if (!j || !j.ok) throw {code: "pair", message: (j && j.error) || "The bridge would not hand over its key."};
@@ -664,7 +665,7 @@ function bridgeSetupSteps(){
     step(2, connected && st.tallyUp, "Open TallyPrime and your company",
       "In TallyPrime: F1 Help \u2192 Settings \u2192 Connectivity \u2192 <b>TallyPrime acts as: Both</b>. Each user's Tally needs its own port (9000, 9001, \u2026).") +
     step(3, connected, "Press Connect here",
-      'TDS Desk finds the bridge on this computer and takes its key by itself. <button class="btn small primary" data-act="bridgeConnect">Connect</button>') +
+      'Press <button class="btn small primary" data-act="bridgeConnect">Connect</button> and type the 6-digit code shown in the bridge window. The code works once, for 15 minutes after the bridge starts; no other web page can connect.') +
     "</ol></div>";
 }
 function viewBridgeSettings(){
