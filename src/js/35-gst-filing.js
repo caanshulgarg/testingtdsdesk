@@ -124,6 +124,19 @@ const GSTF = {
     });
     return out;
   },
+  // e-invoices made from Tally: once any voucher of the registration carries an IRN, invoices to registered customers without
+  // one are listed, and so are IRNs taken more than 30 days after the invoice (the limit for turnover of Rs 10 crore and above)
+  einv(ym, reg){
+    const vs = (S.books.vouchers || []).filter(v => Books.isSale(v) && (!reg || GSTR.regOf(v) === reg));
+    if (!vs.some(v => v.irn)) return {uses: false, missing: [], late: []};
+    const iso = d => { const x = String(d || "").replace(/-/g, ""); return x.slice(0, 4) + "-" + x.slice(4, 6) + "-" + x.slice(6, 8); };
+    const kinds = new Set(["B2B", "EXP", "CDNR", "DBNR"]), byId = new Map(vs.map(v => [v.id, v]));
+    const out = GSTR.outward(ym, reg).filter(r => kinds.has(r.kind) && (r.gstin || r.kind === "EXP"));
+    const missing = out.filter(r => !(byId.get(r.id) || {}).irn).map(r => ({no: r.no, party: r.party}));
+    const late = out.map(r => byId.get(r.id)).filter(v => v && v.irn && /^\d{8}$/.test(String(v.irnDate || "").replace(/-/g, "").slice(0, 8)))
+      .filter(v => this.days(iso(v.date), iso(String(v.irnDate).replace(/-/g, "").slice(0, 8))) > 30).map(v => ({no: v.no, party: v.party}));
+    return {uses: true, missing, late};
+  },
   // the month's set-off and cash payment as one journal for Tally: output tax debited, input tax and the cash ledger credited
   journal(ym, reg){
     const t = GSTR.threeB(ym, reg), P = t.pay, H = ["igst", "cgst", "sgst", "cess"], lines = [], rec = this.peek(ym, reg);
@@ -203,4 +216,29 @@ if (typeof document !== "undefined") document.addEventListener("click", e => {
   if (a === "journal"){ const J = GSTF.journal(ym, reg); if (!J.lines.length){ toast("Nothing to set off this month."); return; }
     if (!J.balanced){ toast("A ledger is missing in Tally (" + J.missing.join(", ") + "); the journal would not balance."); return; }
     const co = CO() || {}; saveFile(String(co.name || "client").replace(/[^A-Za-z0-9]+/g, "-") + "-GST-setoff-" + reg + "-" + ym + ".xml", new Blob([Audit.jeXml([{date: J.date, narr: J.narr, lines: J.lines}])], {type: "application/xml"})); }
+});
+function viewGstr1a(b, ym, reg){
+  if (!ym || !reg) return "";
+  const c = GSTAmend.can1a(ym, reg), label = GSTR.label(ym);
+  if (!c.filed1) return "";
+  let h = '<section class="dash-card" style="margin-top:12px"><h3>GSTR-1A for ' + esc(label) + "</h3>";
+  if (!c.period) return h + '<p class="note">GSTR-1A is available from the July 2024 period; for this month, differences go as amendments in a later GSTR-1.</p></section>';
+  if (c.threeB) return h + '<p class="note">The 3B for ' + esc(label) + " is marked as filed, so GSTR-1A is closed; the differences above go as amendments in the next GSTR-1.</p></section>";
+  const r = GSTAmend.json1a(ym, reg), n = r ? r.rows.length : 0;
+  h += '<p class="note">After GSTR-1 is filed and until the 3B for the month is filed (due ' + esc(GSTAmend.dmy(c.due.replace(/-/g, ""))) + "), a missed invoice or a wrong one can be put right in GSTR-1A for the same month, so the tax lands in this month\\u2019s 3B and your customer sees it in this month\\u2019s 2B. Type the 3B filing date on the GSTR-3B tab once it is filed, and this closes.</p>";
+  if (!n) return h + '<p class="note">' + (c.kept ? "A GSTR-1A was made for this month and the books now agree with it." : "Nothing to put in GSTR-1A: the books agree with the GSTR-1 filed.") + "</p></section>";
+  const kind = {B2B: "B2B invoice", B2CL: "B2C large", EXP: "Export", CDNR: "Credit or debit note", B2CS: "B2C small"};
+  h += '<div class="bk-tablewrap"><table class="bk-table compact"><thead><tr><th>Document</th><th>Number</th><th>Customer</th><th>What changes</th></tr></thead><tbody>' +
+    r.rows.map(x => { const d = x.now || x.was || {}; return "<tr><td>" + esc(kind[x.kind] || x.kind) + "</td><td>" + esc(d.num || (x.b2cs ? "place " + x.b2cs.pos + ", " + x.b2cs.rt + "%" : "")) + "</td><td>" + esc(d.ctin || "") + "</td><td>" + esc((x.changes || []).join("; ")) + "</td></tr>"; }).join("") + "</tbody></table></div>" +
+    '<div class="row" style="gap:8px;margin-top:8px"><button class="btn small primary" data-act1a="json">Download GSTR-1A JSON (' + n + ")</button></div>" +
+    '<p class="note">Downloading keeps a copy, so the next GSTR-1 does not report these again. This is a first version: check it opens in the offline tool, and send me a GSTR-1A JSON exported from the portal so the layout can be matched exactly.</p></section>';
+  return h;
+}
+if (typeof document !== "undefined") document.addEventListener("click", e => {
+  const t = e.target.closest("[data-act1a]"); if (!t || !S.books) return;
+  const ym = S.gstYm || "", reg = S.gstReg || "", r = GSTAmend.json1a(ym, reg); if (!r || !r.rows.length) return;
+  const out = Object.assign({version: "GST3.2.1", hash: "hash"}, r.json);
+  GSTAmend.keep1a(out); saveBooks();
+  saveFile("GSTR1A_" + out.gstin + "_" + out.fp + ".json", new Blob([JSON.stringify(out)], {type: "application/json"}));
+  render(); toast("GSTR-1A for " + GSTR.label(ym) + " downloaded and kept.");
 });

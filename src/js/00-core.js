@@ -33,7 +33,7 @@ const DEFAULT_FIRM = {firmName:"Garg Shekhar & Company", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "26 Sep 2026 · build 142 (GST filing: late fee, section 50 interest, rule 37, DRC-01B/01C, filed 3B copies, section 34(2), set-off journal for Tally)";
+const APP_VERSION = "26 Sep 2026 · build 143 (GSTR-1A before 3B; e-invoice checks where Tally carries IRNs)";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;

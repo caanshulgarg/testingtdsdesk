@@ -66,6 +66,8 @@ const GSTAmend = {
       periods.add(f.ym);
       n.docs.forEach((d, k) => docs.set(k, Object.assign({}, d, {filedIn: f.ym})));
       b2cs[f.ym] = n.b2cs;
+      const a1 = ((S.books && S.books.filed1a) || {})[String(f.gstin).toUpperCase() + "|" + f.fp];
+      if (a1){ const n1 = this.norm(a1.json); n1.docs.forEach((d, k) => docs.set(k, Object.assign({}, d, {filedIn: f.ym, in1a: true}))); n1.b2csa.forEach(a => { const m = b2cs[f.ym] = b2cs[f.ym] || new Map(); m.set(a.pos + "|" + a.rt + "|" + a.sply_ty, a); }); }
       n.b2csa.forEach(a => {
         const m = b2cs[this.ymOf(a.omon)] = b2cs[this.ymOf(a.omon)] || new Map();
         m.set(a.pos + "|" + a.rt + "|" + a.sply_ty, a);
@@ -87,14 +89,15 @@ const GSTAmend = {
     return out;
   },
   // every difference between the books and the portal, for months before the return being prepared
-  pending(ym, reg){
+  // self: the month's own differences, for its GSTR-1A (after its GSTR-1, before its 3B)
+  pending(ym, reg, self){
     const res = {rows: [], periods: [], noCopy: [], late: [], ready: !!reg};
     if (!reg || !ym) return res;
-    const st = this.state(reg, ym, false), fix = (S.books && S.books.amendFix) || {};
-    const months = GSTR.months().filter(m => m < ym);
+    const st = this.state(reg, ym, !!self), fix = (S.books && S.books.amendFix) || {};
+    const months = self ? [ym] : GSTR.months().filter(m => m < ym);
     months.forEach(P => {
       if (!st.periods.has(P)){ if (this.filed(reg).length) res.noCopy.push(P); return; }
-      if (ym > this.lastYm(P)){ res.late.push(P); return; }
+      if (!self && ym > this.lastYm(P)){ res.late.push(P); return; }
       res.periods.push(P);
       const bn = this.norm(GSTR.toJson(P, reg, {plain: true})), books = bn.docs;
       const before = res.rows.length;
@@ -172,10 +175,22 @@ const GSTAmend = {
     let b2csF = 0, b2csB = 0; filed.b2cs.forEach(x => { b2csF += num(x.txval); }); books.b2cs.forEach(x => { b2csB += num(x.txval); });
     return {file: f, rows, filedTotal: r2(tot(filed.docs) + b2csF), booksTotal: r2(tot(books.docs) + b2csB), b2csF: r2(b2csF), b2csB: r2(b2csB)};
   },
+  // GSTR-1A (section 37A, from the July 2024 period): after the month's GSTR-1 is filed and before its 3B
+  can1a(ym, reg){
+    const f = this.filed(reg).find(x => x.ym === ym && !x.notFiled), r = typeof GSTF === "object" ? GSTF.peek(ym, reg) : {};
+    return {period: ym >= "202407", filed1: !!f, threeB: !!(r.r3b || r.snap), kept: !!(((S.books || {}).filed1a || {})[(f ? String(f.gstin).toUpperCase() + "|" + f.fp : "")]), due: typeof GSTF === "object" ? GSTF.due(ym, "r3b") : ""};
+  },
+  json1a(ym, reg){
+    const f = this.filed(reg).find(x => x.ym === ym && !x.notFiled); if (!f) return null;
+    const out = {gstin: String(f.gstin).toUpperCase(), fp: f.fp};
+    const p = this.addTo(out, ym, reg, true);
+    return {json: out, rows: p.rows.filter(r => r.act !== "skip")};
+  },
+  keep1a(json){ const b = S.books; b.filed1a = b.filed1a || {}; const k = String(json.gstin).toUpperCase() + "|" + json.fp; b.filed1a[k] = {json, at: new Date().toISOString()}; return b.filed1a[k]; },
   zeroItems(d){ return [{num: 1, itm_det: Object.assign({rt: d.rates[0] || 0, txval: 0, csamt: 0}, d.iamt ? {iamt: 0} : {camt: 0, samt: 0})}]; },
   // put what is pending into the month's GSTR-1 JSON
-  addTo(out, ym, reg){
-    const p = this.pending(ym, reg);
+  addTo(out, ym, reg, self){
+    const p = this.pending(ym, reg, self);
     const groups = {}, push = (sec, gk, head, item) => { const s = groups[sec] = groups[sec] || {}; (s[gk] = s[gk] || Object.assign({}, head, {list: []})).list.push(item); };
     const moved = {};
     p.rows.forEach(r => {
