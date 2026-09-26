@@ -58,6 +58,14 @@ async function fyn(method: string, path: string, headers: Record<string, string>
   if (r.status < 200 || r.status >= 300 || !j) console.log(JSON.stringify({ fyn: method + " " + path.replace(/\?.*$/, ""), http: r.status, type: r.headers.get("content-type"), server: r.headers.get("server"), via: RELAY ? "relay" : "direct", length: text.length, head: text.slice(0, 300) }));
   return { http: r.status, j, text };
 }
+async function fynAt(url: string, headers: Record<string, string>): Promise<{ http: number; j: any; text: string }> {
+  const t = await fynToken();
+  if (!t.ok) throw new Error(t.error);
+  const r = await toFyn(url, { method: "GET", headers: { Authorization: "Bearer " + t.token, "Content-Type": "application/json", ...headers } });
+  const text = await r.text();
+  let j: any = null; try { j = JSON.parse(text); } catch { /* not JSON */ }
+  return { http: r.status, j, text };
+}
 const gstErr = (x: { http: number; j: any; text: string }) => (x.j && (x.j.error?.message ? x.j.error.message + (x.j.error.error_cd ? " (" + x.j.error.error_cd + ")" : "") : x.j.errorMessage || x.j.message)) || ("HTTP " + x.http + ": " + x.text.slice(0, 200));
 const GSTIN = /^\d{2}[A-Z0-9]{13}$/, PERIOD = /^(0[1-9]|1[0-2])20\d{2}$/;
 
@@ -125,13 +133,31 @@ Deno.serve(async (req) => {
       };
       // FYN's path carries the file number: /1 first, then /2, /3 … when 2B comes in parts (fc)
       const path = "gst/returns/gstr2b/" + gstin + "/" + period;
-      const first = await fyn("GET", path + "/1", sess);
+      let first = await fyn("GET", path + "/1", sess);
       if (first.j === null || first.j === "") {
-        // an empty answer: check the same session on a plain read (the filed GSTR-3B of the month) to tell the two apart
-        const p3 = await fyn("GET", "gst/getgstr3b/" + gstin + "/" + period, { ...sess, "auth-token": sess.authtoken });
-        const said = p3.j?.status_cd == 1 ? "works (GSTR-3B read)" : (p3.j ? gstErr(p3) : "HTTP " + p3.http + ", empty");
-        console.log(JSON.stringify({ probe: "3b", http: p3.http, status_cd: p3.j?.status_cd ?? null, keys: p3.j && typeof p3.j === "object" ? Object.keys(p3.j) : null, error: p3.j?.error ?? null }));
-        return reply(200, { ok: false, error: "FYN Gateway sent back nothing for the 2B of " + period.slice(0, 2) + "/" + period.slice(2) + " (HTTP " + first.http + ", empty). The same portal session on another call: " + said + "." });
+        // an empty answer: try the other ways FYN may take this call, once each, and keep the first that answers.
+        // Each outcome goes to the function's logs (status and codes only), so the right one can be fixed in place.
+        const ROOT = BASE.replace(/\/api$/, ""), txn = crypto.randomUUID().replace(/-/g, "");
+        const std = { "auth-token": sess.authtoken, username, "state-cd": h["state-cd"], "ip-usr": ip, txn, gstin, ret_period: period, rtnprd: period };
+        const tries: [string, string, Record<string, string>][] = [
+          ["2b-headers", path + "/1", { ...sess, gstin, rtnprd: period, ret_period: period, "auth-token": sess.authtoken }],
+          ["2b-nokeys", path + "/1", { "ip-usr": ip, "state-cd": h["state-cd"], username, authtoken: sess.authtoken }],
+          ["2b-0", path + "/0", sess],
+          ["2b-bare", "gst/returns/gstr2b", { ...sess, gstin, rtnprd: period, file_num: "1" }],
+          ["std-2b", ROOT + "/gstapi/taxpayerapi/v1.0/returns/gstr2b?action=GET2B&gstin=" + gstin + "&rtnprd=" + period, std],
+          ["std-2b-noaction", ROOT + "/gstapi/taxpayerapi/v1.0/returns/gstr2b?gstin=" + gstin + "&rtnprd=" + period, std],
+          ["3b-headers", "gst/getgstr3b/" + gstin + "/" + period, { ...sess, "auth-token": sess.authtoken, gstin, ret_period: period }],
+        ];
+        const seen: string[] = [];
+        for (const [name, where, hd] of tries) {
+          const x = where.startsWith("http") ? await fynAt(where, hd) : await fyn("GET", where, hd);
+          const code = x.j?.status_cd ?? null, err = x.j?.error?.error_cd || x.j?.error?.message || null;
+          console.log(JSON.stringify({ try: name, http: x.http, length: x.text.length, status_cd: code, error: err, keys: x.j && typeof x.j === "object" ? Object.keys(x.j).slice(0, 8) : null }));
+          seen.push(name + ": " + (x.j && typeof x.j === "object" ? (code == 1 ? "answered" : "status " + code + (err ? " " + err : "")) : "HTTP " + x.http + (x.text.length <= 4 ? " empty" : "")));
+          if (name.startsWith("3b")) continue;
+          if (x.j && typeof x.j === "object" && x.j.status_cd == 1) { first = x; break; }
+        }
+        if (first.j === null || first.j === "") return reply(200, { ok: false, error: "FYN Gateway sent back nothing for the 2B of " + period.slice(0, 2) + "/" + period.slice(2) + ". Tried: " + seen.join("; ") + "." });
       }
       let out = open(first);
       out = out?.data && !out.docdata ? out.data : out;
