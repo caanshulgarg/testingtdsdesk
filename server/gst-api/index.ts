@@ -14,6 +14,14 @@ const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
 const BASE = (Deno.env.get("FYN_BASE_URL") || "https://www.fynamics.co.in/api").replace(/\/+$/, "");
 const CID = Deno.env.get("FYN_CLIENT_ID") || "";
 const CSEC = Deno.env.get("FYN_CLIENT_SECRET") || "";
+// FYN whitelists the IPs it takes calls from; Supabase has no fixed outgoing IP, so when these two are set every
+// call to FYN goes through the firm's relay on a server with a fixed IP (server/fyn-relay). Unset: FYN directly.
+const RELAY = (Deno.env.get("FYN_RELAY_URL") || "").replace(/\/+$/, "");
+const RKEY = Deno.env.get("FYN_RELAY_KEY") || "";
+function toFyn(url: string, init: { method: string; headers: Record<string, string>; body?: string }): Promise<Response> {
+  if (!RELAY || !RKEY) return fetch(url, init);
+  return fetch(RELAY + "/fwd", { method: "POST", headers: { ...init.headers, "x-relay-key": RKEY, "x-target": url, "x-method": init.method }, body: init.method === "GET" ? undefined : init.body });
+}
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -29,8 +37,8 @@ async function fynToken(): Promise<{ ok: boolean; token?: string; expiresIn?: nu
   if (!CID || !CSEC) return { ok: false, error: "FYN_CLIENT_ID and FYN_CLIENT_SECRET are not set in the project's Edge Function secrets." };
   if (tok && tok.exp - Date.now() > 5 * 60 * 1000) return { ok: true, token: tok.token, expiresIn: Math.round((tok.exp - Date.now()) / 1000) };
   let r: Response;
-  try { r = await fetch(BASE + "/authenticate", { method: "POST", headers: { clientId: CID, clientSecret: CSEC, "Content-Type": "application/json" } }); }
-  catch (e) { return { ok: false, error: "Could not reach FYN Gateway at " + BASE + ": " + String((e as Error).message || e) }; }
+  try { r = await toFyn(BASE + "/authenticate", { method: "POST", headers: { clientId: CID, clientSecret: CSEC, "Content-Type": "application/json" } }); }
+  catch (e) { return { ok: false, error: "Could not reach FYN Gateway at " + BASE + (RELAY ? " through the relay " + RELAY : "") + ": " + String((e as Error).message || e) }; }
   const text = await r.text();
   let j: any = null; try { j = JSON.parse(text); } catch { /* not JSON */ }
   if (!j) return { ok: false, http: r.status, error: "FYN Gateway answered HTTP " + r.status + " without JSON: " + text.slice(0, 200) };
@@ -42,7 +50,7 @@ async function fynToken(): Promise<{ ok: boolean; token?: string; expiresIn?: nu
 async function fyn(method: string, path: string, headers: Record<string, string>, body?: unknown): Promise<{ http: number; j: any; text: string }> {
   const t = await fynToken();
   if (!t.ok) throw new Error(t.error);
-  const r = await fetch(BASE + "/" + path, { method, headers: { Authorization: "Bearer " + t.token, "Content-Type": "application/json", ...headers }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const r = await toFyn(BASE + "/" + path, { method, headers: { Authorization: "Bearer " + t.token, "Content-Type": "application/json", ...headers }, body: body === undefined ? undefined : JSON.stringify(body) });
   const text = await r.text();
   let j: any = null; try { j = JSON.parse(text); } catch { /* not JSON */ }
   if (r.status === 401) tok = null;
@@ -61,8 +69,8 @@ Deno.serve(async (req) => {
   if (req.method === "GET" && u.searchParams.get("selftest")) {
     const t = await fynToken();
     return reply(t.ok ? 200 : 502, t.ok
-      ? { ok: true, fyn: BASE, signedIn: true, tokenValidForMinutes: Math.round((t.expiresIn || 0) / 60), note: "The key and secret work. The token itself is never shown." }
-      : { ok: false, fyn: BASE, signedIn: false, error: t.error, http: t.http });
+      ? { ok: true, fyn: BASE, via: RELAY ? "relay " + RELAY : "direct", signedIn: true, tokenValidForMinutes: Math.round((t.expiresIn || 0) / 60), note: "The key and secret work. The token itself is never shown." }
+      : { ok: false, fyn: BASE, via: RELAY ? "relay " + RELAY : "direct", signedIn: false, error: t.error, http: t.http });
   }
   if (req.method !== "POST") return reply(405, { ok: false, error: "POST only" });
 
