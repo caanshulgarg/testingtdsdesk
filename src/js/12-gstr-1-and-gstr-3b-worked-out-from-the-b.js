@@ -13,6 +13,10 @@ const GSTR = {
     if (!b || !b.vouchers) return [];
     return Array.from(new Set(b.vouchers.map(v => this.ym(v.date)).filter(x => x.length === 6))).sort();
   },
+  inP(date, per){ const m = String(date).slice(0, 6), p = String(per); return p.length > 6 ? m >= p.slice(0, 6) && m <= p.slice(7, 13) : m === p; },
+  pStart(per){ return String(per).slice(0, 6); },
+  pEnd(per){ const p = String(per); return p.length > 6 ? p.slice(7, 13) : p; },
+  expand(per){ const out = []; let m = this.pStart(per); const e = this.pEnd(per); while (m <= e){ out.push(m); m = this.nextYm(m); } return out; },
   nextYm(ym){ const y = +ym.slice(0, 4), m = +ym.slice(4, 6); return m === 12 ? (y + 1) + "01" : y + String(m + 1).padStart(2, "0"); },
   label(ym){ return fmtDate(ym.slice(0, 4) + "-" + ym.slice(4, 6) + "-01").replace(/^\d+\s/, ""); },
   regOf(v){
@@ -25,7 +29,7 @@ const GSTR = {
     const b = S.books, out = [];
     (b.vouchers || []).forEach(v => {
       if (!Books.isSale(v)) return;
-      if (ym && this.ym(v.date) !== ym) return;
+      if (ym && !this.inP(v.date, ym)) return;
       if (reg && this.regOf(v) !== reg) return;
       const L = Books.lines(v);
       const tax = r2(L.tax.CGST + L.tax.SGST + L.tax.IGST);
@@ -53,7 +57,7 @@ const GSTR = {
     if (!s || s.cid !== S.coId) return [];
     return (s.list || []).filter(v => v.source === "market" && v.status !== "ignored").map(v => {
       const x = v.x || {}, d = String(x.date || "").replace(/-/g, "");
-      if (ym && d.slice(0, 6) !== ym) return null;
+      if (ym && !GSTR.inP(d, ym)) return null;
       const tax = r2(num(x.cgst) + num(x.sgst) + num(x.igst));
       return {id: v.id, date: d, no: x.number || "", party: x.customerName || "", gstin: (x.customerGstin || "").toUpperCase(),
         pos: x.placeOfSupply || "", cls: "taxable", rcm: false, hsn: x.hsn || "", supply: "", eco: x.ecommerce || "market",
@@ -69,7 +73,7 @@ const GSTR = {
     const b = S.books, out = [], gst = b.gstins || {};
     (b.vouchers || []).forEach(v => {
       if (Books.isSale(v)) return;
-      if (ym && this.ym(v.date) !== ym) return;
+      if (ym && !this.inP(v.date, ym)) return;
       const purch = Books.isPurchase(v);
       let inTax = false, outTax = false, signed = 0;
       v.ent.forEach(e => { const m = Books.ledgerOf(e.l);
@@ -134,7 +138,7 @@ const GSTR = {
       if (key(no) > key(sr.to)) sr.to = no;
     };
     rows.filter(r => r.no && !r.eco).forEach(r => inSeries(r.no, natOf(r), false));
-    ((S.books || {}).vouchers || []).filter(v => v.cancel && v.no && (!ym || this.ym(v.date) === ym) && Books.isSale(v) && (!reg || String(v.cmp || "").slice(0, 2) === reg || !v.cmp))
+    ((S.books || {}).vouchers || []).filter(v => v.cancel && v.no && (!ym || this.inP(v.date, ym)) && Books.isSale(v) && (!reg || String(v.cmp || "").slice(0, 2) === reg || !v.cmp))
       .forEach(v => inSeries(v.no, /CREDIT NOTE/i.test(v.type) ? 5 : /DEBIT NOTE/i.test(v.type) ? 4 : 1, true));
     const eco = rows.filter(r => r.eco);
     const ecoBy = {};
@@ -164,7 +168,12 @@ const GSTR = {
     return signed > 0.004 ? -1 : signed < -0.004 ? 1 : (/DEBIT NOTE/i.test(v.type) ? -1 : 1);
   },
   signedIn(r){ return r.dir < 0 ? Object.assign({}, r, {taxable: -r.taxable, cgst: -r.cgst, sgst: -r.sgst, igst: -r.igst, cess: -r.cess, ineligible: -(r.ineligible || 0)}) : r; },
+  // the 3B as filed for a month: a monthly filer's month, or at the end of a QRMP quarter the quarter's
   threeB(ym, reg){
+    if (typeof GSTSet === "object" && reg && GSTSet.typeOf(ym, reg) === "qrmp" && GSTSet.isQEnd(ym) && typeof GSTQ === "object") return GSTQ.threeBQ(ym, reg);
+    return this.threeBm(ym, reg);
+  },
+  threeBm(ym, reg){
     const out = this.outward(ym, reg), inn = this.inward(ym, reg).map(r => this.signedIn(r));
     const S1 = f => this.sum(out.filter(f)), S2 = f => this.sum(inn.filter(f));
     const taxableOut = S1(r => r.cls === "taxable" && r.kind !== "CDNR");
@@ -281,11 +290,12 @@ const GSTR = {
   },
   // the credit carried into a month: the balance typed for the first month here, then each month's left-over
   creditIn(ym, reg){
-    const b = S.books, key = [reg, b.vouchers && b.vouchers.length, b.mapV || 0, JSON.stringify((b.gstOpen || {})[reg || ""] || {}), JSON.stringify(((b.gstFiled || {})[reg || ""]) || {}).length, JSON.stringify(b.rule37On || {}), JSON.stringify(b.gstRev || {}).length, JSON.stringify(b.gstAdv || {}).length, JSON.stringify(b.itcBasis || {}), JSON.stringify(b.gst3b || {}), Object.keys(b.twoBs || {}).join(","), JSON.stringify(((b.reco2b || {}).confirm) || {}).length, JSON.stringify(((b.reco2b || {}).link) || {}).length].join("|");
+    const b = S.books, key = [reg, b.vouchers && b.vouchers.length, b.mapV || 0, JSON.stringify((b.gstOpen || {})[reg || ""] || {}), JSON.stringify(((b.gstFiled || {})[reg || ""]) || {}).length, JSON.stringify(b.rule37On || {}), JSON.stringify(b.gstSet || {}).length, JSON.stringify(b.gstRev || {}).length, JSON.stringify(b.gstAdv || {}).length, JSON.stringify(b.itcBasis || {}), JSON.stringify(b.gst3b || {}), Object.keys(b.twoBs || {}).join(","), JSON.stringify(((b.reco2b || {}).confirm) || {}).length, JSON.stringify(((b.reco2b || {}).link) || {}).length].join("|");
     if (!this._carry || this._carry.key !== key || this._carry.v !== b.vouchers) this._carry = {key, v: b.vouchers, m: {}};
     if (this._carry.m[ym]) return this._carry.m[ym];
     const months = this.months(), i = months.indexOf(ym), open = (b.gstOpen || {})[reg || ""] || {};
     let bal = {igst: num(open.igst), cgst: num(open.cgst), sgst: num(open.sgst), cess: num(open.cess)};
+    if (i > 0 && typeof GSTSet === "object" && GSTSet.typeOf(ym, reg) === "qrmp" && GSTSet.qStart(ym) !== ym && months.includes(GSTSet.qStart(ym))){ this._carry.m[ym] = this.creditIn(GSTSet.qStart(ym), reg); return this._carry.m[ym]; }
     if (i > 0){ const prev = months[i - 1], f = typeof GSTF === "object" ? GSTF.filed3b(prev, reg) : null, t = f || this.threeB(prev, reg); bal = Object.assign({}, t.pay.carry); }
     this._carry.m[ym] = bal;
     return bal;
@@ -343,7 +353,7 @@ const GSTR = {
     const nilSum = g.nil.reduce((a, r) => ({expt_amt: r2(a.expt_amt + (r.cls === "exempt" ? r.taxable : 0)),
       nil_amt: r2(a.nil_amt + (r.cls === "nil" ? r.taxable : 0)), ngsup_amt: r2(a.ngsup_amt + (r.cls === "nongst" ? r.taxable : 0))}),
       {expt_amt: 0, nil_amt: 0, ngsup_amt: 0});
-    const out = {gstin, fp: ym.slice(4, 6) + ym.slice(0, 4), version: "GST3.2.1", hash: "hash"};
+    const fe = this.pEnd(ym), out = {gstin, fp: fe.slice(4, 6) + fe.slice(0, 4), version: "GST3.2.1", hash: "hash"};
     if (g.b2b.length) out.b2b = byParty(g.b2b, "inv");
     if (g.b2cl.length){
       const m = {};
@@ -372,11 +382,12 @@ const GSTR = {
       const nats = Array.from(new Set(g.series.map(x => x.nat))).sort((a, c) => a - c);
       out.doc_issue = {doc_det: nats.map(n => ({doc_num: n, docs: g.series.filter(x => x.nat === n).map((x, i) => ({num: i + 1, from: String(x.from), to: String(x.to), totnum: x.n, cancel: x.cancelled, net_issue: x.n - x.cancelled}))}))};
     }
-    if (!(opts && opts.plain) && reg) GSTAmend.addTo(out, ym, reg);
+    if (!(opts && opts.plain) && reg) GSTAmend.addTo(out, this.pStart(ym), reg);
     return out;
   },
   async toJsonFile(ym, reg){
-    const j = this.toJson(ym, reg);
+    const ft = typeof GSTSet === "object" && reg ? GSTSet.typeOf(ym, reg) : "monthly";
+    const j = ft === "qrmp" ? (GSTSet.isQEnd(ym) ? GSTQ.r1Q(ym, reg).json : GSTQ.iff(ym, reg).json) : this.toJson(ym, reg);
     // the copy kept here is what later months' amendments are measured against
     if (reg && j.gstin){ try { GSTAmend.keep(JSON.parse(JSON.stringify(j)), "downloaded"); saveBooks(); } catch (e){} }
     saveFile("GSTR1_" + (j.gstin || "") + "_" + j.fp + ".json", new Blob([JSON.stringify(j)], {type: "application/json"}));

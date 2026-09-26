@@ -62,6 +62,8 @@ function viewGstSettings(){
       (hist.length ? '<p class="note">' + hist.map(x => GSTSet.typeLabel(x.type) + " from " + GSTSet.qLabel(x.from) + ' <button class="linkbtn" data-gsetdel="' + reg + "|" + x.from + '">remove</button>').join("; ") + ". Before the first of these: monthly.</p>" : '<p class="note">Monthly for every month in the books.</p>') +
       '<p class="note">Changing between QRMP and monthly on the portal: ' + (typeof GSTAPI === "object" && GSTAPI.on && GSTAPI.on() ? '<button class="btn small" data-gsetswitch="' + reg + '">Change on the portal</button>' : "<b>needs the GST API connection</b> (the portal\u2019s own preference call); until then change it on the portal and set it here.") +
       " For " + GSTSet.qLabel(next) + " the portal accepts the change from " + GSTAmend.dmy(win.from.replace(/-/g, "")) + " to " + GSTAmend.dmy(win.to.replace(/-/g, "")) + ". QRMP needs turnover of \u20b95 crore or less in the year before. Composition is chosen on the portal (CMP-02, CMP-04) and cannot be changed through the API.</p>" +
+      '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px"><label class="note">If QRMP, PMT-06 by <select data-gset="pmt" data-greg="' + reg + '" style="width:auto"><option value="fixed"' + ((st.pmt || "fixed") === "fixed" ? " selected" : "") + '>fixed sum (35% method)</option><option value="self"' + (st.pmt === "self" ? " selected" : "") + ">self-assessment</option></select></label>" +
+      '<label class="note">If composition, rate <select data-gset="comp" data-greg="' + reg + '" style="width:auto">' + Object.entries(GSTQ.RATES).map(([k, x]) => '<option value="' + k + '"' + ((st.comp || "trader") === k ? " selected" : "") + ">" + esc(x.l) + "</option>").join("") + "</select></label></div>" +
       '<h4 style="margin:12px 0 4px">Credit in 3B table 4</h4><select data-gset="basis" data-greg="' + reg + '" style="width:auto"><option value="2b"' + (basis === "2b" ? " selected" : "") + '>As far as 2B shows it (section 16(2)(aa)) \u2014 the law</option><option value="books"' + (basis === "books" ? " selected" : "") + ">As booked in Tally \u2014 for comparison only</option></select>" +
       '<h4 style="margin:12px 0 4px">Electronic credit ledger at the start' + (first ? " (" + esc(GSTR.label(first)) + ")" : "") + "</h4>" +
       '<div style="display:flex;gap:12px;flex-wrap:wrap">' + [["igst", "IGST"], ["cgst", "CGST"], ["sgst", "SGST"], ["cess", "Cess"]].map(([k, l]) => '<label class="note">' + l + ' <input type="number" step="0.01" data-gset="open" data-ghead="' + k + '" data-greg="' + reg + '" value="' + (open[k] === undefined || open[k] === "" ? "" : esc(String(open[k]))) + '" style="width:130px"></label>').join("") + "</div>" +
@@ -74,7 +76,12 @@ function viewGstSettings(){
   // the client as a whole
   const fys = Array.from(new Set(months.map(m => GSTF.fyOf(m))));
   const prevFys = Array.from(new Set(fys.map(f => (+f.slice(0, 4) - 1) + "-" + f.slice(2, 4)).concat(fys))).sort();
+  const api = GSTQ.apiMode();
   h += '<section class="dash-card" style="margin-bottom:12px"><h3>For the client (all GSTINs)</h3>' +
+    '<h4 style="margin:8px 0 4px">Returns sent through the GST API</h4>' +
+    '<label class="note" style="display:block"><input type="radio" name="gstapi" data-gset="api" value="save"' + (api === "save" ? " checked" : "") + "> <b>Save only</b> \u2014 the return is saved on the portal; you check it there and file it yourself (recommended)</label>" +
+    '<label class="note" style="display:block"><input type="radio" name="gstapi" data-gset="api" value="file"' + (api === "file" ? " checked" : "") + "> <b>Save and file</b> \u2014 after the figures agree with the portal and the return is approved, it is filed with the signatory\u2019s EVC OTP or DSC</label>" +
+    '<p class="note">Applies once the GST API is connected; until then returns are downloaded as JSON.</p>' +
     '<h4 style="margin:8px 0 4px">Aggregate turnover of the year</h4><div style="display:flex;gap:12px;flex-wrap:wrap">' +
     prevFys.map(f => { const a = GSTF.aato(GSTF.fyOf((+f.slice(0, 4) + 1) + "04")); return '<label class="note">' + esc(f) + ' <input type="number" data-gset="aato" data-gfy="' + esc((+f.slice(0, 4) + 1) + "-" + String(+f.slice(0, 4) + 2).slice(2)) + '" value="' + (((b.gstAato || {})[(+f.slice(0, 4) + 1) + "-" + String(+f.slice(0, 4) + 2).slice(2)]) || "") + '" placeholder="' + (a.v ? money(a.v) + " from the books" : "type it") + '" style="width:170px"></label>'; }).join("") +
     '</div><p class="note">Used for the late fee caps, QRMP (\u20b95 crore or less), e-invoicing and the 30-day IRN limit (\u20b910 crore and above).</p>' +
@@ -101,6 +108,9 @@ if (typeof document !== "undefined"){
       if (d.gset === "open"){ b.gstOpen = Object.assign({}, b.gstOpen); b.gstOpen[reg] = Object.assign({}, b.gstOpen[reg], {[d.ghead]: t.value === "" ? "" : num(t.value)}); }
       if (d.gset === "r37") b.rule37On = Object.assign({}, b.rule37On, {[reg]: t.checked});
       if (d.gset === "einv") GSTSet.store(reg).einv = t.value;
+      if (d.gset === "pmt") GSTSet.store(reg).pmt = t.value;
+      if (d.gset === "comp") GSTSet.store(reg).comp = t.value;
+      if (d.gset === "api"){ if (!t.checked) return; b.gstApi = t.value; }
       if (d.gset === "cash") b.gstCashLedger = Object.assign({}, b.gstCashLedger, {[reg]: t.value});
       if (d.gset === "aato") b.gstAato = Object.assign({}, b.gstAato, {[d.gfy]: num(t.value)});
       if (d.gset === "d2") b.rev = Object.assign({}, b.rev, {d2: !!t.checked});

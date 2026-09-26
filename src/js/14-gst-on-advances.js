@@ -124,7 +124,7 @@ const GSTAdv = {
   month(ym, reg){
     const zero = {n: 0, taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, received: 0};
     if (!this.ready()) return {ready: false, at: [], txpd: [], atSum: zero, txpdSum: zero, net: zero, untaxed: [], open: []};
-    const months = ym ? [ym] : GSTR.months();
+    const months = ym ? GSTR.expand(ym) : GSTR.months();
     const {pieces} = this.build();
     const at = [], txpd = [], untaxed = [];
     pieces.forEach(p => {

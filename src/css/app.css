@@ -722,3 +722,10 @@ img.preview{display:block;max-width:100%;max-height:70vh;margin:0 auto;border:1p
 .help-panel h4{margin:14px 0 4px;font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
 .help-panel ol,.help-panel ul{padding-left:20px;margin:4px 0}.help-panel li{margin:4px 0}
 @media (min-width:1100px){ body.help-on{padding-right:420px} }
+/* simple step cards for QRMP and composition returns */
+.gq .gq-step{display:flex;gap:12px;padding:12px 0;border-top:1px solid var(--rule-soft)}
+.gq .gq-step:first-of-type{border-top:0}
+.gq .gq-n{flex:0 0 28px;height:28px;border-radius:50%;background:var(--stamp-soft);color:var(--stamp);display:flex;align-items:center;justify-content:center;font-weight:600}
+.gq .gq-step.done .gq-n{background:var(--ledger-soft);color:var(--ledger)}
+.gq .gq-b{flex:1;min-width:0}.gq .gq-t{font-weight:600;margin-bottom:4px}
+.gq .gq-b p{margin:4px 0}

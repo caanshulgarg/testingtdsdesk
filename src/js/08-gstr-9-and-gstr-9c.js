@@ -11,7 +11,8 @@ const GST9 = {
   build(fy, reg){
     const months = this.months(fy), have = new Set(GSTR.months()), inBooks = months.filter(m => have.has(m));
     const out = [], inn = [], t3 = {};
-    inBooks.forEach(m => { GSTR.outward(m, reg).forEach(r => out.push(r)); GSTR.inward(m, reg).forEach(r => inn.push(Object.assign({ym: m}, r))); t3[m] = (typeof GSTF === "object" && GSTF.filed3b(m, reg)) || GSTR.threeB(m, reg); });
+    inBooks.forEach(m => { GSTR.outward(m, reg).forEach(r => out.push(r)); GSTR.inward(m, reg).forEach(r => inn.push(Object.assign({ym: m}, r))); t3[m] = (typeof GSTF === "object" && GSTF.filed3b(m, reg)) || GSTR.threeBm(m, reg);
+      if (typeof GSTSet === "object" && GSTSet.typeOf(m, reg) === "qrmp"){ const q = GSTSet.isQEnd(m) ? GSTR.threeB(m, reg).pay : {cash: {}, use: {}}; t3[m] = Object.assign({}, t3[m], {pay: q}); } });
     const S1 = f => this.sumRows(out.filter(f));
     const taxable = r => r.cls === "taxable" && !r.rcm;
     const T = {};

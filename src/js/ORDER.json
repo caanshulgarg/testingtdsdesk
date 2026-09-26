@@ -34,5 +34,6 @@
  "33-customer-ims.js",
  "34-help.js",
  "35-gst-filing.js",
- "36-gst-settings.js"
+ "36-gst-settings.js",
+ "37-gst-periodic.js"
 ]
