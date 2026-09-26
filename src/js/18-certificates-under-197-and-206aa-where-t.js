@@ -110,7 +110,7 @@ async function saveBooks(){ const b = S.books; if (b && b.cid) await Books.save(
   gstins: b.gstins, under: b.under, states: b.states, groups: b.groups, salary: b.salary, certs: b.certs, advFix: b.advFix, assets: b.assets, rev: b.rev,
   filed: b.filed, amendFix: b.amendFix, twoBs: b.twoBs, reco2b: b.reco2b, ledInfo: b.ledInfo, ledInfoAt: b.ledInfoAt,
   audit: b.audit, auditCfg: b.auditCfg, auditRel: b.auditRel, ledSnaps: b.ledSnaps, gst9c: b.gst9c, groupInfo: b.groupInfo, fs: b.fs, tb: b.tb, mis: b.mis, misCfg: b.misCfg, msme: b.msme, budget: b.budget,
-  gst3b: b.gst3b, gst9: b.gst9, gstOpen: b.gstOpen, itcBasis: b.itcBasis, itcTrack: b.itcTrack, outRej: b.outRej}); }
+  gst3b: b.gst3b, gst9: b.gst9, gstOpen: b.gstOpen, itcBasis: b.itcBasis, itcTrack: b.itcTrack, outRej: b.outRej, gstFiled: b.gstFiled, gstAato: b.gstAato, rule37Off: b.rule37Off, gstCashLedger: b.gstCashLedger}); }
 function viewBooks(){
   const co = CO();
   if (!S.books || S.books.cid !== co.id){ openBooks(co.id); return '<p class="note">Opening the books…</p>'; }
@@ -1455,6 +1455,7 @@ function viewGstr3b(b){
     "<tr><td><b>Credit carried to next month</b></td><td></td>" + hd.map(([k]) => '<td class="n"><b>' + money(P.carry[k]) + "</b></td>").join("") + "<td></td><td></td></tr></tbody></table></div>";
   h += '<p class="note">Worked out from the books. Credit is used as sections 49 and 49A and rule 88A require: IGST credit first against IGST, the rest against CGST and SGST; then CGST and SGST credit against their own tax and then IGST; CGST never against SGST. Reverse charge is paid in cash. Interest and late fee, and anything paid outside the books, are not included; check the ledgers on the portal before paying.</p>';
   h += viewGstChecks();
+  if (typeof viewGstFiling === "function") h += viewGstFiling(b, t);
   return h;
 }
 function inregRows(b){
@@ -1505,7 +1506,7 @@ function viewInputRegister(b){
   const all = tot(R.rows), shown = tot(list);
   // it ties to 3B table 4: what the register gives against what the 3B takes
   const hr = {held: 0, rel: 0};
-  const t3 = R.months.reduce((a, m) => { const t = GSTR.threeB(m, R.reg); ["igst", "cgst", "sgst", "cess"].forEach(k => { a[k] = r2(a[k] + num(t.itc[k]) - num(t.reversal[k])); }); hr.held = r2(hr.held + t.held.igst + t.held.cgst + t.held.sgst + t.held.cess); hr.rel = r2(hr.rel + t.released.igst + t.released.cgst + t.released.sgst + t.released.cess); return a; }, {igst: 0, cgst: 0, sgst: 0, cess: 0});
+  const t3 = R.months.reduce((a, m) => { const t = GSTR.threeB(m, R.reg); ["igst", "cgst", "sgst", "cess"].forEach(k => { a[k] = r2(a[k] + num(t.itc[k]) - num(t.reversal[k]) - num((t.reclaim || {})[k])); }); hr.held = r2(hr.held + t.held.igst + t.held.cgst + t.held.sgst + t.held.cess); hr.rel = r2(hr.rel + t.released.igst + t.released.cgst + t.released.sgst + t.released.cess); return a; }, {igst: 0, cgst: 0, sgst: 0, cess: 0});
   const reg = tot(R.rows.filter(r => r.kindL !== "Not to be taken"));
   const gap = r2(reg.igst + reg.cgst + reg.sgst + reg.cess - (t3.igst + t3.cgst + t3.sgst + t3.cess));
   const tx4 = x => money(x.igst + x.cgst + x.sgst + x.cess);

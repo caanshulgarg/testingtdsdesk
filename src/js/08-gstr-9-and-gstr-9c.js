@@ -11,7 +11,7 @@ const GST9 = {
   build(fy, reg){
     const months = this.months(fy), have = new Set(GSTR.months()), inBooks = months.filter(m => have.has(m));
     const out = [], inn = [], t3 = {};
-    inBooks.forEach(m => { GSTR.outward(m, reg).forEach(r => out.push(r)); GSTR.inward(m, reg).forEach(r => inn.push(Object.assign({ym: m}, r))); t3[m] = GSTR.threeB(m, reg); });
+    inBooks.forEach(m => { GSTR.outward(m, reg).forEach(r => out.push(r)); GSTR.inward(m, reg).forEach(r => inn.push(Object.assign({ym: m}, r))); t3[m] = (typeof GSTF === "object" && GSTF.filed3b(m, reg)) || GSTR.threeB(m, reg); });
     const S1 = f => this.sumRows(out.filter(f));
     const taxable = r => r.cls === "taxable" && !r.rcm;
     const T = {};
@@ -53,12 +53,14 @@ const GST9 = {
     T["6D"] = rc.filter(r => r.gstin).reduce((a, r) => this.add(a, r, sgn(r)), this.Z());
     T["6E"] = inn.filter(r => r.import && r.supply !== "Services").reduce((a, r) => this.add(a, r), this.Z());
     T["6F"] = inn.filter(r => r.import && r.supply === "Services").reduce((a, r) => this.add(a, r), this.Z());
-    T["6G"] = tz("6G"); T["6H"] = tz("6H");
+    // 6H: credit reclaimed in 3B 4(D)(1) (rule 37 and typed) is already inside 6A, so it is listed here too
+    T["6G"] = tz("6G"); T["6H"] = this.add(tz("6H"), sumT(t => t.reclaim || {}));
     T["6I"] = ["6B-in", "6B-cg", "6B-is", "6C", "6D", "6E", "6F", "6G", "6H"].reduce((a, k) => this.add(a, T[k]), this.Z());
     T["6J"] = this.add(T["6A"], T["6I"], -1);
     T["6O"] = T["6I"];
     T["7C"] = sumT(t => t.r42); T["7D"] = sumT(t => t.r43); T["7E"] = sumT(t => t.reversal);
-    T["7A"] = tz("7A"); T["7B"] = tz("7B"); T["7H"] = tz("7H");
+    // 7A: rule 37 reversals worked out from the bills; 7H keeps what was typed in 4(B)(2) besides them
+    T["7A"] = this.add(tz("7A"), sumT(t => (t.r37 && t.r37.rev) || {})); T["7B"] = tz("7B"); T["7H"] = tz("7H");
     T["7I"] = ["7A", "7B", "7C", "7D", "7E", "7H"].reduce((a, k) => this.add(a, T[k]), this.Z());
     T["7J"] = this.add(T["6O"], T["7I"], -1);
     // 8A: credit in 2B for the year's months

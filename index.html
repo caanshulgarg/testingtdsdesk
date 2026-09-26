@@ -804,7 +804,7 @@ const DEFAULT_FIRM = {firmName:"Garg Shekhar & Company", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "TEST · 25 Sep 2026 · build 141 (customers’ IMS rejections; GST typed figures now saved; How this tab works on every GST and TDS tab)";
+const APP_VERSION = "TEST · 26 Sep 2026 · build 142 (GST filing: late fee, section 50 interest, rule 37, DRC-01B/01C, filed 3B copies, section 34(2), set-off journal for Tally)";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;
@@ -6783,7 +6783,7 @@ const GST9 = {
   build(fy, reg){
     const months = this.months(fy), have = new Set(GSTR.months()), inBooks = months.filter(m => have.has(m));
     const out = [], inn = [], t3 = {};
-    inBooks.forEach(m => { GSTR.outward(m, reg).forEach(r => out.push(r)); GSTR.inward(m, reg).forEach(r => inn.push(Object.assign({ym: m}, r))); t3[m] = GSTR.threeB(m, reg); });
+    inBooks.forEach(m => { GSTR.outward(m, reg).forEach(r => out.push(r)); GSTR.inward(m, reg).forEach(r => inn.push(Object.assign({ym: m}, r))); t3[m] = (typeof GSTF === "object" && GSTF.filed3b(m, reg)) || GSTR.threeB(m, reg); });
     const S1 = f => this.sumRows(out.filter(f));
     const taxable = r => r.cls === "taxable" && !r.rcm;
     const T = {};
@@ -6825,12 +6825,14 @@ const GST9 = {
     T["6D"] = rc.filter(r => r.gstin).reduce((a, r) => this.add(a, r, sgn(r)), this.Z());
     T["6E"] = inn.filter(r => r.import && r.supply !== "Services").reduce((a, r) => this.add(a, r), this.Z());
     T["6F"] = inn.filter(r => r.import && r.supply === "Services").reduce((a, r) => this.add(a, r), this.Z());
-    T["6G"] = tz("6G"); T["6H"] = tz("6H");
+    // 6H: credit reclaimed in 3B 4(D)(1) (rule 37 and typed) is already inside 6A, so it is listed here too
+    T["6G"] = tz("6G"); T["6H"] = this.add(tz("6H"), sumT(t => t.reclaim || {}));
     T["6I"] = ["6B-in", "6B-cg", "6B-is", "6C", "6D", "6E", "6F", "6G", "6H"].reduce((a, k) => this.add(a, T[k]), this.Z());
     T["6J"] = this.add(T["6A"], T["6I"], -1);
     T["6O"] = T["6I"];
     T["7C"] = sumT(t => t.r42); T["7D"] = sumT(t => t.r43); T["7E"] = sumT(t => t.reversal);
-    T["7A"] = tz("7A"); T["7B"] = tz("7B"); T["7H"] = tz("7H");
+    // 7A: rule 37 reversals worked out from the bills; 7H keeps what was typed in 4(B)(2) besides them
+    T["7A"] = this.add(tz("7A"), sumT(t => (t.r37 && t.r37.rev) || {})); T["7B"] = tz("7B"); T["7H"] = tz("7H");
     T["7I"] = ["7A", "7B", "7C", "7D", "7E", "7H"].reduce((a, k) => this.add(a, T[k]), this.Z());
     T["7J"] = this.add(T["6O"], T["7I"], -1);
     // 8A: credit in 2B for the year's months
@@ -7428,6 +7430,7 @@ const GSTR = {
     if (!b || !b.vouchers) return [];
     return Array.from(new Set(b.vouchers.map(v => this.ym(v.date)).filter(x => x.length === 6))).sort();
   },
+  nextYm(ym){ const y = +ym.slice(0, 4), m = +ym.slice(4, 6); return m === 12 ? (y + 1) + "01" : y + String(m + 1).padStart(2, "0"); },
   label(ym){ return fmtDate(ym.slice(0, 4) + "-" + ym.slice(4, 6) + "-01").replace(/^\d+\s/, ""); },
   regOf(v){
     let r = "";
@@ -7629,6 +7632,11 @@ const GSTR = {
     const typed = ((S.books.gst3b || {})[(reg || "") + "|" + ym]) || {}, tv = (k, h) => num(((typed[k] || {})[h]));
     const rev2 = {igst: tv("rev2", "igst"), cgst: tv("rev2", "cgst"), sgst: tv("rev2", "sgst"), cess: tv("rev2", "cess")};
     const reclaim = {igst: tv("reclaim", "igst"), cgst: tv("reclaim", "cgst"), sgst: tv("reclaim", "sgst"), cess: tv("reclaim", "cess")};
+    // rule 37: credit on bills unpaid 180 days after their date is reversed in 4(B)(2), and reclaimed when paid
+    const r37 = typeof GSTF === "object" && !((S.books.rule37Off || {})[reg || ""]) ? GSTF.rule37(ym, reg) : null;
+    if (r37) ["igst", "cgst", "sgst", "cess"].forEach(h => { rev2[h] = r2(rev2[h] + r37.rev[h]); reclaim[h] = r2(reclaim[h] + r37.re[h]); });
+    // reclaimed credit is taken in 4(A)(5) and shown again in 4(D)(1)
+    other = Object.assign({}, other, {igst: r2(other.igst + reclaim.igst), cgst: r2(other.cgst + reclaim.cgst), sgst: r2(other.sgst + reclaim.sgst), cess: r2(other.cess + reclaim.cess)});
     // table 5: inward supplies with no tax (from unregistered or composition suppliers, exempt, nil, non-GST), inter- and intra-state
     const own = String(reg || "").slice(0, 2), gstOf = r => String(r.gstin || "").slice(0, 2);
     const noTax = inn.filter(r => r.bill && !r.import && !r.rcm && r.dir > 0 && !(num(r.igst) || num(r.cgst) || num(r.sgst)) && r.taxable);
@@ -7655,7 +7663,7 @@ const GSTR = {
     const opening = this.creditIn(ym, reg);
     const pay = this.setOff(net, rcmOut, netItc, opening);
     return {sale: taxableOut, cn, net, adv, custRej: cust, rules, r42: rul.r42, r43: rul.r43, zero, nil, nongst, rcmOut, rcmIn, toUnreg, impGoods, impServ, other, blocked,
-      buy: this.sum(inn), itc, reversal, rev1, rev2, reclaim, na, inw5, unregPos: Object.values(unregPos).sort((a, c) => a.pos.localeCompare(c.pos)),
+      buy: this.sum(inn), itc, reversal, rev1, rev2, reclaim, r37, na, inw5, unregPos: Object.values(unregPos).sort((a, c) => a.pos.localeCompare(c.pos)),
       basis: basis.on ? "2b" : basis.why, held, released, cn2b, rejBack, netItc, ineligible: this.sum(inn).ineligible, opening, pay, payable: pay.cash};
   },
   // credit on the 2B basis for a month: on when that month's 2B is here and the client has not chosen the books basis
@@ -7689,12 +7697,12 @@ const GSTR = {
   },
   // the credit carried into a month: the balance typed for the first month here, then each month's left-over
   creditIn(ym, reg){
-    const b = S.books, key = [reg, b.vouchers && b.vouchers.length, b.mapV || 0, JSON.stringify((b.gstOpen || {})[reg || ""] || {}), JSON.stringify(b.gstRev || {}).length, JSON.stringify(b.gstAdv || {}).length, JSON.stringify(b.itcBasis || {}), JSON.stringify(b.gst3b || {}), Object.keys(b.twoBs || {}).join(","), JSON.stringify(((b.reco2b || {}).confirm) || {}).length, JSON.stringify(((b.reco2b || {}).link) || {}).length].join("|");
+    const b = S.books, key = [reg, b.vouchers && b.vouchers.length, b.mapV || 0, JSON.stringify((b.gstOpen || {})[reg || ""] || {}), JSON.stringify(((b.gstFiled || {})[reg || ""]) || {}).length, JSON.stringify(b.rule37Off || {}), JSON.stringify(b.gstRev || {}).length, JSON.stringify(b.gstAdv || {}).length, JSON.stringify(b.itcBasis || {}), JSON.stringify(b.gst3b || {}), Object.keys(b.twoBs || {}).join(","), JSON.stringify(((b.reco2b || {}).confirm) || {}).length, JSON.stringify(((b.reco2b || {}).link) || {}).length].join("|");
     if (!this._carry || this._carry.key !== key || this._carry.v !== b.vouchers) this._carry = {key, v: b.vouchers, m: {}};
     if (this._carry.m[ym]) return this._carry.m[ym];
     const months = this.months(), i = months.indexOf(ym), open = (b.gstOpen || {})[reg || ""] || {};
     let bal = {igst: num(open.igst), cgst: num(open.cgst), sgst: num(open.sgst), cess: num(open.cess)};
-    if (i > 0){ const prev = months[i - 1], t = this.threeB(prev, reg); bal = Object.assign({}, t.pay.carry); }
+    if (i > 0){ const prev = months[i - 1], f = typeof GSTF === "object" ? GSTF.filed3b(prev, reg) : null, t = f || this.threeB(prev, reg); bal = Object.assign({}, t.pay.carry); }
     this._carry.m[ym] = bal;
     return bal;
   },
@@ -7706,6 +7714,7 @@ const GSTR = {
     add("Outward invoices with no place of supply", out.filter(r => !r.pos && r.kind !== "NIL"), "Set the place of supply on the voucher.");
     add("Outward invoices with no HSN", out.filter(r => !r.hsn && r.cls === "taxable"), "HSN is needed in the GSTR-1 summary.");
     add("Tax that does not fit the taxable value", out.filter(r => r.taxable && this.partsOf([r]).some(q => !Books.GST_RATES.includes(q.rate))), "Check the rate on these invoices.");
+    if (typeof GSTF === "object") add("Credit notes issued after 30 November following the invoice\u2019s year", GSTF.lateCn(ym, reg).map(x => ({no: x.no + " (for " + x.orig + ")", party: x.party})), "Section 34(2): these cannot reduce your tax. Keep them out of 3.1(a) or issue them as financial credit notes without GST.");
     add("Invoices with items at more than one rate", out.filter(r => r.mixed), "Split rate by rate in the return, from each item's rate in Tally.");
     add("Purchases with no supplier GSTIN", inn.filter(r => !r.gstin && (r.cgst || r.sgst || r.igst)), "Needed to match against 2B.");
     add("Purchases marked ITC not to be taken", inn.filter(r => r.blocked), "These are kept out of the credit claimed.");
@@ -8647,7 +8656,7 @@ async function saveBooks(){ const b = S.books; if (b && b.cid) await Books.save(
   gstins: b.gstins, under: b.under, states: b.states, groups: b.groups, salary: b.salary, certs: b.certs, advFix: b.advFix, assets: b.assets, rev: b.rev,
   filed: b.filed, amendFix: b.amendFix, twoBs: b.twoBs, reco2b: b.reco2b, ledInfo: b.ledInfo, ledInfoAt: b.ledInfoAt,
   audit: b.audit, auditCfg: b.auditCfg, auditRel: b.auditRel, ledSnaps: b.ledSnaps, gst9c: b.gst9c, groupInfo: b.groupInfo, fs: b.fs, tb: b.tb, mis: b.mis, misCfg: b.misCfg, msme: b.msme, budget: b.budget,
-  gst3b: b.gst3b, gst9: b.gst9, gstOpen: b.gstOpen, itcBasis: b.itcBasis, itcTrack: b.itcTrack, outRej: b.outRej}); }
+  gst3b: b.gst3b, gst9: b.gst9, gstOpen: b.gstOpen, itcBasis: b.itcBasis, itcTrack: b.itcTrack, outRej: b.outRej, gstFiled: b.gstFiled, gstAato: b.gstAato, rule37Off: b.rule37Off, gstCashLedger: b.gstCashLedger}); }
 function viewBooks(){
   const co = CO();
   if (!S.books || S.books.cid !== co.id){ openBooks(co.id); return '<p class="note">Opening the books…</p>'; }
@@ -9992,6 +10001,7 @@ function viewGstr3b(b){
     "<tr><td><b>Credit carried to next month</b></td><td></td>" + hd.map(([k]) => '<td class="n"><b>' + money(P.carry[k]) + "</b></td>").join("") + "<td></td><td></td></tr></tbody></table></div>";
   h += '<p class="note">Worked out from the books. Credit is used as sections 49 and 49A and rule 88A require: IGST credit first against IGST, the rest against CGST and SGST; then CGST and SGST credit against their own tax and then IGST; CGST never against SGST. Reverse charge is paid in cash. Interest and late fee, and anything paid outside the books, are not included; check the ledgers on the portal before paying.</p>';
   h += viewGstChecks();
+  if (typeof viewGstFiling === "function") h += viewGstFiling(b, t);
   return h;
 }
 function inregRows(b){
@@ -10042,7 +10052,7 @@ function viewInputRegister(b){
   const all = tot(R.rows), shown = tot(list);
   // it ties to 3B table 4: what the register gives against what the 3B takes
   const hr = {held: 0, rel: 0};
-  const t3 = R.months.reduce((a, m) => { const t = GSTR.threeB(m, R.reg); ["igst", "cgst", "sgst", "cess"].forEach(k => { a[k] = r2(a[k] + num(t.itc[k]) - num(t.reversal[k])); }); hr.held = r2(hr.held + t.held.igst + t.held.cgst + t.held.sgst + t.held.cess); hr.rel = r2(hr.rel + t.released.igst + t.released.cgst + t.released.sgst + t.released.cess); return a; }, {igst: 0, cgst: 0, sgst: 0, cess: 0});
+  const t3 = R.months.reduce((a, m) => { const t = GSTR.threeB(m, R.reg); ["igst", "cgst", "sgst", "cess"].forEach(k => { a[k] = r2(a[k] + num(t.itc[k]) - num(t.reversal[k]) - num((t.reclaim || {})[k])); }); hr.held = r2(hr.held + t.held.igst + t.held.cgst + t.held.sgst + t.held.cess); hr.rel = r2(hr.rel + t.released.igst + t.released.cgst + t.released.sgst + t.released.cess); return a; }, {igst: 0, cgst: 0, sgst: 0, cess: 0});
   const reg = tot(R.rows.filter(r => r.kindL !== "Not to be taken"));
   const gap = r2(reg.igst + reg.cgst + reg.sgst + reg.cess - (t3.igst + t3.cgst + t3.sgst + t3.cess));
   const tx4 = x => money(x.igst + x.cgst + x.sgst + x.cess);
@@ -19497,9 +19507,9 @@ const Help = {
       from: "Tally sales, credit note and debit note vouchers; HSN, rate and unit from each item or ledger line; the customer\u2019s GSTIN and state from the ledger master (Tally\u2019s dated registration details); marketplace sales from the Sales tab.",
       watch: ["A voucher changed after the month is filed is an amendment in a later month, never a second filing of that month.", "Cancelled vouchers are counted in table 13.", "An invoice with two rates is split rate by rate in the JSON.", "A credit note rejected by the customer in IMS: the portal adds its tax back to your liability in the next month; that is put into 3.1(a) here."]},
     "gst:r3b": {t: "GSTR-3B", what: "The month\u2019s summary return and the tax to pay: 3.1 outward supplies and reverse charge, 3.2 inter-state supplies to unregistered persons, 4 input tax credit, 5 exempt and non-GST inward supplies, and 6 payment with the credit set off.",
-      steps: ["Choose the basis for credit at the top: \u201cas far as 2B shows it\u201d (the law, section 16(2)(aa)) whenever the month\u2019s 2B is here, or \u201cas booked\u201d.", "In the first month only, type the opening balance of the electronic credit ledger for each tax; later months carry it forward.", "Check 4(A)(5) and the lines for bills held back (not in 2B yet) and released (from an earlier month, now in 2B).", "Type 4(B)(2) and 4(D)(1) if there is anything to reverse or reclaim; rules 42 and 43 come from the Reversal tab.", "Check the set-off and the cash to pay in table 6.", "Pay the cash through a challan (PMT-06), then download the 3B JSON or fill the return from the Excel."],
+      steps: ["Choose the basis for credit at the top: \u201cas far as 2B shows it\u201d (the law, section 16(2)(aa)) whenever the month\u2019s 2B is here, or \u201cas booked\u201d.", "In the first month only, type the opening balance of the electronic credit ledger for each tax; later months carry it forward.", "Check 4(A)(5) and the lines for bills held back (not in 2B yet) and released (from an earlier month, now in 2B).", "Type 4(B)(2) and 4(D)(1) if there is anything to reverse or reclaim; rules 42 and 43 come from the Reversal tab.", "Check the set-off and the cash to pay in table 6.", "Pay the cash through a challan (PMT-06), then download the 3B JSON or fill the return from the Excel.", "Under \u201cFiling, interest and late fee\u201d, read the portal\u2019s checks (DRC-01B, DRC-01C) and the rule 37 bills before filing.", "After filing, type the dates GSTR-1 and 3B were filed \u2014 late fee and interest are worked out \u2014 and click \u201cMark this 3B as filed\u201d so the month stays as filed.", "Download the set-off journal and import it into Tally, so the GST ledgers there agree with the portal."],
       from: "3.1(a) from sales less credit notes, plus tax on advances; 3.1(d) from the reverse charge payable ledger; table 4 from every voucher carrying input tax, limited to what 2B shows; 4(D)(2) from 2B\u2019s not-available lines; rules 42/43 from Reversal.",
-      watch: ["A bill not in 2B gives no credit that month; it is taken in the month its 2B carries it.", "Documents rejected in IMS give no credit; a rejected supplier credit note does not reduce it.", "Credit is used in the order the law sets: IGST first, then CGST and SGST (sections 49 and 49A, rule 88A).", "Our own credit notes rejected by customers are added back to 3.1(a) in the month the portal adds them."]},
+      watch: ["A bill not in 2B gives no credit that month; it is taken in the month its 2B carries it.", "Documents rejected in IMS give no credit; a rejected supplier credit note does not reduce it.", "Credit is used in the order the law sets: IGST first, then CGST and SGST (sections 49 and 49A, rule 88A).", "Our own credit notes rejected by customers are added back to 3.1(a) in the month the portal adds them.", "Rule 37: credit on a bill unpaid 180 days after its date is reversed in 4(B)(2) in the month the 181st day falls in, and taken back in 4(A)(5) and 4(D)(1) when it is paid. Only bills kept bill-wise in Tally can be followed.", "Late fee is \u20b950 a day (\u20b920 for nil), capped by the year-before turnover; interest is 18% a year on tax paid in cash after the due date (section 50)."]},
     "gst:inreg": {t: "Input register", what: "Every purchase-side document with input tax, line by line \u2014 rate by rate and HSN by HSN \u2014 with whether it is in 2B.",
       steps: ["Choose the month.", "Use the funnel on any column to narrow the list: supplier, rate, status, amount range.", "Look at \u201cNot in 2B\u201d and \u201cIn 2B, differs\u201d first; they are followed up under ITC follow-up.", "Download the Excel for the file or the client."],
       from: "Tally purchases, journals and payments carrying input tax; the 2B for the month.", watch: ["Status needs that month\u2019s 2B; without it every line says \u201c2B not brought in\u201d.", "Reverse charge and blocked credit (section 17(5)) are shown but are not expected in 2B the same way."]},
@@ -19584,6 +19594,212 @@ if (typeof document !== "undefined") document.addEventListener("click", e => {
 });
 // Esc closes the guide and nothing else: the app's own Esc (which leaves the screen) must not run as well
 if (typeof document !== "undefined") document.addEventListener("keydown", e => { if (e.key === "Escape" && S.helpOpen && document.getElementById("helpPanel")){ e.stopImmediatePropagation(); e.preventDefault(); S.helpOpen = false; Help.after(); } }, true);
+/* ================================================================== */
+/* Filing a GST month: due dates, late fee, interest, rule 37, the    */
+/* checks the portal runs (DRC-01B, DRC-01C), filed 3B copies, and    */
+/* the set-off journal for Tally                                      */
+/* ================================================================== */
+const GSTF = {
+  // monthly filers: GSTR-1 by the 11th, GSTR-3B by the 20th of the next month
+  due(ym, which){ const n = GSTR.nextYm ? GSTR.nextYm(ym) : CustIMS.nextYm(ym); return n.slice(0, 4) + "-" + n.slice(4, 6) + "-" + (which === "r1" ? "11" : "20"); },
+  days(a, b){ return Math.round((Date.parse(b) - Date.parse(a)) / 86400000); },
+  today(){ return new Date().toISOString().slice(0, 10); },
+  store(reg){ const b = S.books; b.gstFiled = b.gstFiled || {}; return b.gstFiled[reg || ""] = b.gstFiled[reg || ""] || {}; },
+  rec(ym, reg){ const s = this.store(reg); return s[ym] = s[ym] || {}; },
+  peek(ym, reg){ return (((S.books || {}).gstFiled || {})[reg || ""] || {})[ym] || {}; },
+  fyOf(ym){ const y = +ym.slice(0, 4), m = +ym.slice(4, 6); return m >= 4 ? y + "-" + String(y + 1).slice(2) : (y - 1) + "-" + String(y).slice(2); },
+  // aggregate turnover of the year before, for the late fee caps: typed, else from the books (all registrations)
+  aato(fy){
+    const t = num(((S.books.gstAato || {})[fy]));
+    if (t) return {v: t, from: "typed"};
+    const y0 = +fy.slice(0, 4) - 1, months = GSTR.months().filter(m => m >= y0 + "04" && m <= (y0 + 1) + "03");
+    if (months.length < 12) return {v: 0, from: months.length ? "part" : "none", n: months.length};
+    let v = 0; months.forEach(m => GSTR.outward(m, "").forEach(r => { v += (r.kind === "CDNR" ? -1 : 1) * num(r.taxable); }));
+    return {v: r2(v), from: "books"};
+  },
+  // late fee, section 47 as capped by notifications 19/2021 (3B) and 20/2021 (GSTR-1): Rs 50 a day (Rs 20 for a nil return),
+  // half CGST and half SGST, capped at Rs 500 for nil, else Rs 2,000 / 5,000 / 10,000 by turnover
+  // with no filing date typed, an estimate "if filed today" is given only for a month that has just fallen due
+  unknown(due, filed){ return !filed && this.days(due, this.today()) > 45; },
+  lateFee(ym, reg, which, nil){
+    const r = this.peek(ym, reg), filed = r[which] || "", due = this.due(ym, which), upto = filed || this.today(), d = Math.max(0, this.days(due, upto));
+    if (this.unknown(due, filed)) return {days: 0, fee: 0, due, filed, cap: 0, unknown: true};
+    if (!d) return {days: 0, fee: 0, due, filed, cap: 0};
+    const a = this.aato(this.fyOf(ym)), cap = nil ? 500 : !a.v ? 10000 : a.v <= 15000000 ? 2000 : a.v <= 50000000 ? 5000 : 10000;
+    const fee = Math.min(d * (nil ? 20 : 50), cap);
+    return {days: d, fee, cgst: fee / 2, sgst: fee / 2, due, filed, cap, capFrom: a.from, estimated: !filed};
+  },
+  // interest, section 50(1) with its proviso: 18% a year on the tax paid in cash, for the days after the due date
+  interest(ym, reg, t){
+    const r = this.peek(ym, reg), due = this.due(ym, "r3b"), upto = r.r3b || this.today(), d = this.unknown(due, r.r3b) ? 0 : Math.max(0, this.days(due, upto));
+    const cash = t.pay.cash, heads = {};
+    ["igst", "cgst", "sgst", "cess"].forEach(h => { heads[h] = r2(num(cash[h]) * 0.18 * d / 365); });
+    return {days: d, due, filed: r.r3b || "", heads, total: r2(heads.igst + heads.cgst + heads.sgst + heads.cess), estimated: !r.r3b};
+  },
+  // rule 37: credit on a bill not paid within 180 days of its date is reversed in the return of the month the 181st day falls in,
+  // on the unpaid part, and taken back in the month it is paid (4(D)(1)). Only bills kept bill-wise in Tally can be followed.
+  bills(reg){
+    const b = S.books, key = reg + "|" + (b.vouchers || []).length + "|" + (b.mapV || 0);
+    if (this._bills && this._bills.key === key && this._bills.v === b.vouchers) return this._bills.list;
+    const bills = {};
+    (b.vouchers || []).filter(v => !v.opt && !v.cancel).forEach(v => v.ent.forEach(e => (e.b || []).forEach(([name, type, amt]) => {
+      if (!name) return;
+      const k = e.l + "|" + name, x = bills[k] = bills[k] || {party: e.l, ref: name, billed: 0, pays: [], v: null, tax: {}};
+      if (type === "New Ref" && amt > 0 && Books.isPurchase(v) && !Books.isRcm(v) && GSTR.regOf(v) === reg){
+        x.billed = r2(x.billed + amt); x.v = v;
+        // the invoice's full value, credited to the supplier on this voucher: the unpaid share is measured against it
+        x.gross = r2(v.ent.filter(z => z.l === e.l && z.a > 0).reduce((a, z) => a + z.a, 0));
+        v.ent.forEach(z => { const m = Books.ledgerOf(z.l); if (z.a < 0 && (m.kind === "gst" || m.kind === "gst_common") && m.side === "input"){ const h = String(m.tax || "").toLowerCase(); if (h) x.tax[h] = r2((x.tax[h] || 0) - z.a); } });
+      } else if (amt < 0) x.pays.push({date: v.date, amt: -amt});
+    })));
+    const list = Object.values(bills).filter(x => x.v && Object.keys(x.tax).length && x.billed > 0).map(x => {
+      const d0 = String(x.v.refDate || x.v.date), dt = new Date(Date.UTC(+d0.slice(0, 4), +d0.slice(4, 6) - 1, +d0.slice(6, 8) + 180));
+      x.revYm = dt.toISOString().slice(0, 7).replace("-", ""); x.billDate = d0; return x; });
+    this._bills = {key, v: b.vouchers, list};
+    return list;
+  },
+  // what a supplier's ledger shows as owing at a month's end: credits less debits, opening balance included
+  owing(reg){
+    const b = S.books, key = (b.vouchers || []).length + "|" + (b.mapV || 0);
+    if (!this._owe || this._owe.key !== key || this._owe.v !== b.vouchers){
+      const by = {};
+      (b.vouchers || []).filter(v => !v.opt && !v.cancel).forEach(v => v.ent.forEach(e => { (by[e.l] = by[e.l] || []).push([String(v.date).slice(0, 6), e.a]); }));
+      Object.values(by).forEach(l => l.sort((a, c) => a[0].localeCompare(c[0])));
+      this._owe = {key, v: b.vouchers, by};
+    }
+    return (party, end) => { const op = num((((b.ledInfo || {})[party]) || {}).ob); let s2 = op; (this._owe.by[party] || []).forEach(([m, a]) => { if (m <= end) s2 += a; }); return Math.max(0, s2); };
+  },
+  rule37(ym, reg){
+    const Z = () => ({igst: 0, cgst: 0, sgst: 0, cess: 0, n: 0, list: []}), rev = Z(), re = Z(), paidBy = (x, end) => x.pays.filter(p => String(p.date).slice(0, 6) <= end).reduce((a, p) => a + p.amt, 0);
+    const put = (o, x, share, why) => { ["igst", "cgst", "sgst", "cess"].forEach(h => { o[h] = r2(o[h] + r2(num(x.tax[h]) * share)); }); o.n++; o.list.push({party: x.party, ref: x.ref, date: x.billDate, share: r2(share), why, tax: r2(Object.values(x.tax).reduce((a, v) => a + v, 0) * share)}); };
+    const owe = this.owing(reg);
+    this.bills(reg).forEach(x => {
+      if (x.revYm > ym) return;
+      // a payment made on account, not against the bill, still pays it: never more unpaid than the ledger owes
+      const unpaidAt = end => Math.max(0, Math.min(x.billed - paidBy(x, end), owe(x.party, end))) / Math.max(x.billed, x.gross || 0);
+      const atRev = unpaidAt(x.revYm);
+      if (atRev * Math.max(x.billed, x.gross || 0) < 1) return;
+      if (x.revYm === ym) put(rev, x, atRev, (atRev < 0.01 ? "under 1%" : Math.round(atRev * 100) + "%") + " unpaid after 180 days");
+      else {
+        // paid in this month, after the reversal: that share comes back
+        const prev = GSTR.months()[GSTR.months().indexOf(ym) - 1] || x.revYm, before = unpaidAt(prev < x.revYm ? x.revYm : prev), now = unpaidAt(ym), back = r2(before - now);
+        if (back > 0.0001) put(re, x, back, "paid in " + GSTR.label(ym));
+      }
+    });
+    return {rev, re};
+  },
+  // a kept copy of the 3B as filed: its figures stand for the month in GSTR-9 and its credit left over is carried
+  filed3b(ym, reg){ const r = this.peek(ym, reg); return r.snap || null; },
+  snapOf(t){ const c = JSON.parse(JSON.stringify(t)); ["held", "released", "cn2b", "rejBack", "custRej", "r37"].forEach(k => { if (c[k] && c[k].list) delete c[k].list; if (c[k] && c[k].add) { delete c[k].add.list; delete c[k].back.list; } if (c[k] && c[k].rev){ delete c[k].rev.list; delete c[k].re.list; } }); delete c.unregPos; return c; },
+  // DRC-01B (rule 88C): liability in GSTR-1 higher than paid in 3B; DRC-01C (rule 88D): credit in 3B above 2B.
+  // The portal intimates when the difference passes its limit; the limit is set here as notified, and the difference is always shown.
+  LIM: {b: {amt: 2500000, pct: 20}, c: {amt: 500000, pct: 20}},
+  drc(ym, reg, t){
+    const tax = x => r2(num(x.igst) + num(x.cgst) + num(x.sgst) + num(x.cess));
+    const filed = typeof GSTAmend === "object" ? GSTAmend.filed(reg).find(f => f.ym === ym && !f.notFiled) : null;
+    let r1 = null, r1From = "books";
+    if (filed){ r1From = "filed"; const n = GSTAmend.norm(filed.json); let s = 0; n.docs.forEach(d => { s += (d.kind === "CDNR" && d.nt === "C" ? -1 : 1) * r2(num(d.iamt) + num(d.camt) + num(d.samt) + num(d.csamt)); }); n.b2cs.forEach(d => { s += num(d.iamt) + num(d.camt) + num(d.samt) + num(d.csamt); }); r1 = r2(s); }
+    if (r1 == null) r1 = r2(tax(t.sale) - tax(t.cn) + tax(t.zero) + tax(t.adv));
+    // 3.1(a) and (b) as they go in 3B (advances in both; our credit notes rejected by customers add to 3B only)
+    const r3 = r2(tax(t.net) - (t.custRej ? tax(t.custRej.add) - tax(t.custRej.back) : 0) + tax(t.zero));
+    const gapB = r2(r1 - r3), limB = Math.max(this.LIM.b.amt, r1 * this.LIM.b.pct / 100);
+    let avl = 0, have2b = false;
+    (typeof GST2B === "object" ? GST2B.all2b(reg) : []).filter(x => x.ym === ym).forEach(x => { have2b = true; x.rows.filter(r => r.itcavl !== "N" && !r.rej && !r.rcm && r.sec !== "impg" && r.sec !== "isd").forEach(r => { avl += r.dir * (num(r.igst) + num(r.cgst) + num(r.sgst) + num(r.cess)); }); });
+    avl = r2(avl);
+    const claimed = tax(t.other), gapC = r2(claimed - avl), limC = Math.max(this.LIM.c.amt, avl * this.LIM.c.pct / 100);
+    return {b: {r1, r3, gap: gapB, lim: r2(limB), flag: gapB > limB, from: r1From}, c: {have2b, avl, claimed, gap: gapC, lim: r2(limC), flag: have2b && gapC > limC}};
+  },
+  // section 34(2): a credit note reduces tax only if issued by 30 November after the year of the invoice
+  lateCn(ym, reg){
+    const out = [];
+    (S.books.vouchers || []).forEach(v => {
+      if (!Books.isSale(v) || !/CREDIT NOTE/i.test(v.type) || (ym && GSTR.ym(v.date) !== ym) || (reg && GSTR.regOf(v) !== reg)) return;
+      const od = String(v.refDate || ""); if (!/^\d{8}$/.test(od)) return;
+      const fyEnd = +od.slice(4, 6) >= 4 ? +od.slice(0, 4) + 1 : +od.slice(0, 4), lim = fyEnd + "1130";
+      if (String(v.date) > lim) out.push({no: v.no, party: v.party, date: v.date, orig: v.ref, origDate: od, lim});
+    });
+    return out;
+  },
+  // the month's set-off and cash payment as one journal for Tally: output tax debited, input tax and the cash ledger credited
+  journal(ym, reg){
+    const t = GSTR.threeB(ym, reg), P = t.pay, H = ["igst", "cgst", "sgst", "cess"], lines = [], rec = this.peek(ym, reg);
+    const led = (kind, head, side, rcm) => { const e = Object.entries(S.books.map || {}).filter(([, m]) => m.kind === kind && (m.tax === head || (rcm && !m.tax) || (rcm && !head)) && (!m.reg || m.reg === reg) && m.side === side && !!m.rcm === !!rcm).sort((a, c) => (c[1].tax ? 1 : 0) - (a[1].tax ? 1 : 0) || (c[1].n || 0) - (a[1].n || 0)); if (!e.length && rcm) return led(kind, "", side, true) || Object.entries(S.books.map || {}).filter(([, m]) => m.kind === kind && m.rcm && m.side === side && (!m.reg || m.reg === reg)).map(z => z[0])[0] || null;
+      return e.length ? e[0][0] : null; };
+    const cashL = rec.cashLedger || (S.books.gstCashLedger || {})[reg] || (reg + " GST ELECTRONIC CASH LEDGER"), missing = [];
+    const add = (l, dr, cr, what) => { if (!r2(dr) && !r2(cr)) return; if (!l){ missing.push(what); return; }
+      const o = lines.find(z => z.l === l && (dr ? z.dr : z.cr)); if (o){ o.dr = r2(o.dr + r2(dr)); o.cr = r2(o.cr + r2(cr)); } else lines.push({l, dr: r2(dr), cr: r2(cr)}); };
+    H.forEach(to => {
+      const HU = to.toUpperCase(), used = H.reduce((a, from) => a + num((P.use[from] || {})[to]), 0), cashTo = r2(num(P.cash[to]) - num((P.rcmCash || {})[to]));
+      add(led("gst", HU, "output"), used + cashTo, 0, HU + " output ledger");
+    });
+    H.forEach(from => { const HU = from.toUpperCase(), used = Object.values(P.use[from] || {}).reduce((a, v) => a + num(v), 0); if (used) add(led("gst", HU, "input"), 0, used, HU + " input ledger"); });
+    H.forEach(h => { const rc = num((P.rcmCash || {})[h]); if (rc) add(led("gst", h.toUpperCase(), "output", true), rc, 0, h.toUpperCase() + " reverse charge payable ledger"); });
+    const cash = r2(H.reduce((a, h) => a + num(P.cash[h]), 0));
+    if (cash) lines.push({l: cashL, dr: 0, cr: cash});
+    // rounding: keep the voucher balanced
+    // paise only: a larger difference means a ledger is missing, and the journal is not offered as balanced
+    const d = r2(lines.reduce((a, l) => a + l.dr - l.cr, 0)); if (Math.abs(d) >= 0.01 && Math.abs(d) < 1 && lines.length) lines[lines.length - 1].cr = r2(lines[lines.length - 1].cr + d);
+    const balanced = Math.abs(r2(lines.reduce((a, l) => a + l.dr - l.cr, 0))) < 0.01;
+    const nx = (GSTR.nextYm ? GSTR.nextYm(ym) : CustIMS.nextYm(ym));
+    const date = rec.r3b ? rec.r3b.replace(/-/g, "") : nx + "20";
+    return {balanced, date, narr: "GSTR-3B " + GSTR.label(ym) + ": tax set off against input tax credit and paid in cash (sections 49, 49A; rule 88A)", lines, missing, cash, cashL};
+  }
+};
+function viewGstFiling(b, t){
+  const ym = S.gstYm || "", reg = S.gstReg || "", money = v => INR.format(r2(v || 0)), rec = GSTF.peek(ym, reg), d = s => s ? GSTAmend.dmy(s.replace(/-/g, "")) : "";
+  const nil3b = !(t.net.igst || t.net.cgst || t.net.sgst || t.rcmOut.igst || t.rcmOut.cgst || t.rcmOut.sgst || t.other.igst || t.other.cgst || t.other.sgst);
+  const nil1 = !GSTR.outward(ym, reg).length;
+  const f1 = GSTF.lateFee(ym, reg, "r1", nil1), f3 = GSTF.lateFee(ym, reg, "r3b", nil3b), it = GSTF.interest(ym, reg, t), dr = GSTF.drc(ym, reg, t), a = GSTF.aato(GSTF.fyOf(ym));
+  const dateIn = (k, v) => '<input type="date" data-gstf="' + k + '" value="' + esc(v || "") + '" style="width:auto">';
+  let h = '<section class="dash-card" style="margin-top:12px"><h3>Filing, interest and late fee</h3>' +
+    '<div class="bk-tablewrap"><table class="bk-table compact"><thead><tr><th>Return</th><th>Due</th><th>Filed on</th><th class="n">Days late</th><th class="n">Late fee</th></tr></thead><tbody>' +
+    "<tr><td>GSTR-1" + (nil1 ? ' <span class="nr">nil</span>' : "") + "</td><td>" + d(f1.due || GSTF.due(ym, "r1")) + "</td><td>" + dateIn("r1", rec.r1) + '</td><td class="n">' + (f1.unknown ? '<span class="nr">type the date filed</span>' : f1.days || "\u2014") + '</td><td class="n">' + (f1.fee ? money(f1.fee) + (f1.estimated ? '<div class="nr">if filed today</div>' : "") : "\u2014") + "</td></tr>" +
+    "<tr><td>GSTR-3B" + (nil3b ? ' <span class="nr">nil</span>' : "") + "</td><td>" + d(GSTF.due(ym, "r3b")) + "</td><td>" + dateIn("r3b", rec.r3b) + '</td><td class="n">' + (f3.unknown ? '<span class="nr">type the date filed</span>' : f3.days || "\u2014") + '</td><td class="n">' + (f3.fee ? money(f3.fee) + (f3.estimated ? '<div class="nr">if filed today</div>' : "") : "\u2014") + "</td></tr></tbody></table></div>" +
+    '<p class="note">Late fee under section 47: \u20b950 a day (\u20b920 for a nil return), half CGST and half SGST, capped by turnover of the year before (notifications 19/2021 and 20/2021) at \u20b9' + money(f3.cap || f1.cap || 0).replace(/\.00$/, "") +
+    '. Turnover of ' + esc(String(+GSTF.fyOf(ym).slice(0, 4) - 1) + "-" + GSTF.fyOf(ym).slice(2, 4)) + ': <input type="number" data-gstf="aato" value="' + (a.from === "typed" ? a.v : "") + '" placeholder="' + (a.v ? money(a.v) + " from the books" : "type it") + '" style="width:170px">' +
+    (a.from === "part" || a.from === "none" ? " <b>not all of that year is in the books \u2014 type it; the highest cap is used meanwhile.</b>" : "") + " GSTR-1\u2019s late fee is charged by the portal in the next 3B.</p>";
+  if (it.days && it.total) h += '<p class="note"><b>Interest under section 50(1): \u20b9' + money(it.total) + "</b> (18% a year on \u20b9" + money(t.pay.cash.igst + t.pay.cash.cgst + t.pay.cash.sgst + t.pay.cash.cess) + " paid in cash, for " + it.days + " days" + (it.estimated ? ", if filed today" : "") + "): IGST " + money(it.heads.igst) + ", CGST " + money(it.heads.cgst) + ", SGST " + money(it.heads.sgst) + ". It goes in table 5.1; check it against what the portal works out.</p>";
+  // DRC-01B and DRC-01C
+  const flag = (on, txt) => '<div class="dash-row"><span>' + txt + "</span><b" + (on ? ' class="bad"' : "") + ">" + (on ? "check before filing" : "within the limit") + "</b></div>";
+  h += "<h4 style=\"margin:12px 0 4px\">Checks the portal runs</h4>" +
+    flag(dr.b.flag, "DRC-01B: tax in GSTR-1 (" + (dr.b.from === "filed" ? "as filed" : "from the books") + ") \u20b9" + money(dr.b.r1) + " against 3B \u20b9" + money(dr.b.r3) + ", short by \u20b9" + money(Math.max(0, dr.b.gap)) + " (limit \u20b9" + money(dr.b.lim) + ")") +
+    (dr.c.have2b ? flag(dr.c.flag, "DRC-01C: credit in 3B 4(A)(5) \u20b9" + money(dr.c.claimed) + " against 2B \u20b9" + money(dr.c.avl) + ", above 2B by \u20b9" + money(Math.max(0, dr.c.gap)) + " (limit \u20b9" + money(dr.c.lim) + ")") : '<div class="dash-row"><span>DRC-01C: credit against 2B</span><b class="nr">no 2B for this month</b></div>') +
+    '<p class="note">Limits as notified under rules 88C and 88D (the higher of an amount and a percentage); a difference is not wrong in itself \u2014 reclaims, credit of earlier months and 2B timing explain most \u2014 but be ready to explain it.</p>';
+  // rule 37
+  const r = t.r37, off = !!((b.rule37Off || {})[reg]);
+  h += '<h4 style="margin:12px 0 4px">Rule 37: suppliers unpaid after 180 days</h4>' +
+    '<label class="note"><input type="checkbox" data-gstf="r37off"' + (off ? "" : " checked") + "> Work out from bills in Tally (only bills kept bill-wise can be followed)</label>" +
+    (r && (r.rev.n || r.re.n) ? '<div class="bk-tablewrap"><table class="bk-table compact"><thead><tr><th>Supplier</th><th>Bill</th><th class="dt">Date</th><th>Why</th><th class="n">Tax</th><th>In 3B</th></tr></thead><tbody>' +
+      r.rev.list.map(x => "<tr><td>" + esc(x.party) + "</td><td>" + esc(x.ref) + "</td><td>" + fmtDate(tallyDate(x.date)) + "</td><td>" + esc(x.why) + '</td><td class="n">' + money(x.tax) + "</td><td>4(B)(2) reversed</td></tr>").join("") +
+      r.re.list.map(x => "<tr><td>" + esc(x.party) + "</td><td>" + esc(x.ref) + "</td><td>" + fmtDate(tallyDate(x.date)) + "</td><td>" + esc(x.why) + '</td><td class="n">' + money(x.tax) + "</td><td>4(A)(5) and 4(D)(1) reclaimed</td></tr>").join("") +
+      "</tbody></table></div>" : '<p class="note">' + (off ? "Off: type any reversal in 4(B)(2) above." : "No bill reaches 180 days unpaid this month, and none reversed earlier was paid.") + "</p>") +
+    '<p class="note">Interest under section 50 applies to credit reversed here only where it was used to pay tax (rule 88B).</p>';
+  // the filed copy and the Tally journal
+  const J = GSTF.journal(ym, reg);
+  h += '<h4 style="margin:12px 0 4px">After filing</h4><div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">' +
+    (rec.snap ? '<span class="tag">3B kept as filed on ' + esc(d(rec.r3b) || fmtDate(String(rec.snapAt || "").slice(0, 10))) + '</span><button class="linkbtn" data-gstfact="unsnap">remove the kept copy</button>'
+      : '<button class="btn small" data-gstfact="snap">Mark this 3B as filed and keep a copy</button>') +
+    '<button class="btn small" data-gstfact="journal">Set-off journal for Tally</button><span class="note">cash ledger in Tally:</span><input type="text" data-gstf="cashLedger" value="' + esc(J.cashL) + '" style="width:260px"></div>' +
+    '<p class="note">The kept copy is used for GSTR-9 and for the credit carried into the next month, so later changes in Tally do not move a month already filed.' + (J.missing.length ? " <b>Ledger not found in Tally: " + esc(J.missing.join(", ")) + (J.balanced ? "" : "; the journal will not balance until it is there") + ".</b>" : "") + "</p></section>";
+  return h;
+}
+if (typeof document !== "undefined") document.addEventListener("change", e => {
+  const t = e.target; if (!t.dataset || t.dataset.gstf === undefined || !S.books) return;
+  const ym = S.gstYm || "", reg = S.gstReg || "", k = t.dataset.gstf, b = S.books;
+  if (k === "r1" || k === "r3b" || k === "cashLedger") GSTF.rec(ym, reg)[k] = t.value;
+  if (k === "aato"){ b.gstAato = Object.assign({}, b.gstAato, {[GSTF.fyOf(ym)]: num(t.value)}); }
+  if (k === "r37off"){ b.rule37Off = Object.assign({}, b.rule37Off, {[reg]: !t.checked}); }
+  GSTR._carry = null; saveBooks(); render();
+});
+if (typeof document !== "undefined") document.addEventListener("click", e => {
+  const t = e.target.closest("[data-gstfact]"); if (!t || !S.books) return;
+  const ym = S.gstYm || "", reg = S.gstReg || "", a = t.dataset.gstfact;
+  if (a === "snap"){ const r = GSTF.rec(ym, reg); r.snap = GSTF.snapOf(GSTR.threeB(ym, reg)); r.snapAt = new Date().toISOString(); if (!r.r3b) r.r3b = GSTF.today(); GSTR._carry = null; saveBooks(); render(); toast("3B for " + GSTR.label(ym) + " kept as filed."); return; }
+  if (a === "unsnap"){ const r = GSTF.rec(ym, reg); delete r.snap; delete r.snapAt; GSTR._carry = null; saveBooks(); render(); return; }
+  if (a === "journal"){ const J = GSTF.journal(ym, reg); if (!J.lines.length){ toast("Nothing to set off this month."); return; }
+    if (!J.balanced){ toast("A ledger is missing in Tally (" + J.missing.join(", ") + "); the journal would not balance."); return; }
+    const co = CO() || {}; saveFile(String(co.name || "client").replace(/[^A-Za-z0-9]+/g, "-") + "-GST-setoff-" + reg + "-" + ym + ".xml", new Blob([Audit.jeXml([{date: J.date, narr: J.narr, lines: J.lines}])], {type: "application/xml"})); }
+});
 </script>
 </body>
 </html>
