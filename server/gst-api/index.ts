@@ -148,13 +148,20 @@ Deno.serve(async (req) => {
           ["std-2b-noaction", ROOT + "/gstapi/taxpayerapi/v1.0/returns/gstr2b?gstin=" + gstin + "&rtnprd=" + period, std],
           ["3b-headers", "gst/getgstr3b/" + gstin + "/" + period, { ...sess, "auth-token": sess.authtoken, gstin, ret_period: period }],
         ];
+        // the session as FYN gave it: sizes only (never the keys); and the key decoded, in case FYN wants it so
+        let ek = "";
+        try { ek = btoa(String.fromCharCode(...C.sekBytes(sess.sek, sess.app_key))); } catch (e) { ek = ""; }
+        console.log(JSON.stringify({ session: { app_key_len: sess.app_key.length, sek_len: sess.sek.length, auth_len: sess.authtoken.length, sek_opens_with_app_key: !!ek } }));
+        if (ek) tries.splice(0, 0, ["2b-ek", path + "/1", { ...sess, sek: ek }]);
+        tries.push(["ledger-cash", "gst/ledgers/" + gstin + "/" + period, { ...sess, "auth-token": sess.authtoken }]);
         const seen: string[] = [];
         for (const [name, where, hd] of tries) {
           const x = where.startsWith("http") ? await fynAt(where, hd) : await fyn("GET", where, hd);
           const code = x.j?.status_cd ?? null, err = x.j?.error?.error_cd || x.j?.error?.message || null;
-          console.log(JSON.stringify({ try: name, http: x.http, length: x.text.length, status_cd: code, error: err, keys: x.j && typeof x.j === "object" ? Object.keys(x.j).slice(0, 8) : null }));
-          seen.push(name + ": " + (x.j && typeof x.j === "object" ? (code == 1 ? "answered" : "status " + code + (err ? " " + err : "")) : "HTTP " + x.http + (x.text.length <= 4 ? " empty" : "")));
-          if (name.startsWith("3b")) continue;
+          const msg = x.j && typeof x.j === "object" && !x.j.data ? String(x.j.errorMessage || x.j.message || "").slice(0, 160) : "";
+          console.log(JSON.stringify({ try: name, http: x.http, length: x.text.length, status_cd: code, error: err, msg, keys: x.j && typeof x.j === "object" ? Object.keys(x.j).slice(0, 8) : null }));
+          seen.push(name + ": " + (x.j && typeof x.j === "object" ? (code == 1 ? "answered" : "status " + code + (err ? " " + err : "") + (msg ? " (" + msg + ")" : "")) : "HTTP " + x.http + (x.text.length <= 4 ? " empty" : "")));
+          if (name.startsWith("3b") || name.startsWith("ledger")) continue;
           if (x.j && typeof x.j === "object" && x.j.status_cd == 1) { first = x; break; }
         }
         if (first.j === null || first.j === "") return reply(200, { ok: false, error: "FYN Gateway sent back nothing for the 2B of " + period.slice(0, 2) + "/" + period.slice(2) + ". Tried: " + seen.join("; ") + "." });
