@@ -123,14 +123,15 @@ Deno.serve(async (req) => {
         if (typeof d === "string") { try { return JSON.parse(new TextDecoder().decode(C.b64dec(d))); } catch { /* fall through */ } }
         throw new Error("2B came back in a form TDS Desk does not know.");
       };
+      // FYN's path carries the file number: /1 first, then /2, /3 … when 2B comes in parts (fc)
       const path = "gst/returns/gstr2b/" + gstin + "/" + period;
-      let out = open(await fyn("GET", path, sess));
+      let out = open(await fyn("GET", path + "/1", sess));
       out = out?.data && !out.docdata ? out.data : out;
       const parts = Number(out?.fc || 0);
       if (parts > 1) {
         const all = out; all.docdata = all.docdata || {};
         for (let n = 2; n <= parts; n++) {
-          let p = open(await fyn("GET", path + "?file_num=" + n, sess)); p = p?.data && !p.docdata ? p.data : p;
+          let p = open(await fyn("GET", path + "/" + n, sess)); p = p?.data && !p.docdata ? p.data : p;
           Object.entries(p?.docdata || {}).forEach(([k, v]) => { all.docdata[k] = (all.docdata[k] || []).concat(v as any[]); });
         }
         out = all;
