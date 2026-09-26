@@ -125,7 +125,15 @@ Deno.serve(async (req) => {
       };
       // FYN's path carries the file number: /1 first, then /2, /3 … when 2B comes in parts (fc)
       const path = "gst/returns/gstr2b/" + gstin + "/" + period;
-      let out = open(await fyn("GET", path + "/1", sess));
+      const first = await fyn("GET", path + "/1", sess);
+      if (first.j === null || first.j === "") {
+        // an empty answer: check the same session on a plain read (the filed GSTR-3B of the month) to tell the two apart
+        const p3 = await fyn("GET", "gst/getgstr3b/" + gstin + "/" + period, { ...sess, "auth-token": sess.authtoken });
+        const said = p3.j?.status_cd == 1 ? "works (GSTR-3B read)" : (p3.j ? gstErr(p3) : "HTTP " + p3.http + ", empty");
+        console.log(JSON.stringify({ probe: "3b", http: p3.http, status_cd: p3.j?.status_cd ?? null, keys: p3.j && typeof p3.j === "object" ? Object.keys(p3.j) : null, error: p3.j?.error ?? null }));
+        return reply(200, { ok: false, error: "FYN Gateway sent back nothing for the 2B of " + period.slice(0, 2) + "/" + period.slice(2) + " (HTTP " + first.http + ", empty). The same portal session on another call: " + said + "." });
+      }
+      let out = open(first);
       out = out?.data && !out.docdata ? out.data : out;
       const parts = Number(out?.fc || 0);
       if (parts > 1) {
