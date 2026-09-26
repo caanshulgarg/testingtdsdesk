@@ -35,5 +35,6 @@
  "34-help.js",
  "35-gst-filing.js",
  "36-gst-settings.js",
- "37-gst-periodic.js"
+ "37-gst-periodic.js",
+ "38-gst-returns-filed.js"
 ]

@@ -30,15 +30,16 @@ let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + 
   x.GSTF.rec(ym, reg).r3b = "2026-04-20";
   ok(A.can1a(ym, reg).threeB, "3B filed: GSTR-1A closes, the differences go in the next GSTR-1");
   ok(!A.can1a("202406", reg).period, "before the July 2024 period there is no GSTR-1A");
-  // e-invoices: no check for a client that does not make them in Tally; listed once any voucher carries an IRN
-  ok(!x.GSTF.einv(ym, reg).uses && !x.GSTR.checks(ym, reg).some(z => /IRN/.test(z.what)), "VMS's books carry no IRN: no e-invoice check, rather than every invoice flagged");
-  const sales = b.vouchers.filter(v => x.Books.isSale(v) && x.GSTR.regOf(v) === reg && x.GSTR.ym(v.date) === ym && v.gstin && !/NOTE/i.test(v.type));
-  sales.forEach((v, i) => { if (i < sales.length - 2){ v.irn = "irn" + i; v.irnDate = v.date; } });
-  sales[0].irnDate = x.GSTR.nextYm(ym) + "28";
+  // e-invoices: VMS makes them in Tally (769 vouchers carry an IRN); one credit note has none
+  const all = x.GSTR.months().reduce((a, m) => { const e = x.GSTF.einv(m, reg); return {m: a.m.concat(e.missing), l: a.l.concat(e.late), uses: a.uses || e.uses}; }, {m: [], l: [], uses: false});
+  ok(all.uses && all.m.length === 1 && /^4\b/.test(all.m[0].no) && /ARTHA/.test(all.m[0].party) && all.l.length === 0, "VMS's IRNs are read from Tally: only credit note 4 of Dec 2025 (Artha Data Solutions) has none; none late");
+  ok(x.GSTR.checks("202512", reg).some(z => /without an e-invoice/.test(z.what)), "and it is listed in December's GSTR-1 checks");
+  const sales = b.vouchers.filter(v => x.Books.isSale(v) && x.GSTR.regOf(v) === reg && x.GSTR.ym(v.date) === ym && v.gstin && !/NOTE/i.test(v.type) && v.irn);
+  const k0 = {irn: sales[0].irn, d: sales[0].irnDate}, k1 = sales[1].irnDate;
+  delete sales[0].irn; sales[1].irnDate = x.GSTR.nextYm(ym) + "28";
   const e = x.GSTF.einv(ym, reg);
-  ok(e.uses && e.missing.length >= 2 && e.late.length === 1, "with IRNs in Tally: invoices without one (" + e.missing.length + ") and one taken more than 30 days late are listed");
-  ok(x.GSTR.checks(ym, reg).some(z => /without an e-invoice/.test(z.what)), "and they show in the GSTR-1 checks");
-  sales.forEach(v => { delete v.irn; delete v.irnDate; });
+  ok(e.uses && e.missing.some(z => z.no === sales[0].no) && e.late.some(z => z.no === sales[1].no), "an invoice without an IRN, and one IRN taken more than 30 days late, are listed");
+  sales[0].irn = k0.irn; sales[0].irnDate = k0.d; sales[1].irnDate = k1;
   const rd = fs.readFileSync(HTML, "utf8");
   ok(/irn: this\.one\(s, "IRN"\), irnDate: this\.one\(s, "IRNACKDATE"\)/.test(rd), "the day book reader keeps each voucher's IRN and acknowledgement date");
   const src = fs.readFileSync(HTML, "utf8"), sv = (src.match(/async function saveBooks\(\)\{[\s\S]*?\}\); \}/) || [""])[0];

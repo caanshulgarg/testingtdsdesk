@@ -67,6 +67,9 @@ const CloudDocs = {
       const s = SL();
       const v = s && s.cid === job.cid ? s.list.find(x => "sv:" + x.id === job.id) : null;
       if (v){ v.docPath = path; v.docSize = size; saveSales(); }
+    } else if (job.kind === "gstret"){
+      const x = S.books && S.books.cid === job.cid && typeof GSTV === "object" ? GSTV.list().find(z => z.id === job.id) : null;
+      if (x){ x.docPath = path; x.docSize = size; saveBooks(); }
     } else if (job.kind === "stmt"){
       const b = S.bank, id = job.id.replace(/^st:/, "");
       const st = b && b.cid === job.cid ? (b.stmts || []).find(x => x.id === id) : null;

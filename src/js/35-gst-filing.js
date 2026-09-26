@@ -222,7 +222,9 @@ function viewGstFiling(b, t){
     '<p class="note">Only bills kept bill-wise in Tally can be followed. Interest under section 50 applies to credit reversed here only where it was used to pay tax (rule 88B).</p>';
   // the filed copy and the Tally journal
   const J = GSTF.journal(ym, reg);
-  h += '<h4 style="margin:12px 0 4px">After filing</h4><div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">' +
+  const pdfs = typeof GSTV === "object" ? ["r1", "r3b"].map(f => [f, GSTV.copies(reg, f, ym)[0]]) : [];
+  h += '<h4 style="margin:12px 0 4px">After filing</h4>' + (pdfs.length ? '<p class="note">Portal PDFs: ' + pdfs.map(([f, r]) => GSTV.label(f) + " " + (r ? "\u2713 on file" : "not yet")).join(" \u00b7 ") + ' \u00b7 <button class="linkbtn" data-gstpart="vault">Returns filed</button></p>' : "") +
+    '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">' +
     (rec.snap ? '<span class="tag">3B kept as filed on ' + esc(d(rec.r3b) || fmtDate(String(rec.snapAt || "").slice(0, 10))) + '</span><button class="linkbtn" data-gstfact="unsnap">remove the kept copy</button>'
       : '<button class="btn small" data-gstfact="snap">Mark this 3B as filed and keep a copy</button>') +
     '<button class="btn small" data-gstfact="journal">Set-off journal for Tally</button><span class="note">cash ledger in Tally: <b>' + esc(J.cashL) + "</b> \u00b7 " + gstSetLink() + "</span></div>" +

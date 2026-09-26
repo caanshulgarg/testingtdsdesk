@@ -110,7 +110,7 @@ async function saveBooks(){ const b = S.books; if (b && b.cid) await Books.save(
   gstins: b.gstins, under: b.under, states: b.states, groups: b.groups, salary: b.salary, certs: b.certs, advFix: b.advFix, assets: b.assets, rev: b.rev,
   filed: b.filed, amendFix: b.amendFix, twoBs: b.twoBs, reco2b: b.reco2b, ledInfo: b.ledInfo, ledInfoAt: b.ledInfoAt,
   audit: b.audit, auditCfg: b.auditCfg, auditRel: b.auditRel, ledSnaps: b.ledSnaps, gst9c: b.gst9c, groupInfo: b.groupInfo, fs: b.fs, tb: b.tb, mis: b.mis, misCfg: b.misCfg, msme: b.msme, budget: b.budget,
-  gst3b: b.gst3b, gst9: b.gst9, gstOpen: b.gstOpen, itcBasis: b.itcBasis, itcTrack: b.itcTrack, outRej: b.outRej, gstFiled: b.gstFiled, gstAato: b.gstAato, filed1a: b.filed1a, rule37On: b.rule37On, gstCashLedger: b.gstCashLedger, gstSet: b.gstSet, gstContacts: b.gstContacts, gstApi: b.gstApi, gstEst: b.gstEst}); }
+  gst3b: b.gst3b, gst9: b.gst9, gstOpen: b.gstOpen, itcBasis: b.itcBasis, itcTrack: b.itcTrack, outRej: b.outRej, gstFiled: b.gstFiled, gstAato: b.gstAato, filed1a: b.filed1a, rule37On: b.rule37On, gstCashLedger: b.gstCashLedger, gstSet: b.gstSet, gstContacts: b.gstContacts, gstApi: b.gstApi, gstEst: b.gstEst, gstVault: b.gstVault}); }
 function viewBooks(){
   const co = CO();
   if (!S.books || S.books.cid !== co.id){ openBooks(co.id); return '<p class="note">Opening the books…</p>'; }
@@ -1156,6 +1156,7 @@ function viewBooksGst(b){
   const parts = ftype === "comp" ? [["cmp08", "CMP-08"], ["gstr4", "GSTR-4"], ["inreg", "Purchases"], ["r2b", "2B reconciliation"]]
     : (ftype === "qrmp" ? [["qtr", "This quarter"], ["r1", "GSTR-1 working"], ["r3b", "GSTR-3B working"]] : [["r1", "GSTR-1"], ["r3b", "GSTR-3B"]])
       .concat([["inreg", "Input register"], ["r2b", "2B reconciliation"], ["follow", "ITC follow-up"], ["adv", "Advances"], ["rev", "Reversal"], ["amend", "Amendments"], ["g9", "GSTR-9"], ["g9c", "GSTR-9C"]]);
+  parts.push(["vault", "Returns filed"]);
   // a GSTIN or filing type seen for the first time opens on its first part: This quarter, CMP-08, or GSTR-1
   const seen = (S.gstReg || "") + "|" + ftype;
   if (!S.gstPart || !parts.some(x => x[0] === S.gstPart) || (S.gstSeen && S.gstSeen !== seen)) S.gstPart = parts[0][0];
@@ -1165,13 +1166,14 @@ function viewBooksGst(b){
     .map(([id, l]) => '<button data-gstpart="' + id + '" aria-selected="' + (part === id) + '">' + l + "</button>").join("") + "</nav>";
   h += '<div class="revfilter"><select data-gstym>' + months.map(m => '<option value="' + m + '"' + (S.gstYm === m ? " selected" : "") + ">" + GSTR.label(m) + "</option>").join("") + "</select>" +
     (regs.length > 1 ? '<select data-gstreg>' + regs.map(g => '<option value="' + g.slice(0, 2) + '"' + (S.gstReg === g.slice(0, 2) ? " selected" : "") + ">" + esc(g) + "</option>").join("") + "</select>" : "") +
-    (part === "r2b" || part === "rev" || part === "inreg" || part === "follow" || part === "qtr" || ftype === "comp" ? "" : '<button class="btn small" data-act="gstExcel">Download GSTR-1 and 3B</button>') +
+    (part === "r2b" || part === "rev" || part === "inreg" || part === "follow" || part === "qtr" || part === "vault" || ftype === "comp" ? "" : '<button class="btn small" data-act="gstExcel">Download GSTR-1 and 3B</button>') +
     (part === "amend" && ftype === "monthly" ? '<button class="btn small primary" data-act="gstJson">Download GSTR-1 JSON with these</button>' : "") +
     (part === "r1" && !noReturn ? '<button class="btn small primary" data-act="gstJson">Download GSTR-1 JSON' + (ftype === "qrmp" ? " for the quarter" : " for the portal") + "</button>" : "") +
     (part === "r3b" && !noReturn ? '<button class="btn small primary" data-act="gst3bJson">Download GSTR-3B JSON' + (ftype === "qrmp" ? " for the quarter" : " for the portal") + "</button>" : "") + "</div>";
   // a GSTIN that is not a monthly filer: say so on every part, until its own returns are built
   const ftp = typeof GSTSet === "object" && S.gstYm ? GSTSet.typeOf(S.gstYm, S.gstReg || "") : "monthly";
   if (ftp === "qrmp" && (part === "r1" || part === "r3b")) h += '<p class="note" style="margin:0 0 10px">Quarterly (QRMP) filer: this is the working for ' + esc(GSTR.label(S.gstYm)) + (GSTSet.isQEnd(S.gstYm) ? "; the downloads cover the whole of " + esc(GSTSet.qLabel(S.gstYm)) + "." : ", for reference; this month has no GSTR-1 or 3B \u2014 see \u201cThis quarter\u201d.") + "</p>";
+  if (part === "vault") return h + viewGstReturnsFiled(b);
   if (part === "qtr") return h + viewQrmp(b);
   if (part === "cmp08") return h + viewCmp08(b);
   if (part === "gstr4") return h + viewGstr4(b);
