@@ -95,9 +95,11 @@ function stepCounts(){
   }
   return {collect: inbox ? inbox + " in inbox" : "upload bills", review: (st.drafts || 0) + " to review", post: (st.waiting || 0) + " approved", done: (st.invoicesFy || 0) + " this year"};
 }
+// the firm's plan comes as {name, includes, …} from the firm account; older copies kept only its name
+function planName(p){ return p && typeof p === "object" ? String(p.name || "") : String(p || ""); }
 function topRight(){
   const bal = accountBalance();
-  const plan = S.account && S.account.firm ? (S.account.firm.plan || "") : "";
+  const plan = S.account && S.account.firm ? planName(S.account.firm.plan) : "";
   return '<div class="topright">' +
     '<button class="tallychip' + (bridgeLive(S.view === "company" ? CO() : null) ? " live" : Bridge.on() ? " off" : " none") + '" data-act="tallyPanel" title="Tally connection">' +
       '<span class="dotled"></span>Tally' + (bridgeLive(S.view === "company" ? CO() : null) ? "" : Bridge.on() ? ": not answering" : ": not set up") + "</button>" +
@@ -122,7 +124,7 @@ function firmMenuHtml(){
   const a = S.account, bal = accountBalance();
   return '<button class="menu-scrim" data-act="firmMenuClose" aria-label="Close"></button><div class="firmmenu" role="menu">' +
     '<div class="fm-head"><b>' + esc(S.firm.firmName || "Firm") + "</b>" + (a && a.me ? '<span class="note">' + esc(a.me.email || "") + " \u00b7 " + esc(a.me.role || "") + "</span>" : "") + "</div>" +
-    (a && a.firm ? '<div class="fm-plan"><span>' + esc(a.firm.plan || "Plan") + "</span>" + (bal != null ? "<b>credit " + INR.format(bal) + "</b>" : "") + "</div>" : "") +
+    (a && a.firm ? '<div class="fm-plan"><span>' + esc(planName(a.firm.plan) || "Plan") + "</span>" + (bal != null ? "<b>credit " + INR.format(bal) + "</b>" : "") + "</div>" : "") +
     '<button class="fm-item" data-act="openSettings">Settings</button>' +
     '<button class="fm-item" data-nav="tally">Tally: everything sent</button>' +
     '<button class="fm-item" data-nav="inbox">Inbox for all clients</button>' +
