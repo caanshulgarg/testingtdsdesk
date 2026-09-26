@@ -27,7 +27,10 @@ const near = (a, b2, t) => Math.abs(a - b2) <= (t || 0.02);
   G.rec("202603", "07").r3b = "2026-05-05"; reset();
   const t = x.GSTR.threeB("202603", "07"), it = G.interest("202603", "07", t), cash = t.pay.cash.igst + t.pay.cash.cgst + t.pay.cash.sgst + t.pay.cash.cess;
   ok(it.days === 15 && near(it.total, cash * 0.18 * 15 / 365, 0.05) && cash > 0, "interest under section 50: 18% on the cash of \u20b9" + Math.round(cash) + " for 15 days = \u20b9" + it.total);
-  // rule 37
+  // rule 37: off unless switched on for the GSTIN
+  reset(); const t10off = x.GSTR.threeB("202510", "07");
+  ok(!t10off.r37 && (t10off.rev2.igst + t10off.rev2.cgst + t10off.rev2.sgst) === 0, "rule 37 is off by default: nothing reversed in October's 3B");
+  b.rule37On = {"07": true}; reset();
   const oct = G.rule37("202510", "07"), nov = G.rule37("202511", "07");
   const brand = oct.rev.list.find(z => /BRANDALIVE/.test(z.party));
   ok(brand && near(brand.tax, 101700, 1), "rule 37: Brandalive's bill of 30 Apr 2025, unpaid 180 days later, is reversed in October (\u20b91,01,700)");
@@ -37,7 +40,7 @@ const near = (a, b2, t) => Math.abs(a - b2) <= (t || 0.02);
   reset(); const t10 = x.GSTR.threeB("202510", "07");
   ok(near(t10.rev2.igst + t10.rev2.cgst + t10.rev2.sgst, oct.rev.igst + oct.rev.cgst + oct.rev.sgst), "October 3B 4(B)(2) carries the rule 37 reversal");
   const t11 = x.GSTR.threeB("202511", "07");
-  b.rule37Off = {"07": true}; reset(); const t11off = x.GSTR.threeB("202511", "07"); b.rule37Off = {};
+  b.rule37On = {}; reset(); const t11off = x.GSTR.threeB("202511", "07"); b.rule37On = {"07": true};
   ok(near((t11.other.igst + t11.other.cgst + t11.other.sgst) - (t11off.other.igst + t11off.other.cgst + t11off.other.sgst), nov.re.igst + nov.re.cgst + nov.re.sgst) && near(t11.reclaim.igst + t11.reclaim.cgst + t11.reclaim.sgst, nov.re.igst + nov.re.cgst + nov.re.sgst), "November: the reclaim is taken in 4(A)(5) and shown in 4(D)(1)");
   b.gst3b = {"07|202512": {reclaim: {igst: 1000}}}; reset();
   const t12 = x.GSTR.threeB("202512", "07"); b.gst3b = {}; reset(); const t12b = x.GSTR.threeB("202512", "07");
@@ -80,6 +83,6 @@ const near = (a, b2, t) => Math.abs(a - b2) <= (t || 0.02);
   ok(/VCHTYPE="Journal"/.test(xml) && xml.includes("07 GST ELECTRONIC CASH LEDGER") && xml.includes("<DATE>20260505</DATE>"), "as a Tally journal dated the day the 3B was filed");
   // saved with the books
   const src = fs.readFileSync(HTML, "utf8"), sv = (src.match(/async function saveBooks\(\)\{[\s\S]*?\}\); \}/) || [""])[0];
-  ok(["gstFiled", "gstAato", "rule37Off", "gstCashLedger"].every(k => new RegExp("\\b" + k + ": b\\." + k + "\\b").test(sv)), "filed dates, turnover, rule 37 setting and cash ledger are saved with the books");
+  ok(["gstFiled", "gstAato", "rule37On", "gstCashLedger"].every(k => new RegExp("\\b" + k + ": b\\." + k + "\\b").test(sv)), "filed dates, turnover, rule 37 setting and cash ledger are saved with the books");
   console.log("\n" + (fails ? fails + " FAILED" : "all passed")); process.exit(fails ? 1 : 0);
 })();

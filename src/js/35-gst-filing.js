@@ -168,29 +168,33 @@ function viewGstFiling(b, t){
   const nil1 = !GSTR.outward(ym, reg).length;
   const f1 = GSTF.lateFee(ym, reg, "r1", nil1), f3 = GSTF.lateFee(ym, reg, "r3b", nil3b), it = GSTF.interest(ym, reg, t), dr = GSTF.drc(ym, reg, t), a = GSTF.aato(GSTF.fyOf(ym));
   const dateIn = (k, v) => '<input type="date" data-gstf="' + k + '" value="' + esc(v || "") + '" style="width:auto">';
+  const cmp = (est, portal) => portal === undefined || portal === "" ? "" : Math.abs(num(est) - num(portal)) < 1 ? '<div class="nr">agrees</div>' : '<div class="bad">estimate \u20b9' + money(est) + "</div>";
+  const pf = (k, v) => '<input type="number" step="0.01" data-gstf="' + k + '" value="' + (v === undefined || v === "" ? "" : esc(String(v))) + '" placeholder="as on the portal" style="width:140px">';
   let h = '<section class="dash-card" style="margin-top:12px"><h3>Filing, interest and late fee</h3>' +
-    '<div class="bk-tablewrap"><table class="bk-table compact"><thead><tr><th>Return</th><th>Due</th><th>Filed on</th><th class="n">Days late</th><th class="n">Late fee</th></tr></thead><tbody>' +
-    "<tr><td>GSTR-1" + (nil1 ? ' <span class="nr">nil</span>' : "") + "</td><td>" + d(f1.due || GSTF.due(ym, "r1")) + "</td><td>" + dateIn("r1", rec.r1) + '</td><td class="n">' + (f1.unknown ? '<span class="nr">type the date filed</span>' : f1.days || "\u2014") + '</td><td class="n">' + (f1.fee ? money(f1.fee) + (f1.estimated ? '<div class="nr">if filed today</div>' : "") : "\u2014") + "</td></tr>" +
-    "<tr><td>GSTR-3B" + (nil3b ? ' <span class="nr">nil</span>' : "") + "</td><td>" + d(GSTF.due(ym, "r3b")) + "</td><td>" + dateIn("r3b", rec.r3b) + '</td><td class="n">' + (f3.unknown ? '<span class="nr">type the date filed</span>' : f3.days || "\u2014") + '</td><td class="n">' + (f3.fee ? money(f3.fee) + (f3.estimated ? '<div class="nr">if filed today</div>' : "") : "\u2014") + "</td></tr></tbody></table></div>" +
+    '<p class="note">The portal works out late fee and interest itself: late fee in table 5.1 of the late return, interest on late payment in the next 3B. <b>Its figures are the ones to pay.</b> The figures below are TDS Desk\u2019s estimate, kept as a cross-check; type the portal\u2019s figures where shown (they will be fetched once the GST API is connected).</p>' +
+    '<div class="bk-tablewrap"><table class="bk-table compact"><thead><tr><th>Return</th><th>Due</th><th>Filed on</th><th class="n">Days late</th><th class="n">Late fee, estimate</th><th class="n">Late fee on the portal</th></tr></thead><tbody>' +
+    "<tr><td>GSTR-1" + (nil1 ? ' <span class="nr">nil</span>' : "") + "</td><td>" + d(f1.due || GSTF.due(ym, "r1")) + "</td><td>" + dateIn("r1", rec.r1) + '</td><td class="n">' + (f1.unknown ? '<span class="nr">type the date filed</span>' : f1.days || "\u2014") + '</td><td class="n">' + (f1.fee ? money(f1.fee) + (f1.estimated ? '<div class="nr">if filed today</div>' : "") : "\u2014") + '</td><td class="n">' + pf("portalFee1", rec.portalFee1) + cmp(f1.fee, rec.portalFee1) + "</td></tr>" +
+    "<tr><td>GSTR-3B" + (nil3b ? ' <span class="nr">nil</span>' : "") + "</td><td>" + d(GSTF.due(ym, "r3b")) + "</td><td>" + dateIn("r3b", rec.r3b) + '</td><td class="n">' + (f3.unknown ? '<span class="nr">type the date filed</span>' : f3.days || "\u2014") + '</td><td class="n">' + (f3.fee ? money(f3.fee) + (f3.estimated ? '<div class="nr">if filed today</div>' : "") : "\u2014") + '</td><td class="n">' + pf("portalFee3", rec.portalFee3) + cmp(f3.fee, rec.portalFee3) + "</td></tr></tbody></table></div>" +
     '<p class="note">Late fee under section 47: \u20b950 a day (\u20b920 for a nil return), half CGST and half SGST, capped by turnover of the year before (notifications 19/2021 and 20/2021) at \u20b9' + money(f3.cap || f1.cap || 0).replace(/\.00$/, "") +
     '. Turnover of ' + esc(String(+GSTF.fyOf(ym).slice(0, 4) - 1) + "-" + GSTF.fyOf(ym).slice(2, 4)) + ': <input type="number" data-gstf="aato" value="' + (a.from === "typed" ? a.v : "") + '" placeholder="' + (a.v ? money(a.v) + " from the books" : "type it") + '" style="width:170px">' +
     (a.from === "part" || a.from === "none" ? " <b>not all of that year is in the books \u2014 type it; the highest cap is used meanwhile.</b>" : "") + " GSTR-1\u2019s late fee is charged by the portal in the next 3B.</p>";
-  if (it.days && it.total) h += '<p class="note"><b>Interest under section 50(1): \u20b9' + money(it.total) + "</b> (18% a year on \u20b9" + money(t.pay.cash.igst + t.pay.cash.cgst + t.pay.cash.sgst + t.pay.cash.cess) + " paid in cash, for " + it.days + " days" + (it.estimated ? ", if filed today" : "") + "): IGST " + money(it.heads.igst) + ", CGST " + money(it.heads.cgst) + ", SGST " + money(it.heads.sgst) + ". It goes in table 5.1; check it against what the portal works out.</p>";
+  h += '<div class="dash-row"><span>Interest under section 50 on the portal (table 5.1)</span><b>' + pf("portalInt", rec.portalInt) + cmp(it.total, rec.portalInt) + "</b></div>";
+  if (it.days && it.total) h += '<p class="note"><b>Interest, estimate: \u20b9' + money(it.total) + "</b> (18% a year on \u20b9" + money(t.pay.cash.igst + t.pay.cash.cgst + t.pay.cash.sgst + t.pay.cash.cess) + " paid in cash, for " + it.days + " days" + (it.estimated ? ", if filed today" : "") + "): IGST " + money(it.heads.igst) + ", CGST " + money(it.heads.cgst) + ", SGST " + money(it.heads.sgst) + ".</p>";
   // DRC-01B and DRC-01C
   const flag = (on, txt) => '<div class="dash-row"><span>' + txt + "</span><b" + (on ? ' class="bad"' : "") + ">" + (on ? "check before filing" : "within the limit") + "</b></div>";
   h += "<h4 style=\"margin:12px 0 4px\">Checks the portal runs</h4>" +
     flag(dr.b.flag, "DRC-01B: tax in GSTR-1 (" + (dr.b.from === "filed" ? "as filed" : "from the books") + ") \u20b9" + money(dr.b.r1) + " against 3B \u20b9" + money(dr.b.r3) + ", short by \u20b9" + money(Math.max(0, dr.b.gap)) + " (limit \u20b9" + money(dr.b.lim) + ")") +
     (dr.c.have2b ? flag(dr.c.flag, "DRC-01C: credit in 3B 4(A)(5) \u20b9" + money(dr.c.claimed) + " against 2B \u20b9" + money(dr.c.avl) + ", above 2B by \u20b9" + money(Math.max(0, dr.c.gap)) + " (limit \u20b9" + money(dr.c.lim) + ")") : '<div class="dash-row"><span>DRC-01C: credit against 2B</span><b class="nr">no 2B for this month</b></div>') +
     '<p class="note">Limits as notified under rules 88C and 88D (the higher of an amount and a percentage); a difference is not wrong in itself \u2014 reclaims, credit of earlier months and 2B timing explain most \u2014 but be ready to explain it.</p>';
-  // rule 37
-  const r = t.r37, off = !!((b.rule37Off || {})[reg]);
+  // rule 37: a setting, off unless switched on for this GSTIN
+  const r = t.r37, on = !!((b.rule37On || {})[reg]);
   h += '<h4 style="margin:12px 0 4px">Rule 37: suppliers unpaid after 180 days</h4>' +
-    '<label class="note"><input type="checkbox" data-gstf="r37off"' + (off ? "" : " checked") + "> Work out from bills in Tally (only bills kept bill-wise can be followed)</label>" +
-    (r && (r.rev.n || r.re.n) ? '<div class="bk-tablewrap"><table class="bk-table compact"><thead><tr><th>Supplier</th><th>Bill</th><th class="dt">Date</th><th>Why</th><th class="n">Tax</th><th>In 3B</th></tr></thead><tbody>' +
+    '<label class="note"><input type="checkbox" data-gstf="r37on"' + (on ? " checked" : "") + "> Reverse credit on bills unpaid 180 days after their date, and reclaim it when paid (setting for this GSTIN; off unless switched on)</label>";
+  if (on) h += (r && (r.rev.n || r.re.n) ? '<div class="bk-tablewrap"><table class="bk-table compact"><thead><tr><th>Supplier</th><th>Bill</th><th class="dt">Date</th><th>Why</th><th class="n">Tax</th><th>In 3B</th></tr></thead><tbody>' +
       r.rev.list.map(x => "<tr><td>" + esc(x.party) + "</td><td>" + esc(x.ref) + "</td><td>" + fmtDate(tallyDate(x.date)) + "</td><td>" + esc(x.why) + '</td><td class="n">' + money(x.tax) + "</td><td>4(B)(2) reversed</td></tr>").join("") +
       r.re.list.map(x => "<tr><td>" + esc(x.party) + "</td><td>" + esc(x.ref) + "</td><td>" + fmtDate(tallyDate(x.date)) + "</td><td>" + esc(x.why) + '</td><td class="n">' + money(x.tax) + "</td><td>4(A)(5) and 4(D)(1) reclaimed</td></tr>").join("") +
-      "</tbody></table></div>" : '<p class="note">' + (off ? "Off: type any reversal in 4(B)(2) above." : "No bill reaches 180 days unpaid this month, and none reversed earlier was paid.") + "</p>") +
-    '<p class="note">Interest under section 50 applies to credit reversed here only where it was used to pay tax (rule 88B).</p>';
+      "</tbody></table></div>" : '<p class="note">No bill reaches 180 days unpaid this month, and none reversed earlier was paid.</p>') +
+    '<p class="note">Only bills kept bill-wise in Tally can be followed. Interest under section 50 applies to credit reversed here only where it was used to pay tax (rule 88B).</p>';
   // the filed copy and the Tally journal
   const J = GSTF.journal(ym, reg);
   h += '<h4 style="margin:12px 0 4px">After filing</h4><div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">' +
@@ -204,8 +208,9 @@ if (typeof document !== "undefined") document.addEventListener("change", e => {
   const t = e.target; if (!t.dataset || t.dataset.gstf === undefined || !S.books) return;
   const ym = S.gstYm || "", reg = S.gstReg || "", k = t.dataset.gstf, b = S.books;
   if (k === "r1" || k === "r3b" || k === "cashLedger") GSTF.rec(ym, reg)[k] = t.value;
+  if (k === "portalFee1" || k === "portalFee3" || k === "portalInt"){ const r = GSTF.rec(ym, reg); if (t.value === "") delete r[k]; else r[k] = num(t.value); }
   if (k === "aato"){ b.gstAato = Object.assign({}, b.gstAato, {[GSTF.fyOf(ym)]: num(t.value)}); }
-  if (k === "r37off"){ b.rule37Off = Object.assign({}, b.rule37Off, {[reg]: !t.checked}); }
+  if (k === "r37on"){ b.rule37On = Object.assign({}, b.rule37On, {[reg]: t.checked}); }
   GSTR._carry = null; saveBooks(); render();
 });
 if (typeof document !== "undefined") document.addEventListener("click", e => {
