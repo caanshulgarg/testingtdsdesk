@@ -133,39 +133,11 @@ Deno.serve(async (req) => {
       };
       // FYN's path carries the file number: /1 first, then /2, /3 … when 2B comes in parts (fc)
       const path = "gst/returns/gstr2b/" + gstin + "/" + period;
-      let first = await fyn("GET", path + "/1", sess);
+      const first = await fyn("GET", path + "/1", sess);
       if (first.j === null || first.j === "") {
-        // an empty answer: try the other ways FYN may take this call, once each, and keep the first that answers.
-        // Each outcome goes to the function's logs (status and codes only), so the right one can be fixed in place.
-        const ROOT = BASE.replace(/\/api$/, ""), txn = crypto.randomUUID().replace(/-/g, "");
-        const std = { "auth-token": sess.authtoken, username, "state-cd": h["state-cd"], "ip-usr": ip, txn, gstin, ret_period: period, rtnprd: period };
-        const tries: [string, string, Record<string, string>][] = [
-          ["std-2b", ROOT + "/gstapi/taxpayerapi/v1.0/returns/gstr2b?action=GET2B&gstin=" + gstin + "&rtnprd=" + period, std],
-          ["3b-headers", "gst/getgstr3b/" + gstin + "/" + period, { ...sess, "auth-token": sess.authtoken, gstin, ret_period: period }],
-        ];
-        // the session as FYN gave it: sizes only (never the keys); and the key decoded, in case FYN wants it so
-        let ek = "";
-        try { ek = btoa(String.fromCharCode(...C.sekBytes(sess.sek, sess.app_key))); } catch (e) { ek = ""; }
-        console.log(JSON.stringify({ session: { app_key_len: sess.app_key.length, sek_len: sess.sek.length, auth_len: sess.authtoken.length, sek_opens_with_app_key: !!ek } }));
-        tries.push(["ledger-cash", "gst/ledgers/" + gstin + "/" + period, { ...sess, "auth-token": sess.authtoken }]);
-        // the standard route (straight through to GSTN) wants FYN's own token by another name: try the likely ones
-        const ft = (await fynToken()).token || "";
-        const u2b = ROOT + "/gstapi/taxpayerapi/v1.0/returns/gstr2b?gstin=" + gstin + "&rtnprd=" + period;
-        tries.push(["std-accesstoken", u2b, { ...std, accesstoken: ft }]);
-        tries.push(["std-accesstoken-action", u2b + "&action=GET2B", { ...std, accesstoken: ft }]);
-        tries.push(["std-access-token", u2b, { ...std, "access-token": ft, accessToken: ft }]);
-        tries.push(["std-client", u2b, { ...std, accesstoken: ft, clientid: CID, "client-secret": CSEC }]);
-        const seen: string[] = [];
-        for (const [name, where, hd] of tries) {
-          const x = where.startsWith("http") ? await fynAt(where, hd) : await fyn("GET", where, hd);
-          const code = x.j?.status_cd ?? null, err = x.j?.error?.error_cd || x.j?.error?.message || null;
-          const msg = x.j && typeof x.j === "object" && !x.j.data ? String(x.j.errorMessage || x.j.message || "").slice(0, 160) : "";
-          console.log(JSON.stringify({ try: name, http: x.http, length: x.text.length, status_cd: code, error: err, msg, keys: x.j && typeof x.j === "object" ? Object.keys(x.j).slice(0, 8) : null }));
-          seen.push(name + ": " + (x.j && typeof x.j === "object" ? (code == 1 ? "answered" : "status " + code + (err ? " " + err : "") + (msg ? " (" + msg + ")" : "")) : "HTTP " + x.http + (x.text.length <= 4 ? " empty" : "")));
-          if (name.startsWith("3b") || name.startsWith("ledger")) continue;
-          if (x.j && typeof x.j === "object" && x.j.status_cd == 1) { first = x; break; }
-        }
-        if (first.j === null || first.j === "") return reply(200, { ok: false, error: "FYN Gateway sent back nothing for the 2B of " + period.slice(0, 2) + "/" + period.slice(2) + ". Tried: " + seen.join("; ") + "." });
+        // FYN answers some calls with an empty body even with a valid session (seen on production, Sep 2026):
+        // say so plainly rather than guess; FYN has to enable or fix the returns APIs for the client ID
+        return reply(200, { ok: false, error: "FYN Gateway accepted the call but sent back nothing for the 2B of " + period.slice(0, 2) + "/" + period.slice(2) + ". The portal session is valid; this is on FYN Gateway's side (returns APIs not enabled for the account, or their fault). Until it is fixed, bring in the 2B JSON downloaded from the GST portal." });
       }
       let out = open(first);
       out = out?.data && !out.docdata ? out.data : out;
