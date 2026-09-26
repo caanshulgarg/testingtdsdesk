@@ -361,7 +361,38 @@ function effectivePan(x){
   return "";
 }
 let toastTimer;
-function toast(msg){ const t = document.getElementById("toast"); t.textContent = msg; t.classList.remove("hidden"); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.add("hidden"), 4500); }
+// The message at the bottom. It slides in, stays longer for longer messages, waits while the pointer is on it,
+// and goes on a click or a swipe down. Messages that report a failure are marked in red, ones that report work done in green.
+function toastTone(s){
+  if (/^(could not|couldn.t|cannot|can.t|failed|error)\b/i.test(s) || /\b(failed|error)\b/i.test(s)) return "stop";
+  if (/\b(saved|posted|booked|filed|added|created|loaded|uploaded|sent|matched|done|copied|downloaded)\b/i.test(s)) return "ok";
+  return "";
+}
+function toastHide(){
+  const t = document.getElementById("toast"); if (!t || t.classList.contains("hidden")) return;
+  clearTimeout(toastTimer); t.classList.remove("in"); t.classList.add("out");
+  toastTimer = setTimeout(() => { t.classList.add("hidden"); t.classList.remove("out"); t.style.transform = ""; }, 160);
+}
+function toastWire(t){
+  if (t._wired) return; t._wired = true;
+  t.addEventListener("mouseenter", () => clearTimeout(toastTimer));
+  t.addEventListener("mouseleave", () => { if (!t.classList.contains("hidden")) { clearTimeout(toastTimer); toastTimer = setTimeout(toastHide, 2000); } });
+  t.addEventListener("click", toastHide);
+  let y0 = null;
+  t.addEventListener("pointerdown", ev => { y0 = ev.clientY; clearTimeout(toastTimer); });
+  t.addEventListener("pointermove", ev => { if (y0 == null) return; const d = Math.max(0, ev.clientY - y0); t.style.transform = "translate(-50%," + d + "px)"; t.style.opacity = String(Math.max(.3, 1 - d / 80)); });
+  const end = ev => { if (y0 == null) return; const d = ev.clientY - y0; y0 = null; t.style.opacity = ""; if (d > 40) toastHide(); else { t.style.transform = ""; toastTimer = setTimeout(toastHide, 2000); } };
+  t.addEventListener("pointerup", end); t.addEventListener("pointercancel", end);
+}
+function toast(msg){
+  const t = document.getElementById("toast"); if (!t) return;
+  const s = msg == null ? "" : String(msg);
+  toastWire(t);
+  t.textContent = s; t.dataset.tone = toastTone(s);
+  clearTimeout(toastTimer);
+  t.classList.remove("hidden", "out", "in"); t.style.transform = ""; void t.offsetWidth; t.classList.add("in");
+  toastTimer = setTimeout(toastHide, Math.min(9000, 4000 + s.length * 35));
+}
 function byDate(a, b){ return String(a.x.invoiceDate || a.createdAt).localeCompare(String(b.x.invoiceDate || b.createdAt)); }
 function lsGet(k){ try { return localStorage.getItem(k); } catch(e){ return null; } }
 function lsSet(k, v){ try { localStorage.setItem(k, v); } catch(e){} }

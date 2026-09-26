@@ -151,7 +151,17 @@ table.data tr.sel td{background:var(--ledger-soft)}
 .two{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
 ol.steps{margin:6px 0 0;padding-left:20px;font-size:14px}
 ol.steps li{margin:3px 0}
-.toast{position:fixed;left:50%;bottom:132px;transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:9px 16px;border-radius:6px;font-size:14px;max-width:calc(100% - 32px);z-index:9}
+.toast{position:fixed;left:50%;bottom:132px;transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 16px 10px 14px;border-radius:8px;font-size:14px;max-width:min(560px,calc(100% - 32px));z-index:9;display:flex;align-items:baseline;gap:9px;box-shadow:0 8px 24px rgba(10,14,20,.22),0 1px 3px rgba(10,14,20,.18);cursor:pointer;touch-action:none;user-select:none}
+.toast::before{content:"";flex-shrink:0;width:8px;height:8px;border-radius:50%;background:var(--muted);transform:translateY(-1px)}
+.toast[data-tone="ok"]::before{background:#5FC0A4}
+.toast[data-tone="stop"]::before{background:#EE8A7E}
+:root[data-theme="dark"] .toast[data-tone="ok"]::before{background:#1F6F5C}
+:root[data-theme="dark"] .toast[data-tone="stop"]::before{background:#A8372B}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .toast[data-tone="ok"]::before{background:#1F6F5C}:root:not([data-theme="light"]) .toast[data-tone="stop"]::before{background:#A8372B}}
+.toast.in{animation:toast-in .22s cubic-bezier(.22,1,.36,1)}
+.toast.out{animation:toast-out .16s ease-in forwards}
+@keyframes toast-in{from{opacity:0;transform:translate(-50%,14px) scale(.97)}to{opacity:1;transform:translate(-50%,0) scale(1)}}
+@keyframes toast-out{to{opacity:0;transform:translate(-50%,8px) scale(.98)}}
 .hidden{display:none !important}
 
 .top .wrap{align-items:center}
@@ -804,6 +814,67 @@ img.preview{display:block;max-width:100%;max-height:70vh;margin:0 auto;border:1p
 .sp-hbar{display:grid;grid-template-columns:minmax(90px,200px) 1fr 30px;gap:10px;align-items:center;margin:8px 0;font-size:14px}
 .sp-hbar span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sp-hbar i{height:8px;border-radius:5px;background:#3A62D8;display:block}.sp-hbar b{text-align:right}
 @media (max-width: 900px){ .sp-guide,.sp-desk,.sp-two,.sp-grid{grid-template-columns:1fr} .sp-kpis{grid-template-columns:repeat(2,minmax(0,1fr))} .sp-msg{max-width:100%} }
+
+/* Motion and feel: short, ease-out, only transform and opacity; all of it off for people who ask for less motion */
+.btn,.side-link,nav.tabs button,.queue li button,.tallychip,.swlist li{transition:background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .15s ease,transform .12s ease-out}
+.btn:not([disabled]):active,.tallychip:active{transform:scale(.97)}
+.side-link:active{transform:scale(.985)}
+.btn.primary:not([disabled]):hover{filter:brightness(1.06)}
+tr.rowlink td,.bk-table td{transition:background-color .12s ease}
+.tile:hover{box-shadow:0 4px 14px rgba(15,25,20,.08)}
+.tile:active{transform:scale(.99)}
+.drop{transition:border-color .15s ease,background-color .15s ease,transform .15s ease-out}
+.drop:hover{border-color:var(--ledger)}
+.drop.over{transform:scale(1.01);border-style:solid}
+/* the company switcher: fades in and settles */
+#modal:not(.hidden){animation:fade-in .18s ease-out}
+#modal .sw{animation:pop-in .2s cubic-bezier(.22,1,.36,1);box-shadow:0 20px 50px rgba(10,14,20,.25)}
+/* the bill drawer: slides in from the right, only when it opens (not on every refresh) */
+.drawer.enter{animation:slide-left .26s cubic-bezier(.22,1,.36,1)}
+.drawer-scrim.enter{animation:fade-in .2s ease-out}
+@keyframes fade-in{from{opacity:0}}
+@keyframes pop-in{from{opacity:0;transform:translateY(8px) scale(.97)}}
+@keyframes slide-left{from{transform:translateX(40px);opacity:0}}
+@keyframes slide-up{from{transform:translateY(100%)}}
+/* on a phone the switcher and the drawer become sheets from the bottom, with a handle */
+@media (max-width:640px){
+  #modal{align-items:flex-end;padding:0}
+  #modal .sw{width:100%;max-height:86vh;border-radius:16px 16px 0 0;border-bottom:0;animation:slide-up .3s cubic-bezier(.32,.72,0,1)}
+  #modal .sw::before,.drawer::before{content:"";display:block;width:40px;height:4px;border-radius:2px;background:var(--rule);margin:8px auto 2px;flex-shrink:0}
+  .drawer{top:auto;left:0;width:100%;max-height:88vh;border-radius:16px 16px 0 0;box-shadow:0 -10px 30px rgba(0,0,0,.18);padding:0 14px 110px}
+  .drawer.enter{animation:slide-up .3s cubic-bezier(.32,.72,0,1)}
+}
+@media (prefers-reduced-motion:reduce){
+  .toast.in,.toast.out,#modal:not(.hidden),#modal .sw,.drawer.enter,.drawer-scrim.enter{animation:none}
+  .btn,.side-link,nav.tabs button,.queue li button,.tallychip,.swlist li,.drop,tr.rowlink td,.bk-table td{transition:none}
+  .btn:active,.tallychip:active,.side-link:active,.tile:active,.drop.over{transform:none}
+}
+/* upload zones get an upload mark; an empty review list becomes a place to drop bills */
+.drop::before{content:"";display:block;width:26px;height:26px;margin:0 auto 8px;background:var(--ledger);opacity:.85;
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 15V4m0 0L7.5 8.5M12 4l4.5 4.5'/%3E%3Cpath d='M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4'/%3E%3C/svg%3E") center/contain no-repeat;
+  mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 15V4m0 0L7.5 8.5M12 4l4.5 4.5'/%3E%3Cpath d='M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4'/%3E%3C/svg%3E") center/contain no-repeat;
+  transition:transform .2s cubic-bezier(.22,1,.36,1)}
+.drop:hover::before,.drop.over::before{transform:translateY(-2px)}
+.drop-empty{margin-top:4px;padding:28px 18px}
+/* page title stays on one line; the client name shortens instead of stacking word by word */
+.tbar-title{min-width:0}
+.tbar-title h2{white-space:nowrap}
+.tbar-title .note{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px}
+/* on a phone the side menu becomes one scrolling strip instead of filling the first screen */
+@media (max-width:640px){
+  .side{flex-wrap:nowrap;overflow-x:auto;gap:4px;padding:8px 10px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .side::-webkit-scrollbar{display:none}
+  .side-brand,.side-sep,.side-label,.side-ver,.side-grow{display:none}
+  .side-client{padding:0;flex-shrink:0}
+  .side-co{padding:6px 10px;max-width:170px}
+  .side-link{flex-shrink:0;white-space:nowrap}
+  .tbar{flex-wrap:wrap;gap:10px}
+  .tbar-title .note{max-width:150px}
+}
+@media (prefers-reduced-motion:reduce){.drop::before{transition:none}.drop:hover::before,.drop.over::before{transform:none}}
+/* the bill list and the bill stack on narrow screens (an earlier rule kept two columns on phones) */
+@media (max-width:860px){.desk{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:640px){.side{width:100%}}
 </style>
 <style>.is-test .side-brand::after{content:"TEST";display:block;margin-top:4px;font-size:11px;letter-spacing:.14em;color:#E9A06A}.is-test header.top{box-shadow:inset 0 3px 0 #E2761B}body.is-test::after{content:"TESTING SITE · not for real client work · post only to a ZZ TEST company in Tally";position:fixed;left:0;right:0;bottom:0;z-index:70;background:#E2761B;color:#fff;font-size:12.5px;text-align:center;padding:3px 8px;letter-spacing:.04em;pointer-events:none}.is-test .actionbar{bottom:22px}.is-test #app{padding-bottom:34px}</style></head>
 <body class="is-test">
@@ -877,7 +948,7 @@ const DEFAULT_FIRM = {firmName:"Garg Shekhar & Company", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "TEST · 26 Sep 2026 · build 158 (Tally Bridge 1.11: other web pages refused; connecting needs the code from the bridge window)";
+const APP_VERSION = "TEST · 27 Sep 2026 · build 159 (design pass: messages, motion, phone layout)";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;
@@ -1393,7 +1464,38 @@ function effectivePan(x){
   return "";
 }
 let toastTimer;
-function toast(msg){ const t = document.getElementById("toast"); t.textContent = msg; t.classList.remove("hidden"); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.add("hidden"), 4500); }
+// The message at the bottom. It slides in, stays longer for longer messages, waits while the pointer is on it,
+// and goes on a click or a swipe down. Messages that report a failure are marked in red, ones that report work done in green.
+function toastTone(s){
+  if (/^(could not|couldn.t|cannot|can.t|failed|error)\b/i.test(s) || /\b(failed|error)\b/i.test(s)) return "stop";
+  if (/\b(saved|posted|booked|filed|added|created|loaded|uploaded|sent|matched|done|copied|downloaded)\b/i.test(s)) return "ok";
+  return "";
+}
+function toastHide(){
+  const t = document.getElementById("toast"); if (!t || t.classList.contains("hidden")) return;
+  clearTimeout(toastTimer); t.classList.remove("in"); t.classList.add("out");
+  toastTimer = setTimeout(() => { t.classList.add("hidden"); t.classList.remove("out"); t.style.transform = ""; }, 160);
+}
+function toastWire(t){
+  if (t._wired) return; t._wired = true;
+  t.addEventListener("mouseenter", () => clearTimeout(toastTimer));
+  t.addEventListener("mouseleave", () => { if (!t.classList.contains("hidden")) { clearTimeout(toastTimer); toastTimer = setTimeout(toastHide, 2000); } });
+  t.addEventListener("click", toastHide);
+  let y0 = null;
+  t.addEventListener("pointerdown", ev => { y0 = ev.clientY; clearTimeout(toastTimer); });
+  t.addEventListener("pointermove", ev => { if (y0 == null) return; const d = Math.max(0, ev.clientY - y0); t.style.transform = "translate(-50%," + d + "px)"; t.style.opacity = String(Math.max(.3, 1 - d / 80)); });
+  const end = ev => { if (y0 == null) return; const d = ev.clientY - y0; y0 = null; t.style.opacity = ""; if (d > 40) toastHide(); else { t.style.transform = ""; toastTimer = setTimeout(toastHide, 2000); } };
+  t.addEventListener("pointerup", end); t.addEventListener("pointercancel", end);
+}
+function toast(msg){
+  const t = document.getElementById("toast"); if (!t) return;
+  const s = msg == null ? "" : String(msg);
+  toastWire(t);
+  t.textContent = s; t.dataset.tone = toastTone(s);
+  clearTimeout(toastTimer);
+  t.classList.remove("hidden", "out", "in"); t.style.transform = ""; void t.offsetWidth; t.classList.add("in");
+  toastTimer = setTimeout(toastHide, Math.min(9000, 4000 + s.length * 35));
+}
 function byDate(a, b){ return String(a.x.invoiceDate || a.createdAt).localeCompare(String(b.x.invoiceDate || b.createdAt)); }
 function lsGet(k){ try { return localStorage.getItem(k); } catch(e){ return null; } }
 function lsSet(k, v){ try { localStorage.setItem(k, v); } catch(e){} }
@@ -10756,11 +10858,13 @@ function drawerEntry(){
   if (!e || (e.status !== "draft" && e.status !== "duplicate")){ S.drawerOpen = false; return null; }
   return e;
 }
+let drawerWasOpen = false;   // the drawer slides in only when it opens, not each time the page is drawn again
 function drawerHtml(){
   const e = drawerEntry();
-  if (!e) return "";
+  if (!e){ drawerWasOpen = false; return ""; }
   const rows = draftRows(), i = rows.findIndex(r => r.e.id === e.id);
-  return '<button class="drawer-scrim" data-act="drawerClose" aria-label="Close"></button><aside class="drawer" role="dialog" aria-modal="true" aria-label="Bill">' +
+  const enter = drawerWasOpen ? "" : " enter"; drawerWasOpen = true;
+  return '<button class="drawer-scrim' + enter + '" data-act="drawerClose" aria-label="Close"></button><aside class="drawer' + enter + '" role="dialog" aria-modal="true" aria-label="Bill">' +
     '<div class="drawer-head"><div><b>' + esc(e.x.vendorName || e.fileName || "Bill") + '</b><span class="note">' + esc(e.x.invoiceNo || "") + (i >= 0 ? " \u00b7 " + (i + 1) + " of " + rows.length : "") + "</span></div>" +
     '<button class="btn small" data-act="drawerClose">Close</button></div>' + viewDetail(e) + "</aside>";
 }
@@ -11086,7 +11190,9 @@ function viewInvoices(){
 
     (Object.values(d.entries).filter(e => e.status === "draft").length > 1 ? '<div class="row" style="margin:8px 0 0"><button class="btn small" data-act="revTable">Review all ' + Object.values(d.entries).filter(e => e.status === "draft").length + ' in a table</button></div>' : "") +
     '<div class="filters">' + f("draft", "To review") + f("approved", "Approved") + f("rejected", "No entry") + (cnt("duplicate") || S.filter === "duplicate" ? f("duplicate", "Duplicates") : "") + "</div>" +
-    (items ? '<ul class="queue">' + items + "</ul>" : '<p class="empty">' + esc(emptyMsg) + "</p>") +
+    (items ? '<ul class="queue">' + items + "</ul>" : S.filter === "draft" && !all.length
+      ? '<div class="drop drop-empty" id="drop" tabindex="0" role="button" aria-label="Upload invoices for ' + esc(co.name) + '"><strong>No bills yet for ' + esc(co.name) + '</strong><div class="note">Drop PDFs or photos here, or click to choose. Several at once is fine.</div></div>'
+      : '<p class="empty">' + esc(emptyMsg) + "</p>") +
     "</div><div>" + (S.selected ? viewDetail(d.entries[S.selected]) : '<div class="detail"><section><p class="empty">Select an invoice to see its TDS draft.</p></section></div>') + "</div></div>";
 }
 function field(label, key, val, o){

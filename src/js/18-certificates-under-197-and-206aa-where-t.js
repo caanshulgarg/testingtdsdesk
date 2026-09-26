@@ -2072,11 +2072,13 @@ function drawerEntry(){
   if (!e || (e.status !== "draft" && e.status !== "duplicate")){ S.drawerOpen = false; return null; }
   return e;
 }
+let drawerWasOpen = false;   // the drawer slides in only when it opens, not each time the page is drawn again
 function drawerHtml(){
   const e = drawerEntry();
-  if (!e) return "";
+  if (!e){ drawerWasOpen = false; return ""; }
   const rows = draftRows(), i = rows.findIndex(r => r.e.id === e.id);
-  return '<button class="drawer-scrim" data-act="drawerClose" aria-label="Close"></button><aside class="drawer" role="dialog" aria-modal="true" aria-label="Bill">' +
+  const enter = drawerWasOpen ? "" : " enter"; drawerWasOpen = true;
+  return '<button class="drawer-scrim' + enter + '" data-act="drawerClose" aria-label="Close"></button><aside class="drawer' + enter + '" role="dialog" aria-modal="true" aria-label="Bill">' +
     '<div class="drawer-head"><div><b>' + esc(e.x.vendorName || e.fileName || "Bill") + '</b><span class="note">' + esc(e.x.invoiceNo || "") + (i >= 0 ? " \u00b7 " + (i + 1) + " of " + rows.length : "") + "</span></div>" +
     '<button class="btn small" data-act="drawerClose">Close</button></div>' + viewDetail(e) + "</aside>";
 }

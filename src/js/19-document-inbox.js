@@ -213,7 +213,9 @@ function viewInvoices(){
 
     (Object.values(d.entries).filter(e => e.status === "draft").length > 1 ? '<div class="row" style="margin:8px 0 0"><button class="btn small" data-act="revTable">Review all ' + Object.values(d.entries).filter(e => e.status === "draft").length + ' in a table</button></div>' : "") +
     '<div class="filters">' + f("draft", "To review") + f("approved", "Approved") + f("rejected", "No entry") + (cnt("duplicate") || S.filter === "duplicate" ? f("duplicate", "Duplicates") : "") + "</div>" +
-    (items ? '<ul class="queue">' + items + "</ul>" : '<p class="empty">' + esc(emptyMsg) + "</p>") +
+    (items ? '<ul class="queue">' + items + "</ul>" : S.filter === "draft" && !all.length
+      ? '<div class="drop drop-empty" id="drop" tabindex="0" role="button" aria-label="Upload invoices for ' + esc(co.name) + '"><strong>No bills yet for ' + esc(co.name) + '</strong><div class="note">Drop PDFs or photos here, or click to choose. Several at once is fine.</div></div>'
+      : '<p class="empty">' + esc(emptyMsg) + "</p>") +
     "</div><div>" + (S.selected ? viewDetail(d.entries[S.selected]) : '<div class="detail"><section><p class="empty">Select an invoice to see its TDS draft.</p></section></div>') + "</div></div>";
 }
 function field(label, key, val, o){
