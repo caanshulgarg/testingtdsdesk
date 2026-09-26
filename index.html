@@ -816,7 +816,7 @@ const DEFAULT_FIRM = {firmName:"Garg Shekhar & Company", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "TEST · 26 Sep 2026 · build 152 (GSTINs added in GST settings, each with its own settings; GST tab without a day book)";
+const APP_VERSION = "TEST · 26 Sep 2026 · build 153 (GST settings: typing kept when the screen refreshes)";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;
@@ -20086,7 +20086,7 @@ function viewGstRegs(b, regs){
         "</td><td>" + esc(src.join(", ")) + "</td><td>" + (S.gsetReg === reg ? '<span class="note">settings below</span>' : '<button class="linkbtn" data-gsetpick="' + reg + '">settings</button>') +
         (only ? ' · <button class="linkbtn" data-gregdel="' + esc(g) + '">remove</button>' : "") + "</td></tr>"; }).join("") + "</tbody></table></div>";
   else h += '<p class="note" style="color:#B9541B">No GSTIN yet. Add the client’s GSTIN below to use the GST tab.</p>';
-  h += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px"><input type="text" data-gregnew data-fk="gregnew" maxlength="15" placeholder="15-character GSTIN" style="width:240px;text-transform:uppercase" autocomplete="off"><button class="btn small primary" data-gregadd>Add GSTIN</button>' +
+  h += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px"><input type="text" data-gregnew data-fk="gregnew" data-keeptyped maxlength="15" placeholder="15-character GSTIN" style="width:240px;text-transform:uppercase" autocomplete="off"><button class="btn small primary" data-gregadd>Add GSTIN</button>' +
     '<span class="note">Its PAN must be the client’s PAN.</span></div>' +
     (regs.length > 1 ? '<div style="margin-top:10px"><label class="note">Settings shown for <select data-gsetreg style="width:auto">' + regs.map(g => '<option value="' + g.slice(0, 2) + '"' + (S.gsetReg === g.slice(0, 2) ? " selected" : "") + ">" + esc(g) + " · " + esc(GSTRegs.state(g)) + "</option>").join("") + "</select></label></div>" : "") +
     "</section>";
@@ -20137,14 +20137,14 @@ function viewGstSettings(){
       " For " + GSTSet.qLabel(next) + " the portal accepts the change from " + GSTAmend.dmy(win.from.replace(/-/g, "")) + " to " + GSTAmend.dmy(win.to.replace(/-/g, "")) + ". QRMP needs turnover of \u20b95 crore or less in the year before. Composition is chosen on the portal (CMP-02, CMP-04) and cannot be changed through the API.</p>" +
       '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px"><label class="note">If QRMP, PMT-06 by <select data-gset="pmt" data-greg="' + reg + '" style="width:auto"><option value="fixed"' + ((st.pmt || "fixed") === "fixed" ? " selected" : "") + '>fixed sum (35% method)</option><option value="self"' + (st.pmt === "self" ? " selected" : "") + ">self-assessment</option></select></label>" +
       '<label class="note">If composition, rate <select data-gset="comp" data-greg="' + reg + '" style="width:auto">' + Object.entries(GSTQ.RATES).map(([k, x]) => '<option value="' + k + '"' + ((st.comp || "trader") === k ? " selected" : "") + ">" + esc(x.l) + "</option>").join("") + "</select></label></div>" +
-      '<h4 style="margin:12px 0 4px">GST portal username</h4><input type="text" data-gset="puser" data-greg="' + reg + '" value="' + esc(st.portalUser || "") + '" placeholder="as used to sign in on gst.gov.in" style="width:260px" autocomplete="off"> <span class="note">for the GST API (OTP sign-in). The password is never asked for or kept.</span>' +
+      '<h4 style="margin:12px 0 4px">GST portal username</h4><input type="text" data-gset="puser" data-greg="' + reg + '" data-fk="gset-puser-' + reg + '" data-keeptyped value="' + esc(st.portalUser || "") + '" placeholder="as used to sign in on gst.gov.in" style="width:260px" autocomplete="off"> <span class="note">for the GST API (OTP sign-in). The password is never asked for or kept.</span>' +
       '<h4 style="margin:12px 0 4px">Credit in 3B table 4</h4><select data-gset="basis" data-greg="' + reg + '" style="width:auto"><option value="2b"' + (basis === "2b" ? " selected" : "") + '>As far as 2B shows it (section 16(2)(aa)) \u2014 the law</option><option value="books"' + (basis === "books" ? " selected" : "") + ">As booked in Tally \u2014 for comparison only</option></select>" +
       '<h4 style="margin:12px 0 4px">Electronic credit ledger at the start' + (first ? " (" + esc(GSTR.label(first)) + ")" : "") + "</h4>" +
-      '<div style="display:flex;gap:12px;flex-wrap:wrap">' + [["igst", "IGST"], ["cgst", "CGST"], ["sgst", "SGST"], ["cess", "Cess"]].map(([k, l]) => '<label class="note">' + l + ' <input type="number" step="0.01" data-gset="open" data-ghead="' + k + '" data-greg="' + reg + '" value="' + (open[k] === undefined || open[k] === "" ? "" : esc(String(open[k]))) + '" style="width:130px"></label>').join("") + "</div>" +
+      '<div style="display:flex;gap:12px;flex-wrap:wrap">' + [["igst", "IGST"], ["cgst", "CGST"], ["sgst", "SGST"], ["cess", "Cess"]].map(([k, l]) => '<label class="note">' + l + ' <input type="number" step="0.01" data-gset="open" data-ghead="' + k + '" data-greg="' + reg + '" data-fk="gset-open-' + reg + k + '" data-keeptyped value="' + (open[k] === undefined || open[k] === "" ? "" : esc(String(open[k]))) + '" style="width:130px"></label>').join("") + "</div>" +
       '<p class="note">The balance on the portal\u2019s credit ledger before the first month here; later months carry it forward.</p>' +
       '<h4 style="margin:12px 0 4px">Rule 37</h4><label class="note"><input type="checkbox" data-gset="r37" data-greg="' + reg + '"' + (((b.rule37On || {})[reg]) ? " checked" : "") + "> Reverse credit on bills unpaid 180 days after their date, and reclaim it when paid (off unless switched on)</label>" +
       '<h4 style="margin:12px 0 4px">E-invoicing</h4><select data-gset="einv" data-greg="' + reg + '" style="width:auto">' + [["auto", "Found from Tally: checked when the books carry IRNs"], ["outside", "Applies, e-invoices made outside Tally"], ["no", "Does not apply"]].map(([v, l]) => '<option value="' + v + '"' + (GSTSet.einvMode(reg) === v ? " selected" : "") + ">" + l + "</option>").join("") + "</select>" +
-      '<h4 style="margin:12px 0 4px">Tally ledger for GST paid in cash</h4><input type="text" data-gset="cash" data-greg="' + reg + '" value="' + esc(((b.gstCashLedger || {})[reg]) || (reg + " GST ELECTRONIC CASH LEDGER")) + '" style="width:320px"> <span class="note">used in the set-off journal</span>' +
+      '<h4 style="margin:12px 0 4px">Tally ledger for GST paid in cash</h4><input type="text" data-gset="cash" data-greg="' + reg + '" data-fk="gset-cash-' + reg + '" data-keeptyped value="' + esc(((b.gstCashLedger || {})[reg]) || (reg + " GST ELECTRONIC CASH LEDGER")) + '" style="width:320px"> <span class="note">used in the set-off journal</span>' +
       "</section>";
   });
   // the client as a whole

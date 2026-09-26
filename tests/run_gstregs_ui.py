@@ -53,6 +53,10 @@ with sync_playwright() as p:
     pg.select_option('select[data-gset="type"][data-greg="09"]', "qrmp"); pg.click('button[data-gsetadd="09"]'); pg.wait_for_timeout(600)
     pg.check('[data-gapto="07"]'); pg.click('[data-cbx="yes"]'); pg.wait_for_timeout(700)
     ok(pg.evaluate("['09','07','27'].map(r => GSTSet.history(r).length)") == [1, 1, 0], "filing type set for this GSTIN and Delhi")
+    # typing survives the screen being redrawn in the background (as when signed in to the firm account)
+    pg.click('input[data-gset="puser"][data-greg="09"]'); pg.keyboard.type("garg"); pg.evaluate("render()"); pg.keyboard.type("x"); pg.evaluate("render()")
+    ok(pg.input_value('input[data-gset="puser"][data-greg="09"]') == "gargx" and pg.evaluate("document.activeElement.dataset.gset") == "puser", "the username keeps what is typed and the cursor when the screen is redrawn")
+    pg.fill('input[data-gset="puser"][data-greg="09"]', "")
     # the username stays per GSTIN, without a question
     pg.fill('input[data-gset="puser"][data-greg="09"]', "gargup"); pg.press('input[data-gset="puser"][data-greg="09"]', "Tab"); pg.wait_for_timeout(600)
     ok(pg.locator("#confirmBox .cbx").count() == 0 and pg.evaluate("[GSTSet.peek('09').portalUser, GSTSet.peek('07').portalUser || '']") == ["gargup", ""], "portal username: this GSTIN's own, no question")
