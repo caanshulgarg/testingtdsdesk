@@ -38,5 +38,6 @@
  "37-gst-periodic.js",
  "38-gst-returns-filed.js",
  "39-gst-api.js",
- "40-support.js"
+ "40-support.js",
+ "41-books-sync.js"
 ]

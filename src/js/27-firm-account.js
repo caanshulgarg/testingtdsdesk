@@ -271,6 +271,7 @@ async function cloudSync(manual){
   try {
     const sent = await cloudPush();
     const got = await cloudPull();
+    try { await BookSync.tick(); } catch (e){}
     Cloud.st.lastSync = Date.now();
     Cloud.st.pending = cloudChanges().changes.length;
     Cloud.st.state = "ok";

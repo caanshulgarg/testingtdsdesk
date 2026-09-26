@@ -43,6 +43,7 @@ Everything is plain JavaScript in one scope, no framework and no bundler. State 
 | `12-gstr-1-and-gstr-3b…` | `GSTR`: outward and inward rows per month and registration, GSTR-1, 3B, their JSON. |
 | `13`–`15` | Amendments (`GSTAmend`), advances (`GSTAdv`), ITC reversal (`GSTRev`). |
 | `16`–`18` | The 26Q text file for the FVU, 24Q, certificates. |
+| `41-books-sync.js` | `BookSync`: each client's TDS and GST work kept in the firm's database (below). |
 | `19`–`27` | Document inbox, bank statements, written rules, column filters, the Tally Bridge client (`Bridge`, `TallyRead`), sales and marketplaces, the firm account. |
 
 ## Rules the code keeps
@@ -92,3 +93,17 @@ Everything is plain JavaScript in one scope, no framework and no bundler. State 
 Live project `nrtczucrlgalvtojwoes`; staging `qbocskaiewaxqcvaunzc` (ap-south-1) has the same 14 migrations, the nightly backup at 19:30 UTC, the `client-docs` and `doc-inbox` buckets, and the `gateway`, `admin` and `signup` functions. Row-level security keeps each firm to its own rows (`my_firm()`); a superadmin (`platform_admins`) sees all. Paid calls to Claude and Google Vision go through `gateway`, which checks the plan and balance and charges before calling.
 
 Known issue on both: the gateway's refund calls `exec_refund`, which does not exist, so a failed provider call records the refund but does not restore the balance. `refund_charge` does both and should be called instead.
+
+## Shared TDS and GST work (build 156)
+
+Until build 155 everything under a client's books lived only in the browser that did it (IndexedDB `books:<cid>`), so two staff on one client could see different challans, 2B and returns filed, and a cleared browser lost the work.
+
+Now the **work** part of the books (every key in `BOOKS_KEYS` except what is read from Tally: `vouchers`, `meta`, `under`, `states`, `groups`, `groupInfo`, `ledInfo`, `ledInfoAt`, `tb`, `mis`) is kept in Supabase, table `client_books`, one row per client, with a revision number. `server/books-sync/migration.sql` makes it.
+
+- **Saving.** `saveBooks()` still writes this browser's copy, then `BookSync.schedule(cid)` sends the work 1.5 s later through `save_client_books(client, part, base, data)`. The save names the revision it was built on; the database refuses it if someone saved since.
+- **A refused save** is merged three ways (`BookSync.merge`: what both started from, this browser, the database). Changes to different things are both kept; lists of items with an `id` (challans, certificates, assets) merge item by item; where both changed the same value the database's stays, this browser's whole copy goes to `client_books_history` with note `conflict`, and the person is told who changed what.
+- **Receiving.** Opening a client's books, and every firm sync (45 s), fetch the row; a newer revision is merged in the same way.
+- **History.** Every replaced revision is kept in `client_books_history`; the nightly `take_backup` now includes `client_books`.
+- **Who may save.** Only through the function, only for one's own firm, only owner and staff (`can_write()`); look-only members read.
+- **Without the migration** (or signed out) `BookSync` switches itself off and the books work in this browser as before; a line under the books' tabs says so.
+- `BookSync.st` keeps, per client, the revision and copy last agreed with the database, also in IndexedDB as `booksync:<cid>`.
