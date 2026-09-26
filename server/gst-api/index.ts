@@ -140,20 +140,21 @@ Deno.serve(async (req) => {
         const ROOT = BASE.replace(/\/api$/, ""), txn = crypto.randomUUID().replace(/-/g, "");
         const std = { "auth-token": sess.authtoken, username, "state-cd": h["state-cd"], "ip-usr": ip, txn, gstin, ret_period: period, rtnprd: period };
         const tries: [string, string, Record<string, string>][] = [
-          ["2b-headers", path + "/1", { ...sess, gstin, rtnprd: period, ret_period: period, "auth-token": sess.authtoken }],
-          ["2b-nokeys", path + "/1", { "ip-usr": ip, "state-cd": h["state-cd"], username, authtoken: sess.authtoken }],
-          ["2b-0", path + "/0", sess],
-          ["2b-bare", "gst/returns/gstr2b", { ...sess, gstin, rtnprd: period, file_num: "1" }],
           ["std-2b", ROOT + "/gstapi/taxpayerapi/v1.0/returns/gstr2b?action=GET2B&gstin=" + gstin + "&rtnprd=" + period, std],
-          ["std-2b-noaction", ROOT + "/gstapi/taxpayerapi/v1.0/returns/gstr2b?gstin=" + gstin + "&rtnprd=" + period, std],
           ["3b-headers", "gst/getgstr3b/" + gstin + "/" + period, { ...sess, "auth-token": sess.authtoken, gstin, ret_period: period }],
         ];
         // the session as FYN gave it: sizes only (never the keys); and the key decoded, in case FYN wants it so
         let ek = "";
         try { ek = btoa(String.fromCharCode(...C.sekBytes(sess.sek, sess.app_key))); } catch (e) { ek = ""; }
         console.log(JSON.stringify({ session: { app_key_len: sess.app_key.length, sek_len: sess.sek.length, auth_len: sess.authtoken.length, sek_opens_with_app_key: !!ek } }));
-        if (ek) tries.splice(0, 0, ["2b-ek", path + "/1", { ...sess, sek: ek }]);
         tries.push(["ledger-cash", "gst/ledgers/" + gstin + "/" + period, { ...sess, "auth-token": sess.authtoken }]);
+        // the standard route (straight through to GSTN) wants FYN's own token by another name: try the likely ones
+        const ft = (await fynToken()).token || "";
+        const u2b = ROOT + "/gstapi/taxpayerapi/v1.0/returns/gstr2b?gstin=" + gstin + "&rtnprd=" + period;
+        tries.push(["std-accesstoken", u2b, { ...std, accesstoken: ft }]);
+        tries.push(["std-accesstoken-action", u2b + "&action=GET2B", { ...std, accesstoken: ft }]);
+        tries.push(["std-access-token", u2b, { ...std, "access-token": ft, accessToken: ft }]);
+        tries.push(["std-client", u2b, { ...std, accesstoken: ft, clientid: CID, "client-secret": CSEC }]);
         const seen: string[] = [];
         for (const [name, where, hd] of tries) {
           const x = where.startsWith("http") ? await fynAt(where, hd) : await fyn("GET", where, hd);
