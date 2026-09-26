@@ -173,6 +173,8 @@ const TallyRead = {
       b.busy = "Reading " + GSTR.label(x.ym) + " from Tally (" + (i + 1) + " of " + ms.length + ")\u2026"; render();
       const text = how === "copy" ? await this.raw("/syncfile" + q + "&file=daybook-" + x.ym + ".xml") : await this.raw("/daybook" + q + "&from=" + x.from + "&to=" + x.to);
       const res = await Books.importDayBook(new Blob([text], {type: "text/xml"}));
+      const bad = notThisClient((res.meta || {}).gstins);
+      if (bad.length){ b.busy = ""; render(); throw new Error(panRefusal("The company open in Tally", bad)); }
       this.merge(b, res, x.from, x.to);
     }
     b.busy = "Reading the balances from Tally\u2026"; render();
@@ -212,7 +214,9 @@ function viewBooksImport(b){
     '<p class="note">In Tally: <b>Display → Day Book</b>, set the period, then <b>Export</b> as XML. For the deductees’ PAN, also export <b>Display → List of Accounts</b> as XML. Nothing is sent anywhere; both are read on this computer.</p>' +
     '<div class="row" style="gap:8px;margin:10px 0"><button class="btn primary" data-act="booksPick">Choose the day book XML</button>' +
     '<button class="btn" data-act="mastersPick">Choose the ledger masters XML</button>' +
-    (b.vouchers && b.vouchers.length ? '<button class="btn small" data-act="booksClear">Remove what is here</button>' : "") + "</div>" +
+    (b.vouchers && b.vouchers.length ? '<button class="btn small" data-act="booksClear">Remove what is here</button>' : "") +
+    (booksHasAny(b) ? '<button class="btn small" data-act="booksWipe">Remove Tally data and all GST work</button>' : "") + "</div>" +
+    ((b.meta || {}).gstins && notThisClient(b.meta.gstins).length ? '<p class="bk-warn">The books here are for ' + esc(notThisClient(b.meta.gstins).join(", ")) + ", not this client\u2019s PAN (" + esc(clientPan()) + "). Remove them with \u201cRemove Tally data and all GST work\u201d.</p>" : "") +
     (b.vouchers && b.vouchers.length
       ? '<div class="dash-row"><span>Vouchers</span><b>' + b.vouchers.length + "</b></div>" +
         '<div class="dash-row"><span>Period</span><b>' + fmtDate(tallyDate(m.from)) + " to " + fmtDate(tallyDate(m.to)) + "</b></div>" +

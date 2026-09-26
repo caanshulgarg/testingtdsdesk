@@ -149,7 +149,8 @@ async function gstvTake(files, bound){
   for (const file of Array.from(files || [])){
     if (!/\.pdf$/i.test(file.name) && file.type !== "application/pdf"){ refused.push(file.name + " (not a PDF)"); continue; }
     let d; try { d = GSTV.detect(await gstvPdfText(file), file.name, gstins); } catch (e){ d = GSTV.detect("", file.name, gstins); d.why.push("could not read the PDF"); }
-    if (d.gstin && !gstins.includes(d.gstin)){ refused.push(file.name + " (GSTIN " + d.gstin + " is not this client’s)"); continue; }
+    // a GSTIN of another PAN is refused; with no PAN on the client, only the GSTINs in its books are taken
+    if (d.gstin && (notThisClient([d.gstin]).length || (!clientPan() && gstins.length && !gstins.includes(d.gstin)))){ refused.push(file.name + " (GSTIN " + d.gstin + " is not this client’s)"); continue; }
     let reg = d.gstin ? d.gstin.slice(0, 2) : (bound ? bound.reg : (S.gstReg || ""));
     let form = d.form, per = d.per, sure = d.sure, note = "";
     if (bound && !(d.sure)){ form = form || bound.form; per = per || bound.per; reg = reg || bound.reg; sure = !!(form && per && reg); }

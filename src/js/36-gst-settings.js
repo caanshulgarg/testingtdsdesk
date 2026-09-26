@@ -3,6 +3,12 @@
 /* rule 37, e-invoicing, Tally cash ledger) and for the client (year  */
 /* turnover, rule 42 non-business use, party contacts)                */
 /* ================================================================== */
+// The client's PAN: as typed in its settings, else the middle ten characters of its GSTIN
+function clientPan(co){ const c = co || (typeof CO === "function" ? CO() : null) || {}, p = String(c.pan || "").toUpperCase().trim(), g = String(c.gstin || "").toUpperCase().trim();
+  return /^[A-Z]{5}\d{4}[A-Z]$/.test(p) ? p : /^\d{2}[A-Z]{5}\d{4}[A-Z]/.test(g) ? g.slice(2, 12) : ""; }
+// GSTINs that are not the client's: their PAN differs from the client's PAN (nothing is refused while the client has no PAN)
+function notThisClient(gstins, co){ const pan = clientPan(co); if (!pan) return []; return Array.from(new Set((gstins || []).map(g => String(g || "").toUpperCase()).filter(g => /^\d{2}[A-Z0-9]{13}$/.test(g) && g.slice(2, 12) !== pan))); }
+function panRefusal(what, bad, co){ const c = co || CO() || {}; return what + " is for " + bad.join(", ") + " (PAN " + bad[0].slice(2, 12) + "), not " + (c.name || "this client") + " (PAN " + clientPan(c) + "). Nothing was brought in."; }
 const GSTSet = {
   TYPES: [["monthly", "Monthly"], ["qrmp", "Quarterly (QRMP)"], ["comp", "Composition"]],
   // QRMP 3B falls due on the 22nd in these states and union territories, on the 24th elsewhere
@@ -133,3 +139,10 @@ if (typeof document !== "undefined"){
     if (t.dataset.gsetdel){ const [reg, from] = t.dataset.gsetdel.split("|"), st = GSTSet.store(reg); st.filing = (st.filing || []).filter(x => x.from !== from); saveBooks(); render(); }
   });
 }
+
+// everything read from Tally and all GST work: what "Remove Tally data and all GST work" clears
+const BOOKS_WIPE = ["vouchers", "meta", "map", "reco", "pans", "gstins", "under", "states", "groups", "groupInfo", "ledInfo", "ledInfoAt", "tb", "ledSnaps", "audit", "auditRel", "mis",
+  "twoB", "twoBs", "reco2b", "filed", "filed1a", "amendFix", "advFix", "rev", "assets", "gst3b", "gst9", "gst9c", "gstOpen", "itcBasis", "itcTrack", "outRej", "gstFiled", "gstAato",
+  "rule37On", "gstCashLedger", "gstSet", "gstContacts", "gstApi", "gstEst", "gstVault"];
+function booksHasAny(b){ return !!b && BOOKS_WIPE.some(k => { const v = b[k]; return Array.isArray(v) ? v.length : v && typeof v === "object" ? Object.keys(v).length : !!v; }); }
+function booksWipe(b){ BOOKS_WIPE.forEach(k => { delete b[k]; }); b.vouchers = []; b.map = {}; b.meta = null; return b; }

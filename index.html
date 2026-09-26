@@ -816,7 +816,7 @@ const DEFAULT_FIRM = {firmName:"Garg Shekhar & Company", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "TEST · 26 Sep 2026 · build 150 (GST API through FYN Gateway: taxpayer OTP sign-in and 2B fetched from the portal)";
+const APP_VERSION = "TEST · 26 Sep 2026 · build 151 (another business’s data refused by PAN; Remove Tally data and all GST work)";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;
@@ -8778,6 +8778,8 @@ const TallyRead = {
       b.busy = "Reading " + GSTR.label(x.ym) + " from Tally (" + (i + 1) + " of " + ms.length + ")\u2026"; render();
       const text = how === "copy" ? await this.raw("/syncfile" + q + "&file=daybook-" + x.ym + ".xml") : await this.raw("/daybook" + q + "&from=" + x.from + "&to=" + x.to);
       const res = await Books.importDayBook(new Blob([text], {type: "text/xml"}));
+      const bad = notThisClient((res.meta || {}).gstins);
+      if (bad.length){ b.busy = ""; render(); throw new Error(panRefusal("The company open in Tally", bad)); }
       this.merge(b, res, x.from, x.to);
     }
     b.busy = "Reading the balances from Tally\u2026"; render();
@@ -8817,7 +8819,9 @@ function viewBooksImport(b){
     '<p class="note">In Tally: <b>Display → Day Book</b>, set the period, then <b>Export</b> as XML. For the deductees’ PAN, also export <b>Display → List of Accounts</b> as XML. Nothing is sent anywhere; both are read on this computer.</p>' +
     '<div class="row" style="gap:8px;margin:10px 0"><button class="btn primary" data-act="booksPick">Choose the day book XML</button>' +
     '<button class="btn" data-act="mastersPick">Choose the ledger masters XML</button>' +
-    (b.vouchers && b.vouchers.length ? '<button class="btn small" data-act="booksClear">Remove what is here</button>' : "") + "</div>" +
+    (b.vouchers && b.vouchers.length ? '<button class="btn small" data-act="booksClear">Remove what is here</button>' : "") +
+    (booksHasAny(b) ? '<button class="btn small" data-act="booksWipe">Remove Tally data and all GST work</button>' : "") + "</div>" +
+    ((b.meta || {}).gstins && notThisClient(b.meta.gstins).length ? '<p class="bk-warn">The books here are for ' + esc(notThisClient(b.meta.gstins).join(", ")) + ", not this client\u2019s PAN (" + esc(clientPan()) + "). Remove them with \u201cRemove Tally data and all GST work\u201d.</p>" : "") +
     (b.vouchers && b.vouchers.length
       ? '<div class="dash-row"><span>Vouchers</span><b>' + b.vouchers.length + "</b></div>" +
         '<div class="dash-row"><span>Period</span><b>' + fmtDate(tallyDate(m.from)) + " to " + fmtDate(tallyDate(m.to)) + "</b></div>" +
@@ -14740,6 +14744,8 @@ function booksChange(t){
     if (!f) return true;
     const b = S.books; b.busy = "Opening " + f.name + "\u2026"; render();
     Books.importDayBook(f, m => { b.busy = m; softRender(); }).then(async res => {
+      const bad = notThisClient((res.meta || {}).gstins);
+      if (bad.length){ b.busy = ""; render(); askConfirm({title: "This day book is not this client\u2019s", ok: "Close", body: '<p class="note">' + esc(panRefusal("The day book " + f.name, bad)) + " Choose the day book exported from this client\u2019s company in Tally, or correct the client\u2019s GSTIN and PAN in Client setup.</p>"}); return; }
       b.vouchers = res.vouchers; b.meta = Object.assign(res.meta, {at: new Date().toISOString(), file: f.name});
       b.map = Books.mapLedgers(res.vouchers, b.map); LedMaster.refresh(b); b.reco = null; b.busy = "";
       if (Audit.cfg(b).freq !== "off") try { const r = Audit.defaultRange(b); Audit.run(r.from, r.to, "after the day book was read"); } catch (e){}
@@ -14766,7 +14772,7 @@ function booksChange(t){
   if (t.id === "filedIn"){
     const files = Array.from(t.files || []); t.value = "";
     if (!files.length) return true;
-    Promise.all(files.map(f => f.text().then(txt => { const k = GSTAmend.keep(JSON.parse(txt), "portal"); return GSTR.label(k.ym) + " " + k.gstin.slice(0, 2); }).catch(e => "not read: " + f.name)))
+    Promise.all(files.map(f => f.text().then(txt => { const j = JSON.parse(txt); if (notThisClient([j.gstin]).length) return "not taken: " + f.name + " is for " + j.gstin + ", another PAN"; const k = GSTAmend.keep(j, "portal"); return GSTR.label(k.ym) + " " + k.gstin.slice(0, 2); }).catch(e => "not read: " + f.name)))
       .then(list => { saveBooks(); toast("Filed GSTR-1 kept: " + list.join(", ") + "."); render(); });
     return true;
   }
@@ -14777,6 +14783,7 @@ function booksChange(t){
     Promise.all(files.map(f => f.text().then(txt => {
       const x = GST2B.fromJson(JSON.parse(txt));
       if (!x.gstin || !x.ym) throw new Error("no period");
+      if (notThisClient([x.gstin]).length) return "not taken: " + f.name + " is for " + x.gstin + ", another PAN";
       b.twoBs = b.twoBs || {};
       b.twoBs[x.gstin + "|" + x.period] = x;
       return GSTR.label(x.ym) + " (" + x.rows.length + ")";
@@ -18429,6 +18436,18 @@ document.addEventListener("click", ev => {
     case "assetAdd": { const b = S.books; b.assets = (b.assets || []).concat([{id: uid("as"), name: "", date: "", igst: 0, cgst: 0, sgst: 0, cess: 0, use: "common", reg: S.gstReg || "", sold: ""}]); saveBooks(); render(); break; }
     case "booksClear": askConfirm({title: "Remove the books read from Tally?", ok: "Remove", body: '<p class="note">Challans and what you corrected stay. The day book can be brought in again.</p>'}).then(ok => {
       if (!ok) return; S.books.vouchers = []; S.books.meta = null; S.books.reco = null; saveBooks(); toast("Removed."); render(); }); break;
+    case "booksWipe": {
+      const b = S.books; if (!b) break;
+      askConfirm({title: "Remove Tally data and all GST work?", ok: "Remove", danger: true, wide: true,
+        body: '<p class="note"><b>Removed for ' + esc(CO().name) + ":</b> the day book and ledger masters read from Tally, Tally\u2019s balances, the audit, MIS and trial balance worked from them; every 2B, filed GSTR-1 and GSTR-1A copy; GST settings and contacts; 3B and GSTR-9 figures typed; filing dates and portal figures; ITC follow-up and IMS decisions; advances, reversal and amendment choices; and the returns-filed PDFs.</p>" +
+          '<p class="note"><b>Kept:</b> TDS challans, certificates and the salary sheet; bills, bank and sales; the client\u2019s own settings. It cannot be undone; the day book can be brought in again.</p>'}).then(async ok => {
+        if (!ok) return;
+        const co = CO(), vault = (b.gstVault || []).slice();
+        for (const x of vault){ try { await FileStore.drop(co.id, x.id); } catch (e){} if (x.docPath && typeof CloudDocs === "object") CloudDocs.remove(x.docPath); }
+        booksWipe(b); GST2B._memo = null; GSTR._carry = null; if (typeof GSTAPI === "object") GSTAPI.sess = {};
+        await saveBooks(); toast("Tally data and all GST work removed for " + co.name + "."); render();
+      }); break;
+    }
     case "fvuClose": S.fvuResult = null; render(); break;
     case "tdsFClear": S.tdsF = {}; render(); break;
     case "tdsPrint": {
@@ -18874,6 +18893,11 @@ document.addEventListener("change", ev => {
       if (g && !gstinValid(g)) toast("That GSTIN fails its check digit. Check each character.");
       else if (g && Object.values(S.companies).some(c => c.id !== co.id && c.gstin === g)) toast("Another client already has this GSTIN.");
       if (GSTIN_RE.test(g) && !co.pan) co.pan = g.slice(2, 12);
+      else if (GSTIN_RE.test(g) && co.pan && String(co.pan).toUpperCase() !== g.slice(2, 12)) toast("This GSTIN\u2019s PAN is " + g.slice(2, 12) + ", but the client\u2019s PAN is " + co.pan + ". Correct one of them.");
+    }
+    else if (t.dataset.c === "pan"){
+      const p0 = t.value.toUpperCase().trim(), g0 = String(co.gstin || "").toUpperCase();
+      if (p0 && GSTIN_RE.test(g0) && g0.slice(2, 12) !== p0) toast("The client\u2019s GSTIN " + g0 + " carries PAN " + g0.slice(2, 12) + ", not " + p0 + ". Correct one of them.");
     }
     Store.saveCompany(co); refreshStats(co.id); render(); return;
   }
@@ -19963,6 +19987,12 @@ if (typeof document !== "undefined") document.addEventListener("click", e => {
 /* rule 37, e-invoicing, Tally cash ledger) and for the client (year  */
 /* turnover, rule 42 non-business use, party contacts)                */
 /* ================================================================== */
+// The client's PAN: as typed in its settings, else the middle ten characters of its GSTIN
+function clientPan(co){ const c = co || (typeof CO === "function" ? CO() : null) || {}, p = String(c.pan || "").toUpperCase().trim(), g = String(c.gstin || "").toUpperCase().trim();
+  return /^[A-Z]{5}\d{4}[A-Z]$/.test(p) ? p : /^\d{2}[A-Z]{5}\d{4}[A-Z]/.test(g) ? g.slice(2, 12) : ""; }
+// GSTINs that are not the client's: their PAN differs from the client's PAN (nothing is refused while the client has no PAN)
+function notThisClient(gstins, co){ const pan = clientPan(co); if (!pan) return []; return Array.from(new Set((gstins || []).map(g => String(g || "").toUpperCase()).filter(g => /^\d{2}[A-Z0-9]{13}$/.test(g) && g.slice(2, 12) !== pan))); }
+function panRefusal(what, bad, co){ const c = co || CO() || {}; return what + " is for " + bad.join(", ") + " (PAN " + bad[0].slice(2, 12) + "), not " + (c.name || "this client") + " (PAN " + clientPan(c) + "). Nothing was brought in."; }
 const GSTSet = {
   TYPES: [["monthly", "Monthly"], ["qrmp", "Quarterly (QRMP)"], ["comp", "Composition"]],
   // QRMP 3B falls due on the 22nd in these states and union territories, on the 24th elsewhere
@@ -20093,6 +20123,13 @@ if (typeof document !== "undefined"){
     if (t.dataset.gsetdel){ const [reg, from] = t.dataset.gsetdel.split("|"), st = GSTSet.store(reg); st.filing = (st.filing || []).filter(x => x.from !== from); saveBooks(); render(); }
   });
 }
+
+// everything read from Tally and all GST work: what "Remove Tally data and all GST work" clears
+const BOOKS_WIPE = ["vouchers", "meta", "map", "reco", "pans", "gstins", "under", "states", "groups", "groupInfo", "ledInfo", "ledInfoAt", "tb", "ledSnaps", "audit", "auditRel", "mis",
+  "twoB", "twoBs", "reco2b", "filed", "filed1a", "amendFix", "advFix", "rev", "assets", "gst3b", "gst9", "gst9c", "gstOpen", "itcBasis", "itcTrack", "outRej", "gstFiled", "gstAato",
+  "rule37On", "gstCashLedger", "gstSet", "gstContacts", "gstApi", "gstEst", "gstVault"];
+function booksHasAny(b){ return !!b && BOOKS_WIPE.some(k => { const v = b[k]; return Array.isArray(v) ? v.length : v && typeof v === "object" ? Object.keys(v).length : !!v; }); }
+function booksWipe(b){ BOOKS_WIPE.forEach(k => { delete b[k]; }); b.vouchers = []; b.map = {}; b.meta = null; return b; }
 /* ================================================================== */
 /* Returns for GSTINs that are not monthly filers                     */
 /*  QRMP: IFF (months 1-2, optional), PMT-06 (months 1-2), GSTR-1 and */
@@ -20431,7 +20468,8 @@ async function gstvTake(files, bound){
   for (const file of Array.from(files || [])){
     if (!/\.pdf$/i.test(file.name) && file.type !== "application/pdf"){ refused.push(file.name + " (not a PDF)"); continue; }
     let d; try { d = GSTV.detect(await gstvPdfText(file), file.name, gstins); } catch (e){ d = GSTV.detect("", file.name, gstins); d.why.push("could not read the PDF"); }
-    if (d.gstin && !gstins.includes(d.gstin)){ refused.push(file.name + " (GSTIN " + d.gstin + " is not this client’s)"); continue; }
+    // a GSTIN of another PAN is refused; with no PAN on the client, only the GSTINs in its books are taken
+    if (d.gstin && (notThisClient([d.gstin]).length || (!clientPan() && gstins.length && !gstins.includes(d.gstin)))){ refused.push(file.name + " (GSTIN " + d.gstin + " is not this client’s)"); continue; }
     let reg = d.gstin ? d.gstin.slice(0, 2) : (bound ? bound.reg : (S.gstReg || ""));
     let form = d.form, per = d.per, sure = d.sure, note = "";
     if (bound && !(d.sure)){ form = form || bound.form; per = per || bound.per; reg = reg || bound.reg; sure = !!(form && per && reg); }

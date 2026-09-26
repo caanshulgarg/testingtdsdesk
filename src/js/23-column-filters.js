@@ -999,6 +999,8 @@ function booksChange(t){
     if (!f) return true;
     const b = S.books; b.busy = "Opening " + f.name + "\u2026"; render();
     Books.importDayBook(f, m => { b.busy = m; softRender(); }).then(async res => {
+      const bad = notThisClient((res.meta || {}).gstins);
+      if (bad.length){ b.busy = ""; render(); askConfirm({title: "This day book is not this client\u2019s", ok: "Close", body: '<p class="note">' + esc(panRefusal("The day book " + f.name, bad)) + " Choose the day book exported from this client\u2019s company in Tally, or correct the client\u2019s GSTIN and PAN in Client setup.</p>"}); return; }
       b.vouchers = res.vouchers; b.meta = Object.assign(res.meta, {at: new Date().toISOString(), file: f.name});
       b.map = Books.mapLedgers(res.vouchers, b.map); LedMaster.refresh(b); b.reco = null; b.busy = "";
       if (Audit.cfg(b).freq !== "off") try { const r = Audit.defaultRange(b); Audit.run(r.from, r.to, "after the day book was read"); } catch (e){}
@@ -1025,7 +1027,7 @@ function booksChange(t){
   if (t.id === "filedIn"){
     const files = Array.from(t.files || []); t.value = "";
     if (!files.length) return true;
-    Promise.all(files.map(f => f.text().then(txt => { const k = GSTAmend.keep(JSON.parse(txt), "portal"); return GSTR.label(k.ym) + " " + k.gstin.slice(0, 2); }).catch(e => "not read: " + f.name)))
+    Promise.all(files.map(f => f.text().then(txt => { const j = JSON.parse(txt); if (notThisClient([j.gstin]).length) return "not taken: " + f.name + " is for " + j.gstin + ", another PAN"; const k = GSTAmend.keep(j, "portal"); return GSTR.label(k.ym) + " " + k.gstin.slice(0, 2); }).catch(e => "not read: " + f.name)))
       .then(list => { saveBooks(); toast("Filed GSTR-1 kept: " + list.join(", ") + "."); render(); });
     return true;
   }
@@ -1036,6 +1038,7 @@ function booksChange(t){
     Promise.all(files.map(f => f.text().then(txt => {
       const x = GST2B.fromJson(JSON.parse(txt));
       if (!x.gstin || !x.ym) throw new Error("no period");
+      if (notThisClient([x.gstin]).length) return "not taken: " + f.name + " is for " + x.gstin + ", another PAN";
       b.twoBs = b.twoBs || {};
       b.twoBs[x.gstin + "|" + x.period] = x;
       return GSTR.label(x.ym) + " (" + x.rows.length + ")";

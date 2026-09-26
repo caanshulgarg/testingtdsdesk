@@ -1454,6 +1454,18 @@ document.addEventListener("click", ev => {
     case "assetAdd": { const b = S.books; b.assets = (b.assets || []).concat([{id: uid("as"), name: "", date: "", igst: 0, cgst: 0, sgst: 0, cess: 0, use: "common", reg: S.gstReg || "", sold: ""}]); saveBooks(); render(); break; }
     case "booksClear": askConfirm({title: "Remove the books read from Tally?", ok: "Remove", body: '<p class="note">Challans and what you corrected stay. The day book can be brought in again.</p>'}).then(ok => {
       if (!ok) return; S.books.vouchers = []; S.books.meta = null; S.books.reco = null; saveBooks(); toast("Removed."); render(); }); break;
+    case "booksWipe": {
+      const b = S.books; if (!b) break;
+      askConfirm({title: "Remove Tally data and all GST work?", ok: "Remove", danger: true, wide: true,
+        body: '<p class="note"><b>Removed for ' + esc(CO().name) + ":</b> the day book and ledger masters read from Tally, Tally\u2019s balances, the audit, MIS and trial balance worked from them; every 2B, filed GSTR-1 and GSTR-1A copy; GST settings and contacts; 3B and GSTR-9 figures typed; filing dates and portal figures; ITC follow-up and IMS decisions; advances, reversal and amendment choices; and the returns-filed PDFs.</p>" +
+          '<p class="note"><b>Kept:</b> TDS challans, certificates and the salary sheet; bills, bank and sales; the client\u2019s own settings. It cannot be undone; the day book can be brought in again.</p>'}).then(async ok => {
+        if (!ok) return;
+        const co = CO(), vault = (b.gstVault || []).slice();
+        for (const x of vault){ try { await FileStore.drop(co.id, x.id); } catch (e){} if (x.docPath && typeof CloudDocs === "object") CloudDocs.remove(x.docPath); }
+        booksWipe(b); GST2B._memo = null; GSTR._carry = null; if (typeof GSTAPI === "object") GSTAPI.sess = {};
+        await saveBooks(); toast("Tally data and all GST work removed for " + co.name + "."); render();
+      }); break;
+    }
     case "fvuClose": S.fvuResult = null; render(); break;
     case "tdsFClear": S.tdsF = {}; render(); break;
     case "tdsPrint": {
@@ -1899,6 +1911,11 @@ document.addEventListener("change", ev => {
       if (g && !gstinValid(g)) toast("That GSTIN fails its check digit. Check each character.");
       else if (g && Object.values(S.companies).some(c => c.id !== co.id && c.gstin === g)) toast("Another client already has this GSTIN.");
       if (GSTIN_RE.test(g) && !co.pan) co.pan = g.slice(2, 12);
+      else if (GSTIN_RE.test(g) && co.pan && String(co.pan).toUpperCase() !== g.slice(2, 12)) toast("This GSTIN\u2019s PAN is " + g.slice(2, 12) + ", but the client\u2019s PAN is " + co.pan + ". Correct one of them.");
+    }
+    else if (t.dataset.c === "pan"){
+      const p0 = t.value.toUpperCase().trim(), g0 = String(co.gstin || "").toUpperCase();
+      if (p0 && GSTIN_RE.test(g0) && g0.slice(2, 12) !== p0) toast("The client\u2019s GSTIN " + g0 + " carries PAN " + g0.slice(2, 12) + ", not " + p0 + ". Correct one of them.");
     }
     Store.saveCompany(co); refreshStats(co.id); render(); return;
   }
