@@ -47,7 +47,7 @@ const GST2B = {
   bookDocs(){
     const b = S.books;
     if (!b || !b.vouchers) return [];
-    const regs = ((b.meta || {}).gstins || []).map(g => g.slice(0, 2)), gst = b.gstins || {};
+    const regs = (GSTR.gstins(b) || []).map(g => g.slice(0, 2)), gst = b.gstins || {};
     const out = [];
     this.skipped = {setOff: 0, taxOnly: 0};
     b.vouchers.forEach(v => {
@@ -104,7 +104,7 @@ const GST2B = {
     if (this._memo && this._memo.key === key && this._memo.v === b.vouchers) return this._memo.res;
     const portal = [], rejRows = [];
     this.all2b(reg).forEach(t => t.rows.forEach(r => (r.rej ? rejRows : portal).push(r)));
-    const regs = ((b.meta || {}).gstins || []).map(g => g.slice(0, 2));
+    const regs = (GSTR.gstins(b) || []).map(g => g.slice(0, 2));
     const books = this.bookDocs().filter(d => !reg || d.reg === reg || (!d.reg && regs.length <= 1));
     const byId = new Map(books.map(d => [d.id, d]));
     const taken = new Set(), pairs = [], used2b = new Set();

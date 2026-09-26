@@ -110,7 +110,7 @@ async function saveBooks(){ const b = S.books; if (b && b.cid) await Books.save(
   gstins: b.gstins, under: b.under, states: b.states, groups: b.groups, salary: b.salary, certs: b.certs, advFix: b.advFix, assets: b.assets, rev: b.rev,
   filed: b.filed, amendFix: b.amendFix, twoBs: b.twoBs, reco2b: b.reco2b, ledInfo: b.ledInfo, ledInfoAt: b.ledInfoAt,
   audit: b.audit, auditCfg: b.auditCfg, auditRel: b.auditRel, ledSnaps: b.ledSnaps, gst9c: b.gst9c, groupInfo: b.groupInfo, fs: b.fs, tb: b.tb, mis: b.mis, misCfg: b.misCfg, msme: b.msme, budget: b.budget,
-  gst3b: b.gst3b, gst9: b.gst9, gstOpen: b.gstOpen, itcBasis: b.itcBasis, itcTrack: b.itcTrack, outRej: b.outRej, gstFiled: b.gstFiled, gstAato: b.gstAato, filed1a: b.filed1a, rule37On: b.rule37On, gstCashLedger: b.gstCashLedger, gstSet: b.gstSet, gstContacts: b.gstContacts, gstApi: b.gstApi, gstEst: b.gstEst, gstVault: b.gstVault}); }
+  gst3b: b.gst3b, gst9: b.gst9, gstOpen: b.gstOpen, itcBasis: b.itcBasis, itcTrack: b.itcTrack, outRej: b.outRej, gstFiled: b.gstFiled, gstAato: b.gstAato, filed1a: b.filed1a, rule37On: b.rule37On, gstCashLedger: b.gstCashLedger, gstSet: b.gstSet, gstContacts: b.gstContacts, gstApi: b.gstApi, gstEst: b.gstEst, gstVault: b.gstVault, gstRegs: b.gstRegs}); }
 function viewBooks(){
   const co = CO();
   if (!S.books || S.books.cid !== co.id){ openBooks(co.id); return '<p class="note">Opening the books…</p>'; }
@@ -119,6 +119,7 @@ function viewBooks(){
     .map(([id, label, c]) => '<button data-bookstab="' + id + '" aria-selected="' + (tab === id) + '">' + label + (c == null ? "" : ' <span class="sbar-n">' + c + "</span>") + "</button>").join("") + "</nav>";
   if (b.busy) h += busyCard("Reading the books…", b.busy, 0, 0);
   if (tab === "import") h += viewBooksImport(b);
+  else if (!n && tab === "gst") h += viewBooksGst(b);
   else if (!n && !(tab === "tds" && (b.salary || []).length)) h += '<div class="bk-none">Bring the day book in first, under “From Tally”. Salary for 24Q can be brought in on its own, under TDS.</div>';
   else if (!n && tab === "tds") h += viewBooksTds(b);
   else if (tab === "ledgers") h += viewBooksLedgers(b);
@@ -227,7 +228,7 @@ function viewBooksImport(b){
 }
 function tallyDate(s){ return s && String(s).length === 8 ? String(s).slice(0, 4) + "-" + String(s).slice(4, 6) + "-" + String(s).slice(6, 8) : ""; }
 function viewBooksLedgers(b){
-  const regs = ((b.meta && b.meta.gstins) || []).map(g => g.slice(0, 2)), info = b.ledInfo || {};
+  const regs = (GSTR.gstins(b) || []).map(g => g.slice(0, 2)), info = b.ledInfo || {};
   const all = Object.entries(b.map || {});
   const isTax = ([n, m]) => LedMaster.taxLike(n, m, info[n]);
   const gst = all.filter(([n, m]) => LedMaster.isGst(m.what) && isTax([n, m])), tds = all.filter(([n, m]) => LedMaster.isTds(m.what) && isTax([n, m]));
@@ -1071,10 +1072,10 @@ function ledChangedBanner(b){
     ch.slice(0, 30).map(x => "<tr><td>" + esc(x.name) + "</td><td>" + esc(x.change) + "</td><td>" + esc(x.returns.slice(0, 4).join("; ") + (x.returns.length > 4 ? " and " + (x.returns.length - 4) + " more" : "")) + "</td></tr>").join("") + "</tbody></table></div></section>";
 }
 function viewGst9(b){
-  const reg = S.gstReg || (((b.meta || {}).gstins || []).length === 1 ? b.meta.gstins[0].slice(0, 2) : "");
+  const reg = S.gstReg || (GSTR.gstins(b).length === 1 ? GSTR.gstins(b)[0].slice(0, 2) : "");
   if (!reg) return '<p class="note">Choose a registration above; the annual return is filed for each GSTIN.</p>';
   const fy = GST9.fyOf(S.gstYm || GSTR.months().slice(-1)[0]), d = GST9.build(fy, reg), m = v => INR.format(r2(v || 0));
-  let h = '<section class="dash-card"><h3>GSTR-9 for ' + GST9.label(fy) + ", " + esc(((b.meta || {}).gstins || []).find(g => g.slice(0, 2) === reg) || reg) + "</h3>" +
+  let h = '<section class="dash-card"><h3>GSTR-9 for ' + GST9.label(fy) + ", " + esc((GSTR.gstins(b) || []).find(g => g.slice(0, 2) === reg) || reg) + "</h3>" +
     '<p class="note">Built from the months in the books, the same figures as each month\u2019s GSTR-1 and 3B. ' + (d.missing.length ? '<span class="bad">Not in the books: ' + d.missing.map(GSTR.label).join(", ") + ".</span> " : "") +
     (d.twoB ? d.twoB + " months of 2B here for table 8A." : '<span class="bad">No 2B here for this year, so table 8A is empty; bring the 2B files in under 2B reconciliation.</span>') + "</p>" +
     '<div class="row" style="gap:8px;margin:8px 0"><button class="btn small primary" data-act="gst9Pdf">Download (PDF)</button><button class="btn small" data-act="gst9Excel">Excel</button></div>' + GST9.html(d) +
@@ -1093,7 +1094,7 @@ function viewGst9(b){
   return h;
 }
 function viewGst9c(b){
-  const reg = S.gstReg || (((b.meta || {}).gstins || []).length === 1 ? b.meta.gstins[0].slice(0, 2) : "");
+  const reg = S.gstReg || (GSTR.gstins(b).length === 1 ? GSTR.gstins(b)[0].slice(0, 2) : "");
   if (!reg) return '<p class="note">Choose a registration above.</p>';
   const fy = GST9.fyOf(S.gstYm || GSTR.months().slice(-1)[0]), c = GST9C.build(fy, reg), m = v => INR.format(r2(v || 0)), st = c.st;
   const inp = (k, v, ph) => '<input type="number" step="0.01" data-g9c="' + k + '" value="' + esc(v == null ? "" : v) + '" placeholder="' + esc(ph || "0") + '" style="width:140px;text-align:right">';
@@ -1121,14 +1122,14 @@ function viewGst9c(b){
   return h;
 }
 function gst9PackHtml(which){
-  const b = S.books, reg = S.gstReg || (((b.meta || {}).gstins || [])[0] || "").slice(0, 2), fy = GST9.fyOf(S.gstYm || GSTR.months().slice(-1)[0]), co = CO();
-  const head = (t) => '<div style="border-bottom:2px solid #15201B;padding-bottom:8px;margin-bottom:10px"><div style="font-size:12px;color:#5A6B63">' + t + ' \u2014 WORKING FROM THE BOOKS</div><h1 style="font-size:20px;margin:4px 0">' + esc(co.name) + "</h1><div>" + esc(((b.meta || {}).gstins || []).find(g => g.slice(0, 2) === reg) || reg) + " \u00b7 " + GST9.label(fy) + "</div></div>";
+  const b = S.books, reg = S.gstReg || ((GSTR.gstins(b) || [])[0] || "").slice(0, 2), fy = GST9.fyOf(S.gstYm || GSTR.months().slice(-1)[0]), co = CO();
+  const head = (t) => '<div style="border-bottom:2px solid #15201B;padding-bottom:8px;margin-bottom:10px"><div style="font-size:12px;color:#5A6B63">' + t + ' \u2014 WORKING FROM THE BOOKS</div><h1 style="font-size:20px;margin:4px 0">' + esc(co.name) + "</h1><div>" + esc((GSTR.gstins(b) || []).find(g => g.slice(0, 2) === reg) || reg) + " \u00b7 " + GST9.label(fy) + "</div></div>";
   if (which === "9") return head("GSTR-9") + GST9.html(GST9.build(fy, reg)).replace(/<div class="bk-tablewrap">|<\/div>/g, "");
   return head("GSTR-9C") + viewGst9c(b).replace(/<input[^>]*value="([^"]*)"[^>]*>/g, "$1").replace(/<textarea[^>]*>([^<]*)<\/textarea>/g, "<p>$1</p>").replace(/<button[^>]*>[^<]*<\/button>/g, "").replace(/class="bk-tablewrap"/g, "");
 }
 async function gst9Excel(which){
   await ensureXlsx();
-  const b = S.books, reg = S.gstReg || (((b.meta || {}).gstins || [])[0] || "").slice(0, 2), fy = GST9.fyOf(S.gstYm || GSTR.months().slice(-1)[0]), wb = XLSX.utils.book_new();
+  const b = S.books, reg = S.gstReg || ((GSTR.gstins(b) || [])[0] || "").slice(0, 2), fy = GST9.fyOf(S.gstYm || GSTR.months().slice(-1)[0]), wb = XLSX.utils.book_new();
   if (which === "9"){
     const d = GST9.build(fy, reg), rows = [["Table", "Details", "Taxable value", "IGST", "CGST", "SGST", "Cess"]];
     GST9.ROWS.forEach(r => { if (r.length === 3 && /^(II|III|IV|V|VI)$/.test(r[0])){ rows.push(["Part " + r[0], r[1] + ". " + r[2]]); return; } const x = d.T[r[0]] || GST9.Z(); rows.push([r[0].replace(/-.*/, ""), r[1], x.taxable, x.igst, x.cgst, x.sgst, x.cess]); });
@@ -1151,8 +1152,9 @@ async function gst9Excel(which){
   saveFile(CO().name.replace(/[^A-Za-z0-9]+/g, "-") + "-GSTR-" + which + "-" + fy + "-" + reg + ".xlsx", new Blob([XLSX.write(wb, {bookType: "xlsx", type: "array"})], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
 }
 function viewBooksGst(b){
-  const months = GSTR.months(), regs = (b.meta && b.meta.gstins) || [];
-  if (!S.gstYm && months.length) S.gstYm = months[months.length - 1];
+  const months = GSTR.months(), regs = GSTR.gstins(b) || [], noBooks = !(b.vouchers || []).length;
+  if (!regs.length) return '<div class="bk-none">Add the client\u2019s GSTIN in ' + gstSetLink("GST settings") + " to use the GST tab. With it, 2B can be fetched from the portal or brought in, and the returns filed kept, with or without a Tally day book. GSTR-1 and 3B are worked out from the day book, brought in under \u201cFrom Tally\u201d.</div>";
+  if (!S.gstYm || !months.includes(S.gstYm)) S.gstYm = months[months.length - 1] || "";
   // a return is filed for one GSTIN: the company's own first, never the registrations added together
   if (regs.length && !regs.some(g => g.slice(0, 2) === S.gstReg)){ const own = String((CO() || {}).gstin || "").slice(0, 2); S.gstReg = (regs.find(g => g.slice(0, 2) === own) || regs[0]).slice(0, 2); }
   // the parts follow the GSTIN's filing type: QRMP starts from the quarter; composition has its own two returns
@@ -1161,6 +1163,8 @@ function viewBooksGst(b){
     : (ftype === "qrmp" ? [["qtr", "This quarter"], ["r1", "GSTR-1 working"], ["r3b", "GSTR-3B working"]] : [["r1", "GSTR-1"], ["r3b", "GSTR-3B"]])
       .concat([["inreg", "Input register"], ["r2b", "2B reconciliation"], ["follow", "ITC follow-up"], ["adv", "Advances"], ["rev", "Reversal"], ["amend", "Amendments"], ["g9", "GSTR-9"], ["g9c", "GSTR-9C"]]);
   parts.push(["vault", "Returns filed"]);
+  // without the day book only what does not come from it: 2B (from the portal or its JSON) and the returns filed
+  if (noBooks) parts.splice(0, parts.length, ["r2b", "2B"], ["vault", "Returns filed"]);
   // a GSTIN or filing type seen for the first time opens on its first part: This quarter, CMP-08, or GSTR-1
   const seen = (S.gstReg || "") + "|" + ftype;
   if (!S.gstPart || !parts.some(x => x[0] === S.gstPart) || (S.gstSeen && S.gstSeen !== seen)) S.gstPart = parts[0][0];
@@ -1174,6 +1178,10 @@ function viewBooksGst(b){
     (part === "amend" && ftype === "monthly" ? '<button class="btn small primary" data-act="gstJson">Download GSTR-1 JSON with these</button>' : "") +
     (part === "r1" && !noReturn ? '<button class="btn small primary" data-act="gstJson">Download GSTR-1 JSON' + (ftype === "qrmp" ? " for the quarter" : " for the portal") + "</button>" : "") +
     (part === "r3b" && !noReturn ? '<button class="btn small primary" data-act="gst3bJson">Download GSTR-3B JSON' + (ftype === "qrmp" ? " for the quarter" : " for the portal") + "</button>" : "") + "</div>";
+  // the GSTIN chosen, with what GST settings hold for it
+  const gNow = regs.find(g => g.slice(0, 2) === S.gstReg) || "";
+  if (gNow) h = h.replace(/<\/div>$/, "") + '<span class="note" style="align-self:center"><b>' + esc(gNow) + "</b> \u00b7 " + esc(GSTRegs.state(gNow)) + " \u00b7 " + esc(GSTSet.typeLabel(ftype)) + (GSTSet.peek(S.gstReg).portalUser ? " \u00b7 portal user " + esc(GSTSet.peek(S.gstReg).portalUser) : "") + " \u00b7 " + gstSetLink("GST settings") + "</span></div>";
+  if (noBooks) h += '<p class="note" style="margin:0 0 10px;color:#B9541B">No Tally day book here yet. 2B and the returns filed work without it; GSTR-1, 3B, the input register and the other workings need the day book, brought in under \u201cFrom Tally\u201d or read from Tally.</p>';
   // a GSTIN that is not a monthly filer: say so on every part, until its own returns are built
   const ftp = typeof GSTSet === "object" && S.gstYm ? GSTSet.typeOf(S.gstYm, S.gstReg || "") : "monthly";
   if (ftp === "qrmp" && (part === "r1" || part === "r3b")) h += '<p class="note" style="margin:0 0 10px">Quarterly (QRMP) filer: this is the working for ' + esc(GSTR.label(S.gstYm)) + (GSTSet.isQEnd(S.gstYm) ? "; the downloads cover the whole of " + esc(GSTSet.qLabel(S.gstYm)) + "." : ", for reference; this month has no GSTR-1 or 3B \u2014 see \u201cThis quarter\u201d.") + "</p>";
@@ -1193,7 +1201,7 @@ function viewBooksGst(b){
 }
 
 function viewGstAmend(b){
-  const money = v => INR.format(r2(v || 0)), ym = S.gstYm || "", reg = S.gstReg || "", regs = (b.meta && b.meta.gstins) || [];
+  const money = v => INR.format(r2(v || 0)), ym = S.gstYm || "", reg = S.gstReg || "", regs = GSTR.gstins(b) || [];
   const kindName = {B2B: "B2B invoice", B2CL: "B2C large invoice", EXP: "Export invoice", CDNR: "Credit or debit note", B2CS: "B2C small, month total"};
   const table = {B2B: "9A", B2CL: "9A", EXP: "9A", CDNR: "9C", B2CS: "10"};
   let h = "";
@@ -1341,7 +1349,7 @@ function viewGstRev(b){
       "<tr><td><b>" + (more > 0 ? "To reverse more, with interest under section 50" : more < 0 ? "To take back as credit" : "Difference") + "</b></td>" + heads(y.diff) + "</tr></tbody></table></div>" +
       '<p class="note">Reverse the extra in 4(B)(1), or take the excess back in 4(A)(5), in a return up to September after the year ends.</p></section>';
   }
-  const regs = (b.meta && b.meta.gstins) || [], assets = b.assets || [];
+  const regs = GSTR.gstins(b) || [], assets = b.assets || [];
   h += '<section class="dash-card" style="margin-top:12px"><h3>Rule 43: capital goods</h3>' +
     '<p class="note">The credit on a capital good used for both taxable and exempt supplies is spread over 60 months, 5% a quarter, from the month it is put to use. Each month, the exempt share of that month’s part (Tr × E ÷ F) is reversed. A good used only for taxable supplies keeps all its credit; one used only for exempt or non-business supplies gets none, so mark those and they are left out.</p>' +
     '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Capital good</th><th class="dt">Put to use</th>' + th + "<th>Used for</th>" + (regs.length > 1 ? "<th>Registration</th>" : "") + '<th class="dt">Sold on</th><th class="n">This month (Tm)</th><th></th></tr></thead><tbody>' +
@@ -1577,7 +1585,7 @@ async function inregExcel(){
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(it), "By rate and HSN");
   if (R.only2b.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["2B month", "Supplier", "GSTIN", "Bill no.", "Date", "Value", "IGST", "CGST", "SGST", "Cess", "Available in 2B", "In Tally"]].concat(R.only2b.map(p => [p.ym, p.party, p.gstin, p.no, p.date, p.dir * p.taxable, p.dir * p.igst, p.dir * p.cgst, p.dir * p.sgst, p.dir * p.cess, p.itcavl === "N" ? "No" + (p.rsn ? " (" + p.rsn + ")" : "") : "Yes",
     p.bookedNoCredit ? "booked without credit: " + p.bookedNoCredit.type + " " + (p.bookedNoCredit.no || "") + " " + p.bookedNoCredit.date + " " + (p.bookedNoCredit.party || "") : "not found"]))), "In 2B not in books");
-  const gstin = ((b.meta || {}).gstins || []).find(g => g.slice(0, 2) === R.reg) || R.reg;
+  const gstin = (GSTR.gstins(b) || []).find(g => g.slice(0, 2) === R.reg) || R.reg;
   saveFile(CO().name.replace(/[^A-Za-z0-9]+/g, "-") + "-Input-register-" + gstin + "-" + (R.months.length > 1 ? R.months[0] + "-" + R.months[R.months.length - 1] : R.months[0]) + ".xlsx", new Blob([XLSX.write(wb, {bookType: "xlsx", type: "array"})], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
 }
 function r2Scope(){
@@ -1587,7 +1595,7 @@ function r2Scope(){
   return {mode: "month", months: [ym], label: GSTR.label(ym)};
 }
 function r2Reg(b){
-  const regs = ((b.meta || {}).gstins || []).map(g => g.slice(0, 2));
+  const regs = (GSTR.gstins(b) || []).map(g => g.slice(0, 2));
   if (S.gstReg) return S.gstReg;
   const own = Array.from(new Set(GST2B.all2b("").map(t => t.gstin.slice(0, 2))));
   return own.length === 1 ? own[0] : regs.length === 1 ? regs[0] : "";
@@ -1604,7 +1612,7 @@ function viewBooks2B(b){
       (b.twoB ? '<p class="note" style="color:#B9541B">A 2B brought in before this build was read the old way. Bring it in again.</p>' : "") + pick + "</section>";
   }
   const reg = r2Reg(b), sc0 = r2Scope(), set = GST2B.settings(), st = GST2B.state();
-  const regs = (b.meta && b.meta.gstins) || [];
+  const regs = GSTR.gstins(b) || [];
   if (!reg && regs.length > 1) return '<p class="note">Choose a registration above.</p>';
   const mine = GST2B.all2b(reg), sc = GST2B.scope(reg, sc0.months);
   const wrong = loadedAll.filter(t => regs.length && !regs.includes(t.gstin));

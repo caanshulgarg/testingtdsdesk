@@ -18,7 +18,7 @@ const GSTAPI = {
     return j;
   },
   ready(ym){ const nx = GSTR.nextYm(ym), t = GSTF.today(); return t.slice(0, 7).replace("-", "") > nx || (t.slice(0, 7).replace("-", "") === nx && +t.slice(8, 10) >= 14); },
-  gstinOf(reg){ return ((((S.books || {}).meta || {}).gstins) || []).find(g => g.slice(0, 2) === reg) || ""; },
+  gstinOf(reg){ return ((GSTR.gstins(S.books)) || []).find(g => g.slice(0, 2) === reg) || ""; },
   user(reg){ return (typeof GSTSet === "object" ? GSTSet.peek(reg).portalUser : "") || ""; },
   live(gstin){ const x = this.sess[gstin]; return x && x.auth_token && x.until > Date.now() ? x : null; },
   async otp(reg){
@@ -47,7 +47,7 @@ const GSTAPI = {
   }
 };
 function viewGstApiCard(b){
-  const reg = S.gstReg || (((b.meta || {}).gstins || [])[0] || "").slice(0, 2), gstin = GSTAPI.gstinOf(reg);
+  const reg = S.gstReg || ((GSTR.gstins(b) || [])[0] || "").slice(0, 2), gstin = GSTAPI.gstinOf(reg);
   if (!gstin) return "";
   let h = '<section class="dash-card" style="margin-bottom:12px"><h3>Fetch 2B from the portal</h3>';
   if (!GSTAPI.on()) return h + '<p class="note">Sign in to the firm account (top right) to fetch 2B straight from the GST portal through the firm’s GST API connection. Until then, bring in the JSON files downloaded from the portal.</p></section>';
@@ -73,7 +73,7 @@ if (typeof document !== "undefined"){
   document.addEventListener("change", e => { const t = e.target; if (t.dataset && t.dataset.gapiym !== undefined){ S.gstApiYm = t.value; } });
   document.addEventListener("click", async e => {
     const t = e.target.closest("[data-gapi]"); if (!t || !S.books || S.gstApiBusy) return;
-    const reg = S.gstReg || (((S.books.meta || {}).gstins || [])[0] || "").slice(0, 2), a = t.dataset.gapi;
+    const reg = S.gstReg || ((GSTR.gstins(S.books) || [])[0] || "").slice(0, 2), a = t.dataset.gapi;
     const run = async (msg, f) => { S.gstApiBusy = true; S.gstApiMsg = msg; render(); try { S.gstApiMsg = await f(); } catch (err){ S.gstApiMsg = "Not done: " + ((err && err.message) || err); } S.gstApiBusy = false; render(); };
     if (a === "otp") return run("Asking the portal to send the OTP…", async () => { await GSTAPI.otp(reg); return "OTP sent to the taxpayer’s registered mobile and email. Type it and press Connect."; });
     if (a === "auth"){ const i = document.querySelector("[data-gapiotp]"), otp = i ? i.value.trim() : "";

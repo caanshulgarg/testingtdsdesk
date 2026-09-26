@@ -20,7 +20,7 @@ with sync_playwright() as p:
     ok("Filing, interest and late fee" in t and "Checks the portal runs" in t and "DRC-01B" in t, "3B has the filing section and the portal's checks")
     ok("Rule 37" in t and "BRANDALIVE" not in t, "rule 37 is off by default: no bills listed")
     pg.evaluate("S.tab = 'gstset'; render()"); pg.wait_for_timeout(2500)
-    pg.check('input[data-gset="r37"][data-greg="07"]'); pg.wait_for_timeout(1500)
+    pg.check('input[data-gset="r37"][data-greg="07"]'); pg.wait_for_timeout(800); pg.click('[data-cbx="yes"]'); pg.wait_for_timeout(1200)
     pg.evaluate("S.tab = 'books'; render()"); pg.wait_for_timeout(4000); t = pg.inner_text("#app")
     ok("BRANDALIVE" in t and "4(B)(2) reversed" in t and pg.evaluate("S.books.rule37On['07']") is True, "switched on for the GSTIN: October's unpaid bills listed, reversed in 4(B)(2)")
     ok("are the portal\u2019s own figures" in t, "says late fee and interest are the portal's own figures")

@@ -18,7 +18,7 @@ with sync_playwright() as p:
     pg.wait_for_timeout(1500); pg.evaluate("S.books = window.__bk; render();"); pg.wait_for_timeout(3000)
     # choose QRMP from Q3 in settings
     pg.evaluate("S.tab = 'gstset'; render()"); pg.wait_for_timeout(2500)
-    pg.select_option('select[data-gset="type"][data-greg="07"]', "qrmp"); pg.select_option('select[data-gset="from"][data-greg="07"]', "202510"); pg.click('button[data-gsetadd="07"]'); pg.wait_for_timeout(1500)
+    pg.select_option('select[data-gset="type"][data-greg="07"]', "qrmp"); pg.select_option('select[data-gset="from"][data-greg="07"]', "202510"); pg.click('button[data-gsetadd="07"]'); pg.wait_for_timeout(800); pg.click('[data-cbx="yes"]'); pg.wait_for_timeout(1200)
     ok(pg.evaluate("GSTSet.typeOf('202511','07')") == "qrmp" and "Quarterly (QRMP) from Q3 2025-26" in pg.inner_text("#app"), "QRMP from Q3 2025-26 set in GST settings")
     ok("Save only" in pg.inner_text("#app") and pg.evaluate("GSTQ.apiMode()") == "save", "returns through the API: save only by default")
     pg.evaluate("S.tab = 'books'; render()"); pg.wait_for_timeout(3500); t = pg.inner_text("#app")
@@ -36,7 +36,7 @@ with sync_playwright() as p:
     ok(any("GSTR1_" in n and "122025" in n for n in pg.evaluate("window.__saved")), "GSTR-1 JSON for the quarter downloads")
     # composition from Q4
     pg.evaluate("S.tab = 'gstset'; render()"); pg.wait_for_timeout(2500)
-    pg.select_option('select[data-gset="type"][data-greg="07"]', "comp"); pg.select_option('select[data-gset="from"][data-greg="07"]', "202601"); pg.click('button[data-gsetadd="07"]'); pg.wait_for_timeout(1500)
+    pg.select_option('select[data-gset="type"][data-greg="07"]', "comp"); pg.select_option('select[data-gset="from"][data-greg="07"]', "202601"); pg.click('button[data-gsetadd="07"]'); pg.wait_for_timeout(800); pg.click('[data-cbx="yes"]'); pg.wait_for_timeout(1200)
     pg.evaluate("S.tab = 'books'; S.gstYm = '202603'; render()"); pg.wait_for_timeout(4000); t = pg.inner_text("#app")
     nav = pg.inner_text('nav.sbar[aria-label="GST"]')
     print("   nav:", nav.replace("\n", " | "))

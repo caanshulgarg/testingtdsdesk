@@ -938,7 +938,7 @@ function gstFixChange(t){
   if (d.inregf !== undefined){ S.inregF = t.value; render(); return true; }
   if (d.inregq !== undefined){ S.inregQ = t.value; render(); return true; }
   if (d.g9c !== undefined){
-    const fy = GST9.fyOf(S.gstYm || GSTR.months().slice(-1)[0]), reg = S.gstReg || (((b.meta || {}).gstins || [])[0] || "").slice(0, 2), st = GST9C.st(fy, reg), k = d.g9c;
+    const fy = GST9.fyOf(S.gstYm || GSTR.months().slice(-1)[0]), reg = S.gstReg || ((GSTR.gstins(b) || [])[0] || "").slice(0, 2), st = GST9C.st(fy, reg), k = d.g9c;
     const v = t.tagName === "TEXTAREA" ? t.value : (t.value === "" ? "" : num(t.value));
     if (k.startsWith("adj.")) st.adj[k.slice(4)] = v; else if (k.startsWith("reasons.")) st.reasons[k.slice(8)] = v; else st[k] = v;
     saveBooks(); render(); return true;

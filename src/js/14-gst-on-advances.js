@@ -82,7 +82,7 @@ const GSTAdv = {
         });
       });
     });
-    const regs = ((b.meta || {}).gstins || []).map(g => g.slice(0, 2));
+    const regs = (GSTR.gstins(b) || []).map(g => g.slice(0, 2));
     const mostly = firstSupply.Goods > firstSupply.Services ? "Goods" : "Services";
     pieces.forEach(p => {
       const f = p.fix;

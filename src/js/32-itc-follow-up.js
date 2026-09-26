@@ -92,7 +92,7 @@ const ITCT = {
     const co = CO(), m = v => INR.format(r2(v || 0));
     const w = items.filter(x => x.cat === "waiting" && x.act === "follow"), d = items.filter(x => x.cat === "diff" && x.act === "supplier"), n = items.filter(x => x.cat === "ournote" && x.act === "follow"),
       rj = items.filter(x => (x.cat === "rejinv" || x.cat === "rejcn") && x.act === "keep");
-    let t = "Dear " + (party || "Sir/Madam") + ",\n\nWe are " + co.name + (co.gstin || gstin ? " (GSTIN " + (((S.books.meta || {}).gstins || []).find(g => g.slice(0, 2) === reg) || co.gstin || "") + ")" : "") + ". Our GST credit depends on your returns, so please look at the following:\n";
+    let t = "Dear " + (party || "Sir/Madam") + ",\n\nWe are " + co.name + (co.gstin || gstin ? " (GSTIN " + ((GSTR.gstins(S.books) || []).find(g => g.slice(0, 2) === reg) || co.gstin || "") + ")" : "") + ". Our GST credit depends on your returns, so please look at the following:\n";
     if (w.length) t += "\n1. Invoices in our books that do not appear in our GSTR-2B. Please report them in your GSTR-1 / IFF:\n" + w.map((x, i) => "   " + (i + 1) + ". Invoice " + x.no + " dated " + GSTAmend.dmy(x.date) + ", taxable " + m(x.taxable) + ", tax " + m(x.tax)).join("\n") + "\n";
     if (d.length) t += "\n" + (w.length ? "2" : "1") + ". Invoices reported with different figures. Please amend them in your GSTR-1:\n" + d.map((x, i) => "   " + (i + 1) + ". Invoice " + x.no + " dated " + GSTAmend.dmy(x.date) + ": tax " + m(x.tax) + " in our books, " + m(x.tax2b) + " in your return" + (x.issues && x.issues.length ? " (" + x.issues.filter(z => !/^booked in|^value differs/.test(z)).join("; ") + ")" : "")).join("\n") + "\n";
     if (n.length) t += "\n" + (1 + (w.length ? 1 : 0) + (d.length ? 1 : 0)) + ". Credit notes you issued to us that are not in your return:\n" + n.map((x, i) => "   " + (i + 1) + ". Note " + x.no + " dated " + GSTAmend.dmy(x.date) + ", tax " + m(x.tax)).join("\n") + "\n";
@@ -175,6 +175,6 @@ async function itctExcel(){
   const sups = ITCT.suppliers(reg, R.items);
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Supplier", "GSTIN", "Email", "Phone", "Bills", "Tax waiting", "Last written", "Letter"]].concat(sups.map(s => [s.party, s.gstin, s.email, s.phone, s.items.length, s.tax, s.lastSent ? d(s.lastSent) : "", ITCT.letter(reg, s.gstin, s.party, s.items).text]))), "Letters");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([head].concat(R.items.filter(x => !x.open).map(row))), "Settled");
-  const g = ((S.books.meta || {}).gstins || []).find(z => z.slice(0, 2) === reg) || reg;
+  const g = (GSTR.gstins(S.books) || []).find(z => z.slice(0, 2) === reg) || reg;
   saveFile(CO().name.replace(/[^A-Za-z0-9]+/g, "-") + "-ITC-follow-up-" + g + "-" + ITCT.today() + ".xlsx", new Blob([XLSX.write(wb, {bookType: "xlsx", type: "array"})], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
 }

@@ -28,7 +28,7 @@ with sync_playwright() as p:
     pg.select_option('select[data-gstym]', "202504"); pg.wait_for_timeout(2500)
     ok("typed in GST settings" in pg.inner_text("#app") and pg.locator('input[data-gstopen]').count() == 0, "the first month points to GST settings for the credit ledger balance")
     before = pg.evaluate("GSTR.threeB('202504','09').pay.cash.igst + GSTR.threeB('202504','09').pay.cash.cgst")
-    pg.evaluate("S.tab = 'gstset'; render()"); pg.wait_for_timeout(2500)
+    pg.evaluate("S.tab = 'gstset'; S.gsetReg = '09'; render()"); pg.wait_for_timeout(2500)
     ok("GST settings" in pg.inner_text("#app") and "Filing type" in pg.inner_text("#app"), "Client setup \u2192 GST: the settings for each GSTIN")
     pg.fill('input[data-gset="open"][data-ghead="cgst"][data-greg="09"]', "500000"); pg.press('input[data-gset="open"][data-ghead="cgst"][data-greg="09"]', "Tab"); pg.wait_for_timeout(2500)
     after = pg.evaluate("GSTR.threeB('202504','09').pay.cash.igst + GSTR.threeB('202504','09').pay.cash.cgst")

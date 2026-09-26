@@ -8,10 +8,24 @@ const STATE_CODES = {"JAMMU AND KASHMIR": "01", "HIMACHAL PRADESH": "02", "PUNJA
   "KERALA": "32", "TAMIL NADU": "33", "PUDUCHERRY": "34", "ANDAMAN AND NICOBAR ISLANDS": "35", "TELANGANA": "36", "ANDHRA PRADESH": "37", "LADAKH": "38", "OTHER TERRITORY": "97"};
 const GSTR = {
   ym(d){ return String(d).slice(0, 6); },
+  // the months of the books; with no day book, the year before and this year up to last month, so the GST tab works
+  // from its registrations alone
   months(){
     const b = S.books;
-    if (!b || !b.vouchers) return [];
-    return Array.from(new Set(b.vouchers.map(v => this.ym(v.date)).filter(x => x.length === 6))).sort();
+    if (!b) return [];
+    const m = Array.from(new Set((b.vouchers || []).map(v => this.ym(v.date)).filter(x => x.length === 6))).sort();
+    if (m.length || !this.gstins(b).length) return m;
+    const d = new Date(), y = d.getFullYear(), mo = d.getMonth() + 1, fy = mo >= 4 ? y : y - 1, out = [];
+    let x = (fy - 1) + "04"; const last = (mo === 1 ? (y - 1) + "12" : y + String(mo - 1).padStart(2, "0"));
+    while (x <= last){ out.push(x); x = this.nextYm(x); }
+    return out;
+  },
+  // the client's registrations: read from Tally, added in GST settings, and its own GSTIN
+  gstins(b){
+    b = b || S.books || {};
+    const co = typeof CO === "function" ? CO() : null, own = co && (!b.cid || b.cid === co.id) ? String(co.gstin || "").toUpperCase().trim() : "";
+    const all = [].concat(((b.meta || {}).gstins) || [], (b.gstRegs || []).map(r => r.gstin), /^\d{2}[A-Z0-9]{13}$/.test(own) ? [own] : []);
+    return Array.from(new Set(all.map(g => String(g).toUpperCase()).filter(g => /^\d{2}[A-Z0-9]{13}$/.test(g))));
   },
   inP(date, per){ const m = String(date).slice(0, 6), p = String(per); return p.length > 6 ? m >= p.slice(0, 6) && m <= p.slice(7, 13) : m === p; },
   pStart(per){ return String(per).slice(0, 6); },
@@ -326,7 +340,7 @@ const GSTR = {
   // the file the portal takes: GSTR-1 as JSON
   toJson(ym, reg, opts){
     const g = this.one(ym, reg);
-    const gstin = ((S.books.meta || {}).gstins || []).find(x => !reg || x.slice(0, 2) === reg) || "";
+    const gstin = (GSTR.gstins(S.books) || []).find(x => !reg || x.slice(0, 2) === reg) || "";
     const dmy = d => String(d).length === 8 ? String(d).slice(6, 8) + "-" + String(d).slice(4, 6) + "-" + String(d).slice(0, 4) : d;
     // one item per rate on the invoice
     const items = r => { const m = {}; this.partsOf([r]).forEach(q => { const k = String(q.rate), x = m[k] = m[k] || {rt: q.rate, txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0};
@@ -397,7 +411,7 @@ const GSTR = {
   // GSTR-3B in the shape the portal takes
   threeBJson(ym, reg){
     const t = this.threeB(ym, reg);
-    const gstin = ((S.books.meta || {}).gstins || []).find(x => !reg || x.slice(0, 2) === reg) || "";
+    const gstin = (GSTR.gstins(S.books) || []).find(x => !reg || x.slice(0, 2) === reg) || "";
     const sup = (txval, iamt, camt, samt, csamt) => ({txval: r2(txval), iamt: r2(iamt), camt: r2(camt), samt: r2(samt), csamt: r2(csamt)});
     const out = {gstin, ret_period: ym.slice(4, 6) + ym.slice(0, 4),
       sup_details: {

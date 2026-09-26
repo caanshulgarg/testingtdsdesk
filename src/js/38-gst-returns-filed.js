@@ -131,7 +131,7 @@ const GSTV = {
   // the name a copy is saved under: client, GSTIN, return and period
   fileName(rec){
     const co = String((CO() || {}).name || "client").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "");
-    const g = ((((S.books || {}).meta || {}).gstins) || []).find(z => z.slice(0, 2) === rec.reg) || rec.reg;
+    const g = ((GSTR.gstins(S.books)) || []).find(z => z.slice(0, 2) === rec.reg) || rec.reg;
     const per = /^\d{6}$/.test(rec.per) ? rec.per.slice(0, 4) + "-" + rec.per.slice(4, 6) : rec.per;
     return co + "_" + g + "_" + this.label(rec.form).replace(/\s+/g, "-") + "_" + per + ".pdf";
   }
@@ -144,7 +144,7 @@ async function gstvPdfText(file){
 }
 // ---- taking in PDFs: bound to a checklist row when picked from one ----
 async function gstvTake(files, bound){
-  const b = S.books, co = CO(), gstins = ((b.meta || {}).gstins || []).map(g => g.toUpperCase());
+  const b = S.books, co = CO(), gstins = (GSTR.gstins(b) || []).map(g => g.toUpperCase());
   let added = 0, sorted = 0; const refused = [], dupes = [];
   for (const file of Array.from(files || [])){
     if (!/\.pdf$/i.test(file.name) && file.type !== "application/pdf"){ refused.push(file.name + " (not a PDF)"); continue; }
@@ -168,7 +168,7 @@ async function gstvFile(rec){ return FileStore.get((CO() || {}).id, rec.id, rec.
 function viewGstReturnsFiled(b){
   const reg = S.gstReg || "", years = GSTV.years(reg), fy = years.includes(S.gstvFy) ? S.gstvFy : (GSTF.fyOf(S.gstYm || GSTR.months().slice(-1)[0] || "") || years[0]);
   S.gstvFy = fy;
-  const g = (((b.meta || {}).gstins) || []).find(z => z.slice(0, 2) === reg) || reg, rows = GSTV.expected(fy, reg), d = s => s ? GSTAmend.dmy(String(s).replace(/-/g, "")) : "";
+  const g = ((GSTR.gstins(b)) || []).find(z => z.slice(0, 2) === reg) || reg, rows = GSTV.expected(fy, reg), d = s => s ? GSTAmend.dmy(String(s).replace(/-/g, "")) : "";
   const exp = new Set(rows.map(r => r.form + "|" + r.per));
   const extra = GSTV.list().filter(x => x.reg === reg && !x.sort && x.form && GSTV.fyOfPer(x.per) === fy && !exp.has(x.form + "|" + x.per));
   const seenX = new Set(); extra.forEach(x => { if (!seenX.has(x.form + "|" + x.per)){ seenX.add(x.form + "|" + x.per); rows.push({form: x.form, per: x.per, extra: true}); } });
@@ -190,7 +190,7 @@ function viewGstReturnsFiled(b){
     }).join("") + "</tbody></table></div>";
   h += '<p class="note">Kept in this browser and, when the firm account is on, in its cloud documents, so any computer of the firm can open them. The checklist follows the filing type in GST settings. Filing dates typed on the GST screens and ARN dates read from the PDFs fill each other in. When the GST API is connected, filing status and ARN will be fetched; the portal’s PDF itself is still downloaded from the portal and added here.</p></section>';
   if (toSort.length){
-    const forms = Object.entries(GSTV.FORMS), gl = ((b.meta || {}).gstins || []);
+    const forms = Object.entries(GSTV.FORMS), gl = (GSTR.gstins(b) || []);
     h += '<section class="dash-card" id="gstvsort" style="margin-top:12px"><h3>To sort</h3><p class="note">These could not be read for sure. Say which return and period each is, and it is filed in its place.</p><div class="bk-tablewrap"><table class="bk-table compact"><thead><tr><th>File</th><th>GSTIN</th><th>Return</th><th>Period</th><th></th></tr></thead><tbody>' +
       toSort.map(x => "<tr><td>" + esc(x.name) + (x.why ? '<div class="nr">' + esc(x.why) + "</div>" : "") + ' <button class="linkbtn" data-gstvopen="' + x.id + '">open</button></td>' +
         '<td><select data-gstvs="reg" data-gid="' + x.id + '" style="width:auto">' + gl.map(z => '<option value="' + z.slice(0, 2) + '"' + (x.reg === z.slice(0, 2) ? " selected" : "") + ">" + esc(z) + "</option>").join("") + "</select></td>" +
@@ -235,7 +235,7 @@ if (typeof document !== "undefined"){
       const used = new Set();
       for (const x of recs){ const f = await gstvFile(x); if (!f){ missed.push(x.name); continue; } let n = GSTV.fileName(x); let i = 2; while (used.has(n)){ n = GSTV.fileName(x).replace(/\.pdf$/, "_" + i++ + ".pdf"); } used.add(n); files.push({name: n, data: new Uint8Array(await f.arrayBuffer())}); }
       if (!files.length){ toast("No PDF could be read."); return; }
-      const g = (((S.books.meta || {}).gstins) || []).find(z => z.slice(0, 2) === reg) || reg;
+      const g = ((GSTR.gstins(S.books)) || []).find(z => z.slice(0, 2) === reg) || reg;
       saveFile(String((CO() || {}).name || "client").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "") + "_" + g + "_GST-returns_" + fy + ".zip", GSTV.zip(files));
       if (missed.length) toast(missed.length + " could not be read and were left out: " + missed.join(", "));
     }

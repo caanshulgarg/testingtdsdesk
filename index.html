@@ -816,7 +816,7 @@ const DEFAULT_FIRM = {firmName:"Garg Shekhar & Company", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "TEST · 26 Sep 2026 · build 151 (another business’s data refused by PAN; Remove Tally data and all GST work)";
+const APP_VERSION = "TEST · 26 Sep 2026 · build 152 (GSTINs added in GST settings, each with its own settings; GST tab without a day book)";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;
@@ -7205,7 +7205,7 @@ const GST2B = {
   bookDocs(){
     const b = S.books;
     if (!b || !b.vouchers) return [];
-    const regs = ((b.meta || {}).gstins || []).map(g => g.slice(0, 2)), gst = b.gstins || {};
+    const regs = (GSTR.gstins(b) || []).map(g => g.slice(0, 2)), gst = b.gstins || {};
     const out = [];
     this.skipped = {setOff: 0, taxOnly: 0};
     b.vouchers.forEach(v => {
@@ -7262,7 +7262,7 @@ const GST2B = {
     if (this._memo && this._memo.key === key && this._memo.v === b.vouchers) return this._memo.res;
     const portal = [], rejRows = [];
     this.all2b(reg).forEach(t => t.rows.forEach(r => (r.rej ? rejRows : portal).push(r)));
-    const regs = ((b.meta || {}).gstins || []).map(g => g.slice(0, 2));
+    const regs = (GSTR.gstins(b) || []).map(g => g.slice(0, 2));
     const books = this.bookDocs().filter(d => !reg || d.reg === reg || (!d.reg && regs.length <= 1));
     const byId = new Map(books.map(d => [d.id, d]));
     const taken = new Set(), pairs = [], used2b = new Set();
@@ -7446,10 +7446,24 @@ const STATE_CODES = {"JAMMU AND KASHMIR": "01", "HIMACHAL PRADESH": "02", "PUNJA
   "KERALA": "32", "TAMIL NADU": "33", "PUDUCHERRY": "34", "ANDAMAN AND NICOBAR ISLANDS": "35", "TELANGANA": "36", "ANDHRA PRADESH": "37", "LADAKH": "38", "OTHER TERRITORY": "97"};
 const GSTR = {
   ym(d){ return String(d).slice(0, 6); },
+  // the months of the books; with no day book, the year before and this year up to last month, so the GST tab works
+  // from its registrations alone
   months(){
     const b = S.books;
-    if (!b || !b.vouchers) return [];
-    return Array.from(new Set(b.vouchers.map(v => this.ym(v.date)).filter(x => x.length === 6))).sort();
+    if (!b) return [];
+    const m = Array.from(new Set((b.vouchers || []).map(v => this.ym(v.date)).filter(x => x.length === 6))).sort();
+    if (m.length || !this.gstins(b).length) return m;
+    const d = new Date(), y = d.getFullYear(), mo = d.getMonth() + 1, fy = mo >= 4 ? y : y - 1, out = [];
+    let x = (fy - 1) + "04"; const last = (mo === 1 ? (y - 1) + "12" : y + String(mo - 1).padStart(2, "0"));
+    while (x <= last){ out.push(x); x = this.nextYm(x); }
+    return out;
+  },
+  // the client's registrations: read from Tally, added in GST settings, and its own GSTIN
+  gstins(b){
+    b = b || S.books || {};
+    const co = typeof CO === "function" ? CO() : null, own = co && (!b.cid || b.cid === co.id) ? String(co.gstin || "").toUpperCase().trim() : "";
+    const all = [].concat(((b.meta || {}).gstins) || [], (b.gstRegs || []).map(r => r.gstin), /^\d{2}[A-Z0-9]{13}$/.test(own) ? [own] : []);
+    return Array.from(new Set(all.map(g => String(g).toUpperCase()).filter(g => /^\d{2}[A-Z0-9]{13}$/.test(g))));
   },
   inP(date, per){ const m = String(date).slice(0, 6), p = String(per); return p.length > 6 ? m >= p.slice(0, 6) && m <= p.slice(7, 13) : m === p; },
   pStart(per){ return String(per).slice(0, 6); },
@@ -7764,7 +7778,7 @@ const GSTR = {
   // the file the portal takes: GSTR-1 as JSON
   toJson(ym, reg, opts){
     const g = this.one(ym, reg);
-    const gstin = ((S.books.meta || {}).gstins || []).find(x => !reg || x.slice(0, 2) === reg) || "";
+    const gstin = (GSTR.gstins(S.books) || []).find(x => !reg || x.slice(0, 2) === reg) || "";
     const dmy = d => String(d).length === 8 ? String(d).slice(6, 8) + "-" + String(d).slice(4, 6) + "-" + String(d).slice(0, 4) : d;
     // one item per rate on the invoice
     const items = r => { const m = {}; this.partsOf([r]).forEach(q => { const k = String(q.rate), x = m[k] = m[k] || {rt: q.rate, txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0};
@@ -7835,7 +7849,7 @@ const GSTR = {
   // GSTR-3B in the shape the portal takes
   threeBJson(ym, reg){
     const t = this.threeB(ym, reg);
-    const gstin = ((S.books.meta || {}).gstins || []).find(x => !reg || x.slice(0, 2) === reg) || "";
+    const gstin = (GSTR.gstins(S.books) || []).find(x => !reg || x.slice(0, 2) === reg) || "";
     const sup = (txval, iamt, camt, samt, csamt) => ({txval: r2(txval), iamt: r2(iamt), camt: r2(camt), samt: r2(samt), csamt: r2(csamt)});
     const out = {gstin, ret_period: ym.slice(4, 6) + ym.slice(0, 4),
       sup_details: {
@@ -8246,7 +8260,7 @@ const GSTAdv = {
         });
       });
     });
-    const regs = ((b.meta || {}).gstins || []).map(g => g.slice(0, 2));
+    const regs = (GSTR.gstins(b) || []).map(g => g.slice(0, 2));
     const mostly = firstSupply.Goods > firstSupply.Services ? "Goods" : "Services";
     pieces.forEach(p => {
       const f = p.fix;
@@ -8715,7 +8729,7 @@ async function saveBooks(){ const b = S.books; if (b && b.cid) await Books.save(
   gstins: b.gstins, under: b.under, states: b.states, groups: b.groups, salary: b.salary, certs: b.certs, advFix: b.advFix, assets: b.assets, rev: b.rev,
   filed: b.filed, amendFix: b.amendFix, twoBs: b.twoBs, reco2b: b.reco2b, ledInfo: b.ledInfo, ledInfoAt: b.ledInfoAt,
   audit: b.audit, auditCfg: b.auditCfg, auditRel: b.auditRel, ledSnaps: b.ledSnaps, gst9c: b.gst9c, groupInfo: b.groupInfo, fs: b.fs, tb: b.tb, mis: b.mis, misCfg: b.misCfg, msme: b.msme, budget: b.budget,
-  gst3b: b.gst3b, gst9: b.gst9, gstOpen: b.gstOpen, itcBasis: b.itcBasis, itcTrack: b.itcTrack, outRej: b.outRej, gstFiled: b.gstFiled, gstAato: b.gstAato, filed1a: b.filed1a, rule37On: b.rule37On, gstCashLedger: b.gstCashLedger, gstSet: b.gstSet, gstContacts: b.gstContacts, gstApi: b.gstApi, gstEst: b.gstEst, gstVault: b.gstVault}); }
+  gst3b: b.gst3b, gst9: b.gst9, gstOpen: b.gstOpen, itcBasis: b.itcBasis, itcTrack: b.itcTrack, outRej: b.outRej, gstFiled: b.gstFiled, gstAato: b.gstAato, filed1a: b.filed1a, rule37On: b.rule37On, gstCashLedger: b.gstCashLedger, gstSet: b.gstSet, gstContacts: b.gstContacts, gstApi: b.gstApi, gstEst: b.gstEst, gstVault: b.gstVault, gstRegs: b.gstRegs}); }
 function viewBooks(){
   const co = CO();
   if (!S.books || S.books.cid !== co.id){ openBooks(co.id); return '<p class="note">Opening the books…</p>'; }
@@ -8724,6 +8738,7 @@ function viewBooks(){
     .map(([id, label, c]) => '<button data-bookstab="' + id + '" aria-selected="' + (tab === id) + '">' + label + (c == null ? "" : ' <span class="sbar-n">' + c + "</span>") + "</button>").join("") + "</nav>";
   if (b.busy) h += busyCard("Reading the books…", b.busy, 0, 0);
   if (tab === "import") h += viewBooksImport(b);
+  else if (!n && tab === "gst") h += viewBooksGst(b);
   else if (!n && !(tab === "tds" && (b.salary || []).length)) h += '<div class="bk-none">Bring the day book in first, under “From Tally”. Salary for 24Q can be brought in on its own, under TDS.</div>';
   else if (!n && tab === "tds") h += viewBooksTds(b);
   else if (tab === "ledgers") h += viewBooksLedgers(b);
@@ -8832,7 +8847,7 @@ function viewBooksImport(b){
 }
 function tallyDate(s){ return s && String(s).length === 8 ? String(s).slice(0, 4) + "-" + String(s).slice(4, 6) + "-" + String(s).slice(6, 8) : ""; }
 function viewBooksLedgers(b){
-  const regs = ((b.meta && b.meta.gstins) || []).map(g => g.slice(0, 2)), info = b.ledInfo || {};
+  const regs = (GSTR.gstins(b) || []).map(g => g.slice(0, 2)), info = b.ledInfo || {};
   const all = Object.entries(b.map || {});
   const isTax = ([n, m]) => LedMaster.taxLike(n, m, info[n]);
   const gst = all.filter(([n, m]) => LedMaster.isGst(m.what) && isTax([n, m])), tds = all.filter(([n, m]) => LedMaster.isTds(m.what) && isTax([n, m]));
@@ -9676,10 +9691,10 @@ function ledChangedBanner(b){
     ch.slice(0, 30).map(x => "<tr><td>" + esc(x.name) + "</td><td>" + esc(x.change) + "</td><td>" + esc(x.returns.slice(0, 4).join("; ") + (x.returns.length > 4 ? " and " + (x.returns.length - 4) + " more" : "")) + "</td></tr>").join("") + "</tbody></table></div></section>";
 }
 function viewGst9(b){
-  const reg = S.gstReg || (((b.meta || {}).gstins || []).length === 1 ? b.meta.gstins[0].slice(0, 2) : "");
+  const reg = S.gstReg || (GSTR.gstins(b).length === 1 ? GSTR.gstins(b)[0].slice(0, 2) : "");
   if (!reg) return '<p class="note">Choose a registration above; the annual return is filed for each GSTIN.</p>';
   const fy = GST9.fyOf(S.gstYm || GSTR.months().slice(-1)[0]), d = GST9.build(fy, reg), m = v => INR.format(r2(v || 0));
-  let h = '<section class="dash-card"><h3>GSTR-9 for ' + GST9.label(fy) + ", " + esc(((b.meta || {}).gstins || []).find(g => g.slice(0, 2) === reg) || reg) + "</h3>" +
+  let h = '<section class="dash-card"><h3>GSTR-9 for ' + GST9.label(fy) + ", " + esc((GSTR.gstins(b) || []).find(g => g.slice(0, 2) === reg) || reg) + "</h3>" +
     '<p class="note">Built from the months in the books, the same figures as each month\u2019s GSTR-1 and 3B. ' + (d.missing.length ? '<span class="bad">Not in the books: ' + d.missing.map(GSTR.label).join(", ") + ".</span> " : "") +
     (d.twoB ? d.twoB + " months of 2B here for table 8A." : '<span class="bad">No 2B here for this year, so table 8A is empty; bring the 2B files in under 2B reconciliation.</span>') + "</p>" +
     '<div class="row" style="gap:8px;margin:8px 0"><button class="btn small primary" data-act="gst9Pdf">Download (PDF)</button><button class="btn small" data-act="gst9Excel">Excel</button></div>' + GST9.html(d) +
@@ -9698,7 +9713,7 @@ function viewGst9(b){
   return h;
 }
 function viewGst9c(b){
-  const reg = S.gstReg || (((b.meta || {}).gstins || []).length === 1 ? b.meta.gstins[0].slice(0, 2) : "");
+  const reg = S.gstReg || (GSTR.gstins(b).length === 1 ? GSTR.gstins(b)[0].slice(0, 2) : "");
   if (!reg) return '<p class="note">Choose a registration above.</p>';
   const fy = GST9.fyOf(S.gstYm || GSTR.months().slice(-1)[0]), c = GST9C.build(fy, reg), m = v => INR.format(r2(v || 0)), st = c.st;
   const inp = (k, v, ph) => '<input type="number" step="0.01" data-g9c="' + k + '" value="' + esc(v == null ? "" : v) + '" placeholder="' + esc(ph || "0") + '" style="width:140px;text-align:right">';
@@ -9726,14 +9741,14 @@ function viewGst9c(b){
   return h;
 }
 function gst9PackHtml(which){
-  const b = S.books, reg = S.gstReg || (((b.meta || {}).gstins || [])[0] || "").slice(0, 2), fy = GST9.fyOf(S.gstYm || GSTR.months().slice(-1)[0]), co = CO();
-  const head = (t) => '<div style="border-bottom:2px solid #15201B;padding-bottom:8px;margin-bottom:10px"><div style="font-size:12px;color:#5A6B63">' + t + ' \u2014 WORKING FROM THE BOOKS</div><h1 style="font-size:20px;margin:4px 0">' + esc(co.name) + "</h1><div>" + esc(((b.meta || {}).gstins || []).find(g => g.slice(0, 2) === reg) || reg) + " \u00b7 " + GST9.label(fy) + "</div></div>";
+  const b = S.books, reg = S.gstReg || ((GSTR.gstins(b) || [])[0] || "").slice(0, 2), fy = GST9.fyOf(S.gstYm || GSTR.months().slice(-1)[0]), co = CO();
+  const head = (t) => '<div style="border-bottom:2px solid #15201B;padding-bottom:8px;margin-bottom:10px"><div style="font-size:12px;color:#5A6B63">' + t + ' \u2014 WORKING FROM THE BOOKS</div><h1 style="font-size:20px;margin:4px 0">' + esc(co.name) + "</h1><div>" + esc((GSTR.gstins(b) || []).find(g => g.slice(0, 2) === reg) || reg) + " \u00b7 " + GST9.label(fy) + "</div></div>";
   if (which === "9") return head("GSTR-9") + GST9.html(GST9.build(fy, reg)).replace(/<div class="bk-tablewrap">|<\/div>/g, "");
   return head("GSTR-9C") + viewGst9c(b).replace(/<input[^>]*value="([^"]*)"[^>]*>/g, "$1").replace(/<textarea[^>]*>([^<]*)<\/textarea>/g, "<p>$1</p>").replace(/<button[^>]*>[^<]*<\/button>/g, "").replace(/class="bk-tablewrap"/g, "");
 }
 async function gst9Excel(which){
   await ensureXlsx();
-  const b = S.books, reg = S.gstReg || (((b.meta || {}).gstins || [])[0] || "").slice(0, 2), fy = GST9.fyOf(S.gstYm || GSTR.months().slice(-1)[0]), wb = XLSX.utils.book_new();
+  const b = S.books, reg = S.gstReg || ((GSTR.gstins(b) || [])[0] || "").slice(0, 2), fy = GST9.fyOf(S.gstYm || GSTR.months().slice(-1)[0]), wb = XLSX.utils.book_new();
   if (which === "9"){
     const d = GST9.build(fy, reg), rows = [["Table", "Details", "Taxable value", "IGST", "CGST", "SGST", "Cess"]];
     GST9.ROWS.forEach(r => { if (r.length === 3 && /^(II|III|IV|V|VI)$/.test(r[0])){ rows.push(["Part " + r[0], r[1] + ". " + r[2]]); return; } const x = d.T[r[0]] || GST9.Z(); rows.push([r[0].replace(/-.*/, ""), r[1], x.taxable, x.igst, x.cgst, x.sgst, x.cess]); });
@@ -9756,8 +9771,9 @@ async function gst9Excel(which){
   saveFile(CO().name.replace(/[^A-Za-z0-9]+/g, "-") + "-GSTR-" + which + "-" + fy + "-" + reg + ".xlsx", new Blob([XLSX.write(wb, {bookType: "xlsx", type: "array"})], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
 }
 function viewBooksGst(b){
-  const months = GSTR.months(), regs = (b.meta && b.meta.gstins) || [];
-  if (!S.gstYm && months.length) S.gstYm = months[months.length - 1];
+  const months = GSTR.months(), regs = GSTR.gstins(b) || [], noBooks = !(b.vouchers || []).length;
+  if (!regs.length) return '<div class="bk-none">Add the client\u2019s GSTIN in ' + gstSetLink("GST settings") + " to use the GST tab. With it, 2B can be fetched from the portal or brought in, and the returns filed kept, with or without a Tally day book. GSTR-1 and 3B are worked out from the day book, brought in under \u201cFrom Tally\u201d.</div>";
+  if (!S.gstYm || !months.includes(S.gstYm)) S.gstYm = months[months.length - 1] || "";
   // a return is filed for one GSTIN: the company's own first, never the registrations added together
   if (regs.length && !regs.some(g => g.slice(0, 2) === S.gstReg)){ const own = String((CO() || {}).gstin || "").slice(0, 2); S.gstReg = (regs.find(g => g.slice(0, 2) === own) || regs[0]).slice(0, 2); }
   // the parts follow the GSTIN's filing type: QRMP starts from the quarter; composition has its own two returns
@@ -9766,6 +9782,8 @@ function viewBooksGst(b){
     : (ftype === "qrmp" ? [["qtr", "This quarter"], ["r1", "GSTR-1 working"], ["r3b", "GSTR-3B working"]] : [["r1", "GSTR-1"], ["r3b", "GSTR-3B"]])
       .concat([["inreg", "Input register"], ["r2b", "2B reconciliation"], ["follow", "ITC follow-up"], ["adv", "Advances"], ["rev", "Reversal"], ["amend", "Amendments"], ["g9", "GSTR-9"], ["g9c", "GSTR-9C"]]);
   parts.push(["vault", "Returns filed"]);
+  // without the day book only what does not come from it: 2B (from the portal or its JSON) and the returns filed
+  if (noBooks) parts.splice(0, parts.length, ["r2b", "2B"], ["vault", "Returns filed"]);
   // a GSTIN or filing type seen for the first time opens on its first part: This quarter, CMP-08, or GSTR-1
   const seen = (S.gstReg || "") + "|" + ftype;
   if (!S.gstPart || !parts.some(x => x[0] === S.gstPart) || (S.gstSeen && S.gstSeen !== seen)) S.gstPart = parts[0][0];
@@ -9779,6 +9797,10 @@ function viewBooksGst(b){
     (part === "amend" && ftype === "monthly" ? '<button class="btn small primary" data-act="gstJson">Download GSTR-1 JSON with these</button>' : "") +
     (part === "r1" && !noReturn ? '<button class="btn small primary" data-act="gstJson">Download GSTR-1 JSON' + (ftype === "qrmp" ? " for the quarter" : " for the portal") + "</button>" : "") +
     (part === "r3b" && !noReturn ? '<button class="btn small primary" data-act="gst3bJson">Download GSTR-3B JSON' + (ftype === "qrmp" ? " for the quarter" : " for the portal") + "</button>" : "") + "</div>";
+  // the GSTIN chosen, with what GST settings hold for it
+  const gNow = regs.find(g => g.slice(0, 2) === S.gstReg) || "";
+  if (gNow) h = h.replace(/<\/div>$/, "") + '<span class="note" style="align-self:center"><b>' + esc(gNow) + "</b> \u00b7 " + esc(GSTRegs.state(gNow)) + " \u00b7 " + esc(GSTSet.typeLabel(ftype)) + (GSTSet.peek(S.gstReg).portalUser ? " \u00b7 portal user " + esc(GSTSet.peek(S.gstReg).portalUser) : "") + " \u00b7 " + gstSetLink("GST settings") + "</span></div>";
+  if (noBooks) h += '<p class="note" style="margin:0 0 10px;color:#B9541B">No Tally day book here yet. 2B and the returns filed work without it; GSTR-1, 3B, the input register and the other workings need the day book, brought in under \u201cFrom Tally\u201d or read from Tally.</p>';
   // a GSTIN that is not a monthly filer: say so on every part, until its own returns are built
   const ftp = typeof GSTSet === "object" && S.gstYm ? GSTSet.typeOf(S.gstYm, S.gstReg || "") : "monthly";
   if (ftp === "qrmp" && (part === "r1" || part === "r3b")) h += '<p class="note" style="margin:0 0 10px">Quarterly (QRMP) filer: this is the working for ' + esc(GSTR.label(S.gstYm)) + (GSTSet.isQEnd(S.gstYm) ? "; the downloads cover the whole of " + esc(GSTSet.qLabel(S.gstYm)) + "." : ", for reference; this month has no GSTR-1 or 3B \u2014 see \u201cThis quarter\u201d.") + "</p>";
@@ -9798,7 +9820,7 @@ function viewBooksGst(b){
 }
 
 function viewGstAmend(b){
-  const money = v => INR.format(r2(v || 0)), ym = S.gstYm || "", reg = S.gstReg || "", regs = (b.meta && b.meta.gstins) || [];
+  const money = v => INR.format(r2(v || 0)), ym = S.gstYm || "", reg = S.gstReg || "", regs = GSTR.gstins(b) || [];
   const kindName = {B2B: "B2B invoice", B2CL: "B2C large invoice", EXP: "Export invoice", CDNR: "Credit or debit note", B2CS: "B2C small, month total"};
   const table = {B2B: "9A", B2CL: "9A", EXP: "9A", CDNR: "9C", B2CS: "10"};
   let h = "";
@@ -9946,7 +9968,7 @@ function viewGstRev(b){
       "<tr><td><b>" + (more > 0 ? "To reverse more, with interest under section 50" : more < 0 ? "To take back as credit" : "Difference") + "</b></td>" + heads(y.diff) + "</tr></tbody></table></div>" +
       '<p class="note">Reverse the extra in 4(B)(1), or take the excess back in 4(A)(5), in a return up to September after the year ends.</p></section>';
   }
-  const regs = (b.meta && b.meta.gstins) || [], assets = b.assets || [];
+  const regs = GSTR.gstins(b) || [], assets = b.assets || [];
   h += '<section class="dash-card" style="margin-top:12px"><h3>Rule 43: capital goods</h3>' +
     '<p class="note">The credit on a capital good used for both taxable and exempt supplies is spread over 60 months, 5% a quarter, from the month it is put to use. Each month, the exempt share of that month’s part (Tr × E ÷ F) is reversed. A good used only for taxable supplies keeps all its credit; one used only for exempt or non-business supplies gets none, so mark those and they are left out.</p>' +
     '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Capital good</th><th class="dt">Put to use</th>' + th + "<th>Used for</th>" + (regs.length > 1 ? "<th>Registration</th>" : "") + '<th class="dt">Sold on</th><th class="n">This month (Tm)</th><th></th></tr></thead><tbody>' +
@@ -10182,7 +10204,7 @@ async function inregExcel(){
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(it), "By rate and HSN");
   if (R.only2b.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["2B month", "Supplier", "GSTIN", "Bill no.", "Date", "Value", "IGST", "CGST", "SGST", "Cess", "Available in 2B", "In Tally"]].concat(R.only2b.map(p => [p.ym, p.party, p.gstin, p.no, p.date, p.dir * p.taxable, p.dir * p.igst, p.dir * p.cgst, p.dir * p.sgst, p.dir * p.cess, p.itcavl === "N" ? "No" + (p.rsn ? " (" + p.rsn + ")" : "") : "Yes",
     p.bookedNoCredit ? "booked without credit: " + p.bookedNoCredit.type + " " + (p.bookedNoCredit.no || "") + " " + p.bookedNoCredit.date + " " + (p.bookedNoCredit.party || "") : "not found"]))), "In 2B not in books");
-  const gstin = ((b.meta || {}).gstins || []).find(g => g.slice(0, 2) === R.reg) || R.reg;
+  const gstin = (GSTR.gstins(b) || []).find(g => g.slice(0, 2) === R.reg) || R.reg;
   saveFile(CO().name.replace(/[^A-Za-z0-9]+/g, "-") + "-Input-register-" + gstin + "-" + (R.months.length > 1 ? R.months[0] + "-" + R.months[R.months.length - 1] : R.months[0]) + ".xlsx", new Blob([XLSX.write(wb, {bookType: "xlsx", type: "array"})], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
 }
 function r2Scope(){
@@ -10192,7 +10214,7 @@ function r2Scope(){
   return {mode: "month", months: [ym], label: GSTR.label(ym)};
 }
 function r2Reg(b){
-  const regs = ((b.meta || {}).gstins || []).map(g => g.slice(0, 2));
+  const regs = (GSTR.gstins(b) || []).map(g => g.slice(0, 2));
   if (S.gstReg) return S.gstReg;
   const own = Array.from(new Set(GST2B.all2b("").map(t => t.gstin.slice(0, 2))));
   return own.length === 1 ? own[0] : regs.length === 1 ? regs[0] : "";
@@ -10209,7 +10231,7 @@ function viewBooks2B(b){
       (b.twoB ? '<p class="note" style="color:#B9541B">A 2B brought in before this build was read the old way. Bring it in again.</p>' : "") + pick + "</section>";
   }
   const reg = r2Reg(b), sc0 = r2Scope(), set = GST2B.settings(), st = GST2B.state();
-  const regs = (b.meta && b.meta.gstins) || [];
+  const regs = GSTR.gstins(b) || [];
   if (!reg && regs.length > 1) return '<p class="note">Choose a registration above.</p>';
   const mine = GST2B.all2b(reg), sc = GST2B.scope(reg, sc0.months);
   const wrong = loadedAll.filter(t => regs.length && !regs.includes(t.gstin));
@@ -14683,7 +14705,7 @@ function gstFixChange(t){
   if (d.inregf !== undefined){ S.inregF = t.value; render(); return true; }
   if (d.inregq !== undefined){ S.inregQ = t.value; render(); return true; }
   if (d.g9c !== undefined){
-    const fy = GST9.fyOf(S.gstYm || GSTR.months().slice(-1)[0]), reg = S.gstReg || (((b.meta || {}).gstins || [])[0] || "").slice(0, 2), st = GST9C.st(fy, reg), k = d.g9c;
+    const fy = GST9.fyOf(S.gstYm || GSTR.months().slice(-1)[0]), reg = S.gstReg || ((GSTR.gstins(b) || [])[0] || "").slice(0, 2), st = GST9C.st(fy, reg), k = d.g9c;
     const v = t.tagName === "TEXTAREA" ? t.value : (t.value === "" ? "" : num(t.value));
     if (k.startsWith("adj.")) st.adj[k.slice(4)] = v; else if (k.startsWith("reasons.")) st.reasons[k.slice(8)] = v; else st[k] = v;
     saveBooks(); render(); return true;
@@ -19416,7 +19438,7 @@ const ITCT = {
     const co = CO(), m = v => INR.format(r2(v || 0));
     const w = items.filter(x => x.cat === "waiting" && x.act === "follow"), d = items.filter(x => x.cat === "diff" && x.act === "supplier"), n = items.filter(x => x.cat === "ournote" && x.act === "follow"),
       rj = items.filter(x => (x.cat === "rejinv" || x.cat === "rejcn") && x.act === "keep");
-    let t = "Dear " + (party || "Sir/Madam") + ",\n\nWe are " + co.name + (co.gstin || gstin ? " (GSTIN " + (((S.books.meta || {}).gstins || []).find(g => g.slice(0, 2) === reg) || co.gstin || "") + ")" : "") + ". Our GST credit depends on your returns, so please look at the following:\n";
+    let t = "Dear " + (party || "Sir/Madam") + ",\n\nWe are " + co.name + (co.gstin || gstin ? " (GSTIN " + ((GSTR.gstins(S.books) || []).find(g => g.slice(0, 2) === reg) || co.gstin || "") + ")" : "") + ". Our GST credit depends on your returns, so please look at the following:\n";
     if (w.length) t += "\n1. Invoices in our books that do not appear in our GSTR-2B. Please report them in your GSTR-1 / IFF:\n" + w.map((x, i) => "   " + (i + 1) + ". Invoice " + x.no + " dated " + GSTAmend.dmy(x.date) + ", taxable " + m(x.taxable) + ", tax " + m(x.tax)).join("\n") + "\n";
     if (d.length) t += "\n" + (w.length ? "2" : "1") + ". Invoices reported with different figures. Please amend them in your GSTR-1:\n" + d.map((x, i) => "   " + (i + 1) + ". Invoice " + x.no + " dated " + GSTAmend.dmy(x.date) + ": tax " + m(x.tax) + " in our books, " + m(x.tax2b) + " in your return" + (x.issues && x.issues.length ? " (" + x.issues.filter(z => !/^booked in|^value differs/.test(z)).join("; ") + ")" : "")).join("\n") + "\n";
     if (n.length) t += "\n" + (1 + (w.length ? 1 : 0) + (d.length ? 1 : 0)) + ". Credit notes you issued to us that are not in your return:\n" + n.map((x, i) => "   " + (i + 1) + ". Note " + x.no + " dated " + GSTAmend.dmy(x.date) + ", tax " + m(x.tax)).join("\n") + "\n";
@@ -19499,7 +19521,7 @@ async function itctExcel(){
   const sups = ITCT.suppliers(reg, R.items);
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Supplier", "GSTIN", "Email", "Phone", "Bills", "Tax waiting", "Last written", "Letter"]].concat(sups.map(s => [s.party, s.gstin, s.email, s.phone, s.items.length, s.tax, s.lastSent ? d(s.lastSent) : "", ITCT.letter(reg, s.gstin, s.party, s.items).text]))), "Letters");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([head].concat(R.items.filter(x => !x.open).map(row))), "Settled");
-  const g = ((S.books.meta || {}).gstins || []).find(z => z.slice(0, 2) === reg) || reg;
+  const g = (GSTR.gstins(S.books) || []).find(z => z.slice(0, 2) === reg) || reg;
   saveFile(CO().name.replace(/[^A-Za-z0-9]+/g, "-") + "-ITC-follow-up-" + g + "-" + ITCT.today() + ".xlsx", new Blob([XLSX.write(wb, {bookType: "xlsx", type: "array"})], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
 }
 /* ================================================================== */
@@ -19546,7 +19568,7 @@ const CustIMS = {
     return {add, back};
   },
   letter(reg, gstin, party, list){
-    const co = CO() || {}, g = ((S.books.meta || {}).gstins || []).find(z => z.slice(0, 2) === reg) || reg, m = v => "\u20b9" + INR.format(r2(v));
+    const co = CO() || {}, g = (GSTR.gstins(S.books) || []).find(z => z.slice(0, 2) === reg) || reg, m = v => "\u20b9" + INR.format(r2(v));
     let t = "Dear Sir/Madam,\n\nThe following documents issued by " + (co.name || "us") + " (GSTIN " + g + ") to " + party + " (GSTIN " + gstin + ") are shown as rejected in your Invoice Management System:\n\n";
     t += list.map((x, i) => "   " + (i + 1) + ". " + (x.kind === "cn" ? "Credit note " : "Invoice ") + x.no + " dated " + GSTAmend.dmy(x.date) + ", taxable " + m(x.taxable) + ", tax " + m(x.tax) + (x.remark ? " (your remark: " + x.remark + ")" : "")).join("\n");
     t += "\n\nWe have checked them against our books and they are correct. Please accept them in IMS before you file GSTR-3B; if your return for that month is already filed, please let us know and we will report them again so that they come back to your IMS.\n\nRegards,\n" + (co.name || "");
@@ -20031,20 +20053,81 @@ const GSTSet = {
     this._p = {key, v: b.vouchers, list}; return list;
   }
 };
+// The client's GSTINs: read from Tally, added in GST settings, or the one in Client setup. All must carry the client's PAN.
+const GSTRegs = {
+  STATES: {"01": "Jammu and Kashmir", "02": "Himachal Pradesh", "03": "Punjab", "04": "Chandigarh", "05": "Uttarakhand", "06": "Haryana", "07": "Delhi", "08": "Rajasthan", "09": "Uttar Pradesh", "10": "Bihar", "11": "Sikkim", "12": "Arunachal Pradesh", "13": "Nagaland", "14": "Manipur", "15": "Mizoram", "16": "Tripura", "17": "Meghalaya", "18": "Assam", "19": "West Bengal", "20": "Jharkhand", "21": "Odisha", "22": "Chhattisgarh", "23": "Madhya Pradesh", "24": "Gujarat", "26": "Dadra and Nagar Haveli and Daman and Diu", "27": "Maharashtra", "29": "Karnataka", "30": "Goa", "31": "Lakshadweep", "32": "Kerala", "33": "Tamil Nadu", "34": "Puducherry", "35": "Andaman and Nicobar Islands", "36": "Telangana", "37": "Andhra Pradesh", "38": "Ladakh", "97": "Other Territory"},
+  state(g){ return this.STATES[String(g || "").slice(0, 2)] || "State " + String(g || "").slice(0, 2); },
+  source(g, b){ b = b || S.books || {}; const co = CO() || {};
+    const t = [];
+    if (((b.meta || {}).gstins || []).map(x => String(x).toUpperCase()).includes(g)) t.push("from Tally");
+    if ((b.gstRegs || []).some(r => r.gstin === g)) t.push("added here");
+    if (String(co.gstin || "").toUpperCase().trim() === g) t.push("Client setup");
+    return t; },
+  // why a GSTIN cannot be added, or "" when it can
+  refuse(g, b){ g = String(g || "").toUpperCase().trim(); b = b || S.books || {};
+    if (!/^\d{2}[A-Z0-9]{13}$/.test(g)) return "A GSTIN has 15 characters: 2-digit state code, PAN, entity number, Z and a check character.";
+    if (!gstinValid(g)) return g + " is not a valid GSTIN: its last character (the check character) does not agree with the rest.";
+    if (!this.STATES[g.slice(0, 2)]) return g + " starts with " + g.slice(0, 2) + ", which is not a state code.";
+    const pan = clientPan();
+    if (!pan) return "Type the client’s PAN in Client setup first; every GSTIN added must carry it.";
+    if (g.slice(2, 12) !== pan) return g + " is for PAN " + g.slice(2, 12) + ", not this client’s PAN " + pan + ".";
+    if (GSTR.gstins(b).includes(g)) return g + " is already here.";
+    if (GSTR.gstins(b).some(x => x.slice(0, 2) === g.slice(0, 2))) return "This client already has a GSTIN in " + this.state(g) + "; TDS Desk keeps one GSTIN for each state.";
+    return ""; },
+  add(g){ const b = S.books; g = String(g || "").toUpperCase().trim(); b.gstRegs = (b.gstRegs || []).concat([{gstin: g, at: new Date().toISOString()}]); GSTR._carry = null; },
+  remove(g){ const b = S.books; b.gstRegs = (b.gstRegs || []).filter(r => r.gstin !== g); GSTR._carry = null; }
+};
+function viewGstRegs(b, regs){
+  let h = '<section class="dash-card" style="margin-bottom:12px"><h3>GST registrations</h3>' +
+    '<p class="note" style="margin:0 0 8px">The GSTINs of ' + esc((CO() || {}).name || "this client") + " (PAN " + esc(clientPan() || "not set") + "). The GST tab works for these even before any Tally day book is brought in: 2B from the portal or its JSON, and the returns filed.</p>";
+  if (regs.length) h += '<div class="bk-tablewrap"><table class="bk-table compact"><thead><tr><th>GSTIN</th><th>State</th><th>Filing type now</th><th>Portal username</th><th>Taken from</th><th></th></tr></thead><tbody>' +
+    regs.map(g => { const reg = g.slice(0, 2), src = GSTRegs.source(g, b), only = src.length === 1 && src[0] === "added here", months = GSTR.months();
+      return '<tr><td><b>' + esc(g) + "</b></td><td>" + esc(GSTRegs.state(g)) + "</td><td>" + esc(GSTSet.typeLabel(GSTSet.typeOf(months[months.length - 1] || GSTF.today().slice(0, 7).replace("-", ""), reg))) + "</td><td>" + esc(GSTSet.peek(reg).portalUser || "—") +
+        "</td><td>" + esc(src.join(", ")) + "</td><td>" + (S.gsetReg === reg ? '<span class="note">settings below</span>' : '<button class="linkbtn" data-gsetpick="' + reg + '">settings</button>') +
+        (only ? ' · <button class="linkbtn" data-gregdel="' + esc(g) + '">remove</button>' : "") + "</td></tr>"; }).join("") + "</tbody></table></div>";
+  else h += '<p class="note" style="color:#B9541B">No GSTIN yet. Add the client’s GSTIN below to use the GST tab.</p>';
+  h += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px"><input type="text" data-gregnew data-fk="gregnew" maxlength="15" placeholder="15-character GSTIN" style="width:240px;text-transform:uppercase" autocomplete="off"><button class="btn small primary" data-gregadd>Add GSTIN</button>' +
+    '<span class="note">Its PAN must be the client’s PAN.</span></div>' +
+    (regs.length > 1 ? '<div style="margin-top:10px"><label class="note">Settings shown for <select data-gsetreg style="width:auto">' + regs.map(g => '<option value="' + g.slice(0, 2) + '"' + (S.gsetReg === g.slice(0, 2) ? " selected" : "") + ">" + esc(g) + " · " + esc(GSTRegs.state(g)) + "</option>").join("") + "</select></label></div>" : "") +
+    "</section>";
+  return h;
+}
+// a setting changed for one GSTIN: with more than one, ask whether it is for this GSTIN only (the default), all of them, or those ticked
+async function gsetApply(reg, what, fn){
+  const regs = GSTR.gstins(S.books), others = regs.filter(g => g.slice(0, 2) !== reg), me = regs.find(g => g.slice(0, 2) === reg) || reg;
+  if (!others.length || typeof document === "undefined"){ fn(reg); return true; }
+  const r = await askConfirm({title: "Apply to which GSTINs?", ok: "Save",
+    body: "<p>" + esc(what) + " for " + esc(me) + ".</p>" +
+      '<label class="chk" style="display:block"><input type="radio" name="gapto" value="one" checked> Only ' + esc(me) + "</label>" +
+      '<label class="chk" style="display:block"><input type="radio" name="gapto" value="all"> All ' + regs.length + " GSTINs of the client</label>" +
+      '<label class="chk" style="display:block"><input type="radio" name="gapto" value="some"> ' + esc(me) + " and the GSTINs ticked:</label>" +
+      '<div style="margin-left:24px">' + others.map(g => '<label class="chk" style="display:block"><input type="checkbox" data-gapto="' + g.slice(0, 2) + '"> ' + esc(g) + " · " + esc(GSTRegs.state(g)) + "</label>").join("") + "</div>",
+    onReady: box => box.querySelectorAll("[data-gapto]").forEach(c => c.addEventListener("change", () => { if (c.checked){ const s = box.querySelector('input[name="gapto"][value="some"]'); if (s) s.checked = true; } })),
+    read: () => { const box = document.getElementById("confirmBox"), mode = (box.querySelector('input[name="gapto"]:checked') || {}).value || "one";
+      return {mode, ticked: Array.from(box.querySelectorAll("[data-gapto]:checked")).map(c => c.dataset.gapto)}; },
+    validate: d => d.mode === "some" && !d.ticked.length ? "Tick the other GSTINs, or choose “Only " + me + "”." : ""});
+  if (!r){ render(); return false; }
+  const to = r.data.mode === "all" ? regs.map(g => g.slice(0, 2)) : r.data.mode === "some" ? [reg].concat(r.data.ticked) : [reg];
+  Array.from(new Set(to)).forEach(x => fn(x));
+  if (to.length > 1) toast(what + ": saved for " + to.length + " GSTINs.");
+  return true;
+}
 function gstSetLink(label){ return '<button class="linkbtn" data-gotogstset>' + esc(label || "change in GST settings") + "</button>"; }
 function viewGstSettings(){
   const co = CO();
   if (!S.books || S.books.cid !== co.id || S.books.loading){ if (!S.books || S.books.cid !== co.id) openBooks(co.id); return '<p class="note">Opening the books\u2026</p>'; }
-  const b = S.books, regs = ((b.meta || {}).gstins || []), money = v => INR.format(r2(v || 0));
-  if (!(b.vouchers || []).length) return '<div class="bk-none">Bring the day book in first, under TDS &amp; GST \u2192 From Tally; the GST settings are kept with the books.</div>';
+  const b = S.books, regs = (GSTR.gstins(b) || []), money = v => INR.format(r2(v || 0));
   const months = GSTR.months(), first = months[0] || "";
+  if (!regs.some(g => g.slice(0, 2) === S.gsetReg)){ const own = String(co.gstin || "").toUpperCase().slice(0, 2); S.gsetReg = ((regs.find(g => g.slice(0, 2) === own) || regs[0] || "")).slice(0, 2); }
   const quarters = Array.from(new Set(months.map(m => GSTSet.qStart(m))));
   let h = '<div class="stack"><div class="pane" style="margin-top:0"><h2>GST settings</h2><p class="note" style="margin:0 0 12px">Settings that stay the same month after month, for each GSTIN and for the client. What changes each month \u2014 filing dates, portal figures, IMS and follow-up decisions \u2014 stays on the GST tab.</p>';
-  regs.forEach(g => {
+  h += viewGstRegs(b, regs);
+  regs.filter(g => g.slice(0, 2) === S.gsetReg).forEach(g => {
     const reg = g.slice(0, 2), st = GSTSet.peek(reg), hist = GSTSet.history(reg), open = (b.gstOpen || {})[reg] || {}, basis = ((b.itcBasis || {})[reg]) || "2b";
     const cur = GSTSet.typeOf(months[months.length - 1] || first, reg);
     const next = GSTSet.qStart(GSTR.nextYm(GSTSet.qEnd(GSTF.today().slice(0, 7).replace("-", "")))), win = GSTSet.window(next);
-    h += '<section class="dash-card" style="margin-bottom:12px"><h3>' + esc(g) + "</h3>" +
+    h += '<section class="dash-card" style="margin-bottom:12px"><h3>Settings of ' + esc(g) + " \u00b7 " + esc(GSTRegs.state(g)) + "</h3>" +
+      (regs.length > 1 ? '<p class="note" style="margin:0 0 6px">Each GSTIN keeps its own settings. When one is changed here, TDS Desk asks whether it is for this GSTIN only or for the others too.</p>' : "") +
       '<h4 style="margin:8px 0 4px">Filing type</h4>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><select data-gset="type" data-greg="' + reg + '" style="width:auto">' + GSTSet.TYPES.map(([v, l]) => '<option value="' + v + '"' + (cur === v ? " selected" : "") + ">" + l + "</option>").join("") + "</select>" +
       '<span class="note">from</span><select data-gset="from" data-greg="' + reg + '" style="width:auto">' + quarters.map(q => '<option value="' + q + '"' + ((S.gsetFrom || {})[reg] === q ? " selected" : "") + ">" + GSTSet.qLabel(q) + "</option>").join("") + "</select>" +
@@ -20096,13 +20179,15 @@ if (typeof document !== "undefined"){
     if (d.gset !== undefined){
       if (d.gset === "from"){ S.gsetFrom = Object.assign({}, S.gsetFrom, {[reg]: t.value}); return; }
       if (d.gset === "type"){ S.gsetType = Object.assign({}, S.gsetType, {[reg]: t.value}); return; }
-      if (d.gset === "basis") b.itcBasis = Object.assign({}, b.itcBasis, {[reg]: t.value});
+      // shared with the client's other GSTINs if the user says so
+      const share = {basis: ["Credit in 3B table 4", x => { b.itcBasis = Object.assign({}, b.itcBasis, {[x]: t.value}); }],
+        r37: ["Rule 37 " + (t.checked ? "on" : "off"), x => { b.rule37On = Object.assign({}, b.rule37On, {[x]: t.checked}); }],
+        einv: ["E-invoicing", x => { GSTSet.store(x).einv = t.value; }],
+        pmt: ["PMT-06 method", x => { GSTSet.store(x).pmt = t.value; }],
+        comp: ["Composition rate", x => { GSTSet.store(x).comp = t.value; }]}[d.gset];
+      if (share){ gsetApply(reg, share[0], share[1]).then(done => { if (done){ GSTR._carry = null; saveBooks(); render(); } }); return; }
       if (d.gset === "open"){ b.gstOpen = Object.assign({}, b.gstOpen); b.gstOpen[reg] = Object.assign({}, b.gstOpen[reg], {[d.ghead]: t.value === "" ? "" : num(t.value)}); }
-      if (d.gset === "r37") b.rule37On = Object.assign({}, b.rule37On, {[reg]: t.checked});
-      if (d.gset === "einv") GSTSet.store(reg).einv = t.value;
-      if (d.gset === "pmt") GSTSet.store(reg).pmt = t.value;
       if (d.gset === "puser") GSTSet.store(reg).portalUser = t.value.trim();
-      if (d.gset === "comp") GSTSet.store(reg).comp = t.value;
       if (d.gset === "api"){ if (!t.checked) return; b.gstApi = t.value; }
       if (d.gset === "est") b.gstEst = !!t.checked;
       if (d.gset === "cash") b.gstCashLedger = Object.assign({}, b.gstCashLedger, {[reg]: t.value});
@@ -20110,16 +20195,25 @@ if (typeof document !== "undefined"){
       if (d.gset === "d2") b.rev = Object.assign({}, b.rev, {d2: !!t.checked});
       GSTR._carry = null; saveBooks(); render(); return;
     }
+    if (d.gsetreg !== undefined){ S.gsetReg = t.value; render(); return; }
     if (d.gcont !== undefined){ b.gstContacts = Object.assign({}, b.gstContacts); b.gstContacts[d.gcont] = Object.assign({}, b.gstContacts[d.gcont], {[d.cf]: t.value.trim()}); saveBooks(); }
   });
   document.addEventListener("input", e => { const t = e.target; if (t.matches && t.matches("[data-gcontq]")){ S.gcontQ = t.value; render(); } });
   document.addEventListener("click", e => {
-    const t = e.target.closest("[data-gsetadd],[data-gsetdel],[data-gotogstset]"); if (!t) return;
-    if (t.dataset.gotogstset !== undefined){ S.tab = "gstset"; render(); return; }
+    const t = e.target.closest("[data-gsetadd],[data-gsetdel],[data-gotogstset],[data-gregadd],[data-gregdel],[data-gsetpick]"); if (!t) return;
+    if (t.dataset.gotogstset !== undefined){ if (S.gstReg) S.gsetReg = S.gstReg; S.tab = "gstset"; render(); return; }
     if (!S.books) return;
+    if (t.dataset.gsetpick){ S.gsetReg = t.dataset.gsetpick; render(); return; }
+    if (t.dataset.gregadd !== undefined){ const i = document.querySelector("[data-gregnew]"), g = String(i ? i.value : "").toUpperCase().trim(), why = GSTRegs.refuse(g, S.books);
+      if (why){ toast(why); return; }
+      GSTRegs.add(g); S.gsetReg = g.slice(0, 2); S.gstReg = g.slice(0, 2); if (i) i.value = ""; saveBooks(); render(); toast(g + " added (" + GSTRegs.state(g) + ")."); return; }
+    if (t.dataset.gregdel){ const g = t.dataset.gregdel;
+      askConfirm({title: "Remove " + g + "?", ok: "Remove", body: '<p class="note">It goes from this client\u2019s GSTINs. Its settings, 2B and returns filed stay with the books and come back if it is added again.</p>'})
+        .then(r => { if (!r) return; GSTRegs.remove(g); saveBooks(); render(); }); return; }
     if (t.dataset.gsetadd){ const reg = t.dataset.gsetadd, months = GSTR.months(), from = (S.gsetFrom || {})[reg] || GSTSet.qStart(months[0] || GSTF.today().slice(0, 7).replace("-", "")),
-        sel = document.querySelector('select[data-gset="type"][data-greg="' + reg + '"]'), type = (S.gsetType || {})[reg] || (sel ? sel.value : "monthly"), st = GSTSet.store(reg);
-      st.filing = (st.filing || []).filter(x => x.from !== from).concat([{type, from}]); GSTR._carry = null; saveBooks(); render(); toast(GSTSet.typeLabel(type) + " from " + GSTSet.qLabel(from) + "."); return; }
+        sel = document.querySelector('select[data-gset="type"][data-greg="' + reg + '"]'), type = (S.gsetType || {})[reg] || (sel ? sel.value : "monthly");
+      gsetApply(reg, GSTSet.typeLabel(type) + " from " + GSTSet.qLabel(from), x => { const st = GSTSet.store(x); st.filing = (st.filing || []).filter(y => y.from !== from).concat([{type, from}]); })
+        .then(done => { if (!done) return; GSTR._carry = null; saveBooks(); render(); toast(GSTSet.typeLabel(type) + " from " + GSTSet.qLabel(from) + "."); }); return; }
     if (t.dataset.gsetdel){ const [reg, from] = t.dataset.gsetdel.split("|"), st = GSTSet.store(reg); st.filing = (st.filing || []).filter(x => x.from !== from); saveBooks(); render(); }
   });
 }
@@ -20450,7 +20544,7 @@ const GSTV = {
   // the name a copy is saved under: client, GSTIN, return and period
   fileName(rec){
     const co = String((CO() || {}).name || "client").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "");
-    const g = ((((S.books || {}).meta || {}).gstins) || []).find(z => z.slice(0, 2) === rec.reg) || rec.reg;
+    const g = ((GSTR.gstins(S.books)) || []).find(z => z.slice(0, 2) === rec.reg) || rec.reg;
     const per = /^\d{6}$/.test(rec.per) ? rec.per.slice(0, 4) + "-" + rec.per.slice(4, 6) : rec.per;
     return co + "_" + g + "_" + this.label(rec.form).replace(/\s+/g, "-") + "_" + per + ".pdf";
   }
@@ -20463,7 +20557,7 @@ async function gstvPdfText(file){
 }
 // ---- taking in PDFs: bound to a checklist row when picked from one ----
 async function gstvTake(files, bound){
-  const b = S.books, co = CO(), gstins = ((b.meta || {}).gstins || []).map(g => g.toUpperCase());
+  const b = S.books, co = CO(), gstins = (GSTR.gstins(b) || []).map(g => g.toUpperCase());
   let added = 0, sorted = 0; const refused = [], dupes = [];
   for (const file of Array.from(files || [])){
     if (!/\.pdf$/i.test(file.name) && file.type !== "application/pdf"){ refused.push(file.name + " (not a PDF)"); continue; }
@@ -20487,7 +20581,7 @@ async function gstvFile(rec){ return FileStore.get((CO() || {}).id, rec.id, rec.
 function viewGstReturnsFiled(b){
   const reg = S.gstReg || "", years = GSTV.years(reg), fy = years.includes(S.gstvFy) ? S.gstvFy : (GSTF.fyOf(S.gstYm || GSTR.months().slice(-1)[0] || "") || years[0]);
   S.gstvFy = fy;
-  const g = (((b.meta || {}).gstins) || []).find(z => z.slice(0, 2) === reg) || reg, rows = GSTV.expected(fy, reg), d = s => s ? GSTAmend.dmy(String(s).replace(/-/g, "")) : "";
+  const g = ((GSTR.gstins(b)) || []).find(z => z.slice(0, 2) === reg) || reg, rows = GSTV.expected(fy, reg), d = s => s ? GSTAmend.dmy(String(s).replace(/-/g, "")) : "";
   const exp = new Set(rows.map(r => r.form + "|" + r.per));
   const extra = GSTV.list().filter(x => x.reg === reg && !x.sort && x.form && GSTV.fyOfPer(x.per) === fy && !exp.has(x.form + "|" + x.per));
   const seenX = new Set(); extra.forEach(x => { if (!seenX.has(x.form + "|" + x.per)){ seenX.add(x.form + "|" + x.per); rows.push({form: x.form, per: x.per, extra: true}); } });
@@ -20509,7 +20603,7 @@ function viewGstReturnsFiled(b){
     }).join("") + "</tbody></table></div>";
   h += '<p class="note">Kept in this browser and, when the firm account is on, in its cloud documents, so any computer of the firm can open them. The checklist follows the filing type in GST settings. Filing dates typed on the GST screens and ARN dates read from the PDFs fill each other in. When the GST API is connected, filing status and ARN will be fetched; the portal’s PDF itself is still downloaded from the portal and added here.</p></section>';
   if (toSort.length){
-    const forms = Object.entries(GSTV.FORMS), gl = ((b.meta || {}).gstins || []);
+    const forms = Object.entries(GSTV.FORMS), gl = (GSTR.gstins(b) || []);
     h += '<section class="dash-card" id="gstvsort" style="margin-top:12px"><h3>To sort</h3><p class="note">These could not be read for sure. Say which return and period each is, and it is filed in its place.</p><div class="bk-tablewrap"><table class="bk-table compact"><thead><tr><th>File</th><th>GSTIN</th><th>Return</th><th>Period</th><th></th></tr></thead><tbody>' +
       toSort.map(x => "<tr><td>" + esc(x.name) + (x.why ? '<div class="nr">' + esc(x.why) + "</div>" : "") + ' <button class="linkbtn" data-gstvopen="' + x.id + '">open</button></td>' +
         '<td><select data-gstvs="reg" data-gid="' + x.id + '" style="width:auto">' + gl.map(z => '<option value="' + z.slice(0, 2) + '"' + (x.reg === z.slice(0, 2) ? " selected" : "") + ">" + esc(z) + "</option>").join("") + "</select></td>" +
@@ -20554,7 +20648,7 @@ if (typeof document !== "undefined"){
       const used = new Set();
       for (const x of recs){ const f = await gstvFile(x); if (!f){ missed.push(x.name); continue; } let n = GSTV.fileName(x); let i = 2; while (used.has(n)){ n = GSTV.fileName(x).replace(/\.pdf$/, "_" + i++ + ".pdf"); } used.add(n); files.push({name: n, data: new Uint8Array(await f.arrayBuffer())}); }
       if (!files.length){ toast("No PDF could be read."); return; }
-      const g = (((S.books.meta || {}).gstins) || []).find(z => z.slice(0, 2) === reg) || reg;
+      const g = ((GSTR.gstins(S.books)) || []).find(z => z.slice(0, 2) === reg) || reg;
       saveFile(String((CO() || {}).name || "client").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "") + "_" + g + "_GST-returns_" + fy + ".zip", GSTV.zip(files));
       if (missed.length) toast(missed.length + " could not be read and were left out: " + missed.join(", "));
     }
@@ -20580,7 +20674,7 @@ const GSTAPI = {
     return j;
   },
   ready(ym){ const nx = GSTR.nextYm(ym), t = GSTF.today(); return t.slice(0, 7).replace("-", "") > nx || (t.slice(0, 7).replace("-", "") === nx && +t.slice(8, 10) >= 14); },
-  gstinOf(reg){ return ((((S.books || {}).meta || {}).gstins) || []).find(g => g.slice(0, 2) === reg) || ""; },
+  gstinOf(reg){ return ((GSTR.gstins(S.books)) || []).find(g => g.slice(0, 2) === reg) || ""; },
   user(reg){ return (typeof GSTSet === "object" ? GSTSet.peek(reg).portalUser : "") || ""; },
   live(gstin){ const x = this.sess[gstin]; return x && x.auth_token && x.until > Date.now() ? x : null; },
   async otp(reg){
@@ -20609,7 +20703,7 @@ const GSTAPI = {
   }
 };
 function viewGstApiCard(b){
-  const reg = S.gstReg || (((b.meta || {}).gstins || [])[0] || "").slice(0, 2), gstin = GSTAPI.gstinOf(reg);
+  const reg = S.gstReg || ((GSTR.gstins(b) || [])[0] || "").slice(0, 2), gstin = GSTAPI.gstinOf(reg);
   if (!gstin) return "";
   let h = '<section class="dash-card" style="margin-bottom:12px"><h3>Fetch 2B from the portal</h3>';
   if (!GSTAPI.on()) return h + '<p class="note">Sign in to the firm account (top right) to fetch 2B straight from the GST portal through the firm’s GST API connection. Until then, bring in the JSON files downloaded from the portal.</p></section>';
@@ -20635,7 +20729,7 @@ if (typeof document !== "undefined"){
   document.addEventListener("change", e => { const t = e.target; if (t.dataset && t.dataset.gapiym !== undefined){ S.gstApiYm = t.value; } });
   document.addEventListener("click", async e => {
     const t = e.target.closest("[data-gapi]"); if (!t || !S.books || S.gstApiBusy) return;
-    const reg = S.gstReg || (((S.books.meta || {}).gstins || [])[0] || "").slice(0, 2), a = t.dataset.gapi;
+    const reg = S.gstReg || ((GSTR.gstins(S.books) || [])[0] || "").slice(0, 2), a = t.dataset.gapi;
     const run = async (msg, f) => { S.gstApiBusy = true; S.gstApiMsg = msg; render(); try { S.gstApiMsg = await f(); } catch (err){ S.gstApiMsg = "Not done: " + ((err && err.message) || err); } S.gstApiBusy = false; render(); };
     if (a === "otp") return run("Asking the portal to send the OTP…", async () => { await GSTAPI.otp(reg); return "OTP sent to the taxpayer’s registered mobile and email. Type it and press Connect."; });
     if (a === "auth"){ const i = document.querySelector("[data-gapiotp]"), otp = i ? i.value.trim() : "";
