@@ -54,6 +54,8 @@ async function fyn(method: string, path: string, headers: Record<string, string>
   const text = await r.text();
   let j: any = null; try { j = JSON.parse(text); } catch { /* not JSON */ }
   if (r.status === 401) tok = null;
+  // what FYN answered, for the function's own logs: never tokens, keys or return data
+  if (r.status < 200 || r.status >= 300 || !j) console.log(JSON.stringify({ fyn: method + " " + path.replace(/\?.*$/, ""), http: r.status, type: r.headers.get("content-type"), server: r.headers.get("server"), via: RELAY ? "relay" : "direct", length: text.length, head: text.slice(0, 300) }));
   return { http: r.status, j, text };
 }
 const gstErr = (x: { http: number; j: any; text: string }) => (x.j && (x.j.error?.message ? x.j.error.message + (x.j.error.error_cd ? " (" + x.j.error.error_cd + ")" : "") : x.j.errorMessage || x.j.message)) || ("HTTP " + x.http + ": " + x.text.slice(0, 200));
