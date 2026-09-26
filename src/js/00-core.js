@@ -33,7 +33,7 @@ const DEFAULT_FIRM = {firmName:"Garg Shekhar & Company", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "26 Sep 2026 · build 147 (QRMP flow checked: IFF and quarter copies kept for amendments, GSTR-1A per quarter, quarter 2B replaces monthly, late IFF not counted)";
+const APP_VERSION = "26 Sep 2026 · build 148 (interest and late fee from the portal only; TDS Desk estimate behind a setting, off by default)";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;

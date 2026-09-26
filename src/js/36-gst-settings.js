@@ -82,6 +82,7 @@ function viewGstSettings(){
     '<label class="note" style="display:block"><input type="radio" name="gstapi" data-gset="api" value="save"' + (api === "save" ? " checked" : "") + "> <b>Save only</b> \u2014 the return is saved on the portal; you check it there and file it yourself (recommended)</label>" +
     '<label class="note" style="display:block"><input type="radio" name="gstapi" data-gset="api" value="file"' + (api === "file" ? " checked" : "") + "> <b>Save and file</b> \u2014 after the figures agree with the portal and the return is approved, it is filed with the signatory\u2019s EVC OTP or DSC</label>" +
     '<p class="note">Applies once the GST API is connected; until then returns are downloaded as JSON.</p>' +
+    '<h4 style="margin:12px 0 4px">Interest and late fee</h4><label class="note"><input type="checkbox" data-gset="est"' + (b.gstEst ? " checked" : "") + "> Also show TDS Desk\u2019s own estimate beside the portal\u2019s figures (off: only the portal\u2019s figures are shown)</label>" +
     '<h4 style="margin:8px 0 4px">Aggregate turnover of the year</h4><div style="display:flex;gap:12px;flex-wrap:wrap">' +
     prevFys.map(f => { const a = GSTF.aato(GSTF.fyOf((+f.slice(0, 4) + 1) + "04")); return '<label class="note">' + esc(f) + ' <input type="number" data-gset="aato" data-gfy="' + esc((+f.slice(0, 4) + 1) + "-" + String(+f.slice(0, 4) + 2).slice(2)) + '" value="' + (((b.gstAato || {})[(+f.slice(0, 4) + 1) + "-" + String(+f.slice(0, 4) + 2).slice(2)]) || "") + '" placeholder="' + (a.v ? money(a.v) + " from the books" : "type it") + '" style="width:170px"></label>'; }).join("") +
     '</div><p class="note">Used for the late fee caps, QRMP (\u20b95 crore or less), e-invoicing and the 30-day IRN limit (\u20b910 crore and above).</p>' +
@@ -111,6 +112,7 @@ if (typeof document !== "undefined"){
       if (d.gset === "pmt") GSTSet.store(reg).pmt = t.value;
       if (d.gset === "comp") GSTSet.store(reg).comp = t.value;
       if (d.gset === "api"){ if (!t.checked) return; b.gstApi = t.value; }
+      if (d.gset === "est") b.gstEst = !!t.checked;
       if (d.gset === "cash") b.gstCashLedger = Object.assign({}, b.gstCashLedger, {[reg]: t.value});
       if (d.gset === "aato") b.gstAato = Object.assign({}, b.gstAato, {[d.gfy]: num(t.value)});
       if (d.gset === "d2") b.rev = Object.assign({}, b.rev, {d2: !!t.checked});

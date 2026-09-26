@@ -156,7 +156,7 @@ function viewCmp08(b){
       '<div class="dash-row"><span>Reverse charge in the quarter</span><b>' + gstMoney(c.rcm.igst + c.rcm.cgst + c.rcm.sgst + c.rcm.cess) + "</b></div>", false) +
     gstStep(3, "Pay and file",
       '<div class="dash-row"><span><b>Total to pay, in cash</b></span><b>' + gstMoney(c.payable) + "</b></div>" +
-      (c.late ? '<p class="note">Filed ' + c.late + " days late: interest " + gstMoney(c.interest) + " (18% a year).</p>" : "") +
+      (c.late && S.books.gstEst ? '<p class="note">TDS Desk\u2019s estimate: filed ' + c.late + " days late, interest " + gstMoney(c.interest) + " (18% a year). The portal\u2019s figure is the one to pay.</p>" : "") +
       '<div class="row" style="gap:8px;align-items:center"><span class="note">Filed on</span><input type="date" data-gqf="cmp08" data-gqq="' + qEnd + '" value="' + esc(rec.cmp08 || "") + '" style="width:auto"></div>' +
       '<p class="note">A composition dealer takes no input tax credit and charges no tax on its invoices.</p>', !!rec.cmp08);
   return h + "</section>";
@@ -166,9 +166,9 @@ function viewGstr4(b){
   return '<section class="dash-card gq"><h3>GSTR-4 \u00b7 ' + esc(fy) + ' <span class="tag">Composition, the year</span></h3><p class="note">The annual return, due ' + esc(gstD(g.due)) + ". Fill these figures on the portal (Returns \u2192 GSTR-4).</p>" +
     gstStep(1, "Table 4: purchases", '<div class="bk-tablewrap"><table class="bk-table compact"><thead><tr><th></th><th class="n">Value</th><th class="n">IGST</th><th class="n">CGST</th><th class="n">SGST</th></tr></thead><tbody>' +
       row("4A From registered suppliers (not reverse charge)", g.t4.reg) + row("4B From registered suppliers, reverse charge", g.t4.regRcm) + row("4C From unregistered suppliers, reverse charge", g.t4.unregRcm) + row("4D Import of services", g.t4.imps) + "</tbody></table></div>", false) +
-    gstStep(2, "Table 5: the year\u2019s CMP-08s", '<div class="bk-tablewrap"><table class="bk-table compact"><thead><tr><th>Quarter</th><th class="n">Turnover</th><th class="n">Tax</th><th class="n">Reverse charge</th><th class="n">Interest</th></tr></thead><tbody>' +
-      g.quarters.map(x => "<tr><td>" + esc(x.label) + '</td><td class="n">' + m(x.turnover) + '</td><td class="n">' + m(x.tax) + '</td><td class="n">' + m(x.rcm.igst + x.rcm.cgst + x.rcm.sgst + x.rcm.cess) + '</td><td class="n">' + m(x.interest) + "</td></tr>").join("") +
-      '<tr><td><b>Year</b></td><td class="n"><b>' + m(g.turnover) + '</b></td><td class="n"><b>' + m(g.tax) + '</b></td><td class="n"><b>' + m(g.rcm.igst + g.rcm.cgst + g.rcm.sgst + g.rcm.cess) + '</b></td><td class="n"><b>' + m(g.interest) + "</b></td></tr></tbody></table></div>", false) +
+    gstStep(2, "Table 5: the year\u2019s CMP-08s", '<div class="bk-tablewrap"><table class="bk-table compact"><thead><tr><th>Quarter</th><th class="n">Turnover</th><th class="n">Tax</th><th class="n">Reverse charge</th>' + (S.books.gstEst ? '<th class="n">Interest, estimate</th>' : "") + "</tr></thead><tbody>" +
+      g.quarters.map(x => "<tr><td>" + esc(x.label) + '</td><td class="n">' + m(x.turnover) + '</td><td class="n">' + m(x.tax) + '</td><td class="n">' + m(x.rcm.igst + x.rcm.cgst + x.rcm.sgst + x.rcm.cess) + "</td>" + (S.books.gstEst ? '<td class="n">' + m(x.interest) + "</td>" : "") + "</tr>").join("") +
+      '<tr><td><b>Year</b></td><td class="n"><b>' + m(g.turnover) + '</b></td><td class="n"><b>' + m(g.tax) + '</b></td><td class="n"><b>' + m(g.rcm.igst + g.rcm.cgst + g.rcm.sgst + g.rcm.cess) + "</b></td>" + (S.books.gstEst ? '<td class="n"><b>' + m(g.interest) + "</b></td>" : "") + "</tr></tbody></table></div>", false) +
     gstStep(3, "Table 6: sales by rate", "<p>" + esc(GSTQ.RATES[GSTQ.compCat(reg)].l) + ": turnover " + m(g.turnover) + ", tax " + m(g.tax) + ".</p>", false) +
     '<p class="note">Tables 7 (TDS and TCS credit) and 8 (tax paid) are taken from the portal as filed through the year.</p></section>';
 }
