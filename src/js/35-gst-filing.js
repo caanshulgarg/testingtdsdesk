@@ -49,7 +49,7 @@ const GSTF = {
   // interest, section 50(1) with its proviso: 18% a year on the tax paid in cash, for the days after the due date
   interest(ym, reg, t){
     const r = this.peek(ym, reg), due = this.due(ym, "r3b", reg), upto = r.r3b || this.today(), d = !due || this.unknown(due, r.r3b) ? 0 : Math.max(0, this.days(due, upto));
-    const cash = t.pay.cash, heads = {};
+    const cash = t.quarter ? t.cashAfter : t.pay.cash, heads = {};
     ["igst", "cgst", "sgst", "cess"].forEach(h => { heads[h] = r2(num(cash[h]) * 0.18 * d / 365); });
     return {days: d, due, filed: r.r3b || "", heads, total: r2(heads.igst + heads.cgst + heads.sgst + heads.cess), estimated: !r.r3b};
   },
@@ -113,7 +113,7 @@ const GSTF = {
   LIM: {b: {amt: 2500000, pct: 20}, c: {amt: 500000, pct: 20}},
   drc(ym, reg, t){
     const tax = x => r2(num(x.igst) + num(x.cgst) + num(x.sgst) + num(x.cess));
-    const filed = typeof GSTAmend === "object" ? GSTAmend.filed(reg).find(f => f.ym === ym && !f.notFiled) : null;
+    const filed = !t.quarter && typeof GSTAmend === "object" ? GSTAmend.filed(reg).find(f => f.ym === ym && !f.notFiled) : null;
     let r1 = null, r1From = "books";
     if (filed){ r1From = "filed"; const n = GSTAmend.norm(filed.json); let s = 0; n.docs.forEach(d => { s += (d.kind === "CDNR" && d.nt === "C" ? -1 : 1) * r2(num(d.iamt) + num(d.camt) + num(d.samt) + num(d.csamt)); }); n.b2cs.forEach(d => { s += num(d.iamt) + num(d.camt) + num(d.samt) + num(d.csamt); }); r1 = r2(s); }
     if (r1 == null) r1 = r2(tax(t.sale) - tax(t.cn) + tax(t.zero) + tax(t.adv));
@@ -242,6 +242,7 @@ function viewGstr1a(b, ym, reg){
   const c = GSTAmend.can1a(ym, reg), label = GSTR.label(ym);
   if (!c.filed1) return "";
   let h = '<section class="dash-card" style="margin-top:12px"><h3>GSTR-1A for ' + esc(label) + "</h3>";
+  if (c.qrmpMonth) return h + '<p class="note">Quarterly (QRMP) filer: GSTR-1A is for the whole quarter, in its last month (' + esc(GSTR.label(GSTSet.qEnd(ym))) + ").</p></section>";
   if (!c.period) return h + '<p class="note">GSTR-1A is available from the July 2024 period; for this month, differences go as amendments in a later GSTR-1.</p></section>';
   if (c.threeB) return h + '<p class="note">The 3B for ' + esc(label) + " is marked as filed, so GSTR-1A is closed; the differences above go as amendments in the next GSTR-1.</p></section>";
   const r = GSTAmend.json1a(ym, reg), n = r ? r.rows.length : 0;

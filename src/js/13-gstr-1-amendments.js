@@ -15,14 +15,14 @@ const GSTAmend = {
     return Object.values((S.books && S.books.filed) || {}).filter(f => (!reg || String(f.gstin).slice(0, 2) === reg)).sort((a, c) => a.ym.localeCompare(c.ym));
   },
   // keep a GSTR-1 JSON as filed: one per registration and month
-  keep(json, source){
+  keep(json, source, extra){
     const b = S.books, gstin = String(json.gstin || "").toUpperCase(), fp = String(json.fp || "");
     if (!/^\d{2}[A-Z0-9]{13}$/.test(gstin) || !/^\d{6}$/.test(fp)) throw new Error("This does not look like a GSTR-1 JSON: it needs a GSTIN and a period (fp).");
     b.filed = b.filed || {};
     const k = gstin + "|" + fp, old = b.filed[k];
     // a copy from the portal is not replaced by a later download from here
     if (old && old.source === "portal" && source === "downloaded") return old;
-    b.filed[k] = {gstin, fp, ym: this.ymOf(fp), source, at: new Date().toISOString(), json, notFiled: false};
+    b.filed[k] = Object.assign({gstin, fp, ym: this.ymOf(fp), source, at: new Date().toISOString(), json, notFiled: false}, extra || {});
     return b.filed[k];
   },
   // one flat list of documents from a GSTR-1 JSON, amendments folded onto the original number
@@ -60,10 +60,12 @@ const GSTAmend = {
   },
   // what the portal holds, as of the returns filed before a month
   state(reg, beforeYm, inclusive){
-    const docs = new Map(), b2cs = {}, periods = new Set();
+    const docs = new Map(), b2cs = {}, periods = new Set(), qOf = {};
     this.filed(reg).filter(f => !f.notFiled && (inclusive ? f.ym <= beforeYm : f.ym < beforeYm)).forEach(f => {
       const n = this.norm(f.json);
       periods.add(f.ym);
+      // a QRMP quarter's GSTR-1 reports all three months (with whatever IFF did not)
+      if (f.quarter) GSTR.expand(f.quarter).forEach(m => { qOf[m] = f.quarter; if (inclusive ? m <= beforeYm : m < beforeYm) periods.add(m); });
       n.docs.forEach((d, k) => docs.set(k, Object.assign({}, d, {filedIn: f.ym})));
       b2cs[f.ym] = n.b2cs;
       const a1 = ((S.books && S.books.filed1a) || {})[String(f.gstin).toUpperCase() + "|" + f.fp];
@@ -73,7 +75,7 @@ const GSTAmend = {
         m.set(a.pos + "|" + a.rt + "|" + a.sply_ty, a);
       });
     });
-    return {docs, b2cs, periods};
+    return {docs, b2cs, periods, qOf};
   },
   same(a, c){ return Math.abs(num(a) - num(c)) < 1.005; },
   changes(was, now){
@@ -94,7 +96,8 @@ const GSTAmend = {
     const res = {rows: [], periods: [], noCopy: [], late: [], ready: !!reg};
     if (!reg || !ym) return res;
     const st = this.state(reg, ym, !!self), fix = (S.books && S.books.amendFix) || {};
-    const months = self ? [ym] : GSTR.months().filter(m => m < ym);
+    const qr = self && typeof GSTSet === "object" && GSTSet.typeOf(ym, reg) === "qrmp";
+    const months = self ? (qr ? GSTR.expand(GSTSet.qStart(ym) + "-" + ym).filter(m => GSTR.months().includes(m)) : [ym]) : GSTR.months().filter(m => m < ym);
     months.forEach(P => {
       if (!st.periods.has(P)){ if (this.filed(reg).length) res.noCopy.push(P); return; }
       if (!self && ym > this.lastYm(P)){ res.late.push(P); return; }
@@ -143,9 +146,12 @@ const GSTAmend = {
       for (let i = res.rows.length - 1; i >= before; i--) if (res.rows[i].paired) res.rows.splice(i, 1);
       // B2C small (table 7) of the month: when the books now differ from what was filed (an invoice lost or gained a GSTIN,
       // or a B2C invoice changed), table 10 carries the month's revised figures, rate by rate and place by place
-      const fb = st.b2cs[P] || new Map(), keys = new Set(Array.from(fb.keys()).concat(Array.from(bn.b2cs.keys())));
+      // a QRMP quarter reports B2C small once, for the quarter: compared at its last month, against the quarter's books
+      const qP = (st.qOf || {})[P];
+      const bq = qP ? (GSTR.pEnd(qP) === P ? this.norm(GSTR.toJson(qP, reg, {plain: true})).b2cs : null) : bn.b2cs;
+      const fb = bq ? (st.b2cs[P] || new Map()) : new Map(), keys = bq ? new Set(Array.from(fb.keys()).concat(Array.from(bq.keys()))) : new Set();
       keys.forEach(k => {
-        const w = fb.get(k), d = bn.b2cs.get(k), z = {txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0};
+        const w = fb.get(k), d = bq.get(k), z = {txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0};
         const a = Object.assign({}, z, w || {}), c = Object.assign({}, z, d || {});
         if (["txval", "iamt", "camt", "samt", "csamt"].every(f => this.same(a[f], c[f]))) return;
         const [pos, rt, sply] = k.split("|"), id = P + "|B2CS|" + k, m = v => INR.format(r2(v || 0));
@@ -178,7 +184,8 @@ const GSTAmend = {
   // GSTR-1A (section 37A, from the July 2024 period): after the month's GSTR-1 is filed and before its 3B
   can1a(ym, reg){
     const f = this.filed(reg).find(x => x.ym === ym && !x.notFiled), r = typeof GSTF === "object" ? GSTF.peek(ym, reg) : {};
-    return {period: ym >= "202407", filed1: !!f, threeB: !!(r.r3b || r.snap), kept: !!(((S.books || {}).filed1a || {})[(f ? String(f.gstin).toUpperCase() + "|" + f.fp : "")]), due: typeof GSTF === "object" ? GSTF.due(ym, "r3b", reg) : ""};
+    const qr = typeof GSTSet === "object" && GSTSet.typeOf(ym, reg) === "qrmp";
+    return {period: ym >= "202407" && (!qr || GSTSet.isQEnd(ym)), qrmpMonth: qr && !GSTSet.isQEnd(ym), filed1: !!f, threeB: !!(r.r3b || r.snap), kept: !!(((S.books || {}).filed1a || {})[(f ? String(f.gstin).toUpperCase() + "|" + f.fp : "")]), due: typeof GSTF === "object" ? GSTF.due(ym, "r3b", reg) : ""};
   },
   json1a(ym, reg){
     const f = this.filed(reg).find(x => x.ym === ym && !x.notFiled); if (!f) return null;

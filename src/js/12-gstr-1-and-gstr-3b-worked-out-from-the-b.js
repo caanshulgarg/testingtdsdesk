@@ -389,7 +389,8 @@ const GSTR = {
     const ft = typeof GSTSet === "object" && reg ? GSTSet.typeOf(ym, reg) : "monthly";
     const j = ft === "qrmp" ? (GSTSet.isQEnd(ym) ? GSTQ.r1Q(ym, reg).json : GSTQ.iff(ym, reg).json) : this.toJson(ym, reg);
     // the copy kept here is what later months' amendments are measured against
-    if (reg && j.gstin){ try { GSTAmend.keep(JSON.parse(JSON.stringify(j)), "downloaded"); saveBooks(); } catch (e){} }
+    const extra = ft === "qrmp" ? (GSTSet.isQEnd(ym) ? {quarter: GSTSet.qStart(ym) + "-" + ym} : {iff: true}) : null;
+    if (reg && j.gstin){ try { GSTAmend.keep(JSON.parse(JSON.stringify(j)), "downloaded", extra); saveBooks(); } catch (e){} }
     saveFile("GSTR1_" + (j.gstin || "") + "_" + j.fp + ".json", new Blob([JSON.stringify(j)], {type: "application/json"}));
     return j;
   },

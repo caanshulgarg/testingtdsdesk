@@ -89,7 +89,12 @@ const GST2B = {
   settings(){ return Object.assign({tol: 1}, (S.books && S.books.reco2b && S.books.reco2b.opt) || {}); },
   state(){ const b = S.books; b.reco2b = b.reco2b || {}; ["confirm", "link", "tag"].forEach(k => { b.reco2b[k] = b.reco2b[k] || {}; }); return b.reco2b; },
   all2b(reg){
-    return Object.values((S.books && S.books.twoBs) || {}).filter(t => !reg || t.gstin.slice(0, 2) === reg).sort((a, c) => a.ym.localeCompare(c.ym));
+    const all = Object.values((S.books && S.books.twoBs) || {}).filter(t => !reg || t.gstin.slice(0, 2) === reg);
+    // for a QRMP GSTIN the quarter's 2B (made for its last month) holds the whole quarter; the first two months' 2Bs are
+    // for information only, and are set aside once the quarter's is here
+    const have = new Set(all.map(t => t.gstin + "|" + t.ym));
+    return all.filter(t => { if (typeof GSTSet !== "object") return true; const r = t.gstin.slice(0, 2);
+      return !(GSTSet.typeOf(t.ym, r) === "qrmp" && !GSTSet.isQEnd(t.ym) && have.has(t.gstin + "|" + GSTSet.qEnd(t.ym))); }).sort((a, c) => a.ym.localeCompare(c.ym));
   },
   _memo: null,
   // match every 2B document against every book document, strongest evidence first

@@ -47,11 +47,42 @@ const near = (a, b2, t) => Math.abs(a - b2) <= (t || 0.05), H = ["igst", "cgst",
   ok(f.keys.every(k => !inQ.has(k)) && r1b.skipped.join() === "202510" && (r1b.json.hsn || {}).hsn_b2b, "October's IFF documents are left out of the quarter's B2B, still in its HSN summary");
   const octAll = (G.toJson("202510", "07", {plain: true}).b2b || []).reduce((a, g) => a + g.inv.length, 0), octInQ = (r1b.json.b2b || []).reduce((a, g) => a + g.inv.filter(i => idt(i) === "202510").length, 0);
   ok(octInQ === octAll - f.n, "the October invoices that did not fit in the IFF go in the quarter's GSTR-1 (" + octInQ + ")");
+  // IFF typed as filed after the 13th does not count: those invoices stay in the quarter's GSTR-1
+  F.rec("202510", "07").iff = "2025-11-20";
+  const r1late = Q.r1Q("202512", "07"), inLate = new Set(); (r1late.json.b2b || []).forEach(g => g.inv.forEach(i => inLate.add(Q.key(g.ctin, i.inum))));
+  ok(!Q.iffFiled("202510", "07") && f.keys.every(k => inLate.has(k)), "an IFF typed as filed after 13 November does not count: its invoices stay in the quarter's GSTR-1");
+  F.rec("202510", "07").iff = "2025-11-12";
+  // amendments later: the IFF copy and the quarter's copy both count as filed, for all three months
+  x.GSTAmend.keep(JSON.parse(JSON.stringify(f.json)), "downloaded", {iff: true});
+  x.GSTAmend.keep(JSON.parse(JSON.stringify(r1b.json)), "downloaded", {quarter: "202510-202512"});
+  const st = x.GSTAmend.state("07", "202601", false);
+  ok(["202510", "202511", "202512"].every(m => st.periods.has(m)), "the IFF copy and the quarter's GSTR-1 copy stand as filed for October, November and December");
+  ok(x.GSTAmend.pending("202601", "07").rows.filter(z => z.P >= "202510" && z.P <= "202512").length === 0, "so the next quarter reports no amendments for them while the books agree");
+  // GSTR-1A: the whole quarter, at its end
+  ok(!x.GSTAmend.can1a("202511", "07").period && x.GSTAmend.can1a("202511", "07").qrmpMonth && x.GSTAmend.can1a("202512", "07").period, "GSTR-1A for a QRMP filer is for the quarter, in December only");
+  const k0 = Object.keys(b.filed).find(k => k.endsWith("|122025")), rec0 = b.filed[k0], g0 = rec0.json.b2b.find(g => g.inv.some(i => idt(i) === "202511")), i0 = g0.inv.find(i => idt(i) === "202511");
+  i0.itms[0].itm_det.txval += 1000;
+  const a1 = x.GSTAmend.json1a("202512", "07");
+  ok(a1.rows.length === 1 && a1.rows[0].P === "202511", "a November invoice changed after the quarter's GSTR-1: GSTR-1A in December picks it up");
+  i0.itms[0].itm_det.txval -= 1000; b.filed = {};
+  // interest on what is still unpaid after PMT-06
+  F.rec("202512", "07").r3b = "2026-02-03"; reset();
+  const tqi = G.threeB("202512", "07"), itq = F.interest("202512", "07", tqi);
+  ok(itq.days === 10 && near(itq.total, tqi.payable * 0.18 * 10 / 365, 1), "interest on the quarter's 3B filed 10 days late: on what was still unpaid after PMT-06, ₹" + itq.total);
+  delete F.rec("202512", "07").r3b;
+  const dq = F.drc("202512", "07", tqi);
+  ok(dq.b.from === "books" && Math.abs(dq.b.gap) < 1, "DRC-01B for the quarter: GSTR-1 and 3B from the same quarter agree");
   // due dates and GSTR-9
   ok(F.due("202512", "r3b", "07") === "2026-01-24" && F.lateFee("202511", "07", "r3b", false).none, "Delhi quarter's 3B due 24 January; no 3B late fee inside the quarter");
   const g9 = x.GST9.build(x.GST9.fyOf("202603"), "07"), expect = G.months().filter(m => m >= "202504" && m <= "202603").reduce((a, m) => {
     const t = x.GSTSet.typeOf(m, "07") === "qrmp" ? (x.GSTSet.isQEnd(m) ? G.threeB(m, "07") : null) : G.threeBm(m, "07"); return a + (t ? ["igst", "cgst", "sgst"].reduce((s, h) => s + t.pay.cash[h], 0) : 0); }, 0);
   ok(near(["igst", "cgst", "sgst"].reduce((a, h) => a + g9.pay[h].cash, 0), expect, 2), "GSTR-9 table 9: a QRMP quarter's tax counted once, at its end");
+  // 2B: the quarter's 2B holds the quarter; the first two months' 2Bs are then set aside
+  x.GSTSet.store("07").filing = [{type: "qrmp", from: "202601"}]; reset();
+  ["022026", "032026"].forEach(pp => { const t2 = x.GST2B.fromJson(JSON.parse(fs.readFileSync(DATA + "/returns_R2B_07AADCV3366N1ZU_" + pp + ".json", "utf8"))); b.twoBs[t2.gstin + "|" + t2.period] = t2; });
+  const used = x.GST2B.all2b("07").map(t2 => t2.ym);
+  ok(used.join() === "202603", "QRMP Jan-Mar: with the quarter's 2B (March) here, February's 2B is set aside, so no bill counts twice");
+  x.GSTSet.store("07").filing = []; ok(x.GST2B.all2b("07").length === 2, "for a monthly filer both are used"); b.twoBs = {}; x.GST2B._memo = null;
   // composition
   x.GSTSet.store("07").filing = [{type: "comp", from: "202601"}]; reset();
   const c = Q.cmp08("202603", "07");

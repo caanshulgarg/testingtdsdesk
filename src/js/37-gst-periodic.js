@@ -69,7 +69,7 @@ const GSTQ = {
   // GSTR-1 for the quarter: everything in it, less the invoices and notes already sent in an IFF
   r1Q(qEnd, reg){
     // the documents sent in each IFF filed: as recorded when it was downloaded, else worked out again the same way
-    const qs = GSTSet.qStart(qEnd), j = GSTR.toJson(qs + "-" + qEnd, reg), skip = new Set(GSTR.expand(qs + "-" + qEnd).filter(m => m !== qEnd && GSTF.peek(m, reg).iff));
+    const qs = GSTSet.qStart(qEnd), j = GSTR.toJson(qs + "-" + qEnd, reg), skip = new Set(GSTR.expand(qs + "-" + qEnd).filter(m => m !== qEnd && this.iffFiled(m, reg)));
     const sent = new Set(); skip.forEach(m => { (GSTF.peek(m, reg).iffKeys || this.iff(m, reg).keys).forEach(k => sent.add(k)); });
     if (sent.size){
       if (j.b2b) j.b2b = j.b2b.map(g => Object.assign({}, g, {inv: g.inv.filter(i => !sent.has(this.key(g.ctin, i.inum)))})).filter(g => g.inv.length);
@@ -78,6 +78,8 @@ const GSTQ = {
     }
     return {json: j, skipped: Array.from(skip)};
   },
+  // an IFF counts only if filed by its due date: the portal closes it after the 13th
+  iffFiled(ym, reg){ const d = GSTF.peek(ym, reg).iff; return !!d && d <= GSTF.due(ym, "iff", reg); },
   // ---- Composition ----
   RATES: {mfr: {l: "Manufacturer: 1% of turnover", r: 1, base: "all"}, trader: {l: "Trader: 1% of turnover of taxable supplies", r: 1, base: "taxable"}, rest: {l: "Restaurant: 5% of turnover", r: 5, base: "all"}, serv: {l: "Services (notification 2/2019): 6% of turnover", r: 6, base: "all"}},
   compCat(reg){ return GSTSet.peek(reg).comp || "trader"; },
@@ -115,8 +117,8 @@ function viewQrmp(b, part){
         (f.all ? "<p>" + f.n + " invoice" + (f.n === 1 ? "" : "s") + (f.notes ? " and " + f.notes + " note" + (f.notes === 1 ? "" : "s") : "") + " to registered customers" + (f.over ? " in the IFF" : "") + ", value " + gstMoney(f.val) + ", tax " + gstMoney(f.tax) + ". Filing IFF lets your customers take the credit this month instead of at quarter end.</p>" +
           (f.over ? '<p class="note"><b>IFF allows \u20b950 lakh a month.</b> The month has ' + f.all + " documents worth " + gstMoney(f.allVal) + "; the IFF file carries the first " + (f.n + f.notes) + " by date, and the other " + f.left + " go in the quarter\u2019s GSTR-1.</p>" : "") +
           '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><button class="btn small" data-gq="iffjson">Download IFF JSON</button><span class="note">Filed on</span><input type="date" data-gqf="iff" value="' + esc(rec.iff || "") + '" style="width:auto"></div>' +
-          (rec.iff ? '<p class="note">Filed: these will be left out of the quarter\u2019s GSTR-1.</p>' : "")
-          : "<p>No invoices to registered customers this month; nothing to file.</p>"), !!rec.iff || !f.all) +
+          (rec.iff ? (GSTQ.iffFiled(ym, reg) ? '<p class="note">Filed: these are already on the portal and flow into the quarter\u2019s GSTR-1 by themselves, so the GSTR-1 file here leaves them out.</p>' : '<p class="bad">IFF cannot be filed after ' + esc(gstD(GSTF.due(ym, "iff", reg))) + ": these invoices go in the quarter\u2019s GSTR-1 instead.</p>") : "")
+          : "<p>No invoices to registered customers this month; nothing to file.</p>"), GSTQ.iffFiled(ym, reg) || !f.all) +
       gstStep(2, "Pay tax by PMT-06 \u2014 by " + esc(gstD(p.due)),
         '<p><select data-gqf="pmtMethod" style="width:auto"><option value="fixed"' + (p.method === "fixed" ? " selected" : "") + '>Fixed sum (35% method)</option><option value="self"' + (p.method === "self" ? " selected" : "") + ">Self-assessment (this month\u2019s tax)</option></select></p>" +
         (p.known ? "<p><b>" + gstMoney(p.total) + "</b> to pay: " + esc(p.why) + ".</p>" + (p.total ? '<p class="note">IGST ' + gstMoney(p.amt.igst) + " \u00b7 CGST " + gstMoney(p.amt.cgst) + " \u00b7 SGST " + gstMoney(p.amt.sgst) + (p.amt.cess ? " \u00b7 cess " + gstMoney(p.amt.cess) : "") + "</p>" : '<p class="note">Nothing to pay this month.</p>') : '<p class="note">' + esc(p.why) + ".</p>") +
@@ -180,6 +182,6 @@ if (typeof document !== "undefined"){
   document.addEventListener("click", e => {
     const t = e.target.closest("[data-gq]"); if (!t || !S.books) return;
     const ym = S.gstYm || "", reg = S.gstReg || "";
-    if (t.dataset.gq === "iffjson"){ if (typeof ledgersReady === "function" && !ledgersReady("gst")) return; const f = GSTQ.iff(ym, reg); GSTF.rec(ym, reg).iffKeys = f.keys; saveBooks(); saveFile("IFF_" + f.json.gstin + "_" + f.json.fp + ".json", new Blob([JSON.stringify(f.json)], {type: "application/json"})); }
+    if (t.dataset.gq === "iffjson"){ if (typeof ledgersReady === "function" && !ledgersReady("gst")) return; const f = GSTQ.iff(ym, reg); GSTF.rec(ym, reg).iffKeys = f.keys; try { GSTAmend.keep(JSON.parse(JSON.stringify(f.json)), "downloaded", {iff: true}); } catch (e2){} saveBooks(); saveFile("IFF_" + f.json.gstin + "_" + f.json.fp + ".json", new Blob([JSON.stringify(f.json)], {type: "application/json"})); }
   });
 }
