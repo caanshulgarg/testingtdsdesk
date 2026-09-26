@@ -5,7 +5,7 @@ let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + 
 (async () => {
   const {ctx, x} = load(HTML, NAMES);
   // everything typed on the GST screens goes with the books when they are saved
-  const src = fs.readFileSync(HTML, "utf8"), sv = (src.match(/async function saveBooks\(\)\{[\s\S]*?\}\); \}/) || [""])[0];
+  const src = fs.readFileSync(HTML, "utf8"), sv = /async function saveBooks\(opts\)\{[\s\S]*?BOOKS_KEYS\.forEach\(k => \{ keep\[k\] = b\[k\]; \}\)/.test(src) ? JSON.parse((src.match(/const BOOKS_KEYS = (\[[^\]]*\]);/) || [, "[]"])[1]).map(k => k + ": b." + k).join(", ") : "";  // what saveBooks keeps: every name in BOOKS_KEYS
   ["gst3b", "gst9", "gstOpen", "itcBasis", "itcTrack", "outRej"].forEach(k => ok(new RegExp("\\b" + k + ": b\\." + k + "\\b").test(sv), "saved with the books: " + k));
   const b = JSON.parse(fs.readFileSync(CACHE, "utf8"));
   const ms = await x.Books.importMasters(await openBlob(DATA + "/Master.xml"));

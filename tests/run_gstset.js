@@ -42,7 +42,7 @@ let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + 
   G.store("07").einv = "outside";
   ok(!F.einv("202603", "07").uses && F.einv("202603", "07").mode === "outside", "made outside Tally: no check from Tally's IRNs");
   delete sales[0].irn; delete sales[0].irnDate; G.store("07").einv = "auto";
-  const src = fs.readFileSync(HTML, "utf8"), sv = (src.match(/async function saveBooks\(\)\{[\s\S]*?\}\); \}/) || [""])[0];
+  const src = fs.readFileSync(HTML, "utf8"), sv = /async function saveBooks\(opts\)\{[\s\S]*?BOOKS_KEYS\.forEach\(k => \{ keep\[k\] = b\[k\]; \}\)/.test(src) ? JSON.parse((src.match(/const BOOKS_KEYS = (\[[^\]]*\]);/) || [, "[]"])[1]).map(k => k + ": b." + k).join(", ") : "";  // what saveBooks keeps: every name in BOOKS_KEYS
   ok(["gstSet", "gstContacts", "itcBasis", "gstOpen", "rule37On", "gstAato", "gstCashLedger"].every(k => new RegExp("\\b" + k + ": b\\." + k + "\\b").test(sv)), "every GST setting is saved with the books");
   ok(/\["gstset", "GST"\]/.test(src), "Client setup has a GST tab");
   console.log("\n" + (fails ? fails + " FAILED" : "all passed")); process.exit(fails ? 1 : 0);

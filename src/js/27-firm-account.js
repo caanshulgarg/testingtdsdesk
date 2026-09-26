@@ -5,7 +5,10 @@ const CLOUD_DEFAULT = {url: "https://nrtczucrlgalvtojwoes.supabase.co", key: "sb
 const CLOUD_CHUNK = 300;      // bank rows per record
 const Cloud = {
   st: {state: "off", email: "", role: "", firm: "", lastSync: 0, pending: 0, error: "", busy: "", members: []},
-  cfg(){ let c = {}; try { c = JSON.parse(lsGet("tdsdesk:cloud") || "{}"); } catch (e){} return Object.assign({}, CLOUD_DEFAULT, c); },
+  cfg(){ let c = {}; try { c = JSON.parse(lsGet("tdsdesk:cloud") || "{}"); } catch (e){}
+    // a build tied to one database (the test site: staging) forgets an address kept from another, and its sign-in
+    if (CLOUD_DEFAULT.lock && c.url && c.url !== CLOUD_DEFAULT.url){ c = {email: c.email || ""}; lsSet("tdsdesk:cloud", JSON.stringify(c)); lsDel("tdsdesk:cloudsess"); }
+    return Object.assign({}, CLOUD_DEFAULT, c); },
   setCfg(p){ lsSet("tdsdesk:cloud", JSON.stringify(Object.assign(this.cfg(), p))); },
   sess(){ let s = null; try { s = JSON.parse(lsGet("tdsdesk:cloudsess") || "null"); } catch (e){} return s; },
   setSess(s){ if (s) lsSet("tdsdesk:cloudsess", JSON.stringify(s)); else lsDel("tdsdesk:cloudsess"); },

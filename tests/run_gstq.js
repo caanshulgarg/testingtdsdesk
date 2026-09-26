@@ -93,7 +93,7 @@ const near = (a, b2, t) => Math.abs(a - b2) <= (t || 0.05), H = ["igst", "cgst",
   ok(F.due("202603", "cmp08", "07") === "2026-04-18", "CMP-08 due 18 April");
   const g4 = Q.gstr4("2025-26", "07");
   ok(g4.quarters.length === 4 && g4.t4.reg.taxable > 0 && g4.due === "2026-06-30", "GSTR-4 2025-26: four quarters, purchases in table 4, due 30 June");
-  const src = fs.readFileSync(HTML, "utf8"), sv = (src.match(/async function saveBooks\(\)\{[\s\S]*?\}\); \}/) || [""])[0];
+  const src = fs.readFileSync(HTML, "utf8"), sv = /async function saveBooks\(opts\)\{[\s\S]*?BOOKS_KEYS\.forEach\(k => \{ keep\[k\] = b\[k\]; \}\)/.test(src) ? JSON.parse((src.match(/const BOOKS_KEYS = (\[[^\]]*\]);/) || [, "[]"])[1]).map(k => k + ": b." + k).join(", ") : "";  // what saveBooks keeps: every name in BOOKS_KEYS
   ok(/\bgstApi: b\.gstApi\b/.test(sv) && Q.apiMode() === "save", "API returns: save only unless set to file; saved with the books");
   console.log("\n" + (fails ? fails + " FAILED" : "all passed")); process.exit(fails ? 1 : 0);
 })();

@@ -171,9 +171,11 @@ const BookSync = {
     if (open) await this.pull(open);
   },
   // one line under the books' tabs
-  note(cid){
-    if (!(typeof Cloud === "object" && Cloud.on())) return '<p class="note" style="margin:6px 0">TDS and GST work is kept in this browser only. Sign in to the firm account to share it with your colleagues.</p>';
-    if (this.off) return '<p class="note" style="margin:6px 0">The firm’s database is not set up for shared TDS and GST work yet: it is kept in this browser only.</p>';
+  // information on the From Tally tab only; warnings (look-only, not saved) on every tab
+  note(cid, tab){
+    const info = !tab || tab === "import";
+    if (!(typeof Cloud === "object" && Cloud.on())) return !info ? "" : '<p class="note" style="margin:6px 0">TDS and GST work is kept in this browser only. Sign in to the firm account to share it with your colleagues.</p>';
+    if (this.off) return !info ? "" : '<p class="note" style="margin:6px 0">The firm’s database is not set up for shared TDS and GST work yet: it is kept in this browser only.</p>';
     const s = this.st[cid] || {};
     if (s.readonly) return '<p class="note" style="margin:6px 0">Look-only access: changes here are not saved for the firm.</p>';
     if (s.error) return '<p class="note warn" style="margin:6px 0">TDS and GST work not saved to the firm yet: ' + esc(s.error) + ". It is safe in this browser and will be sent at the next sync.</p>";

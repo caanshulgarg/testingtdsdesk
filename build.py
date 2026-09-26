@@ -9,6 +9,7 @@ The source is kept in its live form. The test build differs only in:
   - browser storage: tdsdesk:* -> tdsdesk-test:*, and the databases tdsdesk-bank / tdsdesk-work -> ...-test
   - the TEST mark: an orange top edge, a fixed orange bar, and "TEST" under the brand (build/test-style.html)
   - APP_VERSION starts with "TEST · "
+  - it works on the staging database (tds-desk-staging), never on live
 Nothing else may differ; the checks below stop the build if a rule is broken.
 """
 import json, os, re, sys
@@ -40,6 +41,11 @@ def to_test(html):
     t = t[:i] + style + t[i:]
     t = t.replace("<body>", '<body class="is-test">', 1)
     t = re.sub(r'(const APP_VERSION = ")', "\\1TEST \u00b7 ", t, 1)
+    # the test site works on the staging database, never on live
+    live = 'const CLOUD_DEFAULT = {url: "https://nrtczucrlgalvtojwoes.supabase.co", key: "sb_publishable_HMkVf1jl9iOA8Xt4YaUezg_--4cIWVR", auto: true};'
+    if live not in t: sys.exit("CLOUD_DEFAULT (live) not found; the test build must not fall back to the live database")
+    t = t.replace(live, 'const CLOUD_DEFAULT = {url: "https://qbocskaiewaxqcvaunzc.supabase.co", key: "sb_publishable_Q--gLdP6P-hU3gJDMHuKEA_fLTMJAxd", auto: true, lock: true};')
+    if "nrtczucrlgalvtojwoes" in t: sys.exit("the test build still names the live database")
     return t
 
 def main():

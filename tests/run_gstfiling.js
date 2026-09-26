@@ -82,7 +82,7 @@ const near = (a, b2, t) => Math.abs(a - b2) <= (t || 0.02);
   const xml = x.Audit.jeXml([{date: J.date, narr: J.narr, lines: J.lines}]);
   ok(/VCHTYPE="Journal"/.test(xml) && xml.includes("07 GST ELECTRONIC CASH LEDGER") && xml.includes("<DATE>20260505</DATE>"), "as a Tally journal dated the day the 3B was filed");
   // saved with the books
-  const src = fs.readFileSync(HTML, "utf8"), sv = (src.match(/async function saveBooks\(\)\{[\s\S]*?\}\); \}/) || [""])[0];
+  const src = fs.readFileSync(HTML, "utf8"), sv = /async function saveBooks\(opts\)\{[\s\S]*?BOOKS_KEYS\.forEach\(k => \{ keep\[k\] = b\[k\]; \}\)/.test(src) ? JSON.parse((src.match(/const BOOKS_KEYS = (\[[^\]]*\]);/) || [, "[]"])[1]).map(k => k + ": b." + k).join(", ") : "";  // what saveBooks keeps: every name in BOOKS_KEYS
   ok(["gstFiled", "gstAato", "rule37On", "gstCashLedger"].every(k => new RegExp("\\b" + k + ": b\\." + k + "\\b").test(sv)), "filed dates, turnover, rule 37 setting and cash ledger are saved with the books");
   console.log("\n" + (fails ? fails + " FAILED" : "all passed")); process.exit(fails ? 1 : 0);
 })();

@@ -61,7 +61,7 @@ let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + 
   const zb = Buffer.from(await z.arrayBuffer()), outZ = (process.env.TDSDESK_OUT || "/tmp") + "/gstv-test.zip"; fs.writeFileSync(outZ, zb);
   const lst = require("child_process").execSync("python3 -c \"import zipfile,sys; z=zipfile.ZipFile(sys.argv[1]); print(z.testzip(), [(i.filename, len(z.read(i))) for i in z.infolist()])\" " + outZ).toString();
   ok(/None \[\('a\.pdf', 12\), \('b\.pdf', 13\)\]/.test(lst), "the year's zip holds every PDF, intact (" + lst.trim() + ")");
-  const src = fs.readFileSync(HTML, "utf8"), sv = (src.match(/async function saveBooks\(\)\{[\s\S]*?\}\); \}/) || [""])[0];
+  const src = fs.readFileSync(HTML, "utf8"), sv = /async function saveBooks\(opts\)\{[\s\S]*?BOOKS_KEYS\.forEach\(k => \{ keep\[k\] = b\[k\]; \}\)/.test(src) ? JSON.parse((src.match(/const BOOKS_KEYS = (\[[^\]]*\]);/) || [, "[]"])[1]).map(k => k + ": b." + k).join(", ") : "";  // what saveBooks keeps: every name in BOOKS_KEYS
   ok(/\bgstVault: b\.gstVault\b/.test(sv) && /job\.kind === "gstret"/.test(src), "records saved with the books; the cloud path is remembered once uploaded");
   console.log("\n" + (fails ? fails + " FAILED" : "all passed")); process.exit(fails ? 1 : 0);
 })();

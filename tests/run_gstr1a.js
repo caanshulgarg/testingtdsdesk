@@ -42,7 +42,7 @@ let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + 
   sales[0].irn = k0.irn; sales[0].irnDate = k0.d; sales[1].irnDate = k1;
   const rd = fs.readFileSync(HTML, "utf8");
   ok(/irn: this\.one\(s, "IRN"\), irnDate: this\.one\(s, "IRNACKDATE"\)/.test(rd), "the day book reader keeps each voucher's IRN and acknowledgement date");
-  const src = fs.readFileSync(HTML, "utf8"), sv = (src.match(/async function saveBooks\(\)\{[\s\S]*?\}\); \}/) || [""])[0];
+  const src = fs.readFileSync(HTML, "utf8"), sv = /async function saveBooks\(opts\)\{[\s\S]*?BOOKS_KEYS\.forEach\(k => \{ keep\[k\] = b\[k\]; \}\)/.test(src) ? JSON.parse((src.match(/const BOOKS_KEYS = (\[[^\]]*\]);/) || [, "[]"])[1]).map(k => k + ": b." + k).join(", ") : "";  // what saveBooks keeps: every name in BOOKS_KEYS
   ok(/\bfiled1a: b\.filed1a\b/.test(sv), "GSTR-1A copies are saved with the books");
   console.log("\n" + (fails ? fails + " FAILED" : "all passed")); process.exit(fails ? 1 : 0);
 })();
