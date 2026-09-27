@@ -46,7 +46,7 @@ try:
         pg.goto("http://localhost:8133/"); pg.wait_for_timeout(2000)
         pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
         pg.evaluate(SETUP, [key, BANK, PARTY]); pg.evaluate("Bridge.refresh()")
-        ok(pg.evaluate("Bridge.st.version") == "1.12.4", "bridge 1.12.4 running against the stand-in Tally")
+        ok(pg.evaluate("Bridge.st.version") == "1.12.5", "bridge 1.12.5 running against the stand-in Tally")
         ok(pg.evaluate("syncLedgersFromTally(true)") and pg.evaluate("!!exactLedger('%s') && !!exactLedger('%s')" % (BANK, PARTY)), "ledgers read from Tally")
         pg.evaluate("() => { B().rows.forEach(r => { r.state = 'ready'; }); }")
         # the dates themselves
@@ -135,7 +135,15 @@ try:
         ok("Balance in Tally on" in t and "Balance as per the bank statement" in t and "typed in Tally" in t and "second copy" in t, "the reconciliation statement and the lists are shown")
         ok(R["pick"] == 1, "the copy is ticked for deletion; the entry typed in Tally is not, until you tick it")
         pg.click("[data-reconpick]:not(:checked)"); pg.wait_for_timeout(200)
+        # a Tally that refuses to delete: nothing is claimed, and Tally's own words are shown
+        fake_tally.CTRL["delete_mode"] = "refuse"; nd = len(fake_tally.DELETED)
         pg.evaluate("() => { window._rd = reconDelete('delete'); }"); pg.wait_for_timeout(300); pg.click('[data-cbx="yes"]'); pg.evaluate("window._rd")
+        ok(len(fake_tally.DELETED) == nd and "not allowed for this user" in pg.inner_text(".recon") and pg.evaluate("S.recon.extra.length") == 2, "a Tally that refuses: nothing deleted, and Tally's reason is shown in the reconciliation")
+        # a Tally that deletes only by date and voucher number: found that way
+        fake_tally.CTRL["delete_mode"] = "number"
+        pg.evaluate("() => { S.recon.pick = new Set(S.recon.extra); render(); }")
+        pg.evaluate("() => { window._rd = reconDelete('delete'); }"); pg.wait_for_timeout(300); pg.click('[data-cbx="yes"]'); pg.evaluate("window._rd")
+        fake_tally.CTRL["delete_mode"] = ""
         ok(len(fake_tally.DELETED) >= 3 and "880" not in [x[2] for x in fake_tally.POSTED] and not [x for x in fake_tally.POSTED if x[1] == "cash typed in Tally"], "'Delete the ticked from Tally': the copy and the typed entry are gone")
         pg.evaluate("reconPost()")
         for i in range(60):

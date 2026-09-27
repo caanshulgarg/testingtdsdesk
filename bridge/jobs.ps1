@@ -161,6 +161,46 @@ function Get-OneLedgerBalance([int]$Port, [string]$Company, [string]$Ledger, [st
   return $null
 }
 
+# --- 1.12.5: delete one voucher from Tally, trying each way Tally identifies a voucher, and saying what Tally answered
+function Remove-TallyVoucher([int]$Port, [string]$Company, [string]$Guid, [string]$MasterId, [string]$VType, [string]$VDate, [string]$VNum) {
+  $d = $null; try { $d = [datetime]::ParseExact($VDate, 'yyyyMMdd', $null) } catch { }
+  # each try is a name and the XML, built first and then added (PowerShell's comma binds tighter than +)
+  $tries = New-Object System.Collections.ArrayList
+  $vt = Esc $VType
+  if ($Guid) {
+    $x1 = '<VOUCHER REMOTEID="' + (Esc $Guid) + '" VCHTYPE="' + $vt + '" ACTION="Delete"><DATE>' + (Esc $VDate) + '</DATE><VOUCHERTYPENAME>' + $vt + '</VOUCHERTYPENAME></VOUCHER>'
+    $null = $tries.Add(@('GUID', $x1))
+  }
+  if ($MasterId) {
+    $x2 = '<VOUCHER TAGNAME="MASTERID" TAGVALUE="' + (Esc $MasterId) + '" VCHTYPE="' + $vt + '" ACTION="Delete"><VOUCHERTYPENAME>' + $vt + '</VOUCHERTYPENAME></VOUCHER>'
+    $null = $tries.Add(@('MasterID', $x2))
+  }
+  if ($VNum -and $d) {
+    foreach ($ds in @($d.ToString('d-MMM-yyyy', [Globalization.CultureInfo]::InvariantCulture), $VDate)) {
+      $x3 = '<VOUCHER DATE="' + (Esc $ds) + '" TAGNAME="Voucher Number" TAGVALUE="' + (Esc $VNum) + '" VCHTYPE="' + $vt + '" ACTION="Delete"><DATE>' + (Esc $VDate) + '</DATE><VOUCHERTYPENAME>' + $vt + '</VOUCHERTYPENAME><VOUCHERNUMBER>' + (Esc $VNum) + '</VOUCHERNUMBER></VOUCHER>'
+      $n3 = 'number ' + $ds
+      $null = $tries.Add(@($n3, $x3))
+    }
+  }
+  if (-not $tries.Count) { return [ordered]@{ ok = $false; message = 'This entry has no Tally identity (GUID, master ID or voucher number), so it cannot be removed automatically.' } }
+  $said = @()
+  foreach ($t in $tries) {
+    $env2 = '<ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>Vouchers</REPORTNAME>' +
+      '<STATICVARIABLES><SVCURRENTCOMPANY>' + (Esc $Company) + '</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><REQUESTDATA>' +
+      '<TALLYMESSAGE xmlns:UDF="TallyUDF">' + $t[1] + '</TALLYMESSAGE></REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>'
+    $raw = Invoke-Tally -TallyPort $Port -Xml $env2
+    $del = [regex]::Match($raw, '<DELETED>\s*(\d+)\s*</DELETED>')
+    $res = Read-ImportResult $raw
+    $flat = ($raw -replace '\s+', ' ')
+    Write-Log ('  delete by ' + $t[0] + ': ' + $flat.Substring(0, [Math]::Min(300, $flat.Length)))
+    if ($del.Success -and [int]$del.Groups[1].Value -gt 0) { return [ordered]@{ ok = $true; how = $t[0]; message = '' } }
+    $m = [string]$res.message; if ($m -and $m -notmatch 'did not create') { $said += $m }
+  }
+  $why = (@($said | Select-Object -Unique) -join ' ')
+  if (-not $why) { $why = 'Tally did not delete it (it may already be gone, or its voucher number or type has changed).' }
+  return [ordered]@{ ok = $false; message = $why }
+}
+
 function Find-PostedTags([int]$port, [string]$company, $items, [string]$ledger) {
   $found = @{}
   $dates = @()

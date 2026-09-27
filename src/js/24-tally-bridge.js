@@ -23,7 +23,7 @@ const Bridge = {
     } finally { clearTimeout(timer); }
     let j = null;
     try { j = await r.json(); } catch (e){ j = null; }
-    if (!r.ok || !j || j.ok === false) throw {code: r.status === 401 ? "bridge_key" : "bridge", message: (j && j.error) || ("The bridge answered with error " + r.status + ".")};
+    if (!r.ok || !j || j.ok === false) throw {code: r.status === 401 ? "bridge_key" : "bridge", message: (j && (j.error || j.message)) || ("The bridge answered with error " + r.status + ".")};
     return j;
   },
   async refresh(){
@@ -229,9 +229,9 @@ async function bridgeTick(first){
     const before = Bridge.st.state;
     await Bridge.refresh();
     if (first && Bridge.up() && !Bridge.posting) bridgeLeftover();
-    if (first && Bridge.up() && Bridge.st.version && bridgeVer(Bridge.st.version) < bridgeVer("1.12.4") && !lsGet("tdsdesk:bridgenudge1124")){
-      lsSet("tdsdesk:bridgenudge1124", "1");
-      toast("A new Tally Bridge (1.12.4) is ready: posting only sends, and the checks run once afterwards in the background, and it keeps posting even if this page or the connection drops. Download it under Settings \u2192 Tally Bridge and run the setup on the Tally computer.");
+    if (first && Bridge.up() && Bridge.st.version && bridgeVer(Bridge.st.version) < bridgeVer("1.12.5") && !lsGet("tdsdesk:bridgenudge1125")){
+      lsSet("tdsdesk:bridgenudge1125", "1");
+      toast("A new Tally Bridge (1.12.5) is ready: deleting entries from the reconciliation works on more Tally setups, and posting stays fast, and it keeps posting even if this page or the connection drops. Download it under Settings \u2192 Tally Bridge and run the setup on the Tally computer.");
     }
     const key = Bridge.st.open.map(o => o.name).sort().join("|");
     const changed = key !== Bridge.lastOpenKey;
@@ -502,6 +502,8 @@ function reconHtml(){
     (Math.abs(R.openDiff) >= 0.01 ? line("Opening balance difference", R.openDiff, R.openDiff >= 0 ? "+ " : "− ", "Tally on " + fmtDate(addDays(R.from, -1)) + " is " + m(R.tOpen) + "; the statement opens at " + m(R.sOpen) + ": entries before " + fmtDate(R.from) + " differ — reconcile the earlier statement") : "") +
     (R.unexplained !== null && Math.abs(R.unexplained) >= 0.01 ? line("Not explained by the lines below", R.unexplained, R.unexplained >= 0 ? "+ " : "− ") : "") +
     '<tr class="tot"><td><b>Balance as per the bank statement on ' + fmtDate(R.to) + '</b></td><td class="n"><b>' + (R.sClose === null ? "—" : (R.sClose < 0 ? "−" : "") + m(R.sClose)) + "</b></td></tr></tbody></table>";
+  if ((R.deleteProblems || []).length) h += '<div class="bk-alert bad" style="margin-top:10px"><b>Tally did not delete ' + R.deleteProblems.length + " entr" + (R.deleteProblems.length === 1 ? "y" : "ies") + '.</b> What Tally said:<ul style="margin:6px 0 0">' + R.deleteProblems.slice(0, 20).map(x => "<li>" + esc(x) + "</li>").join("") + "</ul>" +
+    '<div class="note">If Tally says the voucher cannot be found, it may already be gone: press Reconcile again. If a Tally security setting blocks deleting, delete these in Tally (Alt+D on the voucher).</div></div>';
   // A. on the statement, not in Tally
   if (R.missing.length){
     const rows = R.missing.map(id => rowById.get(id)).filter(Boolean);
@@ -557,25 +559,27 @@ async function reconDelete(which){
       "<br><br>" + (which === "replace" ? "Each Tally entry is deleted and the statement line is posted again with the statement’s amount." : "Total " + INR.format(total) + ".") + " This cannot be undone from TDS Desk: take a Tally backup first if you have not.</p>"});
   if (!a) return;
   let ok = 0, bad = 0;
+  const why = [], gone = new Set();
   for (let k = 0; k < list.length; k++){
     const t = list[k];
     b.busy = (which === "replace" ? "Replacing " : "Deleting ") + (k + 1) + " of " + list.length + " in Tally…"; render();
     try {
-      const j = await Bridge.call("/unpost", {company: R.company, guid: t.guid, vchType: t.type, vchDate: t.vdate, vchNumber: t.number}, 60000);
-      if (j && j.ok !== false){ ok++; logPosting({what: "bank", id: t.guid, action: "removed", co: b.cid, ref: "reconciliation " + [t.type, t.number].join(" "), party: t.party, amount: Math.abs(t.eff), tally: {guid: t.guid, vchType: t.type, vchDate: t.vdate, company: R.company}, by: (Cloud.st && Cloud.st.email) || ""}); }
-      else bad++;
-    } catch (e){ bad++; }
+      const j = await Bridge.call("/unpost", {company: R.company, guid: t.guid, masterId: t.masterId, vchType: t.type, vchDate: t.vdate, vchNumber: t.number}, 60000);
+      if (j && j.ok !== false){ ok++; gone.add(t.i); logPosting({what: "bank", id: t.guid, action: "removed", co: b.cid, ref: "reconciliation " + [t.type, t.number].join(" "), party: t.party, amount: Math.abs(t.eff), tally: {guid: t.guid, vchType: t.type, vchDate: t.vdate, company: R.company}, by: (Cloud.st && Cloud.st.email) || ""}); }
+      else { bad++; why.push(fmtDate(t.date) + " " + [t.type, t.number].filter(Boolean).join(" ") + ": " + ((j && (j.message || j.error)) || "Tally did not delete it")); }
+    } catch (e){ bad++; why.push(fmtDate(t.date) + " " + [t.type, t.number].filter(Boolean).join(" ") + ": " + (e.message || e)); }
   }
   b.busy = ""; b.tallyLook = null;
-  toast(ok + (which === "replace" ? " removed from Tally" : " deleted from Tally") + (bad ? ", " + bad + " could not be — delete those in Tally" : "") + ".");
+  toast(ok + (which === "replace" ? " removed from Tally" : " deleted from Tally") + (bad ? "; " + bad + " not deleted \u2014 Tally\u2019s reason is shown in the reconciliation" : "") + ".");
   if (which === "replace"){
-    // the statement lines go in again with their own amount
-    const ids = R.differ.map(d => d.rowId);
+    // the statement lines go in again with their own amount, only where the old entry really went
+    const ids = R.differ.filter(d => gone.has(d.ti)).map(d => d.rowId);
     b.rows.forEach(r => { if (ids.includes(r.id)){ if (b.postedTags) delete b.postedTags[fpHash(r.fp || r.id)]; r.state = r.ledger && exactLedger(r.ledger) ? "ready" : "attention"; r.tally = null; r.postVerified = false; r.tallyHow = ""; r.tallyRef = ""; delete r.tallyIdx; } });
     lsDel(wideCheckKey()); saveBank({rows: true, posted: true});
     await postBankToTally(ids.filter(id => (b.rows.find(r => r.id === id) || {}).state === "ready"));
   }
-  await reconcileBank({stay: true});
+  const R2 = await reconcileBank({stay: true});
+  if (R2 && why.length){ R2.deleteProblems = why; render(); }
 }
 
 /* ---------- lines marked as posted that are no longer in Tally (deleted there) ---------- */

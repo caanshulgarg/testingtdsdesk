@@ -26,7 +26,7 @@ trap {
   try { Stop-Transcript | Out-Null } catch { }
   break
 }
-$BridgeVersion = '1.12.4'
+$BridgeVersion = '1.12.5'
 
 # ------------------------------------------------------------------ settings
 function New-BridgeKey {
@@ -974,7 +974,12 @@ function Invoke-Client($client) {
         $vtype = [string]$bodyObj.vchType
         $vdate = [string]$bodyObj.vchDate
         $vnum = [string]$bodyObj.vchNumber
-        if (-not $guid -and -not ($vnum -and $vdate -and $vtype)) { $result = [ordered]@{ ok = $false; error = 'This entry has no Tally identity stored, so it cannot be removed automatically. Delete it in Tally.' } }
+        $mid = [string]$bodyObj.masterId
+        if ($true) {
+          try { $rv = Remove-TallyVoucher $port $company $guid $mid $vtype $vdate $vnum; Write-Log ("Unpost " + $vtype + ' ' + $vnum + ' of ' + $vdate + " from '" + $company + "': " + $(if ($rv.ok) { 'removed (' + $rv.how + ')' } else { 'FAILED ' + $rv.message })); $result = [ordered]@{ ok = [bool]$rv.ok; company = $company; port = $port; message = $rv.message; error = $(if ($rv.ok) { '' } else { [string]$rv.message }); how = $rv.how } }
+          catch { $result = [ordered]@{ ok = $false; error = 'Tally did not answer: ' + $_.Exception.Message } }
+        }
+        elseif (-not $guid -and -not ($vnum -and $vdate -and $vtype)) { $result = [ordered]@{ ok = $false; error = 'This entry has no Tally identity stored, so it cannot be removed automatically. Delete it in Tally.' } }
         else {
           $x = if ($guid) {
             '<VOUCHER REMOTEID="' + (Esc $guid) + '" VCHTYPE="' + (Esc $vtype) + '" ACTION="Delete">' +
@@ -1350,6 +1355,46 @@ function Get-OneLedgerBalance([int]$Port, [string]$Company, [string]$Ledger, [st
     if ($n -eq $Ledger) { return (Get-NodeText $l 'CLOSINGBALANCE') }
   }
   return $null
+}
+
+# --- 1.12.5: delete one voucher from Tally, trying each way Tally identifies a voucher, and saying what Tally answered
+function Remove-TallyVoucher([int]$Port, [string]$Company, [string]$Guid, [string]$MasterId, [string]$VType, [string]$VDate, [string]$VNum) {
+  $d = $null; try { $d = [datetime]::ParseExact($VDate, 'yyyyMMdd', $null) } catch { }
+  # each try is a name and the XML, built first and then added (PowerShell's comma binds tighter than +)
+  $tries = New-Object System.Collections.ArrayList
+  $vt = Esc $VType
+  if ($Guid) {
+    $x1 = '<VOUCHER REMOTEID="' + (Esc $Guid) + '" VCHTYPE="' + $vt + '" ACTION="Delete"><DATE>' + (Esc $VDate) + '</DATE><VOUCHERTYPENAME>' + $vt + '</VOUCHERTYPENAME></VOUCHER>'
+    $null = $tries.Add(@('GUID', $x1))
+  }
+  if ($MasterId) {
+    $x2 = '<VOUCHER TAGNAME="MASTERID" TAGVALUE="' + (Esc $MasterId) + '" VCHTYPE="' + $vt + '" ACTION="Delete"><VOUCHERTYPENAME>' + $vt + '</VOUCHERTYPENAME></VOUCHER>'
+    $null = $tries.Add(@('MasterID', $x2))
+  }
+  if ($VNum -and $d) {
+    foreach ($ds in @($d.ToString('d-MMM-yyyy', [Globalization.CultureInfo]::InvariantCulture), $VDate)) {
+      $x3 = '<VOUCHER DATE="' + (Esc $ds) + '" TAGNAME="Voucher Number" TAGVALUE="' + (Esc $VNum) + '" VCHTYPE="' + $vt + '" ACTION="Delete"><DATE>' + (Esc $VDate) + '</DATE><VOUCHERTYPENAME>' + $vt + '</VOUCHERTYPENAME><VOUCHERNUMBER>' + (Esc $VNum) + '</VOUCHERNUMBER></VOUCHER>'
+      $n3 = 'number ' + $ds
+      $null = $tries.Add(@($n3, $x3))
+    }
+  }
+  if (-not $tries.Count) { return [ordered]@{ ok = $false; message = 'This entry has no Tally identity (GUID, master ID or voucher number), so it cannot be removed automatically.' } }
+  $said = @()
+  foreach ($t in $tries) {
+    $env2 = '<ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>Vouchers</REPORTNAME>' +
+      '<STATICVARIABLES><SVCURRENTCOMPANY>' + (Esc $Company) + '</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><REQUESTDATA>' +
+      '<TALLYMESSAGE xmlns:UDF="TallyUDF">' + $t[1] + '</TALLYMESSAGE></REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>'
+    $raw = Invoke-Tally -TallyPort $Port -Xml $env2
+    $del = [regex]::Match($raw, '<DELETED>\s*(\d+)\s*</DELETED>')
+    $res = Read-ImportResult $raw
+    $flat = ($raw -replace '\s+', ' ')
+    Write-Log ('  delete by ' + $t[0] + ': ' + $flat.Substring(0, [Math]::Min(300, $flat.Length)))
+    if ($del.Success -and [int]$del.Groups[1].Value -gt 0) { return [ordered]@{ ok = $true; how = $t[0]; message = '' } }
+    $m = [string]$res.message; if ($m -and $m -notmatch 'did not create') { $said += $m }
+  }
+  $why = (@($said | Select-Object -Unique) -join ' ')
+  if (-not $why) { $why = 'Tally did not delete it (it may already be gone, or its voucher number or type has changed).' }
+  return [ordered]@{ ok = $false; message = $why }
 }
 
 function Find-PostedTags([int]$port, [string]$company, $items, [string]$ledger) {

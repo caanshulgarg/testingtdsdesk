@@ -43,6 +43,7 @@ def amounts_until(asOn):
 CTRL = {"delay": 0.0, "hang_after": 0, "hang_before": 0, "hang_sec": 25, "refuse": 0}
 POSTED = []          # (date, narration, number, xml) of every voucher created here
 DELETED = []
+BODIES = []
 REQS = {}            # how many requests of each kind this Tally was asked (the tests check nothing heavy is asked)
 def _kind(body):
     for k in ("TDSDeskLedVch", "TDSDeskOneLed", "TDSDeskVchHeads", "TDSDeskBalances", "TDSDeskLedgers", "TDSDeskCompanies"):
@@ -66,6 +67,7 @@ class H(http.server.BaseHTTPRequestHandler):
         REQS[_kind(body)] = REQS.get(_kind(body), 0) + 1
         if "<TALLYREQUEST>Import Data</TALLYREQUEST>" in body:
             CTRL["_imported"] = True
+            BODIES.append(body[-600:])
             import time as _t
             if CTRL["refuse"] > 0:
                 CTRL["refuse"] -= 1; self.close_connection = True; return
@@ -74,11 +76,19 @@ class H(http.server.BaseHTTPRequestHandler):
             _t.sleep(CTRL["delay"])
             with _lock:
                 if 'ACTION="Delete"' in body:
+                    # CTRL delete_mode: "" any way; "number" only by date (d-MMM-yyyy) and voucher number; "refuse" never
+                    mode = CTRL.get("delete_mode", "")
                     rid = (re.search(r'REMOTEID="([^"]*)"', body) or [0, ""])[1]
+                    num = (re.search(r'TAGNAME="Voucher Number" TAGVALUE="([^"]*)"', body) or [0, ""])[1]
+                    dat = (re.search(r'<VOUCHER DATE="([^"]*)"', body) or [0, ""])[1]
                     before = len(POSTED)
-                    POSTED[:] = [x for x in POSTED if "g-" + x[2] != rid]
-                    DELETED.append(rid)
-                    out = "<RESPONSE><CREATED>0</CREATED><ALTERED>0</ALTERED><DELETED>%d</DELETED><ERRORS>%d</ERRORS><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>" % (before - len(POSTED), 0 if before > len(POSTED) else 1)
+                    if mode == "refuse": pass
+                    elif rid and mode != "number": POSTED[:] = [x for x in POSTED if "g-" + x[2] != rid]
+                    elif num and re.match(r"\d{1,2}-[A-Z][a-z]{2}-\d{4}$", dat): POSTED[:] = [x for x in POSTED if x[2] != num]
+                    n = before - len(POSTED)
+                    if n: DELETED.append(rid or num)
+                    err = "" if n else ("<LINEERROR>Deleting vouchers is not allowed for this user.</LINEERROR>" if mode == "refuse" else "<LINEERROR>Voucher does not exist!</LINEERROR>")
+                    out = "<RESPONSE><CREATED>0</CREATED><ALTERED>0</ALTERED><DELETED>%d</DELETED><ERRORS>%d</ERRORS><EXCEPTIONS>0</EXCEPTIONS>%s</RESPONSE>" % (n, 0 if n else 1, err)
                 elif "<VOUCHER" in body:
                     made, errs = 0, []
                     for vx in re.findall(r"<VOUCHER\b.*?</VOUCHER>", body, re.S):

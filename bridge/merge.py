@@ -6,7 +6,7 @@ def R(a, b):
     assert base.count(a) == 1, ('anchor', a[:60], base.count(a))
     base = base.replace(a, b)
 import re
-base = re.sub(r"\$BridgeVersion = '[0-9.]+'", "$BridgeVersion = '1.12.4'", base, 1)
+base = re.sub(r"\$BridgeVersion = '[0-9.]+'", "$BridgeVersion = '1.12.5'", base, 1)
 def RA(a, b, n):
     global base
     assert base.count(a) == n, ('anchor', a[:60], base.count(a))
@@ -119,6 +119,13 @@ R("try { Start-Transcript -Path", "if (-not $Job) { try { Start-Transcript -Path
 R("-Append -ErrorAction SilentlyContinue | Out-Null } catch { }\n", "-Append -ErrorAction SilentlyContinue | Out-Null } catch { } }\n")
 R("      }\n      '/companies' {", "        $result['jobs'] = $jobsNow\n      }\n      '/companies' {")
 R("        $sessions = @(Get-OpenCompanies -Fresh)\n", "        $jobsNow = @(Get-ActiveJobs | Where-Object { $_.status -ne 'interrupted' })\n        $sessions = @($(if ($jobsNow.Count) { Get-OpenCompanies } else { Get-OpenCompanies -Fresh }))\n")
+# --- 1.12.5: /unpost tries every way Tally identifies a voucher, and passes on what Tally said
+R("""        if (-not $guid -and -not ($vnum -and $vdate -and $vtype)) {""", """        $mid = [string]$bodyObj.masterId
+        if ($true) {
+          try { $rv = Remove-TallyVoucher $port $company $guid $mid $vtype $vdate $vnum; Write-Log ("Unpost " + $vtype + ' ' + $vnum + ' of ' + $vdate + " from '" + $company + "': " + $(if ($rv.ok) { 'removed (' + $rv.how + ')' } else { 'FAILED ' + $rv.message })); $result = [ordered]@{ ok = [bool]$rv.ok; company = $company; port = $port; message = $rv.message; error = $(if ($rv.ok) { '' } else { [string]$rv.message }); how = $rv.how } }
+          catch { $result = [ordered]@{ ok = $false; error = 'Tally did not answer: ' + $_.Exception.Message } }
+        }
+        elseif (-not $guid -and -not ($vnum -and $vdate -and $vtype)) {""")
 # --- 1.12.1: a voucher without a proper date never reaches Tally (Tally answers "Voucher date is missing" but may still make it)
 R("""      if (($xml -notmatch '^\\s*<(VOUCHER|LEDGER|GROUP)\\b') -and -not $vtOnly) {""", """      if (($xml -match '^\\s*<VOUCHER\\b') -and ($xml -notmatch '<DATE>(19|20)\\d\\d(0[1-9]|1[0-2])(0[1-9]|[12]\\d|3[01])</DATE>')) { $results += [ordered]@{ id = $it.id; kind = $g.kind; ok = $false; message = 'The entry has no valid date, so it was not sent to Tally.' }; continue }
       if (($xml -notmatch '^\\s*<(VOUCHER|LEDGER|GROUP)\\b') -and -not $vtOnly) {""")

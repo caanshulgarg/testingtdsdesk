@@ -466,6 +466,8 @@ function acMatches(q){
 function acInput(){ return AC.fk ? document.querySelector('[data-fk="' + AC.fk.replace(/"/g, '\\"') + '"]') : null; }
 function acOpen(input){
   if (!B()) return;
+  // just picked: the redraw that follows puts focus back in the box, which must not open the list again
+  if (AC.picked && AC.picked.fk === input.dataset.fk && Date.now() - AC.picked.at < 800 && input.value === AC.picked.value) return;
   AC.fk = input.dataset.fk;
   AC.q = input.value;
   const m = acMatches(input.value);
@@ -481,8 +483,9 @@ function acOpen(input){
       .map(x => ({name: x.l, group: ((known.get(x.l.toLowerCase()) || {}).group || ""), used: x.n}));
     AC.items = past.concat(AC.items.filter(it => !past.some(p => p.name.toLowerCase() === it.name.toLowerCase())));
   }
-  if (input.value.trim() && !exact && hasLedgerList()) AC.items.push({name: input.value.trim(), create: true});
-  AC.idx = AC.items.length && input.value.trim() ? 0 : -1;
+  // "create" comes first, where it is seen; Enter still takes the best existing match below it
+  if (input.value.trim() && !exact && hasLedgerList()) AC.items.unshift({name: input.value.trim(), create: true});
+  AC.idx = !input.value.trim() || !AC.items.length ? -1 : AC.items[0].create && AC.items.length > 1 ? 1 : 0;
   if (!AC.box){ AC.box = document.createElement("div"); AC.box.id = "acBox"; AC.box.setAttribute("role", "listbox"); document.body.appendChild(AC.box); }
   acDraw(input);
 }
@@ -515,6 +518,7 @@ function acPick(i){
   const input = acInput(), it = AC.items[i];
   if (!input || !it) return;
   acClose();
+  if (!it.create) AC.picked = {fk: input.dataset.fk, value: it.name, at: Date.now()};
   if (it.create){
     if (input.dataset.e === "partyLedger" || input.dataset.e === "expenseLedger"){
     const k = input.dataset.e, e0 = curEntry();
@@ -540,7 +544,8 @@ function acPick(i){
     return;
   }
   input.value = it.name;
-  if (input.dataset.bled) input.dispatchEvent(new Event("change", {bubbles: true}));
+  AC.picked.at = Date.now();
+  if (input.dataset.bled){ input.dispatchEvent(new Event("change", {bubbles: true})); AC.picked.at = Date.now(); setTimeout(() => { const el = acInput() || document.querySelector('[data-fk="' + AC.picked.fk.replace(/"/g, '\\"') + '"]'); if (el && document.activeElement === el) el.blur(); acClose(); }, 0); }
   else if (input.hasAttribute("data-bulkled")) bulkLedgerFrom(input);
   else if (input.dataset.svcust || input.hasAttribute("data-sdcust")) input.dispatchEvent(new Event("change", {bubbles: true}));
   else if (input.dataset.e){ input.dispatchEvent(new Event("input", {bubbles: true})); input.dispatchEvent(new Event("change", {bubbles: true})); }

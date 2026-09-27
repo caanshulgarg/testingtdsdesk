@@ -651,7 +651,7 @@ function matchTallyBook(acc, rows, force){
 }
 /* ---------- row actions ---------- */
 function sameParty(a, b){
-  if (a.dec.key === b.dec.key) return true;
+  if (a.dec.key && a.dec.key === b.dec.key) return true;      // two lines without a key are not the same party
   const pa = partyKey(a.dec), pb = partyKey(b.dec);
   if (!pa || !pb) return false;
   if (pa === pb) return true;
