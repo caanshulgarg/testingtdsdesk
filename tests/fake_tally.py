@@ -33,6 +33,11 @@ def amounts_until(asOn):
     for d, piece in V[:bisect.bisect_right(dates, asOn)]:
         for e in re.finditer(r"<LEDGERNAME>([^<]*)</LEDGERNAME>.*?<AMOUNT>(-?[\d.]+)</AMOUNT>", piece, re.S):
             bal[e.group(1)] = bal.get(e.group(1), 0) + float(e.group(2))
+    for d, _, _, piece in list(POSTED):
+        if d > asOn: continue
+        for e in re.finditer(r"<LEDGERNAME>([^<]*)</LEDGERNAME>.*?<AMOUNT>(-?[\d.]+)</AMOUNT>", piece, re.S):
+            nm = e.group(1).replace("&amp;", "&")
+            bal[nm] = bal.get(nm, 0) + float(e.group(2))
     return bal
 # what the tests make this Tally do when entries are imported: be slow, stop answering (after or before creating), refuse
 CTRL = {"delay": 0.0, "hang_after": 0, "hang_before": 0, "hang_sec": 25, "refuse": 0}

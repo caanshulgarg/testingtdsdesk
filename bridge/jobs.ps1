@@ -6,7 +6,7 @@
 # anything whose answer was lost (a timeout, a crash) is looked for in Tally by its TDSDesk tag before it is sent again.
 
 $script:JobsDir = Join-Path $PSScriptRoot 'jobs'
-$script:JobChunk = 10
+$script:JobChunk = 25
 
 function Get-JobDir([string]$id) {
   if ($id -notmatch '^[A-Za-z0-9-]{8,64}$') { throw 'Not a job number.' }
@@ -139,6 +139,26 @@ function Set-KeepAwake([bool]$on) {
   } catch { }
 }
 
+# Entries Tally said it created are read back together (one read for up to 100), not after every batch:
+# found -> confirmed with Tally's voucher number; not found -> not sent again, said so; no answer -> left unconfirmed
+function Confirm-Posted($port, [string]$company, $pending, $results, $items) {
+  if (-not $pending.Count) { return }
+  $byId = @{}; foreach ($it in $items) { $byId[[string]$it.id] = $it }
+  $there = $null
+  for ($a = 0; $null -eq $there -and $a -lt 4; $a++) {
+    $there = Find-PostedTags $port $company @($pending | ForEach-Object { $byId[[string]$_] } | Where-Object { $_ })
+    if ($null -eq $there) { Start-Sleep -Seconds @(2, 5, 10, 20)[$a] }
+  }
+  foreach ($r in $results) {
+    $k = [string]$r.id
+    if (-not ($pending -contains $k)) { continue }
+    if ($null -eq $there) { $r.verified = $null; $r.message = "Tally said it created this, but did not answer the check afterwards. Use 'Check Tally' before posting it again." }
+    elseif ($there.ContainsKey($k)) { $h = $there[$k]; $r.verified = $true; $r.vchNumber = [string]$h.number; $r.vchType = [string]$h.type; $r.masterId = [string]$h.masterId; $r.guid = [string]$h.guid; $r.vchDate = [string]$h.date; $r.message = '' }
+    else { $r.ok = $false; $r.verified = $false; $r.message = "Tally replied 'created', but the entry cannot be found in '" + $company + "'. It was not sent again: look for it in Tally (another company open in Tally, or an Optional voucher)." }
+  }
+  $pending.Clear()
+}
+
 # the worker: this script started with -Job <folder>
 function Invoke-JobWorker([string]$dir) {
   $p = Read-JobProgress $dir
@@ -185,6 +205,10 @@ function Invoke-JobWorker([string]$dir) {
     Write-JobProgress $dir $p
     $queue = [Collections.ArrayList]@($todo)
     $tries = @{}
+    $allItems = @($pl.items)
+    # entries created before a stop but not yet read back are confirmed with the next read
+    $toConfirm = New-Object System.Collections.ArrayList
+    foreach ($r in $results) { if ($r.ok -and $r.pendingCheck) { $null = $toConfirm.Add([string]$r.id) } }
     while ($queue.Count -gt 0) {
       $n = [Math]::Min($script:JobChunk, $queue.Count)
       $chunk = @($queue.GetRange(0, $n)); $queue.RemoveRange(0, $n)
@@ -210,8 +234,14 @@ function Invoke-JobWorker([string]$dir) {
           $rr = Read-ImportResult (Invoke-Tally -TallyPort $port -Xml $env)
         } catch { $rr = $null; $why = Get-TallyTrouble $_.Exception.Message }
         $there = $null
-        if ($rr) { $there = Find-PostedTags $port ([string]$pl.company) @($fast | ForEach-Object { [ordered]@{ id = $_.id; kind = 'voucher'; xml = $_.xml } }) }
-        if ($null -eq $there) {
+        if ($rr -and $rr.created -eq $fast.Count -and -not $rr.errors -and -not $rr.exceptions) {
+          # Tally made every one: counted now, read back with the next batch check (one read instead of one per batch)
+          foreach ($v in $fast) { $res += [ordered]@{ id = [string]$v.id; kind = 'voucher'; ok = $true; verified = $null; pendingCheck = $true; created = 1; company = [string]$pl.company; port = $port; vchNumber = ''; vchType = ''; masterId = ''; guid = ''; vchDate = ''; message = '' }; $null = $toConfirm.Add([string]$v.id) }
+          $fast = @()
+        }
+        elseif ($rr) { $there = Find-PostedTags $port ([string]$pl.company) @($fast | ForEach-Object { [ordered]@{ id = $_.id; kind = 'voucher'; xml = $_.xml } }) }
+        if (-not $fast.Count) { }
+        elseif ($null -eq $there) {
           if ($rr) { $why = 'Tally did not answer the check after posting' }
           foreach ($v in $fast) { $res += [ordered]@{ id = [string]$v.id; kind = 'voucher'; ok = $false; message = 'Tally did not answer: ' + $why } }
         } else {
@@ -264,9 +294,12 @@ function Invoke-JobWorker([string]$dir) {
         }
       }
       foreach ($r in $res) { $r.Remove('replySnip'); $null = $results.Add($r) }
+      if ($toConfirm.Count -ge 100) { $p.message = 'Checking ' + $toConfirm.Count + ' entries in Tally'; Write-JobProgress $dir $p; Confirm-Posted $port ([string]$pl.company) $toConfirm $results $allItems }
       $p.done = $results.Count
       Write-JobProgress $dir $p
     }
+    if ($toConfirm.Count) { $p.message = 'Checking ' + $toConfirm.Count + ' entries in Tally'; Write-JobProgress $dir $p; Confirm-Posted $port ([string]$pl.company) $toConfirm $results $allItems }
+    foreach ($r in $results) { if ($r -is [System.Collections.IDictionary]) { if ($r.Contains('pendingCheck')) { $r.Remove('pendingCheck') } } elseif ($r.PSObject.Properties['pendingCheck']) { $r.PSObject.Properties.Remove('pendingCheck') } }
     $okN = @($results | Where-Object { $_.ok }).Count
     $p.status = 'done'; $p.message = [string]$okN + ' of ' + $p.total + ' in Tally'; $p.finishedAt = (Get-Date).ToString('o')
     Write-JobProgress $dir $p

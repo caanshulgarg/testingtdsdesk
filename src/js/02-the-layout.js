@@ -146,6 +146,7 @@ function clientHeader(){
     return h + '<nav class="sbar" aria-label="Client setup">' + SETUP_TABS.map(([id, l]) => '<button data-tab="' + id + '" aria-selected="' + (S.tab === id) + '">' + l + "</button>").join("") + "</nav>";
   }
   if (t === "sales" && S.tab === "sales") return h;
+  if (t === "bank" && S.tab === "bank") return h;      // the bank page has its own tabs (review, ready, in Tally)
   const now = curStep(), c = stepCounts();
   const num0 = x => { const m = String(x || "").match(/\d+/); return m ? m[0] : ""; };
   const items = [["review", "To review", num0(c.review)], ["post", "Ready to post", num0(c.post)], ["done", "Posted", num0(c.done)]];

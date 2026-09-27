@@ -796,6 +796,7 @@ function bankRangeOn(){ const b = B(); return !!(b && (b.from || b.to || bankCol
 function bankRangeRows(){ const b = B(); return bankRangeOn() ? b.rows.filter(inBankRange) : b.rows; }
 function bankVisibleRows(){
   const b = B();
+  if (b.focus && b.focus.ids){ const only = new Set(b.focus.ids); return b.rows.filter(r => only.has(r.id)); }
   const q = b.q.trim().toLowerCase();
   const states = tabStates(bankTab());
   return b.rows.filter(r => inBankRange(r) && (!states || states.includes(r.state) || b.sticky.has(r.id)) && (!q || (r.narr + " " + r.ledger + " " + (r.debit || r.credit) + " " + (r.dec.name || "")).toLowerCase().includes(q)));
@@ -994,7 +995,7 @@ function exportBankCsv(){
 /* ---------- screen ---------- */
 /* ---------- the bank screen ---------- */
 const BANK_TABS_EXTRA = [["rules", "Rules"]];
-const BANK_TABS = [["review", "To review"], ["ready", "Ready"], ["done", "Done"]];
+const BANK_TABS = [["review", "1 \u00b7 To review"], ["ready", "2 \u00b7 Ready to post"], ["done", "3 \u00b7 In Tally"]];
 function tabStates(tab){ return tab === "ready" ? ["ready"] : tab === "done" ? ["sent", "intally", "ignored"] : tab === "all" ? null : ["attention", "suggested"]; }
 function bankTab(){ const b = B(); return ["review", "ready", "done", "all", "rules"].includes(b.filter) ? b.filter : "review"; }
 function tabCounts(rows){
@@ -1066,25 +1067,30 @@ function viewBank(){
     (b.stmts.length > 1 ? '<select class="bk-stmtsel" data-stmtsel aria-label="Statement">' + b.stmts.slice().reverse().map(s => '<option value="' + s.id + '"' + (s.id === b.cur ? " selected" : "") + ">" + esc(stmtLabel(s)) + "</option>").join("") + "</select>"
       : '<h2 class="bk-title">' + esc(accLedger || st.bank) + "</h2>") +
     '<div class="bk-sub">' + esc(st.bank) + (st.acct ? " \u00b7 A/c " + esc(st.acct) : "") + " \u00b7 " + fmtDate(st.from) + " to " + fmtDate(st.to) + " \u00b7 " + b.rows.length + " entries</div></div>" +
-    '<dl class="bk-figs"><div><dt>Opening</dt><dd>' + (st.opening !== undefined ? INR.format(st.opening) : "\u2014") + '</dd></div><div><dt>Withdrawals</dt><dd>' + INR.format(st.totDr || 0) + '</dd></div><div><dt>Deposits</dt><dd>' + INR.format(st.totCr || 0) + '</dd></div><div><dt>Closing</dt><dd>' + (st.closing !== undefined ? INR.format(st.closing) : "\u2014") + "</dd></div></dl>" +
-    '<div class="bk-actions"><button class="btn small" data-act="bankPick">Upload statement</button><button class="btn small" data-act="bankSettings">Settings</button>' +
+    '<dl class="bk-figs"><div><dt>Opening</dt><dd>' + (st.opening !== undefined ? INR.format(st.opening) : "\u2014") + '</dd></div><div><dt>Withdrawals</dt><dd>' + INR.format(st.totDr || b.rows.reduce((a2, r) => a2 + num(r.debit), 0)) + '</dd></div><div><dt>Deposits</dt><dd>' + INR.format(st.totCr || b.rows.reduce((a2, r) => a2 + num(r.credit), 0)) + '</dd></div><div><dt>Closing</dt><dd>' + (st.closing !== undefined ? INR.format(st.closing) : "\u2014") + "</dd></div></dl>" +
+    '<div class="bk-actions"><button class="btn small" data-act="bankSettings">Settings</button>' +
     '<details class="bk-menu"><summary class="btn small">More</summary><div class="bk-menu-list">' +
-      (Bridge.on() && Bridge.up() ? '<button data-act="dupFind">Find double or wrong-date entries in Tally</button><button data-act="bankCheckTally">Check Tally for entries already there</button><button data-act="bankSync">Refresh ledgers from Tally</button><button data-act="bankFile">Create Tally file instead</button>' : '<button data-act="bookPick">Match with Tally bank book</button>') +
+      (Bridge.on() && Bridge.up() ? '<button data-act="bankBalCheck">Check the balance with Tally<small>Tally\u2019s bank balance against the statement, and why they differ</small></button>' +
+        '<button data-act="bankCheckTally">Mark lines already in Tally<small>Reads the bank ledger; lines found there are not posted again</small></button>' +
+        '<button data-act="dupFind">Find double or wrong-date entries<small>Entries from this statement that are in Tally twice or under another date</small></button>' +
+        '<button data-act="bankSync">Reload ledgers from Tally<small>After you create or rename a ledger in Tally</small></button>' +
+        '<button data-act="bankFile">Create a Tally file instead<small>Download an XML to import in Tally yourself</small></button>' : '<button data-act="bookPick">Match with Tally bank book</button>') +
       '<button data-act="bankCsv">Download as Excel (CSV)</button>' +
       (S.engine && tc.attention ? '<button data-act="bankClaude">Ask Claude for the remaining entries</button>' : "") +
       '<button data-act="bankClearStmt">Clear all decisions</button>' +
       '<button class="danger" data-act="bankDelStmt">Delete this statement</button></div></details></div></div>';
   const repaired = b.rows.filter(r => r.repaired).length;
   h += '<div class="bk-check">' + (st.badRows ? '<span class="bad">\u2716 ' + st.badRows + " entries do not agree with the running balance \u2014 check them before posting</span>"
-      : '<span class="ok">\u2714 Balances verified' + (st.summaryOk ? ": opening + deposits \u2212 withdrawals = closing" : "") + "</span>") +
+      : '<span class="ok">\u2714 The statement adds up: every line agrees with its running balance' + (st.summaryOk ? ", and opening + deposits \u2212 withdrawals = closing" : "") + "</span>") +
     (repaired ? ' <span class="warn">\u00b7 ' + repaired + " amounts were read from the balance change (marked \u2248)</span>" : "") +
     (st.dupRows ? ' <span class="muted">\u00b7 ' + st.dupRows + " entries skipped (already uploaded)</span>" : "") +
     (b.books[st.acctId] ? ' <span class="muted">\u00b7 ' + (b.books[st.acctId].live ? "Checked against Tally " + new Date(b.books[st.acctId].importedAt).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}) : "Matched with the Tally bank book") + "</span>" : "") + "</div>";
+  if (accLedger && (Bridge.on() || st.tallyBal)) h += bankBalanceHtml(st);
   if (!accLedger) h += '<div class="bk-setup"><div><b>Which Tally ledger is this bank account?</b><div class="note">' + esc(st.bank) + (acc.last4 ? " \u00b7\u00b7" + esc(acc.last4) : "") + (acc.ifsc ? " \u00b7 " + esc(acc.ifsc) : "") + "</div></div>" +
     (hasLedgerList() ? '<select data-bankacc="' + acc.id + '">' + ledgerOptions("", BANK_GROUPS) + "</select>" : '<span class="note">Import the ledger list first.</span>') + "</div>";
   // tabs
   const tab = bankTab();
-  h += '<div class="bk-bar"><div class="bk-tabs" role="tablist">' + BANK_TABS.concat([]).map(([k, t]) => '<button role="tab" aria-selected="' + (tab === k) + '" data-btab="' + k + '">' + t + ' <span class="cnt">' + tc[k] + "</span></button>").join("") +
+  h += '<div class="bk-bar"><div class="bk-tabs" role="tablist">' + BANK_TABS.concat([]).map(([k, t]) => '<button role="tab" aria-selected="' + (tab === k && !b.focus) + '" data-btab="' + k + '">' + t + ' <span class="cnt">' + tc[k] + "</span></button>").join("") +
     '<button role="tab" aria-selected="' + (tab === "rules") + '" data-btab="rules">Rules <span class="cnt">' + allRules().length + "</span></button></div>" +
     (tab === "review" ? '<label class="bk-switch"><input type="checkbox" data-bgroup' + (b.grouped ? " checked" : "") + "> Group by party</label>" : "") +
     '<input type="search" class="bk-search" data-bankq data-fk="bankq" data-keeptyped autocomplete="off" placeholder="Search the description, party or amount" value="' + esc(b.q) + '"></div>';
@@ -1093,6 +1099,7 @@ function viewBank(){
     h += colChipBar("bank", inR.length, b.rows.length + " lines", "out " + INR.format(r2(out)) + " \u00b7 in " + INR.format(r2(inn)));
   }
   h += dupFindHtml();
+  h += bankFocusHtml();
   if (b.offerRule){
     const o = b.offerRule;
     h += '<div class="bk-found" style="border-color:var(--ledger)"><b>Keep this as a rule?</b> Every future line containing \u201c' + esc(o.text) + '\u201d would go to <b>' + esc(o.ledger) + "</b> by itself." +

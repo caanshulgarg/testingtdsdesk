@@ -684,7 +684,8 @@ async function clearRules(){
 function bankRow(id){ const b = B(); return b && b.rows.find(r => r.id === id); }
 function bankClick(t){
   const b = B(); if (!b) return false;
-  if (t.dataset.btab){ b.filter = t.dataset.btab; b.limit = 100; b.sticky.clear(); b.sel.clear(); render(); return true; }
+  if (t.dataset.bfocus){ const f = S.focusSets[t.dataset.bfocus]; if (f){ bankFocus(f.title, f.ids, f.note); render(); window.scrollTo({top: 0, behavior: "smooth"}); } return true; }
+  if (t.dataset.btab){ b.focus = null; b.filter = t.dataset.btab; b.limit = 100; b.sticky.clear(); b.sel.clear(); render(); return true; }
   if (t.dataset.delstmt){ deleteStatement(t.dataset.delstmt); return true; }
   if (t.dataset.gapply){ const inp = document.getElementById(t.dataset.gapply); if (inp) applyGroup(inp.dataset.gkey, inp.value); acClose(); return true; }
   if (t.hasAttribute && (t.hasAttribute("data-bselall") || t.hasAttribute("data-bsel"))) return true;
@@ -856,6 +857,8 @@ function bankClick(t){
     case "bankRangeClear": { const b = B(); b.from = ""; b.to = ""; b.f = {}; b.sel.clear(); render(); return true; }
     case "bankBulkPost": { const ids = b.rows.filter(r => b.sel.has(r.id) && r.state === "ready").map(r => r.id); b.sel.clear(); postBankToTally(ids); return true; }
     case "bankReportOk": b.postReport = null; render(); return true;
+    case "bankFocusOff": b.focus = null; render(); return true;
+    case "bankBalCheck": closeMenus(); checkBankBalance(); return true;
     case "dupFind": closeMenus(); findTallyDuplicates(); return true;
     case "dupRemove": removeTallyDuplicates("extra"); return true;
     case "dupRemoveWrong": removeTallyDuplicates("wrong"); return true;
@@ -866,9 +869,12 @@ function bankClick(t){
       ensureTallyCompany(CO(b2.cid)).then(n => {
         if (!n) return;
         b2.busy = "Reading the bank ledger from Tally\u2026"; render();
+        const before = new Set(b2.rows.filter(r => r.state === "intally").map(r => r.id));
         syncBankBookFromTally(true).then(() => {
           b2.busy = ""; b2.checkedAt = Date.now();
-          toast(b2.rows.filter(r => r.state === "intally").length + " entries are already in Tally.");
+          const now = b2.rows.filter(r => r.state === "intally"), fresh = now.filter(r => !before.has(r.id));
+          if (fresh.length) bankFocus("found in Tally just now", fresh.map(r => r.id), "These lines are already in Tally, so they will not be posted. Each shows how it was matched.");
+          toast(fresh.length ? fresh.length + " more line" + (fresh.length === 1 ? " was" : "s were") + " found in Tally (" + now.length + " in all)." : "No more lines found in Tally (" + now.length + " already marked).");
           render();
         }, e => { b2.busy = ""; toast("Could not read: " + e.message); render(); });
       });

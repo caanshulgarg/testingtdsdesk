@@ -228,6 +228,15 @@ html{scroll-padding-bottom:150px}
 .bk-menu-list button:hover{background:var(--rule-soft)}
 .bk-menu-list .danger{color:var(--stop)}
 .bk-check{font-size:13px;padding:0 4px}
+.bk-menu-list{min-width:320px}
+.bk-menu-list button small{display:block;color:var(--muted);font-size:12px;margin-top:2px;line-height:1.35}
+.bk-bal{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;padding:10px 14px;border-radius:8px;border:1px solid var(--rule);background:var(--sheet);font-size:14px;margin:8px 0}
+.bk-bal.ok{border-color:var(--ledger);background:var(--ledger-soft,#e8f3ee)}
+.bk-bal.bad{border-color:var(--stop);background:var(--stop-soft)}
+.bk-bal .btn{flex:none}
+.bk-bal-why{margin:8px 0 0;padding-left:18px}
+.bk-bal-why li{margin:4px 0}
+.bk-focus{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:10px 14px;border-radius:8px;background:var(--flag-soft);border-left:3px solid var(--flag);margin:8px 0;font-size:14px}
 .bk-check .ok{color:var(--ledger)}
 .bk-check .bad{color:var(--stop);font-weight:600}
 .bk-check .warn{color:var(--flag)}
@@ -972,7 +981,7 @@ const DEFAULT_FIRM = {firmName:"Garg Shekhar & Company", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "TEST · 27 Sep 2026 · build 161 (every date sent to Tally fixed; wrong-date and double entries found and removed)";
+const APP_VERSION = "TEST · 27 Sep 2026 · build 162 (faster posting; Tally balance checked against the statement; clearer bank page)";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;
@@ -5019,6 +5028,7 @@ function clientHeader(){
     return h + '<nav class="sbar" aria-label="Client setup">' + SETUP_TABS.map(([id, l]) => '<button data-tab="' + id + '" aria-selected="' + (S.tab === id) + '">' + l + "</button>").join("") + "</nav>";
   }
   if (t === "sales" && S.tab === "sales") return h;
+  if (t === "bank" && S.tab === "bank") return h;      // the bank page has its own tabs (review, ready, in Tally)
   const now = curStep(), c = stepCounts();
   const num0 = x => { const m = String(x || "").match(/\d+/); return m ? m[0] : ""; };
   const items = [["review", "To review", num0(c.review)], ["post", "Ready to post", num0(c.post)], ["done", "Posted", num0(c.done)]];
@@ -13671,6 +13681,7 @@ function bankRangeOn(){ const b = B(); return !!(b && (b.from || b.to || bankCol
 function bankRangeRows(){ const b = B(); return bankRangeOn() ? b.rows.filter(inBankRange) : b.rows; }
 function bankVisibleRows(){
   const b = B();
+  if (b.focus && b.focus.ids){ const only = new Set(b.focus.ids); return b.rows.filter(r => only.has(r.id)); }
   const q = b.q.trim().toLowerCase();
   const states = tabStates(bankTab());
   return b.rows.filter(r => inBankRange(r) && (!states || states.includes(r.state) || b.sticky.has(r.id)) && (!q || (r.narr + " " + r.ledger + " " + (r.debit || r.credit) + " " + (r.dec.name || "")).toLowerCase().includes(q)));
@@ -13869,7 +13880,7 @@ function exportBankCsv(){
 /* ---------- screen ---------- */
 /* ---------- the bank screen ---------- */
 const BANK_TABS_EXTRA = [["rules", "Rules"]];
-const BANK_TABS = [["review", "To review"], ["ready", "Ready"], ["done", "Done"]];
+const BANK_TABS = [["review", "1 \u00b7 To review"], ["ready", "2 \u00b7 Ready to post"], ["done", "3 \u00b7 In Tally"]];
 function tabStates(tab){ return tab === "ready" ? ["ready"] : tab === "done" ? ["sent", "intally", "ignored"] : tab === "all" ? null : ["attention", "suggested"]; }
 function bankTab(){ const b = B(); return ["review", "ready", "done", "all", "rules"].includes(b.filter) ? b.filter : "review"; }
 function tabCounts(rows){
@@ -13941,25 +13952,30 @@ function viewBank(){
     (b.stmts.length > 1 ? '<select class="bk-stmtsel" data-stmtsel aria-label="Statement">' + b.stmts.slice().reverse().map(s => '<option value="' + s.id + '"' + (s.id === b.cur ? " selected" : "") + ">" + esc(stmtLabel(s)) + "</option>").join("") + "</select>"
       : '<h2 class="bk-title">' + esc(accLedger || st.bank) + "</h2>") +
     '<div class="bk-sub">' + esc(st.bank) + (st.acct ? " \u00b7 A/c " + esc(st.acct) : "") + " \u00b7 " + fmtDate(st.from) + " to " + fmtDate(st.to) + " \u00b7 " + b.rows.length + " entries</div></div>" +
-    '<dl class="bk-figs"><div><dt>Opening</dt><dd>' + (st.opening !== undefined ? INR.format(st.opening) : "\u2014") + '</dd></div><div><dt>Withdrawals</dt><dd>' + INR.format(st.totDr || 0) + '</dd></div><div><dt>Deposits</dt><dd>' + INR.format(st.totCr || 0) + '</dd></div><div><dt>Closing</dt><dd>' + (st.closing !== undefined ? INR.format(st.closing) : "\u2014") + "</dd></div></dl>" +
-    '<div class="bk-actions"><button class="btn small" data-act="bankPick">Upload statement</button><button class="btn small" data-act="bankSettings">Settings</button>' +
+    '<dl class="bk-figs"><div><dt>Opening</dt><dd>' + (st.opening !== undefined ? INR.format(st.opening) : "\u2014") + '</dd></div><div><dt>Withdrawals</dt><dd>' + INR.format(st.totDr || b.rows.reduce((a2, r) => a2 + num(r.debit), 0)) + '</dd></div><div><dt>Deposits</dt><dd>' + INR.format(st.totCr || b.rows.reduce((a2, r) => a2 + num(r.credit), 0)) + '</dd></div><div><dt>Closing</dt><dd>' + (st.closing !== undefined ? INR.format(st.closing) : "\u2014") + "</dd></div></dl>" +
+    '<div class="bk-actions"><button class="btn small" data-act="bankSettings">Settings</button>' +
     '<details class="bk-menu"><summary class="btn small">More</summary><div class="bk-menu-list">' +
-      (Bridge.on() && Bridge.up() ? '<button data-act="dupFind">Find double or wrong-date entries in Tally</button><button data-act="bankCheckTally">Check Tally for entries already there</button><button data-act="bankSync">Refresh ledgers from Tally</button><button data-act="bankFile">Create Tally file instead</button>' : '<button data-act="bookPick">Match with Tally bank book</button>') +
+      (Bridge.on() && Bridge.up() ? '<button data-act="bankBalCheck">Check the balance with Tally<small>Tally\u2019s bank balance against the statement, and why they differ</small></button>' +
+        '<button data-act="bankCheckTally">Mark lines already in Tally<small>Reads the bank ledger; lines found there are not posted again</small></button>' +
+        '<button data-act="dupFind">Find double or wrong-date entries<small>Entries from this statement that are in Tally twice or under another date</small></button>' +
+        '<button data-act="bankSync">Reload ledgers from Tally<small>After you create or rename a ledger in Tally</small></button>' +
+        '<button data-act="bankFile">Create a Tally file instead<small>Download an XML to import in Tally yourself</small></button>' : '<button data-act="bookPick">Match with Tally bank book</button>') +
       '<button data-act="bankCsv">Download as Excel (CSV)</button>' +
       (S.engine && tc.attention ? '<button data-act="bankClaude">Ask Claude for the remaining entries</button>' : "") +
       '<button data-act="bankClearStmt">Clear all decisions</button>' +
       '<button class="danger" data-act="bankDelStmt">Delete this statement</button></div></details></div></div>';
   const repaired = b.rows.filter(r => r.repaired).length;
   h += '<div class="bk-check">' + (st.badRows ? '<span class="bad">\u2716 ' + st.badRows + " entries do not agree with the running balance \u2014 check them before posting</span>"
-      : '<span class="ok">\u2714 Balances verified' + (st.summaryOk ? ": opening + deposits \u2212 withdrawals = closing" : "") + "</span>") +
+      : '<span class="ok">\u2714 The statement adds up: every line agrees with its running balance' + (st.summaryOk ? ", and opening + deposits \u2212 withdrawals = closing" : "") + "</span>") +
     (repaired ? ' <span class="warn">\u00b7 ' + repaired + " amounts were read from the balance change (marked \u2248)</span>" : "") +
     (st.dupRows ? ' <span class="muted">\u00b7 ' + st.dupRows + " entries skipped (already uploaded)</span>" : "") +
     (b.books[st.acctId] ? ' <span class="muted">\u00b7 ' + (b.books[st.acctId].live ? "Checked against Tally " + new Date(b.books[st.acctId].importedAt).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}) : "Matched with the Tally bank book") + "</span>" : "") + "</div>";
+  if (accLedger && (Bridge.on() || st.tallyBal)) h += bankBalanceHtml(st);
   if (!accLedger) h += '<div class="bk-setup"><div><b>Which Tally ledger is this bank account?</b><div class="note">' + esc(st.bank) + (acc.last4 ? " \u00b7\u00b7" + esc(acc.last4) : "") + (acc.ifsc ? " \u00b7 " + esc(acc.ifsc) : "") + "</div></div>" +
     (hasLedgerList() ? '<select data-bankacc="' + acc.id + '">' + ledgerOptions("", BANK_GROUPS) + "</select>" : '<span class="note">Import the ledger list first.</span>') + "</div>";
   // tabs
   const tab = bankTab();
-  h += '<div class="bk-bar"><div class="bk-tabs" role="tablist">' + BANK_TABS.concat([]).map(([k, t]) => '<button role="tab" aria-selected="' + (tab === k) + '" data-btab="' + k + '">' + t + ' <span class="cnt">' + tc[k] + "</span></button>").join("") +
+  h += '<div class="bk-bar"><div class="bk-tabs" role="tablist">' + BANK_TABS.concat([]).map(([k, t]) => '<button role="tab" aria-selected="' + (tab === k && !b.focus) + '" data-btab="' + k + '">' + t + ' <span class="cnt">' + tc[k] + "</span></button>").join("") +
     '<button role="tab" aria-selected="' + (tab === "rules") + '" data-btab="rules">Rules <span class="cnt">' + allRules().length + "</span></button></div>" +
     (tab === "review" ? '<label class="bk-switch"><input type="checkbox" data-bgroup' + (b.grouped ? " checked" : "") + "> Group by party</label>" : "") +
     '<input type="search" class="bk-search" data-bankq data-fk="bankq" data-keeptyped autocomplete="off" placeholder="Search the description, party or amount" value="' + esc(b.q) + '"></div>';
@@ -13968,6 +13984,7 @@ function viewBank(){
     h += colChipBar("bank", inR.length, b.rows.length + " lines", "out " + INR.format(r2(out)) + " \u00b7 in " + INR.format(r2(inn)));
   }
   h += dupFindHtml();
+  h += bankFocusHtml();
   if (b.offerRule){
     const o = b.offerRule;
     h += '<div class="bk-found" style="border-color:var(--ledger)"><b>Keep this as a rule?</b> Every future line containing \u201c' + esc(o.text) + '\u201d would go to <b>' + esc(o.ledger) + "</b> by itself." +
@@ -14673,7 +14690,8 @@ async function clearRules(){
 function bankRow(id){ const b = B(); return b && b.rows.find(r => r.id === id); }
 function bankClick(t){
   const b = B(); if (!b) return false;
-  if (t.dataset.btab){ b.filter = t.dataset.btab; b.limit = 100; b.sticky.clear(); b.sel.clear(); render(); return true; }
+  if (t.dataset.bfocus){ const f = S.focusSets[t.dataset.bfocus]; if (f){ bankFocus(f.title, f.ids, f.note); render(); window.scrollTo({top: 0, behavior: "smooth"}); } return true; }
+  if (t.dataset.btab){ b.focus = null; b.filter = t.dataset.btab; b.limit = 100; b.sticky.clear(); b.sel.clear(); render(); return true; }
   if (t.dataset.delstmt){ deleteStatement(t.dataset.delstmt); return true; }
   if (t.dataset.gapply){ const inp = document.getElementById(t.dataset.gapply); if (inp) applyGroup(inp.dataset.gkey, inp.value); acClose(); return true; }
   if (t.hasAttribute && (t.hasAttribute("data-bselall") || t.hasAttribute("data-bsel"))) return true;
@@ -14845,6 +14863,8 @@ function bankClick(t){
     case "bankRangeClear": { const b = B(); b.from = ""; b.to = ""; b.f = {}; b.sel.clear(); render(); return true; }
     case "bankBulkPost": { const ids = b.rows.filter(r => b.sel.has(r.id) && r.state === "ready").map(r => r.id); b.sel.clear(); postBankToTally(ids); return true; }
     case "bankReportOk": b.postReport = null; render(); return true;
+    case "bankFocusOff": b.focus = null; render(); return true;
+    case "bankBalCheck": closeMenus(); checkBankBalance(); return true;
     case "dupFind": closeMenus(); findTallyDuplicates(); return true;
     case "dupRemove": removeTallyDuplicates("extra"); return true;
     case "dupRemoveWrong": removeTallyDuplicates("wrong"); return true;
@@ -14855,9 +14875,12 @@ function bankClick(t){
       ensureTallyCompany(CO(b2.cid)).then(n => {
         if (!n) return;
         b2.busy = "Reading the bank ledger from Tally\u2026"; render();
+        const before = new Set(b2.rows.filter(r => r.state === "intally").map(r => r.id));
         syncBankBookFromTally(true).then(() => {
           b2.busy = ""; b2.checkedAt = Date.now();
-          toast(b2.rows.filter(r => r.state === "intally").length + " entries are already in Tally.");
+          const now = b2.rows.filter(r => r.state === "intally"), fresh = now.filter(r => !before.has(r.id));
+          if (fresh.length) bankFocus("found in Tally just now", fresh.map(r => r.id), "These lines are already in Tally, so they will not be posted. Each shows how it was matched.");
+          toast(fresh.length ? fresh.length + " more line" + (fresh.length === 1 ? " was" : "s were") + " found in Tally (" + now.length + " in all)." : "No more lines found in Tally (" + now.length + " already marked).");
           render();
         }, e => { b2.busy = ""; toast("Could not read: " + e.message); render(); });
       });
@@ -15332,9 +15355,9 @@ async function bridgeTick(first){
     const before = Bridge.st.state;
     await Bridge.refresh();
     if (first && Bridge.up() && !Bridge.posting) bridgeLeftover();
-    if (first && Bridge.up() && Bridge.st.version && bridgeVer(Bridge.st.version) < bridgeVer("1.12.0") && !lsGet("tdsdesk-test:bridgenudge112")){
-      lsSet("tdsdesk-test:bridgenudge112", "1");
-      toast("A steadier Tally Bridge (1.12) is ready: it keeps posting even if this page or the connection drops. Download it under Settings \u2192 Tally Bridge and run the setup on the Tally computer.");
+    if (first && Bridge.up() && Bridge.st.version && bridgeVer(Bridge.st.version) < bridgeVer("1.12.2") && !lsGet("tdsdesk-test:bridgenudge1122")){
+      lsSet("tdsdesk-test:bridgenudge1122", "1");
+      toast("A new Tally Bridge (1.12.2) is ready: faster posting, and it keeps posting even if this page or the connection drops. Download it under Settings \u2192 Tally Bridge and run the setup on the Tally computer.");
     }
     const key = Bridge.st.open.map(o => o.name).sort().join("|");
     const changed = key !== Bridge.lastOpenKey;
@@ -15578,7 +15601,7 @@ function dupFindHtml(){
   if (!bad) return h + "<b>All clear.</b> " + d.tagged + " entries posted by TDS Desk were checked in " + esc(d.company) + " (" + fmtDate(d.from) + " to " + fmtDate(d.to) + "): each is there once, on its statement date. " + '<button class="linkbtn" data-act="dupClose">Close</button></div>';
   if (d.wrongDate.length){
     h += "<b>" + d.wrongDate.length + " entr" + (d.wrongDate.length === 1 ? "y is" : "ies are") + " in " + esc(d.company) + " under the wrong date.</b>" +
-      "<div>Remove them; the lines then show as not posted, and Post puts them in again with the statement’s date.</div>" + tbl(d.wrongDate, true) +
+      "<div>Remove them; the lines then show as not posted, and Post puts them in again with the statement’s date. " + focusBtn("dup-wrong", "in Tally under the wrong date", Array.from(new Set(d.wrongDate.map(v => v.rowId).filter(Boolean))), "Show their statement lines") + "</div>" + tbl(d.wrongDate, true) +
       '<div class="row" style="margin-top:8px"><button class="btn small primary" data-act="dupRemoveWrong">Remove the ' + d.wrongDate.length + " wrong-date entr" + (d.wrongDate.length === 1 ? "y" : "ies") + ' from Tally</button></div>';
   }
   if (d.extra.length){
@@ -15628,6 +15651,113 @@ async function removeTallyDuplicates(which){
   S.dupFind = null;
   lsDel(wideCheckKey());
   render();
+}
+
+/* ---------- does Tally agree with the bank? ---------- */
+// Tally's balance of the bank ledger at the start and end of the statement, against the statement's own opening and closing.
+// When they differ, the difference is taken apart: the opening, the statement lines not in Tally yet, the lines left out,
+// and the entries in Tally for these dates that are not on the statement. Whatever is left is shown as unexplained.
+function bankEffect(r){ return r2(num(r.credit) - num(r.debit)); }
+async function checkBankBalance(opts){
+  opts = opts || {};
+  const b = B(), co = CO(b.cid), st = curStmt();
+  if (!st) return null;
+  const acc = (co.bankAccounts || []).find(a => a.id === st.acctId);
+  const ledger = acc && exactLedger(acc.ledger);
+  if (!ledger){ if (!opts.quiet) toast("Choose the Tally ledger for this bank account first."); return null; }
+  const tname = opts.tname || await ensureTallyCompany(co);
+  if (!tname) return null;
+  const sid = st.id;
+  b.balBusy = true; if (!opts.quiet){ b.busy = "Reading " + ledger + "'s balance from Tally…"; } render();
+  let res;
+  try {
+    const j = await Bridge.call("/balances?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(st.from) + "&to=" + isoToTally(st.to) + Bridge.pinQ(), null, 180000);
+    const L = [].concat(j.ledgers || []).find(l => norm(l.name) === norm(ledger));
+    if (!L) throw {message: "“" + ledger + "” is not among Tally's ledgers in " + tname + "."};
+    // Tally gives a debit balance as a negative number; for the bank, money in the account is a debit
+    const bankBal = v => r2(-(parseFloat(String(v == null || v === "" ? "0" : v).replace(/,/g, "")) || 0));
+    const all = b.rows.reduce((a, r) => a + bankEffect(r), 0);
+    const sOpen = st.opening !== undefined && st.opening !== null && st.opening !== "" ? r2(num(st.opening)) : (st.closing !== undefined ? r2(num(st.closing) - all) : null);
+    const sClose = st.closing !== undefined && st.closing !== null && st.closing !== "" ? r2(num(st.closing)) : (sOpen !== null ? r2(sOpen + all) : null);
+    res = {at: Date.now(), ledger, company: tname, from: st.from, to: st.to, openAsOn: tallyToIso(j.openAsOn) || addDays(st.from, -1),
+      tOpen: bankBal(L.open), tClose: bankBal(L.close), sOpen, sClose};
+    res.diffOpen = sOpen === null ? null : r2(sOpen - res.tOpen);
+    res.diff = sClose === null ? null : r2(sClose - res.tClose);
+    const notIn = b.rows.filter(r => !["sent", "intally", "ignored"].includes(r.state));
+    const left = b.rows.filter(r => r.state === "ignored");
+    res.notIn = notIn.map(r => r.id); res.notInEffect = r2(notIn.reduce((a, r) => a + bankEffect(r), 0));
+    res.left = left.map(r => r.id); res.leftEffect = r2(left.reduce((a, r) => a + bankEffect(r), 0));
+    res.extra = null;
+    if (res.diff !== null && Math.abs(res.diff) >= 0.01){
+      // which entries does Tally have for these dates that the statement does not?
+      if (!opts.quiet) { b.busy = "The balance differs: reading " + ledger + " for " + fmtDate(st.from) + " to " + fmtDate(st.to) + " to find out why…"; render(); }
+      const jv = await Bridge.call("/vouchers?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(st.from) + "&to=" + isoToTally(st.to) + "&ledger=" + encodeURIComponent(ledger) + Bridge.pinQ(), null, 600000);
+      const posted = b.rows.filter(r => ["sent", "intally"].includes(r.state));
+      const byTag = new Map(posted.map(r => [fpHash(r.fp || r.id), r]));
+      const used = new Set();
+      const extra = [];
+      const days = (a1, b1) => Math.abs((new Date(a1) - new Date(b1)) / 864e5);
+      [].concat(jv.vouchers || []).filter(v => !/^yes$/i.test(v.cancelled || "")).forEach(v => {
+        const be = [].concat(v.entries || []).find(e => norm(e.ledger) === norm(ledger));
+        if (!be) return;
+        const eff = r2(-(parseFloat(String(be.amount).replace(/,/g, "")) || 0));
+        const date = tallyToIso(v.date);
+        const tag = (String(v.narration || "").match(/TDSDesk:([A-Za-z0-9]+)/i) || [])[1];
+        let hit = tag && byTag.get(tag.toLowerCase());
+        if (hit && used.has(hit.id)) hit = null;
+        if (!hit) hit = posted.find(r => !used.has(r.id) && Math.abs(bankEffect(r) - eff) < 0.01 && days(r.date, date) <= (r.dec && r.dec.mode === "CHQ" ? 15 : 3));
+        if (hit){ used.add(hit.id); if (Math.abs(bankEffect(hit) - eff) >= 0.01) extra.push({date, type: v.type || "", number: v.number || "", party: (([].concat(v.entries || []).find(e => norm(e.ledger) !== norm(ledger)) || {}).ledger) || v.party || "", eff: r2(eff - bankEffect(hit)), note: "amount differs from the statement line of " + fmtDate(hit.date), rowId: hit.id}); return; }
+        extra.push({date, type: v.type || "", number: v.number || "", party: (([].concat(v.entries || []).find(e => norm(e.ledger) !== norm(ledger)) || {}).ledger) || v.party || "", eff, narr: String(v.narration || "").slice(0, 120)});
+      });
+      // lines marked as in Tally that Tally does not show for these dates
+      res.missing = posted.filter(r => !used.has(r.id)).map(r => r.id);
+      res.missingEffect = r2(b.rows.filter(r => res.missing.includes(r.id)).reduce((a, r) => a + bankEffect(r), 0));
+      res.extra = extra; res.extraEffect = r2(extra.reduce((a, x) => a + x.eff, 0));
+      res.unexplained = r2(res.diff - (res.diffOpen || 0) - res.notInEffect - res.leftEffect - res.missingEffect + res.extraEffect);
+    }
+  } catch (e){ res = {at: Date.now(), error: e.message || String(e)}; }
+  const st2 = b.stmts.find(x => x.id === sid);
+  if (st2){ st2.tallyBal = res; saveBank({stmts: true}); }
+  b.balBusy = false; if (!opts.quiet) b.busy = "";
+  render();
+  return res;
+}
+function bankFocus(title, ids, note){ const b = B(); b.focus = {title, ids: [].concat(ids || []), note: note || ""}; b.sel.clear(); b.limit = 500; }
+function bankFocusHtml(){
+  const b = B(), f = b.focus;
+  if (!f) return "";
+  return '<div class="bk-focus"><div><b>Showing ' + f.ids.length + " line" + (f.ids.length === 1 ? "" : "s") + ": " + esc(f.title) + "</b>" + (f.note ? '<div class="note">' + esc(f.note) + "</div>" : "") +
+    '</div><button class="btn small" data-act="bankFocusOff">Show all lines</button></div>';
+}
+S.focusSets = S.focusSets || {};
+function focusBtn(key, title, ids, label, note){
+  S.focusSets[key] = {title, ids: [].concat(ids || []), note: note || ""};
+  return ids && ids.length ? '<button class="linkbtn" data-bfocus="' + esc(key) + '">' + esc(label || "Show " + (ids.length === 1 ? "this line" : "these " + ids.length + " lines")) + "</button>" : "";
+}
+function bankBalanceHtml(st){
+  const b = B(), t = st.tallyBal;
+  const live = Bridge.on() && Bridge.up();
+  const btn = live ? '<button class="btn small" data-act="bankBalCheck"' + (b.balBusy ? " disabled" : "") + ">" + (b.balBusy ? "Checking…" : t ? "Check again" : "Check with Tally") + "</button>" : "";
+  const when = t && t.at ? '<span class="muted"> · checked ' + new Date(t.at).toLocaleString([], {day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit"}) + "</span>" : "";
+  if (!t) return '<div class="bk-bal"><div><b>Balance in Tally:</b> <span class="muted">not checked yet.' + (live ? " TDS Desk checks it after every posting." : " Connect the Tally Bridge to check it.") + "</span></div>" + btn + "</div>";
+  if (t.error) return '<div class="bk-bal bad"><div><b>Balance in Tally could not be read:</b> ' + esc(t.error) + when + "</div>" + btn + "</div>";
+  const m = v => INR.format(v || 0);
+  const on = fmtDate(t.to);
+  if (t.diff === null) return '<div class="bk-bal"><div><b>' + esc(t.ledger) + " in Tally on " + on + ":</b> " + m(t.tClose) + ' <span class="muted">(the statement has no closing balance to compare with)</span>' + when + "</div>" + btn + "</div>";
+  if (Math.abs(t.diff) < 0.01) return '<div class="bk-bal ok"><div>✔ <b>Tally agrees with the bank.</b> ' + esc(t.ledger) + " in Tally on " + on + " is " + m(t.tClose) + ", the statement's closing balance." + when + "</div>" + btn + "</div>";
+  let h = '<div class="bk-bal bad"><div style="flex:1"><div>✖ <b>Tally does not agree with the bank.</b> ' + esc(t.ledger) + " in Tally on " + on + " is <b>" + m(t.tClose) + "</b>; the statement closes at <b>" + m(t.sClose) + "</b>. Difference <b>" + m(Math.abs(t.diff)) + "</b> (" + (t.diff > 0 ? "Tally is lower" : "Tally is higher") + ")." + when + "</div>";
+  const li = [];
+  if (t.diffOpen && Math.abs(t.diffOpen) >= 0.01) li.push("<li><b>Opening balance:</b> Tally on " + fmtDate(t.openAsOn) + " is " + m(t.tOpen) + ", the statement opens at " + m(t.sOpen) + " (" + m(Math.abs(t.diffOpen)) + " apart). Entries before " + fmtDate(t.from) + " are missing or different in Tally: post the earlier statement first.</li>");
+  if (t.notIn.length) li.push("<li><b>" + t.notIn.length + " line" + (t.notIn.length === 1 ? " is" : "s are") + " not in Tally yet</b> (" + m(Math.abs(t.notInEffect)) + " " + (t.notInEffect >= 0 ? "net in" : "net out") + ") " + focusBtn("bal-notin", "not in Tally yet", t.notIn) + "</li>");
+  if (t.left.length) li.push("<li><b>" + t.left.length + " line" + (t.left.length === 1 ? " was" : "s were") + " left out</b> (" + m(Math.abs(t.leftEffect)) + ") " + focusBtn("bal-left", "left out, not posted", t.left) + "</li>");
+  if (t.missing && t.missing.length) li.push("<li><b>" + t.missing.length + " line" + (t.missing.length === 1 ? " is" : "s are") + " marked as in Tally, but Tally does not show " + (t.missing.length === 1 ? "it" : "them") + " for these dates</b> (" + m(Math.abs(t.missingEffect)) + "): deleted in Tally, or under another date. " + focusBtn("bal-missing", "marked in Tally, not found there", t.missing) + "</li>");
+  if (t.extra && t.extra.length) li.push("<li><b>" + t.extra.length + " entr" + (t.extra.length === 1 ? "y is" : "ies are") + " in Tally for these dates but not on the statement</b> (" + m(Math.abs(t.extraEffect)) + "):" +
+    '<div class="tblwrap" style="margin-top:6px;max-height:240px;overflow:auto"><table class="data"><thead><tr><th>Date</th><th>Voucher</th><th>Party / ledger</th><th class="n">In</th><th class="n">Out</th><th></th></tr></thead><tbody>' +
+    t.extra.slice(0, 300).map(x => "<tr><td>" + fmtDate(x.date) + "</td><td>" + esc([x.type, x.number].filter(Boolean).join(" ")) + "</td><td>" + esc(x.party) + '</td><td class="n">' + (x.eff > 0 ? m(x.eff) : "") + '</td><td class="n">' + (x.eff < 0 ? m(-x.eff) : "") + "</td><td>" + esc(x.note || "") + "</td></tr>").join("") +
+    "</tbody></table></div></li>");
+  if (t.unexplained !== undefined && Math.abs(t.unexplained) >= 0.01) li.push("<li><b>" + m(Math.abs(t.unexplained)) + " is not explained</b> by the lines above: check the amounts of the entries in Tally against the statement.</li>");
+  else if (t.extra) li.push('<li class="muted">These together make up the whole difference.</li>');
+  return h + (li.length ? '<ul class="bk-bal-why">' + li.join("") + "</ul>" : "") + "</div>" + btn + "</div>";
 }
 
 /* ---------- taking an entry back out of Tally ---------- */
@@ -15735,7 +15865,7 @@ async function postBankToTally(ids){
     if (miss !== undefined){
       const sug = suggestLedgers(miss || "", "party", 1);
       r.postError = "Ledger \u201c" + (miss || "(none)") + "\u201d is not in Tally" + (sug.length ? " (Tally has \u201c" + sug[0] + "\u201d)" : "");
-      failed.push({what: fmtDate(r.date) + " " + (r.dec.name || "") + " " + INR.format(r.debit || r.credit), msg: r.postError});
+      failed.push({id: r.id, what: fmtDate(r.date) + " " + (r.dec.name || "") + " " + INR.format(r.debit || r.credit), msg: r.postError});
       return false;
     }
     r.ledger = exactLedger(r.ledger);
@@ -15766,7 +15896,7 @@ async function postBankToTally(ids){
       if (x && x.ok && x.verified !== true){
         b.postedTags = b.postedTags || {}; b.postedTags[fpHash(r.fp || r.id)] = "unconfirmed:" + now;
         r.postError = "Tally replied 'created', but TDS Desk could not find the entry in Tally afterwards, so it is NOT marked as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again." + (x.verifyNote ? " [" + x.verifyNote + "]" : "");
-        failed.push({what: fmtDate(r.date) + " " + (r.dec.name || "") + " " + INR.format(r.debit || r.credit), msg: "not confirmed in Tally \u2014 check Tally before posting again"});
+        failed.push({id: r.id, what: fmtDate(r.date) + " " + (r.dec.name || "") + " " + INR.format(r.debit || r.credit), msg: "not confirmed in Tally \u2014 check Tally before posting again"});
       } else if (x && x.ok){
         ok++; r.state = "sent"; r.sentAt = now; r.postedVia = "bridge"; r.postError = ""; r.postedOptional = !!x.optional; r.postVerified = x.verified === true; posted.push(r);
         b.postedTags = b.postedTags || {}; b.postedTags[fpHash(r.fp || r.id)] = now;
@@ -15777,7 +15907,7 @@ async function postBankToTally(ids){
         markSalesReceived(r);
       } else {
         r.postError = plainMsg(x && x.message) || "Tally did not confirm this entry.";
-        failed.push({what: fmtDate(r.date) + " " + (r.dec.name || "") + " " + INR.format(r.debit || r.credit), msg: r.postError});
+        failed.push({id: r.id, what: fmtDate(r.date) + " " + (r.dec.name || "") + " " + INR.format(r.debit || r.credit), msg: r.postError});
       }
     });
     learnRows(posted, "sent");
@@ -15785,9 +15915,11 @@ async function postBankToTally(ids){
     b.postReport = {at: Date.now(), posted: ok, skipped, movedBack, failed, dismiss: "bankReportOk", company: tname, optional: optionalN, noPreCheck: !heavy};
     toast(ok + " posted to Tally" + (skipped ? ", " + skipped + " were already there" : "") + (failed.length ? ", " + failed.length + " not posted" : "") + ".");
     if (!failed.length && !b.rows.some(r => r.state === "ready")) b.filter = "done";
+    b.afterPost = true;
   } catch (e){ toast("Posting failed: " + e.message); b.postReport = {at: Date.now(), posted: 0, skipped, movedBack, failed: failed.concat([{what: "Posting", msg: e.message}]), dismiss: "bankReportOk"}; }
   b.busy = "";
   render();
+  if (b.afterPost){ b.afterPost = false; try { await checkBankBalance({quiet: true, tname}); } catch (e){} }
 }
 async function checkBillsInTally(onlyUnconfirmed){
   const co = CO();
@@ -17403,7 +17535,9 @@ function postReportHtml(rep){
   if (rep.failed && rep.failed.length) bits.push(rep.failed.length + " not posted");
   if (rep.movedBack) bits.push(rep.movedBack + " moved back to review (ledger not in Tally)");
   return '<div class="bk-alert' + (rep.failed && rep.failed.length ? " bad" : "") + '"><b>Tally, ' + new Date(rep.at).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}) + ":</b> " + bits.join(" \u00b7 ") +
-    (rep.failed && rep.failed.length ? '<ul style="margin:6px 0 0">' + rep.failed.slice(0, 20).map(f => "<li>" + esc(f.what) + " \u2014 " + esc(f.msg) + "</li>").join("") + "</ul>" : "") +
+    (rep.failed && rep.failed.length ? '<ul style="margin:6px 0 0">' + rep.failed.slice(0, 20).map(f => "<li>" + esc(f.what) + " \u2014 " + esc(f.msg) + "</li>").join("") + "</ul>" +
+      (rep.failed.length > 20 ? '<div class="note">and ' + (rep.failed.length - 20) + " more</div>" : "") +
+      (typeof focusBtn === "function" && S.tab === "bank" ? focusBtn("rep-failed", "not posted in the last posting", rep.failed.map(f => f.id).filter(Boolean), "Show the lines not posted") : "") : "") +
     ' <button class="linkbtn" data-act="' + rep.dismiss + '">Dismiss</button></div>';
 }
 

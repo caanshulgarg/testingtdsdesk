@@ -216,6 +216,15 @@ html{scroll-padding-bottom:150px}
 .bk-menu-list button:hover{background:var(--rule-soft)}
 .bk-menu-list .danger{color:var(--stop)}
 .bk-check{font-size:13px;padding:0 4px}
+.bk-menu-list{min-width:320px}
+.bk-menu-list button small{display:block;color:var(--muted);font-size:12px;margin-top:2px;line-height:1.35}
+.bk-bal{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;padding:10px 14px;border-radius:8px;border:1px solid var(--rule);background:var(--sheet);font-size:14px;margin:8px 0}
+.bk-bal.ok{border-color:var(--ledger);background:var(--ledger-soft,#e8f3ee)}
+.bk-bal.bad{border-color:var(--stop);background:var(--stop-soft)}
+.bk-bal .btn{flex:none}
+.bk-bal-why{margin:8px 0 0;padding-left:18px}
+.bk-bal-why li{margin:4px 0}
+.bk-focus{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:10px 14px;border-radius:8px;background:var(--flag-soft);border-left:3px solid var(--flag);margin:8px 0;font-size:14px}
 .bk-check .ok{color:var(--ledger)}
 .bk-check .bad{color:var(--stop);font-weight:600}
 .bk-check .warn{color:var(--flag)}

@@ -1025,7 +1025,9 @@ function postReportHtml(rep){
   if (rep.failed && rep.failed.length) bits.push(rep.failed.length + " not posted");
   if (rep.movedBack) bits.push(rep.movedBack + " moved back to review (ledger not in Tally)");
   return '<div class="bk-alert' + (rep.failed && rep.failed.length ? " bad" : "") + '"><b>Tally, ' + new Date(rep.at).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}) + ":</b> " + bits.join(" \u00b7 ") +
-    (rep.failed && rep.failed.length ? '<ul style="margin:6px 0 0">' + rep.failed.slice(0, 20).map(f => "<li>" + esc(f.what) + " \u2014 " + esc(f.msg) + "</li>").join("") + "</ul>" : "") +
+    (rep.failed && rep.failed.length ? '<ul style="margin:6px 0 0">' + rep.failed.slice(0, 20).map(f => "<li>" + esc(f.what) + " \u2014 " + esc(f.msg) + "</li>").join("") + "</ul>" +
+      (rep.failed.length > 20 ? '<div class="note">and ' + (rep.failed.length - 20) + " more</div>" : "") +
+      (typeof focusBtn === "function" && S.tab === "bank" ? focusBtn("rep-failed", "not posted in the last posting", rep.failed.map(f => f.id).filter(Boolean), "Show the lines not posted") : "") : "") +
     ' <button class="linkbtn" data-act="' + rep.dismiss + '">Dismiss</button></div>';
 }
 
