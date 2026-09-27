@@ -1034,7 +1034,8 @@ function viewBank(){
   let h = "";
   h += '<div class="bk">';
   if (BankDB.mode === "memory only" || BankDB.lost) h += '<div class="bk-alert bad">This browser is not keeping bank statements' + (BankDB.lost ? " (storage is full)" : "") + ". Create the Tally file before closing, or use Chrome.</div>";
-  if (b.busy) h += busyCard("Working on the statement\u2026", b.busy, 0, 0);
+  // what TDS Desk is doing floats in view wherever you are on the page, instead of at the top
+  if (b.busy) h += '<div class="busy-float">' + busyCard(/Tally/.test(b.busy) ? "Working with Tally\u2026" : "Working on the statement\u2026", b.busy, 0, 0) + "</div>";
   if (b.moved) h += '<div class="bk-alert"><b>' + esc(b.moved.file) + "</b> is a statement of " + esc(b.moved.name) + " (account \u00b7\u00b7" + esc(b.moved.last4) + "), so it was filed there. " +
     '<button class="linkbtn" data-act="bankOpenMoved">Open ' + esc(b.moved.name) + '</button> <button class="linkbtn" data-act="bankDismissMoved">Dismiss</button></div>';
   if (b.postReport) h += postReportHtml(b.postReport);

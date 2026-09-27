@@ -122,6 +122,7 @@ class H(http.server.BaseHTTPRequestHandler):
                 out = "<ENVELOPE><BODY><DATA><COLLECTION>" + "".join(mine) + "</COLLECTION></DATA></BODY></ENVELOPE>"
         elif "TDSDeskOneLed" in body:
             asOn = g("SVTODATE"); name = (re.search(r'\$Name = "([^"]*)"', body) or [0, ""])[1]
+            if CTRL.get("ignore_balance_dates"): asOn = "99991231"      # like a Tally that gives its latest balance whatever the date
             plain = name.replace("&amp;", "&"); mv = amounts_until(asOn)
             hit = [(n, ob) for n, _, ob in L if n.replace("&amp;", "&") == plain]
             out = "<ENVELOPE><BODY><DATA><COLLECTION>" + "".join('<LEDGER NAME="%s"><NAME>%s</NAME><CLOSINGBALANCE>%.2f</CLOSINGBALANCE></LEDGER>' % (n, n, ob + mv.get(plain, mv.get(n, 0))) for n, ob in hit) + "</COLLECTION></DATA></BODY></ENVELOPE>"

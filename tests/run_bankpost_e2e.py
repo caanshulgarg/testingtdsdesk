@@ -93,16 +93,16 @@ try:
         ok(rep["posted"] == 4 and not rep["failed"], "the report: 4 posted, none failed")
         fake_tally.CTRL["read_delay_after_import"] = 0
         heavy = {k: v for k, v in fake_tally.REQS.items() if k in ("DayBook", "TDSDeskVchHeads", "TDSDeskBalances")}
-        ok(not heavy and fake_tally.REQS.get("TDSDeskLedVch") and fake_tally.REQS.get("TDSDeskOneLed") == 1, "posting and the balance check ask Tally for the bank ledger only: nothing company-wide (%s)" % dict(fake_tally.REQS))
+        ok(not heavy and fake_tally.REQS.get("TDSDeskLedVch") and fake_tally.REQS.get("TDSDeskOneLed") == 2, "posting and the balance check ask Tally for the bank ledger only: nothing company-wide (%s)" % dict(fake_tally.REQS))
         tb = pg.evaluate("curStmt().tallyBal")
-        ok(tb and tb.get("diff") == 0 and "Tally agrees with the bank" in pg.inner_text(".bk-bal"), "after posting, the balance is checked by itself: Tally agrees with the statement's closing (%s)" % (tb and {k: tb.get(k) for k in ("tClose", "sClose", "diff", "error")}))
+        ok(tb and tb.get("diff") == 0 and "Tally agrees with the bank" in pg.inner_text(".bk-balbox"), "after posting, the balance is checked by itself: Tally agrees with the statement's closing (%s)" % (tb and {k: tb.get(k) for k in ("tClose", "sClose", "diff", "error")}))
         # someone enters a payment in Tally by hand that is not on the statement
         fake_tally.POSTED.append(("20250604", "cash typed in Tally", "777", '<VOUCHER VCHTYPE="Payment" ACTION="Create"><DATE>20250604</DATE><VOUCHERTYPENAME>Payment</VOUCHERTYPENAME><NARRATION>cash typed in Tally</NARRATION><ALLLEDGERENTRIES.LIST><LEDGERNAME>2K Mart</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-999.00</AMOUNT></ALLLEDGERENTRIES.LIST><ALLLEDGERENTRIES.LIST><LEDGERNAME>HDFC BANK ACCOUNT</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>999.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>'))
         tb = pg.evaluate("checkBankBalance()")
-        ok(tb["diff"] == 999 and tb["extra"] is None and "Reconcile with Tally" in pg.inner_text(".bk-bal"), "the balance check alone only reads the balance, and offers to find the reason")
+        ok(tb["diff"] == 999 and tb["extra"] is None and "Reconcile with Tally" in pg.inner_text(".bk-balbox"), "the balance check alone only reads the balance, and offers to find the reason")
         tb = pg.evaluate("checkBankBalance({explain: true})")
         ok(tb and tb["diff"] == 999 and len(tb["extra"]) == 1 and tb["extra"][0]["eff"] == -999 and tb["unexplained"] == 0, "a payment typed in Tally by hand: the balance is 999 apart, and that entry is named as the whole reason (%s)" % (tb and {k: tb.get(k) for k in ("diff", "extraEffect", "unexplained")}))
-        t = pg.inner_text(".bk-bal")
+        t = pg.inner_text(".bk-balbox")
         ok("Tally does not agree" in t and "2K Mart" in t and "make up the whole difference" in t, "and it says so on the page: " + t[:140].replace("\n", " "))
         pg.evaluate("() => { B().rows.forEach(r => { r.state = 'ready'; }); B().postedTags = {}; }")
         pg.evaluate("postBankToTally()")
@@ -158,6 +158,23 @@ try:
         ok(len(e3) == 1 and "47000.00" in e3[0][3], "'Replace them': the entry with the wrong amount is replaced by the statement's amount")
         R = pg.evaluate("reconcileBank().then(R => R && {missing: R.missing.length, extra: R.extra.length, differ: R.differ.length, t: R.tClose, s: R.sClose})")
         ok(R and R["missing"] == R["extra"] == R["differ"] == 0 and abs(R["t"] - R["s"]) < 0.01 and "Reconciled" in pg.inner_text(".recon"), "reconciled: every line in Tally once, and the balances agree (%s)" % R)
+        # an entry dated long after the statement, in a Tally that gives its latest balance whatever date is asked
+        fake_tally.POSTED.append(("20270331", "year end entry", "990", '<VOUCHER VCHTYPE="Receipt" ACTION="Create"><DATE>20270331</DATE><VOUCHERTYPENAME>Receipt</VOUCHERTYPENAME><NARRATION>year end entry</NARRATION><ALLLEDGERENTRIES.LIST><LEDGERNAME>2K Mart</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>5000.00</AMOUNT></ALLLEDGERENTRIES.LIST><ALLLEDGERENTRIES.LIST><LEDGERNAME>HDFC BANK ACCOUNT</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-5000.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>'))
+        fake_tally.CTRL["ignore_balance_dates"] = True
+        R = pg.evaluate("reconcileBank().then(R => R && {missing: R.missing.length, extra: R.extra.length, t: R.tClose, s: R.sClose, how: R.how})")
+        tb = pg.evaluate("checkBankBalance().then(t => ({diff: t.diff, how: t.how}))")
+        fake_tally.CTRL["ignore_balance_dates"] = False
+        ok(R and R["missing"] == R["extra"] == 0 and abs(R["t"] - R["s"]) < 0.01 and R["how"] == "worked back" and tb["diff"] == 0, "an entry of 31-03-2027 in a Tally that ignores the date asked: not counted in the statement's balance, still reconciled (%s, %s)" % (R, tb))
+        ok("worked back" in pg.inner_text(".bk-balbox"), "and the balance box says the balance was worked back")
+        pg.click(".bk-balbox .bk-x"); pg.wait_for_timeout(200)
+        ok(pg.locator(".bk-balbox").count() == 0, "the balance box closes with its ×")
+        pg.evaluate("checkBankBalance()"); pg.wait_for_timeout(200)
+        ok(pg.locator(".bk-balbox").count() == 1, "and comes back with the next check")
+        # while TDS Desk works, what it is doing floats in view wherever the page is scrolled
+        pg.evaluate("() => { window.scrollTo(0, 99999); B().busy = 'Deleting 1 of 2 in Tally…'; render(); }"); pg.wait_for_timeout(200)
+        bb = pg.evaluate("(() => { const e = document.querySelector('.busy-float'); if (!e) return null; const r = e.getBoundingClientRect(); return [r.top, r.bottom, innerHeight, getComputedStyle(e).position]; })()")
+        ok(bb and bb[3] == "fixed" and 0 <= bb[0] < bb[2] and "1 / 2" not in "" , "the working message floats in view (%s)" % bb)
+        pg.evaluate("() => { B().busy = ''; render(); }")
         # the last line of the list can always be scrolled above the bars at the bottom of the window
         pg.evaluate("() => { B().filter = 'done'; render(); }"); pg.wait_for_timeout(300)
         pg.evaluate("window.scrollTo(0, document.documentElement.scrollHeight)"); pg.wait_for_timeout(300)

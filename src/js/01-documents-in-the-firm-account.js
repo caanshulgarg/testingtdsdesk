@@ -3325,7 +3325,7 @@ function freeRate(co){
 // "Working on it": a spinner, what it is doing now, and how far it has got
 function busyCard(title, detail, done, total){
   const pct = total ? Math.round(Math.min(1, done / total) * 100) : null;
-  const m = pct === null && detail ? String(detail).match(/page (\d+) of (\d+)/i) : null;
+  const m = pct === null && detail ? String(detail).match(/(?:page )?(\d+) of (\d+)/i) : null;
   const p2 = m ? Math.round(m[1] / m[2] * 100) : pct;
   return '<div class="busycard" role="status" aria-live="polite"><span class="spinner" aria-hidden="true"></span>' +
     '<div class="busytext"><b>' + esc(title) + "</b>" + (detail ? '<span class="note">' + esc(detail) + "</span>" : "") +

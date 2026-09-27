@@ -33,7 +33,7 @@ const DEFAULT_FIRM = {firmName:"Garg Shekhar & Company", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "27 Sep 2026 · build 167 (deleting in Tally works every way Tally allows; the ledger list closes after a pick)";
+const APP_VERSION = "27 Sep 2026 · build 168 (Tally balance on the statement date, even when Tally ignores the date; the working message stays in view)";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;

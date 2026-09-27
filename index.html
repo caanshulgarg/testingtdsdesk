@@ -247,6 +247,11 @@ html{scroll-padding-bottom:150px}
 .recon-sec .cnt{font-size:12px;background:var(--rule-soft);border-radius:10px;padding:1px 8px}
 .recon-sec .tblwrap{max-height:320px;overflow:auto}
 .btn.danger{background:var(--stop);border-color:var(--stop);color:#fff}
+.bk-bal{position:relative;padding-right:40px}
+.bk-bal .bk-x{position:absolute;top:6px;right:8px;border:0;background:none;font-size:20px;line-height:1;cursor:pointer;color:var(--muted);padding:2px 6px;border-radius:6px}
+.bk-bal .bk-x:hover{background:var(--rule-soft);color:var(--ink)}
+.busy-float{position:fixed;left:50%;transform:translateX(-50%);top:78px;z-index:60;width:min(640px,calc(100vw - 32px));box-shadow:0 12px 32px rgba(16,26,22,.22);border-radius:10px}
+.busy-float .busycard{margin:0;background:var(--sheet)}
 .bk-focus{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:10px 14px;border-radius:8px;background:var(--flag-soft);border-left:3px solid var(--flag);margin:8px 0;font-size:14px}
 .bk-check .ok{color:var(--ledger)}
 .bk-check .bad{color:var(--stop);font-weight:600}
@@ -992,7 +997,7 @@ const DEFAULT_FIRM = {firmName:"Garg Shekhar & Company", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "TEST · 27 Sep 2026 · build 167 (deleting in Tally works every way Tally allows; the ledger list closes after a pick)";
+const APP_VERSION = "TEST · 27 Sep 2026 · build 168 (Tally balance on the statement date, even when Tally ignores the date; the working message stays in view)";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;
@@ -4472,7 +4477,7 @@ function freeRate(co){
 // "Working on it": a spinner, what it is doing now, and how far it has got
 function busyCard(title, detail, done, total){
   const pct = total ? Math.round(Math.min(1, done / total) * 100) : null;
-  const m = pct === null && detail ? String(detail).match(/page (\d+) of (\d+)/i) : null;
+  const m = pct === null && detail ? String(detail).match(/(?:page )?(\d+) of (\d+)/i) : null;
   const p2 = m ? Math.round(m[1] / m[2] * 100) : pct;
   return '<div class="busycard" role="status" aria-live="polite"><span class="spinner" aria-hidden="true"></span>' +
     '<div class="busytext"><b>' + esc(title) + "</b>" + (detail ? '<span class="note">' + esc(detail) + "</span>" : "") +
@@ -13946,7 +13951,8 @@ function viewBank(){
   let h = "";
   h += '<div class="bk">';
   if (BankDB.mode === "memory only" || BankDB.lost) h += '<div class="bk-alert bad">This browser is not keeping bank statements' + (BankDB.lost ? " (storage is full)" : "") + ". Create the Tally file before closing, or use Chrome.</div>";
-  if (b.busy) h += busyCard("Working on the statement\u2026", b.busy, 0, 0);
+  // what TDS Desk is doing floats in view wherever you are on the page, instead of at the top
+  if (b.busy) h += '<div class="busy-float">' + busyCard(/Tally/.test(b.busy) ? "Working with Tally\u2026" : "Working on the statement\u2026", b.busy, 0, 0) + "</div>";
   if (b.moved) h += '<div class="bk-alert"><b>' + esc(b.moved.file) + "</b> is a statement of " + esc(b.moved.name) + " (account \u00b7\u00b7" + esc(b.moved.last4) + "), so it was filed there. " +
     '<button class="linkbtn" data-act="bankOpenMoved">Open ' + esc(b.moved.name) + '</button> <button class="linkbtn" data-act="bankDismissMoved">Dismiss</button></div>';
   if (b.postReport) h += postReportHtml(b.postReport);
@@ -14901,6 +14907,7 @@ function bankClick(t){
     case "bankReportOk": b.postReport = null; render(); return true;
     case "bankFocusOff": b.focus = null; render(); return true;
     case "goneBack": goneBack(); return true;
+    case "balHide": { const st = curStmt(); if (st){ st.tallyBalHidden = st.tallyBal ? st.tallyBal.at : "none"; saveBank({stmts: true}); render(); } return true; }
     case "reconRun": closeMenus(); reconcileBank(); return true;
     case "reconClose": S.recon = null; render(); return true;
     case "reconPost": reconPost(); return true;
@@ -15608,13 +15615,9 @@ async function reconcileBank(opts){
   b.busy = "Reconciling " + ledger + " with the statement…"; render();
   let rec;
   try {
-    const one = bridgeVer(Bridge.st.version) >= bridgeVer("1.12.3");
-    const jb = await Bridge.call((one ? "/ledgerbalance" : "/balances") + "?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(st.from) + "&to=" + isoToTally(st.to) + (one ? "&ledger=" + encodeURIComponent(ledger) : "") + Bridge.pinQ(), null, 180000);
-    const L = one ? {open: jb.open, close: jb.close} : [].concat(jb.ledgers || []).find(l => norm(l.name) === norm(ledger));
-    if (!L) throw {message: "“" + ledger + "” is not among Tally's ledgers in " + tname + "."};
+    const tb = await tallyBankBalance(tname, ledger, st.to);
     const jl = await Bridge.call(ledgerLinesUrl(tname, ledger, st.from, st.to), null, 600000);
     if (!Array.isArray(jl.vouchers)) throw {message: "Tally did not return the entries of " + ledger + "."};
-    const bankBal = v => r2(-(parseFloat(String(v == null || v === "" ? "0" : v).replace(/,/g, "")) || 0));
     // Tally's side
     const T = [];
     jl.vouchers.filter(v => !/^yes$/i.test(v.cancelled || "")).forEach(v => {
@@ -15663,12 +15666,12 @@ async function reconcileBank(opts){
     const all = b.rows.reduce((a, r) => a + bankEffect(r), 0);
     const sOpen = st.opening !== undefined && st.opening !== null && st.opening !== "" ? r2(num(st.opening)) : (st.closing !== undefined ? r2(num(st.closing) - all) : null);
     const sClose = st.closing !== undefined && st.closing !== null && st.closing !== "" ? r2(num(st.closing)) : (sOpen !== null ? r2(sOpen + all) : null);
-    const tOpen = one ? bankBal(L.open) : bankBal(L.open), tClose = bankBal(L.close);
+    const tClose = tb.close, tOpen = r2(tClose - T.reduce((a, t) => a + t.eff, 0));
     const mEff = sum(missing, id => bankEffect(rowById.get(id)));
     const xEff = sum(extra, i => T[i].eff);
     const dEff = sum(differ, d => bankEffect(rowById.get(d.rowId)) - T[d.ti].eff);
     const openDiff = sOpen === null ? 0 : r2(sOpen - tOpen);
-    rec = {sid: st.id, at: Date.now(), company: tname, ledger, from: st.from, to: st.to, T, pairs: pairOf.size, missing, extra, differ, dupOf: Array.from(dupOf.entries()),
+    rec = {sid: st.id, at: Date.now(), company: tname, ledger, from: st.from, to: st.to, T, pairs: pairOf.size, how: tb.how, laterN: tb.laterN, missing, extra, differ, dupOf: Array.from(dupOf.entries()),
       tOpen, tClose, sOpen, sClose, mEff, xEff, dEff, openDiff,
       unexplained: sClose === null ? null : r2(sClose - (tClose + mEff - xEff + dEff + openDiff)), pick: new Set(extra.filter(i => T[i].tag || dupOf.has(i)))};
     st.tallyBal = {at: Date.now(), ledger, company: tname, from: st.from, to: st.to, openAsOn: addDays(st.from, -1), tOpen, tClose, sOpen, sClose, diffOpen: sOpen === null ? null : openDiff, diff: sClose === null ? null : r2(sClose - tClose),
@@ -16043,6 +16046,31 @@ async function bankAfterCheck(cid, sid, chk, tname){
   } else BankDB.set("stmt:" + cid + ":" + sid, rows);
 }
 
+/* ---------- the bank ledger's balance in Tally on a date ---------- */
+// Some Tally setups give a ledger's closing balance for their whole current period whatever date is asked, so an entry
+// dated after the statement (say 31-03-2027) would be counted. So the balance on the statement's last day is checked:
+// read on that day and far later, and compared with the entries in between. If Tally kept to the date, its figure is
+// used; if not, the balance is worked back from its latest figure less the later entries.
+async function tallyBankBalance(tname, ledger, to){
+  const one = bridgeVer(Bridge.st.version) >= bridgeVer("1.12.3");
+  const bankBal = v => r2(-(parseFloat(String(v == null || v === "" ? "0" : v).replace(/,/g, "")) || 0));
+  const far = addDays(to, 800), next = addDays(to, 1);
+  const j = await Bridge.call((one ? "/ledgerbalance" : "/balances") + "?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(next) + "&to=" + isoToTally(far) + (one ? "&ledger=" + encodeURIComponent(ledger) : "") + Bridge.pinQ(), null, 180000);
+  const L = one ? {open: j.open, close: j.close} : [].concat(j.ledgers || []).find(l => norm(l.name) === norm(ledger));
+  if (!L) throw {message: "\u201c" + ledger + "\u201d is not among Tally's ledgers in " + tname + "."};
+  const atTo = bankBal(L.open), atFar = bankBal(L.close);
+  const lv = await Bridge.call(ledgerLinesUrl(tname, ledger, next, far), null, 600000);
+  let later = 0, laterN = 0;
+  [].concat(lv.vouchers || []).filter(v => !/^yes$/i.test(v.cancelled || "")).forEach(v => {
+    const d = tallyToIso(v.date); if (d <= to || d > far) return;
+    const be = [].concat(v.entries || []).find(e => norm(e.ledger) === norm(ledger)); if (!be) return;
+    later += -(parseFloat(String(be.amount).replace(/,/g, "")) || 0); laterN++;
+  });
+  later = r2(later);
+  if (Math.abs(atFar - (atTo + later)) < 0.01) return {close: atTo, how: "tally", later, laterN};
+  return {close: r2(atFar - later), how: "worked back", later, laterN};
+}
+
 /* ---------- does Tally agree with the bank? ---------- */
 // Tally's balance of the bank ledger at the start and end of the statement, against the statement's own opening and closing.
 // When they differ, the difference is taken apart: the opening, the statement lines not in Tally yet, the lines left out,
@@ -16061,20 +16089,11 @@ async function checkBankBalance(opts){
   b.balBusy = true; if (!opts.quiet){ b.busy = "Reading " + ledger + "'s balance from Tally…"; } render();
   let res;
   try {
-    // 1.12.3: this one ledger's balance (two small reads); older bridges: every ledger's balance
-    const one = bridgeVer(Bridge.st.version) >= bridgeVer("1.12.3");
-    const closeOnly = one && opts.closeOnly && bridgeVer(Bridge.st.version) >= bridgeVer("1.12.4");
-    const j = await Bridge.call((one ? "/ledgerbalance" : "/balances") + "?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(st.from) + "&to=" + isoToTally(st.to) + (one ? "&ledger=" + encodeURIComponent(ledger) : "") + (closeOnly ? "&only=close" : "") + Bridge.pinQ(), null, 180000);
-    const L = one ? {open: j.open, close: j.close} : [].concat(j.ledgers || []).find(l => norm(l.name) === norm(ledger));
-    if (!L) throw {message: "“" + ledger + "” is not among Tally's ledgers in " + tname + "."};
-    // Tally gives a debit balance as a negative number; for the bank, money in the account is a debit
-    const bankBal = v => r2(-(parseFloat(String(v == null || v === "" ? "0" : v).replace(/,/g, "")) || 0));
+    const tb = await tallyBankBalance(tname, ledger, st.to);
     const all = b.rows.reduce((a, r) => a + bankEffect(r), 0);
     const sOpen = st.opening !== undefined && st.opening !== null && st.opening !== "" ? r2(num(st.opening)) : (st.closing !== undefined ? r2(num(st.closing) - all) : null);
     const sClose = st.closing !== undefined && st.closing !== null && st.closing !== "" ? r2(num(st.closing)) : (sOpen !== null ? r2(sOpen + all) : null);
-    res = {at: Date.now(), ledger, company: tname, from: st.from, to: st.to, openAsOn: tallyToIso(j.openAsOn) || addDays(st.from, -1),
-      tOpen: bankBal(L.open), tClose: bankBal(L.close), sOpen, sClose};
-    if (closeOnly) res.tOpen = null;
+    res = {at: Date.now(), ledger, company: tname, from: st.from, to: st.to, openAsOn: addDays(st.from, -1), tOpen: null, tClose: tb.close, how: tb.how, later: tb.laterN, sOpen, sClose};
     res.diffOpen = sOpen === null || res.tOpen === null ? null : r2(sOpen - res.tOpen);
     res.diff = sClose === null ? null : r2(sClose - res.tClose);
     const notIn = b.rows.filter(r => !["sent", "intally", "ignored"].includes(r.state));
@@ -16129,10 +16148,18 @@ function focusBtn(key, title, ids, label, note){
   return ids && ids.length ? '<button class="linkbtn" data-bfocus="' + esc(key) + '">' + esc(label || "Show " + (ids.length === 1 ? "this line" : "these " + ids.length + " lines")) + "</button>" : "";
 }
 function bankBalanceHtml(st){
+  const t = st.tallyBal;
+  if (st.tallyBalHidden && st.tallyBalHidden === (t ? t.at : "none")) return "";
+  const h = bankBalanceInner(st);
+  // every form of the box can be closed; a new check shows it again
+  return h ? h.replace('class="bk-bal', 'class="bk-balbox bk-bal').replace(/<\/div>$/, '<button class="icon bk-x" data-act="balHide" title="Close" aria-label="Close">\u00d7</button></div>') : "";
+}
+function bankBalanceInner(st){
   const b = B(), t = st.tallyBal;
   const live = Bridge.on() && Bridge.up();
   const btn = live ? '<button class="btn small" data-act="bankBalCheck"' + (b.balBusy ? " disabled" : "") + ">" + (b.balBusy ? "Checking…" : t ? "Check again" : "Check with Tally") + "</button>" : "";
-  const when = t && t.at ? '<span class="muted"> · checked ' + new Date(t.at).toLocaleString([], {day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit"}) + "</span>" : "";
+  const when = (t && t.at ? '<span class="muted"> \u00b7 checked ' + new Date(t.at).toLocaleString([], {day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit"}) + "</span>" : "") +
+    (t && t.how === "worked back" ? '<span class="muted"> \u00b7 Tally gave its latest balance whatever the date, so the balance on ' + fmtDate(t.to) + " was worked back from it" + (t.later ? ", less " + t.later + " later entr" + (t.later === 1 ? "y" : "ies") : "") + "</span>" : "");
   if (!t) return '<div class="bk-bal"><div><b>Balance in Tally:</b> <span class="muted">not checked yet.' + (live ? " TDS Desk checks it after every posting." : " Connect the Tally Bridge to check it.") + "</span></div>" + btn + "</div>";
   if (t.error) return '<div class="bk-bal bad"><div><b>Balance in Tally could not be read:</b> ' + esc(t.error) + when + "</div>" + btn + "</div>";
   const m = v => INR.format(v || 0);

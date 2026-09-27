@@ -864,6 +864,7 @@ function bankClick(t){
     case "bankReportOk": b.postReport = null; render(); return true;
     case "bankFocusOff": b.focus = null; render(); return true;
     case "goneBack": goneBack(); return true;
+    case "balHide": { const st = curStmt(); if (st){ st.tallyBalHidden = st.tallyBal ? st.tallyBal.at : "none"; saveBank({stmts: true}); render(); } return true; }
     case "reconRun": closeMenus(); reconcileBank(); return true;
     case "reconClose": S.recon = null; render(); return true;
     case "reconPost": reconPost(); return true;
