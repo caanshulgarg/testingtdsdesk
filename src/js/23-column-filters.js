@@ -859,6 +859,11 @@ function bankClick(t){
     case "bankReportOk": b.postReport = null; render(); return true;
     case "bankFocusOff": b.focus = null; render(); return true;
     case "goneBack": goneBack(); return true;
+    case "reconRun": closeMenus(); reconcileBank(); return true;
+    case "reconClose": S.recon = null; render(); return true;
+    case "reconPost": reconPost(); return true;
+    case "reconDelete": reconDelete("delete"); return true;
+    case "reconReplace": reconDelete("replace"); return true;
     case "goneKeep": b.gone = null; render(); return true;
     case "goneCheck": checkMarkedInTally(); return true;
     case "bankBalCheck": closeMenus(); checkBankBalance(); return true;
@@ -1104,6 +1109,8 @@ document.addEventListener("click", ev => {
   if (ra){ S.revSel = new Set(ra.checked ? revFiltered().map(r => r.e.id) : []); render(); return; }   // only the rows the filter shows
   const cb = ev.target.closest && ev.target.closest("[data-bsel]");
   if (cb){ bankToggle(cb, ev.shiftKey); return; }
+  const rp = ev.target.closest && ev.target.closest("[data-reconpick]");
+  if (rp && S.recon){ const i = +rp.dataset.reconpick; if (rp.checked) S.recon.pick.add(i); else S.recon.pick.delete(i); render(); return; }
   const all = ev.target.closest && ev.target.closest("[data-bselall]");
   if (all && B()){ const b = B(); const vis = bankVisibleRows().filter(r => r.state !== "sent"); if (all.checked) vis.forEach(r => b.sel.add(r.id)); else vis.forEach(r => b.sel.delete(r.id)); bankLightRefresh(); return; }
   const ov = ev.target.hasAttribute && ev.target.hasAttribute("data-bkoverlay");

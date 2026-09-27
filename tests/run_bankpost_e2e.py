@@ -99,7 +99,7 @@ try:
         # someone enters a payment in Tally by hand that is not on the statement
         fake_tally.POSTED.append(("20250604", "cash typed in Tally", "777", '<VOUCHER VCHTYPE="Payment" ACTION="Create"><DATE>20250604</DATE><VOUCHERTYPENAME>Payment</VOUCHERTYPENAME><NARRATION>cash typed in Tally</NARRATION><ALLLEDGERENTRIES.LIST><LEDGERNAME>2K Mart</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-999.00</AMOUNT></ALLLEDGERENTRIES.LIST><ALLLEDGERENTRIES.LIST><LEDGERNAME>HDFC BANK ACCOUNT</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>999.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>'))
         tb = pg.evaluate("checkBankBalance()")
-        ok(tb["diff"] == 999 and tb["extra"] is None and "Find the reason" in pg.inner_text(".bk-bal"), "the balance check alone only reads the balance, and offers to find the reason")
+        ok(tb["diff"] == 999 and tb["extra"] is None and "Reconcile with Tally" in pg.inner_text(".bk-bal"), "the balance check alone only reads the balance, and offers to find the reason")
         tb = pg.evaluate("checkBankBalance({explain: true})")
         ok(tb and tb["diff"] == 999 and len(tb["extra"]) == 1 and tb["extra"][0]["eff"] == -999 and tb["unexplained"] == 0, "a payment typed in Tally by hand: the balance is 999 apart, and that entry is named as the whole reason (%s)" % (tb and {k: tb.get(k) for k in ("diff", "extraEffect", "unexplained")}))
         t = pg.inner_text(".bk-bal")
@@ -122,6 +122,34 @@ try:
         ok(len(tags) == 4 and len(set(tags)) == 4 and pg.evaluate("B().rows.every(r => r.state === 'sent')"), "and Post sends them to Tally again, each once")
         pg.evaluate("checkMarkedInTally()")
         ok(not pg.evaluate("B().gone") and pg.locator("[data-act='goneBack']").count() == 0, "checked again: all are in Tally, nothing offered")
+        # reconciliation: one line deleted in Tally, one posted twice, one with another amount, and one typed in Tally (the 999 above)
+        tg = pg.evaluate("[0,1,2,3].map(i => fpHash('fp-e2e-' + i))")
+        P = fake_tally.POSTED
+        P[:] = [x for x in P if "TDSDesk:" + tg[1] not in x[1]]
+        c2 = [x for x in P if "TDSDesk:" + tg[2] in x[1]][0]; P.append((c2[0], c2[1], "880", c2[3]))
+        k3 = [i for i, x in enumerate(P) if "TDSDesk:" + tg[3] in x[1]][0]
+        P[k3] = (P[k3][0], P[k3][1], P[k3][2], P[k3][3].replace("47000.00", "47500.00"))
+        R = pg.evaluate("reconcileBank().then(R => R && {missing: R.missing, extra: R.extra.length, differ: R.differ.length, unexplained: R.unexplained, pick: R.pick.size})")
+        ok(R and R["missing"] == ["r1"] and R["extra"] == 2 and R["differ"] == 1 and R["unexplained"] == 0, "reconcile: 1 line not in Tally, 2 entries in Tally not on the statement, 1 amount differs, nothing unexplained (%s)" % R)
+        t = pg.inner_text(".recon")
+        ok("Balance in Tally on" in t and "Balance as per the bank statement" in t and "typed in Tally" in t and "second copy" in t, "the reconciliation statement and the lists are shown")
+        ok(R["pick"] == 1, "the copy is ticked for deletion; the entry typed in Tally is not, until you tick it")
+        pg.click("[data-reconpick]:not(:checked)"); pg.wait_for_timeout(200)
+        pg.evaluate("() => { window._rd = reconDelete('delete'); }"); pg.wait_for_timeout(300); pg.click('[data-cbx="yes"]'); pg.evaluate("window._rd")
+        ok(len(fake_tally.DELETED) >= 3 and "880" not in [x[2] for x in fake_tally.POSTED] and not [x for x in fake_tally.POSTED if x[1] == "cash typed in Tally"], "'Delete the ticked from Tally': the copy and the typed entry are gone")
+        pg.evaluate("reconPost()")
+        for i in range(60):
+            if pg.evaluate("!B().rows.some(r => r.checking)"): break
+            pg.wait_for_timeout(500)
+        ok(len([x for x in fake_tally.POSTED if "TDSDesk:" + tg[1] in x[1]]) == 1, "'Post these to Tally': the missing line goes in, once")
+        pg.evaluate("() => { window._rr = reconDelete('replace'); }"); pg.wait_for_timeout(300); pg.click('[data-cbx="yes"]'); pg.evaluate("window._rr")
+        for i in range(60):
+            if pg.evaluate("!B().rows.some(r => r.checking)"): break
+            pg.wait_for_timeout(500)
+        e3 = [x for x in fake_tally.POSTED if "TDSDesk:" + tg[3] in x[1]]
+        ok(len(e3) == 1 and "47000.00" in e3[0][3], "'Replace them': the entry with the wrong amount is replaced by the statement's amount")
+        R = pg.evaluate("reconcileBank().then(R => R && {missing: R.missing.length, extra: R.extra.length, differ: R.differ.length, t: R.tClose, s: R.sClose})")
+        ok(R and R["missing"] == R["extra"] == R["differ"] == 0 and abs(R["t"] - R["s"]) < 0.01 and "Reconciled" in pg.inner_text(".recon"), "reconciled: every line in Tally once, and the balances agree (%s)" % R)
         # the last line of the list can always be scrolled above the bars at the bottom of the window
         pg.evaluate("() => { B().filter = 'done'; render(); }"); pg.wait_for_timeout(300)
         pg.evaluate("window.scrollTo(0, document.documentElement.scrollHeight)"); pg.wait_for_timeout(300)
@@ -130,16 +158,17 @@ try:
         ok(lastb <= bart, "scrolled to the end, the last line sits above the action bar (%d <= %d)" % (lastb, bart))
         # a Tally that will not give one ledger's vouchers: the bridge falls back to the Day Book, and the answer is the same
         fake_tally.CTRL["no_ledvch"] = True
-        tb2 = pg.evaluate("checkBankBalance({explain: true})")
+        R2 = pg.evaluate("reconcileBank().then(R => R && {missing: R.missing.length, extra: R.extra.length, differ: R.differ.length, t: R.tClose, s: R.sClose, pairs: R.pairs})")
         fake_tally.CTRL["no_ledvch"] = False
-        ok(tb2 and tb2["diff"] == 999 and len(tb2["extra"]) == 1 and tb2["unexplained"] == 0, "a Tally that refuses the one-ledger read: the Day Book is read instead, same answer")
+        ok(R2 and R2["pairs"] == 4 and R2["missing"] == R2["extra"] == R2["differ"] == 0 and abs(R2["t"] - R2["s"]) < 0.01, "a Tally that refuses the one-ledger read: the Day Book is read instead, same answer (%s)" % R2)
+        n_before = len(fake_tally.POSTED)
         # a voucher without a date never reaches Tally: stopped in TDS Desk ...
         r = pg.evaluate("""async () => (await Bridge.post({company: "VMS EVENTS PRIVATE LIMITED (2024-25)", masters: [], vouchers: [{id: "nodate", xml: '<VOUCHER VCHTYPE="Payment" ACTION="Create"><DATE></DATE><NARRATION>x TDSDesk:zz1</NARRATION></VOUCHER>'}, {id: "early", xml: '<VOUCHER VCHTYPE="Payment" ACTION="Create"><DATE>20230101</DATE><NARRATION>x TDSDesk:zz2</NARRATION></VOUCHER>'}]})).results""")
-        ok(len(fake_tally.POSTED) == 5 and {x["id"]: x["ok"] for x in r} == {"nodate": False, "early": False} and "no date" in r[0]["message"] and "before" in r[1]["message"], "no date, or a date before the books begin: refused by TDS Desk, nothing sent (%s)" % [x["message"][:40] for x in r])
+        ok(len(fake_tally.POSTED) == n_before and {x["id"]: x["ok"] for x in r} == {"nodate": False, "early": False} and "no date" in r[0]["message"] and "before" in r[1]["message"], "no date, or a date before the books begin: refused by TDS Desk, nothing sent (%s)" % [x["message"][:40] for x in r])
         # ... and in the bridge, for anything that bypasses TDS Desk's own check
         req = urllib.request.Request("http://127.0.0.1:9100/import", data=json.dumps({"company": "VMS EVENTS PRIVATE LIMITED (2024-25)", "masters": [], "vouchers": [{"id": "nd", "xml": '<VOUCHER VCHTYPE="Payment" ACTION="Create"><DATE></DATE><NARRATION>y</NARRATION></VOUCHER>'}]}).encode(), headers={"X-Bridge-Key": key, "Content-Type": "application/json"})
         jr = json.loads(urllib.request.urlopen(req, timeout=60).read())
-        ok(len(fake_tally.POSTED) == 5 and not jr["results"][0]["ok"] and "no valid date" in jr["results"][0]["message"], "the bridge itself refuses a voucher with no date")
+        ok(len(fake_tally.POSTED) == n_before and not jr["results"][0]["ok"] and "no valid date" in jr["results"][0]["message"], "the bridge itself refuses a voucher with no date")
         br.close()
 finally:
     br_p.kill()

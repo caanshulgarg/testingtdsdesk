@@ -1070,7 +1070,8 @@ function viewBank(){
     '<dl class="bk-figs"><div><dt>Opening</dt><dd>' + (st.opening !== undefined ? INR.format(st.opening) : "\u2014") + '</dd></div><div><dt>Withdrawals</dt><dd>' + INR.format(st.totDr || b.rows.reduce((a2, r) => a2 + num(r.debit), 0)) + '</dd></div><div><dt>Deposits</dt><dd>' + INR.format(st.totCr || b.rows.reduce((a2, r) => a2 + num(r.credit), 0)) + '</dd></div><div><dt>Closing</dt><dd>' + (st.closing !== undefined ? INR.format(st.closing) : "\u2014") + "</dd></div></dl>" +
     '<div class="bk-actions"><button class="btn small" data-act="bankSettings">Settings</button>' +
     '<details class="bk-menu"><summary class="btn small">More</summary><div class="bk-menu-list">' +
-      (Bridge.on() && Bridge.up() ? '<button data-act="bankBalCheck">Check the balance with Tally<small>Tally\u2019s bank balance against the statement, and why they differ</small></button>' +
+      (Bridge.on() && Bridge.up() ? '<button data-act="reconRun">Reconcile with Tally<small>Every statement line against the bank ledger in Tally: what to post, what to delete</small></button>' +
+        '<button data-act="bankBalCheck">Check the balance with Tally<small>Tally\u2019s bank balance against the statement\u2019s closing</small></button>' +
         '<button data-act="bankCheckTally">Mark lines already in Tally<small>Reads the bank ledger; lines found there are not posted again</small></button>' +
         '<button data-act="dupFind">Find double or wrong-date entries<small>Entries from this statement that are in Tally twice or under another date</small></button>' +
         '<button data-act="bankSync">Reload ledgers from Tally<small>After you create or rename a ledger in Tally</small></button>' +
@@ -1086,6 +1087,7 @@ function viewBank(){
     (st.dupRows ? ' <span class="muted">\u00b7 ' + st.dupRows + " entries skipped (already uploaded)</span>" : "") +
     (b.books[st.acctId] ? ' <span class="muted">\u00b7 ' + (b.books[st.acctId].live ? "Checked against Tally " + new Date(b.books[st.acctId].importedAt).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}) : "Matched with the Tally bank book") + "</span>" : "") + "</div>";
   if (accLedger && (Bridge.on() || st.tallyBal)) h += bankBalanceHtml(st);
+  h += reconHtml();
   if (!accLedger) h += '<div class="bk-setup"><div><b>Which Tally ledger is this bank account?</b><div class="note">' + esc(st.bank) + (acc.last4 ? " \u00b7\u00b7" + esc(acc.last4) : "") + (acc.ifsc ? " \u00b7 " + esc(acc.ifsc) : "") + "</div></div>" +
     (hasLedgerList() ? '<select data-bankacc="' + acc.id + '">' + ledgerOptions("", BANK_GROUPS) + "</select>" : '<span class="note">Import the ledger list first.</span>') + "</div>";
   // tabs

@@ -388,6 +388,196 @@ async function bankAutoSync(force){
     if (Date.now() - last > 3 * 60000){ b.goneAt = Object.assign({}, b.goneAt, {[k]: Date.now()}); try { await checkMarkedInTally({quiet: true}); } catch (e){} }
   }
 }
+/* ---------- bank reconciliation: the statement against the bank ledger in Tally, line by line ---------- */
+// One read of the bank ledger for the statement's dates and one of its balance. Each statement line is paired with a
+// Tally entry: first by TDS Desk's tag, then by amount and a nearby date. What is left on either side, and any pair
+// whose amounts differ, makes up the difference; each comes with the action that removes it (post, delete, replace).
+async function reconcileBank(opts){
+  opts = opts || {};
+  const b = B(), co = CO(b.cid), st = curStmt();
+  if (!st) return null;
+  const acc = (co.bankAccounts || []).find(a => a.id === st.acctId), ledger = acc && exactLedger(acc.ledger);
+  if (!ledger){ toast("Choose the Tally ledger for this bank account first."); return null; }
+  const tname = await ensureTallyCompany(co);
+  if (!tname) return null;
+  b.busy = "Reconciling " + ledger + " with the statement…"; render();
+  let rec;
+  try {
+    const one = bridgeVer(Bridge.st.version) >= bridgeVer("1.12.3");
+    const jb = await Bridge.call((one ? "/ledgerbalance" : "/balances") + "?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(st.from) + "&to=" + isoToTally(st.to) + (one ? "&ledger=" + encodeURIComponent(ledger) : "") + Bridge.pinQ(), null, 180000);
+    const L = one ? {open: jb.open, close: jb.close} : [].concat(jb.ledgers || []).find(l => norm(l.name) === norm(ledger));
+    if (!L) throw {message: "“" + ledger + "” is not among Tally's ledgers in " + tname + "."};
+    const jl = await Bridge.call(ledgerLinesUrl(tname, ledger, st.from, st.to), null, 600000);
+    if (!Array.isArray(jl.vouchers)) throw {message: "Tally did not return the entries of " + ledger + "."};
+    const bankBal = v => r2(-(parseFloat(String(v == null || v === "" ? "0" : v).replace(/,/g, "")) || 0));
+    // Tally's side
+    const T = [];
+    jl.vouchers.filter(v => !/^yes$/i.test(v.cancelled || "")).forEach(v => {
+      const be = [].concat(v.entries || []).find(e => norm(e.ledger) === norm(ledger));
+      if (!be) return;
+      const other = [].concat(v.entries || []).find(e => norm(e.ledger) !== norm(ledger));
+      const date = tallyToIso(v.date);
+      if (date < st.from || date > st.to) return;
+      T.push({i: T.length, guid: v.guid || "", masterId: v.masterId || "", type: v.type || "", number: v.number || "", date, vdate: v.date,
+        party: (other && other.ledger) || v.party || "", eff: r2(-(parseFloat(String(be.amount).replace(/,/g, "")) || 0)),
+        narr: String(v.narration || ""), tag: ((String(v.narration || "").match(/TDSDesk:([A-Za-z0-9]+)/i) || [])[1] || "").toLowerCase(), optional: /^yes$/i.test(v.optional || "")});
+    });
+    // pair them
+    const rows = b.rows.filter(r => r.date >= st.from && r.date <= st.to);
+    const byTag = new Map(); rows.forEach(r => byTag.set(fpHash(r.fp || r.id), r));
+    const pairOf = new Map(), used = new Set(), differ = [], dupOf = new Map();
+    T.forEach(t => {                                   // 1. by TDS Desk's tag
+      const r = t.tag && byTag.get(t.tag);
+      if (!r) return;
+      if (pairOf.has(r.id)){ dupOf.set(t.i, r.id); used.add(t.i); return; }
+      pairOf.set(r.id, t.i); used.add(t.i);
+      if (Math.abs(t.eff - bankEffect(r)) >= 0.01) differ.push({rowId: r.id, ti: t.i});
+    });
+    const days = (a1, b1) => Math.abs((new Date(a1) - new Date(b1)) / 864e5);
+    [0, 1].forEach(pass => rows.forEach(r => {          // 2. same amount, same day first, then a nearby day
+      if (pairOf.has(r.id)) return;
+      const win = pass === 0 ? 0 : (r.dec && r.dec.mode === "CHQ" ? 15 : 4);
+      let best = null;
+      T.forEach(t => { if (used.has(t.i) || t.tag && byTag.has(t.tag) || Math.abs(t.eff - bankEffect(r)) >= 0.01) return; const d = days(t.date, r.date); if (d <= win && (!best || d < best.d)) best = {t, d}; });
+      if (best){ pairOf.set(r.id, best.t.i); used.add(best.t.i); }
+    }));
+    const missing = rows.filter(r => !pairOf.has(r.id)).map(r => r.id);
+    const extra = T.filter(t => !used.has(t.i) || dupOf.has(t.i)).map(t => t.i);
+    // what TDS Desk shows follows what Tally has: paired lines count as in Tally, lines Tally does not have are not
+    const now = new Date().toISOString();
+    b.postedTags = b.postedTags || {};
+    rows.forEach(r => {
+      if (pairOf.has(r.id)){
+        if (["ready", "attention", "suggested"].includes(r.state)){ r.prevState = r.state; r.state = "intally"; r.tallyHow = "found in Tally when reconciling"; const t = T[pairOf.get(r.id)]; r.tallyRef = [t.type, t.number, t.party].filter(Boolean).join(" · "); }
+        if (r.state === "intally" || r.state === "sent") b.postedTags[fpHash(r.fp || r.id)] = b.postedTags[fpHash(r.fp || r.id)] || "tally:" + now;
+      }
+    });
+    saveBank({rows: true, posted: true});
+    const sum = (list, f) => r2(list.reduce((a, x) => a + f(x), 0));
+    const rowById = new Map(b.rows.map(r => [r.id, r]));
+    const all = b.rows.reduce((a, r) => a + bankEffect(r), 0);
+    const sOpen = st.opening !== undefined && st.opening !== null && st.opening !== "" ? r2(num(st.opening)) : (st.closing !== undefined ? r2(num(st.closing) - all) : null);
+    const sClose = st.closing !== undefined && st.closing !== null && st.closing !== "" ? r2(num(st.closing)) : (sOpen !== null ? r2(sOpen + all) : null);
+    const tOpen = one ? bankBal(L.open) : bankBal(L.open), tClose = bankBal(L.close);
+    const mEff = sum(missing, id => bankEffect(rowById.get(id)));
+    const xEff = sum(extra, i => T[i].eff);
+    const dEff = sum(differ, d => bankEffect(rowById.get(d.rowId)) - T[d.ti].eff);
+    const openDiff = sOpen === null ? 0 : r2(sOpen - tOpen);
+    rec = {sid: st.id, at: Date.now(), company: tname, ledger, from: st.from, to: st.to, T, pairs: pairOf.size, missing, extra, differ, dupOf: Array.from(dupOf.entries()),
+      tOpen, tClose, sOpen, sClose, mEff, xEff, dEff, openDiff,
+      unexplained: sClose === null ? null : r2(sClose - (tClose + mEff - xEff + dEff + openDiff)), pick: new Set(extra.filter(i => T[i].tag || dupOf.has(i)))};
+    st.tallyBal = {at: Date.now(), ledger, company: tname, from: st.from, to: st.to, openAsOn: addDays(st.from, -1), tOpen, tClose, sOpen, sClose, diffOpen: sOpen === null ? null : openDiff, diff: sClose === null ? null : r2(sClose - tClose),
+      notIn: [], notInEffect: 0, left: [], leftEffect: 0, extra: null, reconciled: true};
+    saveBank({stmts: true});
+  } catch (e){ b.busy = ""; toast("Could not reconcile: " + (e.message || e)); render(); return null; }
+  S.recon = rec; b.focus = null; b.busy = "";
+  render();
+  if (!opts.stay) window.scrollTo({top: 0, behavior: "smooth"});
+  return rec;
+}
+function reconHtml(){
+  const b = B(), st = curStmt(), R = S.recon;
+  if (!R || !st || R.sid !== st.id) return "";
+  const m = v => INR.format(Math.abs(v || 0));
+  const rowById = new Map(b.rows.map(r => [r.id, r]));
+  const live = Bridge.on() && Bridge.up();
+  const balanced = R.unexplained !== null && Math.abs(R.sClose - R.tClose) < 0.01;
+  let h = '<section class="recon"><div class="recon-head"><div><h3>Bank reconciliation · ' + esc(R.ledger) + "</h3>" +
+    '<div class="note">' + esc(R.company) + " · " + fmtDate(R.from) + " to " + fmtDate(R.to) + " · " + R.pairs + " lines matched · read " + new Date(R.at).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}) + "</div></div>" +
+    '<div class="row" style="gap:8px">' + (live ? '<button class="btn small" data-act="reconRun">Reconcile again</button>' : "") + '<button class="btn small" data-act="reconClose">Close</button></div></div>';
+  if (balanced && !R.missing.length && !R.extra.length && !R.differ.length){
+    return h + '<div class="bk-bal ok"><div>✔ <b>Reconciled.</b> Every line of the statement is in Tally once, and nothing else is. ' + esc(R.ledger) + " in Tally on " + fmtDate(R.to) + " is " + m(R.tClose) + ", the same as the statement.</div></div></section>";
+  }
+  // the reconciliation statement
+  const line = (label, v, sign, note) => '<tr><td>' + label + (note ? ' <span class="muted">' + note + "</span>" : "") + '</td><td class="n">' + (v ? (sign || "") + m(v) : "—") + "</td></tr>";
+  const mIn = r2(R.missing.map(id => rowById.get(id)).filter(Boolean).reduce((a, r) => a + num(r.credit), 0)), mOut = r2(R.missing.map(id => rowById.get(id)).filter(Boolean).reduce((a, r) => a + num(r.debit), 0));
+  const xIn = r2(R.extra.reduce((a, i) => a + Math.max(0, R.T[i].eff), 0)), xOut = r2(R.extra.reduce((a, i) => a + Math.max(0, -R.T[i].eff), 0));
+  h += '<table class="data recon-stmt"><tbody>' +
+    '<tr><td><b>Balance in Tally on ' + fmtDate(R.to) + '</b></td><td class="n"><b>' + (R.tClose < 0 ? "−" : "") + m(R.tClose) + "</b></td></tr>" +
+    line("Add: deposits on the statement, not in Tally", mIn, "+ ") +
+    line("Less: withdrawals on the statement, not in Tally", mOut, "− ") +
+    line("Less: receipts in Tally, not on the statement", xIn, "− ") +
+    line("Add: payments in Tally, not on the statement", xOut, "+ ") +
+    (R.differ.length ? line("Amounts that differ (statement less Tally)", R.dEff, R.dEff >= 0 ? "+ " : "− ") : "") +
+    (Math.abs(R.openDiff) >= 0.01 ? line("Opening balance difference", R.openDiff, R.openDiff >= 0 ? "+ " : "− ", "Tally on " + fmtDate(addDays(R.from, -1)) + " is " + m(R.tOpen) + "; the statement opens at " + m(R.sOpen) + ": entries before " + fmtDate(R.from) + " differ — reconcile the earlier statement") : "") +
+    (R.unexplained !== null && Math.abs(R.unexplained) >= 0.01 ? line("Not explained by the lines below", R.unexplained, R.unexplained >= 0 ? "+ " : "− ") : "") +
+    '<tr class="tot"><td><b>Balance as per the bank statement on ' + fmtDate(R.to) + '</b></td><td class="n"><b>' + (R.sClose === null ? "—" : (R.sClose < 0 ? "−" : "") + m(R.sClose)) + "</b></td></tr></tbody></table>";
+  // A. on the statement, not in Tally
+  if (R.missing.length){
+    const rows = R.missing.map(id => rowById.get(id)).filter(Boolean);
+    const canPost = rows.filter(r => ["ready", "sent", "intally"].includes(r.state) && r.ledger && exactLedger(r.ledger));
+    const needLedger = rows.filter(r => !canPost.includes(r) && r.state !== "ignored"), left = rows.filter(r => r.state === "ignored");
+    h += '<div class="recon-sec"><h4>On the statement, not in Tally <span class="cnt">' + rows.length + "</span></h4>" +
+      '<div class="tblwrap"><table class="data"><thead><tr><th>Date</th><th>Particulars</th><th class="n">Withdrawal</th><th class="n">Deposit</th><th>Ledger</th><th>Why</th></tr></thead><tbody>' +
+      rows.slice(0, 400).map(r => "<tr><td>" + fmtDate(r.date) + "</td><td>" + esc(r.dec.name || r.narr.slice(0, 50)) + '</td><td class="n">' + (r.debit ? m(r.debit) : "") + '</td><td class="n">' + (r.credit ? m(r.credit) : "") + "</td><td>" + esc(r.ledger || "—") + "</td><td>" +
+        esc(r.state === "ignored" ? "left out" : ["sent", "intally"].includes(r.state) ? "marked as posted, but Tally does not have it" : r.state === "ready" ? "not posted yet" : "needs a ledger") + "</td></tr>").join("") + "</tbody></table></div>" +
+      '<div class="row" style="gap:8px;margin-top:8px">' + (live && canPost.length ? '<button class="btn small primary" data-act="reconPost">Post ' + (canPost.length === 1 ? "it" : "these " + canPost.length) + " to Tally</button>" : "") +
+      (needLedger.length ? '<span class="note">' + needLedger.length + " need a ledger first " + focusBtn("recon-need", "need a ledger before they can be posted", needLedger.map(r => r.id), "Show them") + "</span>" : "") +
+      (left.length ? '<span class="note">' + left.length + " were left out on purpose " + focusBtn("recon-left", "left out, not posted", left.map(r => r.id), "Show them") + "</span>" : "") + "</div></div>";
+  }
+  // B. in Tally, not on the statement
+  if (R.extra.length){
+    const dup = new Map(R.dupOf);
+    h += '<div class="recon-sec"><h4>In Tally, not on the statement <span class="cnt">' + R.extra.length + "</span></h4>" +
+      '<p class="note" style="margin:0 0 6px">Tick the entries to delete from Tally. Copies and entries TDS Desk posted are ticked already; check entries typed in Tally before deleting them.</p>' +
+      '<div class="tblwrap"><table class="data"><thead><tr><th></th><th>Date</th><th>Voucher</th><th>Party / ledger</th><th class="n">In</th><th class="n">Out</th><th>What it is</th></tr></thead><tbody>' +
+      R.extra.map(i => { const t = R.T[i]; return '<tr><td><input type="checkbox" data-reconpick="' + i + '"' + (R.pick.has(i) ? " checked" : "") + (live ? "" : " disabled") + '></td><td>' + fmtDate(t.date) + "</td><td>" + esc([t.type, t.number].filter(Boolean).join(" ")) + "</td><td>" + esc(t.party) + '</td><td class="n">' + (t.eff > 0 ? m(t.eff) : "") + '</td><td class="n">' + (t.eff < 0 ? m(t.eff) : "") + "</td><td>" +
+        esc(dup.has(i) ? "a second copy of " + fmtDate((rowById.get(dup.get(i)) || {}).date) + "'s line" : t.tag ? "posted by TDS Desk, from another statement or an old copy" : "typed in Tally") + (t.narr && !t.tag ? '<div class="muted" style="font-size:12px">' + esc(t.narr.slice(0, 80)) + "</div>" : "") + "</td></tr>"; }).join("") + "</tbody></table></div>" +
+      (live ? '<div class="row" style="gap:8px;margin-top:8px"><button class="btn small danger" data-act="reconDelete"' + (R.pick.size ? "" : " disabled") + ">Delete the " + R.pick.size + " ticked from Tally</button></div>" : "") + "</div>";
+  }
+  // C. the same line, a different amount
+  if (R.differ.length){
+    h += '<div class="recon-sec"><h4>Amount differs <span class="cnt">' + R.differ.length + "</span></h4>" +
+      '<div class="tblwrap"><table class="data"><thead><tr><th>Date</th><th>Particulars</th><th class="n">Statement</th><th class="n">Tally</th><th>Tally voucher</th></tr></thead><tbody>' +
+      R.differ.map(d => { const r = rowById.get(d.rowId), t = R.T[d.ti]; return "<tr><td>" + fmtDate(r.date) + "</td><td>" + esc(r.dec.name || r.narr.slice(0, 50)) + '</td><td class="n">' + m(bankEffect(r)) + '</td><td class="n">' + m(t.eff) + "</td><td>" + esc([t.type, t.number].filter(Boolean).join(" ")) + "</td></tr>"; }).join("") + "</tbody></table></div>" +
+      (live ? '<div class="row" style="gap:8px;margin-top:8px"><button class="btn small primary" data-act="reconReplace">Replace ' + (R.differ.length === 1 ? "it" : "them") + " in Tally with the statement’s amount</button></div>" : "") + "</div>";
+  }
+  return h + "</section>";
+}
+async function reconPost(){
+  const b = B(), R = S.recon;
+  if (!R) return;
+  const ids = R.missing.filter(id => { const r = b.rows.find(x => x.id === id); return r && ["ready", "sent", "intally"].includes(r.state) && r.ledger && exactLedger(r.ledger); });
+  if (!ids.length) return;
+  // lines marked as posted that Tally does not have: posted afresh
+  b.rows.forEach(r => { if (ids.includes(r.id) && ["sent", "intally"].includes(r.state)){ if (b.postedTags) delete b.postedTags[fpHash(r.fp || r.id)]; r.state = "ready"; r.tally = null; r.postVerified = false; r.checking = false; r.tallyHow = ""; r.tallyRef = ""; delete r.tallyIdx; } });
+  b.tallyLook = null; lsDel(wideCheckKey());
+  saveBank({rows: true, posted: true});
+  await postBankToTally(ids);
+  await reconcileBank({stay: true});
+}
+async function reconDelete(which){
+  const b = B(), R = S.recon;
+  if (!R) return;
+  const list = which === "replace" ? R.differ.map(d => R.T[d.ti]) : Array.from(R.pick).map(i => R.T[i]);
+  if (!list.length) return;
+  const total = list.reduce((a, t) => a + Math.abs(t.eff), 0);
+  const a = await askConfirm({title: which === "replace" ? "Replace " + list.length + " entr" + (list.length === 1 ? "y" : "ies") + " in " + R.company + "?" : "Delete " + list.length + " entr" + (list.length === 1 ? "y" : "ies") + " from " + R.company + "?", ok: which === "replace" ? "Replace them" : "Delete them",
+    body: '<p class="note">' + list.slice(0, 12).map(t => esc(fmtDate(t.date) + " " + [t.type, t.number].filter(Boolean).join(" ") + " " + t.party + " " + INR.format(Math.abs(t.eff)))).join("<br>") + (list.length > 12 ? "<br>and " + (list.length - 12) + " more" : "") +
+      "<br><br>" + (which === "replace" ? "Each Tally entry is deleted and the statement line is posted again with the statement’s amount." : "Total " + INR.format(total) + ".") + " This cannot be undone from TDS Desk: take a Tally backup first if you have not.</p>"});
+  if (!a) return;
+  let ok = 0, bad = 0;
+  for (let k = 0; k < list.length; k++){
+    const t = list[k];
+    b.busy = (which === "replace" ? "Replacing " : "Deleting ") + (k + 1) + " of " + list.length + " in Tally…"; render();
+    try {
+      const j = await Bridge.call("/unpost", {company: R.company, guid: t.guid, vchType: t.type, vchDate: t.vdate, vchNumber: t.number}, 60000);
+      if (j && j.ok !== false){ ok++; logPosting({what: "bank", id: t.guid, action: "removed", co: b.cid, ref: "reconciliation " + [t.type, t.number].join(" "), party: t.party, amount: Math.abs(t.eff), tally: {guid: t.guid, vchType: t.type, vchDate: t.vdate, company: R.company}, by: (Cloud.st && Cloud.st.email) || ""}); }
+      else bad++;
+    } catch (e){ bad++; }
+  }
+  b.busy = ""; b.tallyLook = null;
+  toast(ok + (which === "replace" ? " removed from Tally" : " deleted from Tally") + (bad ? ", " + bad + " could not be — delete those in Tally" : "") + ".");
+  if (which === "replace"){
+    // the statement lines go in again with their own amount
+    const ids = R.differ.map(d => d.rowId);
+    b.rows.forEach(r => { if (ids.includes(r.id)){ if (b.postedTags) delete b.postedTags[fpHash(r.fp || r.id)]; r.state = r.ledger && exactLedger(r.ledger) ? "ready" : "attention"; r.tally = null; r.postVerified = false; r.tallyHow = ""; r.tallyRef = ""; delete r.tallyIdx; } });
+    lsDel(wideCheckKey()); saveBank({rows: true, posted: true});
+    await postBankToTally(ids.filter(id => (b.rows.find(r => r.id === id) || {}).state === "ready"));
+  }
+  await reconcileBank({stay: true});
+}
+
 /* ---------- lines marked as posted that are no longer in Tally (deleted there) ---------- */
 // Every line TDS Desk posted carries its tag in Tally's narration; a line matched to an entry typed in Tally is found by
 // amount and date. A line marked as posted that Tally no longer has is offered back for posting, never posted by itself.
@@ -750,7 +940,7 @@ function bankBalanceHtml(st){
     '<div class="tblwrap" style="margin-top:6px;max-height:240px;overflow:auto"><table class="data"><thead><tr><th>Date</th><th>Voucher</th><th>Party / ledger</th><th class="n">In</th><th class="n">Out</th><th></th></tr></thead><tbody>' +
     t.extra.slice(0, 300).map(x => "<tr><td>" + fmtDate(x.date) + "</td><td>" + esc([x.type, x.number].filter(Boolean).join(" ")) + "</td><td>" + esc(x.party) + '</td><td class="n">' + (x.eff > 0 ? m(x.eff) : "") + '</td><td class="n">' + (x.eff < 0 ? m(-x.eff) : "") + "</td><td>" + esc(x.note || "") + "</td></tr>").join("") +
     "</tbody></table></div></li>");
-  if (!t.extra) li.push('<li>' + (live ? '<button class="btn small primary" data-act="bankBalWhy"' + (b.balBusy ? " disabled" : "") + ">Find the reason</button> " : "") + '<span class="muted">reads ' + esc(t.ledger) + " for " + fmtDate(t.from) + " to " + fmtDate(t.to) + " from Tally and lists the entries that are not on the statement</span></li>");
+  if (!t.extra) li.push('<li>' + (live ? '<button class="btn small primary" data-act="reconRun">Reconcile with Tally</button> ' : "") + '<span class="muted">pairs every statement line with the entries of ' + esc(t.ledger) + " in Tally, and lists what to post and what to delete to make them agree</span></li>");
   if (t.unexplained !== undefined && Math.abs(t.unexplained) >= 0.01) li.push("<li><b>" + m(Math.abs(t.unexplained)) + " is not explained</b> by the lines above: check the amounts of the entries in Tally against the statement.</li>");
   else if (t.extra) li.push('<li class="muted">These together make up the whole difference.</li>');
   return h + (li.length ? '<ul class="bk-bal-why">' + li.join("") + "</ul>" : "") + "</div>" + btn + "</div>";
