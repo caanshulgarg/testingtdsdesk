@@ -772,7 +772,7 @@ function bankClick(t){
     case "bookPick": closeMenus(); document.getElementById("bookIn").click(); return true;
     case "bankSettings": b.showSettings = true; render(); return true;
     case "bankSettingsClose": b.showSettings = false; render(); return true;
-    case "bankMore": b.limit += 100; render(); return true;
+    case "bankMore": b.limit += 200; render(); return true;
     case "bankCsv": closeMenus(); exportBankCsv(); return true;
     case "bankDismissFail": b.lastFail = null; render(); return true;
     case "bankCopyReport": {
@@ -858,6 +858,9 @@ function bankClick(t){
     case "bankBulkPost": { const ids = b.rows.filter(r => b.sel.has(r.id) && r.state === "ready").map(r => r.id); b.sel.clear(); postBankToTally(ids); return true; }
     case "bankReportOk": b.postReport = null; render(); return true;
     case "bankFocusOff": b.focus = null; render(); return true;
+    case "goneBack": goneBack(); return true;
+    case "goneKeep": b.gone = null; render(); return true;
+    case "goneCheck": checkMarkedInTally(); return true;
     case "bankBalCheck": closeMenus(); checkBankBalance(); return true;
     case "bankBalWhy": checkBankBalance({explain: true}); return true;
     case "dupFind": closeMenus(); findTallyDuplicates(); return true;
@@ -1141,3 +1144,13 @@ function bankInput(t){
   return false;
 }
 
+
+// a long statement keeps going as you scroll: the next lines load when the end of the list comes into view
+let bankMoreBusy = false;
+window.addEventListener("scroll", () => {
+  if (bankMoreBusy || !S.bank || S.view !== "company" || S.tab !== "bank") return;
+  const m = document.querySelector(".bk-more [data-act='bankMore']");
+  if (!m || m.getBoundingClientRect().top > window.innerHeight + 300) return;
+  bankMoreBusy = true;
+  requestAnimationFrame(() => { S.bank.limit += 200; render(); setTimeout(() => { bankMoreBusy = false; }, 250); });
+}, {passive: true});

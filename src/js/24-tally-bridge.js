@@ -381,6 +381,85 @@ async function bankAutoSync(force){
     if (st && force) await syncBankBookFromTally(true);   // only when asked: this reads the Day Book
     if (force || (b.ledgers.list || []).length !== before) render();
   } finally { bankSyncing = false; }
+  // lines marked as posted that were deleted in Tally since: looked for quietly, at most every 3 minutes per statement
+  const st = curStmt();
+  if (st && bridgeVer(Bridge.st.version) >= bridgeVer("1.12.3") && b.rows.some(r => ["sent", "intally"].includes(r.state))){
+    const k = st.id, last = (b.goneAt || {})[k] || 0;
+    if (Date.now() - last > 3 * 60000){ b.goneAt = Object.assign({}, b.goneAt, {[k]: Date.now()}); try { await checkMarkedInTally({quiet: true}); } catch (e){} }
+  }
+}
+/* ---------- lines marked as posted that are no longer in Tally (deleted there) ---------- */
+// Every line TDS Desk posted carries its tag in Tally's narration; a line matched to an entry typed in Tally is found by
+// amount and date. A line marked as posted that Tally no longer has is offered back for posting, never posted by itself.
+function markedGone(pre, from, to){
+  const b = B(), co = CO(b.cid), st = curStmt();
+  const acc = (co.bankAccounts || []).find(a => a.id === st.acctId), ledger = acc && exactLedger(acc.ledger);
+  const vs = [].concat(pre.vouchers || []).filter(v => !/^yes$/i.test(v.cancelled || ""));
+  const tags = new Set();
+  vs.forEach(v => { const m = String(v.narration || "").match(/TDSDesk:([A-Za-z0-9]+)/ig) || []; m.forEach(x => tags.add(x.slice(8).toLowerCase())); });
+  const lines = vs.map(v => { const be = [].concat(v.entries || []).find(e => norm(e.ledger) === norm(ledger)); return be ? {date: tallyToIso(v.date), eff: r2(-(parseFloat(String(be.amount).replace(/,/g, "")) || 0))} : null; }).filter(Boolean);
+  const used = new Set();
+  const days = (a1, b1) => Math.abs((new Date(a1) - new Date(b1)) / 864e5);
+  const marked = b.rows.filter(r => ["sent", "intally"].includes(r.state) && r.date >= from && r.date <= to && !r.postedOptional);
+  const gone = [];
+  marked.forEach(r => {
+    if (tags.has(fpHash(r.fp || r.id))) return;
+    const win = r.dec && r.dec.mode === "CHQ" ? 15 : 4;
+    const i = lines.findIndex((l, k) => !used.has(k) && Math.abs(l.eff - bankEffect(r)) < 0.01 && days(l.date, r.date) <= win);
+    if (i >= 0){ used.add(i); return; }
+    gone.push(r.id);
+  });
+  return {ids: gone, marked: marked.length, bankLines: lines.length, at: Date.now()};
+}
+async function checkMarkedInTally(opts){
+  opts = opts || {};
+  const b = B(), co = CO(b.cid), st = curStmt();
+  if (!st) return null;
+  const acc = (co.bankAccounts || []).find(a => a.id === st.acctId), ledger = acc && exactLedger(acc.ledger);
+  if (!ledger) return null;
+  const tname = opts.tname || (bridgeLive(co) ? Bridge.openFor(co).name : await ensureTallyCompany(co));
+  if (!tname) return null;
+  const dsAll = b.rows.map(r => r.date).filter(Boolean).sort(), today = new Date().toISOString().slice(0, 10);
+  const from = addDays(dsAll[0], -15), to = addDays(dsAll[dsAll.length - 1] > today ? dsAll[dsAll.length - 1] : today, 7);
+  if (!opts.quiet){ b.busy = "Checking in Tally that the posted lines are still there\u2026"; render(); }
+  let pre = opts.pre;
+  try { if (!pre) pre = await Bridge.call(ledgerLinesUrl(tname, ledger, from, to), null, 600000); }
+  catch (e){ if (!opts.quiet){ b.busy = ""; toast("Tally could not be read: " + e.message); render(); } return null; }
+  if (!Array.isArray(pre.vouchers)){ if (!opts.quiet){ b.busy = ""; render(); } return null; }
+  b.tallyLook = {sid: st.id, at: Date.now(), data: pre};
+  const g = markedGone(pre, from, to);
+  g.sid = st.id; g.ledger = ledger; g.company = tname;
+  b.gone = g.ids.length ? g : null;
+  if (!opts.quiet){ b.busy = ""; toast(g.ids.length ? g.ids.length + " line" + (g.ids.length === 1 ? " is" : "s are") + " no longer in Tally." : "All " + g.marked + " posted lines are still in Tally."); }
+  render();
+  return g;
+}
+function goneHtml(){
+  const b = B(), g = b.gone, st = curStmt();
+  if (!g || !st || g.sid !== st.id || !g.ids.length) return "";
+  const n = g.ids.length, all = n === g.marked;
+  return '<div class="bk-bal bad"><div style="flex:1"><b>' + n + " line" + (n === 1 ? " is" : "s are") + " marked as posted, but " + (n === 1 ? "is" : "are") + " no longer in Tally.</b> " +
+    (all ? "None of this statement\u2019s posted lines are in " + esc(g.ledger) + " in " + esc(g.company) + " any more" + (g.bankLines ? "" : " (Tally shows no entries in this ledger for these dates)") + "." : "They were probably deleted in Tally, or moved to another company.") +
+    '<div class="row" style="margin-top:8px;gap:8px"><button class="btn small primary" data-act="goneBack">Put ' + (n === 1 ? "it" : "them") + " back in Ready to post</button>" + focusBtn("gone", "no longer in Tally", g.ids, "Show " + (n === 1 ? "it" : "them")) +
+    '<button class="linkbtn" data-act="goneKeep">Leave them as posted</button></div></div></div>';
+}
+function goneBack(){
+  const b = B(), g = b.gone;
+  if (!g) return;
+  const ids = new Set(g.ids);
+  let n = 0;
+  b.rows.forEach(r => {
+    if (!ids.has(r.id) || !["sent", "intally"].includes(r.state)) return;
+    n++;
+    if (b.postedTags) delete b.postedTags[fpHash(r.fp || r.id)];
+    r.state = r.ledger && exactLedger(r.ledger) ? "ready" : "attention";
+    r.tally = null; r.postVerified = false; r.checking = false; r.postError = ""; r.postedVia = ""; r.sentAt = ""; delete r.tallyIdx; r.tallyHow = ""; r.tallyRef = "";
+  });
+  b.gone = null; b.focus = null; b.filter = "ready"; b.tallyLook = null;
+  lsDel(wideCheckKey());
+  saveBank({rows: true, posted: true});
+  toast(n + " line" + (n === 1 ? " is" : "s are") + " back in Ready to post. Press Post to send " + (n === 1 ? "it" : "them") + " to Tally again.");
+  render();
 }
 /* ---------- finding double entries, and entries Tally holds under the wrong date ---------- */
 // Reads this bank ledger from Tally over a wide window (not only the statement's dates), so an entry TDS Desk sent that
@@ -751,6 +830,8 @@ async function postBankToTally(ids){
         pre = await Bridge.call(ledgerLinesUrl(tname, acc.ledger, from, to), null, 600000);
         b.tallyLook = {sid: st.id, at: Date.now(), data: pre};
       }
+      const g = markedGone(pre, from, to);
+      if (g.ids.length){ g.sid = st.id; g.ledger = acc.ledger; g.company = tname; b.gone = g; }
       await syncBankBookFromTally(true, {from, to, rows: toCheck, pre});
       toCheck.forEach(r => { if (r.state === "intally") b.postedTags[fpHash(r.fp || r.id)] = b.postedTags[fpHash(r.fp || r.id)] || "tally:" + new Date().toISOString(); });
       saveBank({posted: true});

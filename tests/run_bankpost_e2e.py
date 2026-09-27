@@ -108,6 +108,26 @@ try:
         pg.evaluate("postBankToTally()")
         ok(len(fake_tally.POSTED) == 5, "posting the same lines again (this browser's memory wiped): Tally is checked, nothing goes in twice")
         ok(pg.evaluate("B().rows.every(r => r.state === 'intally')"), "and they show as already in Tally")
+        # the user deletes TDS Desk's entries in Tally, and wants to post them again
+        fake_tally.POSTED[:] = [x for x in fake_tally.POSTED if "TDSDesk:" not in x[1]]
+        g = pg.evaluate("checkMarkedInTally()")
+        ok(g and len(g["ids"]) == 4 and "4 lines are marked as posted, but are no longer in Tally" in pg.inner_text("#app"), "entries deleted in Tally are noticed: 4 lines marked as posted are no longer there, and it says so")
+        pg.click("[data-act='goneBack']"); pg.wait_for_timeout(300)
+        ok(pg.evaluate("B().rows.filter(r => r.state === 'ready').length") == 4 and pg.evaluate("B().filter") == "ready", "'Put them back in Ready to post': all 4 ready again")
+        pg.evaluate("postBankToTally()")
+        for i in range(60):
+            if pg.evaluate("!B().rows.some(r => r.checking)"): break
+            pg.wait_for_timeout(500)
+        tags = [t for t in fake_tally.posted_tags()]
+        ok(len(tags) == 4 and len(set(tags)) == 4 and pg.evaluate("B().rows.every(r => r.state === 'sent')"), "and Post sends them to Tally again, each once")
+        pg.evaluate("checkMarkedInTally()")
+        ok(not pg.evaluate("B().gone") and pg.locator("[data-act='goneBack']").count() == 0, "checked again: all are in Tally, nothing offered")
+        # the last line of the list can always be scrolled above the bars at the bottom of the window
+        pg.evaluate("() => { B().filter = 'done'; render(); }"); pg.wait_for_timeout(300)
+        pg.evaluate("window.scrollTo(0, document.documentElement.scrollHeight)"); pg.wait_for_timeout(300)
+        lastb = pg.evaluate("(() => { const rs = document.querySelectorAll('.bk-table tbody tr'); return rs.length ? rs[rs.length - 1].getBoundingClientRect().bottom : 0; })()")
+        bart = pg.evaluate("(() => { const a = document.querySelector('.actionbar'); return a ? a.getBoundingClientRect().top : 99999; })()")
+        ok(lastb <= bart, "scrolled to the end, the last line sits above the action bar (%d <= %d)" % (lastb, bart))
         # a Tally that will not give one ledger's vouchers: the bridge falls back to the Day Book, and the answer is the same
         fake_tally.CTRL["no_ledvch"] = True
         tb2 = pg.evaluate("checkBankBalance({explain: true})")

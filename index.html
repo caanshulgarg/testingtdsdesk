@@ -981,7 +981,7 @@ const DEFAULT_FIRM = {firmName:"Garg Shekhar & Company", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "TEST · 27 Sep 2026 · build 164 (posting only sends; the checks run once, in the background, after the batch)";
+const APP_VERSION = "TEST · 27 Sep 2026 · build 165 (lines deleted in Tally are offered back for posting; long lists scroll to the end)";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;
@@ -4822,7 +4822,23 @@ const app = document.getElementById("app");
 function sortedCompanies(){ return Object.values(S.companies).sort((a, b) => a.name.localeCompare(b.name)); }
 function recentIds(){ try { return JSON.parse(lsGet("tdsdesk-test:recent") || "[]"); } catch(e){ return []; } }
 
+// The page always ends below the bars fixed at the bottom of the window (the action bar, the testing strip),
+// so the last line of a long list can be scrolled into view instead of staying hidden behind them.
+function padForBars(){
+  let top = window.innerHeight;
+  document.querySelectorAll("body *").forEach(el => {
+    if (!el.offsetParent && getComputedStyle(el).position !== "fixed") return;
+    const cs = getComputedStyle(el);
+    if (cs.position !== "fixed" || cs.display === "none" || cs.visibility === "hidden") return;
+    const r = el.getBoundingClientRect();
+    if (r.height > 0 && r.height < window.innerHeight / 3 && r.top > window.innerHeight * 0.6 && r.width > window.innerWidth / 2) top = Math.min(top, r.top);
+  });
+  const pad = Math.max(0, Math.round(window.innerHeight - top)) + 16;
+  if (document.body.style.paddingBottom !== pad + "px") document.body.style.paddingBottom = pad + "px";
+}
+window.addEventListener("resize", () => requestAnimationFrame(padForBars));
 function render(){
+  requestAnimationFrame(padForBars);
   const drafts = {};
   document.querySelectorAll("#app [data-draft]").forEach(el => { if (el.id) drafts[el.id] = el.value; });
   const a = document.activeElement, fk = a && a.dataset ? (a.dataset.fk || (a.hasAttribute("data-draft") ? "id:" + a.id : null)) : null;
@@ -13983,8 +13999,10 @@ function viewBank(){
     const inR = bankRangeRows(), out = inR.reduce((a2, r) => a2 + num(r.debit), 0), inn = inR.reduce((a2, r) => a2 + num(r.credit), 0);
     h += colChipBar("bank", inR.length, b.rows.length + " lines", "out " + INR.format(r2(out)) + " \u00b7 in " + INR.format(r2(inn)));
   }
+  h += goneHtml();
   h += dupFindHtml();
   h += bankFocusHtml();
+  if (tab === "done" && !b.focus && Bridge.on() && Bridge.up() && tc.done) h += '<div class="bk-found"><span class="muted">Deleted some of these in Tally?</span> <button class="btn small" data-act="goneCheck">Check they are still in Tally</button></div>';
   if (b.offerRule){
     const o = b.offerRule;
     h += '<div class="bk-found" style="border-color:var(--ledger)"><b>Keep this as a rule?</b> Every future line containing \u201c' + esc(o.text) + '\u201d would go to <b>' + esc(o.ledger) + "</b> by itself." +
@@ -14778,7 +14796,7 @@ function bankClick(t){
     case "bookPick": closeMenus(); document.getElementById("bookIn").click(); return true;
     case "bankSettings": b.showSettings = true; render(); return true;
     case "bankSettingsClose": b.showSettings = false; render(); return true;
-    case "bankMore": b.limit += 100; render(); return true;
+    case "bankMore": b.limit += 200; render(); return true;
     case "bankCsv": closeMenus(); exportBankCsv(); return true;
     case "bankDismissFail": b.lastFail = null; render(); return true;
     case "bankCopyReport": {
@@ -14864,6 +14882,9 @@ function bankClick(t){
     case "bankBulkPost": { const ids = b.rows.filter(r => b.sel.has(r.id) && r.state === "ready").map(r => r.id); b.sel.clear(); postBankToTally(ids); return true; }
     case "bankReportOk": b.postReport = null; render(); return true;
     case "bankFocusOff": b.focus = null; render(); return true;
+    case "goneBack": goneBack(); return true;
+    case "goneKeep": b.gone = null; render(); return true;
+    case "goneCheck": checkMarkedInTally(); return true;
     case "bankBalCheck": closeMenus(); checkBankBalance(); return true;
     case "bankBalWhy": checkBankBalance({explain: true}); return true;
     case "dupFind": closeMenus(); findTallyDuplicates(); return true;
@@ -15147,6 +15168,16 @@ function bankInput(t){
   return false;
 }
 
+
+// a long statement keeps going as you scroll: the next lines load when the end of the list comes into view
+let bankMoreBusy = false;
+window.addEventListener("scroll", () => {
+  if (bankMoreBusy || !S.bank || S.view !== "company" || S.tab !== "bank") return;
+  const m = document.querySelector(".bk-more [data-act='bankMore']");
+  if (!m || m.getBoundingClientRect().top > window.innerHeight + 300) return;
+  bankMoreBusy = true;
+  requestAnimationFrame(() => { S.bank.limit += 200; render(); setTimeout(() => { bankMoreBusy = false; }, 250); });
+}, {passive: true});
 /* ================================================================== */
 /* Tally Bridge: live connection to TallyPrime on this computer        */
 /* ================================================================== */
@@ -15530,6 +15561,85 @@ async function bankAutoSync(force){
     if (st && force) await syncBankBookFromTally(true);   // only when asked: this reads the Day Book
     if (force || (b.ledgers.list || []).length !== before) render();
   } finally { bankSyncing = false; }
+  // lines marked as posted that were deleted in Tally since: looked for quietly, at most every 3 minutes per statement
+  const st = curStmt();
+  if (st && bridgeVer(Bridge.st.version) >= bridgeVer("1.12.3") && b.rows.some(r => ["sent", "intally"].includes(r.state))){
+    const k = st.id, last = (b.goneAt || {})[k] || 0;
+    if (Date.now() - last > 3 * 60000){ b.goneAt = Object.assign({}, b.goneAt, {[k]: Date.now()}); try { await checkMarkedInTally({quiet: true}); } catch (e){} }
+  }
+}
+/* ---------- lines marked as posted that are no longer in Tally (deleted there) ---------- */
+// Every line TDS Desk posted carries its tag in Tally's narration; a line matched to an entry typed in Tally is found by
+// amount and date. A line marked as posted that Tally no longer has is offered back for posting, never posted by itself.
+function markedGone(pre, from, to){
+  const b = B(), co = CO(b.cid), st = curStmt();
+  const acc = (co.bankAccounts || []).find(a => a.id === st.acctId), ledger = acc && exactLedger(acc.ledger);
+  const vs = [].concat(pre.vouchers || []).filter(v => !/^yes$/i.test(v.cancelled || ""));
+  const tags = new Set();
+  vs.forEach(v => { const m = String(v.narration || "").match(/TDSDesk:([A-Za-z0-9]+)/ig) || []; m.forEach(x => tags.add(x.slice(8).toLowerCase())); });
+  const lines = vs.map(v => { const be = [].concat(v.entries || []).find(e => norm(e.ledger) === norm(ledger)); return be ? {date: tallyToIso(v.date), eff: r2(-(parseFloat(String(be.amount).replace(/,/g, "")) || 0))} : null; }).filter(Boolean);
+  const used = new Set();
+  const days = (a1, b1) => Math.abs((new Date(a1) - new Date(b1)) / 864e5);
+  const marked = b.rows.filter(r => ["sent", "intally"].includes(r.state) && r.date >= from && r.date <= to && !r.postedOptional);
+  const gone = [];
+  marked.forEach(r => {
+    if (tags.has(fpHash(r.fp || r.id))) return;
+    const win = r.dec && r.dec.mode === "CHQ" ? 15 : 4;
+    const i = lines.findIndex((l, k) => !used.has(k) && Math.abs(l.eff - bankEffect(r)) < 0.01 && days(l.date, r.date) <= win);
+    if (i >= 0){ used.add(i); return; }
+    gone.push(r.id);
+  });
+  return {ids: gone, marked: marked.length, bankLines: lines.length, at: Date.now()};
+}
+async function checkMarkedInTally(opts){
+  opts = opts || {};
+  const b = B(), co = CO(b.cid), st = curStmt();
+  if (!st) return null;
+  const acc = (co.bankAccounts || []).find(a => a.id === st.acctId), ledger = acc && exactLedger(acc.ledger);
+  if (!ledger) return null;
+  const tname = opts.tname || (bridgeLive(co) ? Bridge.openFor(co).name : await ensureTallyCompany(co));
+  if (!tname) return null;
+  const dsAll = b.rows.map(r => r.date).filter(Boolean).sort(), today = new Date().toISOString().slice(0, 10);
+  const from = addDays(dsAll[0], -15), to = addDays(dsAll[dsAll.length - 1] > today ? dsAll[dsAll.length - 1] : today, 7);
+  if (!opts.quiet){ b.busy = "Checking in Tally that the posted lines are still there\u2026"; render(); }
+  let pre = opts.pre;
+  try { if (!pre) pre = await Bridge.call(ledgerLinesUrl(tname, ledger, from, to), null, 600000); }
+  catch (e){ if (!opts.quiet){ b.busy = ""; toast("Tally could not be read: " + e.message); render(); } return null; }
+  if (!Array.isArray(pre.vouchers)){ if (!opts.quiet){ b.busy = ""; render(); } return null; }
+  b.tallyLook = {sid: st.id, at: Date.now(), data: pre};
+  const g = markedGone(pre, from, to);
+  g.sid = st.id; g.ledger = ledger; g.company = tname;
+  b.gone = g.ids.length ? g : null;
+  if (!opts.quiet){ b.busy = ""; toast(g.ids.length ? g.ids.length + " line" + (g.ids.length === 1 ? " is" : "s are") + " no longer in Tally." : "All " + g.marked + " posted lines are still in Tally."); }
+  render();
+  return g;
+}
+function goneHtml(){
+  const b = B(), g = b.gone, st = curStmt();
+  if (!g || !st || g.sid !== st.id || !g.ids.length) return "";
+  const n = g.ids.length, all = n === g.marked;
+  return '<div class="bk-bal bad"><div style="flex:1"><b>' + n + " line" + (n === 1 ? " is" : "s are") + " marked as posted, but " + (n === 1 ? "is" : "are") + " no longer in Tally.</b> " +
+    (all ? "None of this statement\u2019s posted lines are in " + esc(g.ledger) + " in " + esc(g.company) + " any more" + (g.bankLines ? "" : " (Tally shows no entries in this ledger for these dates)") + "." : "They were probably deleted in Tally, or moved to another company.") +
+    '<div class="row" style="margin-top:8px;gap:8px"><button class="btn small primary" data-act="goneBack">Put ' + (n === 1 ? "it" : "them") + " back in Ready to post</button>" + focusBtn("gone", "no longer in Tally", g.ids, "Show " + (n === 1 ? "it" : "them")) +
+    '<button class="linkbtn" data-act="goneKeep">Leave them as posted</button></div></div></div>';
+}
+function goneBack(){
+  const b = B(), g = b.gone;
+  if (!g) return;
+  const ids = new Set(g.ids);
+  let n = 0;
+  b.rows.forEach(r => {
+    if (!ids.has(r.id) || !["sent", "intally"].includes(r.state)) return;
+    n++;
+    if (b.postedTags) delete b.postedTags[fpHash(r.fp || r.id)];
+    r.state = r.ledger && exactLedger(r.ledger) ? "ready" : "attention";
+    r.tally = null; r.postVerified = false; r.checking = false; r.postError = ""; r.postedVia = ""; r.sentAt = ""; delete r.tallyIdx; r.tallyHow = ""; r.tallyRef = "";
+  });
+  b.gone = null; b.focus = null; b.filter = "ready"; b.tallyLook = null;
+  lsDel(wideCheckKey());
+  saveBank({rows: true, posted: true});
+  toast(n + " line" + (n === 1 ? " is" : "s are") + " back in Ready to post. Press Post to send " + (n === 1 ? "it" : "them") + " to Tally again.");
+  render();
 }
 /* ---------- finding double entries, and entries Tally holds under the wrong date ---------- */
 // Reads this bank ledger from Tally over a wide window (not only the statement's dates), so an entry TDS Desk sent that
@@ -15900,6 +16010,8 @@ async function postBankToTally(ids){
         pre = await Bridge.call(ledgerLinesUrl(tname, acc.ledger, from, to), null, 600000);
         b.tallyLook = {sid: st.id, at: Date.now(), data: pre};
       }
+      const g = markedGone(pre, from, to);
+      if (g.ids.length){ g.sid = st.id; g.ledger = acc.ledger; g.company = tname; b.gone = g; }
       await syncBankBookFromTally(true, {from, to, rows: toCheck, pre});
       toCheck.forEach(r => { if (r.state === "intally") b.postedTags[fpHash(r.fp || r.id)] = b.postedTags[fpHash(r.fp || r.id)] || "tally:" + new Date().toISOString(); });
       saveBank({posted: true});

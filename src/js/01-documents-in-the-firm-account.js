@@ -3686,7 +3686,23 @@ const app = document.getElementById("app");
 function sortedCompanies(){ return Object.values(S.companies).sort((a, b) => a.name.localeCompare(b.name)); }
 function recentIds(){ try { return JSON.parse(lsGet("tdsdesk:recent") || "[]"); } catch(e){ return []; } }
 
+// The page always ends below the bars fixed at the bottom of the window (the action bar, the testing strip),
+// so the last line of a long list can be scrolled into view instead of staying hidden behind them.
+function padForBars(){
+  let top = window.innerHeight;
+  document.querySelectorAll("body *").forEach(el => {
+    if (!el.offsetParent && getComputedStyle(el).position !== "fixed") return;
+    const cs = getComputedStyle(el);
+    if (cs.position !== "fixed" || cs.display === "none" || cs.visibility === "hidden") return;
+    const r = el.getBoundingClientRect();
+    if (r.height > 0 && r.height < window.innerHeight / 3 && r.top > window.innerHeight * 0.6 && r.width > window.innerWidth / 2) top = Math.min(top, r.top);
+  });
+  const pad = Math.max(0, Math.round(window.innerHeight - top)) + 16;
+  if (document.body.style.paddingBottom !== pad + "px") document.body.style.paddingBottom = pad + "px";
+}
+window.addEventListener("resize", () => requestAnimationFrame(padForBars));
 function render(){
+  requestAnimationFrame(padForBars);
   const drafts = {};
   document.querySelectorAll("#app [data-draft]").forEach(el => { if (el.id) drafts[el.id] = el.value; });
   const a = document.activeElement, fk = a && a.dataset ? (a.dataset.fk || (a.hasAttribute("data-draft") ? "id:" + a.id : null)) : null;

@@ -1098,8 +1098,10 @@ function viewBank(){
     const inR = bankRangeRows(), out = inR.reduce((a2, r) => a2 + num(r.debit), 0), inn = inR.reduce((a2, r) => a2 + num(r.credit), 0);
     h += colChipBar("bank", inR.length, b.rows.length + " lines", "out " + INR.format(r2(out)) + " \u00b7 in " + INR.format(r2(inn)));
   }
+  h += goneHtml();
   h += dupFindHtml();
   h += bankFocusHtml();
+  if (tab === "done" && !b.focus && Bridge.on() && Bridge.up() && tc.done) h += '<div class="bk-found"><span class="muted">Deleted some of these in Tally?</span> <button class="btn small" data-act="goneCheck">Check they are still in Tally</button></div>';
   if (b.offerRule){
     const o = b.offerRule;
     h += '<div class="bk-found" style="border-color:var(--ledger)"><b>Keep this as a rule?</b> Every future line containing \u201c' + esc(o.text) + '\u201d would go to <b>' + esc(o.ledger) + "</b> by itself." +
