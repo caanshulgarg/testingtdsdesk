@@ -229,9 +229,9 @@ async function bridgeTick(first){
     const before = Bridge.st.state;
     await Bridge.refresh();
     if (first && Bridge.up() && !Bridge.posting) bridgeLeftover();
-    if (first && Bridge.up() && Bridge.st.version && bridgeVer(Bridge.st.version) < bridgeVer("1.12.5") && !lsGet("tdsdesk:bridgenudge1125")){
-      lsSet("tdsdesk:bridgenudge1125", "1");
-      toast("A new Tally Bridge (1.12.5) is ready: deleting entries from the reconciliation works on more Tally setups, and posting stays fast, and it keeps posting even if this page or the connection drops. Download it under Settings \u2192 Tally Bridge and run the setup on the Tally computer.");
+    if (first && Bridge.up() && Bridge.st.version && bridgeVer(Bridge.st.version) < bridgeVer("1.12.6") && !lsGet("tdsdesk:bridgenudge1126")){
+      lsSet("tdsdesk:bridgenudge1126", "1");
+      toast("A new Tally Bridge (1.12.6) is ready: it reads bill references for the vendor reconciliation, deletes entries on more Tally setups, and posts fast, and it keeps posting even if this page or the connection drops. Download it under Settings \u2192 Tally Bridge and run the setup on the Tally computer.");
     }
     const key = Bridge.st.open.map(o => o.name).sort().join("|");
     const changed = key !== Bridge.lastOpenKey;
@@ -480,7 +480,7 @@ function reconHtml(){
   const balanced = R.unexplained !== null && Math.abs(R.sClose - R.tClose) < 0.01;
   let h = '<section class="recon"><div class="recon-head"><div><h3>Bank reconciliation · ' + esc(R.ledger) + "</h3>" +
     '<div class="note">' + esc(R.company) + " · " + fmtDate(R.from) + " to " + fmtDate(R.to) + " · " + R.pairs + " lines matched · read " + new Date(R.at).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}) + "</div></div>" +
-    '<div class="row" style="gap:8px">' + (live ? '<button class="btn small" data-act="reconRun">Reconcile again</button>' : "") + '<button class="btn small" data-act="reconClose">Close</button></div></div>';
+    '<div class="row" style="gap:8px">' + '<button class="btn small" data-act="reconExcel">Download Excel</button>' + (live ? '<button class="btn small" data-act="reconRun">Reconcile again</button>' : "") + '<button class="btn small" data-act="reconClose">Close</button></div></div>';
   if (balanced && !R.missing.length && !R.extra.length && !R.differ.length){
     return h + '<div class="bk-bal ok"><div>✔ <b>Reconciled.</b> Every line of the statement is in Tally once, and nothing else is. ' + esc(R.ledger) + " in Tally on " + fmtDate(R.to) + " is " + m(R.tClose) + ", the same as the statement.</div></div></section>";
   }

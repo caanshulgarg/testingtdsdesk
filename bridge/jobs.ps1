@@ -124,7 +124,7 @@ function Get-LedgerVoucherList([int]$Port, [string]$Company, [string]$Ledger, [s
     '<BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + (Esc $Company) + '</SVCURRENTCOMPANY>' +
     '<SVFROMDATE>' + $From + '</SVFROMDATE><SVTODATE>' + $To + '</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE>' +
     '<COLLECTION NAME="TDSDeskLedVch" ISMODIFY="No"><TYPE>Vouchers : Ledger</TYPE><CHILDOF>' + (Esc $Ledger) + '</CHILDOF>' +
-    '<FETCH>DATE,VOUCHERTYPENAME,VOUCHERNUMBER,PARTYLEDGERNAME,NARRATION,MASTERID,GUID,ISOPTIONAL,ISCANCELLED,ALLLEDGERENTRIES.LIST</FETCH></COLLECTION>' +
+    '<FETCH>DATE,VOUCHERTYPENAME,VOUCHERNUMBER,REFERENCE,PARTYLEDGERNAME,NARRATION,MASTERID,GUID,ISOPTIONAL,ISCANCELLED,ALLLEDGERENTRIES.LIST</FETCH></COLLECTION>' +
     '</TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>'
   $raw = Invoke-Tally -TallyPort $Port -Xml $req
   if ($raw -match '<LINEERROR>|Could not find|Unknown Request') { return $null }
@@ -137,9 +137,10 @@ function Get-LedgerVoucherList([int]$Port, [string]$Company, [string]$Ledger, [s
     $entries = @()
     foreach ($e in $v.SelectNodes('ALLLEDGERENTRIES.LIST | LEDGERENTRIES.LIST')) {
       $bank = $e.SelectSingleNode('BANKALLOCATIONS.LIST')
-      $entries += [ordered]@{ ledger = (Get-NodeText $e 'LEDGERNAME'); amount = (Get-NodeText $e 'AMOUNT'); instrument = (Get-NodeText $bank 'INSTRUMENTNUMBER') }
+      $bills = @(); foreach ($bl in $e.SelectNodes('BILLALLOCATIONS.LIST')) { $bn = Get-NodeText $bl 'NAME'; if ($bn) { $bills += $bn } }
+      $entries += [ordered]@{ ledger = (Get-NodeText $e 'LEDGERNAME'); amount = (Get-NodeText $e 'AMOUNT'); instrument = (Get-NodeText $bank 'INSTRUMENTNUMBER'); bills = $bills }
     }
-    $null = $list.Add([ordered]@{ guid = (Get-NodeText $v 'GUID'); masterId = (Get-NodeText $v 'MASTERID'); date = $d; type = $type; number = (Get-NodeText $v 'VOUCHERNUMBER')
+    $null = $list.Add([ordered]@{ guid = (Get-NodeText $v 'GUID'); masterId = (Get-NodeText $v 'MASTERID'); date = $d; type = $type; number = (Get-NodeText $v 'VOUCHERNUMBER'); reference = (Get-NodeText $v 'REFERENCE')
       party = (Get-NodeText $v 'PARTYLEDGERNAME'); narration = (Get-NodeText $v 'NARRATION'); optional = (Get-NodeText $v 'ISOPTIONAL'); cancelled = (Get-NodeText $v 'ISCANCELLED'); entries = $entries })
   }
   return ,$list

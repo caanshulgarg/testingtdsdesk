@@ -240,6 +240,12 @@ html{scroll-padding-bottom:150px}
 .bk-bal .bk-x:hover{background:var(--rule-soft);color:var(--ink)}
 .busy-float{position:fixed;left:50%;transform:translateX(-50%);top:78px;z-index:60;width:min(640px,calc(100vw - 32px));box-shadow:0 12px 32px rgba(16,26,22,.22);border-radius:10px}
 .busy-float .busycard{margin:0;background:var(--sheet)}
+.vr-form{display:grid;grid-template-columns:minmax(240px,2fr) 150px 150px minmax(200px,1.4fr) auto;gap:12px;align-items:start;margin:4px 0 8px}
+.vr-form label{display:flex;flex-direction:column;gap:4px;font-size:13px}
+.vr-form label span{color:var(--muted)}
+.vr-form input[type=text],.vr-form input[type=date]{padding:7px 9px;border:1px solid var(--rule);border-radius:8px;font:inherit;background:var(--paper);color:var(--ink)}
+.vr-form small.bad{color:var(--stop)}
+@media (max-width:900px){.vr-form{grid-template-columns:1fr 1fr}}
 .bk-focus{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:10px 14px;border-radius:8px;background:var(--flag-soft);border-left:3px solid var(--flag);margin:8px 0;font-size:14px}
 .bk-check .ok{color:var(--ledger)}
 .bk-check .bad{color:var(--stop);font-weight:600}

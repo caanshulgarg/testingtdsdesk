@@ -192,6 +192,7 @@ function uploadBlock(co){
       '<div class="row"><button class="btn primary small" data-act="pasteAdd">Add to ' + esc(co.name) + '</button><button class="btn small" data-act="pasteClose">Cancel</button></div></div>' : "");
 }
 function viewInvoices(){
+  if (VR.st()) return viewVendorRecon();
   if (S.reviewTable && S.filter === "draft") return viewReviewTable();
   const d = D(), co = CO(), all = Object.values(d.entries);
   const shown = all.filter(e => e.status === S.filter).sort((a, b) => S.filter === "draft" ? byDate(a, b) : byDate(b, a));
@@ -212,6 +213,7 @@ function viewInvoices(){
   return docqPanel(S.coId) + '<div class="desk"><div>' +
 
     (Object.values(d.entries).filter(e => e.status === "draft").length > 1 ? '<div class="row" style="margin:8px 0 0"><button class="btn small" data-act="revTable">Review all ' + Object.values(d.entries).filter(e => e.status === "draft").length + ' in a table</button></div>' : "") +
+    '<div class="row" style="margin:8px 0 0;justify-content:flex-end"><button class="btn small" data-act="vrOpen" title="Match a vendor\u2019s ledger with the party\u2019s ledger in Tally">Reconcile a vendor ledger</button></div>' +
     '<div class="filters">' + f("draft", "To review") + f("approved", "Approved") + f("rejected", "No entry") + (cnt("duplicate") || S.filter === "duplicate" ? f("duplicate", "Duplicates") : "") + "</div>" +
     (items ? '<ul class="queue">' + items + "</ul>" : S.filter === "draft" && !all.length
       ? '<div class="drop drop-empty" id="drop" tabindex="0" role="button" aria-label="Upload invoices for ' + esc(co.name) + '"><strong>No bills yet for ' + esc(co.name) + '</strong><div class="note">Drop PDFs or photos here, or click to choose. Several at once is fine.</div></div>'

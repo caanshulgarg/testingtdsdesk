@@ -39,5 +39,6 @@
  "38-gst-returns-filed.js",
  "39-gst-api.js",
  "40-support.js",
- "41-books-sync.js"
+ "41-books-sync.js",
+ "42-vendor-recon.js"
 ]

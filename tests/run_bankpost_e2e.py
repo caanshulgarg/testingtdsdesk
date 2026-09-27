@@ -46,7 +46,7 @@ try:
         pg.goto("http://localhost:8133/"); pg.wait_for_timeout(2000)
         pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
         pg.evaluate(SETUP, [key, BANK, PARTY]); pg.evaluate("Bridge.refresh()")
-        ok(pg.evaluate("Bridge.st.version") == "1.12.5", "bridge 1.12.5 running against the stand-in Tally")
+        ok(pg.evaluate("Bridge.st.version") == "1.12.6", "bridge 1.12.6 running against the stand-in Tally")
         ok(pg.evaluate("syncLedgersFromTally(true)") and pg.evaluate("!!exactLedger('%s') && !!exactLedger('%s')" % (BANK, PARTY)), "ledgers read from Tally")
         pg.evaluate("() => { B().rows.forEach(r => { r.state = 'ready'; }); }")
         # the dates themselves
@@ -158,6 +158,8 @@ try:
         ok(len(e3) == 1 and "47000.00" in e3[0][3], "'Replace them': the entry with the wrong amount is replaced by the statement's amount")
         R = pg.evaluate("reconcileBank().then(R => R && {missing: R.missing.length, extra: R.extra.length, differ: R.differ.length, t: R.tClose, s: R.sClose})")
         ok(R and R["missing"] == R["extra"] == R["differ"] == 0 and abs(R["t"] - R["s"]) < 0.01 and "Reconciled" in pg.inner_text(".recon"), "reconciled: every line in Tally once, and the balances agree (%s)" % R)
+        with pg.expect_download() as dl: pg.click("[data-act='reconExcel']")
+        ok(dl.value.suggested_filename.endswith(".xlsx") and os.path.getsize(dl.value.path()) > 2000, "the bank reconciliation downloads as Excel (%s)" % dl.value.suggested_filename)
         # an entry dated long after the statement, in a Tally that gives its latest balance whatever date is asked
         fake_tally.POSTED.append(("20270331", "year end entry", "990", '<VOUCHER VCHTYPE="Receipt" ACTION="Create"><DATE>20270331</DATE><VOUCHERTYPENAME>Receipt</VOUCHERTYPENAME><NARRATION>year end entry</NARRATION><ALLLEDGERENTRIES.LIST><LEDGERNAME>2K Mart</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>5000.00</AMOUNT></ALLLEDGERENTRIES.LIST><ALLLEDGERENTRIES.LIST><LEDGERNAME>HDFC BANK ACCOUNT</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-5000.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>'))
         fake_tally.CTRL["ignore_balance_dates"] = True
