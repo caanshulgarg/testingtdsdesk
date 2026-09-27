@@ -227,7 +227,7 @@ function learnCustomer(v){
 /* ---------- Tally XML ---------- */
 function salesVoucherXml(v, co){
   const x = v.x, cfg = SL().cfg, cn = x.noteKind === "credit";
-  const vt = xesc(cn ? (cfg.creditNoteType || "Credit Note") : x.noteKind === "debit" ? (cfg.debitNoteType || "Debit Note") : (cfg.voucherType || "Sales")), d = tallyDate(x.date);
+  const vt = xesc(cn ? (cfg.creditNoteType || "Credit Note") : x.noteKind === "debit" ? (cfg.debitNoteType || "Debit Note") : (cfg.voucherType || "Sales")), d = toTallyDate(x.date);
   const pos = x.pos || stateOfGstin(x.customerGstin) || stateOfGstin(co.gstin);
   const amt2 = n => r2(n).toFixed(2);
   let s = '<VOUCHER VCHTYPE="' + vt + '" ACTION="Create" OBJVIEW="Accounting Voucher View">\n<DATE>' + d + "</DATE>\n<EFFECTIVEDATE>" + d + "</EFFECTIVEDATE>\n" +

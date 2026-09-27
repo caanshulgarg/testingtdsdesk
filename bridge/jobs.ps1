@@ -198,7 +198,7 @@ function Invoke-JobWorker([string]$dir) {
       #   Tally made fewer than it got   -> the rest were refused: sent one by one, for each one's own reason
       #   Tally made all, one not found  -> not sent again (another company, or Optional): said so
       #   no answer, or no answered read -> treated as lost: checked in Tally again before anything is resent
-      $fast = @($vouchers | Where-Object { ([string]$_.xml -match 'TDSDesk:[A-Za-z0-9._-]+') -and ([string]$_.xml -notmatch '<ISOPTIONAL>\s*Yes') -and ([string]$_.xml -match '^\s*<VOUCHER\b') })
+      $fast = @($vouchers | Where-Object { ([string]$_.xml -match 'TDSDesk:[A-Za-z0-9._-]+') -and ([string]$_.xml -notmatch '<ISOPTIONAL>\s*Yes') -and ([string]$_.xml -match '^\s*<VOUCHER\b') -and ([string]$_.xml -match '<DATE>\d{8}</DATE>') })
       if ($fast.Count -ge 2) {
         $fastIds = @{}; foreach ($v in $fast) { $fastIds[[string]$v.id] = $true }
         $vouchers = @($vouchers | Where-Object { -not $fastIds.ContainsKey([string]$_.id) })

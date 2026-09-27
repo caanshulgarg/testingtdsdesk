@@ -33,7 +33,7 @@ try:
         r = urllib.request.urlopen(req, timeout=t); d = r.read().decode("utf-8")
         return (d, r.headers.get("Content-Type")) if raw else json.loads(d)
     ping = json.loads(urllib.request.urlopen("http://127.0.0.1:9100/ping").read())
-    ok(ping["version"] == "1.12.0", "bridge 1.12.0 answers")
+    ok(ping["version"] == "1.12.1", "bridge 1.12.1 answers")
     # connecting: only TDS Desk's own pages, and only with the code shown in the bridge window
     def raw(path, origin=None, key=None):
         h = {}

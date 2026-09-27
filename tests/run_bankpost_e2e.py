@@ -1,0 +1,91 @@
+"""python3 run_bankpost_e2e.py - bank lines posted from TDS Desk through the real bridge into a stand-in Tally, end to end:
+every voucher carries its statement date; an entry Tally holds under the wrong date is found, stops the posting, is removed,
+and the line goes in again at the right date; posting twice never makes a second copy; a voucher with no date is stopped
+both in TDS Desk and in the bridge before it reaches Tally."""
+import os as _os, shutil as _sh
+HERE = _os.path.dirname(_os.path.abspath(__file__))
+BRUN = _os.path.join(HERE, "out", "bankpostrun")
+_sh.rmtree(BRUN, ignore_errors=True); _os.makedirs(BRUN, exist_ok=True)
+_sh.copy(_os.path.join(HERE, "..", "bridge", "TDSBridge.ps1"), _os.path.join(BRUN, "TDSBridge.ps1"))
+_sh.copy(_os.path.join(HERE, "fake.json"), _os.path.join(BRUN, "fake.json"))
+import json, os, sys, time, threading, functools, http.server, subprocess, urllib.request, re
+os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
+sys.path.insert(0, HERE)
+import fake_tally
+from playwright.sync_api import sync_playwright
+fake_tally.start()
+H = functools.partial(http.server.SimpleHTTPRequestHandler, directory=os.environ.get("TDSDESK_SITE", os.path.join(HERE, "..", "site-test"))); H.log_message = lambda *a: None
+srv = http.server.ThreadingHTTPServer(("localhost", 8133), H); threading.Thread(target=srv.serve_forever, daemon=True).start()
+os.environ["TDSBRIDGE_FAKE"] = _os.path.join(BRUN, "fake.json")
+json.dump({"TallyTimeoutSec": 20}, open(_os.path.join(BRUN, "tds-bridge.config.json"), "w"))
+br_p = subprocess.Popen([os.environ.get("PWSH", "/opt/pwsh/pwsh"), "-NoProfile", "-File", _os.path.join(BRUN, "TDSBridge.ps1")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=BRUN)
+fails, errors = [], []
+def ok(c, w):
+    print(("  ok   " if c else "  FAIL ") + w)
+    if not c: fails.append(w)
+BANK, PARTY = "HDFC BANK ACCOUNT", "2K Mart"
+SETUP = """([k, bank, party]) => { Bridge.setCfg({url: "http://127.0.0.1:9100", key: k});
+  const c = newCompany({name: "VMS EVENTS PRIVATE LIMITED (2024-25)", gstin: "07AADCV3366N1ZU"}); c.bankAccounts = [{id: "a1", bank: "HDFC", acct: "123", ledger: bank}];
+  S.companies[c.id] = c; S.coId = c.id; S.view = "company"; S.tab = "bank";
+  const rows = [["2025-06-02", 1000], ["2025-06-03", 2500], ["2025-06-04", 330], ["2025-06-05", 47000]].map(([d, amt], i) => ({id: "r" + i, fp: "fp-e2e-" + i, date: d, debit: amt, credit: 0,
+    narr: "NEFT to supplier " + i, dec: {name: party, mode: "NEFT"}, ledger: party, state: "ready", balOk: true, ref: "UTR" + i}));
+  S.bank = {cid: c.id, loading: false, stmts: [{id: "s1", acctId: "a1", bank: "HDFC", acct: "123", from: "2025-06-02", to: "2025-06-05"}], cur: "s1", rows, rules: [], wrules: [],
+    ledgers: {list: [], importedAt: ""}, newLed: [], keys: {}, books: {}, filter: "ready", grouped: false, showSettings: false, q: "", limit: 100, pendingRule: null, busy: "",
+    createFor: null, sel: new Set(), sticky: new Set(), undo: null, hist: {rows: {}}, histVer: 0, postedTags: {}, salesRef: []};
+  return c.id; }"""
+try:
+    for i in range(60):
+        time.sleep(1)
+        try: urllib.request.urlopen("http://127.0.0.1:9100/ping", timeout=2).read(); break
+        except Exception: pass
+    key = json.load(open(_os.path.join(BRUN, "tds-bridge.config.json"), encoding="utf-8-sig"))["Key"]
+    with sync_playwright() as p:
+        br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1400, "height": 1000})
+        pg.on("pageerror", lambda e: errors.append(str(e)))
+        pg.on("dialog", lambda d: d.accept())
+        pg.goto("http://localhost:8133/"); pg.wait_for_timeout(2000)
+        pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+        pg.evaluate(SETUP, [key, BANK, PARTY]); pg.evaluate("Bridge.refresh()")
+        ok(pg.evaluate("Bridge.st.version") == "1.12.1", "bridge 1.12.1 running against the stand-in Tally")
+        ok(pg.evaluate("syncLedgersFromTally(true)") and pg.evaluate("!!exactLedger('%s') && !!exactLedger('%s')" % (BANK, PARTY)), "ledgers read from Tally")
+        pg.evaluate("() => { B().rows.forEach(r => { r.state = 'ready'; }); }")
+        # the dates themselves
+        ok(pg.evaluate("[toTallyDate('2026-04-01'), toTallyDate('20260401'), toTallyDate('01/04/2026'), toTallyDate('2026-02-30'), toTallyDate(''), tallyDate('20260401')]") == ["20260401", "20260401", "20260401", "", "", "2026-04-01"],
+           "toTallyDate: ISO, Tally and Indian dates become yyyymmdd; nonsense becomes empty; tallyDate still reads Tally dates for display")
+        x = pg.evaluate("bankVoucherXml(B().rows[0], CO().bankAccounts[0], CO())")
+        ok("<DATE>20250602</DATE>" in x and "<BANKERSDATE>20250602</BANKERSDATE>" in x, "a bank voucher carries its statement date (was empty: two functions named tallyDate)")
+        # an entry an earlier build left in Tally under another date
+        tag0 = pg.evaluate("fpHash('fp-e2e-0')")
+        fake_tally.POSTED.append(("20260927", "old | TDSDesk:" + tag0, "501", re.sub(r"<DATE>[^<]*</DATE>", "<DATE></DATE>", x)))
+        pg.evaluate("postBankToTally()"); pg.wait_for_timeout(500)
+        d = pg.evaluate("S.dupFind && {w: S.dupFind.wrongDate.length, e: S.dupFind.extra.length, when: S.dupFind.wrongDate[0] && S.dupFind.wrongDate[0].date}")
+        ok(d and d["w"] == 1 and d["when"] == "20260927" and len(fake_tally.POSTED) == 1, "Post first looks through Tally beyond the statement's dates: the wrong-date entry is found and nothing is posted (%s)" % d)
+        ok("under the wrong date" in pg.inner_text("#app") and "Remove the 1 wrong-date entry" in pg.inner_text("#app"), "the wrong-date entry is shown with its right date and a button to remove it")
+        pg.evaluate("() => { B().rows[0].state = 'intally'; B().postedTags[fpHash('fp-e2e-0')] = 'tally:x'; }")
+        pg.evaluate("() => { window._rm = removeTallyDuplicates('wrong'); }"); pg.wait_for_timeout(400)
+        pg.click('[data-cbx="yes"]'); pg.evaluate("window._rm")
+        ok(fake_tally.DELETED == ["g-501"] and not fake_tally.POSTED, "removed from Tally by its GUID")
+        ok(pg.evaluate("B().rows[0].state") == "ready" and not pg.evaluate("B().postedTags[fpHash('fp-e2e-0')]"), "its line is back to ready, not counted as posted")
+        t0 = time.time(); pg.evaluate("postBankToTally()"); dt = time.time() - t0
+        got = sorted((dd, re.search(r"TDSDesk:(\w+)", n).group(1)) for dd, n, _, _ in fake_tally.POSTED)
+        want = sorted(zip(["20250602", "20250603", "20250604", "20250605"], pg.evaluate("[0,1,2,3].map(i => fpHash('fp-e2e-' + i))")))
+        ok(got == want, "all 4 posted, each once, each on its statement date: %s" % got)
+        ok(pg.evaluate("B().rows.every(r => r.state === 'sent' && r.postVerified)"), "each line marked posted and confirmed in Tally (%.1fs)" % dt)
+        rep = pg.evaluate("B().postReport")
+        ok(rep["posted"] == 4 and not rep["failed"], "the report: 4 posted, none failed")
+        pg.evaluate("() => { B().rows.forEach(r => { r.state = 'ready'; }); B().postedTags = {}; }")
+        pg.evaluate("postBankToTally()")
+        ok(len(fake_tally.POSTED) == 4, "posting the same lines again (this browser's memory wiped): Tally is checked, nothing goes in twice")
+        ok(pg.evaluate("B().rows.every(r => r.state === 'intally')"), "and they show as already in Tally")
+        # a voucher without a date never reaches Tally: stopped in TDS Desk ...
+        r = pg.evaluate("""async () => (await Bridge.post({company: "VMS EVENTS PRIVATE LIMITED (2024-25)", masters: [], vouchers: [{id: "nodate", xml: '<VOUCHER VCHTYPE="Payment" ACTION="Create"><DATE></DATE><NARRATION>x TDSDesk:zz1</NARRATION></VOUCHER>'}, {id: "early", xml: '<VOUCHER VCHTYPE="Payment" ACTION="Create"><DATE>20230101</DATE><NARRATION>x TDSDesk:zz2</NARRATION></VOUCHER>'}]})).results""")
+        ok(len(fake_tally.POSTED) == 4 and {x["id"]: x["ok"] for x in r} == {"nodate": False, "early": False} and "no date" in r[0]["message"] and "before" in r[1]["message"], "no date, or a date before the books begin: refused by TDS Desk, nothing sent (%s)" % [x["message"][:40] for x in r])
+        # ... and in the bridge, for anything that bypasses TDS Desk's own check
+        req = urllib.request.Request("http://127.0.0.1:9100/import", data=json.dumps({"company": "VMS EVENTS PRIVATE LIMITED (2024-25)", "masters": [], "vouchers": [{"id": "nd", "xml": '<VOUCHER VCHTYPE="Payment" ACTION="Create"><DATE></DATE><NARRATION>y</NARRATION></VOUCHER>'}]}).encode(), headers={"X-Bridge-Key": key, "Content-Type": "application/json"})
+        jr = json.loads(urllib.request.urlopen(req, timeout=60).read())
+        ok(len(fake_tally.POSTED) == 4 and not jr["results"][0]["ok"] and "no valid date" in jr["results"][0]["message"], "the bridge itself refuses a voucher with no date")
+        br.close()
+finally:
+    br_p.kill()
+ok(not errors, "no page errors" + ("" if not errors else ": " + " | ".join(errors[:3])))
+print("\n" + (str(len(fails)) + " FAILED" if fails else "all passed"))

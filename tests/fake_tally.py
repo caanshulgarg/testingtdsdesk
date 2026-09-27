@@ -37,6 +37,7 @@ def amounts_until(asOn):
 # what the tests make this Tally do when entries are imported: be slow, stop answering (after or before creating), refuse
 CTRL = {"delay": 0.0, "hang_after": 0, "hang_before": 0, "hang_sec": 25, "refuse": 0}
 POSTED = []          # (date, narration, number, xml) of every voucher created here
+DELETED = []
 LEDGERS_MADE = []
 _lock = threading.Lock(); _serial = threading.Lock()
 def posted_tags():
@@ -56,12 +57,23 @@ class H(http.server.BaseHTTPRequestHandler):
                 CTRL["hang_before"] -= 1; _t.sleep(CTRL["hang_sec"])
             _t.sleep(CTRL["delay"])
             with _lock:
-                if "<VOUCHER" in body:
+                if 'ACTION="Delete"' in body:
+                    rid = (re.search(r'REMOTEID="([^"]*)"', body) or [0, ""])[1]
+                    before = len(POSTED)
+                    POSTED[:] = [x for x in POSTED if "g-" + x[2] != rid]
+                    DELETED.append(rid)
+                    out = "<RESPONSE><CREATED>0</CREATED><ALTERED>0</ALTERED><DELETED>%d</DELETED><ERRORS>%d</ERRORS><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>" % (before - len(POSTED), 0 if before > len(POSTED) else 1)
+                elif "<VOUCHER" in body:
                     made, errs = 0, []
                     for vx in re.findall(r"<VOUCHER\b.*?</VOUCHER>", body, re.S):
                         if "NoSuchLedger" in vx: errs.append("Ledger 'NoSuchLedger' does not exist!"); continue
                         d = (re.search(r"<DATE>(\d{8})</DATE>", vx) or [0, ""])[1]; n = (re.search(r"<NARRATION>([^<]*)</NARRATION>", vx) or [0, ""])[1]
-                        num = str(len(POSTED) + 1); POSTED.append((d, n, num, vx)); made += 1
+                        if not d:
+                            # what a real Tally did with an empty date: complained, and (sometimes) made it anyway on another date
+                            errs.append("Voucher date is missing for: 'Payment' voucher 1. Verify the data, resolve errors (if any) and retry Split.")
+                            if not CTRL.get("empty_date_creates"): continue
+                            d = CTRL["empty_date_creates"]
+                        num = str(len(POSTED) + 1 + len(DELETED)); POSTED.append((d, n, num, vx)); made += 1
                     vid = str(900000 + len(POSTED))
                     out = "<RESPONSE><CREATED>%d</CREATED><ALTERED>0</ALTERED><ERRORS>%d</ERRORS><EXCEPTIONS>0</EXCEPTIONS>%s<LASTVCHID>%s</LASTVCHID></RESPONSE>" % (made, len(errs), "".join("<LINEERROR>%s</LINEERROR>" % e for e in errs), vid)
                 else:
@@ -78,12 +90,12 @@ class H(http.server.BaseHTTPRequestHandler):
         elif "<REPORTNAME>Day Book</REPORTNAME>" in body:
             a, b = g("SVFROMDATE"), g("SVTODATE")
             lo, hi = bisect.bisect_left(dates, a), bisect.bisect_right(dates, b)
-            out = "<ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>Vouchers</REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY>%s</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><REQUESTDATA>" % COMPANY + "".join(p for _, p in V[lo:hi]) + "</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>"
+            out = "<ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>Vouchers</REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY>%s</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><REQUESTDATA>" % COMPANY + "".join(p for _, p in V[lo:hi]) + "".join('<TALLYMESSAGE xmlns:UDF="TallyUDF">' + re.sub(r"^(<VOUCHER\b[^>]*>)", lambda m: m.group(1) + "<GUID>g-%s</GUID><MASTERID>%d</MASTERID><VOUCHERNUMBER>%s</VOUCHERNUMBER>" % (num, 900000 + int(num), num), re.sub(r"<DATE>[^<]*</DATE>", "<DATE>%s</DATE>" % d, vx, 1)) + "</TALLYMESSAGE>" for d, _, num, vx in list(POSTED) if a <= d <= b) + "</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>"
         elif "TDSDeskBalances" in body:
             asOn = g("SVTODATE"); mv = amounts_until(asOn)
             out = "<ENVELOPE><BODY><DATA><COLLECTION>" + "".join('<LEDGER NAME="%s"><PARENT>%s</PARENT><CLOSINGBALANCE>%.2f</CLOSINGBALANCE></LEDGER>' % (n, p, ob + mv.get(n.replace("&amp;", "&"), mv.get(n, 0))) for n, p, ob in L) + "</COLLECTION></DATA></BODY></ENVELOPE>"
         elif "TDSDeskLedgers" in body:
-            out = "<ENVELOPE><BODY><DATA><COLLECTION>" + "".join('<LEDGER NAME="%s"><PARENT>%s</PARENT></LEDGER>' % (n, p) for n, p, _ in L[:300]) + "</COLLECTION></DATA></BODY></ENVELOPE>"
+            out = "<ENVELOPE><BODY><DATA><COLLECTION>" + "".join('<LEDGER NAME="%s"><PARENT>%s</PARENT></LEDGER>' % (n, p) for n, p, _ in L[:300] + [x for x in L[300:] if "BANK ACCOUNT" in x[0]]) + "</COLLECTION></DATA></BODY></ENVELOPE>"
         else:
             out = "<ENVELOPE><BODY><DATA></DATA></BODY></ENVELOPE>"
         data = out.encode("utf-8")

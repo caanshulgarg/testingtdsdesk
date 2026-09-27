@@ -857,7 +857,8 @@ function bankClick(t){
     case "bankBulkPost": { const ids = b.rows.filter(r => b.sel.has(r.id) && r.state === "ready").map(r => r.id); b.sel.clear(); postBankToTally(ids); return true; }
     case "bankReportOk": b.postReport = null; render(); return true;
     case "dupFind": closeMenus(); findTallyDuplicates(); return true;
-    case "dupRemove": removeTallyDuplicates(); return true;
+    case "dupRemove": removeTallyDuplicates("extra"); return true;
+    case "dupRemoveWrong": removeTallyDuplicates("wrong"); return true;
     case "dupClose": S.dupFind = null; render(); return true;
     case "bankCheckTally": {
       closeMenus();

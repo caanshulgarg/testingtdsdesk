@@ -890,7 +890,7 @@ function createLedger(name, group, pan, gstin, acNo, ifsc){
 /* ---------- Tally XML ---------- */
 function bankVoucherXml(row, acc, co){
   const vt = row.vtype || (row.debit ? "Payment" : "Receipt");
-  const d = tallyDate(row.date), amt2 = n => r2(n).toFixed(2);
+  const d = toTallyDate(row.date), amt2 = n => r2(n).toFixed(2);
   const amount = row.debit || row.credit, out = !!row.debit;
   const tds = out && row.tdsAtPay ? r2(row.tdsAtPay) : 0;
   const party = tallyLedgerName(row.ledger);
@@ -943,7 +943,8 @@ function markSalesReceived(r){
 function bankExportProblems(rows){
   const probs = [];
   rows.forEach(r => {
-    if (!r.ledger) probs.push(fmtDate(r.date) + ": no ledger");
+    if (!toTallyDate(r.date)) probs.push((r.dec && r.dec.name || "A line") + ": no valid date");
+    else if (!r.ledger) probs.push(fmtDate(r.date) + ": no ledger");
     else if (!exactLedger(r.ledger)) probs.push(fmtDate(r.date) + ": \u201c" + r.ledger + "\u201d is not a Tally ledger");
   });
   return probs;
@@ -1068,7 +1069,7 @@ function viewBank(){
     '<dl class="bk-figs"><div><dt>Opening</dt><dd>' + (st.opening !== undefined ? INR.format(st.opening) : "\u2014") + '</dd></div><div><dt>Withdrawals</dt><dd>' + INR.format(st.totDr || 0) + '</dd></div><div><dt>Deposits</dt><dd>' + INR.format(st.totCr || 0) + '</dd></div><div><dt>Closing</dt><dd>' + (st.closing !== undefined ? INR.format(st.closing) : "\u2014") + "</dd></div></dl>" +
     '<div class="bk-actions"><button class="btn small" data-act="bankPick">Upload statement</button><button class="btn small" data-act="bankSettings">Settings</button>' +
     '<details class="bk-menu"><summary class="btn small">More</summary><div class="bk-menu-list">' +
-      (Bridge.on() && Bridge.up() ? '<button data-act="dupFind">Find double entries in Tally</button><button data-act="bankCheckTally">Check Tally for entries already there</button><button data-act="bankSync">Refresh ledgers from Tally</button><button data-act="bankFile">Create Tally file instead</button>' : '<button data-act="bookPick">Match with Tally bank book</button>') +
+      (Bridge.on() && Bridge.up() ? '<button data-act="dupFind">Find double or wrong-date entries in Tally</button><button data-act="bankCheckTally">Check Tally for entries already there</button><button data-act="bankSync">Refresh ledgers from Tally</button><button data-act="bankFile">Create Tally file instead</button>' : '<button data-act="bookPick">Match with Tally bank book</button>') +
       '<button data-act="bankCsv">Download as Excel (CSV)</button>' +
       (S.engine && tc.attention ? '<button data-act="bankClaude">Ask Claude for the remaining entries</button>' : "") +
       '<button data-act="bankClearStmt">Clear all decisions</button>' +

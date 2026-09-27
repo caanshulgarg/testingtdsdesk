@@ -72,6 +72,24 @@ const Bridge = {
   // rides out a bridge or network that stops answering for a while. An older bridge: the one long request as before.
   // Returns {results: [{id, ok, message, ...}]} for every item sent, whatever happened.
   async post(payload, onProgress){
+    // nothing without a proper date, or dated before the company's books begin, ever goes to Tally: it is answered here
+    const refused = [];
+    const open = (this.st.open || []).find(o => o.name === payload.company);
+    const booksFrom = open && /^\d{8}$/.test(String(open.from || "")) ? String(open.from) : "";
+    const keep = list => [].concat(list || []).filter(it => {
+      let why = voucherDateProblem(it.xml);
+      const d = (String(it.xml || "").match(/^\s*<VOUCHER\b[\s\S]*?<DATE>(\d{8})<\/DATE>/) || [])[1];
+      if (!why && d && booksFrom && d < booksFrom) why = "Dated " + fmtDate(tallyDate(d)) + ", before " + payload.company + "'s books begin (" + fmtDate(tallyDate(booksFrom)) + "), so it was not sent. Open the company that holds this period in Tally.";
+      if (why) refused.push({id: it.id, ok: false, message: why});
+      return !why;
+    });
+    payload = Object.assign({}, payload, {masters: keep(payload.masters), vouchers: keep(payload.vouchers)});
+    if (!payload.masters.length && !payload.vouchers.length) return {ok: true, company: payload.company, results: refused};
+    const out = await this.postChecked(payload, onProgress);
+    out.results = [].concat(out.results || []).concat(refused);
+    return out;
+  },
+  async postChecked(payload, onProgress){
     const jobs = bridgeVer(this.st.version) >= bridgeVer("1.12.0");
     if (!jobs) return this.call("/import", payload, 600000);
     const jobId = (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 12));
@@ -342,23 +360,32 @@ async function bankAutoSync(force){
     if (force || (b.ledgers.list || []).length !== before) render();
   } finally { bankSyncing = false; }
 }
-/* ---------- finding and removing double entries already in Tally ---------- */
-async function findTallyDuplicates(){
+/* ---------- finding double entries, and entries Tally holds under the wrong date ---------- */
+// Reads this bank ledger from Tally over a wide window (not only the statement's dates), so an entry TDS Desk sent that
+// Tally filed under another date is found too. Every TDS Desk entry carries its line's tag in the narration.
+//   extra     : a second (third...) copy of a line that is already in Tally at the right date
+//   wrongDate : a line that is in Tally only under another date, or an extra copy under another date
+//   strangers : TDS Desk entries whose amount is not on this statement at all
+async function scanStatementInTally(opts){
+  opts = opts || {};
   const b = B(), co = CO(b.cid), st = curStmt();
-  if (!st){ toast("Open a statement first."); return; }
   const acc = (co.bankAccounts || []).find(a => a.id === st.acctId);
-  if (!acc || !exactLedger(acc.ledger)){ toast("Set the Tally ledger for this bank account first."); return; }
-  const tname = await ensureTallyCompany(co);
-  if (!tname) return;
+  const tname = opts.tname || await ensureTallyCompany(co);
+  if (!tname) return null;
+  const ledger = exactLedger(acc.ledger);
   const ds = b.rows.map(r => r.date).filter(Boolean).sort();
-  b.busy = "Reading " + exactLedger(acc.ledger) + " from Tally\u2026"; render();
-  let vs = [];
-  try {
-    const j = await Bridge.call("/vouchers?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(ds[0]) + "&to=" + isoToTally(ds[ds.length - 1]) + "&ledger=" + encodeURIComponent(exactLedger(acc.ledger)) + Bridge.pinQ(), null, 300000);
-    vs = [].concat(j.vouchers || []).filter(v => !/^yes$/i.test(v.cancelled || ""));
-  } catch (e){ b.busy = ""; toast("Could not read Tally: " + e.message); render(); return; }
-  b.busy = "";
-  // group what TDS Desk posted by its tag; more than one voucher with the same tag is a double entry
+  const today = new Date().toISOString().slice(0, 10);
+  const open = Bridge.openFor(co) || {};
+  const booksFrom = /^\d{8}$/.test(String(open.from || "")) ? tallyDate(open.from) : "";
+  let from = addDays(ds[0], -60);
+  if (booksFrom && from < booksFrom) from = booksFrom;
+  const last = ds[ds.length - 1] > today ? ds[ds.length - 1] : today;
+  const to = addDays(last, 31);
+  // bridge 1.12.1: one light read of TDS Desk's own entries (heads only); older: this bank ledger month by month
+  const light = bridgeVer(Bridge.st.version) >= bridgeVer("1.12.1");
+  const j = await Bridge.call((light ? "/tags" : "/vouchers") + "?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(from) + "&to=" + isoToTally(to) + (light ? "" : "&ledger=" + encodeURIComponent(ledger)) + Bridge.pinQ(), null, 600000);
+  const vs = [].concat(j.vouchers || []).filter(v => !/^yes$/i.test(v.cancelled || ""));
+  const rowByTag = new Map(b.rows.map(r => [fpHash(r.fp || r.id), r]));
   const groups = new Map();
   vs.forEach(v => {
     const m = String(v.narration || "").match(/TDSDesk:([A-Za-z0-9]+)/i);
@@ -366,65 +393,115 @@ async function findTallyDuplicates(){
     const k = m[1].toLowerCase();
     (groups.get(k) || groups.set(k, []).get(k)).push(v);
   });
-  const extra = [];
-  groups.forEach(list => {
-    if (list.length < 2) return;
-    list.sort((a, c) => num(a.masterId) - num(c.masterId) || String(a.number).localeCompare(String(c.number)));
-    list.slice(1).forEach(v => extra.push(v));            // keep the first, the rest are copies
-  });
-  // vouchers TDS Desk posted whose amount is not on this statement at all
-  const amountOf = v => { const en = [].concat(v.entries || []).find(x => norm(x.ledger) === norm(exactLedger(acc.ledger))); return en ? Math.abs(parseFloat(String(en.amount).replace(/,/g, "")) || 0) : 0; };
+  const tagOf = v => (String(v.narration || "").match(/TDSDesk:([A-Za-z0-9]+)/i) || [])[1];
+  const amountOf = v => {
+    const en = [].concat(v.entries || []).find(x => norm(x.ledger) === norm(ledger));
+    if (en) return Math.abs(parseFloat(String(en.amount).replace(/,/g, "")) || 0);
+    const r = rowByTag.get(String(tagOf(v) || "").toLowerCase());
+    return r ? num(r.debit || r.credit) : 0;
+  };
   const onStmt = new Set(b.rows.map(r => tallyToIso(isoToTally(r.date)) + "|" + r2(r.debit || r.credit)));
-  const strangers = [];
-  groups.forEach(list => { const v = list[0]; const k = tallyToIso(v.date) + "|" + r2(amountOf(v)); if (amountOf(v) && !onStmt.has(k)) list.forEach(x => strangers.push(x)); });
-  // everything seen in Tally counts as posted, so it is never posted again from here
+  const extra = [], wrongDate = [], strangers = [], goodTags = [], badOnly = [];
+  groups.forEach((list, k) => {
+    list.sort((a, c) => num(a.masterId) - num(c.masterId) || String(a.number).localeCompare(String(c.number)));
+    const row = rowByTag.get(k);
+    if (!row){
+      // the light read sees every TDS Desk entry of the company (other statements, bills): only this statement's lines matter
+      if (light){ goodTags.push(k); return; }
+      // not a line of this statement: a line of another statement of this account, or an old copy
+      const v = list[0];
+      if (amountOf(v) && !onStmt.has(tallyToIso(v.date) + "|" + r2(amountOf(v)))) list.forEach(x => strangers.push(x));
+      else if (list.length > 1) list.slice(1).forEach(x => extra.push(x));
+      goodTags.push(k);
+      return;
+    }
+    const want = isoToTally(row.date);
+    const good = list.filter(v => String(v.date) === want), bad = list.filter(v => String(v.date) !== want);
+    bad.forEach(v => { v.rowId = row.id; v.wantDate = row.date; wrongDate.push(v); });
+    if (good.length){ good.slice(1).forEach(v => extra.push(v)); goodTags.push(k); }
+    else badOnly.push(row.id);
+  });
+  // what is in Tally at the right date counts as posted, so it is never posted again from here;
+  // a line that is in Tally only under a wrong date is not: once that copy is removed it is posted afresh
   b.postedTags = b.postedTags || {};
-  groups.forEach((list, k) => { b.postedTags[k] = b.postedTags[k] || new Date().toISOString(); });
+  goodTags.forEach(k => { b.postedTags[k] = b.postedTags[k] || "tally:" + new Date().toISOString(); });
   saveBank({posted: true});
-  S.dupFind = {at: Date.now(), total: vs.length, tagged: Array.from(groups.values()).reduce((a, l) => a + l.length, 0), extra, strangers, company: tname, amountOf};
+  return {at: Date.now(), total: vs.length, tagged: Array.from(groups.values()).reduce((a, l) => a + l.length, 0), extra, wrongDate, strangers, badOnly, company: tname, amountOf, from, to};
+}
+function wideCheckKey(){ const st = curStmt(); return "tdsdesk:tallywide:" + (st ? st.id : ""); }
+async function findTallyDuplicates(){
+  const b = B(), co = CO(b.cid), st = curStmt();
+  if (!st){ toast("Open a statement first."); return; }
+  const acc = (co.bankAccounts || []).find(a => a.id === st.acctId);
+  if (!acc || !exactLedger(acc.ledger)){ toast("Set the Tally ledger for this bank account first."); return; }
+  b.busy = "Reading " + exactLedger(acc.ledger) + " from Tally, month by month…"; render();
+  try { S.dupFind = await scanStatementInTally(); }
+  catch (e){ b.busy = ""; toast("Could not read Tally: " + e.message); render(); return; }
+  b.busy = "";
+  if (S.dupFind && !S.dupFind.extra.length && !S.dupFind.wrongDate.length) lsSet(wideCheckKey(), String(Date.now()));
   render();
 }
 function dupFindHtml(){
   const d = S.dupFind;
   if (!d) return "";
   const amt = v => INR.format(d.amountOf(v));
-  let h = '<div class="bigwarn" style="border-color:' + (d.extra.length || d.strangers.length ? "var(--stop)" : "var(--ledger)") + '">';
-  if (!d.extra.length && !d.strangers.length) return h + "<b>No double entries.</b> " + d.tagged + " entries posted by TDS Desk were checked in " + esc(d.company) + '. <button class="linkbtn" data-act="dupClose">Close</button></div>';
+  const tbl = (list, withWant) => '<div class="tblwrap" style="margin-top:6px;max-height:260px;overflow:auto"><table class="data"><thead><tr><th>' + (withWant ? "In Tally on" : "Date") + "</th>" + (withWant ? "<th>Should be</th>" : "") + '<th>Type</th><th>Voucher</th><th>Party</th><th class="n">Amount</th></tr></thead><tbody>' +
+    list.slice(0, 400).map(v => "<tr><td>" + fmtDate(tallyToIso(v.date)) + "</td>" + (withWant ? "<td>" + fmtDate(v.wantDate) + "</td>" : "") + "<td>" + esc(v.type || "") + "</td><td>" + esc(v.number || "") + "</td><td>" + esc(v.party || "") + '</td><td class="n">' + amt(v) + "</td></tr>").join("") +
+    "</tbody></table></div>";
+  const bad = d.extra.length || d.wrongDate.length || d.strangers.length;
+  let h = '<div class="bigwarn" style="border-color:' + (bad ? "var(--stop)" : "var(--ledger)") + '">';
+  if (!bad) return h + "<b>All clear.</b> " + d.tagged + " entries posted by TDS Desk were checked in " + esc(d.company) + " (" + fmtDate(d.from) + " to " + fmtDate(d.to) + "): each is there once, on its statement date. " + '<button class="linkbtn" data-act="dupClose">Close</button></div>';
+  if (d.wrongDate.length){
+    h += "<b>" + d.wrongDate.length + " entr" + (d.wrongDate.length === 1 ? "y is" : "ies are") + " in " + esc(d.company) + " under the wrong date.</b>" +
+      "<div>Remove them; the lines then show as not posted, and Post puts them in again with the statement’s date.</div>" + tbl(d.wrongDate, true) +
+      '<div class="row" style="margin-top:8px"><button class="btn small primary" data-act="dupRemoveWrong">Remove the ' + d.wrongDate.length + " wrong-date entr" + (d.wrongDate.length === 1 ? "y" : "ies") + ' from Tally</button></div>';
+  }
   if (d.extra.length){
-    h += "<b>" + d.extra.length + " entr" + (d.extra.length === 1 ? "y is" : "ies are") + " in " + esc(d.company) + " twice.</b>" +
-      "<div>For each one, the first copy is kept and the later copy is removed.</div>" +
-      '<div class="tblwrap" style="margin-top:6px;max-height:260px;overflow:auto"><table class="data"><thead><tr><th>Date</th><th>Type</th><th>Voucher</th><th>Party</th><th class="n">Amount</th></tr></thead><tbody>' +
-      d.extra.slice(0, 300).map(v => "<tr><td>" + fmtDate(tallyToIso(v.date)) + "</td><td>" + esc(v.type || "") + "</td><td>" + esc(v.number || "") + "</td><td>" + esc(v.party || "") + '</td><td class="n">' + amt(v) + "</td></tr>").join("") +
-      "</tbody></table></div>" +
-      '<div class="row" style="margin-top:8px"><button class="btn small primary" data-act="dupRemove">Remove the ' + d.extra.length + " extra cop" + (d.extra.length === 1 ? "y" : "ies") + ' from Tally</button><button class="linkbtn" data-act="dupClose">Not now</button></div>';
+    h += '<div style="margin-top:' + (d.wrongDate.length ? 12 : 0) + 'px"><b>' + d.extra.length + " entr" + (d.extra.length === 1 ? "y is" : "ies are") + " in " + esc(d.company) + " twice.</b></div>" +
+      "<div>For each one, the first copy is kept and the later copy is removed.</div>" + tbl(d.extra, false) +
+      '<div class="row" style="margin-top:8px"><button class="btn small primary" data-act="dupRemove">Remove the ' + d.extra.length + " extra cop" + (d.extra.length === 1 ? "y" : "ies") + " from Tally</button></div>";
   }
   if (d.strangers.length){
     h += '<div style="margin-top:10px"><b>' + d.strangers.length + " entr" + (d.strangers.length === 1 ? "y" : "ies") + " posted by TDS Desk " + (d.strangers.length === 1 ? "has an amount that is" : "have amounts that are") + " not on this statement:</b> " +
-      d.strangers.map(v => fmtDate(tallyToIso(v.date)) + " " + esc(v.party || "") + " " + amt(v)).join("; ") +
+      d.strangers.slice(0, 40).map(v => fmtDate(tallyToIso(v.date)) + " " + esc(v.party || "") + " " + amt(v)).join("; ") +
       ". They were probably read from an earlier or different copy of the statement. Check them against the bank, and delete them in Tally if they are wrong.</div>";
   }
-  return h + "</div>";
+  return h + '<div class="row" style="margin-top:8px"><button class="linkbtn" data-act="dupClose">Close</button></div></div>';
 }
-async function removeTallyDuplicates(){
+async function removeTallyDuplicates(which){
   const d = S.dupFind;
-  if (!d || !d.extra.length) return;
-  const a = await askConfirm({title: "Remove " + d.extra.length + " extra copies from " + d.company + "?", ok: "Remove them",
-    body: '<p class="note">Only the later copy of each double entry is removed; the first stays. This cannot be undone from TDS Desk, so take a Tally backup first if you have not.</p>'});
+  const list = d ? (which === "wrong" ? d.wrongDate : d.extra) : [];
+  if (!list.length) return;
+  const what = which === "wrong" ? list.length + " wrong-date entr" + (list.length === 1 ? "y" : "ies") : list.length + " extra cop" + (list.length === 1 ? "y" : "ies");
+  const a = await askConfirm({title: "Remove " + what + " from " + d.company + "?", ok: "Remove them",
+    body: '<p class="note">' + (which === "wrong" ? "Only the copies under the wrong date are removed. The lines then show as not posted, and Post puts them in with the right date." : "Only the later copy of each double entry is removed; the first stays.") + " This cannot be undone from TDS Desk, so take a Tally backup first if you have not.</p>"});
   if (!a) return;
   const b = B();
   let ok = 0, bad = 0;
-  for (let i = 0; i < d.extra.length; i++){
-    const v = d.extra[i];
-    b.busy = "Removing copy " + (i + 1) + " of " + d.extra.length + "\u2026"; render();
+  const gone = new Set();
+  for (let i = 0; i < list.length; i++){
+    const v = list[i];
+    b.busy = "Removing " + (i + 1) + " of " + list.length + "…"; render();
     try {
       const j = await Bridge.call("/unpost", {company: d.company, guid: v.guid || "", vchType: v.type, vchDate: v.date, vchNumber: v.number || ""}, 60000);
-      if (j && j.ok !== false){ ok++; logPosting({what: "bank", id: v.guid, action: "removed", co: b.cid, ref: "double entry " + (v.number || ""), party: v.party, amount: d.amountOf(v), tally: {guid: v.guid, vchType: v.type, vchDate: v.date, company: d.company}, by: (Cloud.st && Cloud.st.email) || ""}); }
-      else bad++;
+      if (j && j.ok !== false){
+        ok++; if (v.rowId) gone.add(v.rowId);
+        logPosting({what: "bank", id: v.guid, action: "removed", co: b.cid, ref: (which === "wrong" ? "wrong date " : "double entry ") + (v.number || ""), party: v.party, amount: d.amountOf(v), tally: {guid: v.guid, vchType: v.type, vchDate: v.date, company: d.company}, by: (Cloud.st && Cloud.st.email) || ""});
+      } else bad++;
     } catch (e){ bad++; }
   }
+  // a line whose only copy in Tally was under a wrong date is not posted any more: back to ready, so Post sends it
+  if (which === "wrong") b.rows.forEach(r => {
+    if (!gone.has(r.id) || !d.badOnly.includes(r.id)) return;
+    if (b.postedTags) delete b.postedTags[fpHash(r.fp || r.id)];
+    if (["sent", "intally"].includes(r.state)){ r.state = "ready"; r.tally = null; r.postedVia = ""; }
+    r.postError = "";
+  });
+  saveBank({rows: true, posted: true});
   b.busy = "";
-  toast(ok + " extra copies removed" + (bad ? ", " + bad + " could not be removed \u2014 delete those in Tally" : "") + ".");
+  toast(ok + " removed from Tally" + (bad ? ", " + bad + " could not be removed — delete those in Tally" : "") + "." + (which === "wrong" && ok ? " Post the lines again to put them in with the right date." : ""));
   S.dupFind = null;
+  lsDel(wideCheckKey());
   render();
 }
 
@@ -499,6 +576,24 @@ async function postBankToTally(ids){
     } catch (e){
       b.busy = ""; render();
       toast("Tally could not be checked for these dates (" + e.message + "), so nothing was posted. Try again in a moment.");
+      return;
+    }
+  }
+  // guard 2b: once per statement, look through Tally well beyond these dates for entries TDS Desk put under another date,
+  // or put in twice; if there are any, nothing is posted until they are sorted out
+  if (toCheck.length && !lsGet(wideCheckKey())){
+    try {
+      b.busy = "Checking Tally for earlier postings of this statement (once per statement)\u2026"; render();
+      const d = await scanStatementInTally({tname});
+      if (d.extra.length || d.wrongDate.length){
+        S.dupFind = d; b.busy = "";
+        toast("Nothing was posted: Tally already has entries from this statement under the wrong date or twice. Sort them out below, then post.");
+        render(); return;
+      }
+      lsSet(wideCheckKey(), String(Date.now()));
+    } catch (e){
+      b.busy = ""; render();
+      toast("Tally could not be checked (" + e.message + "), so nothing was posted. Try again in a moment.");
       return;
     }
   }
@@ -579,10 +674,10 @@ async function checkBillsInTally(onlyUnconfirmed){
   try {
     const dates = sent.map(e => e.x.invoiceDate).sort();
     const vt = co.voucherType || "Journal";
-    const j = await Bridge.call("/vouchers?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(addDays(dates[0], -5)) + "&to=" + isoToTally(addDays(dates[dates.length - 1], 5)) + "&types=" + encodeURIComponent([vt, "Purchase", "Journal", co.debitNoteType || "Debit Note"].join(",")) + Bridge.pinQ(), null, 300000);
+    const j = await Bridge.call("/vouchers?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(addDays(dates[0], -5)) + "&to=" + isoToTally(addDays(dates[dates.length - 1] > new Date().toISOString().slice(0, 10) ? dates[dates.length - 1] : new Date().toISOString().slice(0, 10), 31)) + "&types=" + encodeURIComponent([vt, "Purchase", "Journal", co.debitNoteType || "Debit Note"].join(",")) + Bridge.pinQ(), null, 300000);
     const vs = [].concat(j.vouchers || []).filter(v => !/^yes$/i.test(v.cancelled || ""));
     const now = new Date().toISOString();
-    const missing = [];
+    const missing = [], wrongDate = [];
     let optional = 0;
     sent.forEach(e => {
       const hit = vs.find(v => String(v.narration || "").includes("TDSDesk:" + e.id)) ||
@@ -590,10 +685,11 @@ async function checkBillsInTally(onlyUnconfirmed){
       e.tallyCheck = {at: now, found: !!hit, optional: !!(hit && /^yes$/i.test(hit.optional || "")), company: tname};
       if (hit && !e.exportedAt){ e.exportedAt = now; e.postUnconfirmed = null; e.postError = ""; e.postVerified = true; e.postedOptional = e.tallyCheck.optional; e.postedInto = tname; }
       if (hit && e.tallyCheck.optional) optional++;
+      if (hit && String(hit.date || "") !== isoToTally(e.x.invoiceDate)){ e.tallyCheck.wrongDate = String(hit.date || ""); wrongDate.push({no: e.x.invoiceNo, party: e.x.vendorName, want: e.x.invoiceDate, got: tallyToIso(hit.date)}); }
       if (!hit) missing.push(e);
       Store.saveEntry(co.id, e);
     });
-    S.billCheck = {at: now, checked: sent.length, found: sent.length - missing.length, optional, missing: missing.map(e => e.id), company: tname};
+    S.billCheck = {at: now, checked: sent.length, found: sent.length - missing.length, optional, missing: missing.map(e => e.id), wrongDate, company: tname};
   } catch (err){ S.billCheck = {error: err.message}; }
   render();
 }

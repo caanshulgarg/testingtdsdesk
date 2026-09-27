@@ -6,7 +6,7 @@ def R(a, b):
     assert base.count(a) == 1, ('anchor', a[:60], base.count(a))
     base = base.replace(a, b)
 import re
-base = re.sub(r"\$BridgeVersion = '[0-9.]+'", "$BridgeVersion = '1.12.0'", base, 1)
+base = re.sub(r"\$BridgeVersion = '[0-9.]+'", "$BridgeVersion = '1.12.1'", base, 1)
 def RA(a, b, n):
     global base
     assert base.count(a) == n, ('anchor', a[:60], base.count(a))
@@ -38,6 +38,14 @@ R("      '/vouchers' {", """      '/daybook' { $xml = Get-DayBookXml $qs['compan
         else { $result = [ordered]@{ ok = $true; jobs = @(Get-ActiveJobs) } }
       }
       '/jobs/resume' { if ($method -ne 'POST') { throw 'Use POST.' }; $o = $body | ConvertFrom-Json; $result = Resume-PostJob ([string]$o.id) }
+      '/tags' {
+        # every voucher TDS Desk posted in a date range (its tag is in the narration): one light read, no ledger lines
+        $port = Find-CompanyPort ([string]$qs['company']) ([int]('0' + $qs['port']))
+        $heads = Get-VoucherHeads -Port $port -Company ([string]$qs['company']) -From ([string]$qs['from']) -To ([string]$qs['to'])
+        $tagged = New-Object System.Collections.ArrayList
+        foreach ($h in $heads) { if ([string]$h.narration -match 'TDSDesk:') { $null = $tagged.Add($h) } }
+        $result = [ordered]@{ ok = $true; port = $port; vouchers = @($tagged) }
+      }
       '/vouchers' {""")
 # --- 1.11.0: a web page other than TDS Desk gets nothing from the bridge; connecting needs the code in the bridge window
 RA("  if (-not $origin) { $origin = '*' }\n", "", 2)
@@ -94,5 +102,8 @@ R("try { Start-Transcript -Path", "if (-not $Job) { try { Start-Transcript -Path
 R("-Append -ErrorAction SilentlyContinue | Out-Null } catch { }\n", "-Append -ErrorAction SilentlyContinue | Out-Null } catch { } }\n")
 R("      }\n      '/companies' {", "        $result['jobs'] = $jobsNow\n      }\n      '/companies' {")
 R("        $sessions = @(Get-OpenCompanies -Fresh)\n", "        $jobsNow = @(Get-ActiveJobs | Where-Object { $_.status -ne 'interrupted' })\n        $sessions = @($(if ($jobsNow.Count) { Get-OpenCompanies } else { Get-OpenCompanies -Fresh }))\n")
+# --- 1.12.1: a voucher without a proper date never reaches Tally (Tally answers "Voucher date is missing" but may still make it)
+R("""      if (($xml -notmatch '^\\s*<(VOUCHER|LEDGER|GROUP)\\b') -and -not $vtOnly) {""", """      if (($xml -match '^\\s*<VOUCHER\\b') -and ($xml -notmatch '<DATE>(19|20)\\d\\d(0[1-9]|1[0-2])(0[1-9]|[12]\\d|3[01])</DATE>')) { $results += [ordered]@{ id = $it.id; kind = $g.kind; ok = $false; message = 'The entry has no valid date, so it was not sent to Tally.' }; continue }
+      if (($xml -notmatch '^\\s*<(VOUCHER|LEDGER|GROUP)\\b') -and -not $vtOnly) {""")
 open(sys.argv[2], 'w', encoding='utf-8-sig', newline='\r\n').write(base)
 print('merged', len(base))

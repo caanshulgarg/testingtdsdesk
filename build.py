@@ -23,6 +23,17 @@ def assemble():
     missing = sorted(set(f for f in os.listdir(os.path.join(ROOT, "src/js")) if f.endswith(".js")) - set(order))
     if missing: sys.exit("These program files are not in src/js/ORDER.json: " + ", ".join(missing))
     js = "".join(read("src/js/" + f) for f in order)
+    # every file shares one scope: a second top-level function or const with the same name silently replaces the first
+    # (two tallyDate()s once emptied every date sent to Tally), so a clash stops the build
+    seen, clash = {}, []
+    for f in order:
+        for i, line in enumerate(read("src/js/" + f).split("\n"), 1):
+            m = re.match(r"(?:async\s+)?function\s*\*?\s*([A-Za-z_$][\w$]*)\s*\(|(?:const|let|var|class)\s+([A-Za-z_$][\w$]*)\b", line)
+            if not m: continue
+            n = m.group(1) or m.group(2)
+            if n in seen: clash.append(n + " in " + f + ":" + str(i) + " and " + seen[n])
+            else: seen[n] = f + ":" + str(i)
+    if clash: sys.exit("The same name is defined twice at the top level:\n  " + "\n  ".join(clash))
     css = read("src/css/app.css")
     if shell.count("{{CSS}}") != 1 or shell.count("{{JS}}") != 1: sys.exit("src/shell.html must have {{CSS}} and {{JS}} once each")
     return shell.replace("{{CSS}}", css).replace("{{JS}}", js)

@@ -26,7 +26,7 @@ trap {
   try { Stop-Transcript | Out-Null } catch { }
   break
 }
-$BridgeVersion = '1.12.0'
+$BridgeVersion = '1.12.1'
 
 # ------------------------------------------------------------------ settings
 function New-BridgeKey {
@@ -654,6 +654,7 @@ function Invoke-Import($payload) {
         $tags = @([regex]::Matches($inner, '<([A-Z.]+)>') | ForEach-Object { $_.Groups[1].Value })
         $vtOnly = ($xml -match 'ACTION="Alter"') -and ($tags.Count -gt 0) -and (@($tags | Where-Object { $_ -notin @('NAME', 'NUMBERINGMETHOD', 'PREVENTDUPLICATES') }).Count -eq 0)
       }
+      if (($xml -match '^\s*<VOUCHER\b') -and ($xml -notmatch '<DATE>(19|20)\d\d(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])</DATE>')) { $results += [ordered]@{ id = $it.id; kind = $g.kind; ok = $false; message = 'The entry has no valid date, so it was not sent to Tally.' }; continue }
       if (($xml -notmatch '^\s*<(VOUCHER|LEDGER|GROUP)\b') -and -not $vtOnly) { $results += [ordered]@{ id = $it.id; kind = $g.kind; ok = $false; message = 'Only VOUCHER, LEDGER or GROUP objects can be posted, or a voucher type''s numbering changed.' }; continue }
       $env = '<ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>' + $g.report + '</REPORTNAME>' +
         '<STATICVARIABLES><SVCURRENTCOMPANY>' + (Esc $company) + '</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><REQUESTDATA>' +
@@ -939,6 +940,14 @@ function Invoke-Client($client) {
         else { $result = [ordered]@{ ok = $true; jobs = @(Get-ActiveJobs) } }
       }
       '/jobs/resume' { if ($method -ne 'POST') { throw 'Use POST.' }; $o = $body | ConvertFrom-Json; $result = Resume-PostJob ([string]$o.id) }
+      '/tags' {
+        # every voucher TDS Desk posted in a date range (its tag is in the narration): one light read, no ledger lines
+        $port = Find-CompanyPort ([string]$qs['company']) ([int]('0' + $qs['port']))
+        $heads = Get-VoucherHeads -Port $port -Company ([string]$qs['company']) -From ([string]$qs['from']) -To ([string]$qs['to'])
+        $tagged = New-Object System.Collections.ArrayList
+        foreach ($h in $heads) { if ([string]$h.narration -match 'TDSDesk:') { $null = $tagged.Add($h) } }
+        $result = [ordered]@{ ok = $true; port = $port; vouchers = @($tagged) }
+      }
       '/vouchers' { $result = Get-Vouchers $qs['company'] $qs['from'] $qs['to'] $qs['ledger'] $qs['types'] ([int]('0' + $qs['port'])) }
       '/unpost' {
         $bodyObj = $body | ConvertFrom-Json
@@ -1363,7 +1372,7 @@ function Invoke-JobWorker([string]$dir) {
       #   Tally made fewer than it got   -> the rest were refused: sent one by one, for each one's own reason
       #   Tally made all, one not found  -> not sent again (another company, or Optional): said so
       #   no answer, or no answered read -> treated as lost: checked in Tally again before anything is resent
-      $fast = @($vouchers | Where-Object { ([string]$_.xml -match 'TDSDesk:[A-Za-z0-9._-]+') -and ([string]$_.xml -notmatch '<ISOPTIONAL>\s*Yes') -and ([string]$_.xml -match '^\s*<VOUCHER\b') })
+      $fast = @($vouchers | Where-Object { ([string]$_.xml -match 'TDSDesk:[A-Za-z0-9._-]+') -and ([string]$_.xml -notmatch '<ISOPTIONAL>\s*Yes') -and ([string]$_.xml -match '^\s*<VOUCHER\b') -and ([string]$_.xml -match '<DATE>\d{8}</DATE>') })
       if ($fast.Count -ge 2) {
         $fastIds = @{}; foreach ($v in $fast) { $fastIds[[string]$v.id] = $true }
         $vouchers = @($vouchers | Where-Object { -not $fastIds.ContainsKey([string]$_.id) })

@@ -3568,7 +3568,28 @@ function refreshStats(cid){
 /* ------------------------------------------------------------------ */
 /* Tally XML, ZIP, CSV (current client)                                */
 /* ------------------------------------------------------------------ */
-function tallyDate(d){ return String(d || "").replace(/-/g, ""); }
+// A date for Tally's XML: always 8 digits (yyyymmdd) of a real calendar date, or "" when it cannot be read.
+// Posting code refuses a voucher whose date comes back "" (see voucherDateProblem), so Tally never gets an empty <DATE>.
+function toTallyDate(d){
+  const s = String(d == null ? "" : d).trim();
+  let y, m, dd, k;
+  if ((k = s.match(/^(\d{4})-(\d{2})-(\d{2})/))) { y = +k[1]; m = +k[2]; dd = +k[3]; }
+  else if ((k = s.match(/^(\d{4})(\d{2})(\d{2})$/))) { y = +k[1]; m = +k[2]; dd = +k[3]; }
+  else if ((k = s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/))) { y = +k[3]; m = +k[2]; dd = +k[1]; }
+  else return "";
+  const t = new Date(Date.UTC(y, m - 1, dd));
+  if (y < 1990 || y > 2099 || t.getUTCMonth() !== m - 1 || t.getUTCDate() !== dd) return "";
+  return String(y) + String(m).padStart(2, "0") + String(dd).padStart(2, "0");
+}
+// What is wrong with a voucher's XML date, or "" when it is fine: checked on every voucher before it goes to Tally
+function voucherDateProblem(xml){
+  const s = String(xml || "");
+  if (!/^\s*<VOUCHER\b/.test(s)) return "";
+  const m = s.match(/<DATE>([^<]*)<\/DATE>/);
+  if (!m || !m[1]) return "The entry has no date, so it was not sent to Tally.";
+  if (!/^\d{8}$/.test(m[1]) || toTallyDate(m[1]) !== m[1]) return "The entry's date (" + m[1] + ") is not a valid date, so it was not sent to Tally.";
+  return "";
+}
 function amt(n){ return r2(n).toFixed(2); }
 // the voucher number Tally gets: the supplier's bill number, unless the client leaves numbering to Tally
 function vchNoFor(e, co){
@@ -3578,7 +3599,7 @@ function vchNoFor(e, co){
 function initialsOf(name){ return String(name || "").replace(/[^A-Za-z ]/g, " ").split(/\s+/).filter(w => w.length > 2 && !/^(pvt|ltd|private|limited|and|the|co|llp)$/i.test(w)).map(w => w[0].toUpperCase()).join("").slice(0, 4) || "X"; }
 function voucherXml(e, co){
   const note = e.noteKind === "credit";                 // a supplier's credit note: a Debit Note in Tally, every line reversed
-  const s = e.snapshot, vt = xesc(note ? (co.debitNoteType || "Debit Note") : (co.voucherType || "Journal")), d = tallyDate(e.x.invoiceDate);
+  const s = e.snapshot, vt = xesc(note ? (co.debitNoteType || "Debit Note") : (co.voucherType || "Journal")), d = toTallyDate(e.x.invoiceDate);
   let x = '<VOUCHER VCHTYPE="' + vt + '" ACTION="Create" OBJVIEW="Accounting Voucher View">\n';
   x += "<DATE>" + d + "</DATE>\n<EFFECTIVEDATE>" + d + "</EFFECTIVEDATE>\n";
   x += "<VOUCHERTYPENAME>" + vt + "</VOUCHERTYPENAME>\n";
