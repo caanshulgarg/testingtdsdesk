@@ -1225,7 +1225,7 @@ function blockText(id){
   const el = document.getElementById(id);
   if (el) return Promise.resolve(el.textContent);
   if (!window.TDS_ASSETS) return Promise.resolve(null);
-  if (!blockCache[id]) blockCache[id] = fetch(window.TDS_ASSETS + id + ".txt", {cache: "force-cache"}).then(r => {
+  if (!blockCache[id]) blockCache[id] = fetch(window.TDS_ASSETS + id + ".txt?b=" + ((String(typeof APP_VERSION === "string" ? APP_VERSION : "").match(/build (\d+)/) || [])[1] || ""), {cache: "force-cache"}).then(r => {
     if (!r.ok) throw {code: "asset_missing", message: id + " could not be fetched (" + r.status + ")"};
     return r.text();
   }).catch(e => { delete blockCache[id]; throw e; });
