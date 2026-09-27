@@ -859,7 +859,7 @@ async function pushNewLedger(name){
   if (!led || led.sent) return false;
   if (!bridgeLive(co)) return false;
   try {
-    const j = await Bridge.call("/import", {company: Bridge.openFor(co).name, masters: [{id: "led:" + led.name, xml: ledgerMasterXml(led)}], vouchers: []}, 120000);
+    const j = await Bridge.post({company: Bridge.openFor(co).name, masters: [{id: "led:" + led.name, xml: ledgerMasterXml(led)}], vouchers: []});
     const r = [].concat(j.results || [])[0];
     if (r && r.ok){
       led.sent = true; led.sentAt = new Date().toISOString();

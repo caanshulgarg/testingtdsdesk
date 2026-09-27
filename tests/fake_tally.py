@@ -34,12 +34,46 @@ def amounts_until(asOn):
         for e in re.finditer(r"<LEDGERNAME>([^<]*)</LEDGERNAME>.*?<AMOUNT>(-?[\d.]+)</AMOUNT>", piece, re.S):
             bal[e.group(1)] = bal.get(e.group(1), 0) + float(e.group(2))
     return bal
+# what the tests make this Tally do when entries are imported: be slow, stop answering (after or before creating), refuse
+CTRL = {"delay": 0.0, "hang_after": 0, "hang_before": 0, "hang_sec": 25, "refuse": 0}
+POSTED = []          # (date, narration, number, xml) of every voucher created here
+LEDGERS_MADE = []
+_lock = threading.Lock(); _serial = threading.Lock()
+def posted_tags():
+    return [t for _, n, _, _ in POSTED for t in re.findall(r"TDSDesk:[A-Za-z0-9._-]+", n)]
 class H(http.server.BaseHTTPRequestHandler):
     def log_message(self, *a): pass
     def do_POST(self):
+        with _serial: return self._post()      # like TallyPrime: one request at a time
+    def _post(self):
         body = self.rfile.read(int(self.headers.get("Content-Length", 0))).decode("utf-8")
         g = lambda t: (re.search("<" + t + ">([^<]*)</" + t + ">", body) or [None, ""])[1]
-        if "TDSDeskCompanies" in body:
+        if "<TALLYREQUEST>Import Data</TALLYREQUEST>" in body:
+            import time as _t
+            if CTRL["refuse"] > 0:
+                CTRL["refuse"] -= 1; self.close_connection = True; return
+            if CTRL["hang_before"] > 0:
+                CTRL["hang_before"] -= 1; _t.sleep(CTRL["hang_sec"])
+            _t.sleep(CTRL["delay"])
+            with _lock:
+                if "<VOUCHER" in body:
+                    made, errs = 0, []
+                    for vx in re.findall(r"<VOUCHER\b.*?</VOUCHER>", body, re.S):
+                        if "NoSuchLedger" in vx: errs.append("Ledger 'NoSuchLedger' does not exist!"); continue
+                        d = (re.search(r"<DATE>(\d{8})</DATE>", vx) or [0, ""])[1]; n = (re.search(r"<NARRATION>([^<]*)</NARRATION>", vx) or [0, ""])[1]
+                        num = str(len(POSTED) + 1); POSTED.append((d, n, num, vx)); made += 1
+                    vid = str(900000 + len(POSTED))
+                    out = "<RESPONSE><CREATED>%d</CREATED><ALTERED>0</ALTERED><ERRORS>%d</ERRORS><EXCEPTIONS>0</EXCEPTIONS>%s<LASTVCHID>%s</LASTVCHID></RESPONSE>" % (made, len(errs), "".join("<LINEERROR>%s</LINEERROR>" % e for e in errs), vid)
+                else:
+                    LEDGERS_MADE.append(body)
+                    out = "<RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><ERRORS>0</ERRORS><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>"
+            if CTRL["hang_after"] > 0:
+                CTRL["hang_after"] -= 1; _t.sleep(CTRL["hang_sec"])
+        elif "TDSDeskVchHeads" in body:
+            a, b = g("SVFROMDATE"), g("SVTODATE")
+            with _lock: mine = [x for x in POSTED if a <= x[0] <= b]
+            out = "<ENVELOPE><BODY><DATA><COLLECTION>" + "".join('<VOUCHER><DATE>%s</DATE><VOUCHERTYPENAME>Journal</VOUCHERTYPENAME><VOUCHERNUMBER>%s</VOUCHERNUMBER><NARRATION>%s</NARRATION><MASTERID>%d</MASTERID><GUID>g-%s</GUID><ISOPTIONAL>No</ISOPTIONAL></VOUCHER>' % (d, num, n, 900000 + int(num), num) for d, n, num, _ in mine) + "</COLLECTION></DATA></BODY></ENVELOPE>"
+        elif "TDSDeskCompanies" in body:
             out = '<ENVELOPE><BODY><DATA><COLLECTION><COMPANY NAME="%s"><NAME>%s</NAME><STARTINGFROM>20240401</STARTINGFROM></COMPANY></COLLECTION></DATA></BODY></ENVELOPE>' % (COMPANY.replace("&", "&amp;"), COMPANY)
         elif "<REPORTNAME>Day Book</REPORTNAME>" in body:
             a, b = g("SVFROMDATE"), g("SVTODATE")

@@ -1,20 +1,20 @@
 import sys
 base = open(sys.argv[1], encoding='utf-8-sig').read().replace('\r\n', '\n')
-add = open('additions.ps1', encoding='utf-8').read()
+add = open('additions.ps1', encoding='utf-8').read() + '\n' + open('jobs.ps1', encoding='utf-8').read()
 def R(a, b):
     global base
     assert base.count(a) == 1, ('anchor', a[:60], base.count(a))
     base = base.replace(a, b)
 import re
-base = re.sub(r"\$BridgeVersion = '[0-9.]+'", "$BridgeVersion = '1.11.0'", base, 1)
+base = re.sub(r"\$BridgeVersion = '[0-9.]+'", "$BridgeVersion = '1.12.0'", base, 1)
 def RA(a, b, n):
     global base
     assert base.count(a) == n, ('anchor', a[:60], base.count(a))
     base = base.replace(a, b)
 R("param(\n  [string]$ConfigPath = (Join-Path $PSScriptRoot 'tds-bridge.config.json')\n)",
-  "param(\n  [string]$ConfigPath = (Join-Path $PSScriptRoot 'tds-bridge.config.json'),\n  [switch]$Sync\n)")
+  "param(\n  [string]$ConfigPath = (Join-Path $PSScriptRoot 'tds-bridge.config.json'),\n  [switch]$Sync,\n  [string]$Job = ''\n)")
 R("  AllowImport     = $true\n}", "  AllowImport     = $true\n  SyncDir         = ''\n  SyncCompanies   = @()\n  AllowedOrigins  = @('https://caanshulgarg.github.io', 'http://localhost', 'null')\n}")
-R("# ------------------------------------------------------------------ start\n", add + "\n# the nightly copy runs on its own and stops; it does not start the bridge\nif ($Sync) {\n  $r = Invoke-NightlySync\n  Write-Host ('Nightly copy: ' + @($r.done).Count + ' done, ' + @($r.failed).Count + ' failed.')\n  try { Stop-Transcript | Out-Null } catch { }\n  exit 0\n}\n\n# ------------------------------------------------------------------ start\n")
+R("# ------------------------------------------------------------------ start\n", add + "\n# the nightly copy runs on its own and stops; it does not start the bridge\n# a posting job runs on its own, reports to its folder and stops\nif ($Job) {\n  try { Invoke-JobWorker $Job } catch { Write-Log ('Posting job stopped: ' + $_.Exception.Message) }\n  exit 0\n}\nif ($Sync) {\n  $r = Invoke-NightlySync\n  Write-Host ('Nightly copy: ' + @($r.done).Count + ' done, ' + @($r.failed).Count + ' failed.')\n  try { Stop-Transcript | Out-Null } catch { }\n  exit 0\n}\n\n# ------------------------------------------------------------------ start\n")
 R("      '/vouchers' {", """      '/daybook' { $xml = Get-DayBookXml $qs['company'] $qs['from'] $qs['to'] ([int]('0' + $qs['port'])); Send-Raw $stream 200 $xml $origin; return }
       '/balances' { $result = Get-Balances $qs['company'] $qs['from'] $qs['to'] ([int]('0' + $qs['port'])) }
       '/synced' {
@@ -32,6 +32,12 @@ R("      '/vouchers' {", """      '/daybook' { $xml = Get-DayBookXml $qs['compan
       '/schedule' { if ($method -eq 'POST') { $o = $body | ConvertFrom-Json; $result = Set-Schedule ([bool]$o.on) ([string]$o.time) } else { $result = Get-Schedule } }
       '/syncnow' { if ($method -ne 'POST') { throw 'Use POST.' }; $o = $body | ConvertFrom-Json; $result = Invoke-CompanySync ([string]$o.company) ([int]('0' + $o.port)) }
       '/fvu' { if ($method -ne 'POST') { throw 'Use POST.' }; $result = Invoke-Fvu ($body | ConvertFrom-Json) }
+      '/jobs' {
+        if ($method -eq 'POST') { $result = New-PostJob ($body | ConvertFrom-Json) }
+        elseif ($qs['id']) { $v = Get-JobView (Get-JobDir $qs['id']); if (-not $v) { throw 'No such job.' }; $result = $v }
+        else { $result = [ordered]@{ ok = $true; jobs = @(Get-ActiveJobs) } }
+      }
+      '/jobs/resume' { if ($method -ne 'POST') { throw 'Use POST.' }; $o = $body | ConvertFrom-Json; $result = Resume-PostJob ([string]$o.id) }
       '/vouchers' {""")
 # --- 1.11.0: a web page other than TDS Desk gets nothing from the bridge; connecting needs the code in the bridge window
 RA("  if (-not $origin) { $origin = '*' }\n", "", 2)
@@ -83,5 +89,10 @@ function Test-AllowedOrigin([string]$o) {
 }
 
 function ConvertTo-JsonText($obj) {""")
+# --- 1.12.0: posting jobs
+R("try { Start-Transcript -Path", "if (-not $Job) { try { Start-Transcript -Path")
+R("-Append -ErrorAction SilentlyContinue | Out-Null } catch { }\n", "-Append -ErrorAction SilentlyContinue | Out-Null } catch { } }\n")
+R("      }\n      '/companies' {", "        $result['jobs'] = $jobsNow\n      }\n      '/companies' {")
+R("        $sessions = @(Get-OpenCompanies -Fresh)\n", "        $jobsNow = @(Get-ActiveJobs | Where-Object { $_.status -ne 'interrupted' })\n        $sessions = @($(if ($jobsNow.Count) { Get-OpenCompanies } else { Get-OpenCompanies -Fresh }))\n")
 open(sys.argv[2], 'w', encoding='utf-8-sig', newline='\r\n').write(base)
 print('merged', len(base))

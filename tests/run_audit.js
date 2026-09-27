@@ -28,7 +28,7 @@ let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + 
   ok(/Summary/.test(html) && /Recommendation\./.test(html) && /Management response\./.test(html), "report has the summary and, for each, observation, effect, recommendation, response");
   // schedule
   ok(x.Audit.due(b) === false, "just ran: not due again today");
-  b.audit.last.at = "2026-09-20T10:00:00.000Z"; ok(x.Audit.due(b) === true, "daily: due on a new day");
+  b.audit.last.at = new Date(Date.now() - 5 * 86400000).toISOString(); ok(x.Audit.due(b) === true, "daily: due on a new day");
   b.auditCfg = {freq: "weekly"}; ok(x.Audit.due(b) === false, "weekly: not due after 5 days");
   b.auditCfg = {freq: "off"}; ok(x.Audit.due(b) === false, "off: never on its own");
   // with the books from the start, balances run

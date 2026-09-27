@@ -40,13 +40,21 @@ const Bridge = {
       open.forEach(o => { names[o.name] = (names[o.name] || 0) + 1; });
       const clash = !pin && Object.keys(names).filter(n => names[n] > 1 && !(open.filter(o => o.name === n && o.mine === true).length === 1));
       this.st = {state: "ok", sessions: j.sessions || [], open: open.filter(o => !(clash && clash.includes(o.name)) || o.mine === true), clash: clash || [], at: Date.now(), error: "",
-        version: j.version, allowImport: j.allowImport !== false, mode: j.mode || "", user: j.user || "", mySession: j.mySession,
+        version: j.version, allowImport: j.allowImport !== false, mode: j.mode || "", user: j.user || "", mySession: j.mySession, jobs: [].concat(j.jobs || []),
         tallyUp: usable.length > 0, pinMissing: !!pin && !(j.sessions || []).some(s => s.port === pin && s.ok && !s.skipped)};
       if (!this.st.tallyUp || this.st.pinMissing){ if (!this.diag || Date.now() - this.diag.at > 30000) await this.diagnose(); }
       else this.diag = null;
+      this.misses = 0;
     } catch (e){
-      this.st = {state: e.code === "bridge_key" ? "key" : "down", sessions: [], open: [], at: Date.now(), error: e.message};
+      // one missed answer (or any while this tab is posting) is not a lost bridge: keep what was known and ask again soon
+      this.misses = (this.misses || 0) + 1;
+      const was = this.st && this.st.state === "ok" && Date.now() - (this.st.at || 0) < 5 * 60000;
+      if (e.code !== "bridge_key" && was && (this.misses < 3 || this.posting)){
+        this.st = Object.assign({}, this.st, {shaky: true, error: e.message});
+        clearTimeout(this.again); this.again = setTimeout(() => { if (typeof bridgeTick === "function") bridgeTick(false); }, 8000);
+      } else this.st = {state: e.code === "bridge_key" ? "key" : "down", sessions: [], open: [], at: Date.now(), error: e.message};
     }
+    if (this.st.state === "ok" && !this.misses) this.st.shaky = false;
     return this.st;
   },
   diag: null,
@@ -58,6 +66,53 @@ const Bridge = {
     }
     catch (e){ this.diag = {at: Date.now(), error: e.message, findings: []}; }
     return this.diag;
+  },
+  // Post masters and vouchers to Tally. Bridge 1.12 and later: handed over as a job, which the bridge posts on its own
+  // (in batches, one writer per Tally, checked in Tally before anything is sent again); TDS Desk follows its progress and
+  // rides out a bridge or network that stops answering for a while. An older bridge: the one long request as before.
+  // Returns {results: [{id, ok, message, ...}]} for every item sent, whatever happened.
+  async post(payload, onProgress){
+    const jobs = bridgeVer(this.st.version) >= bridgeVer("1.12.0");
+    if (!jobs) return this.call("/import", payload, 600000);
+    const jobId = (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 12));
+    const ids = [].concat(payload.masters || [], payload.vouchers || []).map(x => x.id);
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+    let told = "";
+    const tell = (j, extra) => { const pj = Object.assign({done: 0, total: ids.length}, j || {}, extra || {}); const k = pj.done + "|" + pj.message; if (k === told) return; told = k; try { onProgress && onProgress(pj); } catch (e){} };
+    this.posting = {id: jobId, at: Date.now()};
+    try { lsSet("tdsdesk:bridgejob", JSON.stringify({id: jobId, at: Date.now(), company: payload.company, n: ids.length})); } catch (e){}
+    let j = null;
+    // hand it over; a request lost on the way is sent again with the same job number, so it can never start twice
+    for (let a = 0; !j; a++){
+      try { j = await this.call("/jobs", Object.assign({jobId}, payload), 20000); }
+      catch (e){ if (a >= 5 || e.code === "bridge_key" || (e.code === "bridge" && !/in time|not running/.test(e.message))) { this.posting = null; throw e; } tell(null, {message: "Handing the entries to the bridge\u2026 (try " + (a + 2) + ")"}); await sleep(1500 * (a + 1)); }
+    }
+    let quietSince = 0, resumed = 0;
+    while (!["done", "failed"].includes(j.status)){
+      if (j.status === "interrupted"){
+        if (resumed++ >= 3) break;
+        tell(j, {message: "The posting stopped part-way; resuming it (nothing already in Tally is sent again)\u2026"});
+        try { j = await this.call("/jobs/resume", {id: jobId}, 20000); } catch (e){ await sleep(3000); }
+        continue;
+      }
+      tell(j);
+      await sleep(quietSince ? 3000 : 700);
+      try { j = await this.call("/jobs?id=" + encodeURIComponent(jobId), null, 15000); quietSince = 0; }
+      catch (e){
+        if (e.code === "bridge" && /No such job/.test(e.message)){ j = {status: "failed", message: "The bridge lost this posting. Press Post again: entries already in Tally are recognised and not sent twice.", results: j.results || []}; break; }
+        quietSince = quietSince || Date.now();
+        const s = Math.round((Date.now() - quietSince) / 1000);
+        tell(j, {message: "The bridge is not answering (" + s + "s); the posting carries on there. Waiting\u2026"});
+        if (Date.now() - quietSince > 15 * 60000){ j = Object.assign({}, j, {status: "failed", message: "The bridge did not answer for 15 minutes. The posting may have finished: press Post again. Entries already in Tally are recognised and not sent twice."}); break; }
+      }
+    }
+    this.posting = null;
+    try { lsDel("tdsdesk:bridgejob"); } catch (e){}
+    // every item gets a result: the ones the job did not reach are refused with the job's reason
+    const got = new Map([].concat(j.results || []).map(r => [r.id, r]));
+    const why = j.status === "done" ? "Not posted." : (j.message || "The posting stopped.");
+    const results = ids.map(id => got.get(id) || {id, ok: false, message: why});
+    return {ok: true, company: j.company || payload.company, port: j.port, results, job: {id: jobId, status: j.status, message: j.message}};
   },
   // ask the bridge on this computer for its key, with the 6-digit code shown in the bridge window
   // (bridge 1.11: only for a few minutes after it starts, once, and never for another web page)
@@ -112,6 +167,20 @@ function refreshBridgeChip(){
   const html = bridgeChip(S.view === "company" ? CO() : null);
   if (html !== lastBridgeChip){ el.innerHTML = html; lastBridgeChip = html; }
 }
+function bridgeVer(v){ return String(v || "").split(".").map(x => String(num(x)).padStart(3, "0")).join("."); }
+// a posting handed to the bridge before this page was reloaded or closed: say how it ended (the bridge finishes it on its own)
+async function bridgeLeftover(){
+  let m = null; try { m = JSON.parse(lsGet("tdsdesk:bridgejob") || "null"); } catch (e){}
+  if (!m || !m.id) return;
+  try {
+    let j = await Bridge.call("/jobs?id=" + encodeURIComponent(m.id), null, 15000);
+    if (j.status === "interrupted") j = await Bridge.call("/jobs/resume", {id: m.id}, 20000);
+    if (["queued", "waiting", "running"].includes(j.status)) { toast("The earlier posting to " + (j.company || "Tally") + " is still going on the Tally computer: " + (j.done || 0) + " of " + (j.total || 0) + " done."); return; }
+    lsDel("tdsdesk:bridgejob");
+    const ok = [].concat(j.results || []).filter(r => r.ok).length;
+    toast("The earlier posting to " + (j.company || "Tally") + " finished: " + ok + " of " + (j.total || 0) + " in Tally. Press Post again for any left; entries already in Tally are not sent twice.");
+  } catch (e){ if (Date.now() - (m.at || 0) > 7 * 86400000) lsDel("tdsdesk:bridgejob"); }
+}
 async function bridgeTick(first){
   Bridge.st.lastAsk = Date.now();
   if (bridgeBusy || !Bridge.on()) return;
@@ -119,6 +188,11 @@ async function bridgeTick(first){
   try {
     const before = Bridge.st.state;
     await Bridge.refresh();
+    if (first && Bridge.up() && !Bridge.posting) bridgeLeftover();
+    if (first && Bridge.up() && Bridge.st.version && bridgeVer(Bridge.st.version) < bridgeVer("1.12.0") && !lsGet("tdsdesk:bridgenudge112")){
+      lsSet("tdsdesk:bridgenudge112", "1");
+      toast("A steadier Tally Bridge (1.12) is ready: it keeps posting even if this page or the connection drops. Download it under Settings \u2192 Tally Bridge and run the setup on the Tally computer.");
+    }
     const key = Bridge.st.open.map(o => o.name).sort().join("|");
     const changed = key !== Bridge.lastOpenKey;
     Bridge.lastOpenKey = key;
@@ -165,6 +239,9 @@ function bridgeChip(co){
   if (st.state === "down") return '<button class="tchip off" data-act="openSettings" title="' + esc(st.error) + '">Tally Bridge offline \u2014 check</button>';
   if (st.state === "key") return '<span class="tchip bad" title="' + esc(st.error) + '">Tally Bridge: wrong key</span>';
   if (st.state !== "ok") return '<span class="tchip off">Tally Bridge\u2026</span>';
+  const run = (st.jobs || []).find(j => ["queued", "waiting", "running"].includes(j.status));
+  if (run) return '<span class="tchip ok" title="' + esc((run.company || "") + ": " + (run.message || "")) + '">\u25CF Posting to Tally: ' + (run.done || 0) + " of " + (run.total || 0) + "</span>";
+  if (st.shaky) return '<span class="tchip warn" title="' + esc(st.error || "") + '">Tally Bridge: checking again\u2026</span>';
   const why = Bridge.diag && (Bridge.diag.findings || []).find(f => f.level !== "ok");
   if (st.pinMissing) return '<button class="tchip warn" data-act="openSettings" title="' + esc(why ? why.text : "The Tally chosen in Settings is not running") + '">Your Tally is not connected \u2014 check</button>';
   if (!st.tallyUp) return '<button class="tchip warn" data-act="openSettings" title="' + esc(why ? why.text : "No TallyPrime is answering in your Windows session") + '">Tally not connected \u2014 check</button>';
@@ -379,6 +456,13 @@ function logPosting(rec){
   Store.saveFirm();
 }
 /* ---------- posting ---------- */
+// "Posting 30 of 120 to <company>…", or the bridge's own words while it waits for Tally
+function postingLine(pj, tname){
+  const n = pj.total || 0, d = Math.min(pj.done || 0, n);
+  const head = n ? "Posting to " + tname + ": " + d + " of " + n + " done" : "Posting to " + tname;
+  return head + (pj.message && !/^(Posting|Starting|Resuming|Finding)/.test(pj.message) ? " \u2014 " + pj.message : "\u2026");
+}
+function refreshBusy(){ softRender(); }
 async function postBankToTally(ids){
   const b = B(), co = CO(b.cid), st = curStmt();
   if (!st) return;
@@ -449,9 +533,9 @@ async function postBankToTally(ids){
   const masters = b.newLed.filter(l => !l.sent && used.has(l.name.toLowerCase()));
   b.busy = "Posting " + entries(rows.length) + " to " + tname + "\u2026"; render();
   try {
-    const j = await Bridge.call("/import", {company: tname,
+    const j = await Bridge.post({company: tname,
       masters: masters.map(l => ({id: "led:" + l.name, xml: ledgerMasterXml(l)})),
-      vouchers: rows.map(r => ({id: r.id, xml: bankVoucherXml(r, acc, co)}))}, 600000);
+      vouchers: rows.map(r => ({id: r.id, xml: bankVoucherXml(r, acc, co)}))}, pj => { b.busy = postingLine(pj, tname); refreshBusy(); });
     const byId = new Map([].concat(j.results || []).map(x => [x.id, x]));
     const now = new Date().toISOString();
     masters.forEach(l => { const x = byId.get("led:" + l.name); if (x && x.ok){ l.sent = true; l.sentAt = now; } else if (x) failed.push({what: "New ledger " + l.name, msg: x.message}); });
@@ -548,7 +632,7 @@ async function postBillsToTally(){
       const used = new Set(todo.flatMap(e => e.snapshot.lines.map(l => String(l.ledger).toLowerCase())));
       const masters = B().newLed.filter(l => !l.sent && used.has(l.name.toLowerCase()));
       S.billPost = {busy: "Posting " + entries(todo.length) + " to " + tname + "\u2026"}; render();
-      const j = await Bridge.call("/import", {company: tname, masters: masters.map(l => ({id: "led:" + l.name, xml: ledgerMasterXml(l)})), vouchers: todo.map(e => ({id: e.id, xml: voucherXml(e, co)}))}, 600000);
+      const j = await Bridge.post({company: tname, masters: masters.map(l => ({id: "led:" + l.name, xml: ledgerMasterXml(l)})), vouchers: todo.map(e => ({id: e.id, xml: voucherXml(e, co)}))}, pj => { S.billPost = {busy: postingLine(pj, tname)}; refreshBusy(); });
       const byId = new Map([].concat(j.results || []).map(x => [x.id, x]));
       masters.forEach(l => { const x = byId.get("led:" + l.name); if (x && x.ok){ l.sent = true; l.sentAt = now; } });
       saveBank({newLed: true});
@@ -558,7 +642,7 @@ async function postBillsToTally(){
         clash.forEach(e => { e.vchNo = (e.x.invoiceNo || "B") + "/" + initialsOf(e.x.vendorName || e.partyLedger); });
         S.billPost = {busy: "Voucher numbers already used in Tally: trying " + clash.length + " again with the supplier\u2019s initials\u2026"}; render();
         try {
-          const j2 = await Bridge.call("/import", {company: tname, masters: [], vouchers: clash.map(e => ({id: e.id, xml: voucherXml(e, co)}))}, 120000);
+          const j2 = await Bridge.post({company: tname, masters: [], vouchers: clash.map(e => ({id: e.id, xml: voucherXml(e, co)}))});
           [].concat(j2.results || []).forEach(x => byId.set(x.id, x));
         } catch (err){ /* reported below as refused */ }
       }
@@ -593,7 +677,7 @@ async function setAutoNumbering(){
   toast("Setting automatic numbering in " + tname + "\u2026");
   const xml = t => '<VOUCHERTYPE NAME="' + xesc(t) + '" ACTION="Alter">\n<NAME>' + xesc(t) + "</NAME>\n<NUMBERINGMETHOD>Automatic</NUMBERINGMETHOD>\n<PREVENTDUPLICATES>No</PREVENTDUPLICATES>\n</VOUCHERTYPE>\n";
   try {
-    const j = await Bridge.call("/import", {company: tname, masters: AUTO_TYPES.map(t => ({id: "vt:" + t, xml: xml(t)})), vouchers: []}, 120000);
+    const j = await Bridge.post({company: tname, masters: AUTO_TYPES.map(t => ({id: "vt:" + t, xml: xml(t)})), vouchers: []});
     const res = [].concat(j.results || []);
     const done = res.filter(x => x.ok).map(x => x.id.slice(3)), bad = res.filter(x => !x.ok);
     if (done.length){

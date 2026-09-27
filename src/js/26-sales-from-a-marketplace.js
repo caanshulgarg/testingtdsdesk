@@ -641,9 +641,10 @@ async function postSalesToTally(){
     if (!list.length){ s.busy = ""; saveSales(); toast(probs.length ? "Fix these first: " + probs.slice(0, 2).join("; ") : "These invoices are already in Tally."); render(); return; }
     const masters = mastersFor(list);
     s.busy = "Posting " + list.length + " invoice" + (list.length > 1 ? "s" : "") + " to Tally\u2026"; render();
-    const j = await Bridge.call("/import", {company: Bridge.openFor(co).name,
+    const tn = Bridge.openFor(co).name;
+    const j = await Bridge.post({company: tn,
       masters: masters.map(l => ({id: "led:" + l.name, xml: customerMasterXml(l)})),
-      vouchers: list.map(v => ({id: v.id, xml: salesVoucherXml(v, co)}))}, 600000);
+      vouchers: list.map(v => ({id: v.id, xml: salesVoucherXml(v, co)}))}, pj => { s.busy = postingLine(pj, tn); refreshBusy(); });
     const by = new Map([].concat(j.results || []).map(r => [r.id, r]));
     const now = new Date().toISOString();
     masters.forEach(l => { const r = by.get("led:" + l.name); if (r && r.ok){ l.sent = true; l.sentAt = now; } });
