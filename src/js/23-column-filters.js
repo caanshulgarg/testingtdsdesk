@@ -292,7 +292,7 @@ function bankRowHtml(r, tab){
       : ruleBtn + '<button class="icon" data-brow="ignore" data-rid="' + r.id + '" title="Ignore this entry" aria-label="Ignore">\u2715</button>';
   } else {
     const canUndo = r.state === "sent" && r.tally && r.tally.guid && Bridge.on() && Bridge.up();
-    const status = r.state === "sent" ? "Posted " + (r.sentAt ? shortDate(r.sentAt.slice(0, 10)) : "")
+    const status = r.state === "sent" ? "Posted " + (r.sentAt ? shortDate(r.sentAt.slice(0, 10)) : "") + (r.checking ? " \u00b7 checking in Tally\u2026" : r.tally && r.tally.number ? " \u00b7 Tally voucher " + r.tally.number : "")
       : r.state === "intally" ? "Already in Tally" + (r.tallyRef ? ": " + r.tallyRef : "") + (r.tallyHow ? " (" + r.tallyHow + ")" : "") : "Ignored";
     ledgerCell = '<span class="lgtext">' + esc(r.ledger || "\u2014") + '</span><span class="src muted">' + esc(status) +
       (canUndo ? ' <button class="linkbtn" data-brow="unpost" data-rid="' + r.id + '">Take it back</button>' : "") + "</span>";

@@ -26,7 +26,7 @@ trap {
   try { Stop-Transcript | Out-Null } catch { }
   break
 }
-$BridgeVersion = '1.12.3'
+$BridgeVersion = '1.12.4'
 
 # ------------------------------------------------------------------ settings
 function New-BridgeKey {
@@ -951,7 +951,9 @@ function Invoke-Client($client) {
         # one ledger's balance the day before 'from' and on 'to'
         $co = [string]$qs['company']; $port = Find-CompanyPort $co ([int]('0' + $qs['port'])); $led = [string]$qs['ledger']
         $before = ([datetime]::ParseExact([string]$qs['from'], 'yyyyMMdd', $null)).AddDays(-1).ToString('yyyyMMdd')
-        $o = Get-OneLedgerBalance $port $co $led $before; $c = Get-OneLedgerBalance $port $co $led ([string]$qs['to'])
+        # only=close: one read (after a posting); the opening is read when the reason for a difference is asked for
+        $o = $null; if ([string]$qs['only'] -ne 'close') { $o = Get-OneLedgerBalance $port $co $led $before }
+        $c = Get-OneLedgerBalance $port $co $led ([string]$qs['to'])
         if ($null -eq $c) { throw ('Ledger ' + $led + ' was not found in ' + $co + '.') }
         $result = [ordered]@{ ok = $true; port = $port; ledger = $led; openAsOn = $before; open = [string]$o; close = [string]$c }
       }
@@ -1243,6 +1245,11 @@ function Get-JobView([string]$dir) {
     $age = ((Get-Date) - [datetime]$p.updatedAt).TotalSeconds
     if ($age -gt 5) { $p.status = 'interrupted'; $p.message = 'The posting stopped part-way (the computer or the bridge was restarted). Resume to finish it; nothing already in Tally is sent again.' }
   }
+  # the check after posting stopped with its process: the entries are in Tally, only not read back
+  if ($p.status -eq 'done' -and $p.checking -and -not (Test-ProcessAlive ([int]$p.pid))) {
+    $age = ((Get-Date) - [datetime]$p.updatedAt).TotalSeconds
+    if ($age -gt 5) { $p.checking = $false; $p.checkFailed = $true }
+  }
   return $p
 }
 
@@ -1273,7 +1280,7 @@ function New-PostJob($payload) {
   foreach ($m in @($payload.masters)) { if ($m) { $items += [ordered]@{ id = [string]$m.id; kind = 'master'; xml = [string]$m.xml } } }
   foreach ($v in @($payload.vouchers)) { if ($v) { $items += [ordered]@{ id = [string]$v.id; kind = 'voucher'; xml = [string]$v.xml } } }
   [IO.File]::WriteAllText((Join-Path $dir 'payload.json'), (ConvertTo-Json -InputObject ([ordered]@{ company = [string]$payload.company; port = [int]('0' + $payload.port); ledger = [string]$payload.ledger; items = $items }) -Depth 8 -Compress))
-  $p = [ordered]@{ ok = $true; id = $id; status = 'queued'; company = [string]$payload.company; port = 0; total = $items.Count; done = 0; results = @(); message = 'Starting'; pid = 0; resumed = $false; startedAt = (Get-Date).ToString('o'); updatedAt = ''; finishedAt = '' }
+  $p = [ordered]@{ ok = $true; id = $id; status = 'queued'; company = [string]$payload.company; port = 0; total = $items.Count; done = 0; results = @(); message = 'Starting'; pid = 0; resumed = $false; startedAt = (Get-Date).ToString('o'); updatedAt = ''; finishedAt = ''; checking = $false; checkFailed = $false }
   Write-JobProgress $dir $p
   $p.pid = Start-JobWorker $dir
   Write-JobProgress $dir $p
@@ -1528,15 +1535,20 @@ function Invoke-JobWorker([string]$dir) {
         }
       }
       foreach ($r in $res) { $r.Remove('replySnip'); $null = $results.Add($r) }
-      if ($toConfirm.Count -ge 250) { $p.message = 'Checking ' + $toConfirm.Count + ' entries in Tally'; Write-JobProgress $dir $p; Confirm-Posted $port ([string]$pl.company) $toConfirm $results $allItems ([string]$pl.ledger) }
       $p.done = $results.Count
       Write-JobProgress $dir $p
     }
-    if ($toConfirm.Count) { $p.message = 'Checking ' + $toConfirm.Count + ' entries in Tally'; Write-JobProgress $dir $p; Confirm-Posted $port ([string]$pl.company) $toConfirm $results $allItems ([string]$pl.ledger) }
-    foreach ($r in $results) { if ($r -is [System.Collections.IDictionary]) { if ($r.Contains('pendingCheck')) { $r.Remove('pendingCheck') } } elseif ($r.PSObject.Properties['pendingCheck']) { $r.PSObject.Properties.Remove('pendingCheck') } }
+    # sending is finished: TDS Desk shows it at once; the read-back runs after, in one read, while TDS Desk carries on
     $okN = @($results | Where-Object { $_.ok }).Count
-    $p.status = 'done'; $p.message = [string]$okN + ' of ' + $p.total + ' in Tally'; $p.finishedAt = (Get-Date).ToString('o')
+    $p.status = 'done'; $p.checking = ($toConfirm.Count -gt 0); $p.message = [string]$okN + ' of ' + $p.total + ' sent to Tally'; $p.finishedAt = (Get-Date).ToString('o')
     Write-JobProgress $dir $p
+    if ($toConfirm.Count) {
+      Confirm-Posted $port ([string]$pl.company) $toConfirm $results $allItems ([string]$pl.ledger)
+      foreach ($r in $results) { if ($r -is [System.Collections.IDictionary]) { if ($r.Contains('pendingCheck')) { $r.Remove('pendingCheck') } } elseif ($r.PSObject.Properties['pendingCheck']) { $r.PSObject.Properties.Remove('pendingCheck') } }
+      $okN = @($results | Where-Object { $_.ok }).Count
+      $p.checking = $false; $p.message = [string]$okN + ' of ' + $p.total + ' in Tally'
+      Write-JobProgress $dir $p
+    }
     Write-Log ('Posting job ' + $p.id + ' finished: ' + $p.message)
   } catch {
     $p.status = 'failed'; $p.message = Get-TallyTrouble $_.Exception.Message; $p.finishedAt = (Get-Date).ToString('o')

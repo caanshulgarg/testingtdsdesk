@@ -71,7 +71,7 @@ const Bridge = {
   // (in batches, one writer per Tally, checked in Tally before anything is sent again); TDS Desk follows its progress and
   // rides out a bridge or network that stops answering for a while. An older bridge: the one long request as before.
   // Returns {results: [{id, ok, message, ...}]} for every item sent, whatever happened.
-  async post(payload, onProgress){
+  async post(payload, onProgress, onChecked){
     // nothing without a proper date, or dated before the company's books begin, ever goes to Tally: it is answered here
     const refused = [];
     const open = (this.st.open || []).find(o => o.name === payload.company);
@@ -85,11 +85,11 @@ const Bridge = {
     });
     payload = Object.assign({}, payload, {masters: keep(payload.masters), vouchers: keep(payload.vouchers)});
     if (!payload.masters.length && !payload.vouchers.length) return {ok: true, company: payload.company, results: refused};
-    const out = await this.postChecked(payload, onProgress);
+    const out = await this.postChecked(payload, onProgress, onChecked);
     out.results = [].concat(out.results || []).concat(refused);
     return out;
   },
-  async postChecked(payload, onProgress){
+  async postChecked(payload, onProgress, onChecked){
     const jobs = bridgeVer(this.st.version) >= bridgeVer("1.12.0");
     if (!jobs) return this.call("/import", payload, 600000);
     const jobId = (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 12));
@@ -125,12 +125,29 @@ const Bridge = {
       }
     }
     this.posting = null;
-    try { lsDel("tdsdesk:bridgejob"); } catch (e){}
     // every item gets a result: the ones the job did not reach are refused with the job's reason
-    const got = new Map([].concat(j.results || []).map(r => [r.id, r]));
     const why = j.status === "done" ? "Not posted." : (j.message || "The posting stopped.");
-    const results = ids.map(id => got.get(id) || {id, ok: false, message: why});
-    return {ok: true, company: j.company || payload.company, port: j.port, results, job: {id: jobId, status: j.status, message: j.message}};
+    const resultsOf = jj => { const got = new Map([].concat(jj.results || []).map(r => [r.id, r])); return ids.map(id => got.get(id) || {id, ok: false, message: why}); };
+    const results = resultsOf(j);
+    if (j.checking){
+      // the entries are in Tally; the bridge now reads them back once. TDS Desk carries on and is told when that is done.
+      results.forEach(r => { if (r.ok && r.verified == null) r.pendingCheck = true; });
+      this.followCheck(jobId, resultsOf, onChecked);
+    } else { try { lsDel("tdsdesk:bridgejob"); } catch (e){} }
+    return {ok: true, company: j.company || payload.company, port: j.port, results, checking: !!j.checking, job: {id: jobId, status: j.status, message: j.message}};
+  },
+  async followCheck(jobId, resultsOf, onChecked){
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+    const t0 = Date.now();
+    for (let n = 0; Date.now() - t0 < 30 * 60000; n++){
+      await sleep(n < 10 ? 1500 : 4000);
+      let j;
+      try { j = await this.call("/jobs?id=" + encodeURIComponent(jobId), null, 15000); } catch (e){ continue; }
+      if (j.checking) continue;
+      try { lsDel("tdsdesk:bridgejob"); } catch (e){}
+      try { onChecked && onChecked({results: resultsOf(j), checkFailed: !!j.checkFailed}); } catch (e){}
+      return;
+    }
   },
   // ask the bridge on this computer for its key, with the 6-digit code shown in the bridge window
   // (bridge 1.11: only for a few minutes after it starts, once, and never for another web page)
@@ -212,9 +229,9 @@ async function bridgeTick(first){
     const before = Bridge.st.state;
     await Bridge.refresh();
     if (first && Bridge.up() && !Bridge.posting) bridgeLeftover();
-    if (first && Bridge.up() && Bridge.st.version && bridgeVer(Bridge.st.version) < bridgeVer("1.12.3") && !lsGet("tdsdesk:bridgenudge1123")){
-      lsSet("tdsdesk:bridgenudge1123", "1");
-      toast("A new Tally Bridge (1.12.3) is ready: it asks Tally for the bank ledger only, so Tally stays quick while posting and checking, and it keeps posting even if this page or the connection drops. Download it under Settings \u2192 Tally Bridge and run the setup on the Tally computer.");
+    if (first && Bridge.up() && Bridge.st.version && bridgeVer(Bridge.st.version) < bridgeVer("1.12.4") && !lsGet("tdsdesk:bridgenudge1124")){
+      lsSet("tdsdesk:bridgenudge1124", "1");
+      toast("A new Tally Bridge (1.12.4) is ready: posting only sends, and the checks run once afterwards in the background, and it keeps posting even if this page or the connection drops. Download it under Settings \u2192 Tally Bridge and run the setup on the Tally computer.");
     }
     const key = Bridge.st.open.map(o => o.name).sort().join("|");
     const changed = key !== Bridge.lastOpenKey;
@@ -320,7 +337,7 @@ async function syncBankBookFromTally(silent, win){
   if (!ledger) return 0;
   try {
     const from = win ? win.from : addDays(st.from || b.rows[0].date, -20), to = win ? win.to : addDays(st.to || b.rows[b.rows.length - 1].date, 20);
-    const j = await Bridge.call(ledgerLinesUrl(Bridge.openFor(co).name, ledger, from, to), null, 300000);
+    const j = win && win.pre ? win.pre : await Bridge.call(ledgerLinesUrl(Bridge.openFor(co).name, ledger, from, to), null, 300000);
     const entries = [];
     [].concat(j.vouchers || []).forEach(v => {
       if (/^yes$/i.test(v.cancelled || "")) return;
@@ -385,12 +402,13 @@ async function scanStatementInTally(opts){
   let from = addDays(ds[0], -60);
   if (booksFrom && from < booksFrom) from = booksFrom;
   const last = ds[ds.length - 1] > today ? ds[ds.length - 1] : today;
-  const to = addDays(last, 31);
+  let to = addDays(last, 31);
   // bridge 1.12.1: one light read of TDS Desk's own entries (heads only); older: this bank ledger month by month
   // 1.12.3: this bank ledger's own vouchers (light, with amounts); 1.12.1-2: TDS Desk's tagged entries; older: the Day Book
   const byLedger = bridgeVer(Bridge.st.version) >= bridgeVer("1.12.3");
   const light = !byLedger && bridgeVer(Bridge.st.version) >= bridgeVer("1.12.1");
-  const j = await Bridge.call(light ? "/tags?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(from) + "&to=" + isoToTally(to) + Bridge.pinQ() : ledgerLinesUrl(tname, ledger, from, to), null, 600000);
+  if (opts.pre){ from = opts.from; to = opts.to; }
+  const j = opts.pre || await Bridge.call(light ? "/tags?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(from) + "&to=" + isoToTally(to) + Bridge.pinQ() : ledgerLinesUrl(tname, ledger, from, to), null, 600000);
   const vs = [].concat(j.vouchers || []).filter(v => !/^yes$/i.test(v.cancelled || ""));
   const rowByTag = new Map(b.rows.map(r => [fpHash(r.fp || r.id), r]));
   const groups = new Map();
@@ -512,6 +530,41 @@ async function removeTallyDuplicates(which){
   render();
 }
 
+/* ---------- after a posting: the bridge's read-back arrives in the background ---------- */
+async function bankAfterCheck(cid, sid, chk, tname){
+  const b = B(), here = b && b.cid === cid && b.cur === sid;
+  const rows = here ? b.rows : ((await BankDB.get("stmt:" + cid + ":" + sid)) || []);
+  const byId = new Map([].concat(chk.results || []).map(x => [x.id, x]));
+  const now = new Date().toISOString();
+  let confirmed = 0, notFound = [], unread = 0;
+  rows.forEach(r => {
+    if (!r.checking) return;
+    const x = byId.get(r.id);
+    r.checking = false;
+    if (x && x.ok && x.verified === true){
+      confirmed++; r.postVerified = true;
+      r.tally = Object.assign({}, r.tally || {}, {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", number: x.vchNumber || ""});
+    } else if (x && !x.ok){
+      // Tally said it made it, but it is not there: not counted as posted, and not sent again without a look
+      r.state = "ready"; r.postVerified = false;
+      r.postError = "Tally replied 'created', but the entry cannot be found in Tally afterwards, so it is NOT marked as posted. Look in Tally before posting it again.";
+      if (here){ b.postedTags = b.postedTags || {}; b.postedTags[fpHash(r.fp || r.id)] = "unconfirmed:" + now; }
+      notFound.push({id: r.id, what: fmtDate(r.date) + " " + (r.dec.name || "") + " " + INR.format(r.debit || r.credit), msg: "not found in Tally after posting \u2014 check Tally before posting again"});
+    } else { unread++; r.postVerified = false; }
+  });
+  if (here){
+    saveBank({rows: true, posted: true});
+    const rep = b.postReport;
+    if (rep && rep.checking){
+      rep.checking = false; rep.confirmed = confirmed; rep.unread = unread + (chk.checkFailed ? 0 : 0);
+      if (notFound.length){ rep.posted -= notFound.length; rep.failed = (rep.failed || []).concat(notFound); }
+    }
+    render();
+    // and then the balance, once, for the whole batch
+    if (!notFound.length) { try { await checkBankBalance({quiet: true, tname, closeOnly: true}); } catch (e){} }
+  } else BankDB.set("stmt:" + cid + ":" + sid, rows);
+}
+
 /* ---------- does Tally agree with the bank? ---------- */
 // Tally's balance of the bank ledger at the start and end of the statement, against the statement's own opening and closing.
 // When they differ, the difference is taken apart: the opening, the statement lines not in Tally yet, the lines left out,
@@ -532,7 +585,8 @@ async function checkBankBalance(opts){
   try {
     // 1.12.3: this one ledger's balance (two small reads); older bridges: every ledger's balance
     const one = bridgeVer(Bridge.st.version) >= bridgeVer("1.12.3");
-    const j = await Bridge.call((one ? "/ledgerbalance" : "/balances") + "?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(st.from) + "&to=" + isoToTally(st.to) + (one ? "&ledger=" + encodeURIComponent(ledger) : "") + Bridge.pinQ(), null, 180000);
+    const closeOnly = one && opts.closeOnly && bridgeVer(Bridge.st.version) >= bridgeVer("1.12.4");
+    const j = await Bridge.call((one ? "/ledgerbalance" : "/balances") + "?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(st.from) + "&to=" + isoToTally(st.to) + (one ? "&ledger=" + encodeURIComponent(ledger) : "") + (closeOnly ? "&only=close" : "") + Bridge.pinQ(), null, 180000);
     const L = one ? {open: j.open, close: j.close} : [].concat(j.ledgers || []).find(l => norm(l.name) === norm(ledger));
     if (!L) throw {message: "“" + ledger + "” is not among Tally's ledgers in " + tname + "."};
     // Tally gives a debit balance as a negative number; for the bank, money in the account is a debit
@@ -542,7 +596,8 @@ async function checkBankBalance(opts){
     const sClose = st.closing !== undefined && st.closing !== null && st.closing !== "" ? r2(num(st.closing)) : (sOpen !== null ? r2(sOpen + all) : null);
     res = {at: Date.now(), ledger, company: tname, from: st.from, to: st.to, openAsOn: tallyToIso(j.openAsOn) || addDays(st.from, -1),
       tOpen: bankBal(L.open), tClose: bankBal(L.close), sOpen, sClose};
-    res.diffOpen = sOpen === null ? null : r2(sOpen - res.tOpen);
+    if (closeOnly) res.tOpen = null;
+    res.diffOpen = sOpen === null || res.tOpen === null ? null : r2(sOpen - res.tOpen);
     res.diff = sClose === null ? null : r2(sClose - res.tClose);
     const notIn = b.rows.filter(r => !["sent", "intally", "ignored"].includes(r.state));
     const left = b.rows.filter(r => r.state === "ignored");
@@ -682,7 +737,39 @@ async function postBankToTally(ids){
   });
   // guard 2: look in Tally itself around the dates being posted, for our own entries and for ones typed in by hand
   const toCheck = b.rows.filter(r => r.state === "ready" && (!ids || ids.includes(r.id)));
-  if (toCheck.length && !heavy){
+  // bridge 1.12.3+: ONE read of this bank ledger covers both looks (these dates, and anything TDS Desk put in before),
+  // and is reused for 30 minutes, so posting the next batch starts at once
+  const oneRead = bridgeVer(Bridge.st.version) >= bridgeVer("1.12.3");
+  if (toCheck.length && !heavy && oneRead){
+    try {
+      const look = b.tallyLook && b.tallyLook.sid === st.id && Date.now() - b.tallyLook.at < 30 * 60000 ? b.tallyLook : null;
+      let pre = look && look.data;
+      const dsAll = b.rows.map(r => r.date).filter(Boolean).sort(), today = new Date().toISOString().slice(0, 10);
+      const from = addDays(dsAll[0], -15), to = addDays(dsAll[dsAll.length - 1] > today ? dsAll[dsAll.length - 1] : today, 7);
+      if (!pre){
+        b.busy = "Looking at " + acc.ledger + " in Tally before posting\u2026"; render();
+        pre = await Bridge.call(ledgerLinesUrl(tname, acc.ledger, from, to), null, 600000);
+        b.tallyLook = {sid: st.id, at: Date.now(), data: pre};
+      }
+      await syncBankBookFromTally(true, {from, to, rows: toCheck, pre});
+      toCheck.forEach(r => { if (r.state === "intally") b.postedTags[fpHash(r.fp || r.id)] = b.postedTags[fpHash(r.fp || r.id)] || "tally:" + new Date().toISOString(); });
+      saveBank({posted: true});
+      if (!lsGet(wideCheckKey())){
+        const d = await scanStatementInTally({tname, pre, from, to});
+        if (d.extra.length || d.wrongDate.length){
+          S.dupFind = d; b.busy = ""; b.tallyLook = null;
+          toast("Nothing was posted: Tally already has entries from this statement under the wrong date or twice. Sort them out below, then post.");
+          render(); return;
+        }
+        lsSet(wideCheckKey(), String(Date.now()));
+      }
+    } catch (e){
+      b.busy = ""; b.tallyLook = null; render();
+      toast("Tally could not be checked before posting (" + e.message + "), so nothing was posted. Try again in a moment.");
+      return;
+    }
+  }
+  if (toCheck.length && !heavy && !oneRead){
     const ds = toCheck.map(r => r.date).sort();
     const wide = toCheck.some(r => r.dec && r.dec.mode === "CHQ") ? 15 : 4;
     try {
@@ -698,7 +785,7 @@ async function postBankToTally(ids){
   }
   // guard 2b: once per statement, look through Tally well beyond these dates for entries TDS Desk put under another date,
   // or put in twice; if there are any, nothing is posted until they are sorted out
-  if (toCheck.length && !lsGet(wideCheckKey())){
+  if (toCheck.length && !oneRead && !lsGet(wideCheckKey())){
     try {
       b.busy = "Checking Tally for earlier postings of this statement (once per statement)\u2026"; render();
       const d = await scanStatementInTally({tname});
@@ -747,7 +834,8 @@ async function postBankToTally(ids){
   try {
     const j = await Bridge.post({company: tname, ledger: acc.ledger,
       masters: masters.map(l => ({id: "led:" + l.name, xml: ledgerMasterXml(l)})),
-      vouchers: rows.map(r => ({id: r.id, xml: bankVoucherXml(r, acc, co)}))}, pj => { b.busy = postingLine(pj, tname); refreshBusy(); });
+      vouchers: rows.map(r => ({id: r.id, xml: bankVoucherXml(r, acc, co)}))}, pj => { b.busy = postingLine(pj, tname); refreshBusy(); },
+      chk => bankAfterCheck(b.cid, st.id, chk, tname));
     const byId = new Map([].concat(j.results || []).map(x => [x.id, x]));
     const now = new Date().toISOString();
     masters.forEach(l => { const x = byId.get("led:" + l.name); if (x && x.ok){ l.sent = true; l.sentAt = now; } else if (x) failed.push({what: "New ledger " + l.name, msg: x.message}); });
@@ -755,12 +843,12 @@ async function postBankToTally(ids){
     const posted = [];
     rows.forEach(r => {
       const x = byId.get(r.id);
-      if (x && x.ok && x.verified !== true){
+      if (x && x.ok && x.verified !== true && !x.pendingCheck){
         b.postedTags = b.postedTags || {}; b.postedTags[fpHash(r.fp || r.id)] = "unconfirmed:" + now;
         r.postError = "Tally replied 'created', but TDS Desk could not find the entry in Tally afterwards, so it is NOT marked as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again." + (x.verifyNote ? " [" + x.verifyNote + "]" : "");
         failed.push({id: r.id, what: fmtDate(r.date) + " " + (r.dec.name || "") + " " + INR.format(r.debit || r.credit), msg: "not confirmed in Tally \u2014 check Tally before posting again"});
       } else if (x && x.ok){
-        ok++; r.state = "sent"; r.sentAt = now; r.postedVia = "bridge"; r.postError = ""; r.postedOptional = !!x.optional; r.postVerified = x.verified === true; posted.push(r);
+        ok++; r.state = "sent"; r.sentAt = now; r.postedVia = "bridge"; r.postError = ""; r.postedOptional = !!x.optional; r.postVerified = x.verified === true; r.checking = !!x.pendingCheck; posted.push(r);
         b.postedTags = b.postedTags || {}; b.postedTags[fpHash(r.fp || r.id)] = now;
         logPosting({what: "bank", id: r.id, action: "posted", co: b.cid, ref: r.narr.slice(0, 40), party: r.ledger, amount: num(r.debit || r.credit), tally: {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", company: tname}, by: (Cloud.st && Cloud.st.email) || ""});
         r.tally = {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", at: now, by: (Cloud.st && Cloud.st.email) || "", company: tname};
@@ -774,14 +862,15 @@ async function postBankToTally(ids){
     });
     learnRows(posted, "sent");
     saveBank({rows: true, newLed: true, posted: true});
-    b.postReport = {at: Date.now(), posted: ok, skipped, movedBack, failed, dismiss: "bankReportOk", company: tname, optional: optionalN, noPreCheck: !heavy};
+    b.postReport = {at: Date.now(), posted: ok, skipped, movedBack, failed, dismiss: "bankReportOk", company: tname, optional: optionalN, noPreCheck: !heavy, checking: !!j.checking};
     toast(ok + " posted to Tally" + (skipped ? ", " + skipped + " were already there" : "") + (failed.length ? ", " + failed.length + " not posted" : "") + ".");
     if (!failed.length && !b.rows.some(r => r.state === "ready")) b.filter = "done";
-    b.afterPost = true;
+    b.afterPost = !j.checking;
+    b.tallyLook = null;          // Tally has changed: the next posting looks again
   } catch (e){ toast("Posting failed: " + e.message); b.postReport = {at: Date.now(), posted: 0, skipped, movedBack, failed: failed.concat([{what: "Posting", msg: e.message}]), dismiss: "bankReportOk"}; }
   b.busy = "";
   render();
-  if (b.afterPost){ b.afterPost = false; try { await checkBankBalance({quiet: true, tname}); } catch (e){} }
+  if (b.afterPost){ b.afterPost = false; try { await checkBankBalance({quiet: true, tname, closeOnly: true}); } catch (e){} }
 }
 async function checkBillsInTally(onlyUnconfirmed){
   const co = CO();

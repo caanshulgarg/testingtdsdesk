@@ -1018,7 +1018,8 @@ function maybeLiveSync(){
 function plainMsg(m){ const t = document.createElement("textarea"); t.innerHTML = String(m || ""); t.innerHTML = t.value; return t.value; }
 function postReportHtml(rep){
   if (!rep) return "";
-  const bits = [(rep.posted || 0) + " posted" + (rep.company ? " into " + rep.company + " and confirmed there" : "")];
+  const bits = [(rep.posted || 0) + (rep.checking ? " sent" + (rep.company ? " to " + rep.company : "") + " \u00b7 checking them in Tally in the background\u2026" : " posted" + (rep.company ? " into " + rep.company + (rep.unread ? "" : " and confirmed there") : ""))];
+  if (rep.unread) bits.push(rep.unread + " not read back yet (Tally did not answer the check; use \u2018Mark lines already in Tally\u2019 later)");
 
   if (rep.optional) bits.push(rep.optional + " as Optional vouchers (Tally: Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers)");
   if (rep.skipped) bits.push(rep.skipped + " already in Tally (not posted again)");

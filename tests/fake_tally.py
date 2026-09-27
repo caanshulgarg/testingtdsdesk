@@ -65,6 +65,7 @@ class H(http.server.BaseHTTPRequestHandler):
         g = lambda t: (re.search("<" + t + ">([^<]*)</" + t + ">", body) or [None, ""])[1]
         REQS[_kind(body)] = REQS.get(_kind(body), 0) + 1
         if "<TALLYREQUEST>Import Data</TALLYREQUEST>" in body:
+            CTRL["_imported"] = True
             import time as _t
             if CTRL["refuse"] > 0:
                 CTRL["refuse"] -= 1; self.close_connection = True; return
@@ -97,6 +98,9 @@ class H(http.server.BaseHTTPRequestHandler):
             if CTRL["hang_after"] > 0:
                 CTRL["hang_after"] -= 1; _t.sleep(CTRL["hang_sec"])
         elif "TDSDeskLedVch" in body:
+            import time as _t2
+            if CTRL.get("read_delay"): _t2.sleep(CTRL["read_delay"])
+            if CTRL.get("read_delay_after_import") and CTRL.get("_imported"): _t2.sleep(CTRL["read_delay_after_import"])
             if CTRL.get("no_ledvch"):
                 out = "<ENVELOPE><BODY><DATA><LINEERROR>Could not find Collection</LINEERROR></DATA></BODY></ENVELOPE>"
             else:

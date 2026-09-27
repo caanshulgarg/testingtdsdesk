@@ -23,7 +23,7 @@ def wait(jid, t=300, every=0.25):
     t0 = time.time()
     while time.time() - t0 < t:
         j = call("/jobs?id=" + jid)
-        if j["status"] in ("done", "failed", "interrupted"): return j
+        if j["status"] in ("failed", "interrupted") or (j["status"] == "done" and not j.get("checking")): return j
         time.sleep(every)
     return j
 def dup_tags(): c = collections.Counter(T.posted_tags()); return [k for k, v in c.items() if v > 1]
@@ -34,7 +34,7 @@ try:
         except Exception: pass
     KEY = json.load(open(os.path.join(BRUN, "tds-bridge.config.json"), encoding="utf-8-sig"))["Key"]
     CO = T.COMPANY
-    ok(json.loads(urllib.request.urlopen("http://127.0.0.1:9100/ping").read())["version"] == "1.12.3", "bridge 1.12.3")
+    ok(json.loads(urllib.request.urlopen("http://127.0.0.1:9100/ping").read())["version"] == "1.12.4", "bridge 1.12.4")
     # 1. a batch of 100: handed over at once; the bridge answers while it posts; every entry created once and found in Tally
     jid = str(uuid.uuid4()); t0 = time.time()
     j = call("/jobs", {"jobId": jid, "company": CO, "masters": [{"id": "led:Rent", "xml": '<LEDGER NAME="Rent" ACTION="Create"><PARENT>Indirect Expenses</PARENT></LEDGER>'}], "vouchers": vouchers(100, "A")})
@@ -46,7 +46,14 @@ try:
         s = call("/status", t=10); mid.append((time.time() - t1, s.get("jobs") or []))
         if any(x.get("done", 0) > 20 for x in (s.get("jobs") or [])): break
     ok(mid and max(d for d, _ in mid) < 3 and any(jobs for _, jobs in mid), "while posting the bridge answers status in %.2fs at most, and says a posting is running (%s)" % (max(d for d, _ in mid), (mid[-1][1] or [{}])[0].get("message", "")))
+    # sending finishes first (TDS Desk is told at once); the read-back follows
+    sent_at = None
+    while time.time() - t0 < 300:
+        j0 = call("/jobs?id=" + jid)
+        if j0["status"] == "done": sent_at = (time.time() - t0, j0.get("checking")); break
+        time.sleep(0.1)
     r = wait(jid); took = time.time() - t0
+    ok(sent_at and sent_at[0] <= took, "the job says 'done' as soon as everything is sent (%.1fs), with the read-back after (checking: %s, all done %.1fs)" % (sent_at[0], sent_at[1], took))
     okN = sum(1 for x in r["results"] if x["ok"]); ver = sum(1 for x in r["results"] if x.get("verified") is True)
     ok(r["status"] == "done" and okN == 101 and len([t for t in T.posted_tags() if t.startswith("TDSDesk:A-")]) == 100, "100 vouchers and a ledger: all created, each once (%d ok, %d found in Tally), %.1fs, %.0f ms a voucher" % (okN, ver, took, 1000 * took / 101))
     ok(ver == 100, "every voucher read back from Tally")
