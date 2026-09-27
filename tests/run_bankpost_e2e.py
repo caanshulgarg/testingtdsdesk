@@ -46,7 +46,7 @@ try:
         pg.goto("http://localhost:8133/"); pg.wait_for_timeout(2000)
         pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
         pg.evaluate(SETUP, [key, BANK, PARTY]); pg.evaluate("Bridge.refresh()")
-        ok(pg.evaluate("Bridge.st.version") == "1.12.2", "bridge 1.12.2 running against the stand-in Tally")
+        ok(pg.evaluate("Bridge.st.version") == "1.12.3", "bridge 1.12.3 running against the stand-in Tally")
         ok(pg.evaluate("syncLedgersFromTally(true)") and pg.evaluate("!!exactLedger('%s') && !!exactLedger('%s')" % (BANK, PARTY)), "ledgers read from Tally")
         pg.evaluate("() => { B().rows.forEach(r => { r.state = 'ready'; }); }")
         # the dates themselves
@@ -76,6 +76,7 @@ try:
         pg.click('[data-cbx="yes"]'); pg.evaluate("window._rm")
         ok(fake_tally.DELETED == ["g-501"] and not fake_tally.POSTED, "removed from Tally by its GUID")
         ok(pg.evaluate("B().rows[0].state") == "ready" and not pg.evaluate("B().postedTags[fpHash('fp-e2e-0')]"), "its line is back to ready, not counted as posted")
+        fake_tally.REQS.clear()
         t0 = time.time(); pg.evaluate("postBankToTally()"); dt = time.time() - t0
         got = sorted((dd, re.search(r"TDSDesk:(\w+)", n).group(1)) for dd, n, _, _ in fake_tally.POSTED)
         want = sorted(zip(["20250602", "20250603", "20250604", "20250605"], pg.evaluate("[0,1,2,3].map(i => fpHash('fp-e2e-' + i))")))
@@ -83,11 +84,15 @@ try:
         ok(pg.evaluate("B().rows.every(r => r.state === 'sent' && r.postVerified)"), "each line marked posted and confirmed in Tally (%.1fs)" % dt)
         rep = pg.evaluate("B().postReport")
         ok(rep["posted"] == 4 and not rep["failed"], "the report: 4 posted, none failed")
+        heavy = {k: v for k, v in fake_tally.REQS.items() if k in ("DayBook", "TDSDeskVchHeads", "TDSDeskBalances")}
+        ok(not heavy and fake_tally.REQS.get("TDSDeskLedVch") and fake_tally.REQS.get("TDSDeskOneLed") == 2, "posting and the balance check ask Tally for the bank ledger only: nothing company-wide (%s)" % dict(fake_tally.REQS))
         tb = pg.evaluate("curStmt().tallyBal")
         ok(tb and tb.get("diff") == 0 and "Tally agrees with the bank" in pg.inner_text(".bk-bal"), "after posting, the balance is checked by itself: Tally agrees with the statement's closing (%s)" % (tb and {k: tb.get(k) for k in ("tClose", "sClose", "diff", "error")}))
         # someone enters a payment in Tally by hand that is not on the statement
         fake_tally.POSTED.append(("20250604", "cash typed in Tally", "777", '<VOUCHER VCHTYPE="Payment" ACTION="Create"><DATE>20250604</DATE><VOUCHERTYPENAME>Payment</VOUCHERTYPENAME><NARRATION>cash typed in Tally</NARRATION><ALLLEDGERENTRIES.LIST><LEDGERNAME>2K Mart</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-999.00</AMOUNT></ALLLEDGERENTRIES.LIST><ALLLEDGERENTRIES.LIST><LEDGERNAME>HDFC BANK ACCOUNT</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>999.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>'))
         tb = pg.evaluate("checkBankBalance()")
+        ok(tb["diff"] == 999 and tb["extra"] is None and "Find the reason" in pg.inner_text(".bk-bal"), "the balance check alone only reads the balance, and offers to find the reason")
+        tb = pg.evaluate("checkBankBalance({explain: true})")
         ok(tb and tb["diff"] == 999 and len(tb["extra"]) == 1 and tb["extra"][0]["eff"] == -999 and tb["unexplained"] == 0, "a payment typed in Tally by hand: the balance is 999 apart, and that entry is named as the whole reason (%s)" % (tb and {k: tb.get(k) for k in ("diff", "extraEffect", "unexplained")}))
         t = pg.inner_text(".bk-bal")
         ok("Tally does not agree" in t and "2K Mart" in t and "make up the whole difference" in t, "and it says so on the page: " + t[:140].replace("\n", " "))
@@ -95,6 +100,11 @@ try:
         pg.evaluate("postBankToTally()")
         ok(len(fake_tally.POSTED) == 5, "posting the same lines again (this browser's memory wiped): Tally is checked, nothing goes in twice")
         ok(pg.evaluate("B().rows.every(r => r.state === 'intally')"), "and they show as already in Tally")
+        # a Tally that will not give one ledger's vouchers: the bridge falls back to the Day Book, and the answer is the same
+        fake_tally.CTRL["no_ledvch"] = True
+        tb2 = pg.evaluate("checkBankBalance({explain: true})")
+        fake_tally.CTRL["no_ledvch"] = False
+        ok(tb2 and tb2["diff"] == 999 and len(tb2["extra"]) == 1 and tb2["unexplained"] == 0, "a Tally that refuses the one-ledger read: the Day Book is read instead, same answer")
         # a voucher without a date never reaches Tally: stopped in TDS Desk ...
         r = pg.evaluate("""async () => (await Bridge.post({company: "VMS EVENTS PRIVATE LIMITED (2024-25)", masters: [], vouchers: [{id: "nodate", xml: '<VOUCHER VCHTYPE="Payment" ACTION="Create"><DATE></DATE><NARRATION>x TDSDesk:zz1</NARRATION></VOUCHER>'}, {id: "early", xml: '<VOUCHER VCHTYPE="Payment" ACTION="Create"><DATE>20230101</DATE><NARRATION>x TDSDesk:zz2</NARRATION></VOUCHER>'}]})).results""")
         ok(len(fake_tally.POSTED) == 5 and {x["id"]: x["ok"] for x in r} == {"nodate": False, "early": False} and "no date" in r[0]["message"] and "before" in r[1]["message"], "no date, or a date before the books begin: refused by TDS Desk, nothing sent (%s)" % [x["message"][:40] for x in r])

@@ -43,6 +43,15 @@ def amounts_until(asOn):
 CTRL = {"delay": 0.0, "hang_after": 0, "hang_before": 0, "hang_sec": 25, "refuse": 0}
 POSTED = []          # (date, narration, number, xml) of every voucher created here
 DELETED = []
+REQS = {}            # how many requests of each kind this Tally was asked (the tests check nothing heavy is asked)
+def _kind(body):
+    for k in ("TDSDeskLedVch", "TDSDeskOneLed", "TDSDeskVchHeads", "TDSDeskBalances", "TDSDeskLedgers", "TDSDeskCompanies"):
+        if k in body: return k
+    if "<REPORTNAME>Day Book</REPORTNAME>" in body: return "DayBook"
+    if "Import Data" in body: return "Import"
+    return "other"
+def _with_ids(vx, d, num):
+    return re.sub(r"^(<VOUCHER\b[^>]*>)", lambda m: m.group(1) + "<GUID>g-%s</GUID><MASTERID>%d</MASTERID><VOUCHERNUMBER>%s</VOUCHERNUMBER>" % (num, 900000 + int(num), num), re.sub(r"<DATE>[^<]*</DATE>", "<DATE>%s</DATE>" % d, vx, 1))
 LEDGERS_MADE = []
 _lock = threading.Lock(); _serial = threading.Lock()
 def posted_tags():
@@ -54,6 +63,7 @@ class H(http.server.BaseHTTPRequestHandler):
     def _post(self):
         body = self.rfile.read(int(self.headers.get("Content-Length", 0))).decode("utf-8")
         g = lambda t: (re.search("<" + t + ">([^<]*)</" + t + ">", body) or [None, ""])[1]
+        REQS[_kind(body)] = REQS.get(_kind(body), 0) + 1
         if "<TALLYREQUEST>Import Data</TALLYREQUEST>" in body:
             import time as _t
             if CTRL["refuse"] > 0:
@@ -86,6 +96,21 @@ class H(http.server.BaseHTTPRequestHandler):
                     out = "<RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><ERRORS>0</ERRORS><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>"
             if CTRL["hang_after"] > 0:
                 CTRL["hang_after"] -= 1; _t.sleep(CTRL["hang_sec"])
+        elif "TDSDeskLedVch" in body:
+            if CTRL.get("no_ledvch"):
+                out = "<ENVELOPE><BODY><DATA><LINEERROR>Could not find Collection</LINEERROR></DATA></BODY></ENVELOPE>"
+            else:
+                a, b = g("SVFROMDATE"), g("SVTODATE"); led = g("CHILDOF")
+                lo, hi = bisect.bisect_left(dates, a), bisect.bisect_right(dates, b)
+                tagv = "<LEDGERNAME>%s</LEDGERNAME>" % led
+                mine = [p for _, p in V[lo:hi] if tagv in p]
+                with _lock: mine += [_with_ids(vx, d, num) for d, _, num, vx in list(POSTED) if a <= d <= b and tagv in vx]
+                out = "<ENVELOPE><BODY><DATA><COLLECTION>" + "".join(mine) + "</COLLECTION></DATA></BODY></ENVELOPE>"
+        elif "TDSDeskOneLed" in body:
+            asOn = g("SVTODATE"); name = (re.search(r'\$Name = "([^"]*)"', body) or [0, ""])[1]
+            plain = name.replace("&amp;", "&"); mv = amounts_until(asOn)
+            hit = [(n, ob) for n, _, ob in L if n.replace("&amp;", "&") == plain]
+            out = "<ENVELOPE><BODY><DATA><COLLECTION>" + "".join('<LEDGER NAME="%s"><NAME>%s</NAME><CLOSINGBALANCE>%.2f</CLOSINGBALANCE></LEDGER>' % (n, n, ob + mv.get(plain, mv.get(n, 0))) for n, ob in hit) + "</COLLECTION></DATA></BODY></ENVELOPE>"
         elif "TDSDeskVchHeads" in body:
             a, b = g("SVFROMDATE"), g("SVTODATE")
             with _lock: mine = [x for x in POSTED if a <= x[0] <= b]

@@ -859,6 +859,7 @@ function bankClick(t){
     case "bankReportOk": b.postReport = null; render(); return true;
     case "bankFocusOff": b.focus = null; render(); return true;
     case "bankBalCheck": closeMenus(); checkBankBalance(); return true;
+    case "bankBalWhy": checkBankBalance({explain: true}); return true;
     case "dupFind": closeMenus(); findTallyDuplicates(); return true;
     case "dupRemove": removeTallyDuplicates("extra"); return true;
     case "dupRemoveWrong": removeTallyDuplicates("wrong"); return true;

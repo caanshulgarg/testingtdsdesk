@@ -185,6 +185,11 @@ function refreshBridgeChip(){
   const html = bridgeChip(S.view === "company" ? CO() : null);
   if (html !== lastBridgeChip){ el.innerHTML = html; lastBridgeChip = html; }
 }
+// One ledger's vouchers for a period. Bridge 1.12.3 asks Tally for that ledger only; older bridges read the Day Book month by month.
+function ledgerLinesUrl(company, ledger, from, to){
+  const light = bridgeVer(Bridge.st.version) >= bridgeVer("1.12.3");
+  return (light ? "/ledgerlines" : "/vouchers") + "?company=" + encodeURIComponent(company) + "&from=" + isoToTally(from) + "&to=" + isoToTally(to) + "&ledger=" + encodeURIComponent(ledger) + Bridge.pinQ();
+}
 function bridgeVer(v){ return String(v || "").split(".").map(x => String(num(x)).padStart(3, "0")).join("."); }
 // a posting handed to the bridge before this page was reloaded or closed: say how it ended (the bridge finishes it on its own)
 async function bridgeLeftover(){
@@ -207,9 +212,9 @@ async function bridgeTick(first){
     const before = Bridge.st.state;
     await Bridge.refresh();
     if (first && Bridge.up() && !Bridge.posting) bridgeLeftover();
-    if (first && Bridge.up() && Bridge.st.version && bridgeVer(Bridge.st.version) < bridgeVer("1.12.2") && !lsGet("tdsdesk:bridgenudge1122")){
-      lsSet("tdsdesk:bridgenudge1122", "1");
-      toast("A new Tally Bridge (1.12.2) is ready: faster posting, and it keeps posting even if this page or the connection drops. Download it under Settings \u2192 Tally Bridge and run the setup on the Tally computer.");
+    if (first && Bridge.up() && Bridge.st.version && bridgeVer(Bridge.st.version) < bridgeVer("1.12.3") && !lsGet("tdsdesk:bridgenudge1123")){
+      lsSet("tdsdesk:bridgenudge1123", "1");
+      toast("A new Tally Bridge (1.12.3) is ready: it asks Tally for the bank ledger only, so Tally stays quick while posting and checking, and it keeps posting even if this page or the connection drops. Download it under Settings \u2192 Tally Bridge and run the setup on the Tally computer.");
     }
     const key = Bridge.st.open.map(o => o.name).sort().join("|");
     const changed = key !== Bridge.lastOpenKey;
@@ -315,7 +320,7 @@ async function syncBankBookFromTally(silent, win){
   if (!ledger) return 0;
   try {
     const from = win ? win.from : addDays(st.from || b.rows[0].date, -20), to = win ? win.to : addDays(st.to || b.rows[b.rows.length - 1].date, 20);
-    const j = await Bridge.call("/vouchers?company=" + encodeURIComponent(Bridge.openFor(co).name) + "&from=" + isoToTally(from) + "&to=" + isoToTally(to) + "&ledger=" + encodeURIComponent(ledger) + Bridge.pinQ());
+    const j = await Bridge.call(ledgerLinesUrl(Bridge.openFor(co).name, ledger, from, to), null, 300000);
     const entries = [];
     [].concat(j.vouchers || []).forEach(v => {
       if (/^yes$/i.test(v.cancelled || "")) return;
@@ -382,8 +387,10 @@ async function scanStatementInTally(opts){
   const last = ds[ds.length - 1] > today ? ds[ds.length - 1] : today;
   const to = addDays(last, 31);
   // bridge 1.12.1: one light read of TDS Desk's own entries (heads only); older: this bank ledger month by month
-  const light = bridgeVer(Bridge.st.version) >= bridgeVer("1.12.1");
-  const j = await Bridge.call((light ? "/tags" : "/vouchers") + "?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(from) + "&to=" + isoToTally(to) + (light ? "" : "&ledger=" + encodeURIComponent(ledger)) + Bridge.pinQ(), null, 600000);
+  // 1.12.3: this bank ledger's own vouchers (light, with amounts); 1.12.1-2: TDS Desk's tagged entries; older: the Day Book
+  const byLedger = bridgeVer(Bridge.st.version) >= bridgeVer("1.12.3");
+  const light = !byLedger && bridgeVer(Bridge.st.version) >= bridgeVer("1.12.1");
+  const j = await Bridge.call(light ? "/tags?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(from) + "&to=" + isoToTally(to) + Bridge.pinQ() : ledgerLinesUrl(tname, ledger, from, to), null, 600000);
   const vs = [].concat(j.vouchers || []).filter(v => !/^yes$/i.test(v.cancelled || ""));
   const rowByTag = new Map(b.rows.map(r => [fpHash(r.fp || r.id), r]));
   const groups = new Map();
@@ -523,8 +530,10 @@ async function checkBankBalance(opts){
   b.balBusy = true; if (!opts.quiet){ b.busy = "Reading " + ledger + "'s balance from Tally…"; } render();
   let res;
   try {
-    const j = await Bridge.call("/balances?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(st.from) + "&to=" + isoToTally(st.to) + Bridge.pinQ(), null, 180000);
-    const L = [].concat(j.ledgers || []).find(l => norm(l.name) === norm(ledger));
+    // 1.12.3: this one ledger's balance (two small reads); older bridges: every ledger's balance
+    const one = bridgeVer(Bridge.st.version) >= bridgeVer("1.12.3");
+    const j = await Bridge.call((one ? "/ledgerbalance" : "/balances") + "?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(st.from) + "&to=" + isoToTally(st.to) + (one ? "&ledger=" + encodeURIComponent(ledger) : "") + Bridge.pinQ(), null, 180000);
+    const L = one ? {open: j.open, close: j.close} : [].concat(j.ledgers || []).find(l => norm(l.name) === norm(ledger));
     if (!L) throw {message: "“" + ledger + "” is not among Tally's ledgers in " + tname + "."};
     // Tally gives a debit balance as a negative number; for the bank, money in the account is a debit
     const bankBal = v => r2(-(parseFloat(String(v == null || v === "" ? "0" : v).replace(/,/g, "")) || 0));
@@ -540,10 +549,10 @@ async function checkBankBalance(opts){
     res.notIn = notIn.map(r => r.id); res.notInEffect = r2(notIn.reduce((a, r) => a + bankEffect(r), 0));
     res.left = left.map(r => r.id); res.leftEffect = r2(left.reduce((a, r) => a + bankEffect(r), 0));
     res.extra = null;
-    if (res.diff !== null && Math.abs(res.diff) >= 0.01){
+    if (res.diff !== null && Math.abs(res.diff) >= 0.01 && opts.explain){
       // which entries does Tally have for these dates that the statement does not?
       if (!opts.quiet) { b.busy = "The balance differs: reading " + ledger + " for " + fmtDate(st.from) + " to " + fmtDate(st.to) + " to find out why…"; render(); }
-      const jv = await Bridge.call("/vouchers?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(st.from) + "&to=" + isoToTally(st.to) + "&ledger=" + encodeURIComponent(ledger) + Bridge.pinQ(), null, 600000);
+      const jv = await Bridge.call(ledgerLinesUrl(tname, ledger, st.from, st.to), null, 600000);
       const posted = b.rows.filter(r => ["sent", "intally"].includes(r.state));
       const byTag = new Map(posted.map(r => [fpHash(r.fp || r.id), r]));
       const used = new Set();
@@ -607,6 +616,7 @@ function bankBalanceHtml(st){
     '<div class="tblwrap" style="margin-top:6px;max-height:240px;overflow:auto"><table class="data"><thead><tr><th>Date</th><th>Voucher</th><th>Party / ledger</th><th class="n">In</th><th class="n">Out</th><th></th></tr></thead><tbody>' +
     t.extra.slice(0, 300).map(x => "<tr><td>" + fmtDate(x.date) + "</td><td>" + esc([x.type, x.number].filter(Boolean).join(" ")) + "</td><td>" + esc(x.party) + '</td><td class="n">' + (x.eff > 0 ? m(x.eff) : "") + '</td><td class="n">' + (x.eff < 0 ? m(-x.eff) : "") + "</td><td>" + esc(x.note || "") + "</td></tr>").join("") +
     "</tbody></table></div></li>");
+  if (!t.extra) li.push('<li>' + (live ? '<button class="btn small primary" data-act="bankBalWhy"' + (b.balBusy ? " disabled" : "") + ">Find the reason</button> " : "") + '<span class="muted">reads ' + esc(t.ledger) + " for " + fmtDate(t.from) + " to " + fmtDate(t.to) + " from Tally and lists the entries that are not on the statement</span></li>");
   if (t.unexplained !== undefined && Math.abs(t.unexplained) >= 0.01) li.push("<li><b>" + m(Math.abs(t.unexplained)) + " is not explained</b> by the lines above: check the amounts of the entries in Tally against the statement.</li>");
   else if (t.extra) li.push('<li class="muted">These together make up the whole difference.</li>');
   return h + (li.length ? '<ul class="bk-bal-why">' + li.join("") + "</ul>" : "") + "</div>" + btn + "</div>";
@@ -735,7 +745,7 @@ async function postBankToTally(ids){
   const masters = b.newLed.filter(l => !l.sent && used.has(l.name.toLowerCase()));
   b.busy = "Posting " + entries(rows.length) + " to " + tname + "\u2026"; render();
   try {
-    const j = await Bridge.post({company: tname,
+    const j = await Bridge.post({company: tname, ledger: acc.ledger,
       masters: masters.map(l => ({id: "led:" + l.name, xml: ledgerMasterXml(l)})),
       vouchers: rows.map(r => ({id: r.id, xml: bankVoucherXml(r, acc, co)}))}, pj => { b.busy = postingLine(pj, tname); refreshBusy(); });
     const byId = new Map([].concat(j.results || []).map(x => [x.id, x]));

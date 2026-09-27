@@ -661,7 +661,7 @@ async function fetchPartyYtd(party, fy, ledger, opts){
   const span = fyStartEnd(fy);
   const today = new Date().toISOString().slice(0, 10);
   const to = span.to < today ? span.to : today;
-  const j = await Bridge.call("/vouchers?company=" + encodeURIComponent(Bridge.openFor(co).name) + "&from=" + isoToTally(span.from) + "&to=" + isoToTally(to) + "&ledger=" + encodeURIComponent(ledger) + Bridge.pinQ(), null, 300000);
+  const j = await Bridge.call(ledgerLinesUrl(Bridge.openFor(co).name, ledger, span.from, to), null, 300000);
   let credited = 0, gross = 0, n = 0;
   [].concat(j.vouchers || []).forEach(v => {
     if (/^yes$/i.test(v.cancelled || "")) return;

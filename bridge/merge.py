@@ -6,7 +6,7 @@ def R(a, b):
     assert base.count(a) == 1, ('anchor', a[:60], base.count(a))
     base = base.replace(a, b)
 import re
-base = re.sub(r"\$BridgeVersion = '[0-9.]+'", "$BridgeVersion = '1.12.2'", base, 1)
+base = re.sub(r"\$BridgeVersion = '[0-9.]+'", "$BridgeVersion = '1.12.3'", base, 1)
 def RA(a, b, n):
     global base
     assert base.count(a) == n, ('anchor', a[:60], base.count(a))
@@ -38,6 +38,21 @@ R("      '/vouchers' {", """      '/daybook' { $xml = Get-DayBookXml $qs['compan
         else { $result = [ordered]@{ ok = $true; jobs = @(Get-ActiveJobs) } }
       }
       '/jobs/resume' { if ($method -ne 'POST') { throw 'Use POST.' }; $o = $body | ConvertFrom-Json; $result = Resume-PostJob ([string]$o.id) }
+      '/ledgerlines' {
+        # one ledger's vouchers for a period (light); the Day Book month by month only if this Tally will not answer that way
+        $co = [string]$qs['company']; $port = Find-CompanyPort $co ([int]('0' + $qs['port']))
+        $lv = $null; try { $lv = Get-LedgerVoucherList $port $co ([string]$qs['ledger']) ([string]$qs['from']) ([string]$qs['to']) } catch { $lv = $null }
+        if ($null -ne $lv) { $result = [ordered]@{ ok = $true; port = $port; via = 'ledger'; vouchers = @($lv) } }
+        else { $r0 = Get-Vouchers $co ([string]$qs['from']) ([string]$qs['to']) ([string]$qs['ledger']) '' $port; $r0['via'] = 'daybook'; $result = $r0 }
+      }
+      '/ledgerbalance' {
+        # one ledger's balance the day before 'from' and on 'to'
+        $co = [string]$qs['company']; $port = Find-CompanyPort $co ([int]('0' + $qs['port'])); $led = [string]$qs['ledger']
+        $before = ([datetime]::ParseExact([string]$qs['from'], 'yyyyMMdd', $null)).AddDays(-1).ToString('yyyyMMdd')
+        $o = Get-OneLedgerBalance $port $co $led $before; $c = Get-OneLedgerBalance $port $co $led ([string]$qs['to'])
+        if ($null -eq $c) { throw ('Ledger ' + $led + ' was not found in ' + $co + '.') }
+        $result = [ordered]@{ ok = $true; port = $port; ledger = $led; openAsOn = $before; open = [string]$o; close = [string]$c }
+      }
       '/tags' {
         # every voucher TDS Desk posted in a date range (its tag is in the narration): one light read, no ledger lines
         $port = Find-CompanyPort ([string]$qs['company']) ([int]('0' + $qs['port']))

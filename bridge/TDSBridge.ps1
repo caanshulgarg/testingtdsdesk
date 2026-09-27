@@ -26,7 +26,7 @@ trap {
   try { Stop-Transcript | Out-Null } catch { }
   break
 }
-$BridgeVersion = '1.12.2'
+$BridgeVersion = '1.12.3'
 
 # ------------------------------------------------------------------ settings
 function New-BridgeKey {
@@ -940,6 +940,21 @@ function Invoke-Client($client) {
         else { $result = [ordered]@{ ok = $true; jobs = @(Get-ActiveJobs) } }
       }
       '/jobs/resume' { if ($method -ne 'POST') { throw 'Use POST.' }; $o = $body | ConvertFrom-Json; $result = Resume-PostJob ([string]$o.id) }
+      '/ledgerlines' {
+        # one ledger's vouchers for a period (light); the Day Book month by month only if this Tally will not answer that way
+        $co = [string]$qs['company']; $port = Find-CompanyPort $co ([int]('0' + $qs['port']))
+        $lv = $null; try { $lv = Get-LedgerVoucherList $port $co ([string]$qs['ledger']) ([string]$qs['from']) ([string]$qs['to']) } catch { $lv = $null }
+        if ($null -ne $lv) { $result = [ordered]@{ ok = $true; port = $port; via = 'ledger'; vouchers = @($lv) } }
+        else { $r0 = Get-Vouchers $co ([string]$qs['from']) ([string]$qs['to']) ([string]$qs['ledger']) '' $port; $r0['via'] = 'daybook'; $result = $r0 }
+      }
+      '/ledgerbalance' {
+        # one ledger's balance the day before 'from' and on 'to'
+        $co = [string]$qs['company']; $port = Find-CompanyPort $co ([int]('0' + $qs['port'])); $led = [string]$qs['ledger']
+        $before = ([datetime]::ParseExact([string]$qs['from'], 'yyyyMMdd', $null)).AddDays(-1).ToString('yyyyMMdd')
+        $o = Get-OneLedgerBalance $port $co $led $before; $c = Get-OneLedgerBalance $port $co $led ([string]$qs['to'])
+        if ($null -eq $c) { throw ('Ledger ' + $led + ' was not found in ' + $co + '.') }
+        $result = [ordered]@{ ok = $true; port = $port; ledger = $led; openAsOn = $before; open = [string]$o; close = [string]$c }
+      }
       '/tags' {
         # every voucher TDS Desk posted in a date range (its tag is in the narration): one light read, no ledger lines
         $port = Find-CompanyPort ([string]$qs['company']) ([int]('0' + $qs['port']))
@@ -1257,7 +1272,7 @@ function New-PostJob($payload) {
   $items = @()
   foreach ($m in @($payload.masters)) { if ($m) { $items += [ordered]@{ id = [string]$m.id; kind = 'master'; xml = [string]$m.xml } } }
   foreach ($v in @($payload.vouchers)) { if ($v) { $items += [ordered]@{ id = [string]$v.id; kind = 'voucher'; xml = [string]$v.xml } } }
-  [IO.File]::WriteAllText((Join-Path $dir 'payload.json'), (ConvertTo-Json -InputObject ([ordered]@{ company = [string]$payload.company; port = [int]('0' + $payload.port); items = $items }) -Depth 8 -Compress))
+  [IO.File]::WriteAllText((Join-Path $dir 'payload.json'), (ConvertTo-Json -InputObject ([ordered]@{ company = [string]$payload.company; port = [int]('0' + $payload.port); ledger = [string]$payload.ledger; items = $items }) -Depth 8 -Compress))
   $p = [ordered]@{ ok = $true; id = $id; status = 'queued'; company = [string]$payload.company; port = 0; total = $items.Count; done = 0; results = @(); message = 'Starting'; pid = 0; resumed = $false; startedAt = (Get-Date).ToString('o'); updatedAt = ''; finishedAt = '' }
   Write-JobProgress $dir $p
   $p.pid = Start-JobWorker $dir
@@ -1286,7 +1301,51 @@ function Get-TallyTrouble([string]$msg) {
 }
 
 # the TDSDesk tags of these items already in Tally (found by reading the dates they carry)
-function Find-PostedTags([int]$port, [string]$company, $items) {
+# --- 1.12.3: reads that ask Tally for one ledger only (a bank ledger has a few hundred entries a month; the company has thousands)
+# The vouchers of one ledger for a period, with every ledger line; $null when this Tally will not give them this way
+function Get-LedgerVoucherList([int]$Port, [string]$Company, [string]$Ledger, [string]$From, [string]$To) {
+  $req = '<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TDSDeskLedVch</ID></HEADER>' +
+    '<BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + (Esc $Company) + '</SVCURRENTCOMPANY>' +
+    '<SVFROMDATE>' + $From + '</SVFROMDATE><SVTODATE>' + $To + '</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE>' +
+    '<COLLECTION NAME="TDSDeskLedVch" ISMODIFY="No"><TYPE>Vouchers : Ledger</TYPE><CHILDOF>' + (Esc $Ledger) + '</CHILDOF>' +
+    '<FETCH>DATE,VOUCHERTYPENAME,VOUCHERNUMBER,PARTYLEDGERNAME,NARRATION,MASTERID,GUID,ISOPTIONAL,ISCANCELLED,ALLLEDGERENTRIES.LIST</FETCH></COLLECTION>' +
+    '</TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>'
+  $raw = Invoke-Tally -TallyPort $Port -Xml $req
+  if ($raw -match '<LINEERROR>|Could not find|Unknown Request') { return $null }
+  $doc = Get-XmlDoc $raw
+  $list = New-Object System.Collections.ArrayList
+  foreach ($v in $doc.SelectNodes('//VOUCHER')) {
+    $d = Get-NodeText $v 'DATE'
+    if ($d -and ($d -lt $From -or $d -gt $To)) { continue }
+    $type = Get-NodeText $v 'VOUCHERTYPENAME'; if (-not $type) { $type = $v.GetAttribute('VCHTYPE') }
+    $entries = @()
+    foreach ($e in $v.SelectNodes('ALLLEDGERENTRIES.LIST | LEDGERENTRIES.LIST')) {
+      $bank = $e.SelectSingleNode('BANKALLOCATIONS.LIST')
+      $entries += [ordered]@{ ledger = (Get-NodeText $e 'LEDGERNAME'); amount = (Get-NodeText $e 'AMOUNT'); instrument = (Get-NodeText $bank 'INSTRUMENTNUMBER') }
+    }
+    $null = $list.Add([ordered]@{ guid = (Get-NodeText $v 'GUID'); masterId = (Get-NodeText $v 'MASTERID'); date = $d; type = $type; number = (Get-NodeText $v 'VOUCHERNUMBER')
+      party = (Get-NodeText $v 'PARTYLEDGERNAME'); narration = (Get-NodeText $v 'NARRATION'); optional = (Get-NodeText $v 'ISOPTIONAL'); cancelled = (Get-NodeText $v 'ISCANCELLED'); entries = $entries })
+  }
+  return ,$list
+}
+# One ledger's balance as on a date (Tally: a debit balance is negative); $null when not found this way
+function Get-OneLedgerBalance([int]$Port, [string]$Company, [string]$Ledger, [string]$AsOn) {
+  $f = ([string]$Ledger).Replace('"', '')
+  $req = '<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TDSDeskOneLed</ID></HEADER>' +
+    '<BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + (Esc $Company) + '</SVCURRENTCOMPANY>' +
+    '<SVFROMDATE>' + $AsOn + '</SVFROMDATE><SVTODATE>' + $AsOn + '</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE>' +
+    '<COLLECTION NAME="TDSDeskOneLed" ISMODIFY="No"><TYPE>Ledger</TYPE><FILTERS>TDSDeskThisLed</FILTERS><FETCH>NAME,CLOSINGBALANCE</FETCH></COLLECTION>' +
+    '<SYSTEM TYPE="Formulae" NAME="TDSDeskThisLed">$Name = "' + (Esc $f) + '"</SYSTEM>' +
+    '</TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>'
+  $doc = Get-XmlDoc (Invoke-Tally -TallyPort $Port -Xml $req)
+  foreach ($l in $doc.SelectNodes('//LEDGER')) {
+    $n = $l.GetAttribute('NAME'); if (-not $n) { $n = Get-NodeText $l 'NAME' }
+    if ($n -eq $Ledger) { return (Get-NodeText $l 'CLOSINGBALANCE') }
+  }
+  return $null
+}
+
+function Find-PostedTags([int]$port, [string]$company, $items, [string]$ledger) {
   $found = @{}
   $dates = @()
   foreach ($it in $items) { $m = [regex]::Match([string]$it.xml, '<DATE>(\d{8})</DATE>'); if ($m.Success) { $dates += $m.Groups[1].Value } }
@@ -1294,7 +1353,8 @@ function Find-PostedTags([int]$port, [string]$company, $items) {
   if (-not $dates.Count) { return $found }
   # a read that Tally did not answer tells nothing: $null, so nothing is sent again on a guess
   $heads = @(); $read = $false
-  try { $heads = @(Get-VoucherHeads -Port $port -Company $company -From $dates[0] -To $dates[$dates.Count - 1]); $read = $true } catch { }
+  if ($ledger) { try { $lv = Get-LedgerVoucherList $port $company $ledger $dates[0] $dates[$dates.Count - 1]; if ($null -ne $lv) { $heads = @($lv); $read = $true } } catch { } }
+  if (-not $read) { try { $heads = @(Get-VoucherHeads -Port $port -Company $company -From $dates[0] -To $dates[$dates.Count - 1]); $read = $true } catch { } }
   if (-not $heads.Count) { try { $heads = @(Get-DayBookHeads -Port $port -Company $company -From $dates[0] -To $dates[$dates.Count - 1]); $read = $true } catch { } }
   if (-not $read) { return $null }
   foreach ($it in $items) {
@@ -1315,12 +1375,12 @@ function Set-KeepAwake([bool]$on) {
 
 # Entries Tally said it created are read back together (one read for up to 100), not after every batch:
 # found -> confirmed with Tally's voucher number; not found -> not sent again, said so; no answer -> left unconfirmed
-function Confirm-Posted($port, [string]$company, $pending, $results, $items) {
+function Confirm-Posted($port, [string]$company, $pending, $results, $items, [string]$ledger) {
   if (-not $pending.Count) { return }
   $byId = @{}; foreach ($it in $items) { $byId[[string]$it.id] = $it }
   $there = $null
   for ($a = 0; $null -eq $there -and $a -lt 4; $a++) {
-    $there = Find-PostedTags $port $company @($pending | ForEach-Object { $byId[[string]$_] } | Where-Object { $_ })
+    $there = Find-PostedTags $port $company @($pending | ForEach-Object { $byId[[string]$_] } | Where-Object { $_ }) $ledger
     if ($null -eq $there) { Start-Sleep -Seconds @(2, 5, 10, 20)[$a] }
   }
   foreach ($r in $results) {
@@ -1365,7 +1425,7 @@ function Invoke-JobWorker([string]$dir) {
     if ($results.Count -gt 0 -or $p.resumed) {
       $there = $null
       for ($a = 0; $null -eq $there -and $a -lt 6; $a++) {
-        $there = Find-PostedTags $port ([string]$pl.company) @($todo | Where-Object { $_.kind -eq 'voucher' })
+        $there = Find-PostedTags $port ([string]$pl.company) @($todo | Where-Object { $_.kind -eq 'voucher' }) ([string]$pl.ledger)
         if ($null -eq $there) { $p.message = 'Checking Tally for entries sent before the stop'; Write-JobProgress $dir $p; Start-Sleep -Seconds (5 * ($a + 1)) }
       }
       if ($null -eq $there) { throw 'Tally did not answer, so it cannot be told which entries arrived before the stop. Open Tally and resume again.' }
@@ -1413,7 +1473,7 @@ function Invoke-JobWorker([string]$dir) {
           foreach ($v in $fast) { $res += [ordered]@{ id = [string]$v.id; kind = 'voucher'; ok = $true; verified = $null; pendingCheck = $true; created = 1; company = [string]$pl.company; port = $port; vchNumber = ''; vchType = ''; masterId = ''; guid = ''; vchDate = ''; message = '' }; $null = $toConfirm.Add([string]$v.id) }
           $fast = @()
         }
-        elseif ($rr) { $there = Find-PostedTags $port ([string]$pl.company) @($fast | ForEach-Object { [ordered]@{ id = $_.id; kind = 'voucher'; xml = $_.xml } }) }
+        elseif ($rr) { $there = Find-PostedTags $port ([string]$pl.company) @($fast | ForEach-Object { [ordered]@{ id = $_.id; kind = 'voucher'; xml = $_.xml } }) ([string]$pl.ledger) }
         if (-not $fast.Count) { }
         elseif ($null -eq $there) {
           if ($rr) { $why = 'Tally did not answer the check after posting' }
@@ -1438,7 +1498,7 @@ function Invoke-JobWorker([string]$dir) {
         # Tally works one request at a time: a read it answers comes after the lost one was dealt with
         $there = $null
         for ($a = 0; $null -eq $there -and $a -lt 5; $a++) {
-          $there = Find-PostedTags $port ([string]$pl.company) @($lostItems | Where-Object { $_.kind -eq 'voucher' })
+          $there = Find-PostedTags $port ([string]$pl.company) @($lostItems | Where-Object { $_.kind -eq 'voucher' }) ([string]$pl.ledger)
           if ($null -eq $there) { $p.message = 'Tally is busy: waiting to check what arrived'; Write-JobProgress $dir $p; Start-Sleep -Seconds @(3, 10, 20, 30, 45)[$a] }
         }
         $unsure = ($null -eq $there)
@@ -1468,11 +1528,11 @@ function Invoke-JobWorker([string]$dir) {
         }
       }
       foreach ($r in $res) { $r.Remove('replySnip'); $null = $results.Add($r) }
-      if ($toConfirm.Count -ge 100) { $p.message = 'Checking ' + $toConfirm.Count + ' entries in Tally'; Write-JobProgress $dir $p; Confirm-Posted $port ([string]$pl.company) $toConfirm $results $allItems }
+      if ($toConfirm.Count -ge 250) { $p.message = 'Checking ' + $toConfirm.Count + ' entries in Tally'; Write-JobProgress $dir $p; Confirm-Posted $port ([string]$pl.company) $toConfirm $results $allItems ([string]$pl.ledger) }
       $p.done = $results.Count
       Write-JobProgress $dir $p
     }
-    if ($toConfirm.Count) { $p.message = 'Checking ' + $toConfirm.Count + ' entries in Tally'; Write-JobProgress $dir $p; Confirm-Posted $port ([string]$pl.company) $toConfirm $results $allItems }
+    if ($toConfirm.Count) { $p.message = 'Checking ' + $toConfirm.Count + ' entries in Tally'; Write-JobProgress $dir $p; Confirm-Posted $port ([string]$pl.company) $toConfirm $results $allItems ([string]$pl.ledger) }
     foreach ($r in $results) { if ($r -is [System.Collections.IDictionary]) { if ($r.Contains('pendingCheck')) { $r.Remove('pendingCheck') } } elseif ($r.PSObject.Properties['pendingCheck']) { $r.PSObject.Properties.Remove('pendingCheck') } }
     $okN = @($results | Where-Object { $_.ok }).Count
     $p.status = 'done'; $p.message = [string]$okN + ' of ' + $p.total + ' in Tally'; $p.finishedAt = (Get-Date).ToString('o')
