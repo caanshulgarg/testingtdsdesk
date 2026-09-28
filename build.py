@@ -34,6 +34,9 @@ def assemble():
             if n in seen: clash.append(n + " in " + f + ":" + str(i) + " and " + seen[n])
             else: seen[n] = f + ":" + str(i)
     if clash: sys.exit("The same name is defined twice at the top level:\n  " + "\n  ".join(clash))
+    sha = read("assets/bridge-setup.sha256").split()[0][:16]
+    if js.count("{{BRIDGE_SETUP_SHA}}") != 1: sys.exit("BRIDGE_SETUP_SHA placeholder missing in src/js")
+    js = js.replace("{{BRIDGE_SETUP_SHA}}", sha)
     css = read("src/css/app.css")
     if shell.count("{{CSS}}") != 1 or shell.count("{{JS}}") != 1: sys.exit("src/shell.html must have {{CSS}} and {{JS}} once each")
     return shell.replace("{{CSS}}", css).replace("{{JS}}", js)

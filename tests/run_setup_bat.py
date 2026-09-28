@@ -22,5 +22,8 @@ want = open(os.path.join(ROOT, "bridge", "TDSBridge.ps1"), "rb").read()
 ok(got.lstrip(b"\xef\xbb\xbf") == want.lstrip(b"\xef\xbb\xbf"), "the bridge written is the one in the repository")
 v = re.search(rb"\$BridgeVersion = '([0-9.]+)'", got)
 ok(bool(v), "version " + (v.group(1).decode() if v else "?"))
+site = open(os.path.join(ROOT, os.environ.get("TDSDESK_SITE", "site-test").split("/")[-1] if not os.path.isabs(os.environ.get("TDSDESK_SITE", "")) else os.environ["TDSDESK_SITE"], "index.html"), encoding="utf-8").read()
+sha = open(os.path.join(ROOT, "assets", "bridge-setup.sha256")).read().split()[0]
+ok('BRIDGE_SETUP_SHA = "' + sha[:16] + '"' in site, "the app asks for this setup file by its fingerprint, so no old copy is served from a cache")
 print("all passed" if not fails else str(len(fails)) + " FAILED")
 sys.exit(1 if fails else 0)

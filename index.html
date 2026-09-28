@@ -1120,7 +1120,7 @@ header.top .tbar-title{align-items:center}
   header.top .headrow:has(> .sbar) > .sbar button{margin-right:18px;padding-right:0;font-size:14px}
 }
 </style>
-<style>.is-test .side-brand::after{content:"TEST";display:block;margin-top:4px;font-size:11px;letter-spacing:.14em;color:#E9A06A}.is-test header.top{box-shadow:inset 0 3px 0 #E2761B}body.is-test::after{content:"TESTING SITE · not for real client work · post only to a ZZ TEST company in Tally";position:fixed;left:0;right:0;bottom:0;z-index:70;background:#E2761B;color:#fff;font-size:12.5px;text-align:center;padding:3px 8px;letter-spacing:.04em;pointer-events:none}.is-test .actionbar{bottom:22px}.is-test #app{padding-bottom:34px}</style><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-JUZRiA/pD/Q1MSIv1WkOX00eklOKXLcOHszD3zr3UBc=' 'sha256-4gXtz+1IOLHk+9vxnER2w+D4icgxYCO8m41e20iYYos=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+<style>.is-test .side-brand::after{content:"TEST";display:block;margin-top:4px;font-size:11px;letter-spacing:.14em;color:#E9A06A}.is-test header.top{box-shadow:inset 0 3px 0 #E2761B}body.is-test::after{content:"TESTING SITE · not for real client work · post only to a ZZ TEST company in Tally";position:fixed;left:0;right:0;bottom:0;z-index:70;background:#E2761B;color:#fff;font-size:12.5px;text-align:center;padding:3px 8px;letter-spacing:.04em;pointer-events:none}.is-test .actionbar{bottom:22px}.is-test #app{padding-bottom:34px}</style><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-JUZRiA/pD/Q1MSIv1WkOX00eklOKXLcOHszD3zr3UBc=' 'sha256-L5mmipEQKaPtUdBrmueabUE8t3ybFTcOFtRQQ0ObGqI=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
 </head>
 <body class="is-test">
 <a class="skip" id="skipLink" href="#app">Skip to the work</a>
@@ -1195,7 +1195,9 @@ const DEFAULT_FIRM = {firmName:"", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "TEST · 27 Sep 2026 · build 170 (security: own-site libraries, CSP, no keys in the browser, two-step sign-in, audit trail, idle sign-out)";
+const APP_VERSION = "TEST · 28 Sep 2026 · build 171 (FinCom: reports, look up, letters, closed periods; bridge 1.12.9)";
+// the Tally Bridge setup file's fingerprint, put in by build.py: a new setup file is never served from an old cache
+const BRIDGE_SETUP_SHA = "19261ef22b270a48";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;
@@ -2573,7 +2575,7 @@ function blockText(id){
   const el = document.getElementById(id);
   if (el) return Promise.resolve(el.textContent);
   if (!window.TDS_ASSETS) return Promise.resolve(null);
-  if (!blockCache[id]) blockCache[id] = fetch(window.TDS_ASSETS + id + ".txt?b=" + ((String(typeof APP_VERSION === "string" ? APP_VERSION : "").match(/build (\d+)/) || [])[1] || ""), {cache: "force-cache"}).then(r => {
+  if (!blockCache[id]) blockCache[id] = fetch(window.TDS_ASSETS + id + ".txt?b=" + ((String(typeof APP_VERSION === "string" ? APP_VERSION : "").match(/build (\d+)/) || [])[1] || "") + (id === "bridge-setup" ? "&s=" + BRIDGE_SETUP_SHA : ""), {cache: "force-cache"}).then(r => {
     if (!r.ok) throw {code: "asset_missing", message: id + " could not be fetched (" + r.status + ")"};
     return r.text();
   }).catch(e => { delete blockCache[id]; throw e; });
