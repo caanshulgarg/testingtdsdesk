@@ -14,12 +14,12 @@
 @font-face{font-family:"Plex Sans";src:url(fonts/ibm-plex-sans-latin-500-normal.woff2) format("woff2");font-weight:500;font-display:swap}
 @font-face{font-family:"Plex Sans";src:url(fonts/ibm-plex-sans-latin-600-normal.woff2) format("woff2");font-weight:600;font-display:swap}
 @font-face{font-family:"Plex Serif";src:url(fonts/ibm-plex-serif-latin-600-normal.woff2) format("woff2");font-weight:600;font-display:swap}
-/* One accent (TDS Desk green). Radius rule: buttons and chips 12px, cards and screenshots 20px, the two brand panels 28px. */
-:root{--bg:#f4f6f3;--surface:#ffffff;--surface-2:#e9f0ec;--ink:#13201b;--ink-2:#3f4d47;--ink-3:#5f6d67;--line:#d9e1dc;
-  --accent:#1f6f5c;--accent-ink:#17574a;--accent-soft:#dcece5;--panel:#0f3d33;--panel-2:#15584a;--panel-ink:#f1f7f4;--panel-ink-2:#bfd6cc;
+/* One accent (FinCom emerald), lit with glow and gradients. Radius rule: buttons and chips 12px, cards and screenshots 20px, the two brand panels 28px. */
+:root{--bg:#f3f8f5;--surface:#ffffff;--surface-2:#e6f6ee;--ink:#0f1f19;--ink-2:#3a4d45;--ink-3:#5a6d65;--line:#d3e6dc;
+  --accent:#059669;--accent-ink:#047857;--accent-soft:#d1fae5;--panel:#04382c;--panel-2:#0a7a5a;--panel-ink:#f2fbf7;--panel-ink-2:#c3e6d7;--glow:#34d399;--glow-2:#2dd4bf;
   --mark-ink:#ffffff;--warn-soft:#fbefdc;--warn-ink:#83500f;--shadow:0 1px 2px rgb(19 32 27 / .06),0 18px 40px -18px rgb(19 32 27 / .28);color-scheme:light}
-@media (prefers-color-scheme:dark){:root{--bg:#0c1210;--surface:#131b18;--surface-2:#18231f;--ink:#e7eeea;--ink-2:#b2bfb9;--ink-3:#8d9a94;--line:#24302b;
-  --accent:#43a98d;--accent-ink:#79cdb4;--accent-soft:#163029;--panel:#0f2e27;--panel-2:#14463a;--panel-ink:#eef6f2;--panel-ink-2:#a9c7ba;
+@media (prefers-color-scheme:dark){:root{--bg:#07110d;--surface:#0f1b16;--surface-2:#12241d;--ink:#e7f2ed;--ink-2:#b0c4bb;--ink-3:#8a9e95;--line:#1d3329;
+  --accent:#34d399;--accent-ink:#6ee7b7;--accent-soft:#0b3326;--panel:#032a21;--panel-2:#0a6b50;--panel-ink:#effbf6;--panel-ink-2:#a8d9c5;--glow:#34d399;--glow-2:#2dd4bf;
   --mark-ink:#0c1210;--warn-soft:#2d2314;--warn-ink:#e6b774;--shadow:0 1px 2px rgb(0 0 0 / .4),0 22px 48px -22px rgb(0 0 0 / .7);color-scheme:dark}}
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;scroll-padding-top:84px}
@@ -237,6 +237,54 @@ footer{border-top:1px solid var(--line);padding:32px 0 48px;color:var(--ink-3);f
 .ins-body>p{margin:0 0 18px;color:var(--ink-2)}
 @media (max-width:1023px){.ins-grid{grid-template-columns:1fr}}
 @media (max-width:767px){.ins-shot{padding:18px 0 0 18px;min-height:0}.ins-body{padding:24px 22px 26px}}
+/* ---------- lively layer: emerald light, glow and a gentle shine ---------- */
+body{background:
+  radial-gradient(1100px 520px at 85% -120px,color-mix(in srgb,var(--glow) 16%,transparent),transparent 70%),
+  radial-gradient(800px 420px at -10% 30%,color-mix(in srgb,var(--glow-2) 9%,transparent),transparent 70%),var(--bg);background-repeat:no-repeat}
+.mark{color:var(--accent);filter:drop-shadow(0 4px 10px color-mix(in srgb,var(--glow) 45%,transparent))}
+/* primary button: emerald gradient with a light sweep */
+.btn.primary{position:relative;overflow:hidden;isolation:isolate;background:linear-gradient(135deg,#10b981 0%,#059669 45%,#046c4e 100%);color:#fff;box-shadow:0 1px 0 rgb(255 255 255 / .25) inset,0 10px 24px -10px color-mix(in srgb,var(--glow) 80%,transparent)}
+.btn.primary:hover{background:linear-gradient(135deg,#34d399 0%,#059669 50%,#046c4e 100%);box-shadow:0 1px 0 rgb(255 255 255 / .3) inset,0 14px 30px -10px color-mix(in srgb,var(--glow) 95%,transparent);transform:translateY(-1px)}
+.btn.primary::after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(110deg,transparent 30%,rgb(255 255 255 / .38) 50%,transparent 70%);transform:translateX(-120%)}
+.btn.primary:hover::after{transform:translateX(120%);transition:transform .8s cubic-bezier(.16,1,.3,1)}
+@media (prefers-color-scheme:dark){.btn.primary{color:#fff}}
+.btn.light{background:linear-gradient(180deg,#ffffff,#d9fbe9);color:#04382c;box-shadow:0 10px 26px -12px rgb(52 211 153 / .8)}
+.btn.light:hover{box-shadow:0 14px 34px -10px rgb(52 211 153 / .95)}
+/* brand panels: deep emerald with living light */
+.panel{background:linear-gradient(135deg,var(--panel) 0%,#065a44 55%,#0b6b5c 100%)}
+.panel::before{background:
+  radial-gradient(640px 420px at 82% 12%,rgb(52 211 153 / .55),transparent 62%),
+  radial-gradient(520px 380px at 8% 100%,rgb(45 212 191 / .38),transparent 66%),
+  radial-gradient(380px 260px at 45% 40%,rgb(163 230 53 / .12),transparent 70%)}
+.panel::after{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;opacity:.35;
+  background-image:radial-gradient(rgb(255 255 255 / .22) 1px,transparent 1.2px);background-size:22px 22px;
+  -webkit-mask-image:linear-gradient(120deg,transparent 10%,#000 55%,transparent 95%);mask-image:linear-gradient(120deg,transparent 10%,#000 55%,transparent 95%)}
+.shine{background:linear-gradient(100deg,#6ee7b7 0%,#d9f99d 35%,#5eead4 65%,#6ee7b7 100%);background-size:220% 100%;-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero-shot{box-shadow:0 30px 70px -20px rgb(0 0 0 / .55),0 0 0 1px rgb(110 231 183 / .25),0 0 60px -10px rgb(52 211 153 / .45)}
+/* accents across the page */
+.eyebrow{background:linear-gradient(90deg,var(--accent-ink),var(--glow-2));-webkit-background-clip:text;background-clip:text;color:transparent;width:fit-content}
+.facts li,.aud,.tile,.node,.ins,.frame{transition:transform .35s cubic-bezier(.16,1,.3,1),box-shadow .35s,border-color .35s}
+.facts li:hover,.aud:hover,.tile:hover,.ins:hover{border-color:color-mix(in srgb,var(--glow) 55%,var(--line));box-shadow:0 18px 40px -20px color-mix(in srgb,var(--glow) 60%,transparent)}
+.facts .ic,.tile .ic,.aud .big,.node .ic,.cap-h .ic,.ins-body h3 .ic,.pt .ic{color:var(--accent);filter:drop-shadow(0 3px 8px color-mix(in srgb,var(--glow) 45%,transparent))}
+.aud.alt{background:linear-gradient(160deg,var(--surface-2),color-mix(in srgb,var(--glow) 10%,var(--surface)))}
+.caps{border-top:0;position:relative}
+.caps::before{content:"";position:absolute;left:0;right:0;top:0;height:3px;border-radius:3px;background:linear-gradient(90deg,#059669,#34d399,#2dd4bf,#059669)}
+@media (max-width:1023px){.cap{border-top:2px solid color-mix(in srgb,var(--glow) 60%,var(--line))}.caps::before{display:none}}
+.cap li::before{background:linear-gradient(135deg,var(--glow),var(--accent))}
+.tally{background:linear-gradient(180deg,var(--surface-2),color-mix(in srgb,var(--glow-2) 8%,var(--surface-2)))}
+.node.hi{background:linear-gradient(135deg,var(--panel),#0a7a5a);box-shadow:0 18px 40px -18px rgb(52 211 153 / .7)}
+.node.hi .ic{color:#6ee7b7}
+.ins-shot{background:radial-gradient(420px 260px at 90% 0%,rgb(52 211 153 / .5),transparent 65%),linear-gradient(150deg,var(--panel),#0a7a5a)}
+.status{background:linear-gradient(135deg,var(--accent-soft),color-mix(in srgb,var(--glow) 22%,var(--accent-soft)))}
+.qa .chev{color:var(--accent)}
+.qa summary:hover{color:var(--accent-ink)}
+.frame:hover{box-shadow:0 26px 50px -24px color-mix(in srgb,var(--glow) 60%,transparent)}
+@media (prefers-reduced-motion:no-preference){
+  .panel::before{animation:drift 18s ease-in-out infinite alternate}
+  @keyframes drift{from{transform:translate3d(0,0,0) scale(1)}to{transform:translate3d(-4%,3%,0) scale(1.08)}}
+  .shine{animation:sheen 7s ease-in-out infinite}
+  @keyframes sheen{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+}
 /* shared by the inner pages: pricing, security, legal, contact */
 .todo{background:#fff3c4;color:#6b4a00;border-radius:6px;padding:0 4px;font-weight:500}
 @media (prefers-color-scheme:dark){.todo{background:#3b3010;color:#f1d27a}}
@@ -331,6 +379,11 @@ table.units{width:100%;border-collapse:collapse;font-size:15.5px}
   .doc-toc{grid-template-columns:1fr}
   .units th,.units td{padding:12px 14px}
 }
+/* lively layer for inner pages */
+.plan.hi{background:radial-gradient(420px 300px at 90% 0%,rgb(52 211 153 / .45),transparent 65%),linear-gradient(150deg,var(--panel),#0a7a5a);box-shadow:0 24px 50px -22px rgb(52 211 153 / .75)}
+.plan.hi .ticks .ic{color:#6ee7b7}
+.plan{transition:transform .35s cubic-bezier(.16,1,.3,1),box-shadow .35s,border-color .35s}
+.plan:not(.hi):hover{border-color:color-mix(in srgb,var(--glow) 55%,var(--line));box-shadow:0 18px 40px -20px color-mix(in srgb,var(--glow) 60%,transparent)}
 </style>
 </head>
 <body>
@@ -350,7 +403,7 @@ table.units{width:100%;border-collapse:collapse;font-size:15.5px}
     <div class="wrap">
       <div class="panel">
         <div class="hero-copy">
-          <h1 id="hero-h">Know your business finance in one click.</h1>
+          <h1 id="hero-h">Know your business finance <span class="shine">in one click.</span></h1>
           <p class="lede">Bills and bank statements go into Tally with TDS and GST done. Then your MIS and an audit review, every month.</p>
           <div class="actions"><a class="btn light lg" href="../#register">Register <svg class="ic" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M221.66,133.66l-72,72a8,8,0,0,1-11.32-11.32L196.69,136H40a8,8,0,0,1,0-16H196.69L138.34,61.66a8,8,0,0,1,11.32-11.32l72,72A8,8,0,0,1,221.66,133.66Z"/></svg></a><a class="btn outline lg" href="../#signin">Sign in</a></div>
         </div>
@@ -520,7 +573,7 @@ table.units{width:100%;border-collapse:collapse;font-size:15.5px}
   <section class="close" aria-labelledby="x-h">
     <div class="wrap">
       <div class="panel end rise">
-        <h2 id="x-h">See your business clearly this month.</h2>
+        <h2 id="x-h">See your business <span class="shine">clearly</span> this month.</h2>
         <p>Register, add your company, and bring in a month of bills and bank statements.</p>
         <div class="actions"><a class="btn light lg" href="../#register">Register <svg class="ic" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M221.66,133.66l-72,72a8,8,0,0,1-11.32-11.32L196.69,136H40a8,8,0,0,1,0-16H196.69L138.34,61.66a8,8,0,0,1,11.32-11.32l72,72A8,8,0,0,1,221.66,133.66Z"/></svg></a><a class="btn outline lg" href="../#signin">Sign in</a></div>
       </div>
