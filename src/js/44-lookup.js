@@ -35,7 +35,10 @@ const FC = {
   when(d){ return fmtDate(tallyDate(d)); },
   span(from, to){ return this.when(from) + " to " + this.when(to); },
   // every ledger known for the client: in the masters, the balances, or the vouchers
+  // Tally's own ledger names, read through the bridge when Look up opens (light: names and groups only)
+  tn(){ const n = typeof LK === "object" ? LK.names : null; return n && n.cid === S.coId ? n : null; },
   ledgers(){
+    const T = this.tn(); if (T) return T.leds;
     const b = S.books || {}, key = (b.vouchers || []).length + "|" + Object.keys(b.under || {}).length + "|" + Object.keys(b.ledInfo || {}).length + "|" + ((b.tb || {}).at || "");
     if (this._led && this._led.key === key && this._led.cid === b.cid) return this._led.list;
     const s = new Set(Object.keys(b.under || {}).concat(Object.keys(b.ledInfo || {}), Object.keys(b.map || {}), Object.keys((b.tb || {}).led || {})));
@@ -44,11 +47,17 @@ const FC = {
     return list;
   },
   groups(){
+    const T = this.tn(); if (T) return Array.from(new Set(Object.keys(T.groups).concat(Object.values(T.under)))).filter(Boolean).sort((a, c) => a.localeCompare(c));
     const b = S.books || {}, s = new Set(Object.keys(b.groups || {}).concat(Object.values(b.under || {})));
     return Array.from(s).filter(Boolean).sort((a, c) => a.localeCompare(c));
   },
-  inGroup(l, g){ const G = String(g || "").toLowerCase(); return Audit.path(l).some(x => x.toLowerCase() === G); },
-  top(l){ const p = Audit.path(l); return p[p.length - 1] || "Not in a group"; },
+  path(l){
+    const T = this.tn();
+    if (T && T.under[l] != null){ const out = []; let p = T.under[l]; for (let i = 0; p && i < 15; i++){ out.push(p); p = T.groups[p]; } return out; }
+    return Audit.path(l);
+  },
+  inGroup(l, g){ const G = String(g || "").toLowerCase(); return this.path(l).some(x => x.toLowerCase() === G); },
+  top(l){ const p = this.path(l); return p[p.length - 1] || "Not in a group"; },
   // a small bar chart, drawn as SVG: series [{name, cls, values}], one bar group per label
   bars(labels, series, o){
     o = o || {}; const H = o.h || 120, W = Math.max(280, labels.length * (series.length * 12 + 10)), pad = 4;
@@ -136,7 +145,8 @@ const LK = {
       note: (B.ok ? "Opening from " + B.src + "." : "Opening balance not known: " + (B.why || "") + ".") + (cv.full ? "" : " The books read here cover " + (cv.f ? FC.span(cv.f, cv.t) : "no dates") + "; entries outside that are not shown. Fetch from Tally for the whole period.")};
   },
   // ---------- the same, straight from Tally
-  async ledgerTally(led, from, to){
+  async ledgerTally(led, from, to, force){
+    const ck = S.coId + "|led|" + led + "|" + from + "|" + to, hit = this.cached(ck, force); if (hit) return hit;
     const co = CO(), o = Bridge.openFor(co);
     if (!o) throw new Error("Open " + (co.tallyName || co.name) + " in Tally first.");
     if (bridgeVer(Bridge.st.version) < bridgeVer("1.12.3")) throw new Error("This needs Tally Bridge 1.12.3 or later. Download the new setup from Settings, Tally Bridge.");
@@ -156,8 +166,8 @@ const LK = {
       return {id: v.guid || v.masterId || d8 + v.number, date: d8, type: v.type, no: v.number, part: other.length ? other[0].l + (other.length > 1 ? " and " + (other.length - 1) + " more" : "") : (v.party || ""), narr: v.narration || "", dr: d, cr: c, run, ent: ents};
     });
     const diff = r2(close - run);
-    return {kind: "ledger", src: "tally", led, from, to, open, close, dr, cr, rows, at: new Date().toISOString(),
-      note: "Read from Tally (" + o.name + ") just now." + (Math.abs(diff) >= 0.5 ? " Tally's closing balance differs from the entries by " + INR.format(Math.abs(diff)) + ": an entry may be optional or post-dated." : "")};
+    return this.keep(ck, {kind: "ledger", src: "tally", led, from, to, open, close, dr, cr, rows, at: Date.now(),
+      note: "Read from Tally (" + o.name + ")." + (Math.abs(diff) >= 0.5 ? " Tally's closing balance differs from the entries by " + INR.format(Math.abs(diff)) + ": an entry may be optional or post-dated." : "")});
   },
   // ---------- a group: each ledger's opening, debits, credits and closing
   group(grp, from, to){
@@ -178,14 +188,68 @@ const LK = {
     const at = B.at(asOn), rows = Object.keys(at).filter(l => Math.abs(at[l]) >= 0.005).map(l => ({l, top: FC.top(l), sub: (S.books.under || {})[l] || "", bal: -r2(at[l])}));
     return this.tbShape({kind: "tb", src: "books", asOn, rows, note: "From " + B.src + "."});
   },
-  async tbTally(asOn){
-    const co = CO(), o = Bridge.openFor(co);
-    if (!o) throw new Error("Open " + (co.tallyName || co.name) + " in Tally first.");
-    const from = Audit.fyStart(asOn), j = await Bridge.call("/balances?company=" + encodeURIComponent(o.name) + "&from=" + from + "&to=" + asOn + Bridge.pinQ(), null, 600000);
-    const under = S.books.under = S.books.under || {};
-    const rows = [].concat(j.ledgers || []).map(l => { if (l.parent && !under[l.name]) under[l.name] = l.parent; return {l: l.name, bal: -r2(Books.amt(l.close))}; })
-      .filter(r => Math.abs(r.bal) >= 0.005).map(r => Object.assign(r, {top: FC.top(r.l), sub: under[r.l] || ""}));
-    return this.tbShape({kind: "tb", src: "tally", asOn, rows, at: new Date().toISOString(), note: "Read from Tally (" + o.name + ") just now."});
+  // ---------- straight from Tally: light reads, kept for ten minutes so asking again does not touch Tally
+  names: null,
+  cache: {},
+  TTL: 10 * 60000,
+  live(){ const co = CO(); return !!(co && typeof bridgeLive === "function" && bridgeLive(co) && Bridge.openFor(co)); },
+  light(){ return bridgeVer(Bridge.st.version) >= bridgeVer("1.12.10"); },
+  tname(){ const co = CO(), o = Bridge.openFor(co); if (!o) throw new Error("Open " + (co.tallyName || co.name) + " in Tally first."); return o.name; },
+  async loadNames(force){
+    const cid = S.coId;
+    if (!this.live() || !this.light() || this._namesBusy) return;
+    if (!force && this.names && this.names.cid === cid && Date.now() - this.names.at < 30 * 60000) return;
+    this._namesBusy = true;
+    try {
+      const j = await Bridge.call("/ledgernames?company=" + encodeURIComponent(this.tname()) + Bridge.pinQ(), null, 90000);
+      const under = {}, groups = {};
+      [].concat(j.ledgers || []).forEach(([n, p]) => { under[n] = p || ""; });
+      [].concat(j.groups || []).forEach(([n, p]) => { groups[n] = p || ""; });
+      this.names = {cid, at: Date.now(), leds: Object.keys(under).sort((a, c) => a.localeCompare(c)), under, groups};
+    } catch (e){ if (force) toast("Could not read the ledger names from Tally: " + ((e && e.message) || e)); }
+    this._namesBusy = false;
+    if (S.booksTab === "lookup") render();
+  },
+  cached(key, force){ const c = this.cache[key]; return !force && c && Date.now() - c.at < this.TTL ? c.v : null; },
+  keep(key, v){ this.cache[key] = {at: Date.now(), v}; return v; },
+  // every ledger's balance on a date, debit positive: one read of the ledgers that have a balance
+  async tbRaw(asOn, force){
+    const key = S.coId + "|tb|" + asOn, hit = this.cached(key, force); if (hit) return hit;
+    const name = this.tname(), bal = {}, par = {};
+    if (this.light()){
+      const j = await Bridge.call("/tb?company=" + encodeURIComponent(name) + "&to=" + asOn + Bridge.pinQ(), null, 300000);
+      [].concat(j.ledgers || []).forEach(([n, p, b]) => { bal[n] = -r2(Books.amt(b)); par[n] = p || ""; });
+    } else {
+      const j = await Bridge.call("/balances?company=" + encodeURIComponent(name) + "&from=" + asOn + "&to=" + asOn + Bridge.pinQ(), null, 600000);
+      [].concat(j.ledgers || []).forEach(l => { const b = -r2(Books.amt(l.close)); if (Math.abs(b) >= 0.005){ bal[l.name] = b; par[l.name] = l.parent || ""; } });
+    }
+    if (this.names && this.names.cid === S.coId) Object.entries(par).forEach(([n, p]) => { if (this.names.under[n] == null){ this.names.under[n] = p; this.names.leds.push(n); } });
+    return this.keep(key, {bal, par, at: Date.now(), company: name});
+  },
+  async tbTally(asOn, force){
+    const t = await this.tbRaw(asOn, force), sub = l => (FC.tn() ? FC.tn().under[l] : null) || t.par[l] || (S.books.under || {})[l] || "";
+    const rows = Object.keys(t.bal).filter(l => Math.abs(t.bal[l]) >= 0.005).map(l => ({l, bal: t.bal[l], sub: sub(l), top: FC.path(l).length ? FC.top(l) : (sub(l) || "Not in a group")}));
+    return this.tbShape({kind: "tb", src: "tally", asOn, rows, at: t.at, note: "Read from Tally (" + t.company + ")" + (this.light() ? "" : ". This bridge reads every ledger twice; install Tally Bridge 1.12.10 for a faster, lighter read") + "."});
+  },
+  // a group straight from Tally: each ledger's opening and closing (two light reads), and the change between
+  async groupTally(grp, from, to, force){
+    const A = await this.tbRaw(Audit.dayBefore(from), force), Z = await this.tbRaw(to, force);
+    const inG = l => FC.inGroup(l, grp) || String(A.par[l] || Z.par[l] || "").toLowerCase() === String(grp).toLowerCase();
+    const led = Array.from(new Set(Object.keys(A.bal).concat(Object.keys(Z.bal)))).filter(inG);
+    const rows = led.map(l => { const o = r2(A.bal[l] || 0), c = r2(Z.bal[l] || 0), n = r2(c - o); return {l, sub: Z.par[l] || A.par[l] || "", open: o, dr: n > 0 ? n : 0, cr: n < 0 ? -n : 0, close: c}; })
+      .sort((a, c) => Math.abs(c.close) - Math.abs(a.close) || a.l.localeCompare(c.l));
+    const sum = k => r2(rows.reduce((s2, r) => s2 + (r[k] || 0), 0));
+    return {kind: "group", src: "tally", grp, from, to, rows, open: sum("open"), dr: sum("dr"), cr: sum("cr"), close: sum("close"), at: Z.at, net: true,
+      note: "Opening and closing read from Tally (" + Z.company + "); the debit and credit columns are each ledger\u2019s net change. Open a ledger for its entries."};
+  },
+  // a ledger month by month, from its entries in Tally
+  async monthlyTally(led, from, to, force){
+    const r = await this.ledgerTally(led, from, to, force), months = MIS.monthsOf(from, to), m = {};
+    months.forEach(k => { m[k] = {dr: 0, cr: 0}; });
+    r.rows.forEach(v => { const x = m[v.date.slice(0, 6)]; if (x){ x.dr = r2(x.dr + v.dr); x.cr = r2(x.cr + v.cr); } });
+    let run = r.open;
+    const rows = months.map(k => { const x = m[k]; run = r2(run + x.dr - x.cr); return {ym: k, dr: x.dr, cr: x.cr, net: r2(x.dr - x.cr), close: run}; });
+    return {kind: "monthly", src: "tally", led, grp: "", from, to, open: r.open, rows, dr: r.dr, cr: r.cr, at: r.at, note: "From " + led + "\u2019s entries in Tally."};
   },
   tbShape(r){
     const ORDER = ["Capital Account", "Loans (Liability)", "Current Liabilities", "Fixed Assets", "Investments", "Current Assets", "Sales Accounts", "Purchase Accounts", "Direct Incomes", "Direct Expenses", "Indirect Incomes", "Indirect Expenses", "Suspense A/c", "Branch / Divisions", "Misc. Expenses (ASSET)"];
@@ -237,20 +301,32 @@ const LK = {
   },
   types(){ return Array.from(new Set((S.books.vouchers || []).map(v => v.type).filter(Boolean))).sort(); },
   // ---------- run what the page asks for
+  // Where the answer comes from: Tally, live, whenever the bridge is connected and Tally can answer it lightly (a ledger,
+  // a group, the trial balance, a ledger month by month); else the books read into FinCom. Answers from Tally are kept for
+  // ten minutes, so asking again, or turning pages, never asks Tally twice.
+  canTally(x){ return this.live() && (x.kind === "ledger" || x.kind === "tb" || x.kind === "group" || (x.kind === "monthly" && !!x.led)); },
+  useTally(x, how){ if (how === "books") return false; if (how === "tally" || how === "fresh") return this.canTally(x); return (x.src || "tally") === "tally" && this.canTally(x); },
   async run(how){
     const x = this.st();
+    if (x.busy) return;
+    const tally = this.useTally(x, how), have = (S.books.vouchers || []).length > 0;
     const need = (c, m) => { if (!c){ toast(m); throw null; } };
     try {
-      if (["ledger", "bills"].includes(x.kind) && x.led) need(FC.ledgers().includes(x.led) || how === "tally", "“" + x.led + "” is not a ledger in these books. Pick one from the list.");
       if (x.kind === "ledger") need(x.led, "Choose a ledger.");
+      if (["ledger", "bills"].includes(x.kind) && x.led) need(FC.ledgers().includes(x.led) || tally, "\u201c" + x.led + "\u201d is not a ledger " + (FC.tn() ? "in Tally" : "in these books") + ". Pick one from the list.");
       if (x.kind === "group") need(x.grp, "Choose a group.");
       if (x.kind === "monthly") need(x.led || x.grp, "Choose a ledger or a group.");
       if (["ledger", "group", "monthly", "find"].includes(x.kind)) need(x.from && x.to && x.from <= x.to, "The dates are the wrong way round.");
+      if (!tally) need(have, this.live() ? "This needs the books read into FinCom. Choose \u201cTally\u201d as the source, or read the books first." : "Read the books from Tally first, or connect the Tally Bridge.");
     } catch (e){ if (e) throw e; return; }
     x.open = {};
-    if (how === "tally"){
-      x.busy = x.kind === "tb" ? "Reading every ledger’s balance from Tally…" : "Reading " + x.led + " from Tally…"; render();
-      try { x.res = x.kind === "tb" ? await this.tbTally(x.asOn) : await this.ledgerTally(x.led, x.from, x.to); }
+    if (tally){
+      const force = how === "fresh";
+      x.busy = x.kind === "tb" ? "Reading the trial balance from Tally\u2026" : x.kind === "group" ? "Reading " + x.grp + " from Tally\u2026" : "Reading " + x.led + " from Tally\u2026"; render();
+      try {
+        x.res = x.kind === "tb" ? await this.tbTally(x.asOn, force) : x.kind === "group" ? await this.groupTally(x.grp, x.from, x.to, force)
+          : x.kind === "monthly" ? await this.monthlyTally(x.led, x.from, x.to, force) : await this.ledgerTally(x.led, x.from, x.to, force);
+      }
       catch (e){ x.busy = ""; toast("Could not read Tally: " + ((e && e.message) || e)); render(); return; }
       x.busy = "";
     } else {
@@ -261,6 +337,7 @@ const LK = {
     this.remember(x);
     render();
   },
+  booksAge(){ const m = (S.books || {}).meta || {}; return m.at ? fmtDate(String(m.at).slice(0, 10)) : ""; },
   // ---------- a question in plain words, turned into a look-up
   STOP: new Set(["the", "of", "for", "and", "to", "a", "an", "in", "on", "from", "show", "me", "give", "what", "is", "was", "ledger", "account", "a/c", "ac", "statement", "balance", "balances", "all", "with", "by", "as", "at", "till", "upto", "up", "this", "last", "year", "month", "quarter", "fy", "ltd", "pvt", "private", "limited", "llp", "co", "&", "m/s", "ms", "entries", "entry", "list", "please", "details", "detail", "how", "much", "many", "our", "my", "we", "us"]),
   MONTHS: {jan: 1, january: 1, feb: 2, february: 2, mar: 3, march: 3, apr: 4, april: 4, may: 5, jun: 6, june: 6, jul: 7, july: 7, aug: 8, august: 8, sep: 9, sept: 9, september: 9, oct: 10, october: 10, nov: 11, november: 11, dec: 12, december: 12},
@@ -344,11 +421,14 @@ const LK = {
   },
   // ---------- the page
   view(b){
-    const x = this.st(), live = typeof bridgeLive === "function" && bridgeLive(CO()), have = (b.vouchers || []).length > 0;
-    const leds = FC.ledgers(), grps = FC.groups();
+    const x = this.st(), live = this.live(), have = (b.vouchers || []).length > 0;
+    // Tally's ledger names, once per client (light), so typing offers what is in Tally today
+    if (live && this.light() && !(this.names && this.names.cid === S.coId) && !this._namesBusy && this._namesTried !== S.coId){ this._namesTried = S.coId; setTimeout(() => this.loadNames(), 0); }
+    // the source is Tally whenever it is connected, unless the books were chosen (x.src = "books")
+    const leds = FC.ledgers(), grps = FC.groups(), T = FC.tn();
     const dl = '<datalist id="lkLeds">' + leds.slice(0, 5000).map(l => '<option value="' + esc(l) + '">').join("") + '</datalist><datalist id="lkGrps">' + grps.map(g => '<option value="' + esc(g) + '">').join("") + "</datalist>";
     let h = '<section class="dash-card lk-ask"><h3>Look up</h3>' +
-      '<p class="note" style="margin:0 0 10px">Ask in plain words, or choose below. Anything in the books read here opens at once; a ledger or the trial balance can also be read straight from Tally.</p>' +
+      '<p class="note" style="margin:0 0 10px">Ask in plain words, or choose below. ' + (live ? "Ledgers, groups and the trial balance are read straight from Tally, lightly, and kept for ten minutes." : "Answers come from the books read into FinCom" + (this.booksAge() ? " on " + this.booksAge() : "") + ". Connect the Tally Bridge to read Tally directly.") + "</p>" +
       '<div class="lk-askrow"><input type="search" id="lkAsk" data-fk="lkAsk" data-lkf="ask" data-keeptyped value="' + esc(x.ask || "") + '" placeholder="Try: HDFC bank for August · Raj Fabrics open bills · sales month by month this year · trial balance as on 31/03/2026" aria-label="Ask a question about the books">' +
       '<button class="btn primary" data-lk="ask">Look up</button></div>' +
       (x.heard ? '<p class="note lk-heard">Understood as: <b>' + esc(x.heard) + "</b>. Change anything below.</p>" : "") +
@@ -366,11 +446,13 @@ const LK = {
     else form = '<label class="f lk-wide"><span>Words, a number or an amount</span><input type="search" data-fk="lkQ" data-lkf="q" value="' + esc(x.q || "") + '" placeholder="party, narration, bill number or 25000"></label>' + dates +
       '<label class="f"><span>Type</span><select data-lkf="typ"><option value="">Every type</option>' + this.types().map(t => '<option' + (x.typ === t ? " selected" : "") + ">" + esc(t) + "</option>").join("") + "</select></label>";
     const presets = ["ledger", "group", "monthly", "find"].includes(x.kind) ? '<div class="lk-presets">' + FC.PRESETS.map(([k, l]) => '<button class="btn small" data-lkper="' + k + '">' + l + "</button>").join("") + "</div>" : "";
-    const tallyOk = (x.kind === "ledger" || x.kind === "tb") && live;
-    h += '<div class="lk-form">' + form + "</div>" + presets +
-      '<div class="row" style="gap:8px;margin-top:10px">' + (have ? '<button class="btn primary" data-lk="books">Show</button>' : "") +
-      (tallyOk ? '<button class="btn' + (have ? "" : " primary") + '" data-lk="tally"' + (x.busy ? " disabled" : "") + ">" + (x.busy ? "Reading Tally…" : "Fetch from Tally") + "</button>" : "") +
-      ((x.kind === "ledger" || x.kind === "tb") && !live ? '<span class="note">Connect the Tally Bridge to read any period straight from Tally.</span>' : "") + "</div>" + dl + "</section>";
+    const can = this.canTally(x), fromTally = can && x.src !== "books";
+    const srcRow = can ? '<div class="lk-src" role="radiogroup" aria-label="Where from"><span class="note">From</span><button role="radio" data-lksrc="tally" aria-checked="' + fromTally + '">Tally, live</button>' +
+        (have ? '<button role="radio" data-lksrc="books" aria-checked="' + !fromTally + '">The books read into FinCom' + (this.booksAge() ? " on " + this.booksAge() : "") + "</button>" : "") + "</div>"
+      : (have ? '<p class="note lk-srcnote">From the books read into FinCom' + (this.booksAge() ? " on " + this.booksAge() : "") + ' (entries ' + (b.meta && b.meta.from ? FC.span(b.meta.from, b.meta.to) : "") + '). <button class="linkbtn" data-fcgo="import">Read them again</button></p>' : "");
+    const names = live ? '<p class="note lk-names">' + (T ? "Ledger names from Tally: " + T.leds.length + ' \u00b7 <button class="linkbtn" data-lk="names">refresh</button>' : this.light() ? (this._namesBusy ? "Reading the ledger names from Tally\u2026" : "") : "Install Tally Bridge 1.12.10 so ledger names come from Tally and the trial balance is read in one light step.") + "</p>" : "";
+    h += '<div class="lk-form">' + form + "</div>" + presets + srcRow +
+      '<div class="row" style="gap:8px;margin-top:10px;align-items:center"><button class="btn primary" data-lk="show"' + (x.busy ? " disabled" : "") + ">" + (x.busy ? "Reading Tally\u2026" : "Show") + "</button>" + names + "</div>" + dl + "</section>";
     const rec = this.recent();
     if (rec.length && !x.res) h += '<section class="dash-card" style="margin-top:12px"><h3>Looked up lately</h3><div class="lk-recent">' + rec.map((r, i) => '<button class="btn small" data-lkrec="' + i + '">' + esc(r.label) + "</button>").join("") + "</div></section>";
     if (!have && !live) h += FC.noBooks("Look up");
@@ -386,7 +468,8 @@ const LK = {
   },
   result(r, x){
     const src = r.src === "tally" ? '<span class="tag stamp">from Tally</span>' : '<span class="tag ok">from the books</span>';
-    let h = '<section class="dash-card lk-res" style="margin-top:12px"><div class="lk-head"><h3>' + esc(r.title || "") + " " + src + '</h3><div class="row" style="gap:6px"><button class="btn small" data-lk="print">Print or PDF</button><button class="btn small" data-lk="excel">Excel</button><button class="btn small" data-lk="clear">Close</button></div></div>';
+    const when = r.src === "tally" && r.at ? '<span class="note">read at ' + new Date(r.at).toLocaleTimeString("en-IN", {hour: "2-digit", minute: "2-digit"}) + '</span> <button class="linkbtn" data-lk="fresh">Read again</button>' : "";
+    let h = '<section class="dash-card lk-res" style="margin-top:12px"><div class="lk-head"><h3>' + esc(r.title || "") + " " + src + " " + when + '</h3><div class="row" style="gap:6px"><button class="btn small" data-lk="print">Print or PDF</button><button class="btn small" data-lk="excel">Excel</button><button class="btn small" data-lk="clear">Close</button></div></div>';
     if (r.note) h += '<p class="note">' + esc(r.note) + "</p>";
     const tile = (l, v, cls) => '<div class="dtile' + (cls ? " " + cls : "") + '"><span>' + l + "</span><b>" + v + "</b></div>";
     const LIMIT = 1500;
@@ -402,7 +485,7 @@ const LK = {
     else if (r.kind === "group"){
       h += '<div class="dash-tiles">' + tile("Opening", r.open == null ? "not known" : FC.drcr(r.open)) + tile("Debits", FC.amt(r.dr) || "0.00") + tile("Credits", FC.amt(r.cr) || "0.00") + tile("Closing", r.close == null ? "not known" : FC.drcr(r.close)) + "</div>";
       if (!r.rows.length) return h + '<div class="bk-none">No ledger under ' + esc(r.grp) + " moved in these dates.</div></section>";
-      h += '<div class="bk-tablewrap"><table class="bk-table lk-t"><thead><tr><th>Ledger</th><th>Under</th><th class="n">Opening</th><th class="n">Debit</th><th class="n">Credit</th><th class="n">Closing</th></tr></thead><tbody>' +
+      h += '<div class="bk-tablewrap"><table class="bk-table lk-t"><thead><tr><th>Ledger</th><th>Under</th><th class="n">Opening</th><th class="n">' + (r.net ? "Net debit" : "Debit") + '</th><th class="n">' + (r.net ? "Net credit" : "Credit") + '</th><th class="n">Closing</th></tr></thead><tbody>' +
         r.rows.slice(0, LIMIT).map(z => '<tr><td><button class="linkbtn strong" data-lkled="' + esc(z.l) + '">' + esc(z.l) + "</button></td><td>" + esc(z.sub) + '</td><td class="n">' + (z.open == null ? "" : FC.drcr(z.open)) + '</td><td class="n">' + FC.amt(z.dr) + '</td><td class="n">' + FC.amt(z.cr) + '</td><td class="n">' + (z.close == null ? "" : FC.drcr(z.close)) + "</td></tr>").join("") +
         '<tr class="lk-tot"><td><b>' + r.rows.length + ' ledgers</b></td><td></td><td class="n"><b>' + (r.open == null ? "" : FC.drcr(r.open)) + '</b></td><td class="n"><b>' + FC.amt(r.dr) + '</b></td><td class="n"><b>' + FC.amt(r.cr) + '</b></td><td class="n"><b>' + (r.close == null ? "" : FC.drcr(r.close)) + "</b></td></tr></tbody></table></div>";
     }
@@ -461,23 +544,27 @@ function viewBooksLookup(b){ return LK.view(b); }
 
 if (typeof document !== "undefined"){
   document.addEventListener("click", e => {
-    const t = e.target.closest && e.target.closest("[data-lk],[data-lkkind],[data-lkper],[data-lkrec],[data-lkled],[data-lkopen],[data-lkmonth],[data-fcgo]");
+    const t = e.target.closest && e.target.closest("[data-lk],[data-lkkind],[data-lkper],[data-lkrec],[data-lkled],[data-lkopen],[data-lkmonth],[data-fcgo],[data-lksrc]");
     if (!t || !S.books) return;
     const x = LK.st();
     if (t.dataset.fcgo){ FC.go(t.dataset.fcgo); return; }
+    if (t.dataset.lksrc){ x.src = t.dataset.lksrc; render(); return; }
     if (t.dataset.lkkind){ x.kind = t.dataset.lkkind; x.res = null; x.heard = ""; if (x.typ && !LK.types().includes(x.typ)) x.typ = ""; if (x.kind === "bills" && x.led && !(Audit.isDebtor(x.led) || Audit.isCreditor(x.led))) x.led = ""; render(); return; }
-    if (t.dataset.lkper){ const p = FC.period(t.dataset.lkper); x.from = p.from; x.to = p.to; if ((S.books.vouchers || []).length) LK.run("books"); else render(); return; }
-    if (t.dataset.lkrec){ const r = LK.recent()[+t.dataset.lkrec]; if (r){ Object.assign(x, r); x.heard = ""; LK.run("books"); } return; }
+    if (t.dataset.lkper){ const p = FC.period(t.dataset.lkper); x.from = p.from; x.to = p.to; LK.run("auto"); return; }
+    if (t.dataset.lkrec){ const r = LK.recent()[+t.dataset.lkrec]; if (r){ Object.assign(x, r); x.heard = ""; LK.run("auto"); } return; }
     if (t.dataset.lkled !== undefined){ e.preventDefault(); e.stopPropagation(); const p = x.res && x.res.from ? {from: x.res.from, to: x.res.to} : x.res && x.res.asOn ? {from: Audit.fyStart(x.res.asOn), to: x.res.asOn} : {from: x.from, to: x.to};
-      Object.assign(x, {kind: "ledger", led: t.dataset.lkled, from: p.from, to: p.to, heard: ""}); if (S.booksTab !== "lookup") FC.go("lookup"); LK.run("books"); return; }
-    if (t.dataset.lkmonth){ const ym = t.dataset.lkmonth, y = num(ym.slice(0, 4)), m = num(ym.slice(4, 6)); Object.assign(x, {kind: x.led ? "ledger" : "group", from: ym + "01", to: FC.monthEnd(y, m)}); LK.run("books"); return; }
+      Object.assign(x, {kind: "ledger", led: t.dataset.lkled, from: p.from, to: p.to, heard: ""}); if (S.booksTab !== "lookup") FC.go("lookup"); LK.run("auto"); return; }
+    if (t.dataset.lkmonth){ const ym = t.dataset.lkmonth, y = num(ym.slice(0, 4)), m = num(ym.slice(4, 6)); Object.assign(x, {kind: x.led ? "ledger" : "group", from: ym + "01", to: FC.monthEnd(y, m)}); LK.run("auto"); return; }
     if (t.dataset.lkopen){ if (e.target.closest("button")) return; x.open[t.dataset.lkopen] = !x.open[t.dataset.lkopen]; render(); return; }
     const a = t.dataset.lk;
     if (a === "ask"){ const q = (document.getElementById("lkAsk") || {}).value || x.ask || ""; x.ask = q; if (!q.trim()){ toast("Type what you want to see."); return; }
       const o = LK.understand(q); x.heard = LK.title(Object.assign({}, x, o)); if (["ledger", "group", "monthly"].includes(o.kind) && !(o.led || o.grp)){ render(); return; }
-      if (!(S.books.vouchers || []).length && (o.kind === "ledger" || o.kind === "tb") && bridgeLive(CO())) LK.run("tally"); else LK.run("books"); return; }
-    if (a === "books") LK.run("books");
+      LK.run("auto"); return; }
+    if (a === "show") LK.run("auto");
+    else if (a === "books") LK.run("books");
     else if (a === "tally") LK.run("tally");
+    else if (a === "fresh") LK.run("fresh");
+    else if (a === "names"){ LK.names = null; LK.loadNames(true); render(); }
     else if (a === "clear"){ x.res = null; render(); }
     else if (a === "print") LK.printIt();
     else if (a === "excel" && x.res) FC.excel(x.res.title, [[x.res.kind === "tb" ? "Trial balance" : "Look up", LK.sheet(x.res)]]).catch(er => toast("Could not build the file: " + (er && er.message)));
@@ -493,7 +580,7 @@ if (typeof document !== "undefined"){
   });
   document.addEventListener("keydown", e => {
     const t = e.target;
-    if (e.key === "Enter" && t && t.dataset && t.dataset.lkf){ e.preventDefault(); if (t.dataset.lkf === "ask"){ const b = document.querySelector('[data-lk="ask"]'); if (b) b.click(); } else if ((S.books.vouchers || []).length) LK.run("books"); else if (bridgeLive(CO())) LK.run("tally"); }
+    if (e.key === "Enter" && t && t.dataset && t.dataset.lkf){ e.preventDefault(); if (t.dataset.lkf === "ask"){ const b = document.querySelector('[data-lk="ask"]'); if (b) b.click(); } else LK.run("auto"); }
     if (e.key === "Enter" && t && t.dataset && t.dataset.lkopen){ e.preventDefault(); t.click(); }
   });
 }

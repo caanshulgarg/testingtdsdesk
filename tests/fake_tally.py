@@ -46,7 +46,7 @@ DELETED = []
 BODIES = []
 REQS = {}            # how many requests of each kind this Tally was asked (the tests check nothing heavy is asked)
 def _kind(body):
-    for k in ("TDSDeskLedVch", "TDSDeskOneLed", "TDSDeskVchHeads", "TDSDeskBalances", "TDSDeskLedgers", "TDSDeskCompanies"):
+    for k in ("TDSDeskLedVch", "TDSDeskOneLed", "TDSDeskVchHeads", "TDSDeskBalances", "TDSDeskGroupNames", "TDSDeskNames", "TDSDeskTB", "TDSDeskLedgers", "TDSDeskCompanies"):
         if k in body: return k
     if "<REPORTNAME>Day Book</REPORTNAME>" in body: return "DayBook"
     if "Import Data" in body: return "Import"
@@ -136,6 +136,15 @@ class H(http.server.BaseHTTPRequestHandler):
             a, b = g("SVFROMDATE"), g("SVTODATE")
             lo, hi = bisect.bisect_left(dates, a), bisect.bisect_right(dates, b)
             out = "<ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>Vouchers</REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY>%s</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><REQUESTDATA>" % COMPANY + "".join(p for _, p in V[lo:hi]) + "".join('<TALLYMESSAGE xmlns:UDF="TallyUDF">' + re.sub(r"^(<VOUCHER\b[^>]*>)", lambda m: m.group(1) + "<GUID>g-%s</GUID><MASTERID>%d</MASTERID><VOUCHERNUMBER>%s</VOUCHERNUMBER>" % (num, 900000 + int(num), num), re.sub(r"<DATE>[^<]*</DATE>", "<DATE>%s</DATE>" % d, vx, 1)) + "</TALLYMESSAGE>" for d, _, num, vx in list(POSTED) if a <= d <= b) + "</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>"
+        elif "TDSDeskTB" in body:
+            asOn = g("SVTODATE"); mv = amounts_until(asOn)
+            rows = [(n, p, ob + mv.get(n.replace("&amp;", "&"), mv.get(n, 0))) for n, p, ob in L]
+            out = "<ENVELOPE><BODY><DATA><COLLECTION>" + "".join('<LEDGER NAME="%s"><PARENT>%s</PARENT><CLOSINGBALANCE>%.2f</CLOSINGBALANCE></LEDGER>' % (n, p, b) for n, p, b in rows if abs(b) >= 0.005) + "</COLLECTION></DATA></BODY></ENVELOPE>"
+        elif "TDSDeskGroupNames" in body:
+            gs = sorted(set(p for _, p, _ in L if p))
+            out = "<ENVELOPE><BODY><DATA><COLLECTION>" + "".join('<GROUP NAME="%s"><PARENT></PARENT></GROUP>' % gname for gname in gs) + "</COLLECTION></DATA></BODY></ENVELOPE>"
+        elif "TDSDeskNames" in body:
+            out = "<ENVELOPE><BODY><DATA><COLLECTION>" + "".join('<LEDGER NAME="%s"><PARENT>%s</PARENT></LEDGER>' % (n, p) for n, p, _ in L) + "</COLLECTION></DATA></BODY></ENVELOPE>"
         elif "TDSDeskBalances" in body:
             asOn = g("SVTODATE"); mv = amounts_until(asOn)
             out = "<ENVELOPE><BODY><DATA><COLLECTION>" + "".join('<LEDGER NAME="%s"><PARENT>%s</PARENT><CLOSINGBALANCE>%.2f</CLOSINGBALANCE></LEDGER>' % (n, p, ob + mv.get(n.replace("&amp;", "&"), mv.get(n, 0))) for n, p, ob in L) + "</COLLECTION></DATA></BODY></ENVELOPE>"

@@ -34,12 +34,13 @@ const LTR = {
   async readTally(asOn){
     const x = this.st();
     x.busy = "Reading every ledger’s balance from Tally…"; render();
-    try { const r = await LK.tbTally(asOn); const bal = {}; r.rows.forEach(z => { bal[z.l] = z.bal; }); x.tally = {asOn, at: new Date().toISOString(), bal}; }
+    try { await LK.loadNames(); const r = await LK.tbTally(asOn); const bal = {}; r.rows.forEach(z => { bal[z.l] = z.bal; }); x.tally = {asOn, at: new Date().toISOString(), bal}; }
     catch (e){ toast("Could not read Tally: " + ((e && e.message) || e)); }
     x.busy = ""; render();
   },
-  isOther(l){ return Audit.isLoan(l) || /loans? (&|and) advances|deposits \(asset\)/i.test(Audit.path(l).join("|")); },
-  side(l){ return Audit.isDebtor(l) ? "r" : Audit.isCreditor(l) ? "p" : this.isOther(l) ? "o" : ""; },
+  // which side a party is on, from Tally's groups when they have been read, else the books'
+  isOther(l){ const p = FC.path(l).join("|"); return /loans \(liability\)|secured loans|unsecured loans|loans? (&|and) advances|deposits \(asset\)/i.test(p) || (!p && Audit.isLoan(l)); },
+  side(l){ const p = FC.path(l).map(x => x.toLowerCase()); return p.includes("sundry debtors") ? "r" : p.includes("sundry creditors") ? "p" : this.isOther(l) ? "o" : ""; },
   // ---------- the parties to write to, with their balance
   confirmRows(){
     const x = this.st(), B = this.balances(x.asOn);

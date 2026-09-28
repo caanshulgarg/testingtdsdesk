@@ -26,7 +26,7 @@ trap {
   try { Stop-Transcript | Out-Null } catch { }
   break
 }
-$BridgeVersion = '1.12.9'
+$BridgeVersion = '1.12.10'
 
 # ------------------------------------------------------------------ settings
 function New-BridgeKey {
@@ -966,6 +966,8 @@ function Invoke-Client($client) {
         if ($null -ne $lv) { $result = [ordered]@{ ok = $true; port = $port; via = 'ledger'; vouchers = @($lv) } }
         else { $r0 = Get-Vouchers $co ([string]$qs['from']) ([string]$qs['to']) ([string]$qs['ledger']) '' $port; $r0['via'] = 'daybook'; $result = $r0 }
       }
+      '/ledgernames' { $result = Get-LedgerNames ([string]$qs['company']) ([int]('0' + $qs['port'])) }
+      '/tb' { $result = Get-TrialBalance ([string]$qs['company']) ([string]$qs['to']) ([int]('0' + $qs['port'])) }
       '/ledgerbalance' {
         # one ledger's balance the day before 'from' and on 'to'
         $co = [string]$qs['company']; $port = Find-CompanyPort $co ([int]('0' + $qs['port'])); $led = [string]$qs['ledger']
@@ -1211,6 +1213,40 @@ function Invoke-Fvu($o) {
   Write-Log ('FVU run on ' + $name + ': ' + $(if ($fvuFile) { 'accepted' } else { 'errors' }))
   # ok: the FVU ran; accepted: it made the .fvu file
   return [ordered]@{ ok = $true; accepted = [bool]$fvuFile; fvu = $fvuPath; errors = $errors; output = ($so.Result + $se.Result); folder = $runDir; input = $inFile }
+}
+
+# ------------------------------------------------------------------ 1.12.10: light reads for Look up, so Tally is not held up
+# every ledger's name and group, and every group's parent: no balances, so Tally answers at once
+function Get-LedgerNames([string]$Company, [int]$PreferredPort) {
+  $port = Find-CompanyPort $Company $PreferredPort
+  $doc = Get-XmlDoc (Invoke-Tally -TallyPort $port -Xml (New-CollectionRequest 'TDSDeskNames' 'Ledger' 'NAME,PARENT' $Company ''))
+  $led = New-Object System.Collections.ArrayList
+  foreach ($l in $doc.SelectNodes('//LEDGER')) { $n = $l.GetAttribute('NAME'); if (-not $n) { $n = Get-NodeText $l 'NAME' }; if ($n) { $null = $led.Add(@($n, (Get-NodeText $l 'PARENT'))) } }
+  $gdoc = Get-XmlDoc (Invoke-Tally -TallyPort $port -Xml (New-CollectionRequest 'TDSDeskGroupNames' 'Group' 'NAME,PARENT' $Company ''))
+  $grp = New-Object System.Collections.ArrayList
+  foreach ($g in $gdoc.SelectNodes('//GROUP')) { $n = $g.GetAttribute('NAME'); if (-not $n) { $n = Get-NodeText $g 'NAME' }; if ($n) { $null = $grp.Add(@($n, (Get-NodeText $g 'PARENT'))) } }
+  return [ordered]@{ ok = $true; company = $Company; port = $port; ledgers = @($led); groups = @($grp) }
+}
+# the trial balance on one date: one read, and only ledgers with a balance (the full /balances reads every ledger twice)
+function Get-TrialBalance([string]$Company, [string]$AsOn, [int]$PreferredPort) {
+  if (-not (Test-TallyDate $AsOn)) { throw 'The date is to be given as yyyymmdd.' }
+  $port = Find-CompanyPort $Company $PreferredPort
+  $req = '<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TDSDeskTB</ID></HEADER>' +
+    '<BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + (Esc $Company) + '</SVCURRENTCOMPANY>' +
+    '<SVFROMDATE>' + $AsOn + '</SVFROMDATE><SVTODATE>' + $AsOn + '</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE>' +
+    '<COLLECTION NAME="TDSDeskTB" ISMODIFY="No"><TYPE>Ledger</TYPE><FETCH>NAME,PARENT,CLOSINGBALANCE</FETCH><FILTERS>TDSDeskHasBal</FILTERS></COLLECTION>' +
+    '<SYSTEM TYPE="Formulae" NAME="TDSDeskHasBal">NOT $$IsEmpty:$ClosingBalance</SYSTEM>' +
+    '</TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>'
+  $sw = [Diagnostics.Stopwatch]::StartNew()
+  $doc = Get-XmlDoc (Invoke-Tally -TallyPort $port -Xml $req)
+  $list = New-Object System.Collections.ArrayList
+  foreach ($l in $doc.SelectNodes('//LEDGER')) {
+    $n = $l.GetAttribute('NAME'); if (-not $n) { $n = Get-NodeText $l 'NAME' }
+    $b = Get-NodeText $l 'CLOSINGBALANCE'
+    if ($n -and $b) { $null = $list.Add(@($n, (Get-NodeText $l 'PARENT'), $b)) }
+  }
+  Write-Log ('Trial balance of ' + $Company + ' on ' + $AsOn + ': ' + $list.Count + ' ledgers in ' + [int]$sw.Elapsed.TotalMilliseconds + ' ms')
+  return [ordered]@{ ok = $true; company = $Company; port = $port; asOn = $AsOn; ms = [int]$sw.Elapsed.TotalMilliseconds; ledgers = @($list) }
 }
 
 # ------------------------------------------------------------------ posting as a background job (bridge 1.12)

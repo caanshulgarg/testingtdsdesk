@@ -62,7 +62,7 @@ with sync_playwright() as p:
     chk = pg.evaluate("""() => { const r = S.lk.res; let run = r.open; for (const v of r.rows) run = Math.round((run + v.dr - v.cr) * 100) / 100; return [run, r.close]; }""")
     ok(abs(chk[0] - chk[1]) < 0.01, "opening plus debits less credits is the closing balance")
     # the closing for August is the opening for September
-    pg.evaluate("S.lk.from = '20250901'; S.lk.to = '20250930';"); pg.click('[data-lk="books"]'); pg.wait_for_timeout(700)
+    pg.evaluate("S.lk.from = '20250901'; S.lk.to = '20250930';"); pg.click('[data-lk="show"]'); pg.wait_for_timeout(700)
     ok(abs(pg.evaluate("S.lk.res.open") - chk[1]) < 0.01, "August's closing is September's opening")
     t = pg.inner_text("#app")
     ok("Opening balance" in t and "Total" in t, "the ledger shows opening, entries and totals")
@@ -84,7 +84,7 @@ with sync_playwright() as p:
     # find by amount
     amt = pg.evaluate("Math.abs(S.books.vouchers.find(v => v.type === 'Sales').ent[0].a)")
     pg.click('[data-lkkind="find"]'); pg.wait_for_timeout(300)
-    pg.fill('[data-lkf="q"]', str(int(amt)) if amt == int(amt) else str(amt)); pg.evaluate("S.lk.from = '20250401'; S.lk.to = '20260331';"); pg.click('[data-lk="books"]'); pg.wait_for_timeout(600)
+    pg.fill('[data-lkf="q"]', str(int(amt)) if amt == int(amt) else str(amt)); pg.evaluate("S.lk.from = '20250401'; S.lk.to = '20260331';"); pg.click('[data-lk="show"]'); pg.wait_for_timeout(600)
     ok(pg.evaluate("S.lk.res.rows.length") >= 1, "finding an entry by its amount")
     pg.click('[data-lk="excel"]'); pg.wait_for_timeout(1500)
     ok(not errors, "no page errors so far")

@@ -6,7 +6,7 @@ def R(a, b):
     assert base.count(a) == 1, ('anchor', a[:60], base.count(a))
     base = base.replace(a, b)
 import re
-base = re.sub(r"\$BridgeVersion = '[0-9.]+'", "$BridgeVersion = '1.12.9'", base, 1)
+base = re.sub(r"\$BridgeVersion = '[0-9.]+'", "$BridgeVersion = '1.12.10'", base, 1)
 # 1.12.7 (security): the log never holds keys, codes or passwords, and is rotated at 5 MB keeping 5 old copies
 R(r"""function Write-Log([string]$msg) {
   $line = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + '  ' + $msg
@@ -164,6 +164,10 @@ R("""    $ledgers += [ordered]@{
     $ledgers += [ordered]@{
       name = $name; group = (Get-NodeText $l 'PARENT'); pan = (Get-NodeText $l 'INCOMETAXNUMBER'); gstin = $gstin
       email = (Get-NodeText $l 'EMAIL'); phone = (Get-NodeText $l 'LEDGERPHONE'); mobile = (Get-NodeText $l 'LEDGERMOBILE'); address = @($addr)""")
+# 1.12.10: light reads for Look up (ledger names; the trial balance on a date in one read)
+R("""      '/ledgerbalance' {""", """      '/ledgernames' { $result = Get-LedgerNames ([string]$qs['company']) ([int]('0' + $qs['port'])) }
+      '/tb' { $result = Get-TrialBalance ([string]$qs['company']) ([string]$qs['to']) ([int]('0' + $qs['port'])) }
+      '/ledgerbalance' {""")
 # 1.12.8: the product is now called FinCom. Only what people read changes; the scheduled task keeps its old name
 # (an installed bridge finds and replaces it by that name)
 base = '\n'.join(l if "$script:TaskName = 'TDS Desk - nightly Tally copy'" in l else l.replace('TDS Desk', 'FinCom') for l in base.split('\n'))

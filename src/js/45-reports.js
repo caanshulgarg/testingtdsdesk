@@ -178,7 +178,7 @@ const RPT = {
       Object.assign(x, {from: p.from, to: p.to, asOn: p.to, heard: "", res: null, q: "", typ: ""}, spec);
       FC.go("lookup");
       const ready = spec.kind === "tb" || spec.kind === "bills" || (spec.kind === "ledger" && spec.led) || (spec.kind === "group" && spec.grp) || (spec.kind === "find" && false);
-      if (ready && (b.vouchers || []).length) LK.run("books");
+      if (ready) LK.run("auto");
     }
   }
 };
