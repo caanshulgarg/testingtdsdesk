@@ -47,7 +47,7 @@ BODIES = []
 REQS = {}
 LOG = []             # (kind, from, to) of every request, for the tests to see how much was asked at a time            # how many requests of each kind this Tally was asked (the tests check nothing heavy is asked)
 def _kind(body):
-    for k in ("TDSDeskKeepList", "TDSDeskKeepBal", "TDSDeskLedVch", "TDSDeskOneLed", "TDSDeskVchHeads", "TDSDeskBalances", "TDSDeskGroupNames", "TDSDeskNames", "TDSDeskTB", "TDSDeskLedgers", "TDSDeskCompanies"):
+    for k in ("TDSDeskKeepList", "TDSDeskKeepLed", "TDSDeskKeepBal", "TDSDeskLedVch", "TDSDeskOneLed", "TDSDeskVchHeads", "TDSDeskBalances", "TDSDeskGroupNames", "TDSDeskNames", "TDSDeskTB", "TDSDeskLedgers", "TDSDeskCompanies"):
         if k in body: return k
     if "<REPORTNAME>Day Book</REPORTNAME>" in body: return "DayBook"
     if "Import Data" in body: return "Import"
@@ -136,8 +136,15 @@ class H(http.server.BaseHTTPRequestHandler):
             out = '<ENVELOPE><BODY><DATA><COLLECTION><COMPANY NAME="%s"><NAME>%s</NAME><STARTINGFROM>20240401</STARTINGFROM></COMPANY></COLLECTION></DATA></BODY></ENVELOPE>' % (COMPANY.replace("&", "&amp;"), COMPANY)
         elif "<REPORTNAME>Day Book</REPORTNAME>" in body:
             a, b = g("SVFROMDATE"), g("SVTODATE")
+            if any(a <= d <= b for d in CTRL.get("fail_days", ())):
+                # like a Tally that cannot give these days: the request just dies
+                self.close_connection = True; return
             lo, hi = bisect.bisect_left(dates, a), bisect.bisect_right(dates, b)
             out = "<ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>Vouchers</REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY>%s</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><REQUESTDATA>" % COMPANY + "".join(p for _, p in V[lo:hi]) + "".join('<TALLYMESSAGE xmlns:UDF="TallyUDF">' + re.sub(r"^(<VOUCHER\b[^>]*>)", lambda m: m.group(1) + "<GUID>g-%s</GUID><MASTERID>%d</MASTERID><VOUCHERNUMBER>%s</VOUCHERNUMBER>" % (num, 900000 + int(num), num), re.sub(r"<DATE>[^<]*</DATE>", "<DATE>%s</DATE>" % d, vx, 1)) + "</TALLYMESSAGE>" for d, _, num, vx in list(POSTED) if a <= d <= b) + "</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>"
+        elif "TDSDeskKeepLed" in body:
+            after = re.search(r"\$AlterID &gt; (\d+)", body); lim = int(after.group(1)) if after else -1
+            rows = ['<LEDGER NAME="%s"><GUID>%s</GUID><ALTERID> %d</ALTERID><PARENT>%s</PARENT></LEDGER>' % (n, led_guid(n), LALT.get(led_guid(n), 1), p) for n, p, _ in L if LALT.get(led_guid(n), 1) > lim]
+            out = "<ENVELOPE><BODY><DATA><COLLECTION>" + "".join(rows) + "</COLLECTION></DATA></BODY></ENVELOPE>"
         elif "TDSDeskKeepList" in body:
             a, b = g("SVFROMDATE"), g("SVTODATE")
             after = re.search(r"\$AlterID &gt; (\d+)", body)
@@ -192,6 +199,38 @@ def add_copy(guid, new_date, new_guid):
             pc2 = pc.replace("<GUID>%s</GUID>" % guid, "<GUID>%s</GUID>" % new_guid).replace("<DATE>%s</DATE>" % d, "<DATE>%s</DATE>" % new_date)
             pc2 = re.sub(r"<ALTERID>\s*\d+</ALTERID>", "<ALTERID> %d</ALTERID>" % _alter[0], pc2)
             V.append((new_date, pc2)); _resort(); return _alter[0]
+# ledger masters: each has a GUID and its own change number (Tally counts masters apart from entries)
+LGUID = {}; LALT = {}; _malter = [1000]
+def led_guid(n):
+    if n not in LGUID: LGUID[n] = "led-%d" % len(LGUID)
+    return LGUID[n]
+for _n, _p, _o in L: led_guid(_n)
+def _mbump(n): _malter[0] += 1; LALT[led_guid(n)] = _malter[0]
+def rename_ledger(old, new):
+    """a ledger renamed in Tally: its entries show the new name, their own change numbers stay as they were"""
+    for i, (n, p, ob) in enumerate(L):
+        if n == old:
+            gid = LGUID.pop(old); LGUID[new] = gid; L[i] = (new, p, ob); _mbump(new)
+    for i, (d, pc) in enumerate(V):
+        if ">%s<" % old in pc: V[i] = (d, pc.replace("<LEDGERNAME>%s</LEDGERNAME>" % old, "<LEDGERNAME>%s</LEDGERNAME>" % new).replace("<PARTYLEDGERNAME>%s</PARTYLEDGERNAME>" % old, "<PARTYLEDGERNAME>%s</PARTYLEDGERNAME>" % new))
+def set_opening(name, ob):
+    for i, (n, p, o) in enumerate(L):
+        if n == name: L[i] = (n, p, ob); _mbump(n)
+def add_ledger(name, parent, ob):
+    L.append((name, parent, ob)); _mbump(name)
+def move_date(guid, new_date):
+    """an entry whose date is changed in Tally: same GUID, a new change number"""
+    for i, (d, pc) in enumerate(V):
+        if "<GUID>%s</GUID>" % guid in pc:
+            _alter[0] += 1
+            pc = pc.replace("<DATE>%s</DATE>" % d, "<DATE>%s</DATE>" % new_date)
+            pc = re.sub(r"<ALTERID>\s*\d+</ALTERID>", "<ALTERID> %d</ALTERID>" % _alter[0], pc)
+            V[i] = (new_date, pc); _resort(); return _alter[0]
+def renumber_down(by):
+    """what restoring a backup can look like: every change number lower than before"""
+    for i, (d, pc) in enumerate(V):
+        V[i] = (d, re.sub(r"<ALTERID>\s*(\d+)</ALTERID>", lambda m: "<ALTERID> %d</ALTERID>" % max(1, int(m.group(1)) - by), pc))
+    _alter[0] = max(1, _alter[0] - by)
 def start():
     srv = http.server.ThreadingHTTPServer(("127.0.0.1", 9000), H)
     threading.Thread(target=srv.serve_forever, daemon=True).start()

@@ -27,7 +27,7 @@ trap {
   try { Stop-Transcript | Out-Null } catch { }
   break
 }
-$BridgeVersion = '1.12.12'
+$BridgeVersion = '1.12.13'
 
 # ------------------------------------------------------------------ settings
 function New-BridgeKey {
@@ -1059,6 +1059,7 @@ function Get-DayBookXml([string]$Company, [string]$From, [string]$To, [int]$Pref
     '<STATICVARIABLES><SVCURRENTCOMPANY>' + (Esc $Company) + '</SVCURRENTCOMPANY><SVFROMDATE>' + $From + '</SVFROMDATE><SVTODATE>' + $To + '</SVTODATE>' +
     '<SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><EXPLODEFLAG>Yes</EXPLODEFLAG></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>'
   $t = [Math]::Max([int]$Cfg.TallyTimeoutSec, 900)
+  if ($script:KeepReadSec -gt 0) { $t = $script:KeepReadSec }      # the keep-in-step worker: small reads, short limit
   return (ConvertTo-CleanXml (Invoke-Tally -TallyPort $port -Xml $req -TimeoutSec $t))
 }
 
@@ -1668,7 +1669,7 @@ function Invoke-JobWorker([string]$dir) {
 }
 
 
-# ------------------------------------------------------------------ 1.12.12: keep FinCom's copy of each company in step with Tally
+# ------------------------------------------------------------------ 1.12.13: keep FinCom's copy of each company in step with Tally
 # A worker of its own (TDSBridge.ps1 -Keep), started by the bridge while any company is open in your Tally, and stopping
 # ten minutes after the last one is closed. For each open company it:
 #   1. reads the opening balances once, in small groups of ledgers (never every ledger at once);
@@ -1753,12 +1754,47 @@ function Copy-KeepDays([string]$Company, [int]$Port, [string]$Dir, [string]$From
   }
   $days = Join-Path $Dir 'days'; New-Item -ItemType Directory -Force -Path $days | Out-Null
   $d = $From; $n = 0
+  $where = Get-KeepWhere $Dir
   while ($d -le $To) {
     $t = ''; if ($by.ContainsKey($d)) { $t = $by[$d].ToString(); $n += [regex]::Matches($t, '<VOUCHER\b').Count }
     Save-KeepFile (Join-Path $days ($d + '.xml')) $t
+    $ix = Get-KeepIndexText $t
+    Save-KeepFile (Join-Path $days ($d + '.idx')) $ix
+    foreach ($ln in ($ix -split "`n")) { $g = ($ln -split "`t")[0]; if ($g) { $where[$g] = $d } }
     $d = Add-KeepDays $d 1
   }
   return @($sec, $n)
+}
+# one day's entries as numbers only, one line each: guid, change number
+function Get-KeepIndexText([string]$t) {
+  $sb = New-Object Text.StringBuilder
+  foreach ($m in [regex]::Matches($t, '<VOUCHER\b[\s\S]*?</VOUCHER>')) {
+    $g = [regex]::Match($m.Value, '<GUID>([^<]*)</GUID>').Groups[1].Value.Trim()
+    $a = [regex]::Match($m.Value, '<ALTERID>\s*(\d+)').Groups[1].Value
+    if ($g) { $null = $sb.Append($g).Append("`t").Append($a).Append("`n") }
+  }
+  return $sb.ToString()
+}
+# a day's index, made from the day's file when an older bridge kept it without one
+function Read-KeepIndex([string]$DayXml) {
+  $ixf = [IO.Path]::ChangeExtension($DayXml, '.idx')
+  if (-not (Test-Path -LiteralPath $ixf)) { Save-KeepFile $ixf (Get-KeepIndexText ([IO.File]::ReadAllText($DayXml))) }
+  return [IO.File]::ReadAllText($ixf)
+}
+# where each entry sits in the copy (guid -> date), held in memory by the worker; an entry moved to another date is
+# then taken off its old date too
+$script:KeepWhereMap = @{}
+function Get-KeepWhere([string]$Dir) {
+  if ($script:KeepWhereMap.ContainsKey($Dir)) { return $script:KeepWhereMap[$Dir] }
+  $w = @{}
+  $days = Join-Path $Dir 'days'
+  if (Test-Path $days) {
+    foreach ($f in (Get-ChildItem -LiteralPath $days -Filter '*.xml' | Sort-Object Name)) {
+      foreach ($ln in ((Read-KeepIndex $f.FullName) -split "`n")) { $g = ($ln -split "`t")[0]; if ($g) { $w[$g] = $f.BaseName } }
+    }
+  }
+  $script:KeepWhereMap[$Dir] = $w
+  return $w
 }
 # the entries kept for a month: guid -> [change number, date]
 function Get-KeepHeld([string]$Dir, [string]$Ym) {
@@ -1766,11 +1802,9 @@ function Get-KeepHeld([string]$Dir, [string]$Ym) {
   $days = Join-Path $Dir 'days'
   if (-not (Test-Path $days)) { return $h }
   foreach ($f in (Get-ChildItem -LiteralPath $days -Filter ($Ym + '*.xml'))) {
-    $t = [IO.File]::ReadAllText($f.FullName)
-    foreach ($m in [regex]::Matches($t, '<VOUCHER\b[\s\S]*?</VOUCHER>')) {
-      $g = [regex]::Match($m.Value, '<GUID>([^<]*)</GUID>').Groups[1].Value.Trim()
-      $a = [regex]::Match($m.Value, '<ALTERID>\s*(\d+)').Groups[1].Value
-      if ($g) { $h[$g] = @([long]('0' + $a), $f.BaseName) }
+    foreach ($ln in ((Read-KeepIndex $f.FullName) -split "`n")) {
+      $p = $ln -split "`t"
+      if ($p[0]) { $h[$p[0]] = @([long]('0' + $p[1]), $f.BaseName) }
     }
   }
   return $h
@@ -1797,24 +1831,131 @@ function Write-KeepManifest([string]$Dir, $St, [string]$Today) {
   }
   $doneTo = Add-KeepDays ([string]$St.next) -1
   $man = [ordered]@{ ok = $true; keep = $true; company = $St.company; at = (Get-Date).ToString('s'); from = $St.from; to = $(if ($St.phase -eq 'first' -or $St.phase -eq 'open') { $doneTo } else { $Today });
-    phase = $St.phase; doneTo = $doneTo; seen = (Get-Date).ToString('s'); months = $months; balancesAt = $St.balAt; bridge = $BridgeVersion }
+    phase = $St.phase; doneTo = $doneTo; seen = (Get-Date).ToString('s'); months = $months; balancesAt = $St.balAt; bridge = $BridgeVersion;
+    skipped = @(@($St.skipped) | Where-Object { $_ }); trouble = $St.trouble }
   Save-KeepFile (Join-Path $Dir 'manifest.json') ($man | ConvertTo-Json -Depth 6 -Compress)
 }
-# re-read some dates (changed or found different), a few at a time
+# re-read some dates (changed or found different), a few at a time; a date Tally cannot give now is noted and tried later
 function Update-KeepDates([string]$Company, [int]$Port, [string]$Dir, $St, [string[]]$Dates) {
   $touched = @{}
-  $list = @($Dates | Sort-Object -Unique)
+  $list = @($Dates | Where-Object { $_ -and $_ -ge [string]$St.from } | Sort-Object -Unique)
   $i = 0
   while ($i -lt $list.Count) {
     $a = $list[$i]; $b = $a
-    while ($i + 1 -lt $list.Count -and $list[$i + 1] -eq (Add-KeepDays $b 1) -and ((ConvertFrom-TallyDate $list[$i + 1]) - (ConvertFrom-TallyDate $a)).TotalDays -lt 7) { $i++; $b = $list[$i] }
-    $r = Copy-KeepDays $Company $Port $Dir $a $b
-    $touched[$a.Substring(0, 6)] = $true; $touched[$b.Substring(0, 6)] = $true
-    Start-Sleep -Milliseconds ([int][Math]::Max(1000, $r[0] * 1500))
+    while ($i + 1 -lt $list.Count -and $list[$i + 1] -eq (Add-KeepDays $b 1) -and ((ConvertFrom-TallyDate $list[$i + 1]) - (ConvertFrom-TallyDate $a)).TotalDays -lt [Math]::Max(1, [Math]::Min(7, [int]$St.slice))) { $i++; $b = $list[$i] }
+    try {
+      $r = Copy-KeepDays $Company $Port $Dir $a $b
+      $touched[$a.Substring(0, 6)] = $true; $touched[$b.Substring(0, 6)] = $true
+      $St.skipped = @(@($St.skipped) | Where-Object { $_ -and ($_ -lt $a -or $_ -gt $b) })
+      Start-Sleep -Milliseconds ([int][Math]::Max(1000, $r[0] * 1500))
+    } catch {
+      $d = $a; while ($d -le $b) { Add-KeepSkipped $St $d; $d = Add-KeepDays $d 1 }
+      Write-Log ('Keeping ' + $Company + ': Tally did not give ' + $a + $(if ($b -ne $a) { '-' + $b } else { '' }) + ' (' + $_.Exception.Message + '); tried again later')
+      Start-Sleep -Seconds 5
+    }
     $i++
   }
   foreach ($ym in $touched.Keys) { Write-KeepMonth $Dir $ym $St }
   return $touched.Count
+}
+function Add-KeepSkipped($St, [string]$d) { $St.skipped = @(@($St.skipped) + $d | Where-Object { $_ } | Sort-Object -Unique) }
+
+# the ledgers as numbers and names only: [guid, change number, name, parent]; 'after' asks only for those changed since
+function Get-KeepLedgers([string]$Company, [int]$Port, [long]$After) {
+  $flt = ''; $sys = ''
+  if ($After -gt 0) { $flt = '<FILTERS>TDSDeskKeepLedNew</FILTERS>'; $sys = '<SYSTEM TYPE="Formulae" NAME="TDSDeskKeepLedNew">$AlterID &gt; ' + $After + '</SYSTEM>' }
+  $req = '<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TDSDeskKeepLed</ID></HEADER>' +
+    '<BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + (Esc $Company) + '</SVCURRENTCOMPANY></STATICVARIABLES><TDL><TDLMESSAGE>' +
+    '<COLLECTION NAME="TDSDeskKeepLed" ISMODIFY="No"><TYPE>Ledger</TYPE><FETCH>GUID,ALTERID,NAME,PARENT</FETCH>' + $flt + '</COLLECTION>' + $sys +
+    '</TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>'
+  $doc = Get-XmlDoc (Invoke-Tally -TallyPort $Port -Xml $req -TimeoutSec 120)
+  $out = New-Object System.Collections.ArrayList
+  foreach ($l in $doc.SelectNodes('//LEDGER')) {
+    $n = $l.GetAttribute('NAME'); if (-not $n) { $n = Get-NodeText $l 'NAME' }
+    $g = (Get-NodeText $l 'GUID').Trim()
+    if ($n -and $g) { $null = $out.Add(@($g, [long]('0' + ((Get-NodeText $l 'ALTERID') -replace '\D', '')), $n, (Get-NodeText $l 'PARENT'))) }
+  }
+  return , $out
+}
+function Read-KeepJson([string]$f) { if (-not (Test-Path -LiteralPath $f)) { return $null }; try { return (Get-Content -Raw -LiteralPath $f -Encoding UTF8 | ConvertFrom-Json) } catch { return $null } }
+# a ledger renamed in Tally: the copy's entries carry the new name (Tally's own entries do); nothing is asked of Tally for it
+function Rename-KeepLedger([string]$Dir, $St, [string]$Old, [string]$New) {
+  $days = Join-Path $Dir 'days'; $touched = @{}
+  $olds = @((Esc $Old), $Old.Replace('&', '&amp;').Replace('<', '&lt;').Replace('>', '&gt;'), $Old.Replace('&', '&amp;').Replace('<', '&lt;').Replace('>', '&gt;').Replace("'", '&apos;')) | Sort-Object -Unique
+  $nw = $New.Replace('&', '&amp;').Replace('<', '&lt;').Replace('>', '&gt;')
+  foreach ($f in (Get-ChildItem -LiteralPath $days -Filter '*.xml')) {
+    $t = [IO.File]::ReadAllText($f.FullName); $t2 = $t
+    foreach ($o in $olds) { foreach ($tag in 'LEDGERNAME', 'PARTYLEDGERNAME') { $t2 = $t2.Replace('<' + $tag + '>' + $o + '</' + $tag + '>', '<' + $tag + '>' + $nw + '</' + $tag + '>') } }
+    if ($t2 -ne $t) { Save-KeepFile $f.FullName $t2; $touched[$f.BaseName.Substring(0, 6)] = $true }
+  }
+  foreach ($ym in $touched.Keys) { Write-KeepMonth $Dir $ym $St }
+  return $touched.Count
+}
+# ledger masters changed in Tally (new, renamed, opening or group changed): names put right, those ledgers' opening read again
+function Update-KeepLedgers([string]$Company, [int]$Port, [string]$Dir, $St, [bool]$Full) {
+  $lf = Join-Path $Dir 'ledgers.json'
+  $known = @{}; $kj = Read-KeepJson $lf; if ($kj) { foreach ($p in $kj.PSObject.Properties) { $known[$p.Name] = @($p.Value) } }
+  $first = -not $known.Count -or -not ([long]$St.lastM -gt 0)
+  $ch = Get-KeepLedgers $Company $Port $(if ($Full -or $first) { 0 } else { [long]$St.lastM })
+  $renamed = 0; $again = @(); $seen = @{}
+  foreach ($c in $ch) {
+    $seen[$c[0]] = $true
+    if ([long]$c[1] -gt [long]$St.lastM) { $St.lastM = [long]$c[1] }
+    $k = $known[$c[0]]
+    if ($first) { $known[$c[0]] = @($c[2], $c[3], [long]$c[1]); continue }
+    if ($k -and [long]$k[2] -eq [long]$c[1] -and $k[0] -eq $c[2]) { continue }
+    if ($k -and $k[0] -ne $c[2]) { $null = Rename-KeepLedger $Dir $St ([string]$k[0]) ([string]$c[2]); $renamed++; Write-Log ('Keeping ' + $Company + ': ledger ' + $k[0] + ' is now ' + $c[2]) }
+    $known[$c[0]] = @($c[2], $c[3], [long]$c[1]); $again += , @($c[2], $(if ($k) { [string]$k[0] } else { '' }))
+  }
+  $gone = @()
+  if ($Full -and -not $first) { foreach ($g in @($known.Keys)) { if (-not $seen.ContainsKey($g)) { $gone += [string]$known[$g][0]; $known.Remove($g) } } }
+  if (-not $first -and ($again.Count -or $gone.Count)) {
+    $bf = Join-Path $Dir 'balances.json'; $bal = Read-KeepJson $bf
+    if ($bal) {
+      $rows = [ordered]@{}; foreach ($l in @($bal.ledgers)) { $rows[[string]$l.name] = [ordered]@{ name = [string]$l.name; parent = [string]$l.parent; open = [string]$l.open; close = '' } }
+      foreach ($x in $again) { if ($x[1] -and $x[1] -ne $x[0] -and $rows.Contains($x[1])) { $rows.Remove($x[1]) } }
+      foreach ($n in $gone) { if ($rows.Contains($n)) { $rows.Remove($n) } }
+      $names = @($again | ForEach-Object { $_[0] })
+      for ($i = 0; $i -lt $names.Count; $i += 150) {
+        $chunk = $names[$i .. ([Math]::Min($names.Count, $i + 150) - 1)]
+        foreach ($chunkName in $chunk) { if ($rows.Contains($chunkName)) { $rows.Remove($chunkName) } }
+        foreach ($r in (Get-KeepBalances $Company $Port $chunk ([string]$bal.openAsOn))) { $rows[[string]$r[0]] = [ordered]@{ name = [string]$r[0]; parent = [string]$r[1]; open = [string]$r[2]; close = '' } }
+      }
+      $bal.ledgers = @($rows.Values)
+      Save-KeepFile $bf ($bal | ConvertTo-Json -Depth 6 -Compress)
+      $St.balAt = (Get-Date).ToString('s')
+      Write-Log ('Keeping ' + $Company + ': ' + $names.Count + ' ledger(s) changed in Tally' + $(if ($gone.Count) { ', ' + $gone.Count + ' no longer there' } else { '' }) + '; their opening read again')
+    }
+  }
+  $o = [ordered]@{}; foreach ($g in $known.Keys) { $o[$g] = $known[$g] }
+  Save-KeepFile $lf ($o | ConvertTo-Json -Depth 4 -Compress)
+}
+# one month of the copy compared with Tally's list of entries, and the dates that differ read again. Also notices when
+# Tally's change numbers have gone back (a backup restored, the data rewritten): then every month is checked again.
+function Test-KeepMonthFix([string]$Company, [int]$Port, [string]$Dir, $St, [string]$Ym, [string]$Today) {
+  $mf = $Ym + '01'; if ($mf -lt [string]$St.from) { $mf = [string]$St.from }
+  $mt = (ConvertFrom-TallyDate ($Ym + '01')).AddMonths(1).AddDays(-1).ToString('yyyyMMdd'); if ($mt -gt $Today) { $mt = $Today }
+  if ($mf -gt $mt) { return 0 }
+  $tl = Get-KeepList $Company $Port $mf $mt 0
+  $held = Get-KeepHeld $Dir $Ym
+  $bad = @{}; $seen = @{}; $back = 0; $max = 0
+  foreach ($e in $tl) {
+    $seen[$e[0]] = $true
+    if ([long]$e[1] -gt $max) { $max = [long]$e[1] }
+    $h = $held[$e[0]]
+    if (-not $h) { $bad[$e[2]] = $true }
+    elseif ([long]$h[0] -ne [long]$e[1] -or $h[1] -ne $e[2]) { $bad[$e[2]] = $true; $bad[$h[1]] = $true; if ([long]$h[0] -gt [long]$e[1]) { $back++ } }
+  }
+  foreach ($g in $held.Keys) { if (-not $seen.ContainsKey($g)) { $bad[$held[$g][1]] = $true } }
+  if ($back -gt 0 -and $St.phase -eq 'live') {
+    # everything may differ: copied again the gentle way, a few days at a time; the old copy serves until each day is replaced
+    Write-Log ('Keeping ' + $Company + ': Tally''s change numbers have gone back (a backup restored or the data rewritten?); copying the company again, gently')
+    $St.phase = 'first'; $St.last = 0; $St.next = [string]$St.from; $St.slice = (Get-KeepNum 'KeepSliceDays' 3); $St.checkYm = ([string]$St.from).Substring(0, 6)
+    return 0
+  }
+  if ($max -gt [long]$St.last -and $St.phase -ne 'live') { $St.last = $max }
+  if ($bad.Count) { $null = Update-KeepDates $Company $Port $Dir $St @($bad.Keys); Write-Log ('Keeping ' + $Company + ': ' + $Ym + ' differed on ' + $bad.Count + ' date(s); read again') }
+  return $bad.Count
 }
 # one turn for one open company: at most a few seconds of Tally's time, with pauses between reads
 function Step-Keep([string]$Company, [int]$Port, [string]$BooksFrom) {
@@ -1826,7 +1967,7 @@ function Step-Keep([string]$Company, [int]$Port, [string]$BooksFrom) {
     $from = (Get-FyStart (Get-Date)).ToString('yyyyMMdd')
     if ([string]$Cfg.KeepFrom -match '^\d{8}$') { $from = [string]$Cfg.KeepFrom }        # e.g. last year's start, for an audit
     if ($BooksFrom -and $BooksFrom -match '^\d{8}$' -and $BooksFrom -gt $from) { $from = $BooksFrom }
-    $st = @{ company = $Company; from = $from; next = $from; slice = (Get-KeepNum 'KeepSliceDays' 3); phase = 'open'; openIdx = 0; last = 0; checkYm = ''; checkRound = 0; months = @{}; cycle = 0 }
+    $st = @{ company = $Company; from = $from; next = $from; slice = (Get-KeepNum 'KeepSliceDays' 3); phase = 'open'; openIdx = 0; last = 0; lastM = 0; checkYm = ''; months = @{}; cycle = 0; skipped = @(); dayFail = 0 }
     Write-Log ('Keeping ' + $Company + ' in step with FinCom: first copy from ' + $from)
   }
   $st.cycle = [int]$st.cycle + 1
@@ -1846,6 +1987,7 @@ function Step-Keep([string]$Company, [int]$Port, [string]$BooksFrom) {
       $t0 = $sw.Elapsed.TotalSeconds
       foreach ($r in (Get-KeepBalances $Company $Port $chunk $asOn)) { $got += , @($r[0], $r[1], $r[2]) }
       $st.openIdx = [int]$st.openIdx + $chunk.Count
+      Save-KeepFile $pf (ConvertTo-Json -InputObject @($got) -Depth 4 -Compress); & $save
       Start-Sleep -Milliseconds ([int][Math]::Max(1000, ($sw.Elapsed.TotalSeconds - $t0) * 1500))
     }
     Save-KeepFile $pf (ConvertTo-Json -InputObject @($got) -Depth 4 -Compress)
@@ -1854,6 +1996,7 @@ function Step-Keep([string]$Company, [int]$Port, [string]$BooksFrom) {
       $bal = [ordered]@{ ok = $true; company = $Company; from = $st.from; to = $today; openAsOn = $asOn; ledgers = $led; keep = $true }
       Save-KeepFile (Join-Path $dir 'balances.json') ($bal | ConvertTo-Json -Depth 6 -Compress)
       $st.balAt = (Get-Date).ToString('s')
+      $st.lastM = 0; Update-KeepLedgers $Company $Port $dir $st $false        # the ledgers' own numbers, to follow renames and changes
       $st.phase = $(if ([string]$st.next -gt $today) { 'check' } else { 'first' })
       Write-Log ('Keeping ' + $Company + ': opening balances read (' + $led.Count + ' ledgers)')
     }
@@ -1864,9 +2007,21 @@ function Step-Keep([string]$Company, [int]$Port, [string]$BooksFrom) {
     # the year's day book, a few days at a time; smaller steps when Tally is slow, bigger when it is quick
     while ([string]$st.next -le $today -and $sw.Elapsed.TotalSeconds -lt $budget) {
       $f = [string]$st.next; $t = Add-KeepDays $f ([int]$st.slice - 1); if ($t -gt $today) { $t = $today }
-      $r = Copy-KeepDays $Company $Port $dir $f $t
+      try { $r = Copy-KeepDays $Company $Port $dir $f $t }
+      catch {
+        $why = $_.Exception.Message
+        if ([int]$st.slice -gt 1) { $st.slice = [int][Math]::Max(1, [Math]::Floor([int]$st.slice / 2)); & $save; throw ('Tally did not give ' + $f + '-' + $t + ' (' + $why + '); next time a smaller step') }
+        $st.dayFail = [int]$st.dayFail + 1
+        if ([int]$st.dayFail -ge 3) {
+          Add-KeepSkipped $st $f; $st.next = Add-KeepDays $f 1; $st.dayFail = 0; & $save
+          Write-Log ('Keeping ' + $Company + ': Tally could not give ' + $f + ' after 3 tries (' + $why + '); going on, and trying that day again later')
+          return
+        }
+        & $save; throw ('Tally did not give ' + $f + ' (' + $why + '); try ' + $st.dayFail + ' of 3')
+      }
+      $st.dayFail = 0
       $sec = $r[0]
-      if ($sec -gt 8 -and [int]$st.slice -gt 1) { $st.slice = [int][Math]::Max(1, [int]$st.slice / 2) }
+      if ($sec -gt 8 -and [int]$st.slice -gt 1) { $st.slice = [int][Math]::Max(1, [Math]::Floor([int]$st.slice / 2)) }
       elseif ($sec -lt 2 -and [int]$st.slice -lt 31) { $st.slice = [int][Math]::Min(31, [int]$st.slice * 2) }
       $ymA = $f.Substring(0, 6); $ymB = $t.Substring(0, 6)
       Write-KeepMonth $dir $ymA $st; if ($ymB -ne $ymA) { Write-KeepMonth $dir $ymB $st }
@@ -1875,51 +2030,76 @@ function Step-Keep([string]$Company, [int]$Port, [string]$BooksFrom) {
       Start-Sleep -Milliseconds ([int][Math]::Max(2000, $sec * 1500))
     }
     if ([string]$st.next -gt $today) { $st.phase = 'check'; $st.checkYm = $st.from.Substring(0, 6); Write-Log ('Keeping ' + $Company + ': first copy done; checking it month by month') }
-    & $save
+    $st.trouble = $null; & $save
     return
   }
   # a new day: the days since the last turn
-  if ([string]$st.next -le $today) { $r = Copy-KeepDays $Company $Port $dir ([string]$st.next) $today; Write-KeepMonth $dir $today.Substring(0, 6) $st; if (([string]$st.next).Substring(0, 6) -ne $today.Substring(0, 6)) { Write-KeepMonth $dir ([string]$st.next).Substring(0, 6) $st }; $st.next = Add-KeepDays $today 1 }
-  # what changed since the last change number seen
+  if ([string]$st.next -le $today) { $null = Update-KeepDates $Company $Port $dir $st @(Get-KeepDayRange ([string]$st.next) $today); $st.next = Add-KeepDays $today 1 }
+  # entries changed since the last change number seen: their dates now, and where the copy had them before
   if ($st.phase -eq 'live' -and [long]$st.last -gt 0) {
     $ch = Get-KeepList $Company $Port ([string]$st.from) $today ([long]$st.last)
     if ($ch.Count) {
-      $dates = @($ch | ForEach-Object { $_[2] } | Sort-Object -Unique)
-      $n = Update-KeepDates $Company $Port $dir $st $dates
+      $where = Get-KeepWhere $dir
+      $dates = @($ch | ForEach-Object { $_[2] })
+      foreach ($c in $ch) { $o = $where[$c[0]]; if ($o -and $o -ne $c[2]) { $dates += $o } }
+      $dates = @($dates | Sort-Object -Unique)
+      $null = Update-KeepDates $Company $Port $dir $st $dates
       $st.last = [long](($ch | ForEach-Object { $_[1] } | Measure-Object -Maximum).Maximum)
       Write-Log ('Keeping ' + $Company + ': ' + $ch.Count + ' changed entries on ' + $dates.Count + ' dates brought in')
     }
   }
-  # one month compared with Tally's list: finds deleted entries, and anything the change numbers missed
-  $every = $(if ($st.phase -eq 'check') { 1 } else { Get-KeepNum 'KeepCheckEvery' 5 })
-  if (([int]$st.cycle % $every) -eq 0 -and $sw.Elapsed.TotalSeconds -lt $budget) {
-    $ym = [string]$st.checkYm; if (-not $ym) { $ym = $st.from.Substring(0, 6) }
-    $mf = $ym + '01'; if ($mf -lt $st.from) { $mf = $st.from }
-    $mt = (ConvertFrom-TallyDate ($ym + '01')).AddMonths(1).AddDays(-1).ToString('yyyyMMdd'); if ($mt -gt $today) { $mt = $today }
-    $tl = Get-KeepList $Company $Port $mf $mt 0
-    $held = Get-KeepHeld $dir $ym
-    $bad = @{}
-    $seen = @{}
-    foreach ($e in $tl) {
-      $seen[$e[0]] = $true
-      if ([long]$e[1] -gt [long]$st.last) { $st.last = [long]$e[1] }
-      $h = $held[$e[0]]
-      if (-not $h) { $bad[$e[2]] = $true }
-      elseif ([long]$h[0] -ne [long]$e[1] -or $h[1] -ne $e[2]) { $bad[$e[2]] = $true; $bad[$h[1]] = $true }
-    }
-    foreach ($g in $held.Keys) { if (-not $seen.ContainsKey($g)) { $bad[$held[$g][1]] = $true } }
-    if ($bad.Count) { $null = Update-KeepDates $Company $Port $dir $st @($bad.Keys); Write-Log ('Keeping ' + $Company + ': ' + $ym + ' differed on ' + $bad.Count + ' dates; read again') }
-    $nx = (ConvertFrom-TallyDate ($ym + '01')).AddMonths(1).ToString('yyyyMM')
-    if ($nx -gt $today.Substring(0, 6)) { $nx = $st.from.Substring(0, 6); if ($st.phase -eq 'check') { $st.phase = 'live'; Write-Log ('Keeping ' + $Company + ': in step with Tally') } }
-    $st.checkYm = $nx
+  # ledger masters changed since the last look
+  if ($st.phase -eq 'live' -and $sw.Elapsed.TotalSeconds -lt $budget) { Update-KeepLedgers $Company $Port $dir $st $false }
+  # a month FinCom asked to be checked, now
+  $rq = Join-Path $dir 'recheck.txt'
+  if ((Test-Path -LiteralPath $rq) -and $sw.Elapsed.TotalSeconds -lt $budget) {
+    $want = ([IO.File]::ReadAllText($rq)).Trim(); [IO.File]::WriteAllText($rq, '')
+    if ($want -match '^\d{6}$') { $null = Test-KeepMonthFix $Company $Port $dir $st $want $today }
   }
+  # deleted entries leave no change number, so months are compared with Tally's list: this month often, the others in turn
+  $every = $(if ($st.phase -eq 'check') { 1 } else { Get-KeepNum 'KeepCheckEvery' 5 })
+  $nowEvery = Get-KeepNum 'KeepNowEvery' 2
+  if ($sw.Elapsed.TotalSeconds -lt $budget) {
+    if (([int]$st.cycle % $every) -eq 0) {
+      $ym = [string]$st.checkYm; if (-not $ym) { $ym = $st.from.Substring(0, 6) }
+      $null = Test-KeepMonthFix $Company $Port $dir $st $ym $today
+      if ($st.checkYm -eq $ym) {
+        $nx = (ConvertFrom-TallyDate ($ym + '01')).AddMonths(1).ToString('yyyyMM')
+        if ($nx -gt $today.Substring(0, 6)) {
+          $nx = $st.from.Substring(0, 6)
+          if ($st.phase -eq 'check') { $st.phase = 'live'; Write-Log ('Keeping ' + $Company + ': in step with Tally') }
+          if ($st.phase -eq 'live' -and $sw.Elapsed.TotalSeconds -lt $budget) { Update-KeepLedgers $Company $Port $dir $st $true }   # once a round: ledgers no longer in Tally
+        }
+        $st.checkYm = $nx
+      }
+    } elseif ($st.phase -eq 'live' -and ([int]$st.cycle % $nowEvery) -eq 0) {
+      $null = Test-KeepMonthFix $Company $Port $dir $st $today.Substring(0, 6) $today
+    }
+  }
+  # days Tally could not give before: one more try now and then
+  if ($st.phase -eq 'live' -and @($st.skipped | Where-Object { $_ }).Count -and ([int]$st.cycle % $every) -eq 1 -and $sw.Elapsed.TotalSeconds -lt $budget) {
+    $d = @($st.skipped | Where-Object { $_ })[0]
+    $null = Update-KeepDates $Company $Port $dir $st @($d)
+    if (-not (@($st.skipped) -contains $d)) { Write-Log ('Keeping ' + $Company + ': ' + $d + ' read now') }
+  }
+  $st.trouble = $null
   & $save
+}
+function Get-KeepDayRange([string]$a, [string]$b) { $o = @(); $d = $a; while ($d -le $b) { $o += $d; $d = Add-KeepDays $d 1 }; return $o }
+# a turn that went wrong: noted for FinCom to show, and that company left alone for a while (longer each time)
+$script:KeepBack = @{}
+function Set-KeepTrouble([string]$Company, [string]$Why) {
+  try {
+    $dir = Get-SyncFolder $Company; $st = Read-KeepState $dir
+    if ($st) { $st.trouble = [ordered]@{ at = (Get-Date).ToString('s'); why = $Why }; Save-KeepFile (Join-Path $dir 'keep.json') ($st | ConvertTo-Json -Depth 6 -Compress); Write-KeepManifest $dir $st ((Get-Date).ToString('yyyyMMdd')) }
+  } catch { }
 }
 function Invoke-KeepWorker {
   $lock = Join-Path (Get-SyncDir) 'keep.pid'
   New-Item -ItemType Directory -Force -Path (Get-SyncDir) | Out-Null
   [IO.File]::WriteAllText($lock, [string]$PID)
   Write-Log 'Keeping copies in step: started'
+  $script:KeepReadSec = Get-KeepNum 'KeepReadSec' 120      # no read of the day book may hold Tally longer than this
   $idle = Get-Date
   try {
     while (Test-KeepOn) {
@@ -1937,7 +2117,18 @@ function Invoke-KeepWorker {
       }
       if (-not $open.Count) { if (((Get-Date) - $idle).TotalMinutes -ge (Get-KeepNum 'KeepIdleMin' 10)) { break }; Start-Sleep -Seconds 20; continue }
       $idle = Get-Date
-      foreach ($o in $open) { try { Step-Keep $o[0] $o[1] $o[2] } catch { Write-Log ('Keeping ' + $o[0] + ' in step: ' + $_.Exception.Message) } }
+      foreach ($o in $open) {
+        $bk = $script:KeepBack[$o[0]]
+        if ($bk -and (Get-Date) -lt $bk.until) { continue }
+        try { Step-Keep $o[0] $o[1] $o[2]; $script:KeepBack.Remove($o[0]) }
+        catch {
+          $n = $(if ($bk) { [int]$bk.n + 1 } else { 1 })
+          $wait = [Math]::Min(1800, (Get-KeepNum 'KeepCycleSec' 60) * [Math]::Pow(2, $n))
+          $script:KeepBack[$o[0]] = @{ n = $n; until = (Get-Date).AddSeconds($wait) }
+          Write-Log ('Keeping ' + $o[0] + ' in step: ' + $_.Exception.Message + ' - leaving Tally alone for ' + [int]$wait + 's')
+          Set-KeepTrouble $o[0] $_.Exception.Message
+        }
+      }
       Start-Sleep -Seconds (Get-KeepNum 'KeepCycleSec' 60)
     }
   } finally { try { if ([IO.File]::ReadAllText($lock) -eq [string]$PID) { [IO.File]::WriteAllText($lock, '') } } catch { } ; Write-Log 'Keeping copies in step: stopped' }
@@ -1977,13 +2168,15 @@ function Test-KeepMonth([string]$Company, [string]$Ym, [int]$PreferredPort) {
   $missing = 0; $differ = 0; $seen = @{}
   foreach ($e in $tl) { $seen[$e[0]] = $true; $h = $held[$e[0]]; if (-not $h) { $missing++ } elseif ([long]$h[0] -ne [long]$e[1]) { $differ++ } }
   $extra = @($held.Keys | Where-Object { -not $seen.ContainsKey($_) }).Count
+  $fixing = $false
+  if ($missing -or $differ -or $extra) { try { [IO.File]::WriteAllText((Join-Path $dir 'recheck.txt'), $Ym); $fixing = $true } catch { } }   # the worker reads those dates again on its next turn
   # the light list against the day book for the first three days: the same entries both ways
   $d3 = Add-KeepDays $mf 2; if ($d3 -gt $mt) { $d3 = $mt }
   $dbx = Get-DayBookXml $Company $mf $d3 $port
   $dbG = @{}; foreach ($m in [regex]::Matches($dbx, '<VOUCHER\b[\s\S]*?</VOUCHER>')) { $g = [regex]::Match($m.Value, '<GUID>([^<]*)</GUID>').Groups[1].Value.Trim(); if ($g) { $dbG[$g] = $true } }
   $lsG = @{}; foreach ($e in $tl) { if ($e[2] -le $d3) { $lsG[$e[0]] = $true } }
   $same = ($dbG.Count -eq $lsG.Count) -and -not @($dbG.Keys | Where-Object { -not $lsG.ContainsKey($_) }).Count
-  return [ordered]@{ ok = $true; ym = $Ym; tally = $tl.Count; copy = $held.Count; missing = $missing; differ = $differ; extra = $extra; firstDays = $d3; dayBook = $dbG.Count; list = $lsG.Count; listMatchesDayBook = $same }
+  return [ordered]@{ ok = $true; ym = $Ym; tally = $tl.Count; copy = $held.Count; missing = $missing; differ = $differ; extra = $extra; firstDays = $d3; dayBook = $dbG.Count; list = $lsG.Count; listMatchesDayBook = $same; fixing = $fixing }
 }
 
 # the nightly copy runs on its own and stops; it does not start the bridge

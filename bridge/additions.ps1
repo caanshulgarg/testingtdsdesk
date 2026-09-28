@@ -15,6 +15,7 @@ function Get-DayBookXml([string]$Company, [string]$From, [string]$To, [int]$Pref
     '<STATICVARIABLES><SVCURRENTCOMPANY>' + (Esc $Company) + '</SVCURRENTCOMPANY><SVFROMDATE>' + $From + '</SVFROMDATE><SVTODATE>' + $To + '</SVTODATE>' +
     '<SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><EXPLODEFLAG>Yes</EXPLODEFLAG></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>'
   $t = [Math]::Max([int]$Cfg.TallyTimeoutSec, 900)
+  if ($script:KeepReadSec -gt 0) { $t = $script:KeepReadSec }      # the keep-in-step worker: small reads, short limit
   return (ConvertTo-CleanXml (Invoke-Tally -TallyPort $port -Xml $req -TimeoutSec $t))
 }
 

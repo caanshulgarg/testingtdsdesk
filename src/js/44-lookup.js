@@ -400,7 +400,7 @@ const LK = {
   },
   async keepOn(on){
     try { const f = this.fr(); f.keep = await Bridge.call("/keep?company=" + encodeURIComponent(this.tname()) + Bridge.pinQ(), {on: !!on}, 30000); toast(on ? "The bridge will keep this company in step whenever it is open in Tally." : "Keeping in step switched off."); f.at = 0; setTimeout(() => this.autoFresh(true), 3000); render(); }
-    catch (e){ toast(/Unknown address|No such/i.test(String(e && e.message)) ? "This needs Tally Bridge 1.12.12. Download the new setup and install it." : "The bridge could not do it: " + ((e && e.message) || e)); }
+    catch (e){ toast(/Unknown address|No such/i.test(String(e && e.message)) ? "This needs Tally Bridge 1.12.13. Download the new setup and install it." : "The bridge could not do it: " + ((e && e.message) || e)); }
   },
   async keepCheck(){
     const f = this.fr(), ym = Audit.today().slice(0, 6);
@@ -452,11 +452,14 @@ const LK = {
       if (m.phase === "open") upTo = "The bridge is reading the opening balances, a few ledgers at a time.";
       else if (m.phase === "first"){ const pct = Math.max(0, Math.min(99, Math.round(Audit.days(m.from, m.doneTo || m.from) / Math.max(1, Audit.days(m.from, today)) * 100))); upTo = "The bridge is copying this company from Tally a few days at a time: up to <b>" + FC.when(m.doneTo) + "</b> (" + pct + "%). It carries on whenever the company is open in Tally."; }
       else upTo = seenMin < 5 ? "<b>In step with Tally</b> (checked at " + hhmm(m.seen) + ")." : "In step with Tally as of <b>" + fmtDate(String(m.seen).slice(0, 10)) + " " + hhmm(m.seen) + "</b>, when the company was last open.";
+      const sk = (m.skipped || []).filter(Boolean);
+      if (sk.length) upTo += ' <span class="bad"><b>' + sk.length + (sk.length === 1 ? " day" : " days") + " not read yet</b> from Tally: " + esc(sk.slice(0, 3).map(d => fmtDate(Audit.iso(d))).join(", ")) + (sk.length > 3 ? " and " + (sk.length - 3) + " more" : "") + ". Figures touching " + (sk.length === 1 ? "that day" : "those days") + " may be out; the bridge tries again every few minutes.</span>";
+      if (m.trouble && m.trouble.at) upTo += ' <span class="note">Tally did not answer at ' + hhmm(m.trouble.at) + "; the bridge is leaving it alone for a while and will carry on by itself.</span>";
       btns = live ? '<button class="btn small" data-lk="keepcheck">Check against Tally</button>' : "";
     } else {
       upTo = have ? "The books in FinCom run to <b>" + FC.when(meta.to) + "</b>" + (meta.copyAt ? " (copy made " + esc(String(meta.copyAt).replace("T", " ").slice(0, 16)) + (meta.todayAt ? "; today\u2019s entries brought in at " + hhmm(meta.todayAt) : "") + ")" : meta.at ? " (read " + this.booksAge() + ")" : "") + "." : "No books in FinCom yet.";
       if (live){
-        btns = (kp.ok ? (kp.on ? "" : '<button class="btn small primary" data-lk="keepon">Keep this company in step with Tally</button>') : '<span class="note">Install Tally Bridge 1.12.12 to keep companies in step while they are open.</span>') +
+        btns = (kp.ok ? (kp.on ? "" : '<button class="btn small primary" data-lk="keepon">Keep this company in step with Tally</button>') : '<span class="note">Install Tally Bridge 1.12.13 to keep companies in step while they are open.</span>') +
           (have && String(meta.to) < today ? '<button class="btn small" data-lk="today">Bring in today\u2019s entries</button>' : "") +
           (sch.on ? '<span class="note">Nightly copy is on' + (sch.next ? ", next " + esc(sch.next) : "") + ".</span>" : "");
         if (kp.on) upTo += " The bridge starts keeping it in step within a minute of the company being open in Tally.";
