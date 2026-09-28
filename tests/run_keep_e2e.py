@@ -13,11 +13,12 @@ sys.path.insert(0, HERE)
 import fake_tally
 from playwright.sync_api import sync_playwright
 fake_tally.start()
+if os.environ.get("KEEP_NO_COUNTERS"): fake_tally.CTRL["no_counters"] = True       # a Tally that does not give its change counters
 H = functools.partial(http.server.SimpleHTTPRequestHandler, directory=os.environ.get("TDSDESK_SITE", os.path.join(HERE, "..", "site-test"))); H.log_message = lambda *a: None
 srv = http.server.ThreadingHTTPServer(("localhost", 8145), H); threading.Thread(target=srv.serve_forever, daemon=True).start()
 os.environ["TDSBRIDGE_FAKE"] = _os.path.join(BRUN, "fake.json")
 FROM = "20260301"
-json.dump({"TallyTimeoutSec": 20, "KeepInStep": True, "KeepStartSec": 3, "KeepCycleSec": 3, "KeepBudgetSec": 30, "KeepCheckEvery": 4, "KeepNowEvery": 2, "KeepIdleMin": 1, "KeepFrom": FROM}, open(_os.path.join(BRUN, "tds-bridge.config.json"), "w"))
+json.dump({"TallyTimeoutSec": 20, "KeepInStep": True, "KeepStartSec": 3, "KeepCycleSec": 3, "KeepBudgetSec": 30, "KeepCheckEvery": 4, "KeepNowEvery": 2, "KeepIdleMin": 1, "KeepFrom": FROM, "KeepSharePct": 100, "KeepNightSharePct": 100}, open(_os.path.join(BRUN, "tds-bridge.config.json"), "w"))
 br_p = subprocess.Popen([os.environ.get("PWSH", "/opt/pwsh/pwsh"), "-NoProfile", "-File", _os.path.join(BRUN, "TDSBridge.ps1")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=BRUN)
 fails, errors = [], []
 def ok(c, w):
@@ -45,7 +46,7 @@ march = [(d, p) for d, p in fake_tally.V if d.startswith("202603")]
 try:
     until(lambda: urllib.request.urlopen("http://127.0.0.1:9100/ping", timeout=2).read(), 60)
     key = json.load(open(_os.path.join(BRUN, "tds-bridge.config.json"), encoding="utf-8-sig"))["Key"]
-    ok(json.loads(urllib.request.urlopen("http://127.0.0.1:9100/ping").read())["version"] == "1.12.13", "bridge 1.12.13 running")
+    ok(json.loads(urllib.request.urlopen("http://127.0.0.1:9100/ping").read())["version"] == "1.13.0", "bridge 1.13.0 running")
     # ---------- the worker starts on its own and makes the first copy
     t0 = time.time()
     m = until(lambda: (lambda x: x if x and x.get("phase") == "live" else None)(man()), 300)
@@ -75,6 +76,11 @@ try:
         own = pg.evaluate("async (x) => (await Books.importDayBook(new Blob([x], {type: 'text/xml'}))).vouchers.length", "<ENVELOPE>" + "".join(p_ for d, p_ in march) + "</ENVELOPE>")
         ok(got == own, "FinCom has every March entry, as it reads them from Tally's own day book: %d of %d" % (got, own))
         ok("In step with Tally" in pg.inner_text(".lk-fresh"), "the page says the company is in step with Tally")
+        # ---------- nothing changes in Tally: only the tiny question is asked
+        from collections import Counter
+        n0 = len(fake_tally.LOG); time.sleep(20)
+        seen = Counter(k for k, a_, b_ in fake_tally.LOG[n0:])
+        if not os.environ.get("KEEP_NO_COUNTERS"): ok(seen["TDSDeskKeepCo"] >= 3 and seen["TDSDeskKeepList"] <= 3 and not seen["TDSDeskKeepLed"] and not seen["DayBook"], "when nothing changes in Tally, the bridge mostly asks its one tiny question: " + json.dumps(seen))
         # ---------- totals: Tally asked nothing
         fake_tally.REQS.clear()
         pg.fill("#lkAsk", "trial balance as on 31/03/2026"); pg.keyboard.press("Enter")
@@ -175,6 +181,10 @@ try:
     ok("change numbers have gone back" in log, "the log says Tally's change numbers went back")
 finally:
     br_p.terminate()
+    try: (br_p if 'br_p' in dir() else br).wait(10)
+    except Exception:
+        try: (br_p if 'br_p' in dir() else br).kill()
+        except Exception: pass
     for f in glob.glob(_os.path.join(BRUN, "sync", "keep.pid")):
         try:
             pid = int(open(f).read().strip() or 0)

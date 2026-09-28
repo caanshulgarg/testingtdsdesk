@@ -1,0 +1,14 @@
+{
+ "at": "2026-09-28T18:11:54Z",
+ "connector": {
+  "version": "1.0.0",
+  "url": "https://staging.fincom.live/assets/connector/FinComConnector.exe",
+  "sha256": "99f558a72acadb4fe1005348fba4b255fe69bbac35206ee3e9926ee93fe70e30"
+ },
+ "engine": {
+  "version": "1.13.0",
+  "url": "https://staging.fincom.live/assets/connector/TDSBridge.ps1",
+  "sha256": "24f4930959353f27ec4e40ed14b19521ef2de6bf5181472e4f9732974b1a3404"
+ },
+ "notes": "Keeps the Tally Bridge running; the copy of the books goes to FinCom's cloud."
+}

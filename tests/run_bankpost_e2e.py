@@ -46,7 +46,7 @@ try:
         pg.goto("http://localhost:8133/"); pg.wait_for_timeout(2000)
         pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
         pg.evaluate(SETUP, [key, BANK, PARTY]); pg.evaluate("Bridge.refresh()")
-        ok(pg.evaluate("Bridge.st.version") == "1.12.13", "bridge 1.12.13 running against the stand-in Tally")
+        ok(pg.evaluate("Bridge.st.version") == "1.13.0", "bridge 1.13.0 running against the stand-in Tally")
         ok(pg.evaluate("syncLedgersFromTally(true)") and pg.evaluate("!!exactLedger('%s') && !!exactLedger('%s')" % (BANK, PARTY)), "ledgers read from Tally")
         pg.evaluate("() => { B().rows.forEach(r => { r.state = 'ready'; }); }")
         # the dates themselves

@@ -41,13 +41,14 @@ def amounts_until(asOn):
     return bal
 # what the tests make this Tally do when entries are imported: be slow, stop answering (after or before creating), refuse
 CTRL = {"delay": 0.0, "hang_after": 0, "hang_before": 0, "hang_sec": 25, "refuse": 0}
+BUSY = []            # (start, end) of every request, to see how much of Tally's time was taken
 POSTED = []          # (date, narration, number, xml) of every voucher created here
 DELETED = []
 BODIES = []
 REQS = {}
 LOG = []             # (kind, from, to) of every request, for the tests to see how much was asked at a time            # how many requests of each kind this Tally was asked (the tests check nothing heavy is asked)
 def _kind(body):
-    for k in ("TDSDeskKeepList", "TDSDeskKeepLed", "TDSDeskKeepBal", "TDSDeskLedVch", "TDSDeskOneLed", "TDSDeskVchHeads", "TDSDeskBalances", "TDSDeskGroupNames", "TDSDeskNames", "TDSDeskTB", "TDSDeskLedgers", "TDSDeskCompanies"):
+    for k in ("TDSDeskKeepList", "TDSDeskKeepLed", "TDSDeskKeepCo", "TDSDeskKeepBal", "TDSDeskLedVch", "TDSDeskOneLed", "TDSDeskVchHeads", "TDSDeskBalances", "TDSDeskGroupNames", "TDSDeskNames", "TDSDeskTB", "TDSDeskLedgers", "TDSDeskCompanies"):
         if k in body: return k
     if "<REPORTNAME>Day Book</REPORTNAME>" in body: return "DayBook"
     if "Import Data" in body: return "Import"
@@ -61,7 +62,11 @@ def posted_tags():
 class H(http.server.BaseHTTPRequestHandler):
     def log_message(self, *a): pass
     def do_POST(self):
-        with _serial: return self._post()      # like TallyPrime: one request at a time
+        with _serial:                           # like TallyPrime: one request at a time
+            import time as _tb
+            t0 = _tb.time()
+            try: return self._post()
+            finally: BUSY.append((t0, _tb.time()))
     def _post(self):
         body = self.rfile.read(int(self.headers.get("Content-Length", 0))).decode("utf-8")
         g = lambda t: (re.search("<" + t + ">([^<]*)</" + t + ">", body) or [None, ""])[1]
@@ -136,11 +141,18 @@ class H(http.server.BaseHTTPRequestHandler):
             out = '<ENVELOPE><BODY><DATA><COLLECTION><COMPANY NAME="%s"><NAME>%s</NAME><STARTINGFROM>20240401</STARTINGFROM></COMPANY></COLLECTION></DATA></BODY></ENVELOPE>' % (COMPANY.replace("&", "&amp;"), COMPANY)
         elif "<REPORTNAME>Day Book</REPORTNAME>" in body:
             a, b = g("SVFROMDATE"), g("SVTODATE")
+            if CTRL.get("daybook_delay"):
+                import time as _td; _td.sleep(CTRL["daybook_delay"])
             if any(a <= d <= b for d in CTRL.get("fail_days", ())):
                 # like a Tally that cannot give these days: the request just dies
                 self.close_connection = True; return
             lo, hi = bisect.bisect_left(dates, a), bisect.bisect_right(dates, b)
             out = "<ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>Vouchers</REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY>%s</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><REQUESTDATA>" % COMPANY + "".join(p for _, p in V[lo:hi]) + "".join('<TALLYMESSAGE xmlns:UDF="TallyUDF">' + re.sub(r"^(<VOUCHER\b[^>]*>)", lambda m: m.group(1) + "<GUID>g-%s</GUID><MASTERID>%d</MASTERID><VOUCHERNUMBER>%s</VOUCHERNUMBER>" % (num, 900000 + int(num), num), re.sub(r"<DATE>[^<]*</DATE>", "<DATE>%s</DATE>" % d, vx, 1)) + "</TALLYMESSAGE>" for d, _, num, vx in list(POSTED) if a <= d <= b) + "</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>"
+        elif "TDSDeskKeepCo" in body:
+            if CTRL.get("no_counters"):
+                out = '<ENVELOPE><BODY><DATA><COLLECTION><COMPANY NAME="%s"><NAME>%s</NAME></COMPANY></COLLECTION></DATA></BODY></ENVELOPE>' % (COMPANY, COMPANY)
+            else:
+                out = '<ENVELOPE><BODY><DATA><COLLECTION><COMPANY NAME="%s"><ALTVCHID TYPE="Number"> %d</ALTVCHID><ALTMSTID TYPE="Number"> %d</ALTMSTID></COMPANY></COLLECTION></DATA></BODY></ENVELOPE>' % (COMPANY, _alter[0], _malter[0])
         elif "TDSDeskKeepLed" in body:
             after = re.search(r"\$AlterID &gt; (\d+)", body); lim = int(after.group(1)) if after else -1
             rows = ['<LEDGER NAME="%s"><GUID>%s</GUID><ALTERID> %d</ALTERID><PARENT>%s</PARENT></LEDGER>' % (n, led_guid(n), LALT.get(led_guid(n), 1), p) for n, p, _ in L if LALT.get(led_guid(n), 1) > lim]
@@ -190,7 +202,10 @@ def edit_amount(guid, factor):
             V[i] = (d, pc); return _alter[0]
 def delete(guid):
     for i, (d, pc) in enumerate(V):
-        if "<GUID>%s</GUID>" % guid in pc: del V[i]; _resort(); return d
+        if "<GUID>%s</GUID>" % guid in pc:
+            del V[i]; _resort()
+            if CTRL.get("delete_bumps", True): _alter[0] += 1     # a deletion moves the company's change counter
+            return d
 def add_copy(guid, new_date, new_guid):
     """a new entry: a copy of one entry on another date"""
     for d, pc in list(V):

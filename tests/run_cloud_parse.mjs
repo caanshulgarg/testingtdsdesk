@@ -1,0 +1,39 @@
+// node run_cloud_parse.mjs - the cloud copy reads a day book exactly as FinCom does: the same entries, and every
+// ledger's total the same, on the real books (day by day, as the bridge sends them)
+import { createRequire } from "module";
+import fs from "fs";
+import { parseDay } from "../server/tally-cloud/parse.js";
+const require = createRequire(import.meta.url);
+const {load, openBlob, HTML, DATA} = require("./harness");
+let fails = 0;
+const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
+const h = load(HTML, ["num", "r2", "Books"]);
+const db = await h.x.Books.importDayBook(await openBlob(DATA + "/DayBook.xml"));
+// the same file, cut into days as the bridge keeps them
+const raw = fs.readFileSync(DATA + "/DayBook.xml");
+const text = raw[0] === 0xFF && raw[1] === 0xFE ? raw.toString("utf16le") : raw.toString("utf8");
+const byDay = {};
+let cut, buf = text;
+while ((cut = buf.indexOf("</VOUCHER>")) >= 0){
+  const piece = buf.slice(0, cut + 10); buf = buf.slice(cut + 10);
+  const st = piece.lastIndexOf("<VOUCHER "); if (st < 0) continue;
+  const v = piece.slice(st), d = (v.match(/<DATE>(\d{8})<\/DATE>/) || [])[1]; if (!d) continue;
+  (byDay[d] = byDay[d] || []).push("<TALLYMESSAGE>" + v + "</TALLYMESSAGE>");
+}
+let cv = 0; const cloudTot = {}, cloudIds = new Set();
+for (const d of Object.keys(byDay)){
+  const r = parseDay(byDay[d].join(""));
+  const heads = new Map(r.vouchers.map(v => [v.guid, v]));
+  cv += r.n; r.vouchers.forEach(v => cloudIds.add(v.guid));
+  r.lines.forEach(([g, l, a]) => { const v = heads.get(g); if (v.cancel || v.opt) return; cloudTot[l] = (cloudTot[l] || 0) + a; });
+}
+const finTot = {};
+db.vouchers.forEach(v => { if (v.cancel || v.opt) return; v.ent.forEach(e => { finTot[e.l] = (finTot[e.l] || 0) + e.a; }); });
+ok(cv === db.vouchers.length, "the same entries: cloud " + cv + ", FinCom " + db.vouchers.length);
+ok(db.vouchers.every(v => cloudIds.has(v.id)), "every entry FinCom reads is in the cloud copy, by its id");
+const names = new Set(Object.keys(finTot).concat(Object.keys(cloudTot)));
+const bad = [...names].filter(n => Math.abs((finTot[n] || 0) - (cloudTot[n] || 0)) >= 0.01);
+ok(!bad.length, "every ledger's total is the same (" + names.size + " ledgers)" + (bad.length ? ": " + bad.slice(0, 5).map(n => n + " " + finTot[n] + " / " + cloudTot[n]).join("; ") : ""));
+const t0 = Date.now(); parseDay(byDay[Object.keys(byDay).sort((a, b) => byDay[b].length - byDay[a].length)[0]].join("")); 
+ok(Date.now() - t0 < 1000, "the busiest day is read in " + (Date.now() - t0) + " ms");
+console.log(fails ? fails + " FAILED" : "all passed"); process.exit(fails ? 1 : 0);

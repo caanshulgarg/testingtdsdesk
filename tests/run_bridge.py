@@ -14,7 +14,7 @@ srv = fake_tally.start()
 os.environ["TDSBRIDGE_FAKE"] = _os.path.join(BRUN, "fake.json")
 for f in ["tds-bridge.config.json"]:
     if _os.path.exists(_os.path.join(BRUN, f)): os.remove(_os.path.join(BRUN, f))
-# a settings file saved by an older bridge, which only knew the github.io address (1.12.13 still allows fincom.live)
+# a settings file saved by an older bridge, which only knew the github.io address (1.13.0 still allows fincom.live)
 json.dump({"AllowedOrigins": ["https://caanshulgarg.github.io", "http://localhost", "null"]}, open(_os.path.join(BRUN, "tds-bridge.config.json"), "w"))
 p = subprocess.Popen([_os.environ.get("PWSH", "/opt/pwsh/pwsh"), "-NoProfile", "-File", _os.path.join(BRUN, "TDSBridge.ps1")], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=BRUN)
 import threading
@@ -35,7 +35,7 @@ try:
         r = urllib.request.urlopen(req, timeout=t); d = r.read().decode("utf-8")
         return (d, r.headers.get("Content-Type")) if raw else json.loads(d)
     ping = json.loads(urllib.request.urlopen("http://127.0.0.1:9100/ping").read())
-    ok(ping["version"] == "1.12.13", "bridge 1.12.13 answers")
+    ok(ping["version"] == "1.13.0", "bridge 1.13.0 answers")
     # connecting: only FinCom's own pages, and only with the code shown in the bridge window
     def raw(path, origin=None, key=None):
         h = {}

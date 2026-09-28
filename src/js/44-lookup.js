@@ -319,6 +319,8 @@ const LK = {
     const x = this.st();
     if (x.busy) return;
     const tally = this.useTally(x, how), have = (S.books.vouchers || []).length > 0;
+    // a large company, or books not loaded here: the trial balance and ledgers from the cloud's ready totals
+    const cloud = !tally && ["tb", "ledger"].includes(x.kind) && TCloud.has(S.coId) && (!have || TCloud.big(S.coId));
     const need = (c, m) => { if (!c){ toast(m); throw null; } };
     try {
       if (x.kind === "ledger") need(x.led, "Choose a ledger.");
@@ -326,10 +328,15 @@ const LK = {
       if (x.kind === "group") need(x.grp, "Choose a group.");
       if (x.kind === "monthly") need(x.led || x.grp, "Choose a ledger or a group.");
       if (["ledger", "group", "monthly", "find"].includes(x.kind)) need(x.from && x.to && x.from <= x.to, "The dates are the wrong way round.");
-      if (!tally) need(have, this.live() ? "This needs the books read into FinCom. Choose \u201cTally\u201d as the source, or read the books first." : "Read the books from Tally first, or connect the Tally Bridge.");
+      if (!tally && !cloud) need(have, this.live() ? "This needs the books read into FinCom. Choose \u201cTally\u201d as the source, or read the books first." : "Read the books from Tally first, or connect the Tally Bridge.");
     } catch (e){ if (e) throw e; return; }
     x.open = {};
-    if (tally){
+    if (cloud){
+      x.busy = "Asking the copy in FinCom\u2019s cloud\u2026"; render();
+      try { x.res = x.kind === "tb" ? await TCloud.tb(S.coId, x.asOn) : await TCloud.ledger(S.coId, x.led, x.from, x.to); }
+      catch (e){ x.busy = ""; toast("Could not ask the cloud copy: " + ((e && e.message) || e)); render(); return; }
+      x.busy = "";
+    } else if (tally){
       const force = how === "fresh";
       x.busy = x.kind === "tb" ? "Reading the trial balance from Tally\u2026" : x.kind === "group" ? "Reading " + x.grp + " from Tally\u2026" : "Reading " + x.led + " from Tally\u2026"; render();
       try {
@@ -351,9 +358,19 @@ const LK = {
   fr(){ const cid = S.coId; if (!S.lkFr || S.lkFr.cid !== cid) S.lkFr = {cid, man: null, sch: null, at: 0, busy: ""}; return S.lkFr; },
   // on opening Look up, Reports or Letters: if the bridge made a newer copy last night, bring it in (read from the bridge's
   // folder; Tally is not asked anything)
+  // the copy in FinCom's cloud: for a computer without the bridge, or a bridge that does not keep this company
+  async cloudFresh(force){
+    const f = this.fr();
+    if (!TCloud.on() || f.busy) return;
+    if (!force && Date.now() - (f.cat || 0) < 60000) return;
+    f.cat = Date.now();
+    try { await TCloud.status(S.coId, force); if (TCloud.has(S.coId)) await TCloud.load(force); } catch (e){}
+    render();
+  },
   async autoFresh(force){
     const f = this.fr(), co = CO();
-    if (!this.live() || f.busy) return;
+    if (f.busy) return;
+    if (!this.live()){ await this.cloudFresh(force); return; }
     const keep = f.man && f.man.keep;
     if (!force && Date.now() - f.at < (keep ? 60000 : 15 * 60000)) return;
     f.at = Date.now();
@@ -362,7 +379,7 @@ const LK = {
     try { f.keep = await Bridge.call("/keep" + q, null, 30000); } catch (e){ f.keep = null; }
     try { f.sch = await Bridge.call("/schedule", null, 30000); } catch (e){ f.sch = null; }
     const b = S.books, m = f.man || {}, meta = (b && b.meta) || {};
-    if (!(b && b.cid === co.id && m.ok && !m.none && m.at && m.from)){ render(); return; }
+    if (!(b && b.cid === co.id && m.ok && !m.none && m.at && m.from)){ f.at = 0; await this.cloudFresh(force); render(); return; }
     if (m.keep){
       // kept in step by the bridge: only the months that changed since FinCom last looked
       const known = meta.monthsAt || {}, todo = [].concat(m.months || []).filter(x => x.at && (!known[x.ym] || x.at > known[x.ym]) && x.from <= m.to);
@@ -400,7 +417,7 @@ const LK = {
   },
   async keepOn(on){
     try { const f = this.fr(); f.keep = await Bridge.call("/keep?company=" + encodeURIComponent(this.tname()) + Bridge.pinQ(), {on: !!on}, 30000); toast(on ? "The bridge will keep this company in step whenever it is open in Tally." : "Keeping in step switched off."); f.at = 0; setTimeout(() => this.autoFresh(true), 3000); render(); }
-    catch (e){ toast(/Unknown address|No such/i.test(String(e && e.message)) ? "This needs Tally Bridge 1.12.13. Download the new setup and install it." : "The bridge could not do it: " + ((e && e.message) || e)); }
+    catch (e){ toast(/Unknown address|No such/i.test(String(e && e.message)) ? "This needs Tally Bridge 1.13.0. Download the new setup and install it." : "The bridge could not do it: " + ((e && e.message) || e)); }
   },
   async keepCheck(){
     const f = this.fr(), ym = Audit.today().slice(0, 6);
@@ -444,7 +461,7 @@ const LK = {
   },
   freshBar(b){
     const f = this.fr(), live = this.live(), meta = (b && b.meta) || {}, have = (b.vouchers || []).length > 0, sch = f.sch || {}, today = Audit.today(), m = f.man || {}, kp = f.keep || {};
-    if (!have && !live && !meta.keep) return "";
+    if (!have && !live && !meta.keep && !TCloud.has(S.coId)) return "";
     const hhmm = s2 => { const d = new Date(s2); return isNaN(d) ? "" : d.toLocaleTimeString("en-IN", {hour: "2-digit", minute: "2-digit"}); };
     let upTo, btns = "";
     if (m.keep){
@@ -459,7 +476,7 @@ const LK = {
     } else {
       upTo = have ? "The books in FinCom run to <b>" + FC.when(meta.to) + "</b>" + (meta.copyAt ? " (copy made " + esc(String(meta.copyAt).replace("T", " ").slice(0, 16)) + (meta.todayAt ? "; today\u2019s entries brought in at " + hhmm(meta.todayAt) : "") + ")" : meta.at ? " (read " + this.booksAge() + ")" : "") + "." : "No books in FinCom yet.";
       if (live){
-        btns = (kp.ok ? (kp.on ? "" : '<button class="btn small primary" data-lk="keepon">Keep this company in step with Tally</button>') : '<span class="note">Install Tally Bridge 1.12.13 to keep companies in step while they are open.</span>') +
+        btns = (kp.ok ? (kp.on ? "" : '<button class="btn small primary" data-lk="keepon">Keep this company in step with Tally</button>') : '<span class="note">Install Tally Bridge 1.13.0 to keep companies in step while they are open.</span>') +
           (have && String(meta.to) < today ? '<button class="btn small" data-lk="today">Bring in today\u2019s entries</button>' : "") +
           (sch.on ? '<span class="note">Nightly copy is on' + (sch.next ? ", next " + esc(sch.next) : "") + ".</span>" : "");
         if (kp.on) upTo += " The bridge starts keeping it in step within a minute of the company being open in Tally.";
@@ -472,6 +489,8 @@ const LK = {
         : '<p class="note ' + (c.missing || c.differ || c.extra || !c.listMatchesDayBook ? "bad" : "ok") + '">Checked ' + esc(FC.monthLabel(c.ym)) + " against Tally: Tally has " + c.tally + " entries, the copy " + c.copy + (c.missing || c.differ || c.extra ? " (" + c.missing + " missing, " + c.differ + " changed, " + c.extra + " no longer in Tally; the bridge puts these right on its next turn)" : ", all the same") +
           ". The light list " + (c.listMatchesDayBook ? "matches" : "<b>does not match</b>") + " the day book for the first days (" + c.list + " and " + c.dayBook + " entries)" + (c.listMatchesDayBook ? "." : ": please tell us, so the bridge can be adjusted for your Tally.") + "</p>";
     }
+    // the cloud's copy: what this page shows when it is the source
+    if (TCloud.has(S.coId) && ((meta.cloud && !m.keep) || !live)) return '<div class="lk-fresh"><span class="note">' + TCloud.bar(S.coId) + " Totals come from this copy, so Tally is never held up.</span>" + chk + "</div>";
     return '<div class="lk-fresh"><span class="note">' + upTo + " Totals come from this copy, so Tally is never held up.</span>" + btns + chk + "</div>";
   },
 

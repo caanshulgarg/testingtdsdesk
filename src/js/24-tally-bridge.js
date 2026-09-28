@@ -1372,7 +1372,13 @@ function bridgeSetupSteps(){
 function viewBridgeSettings(){
   const c = Bridge.cfg(), st = Bridge.st;
   if (Bridge.blocked()) return '<div class="pane"><h2>Tally Bridge</h2><p class="note" style="margin:0">Pages opened on claude.ai cannot reach programs on your computer. To connect to Tally, use the downloaded app (<b>Download standalone app</b>) on the computer where TallyPrime runs.</p></div>';
-  let h = '<div class="pane"><h2>Tally Bridge</h2><p class="note" style="margin:0 0 12px">Connects FinCom to TallyPrime on this computer: the company open in Tally is followed, ledgers load straight from Tally, and entries are posted without files. Run <b>TDSBridge</b> on the computer where TallyPrime runs, then paste its key here.</p>' +
+  // the Windows app that keeps the bridge running, shows what it does, updates it and sends its log to support
+  const cn = '<div class="pane cn-card"><h2>FinCom Connector for Windows <span class="tag">recommended</span></h2>' +
+    '<p class="note" style="margin:0 0 10px">One program on the computer with Tally: it installs the bridge, starts with Windows, keeps the bridge running (and starts it again if it stops), ' +
+    "shows Tally, the companies kept in step and the cloud copy, checks the computer and says what to do in plain words, updates itself, and sends its log to FinCom support in one click. No admin rights needed.</p>" +
+    '<div class="row"><a class="btn primary" href="assets/connector/FinComConnector.exe" download>Download FinCom Connector</a>' +
+    '<span class="note" style="align-self:center">Windows 10 or 11. Until the program is signed, Windows may say \u201cWindows protected your PC\u201d: press More info, then Run anyway.</span></div></div>';
+  let h = cn + '<div class="pane"><h2>Tally Bridge</h2><p class="note" style="margin:0 0 12px">Connects FinCom to TallyPrime on this computer: the company open in Tally is followed, ledgers load straight from Tally, and entries are posted without files. Run <b>TDSBridge</b> on the computer where TallyPrime runs, then paste its key here.</p>' +
     '<div class="grid"><label class="f"><span>Bridge address</span><input type="text" data-bridge="url" value="' + esc(c.url) + '"></label>' +
     '<label class="f"><span>Bridge key (filled in by Connect)</span><input type="text" data-bridge="key" data-fk="bridgekey" value="' + esc(c.key) + '" autocomplete="off" placeholder="press Connect below"></label></div>' +
     '<label class="chk" style="margin-top:8px"><input type="checkbox" data-bridge="follow"' + (c.follow ? " checked" : "") + "> Follow the company open in Tally (switch FinCom to it automatically)</label>" +

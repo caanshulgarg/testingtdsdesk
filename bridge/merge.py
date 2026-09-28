@@ -1,12 +1,12 @@
 import sys
 base = open(sys.argv[1], encoding='utf-8-sig').read().replace('\r\n', '\n')
-add = open('additions.ps1', encoding='utf-8').read() + '\n' + open('jobs.ps1', encoding='utf-8').read() + '\n' + open('keep.ps1', encoding='utf-8').read()
+add = open('additions.ps1', encoding='utf-8').read() + '\n' + open('jobs.ps1', encoding='utf-8').read() + '\n' + open('keep.ps1', encoding='utf-8').read() + '\n' + open('cloud.ps1', encoding='utf-8').read()
 def R(a, b):
     global base
     assert base.count(a) == 1, ('anchor', a[:60], base.count(a))
     base = base.replace(a, b)
 import re
-base = re.sub(r"\$BridgeVersion = '[0-9.]+'", "$BridgeVersion = '1.12.13'", base, 1)
+base = re.sub(r"\$BridgeVersion = '[0-9.]+'", "$BridgeVersion = '1.13.0'", base, 1)
 # 1.12.7 (security): the log never holds keys, codes or passwords, and is rotated at 5 MB keeping 5 old copies
 R(r"""function Write-Log([string]$msg) {
   $line = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + '  ' + $msg
@@ -17,6 +17,7 @@ R(r"""function Write-Log([string]$msg) {
   $m = $msg -replace '(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+', 'Bearer ***'
   $m = $m -replace '(?i)\b(key|token|password|passwd|secret|code|authorization|x-tds-key)("?\s*[:=]\s*"?)[^\s",;&<]+', '$1$2***'
   $m = $m -replace '\btdsd_[0-9a-f]{16,}\b', 'tdsd_***'
+  $m = $m -replace '\bfcd_[0-9a-f]{16,}\b', 'fcd_***'
   if ($Cfg -and $Cfg.Key -and $Cfg.Key.Length -ge 8) { $m = $m.Replace([string]$Cfg.Key, '***') }
   return $m
 }
@@ -170,14 +171,21 @@ R("""    $ledgers += [ordered]@{
 R("""      '/ledgerbalance' {""", """      '/ledgernames' { $result = Get-LedgerNames ([string]$qs['company']) ([int]('0' + $qs['port'])) }
       '/tb' { $result = Get-TrialBalance ([string]$qs['company']) ([string]$qs['to']) ([int]('0' + $qs['port'])) }
       '/ledgerbalance' {""")
-# 1.12.13: keeping FinCom's copy of each open company in step with Tally, in a worker of its own
+# 1.13.0: keeping FinCom's copy of each open company in step with Tally, in a worker of its own
 R("[switch]$Sync,", "[switch]$Sync,\n  [switch]$Keep,")
-R("  SyncCompanies   = @()\n", "  SyncCompanies   = @()\n  KeepInStep      = $null\n")
+R("  SyncCompanies   = @()\n", "  SyncCompanies   = @()\n  KeepInStep      = $null\n  CloudUrl        = ''\n  CloudKey        = ''\n")
 R("if ($Sync) {\n  $r = Invoke-NightlySync", "if ($Keep) {\n  try { Invoke-KeepWorker } catch { Write-Log ('Keeping copies in step stopped: ' + $_.Exception.Message) }\n  exit 0\n}\nif ($Sync) {\n  $r = Invoke-NightlySync")
 R("""    if (((Get-Date) - $lastCheck).TotalSeconds -ge 60) { $lastCheck = Get-Date; Show-Diagnosis }""", """    if (((Get-Date) - $lastCheck).TotalSeconds -ge (Get-KeepNum 'KeepStartSec' 60)) { $lastCheck = Get-Date; Show-Diagnosis; try { Start-KeepIfNeeded } catch { Write-Log ('Could not start keeping copies in step: ' + $_.Exception.Message) } }""")
-R("""      '/ledgerbalance' {""", """      '/keep' { if ($method -eq 'POST') { $o = $body | ConvertFrom-Json; $Cfg.KeepInStep = [bool]$o.on; Save-Config; if ($o.on) { Start-KeepIfNeeded } }; $result = Get-KeepStatus ([string]$qs['company']) }
+R("""      '/ledgerbalance' {""", """      '/shutdown' { if ($method -ne 'POST') { throw 'Use POST.' }; $script:ShutdownAfter = $true; $result = [ordered]@{ ok = $true; stopping = $true } }
+      '/cloudlink' { if ($method -eq 'POST') { $result = Set-CloudLink ($body | ConvertFrom-Json) } else { $result = Get-CloudLinkStatus } }
+      '/keep' { if ($method -eq 'POST') { $o = $body | ConvertFrom-Json; $Cfg.KeepInStep = [bool]$o.on; Save-Config; if ($o.on) { Start-KeepIfNeeded } }; $result = Get-KeepStatus ([string]$qs['company']) }
       '/keepcheck' { $result = Test-KeepMonth ([string]$qs['company']) ([string]$qs['ym']) ([int]('0' + $qs['port'])) }
       '/ledgerbalance' {""")
+# 1.13.0: the FinCom Connector may ask the bridge to stop (to update it, or restart it cleanly)
+R("""  finally { try { $client.Close() } catch { } }
+}""", """  finally { try { $client.Close() } catch { } }
+  if ($script:ShutdownAfter) { Write-Log 'Stopping: the FinCom Connector asked'; try { $listener.Stop() } catch { }; exit 0 }
+}""")
 # 1.12.8: the product is now called FinCom. Only what people read changes; the scheduled task keeps its old name
 # (an installed bridge finds and replaces it by that name)
 base = '\n'.join(l if "$script:TaskName = 'TDS Desk - nightly Tally copy'" in l else l.replace('TDS Desk', 'FinCom') for l in base.split('\n'))

@@ -107,3 +107,38 @@ Now the **work** part of the books (every key in `BOOKS_KEYS` except what is rea
 - **Who may save.** Only through the function, only for one's own firm, only owner and staff (`can_write()`); look-only members read.
 - **Without the migration** (or signed out) `BookSync` switches itself off and the books work in this browser as before; a line under the books' tabs says so.
 - `BookSync.st` keeps, per client, the revision and copy last agreed with the database, also in IndexedDB as `booksync:<cid>`.
+
+## The books in the cloud, and the FinCom Connector (bridge 1.13.0)
+
+```
+ TallyPrime ──XML──▶ Tally Bridge (keep in step: a few days at a time, then only changes)
+                        │ changed days (gzip), ledgers, state ─── HTTPS, x-fincom-device key ───▶ tally-ingest (edge function)
+                        │                                                                          │  checks the key (hash in tally_devices),
+ FinCom Connector ──────┘ keeps the bridge running, shows it, updates it, sends its log             │  the company's link to a client (tally_companies)
+ (Windows app)                                                                                      ▼
+                                                   storage tally-days/<firm>/<book>/<yyyymm>/<day>.xml.gz   tally_vouchers, tally_lines,
+                                                                                                    tally_ledger_day (ready totals), tally_ledgers
+ FinCom (any computer or phone) ◀── tally_tb, tally_ledger, tally_status, tally_days_list (members of the firm only)
+```
+
+- **Load on Tally** (`bridge/keep.ps1`): every request to Tally is timed; the worker keeps its share of each Tally's time under
+  `KeepSharePct` (10% in office hours, `KeepNightSharePct` 40% outside them). Each turn first asks Tally's own change counters
+  (`TDSDeskKeepCo`: the company's AltVchID and AltMstID); when neither moved, nothing else is asked. Changes are looked for in the last
+  three months every turn and in the whole period only when the counter says so. Slow and failed requests go in the log with their time;
+  `sync/keep-load.json` has each Tally's share and each kind of request's average and slowest time.
+- **Sending** (`bridge/cloud.ps1`): each day written to the copy is queued in `cloud-out.txt`; the queue goes in batches of about 3 MB,
+  ledgers first, only for companies the cloud says are linked; nothing is lost without internet (the queue waits, with back-off).
+  The computer's key (made in FinCom, Settings, Books in the cloud) is kept with Windows DPAPI for the signed-in user.
+- **Cloud** (`server/tally-cloud/`): `migration.sql` (tables, row-level security, functions), `index.ts` (tally-ingest), `parse.js`
+  (the day book read by FinCom's own rules; `tests/run_cloud_parse.mjs` checks it gives FinCom's figures on real books). One *book* per
+  Tally company, so a client that keeps one company per year in Tally has a book a year; `tally_pick` chooses the book for a date.
+- **FinCom** (`src/js/49-tally-cloud.js`, `TCloud`): Settings, Books in the cloud (connect this computer, remove one, link companies);
+  Look up and Reports load the cloud copy when this computer has no bridge for the company, downloading only days that changed (kept in
+  IndexedDB as `tcday:<book>:<day>`); a company of more than 60,000 entries is not loaded: its trial balance and ledgers come from the
+  cloud's ready totals.
+- **FinCom Connector** (`connector/`, C# for the .NET Framework 4.8 in Windows, built with Mono's `mcs` by `connector/build.sh`, published
+  by `connector/publish.py` to `assets/connector/` with `latest.json`): installs into the bridge's folder for the Windows user, starts with
+  Windows, runs the engine hidden and starts it again when it stops or stops answering (back-off; a script blocked by Windows or an
+  antivirus is recognised and explained), checks Tally, the company, the cloud, disk and internet, shows the companies and the log, updates
+  the engine and itself only with files matching their SHA-256 (and goes back when a new one does not start), and sends its log and
+  details (no keys) to the `tally-support` bucket. `tests/run_connector.py` runs its self-test under Mono and opens its window on a virtual screen.

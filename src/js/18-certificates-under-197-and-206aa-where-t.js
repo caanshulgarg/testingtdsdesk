@@ -1984,6 +1984,7 @@ const SETTING_TILES = [
   {id: "account",  title: "Firm account",      note: "Who is signed in, people in the firm, sync",       icon: "\u{1F465}"},
   {id: "plan",     title: "Plan and credit",   note: "What you pay, credit left, usage this month",      icon: "\u{1F4B3}"},
   {id: "bridge",   title: "Tally Bridge",      note: "Connect to TallyPrime, set it up, check it",       icon: "\u{1F517}"},
+  {id: "tcloud",   title: "Books in the cloud", note: "Computers that send Tally's books, and which company is which client", icon: "\u2601\uFE0F"},
   {id: "reading",  title: "Reading bills",     note: "How bills are read, and a test of each way",       icon: "\u{1F441}"},
   {id: "rates",    title: "Rates and limits",  note: "TDS rates, limits and the firm's own details",     icon: "\u{1F4D0}"},
   {id: "postlog",  title: "Sent to Tally",     note: "Every entry posted, by whom, and taking one back", icon: "\u{1F4DC}"},
@@ -1997,6 +1998,7 @@ function settingsTiles(){
     plan: a && a.firm ? (a.firm.plan ? esc(a.firm.plan.name) : "no plan") + " \u00b7 " + INR.format(num(a.firm.balance)) + " left" : "",
     bridge: Bridge.on() && Bridge.up() ? (Bridge.st.tallyUp ? "connected to Tally" : "bridge running, Tally not open") : "not connected",
     reading: S.engine === "api" ? "free steps, then Claude" : hasGoogle() ? "free steps, then Google OCR" : "free reading only",
+ tcloud: TCloud.pane.devices ? TCloud.pane.devices.filter(d => !d.revoked).length + " computer(s) sending" : "",
     rates: "tax year " + (S.firm && S.firm.fy ? esc(S.firm.fy) : "2026-27"),
     postlog: ((S.firm.postLog || []).filter(r => r.co === S.coId).length) + " entries",
     platform: S.adminData ? (S.adminData.firms || []).length + " firms" : "administrator"
@@ -2048,6 +2050,7 @@ function viewRules(){
   if (tab === "account") return head + viewCloudSettings() + (Cloud.on() ? viewAccountPeopleOnly() : "");
   if (tab === "plan") return head + viewAccount();
   if (tab === "bridge") return head + viewBridgeSettings();
+  if (tab === "tcloud") return head + TCloud.view();
   if (tab === "reading") return head + viewReading();
   if (tab === "postlog") return head + viewPostLog();
   if (tab === "platform") return head + viewSuperadmin();
