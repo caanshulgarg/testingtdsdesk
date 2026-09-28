@@ -273,3 +273,60 @@ body{background:
   .shine{animation:sheen 7s ease-in-out infinite}
   @keyframes sheen{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
 }
+/* ---------- vibrant layer: emerald leads, with sky, violet, amber, rose and teal ---------- */
+:root{--c-em1:#34d399;--c-em2:#059669;--c-sky1:#38bdf8;--c-sky2:#2563eb;--c-vi1:#a78bfa;--c-vi2:#7c3aed;--c-am1:#fbbf24;--c-am2:#ea580c;--c-ro1:#fb7185;--c-ro2:#db2777;--c-te1:#2dd4bf;--c-te2:#0891b2}
+.facts li:nth-child(1),.cap:nth-child(1),.node-a,.pt:nth-of-type(1),.comp .tile:nth-child(1),.ins:nth-child(1) h3,.aud:not(.alt){--c1:var(--c-em1);--c2:var(--c-em2)}
+.facts li:nth-child(2),.cap:nth-child(2),.pt:nth-of-type(2),.comp .tile:nth-child(2),.ins:nth-child(2) h3,.aud.alt{--c1:var(--c-vi1);--c2:var(--c-vi2)}
+.facts li:nth-child(3),.cap:nth-child(3),.pt:nth-of-type(3),.comp .tile:nth-child(3){--c1:var(--c-sky1);--c2:var(--c-sky2)}
+.facts li:nth-child(4),.cap:nth-child(4),.pt:nth-of-type(4),.comp .tile:nth-child(4){--c1:var(--c-am1);--c2:var(--c-am2)}
+.group:nth-child(2) .pt:nth-of-type(1){--c1:var(--c-te1);--c2:var(--c-te2)}
+.group:nth-child(2) .pt:nth-of-type(2){--c1:var(--c-ro1);--c2:var(--c-ro2)}
+.group:nth-child(2) .pt:nth-of-type(3){--c1:var(--c-am1);--c2:var(--c-am2)}
+.aud:not(.alt){--c1:var(--c-am1);--c2:var(--c-am2)}
+/* icon badges */
+.facts .ic,.cap-h .ic,.aud .ic.big,.tile>.ic,.pt>.ic,.ins-body h3 .ic,.flow .node .ic{box-sizing:content-box;padding:9px;border-radius:12px;color:#fff;filter:none;
+  background:linear-gradient(135deg,var(--c1,var(--c-em1)),var(--c2,var(--c-em2)));box-shadow:0 8px 18px -8px var(--c2,var(--c-em2)),inset 0 1px 0 rgb(255 255 255 / .35)}
+.facts .ic,.pt>.ic{width:20px;height:20px}
+.cap-h .ic,.ins-body h3 .ic{width:22px;height:22px}
+.tile>.ic{width:26px;height:26px;grid-row:span 3}
+.aud .ic.big{width:30px;height:30px;padding:12px;border-radius:14px}
+.flow .node .ic{width:24px;height:24px}
+.flow li:nth-child(1) .node{--c1:var(--c-sky1);--c2:var(--c-sky2)}
+.flow li:nth-child(5) .node{--c1:var(--c-vi1);--c2:var(--c-vi2)}
+.node.hi .ic{--c1:#bef264;--c2:#10b981;color:#04382c}
+/* coloured hover glow per card */
+.facts li:hover,.aud:hover,.tile:hover{border-color:color-mix(in srgb,var(--c1,var(--glow)) 60%,var(--line));box-shadow:0 20px 40px -20px var(--c2,var(--glow))}
+/* capability columns each carry their colour */
+.caps::before{background:linear-gradient(90deg,var(--c-em1),var(--c-vi1),var(--c-sky1),var(--c-am1))}
+.cap li::before{background:linear-gradient(135deg,var(--c1),var(--c2))}
+.what{background:
+  radial-gradient(600px 300px at 100% 0%,color-mix(in srgb,var(--c-vi1) 14%,transparent),transparent 70%),
+  radial-gradient(600px 320px at 0% 100%,color-mix(in srgb,var(--c-sky1) 14%,transparent),transparent 70%),var(--surface)}
+/* audience cards: warm for owners, violet for CAs */
+.aud:not(.alt){background:linear-gradient(160deg,color-mix(in srgb,var(--c-am1) 14%,var(--surface)),var(--surface) 60%)}
+.aud.alt{background:linear-gradient(160deg,color-mix(in srgb,var(--c-vi1) 16%,var(--surface)),var(--surface) 60%)}
+.aud .ticks .ic{color:var(--c2)}
+/* insight cards: MIS in emerald to cyan, audit in violet to indigo */
+.ins:nth-child(1) .ins-shot{background:radial-gradient(420px 260px at 90% 0%,rgb(190 242 100 / .45),transparent 65%),linear-gradient(140deg,#047857,#0891b2)}
+.ins:nth-child(2) .ins-shot{background:radial-gradient(420px 260px at 90% 0%,rgb(244 114 182 / .45),transparent 65%),linear-gradient(140deg,#6d28d9,#1d4ed8)}
+.ins:nth-child(1) .ticks .ic{color:#059669}.ins:nth-child(2) .ticks .ic{color:#7c3aed}
+@media (prefers-color-scheme:dark){.ins:nth-child(1) .ticks .ic{color:#34d399}.ins:nth-child(2) .ticks .ic{color:#a78bfa}.aud .ticks .ic{color:var(--c1)}}
+/* eyebrows as bright pills */
+.eyebrow{-webkit-background-clip:border-box;background-clip:border-box;color:#fff;padding:7px 12px;border-radius:999px;background:linear-gradient(90deg,#059669,#0891b2);box-shadow:0 8px 18px -10px #0891b2}
+#security .eyebrow{background:linear-gradient(90deg,#7c3aed,#2563eb);box-shadow:0 8px 18px -10px #7c3aed}
+/* hero and closing panels: bolder, multi-hue light */
+.panel{background:linear-gradient(125deg,#03342a 0%,#05664b 40%,#0a7f6a 70%,#0e6f86 100%)}
+.panel::before{background:
+  radial-gradient(620px 420px at 85% 10%,rgb(52 211 153 / .6),transparent 62%),
+  radial-gradient(520px 380px at 5% 105%,rgb(56 189 248 / .45),transparent 66%),
+  radial-gradient(420px 300px at 50% 45%,rgb(190 242 100 / .18),transparent 70%),
+  radial-gradient(380px 260px at 100% 100%,rgb(167 139 250 / .35),transparent 70%)}
+.panel.end{background:linear-gradient(120deg,#047857 0%,#0d9488 40%,#0369a1 75%,#5b21b6 110%)}
+.shine{background:linear-gradient(100deg,#6ee7b7 0%,#fde047 30%,#5eead4 60%,#a5f3fc 80%,#6ee7b7 100%);background-size:240% 100%;-webkit-background-clip:text;background-clip:text}
+/* compliance status chips */
+.status{background:linear-gradient(135deg,#d1fae5,#a7f3d0);color:#065f46}
+.status.wait{background:linear-gradient(135deg,#fef3c7,#fed7aa);color:#9a3412}
+@media (prefers-color-scheme:dark){.status{background:linear-gradient(135deg,#064e3b,#065f46);color:#a7f3d0}.status.wait{background:linear-gradient(135deg,#78350f,#7c2d12);color:#fed7aa}}
+.honest{padding-left:14px;border-left:3px solid;border-image:linear-gradient(#34d399,#38bdf8) 1}
+.qa[open] summary{color:var(--accent-ink)}
+.qa .chev{color:#fff;background:linear-gradient(135deg,#34d399,#0891b2);border-radius:999px;padding:3px;box-sizing:content-box;width:16px;height:16px}
