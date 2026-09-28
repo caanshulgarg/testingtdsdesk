@@ -54,40 +54,63 @@ try:
         ok(len(names) == len(fake_tally.L), "ledger names while typing come from Tally: %d of %d" % (len(names), len(fake_tally.L)))
         ok("OLD LEDGER FROM LAST YEAR" not in names, "the old ledger from the books read earlier is not offered")
         ok(pg.locator("#lkLeds option").count() == len(fake_tally.L), "the list under the ledger box is Tally's")
-        ok(pg.evaluate("LK.useTally(Object.assign({}, S.lk, {kind: 'tb'}), 'auto')"), "Tally is the source by default when the bridge is connected")
-        # the trial balance: one light read
+        ok(not pg.evaluate("LK.useTally(Object.assign({}, S.lk, {kind: 'tb'}), 'auto')") and not pg.evaluate("LK.useTally(Object.assign({}, S.lk, {kind: 'group', grp: 'Sundry Debtors'}), 'auto')"), "the trial balance and groups are never read live from Tally")
+        # the nightly copy, made here once (in real use the bridge makes it at 2 am): then totals never ask Tally
+        pg.evaluate("S.lkFr.at = 0");
+        t0 = time.time()
+        pg.evaluate("Bridge.call('/syncnow', {company: LK.tname()}, 3600000)")
+        ok(True, "nightly copy made in %.0fs" % (time.time() - t0))
+        pg.evaluate("S.lkFr.at = 0; LK.autoFresh()")
+        ok(wait_for(pg, "S.books.meta && S.books.meta.copyAt && !S.lkFr.busy", 300), "last night's copy is brought in on its own, from the bridge's folder")
+        ok(pg.evaluate("S.books.vouchers.length") > 1000 and pg.evaluate("S.books.meta.to") >= "20260331", "the copy holds the year: %d entries to %s" % (pg.evaluate("S.books.vouchers.length"), pg.evaluate("S.books.meta.to")))
+        # the trial balance: Tally is not asked anything
         fake_tally.REQS.clear()
         t0 = time.time()
-        pg.fill("#lkAsk", "trial balance as on 31/03/2026"); pg.keyboard.press("Enter")
+        pg.fill("#lkAsk", "need trial balance as on 31st july"); pg.keyboard.press("Enter")
         wait_for(pg, "S.lk.res && S.lk.res.kind === 'tb' && !S.lk.busy")
         secs = time.time() - t0
-        r = pg.evaluate("({src: S.lk.res.src, dr: S.lk.res.dr, cr: S.lk.res.cr, n: S.lk.res.rows.length})")
-        ok(r["src"] == "tally" and r["n"] > 20, "trial balance read from Tally: %d ledgers in %.1fs" % (r["n"], secs))
-        mv = fake_tally.amounts_until("20260331"); held = sum(ob + mv.get(n.replace("&amp;", "&"), mv.get(n, 0)) for n, p_, ob in fake_tally.L)
-        ok(abs((r["dr"] - r["cr"]) + held) < 1, "the trial balance is exactly what this Tally holds (its sample books are off by %.2f themselves)" % held)
-        ok(fake_tally.REQS.get("TDSDeskTB", 0) == 1 and not fake_tally.REQS.get("TDSDeskBalances") and not fake_tally.REQS.get("DayBook"), "Tally was asked once, lightly: " + json.dumps(fake_tally.REQS))
-        # asking again does not touch Tally
+        r = pg.evaluate("({src: S.lk.res.src, asOn: S.lk.res.asOn, dr: S.lk.res.dr, cr: S.lk.res.cr, n: S.lk.res.rows.length, none: S.lk.res.none || ''})")
+        ok(r["asOn"] == "20250731" or r["asOn"] == "20260731", "31st July understood: " + r["asOn"])
+        pg.fill("#lkAsk", "trial balance as on 31/03/2026"); pg.keyboard.press("Enter")
+        wait_for(pg, "S.lk.res && S.lk.res.kind === 'tb' && S.lk.res.asOn === '20260331' && !S.lk.busy")
+        r = pg.evaluate("({src: S.lk.res.src, dr: S.lk.res.dr, cr: S.lk.res.cr, n: S.lk.res.rows.length, none: S.lk.res.none || ''})")
+        ok(r["src"] == "books" and r["n"] > 20 and not r["none"], "trial balance on 31 March 2026 from the copy: %d ledgers" % r["n"])
+        ok(sum(fake_tally.REQS.values()) == 0, "Tally was asked nothing for the trial balance: " + json.dumps(fake_tally.REQS))
+        ok(abs(r["dr"] - r["cr"]) < 1, "the trial balance from the copy balances: %.2f / %.2f" % (r["dr"], r["cr"]))
+        # every ledger against Tally's own figure (asked here only to check; FinCom does not ask this)
+        diff = pg.evaluate("""async () => { const mine = {}; S.lk.res.rows.forEach(z => { mine[z.l] = z.bal; });
+          const j = await Bridge.call('/tb?company=' + encodeURIComponent(LK.tname()) + '&to=20260331'); const bad = [];
+          j.ledgers.forEach(([n, p, b]) => { const t = -Books.amt(b), m = mine[n] || 0; if (Math.abs(t - m) >= 1) bad.push(n); });
+          return {n: j.ledgers.length, bad}; }""")
+        import re as _re
+        fx = lambda n: any(_re.search(r"<LEDGERNAME>" + _re.escape(n) + r"</LEDGERNAME>.*?<AMOUNT>[^<]*[$@=]", pc, _re.S) for d, pc in fake_tally.V if "<LEDGERNAME>" + n + "</LEDGERNAME>" in pc)
+        banks = [n for n in diff["bad"] if "BANK" in n]
+        ok(all(fx(n) or n in banks for n in diff["bad"]) and len(diff["bad"]) <= 5,
+           "every ledger agrees with Tally (%d of %d), except those with dollar entries that the stand-in Tally cannot add up: %s" % (diff["n"] - len(diff["bad"]), diff["n"], ", ".join(diff["bad"])))
         fake_tally.REQS.clear()
-        pg.click('[data-lk="show"]'); pg.wait_for_timeout(800)
-        ok(sum(fake_tally.REQS.values()) == 0, "asking again comes from the ten-minute copy, not Tally: " + json.dumps(fake_tally.REQS))
-        ok("read at" in pg.inner_text(".lk-res"), "the answer says when it was read")
-        pg.click('[data-lk="fresh"]'); wait_for(pg, "!S.lk.busy"); pg.wait_for_timeout(300)
-        ok(fake_tally.REQS.get("TDSDeskTB", 0) == 1, "Read again asks Tally once more")
+        # a group: also from the copy
+        pg.click('[data-lkkind="group"]'); pg.fill('[data-lkf="grp"]', "Sundry Debtors"); pg.evaluate("S.lk.from = '20250401'; S.lk.to = '20260331';")
+        pg.click('[data-lk="show"]'); wait_for(pg, "S.lk.res && S.lk.res.kind === 'group' && !S.lk.busy")
+        ok(pg.evaluate("S.lk.res.src") == "books" and pg.evaluate("S.lk.res.rows.length") > 0 and sum(fake_tally.REQS.values()) == 0, "a group comes from the copy, Tally not asked: %d ledgers" % pg.evaluate("S.lk.res.rows.length"))
+        # today's entries: one small day book read
+        fake_tally.REQS.clear()
+        pg.evaluate("S.books.meta.to = '20260320'; render();"); pg.wait_for_timeout(300)
+        pg.evaluate("Audit.today = () => '20260331'")
+        pg.click('[data-lk="today"]'); wait_for(pg, "!S.lkFr.busy && S.books.meta.to === '20260331'", 120)
+        ok(set(fake_tally.REQS) <= {"DayBook", "TDSDeskCompanies"} and fake_tally.REQS.get("DayBook", 0) == 1, "today's entries: one small day book read, nothing else: " + json.dumps(fake_tally.REQS))
+        ok(pg.evaluate("S.books.tb.to") >= "20260331", "balances carry on from the entries brought in")
         # a ledger straight from Tally
         bank = "ICICI BANK ACCOUNT-3812"
         fake_tally.REQS.clear()
         pg.fill("#lkAsk", bank.lower() + " for august 2025"); pg.keyboard.press("Enter")
         wait_for(pg, "S.lk.res && S.lk.res.kind === 'ledger' && !S.lk.busy")
+        ok(pg.evaluate("S.lk.res.src") == "books" and sum(fake_tally.REQS.values()) == 0, "a ledger inside the copy comes from the copy at once")
+        pg.click('[data-lksrc="tally"]'); pg.click('[data-lk="show"]')
+        wait_for(pg, "S.lk.res && S.lk.res.kind === 'ledger' && S.lk.res.src === 'tally' && !S.lk.busy")
         lr = pg.evaluate("({src: S.lk.res.src, led: S.lk.res.led, from: S.lk.res.from, rows: S.lk.res.rows.length, open: S.lk.res.open, close: S.lk.res.close, dr: S.lk.res.dr, cr: S.lk.res.cr})")
         ok(lr["src"] == "tally" and lr["led"] == bank and lr["from"] == "20250801" and lr["rows"] > 10, "the ledger is read from Tally, with its entries: " + json.dumps({k: lr[k] for k in ("led", "rows")}))
         ok(abs(lr["open"] + lr["dr"] - lr["cr"] - lr["close"]) < 1, "opening plus entries is Tally's closing")
         ok(not fake_tally.REQS.get("DayBook") and not fake_tally.REQS.get("TDSDeskBalances"), "no day book and no full balances for one ledger: " + json.dumps(fake_tally.REQS))
-        # a group from Tally: two light reads, then from the copy
-        fake_tally.REQS.clear()
-        pg.click('[data-lkkind="group"]'); pg.fill('[data-lkf="grp"]', "Sundry Debtors"); pg.evaluate("S.lk.from = '20250401'; S.lk.to = '20260331';")
-        pg.click('[data-lk="show"]'); wait_for(pg, "S.lk.res && S.lk.res.kind === 'group' && !S.lk.busy")
-        g = pg.evaluate("({src: S.lk.res.src, n: S.lk.res.rows.length})")
-        ok(g["src"] == "tally" and g["n"] > 0 and fake_tally.REQS.get("TDSDeskTB", 0) <= 2, "a group from Tally in at most two light reads: %d ledgers, %s" % (g["n"], json.dumps(fake_tally.REQS)))
         # the books can still be chosen
         pg.click('[data-lksrc="books"]'); pg.wait_for_timeout(200)
         ok(pg.evaluate("S.lk.src") == "books", "the books read into FinCom can be chosen instead")

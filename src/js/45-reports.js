@@ -132,9 +132,12 @@ const RPT = {
   },
   view(b){
     const have = (b.vouchers || []).length > 0, q = String(S.rptQ || "").toLowerCase().trim();
+    if (LK.live()) setTimeout(() => LK.autoFresh(), 0);
     let h = '<section class="dash-card rpt-head"><div class="rpt-top-row"><div><h3>Reports</h3><p class="note" style="margin:0">Every report for ' + esc(CO().name) + " in one place. Click a figure or a report to open it.</p></div>" +
       '<input type="search" id="rptQ" data-fk="rptQ" data-keeptyped value="' + esc(S.rptQ || "") + '" placeholder="Find a report: ageing, 3B, cash, ratios…" aria-label="Find a report">' +
       (have ? '<select data-rptfy aria-label="Year">' + this.fys().map(y => '<option value="' + y + '"' + (this.range().fy === y ? " selected" : "") + ">" + FC.fyLabel(y) + "</option>").join("") + "</select>" : "") + "</div></section>";
+    if (LK.fr().busy) h += busyCard("Bringing the books up to date\u2026", LK.fr().busy, 0, 0);
+    if (have || LK.live()) h += LK.freshBar(b);
     if (!have) h += FC.noBooks("Reports");
     const d = have ? this.data() : null;
     if (q){

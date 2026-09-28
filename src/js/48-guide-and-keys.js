@@ -64,3 +64,8 @@ if (typeof document !== "undefined"){
   document.addEventListener("click", e => { if (e.target.closest && e.target.closest("[data-dashask]")) dashAsk(); });
   document.addEventListener("keydown", e => { if (e.key === "Enter" && e.target && e.target.id === "dashAsk"){ e.preventDefault(); dashAsk(); } });
 }
+// after the nightly copy is switched on anywhere, Look up shows it
+if (typeof document !== "undefined") document.addEventListener("click", e => {
+  const t = e.target.closest && e.target.closest('[data-act="tallyScheduleOn"]');
+  if (t && S.lkFr) setTimeout(() => { S.lkFr.at = 0; LK.autoFresh(); }, 4000);
+});

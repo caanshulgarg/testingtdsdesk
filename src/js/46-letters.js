@@ -157,6 +157,8 @@ const LTR = {
       '<div class="lk-kinds" role="tablist" aria-label="Letters"><button role="tab" data-ltrmode="confirm" aria-selected="' + (x.mode === "confirm") + '">Balance confirmations</button><button role="tab" data-ltrmode="remind" aria-selected="' + (x.mode === "remind") + '">Dues reminders</button><button role="tab" data-ltrmode="settings" aria-selected="' + (x.mode === "settings") + '">Letter settings</button></div></section>';
     if (!have && x.mode !== "settings") return h + FC.noBooks("Letters");
     if (x.busy) h += busyCard("Reading Tally…", x.busy, 0, 0);
+    if (live) setTimeout(() => LK.autoFresh(), 0);
+    if (LK.fr().busy) h += busyCard("Bringing the books up to date\u2026", LK.fr().busy, 0, 0);
     if (x.mode === "settings") return h + this.viewSettings();
     return h + (x.mode === "confirm" ? this.viewConfirm(live) : this.viewRemind());
   },
@@ -173,7 +175,7 @@ const LTR = {
       '<label class="f"><span>Show</span><select data-ltrf="show">' + [["all", "Every party"], ["notsent", "Not sent yet"], ["waiting", "Sent, no reply yet"], ["differs", "Replied with a difference"]].map(([v, l]) => '<option value="' + v + '"' + (x.show === v ? " selected" : "") + ">" + l + "</option>").join("") + "</select></label>" +
       '<label class="f lk-wide"><span>Find</span><input type="search" data-fk="ltrQ" data-ltrf="q" data-keeptyped value="' + esc(x.q) + '" placeholder="party or GSTIN"></label></div>' +
       '<p class="note" style="margin:8px 0 0">Replies go to <b>' + esc(this.replyTo().name) + "</b>" + (c.replyTo === "auditor" ? " (the auditor)" : "") + ". " + (c.attach ? "Each letter carries the party’s statement of account for the year." : "") + ' <button class="linkbtn" data-ltrmode="settings">Change</button></p></section>';
-    if (!B.ok) return h + '<div class="fc-empty"><h3>The balances on ' + FC.when(x.asOn) + " are not known yet</h3><p class=\"note\">" + esc(B.why || "") + ".</p>" + (live ? '<button class="btn primary" data-ltr="tally">Read the balances from Tally</button>' : '<p class="note">Connect the Tally Bridge to read them.</p>') + "</div>";
+    if (!B.ok) return h + '<div class="fc-empty"><h3>The balances on ' + FC.when(x.asOn) + ' are not in FinCom\u2019s copy of the books yet</h3><p class="note">' + esc(B.why || "") + '.</p>' + LK.freshBar(S.books) + "</div>";
     const rec = this.store().conf[x.asOn] || {}, all = Object.values(rec), sent = all.filter(s => s.sentAt).length, agreed = all.filter(s => s.reply === "agreed").length, diff = all.filter(s => s.reply === "differs").length;
     const picked = rows.filter(r => x.sel[r.l]);
     h += '<div class="dash-tiles" style="margin-top:12px"><div class="dtile"><span>Parties</span><b>' + rows.length + "</b><small>" + esc(B.src) + '</small></div><div class="dtile"><span>Sent</span><b>' + sent + '</b><small>for this date</small></div><div class="dtile"><span>Agreed</span><b>' + agreed + '</b><small>confirmed by the party</small></div><div class="dtile' + (diff ? " warn" : "") + '"><span>Differences</span><b>' + diff + "</b><small>to reconcile</small></div></div>";
@@ -239,8 +241,7 @@ if (typeof document !== "undefined"){
       return;
     }
     const a = t.dataset.ltr;
-    if (a === "tally") LTR.readTally(x.asOn);
-    else if (a === "print") LTR.print("confirm", LTR.confirmRows().rows.filter(r => x.sel[r.l]));
+    if (a === "print") LTR.print("confirm", LTR.confirmRows().rows.filter(r => x.sel[r.l]));
     else if (a === "rprint") LTR.print("remind", LTR.remindRows().filter(r => x.sel["rem|" + r.l]));
     else if (a === "selall" || a === "rselall"){
       const rows = a === "selall" ? LTR.confirmRows().rows : LTR.remindRows(), key = r => (a === "selall" ? "" : "rem|") + r.l, all = rows.every(r => x.sel[key(r)]);

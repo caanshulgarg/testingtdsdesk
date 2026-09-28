@@ -301,11 +301,18 @@ const LK = {
   },
   types(){ return Array.from(new Set((S.books.vouchers || []).map(v => v.type).filter(Boolean))).sort(); },
   // ---------- run what the page asks for
-  // Where the answer comes from: Tally, live, whenever the bridge is connected and Tally can answer it lightly (a ledger,
-  // a group, the trial balance, a ledger month by month); else the books read into FinCom. Answers from Tally are kept for
-  // ten minutes, so asking again, or turning pages, never asks Tally twice.
-  canTally(x){ return this.live() && (x.kind === "ledger" || x.kind === "tb" || x.kind === "group" || (x.kind === "monthly" && !!x.led)); },
-  useTally(x, how){ if (how === "books") return false; if (how === "tally" || how === "fresh") return this.canTally(x); return (x.src || "tally") === "tally" && this.canTally(x); },
+  // Tally is never asked to work out balances during the day: that holds Tally up for everyone using it. Totals (the trial
+  // balance, a group, month by month) always come from FinCom's copy of the books, which the bridge refreshes every night
+  // and which "Bring in today's entries" tops up with just the days since. Only one ledger at a time is ever read live,
+  // and only when the copy does not reach the dates asked for (or when asked for); that read is small.
+  canTally(x){ return this.live() && (x.kind === "ledger" || (x.kind === "monthly" && !!x.led)); },
+  covers(from, to){ const m = (S.books || {}).meta || {}; return (S.books.vouchers || []).length > 0 && !!m.from && m.from <= from && String(m.to || "") >= to; },
+  useTally(x, how){
+    if (how === "books" || !this.canTally(x)) return false;
+    if (how === "tally" || how === "fresh") return true;
+    if (x.src) return x.src === "tally";
+    return !this.covers(x.from, x.to);
+  },
   async run(how){
     const x = this.st();
     if (x.busy) return;
@@ -338,6 +345,66 @@ const LK = {
     render();
   },
   booksAge(){ const m = (S.books || {}).meta || {}; return m.at ? fmtDate(String(m.at).slice(0, 10)) : ""; },
+  // ---------- keeping the copy of the books fresh without holding Tally up
+  fr(){ const cid = S.coId; if (!S.lkFr || S.lkFr.cid !== cid) S.lkFr = {cid, man: null, sch: null, at: 0, busy: ""}; return S.lkFr; },
+  // on opening Look up, Reports or Letters: if the bridge made a newer copy last night, bring it in (read from the bridge's
+  // folder; Tally is not asked anything)
+  async autoFresh(){
+    const f = this.fr(), co = CO();
+    if (!this.live() || f.busy || Date.now() - f.at < 15 * 60000) return;
+    f.at = Date.now();
+    const q = "?company=" + encodeURIComponent(this.tname()) + Bridge.pinQ();
+    try { f.man = await Bridge.call("/synced" + q, null, 30000); } catch (e){ f.man = {error: (e && e.message) || String(e)}; }
+    try { f.sch = await Bridge.call("/schedule", null, 30000); } catch (e){ f.sch = null; }
+    const b = S.books, m = f.man || {}, meta = (b && b.meta) || {};
+    if (b && b.cid === co.id && m.ok && !m.none && m.at && m.from && (!meta.copyAt || m.at > meta.copyAt) && (!meta.to || m.to >= meta.to || !meta.copyAt)){
+      f.busy = "Bringing in last night\u2019s copy of the books (made " + String(m.at).replace("T", " ").slice(0, 16) + "); Tally is not asked anything\u2026"; render();
+      try { await TallyRead.read(m.from, m.to, "copy"); b.meta.copyAt = m.at; b.meta.copyTo = m.to; await saveBooks(); toast("The books are up to " + FC.when(m.to) + ", from last night\u2019s copy."); }
+      catch (e){ toast("Could not bring in last night\u2019s copy: " + ((e && e.message) || e)); }
+      f.busy = "";
+    }
+    render();
+  },
+  // the days since the copy: one small day book read, merged in; balances follow from the entries
+  async bringToday(){
+    const f = this.fr(), b = S.books, meta = b.meta || {}, today = Audit.today();
+    if (!this.live()){ toast("Connect the Tally Bridge first."); return; }
+    if (!(b.vouchers || []).length || !meta.to){ toast("Bring in the books first (last night\u2019s copy, or From Tally)."); return; }
+    const from = Audit.ymd(Audit.iso(meta.to) && FC.d8(addDays(Audit.iso(meta.to), 1))), to = today;
+    const start = String(meta.to) >= today ? today : from;
+    if (Audit.days(start, to) > 31){ toast("The copy is more than a month old. Switch on the nightly copy, or make the copy now after office hours."); return; }
+    f.busy = "Reading " + FC.span(start, to) + " from Tally\u2026 (a small read)"; render();
+    try {
+      const q = "?company=" + encodeURIComponent(this.tname()) + Bridge.pinQ();
+      const text = await TallyRead.raw("/daybook" + q + "&from=" + start + "&to=" + to, 180000);
+      const res = await Books.importDayBook(new Blob([text], {type: "text/xml"}));
+      const bad = notThisClient((res.meta || {}).gstins);
+      if (bad.length) throw new Error(panRefusal("The company open in Tally", bad));
+      TallyRead.merge(b, res, start, to);
+      if (b.tb && b.tb.from <= start && String(b.tb.to) < to) b.tb.to = to;     // the opening stays; later balances follow from the entries
+      b.map = Books.mapLedgers(b.vouchers, b.map); try { LedMaster.refresh(b); } catch (e){}
+      b.meta.at = new Date().toISOString(); b.meta.todayAt = b.meta.at; b.reco = null;
+      await saveBooks();
+      this.cache = {}; toast(res.vouchers.length + " entries from " + FC.span(start, to) + " brought in.");
+    } catch (e){ toast("Could not read Tally: " + ((e && e.message) || e)); }
+    f.busy = ""; render();
+  },
+  async syncNow(){
+    const r = await askConfirm({title: "Make the copy of the books now?", ok: "Make it now", body: "<p>The bridge reads this year\u2019s day book and every ledger\u2019s balance from Tally. On a large company Tally is busy for several minutes and others using it will wait.</p><p>Best done after office hours. Switching on the nightly copy does this every night at 2 am instead.</p>"});
+    if (!r || !r.ok) return;
+    const f = this.fr(); f.busy = "The bridge is copying the books from Tally\u2026 this takes a few minutes"; render();
+    try { await Bridge.call("/syncnow", {company: this.tname()}, 3600000); f.at = 0; f.busy = ""; await this.autoFresh(); }
+    catch (e){ f.busy = ""; toast("The copy did not finish: " + ((e && e.message) || e)); render(); }
+  },
+  freshBar(b){
+    const f = this.fr(), live = this.live(), meta = (b && b.meta) || {}, have = (b.vouchers || []).length > 0, sch = f.sch || {}, today = Audit.today();
+    if (!have && !live) return "";
+    const upTo = have ? "The books in FinCom run to <b>" + FC.when(meta.to) + "</b>" + (meta.copyAt ? " (last night\u2019s copy, made " + esc(String(meta.copyAt).replace("T", " ").slice(0, 16)) + (meta.todayAt ? "; today\u2019s entries brought in at " + new Date(meta.todayAt).toLocaleTimeString("en-IN", {hour: "2-digit", minute: "2-digit"}) : "") + ")" : meta.at ? " (read " + this.booksAge() + ")" : "") + "." : "No books in FinCom yet.";
+    const btns = live ? (have && String(meta.to) < today ? '<button class="btn small primary" data-lk="today">Bring in today\u2019s entries</button>' : have ? '<button class="btn small" data-lk="today">Bring in today\u2019s entries again</button>' : "") +
+      (sch.on ? '<span class="note">Nightly copy is on' + (sch.next ? ", next " + esc(sch.next) : "") + ".</span>" : f.sch ? '<button class="btn small" data-act="tallyScheduleOn">Switch on the nightly copy (2 am)</button>' : "") +
+      (!have || (f.man && f.man.none) ? '<button class="btn small" data-lk="syncnow">Make the copy now</button>' : "") : '<span class="note">Connect the Tally Bridge to keep this up to date.</span>';
+    return '<div class="lk-fresh"><span class="note">' + upTo + " Totals and the trial balance come from these books, so Tally is never held up.</span>" + btns + "</div>";
+  },
   // ---------- a question in plain words, turned into a look-up
   STOP: new Set(["the", "of", "for", "and", "to", "a", "an", "in", "on", "from", "show", "me", "give", "what", "is", "was", "ledger", "account", "a/c", "ac", "statement", "balance", "balances", "all", "with", "by", "as", "at", "till", "upto", "up", "this", "last", "year", "month", "quarter", "fy", "ltd", "pvt", "private", "limited", "llp", "co", "&", "m/s", "ms", "entries", "entry", "list", "please", "details", "detail", "how", "much", "many", "our", "my", "we", "us"]),
   MONTHS: {jan: 1, january: 1, feb: 2, february: 2, mar: 3, march: 3, apr: 4, april: 4, may: 5, jun: 6, june: 6, jul: 7, july: 7, aug: 8, august: 8, sep: 9, sept: 9, september: 9, oct: 10, october: 10, nov: 11, november: 11, dec: 12, december: 12},
@@ -363,10 +430,16 @@ const LK = {
       let q = x.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
       if (q){ const y = q[3].length === 2 ? "20" + q[3] : q[3]; return y + q[2].padStart(2, "0") + q[1].padStart(2, "0"); }
       q = x.match(/^(\d{4})-(\d{2})-(\d{2})$/); if (q) return q[1] + q[2] + q[3];
-      q = x.match(/^(\d{1,2})\s*(?:st|nd|rd|th)?\s+([a-z]+)\s+(\d{4})$/); if (q && this.MONTHS[q[2]]) return q[3] + String(this.MONTHS[q[2]]).padStart(2, "0") + q[1].padStart(2, "0");
+      q = x.match(/^(\d{1,2})\s*(?:st|nd|rd|th)?\s+(?:of\s+)?([a-z]+)(?:,?\s+(\d{4}))?$/) || (x.match(/^([a-z]+)\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(\d{4}))?$/) || []).slice(0).map((v, i, arr) => i === 1 ? arr[2] : i === 2 ? arr[1] : v);
+      if (q && q[2] && this.MONTHS[q[2]]){
+        const mm = String(this.MONTHS[q[2]]).padStart(2, "0"), dd = String(q[1]).padStart(2, "0");
+        let y = q[3] ? num(q[3]) : num(a.slice(0, 4));
+        if (!q[3] && String(y) + mm + dd > a) y--;                  // no year: the latest such day up to today
+        return y + mm + dd;
+      }
       return "";
     };
-    const D = "(\\d{1,2}[\\/\\-.]\\d{1,2}[\\/\\-.]\\d{2,4}|\\d{4}-\\d{2}-\\d{2}|\\d{1,2}(?:st|nd|rd|th)?\\s+[a-z]+\\s+\\d{4})";
+    const D = "(\\d{1,2}[\\/\\-.]\\d{1,2}[\\/\\-.]\\d{2,4}|\\d{4}-\\d{2}-\\d{2}|\\d{1,2}(?:st|nd|rd|th)?\\s+(?:of\\s+)?[a-z]+(?:,?\\s+\\d{4})?|[a-z]+\\s+\\d{1,2}(?:st|nd|rd|th)?(?:,?\\s+\\d{4})?)";
     if ((m = t.match(new RegExp("(?:from|between)\\s+" + D + "\\s+(?:to|and|till|until|-)\\s+" + D)))){ const f = one(m[1]), e = one(m[2]); if (f && e) return {from: f, to: e}; }
     if ((m = t.match(new RegExp("(?:as on|as at|on|till|upto|up to)\\s+" + D)))){ const d = one(m[1]); if (d) return {asOn: d, from: Audit.fyStart(d), to: d}; }
     if ((m = t.match(/\b(?:fy\s*)?(20\d{2})\s*[-\/]\s*(\d{2}|20\d{2})\b/))){ const y = num(m[1]); return {from: y + "0401", to: (y + 1) + "0331"}; }
@@ -424,11 +497,11 @@ const LK = {
     const x = this.st(), live = this.live(), have = (b.vouchers || []).length > 0;
     // Tally's ledger names, once per client (light), so typing offers what is in Tally today
     if (live && this.light() && !(this.names && this.names.cid === S.coId) && !this._namesBusy && this._namesTried !== S.coId){ this._namesTried = S.coId; setTimeout(() => this.loadNames(), 0); }
-    // the source is Tally whenever it is connected, unless the books were chosen (x.src = "books")
+    if (live) setTimeout(() => this.autoFresh(), 0);
     const leds = FC.ledgers(), grps = FC.groups(), T = FC.tn();
     const dl = '<datalist id="lkLeds">' + leds.slice(0, 5000).map(l => '<option value="' + esc(l) + '">').join("") + '</datalist><datalist id="lkGrps">' + grps.map(g => '<option value="' + esc(g) + '">').join("") + "</datalist>";
     let h = '<section class="dash-card lk-ask"><h3>Look up</h3>' +
-      '<p class="note" style="margin:0 0 10px">Ask in plain words, or choose below. ' + (live ? "Ledgers, groups and the trial balance are read straight from Tally, lightly, and kept for ten minutes." : "Answers come from the books read into FinCom" + (this.booksAge() ? " on " + this.booksAge() : "") + ". Connect the Tally Bridge to read Tally directly.") + "</p>" +
+      '<p class="note" style="margin:0 0 10px">Ask in plain words, or choose below. ' + "Answers come at once from FinCom\u2019s copy of the books; one ledger can also be read straight from Tally." + "</p>" +
       '<div class="lk-askrow"><input type="search" id="lkAsk" data-fk="lkAsk" data-lkf="ask" data-keeptyped value="' + esc(x.ask || "") + '" placeholder="Try: HDFC bank for August · Raj Fabrics open bills · sales month by month this year · trial balance as on 31/03/2026" aria-label="Ask a question about the books">' +
       '<button class="btn primary" data-lk="ask">Look up</button></div>' +
       (x.heard ? '<p class="note lk-heard">Understood as: <b>' + esc(x.heard) + "</b>. Change anything below.</p>" : "") +
@@ -446,17 +519,18 @@ const LK = {
     else form = '<label class="f lk-wide"><span>Words, a number or an amount</span><input type="search" data-fk="lkQ" data-lkf="q" value="' + esc(x.q || "") + '" placeholder="party, narration, bill number or 25000"></label>' + dates +
       '<label class="f"><span>Type</span><select data-lkf="typ"><option value="">Every type</option>' + this.types().map(t => '<option' + (x.typ === t ? " selected" : "") + ">" + esc(t) + "</option>").join("") + "</select></label>";
     const presets = ["ledger", "group", "monthly", "find"].includes(x.kind) ? '<div class="lk-presets">' + FC.PRESETS.map(([k, l]) => '<button class="btn small" data-lkper="' + k + '">' + l + "</button>").join("") + "</div>" : "";
-    const can = this.canTally(x), fromTally = can && x.src !== "books";
+    const can = this.canTally(x), fromTally = can && this.useTally(x, "auto");
     const srcRow = can ? '<div class="lk-src" role="radiogroup" aria-label="Where from"><span class="note">From</span><button role="radio" data-lksrc="tally" aria-checked="' + fromTally + '">Tally, live</button>' +
         (have ? '<button role="radio" data-lksrc="books" aria-checked="' + !fromTally + '">The books read into FinCom' + (this.booksAge() ? " on " + this.booksAge() : "") + "</button>" : "") + "</div>"
-      : (have ? '<p class="note lk-srcnote">From the books read into FinCom' + (this.booksAge() ? " on " + this.booksAge() : "") + ' (entries ' + (b.meta && b.meta.from ? FC.span(b.meta.from, b.meta.to) : "") + '). <button class="linkbtn" data-fcgo="import">Read them again</button></p>' : "");
-    const names = live ? '<p class="note lk-names">' + (T ? "Ledger names from Tally: " + T.leds.length + ' \u00b7 <button class="linkbtn" data-lk="names">refresh</button>' : this.light() ? (this._namesBusy ? "Reading the ledger names from Tally\u2026" : "") : "Install Tally Bridge 1.12.10 so ledger names come from Tally and the trial balance is read in one light step.") + "</p>" : "";
-    h += '<div class="lk-form">' + form + "</div>" + presets + srcRow +
+      : "";
+    const names = live ? '<p class="note lk-names">' + (T ? "Ledger names from Tally: " + T.leds.length + ' \u00b7 <button class="linkbtn" data-lk="names">refresh</button>' : this.light() ? (this._namesBusy ? "Reading the ledger names from Tally\u2026" : "") : "Install Tally Bridge 1.12.10 so ledger names come from Tally.") + "</p>" : "";
+    h += this.freshBar(b) + '<div class="lk-form">' + form + "</div>" + presets + srcRow +
       '<div class="row" style="gap:8px;margin-top:10px;align-items:center"><button class="btn primary" data-lk="show"' + (x.busy ? " disabled" : "") + ">" + (x.busy ? "Reading Tally\u2026" : "Show") + "</button>" + names + "</div>" + dl + "</section>";
     const rec = this.recent();
     if (rec.length && !x.res) h += '<section class="dash-card" style="margin-top:12px"><h3>Looked up lately</h3><div class="lk-recent">' + rec.map((r, i) => '<button class="btn small" data-lkrec="' + i + '">' + esc(r.label) + "</button>").join("") + "</div></section>";
     if (!have && !live) h += FC.noBooks("Look up");
     if (x.busy) h += busyCard("Reading Tally…", x.busy, 0, 0);
+    if (this.fr().busy) h += busyCard("Bringing the books up to date\u2026", this.fr().busy, 0, 0);
     if (x.res) h += this.result(x.res, x);
     return h;
   },
@@ -490,7 +564,7 @@ const LK = {
         '<tr class="lk-tot"><td><b>' + r.rows.length + ' ledgers</b></td><td></td><td class="n"><b>' + (r.open == null ? "" : FC.drcr(r.open)) + '</b></td><td class="n"><b>' + FC.amt(r.dr) + '</b></td><td class="n"><b>' + FC.amt(r.cr) + '</b></td><td class="n"><b>' + (r.close == null ? "" : FC.drcr(r.close)) + "</b></td></tr></tbody></table></div>";
     }
     else if (r.kind === "tb"){
-      if (r.none) return h + '<div class="bk-none">The balances on this date are not known from the books read here: ' + esc(r.none) + "." + (typeof bridgeLive === "function" && bridgeLive(CO()) ? ' <button class="btn small" data-lk="tally">Fetch from Tally</button>' : "") + "</div></section>";
+      if (r.none) return h + '<div class="bk-none">The balances on this date are not in FinCom\u2019s copy of the books yet: ' + esc(r.none) + ". Bring in last night\u2019s copy or today\u2019s entries above; the trial balance is then worked out here, without holding Tally up.</div></section>";
       const diff = r2(r.dr - r.cr);
       h += '<div class="dash-tiles">' + tile("Debit balances", FC.amt(r.dr)) + tile("Credit balances", FC.amt(r.cr)) + tile("Difference", Math.abs(diff) < 0.5 ? "agrees" : FC.amt(diff), Math.abs(diff) < 0.5 ? "" : "warn") + tile("Ledgers", String(r.rows.length)) + "</div>";
       h += '<div class="bk-tablewrap"><table class="bk-table lk-t"><thead><tr><th>Ledger</th><th>Under</th><th class="n">Debit</th><th class="n">Credit</th></tr></thead><tbody>' +
@@ -565,6 +639,8 @@ if (typeof document !== "undefined"){
     else if (a === "tally") LK.run("tally");
     else if (a === "fresh") LK.run("fresh");
     else if (a === "names"){ LK.names = null; LK.loadNames(true); render(); }
+    else if (a === "today") LK.bringToday();
+    else if (a === "syncnow") LK.syncNow();
     else if (a === "clear"){ x.res = null; render(); }
     else if (a === "print") LK.printIt();
     else if (a === "excel" && x.res) FC.excel(x.res.title, [[x.res.kind === "tb" ? "Trial balance" : "Look up", LK.sheet(x.res)]]).catch(er => toast("Could not build the file: " + (er && er.message)));

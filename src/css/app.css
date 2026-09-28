@@ -1110,3 +1110,6 @@ header.top .tbar-title{align-items:center}
 .lk-src button{border:1px solid var(--rule);background:var(--sheet);color:var(--ink);border-radius:999px;padding:5px 12px;font:inherit;font-size:13px;cursor:pointer}
 .lk-src button[aria-checked="true"]{border-color:#10b981;background:color-mix(in srgb,#10b981 14%,var(--sheet));font-weight:600}
 .lk-srcnote{margin:10px 0 0}.lk-names{margin:0}
+.lk-fresh{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;margin:10px 0 0;padding:9px 12px;border-radius:10px;background:color-mix(in srgb,var(--v-sky1) 9%,var(--sheet));border:1px solid color-mix(in srgb,var(--v-sky1) 30%,var(--rule))}
+.lk-fresh .note{flex:1 1 320px}
+.fc-empty .lk-fresh{text-align:left;margin-top:12px}
