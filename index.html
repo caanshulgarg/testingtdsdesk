@@ -931,7 +931,7 @@ p,.note,.banner{text-wrap:pretty}
 /* on the screens with review / post tabs the client name is already in the side menu, so the title row stays clean */
 .headrow .tbar-title .note{display:none}
 </style>
-<style>.is-test .side-brand::after{content:"TEST";display:block;margin-top:4px;font-size:11px;letter-spacing:.14em;color:#E9A06A}.is-test header.top{box-shadow:inset 0 3px 0 #E2761B}body.is-test::after{content:"TESTING SITE · not for real client work · post only to a ZZ TEST company in Tally";position:fixed;left:0;right:0;bottom:0;z-index:70;background:#E2761B;color:#fff;font-size:12.5px;text-align:center;padding:3px 8px;letter-spacing:.04em;pointer-events:none}.is-test .actionbar{bottom:22px}.is-test #app{padding-bottom:34px}</style><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-JUZRiA/pD/Q1MSIv1WkOX00eklOKXLcOHszD3zr3UBc=' 'sha256-mVxYW9PNdz2JLeSXfKz5JAPMvbSNw/IsTnU1wv+Sc+I=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+<style>.is-test .side-brand::after{content:"TEST";display:block;margin-top:4px;font-size:11px;letter-spacing:.14em;color:#E9A06A}.is-test header.top{box-shadow:inset 0 3px 0 #E2761B}body.is-test::after{content:"TESTING SITE · not for real client work · post only to a ZZ TEST company in Tally";position:fixed;left:0;right:0;bottom:0;z-index:70;background:#E2761B;color:#fff;font-size:12.5px;text-align:center;padding:3px 8px;letter-spacing:.04em;pointer-events:none}.is-test .actionbar{bottom:22px}.is-test #app{padding-bottom:34px}</style><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-JUZRiA/pD/Q1MSIv1WkOX00eklOKXLcOHszD3zr3UBc=' 'sha256-5T46weycixnZR4A0MF4ZH6CEKQ1zc2eF2SxOVAPt4IY=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
 </head>
 <body class="is-test">
 <a class="skip" id="skipLink" href="#app">Skip to the work</a>
@@ -18573,6 +18573,7 @@ function viewSignIn(){
   return '<div class="signin"><div class="signin-box">' +
     '<h1>TDS Desk</h1>' +
     '<p class="note">' + esc(S.firm && S.firm.firmName ? S.firm.firmName : "Garg Shekhar & Company") + "</p>" +
+    '<p class="note" style="margin:2px 0 0"><a href="welcome/">What is TDS Desk?</a></p>' +
     '<p class="note" style="margin:10px 0 14px">Sign in to see your firm\u2019s work. Nothing is shown before that.</p>' +
     '<label class="f"><span>Email</span><input type="email" data-cloud="email" data-fk="cloudemail" value="' + esc((S.cloudForm && S.cloudForm.email) || c.email || "") + '" autocomplete="username" autofocus></label>' +
     '<label class="f" style="margin-top:8px"><span>Password</span><input type="password" data-cloud="password" data-fk="cloudpw" value="' + esc((S.cloudForm && S.cloudForm.password) || "") + '" autocomplete="current-password"></label>' +
@@ -19964,7 +19965,18 @@ document.addEventListener("keydown", ev => {
 /* ------------------------------------------------------------------ */
 /* Start                                                               */
 /* ------------------------------------------------------------------ */
+// the landing page links here with #register or #signin: show that screen (unless already signed in)
+function applyEntryHash(){
+  const h = String(location.hash || "").toLowerCase();
+  if (h !== "#register" && h !== "#signin") return;
+  try { history.replaceState(null, "", location.pathname + location.search); } catch (e){}
+  if (Cloud.on() || window.claude) return;
+  Cloud.setCfg({gate: true});                  // someone who chose "without an account" earlier still sees the screen asked for
+  S.signUpOpen = h === "#register"; Cloud.st.error = "";
+}
+window.addEventListener("hashchange", () => { applyEntryHash(); render(); });
 (async function start(){
+  applyEntryHash();
   S.splitPdf = lsGet("tdsdesk-test:splitPdf") === "1";
   S.freeFirst = lsGet("tdsdesk-test:freeFirst") !== "0";
   S.askClaudeNewSupplier = lsGet("tdsdesk-test:askClaudeNew") === "1";

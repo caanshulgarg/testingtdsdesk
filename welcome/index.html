@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en-IN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<title>TDS Desk: bills and bank statements to Tally, with TDS and GST</title>
+<meta name="description" content="TDS Desk reads purchase bills and bank statements, works out TDS and GST, and posts entries to TallyPrime. Built by Garg Shekhar &amp; Company, Chartered Accountants.">
+<meta name="theme-color" content="#1f6f5c">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231F6F5C'/%3E%3Cpath d='M9 11h14M16 11v12' stroke='white' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preload" href="fonts/ibm-plex-sans-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+@font-face{font-family:"Plex Sans";src:url(fonts/ibm-plex-sans-latin-400-normal.woff2) format("woff2");font-weight:400;font-display:swap}
+@font-face{font-family:"Plex Sans";src:url(fonts/ibm-plex-sans-latin-500-normal.woff2) format("woff2");font-weight:500;font-display:swap}
+@font-face{font-family:"Plex Sans";src:url(fonts/ibm-plex-sans-latin-600-normal.woff2) format("woff2");font-weight:600;font-display:swap}
+@font-face{font-family:"Plex Serif";src:url(fonts/ibm-plex-serif-latin-600-normal.woff2) format("woff2");font-weight:600;font-display:swap}
+@font-face{font-family:"Plex Mono";src:url(fonts/ibm-plex-mono-latin-400-normal.woff2) format("woff2");font-weight:400;font-display:swap}
+/* Radius rule: buttons and chips 10px, cards and screenshots 16px. One accent: TDS Desk green. */
+:root{--bg:#f6f7f5;--surface:#ffffff;--surface-2:#eef2ef;--ink:#16211d;--ink-2:#46534d;--ink-3:#66736d;--line:#dde3df;
+  --accent:#1f6f5c;--accent-ink:#17574a;--accent-soft:#e3efea;--on-accent:#ffffff;--warn-soft:#fbf1e2;--warn-ink:#8a5412;
+  --shadow:0 1px 2px rgb(22 33 29 / .06),0 12px 32px -12px rgb(22 33 29 / .18);color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1513;--surface:#151d1a;--surface-2:#1b2521;--ink:#e8eeeb;--ink-2:#b3bfb9;--ink-3:#8c9993;--line:#26322d;
+  --accent:#3fa58a;--accent-ink:#6cc7ad;--accent-soft:#16302a;--on-accent:#0c1411;--warn-soft:#2c2214;--warn-ink:#e3b46d;
+  --shadow:0 1px 2px rgb(0 0 0 / .4),0 16px 40px -16px rgb(0 0 0 / .6);color-scheme:dark}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.6 "Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+a{color:inherit}
+img{max-width:100%;height:auto;display:block}
+.wrap{max-width:1200px;margin:0 auto;padding:0 24px}
+.ic{width:22px;height:22px;flex:none}
+.skip{position:absolute;left:-999px;top:8px;background:var(--surface);padding:8px 12px;border-radius:10px}
+.skip:focus{left:8px;z-index:30}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+/* nav */
+header{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:saturate(160%) blur(10px);-webkit-backdrop-filter:saturate(160%) blur(10px);border-bottom:1px solid var(--line)}
+@media (prefers-reduced-transparency:reduce){header{background:var(--bg);backdrop-filter:none}}
+.nav{display:flex;align-items:center;gap:28px;height:68px}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;font:600 20px/1 "Plex Serif",Georgia,serif;letter-spacing:-.01em}
+.mark{width:28px;height:28px;color:var(--accent)}
+.links{display:flex;gap:24px;margin-left:12px}
+.links a{text-decoration:none;color:var(--ink-2);font-weight:500;font-size:15px}
+.links a:hover{color:var(--ink)}
+.nav .cta{margin-left:auto;display:flex;gap:10px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 18px;border-radius:10px;font:500 15px/1 "Plex Sans",sans-serif;text-decoration:none;white-space:nowrap;border:1px solid transparent;transition:transform .2s cubic-bezier(.16,1,.3,1),background-color .2s,border-color .2s}
+.btn:active{transform:translateY(1px) scale(.99)}
+.btn.primary{background:var(--accent);color:var(--on-accent)}
+.btn.primary:hover{background:var(--accent-ink)}
+.btn.ghost{border-color:var(--line);background:var(--surface);color:var(--ink)}
+.btn.ghost:hover{border-color:var(--ink-3)}
+.btn.lg{height:50px;padding:0 22px;font-size:16px}
+/* hero */
+.hero{padding:64px 0 72px}
+.hero-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:56px;align-items:center}
+h1{font:600 clamp(34px,3.4vw,46px)/1.08 "Plex Sans",sans-serif;letter-spacing:-.025em;margin:0 0 20px;max-width:18ch}
+.lede{font-size:19px;line-height:1.55;color:var(--ink-2);max-width:40ch;margin:0 0 32px}
+.hero .actions{display:flex;gap:12px;flex-wrap:wrap}
+.shot{border-radius:16px;overflow:hidden;border:1px solid var(--line);background:var(--surface);box-shadow:var(--shadow)}
+.hero .shot{transform:translateX(24px)}
+/* sections */
+section{padding:88px 0}
+h2{font:600 clamp(28px,3vw,40px)/1.12 "Plex Sans",sans-serif;letter-spacing:-.02em;margin:0 0 14px;max-width:22ch}
+.intro{color:var(--ink-2);font-size:18px;max-width:60ch;margin:0 0 44px}
+/* bento */
+.bento{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:16px}
+.cell{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:28px;display:flex;flex-direction:column;gap:10px}
+.cell h3{margin:0;font:600 20px/1.25 "Plex Sans",sans-serif;letter-spacing:-.01em}
+.cell p{margin:0;color:var(--ink-2)}
+.cell .ic{color:var(--accent);width:26px;height:26px}
+.c-wide{grid-column:span 6;display:grid;grid-template-columns:minmax(0,4fr) minmax(0,8fr);gap:32px;align-items:center;background:var(--surface-2)}
+.c-wide .shot{box-shadow:none}
+.c-a{grid-column:span 3}
+.c-b{grid-column:span 3;background:var(--accent);color:var(--on-accent);border-color:transparent}
+.c-b p,.c-b .ic{color:var(--on-accent)}
+.c-b p{opacity:.9}
+.c-c{grid-column:span 2}
+.c-d{grid-column:span 4;background:linear-gradient(135deg,var(--accent-soft),var(--surface) 70%)}
+/* how */
+.how{background:var(--surface);border-block:1px solid var(--line)}
+.flow{list-style:none;margin:0;padding:0;display:grid;gap:0}
+.flow li{display:grid;grid-template-columns:220px minmax(0,1fr);gap:32px;padding:28px 0;border-top:1px solid var(--line);align-items:baseline}
+.flow li:first-child{border-top:0}
+.verb{font:600 clamp(28px,3vw,36px)/1 "Plex Sans",sans-serif;letter-spacing:-.02em;color:var(--accent-ink)}
+.flow p{margin:0;font-size:18px;color:var(--ink-2);max-width:62ch}
+/* security */
+.sec-grid{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:56px;align-items:start}
+.sec-grid .shot{max-width:420px}
+.groups{display:grid;grid-template-columns:1fr 1fr;gap:36px 40px}
+.group h3{font:600 15px/1.2 "Plex Sans",sans-serif;margin:0 0 14px;color:var(--ink-3)}
+.pt{display:flex;gap:12px;margin:0 0 18px}
+.pt .ic{color:var(--accent);margin-top:2px}
+.pt p{margin:0;color:var(--ink)}
+.note{margin:36px 0 0;padding:16px 18px;border-radius:16px;background:var(--surface-2);color:var(--ink-2);font-size:15px;grid-column:1 / -1}
+/* compliance */
+.comp{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0;border:1px solid var(--line);border-radius:16px;overflow:hidden;background:var(--surface)}
+.tile{padding:30px;display:grid;grid-template-columns:auto 1fr;gap:6px 16px;align-content:start}
+.tile:nth-child(odd){border-right:1px solid var(--line)}
+.tile:nth-child(-n+2){border-bottom:1px solid var(--line)}
+.tile .ic{grid-row:span 3;width:30px;height:30px;color:var(--accent)}
+.tile h3{margin:0;font:600 19px/1.3 "Plex Sans",sans-serif}
+.status{justify-self:start;font:500 13px/1 "Plex Sans",sans-serif;padding:6px 10px;border-radius:10px;background:var(--accent-soft);color:var(--accent-ink)}
+.status.wait{background:var(--warn-soft);color:var(--warn-ink)}
+.tile p{margin:4px 0 0;color:var(--ink-2)}
+.honest{margin:20px 0 0;color:var(--ink-3);font-size:15px;max-width:70ch}
+/* closing */
+.close{padding:96px 0}
+.close .box{display:flex;align-items:center;justify-content:space-between;gap:32px;flex-wrap:wrap}
+.close h2{margin:0}
+footer{border-top:1px solid var(--line);padding:32px 0 48px;color:var(--ink-3);font-size:14px}
+footer .row{display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap}
+footer a{color:var(--ink-2)}
+/* motion: sections rise in as they enter, only where supported and wanted */
+@media (prefers-reduced-motion:no-preference){
+  @supports (animation-timeline:view()){
+    .rise{animation:rise linear both;animation-timeline:view();animation-range:entry 0% entry 40%}
+    @keyframes rise{from{opacity:0;transform:translateY(28px)}to{opacity:1;transform:none}}
+  }
+  .hero-copy{animation:in .7s cubic-bezier(.16,1,.3,1) both}
+  .hero .shot{animation:in-shot .9s .08s cubic-bezier(.16,1,.3,1) both}
+  @keyframes in{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+  @keyframes in-shot{from{opacity:0;transform:translate(48px,0)}to{opacity:1;transform:translateX(24px)}}
+}
+/* mobile */
+@media (max-width:1023px){.links{display:none}}
+@media (max-width:767px){
+  .wrap{padding:0 16px}
+  .nav{gap:12px}.nav .btn{height:40px;padding:0 14px;font-size:14px}
+  .hero{padding:36px 0 48px}
+  .hero-grid,.sec-grid,.c-wide,.groups,.comp{grid-template-columns:1fr}
+  .hero .shot{transform:none}
+  .bento{grid-template-columns:1fr}
+  .c-a,.c-b,.c-c,.c-d,.c-wide{grid-column:auto}
+  .flow li{grid-template-columns:1fr;gap:8px}
+  .tile:nth-child(odd){border-right:0}
+  .tile:not(:last-child){border-bottom:1px solid var(--line)}
+  section{padding:64px 0}
+  @media (prefers-reduced-motion:no-preference){.hero .shot{animation:in .7s cubic-bezier(.16,1,.3,1) both}}
+}
+@media (max-width:420px){.nav .ghost{display:none}}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header>
+  <nav class="wrap nav" aria-label="Main">
+    <a class="brand" href="./"><svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="currentColor"/><path d="M9 11h14M16 11v12" stroke="var(--on-accent)" stroke-width="3" stroke-linecap="round"/></svg>TDS Desk</a>
+    <div class="links"><a href="#features">Features</a><a href="#how">How it works</a><a href="#security">Security</a><a href="#compliance">Compliance</a></div>
+    <div class="cta"><a class="btn ghost" href="../#signin">Sign in</a><a class="btn primary" href="../#register">Register</a></div>
+  </nav>
+</header>
+<main id="main">
+  <section class="hero" aria-labelledby="hero-h">
+    <div class="wrap hero-grid">
+      <div class="hero-copy">
+        <h1 id="hero-h">Bills to Tally, with TDS and GST worked out.</h1>
+        <p class="lede">Upload purchase bills and bank statements. TDS Desk reads them, decides TDS and GST, and posts clean entries to TallyPrime.</p>
+        <div class="actions"><a class="btn primary lg" href="../#register">Register</a><a class="btn ghost lg" href="../#signin">Sign in</a></div>
+      </div>
+      <div class="shot"><img src="img/bill-review.webp" width="1600" height="900" alt="TDS Desk reviewing a professional fees bill: invoice fields read from the PDF, section 194J chosen, TDS of 6,500 rupees at 10 percent, ready to approve" fetchpriority="high"></div>
+    </div>
+  </section>
+
+  <section id="features" aria-labelledby="f-h">
+    <div class="wrap">
+      <h2 id="f-h" class="rise">The month's paperwork, handled in one place.</h2>
+      <p class="intro rise">Made by practising chartered accountants for the work their own office does every month.</p>
+      <div class="bento">
+        <article class="cell c-wide rise">
+          <div><svg class="ic" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M224,128a8,8,0,0,1-8,8H128a8,8,0,0,1,0-16h88A8,8,0,0,1,224,128ZM128,72h88a8,8,0,0,0,0-16H128a8,8,0,0,0,0,16Zm88,112H128a8,8,0,0,0,0,16h88a8,8,0,0,0,0-16ZM82.34,42.34,56,68.69,45.66,58.34A8,8,0,0,0,34.34,69.66l16,16a8,8,0,0,0,11.32,0l32-32A8,8,0,0,0,82.34,42.34Zm0,64L56,132.69,45.66,122.34a8,8,0,0,0-11.32,11.32l16,16a8,8,0,0,0,11.32,0l32-32a8,8,0,0,0-11.32-11.32Zm0,64L56,196.69,45.66,186.34a8,8,0,0,0-11.32,11.32l16,16a8,8,0,0,0,11.32,0l32-32a8,8,0,0,0-11.32-11.32Z"/></svg><h3>Review a month of bills in one table</h3><p>Each bill shows its TDS section, the tax, and where the vendor stands against this year's limit. Approve them together.</p></div>
+          <div class="shot"><img src="img/bill-table.webp" width="1400" height="609" alt="A table of four uploaded bills with payment type, TDS amount and the vendor's running total against the yearly limit" loading="lazy"></div>
+        </article>
+        <article class="cell c-a rise"><svg class="ic" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M24,104H48v64H32a8,8,0,0,0,0,16H224a8,8,0,0,0,0-16H208V104h24a8,8,0,0,0,4.19-14.81l-104-64a8,8,0,0,0-8.38,0l-104,64A8,8,0,0,0,24,104Zm40,0H96v64H64Zm80,0v64H112V104Zm48,64H160V104h32ZM128,41.39,203.74,88H52.26ZM248,208a8,8,0,0,1-8,8H16a8,8,0,0,1,0-16H240A8,8,0,0,1,248,208Z"/></svg><h3>Bank statements into Tally</h3><p>PDF or Excel statements become receipts and payments, matched to your ledgers by rules you teach it once.</p></article>
+        <article class="cell c-b rise"><svg class="ic" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M213.66,181.66l-32,32a8,8,0,0,1-11.32-11.32L188.69,184H48a8,8,0,0,1,0-16H188.69l-18.35-18.34a8,8,0,0,1,11.32-11.32l32,32A8,8,0,0,1,213.66,181.66Zm-139.32-64a8,8,0,0,0,11.32-11.32L67.31,88H208a8,8,0,0,0,0-16H67.31L85.66,53.66A8,8,0,0,0,74.34,42.34l-32,32a8,8,0,0,0,0,11.32Z"/></svg><h3>Reconcile to the rupee</h3><p>Bank and vendor ledgers checked against Tally. Every difference is listed, with one click to post or remove the entry.</p></article>
+        <article class="cell c-c rise"><svg class="ic" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M72,104a8,8,0,0,1,8-8h96a8,8,0,0,1,0,16H80A8,8,0,0,1,72,104Zm8,40h96a8,8,0,0,0,0-16H80a8,8,0,0,0,0,16ZM232,56V208a8,8,0,0,1-11.58,7.15L192,200.94l-28.42,14.21a8,8,0,0,1-7.16,0L128,200.94,99.58,215.15a8,8,0,0,1-7.16,0L64,200.94,35.58,215.15A8,8,0,0,1,24,208V56A16,16,0,0,1,40,40H216A16,16,0,0,1,232,56Zm-16,0H40V195.06l20.42-10.22a8,8,0,0,1,7.16,0L96,199.06l28.42-14.22a8,8,0,0,1,7.16,0L160,199.06l28.42-14.22a8,8,0,0,1,7.16,0L216,195.06Z"/></svg><h3>GST returns from your books</h3><p>GSTR-1, GSTR-3B and 2B matching, worked out from what is in Tally.</p></article>
+        <article class="cell c-d rise"><svg class="ic" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M232,208a8,8,0,0,1-8,8H32a8,8,0,0,1-8-8V48a8,8,0,0,1,16,0V156.69l50.34-50.35a8,8,0,0,1,11.32,0L128,132.69,180.69,80H160a8,8,0,0,1,0-16h40a8,8,0,0,1,8,8v40a8,8,0,0,1-16,0V91.31l-58.34,58.35a8,8,0,0,1-11.32,0L96,123.31l-56,56V200H224A8,8,0,0,1,232,208Z"/></svg><h3>Audit findings and MIS</h3><p>Checks on the books with the vouchers behind each finding, plus ageing, cash flow and ratios for the owner.</p></article>
+      </div>
+    </div>
+  </section>
+
+  <section id="how" class="how" aria-labelledby="h-h">
+    <div class="wrap">
+      <h2 id="h-h" class="rise">From a pile of PDFs to posted vouchers.</h2>
+      <p class="intro rise">No re-typing. Your team checks, TDS Desk does the rest.</p>
+      <ol class="flow">
+        <li class="rise"><span class="verb">Upload</span><p>Drop bills and statements, or forward them from email. Printed bills are read on your own computer with free OCR.</p></li>
+        <li class="rise"><span class="verb">Check</span><p>Anything the reader is unsure of is marked. Confirm the payment type once per vendor and approve one bill or fifty.</p></li>
+        <li class="rise"><span class="verb">Post</span><p>The Tally Bridge sends the entries to TallyPrime on your computer, then reads them back and confirms the balance.</p></li>
+      </ol>
+    </div>
+  </section>
+
+  <section id="security" aria-labelledby="s-h">
+    <div class="wrap">
+      <h2 id="s-h" class="rise">Your clients' books stay yours.</h2>
+      <p class="intro rise">Security is enforced by the database and the server, not left to the screen.</p>
+      <div class="sec-grid">
+        <div class="shot rise"><img src="img/two-step.webp" width="620" height="890" alt="The two-step sign-in screen of TDS Desk with a QR code to scan in an authenticator app" loading="lazy"></div>
+        <div class="groups">
+          <div class="group rise">
+            <h3>Access</h3>
+            <div class="pt"><svg class="ic" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M72,128a134.63,134.63,0,0,1-14.16,60.47,8,8,0,1,1-14.32-7.12A118.8,118.8,0,0,0,56,128,71.73,71.73,0,0,1,83,71.8,8,8,0,1,1,93,84.29,55.76,55.76,0,0,0,72,128Zm56-8a8,8,0,0,0-8,8,184.12,184.12,0,0,1-23,89.1,8,8,0,0,0,14,7.76A200.19,200.19,0,0,0,136,128,8,8,0,0,0,128,120Zm0-32a40,40,0,0,0-40,40,8,8,0,0,0,16,0,24,24,0,0,1,48,0,214.09,214.09,0,0,1-20.51,92A8,8,0,1,0,146,226.83,230,230,0,0,0,168,128,40,40,0,0,0,128,88Zm0-64A104.11,104.11,0,0,0,24,128a87.76,87.76,0,0,1-5,29.33,8,8,0,0,0,15.09,5.33A103.9,103.9,0,0,0,40,128a88,88,0,0,1,176,0,282.24,282.24,0,0,1-5.29,54.45,8,8,0,0,0,6.3,9.4,8.22,8.22,0,0,0,1.55.15,8,8,0,0,0,7.84-6.45A298.37,298.37,0,0,0,232,128,104.12,104.12,0,0,0,128,24ZM94.4,152.17A8,8,0,0,0,85,158.42a151,151,0,0,1-17.21,45.44,8,8,0,0,0,13.86,8,166.67,166.67,0,0,0,19-50.25A8,8,0,0,0,94.4,152.17ZM128,56a72.85,72.85,0,0,0-9,.56,8,8,0,0,0,2,15.87A56.08,56.08,0,0,1,184,128a252.12,252.12,0,0,1-1.92,31A8,8,0,0,0,189,168a8.39,8.39,0,0,0,1,.06,8,8,0,0,0,7.92-7,266.48,266.48,0,0,0,2-33A72.08,72.08,0,0,0,128,56Zm57.93,128.25a8,8,0,0,0-9.75,5.75c-1.46,5.69-3.15,11.4-5,17a8,8,0,0,0,5,10.13,7.88,7.88,0,0,0,2.55.42,8,8,0,0,0,7.58-5.46c2-5.92,3.79-12,5.35-18.05A8,8,0,0,0,185.94,184.26Z"/></svg><p>Two-step sign-in with an authenticator app, required for every firm owner.</p></div>
+            <div class="pt"><svg class="ic" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M128,112a28,28,0,0,0-8,54.83V184a8,8,0,0,0,16,0V166.83A28,28,0,0,0,128,112Zm0,40a12,12,0,1,1,12-12A12,12,0,0,1,128,152Zm80-72H176V56a48,48,0,0,0-96,0V80H48A16,16,0,0,0,32,96V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V96A16,16,0,0,0,208,80ZM96,56a32,32,0,0,1,64,0V80H96ZM208,208H48V96H208V208Z"/></svg><p>Signs out after 30 minutes without use, and ends the session on the server too.</p></div>
+            <div class="pt"><svg class="ic" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M208,40H48A16,16,0,0,0,32,56v56c0,52.72,25.52,84.67,46.93,102.19,23.06,18.86,46,25.26,47,25.53a8,8,0,0,0,4.2,0c1-.27,23.91-6.67,47-25.53C198.48,196.67,224,164.72,224,112V56A16,16,0,0,0,208,40Zm0,72c0,37.07-13.66,67.16-40.6,89.42A129.3,129.3,0,0,1,128,223.62a128.25,128.25,0,0,1-38.92-21.81C61.82,179.51,48,149.3,48,112l0-56,160,0ZM82.34,141.66a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35a8,8,0,0,1,11.32,11.32l-56,56a8,8,0,0,1-11.32,0Z"/></svg><p>Each firm's data is walled off by the database itself. One firm can never read another's.</p></div>
+          </div>
+          <div class="group rise">
+            <h3>Data</h3>
+            <div class="pt"><svg class="ic" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M128,64a40,40,0,1,0,40,40A40,40,0,0,0,128,64Zm0,64a24,24,0,1,1,24-24A24,24,0,0,1,128,128Zm0-112a88.1,88.1,0,0,0-88,88c0,31.4,14.51,64.68,42,96.25a254.19,254.19,0,0,0,41.45,38.3,8,8,0,0,0,9.18,0A254.19,254.19,0,0,0,174,200.25c27.45-31.57,42-64.85,42-96.25A88.1,88.1,0,0,0,128,16Zm0,206c-16.53-13-72-60.75-72-118a72,72,0,0,1,144,0C200,161.23,144.53,209,128,222Z"/></svg><p>Stored in India, in the Mumbai region, encrypted at rest and in transit.</p></div>
+            <div class="pt"><svg class="ic" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M213.66,82.34l-56-56A8,8,0,0,0,152,24H56A16,16,0,0,0,40,40V216a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V88A8,8,0,0,0,213.66,82.34ZM160,51.31,188.69,80H160ZM200,216H56V40h88V88a8,8,0,0,0,8,8h48V216Zm-32-80a8,8,0,0,1-8,8H96a8,8,0,0,1,0-16h64A8,8,0,0,1,168,136Zm0,32a8,8,0,0,1-8,8H96a8,8,0,0,1,0-16h64A8,8,0,0,1,168,168Z"/></svg><p>A permanent audit trail of sign-ins, posts to Tally and deletions. It cannot be edited.</p></div>
+            <div class="pt"><svg class="ic" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M53.92,34.62A8,8,0,1,0,42.08,45.38L61.32,66.55C25,88.84,9.38,123.2,8.69,124.76a8,8,0,0,0,0,6.5c.35.79,8.82,19.57,27.65,38.4C61.43,194.74,93.12,208,128,208a127.11,127.11,0,0,0,52.07-10.83l22,24.21a8,8,0,1,0,11.84-10.76Zm47.33,75.84,41.67,45.85a32,32,0,0,1-41.67-45.85ZM128,192c-30.78,0-57.67-11.19-79.93-33.25A133.16,133.16,0,0,1,25,128c4.69-8.79,19.66-33.39,47.35-49.38l18,19.75a48,48,0,0,0,63.66,70l14.73,16.2A112,112,0,0,1,128,192Zm6-95.43a8,8,0,0,1,3-15.72,48.16,48.16,0,0,1,38.77,42.64,8,8,0,0,1-7.22,8.71,6.39,6.39,0,0,1-.75,0,8,8,0,0,1-8-7.26A32.09,32.09,0,0,0,134,96.57Zm113.28,34.69c-.42.94-10.55,23.37-33.36,43.8a8,8,0,1,1-10.67-11.92A132.77,132.77,0,0,0,231.05,128a133.15,133.15,0,0,0-23.12-30.77C185.67,75.19,158.78,64,128,64a118.37,118.37,0,0,0-19.36,1.57A8,8,0,1,1,106,49.79,134,134,0,0,1,128,48c34.88,0,66.57,13.26,91.66,38.35,18.83,18.83,27.3,37.62,27.65,38.41A8,8,0,0,1,247.31,131.26Z"/></svg><p>The Tally Bridge listens only on your own computer. Tally is never opened to the internet.</p></div>
+          </div>
+          <p class="note">When you choose AI reading for a difficult bill, its image is sent to Anthropic or Google for reading only. Their terms do not allow it to be used for training.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="compliance" aria-labelledby="c-h">
+    <div class="wrap">
+      <h2 id="c-h" class="rise">Certification and compliance.</h2>
+      <p class="intro rise">Where we stand today, stated plainly.</p>
+      <div class="comp rise">
+        <div class="tile"><svg class="ic" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M128,136a8,8,0,0,1-8,8H72a8,8,0,0,1,0-16h48A8,8,0,0,1,128,136Zm-8-40H72a8,8,0,0,0,0,16h48a8,8,0,0,0,0-16Zm112,65.47V224A8,8,0,0,1,220,231l-24-13.74L172,231A8,8,0,0,1,160,224V200H40a16,16,0,0,1-16-16V56A16,16,0,0,1,40,40H216a16,16,0,0,1,16,16V86.53a51.88,51.88,0,0,1,0,74.94ZM160,184V161.47A52,52,0,0,1,216,76V56H40V184Zm56-12a51.88,51.88,0,0,1-40,0v38.22l16-9.16a8,8,0,0,1,7.94,0l16,9.16Zm16-48a36,36,0,1,0-36,36A36,36,0,0,0,232,124Z"/></svg><h3>ISO/IEC 27001:2022</h3><span class="status wait">In progress</span><p>Our information security management system is written against all 93 Annex A controls. The certification audit follows.</p></div>
+        <div class="tile"><svg class="ic" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M208,40H48A16,16,0,0,0,32,56v56c0,52.72,25.52,84.67,46.93,102.19,23.06,18.86,46,25.26,47,25.53a8,8,0,0,0,4.2,0c1-.27,23.91-6.67,47-25.53C198.48,196.67,224,164.72,224,112V56A16,16,0,0,0,208,40Zm0,72c0,37.07-13.66,67.16-40.6,89.42A129.3,129.3,0,0,1,128,223.62a128.25,128.25,0,0,1-38.92-21.81C61.82,179.51,48,149.3,48,112l0-56,160,0ZM82.34,141.66a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35a8,8,0,0,1,11.32,11.32l-56,56a8,8,0,0,1-11.32,0Z"/></svg><h3>VAPT</h3><span class="status wait">Scheduled</span><p>Independent testing by a CERT-In empanelled auditor. The summary report will be shared with clients on request.</p></div>
+        <div class="tile"><svg class="ic" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M128,24C74.17,24,32,48.6,32,80v96c0,31.4,42.17,56,96,56s96-24.6,96-56V80C224,48.6,181.83,24,128,24Zm80,104c0,9.62-7.88,19.43-21.61,26.92C170.93,163.35,150.19,168,128,168s-42.93-4.65-58.39-13.08C55.88,147.43,48,137.62,48,128V111.36c17.06,15,46.23,24.64,80,24.64s62.94-9.68,80-24.64ZM69.61,53.08C85.07,44.65,105.81,40,128,40s42.93,4.65,58.39,13.08C200.12,60.57,208,70.38,208,80s-7.88,19.43-21.61,26.92C170.93,115.35,150.19,120,128,120s-42.93-4.65-58.39-13.08C55.88,99.43,48,89.62,48,80S55.88,60.57,69.61,53.08ZM186.39,202.92C170.93,211.35,150.19,216,128,216s-42.93-4.65-58.39-13.08C55.88,195.43,48,185.62,48,176V159.36c17.06,15,46.23,24.64,80,24.64s62.94-9.68,80-24.64V176C208,185.62,200.12,195.43,186.39,202.92Z"/></svg><h3>DPDP Act 2023</h3><span class="status wait">In progress</span><p>Data used only for the work you ask for, deleted on request, and firms told without delay if anything goes wrong.</p></div>
+        <div class="tile"><svg class="ic" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M173.66,98.34a8,8,0,0,1,0,11.32l-56,56a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35A8,8,0,0,1,173.66,98.34ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/></svg><h3>CERT-In Directions 2022</h3><span class="status">In place</span><p>An incident process with reporting to CERT-In within 6 hours, and an audit trail kept for at least 180 days.</p></div>
+      </div>
+      <p class="honest rise">TDS Desk is not yet ISO 27001 certified. We will publish the certificate and the VAPT summary on this page when they are issued.</p>
+    </div>
+  </section>
+
+  <section class="close" aria-labelledby="x-h">
+    <div class="wrap box rise">
+      <h2 id="x-h">Start with one client this month.</h2>
+      <div class="actions" style="display:flex;gap:12px;flex-wrap:wrap"><a class="btn primary lg" href="../#register">Register</a><a class="btn ghost lg" href="../#signin">Sign in</a></div>
+    </div>
+  </section>
+</main>
+<footer>
+  <div class="wrap row">
+    <p>TDS Desk is built and run by Garg Shekhar &amp; Company, Chartered Accountants, Noida.</p>
+    <p><a href="../.well-known/security.txt">Report a security issue</a></p>
+  </div>
+</footer>
+</body>
+</html>

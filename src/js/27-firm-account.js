@@ -610,6 +610,7 @@ function viewSignIn(){
   return '<div class="signin"><div class="signin-box">' +
     '<h1>TDS Desk</h1>' +
     '<p class="note">' + esc(S.firm && S.firm.firmName ? S.firm.firmName : "Garg Shekhar & Company") + "</p>" +
+    '<p class="note" style="margin:2px 0 0"><a href="welcome/">What is TDS Desk?</a></p>' +
     '<p class="note" style="margin:10px 0 14px">Sign in to see your firm\u2019s work. Nothing is shown before that.</p>' +
     '<label class="f"><span>Email</span><input type="email" data-cloud="email" data-fk="cloudemail" value="' + esc((S.cloudForm && S.cloudForm.email) || c.email || "") + '" autocomplete="username" autofocus></label>' +
     '<label class="f" style="margin-top:8px"><span>Password</span><input type="password" data-cloud="password" data-fk="cloudpw" value="' + esc((S.cloudForm && S.cloudForm.password) || "") + '" autocomplete="current-password"></label>' +
@@ -2001,7 +2002,18 @@ document.addEventListener("keydown", ev => {
 /* ------------------------------------------------------------------ */
 /* Start                                                               */
 /* ------------------------------------------------------------------ */
+// the landing page links here with #register or #signin: show that screen (unless already signed in)
+function applyEntryHash(){
+  const h = String(location.hash || "").toLowerCase();
+  if (h !== "#register" && h !== "#signin") return;
+  try { history.replaceState(null, "", location.pathname + location.search); } catch (e){}
+  if (Cloud.on() || window.claude) return;
+  Cloud.setCfg({gate: true});                  // someone who chose "without an account" earlier still sees the screen asked for
+  S.signUpOpen = h === "#register"; Cloud.st.error = "";
+}
+window.addEventListener("hashchange", () => { applyEntryHash(); render(); });
 (async function start(){
+  applyEntryHash();
   S.splitPdf = lsGet("tdsdesk:splitPdf") === "1";
   S.freeFirst = lsGet("tdsdesk:freeFirst") !== "0";
   S.askClaudeNewSupplier = lsGet("tdsdesk:askClaudeNew") === "1";
