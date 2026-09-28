@@ -1127,7 +1127,7 @@ header.top .tbar-title{align-items:center}
 .lk-fresh .note{flex:1 1 320px}
 .fc-empty .lk-fresh{text-align:left;margin-top:12px}
 </style>
-<style>.is-test .side-brand::after{content:"TEST";display:block;margin-top:4px;font-size:11px;letter-spacing:.14em;color:#E9A06A}.is-test header.top{box-shadow:inset 0 3px 0 #E2761B}body.is-test::after{content:"TESTING SITE · not for real client work · post only to a ZZ TEST company in Tally";position:fixed;left:0;right:0;bottom:0;z-index:70;background:#E2761B;color:#fff;font-size:12.5px;text-align:center;padding:3px 8px;letter-spacing:.04em;pointer-events:none}.is-test .actionbar{bottom:22px}.is-test #app{padding-bottom:34px}</style><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-JUZRiA/pD/Q1MSIv1WkOX00eklOKXLcOHszD3zr3UBc=' 'sha256-u3eHwg8JCXo+FQfLFJTpcSIP1mC/nLNhG93hm03pxn4=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+<style>.is-test .side-brand::after{content:"TEST";display:block;margin-top:4px;font-size:11px;letter-spacing:.14em;color:#E9A06A}.is-test header.top{box-shadow:inset 0 3px 0 #E2761B}body.is-test::after{content:"TESTING SITE · not for real client work · post only to a ZZ TEST company in Tally";position:fixed;left:0;right:0;bottom:0;z-index:70;background:#E2761B;color:#fff;font-size:12.5px;text-align:center;padding:3px 8px;letter-spacing:.04em;pointer-events:none}.is-test .actionbar{bottom:22px}.is-test #app{padding-bottom:34px}</style><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-JUZRiA/pD/Q1MSIv1WkOX00eklOKXLcOHszD3zr3UBc=' 'sha256-W2d55b6fL0jVk1NScCTrAph1YcqIIcBplmBNJFhMqes=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
 </head>
 <body class="is-test">
 <a class="skip" id="skipLink" href="#app">Skip to the work</a>
@@ -1204,7 +1204,7 @@ const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
 const APP_VERSION = "TEST · 28 Sep 2026 · build 171 (FinCom: reports, look up, letters, closed periods; bridge 1.12.9)";
 // the Tally Bridge setup file's fingerprint, put in by build.py: a new setup file is never served from an old cache
-const BRIDGE_SETUP_SHA = "5bc47799d9a76599";
+const BRIDGE_SETUP_SHA = "493b62cb0b00ebcc";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;
@@ -23151,7 +23151,9 @@ const LK = {
   },
   // ---------- every ledger's balance on a date
   tbBooks(asOn){
-    const B = this.bal(Audit.fyStart(asOn), asOn);
+    // a balance on a date needs only a known opening before it: the year's start, or where the copy starts if later
+    const tb = (S.books || {}).tb, fs = Audit.fyStart(asOn), base = tb && tb.from > fs && tb.from <= asOn ? tb.from : fs;
+    const B = this.bal(base, asOn);
     if (!B.ok) return {kind: "tb", src: "books", asOn, rows: [], none: B.why};
     const at = B.at(asOn), rows = Object.keys(at).filter(l => Math.abs(at[l]) >= 0.005).map(l => ({l, top: FC.top(l), sub: (S.books.under || {})[l] || "", bal: -r2(at[l])}));
     return this.tbShape({kind: "tb", src: "books", asOn, rows, note: "From " + B.src + "."});
@@ -23317,21 +23319,65 @@ const LK = {
   fr(){ const cid = S.coId; if (!S.lkFr || S.lkFr.cid !== cid) S.lkFr = {cid, man: null, sch: null, at: 0, busy: ""}; return S.lkFr; },
   // on opening Look up, Reports or Letters: if the bridge made a newer copy last night, bring it in (read from the bridge's
   // folder; Tally is not asked anything)
-  async autoFresh(){
+  async autoFresh(force){
     const f = this.fr(), co = CO();
-    if (!this.live() || f.busy || Date.now() - f.at < 15 * 60000) return;
+    if (!this.live() || f.busy) return;
+    const keep = f.man && f.man.keep;
+    if (!force && Date.now() - f.at < (keep ? 60000 : 15 * 60000)) return;
     f.at = Date.now();
     const q = "?company=" + encodeURIComponent(this.tname()) + Bridge.pinQ();
     try { f.man = await Bridge.call("/synced" + q, null, 30000); } catch (e){ f.man = {error: (e && e.message) || String(e)}; }
+    try { f.keep = await Bridge.call("/keep" + q, null, 30000); } catch (e){ f.keep = null; }
     try { f.sch = await Bridge.call("/schedule", null, 30000); } catch (e){ f.sch = null; }
     const b = S.books, m = f.man || {}, meta = (b && b.meta) || {};
-    if (b && b.cid === co.id && m.ok && !m.none && m.at && m.from && (!meta.copyAt || m.at > meta.copyAt) && (!meta.to || m.to >= meta.to || !meta.copyAt)){
+    if (!(b && b.cid === co.id && m.ok && !m.none && m.at && m.from)){ render(); return; }
+    if (m.keep){
+      // kept in step by the bridge: only the months that changed since FinCom last looked
+      const known = meta.monthsAt || {}, todo = [].concat(m.months || []).filter(x => x.at && (!known[x.ym] || x.at > known[x.ym]) && x.from <= m.to);
+      const balNew = m.balancesAt && m.balancesAt !== meta.balAt;
+      if (todo.length || balNew){
+        f.busy = "Bringing in " + (todo.length === 1 ? FC.monthLabel(todo[0].ym) : todo.length + " months") + " from the copy the bridge keeps (Tally is not asked anything)\u2026"; render();
+        try {
+          const nm = this.tname(), qq = "?company=" + encodeURIComponent(nm) + Bridge.pinQ();
+          b.meta = b.meta || {};
+          if (balNew){ const j = JSON.parse(await TallyRead.raw("/syncfile" + qq + "&file=balances.json", 120000)); TallyRead.balances(b, j, j.from || m.from, m.to); b.meta.balAt = m.balancesAt; }
+          for (const x of todo){
+            const text = await TallyRead.raw("/syncfile" + qq + "&file=daybook-" + x.ym + ".xml", 300000);
+            const res = await Books.importDayBook(new Blob([text], {type: "text/xml"}));
+            const bad = notThisClient((res.meta || {}).gstins);
+            if (bad.length) throw new Error(panRefusal("The company kept in step", bad));
+            TallyRead.merge(b, res, x.from, x.to);
+            (b.meta.monthsAt = b.meta.monthsAt || {})[x.ym] = x.at;
+          }
+          if (b.tb && String(b.tb.to) < m.to) b.tb.to = m.to;
+          b.map = Books.mapLedgers(b.vouchers || [], b.map); try { LedMaster.refresh(b); } catch (e){}
+          b.meta.at = new Date().toISOString(); b.meta.copyAt = m.at; b.meta.copyTo = m.to; b.meta.keep = true; b.meta.file = "kept in step with Tally by the bridge"; b.reco = null;
+          this.cache = {}; await saveBooks();
+        } catch (e){ toast("Could not bring in the copy: " + ((e && e.message) || e)); }
+        f.busy = "";
+      }
+      render(); return;
+    }
+    if ((!meta.copyAt || m.at > meta.copyAt) && (!meta.to || m.to >= meta.to || !meta.copyAt)){
       f.busy = "Bringing in last night\u2019s copy of the books (made " + String(m.at).replace("T", " ").slice(0, 16) + "); Tally is not asked anything\u2026"; render();
       try { await TallyRead.read(m.from, m.to, "copy"); b.meta.copyAt = m.at; b.meta.copyTo = m.to; await saveBooks(); toast("The books are up to " + FC.when(m.to) + ", from last night\u2019s copy."); }
       catch (e){ toast("Could not bring in last night\u2019s copy: " + ((e && e.message) || e)); }
       f.busy = "";
     }
     render();
+  },
+  async keepOn(on){
+    try { const f = this.fr(); f.keep = await Bridge.call("/keep?company=" + encodeURIComponent(this.tname()) + Bridge.pinQ(), {on: !!on}, 30000); toast(on ? "The bridge will keep this company in step whenever it is open in Tally." : "Keeping in step switched off."); f.at = 0; setTimeout(() => this.autoFresh(true), 3000); render(); }
+    catch (e){ toast(/Unknown address|No such/i.test(String(e && e.message)) ? "This needs Tally Bridge 1.12.12. Download the new setup and install it." : "The bridge could not do it: " + ((e && e.message) || e)); }
+  },
+  async keepCheck(){
+    const f = this.fr(), ym = Audit.today().slice(0, 6);
+    f.busy = "Checking this month\u2019s copy against Tally\u2026"; render();
+    try {
+      const r = await Bridge.call("/keepcheck?company=" + encodeURIComponent(this.tname()) + "&ym=" + ym + Bridge.pinQ(), null, 300000);
+      f.check = Object.assign({at: Date.now()}, r);
+    } catch (e){ f.check = {error: (e && e.message) || String(e)}; }
+    f.busy = ""; render();
   },
   // the days since the copy: one small day book read, merged in; balances follow from the entries
   async bringToday(){
@@ -23365,14 +23411,35 @@ const LK = {
     catch (e){ f.busy = ""; toast("The copy did not finish: " + ((e && e.message) || e)); render(); }
   },
   freshBar(b){
-    const f = this.fr(), live = this.live(), meta = (b && b.meta) || {}, have = (b.vouchers || []).length > 0, sch = f.sch || {}, today = Audit.today();
-    if (!have && !live) return "";
-    const upTo = have ? "The books in FinCom run to <b>" + FC.when(meta.to) + "</b>" + (meta.copyAt ? " (last night\u2019s copy, made " + esc(String(meta.copyAt).replace("T", " ").slice(0, 16)) + (meta.todayAt ? "; today\u2019s entries brought in at " + new Date(meta.todayAt).toLocaleTimeString("en-IN", {hour: "2-digit", minute: "2-digit"}) : "") + ")" : meta.at ? " (read " + this.booksAge() + ")" : "") + "." : "No books in FinCom yet.";
-    const btns = live ? (have && String(meta.to) < today ? '<button class="btn small primary" data-lk="today">Bring in today\u2019s entries</button>' : have ? '<button class="btn small" data-lk="today">Bring in today\u2019s entries again</button>' : "") +
-      (sch.on ? '<span class="note">Nightly copy is on' + (sch.next ? ", next " + esc(sch.next) : "") + ".</span>" : f.sch ? '<button class="btn small" data-act="tallyScheduleOn">Switch on the nightly copy (2 am)</button>' : "") +
-      (!have || (f.man && f.man.none) ? '<button class="btn small" data-lk="syncnow">Make the copy now</button>' : "") : '<span class="note">Connect the Tally Bridge to keep this up to date.</span>';
-    return '<div class="lk-fresh"><span class="note">' + upTo + " Totals and the trial balance come from these books, so Tally is never held up.</span>" + btns + "</div>";
+    const f = this.fr(), live = this.live(), meta = (b && b.meta) || {}, have = (b.vouchers || []).length > 0, sch = f.sch || {}, today = Audit.today(), m = f.man || {}, kp = f.keep || {};
+    if (!have && !live && !meta.keep) return "";
+    const hhmm = s2 => { const d = new Date(s2); return isNaN(d) ? "" : d.toLocaleTimeString("en-IN", {hour: "2-digit", minute: "2-digit"}); };
+    let upTo, btns = "";
+    if (m.keep){
+      const seenMin = m.seen ? (Date.now() - Date.parse(m.seen)) / 60000 : 999;
+      if (m.phase === "open") upTo = "The bridge is reading the opening balances, a few ledgers at a time.";
+      else if (m.phase === "first"){ const pct = Math.max(0, Math.min(99, Math.round(Audit.days(m.from, m.doneTo || m.from) / Math.max(1, Audit.days(m.from, today)) * 100))); upTo = "The bridge is copying this company from Tally a few days at a time: up to <b>" + FC.when(m.doneTo) + "</b> (" + pct + "%). It carries on whenever the company is open in Tally."; }
+      else upTo = seenMin < 5 ? "<b>In step with Tally</b> (checked at " + hhmm(m.seen) + ")." : "In step with Tally as of <b>" + fmtDate(String(m.seen).slice(0, 10)) + " " + hhmm(m.seen) + "</b>, when the company was last open.";
+      btns = live ? '<button class="btn small" data-lk="keepcheck">Check against Tally</button>' : "";
+    } else {
+      upTo = have ? "The books in FinCom run to <b>" + FC.when(meta.to) + "</b>" + (meta.copyAt ? " (copy made " + esc(String(meta.copyAt).replace("T", " ").slice(0, 16)) + (meta.todayAt ? "; today\u2019s entries brought in at " + hhmm(meta.todayAt) : "") + ")" : meta.at ? " (read " + this.booksAge() + ")" : "") + "." : "No books in FinCom yet.";
+      if (live){
+        btns = (kp.ok ? (kp.on ? "" : '<button class="btn small primary" data-lk="keepon">Keep this company in step with Tally</button>') : '<span class="note">Install Tally Bridge 1.12.12 to keep companies in step while they are open.</span>') +
+          (have && String(meta.to) < today ? '<button class="btn small" data-lk="today">Bring in today\u2019s entries</button>' : "") +
+          (sch.on ? '<span class="note">Nightly copy is on' + (sch.next ? ", next " + esc(sch.next) : "") + ".</span>" : "");
+        if (kp.on) upTo += " The bridge starts keeping it in step within a minute of the company being open in Tally.";
+      } else btns = '<span class="note">Connect the Tally Bridge to keep this up to date.</span>';
+    }
+    let chk = "";
+    if (f.check){
+      const c = f.check;
+      chk = c.error ? '<p class="note bad">The check could not run: ' + esc(c.error) + "</p>"
+        : '<p class="note ' + (c.missing || c.differ || c.extra || !c.listMatchesDayBook ? "bad" : "ok") + '">Checked ' + esc(FC.monthLabel(c.ym)) + " against Tally: Tally has " + c.tally + " entries, the copy " + c.copy + (c.missing || c.differ || c.extra ? " (" + c.missing + " missing, " + c.differ + " changed, " + c.extra + " no longer in Tally; the bridge puts these right on its next turn)" : ", all the same") +
+          ". The light list " + (c.listMatchesDayBook ? "matches" : "<b>does not match</b>") + " the day book for the first days (" + c.list + " and " + c.dayBook + " entries)" + (c.listMatchesDayBook ? "." : ": please tell us, so the bridge can be adjusted for your Tally.") + "</p>";
+    }
+    return '<div class="lk-fresh"><span class="note">' + upTo + " Totals come from this copy, so Tally is never held up.</span>" + btns + chk + "</div>";
   },
+
   // ---------- a question in plain words, turned into a look-up
   STOP: new Set(["the", "of", "for", "and", "to", "a", "an", "in", "on", "from", "show", "me", "give", "what", "is", "was", "ledger", "account", "a/c", "ac", "statement", "balance", "balances", "all", "with", "by", "as", "at", "till", "upto", "up", "this", "last", "year", "month", "quarter", "fy", "ltd", "pvt", "private", "limited", "llp", "co", "&", "m/s", "ms", "entries", "entry", "list", "please", "details", "detail", "how", "much", "many", "our", "my", "we", "us"]),
   MONTHS: {jan: 1, january: 1, feb: 2, february: 2, mar: 3, march: 3, apr: 4, april: 4, may: 5, jun: 6, june: 6, jul: 7, july: 7, aug: 8, august: 8, sep: 9, sept: 9, september: 9, oct: 10, october: 10, nov: 11, november: 11, dec: 12, december: 12},
@@ -23608,6 +23675,8 @@ if (typeof document !== "undefined"){
     else if (a === "fresh") LK.run("fresh");
     else if (a === "names"){ LK.names = null; LK.loadNames(true); render(); }
     else if (a === "today") LK.bringToday();
+    else if (a === "keepon") LK.keepOn(true);
+    else if (a === "keepcheck") LK.keepCheck();
     else if (a === "syncnow") LK.syncNow();
     else if (a === "clear"){ x.res = null; render(); }
     else if (a === "print") LK.printIt();
@@ -24259,6 +24328,10 @@ if (typeof document !== "undefined") document.addEventListener("click", e => {
   const t = e.target.closest && e.target.closest('[data-act="tallyScheduleOn"]');
   if (t && S.lkFr) setTimeout(() => { S.lkFr.at = 0; LK.autoFresh(); }, 4000);
 });
+// while Look up, Reports or Letters is on screen: pick up what the bridge has brought in, once a minute
+if (typeof window !== "undefined") setInterval(() => {
+  try { if (document.visibilityState === "visible" && S.view === "company" && S.tab === "books" && ["lookup", "reports", "letters"].includes(S.booksTab) && typeof LK === "object") LK.autoFresh(); } catch (e){}
+}, 60000);
 </script>
 </body>
 </html>

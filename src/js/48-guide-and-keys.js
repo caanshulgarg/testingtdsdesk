@@ -69,3 +69,7 @@ if (typeof document !== "undefined") document.addEventListener("click", e => {
   const t = e.target.closest && e.target.closest('[data-act="tallyScheduleOn"]');
   if (t && S.lkFr) setTimeout(() => { S.lkFr.at = 0; LK.autoFresh(); }, 4000);
 });
+// while Look up, Reports or Letters is on screen: pick up what the bridge has brought in, once a minute
+if (typeof window !== "undefined") setInterval(() => {
+  try { if (document.visibilityState === "visible" && S.view === "company" && S.tab === "books" && ["lookup", "reports", "letters"].includes(S.booksTab) && typeof LK === "object") LK.autoFresh(); } catch (e){}
+}, 60000);

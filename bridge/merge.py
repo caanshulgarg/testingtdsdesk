@@ -1,12 +1,12 @@
 import sys
 base = open(sys.argv[1], encoding='utf-8-sig').read().replace('\r\n', '\n')
-add = open('additions.ps1', encoding='utf-8').read() + '\n' + open('jobs.ps1', encoding='utf-8').read()
+add = open('additions.ps1', encoding='utf-8').read() + '\n' + open('jobs.ps1', encoding='utf-8').read() + '\n' + open('keep.ps1', encoding='utf-8').read()
 def R(a, b):
     global base
     assert base.count(a) == 1, ('anchor', a[:60], base.count(a))
     base = base.replace(a, b)
 import re
-base = re.sub(r"\$BridgeVersion = '[0-9.]+'", "$BridgeVersion = '1.12.11'", base, 1)
+base = re.sub(r"\$BridgeVersion = '[0-9.]+'", "$BridgeVersion = '1.12.12'", base, 1)
 # 1.12.7 (security): the log never holds keys, codes or passwords, and is rotated at 5 MB keeping 5 old copies
 R(r"""function Write-Log([string]$msg) {
   $line = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + '  ' + $msg
@@ -169,6 +169,14 @@ R("""    $ledgers += [ordered]@{
 # 1.12.10: light reads for Look up (ledger names; the trial balance on a date in one read)
 R("""      '/ledgerbalance' {""", """      '/ledgernames' { $result = Get-LedgerNames ([string]$qs['company']) ([int]('0' + $qs['port'])) }
       '/tb' { $result = Get-TrialBalance ([string]$qs['company']) ([string]$qs['to']) ([int]('0' + $qs['port'])) }
+      '/ledgerbalance' {""")
+# 1.12.12: keeping FinCom's copy of each open company in step with Tally, in a worker of its own
+R("[switch]$Sync,", "[switch]$Sync,\n  [switch]$Keep,")
+R("  SyncCompanies   = @()\n", "  SyncCompanies   = @()\n  KeepInStep      = $null\n")
+R("if ($Sync) {\n  $r = Invoke-NightlySync", "if ($Keep) {\n  try { Invoke-KeepWorker } catch { Write-Log ('Keeping copies in step stopped: ' + $_.Exception.Message) }\n  exit 0\n}\nif ($Sync) {\n  $r = Invoke-NightlySync")
+R("""    if (((Get-Date) - $lastCheck).TotalSeconds -ge 60) { $lastCheck = Get-Date; Show-Diagnosis }""", """    if (((Get-Date) - $lastCheck).TotalSeconds -ge (Get-KeepNum 'KeepStartSec' 60)) { $lastCheck = Get-Date; Show-Diagnosis; try { Start-KeepIfNeeded } catch { Write-Log ('Could not start keeping copies in step: ' + $_.Exception.Message) } }""")
+R("""      '/ledgerbalance' {""", """      '/keep' { if ($method -eq 'POST') { $o = $body | ConvertFrom-Json; $Cfg.KeepInStep = [bool]$o.on; Save-Config; if ($o.on) { Start-KeepIfNeeded } }; $result = Get-KeepStatus ([string]$qs['company']) }
+      '/keepcheck' { $result = Test-KeepMonth ([string]$qs['company']) ([string]$qs['ym']) ([int]('0' + $qs['port'])) }
       '/ledgerbalance' {""")
 # 1.12.8: the product is now called FinCom. Only what people read changes; the scheduled task keeps its old name
 # (an installed bridge finds and replaces it by that name)

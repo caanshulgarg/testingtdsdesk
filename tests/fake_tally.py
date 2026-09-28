@@ -44,9 +44,10 @@ CTRL = {"delay": 0.0, "hang_after": 0, "hang_before": 0, "hang_sec": 25, "refuse
 POSTED = []          # (date, narration, number, xml) of every voucher created here
 DELETED = []
 BODIES = []
-REQS = {}            # how many requests of each kind this Tally was asked (the tests check nothing heavy is asked)
+REQS = {}
+LOG = []             # (kind, from, to) of every request, for the tests to see how much was asked at a time            # how many requests of each kind this Tally was asked (the tests check nothing heavy is asked)
 def _kind(body):
-    for k in ("TDSDeskLedVch", "TDSDeskOneLed", "TDSDeskVchHeads", "TDSDeskBalances", "TDSDeskGroupNames", "TDSDeskNames", "TDSDeskTB", "TDSDeskLedgers", "TDSDeskCompanies"):
+    for k in ("TDSDeskKeepList", "TDSDeskKeepBal", "TDSDeskLedVch", "TDSDeskOneLed", "TDSDeskVchHeads", "TDSDeskBalances", "TDSDeskGroupNames", "TDSDeskNames", "TDSDeskTB", "TDSDeskLedgers", "TDSDeskCompanies"):
         if k in body: return k
     if "<REPORTNAME>Day Book</REPORTNAME>" in body: return "DayBook"
     if "Import Data" in body: return "Import"
@@ -65,6 +66,7 @@ class H(http.server.BaseHTTPRequestHandler):
         body = self.rfile.read(int(self.headers.get("Content-Length", 0))).decode("utf-8")
         g = lambda t: (re.search("<" + t + ">([^<]*)</" + t + ">", body) or [None, ""])[1]
         REQS[_kind(body)] = REQS.get(_kind(body), 0) + 1
+        LOG.append((_kind(body), g("SVFROMDATE"), g("SVTODATE")))
         if "<TALLYREQUEST>Import Data</TALLYREQUEST>" in body:
             CTRL["_imported"] = True
             BODIES.append(body[-600:])
@@ -136,6 +138,20 @@ class H(http.server.BaseHTTPRequestHandler):
             a, b = g("SVFROMDATE"), g("SVTODATE")
             lo, hi = bisect.bisect_left(dates, a), bisect.bisect_right(dates, b)
             out = "<ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>Vouchers</REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY>%s</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><REQUESTDATA>" % COMPANY + "".join(p for _, p in V[lo:hi]) + "".join('<TALLYMESSAGE xmlns:UDF="TallyUDF">' + re.sub(r"^(<VOUCHER\b[^>]*>)", lambda m: m.group(1) + "<GUID>g-%s</GUID><MASTERID>%d</MASTERID><VOUCHERNUMBER>%s</VOUCHERNUMBER>" % (num, 900000 + int(num), num), re.sub(r"<DATE>[^<]*</DATE>", "<DATE>%s</DATE>" % d, vx, 1)) + "</TALLYMESSAGE>" for d, _, num, vx in list(POSTED) if a <= d <= b) + "</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>"
+        elif "TDSDeskKeepList" in body:
+            a, b = g("SVFROMDATE"), g("SVTODATE")
+            after = re.search(r"\$AlterID &gt; (\d+)", body)
+            lo, hi = bisect.bisect_left(dates, a), bisect.bisect_right(dates, b)
+            rows = []
+            for d, pc in V[lo:hi]:
+                gu = re.search(r"<GUID>([^<]*)</GUID>", pc).group(1); al = int(re.search(r"<ALTERID>\s*(\d+)", pc).group(1))
+                if after and al <= int(after.group(1)): continue
+                rows.append("<VOUCHER><GUID>%s</GUID><ALTERID> %d</ALTERID><DATE>%s</DATE></VOUCHER>" % (gu, al, d))
+            out = "<ENVELOPE><BODY><DATA><COLLECTION>" + "".join(rows) + "</COLLECTION></DATA></BODY></ENVELOPE>"
+        elif "TDSDeskKeepBal" in body:
+            asOn = g("SVTODATE"); mv = amounts_until(asOn)
+            want = set(__import__("html").unescape(n) for n in re.findall(r'\$Name = (?:&quot;|&#34;|")(.*?)(?:&quot;|&#34;|")(?: OR |</SYSTEM>)', body))
+            out = "<ENVELOPE><BODY><DATA><COLLECTION>" + "".join('<LEDGER NAME="%s"><PARENT>%s</PARENT><CLOSINGBALANCE>%.2f</CLOSINGBALANCE></LEDGER>' % (n, p, ob + mv.get(n.replace("&amp;", "&"), mv.get(n, 0))) for n, p, ob in L if __import__("html").unescape(n) in want or n in want) + "</COLLECTION></DATA></BODY></ENVELOPE>"
         elif "TDSDeskTB" in body:
             asOn = g("SVTODATE"); mv = amounts_until(asOn)
             rows = [(n, p, ob + mv.get(n.replace("&amp;", "&"), mv.get(n, 0))) for n, p, ob in L]
@@ -154,6 +170,28 @@ class H(http.server.BaseHTTPRequestHandler):
             out = "<ENVELOPE><BODY><DATA></DATA></BODY></ENVELOPE>"
         data = out.encode("utf-8")
         self.send_response(200); self.send_header("Content-Type", "text/xml; charset=utf-8"); self.send_header("Content-Length", str(len(data))); self.end_headers(); self.wfile.write(data)
+_alter = [max(int(re.search(r"<ALTERID>\s*(\d+)", p).group(1)) for _, p in V) if V else 0]
+def _resort():
+    V.sort(key=lambda z: z[0]); dates[:] = [d for d, _ in V]
+def edit_amount(guid, factor):
+    """change every amount in one entry by a factor, as a user editing it in Tally would; it gets a new change number"""
+    for i, (d, pc) in enumerate(V):
+        if "<GUID>%s</GUID>" % guid in pc:
+            _alter[0] += 1
+            pc = re.sub(r"<AMOUNT>(-?[\d.]+)</AMOUNT>", lambda m: "<AMOUNT>%.2f</AMOUNT>" % (float(m.group(1)) * factor), pc)
+            pc = re.sub(r"<ALTERID>\s*\d+</ALTERID>", "<ALTERID> %d</ALTERID>" % _alter[0], pc)
+            V[i] = (d, pc); return _alter[0]
+def delete(guid):
+    for i, (d, pc) in enumerate(V):
+        if "<GUID>%s</GUID>" % guid in pc: del V[i]; _resort(); return d
+def add_copy(guid, new_date, new_guid):
+    """a new entry: a copy of one entry on another date"""
+    for d, pc in list(V):
+        if "<GUID>%s</GUID>" % guid in pc:
+            _alter[0] += 1
+            pc2 = pc.replace("<GUID>%s</GUID>" % guid, "<GUID>%s</GUID>" % new_guid).replace("<DATE>%s</DATE>" % d, "<DATE>%s</DATE>" % new_date)
+            pc2 = re.sub(r"<ALTERID>\s*\d+</ALTERID>", "<ALTERID> %d</ALTERID>" % _alter[0], pc2)
+            V.append((new_date, pc2)); _resort(); return _alter[0]
 def start():
     srv = http.server.ThreadingHTTPServer(("127.0.0.1", 9000), H)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
