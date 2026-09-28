@@ -318,7 +318,7 @@ function startCloudSync2(){
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && Cloud.on() && Cloud.cfg().auto !== false) cloudSync(false); });
 function whoChip(){
   if (!Cloud.on()) return "";
-  return whoChipInner() + '<button class="tchip signout" data-act="signOutNow" title="Sign out of TDS Desk">\u23fb Sign out</button>';
+  return whoChipInner() + '<button class="tchip signout" data-act="signOutNow" title="Sign out of FinCom">\u23fb Sign out</button>';
 }
 function whoChipInner(){
   const a = S.account, who = a && a.me ? (a.me.name || a.me.email) : Cloud.st.email;
@@ -422,7 +422,7 @@ function creditBanner(){
   if (!a || !a.firm) return "";
   const bal = num(a.firm.balance), warn = num(a.firm.warn_at);
   if (S.creditStop && Date.now() - S.creditStop.at < 6 * 3600e3 && bal <= 0)
-    return '<p class="banner" style="border-left-color:var(--stop);background:var(--stop-soft)"><b>Credit finished.</b> Reading new bills, bank statements and invoices is paused. Everything already in TDS Desk still works, and entries can still be posted to Tally. Ask the administrator to add credit.</p>';
+    return '<p class="banner" style="border-left-color:var(--stop);background:var(--stop-soft)"><b>Credit finished.</b> Reading new bills, bank statements and invoices is paused. Everything already in FinCom still works, and entries can still be posted to Tally. Ask the administrator to add credit.</p>';
   if (bal <= warn)
     return '<p class="banner">Credit left: <b>' + INR.format(bal) + "</b>. Ask the administrator to top it up before it runs out.</p>";
   return "";
@@ -612,9 +612,9 @@ function viewSignIn(){
   if (Cloud.on() && st.mfa) return viewTwoStep();
   if (S.signUpOpen) return viewSignUp();
   return '<div class="signin"><div class="signin-box">' +
-    '<h1>TDS Desk</h1>' +
-    '<p class="note">' + esc(S.firm && S.firm.firmName ? S.firm.firmName : "Garg Shekhar & Company") + "</p>" +
-    '<p class="note" style="margin:2px 0 0"><a href="welcome/">What is TDS Desk?</a></p>' +
+    '<h1>FinCom</h1>' +
+    '<p class="note">' + esc(S.firm && S.firm.firmName ? S.firm.firmName : "Finance and compliance, in one place") + "</p>" +
+    '<p class="note" style="margin:2px 0 0"><a href="welcome/">What is FinCom?</a></p>' +
     '<p class="note" style="margin:10px 0 14px">Sign in to see your firm\u2019s work. Nothing is shown before that.</p>' +
     '<label class="f"><span>Email</span><input type="email" data-cloud="email" data-fk="cloudemail" value="' + esc((S.cloudForm && S.cloudForm.email) || c.email || "") + '" autocomplete="username" autofocus></label>' +
     '<label class="f" style="margin-top:8px"><span>Password</span><input type="password" data-cloud="password" data-fk="cloudpw" value="' + esc((S.cloudForm && S.cloudForm.password) || "") + '" autocomplete="current-password"></label>' +
@@ -712,8 +712,8 @@ function viewCompanySettings(){
     (Bridge.up() && Bridge.st.open.length ? '<label class="f"><span>Or pick the company open in Tally</span><select data-picktally><option value="">\u2014</option>' + Bridge.st.open.map(o => '<option' + (o.name === c.tallyName ? " selected" : "") + ">" + esc(o.name) + "</option>").join("") + "</select></label>" : "") +
     '<label class="f"><span>Voucher type</span><select data-c="voucherType">' + ["Journal", "Purchase"].map(v => "<option" + (c.voucherType === v ? " selected" : "") + ">" + v + "</option>").join("") + "</select></label>" +
     '<div class="f wide vnum"><span>Voucher numbering</span>' + (c.vchNumbering === "tally"
-      ? '<div class="note"><span class="tag ok">Automatic in Tally</span> Tally gives every entry its own next number' + (c.vchAutoAt ? " (set " + fmtDate(String(c.vchAutoAt).slice(0, 10)) + ")" : "") + '. TDS Desk sends no voucher numbers. <button class="linkbtn" data-act="vchUseBillNo">Use supplier bill numbers instead</button></div>'
-      : '<div class="note">TDS Desk sends the supplier\u2019s bill number as the voucher number; a number already in Tally is retried with the supplier\u2019s initials.</div>' +
+      ? '<div class="note"><span class="tag ok">Automatic in Tally</span> Tally gives every entry its own next number' + (c.vchAutoAt ? " (set " + fmtDate(String(c.vchAutoAt).slice(0, 10)) + ")" : "") + '. FinCom sends no voucher numbers. <button class="linkbtn" data-act="vchUseBillNo">Use supplier bill numbers instead</button></div>'
+      : '<div class="note">FinCom sends the supplier\u2019s bill number as the voucher number; a number already in Tally is retried with the supplier\u2019s initials.</div>' +
         '<div class="row" style="gap:8px"><button class="btn small" data-act="vchAuto"' + (Bridge.on() && Bridge.up() ? "" : " disabled title=\"Needs the Tally Bridge and Tally open\"") + '>Set automatic numbering in Tally</button>' +
         '<button class="btn small" data-act="vchTallyDone">It is set in Tally already: use Tally\u2019s automatic numbers</button></div>') + "</div>" +
     cf("Input CGST ledger", "gst.cgst", c.gst.cgst) + cf("Input SGST ledger", "gst.sgst", c.gst.sgst) + cf("Input IGST ledger", "gst.igst", c.gst.igst) + cf("Round off ledger", "roundOff", c.roundOff) +
@@ -1023,7 +1023,7 @@ document.addEventListener("click", ev => {
     const port = num(t.dataset.bridgepin);
     Bridge.setCfg({port: port || 0}); Bridge.lastOpenKey = null;
     if (S.bank){ S.bank.syncedAt = {}; S.bank.ledgers.importedAt = ""; }
-    Bridge.refresh().then(() => { toast(port ? "TDS Desk now uses only the Tally on port " + port + "." : "TDS Desk picks your Tally automatically."); bridgeTick(false); render(); });
+    Bridge.refresh().then(() => { toast(port ? "FinCom now uses only the Tally on port " + port + "." : "FinCom picks your Tally automatically."); bridgeTick(false); render(); });
     return;
   }
   if (S.view === "company" && (S.tab === "bank" || (S.tab === "export" && S.bank && S.bank.cid === S.coId)) && bankClick(t)) return;   // bank buttons also work on the Post step
@@ -1274,7 +1274,7 @@ document.addEventListener("click", ev => {
     }
     case "signOutNow": {
       const pend = Cloud.on() ? cloudChanges().changes.length : 0;
-      askConfirm({title: "Sign out of TDS Desk?", ok: "Sign out", body: '<p class="note">You will need your email, password' + (Cloud.st.firm ? " and, if set up, the code from your phone" : "") + ' to come back in. Work already synced stays in your firm account.</p>',
+      askConfirm({title: "Sign out of FinCom?", ok: "Sign out", body: '<p class="note">You will need your email, password' + (Cloud.st.firm ? " and, if set up, the code from your phone" : "") + ' to come back in. Work already synced stays in your firm account.</p>',
         check: pend ? "" : "Also remove this firm\u2019s work from this computer (for a shared or office computer)"}).then(a => {
         if (!a) return;
         signOutHere("Signed out.", !!(a.check && !pend));
@@ -1346,7 +1346,7 @@ document.addEventListener("click", ev => {
     case "adminCreditGo": break;
     case "bridgeConnect": {
       askConfirm({title: "Connect to the Tally Bridge", ok: "Connect",
-        body: '<p class="note">Type the 6-digit code shown in the bridge window on this computer (the window titled TDS Desk - Tally Bridge). It works once, for 15 minutes after the bridge starts.</p><input type="text" id="bridgeCode" inputmode="numeric" maxlength="7" autocomplete="off" placeholder="6-digit code" style="width:160px;font-size:18px;letter-spacing:3px">',
+        body: '<p class="note">Type the 6-digit code shown in the bridge window on this computer (the window titled FinCom - Tally Bridge). It works once, for 15 minutes after the bridge starts.</p><input type="text" id="bridgeCode" inputmode="numeric" maxlength="7" autocomplete="off" placeholder="6-digit code" style="width:160px;font-size:18px;letter-spacing:3px">',
         read: () => String((document.getElementById("bridgeCode") || {}).value || "").replace(/\D/g, ""),
         validate: v => /^\d{6}$/.test(v) ? "" : "Type the 6 digits shown in the bridge window."}).then(a => {
       if (!a) return;
@@ -1611,8 +1611,8 @@ document.addEventListener("click", ev => {
       break;
     }
     case "vchAuto": setAutoNumbering(); break;
-    case "vchTallyDone": { const co = CO(); co.vchNumbering = "tally"; co.vchAutoAt = new Date().toISOString(); Store.saveCompany(co); toast("TDS Desk will leave voucher numbers to Tally."); render(); break; }
-    case "vchUseBillNo": { const co = CO(); co.vchNumbering = ""; Store.saveCompany(co); toast("TDS Desk will send the supplier\u2019s bill number as the voucher number."); render(); break; }
+    case "vchTallyDone": { const co = CO(); co.vchNumbering = "tally"; co.vchAutoAt = new Date().toISOString(); Store.saveCompany(co); toast("FinCom will leave voucher numbers to Tally."); render(); break; }
+    case "vchUseBillNo": { const co = CO(); co.vchNumbering = ""; Store.saveCompany(co); toast("FinCom will send the supplier\u2019s bill number as the voucher number."); render(); break; }
     case "revFClear": S.revF = {}; S.revQuery = ""; S.revSel = new Set(); render(); break;
     case "billBackAll": {
       const list = Object.values(D().entries).filter(e => e.status === "approved" && !e.exportedAt);

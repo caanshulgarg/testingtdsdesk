@@ -8,7 +8,7 @@ Owner: Anshul Garg · Version 0.1 draft, 27 Sep 2026
 |---|---|---|
 | Public | The web app code, the help pages, security.txt | May be published |
 | Internal | Risk register, this pack, the architecture | Staff and auditors only |
-| Client-Confidential | Bills, bank statements, PAN, GSTIN, salaries, Tally data, backups, the audit trail | Only in TDS Desk, Supabase or the client's own systems. Never in email, chat or personal drives. Never in test data. |
+| Client-Confidential | Bills, bank statements, PAN, GSTIN, salaries, Tally data, backups, the audit trail | Only in FinCom, Supabase or the client's own systems. Never in email, chat or personal drives. Never in test data. |
 | Secret | API keys, the service role key, bridge keys, drop keys, two-step recovery codes | Only in Supabase secrets or a password manager. Rotate if ever seen elsewhere. |
 
 ## 10.2 Encryption (A.8.24)

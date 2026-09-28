@@ -38,7 +38,7 @@ Cloud.checkMfa = async function(){
 Cloud.enrolStart = async function(){
   // an earlier half-finished set-up is dropped first
   for (const f of await this.factors()) if (f.status !== "verified") { try { await this.authApi("factors/" + f.id, "DELETE"); } catch (e){} }
-  const j = await this.authApi("factors", "POST", {factor_type: "totp", friendly_name: "TDS Desk " + new Date().toISOString().slice(0, 16)});
+  const j = await this.authApi("factors", "POST", {factor_type: "totp", friendly_name: "FinCom " + new Date().toISOString().slice(0, 16)});
   this.st.mfa = Object.assign({}, this.st.mfa || {need: "enrol"}, {factorId: j.id, qr: (j.totp || {}).qr_code || "", secret: (j.totp || {}).secret || ""});
   return this.st.mfa;
 };
@@ -58,7 +58,7 @@ function viewTwoStep(){
   let h = '<div class="signin"><div class="signin-box"><h1>Two-step sign-in</h1>';
   if (m.forAdmin) h += '<p class="note" style="margin:8px 0 0">Platform administration changes every firm and the credit, so it needs the code from your phone. Your firm work does not.</p>';
   if (m.need === "code"){
-    h += '<p class="note" style="margin:8px 0 14px">Open the authenticator app on your phone (Google Authenticator, Microsoft Authenticator or similar) and type the 6-digit code for TDS Desk.</p>';
+    h += '<p class="note" style="margin:8px 0 14px">Open the authenticator app on your phone (Google Authenticator, Microsoft Authenticator or similar) and type the 6-digit code for FinCom.</p>';
   } else if (!m.factorId){
     h += '<p class="note" style="margin:8px 0 14px">' + (m.required ? "This account must" : "You can") +
       " protect this account with a code from an authenticator app on your phone, as well as the password. Install Google Authenticator or Microsoft Authenticator, then press the button.</p>" +

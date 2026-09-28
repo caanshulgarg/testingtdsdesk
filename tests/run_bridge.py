@@ -33,8 +33,8 @@ try:
         r = urllib.request.urlopen(req, timeout=t); d = r.read().decode("utf-8")
         return (d, r.headers.get("Content-Type")) if raw else json.loads(d)
     ping = json.loads(urllib.request.urlopen("http://127.0.0.1:9100/ping").read())
-    ok(ping["version"] == "1.12.7", "bridge 1.12.7 answers")
-    # connecting: only TDS Desk's own pages, and only with the code shown in the bridge window
+    ok(ping["version"] == "1.12.8", "bridge 1.12.8 answers")
+    # connecting: only FinCom's own pages, and only with the code shown in the bridge window
     def raw(path, origin=None, key=None):
         h = {}
         if origin: h["Origin"] = origin
@@ -46,17 +46,17 @@ try:
     st_, hd, j = raw("/pair?code=" + (code or ""), origin="https://evil.example")
     ok(st_ == 403 and "key" not in j and "Access-Control-Allow-Origin" not in hd, "another web page is refused, even with the right code, and cannot read the answer")
     st_, hd, j = raw("/pair", origin="https://caanshulgarg.github.io")
-    ok(st_ == 403 and j.get("needCode") and "key" not in j, "TDS Desk without the code: asked for it, no key")
+    ok(st_ == 403 and j.get("needCode") and "key" not in j, "FinCom without the code: asked for it, no key")
     st_, hd, j = raw("/pair?code=000000" if code != "000000" else "/pair?code=111111", origin="https://caanshulgarg.github.io")
     ok(st_ == 403 and "not the code" in j.get("error", ""), "a wrong code: refused")
     st_, hd, j = raw("/pair?code=" + (code or ""), origin="https://caanshulgarg.github.io")
-    ok(st_ == 200 and j.get("key") == key and hd.get("Access-Control-Allow-Origin") == "https://caanshulgarg.github.io", "TDS Desk with the right code gets the key")
+    ok(st_ == 200 and j.get("key") == key and hd.get("Access-Control-Allow-Origin") == "https://caanshulgarg.github.io", "FinCom with the right code gets the key")
     st_, hd, j = raw("/pair?code=" + (code or ""), origin="https://caanshulgarg.github.io")
     ok(st_ == 403 and "key" not in j, "the code works once; connecting again needs the bridge started again")
     st_, hd, j = raw("/companies", origin="https://evil.example", key=key)
     ok(st_ == 403 and "Access-Control-Allow-Origin" not in hd, "another web page is refused even with the key")
     st_, hd, j = raw("/companies", origin="http://localhost:8150", key=key)
-    ok(st_ == 200 and hd.get("Access-Control-Allow-Origin") == "http://localhost:8150", "TDS Desk run from this computer (localhost) is answered")
+    ok(st_ == 200 and hd.get("Access-Control-Allow-Origin") == "http://localhost:8150", "FinCom run from this computer (localhost) is answered")
     co = urllib.parse.quote(fake_tally.COMPANY)
     st = get("/companies"); ok(any(c["name"] == fake_tally.COMPANY for c in st["companies"]), "company seen in the stand-in Tally")
     t0 = time.time(); x, ct = get("/daybook?company=%s&from=20250601&to=20250630" % co, raw=True)

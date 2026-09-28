@@ -34,7 +34,7 @@ function renderSide(){
     icon(ICONS[kind || id]) + "<span>" + label + "</span>" + (n ? '<span class="side-count">' + n + "</span>" : "") + "</button>";
   const mod = inCo ? docType() : "";
   const onDash = inCo && S.tab === "dash";
-  let h = '<div class="side-brand">TDS Desk</div>';
+  let h = '<div class="side-brand">FinCom</div>';
   if (open){
     h += '<div class="side-client"><span class="side-label">Client</span><button class="side-co" data-act="switch" title="Change client (F3)"><b>' + esc(open.name) + "</b><small>" + esc(open.gstin || "No GSTIN") + " \u00b7 change</small></button></div>" +
       item("dash", "Dashboard", onDash, 0, "dash", 'data-goclient="dash"') +

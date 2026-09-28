@@ -2285,7 +2285,7 @@ function diagnosticReport(){
   const e = envInfo(), st = S.selfTest && S.selfTest.results || {};
   const yn = v => v ? "yes" : "NO";
   return [
-    "TDS Desk diagnostic report",
+    "FinCom diagnostic report",
     "Version: " + APP_VERSION,
     "Opened: " + e.where,
     "Browser: " + e.browser,
@@ -2660,7 +2660,7 @@ function errText(code){
     google_billing:"Billing is not enabled on the Google Cloud project. Enable billing (the first 1,000 pages a month stay free).",
     google_not_enabled:"The Cloud Vision API is not enabled on this Google Cloud project. Enable it in the Google Cloud console.",
     google_forbidden:"Google refused the request. Check the API key's restrictions (allowed websites and APIs).",
-    no_credit:"The firm's credit has run out. Ask the administrator to add credit; everything already in TDS Desk still works.",
+    no_credit:"The firm's credit has run out. Ask the administrator to add credit; everything already in FinCom still works.",
     google_referrer:"This API key only works from certain websites, but the app is opened as a file, which sends no website address. Remove the website restriction on the key, then test again.",
     google_quota:"Google's usage limit was reached. Wait, or raise the quota in the Google Cloud console.",
     google_error:"Google could not read this image.",
@@ -3373,7 +3373,7 @@ function routeCompany(j){
   }
   if (vg){
     const seller = cos.find(c => c.gstin && c.gstin === vg);
-    if (seller) return {cid: null, note: "This looks like a sales invoice issued by " + seller.name + ". TDS Desk is for purchase and expense invoices."};
+    if (seller) return {cid: null, note: "This looks like a sales invoice issued by " + seller.name + ". FinCom is for purchase and expense invoices."};
   }
   if (!bg && !bn && Bridge.up()){
     const open = Bridge.openClients();

@@ -24,11 +24,11 @@ Record who attended and when.
   - a screen lock of 5 minutes or less,
   - automatic OS updates,
   - antivirus on.
-- Client data stays in TDS Desk and Tally. It must not be copied into:
+- Client data stays in FinCom and Tally. It must not be copied into:
   - personal email,
   - WhatsApp,
   - personal cloud drives,
-  - AI chat tools outside TDS Desk.
+  - AI chat tools outside FinCom.
 - On shared or client computers, sign out with "remove this firm's work from this computer".
 - Public Wi-Fi is acceptable, because all traffic is HTTPS. Do not leave a laptop unattended.
 - Report a lost device at once. The owner then switches off the login.
@@ -36,7 +36,7 @@ Record who attended and when.
 ## 11.4 Leaving or changing role (A.5.11, 6.5)
 
 Leaver checklist (same day):
-1. Switch the person off in TDS Desk. The admin function records it in the audit trail.
+1. Switch the person off in FinCom. The admin function records it in the audit trail.
 2. Remove them from the Supabase, GitHub, Google and Anthropic consoles, and from `platform_admins`.
 3. Rotate any shared secret they knew (doc 10.3).
 4. Get back laptops and papers. Remind them that the confidentiality duty continues after they leave.
@@ -44,4 +44,4 @@ Leaver checklist (same day):
 
 ## 11.5 Disciplinary (A.6.4)
 
-A breach of these rules is handled under the firm's HR policy, in proportion to what happened and whether it was deliberate.
+A breach of these rules is handled under the company's HR policy, in proportion to what happened and whether it was deliberate.

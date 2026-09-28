@@ -1,4 +1,4 @@
-# Setting up TDS Desk
+# Setting up FinCom
 
 ## 1. Working on the code
 
@@ -16,8 +16,8 @@ Keep `APP_VERSION` in `src/js/00-core.js` current: date, build number, and a sho
 
 1. Sign in to the server as the Windows user who runs Tally.
 2. In TallyPrime: **F1 Help → Settings → Connectivity**, set **TallyPrime acts as** to *Both* (or *Server*) and the port to 9000.
-3. In TDS Desk: **Settings → Tally Bridge → download the setup**. On the server, double-click `Setup-TDS-Bridge.bat` and press **I**. It installs into `%LOCALAPPDATA%\TDS Desk Bridge` and starts with Windows.
-4. Copy the key from the bridge window into **Settings → Tally Bridge** in TDS Desk. The screen should show the bridge version (1.10.0) and the open companies.
+3. In FinCom: **Settings → Tally Bridge → download the setup**. On the server, double-click `Setup-TDS-Bridge.bat` and press **I**. It installs into `%LOCALAPPDATA%\FinCom Bridge` and starts with Windows.
+4. Copy the key from the bridge window into **Settings → Tally Bridge** in FinCom. The screen should show the bridge version (1.10.0) and the open companies.
 5. **Reading straight from Tally:** a client's **From Tally** tab → *Read from Tally* for a period.
 6. **The nightly copy:** **From Tally → Every night → Copy every night** (default 02:00). The companies must be open in that user's Tally at that time. In the morning, **See last night's copy → Use it**.
 7. **The FVU:** install Java and Protean's File Validation Utility on the same computer. Put the path of `FVU_STANDALONE.jar` (and the CSI file, if used) in the client's settings; then **TDS → the quarter → Check it with the FVU**.
@@ -35,7 +35,7 @@ Staging has the live schema (14 migrations), the nightly backup, the `client-doc
 
 1. **Sign-in addresses:** Supabase dashboard → staging → **Authentication → URL Configuration**. Site URL `https://caanshulgarg.github.io/testingtdsdesk/`; add redirect URLs `https://caanshulgarg.github.io/testingtdsdesk/**` and `https://caanshulgarg.github.io/tds-desk/**`. Do the same on live for the live site.
 2. **A superadmin:** sign up once on staging, then in the SQL editor: `insert into public.platform_admins (user_id) select id from auth.users where email = 'you@example.com';`
-3. **Keys for paid services:** as superadmin in TDS Desk, set `claude_api_key` and `google_vision_key`, or leave them unset on staging so no paid call can be made from test.
+3. **Keys for paid services:** as superadmin in FinCom, set `claude_api_key` and `google_vision_key`, or leave them unset on staging so no paid call can be made from test.
 4. **Point the test site at staging:** the Supabase address and public key in the test build must be staging's. Do this only after steps 1 and 2, or sign-in on the test site stops working.
 
 A migration goes to staging first, is checked with the test site, and only then to live, with the same file.

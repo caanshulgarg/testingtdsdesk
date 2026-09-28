@@ -1,9 +1,9 @@
 ﻿<#
-  TDS Desk - Tally Bridge
+  FinCom - Tally Bridge
   Garg Shekhar & Company
 
   Runs on the computer where TallyPrime runs. Listens only on this computer (127.0.0.1)
-  and lets TDS Desk, opened in a browser on the same computer, read from and post to Tally.
+  and lets FinCom, opened in a browser on the same computer, read from and post to Tally.
 
   Works with Windows PowerShell 5.1 (built into Windows) and PowerShell 7.
   Start:  powershell -ExecutionPolicy Bypass -File TDSBridge.ps1
@@ -26,7 +26,7 @@ trap {
   try { Stop-Transcript | Out-Null } catch { }
   break
 }
-$BridgeVersion = '1.12.7'
+$BridgeVersion = '1.12.8'
 
 # ------------------------------------------------------------------ settings
 function New-BridgeKey {
@@ -296,7 +296,7 @@ function Get-Diagnosis {
   $mine = @($tallies | Where-Object { $_.mine })
   $others = @($tallies | Where-Object { -not $_.mine })
   if (-not $ns.ok) {
-    & $add 'warn' 'Windows did not let the bridge see which programs are running, so it cannot tell which Tally is yours.' 'In TDS Desk > Settings > Tally Bridge, press "Use this Tally" on your own Tally (the port shown in TallyPrime: F1 > Settings > Connectivity).'
+    & $add 'warn' 'Windows did not let the bridge see which programs are running, so it cannot tell which Tally is yours.' 'In FinCom > Settings > Tally Bridge, press "Use this Tally" on your own Tally (the port shown in TallyPrime: F1 > Settings > Connectivity).'
   } elseif ($mine.Count -eq 0) {
     $txt = 'TallyPrime is not running in your Windows login (' + $me + ').'
     if ($others.Count) { $txt += ' TallyPrime is running for: ' + (($others | ForEach-Object { $u = $_.user; if (-not $u) { $u = 'session ' + $_.session }; $u + $(if ($_.ports.Count) { ' (port ' + ($_.ports -join ', ') + ')' } else { '' }) }) -join '; ') + '.' }
@@ -387,7 +387,7 @@ function Get-OpenCompanies([switch]$Fresh) {
   return $sessions
 }
 
-# The Tally to use for a company. A port chosen in TDS Desk wins; otherwise the company must be open
+# The Tally to use for a company. A port chosen in FinCom wins; otherwise the company must be open
 # in exactly one Tally (your own session first) - the bridge never guesses between two.
 function Find-CompanyPort([string]$Company, [int]$PreferredPort) {
   foreach ($fresh in @($false, $true)) {
@@ -397,8 +397,8 @@ function Find-CompanyPort([string]$Company, [int]$PreferredPort) {
       $s = $usable | Where-Object { $_.port -eq $PreferredPort } | Select-Object -First 1
       if ($s -and (@($s.companies | Where-Object { $_.name -eq $Company }).Count -gt 0)) { return [int]$PreferredPort }
       if ($fresh) {
-        if (-not $s) { throw "The Tally chosen in TDS Desk (port $PreferredPort) is not running in your Windows session. Start it, or choose another Tally in TDS Desk > Settings > Tally Bridge." }
-        throw "Company '$Company' is not open in the Tally chosen in TDS Desk (port $PreferredPort). Open it there."
+        if (-not $s) { throw "The Tally chosen in FinCom (port $PreferredPort) is not running in your Windows session. Start it, or choose another Tally in FinCom > Settings > Tally Bridge." }
+        throw "Company '$Company' is not open in the Tally chosen in FinCom (port $PreferredPort). Open it there."
       }
       continue
     }
@@ -407,7 +407,7 @@ function Find-CompanyPort([string]$Company, [int]$PreferredPort) {
     if ($withIt.Count -gt 1) {
       $mine = @($withIt | Where-Object { $_.mine -eq $true })
       if ($mine.Count -eq 1) { return [int]$mine[0].port }
-      if ($fresh) { throw ("Company '$Company' is open in more than one Tally (ports " + (($withIt | ForEach-Object { $_.port }) -join ', ') + "). Choose your Tally in TDS Desk > Settings > Tally Bridge.") }
+      if ($fresh) { throw ("Company '$Company' is open in more than one Tally (ports " + (($withIt | ForEach-Object { $_.port }) -join ', ') + "). Choose your Tally in FinCom > Settings > Tally Bridge.") }
     }
   }
   throw "Company '$Company' is not open in Tally. Open it in TallyPrime on this computer and try again."
@@ -806,7 +806,7 @@ function Send-Response($stream, [int]$status, [string]$body, [string]$origin) {
   $stream.Flush()
 }
 
-# the pages allowed to talk to the bridge: TDS Desk's own addresses (settings: AllowedOrigins); 'http://localhost' allows any port
+# the pages allowed to talk to the bridge: FinCom's own addresses (settings: AllowedOrigins); 'http://localhost' allows any port
 function Test-AllowedOrigin([string]$o) {
   if (-not $o) { return $true }
   foreach ($a in @($Cfg.AllowedOrigins)) {
@@ -870,7 +870,7 @@ function Invoke-Client($client) {
   $body = ''
   if ($len -gt 0) { $body = [Text.Encoding]::UTF8.GetString($all, $bodyStart, [Math]::Min($len, $all.Length - $bodyStart)) }
 
-  # a browser always says which page is asking; only TDS Desk's own pages (the allowed origins) are answered in a way the page can read
+  # a browser always says which page is asking; only FinCom's own pages (the allowed origins) are answered in a way the page can read
   $sentOrigin = ''
   if ($headers.ContainsKey('origin')) { $sentOrigin = [string]$headers['origin'] }
   $originOk = Test-AllowedOrigin $sentOrigin
@@ -882,11 +882,11 @@ function Invoke-Client($client) {
   $qs = Get-QueryValues $query
 
   if ($method -eq 'OPTIONS') { Send-Response $stream 204 '' $origin; return }
-  if ($path -eq '/ping') { Send-Response $stream 200 (ConvertTo-JsonText ([ordered]@{ ok = $true; bridge = 'TDS Desk Tally Bridge'; version = $BridgeVersion })) $origin; return }
-  # TDS Desk on this same computer may fetch the key itself for a while after the bridge starts
+  if ($path -eq '/ping') { Send-Response $stream 200 (ConvertTo-JsonText ([ordered]@{ ok = $true; bridge = 'FinCom Tally Bridge'; version = $BridgeVersion })) $origin; return }
+  # FinCom on this same computer may fetch the key itself for a while after the bridge starts
   if ($sentOrigin -and -not $originOk -and $path -ne '/ping') {
-    Write-Log ('Refused a request from the web page ' + $sentOrigin + ' (not TDS Desk).')
-    Send-Response $stream 403 (ConvertTo-JsonText ([ordered]@{ ok = $false; error = 'This bridge answers TDS Desk only.' })) $origin
+    Write-Log ('Refused a request from the web page ' + $sentOrigin + ' (not FinCom).')
+    Send-Response $stream 403 (ConvertTo-JsonText ([ordered]@{ ok = $false; error = 'This bridge answers FinCom only.' })) $origin
     return
   }
   if ($path -eq '/pair') {
@@ -901,10 +901,10 @@ function Invoke-Client($client) {
     }
     if ((Get-Date) -le $script:PairUntil) {
       $script:PairUntil = (Get-Date).AddMinutes(-1)      # one connection per start
-      Write-Log ('TDS Desk connected with the code (' + $sentOrigin + ').')
+      Write-Log ('FinCom connected with the code (' + $sentOrigin + ').')
       Send-Response $stream 200 (ConvertTo-JsonText ([ordered]@{ ok = $true; key = $Cfg.Key; computer = $env:COMPUTERNAME; user = $env:USERNAME; version = $BridgeVersion })) $origin
     } else {
-      Send-Response $stream 403 (ConvertTo-JsonText ([ordered]@{ ok = $false; error = 'The connect window has closed. Start the bridge again (Start-TDS-Bridge), then press Connect in TDS Desk within ' + $Cfg.PairWindowMin + ' minutes.' })) $origin
+      Send-Response $stream 403 (ConvertTo-JsonText ([ordered]@{ ok = $false; error = 'The connect window has closed. Start the bridge again (Start-TDS-Bridge), then press Connect in FinCom within ' + $Cfg.PairWindowMin + ' minutes.' })) $origin
     }
     return
   }
@@ -912,7 +912,7 @@ function Invoke-Client($client) {
   $key = ''
   if ($headers.ContainsKey('x-bridge-key')) { $key = $headers['x-bridge-key'] }
   if ($key -ne $Cfg.Key) {
-    Send-Response $stream 401 (ConvertTo-JsonText @{ ok = $false; error = 'Wrong bridge key. Copy the key shown in the bridge window into TDS Desk Settings.' }) $origin
+    Send-Response $stream 401 (ConvertTo-JsonText @{ ok = $false; error = 'Wrong bridge key. Copy the key shown in the bridge window into FinCom Settings.' }) $origin
     return
   }
   try {
@@ -974,7 +974,7 @@ function Invoke-Client($client) {
         $result = [ordered]@{ ok = $true; port = $port; ledger = $led; openAsOn = $before; open = [string]$o; close = [string]$c }
       }
       '/tags' {
-        # every voucher TDS Desk posted in a date range (its tag is in the narration): one light read, no ledger lines
+        # every voucher FinCom posted in a date range (its tag is in the narration): one light read, no ledger lines
         $port = Find-CompanyPort ([string]$qs['company']) ([int]('0' + $qs['port']))
         $heads = Get-VoucherHeads -Port $port -Company ([string]$qs['company']) -From ([string]$qs['from']) -To ([string]$qs['to'])
         $tagged = New-Object System.Collections.ArrayList
@@ -1178,7 +1178,7 @@ function Invoke-Fvu($o) {
   if (-not $jar) { $jar = Join-Path $homeDir 'TDS-Desk\FVU\FVU_STANDALONE.jar' }
   $outDir = [string]$o.outDir
   if (-not $outDir) { $outDir = Join-Path $homeDir 'TDS-Desk\FVU\out' }
-  if ($jar -notmatch '\.jar$' -or -not (Test-Path -LiteralPath $jar)) { return [ordered]@{ ok = $false; error = "The FVU was not found at $jar. Install Protean's FVU and set its path in TDS Desk." } }
+  if ($jar -notmatch '\.jar$' -or -not (Test-Path -LiteralPath $jar)) { return [ordered]@{ ok = $false; error = "The FVU was not found at $jar. Install Protean's FVU and set its path in FinCom." } }
   if (-not (Get-Command java -ErrorAction SilentlyContinue)) { return [ordered]@{ ok = $false; error = 'Java is not installed on this computer. The FVU needs Java to run.' } }
   $text = [string]$o.text
   if (-not $text) { return [ordered]@{ ok = $false; error = 'The return file is empty.' } }
@@ -1211,7 +1211,7 @@ function Invoke-Fvu($o) {
 }
 
 # ------------------------------------------------------------------ posting as a background job (bridge 1.12)
-# TDS Desk hands a batch to POST /jobs and gets a job number at once. A separate PowerShell process (this same
+# FinCom hands a batch to POST /jobs and gets a job number at once. A separate PowerShell process (this same
 # script with -Job) posts it in small batches, one writer per Tally at a time, and writes its progress to
 # jobs\<id>\progress.json after every batch. The bridge keeps answering while it runs; the browser may close,
 # the network may drop, the bridge may restart: the job goes on, or is resumed, and nothing is posted twice:
@@ -1258,7 +1258,7 @@ function Start-JobWorker([string]$dir) {
   return [Diagnostics.Process]::Start($psi).Id
 }
 
-# a job as TDS Desk sees it; a running job whose process has gone is "interrupted" (TDS Desk resumes it)
+# a job as FinCom sees it; a running job whose process has gone is "interrupted" (FinCom resumes it)
 function Get-JobView([string]$dir) {
   $p = Read-JobProgress $dir
   if (-not $p) { return $null }
@@ -1600,7 +1600,7 @@ function Invoke-JobWorker([string]$dir) {
       $p.done = $results.Count
       Write-JobProgress $dir $p
     }
-    # sending is finished: TDS Desk shows it at once; the read-back runs after, in one read, while TDS Desk carries on
+    # sending is finished: FinCom shows it at once; the read-back runs after, in one read, while FinCom carries on
     $okN = @($results | Where-Object { $_.ok }).Count
     $p.status = 'done'; $p.checking = ($toConfirm.Count -gt 0); $p.message = [string]$okN + ' of ' + $p.total + ' sent to Tally'; $p.finishedAt = (Get-Date).ToString('o')
     Write-JobProgress $dir $p
@@ -1641,15 +1641,15 @@ try { $listener.Start() } catch {
   Write-Host "Could not start on port $($Cfg.Port): $($_.Exception.Message)" -ForegroundColor Red
   Write-Host 'Another program already uses this port. Usually the bridge is already running (another window,'
   Write-Host 'or started hidden at sign-in). Run Remove-AutoStart.ps1 to stop hidden copies, or change "Port"'
-  Write-Host 'in tds-bridge.config.json and use the new address in TDS Desk.'
+  Write-Host 'in tds-bridge.config.json and use the new address in FinCom.'
   try { Stop-Transcript | Out-Null } catch { }
   exit 1
 }
 Write-Host ''
-Write-Host '  TDS Desk - Tally Bridge' $BridgeVersion -ForegroundColor Green
+Write-Host '  FinCom - Tally Bridge' $BridgeVersion -ForegroundColor Green
 Write-Host ('  Address : http://127.0.0.1:' + $Cfg.Port)
 Write-Host ('  Key     : ' + $Cfg.Key) -ForegroundColor Yellow
-Write-Host '  Copy the address and key into TDS Desk > Settings > Tally Bridge.'
+Write-Host '  Copy the address and key into FinCom > Settings > Tally Bridge.'
 Write-Host '  Keep this window open while you work. Press Ctrl+C to stop.'
 Write-Host ''
 Write-Host ('  Your Windows session: ' + $script:MySession + ' (' + $env:USERNAME + ')')
@@ -1676,13 +1676,13 @@ function Show-Diagnosis {
 }
 Show-Diagnosis
 Write-Host ''
-Write-Host ('  READY - the bridge is running. Waiting for TDS Desk at http://127.0.0.1:' + $Cfg.Port) -ForegroundColor Green
-if ($script:PlanMode -eq 'fallback') { Write-Log 'Windows did not say which Tally belongs to you; ports from the settings are used. Choose your Tally in TDS Desk.' }
+Write-Host ('  READY - the bridge is running. Waiting for FinCom at http://127.0.0.1:' + $Cfg.Port) -ForegroundColor Green
+if ($script:PlanMode -eq 'fallback') { Write-Log 'Windows did not say which Tally belongs to you; ports from the settings are used. Choose your Tally in FinCom.' }
 $script:PairUntil = (Get-Date).AddMinutes([int]$Cfg.PairWindowMin)
 $script:PairTries = 0
 $rng = [Security.Cryptography.RandomNumberGenerator]::Create(); $b4 = New-Object byte[] 4; $rng.GetBytes($b4)
 $script:PairCode = ([BitConverter]::ToUInt32($b4, 0) % 1000000).ToString('000000')
-Write-Host ('  To connect TDS Desk: press Connect there and type the code  ' + $script:PairCode + '  (until ' + $script:PairUntil.ToString('HH:mm') + ').') -ForegroundColor Green
+Write-Host ('  To connect FinCom: press Connect there and type the code  ' + $script:PairCode + '  (until ' + $script:PairUntil.ToString('HH:mm') + ').') -ForegroundColor Green
 Write-Host ''
 $lastCheck = Get-Date
 while ($true) {

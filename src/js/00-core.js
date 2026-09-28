@@ -29,7 +29,7 @@ const TDS_LEDGER_DEFAULTS = {contractor:"TDS Payable - Contractor", professional
   director:"TDS Payable - Director", commission:"TDS Payable - Commission", rent_building:"TDS Payable - Rent", rent_machinery:"TDS Payable - Rent",
   interest:"TDS Payable - Interest", goods:"TDS Payable - Purchase of Goods", none:""};
 const GST_DEFAULTS = {cgst:"Input CGST", sgst:"Input SGST", igst:"Input IGST"};
-const DEFAULT_FIRM = {firmName:"Garg Shekhar & Company", rules:{}};
+const DEFAULT_FIRM = {firmName:"", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;

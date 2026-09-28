@@ -7,7 +7,7 @@ Owner: Anshul Garg · Version 0.1 draft, 27 Sep 2026
 - **Least privilege.** Staff get the role they need; the owner role is kept to the fewest people.
 - **The database decides.** Every table has row-level security, and the app's checks are only a convenience. Firm data is visible only through `my_firm()`.
 
-## 5.2 Roles in TDS Desk
+## 5.2 Roles in FinCom
 
 | Role | Can | Two-step sign-in |
 |---|---|---|

@@ -1,4 +1,4 @@
-# TDS Desk (test site and source)
+# FinCom (test site and source)
 
 The test site is published from this repository: https://caanshulgarg.github.io/testingtdsdesk/ (live: caanshulgarg/tds-desk).
 

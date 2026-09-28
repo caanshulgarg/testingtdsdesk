@@ -34,4 +34,4 @@ In order of urgency. Each item takes minutes unless marked otherwise.
 14. Hold a **management review** meeting and keep the minutes: objectives, risks, incidents, audit results, changes.
 15. Hold one **incident tabletop exercise** (doc 7.8) and one **staff briefing** (doc 11.2).
 16. Choose the **certification body**, accredited by NABCB or UKAS (for example BSI, TÜV SÜD, Intertek or TÜV India). Book Stage 1.
-17. **Key-person cover:** a sealed note with a partner; name a second developer or a support firm (risk R22).
+17. **Key-person cover:** a sealed note with a director; name a second developer or a support firm (risk R22).

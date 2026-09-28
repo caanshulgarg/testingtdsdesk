@@ -27,7 +27,7 @@ with sync_playwright() as p:
     ok('"cgst":"07 CGST INPUT"' in co and '"igst":"07 IGST INPUT"' in co, "empty posting ledgers filled from the confirmed master (Delhi input ledgers)")
     ok('"contractor":"TDS ON CONTRACT 194C 2%"' in co, "contractor TDS: the 194C ledger at the rule's rate, the most used")
     pg.evaluate("S.lmView = 'post'; render();"); pg.wait_for_timeout(400)
-    ok("What TDS Desk posts bills to" in pg.inner_text("#app") and "same" in pg.inner_text("#app"), "the posting view shows each slot and where it comes from")
+    ok("What FinCom posts bills to" in pg.inner_text("#app") and "same" in pg.inner_text("#app"), "the posting view shows each slot and where it comes from")
     pg.screenshot(path=OUT + "/led-post.png", full_page=False)
     # set one by hand elsewhere, then use the master's
     pg.evaluate("CO().gst.sgst = 'Input SGST'; render();"); pg.wait_for_timeout(300)

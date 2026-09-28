@@ -1,6 +1,6 @@
-# TDS Desk: security and ISO 27001 pack
+# FinCom: security and ISO 27001 pack
 
-Prepared September 2026 for VAPT and ISO/IEC 27001:2022 certification of TDS Desk (Garg Shekhar & Company).
+Prepared September 2026 for VAPT and ISO/IEC 27001:2022 certification of FinCom (Yuvnav Services Private Limited, Noida). FinCom was earlier called TDS Desk.
 These are working drafts. The owner reviews, adjusts and signs them. They become ISMS records only when approved.
 
 | # | Document | ISO 27001:2022 | Status |

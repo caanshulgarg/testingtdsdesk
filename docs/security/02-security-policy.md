@@ -4,12 +4,12 @@
 |---|---|
 | Document owner | Anshul Garg (ISMS owner) |
 | Version | 0.1 draft, 27 Sep 2026 |
-| Approved by | Partners of Garg Shekhar & Company, on: — |
+| Approved by | Board of directors of Yuvnav Services Private Limited, on: — |
 | Review | Every 12 months, and after any major incident or change |
 
 ## 2.1 Policy statement (5.2)
 
-Garg Shekhar & Company protects the confidentiality, integrity and availability of the information that its clients entrust to TDS Desk. We:
+Yuvnav Services Private Limited protects the confidentiality, integrity and availability of the information that its clients entrust to FinCom. We:
 
 1. Treat every client's data as confidential. It is used only to give the service the client asked for.
 2. Keep one firm's data separate from every other firm's, enforced by the database itself and not only by the app.

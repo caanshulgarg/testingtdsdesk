@@ -35,7 +35,7 @@ Owner: Anshul Garg · Version 0.1 draft, 27 Sep 2026
 - Keep a second host configured and tested once a year.
 
 ## 8.6 If the owner is unavailable (key person)
-- A sealed note of the recovery steps, the console logins and the two-step recovery codes is kept with a partner in a safe.
+- A sealed note of the recovery steps, the console logins and the two-step recovery codes is kept with a director in a safe.
 - `docs/` explains build, test and release.
 
 ## Evidence

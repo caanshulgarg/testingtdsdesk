@@ -63,7 +63,7 @@ with sync_playwright() as p:
     # next sign-in asks only for the code
     pg.fill('[data-cloud="email"]', "owner@firm.in"); pg.fill('[data-cloud="password"]', "pw12345678"); pg.click('[data-act="cloudSignIn"]'); pg.wait_for_timeout(1500)
     t = pg.inner_text("#app")
-    ok("6-digit code for TDS Desk" in t and pg.locator('[data-act="mfaStart"]').count() == 0 and pg.locator('[data-act="mfaCancel"]').count() == 0, "once turned on, the next sign-in asks for the code (no skipping)")
+    ok("6-digit code for FinCom" in t and pg.locator('[data-act="mfaStart"]').count() == 0 and pg.locator('[data-act="mfaCancel"]').count() == 0, "once turned on, the next sign-in asks for the code (no skipping)")
     ok(not any("/rest/v1/records" in c[1] for c in ST["calls"][-6:]), "no firm data is asked for before the code")
     pg.fill("#mfaCode", "123456"); pg.keyboard.press("Enter"); pg.wait_for_timeout(2000)
     ok(pg.evaluate("Cloud.aal()") == "aal2", "code accepted with Enter")

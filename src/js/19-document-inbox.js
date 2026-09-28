@@ -1,6 +1,6 @@
 /* ================================================================== */
 /* Document inbox: kind = 'inbox'. The Poster says "a file arrived";  */
-/* TDS Desk reads it and owns the status after that.                   */
+/* FinCom reads it and owns the status after that.                   */
 /* ================================================================== */
 S.docq = S.docq || {};
 S.docqLocal = S.docqLocal || {};          // this computer's own progress: reading, or why a read failed. Never written back.
@@ -23,7 +23,7 @@ async function loadDocq(force){
     if (sig() !== before) render();
   } catch (e){ /* the inbox is best effort; the rest of the app keeps working */ }
 }
-// TDS Desk writes back only what the spec gives it: status and entryId (and the client, if staff move an unsorted file)
+// FinCom writes back only what the spec gives it: status and entryId (and the client, if staff move an unsorted file)
 async function docqSave(d, patch){
   const cur = Object.assign({}, d, patch || {});
   const data = Object.assign({}, cur); delete data.client_id;
@@ -169,7 +169,7 @@ function viewDropKeys(){
       '<div style="margin-top:6px"><code style="font-size:13px;user-select:all">' + esc(S.newDropKey) + "</code></div>" +
       '<div style="margin-top:8px">The Poster adds one waiting document with one call:</div>' +
       '<pre style="white-space:pre-wrap;font-size:12px;background:var(--paper);padding:8px;border-radius:6px;user-select:all">POST ' + esc(rpc) +
-      "\nHeader  apikey: " + esc(Cloud.cfg().key) + "\nHeader  Content-Type: application/json\nBody\n{\n  \"p_key\": \"" + esc(S.newDropKey) + "\",\n  \"p_id\": \"&lt;intake uuid&gt;\",\n  \"p_client_id\": \"&lt;TDS Desk client id&gt;\",\n  \"p_data\": { \"fileName\": ..., \"fileHash\": ..., \"url\": ..., \"urlExpiresAt\": ..., ... }\n}" +
+      "\nHeader  apikey: " + esc(Cloud.cfg().key) + "\nHeader  Content-Type: application/json\nBody\n{\n  \"p_key\": \"" + esc(S.newDropKey) + "\",\n  \"p_id\": \"&lt;intake uuid&gt;\",\n  \"p_client_id\": \"&lt;FinCom client id&gt;\",\n  \"p_data\": { \"fileName\": ..., \"fileHash\": ..., \"url\": ..., \"urlExpiresAt\": ..., ... }\n}" +
       "\n\nRefresh a link:  POST .../rest/v1/rpc/refresh_inbox_link\n{ \"p_key\": ..., \"p_id\": ..., \"p_url\": ..., \"p_expires_at\": ... }</pre>" +
       '<button class="linkbtn" data-act="dropKeyHide">I have copied it</button></div>';
   }

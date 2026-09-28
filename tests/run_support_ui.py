@@ -40,7 +40,7 @@ def rpc(tok, name, a):
         elif not sa: t["status"] = "new" if t["status"] == "new" else "open"; t["resolved_at"] = None; t["last_by"] = "firm"
         t["updated_at"] = iso(now()); return row(t, sa)
     if name == "support_set":
-        if not sa and (a["p_priority"] or a["p_assignee"] or (a["p_status"] or "resolved") not in ("resolved", "open")): raise Exception("Only TDS Desk support can change that.")
+        if not sa and (a["p_priority"] or a["p_assignee"] or (a["p_status"] or "resolved") not in ("resolved", "open")): raise Exception("Only FinCom support can change that.")
         if a["p_status"]: t["status"] = a["p_status"]; t["resolved_at"] = iso(now()) if a["p_status"] in ("resolved", "closed") else None
         if a["p_priority"]: t["priority"] = a["p_priority"]
         if a["p_assignee"] is not None: t["assignee"] = a["p_assignee"]
@@ -72,7 +72,7 @@ with sync_playwright() as p:
     ok(pg.locator('#side [data-nav="help"], [data-nav="help"]').count() >= 1, "Help is in the side bar")
     pg.click('[data-nav="help"]'); pg.wait_for_timeout(800)
     t = pg.inner_text("#app")
-    ok("Help" in t and "Getting started with TDS Desk" in t and "2B reconciliation" in t and "Raising a ticket" in t, "the guide lists its topics and every tab guide, by area")
+    ok("Help" in t and "Getting started with FinCom" in t and "2B reconciliation" in t and "Raising a ticket" in t, "the guide lists its topics and every tab guide, by area")
     pg.fill("input[data-supgq]", "tally port"); pg.wait_for_timeout(500)
     ok("Connecting Tally" in pg.inner_text(".sp-gright") and "9000" in pg.inner_text(".sp-gright"), "search finds the article and shows it: " + pg.inner_text(".sp-gright")[:40])
     pg.fill("input[data-supgq]", "rule 37"); pg.wait_for_timeout(500)

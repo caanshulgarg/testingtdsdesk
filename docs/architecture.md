@@ -1,9 +1,9 @@
-# TDS Desk: architecture
+# FinCom: architecture
 
-TDS Desk is one HTML page that runs in the browser. It reads a client's books from Tally, works out TDS and GST returns, audits the books, and produces MIS. A small PowerShell program, the **Tally Bridge**, runs on the computer with Tally and lets the page talk to Tally. A Supabase project holds firm accounts, shared data and paid services.
+FinCom is one HTML page that runs in the browser. It reads a client's books from Tally, works out TDS and GST returns, audits the books, and produces MIS. A small PowerShell program, the **Tally Bridge**, runs on the computer with Tally and lets the page talk to Tally. A Supabase project holds firm accounts, shared data and paid services.
 
 ```
- Browser: TDS Desk (index.html)  ──HTTP 127.0.0.1:9100──▶  Tally Bridge (TDSBridge.ps1)  ──XML──▶  TallyPrime (port 9000)
+ Browser: FinCom (index.html)  ──HTTP 127.0.0.1:9100──▶  Tally Bridge (TDSBridge.ps1)  ──XML──▶  TallyPrime (port 9000)
         │                                                        │
         │ HTTPS                                                   └─ nightly copy folder (day books, balances, ledgers)
         ▼
@@ -34,7 +34,7 @@ Everything is plain JavaScript in one scope, no framework and no bundler. State 
 |---|---|
 | `00-core.js` | Rules and rates (`RULE_DEFAULTS`), storage (`lsGet`, IndexedDB), helpers (`num`, `r2`, `esc`, `fmtDate`), the state `S`, the purchase and bank posting logic, the shared layout. |
 | `04-the-client-s-books-read-from-tally.js` | `Books`: reads the Day Book and ledger masters (XML, UTF-16 or UTF-8), keeps each voucher as `{id, date, type, no, ref, party, gstin, cmp, ent: [{l, a, r, b, c}], …}`. `a` is Tally's sign: a debit is negative. `b` holds bill-wise allocations, `c` cost centres. `Books.lines(v)` reads one voucher into value, tax by head, TDS and so on, by what each ledger is. |
-| `05-tally-ledger-master.js` | `LedMaster`: what each GST and TDS ledger is, guessed from Tally and the day book, confirmed by the user. Also what TDS Desk posts to, templates across clients, and a copy of the master at each filing. |
+| `05-tally-ledger-master.js` | `LedMaster`: what each GST and TDS ledger is, guessed from Tally and the day book, confirmed by the user. Also what FinCom posts to, templates across clients, and a copy of the master at each filing. |
 | `06-audit.js` | `Audit`: rule-based checks, each returning findings with the problem, effect, recommendation, suggested journal entries and the vouchers behind it. Result codes, items put right, the final report, the Form 3CD draft. |
 | `07-mis.js` | `MIS`: profit and loss by Tally group, ageing bill by bill, sales and purchases, cash flow, the 13-week forecast, ratios, cost centres, budget. |
 | `08-gstr-9-and-gstr-9c.js` | `GST9`, `GST9C`: the year from the monthly figures. |

@@ -1,5 +1,5 @@
 /* ================================================================== */
-/* Help: a searchable guide, and tickets that firms raise to TDS Desk  */
+/* Help: a searchable guide, and tickets that firms raise to FinCom  */
 /* support, with the screen's details attached and a desk for support  */
 /* (platform admins) with SLA, pipeline and ageing                     */
 /* ================================================================== */
@@ -99,10 +99,10 @@ const SUP = {
   }
 };
 
-/* ---------- the guide: every "How this tab works" plus the rest of TDS Desk ---------- */
+/* ---------- the guide: every "How this tab works" plus the rest of FinCom ---------- */
 const GUIDE = {
   A: {
-    "start": {area: "Getting started", t: "Getting started with TDS Desk", what: "TDS Desk reads purchase bills, bank statements and sales, checks them, and posts them to Tally; it also works out TDS and GST returns from the Tally books.",
+    "start": {area: "Getting started", t: "Getting started with FinCom", what: "FinCom reads purchase bills, bank statements and sales, checks them, and posts them to Tally; it also works out TDS and GST returns from the Tally books.",
       steps: ["Add a client under All clients, with its GSTIN and PAN.", "Connect Tally on this computer (Tally chip at the top) so entries can be posted and the day book read.", "Bring in documents: Purchase, Bank and Sales on the left.", "Review what was read, then post to Tally.", "For returns, open TDS & GST and read the day book from Tally."],
       watch: ["Work is saved in this browser unless you sign in to the firm account, which keeps it in the cloud for everyone in the firm."]},
     "bills": {area: "Documents", t: "Purchase bills", what: "Bills are read from PDFs and photos, checked against the supplier's ledger and GST, and posted to Tally as purchase or journal vouchers with TDS where it applies.",
@@ -115,8 +115,8 @@ const GUIDE = {
       steps: ["Bring in the invoices or the marketplace report.", "Check customers, rates and places of supply.", "Post to Tally."]},
     "inbox": {area: "Documents", t: "Inbox", what: "Each client has an address and a drop link; documents sent there wait in the Inbox until you sort them.",
       steps: ["Share the client's drop link or address.", "Open Inbox, check each document's client and kind, and send it on to Purchase, Bank or Sales."]},
-    "tally": {area: "Tally", t: "Connecting Tally", what: "TDS Desk talks to Tally on this computer through Tally's own port (9000 by default).",
-      steps: ["In Tally: F1 → Settings → Connectivity → TallyPrime acts as: Both, port 9000.", "Open the company in Tally.", "Click the Tally chip at the top of TDS Desk and check it says connected.", "Post a test entry to a ZZ TEST company first."],
+    "tally": {area: "Tally", t: "Connecting Tally", what: "FinCom talks to Tally on this computer through Tally's own port (9000 by default).",
+      steps: ["In Tally: F1 → Settings → Connectivity → TallyPrime acts as: Both, port 9000.", "Open the company in Tally.", "Click the Tally chip at the top of FinCom and check it says connected.", "Post a test entry to a ZZ TEST company first."],
       watch: ["Tally must be open with the right company when posting.", "Everything sent to Tally is listed under Tally: everything sent."]},
     "gstapi": {area: "GST", t: "Fetching from the GST portal (GST API)", what: "With the firm account, 2B can be fetched straight from the GST portal after an OTP sent to the taxpayer.",
       steps: ["On gst.gov.in the taxpayer allows API access: My Profile → Manage API Access.", "Client setup → GST: type the GST portal username for the GSTIN.", "TDS & GST → GST → 2B: Send OTP, type the OTP, Connect, then Fetch 2B."],
@@ -125,7 +125,7 @@ const GUIDE = {
       steps: ["Add each GSTIN; its PAN must be the client's PAN.", "Choose the GSTIN in the list to see its settings.", "When a setting changes, choose whether it is for this GSTIN only, for all, or for the ones you tick."]},
     "account": {area: "Firm account", t: "Firm account, people and credit", what: "Signing in to the firm account keeps the work in the cloud, shares it with the firm's people, and uses the firm's credit for reading documents.",
       steps: ["Sign in at the top right.", "Owners add people under Settings → People, with what each may do.", "Credit and plan are shown on the firm button; ask the administrator to top up before it runs out."]},
-    "tickets": {area: "Help", t: "Raising a ticket", what: "When the guide does not answer it, raise a ticket to TDS Desk support. It carries the screen you were on, the client, the build and the last messages shown, so there is less back and forth.",
+    "tickets": {area: "Help", t: "Raising a ticket", what: "When the guide does not answer it, raise a ticket to FinCom support. It carries the screen you were on, the client, the build and the last messages shown, so there is less back and forth.",
       steps: ["Open Help from the screen where the problem is.", "Help → My tickets → New ticket: a subject, the module, how urgent, and what happened.", "Attach screenshots or the file that was being read.", "Replies appear on the ticket (and by email when email is set up). Reply on the ticket, or mark it resolved."],
       watch: ["Response targets: urgent 2 hours, high 4, medium 8, low 24; resolution: urgent 8 hours, high 1 day, medium 3 days, low 5 days."]}
   },
@@ -160,7 +160,7 @@ function viewHelp(){
   const s = SUP.st(), adm = SUP.admin();
   if (s.tab === "desk" && !adm) s.tab = "tickets";
   const n = SUP.counts();
-  let h = '<div class="pane" style="margin-top:0"><div class="sp-head"><div><h2 style="margin:0">Help</h2><p class="note" style="margin:2px 0 0">Search the guide; if it does not answer it, raise a ticket to TDS Desk support.</p></div>' +
+  let h = '<div class="pane" style="margin-top:0"><div class="sp-head"><div><h2 style="margin:0">Help</h2><p class="note" style="margin:2px 0 0">Search the guide; if it does not answer it, raise a ticket to FinCom support.</p></div>' +
     (SUP.on() ? '<button class="btn primary" data-sup="new">+ New ticket</button>' : "") + "</div>" +
     '<nav class="sbar" aria-label="Help">' + [["guide", "Guide"], ["tickets", "My tickets", !adm && n ? n : null]].concat(adm ? [["desk", "Support desk", n || null]] : [])
       .map(([id, l, c]) => '<button data-suptab="' + id + '" aria-selected="' + (s.tab === id) + '">' + l + (c ? ' <span class="sbar-n">' + c + "</span>" : "") + "</button>").join("") + "</nav>";
@@ -200,7 +200,7 @@ function viewSupMine(){
   const shown = l.filter(t => (f === "all" || (f === "open" ? SUP.active(t) : f === "waiting" ? t.status === "waiting" : !SUP.active(t))) && (!q || (SUP.code(t) + " " + t.subject + " " + t.module).toLowerCase().includes(q)));
   h += supToolbar([["open", "Open", l.filter(SUP.active).length], ["waiting", "Awaiting me", wait.length], ["closed", "Closed", l.filter(t => !SUP.active(t)).length], ["all", "All", l.length]], f, s.q);
   h += shown.length ? '<div class="bk-tablewrap"><table class="bk-table sp-table"><thead><tr><th>ID</th><th>Subject</th><th>Module</th><th>Priority</th><th>Status</th><th>SLA</th><th class="dt">Updated</th></tr></thead><tbody>' + shown.map(t => supRow(t, false)).join("") + "</tbody></table></div>"
-    : '<p class="note">' + (l.length ? "No tickets here." : "No tickets yet. Raise one with + New ticket; it goes to TDS Desk support.") + "</p>";
+    : '<p class="note">' + (l.length ? "No tickets here." : "No tickets yet. Raise one with + New ticket; it goes to FinCom support.") + "</p>";
   return h;
 }
 function supToolbar(chips, f, q){
@@ -260,7 +260,7 @@ function viewSupDesk(){
 function viewSupNew(){
   const s = SUP.st(), c = S.helpCtx || SUP.context(), d = s.draft || (s.draft = {module: SUP.moduleOf(c), category: "problem", priority: "medium", withCtx: true, subject: s.gq || "", body: ""});
   const sugg = d.subject && d.subject.length > 3 ? GUIDE.search(d.subject).slice(0, 3) : [];
-  return '<div class="sp-card" style="margin-top:12px"><div class="sp-head"><h3 style="margin:0">New ticket to TDS Desk support</h3><button class="linkbtn" data-sup="cancel">Cancel</button></div>' +
+  return '<div class="sp-card" style="margin-top:12px"><div class="sp-head"><h3 style="margin:0">New ticket to FinCom support</h3><button class="linkbtn" data-sup="cancel">Cancel</button></div>' +
     '<label class="sp-f"><span>Subject</span><input type="text" data-supd="subject" data-fk="supd-subject" data-keeptyped maxlength="200" value="' + esc(d.subject) + '" placeholder="In a line: what is wrong or what you need"></label>' +
     (sugg.length ? '<div class="sp-sugg"><span class="note">The guide may answer it:</span> ' + sugg.map(x => '<button class="linkbtn" data-supart="' + esc(x.k) + '" data-supgo>' + esc(x.t) + "</button>").join(" · ") + "</div>" : "") +
     '<div class="sp-grid"><label class="sp-f"><span>Module</span><select data-supd="module">' + SUP.MODULES.map(m => "<option" + (d.module === m ? " selected" : "") + ">" + esc(m) + "</option>").join("") + "</select></label>" +
@@ -296,8 +296,8 @@ function viewSupTicket(){
   h += "</div>";
   const c = t.context || {};
   if (Object.keys(c).length) h += '<details class="sp-ctx"' + (adm ? " open" : "") + "><summary>Screen details sent with the ticket</summary>" + supCtx(c) + "</details>";
-  h += '<div class="sp-thread">' + (t.thread || []).map(m => '<div class="sp-msg' + (m.from_support ? " sup" : "") + (m.internal ? " int" : "") + '"><div class="sp-mhead"><b>' + esc(m.author_name || (m.from_support ? "TDS Desk support" : "Firm")) + "</b>" +
-    (m.from_support ? ' <span class="note">TDS Desk support</span>' : "") + (m.internal ? ' <span class="sp-pill sp-int">internal note — the firm does not see it</span>' : "") + '<span class="note" style="margin-left:auto">' + esc(SUP.when(m.created_at)) + "</span></div>" +
+  h += '<div class="sp-thread">' + (t.thread || []).map(m => '<div class="sp-msg' + (m.from_support ? " sup" : "") + (m.internal ? " int" : "") + '"><div class="sp-mhead"><b>' + esc(m.author_name || (m.from_support ? "FinCom support" : "Firm")) + "</b>" +
+    (m.from_support ? ' <span class="note">FinCom support</span>' : "") + (m.internal ? ' <span class="sp-pill sp-int">internal note — the firm does not see it</span>' : "") + '<span class="note" style="margin-left:auto">' + esc(SUP.when(m.created_at)) + "</span></div>" +
     '<div class="sp-body">' + esc(m.body).replace(/\n/g, "<br>") + "</div>" +
     ((m.files || []).length ? '<div class="sp-mfiles">' + m.files.map(f => '<button class="sp-file" data-supdl="' + esc(f.path) + '" data-supdln="' + esc(f.name) + '">\u{1F4CE} ' + esc(f.name) + " <small>" + Math.max(1, Math.round((f.size || 0) / 1024)) + " KB</small></button>").join("") + "</div>" : "") + "</div>").join("") + "</div>";
   h += '<div class="sp-card"><label class="sp-f"><span>' + (adm ? "Reply to the firm" : "Reply") + '</span><textarea data-supr data-fk="supr" data-keeptyped rows="4" placeholder="' + (adm ? "Your answer" : "Add details, answer support’s question") + '">' + esc(s.rtext || "") + "</textarea></label>" +
@@ -351,7 +351,7 @@ if (typeof document !== "undefined"){
       if (String(dr.subject || "").trim().length < 3){ toast("Give the ticket a subject."); return; }
       if (String(dr.body || "").trim().length < 5){ toast("Describe what happened."); return; }
       s.busy = true; render();
-      try { const tk = await SUP.create(dr); s.newOpen = false; s.draft = null; s.files = []; s.tab = "tickets"; s.busy = false; S.helpCtx = null; toast("Ticket " + SUP.code(tk) + " raised. TDS Desk support will answer here."); await SUP.load(true); SUP.open(tk.id); }
+      try { const tk = await SUP.create(dr); s.newOpen = false; s.draft = null; s.files = []; s.tab = "tickets"; s.busy = false; S.helpCtx = null; toast("Ticket " + SUP.code(tk) + " raised. FinCom support will answer here."); await SUP.load(true); SUP.open(tk.id); }
       catch (err){ s.busy = false; toast("Not raised: " + err.message); render(); }
       return;
     }

@@ -2,13 +2,13 @@
 
 | | |
 |---|---|
-| Document owner | Anshul Garg, FCA, Partner (ISMS owner) |
+| Document owner | Anshul Garg (ISMS owner) |
 | Version | 0.1 draft, 27 Sep 2026 |
 | Approved | — |
 
 ## 1.1 The organisation (4.1)
 
-Garg Shekhar & Company, Chartered Accountants, builds and runs **TDS Desk**. TDS Desk is a web application for accounting firms and businesses. It:
+Yuvnav Services Private Limited, Noida, builds and runs **FinCom** (finance and compliance). FinCom is a web application for accounting firms and businesses. It:
 - reads purchase bills and bank statements,
 - works out TDS and GST,
 - posts entries to TallyPrime through a small program on the client's computer (the Tally Bridge),
@@ -34,21 +34,21 @@ Garg Shekhar & Company, Chartered Accountants, builds and runs **TDS Desk**. TDS
 | Businesses whose books are processed (data principals' employers, vendors) | Their PAN, bank and salary data used only for the purpose it was given for |
 | Regulators: CERT-In, Data Protection Board, ICAI | Incident reports, logs, lawful processing |
 | Suppliers (see doc 9) | Use within their terms |
-| The firm's partners | Revenue, reputation, no liability |
+| The company's directors and shareholders | Revenue, reputation, no liability |
 
 ## 1.3 Scope statement (4.3)
 
-> The information security management system covers the design, development, operation and support of the TDS Desk software service. This includes:
+> The information security management system covers the design, development, operation and support of the FinCom software service. This includes:
 > - the web application (the GitHub repository and GitHub Pages sites),
 > - the Supabase cloud back end (database, authentication, storage and edge functions, Mumbai region),
 > - the Tally Bridge program as distributed,
-> - the people and computers of Garg Shekhar & Company who develop and support it,
+> - the people and computers of Yuvnav Services Private Limited who develop and support it,
 >
 > from the office at [address to be filled in] and remote work.
 
 **Out of scope**
 - Clients' own computers, networks and TallyPrime installations. The client is responsible for these, and the service agreement says so.
-- The firm's audit and tax practice, which is not the software service.
+- The audit and tax practice of any associated CA firm, which is not the software service.
 - Suppliers' internal controls. These are covered by their own certifications (see doc 9).
 
 ## 1.4 What is in the scope

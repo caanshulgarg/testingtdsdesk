@@ -1,4 +1,4 @@
-"""python3 run_bridgejobs_ui.py - TDS Desk hands postings to bridge 1.12 as a job and follows it: a lost hand-over is sent
+"""python3 run_bridgejobs_ui.py - FinCom hands postings to bridge 1.12 as a job and follows it: a lost hand-over is sent
 again with the same job number, a bridge that stops answering is waited for, a stopped job is resumed, an old bridge still
 gets the one long /import, one missed status check does not show the bridge as offline, and a posting left over from
 before a reload is reported."""
@@ -68,7 +68,7 @@ with sync_playwright() as p:
 
     M["jobs"].clear(); M["dropPoll"] = 3
     o = pg.evaluate(POST, {"m": [], "v": ["a", "b", "c", "d"]})
-    ok(all(x["ok"] for x in o["r"]["results"]) and any("not answering" in x[2] for x in o["prog"]), "the bridge stops answering for a while: TDS Desk waits and says so, then finishes")
+    ok(all(x["ok"] for x in o["r"]["results"]) and any("not answering" in x[2] for x in o["prog"]), "the bridge stops answering for a while: FinCom waits and says so, then finishes")
 
     M["jobs"].clear(); M["interruptOnce"] = True
     o = pg.evaluate(POST, {"m": [], "v": ["a", "b", "c", "d", "e", "f"]})

@@ -64,7 +64,7 @@ Then update the risk register (doc 3).
 | To whom | When | How |
 |---|---|---|
 | **CERT-In** (CERT-In Directions, 28 Apr 2022: data breach, unauthorised access, website compromise and similar) | **Within 6 hours** of noticing | incident@cert-in.org.in, in the CERT-In incident form |
-| **Client firms affected.** TDS Desk usually processes data for the firm, so each firm has its own duty to its data principals. | Without delay, and within 24 hours | Email plus a phone call to the firm owner |
+| **Client firms affected.** FinCom usually processes data for the firm, so each firm has its own duty to its data principals. | Without delay, and within 24 hours | Email plus a phone call to the firm owner |
 | **Data Protection Board and affected people**, where the firm is itself the Data Fiduciary (DPDP Act 2023, s.8(6), and the DPDP Rules) | Intimation without delay; the detailed report within the time the Rules set (72 hours in the Rules as published; confirm the current text) | As the Board prescribes |
 | Insurer (if cyber cover is bought) | As the policy says | — |
 

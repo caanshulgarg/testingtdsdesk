@@ -6,7 +6,7 @@ def R(a, b):
     assert base.count(a) == 1, ('anchor', a[:60], base.count(a))
     base = base.replace(a, b)
 import re
-base = re.sub(r"\$BridgeVersion = '[0-9.]+'", "$BridgeVersion = '1.12.7'", base, 1)
+base = re.sub(r"\$BridgeVersion = '[0-9.]+'", "$BridgeVersion = '1.12.8'", base, 1)
 # 1.12.7 (security): the log never holds keys, codes or passwords, and is rotated at 5 MB keeping 5 old copies
 R(r"""function Write-Log([string]$msg) {
   $line = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + '  ' + $msg
@@ -155,5 +155,8 @@ R("""        if (-not $guid -and -not ($vnum -and $vdate -and $vtype)) {""", """
 # --- 1.12.1: a voucher without a proper date never reaches Tally (Tally answers "Voucher date is missing" but may still make it)
 R("""      if (($xml -notmatch '^\\s*<(VOUCHER|LEDGER|GROUP)\\b') -and -not $vtOnly) {""", """      if (($xml -match '^\\s*<VOUCHER\\b') -and ($xml -notmatch '<DATE>(19|20)\\d\\d(0[1-9]|1[0-2])(0[1-9]|[12]\\d|3[01])</DATE>')) { $results += [ordered]@{ id = $it.id; kind = $g.kind; ok = $false; message = 'The entry has no valid date, so it was not sent to Tally.' }; continue }
       if (($xml -notmatch '^\\s*<(VOUCHER|LEDGER|GROUP)\\b') -and -not $vtOnly) {""")
+# 1.12.8: the product is now called FinCom. Only what people read changes; the scheduled task keeps its old name
+# (an installed bridge finds and replaces it by that name)
+base = '\n'.join(l if "$script:TaskName = 'TDS Desk - nightly Tally copy'" in l else l.replace('TDS Desk', 'FinCom') for l in base.split('\n'))
 open(sys.argv[2], 'w', encoding='utf-8-sig', newline='\r\n').write(base)
 print('merged', len(base))

@@ -650,7 +650,7 @@ async function postSalesToTally(){
     masters.forEach(l => { const r = by.get("led:" + l.name); if (r && r.ok){ l.sent = true; l.sentAt = now; } });
     let ok = 0, bad = 0;
     let optionalN = 0;
-    list.forEach(v => { const r = by.get(v.id); if (r && r.ok && r.verified !== true){ bad++; const x = r; v.postError = "Tally replied 'created', but TDS Desk could not find the entry in Tally afterwards, so it is NOT marked as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again." + (x.verifyNote ? " [" + x.verifyNote + "]" : ""); return; } if (r && r.ok){ ok++; v.status = "posted"; v.postedAt = now; v.postError = ""; v.postedInto = r.company || ""; v.postedOptional = !!r.optional; if (r.optional) optionalN++; learnCustomer(v); } else { bad++; v.postError = plainMsg(r && r.message) || "Tally did not confirm this invoice."; } });
+    list.forEach(v => { const r = by.get(v.id); if (r && r.ok && r.verified !== true){ bad++; const x = r; v.postError = "Tally replied 'created', but FinCom could not find the entry in Tally afterwards, so it is NOT marked as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again." + (x.verifyNote ? " [" + x.verifyNote + "]" : ""); return; } if (r && r.ok){ ok++; v.status = "posted"; v.postedAt = now; v.postError = ""; v.postedInto = r.company || ""; v.postedOptional = !!r.optional; if (r.optional) optionalN++; learnCustomer(v); } else { bad++; v.postError = plainMsg(r && r.message) || "Tally did not confirm this invoice."; } });
     saveBank({newLed: true});
     s.busy = ""; saveSales();
     toast(ok + " posted to Tally" + (optionalN ? " (" + optionalN + " as Optional vouchers: Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers)" : "") + (bad ? "; " + bad + " not posted (see the red notes)" : "") + ".");
@@ -748,7 +748,7 @@ function salesClick(t){
     if (a === "ignore"){ v.status = "ignored"; if (s.openId === v.id) s.openId = null; salesSetUndo("Invoice " + esc(v.x.number) + " ignored", before); }
     if (a === "restore"){ v.status = "review"; mapInvoice(v); salesSetUndo("Invoice " + esc(v.x.number) + " restored", before); }
     if (a === "delete"){
-      askConfirm({title: "Delete invoice " + (v.x.number || "") + "?", danger: true, ok: "Delete", body: "It is removed from TDS Desk. Tally is not changed."}).then(ans => {
+      askConfirm({title: "Delete invoice " + (v.x.number || "") + "?", danger: true, ok: "Delete", body: "It is removed from FinCom. Tally is not changed."}).then(ans => {
         if (!ans) return;
         s.list = s.list.filter(o => o.id !== v.id); s.openId = null; salesSetUndo("Invoice " + esc(v.x.number) + " deleted", before); saveSales(); render();
       });
@@ -776,7 +776,7 @@ function salesClick(t){
     case "salesSelNone": s.sel.clear(); salesLightRefresh(); return true;
     case "salesBulkConfirm": salesBulk("confirm"); return true;
     case "salesBulkIgnore": salesBulk("ignore"); return true;
-    case "salesBulkDelete": askConfirm({title: "Delete " + s.sel.size + " invoices?", danger: true, ok: "Delete", body: "They are removed from TDS Desk. Tally is not changed."}).then(a => { if (a) salesBulk("delete"); }); return true;
+    case "salesBulkDelete": askConfirm({title: "Delete " + s.sel.size + " invoices?", danger: true, ok: "Delete", body: "They are removed from FinCom. Tally is not changed."}).then(a => { if (a) salesBulk("delete"); }); return true;
     case "salesBulkPrint": { const rows = s.list.filter(v => s.sel.has(v.id)); const co = CO(s.cid);
       const html = rows.map(v => invoiceHtml(v.x, co, s.cfg)).join("").replace(/<\/body><\/html><!doctype html><html lang="en"><head>[\s\S]*?<body>(<p class="noprint"[\s\S]*?<\/p>)?/g, '<div style="page-break-before:always"></div>');
       printInvoiceHtml(html, rows.length + "-invoices"); return true; }
@@ -787,8 +787,8 @@ function salesClick(t){
       rows.forEach(v => { v.status = "ready"; s.sticky.add(v.id); learnCustomer(v); });
       salesSetUndo(rows.length + " invoices confirmed", before); saveSales(); render(); return true;
     }
-    case "salesForget": askConfirm({title: "Forget customer memory?", ok: "Forget", body: "TDS Desk forgets which ledger was used for each customer. Invoices keep their ledgers."}).then(a => { if (a){ s.hist = {}; saveSales({hist: true}); toast("Forgotten."); } }); return true;
-    case "salesDelAll": askConfirm({title: "Delete all " + s.list.length + " sales invoices?", danger: true, ok: "Delete all", body: "They are removed from TDS Desk. Tally is not changed."}).then(a => { if (a){ s.list = []; s.openId = null; s.showSettings = false; saveSales(); render(); } }); return true;
+    case "salesForget": askConfirm({title: "Forget customer memory?", ok: "Forget", body: "FinCom forgets which ledger was used for each customer. Invoices keep their ledgers."}).then(a => { if (a){ s.hist = {}; saveSales({hist: true}); toast("Forgotten."); } }); return true;
+    case "salesDelAll": askConfirm({title: "Delete all " + s.list.length + " sales invoices?", danger: true, ok: "Delete all", body: "They are removed from FinCom. Tally is not changed."}).then(a => { if (a){ s.list = []; s.openId = null; s.showSettings = false; saveSales(); render(); } }); return true;
   }
   return false;
 }
@@ -987,7 +987,7 @@ async function ensureTallyCompany(co){
   const open = Bridge.st.open;
   if (!open.length){ toast("No company is open in your Tally. Open " + co.name + " in TallyPrime."); return null; }
   const ans = await askConfirm({title: "Which Tally company is " + co.name + "?", ok: "Use this company",
-    body: '<p class="note" style="margin:0 0 10px">TDS Desk could not match <b>' + esc(co.name) + "</b> to a company open in your Tally by name or GSTIN. Choose it once; it is remembered.</p>" +
+    body: '<p class="note" style="margin:0 0 10px">FinCom could not match <b>' + esc(co.name) + "</b> to a company open in your Tally by name or GSTIN. Choose it once; it is remembered.</p>" +
       '<div class="bk-form one"><label><span>Company open in Tally</span><select id="tcoPick">' + open.map(x => '<option value="' + esc(x.name) + '">' + esc(x.name) + " (port " + x.port + ")</option>").join("") + "</select></label></div>",
     read: () => ({name: (document.getElementById("tcoPick") || {}).value || ""})});
   if (!ans || !ans.data.name) return null;

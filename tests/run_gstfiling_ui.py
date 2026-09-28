@@ -33,7 +33,7 @@ with sync_playwright() as p:
     ok(pg.locator('input[data-gset="est"]').is_checked() is False, "the estimate setting is off by default")
     pg.check('input[data-gset="est"]'); pg.wait_for_timeout(1200)
     pg.evaluate("S.tab = 'books'; render()"); pg.wait_for_timeout(4000); t = pg.inner_text("#app")
-    ok("TDS Desk\u2019s estimate" in t and "Late fee, estimate" in t.replace("LATE FEE, ESTIMATE", "Late fee, estimate") and "estimate \u20b9" in t, "switched on: the estimate shows beside the portal's figures")
+    ok("FinCom\u2019s estimate" in t and "Late fee, estimate" in t.replace("LATE FEE, ESTIMATE", "Late fee, estimate") and "estimate \u20b9" in t, "switched on: the estimate shows beside the portal's figures")
     pg.screenshot(path=OUT + "/gstfiling.png", full_page=True)
     pg.evaluate("() => { window.__saved = []; window.saveFile = (n) => window.__saved.push(n); }")
     pg.click('button[data-gstfact="journal"]'); pg.wait_for_timeout(1500)

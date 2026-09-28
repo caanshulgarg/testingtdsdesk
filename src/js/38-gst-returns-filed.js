@@ -226,7 +226,7 @@ if (typeof document !== "undefined"){
       x.sort = false; const k = GSTV.filedKey(x.form); if (k && x.arnDate){ const r = GSTF.rec(x.per, x.reg); if (!r[k]) r[k] = x.arnDate; }
       saveBooks(); render(); return; }
     if (t.dataset.gstvdel){ const x = find(t.dataset.gstvdel); if (!x) return;
-      const ans = await askConfirm({title: "Remove this PDF?", body: esc(GSTV.label(x.form) + " " + GSTV.perLabel(x.form, x.per, x.reg) + " — " + x.name) + " is removed from TDS Desk and the firm’s cloud documents. The return on the portal is not touched.", ok: "Remove", danger: true});
+      const ans = await askConfirm({title: "Remove this PDF?", body: esc(GSTV.label(x.form) + " " + GSTV.perLabel(x.form, x.per, x.reg) + " — " + x.name) + " is removed from FinCom and the firm’s cloud documents. The return on the portal is not touched.", ok: "Remove", danger: true});
       if (!ans) return;
       const co = CO(); await FileStore.drop(co.id, x.id); if (x.docPath && typeof CloudDocs === "object") CloudDocs.remove(x.docPath);
       S.books.gstVault = GSTV.list().filter(z => z !== x); saveBooks(); render(); return; }

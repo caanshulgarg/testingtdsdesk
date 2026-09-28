@@ -603,9 +603,9 @@ Object.assign(Audit, {
   }
 });
 
-/* ---------- the ledger master, phase 2: what TDS Desk posts to, templates across clients, and a copy at each filing ---------- */
+/* ---------- the ledger master, phase 2: what FinCom posts to, templates across clients, and a copy at each filing ---------- */
 Object.assign(LedMaster, {
-  // what TDS Desk posts bills into Tally with, taken from the confirmed master
+  // what FinCom posts bills into Tally with, taken from the confirmed master
   POST_SLOTS: [["gst.cgst", "Input CGST"], ["gst.sgst", "Input SGST"], ["gst.igst", "Input IGST"], ["gst.rcmCgstIn", "Reverse charge CGST, credit"], ["gst.rcmSgstIn", "Reverse charge SGST, credit"], ["gst.rcmIgstIn", "Reverse charge IGST, credit"],
     ["gst.rcmCgstOut", "Reverse charge CGST, payable"], ["gst.rcmSgstOut", "Reverse charge SGST, payable"], ["gst.rcmIgstOut", "Reverse charge IGST, payable"], ["roundOff", "Round off"]],
   getSlot(co, k){ const [a, c] = k.split("."); return c ? ((co[a] || {})[c] || "") : (co[a] || ""); },

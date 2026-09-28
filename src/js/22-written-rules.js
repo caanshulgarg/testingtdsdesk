@@ -617,11 +617,11 @@ function matchTallyBook(acc, rows, force){
     if (t.party && !/as per details|^\(|^opening|^closing/i.test(t.party) && b.hist){ b.hist.rows[r.fp] = histEntry(r, t.party, "tally"); b.histVer++; learnedFromTally = true; }
   };
   const open = () => rows.filter(r => r.state !== "intally" && r.state !== "sent");
-  // 1. posted by TDS Desk before (tag in the narration)
+  // 1. posted by FinCom before (tag in the narration)
   open().forEach(r => {
     const tag = "TDSDESK:" + fpHash(r.fp || r.id).toUpperCase();
     const i = book.entries.findIndex((t, k) => !used.has(k) && String(t.narr).toUpperCase().includes(tag));
-    if (i >= 0) take(r, i, "posted by TDS Desk earlier");
+    if (i >= 0) take(r, i, "posted by FinCom earlier");
   });
   // 2. same UTR / cheque number and amount, within 45 days
   open().forEach(r => {
@@ -1034,7 +1034,7 @@ function viewBank(){
   let h = "";
   h += '<div class="bk">';
   if (BankDB.mode === "memory only" || BankDB.lost) h += '<div class="bk-alert bad">This browser is not keeping bank statements' + (BankDB.lost ? " (storage is full)" : "") + ". Create the Tally file before closing, or use Chrome.</div>";
-  // what TDS Desk is doing floats in view wherever you are on the page, instead of at the top
+  // what FinCom is doing floats in view wherever you are on the page, instead of at the top
   if (b.busy) h += '<div class="busy-float">' + busyCard(/Tally/.test(b.busy) ? "Working with Tally\u2026" : "Working on the statement\u2026", b.busy, 0, 0) + "</div>";
   if (b.moved) h += '<div class="bk-alert"><b>' + esc(b.moved.file) + "</b> is a statement of " + esc(b.moved.name) + " (account \u00b7\u00b7" + esc(b.moved.last4) + "), so it was filed there. " +
     '<button class="linkbtn" data-act="bankOpenMoved">Open ' + esc(b.moved.name) + '</button> <button class="linkbtn" data-act="bankDismissMoved">Dismiss</button></div>';

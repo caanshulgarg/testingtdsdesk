@@ -73,7 +73,7 @@ const Bridge = {
     return this.diag;
   },
   // Post masters and vouchers to Tally. Bridge 1.12 and later: handed over as a job, which the bridge posts on its own
-  // (in batches, one writer per Tally, checked in Tally before anything is sent again); TDS Desk follows its progress and
+  // (in batches, one writer per Tally, checked in Tally before anything is sent again); FinCom follows its progress and
   // rides out a bridge or network that stops answering for a while. An older bridge: the one long request as before.
   // Returns {results: [{id, ok, message, ...}]} for every item sent, whatever happened.
   async post(payload, onProgress, onChecked){
@@ -135,7 +135,7 @@ const Bridge = {
     const resultsOf = jj => { const got = new Map([].concat(jj.results || []).map(r => [r.id, r])); return ids.map(id => got.get(id) || {id, ok: false, message: why}); };
     const results = resultsOf(j);
     if (j.checking){
-      // the entries are in Tally; the bridge now reads them back once. TDS Desk carries on and is told when that is done.
+      // the entries are in Tally; the bridge now reads them back once. FinCom carries on and is told when that is done.
       results.forEach(r => { if (r.ok && r.verified == null) r.pendingCheck = true; });
       this.followCheck(jobId, resultsOf, onChecked);
     } else { try { lsDel("tdsdesk:bridgejob"); } catch (e){} }
@@ -395,7 +395,7 @@ async function bankAutoSync(force){
 }
 /* ---------- bank reconciliation: the statement against the bank ledger in Tally, line by line ---------- */
 // One read of the bank ledger for the statement's dates and one of its balance. Each statement line is paired with a
-// Tally entry: first by TDS Desk's tag, then by amount and a nearby date. What is left on either side, and any pair
+// Tally entry: first by FinCom's tag, then by amount and a nearby date. What is left on either side, and any pair
 // whose amounts differ, makes up the difference; each comes with the action that removes it (post, delete, replace).
 async function reconcileBank(opts){
   opts = opts || {};
@@ -427,7 +427,7 @@ async function reconcileBank(opts){
     const rows = b.rows.filter(r => r.date >= st.from && r.date <= st.to);
     const byTag = new Map(); rows.forEach(r => byTag.set(fpHash(r.fp || r.id), r));
     const pairOf = new Map(), used = new Set(), differ = [], dupOf = new Map();
-    T.forEach(t => {                                   // 1. by TDS Desk's tag
+    T.forEach(t => {                                   // 1. by FinCom's tag
       const r = t.tag && byTag.get(t.tag);
       if (!r) return;
       if (pairOf.has(r.id)){ dupOf.set(t.i, r.id); used.add(t.i); return; }
@@ -444,7 +444,7 @@ async function reconcileBank(opts){
     }));
     const missing = rows.filter(r => !pairOf.has(r.id)).map(r => r.id);
     const extra = T.filter(t => !used.has(t.i) || dupOf.has(t.i)).map(t => t.i);
-    // what TDS Desk shows follows what Tally has: paired lines count as in Tally, lines Tally does not have are not
+    // what FinCom shows follows what Tally has: paired lines count as in Tally, lines Tally does not have are not
     const now = new Date().toISOString();
     b.postedTags = b.postedTags || {};
     rows.forEach(r => {
@@ -522,10 +522,10 @@ function reconHtml(){
   if (R.extra.length){
     const dup = new Map(R.dupOf);
     h += '<div class="recon-sec"><h4>In Tally, not on the statement <span class="cnt">' + R.extra.length + "</span></h4>" +
-      '<p class="note" style="margin:0 0 6px">Tick the entries to delete from Tally. Copies and entries TDS Desk posted are ticked already; check entries typed in Tally before deleting them.</p>' +
+      '<p class="note" style="margin:0 0 6px">Tick the entries to delete from Tally. Copies and entries FinCom posted are ticked already; check entries typed in Tally before deleting them.</p>' +
       '<div class="tblwrap"><table class="data"><thead><tr><th></th><th>Date</th><th>Voucher</th><th>Party / ledger</th><th class="n">In</th><th class="n">Out</th><th>What it is</th></tr></thead><tbody>' +
       R.extra.map(i => { const t = R.T[i]; return '<tr><td><input type="checkbox" data-reconpick="' + i + '"' + (R.pick.has(i) ? " checked" : "") + (live ? "" : " disabled") + '></td><td>' + fmtDate(t.date) + "</td><td>" + esc([t.type, t.number].filter(Boolean).join(" ")) + "</td><td>" + esc(t.party) + '</td><td class="n">' + (t.eff > 0 ? m(t.eff) : "") + '</td><td class="n">' + (t.eff < 0 ? m(t.eff) : "") + "</td><td>" +
-        esc(dup.has(i) ? "a second copy of " + fmtDate((rowById.get(dup.get(i)) || {}).date) + "'s line" : t.tag ? "posted by TDS Desk, from another statement or an old copy" : "typed in Tally") + (t.narr && !t.tag ? '<div class="muted" style="font-size:12px">' + esc(t.narr.slice(0, 80)) + "</div>" : "") + "</td></tr>"; }).join("") + "</tbody></table></div>" +
+        esc(dup.has(i) ? "a second copy of " + fmtDate((rowById.get(dup.get(i)) || {}).date) + "'s line" : t.tag ? "posted by FinCom, from another statement or an old copy" : "typed in Tally") + (t.narr && !t.tag ? '<div class="muted" style="font-size:12px">' + esc(t.narr.slice(0, 80)) + "</div>" : "") + "</td></tr>"; }).join("") + "</tbody></table></div>" +
       (live ? '<div class="row" style="gap:8px;margin-top:8px"><button class="btn small danger" data-act="reconDelete"' + (R.pick.size ? "" : " disabled") + ">Delete the " + R.pick.size + " ticked from Tally</button></div>" : "") + "</div>";
   }
   // C. the same line, a different amount
@@ -557,7 +557,7 @@ async function reconDelete(which){
   const total = list.reduce((a, t) => a + Math.abs(t.eff), 0);
   const a = await askConfirm({title: which === "replace" ? "Replace " + list.length + " entr" + (list.length === 1 ? "y" : "ies") + " in " + R.company + "?" : "Delete " + list.length + " entr" + (list.length === 1 ? "y" : "ies") + " from " + R.company + "?", ok: which === "replace" ? "Replace them" : "Delete them",
     body: '<p class="note">' + list.slice(0, 12).map(t => esc(fmtDate(t.date) + " " + [t.type, t.number].filter(Boolean).join(" ") + " " + t.party + " " + INR.format(Math.abs(t.eff)))).join("<br>") + (list.length > 12 ? "<br>and " + (list.length - 12) + " more" : "") +
-      "<br><br>" + (which === "replace" ? "Each Tally entry is deleted and the statement line is posted again with the statement’s amount." : "Total " + INR.format(total) + ".") + " This cannot be undone from TDS Desk: take a Tally backup first if you have not.</p>"});
+      "<br><br>" + (which === "replace" ? "Each Tally entry is deleted and the statement line is posted again with the statement’s amount." : "Total " + INR.format(total) + ".") + " This cannot be undone from FinCom: take a Tally backup first if you have not.</p>"});
   if (!a) return;
   let ok = 0, bad = 0;
   const why = [], gone = new Set();
@@ -584,7 +584,7 @@ async function reconDelete(which){
 }
 
 /* ---------- lines marked as posted that are no longer in Tally (deleted there) ---------- */
-// Every line TDS Desk posted carries its tag in Tally's narration; a line matched to an entry typed in Tally is found by
+// Every line FinCom posted carries its tag in Tally's narration; a line matched to an entry typed in Tally is found by
 // amount and date. A line marked as posted that Tally no longer has is offered back for posting, never posted by itself.
 function markedGone(pre, from, to){
   const b = B(), co = CO(b.cid), st = curStmt();
@@ -657,11 +657,11 @@ function goneBack(){
   render();
 }
 /* ---------- finding double entries, and entries Tally holds under the wrong date ---------- */
-// Reads this bank ledger from Tally over a wide window (not only the statement's dates), so an entry TDS Desk sent that
-// Tally filed under another date is found too. Every TDS Desk entry carries its line's tag in the narration.
+// Reads this bank ledger from Tally over a wide window (not only the statement's dates), so an entry FinCom sent that
+// Tally filed under another date is found too. Every FinCom entry carries its line's tag in the narration.
 //   extra     : a second (third...) copy of a line that is already in Tally at the right date
 //   wrongDate : a line that is in Tally only under another date, or an extra copy under another date
-//   strangers : TDS Desk entries whose amount is not on this statement at all
+//   strangers : FinCom entries whose amount is not on this statement at all
 async function scanStatementInTally(opts){
   opts = opts || {};
   const b = B(), co = CO(b.cid), st = curStmt();
@@ -677,8 +677,8 @@ async function scanStatementInTally(opts){
   if (booksFrom && from < booksFrom) from = booksFrom;
   const last = ds[ds.length - 1] > today ? ds[ds.length - 1] : today;
   let to = addDays(last, 31);
-  // bridge 1.12.1: one light read of TDS Desk's own entries (heads only); older: this bank ledger month by month
-  // 1.12.3: this bank ledger's own vouchers (light, with amounts); 1.12.1-2: TDS Desk's tagged entries; older: the Day Book
+  // bridge 1.12.1: one light read of FinCom's own entries (heads only); older: this bank ledger month by month
+  // 1.12.3: this bank ledger's own vouchers (light, with amounts); 1.12.1-2: FinCom's tagged entries; older: the Day Book
   const byLedger = bridgeVer(Bridge.st.version) >= bridgeVer("1.12.3");
   const light = !byLedger && bridgeVer(Bridge.st.version) >= bridgeVer("1.12.1");
   if (opts.pre){ from = opts.from; to = opts.to; }
@@ -705,7 +705,7 @@ async function scanStatementInTally(opts){
     list.sort((a, c) => num(a.masterId) - num(c.masterId) || String(a.number).localeCompare(String(c.number)));
     const row = rowByTag.get(k);
     if (!row){
-      // the light read sees every TDS Desk entry of the company (other statements, bills): only this statement's lines matter
+      // the light read sees every FinCom entry of the company (other statements, bills): only this statement's lines matter
       if (light){ goodTags.push(k); return; }
       // not a line of this statement: a line of another statement of this account, or an old copy
       const v = list[0];
@@ -749,7 +749,7 @@ function dupFindHtml(){
     "</tbody></table></div>";
   const bad = d.extra.length || d.wrongDate.length || d.strangers.length;
   let h = '<div class="bigwarn" style="border-color:' + (bad ? "var(--stop)" : "var(--ledger)") + '">';
-  if (!bad) return h + "<b>All clear.</b> " + d.tagged + " entries posted by TDS Desk were checked in " + esc(d.company) + " (" + fmtDate(d.from) + " to " + fmtDate(d.to) + "): each is there once, on its statement date. " + '<button class="linkbtn" data-act="dupClose">Close</button></div>';
+  if (!bad) return h + "<b>All clear.</b> " + d.tagged + " entries posted by FinCom were checked in " + esc(d.company) + " (" + fmtDate(d.from) + " to " + fmtDate(d.to) + "): each is there once, on its statement date. " + '<button class="linkbtn" data-act="dupClose">Close</button></div>';
   if (d.wrongDate.length){
     h += "<b>" + d.wrongDate.length + " entr" + (d.wrongDate.length === 1 ? "y is" : "ies are") + " in " + esc(d.company) + " under the wrong date.</b>" +
       "<div>Remove them; the lines then show as not posted, and Post puts them in again with the statement’s date. " + focusBtn("dup-wrong", "in Tally under the wrong date", Array.from(new Set(d.wrongDate.map(v => v.rowId).filter(Boolean))), "Show their statement lines") + "</div>" + tbl(d.wrongDate, true) +
@@ -761,7 +761,7 @@ function dupFindHtml(){
       '<div class="row" style="margin-top:8px"><button class="btn small primary" data-act="dupRemove">Remove the ' + d.extra.length + " extra cop" + (d.extra.length === 1 ? "y" : "ies") + " from Tally</button></div>";
   }
   if (d.strangers.length){
-    h += '<div style="margin-top:10px"><b>' + d.strangers.length + " entr" + (d.strangers.length === 1 ? "y" : "ies") + " posted by TDS Desk " + (d.strangers.length === 1 ? "has an amount that is" : "have amounts that are") + " not on this statement:</b> " +
+    h += '<div style="margin-top:10px"><b>' + d.strangers.length + " entr" + (d.strangers.length === 1 ? "y" : "ies") + " posted by FinCom " + (d.strangers.length === 1 ? "has an amount that is" : "have amounts that are") + " not on this statement:</b> " +
       d.strangers.slice(0, 40).map(v => fmtDate(tallyToIso(v.date)) + " " + esc(v.party || "") + " " + amt(v)).join("; ") +
       ". They were probably read from an earlier or different copy of the statement. Check them against the bank, and delete them in Tally if they are wrong.</div>";
   }
@@ -773,7 +773,7 @@ async function removeTallyDuplicates(which){
   if (!list.length) return;
   const what = which === "wrong" ? list.length + " wrong-date entr" + (list.length === 1 ? "y" : "ies") : list.length + " extra cop" + (list.length === 1 ? "y" : "ies");
   const a = await askConfirm({title: "Remove " + what + " from " + d.company + "?", ok: "Remove them",
-    body: '<p class="note">' + (which === "wrong" ? "Only the copies under the wrong date are removed. The lines then show as not posted, and Post puts them in with the right date." : "Only the later copy of each double entry is removed; the first stays.") + " This cannot be undone from TDS Desk, so take a Tally backup first if you have not.</p>"});
+    body: '<p class="note">' + (which === "wrong" ? "Only the copies under the wrong date are removed. The lines then show as not posted, and Post puts them in with the right date." : "Only the later copy of each double entry is removed; the first stays.") + " This cannot be undone from FinCom, so take a Tally backup first if you have not.</p>"});
   if (!a) return;
   const b = B();
   let ok = 0, bad = 0;
@@ -953,7 +953,7 @@ function bankBalanceInner(st){
   const btn = live ? '<button class="btn small" data-act="bankBalCheck"' + (b.balBusy ? " disabled" : "") + ">" + (b.balBusy ? "Checking…" : t ? "Check again" : "Check with Tally") + "</button>" : "";
   const when = (t && t.at ? '<span class="muted"> \u00b7 checked ' + new Date(t.at).toLocaleString([], {day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit"}) + "</span>" : "") +
     (t && t.how === "worked back" ? '<span class="muted"> \u00b7 Tally gave its latest balance whatever the date, so the balance on ' + fmtDate(t.to) + " was worked back from it" + (t.later ? ", less " + t.later + " later entr" + (t.later === 1 ? "y" : "ies") : "") + "</span>" : "");
-  if (!t) return '<div class="bk-bal"><div><b>Balance in Tally:</b> <span class="muted">not checked yet.' + (live ? " TDS Desk checks it after every posting." : " Connect the Tally Bridge to check it.") + "</span></div>" + btn + "</div>";
+  if (!t) return '<div class="bk-bal"><div><b>Balance in Tally:</b> <span class="muted">not checked yet.' + (live ? " FinCom checks it after every posting." : " Connect the Tally Bridge to check it.") + "</span></div>" + btn + "</div>";
   if (t.error) return '<div class="bk-bal bad"><div><b>Balance in Tally could not be read:</b> ' + esc(t.error) + when + "</div>" + btn + "</div>";
   const m = v => INR.format(v || 0);
   const on = fmtDate(t.to);
@@ -980,7 +980,7 @@ async function unpostFromTally(what, obj, cid){
   const co = CO(cid || S.coId);
   const t = obj.tally || {};
   if (!t.guid){
-    toast("This entry was posted before TDS Desk kept the Tally identity, so it has to be deleted in Tally by hand.");
+    toast("This entry was posted before FinCom kept the Tally identity, so it has to be deleted in Tally by hand.");
     return false;
   }
   const tname = await ensureTallyCompany(co);
@@ -1031,11 +1031,11 @@ async function postBankToTally(ids){
   b.rows.forEach(r => {
     if (r.state !== "ready" || (ids && !ids.includes(r.id))) return;
     const tag = fpHash(r.fp || r.id);
-    if (b.postedTags[tag]){ r.prevState = r.state; r.state = "intally"; r.tallyHow = "posted by TDS Desk on " + fmtDate(String(b.postedTags[tag]).slice(0, 10)); }
+    if (b.postedTags[tag]){ r.prevState = r.state; r.state = "intally"; r.tallyHow = "posted by FinCom on " + fmtDate(String(b.postedTags[tag]).slice(0, 10)); }
   });
   // guard 2: look in Tally itself around the dates being posted, for our own entries and for ones typed in by hand
   const toCheck = b.rows.filter(r => r.state === "ready" && (!ids || ids.includes(r.id)));
-  // bridge 1.12.3+: ONE read of this bank ledger covers both looks (these dates, and anything TDS Desk put in before),
+  // bridge 1.12.3+: ONE read of this bank ledger covers both looks (these dates, and anything FinCom put in before),
   // and is reused for 30 minutes, so posting the next batch starts at once
   const oneRead = bridgeVer(Bridge.st.version) >= bridgeVer("1.12.3");
   if (toCheck.length && !heavy && oneRead){
@@ -1083,7 +1083,7 @@ async function postBankToTally(ids){
       return;
     }
   }
-  // guard 2b: once per statement, look through Tally well beyond these dates for entries TDS Desk put under another date,
+  // guard 2b: once per statement, look through Tally well beyond these dates for entries FinCom put under another date,
   // or put in twice; if there are any, nothing is posted until they are sorted out
   if (toCheck.length && !oneRead && !lsGet(wideCheckKey())){
     try {
@@ -1145,7 +1145,7 @@ async function postBankToTally(ids){
       const x = byId.get(r.id);
       if (x && x.ok && x.verified !== true && !x.pendingCheck){
         b.postedTags = b.postedTags || {}; b.postedTags[fpHash(r.fp || r.id)] = "unconfirmed:" + now;
-        r.postError = "Tally replied 'created', but TDS Desk could not find the entry in Tally afterwards, so it is NOT marked as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again." + (x.verifyNote ? " [" + x.verifyNote + "]" : "");
+        r.postError = "Tally replied 'created', but FinCom could not find the entry in Tally afterwards, so it is NOT marked as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again." + (x.verifyNote ? " [" + x.verifyNote + "]" : "");
         failed.push({id: r.id, what: fmtDate(r.date) + " " + (r.dec.name || "") + " " + INR.format(r.debit || r.credit), msg: "not confirmed in Tally \u2014 check Tally before posting again"});
       } else if (x && x.ok){
         ok++; r.state = "sent"; r.sentAt = now; r.postedVia = "bridge"; r.postError = ""; r.postedOptional = !!x.optional; r.postVerified = x.verified === true; r.checking = !!x.pendingCheck; posted.push(r);
@@ -1254,7 +1254,7 @@ async function postBillsToTally(){
         const x = byId.get(e.id);
         if (x && x.ok && x.verified === true){ ok++; logPosting({what: "bill", id: e.id, action: "posted", co: co.id, ref: e.x.invoiceNo, party: e.x.vendorName, amount: num(e.x.total), tally: {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", company: x.company || tname}, by: (Cloud.st && Cloud.st.email) || ""}); e.exportedAt = now; e.postError = ""; e.postUnconfirmed = null; e.postedVia = "bridge"; e.postedInto = x.company || tname; e.postedOptional = !!x.optional; e.postVerified = true; e.tallyVchNo = x.vchNumber || "";
           e.tally = {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", at: now, by: (Cloud.st && Cloud.st.email) || "", company: x.company || tname}; if (x.optional) optionalN++; }
-        else if (x && x.ok){ unverified++; e.postUnconfirmed = {at: now, company: x.company || tname, optional: /Optional/.test(x.verifyNote || '')}; e.postError = (/Optional/.test(x.verifyNote || '') && x.message) ? plainMsg(x.message) : "Tally replied 'created', but TDS Desk could not find the entry in Tally afterwards, so it is NOT marked as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again." + (x.verifyNote ? " [" + x.verifyNote + "]" : ""); failed.push({no: e.x.invoiceNo, party: e.x.vendorName, msg: "not confirmed in Tally"}); }
+        else if (x && x.ok){ unverified++; e.postUnconfirmed = {at: now, company: x.company || tname, optional: /Optional/.test(x.verifyNote || '')}; e.postError = (/Optional/.test(x.verifyNote || '') && x.message) ? plainMsg(x.message) : "Tally replied 'created', but FinCom could not find the entry in Tally afterwards, so it is NOT marked as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again." + (x.verifyNote ? " [" + x.verifyNote + "]" : ""); failed.push({no: e.x.invoiceNo, party: e.x.vendorName, msg: "not confirmed in Tally"}); }
         else {
           e.postError = plainMsg(x && x.message) || "Tally did not confirm this entry.";
           failed.push({id: e.id, no: e.x.invoiceNo, party: e.x.vendorName, msg: e.postError});
@@ -1306,7 +1306,7 @@ function viewReadTest(){
   if (!Bridge.up()) return "";
   const r = S.readTest || {};
   let h = '<div style="margin-top:10px;border-top:1px solid var(--rule-soft);padding-top:10px"><div class="row" style="justify-content:space-between;align-items:center"><b>Test reading entries</b><button class="btn small" data-act="bridgeReadTest"' + (r.busy ? " disabled" : "") + ">" + (r.busy ? "Testing\u2026" : "Run test") + "</button></div>" +
-    '<p class="note" style="margin:4px 0">Checks how TDS Desk can read entries from the company open in Tally (nothing is written). If posts are \u201cnot confirmed\u201d, run this and send the result.</p>';
+    '<p class="note" style="margin:4px 0">Checks how FinCom can read entries from the company open in Tally (nothing is written). If posts are \u201cnot confirmed\u201d, run this and send the result.</p>';
   if (r.error) h += '<p class="bk-warn">' + esc(r.error) + "</p>";
   if (r.tests) h += '<table class="data"><tbody>' + r.tests.map(t => "<tr><td>" + esc(t.name) + "</td><td>" + (t.ok ? '<span class="tag ok">works</span> ' + num(t.count) + " found" + (t.optional ? " (" + num(t.optional) + " Optional)" : "") : '<span class="tag bad">failed</span> ' + esc(t.error || "")) + '</td><td class="n">' + num(t.ms) + " ms</td></tr>").join("") + "</tbody></table>" +
     '<p class="note" style="margin:4px 0 0">' + esc(r.company || "") + " \u00b7 port " + esc(r.port) + " \u00b7 " + esc(r.from) + " to " + esc(r.to) + "</p>";
@@ -1327,11 +1327,11 @@ function viewBridgeDiagnosis(){
 }
 function bridgeDownHelp(c){
   const url = c.url.replace(/\/+$/, "");
-  return '<div class="bdiag"><b>TDS Desk cannot reach the bridge. Check, in this order:</b><ol style="margin:8px 0 0 18px;padding:0;line-height:1.55">' +
-    "<li>On the computer where TallyPrime runs, is the window <b>TDS Desk - Tally Bridge</b> open and showing <b>READY</b>? If not, double-click <b>Start-TDS-Bridge.bat</b> in the bridge folder.</li>" +
+  return '<div class="bdiag"><b>FinCom cannot reach the bridge. Check, in this order:</b><ol style="margin:8px 0 0 18px;padding:0;line-height:1.55">' +
+    "<li>On the computer where TallyPrime runs, is the window <b>FinCom - Tally Bridge</b> open and showing <b>READY</b>? If not, double-click <b>Start-TDS-Bridge.bat</b> in the bridge folder.</li>" +
     "<li>If that window shows <b>BRIDGE STOPPED</b> or <b>Could not start on port</b>, do what it says, or send the file <b>tds-bridge-console.txt</b> from the bridge folder.</li>" +
     '<li>In this same browser, open <a href="' + esc(url) + '/ping" target="_blank" rel="noopener">' + esc(url) + "/ping</a>. If it shows <code>\"ok\":true</code>, press <b>Retry</b> below (and choose <b>Allow</b> if the browser asks about apps on this device).</li>" +
-    "<li>If that page cannot be reached, TDS Desk and the bridge are on different computers: open TDS Desk (the downloaded file) inside the server session where TallyPrime runs.</li>" +
+    "<li>If that page cannot be reached, FinCom and the bridge are on different computers: open FinCom (the downloaded file) inside the server session where TallyPrime runs.</li>" +
     '</ol><div class="row" style="margin-top:8px"><button class="btn small primary" data-act="bridgeTest">Retry</button></div></div>';
 }
 async function saveBridgeSetup(){
@@ -1341,10 +1341,10 @@ async function saveBridgeSetup(){
   const raw = atob(t.trim());
   const bytes = new Uint8Array(raw.length);
   for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-  saveFile("Setup-TDS-Bridge.bat", new Blob([bytes], {type: "application/octet-stream"}));
-  // its fingerprint, to compare with the one published in the TDS Desk repository (assets/bridge-setup.sha256)
+  saveFile("Setup-FinCom-Bridge.bat", new Blob([bytes], {type: "application/octet-stream"}));
+  // its fingerprint, to compare with the one published in the FinCom repository (assets/bridge-setup.sha256)
   try { const h = await crypto.subtle.digest("SHA-256", bytes); S.bridgeSha = Array.from(new Uint8Array(h)).map(x => x.toString(16).padStart(2, "0")).join(""); } catch (e){ S.bridgeSha = ""; }
-  toast("Saved. On the computer where Tally runs, double-click Setup-TDS-Bridge.bat and press I.");
+  toast("Saved. On the computer where Tally runs, double-click Setup-FinCom-Bridge.bat and press I.");
   render();
 }
 function bridgeSetupSteps(){
@@ -1353,7 +1353,7 @@ function bridgeSetupSteps(){
   return '<div class="setupcard"><h3 style="margin:0 0 6px">Set up in three steps</h3><ol class="setup">' +
     step(1, connected, "Put the bridge on the Tally computer",
       'Press <button class="btn small" data-act="bridgeSetupFile">Download the bridge setup</button> and run the file there (double-click, press <b>I</b>). It installs itself, starts, and starts again at every sign-in. No admin rights needed.') +
-    (S.bridgeSha ? '<li class="note" style="list-style:none;font-size:12px">Fingerprint (SHA-256) of the file just saved: <code style="user-select:all;word-break:break-all">' + esc(S.bridgeSha) + "</code>. It must match the one published by TDS Desk before you run it.</li>" : "") +
+    (S.bridgeSha ? '<li class="note" style="list-style:none;font-size:12px">Fingerprint (SHA-256) of the file just saved: <code style="user-select:all;word-break:break-all">' + esc(S.bridgeSha) + "</code>. It must match the one published by FinCom before you run it.</li>" : "") +
     step(2, connected && st.tallyUp, "Open TallyPrime and your company",
       "In TallyPrime: F1 Help \u2192 Settings \u2192 Connectivity \u2192 <b>TallyPrime acts as: Both</b>. Each user's Tally needs its own port (9000, 9001, \u2026).") +
     step(3, connected, "Press Connect here",
@@ -1363,10 +1363,10 @@ function bridgeSetupSteps(){
 function viewBridgeSettings(){
   const c = Bridge.cfg(), st = Bridge.st;
   if (Bridge.blocked()) return '<div class="pane"><h2>Tally Bridge</h2><p class="note" style="margin:0">Pages opened on claude.ai cannot reach programs on your computer. To connect to Tally, use the downloaded app (<b>Download standalone app</b>) on the computer where TallyPrime runs.</p></div>';
-  let h = '<div class="pane"><h2>Tally Bridge</h2><p class="note" style="margin:0 0 12px">Connects TDS Desk to TallyPrime on this computer: the company open in Tally is followed, ledgers load straight from Tally, and entries are posted without files. Run <b>TDSBridge</b> on the computer where TallyPrime runs, then paste its key here.</p>' +
+  let h = '<div class="pane"><h2>Tally Bridge</h2><p class="note" style="margin:0 0 12px">Connects FinCom to TallyPrime on this computer: the company open in Tally is followed, ledgers load straight from Tally, and entries are posted without files. Run <b>TDSBridge</b> on the computer where TallyPrime runs, then paste its key here.</p>' +
     '<div class="grid"><label class="f"><span>Bridge address</span><input type="text" data-bridge="url" value="' + esc(c.url) + '"></label>' +
     '<label class="f"><span>Bridge key (filled in by Connect)</span><input type="text" data-bridge="key" data-fk="bridgekey" value="' + esc(c.key) + '" autocomplete="off" placeholder="press Connect below"></label></div>' +
-    '<label class="chk" style="margin-top:8px"><input type="checkbox" data-bridge="follow"' + (c.follow ? " checked" : "") + "> Follow the company open in Tally (switch TDS Desk to it automatically)</label>" +
+    '<label class="chk" style="margin-top:8px"><input type="checkbox" data-bridge="follow"' + (c.follow ? " checked" : "") + "> Follow the company open in Tally (switch FinCom to it automatically)</label>" +
     '<div class="row" style="margin-top:10px"><button class="btn small primary" data-act="bridgeTest">' + (c.key ? "Check connection" : "Connect") + "</button>" + (c.key ? '<button class="btn small" data-act="bridgeOff">Disconnect</button>' : "") +
     '<button class="btn small" data-act="bridgeSetupFile">Download the bridge setup</button></div>';
   if (!(Bridge.on() && Bridge.up())) h += bridgeSetupSteps();
@@ -1375,7 +1375,7 @@ function viewBridgeSettings(){
       ? '<p class="note" style="margin:0 0 6px">Bridge ' + esc(st.version || "") + " connected" + (st.allowImport === false ? " (posting switched off in the bridge)" : "") + ". Checked " + new Date(st.at).toLocaleTimeString() + ".</p>" +
         '<p class="note" style="margin:0 0 6px">' + ({auto: "The bridge finds the TallyPrime running in your Windows session" + (st.user ? " (" + esc(st.user) + ")" : "") + " and ignores other users\u2019 Tally.", config: "The bridge uses the Tally ports listed in its settings file.", fallback: "Windows did not tell the bridge which Tally is yours: choose it below."}[st.mode] || "") + "</p>" +
         ((st.clash || []).length ? '<p class="bk-warn">' + esc(st.clash.join(", ")) + " is open in more than one Tally. Choose yours with <b>Use this Tally</b>; until then nothing is read or posted for it.</p>" : "") +
-        (st.sessions.length ? '<table class="data"><thead><tr><th>Tally</th><th>Owner</th><th>Companies open</th><th>TDS Desk client</th><th></th></tr></thead><tbody>' +
+        (st.sessions.length ? '<table class="data"><thead><tr><th>Tally</th><th>Owner</th><th>Companies open</th><th>FinCom client</th><th></th></tr></thead><tbody>' +
           st.sessions.filter(se => se.ok || se.skipped || num(c.port) === se.port || st.mode !== "fallback").map(se => {
             const owner = se.skipped ? '<span class="tag no">Another user \u2014 not used</span>' : se.mine === true ? '<span class="tag ok">Your session</span>' : '<span class="tag warn">Not checked</span>';
             const pinned = num(c.port) === se.port;

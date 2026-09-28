@@ -1,7 +1,7 @@
-"""python3 run_bankpost_e2e.py - bank lines posted from TDS Desk through the real bridge into a stand-in Tally, end to end:
+"""python3 run_bankpost_e2e.py - bank lines posted from FinCom through the real bridge into a stand-in Tally, end to end:
 every voucher carries its statement date; an entry Tally holds under the wrong date is found, stops the posting, is removed,
 and the line goes in again at the right date; posting twice never makes a second copy; a voucher with no date is stopped
-both in TDS Desk and in the bridge before it reaches Tally."""
+both in FinCom and in the bridge before it reaches Tally."""
 import os as _os, shutil as _sh
 HERE = _os.path.dirname(_os.path.abspath(__file__))
 BRUN = _os.path.join(HERE, "out", "bankpostrun")
@@ -46,7 +46,7 @@ try:
         pg.goto("http://localhost:8133/"); pg.wait_for_timeout(2000)
         pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
         pg.evaluate(SETUP, [key, BANK, PARTY]); pg.evaluate("Bridge.refresh()")
-        ok(pg.evaluate("Bridge.st.version") == "1.12.7", "bridge 1.12.7 running against the stand-in Tally")
+        ok(pg.evaluate("Bridge.st.version") == "1.12.8", "bridge 1.12.8 running against the stand-in Tally")
         ok(pg.evaluate("syncLedgersFromTally(true)") and pg.evaluate("!!exactLedger('%s') && !!exactLedger('%s')" % (BANK, PARTY)), "ledgers read from Tally")
         pg.evaluate("() => { B().rows.forEach(r => { r.state = 'ready'; }); }")
         # the dates themselves
@@ -108,7 +108,7 @@ try:
         pg.evaluate("postBankToTally()")
         ok(len(fake_tally.POSTED) == 5, "posting the same lines again (this browser's memory wiped): Tally is checked, nothing goes in twice")
         ok(pg.evaluate("B().rows.every(r => r.state === 'intally')"), "and they show as already in Tally")
-        # the user deletes TDS Desk's entries in Tally, and wants to post them again
+        # the user deletes FinCom's entries in Tally, and wants to post them again
         fake_tally.POSTED[:] = [x for x in fake_tally.POSTED if "TDSDesk:" not in x[1]]
         g = pg.evaluate("checkMarkedInTally()")
         ok(g and len(g["ids"]) == 4 and "4 lines are marked as posted, but are no longer in Tally" in pg.inner_text("#app"), "entries deleted in Tally are noticed: 4 lines marked as posted are no longer there, and it says so")
@@ -172,7 +172,7 @@ try:
         ok(pg.locator(".bk-balbox").count() == 0, "the balance box closes with its ×")
         pg.evaluate("checkBankBalance()"); pg.wait_for_timeout(200)
         ok(pg.locator(".bk-balbox").count() == 1, "and comes back with the next check")
-        # while TDS Desk works, what it is doing floats in view wherever the page is scrolled
+        # while FinCom works, what it is doing floats in view wherever the page is scrolled
         pg.evaluate("() => { window.scrollTo(0, 99999); B().busy = 'Deleting 1 of 2 in Tally…'; render(); }"); pg.wait_for_timeout(200)
         bb = pg.evaluate("(() => { const e = document.querySelector('.busy-float'); if (!e) return null; const r = e.getBoundingClientRect(); return [r.top, r.bottom, innerHeight, getComputedStyle(e).position]; })()")
         ok(bb and bb[3] == "fixed" and 0 <= bb[0] < bb[2] and "1 / 2" not in "" , "the working message floats in view (%s)" % bb)
@@ -189,10 +189,10 @@ try:
         fake_tally.CTRL["no_ledvch"] = False
         ok(R2 and R2["pairs"] == 4 and R2["missing"] == R2["extra"] == R2["differ"] == 0 and abs(R2["t"] - R2["s"]) < 0.01, "a Tally that refuses the one-ledger read: the Day Book is read instead, same answer (%s)" % R2)
         n_before = len(fake_tally.POSTED)
-        # a voucher without a date never reaches Tally: stopped in TDS Desk ...
+        # a voucher without a date never reaches Tally: stopped in FinCom ...
         r = pg.evaluate("""async () => (await Bridge.post({company: "VMS EVENTS PRIVATE LIMITED (2024-25)", masters: [], vouchers: [{id: "nodate", xml: '<VOUCHER VCHTYPE="Payment" ACTION="Create"><DATE></DATE><NARRATION>x TDSDesk:zz1</NARRATION></VOUCHER>'}, {id: "early", xml: '<VOUCHER VCHTYPE="Payment" ACTION="Create"><DATE>20230101</DATE><NARRATION>x TDSDesk:zz2</NARRATION></VOUCHER>'}]})).results""")
-        ok(len(fake_tally.POSTED) == n_before and {x["id"]: x["ok"] for x in r} == {"nodate": False, "early": False} and "no date" in r[0]["message"] and "before" in r[1]["message"], "no date, or a date before the books begin: refused by TDS Desk, nothing sent (%s)" % [x["message"][:40] for x in r])
-        # ... and in the bridge, for anything that bypasses TDS Desk's own check
+        ok(len(fake_tally.POSTED) == n_before and {x["id"]: x["ok"] for x in r} == {"nodate": False, "early": False} and "no date" in r[0]["message"] and "before" in r[1]["message"], "no date, or a date before the books begin: refused by FinCom, nothing sent (%s)" % [x["message"][:40] for x in r])
+        # ... and in the bridge, for anything that bypasses FinCom's own check
         req = urllib.request.Request("http://127.0.0.1:9100/import", data=json.dumps({"company": "VMS EVENTS PRIVATE LIMITED (2024-25)", "masters": [], "vouchers": [{"id": "nd", "xml": '<VOUCHER VCHTYPE="Payment" ACTION="Create"><DATE></DATE><NARRATION>y</NARRATION></VOUCHER>'}]}).encode(), headers={"X-Bridge-Key": key, "Content-Type": "application/json"})
         jr = json.loads(urllib.request.urlopen(req, timeout=60).read())
         ok(len(fake_tally.POSTED) == n_before and not jr["results"][0]["ok"] and "no valid date" in jr["results"][0]["message"], "the bridge itself refuses a voucher with no date")

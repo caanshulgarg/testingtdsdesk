@@ -195,7 +195,7 @@ const Audit = {
       if (!rows.length) return null;
       const amt = rows.reduce((s, r) => s + r.tds, 0);
       return {total: rows.length, area: "tds", sev: TDS.challans().length ? "high" : "medium", clause: "3CD 34(b); section 40(a)(ia)", title: "TDS deducted but not matched to a challan",
-        problem: rows.length + " deductions of \u20b9" + INR.format(r2(amt)) + (TDS.challans().length ? " are not against any challan." : "; no challans are entered in TDS Desk yet."),
+        problem: rows.length + " deductions of \u20b9" + INR.format(r2(amt)) + (TDS.challans().length ? " are not against any challan." : "; no challans are entered in FinCom yet."),
         impact: "If not deposited: the expense is disallowed (30%), interest runs under section 201(1A), and the return shows a shortfall.", amount: amt,
         suggestion: TDS.challans().length ? "Match them under TDS \u2192 the quarter \u2192 Challans, or deposit what is unpaid." : "Enter the challans under TDS \u2192 the quarter \u2192 Challans (payments in Tally are offered there), then put the deductions against them.",
         je: null, rows: rows.slice(0, 500).map(r => ({vid: r.voucherId || "", date: r.date, no: r.voucher || "", type: r.section, party: r.party, amount: r.tds, note: "section " + r.section}))};
@@ -567,7 +567,7 @@ const Audit = {
           '</td><td class="n">' + ((it.row || {}).amount ? m(it.row.amount) : "") + "</td><td>" + fmtDate(String(it.solved).slice(0, 10)) + "</td></tr>")).join("") + "</tbody></table>";
     }
     h += '<p class="note" style="margin-top:18px">Result code ' + esc(run.code || "") + ": the same books give the same code. Rules only; nothing in this report is guessed by a machine." + (run.balances ? " Balances: " + esc(run.balances) + "." : "") + "</p>";
-    h += '<p class="note" style="margin-top:6px">Prepared from the books in Tally by ' + esc(co.firm || "Garg Shekhar & Company") + ". These are observations for review; each is to be confirmed against the documents before any adjustment is made.</p>";
+    h += '<p class="note" style="margin-top:6px">Prepared from the books in Tally by ' + esc(co.firm || (S.firm && S.firm.firmName) || "the firm") + ". These are observations for review; each is to be confirmed against the documents before any adjustment is made.</p>";
     return h;
   },
   async toExcel(run){

@@ -34,7 +34,7 @@ try:
         except Exception: pass
     KEY = json.load(open(os.path.join(BRUN, "tds-bridge.config.json"), encoding="utf-8-sig"))["Key"]
     CO = T.COMPANY
-    ok(json.loads(urllib.request.urlopen("http://127.0.0.1:9100/ping").read())["version"] == "1.12.7", "bridge 1.12.7")
+    ok(json.loads(urllib.request.urlopen("http://127.0.0.1:9100/ping").read())["version"] == "1.12.8", "bridge 1.12.8")
     # 1. a batch of 100: handed over at once; the bridge answers while it posts; every entry created once and found in Tally
     jid = str(uuid.uuid4()); t0 = time.time()
     j = call("/jobs", {"jobId": jid, "company": CO, "masters": [{"id": "led:Rent", "xml": '<LEDGER NAME="Rent" ACTION="Create"><PARENT>Indirect Expenses</PARENT></LEDGER>'}], "vouchers": vouchers(100, "A")})
@@ -46,7 +46,7 @@ try:
         s = call("/status", t=10); mid.append((time.time() - t1, s.get("jobs") or []))
         if any(x.get("done", 0) > 20 for x in (s.get("jobs") or [])): break
     ok(mid and max(d for d, _ in mid) < 3 and any(jobs for _, jobs in mid), "while posting the bridge answers status in %.2fs at most, and says a posting is running (%s)" % (max(d for d, _ in mid), (mid[-1][1] or [{}])[0].get("message", "")))
-    # sending finishes first (TDS Desk is told at once); the read-back follows
+    # sending finishes first (FinCom is told at once); the read-back follows
     sent_at = None
     while time.time() - t0 < 300:
         j0 = call("/jobs?id=" + jid)

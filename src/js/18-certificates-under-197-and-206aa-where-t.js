@@ -256,7 +256,7 @@ function viewBooksLedgers(b){
     '<button class="dtile" data-lmview="tds" style="text-align:left"><span>TDS and TCS ledgers</span><b>' + tds.length + "</b><small>" + tds.filter(x => x[1].ok).length + " confirmed</small></button>" +
     '<button class="dtile" data-lmview="other" style="text-align:left"><span>Other ledgers</span><b>' + other.length + "</b><small>add one to GST or TDS</small></button></div></section>";
   h = ledChangedBanner(b) + h;
-  h += '<nav class="sbar" aria-label="Ledgers">' + [["pending", "To confirm", pend.length], ["gst", "GST", gst.length], ["tds", "TDS and TCS", tds.length], ["done", "Confirmed", null], ["other", "Other ledgers", other.length], ["post", "What TDS Desk posts to", null]]
+  h += '<nav class="sbar" aria-label="Ledgers">' + [["pending", "To confirm", pend.length], ["gst", "GST", gst.length], ["tds", "TDS and TCS", tds.length], ["done", "Confirmed", null], ["other", "Other ledgers", other.length], ["post", "What FinCom posts to", null]]
     .map(([id, l, c]) => '<button data-lmview="' + id + '" aria-selected="' + (view === id) + '">' + l + (c != null ? ' <span class="sbar-n">' + c + "</span>" : "") + "</button>").join("") + "</nav>";
   if (view === "post") return h + viewLedPosting(b);
   h += '<div class="revfilter" style="flex-wrap:wrap;row-gap:6px"><input type="search" id="ledq" data-fk="ledq" data-keeptyped value="' + esc(S.ledQ || "") + '" placeholder="Find a ledger, section or group" style="width:260px;flex:0 0 auto">' +
@@ -929,7 +929,7 @@ function misPackHtml(r){
     if (r.p2.cc.rows.length) h += "<h2>Cost centres, largest 15 by income</h2><table><thead><tr><th>Cost centre</th><th class=\"n\">Income</th><th class=\"n\">Costs</th><th class=\"n\">Profit</th><th class=\"n\">Margin</th></tr></thead><tbody>" +
       r.p2.cc.rows.slice(0, 15).map(x => "<tr><td>" + esc(x.name) + '</td><td class="n">' + m(x.inc) + '</td><td class="n">' + m(x.exp) + '</td><td class="n">' + m(x.profit) + '</td><td class="n">' + (x.margin == null ? "" : x.margin + "%") + "</td></tr>").join("") + "</tbody></table>";
   }
-  return h + '<p class="note" style="margin-top:16px">Prepared from the books in Tally by ' + esc(co.firm || "Garg Shekhar & Company") + ".</p>";
+  return h + '<p class="note" style="margin-top:16px">Prepared from the books in Tally by ' + esc(co.firm || (S.firm && S.firm.firmName) || "the firm") + ".</p>";
 }
 async function misExcel(r){
   await ensureXlsx();
@@ -1063,7 +1063,7 @@ function viewAudit3cd(b){
 }
 function viewLedPosting(b){
   const co = CO(), rows = LedMaster.posting(b, co), diff = rows.filter(x => x.from && x.from !== x.now);
-  return '<section class="dash-card"><h3>What TDS Desk posts bills to</h3><p class="note">When TDS Desk posts a bill into Tally, these are the ledgers it uses. They come from the ledgers confirmed here; an empty one is filled in as soon as its ledger is confirmed, and one set by hand in Client setup is kept until you choose the master\u2019s.</p>' +
+  return '<section class="dash-card"><h3>What FinCom posts bills to</h3><p class="note">When FinCom posts a bill into Tally, these are the ledgers it uses. They come from the ledgers confirmed here; an empty one is filled in as soon as its ledger is confirmed, and one set by hand in Client setup is kept until you choose the master\u2019s.</p>' +
     (diff.length ? '<div class="row" style="margin:8px 0"><button class="btn small primary" data-act="lmPostAll">Use the master\u2019s for all ' + diff.length + "</button></div>" : "") +
     '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Used for</th><th>Now</th><th>From the master</th><th>Why</th><th class="ac"></th></tr></thead><tbody>' +
     rows.map(x => "<tr><td>" + esc(x.label) + "</td><td>" + (x.now ? esc(x.now) + ((b.ledInfo || {})[x.now] || (b.map || {})[x.now] ? "" : ' <span class="tag warn">not in Tally</span>') : '<span class="note">\u2014</span>') + "</td><td>" + (x.from ? (x.from === x.now ? '<span style="color:#1F7A4D">\u2713 same</span>' : "<b>" + esc(x.from) + "</b>") : '<span class="note">none confirmed</span>') +

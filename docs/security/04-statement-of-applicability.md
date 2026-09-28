@@ -77,7 +77,7 @@ The service runs in suppliers' data centres (covered by their certifications). T
 | Control | Applies | Why | How it is met | Status |
 |---|---|---|---|---|
 | 7.1 Physical perimeters | Y | B | Office locked outside hours | Owner to confirm |
-| 7.2 Physical entry | Y | B | Keys held by partners | Owner to confirm |
+| 7.2 Physical entry | Y | B | Keys held by directors | Owner to confirm |
 | 7.3 Securing offices | Y | B | No client papers at open desks | Owner to confirm |
 | 7.4 Physical security monitoring | N | — | A small office with no servers; the data centres are the suppliers' | — |
 | 7.5 Physical and environmental threats | Y | B | Nothing critical is on premises; cloud providers cover this | In place |

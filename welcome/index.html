@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-bq+4nuaAd9d9S583L2sJ9gZeB6INsvkzY+3BkE1efIY='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
-<title>TDS Desk: books, TDS, GST, MIS and audit review, in Tally</title>
-<meta name="description" content="For business owners and their CAs: bills and bank statements into Tally with TDS and GST done, then a monthly MIS and an audit review of the books. Built by Garg Shekhar &amp; Company, Chartered Accountants.">
+<title>FinCom: finance and compliance, from bills to MIS</title>
+<meta name="description" content="FinCom, finance and compliance: bills and bank statements into Tally with TDS and GST done, then a monthly MIS and an audit review of the books. A product of Yuvnav Services Private Limited, Noida.">
 <meta name="theme-color" content="#0f3d33">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231F6F5C'/%3E%3Cpath d='M9 11h14M16 11v12' stroke='white' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231F6F5C'/%3E%3Cpath d='M11 9h11M11 9v14M11 16h8' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preload" href="fonts/ibm-plex-sans-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
 <style>@font-face{font-family:"Plex Sans";src:url(fonts/ibm-plex-sans-latin-400-normal.woff2) format("woff2");font-weight:400;font-display:swap}
 @font-face{font-family:"Plex Sans";src:url(fonts/ibm-plex-sans-latin-500-normal.woff2) format("woff2");font-weight:500;font-display:swap}
@@ -237,17 +237,111 @@ footer{border-top:1px solid var(--line);padding:32px 0 48px;color:var(--ink-3);f
 .ins-body>p{margin:0 0 18px;color:var(--ink-2)}
 @media (max-width:1023px){.ins-grid{grid-template-columns:1fr}}
 @media (max-width:767px){.ins-shot{padding:18px 0 0 18px;min-height:0}.ins-body{padding:24px 22px 26px}}
+/* shared by the inner pages: pricing, security, legal, contact */
+.todo{background:#fff3c4;color:#6b4a00;border-radius:6px;padding:0 4px;font-weight:500}
+@media (prefers-color-scheme:dark){.todo{background:#3b3010;color:#f1d27a}}
+.links a[aria-current="page"]{color:var(--ink);text-decoration:underline;text-underline-offset:6px;text-decoration-thickness:2px;text-decoration-color:var(--accent)}
+.small{font-size:14px;color:var(--ink-3)}
+.p-hero{padding:72px 0 24px}
+.p-hero h1{font:600 clamp(32px,4vw,52px)/1.08 "Plex Sans",sans-serif;letter-spacing:-.028em;margin:0 0 16px;max-width:22ch}
+.lede-2{font-size:19px;color:var(--ink-2);max-width:60ch;margin:0}
+/* pricing */
+.p-plans{padding:32px 0 56px}
+.plans{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;align-items:stretch}
+.plan{display:flex;flex-direction:column;gap:12px;padding:28px;border-radius:20px;background:var(--surface);border:1px solid var(--line)}
+.plan h2{font:600 20px/1.2 "Plex Sans",sans-serif;margin:0}
+.plan .price{margin:4px 0 0;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.plan .price b{font:600 38px/1 "Plex Sans",sans-serif;letter-spacing:-.02em}
+.plan .price span{color:var(--ink-3);font-size:14px}
+.plan .blurb{margin:0;color:var(--ink-2);min-height:3.2em}
+.plan .btn{margin:6px 0 8px}
+.plan .ticks li{font-size:15px}
+.plan.hi{background:var(--panel);color:var(--panel-ink);border-color:transparent;position:relative}
+.plan.hi .price span,.plan.hi .blurb{color:var(--panel-ink-2)}
+.plan.hi .ticks .ic{color:#8fdcc1}
+.p-note{margin-top:20px;color:var(--ink-3);font-size:14px}
+.p-units{padding:40px 0 64px}
+.p-units h2,.t-certs h2,.t-practice h2,.t-subs h2{font-size:clamp(24px,2.4vw,32px)}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:20px;background:var(--surface)}
+table.units{width:100%;border-collapse:collapse;font-size:15.5px}
+.units th,.units td{padding:14px 20px;text-align:left;vertical-align:top}
+.units thead th{font:600 13px/1.2 "Plex Sans",sans-serif;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);background:var(--surface-2)}
+.units tbody tr+tr td{border-top:1px solid var(--line)}
+.units .n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+/* trust */
+.t-certs{padding:40px 0 24px}
+.t-practice{padding:56px 0}
+.grid-p{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:28px 36px;margin-top:28px}
+.grid-p h3{display:flex;gap:10px;align-items:center;font:600 18px/1.3 "Plex Sans",sans-serif;margin:0 0 8px}
+.grid-p h3 .ic{color:var(--accent)}
+.grid-p p{margin:0;color:var(--ink-2)}
+.t-subs{padding:24px 0 56px}
+.t-disclose{padding:56px 0 72px;background:var(--surface);border-top:1px solid var(--line)}
+.two-col{display:grid;grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:40px;align-items:start}
+.box{padding:24px;border-radius:20px;background:var(--surface-2)}
+.box p{margin:0 0 8px}
+/* legal documents */
+.doc{padding:56px 0 80px}
+.doc-grid{display:grid;grid-template-columns:240px minmax(0,1fr);gap:56px;align-items:start}
+.doc-toc{position:sticky;top:96px;display:grid;gap:2px;font-size:14px}
+.doc-toc p{margin:0 0 8px;font-weight:600;color:var(--ink-3);text-transform:uppercase;letter-spacing:.06em;font-size:12px}
+.doc-toc a{text-decoration:none;color:var(--ink-2);padding:6px 10px;border-radius:10px}
+.doc-toc a:hover{background:var(--surface-2);color:var(--ink)}
+.prose{max-width:72ch}
+.prose h1{font:600 clamp(32px,4vw,46px)/1.1 "Plex Sans",sans-serif;letter-spacing:-.025em;margin:0 0 8px}
+.prose .meta{color:var(--ink-3);margin:0 0 24px;font-size:14px}
+.prose .lead{font-size:18px;color:var(--ink-2)}
+.doc-s{padding:12px 0 0;scroll-margin-top:90px}
+.prose h2{font:600 21px/1.3 "Plex Sans",sans-serif;margin:28px 0 8px;letter-spacing:-.01em}
+.prose p,.prose li{color:var(--ink-2)}
+.prose ul{padding-left:20px}
+.prose li{margin:6px 0}
+.prose a{color:var(--accent-ink)}
+/* contact */
+.cgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.cbox{padding:30px;border-radius:20px;background:var(--surface);border:1px solid var(--line)}
+.cbox .ic{width:28px;height:28px;color:var(--accent)}
+.cbox h2{font:600 20px/1.3 "Plex Sans",sans-serif;margin:12px 0 8px}
+.cbox p{margin:0 0 6px;color:var(--ink-2)}
+/* footer */
+.site-foot{border-top:1px solid var(--line);padding:48px 0 28px;color:var(--ink-3);font-size:14px;background:var(--surface)}
+.fgrid{display:grid;grid-template-columns:minmax(0,2fr) repeat(3,minmax(0,1fr));gap:32px}
+.fgrid h3{font:600 13px/1 "Plex Sans",sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);margin:6px 0 14px}
+.fgrid a{display:block;color:var(--ink-2);text-decoration:none;margin:0 0 10px}
+.fgrid a:hover{color:var(--ink);text-decoration:underline}
+.fbrand .brand{display:flex;margin:0 0 12px}
+.fbrand p{margin:0 0 6px}
+.legal-line{margin-top:28px;padding-top:20px;border-top:1px solid var(--line)}
+.legal-line p{margin:0;font-size:13px}
+@media (max-width:1023px){
+  .plans{grid-template-columns:1fr 1fr}
+  .grid-p{grid-template-columns:1fr 1fr}
+  .doc-grid{grid-template-columns:1fr;gap:24px}
+  .doc-toc{position:static;grid-template-columns:1fr 1fr;padding:16px;border-radius:20px;background:var(--surface);border:1px solid var(--line)}
+  .doc-toc p{grid-column:1 / -1}
+  .fgrid{grid-template-columns:1fr 1fr}
+  .fbrand{grid-column:1 / -1}
+  .two-col{grid-template-columns:1fr}
+}
+@media (max-width:767px){
+  .p-hero{padding:40px 0 12px}
+  .plans,.grid-p,.cgrid{grid-template-columns:1fr}
+  .plan .blurb{min-height:0}
+  .doc{padding:32px 0 56px}
+  .doc-toc{grid-template-columns:1fr}
+  .units th,.units td{padding:12px 14px}
+}
 </style>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
 <header class="top">
   <nav class="wrap nav" aria-label="Main">
-    <a class="brand" href="./"><svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="currentColor"/><path d="M9 11h14M16 11v12" stroke="var(--mark-ink)" stroke-width="3" stroke-linecap="round"/></svg><span>TDS Desk</span></a>
-    <div class="links"><a href="#insight">MIS and audit</a><a href="#what">What it does</a><a href="#tally">Tally</a><a href="#security">Security</a><a href="#faq">Questions</a></div>
+    <a class="brand" href="index.html" aria-label="FinCom home"><svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="currentColor"/><path d="M11 9h11M11 9v14M11 16h8" stroke="var(--mark-ink)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg><span>FinCom</span></a>
+    <div class="links"><a href="index.html#insight">MIS and audit</a><a href="index.html#what">Features</a><a href="pricing.html">Pricing</a><a href="security.html">Security</a><a href="index.html#faq">Questions</a></div>
     <div class="cta"><a class="btn ghost hide-sm" href="../#signin">Sign in</a><a class="btn primary" href="../#register">Register</a></div>
     <details class="menu"><summary aria-label="Menu"><svg class="ic" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M224,128a8,8,0,0,1-8,8H40a8,8,0,0,1,0-16H216A8,8,0,0,1,224,128ZM40,72H216a8,8,0,0,0,0-16H40a8,8,0,0,0,0,16ZM216,184H40a8,8,0,0,0,0,16H216a8,8,0,0,0,0-16Z"/></svg></summary>
-      <div class="menu-panel"><a href="#insight">MIS and audit</a><a href="#what">What it does</a><a href="#tally">Tally</a><a href="#security">Security</a><a href="#compliance">Compliance</a><a href="#faq">Questions</a><a class="btn ghost" href="../#signin">Sign in</a></div>
+      <div class="menu-panel"><a href="index.html#insight">MIS and audit</a><a href="index.html#what">Features</a><a href="pricing.html">Pricing</a><a href="security.html">Security</a><a href="index.html#faq">Questions</a><a class="btn ghost" href="../#signin">Sign in</a></div>
     </details>
   </nav>
 </header>
@@ -260,7 +354,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 48px;color:var(--ink-3);f
           <p class="lede">Bills and bank statements go into Tally with TDS and GST done. Then your MIS and an audit review, every month.</p>
           <div class="actions"><a class="btn light lg" href="../#register">Register <svg class="ic" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M221.66,133.66l-72,72a8,8,0,0,1-11.32-11.32L196.69,136H40a8,8,0,0,1,0-16H196.69L138.34,61.66a8,8,0,0,1,11.32-11.32l72,72A8,8,0,0,1,221.66,133.66Z"/></svg></a><a class="btn outline lg" href="../#signin">Sign in</a></div>
         </div>
-        <div class="hero-shot"><img src="img/mis-screen.webp" width="1600" height="800" alt="The MIS in TDS Desk for a year of a textile company's books: sales, profit before tax, cash in and out, money owed to and by the business, and the tax dates coming up" fetchpriority="high"></div>
+        <div class="hero-shot"><img src="img/mis-screen.webp" width="1600" height="800" alt="The MIS in FinCom for a year of a textile company's books: sales, profit before tax, cash in and out, money owed to and by the business, and the tax dates coming up" fetchpriority="high"></div>
       </div>
       <ul class="facts">
         <li><svg class="ic" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M224,224a8,8,0,0,1-8,8H40a8,8,0,0,1,0-16H216A8,8,0,0,1,224,224Zm0-80v40a16,16,0,0,1-16,16H48a16,16,0,0,1-16-16V144a16,16,0,0,1,16-16h56.43L88.72,54.71A32,32,0,0,1,120,16h16a32,32,0,0,1,31.29,38.71L151.57,128H208A16,16,0,0,1,224,144ZM120.79,128h14.42l16.43-76.65A16,16,0,0,0,136,32H120a16,16,0,0,0-15.65,19.35ZM208,184V144H48v40H208Z"/></svg><span>New Income-tax Act 2025 sections, with the old section numbers alongside</span></li>
@@ -277,7 +371,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 48px;color:var(--ink-3);f
       <h2 id="i-h" class="rise">See how the business is doing, and what needs fixing, before the auditor does.</h2>
       <div class="ins-grid">
         <article class="ins rise">
-          <div class="ins-shot"><img src="img/mis.webp" width="1500" height="476" alt="The MIS summary in TDS Desk: sales, profit before tax, cash received and paid, money owed to and by the business, MSME dues and GST payable" loading="lazy"></div>
+          <div class="ins-shot"><img src="img/mis.webp" width="1500" height="476" alt="The MIS summary in FinCom: sales, profit before tax, cash received and paid, money owed to and by the business, MSME dues and GST payable" loading="lazy"></div>
           <div class="ins-body">
             <h3><svg class="ic" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M232,208a8,8,0,0,1-8,8H32a8,8,0,0,1-8-8V48a8,8,0,0,1,16,0V156.69l50.34-50.35a8,8,0,0,1,11.32,0L128,132.69,180.69,80H160a8,8,0,0,1,0-16h40a8,8,0,0,1,8,8v40a8,8,0,0,1-16,0V91.31l-58.34,58.35a8,8,0,0,1-11.32,0L96,123.31l-56,56V200H224A8,8,0,0,1,232,208Z"/></svg>Your month on one page</h3>
             <p>Read straight from Tally. Sales, profit, cash in and out, who owes you, who you owe, and what tax is due next.</p>
@@ -290,7 +384,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 48px;color:var(--ink-3);f
           </div>
         </article>
         <article class="ins rise">
-          <div class="ins-shot"><img src="img/audit.webp" width="1500" height="672" alt="An audit finding in TDS Desk: a cash payment above 10,000 rupees under section 40A(3), with its effect, what to do and the voucher behind it" loading="lazy"></div>
+          <div class="ins-shot"><img src="img/audit.webp" width="1500" height="672" alt="An audit finding in FinCom: a cash payment above 10,000 rupees under section 40A(3), with its effect, what to do and the voucher behind it" loading="lazy"></div>
           <div class="ins-body">
             <h3><svg class="ic" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M229.66,218.34l-50.07-50.06a88.11,88.11,0,1,0-11.31,11.31l50.06,50.07a8,8,0,0,0,11.32-11.32ZM40,112a72,72,0,1,1,72,72A72.08,72.08,0,0,1,40,112Z"/></svg>An audit review of every voucher</h3>
             <p>Checks the whole year's books the way an auditor would, and tells you what each finding costs and how to put it right.</p>
@@ -328,7 +422,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 48px;color:var(--ink-3);f
 
   <section id="what" class="what" aria-labelledby="what-h">
     <div class="wrap">
-      <p class="eyebrow rise">What TDS Desk does</p>
+      <p class="eyebrow rise">What FinCom does</p>
       <h2 id="what-h" class="rise">Everything between the paperwork and the return.</h2>
       <div class="caps">
         <div class="cap rise"><div class="cap-h"><svg class="ic" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M208,32H48A16,16,0,0,0,32,48V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V48A16,16,0,0,0,208,32Zm0,16V152h-28.7A15.86,15.86,0,0,0,168,156.69L148.69,176H107.31L88,156.69A15.86,15.86,0,0,0,76.69,152H48V48Zm0,160H48V168H76.69L96,187.31A15.86,15.86,0,0,0,107.31,192h41.38A15.86,15.86,0,0,0,160,187.31L179.31,168H208v40ZM90.34,125.66a8,8,0,0,1,11.32-11.32L120,132.69V72a8,8,0,0,1,16,0v60.69l18.34-18.35a8,8,0,0,1,11.32,11.32l-32,32a8,8,0,0,1-11.32,0Z"/></svg><h3>Record</h3></div><ul><li>Purchase bills from PDF, photo or email, read and checked</li><li>Bank statements in PDF or Excel, turned into receipts and payments</li><li>Sales invoices and marketplace settlements</li><li>A shared inbox for documents sent by clients or your office</li></ul></div>
@@ -339,7 +433,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 48px;color:var(--ink-3);f
     </div>
   </section>
 
-  <section class="show" aria-label="Screens from TDS Desk">
+  <section class="show" aria-label="Screens from FinCom">
     <div class="wrap">
       <div class="row rise">
         <div class="copy"><h3>A month of bills, reviewed in one table.</h3><p>Every bill shows its TDS section, the tax, and how far the vendor has gone against this year's limit. Tick the ones you agree with and approve them together.</p></div>
@@ -347,7 +441,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 48px;color:var(--ink-3);f
       </div>
       <div class="row flip rise">
         <div class="copy"><h3>Bank statements that add up before they reach Tally.</h3><p>Each statement is checked line by line against its running balance. Lines are matched to your ledgers by rules you set once, then posted in batches.</p></div>
-        <div class="frame"><img src="img/bank.webp" width="1500" height="709" alt="A bank statement in TDS Desk with opening and closing balances, and each line waiting for a Tally ledger" loading="lazy"></div>
+        <div class="frame"><img src="img/bank.webp" width="1500" height="709" alt="A bank statement in FinCom with opening and closing balances, and each line waiting for a Tally ledger" loading="lazy"></div>
       </div>
     </div>
   </section>
@@ -357,7 +451,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 48px;color:var(--ink-3);f
       <h2 id="tally-h" class="rise">Works with the TallyPrime you already use.</h2>
       <p class="intro rise">A small program, the Tally Bridge, runs on the computer where Tally is open. Nothing about Tally is opened to the internet.</p>
       <ol class="flow rise">
-        <li><span class="node"><svg class="ic" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M160,40A88.09,88.09,0,0,0,81.29,88.67,64,64,0,1,0,72,216h88a88,88,0,0,0,0-176Zm0,160H72a48,48,0,0,1,0-96c1.1,0,2.2,0,3.29.11A88,88,0,0,0,72,128a8,8,0,0,0,16,0,72,72,0,1,1,72,72Zm37.66-93.66a8,8,0,0,1,0,11.32l-48,48a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L144,148.69l42.34-42.35A8,8,0,0,1,197.66,106.34Z"/></svg><b>TDS Desk</b><small>in your browser</small></span></li>
+        <li><span class="node"><svg class="ic" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M160,40A88.09,88.09,0,0,0,81.29,88.67,64,64,0,1,0,72,216h88a88,88,0,0,0,0-176Zm0,160H72a48,48,0,0,1,0-96c1.1,0,2.2,0,3.29.11A88,88,0,0,0,72,128a8,8,0,0,0,16,0,72,72,0,1,1,72,72Zm37.66-93.66a8,8,0,0,1,0,11.32l-48,48a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L144,148.69l42.34-42.35A8,8,0,0,1,197.66,106.34Z"/></svg><b>FinCom</b><small>in your browser</small></span></li>
         <li class="arrow" aria-hidden="true"><svg class="ic" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M221.66,133.66l-72,72a8,8,0,0,1-11.32-11.32L196.69,136H40a8,8,0,0,1,0-16H196.69L138.34,61.66a8,8,0,0,1,11.32-11.32l72,72A8,8,0,0,1,221.66,133.66Z"/></svg></li>
         <li><span class="node hi"><svg class="ic" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M237.66,18.34a8,8,0,0,0-11.32,0l-52.4,52.41-5.37-5.38a32.05,32.05,0,0,0-45.26,0L100,88.69l-6.34-6.35A8,8,0,0,0,82.34,93.66L88.69,100,65.37,123.31a32,32,0,0,0,0,45.26l5.38,5.37-52.41,52.4a8,8,0,0,0,11.32,11.32l52.4-52.41,5.37,5.38a32,32,0,0,0,45.26,0L156,167.31l6.34,6.35a8,8,0,0,0,11.32-11.32L167.31,156l23.32-23.31a32,32,0,0,0,0-45.26l-5.38-5.37,52.41-52.4A8,8,0,0,0,237.66,18.34Zm-116.29,161a16,16,0,0,1-22.62,0L76.69,157.25a16,16,0,0,1,0-22.62L100,111.31,144.69,156Zm57.94-57.94L156,144.69,111.31,100l23.32-23.31a16,16,0,0,1,22.62,0l22.06,22A16,16,0,0,1,179.31,121.37ZM88.57,35A8,8,0,0,1,103.43,29l8,20A8,8,0,0,1,96.57,55ZM24.57,93A8,8,0,0,1,35,88.57l20,8A8,8,0,0,1,49,111.43l-20-8A8,8,0,0,1,24.57,93ZM231.43,163a8,8,0,0,1-10.4,4.46l-20-8A8,8,0,1,1,207,144.57l20,8A8,8,0,0,1,231.43,163Zm-64,58.06A8,8,0,0,1,152.57,227l-8-20A8,8,0,0,1,159.43,201Z"/></svg><b>Tally Bridge</b><small>on your computer</small></span></li>
         <li class="arrow" aria-hidden="true"><svg class="ic" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M221.66,133.66l-72,72a8,8,0,0,1-11.32-11.32L196.69,136H40a8,8,0,0,1,0-16H196.69L138.34,61.66a8,8,0,0,1,11.32-11.32l72,72A8,8,0,0,1,221.66,133.66Z"/></svg></li>
@@ -376,7 +470,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 48px;color:var(--ink-3);f
       <p class="eyebrow rise">Security</p>
       <h2 id="s-h" class="rise">Your clients' books stay yours.</h2>
       <div class="sec-grid">
-        <div class="frame narrow rise"><img src="img/two-step.webp" width="620" height="890" alt="The optional two-step sign-in set-up in TDS Desk, with a QR code to scan in an authenticator app" loading="lazy"></div>
+        <div class="frame narrow rise"><img src="img/two-step.webp" width="620" height="890" alt="The optional two-step sign-in set-up in FinCom, with a QR code to scan in an authenticator app" loading="lazy"></div>
         <div class="groups">
           <div class="group rise"><h3>Access</h3>
             <div class="pt"><svg class="ic" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M208,40H48A16,16,0,0,0,32,56v56c0,52.72,25.52,84.67,46.93,102.19,23.06,18.86,46,25.26,47,25.53a8,8,0,0,0,4.2,0c1-.27,23.91-6.67,47-25.53C198.48,196.67,224,164.72,224,112V56A16,16,0,0,0,208,40Zm0,72c0,37.07-13.66,67.16-40.6,89.42A129.3,129.3,0,0,1,128,223.62a128.25,128.25,0,0,1-38.92-21.81C61.82,179.51,48,149.3,48,112l0-56,160,0ZM82.34,141.66a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35a8,8,0,0,1,11.32,11.32l-56,56a8,8,0,0,1-11.32,0Z"/></svg><p>Each firm's data is walled off by the database itself. One firm can never read another's.</p></div>
@@ -404,7 +498,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 48px;color:var(--ink-3);f
         <div class="tile"><svg class="ic" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M128,24C74.17,24,32,48.6,32,80v96c0,31.4,42.17,56,96,56s96-24.6,96-56V80C224,48.6,181.83,24,128,24Zm80,104c0,9.62-7.88,19.43-21.61,26.92C170.93,163.35,150.19,168,128,168s-42.93-4.65-58.39-13.08C55.88,147.43,48,137.62,48,128V111.36c17.06,15,46.23,24.64,80,24.64s62.94-9.68,80-24.64ZM69.61,53.08C85.07,44.65,105.81,40,128,40s42.93,4.65,58.39,13.08C200.12,60.57,208,70.38,208,80s-7.88,19.43-21.61,26.92C170.93,115.35,150.19,120,128,120s-42.93-4.65-58.39-13.08C55.88,99.43,48,89.62,48,80S55.88,60.57,69.61,53.08ZM186.39,202.92C170.93,211.35,150.19,216,128,216s-42.93-4.65-58.39-13.08C55.88,195.43,48,185.62,48,176V159.36c17.06,15,46.23,24.64,80,24.64s62.94-9.68,80-24.64V176C208,185.62,200.12,195.43,186.39,202.92Z"/></svg><h3>DPDP Act 2023</h3><span class="status wait">In progress</span><p>Data used only for the work you ask for, deleted on request, and firms told without delay if anything goes wrong.</p></div>
         <div class="tile"><svg class="ic" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M173.66,98.34a8,8,0,0,1,0,11.32l-56,56a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35A8,8,0,0,1,173.66,98.34ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/></svg><h3>CERT-In Directions 2022</h3><span class="status">In place</span><p>An incident process with reporting to CERT-In within 6 hours, and an audit trail kept for at least 180 days.</p></div>
       </div>
-      <p class="honest rise">TDS Desk is not yet ISO 27001 certified. We will publish the certificate and the VAPT summary on this page when they are issued.</p>
+      <p class="honest rise">FinCom is not yet ISO 27001 certified. We will publish the certificate and the VAPT summary on this page when they are issued.</p>
     </div>
   </section>
 
@@ -413,7 +507,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 48px;color:var(--ink-3);f
       <h2 id="q-h" class="rise">Questions firms ask us.</h2>
       <div class="qas rise">
         <details class="qa"><summary>I run a business, not a CA firm. Can I use it?<svg class="ic chev" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M221.66,133.66l-72,72a8,8,0,0,1-11.32-11.32L196.69,136H40a8,8,0,0,1,0-16H196.69L138.34,61.66a8,8,0,0,1,11.32-11.32l72,72A8,8,0,0,1,221.66,133.66Z"/></svg></summary><p>Yes. Register your business as the account and add your own company. Your accountant can work in the same account with their own login, and you see the MIS and audit review yourself.</p></details>
-        <details class="qa"><summary>Do I need to install anything?<svg class="ic chev" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M221.66,133.66l-72,72a8,8,0,0,1-11.32-11.32L196.69,136H40a8,8,0,0,1,0-16H196.69L138.34,61.66a8,8,0,0,1,11.32-11.32l72,72A8,8,0,0,1,221.66,133.66Z"/></svg></summary><p>TDS Desk runs in Chrome or Edge. To post to Tally, you install the Tally Bridge once on the computer where TallyPrime runs. It needs no administrator rights.</p></details>
+        <details class="qa"><summary>Do I need to install anything?<svg class="ic chev" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M221.66,133.66l-72,72a8,8,0,0,1-11.32-11.32L196.69,136H40a8,8,0,0,1,0-16H196.69L138.34,61.66a8,8,0,0,1,11.32-11.32l72,72A8,8,0,0,1,221.66,133.66Z"/></svg></summary><p>FinCom runs in Chrome or Edge. To post to Tally, you install the Tally Bridge once on the computer where TallyPrime runs. It needs no administrator rights.</p></details>
         <details class="qa"><summary>Which version of Tally does it work with?<svg class="ic chev" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M221.66,133.66l-72,72a8,8,0,0,1-11.32-11.32L196.69,136H40a8,8,0,0,1,0-16H196.69L138.34,61.66a8,8,0,0,1,11.32-11.32l72,72A8,8,0,0,1,221.66,133.66Z"/></svg></summary><p>TallyPrime, with the company open and TallyPrime set to act as a server (F1 Help, Settings, Connectivity). Each user's Tally can use its own port.</p></details>
         <details class="qa"><summary>Can my staff use it for different clients?<svg class="ic chev" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M221.66,133.66l-72,72a8,8,0,0,1-11.32-11.32L196.69,136H40a8,8,0,0,1,0-16H196.69L138.34,61.66a8,8,0,0,1,11.32-11.32l72,72A8,8,0,0,1,221.66,133.66Z"/></svg></summary><p>Yes. The firm owner adds people with their own login and a role: owner, staff or read-only. Everyone sees the same clients and data.</p></details>
         <details class="qa"><summary>Where is our data kept?<svg class="ic chev" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M221.66,133.66l-72,72a8,8,0,0,1-11.32-11.32L196.69,136H40a8,8,0,0,1,0-16H196.69L138.34,61.66a8,8,0,0,1,11.32-11.32l72,72A8,8,0,0,1,221.66,133.66Z"/></svg></summary><p>In India, in the Mumbai region. Each computer also keeps a working copy, so work carries on if the internet drops, and syncs when it is back.</p></details>
@@ -433,12 +527,18 @@ footer{border-top:1px solid var(--line);padding:32px 0 48px;color:var(--ink-3);f
     </div>
   </section>
 </main>
-<footer>
-  <div class="wrap foot">
-    <a class="brand" href="./"><svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="currentColor"/><path d="M9 11h14M16 11v12" stroke="var(--mark-ink)" stroke-width="3" stroke-linecap="round"/></svg><span>TDS Desk</span></a>
-    <p>Built and run by Garg Shekhar &amp; Company, Chartered Accountants, Noida.</p>
-    <p><a href="../.well-known/security.txt">Report a security issue</a></p>
+<footer class="site-foot">
+  <div class="wrap fgrid">
+    <div class="fbrand">
+      <a class="brand" href="index.html"><svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="currentColor"/><path d="M11 9h11M11 9v14M11 16h8" stroke="var(--mark-ink)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg><span>FinCom</span></a>
+      <p>Finance and compliance, in one place.</p>
+      <p class="small">FinCom is a product of Yuvnav Services Private Limited, Noida, Uttar Pradesh.</p>
+    </div>
+    <div><h3>Product</h3><a href="index.html#insight">MIS and audit</a><a href="index.html#what">Features</a><a href="pricing.html">Pricing</a><a href="../#signin">Sign in</a><a href="../#register">Register</a></div>
+    <div><h3>Trust</h3><a href="security.html">Security and certification</a><a href="security.html#disclose">Report a security issue</a><a href="dpa.html">Data processing terms</a></div>
+    <div><h3>Legal</h3><a href="privacy.html">Privacy policy</a><a href="terms.html">Terms of use</a><a href="refund.html">Refunds and cancellation</a><a href="contact.html">Contact and grievances</a></div>
   </div>
+  <div class="wrap legal-line"><p>&copy; 2026 Yuvnav Services Private Limited. All rights reserved. CIN <span class="todo" title="To be filled in">[CIN]</span>. Tally and TallyPrime are trademarks of Tally Solutions Private Limited; FinCom is not connected with Tally Solutions.</p></div>
 </footer>
 <script>document.querySelectorAll(".menu-panel a").forEach(function(a){a.addEventListener("click",function(){a.closest("details").removeAttribute("open")})});</script>
 </body>

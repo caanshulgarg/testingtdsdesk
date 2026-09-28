@@ -222,7 +222,7 @@ async function pdfTextPages(file){
 }
 function bankReport(err){
   const d = (err && err.diag) || {};
-  return ["TDS Desk bank statement report", "Version: " + APP_VERSION, "Browser: " + navigator.userAgent, "Storage: " + BankDB.mode,
+  return ["FinCom bank statement report", "Version: " + APP_VERSION, "Browser: " + navigator.userAgent, "Storage: " + BankDB.mode,
     "File: " + (d.file || "") + " (" + Math.round((d.size || 0) / 1024) + " KB)", "Problem: " + bankErr(err),
     "PDF pages: " + (d.pages == null ? "—" : d.pages) + " · text characters: " + (d.textChars == null ? "—" : d.textChars) + (d.ocrWords != null ? " · OCR words: " + d.ocrWords : ""),
     "Readers tried:", ...(d.tried || []).map(t => "  " + t.method + ": " + t.rows + " rows, score " + t.score + (t.error ? " — " + t.error : "")),

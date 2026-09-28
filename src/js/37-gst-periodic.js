@@ -156,7 +156,7 @@ function viewCmp08(b){
       '<div class="dash-row"><span>Reverse charge in the quarter</span><b>' + gstMoney(c.rcm.igst + c.rcm.cgst + c.rcm.sgst + c.rcm.cess) + "</b></div>", false) +
     gstStep(3, "Pay and file",
       '<div class="dash-row"><span><b>Total to pay, in cash</b></span><b>' + gstMoney(c.payable) + "</b></div>" +
-      (c.late && S.books.gstEst ? '<p class="note">TDS Desk\u2019s estimate: filed ' + c.late + " days late, interest " + gstMoney(c.interest) + " (18% a year). The portal\u2019s figure is the one to pay.</p>" : "") +
+      (c.late && S.books.gstEst ? '<p class="note">FinCom\u2019s estimate: filed ' + c.late + " days late, interest " + gstMoney(c.interest) + " (18% a year). The portal\u2019s figure is the one to pay.</p>" : "") +
       '<div class="row" style="gap:8px;align-items:center"><span class="note">Filed on</span><input type="date" data-gqf="cmp08" data-gqq="' + qEnd + '" value="' + esc(rec.cmp08 || "") + '" style="width:auto"></div>' +
       '<p class="note">A composition dealer takes no input tax credit and charges no tax on its invoices.</p>', !!rec.cmp08);
   return h + "</section>";

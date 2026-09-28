@@ -66,7 +66,7 @@ const GSTRegs = {
     if (!pan) return "Type the client’s PAN in Client setup first; every GSTIN added must carry it.";
     if (g.slice(2, 12) !== pan) return g + " is for PAN " + g.slice(2, 12) + ", not this client’s PAN " + pan + ".";
     if (GSTR.gstins(b).includes(g)) return g + " is already here.";
-    if (GSTR.gstins(b).some(x => x.slice(0, 2) === g.slice(0, 2))) return "This client already has a GSTIN in " + this.state(g) + "; TDS Desk keeps one GSTIN for each state.";
+    if (GSTR.gstins(b).some(x => x.slice(0, 2) === g.slice(0, 2))) return "This client already has a GSTIN in " + this.state(g) + "; FinCom keeps one GSTIN for each state.";
     return ""; },
   add(g){ const b = S.books; g = String(g || "").toUpperCase().trim(); b.gstRegs = (b.gstRegs || []).concat([{gstin: g, at: new Date().toISOString()}]); GSTR._carry = null; },
   remove(g){ const b = S.books; b.gstRegs = (b.gstRegs || []).filter(r => r.gstin !== g); GSTR._carry = null; }
@@ -121,7 +121,7 @@ function viewGstSettings(){
     const cur = GSTSet.typeOf(months[months.length - 1] || first, reg);
     const next = GSTSet.qStart(GSTR.nextYm(GSTSet.qEnd(GSTF.today().slice(0, 7).replace("-", "")))), win = GSTSet.window(next);
     h += '<section class="dash-card" style="margin-bottom:12px"><h3>Settings of ' + esc(g) + " \u00b7 " + esc(GSTRegs.state(g)) + "</h3>" +
-      (regs.length > 1 ? '<p class="note" style="margin:0 0 6px">Each GSTIN keeps its own settings. When one is changed here, TDS Desk asks whether it is for this GSTIN only or for the others too.</p>' : "") +
+      (regs.length > 1 ? '<p class="note" style="margin:0 0 6px">Each GSTIN keeps its own settings. When one is changed here, FinCom asks whether it is for this GSTIN only or for the others too.</p>' : "") +
       '<h4 style="margin:8px 0 4px">Filing type</h4>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><select data-gset="type" data-greg="' + esc(reg) + '" style="width:auto">' + GSTSet.TYPES.map(([v, l]) => '<option value="' + v + '"' + (cur === v ? " selected" : "") + ">" + l + "</option>").join("") + "</select>" +
       '<span class="note">from</span><select data-gset="from" data-greg="' + esc(reg) + '" style="width:auto">' + quarters.map(q => '<option value="' + q + '"' + ((S.gsetFrom || {})[reg] === q ? " selected" : "") + ">" + GSTSet.qLabel(q) + "</option>").join("") + "</select>" +
@@ -150,7 +150,7 @@ function viewGstSettings(){
     '<label class="note" style="display:block"><input type="radio" name="gstapi" data-gset="api" value="save"' + (api === "save" ? " checked" : "") + "> <b>Save only</b> \u2014 the return is saved on the portal; you check it there and file it yourself (recommended)</label>" +
     '<label class="note" style="display:block"><input type="radio" name="gstapi" data-gset="api" value="file"' + (api === "file" ? " checked" : "") + "> <b>Save and file</b> \u2014 after the figures agree with the portal and the return is approved, it is filed with the signatory\u2019s EVC OTP or DSC</label>" +
     '<p class="note">Applies once the GST API is connected; until then returns are downloaded as JSON.</p>' +
-    '<h4 style="margin:12px 0 4px">Interest and late fee</h4><label class="note"><input type="checkbox" data-gset="est"' + (b.gstEst ? " checked" : "") + "> Also show TDS Desk\u2019s own estimate beside the portal\u2019s figures (off: only the portal\u2019s figures are shown)</label>" +
+    '<h4 style="margin:12px 0 4px">Interest and late fee</h4><label class="note"><input type="checkbox" data-gset="est"' + (b.gstEst ? " checked" : "") + "> Also show FinCom\u2019s own estimate beside the portal\u2019s figures (off: only the portal\u2019s figures are shown)</label>" +
     '<h4 style="margin:8px 0 4px">Aggregate turnover of the year</h4><div style="display:flex;gap:12px;flex-wrap:wrap">' +
     prevFys.map(f => { const a = GSTF.aato(GSTF.fyOf((+f.slice(0, 4) + 1) + "04")); return '<label class="note">' + esc(f) + ' <input type="number" data-gset="aato" data-gfy="' + esc((+f.slice(0, 4) + 1) + "-" + String(+f.slice(0, 4) + 2).slice(2)) + '" value="' + (((b.gstAato || {})[(+f.slice(0, 4) + 1) + "-" + String(+f.slice(0, 4) + 2).slice(2)]) || "") + '" placeholder="' + (a.v ? money(a.v) + " from the books" : "type it") + '" style="width:170px"></label>'; }).join("") +
     '</div><p class="note">Used for the late fee caps, QRMP (\u20b95 crore or less), e-invoicing and the 30-day IRN limit (\u20b910 crore and above).</p>' +

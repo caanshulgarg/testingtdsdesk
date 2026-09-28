@@ -4,10 +4,10 @@
 <meta charset="utf-8">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="TDS Desk: read purchase bills and bank statements, work out TDS and GST, and post the entries to Tally.">
+<meta name="description" content="FinCom: read purchase bills and bank statements, work out TDS and GST, and post the entries to Tally.">
 <meta name="theme-color" content="#1E2A25">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231F6F5C'/%3E%3Cpath d='M9 11h14M16 11v12' stroke='white' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
-<title>TDS Desk</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231F6F5C'/%3E%3Cpath d='M11 9v14M11 9h11M11 16h8' stroke='white' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+<title>FinCom</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap" rel="stylesheet">
@@ -931,7 +931,7 @@ p,.note,.banner{text-wrap:pretty}
 /* on the screens with review / post tabs the client name is already in the side menu, so the title row stays clean */
 .headrow .tbar-title .note{display:none}
 </style>
-<style>.is-test .side-brand::after{content:"TEST";display:block;margin-top:4px;font-size:11px;letter-spacing:.14em;color:#E9A06A}.is-test header.top{box-shadow:inset 0 3px 0 #E2761B}body.is-test::after{content:"TESTING SITE · not for real client work · post only to a ZZ TEST company in Tally";position:fixed;left:0;right:0;bottom:0;z-index:70;background:#E2761B;color:#fff;font-size:12.5px;text-align:center;padding:3px 8px;letter-spacing:.04em;pointer-events:none}.is-test .actionbar{bottom:22px}.is-test #app{padding-bottom:34px}</style><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-JUZRiA/pD/Q1MSIv1WkOX00eklOKXLcOHszD3zr3UBc=' 'sha256-h0sVg7G+1Hcgw4wieztlAEIi1d84qXVAyYZaiJftXPM=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+<style>.is-test .side-brand::after{content:"TEST";display:block;margin-top:4px;font-size:11px;letter-spacing:.14em;color:#E9A06A}.is-test header.top{box-shadow:inset 0 3px 0 #E2761B}body.is-test::after{content:"TESTING SITE · not for real client work · post only to a ZZ TEST company in Tally";position:fixed;left:0;right:0;bottom:0;z-index:70;background:#E2761B;color:#fff;font-size:12.5px;text-align:center;padding:3px 8px;letter-spacing:.04em;pointer-events:none}.is-test .actionbar{bottom:22px}.is-test #app{padding-bottom:34px}</style><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-JUZRiA/pD/Q1MSIv1WkOX00eklOKXLcOHszD3zr3UBc=' 'sha256-eBfM5RlNanoMUXe5WqBMdgcvkVHZSzptJPrDrLkhzwI=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
 </head>
 <body class="is-test">
 <a class="skip" id="skipLink" href="#app">Skip to the work</a>
@@ -942,7 +942,7 @@ p,.note,.banner{text-wrap:pretty}
   <div class="wrap">
     <div class="toprow">
       <div class="brand">
-        <h1>TDS Desk</h1>
+        <h1>FinCom</h1>
         <p id="firmLine"></p>
       </div>
       <div class="cobar" id="cobar"></div>
@@ -1002,7 +1002,7 @@ const TDS_LEDGER_DEFAULTS = {contractor:"TDS Payable - Contractor", professional
   director:"TDS Payable - Director", commission:"TDS Payable - Commission", rent_building:"TDS Payable - Rent", rent_machinery:"TDS Payable - Rent",
   interest:"TDS Payable - Interest", goods:"TDS Payable - Purchase of Goods", none:""};
 const GST_DEFAULTS = {cgst:"Input CGST", sgst:"Input SGST", igst:"Input IGST"};
-const DEFAULT_FIRM = {firmName:"Garg Shekhar & Company", rules:{}};
+const DEFAULT_FIRM = {firmName:"", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
@@ -3446,7 +3446,7 @@ function diagnosticReport(){
   const e = envInfo(), st = S.selfTest && S.selfTest.results || {};
   const yn = v => v ? "yes" : "NO";
   return [
-    "TDS Desk diagnostic report",
+    "FinCom diagnostic report",
     "Version: " + APP_VERSION,
     "Opened: " + e.where,
     "Browser: " + e.browser,
@@ -3821,7 +3821,7 @@ function errText(code){
     google_billing:"Billing is not enabled on the Google Cloud project. Enable billing (the first 1,000 pages a month stay free).",
     google_not_enabled:"The Cloud Vision API is not enabled on this Google Cloud project. Enable it in the Google Cloud console.",
     google_forbidden:"Google refused the request. Check the API key's restrictions (allowed websites and APIs).",
-    no_credit:"The firm's credit has run out. Ask the administrator to add credit; everything already in TDS Desk still works.",
+    no_credit:"The firm's credit has run out. Ask the administrator to add credit; everything already in FinCom still works.",
     google_referrer:"This API key only works from certain websites, but the app is opened as a file, which sends no website address. Remove the website restriction on the key, then test again.",
     google_quota:"Google's usage limit was reached. Wait, or raise the quota in the Google Cloud console.",
     google_error:"Google could not read this image.",
@@ -4534,7 +4534,7 @@ function routeCompany(j){
   }
   if (vg){
     const seller = cos.find(c => c.gstin && c.gstin === vg);
-    if (seller) return {cid: null, note: "This looks like a sales invoice issued by " + seller.name + ". TDS Desk is for purchase and expense invoices."};
+    if (seller) return {cid: null, note: "This looks like a sales invoice issued by " + seller.name + ". FinCom is for purchase and expense invoices."};
   }
   if (!bg && !bn && Bridge.up()){
     const open = Bridge.openClients();
@@ -4908,7 +4908,7 @@ function renderSide(){
     icon(ICONS[kind || id]) + "<span>" + label + "</span>" + (n ? '<span class="side-count">' + n + "</span>" : "") + "</button>";
   const mod = inCo ? docType() : "";
   const onDash = inCo && S.tab === "dash";
-  let h = '<div class="side-brand">TDS Desk</div>';
+  let h = '<div class="side-brand">FinCom</div>';
   if (open){
     h += '<div class="side-client"><span class="side-label">Client</span><button class="side-co" data-act="switch" title="Change client (F3)"><b>' + esc(open.name) + "</b><small>" + esc(open.gstin || "No GSTIN") + " \u00b7 change</small></button></div>" +
       item("dash", "Dashboard", onDash, 0, "dash", 'data-goclient="dash"') +
@@ -5933,7 +5933,7 @@ const Audit = {
       if (!rows.length) return null;
       const amt = rows.reduce((s, r) => s + r.tds, 0);
       return {total: rows.length, area: "tds", sev: TDS.challans().length ? "high" : "medium", clause: "3CD 34(b); section 40(a)(ia)", title: "TDS deducted but not matched to a challan",
-        problem: rows.length + " deductions of \u20b9" + INR.format(r2(amt)) + (TDS.challans().length ? " are not against any challan." : "; no challans are entered in TDS Desk yet."),
+        problem: rows.length + " deductions of \u20b9" + INR.format(r2(amt)) + (TDS.challans().length ? " are not against any challan." : "; no challans are entered in FinCom yet."),
         impact: "If not deposited: the expense is disallowed (30%), interest runs under section 201(1A), and the return shows a shortfall.", amount: amt,
         suggestion: TDS.challans().length ? "Match them under TDS \u2192 the quarter \u2192 Challans, or deposit what is unpaid." : "Enter the challans under TDS \u2192 the quarter \u2192 Challans (payments in Tally are offered there), then put the deductions against them.",
         je: null, rows: rows.slice(0, 500).map(r => ({vid: r.voucherId || "", date: r.date, no: r.voucher || "", type: r.section, party: r.party, amount: r.tds, note: "section " + r.section}))};
@@ -6305,7 +6305,7 @@ const Audit = {
           '</td><td class="n">' + ((it.row || {}).amount ? m(it.row.amount) : "") + "</td><td>" + fmtDate(String(it.solved).slice(0, 10)) + "</td></tr>")).join("") + "</tbody></table>";
     }
     h += '<p class="note" style="margin-top:18px">Result code ' + esc(run.code || "") + ": the same books give the same code. Rules only; nothing in this report is guessed by a machine." + (run.balances ? " Balances: " + esc(run.balances) + "." : "") + "</p>";
-    h += '<p class="note" style="margin-top:6px">Prepared from the books in Tally by ' + esc(co.firm || "Garg Shekhar & Company") + ". These are observations for review; each is to be confirmed against the documents before any adjustment is made.</p>";
+    h += '<p class="note" style="margin-top:6px">Prepared from the books in Tally by ' + esc(co.firm || (S.firm && S.firm.firmName) || "the firm") + ". These are observations for review; each is to be confirmed against the documents before any adjustment is made.</p>";
     return h;
   },
   async toExcel(run){
@@ -6927,9 +6927,9 @@ Object.assign(Audit, {
   }
 });
 
-/* ---------- the ledger master, phase 2: what TDS Desk posts to, templates across clients, and a copy at each filing ---------- */
+/* ---------- the ledger master, phase 2: what FinCom posts to, templates across clients, and a copy at each filing ---------- */
 Object.assign(LedMaster, {
-  // what TDS Desk posts bills into Tally with, taken from the confirmed master
+  // what FinCom posts bills into Tally with, taken from the confirmed master
   POST_SLOTS: [["gst.cgst", "Input CGST"], ["gst.sgst", "Input SGST"], ["gst.igst", "Input IGST"], ["gst.rcmCgstIn", "Reverse charge CGST, credit"], ["gst.rcmSgstIn", "Reverse charge SGST, credit"], ["gst.rcmIgstIn", "Reverse charge IGST, credit"],
     ["gst.rcmCgstOut", "Reverse charge CGST, payable"], ["gst.rcmSgstOut", "Reverse charge SGST, payable"], ["gst.rcmIgstOut", "Reverse charge IGST, payable"], ["roundOff", "Round off"]],
   getSlot(co, k){ const [a, c] = k.split("."); return c ? ((co[a] || {})[c] || "") : (co[a] || ""); },
@@ -8675,7 +8675,7 @@ const TDS26Q = {
     let ln = 0;
     const put = arr => { ln++; lines.push([ln].concat(arr).join("^")); };
     // FH: file header
-    put(["FH", "NS1", "R", fileDate, "1", "D", firm.tan, "1", "TDS Desk", "", "", "", "", "", "", "", ""]);
+    put(["FH", "NS1", "R", fileDate, "1", "D", firm.tan, "1", "FinCom", "", "", "", "", "", "", "", ""]);
     // BH: batch header, one batch for this form and quarter
     put(["BH", "1", String(live.length), "26Q", firm.tan, firm.pan || "PANNOTREQD", fy.replace("-", ""), ay.replace("-", ""),
       txt(firm.name), txt(firm.branch), txt(firm.flat), txt(firm.premises), txt(firm.road), txt(firm.area), txt(firm.town),
@@ -9089,7 +9089,7 @@ function viewBooksLedgers(b){
     '<button class="dtile" data-lmview="tds" style="text-align:left"><span>TDS and TCS ledgers</span><b>' + tds.length + "</b><small>" + tds.filter(x => x[1].ok).length + " confirmed</small></button>" +
     '<button class="dtile" data-lmview="other" style="text-align:left"><span>Other ledgers</span><b>' + other.length + "</b><small>add one to GST or TDS</small></button></div></section>";
   h = ledChangedBanner(b) + h;
-  h += '<nav class="sbar" aria-label="Ledgers">' + [["pending", "To confirm", pend.length], ["gst", "GST", gst.length], ["tds", "TDS and TCS", tds.length], ["done", "Confirmed", null], ["other", "Other ledgers", other.length], ["post", "What TDS Desk posts to", null]]
+  h += '<nav class="sbar" aria-label="Ledgers">' + [["pending", "To confirm", pend.length], ["gst", "GST", gst.length], ["tds", "TDS and TCS", tds.length], ["done", "Confirmed", null], ["other", "Other ledgers", other.length], ["post", "What FinCom posts to", null]]
     .map(([id, l, c]) => '<button data-lmview="' + id + '" aria-selected="' + (view === id) + '">' + l + (c != null ? ' <span class="sbar-n">' + c + "</span>" : "") + "</button>").join("") + "</nav>";
   if (view === "post") return h + viewLedPosting(b);
   h += '<div class="revfilter" style="flex-wrap:wrap;row-gap:6px"><input type="search" id="ledq" data-fk="ledq" data-keeptyped value="' + esc(S.ledQ || "") + '" placeholder="Find a ledger, section or group" style="width:260px;flex:0 0 auto">' +
@@ -9762,7 +9762,7 @@ function misPackHtml(r){
     if (r.p2.cc.rows.length) h += "<h2>Cost centres, largest 15 by income</h2><table><thead><tr><th>Cost centre</th><th class=\"n\">Income</th><th class=\"n\">Costs</th><th class=\"n\">Profit</th><th class=\"n\">Margin</th></tr></thead><tbody>" +
       r.p2.cc.rows.slice(0, 15).map(x => "<tr><td>" + esc(x.name) + '</td><td class="n">' + m(x.inc) + '</td><td class="n">' + m(x.exp) + '</td><td class="n">' + m(x.profit) + '</td><td class="n">' + (x.margin == null ? "" : x.margin + "%") + "</td></tr>").join("") + "</tbody></table>";
   }
-  return h + '<p class="note" style="margin-top:16px">Prepared from the books in Tally by ' + esc(co.firm || "Garg Shekhar & Company") + ".</p>";
+  return h + '<p class="note" style="margin-top:16px">Prepared from the books in Tally by ' + esc(co.firm || (S.firm && S.firm.firmName) || "the firm") + ".</p>";
 }
 async function misExcel(r){
   await ensureXlsx();
@@ -9896,7 +9896,7 @@ function viewAudit3cd(b){
 }
 function viewLedPosting(b){
   const co = CO(), rows = LedMaster.posting(b, co), diff = rows.filter(x => x.from && x.from !== x.now);
-  return '<section class="dash-card"><h3>What TDS Desk posts bills to</h3><p class="note">When TDS Desk posts a bill into Tally, these are the ledgers it uses. They come from the ledgers confirmed here; an empty one is filled in as soon as its ledger is confirmed, and one set by hand in Client setup is kept until you choose the master\u2019s.</p>' +
+  return '<section class="dash-card"><h3>What FinCom posts bills to</h3><p class="note">When FinCom posts a bill into Tally, these are the ledgers it uses. They come from the ledgers confirmed here; an empty one is filled in as soon as its ledger is confirmed, and one set by hand in Client setup is kept until you choose the master\u2019s.</p>' +
     (diff.length ? '<div class="row" style="margin:8px 0"><button class="btn small primary" data-act="lmPostAll">Use the master\u2019s for all ' + diff.length + "</button></div>" : "") +
     '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Used for</th><th>Now</th><th>From the master</th><th>Why</th><th class="ac"></th></tr></thead><tbody>' +
     rows.map(x => "<tr><td>" + esc(x.label) + "</td><td>" + (x.now ? esc(x.now) + ((b.ledInfo || {})[x.now] || (b.map || {})[x.now] ? "" : ' <span class="tag warn">not in Tally</span>') : '<span class="note">\u2014</span>') + "</td><td>" + (x.from ? (x.from === x.now ? '<span style="color:#1F7A4D">\u2713 same</span>' : "<b>" + esc(x.from) + "</b>") : '<span class="note">none confirmed</span>') +
@@ -11014,7 +11014,7 @@ async function reviewCheckTally(list){
 }
 /* ================================================================== */
 /* Document inbox: kind = 'inbox'. The Poster says "a file arrived";  */
-/* TDS Desk reads it and owns the status after that.                   */
+/* FinCom reads it and owns the status after that.                   */
 /* ================================================================== */
 S.docq = S.docq || {};
 S.docqLocal = S.docqLocal || {};          // this computer's own progress: reading, or why a read failed. Never written back.
@@ -11037,7 +11037,7 @@ async function loadDocq(force){
     if (sig() !== before) render();
   } catch (e){ /* the inbox is best effort; the rest of the app keeps working */ }
 }
-// TDS Desk writes back only what the spec gives it: status and entryId (and the client, if staff move an unsorted file)
+// FinCom writes back only what the spec gives it: status and entryId (and the client, if staff move an unsorted file)
 async function docqSave(d, patch){
   const cur = Object.assign({}, d, patch || {});
   const data = Object.assign({}, cur); delete data.client_id;
@@ -11183,7 +11183,7 @@ function viewDropKeys(){
       '<div style="margin-top:6px"><code style="font-size:13px;user-select:all">' + esc(S.newDropKey) + "</code></div>" +
       '<div style="margin-top:8px">The Poster adds one waiting document with one call:</div>' +
       '<pre style="white-space:pre-wrap;font-size:12px;background:var(--paper);padding:8px;border-radius:6px;user-select:all">POST ' + esc(rpc) +
-      "\nHeader  apikey: " + esc(Cloud.cfg().key) + "\nHeader  Content-Type: application/json\nBody\n{\n  \"p_key\": \"" + esc(S.newDropKey) + "\",\n  \"p_id\": \"&lt;intake uuid&gt;\",\n  \"p_client_id\": \"&lt;TDS Desk client id&gt;\",\n  \"p_data\": { \"fileName\": ..., \"fileHash\": ..., \"url\": ..., \"urlExpiresAt\": ..., ... }\n}" +
+      "\nHeader  apikey: " + esc(Cloud.cfg().key) + "\nHeader  Content-Type: application/json\nBody\n{\n  \"p_key\": \"" + esc(S.newDropKey) + "\",\n  \"p_id\": \"&lt;intake uuid&gt;\",\n  \"p_client_id\": \"&lt;FinCom client id&gt;\",\n  \"p_data\": { \"fileName\": ..., \"fileHash\": ..., \"url\": ..., \"urlExpiresAt\": ..., ... }\n}" +
       "\n\nRefresh a link:  POST .../rest/v1/rpc/refresh_inbox_link\n{ \"p_key\": ..., \"p_id\": ..., \"p_url\": ..., \"p_expires_at\": ... }</pre>" +
       '<button class="linkbtn" data-act="dropKeyHide">I have copied it</button></div>';
   }
@@ -12362,7 +12362,7 @@ async function pdfTextPages(file){
 }
 function bankReport(err){
   const d = (err && err.diag) || {};
-  return ["TDS Desk bank statement report", "Version: " + APP_VERSION, "Browser: " + navigator.userAgent, "Storage: " + BankDB.mode,
+  return ["FinCom bank statement report", "Version: " + APP_VERSION, "Browser: " + navigator.userAgent, "Storage: " + BankDB.mode,
     "File: " + (d.file || "") + " (" + Math.round((d.size || 0) / 1024) + " KB)", "Problem: " + bankErr(err),
     "PDF pages: " + (d.pages == null ? "—" : d.pages) + " · text characters: " + (d.textChars == null ? "—" : d.textChars) + (d.ocrWords != null ? " · OCR words: " + d.ocrWords : ""),
     "Readers tried:", ...(d.tried || []).map(t => "  " + t.method + ": " + t.rows + " rows, score " + t.score + (t.error ? " — " + t.error : "")),
@@ -13486,11 +13486,11 @@ function matchTallyBook(acc, rows, force){
     if (t.party && !/as per details|^\(|^opening|^closing/i.test(t.party) && b.hist){ b.hist.rows[r.fp] = histEntry(r, t.party, "tally"); b.histVer++; learnedFromTally = true; }
   };
   const open = () => rows.filter(r => r.state !== "intally" && r.state !== "sent");
-  // 1. posted by TDS Desk before (tag in the narration)
+  // 1. posted by FinCom before (tag in the narration)
   open().forEach(r => {
     const tag = "TDSDESK:" + fpHash(r.fp || r.id).toUpperCase();
     const i = book.entries.findIndex((t, k) => !used.has(k) && String(t.narr).toUpperCase().includes(tag));
-    if (i >= 0) take(r, i, "posted by TDS Desk earlier");
+    if (i >= 0) take(r, i, "posted by FinCom earlier");
   });
   // 2. same UTR / cheque number and amount, within 45 days
   open().forEach(r => {
@@ -13903,7 +13903,7 @@ function viewBank(){
   let h = "";
   h += '<div class="bk">';
   if (BankDB.mode === "memory only" || BankDB.lost) h += '<div class="bk-alert bad">This browser is not keeping bank statements' + (BankDB.lost ? " (storage is full)" : "") + ". Create the Tally file before closing, or use Chrome.</div>";
-  // what TDS Desk is doing floats in view wherever you are on the page, instead of at the top
+  // what FinCom is doing floats in view wherever you are on the page, instead of at the top
   if (b.busy) h += '<div class="busy-float">' + busyCard(/Tally/.test(b.busy) ? "Working with Tally\u2026" : "Working on the statement\u2026", b.busy, 0, 0) + "</div>";
   if (b.moved) h += '<div class="bk-alert"><b>' + esc(b.moved.file) + "</b> is a statement of " + esc(b.moved.name) + " (account \u00b7\u00b7" + esc(b.moved.last4) + "), so it was filed there. " +
     '<button class="linkbtn" data-act="bankOpenMoved">Open ' + esc(b.moved.name) + '</button> <button class="linkbtn" data-act="bankDismissMoved">Dismiss</button></div>';
@@ -15237,7 +15237,7 @@ const Bridge = {
     return this.diag;
   },
   // Post masters and vouchers to Tally. Bridge 1.12 and later: handed over as a job, which the bridge posts on its own
-  // (in batches, one writer per Tally, checked in Tally before anything is sent again); TDS Desk follows its progress and
+  // (in batches, one writer per Tally, checked in Tally before anything is sent again); FinCom follows its progress and
   // rides out a bridge or network that stops answering for a while. An older bridge: the one long request as before.
   // Returns {results: [{id, ok, message, ...}]} for every item sent, whatever happened.
   async post(payload, onProgress, onChecked){
@@ -15299,7 +15299,7 @@ const Bridge = {
     const resultsOf = jj => { const got = new Map([].concat(jj.results || []).map(r => [r.id, r])); return ids.map(id => got.get(id) || {id, ok: false, message: why}); };
     const results = resultsOf(j);
     if (j.checking){
-      // the entries are in Tally; the bridge now reads them back once. TDS Desk carries on and is told when that is done.
+      // the entries are in Tally; the bridge now reads them back once. FinCom carries on and is told when that is done.
       results.forEach(r => { if (r.ok && r.verified == null) r.pendingCheck = true; });
       this.followCheck(jobId, resultsOf, onChecked);
     } else { try { lsDel("tdsdesk-test:bridgejob"); } catch (e){} }
@@ -15559,7 +15559,7 @@ async function bankAutoSync(force){
 }
 /* ---------- bank reconciliation: the statement against the bank ledger in Tally, line by line ---------- */
 // One read of the bank ledger for the statement's dates and one of its balance. Each statement line is paired with a
-// Tally entry: first by TDS Desk's tag, then by amount and a nearby date. What is left on either side, and any pair
+// Tally entry: first by FinCom's tag, then by amount and a nearby date. What is left on either side, and any pair
 // whose amounts differ, makes up the difference; each comes with the action that removes it (post, delete, replace).
 async function reconcileBank(opts){
   opts = opts || {};
@@ -15591,7 +15591,7 @@ async function reconcileBank(opts){
     const rows = b.rows.filter(r => r.date >= st.from && r.date <= st.to);
     const byTag = new Map(); rows.forEach(r => byTag.set(fpHash(r.fp || r.id), r));
     const pairOf = new Map(), used = new Set(), differ = [], dupOf = new Map();
-    T.forEach(t => {                                   // 1. by TDS Desk's tag
+    T.forEach(t => {                                   // 1. by FinCom's tag
       const r = t.tag && byTag.get(t.tag);
       if (!r) return;
       if (pairOf.has(r.id)){ dupOf.set(t.i, r.id); used.add(t.i); return; }
@@ -15608,7 +15608,7 @@ async function reconcileBank(opts){
     }));
     const missing = rows.filter(r => !pairOf.has(r.id)).map(r => r.id);
     const extra = T.filter(t => !used.has(t.i) || dupOf.has(t.i)).map(t => t.i);
-    // what TDS Desk shows follows what Tally has: paired lines count as in Tally, lines Tally does not have are not
+    // what FinCom shows follows what Tally has: paired lines count as in Tally, lines Tally does not have are not
     const now = new Date().toISOString();
     b.postedTags = b.postedTags || {};
     rows.forEach(r => {
@@ -15686,10 +15686,10 @@ function reconHtml(){
   if (R.extra.length){
     const dup = new Map(R.dupOf);
     h += '<div class="recon-sec"><h4>In Tally, not on the statement <span class="cnt">' + R.extra.length + "</span></h4>" +
-      '<p class="note" style="margin:0 0 6px">Tick the entries to delete from Tally. Copies and entries TDS Desk posted are ticked already; check entries typed in Tally before deleting them.</p>' +
+      '<p class="note" style="margin:0 0 6px">Tick the entries to delete from Tally. Copies and entries FinCom posted are ticked already; check entries typed in Tally before deleting them.</p>' +
       '<div class="tblwrap"><table class="data"><thead><tr><th></th><th>Date</th><th>Voucher</th><th>Party / ledger</th><th class="n">In</th><th class="n">Out</th><th>What it is</th></tr></thead><tbody>' +
       R.extra.map(i => { const t = R.T[i]; return '<tr><td><input type="checkbox" data-reconpick="' + i + '"' + (R.pick.has(i) ? " checked" : "") + (live ? "" : " disabled") + '></td><td>' + fmtDate(t.date) + "</td><td>" + esc([t.type, t.number].filter(Boolean).join(" ")) + "</td><td>" + esc(t.party) + '</td><td class="n">' + (t.eff > 0 ? m(t.eff) : "") + '</td><td class="n">' + (t.eff < 0 ? m(t.eff) : "") + "</td><td>" +
-        esc(dup.has(i) ? "a second copy of " + fmtDate((rowById.get(dup.get(i)) || {}).date) + "'s line" : t.tag ? "posted by TDS Desk, from another statement or an old copy" : "typed in Tally") + (t.narr && !t.tag ? '<div class="muted" style="font-size:12px">' + esc(t.narr.slice(0, 80)) + "</div>" : "") + "</td></tr>"; }).join("") + "</tbody></table></div>" +
+        esc(dup.has(i) ? "a second copy of " + fmtDate((rowById.get(dup.get(i)) || {}).date) + "'s line" : t.tag ? "posted by FinCom, from another statement or an old copy" : "typed in Tally") + (t.narr && !t.tag ? '<div class="muted" style="font-size:12px">' + esc(t.narr.slice(0, 80)) + "</div>" : "") + "</td></tr>"; }).join("") + "</tbody></table></div>" +
       (live ? '<div class="row" style="gap:8px;margin-top:8px"><button class="btn small danger" data-act="reconDelete"' + (R.pick.size ? "" : " disabled") + ">Delete the " + R.pick.size + " ticked from Tally</button></div>" : "") + "</div>";
   }
   // C. the same line, a different amount
@@ -15721,7 +15721,7 @@ async function reconDelete(which){
   const total = list.reduce((a, t) => a + Math.abs(t.eff), 0);
   const a = await askConfirm({title: which === "replace" ? "Replace " + list.length + " entr" + (list.length === 1 ? "y" : "ies") + " in " + R.company + "?" : "Delete " + list.length + " entr" + (list.length === 1 ? "y" : "ies") + " from " + R.company + "?", ok: which === "replace" ? "Replace them" : "Delete them",
     body: '<p class="note">' + list.slice(0, 12).map(t => esc(fmtDate(t.date) + " " + [t.type, t.number].filter(Boolean).join(" ") + " " + t.party + " " + INR.format(Math.abs(t.eff)))).join("<br>") + (list.length > 12 ? "<br>and " + (list.length - 12) + " more" : "") +
-      "<br><br>" + (which === "replace" ? "Each Tally entry is deleted and the statement line is posted again with the statement’s amount." : "Total " + INR.format(total) + ".") + " This cannot be undone from TDS Desk: take a Tally backup first if you have not.</p>"});
+      "<br><br>" + (which === "replace" ? "Each Tally entry is deleted and the statement line is posted again with the statement’s amount." : "Total " + INR.format(total) + ".") + " This cannot be undone from FinCom: take a Tally backup first if you have not.</p>"});
   if (!a) return;
   let ok = 0, bad = 0;
   const why = [], gone = new Set();
@@ -15748,7 +15748,7 @@ async function reconDelete(which){
 }
 
 /* ---------- lines marked as posted that are no longer in Tally (deleted there) ---------- */
-// Every line TDS Desk posted carries its tag in Tally's narration; a line matched to an entry typed in Tally is found by
+// Every line FinCom posted carries its tag in Tally's narration; a line matched to an entry typed in Tally is found by
 // amount and date. A line marked as posted that Tally no longer has is offered back for posting, never posted by itself.
 function markedGone(pre, from, to){
   const b = B(), co = CO(b.cid), st = curStmt();
@@ -15821,11 +15821,11 @@ function goneBack(){
   render();
 }
 /* ---------- finding double entries, and entries Tally holds under the wrong date ---------- */
-// Reads this bank ledger from Tally over a wide window (not only the statement's dates), so an entry TDS Desk sent that
-// Tally filed under another date is found too. Every TDS Desk entry carries its line's tag in the narration.
+// Reads this bank ledger from Tally over a wide window (not only the statement's dates), so an entry FinCom sent that
+// Tally filed under another date is found too. Every FinCom entry carries its line's tag in the narration.
 //   extra     : a second (third...) copy of a line that is already in Tally at the right date
 //   wrongDate : a line that is in Tally only under another date, or an extra copy under another date
-//   strangers : TDS Desk entries whose amount is not on this statement at all
+//   strangers : FinCom entries whose amount is not on this statement at all
 async function scanStatementInTally(opts){
   opts = opts || {};
   const b = B(), co = CO(b.cid), st = curStmt();
@@ -15841,8 +15841,8 @@ async function scanStatementInTally(opts){
   if (booksFrom && from < booksFrom) from = booksFrom;
   const last = ds[ds.length - 1] > today ? ds[ds.length - 1] : today;
   let to = addDays(last, 31);
-  // bridge 1.12.1: one light read of TDS Desk's own entries (heads only); older: this bank ledger month by month
-  // 1.12.3: this bank ledger's own vouchers (light, with amounts); 1.12.1-2: TDS Desk's tagged entries; older: the Day Book
+  // bridge 1.12.1: one light read of FinCom's own entries (heads only); older: this bank ledger month by month
+  // 1.12.3: this bank ledger's own vouchers (light, with amounts); 1.12.1-2: FinCom's tagged entries; older: the Day Book
   const byLedger = bridgeVer(Bridge.st.version) >= bridgeVer("1.12.3");
   const light = !byLedger && bridgeVer(Bridge.st.version) >= bridgeVer("1.12.1");
   if (opts.pre){ from = opts.from; to = opts.to; }
@@ -15869,7 +15869,7 @@ async function scanStatementInTally(opts){
     list.sort((a, c) => num(a.masterId) - num(c.masterId) || String(a.number).localeCompare(String(c.number)));
     const row = rowByTag.get(k);
     if (!row){
-      // the light read sees every TDS Desk entry of the company (other statements, bills): only this statement's lines matter
+      // the light read sees every FinCom entry of the company (other statements, bills): only this statement's lines matter
       if (light){ goodTags.push(k); return; }
       // not a line of this statement: a line of another statement of this account, or an old copy
       const v = list[0];
@@ -15913,7 +15913,7 @@ function dupFindHtml(){
     "</tbody></table></div>";
   const bad = d.extra.length || d.wrongDate.length || d.strangers.length;
   let h = '<div class="bigwarn" style="border-color:' + (bad ? "var(--stop)" : "var(--ledger)") + '">';
-  if (!bad) return h + "<b>All clear.</b> " + d.tagged + " entries posted by TDS Desk were checked in " + esc(d.company) + " (" + fmtDate(d.from) + " to " + fmtDate(d.to) + "): each is there once, on its statement date. " + '<button class="linkbtn" data-act="dupClose">Close</button></div>';
+  if (!bad) return h + "<b>All clear.</b> " + d.tagged + " entries posted by FinCom were checked in " + esc(d.company) + " (" + fmtDate(d.from) + " to " + fmtDate(d.to) + "): each is there once, on its statement date. " + '<button class="linkbtn" data-act="dupClose">Close</button></div>';
   if (d.wrongDate.length){
     h += "<b>" + d.wrongDate.length + " entr" + (d.wrongDate.length === 1 ? "y is" : "ies are") + " in " + esc(d.company) + " under the wrong date.</b>" +
       "<div>Remove them; the lines then show as not posted, and Post puts them in again with the statement’s date. " + focusBtn("dup-wrong", "in Tally under the wrong date", Array.from(new Set(d.wrongDate.map(v => v.rowId).filter(Boolean))), "Show their statement lines") + "</div>" + tbl(d.wrongDate, true) +
@@ -15925,7 +15925,7 @@ function dupFindHtml(){
       '<div class="row" style="margin-top:8px"><button class="btn small primary" data-act="dupRemove">Remove the ' + d.extra.length + " extra cop" + (d.extra.length === 1 ? "y" : "ies") + " from Tally</button></div>";
   }
   if (d.strangers.length){
-    h += '<div style="margin-top:10px"><b>' + d.strangers.length + " entr" + (d.strangers.length === 1 ? "y" : "ies") + " posted by TDS Desk " + (d.strangers.length === 1 ? "has an amount that is" : "have amounts that are") + " not on this statement:</b> " +
+    h += '<div style="margin-top:10px"><b>' + d.strangers.length + " entr" + (d.strangers.length === 1 ? "y" : "ies") + " posted by FinCom " + (d.strangers.length === 1 ? "has an amount that is" : "have amounts that are") + " not on this statement:</b> " +
       d.strangers.slice(0, 40).map(v => fmtDate(tallyToIso(v.date)) + " " + esc(v.party || "") + " " + amt(v)).join("; ") +
       ". They were probably read from an earlier or different copy of the statement. Check them against the bank, and delete them in Tally if they are wrong.</div>";
   }
@@ -15937,7 +15937,7 @@ async function removeTallyDuplicates(which){
   if (!list.length) return;
   const what = which === "wrong" ? list.length + " wrong-date entr" + (list.length === 1 ? "y" : "ies") : list.length + " extra cop" + (list.length === 1 ? "y" : "ies");
   const a = await askConfirm({title: "Remove " + what + " from " + d.company + "?", ok: "Remove them",
-    body: '<p class="note">' + (which === "wrong" ? "Only the copies under the wrong date are removed. The lines then show as not posted, and Post puts them in with the right date." : "Only the later copy of each double entry is removed; the first stays.") + " This cannot be undone from TDS Desk, so take a Tally backup first if you have not.</p>"});
+    body: '<p class="note">' + (which === "wrong" ? "Only the copies under the wrong date are removed. The lines then show as not posted, and Post puts them in with the right date." : "Only the later copy of each double entry is removed; the first stays.") + " This cannot be undone from FinCom, so take a Tally backup first if you have not.</p>"});
   if (!a) return;
   const b = B();
   let ok = 0, bad = 0;
@@ -16117,7 +16117,7 @@ function bankBalanceInner(st){
   const btn = live ? '<button class="btn small" data-act="bankBalCheck"' + (b.balBusy ? " disabled" : "") + ">" + (b.balBusy ? "Checking…" : t ? "Check again" : "Check with Tally") + "</button>" : "";
   const when = (t && t.at ? '<span class="muted"> \u00b7 checked ' + new Date(t.at).toLocaleString([], {day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit"}) + "</span>" : "") +
     (t && t.how === "worked back" ? '<span class="muted"> \u00b7 Tally gave its latest balance whatever the date, so the balance on ' + fmtDate(t.to) + " was worked back from it" + (t.later ? ", less " + t.later + " later entr" + (t.later === 1 ? "y" : "ies") : "") + "</span>" : "");
-  if (!t) return '<div class="bk-bal"><div><b>Balance in Tally:</b> <span class="muted">not checked yet.' + (live ? " TDS Desk checks it after every posting." : " Connect the Tally Bridge to check it.") + "</span></div>" + btn + "</div>";
+  if (!t) return '<div class="bk-bal"><div><b>Balance in Tally:</b> <span class="muted">not checked yet.' + (live ? " FinCom checks it after every posting." : " Connect the Tally Bridge to check it.") + "</span></div>" + btn + "</div>";
   if (t.error) return '<div class="bk-bal bad"><div><b>Balance in Tally could not be read:</b> ' + esc(t.error) + when + "</div>" + btn + "</div>";
   const m = v => INR.format(v || 0);
   const on = fmtDate(t.to);
@@ -16144,7 +16144,7 @@ async function unpostFromTally(what, obj, cid){
   const co = CO(cid || S.coId);
   const t = obj.tally || {};
   if (!t.guid){
-    toast("This entry was posted before TDS Desk kept the Tally identity, so it has to be deleted in Tally by hand.");
+    toast("This entry was posted before FinCom kept the Tally identity, so it has to be deleted in Tally by hand.");
     return false;
   }
   const tname = await ensureTallyCompany(co);
@@ -16195,11 +16195,11 @@ async function postBankToTally(ids){
   b.rows.forEach(r => {
     if (r.state !== "ready" || (ids && !ids.includes(r.id))) return;
     const tag = fpHash(r.fp || r.id);
-    if (b.postedTags[tag]){ r.prevState = r.state; r.state = "intally"; r.tallyHow = "posted by TDS Desk on " + fmtDate(String(b.postedTags[tag]).slice(0, 10)); }
+    if (b.postedTags[tag]){ r.prevState = r.state; r.state = "intally"; r.tallyHow = "posted by FinCom on " + fmtDate(String(b.postedTags[tag]).slice(0, 10)); }
   });
   // guard 2: look in Tally itself around the dates being posted, for our own entries and for ones typed in by hand
   const toCheck = b.rows.filter(r => r.state === "ready" && (!ids || ids.includes(r.id)));
-  // bridge 1.12.3+: ONE read of this bank ledger covers both looks (these dates, and anything TDS Desk put in before),
+  // bridge 1.12.3+: ONE read of this bank ledger covers both looks (these dates, and anything FinCom put in before),
   // and is reused for 30 minutes, so posting the next batch starts at once
   const oneRead = bridgeVer(Bridge.st.version) >= bridgeVer("1.12.3");
   if (toCheck.length && !heavy && oneRead){
@@ -16247,7 +16247,7 @@ async function postBankToTally(ids){
       return;
     }
   }
-  // guard 2b: once per statement, look through Tally well beyond these dates for entries TDS Desk put under another date,
+  // guard 2b: once per statement, look through Tally well beyond these dates for entries FinCom put under another date,
   // or put in twice; if there are any, nothing is posted until they are sorted out
   if (toCheck.length && !oneRead && !lsGet(wideCheckKey())){
     try {
@@ -16309,7 +16309,7 @@ async function postBankToTally(ids){
       const x = byId.get(r.id);
       if (x && x.ok && x.verified !== true && !x.pendingCheck){
         b.postedTags = b.postedTags || {}; b.postedTags[fpHash(r.fp || r.id)] = "unconfirmed:" + now;
-        r.postError = "Tally replied 'created', but TDS Desk could not find the entry in Tally afterwards, so it is NOT marked as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again." + (x.verifyNote ? " [" + x.verifyNote + "]" : "");
+        r.postError = "Tally replied 'created', but FinCom could not find the entry in Tally afterwards, so it is NOT marked as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again." + (x.verifyNote ? " [" + x.verifyNote + "]" : "");
         failed.push({id: r.id, what: fmtDate(r.date) + " " + (r.dec.name || "") + " " + INR.format(r.debit || r.credit), msg: "not confirmed in Tally \u2014 check Tally before posting again"});
       } else if (x && x.ok){
         ok++; r.state = "sent"; r.sentAt = now; r.postedVia = "bridge"; r.postError = ""; r.postedOptional = !!x.optional; r.postVerified = x.verified === true; r.checking = !!x.pendingCheck; posted.push(r);
@@ -16418,7 +16418,7 @@ async function postBillsToTally(){
         const x = byId.get(e.id);
         if (x && x.ok && x.verified === true){ ok++; logPosting({what: "bill", id: e.id, action: "posted", co: co.id, ref: e.x.invoiceNo, party: e.x.vendorName, amount: num(e.x.total), tally: {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", company: x.company || tname}, by: (Cloud.st && Cloud.st.email) || ""}); e.exportedAt = now; e.postError = ""; e.postUnconfirmed = null; e.postedVia = "bridge"; e.postedInto = x.company || tname; e.postedOptional = !!x.optional; e.postVerified = true; e.tallyVchNo = x.vchNumber || "";
           e.tally = {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", at: now, by: (Cloud.st && Cloud.st.email) || "", company: x.company || tname}; if (x.optional) optionalN++; }
-        else if (x && x.ok){ unverified++; e.postUnconfirmed = {at: now, company: x.company || tname, optional: /Optional/.test(x.verifyNote || '')}; e.postError = (/Optional/.test(x.verifyNote || '') && x.message) ? plainMsg(x.message) : "Tally replied 'created', but TDS Desk could not find the entry in Tally afterwards, so it is NOT marked as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again." + (x.verifyNote ? " [" + x.verifyNote + "]" : ""); failed.push({no: e.x.invoiceNo, party: e.x.vendorName, msg: "not confirmed in Tally"}); }
+        else if (x && x.ok){ unverified++; e.postUnconfirmed = {at: now, company: x.company || tname, optional: /Optional/.test(x.verifyNote || '')}; e.postError = (/Optional/.test(x.verifyNote || '') && x.message) ? plainMsg(x.message) : "Tally replied 'created', but FinCom could not find the entry in Tally afterwards, so it is NOT marked as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again." + (x.verifyNote ? " [" + x.verifyNote + "]" : ""); failed.push({no: e.x.invoiceNo, party: e.x.vendorName, msg: "not confirmed in Tally"}); }
         else {
           e.postError = plainMsg(x && x.message) || "Tally did not confirm this entry.";
           failed.push({id: e.id, no: e.x.invoiceNo, party: e.x.vendorName, msg: e.postError});
@@ -16470,7 +16470,7 @@ function viewReadTest(){
   if (!Bridge.up()) return "";
   const r = S.readTest || {};
   let h = '<div style="margin-top:10px;border-top:1px solid var(--rule-soft);padding-top:10px"><div class="row" style="justify-content:space-between;align-items:center"><b>Test reading entries</b><button class="btn small" data-act="bridgeReadTest"' + (r.busy ? " disabled" : "") + ">" + (r.busy ? "Testing\u2026" : "Run test") + "</button></div>" +
-    '<p class="note" style="margin:4px 0">Checks how TDS Desk can read entries from the company open in Tally (nothing is written). If posts are \u201cnot confirmed\u201d, run this and send the result.</p>';
+    '<p class="note" style="margin:4px 0">Checks how FinCom can read entries from the company open in Tally (nothing is written). If posts are \u201cnot confirmed\u201d, run this and send the result.</p>';
   if (r.error) h += '<p class="bk-warn">' + esc(r.error) + "</p>";
   if (r.tests) h += '<table class="data"><tbody>' + r.tests.map(t => "<tr><td>" + esc(t.name) + "</td><td>" + (t.ok ? '<span class="tag ok">works</span> ' + num(t.count) + " found" + (t.optional ? " (" + num(t.optional) + " Optional)" : "") : '<span class="tag bad">failed</span> ' + esc(t.error || "")) + '</td><td class="n">' + num(t.ms) + " ms</td></tr>").join("") + "</tbody></table>" +
     '<p class="note" style="margin:4px 0 0">' + esc(r.company || "") + " \u00b7 port " + esc(r.port) + " \u00b7 " + esc(r.from) + " to " + esc(r.to) + "</p>";
@@ -16491,11 +16491,11 @@ function viewBridgeDiagnosis(){
 }
 function bridgeDownHelp(c){
   const url = c.url.replace(/\/+$/, "");
-  return '<div class="bdiag"><b>TDS Desk cannot reach the bridge. Check, in this order:</b><ol style="margin:8px 0 0 18px;padding:0;line-height:1.55">' +
-    "<li>On the computer where TallyPrime runs, is the window <b>TDS Desk - Tally Bridge</b> open and showing <b>READY</b>? If not, double-click <b>Start-TDS-Bridge.bat</b> in the bridge folder.</li>" +
+  return '<div class="bdiag"><b>FinCom cannot reach the bridge. Check, in this order:</b><ol style="margin:8px 0 0 18px;padding:0;line-height:1.55">' +
+    "<li>On the computer where TallyPrime runs, is the window <b>FinCom - Tally Bridge</b> open and showing <b>READY</b>? If not, double-click <b>Start-TDS-Bridge.bat</b> in the bridge folder.</li>" +
     "<li>If that window shows <b>BRIDGE STOPPED</b> or <b>Could not start on port</b>, do what it says, or send the file <b>tds-bridge-console.txt</b> from the bridge folder.</li>" +
     '<li>In this same browser, open <a href="' + esc(url) + '/ping" target="_blank" rel="noopener">' + esc(url) + "/ping</a>. If it shows <code>\"ok\":true</code>, press <b>Retry</b> below (and choose <b>Allow</b> if the browser asks about apps on this device).</li>" +
-    "<li>If that page cannot be reached, TDS Desk and the bridge are on different computers: open TDS Desk (the downloaded file) inside the server session where TallyPrime runs.</li>" +
+    "<li>If that page cannot be reached, FinCom and the bridge are on different computers: open FinCom (the downloaded file) inside the server session where TallyPrime runs.</li>" +
     '</ol><div class="row" style="margin-top:8px"><button class="btn small primary" data-act="bridgeTest">Retry</button></div></div>';
 }
 async function saveBridgeSetup(){
@@ -16505,10 +16505,10 @@ async function saveBridgeSetup(){
   const raw = atob(t.trim());
   const bytes = new Uint8Array(raw.length);
   for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-  saveFile("Setup-TDS-Bridge.bat", new Blob([bytes], {type: "application/octet-stream"}));
-  // its fingerprint, to compare with the one published in the TDS Desk repository (assets/bridge-setup.sha256)
+  saveFile("Setup-FinCom-Bridge.bat", new Blob([bytes], {type: "application/octet-stream"}));
+  // its fingerprint, to compare with the one published in the FinCom repository (assets/bridge-setup.sha256)
   try { const h = await crypto.subtle.digest("SHA-256", bytes); S.bridgeSha = Array.from(new Uint8Array(h)).map(x => x.toString(16).padStart(2, "0")).join(""); } catch (e){ S.bridgeSha = ""; }
-  toast("Saved. On the computer where Tally runs, double-click Setup-TDS-Bridge.bat and press I.");
+  toast("Saved. On the computer where Tally runs, double-click Setup-FinCom-Bridge.bat and press I.");
   render();
 }
 function bridgeSetupSteps(){
@@ -16517,7 +16517,7 @@ function bridgeSetupSteps(){
   return '<div class="setupcard"><h3 style="margin:0 0 6px">Set up in three steps</h3><ol class="setup">' +
     step(1, connected, "Put the bridge on the Tally computer",
       'Press <button class="btn small" data-act="bridgeSetupFile">Download the bridge setup</button> and run the file there (double-click, press <b>I</b>). It installs itself, starts, and starts again at every sign-in. No admin rights needed.') +
-    (S.bridgeSha ? '<li class="note" style="list-style:none;font-size:12px">Fingerprint (SHA-256) of the file just saved: <code style="user-select:all;word-break:break-all">' + esc(S.bridgeSha) + "</code>. It must match the one published by TDS Desk before you run it.</li>" : "") +
+    (S.bridgeSha ? '<li class="note" style="list-style:none;font-size:12px">Fingerprint (SHA-256) of the file just saved: <code style="user-select:all;word-break:break-all">' + esc(S.bridgeSha) + "</code>. It must match the one published by FinCom before you run it.</li>" : "") +
     step(2, connected && st.tallyUp, "Open TallyPrime and your company",
       "In TallyPrime: F1 Help \u2192 Settings \u2192 Connectivity \u2192 <b>TallyPrime acts as: Both</b>. Each user's Tally needs its own port (9000, 9001, \u2026).") +
     step(3, connected, "Press Connect here",
@@ -16527,10 +16527,10 @@ function bridgeSetupSteps(){
 function viewBridgeSettings(){
   const c = Bridge.cfg(), st = Bridge.st;
   if (Bridge.blocked()) return '<div class="pane"><h2>Tally Bridge</h2><p class="note" style="margin:0">Pages opened on claude.ai cannot reach programs on your computer. To connect to Tally, use the downloaded app (<b>Download standalone app</b>) on the computer where TallyPrime runs.</p></div>';
-  let h = '<div class="pane"><h2>Tally Bridge</h2><p class="note" style="margin:0 0 12px">Connects TDS Desk to TallyPrime on this computer: the company open in Tally is followed, ledgers load straight from Tally, and entries are posted without files. Run <b>TDSBridge</b> on the computer where TallyPrime runs, then paste its key here.</p>' +
+  let h = '<div class="pane"><h2>Tally Bridge</h2><p class="note" style="margin:0 0 12px">Connects FinCom to TallyPrime on this computer: the company open in Tally is followed, ledgers load straight from Tally, and entries are posted without files. Run <b>TDSBridge</b> on the computer where TallyPrime runs, then paste its key here.</p>' +
     '<div class="grid"><label class="f"><span>Bridge address</span><input type="text" data-bridge="url" value="' + esc(c.url) + '"></label>' +
     '<label class="f"><span>Bridge key (filled in by Connect)</span><input type="text" data-bridge="key" data-fk="bridgekey" value="' + esc(c.key) + '" autocomplete="off" placeholder="press Connect below"></label></div>' +
-    '<label class="chk" style="margin-top:8px"><input type="checkbox" data-bridge="follow"' + (c.follow ? " checked" : "") + "> Follow the company open in Tally (switch TDS Desk to it automatically)</label>" +
+    '<label class="chk" style="margin-top:8px"><input type="checkbox" data-bridge="follow"' + (c.follow ? " checked" : "") + "> Follow the company open in Tally (switch FinCom to it automatically)</label>" +
     '<div class="row" style="margin-top:10px"><button class="btn small primary" data-act="bridgeTest">' + (c.key ? "Check connection" : "Connect") + "</button>" + (c.key ? '<button class="btn small" data-act="bridgeOff">Disconnect</button>' : "") +
     '<button class="btn small" data-act="bridgeSetupFile">Download the bridge setup</button></div>';
   if (!(Bridge.on() && Bridge.up())) h += bridgeSetupSteps();
@@ -16539,7 +16539,7 @@ function viewBridgeSettings(){
       ? '<p class="note" style="margin:0 0 6px">Bridge ' + esc(st.version || "") + " connected" + (st.allowImport === false ? " (posting switched off in the bridge)" : "") + ". Checked " + new Date(st.at).toLocaleTimeString() + ".</p>" +
         '<p class="note" style="margin:0 0 6px">' + ({auto: "The bridge finds the TallyPrime running in your Windows session" + (st.user ? " (" + esc(st.user) + ")" : "") + " and ignores other users\u2019 Tally.", config: "The bridge uses the Tally ports listed in its settings file.", fallback: "Windows did not tell the bridge which Tally is yours: choose it below."}[st.mode] || "") + "</p>" +
         ((st.clash || []).length ? '<p class="bk-warn">' + esc(st.clash.join(", ")) + " is open in more than one Tally. Choose yours with <b>Use this Tally</b>; until then nothing is read or posted for it.</p>" : "") +
-        (st.sessions.length ? '<table class="data"><thead><tr><th>Tally</th><th>Owner</th><th>Companies open</th><th>TDS Desk client</th><th></th></tr></thead><tbody>' +
+        (st.sessions.length ? '<table class="data"><thead><tr><th>Tally</th><th>Owner</th><th>Companies open</th><th>FinCom client</th><th></th></tr></thead><tbody>' +
           st.sessions.filter(se => se.ok || se.skipped || num(c.port) === se.port || st.mode !== "fallback").map(se => {
             const owner = se.skipped ? '<span class="tag no">Another user \u2014 not used</span>' : se.mine === true ? '<span class="tag ok">Your session</span>' : '<span class="tag warn">Not checked</span>';
             const pinned = num(c.port) === se.port;
@@ -17579,7 +17579,7 @@ async function postSalesToTally(){
     masters.forEach(l => { const r = by.get("led:" + l.name); if (r && r.ok){ l.sent = true; l.sentAt = now; } });
     let ok = 0, bad = 0;
     let optionalN = 0;
-    list.forEach(v => { const r = by.get(v.id); if (r && r.ok && r.verified !== true){ bad++; const x = r; v.postError = "Tally replied 'created', but TDS Desk could not find the entry in Tally afterwards, so it is NOT marked as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again." + (x.verifyNote ? " [" + x.verifyNote + "]" : ""); return; } if (r && r.ok){ ok++; v.status = "posted"; v.postedAt = now; v.postError = ""; v.postedInto = r.company || ""; v.postedOptional = !!r.optional; if (r.optional) optionalN++; learnCustomer(v); } else { bad++; v.postError = plainMsg(r && r.message) || "Tally did not confirm this invoice."; } });
+    list.forEach(v => { const r = by.get(v.id); if (r && r.ok && r.verified !== true){ bad++; const x = r; v.postError = "Tally replied 'created', but FinCom could not find the entry in Tally afterwards, so it is NOT marked as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again." + (x.verifyNote ? " [" + x.verifyNote + "]" : ""); return; } if (r && r.ok){ ok++; v.status = "posted"; v.postedAt = now; v.postError = ""; v.postedInto = r.company || ""; v.postedOptional = !!r.optional; if (r.optional) optionalN++; learnCustomer(v); } else { bad++; v.postError = plainMsg(r && r.message) || "Tally did not confirm this invoice."; } });
     saveBank({newLed: true});
     s.busy = ""; saveSales();
     toast(ok + " posted to Tally" + (optionalN ? " (" + optionalN + " as Optional vouchers: Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers)" : "") + (bad ? "; " + bad + " not posted (see the red notes)" : "") + ".");
@@ -17677,7 +17677,7 @@ function salesClick(t){
     if (a === "ignore"){ v.status = "ignored"; if (s.openId === v.id) s.openId = null; salesSetUndo("Invoice " + esc(v.x.number) + " ignored", before); }
     if (a === "restore"){ v.status = "review"; mapInvoice(v); salesSetUndo("Invoice " + esc(v.x.number) + " restored", before); }
     if (a === "delete"){
-      askConfirm({title: "Delete invoice " + (v.x.number || "") + "?", danger: true, ok: "Delete", body: "It is removed from TDS Desk. Tally is not changed."}).then(ans => {
+      askConfirm({title: "Delete invoice " + (v.x.number || "") + "?", danger: true, ok: "Delete", body: "It is removed from FinCom. Tally is not changed."}).then(ans => {
         if (!ans) return;
         s.list = s.list.filter(o => o.id !== v.id); s.openId = null; salesSetUndo("Invoice " + esc(v.x.number) + " deleted", before); saveSales(); render();
       });
@@ -17705,7 +17705,7 @@ function salesClick(t){
     case "salesSelNone": s.sel.clear(); salesLightRefresh(); return true;
     case "salesBulkConfirm": salesBulk("confirm"); return true;
     case "salesBulkIgnore": salesBulk("ignore"); return true;
-    case "salesBulkDelete": askConfirm({title: "Delete " + s.sel.size + " invoices?", danger: true, ok: "Delete", body: "They are removed from TDS Desk. Tally is not changed."}).then(a => { if (a) salesBulk("delete"); }); return true;
+    case "salesBulkDelete": askConfirm({title: "Delete " + s.sel.size + " invoices?", danger: true, ok: "Delete", body: "They are removed from FinCom. Tally is not changed."}).then(a => { if (a) salesBulk("delete"); }); return true;
     case "salesBulkPrint": { const rows = s.list.filter(v => s.sel.has(v.id)); const co = CO(s.cid);
       const html = rows.map(v => invoiceHtml(v.x, co, s.cfg)).join("").replace(/<\/body><\/html><!doctype html><html lang="en"><head>[\s\S]*?<body>(<p class="noprint"[\s\S]*?<\/p>)?/g, '<div style="page-break-before:always"></div>');
       printInvoiceHtml(html, rows.length + "-invoices"); return true; }
@@ -17716,8 +17716,8 @@ function salesClick(t){
       rows.forEach(v => { v.status = "ready"; s.sticky.add(v.id); learnCustomer(v); });
       salesSetUndo(rows.length + " invoices confirmed", before); saveSales(); render(); return true;
     }
-    case "salesForget": askConfirm({title: "Forget customer memory?", ok: "Forget", body: "TDS Desk forgets which ledger was used for each customer. Invoices keep their ledgers."}).then(a => { if (a){ s.hist = {}; saveSales({hist: true}); toast("Forgotten."); } }); return true;
-    case "salesDelAll": askConfirm({title: "Delete all " + s.list.length + " sales invoices?", danger: true, ok: "Delete all", body: "They are removed from TDS Desk. Tally is not changed."}).then(a => { if (a){ s.list = []; s.openId = null; s.showSettings = false; saveSales(); render(); } }); return true;
+    case "salesForget": askConfirm({title: "Forget customer memory?", ok: "Forget", body: "FinCom forgets which ledger was used for each customer. Invoices keep their ledgers."}).then(a => { if (a){ s.hist = {}; saveSales({hist: true}); toast("Forgotten."); } }); return true;
+    case "salesDelAll": askConfirm({title: "Delete all " + s.list.length + " sales invoices?", danger: true, ok: "Delete all", body: "They are removed from FinCom. Tally is not changed."}).then(a => { if (a){ s.list = []; s.openId = null; s.showSettings = false; saveSales(); render(); } }); return true;
   }
   return false;
 }
@@ -17916,7 +17916,7 @@ async function ensureTallyCompany(co){
   const open = Bridge.st.open;
   if (!open.length){ toast("No company is open in your Tally. Open " + co.name + " in TallyPrime."); return null; }
   const ans = await askConfirm({title: "Which Tally company is " + co.name + "?", ok: "Use this company",
-    body: '<p class="note" style="margin:0 0 10px">TDS Desk could not match <b>' + esc(co.name) + "</b> to a company open in your Tally by name or GSTIN. Choose it once; it is remembered.</p>" +
+    body: '<p class="note" style="margin:0 0 10px">FinCom could not match <b>' + esc(co.name) + "</b> to a company open in your Tally by name or GSTIN. Choose it once; it is remembered.</p>" +
       '<div class="bk-form one"><label><span>Company open in Tally</span><select id="tcoPick">' + open.map(x => '<option value="' + esc(x.name) + '">' + esc(x.name) + " (port " + x.port + ")</option>").join("") + "</select></label></div>",
     read: () => ({name: (document.getElementById("tcoPick") || {}).value || ""})});
   if (!ans || !ans.data.name) return null;
@@ -18281,7 +18281,7 @@ function startCloudSync2(){
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && Cloud.on() && Cloud.cfg().auto !== false) cloudSync(false); });
 function whoChip(){
   if (!Cloud.on()) return "";
-  return whoChipInner() + '<button class="tchip signout" data-act="signOutNow" title="Sign out of TDS Desk">\u23fb Sign out</button>';
+  return whoChipInner() + '<button class="tchip signout" data-act="signOutNow" title="Sign out of FinCom">\u23fb Sign out</button>';
 }
 function whoChipInner(){
   const a = S.account, who = a && a.me ? (a.me.name || a.me.email) : Cloud.st.email;
@@ -18385,7 +18385,7 @@ function creditBanner(){
   if (!a || !a.firm) return "";
   const bal = num(a.firm.balance), warn = num(a.firm.warn_at);
   if (S.creditStop && Date.now() - S.creditStop.at < 6 * 3600e3 && bal <= 0)
-    return '<p class="banner" style="border-left-color:var(--stop);background:var(--stop-soft)"><b>Credit finished.</b> Reading new bills, bank statements and invoices is paused. Everything already in TDS Desk still works, and entries can still be posted to Tally. Ask the administrator to add credit.</p>';
+    return '<p class="banner" style="border-left-color:var(--stop);background:var(--stop-soft)"><b>Credit finished.</b> Reading new bills, bank statements and invoices is paused. Everything already in FinCom still works, and entries can still be posted to Tally. Ask the administrator to add credit.</p>';
   if (bal <= warn)
     return '<p class="banner">Credit left: <b>' + INR.format(bal) + "</b>. Ask the administrator to top it up before it runs out.</p>";
   return "";
@@ -18575,9 +18575,9 @@ function viewSignIn(){
   if (Cloud.on() && st.mfa) return viewTwoStep();
   if (S.signUpOpen) return viewSignUp();
   return '<div class="signin"><div class="signin-box">' +
-    '<h1>TDS Desk</h1>' +
-    '<p class="note">' + esc(S.firm && S.firm.firmName ? S.firm.firmName : "Garg Shekhar & Company") + "</p>" +
-    '<p class="note" style="margin:2px 0 0"><a href="welcome/">What is TDS Desk?</a></p>' +
+    '<h1>FinCom</h1>' +
+    '<p class="note">' + esc(S.firm && S.firm.firmName ? S.firm.firmName : "Finance and compliance, in one place") + "</p>" +
+    '<p class="note" style="margin:2px 0 0"><a href="welcome/">What is FinCom?</a></p>' +
     '<p class="note" style="margin:10px 0 14px">Sign in to see your firm\u2019s work. Nothing is shown before that.</p>' +
     '<label class="f"><span>Email</span><input type="email" data-cloud="email" data-fk="cloudemail" value="' + esc((S.cloudForm && S.cloudForm.email) || c.email || "") + '" autocomplete="username" autofocus></label>' +
     '<label class="f" style="margin-top:8px"><span>Password</span><input type="password" data-cloud="password" data-fk="cloudpw" value="' + esc((S.cloudForm && S.cloudForm.password) || "") + '" autocomplete="current-password"></label>' +
@@ -18675,8 +18675,8 @@ function viewCompanySettings(){
     (Bridge.up() && Bridge.st.open.length ? '<label class="f"><span>Or pick the company open in Tally</span><select data-picktally><option value="">\u2014</option>' + Bridge.st.open.map(o => '<option' + (o.name === c.tallyName ? " selected" : "") + ">" + esc(o.name) + "</option>").join("") + "</select></label>" : "") +
     '<label class="f"><span>Voucher type</span><select data-c="voucherType">' + ["Journal", "Purchase"].map(v => "<option" + (c.voucherType === v ? " selected" : "") + ">" + v + "</option>").join("") + "</select></label>" +
     '<div class="f wide vnum"><span>Voucher numbering</span>' + (c.vchNumbering === "tally"
-      ? '<div class="note"><span class="tag ok">Automatic in Tally</span> Tally gives every entry its own next number' + (c.vchAutoAt ? " (set " + fmtDate(String(c.vchAutoAt).slice(0, 10)) + ")" : "") + '. TDS Desk sends no voucher numbers. <button class="linkbtn" data-act="vchUseBillNo">Use supplier bill numbers instead</button></div>'
-      : '<div class="note">TDS Desk sends the supplier\u2019s bill number as the voucher number; a number already in Tally is retried with the supplier\u2019s initials.</div>' +
+      ? '<div class="note"><span class="tag ok">Automatic in Tally</span> Tally gives every entry its own next number' + (c.vchAutoAt ? " (set " + fmtDate(String(c.vchAutoAt).slice(0, 10)) + ")" : "") + '. FinCom sends no voucher numbers. <button class="linkbtn" data-act="vchUseBillNo">Use supplier bill numbers instead</button></div>'
+      : '<div class="note">FinCom sends the supplier\u2019s bill number as the voucher number; a number already in Tally is retried with the supplier\u2019s initials.</div>' +
         '<div class="row" style="gap:8px"><button class="btn small" data-act="vchAuto"' + (Bridge.on() && Bridge.up() ? "" : " disabled title=\"Needs the Tally Bridge and Tally open\"") + '>Set automatic numbering in Tally</button>' +
         '<button class="btn small" data-act="vchTallyDone">It is set in Tally already: use Tally\u2019s automatic numbers</button></div>') + "</div>" +
     cf("Input CGST ledger", "gst.cgst", c.gst.cgst) + cf("Input SGST ledger", "gst.sgst", c.gst.sgst) + cf("Input IGST ledger", "gst.igst", c.gst.igst) + cf("Round off ledger", "roundOff", c.roundOff) +
@@ -18986,7 +18986,7 @@ document.addEventListener("click", ev => {
     const port = num(t.dataset.bridgepin);
     Bridge.setCfg({port: port || 0}); Bridge.lastOpenKey = null;
     if (S.bank){ S.bank.syncedAt = {}; S.bank.ledgers.importedAt = ""; }
-    Bridge.refresh().then(() => { toast(port ? "TDS Desk now uses only the Tally on port " + port + "." : "TDS Desk picks your Tally automatically."); bridgeTick(false); render(); });
+    Bridge.refresh().then(() => { toast(port ? "FinCom now uses only the Tally on port " + port + "." : "FinCom picks your Tally automatically."); bridgeTick(false); render(); });
     return;
   }
   if (S.view === "company" && (S.tab === "bank" || (S.tab === "export" && S.bank && S.bank.cid === S.coId)) && bankClick(t)) return;   // bank buttons also work on the Post step
@@ -19237,7 +19237,7 @@ document.addEventListener("click", ev => {
     }
     case "signOutNow": {
       const pend = Cloud.on() ? cloudChanges().changes.length : 0;
-      askConfirm({title: "Sign out of TDS Desk?", ok: "Sign out", body: '<p class="note">You will need your email, password' + (Cloud.st.firm ? " and, if set up, the code from your phone" : "") + ' to come back in. Work already synced stays in your firm account.</p>',
+      askConfirm({title: "Sign out of FinCom?", ok: "Sign out", body: '<p class="note">You will need your email, password' + (Cloud.st.firm ? " and, if set up, the code from your phone" : "") + ' to come back in. Work already synced stays in your firm account.</p>',
         check: pend ? "" : "Also remove this firm\u2019s work from this computer (for a shared or office computer)"}).then(a => {
         if (!a) return;
         signOutHere("Signed out.", !!(a.check && !pend));
@@ -19309,7 +19309,7 @@ document.addEventListener("click", ev => {
     case "adminCreditGo": break;
     case "bridgeConnect": {
       askConfirm({title: "Connect to the Tally Bridge", ok: "Connect",
-        body: '<p class="note">Type the 6-digit code shown in the bridge window on this computer (the window titled TDS Desk - Tally Bridge). It works once, for 15 minutes after the bridge starts.</p><input type="text" id="bridgeCode" inputmode="numeric" maxlength="7" autocomplete="off" placeholder="6-digit code" style="width:160px;font-size:18px;letter-spacing:3px">',
+        body: '<p class="note">Type the 6-digit code shown in the bridge window on this computer (the window titled FinCom - Tally Bridge). It works once, for 15 minutes after the bridge starts.</p><input type="text" id="bridgeCode" inputmode="numeric" maxlength="7" autocomplete="off" placeholder="6-digit code" style="width:160px;font-size:18px;letter-spacing:3px">',
         read: () => String((document.getElementById("bridgeCode") || {}).value || "").replace(/\D/g, ""),
         validate: v => /^\d{6}$/.test(v) ? "" : "Type the 6 digits shown in the bridge window."}).then(a => {
       if (!a) return;
@@ -19574,8 +19574,8 @@ document.addEventListener("click", ev => {
       break;
     }
     case "vchAuto": setAutoNumbering(); break;
-    case "vchTallyDone": { const co = CO(); co.vchNumbering = "tally"; co.vchAutoAt = new Date().toISOString(); Store.saveCompany(co); toast("TDS Desk will leave voucher numbers to Tally."); render(); break; }
-    case "vchUseBillNo": { const co = CO(); co.vchNumbering = ""; Store.saveCompany(co); toast("TDS Desk will send the supplier\u2019s bill number as the voucher number."); render(); break; }
+    case "vchTallyDone": { const co = CO(); co.vchNumbering = "tally"; co.vchAutoAt = new Date().toISOString(); Store.saveCompany(co); toast("FinCom will leave voucher numbers to Tally."); render(); break; }
+    case "vchUseBillNo": { const co = CO(); co.vchNumbering = ""; Store.saveCompany(co); toast("FinCom will send the supplier\u2019s bill number as the voucher number."); render(); break; }
     case "revFClear": S.revF = {}; S.revQuery = ""; S.revSel = new Set(); render(); break;
     case "billBackAll": {
       const list = Object.values(D().entries).filter(e => e.status === "approved" && !e.exportedAt);
@@ -20641,7 +20641,7 @@ const Help = {
     "gst:r3b": {t: "GSTR-3B", what: "The month\u2019s summary return and the tax to pay: 3.1 outward supplies and reverse charge, 3.2 inter-state supplies to unregistered persons, 4 input tax credit, 5 exempt and non-GST inward supplies, and 6 payment with the credit set off.",
       steps: ["Once for each client, in Client setup \u2192 GST: the filing type (monthly, QRMP, composition), credit as far as 2B shows it (the law, section 16(2)(aa)), the opening balance of the electronic credit ledger, rule 37, e-invoicing, the Tally cash ledger and the year\u2019s turnover.", "Check 4(A)(5) and the lines for bills held back (not in 2B yet) and released (from an earlier month, now in 2B).", "Type 4(B)(2) and 4(D)(1) if there is anything to reverse or reclaim; rules 42 and 43 come from the Reversal tab.", "Check the set-off and the cash to pay in table 6.", "Pay the cash through a challan (PMT-06), then download the 3B JSON or fill the return from the Excel.", "Under \u201cFiling, interest and late fee\u201d, read the portal\u2019s checks (DRC-01B, DRC-01C) before filing.", "After filing, type the dates GSTR-1 and 3B were filed, and the late fee and interest the portal shows (fetched from the portal once the GST API is connected); click \u201cMark this 3B as filed\u201d so the month stays as filed.", "Download the set-off journal and import it into Tally, so the GST ledgers there agree with the portal."],
       from: "3.1(a) from sales less credit notes, plus tax on advances; 3.1(d) from the reverse charge payable ledger; table 4 from every voucher carrying input tax, limited to what 2B shows; 4(D)(2) from 2B\u2019s not-available lines; rules 42/43 from Reversal.",
-      watch: ["A bill not in 2B gives no credit that month; it is taken in the month its 2B carries it.", "Documents rejected in IMS give no credit; a rejected supplier credit note does not reduce it.", "Credit is used in the order the law sets: IGST first, then CGST and SGST (sections 49 and 49A, rule 88A).", "Our own credit notes rejected by customers are added back to 3.1(a) in the month the portal adds them.", "Rule 37 is off unless switched on for the GSTIN. When on, credit on a bill unpaid 180 days after its date is reversed in 4(B)(2) in the month the 181st day falls in, and taken back in 4(A)(5) and 4(D)(1) when it is paid.", "Late fee and interest are the portal\u2019s own figures. TDS Desk shows its own estimate only if switched on in GST settings."]},
+      watch: ["A bill not in 2B gives no credit that month; it is taken in the month its 2B carries it.", "Documents rejected in IMS give no credit; a rejected supplier credit note does not reduce it.", "Credit is used in the order the law sets: IGST first, then CGST and SGST (sections 49 and 49A, rule 88A).", "Our own credit notes rejected by customers are added back to 3.1(a) in the month the portal adds them.", "Rule 37 is off unless switched on for the GSTIN. When on, credit on a bill unpaid 180 days after its date is reversed in 4(B)(2) in the month the 181st day falls in, and taken back in 4(A)(5) and 4(D)(1) when it is paid.", "Late fee and interest are the portal\u2019s own figures. FinCom shows its own estimate only if switched on in GST settings."]},
     "gst:qtr": {t: "This quarter (QRMP)", what: "For a GSTIN that files quarterly: what to do this month, one step at a time.",
       steps: ["In the quarter\u2019s first two months: step 1, IFF (optional) \u2014 download the file and upload it by the 13th, so your customers get the credit that month; type the date it was filed.", "Step 2, PMT-06 \u2014 pay the amount shown by the 25th and type what was paid. The fixed-sum method takes 35% of the last quarter\u2019s cash (or all of the last month\u2019s, after monthly filing); self-assessment takes the month\u2019s own tax after credit.", "In the quarter\u2019s last month: step 1, GSTR-1 for the quarter (invoices already sent in IFF are left out); step 2, GSTR-3B for the quarter, where what was paid by PMT-06 is used first."],
       from: "The books for the three months; the filing type and PMT-06 method from GST settings.", watch: ["IFF takes at most \u20b950 lakh a month; the rest waits for the quarter\u2019s GSTR-1.", "3B falls due on the 22nd or the 24th after the quarter, by state."]},
@@ -20919,14 +20919,14 @@ function viewGstFiling(b, t){
   const ym = S.gstYm || "", reg = S.gstReg || "", money = v => INR.format(r2(v || 0)), rec = GSTF.peek(ym, reg), d = s => s ? GSTAmend.dmy(s.replace(/-/g, "")) : "";
   const nil3b = !(t.net.igst || t.net.cgst || t.net.sgst || t.rcmOut.igst || t.rcmOut.cgst || t.rcmOut.sgst || t.other.igst || t.other.cgst || t.other.sgst);
   const ftype = typeof GSTSet === "object" ? GSTSet.typeOf(ym, reg) : "monthly";
-  if (ftype === "comp") return '<section class="dash-card" style="margin-top:12px"><h3>Filing</h3><p class="note">This GSTIN is set as <b>composition</b>: GSTR-1 and GSTR-3B do not apply. CMP-08 for ' + esc(GSTSet.qLabel(ym)) + " is due " + esc(GSTAmend.dmy(GSTF.due(ym, "cmp08", reg).replace(/-/g, ""))) + " and GSTR-4 by 30 June after the year. TDS Desk does not prepare CMP-08 or GSTR-4 yet; the working above is for reference only. " + gstSetLink() + "</p></section>";
+  if (ftype === "comp") return '<section class="dash-card" style="margin-top:12px"><h3>Filing</h3><p class="note">This GSTIN is set as <b>composition</b>: GSTR-1 and GSTR-3B do not apply. CMP-08 for ' + esc(GSTSet.qLabel(ym)) + " is due " + esc(GSTAmend.dmy(GSTF.due(ym, "cmp08", reg).replace(/-/g, ""))) + " and GSTR-4 by 30 June after the year. FinCom does not prepare CMP-08 or GSTR-4 yet; the working above is for reference only. " + gstSetLink() + "</p></section>";
   if (ftype === "qrmp" && !GSTSet.isQEnd(ym)) return '<section class="dash-card" style="margin-top:12px"><h3>Filing</h3><p class="note">This GSTIN files <b>quarterly (QRMP)</b>: no GSTR-1 or 3B for ' + esc(label0(ym)) + ". Invoices to registered customers may go in IFF by " + esc(GSTAmend.dmy(GSTF.due(ym, "iff", reg).replace(/-/g, ""))) + ", and tax is paid by PMT-06 by " + esc(GSTAmend.dmy(GSTF.due(ym, "pmt06", reg).replace(/-/g, ""))) + ". GSTR-1 and 3B for " + esc(GSTSet.qLabel(ym)) + " are due " + esc(GSTAmend.dmy(GSTF.due(GSTSet.qEnd(ym), "r1", reg).replace(/-/g, ""))) + " and " + esc(GSTAmend.dmy(GSTF.due(GSTSet.qEnd(ym), "r3b", reg).replace(/-/g, ""))) + ". " + gstSetLink() + "</p></section>";
   const nil1 = !GSTR.outward(ym, reg).length;
   const f1 = GSTF.lateFee(ym, reg, "r1", nil1), f3 = GSTF.lateFee(ym, reg, "r3b", nil3b), it = GSTF.interest(ym, reg, t), dr = GSTF.drc(ym, reg, t), a = GSTF.aato(GSTF.fyOf(ym));
   const dateIn = (k, v) => '<input type="date" data-gstf="' + k + '" value="' + esc(v || "") + '" style="width:auto">';
   const cmp = (est, portal) => portal === undefined || portal === "" ? "" : Math.abs(num(est) - num(portal)) < 1 ? '<div class="nr">agrees</div>' : '<div class="bad">estimate \u20b9' + money(est) + "</div>";
   const pf = (k, v) => '<input type="number" step="0.01" data-gstf="' + k + '" value="' + (v === undefined || v === "" ? "" : esc(String(v))) + '" placeholder="as on the portal" style="width:140px">';
-  // interest and late fee are the portal's: TDS Desk's own estimate shows only if switched on in GST settings (off by default)
+  // interest and late fee are the portal's: FinCom's own estimate shows only if switched on in GST settings (off by default)
   const est = !!S.books.gstEst, cell = (lbl, k) => '<div class="dash-row"><span>' + lbl + "</span><b>" + (rec[k] === undefined ? '<span class="nr">not yet from the portal</span>' : "\u20b9" + money(rec[k])) + "</b></div>";
   let h = '<section class="dash-card" style="margin-top:12px"><h3>Filing, interest and late fee</h3>' +
     '<div class="bk-tablewrap"><table class="bk-table compact"><thead><tr><th>Return</th><th>Due</th><th>Filed on</th>' + (est ? '<th class="n">Days late</th><th class="n">Late fee, estimate</th>' : "") + '<th class="n">Late fee, from the portal</th></tr></thead><tbody>' +
@@ -20939,7 +20939,7 @@ function viewGstFiling(b, t){
   h += '<div class="dash-row"><span>Interest under section 50, from the portal (table 5.1)</span><b>' + pf("portalInt", rec.portalInt) + (est ? cmp(it.total, rec.portalInt) : "") + "</b></div>" +
     '<p class="note">Late fee and interest are the portal\u2019s own figures. They will be fetched from the portal once the GST API is connected; until then type what the portal shows. GSTR-1\u2019s late fee is charged by the portal in the next 3B.</p>';
   if (est){
-    h += '<p class="note"><b>TDS Desk\u2019s estimate</b> (' + gstSetLink("switched on in GST settings") + "): late fee under section 47, \u20b950 a day (\u20b920 for nil), capped at \u20b9" + money(f3.cap || f1.cap || 0).replace(/\.00$/, "") + " by the turnover of the year before" +
+    h += '<p class="note"><b>FinCom\u2019s estimate</b> (' + gstSetLink("switched on in GST settings") + "): late fee under section 47, \u20b950 a day (\u20b920 for nil), capped at \u20b9" + money(f3.cap || f1.cap || 0).replace(/\.00$/, "") + " by the turnover of the year before" +
       (a.from === "part" || a.from === "none" ? " (not all of that year is in the books; type it in GST settings)" : "") + ".";
     if (it.days && it.total) h += " Interest under section 50(1), 18% a year on \u20b9" + money(t.quarter ? t.payable : t.pay.cash.igst + t.pay.cash.cgst + t.pay.cash.sgst + t.pay.cash.cess) + (t.quarter ? " still to pay after PMT-06" : " paid in cash") + " for " + it.days + " days" + (it.estimated ? " if filed today" : "") + ": \u20b9" + money(it.total) + ".";
     h += "</p>";
@@ -21079,7 +21079,7 @@ const GSTRegs = {
     if (!pan) return "Type the client’s PAN in Client setup first; every GSTIN added must carry it.";
     if (g.slice(2, 12) !== pan) return g + " is for PAN " + g.slice(2, 12) + ", not this client’s PAN " + pan + ".";
     if (GSTR.gstins(b).includes(g)) return g + " is already here.";
-    if (GSTR.gstins(b).some(x => x.slice(0, 2) === g.slice(0, 2))) return "This client already has a GSTIN in " + this.state(g) + "; TDS Desk keeps one GSTIN for each state.";
+    if (GSTR.gstins(b).some(x => x.slice(0, 2) === g.slice(0, 2))) return "This client already has a GSTIN in " + this.state(g) + "; FinCom keeps one GSTIN for each state.";
     return ""; },
   add(g){ const b = S.books; g = String(g || "").toUpperCase().trim(); b.gstRegs = (b.gstRegs || []).concat([{gstin: g, at: new Date().toISOString()}]); GSTR._carry = null; },
   remove(g){ const b = S.books; b.gstRegs = (b.gstRegs || []).filter(r => r.gstin !== g); GSTR._carry = null; }
@@ -21134,7 +21134,7 @@ function viewGstSettings(){
     const cur = GSTSet.typeOf(months[months.length - 1] || first, reg);
     const next = GSTSet.qStart(GSTR.nextYm(GSTSet.qEnd(GSTF.today().slice(0, 7).replace("-", "")))), win = GSTSet.window(next);
     h += '<section class="dash-card" style="margin-bottom:12px"><h3>Settings of ' + esc(g) + " \u00b7 " + esc(GSTRegs.state(g)) + "</h3>" +
-      (regs.length > 1 ? '<p class="note" style="margin:0 0 6px">Each GSTIN keeps its own settings. When one is changed here, TDS Desk asks whether it is for this GSTIN only or for the others too.</p>' : "") +
+      (regs.length > 1 ? '<p class="note" style="margin:0 0 6px">Each GSTIN keeps its own settings. When one is changed here, FinCom asks whether it is for this GSTIN only or for the others too.</p>' : "") +
       '<h4 style="margin:8px 0 4px">Filing type</h4>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><select data-gset="type" data-greg="' + esc(reg) + '" style="width:auto">' + GSTSet.TYPES.map(([v, l]) => '<option value="' + v + '"' + (cur === v ? " selected" : "") + ">" + l + "</option>").join("") + "</select>" +
       '<span class="note">from</span><select data-gset="from" data-greg="' + esc(reg) + '" style="width:auto">' + quarters.map(q => '<option value="' + q + '"' + ((S.gsetFrom || {})[reg] === q ? " selected" : "") + ">" + GSTSet.qLabel(q) + "</option>").join("") + "</select>" +
@@ -21163,7 +21163,7 @@ function viewGstSettings(){
     '<label class="note" style="display:block"><input type="radio" name="gstapi" data-gset="api" value="save"' + (api === "save" ? " checked" : "") + "> <b>Save only</b> \u2014 the return is saved on the portal; you check it there and file it yourself (recommended)</label>" +
     '<label class="note" style="display:block"><input type="radio" name="gstapi" data-gset="api" value="file"' + (api === "file" ? " checked" : "") + "> <b>Save and file</b> \u2014 after the figures agree with the portal and the return is approved, it is filed with the signatory\u2019s EVC OTP or DSC</label>" +
     '<p class="note">Applies once the GST API is connected; until then returns are downloaded as JSON.</p>' +
-    '<h4 style="margin:12px 0 4px">Interest and late fee</h4><label class="note"><input type="checkbox" data-gset="est"' + (b.gstEst ? " checked" : "") + "> Also show TDS Desk\u2019s own estimate beside the portal\u2019s figures (off: only the portal\u2019s figures are shown)</label>" +
+    '<h4 style="margin:12px 0 4px">Interest and late fee</h4><label class="note"><input type="checkbox" data-gset="est"' + (b.gstEst ? " checked" : "") + "> Also show FinCom\u2019s own estimate beside the portal\u2019s figures (off: only the portal\u2019s figures are shown)</label>" +
     '<h4 style="margin:8px 0 4px">Aggregate turnover of the year</h4><div style="display:flex;gap:12px;flex-wrap:wrap">' +
     prevFys.map(f => { const a = GSTF.aato(GSTF.fyOf((+f.slice(0, 4) + 1) + "04")); return '<label class="note">' + esc(f) + ' <input type="number" data-gset="aato" data-gfy="' + esc((+f.slice(0, 4) + 1) + "-" + String(+f.slice(0, 4) + 2).slice(2)) + '" value="' + (((b.gstAato || {})[(+f.slice(0, 4) + 1) + "-" + String(+f.slice(0, 4) + 2).slice(2)]) || "") + '" placeholder="' + (a.v ? money(a.v) + " from the books" : "type it") + '" style="width:170px"></label>'; }).join("") +
     '</div><p class="note">Used for the late fee caps, QRMP (\u20b95 crore or less), e-invoicing and the 30-day IRN limit (\u20b910 crore and above).</p>' +
@@ -21391,7 +21391,7 @@ function viewCmp08(b){
       '<div class="dash-row"><span>Reverse charge in the quarter</span><b>' + gstMoney(c.rcm.igst + c.rcm.cgst + c.rcm.sgst + c.rcm.cess) + "</b></div>", false) +
     gstStep(3, "Pay and file",
       '<div class="dash-row"><span><b>Total to pay, in cash</b></span><b>' + gstMoney(c.payable) + "</b></div>" +
-      (c.late && S.books.gstEst ? '<p class="note">TDS Desk\u2019s estimate: filed ' + c.late + " days late, interest " + gstMoney(c.interest) + " (18% a year). The portal\u2019s figure is the one to pay.</p>" : "") +
+      (c.late && S.books.gstEst ? '<p class="note">FinCom\u2019s estimate: filed ' + c.late + " days late, interest " + gstMoney(c.interest) + " (18% a year). The portal\u2019s figure is the one to pay.</p>" : "") +
       '<div class="row" style="gap:8px;align-items:center"><span class="note">Filed on</span><input type="date" data-gqf="cmp08" data-gqq="' + qEnd + '" value="' + esc(rec.cmp08 || "") + '" style="width:auto"></div>' +
       '<p class="note">A composition dealer takes no input tax credit and charges no tax on its invoices.</p>', !!rec.cmp08);
   return h + "</section>";
@@ -21648,7 +21648,7 @@ if (typeof document !== "undefined"){
       x.sort = false; const k = GSTV.filedKey(x.form); if (k && x.arnDate){ const r = GSTF.rec(x.per, x.reg); if (!r[k]) r[k] = x.arnDate; }
       saveBooks(); render(); return; }
     if (t.dataset.gstvdel){ const x = find(t.dataset.gstvdel); if (!x) return;
-      const ans = await askConfirm({title: "Remove this PDF?", body: esc(GSTV.label(x.form) + " " + GSTV.perLabel(x.form, x.per, x.reg) + " — " + x.name) + " is removed from TDS Desk and the firm’s cloud documents. The return on the portal is not touched.", ok: "Remove", danger: true});
+      const ans = await askConfirm({title: "Remove this PDF?", body: esc(GSTV.label(x.form) + " " + GSTV.perLabel(x.form, x.per, x.reg) + " — " + x.name) + " is removed from FinCom and the firm’s cloud documents. The return on the portal is not touched.", ok: "Remove", danger: true});
       if (!ans) return;
       const co = CO(); await FileStore.drop(co.id, x.id); if (x.docPath && typeof CloudDocs === "object") CloudDocs.remove(x.docPath);
       S.books.gstVault = GSTV.list().filter(z => z !== x); saveBooks(); render(); return; }
@@ -21755,7 +21755,7 @@ if (typeof document !== "undefined"){
   });
 }
 /* ================================================================== */
-/* Help: a searchable guide, and tickets that firms raise to TDS Desk  */
+/* Help: a searchable guide, and tickets that firms raise to FinCom  */
 /* support, with the screen's details attached and a desk for support  */
 /* (platform admins) with SLA, pipeline and ageing                     */
 /* ================================================================== */
@@ -21855,10 +21855,10 @@ const SUP = {
   }
 };
 
-/* ---------- the guide: every "How this tab works" plus the rest of TDS Desk ---------- */
+/* ---------- the guide: every "How this tab works" plus the rest of FinCom ---------- */
 const GUIDE = {
   A: {
-    "start": {area: "Getting started", t: "Getting started with TDS Desk", what: "TDS Desk reads purchase bills, bank statements and sales, checks them, and posts them to Tally; it also works out TDS and GST returns from the Tally books.",
+    "start": {area: "Getting started", t: "Getting started with FinCom", what: "FinCom reads purchase bills, bank statements and sales, checks them, and posts them to Tally; it also works out TDS and GST returns from the Tally books.",
       steps: ["Add a client under All clients, with its GSTIN and PAN.", "Connect Tally on this computer (Tally chip at the top) so entries can be posted and the day book read.", "Bring in documents: Purchase, Bank and Sales on the left.", "Review what was read, then post to Tally.", "For returns, open TDS & GST and read the day book from Tally."],
       watch: ["Work is saved in this browser unless you sign in to the firm account, which keeps it in the cloud for everyone in the firm."]},
     "bills": {area: "Documents", t: "Purchase bills", what: "Bills are read from PDFs and photos, checked against the supplier's ledger and GST, and posted to Tally as purchase or journal vouchers with TDS where it applies.",
@@ -21871,8 +21871,8 @@ const GUIDE = {
       steps: ["Bring in the invoices or the marketplace report.", "Check customers, rates and places of supply.", "Post to Tally."]},
     "inbox": {area: "Documents", t: "Inbox", what: "Each client has an address and a drop link; documents sent there wait in the Inbox until you sort them.",
       steps: ["Share the client's drop link or address.", "Open Inbox, check each document's client and kind, and send it on to Purchase, Bank or Sales."]},
-    "tally": {area: "Tally", t: "Connecting Tally", what: "TDS Desk talks to Tally on this computer through Tally's own port (9000 by default).",
-      steps: ["In Tally: F1 → Settings → Connectivity → TallyPrime acts as: Both, port 9000.", "Open the company in Tally.", "Click the Tally chip at the top of TDS Desk and check it says connected.", "Post a test entry to a ZZ TEST company first."],
+    "tally": {area: "Tally", t: "Connecting Tally", what: "FinCom talks to Tally on this computer through Tally's own port (9000 by default).",
+      steps: ["In Tally: F1 → Settings → Connectivity → TallyPrime acts as: Both, port 9000.", "Open the company in Tally.", "Click the Tally chip at the top of FinCom and check it says connected.", "Post a test entry to a ZZ TEST company first."],
       watch: ["Tally must be open with the right company when posting.", "Everything sent to Tally is listed under Tally: everything sent."]},
     "gstapi": {area: "GST", t: "Fetching from the GST portal (GST API)", what: "With the firm account, 2B can be fetched straight from the GST portal after an OTP sent to the taxpayer.",
       steps: ["On gst.gov.in the taxpayer allows API access: My Profile → Manage API Access.", "Client setup → GST: type the GST portal username for the GSTIN.", "TDS & GST → GST → 2B: Send OTP, type the OTP, Connect, then Fetch 2B."],
@@ -21881,7 +21881,7 @@ const GUIDE = {
       steps: ["Add each GSTIN; its PAN must be the client's PAN.", "Choose the GSTIN in the list to see its settings.", "When a setting changes, choose whether it is for this GSTIN only, for all, or for the ones you tick."]},
     "account": {area: "Firm account", t: "Firm account, people and credit", what: "Signing in to the firm account keeps the work in the cloud, shares it with the firm's people, and uses the firm's credit for reading documents.",
       steps: ["Sign in at the top right.", "Owners add people under Settings → People, with what each may do.", "Credit and plan are shown on the firm button; ask the administrator to top up before it runs out."]},
-    "tickets": {area: "Help", t: "Raising a ticket", what: "When the guide does not answer it, raise a ticket to TDS Desk support. It carries the screen you were on, the client, the build and the last messages shown, so there is less back and forth.",
+    "tickets": {area: "Help", t: "Raising a ticket", what: "When the guide does not answer it, raise a ticket to FinCom support. It carries the screen you were on, the client, the build and the last messages shown, so there is less back and forth.",
       steps: ["Open Help from the screen where the problem is.", "Help → My tickets → New ticket: a subject, the module, how urgent, and what happened.", "Attach screenshots or the file that was being read.", "Replies appear on the ticket (and by email when email is set up). Reply on the ticket, or mark it resolved."],
       watch: ["Response targets: urgent 2 hours, high 4, medium 8, low 24; resolution: urgent 8 hours, high 1 day, medium 3 days, low 5 days."]}
   },
@@ -21916,7 +21916,7 @@ function viewHelp(){
   const s = SUP.st(), adm = SUP.admin();
   if (s.tab === "desk" && !adm) s.tab = "tickets";
   const n = SUP.counts();
-  let h = '<div class="pane" style="margin-top:0"><div class="sp-head"><div><h2 style="margin:0">Help</h2><p class="note" style="margin:2px 0 0">Search the guide; if it does not answer it, raise a ticket to TDS Desk support.</p></div>' +
+  let h = '<div class="pane" style="margin-top:0"><div class="sp-head"><div><h2 style="margin:0">Help</h2><p class="note" style="margin:2px 0 0">Search the guide; if it does not answer it, raise a ticket to FinCom support.</p></div>' +
     (SUP.on() ? '<button class="btn primary" data-sup="new">+ New ticket</button>' : "") + "</div>" +
     '<nav class="sbar" aria-label="Help">' + [["guide", "Guide"], ["tickets", "My tickets", !adm && n ? n : null]].concat(adm ? [["desk", "Support desk", n || null]] : [])
       .map(([id, l, c]) => '<button data-suptab="' + id + '" aria-selected="' + (s.tab === id) + '">' + l + (c ? ' <span class="sbar-n">' + c + "</span>" : "") + "</button>").join("") + "</nav>";
@@ -21956,7 +21956,7 @@ function viewSupMine(){
   const shown = l.filter(t => (f === "all" || (f === "open" ? SUP.active(t) : f === "waiting" ? t.status === "waiting" : !SUP.active(t))) && (!q || (SUP.code(t) + " " + t.subject + " " + t.module).toLowerCase().includes(q)));
   h += supToolbar([["open", "Open", l.filter(SUP.active).length], ["waiting", "Awaiting me", wait.length], ["closed", "Closed", l.filter(t => !SUP.active(t)).length], ["all", "All", l.length]], f, s.q);
   h += shown.length ? '<div class="bk-tablewrap"><table class="bk-table sp-table"><thead><tr><th>ID</th><th>Subject</th><th>Module</th><th>Priority</th><th>Status</th><th>SLA</th><th class="dt">Updated</th></tr></thead><tbody>' + shown.map(t => supRow(t, false)).join("") + "</tbody></table></div>"
-    : '<p class="note">' + (l.length ? "No tickets here." : "No tickets yet. Raise one with + New ticket; it goes to TDS Desk support.") + "</p>";
+    : '<p class="note">' + (l.length ? "No tickets here." : "No tickets yet. Raise one with + New ticket; it goes to FinCom support.") + "</p>";
   return h;
 }
 function supToolbar(chips, f, q){
@@ -22016,7 +22016,7 @@ function viewSupDesk(){
 function viewSupNew(){
   const s = SUP.st(), c = S.helpCtx || SUP.context(), d = s.draft || (s.draft = {module: SUP.moduleOf(c), category: "problem", priority: "medium", withCtx: true, subject: s.gq || "", body: ""});
   const sugg = d.subject && d.subject.length > 3 ? GUIDE.search(d.subject).slice(0, 3) : [];
-  return '<div class="sp-card" style="margin-top:12px"><div class="sp-head"><h3 style="margin:0">New ticket to TDS Desk support</h3><button class="linkbtn" data-sup="cancel">Cancel</button></div>' +
+  return '<div class="sp-card" style="margin-top:12px"><div class="sp-head"><h3 style="margin:0">New ticket to FinCom support</h3><button class="linkbtn" data-sup="cancel">Cancel</button></div>' +
     '<label class="sp-f"><span>Subject</span><input type="text" data-supd="subject" data-fk="supd-subject" data-keeptyped maxlength="200" value="' + esc(d.subject) + '" placeholder="In a line: what is wrong or what you need"></label>' +
     (sugg.length ? '<div class="sp-sugg"><span class="note">The guide may answer it:</span> ' + sugg.map(x => '<button class="linkbtn" data-supart="' + esc(x.k) + '" data-supgo>' + esc(x.t) + "</button>").join(" · ") + "</div>" : "") +
     '<div class="sp-grid"><label class="sp-f"><span>Module</span><select data-supd="module">' + SUP.MODULES.map(m => "<option" + (d.module === m ? " selected" : "") + ">" + esc(m) + "</option>").join("") + "</select></label>" +
@@ -22052,8 +22052,8 @@ function viewSupTicket(){
   h += "</div>";
   const c = t.context || {};
   if (Object.keys(c).length) h += '<details class="sp-ctx"' + (adm ? " open" : "") + "><summary>Screen details sent with the ticket</summary>" + supCtx(c) + "</details>";
-  h += '<div class="sp-thread">' + (t.thread || []).map(m => '<div class="sp-msg' + (m.from_support ? " sup" : "") + (m.internal ? " int" : "") + '"><div class="sp-mhead"><b>' + esc(m.author_name || (m.from_support ? "TDS Desk support" : "Firm")) + "</b>" +
-    (m.from_support ? ' <span class="note">TDS Desk support</span>' : "") + (m.internal ? ' <span class="sp-pill sp-int">internal note — the firm does not see it</span>' : "") + '<span class="note" style="margin-left:auto">' + esc(SUP.when(m.created_at)) + "</span></div>" +
+  h += '<div class="sp-thread">' + (t.thread || []).map(m => '<div class="sp-msg' + (m.from_support ? " sup" : "") + (m.internal ? " int" : "") + '"><div class="sp-mhead"><b>' + esc(m.author_name || (m.from_support ? "FinCom support" : "Firm")) + "</b>" +
+    (m.from_support ? ' <span class="note">FinCom support</span>' : "") + (m.internal ? ' <span class="sp-pill sp-int">internal note — the firm does not see it</span>' : "") + '<span class="note" style="margin-left:auto">' + esc(SUP.when(m.created_at)) + "</span></div>" +
     '<div class="sp-body">' + esc(m.body).replace(/\n/g, "<br>") + "</div>" +
     ((m.files || []).length ? '<div class="sp-mfiles">' + m.files.map(f => '<button class="sp-file" data-supdl="' + esc(f.path) + '" data-supdln="' + esc(f.name) + '">\u{1F4CE} ' + esc(f.name) + " <small>" + Math.max(1, Math.round((f.size || 0) / 1024)) + " KB</small></button>").join("") + "</div>" : "") + "</div>").join("") + "</div>";
   h += '<div class="sp-card"><label class="sp-f"><span>' + (adm ? "Reply to the firm" : "Reply") + '</span><textarea data-supr data-fk="supr" data-keeptyped rows="4" placeholder="' + (adm ? "Your answer" : "Add details, answer support’s question") + '">' + esc(s.rtext || "") + "</textarea></label>" +
@@ -22107,7 +22107,7 @@ if (typeof document !== "undefined"){
       if (String(dr.subject || "").trim().length < 3){ toast("Give the ticket a subject."); return; }
       if (String(dr.body || "").trim().length < 5){ toast("Describe what happened."); return; }
       s.busy = true; render();
-      try { const tk = await SUP.create(dr); s.newOpen = false; s.draft = null; s.files = []; s.tab = "tickets"; s.busy = false; S.helpCtx = null; toast("Ticket " + SUP.code(tk) + " raised. TDS Desk support will answer here."); await SUP.load(true); SUP.open(tk.id); }
+      try { const tk = await SUP.create(dr); s.newOpen = false; s.draft = null; s.files = []; s.tab = "tickets"; s.busy = false; S.helpCtx = null; toast("Ticket " + SUP.code(tk) + " raised. FinCom support will answer here."); await SUP.load(true); SUP.open(tk.id); }
       catch (err){ s.busy = false; toast("Not raised: " + err.message); render(); }
       return;
     }
@@ -22607,7 +22607,7 @@ Cloud.checkMfa = async function(){
 Cloud.enrolStart = async function(){
   // an earlier half-finished set-up is dropped first
   for (const f of await this.factors()) if (f.status !== "verified") { try { await this.authApi("factors/" + f.id, "DELETE"); } catch (e){} }
-  const j = await this.authApi("factors", "POST", {factor_type: "totp", friendly_name: "TDS Desk " + new Date().toISOString().slice(0, 16)});
+  const j = await this.authApi("factors", "POST", {factor_type: "totp", friendly_name: "FinCom " + new Date().toISOString().slice(0, 16)});
   this.st.mfa = Object.assign({}, this.st.mfa || {need: "enrol"}, {factorId: j.id, qr: (j.totp || {}).qr_code || "", secret: (j.totp || {}).secret || ""});
   return this.st.mfa;
 };
@@ -22627,7 +22627,7 @@ function viewTwoStep(){
   let h = '<div class="signin"><div class="signin-box"><h1>Two-step sign-in</h1>';
   if (m.forAdmin) h += '<p class="note" style="margin:8px 0 0">Platform administration changes every firm and the credit, so it needs the code from your phone. Your firm work does not.</p>';
   if (m.need === "code"){
-    h += '<p class="note" style="margin:8px 0 14px">Open the authenticator app on your phone (Google Authenticator, Microsoft Authenticator or similar) and type the 6-digit code for TDS Desk.</p>';
+    h += '<p class="note" style="margin:8px 0 14px">Open the authenticator app on your phone (Google Authenticator, Microsoft Authenticator or similar) and type the 6-digit code for FinCom.</p>';
   } else if (!m.factorId){
     h += '<p class="note" style="margin:8px 0 14px">' + (m.required ? "This account must" : "You can") +
       " protect this account with a code from an authenticator app on your phone, as well as the password. Install Google Authenticator or Microsoft Authenticator, then press the button.</p>" +

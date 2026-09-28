@@ -22,7 +22,7 @@ const TDS26Q = {
     let ln = 0;
     const put = arr => { ln++; lines.push([ln].concat(arr).join("^")); };
     // FH: file header
-    put(["FH", "NS1", "R", fileDate, "1", "D", firm.tan, "1", "TDS Desk", "", "", "", "", "", "", "", ""]);
+    put(["FH", "NS1", "R", fileDate, "1", "D", firm.tan, "1", "FinCom", "", "", "", "", "", "", "", ""]);
     // BH: batch header, one batch for this form and quarter
     put(["BH", "1", String(live.length), "26Q", firm.tan, firm.pan || "PANNOTREQD", fy.replace("-", ""), ay.replace("-", ""),
       txt(firm.name), txt(firm.branch), txt(firm.flat), txt(firm.premises), txt(firm.road), txt(firm.area), txt(firm.town),
