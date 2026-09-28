@@ -353,9 +353,13 @@ function viewCloudSettings(){
     '<label><span>Repeat it</span><input type="password" data-cloud="newpw2" data-fk="cloudnewpw2" autocomplete="new-password"></label></div>' +
     '<div class="row" style="margin-top:8px"><button class="btn small" data-act="cloudPassword">Change password</button></div>';
   const aal2 = Cloud.aal() === "aal2", idle = num(lsGet("tdsdesk:idlemin")) || IDLE_MIN_DEFAULT;
-  h += '<h3 style="margin:14px 0 4px;font-size:15px">Two-step sign-in</h3><p class="note" style="margin:0 0 6px">' +
-    (aal2 ? '<span class="tag ok">On</span> This sign-in used a code from your authenticator app.' : 'Off. A code from an authenticator app on your phone, as well as the password' + (st.role === "owner" ? " (required for the firm\u2019s owner)." : ".") +
-      ' <button class="btn small" data-act="mfaOptIn">Set it up</button>') + "</p>" +
+  const mi = st.mfaInfo || {};
+  h += '<h3 style="margin:14px 0 4px;font-size:15px">Two-step sign-in (optional)</h3><p class="note" style="margin:0 0 6px">' +
+    (aal2 ? '<span class="tag ok">On</span> This sign-in used a code from your authenticator app.'
+      : mi.enrolled ? "On for this account."
+      : 'Off. For extra safety you can add a code from an authenticator app on your phone. <button class="btn small" data-act="mfaOptIn">Turn it on</button>') + "</p>" +
+    (mi.admin && !aal2 ? '<p class="bk-warn" style="margin:6px 0">Platform administration is locked until you give the code from your phone. <button class="btn small primary" data-act="mfaAdmin">Unlock administration</button></p>' : "") +
+    (S.lastSignIn ? '<p class="note" style="margin:0 0 6px">Your last sign-in: ' + esc(new Date(S.lastSignIn.at).toLocaleString("en-IN")) + ", " + esc(S.lastSignIn.device) + ".</p>" : "") +
     '<label class="f" style="max-width:320px"><span>Sign out after this many minutes without use</span><select data-idlemin aria-label="Sign out after">' +
     [10, 15, 30, 60, 120].map(n => '<option value="' + n + '"' + (n === idle ? " selected" : "") + ">" + n + " minutes</option>").join("") + "</select></label>";
   if ((st.members || []).length) h += '<h3 style="margin:14px 0 4px;font-size:15px">People in the firm</h3><table class="data"><thead><tr><th>Name</th><th>Email</th><th>Role</th></tr></thead><tbody>' +
@@ -1236,7 +1240,7 @@ document.addEventListener("click", ev => {
       const email = em ? em.value.trim() : "", pass = pw ? pw.value : "";
       if (!email || !pass){ toast("Enter your email and password."); break; }
       Cloud.st.busy = "Signing in\u2026"; Cloud.st.error = ""; render();
-      Cloud.signIn(email, pass).then(() => { Cloud.st.busy = ""; S.cloudForm = null; toast("Signed in as " + email + "."); setTimeout(() => auditEvent("signin", navigator.userAgent.slice(0, 120)), 3000); startCloudSync(); loadAccount(true).then(() => render()); render(); },
+      Cloud.signIn(email, pass).then(() => { Cloud.st.busy = ""; S.cloudForm = null; toast("Signed in as " + email + "."); setTimeout(() => { auditEvent("signin", navigator.userAgent.slice(0, 160)); setTimeout(loadLastSignIn, 1500); }, 3000); startCloudSync(); loadAccount(true).then(() => render()); render(); },
         err => { Cloud.st.busy = ""; Cloud.st.error = err.message; render(); });
       break;
     }

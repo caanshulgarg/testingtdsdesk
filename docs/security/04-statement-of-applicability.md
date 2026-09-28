@@ -96,10 +96,10 @@ The service runs in suppliers' data centres (covered by their certifications). T
 | Control | Applies | Why | How it is met | Status |
 |---|---|---|---|---|
 | 8.1 User endpoint devices | Y | R18 | FileVault, OS updates, the browser's own profile per firm user | Partial |
-| 8.2 Privileged access | Y | R1, R2 | platform_admins need two-step sign-in (`is_superadmin()` needs aal2); admin actions logged | Built |
+| 8.2 Privileged access | Y | R1, R2 | Platform administration needs two-step sign-in (`is_superadmin()` needs aal2); admin actions logged | Built |
 | 8.3 Information access restriction | Y | R1 | RLS on every table; functions revoked from anon; cross-firm test | Built |
 | 8.4 Access to source code | Y | R19 | GitHub two-step; the live repository protected | Owner to confirm |
-| 8.5 Secure authentication | Y | R3 | Two-step sign-in (TOTP); server logout; idle sign-out; lockout by Supabase rate limits | Built |
+| 8.5 Secure authentication | Y | R3 | Optional two-step sign-in (TOTP), required for platform administration; strong passwords with leaked-password check; last sign-in shown; server logout; idle sign-out; Supabase rate limits | Built |
 | 8.6 Capacity management | Y | B | Supabase usage alerts; the bridge posts in chunks of 25 | Partial |
 | 8.7 Protection against malware | Y | B | Defender or XProtect on laptops; uploads parsed, never executed; PDF scripts off | Partial |
 | 8.8 Technical vulnerabilities | Y | R5, R6 | Libraries upgraded; Dependabot; yearly VAPT; fix within SLA | Built / To do |

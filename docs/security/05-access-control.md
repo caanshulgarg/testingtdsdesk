@@ -11,15 +11,15 @@ Owner: Anshul Garg · Version 0.1 draft, 27 Sep 2026
 
 | Role | Can | Two-step sign-in |
 |---|---|---|
-| owner | Everything in the firm: people, drop keys, backups, settings, posting to Tally | **Required** |
+| owner | Everything in the firm: people, drop keys, backups, settings, posting to Tally | Optional (required once turned on) |
 | staff | Work on clients, post to Tally | Optional (required if set up) |
 | readonly | See only | Optional |
-| platform administrator (`platform_admins`) | Firms, plans, credit, platform secrets | **Required** (`is_superadmin()` is false without it) |
+| platform administrator (`platform_admins`) | Firms, plans, credit, platform secrets | **Required for administration** (`is_superadmin()` is false without it); their own firm work does not need it |
 
 ## 5.3 Passwords and two-step sign-in
 - Passwords are at least 10 characters (set in Supabase Auth: minimum length, and leaked-password protection on).
 - A first password made by the admin function is 16 random characters. It is shown once and changed by the person.
-- Two-step sign-in uses an authenticator app (TOTP). A lost phone is reset by the firm owner (or the platform administrator for owners) with **Reset two-step**, only after confirming the person by phone or in person. The reset goes into the audit trail.
+- Two-step sign-in uses an authenticator app (TOTP). It is optional for firm users (decision of 28 Sep 2026: a second step on every sign-in was judged too heavy for client firms). Compensating controls: passwords of 10+ characters with the leaked-password check, Supabase sign-in rate limits, the last sign-in shown at each sign-in, idle sign-out, server-side logout, and the audit trail. The risk is accepted in the register (R3). A lost phone is reset by the firm owner (or the platform administrator for owners) with **Reset two-step**, only after confirming the person by phone or in person. The reset goes into the audit trail.
 - Sessions end:
   - after the idle time the person chooses (10 to 120 minutes, 30 by default),
   - on sign-out, which also ends the session on the server.

@@ -77,3 +77,20 @@ end $$;
 drop trigger if exists audit_wallet on public.wallet_entries;
 create trigger audit_wallet after insert on public.wallet_entries for each row execute function public.audit_wallet();
 revoke execute on function public.audit_members(), public.audit_wallet(), public.activity_append_only() from public, anon, authenticated;
+
+-- 28 Sep 2026 (migration security_3b): two-step sign-in made OPTIONAL for firm work, at the owner's request
+-- (a second step on every sign-in was judged too heavy for firms). Anyone who turns it on must still use it.
+-- Platform administration keeps needing it: is_superadmin() above still requires aal2.
+create or replace function public.mfa_required() returns boolean
+language sql stable security definer set search_path = public, auth as $$
+  select exists (select 1 from auth.mfa_factors f where f.user_id = auth.uid() and f.status = 'verified')
+$$;
+create or replace function public.mfa_status() returns jsonb
+language sql stable security definer set search_path = public, auth as $$
+  select jsonb_build_object(
+    'required', public.mfa_required(),
+    'enrolled', exists (select 1 from auth.mfa_factors f where f.user_id = auth.uid() and f.status = 'verified'),
+    'admin', exists (select 1 from public.platform_admins a where a.user_id = auth.uid()),
+    'aal', coalesce(auth.jwt() ->> 'aal', 'aal1'),
+    'ok', public.mfa_ok())
+$$;

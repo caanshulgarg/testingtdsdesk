@@ -2,9 +2,9 @@
 /* Two-step sign-in (an authenticator-app code) and signing out when  */
 /* nobody has used the page for a while                                */
 /* ================================================================== */
-// The firm owner and the platform administrator must use it; anyone else may turn it on.
-// Until the code is given the server shows nothing of the firm (my_firm() is empty), so this
-// screen is a convenience: the lock itself is on the server.
+// Optional for firm work: once someone turns it on, the server shows nothing of the firm without the code
+// (my_firm() is empty). Platform administration (all firms, credit, secrets) always needs it: is_superadmin() is
+// false without it, so the administrator is asked for the code only when opening administration.
 Cloud.aal = function(){
   const s = this.sess();
   try { return JSON.parse(atob(String(s.access_token).split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).aal || "aal1"; } catch (e){ return "aal1"; }
@@ -25,7 +25,7 @@ Cloud.factors = async function(){
 Cloud.checkMfa = async function(){
   if (!this.on()) { this.st.mfa = null; return null; }
   let st;
-  try { st = await this.rpc("mfa_status"); }
+  try { st = await this.rpc("mfa_status"); this.st.mfaInfo = st || null; }
   catch (e){ if (/mfa_status|could not find|404/i.test(e.message)) { this.st.mfa = null; return null; } throw e; }   // a server without two-step yet
   if (!st || st.ok !== false){ this.st.mfa = null; return null; }
   const list = await this.factors();
@@ -56,10 +56,11 @@ Cloud.mfaVerify = async function(code){
 function viewTwoStep(){
   const m = Cloud.st.mfa || {}, busy = Cloud.st.busy;
   let h = '<div class="signin"><div class="signin-box"><h1>Two-step sign-in</h1>';
+  if (m.forAdmin) h += '<p class="note" style="margin:8px 0 0">Platform administration changes every firm and the credit, so it needs the code from your phone. Your firm work does not.</p>';
   if (m.need === "code"){
     h += '<p class="note" style="margin:8px 0 14px">Open the authenticator app on your phone (Google Authenticator, Microsoft Authenticator or similar) and type the 6-digit code for TDS Desk.</p>';
   } else if (!m.factorId){
-    h += '<p class="note" style="margin:8px 0 14px">' + (m.required ? "As the firm’s owner or administrator you must" : "You can") +
+    h += '<p class="note" style="margin:8px 0 14px">' + (m.required ? "This account must" : "You can") +
       " protect this account with a code from an authenticator app on your phone, as well as the password. Install Google Authenticator or Microsoft Authenticator, then press the button.</p>" +
       '<div class="row"><button class="btn primary" data-act="mfaStart"' + (busy ? " disabled" : "") + ">Set it up</button></div>";
   } else {
@@ -73,7 +74,7 @@ function viewTwoStep(){
       '<div class="row" style="margin-top:12px"><button class="btn primary" data-act="mfaVerify"' + (busy ? " disabled" : "") + ">" + (busy ? "Checking…" : "Continue") + "</button></div>";
   }
   if (Cloud.st.error) h += '<p class="bk-warn" style="margin-top:10px">' + esc(Cloud.st.error) + "</p>";
-  h += '<p class="note" style="margin-top:14px">' + (m.required || m.need === "code" ? "" : '<button class="linkbtn" data-act="mfaCancel">Not now</button> · ') +
+  h += '<p class="note" style="margin-top:14px">' + (m.required || (m.need === "code" && !m.forAdmin) ? "" : '<button class="linkbtn" data-act="mfaCancel">Not now</button> · ') +
     'Lost your phone? Ask the platform administrator to reset your two-step sign-in. <button class="linkbtn" data-act="mfaSignOut">Sign out</button></p>';
   return h + "</div></div>";
 }
@@ -93,10 +94,17 @@ async function mfaAction(act){
   } else if (act === "mfaCancel"){ Cloud.st.mfa = null; Cloud.st.error = ""; render(); }
   else if (act === "mfaSignOut"){ signOutHere("Signed out."); }
   else if (act === "mfaOptIn"){ Cloud.st.mfa = {need: "enrol", required: false}; render(); }
+  else if (act === "mfaAdmin"){
+    // the administrator unlocks administration: the code if set up, else set it up now
+    Cloud.st.busy = "1"; render();
+    try { const good = (await Cloud.factors()).find(f => f.status === "verified"); Cloud.st.mfa = good ? {need: "code", factorId: good.id, forAdmin: true} : {need: "enrol", required: false, forAdmin: true}; }
+    catch (e){ toast(e.message); }
+    Cloud.st.busy = ""; render();
+  }
 }
 document.addEventListener("click", ev => {
   const t = ev.target.closest && ev.target.closest("[data-act]");
-  if (!t || !/^mfa(Start|Verify|Cancel|SignOut|OptIn)$/.test(t.dataset.act)) return;
+  if (!t || !/^mfa(Start|Verify|Cancel|SignOut|OptIn|Admin)$/.test(t.dataset.act)) return;
   ev.preventDefault(); ev.stopImmediatePropagation(); mfaAction(t.dataset.act);
 }, true);
 document.addEventListener("keydown", ev => { if (ev.key === "Enter" && ev.target && ev.target.id === "mfaCode"){ ev.preventDefault(); mfaAction("mfaVerify"); } }, true);
@@ -142,3 +150,21 @@ document.addEventListener("change", ev => {
   const t = ev.target;
   if (t && t.matches && t.matches("[data-idlemin]")){ lsSet("tdsdesk:idlemin", String(Math.max(5, Math.min(240, num(t.value) || IDLE_MIN_DEFAULT)))); toast("Saved: sign out after " + t.value + " minutes without use."); }
 }, true);
+
+/* ---------- last sign-in: shown after signing in, so a sign-in you did not make stands out ---------- */
+function deviceName(ua){
+  ua = String(ua || "");
+  const b = /Edg\//.test(ua) ? "Edge" : /Chrome\//.test(ua) ? "Chrome" : /Firefox\//.test(ua) ? "Firefox" : /Safari\//.test(ua) ? "Safari" : "a browser";
+  const o = /Windows/.test(ua) ? "Windows" : /Android/.test(ua) ? "Android" : /iPhone|iPad/.test(ua) ? "iPhone" : /Mac OS/.test(ua) ? "Mac" : /Linux/.test(ua) ? "Linux" : "";
+  return b + (o ? " on " + o : "");
+}
+async function loadLastSignIn(){
+  const s = Cloud.sess();
+  if (!s || !s.user_id || !Cloud.st.firm) return;
+  try {
+    const rows = await Cloud.api("activity?select=at,detail&user_id=eq." + encodeURIComponent(s.user_id) + "&what=eq.signin&order=at.desc&limit=2");
+    const prev = (rows || [])[1];
+    S.lastSignIn = prev ? {at: prev.at, device: deviceName(prev.detail)} : null;
+    if (prev) toast("Your last sign-in: " + new Date(prev.at).toLocaleString("en-IN", {day: "numeric", month: "short", hour: "numeric", minute: "2-digit"}) + ", " + S.lastSignIn.device + ". Not you? Change your password in Settings.");
+  } catch (e){}
+}

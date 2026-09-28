@@ -931,7 +931,7 @@ p,.note,.banner{text-wrap:pretty}
 /* on the screens with review / post tabs the client name is already in the side menu, so the title row stays clean */
 .headrow .tbar-title .note{display:none}
 </style>
-<style>.is-test .side-brand::after{content:"TEST";display:block;margin-top:4px;font-size:11px;letter-spacing:.14em;color:#E9A06A}.is-test header.top{box-shadow:inset 0 3px 0 #E2761B}body.is-test::after{content:"TESTING SITE · not for real client work · post only to a ZZ TEST company in Tally";position:fixed;left:0;right:0;bottom:0;z-index:70;background:#E2761B;color:#fff;font-size:12.5px;text-align:center;padding:3px 8px;letter-spacing:.04em;pointer-events:none}.is-test .actionbar{bottom:22px}.is-test #app{padding-bottom:34px}</style><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-JUZRiA/pD/Q1MSIv1WkOX00eklOKXLcOHszD3zr3UBc=' 'sha256-5T46weycixnZR4A0MF4ZH6CEKQ1zc2eF2SxOVAPt4IY=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+<style>.is-test .side-brand::after{content:"TEST";display:block;margin-top:4px;font-size:11px;letter-spacing:.14em;color:#E9A06A}.is-test header.top{box-shadow:inset 0 3px 0 #E2761B}body.is-test::after{content:"TESTING SITE · not for real client work · post only to a ZZ TEST company in Tally";position:fixed;left:0;right:0;bottom:0;z-index:70;background:#E2761B;color:#fff;font-size:12.5px;text-align:center;padding:3px 8px;letter-spacing:.04em;pointer-events:none}.is-test .actionbar{bottom:22px}.is-test #app{padding-bottom:34px}</style><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-JUZRiA/pD/Q1MSIv1WkOX00eklOKXLcOHszD3zr3UBc=' 'sha256-h0sVg7G+1Hcgw4wieztlAEIi1d84qXVAyYZaiJftXPM=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
 </head>
 <body class="is-test">
 <a class="skip" id="skipLink" href="#app">Skip to the work</a>
@@ -18316,9 +18316,13 @@ function viewCloudSettings(){
     '<label><span>Repeat it</span><input type="password" data-cloud="newpw2" data-fk="cloudnewpw2" autocomplete="new-password"></label></div>' +
     '<div class="row" style="margin-top:8px"><button class="btn small" data-act="cloudPassword">Change password</button></div>';
   const aal2 = Cloud.aal() === "aal2", idle = num(lsGet("tdsdesk-test:idlemin")) || IDLE_MIN_DEFAULT;
-  h += '<h3 style="margin:14px 0 4px;font-size:15px">Two-step sign-in</h3><p class="note" style="margin:0 0 6px">' +
-    (aal2 ? '<span class="tag ok">On</span> This sign-in used a code from your authenticator app.' : 'Off. A code from an authenticator app on your phone, as well as the password' + (st.role === "owner" ? " (required for the firm\u2019s owner)." : ".") +
-      ' <button class="btn small" data-act="mfaOptIn">Set it up</button>') + "</p>" +
+  const mi = st.mfaInfo || {};
+  h += '<h3 style="margin:14px 0 4px;font-size:15px">Two-step sign-in (optional)</h3><p class="note" style="margin:0 0 6px">' +
+    (aal2 ? '<span class="tag ok">On</span> This sign-in used a code from your authenticator app.'
+      : mi.enrolled ? "On for this account."
+      : 'Off. For extra safety you can add a code from an authenticator app on your phone. <button class="btn small" data-act="mfaOptIn">Turn it on</button>') + "</p>" +
+    (mi.admin && !aal2 ? '<p class="bk-warn" style="margin:6px 0">Platform administration is locked until you give the code from your phone. <button class="btn small primary" data-act="mfaAdmin">Unlock administration</button></p>' : "") +
+    (S.lastSignIn ? '<p class="note" style="margin:0 0 6px">Your last sign-in: ' + esc(new Date(S.lastSignIn.at).toLocaleString("en-IN")) + ", " + esc(S.lastSignIn.device) + ".</p>" : "") +
     '<label class="f" style="max-width:320px"><span>Sign out after this many minutes without use</span><select data-idlemin aria-label="Sign out after">' +
     [10, 15, 30, 60, 120].map(n => '<option value="' + n + '"' + (n === idle ? " selected" : "") + ">" + n + " minutes</option>").join("") + "</select></label>";
   if ((st.members || []).length) h += '<h3 style="margin:14px 0 4px;font-size:15px">People in the firm</h3><table class="data"><thead><tr><th>Name</th><th>Email</th><th>Role</th></tr></thead><tbody>' +
@@ -19199,7 +19203,7 @@ document.addEventListener("click", ev => {
       const email = em ? em.value.trim() : "", pass = pw ? pw.value : "";
       if (!email || !pass){ toast("Enter your email and password."); break; }
       Cloud.st.busy = "Signing in\u2026"; Cloud.st.error = ""; render();
-      Cloud.signIn(email, pass).then(() => { Cloud.st.busy = ""; S.cloudForm = null; toast("Signed in as " + email + "."); setTimeout(() => auditEvent("signin", navigator.userAgent.slice(0, 120)), 3000); startCloudSync(); loadAccount(true).then(() => render()); render(); },
+      Cloud.signIn(email, pass).then(() => { Cloud.st.busy = ""; S.cloudForm = null; toast("Signed in as " + email + "."); setTimeout(() => { auditEvent("signin", navigator.userAgent.slice(0, 160)); setTimeout(loadLastSignIn, 1500); }, 3000); startCloudSync(); loadAccount(true).then(() => render()); render(); },
         err => { Cloud.st.busy = ""; Cloud.st.error = err.message; render(); });
       break;
     }
@@ -22567,9 +22571,9 @@ document.addEventListener("click", ev => {
 /* Two-step sign-in (an authenticator-app code) and signing out when  */
 /* nobody has used the page for a while                                */
 /* ================================================================== */
-// The firm owner and the platform administrator must use it; anyone else may turn it on.
-// Until the code is given the server shows nothing of the firm (my_firm() is empty), so this
-// screen is a convenience: the lock itself is on the server.
+// Optional for firm work: once someone turns it on, the server shows nothing of the firm without the code
+// (my_firm() is empty). Platform administration (all firms, credit, secrets) always needs it: is_superadmin() is
+// false without it, so the administrator is asked for the code only when opening administration.
 Cloud.aal = function(){
   const s = this.sess();
   try { return JSON.parse(atob(String(s.access_token).split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).aal || "aal1"; } catch (e){ return "aal1"; }
@@ -22590,7 +22594,7 @@ Cloud.factors = async function(){
 Cloud.checkMfa = async function(){
   if (!this.on()) { this.st.mfa = null; return null; }
   let st;
-  try { st = await this.rpc("mfa_status"); }
+  try { st = await this.rpc("mfa_status"); this.st.mfaInfo = st || null; }
   catch (e){ if (/mfa_status|could not find|404/i.test(e.message)) { this.st.mfa = null; return null; } throw e; }   // a server without two-step yet
   if (!st || st.ok !== false){ this.st.mfa = null; return null; }
   const list = await this.factors();
@@ -22621,10 +22625,11 @@ Cloud.mfaVerify = async function(code){
 function viewTwoStep(){
   const m = Cloud.st.mfa || {}, busy = Cloud.st.busy;
   let h = '<div class="signin"><div class="signin-box"><h1>Two-step sign-in</h1>';
+  if (m.forAdmin) h += '<p class="note" style="margin:8px 0 0">Platform administration changes every firm and the credit, so it needs the code from your phone. Your firm work does not.</p>';
   if (m.need === "code"){
     h += '<p class="note" style="margin:8px 0 14px">Open the authenticator app on your phone (Google Authenticator, Microsoft Authenticator or similar) and type the 6-digit code for TDS Desk.</p>';
   } else if (!m.factorId){
-    h += '<p class="note" style="margin:8px 0 14px">' + (m.required ? "As the firm’s owner or administrator you must" : "You can") +
+    h += '<p class="note" style="margin:8px 0 14px">' + (m.required ? "This account must" : "You can") +
       " protect this account with a code from an authenticator app on your phone, as well as the password. Install Google Authenticator or Microsoft Authenticator, then press the button.</p>" +
       '<div class="row"><button class="btn primary" data-act="mfaStart"' + (busy ? " disabled" : "") + ">Set it up</button></div>";
   } else {
@@ -22638,7 +22643,7 @@ function viewTwoStep(){
       '<div class="row" style="margin-top:12px"><button class="btn primary" data-act="mfaVerify"' + (busy ? " disabled" : "") + ">" + (busy ? "Checking…" : "Continue") + "</button></div>";
   }
   if (Cloud.st.error) h += '<p class="bk-warn" style="margin-top:10px">' + esc(Cloud.st.error) + "</p>";
-  h += '<p class="note" style="margin-top:14px">' + (m.required || m.need === "code" ? "" : '<button class="linkbtn" data-act="mfaCancel">Not now</button> · ') +
+  h += '<p class="note" style="margin-top:14px">' + (m.required || (m.need === "code" && !m.forAdmin) ? "" : '<button class="linkbtn" data-act="mfaCancel">Not now</button> · ') +
     'Lost your phone? Ask the platform administrator to reset your two-step sign-in. <button class="linkbtn" data-act="mfaSignOut">Sign out</button></p>';
   return h + "</div></div>";
 }
@@ -22658,10 +22663,17 @@ async function mfaAction(act){
   } else if (act === "mfaCancel"){ Cloud.st.mfa = null; Cloud.st.error = ""; render(); }
   else if (act === "mfaSignOut"){ signOutHere("Signed out."); }
   else if (act === "mfaOptIn"){ Cloud.st.mfa = {need: "enrol", required: false}; render(); }
+  else if (act === "mfaAdmin"){
+    // the administrator unlocks administration: the code if set up, else set it up now
+    Cloud.st.busy = "1"; render();
+    try { const good = (await Cloud.factors()).find(f => f.status === "verified"); Cloud.st.mfa = good ? {need: "code", factorId: good.id, forAdmin: true} : {need: "enrol", required: false, forAdmin: true}; }
+    catch (e){ toast(e.message); }
+    Cloud.st.busy = ""; render();
+  }
 }
 document.addEventListener("click", ev => {
   const t = ev.target.closest && ev.target.closest("[data-act]");
-  if (!t || !/^mfa(Start|Verify|Cancel|SignOut|OptIn)$/.test(t.dataset.act)) return;
+  if (!t || !/^mfa(Start|Verify|Cancel|SignOut|OptIn|Admin)$/.test(t.dataset.act)) return;
   ev.preventDefault(); ev.stopImmediatePropagation(); mfaAction(t.dataset.act);
 }, true);
 document.addEventListener("keydown", ev => { if (ev.key === "Enter" && ev.target && ev.target.id === "mfaCode"){ ev.preventDefault(); mfaAction("mfaVerify"); } }, true);
@@ -22707,6 +22719,24 @@ document.addEventListener("change", ev => {
   const t = ev.target;
   if (t && t.matches && t.matches("[data-idlemin]")){ lsSet("tdsdesk-test:idlemin", String(Math.max(5, Math.min(240, num(t.value) || IDLE_MIN_DEFAULT)))); toast("Saved: sign out after " + t.value + " minutes without use."); }
 }, true);
+
+/* ---------- last sign-in: shown after signing in, so a sign-in you did not make stands out ---------- */
+function deviceName(ua){
+  ua = String(ua || "");
+  const b = /Edg\//.test(ua) ? "Edge" : /Chrome\//.test(ua) ? "Chrome" : /Firefox\//.test(ua) ? "Firefox" : /Safari\//.test(ua) ? "Safari" : "a browser";
+  const o = /Windows/.test(ua) ? "Windows" : /Android/.test(ua) ? "Android" : /iPhone|iPad/.test(ua) ? "iPhone" : /Mac OS/.test(ua) ? "Mac" : /Linux/.test(ua) ? "Linux" : "";
+  return b + (o ? " on " + o : "");
+}
+async function loadLastSignIn(){
+  const s = Cloud.sess();
+  if (!s || !s.user_id || !Cloud.st.firm) return;
+  try {
+    const rows = await Cloud.api("activity?select=at,detail&user_id=eq." + encodeURIComponent(s.user_id) + "&what=eq.signin&order=at.desc&limit=2");
+    const prev = (rows || [])[1];
+    S.lastSignIn = prev ? {at: prev.at, device: deviceName(prev.detail)} : null;
+    if (prev) toast("Your last sign-in: " + new Date(prev.at).toLocaleString("en-IN", {day: "numeric", month: "short", hour: "numeric", minute: "2-digit"}) + ", " + S.lastSignIn.device + ". Not you? Change your password in Settings.");
+  } catch (e){}
+}
 </script>
 </body>
 </html>
