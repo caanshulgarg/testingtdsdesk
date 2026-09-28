@@ -1082,3 +1082,27 @@ kbd{display:inline-block;min-width:22px;padding:2px 7px;border:1px solid var(--r
 .rpt-top-row select{flex:0 0 auto;width:auto}
 .ltr-in{width:170px}.ltr-in.sm{width:110px}
 .ltr-t .ac{white-space:nowrap}.ltr-t .ac .btn{padding:4px 8px}
+/* header on laptop widths: title, tabs and the Tally/Firm buttons stay on one line; the tabs scroll if they must */
+@media (min-width:761px){
+  header.top .headrow:has(> .sbar){display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;column-gap:18px}
+  header.top .headrow:has(> .sbar) > .sbar{flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;min-width:0;margin-top:0}
+  header.top .headrow:has(> .sbar) > .sbar button{white-space:nowrap;flex:none}
+  header.top .headrow:has(> .sbar) > .topright{justify-self:end}
+}
+header.top .tbar{align-items:center;gap:12px}
+header.top .tbar-title{align-items:center}
+/* settings fields wide enough for real names */
+.pane .grid{grid-template-columns:repeat(auto-fill,minmax(210px,1fr))}
+@media (min-width:761px) and (max-width:1439px){
+  header.top .headrow:has(> .sbar) > .sbar button{margin-right:10px;padding-right:6px;font-size:13.5px}
+  header.top .headrow:has(> .sbar){column-gap:12px}
+  header.top .tbar-title h2{font-size:19px}
+  header.top .tallychip{font-size:12.5px}
+}
+@media (min-width:761px) and (max-width:1359px){
+  header.top .headrow:has(> .sbar){grid-template-columns:auto 1fr auto;grid-template-areas:"t . r" "s s s";row-gap:2px}
+  header.top .headrow:has(> .sbar) > .tbar{grid-area:t}
+  header.top .headrow:has(> .sbar) > .topright{grid-area:r}
+  header.top .headrow:has(> .sbar) > .sbar{grid-area:s}
+  header.top .headrow:has(> .sbar) > .sbar button{margin-right:18px;padding-right:0;font-size:14px}
+}
