@@ -27,6 +27,9 @@ function renderSide(){
     setup: '<path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="8" cy="18" r="2"/>',
     txn: '<path d="M4 5h16v14H4z"/><path d="M4 9h16M9 9v10"/>',
     books: '<path d="M5 4h9l5 5v11H5z"/><path d="M13 4v5h5"/><path d="M8 13h7M8 17h5"/>',
+    reports: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+    lookup: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/><path d="M8 10.5h5M10.5 8v5"/>',
+    letters: '<path d="M3 6h18v12H3z"/><path d="M3 7l9 6 9-6"/>',
     help: '<circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.5v.6"/><circle cx="12" cy="17" r=".6"/>',
     clients: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.6c2.6.2 4.6 1.9 5.3 5.4"/>'
   };
@@ -43,7 +46,10 @@ function renderSide(){
       item("sales", "Sales", inCo && mod === "sales" && !isSetupTab(S.tab), 0, "sales", 'data-goclient="sales"') +
       item("inbox", "Inbox", inCo && S.tab === "clientInbox", docqCount(open.id), "inbox", 'data-goclient="inbox"') +
       item("txn", "Transactions", inCo && S.tab === "txn", 0, "txn", 'data-goclient="txn"') +
-      item("books", "TDS & GST", inCo && S.tab === "books", 0, "books", 'data-goclient="books"') +
+      item("books", "TDS & GST", inCo && S.tab === "books" && !["reports", "lookup", "letters"].includes(booksTab()), 0, "books", 'data-goclient="books"') +
+      item("reports", "Reports", inCo && S.tab === "books" && booksTab() === "reports", 0, "reports", 'data-goclient="books:reports"') +
+      item("lookup", "Look up", inCo && S.tab === "books" && booksTab() === "lookup", 0, "lookup", 'data-goclient="books:lookup" title="Any ledger, any dates (press /)"') +
+      item("letters", "Letters", inCo && S.tab === "books" && booksTab() === "letters", 0, "letters", 'data-goclient="books:letters" title="Balance confirmations and dues reminders"') +
       item("setup", "Client setup", inCo && isSetupTab(S.tab), 0, "setup", 'data-act="setup"');
   }
   h += '<div class="side-sep"></div>' + item("clients", "All clients", S.view === "home" && !["rules", "help"].includes(S.homeTab), 0, "clients");
@@ -137,7 +143,7 @@ function clientHeader(){
   const co = CO(), setup = isSetupTab(S.tab), t = docType();
   const names = {bills: "Purchase bills", bank: "Bank", sales: "Sales invoices"};
   const inbox = docqCount(S.coId);
-  const title = S.tab === "dash" ? "Dashboard" : S.tab === "clientInbox" ? "Inbox" : S.tab === "txn" ? "Transactions" : S.tab === "books" ? "TDS & GST from the books" : setup ? "Client setup" : names[t];
+  const title = S.tab === "dash" ? "Dashboard" : S.tab === "clientInbox" ? "Inbox" : S.tab === "txn" ? "Transactions" : S.tab === "books" ? ({reports: "Reports", lookup: "Look up", letters: "Confirmations and reminders"}[booksTab()] || "TDS & GST from the books") : setup ? "Client setup" : names[t];
   let h = '<div class="tbar"><div class="tbar-title"><h2>' + title + '</h2><span class="note">' + esc(co.name) + "</span></div>" +
     '<div class="tbar-actions">' + (inbox && !setup && S.tab !== "clientInbox" ? '<button class="btn small" data-step="collect">\u{1F4E5} ' + inbox + " in inbox</button>" : "") +
     (setup ? '<button class="btn small" data-act="setup">Back to the work</button>' : (t === "sales" ? "" : '<button class="btn primary small" data-act="uploadHere">' + (t === "bank" ? "Upload statement" : "Upload bills") + "</button>")) + "</div></div>";

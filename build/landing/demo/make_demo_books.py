@@ -145,5 +145,8 @@ V = [v for v in V if v["date"] <= "20260331"]
 V.sort(key=lambda v: (v["date"], v["id"]))
 books = {"cid": "c_demo", "vouchers": V, "meta": {"company": "Aarohi Textiles Pvt Ltd", "from": "20250401", "to": "20260331", "gstins": [CMP], "bills": 1, "cc": 0},
   "pans": pans, "gstins": gstins, "under": under, "states": states, "groups": groups}
-json.dump(books, open("/tmp/claude-0/demo/books.json", "w"))
+import sys, os
+out = sys.argv[1] if len(sys.argv) > 1 else "/tmp/claude-0/demo/books.json"
+os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
+json.dump(books, open(out, "w"))
 print(len(V), "vouchers;", sum(1 for v in V if v["type"] == "Sales"), "sales")

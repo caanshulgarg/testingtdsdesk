@@ -26,7 +26,7 @@ trap {
   try { Stop-Transcript | Out-Null } catch { }
   break
 }
-$BridgeVersion = '1.12.8'
+$BridgeVersion = '1.12.9'
 
 # ------------------------------------------------------------------ settings
 function New-BridgeKey {
@@ -415,7 +415,7 @@ function Find-CompanyPort([string]$Company, [int]$PreferredPort) {
 
 function Get-Ledgers([string]$Company, [int]$PreferredPort) {
   $port = Find-CompanyPort $Company $PreferredPort
-  $fetch = 'NAME,PARENT,INCOMETAXNUMBER,PARTYGSTIN,GSTREGISTRATIONTYPE,LEDSTATENAME,ISBILLWISEON,GUID,ALTERID,LEDGSTREGDETAILS.LIST,PAYMENTDETAILS.LIST,TAXTYPE,GSTDUTYHEAD,TDSNATUREOFPAYMENT,NATUREOFPAYMENT,TDSDEDUCTEETYPE,TDSAPPLICABLE'
+  $fetch = 'NAME,PARENT,INCOMETAXNUMBER,PARTYGSTIN,GSTREGISTRATIONTYPE,LEDSTATENAME,ISBILLWISEON,GUID,ALTERID,LEDGSTREGDETAILS.LIST,PAYMENTDETAILS.LIST,TAXTYPE,GSTDUTYHEAD,TDSNATUREOFPAYMENT,NATUREOFPAYMENT,TDSDEDUCTEETYPE,TDSAPPLICABLE,EMAIL,LEDGERPHONE,LEDGERMOBILE,ADDRESS.LIST,LEDMAILINGDETAILS.LIST'
   $doc = Get-XmlDoc (Invoke-Tally -TallyPort $port -Xml (New-CollectionRequest 'TDSDeskLedgers' 'Ledger' $fetch $Company ''))
   $ledgers = @()
   foreach ($l in $doc.SelectNodes('//LEDGER')) {
@@ -424,8 +424,11 @@ function Get-Ledgers([string]$Company, [int]$PreferredPort) {
     if (-not $name) { continue }
     $gstin = Get-NodeText $l 'PARTYGSTIN'
     if (-not $gstin) { $gstin = Get-NodeText $l 'LEDGSTREGDETAILS.LIST/GSTIN' }
+    $addr = @(); foreach ($an in $l.SelectNodes('ADDRESS.LIST/ADDRESS')) { if ($an.InnerText.Trim()) { $addr += $an.InnerText.Trim() } }
+    if (-not $addr.Count) { foreach ($an in $l.SelectNodes('LEDMAILINGDETAILS.LIST/ADDRESS.LIST/ADDRESS')) { if ($an.InnerText.Trim()) { $addr += $an.InnerText.Trim() } } }
     $ledgers += [ordered]@{
       name = $name; group = (Get-NodeText $l 'PARENT'); pan = (Get-NodeText $l 'INCOMETAXNUMBER'); gstin = $gstin
+      email = (Get-NodeText $l 'EMAIL'); phone = (Get-NodeText $l 'LEDGERPHONE'); mobile = (Get-NodeText $l 'LEDGERMOBILE'); address = @($addr)
       billwise = (Get-NodeText $l 'ISBILLWISEON'); guid = (Get-NodeText $l 'GUID'); alterId = (Get-NodeText $l 'ALTERID')
       acNo = (Get-NodeText $l 'PAYMENTDETAILS.LIST/ACCOUNTNUMBER'); ifsc = (Get-NodeText $l 'PAYMENTDETAILS.LIST/IFSCODE')
       taxType = (Get-NodeText $l 'TAXTYPE'); dutyHead = (Get-NodeText $l 'GSTDUTYHEAD')

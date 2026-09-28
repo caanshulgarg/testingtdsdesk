@@ -735,6 +735,7 @@ function viewCompanySettings(){
   h += '<div class="pane"><h2>Ledgers by payment type</h2><div class="tblwrap"><table class="data"><thead><tr><th>Payment type</th><th>TDS ledger in Tally</th><th>Default expense ledger</th></tr></thead><tbody>' +
     rules().map(r => "<tr><td>" + esc(r.label) + "</td><td>" + (r.basis === "never" ? "—" : '<input type="text" data-tdsled="' + r.id + '" value="' + esc(c.tdsLedgers[r.id] || "") + '" aria-label="TDS ledger">') +
       '</td><td><input type="text" data-expled="' + r.id + '" value="' + esc(c.expenseLedgers[r.id] || "") + '" aria-label="Expense ledger"></td></tr>').join("") + "</tbody></table></div></div>";
+  if (typeof ClosedP === "object") h += ClosedP.pane(c);
   h += '<div class="pane"><h2>Remove this client</h2><p class="note" style="margin:0 0 10px">Deletes this client with all its invoices and deductees from the desk. Nothing in Tally is touched.</p>' +
     '<button class="btn danger" data-act="delCo">' + (S.arm === "delCo" ? "Click again to delete " + esc(c.name) : "Delete client") + "</button></div></div>";
   return h;
@@ -752,7 +753,7 @@ function viewExport(){
     '<p class="note" style="margin:0 0 12px">TDS in these entries: ' + money(totTds) + ". " + sent + " sent earlier.</p>";
   if (waiting.length){
     h += '<div class="tblwrap"><table class="data"><thead><tr><th>Date</th><th>Supplier</th><th>Bill no.</th><th class="n">Amount</th><th>Section</th><th class="n">TDS</th><th></th></tr></thead><tbody>' +
-      waiting.map(e => "<tr><td>" + fmtDate(e.x.invoiceDate) + "</td><td>" + esc(e.x.vendorName) + (e.noteKind ? ' <span class="tag">' + (e.noteKind === "credit" ? "credit note" : "debit note") + "</span>" : "") + "</td><td>" + esc(e.x.invoiceNo || "") + '</td><td class="n">' + INR.format(num(e.x.total)) + "</td><td>" + esc(e.snapshot.ref) + '</td><td class="n">' + money0(e.snapshot.tds) + "</td>" +
+      waiting.map(e => "<tr><td>" + fmtDate(e.x.invoiceDate) + (typeof ClosedP === "object" ? ClosedP.tag(e.x.invoiceDate, !!(e.snapshot && e.snapshot.tds)) : "") + "</td><td>" + esc(e.x.vendorName) + (e.noteKind ? ' <span class="tag">' + (e.noteKind === "credit" ? "credit note" : "debit note") + "</span>" : "") + "</td><td>" + esc(e.x.invoiceNo || "") + '</td><td class="n">' + INR.format(num(e.x.total)) + "</td><td>" + esc(e.snapshot.ref) + '</td><td class="n">' + money0(e.snapshot.tds) + "</td>" +
         '<td class="ac" style="white-space:nowrap"><button class="btn small" data-billback="' + e.id + '">Back to review</button> <button class="btn small danger" data-billdel="' + e.id + '" title="Delete this bill">Delete</button></td></tr>').join("") + "</tbody></table></div>" +
       (waiting.length > 1 ? '<div class="row" style="margin-top:8px"><button class="btn small" data-act="billBackAll">Send all ' + waiting.length + " back to review</button></div>" : "");
   }
@@ -1139,7 +1140,8 @@ document.addEventListener("click", ev => {
       if (to === "dash"){ S.tab = "dash"; S.step = null; render(); window.scrollTo(0, 0); return; }
       if (to === "inbox"){ S.tab = "clientInbox"; S.step = null; render(); window.scrollTo(0, 0); return; }
       if (to === "txn"){ S.tab = "txn"; S.step = null; render(); window.scrollTo(0, 0); return; }
-      if (to === "books"){ S.tab = "books"; S.step = null; render(); window.scrollTo(0, 0); return; }
+      if (to === "books"){ S.tab = "books"; S.step = null; if (["reports", "lookup", "letters"].includes(S.booksTab)) S.booksTab = S.booksLast || "import"; render(); window.scrollTo(0, 0); return; }
+      if (to.indexOf("books:") === 0){ if (!["reports", "lookup", "letters"].includes(S.booksTab)) S.booksLast = S.booksTab; S.tab = "books"; S.booksTab = to.slice(6); S.step = null; render(); window.scrollTo(0, 0); if (S.booksTab === "lookup") setTimeout(() => { const a = document.getElementById("lkAsk"); if (a && !(S.lk && S.lk.res)) a.focus(); }, 60); return; }
       if (to === "post"){ goStep("post", "bills"); return; }
       if (to === "bank" && (!S.bank || S.bank.cid !== cid)) loadBank(cid).then(() => render());
       goStep(to === "bills" ? "review" : "review", to === "bills" ? "bills" : to);
@@ -1490,6 +1492,9 @@ document.addEventListener("click", ev => {
         const info = {}, groups = {};
         [].concat(j.ledgers || []).forEach(l => { if (!l || !l.name) return;
           info[l.name] = {group: l.group || "", taxType: String(l.taxType || "").replace(/[^A-Za-z ]/g, "").trim(), dutyHead: l.dutyHead || "", tdsNature: l.tdsNature || "", gstin: l.gstin || "", pan: l.pan || ""};
+          // contact details, from Tally Bridge 1.12.9: for letters to the party
+          if (l.email) info[l.name].email = String(l.email).trim(); if (l.phone) info[l.name].phone = String(l.phone).trim(); if (l.mobile) info[l.name].mobile = String(l.mobile).trim();
+          if (l.address) info[l.name].addr = [].concat(l.address).filter(Boolean).join("\n");
           if (l.gstin) (b.gstins = b.gstins || {})[l.name] = String(l.gstin).toUpperCase();
           if (l.pan) (b.pans = b.pans || {})[l.name] = String(l.pan).toUpperCase();
           if (l.group) (b.under = b.under || {})[l.name] = l.group; });

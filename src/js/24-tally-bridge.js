@@ -79,6 +79,15 @@ const Bridge = {
   async post(payload, onProgress, onChecked){
     // nothing without a proper date, or dated before the company's books begin, ever goes to Tally: it is answered here
     const refused = [];
+    // entries dated in a closed period: the user is asked, and those held back are answered here
+    if (typeof ClosedP === "object" && (payload.vouchers || []).length){
+      const held = await ClosedP.gate(payload);
+      if (held.length){
+        const ids = new Set(held.map(h => h.id));
+        held.forEach(h => refused.push({id: h.id, ok: false, message: h.message, held: true}));
+        payload = Object.assign({}, payload, {vouchers: payload.vouchers.filter(v => !ids.has(v.id))});
+      }
+    }
     const open = (this.st.open || []).find(o => o.name === payload.company);
     const booksFrom = open && /^\d{8}$/.test(String(open.from || "")) ? String(open.from) : "";
     const keep = list => [].concat(list || []).filter(it => {

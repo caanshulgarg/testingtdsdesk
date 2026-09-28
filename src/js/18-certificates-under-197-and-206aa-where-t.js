@@ -108,7 +108,7 @@ async function openBooks(cid){
   render();
 }
 // everything kept with a client's books, in this browser and (the TDS and GST work) in the firm's database
-const BOOKS_KEYS = ["vouchers", "map", "meta", "challans", "alloc", "pans", "twoB", "gstins", "under", "states", "groups", "salary", "certs", "advFix", "assets", "rev", "filed", "amendFix", "twoBs", "reco2b", "ledInfo", "ledInfoAt", "audit", "auditCfg", "auditRel", "ledSnaps", "gst9c", "groupInfo", "fs", "tb", "mis", "misCfg", "msme", "budget", "gst3b", "gst9", "gstOpen", "itcBasis", "itcTrack", "outRej", "gstFiled", "gstAato", "filed1a", "rule37On", "gstCashLedger", "gstSet", "gstContacts", "gstApi", "gstEst", "gstVault", "gstRegs"];
+const BOOKS_KEYS = ["vouchers", "map", "meta", "challans", "alloc", "pans", "twoB", "gstins", "under", "states", "groups", "salary", "certs", "advFix", "assets", "rev", "filed", "amendFix", "twoBs", "reco2b", "ledInfo", "ledInfoAt", "audit", "auditCfg", "auditRel", "ledSnaps", "gst9c", "groupInfo", "fs", "tb", "mis", "misCfg", "msme", "budget", "gst3b", "gst9", "gstOpen", "itcBasis", "itcTrack", "outRej", "gstFiled", "gstAato", "filed1a", "rule37On", "gstCashLedger", "gstSet", "gstContacts", "gstApi", "gstEst", "gstVault", "gstRegs", "letters"];
 async function saveBooks(opts){
   const b = S.books; if (!b || !b.cid) return;
   const keep = {cid: b.cid}; BOOKS_KEYS.forEach(k => { keep[k] = b[k]; });
@@ -119,6 +119,11 @@ function viewBooks(){
   const co = CO();
   if (!S.books || S.books.cid !== co.id){ openBooks(co.id); return '<p class="note">Opening the books…</p>'; }
   const b = S.books, tab = booksTab(), n = (b.vouchers || []).length;
+  // Reports, Look up and the letters are pages of their own, opened from the side menu
+  if (tab === "reports" || tab === "lookup" || tab === "letters"){
+    const busy = b.busy ? busyCard("Reading the books\u2026", b.busy, 0, 0) : "";
+    return busy + (tab === "reports" ? viewBooksReports(b) : tab === "lookup" ? viewBooksLookup(b) : viewBooksLetters(b));
+  }
   let h = '<nav class="sbar" aria-label="Books">' + [["import", "From Tally", n || null], ["ledgers", "Tally ledgers", n ? (LedMaster.pending(b).length ? LedMaster.pending(b).length + " to confirm" : "\u2713") : null], ["tds", "TDS", n ? TDS.rows().length : ((b.salary || []).length || null)], ["gst", "GST", null], ["mis", "MIS", null], ["fs", "Accounts", null], ["audit", "Audit", b.audit && b.audit.last ? (b.audit.last.findings.filter(f => f.sev === "high" && Audit.status(f.id).s === "open").length || null) : null]]
     .map(([id, label, c]) => '<button data-bookstab="' + id + '" aria-selected="' + (tab === id) + '">' + label + (c == null ? "" : ' <span class="sbar-n">' + c + "</span>") + "</button>").join("") + "</nav>";
   h += BookSync.note(co.id, tab);
@@ -1764,7 +1769,9 @@ function viewClientDash(){
   const sales = S.sales && S.sales.cid === co.id ? S.sales.list : null;
   const money = x => INR.format(r2(x || 0));
   const tile = (label, n, sub, go, warn) => '<button class="dtile' + (warn && n ? " warn" : "") + '" data-goclient="' + go + '"><span>' + label + "</span><b>" + n + "</b><small>" + sub + "</small></button>";
-  let h = '<section class="dash"><div class="dash-tiles">' +
+  let h = '<section class="dash">' + (typeof ONB === "object" ? ONB.card(co) : "") +
+    '<div class="dash-ask"><input type="search" id="dashAsk" data-fk="dashAsk" placeholder="Ask the books: a ledger for any dates, open bills, trial balance\u2026 (press /)" aria-label="Ask the books"><button class="btn primary" data-dashask>Look up</button>' +
+    '<button class="btn" data-goclient="books:reports">Reports</button><button class="btn" data-goclient="books:letters">Letters</button></div><div class="dash-tiles">' +
     tile("To read", docqCount(co.id), "in the inbox", "inbox") +
     tile("Bills to review", drafts.length, drafts.length ? money(drafts.reduce((a, e) => a + num(e.x.total), 0)) : "nothing waiting", "bills") +
     tile("Ready to post", approved.length, approved.length ? money(approved.reduce((a, e) => a + num(e.x.total), 0)) : "nothing approved", "post") +

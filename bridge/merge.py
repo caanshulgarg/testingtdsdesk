@@ -6,7 +6,7 @@ def R(a, b):
     assert base.count(a) == 1, ('anchor', a[:60], base.count(a))
     base = base.replace(a, b)
 import re
-base = re.sub(r"\$BridgeVersion = '[0-9.]+'", "$BridgeVersion = '1.12.8'", base, 1)
+base = re.sub(r"\$BridgeVersion = '[0-9.]+'", "$BridgeVersion = '1.12.9'", base, 1)
 # 1.12.7 (security): the log never holds keys, codes or passwords, and is rotated at 5 MB keeping 5 old copies
 R(r"""function Write-Log([string]$msg) {
   $line = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + '  ' + $msg
@@ -155,6 +155,15 @@ R("""        if (-not $guid -and -not ($vnum -and $vdate -and $vtype)) {""", """
 # --- 1.12.1: a voucher without a proper date never reaches Tally (Tally answers "Voucher date is missing" but may still make it)
 R("""      if (($xml -notmatch '^\\s*<(VOUCHER|LEDGER|GROUP)\\b') -and -not $vtOnly) {""", """      if (($xml -match '^\\s*<VOUCHER\\b') -and ($xml -notmatch '<DATE>(19|20)\\d\\d(0[1-9]|1[0-2])(0[1-9]|[12]\\d|3[01])</DATE>')) { $results += [ordered]@{ id = $it.id; kind = $g.kind; ok = $false; message = 'The entry has no valid date, so it was not sent to Tally.' }; continue }
       if (($xml -notmatch '^\\s*<(VOUCHER|LEDGER|GROUP)\\b') -and -not $vtOnly) {""")
+# 1.12.9: the ledgers carry the party's email, phone and address, for balance confirmations and reminders
+R("""  $fetch = 'NAME,PARENT,INCOMETAXNUMBER,PARTYGSTIN,GSTREGISTRATIONTYPE,LEDSTATENAME,ISBILLWISEON,GUID,ALTERID,LEDGSTREGDETAILS.LIST,PAYMENTDETAILS.LIST,TAXTYPE,GSTDUTYHEAD,TDSNATUREOFPAYMENT,NATUREOFPAYMENT,TDSDEDUCTEETYPE,TDSAPPLICABLE'""",
+  """  $fetch = 'NAME,PARENT,INCOMETAXNUMBER,PARTYGSTIN,GSTREGISTRATIONTYPE,LEDSTATENAME,ISBILLWISEON,GUID,ALTERID,LEDGSTREGDETAILS.LIST,PAYMENTDETAILS.LIST,TAXTYPE,GSTDUTYHEAD,TDSNATUREOFPAYMENT,NATUREOFPAYMENT,TDSDEDUCTEETYPE,TDSAPPLICABLE,EMAIL,LEDGERPHONE,LEDGERMOBILE,ADDRESS.LIST,LEDMAILINGDETAILS.LIST'""")
+R("""    $ledgers += [ordered]@{
+      name = $name; group = (Get-NodeText $l 'PARENT'); pan = (Get-NodeText $l 'INCOMETAXNUMBER'); gstin = $gstin""", """    $addr = @(); foreach ($an in $l.SelectNodes('ADDRESS.LIST/ADDRESS')) { if ($an.InnerText.Trim()) { $addr += $an.InnerText.Trim() } }
+    if (-not $addr.Count) { foreach ($an in $l.SelectNodes('LEDMAILINGDETAILS.LIST/ADDRESS.LIST/ADDRESS')) { if ($an.InnerText.Trim()) { $addr += $an.InnerText.Trim() } } }
+    $ledgers += [ordered]@{
+      name = $name; group = (Get-NodeText $l 'PARENT'); pan = (Get-NodeText $l 'INCOMETAXNUMBER'); gstin = $gstin
+      email = (Get-NodeText $l 'EMAIL'); phone = (Get-NodeText $l 'LEDGERPHONE'); mobile = (Get-NodeText $l 'LEDGERMOBILE'); address = @($addr)""")
 # 1.12.8: the product is now called FinCom. Only what people read changes; the scheduled task keeps its old name
 # (an installed bridge finds and replaces it by that name)
 base = '\n'.join(l if "$script:TaskName = 'TDS Desk - nightly Tally copy'" in l else l.replace('TDS Desk', 'FinCom') for l in base.split('\n'))

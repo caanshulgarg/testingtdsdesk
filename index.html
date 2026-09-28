@@ -1008,8 +1008,95 @@ nav.tabs .count,.sbar-n{background:linear-gradient(135deg,#fef3c7,#fde68a);color
 .signin-box .btn.primary{width:100%;justify-content:center;height:42px}
 .signin-box a,.signin-box .linkbtn{color:var(--ledger)}
 @media (prefers-reduced-motion: reduce){.dtile,.metric,.tile,.btn.primary{transition:none}.dtile:hover,.tile:hover{transform:none}}
+/* ================= Reports, Look up, Letters, closed periods, getting started ================= */
+.fc-chart{margin:12px 0 4px;padding:10px 12px 6px;border:1px solid var(--rule-soft);border-radius:10px;background:linear-gradient(180deg,color-mix(in srgb,var(--v-em1) 5%,var(--sheet)),var(--sheet))}
+.fc-chart svg{width:100%;height:130px;display:block;overflow:visible}
+.fc-chart text{font-size:9.5px;fill:var(--muted);font-family:var(--sans)}
+.fc-chart .axis{stroke:var(--rule);stroke-width:1}
+.fc-chart rect{transition:opacity .15s}.fc-chart rect:hover{opacity:.75}
+.fc-chart .c1,.chart-key .c1{fill:#10b981;background:#10b981}.fc-chart .c2,.chart-key .c2{fill:#38bdf8;background:#38bdf8}.fc-chart .c3,.chart-key .c3{fill:#f59e0b;background:#f59e0b}
+.fc-chart .c4,.chart-key .c4{fill:#8b5cf6;background:#8b5cf6}.fc-chart .c5,.chart-key .c5{fill:#f43f5e;background:#f43f5e}.fc-chart .neg{fill:#f43f5e}
+.chart-key{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:4px}.chart-key span{display:inline-flex;align-items:center;gap:6px}.chart-key i{width:10px;height:10px;border-radius:3px;display:inline-block}
+.fc-empty{margin-top:14px;padding:30px 20px;text-align:center;border:1px dashed color-mix(in srgb,var(--v-em1) 45%,var(--rule));border-radius:14px;background:linear-gradient(160deg,color-mix(in srgb,var(--v-em1) 8%,var(--sheet)),var(--sheet))}
+.fc-empty h3{margin:6px 0 4px;font-size:17px}.fc-empty.small{padding:14px;margin-top:6px}
+.fc-empty-ic{width:46px;height:46px;margin:0 auto;border-radius:14px;display:grid;place-items:center;font-size:22px;color:#fff;background:linear-gradient(135deg,#34d399,#059669 55%,#0891b2);box-shadow:0 8px 20px -10px rgb(5 150 105 / .8)}
+/* look up */
+.lk-askrow{display:flex;gap:8px}.lk-askrow input{flex:1;height:44px;border:1.5px solid color-mix(in srgb,var(--v-em1) 45%,var(--rule));border-radius:12px;padding:0 14px;font:inherit;font-size:15px;background:var(--sheet);color:var(--ink)}
+.lk-askrow input:focus{outline:0;border-color:#10b981;box-shadow:0 0 0 3px rgb(16 185 129 / .2)}.lk-askrow .btn{height:44px;padding:0 18px}
+.lk-heard{margin:8px 0 0;padding:6px 10px;border-radius:8px;background:var(--ledger-soft);display:inline-block}
+.lk-kinds{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0 4px}
+.lk-kinds button{border:1px solid var(--rule);background:var(--sheet);color:var(--ink);border-radius:999px;padding:6px 13px;font:inherit;font-size:13px;cursor:pointer}
+.lk-kinds button:hover{border-color:#34d399}
+.lk-kinds button[aria-selected="true"]{background:linear-gradient(135deg,#10b981,#0e7490);color:#fff;border-color:transparent;box-shadow:0 4px 12px -6px rgb(14 116 144 / .8)}
+.lk-form{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:flex-end;margin-top:10px}
+.lk-form .f{display:flex;flex-direction:column;gap:3px;font-size:12.5px;color:var(--muted)}
+.lk-form .f.lk-wide{flex:1 1 260px;min-width:220px}
+.lk-form input,.lk-form select{height:38px;border:1px solid var(--rule);border-radius:8px;padding:0 10px;font:inherit;font-size:14px;background:var(--sheet);color:var(--ink);min-width:0}
+.lk-form input[type=date]{width:160px}.lk-form input[inputmode=decimal]{width:120px}
+.lk-presets{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.lk-recent{display:flex;flex-wrap:wrap;gap:6px}
+.lk-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap}.lk-head h3{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.lk-t td{vertical-align:top}.lk-t .lk-part{display:block;font-weight:600}.lk-t .nr{display:block}
+.lk-t tr.lk-v{cursor:pointer}.lk-t tr.lk-v:focus-visible td{background:var(--ledger-soft)}
+.lk-t tr.lk-ob td,.lk-t tr.lk-grp td{background:color-mix(in srgb,var(--v-em1) 7%,var(--sheet))}
+.lk-t tr.lk-tot td{border-top:2px solid var(--rule);background:color-mix(in srgb,var(--v-sky1) 7%,var(--sheet))}
+.lk-t tr.lk-sub td{background:var(--paper);padding:6px 10px 10px 30px}
+.lk-entries{border-left:3px solid #34d399;padding-left:10px}.lk-in{font-size:13px;max-width:620px}.lk-in td{padding:4px 8px}
+.dash-tiles .dtile b{word-break:break-word}
+/* reports */
+.rpt-top-row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.rpt-top-row>div{flex:1 1 280px}
+.rpt-top-row input{flex:1 1 260px;max-width:420px;height:40px;border:1.5px solid color-mix(in srgb,var(--v-em1) 45%,var(--rule));border-radius:10px;padding:0 12px;font:inherit;background:var(--sheet);color:var(--ink)}
+.rpt-top-row select{height:40px;border:1px solid var(--rule);border-radius:10px;padding:0 10px;font:inherit;background:var(--sheet);color:var(--ink)}
+.rpt-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:14px}
+.rpt-ah{display:flex;align-items:center;gap:10px;margin-bottom:8px}.rpt-ah h3{margin:0;flex:1}
+.rpt-dot{width:12px;height:12px;border-radius:4px;display:inline-block}
+.rpt-dot.c1{background:linear-gradient(135deg,#34d399,#059669)}.rpt-dot.c2{background:linear-gradient(135deg,#38bdf8,#2563eb)}.rpt-dot.c3{background:linear-gradient(135deg,#fbbf24,#ea580c)}
+.rpt-dot.c4{background:linear-gradient(135deg,#a78bfa,#7c3aed)}.rpt-dot.c5{background:linear-gradient(135deg,#fb7185,#db2777)}.rpt-dot.c6{background:linear-gradient(135deg,#2dd4bf,#0891b2)}
+.rpt-area .dash-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
+.rpt-area .dtile b{font-size:21px}
+.rpt-links{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px;margin-top:10px}
+.rpt-link{display:flex;flex-direction:column;gap:2px;text-align:left;padding:10px 12px;border:1px solid var(--rule);border-radius:10px;background:var(--sheet);color:var(--ink);font:inherit;cursor:pointer;transition:border-color .15s,box-shadow .15s,transform .15s}
+.rpt-link b{font-size:14px}.rpt-link span{font-size:12.5px;color:var(--muted);line-height:1.35}
+.rpt-link:hover{border-color:#34d399;box-shadow:0 8px 18px -12px rgb(16 185 129 / .7);transform:translateY(-1px)}
+.rpt-top{margin:10px 0 0;padding:0;list-style:none;font-size:13.5px;display:grid;gap:4px}
+/* letters */
+.ltr-bar{margin:12px 0 10px;gap:8px}
+.ltr-in{height:32px;border:1px solid var(--rule);border-radius:7px;padding:0 8px;font:inherit;font-size:13px;background:var(--sheet);color:var(--ink);width:190px;max-width:100%}
+.ltr-in.sm{width:120px}
+.ltr-t td{vertical-align:middle}.ltr-t .ac{width:auto}.ltr-t .ac .btn{margin-left:4px}
+/* closed periods */
+.cp-banner{border-left-color:#ea580c;background:linear-gradient(90deg,#fff7ed,#fffbeb)}
+:root[data-theme="dark"] .cp-banner{background:#3a2612}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .cp-banner{background:#3a2612}}
+.cp-q{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px 12px}.cp-q .f{display:flex;flex-direction:column;font-size:12.5px;color:var(--muted);gap:3px}
+.cp-q input{height:34px;border:1px solid var(--rule);border-radius:7px;padding:0 8px;font:inherit;background:var(--sheet);color:var(--ink)}
+.cp-list{margin:6px 0 10px 18px;padding:0}.cp-list li{margin:3px 0}
+.cbx.wide{max-width:640px}
+/* getting started, and the question box on the dashboard */
+.onb{margin-bottom:14px;background:linear-gradient(160deg,color-mix(in srgb,var(--v-em1) 10%,var(--sheet)),var(--sheet) 55%)}
+.onb-h{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.onb-bar{height:6px;border-radius:6px;background:var(--rule-soft);margin:10px 0 12px;overflow:hidden}.onb-bar i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,#10b981,#38bdf8)}
+.onb-list{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px}
+.onb-list li{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--rule-soft);border-radius:10px;background:var(--sheet)}
+.onb-list li div{flex:1;display:flex;flex-direction:column;font-size:13.5px}.onb-list li span:not(.onb-n){font-size:12px;color:var(--muted)}
+.onb-n{width:22px;height:22px;border-radius:50%;border:2px solid var(--rule);display:grid;place-items:center;font-size:12px;flex:none}
+.onb-list li.done{opacity:.7}.onb-list li.done .onb-n{border-color:transparent;background:linear-gradient(135deg,#34d399,#059669);color:#fff}
+.dash-ask{display:flex;gap:8px;margin:0 0 14px;flex-wrap:wrap}
+.dash-ask input{flex:1 1 320px;height:42px;border:1.5px solid color-mix(in srgb,var(--v-em1) 45%,var(--rule));border-radius:12px;padding:0 14px;font:inherit;background:var(--sheet);color:var(--ink)}
+.dash-ask input:focus{outline:0;border-color:#10b981;box-shadow:0 0 0 3px rgb(16 185 129 / .2)}.dash-ask .btn{height:42px}
+kbd{display:inline-block;min-width:22px;padding:2px 7px;border:1px solid var(--rule);border-bottom-width:2px;border-radius:6px;background:var(--paper);font:600 12px var(--sans);text-align:center}
+.keys-t td{padding:6px 8px}
+.side-link[data-goclient="books:reports"]{--si:#fbbf24}.side-link[data-goclient="books:lookup"]{--si:#67e8f9}.side-link[data-goclient="books:letters"]{--si:#f0abfc}
+@media (max-width:900px){.rpt-grid{grid-template-columns:1fr}.lk-askrow{flex-wrap:wrap}.lk-askrow .btn{flex:1}}
+@media (max-width:600px){.rpt-area .dash-tiles{grid-template-columns:1fr 1fr}.lk-form input[type=date]{width:100%}.lk-form .f{flex:1 1 140px}}
+.fc-chart svg{height:112px}
+.fc-xl{display:flex;padding:3px 4px 0}.fc-xl span{flex:1;text-align:center;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden}
+.lk-form input[type=checkbox]{height:auto;width:auto}
+.rpt-top-row select{flex:0 0 auto;width:auto}
+.ltr-in{width:170px}.ltr-in.sm{width:110px}
+.ltr-t .ac{white-space:nowrap}.ltr-t .ac .btn{padding:4px 8px}
 </style>
-<style>.is-test .side-brand::after{content:"TEST";display:block;margin-top:4px;font-size:11px;letter-spacing:.14em;color:#E9A06A}.is-test header.top{box-shadow:inset 0 3px 0 #E2761B}body.is-test::after{content:"TESTING SITE · not for real client work · post only to a ZZ TEST company in Tally";position:fixed;left:0;right:0;bottom:0;z-index:70;background:#E2761B;color:#fff;font-size:12.5px;text-align:center;padding:3px 8px;letter-spacing:.04em;pointer-events:none}.is-test .actionbar{bottom:22px}.is-test #app{padding-bottom:34px}</style><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-JUZRiA/pD/Q1MSIv1WkOX00eklOKXLcOHszD3zr3UBc=' 'sha256-eBfM5RlNanoMUXe5WqBMdgcvkVHZSzptJPrDrLkhzwI=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+<style>.is-test .side-brand::after{content:"TEST";display:block;margin-top:4px;font-size:11px;letter-spacing:.14em;color:#E9A06A}.is-test header.top{box-shadow:inset 0 3px 0 #E2761B}body.is-test::after{content:"TESTING SITE · not for real client work · post only to a ZZ TEST company in Tally";position:fixed;left:0;right:0;bottom:0;z-index:70;background:#E2761B;color:#fff;font-size:12.5px;text-align:center;padding:3px 8px;letter-spacing:.04em;pointer-events:none}.is-test .actionbar{bottom:22px}.is-test #app{padding-bottom:34px}</style><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-JUZRiA/pD/Q1MSIv1WkOX00eklOKXLcOHszD3zr3UBc=' 'sha256-4gXtz+1IOLHk+9vxnER2w+D4icgxYCO8m41e20iYYos=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
 </head>
 <body class="is-test">
 <a class="skip" id="skipLink" href="#app">Skip to the work</a>
@@ -4979,6 +5066,9 @@ function renderSide(){
     setup: '<path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="8" cy="18" r="2"/>',
     txn: '<path d="M4 5h16v14H4z"/><path d="M4 9h16M9 9v10"/>',
     books: '<path d="M5 4h9l5 5v11H5z"/><path d="M13 4v5h5"/><path d="M8 13h7M8 17h5"/>',
+    reports: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+    lookup: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/><path d="M8 10.5h5M10.5 8v5"/>',
+    letters: '<path d="M3 6h18v12H3z"/><path d="M3 7l9 6 9-6"/>',
     help: '<circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.5v.6"/><circle cx="12" cy="17" r=".6"/>',
     clients: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.6c2.6.2 4.6 1.9 5.3 5.4"/>'
   };
@@ -4995,7 +5085,10 @@ function renderSide(){
       item("sales", "Sales", inCo && mod === "sales" && !isSetupTab(S.tab), 0, "sales", 'data-goclient="sales"') +
       item("inbox", "Inbox", inCo && S.tab === "clientInbox", docqCount(open.id), "inbox", 'data-goclient="inbox"') +
       item("txn", "Transactions", inCo && S.tab === "txn", 0, "txn", 'data-goclient="txn"') +
-      item("books", "TDS & GST", inCo && S.tab === "books", 0, "books", 'data-goclient="books"') +
+      item("books", "TDS & GST", inCo && S.tab === "books" && !["reports", "lookup", "letters"].includes(booksTab()), 0, "books", 'data-goclient="books"') +
+      item("reports", "Reports", inCo && S.tab === "books" && booksTab() === "reports", 0, "reports", 'data-goclient="books:reports"') +
+      item("lookup", "Look up", inCo && S.tab === "books" && booksTab() === "lookup", 0, "lookup", 'data-goclient="books:lookup" title="Any ledger, any dates (press /)"') +
+      item("letters", "Letters", inCo && S.tab === "books" && booksTab() === "letters", 0, "letters", 'data-goclient="books:letters" title="Balance confirmations and dues reminders"') +
       item("setup", "Client setup", inCo && isSetupTab(S.tab), 0, "setup", 'data-act="setup"');
   }
   h += '<div class="side-sep"></div>' + item("clients", "All clients", S.view === "home" && !["rules", "help"].includes(S.homeTab), 0, "clients");
@@ -5089,7 +5182,7 @@ function clientHeader(){
   const co = CO(), setup = isSetupTab(S.tab), t = docType();
   const names = {bills: "Purchase bills", bank: "Bank", sales: "Sales invoices"};
   const inbox = docqCount(S.coId);
-  const title = S.tab === "dash" ? "Dashboard" : S.tab === "clientInbox" ? "Inbox" : S.tab === "txn" ? "Transactions" : S.tab === "books" ? "TDS & GST from the books" : setup ? "Client setup" : names[t];
+  const title = S.tab === "dash" ? "Dashboard" : S.tab === "clientInbox" ? "Inbox" : S.tab === "txn" ? "Transactions" : S.tab === "books" ? ({reports: "Reports", lookup: "Look up", letters: "Confirmations and reminders"}[booksTab()] || "TDS & GST from the books") : setup ? "Client setup" : names[t];
   let h = '<div class="tbar"><div class="tbar-title"><h2>' + title + '</h2><span class="note">' + esc(co.name) + "</span></div>" +
     '<div class="tbar-actions">' + (inbox && !setup && S.tab !== "clientInbox" ? '<button class="btn small" data-step="collect">\u{1F4E5} ' + inbox + " in inbox</button>" : "") +
     (setup ? '<button class="btn small" data-act="setup">Back to the work</button>' : (t === "sales" ? "" : '<button class="btn primary small" data-act="uploadHere">' + (t === "bank" ? "Upload statement" : "Upload bills") + "</button>")) + "</div></div>";
@@ -9019,7 +9112,7 @@ async function openBooks(cid){
   render();
 }
 // everything kept with a client's books, in this browser and (the TDS and GST work) in the firm's database
-const BOOKS_KEYS = ["vouchers", "map", "meta", "challans", "alloc", "pans", "twoB", "gstins", "under", "states", "groups", "salary", "certs", "advFix", "assets", "rev", "filed", "amendFix", "twoBs", "reco2b", "ledInfo", "ledInfoAt", "audit", "auditCfg", "auditRel", "ledSnaps", "gst9c", "groupInfo", "fs", "tb", "mis", "misCfg", "msme", "budget", "gst3b", "gst9", "gstOpen", "itcBasis", "itcTrack", "outRej", "gstFiled", "gstAato", "filed1a", "rule37On", "gstCashLedger", "gstSet", "gstContacts", "gstApi", "gstEst", "gstVault", "gstRegs"];
+const BOOKS_KEYS = ["vouchers", "map", "meta", "challans", "alloc", "pans", "twoB", "gstins", "under", "states", "groups", "salary", "certs", "advFix", "assets", "rev", "filed", "amendFix", "twoBs", "reco2b", "ledInfo", "ledInfoAt", "audit", "auditCfg", "auditRel", "ledSnaps", "gst9c", "groupInfo", "fs", "tb", "mis", "misCfg", "msme", "budget", "gst3b", "gst9", "gstOpen", "itcBasis", "itcTrack", "outRej", "gstFiled", "gstAato", "filed1a", "rule37On", "gstCashLedger", "gstSet", "gstContacts", "gstApi", "gstEst", "gstVault", "gstRegs", "letters"];
 async function saveBooks(opts){
   const b = S.books; if (!b || !b.cid) return;
   const keep = {cid: b.cid}; BOOKS_KEYS.forEach(k => { keep[k] = b[k]; });
@@ -9030,6 +9123,11 @@ function viewBooks(){
   const co = CO();
   if (!S.books || S.books.cid !== co.id){ openBooks(co.id); return '<p class="note">Opening the books…</p>'; }
   const b = S.books, tab = booksTab(), n = (b.vouchers || []).length;
+  // Reports, Look up and the letters are pages of their own, opened from the side menu
+  if (tab === "reports" || tab === "lookup" || tab === "letters"){
+    const busy = b.busy ? busyCard("Reading the books\u2026", b.busy, 0, 0) : "";
+    return busy + (tab === "reports" ? viewBooksReports(b) : tab === "lookup" ? viewBooksLookup(b) : viewBooksLetters(b));
+  }
   let h = '<nav class="sbar" aria-label="Books">' + [["import", "From Tally", n || null], ["ledgers", "Tally ledgers", n ? (LedMaster.pending(b).length ? LedMaster.pending(b).length + " to confirm" : "\u2713") : null], ["tds", "TDS", n ? TDS.rows().length : ((b.salary || []).length || null)], ["gst", "GST", null], ["mis", "MIS", null], ["fs", "Accounts", null], ["audit", "Audit", b.audit && b.audit.last ? (b.audit.last.findings.filter(f => f.sev === "high" && Audit.status(f.id).s === "open").length || null) : null]]
     .map(([id, label, c]) => '<button data-bookstab="' + id + '" aria-selected="' + (tab === id) + '">' + label + (c == null ? "" : ' <span class="sbar-n">' + c + "</span>") + "</button>").join("") + "</nav>";
   h += BookSync.note(co.id, tab);
@@ -10675,7 +10773,9 @@ function viewClientDash(){
   const sales = S.sales && S.sales.cid === co.id ? S.sales.list : null;
   const money = x => INR.format(r2(x || 0));
   const tile = (label, n, sub, go, warn) => '<button class="dtile' + (warn && n ? " warn" : "") + '" data-goclient="' + go + '"><span>' + label + "</span><b>" + n + "</b><small>" + sub + "</small></button>";
-  let h = '<section class="dash"><div class="dash-tiles">' +
+  let h = '<section class="dash">' + (typeof ONB === "object" ? ONB.card(co) : "") +
+    '<div class="dash-ask"><input type="search" id="dashAsk" data-fk="dashAsk" placeholder="Ask the books: a ledger for any dates, open bills, trial balance\u2026 (press /)" aria-label="Ask the books"><button class="btn primary" data-dashask>Look up</button>' +
+    '<button class="btn" data-goclient="books:reports">Reports</button><button class="btn" data-goclient="books:letters">Letters</button></div><div class="dash-tiles">' +
     tile("To read", docqCount(co.id), "in the inbox", "inbox") +
     tile("Bills to review", drafts.length, drafts.length ? money(drafts.reduce((a, e) => a + num(e.x.total), 0)) : "nothing waiting", "bills") +
     tile("Ready to post", approved.length, approved.length ? money(approved.reduce((a, e) => a + num(e.x.total), 0)) : "nothing approved", "post") +
@@ -11366,6 +11466,10 @@ function viewDetail(e){
       e.readTrace.map(t => '<li class="' + (t.ok ? "tok" : "tno") + '"><b>' + (t.ok ? "✓ " : "✗ ") + esc(t.step) + "</b>" + (t.note ? ": " + esc(t.note) : "") + "</li>").join("") + "</ol></details>" : "") +
     (e.freeWhy && !ro && !(e.readTrace && e.readTrace.length) ? '<p class="note" style="margin:6px 0 0">Free reading was not enough: ' + esc(e.freeWhy) + ".</p>" : "");
   h += docWarn;
+  if (typeof ClosedP === "object" && x.invoiceDate && e.status !== "rejected" && !e.exportedAt){
+    const cw = ClosedP.note(x.invoiceDate, !!(e.snapshot && e.snapshot.tds));
+    if (cw.length) h += '<div class="banner cp-banner"><b>Closed period.</b> This bill is dated ' + fmtDate(x.invoiceDate) + ": " + esc(cw.join("; ")) + ". It can still be posted; FinCom will ask first.</div>";
+  }
   h += '<section class="' + (prev ? "withprev" : "") + '">' +
     (prev ? '<details class="prevbox" open><summary>Invoice image</summary><a href="' + prev + '" target="_blank" rel="noopener"><' + 'img class="preview" src="' + prev + '" alt="Uploaded invoice"></a></details>' : "") +
     '<div><h3>Invoice details</h3><div class="grid">' +
@@ -15321,6 +15425,15 @@ const Bridge = {
   async post(payload, onProgress, onChecked){
     // nothing without a proper date, or dated before the company's books begin, ever goes to Tally: it is answered here
     const refused = [];
+    // entries dated in a closed period: the user is asked, and those held back are answered here
+    if (typeof ClosedP === "object" && (payload.vouchers || []).length){
+      const held = await ClosedP.gate(payload);
+      if (held.length){
+        const ids = new Set(held.map(h => h.id));
+        held.forEach(h => refused.push({id: h.id, ok: false, message: h.message, held: true}));
+        payload = Object.assign({}, payload, {vouchers: payload.vouchers.filter(v => !ids.has(v.id))});
+      }
+    }
     const open = (this.st.open || []).find(o => o.name === payload.company);
     const booksFrom = open && /^\d{8}$/.test(String(open.from || "")) ? String(open.from) : "";
     const keep = list => [].concat(list || []).filter(it => {
@@ -18776,6 +18889,7 @@ function viewCompanySettings(){
   h += '<div class="pane"><h2>Ledgers by payment type</h2><div class="tblwrap"><table class="data"><thead><tr><th>Payment type</th><th>TDS ledger in Tally</th><th>Default expense ledger</th></tr></thead><tbody>' +
     rules().map(r => "<tr><td>" + esc(r.label) + "</td><td>" + (r.basis === "never" ? "—" : '<input type="text" data-tdsled="' + r.id + '" value="' + esc(c.tdsLedgers[r.id] || "") + '" aria-label="TDS ledger">') +
       '</td><td><input type="text" data-expled="' + r.id + '" value="' + esc(c.expenseLedgers[r.id] || "") + '" aria-label="Expense ledger"></td></tr>').join("") + "</tbody></table></div></div>";
+  if (typeof ClosedP === "object") h += ClosedP.pane(c);
   h += '<div class="pane"><h2>Remove this client</h2><p class="note" style="margin:0 0 10px">Deletes this client with all its invoices and deductees from the desk. Nothing in Tally is touched.</p>' +
     '<button class="btn danger" data-act="delCo">' + (S.arm === "delCo" ? "Click again to delete " + esc(c.name) : "Delete client") + "</button></div></div>";
   return h;
@@ -18793,7 +18907,7 @@ function viewExport(){
     '<p class="note" style="margin:0 0 12px">TDS in these entries: ' + money(totTds) + ". " + sent + " sent earlier.</p>";
   if (waiting.length){
     h += '<div class="tblwrap"><table class="data"><thead><tr><th>Date</th><th>Supplier</th><th>Bill no.</th><th class="n">Amount</th><th>Section</th><th class="n">TDS</th><th></th></tr></thead><tbody>' +
-      waiting.map(e => "<tr><td>" + fmtDate(e.x.invoiceDate) + "</td><td>" + esc(e.x.vendorName) + (e.noteKind ? ' <span class="tag">' + (e.noteKind === "credit" ? "credit note" : "debit note") + "</span>" : "") + "</td><td>" + esc(e.x.invoiceNo || "") + '</td><td class="n">' + INR.format(num(e.x.total)) + "</td><td>" + esc(e.snapshot.ref) + '</td><td class="n">' + money0(e.snapshot.tds) + "</td>" +
+      waiting.map(e => "<tr><td>" + fmtDate(e.x.invoiceDate) + (typeof ClosedP === "object" ? ClosedP.tag(e.x.invoiceDate, !!(e.snapshot && e.snapshot.tds)) : "") + "</td><td>" + esc(e.x.vendorName) + (e.noteKind ? ' <span class="tag">' + (e.noteKind === "credit" ? "credit note" : "debit note") + "</span>" : "") + "</td><td>" + esc(e.x.invoiceNo || "") + '</td><td class="n">' + INR.format(num(e.x.total)) + "</td><td>" + esc(e.snapshot.ref) + '</td><td class="n">' + money0(e.snapshot.tds) + "</td>" +
         '<td class="ac" style="white-space:nowrap"><button class="btn small" data-billback="' + e.id + '">Back to review</button> <button class="btn small danger" data-billdel="' + e.id + '" title="Delete this bill">Delete</button></td></tr>').join("") + "</tbody></table></div>" +
       (waiting.length > 1 ? '<div class="row" style="margin-top:8px"><button class="btn small" data-act="billBackAll">Send all ' + waiting.length + " back to review</button></div>" : "");
   }
@@ -19180,7 +19294,8 @@ document.addEventListener("click", ev => {
       if (to === "dash"){ S.tab = "dash"; S.step = null; render(); window.scrollTo(0, 0); return; }
       if (to === "inbox"){ S.tab = "clientInbox"; S.step = null; render(); window.scrollTo(0, 0); return; }
       if (to === "txn"){ S.tab = "txn"; S.step = null; render(); window.scrollTo(0, 0); return; }
-      if (to === "books"){ S.tab = "books"; S.step = null; render(); window.scrollTo(0, 0); return; }
+      if (to === "books"){ S.tab = "books"; S.step = null; if (["reports", "lookup", "letters"].includes(S.booksTab)) S.booksTab = S.booksLast || "import"; render(); window.scrollTo(0, 0); return; }
+      if (to.indexOf("books:") === 0){ if (!["reports", "lookup", "letters"].includes(S.booksTab)) S.booksLast = S.booksTab; S.tab = "books"; S.booksTab = to.slice(6); S.step = null; render(); window.scrollTo(0, 0); if (S.booksTab === "lookup") setTimeout(() => { const a = document.getElementById("lkAsk"); if (a && !(S.lk && S.lk.res)) a.focus(); }, 60); return; }
       if (to === "post"){ goStep("post", "bills"); return; }
       if (to === "bank" && (!S.bank || S.bank.cid !== cid)) loadBank(cid).then(() => render());
       goStep(to === "bills" ? "review" : "review", to === "bills" ? "bills" : to);
@@ -19531,6 +19646,9 @@ document.addEventListener("click", ev => {
         const info = {}, groups = {};
         [].concat(j.ledgers || []).forEach(l => { if (!l || !l.name) return;
           info[l.name] = {group: l.group || "", taxType: String(l.taxType || "").replace(/[^A-Za-z ]/g, "").trim(), dutyHead: l.dutyHead || "", tdsNature: l.tdsNature || "", gstin: l.gstin || "", pan: l.pan || ""};
+          // contact details, from Tally Bridge 1.12.9: for letters to the party
+          if (l.email) info[l.name].email = String(l.email).trim(); if (l.phone) info[l.name].phone = String(l.phone).trim(); if (l.mobile) info[l.name].mobile = String(l.mobile).trim();
+          if (l.address) info[l.name].addr = [].concat(l.address).filter(Boolean).join("\n");
           if (l.gstin) (b.gstins = b.gstins || {})[l.name] = String(l.gstin).toUpperCase();
           if (l.pan) (b.pans = b.pans || {})[l.name] = String(l.pan).toUpperCase();
           if (l.group) (b.under = b.under || {})[l.name] = l.group; });
@@ -22814,6 +22932,1126 @@ async function loadLastSignIn(){
     S.lastSignIn = prev ? {at: prev.at, device: deviceName(prev.detail)} : null;
     if (prev) toast("Your last sign-in: " + new Date(prev.at).toLocaleString("en-IN", {day: "numeric", month: "short", hour: "numeric", minute: "2-digit"}) + ", " + S.lastSignIn.device + ". Not you? Change your password in Settings.");
   } catch (e){}
+}
+/* ================================================================== */
+/* Look up: any ledger for any dates, a group, the trial balance on a  */
+/* date, month by month, a party's open bills, or any entry, from the  */
+/* books read here or straight from Tally through the bridge           */
+/* ================================================================== */
+// Shared bits for the Look up, Reports and Letters pages: periods, Dr/Cr amounts, a small chart, going to a page.
+const FC = {
+  d8(iso){ return String(iso || "").replace(/-/g, "").slice(0, 8); },
+  iso(d){ return Audit.iso(d); },
+  today(){ return Audit.today(); },
+  // the date the quick periods are counted from: today, or the last day in the books when they end earlier
+  anchor(){ const t = this.today(), to = String(((S.books || {}).meta || {}).to || ""); return to && to < t ? to : t; },
+  monthEnd(y, m){ return String(y) + String(m).padStart(2, "0") + String(new Date(y, m, 0).getDate()).padStart(2, "0"); },
+  period(k, at){
+    const a = at || this.anchor(), y = num(a.slice(0, 4)), m = num(a.slice(4, 6)), fs = Audit.fyStart(a), fy = num(fs.slice(0, 4));
+    const mStart = (yy, mm) => String(yy) + String(mm).padStart(2, "0") + "01";
+    if (k === "month") return {from: mStart(y, m), to: this.monthEnd(y, m)};
+    if (k === "lastmonth"){ const yy = m === 1 ? y - 1 : y, mm = m === 1 ? 12 : m - 1; return {from: mStart(yy, mm), to: this.monthEnd(yy, mm)}; }
+    if (k === "quarter" || k === "lastquarter"){
+      let q = Math.floor(((m + 8) % 12) / 3), qy = fy;                 // 0 = Apr-Jun
+      if (k === "lastquarter"){ q--; if (q < 0){ q = 3; qy--; } }
+      const sm = [4, 7, 10, 1][q], sy = q === 3 ? qy + 1 : qy, em = sm + 2;
+      return {from: mStart(sy, sm), to: this.monthEnd(sy, em)};
+    }
+    if (k === "fy") return {from: fs, to: (fy + 1) + "0331"};
+    if (k === "ytd") return {from: fs, to: a};
+    if (k === "lastfy") return {from: (fy - 1) + "0401", to: fy + "0331"};
+    return {from: fs, to: a};
+  },
+  PRESETS: [["month", "This month"], ["lastmonth", "Last month"], ["quarter", "This quarter"], ["lastquarter", "Last quarter"], ["ytd", "Year to date"], ["fy", "This year"], ["lastfy", "Last year"]],
+  fyLabel(from){ const y = num(String(from).slice(0, 4)); return y + "-" + String(y + 1).slice(2); },
+  // an amount with debit positive, shown the way Tally does
+  drcr(x){ x = r2(x || 0); return Math.abs(x) < 0.005 ? "0.00" : INR.format(Math.abs(x)) + (x > 0 ? " Dr" : " Cr"); },
+  amt(x){ return Math.abs(r2(x || 0)) < 0.005 ? "" : INR.format(r2(x)); },
+  when(d){ return fmtDate(tallyDate(d)); },
+  span(from, to){ return this.when(from) + " to " + this.when(to); },
+  // every ledger known for the client: in the masters, the balances, or the vouchers
+  ledgers(){
+    const b = S.books || {}, key = (b.vouchers || []).length + "|" + Object.keys(b.under || {}).length + "|" + Object.keys(b.ledInfo || {}).length + "|" + ((b.tb || {}).at || "");
+    if (this._led && this._led.key === key && this._led.cid === b.cid) return this._led.list;
+    const s = new Set(Object.keys(b.under || {}).concat(Object.keys(b.ledInfo || {}), Object.keys(b.map || {}), Object.keys((b.tb || {}).led || {})));
+    const list = Array.from(s).filter(Boolean).sort((a, c) => a.localeCompare(c));
+    this._led = {key, cid: b.cid, list};
+    return list;
+  },
+  groups(){
+    const b = S.books || {}, s = new Set(Object.keys(b.groups || {}).concat(Object.values(b.under || {})));
+    return Array.from(s).filter(Boolean).sort((a, c) => a.localeCompare(c));
+  },
+  inGroup(l, g){ const G = String(g || "").toLowerCase(); return Audit.path(l).some(x => x.toLowerCase() === G); },
+  top(l){ const p = Audit.path(l); return p[p.length - 1] || "Not in a group"; },
+  // a small bar chart, drawn as SVG: series [{name, cls, values}], one bar group per label
+  bars(labels, series, o){
+    o = o || {}; const H = o.h || 120, W = Math.max(280, labels.length * (series.length * 12 + 10)), pad = 4;
+    const all = series.flatMap(s => s.values.map(v => num(v)));
+    if (!all.some(v => Math.abs(v) >= 0.5)) return "";
+    const max = Math.max(1, ...all.map(v => Math.abs(v))), neg = all.some(v => v < 0);
+    const zero = neg ? H / 2 : H - 2, scale = (neg ? H / 2 - 6 : H - 8) / max, gw = (W - pad * 2) / Math.max(1, labels.length), bw = Math.max(3, Math.min(22, (gw - 6) / series.length));
+    let g = "";
+    labels.forEach((l, i) => {
+      series.forEach((s, j) => {
+        const v = num(s.values[i]), hgt = Math.max(v ? 1.5 : 0, Math.abs(v) * scale), x = pad + i * gw + (gw - bw * series.length) / 2 + j * bw;
+        g += '<rect class="' + (s.cls || "c1") + (v < 0 ? " neg" : "") + '" x="' + x.toFixed(1) + '" y="' + (v >= 0 ? zero - hgt : zero).toFixed(1) + '" width="' + (bw - 1.5).toFixed(1) + '" height="' + hgt.toFixed(1) + '" rx="2"><title>' + esc(l + ": " + s.name + " " + INR0.format(v)) + "</title></rect>";
+      });
+    });
+    g += '<line x1="0" x2="' + W + '" y1="' + zero.toFixed(1) + '" y2="' + zero.toFixed(1) + '" class="axis"/>';
+    const key = series.length > 1 ? '<div class="chart-key">' + series.map(s => '<span><i class="' + (s.cls || "c1") + '"></i>' + esc(s.name) + "</span>").join("") + "</div>" : "";
+    const every = Math.ceil(labels.length / 12), xl = '<div class="fc-xl" aria-hidden="true">' + labels.map((l, i) => "<span>" + (i % every === 0 ? esc(String(l).slice(0, 8)) : "") + "</span>").join("") + "</div>";
+    return '<figure class="fc-chart"' + (o.label ? ' aria-label="' + esc(o.label) + '"' : "") + '><svg viewBox="0 0 ' + W + " " + H + '" preserveAspectRatio="none" role="img">' + g + "</svg>" + xl + key + "</figure>";
+  },
+  monthLabel(ym){ return typeof GSTR === "object" ? GSTR.label(ym) : ym; },
+  shortMonth(ym){ const m = num(String(ym).slice(4, 6)); return ["", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"][((m + 8) % 12) + 1]; },
+  go(tab, extra){
+    Object.assign(S, extra || {});
+    S.tab = "books"; S.booksTab = tab; S.step = null; S.drawerOpen = false;
+    render(); window.scrollTo(0, 0);
+  },
+  noBooks(what){
+    const live = typeof bridgeLive === "function" && bridgeLive(CO());
+    return '<div class="fc-empty"><div class="fc-empty-ic" aria-hidden="true">▤</div><h3>' + esc(what) + ' needs the books</h3><p class="note">Read the day book and balances from Tally first. It takes a minute a month through the Tally Bridge.</p>' +
+      '<div class="row" style="justify-content:center;gap:8px"><button class="btn primary" data-fcgo="import">Read the books from Tally</button>' + (live ? "" : '<button class="btn" data-act="tallyGuide">Set up the Tally Bridge</button>') + "</div></div>";
+  },
+  async excel(name, sheets){
+    await ensureXlsx();
+    const wb = XLSX.utils.book_new();
+    sheets.forEach(([n, rows]) => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), String(n).replace(/[\\/?*[\]:]/g, " ").slice(0, 31)));
+    saveFile(String((CO() || {}).name || "client").replace(/[^A-Za-z0-9]+/g, "-") + "-" + name.replace(/[^A-Za-z0-9]+/g, "-") + ".xlsx", new Blob([XLSX.write(wb, {bookType: "xlsx", type: "array"})], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
+  }
+};
+
+const LK = {
+  KINDS: [["ledger", "Ledger account"], ["group", "Group summary"], ["tb", "Trial balance on a date"], ["monthly", "Month by month"], ["bills", "Open bills of a party"], ["find", "Find entries"]],
+  st(){
+    const cid = S.coId;
+    if (!S.lk || S.lk.cid !== cid){ const p = FC.period("ytd"); S.lk = {cid, kind: "ledger", led: "", grp: "", from: p.from, to: p.to, asOn: p.to, q: "", typ: "", ask: "", res: null, open: {}}; }
+    return S.lk;
+  },
+  recentKey(){ return "tdsdesk-test:lkrecent:" + (S.coId || ""); },
+  recent(){ try { return JSON.parse(lsGet(this.recentKey()) || "[]"); } catch (e){ return []; } },
+  remember(x){
+    const k = JSON.stringify([x.kind, x.led, x.grp, x.from, x.to, x.asOn, x.q]);
+    const list = this.recent().filter(r => JSON.stringify([r.kind, r.led, r.grp, r.from, r.to, r.asOn, r.q]) !== k);
+    list.unshift({kind: x.kind, led: x.led, grp: x.grp, from: x.from, to: x.to, asOn: x.asOn, q: x.q, typ: x.typ, side: x.side, label: this.title(x)});
+    lsSet(this.recentKey(), JSON.stringify(list.slice(0, 8)));
+  },
+  title(x){
+    const k = x.kind;
+    if (k === "ledger") return x.led + ", " + FC.span(x.from, x.to);
+    if (k === "group") return x.grp + ", " + FC.span(x.from, x.to);
+    if (k === "tb") return "Trial balance on " + FC.when(x.asOn);
+    if (k === "monthly") return (x.led || x.grp) + " month by month, " + FC.span(x.from, x.to);
+    if (k === "bills") return (x.led || "Every party") + ": open bills on " + FC.when(x.asOn);
+    return "Entries" + (x.q ? " with “" + x.q + "”" : "") + ", " + FC.span(x.from, x.to);
+  },
+  // the books cover these dates, and the opening balance is known
+  cover(from, to){
+    const m = (S.books || {}).meta || {}, f = String(m.from || ""), t = String(m.to || "");
+    return {have: !!(S.books.vouchers || []).length, full: !!f && f <= from && t >= to, f, t};
+  },
+  bal(from, to){ try { return Audit.balances(from, to); } catch (e){ return {ok: false, why: e.message}; } },
+  // ---------- one ledger's account, from the books read here
+  ledgerBooks(led, from, to){
+    const B = this.bal(from, to), cv = this.cover(from, to);
+    const open = B.ok ? -r2((B.at(Audit.dayBefore(from))[led]) || 0) : null;
+    const vs = (S.books.vouchers || []).filter(v => v.date >= from && v.date <= to && !v.opt && !v.cancel && v.ent.some(e => e.l === led))
+      .sort((a, c) => a.date.localeCompare(c.date) || String(a.no).localeCompare(String(c.no), undefined, {numeric: true}));
+    let run = open || 0, dr = 0, cr = 0;
+    const rows = vs.map(v => {
+      const a = r2(v.ent.filter(e => e.l === led).reduce((s, e) => s + e.a, 0)), d = a < 0 ? -a : 0, c = a > 0 ? a : 0;
+      dr = r2(dr + d); cr = r2(cr + c); run = r2(run + d - c);
+      const other = v.ent.filter(e => e.l !== led && Math.sign(e.a) !== Math.sign(a) && e.a).sort((x, y) => Math.abs(y.a) - Math.abs(x.a));
+      const part = other.length ? other[0].l + (other.length > 1 ? " and " + (other.length - 1) + " more" : "") : (v.party && v.party !== led ? v.party : "");
+      return {id: v.id, date: v.date, type: v.type, no: v.no, part, narr: v.narr || "", dr: d, cr: c, run, ent: v.ent.map(e => ({l: e.l, a: e.a}))};
+    });
+    return {kind: "ledger", src: "books", led, from, to, open, close: open == null ? null : run, dr, cr, rows,
+      note: (B.ok ? "Opening from " + B.src + "." : "Opening balance not known: " + (B.why || "") + ".") + (cv.full ? "" : " The books read here cover " + (cv.f ? FC.span(cv.f, cv.t) : "no dates") + "; entries outside that are not shown. Fetch from Tally for the whole period.")};
+  },
+  // ---------- the same, straight from Tally
+  async ledgerTally(led, from, to){
+    const co = CO(), o = Bridge.openFor(co);
+    if (!o) throw new Error("Open " + (co.tallyName || co.name) + " in Tally first.");
+    if (bridgeVer(Bridge.st.version) < bridgeVer("1.12.3")) throw new Error("This needs Tally Bridge 1.12.3 or later. Download the new setup from Settings, Tally Bridge.");
+    const q = "?company=" + encodeURIComponent(o.name) + "&from=" + from + "&to=" + to + "&ledger=" + encodeURIComponent(led) + Bridge.pinQ();
+    const bal = await Bridge.call("/ledgerbalance" + q, null, 180000);
+    const lv = await Bridge.call(ledgerLinesUrl(o.name, led, FC.iso(from), FC.iso(to)), null, 600000);
+    const open = -r2(num(bal.open)), close = -r2(num(bal.close));
+    let run = open, dr = 0, cr = 0;
+    const rows = [].concat(lv.vouchers || []).filter(v => !/^yes$/i.test(v.cancelled || "") && !/^yes$/i.test(v.optional || "")).map(v => {
+      const d8 = String(v.date || "").replace(/\D/g, "").slice(0, 8), ents = [].concat(v.entries || []).map(e => ({l: e.ledger, a: r2(num(e.amount))}));
+      const a = r2(ents.filter(e => norm(e.l) === norm(led)).reduce((s, e) => s + e.a, 0));
+      return {v, d8, ents, a};
+    }).filter(x => x.d8 >= from && x.d8 <= to && x.a).sort((x, y) => x.d8.localeCompare(y.d8)).map(({v, d8, ents, a}) => {
+      const d = a < 0 ? -a : 0, c = a > 0 ? a : 0;
+      dr = r2(dr + d); cr = r2(cr + c); run = r2(run + d - c);
+      const other = ents.filter(e => norm(e.l) !== norm(led) && Math.sign(e.a) !== Math.sign(a) && e.a).sort((x, y) => Math.abs(y.a) - Math.abs(x.a));
+      return {id: v.guid || v.masterId || d8 + v.number, date: d8, type: v.type, no: v.number, part: other.length ? other[0].l + (other.length > 1 ? " and " + (other.length - 1) + " more" : "") : (v.party || ""), narr: v.narration || "", dr: d, cr: c, run, ent: ents};
+    });
+    const diff = r2(close - run);
+    return {kind: "ledger", src: "tally", led, from, to, open, close, dr, cr, rows, at: new Date().toISOString(),
+      note: "Read from Tally (" + o.name + ") just now." + (Math.abs(diff) >= 0.5 ? " Tally's closing balance differs from the entries by " + INR.format(Math.abs(diff)) + ": an entry may be optional or post-dated." : "")};
+  },
+  // ---------- a group: each ledger's opening, debits, credits and closing
+  group(grp, from, to){
+    const B = this.bal(from, to), led = FC.ledgers().filter(l => FC.inGroup(l, grp));
+    const set = new Set(led), mv = {};
+    (S.books.vouchers || []).forEach(v => { if (v.date < from || v.date > to || v.opt || v.cancel) return; v.ent.forEach(e => { if (!set.has(e.l)) return; const x = mv[e.l] = mv[e.l] || {dr: 0, cr: 0}; if (e.a < 0) x.dr = r2(x.dr - e.a); else x.cr = r2(x.cr + e.a); }); });
+    const o = B.ok ? B.at(Audit.dayBefore(from)) : null;
+    const rows = led.map(l => { const x = mv[l] || {dr: 0, cr: 0}, op = o ? -r2(o[l] || 0) : null; return {l, sub: (S.books.under || {})[l] || "", open: op, dr: x.dr, cr: x.cr, close: op == null ? null : r2(op + x.dr - x.cr)}; })
+      .filter(r => r.dr || r.cr || (r.open && Math.abs(r.open) >= 0.5)).sort((a, c) => Math.abs(c.close != null ? c.close : c.dr - c.cr) - Math.abs(a.close != null ? a.close : a.dr - a.cr) || a.l.localeCompare(c.l));
+    const sum = k => r2(rows.reduce((s, r) => s + (r[k] || 0), 0));
+    return {kind: "group", src: "books", grp, from, to, rows, open: B.ok ? sum("open") : null, dr: sum("dr"), cr: sum("cr"), close: B.ok ? sum("close") : null,
+      note: B.ok ? "Balances from " + B.src + "." : "Opening and closing balances not known: " + (B.why || "") + ". Debits and credits are from the entries read here."};
+  },
+  // ---------- every ledger's balance on a date
+  tbBooks(asOn){
+    const B = this.bal(Audit.fyStart(asOn), asOn);
+    if (!B.ok) return {kind: "tb", src: "books", asOn, rows: [], none: B.why};
+    const at = B.at(asOn), rows = Object.keys(at).filter(l => Math.abs(at[l]) >= 0.005).map(l => ({l, top: FC.top(l), sub: (S.books.under || {})[l] || "", bal: -r2(at[l])}));
+    return this.tbShape({kind: "tb", src: "books", asOn, rows, note: "From " + B.src + "."});
+  },
+  async tbTally(asOn){
+    const co = CO(), o = Bridge.openFor(co);
+    if (!o) throw new Error("Open " + (co.tallyName || co.name) + " in Tally first.");
+    const from = Audit.fyStart(asOn), j = await Bridge.call("/balances?company=" + encodeURIComponent(o.name) + "&from=" + from + "&to=" + asOn + Bridge.pinQ(), null, 600000);
+    const under = S.books.under = S.books.under || {};
+    const rows = [].concat(j.ledgers || []).map(l => { if (l.parent && !under[l.name]) under[l.name] = l.parent; return {l: l.name, bal: -r2(Books.amt(l.close))}; })
+      .filter(r => Math.abs(r.bal) >= 0.005).map(r => Object.assign(r, {top: FC.top(r.l), sub: under[r.l] || ""}));
+    return this.tbShape({kind: "tb", src: "tally", asOn, rows, at: new Date().toISOString(), note: "Read from Tally (" + o.name + ") just now."});
+  },
+  tbShape(r){
+    const ORDER = ["Capital Account", "Loans (Liability)", "Current Liabilities", "Fixed Assets", "Investments", "Current Assets", "Sales Accounts", "Purchase Accounts", "Direct Incomes", "Direct Expenses", "Indirect Incomes", "Indirect Expenses", "Suspense A/c", "Branch / Divisions", "Misc. Expenses (ASSET)"];
+    const by = {};
+    r.rows.forEach(x => { (by[x.top] = by[x.top] || []).push(x); });
+    r.groups = Object.keys(by).sort((a, c) => (ORDER.indexOf(a) < 0 ? 99 : ORDER.indexOf(a)) - (ORDER.indexOf(c) < 0 ? 99 : ORDER.indexOf(c)) || a.localeCompare(c))
+      .map(g => ({g, rows: by[g].sort((a, c) => a.l.localeCompare(c.l)), dr: r2(by[g].filter(x => x.bal > 0).reduce((s, x) => s + x.bal, 0)), cr: r2(by[g].filter(x => x.bal < 0).reduce((s, x) => s - x.bal, 0))}));
+    r.dr = r2(r.groups.reduce((s, g) => s + g.dr, 0)); r.cr = r2(r.groups.reduce((s, g) => s + g.cr, 0));
+    return r;
+  },
+  // ---------- a ledger or a group, month by month
+  monthly(led, grp, from, to){
+    const B = this.bal(from, to), set = new Set(led ? [led] : FC.ledgers().filter(l => FC.inGroup(l, grp)));
+    const months = MIS.monthsOf(from, to), m = {};
+    months.forEach(k => { m[k] = {dr: 0, cr: 0}; });
+    (S.books.vouchers || []).forEach(v => { if (v.date < from || v.date > to || v.opt || v.cancel) return; const x = m[v.date.slice(0, 6)]; if (!x) return; v.ent.forEach(e => { if (!set.has(e.l)) return; if (e.a < 0) x.dr = r2(x.dr - e.a); else x.cr = r2(x.cr + e.a); }); });
+    let run = null;
+    if (B.ok){ const o = B.at(Audit.dayBefore(from)); run = -r2(Array.from(set).reduce((s, l) => s + (o[l] || 0), 0)); }
+    const open = run;
+    const rows = months.map(k => { const x = m[k]; if (run != null) run = r2(run + x.dr - x.cr); return {ym: k, dr: x.dr, cr: x.cr, net: r2(x.dr - x.cr), close: run}; });
+    return {kind: "monthly", src: "books", led, grp, from, to, open, rows, dr: r2(rows.reduce((s, r) => s + r.dr, 0)), cr: r2(rows.reduce((s, r) => s + r.cr, 0)),
+      note: B.ok ? "Balances from " + B.src + "." : "Balances not known (" + (B.why || "") + "); debits and credits only."};
+  },
+  // ---------- a party's open bills on a date
+  bills(led, asOn){
+    const side = led ? (Audit.isCreditor(led) ? "p" : "r") : (S.lk.side === "p" ? "p" : "r");
+    const all = MIS.bills(asOn, side).filter(x => !led || x.party === led).sort((a, c) => a.party.localeCompare(c.party) || String(a.date).localeCompare(String(c.date)));
+    const total = r2(all.reduce((s, x) => s + x.amt, 0));
+    return {kind: "bills", src: "books", led, asOn, side, rows: all, total,
+      note: (side === "r" ? "Owed to the client" : "Owed by the client") + ", bill by bill, from the bill-wise details in Tally. Bills raised before the books read here show only what was settled against them."};
+  },
+  // ---------- any entry: party, narration, number, ledger or amount
+  find(q, from, to, typ){
+    const s = String(q || "").trim().toLowerCase(), amt = /^[\d,]+(\.\d+)?$/.test(s.replace(/[₹\s]/g, "")) ? num(s) : null;
+    const words = amt == null ? s.split(/\s+/).filter(Boolean) : [];
+    const rows = (S.books.vouchers || []).filter(v => {
+      if (v.date < from || v.date > to || v.cancel) return false;
+      if (typ && v.type !== typ) return false;
+      if (amt != null) return v.ent.some(e => Math.abs(Math.abs(e.a) - amt) < 1);
+      if (!words.length) return true;
+      const hay = [v.party, v.narr, v.no, v.ref, v.type].concat(v.ent.map(e => e.l)).join(" ").toLowerCase();
+      return words.every(w => hay.includes(w));
+    }).sort((a, c) => a.date.localeCompare(c.date)).map(v => {
+      const big = v.ent.reduce((m, e) => Math.abs(e.a) > Math.abs(m) ? e.a : m, 0);
+      const tot = r2(v.ent.filter(e => e.a > 0).reduce((x, e) => x + e.a, 0));
+      return {id: v.id, date: v.date, type: v.type, no: v.no, party: v.party || (v.ent.find(e => e.a < 0) || {}).l || "", narr: v.narr || "", amt: tot || Math.abs(big), ent: v.ent.map(e => ({l: e.l, a: e.a}))};
+    });
+    return {kind: "find", src: "books", q, from, to, typ, rows, total: r2(rows.reduce((x, r) => x + r.amt, 0))};
+  },
+  types(){ return Array.from(new Set((S.books.vouchers || []).map(v => v.type).filter(Boolean))).sort(); },
+  // ---------- run what the page asks for
+  async run(how){
+    const x = this.st();
+    const need = (c, m) => { if (!c){ toast(m); throw null; } };
+    try {
+      if (["ledger", "bills"].includes(x.kind) && x.led) need(FC.ledgers().includes(x.led) || how === "tally", "“" + x.led + "” is not a ledger in these books. Pick one from the list.");
+      if (x.kind === "ledger") need(x.led, "Choose a ledger.");
+      if (x.kind === "group") need(x.grp, "Choose a group.");
+      if (x.kind === "monthly") need(x.led || x.grp, "Choose a ledger or a group.");
+      if (["ledger", "group", "monthly", "find"].includes(x.kind)) need(x.from && x.to && x.from <= x.to, "The dates are the wrong way round.");
+    } catch (e){ if (e) throw e; return; }
+    x.open = {};
+    if (how === "tally"){
+      x.busy = x.kind === "tb" ? "Reading every ledger’s balance from Tally…" : "Reading " + x.led + " from Tally…"; render();
+      try { x.res = x.kind === "tb" ? await this.tbTally(x.asOn) : await this.ledgerTally(x.led, x.from, x.to); }
+      catch (e){ x.busy = ""; toast("Could not read Tally: " + ((e && e.message) || e)); render(); return; }
+      x.busy = "";
+    } else {
+      x.res = x.kind === "ledger" ? this.ledgerBooks(x.led, x.from, x.to) : x.kind === "group" ? this.group(x.grp, x.from, x.to) : x.kind === "tb" ? this.tbBooks(x.asOn)
+        : x.kind === "monthly" ? this.monthly(x.led, x.grp, x.from, x.to) : x.kind === "bills" ? this.bills(x.led, x.asOn) : this.find(x.q, x.from, x.to, x.typ);
+    }
+    x.res.title = this.title(x);
+    this.remember(x);
+    render();
+  },
+  // ---------- a question in plain words, turned into a look-up
+  STOP: new Set(["the", "of", "for", "and", "to", "a", "an", "in", "on", "from", "show", "me", "give", "what", "is", "was", "ledger", "account", "a/c", "ac", "statement", "balance", "balances", "all", "with", "by", "as", "at", "till", "upto", "up", "this", "last", "year", "month", "quarter", "fy", "ltd", "pvt", "private", "limited", "llp", "co", "&", "m/s", "ms", "entries", "entry", "list", "please", "details", "detail", "how", "much", "many", "our", "my", "we", "us"]),
+  MONTHS: {jan: 1, january: 1, feb: 2, february: 2, mar: 3, march: 3, apr: 4, april: 4, may: 5, jun: 6, june: 6, jul: 7, july: 7, aug: 8, august: 8, sep: 9, sept: 9, september: 9, oct: 10, october: 10, nov: 11, november: 11, dec: 12, december: 12},
+  toks(s){ return String(s || "").toLowerCase().replace(/[()\[\],.:;'"\/\\]/g, " ").split(/\s+/).filter(Boolean); },
+  bestName(text, names){
+    const T = this.toks(text), tset = new Set(T);
+    let best = null;
+    names.forEach(n => {
+      const nt = this.toks(n).filter(w => !this.STOP.has(w) && w.length > 1);
+      if (!nt.length) return;
+      const hit = nt.filter(w => tset.has(w) || (w.length >= 4 && T.some(t => t.length >= 4 && (w.startsWith(t) || t.startsWith(w)))));
+      if (!hit.length || !hit.some(w => w.length >= 3)) return;
+      const score = hit.length / nt.length + hit.reduce((s, w) => s + w.length, 0) / 100;
+      if (hit.length / nt.length >= 0.5 && (!best || score > best.score)) best = {n, score, full: hit.length === nt.length};
+    });
+    return best;
+  },
+  dateIn(s){
+    const t = String(s).toLowerCase(), a = FC.anchor();
+    let m;
+    // 31/03/2026, 31-03-2026, 2026-03-31, 31 mar 2026, mar 31 2026
+    const one = x => {
+      let q = x.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
+      if (q){ const y = q[3].length === 2 ? "20" + q[3] : q[3]; return y + q[2].padStart(2, "0") + q[1].padStart(2, "0"); }
+      q = x.match(/^(\d{4})-(\d{2})-(\d{2})$/); if (q) return q[1] + q[2] + q[3];
+      q = x.match(/^(\d{1,2})\s*(?:st|nd|rd|th)?\s+([a-z]+)\s+(\d{4})$/); if (q && this.MONTHS[q[2]]) return q[3] + String(this.MONTHS[q[2]]).padStart(2, "0") + q[1].padStart(2, "0");
+      return "";
+    };
+    const D = "(\\d{1,2}[\\/\\-.]\\d{1,2}[\\/\\-.]\\d{2,4}|\\d{4}-\\d{2}-\\d{2}|\\d{1,2}(?:st|nd|rd|th)?\\s+[a-z]+\\s+\\d{4})";
+    if ((m = t.match(new RegExp("(?:from|between)\\s+" + D + "\\s+(?:to|and|till|until|-)\\s+" + D)))){ const f = one(m[1]), e = one(m[2]); if (f && e) return {from: f, to: e}; }
+    if ((m = t.match(new RegExp("(?:as on|as at|on|till|upto|up to)\\s+" + D)))){ const d = one(m[1]); if (d) return {asOn: d, from: Audit.fyStart(d), to: d}; }
+    if ((m = t.match(/\b(?:fy\s*)?(20\d{2})\s*[-\/]\s*(\d{2}|20\d{2})\b/))){ const y = num(m[1]); return {from: y + "0401", to: (y + 1) + "0331"}; }
+    if ((m = t.match(/\bq([1-4])\b(?:\s*(?:of|fy)?\s*(20\d{2}))?/))){
+      const fy = m[2] ? num(m[2]) : num(Audit.fyStart(a).slice(0, 4)), q = num(m[1]), sm = [4, 7, 10, 1][q - 1], sy = q === 4 ? fy + 1 : fy;
+      return {from: String(sy) + String(sm).padStart(2, "0") + "01", to: FC.monthEnd(sy, sm + 2)};
+    }
+    if (/\blast month\b|\bprevious month\b/.test(t)) return FC.period("lastmonth");
+    if (/\bthis month\b/.test(t)) return FC.period("month");
+    if (/\blast quarter\b|\bprevious quarter\b/.test(t)) return FC.period("lastquarter");
+    if (/\bthis quarter\b/.test(t)) return FC.period("quarter");
+    if (/\blast (financial )?year\b|\bprevious year\b|\blast fy\b/.test(t)) return FC.period("lastfy");
+    if (/\bthis (financial )?year\b|\bthis fy\b|\bcurrent year\b/.test(t)) return FC.period("fy");
+    if (/\bytd\b|\byear to date\b|\bso far\b/.test(t)) return FC.period("ytd");
+    // a month, with or without its year: the latest such month up to the anchor
+    const mk = Object.keys(this.MONTHS).sort((x, y) => y.length - x.length).find(k => new RegExp("\\b" + k + "\\b").test(t));
+    if (mk){
+      const mm = this.MONTHS[mk], yy = (t.match(new RegExp("\\b" + mk + "\\w*\\s*,?\\s*(20\\d{2})\\b")) || [])[1];
+      let y = yy ? num(yy) : num(a.slice(0, 4));
+      if (!yy && String(y) + String(mm).padStart(2, "0") > a.slice(0, 6)) y--;
+      return {from: String(y) + String(mm).padStart(2, "0") + "01", to: FC.monthEnd(y, mm)};
+    }
+    return null;
+  },
+  understand(text){
+    const t = String(text || "").toLowerCase(), x = this.st(), out = {};
+    const dates = this.dateIn(t);
+    const led = this.bestName(t, FC.ledgers()), grp = this.bestName(t, FC.groups());
+    let kind = "";
+    if (/\btrial balance\b|\btb\b/.test(t)) kind = "tb";
+    else if (/month[- ]?(by[- ]?month|wise)|\bmonthly\b|\btrend\b/.test(t)) kind = "monthly";
+    else if (/\boutstanding\b|\bopen bills?\b|\bpending bills?\b|\bbills?\b|\bdues?\b|\bowes?\b|\bageing\b|\baging\b/.test(t)) kind = "bills";
+    else if (/\bfind\b|\bsearch\b|\bnarration\b|\bentries (with|of|about)\b|\bwhere\b/.test(t)) kind = "find";
+    else if (grp && (!led || grp.score > led.score + 0.05 || /\bgroup\b|\bunder\b/.test(t))) kind = "group";
+    else if (led) kind = "ledger";
+    else kind = "find";
+    out.kind = kind;
+    if (kind === "tb"){ out.asOn = (dates && (dates.asOn || dates.to)) || FC.anchor(); }
+    else if (kind === "bills"){ out.asOn = (dates && (dates.asOn || dates.to)) || FC.anchor(); out.led = led && (Audit.isDebtor(led.n) || Audit.isCreditor(led.n)) ? led.n : ""; out.side = /\bpay|creditor|supplier|we owe|to pay/.test(t) ? "p" : "r"; }
+    else {
+      const p = dates || FC.period("ytd"); out.from = p.from; out.to = p.to;
+      if (kind === "ledger") out.led = led.n;
+      if (kind === "group") out.grp = grp.n;
+      if (kind === "monthly"){ if (led && (!grp || led.score >= grp.score)) { out.led = led.n; out.grp = ""; } else if (grp){ out.grp = grp.n; out.led = ""; } }
+      if (kind === "find"){
+        const q = this.toks(t.replace(/\b(find|search|entries|entry|with|narration|where|for|of|about|from|to|in|on)\b/g, " ")).filter(w => !this.MONTHS[w] && !/^20\d{2}$/.test(w) && !/^(q[1-4]|this|last|month|year|quarter|fy)$/.test(w)).join(" ");
+        out.q = q; out.typ = "";
+      }
+    }
+    Object.assign(x, out);
+    return out;
+  },
+  // ---------- the page
+  view(b){
+    const x = this.st(), live = typeof bridgeLive === "function" && bridgeLive(CO()), have = (b.vouchers || []).length > 0;
+    const leds = FC.ledgers(), grps = FC.groups();
+    const dl = '<datalist id="lkLeds">' + leds.slice(0, 5000).map(l => '<option value="' + esc(l) + '">').join("") + '</datalist><datalist id="lkGrps">' + grps.map(g => '<option value="' + esc(g) + '">').join("") + "</datalist>";
+    let h = '<section class="dash-card lk-ask"><h3>Look up</h3>' +
+      '<p class="note" style="margin:0 0 10px">Ask in plain words, or choose below. Anything in the books read here opens at once; a ledger or the trial balance can also be read straight from Tally.</p>' +
+      '<div class="lk-askrow"><input type="search" id="lkAsk" data-fk="lkAsk" data-lkf="ask" data-keeptyped value="' + esc(x.ask || "") + '" placeholder="Try: HDFC bank for August · Raj Fabrics open bills · sales month by month this year · trial balance as on 31/03/2026" aria-label="Ask a question about the books">' +
+      '<button class="btn primary" data-lk="ask">Look up</button></div>' +
+      (x.heard ? '<p class="note lk-heard">Understood as: <b>' + esc(x.heard) + "</b>. Change anything below.</p>" : "") +
+      '<div class="lk-kinds" role="tablist" aria-label="What to look up">' + this.KINDS.map(([k, l]) => '<button role="tab" data-lkkind="' + k + '" aria-selected="' + (x.kind === k) + '">' + l + "</button>").join("") + "</div>";
+    const dates = '<label class="f"><span>From</span><input type="date" data-lkf="from" value="' + FC.iso(x.from) + '"></label><label class="f"><span>To</span><input type="date" data-lkf="to" value="' + FC.iso(x.to) + '"></label>';
+    const asOn = '<label class="f"><span>As on</span><input type="date" data-lkf="asOn" value="' + FC.iso(x.asOn) + '"></label>';
+    const ledIn = (label, req) => '<label class="f lk-wide"><span>' + label + '</span><input type="text" list="lkLeds" data-fk="lkLed" data-lkf="led" value="' + esc(x.led || "") + '" placeholder="' + (req ? "Start typing a ledger name" : "Every party") + '" autocomplete="off"></label>';
+    const grpIn = '<label class="f lk-wide"><span>Group</span><input type="text" list="lkGrps" data-fk="lkGrp" data-lkf="grp" value="' + esc(x.grp || "") + '" placeholder="Sundry Debtors, Indirect Expenses…" autocomplete="off"></label>';
+    let form = "";
+    if (x.kind === "ledger") form = ledIn("Ledger", true) + dates;
+    else if (x.kind === "group") form = grpIn + dates;
+    else if (x.kind === "tb") form = asOn;
+    else if (x.kind === "monthly") form = ledIn("Ledger (or leave empty and choose a group)", true) + grpIn + dates;
+    else if (x.kind === "bills") form = ledIn("Party", false) + asOn + '<label class="f"><span>Side</span><select data-lkf="side"><option value="r"' + (x.side !== "p" ? " selected" : "") + '>Owed to the client</option><option value="p"' + (x.side === "p" ? " selected" : "") + ">Owed by the client</option></select></label>";
+    else form = '<label class="f lk-wide"><span>Words, a number or an amount</span><input type="search" data-fk="lkQ" data-lkf="q" value="' + esc(x.q || "") + '" placeholder="party, narration, bill number or 25000"></label>' + dates +
+      '<label class="f"><span>Type</span><select data-lkf="typ"><option value="">Every type</option>' + this.types().map(t => '<option' + (x.typ === t ? " selected" : "") + ">" + esc(t) + "</option>").join("") + "</select></label>";
+    const presets = ["ledger", "group", "monthly", "find"].includes(x.kind) ? '<div class="lk-presets">' + FC.PRESETS.map(([k, l]) => '<button class="btn small" data-lkper="' + k + '">' + l + "</button>").join("") + "</div>" : "";
+    const tallyOk = (x.kind === "ledger" || x.kind === "tb") && live;
+    h += '<div class="lk-form">' + form + "</div>" + presets +
+      '<div class="row" style="gap:8px;margin-top:10px">' + (have ? '<button class="btn primary" data-lk="books">Show</button>' : "") +
+      (tallyOk ? '<button class="btn' + (have ? "" : " primary") + '" data-lk="tally"' + (x.busy ? " disabled" : "") + ">" + (x.busy ? "Reading Tally…" : "Fetch from Tally") + "</button>" : "") +
+      ((x.kind === "ledger" || x.kind === "tb") && !live ? '<span class="note">Connect the Tally Bridge to read any period straight from Tally.</span>' : "") + "</div>" + dl + "</section>";
+    const rec = this.recent();
+    if (rec.length && !x.res) h += '<section class="dash-card" style="margin-top:12px"><h3>Looked up lately</h3><div class="lk-recent">' + rec.map((r, i) => '<button class="btn small" data-lkrec="' + i + '">' + esc(r.label) + "</button>").join("") + "</div></section>";
+    if (!have && !live) h += FC.noBooks("Look up");
+    if (x.busy) h += busyCard("Reading Tally…", x.busy, 0, 0);
+    if (x.res) h += this.result(x.res, x);
+    return h;
+  },
+  voucherRow(r, cols, x){
+    const open = x.open[r.id];
+    return '<tr class="lk-v' + (open ? " open" : "") + '" data-lkopen="' + esc(r.id) + '" tabindex="0">' + cols + "</tr>" +
+      (open ? '<tr class="lk-sub"><td colspan="9"><div class="lk-entries">' + (r.narr ? '<p class="note">' + esc(r.narr) + "</p>" : "") +
+        '<table class="bk-table lk-in"><tbody>' + r.ent.map(e => '<tr><td><button class="linkbtn strong" data-lkled="' + esc(e.l) + '">' + esc(e.l) + '</button></td><td class="n">' + (e.a < 0 ? FC.amt(-e.a) : "") + '</td><td class="n">' + (e.a > 0 ? FC.amt(e.a) : "") + "</td></tr>").join("") + "</tbody></table></div></td></tr>" : "");
+  },
+  result(r, x){
+    const src = r.src === "tally" ? '<span class="tag stamp">from Tally</span>' : '<span class="tag ok">from the books</span>';
+    let h = '<section class="dash-card lk-res" style="margin-top:12px"><div class="lk-head"><h3>' + esc(r.title || "") + " " + src + '</h3><div class="row" style="gap:6px"><button class="btn small" data-lk="print">Print or PDF</button><button class="btn small" data-lk="excel">Excel</button><button class="btn small" data-lk="clear">Close</button></div></div>';
+    if (r.note) h += '<p class="note">' + esc(r.note) + "</p>";
+    const tile = (l, v, cls) => '<div class="dtile' + (cls ? " " + cls : "") + '"><span>' + l + "</span><b>" + v + "</b></div>";
+    const LIMIT = 1500;
+    if (r.kind === "ledger"){
+      h += '<div class="dash-tiles">' + tile("Opening", r.open == null ? "not known" : FC.drcr(r.open)) + tile("Debits", FC.amt(r.dr) || "0.00") + tile("Credits", FC.amt(r.cr) || "0.00") + tile("Closing", r.close == null ? FC.drcr(r.dr - r.cr) + " (movement)" : FC.drcr(r.close)) + "</div>";
+      if (!r.rows.length) return h + '<div class="bk-none">No entries in ' + esc(r.led) + " for these dates.</div></section>";
+      h += '<div class="bk-tablewrap"><table class="bk-table lk-t"><thead><tr><th>Date</th><th>Particulars</th><th>Type</th><th>No.</th><th class="n">Debit</th><th class="n">Credit</th><th class="n">Balance</th></tr></thead><tbody>' +
+        (r.open != null ? '<tr class="lk-ob"><td>' + FC.when(r.from) + "</td><td><b>Opening balance</b></td><td></td><td></td><td class=\"n\">" + (r.open > 0 ? FC.amt(r.open) : "") + '</td><td class="n">' + (r.open < 0 ? FC.amt(-r.open) : "") + '</td><td class="n">' + FC.drcr(r.open) + "</td></tr>" : "") +
+        r.rows.slice(0, LIMIT).map(v => this.voucherRow(v, "<td>" + FC.when(v.date) + '</td><td><span class="lk-part">' + esc(v.part) + "</span>" + (v.narr ? '<span class="nr">' + esc(v.narr) + "</span>" : "") + "</td><td>" + esc(v.type) + "</td><td>" + esc(v.no || "") + '</td><td class="n">' + FC.amt(v.dr) + '</td><td class="n">' + FC.amt(v.cr) + '</td><td class="n">' + (r.open == null ? "" : FC.drcr(v.run)) + "</td>", x)).join("") +
+        '<tr class="lk-tot"><td></td><td><b>Total</b></td><td></td><td></td><td class="n"><b>' + FC.amt(r.dr) + '</b></td><td class="n"><b>' + FC.amt(r.cr) + '</b></td><td class="n"><b>' + (r.close == null ? "" : FC.drcr(r.close)) + "</b></td></tr></tbody></table></div>" +
+        (r.rows.length > LIMIT ? '<p class="note">The first ' + LIMIT + " of " + r.rows.length + " entries are shown; Excel has them all.</p>" : "") + '<p class="note">Click an entry to see both sides. Click a ledger in it to open that ledger.</p>';
+    }
+    else if (r.kind === "group"){
+      h += '<div class="dash-tiles">' + tile("Opening", r.open == null ? "not known" : FC.drcr(r.open)) + tile("Debits", FC.amt(r.dr) || "0.00") + tile("Credits", FC.amt(r.cr) || "0.00") + tile("Closing", r.close == null ? "not known" : FC.drcr(r.close)) + "</div>";
+      if (!r.rows.length) return h + '<div class="bk-none">No ledger under ' + esc(r.grp) + " moved in these dates.</div></section>";
+      h += '<div class="bk-tablewrap"><table class="bk-table lk-t"><thead><tr><th>Ledger</th><th>Under</th><th class="n">Opening</th><th class="n">Debit</th><th class="n">Credit</th><th class="n">Closing</th></tr></thead><tbody>' +
+        r.rows.slice(0, LIMIT).map(z => '<tr><td><button class="linkbtn strong" data-lkled="' + esc(z.l) + '">' + esc(z.l) + "</button></td><td>" + esc(z.sub) + '</td><td class="n">' + (z.open == null ? "" : FC.drcr(z.open)) + '</td><td class="n">' + FC.amt(z.dr) + '</td><td class="n">' + FC.amt(z.cr) + '</td><td class="n">' + (z.close == null ? "" : FC.drcr(z.close)) + "</td></tr>").join("") +
+        '<tr class="lk-tot"><td><b>' + r.rows.length + ' ledgers</b></td><td></td><td class="n"><b>' + (r.open == null ? "" : FC.drcr(r.open)) + '</b></td><td class="n"><b>' + FC.amt(r.dr) + '</b></td><td class="n"><b>' + FC.amt(r.cr) + '</b></td><td class="n"><b>' + (r.close == null ? "" : FC.drcr(r.close)) + "</b></td></tr></tbody></table></div>";
+    }
+    else if (r.kind === "tb"){
+      if (r.none) return h + '<div class="bk-none">The balances on this date are not known from the books read here: ' + esc(r.none) + "." + (typeof bridgeLive === "function" && bridgeLive(CO()) ? ' <button class="btn small" data-lk="tally">Fetch from Tally</button>' : "") + "</div></section>";
+      const diff = r2(r.dr - r.cr);
+      h += '<div class="dash-tiles">' + tile("Debit balances", FC.amt(r.dr)) + tile("Credit balances", FC.amt(r.cr)) + tile("Difference", Math.abs(diff) < 0.5 ? "agrees" : FC.amt(diff), Math.abs(diff) < 0.5 ? "" : "warn") + tile("Ledgers", String(r.rows.length)) + "</div>";
+      h += '<div class="bk-tablewrap"><table class="bk-table lk-t"><thead><tr><th>Ledger</th><th>Under</th><th class="n">Debit</th><th class="n">Credit</th></tr></thead><tbody>' +
+        r.groups.map(g => '<tr class="lk-grp"><td colspan="2"><b>' + esc(g.g) + '</b></td><td class="n"><b>' + FC.amt(g.dr) + '</b></td><td class="n"><b>' + FC.amt(g.cr) + "</b></td></tr>" +
+          g.rows.map(z => '<tr><td style="padding-left:22px"><button class="linkbtn strong" data-lkled="' + esc(z.l) + '">' + esc(z.l) + "</button></td><td>" + esc(z.sub) + '</td><td class="n">' + (z.bal > 0 ? FC.amt(z.bal) : "") + '</td><td class="n">' + (z.bal < 0 ? FC.amt(-z.bal) : "") + "</td></tr>").join("")).join("") +
+        '<tr class="lk-tot"><td><b>Total</b></td><td></td><td class="n"><b>' + FC.amt(r.dr) + '</b></td><td class="n"><b>' + FC.amt(r.cr) + "</b></td></tr></tbody></table></div>";
+    }
+    else if (r.kind === "monthly"){
+      h += FC.bars(r.rows.map(z => FC.shortMonth(z.ym)), [{name: "Debits", cls: "c1", values: r.rows.map(z => z.dr)}, {name: "Credits", cls: "c2", values: r.rows.map(z => z.cr)}], {label: "Debits and credits by month"});
+      h += '<div class="bk-tablewrap"><table class="bk-table lk-t"><thead><tr><th>Month</th><th class="n">Debit</th><th class="n">Credit</th><th class="n">Net</th><th class="n">Closing</th></tr></thead><tbody>' +
+        (r.open != null ? '<tr class="lk-ob"><td><b>Opening</b></td><td></td><td></td><td></td><td class="n">' + FC.drcr(r.open) + "</td></tr>" : "") +
+        r.rows.map(z => '<tr><td><button class="linkbtn strong" data-lkmonth="' + z.ym + '">' + esc(FC.monthLabel(z.ym)) + '</button></td><td class="n">' + FC.amt(z.dr) + '</td><td class="n">' + FC.amt(z.cr) + '</td><td class="n">' + FC.drcr(z.net) + '</td><td class="n">' + (z.close == null ? "" : FC.drcr(z.close)) + "</td></tr>").join("") +
+        '<tr class="lk-tot"><td><b>Total</b></td><td class="n"><b>' + FC.amt(r.dr) + '</b></td><td class="n"><b>' + FC.amt(r.cr) + '</b></td><td class="n"><b>' + FC.drcr(r.dr - r.cr) + "</b></td><td></td></tr></tbody></table></div>";
+    }
+    else if (r.kind === "bills"){
+      const over = d => r.rows.filter(z => z.age > d && z.amt > 0).reduce((s, z) => s + z.amt, 0);
+      h += '<div class="dash-tiles">' + tile("Outstanding", FC.amt(r.total) || "0.00") + tile("Bills", String(r.rows.length)) + tile("Over 90 days", FC.amt(over(90)) || "0.00", over(90) ? "warn" : "") + tile("Over 180 days", FC.amt(over(180)) || "0.00", over(180) ? "warn" : "") + "</div>";
+      if (!r.rows.length) return h + '<div class="bk-none">Nothing open on ' + FC.when(r.asOn) + ".</div></section>";
+      h += '<div class="bk-tablewrap"><table class="bk-table lk-t"><thead><tr>' + (r.led ? "" : "<th>Party</th>") + '<th>Bill</th><th>Date</th><th class="n">Days</th><th class="n">Outstanding</th></tr></thead><tbody>' +
+        r.rows.slice(0, LIMIT).map(z => "<tr>" + (r.led ? "" : '<td><button class="linkbtn strong" data-lkled="' + esc(z.party) + '">' + esc(z.party) + "</button></td>") + "<td>" + esc(z.ref || "on account") + (z.hasNew ? "" : ' <span class="tag no" title="Raised before the books read here">older</span>') + "</td><td>" + FC.when(z.date) + '</td><td class="n' + (z.age > 90 ? " bad" : "") + '">' + z.age + '</td><td class="n">' + FC.amt(z.amt) + "</td></tr>").join("") +
+        '<tr class="lk-tot">' + (r.led ? "" : "<td></td>") + '<td><b>Total</b></td><td></td><td></td><td class="n"><b>' + FC.amt(r.total) + "</b></td></tr></tbody></table></div>";
+    }
+    else {
+      h += '<p class="note"><b>' + r.rows.length + "</b> entries, together " + money(r.total) + ".</p>";
+      if (!r.rows.length) return h + '<div class="bk-none">Nothing matches. Try fewer words, or a wider period.</div></section>';
+      h += '<div class="bk-tablewrap"><table class="bk-table lk-t"><thead><tr><th>Date</th><th>Type</th><th>No.</th><th>Party or ledger</th><th class="n">Amount</th></tr></thead><tbody>' +
+        r.rows.slice(0, LIMIT).map(v => this.voucherRow(v, "<td>" + FC.when(v.date) + "</td><td>" + esc(v.type) + "</td><td>" + esc(v.no || "") + '</td><td><span class="lk-part">' + esc(v.party) + "</span>" + (v.narr ? '<span class="nr">' + esc(v.narr) + "</span>" : "") + '</td><td class="n">' + FC.amt(v.amt) + "</td>", x)).join("") +
+        "</tbody></table></div>" + (r.rows.length > LIMIT ? '<p class="note">The first ' + LIMIT + " are shown; Excel has them all.</p>" : "");
+    }
+    return h + "</section>";
+  },
+  sheet(r){
+    if (r.kind === "ledger") return [["Date", "Particulars", "Type", "No.", "Narration", "Debit", "Credit", "Balance"]].concat(r.open != null ? [[FC.iso(r.from), "Opening balance", "", "", "", r.open > 0 ? r.open : "", r.open < 0 ? -r.open : "", FC.drcr(r.open)]] : [])
+      .concat(r.rows.map(v => [FC.iso(v.date), v.part, v.type, v.no, v.narr, v.dr || "", v.cr || "", r.open == null ? "" : FC.drcr(v.run)])).concat([["", "Total", "", "", "", r.dr, r.cr, r.close == null ? "" : FC.drcr(r.close)]]);
+    if (r.kind === "group") return [["Ledger", "Under", "Opening", "Debit", "Credit", "Closing"]].concat(r.rows.map(z => [z.l, z.sub, z.open == null ? "" : FC.drcr(z.open), z.dr, z.cr, z.close == null ? "" : FC.drcr(z.close)]));
+    if (r.kind === "tb") return [["Group", "Ledger", "Under", "Debit", "Credit"]].concat((r.groups || []).flatMap(g => g.rows.map(z => [g.g, z.l, z.sub, z.bal > 0 ? z.bal : "", z.bal < 0 ? -z.bal : ""]))).concat([["", "Total", "", r.dr, r.cr]]);
+    if (r.kind === "monthly") return [["Month", "Debit", "Credit", "Net", "Closing"]].concat(r.rows.map(z => [FC.monthLabel(z.ym), z.dr, z.cr, FC.drcr(z.net), z.close == null ? "" : FC.drcr(z.close)]));
+    if (r.kind === "bills") return [["Party", "Bill", "Date", "Days", "Outstanding"]].concat(r.rows.map(z => [z.party, z.ref || "on account", FC.iso(z.date), z.age, z.amt]));
+    return [["Date", "Type", "No.", "Party", "Narration", "Amount"]].concat(r.rows.map(v => [FC.iso(v.date), v.type, v.no, v.party, v.narr, v.amt]));
+  },
+  printIt(){
+    const r = this.st().res; if (!r) return;
+    const rows = this.sheet(r), co = CO();
+    const html = "<h1>" + esc(co.name) + "</h1><p class=\"note\">" + esc(r.title) + " · " + (r.src === "tally" ? "read from Tally" : "from the books in FinCom") + " · printed " + fmtDate(new Date().toISOString().slice(0, 10)) + "</p>" +
+      "<table><thead><tr>" + rows[0].map(c => "<th>" + esc(c) + "</th>").join("") + "</tr></thead><tbody>" +
+      rows.slice(1).map(rw => "<tr>" + rw.map(c => typeof c === "number" ? '<td class="n">' + INR.format(c) + "</td>" : "<td>" + esc(c) + "</td>").join("") + "</tr>").join("") + "</tbody></table>";
+    printView(co.name + " " + r.title, "<style>@page{size:A4 portrait;margin:12mm}</style>" + html);
+  }
+};
+function viewBooksLookup(b){ return LK.view(b); }
+
+if (typeof document !== "undefined"){
+  document.addEventListener("click", e => {
+    const t = e.target.closest && e.target.closest("[data-lk],[data-lkkind],[data-lkper],[data-lkrec],[data-lkled],[data-lkopen],[data-lkmonth],[data-fcgo]");
+    if (!t || !S.books) return;
+    const x = LK.st();
+    if (t.dataset.fcgo){ FC.go(t.dataset.fcgo); return; }
+    if (t.dataset.lkkind){ x.kind = t.dataset.lkkind; x.res = null; x.heard = ""; if (x.typ && !LK.types().includes(x.typ)) x.typ = ""; if (x.kind === "bills" && x.led && !(Audit.isDebtor(x.led) || Audit.isCreditor(x.led))) x.led = ""; render(); return; }
+    if (t.dataset.lkper){ const p = FC.period(t.dataset.lkper); x.from = p.from; x.to = p.to; if ((S.books.vouchers || []).length) LK.run("books"); else render(); return; }
+    if (t.dataset.lkrec){ const r = LK.recent()[+t.dataset.lkrec]; if (r){ Object.assign(x, r); x.heard = ""; LK.run("books"); } return; }
+    if (t.dataset.lkled !== undefined){ e.preventDefault(); e.stopPropagation(); const p = x.res && x.res.from ? {from: x.res.from, to: x.res.to} : x.res && x.res.asOn ? {from: Audit.fyStart(x.res.asOn), to: x.res.asOn} : {from: x.from, to: x.to};
+      Object.assign(x, {kind: "ledger", led: t.dataset.lkled, from: p.from, to: p.to, heard: ""}); if (S.booksTab !== "lookup") FC.go("lookup"); LK.run("books"); return; }
+    if (t.dataset.lkmonth){ const ym = t.dataset.lkmonth, y = num(ym.slice(0, 4)), m = num(ym.slice(4, 6)); Object.assign(x, {kind: x.led ? "ledger" : "group", from: ym + "01", to: FC.monthEnd(y, m)}); LK.run("books"); return; }
+    if (t.dataset.lkopen){ if (e.target.closest("button")) return; x.open[t.dataset.lkopen] = !x.open[t.dataset.lkopen]; render(); return; }
+    const a = t.dataset.lk;
+    if (a === "ask"){ const q = (document.getElementById("lkAsk") || {}).value || x.ask || ""; x.ask = q; if (!q.trim()){ toast("Type what you want to see."); return; }
+      const o = LK.understand(q); x.heard = LK.title(Object.assign({}, x, o)); if (["ledger", "group", "monthly"].includes(o.kind) && !(o.led || o.grp)){ render(); return; }
+      if (!(S.books.vouchers || []).length && (o.kind === "ledger" || o.kind === "tb") && bridgeLive(CO())) LK.run("tally"); else LK.run("books"); return; }
+    if (a === "books") LK.run("books");
+    else if (a === "tally") LK.run("tally");
+    else if (a === "clear"){ x.res = null; render(); }
+    else if (a === "print") LK.printIt();
+    else if (a === "excel" && x.res) FC.excel(x.res.title, [[x.res.kind === "tb" ? "Trial balance" : "Look up", LK.sheet(x.res)]]).catch(er => toast("Could not build the file: " + (er && er.message)));
+  });
+  document.addEventListener("input", e => {
+    const t = e.target; if (!t.dataset || !t.dataset.lkf || !S.lk) return;
+    const k = t.dataset.lkf, v = t.value;
+    S.lk[k] = t.type === "date" ? FC.d8(v) : v;
+  });
+  document.addEventListener("change", e => {
+    const t = e.target; if (!t.dataset || !t.dataset.lkf || !S.lk) return;
+    if (t.tagName === "SELECT" || t.type === "date"){ S.lk[t.dataset.lkf] = t.type === "date" ? FC.d8(t.value) : t.value; }
+  });
+  document.addEventListener("keydown", e => {
+    const t = e.target;
+    if (e.key === "Enter" && t && t.dataset && t.dataset.lkf){ e.preventDefault(); if (t.dataset.lkf === "ask"){ const b = document.querySelector('[data-lk="ask"]'); if (b) b.click(); } else if ((S.books.vouchers || []).length) LK.run("books"); else if (bridgeLive(CO())) LK.run("tally"); }
+    if (e.key === "Enter" && t && t.dataset && t.dataset.lkopen){ e.preventDefault(); t.click(); }
+  });
+}
+/* ================================================================== */
+/* Reports: every report in one place, by area, each area opening with */
+/* a few figures and a small chart for the year                        */
+/* ================================================================== */
+const RPT = {
+  AREAS: [
+    {id: "overview", title: "How the business is doing", ic: "c1"},
+    {id: "parties", title: "Customers and suppliers", ic: "c3"},
+    {id: "cash", title: "Bank and cash", ic: "c2"},
+    {id: "gst", title: "GST", ic: "c4"},
+    {id: "tds", title: "TDS", ic: "c5"},
+    {id: "audit", title: "Audit and accounts", ic: "c6"}
+  ],
+  // every report: [id, area, name, what it shows, where it opens]
+  LIST: [
+    ["mis-summary", "overview", "MIS summary", "Sales, profit, cash, who owes whom and the tax due next", {mis: "summary"}],
+    ["mis-pl", "overview", "Profit and loss, month by month", "Every income and expense head by month, open to the vouchers", {mis: "pl"}],
+    ["mis-cash", "overview", "Cash flow and 13-week forecast", "Money in and out, and the weeks ahead", {mis: "cash"}],
+    ["mis-ratios", "overview", "Ratios", "Margins, returns, liquidity and working capital days", {mis: "ratios"}],
+    ["mis-budget", "overview", "Budget against actual", "Each head against the budget for the year", {mis: "budget"}],
+    ["mis-cc", "overview", "Cost centres", "Income and costs by cost centre", {mis: "cc"}],
+    ["mis-pack", "overview", "MIS pack (PDF)", "The whole MIS for the year, ready to send", {act: "misPack"}],
+    ["mis-recv", "parties", "Receivables ageing", "What each customer owes, by age, bill by bill", {mis: "recv"}],
+    ["mis-pay", "parties", "Payables ageing", "What is owed to each supplier, with MSME dues past 45 days", {mis: "pay"}],
+    ["let-confirm", "parties", "Balance confirmations", "Letters asking parties to confirm their balance, for the audit", {letters: "confirm"}],
+    ["let-remind", "parties", "Dues reminders", "Reminders to customers with bills past their days", {letters: "remind"}],
+    ["lk-bills-r", "parties", "Open bills of customers", "Every unpaid bill on a date", {lk: {kind: "bills", led: "", side: "r"}}],
+    ["lk-bills-p", "parties", "Open bills of suppliers", "Every bill still to pay on a date", {lk: {kind: "bills", led: "", side: "p"}}],
+    ["mis-sales", "parties", "Sales by customer", "Each customer, month by month", {mis: "sales"}],
+    ["mis-purch", "parties", "Purchases and expenses by supplier", "Each supplier, month by month", {mis: "purch"}],
+    ["lk-group-bank", "cash", "Bank balances", "Each bank account: opening, in, out, closing", {lk: {kind: "group", grp: "Bank Accounts"}}],
+    ["lk-cash", "cash", "Cash book", "The cash account for any dates", {lk: {kind: "ledger", led: "@cash"}}],
+    ["lk-bank", "cash", "Bank book", "A bank account for any dates", {lk: {kind: "ledger", led: "@bank"}}],
+    ["go-bank", "cash", "Bank statements and reconciliation", "Statements brought in, and how they agree with Tally", {go: "bank"}],
+    ["go-txn", "cash", "Transactions", "Everything uploaded and posted from FinCom", {go: "txn"}],
+    ["gst-r1", "gst", "GSTR-1", "Outward supplies worked out from the books", {gst: "r1"}],
+    ["gst-r3b", "gst", "GSTR-3B", "Tax, credit and cash to pay, month by month", {gst: "r3b"}],
+    ["gst-inreg", "gst", "Input register", "Every bill with its credit", {gst: "inreg"}],
+    ["gst-r2b", "gst", "2B reconciliation", "Bills in Tally against 2B", {gst: "r2b"}],
+    ["gst-follow", "gst", "ITC follow-up", "Credit waiting on suppliers, carried month to month", {gst: "follow"}],
+    ["gst-vault", "gst", "Returns filed", "The portal’s copy of every return", {gst: "vault"}],
+    ["gst-g9", "gst", "GSTR-9 and 9C", "The annual return and reconciliation", {gst: "g9"}],
+    ["mis-comp", "gst", "Compliance calendar", "GST and TDS by month, and what falls due", {mis: "comp"}],
+    ["tds-q", "tds", "TDS by quarter", "Challans, deductees and deductions for 26Q", {tds: "challans"}],
+    ["tds-checks", "tds", "Interest, late fee and checks", "Short deduction, late deposit and rate questions", {tds: "checks"}],
+    ["tds-ledgers", "tds", "TDS and GST ledgers", "The ledgers FinCom reads for tax, to confirm", {ledgers: "pending"}],
+    ["au-find", "audit", "Audit findings", "Every voucher checked the way an auditor would", {audit: "find"}],
+    ["au-3cd", "audit", "Form 3CD draft", "The tax audit report clauses from the books", {audit: "3cd"}],
+    ["au-rel", "audit", "Related parties", "Dealings with related parties", {audit: "rel"}],
+    ["fs", "audit", "Balance sheet and profit and loss", "Schedule III or the ICAI format, with notes", {fs: 1}],
+    ["lk-tb", "audit", "Trial balance on a date", "Every ledger’s balance, grouped", {lk: {kind: "tb"}}],
+    ["lk-group", "audit", "Group summary", "Each ledger under a group, for any dates", {lk: {kind: "group", grp: ""}}],
+    ["lk-find", "audit", "Find any entry", "By party, narration, number or amount", {lk: {kind: "find", q: ""}}]
+  ],
+  fys(){
+    const m = (S.books || {}).meta || {}, f = String(m.from || ""), t = String(m.to || "");
+    if (!f || !t) return [];
+    const out = []; for (let y = num(Audit.fyStart(t).slice(0, 4)); y >= num(Audit.fyStart(f).slice(0, 4)); y--) out.push(String(y));
+    return out;
+  },
+  range(){
+    const ys = this.fys(), fy = S.rptFy && ys.includes(S.rptFy) ? S.rptFy : ys[0];
+    if (!fy) return null;
+    const to = (num(fy) + 1) + "0331", end = String((S.books.meta || {}).to || "");
+    return {fy, from: fy + "0401", to: end && end < to ? end : to, fyEnd: to};
+  },
+  data(){
+    const b = S.books, R = this.range(); if (!R) return null;
+    const key = [b.cid, R.from, R.to, (b.vouchers || []).length, b.mapV || 0, ((b.audit || {}).last || {}).at || "", (b.tb || {}).at || "", JSON.stringify(b.gstFiled || {}).length].join("|");
+    if (this._d && this._d.key === key) return this._d.d;
+    const months = MIS.monthsOf(R.from, R.to), pl = MIS.pl(R.from, R.to);
+    const bal = Audit.balances(R.from, R.to), balTo = bal.ok ? bal.at(R.to) : null;
+    const recv = MIS.ageing(R.to, "r", balTo), pay = MIS.ageing(R.to, "p", balTo), msme = MIS.msme(), md = MIS.cfg(b).msmeDays;
+    const msmeDue = r2(pay.rows.filter(p => /micro|small/i.test(msme[p.party] || "")).reduce((s, p) => s + p.bills.filter(x => x.ref && x.amt > 0 && x.age > md).reduce((a, x) => a + x.amt, 0), 0));
+    const inM = {}, outM = {}, sales = {}, purch = {};
+    months.forEach(m => { inM[m] = 0; outM[m] = 0; });
+    (b.vouchers || []).forEach(v => {
+      if (v.date < R.from || v.date > R.to || v.opt || v.cancel || /CONTRA/i.test(v.type)) return;
+      const m = v.date.slice(0, 6); if (inM[m] == null) return;
+      v.ent.forEach(e => { if (Audit.isCash(e.l) || Audit.isBankL(e.l)){ if (e.a < 0) inM[m] = r2(inM[m] - e.a); else outM[m] = r2(outM[m] + e.a); } });
+    });
+    const H = k => (pl.heads[k] || {m: {}, t: 0});
+    months.forEach(m => { sales[m] = r2((H("rev").m[m] || 0)); purch[m] = r2((H("pur").m[m] || 0) + (H("dir").m[m] || 0)); });
+    let comp = null; try { comp = MIS.compliance(R.from, R.to); } catch (e){ comp = {gst: [], tds: [], audit: null}; }
+    const cashBank = balTo ? r2(Object.keys(balTo).filter(l => Audit.isCash(l) || Audit.isBankL(l)).reduce((s, l) => s - balTo[l], 0)) : null;
+    const au = (b.audit || {}).last, open = au ? au.findings.filter(f => Audit.status(f.id).s === "open") : [];
+    const d = {R, months, pl, bal, recv, pay, msmeDue, inM, outM, sales, purch, comp, cashBank, au, open,
+      tdsDeductees: new Set(TDS.rows().filter(r => r.date >= R.from && r.date <= R.to).map(r => r.pan || r.party)).size};
+    this._d = {key, d};
+    return d;
+  },
+  tile(l, v, sub, rid, cls){ return '<button class="dtile' + (cls ? " " + cls : "") + '"' + (rid ? ' data-rpt="' + rid + '"' : "") + "><span>" + esc(l) + "</span><b>" + v + "</b>" + (sub ? "<small>" + sub + "</small>" : "") + "</button>"; },
+  areaDash(id, d){
+    const m = v => INR0.format(r2(v || 0)), mon = d.months.map(x => FC.shortMonth(x)), T = this.tile.bind(this), pct = (a, c) => c ? (Math.round(a / c * 1000) / 10) + "%" : "—";
+    if (id === "overview"){
+      const rev = (d.pl.heads.rev || {t: 0}).t;
+      return '<div class="dash-tiles">' + T("Sales", m(rev), "the year so far", "mis-sales") + T("Gross profit", m(d.pl.gross.t), pct(d.pl.gross.t, rev) + " of sales", "mis-pl") +
+        T("Profit before tax", m(d.pl.pbt.t), pct(d.pl.pbt.t, rev) + " of sales", "mis-pl", d.pl.pbt.t < 0 ? "warn" : "") + T("Cash and bank", d.cashBank == null ? "—" : m(d.cashBank), d.cashBank == null ? "balances not read yet" : "on " + FC.when(d.R.to), "lk-group-bank") + "</div>" +
+        FC.bars(mon, [{name: "Sales", cls: "c1", values: d.months.map(x => d.sales[x])}, {name: "Purchases and direct costs", cls: "c2", values: d.months.map(x => d.purch[x])}], {label: "Sales and purchases by month"});
+    }
+    if (id === "parties"){
+      const owed = A => A.sum.tally != null ? A.sum.tally : A.sum.open;
+      return '<div class="dash-tiles">' + T("Owed to you", m(owed(d.recv)), d.recv.rows.length + " customers", "mis-recv") + T("Over 90 days", m(d.recv.sum.b[3] + d.recv.sum.b[4]), "customers", "let-remind", d.recv.sum.b[3] + d.recv.sum.b[4] > 0 ? "warn" : "") +
+        T("You owe", m(owed(d.pay)), d.pay.rows.length + " suppliers", "mis-pay") + T("MSME past " + MIS.cfg(S.books).msmeDays + " days", m(d.msmeDue), "section 43B(h)", "mis-pay", d.msmeDue > 0 ? "warn" : "") + "</div>" +
+        FC.bars(MIS.BUCKETS.map(z => z[1]), [{name: "Owed to you", cls: "c1", values: d.recv.sum.b}, {name: "You owe", cls: "c3", values: d.pay.sum.b}], {label: "Ageing, in days"});
+    }
+    if (id === "cash"){
+      const ti = Object.values(d.inM).reduce((s, x) => s + x, 0), to = Object.values(d.outM).reduce((s, x) => s + x, 0);
+      return '<div class="dash-tiles">' + T("Received", m(ti), "into bank and cash", "lk-group-bank") + T("Paid out", m(to), "from bank and cash", "lk-group-bank") + T("Net", m(ti - to), ti - to < 0 ? "more went out" : "more came in", "mis-cash", ti - to < 0 ? "warn" : "") +
+        T("Balance now", d.cashBank == null ? "—" : m(d.cashBank), d.cashBank == null ? "balances not read yet" : "on " + FC.when(d.R.to), "lk-group-bank") + "</div>" +
+        FC.bars(mon, [{name: "Received", cls: "c1", values: d.months.map(x => d.inM[x])}, {name: "Paid", cls: "c3", values: d.months.map(x => d.outM[x])}], {label: "Money in and out by month"});
+    }
+    if (id === "gst"){
+      const g = d.comp.gst || [], s = k => g.reduce((a, x) => a + num(x[k]), 0), last = g[g.length - 1] || {};
+      return '<div class="dash-tiles">' + T("Tax on sales", m(s("out")), "the year so far", "gst-r3b") + T("Input credit", m(s("itc")), "the year so far", "gst-inreg") + T("Paid in cash", m(s("pay")), "after credit", "gst-r3b") +
+        T("Last month", m(last.pay), last.ym ? "to pay for " + FC.monthLabel(last.ym) : "", "gst-r3b") + "</div>" +
+        (g.length ? FC.bars(g.map(x => FC.shortMonth(x.ym)), [{name: "Tax on sales", cls: "c4", values: g.map(x => x.out)}, {name: "Input credit", cls: "c2", values: g.map(x => x.itc)}], {label: "GST by month"}) : "");
+    }
+    if (id === "tds"){
+      const t = d.comp.tds || [], ded = t.reduce((a, x) => a + x.ded, 0), dep = t.reduce((a, x) => a + x.dep, 0);
+      return '<div class="dash-tiles">' + T("Deducted", m(ded), "the year so far", "tds-q") + T("Deposited", m(dep), "by challan", "tds-q") + T("Not yet deposited", m(Math.max(0, ded - dep)), "", "tds-checks", ded - dep > 1 ? "warn" : "") + T("Deductees", String(d.tdsDeductees), "with TDS this year", "tds-q") + "</div>" +
+        (t.length ? FC.bars(t.map(x => FC.shortMonth(x.ym)), [{name: "Deducted", cls: "c5", values: t.map(x => x.ded)}, {name: "Deposited", cls: "c2", values: t.map(x => x.dep)}], {label: "TDS by month"}) : "");
+    }
+    if (id === "audit"){
+      if (!d.au) return '<div class="fc-empty small"><p class="note">The audit has not been run for this client yet.</p><button class="btn small primary" data-rpt="au-find">Run the audit</button></div>';
+      const high = d.open.filter(f => f.sev === "high");
+      return '<div class="dash-tiles">' + T("Serious, still open", String(high.length), m(high.reduce((s, f) => s + num(f.amount), 0)) + " involved", "au-find", high.length ? "warn" : "") + T("All open", String(d.open.length), "findings", "au-find") +
+        T("Put right", String((d.au.solved || []).reduce((s, x) => s + x.n, 0)), "since earlier runs", "au-find") + T("Last run", FC.when(String(d.au.at).slice(0, 10).replace(/-/g, "")), esc(FC.span(d.au.from, d.au.to)), "au-find") + "</div>" +
+        (high.length ? '<ul class="rpt-top">' + high.slice(0, 3).map(f => '<li><span class="tag bad">serious</span> ' + esc(f.title) + "</li>").join("") + "</ul>" : "");
+    }
+    return "";
+  },
+  view(b){
+    const have = (b.vouchers || []).length > 0, q = String(S.rptQ || "").toLowerCase().trim();
+    let h = '<section class="dash-card rpt-head"><div class="rpt-top-row"><div><h3>Reports</h3><p class="note" style="margin:0">Every report for ' + esc(CO().name) + " in one place. Click a figure or a report to open it.</p></div>" +
+      '<input type="search" id="rptQ" data-fk="rptQ" data-keeptyped value="' + esc(S.rptQ || "") + '" placeholder="Find a report: ageing, 3B, cash, ratios…" aria-label="Find a report">' +
+      (have ? '<select data-rptfy aria-label="Year">' + this.fys().map(y => '<option value="' + y + '"' + (this.range().fy === y ? " selected" : "") + ">" + FC.fyLabel(y) + "</option>").join("") + "</select>" : "") + "</div></section>";
+    if (!have) h += FC.noBooks("Reports");
+    const d = have ? this.data() : null;
+    if (q){
+      const hits = this.LIST.filter(r => (r[2] + " " + r[3] + " " + this.AREAS.find(a => a.id === r[1]).title).toLowerCase().includes(q));
+      return h + '<section class="dash-card" style="margin-top:12px"><h3>' + hits.length + " report" + (hits.length === 1 ? "" : "s") + ' found</h3><div class="rpt-links">' +
+        (hits.length ? hits.map(r => this.link(r)).join("") : '<p class="note">Nothing by that name. Try Look up for a ledger or an entry.</p>') + "</div></section>";
+    }
+    h += '<div class="rpt-grid">';
+    this.AREAS.forEach(a => {
+      h += '<section class="dash-card rpt-area rpt-' + a.id + '"><div class="rpt-ah"><i class="rpt-dot ' + a.ic + '" aria-hidden="true"></i><h3>' + esc(a.title) + "</h3>" + (d ? '<span class="note">' + FC.fyLabel(d.R.fy) + (d.R.to < d.R.fyEnd ? ", to " + FC.when(d.R.to) : "") + "</span>" : "") + "</div>" +
+        (d ? this.areaDash(a.id, d) : "") + '<div class="rpt-links">' + this.LIST.filter(r => r[1] === a.id).map(r => this.link(r)).join("") + "</div></section>";
+    });
+    return h + "</div>";
+  },
+  link(r){ return '<button class="rpt-link" data-rpt="' + r[0] + '"><b>' + esc(r[2]) + "</b><span>" + esc(r[3]) + "</span></button>"; },
+  open(id){
+    const r = this.LIST.find(x => x[0] === id); if (!r) return;
+    const to = r[4], R = this.range(), b = S.books;
+    if (to.mis){
+      if (!(b.vouchers || []).length){ FC.go("import"); return; }
+      const last = (b.mis || {}).last;
+      if (R && !(last && last.from === R.from && last.to === R.to)){ try { MIS.run(R.from, R.to, "opened from Reports"); saveBooks(); } catch (e){ toast("Could not work out the MIS: " + e.message); } }
+      if (R) S.misRange = {from: FC.iso(R.from), to: FC.iso(R.to)};
+      FC.go("mis", {misTab: to.mis, misLed: ""}); return;
+    }
+    if (to.act === "misPack"){ this.open("mis-summary"); setTimeout(() => { const bt = document.querySelector('[data-act="misPack"]'); if (bt) bt.click(); }, 50); return; }
+    if (to.gst){ FC.go("gst", {gstPart: to.gst}); return; }
+    if (to.tds){ FC.go("tds", {tdsTab: to.tds}); return; }
+    if (to.audit){
+      if (to.audit === "find" && !(b.audit || {}).last && R && (b.vouchers || []).length){ try { Audit.run(R.from, R.to, "run from Reports"); saveBooks(); } catch (e){} }
+      FC.go("audit", {auditTab: to.audit}); return;
+    }
+    if (to.ledgers){ FC.go("ledgers", {lmView: to.ledgers}); return; }
+    if (to.fs){ FC.go("fs", R ? {fsFy: R.fy} : {}); return; }
+    if (to.letters){ FC.go("letters", {ltrMode: to.letters}); return; }
+    if (to.go){ S.tab = "books"; const el = document.createElement("button"); el.dataset.goclient = to.go; document.body.appendChild(el); el.click(); el.remove(); return; }
+    if (to.lk){
+      const x = LK.st(), spec = Object.assign({}, to.lk), p = R ? {from: R.from, to: R.to} : FC.period("ytd");
+      if (spec.led === "@cash") spec.led = FC.ledgers().find(l => Audit.isCash(l)) || "";
+      if (spec.led === "@bank") spec.led = FC.ledgers().find(l => Audit.isBankL(l)) || "";
+      Object.assign(x, {from: p.from, to: p.to, asOn: p.to, heard: "", res: null, q: "", typ: ""}, spec);
+      FC.go("lookup");
+      const ready = spec.kind === "tb" || spec.kind === "bills" || (spec.kind === "ledger" && spec.led) || (spec.kind === "group" && spec.grp) || (spec.kind === "find" && false);
+      if (ready && (b.vouchers || []).length) LK.run("books");
+    }
+  }
+};
+function viewBooksReports(b){ return RPT.view(b); }
+if (typeof document !== "undefined"){
+  document.addEventListener("click", e => {
+    const t = e.target.closest && e.target.closest("[data-rpt]"); if (!t || !S.books) return;
+    e.preventDefault(); RPT.open(t.dataset.rpt);
+  });
+  document.addEventListener("input", e => { if (e.target && e.target.id === "rptQ"){ S.rptQ = e.target.value; softRender(); } });
+  document.addEventListener("change", e => { if (e.target && e.target.hasAttribute && e.target.hasAttribute("data-rptfy")){ S.rptFy = e.target.value; render(); } });
+}
+/* ================================================================== */
+/* Letters: balance confirmations for the audit, and dues reminders    */
+/* to customers. Nothing is sent from here: letters are printed or     */
+/* saved as PDF, or opened in the user's own email or WhatsApp.        */
+/* ================================================================== */
+const LTR = {
+  st(){
+    const cid = S.coId;
+    if (!S.ltr || S.ltr.cid !== cid){
+      // confirmations are asked for at the year end: the last 31 March up to the books' last day
+      const a = FC.anchor(), lastFyEnd = a.slice(4) === "0331" ? a : num(Audit.fyStart(a).slice(0, 4)) + "0331";
+      S.ltr = {cid, asOn: lastFyEnd, remOn: a, sides: {r: true, p: true, o: false}, min: 1, q: "", show: "all", sel: {}, credit: 30, tone: "friendly", busy: "", tally: null};
+    }
+    if (S.ltrMode){ S.ltr.mode = S.ltrMode; S.ltrMode = null; }
+    S.ltr.mode = S.ltr.mode || "confirm";
+    return S.ltr;
+  },
+  store(){ const b = S.books; b.letters = b.letters || {}; ["conf", "rem", "contacts"].forEach(k => { b.letters[k] = b.letters[k] || {}; }); b.letters.cfg = b.letters.cfg || {}; return b.letters; },
+  cfg(){ return Object.assign({replyTo: "company", auditor: "", auditorEmail: "", days: 15, negative: false, attach: true, msme: false, udyam: "", signer: ""}, this.store().cfg); },
+  contact(party){
+    const b = S.books, own = (this.store().contacts || {})[party] || {}, g = String((b.gstins || {})[party] || "").toUpperCase(), gc = ((b.gstContacts || {})[g]) || {}, i = (b.ledInfo || {})[party] || {};
+    return {email: own.email != null ? own.email : (gc.email || i.email || ""), phone: own.phone != null ? own.phone : (gc.phone || i.phone || i.mobile || ""), addr: own.addr != null ? own.addr : (i.addr || "")};
+  },
+  // ---------- balances on a date: from the books, or read from Tally
+  balances(asOn){
+    const x = this.st();
+    if (x.tally && x.tally.asOn === asOn) return {ok: true, src: "Tally, read " + fmtDate(x.tally.at.slice(0, 10)), bal: x.tally.bal};
+    const B = LK.bal(Audit.fyStart(asOn), asOn);
+    if (!B.ok) return {ok: false, why: B.why};
+    const at = B.at(asOn), bal = {};
+    Object.keys(at).forEach(l => { bal[l] = -r2(at[l]); });
+    return {ok: true, src: B.src, bal};
+  },
+  async readTally(asOn){
+    const x = this.st();
+    x.busy = "Reading every ledger’s balance from Tally…"; render();
+    try { const r = await LK.tbTally(asOn); const bal = {}; r.rows.forEach(z => { bal[z.l] = z.bal; }); x.tally = {asOn, at: new Date().toISOString(), bal}; }
+    catch (e){ toast("Could not read Tally: " + ((e && e.message) || e)); }
+    x.busy = ""; render();
+  },
+  isOther(l){ return Audit.isLoan(l) || /loans? (&|and) advances|deposits \(asset\)/i.test(Audit.path(l).join("|")); },
+  side(l){ return Audit.isDebtor(l) ? "r" : Audit.isCreditor(l) ? "p" : this.isOther(l) ? "o" : ""; },
+  // ---------- the parties to write to, with their balance
+  confirmRows(){
+    const x = this.st(), B = this.balances(x.asOn);
+    if (!B.ok) return {B, rows: []};
+    const rec = this.store().conf[x.asOn] || {}, q = x.q.toLowerCase();
+    const rows = Object.keys(B.bal).map(l => ({l, side: this.side(l), bal: B.bal[l]})).filter(r => r.side && x.sides[r.side] && Math.abs(r.bal) >= Math.max(0.5, num(x.min)))
+      .map(r => Object.assign(r, {gstin: (S.books.gstins || {})[r.l] || "", c: this.contact(r.l), s: rec[r.l] || {}}))
+      .filter(r => !q || (r.l + " " + r.gstin).toLowerCase().includes(q))
+      .filter(r => x.show === "all" || (x.show === "notsent" ? !r.s.sentAt : x.show === "waiting" ? r.s.sentAt && !r.s.reply : x.show === "differs" ? r.s.reply === "differs" : true))
+      .sort((a, c) => a.side.localeCompare(c.side) || Math.abs(c.bal) - Math.abs(a.bal));
+    return {B, rows};
+  },
+  remindRows(){
+    const x = this.st(), A = MIS.ageing(x.remOn, "r"), rem = this.store().rem, q = x.q.toLowerCase(), cr = num(x.credit);
+    return A.rows.map(p => {
+      const over = p.bills.filter(z => z.ref && z.amt > 0 && z.age > cr), amt = r2(over.reduce((s, z) => s + z.amt, 0));
+      return {l: p.party, total: p.total, over, amt, oldest: over.reduce((m, z) => Math.max(m, z.age), 0), c: this.contact(p.party), last: (rem[p.party] || [])[0] || null, gstin: (S.books.gstins || {})[p.party] || ""};
+    }).filter(r => r.amt >= 1 && (!q || (r.l + " " + r.gstin).toLowerCase().includes(q))).sort((a, c) => c.amt - a.amt);
+  },
+  // ---------- the words
+  whoWrites(){ const co = CO(); return {name: co.name, gstin: co.gstin || "", signer: this.cfg().signer}; },
+  replyTo(){ const c = this.cfg(), co = CO(); return c.replyTo === "auditor" && c.auditor ? {name: c.auditor, email: c.auditorEmail} : {name: co.name, email: (this.cfg().companyEmail || "")}; },
+  meaning(bal){ return bal > 0 ? "due from you to us" : "due from us to you"; },
+  confirmText(r){
+    const x = this.st(), c = this.cfg(), W = this.whoWrites(), R = this.replyTo(), amt = "₹" + INR.format(Math.abs(r.bal)) + (r.bal > 0 ? " Dr" : " Cr");
+    return {subject: "Confirmation of balance as on " + FC.when(x.asOn) + " – " + W.name,
+      body: "Dear Sir or Madam,\n\nAs per our books of account, the balance in your account as on " + FC.when(x.asOn) + " is " + amt + ", being the amount " + this.meaning(r.bal) + ".\n\n" +
+        "Please confirm this balance by replying to " + (R.email ? R.name + " at " + R.email : R.name) + " within " + c.days + " days. If your books show a different balance, please send your statement of our account so that the difference can be reconciled." +
+        (c.negative ? "\n\nIf we do not hear from you within " + c.days + " days, we shall take the balance as correct." : "") + "\n\nThank you.\n\nFor " + W.name + (W.signer ? "\n" + W.signer : "") + "\nAuthorised signatory"};
+  },
+  TONES: {
+    friendly: ["A friendly reminder", "This is a friendly reminder that the bills below are past their due date. We would be grateful if you could arrange the payment at the earliest."],
+    firm: ["Payment overdue", "The bills below are overdue despite our earlier reminders. Please arrange the payment within 7 days of this letter."],
+    final: ["Final reminder before further action", "In spite of earlier reminders, the bills below remain unpaid. Unless the payment is received within 7 days, we shall be constrained to take such further steps as are open to us, without further notice."]
+  },
+  remindText(r){
+    const x = this.st(), c = this.cfg(), W = this.whoWrites(), T = this.TONES[x.tone] || this.TONES.friendly;
+    const lines = r.over.slice(0, 15).map(z => "  " + (z.ref || "on account") + ", dated " + FC.when(z.date) + ": ₹" + INR.format(z.amt) + " (" + z.age + " days)").join("\n") + (r.over.length > 15 ? "\n  and " + (r.over.length - 15) + " more bills" : "");
+    return {subject: T[0] + ": ₹" + INR.format(r.amt) + " due – " + W.name,
+      body: "Dear Sir or Madam,\n\n" + T[1] + "\n\n" + lines + "\n\nTotal overdue: ₹" + INR.format(r.amt) + "\n\n" +
+        (c.msme ? "We are registered as a micro or small enterprise" + (c.udyam ? " (Udyam " + c.udyam + ")" : "") + ". Under sections 15 and 16 of the MSMED Act, 2006, payment is due within the agreed period, not more than 45 days, after which compound interest at three times the bank rate notified by the Reserve Bank applies.\n\n" : "") +
+        "If you have already paid, please share the payment details so that we can match them.\n\nFor " + W.name + (W.signer ? "\n" + W.signer : "") + "\nAuthorised signatory"};
+  },
+  // ---------- printed letters (and PDF, through the print window)
+  letterHead(){ const W = this.whoWrites(); return '<div class="lh"><div class="lhn">' + esc(W.name) + "</div>" + (W.gstin ? '<div class="lhs">GSTIN ' + esc(W.gstin) + "</div>" : "") + "</div>"; },
+  toBlock(r){ return '<div class="to">To<br><b>' + esc(r.l) + "</b>" + (r.c.addr ? "<br>" + esc(r.c.addr).replace(/\n/g, "<br>") : "") + (r.gstin ? "<br>GSTIN " + esc(r.gstin) : "") + "</div>"; },
+  confirmHtml(r){
+    const x = this.st(), c = this.cfg(), t = this.confirmText(r), R = this.replyTo();
+    let h = '<div class="page">' + this.letterHead() + '<div class="dt">Date: ' + fmtDate(new Date().toISOString().slice(0, 10)) + "</div>" + this.toBlock(r) +
+      '<p class="sub">Subject: ' + esc(t.subject.split(" – ")[0]) + "</p>" + t.body.split("\n\n").slice(0, -1).map(p => "<p>" + esc(p) + "</p>").join("") +
+      '<p class="sig">For ' + esc(this.whoWrites().name) + "<br><br><br>" + (this.whoWrites().signer ? esc(this.whoWrites().signer) + "<br>" : "") + "Authorised signatory</p>";
+    if (c.attach){
+      const st = LK.ledgerBooks(r.l, Audit.fyStart(x.asOn), x.asOn);
+      if (st.rows.length && st.rows.length <= 80){
+        h += '<div class="ann"><h3>Statement of your account, ' + FC.span(st.from, st.to) + '</h3><table><thead><tr><th>Date</th><th>Particulars</th><th>No.</th><th class="n">Debit</th><th class="n">Credit</th></tr></thead><tbody>' +
+          (st.open != null ? "<tr><td>" + FC.when(st.from) + '</td><td>Opening balance</td><td></td><td class="n">' + (st.open > 0 ? FC.amt(st.open) : "") + '</td><td class="n">' + (st.open < 0 ? FC.amt(-st.open) : "") + "</td></tr>" : "") +
+          st.rows.map(v => "<tr><td>" + FC.when(v.date) + "</td><td>" + esc(v.type) + (v.narr ? ": " + esc(v.narr.slice(0, 60)) : "") + "</td><td>" + esc(v.no || "") + '</td><td class="n">' + FC.amt(v.dr) + '</td><td class="n">' + FC.amt(v.cr) + "</td></tr>").join("") +
+          '<tr><td></td><td><b>Closing balance</b></td><td></td><td class="n"><b>' + (r.bal > 0 ? FC.amt(r.bal) : "") + '</b></td><td class="n"><b>' + (r.bal < 0 ? FC.amt(-r.bal) : "") + "</b></td></tr></tbody></table></div>";
+      } else if (st.rows.length) h += '<p class="small">The statement of your account for the year (' + st.rows.length + " entries) is available on request.</p>";
+    }
+    h += '<div class="slip"><div class="cut">✂ - - - - - - - - - - please sign and return - - - - - - - - - -</div><p><b>To: ' + esc(R.name) + "</b>" + (R.email ? " (" + esc(R.email) + ")" : "") + "</p>" +
+      "<p>We confirm that the balance of our account with " + esc(this.whoWrites().name) + " as on " + FC.when(x.asOn) + " is:</p>" +
+      '<p>☐ ₹' + INR.format(Math.abs(r.bal)) + " " + (r.bal > 0 ? "payable by us" : "receivable by us") + ", as stated above, correct.</p>" +
+      "<p>☐ not correct. Our books show ₹ ____________________ " + (r.bal > 0 ? "payable / receivable" : "receivable / payable") + ". Our statement is enclosed.</p>" +
+      '<div class="sg"><span>Signature and stamp</span><span>Name</span><span>Date</span></div><p class="small">For ' + esc(r.l) + "</p></div></div>";
+    return h;
+  },
+  remindHtml(r){
+    const t = this.remindText(r), T = this.TONES[this.st().tone] || this.TONES.friendly, c = this.cfg();
+    return '<div class="page">' + this.letterHead() + '<div class="dt">Date: ' + fmtDate(new Date().toISOString().slice(0, 10)) + "</div>" + this.toBlock(r) +
+      '<p class="sub">Subject: ' + esc(T[0]) + "</p><p>Dear Sir or Madam,</p><p>" + esc(T[1]) + "</p>" +
+      '<table><thead><tr><th>Bill</th><th>Date</th><th class="n">Days</th><th class="n">Amount due</th></tr></thead><tbody>' +
+      r.over.map(z => "<tr><td>" + esc(z.ref || "on account") + "</td><td>" + FC.when(z.date) + '</td><td class="n">' + z.age + '</td><td class="n">' + FC.amt(z.amt) + "</td></tr>").join("") +
+      '<tr><td><b>Total overdue</b></td><td></td><td></td><td class="n"><b>' + FC.amt(r.amt) + "</b></td></tr></tbody></table>" +
+      (c.msme ? "<p>" + esc(t.body.split("\n\n").find(p => /MSMED/.test(p)) || "") + "</p>" : "") +
+      "<p>If you have already paid, please share the payment details so that we can match them.</p>" +
+      '<p class="sig">For ' + esc(this.whoWrites().name) + "<br><br><br>" + (this.whoWrites().signer ? esc(this.whoWrites().signer) + "<br>" : "") + "Authorised signatory</p></div>";
+  },
+  STYLE: "<style>@page{size:A4 portrait;margin:16mm}body{padding:0;font:12.5px/1.55 Georgia,'Times New Roman',serif;color:#111}.page{page-break-after:always;max-width:720px;margin:0 auto}.page:last-child{page-break-after:auto}" +
+    ".lh{border-bottom:2px solid #047857;padding-bottom:8px;margin-bottom:14px}.lhn{font-size:20px;font-weight:700;color:#064e3b}.lhs{font-size:11px;color:#444}.dt{text-align:right;margin-bottom:10px}.to{margin-bottom:14px}.sub{font-weight:700;text-decoration:underline}" +
+    ".sig{margin-top:22px}.ann{margin-top:16px}.ann h3{font-size:13px;margin:0 0 6px}table{border-collapse:collapse;width:100%;font:11px/1.35 -apple-system,Segoe UI,Roboto,sans-serif;margin:8px 0}th,td{border:1px solid #cfd8d3;padding:3px 6px;text-align:left}th{background:#ecfdf5}td.n,th.n{text-align:right}" +
+    ".slip{margin-top:26px;border:1px dashed #777;padding:10px 14px}.cut{text-align:center;font-size:10px;color:#666;margin:-4px 0 8px}.sg{display:flex;justify-content:space-between;margin-top:34px;font-size:11px;color:#444}.sg span{border-top:1px solid #999;padding-top:3px;width:30%}.small{font-size:11px;color:#444}</style>",
+  print(kind, rows){
+    if (!rows.length){ toast("Tick the parties first."); return; }
+    const html = rows.map(r => kind === "confirm" ? this.confirmHtml(r) : this.remindHtml(r)).join("");
+    printView(CO().name + (kind === "confirm" ? " balance confirmations " + FC.when(this.st().asOn) : " payment reminders"), this.STYLE + html);
+    const at = new Date().toISOString();
+    rows.forEach(r => this.mark(kind, r, "printed", at));
+    saveBooks(); render();
+  },
+  mark(kind, r, via, at){
+    const s = this.store();
+    if (kind === "confirm"){ const x = this.st(), m = s.conf[x.asOn] = s.conf[x.asOn] || {}; m[r.l] = Object.assign({}, m[r.l], {sentAt: at, via, bal: r.bal}); }
+    else { s.rem[r.l] = [{at, via, amt: r.amt, tone: this.st().tone}].concat(s.rem[r.l] || []).slice(0, 12); }
+  },
+  mailto(kind, r){
+    const t = kind === "confirm" ? this.confirmText(r) : this.remindText(r);
+    if (!r.c.email){ toast("Type " + r.l + "’s email first."); return false; }
+    let body = t.body; if (body.length > 1800) body = body.slice(0, 1800) + "\n…";
+    window.open("mailto:" + encodeURIComponent(r.c.email) + "?subject=" + encodeURIComponent(t.subject) + "&body=" + encodeURIComponent(body), "_blank");
+    return true;
+  },
+  whatsapp(kind, r){
+    const ph = String(r.c.phone || "").replace(/\D/g, "");
+    if (!ph){ toast("Type " + r.l + "’s phone first."); return false; }
+    const t = kind === "confirm" ? this.confirmText(r) : this.remindText(r);
+    window.open("https://wa.me/" + (ph.length === 10 ? "91" + ph : ph) + "?text=" + encodeURIComponent(t.subject + "\n\n" + t.body.slice(0, 1500)), "_blank");
+    return true;
+  },
+  // ---------- the page
+  view(b){
+    const x = this.st(), have = (b.vouchers || []).length > 0, live = typeof bridgeLive === "function" && bridgeLive(CO());
+    let h = '<section class="dash-card"><div class="rpt-top-row"><div><h3>Confirmations and reminders</h3><p class="note" style="margin:0">Letters are printed or saved as PDF, or opened in your own email or WhatsApp to send. Nothing is sent from FinCom.</p></div></div>' +
+      '<div class="lk-kinds" role="tablist" aria-label="Letters"><button role="tab" data-ltrmode="confirm" aria-selected="' + (x.mode === "confirm") + '">Balance confirmations</button><button role="tab" data-ltrmode="remind" aria-selected="' + (x.mode === "remind") + '">Dues reminders</button><button role="tab" data-ltrmode="settings" aria-selected="' + (x.mode === "settings") + '">Letter settings</button></div></section>';
+    if (!have && x.mode !== "settings") return h + FC.noBooks("Letters");
+    if (x.busy) h += busyCard("Reading Tally…", x.busy, 0, 0);
+    if (x.mode === "settings") return h + this.viewSettings();
+    return h + (x.mode === "confirm" ? this.viewConfirm(live) : this.viewRemind());
+  },
+  contactCells(r){
+    return '<td><input type="email" class="ltr-in" data-ltrc="' + esc(r.l) + '|email" value="' + esc(r.c.email) + '" placeholder="email" aria-label="' + esc(r.l) + ' email"></td>' +
+      '<td><input type="tel" class="ltr-in sm" data-ltrc="' + esc(r.l) + '|phone" value="' + esc(r.c.phone) + '" placeholder="phone" aria-label="' + esc(r.l) + ' phone"></td>';
+  },
+  viewConfirm(live){
+    const x = this.st(), {B, rows} = this.confirmRows(), c = this.cfg();
+    let h = '<section class="dash-card" style="margin-top:12px"><div class="lk-form">' +
+      '<label class="f"><span>Balance as on</span><input type="date" data-ltrf="asOn" value="' + FC.iso(x.asOn) + '"></label>' +
+      '<div class="f"><span>Write to</span><div class="row" style="gap:12px">' + [["r", "Customers"], ["p", "Suppliers"], ["o", "Loans and advances"]].map(([k, l]) => '<label class="chk"><input type="checkbox" data-ltrside="' + k + '"' + (x.sides[k] ? " checked" : "") + "> " + l + "</label>").join("") + "</div></div>" +
+      '<label class="f"><span>Balances of at least</span><input type="text" inputmode="decimal" data-ltrf="min" value="' + esc(x.min) + '"></label>' +
+      '<label class="f"><span>Show</span><select data-ltrf="show">' + [["all", "Every party"], ["notsent", "Not sent yet"], ["waiting", "Sent, no reply yet"], ["differs", "Replied with a difference"]].map(([v, l]) => '<option value="' + v + '"' + (x.show === v ? " selected" : "") + ">" + l + "</option>").join("") + "</select></label>" +
+      '<label class="f lk-wide"><span>Find</span><input type="search" data-fk="ltrQ" data-ltrf="q" data-keeptyped value="' + esc(x.q) + '" placeholder="party or GSTIN"></label></div>' +
+      '<p class="note" style="margin:8px 0 0">Replies go to <b>' + esc(this.replyTo().name) + "</b>" + (c.replyTo === "auditor" ? " (the auditor)" : "") + ". " + (c.attach ? "Each letter carries the party’s statement of account for the year." : "") + ' <button class="linkbtn" data-ltrmode="settings">Change</button></p></section>';
+    if (!B.ok) return h + '<div class="fc-empty"><h3>The balances on ' + FC.when(x.asOn) + " are not known yet</h3><p class=\"note\">" + esc(B.why || "") + ".</p>" + (live ? '<button class="btn primary" data-ltr="tally">Read the balances from Tally</button>' : '<p class="note">Connect the Tally Bridge to read them.</p>') + "</div>";
+    const rec = this.store().conf[x.asOn] || {}, all = Object.values(rec), sent = all.filter(s => s.sentAt).length, agreed = all.filter(s => s.reply === "agreed").length, diff = all.filter(s => s.reply === "differs").length;
+    const picked = rows.filter(r => x.sel[r.l]);
+    h += '<div class="dash-tiles" style="margin-top:12px"><div class="dtile"><span>Parties</span><b>' + rows.length + "</b><small>" + esc(B.src) + '</small></div><div class="dtile"><span>Sent</span><b>' + sent + '</b><small>for this date</small></div><div class="dtile"><span>Agreed</span><b>' + agreed + '</b><small>confirmed by the party</small></div><div class="dtile' + (diff ? " warn" : "") + '"><span>Differences</span><b>' + diff + "</b><small>to reconcile</small></div></div>";
+    if (!rows.length) return h + '<div class="bk-none">No party with a balance matches. Change the choices above.</div>';
+    h += '<div class="row ltr-bar"><button class="btn primary" data-ltr="print"' + (picked.length ? "" : " disabled") + ">Print or PDF the letters (" + picked.length + ")</button>" +
+      '<button class="btn" data-ltr="selall">' + (picked.length === rows.length ? "Untick all" : "Tick all " + rows.length) + '</button><button class="btn" data-ltr="excel">Excel of the list</button></div>';
+    h += '<div class="bk-tablewrap"><table class="bk-table lk-t ltr-t"><thead><tr><th class="ck"></th><th>Party</th><th class="n">Balance</th><th>Email</th><th>Phone</th><th>Sent</th><th>Reply</th><th class="ac"></th></tr></thead><tbody>' +
+      rows.map(r => '<tr><td class="ck"><input type="checkbox" data-ltrsel="' + esc(r.l) + '"' + (x.sel[r.l] ? " checked" : "") + ' aria-label="Tick ' + esc(r.l) + '"></td><td><button class="linkbtn strong" data-lkled="' + esc(r.l) + '">' + esc(r.l) + '</button><span class="nr">' + ({r: "customer", p: "supplier", o: "loan or advance"}[r.side]) + (r.gstin ? " · " + esc(r.gstin) : "") + "</span></td>" +
+        '<td class="n">' + FC.drcr(r.bal) + "</td>" + this.contactCells(r) +
+        "<td>" + (r.s.sentAt ? fmtDate(r.s.sentAt.slice(0, 10)) + '<span class="nr">' + esc(r.s.via || "") + "</span>" : '<span class="note">not yet</span>') + "</td>" +
+        '<td><select class="ltr-in sm" data-ltrreply="' + esc(r.l) + '">' + [["", "—"], ["agreed", "Agreed"], ["differs", "Differs"], ["none", "No reply"]].map(([v, l]) => '<option value="' + v + '"' + ((r.s.reply || "") === v ? " selected" : "") + ">" + l + "</option>").join("") + "</select>" +
+        (r.s.reply === "differs" ? '<input type="text" class="ltr-in sm" inputmode="decimal" data-ltrtheir="' + esc(r.l) + '" value="' + esc(r.s.their || "") + '" placeholder="their figure" aria-label="Their balance">' + (num(r.s.their) ? '<span class="nr bad">difference ' + INR.format(Math.abs(r2(Math.abs(r.bal) - num(r.s.their)))) + "</span>" : "") : "") + "</td>" +
+        '<td class="ac"><button class="btn small" data-ltrone="confirm|print|' + esc(r.l) + '">Letter</button><button class="btn small" data-ltrone="confirm|mail|' + esc(r.l) + '" title="Opens your email with the letter written">Email</button><button class="btn small" data-ltrone="confirm|wa|' + esc(r.l) + '">WhatsApp</button></td></tr>').join("") +
+      "</tbody></table></div>";
+    return h;
+  },
+  viewRemind(){
+    const x = this.st(), rows = this.remindRows(), c = this.cfg(), picked = rows.filter(r => x.sel["rem|" + r.l]);
+    let h = '<section class="dash-card" style="margin-top:12px"><div class="lk-form">' +
+      '<label class="f"><span>Bills due as on</span><input type="date" data-ltrf="remOn" value="' + FC.iso(x.remOn) + '"></label>' +
+      '<label class="f"><span>Credit allowed</span><select data-ltrf="credit">' + [0, 15, 30, 45, 60, 90].map(d => '<option value="' + d + '"' + (num(x.credit) === d ? " selected" : "") + ">" + (d ? d + " days" : "none") + "</option>").join("") + "</select></label>" +
+      '<label class="f"><span>Tone</span><select data-ltrf="tone">' + [["friendly", "Friendly"], ["firm", "Firm"], ["final", "Final reminder"]].map(([v, l]) => '<option value="' + v + '"' + (x.tone === v ? " selected" : "") + ">" + l + "</option>").join("") + "</select></label>" +
+      '<label class="f lk-wide"><span>Find</span><input type="search" data-fk="ltrQ2" data-ltrf="q" data-keeptyped value="' + esc(x.q) + '" placeholder="customer or GSTIN"></label></div>' +
+      '<label class="chk" style="margin-top:8px"><input type="checkbox" data-ltrcfg="msme"' + (c.msme ? " checked" : "") + "> The client is a micro or small enterprise: mention the MSMED Act interest</label></section>";
+    const tot = rows.reduce((s, r) => s + r.amt, 0);
+    h += '<div class="dash-tiles" style="margin-top:12px"><div class="dtile warn"><span>Overdue</span><b>' + INR0.format(tot) + "</b><small>past " + num(x.credit) + ' days</small></div><div class="dtile"><span>Customers</span><b>' + rows.length + '</b><small>with bills overdue</small></div><div class="dtile"><span>Over 90 days</span><b>' + INR0.format(rows.reduce((s, r) => s + r.over.filter(z => z.age > 90).reduce((a, z) => a + z.amt, 0), 0)) + '</b><small>the oldest</small></div><div class="dtile"><span>Reminded</span><b>' + rows.filter(r => r.last).length + "</b><small>at least once</small></div></div>";
+    if (!rows.length) return h + '<div class="fc-empty"><h3>Nothing overdue</h3><p class="note">No customer has a bill older than ' + num(x.credit) + " days on " + FC.when(x.remOn) + ". Bills are read from the bill-wise details in Tally.</p></div>";
+    h += '<div class="row ltr-bar"><button class="btn primary" data-ltr="rprint"' + (picked.length ? "" : " disabled") + ">Print or PDF the reminders (" + picked.length + ")</button>" +
+      '<button class="btn" data-ltr="rselall">' + (picked.length === rows.length ? "Untick all" : "Tick all " + rows.length) + "</button></div>";
+    h += '<div class="bk-tablewrap"><table class="bk-table lk-t ltr-t"><thead><tr><th class="ck"></th><th>Customer</th><th class="n">Overdue</th><th class="n">Oldest</th><th>Email</th><th>Phone</th><th>Last reminder</th><th class="ac"></th></tr></thead><tbody>' +
+      rows.map(r => '<tr><td class="ck"><input type="checkbox" data-ltrsel="rem|' + esc(r.l) + '"' + (x.sel["rem|" + r.l] ? " checked" : "") + ' aria-label="Tick ' + esc(r.l) + '"></td><td><button class="linkbtn strong" data-lkled="' + esc(r.l) + '">' + esc(r.l) + '</button><span class="nr">' + r.over.length + " bill" + (r.over.length === 1 ? "" : "s") + " · owes " + INR.format(r.total) + " in all</span></td>" +
+        '<td class="n">' + INR.format(r.amt) + '</td><td class="n' + (r.oldest > 90 ? " bad" : "") + '">' + r.oldest + " days</td>" + this.contactCells(r) +
+        "<td>" + (r.last ? fmtDate(r.last.at.slice(0, 10)) + '<span class="nr">' + esc(r.last.via) + ", " + esc(r.last.tone || "") + "</span>" : '<span class="note">never</span>') + "</td>" +
+        '<td class="ac"><button class="btn small" data-ltrone="remind|print|' + esc(r.l) + '">Letter</button><button class="btn small" data-ltrone="remind|mail|' + esc(r.l) + '">Email</button><button class="btn small" data-ltrone="remind|wa|' + esc(r.l) + '">WhatsApp</button></td></tr>').join("") +
+      "</tbody></table></div>";
+    return h;
+  },
+  viewSettings(){
+    const c = this.cfg(), inp = (k, l, ph, t) => '<label class="f"><span>' + l + '</span><input type="' + (t || "text") + '" data-ltrcfg="' + k + '" value="' + esc(c[k] || "") + '" placeholder="' + esc(ph || "") + '"></label>';
+    return '<section class="dash-card" style="margin-top:12px"><h3>Who the letters are from, and where replies go</h3><div class="lk-form">' +
+      inp("signer", "Signed by (name and designation)", "Rakesh Mehra, Director") + inp("companyEmail", "The client’s email for replies", "accounts@client.in", "email") +
+      '<label class="f"><span>Replies go to</span><select data-ltrcfg="replyTo"><option value="company"' + (c.replyTo !== "auditor" ? " selected" : "") + '>The client</option><option value="auditor"' + (c.replyTo === "auditor" ? " selected" : "") + ">The auditor, directly</option></select></label>" +
+      inp("auditor", "Auditor’s name", "Mehra & Iyer, Chartered Accountants") + inp("auditorEmail", "Auditor’s email", "audit@firm.in", "email") +
+      '<label class="f"><span>Days to reply</span><input type="text" inputmode="numeric" data-ltrcfg="days" value="' + esc(c.days) + '"></label>' + inp("udyam", "Udyam number (for reminders)", "UDYAM-UP-00-0000000") + "</div>" +
+      '<div class="stack" style="gap:6px;margin-top:10px"><label class="chk"><input type="checkbox" data-ltrcfg="attach"' + (c.attach ? " checked" : "") + "> Put the party’s statement of account for the year under each confirmation</label>" +
+      '<label class="chk"><input type="checkbox" data-ltrcfg="negative"' + (c.negative ? " checked" : "") + "> Say that no reply means the balance is taken as correct (a negative confirmation; the auditor decides whether that is enough)</label>" +
+      '<label class="chk"><input type="checkbox" data-ltrcfg="msme"' + (c.msme ? " checked" : "") + "> The client is a micro or small enterprise: mention the MSMED Act interest in reminders</label></div>" +
+      '<p class="note" style="margin-top:10px">For an audit, confirmations are best sent by the auditor with replies coming straight back to the auditor (SA 505). Choose “The auditor, directly” for that.</p></section>';
+  },
+  byName(kind, l){ return (kind === "confirm" ? this.confirmRows().rows : this.remindRows()).find(r => r.l === l); }
+};
+function viewBooksLetters(b){ return LTR.view(b); }
+if (typeof document !== "undefined"){
+  document.addEventListener("click", e => {
+    const t = e.target.closest && e.target.closest("[data-ltr],[data-ltrmode],[data-ltrone]"); if (!t || !S.books) return;
+    const x = LTR.st();
+    if (t.dataset.ltrmode){ x.mode = t.dataset.ltrmode; x.q = ""; render(); return; }
+    if (t.dataset.ltrone){
+      const [kind, how, l] = t.dataset.ltrone.split("|"), r = LTR.byName(kind, l); if (!r) return;
+      if (how === "print"){ LTR.print(kind, [r]); return; }
+      const ok = how === "mail" ? LTR.mailto(kind, r) : LTR.whatsapp(kind, r);
+      if (ok){ LTR.mark(kind, r, how === "mail" ? "email" : "WhatsApp", new Date().toISOString()); saveBooks(); render(); }
+      return;
+    }
+    const a = t.dataset.ltr;
+    if (a === "tally") LTR.readTally(x.asOn);
+    else if (a === "print") LTR.print("confirm", LTR.confirmRows().rows.filter(r => x.sel[r.l]));
+    else if (a === "rprint") LTR.print("remind", LTR.remindRows().filter(r => x.sel["rem|" + r.l]));
+    else if (a === "selall" || a === "rselall"){
+      const rows = a === "selall" ? LTR.confirmRows().rows : LTR.remindRows(), key = r => (a === "selall" ? "" : "rem|") + r.l, all = rows.every(r => x.sel[key(r)]);
+      rows.forEach(r => { x.sel[key(r)] = !all; }); render();
+    }
+    else if (a === "excel"){
+      const rows = LTR.confirmRows().rows;
+      FC.excel("balance-confirmations-" + FC.iso(x.asOn), [["Confirmations", [["Party", "Kind", "GSTIN", "Balance", "Dr or Cr", "Email", "Phone", "Sent on", "Sent by", "Reply", "Their figure", "Difference"]].concat(rows.map(r => [r.l, {r: "Customer", p: "Supplier", o: "Loan or advance"}[r.side], r.gstin, Math.abs(r.bal), r.bal > 0 ? "Dr" : "Cr", r.c.email, r.c.phone, r.s.sentAt ? r.s.sentAt.slice(0, 10) : "", r.s.via || "", r.s.reply || "", r.s.their || "", r.s.their ? r2(Math.abs(r.bal) - num(r.s.their)) : ""]))]])
+        .catch(er => toast("Could not build the file: " + (er && er.message)));
+    }
+  });
+  document.addEventListener("input", e => {
+    const t = e.target; if (!t.dataset || !S.books || !S.ltr) return;
+    if (t.dataset.ltrf === "q"){ S.ltr.q = t.value; softRender(); return; }
+    if (t.dataset.ltrc){ const [l, k] = t.dataset.ltrc.split("|"), s = LTR.store(); s.contacts[l] = Object.assign({}, s.contacts[l], {[k]: t.value.trim()}); later("ltrc", saveBooks, 800); return; }
+    if (t.dataset.ltrtheir){ const s = LTR.store(), m = s.conf[S.ltr.asOn] = s.conf[S.ltr.asOn] || {}; m[t.dataset.ltrtheir] = Object.assign({}, m[t.dataset.ltrtheir], {their: t.value}); later("ltrt", () => { saveBooks(); render(); }, 900); return; }
+    if (t.dataset.ltrcfg && t.type !== "checkbox" && t.tagName !== "SELECT"){ LTR.store().cfg[t.dataset.ltrcfg] = t.value; later("ltrcfg", saveBooks, 800); }
+  });
+  document.addEventListener("change", e => {
+    const t = e.target; if (!t.dataset || !S.books || !S.ltr) return;
+    const x = S.ltr;
+    if (t.dataset.ltrf && t.dataset.ltrf !== "q"){ x[t.dataset.ltrf] = t.type === "date" ? FC.d8(t.value) : t.value; if (t.dataset.ltrf === "asOn") x.sel = {}; render(); return; }
+    if (t.dataset.ltrside){ x.sides[t.dataset.ltrside] = t.checked; render(); return; }
+    if (t.dataset.ltrsel !== undefined){ x.sel[t.dataset.ltrsel] = t.checked; render(); return; }
+    if (t.dataset.ltrreply){ const s = LTR.store(), m = s.conf[x.asOn] = s.conf[x.asOn] || {}; m[t.dataset.ltrreply] = Object.assign({}, m[t.dataset.ltrreply], {reply: t.value, replyAt: new Date().toISOString()}); saveBooks(); render(); return; }
+    if (t.dataset.ltrcfg && (t.type === "checkbox" || t.tagName === "SELECT")){ LTR.store().cfg[t.dataset.ltrcfg] = t.type === "checkbox" ? t.checked : t.value; saveBooks(); render(); }
+  });
+}
+/* ================================================================== */
+/* Closed periods: entries dated where the books are closed, or where */
+/* a GST or TDS return has been filed, are not stopped; FinCom warns   */
+/* and asks before they go to Tally, and the audit trail records it.  */
+/* ================================================================== */
+const ClosedP = {
+  cfg(co){ co = co || CO() || {}; return Object.assign({to: "", gst: true, tds: true, tdsFiled: {}}, co.closed || {}); },
+  set(co, k, v){ co.closed = Object.assign(this.cfg(co), {[k]: v}); Store.saveCompany(co); },
+  qKey(d){ const y = num(d.slice(0, 4)), m = num(d.slice(4, 6)), fy = m >= 4 ? y : y - 1; return fy + "-" + String(fy + 1).slice(2) + "|Q" + (Math.floor(((m + 8) % 12) / 3) + 1); },
+  qLabel(k){ const [fy, q] = k.split("|"); return q + " " + fy; },
+  quarters(){
+    const t = Audit.today(), out = []; let fy = num(Audit.fyStart(t).slice(0, 4));
+    for (let i = 0; i < 3; i++, fy--) ["Q4", "Q3", "Q2", "Q1"].forEach(q => { const k = fy + "-" + String(fy + 1).slice(2) + "|" + q, first = {Q1: fy + "0401", Q2: fy + "0701", Q3: fy + "1001", Q4: (fy + 1) + "0101"}[q]; if (first <= t) out.push(k); });
+    return out;
+  },
+  // what a date runs into: books closed, a GST return filed for its month, a TDS return filed for its quarter (only for entries with TDS)
+  why(co, b, d, hasTds){
+    const c = this.cfg(co), out = [];
+    if (!/^\d{8}$/.test(String(d || ""))) return out;
+    if (c.to && d <= FC.d8(c.to)) out.push("the books are closed up to " + FC.when(FC.d8(c.to)));
+    if (c.gst && b){
+      const ym = d.slice(0, 6), seen = new Set();
+      Object.entries(b.gstFiled || {}).forEach(([reg, recs]) => {
+        let r = (recs || {})[ym] || {}, qe = ym;
+        try { if (typeof GSTSet === "object" && GSTSet.typeOf(ym, reg) === "qrmp"){ qe = GSTSet.qEnd(ym); r = (recs || {})[qe] || {}; } } catch (e){}
+        const lab = FC.monthLabel(qe);
+        if (r.r3b && !seen.has("3b" + qe)){ seen.add("3b" + qe); out.push("GSTR-3B for " + lab + " was filed on " + fmtDate(r.r3b)); }
+        else if (r.r1 && !seen.has("1" + qe)){ seen.add("1" + qe); out.push("GSTR-1 for " + lab + " was filed on " + fmtDate(r.r1)); }
+      });
+      if (!seen.size) Object.values(b.filed || {}).forEach(f => { if (f && !f.notFiled && f.ym === ym && !seen.has("p" + ym)){ seen.add("p" + ym); out.push("GSTR-1 for " + FC.monthLabel(ym) + " is filed on the portal"); } });
+    }
+    if (c.tds && hasTds){ const k = this.qKey(d), f = (c.tdsFiled || {})[k]; if (f) out.push("the TDS return for " + this.qLabel(k) + " was filed on " + fmtDate(f) + "; a correction statement will be needed"); }
+    return out;
+  },
+  // the same, for a screen, with the books already open
+  note(d, hasTds){ const co = CO(); if (!co) return []; const b = S.books && S.books.cid === co.id ? S.books : null; return this.why(co, b, FC.d8(d), hasTds); },
+  tag(d, hasTds){ const w = this.note(d, hasTds); return w.length ? ' <span class="tag warn cp-tag" title="' + esc("Closed period: " + w.join("; ")) + '">closed period</span>' : ""; },
+  async booksOf(co){
+    if (S.books && S.books.cid === co.id && !S.books.loading) return S.books;
+    if (this._b && this._b.cid === co.id && Date.now() - this._b.at < 60000) return this._b.b;
+    let b = null; try { b = await Books.load(co.id); } catch (e){}
+    this._b = {cid: co.id, at: Date.now(), b};
+    return b;
+  },
+  // before anything is posted to Tally: warn, and let the user go ahead or hold these entries back
+  async gate(payload){
+    const list = [].concat(payload.vouchers || []);
+    if (!list.length) return [];
+    const co = Object.values(S.companies || {}).find(c => c.tallyName && c.tallyName === payload.company) || CO();
+    if (!co) return [];
+    const b = await this.booksOf(co), hits = [];
+    list.forEach(it => {
+      const x = String(it.xml || ""), d = (x.match(/^\s*<VOUCHER\b[\s\S]*?<DATE>(\d{8})<\/DATE>/) || [])[1];
+      if (!d) return;
+      const tds = /<LEDGERNAME>[^<]*\b(TDS|TCS)\b[^<]*<\/LEDGERNAME>/i.test(x);
+      const w = this.why(co, b, d, tds);
+      if (w.length) hits.push({id: it.id, d, w, no: (x.match(/<VOUCHERNUMBER>([^<]*)<\/VOUCHERNUMBER>/) || [])[1] || "", type: (x.match(/VCHTYPE="([^"]*)"/) || [])[1] || ""});
+    });
+    if (!hits.length) return [];
+    const byWhy = {};
+    hits.forEach(h => h.w.forEach(w => { (byWhy[w] = byWhy[w] || []).push(h); }));
+    const body = "<p>" + hits.length + " of the " + list.length + " entries are dated in a closed period:</p><ul class=\"cp-list\">" +
+      Object.entries(byWhy).map(([w, hs]) => "<li><b>" + esc(w.charAt(0).toUpperCase() + w.slice(1)) + "</b>: " + hs.length + " entr" + (hs.length === 1 ? "y" : "ies") + " (" + hs.slice(0, 4).map(h => FC.when(h.d) + (h.no ? " no. " + esc(h.no) : "")).join(", ") + (hs.length > 4 ? ", …" : "") + ")</li>").join("") + "</ul>" +
+      "<p>They can still be posted. If they are, the return or the closed books will not agree with Tally until it is put right, and the audit trail records that you chose to post them.</p>";
+    const r = await askConfirm({title: "Post into a closed period?", body, ok: "Post them anyway", wide: true});
+    if (r && r.ok){
+      try { auditEvent("post_closed_period", {company: payload.company, entries: hits.length, reasons: Object.keys(byWhy).slice(0, 6)}, co.id); } catch (e){}
+      return [];
+    }
+    return hits.map(h => ({id: h.id, message: "Not sent: dated in a closed period (" + h.w[0] + "). You chose to hold it back; post it again to send it."}));
+  },
+  // ---------- the settings pane, under Client setup
+  pane(co){
+    const c = this.cfg(co), b = S.books && S.books.cid === co.id ? S.books : null;
+    const gf = b ? Object.values(b.gstFiled || {}).flatMap(recs => Object.entries(recs || {}).filter(([, r]) => r && (r.r3b || r.r1)).map(([ym]) => ym)) : [];
+    const lastGst = gf.sort().pop();
+    return '<div class="pane"><h2>Closed periods</h2><p class="note" style="margin:0 0 12px">Entries dated in a closed period are not stopped. Before they go to Tally, FinCom says which ones they are and why, and asks. Choosing to post them is recorded in the audit trail.</p>' +
+      '<div class="grid"><label class="f"><span>Books closed up to</span><input type="date" data-cpto value="' + esc(c.to ? FC.iso(FC.d8(c.to)) : "") + '"></label></div>' +
+      '<div class="stack" style="gap:6px;margin-top:10px"><label class="chk"><input type="checkbox" data-cpk="gst"' + (c.gst ? " checked" : "") + "> Warn for a month whose GSTR-1 or GSTR-3B is marked filed" + (lastGst ? ' <span class="note">(the latest marked filed: ' + esc(FC.monthLabel(lastGst)) + ")</span>" : "") + "</label>" +
+      '<label class="chk"><input type="checkbox" data-cpk="tds"' + (c.tds ? " checked" : "") + "> Warn for an entry with TDS in a quarter whose TDS return is filed</label></div>" +
+      '<h3 style="margin:14px 0 6px;font-size:14px">TDS returns filed</h3><div class="cp-q">' + this.quarters().map(k => '<label class="f"><span>' + esc(this.qLabel(k)) + '</span><input type="date" data-cpq="' + esc(k) + '" value="' + esc((c.tdsFiled || {})[k] || "") + '"></label>').join("") + "</div>" +
+      '<p class="note" style="margin-top:8px">GST months are marked filed under TDS & GST, GST, on the GSTR-3B page or from the portal.</p></div>';
+  }
+};
+if (typeof document !== "undefined"){
+  document.addEventListener("change", e => {
+    const t = e.target, co = CO(); if (!t.dataset || !co) return;
+    if (t.hasAttribute("data-cpto")){ ClosedP.set(co, "to", t.value); toast(t.value ? "Books closed up to " + fmtDate(t.value) + " for " + co.name + "." : "No closing date."); render(); }
+    else if (t.dataset.cpk){ ClosedP.set(co, t.dataset.cpk, t.checked); }
+    else if (t.dataset.cpq){ const f = Object.assign({}, ClosedP.cfg(co).tdsFiled); if (t.value) f[t.dataset.cpq] = t.value; else delete f[t.dataset.cpq]; ClosedP.set(co, "tdsFiled", f); }
+  });
+}
+/* ================================================================== */
+/* Getting started for a new client, and the keyboard shortcuts        */
+/* ================================================================== */
+const ONB = {
+  steps(co){
+    const b = S.books && S.books.cid === co.id ? S.books : null, bridge = typeof Bridge === "object" && Bridge.on() && Bridge.up();
+    return [
+      {id: "tally", done: !!co.tallyName, t: "Name the company as it is in Tally", d: "So entries go to the right company.", btn: ["Client setup", 'data-act="setup"']},
+      {id: "bridge", done: !!bridge, t: "Connect the Tally Bridge", d: "A small program on the computer where Tally is open.", btn: ["Connect", 'data-act="tallyGuide"']},
+      {id: "books", done: !!(b && (b.vouchers || []).length), t: "Read the books from Tally", d: "Unlocks MIS, audit review, reports, look up and letters.", btn: ["Read the books", 'data-goclient="books:import"']},
+      {id: "gst", done: !!co.gstin, t: "Add the GSTIN", d: "For GST returns and 2B.", btn: ["Add it", 'data-act="setup"']},
+      {id: "bank", done: !!(co.bankAccounts || []).length, t: "Add a bank account", d: "Then bring in a statement.", btn: ["Bank", 'data-goclient="bank"']},
+      {id: "bills", done: Object.keys(D(co.id).entries || {}).length > 0, t: "Upload the first bills", d: "PDF, photo or email.", btn: ["Upload", 'data-goclient="bills"']}
+    ];
+  },
+  card(co){
+    if (!co || co.onbHide) return "";
+    if (!S.books || S.books.cid !== co.id){ if (typeof openBooks === "function" && S.view === "company") setTimeout(() => { if (!S.books || S.books.cid !== co.id) openBooks(co.id); }, 0); }
+    const st = this.steps(co), n = st.filter(s => s.done).length;
+    if (n === st.length) return "";
+    return '<section class="dash-card onb"><div class="onb-h"><div><h3>Getting ' + esc(co.name) + ' ready</h3><p class="note" style="margin:0">' + n + " of " + st.length + ' done</p></div><button class="linkbtn" data-onbhide>Hide this</button></div>' +
+      '<div class="onb-bar" role="progressbar" aria-valuemin="0" aria-valuemax="' + st.length + '" aria-valuenow="' + n + '"><i style="width:' + Math.round(n / st.length * 100) + '%"></i></div><ol class="onb-list">' +
+      st.map(s => '<li class="' + (s.done ? "done" : "") + '"><span class="onb-n" aria-hidden="true">' + (s.done ? "✓" : "") + "</span><div><b>" + esc(s.t) + "</b><span>" + esc(s.d) + "</span></div>" + (s.done ? "" : '<button class="btn small" ' + s.btn[1] + ">" + esc(s.btn[0]) + "</button>") + "</li>").join("") + "</ol></section>";
+  }
+};
+const KEYS = [
+  ["/", "Look up any ledger, anywhere in a client"],
+  ["?", "This list"],
+  ["F3 or Ctrl+K", "Switch client"],
+  ["Ctrl+A", "Approve the bill on screen"],
+  ["Esc", "Close a panel, or go back"],
+  ["Enter", "In Look up: show the answer"]
+];
+function showKeys(){
+  askConfirm({title: "Keyboard shortcuts", ok: "Close", body: '<table class="bk-table keys-t"><tbody>' + KEYS.map(([k, d]) => "<tr><td>" + k.split(" or ").map(x => "<kbd>" + esc(x) + "</kbd>").join(" or ") + "</td><td>" + esc(d) + "</td></tr>").join("") + "</tbody></table>"});
+}
+if (typeof document !== "undefined"){
+  document.addEventListener("click", e => {
+    const t = e.target.closest && e.target.closest("[data-onbhide],[data-showkeys]"); if (!t) return;
+    if (t.hasAttribute("data-showkeys")){ showKeys(); return; }
+    const co = CO(); if (co){ co.onbHide = true; Store.saveCompany(co); render(); }
+  });
+  document.addEventListener("keydown", e => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const a = document.activeElement, inField = a && (/INPUT|SELECT|TEXTAREA/.test(a.tagName) || a.isContentEditable);
+    if (inField || document.querySelector("#confirmBox[style*='flex']")) return;
+    if (e.key === "?"){ e.preventDefault(); showKeys(); return; }
+    if (e.key === "/" && S.view === "company" && S.coId){
+      e.preventDefault();
+      const el = document.createElement("button"); el.dataset.goclient = "books:lookup"; el.style.display = "none"; document.body.appendChild(el); el.click(); el.remove();
+      setTimeout(() => { const i = document.getElementById("lkAsk"); if (i){ i.focus(); i.select(); } }, 80);
+    }
+  });
+}
+// the dashboard's question box: opens Look up with the question asked
+if (typeof document !== "undefined"){
+  const dashAsk = () => {
+    const i = document.getElementById("dashAsk"), q = i ? i.value.trim() : "";
+    const el = document.createElement("button"); el.dataset.goclient = "books:lookup"; el.style.display = "none"; document.body.appendChild(el); el.click(); el.remove();
+    if (!q) return;
+    const go = (n) => { if (S.books && S.books.cid === S.coId && !S.books.loading){ LK.st().ask = q; render(); const b = document.querySelector('[data-lk="ask"]'); if (b) b.click(); } else if (n < 40) setTimeout(() => go(n + 1), 100); };
+    setTimeout(() => go(0), 50);
+  };
+  document.addEventListener("click", e => { if (e.target.closest && e.target.closest("[data-dashask]")) dashAsk(); });
+  document.addEventListener("keydown", e => { if (e.key === "Enter" && e.target && e.target.id === "dashAsk"){ e.preventDefault(); dashAsk(); } });
 }
 </script>
 </body>

@@ -41,5 +41,10 @@
  "40-support.js",
  "41-books-sync.js",
  "42-vendor-recon.js",
- "43-two-step.js"
+ "43-two-step.js",
+ "44-lookup.js",
+ "45-reports.js",
+ "46-letters.js",
+ "47-closed-periods.js",
+ "48-guide-and-keys.js"
 ]

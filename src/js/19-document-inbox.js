@@ -274,6 +274,10 @@ function viewDetail(e){
       e.readTrace.map(t => '<li class="' + (t.ok ? "tok" : "tno") + '"><b>' + (t.ok ? "✓ " : "✗ ") + esc(t.step) + "</b>" + (t.note ? ": " + esc(t.note) : "") + "</li>").join("") + "</ol></details>" : "") +
     (e.freeWhy && !ro && !(e.readTrace && e.readTrace.length) ? '<p class="note" style="margin:6px 0 0">Free reading was not enough: ' + esc(e.freeWhy) + ".</p>" : "");
   h += docWarn;
+  if (typeof ClosedP === "object" && x.invoiceDate && e.status !== "rejected" && !e.exportedAt){
+    const cw = ClosedP.note(x.invoiceDate, !!(e.snapshot && e.snapshot.tds));
+    if (cw.length) h += '<div class="banner cp-banner"><b>Closed period.</b> This bill is dated ' + fmtDate(x.invoiceDate) + ": " + esc(cw.join("; ")) + ". It can still be posted; FinCom will ask first.</div>";
+  }
   h += '<section class="' + (prev ? "withprev" : "") + '">' +
     (prev ? '<details class="prevbox" open><summary>Invoice image</summary><a href="' + prev + '" target="_blank" rel="noopener"><' + 'img class="preview" src="' + prev + '" alt="Uploaded invoice"></a></details>' : "") +
     '<div><h3>Invoice details</h3><div class="grid">' +
