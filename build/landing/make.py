@@ -18,8 +18,8 @@ HTML = f"""<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src SCRIPT_HASH; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
-<title>TDS Desk: purchase bills, bank statements and GST, posted to Tally</title>
-<meta name="description" content="TDS Desk reads purchase bills and bank statements, works out TDS and GST, prepares returns, reconciles with Tally and posts the entries to TallyPrime. Built by Garg Shekhar &amp; Company, Chartered Accountants.">
+<title>TDS Desk: books, TDS, GST, MIS and audit review, in Tally</title>
+<meta name="description" content="For business owners and their CAs: bills and bank statements into Tally with TDS and GST done, then a monthly MIS and an audit review of the books. Built by Garg Shekhar &amp; Company, Chartered Accountants.">
 <meta name="theme-color" content="#0f3d33">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231F6F5C'/%3E%3Cpath d='M9 11h14M16 11v12' stroke='white' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="preload" href="fonts/ibm-plex-sans-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -30,10 +30,10 @@ HTML = f"""<!doctype html>
 <header class="top">
   <nav class="wrap nav" aria-label="Main">
     <a class="brand" href="./">{MARK}<span>TDS Desk</span></a>
-    <div class="links"><a href="#what">What it does</a><a href="#tally">Tally</a><a href="#security">Security</a><a href="#compliance">Compliance</a><a href="#faq">Questions</a></div>
+    <div class="links"><a href="#insight">MIS and audit</a><a href="#what">What it does</a><a href="#tally">Tally</a><a href="#security">Security</a><a href="#faq">Questions</a></div>
     <div class="cta"><a class="btn ghost hide-sm" href="{SIGN}">Sign in</a><a class="btn primary" href="{REG}">Register</a></div>
     <details class="menu"><summary aria-label="Menu">{icon("list")}</summary>
-      <div class="menu-panel"><a href="#what">What it does</a><a href="#tally">Tally</a><a href="#security">Security</a><a href="#compliance">Compliance</a><a href="#faq">Questions</a><a class="btn ghost" href="{SIGN}">Sign in</a></div>
+      <div class="menu-panel"><a href="#insight">MIS and audit</a><a href="#what">What it does</a><a href="#tally">Tally</a><a href="#security">Security</a><a href="#compliance">Compliance</a><a href="#faq">Questions</a><a class="btn ghost" href="{SIGN}">Sign in</a></div>
     </details>
   </nav>
 </header>
@@ -42,11 +42,11 @@ HTML = f"""<!doctype html>
     <div class="wrap">
       <div class="panel">
         <div class="hero-copy">
-          <h1 id="hero-h">Your client's bills, bank and GST. Done, and in Tally.</h1>
-          <p class="lede">Upload purchase bills and bank statements. TDS Desk reads them, works out TDS and GST, and posts checked entries to TallyPrime.</p>
+          <h1 id="hero-h">Know your business finance in one click.</h1>
+          <p class="lede">Bills and bank statements go into Tally with TDS and GST done. Then your MIS and an audit review, every month.</p>
           <div class="actions"><a class="btn light lg" href="{REG}">Register {icon("arrow-right")}</a><a class="btn outline lg" href="{SIGN}">Sign in</a></div>
         </div>
-        <div class="hero-shot"><img src="img/bill-review.webp" width="1600" height="900" alt="TDS Desk reviewing a professional fees bill: the invoice fields read from the PDF, section 393 (old 194J) chosen, TDS of 6,500 rupees at 10 percent, ready to approve" fetchpriority="high"></div>
+        <div class="hero-shot"><img src="img/mis-screen.webp" width="1600" height="800" alt="The MIS in TDS Desk for a year of a textile company's books: sales, profit before tax, cash in and out, money owed to and by the business, and the tax dates coming up" fetchpriority="high"></div>
       </div>
       <ul class="facts">
         <li>{icon("stamp")}<span>New Income-tax Act 2025 sections, with the old section numbers alongside</span></li>
@@ -57,21 +57,56 @@ HTML = f"""<!doctype html>
     </div>
   </section>
 
+  <section id="insight" class="insight" aria-labelledby="i-h">
+    <div class="wrap">
+      <p class="eyebrow rise">MIS and audit review</p>
+      <h2 id="i-h" class="rise">See how the business is doing, and what needs fixing, before the auditor does.</h2>
+      <div class="ins-grid">
+        <article class="ins rise">
+          <div class="ins-shot"><img src="img/mis.webp" width="1500" height="476" alt="The MIS summary in TDS Desk: sales, profit before tax, cash received and paid, money owed to and by the business, MSME dues and GST payable" loading="lazy"></div>
+          <div class="ins-body">
+            <h3>{icon("chart-line-up")}Your month on one page</h3>
+            <p>Read straight from Tally. Sales, profit, cash in and out, who owes you, who you owe, and what tax is due next.</p>
+            <ul class="ticks">
+              <li>{icon("check")}Profit and loss month by month, open to the vouchers</li>
+              <li>{icon("check")}Receivable and payable ageing, with MSME dues past 45 days (section 43B(h))</li>
+              <li>{icon("check")}Cash flow with a 13-week forecast, ratios, and budget against actual</li>
+              <li>{icon("check")}A PDF pack and Excel, made on its own every month if you want</li>
+            </ul>
+          </div>
+        </article>
+        <article class="ins rise">
+          <div class="ins-shot"><img src="img/audit.webp" width="1500" height="672" alt="An audit finding in TDS Desk: a cash payment above 10,000 rupees under section 40A(3), with its effect, what to do and the voucher behind it" loading="lazy"></div>
+          <div class="ins-body">
+            <h3>{icon("magnifying-glass")}An audit review of every voucher</h3>
+            <p>Checks the whole year's books the way an auditor would, and tells you what each finding costs and how to put it right.</p>
+            <ul class="ticks">
+              <li>{icon("check")}Cash payments over 10,000 rupees, TDS not deducted, duplicate bills and more</li>
+              <li>{icon("check")}Each finding with its tax effect, what to do, and the vouchers behind it</li>
+              <li>{icon("check")}Journal entries to pass, ready to post to Tally</li>
+              <li>{icon("check")}A report with annexures and a Form 3CD draft for your CA</li>
+            </ul>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
   <section class="who" aria-labelledby="who-h">
     <div class="wrap">
-      <h2 id="who-h" class="rise">Made for the people who close the books.</h2>
+      <h2 id="who-h" class="rise">For the business owner, and the CA who keeps the books.</h2>
       <div class="two">
         <article class="aud rise">
-          {icon("buildings", "ic big")}
-          <h3>Chartered accountant firms</h3>
-          <p>Run many clients from one account. Your staff share the same data, each with their own login and role.</p>
-          <ul class="ticks"><li>{icon("check")}TDS and GST for every client in one place</li><li>{icon("check")}Returns, challans and certificates tracked per client</li><li>{icon("check")}Audit findings with the vouchers behind them</li></ul>
+          {icon("users-three", "ic big")}
+          <h3>Business owners</h3>
+          <p>Know where the money is every month, without waiting for the year-end. Your accountant keeps Tally up to date in minutes, not days.</p>
+          <ul class="ticks"><li>{icon("check")}Monthly MIS: profit, cash, who owes you and who you owe</li><li>{icon("check")}An audit review that catches tax risks early</li><li>{icon("check")}Bank and vendor balances that match Tally, to the rupee</li></ul>
         </article>
         <article class="aud alt rise">
-          {icon("users-three", "ic big")}
-          <h3>Businesses and their accountants</h3>
-          <p>Keep your own books in Tally up to date without typing every bill and bank line by hand.</p>
-          <ul class="ticks"><li>{icon("check")}Bills and bank statements into Tally in minutes</li><li>{icon("check")}Vendor and bank balances that match, to the rupee</li><li>{icon("check")}Monthly MIS: ageing, cash flow and ratios</li></ul>
+          {icon("buildings", "ic big")}
+          <h3>Chartered accountants and their teams</h3>
+          <p>Run many clients from one account. Your staff share the same data, each with their own login and role.</p>
+          <ul class="ticks"><li>{icon("check")}TDS and GST for every client in one place</li><li>{icon("check")}Returns, challans and certificates tracked per client</li><li>{icon("check")}MIS and audit review for every client, on a schedule</li></ul>
         </article>
       </div>
     </div>
@@ -85,7 +120,7 @@ HTML = f"""<!doctype html>
         {cap("tray-arrow-down", "Record", ["Purchase bills from PDF, photo or email, read and checked", "Bank statements in PDF or Excel, turned into receipts and payments", "Sales invoices and marketplace settlements", "A shared inbox for documents sent by clients or your office"])}
         {cap("scales", "TDS", ["The right section and rate for each bill, and the yearly limit per deductee", "Lower-deduction certificates (section 197) and higher rates for non-filers", "Challans from Tally payments", "24Q and 26Q files ready for the FVU"])}
         {cap("receipt", "GST", ["GSTR-1, GSTR-3B, IFF and GSTR-1A worked out from the books", "2B and IMS matching, with follow-ups for missing credit", "Amendments, advances and ITC reversals", "GSTR-9 and 9C, and filing through the GST API"])}
-        {cap("chart-pie-slice", "Check and report", ["Bank and vendor ledger reconciliation against Tally", "Audit findings and a Form 3CD draft", "Financial statements from the Tally books", "MIS: ageing, cash flow, a 13-week forecast, ratios and budget"])}
+        {cap("chart-pie-slice", "MIS and audit", ["Monthly MIS: profit, cash flow, ageing, ratios and budget", "Audit review of every voucher, with a Form 3CD draft", "Financial statements from the Tally books", "Bank and vendor ledger reconciliation against Tally"])}
       </div>
     </div>
   </section>
@@ -163,6 +198,7 @@ HTML = f"""<!doctype html>
     <div class="wrap faq-grid">
       <h2 id="q-h" class="rise">Questions firms ask us.</h2>
       <div class="qas rise">
+        {faq("I run a business, not a CA firm. Can I use it?", "Yes. Register your business as the account and add your own company. Your accountant can work in the same account with their own login, and you see the MIS and audit review yourself.")}
         {faq("Do I need to install anything?", "TDS Desk runs in Chrome or Edge. To post to Tally, you install the Tally Bridge once on the computer where TallyPrime runs. It needs no administrator rights.")}
         {faq("Which version of Tally does it work with?", "TallyPrime, with the company open and TallyPrime set to act as a server (F1 Help, Settings, Connectivity). Each user's Tally can use its own port.")}
         {faq("Can my staff use it for different clients?", "Yes. The firm owner adds people with their own login and a role: owner, staff or read-only. Everyone sees the same clients and data.")}
@@ -176,8 +212,8 @@ HTML = f"""<!doctype html>
   <section class="close" aria-labelledby="x-h">
     <div class="wrap">
       <div class="panel end rise">
-        <h2 id="x-h">Start with one client this month.</h2>
-        <p>Register your firm, add a client, and upload a month of bills.</p>
+        <h2 id="x-h">See your business clearly this month.</h2>
+        <p>Register, add your company, and bring in a month of bills and bank statements.</p>
         <div class="actions"><a class="btn light lg" href="{REG}">Register {icon("arrow-right")}</a><a class="btn outline lg" href="{SIGN}">Sign in</a></div>
       </div>
     </div>
