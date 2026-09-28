@@ -445,9 +445,9 @@ function viewTdsReturn26(b, allRows){
       '<p class="note">TDS payment vouchers in Tally for this quarter. Add the BSR code and challan serial number and each becomes a challan.</p>' +
       '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Date</th><th class="n">Tax</th><th>Sections</th><th>Voucher</th><th>BSR code</th><th>Serial</th><th class="ac"></th></tr></thead><tbody>' +
       pays.map(p => "<tr><td>" + fmtDate(tallyDate(p.date)) + '</td><td class="n">' + money(p.tax) + "</td><td>" + esc(p.sections.join(", ")) + "</td><td>" + esc(p.voucher) + "</td>" +
-        '<td><input type="text" data-paybsr="' + p.vid + '" data-fk="pb-' + p.vid + '" placeholder="0240020" style="width:100px"></td>' +
-        '<td><input type="text" data-payser="' + p.vid + '" data-fk="ps-' + p.vid + '" placeholder="00979" style="width:90px"></td>' +
-        '<td class="ac"><button class="btn small" data-paymake="' + p.vid + '">Make it a challan</button></td></tr>').join("") + "</tbody></table></div></section>";
+        '<td><input type="text" data-paybsr="' + esc(p.vid) + '" data-fk="pb-' + esc(p.vid) + '" placeholder="0240020" style="width:100px"></td>' +
+        '<td><input type="text" data-payser="' + esc(p.vid) + '" data-fk="ps-' + esc(p.vid) + '" placeholder="00979" style="width:90px"></td>' +
+        '<td class="ac"><button class="btn small" data-paymake="' + esc(p.vid) + '">Make it a challan</button></td></tr>').join("") + "</tbody></table></div></section>";
     h += tdsFilterBar("challans", {placeholder: "Find a BSR code or serial", table: "tdsChTable", title: title + " challans", excel: "tdsExcel",
       count: shown.length + " of " + ch.length + " challans",
       selects: [{key: "month", label: "Month", options: [["", "Every month"]].concat(tdsMonths(fy, q).map(m => [m, monthName(m)]))},
@@ -1959,18 +1959,8 @@ function viewReading(){
     banner(S.ocrTest, "Testing built-in OCR…") + banner(S.googleTest, "Testing Google OCR…") + googleHelpHtml() + banner(S.testResult, "Testing Claude… it may ask for permission first.") +
     '<p style="margin:12px 0 0">Bills read since this page opened: <b>' + st.free + "</b> free · <b>" + (st.google || 0) + "</b> by Google OCR · <b>" + (st.freePlusClaude || 0) + "</b> free figures + Claude for the supplier name · <b>" + st.claudeText + "</b> by Claude (text) · <b>" + st.claudeImages + "</b> by Claude (images).</p></div>";
 
-  // 3. keys: only when nobody is signed in to a firm account, or for the administrator
-  const showKeys = !Cloud.on() || (S.account && S.account.superadmin);
-  if (showKeys) h += '<div class="pane" id="keysPane"><h2>Keys</h2>' +
-    (Cloud.on() ? '<p class="note" style="margin:0 0 10px">Keys kept on this computer. Firms do not need any: they use Claude and Google through the platform.</p>' : "") +
-    '<div class="two">' +
-    keyBox({title: "Google Cloud Vision OCR key", label: "Google API key", inputId: "gKey", placeholder: "AIza...", value: gcfg.key, saveAct: "saveGoogle", removeAct: "removeGoogle",
-      help: "Google Cloud console → create a project → enable billing → enable the Cloud Vision API → APIs & Services → Credentials → Create API key (restrict it to Cloud Vision). 1,000 pages a month free, then about $1.50 per 1,000. Kept only in this browser."}) +
-    keyBox({title: "Claude API key", label: "Claude API key", inputId: "apiKey", placeholder: "sk-ant-...", value: cfg.key, saveAct: "saveKey", removeAct: "removeKey",
-      help: "Claude Console → API keys. Used only for bills the OCR steps cannot read with confidence. Billed on your Claude Console account. Kept only in this browser.",
-      extra: '<div class="grid" style="margin-top:6px"><label class="f"><span>Model</span><input data-draft type="text" id="apiModel" value="' + esc(cfg.model) + '"></label>' +
-        '<label class="f"><span>Careful re-read model</span><input data-draft type="text" id="apiCareful" value="' + esc(cfg.carefulModel) + '"></label></div>'}) +
-    "</div></div>";
+  // 3. keys: none in the browser any more
+  h += '<div class="pane" id="keysPane"><h2>Keys</h2><p class="note" style="margin:0">No API keys are kept on this computer. Claude and Google OCR are reached through the firm account, which holds the keys on the server; sign in to the firm account to use them. The free built-in OCR works without signing in.</p></div>';
 
   // 4. order
   h += '<div class="pane"><h2>Reading order</h2>' +
@@ -2010,10 +2000,10 @@ function settingsTiles(){
 }
 function viewPostLog(){
   const log = (S.firm.postLog || []).slice().reverse();
-  const mine = S.logAll ? log : log.filter(r => r.co === S.coId);
+  const mine = S.logAll || !CO() ? log : log.filter(r => r.co === S.coId);
   let h = '<div class="pane"><div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Everything sent to Tally</h2>' +
     '<div><button class="btn small" data-act="logAll">' + (S.logAll ? "This client only" : "All clients") + '</button><button class="btn small" data-act="logCsv">Download as a file</button></div></div>' +
-    '<p class="note" style="margin:6px 0 10px">' + mine.length + " entr" + (mine.length === 1 ? "y" : "ies") + (S.logAll ? " across every client" : " for " + esc(CO().name)) + ". Kept so you can prove what was posted, by whom, and when.</p>";
+    '<p class="note" style="margin:6px 0 10px">' + mine.length + " entr" + (mine.length === 1 ? "y" : "ies") + (S.logAll || !CO() ? " across every client" : " for " + esc(CO().name)) + ". Kept so you can prove what was posted, by whom, and when.</p>";
   if (!mine.length) return h + '<p class="note">Nothing yet.</p></div>';
   h += '<div class="tblwrap"><table class="data"><thead><tr><th>When</th><th>What</th><th>Client</th><th>Reference</th><th class="n">Amount</th><th>Voucher in Tally</th><th>By</th></tr></thead><tbody>' +
     mine.slice(0, 500).map(r => "<tr" + (r.action === "removed" ? ' style="opacity:.65"' : "") + "><td>" + new Date(r.at).toLocaleString([], {day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit"}) + "</td>" +

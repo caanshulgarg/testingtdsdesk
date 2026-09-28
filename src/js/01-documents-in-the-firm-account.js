@@ -352,7 +352,7 @@ function fyOf(d){
   return s + "-" + String((s + 1) % 100).padStart(2, "0");
 }
 S.partyFy = fyOf(null);
-function fmtDate(d){ if (!d) return "—"; const dt = new Date(String(d).slice(0, 10) + "T00:00:00"); return isNaN(dt) ? d : dt.toLocaleDateString("en-IN", {day:"2-digit", month:"short", year:"numeric"}); }
+function fmtDate(d){ if (!d) return "—"; const dt = new Date(String(d).slice(0, 10) + "T00:00:00"); return isNaN(dt) ? String(d).replace(/[^\w \-\/.:]/g, "") : dt.toLocaleDateString("en-IN", {day:"2-digit", month:"short", year:"numeric"}); }
 function effectivePan(x){
   const pan = String(x.vendorPan || "").toUpperCase().trim();
   if (PAN_RE.test(pan)) return pan;
@@ -414,7 +414,15 @@ function loadScriptOnce(name){
 }
 async function ensurePdfJs(){
   if (window.pdfjsLib || !window.TDS_ASSETS) return;
-  await loadScriptOnce("pdfjs-lib.js"); await loadScriptOnce("pdfjs-worker.js");
+  // pdf.js 4.10 (fixes CVE-2024-4367), served from this site; the worker runs as a separate module worker
+  if (!libLoads["pdf.min.mjs"]) libLoads["pdf.min.mjs"] = import(new URL(window.TDS_ASSETS + "pdf.min.mjs", location.href).href)
+    .then(m => { window.pdfjsLib = m; m.GlobalWorkerOptions.workerSrc = new URL(window.TDS_ASSETS + "pdf.worker.min.mjs", location.href).href; })
+    .catch(() => { delete libLoads["pdf.min.mjs"]; throw {code: "lib_missing", message: "pdf.min.mjs could not be loaded"}; });
+  await libLoads["pdf.min.mjs"];
+}
+// Every PDF is opened here: scripts inside a PDF are never run (isEvalSupported false).
+function openPdfDoc(bytes){
+  return window.pdfjsLib.getDocument({data: bytes, isEvalSupported: false, enableXfa: false}).promise;
 }
 async function ensureXlsx(){
   if (window.XLSX || !window.TDS_ASSETS) return;
@@ -425,8 +433,7 @@ async function getPdf(file){
   await ensurePdfJs();
   if (!window.pdfjsLib) throw {code:"pdf_unavailable"};
   if (!pdfCache.has(file)){
-    window.pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-    pdfCache.set(file, file.arrayBuffer().then(buf => window.pdfjsLib.getDocument({data:new Uint8Array(buf), isEvalSupported:false}).promise)
+    pdfCache.set(file, file.arrayBuffer().then(buf => openPdfDoc(new Uint8Array(buf)))
       .catch(() => { pdfCache.delete(file); throw {code:"pdf_broken"}; }));
   }
   return pdfCache.get(file);
@@ -1144,7 +1151,7 @@ function itemsHtml(e, ro){
   if (!s) return "";
   const rows = s.items.map((i, k) => "<tr><td>" + esc(i.desc) + "</td><td>" + esc(i.hsn || "\u2014") + '</td><td class="n">' + (i.qty ? i.qty + (i.unit ? " " + esc(i.unit) : "") : "\u2014") +
     '</td><td class="n">' + (i.rate ? INR.format(i.rate) : "\u2014") + '</td><td class="n">' + INR.format(num(i.taxable)) + '</td><td class="n">' + (i.gstRate == null ? "\u2014" : i.gstRate + "%") + "</td></tr>").join("");
-  const rateRows = s.rates.map(r => "<tr><td>" + (r.rate == null ? "rate not shown" : r.rate + "%") + "</td><td>" + (r.hsn.size ? Array.from(r.hsn).join(", ") : "\u2014") +
+  const rateRows = s.rates.map(r => "<tr><td>" + (r.rate == null ? "rate not shown" : r.rate + "%") + "</td><td>" + (r.hsn.size ? esc(Array.from(r.hsn).join(", ")) : "\u2014") +
     '</td><td class="n">' + INR.format(r.taxable) + '</td><td class="n">' + (r.rate ? INR.format(r2(r.taxable * r.rate / 100)) : "\u2014") + "</td></tr>").join("");
   if (s.unreliable) return '<p class="note" style="margin:6px 0">The line items on this bill could not be read reliably, so only the totals are used.</p>';
   return '<details class="itembox"' + (s.multi ? " open" : "") + '><summary>What was billed \u00b7 ' + s.items.length + " line" + (s.items.length === 1 ? "" : "s") +
@@ -1206,17 +1213,8 @@ function isImage(file){ return /^image\//.test(file.type) || /\.(jpe?g|jpe|jfif|
 /* ------------------------------------------------------------------ */
 /* Free OCR (Tesseract, open source), loaded only when first needed    */
 /* ------------------------------------------------------------------ */
-const TESS = {
-  script: "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js",
-  workerPath: "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/worker.min.js",
-  corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.1",
-  langPath: "https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng@1.0.0/4.0.0_best_int"
-};
-if (window.__TESS) Object.assign(TESS, window.__TESS);
+// OCR runs only from this site's own copy (no outside downloads), so the page can be locked to its own address.
 let ocrEngineP = null, ocrChain = Promise.resolve();
-function loadScript(src){
-  return new Promise((ok, bad) => { const el = document.createElement("script"); el.dataset.injected = "1"; el.src = src; el.onload = ok; el.onerror = () => bad({code:"ocr_script"}); document.head.appendChild(el); });
-}
 function withTimeout(p, ms, code){ return Promise.race([p, new Promise((_, bad) => setTimeout(() => bad({code}), ms))]); }
 // The engine sits at the end of this (large) file, so wait until the page has been read in full.
 function domReady(){ return document.readyState === "loading" ? new Promise(r => document.addEventListener("DOMContentLoaded", r, {once:true})) : Promise.resolve(); }
@@ -1255,10 +1253,13 @@ async function loadBuiltInOcr(){
   if (!hasBuiltInOcr()) throw {code:"not_built_in"};
   if (typeof WebAssembly === "undefined") throw {code:"no_wasm"};
   if (typeof TesseractCore === "undefined"){
-    const el = document.createElement("script");
-    el.dataset.injected = "1";
-    el.textContent = await blockText("tess-core");
-    document.head.appendChild(el);
+    if (document.getElementById("tess-core")){
+      // standalone file: the engine is inside the page
+      const el = document.createElement("script");
+      el.dataset.injected = "1";
+      el.textContent = document.getElementById("tess-core").textContent;
+      document.head.appendChild(el);
+    } else await loadScriptOnce("tess-core.js?b=" + (((String(typeof APP_VERSION === "string" ? APP_VERSION : "").match(/build (\d+)/) || [])[1]) || ""));
   }
   if (typeof TesseractCore === "undefined") throw {code:"core_blocked"};
   let Mod;
@@ -1295,29 +1296,13 @@ async function loadBuiltInOcr(){
     return run;
   }};
 }
-// 2. Fallback: download the engine (for devices where the built-in one cannot start)
-async function loadDownloadedOcr(){
-  await withTimeout(fetch(TESS.langPath + "/eng.traineddata.gz", {method:"HEAD"}), 10000, "ocr_timeout").catch(e => { throw {code: e && e.code === "ocr_timeout" ? "ocr_timeout" : "ocr_blocked"}; });
-  if (!window.Tesseract) await loadScript(TESS.script);
-  const w = await withTimeout(window.Tesseract.createWorker("eng", 1, {workerPath:TESS.workerPath, corePath:TESS.corePath, langPath:TESS.langPath}), 90000, "ocr_timeout");
-  return {kind:"downloaded", recognize: async (canvas, psm) => {
-    await w.setParameters({tessedit_pageseg_mode: psm || "3"});
-    const r = await withTimeout(w.recognize(canvas), 90000, "ocr_timeout");
-    return {text: (r.data && r.data.text) || "", confidence: (r.data && r.data.confidence) || 0};
-  }, tsv: async (canvas) => {
-    await w.setParameters({tessedit_pageseg_mode: "6"});
-    const r = await withTimeout(w.recognize(canvas, {}, {tsv: true, text: false}), 120000, "ocr_timeout");
-    return parseTsv(r.data && r.data.tsv);
-  }};
-}
 function getOcr(){
   if (S.ocrState === "unavailable") return Promise.resolve(null);
   if (!ocrEngineP){
     S.ocrState = "loading"; softRender();
     ocrEngineP = (async () => {
       try { return await loadBuiltInOcr(); }
-      catch (e){ S.ocrBuiltInError = (e && e.code) || "failed"; }
-      return loadDownloadedOcr();
+      catch (e){ S.ocrBuiltInError = (e && e.code) || "failed"; throw e; }
     })()
       .then(eng => { S.ocrState = "ready"; S.ocrKind = eng.kind; softRender(); return eng; })
       .catch(e => { S.ocrState = "unavailable"; S.ocrKind = ""; S.ocrError = (e && e.code) || "failed"; softRender(); return null; });
@@ -1334,6 +1319,7 @@ const OCR_PROBLEMS = {
   ocr_blocked: "the backup OCR download is blocked here",
   ocr_script: "the backup OCR program could not be downloaded",
   ocr_timeout: "the backup OCR download took too long",
+  not_built_in: "the OCR program is not in this copy of the app",
   failed: "the free OCR could not start in this browser"
 };
 function ocrProblem(){
@@ -1346,8 +1332,7 @@ async function probeOcr(){
   if (S.ocrState !== "idle") return;
   await domReady();
   if (hasBuiltInOcr() && typeof WebAssembly !== "undefined"){ S.ocrState = "available"; S.ocrKind = "built-in"; render(); return; }
-  try { await withTimeout(fetch(TESS.langPath + "/eng.traineddata.gz", {method:"HEAD"}), 8000, "ocr_timeout"); S.ocrState = "available"; S.ocrKind = "downloaded"; }
-  catch (e){ S.ocrState = "unavailable"; S.ocrError = (e && e.code) || "ocr_blocked"; }
+  S.ocrState = "unavailable"; S.ocrError = typeof WebAssembly === "undefined" ? "no_wasm" : "not_built_in";
   render();
 }
 async function testFreeOcr(){
@@ -1372,7 +1357,19 @@ async function testFreeOcr(){
 /* Google Cloud Vision OCR (optional, your own Google API key).        */
 /* Much stronger than the built-in OCR on photos and handwriting.      */
 /* ------------------------------------------------------------------ */
-function googleSettings(){ try { return JSON.parse(lsGet("tdsdesk:gvision") || "{}"); } catch (e){ return {}; } }
+// No API keys are kept in the browser: Claude and Google are reached only through the firm account's gateway,
+// which holds the keys on the server. Keys saved by older builds are wiped at start-up.
+function googleSettings(){ return {}; }
+function wipeStoredKeys(){
+  let had = false;
+  try {
+    if (localStorage.getItem("tdsdesk:gvision")){ localStorage.removeItem("tdsdesk:gvision"); had = true; }
+    localStorage.removeItem("tdsdesk:gcheck");
+    const a = JSON.parse(localStorage.getItem("tdsdesk:api") || "null");
+    if (a && a.key){ delete a.key; localStorage.setItem("tdsdesk:api", JSON.stringify(a)); had = true; }
+  } catch (e){}
+  return had;
+}
 function hasGoogle(){ return (!!googleSettings().key || (Cloud.on() && !!S.account && moduleEnabled("vision"))) && !window.claude; }
 function moduleEnabled(code){ const m = ((S.account || {}).modules || []).find(x => x.code === code); return !m || m.enabled !== false; }
 function googleAvailable(){ return !!(googleSettings().key || (Cloud.on() && S.account)); }
@@ -1386,11 +1383,6 @@ async function googleWords(canvas){
   if (Cloud.on() && S.account && !cfg.key){
     const j = await Cloud.fn("gateway", {what: "vision", qty: 1, ref: "bank statement page", payload: body});
     resp = ((j.data || {}).responses || [])[0] || {};
-  } else if (cfg.key){
-    const res = await withTimeout(fetch("https://vision.googleapis.com/v1/images:annotate?key=" + encodeURIComponent(cfg.key), {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify(body)}), 60000, "google_timeout");
-    const data = await res.json();
-    resp = ((data && data.responses) || [])[0] || {};
-    if (!res.ok || resp.error) throw {code: "google_error", message: (resp.error && resp.error.message) || res.status};
   } else throw {code: "no_google_key"};
   S.googleCount = (S.googleCount || 0) + 1;
   const out = [];
@@ -1421,29 +1413,7 @@ async function googleOcr(canvas){
     S.googleCount = (S.googleCount || 0) + 1;
     return {text: full0.text || "", confidence: full0.text ? 85 : 0};
   }
-  if (!cfg.key) throw {code:"no_google_key"};
-  let res;
-  try {
-    res = await withTimeout(fetch("https://vision.googleapis.com/v1/images:annotate?key=" + encodeURIComponent(cfg.key), {
-      method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify(body)}), 60000, "google_timeout");
-  } catch (e){ throw {code: e && e.code === "google_timeout" ? "google_timeout" : "google_blocked"}; }
-  let data = null;
-  try { data = await res.json(); } catch (e){ data = null; }
-  const errMsg = (data && data.error && data.error.message) || (data && data.responses && data.responses[0] && data.responses[0].error && data.responses[0].error.message) || "";
-  if (!res.ok || errMsg){
-    const code = /referer|referrer|HTTP_REFERRER|API_KEY_(IOS|ANDROID|HTTP)/i.test(errMsg) ? "google_referrer"
-      : res.status === 400 && /api key/i.test(errMsg) ? "google_bad_key"
-      : res.status === 403 && /billing/i.test(errMsg) ? "google_billing"
-      : res.status === 403 && /(not been used|disabled|enable)/i.test(errMsg) ? "google_not_enabled"
-      : res.status === 403 ? "google_forbidden" : res.status === 429 ? "google_quota" : "google_error";
-    throw {code, message: errMsg};
-  }
-  const r = (data.responses || [])[0] || {};
-  const full = r.fullTextAnnotation || {};
-  const blocks = (full.pages || []).flatMap(pg => pg.blocks || []).filter(b => typeof b.confidence === "number");
-  const confidence = blocks.length ? Math.round(blocks.reduce((a, b) => a + b.confidence, 0) / blocks.length * 100) : (full.text ? 80 : 0);
-  S.googleCount = (S.googleCount || 0) + 1;
-  return {text: full.text || "", confidence};
+  throw {code:"no_google_key"};
 }
 async function dailyGoogleCheck(){
   if (!googleSettings().key || window.claude) return;   // through the platform there is no key here to check
@@ -2604,13 +2574,13 @@ function movePreview(from, to){
 }
 
 /* ------------------------------------------------------------------ */
-/* Reading with your own Claude API key (works outside claude.ai)      */
+/* Reading with Claude through the firm account (the key stays on the server) */
 /* ------------------------------------------------------------------ */
 const API_DEFAULTS = {model:"claude-sonnet-5", carefulModel:"claude-opus-5"};
 function apiSettings(){
   let o = {};
   try { o = JSON.parse(lsGet("tdsdesk:api") || "{}"); } catch (e){ o = {}; }
-  return Object.assign({}, API_DEFAULTS, o);
+  const r = Object.assign({}, API_DEFAULTS, o); delete r.key; return r;
 }
 function blobToBase64(b){
   return new Promise((ok, bad) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(",")[1]); r.onerror = () => bad(r.error); r.readAsDataURL(b); });
@@ -2640,26 +2610,7 @@ async function apiJson(prompt, images, careful){
     const text = ((j.data && j.data.content) || []).filter(x => x.type === "text").map(x => x.text).join("\n");
     return parseJsonReply(text);
   }
-  if (!cfg.key) throw {code:"no_key"};
-  let res;
-  try {
-    res = await fetch("https://api.anthropic.com/v1/messages", {
-      method:"POST",
-      headers:{"content-type":"application/json", "x-api-key":cfg.key, "anthropic-version":"2023-06-01", "anthropic-dangerous-direct-browser-access":"true"},
-      body: JSON.stringify({model: careful ? cfg.carefulModel : cfg.model, max_tokens: 16000, messages:[{role:"user", content}]})
-    });
-  } catch (e){ throw {code:"api_blocked"}; }
-  let data = null;
-  try { data = await res.json(); } catch (e){ data = null; }
-  if (!res.ok){
-    const msg = data && data.error && data.error.message ? String(data.error.message) : "";
-    const code = res.status === 401 ? "bad_key" : res.status === 403 ? "key_forbidden" : res.status === 404 ? "bad_model"
-      : res.status === 429 ? "rate_limited" : res.status === 413 ? "prompt_too_large" : res.status >= 500 ? "upstream_error" : "api_error";
-    throw {code, message: msg};
-  }
-  const text = ((data && data.content) || []).filter(x => x.type === "text").map(x => x.text).join("\n");
-  if (data && data.stop_reason === "max_tokens" && !text.includes("}")) throw {code:"invalid_json"};
-  return parseJsonReply(text);
+  throw {code:"no_key"};
 }
 async function testReader(){
   S.testResult = {busy:true}; render();
@@ -3244,7 +3195,7 @@ async function downloadStandalone(){
   const root = document.documentElement.cloneNode(true);
   root.querySelectorAll("[data-injected]").forEach(n => n.remove());
   // keep only this app's own parts; anything else was added by the page host
-  const keepScript = el => ["app-main", "tess-core", "tess-eng", "pdfjs-lib", "pdfjs-worker", "xlsx-lib", "sample-jpg", "sample-pdf"].includes(el.id) || /^https:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/pdf\.js\//.test(el.getAttribute("src") || "");
+  const keepScript = el => ["app-main", "tess-core", "tess-eng", "pdfjs-lib", "pdfjs-worker", "xlsx-lib", "sample-jpg", "sample-pdf"].includes(el.id);
   root.querySelectorAll("script").forEach(el => { if (!keepScript(el)) el.remove(); });
   root.querySelectorAll("head > *").forEach(el => {
     const tag = el.tagName.toLowerCase();
@@ -3330,7 +3281,7 @@ function busyCard(title, detail, done, total){
   return '<div class="busycard" role="status" aria-live="polite"><span class="spinner" aria-hidden="true"></span>' +
     '<div class="busytext"><b>' + esc(title) + "</b>" + (detail ? '<span class="note">' + esc(detail) + "</span>" : "") +
     (p2 === null ? "" : '<div class="busybar"><i style="width:' + p2 + '%"></i></div>') + "</div>" +
-    (total ? '<span class="busyn">' + done + " / " + total + "</span>" : "") + "</div>";
+    (total ? '<span class="busyn">' + num(done) + " / " + num(total) + "</span>" : "") + "</div>";
 }
 // what the reading of this client's bills is doing right now
 function docsBusyCard(){

@@ -212,7 +212,7 @@ async function readStatement(file, progress, force){
 }
 async function pdfTextPages(file){
   await ensurePdfJs();
-  const pdf = await pdfjsLib.getDocument({data: new Uint8Array(await file.arrayBuffer())}).promise;
+  const pdf = await openPdfDoc(new Uint8Array(await file.arrayBuffer()));
   const pages = [];
   for (let p = 1; p <= Math.min(pdf.numPages, 400); p++){
     const tc = await (await pdf.getPage(p)).getTextContent();

@@ -1,0 +1,5 @@
+# TDS Desk: how to report a security problem
+Contact: https://github.com/caanshulgarg/testingtdsdesk/security/advisories/new
+Expires: 2027-09-30T00:00:00.000Z
+Preferred-Languages: en, hi
+Policy: https://github.com/caanshulgarg/testingtdsdesk/blob/main/docs/security/vulnerability-disclosure.md

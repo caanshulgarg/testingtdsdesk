@@ -13,6 +13,11 @@ const Bridge = {
   async call(path, body, ms){
     const c = this.cfg();
     if (c.port){ if (body && typeof body === "object" && !Array.isArray(body)) body = Object.assign({port: c.port}, body); }
+    // writes to Tally go into the firm's audit trail (who, which company, how many)
+    if (body && /^\/(unpost|import|jobs)$/.test(path.split("?")[0]) && typeof auditEvent === "function"){
+      const n = Array.isArray(body.items) ? body.items.length : Array.isArray(body.vouchers) ? body.vouchers.length : 1;
+      auditEvent("tally." + path.split("?")[0].slice(1), (body.company || "") + " \u00b7 " + n + (body.guid ? " \u00b7 " + body.guid : "") + (body.vchNumber ? " \u00b7 no. " + body.vchNumber : ""), S.coId || "");
+    }
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), ms || 120000);
     let r;
@@ -280,7 +285,7 @@ function bridgeChip(co){
   if (st.state === "key") return '<span class="tchip bad" title="' + esc(st.error) + '">Tally Bridge: wrong key</span>';
   if (st.state !== "ok") return '<span class="tchip off">Tally Bridge\u2026</span>';
   const run = (st.jobs || []).find(j => ["queued", "waiting", "running"].includes(j.status));
-  if (run) return '<span class="tchip ok" title="' + esc((run.company || "") + ": " + (run.message || "")) + '">\u25CF Posting to Tally: ' + (run.done || 0) + " of " + (run.total || 0) + "</span>";
+  if (run) return '<span class="tchip ok" title="' + esc((run.company || "") + ": " + (run.message || "")) + '">\u25CF Posting to Tally: ' + num(run.done) + " of " + num(run.total) + "</span>";
   if (st.shaky) return '<span class="tchip warn" title="' + esc(st.error || "") + '">Tally Bridge: checking again\u2026</span>';
   const why = Bridge.diag && (Bridge.diag.findings || []).find(f => f.level !== "ok");
   if (st.pinMissing) return '<button class="tchip warn" data-act="openSettings" title="' + esc(why ? why.text : "The Tally chosen in Settings is not running") + '">Your Tally is not connected \u2014 check</button>';
@@ -1303,7 +1308,7 @@ function viewReadTest(){
   let h = '<div style="margin-top:10px;border-top:1px solid var(--rule-soft);padding-top:10px"><div class="row" style="justify-content:space-between;align-items:center"><b>Test reading entries</b><button class="btn small" data-act="bridgeReadTest"' + (r.busy ? " disabled" : "") + ">" + (r.busy ? "Testing\u2026" : "Run test") + "</button></div>" +
     '<p class="note" style="margin:4px 0">Checks how TDS Desk can read entries from the company open in Tally (nothing is written). If posts are \u201cnot confirmed\u201d, run this and send the result.</p>';
   if (r.error) h += '<p class="bk-warn">' + esc(r.error) + "</p>";
-  if (r.tests) h += '<table class="data"><tbody>' + r.tests.map(t => "<tr><td>" + esc(t.name) + "</td><td>" + (t.ok ? '<span class="tag ok">works</span> ' + t.count + " found" + (t.optional ? " (" + t.optional + " Optional)" : "") : '<span class="tag bad">failed</span> ' + esc(t.error || "")) + '</td><td class="n">' + t.ms + " ms</td></tr>").join("") + "</tbody></table>" +
+  if (r.tests) h += '<table class="data"><tbody>' + r.tests.map(t => "<tr><td>" + esc(t.name) + "</td><td>" + (t.ok ? '<span class="tag ok">works</span> ' + num(t.count) + " found" + (t.optional ? " (" + num(t.optional) + " Optional)" : "") : '<span class="tag bad">failed</span> ' + esc(t.error || "")) + '</td><td class="n">' + num(t.ms) + " ms</td></tr>").join("") + "</tbody></table>" +
     '<p class="note" style="margin:4px 0 0">' + esc(r.company || "") + " \u00b7 port " + esc(r.port) + " \u00b7 " + esc(r.from) + " to " + esc(r.to) + "</p>";
   return h + "</div>";
 }
@@ -1313,11 +1318,11 @@ function viewBridgeDiagnosis(){
   if (!d) return h + '<p class="note" style="margin:6px 0 0">Finds your TallyPrime on this server and explains anything that stops the connection.</p>' + viewReadTest() + "</div>";
   if (d.error) return h + '<p class="bk-warn">' + esc(d.error) + "</p></div>";
   h += '<p class="note" style="margin:6px 0">Bridge running as <b>' + esc(d.user || "") + "</b> (Windows session " + esc(d.mySession) + ").</p>";
-  h += (d.findings || []).map(f => '<div class="bd-f ' + f.level + '"><b>' + (f.level === "ok" ? "\u2714 " : "\u26A0 ") + esc(f.text) + "</b>" + (f.fix ? '<div class="bd-fix">What to do: ' + esc(f.fix) + "</div>" : "") + "</div>").join("");
+  h += (d.findings || []).map(f => '<div class="bd-f ' + esc(f.level) + '"><b>' + (f.level === "ok" ? "\u2714 " : "\u26A0 ") + esc(f.text) + "</b>" + (f.fix ? '<div class="bd-fix">What to do: ' + esc(f.fix) + "</div>" : "") + "</div>").join("");
   if ((d.tallies || []).length) h += '<table class="data" style="margin-top:8px"><thead><tr><th>TallyPrime of</th><th>Accepting connections on</th><th>Its setting</th></tr></thead><tbody>' +
-    d.tallies.map(t => "<tr><td>" + esc(t.user || ("session " + t.session)) + (t.mine ? ' <span class="tag ok">you</span>' : "") + "</td><td>" + (t.ports.length ? "port " + t.ports.join(", ") : '<span class="tag bad">not accepting</span>') + "</td><td>" +
+    d.tallies.map(t => "<tr><td>" + esc(t.user || ("session " + t.session)) + (t.mine ? ' <span class="tag ok">you</span>' : "") + "</td><td>" + (t.ports.length ? "port " + esc(t.ports.join(", ")) : '<span class="tag bad">not accepting</span>') + "</td><td>" +
       (t.ini && t.ini.found ? esc((t.ini.mode || "?") + ", port " + (t.ini.port || "9000")) : '<span class="note">\u2014</span>') + "</td></tr>").join("") + "</tbody></table>";
-  if (d.freePort) h += '<p class="note" style="margin:6px 0 0">A free port on this server: <b>' + d.freePort + "</b>. Each user\u2019s TallyPrime needs its own port.</p>";
+  if (d.freePort) h += '<p class="note" style="margin:6px 0 0">A free port on this server: <b>' + esc(d.freePort) + "</b>. Each user\u2019s TallyPrime needs its own port.</p>";
   return h + viewReadTest() + "</div>";
 }
 function bridgeDownHelp(c){
@@ -1337,7 +1342,10 @@ async function saveBridgeSetup(){
   const bytes = new Uint8Array(raw.length);
   for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
   saveFile("Setup-TDS-Bridge.bat", new Blob([bytes], {type: "application/octet-stream"}));
+  // its fingerprint, to compare with the one published in the TDS Desk repository (assets/bridge-setup.sha256)
+  try { const h = await crypto.subtle.digest("SHA-256", bytes); S.bridgeSha = Array.from(new Uint8Array(h)).map(x => x.toString(16).padStart(2, "0")).join(""); } catch (e){ S.bridgeSha = ""; }
   toast("Saved. On the computer where Tally runs, double-click Setup-TDS-Bridge.bat and press I.");
+  render();
 }
 function bridgeSetupSteps(){
   const st = Bridge.st, connected = Bridge.on() && Bridge.up();
@@ -1345,6 +1353,7 @@ function bridgeSetupSteps(){
   return '<div class="setupcard"><h3 style="margin:0 0 6px">Set up in three steps</h3><ol class="setup">' +
     step(1, connected, "Put the bridge on the Tally computer",
       'Press <button class="btn small" data-act="bridgeSetupFile">Download the bridge setup</button> and run the file there (double-click, press <b>I</b>). It installs itself, starts, and starts again at every sign-in. No admin rights needed.') +
+    (S.bridgeSha ? '<li class="note" style="list-style:none;font-size:12px">Fingerprint (SHA-256) of the file just saved: <code style="user-select:all;word-break:break-all">' + esc(S.bridgeSha) + "</code>. It must match the one published by TDS Desk before you run it.</li>" : "") +
     step(2, connected && st.tallyUp, "Open TallyPrime and your company",
       "In TallyPrime: F1 Help \u2192 Settings \u2192 Connectivity \u2192 <b>TallyPrime acts as: Both</b>. Each user's Tally needs its own port (9000, 9001, \u2026).") +
     step(3, connected, "Press Connect here",
@@ -1372,8 +1381,8 @@ function viewBridgeSettings(){
             const pinned = num(c.port) === se.port;
             const comps = se.skipped ? '<span class="note">hidden</span>' : !se.ok ? '<span class="note">' + esc(se.error ? "not answering" : "\u2014") + "</span>" : se.companies.length ? se.companies.map(o => "<b>" + esc(o.name) + "</b>").join("<br>") : '<span class="note">no company open</span>';
             const clients = se.skipped || !se.ok ? "" : se.companies.map(o => { const cl = Bridge.clientFor(o.name); return cl ? esc(cl.name) : '<select data-bridgelink="' + esc(o.name) + '"><option value="">Link to a client\u2026</option>' + sortedCompanies().map(x => '<option value="' + x.id + '">' + esc(x.name) + "</option>").join("") + "</select>"; }).join("<br>");
-            const act = se.skipped ? "" : pinned ? '<span class="tag ok">In use</span> <button class="linkbtn" data-bridgepin="0">Automatic</button>' : se.ok ? '<button class="btn small" data-bridgepin="' + se.port + '">Use this Tally</button>' : "";
-            return "<tr><td>Port " + se.port + "</td><td>" + owner + "</td><td>" + comps + "</td><td>" + clients + "</td><td>" + act + "</td></tr>";
+            const act = se.skipped ? "" : pinned ? '<span class="tag ok">In use</span> <button class="linkbtn" data-bridgepin="0">Automatic</button>' : se.ok ? '<button class="btn small" data-bridgepin="' + esc(se.port) + '">Use this Tally</button>' : "";
+            return "<tr><td>Port " + esc(se.port) + "</td><td>" + owner + "</td><td>" + comps + "</td><td>" + clients + "</td><td>" + act + "</td></tr>";
           }).join("") + "</tbody></table>" : '<p class="note">No TallyPrime found. Start TallyPrime in this Windows session.</p>') +
         (num(c.port) && !st.sessions.some(se => se.port === num(c.port)) ? '<p class="bk-warn">The chosen Tally (port ' + num(c.port) + ') is not running. <button class="linkbtn" data-bridgepin="0">Go back to automatic</button></p>' : "") +
         viewBridgeDiagnosis() +

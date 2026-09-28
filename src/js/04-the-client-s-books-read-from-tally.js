@@ -56,7 +56,7 @@ const Books = {
   takeVoucher(s, out, meta){
     const type = (s.match(/VCHTYPE="([^"]*)"/) || [])[1] || "";
     const v = {
-      id: this.one(s, "GUID") || (s.match(/REMOTEID="([^"]*)"/) || [])[1] || "",
+      id: String(this.one(s, "GUID") || (s.match(/REMOTEID="([^"]*)"/) || [])[1] || "").replace(/[^\w\-.:]/g, ""),
       date: this.one(s, "DATE"), type,
       no: this.one(s, "VOUCHERNUMBER"), ref: this.one(s, "REFERENCE"), refDate: this.one(s, "REFERENCEDATE"), irn: this.one(s, "IRN"), irnDate: this.one(s, "IRNACKDATE"),
       party: this.one(s, "PARTYNAME") || this.one(s, "PARTYLEDGERNAME"),

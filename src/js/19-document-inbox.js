@@ -18,7 +18,7 @@ async function loadDocq(force){
     const sig = () => Object.values(S.docq).map(d => d.id + d.status + d.client_id + (d.urlExpiresAt || "")).sort().join();
     const before = sig();
     const next = {};
-    [].concat(rows || []).forEach(r => { next[r.id] = Object.assign({}, r.data, {id: r.id, client_id: r.client_id || ""}); });
+    [].concat(rows || []).filter(cloudRowOk).forEach(r => { next[r.id] = cleanIds(Object.assign({}, r.data, {id: r.id, client_id: r.client_id || ""}), 0); });
     S.docq = next;
     if (sig() !== before) render();
   } catch (e){ /* the inbox is best effort; the rest of the app keeps working */ }
@@ -244,7 +244,7 @@ function docWarnHtml(e){
 function viewDetail(e){
   if (S.reading[e.id]) return '<div class="detail"><section><div class="thinking"><span class="dot"></span>' + esc(S.reading[e.id]) + ": " + esc(e.fileName) + ". " +
     (/careful/i.test(S.reading[e.id]) ? "Handwritten and faint bills can take up to two minutes." : "This usually takes under a minute.") + "</div></section>" +
-    (S.previews[e.id] ? '<section><img class="preview" src="' + S.previews[e.id] + '" alt="Invoice being read"></section>' : "") + "</div>";
+    (S.previews[e.id] ? '<section><' + 'img class="preview" src="' + S.previews[e.id] + '" alt="Invoice being read"></section>' : "") + "</div>";
   const co = CO(), c = compute(e), ro = e.status !== "draft", x = e.x;
   const snap = e.status === "approved" && e.snapshot;
   const v = snap ? {applicable:snap.applicable, tds:snap.tds, tdsWould:snap.tdsWould != null ? snap.tdsWould : snap.tds, skip:snap.skip || null, why:snap.why || [], meter:snap.meter || null, ref:snap.ref, old:snap.old, pan:snap.pan, indHuf:!!snap.indHuf, fy:snap.fy || fyOf(x.invoiceDate), base:snap.base, tdsBase:snap.tdsBase, rate:snap.rate, rateNote:snap.rateNote || "", never:!!snap.never, flags:[], catchUp:0}
@@ -275,7 +275,7 @@ function viewDetail(e){
     (e.freeWhy && !ro && !(e.readTrace && e.readTrace.length) ? '<p class="note" style="margin:6px 0 0">Free reading was not enough: ' + esc(e.freeWhy) + ".</p>" : "");
   h += docWarn;
   h += '<section class="' + (prev ? "withprev" : "") + '">' +
-    (prev ? '<details class="prevbox" open><summary>Invoice image</summary><a href="' + prev + '" target="_blank" rel="noopener"><img class="preview" src="' + prev + '" alt="Uploaded invoice"></a></details>' : "") +
+    (prev ? '<details class="prevbox" open><summary>Invoice image</summary><a href="' + prev + '" target="_blank" rel="noopener"><' + 'img class="preview" src="' + prev + '" alt="Uploaded invoice"></a></details>' : "") +
     '<div><h3>Invoice details</h3><div class="grid">' +
     field("Deductee name", "vendorName", x.vendorName, {ro, wide:true}) +
     field("GSTIN", "vendorGstin", x.vendorGstin, {ro}) + field("PAN", "vendorPan", x.vendorPan || v.pan, {ro}) +

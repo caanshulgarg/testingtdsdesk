@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="TDS Desk: read purchase bills and bank statements, work out TDS and GST, and post the entries to Tally.">
 <meta name="theme-color" content="#1E2A25">
@@ -930,7 +931,8 @@ p,.note,.banner{text-wrap:pretty}
 /* on the screens with review / post tabs the client name is already in the side menu, so the title row stays clean */
 .headrow .tbar-title .note{display:none}
 </style>
-<style>.is-test .side-brand::after{content:"TEST";display:block;margin-top:4px;font-size:11px;letter-spacing:.14em;color:#E9A06A}.is-test header.top{box-shadow:inset 0 3px 0 #E2761B}body.is-test::after{content:"TESTING SITE · not for real client work · post only to a ZZ TEST company in Tally";position:fixed;left:0;right:0;bottom:0;z-index:70;background:#E2761B;color:#fff;font-size:12.5px;text-align:center;padding:3px 8px;letter-spacing:.04em;pointer-events:none}.is-test .actionbar{bottom:22px}.is-test #app{padding-bottom:34px}</style></head>
+<style>.is-test .side-brand::after{content:"TEST";display:block;margin-top:4px;font-size:11px;letter-spacing:.14em;color:#E9A06A}.is-test header.top{box-shadow:inset 0 3px 0 #E2761B}body.is-test::after{content:"TESTING SITE · not for real client work · post only to a ZZ TEST company in Tally";position:fixed;left:0;right:0;bottom:0;z-index:70;background:#E2761B;color:#fff;font-size:12.5px;text-align:center;padding:3px 8px;letter-spacing:.04em;pointer-events:none}.is-test .actionbar{bottom:22px}.is-test #app{padding-bottom:34px}</style><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-JUZRiA/pD/Q1MSIv1WkOX00eklOKXLcOHszD3zr3UBc=' 'sha256-mVxYW9PNdz2JLeSXfKz5JAPMvbSNw/IsTnU1wv+Sc+I=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+</head>
 <body class="is-test">
 <a class="skip" id="skipLink" href="#app">Skip to the work</a>
 <div class="shell">
@@ -962,12 +964,13 @@ p,.note,.banner{text-wrap:pretty}
 <input type="file" id="filedIn" accept=".json,application/json" multiple class="hidden">
 <input type="file" id="twoBIn" accept=".json,application/json" multiple class="hidden">
 
-<!-- PDF reader: pdf.js 3.11.174 (Apache License 2.0), built in -->
-
-
-<!-- Excel reader: SheetJS Community Edition 0.18.5 (Apache License 2.0), built in -->
-
-<script>window.TDS_ASSETS = "assets/";</script>
+<!-- Libraries, served from assets/ on this site: pdf.js 4.10.38 and SheetJS CE 0.20.3 (Apache License 2.0), Tesseract core 5.1.1 (Apache License 2.0) -->
+<script>window.TDS_ASSETS = "assets/";
+// not inside another site's frame (clickjacking); claude.ai may show its own copy
+(function(){ try { if (window.top === window.self) return; } catch (e){}
+  var a = (location.ancestorOrigins && Array.prototype.slice.call(location.ancestorOrigins)) || [];
+  if (a.some(function(o){ return o !== location.origin && !/(^|\.)(claude\.ai|claudeusercontent\.com|anthropic\.com)$/.test(String(o).replace(/^https?:\/\//, "").replace(/:\d+$/, "")); }))
+    document.documentElement.style.display = "none"; })();</script>
 <script id="app-main">
 "use strict";
 /* TDS rules: Income-tax Act, 2025 (section 393), tax year 2026-27. Editable under Rates and limits. */
@@ -1003,7 +1006,7 @@ const DEFAULT_FIRM = {firmName:"Garg Shekhar & Company", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "TEST · 27 Sep 2026 · build 169 (vendor ledger reconciliation in Purchase; both reconciliations download as Excel)";
+const APP_VERSION = "TEST · 27 Sep 2026 · build 170 (security: own-site libraries, CSP, no keys in the browser, two-step sign-in, audit trail, idle sign-out)";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;
@@ -1510,7 +1513,7 @@ function fyOf(d){
   return s + "-" + String((s + 1) % 100).padStart(2, "0");
 }
 S.partyFy = fyOf(null);
-function fmtDate(d){ if (!d) return "—"; const dt = new Date(String(d).slice(0, 10) + "T00:00:00"); return isNaN(dt) ? d : dt.toLocaleDateString("en-IN", {day:"2-digit", month:"short", year:"numeric"}); }
+function fmtDate(d){ if (!d) return "—"; const dt = new Date(String(d).slice(0, 10) + "T00:00:00"); return isNaN(dt) ? String(d).replace(/[^\w \-\/.:]/g, "") : dt.toLocaleDateString("en-IN", {day:"2-digit", month:"short", year:"numeric"}); }
 function effectivePan(x){
   const pan = String(x.vendorPan || "").toUpperCase().trim();
   if (PAN_RE.test(pan)) return pan;
@@ -1572,7 +1575,15 @@ function loadScriptOnce(name){
 }
 async function ensurePdfJs(){
   if (window.pdfjsLib || !window.TDS_ASSETS) return;
-  await loadScriptOnce("pdfjs-lib.js"); await loadScriptOnce("pdfjs-worker.js");
+  // pdf.js 4.10 (fixes CVE-2024-4367), served from this site; the worker runs as a separate module worker
+  if (!libLoads["pdf.min.mjs"]) libLoads["pdf.min.mjs"] = import(new URL(window.TDS_ASSETS + "pdf.min.mjs", location.href).href)
+    .then(m => { window.pdfjsLib = m; m.GlobalWorkerOptions.workerSrc = new URL(window.TDS_ASSETS + "pdf.worker.min.mjs", location.href).href; })
+    .catch(() => { delete libLoads["pdf.min.mjs"]; throw {code: "lib_missing", message: "pdf.min.mjs could not be loaded"}; });
+  await libLoads["pdf.min.mjs"];
+}
+// Every PDF is opened here: scripts inside a PDF are never run (isEvalSupported false).
+function openPdfDoc(bytes){
+  return window.pdfjsLib.getDocument({data: bytes, isEvalSupported: false, enableXfa: false}).promise;
 }
 async function ensureXlsx(){
   if (window.XLSX || !window.TDS_ASSETS) return;
@@ -1583,8 +1594,7 @@ async function getPdf(file){
   await ensurePdfJs();
   if (!window.pdfjsLib) throw {code:"pdf_unavailable"};
   if (!pdfCache.has(file)){
-    window.pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-    pdfCache.set(file, file.arrayBuffer().then(buf => window.pdfjsLib.getDocument({data:new Uint8Array(buf), isEvalSupported:false}).promise)
+    pdfCache.set(file, file.arrayBuffer().then(buf => openPdfDoc(new Uint8Array(buf)))
       .catch(() => { pdfCache.delete(file); throw {code:"pdf_broken"}; }));
   }
   return pdfCache.get(file);
@@ -2302,7 +2312,7 @@ function itemsHtml(e, ro){
   if (!s) return "";
   const rows = s.items.map((i, k) => "<tr><td>" + esc(i.desc) + "</td><td>" + esc(i.hsn || "\u2014") + '</td><td class="n">' + (i.qty ? i.qty + (i.unit ? " " + esc(i.unit) : "") : "\u2014") +
     '</td><td class="n">' + (i.rate ? INR.format(i.rate) : "\u2014") + '</td><td class="n">' + INR.format(num(i.taxable)) + '</td><td class="n">' + (i.gstRate == null ? "\u2014" : i.gstRate + "%") + "</td></tr>").join("");
-  const rateRows = s.rates.map(r => "<tr><td>" + (r.rate == null ? "rate not shown" : r.rate + "%") + "</td><td>" + (r.hsn.size ? Array.from(r.hsn).join(", ") : "\u2014") +
+  const rateRows = s.rates.map(r => "<tr><td>" + (r.rate == null ? "rate not shown" : r.rate + "%") + "</td><td>" + (r.hsn.size ? esc(Array.from(r.hsn).join(", ")) : "\u2014") +
     '</td><td class="n">' + INR.format(r.taxable) + '</td><td class="n">' + (r.rate ? INR.format(r2(r.taxable * r.rate / 100)) : "\u2014") + "</td></tr>").join("");
   if (s.unreliable) return '<p class="note" style="margin:6px 0">The line items on this bill could not be read reliably, so only the totals are used.</p>';
   return '<details class="itembox"' + (s.multi ? " open" : "") + '><summary>What was billed \u00b7 ' + s.items.length + " line" + (s.items.length === 1 ? "" : "s") +
@@ -2364,17 +2374,8 @@ function isImage(file){ return /^image\//.test(file.type) || /\.(jpe?g|jpe|jfif|
 /* ------------------------------------------------------------------ */
 /* Free OCR (Tesseract, open source), loaded only when first needed    */
 /* ------------------------------------------------------------------ */
-const TESS = {
-  script: "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js",
-  workerPath: "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/worker.min.js",
-  corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.1",
-  langPath: "https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng@1.0.0/4.0.0_best_int"
-};
-if (window.__TESS) Object.assign(TESS, window.__TESS);
+// OCR runs only from this site's own copy (no outside downloads), so the page can be locked to its own address.
 let ocrEngineP = null, ocrChain = Promise.resolve();
-function loadScript(src){
-  return new Promise((ok, bad) => { const el = document.createElement("script"); el.dataset.injected = "1"; el.src = src; el.onload = ok; el.onerror = () => bad({code:"ocr_script"}); document.head.appendChild(el); });
-}
 function withTimeout(p, ms, code){ return Promise.race([p, new Promise((_, bad) => setTimeout(() => bad({code}), ms))]); }
 // The engine sits at the end of this (large) file, so wait until the page has been read in full.
 function domReady(){ return document.readyState === "loading" ? new Promise(r => document.addEventListener("DOMContentLoaded", r, {once:true})) : Promise.resolve(); }
@@ -2413,10 +2414,13 @@ async function loadBuiltInOcr(){
   if (!hasBuiltInOcr()) throw {code:"not_built_in"};
   if (typeof WebAssembly === "undefined") throw {code:"no_wasm"};
   if (typeof TesseractCore === "undefined"){
-    const el = document.createElement("script");
-    el.dataset.injected = "1";
-    el.textContent = await blockText("tess-core");
-    document.head.appendChild(el);
+    if (document.getElementById("tess-core")){
+      // standalone file: the engine is inside the page
+      const el = document.createElement("script");
+      el.dataset.injected = "1";
+      el.textContent = document.getElementById("tess-core").textContent;
+      document.head.appendChild(el);
+    } else await loadScriptOnce("tess-core.js?b=" + (((String(typeof APP_VERSION === "string" ? APP_VERSION : "").match(/build (\d+)/) || [])[1]) || ""));
   }
   if (typeof TesseractCore === "undefined") throw {code:"core_blocked"};
   let Mod;
@@ -2453,29 +2457,13 @@ async function loadBuiltInOcr(){
     return run;
   }};
 }
-// 2. Fallback: download the engine (for devices where the built-in one cannot start)
-async function loadDownloadedOcr(){
-  await withTimeout(fetch(TESS.langPath + "/eng.traineddata.gz", {method:"HEAD"}), 10000, "ocr_timeout").catch(e => { throw {code: e && e.code === "ocr_timeout" ? "ocr_timeout" : "ocr_blocked"}; });
-  if (!window.Tesseract) await loadScript(TESS.script);
-  const w = await withTimeout(window.Tesseract.createWorker("eng", 1, {workerPath:TESS.workerPath, corePath:TESS.corePath, langPath:TESS.langPath}), 90000, "ocr_timeout");
-  return {kind:"downloaded", recognize: async (canvas, psm) => {
-    await w.setParameters({tessedit_pageseg_mode: psm || "3"});
-    const r = await withTimeout(w.recognize(canvas), 90000, "ocr_timeout");
-    return {text: (r.data && r.data.text) || "", confidence: (r.data && r.data.confidence) || 0};
-  }, tsv: async (canvas) => {
-    await w.setParameters({tessedit_pageseg_mode: "6"});
-    const r = await withTimeout(w.recognize(canvas, {}, {tsv: true, text: false}), 120000, "ocr_timeout");
-    return parseTsv(r.data && r.data.tsv);
-  }};
-}
 function getOcr(){
   if (S.ocrState === "unavailable") return Promise.resolve(null);
   if (!ocrEngineP){
     S.ocrState = "loading"; softRender();
     ocrEngineP = (async () => {
       try { return await loadBuiltInOcr(); }
-      catch (e){ S.ocrBuiltInError = (e && e.code) || "failed"; }
-      return loadDownloadedOcr();
+      catch (e){ S.ocrBuiltInError = (e && e.code) || "failed"; throw e; }
     })()
       .then(eng => { S.ocrState = "ready"; S.ocrKind = eng.kind; softRender(); return eng; })
       .catch(e => { S.ocrState = "unavailable"; S.ocrKind = ""; S.ocrError = (e && e.code) || "failed"; softRender(); return null; });
@@ -2492,6 +2480,7 @@ const OCR_PROBLEMS = {
   ocr_blocked: "the backup OCR download is blocked here",
   ocr_script: "the backup OCR program could not be downloaded",
   ocr_timeout: "the backup OCR download took too long",
+  not_built_in: "the OCR program is not in this copy of the app",
   failed: "the free OCR could not start in this browser"
 };
 function ocrProblem(){
@@ -2504,8 +2493,7 @@ async function probeOcr(){
   if (S.ocrState !== "idle") return;
   await domReady();
   if (hasBuiltInOcr() && typeof WebAssembly !== "undefined"){ S.ocrState = "available"; S.ocrKind = "built-in"; render(); return; }
-  try { await withTimeout(fetch(TESS.langPath + "/eng.traineddata.gz", {method:"HEAD"}), 8000, "ocr_timeout"); S.ocrState = "available"; S.ocrKind = "downloaded"; }
-  catch (e){ S.ocrState = "unavailable"; S.ocrError = (e && e.code) || "ocr_blocked"; }
+  S.ocrState = "unavailable"; S.ocrError = typeof WebAssembly === "undefined" ? "no_wasm" : "not_built_in";
   render();
 }
 async function testFreeOcr(){
@@ -2530,7 +2518,19 @@ async function testFreeOcr(){
 /* Google Cloud Vision OCR (optional, your own Google API key).        */
 /* Much stronger than the built-in OCR on photos and handwriting.      */
 /* ------------------------------------------------------------------ */
-function googleSettings(){ try { return JSON.parse(lsGet("tdsdesk-test:gvision") || "{}"); } catch (e){ return {}; } }
+// No API keys are kept in the browser: Claude and Google are reached only through the firm account's gateway,
+// which holds the keys on the server. Keys saved by older builds are wiped at start-up.
+function googleSettings(){ return {}; }
+function wipeStoredKeys(){
+  let had = false;
+  try {
+    if (localStorage.getItem("tdsdesk-test:gvision")){ localStorage.removeItem("tdsdesk-test:gvision"); had = true; }
+    localStorage.removeItem("tdsdesk-test:gcheck");
+    const a = JSON.parse(localStorage.getItem("tdsdesk-test:api") || "null");
+    if (a && a.key){ delete a.key; localStorage.setItem("tdsdesk-test:api", JSON.stringify(a)); had = true; }
+  } catch (e){}
+  return had;
+}
 function hasGoogle(){ return (!!googleSettings().key || (Cloud.on() && !!S.account && moduleEnabled("vision"))) && !window.claude; }
 function moduleEnabled(code){ const m = ((S.account || {}).modules || []).find(x => x.code === code); return !m || m.enabled !== false; }
 function googleAvailable(){ return !!(googleSettings().key || (Cloud.on() && S.account)); }
@@ -2544,11 +2544,6 @@ async function googleWords(canvas){
   if (Cloud.on() && S.account && !cfg.key){
     const j = await Cloud.fn("gateway", {what: "vision", qty: 1, ref: "bank statement page", payload: body});
     resp = ((j.data || {}).responses || [])[0] || {};
-  } else if (cfg.key){
-    const res = await withTimeout(fetch("https://vision.googleapis.com/v1/images:annotate?key=" + encodeURIComponent(cfg.key), {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify(body)}), 60000, "google_timeout");
-    const data = await res.json();
-    resp = ((data && data.responses) || [])[0] || {};
-    if (!res.ok || resp.error) throw {code: "google_error", message: (resp.error && resp.error.message) || res.status};
   } else throw {code: "no_google_key"};
   S.googleCount = (S.googleCount || 0) + 1;
   const out = [];
@@ -2579,29 +2574,7 @@ async function googleOcr(canvas){
     S.googleCount = (S.googleCount || 0) + 1;
     return {text: full0.text || "", confidence: full0.text ? 85 : 0};
   }
-  if (!cfg.key) throw {code:"no_google_key"};
-  let res;
-  try {
-    res = await withTimeout(fetch("https://vision.googleapis.com/v1/images:annotate?key=" + encodeURIComponent(cfg.key), {
-      method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify(body)}), 60000, "google_timeout");
-  } catch (e){ throw {code: e && e.code === "google_timeout" ? "google_timeout" : "google_blocked"}; }
-  let data = null;
-  try { data = await res.json(); } catch (e){ data = null; }
-  const errMsg = (data && data.error && data.error.message) || (data && data.responses && data.responses[0] && data.responses[0].error && data.responses[0].error.message) || "";
-  if (!res.ok || errMsg){
-    const code = /referer|referrer|HTTP_REFERRER|API_KEY_(IOS|ANDROID|HTTP)/i.test(errMsg) ? "google_referrer"
-      : res.status === 400 && /api key/i.test(errMsg) ? "google_bad_key"
-      : res.status === 403 && /billing/i.test(errMsg) ? "google_billing"
-      : res.status === 403 && /(not been used|disabled|enable)/i.test(errMsg) ? "google_not_enabled"
-      : res.status === 403 ? "google_forbidden" : res.status === 429 ? "google_quota" : "google_error";
-    throw {code, message: errMsg};
-  }
-  const r = (data.responses || [])[0] || {};
-  const full = r.fullTextAnnotation || {};
-  const blocks = (full.pages || []).flatMap(pg => pg.blocks || []).filter(b => typeof b.confidence === "number");
-  const confidence = blocks.length ? Math.round(blocks.reduce((a, b) => a + b.confidence, 0) / blocks.length * 100) : (full.text ? 80 : 0);
-  S.googleCount = (S.googleCount || 0) + 1;
-  return {text: full.text || "", confidence};
+  throw {code:"no_google_key"};
 }
 async function dailyGoogleCheck(){
   if (!googleSettings().key || window.claude) return;   // through the platform there is no key here to check
@@ -3762,13 +3735,13 @@ function movePreview(from, to){
 }
 
 /* ------------------------------------------------------------------ */
-/* Reading with your own Claude API key (works outside claude.ai)      */
+/* Reading with Claude through the firm account (the key stays on the server) */
 /* ------------------------------------------------------------------ */
 const API_DEFAULTS = {model:"claude-sonnet-5", carefulModel:"claude-opus-5"};
 function apiSettings(){
   let o = {};
   try { o = JSON.parse(lsGet("tdsdesk-test:api") || "{}"); } catch (e){ o = {}; }
-  return Object.assign({}, API_DEFAULTS, o);
+  const r = Object.assign({}, API_DEFAULTS, o); delete r.key; return r;
 }
 function blobToBase64(b){
   return new Promise((ok, bad) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(",")[1]); r.onerror = () => bad(r.error); r.readAsDataURL(b); });
@@ -3798,26 +3771,7 @@ async function apiJson(prompt, images, careful){
     const text = ((j.data && j.data.content) || []).filter(x => x.type === "text").map(x => x.text).join("\n");
     return parseJsonReply(text);
   }
-  if (!cfg.key) throw {code:"no_key"};
-  let res;
-  try {
-    res = await fetch("https://api.anthropic.com/v1/messages", {
-      method:"POST",
-      headers:{"content-type":"application/json", "x-api-key":cfg.key, "anthropic-version":"2023-06-01", "anthropic-dangerous-direct-browser-access":"true"},
-      body: JSON.stringify({model: careful ? cfg.carefulModel : cfg.model, max_tokens: 16000, messages:[{role:"user", content}]})
-    });
-  } catch (e){ throw {code:"api_blocked"}; }
-  let data = null;
-  try { data = await res.json(); } catch (e){ data = null; }
-  if (!res.ok){
-    const msg = data && data.error && data.error.message ? String(data.error.message) : "";
-    const code = res.status === 401 ? "bad_key" : res.status === 403 ? "key_forbidden" : res.status === 404 ? "bad_model"
-      : res.status === 429 ? "rate_limited" : res.status === 413 ? "prompt_too_large" : res.status >= 500 ? "upstream_error" : "api_error";
-    throw {code, message: msg};
-  }
-  const text = ((data && data.content) || []).filter(x => x.type === "text").map(x => x.text).join("\n");
-  if (data && data.stop_reason === "max_tokens" && !text.includes("}")) throw {code:"invalid_json"};
-  return parseJsonReply(text);
+  throw {code:"no_key"};
 }
 async function testReader(){
   S.testResult = {busy:true}; render();
@@ -4402,7 +4356,7 @@ async function downloadStandalone(){
   const root = document.documentElement.cloneNode(true);
   root.querySelectorAll("[data-injected]").forEach(n => n.remove());
   // keep only this app's own parts; anything else was added by the page host
-  const keepScript = el => ["app-main", "tess-core", "tess-eng", "pdfjs-lib", "pdfjs-worker", "xlsx-lib", "sample-jpg", "sample-pdf"].includes(el.id) || /^https:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/pdf\.js\//.test(el.getAttribute("src") || "");
+  const keepScript = el => ["app-main", "tess-core", "tess-eng", "pdfjs-lib", "pdfjs-worker", "xlsx-lib", "sample-jpg", "sample-pdf"].includes(el.id);
   root.querySelectorAll("script").forEach(el => { if (!keepScript(el)) el.remove(); });
   root.querySelectorAll("head > *").forEach(el => {
     const tag = el.tagName.toLowerCase();
@@ -4488,7 +4442,7 @@ function busyCard(title, detail, done, total){
   return '<div class="busycard" role="status" aria-live="polite"><span class="spinner" aria-hidden="true"></span>' +
     '<div class="busytext"><b>' + esc(title) + "</b>" + (detail ? '<span class="note">' + esc(detail) + "</span>" : "") +
     (p2 === null ? "" : '<div class="busybar"><i style="width:' + p2 + '%"></i></div>') + "</div>" +
-    (total ? '<span class="busyn">' + done + " / " + total + "</span>" : "") + "</div>";
+    (total ? '<span class="busyn">' + num(done) + " / " + num(total) + "</span>" : "") + "</div>";
 }
 // what the reading of this client's bills is doing right now
 function docsBusyCard(){
@@ -5317,7 +5271,7 @@ const Books = {
   takeVoucher(s, out, meta){
     const type = (s.match(/VCHTYPE="([^"]*)"/) || [])[1] || "";
     const v = {
-      id: this.one(s, "GUID") || (s.match(/REMOTEID="([^"]*)"/) || [])[1] || "",
+      id: String(this.one(s, "GUID") || (s.match(/REMOTEID="([^"]*)"/) || [])[1] || "").replace(/[^\w\-.:]/g, ""),
       date: this.one(s, "DATE"), type,
       no: this.one(s, "VOUCHERNUMBER"), ref: this.one(s, "REFERENCE"), refDate: this.one(s, "REFERENCEDATE"), irn: this.one(s, "IRN"), irnDate: this.one(s, "IRNACKDATE"),
       party: this.one(s, "PARTYNAME") || this.one(s, "PARTYLEDGERNAME"),
@@ -9324,9 +9278,9 @@ function viewTdsReturn26(b, allRows){
       '<p class="note">TDS payment vouchers in Tally for this quarter. Add the BSR code and challan serial number and each becomes a challan.</p>' +
       '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Date</th><th class="n">Tax</th><th>Sections</th><th>Voucher</th><th>BSR code</th><th>Serial</th><th class="ac"></th></tr></thead><tbody>' +
       pays.map(p => "<tr><td>" + fmtDate(tallyDate(p.date)) + '</td><td class="n">' + money(p.tax) + "</td><td>" + esc(p.sections.join(", ")) + "</td><td>" + esc(p.voucher) + "</td>" +
-        '<td><input type="text" data-paybsr="' + p.vid + '" data-fk="pb-' + p.vid + '" placeholder="0240020" style="width:100px"></td>' +
-        '<td><input type="text" data-payser="' + p.vid + '" data-fk="ps-' + p.vid + '" placeholder="00979" style="width:90px"></td>' +
-        '<td class="ac"><button class="btn small" data-paymake="' + p.vid + '">Make it a challan</button></td></tr>').join("") + "</tbody></table></div></section>";
+        '<td><input type="text" data-paybsr="' + esc(p.vid) + '" data-fk="pb-' + esc(p.vid) + '" placeholder="0240020" style="width:100px"></td>' +
+        '<td><input type="text" data-payser="' + esc(p.vid) + '" data-fk="ps-' + esc(p.vid) + '" placeholder="00979" style="width:90px"></td>' +
+        '<td class="ac"><button class="btn small" data-paymake="' + esc(p.vid) + '">Make it a challan</button></td></tr>').join("") + "</tbody></table></div></section>";
     h += tdsFilterBar("challans", {placeholder: "Find a BSR code or serial", table: "tdsChTable", title: title + " challans", excel: "tdsExcel",
       count: shown.length + " of " + ch.length + " challans",
       selects: [{key: "month", label: "Month", options: [["", "Every month"]].concat(tdsMonths(fy, q).map(m => [m, monthName(m)]))},
@@ -10838,18 +10792,8 @@ function viewReading(){
     banner(S.ocrTest, "Testing built-in OCR…") + banner(S.googleTest, "Testing Google OCR…") + googleHelpHtml() + banner(S.testResult, "Testing Claude… it may ask for permission first.") +
     '<p style="margin:12px 0 0">Bills read since this page opened: <b>' + st.free + "</b> free · <b>" + (st.google || 0) + "</b> by Google OCR · <b>" + (st.freePlusClaude || 0) + "</b> free figures + Claude for the supplier name · <b>" + st.claudeText + "</b> by Claude (text) · <b>" + st.claudeImages + "</b> by Claude (images).</p></div>";
 
-  // 3. keys: only when nobody is signed in to a firm account, or for the administrator
-  const showKeys = !Cloud.on() || (S.account && S.account.superadmin);
-  if (showKeys) h += '<div class="pane" id="keysPane"><h2>Keys</h2>' +
-    (Cloud.on() ? '<p class="note" style="margin:0 0 10px">Keys kept on this computer. Firms do not need any: they use Claude and Google through the platform.</p>' : "") +
-    '<div class="two">' +
-    keyBox({title: "Google Cloud Vision OCR key", label: "Google API key", inputId: "gKey", placeholder: "AIza...", value: gcfg.key, saveAct: "saveGoogle", removeAct: "removeGoogle",
-      help: "Google Cloud console → create a project → enable billing → enable the Cloud Vision API → APIs & Services → Credentials → Create API key (restrict it to Cloud Vision). 1,000 pages a month free, then about $1.50 per 1,000. Kept only in this browser."}) +
-    keyBox({title: "Claude API key", label: "Claude API key", inputId: "apiKey", placeholder: "sk-ant-...", value: cfg.key, saveAct: "saveKey", removeAct: "removeKey",
-      help: "Claude Console → API keys. Used only for bills the OCR steps cannot read with confidence. Billed on your Claude Console account. Kept only in this browser.",
-      extra: '<div class="grid" style="margin-top:6px"><label class="f"><span>Model</span><input data-draft type="text" id="apiModel" value="' + esc(cfg.model) + '"></label>' +
-        '<label class="f"><span>Careful re-read model</span><input data-draft type="text" id="apiCareful" value="' + esc(cfg.carefulModel) + '"></label></div>'}) +
-    "</div></div>";
+  // 3. keys: none in the browser any more
+  h += '<div class="pane" id="keysPane"><h2>Keys</h2><p class="note" style="margin:0">No API keys are kept on this computer. Claude and Google OCR are reached through the firm account, which holds the keys on the server; sign in to the firm account to use them. The free built-in OCR works without signing in.</p></div>';
 
   // 4. order
   h += '<div class="pane"><h2>Reading order</h2>' +
@@ -10889,10 +10833,10 @@ function settingsTiles(){
 }
 function viewPostLog(){
   const log = (S.firm.postLog || []).slice().reverse();
-  const mine = S.logAll ? log : log.filter(r => r.co === S.coId);
+  const mine = S.logAll || !CO() ? log : log.filter(r => r.co === S.coId);
   let h = '<div class="pane"><div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Everything sent to Tally</h2>' +
     '<div><button class="btn small" data-act="logAll">' + (S.logAll ? "This client only" : "All clients") + '</button><button class="btn small" data-act="logCsv">Download as a file</button></div></div>' +
-    '<p class="note" style="margin:6px 0 10px">' + mine.length + " entr" + (mine.length === 1 ? "y" : "ies") + (S.logAll ? " across every client" : " for " + esc(CO().name)) + ". Kept so you can prove what was posted, by whom, and when.</p>";
+    '<p class="note" style="margin:6px 0 10px">' + mine.length + " entr" + (mine.length === 1 ? "y" : "ies") + (S.logAll || !CO() ? " across every client" : " for " + esc(CO().name)) + ". Kept so you can prove what was posted, by whom, and when.</p>";
   if (!mine.length) return h + '<p class="note">Nothing yet.</p></div>';
   h += '<div class="tblwrap"><table class="data"><thead><tr><th>When</th><th>What</th><th>Client</th><th>Reference</th><th class="n">Amount</th><th>Voucher in Tally</th><th>By</th></tr></thead><tbody>' +
     mine.slice(0, 500).map(r => "<tr" + (r.action === "removed" ? ' style="opacity:.65"' : "") + "><td>" + new Date(r.at).toLocaleString([], {day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit"}) + "</td>" +
@@ -11088,7 +11032,7 @@ async function loadDocq(force){
     const sig = () => Object.values(S.docq).map(d => d.id + d.status + d.client_id + (d.urlExpiresAt || "")).sort().join();
     const before = sig();
     const next = {};
-    [].concat(rows || []).forEach(r => { next[r.id] = Object.assign({}, r.data, {id: r.id, client_id: r.client_id || ""}); });
+    [].concat(rows || []).filter(cloudRowOk).forEach(r => { next[r.id] = cleanIds(Object.assign({}, r.data, {id: r.id, client_id: r.client_id || ""}), 0); });
     S.docq = next;
     if (sig() !== before) render();
   } catch (e){ /* the inbox is best effort; the rest of the app keeps working */ }
@@ -11314,7 +11258,7 @@ function docWarnHtml(e){
 function viewDetail(e){
   if (S.reading[e.id]) return '<div class="detail"><section><div class="thinking"><span class="dot"></span>' + esc(S.reading[e.id]) + ": " + esc(e.fileName) + ". " +
     (/careful/i.test(S.reading[e.id]) ? "Handwritten and faint bills can take up to two minutes." : "This usually takes under a minute.") + "</div></section>" +
-    (S.previews[e.id] ? '<section><img class="preview" src="' + S.previews[e.id] + '" alt="Invoice being read"></section>' : "") + "</div>";
+    (S.previews[e.id] ? '<section><' + 'img class="preview" src="' + S.previews[e.id] + '" alt="Invoice being read"></section>' : "") + "</div>";
   const co = CO(), c = compute(e), ro = e.status !== "draft", x = e.x;
   const snap = e.status === "approved" && e.snapshot;
   const v = snap ? {applicable:snap.applicable, tds:snap.tds, tdsWould:snap.tdsWould != null ? snap.tdsWould : snap.tds, skip:snap.skip || null, why:snap.why || [], meter:snap.meter || null, ref:snap.ref, old:snap.old, pan:snap.pan, indHuf:!!snap.indHuf, fy:snap.fy || fyOf(x.invoiceDate), base:snap.base, tdsBase:snap.tdsBase, rate:snap.rate, rateNote:snap.rateNote || "", never:!!snap.never, flags:[], catchUp:0}
@@ -11345,7 +11289,7 @@ function viewDetail(e){
     (e.freeWhy && !ro && !(e.readTrace && e.readTrace.length) ? '<p class="note" style="margin:6px 0 0">Free reading was not enough: ' + esc(e.freeWhy) + ".</p>" : "");
   h += docWarn;
   h += '<section class="' + (prev ? "withprev" : "") + '">' +
-    (prev ? '<details class="prevbox" open><summary>Invoice image</summary><a href="' + prev + '" target="_blank" rel="noopener"><img class="preview" src="' + prev + '" alt="Uploaded invoice"></a></details>' : "") +
+    (prev ? '<details class="prevbox" open><summary>Invoice image</summary><a href="' + prev + '" target="_blank" rel="noopener"><' + 'img class="preview" src="' + prev + '" alt="Uploaded invoice"></a></details>' : "") +
     '<div><h3>Invoice details</h3><div class="grid">' +
     field("Deductee name", "vendorName", x.vendorName, {ro, wide:true}) +
     field("GSTIN", "vendorGstin", x.vendorGstin, {ro}) + field("PAN", "vendorPan", x.vendorPan || v.pan, {ro}) +
@@ -11851,7 +11795,7 @@ async function parsePdfStatement(file){
   await ensurePdfJs();
   if (!window.pdfjsLib) throw {code: "pdf_unavailable"};
   let pdf;
-  try { pdf = await pdfjsLib.getDocument({data: new Uint8Array(await file.arrayBuffer())}).promise; }
+  try { pdf = await openPdfDoc(new Uint8Array(await file.arrayBuffer())); }
   catch (e){ throw {code: /password/i.test(String(e && (e.name || e.message))) ? "pdf_password" : "pdf_broken"}; }
   let cols = null, textChars = 0, lastRow = null;
   const allRows = [], metaLines = [];
@@ -12101,7 +12045,7 @@ async function statementImages(file, onPage){
   await ensurePdfJs();
   const canvases = [];
   if (isPdf(file)){
-    const pdf = await pdfjsLib.getDocument({data: new Uint8Array(await file.arrayBuffer())}).promise;
+    const pdf = await openPdfDoc(new Uint8Array(await file.arrayBuffer()));
     for (let p = 1; p <= Math.min(pdf.numPages, 60); p++){
       const page = await pdf.getPage(p);
       const vp0 = page.getViewport({scale: 1});
@@ -12408,7 +12352,7 @@ async function readStatement(file, progress, force){
 }
 async function pdfTextPages(file){
   await ensurePdfJs();
-  const pdf = await pdfjsLib.getDocument({data: new Uint8Array(await file.arrayBuffer())}).promise;
+  const pdf = await openPdfDoc(new Uint8Array(await file.arrayBuffer()));
   const pages = [];
   for (let p = 1; p <= Math.min(pdf.numPages, 400); p++){
     const tc = await (await pdf.getPage(p)).getTextContent();
@@ -15233,6 +15177,11 @@ const Bridge = {
   async call(path, body, ms){
     const c = this.cfg();
     if (c.port){ if (body && typeof body === "object" && !Array.isArray(body)) body = Object.assign({port: c.port}, body); }
+    // writes to Tally go into the firm's audit trail (who, which company, how many)
+    if (body && /^\/(unpost|import|jobs)$/.test(path.split("?")[0]) && typeof auditEvent === "function"){
+      const n = Array.isArray(body.items) ? body.items.length : Array.isArray(body.vouchers) ? body.vouchers.length : 1;
+      auditEvent("tally." + path.split("?")[0].slice(1), (body.company || "") + " \u00b7 " + n + (body.guid ? " \u00b7 " + body.guid : "") + (body.vchNumber ? " \u00b7 no. " + body.vchNumber : ""), S.coId || "");
+    }
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), ms || 120000);
     let r;
@@ -15500,7 +15449,7 @@ function bridgeChip(co){
   if (st.state === "key") return '<span class="tchip bad" title="' + esc(st.error) + '">Tally Bridge: wrong key</span>';
   if (st.state !== "ok") return '<span class="tchip off">Tally Bridge\u2026</span>';
   const run = (st.jobs || []).find(j => ["queued", "waiting", "running"].includes(j.status));
-  if (run) return '<span class="tchip ok" title="' + esc((run.company || "") + ": " + (run.message || "")) + '">\u25CF Posting to Tally: ' + (run.done || 0) + " of " + (run.total || 0) + "</span>";
+  if (run) return '<span class="tchip ok" title="' + esc((run.company || "") + ": " + (run.message || "")) + '">\u25CF Posting to Tally: ' + num(run.done) + " of " + num(run.total) + "</span>";
   if (st.shaky) return '<span class="tchip warn" title="' + esc(st.error || "") + '">Tally Bridge: checking again\u2026</span>';
   const why = Bridge.diag && (Bridge.diag.findings || []).find(f => f.level !== "ok");
   if (st.pinMissing) return '<button class="tchip warn" data-act="openSettings" title="' + esc(why ? why.text : "The Tally chosen in Settings is not running") + '">Your Tally is not connected \u2014 check</button>';
@@ -16523,7 +16472,7 @@ function viewReadTest(){
   let h = '<div style="margin-top:10px;border-top:1px solid var(--rule-soft);padding-top:10px"><div class="row" style="justify-content:space-between;align-items:center"><b>Test reading entries</b><button class="btn small" data-act="bridgeReadTest"' + (r.busy ? " disabled" : "") + ">" + (r.busy ? "Testing\u2026" : "Run test") + "</button></div>" +
     '<p class="note" style="margin:4px 0">Checks how TDS Desk can read entries from the company open in Tally (nothing is written). If posts are \u201cnot confirmed\u201d, run this and send the result.</p>';
   if (r.error) h += '<p class="bk-warn">' + esc(r.error) + "</p>";
-  if (r.tests) h += '<table class="data"><tbody>' + r.tests.map(t => "<tr><td>" + esc(t.name) + "</td><td>" + (t.ok ? '<span class="tag ok">works</span> ' + t.count + " found" + (t.optional ? " (" + t.optional + " Optional)" : "") : '<span class="tag bad">failed</span> ' + esc(t.error || "")) + '</td><td class="n">' + t.ms + " ms</td></tr>").join("") + "</tbody></table>" +
+  if (r.tests) h += '<table class="data"><tbody>' + r.tests.map(t => "<tr><td>" + esc(t.name) + "</td><td>" + (t.ok ? '<span class="tag ok">works</span> ' + num(t.count) + " found" + (t.optional ? " (" + num(t.optional) + " Optional)" : "") : '<span class="tag bad">failed</span> ' + esc(t.error || "")) + '</td><td class="n">' + num(t.ms) + " ms</td></tr>").join("") + "</tbody></table>" +
     '<p class="note" style="margin:4px 0 0">' + esc(r.company || "") + " \u00b7 port " + esc(r.port) + " \u00b7 " + esc(r.from) + " to " + esc(r.to) + "</p>";
   return h + "</div>";
 }
@@ -16533,11 +16482,11 @@ function viewBridgeDiagnosis(){
   if (!d) return h + '<p class="note" style="margin:6px 0 0">Finds your TallyPrime on this server and explains anything that stops the connection.</p>' + viewReadTest() + "</div>";
   if (d.error) return h + '<p class="bk-warn">' + esc(d.error) + "</p></div>";
   h += '<p class="note" style="margin:6px 0">Bridge running as <b>' + esc(d.user || "") + "</b> (Windows session " + esc(d.mySession) + ").</p>";
-  h += (d.findings || []).map(f => '<div class="bd-f ' + f.level + '"><b>' + (f.level === "ok" ? "\u2714 " : "\u26A0 ") + esc(f.text) + "</b>" + (f.fix ? '<div class="bd-fix">What to do: ' + esc(f.fix) + "</div>" : "") + "</div>").join("");
+  h += (d.findings || []).map(f => '<div class="bd-f ' + esc(f.level) + '"><b>' + (f.level === "ok" ? "\u2714 " : "\u26A0 ") + esc(f.text) + "</b>" + (f.fix ? '<div class="bd-fix">What to do: ' + esc(f.fix) + "</div>" : "") + "</div>").join("");
   if ((d.tallies || []).length) h += '<table class="data" style="margin-top:8px"><thead><tr><th>TallyPrime of</th><th>Accepting connections on</th><th>Its setting</th></tr></thead><tbody>' +
-    d.tallies.map(t => "<tr><td>" + esc(t.user || ("session " + t.session)) + (t.mine ? ' <span class="tag ok">you</span>' : "") + "</td><td>" + (t.ports.length ? "port " + t.ports.join(", ") : '<span class="tag bad">not accepting</span>') + "</td><td>" +
+    d.tallies.map(t => "<tr><td>" + esc(t.user || ("session " + t.session)) + (t.mine ? ' <span class="tag ok">you</span>' : "") + "</td><td>" + (t.ports.length ? "port " + esc(t.ports.join(", ")) : '<span class="tag bad">not accepting</span>') + "</td><td>" +
       (t.ini && t.ini.found ? esc((t.ini.mode || "?") + ", port " + (t.ini.port || "9000")) : '<span class="note">\u2014</span>') + "</td></tr>").join("") + "</tbody></table>";
-  if (d.freePort) h += '<p class="note" style="margin:6px 0 0">A free port on this server: <b>' + d.freePort + "</b>. Each user\u2019s TallyPrime needs its own port.</p>";
+  if (d.freePort) h += '<p class="note" style="margin:6px 0 0">A free port on this server: <b>' + esc(d.freePort) + "</b>. Each user\u2019s TallyPrime needs its own port.</p>";
   return h + viewReadTest() + "</div>";
 }
 function bridgeDownHelp(c){
@@ -16557,7 +16506,10 @@ async function saveBridgeSetup(){
   const bytes = new Uint8Array(raw.length);
   for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
   saveFile("Setup-TDS-Bridge.bat", new Blob([bytes], {type: "application/octet-stream"}));
+  // its fingerprint, to compare with the one published in the TDS Desk repository (assets/bridge-setup.sha256)
+  try { const h = await crypto.subtle.digest("SHA-256", bytes); S.bridgeSha = Array.from(new Uint8Array(h)).map(x => x.toString(16).padStart(2, "0")).join(""); } catch (e){ S.bridgeSha = ""; }
   toast("Saved. On the computer where Tally runs, double-click Setup-TDS-Bridge.bat and press I.");
+  render();
 }
 function bridgeSetupSteps(){
   const st = Bridge.st, connected = Bridge.on() && Bridge.up();
@@ -16565,6 +16517,7 @@ function bridgeSetupSteps(){
   return '<div class="setupcard"><h3 style="margin:0 0 6px">Set up in three steps</h3><ol class="setup">' +
     step(1, connected, "Put the bridge on the Tally computer",
       'Press <button class="btn small" data-act="bridgeSetupFile">Download the bridge setup</button> and run the file there (double-click, press <b>I</b>). It installs itself, starts, and starts again at every sign-in. No admin rights needed.') +
+    (S.bridgeSha ? '<li class="note" style="list-style:none;font-size:12px">Fingerprint (SHA-256) of the file just saved: <code style="user-select:all;word-break:break-all">' + esc(S.bridgeSha) + "</code>. It must match the one published by TDS Desk before you run it.</li>" : "") +
     step(2, connected && st.tallyUp, "Open TallyPrime and your company",
       "In TallyPrime: F1 Help \u2192 Settings \u2192 Connectivity \u2192 <b>TallyPrime acts as: Both</b>. Each user's Tally needs its own port (9000, 9001, \u2026).") +
     step(3, connected, "Press Connect here",
@@ -16592,8 +16545,8 @@ function viewBridgeSettings(){
             const pinned = num(c.port) === se.port;
             const comps = se.skipped ? '<span class="note">hidden</span>' : !se.ok ? '<span class="note">' + esc(se.error ? "not answering" : "\u2014") + "</span>" : se.companies.length ? se.companies.map(o => "<b>" + esc(o.name) + "</b>").join("<br>") : '<span class="note">no company open</span>';
             const clients = se.skipped || !se.ok ? "" : se.companies.map(o => { const cl = Bridge.clientFor(o.name); return cl ? esc(cl.name) : '<select data-bridgelink="' + esc(o.name) + '"><option value="">Link to a client\u2026</option>' + sortedCompanies().map(x => '<option value="' + x.id + '">' + esc(x.name) + "</option>").join("") + "</select>"; }).join("<br>");
-            const act = se.skipped ? "" : pinned ? '<span class="tag ok">In use</span> <button class="linkbtn" data-bridgepin="0">Automatic</button>' : se.ok ? '<button class="btn small" data-bridgepin="' + se.port + '">Use this Tally</button>' : "";
-            return "<tr><td>Port " + se.port + "</td><td>" + owner + "</td><td>" + comps + "</td><td>" + clients + "</td><td>" + act + "</td></tr>";
+            const act = se.skipped ? "" : pinned ? '<span class="tag ok">In use</span> <button class="linkbtn" data-bridgepin="0">Automatic</button>' : se.ok ? '<button class="btn small" data-bridgepin="' + esc(se.port) + '">Use this Tally</button>' : "";
+            return "<tr><td>Port " + esc(se.port) + "</td><td>" + owner + "</td><td>" + comps + "</td><td>" + clients + "</td><td>" + act + "</td></tr>";
           }).join("") + "</tbody></table>" : '<p class="note">No TallyPrime found. Start TallyPrime in this Windows session.</p>') +
         (num(c.port) && !st.sessions.some(se => se.port === num(c.port)) ? '<p class="bk-warn">The chosen Tally (port ' + num(c.port) + ') is not running. <button class="linkbtn" data-bridgepin="0">Go back to automatic</button></p>' : "") +
         viewBridgeDiagnosis() +
@@ -17358,10 +17311,10 @@ function invoiceHtml(x, co, cfg){
       (co.gstin ? "<div><b>GSTIN:</b> " + e(co.gstin) + "</div>" : "") + (co.pan || co.gstin ? "<div><b>PAN:</b> " + e(co.pan || String(co.gstin).slice(2, 12)) + "</div>" : "") +
       (home ? "<div><b>State:</b> " + e(GST_STATES[home] || "") + " (" + home + ")</div>" : "") + (cfg.phone ? "<div>Phone: " + e(cfg.phone) + "</div>" : "") + (cfg.email ? "<div>Email: " + e(cfg.email) + "</div>" : "") + "</div>" +
       '<div class="cell w50"><table style="border:0"><tbody>' +
-      [["Invoice No.", x.number], ["Invoice Date", fmtDate(x.date)], ["Place of Supply", x.pos ? (GST_STATES[x.pos] || "") + " (" + x.pos + ")" : ""], ["Reverse Charge", "No"], ["Order / PO Ref.", x.poNo], ["E-way Bill No.", x.ewayNo], ["Credit period", x.dueDays ? x.dueDays + " days" : ""]]
+      [["Invoice No.", x.number], ["Invoice Date", fmtDate(x.date)], ["Place of Supply", x.pos ? (GST_STATES[x.pos] || "") + " (" + e(x.pos) + ")" : ""], ["Reverse Charge", "No"], ["Order / PO Ref.", x.poNo], ["E-way Bill No.", x.ewayNo], ["Credit period", x.dueDays ? x.dueDays + " days" : ""]]
         .filter(r => r[1]).map(r => '<tr><td style="border:0;padding:2px 0" class="muted">' + r[0] + '</td><td style="border:0;padding:2px 0"><b>' + e(r[1]) + "</b></td></tr>").join("") + "</tbody></table></div></div>" +
     '<div class="cell b"><div class="muted">Bill to</div><div style="font-size:13px"><b>' + e(x.customerName) + "</b></div>" + (x.address ? "<div>" + e(x.address).replace(/\n/g, "<br>") + "</div>" : "") +
-      "<div><b>GSTIN:</b> " + (x.customerGstin ? e(x.customerGstin) : "Unregistered") + (x.pos ? " &nbsp; <b>State:</b> " + e(GST_STATES[x.pos] || "") + " (" + x.pos + ")" : "") + "</div></div>" +
+      "<div><b>GSTIN:</b> " + (x.customerGstin ? e(x.customerGstin) : "Unregistered") + (x.pos ? " &nbsp; <b>State:</b> " + e(GST_STATES[x.pos] || "") + " (" + e(x.pos) + ")" : "") + "</div></div>" +
     "<table><thead><tr><th>#</th><th>Description of goods / services</th><th>HSN/SAC</th><th class=\"n\">Qty</th><th>Unit</th><th class=\"n\">Rate</th><th class=\"n\">Disc %</th><th class=\"n\">Taxable value</th><th class=\"n\">GST %</th>" +
       (inter ? '<th class="n">IGST</th>' : '<th class="n">CGST</th><th class="n">SGST</th>') + '<th class="n">Amount</th></tr></thead><tbody>' +
       lines.map((it, i) => { const t = r2(num(it.taxable) * num(it.gstRate) / 100), c = r2(t / 2);
@@ -18036,6 +17989,7 @@ const Cloud = {
     const j = await this.authCall("token?grant_type=password", {email: String(email).trim(), password});
     this.setSess({access_token: j.access_token, refresh_token: j.refresh_token, at: Date.now(), expires_in: j.expires_in || 3600, email: (j.user && j.user.email) || email, user_id: j.user && j.user.id});
     this.setCfg({email: String(email).trim()});
+    if (await this.checkMfa()) return true;      // the code is asked for before anything of the firm is shown
     await this.whoAmI();
     return true;
   },
@@ -18187,8 +18141,25 @@ function stableStr(v){
   if (Array.isArray(v)) return "[" + v.map(stableStr).join(",") + "]";
   return "{" + Object.keys(v).filter(k => v[k] !== undefined).sort().map(k => JSON.stringify(k) + ":" + stableStr(v[k])).join(",") + "}";
 }
+// Records from the cloud are written by other people (firm members, the inbox automation), so the
+// identifiers the screens put into HTML attributes are cleaned on the way in: only letters, digits and _ - . : @
+const SAFE_ID = /^[\w\-.:@]{1,160}$/;
+const ID_KEYS = new Set(["id", "stId", "state", "cls", "kind", "vid", "cid", "client_id", "status", "level", "reg", "pos", "hsn"]);
+function cleanIds(v, depth){
+  if (depth > 12 || !v || typeof v !== "object") return v;
+  if (Array.isArray(v)){ v.forEach(x => cleanIds(x, depth + 1)); return v; }
+  for (const k of Object.keys(v)){
+    const x = v[k];
+    if (ID_KEYS.has(k) && typeof x === "string" && x && !SAFE_ID.test(x)) v[k] = x.replace(/[^\w\-.:@ ,]/g, "").slice(0, 160);
+    else if (x && typeof x === "object") cleanIds(x, depth + 1);
+  }
+  return v;
+}
+function cloudRowOk(r){ return r && SAFE_ID.test(String(r.id || "")) && (!r.client_id || SAFE_ID.test(String(r.client_id))); }
 async function cloudApply(rows){
   const marks = Cloud.marks();
+  rows = [].concat(rows || []).filter(cloudRowOk);
+  rows.forEach(r => { if (r.data) cleanIds(r.data, 0); });
   const touchedBank = new Set(), touchedSales = new Set();
   const mine = new Map(); try { cloudSnapshot().forEach(r => mine.set(cloudKey(r), stableStr(r.data))); } catch (e){}
   for (const r of rows){
@@ -18275,7 +18246,7 @@ async function cloudApplySales(r){
 /* ---------- the sync itself ---------- */
 let cloudTimer = null, cloudBusy = false;
 async function cloudSync(manual){
-  if (!Cloud.on() || cloudBusy) return;
+  if (!Cloud.on() || cloudBusy || Cloud.st.mfa) return;
   if (!Cloud.st.firm){ try { await Cloud.whoAmI(); } catch (e){ Cloud.st.error = e.message; renderTop(); return; } }
   if (!Cloud.st.firm) return;
   cloudBusy = true;
@@ -18300,6 +18271,9 @@ async function cloudSync(manual){
 function startCloudSync(){
   clearInterval(cloudTimer);
   if (!Cloud.on()) return;
+  Cloud.checkMfa().then(m => { if (m) render(); else startCloudSync2(); }, () => startCloudSync2());
+}
+function startCloudSync2(){
   loadAccount(true);
   cloudSync(false);
   cloudTimer = setInterval(() => { if (document.visibilityState === "visible" && Cloud.cfg().auto !== false) cloudSync(false); }, 45000);
@@ -18341,6 +18315,12 @@ function viewCloudSettings(){
   h += '<h3 style="margin:14px 0 4px;font-size:15px">Change password</h3><div class="bk-form two"><label><span>New password (8 characters or more)</span><input type="password" data-cloud="newpw" data-fk="cloudnewpw" autocomplete="new-password"></label>' +
     '<label><span>Repeat it</span><input type="password" data-cloud="newpw2" data-fk="cloudnewpw2" autocomplete="new-password"></label></div>' +
     '<div class="row" style="margin-top:8px"><button class="btn small" data-act="cloudPassword">Change password</button></div>';
+  const aal2 = Cloud.aal() === "aal2", idle = num(lsGet("tdsdesk-test:idlemin")) || IDLE_MIN_DEFAULT;
+  h += '<h3 style="margin:14px 0 4px;font-size:15px">Two-step sign-in</h3><p class="note" style="margin:0 0 6px">' +
+    (aal2 ? '<span class="tag ok">On</span> This sign-in used a code from your authenticator app.' : 'Off. A code from an authenticator app on your phone, as well as the password' + (st.role === "owner" ? " (required for the firm\u2019s owner)." : ".") +
+      ' <button class="btn small" data-act="mfaOptIn">Set it up</button>') + "</p>" +
+    '<label class="f" style="max-width:320px"><span>Sign out after this many minutes without use</span><select data-idlemin aria-label="Sign out after">' +
+    [10, 15, 30, 60, 120].map(n => '<option value="' + n + '"' + (n === idle ? " selected" : "") + ">" + n + " minutes</option>").join("") + "</select></label>";
   if ((st.members || []).length) h += '<h3 style="margin:14px 0 4px;font-size:15px">People in the firm</h3><table class="data"><thead><tr><th>Name</th><th>Email</th><th>Role</th></tr></thead><tbody>' +
     st.members.map(m => "<tr><td>" + esc(m.name || "\u2014") + "</td><td>" + esc(m.email) + "</td><td>" + esc(m.role) + (m.active ? "" : " (off)") + "</td></tr>").join("") + "</tbody></table>";
   return h + "</div>";
@@ -18359,6 +18339,7 @@ Cloud.fn = async function(name, body){
   return j;
 };
 async function loadAccount(quiet){
+  if (Cloud.st.mfa) return null;                 // nothing of the firm before the two-step code
   setTimeout(() => loadDocq(true), 0);
   if (!Cloud.on()) return null;
   try {
@@ -18463,6 +18444,7 @@ function viewPeople(canManage){
   let h = '<h3 style="margin:16px 0 6px;font-size:15px">People in the firm</h3><div class="tblwrap"><table class="data"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th></th></tr></thead><tbody>' +
     (a.people || []).map(p => "<tr><td>" + esc(p.name || "\u2014") + "</td><td>" + esc(p.email) + "</td><td>" + esc(p.role) + (p.active ? "" : " (off)") + "</td>" +
       '<td style="white-space:nowrap">' + (canManage ? '<button class="linkbtn" data-person="reset" data-email="' + esc(p.email) + '">New password</button> ' +
+        '<button class="linkbtn" data-person="mfa" data-email="' + esc(p.email) + '" title="For a lost phone: they set up two-step sign-in again">Reset two-step</button> ' +
         '<button class="linkbtn" data-person="' + (p.active ? "off" : "on") + '" data-email="' + esc(p.email) + '">' + (p.active ? "Switch off" : "Switch on") + "</button>" : "") + "</td></tr>").join("") +
     "</tbody></table></div>";
   if (canManage) h += '<div class="bk-form three" style="margin-top:8px"><label><span>Name</span><input type="text" id="npName"></label>' +
@@ -18560,7 +18542,7 @@ function viewSuperadmin(){
 /* ---------- nothing is shown until someone signs in ---------- */
 function signInNeeded(){
   if (window.claude) return false;                 // inside claude.ai, for trying things out
-  if (Cloud.on()) return false;                    // signed in (works offline once signed in)
+  if (Cloud.on()) return !!Cloud.st.mfa;           // signed in (works offline once signed in), unless the code is still due
   return Cloud.cfg().gate !== false;
 }
 Cloud.signUp = async function(d){
@@ -18586,6 +18568,7 @@ function viewSignUp(){
 }
 function viewSignIn(){
   const c = Cloud.cfg(), st = Cloud.st;
+  if (Cloud.on() && st.mfa) return viewTwoStep();
   if (S.signUpOpen) return viewSignUp();
   return '<div class="signin"><div class="signin-box">' +
     '<h1>TDS Desk</h1>' +
@@ -18878,6 +18861,8 @@ document.addEventListener("click", ev => {
   if (t.dataset.person){
     const email = t.dataset.email, what = t.dataset.person;
     if (what === "reset") Cloud.fn("admin", {action: "reset_password", email}).then(r => { S.newPerson = {email: r.email, password: r.password}; toast("New password made."); render(); }, e => toast(e.message));
+    else if (what === "mfa") askConfirm({title: "Reset two-step sign-in for " + email + "?", ok: "Reset", body: '<p class="note">Their authenticator entry is removed. At the next sign-in they set it up again with their phone. Do this only when you are sure it is them asking.</p>'})
+      .then(a => { if (a) Cloud.fn("admin", {action: "reset_two_step", email}).then(() => toast("Two-step sign-in reset for " + email + "."), e => toast(e.message)); });
     else Cloud.fn("admin", {action: "set_person", email, active: what === "on"}).then(() => { toast(what === "on" ? "Switched on." : "Switched off."); loadAccount(); }, e => toast(e.message));
     return;
   }
@@ -19213,7 +19198,7 @@ document.addEventListener("click", ev => {
       const email = em ? em.value.trim() : "", pass = pw ? pw.value : "";
       if (!email || !pass){ toast("Enter your email and password."); break; }
       Cloud.st.busy = "Signing in\u2026"; Cloud.st.error = ""; render();
-      Cloud.signIn(email, pass).then(() => { Cloud.st.busy = ""; S.cloudForm = null; toast("Signed in as " + email + "."); startCloudSync(); loadAccount(true).then(() => render()); render(); },
+      Cloud.signIn(email, pass).then(() => { Cloud.st.busy = ""; S.cloudForm = null; toast("Signed in as " + email + "."); setTimeout(() => auditEvent("signin", navigator.userAgent.slice(0, 120)), 3000); startCloudSync(); loadAccount(true).then(() => render()); render(); },
         err => { Cloud.st.busy = ""; Cloud.st.error = err.message; render(); });
       break;
     }
@@ -19246,11 +19231,11 @@ document.addEventListener("click", ev => {
       break;
     }
     case "signOutNow": {
-      askConfirm({title: "Sign out of TDS Desk?", ok: "Sign out", body: '<p class="note">You will need your email and password to come back in. Work already synced stays in your firm account.</p>'}).then(a => {
+      const pend = Cloud.on() ? cloudChanges().changes.length : 0;
+      askConfirm({title: "Sign out of TDS Desk?", ok: "Sign out", body: '<p class="note">You will need your email, password' + (Cloud.st.firm ? " and, if set up, the code from your phone" : "") + ' to come back in. Work already synced stays in your firm account.</p>',
+        check: pend ? "" : "Also remove this firm\u2019s work from this computer (for a shared or office computer)"}).then(a => {
         if (!a) return;
-        Cloud.signOut(); clearInterval(cloudTimer); S.account = null; S.adminData = null; S.backups = null; S.settingsTab = null;
-        Cloud.setCfg({gate: true});            // signing out always brings the sign-in screen back
-        S.view = "home"; S.coId = null; toast("Signed out."); render();
+        signOutHere("Signed out.", !!(a.check && !pend));
       });
       break;
     }
@@ -19290,8 +19275,8 @@ document.addEventListener("click", ev => {
       const email = g("npEmail").trim();
       if (!email){ toast("An email address is needed."); break; }
       Cloud.fn("admin", {action: "add_person", email, name: g("npName"), role: g("npRole")}).then(r => {
-        S.newPerson = {email: r.email, password: r.password};
-        toast("Added " + r.email + ".");
+        S.newPerson = r.password ? {email: r.email, password: r.password} : null;
+        toast("Added " + r.email + "." + (r.password ? "" : " " + (r.note || "")));
         loadAccount();
       }, e => toast(e.message));
       break;
@@ -19308,7 +19293,7 @@ document.addEventListener("click", ev => {
     case "cloudSignOut": {
       askConfirm({title: "Sign out of the firm account?", ok: "Sign out", body: "This computer keeps its own copy of everything. Changes made after signing out are not shared until you sign in again."}).then(a => {
         if (!a) return;
-        Cloud.signOut(); clearInterval(cloudTimer); S.account = null; S.adminData = null; toast("Signed out."); render();
+        signOutHere("Signed out.");
       });
       break;
     }
@@ -19651,22 +19636,10 @@ document.addEventListener("click", ev => {
     case "testReader": testReader(); break;
     case "testOcr": testFreeOcr(); break;
     case "testGoogle": testGoogle(); break;
-    case "saveGoogle": {
-      const key = (document.getElementById("gKey").value || "").trim();
-      if (!/^AIza[0-9A-Za-z_\-]{20,}$/.test(key)){ toast("That does not look like a Google API key (it starts with AIza)."); break; }
-      lsSet("tdsdesk-test:gvision", JSON.stringify({key})); S.googleTest = null; toast("Google key saved in this browser."); render(); testGoogle(); break;
-    }
-    case "removeGoogle": try { localStorage.removeItem("tdsdesk-test:gvision"); } catch (err){} S.googleTest = null; toast("Google key removed from this browser."); render(); break;
+    case "saveGoogle": case "removeGoogle": toast("Keys are no longer kept in the browser. Sign in to the firm account to use Google OCR."); break;
     case "askPerm": askPermission(); break;
     case "toggleKey": S.apiKeyShown = !S.apiKeyShown; render(); break;
-    case "saveKey": {
-      const key = (document.getElementById("apiKey").value || "").trim();
-      if (!/^sk-ant-/.test(key)){ toast("That does not look like a Claude API key (it starts with sk-ant-)."); break; }
-      lsSet("tdsdesk-test:api", JSON.stringify({key, model:(document.getElementById("apiModel").value || "").trim() || API_DEFAULTS.model,
-        carefulModel:(document.getElementById("apiCareful").value || "").trim() || API_DEFAULTS.carefulModel}));
-      S.readBlocked = null; pickEngine(); S.testResult = null; toast("Key saved in this browser."); render(); testReader(); break;
-    }
-    case "removeKey": try { localStorage.removeItem("tdsdesk-test:api"); } catch (err){} pickEngine(); S.testResult = null; toast("Key removed from this browser."); render(); break;
+    case "saveKey": case "removeKey": toast("Keys are no longer kept in the browser. Sign in to the firm account to use Claude."); break;
     case "pasteOpen": S.pasteOpen = true; render(); { const b = document.getElementById("pasteBox"); if (b) b.focus(); } break;
     case "pasteClose": S.pasteOpen = false; render(); break;
     case "pasteAdd": addPasted(document.getElementById("pasteBox").value); break;
@@ -20014,7 +19987,7 @@ document.addEventListener("keydown", ev => {
   S.sampleReady = true;
   probeOcr();
   try { const last = JSON.parse(lsGet("tdsdesk-test:selftest") || "null"); if (last && last.results) S.selfTest = {busy: false, results: last.results, finished: last.finished, remembered: true}; } catch (e){}
-  setTimeout(() => { if (typeof dailyGoogleCheck === "function") dailyGoogleCheck(); }, 20000);   // no OCR at start: it loads only when a bill needs it
+  if (wipeStoredKeys()){ pickEngine(); setTimeout(() => toast("For safety, API keys saved in this browser were removed. Sign in to the firm account to use Claude and Google OCR."), 1500); }
   startBridgePolling();
   startCloudSync();
   if (!Cloud.on()) fetch(Cloud.cfg().url.replace(/\/+$/, "") + "/rest/v1/rpc/signup_info", {method: "POST", headers: {apikey: Cloud.cfg().key, "Content-Type": "application/json"}, body: "{}"})
@@ -21100,8 +21073,8 @@ function viewGstRegs(b, regs){
     '<p class="note" style="margin:0 0 8px">The GSTINs of ' + esc((CO() || {}).name || "this client") + " (PAN " + esc(clientPan() || "not set") + "). The GST tab works for these even before any Tally day book is brought in: 2B from the portal or its JSON, and the returns filed.</p>";
   if (regs.length) h += '<div class="bk-tablewrap"><table class="bk-table compact"><thead><tr><th>GSTIN</th><th>State</th><th>Filing type now</th><th>Portal username</th><th>Taken from</th><th></th></tr></thead><tbody>' +
     regs.map(g => { const reg = g.slice(0, 2), src = GSTRegs.source(g, b), only = src.length === 1 && src[0] === "added here", months = GSTR.months();
-      return '<tr><td><b>' + esc(g) + "</b></td><td>" + esc(GSTRegs.state(g)) + "</td><td>" + esc(GSTSet.typeLabel(GSTSet.typeOf(months[months.length - 1] || GSTF.today().slice(0, 7).replace("-", ""), reg))) + "</td><td>" + (GSTSet.peek(reg).portalUser ? esc(GSTSet.peek(reg).portalUser) + ' <button class="linkbtn" data-gsetuser="' + reg + '">change</button>' : '<button class="linkbtn" data-gsetuser="' + reg + '">type it</button>') +
-        "</td><td>" + esc(src.join(", ")) + "</td><td>" + (S.gsetReg === reg ? '<span class="note">settings below</span>' : '<button class="linkbtn" data-gsetpick="' + reg + '">settings</button>') +
+      return '<tr><td><b>' + esc(g) + "</b></td><td>" + esc(GSTRegs.state(g)) + "</td><td>" + esc(GSTSet.typeLabel(GSTSet.typeOf(months[months.length - 1] || GSTF.today().slice(0, 7).replace("-", ""), reg))) + "</td><td>" + (GSTSet.peek(reg).portalUser ? esc(GSTSet.peek(reg).portalUser) + ' <button class="linkbtn" data-gsetuser="' + esc(reg) + '">change</button>' : '<button class="linkbtn" data-gsetuser="' + esc(reg) + '">type it</button>') +
+        "</td><td>" + esc(src.join(", ")) + "</td><td>" + (S.gsetReg === reg ? '<span class="note">settings below</span>' : '<button class="linkbtn" data-gsetpick="' + esc(reg) + '">settings</button>') +
         (only ? ' · <button class="linkbtn" data-gregdel="' + esc(g) + '">remove</button>' : "") + "</td></tr>"; }).join("") + "</tbody></table></div>";
   else h += '<p class="note" style="color:#B9541B">No GSTIN yet. Add the client’s GSTIN below to use the GST tab.</p>';
   h += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px"><input type="text" data-gregnew data-fk="gregnew" data-keeptyped maxlength="15" placeholder="15-character GSTIN" style="width:240px;text-transform:uppercase" autocomplete="off"><button class="btn small primary" data-gregadd>Add GSTIN</button>' +
@@ -21147,22 +21120,22 @@ function viewGstSettings(){
     h += '<section class="dash-card" style="margin-bottom:12px"><h3>Settings of ' + esc(g) + " \u00b7 " + esc(GSTRegs.state(g)) + "</h3>" +
       (regs.length > 1 ? '<p class="note" style="margin:0 0 6px">Each GSTIN keeps its own settings. When one is changed here, TDS Desk asks whether it is for this GSTIN only or for the others too.</p>' : "") +
       '<h4 style="margin:8px 0 4px">Filing type</h4>' +
-      '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><select data-gset="type" data-greg="' + reg + '" style="width:auto">' + GSTSet.TYPES.map(([v, l]) => '<option value="' + v + '"' + (cur === v ? " selected" : "") + ">" + l + "</option>").join("") + "</select>" +
-      '<span class="note">from</span><select data-gset="from" data-greg="' + reg + '" style="width:auto">' + quarters.map(q => '<option value="' + q + '"' + ((S.gsetFrom || {})[reg] === q ? " selected" : "") + ">" + GSTSet.qLabel(q) + "</option>").join("") + "</select>" +
-      '<button class="btn small" data-gsetadd="' + reg + '">Set</button></div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><select data-gset="type" data-greg="' + esc(reg) + '" style="width:auto">' + GSTSet.TYPES.map(([v, l]) => '<option value="' + v + '"' + (cur === v ? " selected" : "") + ">" + l + "</option>").join("") + "</select>" +
+      '<span class="note">from</span><select data-gset="from" data-greg="' + esc(reg) + '" style="width:auto">' + quarters.map(q => '<option value="' + q + '"' + ((S.gsetFrom || {})[reg] === q ? " selected" : "") + ">" + GSTSet.qLabel(q) + "</option>").join("") + "</select>" +
+      '<button class="btn small" data-gsetadd="' + esc(reg) + '">Set</button></div>' +
       (hist.length ? '<p class="note">' + hist.map(x => GSTSet.typeLabel(x.type) + " from " + GSTSet.qLabel(x.from) + ' <button class="linkbtn" data-gsetdel="' + reg + "|" + x.from + '">remove</button>').join("; ") + ". Before the first of these: monthly.</p>" : '<p class="note">Monthly for every month in the books.</p>') +
       '<p class="note">Changing between QRMP and monthly on the portal: ' + "<b>through the GST API: not built yet</b> (the portal\u2019s own preference call); until then change it on the portal and set it here." +
       " For " + GSTSet.qLabel(next) + " the portal accepts the change from " + GSTAmend.dmy(win.from.replace(/-/g, "")) + " to " + GSTAmend.dmy(win.to.replace(/-/g, "")) + ". QRMP needs turnover of \u20b95 crore or less in the year before. Composition is chosen on the portal (CMP-02, CMP-04) and cannot be changed through the API.</p>" +
-      '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px"><label class="note">If QRMP, PMT-06 by <select data-gset="pmt" data-greg="' + reg + '" style="width:auto"><option value="fixed"' + ((st.pmt || "fixed") === "fixed" ? " selected" : "") + '>fixed sum (35% method)</option><option value="self"' + (st.pmt === "self" ? " selected" : "") + ">self-assessment</option></select></label>" +
-      '<label class="note">If composition, rate <select data-gset="comp" data-greg="' + reg + '" style="width:auto">' + Object.entries(GSTQ.RATES).map(([k, x]) => '<option value="' + k + '"' + ((st.comp || "trader") === k ? " selected" : "") + ">" + esc(x.l) + "</option>").join("") + "</select></label></div>" +
-      '<h4 style="margin:12px 0 4px">GST portal username</h4><input type="text" data-gset="puser" data-greg="' + reg + '" data-fk="gset-puser-' + reg + '" data-keeptyped value="' + esc(st.portalUser || "") + '" placeholder="as used to sign in on gst.gov.in" style="width:260px" autocomplete="off"> <span class="note">for the GST API (OTP sign-in). The password is never asked for or kept.</span>' +
-      '<h4 style="margin:12px 0 4px">Credit in 3B table 4</h4><select data-gset="basis" data-greg="' + reg + '" style="width:auto"><option value="2b"' + (basis === "2b" ? " selected" : "") + '>As far as 2B shows it (section 16(2)(aa)) \u2014 the law</option><option value="books"' + (basis === "books" ? " selected" : "") + ">As booked in Tally \u2014 for comparison only</option></select>" +
+      '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px"><label class="note">If QRMP, PMT-06 by <select data-gset="pmt" data-greg="' + esc(reg) + '" style="width:auto"><option value="fixed"' + ((st.pmt || "fixed") === "fixed" ? " selected" : "") + '>fixed sum (35% method)</option><option value="self"' + (st.pmt === "self" ? " selected" : "") + ">self-assessment</option></select></label>" +
+      '<label class="note">If composition, rate <select data-gset="comp" data-greg="' + esc(reg) + '" style="width:auto">' + Object.entries(GSTQ.RATES).map(([k, x]) => '<option value="' + k + '"' + ((st.comp || "trader") === k ? " selected" : "") + ">" + esc(x.l) + "</option>").join("") + "</select></label></div>" +
+      '<h4 style="margin:12px 0 4px">GST portal username</h4><input type="text" data-gset="puser" data-greg="' + esc(reg) + '" data-fk="gset-puser-' + reg + '" data-keeptyped value="' + esc(st.portalUser || "") + '" placeholder="as used to sign in on gst.gov.in" style="width:260px" autocomplete="off"> <span class="note">for the GST API (OTP sign-in). The password is never asked for or kept.</span>' +
+      '<h4 style="margin:12px 0 4px">Credit in 3B table 4</h4><select data-gset="basis" data-greg="' + esc(reg) + '" style="width:auto"><option value="2b"' + (basis === "2b" ? " selected" : "") + '>As far as 2B shows it (section 16(2)(aa)) \u2014 the law</option><option value="books"' + (basis === "books" ? " selected" : "") + ">As booked in Tally \u2014 for comparison only</option></select>" +
       '<h4 style="margin:12px 0 4px">Electronic credit ledger at the start' + (first ? " (" + esc(GSTR.label(first)) + ")" : "") + "</h4>" +
-      '<div style="display:flex;gap:12px;flex-wrap:wrap">' + [["igst", "IGST"], ["cgst", "CGST"], ["sgst", "SGST"], ["cess", "Cess"]].map(([k, l]) => '<label class="note">' + l + ' <input type="number" step="0.01" data-gset="open" data-ghead="' + k + '" data-greg="' + reg + '" data-fk="gset-open-' + reg + k + '" data-keeptyped value="' + (open[k] === undefined || open[k] === "" ? "" : esc(String(open[k]))) + '" style="width:130px"></label>').join("") + "</div>" +
+      '<div style="display:flex;gap:12px;flex-wrap:wrap">' + [["igst", "IGST"], ["cgst", "CGST"], ["sgst", "SGST"], ["cess", "Cess"]].map(([k, l]) => '<label class="note">' + l + ' <input type="number" step="0.01" data-gset="open" data-ghead="' + k + '" data-greg="' + esc(reg) + '" data-fk="gset-open-' + reg + k + '" data-keeptyped value="' + (open[k] === undefined || open[k] === "" ? "" : esc(String(open[k]))) + '" style="width:130px"></label>').join("") + "</div>" +
       '<p class="note">The balance on the portal\u2019s credit ledger before the first month here; later months carry it forward.</p>' +
-      '<h4 style="margin:12px 0 4px">Rule 37</h4><label class="note"><input type="checkbox" data-gset="r37" data-greg="' + reg + '"' + (((b.rule37On || {})[reg]) ? " checked" : "") + "> Reverse credit on bills unpaid 180 days after their date, and reclaim it when paid (off unless switched on)</label>" +
-      '<h4 style="margin:12px 0 4px">E-invoicing</h4><select data-gset="einv" data-greg="' + reg + '" style="width:auto">' + [["auto", "Found from Tally: checked when the books carry IRNs"], ["outside", "Applies, e-invoices made outside Tally"], ["no", "Does not apply"]].map(([v, l]) => '<option value="' + v + '"' + (GSTSet.einvMode(reg) === v ? " selected" : "") + ">" + l + "</option>").join("") + "</select>" +
-      '<h4 style="margin:12px 0 4px">Tally ledger for GST paid in cash</h4><input type="text" data-gset="cash" data-greg="' + reg + '" data-fk="gset-cash-' + reg + '" data-keeptyped value="' + esc(((b.gstCashLedger || {})[reg]) || (reg + " GST ELECTRONIC CASH LEDGER")) + '" style="width:320px"> <span class="note">used in the set-off journal</span>' +
+      '<h4 style="margin:12px 0 4px">Rule 37</h4><label class="note"><input type="checkbox" data-gset="r37" data-greg="' + esc(reg) + '"' + (((b.rule37On || {})[reg]) ? " checked" : "") + "> Reverse credit on bills unpaid 180 days after their date, and reclaim it when paid (off unless switched on)</label>" +
+      '<h4 style="margin:12px 0 4px">E-invoicing</h4><select data-gset="einv" data-greg="' + esc(reg) + '" style="width:auto">' + [["auto", "Found from Tally: checked when the books carry IRNs"], ["outside", "Applies, e-invoices made outside Tally"], ["no", "Does not apply"]].map(([v, l]) => '<option value="' + v + '"' + (GSTSet.einvMode(reg) === v ? " selected" : "") + ">" + l + "</option>").join("") + "</select>" +
+      '<h4 style="margin:12px 0 4px">Tally ledger for GST paid in cash</h4><input type="text" data-gset="cash" data-greg="' + esc(reg) + '" data-fk="gset-cash-' + reg + '" data-keeptyped value="' + esc(((b.gstCashLedger || {})[reg]) || (reg + " GST ELECTRONIC CASH LEDGER")) + '" style="width:320px"> <span class="note">used in the set-off journal</span>' +
       "</section>";
   });
   // the client as a whole
@@ -21231,7 +21204,7 @@ if (typeof document !== "undefined"){
       askConfirm({title: "Remove " + g + "?", ok: "Remove", body: '<p class="note">It goes from this client\u2019s GSTINs. Its settings, 2B and returns filed stay with the books and come back if it is added again.</p>'})
         .then(r => { if (!r) return; GSTRegs.remove(g); saveBooks(); render(); }); return; }
     if (t.dataset.gsetadd){ const reg = t.dataset.gsetadd, months = GSTR.months(), from = (S.gsetFrom || {})[reg] || GSTSet.qStart(months[0] || GSTF.today().slice(0, 7).replace("-", "")),
-        sel = document.querySelector('select[data-gset="type"][data-greg="' + reg + '"]'), type = (S.gsetType || {})[reg] || (sel ? sel.value : "monthly");
+        sel = document.querySelector('select[data-gset="type"][data-greg="' + esc(reg) + '"]'), type = (S.gsetType || {})[reg] || (sel ? sel.value : "monthly");
       gsetApply(reg, GSTSet.typeLabel(type) + " from " + GSTSet.qLabel(from), x => { const st = GSTSet.store(x); st.filing = (st.filing || []).filter(y => y.from !== from).concat([{type, from}]); })
         .then(done => { if (!done) return; GSTR._carry = null; saveBooks(); render(); toast(GSTSet.typeLabel(type) + " from " + GSTSet.qLabel(from) + "."); }); return; }
     if (t.dataset.gsetdel){ const [reg, from] = t.dataset.gsetdel.split("|"), st = GSTSet.store(reg); st.filing = (st.filing || []).filter(x => x.from !== from); saveBooks(); render(); }
@@ -22578,6 +22551,150 @@ document.addEventListener("click", ev => {
   else if (a === "vrExcel") vendorReconExcel().catch(e => toast("Could not make the file: " + (e.message || e)));
   else if (a === "reconExcel") bankReconExcel().catch(e => toast("Could not make the file: " + (e.message || e)));
 });
+/* ================================================================== */
+/* Two-step sign-in (an authenticator-app code) and signing out when  */
+/* nobody has used the page for a while                                */
+/* ================================================================== */
+// The firm owner and the platform administrator must use it; anyone else may turn it on.
+// Until the code is given the server shows nothing of the firm (my_firm() is empty), so this
+// screen is a convenience: the lock itself is on the server.
+Cloud.aal = function(){
+  const s = this.sess();
+  try { return JSON.parse(atob(String(s.access_token).split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).aal || "aal1"; } catch (e){ return "aal1"; }
+};
+Cloud.authApi = async function(path, method, body){
+  const c = this.cfg(), s = this.sess();
+  const r = await fetch(c.url.replace(/\/+$/, "") + "/auth/v1/" + path, {method: method || "GET",
+    headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": "application/json"}, body: body ? JSON.stringify(body) : undefined});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.msg || j.message || j.error_description || ("Request failed (" + r.status + ")"));
+  return j;
+};
+Cloud.factors = async function(){
+  const u = await this.authApi("user");
+  return (u.factors || []).filter(f => f.factor_type === "totp");
+};
+// asks the server whether this sign-in still needs the code; sets st.mfa when it does
+Cloud.checkMfa = async function(){
+  if (!this.on()) { this.st.mfa = null; return null; }
+  let st;
+  try { st = await this.rpc("mfa_status"); }
+  catch (e){ if (/mfa_status|could not find|404/i.test(e.message)) { this.st.mfa = null; return null; } throw e; }   // a server without two-step yet
+  if (!st || st.ok !== false){ this.st.mfa = null; return null; }
+  const list = await this.factors();
+  const good = list.find(f => f.status === "verified");
+  if (good){ this.st.mfa = {need: "code", factorId: good.id}; return this.st.mfa; }
+  this.st.mfa = {need: "enrol", required: true};
+  return this.st.mfa;
+};
+// a new authenticator entry: the QR code and the key to type in by hand
+Cloud.enrolStart = async function(){
+  // an earlier half-finished set-up is dropped first
+  for (const f of await this.factors()) if (f.status !== "verified") { try { await this.authApi("factors/" + f.id, "DELETE"); } catch (e){} }
+  const j = await this.authApi("factors", "POST", {factor_type: "totp", friendly_name: "TDS Desk " + new Date().toISOString().slice(0, 16)});
+  this.st.mfa = Object.assign({}, this.st.mfa || {need: "enrol"}, {factorId: j.id, qr: (j.totp || {}).qr_code || "", secret: (j.totp || {}).secret || ""});
+  return this.st.mfa;
+};
+Cloud.mfaVerify = async function(code){
+  const m = this.st.mfa || {};
+  if (!m.factorId) throw new Error("Start again: no authenticator entry is waiting.");
+  const ch = await this.authApi("factors/" + m.factorId + "/challenge", "POST", {});
+  const j = await this.authApi("factors/" + m.factorId + "/verify", "POST", {challenge_id: ch.id, code: String(code).replace(/\s+/g, "")});
+  const s = this.sess();
+  this.setSess(Object.assign({}, s, {access_token: j.access_token, refresh_token: j.refresh_token || s.refresh_token, at: Date.now(), expires_in: j.expires_in || 3600}));
+  this.st.mfa = null;
+  await this.whoAmI();
+  return true;
+};
+function viewTwoStep(){
+  const m = Cloud.st.mfa || {}, busy = Cloud.st.busy;
+  let h = '<div class="signin"><div class="signin-box"><h1>Two-step sign-in</h1>';
+  if (m.need === "code"){
+    h += '<p class="note" style="margin:8px 0 14px">Open the authenticator app on your phone (Google Authenticator, Microsoft Authenticator or similar) and type the 6-digit code for TDS Desk.</p>';
+  } else if (!m.factorId){
+    h += '<p class="note" style="margin:8px 0 14px">' + (m.required ? "As the firm’s owner or administrator you must" : "You can") +
+      " protect this account with a code from an authenticator app on your phone, as well as the password. Install Google Authenticator or Microsoft Authenticator, then press the button.</p>" +
+      '<div class="row"><button class="btn primary" data-act="mfaStart"' + (busy ? " disabled" : "") + ">Set it up</button></div>";
+  } else {
+    h += '<p class="note" style="margin:8px 0 10px">1. In the authenticator app choose <b>Add</b> → <b>Scan a QR code</b> and scan this.</p>' +
+      (m.qr ? '<p style="text-align:center"><' + 'img alt="QR code for the authenticator app" style="width:190px;height:190px;background:#fff;padding:6px;border-radius:8px" src="' + esc(/^data:image\/svg\+xml|^data:image\/png/.test(m.qr) ? m.qr : "") + '"></p>' : "") +
+      '<p class="note" style="margin:6px 0">Cannot scan? Type this key in the app instead: <code style="user-select:all;word-break:break-all">' + esc(m.secret || "") + "</code></p>" +
+      '<p class="note" style="margin:10px 0 6px">2. Type the 6-digit code the app now shows.</p>';
+  }
+  if (m.need === "code" || m.factorId){
+    h += '<label class="f"><span>Code</span><input type="text" id="mfaCode" data-fk="mfacode" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="123456"></label>' +
+      '<div class="row" style="margin-top:12px"><button class="btn primary" data-act="mfaVerify"' + (busy ? " disabled" : "") + ">" + (busy ? "Checking…" : "Continue") + "</button></div>";
+  }
+  if (Cloud.st.error) h += '<p class="bk-warn" style="margin-top:10px">' + esc(Cloud.st.error) + "</p>";
+  h += '<p class="note" style="margin-top:14px">' + (m.required || m.need === "code" ? "" : '<button class="linkbtn" data-act="mfaCancel">Not now</button> · ') +
+    'Lost your phone? Ask the platform administrator to reset your two-step sign-in. <button class="linkbtn" data-act="mfaSignOut">Sign out</button></p>';
+  return h + "</div></div>";
+}
+async function mfaAction(act){
+  const done = () => { Cloud.st.busy = ""; render(); };
+  if (act === "mfaStart"){
+    Cloud.st.busy = "1"; Cloud.st.error = ""; render();
+    try { await Cloud.enrolStart(); } catch (e){ Cloud.st.error = e.message; }
+    done(); const c = document.getElementById("mfaCode"); if (c) c.focus();
+  } else if (act === "mfaVerify"){
+    const code = ((document.getElementById("mfaCode") || {}).value || "").trim();
+    if (!/^\d{6}$/.test(code.replace(/\s+/g, ""))){ toast("Type the 6-digit code from the app."); return; }
+    Cloud.st.busy = "1"; Cloud.st.error = ""; render();
+    try { await Cloud.mfaVerify(code); toast("Two-step sign-in done."); auditEvent("signin.mfa", ""); startCloudSync(); loadAccount(true).then(() => render()); }
+    catch (e){ Cloud.st.error = /invalid|expired/i.test(e.message) ? "That code did not match. Check the phone’s clock is right and try the newest code." : e.message; }
+    done();
+  } else if (act === "mfaCancel"){ Cloud.st.mfa = null; Cloud.st.error = ""; render(); }
+  else if (act === "mfaSignOut"){ signOutHere("Signed out."); }
+  else if (act === "mfaOptIn"){ Cloud.st.mfa = {need: "enrol", required: false}; render(); }
+}
+document.addEventListener("click", ev => {
+  const t = ev.target.closest && ev.target.closest("[data-act]");
+  if (!t || !/^mfa(Start|Verify|Cancel|SignOut|OptIn)$/.test(t.dataset.act)) return;
+  ev.preventDefault(); ev.stopImmediatePropagation(); mfaAction(t.dataset.act);
+}, true);
+document.addEventListener("keydown", ev => { if (ev.key === "Enter" && ev.target && ev.target.id === "mfaCode"){ ev.preventDefault(); mfaAction("mfaVerify"); } }, true);
+
+/* ---------- the audit trail: what people did, kept by the server, never changed ---------- */
+function auditEvent(what, detail, cid){
+  if (!Cloud.on() || !Cloud.st.firm || Cloud.st.mfa) return;
+  Cloud.api("activity", {method: "POST", headers: {Prefer: "return=minimal"},
+    body: {firm_id: Cloud.st.firm, client_id: String(cid || ""), what: String(what).slice(0, 60), detail: String(detail || "").slice(0, 500)}}).catch(() => {});
+}
+
+/* ---------- signing out: everywhere it happens, and after a quiet spell ---------- */
+function signOutHere(msg, clearLocal){
+  auditEvent("signout", msg || "");
+  const s = Cloud.sess();
+  // tell the server too, so the refresh token cannot be used again
+  if (s && s.access_token){ const c = Cloud.cfg(); fetch(c.url.replace(/\/+$/, "") + "/auth/v1/logout", {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token}}).catch(() => {}); }
+  Cloud.signOut(); clearInterval(cloudTimer); S.account = null; S.adminData = null; S.backups = null; S.settingsTab = null;
+  Cloud.setCfg({gate: true});
+  S.view = "home"; S.coId = null;
+  const after = () => { toast(msg || "Signed out."); render(); };
+  // the page is reloaded after clearing, so nothing of the firm stays in memory either
+  if (clearLocal) clearLocalCopy().then(() => location.reload(), () => location.reload()); else after();
+}
+// removes this firm's copy from this browser (only after everything has reached the firm account)
+async function clearLocalCopy(){
+  try { const d = IDBStore.dbp && await IDBStore.dbp; if (d && d.close) d.close(); IDBStore.dbp = null; } catch (e){}
+  const names = ["tdsdesk", "tdsdesk-bank-test", "tdsdesk-work-test", "tdsdesk-files", "tdsdesk-docs"];
+  try { if (indexedDB.databases) (await indexedDB.databases()).forEach(d => { if (d.name && /^tdsdesk/.test(d.name) && !names.includes(d.name)) names.push(d.name); }); } catch (e){}
+  await Promise.all(names.map(n => new Promise(r => { try { const q = indexedDB.deleteDatabase(n); q.onsuccess = q.onerror = q.onblocked = () => r(); } catch (e){ r(); } })));
+  try { Object.keys(localStorage).filter(k => /^tdsdesk-test:/.test(k) && !/^tdsdesk-test:(cloud|bridge)$/.test(k)).forEach(k => localStorage.removeItem(k)); } catch (e){}
+  S.companies = {}; S.data = {}; S.inbox = {}; S.docq = {};
+}
+const IDLE_MIN_DEFAULT = 30;
+let idleLast = Date.now();
+["pointerdown", "keydown", "wheel", "touchstart"].forEach(e => document.addEventListener(e, () => { idleLast = Date.now(); }, {passive: true, capture: true}));
+setInterval(() => {
+  if (!Cloud.on() || window.claude) return;
+  const mins = num(lsGet("tdsdesk-test:idlemin")) || IDLE_MIN_DEFAULT;
+  if (Date.now() - idleLast > mins * 60000){ idleLast = Date.now(); signOutHere("Signed out after " + mins + " minutes without use. Sign in again to carry on."); }
+}, 30000);
+document.addEventListener("change", ev => {
+  const t = ev.target;
+  if (t && t.matches && t.matches("[data-idlemin]")){ lsSet("tdsdesk-test:idlemin", String(Math.max(5, Math.min(240, num(t.value) || IDLE_MIN_DEFAULT)))); toast("Saved: sign out after " + t.value + " minutes without use."); }
+}, true);
 </script>
 </body>
 </html>

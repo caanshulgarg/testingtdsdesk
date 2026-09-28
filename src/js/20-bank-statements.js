@@ -391,7 +391,7 @@ async function parsePdfStatement(file){
   await ensurePdfJs();
   if (!window.pdfjsLib) throw {code: "pdf_unavailable"};
   let pdf;
-  try { pdf = await pdfjsLib.getDocument({data: new Uint8Array(await file.arrayBuffer())}).promise; }
+  try { pdf = await openPdfDoc(new Uint8Array(await file.arrayBuffer())); }
   catch (e){ throw {code: /password/i.test(String(e && (e.name || e.message))) ? "pdf_password" : "pdf_broken"}; }
   let cols = null, textChars = 0, lastRow = null;
   const allRows = [], metaLines = [];
@@ -641,7 +641,7 @@ async function statementImages(file, onPage){
   await ensurePdfJs();
   const canvases = [];
   if (isPdf(file)){
-    const pdf = await pdfjsLib.getDocument({data: new Uint8Array(await file.arrayBuffer())}).promise;
+    const pdf = await openPdfDoc(new Uint8Array(await file.arrayBuffer()));
     for (let p = 1; p <= Math.min(pdf.numPages, 60); p++){
       const page = await pdf.getPage(p);
       const vp0 = page.getViewport({scale: 1});

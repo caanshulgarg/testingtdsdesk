@@ -40,5 +40,6 @@
  "39-gst-api.js",
  "40-support.js",
  "41-books-sync.js",
- "42-vendor-recon.js"
+ "42-vendor-recon.js",
+ "43-two-step.js"
 ]

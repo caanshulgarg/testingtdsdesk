@@ -26,6 +26,7 @@ const Cloud = {
     const j = await this.authCall("token?grant_type=password", {email: String(email).trim(), password});
     this.setSess({access_token: j.access_token, refresh_token: j.refresh_token, at: Date.now(), expires_in: j.expires_in || 3600, email: (j.user && j.user.email) || email, user_id: j.user && j.user.id});
     this.setCfg({email: String(email).trim()});
+    if (await this.checkMfa()) return true;      // the code is asked for before anything of the firm is shown
     await this.whoAmI();
     return true;
   },
@@ -177,8 +178,25 @@ function stableStr(v){
   if (Array.isArray(v)) return "[" + v.map(stableStr).join(",") + "]";
   return "{" + Object.keys(v).filter(k => v[k] !== undefined).sort().map(k => JSON.stringify(k) + ":" + stableStr(v[k])).join(",") + "}";
 }
+// Records from the cloud are written by other people (firm members, the inbox automation), so the
+// identifiers the screens put into HTML attributes are cleaned on the way in: only letters, digits and _ - . : @
+const SAFE_ID = /^[\w\-.:@]{1,160}$/;
+const ID_KEYS = new Set(["id", "stId", "state", "cls", "kind", "vid", "cid", "client_id", "status", "level", "reg", "pos", "hsn"]);
+function cleanIds(v, depth){
+  if (depth > 12 || !v || typeof v !== "object") return v;
+  if (Array.isArray(v)){ v.forEach(x => cleanIds(x, depth + 1)); return v; }
+  for (const k of Object.keys(v)){
+    const x = v[k];
+    if (ID_KEYS.has(k) && typeof x === "string" && x && !SAFE_ID.test(x)) v[k] = x.replace(/[^\w\-.:@ ,]/g, "").slice(0, 160);
+    else if (x && typeof x === "object") cleanIds(x, depth + 1);
+  }
+  return v;
+}
+function cloudRowOk(r){ return r && SAFE_ID.test(String(r.id || "")) && (!r.client_id || SAFE_ID.test(String(r.client_id))); }
 async function cloudApply(rows){
   const marks = Cloud.marks();
+  rows = [].concat(rows || []).filter(cloudRowOk);
+  rows.forEach(r => { if (r.data) cleanIds(r.data, 0); });
   const touchedBank = new Set(), touchedSales = new Set();
   const mine = new Map(); try { cloudSnapshot().forEach(r => mine.set(cloudKey(r), stableStr(r.data))); } catch (e){}
   for (const r of rows){
@@ -265,7 +283,7 @@ async function cloudApplySales(r){
 /* ---------- the sync itself ---------- */
 let cloudTimer = null, cloudBusy = false;
 async function cloudSync(manual){
-  if (!Cloud.on() || cloudBusy) return;
+  if (!Cloud.on() || cloudBusy || Cloud.st.mfa) return;
   if (!Cloud.st.firm){ try { await Cloud.whoAmI(); } catch (e){ Cloud.st.error = e.message; renderTop(); return; } }
   if (!Cloud.st.firm) return;
   cloudBusy = true;
@@ -290,6 +308,9 @@ async function cloudSync(manual){
 function startCloudSync(){
   clearInterval(cloudTimer);
   if (!Cloud.on()) return;
+  Cloud.checkMfa().then(m => { if (m) render(); else startCloudSync2(); }, () => startCloudSync2());
+}
+function startCloudSync2(){
   loadAccount(true);
   cloudSync(false);
   cloudTimer = setInterval(() => { if (document.visibilityState === "visible" && Cloud.cfg().auto !== false) cloudSync(false); }, 45000);
@@ -331,6 +352,12 @@ function viewCloudSettings(){
   h += '<h3 style="margin:14px 0 4px;font-size:15px">Change password</h3><div class="bk-form two"><label><span>New password (8 characters or more)</span><input type="password" data-cloud="newpw" data-fk="cloudnewpw" autocomplete="new-password"></label>' +
     '<label><span>Repeat it</span><input type="password" data-cloud="newpw2" data-fk="cloudnewpw2" autocomplete="new-password"></label></div>' +
     '<div class="row" style="margin-top:8px"><button class="btn small" data-act="cloudPassword">Change password</button></div>';
+  const aal2 = Cloud.aal() === "aal2", idle = num(lsGet("tdsdesk:idlemin")) || IDLE_MIN_DEFAULT;
+  h += '<h3 style="margin:14px 0 4px;font-size:15px">Two-step sign-in</h3><p class="note" style="margin:0 0 6px">' +
+    (aal2 ? '<span class="tag ok">On</span> This sign-in used a code from your authenticator app.' : 'Off. A code from an authenticator app on your phone, as well as the password' + (st.role === "owner" ? " (required for the firm\u2019s owner)." : ".") +
+      ' <button class="btn small" data-act="mfaOptIn">Set it up</button>') + "</p>" +
+    '<label class="f" style="max-width:320px"><span>Sign out after this many minutes without use</span><select data-idlemin aria-label="Sign out after">' +
+    [10, 15, 30, 60, 120].map(n => '<option value="' + n + '"' + (n === idle ? " selected" : "") + ">" + n + " minutes</option>").join("") + "</select></label>";
   if ((st.members || []).length) h += '<h3 style="margin:14px 0 4px;font-size:15px">People in the firm</h3><table class="data"><thead><tr><th>Name</th><th>Email</th><th>Role</th></tr></thead><tbody>' +
     st.members.map(m => "<tr><td>" + esc(m.name || "\u2014") + "</td><td>" + esc(m.email) + "</td><td>" + esc(m.role) + (m.active ? "" : " (off)") + "</td></tr>").join("") + "</tbody></table>";
   return h + "</div>";
@@ -349,6 +376,7 @@ Cloud.fn = async function(name, body){
   return j;
 };
 async function loadAccount(quiet){
+  if (Cloud.st.mfa) return null;                 // nothing of the firm before the two-step code
   setTimeout(() => loadDocq(true), 0);
   if (!Cloud.on()) return null;
   try {
@@ -453,6 +481,7 @@ function viewPeople(canManage){
   let h = '<h3 style="margin:16px 0 6px;font-size:15px">People in the firm</h3><div class="tblwrap"><table class="data"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th></th></tr></thead><tbody>' +
     (a.people || []).map(p => "<tr><td>" + esc(p.name || "\u2014") + "</td><td>" + esc(p.email) + "</td><td>" + esc(p.role) + (p.active ? "" : " (off)") + "</td>" +
       '<td style="white-space:nowrap">' + (canManage ? '<button class="linkbtn" data-person="reset" data-email="' + esc(p.email) + '">New password</button> ' +
+        '<button class="linkbtn" data-person="mfa" data-email="' + esc(p.email) + '" title="For a lost phone: they set up two-step sign-in again">Reset two-step</button> ' +
         '<button class="linkbtn" data-person="' + (p.active ? "off" : "on") + '" data-email="' + esc(p.email) + '">' + (p.active ? "Switch off" : "Switch on") + "</button>" : "") + "</td></tr>").join("") +
     "</tbody></table></div>";
   if (canManage) h += '<div class="bk-form three" style="margin-top:8px"><label><span>Name</span><input type="text" id="npName"></label>' +
@@ -550,7 +579,7 @@ function viewSuperadmin(){
 /* ---------- nothing is shown until someone signs in ---------- */
 function signInNeeded(){
   if (window.claude) return false;                 // inside claude.ai, for trying things out
-  if (Cloud.on()) return false;                    // signed in (works offline once signed in)
+  if (Cloud.on()) return !!Cloud.st.mfa;           // signed in (works offline once signed in), unless the code is still due
   return Cloud.cfg().gate !== false;
 }
 Cloud.signUp = async function(d){
@@ -576,6 +605,7 @@ function viewSignUp(){
 }
 function viewSignIn(){
   const c = Cloud.cfg(), st = Cloud.st;
+  if (Cloud.on() && st.mfa) return viewTwoStep();
   if (S.signUpOpen) return viewSignUp();
   return '<div class="signin"><div class="signin-box">' +
     '<h1>TDS Desk</h1>' +
@@ -868,6 +898,8 @@ document.addEventListener("click", ev => {
   if (t.dataset.person){
     const email = t.dataset.email, what = t.dataset.person;
     if (what === "reset") Cloud.fn("admin", {action: "reset_password", email}).then(r => { S.newPerson = {email: r.email, password: r.password}; toast("New password made."); render(); }, e => toast(e.message));
+    else if (what === "mfa") askConfirm({title: "Reset two-step sign-in for " + email + "?", ok: "Reset", body: '<p class="note">Their authenticator entry is removed. At the next sign-in they set it up again with their phone. Do this only when you are sure it is them asking.</p>'})
+      .then(a => { if (a) Cloud.fn("admin", {action: "reset_two_step", email}).then(() => toast("Two-step sign-in reset for " + email + "."), e => toast(e.message)); });
     else Cloud.fn("admin", {action: "set_person", email, active: what === "on"}).then(() => { toast(what === "on" ? "Switched on." : "Switched off."); loadAccount(); }, e => toast(e.message));
     return;
   }
@@ -1203,7 +1235,7 @@ document.addEventListener("click", ev => {
       const email = em ? em.value.trim() : "", pass = pw ? pw.value : "";
       if (!email || !pass){ toast("Enter your email and password."); break; }
       Cloud.st.busy = "Signing in\u2026"; Cloud.st.error = ""; render();
-      Cloud.signIn(email, pass).then(() => { Cloud.st.busy = ""; S.cloudForm = null; toast("Signed in as " + email + "."); startCloudSync(); loadAccount(true).then(() => render()); render(); },
+      Cloud.signIn(email, pass).then(() => { Cloud.st.busy = ""; S.cloudForm = null; toast("Signed in as " + email + "."); setTimeout(() => auditEvent("signin", navigator.userAgent.slice(0, 120)), 3000); startCloudSync(); loadAccount(true).then(() => render()); render(); },
         err => { Cloud.st.busy = ""; Cloud.st.error = err.message; render(); });
       break;
     }
@@ -1236,11 +1268,11 @@ document.addEventListener("click", ev => {
       break;
     }
     case "signOutNow": {
-      askConfirm({title: "Sign out of TDS Desk?", ok: "Sign out", body: '<p class="note">You will need your email and password to come back in. Work already synced stays in your firm account.</p>'}).then(a => {
+      const pend = Cloud.on() ? cloudChanges().changes.length : 0;
+      askConfirm({title: "Sign out of TDS Desk?", ok: "Sign out", body: '<p class="note">You will need your email, password' + (Cloud.st.firm ? " and, if set up, the code from your phone" : "") + ' to come back in. Work already synced stays in your firm account.</p>',
+        check: pend ? "" : "Also remove this firm\u2019s work from this computer (for a shared or office computer)"}).then(a => {
         if (!a) return;
-        Cloud.signOut(); clearInterval(cloudTimer); S.account = null; S.adminData = null; S.backups = null; S.settingsTab = null;
-        Cloud.setCfg({gate: true});            // signing out always brings the sign-in screen back
-        S.view = "home"; S.coId = null; toast("Signed out."); render();
+        signOutHere("Signed out.", !!(a.check && !pend));
       });
       break;
     }
@@ -1280,8 +1312,8 @@ document.addEventListener("click", ev => {
       const email = g("npEmail").trim();
       if (!email){ toast("An email address is needed."); break; }
       Cloud.fn("admin", {action: "add_person", email, name: g("npName"), role: g("npRole")}).then(r => {
-        S.newPerson = {email: r.email, password: r.password};
-        toast("Added " + r.email + ".");
+        S.newPerson = r.password ? {email: r.email, password: r.password} : null;
+        toast("Added " + r.email + "." + (r.password ? "" : " " + (r.note || "")));
         loadAccount();
       }, e => toast(e.message));
       break;
@@ -1298,7 +1330,7 @@ document.addEventListener("click", ev => {
     case "cloudSignOut": {
       askConfirm({title: "Sign out of the firm account?", ok: "Sign out", body: "This computer keeps its own copy of everything. Changes made after signing out are not shared until you sign in again."}).then(a => {
         if (!a) return;
-        Cloud.signOut(); clearInterval(cloudTimer); S.account = null; S.adminData = null; toast("Signed out."); render();
+        signOutHere("Signed out.");
       });
       break;
     }
@@ -1641,22 +1673,10 @@ document.addEventListener("click", ev => {
     case "testReader": testReader(); break;
     case "testOcr": testFreeOcr(); break;
     case "testGoogle": testGoogle(); break;
-    case "saveGoogle": {
-      const key = (document.getElementById("gKey").value || "").trim();
-      if (!/^AIza[0-9A-Za-z_\-]{20,}$/.test(key)){ toast("That does not look like a Google API key (it starts with AIza)."); break; }
-      lsSet("tdsdesk:gvision", JSON.stringify({key})); S.googleTest = null; toast("Google key saved in this browser."); render(); testGoogle(); break;
-    }
-    case "removeGoogle": try { localStorage.removeItem("tdsdesk:gvision"); } catch (err){} S.googleTest = null; toast("Google key removed from this browser."); render(); break;
+    case "saveGoogle": case "removeGoogle": toast("Keys are no longer kept in the browser. Sign in to the firm account to use Google OCR."); break;
     case "askPerm": askPermission(); break;
     case "toggleKey": S.apiKeyShown = !S.apiKeyShown; render(); break;
-    case "saveKey": {
-      const key = (document.getElementById("apiKey").value || "").trim();
-      if (!/^sk-ant-/.test(key)){ toast("That does not look like a Claude API key (it starts with sk-ant-)."); break; }
-      lsSet("tdsdesk:api", JSON.stringify({key, model:(document.getElementById("apiModel").value || "").trim() || API_DEFAULTS.model,
-        carefulModel:(document.getElementById("apiCareful").value || "").trim() || API_DEFAULTS.carefulModel}));
-      S.readBlocked = null; pickEngine(); S.testResult = null; toast("Key saved in this browser."); render(); testReader(); break;
-    }
-    case "removeKey": try { localStorage.removeItem("tdsdesk:api"); } catch (err){} pickEngine(); S.testResult = null; toast("Key removed from this browser."); render(); break;
+    case "saveKey": case "removeKey": toast("Keys are no longer kept in the browser. Sign in to the firm account to use Claude."); break;
     case "pasteOpen": S.pasteOpen = true; render(); { const b = document.getElementById("pasteBox"); if (b) b.focus(); } break;
     case "pasteClose": S.pasteOpen = false; render(); break;
     case "pasteAdd": addPasted(document.getElementById("pasteBox").value); break;
@@ -2004,7 +2024,7 @@ document.addEventListener("keydown", ev => {
   S.sampleReady = true;
   probeOcr();
   try { const last = JSON.parse(lsGet("tdsdesk:selftest") || "null"); if (last && last.results) S.selfTest = {busy: false, results: last.results, finished: last.finished, remembered: true}; } catch (e){}
-  setTimeout(() => { if (typeof dailyGoogleCheck === "function") dailyGoogleCheck(); }, 20000);   // no OCR at start: it loads only when a bill needs it
+  if (wipeStoredKeys()){ pickEngine(); setTimeout(() => toast("For safety, API keys saved in this browser were removed. Sign in to the firm account to use Claude and Google OCR."), 1500); }
   startBridgePolling();
   startCloudSync();
   if (!Cloud.on()) fetch(Cloud.cfg().url.replace(/\/+$/, "") + "/rest/v1/rpc/signup_info", {method: "POST", headers: {apikey: Cloud.cfg().key, "Content-Type": "application/json"}, body: "{}"})

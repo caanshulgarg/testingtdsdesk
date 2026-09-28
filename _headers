@@ -1,0 +1,13 @@
+# Security headers for hosts that read a _headers file (Cloudflare Pages, Netlify).
+# GitHub Pages ignores this file; there the page carries the same policy as a <meta> tag (added by build.py),
+# except frame-ancestors, which only works as a header.
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: no-referrer
+  Permissions-Policy: camera=(self), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Cross-Origin-Opener-Policy: same-origin
+  Content-Security-Policy: frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'
+/assets/*
+  Cache-Control: public, max-age=86400

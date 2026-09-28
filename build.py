@@ -59,10 +59,39 @@ def to_test(html):
     if "nrtczucrlgalvtojwoes" in t: sys.exit("the test build still names the live database")
     return t
 
+# Content Security Policy, as a meta tag (GitHub Pages cannot send headers; _headers carries the same for hosts that can).
+# Only this site's own scripts run: each inline script is allowed by its SHA-256 hash, computed here after all other changes.
+CSP = ("default-src 'self'; script-src 'self' {hashes} 'wasm-unsafe-eval'; "
+       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; "
+       "img-src 'self' data: blob:; media-src 'self' data: blob:; "
+       "connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co http://127.0.0.1:* http://localhost:*; "
+       "worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'")
+def assemble_js_only(html):
+    return "".join(m.group(1) for m in re.finditer(r"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>", html, re.S))
+def csp_policy(html):
+    import hashlib, base64
+    hashes = []
+    for m in re.finditer(r"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>", html, re.S):
+        h = "'sha256-" + base64.b64encode(hashlib.sha256(m.group(1).encode("utf-8")).digest()).decode() + "'"
+        if h not in hashes: hashes.append(h)
+    return CSP.format(hashes=" ".join(hashes))
+def add_csp(html):
+    # With a CSP meta tag Chrome's preload scanner reads "<img ... src=" inside the inline script and fetches junk
+    # addresses, so the program writes "<" + "img" instead; stop the build if one slips back in.
+    if re.search(r"<img\b", assemble_js_only(html)): sys.exit("write '<' + 'img' in program strings, not a literal <img (see add_csp)")
+    if 'http-equiv="Content-Security-Policy"' in html: sys.exit("src/shell.html must not carry its own CSP; build.py adds it")
+    # at the end of <head>: placed first, Chrome's preload scanner misreads the big inline script and fetches junk URLs
+    meta = '<meta http-equiv="Content-Security-Policy" content="' + csp_policy(html) + '">\n'
+    i = html.index('<meta charset="utf-8">') + len('<meta charset="utf-8">\n')
+    html = html[:i] + '<meta name="referrer" content="no-referrer">\n' + html[i:]
+    j = html.index("</head>")
+    return html[:j] + meta + html[j:]
+
 def main():
     html = assemble()
     live_checks(html)
-    test = to_test(html)
+    test = add_csp(to_test(html))
+    html = add_csp(html)
     import shutil
     for d, h in [("site", html), ("site-test", test)]:
         os.makedirs(os.path.join(ROOT, d), exist_ok=True)

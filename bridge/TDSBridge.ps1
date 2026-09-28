@@ -26,7 +26,7 @@ trap {
   try { Stop-Transcript | Out-Null } catch { }
   break
 }
-$BridgeVersion = '1.12.6'
+$BridgeVersion = '1.12.7'
 
 # ------------------------------------------------------------------ settings
 function New-BridgeKey {
@@ -74,10 +74,26 @@ if (-not $defaults.Key) { $defaults.Key = New-BridgeKey; $needSave = $true }
 if ($needSave) { try { ($defaults | ConvertTo-Json) | Set-Content -Path $ConfigPath -Encoding UTF8 } catch { } }
 $Cfg = [pscustomobject]$defaults
 
+function Protect-LogText([string]$msg) {
+  # anything that looks like a key, token, password or connect code is masked before it is shown or written
+  $m = $msg -replace '(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+', 'Bearer ***'
+  $m = $m -replace '(?i)\b(key|token|password|passwd|secret|code|authorization|x-tds-key)("?\s*[:=]\s*"?)[^\s",;&<]+', '$1$2***'
+  $m = $m -replace '\btdsd_[0-9a-f]{16,}\b', 'tdsd_***'
+  if ($Cfg -and $Cfg.Key -and $Cfg.Key.Length -ge 8) { $m = $m.Replace([string]$Cfg.Key, '***') }
+  return $m
+}
 function Write-Log([string]$msg) {
-  $line = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + '  ' + $msg
+  $line = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + '  ' + (Protect-LogText $msg)
   Write-Host $line
-  try { Add-Content -Path $Cfg.LogFile -Value $line -Encoding UTF8 } catch { }
+  try {
+    $f = $Cfg.LogFile
+    if ((Test-Path $f) -and ((Get-Item $f).Length -gt 5MB)) {
+      # rotation of the bridge's own log: tds-bridge.log.1 is the newest old copy, .5 the oldest (dropped at the next turn)
+      for ($i = 4; $i -ge 1; $i--) { if (Test-Path ($f + '.' + $i)) { Move-Item ($f + '.' + $i) ($f + '.' + ($i + 1)) -Force } }
+      Move-Item $f ($f + '.1') -Force
+    }
+    Add-Content -Path $f -Value $line -Encoding UTF8
+  } catch { }
 }
 
 # ------------------------------------------------------------------ talking to Tally
