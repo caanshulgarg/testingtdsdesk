@@ -26,7 +26,7 @@ trap {
   try { Stop-Transcript | Out-Null } catch { }
   break
 }
-$BridgeVersion = '1.12.10'
+$BridgeVersion = '1.12.11'
 
 # ------------------------------------------------------------------ settings
 function New-BridgeKey {
@@ -54,7 +54,7 @@ $defaults = [ordered]@{
   AllowImport     = $true
   SyncDir         = ''
   SyncCompanies   = @()
-  AllowedOrigins  = @('https://caanshulgarg.github.io', 'http://localhost', 'null')
+  AllowedOrigins  = @('https://app.fincom.live', 'https://staging.fincom.live', 'https://caanshulgarg.github.io', 'http://localhost', 'null')
 }
 $needSave = $false
 if (Test-Path $ConfigPath) {
@@ -812,6 +812,8 @@ function Send-Response($stream, [int]$status, [string]$body, [string]$origin) {
 # the pages allowed to talk to the bridge: FinCom's own addresses (settings: AllowedOrigins); 'http://localhost' allows any port
 function Test-AllowedOrigin([string]$o) {
   if (-not $o) { return $true }
+  # 1.12.11: FinCom's own addresses are always allowed, also with a settings file saved by an older bridge
+  foreach ($a in @('https://app.fincom.live', 'https://staging.fincom.live', 'https://fincom.live', 'https://caanshulgarg.github.io')) { if ($o -eq $a) { return $true } }
   foreach ($a in @($Cfg.AllowedOrigins)) {
     $a = [string]$a
     if ($o -eq $a) { return $true }

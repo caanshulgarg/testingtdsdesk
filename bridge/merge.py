@@ -6,7 +6,7 @@ def R(a, b):
     assert base.count(a) == 1, ('anchor', a[:60], base.count(a))
     base = base.replace(a, b)
 import re
-base = re.sub(r"\$BridgeVersion = '[0-9.]+'", "$BridgeVersion = '1.12.10'", base, 1)
+base = re.sub(r"\$BridgeVersion = '[0-9.]+'", "$BridgeVersion = '1.12.11'", base, 1)
 # 1.12.7 (security): the log never holds keys, codes or passwords, and is rotated at 5 MB keeping 5 old copies
 R(r"""function Write-Log([string]$msg) {
   $line = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + '  ' + $msg
@@ -39,7 +39,7 @@ def RA(a, b, n):
     base = base.replace(a, b)
 R("param(\n  [string]$ConfigPath = (Join-Path $PSScriptRoot 'tds-bridge.config.json')\n)",
   "param(\n  [string]$ConfigPath = (Join-Path $PSScriptRoot 'tds-bridge.config.json'),\n  [switch]$Sync,\n  [string]$Job = ''\n)")
-R("  AllowImport     = $true\n}", "  AllowImport     = $true\n  SyncDir         = ''\n  SyncCompanies   = @()\n  AllowedOrigins  = @('https://caanshulgarg.github.io', 'http://localhost', 'null')\n}")
+R("  AllowImport     = $true\n}", "  AllowImport     = $true\n  SyncDir         = ''\n  SyncCompanies   = @()\n  AllowedOrigins  = @('https://app.fincom.live', 'https://staging.fincom.live', 'https://caanshulgarg.github.io', 'http://localhost', 'null')\n}")
 R("# ------------------------------------------------------------------ start\n", add + "\n# the nightly copy runs on its own and stops; it does not start the bridge\n# a posting job runs on its own, reports to its folder and stops\nif ($Job) {\n  try { Invoke-JobWorker $Job } catch { Write-Log ('Posting job stopped: ' + $_.Exception.Message) }\n  exit 0\n}\nif ($Sync) {\n  $r = Invoke-NightlySync\n  Write-Host ('Nightly copy: ' + @($r.done).Count + ' done, ' + @($r.failed).Count + ' failed.')\n  try { Stop-Transcript | Out-Null } catch { }\n  exit 0\n}\n\n# ------------------------------------------------------------------ start\n")
 R("      '/vouchers' {", """      '/daybook' { $xml = Get-DayBookXml $qs['company'] $qs['from'] $qs['to'] ([int]('0' + $qs['port'])); Send-Raw $stream 200 $xml $origin; return }
       '/balances' { $result = Get-Balances $qs['company'] $qs['from'] $qs['to'] ([int]('0' + $qs['port'])) }
@@ -131,6 +131,8 @@ Write-Host ('  To connect TDS Desk: press Connect there and type the code  ' + $
 R("function ConvertTo-JsonText($obj) {", """# the pages allowed to talk to the bridge: TDS Desk's own addresses (settings: AllowedOrigins); 'http://localhost' allows any port
 function Test-AllowedOrigin([string]$o) {
   if (-not $o) { return $true }
+  # 1.12.11: FinCom's own addresses are always allowed, also with a settings file saved by an older bridge
+  foreach ($a in @('https://app.fincom.live', 'https://staging.fincom.live', 'https://fincom.live', 'https://caanshulgarg.github.io')) { if ($o -eq $a) { return $true } }
   foreach ($a in @($Cfg.AllowedOrigins)) {
     $a = [string]$a
     if ($o -eq $a) { return $true }

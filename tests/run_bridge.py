@@ -14,6 +14,8 @@ srv = fake_tally.start()
 os.environ["TDSBRIDGE_FAKE"] = _os.path.join(BRUN, "fake.json")
 for f in ["tds-bridge.config.json"]:
     if _os.path.exists(_os.path.join(BRUN, f)): os.remove(_os.path.join(BRUN, f))
+# a settings file saved by an older bridge, which only knew the github.io address (1.12.11 still allows fincom.live)
+json.dump({"AllowedOrigins": ["https://caanshulgarg.github.io", "http://localhost", "null"]}, open(_os.path.join(BRUN, "tds-bridge.config.json"), "w"))
 p = subprocess.Popen([_os.environ.get("PWSH", "/opt/pwsh/pwsh"), "-NoProfile", "-File", _os.path.join(BRUN, "TDSBridge.ps1")], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=BRUN)
 import threading
 OUT_LINES = []
@@ -33,7 +35,7 @@ try:
         r = urllib.request.urlopen(req, timeout=t); d = r.read().decode("utf-8")
         return (d, r.headers.get("Content-Type")) if raw else json.loads(d)
     ping = json.loads(urllib.request.urlopen("http://127.0.0.1:9100/ping").read())
-    ok(ping["version"] == "1.12.10", "bridge 1.12.10 answers")
+    ok(ping["version"] == "1.12.11", "bridge 1.12.11 answers")
     # connecting: only FinCom's own pages, and only with the code shown in the bridge window
     def raw(path, origin=None, key=None):
         h = {}
@@ -57,6 +59,11 @@ try:
     ok(st_ == 403 and "Access-Control-Allow-Origin" not in hd, "another web page is refused even with the key")
     st_, hd, j = raw("/companies", origin="http://localhost:8150", key=key)
     ok(st_ == 200 and hd.get("Access-Control-Allow-Origin") == "http://localhost:8150", "FinCom run from this computer (localhost) is answered")
+    for o in ("https://app.fincom.live", "https://staging.fincom.live"):
+        st_, hd, j = raw("/companies", origin=o, key=key)
+        ok(st_ == 200 and hd.get("Access-Control-Allow-Origin") == o, "FinCom at " + o + " is answered")
+    st_, hd, j = raw("/companies", origin="https://app.fincom.live.evil.example", key=key)
+    ok(st_ == 403, "a look-alike address is refused")
     co = urllib.parse.quote(fake_tally.COMPANY)
     st = get("/companies"); ok(any(c["name"] == fake_tally.COMPANY for c in st["companies"]), "company seen in the stand-in Tally")
     t0 = time.time(); x, ct = get("/daybook?company=%s&from=20250601&to=20250630" % co, raw=True)
