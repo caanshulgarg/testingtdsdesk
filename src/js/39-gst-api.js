@@ -3,10 +3,11 @@
 /* portal through TaxPro GSP, by the firm's own server function      */
 /* ================================================================== */
 // The TaxPro ASP password stays in the firm's Supabase project (function gst-taxpro; TaxPro's Decrypted API does GSTN's
-// encryption). The taxpayer's auth token is kept only in this tab's memory: never saved, gone when the tab is closed or
-// the portal's session ends.
+// encryption). The taxpayer's portal session is kept by that function, encrypted, and renewed in the background, so one
+// OTP lasts the taxpayer's API access period (up to 30 days) for every user of the firm. This tab only knows until when
+// each GSTIN is connected, never the token.
 const GSTAPI = {
-  sess: {},
+  sess: {}, seen: {},
   on(){ return typeof Cloud === "object" && Cloud.on() && !!S.account; },
   url(){ return String(Cloud.cfg().url || "").replace(/\/+$/, "") + "/functions/v1/gst-taxpro"; },
   async call(body, retry){
@@ -21,7 +22,14 @@ const GSTAPI = {
   ready(ym){ const nx = GSTR.nextYm(ym), t = GSTF.today(); return t.slice(0, 7).replace("-", "") > nx || (t.slice(0, 7).replace("-", "") === nx && +t.slice(8, 10) >= 14); },
   gstinOf(reg){ return ((GSTR.gstins(S.books)) || []).find(g => g.slice(0, 2) === reg) || ""; },
   user(reg){ return (typeof GSTSet === "object" ? GSTSet.peek(reg).portalUser : "") || ""; },
-  live(gstin){ const x = this.sess[gstin]; return x && x.auth_token && x.until > Date.now() ? x : null; },
+  live(gstin){ const x = this.sess[gstin]; return x && x.connectedAt && !x.error && x.until > Date.now() ? x : null; },
+  // what the server keeps for this GSTIN: asked again at most every 10 minutes (the server renews in the background)
+  async status(gstin){
+    this.seen[gstin] = Date.now();
+    const j = await this.call({action: "status", gstins: [gstin]}), x = (j.sessions || [])[0];
+    this.sess[gstin] = x ? Object.assign(this.sess[gstin] || {}, {until: Date.parse(x.until), connectedAt: x.connectedAt, error: x.error || ""}) : (this.sess[gstin] && this.sess[gstin].sentAt ? {sentAt: this.sess[gstin].sentAt} : undefined);
+  },
+  stale(gstin){ return !this.seen[gstin] || Date.now() - this.seen[gstin] > 10 * 60000; },
   async otp(reg){
     const gstin = this.gstinOf(reg), username = this.user(reg);
     const j = await this.call({action: "otp", gstin, username});
@@ -29,17 +37,17 @@ const GSTAPI = {
     return j;
   },
   async auth(reg, otp){
-    const gstin = this.gstinOf(reg), username = this.user(reg), x = this.sess[gstin];
-    if (!x) throw new Error("Send the OTP first.");
+    const gstin = this.gstinOf(reg), username = this.user(reg);
+    if (!this.sess[gstin]) throw new Error("Send the OTP first.");
     const j = await this.call({action: "auth", gstin, username, otp});
-    Object.assign(x, {auth_token: j.auth_token, until: Date.now() + Math.max(5, (j.expiryMinutes || 120) - 2) * 60000});
-    return x;
+    this.sess[gstin] = {until: Date.parse(j.until), connectedAt: new Date().toISOString(), error: ""}; this.seen[gstin] = Date.now();
+    return this.sess[gstin];
   },
   // 2B for a month (YYYYMM), in the same place as a 2B file brought in
   async twoB(reg, ym){
     const gstin = this.gstinOf(reg), x = this.live(gstin);
     if (!x) throw new Error("Connect with the taxpayer’s OTP first.");
-    const j = await this.call({action: "2b", gstin, username: this.user(reg), period: ym.slice(4, 6) + ym.slice(0, 4), auth_token: x.auth_token});
+    const j = await this.call({action: "2b", gstin, username: this.user(reg), period: ym.slice(4, 6) + ym.slice(0, 4)});
     const t = GST2B.fromJson({data: j.data});
     if (!t.gstin || !t.ym) throw new Error("The 2B for " + GSTR.label(ym) + " came back without its GSTIN or period.");
     const b = S.books; b.twoBs = b.twoBs || {}; b.twoBs[t.gstin + "|" + t.period] = Object.assign(t, {source: "api", fetchedAt: new Date().toISOString()});
@@ -52,9 +60,11 @@ function viewGstApiCard(b){
   if (!gstin) return "";
   let h = '<section class="dash-card" style="margin-bottom:12px"><h3>Fetch 2B from the portal</h3>';
   if (!GSTAPI.on()) return h + '<p class="note">Sign in to the firm account (top right) to fetch 2B straight from the GST portal through the firm’s GST API connection. Until then, bring in the JSON files downloaded from the portal.</p></section>';
-  const user = GSTAPI.user(reg), live = GSTAPI.live(gstin), pend = GSTAPI.sess[gstin] && !live, busy = S.gstApiBusy;
+  if (GSTAPI.stale(gstin)) GSTAPI.status(gstin).then(render, () => {});
+  const user = GSTAPI.user(reg), live = GSTAPI.live(gstin), cur = GSTAPI.sess[gstin], pend = cur && cur.sentAt && !live, busy = S.gstApiBusy;
   if (!user) return h + '<p class="note">Type ' + esc(gstin) + "’s GST portal username in " + gstSetLink("GST settings") + " to connect. The taxpayer must also allow API access on the portal (My Profile → Manage API Access).</p></section>";
   if (!live){
+    if (cur && cur.connectedAt) h += '<p class="note"><b>The portal session has ended' + (cur.error ? ": " + esc(cur.error) : "") + ".</b> The taxpayer’s API access period is over; one OTP connects it again.</p>";
     h += '<p class="note">' + esc(gstin) + " · portal user <b>" + esc(user) + "</b>. The OTP goes to the taxpayer’s registered mobile and email; the taxpayer must have allowed API access on the portal (My Profile → Manage API Access).</p>" +
       '<div class="row" style="gap:8px;align-items:center;flex-wrap:wrap"><button class="btn small' + (pend ? "" : " primary") + '" data-gapi="otp"' + (busy ? " disabled" : "") + ">" + (pend ? "Send the OTP again" : "Send OTP") + "</button>" +
       (pend ? '<input type="text" inputmode="numeric" maxlength="6" data-gapiotp data-fk="gapiotp" placeholder="6-digit OTP" style="width:130px"><button class="btn small primary" data-gapi="auth"' + (busy ? " disabled" : "") + ">Connect</button>" : "") + "</div>";
@@ -63,8 +73,8 @@ function viewGstApiCard(b){
   const have = new Set(GST2B.all2b(reg).map(t => t.ym).concat(Object.values(b.twoBs || {}).filter(t => t.gstin === gstin).map(t => t.ym)));
   // a month's 2B is made on the 14th of the next month
   const fy = S.gstYm ? GSTRev.fyMonths(S.gstYm) : [], due = fy.filter(GSTAPI.ready);
-  const missing = due.filter(m => !have.has(m)), until = new Date(live.until);
-  h += '<p class="note">Connected to the portal for ' + esc(gstin) + " until " + String(until.getHours()).padStart(2, "0") + ":" + String(until.getMinutes()).padStart(2, "0") + ".</p>" +
+  const missing = due.filter(m => !have.has(m)), since = new Date(live.connectedAt);
+  h += '<p class="note">Connected to the portal for ' + esc(gstin) + " since " + since.toLocaleDateString("en-IN", {day: "numeric", month: "short"}) + ". FinCom keeps it connected for the whole firm, with no new OTP, until the taxpayer’s API access period ends (up to 30 days, set on the portal under My Profile → Manage API Access).</p>" +
     '<div class="row" style="gap:8px;align-items:center;flex-wrap:wrap"><select data-gapiym style="width:auto">' + fy.map(m => '<option value="' + m + '"' + (m === (S.gstApiYm || S.gstYm) ? " selected" : "") + ">" + GSTR.label(m) + (have.has(m) ? " ✓" : "") + "</option>").join("") + "</select>" +
     '<button class="btn small primary" data-gapi="one"' + (busy ? " disabled" : "") + ">Fetch 2B</button>" +
     (missing.length ? '<button class="btn small" data-gapi="all"' + (busy ? " disabled" : "") + ">Fetch the " + missing.length + " month" + (missing.length === 1 ? "" : "s") + " not here yet</button>" : "") + "</div>";

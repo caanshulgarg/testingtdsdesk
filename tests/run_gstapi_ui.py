@@ -13,15 +13,18 @@ mar = json.load(open(f2b))["data"]
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
     if not c: fails.append(w)
-seen = []
+seen = []; SESS = {}  # what the server keeps after an OTP
 def fake(route):
     b = json.loads(route.request.post_data or "{}"); seen.append(b)
     auth = route.request.headers.get("authorization", "")
     if auth != "Bearer tok-firm": return route.fulfill(status=401, body=json.dumps({"ok": False, "error": "Sign in again."}))
     a = b.get("action")
-    if a == "otp": r = {"ok": True}
-    elif a == "auth": r = {"ok": True, "auth_token": "at-1", "expiryMinutes": 120} if b.get("otp") == "575757" else {"ok": False, "error": "Invalid OTP (AUTH4033)"}
-    elif a == "2b" and b.get("period") == "032026" and b.get("auth_token") == "at-1": r = {"ok": True, "parts": 1, "data": mar}
+    if a == "status": r = {"ok": True, "sessions": [dict(SESS, gstin=g) for g in b.get("gstins", []) if SESS]}
+    elif a == "otp": r = {"ok": True}
+    elif a == "auth" and b.get("otp") == "575757":
+        SESS.update(username=b.get("username"), until="2099-01-01T00:00:00Z", connectedAt="2026-09-29T13:00:00Z", error=None); r = {"ok": True, "until": SESS["until"]}
+    elif a == "auth": r = {"ok": False, "error": "Invalid OTP (AUTH4033)"}
+    elif a == "2b" and b.get("period") == "032026" and SESS: r = {"ok": True, "parts": 1, "data": mar}
     elif a == "2b": r = {"ok": False, "error": "No 2B for this period (RET2B1016)"}
     else: r = {"ok": False, "error": "?"}
     route.fulfill(status=200, content_type="application/json", body=json.dumps(r))
@@ -42,7 +45,7 @@ with sync_playwright() as p:
     ok(pg.evaluate("GSTSet.peek('07').portalUser") == "vmsevents07", "the portal username is kept in GST settings")
     pg.evaluate("S.tab = 'books'; render()"); pg.wait_for_timeout(2000)
     pg.click('button[data-gapi="otp"]'); pg.wait_for_timeout(1500)
-    ok(seen[-1] == {"action": "otp", "gstin": "07AADCV3366N1ZU", "username": "vmsevents07"} and "OTP sent" in pg.inner_text("#app"), "Send OTP: the GSTIN and username go to the firm's server function; the OTP box appears")
+    ok({"action": "otp", "gstin": "07AADCV3366N1ZU", "username": "vmsevents07"} in seen and "OTP sent" in pg.inner_text("#app"), "Send OTP: the GSTIN and username go to the firm's server function; the OTP box appears")
     pg.fill("input[data-gapiotp]", "111111"); pg.click('button[data-gapi="auth"]'); pg.wait_for_timeout(1500)
     ok("Invalid OTP" in pg.inner_text("#app") and not pg.evaluate("GSTAPI.live('07AADCV3366N1ZU')"), "a wrong OTP: the portal's reason is shown, not connected")
     pg.fill("input[data-gapiotp]", "575757"); pg.click('button[data-gapi="auth"]'); pg.wait_for_timeout(1500)
@@ -52,7 +55,7 @@ with sync_playwright() as p:
     ok(pg.evaluate("!!S.books.twoBs['07AADCV3366N1ZU|032026'] && S.books.twoBs['07AADCV3366N1ZU|032026'].source === 'api'") and "2B fetched: Mar 2026" in t, "March 2B fetched and put where a 2B file goes")
     rows = pg.evaluate("S.books.twoBs['07AADCV3366N1ZU|032026'].rows.length"); want = pg.evaluate("(j) => GST2B.fromJson({data: j}).rows.length", mar)
     ok(rows == want and rows > 0, "every document of it: %d, the same as the portal's JSON file gives" % rows)
-    ok(seen[-1].get("auth_token") == "at-1" and "app_key" not in seen[-1] and seen[-1].get("period") == "032026", "the auth token goes with each call, nothing else of the session")
+    ok(not any(k in seen[-1] for k in ("auth_token", "app_key", "sek")) and seen[-1].get("period") == "032026", "the browser sends no portal token: the server keeps the session")
     ok("matched" in t.lower() or "Matched" in t, "the 2B reconciliation runs on it")
     pg.screenshot(path=OUT + "/gstapi-2b.png", full_page=False)
     pg.select_option("select[data-gapiym]", "202602"); pg.click('button[data-gapi="one"]'); pg.wait_for_timeout(2500)
