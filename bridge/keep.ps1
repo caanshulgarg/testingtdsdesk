@@ -36,10 +36,25 @@ function Add-TallyUse([int]$Port, [double]$Sec, [string]$Xml, [string]$Fail) {
     }
   } catch { }
 }
+# A Tally that did not answer in time is still working on that request (giving up here does not stop it), so it is not
+# asked again for a while: 10 s, then 20, 40, 80, at most 2 minutes, until it answers again. Requests meanwhile fail at
+# once with a plain message instead of piling up behind the one Tally is busy with.
+$script:TallyCool = @{}
 function Invoke-Tally([int]$TallyPort, [string]$Xml, [int]$TimeoutSec) {
+  $c = $script:TallyCool[$TallyPort]
+  if ($c -and [DateTime]::UtcNow -lt $c.until) { throw ('Tally (port ' + $TallyPort + ') is busy and did not answer the last request; not asked again until ' + $c.until.ToLocalTime().ToString('HH:mm:ss')) }
   $sw = [Diagnostics.Stopwatch]::StartNew(); $fail = ''
-  try { return (& $script:TallyInvokeOrig $TallyPort $Xml $TimeoutSec) }
-  catch { $fail = $_.Exception.Message; throw }
+  try { $r = (& $script:TallyInvokeOrig $TallyPort $Xml $TimeoutSec); $script:TallyCool.Remove($TallyPort); return $r }
+  catch {
+    $fail = $_.Exception.Message
+    if ($fail -match 'timed out|was closed|unexpected error occurred on a receive|forcibly closed') {
+      $n = $(if ($c) { [int]$c.n + 1 } else { 1 })
+      $wait = [int][Math]::Min(120, 10 * [Math]::Pow(2, $n - 1))
+      $script:TallyCool[$TallyPort] = @{ n = $n; until = [DateTime]::UtcNow.AddSeconds($wait) }
+      try { Write-Log ('Tally ' + $TallyPort + ' is busy and did not answer in time; it is not asked again for ' + $wait + 's, so requests do not pile up') } catch { }
+    }
+    throw
+  }
   finally { Add-TallyUse $TallyPort $sw.Elapsed.TotalSeconds $Xml $fail; Test-KeepSlowRead $sw.Elapsed.TotalSeconds }
 }
 # the share of one Tally's time used by this program in the last minute (0..1)
@@ -69,10 +84,9 @@ function Get-KeepTargetSec {
   return [double](Get-KeepNum 'KeepNightTargetSec' 10)
 }
 $script:KeepUserApi = $null
-function Get-KeepUserInTally {
-  if ($script:Fake) { return [bool]$Cfg.KeepFakeUserBusy }
+function Initialize-KeepUserApi {
+  if ($null -ne $script:KeepUserApi) { return [bool]$script:KeepUserApi }
   try {
-    if ($null -eq $script:KeepUserApi) {
       Add-Type -Namespace FinCom -Name KeepUser -MemberDefinition @'
 [StructLayout(LayoutKind.Sequential)] public struct LII { public uint cbSize; public uint dwTime; }
 [DllImport("user32.dll")] public static extern bool GetLastInputInfo(ref LII p);
@@ -81,12 +95,28 @@ function Get-KeepUserInTally {
 public static double IdleSec() { LII l = new LII(); l.cbSize = (uint)Marshal.SizeOf(l); if (!GetLastInputInfo(ref l)) return 9999; return ((uint)Environment.TickCount - l.dwTime) / 1000.0; }
 public static int Front() { uint p = 0; GetWindowThreadProcessId(GetForegroundWindow(), out p); return (int)p; }
 '@ -ErrorAction Stop
-      $script:KeepUserApi = $true
-    }
-    if ([FinCom.KeepUser]::IdleSec() -ge (Get-KeepNum 'KeepUserIdleSec' 15)) { return $false }
-    $fp = Get-Process -Id ([FinCom.KeepUser]::Front()) -ErrorAction Stop
-    return ($fp.ProcessName -like 'tally*')
-  } catch { $script:KeepUserApi = $false; return $false }
+    $script:KeepUserApi = $true
+  } catch { $script:KeepUserApi = $false }
+  return [bool]$script:KeepUserApi
+}
+# seconds since the keyboard or mouse was last used on this computer
+function Get-KeepIdleSec {
+  if ($script:Fake) { if ($null -ne $Cfg.KeepFakeIdleSec) { return [double]$Cfg.KeepFakeIdleSec }; return 99999.0 }
+  if (-not (Initialize-KeepUserApi)) { return 99999.0 }
+  try { return [double][FinCom.KeepUser]::IdleSec() } catch { return 99999.0 }
+}
+function Get-KeepUserInTally {
+  if ($script:Fake) { return [bool]$Cfg.KeepFakeUserBusy }
+  if ((Get-KeepIdleSec) -ge (Get-KeepNum 'KeepUserIdleSec' 15)) { return $false }
+  try { $fp = Get-Process -Id ([FinCom.KeepUser]::Front()) -ErrorAction Stop; return ($fp.ProcessName -like 'tally*') } catch { return $false }
+}
+# a quiet time, for a read that may hold Tally up for long: outside office hours, or nobody at this computer for a while
+function Test-KeepQuiet {
+  $now = Get-Date
+  $office = $now.DayOfWeek -ne [DayOfWeek]::Sunday -and $now.Hour -ge (Get-KeepNum 'KeepOfficeFrom' 9) -and $now.Hour -lt (Get-KeepNum 'KeepOfficeTo' 19)
+  if ($script:Fake -and $null -ne $Cfg.KeepFakeOffice) { $office = [bool]$Cfg.KeepFakeOffice }
+  if (-not $office) { return $true }
+  return ((Get-KeepIdleSec) -ge 60 * (Get-KeepNum 'KeepQuietMin' 10))
 }
 # why Tally is to be left alone right now ('' when it is free)
 function Get-KeepHold {
@@ -172,13 +202,15 @@ function Get-KeepList([string]$Company, [int]$Port, [string]$From, [string]$To, 
 # opening balances for a group of ledgers, on one date
 function Get-KeepBalances([string]$Company, [int]$Port, [string[]]$Names, [string]$AsOn) {
   $f = ($Names | ForEach-Object { '$Name = "' + ([string]$_).Replace('"', '') + '"' }) -join ' OR '
+  $flt = '<FILTERS>TDSDeskKeepThese</FILTERS>'; $sys = '<SYSTEM TYPE="Formulae" NAME="TDSDeskKeepThese">' + (Esc $f) + '</SYSTEM>'
+  if (-not @($Names).Count) { $flt = ''; $sys = '' }       # every ledger, in one read (only at a quiet time)
   $req = '<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TDSDeskKeepBal</ID></HEADER>' +
     '<BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + (Esc $Company) + '</SVCURRENTCOMPANY>' +
     '<SVFROMDATE>' + $AsOn + '</SVFROMDATE><SVTODATE>' + $AsOn + '</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE>' +
-    '<COLLECTION NAME="TDSDeskKeepBal" ISMODIFY="No"><TYPE>Ledger</TYPE><FILTERS>TDSDeskKeepThese</FILTERS><FETCH>NAME,PARENT,CLOSINGBALANCE</FETCH></COLLECTION>' +
-    '<SYSTEM TYPE="Formulae" NAME="TDSDeskKeepThese">' + (Esc $f) + '</SYSTEM>' +
+    '<COLLECTION NAME="TDSDeskKeepBal" ISMODIFY="No"><TYPE>Ledger</TYPE>' + $flt + '<FETCH>NAME,PARENT,CLOSINGBALANCE</FETCH></COLLECTION>' + $sys +
     '</TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>'
-  $doc = Get-XmlDoc (Invoke-Tally -TallyPort $Port -Xml $req -TimeoutSec 120)
+  $t = 120; if (-not @($Names).Count) { $t = 900 }
+  $doc = Get-XmlDoc (Invoke-Tally -TallyPort $Port -Xml $req -TimeoutSec $t)
   $out = @()
   foreach ($l in $doc.SelectNodes('//LEDGER')) {
     $n = $l.GetAttribute('NAME'); if (-not $n) { $n = Get-NodeText $l 'NAME' }
@@ -364,6 +396,7 @@ function Update-KeepLedgers([string]$Company, [int]$Port, [string]$Dir, $St, [bo
       foreach ($x in $again) { if ($x[1] -and $x[1] -ne $x[0] -and $rows.Contains($x[1])) { $rows.Remove($x[1]) } }
       foreach ($n in $gone) { if ($rows.Contains($n)) { $rows.Remove($n) } }
       $names = @($again | ForEach-Object { $_[0] })
+      if ($St.balMode -eq 'whole' -and $names.Count) { $St.openPending = $true; $names = @() }     # read with every other one, at a quiet time
       for ($i = 0; $i -lt $names.Count; $i += 150) {
         $chunk = $names[$i .. ([Math]::Min($names.Count, $i + 150) - 1)]
         foreach ($chunkName in $chunk) { if ($rows.Contains($chunkName)) { $rows.Remove($chunkName) } }
@@ -406,6 +439,16 @@ function Test-KeepMonthFix([string]$Company, [int]$Port, [string]$Dir, $St, [str
   if ($bad.Count) { $null = Update-KeepDates $Company $Port $Dir $St @($bad.Keys); Write-Log ('Keeping ' + $Company + ': ' + $Ym + ' differed on ' + $bad.Count + ' date(s); read again') }
   return $bad.Count
 }
+# the opening balances, as FinCom reads them (balances.json), and on to the cloud
+function Save-KeepOpening([string]$Company, [int]$Port, [string]$Dir, $St, $Rows, [string]$AsOn, [string]$Today) {
+  $led = @($Rows | ForEach-Object { [ordered]@{ name = $_[0]; parent = $_[1]; open = $_[2]; close = '' } })
+  $bal = [ordered]@{ ok = $true; company = $Company; from = $St.from; to = $Today; openAsOn = $AsOn; ledgers = $led; keep = $true }
+  Save-KeepFile (Join-Path $Dir 'balances.json') ($bal | ConvertTo-Json -Depth 6 -Compress)
+  Set-CloudLedgers $Dir
+  $St.balAt = (Get-Date).ToString('s')
+  $St.lastM = 0; Update-KeepLedgers $Company $Port $Dir $St $false        # the ledgers' own numbers, to follow renames and changes
+  Write-Log ('Keeping ' + $Company + ': opening balances read (' + $led.Count + ' ledgers)')
+}
 # one turn for one open company: at most a few seconds of Tally's time, with pauses between reads
 function Step-Keep([string]$Company, [int]$Port, [string]$BooksFrom) {
   $dir = Get-SyncFolder $Company
@@ -425,37 +468,55 @@ function Step-Keep([string]$Company, [int]$Port, [string]$BooksFrom) {
   $save = { $st.at = (Get-Date).ToString('s'); Save-KeepFile (Join-Path $dir 'keep.json') ($st | ConvertTo-Json -Depth 6 -Compress); Write-KeepManifest $dir $st $today }
 
   if ($st.phase -eq 'open') {
-    # opening balances on the day before the copy starts, 150 ledgers at a time
-    $names = @((Get-LedgerNames $Company $Port).ledgers | ForEach-Object { $_[0] } | Sort-Object)
+    # opening balances on the day before the copy starts. Some Tallys work out every balance each time they are asked,
+    # however few ledgers: then small groups only multiply the wait, so every balance is read once, at a quiet time
+    # (evening, or nobody at the computer), and the day book copy goes on meanwhile
     $asOn = Add-KeepDays $st.from -1
-    $pf = Join-Path $dir 'open-part.json'
-    $got = @(); if ([int]$st.openIdx -gt 0 -and (Test-Path $pf)) { $got = @(Get-Content -Raw $pf | ConvertFrom-Json) }
-    # a small group first; bigger while Tally answers quickly, smaller when it is slow
-    $size = [int]$st.openSize; if ($size -le 0) { $size = 20 }
-    while ([int]$st.openIdx -lt $names.Count -and $sw.Elapsed.TotalSeconds -lt $budget -and (Test-KeepRoom $Port) -and -not (Get-KeepHold)) {
-      $chunk = $names[[int]$st.openIdx .. ([Math]::Min($names.Count, [int]$st.openIdx + $size) - 1)]
-      $t0 = $sw.Elapsed.TotalSeconds
-      foreach ($r in (Get-KeepBalances $Company $Port $chunk $asOn)) { $got += , @($r[0], $r[1], $r[2]) }
-      $st.openIdx = [int]$st.openIdx + $chunk.Count
-      $took = $sw.Elapsed.TotalSeconds - $t0; $aim = Get-KeepTargetSec
-      if ($took -gt $aim) { $size = [int][Math]::Max(5, [Math]::Floor($size / 2)) } elseif ($took -lt $aim / 3) { $size = [int][Math]::Min(150, $size * 2) }
-      $st.openSize = $size
-      Save-KeepFile $pf (ConvertTo-Json -InputObject @($got) -Depth 4 -Compress); & $save
-      Start-Sleep -Milliseconds ([int][Math]::Max(1000, ($sw.Elapsed.TotalSeconds - $t0) * 1500))
+    if ([string]$st.balMode -ne 'whole') {
+      $names = @((Get-LedgerNames $Company $Port).ledgers | ForEach-Object { $_[0] } | Sort-Object)
+      $pf = Join-Path $dir 'open-part.json'
+      $got = @(); if ([int]$st.openIdx -gt 0 -and (Test-Path $pf)) { $got = @(Get-Content -Raw $pf | ConvertFrom-Json) }
+      # the first read is of five ledgers, tried only when nobody has touched the computer for a minute
+      $size = [int]$st.openSize; if ($size -le 0) { $size = 5 }
+      $later = $false
+      while ([int]$st.openIdx -lt $names.Count -and $sw.Elapsed.TotalSeconds -lt $budget -and (Test-KeepRoom $Port) -and -not (Get-KeepHold)) {
+        if (-not $st.balMode -and (Get-KeepIdleSec) -lt (Get-KeepNum 'KeepProbeIdleSec' 60) -and -not (Test-KeepQuiet)) { $later = $true; break }
+        $chunk = $names[[int]$st.openIdx .. ([Math]::Min($names.Count, [int]$st.openIdx + $size) - 1)]
+        $t0 = $sw.Elapsed.TotalSeconds
+        foreach ($r in (Get-KeepBalances $Company $Port $chunk $asOn)) { $got += , @($r[0], $r[1], $r[2]) }
+        $st.openIdx = [int]$st.openIdx + $chunk.Count
+        $took = $sw.Elapsed.TotalSeconds - $t0; $aim = Get-KeepTargetSec
+        Save-KeepFile $pf (ConvertTo-Json -InputObject @($got) -Depth 4 -Compress)
+        if ($took -gt $aim -and $chunk.Count -le 5) {
+          $st.balMode = 'whole'
+          Write-Log ('Keeping ' + $Company + ': Tally took ' + [Math]::Round($took, 1) + 's for the opening balance of ' + $chunk.Count + ' ledgers, so every opening balance will be read once at a quiet time (evening, or when nobody is at the computer); the day book copy goes on meanwhile')
+          break
+        }
+        $st.balMode = 'chunk'
+        if ($took -gt $aim) { $size = [int][Math]::Max(5, [Math]::Floor($size / 2)) } elseif ($took -lt $aim / 3) { $size = [int][Math]::Min(150, $size * 2) }
+        $st.openSize = $size
+        & $save
+        Start-Sleep -Milliseconds ([int][Math]::Max(1000, $took * 1500))
+      }
+      if ($st.balMode -eq 'chunk' -and [int]$st.openIdx -ge $names.Count) {
+        Save-KeepOpening $Company $Port $dir $st @($got) $asOn $today
+        $st.phase = $(if ([string]$st.next -gt $today) { 'check' } else { 'first' })
+      }
     }
-    Save-KeepFile $pf (ConvertTo-Json -InputObject @($got) -Depth 4 -Compress)
-    if ([int]$st.openIdx -ge $names.Count) {
-      $led = @($got | ForEach-Object { [ordered]@{ name = $_[0]; parent = $_[1]; open = $_[2]; close = '' } })
-      $bal = [ordered]@{ ok = $true; company = $Company; from = $st.from; to = $today; openAsOn = $asOn; ledgers = $led; keep = $true }
-      Save-KeepFile (Join-Path $dir 'balances.json') ($bal | ConvertTo-Json -Depth 6 -Compress)
-      Set-CloudLedgers $dir
-      $st.balAt = (Get-Date).ToString('s')
-      $st.lastM = 0; Update-KeepLedgers $Company $Port $dir $st $false        # the ledgers' own numbers, to follow renames and changes
-      $st.phase = $(if ([string]$st.next -gt $today) { 'check' } else { 'first' })
-      Write-Log ('Keeping ' + $Company + ': opening balances read (' + $led.Count + ' ledgers)')
-    }
+    if ($later -and -not $st.balMode) { Write-Log ('Keeping ' + $Company + ': the opening balances will be read at a quiet time; the day book copy starts now') }
+    if ($st.balMode -eq 'whole' -or ($later -and -not $st.balMode)) { $st.openPending = $true; $st.phase = $(if ([string]$st.next -gt $today) { 'check' } else { 'first' }) }
     & $save
     if ($st.phase -eq 'open') { return }
+  }
+  # every opening balance in one read, when it is a quiet time
+  if ($st.openPending -and (Test-KeepQuiet) -and -not (Get-KeepHold) -and (Test-KeepRoom $Port)) {
+    $asOn = Add-KeepDays $st.from -1
+    Write-Log ('Keeping ' + $Company + ': reading every opening balance now (a quiet time)')
+    $rows = @(Get-KeepBalances $Company $Port @() $asOn)
+    Save-KeepOpening $Company $Port $dir $st $rows $asOn $today
+    $st.openPending = $false
+    & $save
+    return
   }
   if ($st.phase -eq 'first') {
     # the year's day book, a few days at a time; smaller steps when Tally is slow, bigger when it is quick
@@ -594,7 +655,8 @@ function Invoke-KeepWorker {
   $lock = Join-Path (Get-SyncDir) 'keep.pid'
   New-Item -ItemType Directory -Force -Path (Get-SyncDir) | Out-Null
   [IO.File]::WriteAllText($lock, [string]$PID)
-  Write-Log 'Keeping copies in step: started'
+  [IO.File]::WriteAllText((Join-Path (Get-SyncDir) 'keep.ver'), [string]$BridgeVersion)     # a bridge of another version stops this one
+  Write-Log ('Keeping copies in step: started (' + $BridgeVersion + ')')
   $script:KeepReadSec = Get-KeepNum 'KeepReadSec' 120      # no read of the day book may hold Tally longer than this
   $idle = Get-Date
   # the bridge that started this worker: when it is gone (Quit, an update, a restart), the worker stops too
@@ -635,21 +697,21 @@ function Invoke-KeepWorker {
         if (-not (Test-KeepRoom ([int]$o[1]))) { continue }             # this Tally has had its share this minute
         if (Get-KeepHold) { break }
         $script:KeepLong = 0.0
-        try {
-          Step-Keep $o[0] $o[1] $o[2]; $script:KeepBack.Remove($o[0])
-          $long = Get-KeepNum 'KeepTooLongSec' 20
-          if ($script:KeepLong -gt $long) {
+        $rested = { param($name)
+          if ($script:KeepLong -gt (Get-KeepNum 'KeepTooLongSec' 20)) {
             $rest = [int][Math]::Min(1800, $script:KeepLong * 10)
-            $script:KeepBack[$o[0]] = @{ n = 0; until = (Get-Date).AddSeconds($rest) }
-            Write-Log ('Keeping ' + $o[0] + ': one read took ' + [int]$script:KeepLong + 's, so Tally is left alone for ' + [int]($rest / 60) + ' min to stay usable; the next reads will be smaller')
+            $script:KeepBack[$name] = @{ n = $(if ($script:KeepBack[$name]) { [int]$script:KeepBack[$name].n } else { 0 }); until = (Get-Date).AddSeconds($rest) }
+            Write-Log ('Keeping ' + $name + ': one read took ' + [int]$script:KeepLong + 's, so Tally is left alone for ' + [Math]::Max(1, [int]($rest / 60)) + ' min to stay usable; the next reads will be smaller')
           }
         }
+        try { Step-Keep $o[0] $o[1] $o[2]; $script:KeepBack.Remove($o[0]); & $rested $o[0] }
         catch {
           $n = $(if ($bk) { [int]$bk.n + 1 } else { 1 })
           $wait = [Math]::Min(1800, (Get-KeepNum 'KeepCycleSec' 60) * [Math]::Pow(2, $n))
           $script:KeepBack[$o[0]] = @{ n = $n; until = (Get-Date).AddSeconds($wait) }
           Write-Log ('Keeping ' + $o[0] + ' in step: ' + $_.Exception.Message + ' - leaving Tally alone for ' + [int]$wait + 's')
           Set-KeepTrouble $o[0] $_.Exception.Message
+          & $rested $o[0]
         }
       }
       Write-KeepLoad
@@ -662,7 +724,15 @@ function Invoke-KeepWorker {
 function Start-KeepIfNeeded {
   if (-not (Test-KeepOn)) { return }
   $lock = Join-Path (Get-SyncDir) 'keep.pid'
-  if (Test-Path $lock) { $p = 0; try { $p = [int]('0' + [IO.File]::ReadAllText($lock).Trim()) } catch { }; if ($p -and (Test-ProcessAlive $p)) { return } }
+  if (Test-Path $lock) {
+    $p = 0; try { $p = [int]('0' + [IO.File]::ReadAllText($lock).Trim()) } catch { }
+    if ($p -and (Test-ProcessAlive $p)) {
+      $ver = ''; try { $ver = [IO.File]::ReadAllText((Join-Path (Get-SyncDir) 'keep.ver')).Trim() } catch { }
+      if ($ver -eq [string]$BridgeVersion) { return }
+      # a copier from an older bridge (an update does not stop it by itself): stopped, and this version's started
+      try { $pr = Get-Process -Id $p -ErrorAction Stop; if ($pr.ProcessName -match 'powershell|pwsh') { Write-Log ('Stopping the copier of bridge ' + $(if ($ver) { $ver } else { 'before 1.13.2' }) + ' (process ' + $p + ')'); $pr.Kill(); $null = $pr.WaitForExit(5000) } else { return } } catch { }
+    }
+  }
   $any = $false
   try { foreach ($s in @(Get-OpenCompanies)) { if (-not $s.skipped -and $s.ok -and @($s.companies).Count) { $any = $true } } } catch { }
   if (-not $any) { return }

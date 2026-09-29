@@ -72,6 +72,7 @@ class H(http.server.BaseHTTPRequestHandler):
         g = lambda t: (re.search("<" + t + ">([^<]*)</" + t + ">", body) or [None, ""])[1]
         REQS[_kind(body)] = REQS.get(_kind(body), 0) + 1
         LOG.append((_kind(body), g("SVFROMDATE"), g("SVTODATE")))
+        if CTRL.get("all_delay"): __import__("time").sleep(CTRL["all_delay"])     # a Tally slow at everything (still loading, say)
         if "<TALLYREQUEST>Import Data</TALLYREQUEST>" in body:
             CTRL["_imported"] = True
             BODIES.append(body[-600:])
@@ -169,8 +170,10 @@ class H(http.server.BaseHTTPRequestHandler):
             out = "<ENVELOPE><BODY><DATA><COLLECTION>" + "".join(rows) + "</COLLECTION></DATA></BODY></ENVELOPE>"
         elif "TDSDeskKeepBal" in body:
             asOn = g("SVTODATE"); mv = amounts_until(asOn)
+            if CTRL.get("bal_delay"): __import__("time").sleep(CTRL["bal_delay"])      # a Tally that works out every balance each time
+            allL = "TDSDeskKeepThese" not in body
             want = set(__import__("html").unescape(n) for n in re.findall(r'\$Name = (?:&quot;|&#34;|")(.*?)(?:&quot;|&#34;|")(?: OR |</SYSTEM>)', body))
-            out = "<ENVELOPE><BODY><DATA><COLLECTION>" + "".join('<LEDGER NAME="%s"><PARENT>%s</PARENT><CLOSINGBALANCE>%.2f</CLOSINGBALANCE></LEDGER>' % (n, p, ob + mv.get(n.replace("&amp;", "&"), mv.get(n, 0))) for n, p, ob in L if __import__("html").unescape(n) in want or n in want) + "</COLLECTION></DATA></BODY></ENVELOPE>"
+            out = "<ENVELOPE><BODY><DATA><COLLECTION>" + "".join('<LEDGER NAME="%s"><PARENT>%s</PARENT><CLOSINGBALANCE>%.2f</CLOSINGBALANCE></LEDGER>' % (n, p, ob + mv.get(n.replace("&amp;", "&"), mv.get(n, 0))) for n, p, ob in L if allL or __import__("html").unescape(n) in want or n in want) + "</COLLECTION></DATA></BODY></ENVELOPE>"
         elif "TDSDeskTB" in body:
             asOn = g("SVTODATE"); mv = amounts_until(asOn)
             rows = [(n, p, ob + mv.get(n.replace("&amp;", "&"), mv.get(n, 0))) for n, p, ob in L]
