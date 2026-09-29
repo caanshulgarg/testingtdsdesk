@@ -150,7 +150,10 @@ const Audit = {
         const parties = v.ent.filter(e => e.a > 0 && (A.isCreditor(e.l) || (!A.mastersIn() && (S.books.pans || {})[e.l])));
         if (!parties.length) return;
         v.ent.filter(e => e.a < 0 && A.isExpense(e.l)).forEach(e => {
-          const k = KEY.find(([re]) => re.test(e.l));
+          // a section accepted from AI help decides; otherwise the ledger's name
+          const ai = typeof AIH === "object" ? AIH.tdsRule(e.l) : undefined;
+          if (ai === "none") return;
+          const k = ai ? [null, ai] : KEY.find(([re]) => re.test(e.l));
           if (!k) return;
           const p = parties[0].l;
           if (done.has(p) || /\bBANK\b|GOVERNMENT|MUNICIPAL|\bLIC\b/i.test(p)) return;
@@ -224,7 +227,9 @@ const Audit = {
       const rows = [], je = [];
       V.forEach(v => {
         if (Books.isSale(v)) return;
-        const exp = v.ent.find(e => e.a < 0 && RE.test(e.l) && (A.isExpense(e.l) || A.isFixed(e.l) || !A.mastersIn()));
+        // a verdict accepted from AI help decides; otherwise the ledger's name
+        const hit = l => { const ai = typeof AIH === "object" ? AIH.blocked(l) : undefined; return ai === undefined ? RE.test(l) : ai; };
+        const exp = v.ent.find(e => e.a < 0 && hit(e.l) && (A.isExpense(e.l) || A.isFixed(e.l) || A.under(e.l, /^purchase accounts$/i) || !A.mastersIn()));
         if (!exp) return;
         const tax = v.ent.filter(e => { const m = Books.ledgerOf(e.l); return e.a < 0 && (m.kind === "gst" || m.kind === "gst_common") && m.side === "input"; });
         if (!tax.length) return;

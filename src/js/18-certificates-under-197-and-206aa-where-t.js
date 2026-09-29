@@ -108,7 +108,7 @@ async function openBooks(cid){
   render();
 }
 // everything kept with a client's books, in this browser and (the TDS and GST work) in the firm's database
-const BOOKS_KEYS = ["vouchers", "map", "meta", "challans", "alloc", "pans", "twoB", "gstins", "under", "states", "groups", "salary", "certs", "advFix", "assets", "rev", "filed", "amendFix", "twoBs", "reco2b", "ledInfo", "ledInfoAt", "audit", "auditCfg", "auditRel", "ledSnaps", "gst9c", "groupInfo", "fs", "tb", "mis", "misCfg", "msme", "budget", "gst3b", "gst9", "gstOpen", "itcBasis", "itcTrack", "outRej", "gstFiled", "gstAato", "filed1a", "rule37On", "gstCashLedger", "gstSet", "gstContacts", "gstApi", "gstEst", "gstVault", "gstRegs", "letters"];
+const BOOKS_KEYS = ["vouchers", "map", "meta", "challans", "alloc", "pans", "twoB", "gstins", "under", "states", "groups", "salary", "certs", "advFix", "assets", "rev", "filed", "amendFix", "twoBs", "reco2b", "ledInfo", "ledInfoAt", "audit", "auditCfg", "auditRel", "ledSnaps", "gst9c", "groupInfo", "fs", "tb", "mis", "misCfg", "msme", "budget", "gst3b", "gst9", "gstOpen", "itcBasis", "itcTrack", "outRej", "gstFiled", "gstAato", "filed1a", "rule37On", "gstCashLedger", "gstSet", "gstContacts", "gstApi", "gstEst", "gstVault", "gstRegs", "letters", "ai"];
 async function saveBooks(opts){
   const b = S.books; if (!b || !b.cid) return;
   const keep = {cid: b.cid}; BOOKS_KEYS.forEach(k => { keep[k] = b[k]; });
@@ -292,9 +292,10 @@ function viewBooksLedgers(b){
     '<button class="dtile" data-lmview="tds" style="text-align:left"><span>TDS and TCS ledgers</span><b>' + tds.length + "</b><small>" + tds.filter(x => x[1].ok).length + " confirmed</small></button>" +
     '<button class="dtile" data-lmview="other" style="text-align:left"><span>Other ledgers</span><b>' + other.length + "</b><small>add one to GST or TDS</small></button></div></section>";
   h = ledChangedBanner(b) + h;
-  h += '<nav class="sbar" aria-label="Ledgers">' + [["pending", "To confirm", pend.length], ["gst", "GST", gst.length], ["tds", "TDS and TCS", tds.length], ["done", "Confirmed", null], ["other", "Other ledgers", other.length], ["post", "What FinCom posts to", null]]
+  h += '<nav class="sbar" aria-label="Ledgers">' + [["pending", "To confirm", pend.length], ["gst", "GST", gst.length], ["tds", "TDS and TCS", tds.length], ["done", "Confirmed", null], ["other", "Other ledgers", other.length], ["post", "What FinCom posts to", null]].concat(AIH.enabled("tds") || AIH.enabled("audit") ? [["ai", "AI: TDS and credit", null]] : [])
     .map(([id, l, c]) => '<button data-lmview="' + id + '" aria-selected="' + (view === id) + '">' + l + (c != null ? ' <span class="sbar-n">' + c + "</span>" : "") + "</button>").join("") + "</nav>";
   if (view === "post") return h + viewLedPosting(b);
+  if (view === "ai") return h + AIH.viewLedgers(b);
   h += '<div class="revfilter" style="flex-wrap:wrap;row-gap:6px"><input type="search" id="ledq" data-fk="ledq" data-keeptyped value="' + esc(S.ledQ || "") + '" placeholder="Find a ledger, section or group" style="width:260px;flex:0 0 auto">' +
     '<span class="note">' + shown.length + " ledger" + (shown.length === 1 ? "" : "s") + "</span>" +
     (view !== "other" && shown.some(([, m]) => !m.ok) ? '<button class="btn small primary" data-act="lmConfirmShown">Confirm the ' + shown.filter(([, m]) => !m.ok).length + " shown</button>" : "") + "</div>";
@@ -349,12 +350,14 @@ function tdsCrumbs(){
   const v = S.tdsView, parts = ['<button class="linkbtn" data-tdsnav="years">TDS</button>'];
   if (S.tdsFy && v !== "years") parts.push('<button class="linkbtn" data-tdsnav="year">' + esc(S.tdsFy) + "</button>");
   if (v === "certs") parts.push("<b>Certificates and rate questions</b>");
+  if (v === "notices") parts.push("<b>Notices</b>");
   if (v === "return") parts.push("<b>" + esc(S.tdsQ) + " \u00b7 " + esc(S.tdsForm) + "</b>");
   return '<div class="tds-crumbs" style="display:flex;gap:8px;align-items:center;margin:0 0 12px;font-size:15px">' + parts.join('<span class="note">\u203a</span>') + "</div>";
 }
 function viewBooksTds(b){
   const rows = TDS.rows(), fys = tdsYears(b, rows);
   if (!S.tdsView) S.tdsView = fys.length === 1 ? "year" : "years";
+  if (S.tdsView === "notices") return ledgerBanner(b, "tds") + tdsCrumbs() + AIH.viewNotices(b, "tds");
   if ((S.tdsView === "year" || S.tdsView === "return" || S.tdsView === "certs") && !fys.includes(S.tdsFy)) S.tdsFy = fys[0] || "";
   if (!S.tdsFy && S.tdsView !== "years") S.tdsView = "years";
   let h = ledgerBanner(b, "tds") + tdsCrumbs();
@@ -392,7 +395,7 @@ function viewTdsYearPage(b, rows){
     return '<td><button class="linkbtn" data-tdsgo="' + fy + "|" + x.q + '|24Q"><b>' + money(x.salaryTds) + '</b></button><div class="nr">' + x.salaryEmployees + " employee" + (x.salaryEmployees === 1 ? "" : "s") + "</div></td>";
   };
   let h = '<div class="revfilter"><select data-tdsfy>' + tdsYears(b, rows).map(f => '<option value="' + f + '"' + (fy === f ? " selected" : "") + ">" + f + "</option>").join("") + "</select>" +
-    '<button class="btn small" data-tdsnav="certs">Certificates and rate questions</button>' +
+    '<button class="btn small" data-tdsnav="certs">Certificates and rate questions</button>' + (AIH.enabled("notices") ? '<button class="btn small" data-tdsnav="notices">Notices</button>' : "") +
     '<button class="btn small" data-act="yearExcel26">Download the year, 26Q</button><button class="btn small" data-act="yearExcel24">Download the year, 24Q</button>' +
     '<button class="btn small primary" data-act="yearExcelAll">Download the whole year</button></div>';
   h += '<section class="dash-card"><h3>' + esc(fy) + ": returns by quarter</h3>" +
@@ -740,7 +743,7 @@ function viewBooksAudit(b){
     '<p class="note">Every check runs on the vouchers read from Tally. Each finding says what is wrong, what it costs, what to do, and the journal entry where one is needed. Mark each one, then download the report.</p>' +
     '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px">' +
     '<label class="note">From <input type="date" data-auditfrom value="' + esc(range.from) + '"></label><label class="note">to <input type="date" data-auditto value="' + esc(range.to) + '"></label>' +
-    '<button class="btn small primary" data-act="auditRun">Run now</button>' +
+    '<button class="btn small primary" data-act="auditRun">Run now</button>' + AIH.auditButton() +
     (!lyHere && typeof bridgeLive === "function" && bridgeLive(CO()) ? '<button class="btn small" data-act="auditReadLy" title="' + esc(fmtDate(tallyDate(lyFrom)) + " to " + fmtDate(tallyDate(lyTo))) + '">Read last year from Tally, to compare</button>' : "") +
     '<span class="note" style="margin-left:12px">Run on its own</span><select data-auditfreq style="width:auto">' +
     [["daily", "every day"], ["weekly", "every week"], ["monthly", "every month"], ["off", "only when I run it"]].map(([v, l]) => '<option value="' + v + '"' + (c.freq === v ? " selected" : "") + ">" + l + "</option>").join("") + "</select></div>" +
@@ -1204,8 +1207,10 @@ function viewBooksGst(b){
     : (ftype === "qrmp" ? [["qtr", "This quarter"], ["r1", "GSTR-1 working"], ["r3b", "GSTR-3B working"]] : [["r1", "GSTR-1"], ["r3b", "GSTR-3B"]])
       .concat([["inreg", "Input register"], ["r2b", "2B reconciliation"], ["follow", "ITC follow-up"], ["adv", "Advances"], ["rev", "Reversal"], ["amend", "Amendments"], ["g9", "GSTR-9"], ["g9c", "GSTR-9C"]]);
   parts.push(["vault", "Returns filed"]);
+  if (AIH.enabled("notices")) parts.push(["notices", "Notices"]);
   // without the day book only what does not come from it: 2B (from the portal or its JSON) and the returns filed
   if (noBooks) parts.splice(0, parts.length, ["r2b", "2B"], ["vault", "Returns filed"]);
+  if (noBooks && AIH.enabled("notices")) parts.push(["notices", "Notices"]);
   // a GSTIN or filing type seen for the first time opens on its first part: This quarter, CMP-08, or GSTR-1
   const seen = (S.gstReg || "") + "|" + ftype;
   if (!S.gstPart || !parts.some(x => x[0] === S.gstPart) || (S.gstSeen && S.gstSeen !== seen)) S.gstPart = parts[0][0];
@@ -1226,6 +1231,7 @@ function viewBooksGst(b){
   // a GSTIN that is not a monthly filer: say so on every part, until its own returns are built
   const ftp = typeof GSTSet === "object" && S.gstYm ? GSTSet.typeOf(S.gstYm, S.gstReg || "") : "monthly";
   if (ftp === "qrmp" && (part === "r1" || part === "r3b")) h += '<p class="note" style="margin:0 0 10px">Quarterly (QRMP) filer: this is the working for ' + esc(GSTR.label(S.gstYm)) + (GSTSet.isQEnd(S.gstYm) ? "; the downloads cover the whole of " + esc(GSTSet.qLabel(S.gstYm)) + "." : ", for reference; this month has no GSTR-1 or 3B \u2014 see \u201cThis quarter\u201d.") + "</p>";
+  if (part === "notices") return h + AIH.viewNotices(b, "gst");
   if (part === "vault") return h + viewGstReturnsFiled(b);
   if (part === "qtr") return h + viewQrmp(b);
   if (part === "cmp08") return h + viewCmp08(b);
@@ -1759,7 +1765,7 @@ function viewBooks2B(b){
     const list = sc.only2b.filter(p => pass(p, null));
     const free = sc.all.onlyBooks;
     h += bar(list.length + " of " + sc.only2b.length + " \u00b7 tax " + money(sumTx(list)), "r2Only2b");
-    h += '<p class="note">In the supplier\u2019s return but not found in Tally. If it is booked under another number, link it; otherwise book it, or note why the credit is not being taken.</p>';
+    h += '<p class="note">In the supplier\u2019s return but not found in Tally. If it is booked under another number, link it; otherwise book it, or note why the credit is not being taken.</p>' + AIH.r2bBar(list, free);
     h += '<div class="bk-tablewrap"><table class="bk-table" id="r2Only2b"><thead><tr><th>Supplier</th><th>Number</th><th class="dt">Date</th><th class="n">Taxable</th><th class="n">Tax</th><th>Note</th><th>Booked in Tally as</th><th>Remark</th></tr></thead><tbody>' +
       list.slice(0, LIMIT).map(p => {
         const cands = free.filter(d => d.dir === p.dir && (d.gstin === p.gstin || (!d.gstin && GST2B.lastDigits(d.no) === GST2B.lastDigits(p.no)) || (d.gstin && d.gstin.slice(2, 12) === p.gstin.slice(2, 12))))
@@ -1768,7 +1774,7 @@ function viewBooks2B(b){
         return "<tr><td>" + esc(p.party || "\u2014") + '<div class="nr">' + esc(p.gstin) + "</div></td><td>" + esc(p.no) + '<div class="nr">' + esc(secName(p)) + " \u00b7 " + GSTR.label(p.ym) + "</div></td><td>" + fmtDate(tallyDate(p.date)) +
           '</td><td class="n">' + money(p.taxable) + '</td><td class="n">' + money(tx(p)) + "</td><td>" + esc(noteOf(p)) + (p.bookedNoCredit ? '<div>' + only2bNote(p) + "</div>" : "") + "</td>" +
           '<td><select data-r2link="' + esc(p.key) + '" style="max-width:240px"><option value="">' + (cands.length ? "not found \u2014 choose" : "nothing close in Tally") + "</option>" +
-          cands.map(d => '<option value="' + esc(d.id) + '">' + esc(d.no + " \u00b7 vch " + d.voucher + " \u00b7 " + GSTAmend.dmy(d.date) + " \u00b7 tax " + INR.format(tx(d)) + (d.gstin ? "" : " \u00b7 no GSTIN")) + "</option>").join("") + "</select></td>" +
+          cands.map(d => '<option value="' + esc(d.id) + '">' + esc(d.no + " \u00b7 vch " + d.voucher + " \u00b7 " + GSTAmend.dmy(d.date) + " \u00b7 tax " + INR.format(tx(d)) + (d.gstin ? "" : " \u00b7 no GSTIN")) + "</option>").join("") + "</select>" + AIH.pairCell(p) + "</td>" +
           '<td><select data-r2tag="' + esc(p.key) + '">' + [["", "\u2014"], ["To book in Tally", "to book in Tally"], ["Booked in a later month", "booked in a later month"], ["Not our purchase", "not our purchase"], ["Blocked, section 17(5)", "blocked, 17(5)"], ["Ask supplier to correct", "ask supplier to correct"]]
             .map(([v, l]) => '<option value="' + esc(v) + '"' + (tag === v ? " selected" : "") + ">" + l + "</option>").join("") + "</select></td></tr>";
       }).join("") + "</tbody></table>" + (list.length ? "" : '<div class="bk-none">Nothing here.</div>') + "</div>";
@@ -2018,6 +2024,7 @@ const SETTING_TILES = [
   {id: "tcloud",   title: "Books in the cloud", note: "Computers that send Tally's books, and which company is which client", icon: "\u2601\uFE0F"},
   {id: "reading",  title: "Reading bills",     note: "How bills are read, and a test of each way",       icon: "\u{1F441}"},
   {id: "rates",    title: "Rates and limits",  note: "TDS rates, limits and the firm's own details",     icon: "\u{1F4D0}"},
+  {id: "ai",       title: "AI help",           note: "Claude's suggestions in TDS, GST, audit and notices: on or off", icon: "\u2728"},
   {id: "postlog",  title: "Sent to Tally",     note: "Every entry posted, by whom, and taking one back", icon: "\u{1F4DC}"},
   {id: "platform", title: "Platform",          note: "All firms, credit, plans, prices, keys",           icon: "\u{1F3E2}", superadmin: true}
 ];
@@ -2027,6 +2034,7 @@ function settingsTiles(){
   const sub = {
     account: Cloud.on() ? (a && a.me ? esc(a.me.email) + " \u00b7 " + esc(a.me.role) : "signed in") : "not signed in",
     plan: a && a.firm ? (a.firm.plan ? esc(a.firm.plan.name) : "no plan") + " \u00b7 " + INR.format(num(a.firm.balance)) + " left" : "",
+    ai: AIH.sub(),
     bridge: Bridge.on() && Bridge.up() ? (Bridge.st.tallyUp ? "connected to Tally" : "bridge running, Tally not open") : "not connected",
     reading: S.engine === "api" ? "free steps, then Claude" : hasGoogle() ? "free steps, then Google OCR" : "free reading only",
  tcloud: TCloud.pane.devices ? TCloud.pane.devices.filter(d => !d.revoked).length + " computer(s) sending" : "",
@@ -2082,6 +2090,7 @@ function viewRules(){
   if (tab === "plan") return head + viewAccount();
   if (tab === "bridge") return head + viewBridgeSettings();
   if (tab === "tcloud") return head + TCloud.view();
+  if (tab === "ai") return head + AIH.viewSettings();
   if (tab === "reading") return head + viewReading();
   if (tab === "postlog") return head + viewPostLog();
   if (tab === "platform") return head + viewSuperadmin();
