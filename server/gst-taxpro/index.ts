@@ -31,8 +31,8 @@ async function tp(path: string, query: Record<string, string>, headers: Record<s
   });
   const text = await r.text();
   let j: any = null; try { j = JSON.parse(text); } catch { /* not JSON */ }
-  // for the function's own logs: status and the start of the answer, never the credentials
-  if (!j || String(j.status_cd) !== "1") console.log(JSON.stringify({ taxpro: path, http: r.status, head: text.slice(0, 300) }));
+  // for the function's own logs, failures only (never return data or the credentials)
+  if (!j || j.error || String(j.status_cd) === "0") console.log(JSON.stringify({ taxpro: path, http: r.status, head: text.slice(0, 300) }));
   return { http: r.status, j, text };
 }
 const tpErr = (x: { http: number; j: any; text: string }) =>
@@ -46,7 +46,8 @@ const AUTH = "/taxpayerapi/dec/v1.0/authenticate", R2B = "/taxpayerapi/dec/v4.2/
 async function get2b(h: Record<string, string>, gstin: string, username: string, period: string) {
   const q = { action: "GET2B", gstin, username, ret_period: period, rtnprd: period };
   const open = (x: { http: number; j: any; text: string }) => {
-    if (!ok(x)) throw new Error(tpErr(x));
+    // 2B comes back as {chksum, data} with no status_cd; errors carry status_cd 0 and an error
+    if (!ok(x) && !(x.j?.data && !x.j.error)) throw new Error(tpErr(x));
     const d = x.j.data ?? x.j;
     return d?.data && !d.docdata ? d.data : d;
   };
