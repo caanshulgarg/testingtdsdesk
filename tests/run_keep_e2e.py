@@ -46,7 +46,7 @@ march = [(d, p) for d, p in fake_tally.V if d.startswith("202603")]
 try:
     until(lambda: urllib.request.urlopen("http://127.0.0.1:9100/ping", timeout=2).read(), 60)
     key = json.load(open(_os.path.join(BRUN, "tds-bridge.config.json"), encoding="utf-8-sig"))["Key"]
-    ok(json.loads(urllib.request.urlopen("http://127.0.0.1:9100/ping").read())["version"] == "1.13.4", "bridge 1.13.4 running")
+    ok(json.loads(urllib.request.urlopen("http://127.0.0.1:9100/ping").read())["version"] == "1.13.5", "bridge 1.13.5 running")
     # ---------- the worker starts on its own and makes the first copy
     t0 = time.time()
     m = until(lambda: (lambda x: x if x and x.get("phase") == "live" else None)(man()), 300)
@@ -181,7 +181,10 @@ try:
         g_r = "keep-test-after-restore"; fake_tally.add_copy(g_edit, "20260312", g_r)
         ok(until(lambda: fresh() and has(g_r) == ["20260312"], 300, 3), "after Tally's change numbers went back, a new entry still reaches FinCom")
         # ---------- the check against Tally, for March
-        chk = pg.evaluate("async () => await Bridge.call('/keepcheck?company=' + encodeURIComponent(LK.tname()) + '&ym=202603')")
+        # the company is being copied again after the restore: the check agrees once that copy has reached March again
+        ck = lambda: pg.evaluate("async () => await Bridge.call('/keepcheck?company=' + encodeURIComponent(LK.tname()) + '&ym=202603')")
+        good_ck = lambda c: c.get("listMatchesDayBook") and c.get("missing") == 0 and c.get("extra") == 0 and c.get("differ") == 0
+        chk = until(lambda: (lambda c: c if good_ck(c) else None)(ck()), 300, 10) or ck()
         ok(chk.get("listMatchesDayBook") and chk.get("missing") == 0 and chk.get("extra") == 0 and chk.get("differ") == 0, "the check against Tally agrees: " + json.dumps(chk))
         pg.click('[data-lk="keepcheck"]'); wait_for(pg, "LK.fr().check && !LK.fr().busy", 60)
         ok("against Tally" in pg.inner_text(".lk-fresh"), "Check against Tally shows its answer on the page")

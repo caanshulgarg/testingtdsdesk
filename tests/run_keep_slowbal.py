@@ -48,28 +48,28 @@ try:
     wait(lambda: old.poll() is not None, 90)
     ok(old.poll() is not None, "the copier of an older bridge is stopped")
     ok(wait(lambda: worker_pid() not in (0, old.pid) and alive(worker_pid()), 40), "and this version's copier started")
-    ok(wait(lambda: "at a quiet time" in logtext(), 90), "five ledgers' balances were slow, so the rest wait for a quiet time")
-    ok(count("TDSDeskKeepBal") == 1, "only that one small balance read so far (%d)" % count("TDSDeskKeepBal"))
-    ok(wait(lambda: count("DayBook") >= 2, 60), "the day book copy goes on meanwhile (%d reads)" % count("DayBook"))
-    time.sleep(8)
-    ok(count("TDSDeskKeepBal") == 1, "still no balance reads while someone was at the computer recently")
+    ok(wait(lambda: "the first copy is made at a quiet time" in logtext(), 90), "in office hours, with someone at the computer, the first copy waits for a quiet time")
+    time.sleep(10)
+    ok(count("TDSDeskKeepBal") == 0 and count("DayBook") == 0, "and Tally is asked nothing heavy meanwhile (%d balance, %d day book reads)" % (count("TDSDeskKeepBal"), count("DayBook")))
     # nobody at the computer for a long while: a quiet time
     cfg(KeepFakeIdleSec=99999)
+    ok(wait(lambda: "at a quiet time (evening" in logtext(), 90), "at a quiet time: five ledgers' balances were slow, so every balance is read in one go")
     ok(wait(lambda: count("TDSDeskKeepBal") >= 2, 60), "at a quiet time, every opening balance is read")
     ok(wait(lambda: "opening balances read" in logtext(), 30), "and written for FinCom")
     ok(count("TDSDeskKeepBal") == 2, "in one read (%d reads in all)" % count("TDSDeskKeepBal"))
     bf = glob.glob(_os.path.join(BRUN, "sync", "*", "balances.json"))
     n = len(json.load(open(bf[0], encoding="utf-8-sig"))["ledgers"]) if bf else 0
     ok(n == len(fake_tally.L), "every ledger has its opening: %d of %d" % (n, len(fake_tally.L)))
+    ok(wait(lambda: count("DayBook") >= 1, 60), "and the day book copy goes on at the quiet time (%d reads)" % count("DayBook"))
     # a Tally that does not answer in time: not asked again and again
-    fake_tally.CTRL["all_delay"] = 6
+    fake_tally.CTRL["all_delay"] = 10
     t0 = time.time(); n0 = len(fake_tally.LOG); time.sleep(60)
     n1 = len(fake_tally.LOG) - n0
     import collections; print("   kinds:", dict(collections.Counter(k for k, a, b in fake_tally.LOG[n0:])))
-    fake_tally.CTRL["all_delay"] = 0
     nc = sum(1 for k, a, b in fake_tally.LOG[n0:] if k == "TDSDeskCompanies")
     ok(nc <= 6, "a Tally that timed out is not asked again at once: %d company-list requests in a minute" % nc)
-    ok("is busy and did not answer" in logtext(), "and the bridge says Tally is busy")
+    ok(wait(lambda: "is busy and did not answer" in logtext(), 60), "and the bridge says Tally is busy")
+    fake_tally.CTRL["all_delay"] = 0
 finally:
     for p in (br,):
         try: p.kill(); p.wait(10)

@@ -27,7 +27,7 @@ trap {
   try { Stop-Transcript | Out-Null } catch { }
   break
 }
-$BridgeVersion = '1.13.4'
+$BridgeVersion = '1.13.5'
 
 # ------------------------------------------------------------------ settings
 function New-BridgeKey {
@@ -930,13 +930,13 @@ function Invoke-Client($client) {
     switch ($path) {
       '/status' {
         $jobsNow = @(Get-ActiveJobs | Where-Object { $_.status -ne 'interrupted' })
-        $sessions = @($(if ($jobsNow.Count) { Get-OpenCompanies } else { Get-OpenCompanies -Fresh }))
+        $sessions = @(Get-OpenCompanies)          # 1.13.5: the shared answer, at most 30 s old; Tally is not asked on every check
         $result = [ordered]@{ ok = $true; version = $BridgeVersion; computer = $env:COMPUTERNAME; user = $env:USERNAME; mySession = $script:MySession; mode = $script:PlanMode; onlyMySession = [bool]$Cfg.OnlyMySession; time = (Get-Date).ToString('s'); sessions = $sessions; allowImport = [bool]$Cfg.AllowImport }
         $result['jobs'] = $jobsNow
       }
       '/companies' {
         $list = @()
-        foreach ($s in (Get-OpenCompanies -Fresh)) { if ($s.skipped) { continue }; foreach ($c in $s.companies) { $list += [ordered]@{ name = $c.name; port = $s.port; mine = $s.mine; from = $c.from; to = $c.to } } }
+        foreach ($s in (Get-OpenCompanies)) { if ($s.skipped) { continue }; foreach ($c in $s.companies) { $list += [ordered]@{ name = $c.name; port = $s.port; mine = $s.mine; from = $c.from; to = $c.to } } }
         $result = [ordered]@{ ok = $true; companies = $list }
       }
       '/diagnose' { $result = Get-Diagnosis }
@@ -1799,9 +1799,79 @@ function Get-KeepUserInTally {
 function Test-KeepQuiet {
   $now = Get-Date
   $office = $now.DayOfWeek -ne [DayOfWeek]::Sunday -and $now.Hour -ge (Get-KeepNum 'KeepOfficeFrom' 9) -and $now.Hour -lt (Get-KeepNum 'KeepOfficeTo' 19)
-  if ($script:Fake -and $null -ne $Cfg.KeepFakeOffice) { $office = [bool]$Cfg.KeepFakeOffice }
+  if ($script:Fake) { if ($null -eq $Cfg.KeepFakeOffice) { return $true }; $office = [bool]$Cfg.KeepFakeOffice }
   if (-not $office) { return $true }
   return ((Get-KeepIdleSec) -ge 60 * (Get-KeepNum 'KeepQuietMin' 10))
+}
+# ---- Which companies are open (1.13.5): the question every status check asks, so it must cost Tally nothing.
+# Only the names and periods are asked (Tally answers at once); a company's GSTIN and PAN are asked once, when it is
+# first seen, and remembered. The answer is shared through a file by the bridge and its copier, and kept 30 seconds,
+# so FinCom's checks, the Connector's and the copier's together put at most one small question to Tally each 30 s.
+$script:CoInfo = $null
+function Get-CoInfoFile { return (Join-Path (Get-SyncDir) 'company-info.json') }
+function Get-CoInfo([string]$Name, [int]$Port) {
+  if ($null -eq $script:CoInfo) { $script:CoInfo = @{}; try { $f = Get-CoInfoFile; if (Test-Path -LiteralPath $f) { $o = Get-Content -Raw -LiteralPath $f | ConvertFrom-Json; foreach ($p in $o.PSObject.Properties) { $script:CoInfo[$p.Name] = $p.Value } } } catch { } }
+  $x = $script:CoInfo[$Name]
+  if ($x -and ($x.gstin -or $x.pan -or ((Get-Date) - [datetime]$x.at).TotalHours -lt 6)) { return $x }
+  $g = ''; $pan = ''
+  try {
+    $req = New-CollectionRequest 'TDSDeskCompanyInfo' 'Company' 'NAME,GSTREGISTRATIONNUMBER,INCOMETAXNUMBER,GSTREGISTRATIONDETAILS.LIST' '' ('<FILTERS>TDSDeskThisCo</FILTERS></COLLECTION><SYSTEM TYPE="Formulae" NAME="TDSDeskThisCo">$Name = "' + (Esc ($Name.Replace('"', ''))) + '"</SYSTEM><COLLECTION NAME="TDSDeskUnused" ISMODIFY="No"><TYPE>Company</TYPE>')
+    $doc = Get-XmlDoc (Invoke-Tally -TallyPort $Port -Xml $req -TimeoutSec 15)
+    $c = $doc.SelectSingleNode('//COMPANY')
+    if ($c) { $g = Get-NodeText $c 'GSTREGISTRATIONNUMBER'; if (-not $g) { $g = Get-NodeText $c 'GSTREGISTRATIONDETAILS.LIST/GSTIN' }; $pan = Get-NodeText $c 'INCOMETAXNUMBER' }
+  } catch { }
+  $x = [pscustomobject]@{ gstin = $g; pan = $pan; at = (Get-Date).ToString('s') }
+  $script:CoInfo[$Name] = $x
+  try { New-Item -ItemType Directory -Force -Path (Get-SyncDir) | Out-Null; $o = [ordered]@{}; foreach ($k in $script:CoInfo.Keys) { $o[$k] = $script:CoInfo[$k] }; Save-KeepFile (Get-CoInfoFile) ($o | ConvertTo-Json -Depth 3 -Compress) } catch { }
+  return $x
+}
+function Get-OpenCompanies([switch]$Fresh) {
+  $cacheSec = [int]$Cfg.StatusCacheSec; if ($cacheSec -lt 30) { $cacheSec = 30 }
+  if (-not $Fresh -and $script:CompanyCache -and ((Get-Date) - $script:CompanyCacheAt).TotalSeconds -lt $cacheSec) { return $script:CompanyCache }
+  # what the bridge or the copier asked a moment ago
+  $shared = Join-Path (Get-SyncDir) 'open-companies.json'
+  if (-not $Fresh) {
+    try {
+      $fi = Get-Item -LiteralPath $shared -ErrorAction Stop
+      if (((Get-Date) - $fi.LastWriteTime).TotalSeconds -lt $cacheSec) {
+        $script:CompanyCache = @(Get-Content -Raw -LiteralPath $shared | ConvertFrom-Json | ForEach-Object { $h = [ordered]@{}; foreach ($p in $_.PSObject.Properties) { $h[$p.Name] = $p.Value }; $h.companies = @($h.companies | ForEach-Object { $c = [ordered]@{}; foreach ($q in $_.PSObject.Properties) { $c[$q.Name] = $q.Value }; $c }); $h })
+        $script:CompanyCacheAt = $fi.LastWriteTime
+        return $script:CompanyCache
+      }
+    } catch { }
+  }
+  $plan = Get-PortPlan
+  $script:PlanMode = $plan.mode
+  $sessions = @()
+  foreach ($pp in $plan.ports) {
+    $entry = [ordered]@{ port = [int]$pp.port; ok = $false; companies = @(); error = ''; mine = $pp.mine; session = $pp.session; program = $pp.program; user = $pp.user; skipped = $false }
+    if ($Cfg.OnlyMySession -and $pp.mine -eq $false) {
+      $entry.skipped = $true
+      $who = $pp.user; if (-not $who) { $who = 'Windows session ' + $pp.session }
+      $entry.error = "Tally of " + $who
+      $sessions += $entry
+      continue
+    }
+    try {
+      $xml = Invoke-Tally -TallyPort $pp.port -Xml (New-CollectionRequest 'TDSDeskCompanies' 'Company' 'NAME,STARTINGFROM,ENDINGAT,GUID' '' '') -TimeoutSec 8
+      $doc = Get-XmlDoc $xml
+      $list = @()
+      foreach ($c in $doc.SelectNodes('//COMPANY')) {
+        $name = $c.GetAttribute('NAME')
+        if (-not $name) { $name = Get-NodeText $c 'NAME' }
+        if (-not $name) { continue }
+        $inf = Get-CoInfo $name ([int]$pp.port)
+        $list += [ordered]@{ name = $name; from = (Get-NodeText $c 'STARTINGFROM'); to = (Get-NodeText $c 'ENDINGAT'); guid = (Get-NodeText $c 'GUID'); gstin = [string]$inf.gstin; pan = [string]$inf.pan }
+      }
+      $entry.ok = $true
+      $entry.companies = $list
+    } catch { $entry.error = $_.Exception.Message }
+    $sessions += $entry
+  }
+  $script:CompanyCache = $sessions
+  $script:CompanyCacheAt = Get-Date
+  try { New-Item -ItemType Directory -Force -Path (Get-SyncDir) | Out-Null; Save-KeepFile $shared (ConvertTo-Json -InputObject @($sessions) -Depth 6 -Compress) } catch { }
+  return $sessions
 }
 # why Tally is to be left alone right now ('' when it is free)
 function Get-KeepHold {
@@ -2147,6 +2217,13 @@ function Step-Keep([string]$Company, [int]$Port, [string]$BooksFrom) {
     $st = @{ company = $Company; from = $from; next = $from; slice = (Get-KeepNum 'KeepSliceDays' 1); phase = 'open'; openIdx = 0; last = 0; lastM = 0; checkYm = ''; months = @{}; cycle = 0; skipped = @(); dayFail = 0 }
     Write-Log ('Keeping ' + $Company + ' in step with FinCom: first copy from ' + $from)
   }
+  # 1.13.5: the heavy work (the first copy of the year, its opening balances, the month-by-month check) only at a
+  # quiet time: after office hours, or when nobody has used the computer for a while. In the day only changes are read
+  if ($st.phase -ne 'live' -and -not (Test-KeepQuiet)) {
+    if (-not $st.waitNoted){ $st.waitNoted = $true; Save-KeepFile (Join-Path $dir 'keep.json') ($st | ConvertTo-Json -Depth 6 -Compress); Write-Log ('Keeping ' + $Company + ': the first copy is made at a quiet time (after ' + (Get-KeepNum 'KeepOfficeTo' 19) + ':00, or when nobody has used this computer for ' + (Get-KeepNum 'KeepQuietMin' 10) + ' minutes), so Tally is not held up while you work') }
+    return
+  }
+  $st.waitNoted = $false
   $st.cycle = [int]$st.cycle + 1
   $budget = Get-KeepNum 'KeepBudgetSec' 20
   $sw = [Diagnostics.Stopwatch]::StartNew()
@@ -2361,7 +2438,7 @@ function Invoke-KeepWorker {
       $busy = $false; try { $busy = @(Get-ActiveJobs).Count -gt 0 } catch { }
       $open = @()
       if (-not $busy) {
-        foreach ($s in @(Get-OpenCompanies -Fresh)) {
+        foreach ($s in @(Get-OpenCompanies)) {
           if ($s.skipped -or -not $s.ok) { continue }
           foreach ($c in $s.companies) {
             $want = @($Cfg.KeepCompanies | Where-Object { $_ })

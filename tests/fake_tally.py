@@ -138,7 +138,7 @@ class H(http.server.BaseHTTPRequestHandler):
             a, b = g("SVFROMDATE"), g("SVTODATE")
             with _lock: mine = [x for x in POSTED if a <= x[0] <= b]
             out = "<ENVELOPE><BODY><DATA><COLLECTION>" + "".join('<VOUCHER><DATE>%s</DATE><VOUCHERTYPENAME>Journal</VOUCHERTYPENAME><VOUCHERNUMBER>%s</VOUCHERNUMBER><NARRATION>%s</NARRATION><MASTERID>%d</MASTERID><GUID>g-%s</GUID><ISOPTIONAL>No</ISOPTIONAL></VOUCHER>' % (d, num, n, 900000 + int(num), num) for d, n, num, _ in mine) + "</COLLECTION></DATA></BODY></ENVELOPE>"
-        elif "TDSDeskCompanies" in body:
+        elif "TDSDeskCompanies" in body or "TDSDeskCompanyInfo" in body:
             out = '<ENVELOPE><BODY><DATA><COLLECTION><COMPANY NAME="%s"><NAME>%s</NAME><STARTINGFROM>20240401</STARTINGFROM></COMPANY></COLLECTION></DATA></BODY></ENVELOPE>' % (COMPANY.replace("&", "&amp;"), COMPANY)
         elif "<REPORTNAME>Day Book</REPORTNAME>" in body:
             a, b = g("SVFROMDATE"), g("SVTODATE")
