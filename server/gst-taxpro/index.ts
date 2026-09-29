@@ -1,8 +1,8 @@
 // FinCom GST API through TaxPro GSP's Decrypted GST API: TaxPro does GSTN's encryption, so calls carry only the ASP ID
 // and ASP password (server-side here, never in the browser). Staging first; live keeps gst-api (FYN) until switched.
 // Secrets: TAXPRO_ASP_PASSWORD (required), TAXPRO_ASP_ID (default below),
-//   TAXPRO_BASE_URL (default sandbox https://gstsandbox.charteredinfo.com; production https://gstapi.charteredinfo.com).
-// GET ?selftest=1 : sandbox only, asks an OTP for GSTN's test taxpayer and says whether TaxPro took the credentials.
+//   TAXPRO_BASE_URL (default production https://gstapi.charteredinfo.com; sandbox https://gstsandbox.charteredinfo.com).
+// GET ?selftest=1 : always on the sandbox (free), OTP → sign-in → 2B for GSTN's test taxpayer.
 // POST {action: "otp" | "auth" | "2b"} for a signed-in firm member: taxpayer OTP, auth token, GSTR-2B.
 // The taxpayer's auth token stays in the caller's browser, never stored here.
 import { createClient } from "jsr:@supabase/supabase-js@2";
@@ -10,10 +10,10 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
-const BASE = (Deno.env.get("TAXPRO_BASE_URL") || "https://gstsandbox.charteredinfo.com").replace(/\/+$/, "");
+const BASE = (Deno.env.get("TAXPRO_BASE_URL") || "https://gstapi.charteredinfo.com").replace(/\/+$/, "");
+const SANDBOX_URL = "https://gstsandbox.charteredinfo.com";
 const ASPID = (Deno.env.get("TAXPRO_ASP_ID") || "1811650926").trim();
 const ASPPW = Deno.env.get("TAXPRO_ASP_PASSWORD") || "";
-const SANDBOX = BASE.includes("sandbox");
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -24,9 +24,9 @@ const reply = (code: number, body: unknown) =>
   new Response(JSON.stringify(body), { status: code, headers: { ...cors, "Content-Type": "application/json" } });
 
 // one call to TaxPro: query in the URL, ASP credentials and taxpayer details in headers
-async function tp(path: string, query: Record<string, string>, headers: Record<string, string>) {
+async function tp(path: string, query: Record<string, string>, headers: Record<string, string>, base = BASE) {
   if (!ASPPW) throw new Error("TAXPRO_ASP_PASSWORD is not set in Edge Function secrets.");
-  const r = await fetch(BASE + path + "?" + new URLSearchParams(query), {
+  const r = await fetch(base + path + "?" + new URLSearchParams(query), {
     headers: { aspid: ASPID, password: ASPPW, txn: "FC" + Date.now() + Math.floor(Math.random() * 1e6), appver: "FinCom-1.0", ...headers },
   });
   const text = await r.text();
@@ -68,22 +68,21 @@ Deno.serve(async (req) => {
   const u = new globalThis.URL(req.url);
 
   if (req.method === "GET" && u.searchParams.get("selftest")) {
-    // sandbox: GSTN's published test taxpayer; its sandbox OTP is 575757. Production is not touched (it costs credit).
-    if (!SANDBOX) return reply(200, { ok: !!ASPPW, base: BASE, passwordSet: !!ASPPW, note: "Production: no free check. Fetch a 2B for a real client to test." });
+    // GSTN's published sandbox test taxpayer (sandbox OTP 575757); production is not touched, it costs credit
     const t = { gstin: "33AANCS2882A1ZG", username: "TN_NT2.2265" }, h = { "state-cd": "33", gstin: t.gstin, username: t.username, "ip-usr": "127.0.0.1" };
     const steps: Record<string, string> = {};
     try {
-      const a = await tp(AUTH, { action: "OTPREQUEST", ...t }, h); steps.otp = ok(a) ? "ok" : tpErr(a);
-      const b = await tp(AUTH, { action: "AUTHTOKEN", ...t, OTP: "575757" }, h); steps.auth = ok(b) ? "ok" : tpErr(b);
+      const a = await tp(AUTH, { action: "OTPREQUEST", ...t }, h, SANDBOX_URL); steps.otp = ok(a) ? "ok" : tpErr(a);
+      const b = await tp(AUTH, { action: "AUTHTOKEN", ...t, OTP: "575757" }, h, SANDBOX_URL); steps.auth = ok(b) ? "ok" : tpErr(b);
       const token = b.j?.auth_token || b.j?.authtoken || b.j?.data?.auth_token || "";
       steps.authKeys = Object.keys(b.j || {}).join(",");
       if (token) {
-        const g = await tp(R2B, { action: "GET2B", ...t, ret_period: "012021", rtnprd: "012021" }, { ...h, "auth-token": token, ret_period: "012021" });
+        const g = await tp(R2B, { action: "GET2B", ...t, ret_period: "012021", rtnprd: "012021" }, { ...h, "auth-token": token, ret_period: "012021" }, SANDBOX_URL);
         steps.gstr2b = ok(g) ? "ok" : tpErr(g);
         steps.gstr2bKeys = Object.keys(g.j?.data ?? g.j ?? {}).slice(0, 12).join(",");
       }
     } catch (e) { steps.error = String((e as Error).message || e); }
-    return reply(200, { ok: steps.otp === "ok", base: BASE, steps });
+    return reply(200, { ok: steps.auth === "ok", tested: SANDBOX_URL, inUse: BASE, steps });
   }
   if (req.method !== "POST") return reply(405, { ok: false, error: "POST only" });
 
