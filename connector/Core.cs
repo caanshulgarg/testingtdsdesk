@@ -725,19 +725,24 @@ namespace FinCom.Connector
                     k.SetValue("UninstallString", "\"" + App.Exe + "\" --remove"); k.SetValue("DisplayIcon", App.Exe); k.SetValue("NoModify", 1); k.SetValue("NoRepair", 1);
                     k.SetValue("InstallLocation", App.Home);
                 }
-                // a Start menu entry
-                var sm = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), App.Name + ".lnk");
-                Run(App.PowerShell, "-NoProfile -ExecutionPolicy Bypass -Command \"$s = (New-Object -ComObject WScript.Shell).CreateShortcut('" + sm.Replace("'", "''") + "'); $s.TargetPath = '" + App.Exe.Replace("'", "''") + "'; $s.Save()\"");
+                // a Start menu entry and an icon on the desktop: double-click opens the window (or brings it up)
+                foreach (var sm in Shortcuts())
+                    Run(App.PowerShell, "-NoProfile -ExecutionPolicy Bypass -Command \"$s = (New-Object -ComObject WScript.Shell).CreateShortcut('" + sm.Replace("'", "''") + "'); $s.TargetPath = '" + App.Exe.Replace("'", "''") + "'; $s.WorkingDirectory = '" + App.Home.Replace("'", "''") + "'; $s.IconLocation = '" + App.Exe.Replace("'", "''") + ",0'; $s.Description = 'Keeps the Tally Bridge running for FinCom'; $s.Save()\"");
             }
             App.Log("Installed " + App.Name + " " + App.Version + " in " + App.Home);
             return App.Exe;
+        }
+        static string[] Shortcuts()
+        {
+            return new[] { Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), App.Name + ".lnk"),
+                           Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), App.Name + ".lnk") };
         }
         public static void Remove()
         {
             if (!App.IsWindows) return;
             try { using (var k = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run")) k.DeleteValue(App.Name, false); } catch { }
             try { Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\FinComConnector", false); } catch { }
-            try { var sm = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), App.Name + ".lnk"); if (File.Exists(sm)) File.Delete(sm); } catch { }
+            foreach (var sm in Shortcuts()) { try { if (File.Exists(sm)) File.Delete(sm); } catch { } }
             Supervisor.Current.Stop();
             try { if (Bridge.Ping() != null) Bridge.Call("/shutdown", "{}", 3000); } catch { }
             App.Log("Removed from starting with Windows. The folder " + App.Home + " (settings and copies) is left as it is.");
