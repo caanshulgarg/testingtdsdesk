@@ -18,12 +18,11 @@ namespace FinCom.Connector
         {
             var a = new HashSet<string>(args.Select(x => x.ToLowerInvariant()));
             if (a.Contains("--selftest")) return SelfTest.Run(args);
-            if (a.Contains("--swap")) return Swap.Run(args);
             if (a.Contains("--verify") && args.Length >= 3) { var ok = Updater.Verify(File.ReadAllBytes(args[1]), Convert.FromBase64String(File.ReadAllText(args[2]).Trim())); Console.WriteLine(ok ? "signature ok" : "signature BAD"); return ok ? 0 : 1; }
             if (a.Contains("--remove")) { Installer.Remove(); if (!a.Contains("--quiet")) MessageBox.Show("FinCom Connector will not start with Windows any more.\n\nThe folder " + App.Home + " (settings and the copies of the books) is left as it is.", App.Name); return 0; }
             bool first;
             single = new Mutex(true, "Local\\FinComConnector", out first);
-            if (!first && !a.Contains("--updated") && !a.Contains("--rolledback"))
+            if (!first)
             {
                 // already running: ask it to show its window
                 try { using (var ev = EventWaitHandle.OpenExisting("Local\\FinComConnectorShow")) ev.Set(); } catch { }
@@ -44,7 +43,6 @@ namespace FinCom.Connector
                 Process.Start(new ProcessStartInfo(App.Exe, "--installed") { UseShellExecute = false });
                 return 0;
             }
-            if (a.Contains("--updated")) { Thread.Sleep(4000); try { single = new Mutex(true, "Local\\FinComConnector", out first); } catch { } }
             Supervisor.Current.Start();
             var form = new MainForm(!a.Contains("--tray"));
             Application.Run(form);
@@ -154,7 +152,7 @@ namespace FinCom.Connector
             FormClosed += (s, e) => { tray.Visible = false; };
             timer.Tick += (s, e) => Tick();
             try { showEvent = new EventWaitHandle(false, EventResetMode.AutoReset, "Local\\FinComConnectorShow"); ThreadPool.RegisterWaitForSingleObject(showEvent, (o, t) => BeginInvoke((Action)ShowMe), null, -1, false); } catch { }
-            Load += (s, e) => { if (!showNow) { BeginInvoke((Action)Hide); } timer.Start(); RefreshAll(true); try { File.WriteAllText(Path.Combine(App.Home, "update", "started.ok"), DateTime.Now.ToString("s")); } catch { } };
+            Load += (s, e) => { if (!showNow) { BeginInvoke((Action)Hide); } timer.Start(); RefreshAll(true); };
         }
 
         // buttons in a row: text, what it does, text, what it does, ...

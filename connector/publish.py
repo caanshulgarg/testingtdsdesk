@@ -15,7 +15,7 @@ sha = lambda f: hashlib.sha256(open(f, "rb").read()).hexdigest()
 cver = re.search(r'Version = "([0-9.]+)"', open(os.path.join(ROOT, "connector", "Core.cs")).read()).group(1)
 ever = re.search(r"\$BridgeVersion = '([0-9.]+)'", open(eng, encoding="utf-8-sig").read()).group(1)
 man = {"at": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
-       "connector": {"version": cver, "url": base + "/assets/connector/FinComConnector.exe", "sha256": sha(os.path.join(out, "FinComConnector.exe"))},
+       "app": {"version": cver, "url": base + "/assets/connector/FinComConnector.exe"},     # announced only; never "connector" (1.0.0-1.0.3 would swap themselves in)
        "engine": {"version": ever, "url": base + "/assets/connector/TDSBridge.ps1", "sha256": sha(os.path.join(out, "TDSBridge.ps1"))},
        "notes": "Keeps the Tally Bridge running; the copy of the books goes to FinCom's cloud."}
 body = json.dumps(man, indent=1).encode("utf-8")

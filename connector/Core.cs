@@ -24,7 +24,7 @@ namespace FinCom.Connector
 {
     public static class App
     {
-        public const string Version = "1.0.3";
+        public const string Version = "1.0.4";
         public const string Name = "FinCom Connector";
         public static readonly bool IsWindows = Environment.OSVersion.Platform == PlatformID.Win32NT;
         public static readonly JavaScriptSerializer Json = new JavaScriptSerializer { MaxJsonLength = 64 * 1024 * 1024 };
@@ -572,24 +572,16 @@ namespace FinCom.Connector
             sup.StartEngine(); sup.WaitFor(v => true, 60);
             return LastResult = "The new bridge " + want + " did not start, so the previous one (" + have + ") is back. FinCom support has been told in the log.";
         }
-        // the Connector itself: the new program is checked, then started from the update folder to swap itself in once
-        // this one has closed; it puts the old one back if the new one does not start
+        // the Connector itself is never downloaded and run by itself: an unsigned program that fetches a program and starts
+        // it looks like malware to antivirus, which then quarantines the Connector. A newer one is only announced; the
+        // person downloads it from FinCom and runs it (the installer takes over from the old one)
         public static string UpdateSelf(Dictionary<string, object> man, Action exitApp)
         {
-            if (!man.ContainsKey("connector")) return "";
-            var part = (Dictionary<string, object>)man["connector"];
+            if (!man.ContainsKey("app")) return "";
+            var part = (Dictionary<string, object>)man["app"];
             var want = Convert.ToString(part["version"]);
             if (App.CompareVersions(want, App.Version) <= 0) return "";
-            if (!App.IsWindows) return "The Connector " + want + " is available.";
-            var bytes = Fetch(part, "The new Connector");
-            var upd = Path.Combine(App.Home, "update"); Directory.CreateDirectory(upd);
-            var neu = Path.Combine(upd, "FinComConnector.new.exe"); File.WriteAllBytes(neu, bytes);
-            var prevDir = Path.Combine(App.Home, "previous"); Directory.CreateDirectory(prevDir);
-            var ok = Path.Combine(upd, "started.ok"); if (File.Exists(ok)) File.Delete(ok);
-            App.Log("Updating the Connector to " + want);
-            Process.Start(new ProcessStartInfo(neu, "--swap " + Process.GetCurrentProcess().Id) { UseShellExecute = false });
-            exitApp();
-            return "Updating to " + want + "\u2026";
+            return "FinCom Connector " + want + " is available: download it from FinCom (Settings, Tally Bridge) and run it.";
         }
         public static string CheckAndApply(bool auto, Action exitApp)
         {
@@ -601,37 +593,6 @@ namespace FinCom.Connector
                 return (r + " " + s).Trim();
             }
             catch (Exception e) { App.Log("Update: " + e.Message); return LastResult = "Could not update: " + e.Message; }
-        }
-    }
-
-    public static class Swap
-    {
-        public static int Run(string[] args)
-        {
-            int pid; int.TryParse(args.Length > 1 ? args[1] : "0", out pid);
-            try { if (pid > 0) Process.GetProcessById(pid).WaitForExit(30000); } catch { }
-            Thread.Sleep(1000);
-            var me = System.Reflection.Assembly.GetExecutingAssembly().Location;
-            var prevDir = Path.Combine(App.Home, "previous"); Directory.CreateDirectory(prevDir);
-            var prev = Path.Combine(prevDir, "FinComConnector.exe");
-            var ok = Path.Combine(App.Home, "update", "started.ok");
-            try
-            {
-                if (File.Exists(App.Exe)) File.Copy(App.Exe, prev, true);
-                File.Copy(me, App.Exe, true);
-                Process.Start(new ProcessStartInfo(App.Exe, "--tray --updated") { UseShellExecute = false });
-                for (int i = 0; i < 60; i++) { if (File.Exists(ok)) { App.Log("The Connector was updated to " + App.Version); return 0; } Thread.Sleep(1000); }
-                App.Log("The new Connector did not start; going back to the previous one");
-            }
-            catch (Exception e) { App.Log("Could not swap in the new Connector: " + e.Message); }
-            try
-            {
-                foreach (var p in Process.GetProcessesByName("FinComConnector")) { try { if (p.Id != Process.GetCurrentProcess().Id) { p.Kill(); p.WaitForExit(5000); } } catch { } }
-                if (File.Exists(prev)) File.Copy(prev, App.Exe, true);
-                Process.Start(new ProcessStartInfo(App.Exe, "--tray --rolledback") { UseShellExecute = false });
-            }
-            catch (Exception e) { App.Log("Could not go back to the previous Connector: " + e.Message); }
-            return 1;
         }
     }
 

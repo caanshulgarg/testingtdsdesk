@@ -28,6 +28,10 @@ namespace FinCom.Connector
             var upd = Arg(args, "--updates");            // a folder served on http://127.0.0.1:8150/
             // ---- install: the engine from inside the program goes into the folder
             Installer.Install();
+            // the Connector never downloads and starts a program of its own: a newer one is only announced
+            bool exited = false;
+            var said = Updater.UpdateSelf(new Dictionary<string, object> { { "app", new Dictionary<string, object> { { "version", "9.9.9" } } }, { "connector", new Dictionary<string, object> { { "version", "9.9.9" } } } }, () => exited = true);
+            Ok(said.Contains("9.9.9 is available") && !exited && !Directory.Exists(Path.Combine(App.Home, "update")), "a newer Connector is announced, not downloaded or started: " + said);
             Ok(File.Exists(App.Engine) && App.EngineVersionOf(File.ReadAllText(App.Engine)) != "", "installed: the bridge " + App.EngineVersionOf(File.ReadAllText(App.Engine)) + " is in " + App.Home);
             // ---- the minder starts it, and starts it again when it stops
             var sup = Supervisor.Current; sup.IntervalSec = 2; sup.Start();

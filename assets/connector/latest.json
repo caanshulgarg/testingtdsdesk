@@ -1,9 +1,8 @@
 {
- "at": "2026-09-29T04:21:46Z",
- "connector": {
-  "version": "1.0.3",
-  "url": "https://staging.fincom.live/assets/connector/FinComConnector.exe",
-  "sha256": "ce42b327793d378db74b32056a980b7581d048b8b117e242396fb7cb9f4b68b8"
+ "at": "2026-09-29T04:41:35Z",
+ "app": {
+  "version": "1.0.4",
+  "url": "https://staging.fincom.live/assets/connector/FinComConnector.exe"
  },
  "engine": {
   "version": "1.13.3",
