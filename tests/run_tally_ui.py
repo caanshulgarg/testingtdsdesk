@@ -45,12 +45,29 @@ try:
             pg.wait_for_timeout(1000)
             if pg.evaluate("S.books && !S.books.busy && (S.books.vouchers || []).length > 0 && !!S.books.tb"): break
         n = pg.evaluate("S.books.vouchers.length"); want = sum(1 for d, _ in fake_tally.V if "20250601" <= d <= "20250731")
-        ok(n == want, "June and July read month by month: %d vouchers (Tally has %d)" % (n, want))
+        ok(n == want, "June and July read in full: %d vouchers (Tally has %d)" % (n, want))
+        from datetime import date as _d
+        dd = lambda x: _d(int(x[:4]), int(x[4:6]), int(x[6:]))
+        reads = [(a, b) for k, a, b in fake_tally.LOG if k == "DayBook" and a >= "20250601" and b <= "20250731"]
+        ok(len(reads) > 2 and all((dd(b) - dd(a)).days < 31 and a[:6] == b[:6] for a, b in reads), "read a few days at a time, never across a month: %d reads, the longest %d days" % (len(reads), max((dd(b) - dd(a)).days + 1 for a, b in reads) if reads else 0))
+        bal = [k for k, a, b in fake_tally.LOG if k == "TDSDeskBalances"]
+        ok(len(bal) == 1, "the balances asked once, for the opening only (%d reads)" % len(bal))
         ok(pg.evaluate("S.books.tb.from") == "20250601" and pg.evaluate("Object.keys(S.books.tb.led).length") > 2000, "Tally's balances kept for the period")
         run = pg.evaluate("JSON.stringify({how: S.books.audit.last.how, bal: S.books.audit.last.balances, notes: S.books.audit.last.notes, code: S.books.audit.last.code})")
         ok("after reading from Tally" in run and "Tally's balances" in run, "the audit ran on Tally's own balances: " + run[:160])
         mis = pg.evaluate("() => { const r = MIS.run('20250601', '20250731', 'test'); return JSON.stringify(r.control); }")
         ok('"ok":true' in mis, "MIS for June and July agrees with Tally's balances, ledger by ledger: " + mis[:60])
+        # the bridge's copy already holds the opening balances for 31 May: read again, and Tally is not asked for them
+        led = pg.evaluate("Object.entries(S.books.tb.led).map(([n, x]) => ({name: n, parent: x.parent, open: String(x.open), close: ''}))")
+        cdir = _os.path.join(BRUN, "sync", "VMS EVENTS PRIVATE LIMITED (2024-25)"); _os.makedirs(cdir, exist_ok=True)
+        json.dump({"ok": True, "company": "VMS EVENTS PRIVATE LIMITED (2024-25)", "from": "20250601", "to": "20250731", "openAsOn": "20250531", "ledgers": led, "keep": True}, open(_os.path.join(cdir, "balances.json"), "w"))
+        nb = len([1 for k, a2, b2 in fake_tally.LOG if k == "TDSDeskBalances"])
+        pg.click('button[data-act="tallyRead"]'); pg.wait_for_timeout(1500)
+        for i in range(120):
+            pg.wait_for_timeout(1000)
+            if pg.evaluate("S.books && !S.books.busy"): break
+        nb2 = len([1 for k, a2, b2 in fake_tally.LOG if k == "TDSDeskBalances"])
+        ok(nb2 == nb and pg.evaluate("Object.keys(S.books.tb.led).length") > 2000, "read again with the opening balances already in the bridge's copy: Tally not asked for them (%d, %d)" % (nb, nb2))
         rt = pg.evaluate("() => { const r = S.books.mis.last; return JSON.stringify({bs: r.p2.ratios.bs, cr: r.p2.ratios.list.find(x => x[0] === 'Current ratio'), open: r.p2.fc.opening}); }")
         ok('"bs":true' in rt and '"open":null' not in rt, "with Tally's balances: balance-sheet ratios and the forecast's opening cash: " + rt[:120])
         # read the same period again: the same result code

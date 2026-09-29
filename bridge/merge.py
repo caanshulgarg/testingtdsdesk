@@ -6,7 +6,7 @@ def R(a, b):
     assert base.count(a) == 1, ('anchor', a[:60], base.count(a))
     base = base.replace(a, b)
 import re
-base = re.sub(r"\$BridgeVersion = '[0-9.]+'", "$BridgeVersion = '1.13.5'", base, 1)
+base = re.sub(r"\$BridgeVersion = '[0-9.]+'", "$BridgeVersion = '1.13.6'", base, 1)
 # 1.12.7 (security): the log never holds keys, codes or passwords, and is rotated at 5 MB keeping 5 old copies
 R(r"""function Write-Log([string]$msg) {
   $line = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + '  ' + $msg
@@ -42,8 +42,8 @@ R("param(\n  [string]$ConfigPath = (Join-Path $PSScriptRoot 'tds-bridge.config.j
   "param(\n  [string]$ConfigPath = (Join-Path $PSScriptRoot 'tds-bridge.config.json'),\n  [switch]$Sync,\n  [string]$Job = ''\n)")
 R("  AllowImport     = $true\n}", "  AllowImport     = $true\n  SyncDir         = ''\n  SyncCompanies   = @()\n  AllowedOrigins  = @('https://app.fincom.live', 'https://staging.fincom.live', 'https://caanshulgarg.github.io', 'http://localhost', 'null')\n}")
 R("# ------------------------------------------------------------------ start\n", add + "\n# the nightly copy runs on its own and stops; it does not start the bridge\n# a posting job runs on its own, reports to its folder and stops\nif ($Job) {\n  try { Invoke-JobWorker $Job } catch { Write-Log ('Posting job stopped: ' + $_.Exception.Message) }\n  exit 0\n}\nif ($Sync) {\n  $r = Invoke-NightlySync\n  Write-Host ('Nightly copy: ' + @($r.done).Count + ' done, ' + @($r.failed).Count + ' failed.')\n  try { Stop-Transcript | Out-Null } catch { }\n  exit 0\n}\n\n# ------------------------------------------------------------------ start\n")
-R("      '/vouchers' {", """      '/daybook' { $xml = Get-DayBookXml $qs['company'] $qs['from'] $qs['to'] ([int]('0' + $qs['port'])); Send-Raw $stream 200 $xml $origin; return }
-      '/balances' { $result = Get-Balances $qs['company'] $qs['from'] $qs['to'] ([int]('0' + $qs['port'])) }
+R("      '/vouchers' {", """      '/daybook' { Set-FinComReading; $xml = Get-DayBookXml $qs['company'] $qs['from'] $qs['to'] ([int]('0' + $qs['port'])); Send-Raw $stream 200 $xml $origin; return }
+      '/balances' { Set-FinComReading; $result = Get-Balances $qs['company'] $qs['from'] $qs['to'] ([int]('0' + $qs['port'])) ($qs['open'] -eq '1') }
       '/synced' {
         $mf = Join-Path (Get-SyncFolder $qs['company']) 'manifest.json'
         if (Test-Path $mf) { Send-Raw $stream 200 ([IO.File]::ReadAllText($mf)) $origin 'application/json; charset=utf-8'; return }

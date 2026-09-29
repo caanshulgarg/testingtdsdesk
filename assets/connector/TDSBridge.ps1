@@ -27,7 +27,7 @@ trap {
   try { Stop-Transcript | Out-Null } catch { }
   break
 }
-$BridgeVersion = '1.13.5'
+$BridgeVersion = '1.13.6'
 
 # ------------------------------------------------------------------ settings
 function New-BridgeKey {
@@ -943,8 +943,8 @@ function Invoke-Client($client) {
       '/readtest' { $result = Invoke-ReadTest $qs['company'] ([int]('0' + $qs['port'])) }
       '/ledgers' { $result = Get-Ledgers $qs['company'] ([int]('0' + $qs['port'])) }
       '/ledgervouchers' { $result = Get-LedgerVouchers $qs['company'] $qs['ledger'] $qs['from'] $qs['to'] ([int]('0' + $qs['port'])) }
-      '/daybook' { $xml = Get-DayBookXml $qs['company'] $qs['from'] $qs['to'] ([int]('0' + $qs['port'])); Send-Raw $stream 200 $xml $origin; return }
-      '/balances' { $result = Get-Balances $qs['company'] $qs['from'] $qs['to'] ([int]('0' + $qs['port'])) }
+      '/daybook' { Set-FinComReading; $xml = Get-DayBookXml $qs['company'] $qs['from'] $qs['to'] ([int]('0' + $qs['port'])); Send-Raw $stream 200 $xml $origin; return }
+      '/balances' { Set-FinComReading; $result = Get-Balances $qs['company'] $qs['from'] $qs['to'] ([int]('0' + $qs['port'])) ($qs['open'] -eq '1') }
       '/synced' {
         $mf = Join-Path (Get-SyncFolder $qs['company']) 'manifest.json'
         if (Test-Path $mf) { Send-Raw $stream 200 ([IO.File]::ReadAllText($mf)) $origin 'application/json; charset=utf-8'; return }
@@ -1080,7 +1080,7 @@ function Get-DayBookXml([string]$Company, [string]$From, [string]$To, [int]$Pref
 }
 
 # Every ledger's balance as Tally works it out: at the end of the day before the period, and at its end
-function Get-Balances([string]$Company, [string]$From, [string]$To, [int]$PreferredPort) {
+function Get-Balances([string]$Company, [string]$From, [string]$To, [int]$PreferredPort, [bool]$OpenOnly = $false) {
   if (-not (Test-TallyDate $From) -or -not (Test-TallyDate $To)) { throw 'Dates are to be given as yyyymmdd.' }
   $port = Find-CompanyPort $Company $PreferredPort
   $before = (ConvertFrom-TallyDate $From).AddDays(-1).ToString('yyyyMMdd')
@@ -1100,13 +1100,13 @@ function Get-Balances([string]$Company, [string]$From, [string]$To, [int]$Prefer
     return $h
   }
   $open = & $read $before
-  $close = & $read $To
+  $close = $(if ($OpenOnly) { @{} } else { & $read $To })          # FinCom works the closing out from the entries
   $list = @()
   foreach ($n in (@($open.Keys) + @($close.Keys) | Sort-Object -Unique)) {
     $o = $open[$n]; $c = $close[$n]
     $list += [ordered]@{ name = $n; parent = $(if ($c) { $c.parent } else { $o.parent }); open = $(if ($o) { $o.bal } else { '' }); close = $(if ($c) { $c.bal } else { '' }) }
   }
-  return [ordered]@{ ok = $true; company = $Company; port = $port; from = $From; to = $To; openAsOn = $before; ledgers = $list }
+  return [ordered]@{ ok = $true; company = $Company; port = $port; from = $From; to = $To; openAsOn = $before; openOnly = $OpenOnly; ledgers = $list }
 }
 
 # Text back as it is (the Day Book is too large to wrap in JSON)
@@ -1873,8 +1873,11 @@ function Get-OpenCompanies([switch]$Fresh) {
   try { New-Item -ItemType Directory -Force -Path (Get-SyncDir) | Out-Null; Save-KeepFile $shared (ConvertTo-Json -InputObject @($sessions) -Depth 6 -Compress) } catch { }
   return $sessions
 }
+# FinCom reading from Tally (a day book or the balances): the copier waits until it is done
+function Set-FinComReading { try { New-Item -ItemType Directory -Force -Path (Get-SyncDir) | Out-Null; [IO.File]::WriteAllText((Join-Path (Get-SyncDir) 'fincom-reading.txt'), (Get-Date).ToString('s')) } catch { } }
 # why Tally is to be left alone right now ('' when it is free)
 function Get-KeepHold {
+  try { $fr = Get-Item -LiteralPath (Join-Path (Get-SyncDir) 'fincom-reading.txt') -ErrorAction Stop; if (((Get-Date) - $fr.LastWriteTime).TotalSeconds -lt 120) { return 'FinCom is reading from Tally' } } catch { }
   if ($script:Fake -and $Cfg.KeepFakeHold) { return [string]$Cfg.KeepFakeHold }
   try {
     $young = @(Get-Process -Name 'tally*' -ErrorAction SilentlyContinue | Where-Object { $_.StartTime -and ((Get-Date) - $_.StartTime).TotalMinutes -lt (Get-KeepNum 'KeepSettleMin' 3) })

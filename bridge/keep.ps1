@@ -188,8 +188,11 @@ function Get-OpenCompanies([switch]$Fresh) {
   try { New-Item -ItemType Directory -Force -Path (Get-SyncDir) | Out-Null; Save-KeepFile $shared (ConvertTo-Json -InputObject @($sessions) -Depth 6 -Compress) } catch { }
   return $sessions
 }
+# FinCom reading from Tally (a day book or the balances): the copier waits until it is done
+function Set-FinComReading { try { New-Item -ItemType Directory -Force -Path (Get-SyncDir) | Out-Null; [IO.File]::WriteAllText((Join-Path (Get-SyncDir) 'fincom-reading.txt'), (Get-Date).ToString('s')) } catch { } }
 # why Tally is to be left alone right now ('' when it is free)
 function Get-KeepHold {
+  try { $fr = Get-Item -LiteralPath (Join-Path (Get-SyncDir) 'fincom-reading.txt') -ErrorAction Stop; if (((Get-Date) - $fr.LastWriteTime).TotalSeconds -lt 120) { return 'FinCom is reading from Tally' } } catch { }
   if ($script:Fake -and $Cfg.KeepFakeHold) { return [string]$Cfg.KeepFakeHold }
   try {
     $young = @(Get-Process -Name 'tally*' -ErrorAction SilentlyContinue | Where-Object { $_.StartTime -and ((Get-Date) - $_.StartTime).TotalMinutes -lt (Get-KeepNum 'KeepSettleMin' 3) })

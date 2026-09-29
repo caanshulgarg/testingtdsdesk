@@ -20,7 +20,7 @@ function Get-DayBookXml([string]$Company, [string]$From, [string]$To, [int]$Pref
 }
 
 # Every ledger's balance as Tally works it out: at the end of the day before the period, and at its end
-function Get-Balances([string]$Company, [string]$From, [string]$To, [int]$PreferredPort) {
+function Get-Balances([string]$Company, [string]$From, [string]$To, [int]$PreferredPort, [bool]$OpenOnly = $false) {
   if (-not (Test-TallyDate $From) -or -not (Test-TallyDate $To)) { throw 'Dates are to be given as yyyymmdd.' }
   $port = Find-CompanyPort $Company $PreferredPort
   $before = (ConvertFrom-TallyDate $From).AddDays(-1).ToString('yyyyMMdd')
@@ -40,13 +40,13 @@ function Get-Balances([string]$Company, [string]$From, [string]$To, [int]$Prefer
     return $h
   }
   $open = & $read $before
-  $close = & $read $To
+  $close = $(if ($OpenOnly) { @{} } else { & $read $To })          # FinCom works the closing out from the entries
   $list = @()
   foreach ($n in (@($open.Keys) + @($close.Keys) | Sort-Object -Unique)) {
     $o = $open[$n]; $c = $close[$n]
     $list += [ordered]@{ name = $n; parent = $(if ($c) { $c.parent } else { $o.parent }); open = $(if ($o) { $o.bal } else { '' }); close = $(if ($c) { $c.bal } else { '' }) }
   }
-  return [ordered]@{ ok = $true; company = $Company; port = $port; from = $From; to = $To; openAsOn = $before; ledgers = $list }
+  return [ordered]@{ ok = $true; company = $Company; port = $port; from = $From; to = $To; openAsOn = $before; openOnly = $OpenOnly; ledgers = $list }
 }
 
 # Text back as it is (the Day Book is too large to wrap in JSON)
