@@ -6,7 +6,7 @@ def R(a, b):
     assert base.count(a) == 1, ('anchor', a[:60], base.count(a))
     base = base.replace(a, b)
 import re
-base = re.sub(r"\$BridgeVersion = '[0-9.]+'", "$BridgeVersion = '1.13.3'", base, 1)
+base = re.sub(r"\$BridgeVersion = '[0-9.]+'", "$BridgeVersion = '1.13.4'", base, 1)
 # 1.12.7 (security): the log never holds keys, codes or passwords, and is rotated at 5 MB keeping 5 old copies
 R(r"""function Write-Log([string]$msg) {
   $line = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + '  ' + $msg
@@ -177,8 +177,8 @@ Write-Host '  TDS Desk - Tally Bridge' $BridgeVersion -ForegroundColor Green""",
 if ($IsWindows -or $env:OS -eq 'Windows_NT') {
   try {
     Add-Type -Namespace FinCom -Name NoInherit -MemberDefinition '[DllImport("kernel32.dll", SetLastError = true)] public static extern bool SetHandleInformation(IntPtr h, uint mask, uint flags);' -ErrorAction Stop
-    $null = [FinCom.NoInherit]::SetHandleInformation($listener.Server.Handle, 1, 0)
-  } catch { }
+    if (-not [FinCom.NoInherit]::SetHandleInformation($listener.Server.Handle, 1, 0)) { Write-Log 'Could not keep the port from the workers (Windows said no); the FinCom Connector clears leftovers if one holds it' }
+  } catch { try { Write-Log ('Could not keep the port from the workers: ' + $_.Exception.Message) } catch { } }
 }
 Write-Host ''
 Write-Host '  TDS Desk - Tally Bridge' $BridgeVersion -ForegroundColor Green""")

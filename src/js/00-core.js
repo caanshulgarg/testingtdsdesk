@@ -33,7 +33,7 @@ const DEFAULT_FIRM = {firmName:"", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "29 Sep 2026 · build 177 (Connector: installs over a running copy, icon put back; bridge 1.13.3)";
+const APP_VERSION = "29 Sep 2026 · build 178 (the copier starts again; a busy bridge is not stopped; bridge 1.13.4)";
 // the Tally Bridge setup file's fingerprint, put in by build.py: a new setup file is never served from an old cache
 const BRIDGE_SETUP_SHA = "{{BRIDGE_SETUP_SHA}}";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";

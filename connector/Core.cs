@@ -24,7 +24,7 @@ namespace FinCom.Connector
 {
     public static class App
     {
-        public const string Version = "1.0.5";
+        public const string Version = "1.0.6";
         public const string Name = "FinCom Connector";
         public static readonly bool IsWindows = Environment.OSVersion.Platform == PlatformID.Win32NT;
         public static readonly JavaScriptSerializer Json = new JavaScriptSerializer { MaxJsonLength = 64 * 1024 * 1024 };
@@ -224,6 +224,19 @@ namespace FinCom.Connector
             return r.TryGetValue("code", out c) ? Convert.ToString(c) : "";
         }
         // the engine's version when it answers, else null
+        // the bridge's port takes connections (true even while the bridge is busy with a long request)
+        public static bool Listening()
+        {
+            try
+            {
+                using (var c = new System.Net.Sockets.TcpClient())
+                {
+                    var t = c.BeginConnect("127.0.0.1", App.Port, null, null);
+                    return t.AsyncWaitHandle.WaitOne(2000) && c.Connected;
+                }
+            }
+            catch { return false; }
+        }
         public static string Ping()
         {
             try { var r = Call("/ping", null, 4000); object v; return r.TryGetValue("version", out v) ? Convert.ToString(v) : "?"; }
@@ -283,7 +296,10 @@ namespace FinCom.Connector
             }
             fails++;
             bool dead = proc == null || proc.HasExited;
-            if (!dead && fails < 3) { State = "not answering"; return; }        // give a busy engine half a minute
+            // busy is not dead: the bridge answers one request at a time, and a long one (a day book read, a posting to
+            // Tally) keeps /ping waiting. While its process runs and its port takes connections it is left alone; only
+            // silence for 20 minutes (longer than any request may take) or a closed port count as stopped
+            if (!dead && (fails < 3 || (Bridge.Listening() && (DateTime.Now - (LastOk > startedAt ? LastOk : startedAt)).TotalMinutes < 20))) { State = fails < 3 ? "not answering" : "busy"; return; }
             if (!dead) KillEngine("it stopped answering");
             // a bridge that stopped within 20 seconds of starting, counted once for each time it stopped
             if (proc != null && proc.HasExited && noticedExit != proc.Id)

@@ -47,7 +47,7 @@ try:
         pg.goto("http://localhost:8143/"); pg.wait_for_timeout(2000)
         pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
         pg.evaluate(SETUP, [key, CO]); pg.evaluate("Bridge.refresh()"); pg.wait_for_timeout(1500)
-        ok(pg.evaluate("Bridge.st.version") == "1.13.3", "bridge 1.13.3 running")
+        ok(pg.evaluate("Bridge.st.version") == "1.13.4", "bridge 1.13.4 running")
         ok(pg.evaluate("LK.live()"), "Look up sees Tally live")
         pg.evaluate("render()"); pg.wait_for_timeout(4000)
         names = pg.evaluate("FC.ledgers()")

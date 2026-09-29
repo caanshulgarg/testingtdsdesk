@@ -740,9 +740,9 @@ function Start-KeepIfNeeded {
   $psi = New-Object Diagnostics.ProcessStartInfo
   $psi.FileName = $exe
   $psi.Arguments = '-NoLogo -NoProfile -ExecutionPolicy Bypass -File "' + $PSCommandPath + '" -ConfigPath "' + $ConfigPath + '" -Keep'
-  # started through the shell, so it inherits nothing from the bridge: above all not the bridge's port, which would
-  # keep a new bridge (an update, a restart) from starting while this worker runs
-  $psi.UseShellExecute = $true; $psi.WindowStyle = [Diagnostics.ProcessWindowStyle]::Hidden
+  # not through the shell: that fails from the bridge's hidden window ("Unknown error (0xffffffff)"). The bridge's
+  # port is kept from this worker another way (made non-inheritable when the bridge starts)
+  $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true
   $pr = [Diagnostics.Process]::Start($psi)
   New-Item -ItemType Directory -Force -Path (Get-SyncDir) | Out-Null
   [IO.File]::WriteAllText($lock, [string]$pr.Id)
