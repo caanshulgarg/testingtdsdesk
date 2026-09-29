@@ -46,7 +46,7 @@ march = [(d, p) for d, p in fake_tally.V if d.startswith("202603")]
 try:
     until(lambda: urllib.request.urlopen("http://127.0.0.1:9100/ping", timeout=2).read(), 60)
     key = json.load(open(_os.path.join(BRUN, "tds-bridge.config.json"), encoding="utf-8-sig"))["Key"]
-    ok(json.loads(urllib.request.urlopen("http://127.0.0.1:9100/ping").read())["version"] == "1.13.8", "bridge 1.13.8 running")
+    ok(json.loads(urllib.request.urlopen("http://127.0.0.1:9100/ping").read())["version"] == "1.13.9", "bridge 1.13.9 running")
     # ---------- the worker starts on its own and makes the first copy
     t0 = time.time()
     m = until(lambda: (lambda x: x if x and x.get("phase") == "live" else None)(man()), 300)
@@ -86,7 +86,7 @@ try:
         pg.fill("#lkAsk", "trial balance as on 31/03/2026"); pg.keyboard.press("Enter")
         wait_for(pg, "S.lk.res && S.lk.res.kind === 'tb' && !S.lk.busy")
         r = pg.evaluate("({dr: S.lk.res.dr, cr: S.lk.res.cr, n: S.lk.res.rows.length, none: S.lk.res.none || ''})")
-        asked = {k: v for k, v in fake_tally.REQS.items() if k not in ("TDSDeskCompanies", "DayBook", "TDSDeskKeepList", "TDSDeskNames", "TDSDeskGroupNames", "TDSDeskKeepBal", "TDSDeskKeepLed")}
+        asked = {k: v for k, v in fake_tally.REQS.items() if k not in ("TDSDeskCompanies", "DayBook", "TDSDeskKeepList", "TDSDeskNames", "TDSDeskGroupNames", "TDSDeskKeepBal", "TDSDeskKeepLed", "TDSDeskKeepCo")}
         mv = pg.evaluate("(() => { const tb = S.books.tb || {}; let m = 0; S.books.vouchers.filter(v => v.date >= tb.from && v.date <= '20260331' && !v.opt && !v.cancel).forEach(v => v.ent.forEach(e => { m += e.a; })); return m; })()")
         ok(r["n"] > 20 and not r["none"] and abs(mv) < 1, "trial balance on 31 March 2026 from the kept copy: %d ledgers; March's own entries balance (%.2f)" % (r["n"], mv))
         diff = pg.evaluate("""async () => { const mine = {}; S.lk.res.rows.forEach(z => { mine[z.l] = z.bal; });

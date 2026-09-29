@@ -14,6 +14,10 @@
 //   {kind:"ledgers", company, from, openAsOn, ledgers:[[name, parent, open]]}
 //   {kind:"state", company, state}
 //   {kind:"support", note, zip}                      -> the Connector's log and details for FinCom support
+// Or a person signed in to FinCom (Authorization: Bearer, two-step done, a member of the firm), for one of the firm's
+// clients, giving the books from files exported from Tally:
+//   {kind:"upload_days", client, company?, days:[{day, gz}]}
+//   {kind:"upload_ledgers", client, company?, from, openAsOn, ledgers:[[name, parent, open]]}
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { parseDay, amt } from "./parse.js";
 
@@ -24,7 +28,8 @@ const MAX_BODY = 25 * 1024 * 1024;          // one request
 const MAX_DAY = 60 * 1024 * 1024;           // one day's day book, unzipped
 const MAX_UNZIP = 200 * 1024 * 1024;        // all the days of one request, unzipped
 
-const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "x-fincom-device, content-type", "Access-Control-Allow-Methods": "POST, OPTIONS" };
+const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
+const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "x-fincom-device, content-type, authorization, apikey, x-client-info", "Access-Control-Allow-Methods": "POST, OPTIONS" };
 const reply = (code: number, body: unknown) => new Response(JSON.stringify(body), { status: code, headers: { ...cors, "Content-Type": "application/json" } });
 
 async function sha256(s: string) {
@@ -80,10 +85,87 @@ async function bookFor(firm: string, company: string) {
   return data as string | null;
 }
 
+// a few days of the day book (each gzipped), into a book: stored, and read into entries, lines and ready totals
+async function ingestDays(firm: string, book: string, daysIn: unknown) {
+  const days = (Array.isArray(daysIn) ? daysIn : []).slice(0, 62);
+  const done: string[] = [];
+  let unzipped = 0;
+  for (const d of days as any[]) {
+    if (!isDay(d?.day) || typeof d?.gz !== "string") continue;
+    const gz = b64bytes(d.gz);
+    const z = await gunzip(gz, Math.min(MAX_DAY, MAX_UNZIP - unzipped));
+    unzipped += z.size;
+    const r = parseDay(z.text);
+    // every entry of a day is dated that day; anything else means the file is not what it says
+    if (r.dates.some((x: string) => x !== d.day)) return reply(400, { ok: false, error: "The day book for " + d.day + " has entries of other dates (" + r.dates.filter((x: string) => x !== d.day).slice(0, 3).join(", ") + ")." });
+    const path = `${firm}/${book}/${d.day.slice(0, 6)}/${d.day}.xml.gz`;
+    const up = await db.storage.from("tally-days").upload(path, gz, { upsert: true, contentType: "application/gzip" });
+    if (up.error) throw new Error("storage: " + up.error.message);
+    const { error } = await db.rpc("tally_ingest_day", { p_book: book, p_day: iso(d.day),
+      p_vouchers: r.vouchers.map((v: any) => ({ guid: v.guid, alter: v.alter, type: v.type, no: v.no, party: v.party, narr: v.narr, cancel: v.cancel, opt: v.opt })),
+      p_lines: r.lines, p_n: r.n, p_alter: r.alterMax, p_bytes: gz.length });
+    if (error) throw new Error(error.message);
+    done.push(d.day);
+  }
+  return reply(200, { ok: true, done });
+}
+async function ingestLedgers(book: string, body: any) {
+  if (!isDay(body.from) || !isDay(body.openAsOn)) return reply(400, { ok: false, error: "from and openAsOn are dates (yyyymmdd)" });
+  const led = (Array.isArray(body.ledgers) ? body.ledgers : []).slice(0, 100000)
+    .map((l: any) => [String(l?.[0] || "").slice(0, 300), String(l?.[1] || "").slice(0, 300), String(Math.round(amt(l?.[2]) * 100) / 100)]).filter((l: any) => l[0]);
+  const { data, error } = await db.rpc("tally_ingest_ledgers", { p_book: book, p_from: iso(body.from), p_open_as_on: iso(body.openAsOn), p_ledgers: led });
+  if (error) throw new Error(error.message);
+  return reply(200, { ok: true, ...data });
+}
+// a person signed in to FinCom giving the books from files exported from Tally (the day book part by part, the trial
+// balance): the same cloud copy a connected computer sends, so everyone in the firm works on the same books
+async function userUpload(req: Request, auth: string) {
+  const asUser = createClient(URL, ANON, { global: { headers: { Authorization: auth } }, auth: { persistSession: false } });
+  const { data: who } = await asUser.auth.getUser();
+  const user = who?.user;
+  if (!user) return reply(401, { ok: false, error: "Sign in to FinCom again." });
+  const { data: mfaOk } = await asUser.rpc("mfa_ok");
+  if (mfaOk !== true) return reply(403, { ok: false, error: "Finish the two-step sign-in first." });
+  const { data: m } = await db.from("members").select("firm_id, active").eq("user_id", user.id).maybeSingle();
+  if (!m || !m.active) return reply(403, { ok: false, error: "This account is not part of a firm." });
+  const firm = m.firm_id as string;
+  let body: any;
+  try { body = JSON.parse(await readBody(req)); } catch (e) { return (e as Error).message === "too large" ? reply(413, { ok: false, error: "Too much in one go; send fewer days at a time." }) : reply(400, { ok: false, error: "Bad request" }); }
+  const clientId = String(body.client || "");
+  const { data: cl } = await db.from("clients").select("id, name, tally_name, gstin, deleted").eq("firm_id", firm).eq("id", clientId).maybeSingle();
+  if (!cl || cl.deleted) return reply(404, { ok: false, error: "No such client in this firm." });
+  // the client's Tally company in the cloud: the one linked to it, or one made for it now, named as in Tally
+  const { data: tcs } = await db.from("tally_companies").select("company, last_seen").eq("firm_id", firm).eq("client_id", clientId);
+  let company = ((tcs || []).sort((a: any, b: any) => String(b.last_seen || "").localeCompare(String(a.last_seen || "")))[0] || {} as any).company as string | undefined;
+  if (!company) {
+    company = String(body.company || cl.tally_name || cl.name || "").trim().slice(0, 200);
+    if (!company) return reply(400, { ok: false, error: "Give the client's company name as in Tally (Client setup)." });
+    const { data: other } = await db.from("tally_companies").select("client_id").eq("firm_id", firm).eq("company", company).maybeSingle();
+    if (other && other.client_id && other.client_id !== clientId) return reply(409, { ok: false, error: "The Tally company " + company + " is linked to another client." });
+    const { error } = await db.from("tally_companies").upsert({ firm_id: firm, company, client_id: clientId, ...(cl.gstin ? { gstin: cl.gstin } : {}), linked_at: new Date().toISOString(), linked_by: user.id }, { onConflict: "firm_id,company" });
+    if (error) throw new Error(error.message);
+  }
+  const book = await bookFor(firm, company);
+  if (!book) return reply(409, { ok: false, error: "The Tally company " + company + " cannot take this client's books (its GSTIN is another PAN's)." });
+  try {
+    if (body.kind === "upload_days") return await ingestDays(firm, book, body.days);
+    if (body.kind === "upload_ledgers") return await ingestLedgers(book, body);
+    return reply(400, { ok: false, error: "unknown kind" });
+  } catch (e) {
+    console.error("tally-ingest upload", body?.kind, (e as Error).message);
+    return reply(500, { ok: false, error: (e as Error).message });
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return reply(405, { ok: false, error: "POST only" });
   const key = (req.headers.get("x-fincom-device") || "").trim();
+  const auth = req.headers.get("authorization") || "";
+  if (!key && /^Bearer\s+\S+/.test(auth)) {
+    if (Number(req.headers.get("content-length") || 0) > MAX_BODY) return reply(413, { ok: false, error: "Too much in one go; send fewer days at a time." });
+    return userUpload(req, auth);
+  }
   if (!/^fcd_[0-9a-f]{48}$/.test(key)) return reply(401, { ok: false, error: "This computer is not connected to FinCom. Connect it from FinCom: Settings, Tally connection." });
   const len = Number(req.headers.get("content-length") || 0);
   if (len > MAX_BODY) return reply(413, { ok: false, error: "Too much in one go; send fewer days at a time." });
@@ -128,41 +210,14 @@ Deno.serve(async (req) => {
         return reply(200, { ok: true, links });
       }
       case "days": {
-        const company = String(body.company || "");
-        const book = await bookFor(firm, company);
+        const book = await bookFor(firm, String(body.company || ""));
         if (!book) return reply(409, { ok: false, notLinked: true, error: "This Tally company is not linked to a FinCom client yet." });
-        const days = (Array.isArray(body.days) ? body.days : []).slice(0, 62);
-        const done: string[] = [];
-        let unzipped = 0;
-        for (const d of days) {
-          if (!isDay(d?.day) || typeof d?.gz !== "string") continue;
-          const gz = b64bytes(d.gz);
-          const z = await gunzip(gz, Math.min(MAX_DAY, MAX_UNZIP - unzipped));
-          unzipped += z.size;
-          const r = parseDay(z.text);
-          // every entry of a day is dated that day; anything else means the file is not what it says
-          if (r.dates.some((x: string) => x !== d.day)) return reply(400, { ok: false, error: "The day book for " + d.day + " has entries of other dates (" + r.dates.filter((x: string) => x !== d.day).slice(0, 3).join(", ") + ")." });
-          const path = `${firm}/${book}/${d.day.slice(0, 6)}/${d.day}.xml.gz`;
-          const up = await db.storage.from("tally-days").upload(path, gz, { upsert: true, contentType: "application/gzip" });
-          if (up.error) throw new Error("storage: " + up.error.message);
-          const { error } = await db.rpc("tally_ingest_day", { p_book: book, p_day: iso(d.day),
-            p_vouchers: r.vouchers.map((v: any) => ({ guid: v.guid, alter: v.alter, type: v.type, no: v.no, party: v.party, narr: v.narr, cancel: v.cancel, opt: v.opt })),
-            p_lines: r.lines, p_n: r.n, p_alter: r.alterMax, p_bytes: gz.length });
-          if (error) throw new Error(error.message);
-          done.push(d.day);
-        }
-        return reply(200, { ok: true, done });
+        return await ingestDays(firm, book, body.days);
       }
       case "ledgers": {
-        const company = String(body.company || "");
-        const book = await bookFor(firm, company);
+        const book = await bookFor(firm, String(body.company || ""));
         if (!book) return reply(409, { ok: false, notLinked: true, error: "This Tally company is not linked to a FinCom client yet." });
-        if (!isDay(body.from) || !isDay(body.openAsOn)) return reply(400, { ok: false, error: "from and openAsOn are dates (yyyymmdd)" });
-        const led = (Array.isArray(body.ledgers) ? body.ledgers : []).slice(0, 100000)
-          .map((l: any) => [String(l?.[0] || "").slice(0, 300), String(l?.[1] || "").slice(0, 300), String(Math.round(amt(l?.[2]) * 100) / 100)]).filter((l: any) => l[0]);
-        const { data, error } = await db.rpc("tally_ingest_ledgers", { p_book: book, p_from: iso(body.from), p_open_as_on: iso(body.openAsOn), p_ledgers: led });
-        if (error) throw new Error(error.message);
-        return reply(200, { ok: true, ...data });
+        return await ingestLedgers(book, body);
       }
       case "state": {
         const book = await bookFor(firm, String(body.company || ""));

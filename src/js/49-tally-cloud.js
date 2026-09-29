@@ -260,3 +260,42 @@ const TCloud = {
   };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", take); else take();
 })();
+
+// Files exported from Tally and chosen in FinCom (the day book part by part, the trial balance) go to FinCom's cloud
+// too, into the same copy a connected computer fills: everyone in the firm then works on the same books, from any
+// computer. Every day of the dates chosen is sent (an empty day as empty, so a deleted entry goes too)
+const TCloudUp = {
+  on(){ return typeof Cloud === "object" && Cloud.on() && !!(Cloud.st && Cloud.st.firm); },
+  b64(u){ let s = ""; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); },
+  async gz(text){ const cs = new Blob([text]).stream().pipeThrough(new CompressionStream("gzip")); return this.b64(new Uint8Array(await new Response(cs).arrayBuffer())); },
+  async post(body){
+    const c = Cloud.cfg(), s = Cloud.sess();
+    if (!s) throw new Error("Sign in to the firm account first.");
+    const r = await fetch(TCloud.ingestUrl(), {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": "application/json"}, body: JSON.stringify(Object.assign({client: S.coId, company: BridgeSeed.company()}, body))});
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || j.ok === false) throw new Error(j.error || ("FinCom's cloud answered with error " + r.status));
+    return j;
+  },
+  async days(text, range, onStep){
+    if (!this.on()) return {skipped: "not signed in to the firm account"};
+    const re = /<VOUCHER\b[\s\S]*?<\/VOUCHER>/g, byDay = new Map();
+    let m;
+    while ((m = re.exec(text))){ const d = (m[0].match(/<DATE>(\d{8})<\/DATE>/) || [])[1]; if (!d || d < range.from || d > range.to) continue; if (!byDay.has(d)) byDay.set(d, []); byDay.get(d).push(m[0]); }
+    const all = []; for (let d = range.from; d <= range.to; d = BridgeSeed.add(d, 1)) all.push(d);
+    let batch = [], size = 0, sent = 0, done = 0;
+    const flush = async () => { if (!batch.length) return; if (onStep) onStep("Putting the day book in FinCom’s cloud (" + Math.round(done * 100 / all.length) + "%), for everyone in the firm…"); const j = await this.post({kind: "upload_days", days: batch}); sent += (j.done || []).length; batch = []; size = 0; };
+    for (const d of all){
+      const xml = "<ENVELOPE><BODY><DATA>" + (byDay.get(d) || []).map(v => "<TALLYMESSAGE>" + v + "</TALLYMESSAGE>").join("") + "</DATA></BODY></ENVELOPE>";
+      const gz = await this.gz(xml);
+      if (batch.length && (size + gz.length > 12e6 || batch.length >= 31)) await flush();
+      batch.push({day: d, gz}); size += gz.length; done++;
+    }
+    await flush();
+    return {days: sent};
+  },
+  async opening(from, asOn, led){
+    if (!this.on()) return {skipped: "not signed in to the firm account"};
+    return this.post({kind: "upload_ledgers", from, openAsOn: asOn, ledgers: Object.entries(led).map(([n, x]) => [n, x.parent || "", String(x.open)])});
+  }
+};
+

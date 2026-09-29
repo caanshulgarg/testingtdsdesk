@@ -27,7 +27,7 @@ trap {
   try { Stop-Transcript | Out-Null } catch { }
   break
 }
-$BridgeVersion = '1.13.8'
+$BridgeVersion = '1.13.9'
 
 # ------------------------------------------------------------------ settings
 function New-BridgeKey {
@@ -944,6 +944,7 @@ function Invoke-Client($client) {
       '/ledgers' { $result = Get-Ledgers $qs['company'] ([int]('0' + $qs['port'])) }
       '/ledgervouchers' { $result = Get-LedgerVouchers $qs['company'] $qs['ledger'] $qs['from'] $qs['to'] ([int]('0' + $qs['port'])) }
       '/seed' { if ($method -ne 'POST') { throw 'Send the day book with POST.' }; $result = Import-KeepSeed $qs['company'] $qs['from'] $qs['to'] $body }
+      '/keepmode' { if ($method -ne 'POST') { throw 'POST only.' }; $o = $body | ConvertFrom-Json; $result = Set-KeepMode ([string]$o.company) ([string]$o.mode) }
       '/seedbal' { if ($method -ne 'POST') { throw 'Send the balances with POST.' }; $result = Import-KeepOpening $qs['company'] $body }
       '/daybook' { Set-FinComReading; $xml = Get-DayBookXml $qs['company'] $qs['from'] $qs['to'] ([int]('0' + $qs['port'])); Send-Raw $stream 200 $xml $origin; return }
       '/balances' { Set-FinComReading; $result = Get-Balances $qs['company'] $qs['from'] $qs['to'] ([int]('0' + $qs['port'])) ($qs['open'] -eq '1') }
@@ -2010,6 +2011,23 @@ function Save-KeepDays([string]$Dir, [string]$From, [string]$To, [string]$xml) {
   Add-CloudDays $Dir $written
   return $n
 }
+# how a company's year comes in: 'files' (the day book files chosen in FinCom; the default) or 'bridge' (the bridge reads
+# it from Tally at a quiet time). Chosen in FinCom's setup list for the company
+function Get-KeepMode([string]$Company) {
+  $m = $null; try { $m = $Cfg.KeepModes.$Company } catch { }
+  if ($m -eq 'bridge' -or $m -eq 'files') { return $m }
+  if ($script:Fake -and -not $Cfg.KeepFakeFilesFirst) { return 'bridge' }
+  return 'files'
+}
+function Set-KeepMode([string]$Company, [string]$Mode) {
+  if ($Mode -ne 'bridge' -and $Mode -ne 'files') { throw 'The way is files or bridge.' }
+  $h = [ordered]@{}; try { foreach ($p in $Cfg.KeepModes.PSObject.Properties) { $h[$p.Name] = $p.Value } } catch { }
+  $h[$Company] = $Mode
+  $Cfg | Add-Member -NotePropertyName KeepModes -NotePropertyValue ([pscustomobject]$h) -Force
+  Save-Config
+  Write-Log ('Keeping ' + $Company + ' in step: the year comes ' + $(if ($Mode -eq 'bridge') { 'from Tally, read by the bridge at a quiet time' } else { 'from the day book files chosen in FinCom' }))
+  return (Get-KeepStatus $Company)
+}
 # 1.13.8: opening balances from a trial balance exported from Tally (as on the day before the copy starts), so the
 # bridge never asks Tally for them either
 function Import-KeepOpening([string]$Company, [string]$Json) {
@@ -2270,6 +2288,12 @@ function Step-Keep([string]$Company, [int]$Port, [string]$BooksFrom) {
   New-Item -ItemType Directory -Force -Path $dir | Out-Null
   $today = (Get-Date).ToString('yyyyMMdd')
   $st = Read-KeepState $dir
+  if (-not $st -and (Get-KeepMode $Company) -ne 'bridge') {
+    # 1.13.9: the year comes from the day book files chosen in FinCom; the bridge does not read it from Tally by itself
+    $wf = Join-Path $dir 'waiting.txt'
+    if (-not (Test-Path -LiteralPath $wf)) { try { [IO.File]::WriteAllText($wf, (Get-Date).ToString('s')) } catch { }; Write-Log ('Keeping ' + $Company + ' in step: waiting for the day book files from FinCom (Books, From Tally); Tally is not read for the year') }
+    return
+  }
   if (-not $st) {
     $from = (Get-FyStart (Get-Date)).ToString('yyyyMMdd')
     if ([string]$Cfg.KeepFrom -match '^\d{8}$') { $from = [string]$Cfg.KeepFrom }        # e.g. last year's start, for an audit
@@ -2576,7 +2600,8 @@ function Get-KeepStatus([string]$Company) {
   $st = $null; if ($Company) { $st = Read-KeepState (Get-SyncFolder $Company) }
   $load = $null; try { $lf = Join-Path (Get-SyncDir) 'keep-load.json'; if (Test-Path $lf) { $load = Get-Content -Raw $lf | ConvertFrom-Json } } catch { }
   $cloud = $null; try { $cloud = Get-CloudLinkStatus } catch { }
-  return [ordered]@{ ok = $true; on = (Test-KeepOn); running = [bool]($p -and (Test-ProcessAlive $p)); load = $load; cloud = $cloud; phase = $(if ($st) { $st.phase } else { '' }); next = $(if ($st) { $st.next } else { '' }); from = $(if ($st) { $st.from } else { '' }); at = $(if ($st) { $st.at } else { '' }) }
+  return [ordered]@{ ok = $true; on = (Test-KeepOn); running = [bool]($p -and (Test-ProcessAlive $p)); load = $load; cloud = $cloud; phase = $(if ($st) { $st.phase } else { '' }); next = $(if ($st) { $st.next } else { '' }); from = $(if ($st) { $st.from } else { '' }); at = $(if ($st) { $st.at } else { '' });
+    mode = $(if ($Company) { Get-KeepMode $Company } else { '' }); seeded = [bool]($st -and $st.seeded); openPending = [bool]($st -and $st.openPending); balances = [bool]($st -and $st.balAt) }
 }
 # the check: one month of the copy against Tally's own list of entries
 function Test-KeepMonth([string]$Company, [string]$Ym, [int]$PreferredPort) {

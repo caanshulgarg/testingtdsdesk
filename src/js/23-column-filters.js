@@ -1037,12 +1037,20 @@ function booksChange(t){
       TallyRead.after(b, "after the day book was read", {from: b.meta.from, to: b.meta.to});
       await saveBooks();
       toast(inside.length + " entries of " + fmtDate(tallyDate(from)) + " to " + fmtDate(tallyDate(to)) + " brought in" + (outside ? " (" + outside + " outside those dates left out)" : "") + ". Choose the next part, or check the ledgers, then TDS and GST.");
-      // the same file fills the bridge's copy for these dates: the bridge never reads them from Tally itself
-      if (Bridge.on()) BridgeSeed.send(f, m => { b.busy = m; softRender(); }, {from, to}).then(r => { b.busy = "";
-        part.bridge = r && r.entries != null ? "filled (" + r.entries + ")" : r && r.skipped ? "not changed: " + r.skipped : ""; saveBooks(); render();
-        if (r && r.skipped) toast("The bridge\u2019s copy was not changed: " + r.skipped);
-      }, e => { b.busy = ""; part.bridge = "not taken: " + ((e && e.message) || e); saveBooks(); render(); toast("The part is in FinCom, but the bridge could not take it: " + ((e && e.message) || e)); });
-      else part.bridge = "the bridge is not connected";
+      // the same file fills the bridge's copy for these dates (the bridge never reads them from Tally itself) and FinCom's
+      // cloud (everyone in the firm sees the same books)
+      (async () => {
+        const step = m => { b.busy = m; softRender(); };
+        if (Bridge.on()){
+          try { const r = await BridgeSeed.send(f, step, {from, to}); part.bridge = r && r.entries != null ? "filled (" + r.entries + ")" : r && r.skipped ? "not changed: " + r.skipped : ""; }
+          catch (e){ part.bridge = "not taken: " + ((e && e.message) || e); }
+        } else part.bridge = "not connected on this computer";
+        if (TCloudUp.on()){
+          try { const r = await TCloudUp.days(await f.text(), {from, to}, step); part.cloud = r && r.days != null ? "in the cloud (" + r.days + " days)" : (r && r.skipped) || ""; }
+          catch (e){ part.cloud = "not sent: " + ((e && e.message) || e); toast("The part is in FinCom here, but the cloud did not take it: " + ((e && e.message) || e)); }
+        } else part.cloud = "sign in to the firm account to share it";
+        b.busy = ""; await saveBooks(); render();
+      })();
       render();
 
     }, e => { b.busy = ""; toast("Could not read that file: " + (e && e.message || e)); render(); });
@@ -1070,7 +1078,8 @@ function booksChange(t){
       await saveBooks(); render();
       const tot = r2(r.rows.reduce((s2, x) => s2 + num(x.open), 0));
       toast(r.rows.length + " opening balances as on " + fmtDate(tallyDate(on)) + " brought in" + (Math.abs(tot) >= 1 ? "; they do not add up to nil (difference " + INR.format(tot) + "): check the trial balance was exported with every ledger" : "") + ".");
-      if (Bridge.on()) BridgeSeed.opening(on, b.tb.led).then(x => { if (x && x.skipped) toast("The bridge\u2019s copy was not given the balances: " + x.skipped); }, e => toast("The bridge could not take the balances: " + ((e && e.message) || e)));
+      if (Bridge.on()) BridgeSeed.opening(on, b.tb.led).then(x => { b.tb.bridge = x && x.skipped ? "not taken: " + x.skipped : "taken"; saveBooks(); render(); if (x && x.skipped) toast("The bridge\u2019s copy was not given the balances: " + x.skipped); }, e => toast("The bridge could not take the balances: " + ((e && e.message) || e)));
+      if (TCloudUp.on()) TCloudUp.opening(next, on, b.tb.led).then(() => { b.tb.cloud = "in the cloud"; saveBooks(); render(); }, e => toast("The balances are here, but the cloud did not take them: " + ((e && e.message) || e)));
     }, e => toast("Could not read that file: " + ((e && e.message) || e)));
     return true;
   }

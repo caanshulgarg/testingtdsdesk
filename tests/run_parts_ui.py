@@ -39,6 +39,7 @@ with sync_playwright() as p:
     t = pg.inner_text("#app")
     ok("01 Apr 2025 to 30 Sept 2025" in t.replace("Sep ", "Sept ") or "Apr 2025 to 30 Sep" in t, "the parts brought in are listed")
     ok(pg.evaluate("S.books.meta.parts.length") == 2, "two parts kept (the repeat replaced the first)")
+    ok("Setting up ZZ TEST" in t and "1. Day book" in t and "2. Opening balances" in t and "4. Tally Bridge" in t and "5. FinCom" in t, "the setup list shows each step and what is missing")
     # opening balances from a trial balance exported from Tally (ledgers shown), as on 31 March 2025
     led = pg.evaluate("Object.keys(S.books.map).slice(0, 3)")
     tb = ("<ENVELOPE><DSPACCNAME><DSPDISPNAME>Capital Account</DSPDISPNAME></DSPACCNAME><DSPACCINFO><DSPCLDRAMT><DSPCLDRAMTA></DSPCLDRAMTA></DSPCLDRAMT><DSPCLCRAMT><DSPCLCRAMTA>500.00</DSPCLCRAMTA></DSPCLCRAMT></DSPACCINFO>"

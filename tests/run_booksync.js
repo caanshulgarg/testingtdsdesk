@@ -66,7 +66,7 @@ function browser(db, user){
   A.S.books = {cid: "c1", vouchers: [{id: "v1"}], ledInfo: {x: 1}, challans: [{id: "ch1", tax: 1000}], alloc: {}};
   await A.sync.push("c1");
   ok(db.rows.c1 && db.rows.c1.rev === 1, "the work is saved to the database as revision 1");
-  ok(!("vouchers" in db.rows.c1.data) && !("ledInfo" in db.rows.c1.data), "the day book and ledger balances read from Tally stay in the browser");
+  ok(!("vouchers" in db.rows.c1.data) && ("ledInfo" in db.rows.c1.data), "the day book goes through the cloud copy of the books, not here; the ledger masters are shared with the firm here");
 
   // 3. second browser has its own work from before sharing: it is merged, not lost, and not over-written
   B.S.books = {cid: "c1", certs: [{id: "ct1", pan: "AAAPA1234A"}]};

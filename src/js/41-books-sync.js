@@ -9,12 +9,15 @@
 //     kept; where both changed the same thing, the database's copy stays and this browser's copy is kept in
 //     client_books_history (note "conflict"), so nothing is lost;
 //   - every earlier revision is kept in client_books_history.
-// What is read from Tally (the day book, masters, balances) stays in this browser: it can be read again at any time.
+// The day book and the balances read from Tally are shared through FinCom's cloud copy of the books (49-tally-cloud.js);
+// the ledger masters are shared here with the work.
 // If the database does not have client_books yet (migration not applied), the books work as before, in this browser.
 const BookSync = {
   PART: "work",
   // read from Tally and worked out from it again at any time: not sent
-  FROM_TALLY: ["vouchers", "meta", "under", "states", "groups", "groupInfo", "ledInfo", "ledInfoAt", "tb", "mis"],
+  // (the ledger masters are shared: a colleague sees the same groups, PANs and ledger details; the day book and the
+  // balances are shared through the cloud copy of the books)
+  FROM_TALLY: ["vouchers", "meta", "tb", "mis"],
   st: {},            // cid -> {rev, base, timer, busy, again, error, at, by, readonly}
   off: false,        // the database has no client_books: work only in this browser
   wait: 1500,
