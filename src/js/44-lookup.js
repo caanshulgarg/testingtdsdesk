@@ -642,7 +642,7 @@ const LK = {
     let h = '<section class="dash-card lk-res" style="margin-top:12px"><div class="lk-head"><h3>' + esc(r.title || "") + " " + src + " " + when + '</h3><div class="row" style="gap:6px"><button class="btn small" data-lk="print">Print or PDF</button><button class="btn small" data-lk="excel">Excel</button><button class="btn small" data-lk="clear">Close</button></div></div>';
     if (r.note) h += '<p class="note">' + esc(r.note) + "</p>";
     const tile = (l, v, cls) => '<div class="dtile' + (cls ? " " + cls : "") + '"><span>' + l + "</span><b>" + v + "</b></div>";
-    const LIMIT = 1500;
+    const LIMIT = gfN(1500);
     if (r.kind === "ledger"){
       h += '<div class="dash-tiles">' + tile("Opening", r.open == null ? "not known" : FC.drcr(r.open)) + tile("Debits", FC.amt(r.dr) || "0.00") + tile("Credits", FC.amt(r.cr) || "0.00") + tile("Closing", r.close == null ? FC.drcr(r.dr - r.cr) + " (movement)" : FC.drcr(r.close)) + "</div>";
       if (!r.rows.length) return h + '<div class="bk-none">No entries in ' + esc(r.led) + " for these dates.</div></section>";
@@ -762,3 +762,5 @@ if (typeof document !== "undefined"){
 // the books follow Tally on every screen, not only while Look up is open: once a minute, quietly (only the bridge's
 // copy or the cloud is asked; Tally is not)
 setInterval(() => { try { if (S.books && S.books.cid === S.coId && !document.hidden && typeof LK === "object") LK.autoFresh(false, true); } catch (e){} }, 60000);
+setInterval(() => { try { if (typeof TCloud === "object") TCloud.auto(); } catch (e){} }, 60000);
+setTimeout(() => { try { if (typeof TCloud === "object") TCloud.auto(); } catch (e){} }, 8000);

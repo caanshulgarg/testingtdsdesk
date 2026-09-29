@@ -115,9 +115,17 @@ with sync_playwright() as p:
     pg.evaluate("S.view = 'home'; S.homeTab = 'rules'; S.settingsTab = 'tcloud'; render();")
     wait_for(pg, "TCloud.pane.devices && TCloud.pane.companies", 20); pg.evaluate("render()"); pg.wait_for_timeout(300)
     t = pg.inner_text("#app")
-    ok("OFFICE-PC" in t and CO in t and "Connect this computer" in t, "Settings shows the computers that send and the companies seen")
+    ok("OFFICE-PC" in t and CO in t and "Nothing to press" in t and "Connect this computer" not in t, "Settings shows the computers that send and the companies seen; no button to connect")
     pg.select_option('select[data-tclink="' + CO + '"]', "c_vms"); pg.wait_for_timeout(1200)
     ok(calls["link"] and calls["link"][-1] == {"p_company": CO, "p_client": "c_vms"}, "a company is linked to the client chosen: " + json.dumps(calls["link"][-1:]))
+    # ---------- the computer with Tally connects itself, and links the open client's company, with nothing pressed
+    calls["link"].clear()
+    r = pg.evaluate("""async (co) => { const got = []; let linked = false;
+      Object.assign(Bridge, {on: () => true, up: () => true, openFor: () => ({name: co}), call: async (path, body) => { got.push([path, body]); if (body) linked = true; return {ok: true, connected: linked, url: linked ? TCloud.ingestUrl() : ""}; }});
+      Bridge.st.computer = "ACCOUNTS-PC"; TCloud.autoAt = 0; await TCloud.auto(); TCloud.autoAt = 0; await TCloud.auto(); return got; }""", CO)
+    posts = [b for pth, b in r if b]
+    ok(calls["create"] == 1 and len(posts) == 1 and posts[0]["key"].startswith("fcd_") and posts[0]["url"].endswith("/functions/v1/tally-ingest"), "the computer is connected by itself, once (%d keys made)" % calls["create"])
+    ok(calls["link"] and calls["link"][0] == {"p_company": CO, "p_client": "c_vms"}, "and the open client's Tally company is linked to it: " + json.dumps(calls["link"][:1]))
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0][:300]))
     br.close()
 print("all passed" if not fails else str(len(fails)) + " FAILED")

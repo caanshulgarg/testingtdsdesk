@@ -410,7 +410,8 @@ th.n .colh{flex-direction:row-reverse}
 .cp-item small{color:var(--muted);font-variant-numeric:tabular-nums}
 .cp-item input{accent-color:var(--ledger);width:15px;height:15px;margin:0}
 .cp-radios{display:flex;flex-direction:column}
-.cp-range{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.cp-range{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+#gfpop .cp-range:has(input[type="date"]){grid-template-columns:minmax(0,1fr)}
 .cp-range label{display:flex;flex-direction:column;gap:4px;color:var(--muted);font-size:12.5px}
 .cp-auto{display:flex;align-items:center;gap:8px;padding:6px 12px 9px;border-top:1px solid var(--rule-soft);color:var(--muted);font-size:12.5px;cursor:pointer}
 .cp-auto input{accent-color:var(--ledger);width:15px;height:15px;margin:0}

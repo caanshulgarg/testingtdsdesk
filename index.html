@@ -423,7 +423,8 @@ th.n .colh{flex-direction:row-reverse}
 .cp-item small{color:var(--muted);font-variant-numeric:tabular-nums}
 .cp-item input{accent-color:var(--ledger);width:15px;height:15px;margin:0}
 .cp-radios{display:flex;flex-direction:column}
-.cp-range{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.cp-range{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+#gfpop .cp-range:has(input[type="date"]){grid-template-columns:minmax(0,1fr)}
 .cp-range label{display:flex;flex-direction:column;gap:4px;color:var(--muted);font-size:12.5px}
 .cp-auto{display:flex;align-items:center;gap:8px;padding:6px 12px 9px;border-top:1px solid var(--rule-soft);color:var(--muted);font-size:12.5px;cursor:pointer}
 .cp-auto input{accent-color:var(--ledger);width:15px;height:15px;margin:0}
@@ -1127,7 +1128,7 @@ header.top .tbar-title{align-items:center}
 .lk-fresh .note{flex:1 1 320px}
 .fc-empty .lk-fresh{text-align:left;margin-top:12px}
 </style>
-<style>.is-test .side-brand::after{content:"TEST";display:block;margin-top:4px;font-size:11px;letter-spacing:.14em;color:#E9A06A}.is-test header.top{box-shadow:inset 0 3px 0 #E2761B}body.is-test::after{content:"TESTING SITE · not for real client work · post only to a ZZ TEST company in Tally";position:fixed;left:0;right:0;bottom:0;z-index:70;background:#E2761B;color:#fff;font-size:12.5px;text-align:center;padding:3px 8px;letter-spacing:.04em;pointer-events:none}.is-test .actionbar{bottom:22px}.is-test #app{padding-bottom:34px}</style><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-JUZRiA/pD/Q1MSIv1WkOX00eklOKXLcOHszD3zr3UBc=' 'sha256-KAjbkOojmgc8BBZisMRRqdbNJ2lLbhY6k0oTEO9Gf50=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+<style>.is-test .side-brand::after{content:"TEST";display:block;margin-top:4px;font-size:11px;letter-spacing:.14em;color:#E9A06A}.is-test header.top{box-shadow:inset 0 3px 0 #E2761B}body.is-test::after{content:"TESTING SITE · not for real client work · post only to a ZZ TEST company in Tally";position:fixed;left:0;right:0;bottom:0;z-index:70;background:#E2761B;color:#fff;font-size:12.5px;text-align:center;padding:3px 8px;letter-spacing:.04em;pointer-events:none}.is-test .actionbar{bottom:22px}.is-test #app{padding-bottom:34px}</style><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-JUZRiA/pD/Q1MSIv1WkOX00eklOKXLcOHszD3zr3UBc=' 'sha256-NJMMqVmOaugILePPuOUtPzVkTUL9EUkjT2rbyNKIVRQ=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
 </head>
 <body class="is-test">
 <a class="skip" id="skipLink" href="#app">Skip to the work</a>
@@ -1203,7 +1204,7 @@ const DEFAULT_FIRM = {firmName:"", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "TEST · 29 Sep 2026 · build 186 (files go to the cloud for the whole firm; setup list; the bridge waits for the files; bridge 1.13.9)";
+const APP_VERSION = "TEST · 30 Sep 2026 · build 187 (the Tally computer joins the cloud by itself; filters on every table, with dates, over all rows)";
 // the Tally Bridge setup file's fingerprint, put in by build.py: a new setup file is never served from an old cache
 const BRIDGE_SETUP_SHA = "2c81eb2db190c23e";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -7138,7 +7139,7 @@ Object.assign(Audit, {
       '<p class="note">The clauses the books answer. Every figure is to be verified against the documents before it goes into the report on the portal. Other clauses are filled from the records.</p></div>';
     d.clauses.forEach(c => {
       h += '<h2 style="font-size:14px;margin:14px 0 4px">Clause ' + esc(c.no) + ". " + esc(c.title) + "</h2>";
-      if (c.rows.length) h += "<table><thead><tr>" + c.head.map(x => "<th>" + esc(x) + "</th>").join("") + "</tr></thead><tbody>" + c.rows.slice(0, 200).map(r => "<tr>" + r.map(v => '<td class="' + (typeof v === "number" ? "n" : "") + '">' + m(v) + "</td>").join("") + "</tr>").join("") + "</tbody></table>";
+      if (c.rows.length) h += "<table><thead><tr>" + c.head.map(x => "<th>" + esc(x) + "</th>").join("") + "</tr></thead><tbody>" + c.rows.slice(0, gfN(200)).map(r => "<tr>" + r.map(v => '<td class="' + (typeof v === "number" ? "n" : "") + '">' + m(v) + "</td>").join("") + "</tr>").join("") + "</tbody></table>";
       if (c.note) h += '<p class="note">' + esc(c.note) + "</p>";
     });
     return h;
@@ -9898,7 +9899,7 @@ function viewTdsCerts(b){
   h += '<section class="dash-card"><h3>Rate questions</h3>' +
     '<p class="note">Where the books deducted at a rate different from the one that applies: a certificate, 20% under section 206AA when there is no valid PAN, or the usual rate for the section.</p>' +
     '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th class="dt">Date</th><th>Deductee</th><th>PAN</th><th>Section</th><th class="n">Paid</th><th class="n">Rate used</th><th class="n">Rate that applies</th><th>Why</th><th class="n">Short or excess</th></tr></thead><tbody>' +
-    iss.slice(0, 200).map(x => "<tr><td>" + fmtDate(tallyDate(x.row.date)) + "</td><td>" + esc(x.row.party) + "</td><td>" + (Certs.validPan(x.row.pan) ? esc(x.row.pan) : '<span class="tag warn">no PAN</span>') +
+    iss.slice(0, gfN(200)).map(x => "<tr><td>" + fmtDate(tallyDate(x.row.date)) + "</td><td>" + esc(x.row.party) + "</td><td>" + (Certs.validPan(x.row.pan) ? esc(x.row.pan) : '<span class="tag warn">no PAN</span>') +
       "</td><td>" + esc(x.row.section) + '</td><td class="n">' + money(x.row.paid) + '</td><td class="n">' + (x.row.rate == null ? "" : x.row.rate + "%") + '</td><td class="n">' + x.expected + "%</td><td>" + esc(x.why) +
       '</td><td class="n' + (x.short > 0 ? " bad" : "") + '">' + money(x.short) + "</td></tr>").join("") +
     "</tbody></table>" + (iss.length ? "" : '<div class="bk-none">Every deduction matches the rate that applies.</div>') + "</div></section>";
@@ -10091,7 +10092,7 @@ function viewBooksMis(b){
     if (S.misLed){
       const vs = (b.vouchers || []).filter(v => v.date >= r.from && v.date <= r.to && v.ent.some(e => e.l === S.misLed)).sort((a, c) => a.date.localeCompare(c.date));
       h += '<section class="dash-card" style="margin-top:12px"><h3>' + esc(S.misLed) + ' <button class="linkbtn" data-misled="">close</button></h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th class="dt">Date</th><th>Voucher</th><th>Party</th><th class="n">Debit</th><th class="n">Credit</th><th>Narration</th></tr></thead><tbody>' +
-        vs.slice(0, 300).map(v => { const a = v.ent.filter(e => e.l === S.misLed).reduce((s, e) => s + e.a, 0); return "<tr><td>" + fmtDate(tallyDate(v.date)) + "</td><td>" + esc(v.no) + '<div class="nr">' + esc(v.type) + "</div></td><td>" + esc(v.party || "") + '</td><td class="n">' + (a < 0 ? m(-a) : "") + '</td><td class="n">' + (a > 0 ? m(a) : "") + "</td><td>" + esc(v.narr || "") + "</td></tr>"; }).join("") +
+        vs.slice(0, gfN(300)).map(v => { const a = v.ent.filter(e => e.l === S.misLed).reduce((s, e) => s + e.a, 0); return "<tr><td>" + fmtDate(tallyDate(v.date)) + "</td><td>" + esc(v.no) + '<div class="nr">' + esc(v.type) + "</div></td><td>" + esc(v.party || "") + '</td><td class="n">' + (a < 0 ? m(-a) : "") + '</td><td class="n">' + (a > 0 ? m(a) : "") + "</td><td>" + esc(v.narr || "") + "</td></tr>"; }).join("") +
         "</tbody></table></div>" + (vs.length > 300 ? '<p class="note">The first 300 of ' + vs.length + ".</p>" : "") + "</section>";
     }
     return h;
@@ -10102,7 +10103,7 @@ function viewBooksMis(b){
     h += search("Find a " + (tab === "recv" ? "customer" : "supplier"));
     h += '<div class="bk-tablewrap"><table class="bk-table" id="misAge"><thead><tr><th>' + (tab === "recv" ? "Customer" : "Supplier") + "</th>" + MIS.BUCKETS.map(z => '<th class="n">' + z[1] + " days</th>").join("") +
       '<th class="n">Before these books</th><th class="n">Advances</th><th class="n">On account</th><th class="n">Total</th>' + (A.rows.some(p => p.tally != null) ? '<th class="n">Tally balance</th>' : "") + (tab === "pay" ? "<th>MSME</th>" : "") + "</tr></thead><tbody>" +
-      list.slice(0, 400).map(p => {
+      list.slice(0, gfN(400)).map(p => {
         const open = S.misOpen === p.party;
         let x = '<tr><td><button class="linkbtn" data-misopen="' + esc(p.party) + '">' + (open ? "\u25be " : "\u25b8 ") + esc(p.party) + "</button></td>" + p.b.map((v, i) => '<td class="n' + (i >= 3 && v > 0 ? " bad" : "") + '">' + (v ? m(v) : "") + "</td>").join("") +
           '<td class="n">' + (p.pre ? m(p.pre) : "") + '</td><td class="n">' + (p.adv ? m(p.adv) : "") + '</td><td class="n">' + (p.unalloc ? m(p.unalloc) : "") + '</td><td class="n"><b>' + m(p.total) + "</b></td>" +
@@ -10126,11 +10127,11 @@ function viewBooksMis(b){
     if (tab === "sales") h += '<div class="dash-tiles"><div class="dtile"><span>Customers</span><b>' + S2.rows.length + "</b><small>" + (S2.fresh != null ? S2.fresh + " new in the period" : "") + '</small></div><div class="dtile"><span>Top five customers</span><b>' + (S2.total ? Math.round(S2.top5 / S2.total * 1000) / 10 : 0) + "%</b><small>of sales</small></div>" +
       '<div class="dtile"><span>By registration</span><b>' + S2.byReg.length + "</b><small>" + S2.byReg.map(([k, v]) => esc(k) + " " + m(v)).join(" \u00b7 ") + '</small></div><div class="dtile"><span>By state of the customer</span><b>' + S2.byState.length + "</b><small>" + S2.byState.slice(0, 4).map(([k, v]) => esc(k) + " " + m(v)).join(" \u00b7 ") + "</small></div></div>";
     h += '<div class="bk-tablewrap"><table class="bk-table" id="misParty"><thead><tr><th>' + (tab === "sales" ? "Customer" : "Supplier") + "</th>" + (cols ? months.map(mm => '<th class="n">' + GSTR.label(mm) + "</th>").join("") : "") + '<th class="n">Total</th><th class="n">Share</th></tr></thead><tbody>' +
-      list.slice(0, 400).map(x => "<tr><td>" + esc(x.party || "\u2014") + "</td>" + (cols ? months.map(mm => '<td class="n">' + (x.m[mm] ? m(x.m[mm]) : "") + "</td>").join("") : "") + '<td class="n"><b>' + m(x.t) + '</b></td><td class="n">' + (S2.total ? Math.round(x.t / S2.total * 1000) / 10 + "%" : "") + "</td></tr>").join("") +
+      list.slice(0, gfN(400)).map(x => "<tr><td>" + esc(x.party || "\u2014") + "</td>" + (cols ? months.map(mm => '<td class="n">' + (x.m[mm] ? m(x.m[mm]) : "") + "</td>").join("") : "") + '<td class="n"><b>' + m(x.t) + '</b></td><td class="n">' + (S2.total ? Math.round(x.t / S2.total * 1000) / 10 + "%" : "") + "</td></tr>").join("") +
       '<tr><td><b>Total</b></td>' + (cols ? months.map(mm => '<td class="n">' + m(S2.rows.reduce((s, x) => s + (x.m[mm] || 0), 0)) + "</td>").join("") : "") + '<td class="n"><b>' + m(S2.total) + "</b></td><td></td></tr></tbody></table></div>" +
       '<p class="note">' + (tab === "sales" ? "Sales are shown without GST, less credit notes." : "Purchases and expenses booked against suppliers, without GST.") + "</p>";
     if (tab === "purch") h += '<section class="dash-card" style="margin-top:12px"><h3>Expense heads by month</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Ledger</th>' + (cols ? months.map(mm => '<th class="n">' + GSTR.label(mm) + "</th>").join("") : "") + '<th class="n">Total</th></tr></thead><tbody>' +
-      S2.heads.filter(x => !q || x.l.toLowerCase().includes(q)).slice(0, 200).map(x => "<tr><td>" + esc(x.l) + (x.jumps.length ? ' <span class="tag warn">jumped</span>' : "") + "</td>" + (cols ? months.map(mm => '<td class="n' + (x.jumps.includes(mm) ? " bad" : "") + '">' + (x.m[mm] ? m(x.m[mm]) : "") + "</td>").join("") : "") + '<td class="n"><b>' + m(x.t) + "</b></td></tr>").join("") +
+      S2.heads.filter(x => !q || x.l.toLowerCase().includes(q)).slice(0, gfN(200)).map(x => "<tr><td>" + esc(x.l) + (x.jumps.length ? ' <span class="tag warn">jumped</span>' : "") + "</td>" + (cols ? months.map(mm => '<td class="n' + (x.jumps.includes(mm) ? " bad" : "") + '">' + (x.m[mm] ? m(x.m[mm]) : "") + "</td>").join("") : "") + '<td class="n"><b>' + m(x.t) + "</b></td></tr>").join("") +
       '</tbody></table></div><p class="note">\u201cJumped\u201d: a month at least \u20b950,000 and more than one and a half times the average of the other months.</p></section>';
     return h;
   }
@@ -10261,7 +10262,7 @@ function misP2Html(tab, b, r){
     h += '<div class="revfilter"><input type="search" id="misq" data-fk="misq" data-keeptyped value="' + esc(S.misQ || "") + '" placeholder="Find a cost centre" style="width:260px">' +
       (X.cats.length > 1 ? '<select data-miscat style="width:auto"><option value="">Every category</option>' + X.cats.map(c2 => '<option' + (S.misCat === c2 ? " selected" : "") + ">" + esc(c2) + "</option>").join("") + "</select>" : "") + "</div>";
     h += '<div class="bk-tablewrap"><table class="bk-table" id="misCc"><thead><tr><th>Cost centre</th><th class="dt">From</th><th class="dt">To</th><th class="n">Income</th><th class="n">Costs</th><th class="n">Profit</th><th class="n">Margin</th></tr></thead><tbody>' +
-      list.slice(0, 300).map(x => { const open = S.misCc === x.cat + "|" + x.name;
+      list.slice(0, gfN(300)).map(x => { const open = S.misCc === x.cat + "|" + x.name;
         let y = '<tr><td><button class="linkbtn" data-miscc="' + esc(x.cat + "|" + x.name) + '">' + (open ? "\u25be " : "\u25b8 ") + esc(x.name) + "</button>" + (X.cats.length > 1 ? '<div class="nr">' + esc(x.cat) + "</div>" : "") + "</td><td>" + fmtDate(tallyDate(x.first)) + "</td><td>" + fmtDate(tallyDate(x.last)) +
           '</td><td class="n">' + m(x.inc) + '</td><td class="n">' + m(x.exp) + '</td><td class="n' + (x.profit < 0 ? " bad" : "") + '"><b>' + m(x.profit) + '</b></td><td class="n">' + (x.margin == null ? "\u2014" : x.margin + "%") + "</td></tr>";
         if (open) y += '<tr><td colspan="7" style="background:var(--paper);padding:0"><table class="bk-table" style="margin:0"><thead><tr><th>Ledger</th><th class="n">Amount</th></tr></thead><tbody>' +
@@ -10481,7 +10482,7 @@ function viewGstAmend(b){
       '<div class="dash-row"><span>Taxable value filed</span><b>' + money(c.filedTotal) + '</b></div><div class="dash-row"><span>Taxable value in the books now</span><b>' + money(c.booksTotal) + "</b></div>" +
       (Math.abs(c.b2csF - c.b2csB) >= 1 ? '<div class="dash-row"><span>B2C small: filed / books</span><b>' + money(c.b2csF) + " / " + money(c.b2csB) + "</b></div>" : "") +
       (c.rows.length ? '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Document</th><th>Party</th><th>Number</th><th class="dt">Date</th><th>What differs</th></tr></thead><tbody>' +
-        c.rows.slice(0, 200).map(r => "<tr><td>" + esc(kindName[r.kind] || r.kind) + "</td><td>" + esc(r.doc.ctin || "\u2014") + "</td><td>" + esc(r.doc.num) + "</td><td>" + fmtDate(tallyDate(r.doc.date)) + "</td><td>" + esc(r.changes.join("; ")) + "</td></tr>").join("") +
+        c.rows.slice(0, gfN(200)).map(r => "<tr><td>" + esc(kindName[r.kind] || r.kind) + "</td><td>" + esc(r.doc.ctin || "\u2014") + "</td><td>" + esc(r.doc.num) + "</td><td>" + fmtDate(tallyDate(r.doc.date)) + "</td><td>" + esc(r.changes.join("; ")) + "</td></tr>").join("") +
         "</tbody></table></div>" : '<p class="note">Every document in the books matches the return filed.</p>') +
       '<p class="note">Differences here are reported as amendments in a later month’s return, not by filing this month again.</p></section>';
   }
@@ -10821,12 +10822,12 @@ function viewInputRegister(b){
   // fixed widths, so the amounts are always on screen
   const widths = [10, 17, 12, 11, 9, 8, 7, 7].concat(cess ? [5] : []).concat([8, 11]);
   h += '<div class="bk-tablewrap"><table class="bk-table compact fixed"><colgroup>' + widths.map(w => '<col style="width:' + w + '%">').join("") + "</colgroup><thead><tr>" + cols.map((c, i) => "<th" + (i >= numFrom && i <= numTo ? ' class="n"' : "") + ">" + c + "</th>").join("") + "</tr></thead><tbody>" +
-    list.slice(0, 5000).map(r => { const s2 = sgn(r), rates = Array.from(new Set((r.parts || []).map(x => x.rate))).join(", ");
+    list.slice(0, gfN(5000)).map(r => { const s2 = sgn(r), rates = Array.from(new Set((r.parts || []).map(x => x.rate))).join(", ");
       return "<tr><td>" + esc(fmtDate(tallyDate(r.date))) + '<div class="nr" title="' + esc(r.type + " " + (r.voucher || "")) + '">' + esc(r.voucher || "") + "</div></td><td>" + esc(r.party || "") + '<div class="nr">' + esc(r.gstin || "no GSTIN") + "</div></td><td>" + esc(r.no || "") + (r.refDate ? '<div class="nr">' + esc(fmtDate(tallyDate(r.refDate))) + "</div>" : "") + '</td><td class="hr">' + esc([r.hsn, rates ? rates + "%" : ""].filter(Boolean).join(" \u00b7 ")) + '</td><td class="n">' + money(s2 * r.taxable) + (r.valueGuessed ? '<div class="nr">from the tax</div>' : "") + '</td><td class="n">' + money(s2 * r.igst) + '</td><td class="n">' + money(s2 * r.cgst) + '</td><td class="n">' + money(s2 * r.sgst) + "</td>" + (cess ? '<td class="n">' + money(s2 * r.cess) + "</td>" : "") + "<td>" + esc(r.kindL) + '</td><td><span class="' + ((r.twoB === "In 2B" || r.twoB === "not expected in 2B" || r.twoB === "Booked and reversed") && !r.dupe ? "" : r.twoB === "2B not brought in" && !r.dupe ? "nr" : "bad") + '">' + esc(r.dupe ? "Booked " + r.dupe.n + " times" : r.twoB) + "</span>" + (r.twoBWhy ? '<div class="nr" title="' + esc(r.twoBWhy) + '">' + esc(r.twoBWhy) + "</div>" : "") + "</td></tr>"; }).join("") +
     '<tr><td colspan="4"><b>' + shown.n + " document" + (shown.n === 1 ? "" : "s") + (shown.n !== all.n ? " of " + all.n : "") + '</b></td><td class="n"><b>' + money(shown.taxable) + '</b></td><td class="n"><b>' + money(shown.igst) + '</b></td><td class="n"><b>' + money(shown.cgst) + '</b></td><td class="n"><b>' + money(shown.sgst) + "</b></td>" + (cess ? '<td class="n"><b>' + money(shown.cess) + "</b></td>" : "") + '<td colspan="2"></td></tr></tbody></table></div>' +
     (list.length > 5000 ? '<p class="note">The first 5,000 are shown; the Excel has all ' + list.length + ".</p>" : "");
   if (R.only2b.length && (!f || f === "Not in 2B")) h += '<h3 id="inreg2b" style="margin-top:14px">In 2B, not in the books</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>2B month</th><th>Supplier</th><th>GSTIN</th><th>Bill no.</th><th>Date</th><th class="n">Value</th><th class="n">Tax</th><th>In Tally</th></tr></thead><tbody>' +
-    R.only2b.slice().sort((a, c) => (c.igst + c.cgst + c.sgst) - (a.igst + a.cgst + a.sgst)).slice(0, 300).map(p => "<tr><td>" + esc(GSTR.label(p.ym)) + "</td><td>" + esc(p.party) + "</td><td>" + esc(p.gstin) + "</td><td>" + esc(p.no) + "</td><td>" + esc(p.date ? fmtDate(tallyDate(p.date)) : "") + '</td><td class="n">' + money(p.dir * p.taxable) + '</td><td class="n">' + money(p.dir * (p.igst + p.cgst + p.sgst + p.cess)) + "</td><td>" + only2bNote(p) + "</td></tr>").join("") + "</tbody></table></div>";
+    R.only2b.slice().sort((a, c) => (c.igst + c.cgst + c.sgst) - (a.igst + a.cgst + a.sgst)).slice(0, gfN(300)).map(p => "<tr><td>" + esc(GSTR.label(p.ym)) + "</td><td>" + esc(p.party) + "</td><td>" + esc(p.gstin) + "</td><td>" + esc(p.no) + "</td><td>" + esc(p.date ? fmtDate(tallyDate(p.date)) : "") + '</td><td class="n">' + money(p.dir * p.taxable) + '</td><td class="n">' + money(p.dir * (p.igst + p.cgst + p.sgst + p.cess)) + "</td><td>" + only2bNote(p) + "</td></tr>").join("") + "</tbody></table></div>";
   return h + "</section>";
 }
 async function inregExcel(){
@@ -20835,6 +20836,7 @@ async function fsExcel(d){
 /* scroll inside their own box with the heading kept in view         */
 /* ================================================================== */
 // Tables that already have their own filters (bills, bank, sales) are left as they are.
+function gfN(n){ if (typeof GridF !== "object") return n; if (GridF.full()) return Infinity; GridF.cut = true; return n; }
 const GridF = {
   pop: null,
   // which screen this is, so a filter stays with its own table
@@ -20848,16 +20850,39 @@ const GridF = {
   first(c){ const tx = String(c.innerText || c.textContent || "").trim(); return tx.split("\n")[0].trim(); },
   num(s){ let t = String(s || "").replace(/[₹,\s%]/g, ""); const neg = /^\(.*\)$/.test(t); t = t.replace(/[()]/g, ""); if (!/^-?\d+(\.\d+)?$/.test(t)) return null; return (neg ? -1 : 1) * Number(t); },
   isNum(t, i, rows){ const th = this.heads(t)[i]; if (th && th.classList.contains("n")) return true; let n = 0, k = 0; rows.forEach(r => { const v = this.first(r.cells[i]); if (v && v !== "\u2014"){ n++; if (this.num(v) != null) k++; } }); return n > 0 && k / n >= 0.9; },
-  active(f){ return !!f && ((f.sel && f.sel.length) || f.q || f.min !== undefined && f.min !== "" || f.max !== undefined && f.max !== ""); },
+  // tables cut short for speed (gfN) show every row once a filter is set on their screen, so a filter finds them all
+  full(){ const w = this.where() + "|"; return Object.keys(S.gridF || {}).some(k => k.startsWith(w) && Object.values(S.gridF[k] || {}).some(f => this.active(f))); },
+  cut: false, cutSeen: false,
+  active(f){ return !!f && ((f.sel && f.sel.length) || f.q || f.from || f.to || f.min !== undefined && f.min !== "" || f.max !== undefined && f.max !== ""); },
+  // a date as shown ("01 Apr 2025", "30 Sept 2025", "01/04/2025", "2025-04-01") to yyyy-mm-dd, or ""
+  MON: {jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, sept: 9, oct: 10, nov: 11, dec: 12},
+  date(s){
+    const x = String(s || "").trim(), p2 = n => String(n).padStart(2, "0");
+    let m = x.match(/^(\d{4})-(\d{2})-(\d{2})/); if (m) return m[1] + "-" + m[2] + "-" + m[3];
+    m = x.match(/^(\d{1,2})[\s\-\/.]+([A-Za-z]{3,4}|\d{1,2})[\s\-\/.,]+(\d{4})\b/); if (!m) return "";
+    const mo = /\d/.test(m[2]) ? +m[2] : this.MON[m[2].toLowerCase()];
+    return mo >= 1 && mo <= 12 && +m[1] >= 1 && +m[1] <= 31 ? m[3] + "-" + p2(mo) + "-" + p2(m[1]) : "";
+  },
+  isDate(t, i, rows){ let n = 0, k = 0; rows.slice(0, 200).forEach(r => { const v = this.first(r.cells[i]); if (v && v !== "\u2014"){ n++; if (this.date(v)) k++; } }); return n > 0 && k / n >= 0.9; },
+  // the quick ranges, as on the purchase page (the year runs April to March)
+  quick(q){
+    const d = new Date(), y = d.getFullYear(), m = d.getMonth(), iso = x => x.getFullYear() + "-" + String(x.getMonth() + 1).padStart(2, "0") + "-" + String(x.getDate()).padStart(2, "0");
+    const qs = m - (m + 9) % 3, fy = m >= 3 ? y : y - 1;
+    const r = {month: [new Date(y, m, 1), new Date(y, m + 1, 0)], last: [new Date(y, m - 1, 1), new Date(y, m, 0)], quarter: [new Date(y, qs, 1), new Date(y, qs + 3, 0)],
+      fy: [new Date(fy, 3, 1), new Date(fy + 1, 2, 31)], lastfy: [new Date(fy - 1, 3, 1), new Date(fy, 2, 31)]}[q];
+    return r ? [iso(r[0]), iso(r[1])] : null;
+  },
   pass(r, f, i, num){
     const c = r.cells[i], v = this.first(c), all = String(c.innerText || "").toLowerCase();
     if (f.sel && f.sel.length && !f.sel.includes(v)) return false;
+    if (f.from || f.to){ const d = this.date(v); if (!d || (f.from && d < f.from) || (f.to && d > f.to)) return false; }
     if (f.q){ const words = String(f.q).toLowerCase().split(",").map(z => z.trim()).filter(Boolean); const hit = words.some(w => all.includes(w)); if (f.not ? hit : !hit) return false; }
     if (num && (f.min !== undefined && f.min !== "" || f.max !== undefined && f.max !== "")){ const x = this.num(v); if (x == null) return false; if (f.min !== "" && f.min !== undefined && x < Number(f.min)) return false; if (f.max !== "" && f.max !== undefined && x > Number(f.max)) return false; }
     return true;
   },
   // after every render: funnels on the headings, filters applied, long tables boxed
   after(){
+    this.cutSeen = this.cut; this.cut = false;
     const tables = Array.from(document.querySelectorAll("#app table.bk-table"));
     tables.forEach((t, ti) => {
       if (t.querySelector(".colf") || t.classList.contains("gf-off")) return;
@@ -20877,8 +20902,12 @@ const GridF = {
   apply(t){
     const f = this.st(t), rows = this.rows(t), hs = this.heads(t), on = Object.keys(f).filter(i => this.active(f[i]));
     const nums = {}; on.forEach(i => { nums[i] = this.isNum(t, +i, rows); });
+    // a filter set on a screen whose tables were cut short: drawn again with every row, then filtered
+    if (on.length && this.cutSeen && !this.redraw){ this.redraw = setTimeout(() => { this.redraw = null; render(); }, 250); }
     let shown = 0;
-    rows.forEach(r => { const ok = on.every(i => this.pass(r, f[i], +i, nums[i])); r.style.display = ok ? "" : "none"; if (ok) shown++; });
+    // every row read first, then shown or hidden (reading text between changes would lay the page out again per row)
+    const keep = rows.map(r => on.every(i => this.pass(r, f[i], +i, nums[i])));
+    rows.forEach((r, k) => { r.style.display = keep[k] ? "" : "none"; if (keep[k]) shown++; });
     hs.forEach((th, i) => { const b = th.querySelector(".gff"); if (b) b.classList.toggle("on", this.active(f[i])); });
     // what is shown, and its sums, just above the table
     const wrap = t.closest(".bk-tablewrap") || t;
@@ -20897,15 +20926,17 @@ const GridF = {
   },
   values(t, i){ const m = new Map(); this.rows(t).forEach(r => { const v = this.first(r.cells[i]); m.set(v, (m.get(v) || 0) + 1); }); return Array.from(m.entries()).sort((a, c) => c[1] - a[1] || String(a[0]).localeCompare(String(c[0]))); },
   draw(t){
-    const p = this.pop, i = p.i, f = this.st(t)[i] || {}, rows = this.rows(t), num = this.isNum(t, i, rows), label = this.label(this.heads(t)[i]);
+    const p = this.pop, i = p.i, f = this.st(t)[i] || {}, rows = this.rows(t), dt = this.isDate(t, i, rows), num = !dt && this.isNum(t, i, rows), label = this.label(this.heads(t)[i]);
     let el = document.getElementById("gfpop");
     if (!el){ el = document.createElement("div"); el.id = "gfpop"; el.className = "colpop"; document.body.appendChild(el); }
     const vals = this.values(t, i), q = p.search.toLowerCase(), many = vals.length > 400;
     const shown = (q ? vals.filter(([v]) => String(v).toLowerCase().includes(q) || (f.sel || []).includes(v)) : vals).slice(0, 400);
     el.innerHTML = '<div class="cp-head"><b>' + esc(label) + '</b><button class="linkbtn" data-gfx="close" aria-label="Close">\u00d7</button></div><div class="cp-body">' +
+      (dt ? '<div class="cp-quick">' + [["month", "This month"], ["last", "Last month"], ["quarter", "This quarter"], ["fy", "This year"], ["lastfy", "Last year"]].map(([v, l]) => '<button class="cp-chip" data-gfq="' + v + '">' + l + "</button>").join("") + "</div>" +
+        '<div class="cp-range"><label>From<input type="date" data-gfin="from" value="' + esc(f.from || "") + '"></label><label>To<input type="date" data-gfin="to" value="' + esc(f.to || "") + '"></label></div>' : "") +
       (num ? '<div class="cp-range"><label>From<input type="text" inputmode="decimal" data-gfin="min" value="' + esc(f.min || "") + '" placeholder="any"></label><label>To<input type="text" inputmode="decimal" data-gfin="max" value="' + esc(f.max || "") + '" placeholder="any"></label></div>' : "") +
       '<div class="cp-row"><select data-gfin="not"><option value="">Has</option><option value="1"' + (f.not ? " selected" : "") + '>Does not have</option></select><input type="text" data-gfin="q" value="' + esc(f.q || "") + '" placeholder="words, commas between"></div>' +
-      (vals.length > 1 && !(num && vals.length > 60) ? '<p class="cp-sub">Or only these' + (many ? " (the first 400; search to narrow)" : "") + ':</p><input type="search" class="cp-search" data-gfin="search" value="' + esc(p.search) + '" placeholder="Search\u2026">' +
+      (vals.length > 1 && !((num || dt) && vals.length > 60) ? '<p class="cp-sub">Or only these' + (many ? " (the first 400; search to narrow)" : "") + ':</p><input type="search" class="cp-search" data-gfin="search" value="' + esc(p.search) + '" placeholder="Search\u2026">' +
         '<div class="cp-list">' + shown.map(([v, n]) => '<label class="cp-item"><input type="checkbox" data-gfv="' + esc(v) + '"' + ((f.sel || []).includes(v) ? " checked" : "") + "><span>" + esc(v === "" ? "(blank)" : v) + "</span><small>" + n + "</small></label>").join("") + "</div>" : "") +
       '</div><div class="cp-foot"><button class="btn small" data-gfx="clear">Clear</button><button class="btn small primary" data-gfx="close">Done</button></div>';
   },
@@ -20914,7 +20945,9 @@ const GridF = {
     if (!el || !b) return;
     const r = b.getBoundingClientRect(), w = 252;
     el.style.left = Math.max(12, Math.min(window.innerWidth - w - 12, r.left - 8)) + "px";
-    el.style.top = Math.min(window.innerHeight - 80, r.bottom + 6) + "px";
+    // below the funnel; above it when there is no room below, so the buttons stay on the screen
+    const h = el.offsetHeight, below = r.bottom + 6;
+    el.style.top = (below + h <= window.innerHeight - 8 ? below : Math.max(8, Math.min(r.top - h - 6, window.innerHeight - h - 8))) + "px";
   },
   close(){ this.pop = null; const el = document.getElementById("gfpop"); if (el) el.remove(); },
   table(){ return this.pop ? document.querySelector('#app table.bk-table[data-gfkey="' + CSS.escape(this.pop.key) + '"]') : null; },
@@ -20931,6 +20964,8 @@ document.addEventListener("click", e => {
   if (b){ e.preventDefault(); e.stopPropagation(); GridF.open(b); return; }
   const c = e.target.closest && e.target.closest("[data-gfclear]");
   if (c){ const t = document.querySelector('#app table.bk-table[data-gfkey="' + CSS.escape(c.dataset.gfclear) + '"]'); if (t){ S.gridF[t.dataset.gfkey] = {}; GridF.apply(t); } GridF.close(); return; }
+  const qk = e.target.closest && e.target.closest("#gfpop [data-gfq]");
+  if (qk){ const t = GridF.table(), r = GridF.quick(qk.dataset.gfq); if (t && r){ const st = GridF.st(t), f = st[GridF.pop.i] = st[GridF.pop.i] || {}; f.from = r[0]; f.to = r[1]; GridF.apply(t); GridF.draw(t); } return; }
   const x = e.target.closest && e.target.closest("#gfpop [data-gfx]");
   if (x){ const t = GridF.table(); if (x.dataset.gfx === "clear" && t){ delete GridF.st(t)[GridF.pop.i]; GridF.apply(t); GridF.draw(t); } else GridF.close(); return; }
   if (GridF.pop && !(e.target.closest && e.target.closest("#gfpop"))) GridF.close();
@@ -21084,7 +21119,7 @@ function viewItcFollow(b){
       Object.values(ITCT.CATS).map(c => "<tr><td style=\"width:220px\"><b>" + esc(c.label) + "</b></td><td>" + esc(c.law) + "</td></tr>").join("") + "</tbody></table></div></details>";
   const cols = ["What", "Supplier \u00b7 GSTIN", "Bill no. \u00b7 date", "In Tally", "In 2B", "Tax", "Last date", "What to do", "Note"];
   h += '<div class="bk-tablewrap"><table class="bk-table compact fixed"><colgroup>' + [11, 16, 12, 11, 8, 9, 8, 14, 11].map(w => '<col style="width:' + w + '%">').join("") + "</colgroup><thead><tr>" + cols.map((c, i) => "<th" + (i === 5 ? ' class="n"' : "") + ">" + c + "</th>").join("") + "</tr></thead><tbody>" +
-    list.slice(0, 3000).map(x => {
+    list.slice(0, gfN(3000)).map(x => {
       const c = ITCT.CATS[x.cat], dlCls = x.deadline && x.deadline < today ? "bad" : soon(x.deadline) ? "bad" : "nr";
       const tallyCell = x.where === "2B" ? (x.bookedAs ? '<span class="nr">' + esc(x.bookedAs) + "</span>" : '<span class="nr">not booked</span>') : esc(GSTAmend.dmy(x.booked || x.date)) + '<div class="nr">' + esc(x.voucher || "") + "</div>";
       const twoB = x.where === "Tally" ? '<span class="' + (x.covered ? "bad" : "nr") + '">' + esc(x.covered ? "not in 2B" : "no 2B yet") + "</span>" : esc(GSTR.label(x.ym2b || x.ym)) + (x.ims === "rejected" ? '<div class="bad">rejected in IMS</div>' : x.claimedIn ? '<div class="nr">taken then</div>' : x.reason ? '<div class="nr">' + esc(x.reason) + "</div>" : x.ims ? '<div class="nr">IMS: ' + esc(x.ims) + "</div>" : "");
@@ -23988,7 +24023,7 @@ const LK = {
     let h = '<section class="dash-card lk-res" style="margin-top:12px"><div class="lk-head"><h3>' + esc(r.title || "") + " " + src + " " + when + '</h3><div class="row" style="gap:6px"><button class="btn small" data-lk="print">Print or PDF</button><button class="btn small" data-lk="excel">Excel</button><button class="btn small" data-lk="clear">Close</button></div></div>';
     if (r.note) h += '<p class="note">' + esc(r.note) + "</p>";
     const tile = (l, v, cls) => '<div class="dtile' + (cls ? " " + cls : "") + '"><span>' + l + "</span><b>" + v + "</b></div>";
-    const LIMIT = 1500;
+    const LIMIT = gfN(1500);
     if (r.kind === "ledger"){
       h += '<div class="dash-tiles">' + tile("Opening", r.open == null ? "not known" : FC.drcr(r.open)) + tile("Debits", FC.amt(r.dr) || "0.00") + tile("Credits", FC.amt(r.cr) || "0.00") + tile("Closing", r.close == null ? FC.drcr(r.dr - r.cr) + " (movement)" : FC.drcr(r.close)) + "</div>";
       if (!r.rows.length) return h + '<div class="bk-none">No entries in ' + esc(r.led) + " for these dates.</div></section>";
@@ -24108,6 +24143,8 @@ if (typeof document !== "undefined"){
 // the books follow Tally on every screen, not only while Look up is open: once a minute, quietly (only the bridge's
 // copy or the cloud is asked; Tally is not)
 setInterval(() => { try { if (S.books && S.books.cid === S.coId && !document.hidden && typeof LK === "object") LK.autoFresh(false, true); } catch (e){} }, 60000);
+setInterval(() => { try { if (typeof TCloud === "object") TCloud.auto(); } catch (e){} }, 60000);
+setTimeout(() => { try { if (typeof TCloud === "object") TCloud.auto(); } catch (e){} }, 8000);
 /* ================================================================== */
 /* Reports: every report in one place, by area, each area opening with */
 /* a few figures and a small chart for the year                        */
@@ -24752,7 +24789,7 @@ if (typeof window !== "undefined") setInterval(() => {
 //     downloaded, the rest come from this browser's own store (IndexedDB, "tcday:<book>:<day>");
 //   - a large company (more than TCloud.BIG entries) is not loaded at all: the trial balance and ledgers are asked of
 //     the cloud's ready totals and come back in a moment, fit for a phone;
-//   - Settings, Books in the cloud: the computers that send (connect one, remove one) and which Tally company is
+//   - the computer with Tally connects itself (TCloud.auto); Settings, Books in the cloud: the computers that send (remove one) and which Tally company is
 //     which client.
 const TCloud = {
   BIG: 60000,
@@ -24902,26 +24939,31 @@ const TCloud = {
     } catch (e){ p.err = /tally_devices|does not exist|schema cache/i.test(String(e && e.message)) ? "The cloud copy is not set up in this database yet." : (e && e.message) || String(e); }
     p.busy = ""; render();
   },
-  async connect(){
-    if (!this.on()){ toast("Sign in to the firm account first."); return; }
-    if (!Bridge.on() || !Bridge.up()){ toast("Connect the Tally Bridge on this computer first (Settings, Tally Bridge)."); return; }
-    const r = await askConfirm({title: "Send this computer's Tally books to FinCom's cloud?", ok: "Connect this computer",
-      body: "<p>The bridge on this computer will send the books of each Tally company it keeps in step to your firm's space in FinCom's cloud, " +
-        "so everyone in the firm sees them on any computer or phone, even with Tally closed.</p><p>Only companies linked to one of your clients are sent (by their Tally name, or as you link them below). " +
-        "The data is kept in India (Mumbai), separate from every other firm, and only people in your firm can see it. You can disconnect this computer at any time.</p>" +
-        '<label class="f" style="margin-top:8px"><span>Name for this computer</span><input type="text" id="tcName" value="' + esc((Bridge.st.computer || "Office computer")) + '"></label>',
-      read: () => (document.getElementById("tcName") || {}).value || "", validate: v => String(v).trim() ? "" : "Give the computer a name."});
-    if (!r || !r.ok) return;
-    const p = this.pane; p.busy = "Connecting this computer…"; render();
+  // The computer with Tally sends by itself: signed in to the firm, with the bridge running, this computer gets its
+  // key (once) and the open client's Tally company is linked to that client. Nobody has to press anything.
+  // Tried every minute until done, then every 10 minutes; a failed key hand-over waits 30 minutes (no pile of keys).
+  autoAt: 0, autoBusy: false,
+  async auto(){
+    if (this.autoBusy || !this.on() || !Bridge.on() || !Bridge.up() || Date.now() < this.autoAt) return;
+    this.autoBusy = true; this.autoAt = Date.now() + 60000;
     try {
-      const d = await this.rpc("tally_device_create", {p_name: String(r.data).trim()});
-      const j = await Bridge.call("/cloudlink", {url: this.ingestUrl(), key: d.key}, 60000);
-      toast("This computer is connected to " + (j.firm || "the firm") + ". Linked companies start going to the cloud within a few minutes.");
-    } catch (e){
-      const m = (e && e.message) || String(e);
-      toast(/Unknown address|No such/i.test(m) ? "This needs Tally Bridge 1.13.0 or later. Download the new setup from Settings, Tally Bridge." : "Could not connect: " + m);
-    }
-    p.busy = ""; await this.refreshPane();
+      const s = await Bridge.call("/cloudlink", null, 15000);
+      if (!s.connected || s.url !== this.ingestUrl()){
+        this.autoAt = Date.now() + 30 * 60000;
+        const d = await this.rpc("tally_device_create", {p_name: String(Bridge.st.computer || "Office computer").slice(0, 80)});
+        await Bridge.call("/cloudlink", {url: this.ingestUrl(), key: d.key}, 60000);
+        this.autoAt = Date.now() + 60000;
+      }
+      const co = CO(), o = co && Bridge.openFor(co);
+      if (o){
+        const row = ((await Cloud.api("tally_companies?select=client_id&company=eq." + encodeURIComponent(o.name))) || [])[0];
+        if (!row) return;                               // the computer has not reported it yet: next minute
+        // linked to another client already: left as it is (changed only by hand, in Settings)
+        if (!row.client_id) await this.rpc("tally_company_link", {p_company: o.name, p_client: co.id});
+      }
+      this.autoAt = Date.now() + 10 * 60000;
+    } catch (e){ this.autoErr = (e && e.message) || String(e); }
+    finally { this.autoBusy = false; }
   },
   async revoke(id, name){
     const r = await askConfirm({title: "Remove " + name + "?", ok: "Remove it", danger: true, body: "<p>That computer will not be able to send anything to the cloud any more. What it sent stays. To send again, connect it again.</p>"});
@@ -24943,12 +24985,13 @@ const TCloud = {
     let h = '<div class="pane"><h2>Books in FinCom’s cloud</h2><p class="note" style="margin:0 0 12px">The bridge on each connected computer sends the books of the Tally companies it keeps in step. ' +
       "Then Look up, Reports and the books open on any computer or phone, even with Tally closed, and a trial balance or ledger for any date comes back in a moment. Kept in India, for your firm only.</p>" +
       (p.err ? '<p class="note bad">' + esc(p.err) + "</p>" : "") + (p.busy ? '<p class="note">' + esc(p.busy) + "</p>" : "") +
-      '<div class="row"><button class="btn primary" data-tc="connect">Connect this computer</button><button class="btn small" data-tc="refresh">Refresh</button></div></div>';
+      '<p class="note">The computer with Tally and the bridge sends by itself once someone signs in to FinCom there. Nothing to press.</p>' +
+      (this.autoErr ? '<p class="note bad">Last try: ' + esc(this.autoErr) + "</p>" : "") + '<div class="row"><button class="btn small" data-tc="refresh">Refresh</button></div></div>';
     const dv = (p.devices || []).filter(d => !d.revoked);
     h += '<div class="pane"><h3 style="margin-top:0">Computers that send</h3>' + (dv.length ? '<div class="tblwrap"><table class="data"><thead><tr><th>Computer</th><th>Last heard from</th><th>Bridge</th><th></th></tr></thead><tbody>' +
       dv.map(d => "<tr><td>" + esc(d.name) + ((d.info || {}).computer ? '<div class="nr">' + esc(d.info.computer) + (d.info.user ? " · " + esc(d.info.user) : "") + "</div>" : "") + "</td><td>" + when(d.last_seen) + "</td><td>" + esc(d.version || "—") +
         '</td><td class="n"><button class="btn small" data-tc="revoke" data-tcid="' + esc(d.id) + '" data-tcname="' + esc(d.name) + '">Remove</button></td></tr>').join("") + "</tbody></table></div>"
-      : '<p class="note">None yet. On the computer with Tally and the bridge, press “Connect this computer”.</p>') + "</div>";
+      : '<p class="note">None yet. Open FinCom on the computer with Tally, signed in to the firm, and it connects by itself within a minute.</p>') + "</div>";
     const cl = p.companies || [];
     h += '<div class="pane"><h3 style="margin-top:0">Tally companies and clients</h3><p class="note" style="margin:0 0 8px">A company named in Tally as a client’s “Tally name” is linked by itself. ' +
       "Link the others here. A company whose GSTIN is not the client’s cannot be linked, so no one’s books land in the wrong client.</p>" +
@@ -24975,8 +25018,7 @@ const TCloud = {
     const t = e.target.closest && e.target.closest("[data-tc]");
     if (!t) return;
     const a = t.dataset.tc;
-    if (a === "connect") TCloud.connect();
-    else if (a === "refresh") TCloud.refreshPane();
+    if (a === "refresh") TCloud.refreshPane();
     else if (a === "revoke") TCloud.revoke(t.dataset.tcid, t.dataset.tcname);
   });
   document.addEventListener("change", e => {

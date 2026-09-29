@@ -7,7 +7,7 @@
 //     downloaded, the rest come from this browser's own store (IndexedDB, "tcday:<book>:<day>");
 //   - a large company (more than TCloud.BIG entries) is not loaded at all: the trial balance and ledgers are asked of
 //     the cloud's ready totals and come back in a moment, fit for a phone;
-//   - Settings, Books in the cloud: the computers that send (connect one, remove one) and which Tally company is
+//   - the computer with Tally connects itself (TCloud.auto); Settings, Books in the cloud: the computers that send (remove one) and which Tally company is
 //     which client.
 const TCloud = {
   BIG: 60000,
@@ -157,26 +157,31 @@ const TCloud = {
     } catch (e){ p.err = /tally_devices|does not exist|schema cache/i.test(String(e && e.message)) ? "The cloud copy is not set up in this database yet." : (e && e.message) || String(e); }
     p.busy = ""; render();
   },
-  async connect(){
-    if (!this.on()){ toast("Sign in to the firm account first."); return; }
-    if (!Bridge.on() || !Bridge.up()){ toast("Connect the Tally Bridge on this computer first (Settings, Tally Bridge)."); return; }
-    const r = await askConfirm({title: "Send this computer's Tally books to FinCom's cloud?", ok: "Connect this computer",
-      body: "<p>The bridge on this computer will send the books of each Tally company it keeps in step to your firm's space in FinCom's cloud, " +
-        "so everyone in the firm sees them on any computer or phone, even with Tally closed.</p><p>Only companies linked to one of your clients are sent (by their Tally name, or as you link them below). " +
-        "The data is kept in India (Mumbai), separate from every other firm, and only people in your firm can see it. You can disconnect this computer at any time.</p>" +
-        '<label class="f" style="margin-top:8px"><span>Name for this computer</span><input type="text" id="tcName" value="' + esc((Bridge.st.computer || "Office computer")) + '"></label>',
-      read: () => (document.getElementById("tcName") || {}).value || "", validate: v => String(v).trim() ? "" : "Give the computer a name."});
-    if (!r || !r.ok) return;
-    const p = this.pane; p.busy = "Connecting this computer…"; render();
+  // The computer with Tally sends by itself: signed in to the firm, with the bridge running, this computer gets its
+  // key (once) and the open client's Tally company is linked to that client. Nobody has to press anything.
+  // Tried every minute until done, then every 10 minutes; a failed key hand-over waits 30 minutes (no pile of keys).
+  autoAt: 0, autoBusy: false,
+  async auto(){
+    if (this.autoBusy || !this.on() || !Bridge.on() || !Bridge.up() || Date.now() < this.autoAt) return;
+    this.autoBusy = true; this.autoAt = Date.now() + 60000;
     try {
-      const d = await this.rpc("tally_device_create", {p_name: String(r.data).trim()});
-      const j = await Bridge.call("/cloudlink", {url: this.ingestUrl(), key: d.key}, 60000);
-      toast("This computer is connected to " + (j.firm || "the firm") + ". Linked companies start going to the cloud within a few minutes.");
-    } catch (e){
-      const m = (e && e.message) || String(e);
-      toast(/Unknown address|No such/i.test(m) ? "This needs Tally Bridge 1.13.0 or later. Download the new setup from Settings, Tally Bridge." : "Could not connect: " + m);
-    }
-    p.busy = ""; await this.refreshPane();
+      const s = await Bridge.call("/cloudlink", null, 15000);
+      if (!s.connected || s.url !== this.ingestUrl()){
+        this.autoAt = Date.now() + 30 * 60000;
+        const d = await this.rpc("tally_device_create", {p_name: String(Bridge.st.computer || "Office computer").slice(0, 80)});
+        await Bridge.call("/cloudlink", {url: this.ingestUrl(), key: d.key}, 60000);
+        this.autoAt = Date.now() + 60000;
+      }
+      const co = CO(), o = co && Bridge.openFor(co);
+      if (o){
+        const row = ((await Cloud.api("tally_companies?select=client_id&company=eq." + encodeURIComponent(o.name))) || [])[0];
+        if (!row) return;                               // the computer has not reported it yet: next minute
+        // linked to another client already: left as it is (changed only by hand, in Settings)
+        if (!row.client_id) await this.rpc("tally_company_link", {p_company: o.name, p_client: co.id});
+      }
+      this.autoAt = Date.now() + 10 * 60000;
+    } catch (e){ this.autoErr = (e && e.message) || String(e); }
+    finally { this.autoBusy = false; }
   },
   async revoke(id, name){
     const r = await askConfirm({title: "Remove " + name + "?", ok: "Remove it", danger: true, body: "<p>That computer will not be able to send anything to the cloud any more. What it sent stays. To send again, connect it again.</p>"});
@@ -198,12 +203,13 @@ const TCloud = {
     let h = '<div class="pane"><h2>Books in FinCom’s cloud</h2><p class="note" style="margin:0 0 12px">The bridge on each connected computer sends the books of the Tally companies it keeps in step. ' +
       "Then Look up, Reports and the books open on any computer or phone, even with Tally closed, and a trial balance or ledger for any date comes back in a moment. Kept in India, for your firm only.</p>" +
       (p.err ? '<p class="note bad">' + esc(p.err) + "</p>" : "") + (p.busy ? '<p class="note">' + esc(p.busy) + "</p>" : "") +
-      '<div class="row"><button class="btn primary" data-tc="connect">Connect this computer</button><button class="btn small" data-tc="refresh">Refresh</button></div></div>';
+      '<p class="note">The computer with Tally and the bridge sends by itself once someone signs in to FinCom there. Nothing to press.</p>' +
+      (this.autoErr ? '<p class="note bad">Last try: ' + esc(this.autoErr) + "</p>" : "") + '<div class="row"><button class="btn small" data-tc="refresh">Refresh</button></div></div>';
     const dv = (p.devices || []).filter(d => !d.revoked);
     h += '<div class="pane"><h3 style="margin-top:0">Computers that send</h3>' + (dv.length ? '<div class="tblwrap"><table class="data"><thead><tr><th>Computer</th><th>Last heard from</th><th>Bridge</th><th></th></tr></thead><tbody>' +
       dv.map(d => "<tr><td>" + esc(d.name) + ((d.info || {}).computer ? '<div class="nr">' + esc(d.info.computer) + (d.info.user ? " · " + esc(d.info.user) : "") + "</div>" : "") + "</td><td>" + when(d.last_seen) + "</td><td>" + esc(d.version || "—") +
         '</td><td class="n"><button class="btn small" data-tc="revoke" data-tcid="' + esc(d.id) + '" data-tcname="' + esc(d.name) + '">Remove</button></td></tr>').join("") + "</tbody></table></div>"
-      : '<p class="note">None yet. On the computer with Tally and the bridge, press “Connect this computer”.</p>') + "</div>";
+      : '<p class="note">None yet. Open FinCom on the computer with Tally, signed in to the firm, and it connects by itself within a minute.</p>') + "</div>";
     const cl = p.companies || [];
     h += '<div class="pane"><h3 style="margin-top:0">Tally companies and clients</h3><p class="note" style="margin:0 0 8px">A company named in Tally as a client’s “Tally name” is linked by itself. ' +
       "Link the others here. A company whose GSTIN is not the client’s cannot be linked, so no one’s books land in the wrong client.</p>" +
@@ -230,8 +236,7 @@ const TCloud = {
     const t = e.target.closest && e.target.closest("[data-tc]");
     if (!t) return;
     const a = t.dataset.tc;
-    if (a === "connect") TCloud.connect();
-    else if (a === "refresh") TCloud.refreshPane();
+    if (a === "refresh") TCloud.refreshPane();
     else if (a === "revoke") TCloud.revoke(t.dataset.tcid, t.dataset.tcname);
   });
   document.addEventListener("change", e => {

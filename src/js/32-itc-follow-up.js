@@ -138,7 +138,7 @@ function viewItcFollow(b){
       Object.values(ITCT.CATS).map(c => "<tr><td style=\"width:220px\"><b>" + esc(c.label) + "</b></td><td>" + esc(c.law) + "</td></tr>").join("") + "</tbody></table></div></details>";
   const cols = ["What", "Supplier \u00b7 GSTIN", "Bill no. \u00b7 date", "In Tally", "In 2B", "Tax", "Last date", "What to do", "Note"];
   h += '<div class="bk-tablewrap"><table class="bk-table compact fixed"><colgroup>' + [11, 16, 12, 11, 8, 9, 8, 14, 11].map(w => '<col style="width:' + w + '%">').join("") + "</colgroup><thead><tr>" + cols.map((c, i) => "<th" + (i === 5 ? ' class="n"' : "") + ">" + c + "</th>").join("") + "</tr></thead><tbody>" +
-    list.slice(0, 3000).map(x => {
+    list.slice(0, gfN(3000)).map(x => {
       const c = ITCT.CATS[x.cat], dlCls = x.deadline && x.deadline < today ? "bad" : soon(x.deadline) ? "bad" : "nr";
       const tallyCell = x.where === "2B" ? (x.bookedAs ? '<span class="nr">' + esc(x.bookedAs) + "</span>" : '<span class="nr">not booked</span>') : esc(GSTAmend.dmy(x.booked || x.date)) + '<div class="nr">' + esc(x.voucher || "") + "</div>";
       const twoB = x.where === "Tally" ? '<span class="' + (x.covered ? "bad" : "nr") + '">' + esc(x.covered ? "not in 2B" : "no 2B yet") + "</span>" : esc(GSTR.label(x.ym2b || x.ym)) + (x.ims === "rejected" ? '<div class="bad">rejected in IMS</div>' : x.claimedIn ? '<div class="nr">taken then</div>' : x.reason ? '<div class="nr">' + esc(x.reason) + "</div>" : x.ims ? '<div class="nr">IMS: ' + esc(x.ims) + "</div>" : "");
