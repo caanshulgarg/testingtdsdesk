@@ -56,7 +56,11 @@ namespace FinCom.Connector
     {
         readonly NotifyIcon tray = new NotifyIcon();
         readonly TabControl tabs = new TabControl { Dock = DockStyle.Fill };
-        readonly Label headline = new Label { Dock = DockStyle.Top, Height = 54, Padding = new Padding(14, 8, 8, 4), Font = new Font("Segoe UI", 13f, FontStyle.Bold) };
+        // the top of the window: one line saying what is going on, one saying what to do, and the three things people need
+        readonly Label bigState = new Label { Dock = DockStyle.Top, Height = 44, Padding = new Padding(16, 12, 8, 0), Font = new Font("Segoe UI", 15f, FontStyle.Bold) };
+        readonly Label todo = new Label { Dock = DockStyle.Top, Height = 52, Padding = new Padding(19, 4, 14, 4), Font = new Font("Segoe UI", 10.5f) };
+        readonly Button more = new Button { Text = "Show details", Width = 140, Height = 42 };
+        Button startStop;
         readonly ListView checks = new ListView { Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, HeaderStyle = ColumnHeaderStyle.Nonclickable, ShowItemToolTips = true };
         readonly ListView cos = new ListView { Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true };
         readonly TextBox logBox = new TextBox { Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Both, WordWrap = false, Font = new Font("Consolas", 9f) };
@@ -80,7 +84,7 @@ namespace FinCom.Connector
         public MainForm(bool show)
         {
             showNow = show;
-            Text = App.Name; Width = 900; Height = 600; StartPosition = FormStartPosition.CenterScreen;
+            Text = App.Name; Width = 900; Height = 260; StartPosition = FormStartPosition.CenterScreen;
             Icon = MakeIcon(Color.FromArgb(22, 163, 74));
             Font = new Font("Segoe UI", 9.5f);
 
@@ -134,22 +138,31 @@ namespace FinCom.Connector
             pHelp.Controls.Add(supportInfo); pHelp.Controls.Add(hb); pHelp.Controls.Add(note); pHelp.Controls.Add(hl);
 
             tabs.TabPages.AddRange(new[] { pStatus, pCos, pLog, pUpd, pHelp });
-            Controls.Add(tabs); Controls.Add(headline);
+            tabs.Visible = false;
+            var top = new Panel { Dock = DockStyle.Top, Height = 160 };
+            var row = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 58, Padding = new Padding(14, 6, 6, 6) };
+            Func<string, EventHandler, Button> big = (t, h) => { var x = new Button { Text = t, Width = 170, Height = 42, Font = new Font("Segoe UI", 11f, FontStyle.Bold) }; x.Click += h; row.Controls.Add(x); return x; };
+            startStop = big("\u25A0  Stop", (s, e) => StartStop());
+            big("Open FinCom", (s, e) => OpenUrl(App.OpenUrl));
+            big("Exit", (s, e) => ExitAsked());
+            more.Click += (s, e) => { tabs.Visible = !tabs.Visible; more.Text = tabs.Visible ? "Hide details" : "Show details"; Height = tabs.Visible ? 640 : 260; if (tabs.Visible) RefreshAll(true); };
+            row.Controls.Add(more);
+            top.Controls.Add(row); top.Controls.Add(todo); top.Controls.Add(bigState);
+            Controls.Add(tabs); Controls.Add(top);
 
             // ---- tray
             tray.Icon = Icon; tray.Text = App.Name; tray.Visible = true;
             var menu = new ContextMenuStrip();
             menu.Items.Add("Open FinCom Connector", null, (s, e) => ShowMe());
+            var ss = menu.Items.Add("Stop", null, (s, e) => StartStop());
             menu.Items.Add("Open FinCom", null, (s, e) => OpenUrl(App.OpenUrl));
-            menu.Items.Add("Connect FinCom on this computer", null, (s, e) => ConnectFinCom());
-            menu.Items.Add("Restart the bridge", null, (s, e) => Supervisor.Current.Restart("restarted from the tray"));
-            menu.Items.Add("Send to FinCom support", null, (s, e) => { ShowMe(); tabs.SelectedIndex = 4; });
             menu.Items.Add(new ToolStripSeparator());
-            menu.Items.Add("Quit (the bridge stops)", null, (s, e) => { quitting = true; Close(); });
+            menu.Items.Add("Exit", null, (s, e) => ExitAsked());
+            menu.Opening += (s, e) => { ss.Text = Supervisor.Current.StoppedByYou ? "Start" : "Stop"; };
             tray.ContextMenuStrip = menu;
             tray.DoubleClick += (s, e) => ShowMe();
 
-            FormClosing += (s, e) => { if (!quitting && e.CloseReason == CloseReason.UserClosing) { e.Cancel = true; Hide(); tray.ShowBalloonTip(3000, App.Name, "Still running here, keeping the bridge going. Right-click this icon to open it or quit.", ToolTipIcon.Info); } };
+            FormClosing += (s, e) => { if (!quitting && e.CloseReason == CloseReason.UserClosing) { e.Cancel = true; Hide(); tray.ShowBalloonTip(3000, App.Name, Supervisor.Current.StoppedByYou ? "Stopped. Right-click this icon to start it again or exit." : "Still running near the clock, so FinCom can reach Tally. Right-click this icon to stop it or exit.", ToolTipIcon.Info); } };
             FormClosed += (s, e) => { tray.Visible = false; };
             timer.Tick += (s, e) => Tick();
             try { showEvent = new EventWaitHandle(false, EventResetMode.AutoReset, "Local\\FinComConnectorShow"); ThreadPool.RegisterWaitForSingleObject(showEvent, (o, t) => BeginInvoke((Action)ShowMe), null, -1, false); } catch { }
@@ -181,6 +194,27 @@ namespace FinCom.Connector
         {
             try { codeNow = Bridge.NewPairCode(); pairInfo.Text = "Connect code: " + codeNow + "  (for 10 minutes)"; copyBtn.Visible = true; }
             catch (Exception ex) { pairInfo.Text = "Could not open a connect code: " + ex.Message; }
+        }
+        // Stop: the bridge and the copier stop, Tally is not asked anything, until Start. Start: back on
+        void StartStop()
+        {
+            var sup = Supervisor.Current; var stop = !sup.StoppedByYou;
+            startStop.Enabled = false; bigState.Text = stop ? "\u2026  Stopping" : "\u2026  Starting"; bigState.ForeColor = Color.DimGray;
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                try { if (stop) sup.StopByYou(); else sup.StartByYou(); } catch (Exception ex) { App.Log("Start/stop: " + ex.Message); }
+                try { BeginInvoke((Action)(() => { startStop.Enabled = true; RefreshAll(true); })); } catch { }
+            });
+        }
+        // Exit: everything stops and the Connector closes (the desktop icon opens it again)
+        void ExitAsked()
+        {
+            var r = MessageBox.Show("Exit FinCom Connector?\n\nThe bridge stops: FinCom cannot reach Tally and the copy of the books is not kept up to date until you open FinCom Connector again (the icon on the desktop).",
+                App.Name, MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            if (r != DialogResult.Yes) return;
+            quitting = true;
+            try { Supervisor.Current.Stop(); if (Bridge.Ping() != null) Bridge.Call("/shutdown", "{}", 3000); } catch { }
+            Close();
         }
         void ShowMe() { Show(); WindowState = FormWindowState.Normal; Activate(); RefreshAll(true); }
         static void OpenUrl(string u) { try { Process.Start(new ProcessStartInfo(u) { UseShellExecute = true }); } catch { } }
@@ -222,16 +256,15 @@ namespace FinCom.Connector
                     checks.Items.Add(it);
                 }
                 checks.EndUpdate();
-                var worst = list.Any(c => c.Level == "bad") ? "bad" : list.Any(c => c.Level == "warn") ? "warn" : "ok";
-                headline.Text = worst == "ok" ? "✔  All is well: the bridge is running and Tally answers." : worst == "warn" ? "!  Working, with something to look at below." : "✖  Something needs attention: see below.";
-                headline.ForeColor = worst == "ok" ? Color.FromArgb(21, 128, 61) : worst == "warn" ? Color.FromArgb(180, 83, 9) : Color.FromArgb(185, 28, 28);
-                var color = worst == "ok" ? Color.FromArgb(22, 163, 74) : worst == "warn" ? Color.FromArgb(217, 119, 6) : Color.FromArgb(220, 38, 38);
-                if (worst != lastLevel) { tray.Icon = MakeIcon(color); tray.Text = App.Name + (worst == "ok" ? ": all is well" : worst == "warn" ? ": working" : ": needs attention"); }
+                var worst = sup.StoppedByYou ? "stopped" : list.Any(c => c.Level == "bad") ? "bad" : list.Any(c => c.Level == "warn") ? "warn" : "ok";
+                var color = worst == "ok" ? Color.FromArgb(22, 163, 74) : worst == "warn" ? Color.FromArgb(217, 119, 6) : worst == "stopped" ? Color.Gray : Color.FromArgb(220, 38, 38);
+                if (worst != lastLevel) { tray.Icon = MakeIcon(color); tray.Text = App.Name + (worst == "ok" ? ": working" : worst == "warn" ? ": working, one thing to look at" : worst == "stopped" ? ": stopped" : ": not working"); }
                 // a problem that lasts two minutes is worth a word in the corner of the screen
                 if (worst == "bad") { if (badSince == DateTime.MinValue) badSince = DateTime.Now; else if ((DateTime.Now - badSince).TotalMinutes >= 2 && lastLevel == "bad" && !Visible) { var b = list.First(c => c.Level == "bad"); tray.ShowBalloonTip(8000, App.Name + ": " + b.Name, b.Say + " " + b.Fix, ToolTipIcon.Warning); badSince = DateTime.Now.AddMinutes(30); } }
                 else badSince = DateTime.MinValue;
                 lastLevel = worst;
             }
+            ShowTop(list);
             if (rows != null)
             {
                 cos.BeginUpdate(); cos.Items.Clear();
@@ -248,6 +281,19 @@ namespace FinCom.Connector
             updInfo.Text = "FinCom Connector " + App.Version + "\nTally Bridge " + (string.IsNullOrEmpty(sup.EngineVersion) ? "(not answering)" : sup.EngineVersion) + ", " + sup.State + (sup.Restarts > 0 ? ", restarted " + sup.Restarts + " time(s) since this Connector started" : "") +
                 (Updater.LastResult != "" ? "\n" + Updater.LastResult : "");
             if (tabs.SelectedIndex == 2) ShowLog();
+        }
+        // the two lines at the top, in plain words
+        void ShowTop(List<Check> list)
+        {
+            var sup = Supervisor.Current;
+            startStop.Text = sup.StoppedByYou ? "\u25B6  Start" : "\u25A0  Stop";
+            Action<Color, string, string> set = (c, a, b) => { bigState.ForeColor = c; bigState.Text = a; todo.Text = b; };
+            if (sup.StoppedByYou){ set(Color.DimGray, "\u25A0  Stopped", "FinCom cannot reach Tally and nothing is copied. Press Start to switch it on again."); return; }
+            if (list == null) return;
+            var bad = list.FirstOrDefault(c => c.Level == "bad"); var warn = list.FirstOrDefault(c => c.Level == "warn");
+            if (bad != null) set(Color.FromArgb(185, 28, 28), "\u2716  Not working: " + bad.Name, bad.Say + (bad.Fix != "" ? "  What to do: " + bad.Fix : ""));
+            else if (warn != null) set(Color.FromArgb(180, 83, 9), "!  Working, one thing to look at", warn.Name + ": " + warn.Say + (warn.Fix != "" ? "  " + warn.Fix : ""));
+            else set(Color.FromArgb(21, 128, 61), "\u2714  Working", "Tally answers and FinCom can reach it" + (string.IsNullOrEmpty(sup.EngineVersion) ? "." : " (bridge " + sup.EngineVersion + ").") + " You can close this window: it keeps running near the clock.");
         }
         static string Day(string d8) { return d8 != null && d8.Length == 8 ? d8.Substring(6, 2) + "-" + d8.Substring(4, 2) + "-" + d8.Substring(0, 4) : d8; }
         void ShowLog()

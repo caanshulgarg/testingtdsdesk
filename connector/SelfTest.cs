@@ -42,6 +42,13 @@ namespace FinCom.Connector
             while (Bridge.Ping() != null && (DateTime.Now - t0).TotalSeconds < 20) Thread.Sleep(500);
             Ok(Bridge.Ping() == null, "the bridge is stopped (as if it had crashed)");
             Ok(sup.WaitFor(v => true, 120) && sup.Restarts >= 1, "when the bridge is stopped, the minder starts it again (restarts: " + sup.Restarts + ")");
+            // ---- Stop: it stays stopped (the minder does not start it again) until Start
+            sup.StopByYou();
+            Thread.Sleep(7000);
+            Ok(Bridge.Ping() == null && sup.State == "stopped" && sup.StoppedByYou, "Stop: the bridge stops and the minder leaves it stopped (" + sup.State + ")");
+            Ok(Updater.UpdateEngine(new Dictionary<string, object>()).Contains("stopped"), "while stopped, the bridge is not updated (or started) behind your back");
+            sup.StartByYou();
+            Ok(sup.WaitFor(v => true, 90) && !sup.StoppedByYou, "Start: the bridge runs again");
             // ---- a connect code for FinCom on this computer, and FinCom connecting with it
             var code = Bridge.NewPairCode();
             Ok(code.Length == 6, "the Connector opens a one-time connect code: " + code);

@@ -24,7 +24,7 @@ namespace FinCom.Connector
 {
     public static class App
     {
-        public const string Version = "1.0.6";
+        public const string Version = "1.0.7";
         public const string Name = "FinCom Connector";
         public static readonly bool IsWindows = Environment.OSVersion.Platform == PlatformID.Win32NT;
         public static readonly JavaScriptSerializer Json = new JavaScriptSerializer { MaxJsonLength = 64 * 1024 * 1024 };
@@ -270,6 +270,24 @@ namespace FinCom.Connector
             thread.Start();
         }
         public void Stop() { stopping = true; KillEngine("the Connector is closing"); }
+        // stopped by the person (Stop), until they press Start: kept even when the Connector or Windows restarts
+        public bool StoppedByYou { get { return App.Pref("stopped", "") == "yes"; } }
+        public void StopByYou()
+        {
+            var p = App.Prefs(); p["stopped"] = "yes"; App.SavePrefs(p);
+            State = "stopped";
+            KillEngine("stopped by you");
+            try { if (Bridge.Ping() != null) Bridge.Call("/shutdown", "{}", 3000); } catch { }
+            Sweep(false, "stopped by you");
+            App.Log("Stopped by you: the bridge and the copier are not running, and Tally is not asked anything");
+        }
+        public void StartByYou()
+        {
+            var p = App.Prefs(); p.Remove("stopped"); App.SavePrefs(p);
+            nextStart = DateTime.MinValue; fails = 3; quickExits = 0; Restarts = 0; everStarted = false;     // a fresh start, not a restart after trouble
+            App.Log("Started by you");
+            Tick();
+        }
 
         void Loop()
         {
@@ -282,7 +300,7 @@ namespace FinCom.Connector
 
         public void Tick()
         {
-            if (Paused) { State = "stopped"; return; }
+            if (Paused || StoppedByYou) { State = "stopped"; return; }
             var v = Bridge.Ping();
             // "wait for TallyPrime": nothing is started until TallyPrime is open on this computer
             if (v == null && App.WaitForTally && !App.TallyRunning() && (proc == null || proc.HasExited)) { State = "waiting for TallyPrime"; fails = 0; return; }
@@ -563,6 +581,7 @@ namespace FinCom.Connector
         // the engine: stop, swap, start, and go back if the new one does not answer with its own version
         public static string UpdateEngine(Dictionary<string, object> man, bool force = false)
         {
+            if (Supervisor.Current.StoppedByYou && !force) return "The bridge is stopped; it is brought up to date when you press Start.";
             if (!man.ContainsKey("engine")) return "No engine in the update.";
             var part = (Dictionary<string, object>)man["engine"];
             var want = Convert.ToString(part["version"]);

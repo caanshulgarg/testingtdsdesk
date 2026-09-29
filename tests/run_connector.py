@@ -45,6 +45,9 @@ xv = subprocess.Popen(["Xvfb", ":77", "-screen", "0", "1280x800x24"], stdout=sub
 time.sleep(2)
 gui = subprocess.Popen(["mono", os.path.join(home, "FinComConnector.exe")], env=dict(env, DISPLAY=":77"), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 time.sleep(25)
+# a picture of the window, to look at (out/connector-window.png)
+try: subprocess.run(["import", "-display", ":77", "-window", "root", os.path.join(os.path.dirname(os.path.abspath(__file__)), "out", "connector-window.png")], timeout=20)
+except Exception: pass
 alive = gui.poll() is None
 out = ""
 if alive: gui.terminate()
