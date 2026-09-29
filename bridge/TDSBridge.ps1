@@ -27,7 +27,7 @@ trap {
   try { Stop-Transcript | Out-Null } catch { }
   break
 }
-$BridgeVersion = '1.13.0'
+$BridgeVersion = '1.13.1'
 
 # ------------------------------------------------------------------ settings
 function New-BridgeKey {
@@ -1726,7 +1726,7 @@ function Invoke-Tally([int]$TallyPort, [string]$Xml, [int]$TimeoutSec) {
   $sw = [Diagnostics.Stopwatch]::StartNew(); $fail = ''
   try { return (& $script:TallyInvokeOrig $TallyPort $Xml $TimeoutSec) }
   catch { $fail = $_.Exception.Message; throw }
-  finally { Add-TallyUse $TallyPort $sw.Elapsed.TotalSeconds $Xml $fail }
+  finally { Add-TallyUse $TallyPort $sw.Elapsed.TotalSeconds $Xml $fail; Test-KeepSlowRead $sw.Elapsed.TotalSeconds }
 }
 # the share of one Tally's time used by this program in the last minute (0..1)
 function Get-TallyShare([int]$Port, [int]$WindowSec = 60) {
@@ -1744,6 +1744,49 @@ function Get-KeepSharePct {
   return (Get-KeepNum 'KeepNightSharePct' 40)
 }
 function Test-KeepRoom([int]$Port) { return ((Get-TallyShare $Port) * 100 -lt (Get-KeepSharePct)) }
+# ---- Tally comes first (1.13.1). Tally answers one request at a time and its screen waits meanwhile, so the worker:
+#   - leaves Tally alone for its first minutes after it opens (it is still loading the company);
+#   - does not read while the person is working in Tally (Tally in front, a key or the mouse used in the last seconds);
+#   - sizes every read to take a few seconds at most, and rests for a long while after a read that took long.
+function Get-KeepTargetSec {
+  $now = Get-Date
+  $office = $now.DayOfWeek -ne [DayOfWeek]::Sunday -and $now.Hour -ge (Get-KeepNum 'KeepOfficeFrom' 9) -and $now.Hour -lt (Get-KeepNum 'KeepOfficeTo' 19)
+  if ($office) { return [double](Get-KeepNum 'KeepTargetSec' 3) }
+  return [double](Get-KeepNum 'KeepNightTargetSec' 10)
+}
+$script:KeepUserApi = $null
+function Get-KeepUserInTally {
+  if ($script:Fake) { return [bool]$Cfg.KeepFakeUserBusy }
+  try {
+    if ($null -eq $script:KeepUserApi) {
+      Add-Type -Namespace FinCom -Name KeepUser -MemberDefinition @'
+[StructLayout(LayoutKind.Sequential)] public struct LII { public uint cbSize; public uint dwTime; }
+[DllImport("user32.dll")] public static extern bool GetLastInputInfo(ref LII p);
+[DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+[DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+public static double IdleSec() { LII l = new LII(); l.cbSize = (uint)Marshal.SizeOf(l); if (!GetLastInputInfo(ref l)) return 9999; return ((uint)Environment.TickCount - l.dwTime) / 1000.0; }
+public static int Front() { uint p = 0; GetWindowThreadProcessId(GetForegroundWindow(), out p); return (int)p; }
+'@ -ErrorAction Stop
+      $script:KeepUserApi = $true
+    }
+    if ([FinCom.KeepUser]::IdleSec() -ge (Get-KeepNum 'KeepUserIdleSec' 15)) { return $false }
+    $fp = Get-Process -Id ([FinCom.KeepUser]::Front()) -ErrorAction Stop
+    return ($fp.ProcessName -like 'tally*')
+  } catch { $script:KeepUserApi = $false; return $false }
+}
+# why Tally is to be left alone right now ('' when it is free)
+function Get-KeepHold {
+  if ($script:Fake -and $Cfg.KeepFakeHold) { return [string]$Cfg.KeepFakeHold }
+  try {
+    $young = @(Get-Process -Name 'tally*' -ErrorAction SilentlyContinue | Where-Object { $_.StartTime -and ((Get-Date) - $_.StartTime).TotalMinutes -lt (Get-KeepNum 'KeepSettleMin' 3) })
+    if ($young.Count) { return 'Tally has just opened; letting it finish loading' }
+  } catch { }
+  if (Get-KeepUserInTally) { return 'someone is working in Tally' }
+  return ''
+}
+# a read that took long: the company is left alone for ten times as long (at most half an hour)
+$script:KeepLong = 0.0
+function Test-KeepSlowRead([double]$Sec) { if ($Sec -gt $script:KeepLong) { $script:KeepLong = $Sec } }
 # what the worker tells FinCom and the Connector about each Tally's load
 function Write-KeepLoad {
   try {
@@ -2042,7 +2085,7 @@ function Test-KeepMonthFix([string]$Company, [int]$Port, [string]$Dir, $St, [str
   if ($back -gt 0 -and $St.phase -eq 'live') {
     # everything may differ: copied again the gentle way, a few days at a time; the old copy serves until each day is replaced
     Write-Log ('Keeping ' + $Company + ': Tally''s change numbers have gone back (a backup restored or the data rewritten?); copying the company again, gently')
-    $St.phase = 'first'; $St.last = 0; $St.next = [string]$St.from; $St.slice = (Get-KeepNum 'KeepSliceDays' 3); $St.checkYm = ([string]$St.from).Substring(0, 6)
+    $St.phase = 'first'; $St.last = 0; $St.next = [string]$St.from; $St.slice = (Get-KeepNum 'KeepSliceDays' 1); $St.checkYm = ([string]$St.from).Substring(0, 6)
     return 0
   }
   if ($max -gt [long]$St.last -and $St.phase -ne 'live') { $St.last = $max }
@@ -2059,7 +2102,7 @@ function Step-Keep([string]$Company, [int]$Port, [string]$BooksFrom) {
     $from = (Get-FyStart (Get-Date)).ToString('yyyyMMdd')
     if ([string]$Cfg.KeepFrom -match '^\d{8}$') { $from = [string]$Cfg.KeepFrom }        # e.g. last year's start, for an audit
     if ($BooksFrom -and $BooksFrom -match '^\d{8}$' -and $BooksFrom -gt $from) { $from = $BooksFrom }
-    $st = @{ company = $Company; from = $from; next = $from; slice = (Get-KeepNum 'KeepSliceDays' 3); phase = 'open'; openIdx = 0; last = 0; lastM = 0; checkYm = ''; months = @{}; cycle = 0; skipped = @(); dayFail = 0 }
+    $st = @{ company = $Company; from = $from; next = $from; slice = (Get-KeepNum 'KeepSliceDays' 1); phase = 'open'; openIdx = 0; last = 0; lastM = 0; checkYm = ''; months = @{}; cycle = 0; skipped = @(); dayFail = 0 }
     Write-Log ('Keeping ' + $Company + ' in step with FinCom: first copy from ' + $from)
   }
   $st.cycle = [int]$st.cycle + 1
@@ -2073,12 +2116,16 @@ function Step-Keep([string]$Company, [int]$Port, [string]$BooksFrom) {
     $asOn = Add-KeepDays $st.from -1
     $pf = Join-Path $dir 'open-part.json'
     $got = @(); if ([int]$st.openIdx -gt 0 -and (Test-Path $pf)) { $got = @(Get-Content -Raw $pf | ConvertFrom-Json) }
-    $size = 150
-    while ([int]$st.openIdx -lt $names.Count -and $sw.Elapsed.TotalSeconds -lt $budget -and (Test-KeepRoom $Port)) {
+    # a small group first; bigger while Tally answers quickly, smaller when it is slow
+    $size = [int]$st.openSize; if ($size -le 0) { $size = 20 }
+    while ([int]$st.openIdx -lt $names.Count -and $sw.Elapsed.TotalSeconds -lt $budget -and (Test-KeepRoom $Port) -and -not (Get-KeepHold)) {
       $chunk = $names[[int]$st.openIdx .. ([Math]::Min($names.Count, [int]$st.openIdx + $size) - 1)]
       $t0 = $sw.Elapsed.TotalSeconds
       foreach ($r in (Get-KeepBalances $Company $Port $chunk $asOn)) { $got += , @($r[0], $r[1], $r[2]) }
       $st.openIdx = [int]$st.openIdx + $chunk.Count
+      $took = $sw.Elapsed.TotalSeconds - $t0; $aim = Get-KeepTargetSec
+      if ($took -gt $aim) { $size = [int][Math]::Max(5, [Math]::Floor($size / 2)) } elseif ($took -lt $aim / 3) { $size = [int][Math]::Min(150, $size * 2) }
+      $st.openSize = $size
       Save-KeepFile $pf (ConvertTo-Json -InputObject @($got) -Depth 4 -Compress); & $save
       Start-Sleep -Milliseconds ([int][Math]::Max(1000, ($sw.Elapsed.TotalSeconds - $t0) * 1500))
     }
@@ -2098,7 +2145,7 @@ function Step-Keep([string]$Company, [int]$Port, [string]$BooksFrom) {
   }
   if ($st.phase -eq 'first') {
     # the year's day book, a few days at a time; smaller steps when Tally is slow, bigger when it is quick
-    while ([string]$st.next -le $today -and $sw.Elapsed.TotalSeconds -lt $budget -and (Test-KeepRoom $Port)) {
+    while ([string]$st.next -le $today -and $sw.Elapsed.TotalSeconds -lt $budget -and (Test-KeepRoom $Port) -and -not (Get-KeepHold)) {
       $f = [string]$st.next; $t = Add-KeepDays $f ([int]$st.slice - 1); if ($t -gt $today) { $t = $today }
       try { $r = Copy-KeepDays $Company $Port $dir $f $t }
       catch {
@@ -2114,8 +2161,9 @@ function Step-Keep([string]$Company, [int]$Port, [string]$BooksFrom) {
       }
       $st.dayFail = 0
       $sec = $r[0]
-      if ($sec -gt 8 -and [int]$st.slice -gt 1) { $st.slice = [int][Math]::Max(1, [Math]::Floor([int]$st.slice / 2)) }
-      elseif ($sec -lt 2 -and [int]$st.slice -lt 31) { $st.slice = [int][Math]::Min(31, [int]$st.slice * 2) }
+      $aim = Get-KeepTargetSec
+      if ($sec -gt $aim -and [int]$st.slice -gt 1) { $st.slice = [int][Math]::Max(1, [Math]::Floor([int]$st.slice / 2)) }
+      elseif ($sec -lt $aim / 3 -and [int]$st.slice -lt 31) { $st.slice = [int][Math]::Min(31, [int]$st.slice * 2) }
       $ymA = $f.Substring(0, 6); $ymB = $t.Substring(0, 6)
       Write-KeepMonth $dir $ymA $st; if ($ymB -ne $ymA) { Write-KeepMonth $dir $ymB $st }
       $st.next = Add-KeepDays $t 1
@@ -2135,7 +2183,7 @@ function Step-Keep([string]$Company, [int]$Port, [string]$BooksFrom) {
   if ($cn.ok -and $null -ne $st.cv -and [long]$cn.v -lt [long]$st.cv) {
     # the counter went back: a backup restored or the data rewritten. Copied again, gently; the old copy serves meanwhile
     Write-Log ('Keeping ' + $Company + ': Tally''s change numbers have gone back (a backup restored or the data rewritten?); copying the company again, gently')
-    $st.phase = 'first'; $st.last = 0; $st.next = [string]$st.from; $st.slice = (Get-KeepNum 'KeepSliceDays' 3); $st.checkYm = ([string]$st.from).Substring(0, 6); $st.cv = $null; $st.cm = $null
+    $st.phase = 'first'; $st.last = 0; $st.next = [string]$st.from; $st.slice = (Get-KeepNum 'KeepSliceDays' 1); $st.checkYm = ([string]$st.from).Substring(0, 6); $st.cv = $null; $st.cm = $null
     & $save; return
   }
   $st.counters = [bool]$cn.ok
@@ -2235,9 +2283,20 @@ function Invoke-KeepWorker {
   Write-Log 'Keeping copies in step: started'
   $script:KeepReadSec = Get-KeepNum 'KeepReadSec' 120      # no read of the day book may hold Tally longer than this
   $idle = Get-Date
+  # the bridge that started this worker: when it is gone (Quit, an update, a restart), the worker stops too
+  $parent = 0
+  try { $parent = [int](Get-CimInstance Win32_Process -Filter ('ProcessId=' + $PID) -ErrorAction Stop).ParentProcessId } catch { try { $parent = [int](Get-Process -Id $PID).Parent.Id } catch { $parent = 0 } }
+  $held = ''
   try {
     Sync-WorkerConfig
     while ($(Sync-WorkerConfig; Test-KeepOn)) {
+      if ($parent -and -not (Test-ProcessAlive $parent)) { Write-Log 'Keeping copies in step: the bridge has stopped, so this stops too'; break }
+      $hold = Get-KeepHold
+      if ($hold) {
+        if ($hold -ne $held) { Write-Log ('Keeping copies in step: waiting, ' + $hold) }
+        $held = $hold; $idle = Get-Date; Start-Sleep -Seconds 5; continue
+      }
+      $held = ''
       $busy = $false; try { $busy = @(Get-ActiveJobs).Count -gt 0 } catch { }
       $open = @()
       if (-not $busy) {
@@ -2260,7 +2319,17 @@ function Invoke-KeepWorker {
         $bk = $script:KeepBack[$o[0]]
         if ($bk -and (Get-Date) -lt $bk.until) { continue }
         if (-not (Test-KeepRoom ([int]$o[1]))) { continue }             # this Tally has had its share this minute
-        try { Step-Keep $o[0] $o[1] $o[2]; $script:KeepBack.Remove($o[0]) }
+        if (Get-KeepHold) { break }
+        $script:KeepLong = 0.0
+        try {
+          Step-Keep $o[0] $o[1] $o[2]; $script:KeepBack.Remove($o[0])
+          $long = Get-KeepNum 'KeepTooLongSec' 20
+          if ($script:KeepLong -gt $long) {
+            $rest = [int][Math]::Min(1800, $script:KeepLong * 10)
+            $script:KeepBack[$o[0]] = @{ n = 0; until = (Get-Date).AddSeconds($rest) }
+            Write-Log ('Keeping ' + $o[0] + ': one read took ' + [int]$script:KeepLong + 's, so Tally is left alone for ' + [int]($rest / 60) + ' min to stay usable; the next reads will be smaller')
+          }
+        }
         catch {
           $n = $(if ($bk) { [int]$bk.n + 1 } else { 1 })
           $wait = [Math]::Min(1800, (Get-KeepNum 'KeepCycleSec' 60) * [Math]::Pow(2, $n))

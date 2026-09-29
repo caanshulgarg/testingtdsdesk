@@ -24,7 +24,7 @@ namespace FinCom.Connector
 {
     public static class App
     {
-        public const string Version = "1.0.0";
+        public const string Version = "1.0.1";
         public const string Name = "FinCom Connector";
         public static readonly bool IsWindows = Environment.OSVersion.Platform == PlatformID.Win32NT;
         public static readonly JavaScriptSerializer Json = new JavaScriptSerializer { MaxJsonLength = 64 * 1024 * 1024 };
@@ -322,7 +322,22 @@ namespace FinCom.Connector
         public void KillEngine(string why)
         {
             try { if (proc != null && !proc.HasExited) { App.Log("Stopping the bridge: " + why); proc.Kill(); proc.WaitForExit(5000); } } catch { }
-            // the engine's own worker (keeping copies in step) stops when the engine is gone; it holds no locks
+            StopCopier(why);
+        }
+        // the bridge's own worker (keeping copies in step) is a process of its own: stopped with the bridge, so
+        // Quit leaves Tally alone at once. It holds no locks, and carries on where it stopped next time
+        public static void StopCopier(string why)
+        {
+            try
+            {
+                var f = Path.Combine(App.SyncDir, "keep.pid");
+                if (!File.Exists(f)) return;
+                int id; if (!int.TryParse(File.ReadAllText(f).Trim(), out id) || id <= 0) return;
+                var p = Process.GetProcessById(id);
+                var n = p.ProcessName.ToLowerInvariant();
+                if (n.Contains("powershell") || n.Contains("pwsh")) { App.Log("Stopping the copier too: " + why); p.Kill(); p.WaitForExit(5000); }
+            }
+            catch { }
         }
         public void Restart(string why)
         {
