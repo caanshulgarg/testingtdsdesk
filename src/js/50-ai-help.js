@@ -34,7 +34,42 @@ const AIH = {
   tdsRule(l){ if (!S.books || !this.enabled("tds")) return undefined; const x = ((S.books.ai || {}).led || {})[l]; return x && x.tdsOk === "yes" && x.tds && x.tds !== "unsure" ? x.tds : undefined; },
   blocked(l){ if (!S.books || !this.enabled("audit")) return undefined; const x = ((S.books.ai || {}).led || {})[l]; return x && x.itcOk === "yes" && (x.itc === "blocked" || x.itc === "allowed") ? x.itc === "blocked" : undefined; },
 
-  // ---------- 1 and 3: the ledgers, once each (again only when asked)
+  // ---------- rules first: what FinCom's own rules settle about a ledger ("" when they cannot)
+  ruleTds(x){
+    const k = Audit.TDS_KEY.find(([re]) => re.test(x.l));
+    if (k) return k[1];
+    if (Audit.under(x.l, /^purchase accounts$/i) || Audit.isFixed(x.l) && !/INSTALL|CIVIL|CONSTRUCTION/i.test(x.l) || Audit.NO_TDS_RE.test(x.l)) return "none";
+    return "";
+  },
+  ruleItc(x){
+    if (!x.itcIn) return "n/a";                             // no credit taken on it: nothing to decide
+    if (Audit.BLOCKED_RE.test(x.l)) return "blocked";
+    if (Audit.under(x.l, /^purchase accounts$/i)) return "allowed";
+    return "";
+  },
+  // who settled each ledger: the rules, AI (accepted), or no one yet
+  coverage(){
+    const a = (S.books && S.books.ai) || {}, led = a.led || {}, c = {n: 0, tds: {rules: 0, ai: 0, pend: 0}, itc: {rules: 0, ai: 0, pend: 0, na: 0}, ai: {asIs: 0, changed: 0, rejected: 0, waiting: 0}};
+    this.ledgerStats().forEach(x => {
+      c.n++;
+      const y = led[x.l], rt = this.ruleTds(x), ri = this.ruleItc(x);
+      if (rt) c.tds.rules++; else if (y && y.tdsOk === "yes" && y.tds && y.tds !== "unsure") c.tds.ai++; else c.tds.pend++;
+      if (ri === "n/a") c.itc.na++; else if (ri) c.itc.rules++; else if (y && y.itcOk === "yes" && y.itc && y.itc !== "unsure") c.itc.ai++; else c.itc.pend++;
+      if (y){ if ((y.tdsOk || y.itcOk) === "no") c.ai.rejected++; else if (y.tdsOk === "yes" || y.itcOk === "yes") c.ai[y.byHand ? "changed" : "asIs"]++; else c.ai.waiting++; }
+    });
+    Object.values(a.pairs || {}).forEach(s => { if (s.no) c.ai.rejected++; else if (s.okBy) c.ai.asIs++; else c.ai.waiting++; });
+    return c;
+  },
+  coverageCard(){
+    if (!S.books || !(S.books.vouchers || []).length) return "";
+    const c = this.coverage(), pc = (k, n) => n ? Math.round(k * 100 / n) + "%" : "\u2014", t = c.tds, i = c.itc, it = i.rules + i.ai + i.pend, a = c.ai, done = a.asIs + a.changed + a.rejected;
+    return '<section class="dash-card" style="margin-top:12px"><h3>Rules first, AI for the rest: ' + esc((CO() || {}).name || "this client") + "</h3>" +
+      '<div class="bk-tablewrap"><table class="bk-table compact"><thead><tr><th></th><th class="n">By FinCom\u2019s rules</th><th class="n">By AI, accepted</th><th class="n">Still open</th></tr></thead><tbody>' +
+      '<tr><td>TDS section of ' + c.n + " expense and purchase ledgers</td><td class=\"n\">" + t.rules + " (" + pc(t.rules, c.n) + ')</td><td class="n">' + t.ai + " (" + pc(t.ai, c.n) + ')</td><td class="n">' + t.pend + " (" + pc(t.pend, c.n) + ")</td></tr>" +
+      "<tr><td>GST credit on " + it + " ledgers with credit taken</td><td class=\"n\">" + i.rules + " (" + pc(i.rules, it) + ')</td><td class="n">' + i.ai + " (" + pc(i.ai, it) + ')</td><td class="n">' + i.pend + " (" + pc(i.pend, it) + ")</td></tr></tbody></table></div>" +
+      '<p class="note">How right AI has been here: ' + (done ? a.asIs + " accepted as suggested (" + pc(a.asIs, done) + "), " + a.changed + " corrected, " + a.rejected + " rejected" : "nothing decided yet") + (a.waiting ? "; " + a.waiting + " waiting for someone to look" : "") + ". 2B pairs by the rules are on the 2B screen.</p></section>";
+  },
+  // ---------- 1 and 3: the ledgers the rules could not settle, once each (again only when asked)
   ledgerStats(){
     const b = S.books, A = Audit, out = {};
     (b.vouchers || []).forEach(v => {
@@ -56,9 +91,11 @@ const AIH = {
   async reviewLedgers(again){
     if (!(this.ready("tds") || this.enabled("audit") && this.ready("audit"))) return;
     const b = S.books, a = this.st(), wantTds = this.enabled("tds"), wantItc = this.enabled("audit");
-    const all = this.ledgerStats(), todo = all.filter(x => again || !a.led[x.l]).slice(0, 300);
+    // only what the rules leave: a ledger whose TDS provision or credit the rules settle is not sent to AI
+    const all = this.ledgerStats(), open = all.filter(x => (wantTds && !this.ruleTds(x)) || (wantItc && !this.ruleItc(x)));
+    const todo = open.filter(x => again || !a.led[x.l]).slice(0, 300);
     const pay = wantTds ? Object.entries(b.map || {}).filter(([n, m]) => m.kind === "tds_payable" && !m.section && !m.ok && (again || !a.tdsPay[n])).map(([n]) => n).slice(0, 60) : [];
-    if (!todo.length && !pay.length){ toast("Every ledger has been reviewed. Use “Review all again” to ask afresh."); return; }
+    if (!todo.length && !pay.length){ toast(open.length ? "Every ledger the rules leave has been reviewed. Use “Review all again” to ask afresh." : "FinCom’s rules settle every ledger here: nothing for AI."); return; }
     const rules = RULE_DEFAULTS.map(r => r.id + " (" + r.old + ", " + r.label + "): " + (r.hint || "")).join("\n");
     b.busy = "AI is reviewing " + (todo.length + pay.length) + " ledgers…"; render();
     let done = 0;
@@ -68,7 +105,7 @@ const AIH = {
         const prompt = "You help an Indian chartered accountant review a client's expense and purchase ledgers from Tally. For each ledger give:\n" +
           (wantTds ? "- tds: which TDS provision a payment booked to it usually falls under, as one of these ids, or \"none\" when payments to it are not subject to TDS (goods purchases, taxes, bank charges, salaries go under 24Q and are \"none\" here), or \"unsure\":\n" + rules + "\n" : "") +
           (wantItc ? "- itc: \"blocked\" when GST input credit on it is usually blocked under section 17(5) of the CGST Act (motor vehicles and their repair or insurance, food and beverages, outdoor catering, beauty, health and cosmetic services, club or fitness membership, life or health insurance, travel benefits to employees, works contract or goods for building immovable property other than plant and machinery, goods for personal use, gifts and free samples, lost or destroyed goods), \"allowed\" when it is not, or \"unsure\"; and the clause, e.g. 17(5)(b)(i)\n" : "") +
-          "- reason: one short sentence a CA can check.\nJudge from the ledger name, its Tally group, the narrations and the parties. Do not guess when the ledger is too vague: say unsure.\n" +
+          "- reason: one short sentence a CA can check.\nThese are the ledgers FinCom’s own rules could not settle, so they are the unclear ones. Judge from the ledger name, its Tally group, the narrations and the parties. Do not guess when the ledger is too vague: say unsure.\n" +
           "Ledgers:\n" + batch.map((x, k) => k + ". " + x.l + " | group: " + (x.group || "?") + " | " + x.n + " entries, " + INR.format(x.amt) + " | TDS deducted on " + x.tds + " | GST credit taken on " + x.itc +
             (x.narr.length ? " | narrations: " + x.narr.join(" / ") : "") + " | parties: " + Object.keys(x.parties).slice(0, 3).join(", ")).join("\n") +
           '\nReply with only JSON: {"items":[{"i":0,"tds":"contractor","itc":"allowed","clause":"","reason":"..."}]}';
@@ -109,14 +146,15 @@ const AIH = {
   viewLedgers(b){
     const a = this.st(), money = v => INR.format(r2(v || 0)), wantTds = this.enabled("tds"), wantItc = this.enabled("audit");
     if (!wantTds && !wantItc) return '<p class="note">AI help for TDS and audit is off. Settings, AI help.</p>';
-    const stats = this.ledgerStats(), rows = stats.filter(x => a.led[x.l]), notYet = stats.length - rows.length;
+    const stats = this.ledgerStats(), left = stats.filter(x => (wantTds && !this.ruleTds(x)) || (wantItc && !this.ruleItc(x)));
+    const rows = left.filter(x => a.led[x.l]), notYet = left.length - rows.length;
     const pend = rows.filter(x => { const y = a.led[x.l]; return (y.tds && !y.tdsOk) || (y.itc && !y.itcOk); });
     let h = '<section class="dash-card"><h3>AI: TDS section and blocked credit, ledger by ledger</h3>' +
-      '<p class="note">AI reads each expense and purchase ledger’s name, group, narrations and parties' + (wantTds ? " and suggests its TDS section" : "") + (wantItc ? (wantTds ? ", and" : " and says") + " whether GST credit on it is blocked under section 17(5)" : "") +
+      '<p class="note">FinCom’s rules settle ' + (stats.length - left.length) + " of " + stats.length + " ledgers by themselves. For the " + left.length + " they cannot, AI reads each ledger’s name, group, narrations and parties" + (wantTds ? " and suggests its TDS section" : "") + (wantItc ? (wantTds ? ", and" : " and says") + " whether GST credit on it is blocked under section 17(5)" : "") +
       ". Check and accept each: the audit’s checks for missed TDS and blocked credit then use what you accepted. Nothing here changes Tally or a return.</p>" +
       '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><button class="btn small primary" data-aih="review">' + (notYet ? "Ask AI about " + notYet + " ledger" + (notYet === 1 ? "" : "s") : "Nothing new to ask") + "</button>" +
       (rows.length ? '<button class="btn small" data-aih="reviewAgain">Review all again</button>' : "") +
-      '<span class="note">' + rows.length + " reviewed · " + pend.length + " to accept</span></div></section>";
+      '<span class="note">' + rows.length + " reviewed · " + pend.length + " to accept</span></div></section>" + this.coverageCard();
     const pay = Object.entries(a.tdsPay).filter(([n]) => (b.map || {})[n] && !(b.map[n].ok && b.map[n].section));
     if (wantTds && pay.length) h += '<section class="dash-card" style="margin-top:12px"><h3>TDS ledgers without a section</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Ledger</th><th>AI suggests</th><th>Why</th><th></th></tr></thead><tbody>' +
       pay.map(([n, s]) => { const r = this.rule(s.rule); return "<tr><td>" + esc(n) + "</td><td>" + esc(r.old + " · " + r.label) + "</td><td>" + esc(s.reason) + '</td><td class="ac"><button class="btn small primary" data-aihpay="' + esc(n) + '">Accept</button> <button class="btn small" data-aihpayno="' + esc(n) + '">Not this</button></td></tr>'; }).join("") + "</tbody></table></div></section>";
@@ -295,6 +333,7 @@ const AIH = {
       cb("on", c.on, "<b>Use AI help</b>") + '<div style="margin-left:24px">' + this.FEATURES.map(([k, l]) => cb(k, c[k] !== false, esc(l), !c.on)).join("") + "</div></section>";
     h += '<section class="dash-card" style="margin-top:12px"><h3>Clients</h3><p class="note">Tick a client to keep its data away from AI, whatever is switched on above.</p><div class="bk-tablewrap"><table class="bk-table compact"><thead><tr><th>Client</th><th>AI off for this client</th></tr></thead><tbody>' +
       cos.map(co => "<tr><td>" + esc(co.name || co.id) + '</td><td><input type="checkbox" data-aihco="' + esc(co.id) + '"' + (co.aiOff ? " checked" : "") + ' aria-label="AI off for ' + esc(co.name || "") + '"></td></tr>').join("") + "</tbody></table></div></section>";
+    if (S.books && S.books.cid === S.coId) h += this.coverageCard();
     const lg = S.books && S.books.ai && S.books.ai.log || [];
     if (lg.length) h += '<section class="dash-card" style="margin-top:12px"><h3>What AI did for ' + esc((CO() || {}).name || "this client") + '</h3><div class="bk-tablewrap"><table class="bk-table compact"><thead><tr><th class="dt">When</th><th>Who</th><th>What</th><th>Detail</th></tr></thead><tbody>' +
       lg.slice(0, 40).map(x => '<tr><td class="dt">' + esc(String(x.at).replace("T", " ").slice(0, 16)) + "</td><td>" + esc(x.by) + "</td><td>" + esc(x.what) + "</td><td>" + esc(x.detail) + "</td></tr>").join("") + "</tbody></table></div></section>";

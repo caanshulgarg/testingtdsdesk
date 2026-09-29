@@ -28,6 +28,13 @@ const Audit = {
   isCreditor(l){ return this.under(l, /^sundry creditors$/i); },
   isDebtor(l){ return this.under(l, /^sundry debtors$/i); },
   isExpense(l){ return this.under(l, /^(indirect expenses|direct expenses)$/i) || (!this.path(l).length && !Books.ledgerOf(l).kind && /EXP|CHARGES|RENT|SALARY|WAGES|FEES|REPAIR|FREIGHT|CARTAGE|TRAVEL|CONVEYANCE|COMMISSION|ADVERT/i.test(l)); },
+  // the name rules: an expense ledger's TDS provision, and credit usually blocked under section 17(5)
+  TDS_KEY: [[/RENT/i, "rent_building"], [/LEGAL|AUDIT|PROFESSIONAL|PROFF|CONSULT|ADVOCATE|RETAINER/i, "professional"], [/TECHNICAL/i, "technical"],
+    [/COMMISSION|BROKERAGE/i, "commission"], [/CONTRACT|LABOUR|JOB\s*WORK|MANPOWER|TRANSPORT|FREIGHT|CARTAGE|REPAIR|MAINTENANCE|ADVERT|PRINTING|CATERING|SECURITY|HOUSEKEEPING/i, "contractor"],
+    [/INTEREST/i, "interest"]],
+  // payments that are not under TDS by their nature (goods, salary under 24Q, taxes, utilities, bank charges, depreciation)
+  NO_TDS_RE: /\b(SALARY|SALARIES|WAGES|BONUS|STIPEND|GRATUITY|GST|IGST|CGST|SGST|TAXES?|DUTY|DUTIES|BANK CHARGES|DEPRECIATION|ROUND(ING)? ?OFF|DISCOUNT|ELECTRICITY|POWER|WATER|TELEPHONE|MOBILE|INTERNET|POSTAGE|STATIONERY|INSURANCE|PETROL|DIESEL|FUEL|FOREX|EXCHANGE)\b/i,
+  BLOCKED_RE: /\b(FOOD|MEAL|CATERING|CANTEEN|STAFF WELFARE|REFRESHMENT|CLUB|MEMBERSHIP|HEALTH|MEDICAL|LIFE INSURANCE|MOTOR CAR|CAR HIRE|VEHICLE|BEAUTY|GYM|GIFT|HOLIDAY)\b/i,
   isFixed(l){ return this.under(l, /^fixed assets$/i); },
   isIncome(l){ return this.under(l, /^(sales accounts|direct incomes|indirect incomes)$/i); },
   mastersIn(){ return Object.keys(S.books.under || {}).length > 0; },
@@ -141,9 +148,7 @@ const Audit = {
     },
     tdsMissed(A, V, ctx){
       const done = new Set(TDS.allRows().filter(r => r.date >= ctx.from && r.date <= ctx.to).map(r => r.party));
-      const KEY = [[/RENT/i, "rent_building"], [/LEGAL|AUDIT|PROFESSIONAL|PROFF|CONSULT|ADVOCATE|RETAINER/i, "professional"], [/TECHNICAL/i, "technical"],
-        [/COMMISSION|BROKERAGE/i, "commission"], [/CONTRACT|LABOUR|JOB\s*WORK|MANPOWER|TRANSPORT|FREIGHT|CARTAGE|REPAIR|MAINTENANCE|ADVERT|PRINTING|CATERING|SECURITY|HOUSEKEEPING/i, "contractor"],
-        [/INTEREST/i, "interest"]];
+      const KEY = A.TDS_KEY;
       const agg = {};
       V.forEach(v => {
         if (Books.isSale(v)) return;
@@ -223,7 +228,7 @@ const Audit = {
         suggestion: "Deduct the balance from the next payment to each party and deposit it.", je: null, rows};
     },
     gstBlocked(A, V){
-      const RE = /\b(FOOD|MEAL|CATERING|CANTEEN|STAFF WELFARE|REFRESHMENT|CLUB|MEMBERSHIP|HEALTH|MEDICAL|LIFE INSURANCE|MOTOR CAR|CAR HIRE|VEHICLE|BEAUTY|GYM|GIFT|HOLIDAY)\b/i;
+      const RE = A.BLOCKED_RE;
       const rows = [], je = [];
       V.forEach(v => {
         if (Books.isSale(v)) return;
