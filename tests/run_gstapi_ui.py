@@ -19,15 +19,15 @@ def fake(route):
     auth = route.request.headers.get("authorization", "")
     if auth != "Bearer tok-firm": return route.fulfill(status=401, body=json.dumps({"ok": False, "error": "Sign in again."}))
     a = b.get("action")
-    if a == "otp": r = {"ok": True, "app_key": "Xo8lBiPr3atUJ7c0LjG2kDHVAThCvMZE"}
-    elif a == "auth": r = {"ok": True, "auth_token": "at-1", "sek": "sek-1", "expiryMinutes": 120} if b.get("otp") == "575757" else {"ok": False, "error": "Invalid OTP (AUTH4033)"}
+    if a == "otp": r = {"ok": True}
+    elif a == "auth": r = {"ok": True, "auth_token": "at-1", "expiryMinutes": 120} if b.get("otp") == "575757" else {"ok": False, "error": "Invalid OTP (AUTH4033)"}
     elif a == "2b" and b.get("period") == "032026" and b.get("auth_token") == "at-1": r = {"ok": True, "parts": 1, "data": mar}
     elif a == "2b": r = {"ok": False, "error": "No 2B for this period (RET2B1016)"}
     else: r = {"ok": False, "error": "?"}
     route.fulfill(status=200, content_type="application/json", body=json.dumps(r))
 with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1400, "height": 900}); pg.on("pageerror", lambda e: errors.append(str(e)))
-    pg.route("**/functions/v1/gst-api", fake)
+    pg.route("**/functions/v1/gst-taxpro", fake)
     pg.goto("http://localhost:8147/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1500)
     pg.evaluate("""(bk) => { const c = newCompany({name: "ZZ TEST (VMS books)", gstin: "07AADCV3366N1ZU"}); S.companies[c.id] = c; S.coId = c.id; S.view = "company"; S.tab = "books"; S.loadingCo = false;
       S.books = Object.assign({loading: false, challans: [], alloc: {}}, bk, {cid: c.id, misCfg: {freq: "off"}, auditCfg: {freq: "off"}, twoBs: {}}); S.books.map = Books.mapLedgers(bk.vouchers, {}); LedMaster.refresh(S.books); window.__bk = S.books;
@@ -52,12 +52,12 @@ with sync_playwright() as p:
     ok(pg.evaluate("!!S.books.twoBs['07AADCV3366N1ZU|032026'] && S.books.twoBs['07AADCV3366N1ZU|032026'].source === 'api'") and "2B fetched: Mar 2026" in t, "March 2B fetched and put where a 2B file goes")
     rows = pg.evaluate("S.books.twoBs['07AADCV3366N1ZU|032026'].rows.length"); want = pg.evaluate("(j) => GST2B.fromJson({data: j}).rows.length", mar)
     ok(rows == want and rows > 0, "every document of it: %d, the same as the portal's JSON file gives" % rows)
-    ok(seen[-1].get("auth_token") == "at-1" and seen[-1].get("app_key") and seen[-1].get("period") == "032026", "the session goes with each call")
+    ok(seen[-1].get("auth_token") == "at-1" and "app_key" not in seen[-1] and seen[-1].get("period") == "032026", "the auth token goes with each call, nothing else of the session")
     ok("matched" in t.lower() or "Matched" in t, "the 2B reconciliation runs on it")
     pg.screenshot(path=OUT + "/gstapi-2b.png", full_page=False)
     pg.select_option("select[data-gapiym]", "202602"); pg.click('button[data-gapi="one"]'); pg.wait_for_timeout(2500)
     ok("RET2B1016" in pg.inner_text("#app"), "a month the portal has no 2B for: its reason is shown")
-    ok("at-1" not in json.dumps(pg.evaluate("S.books"), default=str) and "Xo8lBiPr" not in json.dumps(pg.evaluate("S.books"), default=str), "the portal session is never saved with the books")
+    ok("at-1" not in json.dumps(pg.evaluate("S.books"), default=str), "the portal session is never saved with the books")
     br.close()
 errs = [e for e in errors if "supabase" not in e and "Failed to load" not in e]
 ok(not errs, "no page errors" + ("" if not errs else ": " + " | ".join(errs[:4])))

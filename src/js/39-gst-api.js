@@ -1,13 +1,14 @@
 /* ================================================================== */
 /* GST API: the taxpayer's OTP sign-in and GSTR-2B fetched from the   */
-/* portal through FYN Gateway, by the firm's own server function     */
+/* portal through TaxPro GSP, by the firm's own server function      */
 /* ================================================================== */
-// The FYN key and secret stay in the firm's Supabase project (function gst-api). The taxpayer's session (app_key, auth
-// token, SEK) is kept only in this tab's memory: never saved, gone when the tab is closed or the portal's session ends.
+// The TaxPro ASP password stays in the firm's Supabase project (function gst-taxpro; TaxPro's Decrypted API does GSTN's
+// encryption). The taxpayer's auth token is kept only in this tab's memory: never saved, gone when the tab is closed or
+// the portal's session ends.
 const GSTAPI = {
   sess: {},
   on(){ return typeof Cloud === "object" && Cloud.on() && !!S.account; },
-  url(){ return String(Cloud.cfg().url || "").replace(/\/+$/, "") + "/functions/v1/gst-api"; },
+  url(){ return String(Cloud.cfg().url || "").replace(/\/+$/, "") + "/functions/v1/gst-taxpro"; },
   async call(body, retry){
     const c = Cloud.cfg(), s = Cloud.sess();
     const r = await fetch(this.url(), {method: "POST", headers: {"Content-Type": "application/json", apikey: c.key, Authorization: "Bearer " + (s && s.access_token)}, body: JSON.stringify(body)});
@@ -24,21 +25,21 @@ const GSTAPI = {
   async otp(reg){
     const gstin = this.gstinOf(reg), username = this.user(reg);
     const j = await this.call({action: "otp", gstin, username});
-    this.sess[gstin] = {app_key: j.app_key, sentAt: Date.now()};
+    this.sess[gstin] = {sentAt: Date.now()};
     return j;
   },
   async auth(reg, otp){
     const gstin = this.gstinOf(reg), username = this.user(reg), x = this.sess[gstin];
-    if (!x || !x.app_key) throw new Error("Send the OTP first.");
+    if (!x) throw new Error("Send the OTP first.");
     const j = await this.call({action: "auth", gstin, username, otp});
-    Object.assign(x, {auth_token: j.auth_token, sek: j.sek, until: Date.now() + Math.max(5, (j.expiryMinutes || 120) - 2) * 60000});
+    Object.assign(x, {auth_token: j.auth_token, until: Date.now() + Math.max(5, (j.expiryMinutes || 120) - 2) * 60000});
     return x;
   },
   // 2B for a month (YYYYMM), in the same place as a 2B file brought in
   async twoB(reg, ym){
     const gstin = this.gstinOf(reg), x = this.live(gstin);
     if (!x) throw new Error("Connect with the taxpayer’s OTP first.");
-    const j = await this.call({action: "2b", gstin, username: this.user(reg), period: ym.slice(4, 6) + ym.slice(0, 4), auth_token: x.auth_token, sek: x.sek, app_key: x.app_key});
+    const j = await this.call({action: "2b", gstin, username: this.user(reg), period: ym.slice(4, 6) + ym.slice(0, 4), auth_token: x.auth_token});
     const t = GST2B.fromJson({data: j.data});
     if (!t.gstin || !t.ym) throw new Error("The 2B for " + GSTR.label(ym) + " came back without its GSTIN or period.");
     const b = S.books; b.twoBs = b.twoBs || {}; b.twoBs[t.gstin + "|" + t.period] = Object.assign(t, {source: "api", fetchedAt: new Date().toISOString()});
