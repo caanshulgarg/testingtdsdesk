@@ -47,6 +47,13 @@ try:
     ok(st.get("seeded") and st.get("phase") == "check" and st.get("next") == "20260401" and int(st.get("last", 0)) == mx, "the copy knows it is done up to 31 March, and the last change number (%s, %s, %s)" % (st.get("phase"), st.get("next"), st.get("last")))
     man = call("/synced?company=" + urllib.parse.quote(co))
     ok(man.get("keep") and [m for m in man.get("months", []) if m["ym"] == "202603"], "FinCom sees March in the copy (the manifest)")
+    # opening balances from a trial balance file: for the day before the copy starts, not another day
+    wrong = call("/seedbal?company=" + urllib.parse.quote(co), json.dumps({"openAsOn": "20260315", "ledgers": [{"name": "X", "open": "-5"}]}), "application/json")
+    ok(wrong.get("skipped") and "20260228" in wrong["skipped"], "balances for the wrong date are refused, saying which date is needed: " + str(wrong.get("skipped")))
+    good = call("/seedbal?company=" + urllib.parse.quote(co), json.dumps({"openAsOn": "20260228", "ledgers": [{"name": n, "parent": "", "open": "-1"} for n, _, _ in fake_tally.L]}), "application/json")
+    st2 = json.load(open(glob.glob(_os.path.join(BRUN, "sync", "*", "keep.json"))[0], encoding="utf-8-sig"))
+    bj = json.load(open(glob.glob(_os.path.join(BRUN, "sync", "*", "balances.json"))[0], encoding="utf-8-sig"))
+    ok(good.get("ledgers") == len(fake_tally.L) and not st2.get("openPending") and bj.get("source") == "trial balance file", "the opening balances are taken from the trial balance, and Tally will not be asked for them")
     # keeping in step switched on: the copier does not make a first copy of March; it checks it, lightly
     # the file ran to today: the days after March have no entries in the stand-in Tally
     import datetime as _dt
@@ -59,6 +66,7 @@ try:
     ok("in step with Tally" in logtext(), "the copier checked March against Tally and is in step")
     ok(len(big) <= 3, "without making a first copy of March itself (%d day book reads of more than a day there)" % len(big))
     ok("taken from the day book file" in logtext(), "the log says the copy came from the file")
+    ok(not [k for k, a, b in fake_tally.LOG[n1:] if k in ("TDSDeskKeepBal", "TDSDeskBalances")], "no balances asked of Tally: they came from the trial balance")
     # a company already kept in step the usual way is not overwritten by a file
     r3 = call("/seed?company=" + urllib.parse.quote(co) + "&from=20260301&to=20260301", "<ENVELOPE></ENVELOPE>", "text/plain")
     ok(r3.get("ok") and not r3.get("skipped"), "more of a file for a company that was started from a file is still taken")

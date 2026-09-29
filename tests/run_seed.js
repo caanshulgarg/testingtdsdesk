@@ -23,6 +23,12 @@ x.BridgeSeed.send({text: async () => text}).then(r => {
   const next = d => { const t = new Date(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6, 8) + 1); return t.getFullYear() + String(t.getMonth() + 1).padStart(2, "0") + String(t.getDate()).padStart(2, "0"); };
   ok(sent.every((p, i) => i === 0 || sent[i - 1].to === p.from || next(sent[i - 1].to) === p.from), "the pieces follow one another with no gap (empty days are known as empty)");
   ok(sent.every(p => (p.body.match(/<DATE>(\d{8})<\/DATE>/g) || []).every(m => { const d = m.slice(6, 14); return d >= p.from && d <= p.to; })), "every entry is inside its piece's dates");
+  // dates chosen: April to June, with nothing in May: May is still sent, empty, so the copy knows it
+  const t2 = "<ENVELOPE>" + days.filter(v => /<DATE>2025(04|06)/.test(v)).map(v => "<TALLYMESSAGE>" + v + "</TALLYMESSAGE>").join("") + "</ENVELOPE>";
+  const pc = x.BridgeSeed.pieces(t2, {from: "20250401", to: "20250630"});
+  ok(pc[0].from === "20250401" && pc[pc.length - 1].to === "20250630" && pc.some(p => p.from === "20250501" && p.to === "20250531" && p.n === 0), "the dates chosen are covered end to end, an empty month sent as empty: " + pc.map(p => p.from + "-" + p.to + ":" + p.n).join(" "));
+  const pc2 = x.BridgeSeed.pieces(text, {from: "20250701", to: "20250710"});
+  ok(pc2.every(p => p.from >= "20250701" && p.to <= "20250710") && pc2.reduce((s, p) => s + p.n, 0) === days.filter(v => /<DATE>202507(0\d|10)</.test(v)).length, "only the entries inside the dates chosen are sent");
   console.log(fails ? fails + " FAILED" : "all passed");
   process.exit(fails ? 1 : 0);
 });

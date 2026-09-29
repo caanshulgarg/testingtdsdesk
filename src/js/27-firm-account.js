@@ -1365,6 +1365,7 @@ document.addEventListener("click", ev => {
     case "marketPick": { const i = document.getElementById("marketIn"); if (i){ i.value = ""; i.click(); } break; }
     case "booksPick": { const i = document.getElementById("booksIn"); if (i){ i.value = ""; i.click(); } break; }
     case "mastersPick": { const i = document.getElementById("mastersIn"); if (i){ i.value = ""; i.click(); } break; }
+    case "tbPick": { const i = document.getElementById("tbIn"); if (i){ i.value = ""; i.click(); } break; }
     case "filedPick": { const i = document.getElementById("filedIn"); if (i){ i.value = ""; i.click(); } break; }
     case "twoBPick": { const i = document.getElementById("twoBIn"); if (i){ i.value = ""; i.click(); } break; }
     case "tallyRead": {
@@ -1863,7 +1864,8 @@ document.addEventListener("input", ev => {
 function setPath(o, path, v){ const k = path.split("."); if (k.length === 2) o[k[0]][k[1]] = v; else o[k[0]] = v; }
 
 document.addEventListener("change", ev => {
-  if (ev.target && ev.target.id && ["booksIn", "mastersIn", "twoBIn", "filedIn"].includes(ev.target.id)){ booksChange(ev.target); return; }
+  if (ev.target && ev.target.id && ["booksIn", "mastersIn", "tbIn", "twoBIn", "filedIn"].includes(ev.target.id)){ booksChange(ev.target); return; }
+  if (ev.target && ev.target.dataset && (ev.target.dataset.dbfrom !== undefined || ev.target.dataset.dbto !== undefined || ev.target.dataset.tbon !== undefined)){ booksChange(ev.target); return; }
   if (ev.target && ev.target.dataset && S.books && gstFixChange(ev.target)) return;
   if (ev.target && ev.target.id === "marketIn"){ const f = (ev.target.files || [])[0]; ev.target.value = ""; if (f) importMarketFile(f); return; }
   if (ev.target && ev.target.id === "salaryIn"){

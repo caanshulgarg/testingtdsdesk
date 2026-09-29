@@ -1408,43 +1408,82 @@ function viewBridgeSettings(){
   return h;
 }
 
-// A day book exported from Tally once and chosen in FinCom also becomes the bridge's copy of the company (1.13.7): sent
-// in pieces of a few megabytes, whole days, never across a month. The bridge then never reads the year from Tally
-// itself; only changes follow. Nothing here asks Tally anything
+// A day book exported from Tally and chosen in FinCom also becomes the bridge's copy of the company (1.13.7): sent in
+// pieces of a few megabytes, month by month within the dates chosen (empty days are sent as empty, so the copy knows
+// them). Parts can come one period at a time, in any order. Nothing here asks Tally anything
 const BridgeSeed = {
-  async send(file, onStep){
-    const co = CO();
-    if (!Bridge.on()) return {skipped: "the Tally Bridge is not connected"};
-    const name = (Bridge.openFor(co) || {}).name || co.tallyName || co.name;
-    if (!name) return {skipped: "no Tally company name"};
-    const text = await file.text(), re = /<VOUCHER\b[\s\S]*?<\/VOUCHER>/g, days = new Map();
+  ymd(t){ return t.getFullYear() + String(t.getMonth() + 1).padStart(2, "0") + String(t.getDate()).padStart(2, "0"); },
+  add(d, n){ return this.ymd(new Date(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6, 8) + n)); },
+  company(){ const co = CO(); return (Bridge.openFor(co) || {}).name || co.tallyName || co.name; },
+  async post(path, body, type){
+    const c = Bridge.cfg();
+    const r = await fetch(c.url.replace(/\/+$/, "") + path + Bridge.pinQ(), {method: "POST", headers: {"X-Bridge-Key": c.key, "Content-Type": type}, body, cache: "no-store"});
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || j.ok === false) throw new Error(j.error || ("The bridge answered with error " + r.status));
+    return j;
+  },
+  // the pieces: month by month from the first date to the last, whole days, about 8 MB at most
+  pieces(text, range){
+    const re = /<VOUCHER\b[\s\S]*?<\/VOUCHER>/g, days = new Map();
     let m;
-    while ((m = re.exec(text))){ const d = (m[0].match(/<DATE>(\d{8})<\/DATE>/) || [])[1]; if (!d) continue; if (!days.has(d)) days.set(d, []); days.get(d).push(m[0]); }
+    while ((m = re.exec(text))){ const d = (m[0].match(/<DATE>(\d{8})<\/DATE>/) || [])[1]; if (!d || (range.from && d < range.from) || (range.to && d > range.to)) continue; if (!days.has(d)) days.set(d, []); days.get(d).push(m[0]); }
     const all = Array.from(days.keys()).sort();
-    if (!all.length) return {skipped: "no entries in the file"};
-    const c = Bridge.cfg(), LIMIT = 8e6, pieces = [];
-    let from = all[0], buf = [], size = 0;
-    all.forEach((d, i) => {
-      const part = days.get(d).map(v => "<TALLYMESSAGE>" + v + "</TALLYMESSAGE>").join(""), next = all[i + 1];
-      buf.push(part); size += part.length;
-      if (!next || size >= LIMIT || next.slice(0, 6) !== d.slice(0, 6)){
-        // a piece covers every day from its first to the day before the next piece, so empty days are known as empty
-        const to = !next ? d : (t => t.getFullYear() + String(t.getMonth() + 1).padStart(2, "0") + String(t.getDate()).padStart(2, "0"))(new Date(+next.slice(0, 4), +next.slice(4, 6) - 1, +next.slice(6, 8) - 1));
-        pieces.push({from, to: to.slice(0, 6) === from.slice(0, 6) ? to : (t => t.getFullYear() + String(t.getMonth() + 1).padStart(2, "0") + String(t.getDate()).padStart(2, "0"))(new Date(+from.slice(0, 4), +from.slice(4, 6), 0)), body: "<ENVELOPE><BODY><DATA>" + buf.join("") + "</DATA></BODY></ENVELOPE>"});
-        buf = []; size = 0; if (next) from = next.slice(0, 6) !== d.slice(0, 6) ? next.slice(0, 6) + "01" : next;
+    const from = range.from || all[0], to = range.to || all[all.length - 1];
+    if (!from || !to) return [];
+    const out = [], LIMIT = 8e6;
+    let ym = from.slice(0, 6);
+    while (ym <= to.slice(0, 6)){
+      const mEnd = this.ymd(new Date(+ym.slice(0, 4), +ym.slice(4, 6), 0)), a = from > ym + "01" ? from : ym + "01", z = to < mEnd ? to : mEnd;
+      let start = a, buf = [], size = 0;
+      for (let d = a; d <= z; d = this.add(d, 1)){
+        const part = (days.get(d) || []).map(v => "<TALLYMESSAGE>" + v + "</TALLYMESSAGE>").join("");
+        buf.push(part); size += part.length;
+        if (d === z || size >= LIMIT){ out.push({from: start, to: d, body: "<ENVELOPE><BODY><DATA>" + buf.join("") + "</DATA></BODY></ENVELOPE>", n: (buf.join("").match(/<VOUCHER\b/g) || []).length}); start = this.add(d, 1); buf = []; size = 0; }
       }
-    });
+      ym = this.add(mEnd, 1).slice(0, 6);
+    }
+    return out;
+  },
+  async send(file, onStep, range){
+    if (!Bridge.on()) return {skipped: "the Tally Bridge is not connected"};
+    const name = this.company();
+    if (!name) return {skipped: "no Tally company name"};
+    const pieces = this.pieces(await file.text(), range || {});
+    if (!pieces.length) return {skipped: "no entries in the file for those dates"};
     let n = 0;
     for (let i = 0; i < pieces.length; i++){
       const x = pieces[i];
-      if (onStep) onStep("Giving the day book to the bridge\u2019s copy (" + (i + 1) + " of " + pieces.length + "); Tally is not asked anything\u2026");
-      const r = await fetch(c.url.replace(/\/+$/, "") + "/seed?company=" + encodeURIComponent(name) + "&from=" + x.from + "&to=" + x.to + Bridge.pinQ(), {method: "POST", headers: {"X-Bridge-Key": c.key, "Content-Type": "text/plain; charset=utf-8"}, body: x.body, cache: "no-store"});
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok || j.ok === false) throw new Error(j.error || ("The bridge answered with error " + r.status));
+      if (onStep) onStep("Giving the day book to the bridge’s copy (" + (i + 1) + " of " + pieces.length + "); Tally is not asked anything…");
+      const j = await this.post("/seed?company=" + encodeURIComponent(name) + "&from=" + x.from + "&to=" + x.to, x.body, "text/plain; charset=utf-8");
       if (j.skipped) return {skipped: j.skipped};
       n += num(j.entries);
     }
     return {entries: n, from: pieces[0].from, to: pieces[pieces.length - 1].to};
+  },
+  // opening balances from a trial balance file, for the bridge's copy
+  async opening(asOn, led){
+    if (!Bridge.on()) return {skipped: "the Tally Bridge is not connected"};
+    return this.post("/seedbal?company=" + encodeURIComponent(this.company()), JSON.stringify({openAsOn: asOn, ledgers: Object.entries(led).map(([name, x]) => ({name, parent: x.parent || "", open: String(x.open)}))}), "application/json");
   }
 };
-
+// A trial balance exported from Tally (Display > Trial Balance, ledgers shown, Ctrl+E > XML): each ledger's closing
+// balance on that day, which is the opening balance of the next. Debit is kept as Tally keeps it (negative)
+const TBFile = {
+  GROUPS: /^(capital account|reserves & surplus|loans \(liability\)|secured loans|unsecured loans|bank od a\/c|bank occ a\/c|current liabilities|duties & taxes|provisions|sundry creditors|fixed assets|investments|current assets|bank accounts|cash-in-hand|deposits \(asset\)|loans & advances \(asset\)|stock-in-hand|sundry debtors|branch \/ divisions|misc\. expenses \(asset\)|suspense a\/c|sales accounts|purchase accounts|direct incomes|direct expenses|indirect incomes|indirect expenses|grand total|total|opening stock|closing stock|difference in opening balances)$/i,
+  read(text, b){
+    const unesc = t => String(t || "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").trim();
+    const groups = new Set(Object.keys((b && b.groups) || {}).map(g => g.toLowerCase()));
+    const known = new Set(Object.keys(Object.assign({}, (b && b.map) || {}, (b && b.under) || {}, (b && b.ledInfo) || {})));
+    const names = [], re = /<DSPACCNAME>[\s\S]*?<DSPDISPNAME>([\s\S]*?)<\/DSPDISPNAME>[\s\S]*?<\/DSPACCNAME>\s*<DSPACCINFO>([\s\S]*?)<\/DSPACCINFO>/g;
+    const amt = (s, tag) => { const m = s.match(new RegExp("<" + tag + ">\\s*([-0-9.,]*)\\s*</" + tag + ">")); return m && m[1] ? Math.abs(num(m[1].replace(/,/g, ""))) : 0; };
+    let m, groupsSeen = 0;
+    while ((m = re.exec(text))){
+      const name = unesc(m[1]);
+      if (!name) continue;
+      if (!known.has(name) && (this.GROUPS.test(name) || groups.has(name.toLowerCase()))){ groupsSeen++; continue; }
+      const dr = amt(m[2], "DSPCLDRAMTA"), cr = amt(m[2], "DSPCLCRAMTA");
+      names.push({name, open: r2(cr - dr)});
+    }
+    return {rows: names, groupsSeen};
+  }
+};

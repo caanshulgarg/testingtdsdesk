@@ -299,12 +299,31 @@ function viewTallyRead(b){
       (cp.schedule ? " \u00b7 Nightly: " + (cp.schedule.on ? "on, next " + esc(cp.schedule.next || "") : "off") : "") + "</div>" : "") + "</div></section>";
   return h;
 }
+// the parts of the day book brought in from files, and the default date for the trial balance: the day before the first
+function viewBookParts(b){
+  const parts = ((b.meta || {}).parts || []).slice().sort((x, y) => String(x.from).localeCompare(String(y.from)));
+  if (!parts.length) return "";
+  return '<div class="bk-tablewrap"><table class="bk-table compact"><thead><tr><th>Part brought in</th><th class="n">Entries</th><th>File</th><th class="dt">On</th><th>Bridge\u2019s copy</th></tr></thead><tbody>' +
+    parts.map(p => "<tr><td>" + fmtDate(tallyDate(p.from)) + " to " + fmtDate(tallyDate(p.to)) + '</td><td class="n">' + p.n + "</td><td>" + esc(p.file || "") + '</td><td class="dt">' + fmtDate(String(p.at || "").slice(0, 10)) + "</td><td>" + esc(p.bridge || "\u2014") + "</td></tr>").join("") + "</tbody></table></div>";
+}
+function tbDefaultOn(b){
+  const parts = ((b.meta || {}).parts || []).map(p => p.from).sort(), f = parts[0] || (b.meta || {}).from;
+  if (!f) return "";
+  const t = new Date(+f.slice(0, 4), +f.slice(4, 6) - 1, +f.slice(6, 8) - 1);
+  return t.getFullYear() + "-" + String(t.getMonth() + 1).padStart(2, "0") + "-" + String(t.getDate()).padStart(2, "0");
+}
 function viewBooksImport(b){
   const m = b.meta || {};
   return viewTallyRead(b) + '<section class="dash-card" style="max-width:760px"><h3>Or bring in files exported from Tally</h3>' +
-    '<p class="note">In Tally: <b>Display → Day Book</b>, set the period, then <b>Export</b> as XML. For the deductees’ PAN, also export <b>Display → List of Accounts</b> as XML. Nothing is sent anywhere; both are read on this computer.</p>' +
-    '<div class="row" style="gap:8px;margin:10px 0"><button class="btn primary" data-act="booksPick">Choose the day book XML</button>' +
-    '<button class="btn" data-act="mastersPick">Choose the ledger masters XML</button>' +
+    '<p class="note">In Tally: <b>Display More Reports → Day Book</b>, <b>F2</b> for the period, then <b>Ctrl+E</b> (Export) as XML. A big company can be brought in <b>part by part</b>: choose the dates, then that part’s file, as many times as needed; each part fills only its dates. The bridge’s copy is filled from the same files, so Tally is not read for them.</p>' +
+    '<div class="row" style="gap:8px;margin:10px 0;flex-wrap:wrap;align-items:center"><label class="note">From <input type="date" data-dbfrom value="' + esc(S.dbFrom || "") + '"></label><label class="note">to <input type="date" data-dbto value="' + esc(S.dbTo || "") + '"></label>' +
+    '<button class="btn primary" data-act="booksPick">Choose the day book XML' + (S.dbFrom || S.dbTo ? " for these dates" : "") + '</button><span class="note">(no dates: the whole file)</span></div>' +
+    viewBookParts(b) +
+    '<p class="note" style="margin-top:10px"><b>Opening balances:</b> in Tally, <b>Display More Reports → Trial Balance</b>, show the ledgers (<b>Alt+F5</b>, detailed), set the date to the day <b>before</b> the first date above, then <b>Ctrl+E</b> as XML. The closing balances there are the opening balances here, so Tally is not asked for them.</p>' +
+    '<div class="row" style="gap:8px;margin:6px 0;flex-wrap:wrap;align-items:center"><label class="note">Balances as on <input type="date" data-tbon value="' + esc(S.tbOn || tbDefaultOn(b)) + '"></label><button class="btn" data-act="tbPick">Choose the trial balance XML</button>' +
+    (b.tb && b.tb.source ? '<span class="note">' + Object.keys(b.tb.led || {}).length + " opening balances from " + esc(b.tb.source) + " (as on " + fmtDate(tallyDate(b.tb.openAsOn || "")) + ")</span>" : "") + "</div>" +
+    '<p class="note" style="margin-top:10px">For the deductees’ PAN and the ledger groups, also export <b>Display → List of Accounts</b> as XML.</p>' +
+    '<div class="row" style="gap:8px;margin:10px 0"><button class="btn" data-act="mastersPick">Choose the ledger masters XML</button>' +
     (b.vouchers && b.vouchers.length ? '<button class="btn small" data-act="booksClear">Remove what is here</button>' : "") +
     (booksHasAny(b) ? '<button class="btn small" data-act="booksWipe">Remove Tally data and all GST work</button>' : "") + "</div>" +
     ((b.meta || {}).gstins && notThisClient(b.meta.gstins).length ? '<p class="bk-warn">The books here are for ' + esc(notThisClient(b.meta.gstins).join(", ")) + ", not this client\u2019s PAN (" + esc(clientPan()) + "). Remove them with \u201cRemove Tally data and all GST work\u201d.</p>" : "") +

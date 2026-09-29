@@ -1023,18 +1023,55 @@ function booksChange(t){
     Books.importDayBook(f, m => { b.busy = m; softRender(); }).then(async res => {
       const bad = notThisClient((res.meta || {}).gstins);
       if (bad.length){ b.busy = ""; render(); askConfirm({title: "This day book is not this client\u2019s", ok: "Close", body: '<p class="note">' + esc(panRefusal("The day book " + f.name, bad)) + " Choose the day book exported from this client\u2019s company in Tally, or correct the client\u2019s GSTIN and PAN in Client setup.</p>"}); return; }
-      b.vouchers = res.vouchers; b.meta = Object.assign(res.meta, {at: new Date().toISOString(), file: f.name});
-      b.map = Books.mapLedgers(res.vouchers, b.map); LedMaster.refresh(b); b.busy = "";
-      TallyRead.after(b, "after the day book was read");
+      // a part: the dates chosen (or the file's own first and last date); only those dates are replaced, the rest stays
+      const ds = res.vouchers.map(v => v.date).filter(Boolean).sort(), iso8 = v => String(v || "").replace(/-/g, "");
+      const from = iso8(S.dbFrom) || ds[0], to = iso8(S.dbTo) || ds[ds.length - 1];
+      if (!from || !to){ b.busy = ""; render(); toast("There are no entries in " + f.name + "."); return; }
+      const inside = res.vouchers.filter(v => v.date >= from && v.date <= to), outside = res.vouchers.length - inside.length;
+      if (!(b.vouchers || []).length){ b.vouchers = inside; b.meta = Object.assign(res.meta, {from, to}); }
+      else TallyRead.merge(b, {vouchers: inside, meta: res.meta}, from, to);
+      b.meta.at = new Date().toISOString(); b.meta.file = "day book files from Tally";
+      const part = {from, to, n: inside.length, file: f.name, at: b.meta.at};
+      b.meta.parts = ((b.meta.parts || []).filter(p => !(p.from >= from && p.to <= to))).concat([part]);
+      b.map = Books.mapLedgers(b.vouchers, b.map); LedMaster.refresh(b); b.busy = "";
+      TallyRead.after(b, "after the day book was read", {from: b.meta.from, to: b.meta.to});
       await saveBooks();
-      toast(res.vouchers.length + " vouchers read, " + Object.keys(b.map).length + " ledgers found. Check the ledgers, then TDS and GST.");
-      // the same file becomes the bridge's copy: it never needs to read the year from Tally itself
-      if (Bridge.on()) BridgeSeed.send(f, m => { b.busy = m; softRender(); }).then(r => { b.busy = ""; render();
-        if (r && r.entries != null) toast("The bridge\u2019s copy now has these " + r.entries + " entries too: from now on only changes are read from Tally.");
-        else if (r && r.skipped) toast("The bridge\u2019s copy was not changed: " + r.skipped);
-      }, e => { b.busy = ""; render(); toast("The day book is in FinCom, but the bridge could not take it: " + ((e && e.message) || e)); });
-      S.booksTab = "ledgers"; render();
+      toast(inside.length + " entries of " + fmtDate(tallyDate(from)) + " to " + fmtDate(tallyDate(to)) + " brought in" + (outside ? " (" + outside + " outside those dates left out)" : "") + ". Choose the next part, or check the ledgers, then TDS and GST.");
+      // the same file fills the bridge's copy for these dates: the bridge never reads them from Tally itself
+      if (Bridge.on()) BridgeSeed.send(f, m => { b.busy = m; softRender(); }, {from, to}).then(r => { b.busy = "";
+        part.bridge = r && r.entries != null ? "filled (" + r.entries + ")" : r && r.skipped ? "not changed: " + r.skipped : ""; saveBooks(); render();
+        if (r && r.skipped) toast("The bridge\u2019s copy was not changed: " + r.skipped);
+      }, e => { b.busy = ""; part.bridge = "not taken: " + ((e && e.message) || e); saveBooks(); render(); toast("The part is in FinCom, but the bridge could not take it: " + ((e && e.message) || e)); });
+      else part.bridge = "the bridge is not connected";
+      render();
+
     }, e => { b.busy = ""; toast("Could not read that file: " + (e && e.message || e)); render(); });
+    return true;
+  }
+  if (t.dataset && t.dataset.dbfrom !== undefined){ S.dbFrom = t.value; render(); return true; }
+  if (t.dataset && t.dataset.dbto !== undefined){ S.dbTo = t.value; render(); return true; }
+  if (t.dataset && t.dataset.tbon !== undefined){ S.tbOn = t.value; render(); return true; }
+  if (t.id === "tbIn"){
+    const f = (t.files || [])[0]; t.value = "";
+    if (!f) return true;
+    const b = S.books, on = String(S.tbOn || tbDefaultOn(b) || "").replace(/-/g, "");
+    if (!/^\d{8}$/.test(on)){ toast("Give the date of the trial balance (the day before the first date of the books) first."); return true; }
+    f.text().then(async text => {
+      const r = TBFile.read(text, b);
+      if (!r.rows.length){ toast(r.groupsSeen ? "This trial balance shows only groups. In Tally, press Alt+F5 (detailed) so each ledger is shown, then export it again." : "No ledger balances found in " + f.name + ". Export the Trial Balance from Tally as XML."); return; }
+      const next = (t => t.getFullYear() + String(t.getMonth() + 1).padStart(2, "0") + String(t.getDate()).padStart(2, "0"))(new Date(+on.slice(0, 4), +on.slice(4, 6) - 1, +on.slice(6, 8) + 1));
+      const to = (b.meta || {}).to || next;
+      const j = {from: next, to, ledgers: r.rows.map(x => ({name: x.name, parent: (b.under || {})[x.name] || "", open: String(x.open), close: ""}))};
+      TallyRead.balances(b, j, next, to);
+      b.tb.source = "the trial balance file " + f.name; b.tb.openAsOn = on;
+      // the closing figures follow from the opening and the entries brought in
+      if (typeof MIS === "object"){ const mv = MIS.moves(b.tb.from, b.tb.to); Object.entries(b.tb.led).forEach(([l, x]) => { x.close = r2(num(x.open) + ((mv[l] || {}).t || 0)); }); }
+      TallyRead.after(b, "after the trial balance was read", {from: next, to});
+      await saveBooks(); render();
+      const tot = r2(r.rows.reduce((s2, x) => s2 + num(x.open), 0));
+      toast(r.rows.length + " opening balances as on " + fmtDate(tallyDate(on)) + " brought in" + (Math.abs(tot) >= 1 ? "; they do not add up to nil (difference " + INR.format(tot) + "): check the trial balance was exported with every ledger" : "") + ".");
+      if (Bridge.on()) BridgeSeed.opening(on, b.tb.led).then(x => { if (x && x.skipped) toast("The bridge\u2019s copy was not given the balances: " + x.skipped); }, e => toast("The bridge could not take the balances: " + ((e && e.message) || e)));
+    }, e => toast("Could not read that file: " + ((e && e.message) || e)));
     return true;
   }
   if (t.id === "mastersIn"){

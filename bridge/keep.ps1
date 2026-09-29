@@ -323,6 +323,24 @@ function Save-KeepDays([string]$Dir, [string]$From, [string]$To, [string]$xml) {
   Add-CloudDays $Dir $written
   return $n
 }
+# 1.13.8: opening balances from a trial balance exported from Tally (as on the day before the copy starts), so the
+# bridge never asks Tally for them either
+function Import-KeepOpening([string]$Company, [string]$Json) {
+  $o = $Json | ConvertFrom-Json
+  $dir = Get-SyncFolder $Company; $st = Read-KeepState $dir
+  if (-not $st) { return [ordered]@{ ok = $true; skipped = 'The bridge has no copy of this company yet: give it the day book first, then the trial balance.' } }
+  $want = Add-KeepDays ([string]$st.from) -1
+  if ([string]$o.openAsOn -ne $want) { return [ordered]@{ ok = $true; skipped = ('The copy starts on ' + $st.from + ', so it needs the balances as on ' + $want + '; this trial balance is as on ' + $o.openAsOn + '.') } }
+  $led = @($o.ledgers | ForEach-Object { [ordered]@{ name = [string]$_.name; parent = [string]$_.parent; open = [string]$_.open; close = '' } })
+  $bal = [ordered]@{ ok = $true; company = $Company; from = $st.from; to = (Get-Date).ToString('yyyyMMdd'); openAsOn = $want; ledgers = $led; keep = $true; source = 'trial balance file' }
+  Save-KeepFile (Join-Path $dir 'balances.json') ($bal | ConvertTo-Json -Depth 6 -Compress)
+  Set-CloudLedgers $dir
+  $st.openPending = $false; $st.balAt = (Get-Date).ToString('s'); $st.lastM = 0
+  Save-KeepFile (Join-Path $dir 'keep.json') ($st | ConvertTo-Json -Depth 6 -Compress)
+  Write-KeepManifest $dir $st ((Get-Date).ToString('yyyyMMdd'))
+  Write-Log ('Keeping ' + $Company + ': opening balances of ' + $led.Count + ' ledgers taken from the trial balance file')
+  return [ordered]@{ ok = $true; ledgers = $led.Count; openAsOn = $want }
+}
 # 1.13.7: the day book exported from Tally once (Display > Day Book > Ctrl+E > XML) and chosen in FinCom: FinCom sends it
 # here a few megabytes at a time, and it becomes the copy, so the bridge never reads the year from Tally itself. After
 # it only changes are read; the opening balances and the month-by-month check follow at a quiet time
@@ -342,8 +360,11 @@ function Import-KeepSeed([string]$Company, [string]$From, [string]$To, [string]$
   $mx = [long]$st.last
   foreach ($m in [regex]::Matches($Xml, '<ALTERID>\s*(\d+)')) { $v = [long]$m.Groups[1].Value; if ($v -gt $mx) { $mx = $v } }
   $st.last = $mx
-  if ($From -lt [string]$st.from) { $st.from = $From; $st.checkYm = $From.Substring(0, 6) }
-  if ((Add-KeepDays $To 1) -gt [string]$st.next) { $st.next = Add-KeepDays $To 1 }
+  if ($From -lt [string]$st.from) { $st.from = $From; $st.checkYm = $From.Substring(0, 6); $st.openPending = $true; $st.balMode = 'whole' }   # an earlier start needs earlier opening balances
+  # copied up to the first day with nothing in the copy: parts may come in any order, and a gap is read from Tally later
+  $d = [string]$st.from; $today = (Get-Date).ToString('yyyyMMdd'); $days = Join-Path $dir 'days'
+  while ($d -le $today -and (Test-Path -LiteralPath (Join-Path $days ($d + '.xml')))) { $d = Add-KeepDays $d 1 }
+  $st.next = $d
   $st.phase = 'check'
   $ym = $From.Substring(0, 6); while ($ym -le $To.Substring(0, 6)) { Write-KeepMonth $dir $ym $st; $ym = (ConvertFrom-TallyDate ($ym + '01')).AddMonths(1).ToString('yyyyMM') }
   $st.at = (Get-Date).ToString('s')
