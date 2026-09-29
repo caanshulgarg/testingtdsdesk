@@ -296,6 +296,11 @@ function Copy-KeepDays([string]$Company, [int]$Port, [string]$Dir, [string]$From
   $sw = [Diagnostics.Stopwatch]::StartNew()
   $xml = Get-DayBookXml $Company $From $To $Port
   $sec = $sw.Elapsed.TotalSeconds
+  $n = Save-KeepDays $Dir $From $To $xml
+  return @($sec, $n)
+}
+# a stretch of the day book (from Tally, or from a day book file) kept as one file a day; a day with nothing is kept empty
+function Save-KeepDays([string]$Dir, [string]$From, [string]$To, [string]$xml) {
   $by = @{}
   foreach ($m in [regex]::Matches($xml, '<VOUCHER\b[\s\S]*?</VOUCHER>')) {
     $d = [regex]::Match($m.Value, '<DATE>(\d{8})</DATE>').Groups[1].Value
@@ -316,7 +321,36 @@ function Copy-KeepDays([string]$Company, [int]$Port, [string]$Dir, [string]$From
     $d = Add-KeepDays $d 1
   }
   Add-CloudDays $Dir $written
-  return @($sec, $n)
+  return $n
+}
+# 1.13.7: the day book exported from Tally once (Display > Day Book > Ctrl+E > XML) and chosen in FinCom: FinCom sends it
+# here a few megabytes at a time, and it becomes the copy, so the bridge never reads the year from Tally itself. After
+# it only changes are read; the opening balances and the month-by-month check follow at a quiet time
+function Import-KeepSeed([string]$Company, [string]$From, [string]$To, [string]$Xml) {
+  if (-not $Company) { throw 'Say which company.' }
+  if (-not (Test-TallyDate $From) -or -not (Test-TallyDate $To) -or $From -gt $To) { throw 'Dates are to be given as yyyymmdd.' }
+  Set-FinComReading                                            # the copier waits meanwhile
+  $dir = Get-SyncFolder $Company
+  New-Item -ItemType Directory -Force -Path $dir | Out-Null
+  $st = Read-KeepState $dir
+  if ($st -and -not $st.seeded -and ($st.phase -eq 'check' -or $st.phase -eq 'live')) { return [ordered]@{ ok = $true; skipped = 'This company is already kept in step; its copy was made before.' } }
+  if (-not $st -or -not $st.seeded) {
+    $st = @{ company = $Company; from = $From; next = $From; slice = 1; phase = 'check'; openIdx = 0; last = 0; lastM = 0; checkYm = $From.Substring(0, 6); months = @{}; cycle = 0; skipped = @(); dayFail = 0; balMode = 'whole'; openPending = $true; seeded = $true }
+    Write-Log ('Keeping ' + $Company + ' in step: the copy starts from the day book file chosen in FinCom')
+  }
+  $n = Save-KeepDays $dir $From $To $Xml
+  $mx = [long]$st.last
+  foreach ($m in [regex]::Matches($Xml, '<ALTERID>\s*(\d+)')) { $v = [long]$m.Groups[1].Value; if ($v -gt $mx) { $mx = $v } }
+  $st.last = $mx
+  if ($From -lt [string]$st.from) { $st.from = $From; $st.checkYm = $From.Substring(0, 6) }
+  if ((Add-KeepDays $To 1) -gt [string]$st.next) { $st.next = Add-KeepDays $To 1 }
+  $st.phase = 'check'
+  $ym = $From.Substring(0, 6); while ($ym -le $To.Substring(0, 6)) { Write-KeepMonth $dir $ym $st; $ym = (ConvertFrom-TallyDate ($ym + '01')).AddMonths(1).ToString('yyyyMM') }
+  $st.at = (Get-Date).ToString('s')
+  Save-KeepFile (Join-Path $dir 'keep.json') ($st | ConvertTo-Json -Depth 6 -Compress)
+  Write-KeepManifest $dir $st ((Get-Date).ToString('yyyyMMdd'))
+  Write-Log ('Keeping ' + $Company + ': ' + $n + ' entries of ' + $From + '-' + $To + ' taken from the day book file')
+  return [ordered]@{ ok = $true; entries = $n; from = $From; to = $To; next = $st.next }
 }
 # one day's entries as numbers only, one line each: guid, change number
 function Get-KeepIndexText([string]$t) {

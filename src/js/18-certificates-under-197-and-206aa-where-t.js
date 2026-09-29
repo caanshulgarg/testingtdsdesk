@@ -191,16 +191,28 @@ const TallyRead = {
   after(b, why, range){
     b.reco = null; if (typeof GSTR === "object") GSTR._carry = null;
     if (!(b.vouchers || []).length) return;              // a very large company answered from the cloud's totals: nothing to work on here
-    // audit and MIS: at once, then at most every 3 minutes while Tally keeps changing (a big company's audit takes a moment)
-    // a read you asked for (a period from Tally, or last night's copy): its audit at once, for that period
-    if (range){ const t = this._soon && this._soon.audit; if (t){ t.at = 0; clearTimeout(t.timer); t.timer = 0; } }
-    this.soon("audit", b, () => { const L = (b.audit || {}).last; if (Audit.cfg(b).freq !== "off"){ const r = range || (L && L.from ? L : Audit.defaultRange(b)); Audit.run(r.from, r.to, why); } });
-    this.soon("mis", b, () => { const H = ((b.mis || {}).history || [])[0]; if (H && H.from) MIS.run(H.from, H.to, why); });
+    // audit and MIS take seconds on a big company, and the page waits meanwhile: they are not worked out here on every
+    // change, only marked out of date; each is worked out again when its tab is opened (Audit, MIS)
+    b.stale = {audit: why, mis: why, range: range || null};
     let d = []; try { d = GSTAmend.drift(); } catch (e){}
     const seen = new Set((b.gstDrift || []).map(x => x.ym + "|" + x.gstin + "|" + x.n));
     b.gstDrift = d;
     const fresh = d.filter(x => !seen.has(x.ym + "|" + x.gstin + "|" + x.n));
     if (fresh.length) toast(GSTAmend.driftLine(fresh[0]) + (fresh.length > 1 ? " " + (fresh.length - 1) + " more filed return" + (fresh.length > 2 ? "s" : "") + " changed: see GST → Amendments." : ""));
+  },
+  // an out-of-date audit or MIS, worked out again once its tab is on the screen (the page is drawn first)
+  catchUp(b, k){
+    const st = b.stale || {};
+    if (!st[k] || this._catching) return "";
+    this._catching = true;
+    setTimeout(() => {
+      try {
+        if (k === "audit" && Audit.cfg(b).freq !== "off"){ const L = (b.audit || {}).last, r = st.range || (L && L.from ? L : Audit.defaultRange(b)); Audit.run(r.from, r.to, st.audit); }
+        if (k === "mis"){ const H = ((b.mis || {}).history || [])[0], r = H && H.from ? H : MIS.autoRange(b); if (r && r.from) MIS.run(r.from, r.to, st.mis); }
+      } catch (e){}
+      delete st[k]; this._catching = false; saveBooks(); render();
+    }, 60);
+    return '<p class="bk-warn" role="status">Tally has changed since this was worked out; working it out again\u2026</p>';
   },
   soon(k, b, fn){
     const t = this._soon = this._soon || {}, x = t[k] = t[k] || {at: 0}, wait = 180000 - (Date.now() - x.at);
@@ -277,6 +289,7 @@ function viewTallyRead(b){
   h += '<p class="note">Reads every voucher of the period, and each ledger\u2019s balance as Tally works it out, from <b>' + esc(Bridge.openFor(co).name) + "</b>.</p>" +
     '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><label class="note">From <input type="date" data-tallyfrom value="' + esc(r.from) + '"></label><label class="note">to <input type="date" data-tallyto value="' + esc(r.to) + '"></label>' +
     '<button class="btn primary" data-act="tallyRead">Read from Tally</button></div>' +
+    '<p class="note" style="margin-top:8px"><b>A big company, or the first time?</b> Export the day book from Tally once (Display More Reports \u2192 Day Book \u2192 F2 for the period \u2192 Ctrl+E \u2192 XML) and choose it below under \u201cChoose the day book XML\u201d. It is the fastest way, and the bridge\u2019s copy starts from the same file, so the bridge never reads the year from Tally; after that only changes are read.</p>' +
     '<div style="margin-top:10px;border-top:1px solid var(--line);padding-top:10px"><b>Every night</b><p class="note">The bridge on the Tally server copies each open company\u2019s day book and balances at night, so in the morning they are read in seconds and the audit is ready. The companies have to be open in Tally at that hour.</p>' +
     '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><button class="btn small" data-act="tallyCopyCheck">See last night\u2019s copy</button>' +
     '<label class="note">at <input type="time" data-tallytime value="' + esc((cp && cp.time) || "02:00") + '" style="width:110px"></label>' +
@@ -770,6 +783,8 @@ function printView(title, html){
 }
 
 function viewBooksAudit(b){
+  const catchUp = TallyRead.catchUp(b, "audit");
+  if (catchUp) return catchUp;
   if (S.auditTab === "rel") return auditTabs() + viewAuditRel(b);
   if (S.auditTab === "3cd") return auditTabs() + viewAudit3cd(b);
   const m = v => INR.format(r2(v || 0)), c = Audit.cfg(b), au = b.audit || {}, run = au.last, dr = Audit.defaultRange(b);
@@ -857,6 +872,8 @@ function misRangeQuick(k, b){
   return null;
 }
 function viewBooksMis(b){
+  const catchUp = TallyRead.catchUp(b, "mis");
+  if (catchUp) return catchUp;
   const m = v => INR.format(r2(v || 0)), r = (b.mis || {}).last, c = MIS.cfg(b);
   const rg = S.misRange || (r ? {from: Audit.iso(r.from), to: Audit.iso(r.to)} : (x => ({from: Audit.iso(x.from), to: Audit.iso(x.to)}))(misRangeQuick("ytd", b)));
   let h = '<section class="dash-card"><h3>MIS</h3>' +

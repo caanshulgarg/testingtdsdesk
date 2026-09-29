@@ -1127,7 +1127,7 @@ header.top .tbar-title{align-items:center}
 .lk-fresh .note{flex:1 1 320px}
 .fc-empty .lk-fresh{text-align:left;margin-top:12px}
 </style>
-<style>.is-test .side-brand::after{content:"TEST";display:block;margin-top:4px;font-size:11px;letter-spacing:.14em;color:#E9A06A}.is-test header.top{box-shadow:inset 0 3px 0 #E2761B}body.is-test::after{content:"TESTING SITE · not for real client work · post only to a ZZ TEST company in Tally";position:fixed;left:0;right:0;bottom:0;z-index:70;background:#E2761B;color:#fff;font-size:12.5px;text-align:center;padding:3px 8px;letter-spacing:.04em;pointer-events:none}.is-test .actionbar{bottom:22px}.is-test #app{padding-bottom:34px}</style><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-JUZRiA/pD/Q1MSIv1WkOX00eklOKXLcOHszD3zr3UBc=' 'sha256-ONiDOpuM8L84n/XxeqQyMQCFdEk5TUsJD22jNweqte8=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+<style>.is-test .side-brand::after{content:"TEST";display:block;margin-top:4px;font-size:11px;letter-spacing:.14em;color:#E9A06A}.is-test header.top{box-shadow:inset 0 3px 0 #E2761B}body.is-test::after{content:"TESTING SITE · not for real client work · post only to a ZZ TEST company in Tally";position:fixed;left:0;right:0;bottom:0;z-index:70;background:#E2761B;color:#fff;font-size:12.5px;text-align:center;padding:3px 8px;letter-spacing:.04em;pointer-events:none}.is-test .actionbar{bottom:22px}.is-test #app{padding-bottom:34px}</style><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-JUZRiA/pD/Q1MSIv1WkOX00eklOKXLcOHszD3zr3UBc=' 'sha256-45kmcedLSg5hqiTKTB0FEImG7KVyewNQ5e4h2uXkpcY=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
 </head>
 <body class="is-test">
 <a class="skip" id="skipLink" href="#app">Skip to the work</a>
@@ -1202,9 +1202,9 @@ const DEFAULT_FIRM = {firmName:"", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "TEST · 29 Sep 2026 · build 183 (Read from Tally a few days at a time; opening balances once, or from the copy; bridge 1.13.6)";
+const APP_VERSION = "TEST · 29 Sep 2026 · build 184 (page no longer waits for audit and MIS; a day book file starts the bridge copy; bridge 1.13.7)";
 // the Tally Bridge setup file's fingerprint, put in by build.py: a new setup file is never served from an old cache
-const BRIDGE_SETUP_SHA = "6d0a460dda9f0545";
+const BRIDGE_SETUP_SHA = "476eb15207c0b969";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;
@@ -9285,16 +9285,28 @@ const TallyRead = {
   after(b, why, range){
     b.reco = null; if (typeof GSTR === "object") GSTR._carry = null;
     if (!(b.vouchers || []).length) return;              // a very large company answered from the cloud's totals: nothing to work on here
-    // audit and MIS: at once, then at most every 3 minutes while Tally keeps changing (a big company's audit takes a moment)
-    // a read you asked for (a period from Tally, or last night's copy): its audit at once, for that period
-    if (range){ const t = this._soon && this._soon.audit; if (t){ t.at = 0; clearTimeout(t.timer); t.timer = 0; } }
-    this.soon("audit", b, () => { const L = (b.audit || {}).last; if (Audit.cfg(b).freq !== "off"){ const r = range || (L && L.from ? L : Audit.defaultRange(b)); Audit.run(r.from, r.to, why); } });
-    this.soon("mis", b, () => { const H = ((b.mis || {}).history || [])[0]; if (H && H.from) MIS.run(H.from, H.to, why); });
+    // audit and MIS take seconds on a big company, and the page waits meanwhile: they are not worked out here on every
+    // change, only marked out of date; each is worked out again when its tab is opened (Audit, MIS)
+    b.stale = {audit: why, mis: why, range: range || null};
     let d = []; try { d = GSTAmend.drift(); } catch (e){}
     const seen = new Set((b.gstDrift || []).map(x => x.ym + "|" + x.gstin + "|" + x.n));
     b.gstDrift = d;
     const fresh = d.filter(x => !seen.has(x.ym + "|" + x.gstin + "|" + x.n));
     if (fresh.length) toast(GSTAmend.driftLine(fresh[0]) + (fresh.length > 1 ? " " + (fresh.length - 1) + " more filed return" + (fresh.length > 2 ? "s" : "") + " changed: see GST → Amendments." : ""));
+  },
+  // an out-of-date audit or MIS, worked out again once its tab is on the screen (the page is drawn first)
+  catchUp(b, k){
+    const st = b.stale || {};
+    if (!st[k] || this._catching) return "";
+    this._catching = true;
+    setTimeout(() => {
+      try {
+        if (k === "audit" && Audit.cfg(b).freq !== "off"){ const L = (b.audit || {}).last, r = st.range || (L && L.from ? L : Audit.defaultRange(b)); Audit.run(r.from, r.to, st.audit); }
+        if (k === "mis"){ const H = ((b.mis || {}).history || [])[0], r = H && H.from ? H : MIS.autoRange(b); if (r && r.from) MIS.run(r.from, r.to, st.mis); }
+      } catch (e){}
+      delete st[k]; this._catching = false; saveBooks(); render();
+    }, 60);
+    return '<p class="bk-warn" role="status">Tally has changed since this was worked out; working it out again\u2026</p>';
   },
   soon(k, b, fn){
     const t = this._soon = this._soon || {}, x = t[k] = t[k] || {at: 0}, wait = 180000 - (Date.now() - x.at);
@@ -9371,6 +9383,7 @@ function viewTallyRead(b){
   h += '<p class="note">Reads every voucher of the period, and each ledger\u2019s balance as Tally works it out, from <b>' + esc(Bridge.openFor(co).name) + "</b>.</p>" +
     '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><label class="note">From <input type="date" data-tallyfrom value="' + esc(r.from) + '"></label><label class="note">to <input type="date" data-tallyto value="' + esc(r.to) + '"></label>' +
     '<button class="btn primary" data-act="tallyRead">Read from Tally</button></div>' +
+    '<p class="note" style="margin-top:8px"><b>A big company, or the first time?</b> Export the day book from Tally once (Display More Reports \u2192 Day Book \u2192 F2 for the period \u2192 Ctrl+E \u2192 XML) and choose it below under \u201cChoose the day book XML\u201d. It is the fastest way, and the bridge\u2019s copy starts from the same file, so the bridge never reads the year from Tally; after that only changes are read.</p>' +
     '<div style="margin-top:10px;border-top:1px solid var(--line);padding-top:10px"><b>Every night</b><p class="note">The bridge on the Tally server copies each open company\u2019s day book and balances at night, so in the morning they are read in seconds and the audit is ready. The companies have to be open in Tally at that hour.</p>' +
     '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><button class="btn small" data-act="tallyCopyCheck">See last night\u2019s copy</button>' +
     '<label class="note">at <input type="time" data-tallytime value="' + esc((cp && cp.time) || "02:00") + '" style="width:110px"></label>' +
@@ -9864,6 +9877,8 @@ function printView(title, html){
 }
 
 function viewBooksAudit(b){
+  const catchUp = TallyRead.catchUp(b, "audit");
+  if (catchUp) return catchUp;
   if (S.auditTab === "rel") return auditTabs() + viewAuditRel(b);
   if (S.auditTab === "3cd") return auditTabs() + viewAudit3cd(b);
   const m = v => INR.format(r2(v || 0)), c = Audit.cfg(b), au = b.audit || {}, run = au.last, dr = Audit.defaultRange(b);
@@ -9951,6 +9966,8 @@ function misRangeQuick(k, b){
   return null;
 }
 function viewBooksMis(b){
+  const catchUp = TallyRead.catchUp(b, "mis");
+  if (catchUp) return catchUp;
   const m = v => INR.format(r2(v || 0)), r = (b.mis || {}).last, c = MIS.cfg(b);
   const rg = S.misRange || (r ? {from: Audit.iso(r.from), to: Audit.iso(r.to)} : (x => ({from: Audit.iso(x.from), to: Audit.iso(x.to)}))(misRangeQuick("ytd", b)));
   let h = '<section class="dash-card"><h3>MIS</h3>' +
@@ -15374,6 +15391,11 @@ function booksChange(t){
       TallyRead.after(b, "after the day book was read");
       await saveBooks();
       toast(res.vouchers.length + " vouchers read, " + Object.keys(b.map).length + " ledgers found. Check the ledgers, then TDS and GST.");
+      // the same file becomes the bridge's copy: it never needs to read the year from Tally itself
+      if (Bridge.on()) BridgeSeed.send(f, m => { b.busy = m; softRender(); }).then(r => { b.busy = ""; render();
+        if (r && r.entries != null) toast("The bridge\u2019s copy now has these " + r.entries + " entries too: from now on only changes are read from Tally.");
+        else if (r && r.skipped) toast("The bridge\u2019s copy was not changed: " + r.skipped);
+      }, e => { b.busy = ""; render(); toast("The day book is in FinCom, but the bridge could not take it: " + ((e && e.message) || e)); });
       S.booksTab = "ledgers"; render();
     }, e => { b.busy = ""; toast("Could not read that file: " + (e && e.message || e)); render(); });
     return true;
@@ -16922,6 +16944,46 @@ function viewBridgeSettings(){
   h += "</div>";
   return h;
 }
+
+// A day book exported from Tally once and chosen in FinCom also becomes the bridge's copy of the company (1.13.7): sent
+// in pieces of a few megabytes, whole days, never across a month. The bridge then never reads the year from Tally
+// itself; only changes follow. Nothing here asks Tally anything
+const BridgeSeed = {
+  async send(file, onStep){
+    const co = CO();
+    if (!Bridge.on()) return {skipped: "the Tally Bridge is not connected"};
+    const name = (Bridge.openFor(co) || {}).name || co.tallyName || co.name;
+    if (!name) return {skipped: "no Tally company name"};
+    const text = await file.text(), re = /<VOUCHER\b[\s\S]*?<\/VOUCHER>/g, days = new Map();
+    let m;
+    while ((m = re.exec(text))){ const d = (m[0].match(/<DATE>(\d{8})<\/DATE>/) || [])[1]; if (!d) continue; if (!days.has(d)) days.set(d, []); days.get(d).push(m[0]); }
+    const all = Array.from(days.keys()).sort();
+    if (!all.length) return {skipped: "no entries in the file"};
+    const c = Bridge.cfg(), LIMIT = 8e6, pieces = [];
+    let from = all[0], buf = [], size = 0;
+    all.forEach((d, i) => {
+      const part = days.get(d).map(v => "<TALLYMESSAGE>" + v + "</TALLYMESSAGE>").join(""), next = all[i + 1];
+      buf.push(part); size += part.length;
+      if (!next || size >= LIMIT || next.slice(0, 6) !== d.slice(0, 6)){
+        // a piece covers every day from its first to the day before the next piece, so empty days are known as empty
+        const to = !next ? d : (t => t.getFullYear() + String(t.getMonth() + 1).padStart(2, "0") + String(t.getDate()).padStart(2, "0"))(new Date(+next.slice(0, 4), +next.slice(4, 6) - 1, +next.slice(6, 8) - 1));
+        pieces.push({from, to: to.slice(0, 6) === from.slice(0, 6) ? to : (t => t.getFullYear() + String(t.getMonth() + 1).padStart(2, "0") + String(t.getDate()).padStart(2, "0"))(new Date(+from.slice(0, 4), +from.slice(4, 6), 0)), body: "<ENVELOPE><BODY><DATA>" + buf.join("") + "</DATA></BODY></ENVELOPE>"});
+        buf = []; size = 0; if (next) from = next.slice(0, 6) !== d.slice(0, 6) ? next.slice(0, 6) + "01" : next;
+      }
+    });
+    let n = 0;
+    for (let i = 0; i < pieces.length; i++){
+      const x = pieces[i];
+      if (onStep) onStep("Giving the day book to the bridge\u2019s copy (" + (i + 1) + " of " + pieces.length + "); Tally is not asked anything\u2026");
+      const r = await fetch(c.url.replace(/\/+$/, "") + "/seed?company=" + encodeURIComponent(name) + "&from=" + x.from + "&to=" + x.to + Bridge.pinQ(), {method: "POST", headers: {"X-Bridge-Key": c.key, "Content-Type": "text/plain; charset=utf-8"}, body: x.body, cache: "no-store"});
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || j.ok === false) throw new Error(j.error || ("The bridge answered with error " + r.status));
+      if (j.skipped) return {skipped: j.skipped};
+      n += num(j.entries);
+    }
+    return {entries: n, from: pieces[0].from, to: pieces[pieces.length - 1].to};
+  }
+};
 
 /* ================================================================== */
 /* Sales: read sales invoices, create invoices, post Sales vouchers    */

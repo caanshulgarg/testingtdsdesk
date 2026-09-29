@@ -1408,3 +1408,43 @@ function viewBridgeSettings(){
   return h;
 }
 
+// A day book exported from Tally once and chosen in FinCom also becomes the bridge's copy of the company (1.13.7): sent
+// in pieces of a few megabytes, whole days, never across a month. The bridge then never reads the year from Tally
+// itself; only changes follow. Nothing here asks Tally anything
+const BridgeSeed = {
+  async send(file, onStep){
+    const co = CO();
+    if (!Bridge.on()) return {skipped: "the Tally Bridge is not connected"};
+    const name = (Bridge.openFor(co) || {}).name || co.tallyName || co.name;
+    if (!name) return {skipped: "no Tally company name"};
+    const text = await file.text(), re = /<VOUCHER\b[\s\S]*?<\/VOUCHER>/g, days = new Map();
+    let m;
+    while ((m = re.exec(text))){ const d = (m[0].match(/<DATE>(\d{8})<\/DATE>/) || [])[1]; if (!d) continue; if (!days.has(d)) days.set(d, []); days.get(d).push(m[0]); }
+    const all = Array.from(days.keys()).sort();
+    if (!all.length) return {skipped: "no entries in the file"};
+    const c = Bridge.cfg(), LIMIT = 8e6, pieces = [];
+    let from = all[0], buf = [], size = 0;
+    all.forEach((d, i) => {
+      const part = days.get(d).map(v => "<TALLYMESSAGE>" + v + "</TALLYMESSAGE>").join(""), next = all[i + 1];
+      buf.push(part); size += part.length;
+      if (!next || size >= LIMIT || next.slice(0, 6) !== d.slice(0, 6)){
+        // a piece covers every day from its first to the day before the next piece, so empty days are known as empty
+        const to = !next ? d : (t => t.getFullYear() + String(t.getMonth() + 1).padStart(2, "0") + String(t.getDate()).padStart(2, "0"))(new Date(+next.slice(0, 4), +next.slice(4, 6) - 1, +next.slice(6, 8) - 1));
+        pieces.push({from, to: to.slice(0, 6) === from.slice(0, 6) ? to : (t => t.getFullYear() + String(t.getMonth() + 1).padStart(2, "0") + String(t.getDate()).padStart(2, "0"))(new Date(+from.slice(0, 4), +from.slice(4, 6), 0)), body: "<ENVELOPE><BODY><DATA>" + buf.join("") + "</DATA></BODY></ENVELOPE>"});
+        buf = []; size = 0; if (next) from = next.slice(0, 6) !== d.slice(0, 6) ? next.slice(0, 6) + "01" : next;
+      }
+    });
+    let n = 0;
+    for (let i = 0; i < pieces.length; i++){
+      const x = pieces[i];
+      if (onStep) onStep("Giving the day book to the bridge\u2019s copy (" + (i + 1) + " of " + pieces.length + "); Tally is not asked anything\u2026");
+      const r = await fetch(c.url.replace(/\/+$/, "") + "/seed?company=" + encodeURIComponent(name) + "&from=" + x.from + "&to=" + x.to + Bridge.pinQ(), {method: "POST", headers: {"X-Bridge-Key": c.key, "Content-Type": "text/plain; charset=utf-8"}, body: x.body, cache: "no-store"});
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || j.ok === false) throw new Error(j.error || ("The bridge answered with error " + r.status));
+      if (j.skipped) return {skipped: j.skipped};
+      n += num(j.entries);
+    }
+    return {entries: n, from: pieces[0].from, to: pieces[pieces.length - 1].to};
+  }
+};
+

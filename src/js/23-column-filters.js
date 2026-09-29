@@ -1028,6 +1028,11 @@ function booksChange(t){
       TallyRead.after(b, "after the day book was read");
       await saveBooks();
       toast(res.vouchers.length + " vouchers read, " + Object.keys(b.map).length + " ledgers found. Check the ledgers, then TDS and GST.");
+      // the same file becomes the bridge's copy: it never needs to read the year from Tally itself
+      if (Bridge.on()) BridgeSeed.send(f, m => { b.busy = m; softRender(); }).then(r => { b.busy = ""; render();
+        if (r && r.entries != null) toast("The bridge\u2019s copy now has these " + r.entries + " entries too: from now on only changes are read from Tally.");
+        else if (r && r.skipped) toast("The bridge\u2019s copy was not changed: " + r.skipped);
+      }, e => { b.busy = ""; render(); toast("The day book is in FinCom, but the bridge could not take it: " + ((e && e.message) || e)); });
       S.booksTab = "ledgers"; render();
     }, e => { b.busy = ""; toast("Could not read that file: " + (e && e.message || e)); render(); });
     return true;

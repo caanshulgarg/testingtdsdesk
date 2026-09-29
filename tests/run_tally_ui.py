@@ -53,6 +53,11 @@ try:
         bal = [k for k, a, b in fake_tally.LOG if k == "TDSDeskBalances"]
         ok(len(bal) == 1, "the balances asked once, for the opening only (%d reads)" % len(bal))
         ok(pg.evaluate("S.books.tb.from") == "20250601" and pg.evaluate("Object.keys(S.books.tb.led).length") > 2000, "Tally's balances kept for the period")
+        # the audit is worked out when its tab is opened (not while reading, so the page never waits)
+        pg.evaluate("S.booksTab = 'audit'; render()")
+        for i in range(60):
+            pg.wait_for_timeout(500)
+            if pg.evaluate("!(S.books.stale || {}).audit && !!(S.books.audit || {}).last"): break
         run = pg.evaluate("JSON.stringify({how: S.books.audit.last.how, bal: S.books.audit.last.balances, notes: S.books.audit.last.notes, code: S.books.audit.last.code})")
         ok("after reading from Tally" in run and "Tally's balances" in run, "the audit ran on Tally's own balances: " + run[:160])
         mis = pg.evaluate("() => { const r = MIS.run('20250601', '20250731', 'test'); return JSON.stringify(r.control); }")
@@ -62,6 +67,7 @@ try:
         cdir = _os.path.join(BRUN, "sync", "VMS EVENTS PRIVATE LIMITED (2024-25)"); _os.makedirs(cdir, exist_ok=True)
         json.dump({"ok": True, "company": "VMS EVENTS PRIVATE LIMITED (2024-25)", "from": "20250601", "to": "20250731", "openAsOn": "20250531", "ledgers": led, "keep": True}, open(_os.path.join(cdir, "balances.json"), "w"))
         nb = len([1 for k, a2, b2 in fake_tally.LOG if k == "TDSDeskBalances"])
+        pg.evaluate("S.booksTab = 'import'; render()"); pg.wait_for_timeout(300)
         pg.click('button[data-act="tallyRead"]'); pg.wait_for_timeout(1500)
         for i in range(120):
             pg.wait_for_timeout(1000)
@@ -106,7 +112,11 @@ try:
             if pg.evaluate("S.books && !S.books.busy && S.books.meta.file === \"last night's copy from Tally\""): break
         n2 = pg.evaluate("S.books.vouchers.length")
         ok(n2 == 10240, "the copy read in: %d vouchers, the same as the exported day book (10,240; two vouchers in it have no entries)" % n2)
-        ok("last night's copy" in pg.evaluate("S.books.audit.last.how"), "and the audit ran on it")
+        pg.evaluate("S.booksTab = 'audit'; render()")
+        for i in range(60):
+            pg.wait_for_timeout(500)
+            if pg.evaluate("!(S.books.stale || {}).audit"): break
+        ok("last night's copy" in pg.evaluate("S.books.audit.last.how"), "and the audit ran on it when its tab was opened")
         br.close()
 finally:
     br_p.terminate()
