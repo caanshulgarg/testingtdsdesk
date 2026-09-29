@@ -24,7 +24,7 @@ namespace FinCom.Connector
 {
     public static class App
     {
-        public const string Version = "1.0.4";
+        public const string Version = "1.0.5";
         public const string Name = "FinCom Connector";
         public static readonly bool IsWindows = Environment.OSVersion.Platform == PlatformID.Win32NT;
         public static readonly JavaScriptSerializer Json = new JavaScriptSerializer { MaxJsonLength = 64 * 1024 * 1024 };
@@ -724,11 +724,21 @@ namespace FinCom.Connector
                     k.SetValue("InstallLocation", App.Home);
                 }
                 // a Start menu entry and an icon on the desktop: double-click opens the window (or brings it up)
-                foreach (var sm in Shortcuts())
-                    Run(App.PowerShell, "-NoProfile -ExecutionPolicy Bypass -Command \"$s = (New-Object -ComObject WScript.Shell).CreateShortcut('" + sm.Replace("'", "''") + "'); $s.TargetPath = '" + App.Exe.Replace("'", "''") + "'; $s.WorkingDirectory = '" + App.Home.Replace("'", "''") + "'; $s.IconLocation = '" + App.Exe.Replace("'", "''") + ",0'; $s.Description = 'Keeps the Tally Bridge running for FinCom'; $s.Save()\"");
+                EnsureShortcuts();
             }
             App.Log("Installed " + App.Name + " " + App.Version + " in " + App.Home);
             return App.Exe;
+        }
+        // the Start menu entry and the desktop icon, put back whenever one is missing (each start of the Connector)
+        public static void EnsureShortcuts()
+        {
+            if (!App.IsWindows) return;
+            foreach (var sm in Shortcuts())
+            {
+                if (File.Exists(sm)) continue;
+                Run(App.PowerShell, "-NoProfile -ExecutionPolicy Bypass -Command \"$s = (New-Object -ComObject WScript.Shell).CreateShortcut('" + sm.Replace("'", "''") + "'); $s.TargetPath = '" + App.Exe.Replace("'", "''") + "'; $s.WorkingDirectory = '" + App.Home.Replace("'", "''") + "'; $s.IconLocation = '" + App.Exe.Replace("'", "''") + ",0'; $s.Description = 'Keeps the Tally Bridge running for FinCom'; $s.Save()\"");
+                App.Log(File.Exists(sm) ? "Put the icon at " + sm : "Could not put the icon at " + sm);
+            }
         }
         static string[] Shortcuts()
         {

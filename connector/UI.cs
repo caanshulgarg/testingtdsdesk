@@ -20,7 +20,22 @@ namespace FinCom.Connector
             if (a.Contains("--selftest")) return SelfTest.Run(args);
             if (a.Contains("--verify") && args.Length >= 3) { var ok = Updater.Verify(File.ReadAllBytes(args[1]), Convert.FromBase64String(File.ReadAllText(args[2]).Trim())); Console.WriteLine(ok ? "signature ok" : "signature BAD"); return ok ? 0 : 1; }
             if (a.Contains("--remove")) { Installer.Remove(); if (!a.Contains("--quiet")) MessageBox.Show("FinCom Connector will not start with Windows any more.\n\nThe folder " + App.Home + " (settings and the copies of the books) is left as it is.", App.Name); return 0; }
-            bool first;
+            bool first = true;
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+            // a downloaded Connector installs even while the installed one runs (the installer stops that one)
+            if (!Installer.InPlace() && !a.Contains("--here"))
+            {
+                var r = MessageBox.Show("Install FinCom Connector " + App.Version + " on this computer?\n\nA Connector already installed here is replaced by this one.\n\n" +
+                    "It keeps FinCom's Tally Bridge running, starts with Windows, shows what the bridge is doing and updates it.\n\n" +
+                    "It goes into " + App.Home + " for this Windows user. No admin rights are needed. An older bridge set up here is taken over, with its settings.",
+                    App.Name, MessageBoxButtons.OKCancel, MessageBoxIcon.Information);
+                if (r != DialogResult.OK) return 0;
+                try { Installer.Install(); }
+                catch (Exception e) { MessageBox.Show("Could not install: " + e.Message + "\n\nSend this message to FinCom support.", App.Name, MessageBoxButtons.OK, MessageBoxIcon.Error); return 1; }
+                Process.Start(new ProcessStartInfo(App.Exe, "--installed") { UseShellExecute = false });
+                return 0;
+            }
             single = new Mutex(true, "Local\\FinComConnector", out first);
             if (!first)
             {
@@ -28,21 +43,7 @@ namespace FinCom.Connector
                 try { using (var ev = EventWaitHandle.OpenExisting("Local\\FinComConnectorShow")) ev.Set(); } catch { }
                 return 0;
             }
-            Application.EnableVisualStyles();
-            Application.SetCompatibleTextRenderingDefault(false);
-            if (!Installer.InPlace() && !a.Contains("--here"))
-            {
-                var r = MessageBox.Show("Install FinCom Connector on this computer?\n\n" +
-                    "It keeps FinCom's Tally Bridge running, starts with Windows, shows what the bridge is doing and updates it.\n\n" +
-                    "It goes into " + App.Home + " for this Windows user. No admin rights are needed. An older bridge set up here is taken over, with its settings.",
-                    App.Name, MessageBoxButtons.OKCancel, MessageBoxIcon.Information);
-                if (r != DialogResult.OK) return 0;
-                try { Installer.Install(); }
-                catch (Exception e) { MessageBox.Show("Could not install: " + e.Message + "\n\nSend this message to FinCom support.", App.Name, MessageBoxButtons.OK, MessageBoxIcon.Error); return 1; }
-                single.ReleaseMutex(); single.Dispose();
-                Process.Start(new ProcessStartInfo(App.Exe, "--installed") { UseShellExecute = false });
-                return 0;
-            }
+            new Thread(Installer.EnsureShortcuts) { IsBackground = true }.Start();
             Supervisor.Current.Start();
             var form = new MainForm(!a.Contains("--tray"));
             Application.Run(form);

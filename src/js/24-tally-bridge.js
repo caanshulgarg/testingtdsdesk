@@ -1376,7 +1376,7 @@ function viewBridgeSettings(){
   const cn = '<div class="pane cn-card"><h2>FinCom Connector for Windows <span class="tag">recommended</span></h2>' +
     '<p class="note" style="margin:0 0 10px">One program on the computer with Tally: it installs the bridge, starts with Windows, keeps the bridge running (and starts it again if it stops), ' +
     "shows Tally, the companies kept in step and the cloud copy, checks the computer and says what to do in plain words, updates itself, and sends its log to FinCom support in one click. No admin rights needed.</p>" +
-    '<div class="row"><a class="btn primary" href="assets/connector/FinComConnector.exe" download>Download FinCom Connector</a>' +
+    '<div class="row"><a class="btn primary" href="assets/connector/FinComConnector.exe?v=' + Date.now() + '" download="FinComConnector.exe">Download FinCom Connector</a>' +
     '<span class="note" style="align-self:center">Windows 10 or 11. Until the program is signed, Windows may say \u201cWindows protected your PC\u201d: press More info, then Run anyway.</span></div></div>';
   let h = cn + '<div class="pane"><h2>Tally Bridge</h2><p class="note" style="margin:0 0 12px">Connects FinCom to TallyPrime on this computer: the company open in Tally is followed, ledgers load straight from Tally, and entries are posted without files. Run <b>TDSBridge</b> on the computer where TallyPrime runs, then paste its key here.</p>' +
     '<div class="grid"><label class="f"><span>Bridge address</span><input type="text" data-bridge="url" value="' + esc(c.url) + '"></label>' +
