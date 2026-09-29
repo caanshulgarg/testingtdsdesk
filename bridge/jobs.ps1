@@ -40,9 +40,7 @@ function Start-JobWorker([string]$dir) {
   $psi = New-Object Diagnostics.ProcessStartInfo
   $psi.FileName = $exe
   $psi.Arguments = '-NoLogo -NoProfile -ExecutionPolicy Bypass -File "' + $PSCommandPath + '" -ConfigPath "' + $ConfigPath + '" -Job "' + $dir + '"'
-  $psi.UseShellExecute = $false
-  $psi.CreateNoWindow = $true
-  $psi.RedirectStandardOutput = $false
+  $psi.UseShellExecute = $true; $psi.WindowStyle = [Diagnostics.ProcessWindowStyle]::Hidden     # inherits nothing, not the bridge's port
   return [Diagnostics.Process]::Start($psi).Id
 }
 

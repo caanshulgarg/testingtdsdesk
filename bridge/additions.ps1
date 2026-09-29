@@ -122,7 +122,8 @@ function Invoke-NightlySync {
 
 $script:TaskName = 'TDS Desk - nightly Tally copy'
 function Get-Schedule {
-  $q = & schtasks.exe /Query /TN $script:TaskName /FO LIST 2>$null
+  $q = $null; $eap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+  try { $q = & schtasks.exe /Query /TN $script:TaskName /FO LIST 2>$null } catch { $q = $null } finally { $ErrorActionPreference = $eap }
   if ($LASTEXITCODE -ne 0 -or -not $q) { return [ordered]@{ ok = $true; on = $false } }
   $next = (($q | Where-Object { $_ -match '^Next Run Time' }) -replace '^Next Run Time:\s*', '')
   $last = $null
@@ -131,7 +132,7 @@ function Get-Schedule {
   return [ordered]@{ ok = $true; on = $true; next = $next; last = $last }
 }
 function Set-Schedule([bool]$On, [string]$Time) {
-  if (-not $On) { & schtasks.exe /Delete /TN $script:TaskName /F 2>$null | Out-Null; return (Get-Schedule) }
+  if (-not $On) { $eap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'; try { & schtasks.exe /Delete /TN $script:TaskName /F 2>$null | Out-Null } catch { } finally { $ErrorActionPreference = $eap }; return (Get-Schedule) }
   if ($Time -notmatch '^\d{2}:\d{2}$') { $Time = '02:00' }
   $ps = Join-Path $PSHOME 'powershell.exe'; if (-not (Test-Path $ps)) { $ps = 'powershell.exe' }
   $cmd = '"' + $ps + '" -NoLogo -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "' + $PSCommandPath + '" -Sync'

@@ -24,7 +24,7 @@ namespace FinCom.Connector
 {
     public static class App
     {
-        public const string Version = "1.0.2";
+        public const string Version = "1.0.3";
         public const string Name = "FinCom Connector";
         public static readonly bool IsWindows = Environment.OSVersion.Platform == PlatformID.Win32NT;
         public static readonly JavaScriptSerializer Json = new JavaScriptSerializer { MaxJsonLength = 64 * 1024 * 1024 };
@@ -306,6 +306,7 @@ namespace FinCom.Connector
         public void StartEngine()
         {
             if (!File.Exists(App.Engine)) { State = "blocked"; App.Log("The bridge file is missing: " + App.Engine); return; }
+            if (quickExits > 0 && Bridge.Ping() == null) Sweep(false, "the bridge stopped as soon as it started");
             var args = "-NoLogo -NoProfile -ExecutionPolicy Bypass " + (App.IsWindows ? "-WindowStyle Hidden " : "") + "-File \"" + App.Engine + "\"";
             var psi = new ProcessStartInfo(App.PowerShell, args) { UseShellExecute = false, CreateNoWindow = true, WorkingDirectory = App.Home };
             try
@@ -326,6 +327,25 @@ namespace FinCom.Connector
         }
         // the bridge's own worker (keeping copies in step) is a process of its own: stopped with the bridge, so
         // Quit leaves Tally alone at once. It holds no locks, and carries on where it stopped next time
+        // every leftover bridge program on this computer (a copier or bridge of an older version, a bridge from the old setup):
+        // any of them may hold port 9100 and keep the bridge from starting. Job workers (a posting in progress) only when asked
+        public static void Sweep(bool jobsToo, string why)
+        {
+            if (!App.IsWindows) return;
+            try
+            {
+                var me = Process.GetCurrentProcess().Id;
+                var filter = "($_.Name -eq 'powershell.exe' -or $_.Name -eq 'pwsh.exe') -and $_.CommandLine -like '*TDSBridge.ps1*'" + (jobsToo ? "" : " -and $_.CommandLine -notlike '*-Job *'");
+                var cmd = "-NoProfile -ExecutionPolicy Bypass -Command \"$n = 0; Get-CimInstance Win32_Process | Where-Object { " + filter + " } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue; $n++ }; $n\"";
+                var psi = new ProcessStartInfo(App.PowerShell, cmd) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true };
+                using (var p = Process.Start(psi))
+                {
+                    var o = p.StandardOutput.ReadToEnd(); p.WaitForExit(30000);
+                    int n; if (int.TryParse((o ?? "").Trim(), out n) && n > 0) App.Log("Stopped " + n + " leftover bridge program(s): " + why);
+                }
+            }
+            catch (Exception e) { App.Log("Could not look for leftover bridge programs: " + e.Message); }
+        }
         public static void StopCopier(string why)
         {
             try
@@ -344,6 +364,7 @@ namespace FinCom.Connector
             KillEngine(why);
             // a bridge started some other way (the old setup) answers on the port too: ask it to stop
             if (Bridge.Ping() != null) { try { Bridge.Call("/shutdown", "{}", 3000); } catch { } Thread.Sleep(1500); }
+            Sweep(false, why);
             nextStart = DateTime.MinValue; fails = 3; quickExits = 0;
             Tick();
         }
@@ -540,6 +561,7 @@ namespace FinCom.Connector
             sup.Paused = true; sup.KillEngine("updating to " + want);
             try { if (Bridge.Ping() != null) Bridge.Call("/shutdown", "{}", 3000); } catch { }
             Thread.Sleep(1500);
+            Supervisor.Sweep(true, "updating to " + want);
             File.WriteAllBytes(App.Engine, bytes);
             sup.Paused = false; sup.StartEngine();
             int waitSec; if (!int.TryParse(Environment.GetEnvironmentVariable("FINCOM_UPDATE_WAIT") ?? "", out waitSec)) waitSec = 90;

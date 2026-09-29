@@ -6,7 +6,7 @@ def R(a, b):
     assert base.count(a) == 1, ('anchor', a[:60], base.count(a))
     base = base.replace(a, b)
 import re
-base = re.sub(r"\$BridgeVersion = '[0-9.]+'", "$BridgeVersion = '1.13.2'", base, 1)
+base = re.sub(r"\$BridgeVersion = '[0-9.]+'", "$BridgeVersion = '1.13.3'", base, 1)
 # 1.12.7 (security): the log never holds keys, codes or passwords, and is rotated at 5 MB keeping 5 old copies
 R(r"""function Write-Log([string]$msg) {
   $line = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + '  ' + $msg
@@ -172,6 +172,16 @@ R("""      '/ledgerbalance' {""", """      '/ledgernames' { $result = Get-Ledger
       '/tb' { $result = Get-TrialBalance ([string]$qs['company']) ([string]$qs['to']) ([int]('0' + $qs['port'])) }
       '/ledgerbalance' {""")
 # 1.13.0: keeping FinCom's copy of each open company in step with Tally, in a worker of its own
+R("""Write-Host ''
+Write-Host '  TDS Desk - Tally Bridge' $BridgeVersion -ForegroundColor Green""", """# 1.13.2: the port is not handed down to programs the bridge starts (a worker holding it kept a new bridge from starting)
+if ($IsWindows -or $env:OS -eq 'Windows_NT') {
+  try {
+    Add-Type -Namespace FinCom -Name NoInherit -MemberDefinition '[DllImport("kernel32.dll", SetLastError = true)] public static extern bool SetHandleInformation(IntPtr h, uint mask, uint flags);' -ErrorAction Stop
+    $null = [FinCom.NoInherit]::SetHandleInformation($listener.Server.Handle, 1, 0)
+  } catch { }
+}
+Write-Host ''
+Write-Host '  TDS Desk - Tally Bridge' $BridgeVersion -ForegroundColor Green""")
 R("[switch]$Sync,", "[switch]$Sync,\n  [switch]$Keep,")
 R("  SyncCompanies   = @()\n", "  SyncCompanies   = @()\n  KeepInStep      = $null\n  CloudUrl        = ''\n  CloudKey        = ''\n")
 R("if ($Sync) {\n  $r = Invoke-NightlySync", "if ($Keep) {\n  try { Invoke-KeepWorker } catch { Write-Log ('Keeping copies in step stopped: ' + $_.Exception.Message) }\n  exit 0\n}\nif ($Sync) {\n  $r = Invoke-NightlySync")

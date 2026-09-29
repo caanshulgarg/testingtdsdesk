@@ -27,7 +27,7 @@ trap {
   try { Stop-Transcript | Out-Null } catch { }
   break
 }
-$BridgeVersion = '1.13.2'
+$BridgeVersion = '1.13.3'
 
 # ------------------------------------------------------------------ settings
 function New-BridgeKey {
@@ -1181,7 +1181,8 @@ function Invoke-NightlySync {
 
 $script:TaskName = 'TDS Desk - nightly Tally copy'
 function Get-Schedule {
-  $q = & schtasks.exe /Query /TN $script:TaskName /FO LIST 2>$null
+  $q = $null; $eap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+  try { $q = & schtasks.exe /Query /TN $script:TaskName /FO LIST 2>$null } catch { $q = $null } finally { $ErrorActionPreference = $eap }
   if ($LASTEXITCODE -ne 0 -or -not $q) { return [ordered]@{ ok = $true; on = $false } }
   $next = (($q | Where-Object { $_ -match '^Next Run Time' }) -replace '^Next Run Time:\s*', '')
   $last = $null
@@ -1190,7 +1191,7 @@ function Get-Schedule {
   return [ordered]@{ ok = $true; on = $true; next = $next; last = $last }
 }
 function Set-Schedule([bool]$On, [string]$Time) {
-  if (-not $On) { & schtasks.exe /Delete /TN $script:TaskName /F 2>$null | Out-Null; return (Get-Schedule) }
+  if (-not $On) { $eap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'; try { & schtasks.exe /Delete /TN $script:TaskName /F 2>$null | Out-Null } catch { } finally { $ErrorActionPreference = $eap }; return (Get-Schedule) }
   if ($Time -notmatch '^\d{2}:\d{2}$') { $Time = '02:00' }
   $ps = Join-Path $PSHOME 'powershell.exe'; if (-not (Test-Path $ps)) { $ps = 'powershell.exe' }
   $cmd = '"' + $ps + '" -NoLogo -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "' + $PSCommandPath + '" -Sync'
@@ -1314,9 +1315,7 @@ function Start-JobWorker([string]$dir) {
   $psi = New-Object Diagnostics.ProcessStartInfo
   $psi.FileName = $exe
   $psi.Arguments = '-NoLogo -NoProfile -ExecutionPolicy Bypass -File "' + $PSCommandPath + '" -ConfigPath "' + $ConfigPath + '" -Job "' + $dir + '"'
-  $psi.UseShellExecute = $false
-  $psi.CreateNoWindow = $true
-  $psi.RedirectStandardOutput = $false
+  $psi.UseShellExecute = $true; $psi.WindowStyle = [Diagnostics.ProcessWindowStyle]::Hidden     # inherits nothing, not the bridge's port
   return [Diagnostics.Process]::Start($psi).Id
 }
 
@@ -2426,7 +2425,9 @@ function Start-KeepIfNeeded {
   $psi = New-Object Diagnostics.ProcessStartInfo
   $psi.FileName = $exe
   $psi.Arguments = '-NoLogo -NoProfile -ExecutionPolicy Bypass -File "' + $PSCommandPath + '" -ConfigPath "' + $ConfigPath + '" -Keep'
-  $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true
+  # started through the shell, so it inherits nothing from the bridge: above all not the bridge's port, which would
+  # keep a new bridge (an update, a restart) from starting while this worker runs
+  $psi.UseShellExecute = $true; $psi.WindowStyle = [Diagnostics.ProcessWindowStyle]::Hidden
   $pr = [Diagnostics.Process]::Start($psi)
   New-Item -ItemType Directory -Force -Path (Get-SyncDir) | Out-Null
   [IO.File]::WriteAllText($lock, [string]$pr.Id)
@@ -2693,6 +2694,13 @@ try { $listener.Start() } catch {
   Write-Host 'in tds-bridge.config.json and use the new address in FinCom.'
   try { Stop-Transcript | Out-Null } catch { }
   exit 1
+}
+# 1.13.2: the port is not handed down to programs the bridge starts (a worker holding it kept a new bridge from starting)
+if ($IsWindows -or $env:OS -eq 'Windows_NT') {
+  try {
+    Add-Type -Namespace FinCom -Name NoInherit -MemberDefinition '[DllImport("kernel32.dll", SetLastError = true)] public static extern bool SetHandleInformation(IntPtr h, uint mask, uint flags);' -ErrorAction Stop
+    $null = [FinCom.NoInherit]::SetHandleInformation($listener.Server.Handle, 1, 0)
+  } catch { }
 }
 Write-Host ''
 Write-Host '  FinCom - Tally Bridge' $BridgeVersion -ForegroundColor Green
