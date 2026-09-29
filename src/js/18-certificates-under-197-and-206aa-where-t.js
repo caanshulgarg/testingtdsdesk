@@ -115,6 +115,15 @@ async function saveBooks(opts){
   await Books.save(b.cid, keep);
   if (!(opts && opts.fromCloud) && typeof BookSync === "object") BookSync.schedule(b.cid);
 }
+// filed GST returns whose documents changed in Tally since: on every Books tab until the amendments are reported
+function gstDriftNote(b){
+  if (b.gstDrift === undefined){ try { b.gstDrift = GSTAmend.drift(); } catch (e){ b.gstDrift = []; } }
+  const d = b.gstDrift || [];
+  if (!d.length) return "";
+  return '<div class="bk-warn" role="status">' + d.slice(0, 3).map(x => "<p>" + esc(GSTAmend.driftLine(x)) + "</p>").join("") +
+    (d.length > 3 ? "<p>" + (d.length - 3) + " more filed return" + (d.length > 4 ? "s" : "") + " changed.</p>" : "") +
+    '<button class="btn small" data-bookstab="gst" data-gstpart="amend">See the amendments</button></div>';
+}
 function viewBooks(){
   const co = CO();
   if (!S.books || S.books.cid !== co.id){ openBooks(co.id); return '<p class="note">Opening the books…</p>'; }
@@ -126,7 +135,7 @@ function viewBooks(){
   }
   let h = '<nav class="sbar" aria-label="Books">' + [["import", "From Tally", n || null], ["ledgers", "Tally ledgers", n ? (LedMaster.pending(b).length ? LedMaster.pending(b).length + " to confirm" : "\u2713") : null], ["tds", "TDS", n ? TDS.rows().length : ((b.salary || []).length || null)], ["gst", "GST", null], ["mis", "MIS", null], ["fs", "Accounts", null], ["audit", "Audit", b.audit && b.audit.last ? (b.audit.last.findings.filter(f => f.sev === "high" && Audit.status(f.id).s === "open").length || null) : null]]
     .map(([id, label, c]) => '<button data-bookstab="' + id + '" aria-selected="' + (tab === id) + '">' + label + (c == null ? "" : ' <span class="sbar-n">' + c + "</span>") + "</button>").join("") + "</nav>";
-  h += BookSync.note(co.id, tab);
+  h += BookSync.note(co.id, tab) + gstDriftNote(b);
   if (b.busy) h += busyCard("Reading the books…", b.busy, 0, 0);
   if (tab === "import") h += viewBooksImport(b);
   else if (!n && tab === "gst") h += viewBooksGst(b);
@@ -175,6 +184,28 @@ const TallyRead = {
     b.tb = {from, to, at: new Date().toISOString(), led};
     Object.entries(led).forEach(([n, x]) => { if (x.parent) (b.under = b.under || {})[n] = (b.under[n] || x.parent); });
   },
+  // after the books changed (read from Tally, changes brought in from the kept copy or the cloud, a day book file):
+  // every section follows. Screens work from the entries as they are; audit and MIS are worked out again for the
+  // period they last covered. A filed GST return is never changed: when its documents changed in Tally, a warning
+  // names the return (and its ARN) and the return the changes go in as amendments
+  after(b, why){
+    b.reco = null; if (typeof GSTR === "object") GSTR._carry = null;
+    if (!(b.vouchers || []).length) return;              // a very large company answered from the cloud's totals: nothing to work on here
+    // audit and MIS: at once, then at most every 3 minutes while Tally keeps changing (a big company's audit takes a moment)
+    this.soon("audit", b, () => { const L = (b.audit || {}).last; if (Audit.cfg(b).freq !== "off"){ const r = L && L.from ? L : Audit.defaultRange(b); Audit.run(r.from, r.to, why); } });
+    this.soon("mis", b, () => { const H = ((b.mis || {}).history || [])[0]; if (H && H.from) MIS.run(H.from, H.to, why); });
+    let d = []; try { d = GSTAmend.drift(); } catch (e){}
+    const seen = new Set((b.gstDrift || []).map(x => x.ym + "|" + x.gstin + "|" + x.n));
+    b.gstDrift = d;
+    const fresh = d.filter(x => !seen.has(x.ym + "|" + x.gstin + "|" + x.n));
+    if (fresh.length) toast(GSTAmend.driftLine(fresh[0]) + (fresh.length > 1 ? " " + (fresh.length - 1) + " more filed return" + (fresh.length > 2 ? "s" : "") + " changed: see GST → Amendments." : ""));
+  },
+  soon(k, b, fn){
+    const t = this._soon = this._soon || {}, x = t[k] = t[k] || {at: 0}, wait = 180000 - (Date.now() - x.at);
+    const go = () => { x.at = Date.now(); x.timer = 0; if (S.books !== b) return; try { fn(); } catch (e){} };
+    if (wait <= 0 || x.cid !== b.cid){ x.cid = b.cid; clearTimeout(x.timer); go(); return; }
+    if (!x.timer) x.timer = setTimeout(() => { go(); saveBooks(); render(); }, wait);
+  },
   // read a period: each month's day book, then the balances
   async read(from, to, how){
     const b = S.books, co = CO(), name = Bridge.openFor(co).name, q = "?company=" + encodeURIComponent(name) + Bridge.pinQ();
@@ -193,8 +224,8 @@ const TallyRead = {
     this.balances(b, j, j.from || from, j.to || to);
     b.map = Books.mapLedgers(b.vouchers, b.map); LedMaster.refresh(b);
     b.meta.at = new Date().toISOString(); b.meta.file = how === "copy" ? "last night's copy from Tally" : "read from Tally";
-    b.busy = ""; b.reco = null;
-    if (Audit.cfg(b).freq !== "off"){ try { Audit.run(j.from || from, j.to || to, how === "copy" ? "after last night's copy was read" : "after reading from Tally"); } catch (e){} }
+    b.busy = "";
+    this.after(b, how === "copy" ? "after last night's copy was read" : "after reading from Tally");
     await saveBooks();
     return b.vouchers.length;
   }

@@ -1024,8 +1024,8 @@ function booksChange(t){
       const bad = notThisClient((res.meta || {}).gstins);
       if (bad.length){ b.busy = ""; render(); askConfirm({title: "This day book is not this client\u2019s", ok: "Close", body: '<p class="note">' + esc(panRefusal("The day book " + f.name, bad)) + " Choose the day book exported from this client\u2019s company in Tally, or correct the client\u2019s GSTIN and PAN in Client setup.</p>"}); return; }
       b.vouchers = res.vouchers; b.meta = Object.assign(res.meta, {at: new Date().toISOString(), file: f.name});
-      b.map = Books.mapLedgers(res.vouchers, b.map); LedMaster.refresh(b); b.reco = null; b.busy = "";
-      if (Audit.cfg(b).freq !== "off") try { const r = Audit.defaultRange(b); Audit.run(r.from, r.to, "after the day book was read"); } catch (e){}
+      b.map = Books.mapLedgers(res.vouchers, b.map); LedMaster.refresh(b); b.busy = "";
+      TallyRead.after(b, "after the day book was read");
       await saveBooks();
       toast(res.vouchers.length + " vouchers read, " + Object.keys(b.map).length + " ledgers found. Check the ledgers, then TDS and GST.");
       S.booksTab = "ledgers"; render();

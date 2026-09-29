@@ -105,6 +105,18 @@ try:
         pg.evaluate("LK.autoFresh(true)"); wait_for(pg, "!S.lkFr.busy", 60); pg.wait_for_timeout(500)
         after = pg.evaluate("(g) => { const v = S.books.vouchers.find(x => x.id === g); return v ? v.ent.map(e => e.a) : null; }", g_edit)
         ok(before and after and abs(after[0] - 2 * before[0]) < 0.01, "an entry changed in Tally reaches FinCom: %s -> %s" % (before[:1] if before else None, after[:1] if after else None))
+        # ---------- on any screen, with nothing pressed: the change arrives by itself and the sections follow
+        tab0 = pg.evaluate("(() => { const t = S.booksTab; S.booksTab = 'mis'; render(); return t; })()")
+        g2 = re.search(r"<GUID>([^<]*)</GUID>", march[7][1]).group(1)
+        b2 = pg.evaluate("(g) => { const v = S.books.vouchers.find(x => x.id === g); return v ? v.ent.map(e => e.a) : null; }", g2)
+        m2 = man()
+        fake_tally.edit_amount(g2, 3)
+        until(lambda: (man() or {}).get("at", "") > m2["at"], 90)
+        pg.wait_for_function("(g) => { const v = S.books.vouchers.find(x => x.id === g); return v && Math.abs(v.ent[0].a - 3 * %r) < 0.01; }" % b2[0], arg=g2, timeout=180000)
+        pg.wait_for_function("() => (((S.books.audit || {}).last || {}).how || '').indexOf('after changes in Tally were brought in') >= 0 && Date.parse(S.books.audit.last.at) > Date.now() - 300000", timeout=240000)
+        how = pg.evaluate("((S.books.audit || {}).last || {}).how || ''")
+        ok("after changes in Tally were brought in" in how, "with MIS open and nothing pressed, the change arrived by itself and the audit was worked out again: " + how)
+        pg.evaluate("(t) => { S.booksTab = t; render(); }", tab0); pg.wait_for_selector("#lkAsk")
         # ---------- a new entry
         g_new = "keep-test-new-0001"
         fake_tally.add_copy(g_edit, "20260315", g_new)

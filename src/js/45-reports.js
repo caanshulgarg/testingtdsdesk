@@ -66,7 +66,7 @@ const RPT = {
   },
   data(){
     const b = S.books, R = this.range(); if (!R) return null;
-    const key = [b.cid, R.from, R.to, (b.vouchers || []).length, b.mapV || 0, ((b.audit || {}).last || {}).at || "", (b.tb || {}).at || "", JSON.stringify(b.gstFiled || {}).length].join("|");
+    const key = [b.cid, R.from, R.to, (b.vouchers || []).length, (b.meta || {}).at || "", b.mapV || 0, ((b.audit || {}).last || {}).at || "", (b.tb || {}).at || "", JSON.stringify(b.gstFiled || {}).length].join("|");
     if (this._d && this._d.key === key) return this._d.d;
     const months = MIS.monthsOf(R.from, R.to), pl = MIS.pl(R.from, R.to);
     const bal = Audit.balances(R.from, R.to), balTo = bal.ok ? bal.at(R.to) : null;

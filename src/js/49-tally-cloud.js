@@ -140,7 +140,8 @@ const TCloud = {
       if (b.tb && String(b.tb.to) < to) b.tb.to = to;
       b.map = Books.mapLedgers(b.vouchers || [], b.map); try { LedMaster.refresh(b); } catch (e){}
       meta.cloud = {book: bk.book, company: bk.company, ledgersAt: bk.ledgersAt, days: Object.assign({}, known, days), at: new Date().toISOString()};
-      meta.at = meta.cloud.at; meta.keep = true; meta.file = "the copy in FinCom's cloud"; meta.from = meta.from && meta.from < from ? meta.from : from; b.reco = null;
+      meta.at = meta.cloud.at; meta.keep = true; meta.file = "the copy in FinCom's cloud"; meta.from = meta.from && meta.from < from ? meta.from : from;
+      TallyRead.after(b, "after changes came from the cloud copy");
       LK.cache = {}; await saveBooks();
     } catch (e){ toast("Could not bring in the cloud copy: " + ((e && e.message) || e)); }
     f.busy = ""; render();

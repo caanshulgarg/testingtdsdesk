@@ -1031,7 +1031,7 @@ document.addEventListener("click", ev => {
   if (S.view === "company" && S.tab === "sales" && salesClick(t)) return;
   if (t.id === "modal"){ if (ev.target.id === "modal") closeSwitcher(); return; }
   if (t.dataset.open){ openCompany(t.dataset.open); return; }
-  if (t.dataset.bookstab){ S.booksTab = t.dataset.bookstab; render(); return; }
+  if (t.dataset.bookstab){ S.booksTab = t.dataset.bookstab; if (t.dataset.gstpart) S.gstPart = t.dataset.gstpart; render(); return; }
   if (t.dataset.gstpart){ S.gstPart = t.dataset.gstpart; render(); return; }
   if (t.dataset.itctcat !== undefined){ S.itctCat = S.itctCat === t.dataset.itctcat ? "" : t.dataset.itctcat; render(); return; }
   if (t.dataset.inregchip !== undefined){ S.inregF = S.inregF === t.dataset.inregchip ? "" : t.dataset.inregchip; render(); return; }
@@ -1570,7 +1570,12 @@ document.addEventListener("click", ev => {
       break;
     }
     case "tdsExcel": TDS.toExcel(S.tdsFy || "", S.tdsQ || "").then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break;
-    case "gstJson": if (!ledgersReady("gst")) break; LedMaster.snap(S.books, "GSTR-1 " + GSTR.label(S.gstYm || "") + (S.gstReg ? " " + S.gstReg : "")); saveBooks(); GSTR.toJsonFile(S.gstYm || "", S.gstReg || "").then(j => toast("GSTR-1 JSON for " + j.fp + " downloaded. Check it on the portal's offline tool before filing."), e => toast("Could not build the file: " + (e && e.message))); break;
+    case "gstJson": if (!ledgersReady("gst")) break;
+      // a month already filed: its return is not made again from the books as they are now
+      { const ym = S.gstYm || "", reg = S.gstReg || "", pr = reg && ym ? GSTAmend.proof(ym, reg) : null;
+        if (pr){ askConfirm({title: "GSTR-1 for " + GSTR.label(ym) + " is already filed", ok: "Close", body: '<p class="note">It was filed' + (pr.arn ? " with ARN " + esc(pr.arn) : "") + (pr.on ? " on " + esc(fmtDate(pr.on)) : "") +
+          ". A return made again from the books now would be wrong: the filed return stays as it is, and whatever was added, changed or deleted in Tally since goes as amendments in " + esc(GSTR.label(GSTAmend.nextOpen(ym, reg))) + "’s GSTR-1 (GST → Amendments).</p>"}); break; } }
+      LedMaster.snap(S.books, "GSTR-1 " + GSTR.label(S.gstYm || "") + (S.gstReg ? " " + S.gstReg : "")); saveBooks(); GSTR.toJsonFile(S.gstYm || "", S.gstReg || "").then(j => toast("GSTR-1 JSON for " + j.fp + " downloaded. Check it on the portal's offline tool before filing."), e => toast("Could not build the file: " + (e && e.message))); break;
     case "gst3bJson": { if (!ledgersReady("gst")) break; LedMaster.snap(S.books, "GSTR-3B " + GSTR.label(S.gstYm || "") + (S.gstReg ? " " + S.gstReg : "")); saveBooks();
       const j = GSTR.threeBJson(S.gstYm || "", S.gstReg || "");
       saveFile("GSTR3B_" + (j.gstin || "") + "_" + j.ret_period + ".json", new Blob([JSON.stringify(j)], {type: "application/json"}));

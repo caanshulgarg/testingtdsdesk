@@ -20,8 +20,10 @@ const GSTAmend = {
     if (!/^\d{2}[A-Z0-9]{13}$/.test(gstin) || !/^\d{6}$/.test(fp)) throw new Error("This does not look like a GSTR-1 JSON: it needs a GSTIN and a period (fp).");
     b.filed = b.filed || {};
     const k = gstin + "|" + fp, old = b.filed[k];
-    // a copy from the portal is not replaced by a later download from here
-    if (old && old.source === "portal" && source === "downloaded") return old;
+    // a copy from the portal is not replaced by a later download from here; nor is a copy of a return known to be filed
+    // (a filing date, or its ARN): it is what later amendments are measured against, and a download from the books
+    // as they are now would hide every change made in Tally since
+    if (old && source === "downloaded" && (old.source === "portal" || (!old.notFiled && this.proof(old.ym, gstin.slice(0, 2))))) return old;
     b.filed[k] = Object.assign({gstin, fp, ym: this.ymOf(fp), source, at: new Date().toISOString(), json, notFiled: false}, extra || {});
     return b.filed[k];
   },
@@ -167,6 +169,48 @@ const GSTAmend = {
     });
     res.rows.sort((a, c) => a.P.localeCompare(c.P) || a.kind.localeCompare(c.kind) || String(a.now ? a.now.num : a.was.num).localeCompare(String(c.now ? c.now.num : c.was.num)));
     return res;
+  },
+  // proof that a month's GSTR-1 (or IFF) was filed: its filing date, and its ARN when the portal's PDF is kept
+  proof(ym, reg){
+    const r = typeof GSTF === "object" ? GSTF.peek(ym, reg) : {};
+    const v = typeof GSTV === "object" ? (GSTV.copies(reg, "r1", ym)[0] || GSTV.copies(reg, "iff", ym)[0]) : null;
+    const on = r.r1 || r.iff || (v && v.arnDate) || "", arn = (v && v.arn) || "";
+    return on || arn ? {on, arn} : null;
+  },
+  // the first GSTR-1 still to be filed after a month: where changes to earlier months are reported
+  nextOpen(ym, reg){
+    const isFiled = m => !!this.proof(m, reg) || this.filed(reg).some(f => f.ym === m && !f.notFiled);
+    let m = GSTR.nextYm(ym);
+    for (let i = 0; i < 24 && isFiled(m); i++) m = GSTR.nextYm(m);
+    return m;
+  },
+  // filed returns whose documents have changed in the books since (added, changed or deleted in Tally after filing):
+  // the filed return stays as it is; the changes are the amendments waiting for the next return. An amendment already
+  // reported in a later return, or one you chose to leave, is not counted
+  drift(){
+    const out = [], b = S.books || {}, m = b.meta || {};
+    if (!(b.vouchers || []).length || !m.from || !m.to) return out;
+    // only months the books hold whole: a month outside them is not "changed", just not brought in
+    const inBooks = ym => String(m.from) <= ym + "01" && String(m.to).slice(0, 6) >= ym;
+    const regs = new Set(Object.values(b.filed || {}).filter(f => !f.notFiled).map(f => String(f.gstin).slice(0, 2)));
+    regs.forEach(reg => {
+      const mine = this.filed(reg).filter(f => !f.notFiled), last = mine.map(f => f.ym).sort().pop();
+      const N = this.nextOpen(last, reg);
+      let p = null; try { p = this.pending(N, reg); } catch (e){ return; }
+      const by = {};
+      p.rows.filter(r => r.act !== "skip" && inBooks(r.P)).forEach(r => { by[r.P] = (by[r.P] || 0) + 1; });
+      Object.keys(by).forEach(P => {
+        const f = mine.find(x => x.ym === P) || mine[0], pr = this.proof(P, reg) || {};
+        out.push({ym: P, reg, gstin: f.gstin, n: by[P], arn: pr.arn || "", on: pr.on || "", next: N});
+      });
+    });
+    return out.sort((a, c) => a.ym.localeCompare(c.ym));
+  },
+  // one line for a warning
+  driftLine(d){
+    return "GSTR-1 for " + GSTR.label(d.ym) + " (" + d.gstin + ") was filed" + (d.arn ? " with ARN " + d.arn : "") + (d.on ? " on " + fmtDate(d.on) : "") +
+      ". " + d.n + " document" + (d.n === 1 ? " has" : "s have") + " been added, changed or deleted in Tally since. The filed return is not changed: " +
+      "the change" + (d.n === 1 ? " goes" : "s go") + " as amendments in " + GSTR.label(d.next) + "’s GSTR-1 (GST → Amendments).";
   },
   // the month's own return: the books now against the copy filed for it
   check(ym, reg){

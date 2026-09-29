@@ -39,7 +39,7 @@ const FC = {
   tn(){ const n = typeof LK === "object" ? LK.names : null; return n && n.cid === S.coId ? n : null; },
   ledgers(){
     const T = this.tn(); if (T) return T.leds;
-    const b = S.books || {}, key = (b.vouchers || []).length + "|" + Object.keys(b.under || {}).length + "|" + Object.keys(b.ledInfo || {}).length + "|" + ((b.tb || {}).at || "");
+    const b = S.books || {}, key = (b.vouchers || []).length + "|" + ((b.meta || {}).at || "") + "|" + Object.keys(b.under || {}).length + "|" + Object.keys(b.ledInfo || {}).length + "|" + ((b.tb || {}).at || "");
     if (this._led && this._led.key === key && this._led.cid === b.cid) return this._led.list;
     const s = new Set(Object.keys(b.under || {}).concat(Object.keys(b.ledInfo || {}), Object.keys(b.map || {}), Object.keys((b.tb || {}).led || {})));
     const list = Array.from(s).filter(Boolean).sort((a, c) => a.localeCompare(c));
@@ -359,27 +359,31 @@ const LK = {
   // on opening Look up, Reports or Letters: if the bridge made a newer copy last night, bring it in (read from the bridge's
   // folder; Tally is not asked anything)
   // the copy in FinCom's cloud: for a computer without the bridge, or a bridge that does not keep this company
-  async cloudFresh(force){
+  async cloudFresh(force, quiet){
     const f = this.fr();
     if (!TCloud.on() || f.busy) return;
     if (!force && Date.now() - (f.cat || 0) < 60000) return;
     f.cat = Date.now();
+    const at = ((S.books || {}).meta || {}).at;
     try { await TCloud.status(S.coId, force); if (TCloud.has(S.coId)) await TCloud.load(force); } catch (e){}
-    render();
+    if (!quiet || at !== ((S.books || {}).meta || {}).at) render();
   },
-  async autoFresh(force){
+  // quiet: the once-a-minute look from any screen; the page is drawn again only when the books changed
+  async autoFresh(force, quiet){
     const f = this.fr(), co = CO();
     if (f.busy) return;
-    if (!this.live()){ await this.cloudFresh(force); return; }
+    if (!this.live()){ await this.cloudFresh(force, quiet); return; }
     const keep = f.man && f.man.keep;
     if (!force && Date.now() - f.at < (keep ? 60000 : 15 * 60000)) return;
     f.at = Date.now();
     const q = "?company=" + encodeURIComponent(this.tname()) + Bridge.pinQ();
     try { f.man = await Bridge.call("/synced" + q, null, 30000); } catch (e){ f.man = {error: (e && e.message) || String(e)}; }
-    try { f.keep = await Bridge.call("/keep" + q, null, 30000); } catch (e){ f.keep = null; }
-    try { f.sch = await Bridge.call("/schedule", null, 30000); } catch (e){ f.sch = null; }
+    if (!quiet){
+      try { f.keep = await Bridge.call("/keep" + q, null, 30000); } catch (e){ f.keep = null; }
+      try { f.sch = await Bridge.call("/schedule", null, 30000); } catch (e){ f.sch = null; }
+    }
     const b = S.books, m = f.man || {}, meta = (b && b.meta) || {};
-    if (!(b && b.cid === co.id && m.ok && !m.none && m.at && m.from)){ f.at = 0; await this.cloudFresh(force); render(); return; }
+    if (!(b && b.cid === co.id && m.ok && !m.none && m.at && m.from)){ f.at = 0; await this.cloudFresh(force, quiet); if (!quiet) render(); return; }
     if (m.keep){
       // kept in step by the bridge: only the months that changed since FinCom last looked
       const known = meta.monthsAt || {}, todo = [].concat(m.months || []).filter(x => x.at && (!known[x.ym] || x.at > known[x.ym]) && x.from <= m.to);
@@ -400,12 +404,14 @@ const LK = {
           }
           if (b.tb && String(b.tb.to) < m.to) b.tb.to = m.to;
           b.map = Books.mapLedgers(b.vouchers || [], b.map); try { LedMaster.refresh(b); } catch (e){}
-          b.meta.at = new Date().toISOString(); b.meta.copyAt = m.at; b.meta.copyTo = m.to; b.meta.keep = true; b.meta.file = "kept in step with Tally by the bridge"; b.reco = null;
+          b.meta.at = new Date().toISOString(); b.meta.copyAt = m.at; b.meta.copyTo = m.to; b.meta.keep = true; b.meta.file = "kept in step with Tally by the bridge";
+          TallyRead.after(b, "after changes in Tally were brought in");
           this.cache = {}; await saveBooks();
         } catch (e){ toast("Could not bring in the copy: " + ((e && e.message) || e)); }
         f.busy = "";
-      }
-      render(); return;
+        render();
+      } else if (!quiet) render();
+      return;
     }
     if ((!meta.copyAt || m.at > meta.copyAt) && (!meta.to || m.to >= meta.to || !meta.copyAt)){
       f.busy = "Bringing in last night\u2019s copy of the books (made " + String(m.at).replace("T", " ").slice(0, 16) + "); Tally is not asked anything\u2026"; render();
@@ -446,7 +452,8 @@ const LK = {
       TallyRead.merge(b, res, start, to);
       if (b.tb && b.tb.from <= start && String(b.tb.to) < to) b.tb.to = to;     // the opening stays; later balances follow from the entries
       b.map = Books.mapLedgers(b.vouchers, b.map); try { LedMaster.refresh(b); } catch (e){}
-      b.meta.at = new Date().toISOString(); b.meta.todayAt = b.meta.at; b.reco = null;
+      b.meta.at = new Date().toISOString(); b.meta.todayAt = b.meta.at;
+      TallyRead.after(b, "after today's entries were read from Tally");
       await saveBooks();
       this.cache = {}; toast(res.vouchers.length + " entries from " + FC.span(start, to) + " brought in.");
     } catch (e){ toast("Could not read Tally: " + ((e && e.message) || e)); }
@@ -751,3 +758,7 @@ if (typeof document !== "undefined"){
     if (e.key === "Enter" && t && t.dataset && t.dataset.lkopen){ e.preventDefault(); t.click(); }
   });
 }
+
+// the books follow Tally on every screen, not only while Look up is open: once a minute, quietly (only the bridge's
+// copy or the cloud is asked; Tally is not)
+setInterval(() => { try { if (S.books && S.books.cid === S.coId && !document.hidden && typeof LK === "object") LK.autoFresh(false, true); } catch (e){} }, 60000);

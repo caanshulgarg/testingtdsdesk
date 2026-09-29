@@ -1127,7 +1127,7 @@ header.top .tbar-title{align-items:center}
 .lk-fresh .note{flex:1 1 320px}
 .fc-empty .lk-fresh{text-align:left;margin-top:12px}
 </style>
-<style>.is-test .side-brand::after{content:"TEST";display:block;margin-top:4px;font-size:11px;letter-spacing:.14em;color:#E9A06A}.is-test header.top{box-shadow:inset 0 3px 0 #E2761B}body.is-test::after{content:"TESTING SITE · not for real client work · post only to a ZZ TEST company in Tally";position:fixed;left:0;right:0;bottom:0;z-index:70;background:#E2761B;color:#fff;font-size:12.5px;text-align:center;padding:3px 8px;letter-spacing:.04em;pointer-events:none}.is-test .actionbar{bottom:22px}.is-test #app{padding-bottom:34px}</style><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-JUZRiA/pD/Q1MSIv1WkOX00eklOKXLcOHszD3zr3UBc=' 'sha256-eEYyXQkJZT1QuqQrRSfrVKbmfGPijoK0tNDeqrM6pY0=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+<style>.is-test .side-brand::after{content:"TEST";display:block;margin-top:4px;font-size:11px;letter-spacing:.14em;color:#E9A06A}.is-test header.top{box-shadow:inset 0 3px 0 #E2761B}body.is-test::after{content:"TESTING SITE · not for real client work · post only to a ZZ TEST company in Tally";position:fixed;left:0;right:0;bottom:0;z-index:70;background:#E2761B;color:#fff;font-size:12.5px;text-align:center;padding:3px 8px;letter-spacing:.04em;pointer-events:none}.is-test .actionbar{bottom:22px}.is-test #app{padding-bottom:34px}</style><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-JUZRiA/pD/Q1MSIv1WkOX00eklOKXLcOHszD3zr3UBc=' 'sha256-5qDapinbu9QzbUgEu0lzwI6FkRwjhRcv1sQ6/Ud1qwI=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
 </head>
 <body class="is-test">
 <a class="skip" id="skipLink" href="#app">Skip to the work</a>
@@ -1202,7 +1202,7 @@ const DEFAULT_FIRM = {firmName:"", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "TEST · 29 Sep 2026 · build 178 (the copier starts again; a busy bridge is not stopped; bridge 1.13.4)";
+const APP_VERSION = "TEST · 29 Sep 2026 · build 179 (every section follows Tally by itself; filed GST returns are never changed; bridge 1.13.4)";
 // the Tally Bridge setup file's fingerprint, put in by build.py: a new setup file is never served from an old cache
 const BRIDGE_SETUP_SHA = "a1b577c669cdb67d";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -8369,8 +8369,10 @@ const GSTAmend = {
     if (!/^\d{2}[A-Z0-9]{13}$/.test(gstin) || !/^\d{6}$/.test(fp)) throw new Error("This does not look like a GSTR-1 JSON: it needs a GSTIN and a period (fp).");
     b.filed = b.filed || {};
     const k = gstin + "|" + fp, old = b.filed[k];
-    // a copy from the portal is not replaced by a later download from here
-    if (old && old.source === "portal" && source === "downloaded") return old;
+    // a copy from the portal is not replaced by a later download from here; nor is a copy of a return known to be filed
+    // (a filing date, or its ARN): it is what later amendments are measured against, and a download from the books
+    // as they are now would hide every change made in Tally since
+    if (old && source === "downloaded" && (old.source === "portal" || (!old.notFiled && this.proof(old.ym, gstin.slice(0, 2))))) return old;
     b.filed[k] = Object.assign({gstin, fp, ym: this.ymOf(fp), source, at: new Date().toISOString(), json, notFiled: false}, extra || {});
     return b.filed[k];
   },
@@ -8516,6 +8518,48 @@ const GSTAmend = {
     });
     res.rows.sort((a, c) => a.P.localeCompare(c.P) || a.kind.localeCompare(c.kind) || String(a.now ? a.now.num : a.was.num).localeCompare(String(c.now ? c.now.num : c.was.num)));
     return res;
+  },
+  // proof that a month's GSTR-1 (or IFF) was filed: its filing date, and its ARN when the portal's PDF is kept
+  proof(ym, reg){
+    const r = typeof GSTF === "object" ? GSTF.peek(ym, reg) : {};
+    const v = typeof GSTV === "object" ? (GSTV.copies(reg, "r1", ym)[0] || GSTV.copies(reg, "iff", ym)[0]) : null;
+    const on = r.r1 || r.iff || (v && v.arnDate) || "", arn = (v && v.arn) || "";
+    return on || arn ? {on, arn} : null;
+  },
+  // the first GSTR-1 still to be filed after a month: where changes to earlier months are reported
+  nextOpen(ym, reg){
+    const isFiled = m => !!this.proof(m, reg) || this.filed(reg).some(f => f.ym === m && !f.notFiled);
+    let m = GSTR.nextYm(ym);
+    for (let i = 0; i < 24 && isFiled(m); i++) m = GSTR.nextYm(m);
+    return m;
+  },
+  // filed returns whose documents have changed in the books since (added, changed or deleted in Tally after filing):
+  // the filed return stays as it is; the changes are the amendments waiting for the next return. An amendment already
+  // reported in a later return, or one you chose to leave, is not counted
+  drift(){
+    const out = [], b = S.books || {}, m = b.meta || {};
+    if (!(b.vouchers || []).length || !m.from || !m.to) return out;
+    // only months the books hold whole: a month outside them is not "changed", just not brought in
+    const inBooks = ym => String(m.from) <= ym + "01" && String(m.to).slice(0, 6) >= ym;
+    const regs = new Set(Object.values(b.filed || {}).filter(f => !f.notFiled).map(f => String(f.gstin).slice(0, 2)));
+    regs.forEach(reg => {
+      const mine = this.filed(reg).filter(f => !f.notFiled), last = mine.map(f => f.ym).sort().pop();
+      const N = this.nextOpen(last, reg);
+      let p = null; try { p = this.pending(N, reg); } catch (e){ return; }
+      const by = {};
+      p.rows.filter(r => r.act !== "skip" && inBooks(r.P)).forEach(r => { by[r.P] = (by[r.P] || 0) + 1; });
+      Object.keys(by).forEach(P => {
+        const f = mine.find(x => x.ym === P) || mine[0], pr = this.proof(P, reg) || {};
+        out.push({ym: P, reg, gstin: f.gstin, n: by[P], arn: pr.arn || "", on: pr.on || "", next: N});
+      });
+    });
+    return out.sort((a, c) => a.ym.localeCompare(c.ym));
+  },
+  // one line for a warning
+  driftLine(d){
+    return "GSTR-1 for " + GSTR.label(d.ym) + " (" + d.gstin + ") was filed" + (d.arn ? " with ARN " + d.arn : "") + (d.on ? " on " + fmtDate(d.on) : "") +
+      ". " + d.n + " document" + (d.n === 1 ? " has" : "s have") + " been added, changed or deleted in Tally since. The filed return is not changed: " +
+      "the change" + (d.n === 1 ? " goes" : "s go") + " as amendments in " + GSTR.label(d.next) + "’s GSTR-1 (GST → Amendments).";
   },
   // the month's own return: the books now against the copy filed for it
   check(ym, reg){
@@ -9152,6 +9196,15 @@ async function saveBooks(opts){
   await Books.save(b.cid, keep);
   if (!(opts && opts.fromCloud) && typeof BookSync === "object") BookSync.schedule(b.cid);
 }
+// filed GST returns whose documents changed in Tally since: on every Books tab until the amendments are reported
+function gstDriftNote(b){
+  if (b.gstDrift === undefined){ try { b.gstDrift = GSTAmend.drift(); } catch (e){ b.gstDrift = []; } }
+  const d = b.gstDrift || [];
+  if (!d.length) return "";
+  return '<div class="bk-warn" role="status">' + d.slice(0, 3).map(x => "<p>" + esc(GSTAmend.driftLine(x)) + "</p>").join("") +
+    (d.length > 3 ? "<p>" + (d.length - 3) + " more filed return" + (d.length > 4 ? "s" : "") + " changed.</p>" : "") +
+    '<button class="btn small" data-bookstab="gst" data-gstpart="amend">See the amendments</button></div>';
+}
 function viewBooks(){
   const co = CO();
   if (!S.books || S.books.cid !== co.id){ openBooks(co.id); return '<p class="note">Opening the books…</p>'; }
@@ -9163,7 +9216,7 @@ function viewBooks(){
   }
   let h = '<nav class="sbar" aria-label="Books">' + [["import", "From Tally", n || null], ["ledgers", "Tally ledgers", n ? (LedMaster.pending(b).length ? LedMaster.pending(b).length + " to confirm" : "\u2713") : null], ["tds", "TDS", n ? TDS.rows().length : ((b.salary || []).length || null)], ["gst", "GST", null], ["mis", "MIS", null], ["fs", "Accounts", null], ["audit", "Audit", b.audit && b.audit.last ? (b.audit.last.findings.filter(f => f.sev === "high" && Audit.status(f.id).s === "open").length || null) : null]]
     .map(([id, label, c]) => '<button data-bookstab="' + id + '" aria-selected="' + (tab === id) + '">' + label + (c == null ? "" : ' <span class="sbar-n">' + c + "</span>") + "</button>").join("") + "</nav>";
-  h += BookSync.note(co.id, tab);
+  h += BookSync.note(co.id, tab) + gstDriftNote(b);
   if (b.busy) h += busyCard("Reading the books…", b.busy, 0, 0);
   if (tab === "import") h += viewBooksImport(b);
   else if (!n && tab === "gst") h += viewBooksGst(b);
@@ -9212,6 +9265,28 @@ const TallyRead = {
     b.tb = {from, to, at: new Date().toISOString(), led};
     Object.entries(led).forEach(([n, x]) => { if (x.parent) (b.under = b.under || {})[n] = (b.under[n] || x.parent); });
   },
+  // after the books changed (read from Tally, changes brought in from the kept copy or the cloud, a day book file):
+  // every section follows. Screens work from the entries as they are; audit and MIS are worked out again for the
+  // period they last covered. A filed GST return is never changed: when its documents changed in Tally, a warning
+  // names the return (and its ARN) and the return the changes go in as amendments
+  after(b, why){
+    b.reco = null; if (typeof GSTR === "object") GSTR._carry = null;
+    if (!(b.vouchers || []).length) return;              // a very large company answered from the cloud's totals: nothing to work on here
+    // audit and MIS: at once, then at most every 3 minutes while Tally keeps changing (a big company's audit takes a moment)
+    this.soon("audit", b, () => { const L = (b.audit || {}).last; if (Audit.cfg(b).freq !== "off"){ const r = L && L.from ? L : Audit.defaultRange(b); Audit.run(r.from, r.to, why); } });
+    this.soon("mis", b, () => { const H = ((b.mis || {}).history || [])[0]; if (H && H.from) MIS.run(H.from, H.to, why); });
+    let d = []; try { d = GSTAmend.drift(); } catch (e){}
+    const seen = new Set((b.gstDrift || []).map(x => x.ym + "|" + x.gstin + "|" + x.n));
+    b.gstDrift = d;
+    const fresh = d.filter(x => !seen.has(x.ym + "|" + x.gstin + "|" + x.n));
+    if (fresh.length) toast(GSTAmend.driftLine(fresh[0]) + (fresh.length > 1 ? " " + (fresh.length - 1) + " more filed return" + (fresh.length > 2 ? "s" : "") + " changed: see GST → Amendments." : ""));
+  },
+  soon(k, b, fn){
+    const t = this._soon = this._soon || {}, x = t[k] = t[k] || {at: 0}, wait = 180000 - (Date.now() - x.at);
+    const go = () => { x.at = Date.now(); x.timer = 0; if (S.books !== b) return; try { fn(); } catch (e){} };
+    if (wait <= 0 || x.cid !== b.cid){ x.cid = b.cid; clearTimeout(x.timer); go(); return; }
+    if (!x.timer) x.timer = setTimeout(() => { go(); saveBooks(); render(); }, wait);
+  },
   // read a period: each month's day book, then the balances
   async read(from, to, how){
     const b = S.books, co = CO(), name = Bridge.openFor(co).name, q = "?company=" + encodeURIComponent(name) + Bridge.pinQ();
@@ -9230,8 +9305,8 @@ const TallyRead = {
     this.balances(b, j, j.from || from, j.to || to);
     b.map = Books.mapLedgers(b.vouchers, b.map); LedMaster.refresh(b);
     b.meta.at = new Date().toISOString(); b.meta.file = how === "copy" ? "last night's copy from Tally" : "read from Tally";
-    b.busy = ""; b.reco = null;
-    if (Audit.cfg(b).freq !== "off"){ try { Audit.run(j.from || from, j.to || to, how === "copy" ? "after last night's copy was read" : "after reading from Tally"); } catch (e){} }
+    b.busy = "";
+    this.after(b, how === "copy" ? "after last night's copy was read" : "after reading from Tally");
     await saveBooks();
     return b.vouchers.length;
   }
@@ -15237,8 +15312,8 @@ function booksChange(t){
       const bad = notThisClient((res.meta || {}).gstins);
       if (bad.length){ b.busy = ""; render(); askConfirm({title: "This day book is not this client\u2019s", ok: "Close", body: '<p class="note">' + esc(panRefusal("The day book " + f.name, bad)) + " Choose the day book exported from this client\u2019s company in Tally, or correct the client\u2019s GSTIN and PAN in Client setup.</p>"}); return; }
       b.vouchers = res.vouchers; b.meta = Object.assign(res.meta, {at: new Date().toISOString(), file: f.name});
-      b.map = Books.mapLedgers(res.vouchers, b.map); LedMaster.refresh(b); b.reco = null; b.busy = "";
-      if (Audit.cfg(b).freq !== "off") try { const r = Audit.defaultRange(b); Audit.run(r.from, r.to, "after the day book was read"); } catch (e){}
+      b.map = Books.mapLedgers(res.vouchers, b.map); LedMaster.refresh(b); b.busy = "";
+      TallyRead.after(b, "after the day book was read");
       await saveBooks();
       toast(res.vouchers.length + " vouchers read, " + Object.keys(b.map).length + " ledgers found. Check the ledgers, then TDS and GST.");
       S.booksTab = "ledgers"; render();
@@ -19227,7 +19302,7 @@ document.addEventListener("click", ev => {
   if (S.view === "company" && S.tab === "sales" && salesClick(t)) return;
   if (t.id === "modal"){ if (ev.target.id === "modal") closeSwitcher(); return; }
   if (t.dataset.open){ openCompany(t.dataset.open); return; }
-  if (t.dataset.bookstab){ S.booksTab = t.dataset.bookstab; render(); return; }
+  if (t.dataset.bookstab){ S.booksTab = t.dataset.bookstab; if (t.dataset.gstpart) S.gstPart = t.dataset.gstpart; render(); return; }
   if (t.dataset.gstpart){ S.gstPart = t.dataset.gstpart; render(); return; }
   if (t.dataset.itctcat !== undefined){ S.itctCat = S.itctCat === t.dataset.itctcat ? "" : t.dataset.itctcat; render(); return; }
   if (t.dataset.inregchip !== undefined){ S.inregF = S.inregF === t.dataset.inregchip ? "" : t.dataset.inregchip; render(); return; }
@@ -19766,7 +19841,12 @@ document.addEventListener("click", ev => {
       break;
     }
     case "tdsExcel": TDS.toExcel(S.tdsFy || "", S.tdsQ || "").then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break;
-    case "gstJson": if (!ledgersReady("gst")) break; LedMaster.snap(S.books, "GSTR-1 " + GSTR.label(S.gstYm || "") + (S.gstReg ? " " + S.gstReg : "")); saveBooks(); GSTR.toJsonFile(S.gstYm || "", S.gstReg || "").then(j => toast("GSTR-1 JSON for " + j.fp + " downloaded. Check it on the portal's offline tool before filing."), e => toast("Could not build the file: " + (e && e.message))); break;
+    case "gstJson": if (!ledgersReady("gst")) break;
+      // a month already filed: its return is not made again from the books as they are now
+      { const ym = S.gstYm || "", reg = S.gstReg || "", pr = reg && ym ? GSTAmend.proof(ym, reg) : null;
+        if (pr){ askConfirm({title: "GSTR-1 for " + GSTR.label(ym) + " is already filed", ok: "Close", body: '<p class="note">It was filed' + (pr.arn ? " with ARN " + esc(pr.arn) : "") + (pr.on ? " on " + esc(fmtDate(pr.on)) : "") +
+          ". A return made again from the books now would be wrong: the filed return stays as it is, and whatever was added, changed or deleted in Tally since goes as amendments in " + esc(GSTR.label(GSTAmend.nextOpen(ym, reg))) + "’s GSTR-1 (GST → Amendments).</p>"}); break; } }
+      LedMaster.snap(S.books, "GSTR-1 " + GSTR.label(S.gstYm || "") + (S.gstReg ? " " + S.gstReg : "")); saveBooks(); GSTR.toJsonFile(S.gstYm || "", S.gstReg || "").then(j => toast("GSTR-1 JSON for " + j.fp + " downloaded. Check it on the portal's offline tool before filing."), e => toast("Could not build the file: " + (e && e.message))); break;
     case "gst3bJson": { if (!ledgersReady("gst")) break; LedMaster.snap(S.books, "GSTR-3B " + GSTR.label(S.gstYm || "") + (S.gstReg ? " " + S.gstReg : "")); saveBooks();
       const j = GSTR.threeBJson(S.gstYm || "", S.gstReg || "");
       saveFile("GSTR3B_" + (j.gstin || "") + "_" + j.ret_period + ".json", new Blob([JSON.stringify(j)], {type: "application/json"}));
@@ -23016,7 +23096,7 @@ const FC = {
   tn(){ const n = typeof LK === "object" ? LK.names : null; return n && n.cid === S.coId ? n : null; },
   ledgers(){
     const T = this.tn(); if (T) return T.leds;
-    const b = S.books || {}, key = (b.vouchers || []).length + "|" + Object.keys(b.under || {}).length + "|" + Object.keys(b.ledInfo || {}).length + "|" + ((b.tb || {}).at || "");
+    const b = S.books || {}, key = (b.vouchers || []).length + "|" + ((b.meta || {}).at || "") + "|" + Object.keys(b.under || {}).length + "|" + Object.keys(b.ledInfo || {}).length + "|" + ((b.tb || {}).at || "");
     if (this._led && this._led.key === key && this._led.cid === b.cid) return this._led.list;
     const s = new Set(Object.keys(b.under || {}).concat(Object.keys(b.ledInfo || {}), Object.keys(b.map || {}), Object.keys((b.tb || {}).led || {})));
     const list = Array.from(s).filter(Boolean).sort((a, c) => a.localeCompare(c));
@@ -23336,27 +23416,31 @@ const LK = {
   // on opening Look up, Reports or Letters: if the bridge made a newer copy last night, bring it in (read from the bridge's
   // folder; Tally is not asked anything)
   // the copy in FinCom's cloud: for a computer without the bridge, or a bridge that does not keep this company
-  async cloudFresh(force){
+  async cloudFresh(force, quiet){
     const f = this.fr();
     if (!TCloud.on() || f.busy) return;
     if (!force && Date.now() - (f.cat || 0) < 60000) return;
     f.cat = Date.now();
+    const at = ((S.books || {}).meta || {}).at;
     try { await TCloud.status(S.coId, force); if (TCloud.has(S.coId)) await TCloud.load(force); } catch (e){}
-    render();
+    if (!quiet || at !== ((S.books || {}).meta || {}).at) render();
   },
-  async autoFresh(force){
+  // quiet: the once-a-minute look from any screen; the page is drawn again only when the books changed
+  async autoFresh(force, quiet){
     const f = this.fr(), co = CO();
     if (f.busy) return;
-    if (!this.live()){ await this.cloudFresh(force); return; }
+    if (!this.live()){ await this.cloudFresh(force, quiet); return; }
     const keep = f.man && f.man.keep;
     if (!force && Date.now() - f.at < (keep ? 60000 : 15 * 60000)) return;
     f.at = Date.now();
     const q = "?company=" + encodeURIComponent(this.tname()) + Bridge.pinQ();
     try { f.man = await Bridge.call("/synced" + q, null, 30000); } catch (e){ f.man = {error: (e && e.message) || String(e)}; }
-    try { f.keep = await Bridge.call("/keep" + q, null, 30000); } catch (e){ f.keep = null; }
-    try { f.sch = await Bridge.call("/schedule", null, 30000); } catch (e){ f.sch = null; }
+    if (!quiet){
+      try { f.keep = await Bridge.call("/keep" + q, null, 30000); } catch (e){ f.keep = null; }
+      try { f.sch = await Bridge.call("/schedule", null, 30000); } catch (e){ f.sch = null; }
+    }
     const b = S.books, m = f.man || {}, meta = (b && b.meta) || {};
-    if (!(b && b.cid === co.id && m.ok && !m.none && m.at && m.from)){ f.at = 0; await this.cloudFresh(force); render(); return; }
+    if (!(b && b.cid === co.id && m.ok && !m.none && m.at && m.from)){ f.at = 0; await this.cloudFresh(force, quiet); if (!quiet) render(); return; }
     if (m.keep){
       // kept in step by the bridge: only the months that changed since FinCom last looked
       const known = meta.monthsAt || {}, todo = [].concat(m.months || []).filter(x => x.at && (!known[x.ym] || x.at > known[x.ym]) && x.from <= m.to);
@@ -23377,12 +23461,14 @@ const LK = {
           }
           if (b.tb && String(b.tb.to) < m.to) b.tb.to = m.to;
           b.map = Books.mapLedgers(b.vouchers || [], b.map); try { LedMaster.refresh(b); } catch (e){}
-          b.meta.at = new Date().toISOString(); b.meta.copyAt = m.at; b.meta.copyTo = m.to; b.meta.keep = true; b.meta.file = "kept in step with Tally by the bridge"; b.reco = null;
+          b.meta.at = new Date().toISOString(); b.meta.copyAt = m.at; b.meta.copyTo = m.to; b.meta.keep = true; b.meta.file = "kept in step with Tally by the bridge";
+          TallyRead.after(b, "after changes in Tally were brought in");
           this.cache = {}; await saveBooks();
         } catch (e){ toast("Could not bring in the copy: " + ((e && e.message) || e)); }
         f.busy = "";
-      }
-      render(); return;
+        render();
+      } else if (!quiet) render();
+      return;
     }
     if ((!meta.copyAt || m.at > meta.copyAt) && (!meta.to || m.to >= meta.to || !meta.copyAt)){
       f.busy = "Bringing in last night\u2019s copy of the books (made " + String(m.at).replace("T", " ").slice(0, 16) + "); Tally is not asked anything\u2026"; render();
@@ -23423,7 +23509,8 @@ const LK = {
       TallyRead.merge(b, res, start, to);
       if (b.tb && b.tb.from <= start && String(b.tb.to) < to) b.tb.to = to;     // the opening stays; later balances follow from the entries
       b.map = Books.mapLedgers(b.vouchers, b.map); try { LedMaster.refresh(b); } catch (e){}
-      b.meta.at = new Date().toISOString(); b.meta.todayAt = b.meta.at; b.reco = null;
+      b.meta.at = new Date().toISOString(); b.meta.todayAt = b.meta.at;
+      TallyRead.after(b, "after today's entries were read from Tally");
       await saveBooks();
       this.cache = {}; toast(res.vouchers.length + " entries from " + FC.span(start, to) + " brought in.");
     } catch (e){ toast("Could not read Tally: " + ((e && e.message) || e)); }
@@ -23728,6 +23815,10 @@ if (typeof document !== "undefined"){
     if (e.key === "Enter" && t && t.dataset && t.dataset.lkopen){ e.preventDefault(); t.click(); }
   });
 }
+
+// the books follow Tally on every screen, not only while Look up is open: once a minute, quietly (only the bridge's
+// copy or the cloud is asked; Tally is not)
+setInterval(() => { try { if (S.books && S.books.cid === S.coId && !document.hidden && typeof LK === "object") LK.autoFresh(false, true); } catch (e){} }, 60000);
 /* ================================================================== */
 /* Reports: every report in one place, by area, each area opening with */
 /* a few figures and a small chart for the year                        */
@@ -23796,7 +23887,7 @@ const RPT = {
   },
   data(){
     const b = S.books, R = this.range(); if (!R) return null;
-    const key = [b.cid, R.from, R.to, (b.vouchers || []).length, b.mapV || 0, ((b.audit || {}).last || {}).at || "", (b.tb || {}).at || "", JSON.stringify(b.gstFiled || {}).length].join("|");
+    const key = [b.cid, R.from, R.to, (b.vouchers || []).length, (b.meta || {}).at || "", b.mapV || 0, ((b.audit || {}).last || {}).at || "", (b.tb || {}).at || "", JSON.stringify(b.gstFiled || {}).length].join("|");
     if (this._d && this._d.key === key) return this._d.d;
     const months = MIS.monthsOf(R.from, R.to), pl = MIS.pl(R.from, R.to);
     const bal = Audit.balances(R.from, R.to), balTo = bal.ok ? bal.at(R.to) : null;
@@ -24505,7 +24596,8 @@ const TCloud = {
       if (b.tb && String(b.tb.to) < to) b.tb.to = to;
       b.map = Books.mapLedgers(b.vouchers || [], b.map); try { LedMaster.refresh(b); } catch (e){}
       meta.cloud = {book: bk.book, company: bk.company, ledgersAt: bk.ledgersAt, days: Object.assign({}, known, days), at: new Date().toISOString()};
-      meta.at = meta.cloud.at; meta.keep = true; meta.file = "the copy in FinCom's cloud"; meta.from = meta.from && meta.from < from ? meta.from : from; b.reco = null;
+      meta.at = meta.cloud.at; meta.keep = true; meta.file = "the copy in FinCom's cloud"; meta.from = meta.from && meta.from < from ? meta.from : from;
+      TallyRead.after(b, "after changes came from the cloud copy");
       LK.cache = {}; await saveBooks();
     } catch (e){ toast("Could not bring in the cloud copy: " + ((e && e.message) || e)); }
     f.busy = ""; render();
