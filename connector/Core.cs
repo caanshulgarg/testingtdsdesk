@@ -119,6 +119,31 @@ namespace FinCom.Connector
         public static string UpdateUrl { get { var u = Pref("updateUrl", DefaultUpdateUrl); return AllowedUrl(u) ? u : DefaultUpdateUrl; } }
         public static string OpenUrl { get { return Pref("appUrl", "https://staging.fincom.live/"); } }
 
+        // TallyPrime running on this computer (tally.exe)
+        public static bool TallyRunning()
+        {
+            try { return Process.GetProcessesByName("tally").Length > 0 || Process.GetProcessesByName("TallyPrime").Length > 0 || Process.GetProcessesByName("tallyprime").Length > 0; } catch { return false; }
+        }
+        public static bool WaitForTally { get { return Pref("waitForTally", "false") == "true"; } }
+        // starting with Windows: the Run entry for this Windows user
+        public static bool StartsWithWindows
+        {
+            get
+            {
+                if (!IsWindows) return Pref("startWithWindows", "true") == "true";
+                try { using (var k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run")) return k != null && k.GetValue(Name) != null; } catch { return false; }
+            }
+            set
+            {
+                var p = Prefs(); p["startWithWindows"] = value ? "true" : "false"; SavePrefs(p);
+                if (!IsWindows) return;
+                using (var k = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run"))
+                {
+                    if (value) k.SetValue(Name, "\"" + Exe + "\" --tray"); else k.DeleteValue(Name, false);
+                }
+                Log(value ? "Starts with Windows again" : "Will not start with Windows (starts when opened)");
+            }
+        }
         public static string Sha256(byte[] b)
         {
             using (var h = SHA256.Create()) return BitConverter.ToString(h.ComputeHash(b)).Replace("-", "").ToLowerInvariant();
@@ -192,6 +217,12 @@ namespace FinCom.Connector
                 }
             }
         }
+        // a fresh one-time connect code for FinCom on this computer (open for 10 minutes)
+        public static string NewPairCode()
+        {
+            var r = Call("/paircode", "{}", 8000); object c;
+            return r.TryGetValue("code", out c) ? Convert.ToString(c) : "";
+        }
         // the engine's version when it answers, else null
         public static string Ping()
         {
@@ -240,6 +271,8 @@ namespace FinCom.Connector
         {
             if (Paused) { State = "stopped"; return; }
             var v = Bridge.Ping();
+            // "wait for TallyPrime": nothing is started until TallyPrime is open on this computer
+            if (v == null && App.WaitForTally && !App.TallyRunning() && (proc == null || proc.HasExited)) { State = "waiting for TallyPrime"; fails = 0; return; }
             if (v != null)
             {
                 EngineVersion = v; LastOk = DateTime.Now; fails = 0;

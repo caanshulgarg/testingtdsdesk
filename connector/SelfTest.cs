@@ -38,6 +38,25 @@ namespace FinCom.Connector
             while (Bridge.Ping() != null && (DateTime.Now - t0).TotalSeconds < 20) Thread.Sleep(500);
             Ok(Bridge.Ping() == null, "the bridge is stopped (as if it had crashed)");
             Ok(sup.WaitFor(v => true, 120) && sup.Restarts >= 1, "when the bridge is stopped, the minder starts it again (restarts: " + sup.Restarts + ")");
+            // ---- a connect code for FinCom on this computer, and FinCom connecting with it
+            var code = Bridge.NewPairCode();
+            Ok(code.Length == 6, "the Connector opens a one-time connect code: " + code);
+            string key = "";
+            try
+            {
+                var req = (System.Net.HttpWebRequest)System.Net.WebRequest.Create("http://127.0.0.1:" + App.Port + "/pair?code=" + code);
+                req.Headers.Add("Origin", "https://staging.fincom.live"); req.Proxy = null;
+                using (var r = req.GetResponse()) using (var sr = new StreamReader(r.GetResponseStream())) { var j = App.Json.Deserialize<Dictionary<string, object>>(sr.ReadToEnd()); key = Convert.ToString(j["key"]); }
+            }
+            catch (Exception e) { key = "(" + e.Message + ")"; }
+            Ok(key == Bridge.Key, "FinCom connects with that code and gets the bridge's key");
+            // ---- wait for TallyPrime: with no TallyPrime on this computer, the bridge is not started
+            var pw = App.Prefs(); pw["waitForTally"] = "true"; App.SavePrefs(pw);
+            sup.SimulateCrash(); var tw = DateTime.Now; while (Bridge.Ping() != null && (DateTime.Now - tw).TotalSeconds < 20) Thread.Sleep(500);
+            Thread.Sleep(7000);
+            Ok(Bridge.Ping() == null && sup.State == "waiting for TallyPrime", "set to wait for TallyPrime, with TallyPrime not open here, the bridge waits (" + sup.State + ")");
+            pw["waitForTally"] = "false"; App.SavePrefs(pw);
+            Ok(sup.WaitFor(v => true, 60), "switched back, the bridge starts again");
             // ---- the checks
             var checks = Doctor.Run();
             foreach (var c in checks) Console.WriteLine("        [" + c.Level + "] " + c.Name + ": " + c.Say);

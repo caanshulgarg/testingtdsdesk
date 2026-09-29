@@ -238,3 +238,24 @@ const TCloud = {
     if (t) TCloud.link(t.dataset.tclink, t.value);
   });
 })();
+// FinCom opened by the FinCom Connector's "Connect FinCom on this computer": the page's address carries the bridge's
+// one-time connect code (#pair=123456). It is taken off the address at once, and used to connect to the bridge.
+(function(){
+  const take = () => {
+    const m = String(location.hash || "").match(/(?:^#|&)pair=(\d{6})\b/);
+    if (!m) return;
+    try { history.replaceState(null, "", location.pathname + location.search); } catch (e){ location.hash = ""; }
+    const code = m[1];
+    const go = async () => {
+      try {
+        const j = await Bridge.pair(code);
+        toast("Connected to the Tally Bridge on " + (j.computer || "this computer") + ".");
+        try { await Bridge.refresh(); } catch (e){}
+        render();
+      } catch (e){ toast("Could not connect to the bridge: " + ((e && e.message) || e) + " Press “Connect FinCom on this computer” in FinCom Connector again."); }
+    };
+    // after the page has drawn itself
+    setTimeout(go, 600);
+  };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", take); else take();
+})();

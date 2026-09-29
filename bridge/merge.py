@@ -176,7 +176,18 @@ R("[switch]$Sync,", "[switch]$Sync,\n  [switch]$Keep,")
 R("  SyncCompanies   = @()\n", "  SyncCompanies   = @()\n  KeepInStep      = $null\n  CloudUrl        = ''\n  CloudKey        = ''\n")
 R("if ($Sync) {\n  $r = Invoke-NightlySync", "if ($Keep) {\n  try { Invoke-KeepWorker } catch { Write-Log ('Keeping copies in step stopped: ' + $_.Exception.Message) }\n  exit 0\n}\nif ($Sync) {\n  $r = Invoke-NightlySync")
 R("""    if (((Get-Date) - $lastCheck).TotalSeconds -ge 60) { $lastCheck = Get-Date; Show-Diagnosis }""", """    if (((Get-Date) - $lastCheck).TotalSeconds -ge (Get-KeepNum 'KeepStartSec' 60)) { $lastCheck = Get-Date; Show-Diagnosis; try { Start-KeepIfNeeded } catch { Write-Log ('Could not start keeping copies in step: ' + $_.Exception.Message) } }""")
-R("""      '/ledgerbalance' {""", """      '/shutdown' { if ($method -ne 'POST') { throw 'Use POST.' }; $script:ShutdownAfter = $true; $result = [ordered]@{ ok = $true; stopping = $true } }
+R("""      '/ledgerbalance' {""", """      '/paircode' {
+        # the FinCom Connector (which holds the key) opens a fresh connect code for FinCom on this computer
+        if ($method -eq 'POST') {
+          $rng2 = [Security.Cryptography.RandomNumberGenerator]::Create(); $b42 = New-Object byte[] 4; $rng2.GetBytes($b42)
+          $script:PairCode = ([BitConverter]::ToUInt32($b42, 0) % 1000000).ToString('000000')
+          $script:PairUntil = (Get-Date).AddMinutes(10); $script:PairTries = 0
+          Write-Log 'A new connect code was opened for 10 minutes (from the FinCom Connector).'
+        }
+        $open = (Get-Date) -le $script:PairUntil
+        $result = [ordered]@{ ok = $true; open = $open; code = $(if ($open) { $script:PairCode } else { '' }); until = $(if ($open) { $script:PairUntil.ToString('s') } else { '' }) }
+      }
+      '/shutdown' { if ($method -ne 'POST') { throw 'Use POST.' }; $script:ShutdownAfter = $true; $result = [ordered]@{ ok = $true; stopping = $true } }
       '/cloudlink' { if ($method -eq 'POST') { $result = Set-CloudLink ($body | ConvertFrom-Json) } else { $result = Get-CloudLinkStatus } }
       '/keep' { if ($method -eq 'POST') { $o = $body | ConvertFrom-Json; $Cfg.KeepInStep = [bool]$o.on; Save-Config; if ($o.on) { Start-KeepIfNeeded } }; $result = Get-KeepStatus ([string]$qs['company']) }
       '/keepcheck' { $result = Test-KeepMonth ([string]$qs['company']) ([string]$qs['ym']) ([int]('0' + $qs['port'])) }

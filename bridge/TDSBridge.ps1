@@ -975,6 +975,17 @@ function Invoke-Client($client) {
       }
       '/ledgernames' { $result = Get-LedgerNames ([string]$qs['company']) ([int]('0' + $qs['port'])) }
       '/tb' { $result = Get-TrialBalance ([string]$qs['company']) ([string]$qs['to']) ([int]('0' + $qs['port'])) }
+      '/paircode' {
+        # the FinCom Connector (which holds the key) opens a fresh connect code for FinCom on this computer
+        if ($method -eq 'POST') {
+          $rng2 = [Security.Cryptography.RandomNumberGenerator]::Create(); $b42 = New-Object byte[] 4; $rng2.GetBytes($b42)
+          $script:PairCode = ([BitConverter]::ToUInt32($b42, 0) % 1000000).ToString('000000')
+          $script:PairUntil = (Get-Date).AddMinutes(10); $script:PairTries = 0
+          Write-Log 'A new connect code was opened for 10 minutes (from the FinCom Connector).'
+        }
+        $open = (Get-Date) -le $script:PairUntil
+        $result = [ordered]@{ ok = $true; open = $open; code = $(if ($open) { $script:PairCode } else { '' }); until = $(if ($open) { $script:PairUntil.ToString('s') } else { '' }) }
+      }
       '/shutdown' { if ($method -ne 'POST') { throw 'Use POST.' }; $script:ShutdownAfter = $true; $result = [ordered]@{ ok = $true; stopping = $true } }
       '/cloudlink' { if ($method -eq 'POST') { $result = Set-CloudLink ($body | ConvertFrom-Json) } else { $result = Get-CloudLinkStatus } }
       '/keep' { if ($method -eq 'POST') { $o = $body | ConvertFrom-Json; $Cfg.KeepInStep = [bool]$o.on; Save-Config; if ($o.on) { Start-KeepIfNeeded } }; $result = Get-KeepStatus ([string]$qs['company']) }

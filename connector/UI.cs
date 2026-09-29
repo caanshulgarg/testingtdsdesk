@@ -67,6 +67,10 @@ namespace FinCom.Connector
         readonly CheckBox autoUpd = new CheckBox { Text = "Update by itself (when nothing is being posted to Tally)", AutoSize = true };
         readonly TextBox note = new TextBox { Multiline = true, Height = 90, Dock = DockStyle.Top };
         readonly Label supportInfo = new Label { Dock = DockStyle.Top, Height = 60, Padding = new Padding(6) };
+        readonly Label pairInfo = new Label { AutoSize = true, Padding = new Padding(8, 8, 0, 0), Font = new Font("Segoe UI", 10f, FontStyle.Bold) };
+        Button copyBtn; string codeNow = "";
+        readonly CheckBox startWin = new CheckBox { Text = "Start with Windows (quietly, near the clock)", AutoSize = true };
+        readonly CheckBox waitTally = new CheckBox { Text = "Wait for TallyPrime: start the bridge only once TallyPrime is open on this computer", AutoSize = true };
         readonly System.Windows.Forms.Timer timer = new System.Windows.Forms.Timer { Interval = 5000 };
         readonly bool showNow;
         bool quitting;
@@ -86,7 +90,10 @@ namespace FinCom.Connector
             checks.Columns.Add("", 26); checks.Columns.Add("Check", 130); checks.Columns.Add("What is going on", 360); checks.Columns.Add("What to do", 340);
             var bar1 = Buttons("Check again", (EventHandler)((s, e) => RefreshAll(true)), "Restart the bridge", (EventHandler)((s, e) => { Supervisor.Current.Restart("restarted from the Connector"); RefreshAll(true); }),
                                "Open FinCom", (EventHandler)((s, e) => OpenUrl(App.OpenUrl)), "Open the folder", (EventHandler)((s, e) => OpenUrl(App.Home)));
-            pStatus.Controls.Add(checks); pStatus.Controls.Add(bar1);
+            var bar2 = Buttons("Connect FinCom on this computer", (EventHandler)((s, e) => ConnectFinCom()), "Show connect code", (EventHandler)((s, e) => ShowCode()));
+            var cp = new Button { Text = "Copy", AutoSize = true, Height = 30, Visible = false }; cp.Click += (s, e) => { try { Clipboard.SetText(codeNow); pairInfo.Text += "  (copied)"; } catch { } };
+            copyBtn = cp; bar2.Controls.Add(pairInfo); bar2.Controls.Add(cp);
+            pStatus.Controls.Add(checks); pStatus.Controls.Add(bar2); pStatus.Controls.Add(bar1);
 
             // ---- Companies
             var pCos = new TabPage("Companies");
@@ -107,7 +114,18 @@ namespace FinCom.Connector
             autoUpd.Checked = App.Pref("autoUpdate", "true") == "true";
             autoUpd.CheckedChanged += (s, e) => { var p = App.Prefs(); p["autoUpdate"] = autoUpd.Checked ? "true" : "false"; App.SavePrefs(p); };
             var ub = Buttons("Check for updates now", (EventHandler)((s, e) => DoUpdate(false)));
-            var ap = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 34, Padding = new Padding(8, 4, 4, 4) }; ap.Controls.Add(autoUpd);
+            var ap = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 100, Padding = new Padding(8, 4, 4, 4), FlowDirection = FlowDirection.TopDown }; ap.Controls.Add(autoUpd); ap.Controls.Add(startWin); ap.Controls.Add(waitTally);
+            startWin.Checked = App.StartsWithWindows; waitTally.Checked = App.WaitForTally;
+            startWin.CheckedChanged += (s, e) =>
+            {
+                if (!startWin.Checked && App.Pref("warnedStart", "") != "yes")
+                {
+                    MessageBox.Show("When FinCom Connector isn't running, the copy of the books in FinCom's cloud stops updating and FinCom cannot post to Tally.\n\nOpen FinCom Connector from the Start menu when you work.", App.Name, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    var pp = App.Prefs(); pp["warnedStart"] = "yes"; App.SavePrefs(pp);
+                }
+                try { App.StartsWithWindows = startWin.Checked; } catch (Exception ex) { MessageBox.Show("Could not change it: " + ex.Message, App.Name); }
+            };
+            waitTally.CheckedChanged += (s, e) => { var pp = App.Prefs(); pp["waitForTally"] = waitTally.Checked ? "true" : "false"; App.SavePrefs(pp); App.Log(waitTally.Checked ? "Waits for TallyPrime before starting the bridge" : "Starts the bridge without waiting for TallyPrime"); };
             pUpd.Controls.Add(ap); pUpd.Controls.Add(ub); pUpd.Controls.Add(updInfo);
 
             // ---- Help
@@ -124,6 +142,7 @@ namespace FinCom.Connector
             var menu = new ContextMenuStrip();
             menu.Items.Add("Open FinCom Connector", null, (s, e) => ShowMe());
             menu.Items.Add("Open FinCom", null, (s, e) => OpenUrl(App.OpenUrl));
+            menu.Items.Add("Connect FinCom on this computer", null, (s, e) => ConnectFinCom());
             menu.Items.Add("Restart the bridge", null, (s, e) => Supervisor.Current.Restart("restarted from the tray"));
             menu.Items.Add("Send to FinCom support", null, (s, e) => { ShowMe(); tabs.SelectedIndex = 4; });
             menu.Items.Add(new ToolStripSeparator());
@@ -144,6 +163,25 @@ namespace FinCom.Connector
             var p = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 40, Padding = new Padding(6, 4, 4, 4) };
             for (int i = 0; i + 1 < bs.Length; i += 2) { var x = new Button { Text = (string)bs[i], AutoSize = true, Height = 30 }; x.Click += (EventHandler)bs[i + 1]; p.Controls.Add(x); }
             return p;
+        }
+        // FinCom opens in the browser with a fresh one-time code in its address and connects by itself
+        void ConnectFinCom()
+        {
+            try
+            {
+                if (Bridge.Ping() == null) { MessageBox.Show("The bridge is not running yet. Wait a moment (or open TallyPrime if the Connector waits for it), then try again.", App.Name); return; }
+                var code = Bridge.NewPairCode();
+                if (code.Length != 6) throw new Exception("the bridge gave no code");
+                OpenUrl(App.OpenUrl.TrimEnd('/') + "/#pair=" + code);
+                pairInfo.Text = "FinCom is opening in your browser and connects by itself.";
+                copyBtn.Visible = false;
+            }
+            catch (Exception ex) { MessageBox.Show("Could not open a connect code: " + ex.Message + "\n\nThis needs Tally Bridge 1.13.0 or later.", App.Name); }
+        }
+        void ShowCode()
+        {
+            try { codeNow = Bridge.NewPairCode(); pairInfo.Text = "Connect code: " + codeNow + "  (for 10 minutes)"; copyBtn.Visible = true; }
+            catch (Exception ex) { pairInfo.Text = "Could not open a connect code: " + ex.Message; }
         }
         void ShowMe() { Show(); WindowState = FormWindowState.Normal; Activate(); RefreshAll(true); }
         static void OpenUrl(string u) { try { Process.Start(new ProcessStartInfo(u) { UseShellExecute = true }); } catch { } }
