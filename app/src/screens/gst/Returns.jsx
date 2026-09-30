@@ -1,10 +1,10 @@
 // GSTR-1 and GSTR-3B for the month and GSTIN chosen, worked out from the day book, and the checks before filing.
 // Was viewGstr1, viewGstr3b and viewGstChecks (src/js/18). The figures are GSTR.one() and GSTR.threeB() (src/js/12);
-// the customers' IMS rejections (viewCustRejections, src/js/33) are still an old piece; filing is Filing.jsx.
-import Legacy from "../../parts/Legacy.jsx";
+// the customers' IMS rejections are CustIms.jsx; filing is Filing.jsx.
 import FilterBar from "../../parts/FilterBar.jsx";
 import CommitBox from "../../parts/CommitBox.jsx";
 import { Filing } from "./Filing.jsx";
+import CustIms from "./CustIms.jsx";
 
 const money = (v) => INR.format(r2(v || 0));
 const day = (d) => fmtDate(tallyDate(d));
@@ -88,7 +88,7 @@ export function Gstr1({ b }) {
     </table></div>
       <p className="note">Cancelled vouchers are counted from Tally (marked cancelled there); a number missing from a series is not, so enter or cancel it in Tally first.</p></section>
     <Checks />
-    <Legacy html={viewCustRejections(b)} />
+    <CustIms />
   </>;
 }
 

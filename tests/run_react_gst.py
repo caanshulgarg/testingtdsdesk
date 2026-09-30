@@ -32,6 +32,16 @@ with sync_playwright() as p:
     ok(pg.locator("#r1Table table").count() == 1, "a click on a customer opens its invoices")
     pg.click('#r1Table tbody tr td button >> nth=0'); pg.wait_for_timeout(400)
     ok(pg.locator("#r1Table table").count() == 0, "and again closes them")
+    # customers' IMS rejections: find an invoice by number, mark it, say what to do, and take it back
+    inv = pg.evaluate("GSTR.one(S.gstYm, S.gstReg || '').b2b[0].no")
+    box = pg.locator('input[aria-label="Invoice or credit note number"]'); box.click(); pg.keyboard.type(inv, delay=15); pg.wait_for_timeout(600)
+    ok(pg.locator('button:text-is("Mark as rejected")').count() >= 1 and pg.evaluate("document.activeElement.getAttribute('aria-label')") == "Invoice or credit note number", "IMS: found by number while typing, the cursor stays")
+    pg.locator('button:text-is("Mark as rejected")').first.click(); pg.wait_for_timeout(500)
+    ok(len(pg.evaluate("CustIMS.items(S.gstReg || '')")) == 1 and box.input_value() == "", "marked as rejected; the box is cleared")
+    pg.select_option('section:has(h3:text-is("Rejected by customers in IMS")) select[aria-label="What to do"]', index=1); pg.wait_for_timeout(400)
+    ok(pg.evaluate("CustIMS.items(S.gstReg || '')[0].act") == pg.evaluate("CustIMS.ACTS.inv[1][0]"), "what to do is kept")
+    pg.click('button:text-is("not rejected after all")'); pg.wait_for_timeout(400)
+    ok(len(pg.evaluate("CustIMS.items(S.gstReg || '')")) == 0, "“not rejected after all” takes it off")
     # the funnel on a column heading, as on every old table: filters the customers, and stays through a redraw
     hsn = pg.locator('#r1Table')
     n = hsn.locator("tbody tr").count()

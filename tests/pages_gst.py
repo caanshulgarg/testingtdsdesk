@@ -80,6 +80,10 @@ with sync_playwright() as p:
     # monthly again, the filing card with FinCom's estimate on and figures from the portal
     pg.evaluate("() => { GSTSet.store(S.gstReg || '').filing = []; S.gstPart = 'r3b'; const r = GSTF.rec(S.gstYm, S.gstReg || ''); r.r1 = '2026-02-15'; r.portalFee1 = 500; r.portalInt = 123; render(); }"); grab("filing-est")
     pg.evaluate("() => { S.books.gstEst = false; render(); }")
+    # customers' IMS rejections on GSTR-1: a number looked for, a credit note and an invoice marked, then 3B
+    pg.evaluate("() => { const reg = S.gstReg || '', docs = CustIMS.find(reg, '') ; S.gstPart = 'r1'; const all = GSTR.months().flatMap(m => GSTR.one(m, reg).cdnr.concat(GSTR.one(m, reg).b2b)); const cn = all.find(r => r.kind === 'CDNR') || all[0]; S.custImsQ = String((cn && cn.no) || '1'); render(); }"); grab("custims-find")
+    pg.evaluate("() => { const reg = S.gstReg || '', hits = CustIMS.find(reg, S.custImsQ); hits.slice(0, 1).forEach(r => CustIMS.add(reg, r.id)); const inv = GSTR.months().flatMap(m => GSTR.one(m, reg).b2b)[0]; if (inv){ const h = CustIMS.find(reg, inv.no)[0]; if (h) CustIMS.add(reg, h.id); } S.custImsQ = ''; GSTR._carry = null; render(); }"); grab("custims-marked")
+    pg.evaluate("() => { const x = CustIMS.items(S.gstReg || '')[0]; if (x){ S.gstYm = x.addYm || x.rejYm; } S.gstPart = 'r3b'; render(); }"); grab("custims-3b")
     br.close()
 srv.shutdown()
 json.dump({"pages": res, "errors": errors}, open(out, "w"), indent=0)
