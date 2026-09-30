@@ -623,6 +623,9 @@ function bankToggleRow(id, on, shift){ bankToggle({dataset: {bsel: id}, checked:
 function bankSelAll(on){ const b = B(); bankVisibleRows().filter(r => r.state !== "sent").forEach(r => { if (on) b.sel.add(r.id); else b.sel.delete(r.id); }); bankLightRefresh(); }
 // a client's bank settings and rules (app/src/parts/BankSettings.jsx): the settings shown or not, a standard entry's
 // ledger, an automation choice, and a rule changed, paused, deleted (asked first), moved or copied to other clients
+// the checks over a statement (app/src/parts/BankChecks.jsx): show only some lines, tick an entry to delete from Tally
+function bankFocusGo(title, ids, note){ bankFocus(title, [].concat(ids || []), note || ""); render(); window.scrollTo({top: 0, behavior: "smooth"}); }
+function reconPick(i, on){ if (!S.recon) return; if (on) S.recon.pick.add(i); else S.recon.pick.delete(i); render(); }
 function bankSettingsShow(on){ B().showSettings = on; render(); }
 function bankStdLedger(k, v){ const b = B(), co = CO(); co.bankLedgerNames = co.bankLedgerNames || {}; co.bankLedgerNames[k] = v; Store.saveCompany(co); suggestAll(b.rows, true); saveBank({rows: true}); render(); }
 function bankOptSet(k, on){ const co = CO(); co[k] = on; Store.saveCompany(co); render(); }
@@ -660,7 +663,6 @@ function ruleAct(what, id){
 }
 function bankClick(t){
   const b = B(); if (!b) return false;
-  if (t.dataset.bfocus){ const f = S.focusSets[t.dataset.bfocus]; if (f){ bankFocus(f.title, f.ids, f.note); render(); window.scrollTo({top: 0, behavior: "smooth"}); } return true; }
   if (t.dataset.btab){ bankTabGo(t.dataset.btab); return true; }
   if (t.dataset.delstmt){ deleteStatement(t.dataset.delstmt); return true; }
   if (t.dataset.brow){ bankRowAct(t.dataset.brow, t.dataset.rid); return true; }
@@ -1087,8 +1089,6 @@ function bankChange(t){
   return false;
 }
 document.addEventListener("click", ev => {
-  const rp = ev.target.closest && ev.target.closest("[data-reconpick]");
-  if (rp && S.recon){ const i = +rp.dataset.reconpick; if (rp.checked) S.recon.pick.add(i); else S.recon.pick.delete(i); render(); return; }
   if (!(ev.target.closest && ev.target.closest(".bk-menu"))) closeMenus();
 });
 document.addEventListener("keydown", ev => {

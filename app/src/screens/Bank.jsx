@@ -6,11 +6,12 @@
 // A line's state is attention (no ledger) → suggested → ready → sent (in Tally), or intally / ignored.
 // The actions are in src/js/22-23: bankAct("bankPost"), bankRowAct("accept", id), bankSetLedger(id, name), …
 //
-// Still old pieces, shown through <Legacy>: the reading-repair banner, the Tally balance check, reconciling with
-// Tally, the column filters, the rules tab and the settings panel.
+// The checks over a statement are parts/BankChecks.jsx; the rules tab and the settings panel parts/BankSettings.jsx.
+// Still old pieces, shown through <Legacy>: the column filters' chips (colChipBar, noMatchNote).
 import { useRef } from "react";
 import Legacy from "../parts/Legacy.jsx";
 import { BankSettings, RulesPanel } from "../parts/BankSettings.jsx";
+import { PostReport, FixBanner, BankBalance, Recon, Gone, DupFind, BankFocus } from "../parts/BankChecks.jsx";
 import ColHead from "../parts/ColHead.jsx";
 import LedgerBox from "../parts/LedgerBox.jsx";
 import { BusyCard } from "../parts/Reading.jsx";
@@ -198,8 +199,8 @@ export default function Bank() {
     {b.busy && <div className="busy-float"><BusyCard title={/Tally/.test(b.busy) ? "Working with Tally…" : "Working on the statement…"} detail={b.busy} /></div>}
     {b.moved && <div className="bk-alert"><b>{b.moved.file}</b> is a statement of {b.moved.name} (account ··{b.moved.last4}), so it was filed there.{" "}
       <button className="linkbtn" onClick={() => bankAct("bankOpenMoved")}>Open {b.moved.name}</button> <button className="linkbtn" onClick={() => bankAct("bankDismissMoved")}>Dismiss</button></div>}
-    <Legacy html={b.postReport ? postReportHtml(b.postReport) : ""} />
-    <Legacy html={fixBanner()} />
+    <PostReport rep={b.postReport} />
+    <FixBanner />
     {b.lastFail && <LastFail f={b.lastFail} />}
     <LedgerSetup co={co} />
   </>;
@@ -249,8 +250,8 @@ export default function Bank() {
         {st.dupRows > 0 && <> <span className="muted">· {st.dupRows} entries skipped (already uploaded)</span></>}
         {book && <> <span className="muted">· {book.live ? "Checked against Tally " + new Date(book.importedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Matched with the Tally bank book"}</span></>}
       </div>
-      <Legacy html={accLedger && (Bridge.on() || st.tallyBal) ? bankBalanceHtml(st) : ""} />
-      <Legacy html={reconHtml()} />
+      {accLedger && (Bridge.on() || st.tallyBal) && <BankBalance st={st} />}
+      <Recon />
       {!accLedger && <div className="bk-setup">
         <div><b>Which Tally ledger is this bank account?</b><div className="note">{st.bank}{acc.last4 ? " ··" + acc.last4 : ""}{acc.ifsc ? " · " + acc.ifsc : ""}</div></div>
         {hasLedgerList() ? <select aria-label="Tally ledger for this bank account" onChange={(ev) => bankSetAccLedger(acc.id, ev.target.value)} dangerouslySetInnerHTML={{ __html: ledgerOptions("", BANK_GROUPS) }} />
@@ -265,7 +266,7 @@ export default function Bank() {
         <input type="search" className="bk-search" autoComplete="off" placeholder="Search the description, party or amount" aria-label="Search the statement" value={b.q} onChange={(ev) => bankSearch(ev.target.value)} />
       </div>
       <Legacy html={range} />
-      <Legacy html={goneHtml() + dupFindHtml() + bankFocusHtml()} />
+      <Gone /><DupFind /><BankFocus />
       {tab === "done" && !b.focus && live() && tc.done > 0 && <div className="bk-found"><span className="muted">Deleted some of these in Tally?</span> <button className="btn small" onClick={() => bankAct("goneCheck")}>Check they are still in Tally</button></div>}
       {b.offerRule && <div className="bk-found" style={{ borderColor: "var(--ledger)" }}><b>Keep this as a rule?</b> Every future line containing “{b.offerRule.text}” would go to <b>{b.offerRule.ledger}</b> by itself.{" "}
         <button className="btn small primary" onClick={() => bankAct("ruleFromBulk")}>Yes, make the rule</button><button className="linkbtn" onClick={() => bankAct("ruleNoThanks")}>No thanks</button></div>}

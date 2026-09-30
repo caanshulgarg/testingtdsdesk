@@ -198,8 +198,5 @@ function vrSet(key, val){
 }
 function vrFile(file){ if (!file || !VR.st()) return; S.vrec.file = file; S.vrec.fileName = file.name; S.vrec.res = null; render(); }
 function vrExcel(){ vendorReconExcel().catch(e => toast("Could not make the file: " + (e.message || e))); }
-// the bank reconciliation's Excel (its page is still old, src/js/24)
-document.addEventListener("click", ev => {
-  const t = ev.target.closest && ev.target.closest('[data-act="reconExcel"]');
-  if (t) bankReconExcel().catch(e => toast("Could not make the file: " + (e.message || e)));
-});
+// the bank reconciliation's Excel (app/src/parts/BankChecks.jsx)
+function reconExcelGo(){ bankReconExcel().catch(e => toast("Could not make the file: " + (e.message || e))); }

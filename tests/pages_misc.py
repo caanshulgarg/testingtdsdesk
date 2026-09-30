@@ -112,6 +112,29 @@ with sync_playwright() as p:
       S.ruleSuggest = [{text: 'BHARATKOSH', sample: 'NEFT DR BHARATKOSH UTR1', dir: 'out', ledger: 'BHARATKOSH', n: 4, agree: 75}]; S.bank.filter = 'rules'; render(); }"""); grab("bank-rules")
     pg.evaluate("() => { S.tab = 'bankset'; render(); }"); grab("setup-bankset")
     pg.evaluate("() => { S.tab = 'bankrules'; S.ruleSuggest = []; render(); }"); grab("setup-bankrules")
+    # the checks over a statement, with the bridge connected: the balance against Tally (agrees, differs, could not read,
+    # not checked), the reconciliation (with differences, and reconciled), lines gone from Tally, duplicates, the lines
+    # being shown, a statement that breaks, the last posting's report
+    pg.evaluate(BANK_SETUP); pg.wait_for_timeout(300)
+    pg.evaluate("() => { Bridge.on = () => true; Bridge.up = () => true; S.tab = 'bank'; const st = curStmt(); st.tallyBal = {at: '2026-04-25T10:00:00Z', ledger: 'ICICI Bank', to: '2026-04-24', tClose: 5000, sClose: 5000, diff: 0}; render(); }"); grab("chk-bal-ok")
+    pg.evaluate("""() => { const st = curStmt(); st.tallyBal = {at: '2026-04-25T10:00:00Z', how: 'worked back', later: 2, ledger: 'ICICI Bank', from: '2026-04-01', to: '2026-04-24', tClose: 4500, sClose: 5000, diff: 500, diffOpen: 100, openAsOn: '2026-03-31', tOpen: 1000, sOpen: 1100,
+      notIn: ['r0', 'r1'], notInEffect: -300, left: ['r2'], leftEffect: 50, missing: ['r3'], missingEffect: 20, extra: [{date: '2026-04-05', type: 'Payment', number: '7', party: 'X Ltd', eff: -200, note: 'typed in Tally'}], unexplained: 30}; render(); }"""); grab("chk-bal-diff")
+    pg.evaluate("() => { const st = curStmt(); st.tallyBal = {at: '2026-04-25T10:00:00Z', ledger: 'ICICI Bank', to: '2026-04-24', tClose: 4500, sClose: 5000, diff: -500, notIn: [], left: [], notInEffect: 0, leftEffect: 0}; B().balBusy = true; render(); }"); grab("chk-bal-diff2")
+    pg.evaluate("() => { const st = curStmt(); st.tallyBal = {at: '2026-04-25T10:00:00Z', error: 'Tally closed'}; B().balBusy = false; render(); }"); grab("chk-bal-err")
+    pg.evaluate("() => { const st = curStmt(); st.tallyBal = {at: '2026-04-25T10:00:00Z', ledger: 'ICICI Bank', to: '2026-04-24', tClose: 4500, diff: null}; render(); }"); grab("chk-bal-noclose")
+    pg.evaluate("() => { const st = curStmt(); st.tallyBal = null; render(); }"); grab("chk-bal-none")
+    pg.evaluate("""() => { S.recon = {sid: 's1', ledger: 'ICICI Bank', company: 'ZZ TEST', from: '2026-04-01', to: '2026-04-24', pairs: 20, at: '2026-04-25T10:00:00Z', unexplained: 10, sClose: 1000, tClose: -900, missing: ['r0', 'r5', 'r3'], extra: [0, 1], differ: [{rowId: 'r1', ti: 2}],
+      T: [{date: '2026-04-02', type: 'Payment', number: '1', party: 'A', eff: -100, tag: true}, {date: '2026-04-03', type: 'Receipt', number: '2', party: 'B', eff: 200, narr: 'typed by hand'}, {date: '2026-04-04', type: 'Payment', number: '3', party: 'C', eff: -50}],
+      dupOf: [[0, 'r3']], pick: new Set([0]), dEff: 10, openDiff: 5, tOpen: 100, sOpen: 105, deleteProblems: ['Voucher not found']}; render(); }"""); grab("chk-recon")
+    pg.evaluate("() => { Object.assign(S.recon, {unexplained: 0, sClose: 1000, tClose: 1000, missing: [], extra: [], differ: []}); render(); }"); grab("chk-recon-ok")
+    pg.evaluate("() => { S.recon = null; B().gone = {sid: 's1', ids: ['r5'], marked: 3, ledger: 'ICICI Bank', company: 'ZZ TEST', bankLines: 2}; render(); }"); grab("chk-gone")
+    pg.evaluate("() => { B().gone = {sid: 's1', ids: ['r5', 'r6'], marked: 2, ledger: 'ICICI Bank', company: 'ZZ TEST', bankLines: 0}; render(); }"); grab("chk-gone-all")
+    pg.evaluate("""() => { B().gone = null; const v = (d, n, a, extra) => Object.assign({date: d, type: 'Payment', number: n, party: 'P' + n, amt: a}, extra || {});
+      S.dupFind = {amountOf: (x) => x.amt, company: 'ZZ TEST', from: '2026-04-01', to: '2026-04-24', tagged: 5, wrongDate: [v('20260410', '4', 300, {wantDate: '2026-04-09', rowId: 'r4'})], extra: [v('20260411', '5', 400)], strangers: [v('20260412', '6', 500)]}; render(); }"""); grab("chk-dup")
+    pg.evaluate("() => { S.dupFind = Object.assign(S.dupFind, {wrongDate: [], extra: [], strangers: []}); render(); }"); grab("chk-dup-ok")
+    pg.evaluate("() => { S.dupFind = null; B().focus = {title: 'not in Tally yet', ids: ['r1', 'r2'], note: 'from the check'}; render(); }"); grab("chk-focus")
+    pg.evaluate("""() => { B().focus = null; B().postReport = {at: '2026-04-25T10:00:00Z', posted: 3, company: 'ZZ TEST', unread: 1, optional: 2, skipped: 1, movedBack: 1, dismiss: 'bankReportOk', failed: [{id: 'r1', what: 'Line 2', msg: 'Ledger missing'}]}; render(); }"""); grab("chk-report")
+    pg.evaluate("() => { B().postReport = {at: '2026-04-25T10:00:00Z', posted: 3, checking: true, company: 'ZZ TEST', dismiss: 'bankReportOk'}; render(); }"); grab("chk-report2")
     br.close()
 srv.shutdown()
 json.dump({"pages": res, "errors": errors}, open(out, "w"), indent=0)

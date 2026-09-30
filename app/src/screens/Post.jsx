@@ -5,7 +5,7 @@
 // doAct("billPost") and friends; bank buttons through bankAct(). What a posting run reports back lives in
 // S.billPost (bills) and S.bank.postReport (bank); S.billCheck is the last "Check sent bills in Tally".
 import { useState } from "react";
-import Legacy from "../parts/Legacy.jsx";
+import { PostReport } from "../parts/BankChecks.jsx";
 
 const plural = (n, one, many) => n + " " + (n === 1 ? one : many);
 const ROLE = { party: "Supplier", expense: "Expense", gst: "Input GST", tds: "TDS payable", roundoff: "Round off", "rcm-in": "RCM input", "rcm-out": "RCM payable" };
@@ -171,7 +171,7 @@ export function PostStep() {
           : !st ? <p className="note">No bank statement yet. <button className="linkbtn" onClick={() => goDocType("bank", "collect")}>Upload one</button>.</p>
           : <>
             {/* the posting report is shared with the Bank and Sales screens, still old ones */}
-            <Legacy html={S.bank.postReport ? postReportHtml(S.bank.postReport) : ""} />
+            <PostReport rep={S.bank.postReport} />
             <div className="row" style={{ alignItems: "center", gap: 12 }}>
               <span><b>{ready.length}</b> line{ready.length === 1 ? "" : "s"} ready in {st.name || "this statement"}</span>
               {ready.length > 0 && Bridge.on() && Bridge.up() && <button className="btn primary" onClick={() => bankAct("bankPost")}>Post {plural(ready.length, "bank line", "bank lines")}</button>}

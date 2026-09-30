@@ -492,67 +492,6 @@ async function reconcileBank(opts){
   if (!opts.stay) window.scrollTo({top: 0, behavior: "smooth"});
   return rec;
 }
-function reconHtml(){
-  const b = B(), st = curStmt(), R = S.recon;
-  if (!R || !st || R.sid !== st.id) return "";
-  const m = v => INR.format(Math.abs(v || 0));
-  const rowById = new Map(b.rows.map(r => [r.id, r]));
-  const live = Bridge.on() && Bridge.up();
-  const balanced = R.unexplained !== null && Math.abs(R.sClose - R.tClose) < 0.01;
-  let h = '<section class="recon"><div class="recon-head"><div><h3>Bank reconciliation · ' + esc(R.ledger) + "</h3>" +
-    '<div class="note">' + esc(R.company) + " · " + fmtDate(R.from) + " to " + fmtDate(R.to) + " · " + R.pairs + " lines matched · read " + new Date(R.at).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}) + "</div></div>" +
-    '<div class="row" style="gap:8px">' + '<button class="btn small" data-act="reconExcel">Download Excel</button>' + (live ? '<button class="btn small" data-act="reconRun">Reconcile again</button>' : "") + '<button class="btn small" data-act="reconClose">Close</button></div></div>';
-  if (balanced && !R.missing.length && !R.extra.length && !R.differ.length){
-    return h + '<div class="bk-bal ok"><div>✔ <b>Reconciled.</b> Every line of the statement is in Tally once, and nothing else is. ' + esc(R.ledger) + " in Tally on " + fmtDate(R.to) + " is " + m(R.tClose) + ", the same as the statement.</div></div></section>";
-  }
-  // the reconciliation statement
-  const line = (label, v, sign, note) => '<tr><td>' + label + (note ? ' <span class="muted">' + note + "</span>" : "") + '</td><td class="n">' + (v ? (sign || "") + m(v) : "—") + "</td></tr>";
-  const mIn = r2(R.missing.map(id => rowById.get(id)).filter(Boolean).reduce((a, r) => a + num(r.credit), 0)), mOut = r2(R.missing.map(id => rowById.get(id)).filter(Boolean).reduce((a, r) => a + num(r.debit), 0));
-  const xIn = r2(R.extra.reduce((a, i) => a + Math.max(0, R.T[i].eff), 0)), xOut = r2(R.extra.reduce((a, i) => a + Math.max(0, -R.T[i].eff), 0));
-  h += '<table class="data recon-stmt"><tbody>' +
-    '<tr><td><b>Balance in Tally on ' + fmtDate(R.to) + '</b></td><td class="n"><b>' + (R.tClose < 0 ? "−" : "") + m(R.tClose) + "</b></td></tr>" +
-    line("Add: deposits on the statement, not in Tally", mIn, "+ ") +
-    line("Less: withdrawals on the statement, not in Tally", mOut, "− ") +
-    line("Less: receipts in Tally, not on the statement", xIn, "− ") +
-    line("Add: payments in Tally, not on the statement", xOut, "+ ") +
-    (R.differ.length ? line("Amounts that differ (statement less Tally)", R.dEff, R.dEff >= 0 ? "+ " : "− ") : "") +
-    (Math.abs(R.openDiff) >= 0.01 ? line("Opening balance difference", R.openDiff, R.openDiff >= 0 ? "+ " : "− ", "Tally on " + fmtDate(addDays(R.from, -1)) + " is " + m(R.tOpen) + "; the statement opens at " + m(R.sOpen) + ": entries before " + fmtDate(R.from) + " differ — reconcile the earlier statement") : "") +
-    (R.unexplained !== null && Math.abs(R.unexplained) >= 0.01 ? line("Not explained by the lines below", R.unexplained, R.unexplained >= 0 ? "+ " : "− ") : "") +
-    '<tr class="tot"><td><b>Balance as per the bank statement on ' + fmtDate(R.to) + '</b></td><td class="n"><b>' + (R.sClose === null ? "—" : (R.sClose < 0 ? "−" : "") + m(R.sClose)) + "</b></td></tr></tbody></table>";
-  if ((R.deleteProblems || []).length) h += '<div class="bk-alert bad" style="margin-top:10px"><b>Tally did not delete ' + R.deleteProblems.length + " entr" + (R.deleteProblems.length === 1 ? "y" : "ies") + '.</b> What Tally said:<ul style="margin:6px 0 0">' + R.deleteProblems.slice(0, 20).map(x => "<li>" + esc(x) + "</li>").join("") + "</ul>" +
-    '<div class="note">If Tally says the voucher cannot be found, it may already be gone: press Reconcile again. If a Tally security setting blocks deleting, delete these in Tally (Alt+D on the voucher).</div></div>';
-  // A. on the statement, not in Tally
-  if (R.missing.length){
-    const rows = R.missing.map(id => rowById.get(id)).filter(Boolean);
-    const canPost = rows.filter(r => ["ready", "sent", "intally"].includes(r.state) && r.ledger && exactLedger(r.ledger));
-    const needLedger = rows.filter(r => !canPost.includes(r) && r.state !== "ignored"), left = rows.filter(r => r.state === "ignored");
-    h += '<div class="recon-sec"><h4>On the statement, not in Tally <span class="cnt">' + rows.length + "</span></h4>" +
-      '<div class="tblwrap"><table class="data"><thead><tr><th>Date</th><th>Particulars</th><th class="n">Withdrawal</th><th class="n">Deposit</th><th>Ledger</th><th>Why</th></tr></thead><tbody>' +
-      rows.slice(0, 400).map(r => "<tr><td>" + fmtDate(r.date) + "</td><td>" + esc(r.dec.name || r.narr.slice(0, 50)) + '</td><td class="n">' + (r.debit ? m(r.debit) : "") + '</td><td class="n">' + (r.credit ? m(r.credit) : "") + "</td><td>" + esc(r.ledger || "—") + "</td><td>" +
-        esc(r.state === "ignored" ? "left out" : ["sent", "intally"].includes(r.state) ? "marked as posted, but Tally does not have it" : r.state === "ready" ? "not posted yet" : "needs a ledger") + "</td></tr>").join("") + "</tbody></table></div>" +
-      '<div class="row" style="gap:8px;margin-top:8px">' + (live && canPost.length ? '<button class="btn small primary" data-act="reconPost">Post ' + (canPost.length === 1 ? "it" : "these " + canPost.length) + " to Tally</button>" : "") +
-      (needLedger.length ? '<span class="note">' + needLedger.length + " need a ledger first " + focusBtn("recon-need", "need a ledger before they can be posted", needLedger.map(r => r.id), "Show them") + "</span>" : "") +
-      (left.length ? '<span class="note">' + left.length + " were left out on purpose " + focusBtn("recon-left", "left out, not posted", left.map(r => r.id), "Show them") + "</span>" : "") + "</div></div>";
-  }
-  // B. in Tally, not on the statement
-  if (R.extra.length){
-    const dup = new Map(R.dupOf);
-    h += '<div class="recon-sec"><h4>In Tally, not on the statement <span class="cnt">' + R.extra.length + "</span></h4>" +
-      '<p class="note" style="margin:0 0 6px">Tick the entries to delete from Tally. Copies and entries FinCom posted are ticked already; check entries typed in Tally before deleting them.</p>' +
-      '<div class="tblwrap"><table class="data"><thead><tr><th></th><th>Date</th><th>Voucher</th><th>Party / ledger</th><th class="n">In</th><th class="n">Out</th><th>What it is</th></tr></thead><tbody>' +
-      R.extra.map(i => { const t = R.T[i]; return '<tr><td><input type="checkbox" data-reconpick="' + i + '"' + (R.pick.has(i) ? " checked" : "") + (live ? "" : " disabled") + '></td><td>' + fmtDate(t.date) + "</td><td>" + esc([t.type, t.number].filter(Boolean).join(" ")) + "</td><td>" + esc(t.party) + '</td><td class="n">' + (t.eff > 0 ? m(t.eff) : "") + '</td><td class="n">' + (t.eff < 0 ? m(t.eff) : "") + "</td><td>" +
-        esc(dup.has(i) ? "a second copy of " + fmtDate((rowById.get(dup.get(i)) || {}).date) + "'s line" : t.tag ? "posted by FinCom, from another statement or an old copy" : "typed in Tally") + (t.narr && !t.tag ? '<div class="muted" style="font-size:12px">' + esc(t.narr.slice(0, 80)) + "</div>" : "") + "</td></tr>"; }).join("") + "</tbody></table></div>" +
-      (live ? '<div class="row" style="gap:8px;margin-top:8px"><button class="btn small danger" data-act="reconDelete"' + (R.pick.size ? "" : " disabled") + ">Delete the " + R.pick.size + " ticked from Tally</button></div>" : "") + "</div>";
-  }
-  // C. the same line, a different amount
-  if (R.differ.length){
-    h += '<div class="recon-sec"><h4>Amount differs <span class="cnt">' + R.differ.length + "</span></h4>" +
-      '<div class="tblwrap"><table class="data"><thead><tr><th>Date</th><th>Particulars</th><th class="n">Statement</th><th class="n">Tally</th><th>Tally voucher</th></tr></thead><tbody>' +
-      R.differ.map(d => { const r = rowById.get(d.rowId), t = R.T[d.ti]; return "<tr><td>" + fmtDate(r.date) + "</td><td>" + esc(r.dec.name || r.narr.slice(0, 50)) + '</td><td class="n">' + m(bankEffect(r)) + '</td><td class="n">' + m(t.eff) + "</td><td>" + esc([t.type, t.number].filter(Boolean).join(" ")) + "</td></tr>"; }).join("") + "</tbody></table></div>" +
-      (live ? '<div class="row" style="gap:8px;margin-top:8px"><button class="btn small primary" data-act="reconReplace">Replace ' + (R.differ.length === 1 ? "it" : "them") + " in Tally with the statement’s amount</button></div>" : "") + "</div>";
-  }
-  return h + "</section>";
-}
 async function reconPost(){
   const b = B(), R = S.recon;
   if (!R) return;
@@ -644,15 +583,6 @@ async function checkMarkedInTally(opts){
   if (!opts.quiet){ b.busy = ""; toast(g.ids.length ? g.ids.length + " line" + (g.ids.length === 1 ? " is" : "s are") + " no longer in Tally." : "All " + g.marked + " posted lines are still in Tally."); }
   render();
   return g;
-}
-function goneHtml(){
-  const b = B(), g = b.gone, st = curStmt();
-  if (!g || !st || g.sid !== st.id || !g.ids.length) return "";
-  const n = g.ids.length, all = n === g.marked;
-  return '<div class="bk-bal bad"><div style="flex:1"><b>' + n + " line" + (n === 1 ? " is" : "s are") + " marked as posted, but " + (n === 1 ? "is" : "are") + " no longer in Tally.</b> " +
-    (all ? "None of this statement\u2019s posted lines are in " + esc(g.ledger) + " in " + esc(g.company) + " any more" + (g.bankLines ? "" : " (Tally shows no entries in this ledger for these dates)") + "." : "They were probably deleted in Tally, or moved to another company.") +
-    '<div class="row" style="margin-top:8px;gap:8px"><button class="btn small primary" data-act="goneBack">Put ' + (n === 1 ? "it" : "them") + " back in Ready to post</button>" + focusBtn("gone", "no longer in Tally", g.ids, "Show " + (n === 1 ? "it" : "them")) +
-    '<button class="linkbtn" data-act="goneKeep">Leave them as posted</button></div></div></div>';
 }
 function goneBack(){
   const b = B(), g = b.gone;
@@ -755,33 +685,6 @@ async function findTallyDuplicates(){
   b.busy = "";
   if (S.dupFind && !S.dupFind.extra.length && !S.dupFind.wrongDate.length) lsSet(wideCheckKey(), String(Date.now()));
   render();
-}
-function dupFindHtml(){
-  const d = S.dupFind;
-  if (!d) return "";
-  const amt = v => INR.format(d.amountOf(v));
-  const tbl = (list, withWant) => '<div class="tblwrap" style="margin-top:6px;max-height:260px;overflow:auto"><table class="data"><thead><tr><th>' + (withWant ? "In Tally on" : "Date") + "</th>" + (withWant ? "<th>Should be</th>" : "") + '<th>Type</th><th>Voucher</th><th>Party</th><th class="n">Amount</th></tr></thead><tbody>' +
-    list.slice(0, 400).map(v => "<tr><td>" + fmtDate(tallyToIso(v.date)) + "</td>" + (withWant ? "<td>" + fmtDate(v.wantDate) + "</td>" : "") + "<td>" + esc(v.type || "") + "</td><td>" + esc(v.number || "") + "</td><td>" + esc(v.party || "") + '</td><td class="n">' + amt(v) + "</td></tr>").join("") +
-    "</tbody></table></div>";
-  const bad = d.extra.length || d.wrongDate.length || d.strangers.length;
-  let h = '<div class="bigwarn" style="border-color:' + (bad ? "var(--stop)" : "var(--ledger)") + '">';
-  if (!bad) return h + "<b>All clear.</b> " + d.tagged + " entries posted by FinCom were checked in " + esc(d.company) + " (" + fmtDate(d.from) + " to " + fmtDate(d.to) + "): each is there once, on its statement date. " + '<button class="linkbtn" data-act="dupClose">Close</button></div>';
-  if (d.wrongDate.length){
-    h += "<b>" + d.wrongDate.length + " entr" + (d.wrongDate.length === 1 ? "y is" : "ies are") + " in " + esc(d.company) + " under the wrong date.</b>" +
-      "<div>Remove them; the lines then show as not posted, and Post puts them in again with the statement’s date. " + focusBtn("dup-wrong", "in Tally under the wrong date", Array.from(new Set(d.wrongDate.map(v => v.rowId).filter(Boolean))), "Show their statement lines") + "</div>" + tbl(d.wrongDate, true) +
-      '<div class="row" style="margin-top:8px"><button class="btn small primary" data-act="dupRemoveWrong">Remove the ' + d.wrongDate.length + " wrong-date entr" + (d.wrongDate.length === 1 ? "y" : "ies") + ' from Tally</button></div>';
-  }
-  if (d.extra.length){
-    h += '<div style="margin-top:' + (d.wrongDate.length ? 12 : 0) + 'px"><b>' + d.extra.length + " entr" + (d.extra.length === 1 ? "y is" : "ies are") + " in " + esc(d.company) + " twice.</b></div>" +
-      "<div>For each one, the first copy is kept and the later copy is removed.</div>" + tbl(d.extra, false) +
-      '<div class="row" style="margin-top:8px"><button class="btn small primary" data-act="dupRemove">Remove the ' + d.extra.length + " extra cop" + (d.extra.length === 1 ? "y" : "ies") + " from Tally</button></div>";
-  }
-  if (d.strangers.length){
-    h += '<div style="margin-top:10px"><b>' + d.strangers.length + " entr" + (d.strangers.length === 1 ? "y" : "ies") + " posted by FinCom " + (d.strangers.length === 1 ? "has an amount that is" : "have amounts that are") + " not on this statement:</b> " +
-      d.strangers.slice(0, 40).map(v => fmtDate(tallyToIso(v.date)) + " " + esc(v.party || "") + " " + amt(v)).join("; ") +
-      ". They were probably read from an earlier or different copy of the statement. Check them against the bank, and delete them in Tally if they are wrong.</div>";
-  }
-  return h + '<div class="row" style="margin-top:8px"><button class="linkbtn" data-act="dupClose">Close</button></div></div>';
 }
 async function removeTallyDuplicates(which){
   const d = S.dupFind;
@@ -945,51 +848,6 @@ async function checkBankBalance(opts){
   return res;
 }
 function bankFocus(title, ids, note){ const b = B(); b.focus = {title, ids: [].concat(ids || []), note: note || ""}; b.sel.clear(); b.limit = 500; }
-function bankFocusHtml(){
-  const b = B(), f = b.focus;
-  if (!f) return "";
-  return '<div class="bk-focus"><div><b>Showing ' + f.ids.length + " line" + (f.ids.length === 1 ? "" : "s") + ": " + esc(f.title) + "</b>" + (f.note ? '<div class="note">' + esc(f.note) + "</div>" : "") +
-    '</div><button class="btn small" data-act="bankFocusOff">Show all lines</button></div>';
-}
-S.focusSets = S.focusSets || {};
-function focusBtn(key, title, ids, label, note){
-  S.focusSets[key] = {title, ids: [].concat(ids || []), note: note || ""};
-  return ids && ids.length ? '<button class="linkbtn" data-bfocus="' + esc(key) + '">' + esc(label || "Show " + (ids.length === 1 ? "this line" : "these " + ids.length + " lines")) + "</button>" : "";
-}
-function bankBalanceHtml(st){
-  const t = st.tallyBal;
-  if (st.tallyBalHidden && st.tallyBalHidden === (t ? t.at : "none")) return "";
-  const h = bankBalanceInner(st);
-  // every form of the box can be closed; a new check shows it again
-  return h ? h.replace('class="bk-bal', 'class="bk-balbox bk-bal').replace(/<\/div>$/, '<button class="icon bk-x" data-act="balHide" title="Close" aria-label="Close">\u00d7</button></div>') : "";
-}
-function bankBalanceInner(st){
-  const b = B(), t = st.tallyBal;
-  const live = Bridge.on() && Bridge.up();
-  const btn = live ? '<button class="btn small" data-act="bankBalCheck"' + (b.balBusy ? " disabled" : "") + ">" + (b.balBusy ? "Checking…" : t ? "Check again" : "Check with Tally") + "</button>" : "";
-  const when = (t && t.at ? '<span class="muted"> \u00b7 checked ' + new Date(t.at).toLocaleString([], {day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit"}) + "</span>" : "") +
-    (t && t.how === "worked back" ? '<span class="muted"> \u00b7 Tally gave its latest balance whatever the date, so the balance on ' + fmtDate(t.to) + " was worked back from it" + (t.later ? ", less " + t.later + " later entr" + (t.later === 1 ? "y" : "ies") : "") + "</span>" : "");
-  if (!t) return '<div class="bk-bal"><div><b>Balance in Tally:</b> <span class="muted">not checked yet.' + (live ? " FinCom checks it after every posting." : " Connect the Tally Bridge to check it.") + "</span></div>" + btn + "</div>";
-  if (t.error) return '<div class="bk-bal bad"><div><b>Balance in Tally could not be read:</b> ' + esc(t.error) + when + "</div>" + btn + "</div>";
-  const m = v => INR.format(v || 0);
-  const on = fmtDate(t.to);
-  if (t.diff === null) return '<div class="bk-bal"><div><b>' + esc(t.ledger) + " in Tally on " + on + ":</b> " + m(t.tClose) + ' <span class="muted">(the statement has no closing balance to compare with)</span>' + when + "</div>" + btn + "</div>";
-  if (Math.abs(t.diff) < 0.01) return '<div class="bk-bal ok"><div>✔ <b>Tally agrees with the bank.</b> ' + esc(t.ledger) + " in Tally on " + on + " is " + m(t.tClose) + ", the statement's closing balance." + when + "</div>" + btn + "</div>";
-  let h = '<div class="bk-bal bad"><div style="flex:1"><div>✖ <b>Tally does not agree with the bank.</b> ' + esc(t.ledger) + " in Tally on " + on + " is <b>" + m(t.tClose) + "</b>; the statement closes at <b>" + m(t.sClose) + "</b>. Difference <b>" + m(Math.abs(t.diff)) + "</b> (" + (t.diff > 0 ? "Tally is lower" : "Tally is higher") + ")." + when + "</div>";
-  const li = [];
-  if (t.diffOpen && Math.abs(t.diffOpen) >= 0.01) li.push("<li><b>Opening balance:</b> Tally on " + fmtDate(t.openAsOn) + " is " + m(t.tOpen) + ", the statement opens at " + m(t.sOpen) + " (" + m(Math.abs(t.diffOpen)) + " apart). Entries before " + fmtDate(t.from) + " are missing or different in Tally: post the earlier statement first.</li>");
-  if (t.notIn.length) li.push("<li><b>" + t.notIn.length + " line" + (t.notIn.length === 1 ? " is" : "s are") + " not in Tally yet</b> (" + m(Math.abs(t.notInEffect)) + " " + (t.notInEffect >= 0 ? "net in" : "net out") + ") " + focusBtn("bal-notin", "not in Tally yet", t.notIn) + "</li>");
-  if (t.left.length) li.push("<li><b>" + t.left.length + " line" + (t.left.length === 1 ? " was" : "s were") + " left out</b> (" + m(Math.abs(t.leftEffect)) + ") " + focusBtn("bal-left", "left out, not posted", t.left) + "</li>");
-  if (t.missing && t.missing.length) li.push("<li><b>" + t.missing.length + " line" + (t.missing.length === 1 ? " is" : "s are") + " marked as in Tally, but Tally does not show " + (t.missing.length === 1 ? "it" : "them") + " for these dates</b> (" + m(Math.abs(t.missingEffect)) + "): deleted in Tally, or under another date. " + focusBtn("bal-missing", "marked in Tally, not found there", t.missing) + "</li>");
-  if (t.extra && t.extra.length) li.push("<li><b>" + t.extra.length + " entr" + (t.extra.length === 1 ? "y is" : "ies are") + " in Tally for these dates but not on the statement</b> (" + m(Math.abs(t.extraEffect)) + "):" +
-    '<div class="tblwrap" style="margin-top:6px;max-height:240px;overflow:auto"><table class="data"><thead><tr><th>Date</th><th>Voucher</th><th>Party / ledger</th><th class="n">In</th><th class="n">Out</th><th></th></tr></thead><tbody>' +
-    t.extra.slice(0, 300).map(x => "<tr><td>" + fmtDate(x.date) + "</td><td>" + esc([x.type, x.number].filter(Boolean).join(" ")) + "</td><td>" + esc(x.party) + '</td><td class="n">' + (x.eff > 0 ? m(x.eff) : "") + '</td><td class="n">' + (x.eff < 0 ? m(-x.eff) : "") + "</td><td>" + esc(x.note || "") + "</td></tr>").join("") +
-    "</tbody></table></div></li>");
-  if (!t.extra) li.push('<li>' + (live ? '<button class="btn small primary" data-act="reconRun">Reconcile with Tally</button> ' : "") + '<span class="muted">pairs every statement line with the entries of ' + esc(t.ledger) + " in Tally, and lists what to post and what to delete to make them agree</span></li>");
-  if (t.unexplained !== undefined && Math.abs(t.unexplained) >= 0.01) li.push("<li><b>" + m(Math.abs(t.unexplained)) + " is not explained</b> by the lines above: check the amounts of the entries in Tally against the statement.</li>");
-  else if (t.extra) li.push('<li class="muted">These together make up the whole difference.</li>');
-  return h + (li.length ? '<ul class="bk-bal-why">' + li.join("") + "</ul>" : "") + "</div>" + btn + "</div>";
-}
 
 /* ---------- taking an entry back out of Tally ---------- */
 async function unpostFromTally(what, obj, cid){

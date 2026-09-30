@@ -114,19 +114,6 @@ async function fixBreaks(force){
     toast("Could not read those pages: " + errCopy(e && e.code));
   }
 }
-function fixBanner(){
-  const b = B(), st = curStmt();
-  if (!b || !st) return "";
-  const bad = breakRows();
-  if (!bad.length) return "";
-  const pages = pagesToFix(bad);
-  return '<div class="bk-alert bad"><b>' + bad.length + " line" + (bad.length === 1 ? " does" : "s do") + " not fit the running balance.</b> " +
-    (pages.length ? "Something printed on page" + (pages.length === 1 ? " " : "s ") + pages.join(", ") + " was missed or misread." : "") +
-    '<div class="row" style="gap:8px;margin-top:8px"><span class="note">Read those pages again:</span>' +
-    '<button class="btn small" data-act="fixFree">Free</button>' +
-    '<button class="btn small" data-act="fixGoogle"' + (googleReady() ? "" : " disabled") + '>Google OCR</button>' +
-    '<button class="btn small primary" data-act="fixClaude"' + (claudeReady() ? "" : " disabled") + ">Claude</button></div></div>";
-}
 
 // Claude reads the pages as images and lists the transactions. Used when asked, or when nothing else could read the file.
 async function claudeStatement(file, progress, onlyPages){

@@ -115,6 +115,22 @@ with sync_playwright() as p:
     ok(pg.evaluate("clientRules().map(r => r.id)") == [ids[1]], "a rule deleted, after asking")
     pg.evaluate("bankTabGo('review')"); pg.wait_for_timeout(300)
     pg.screenshot(path=OUT + "/react-bank.png")
+    # the checks: the balance box closed, a line group shown, the reconciliation's ticks and Excel
+    pg.evaluate("""() => { Bridge.on = () => true; Bridge.up = () => true; const st = curStmt(); st.tallyBal = {at: '2026-04-25T10:00:00Z', ledger: 'ICICI Bank', from: '2026-04-01', to: '2026-04-24', tClose: 4500, sClose: 5000, diff: 500, notIn: ['r0', 'r1'], notInEffect: -300, left: [], leftEffect: 0}; render(); }"""); pg.wait_for_timeout(300)
+    pg.click('.bk-balbox button:text-is("Show these 2 lines")'); pg.wait_for_timeout(400)
+    ok(pg.evaluate("B().focus && B().focus.ids") == ["r0", "r1"] and "Showing 2 lines: not in Tally yet" in app(), "a group of lines shown from the balance check")
+    pg.click('.bk-focus button:text-is("Show all lines")'); pg.wait_for_timeout(300)
+    ok(pg.evaluate("B().focus") is None, "and all lines again")
+    pg.click('.bk-balbox button[aria-label="Close"]'); pg.wait_for_timeout(300)
+    ok(pg.locator(".bk-balbox").count() == 0, "the balance box closed")
+    pg.evaluate("""() => { window.bankReconExcel = async () => { window.__rx = true; }; S.recon = {sid: curStmt().id, ledger: 'ICICI Bank', company: 'ZZ', from: '2026-04-01', to: '2026-04-24', pairs: 2, at: '2026-04-25T10:00:00Z', unexplained: 0, sClose: 1, tClose: 1, missing: [], extra: [0, 1], differ: [],
+      T: [{date: '2026-04-02', type: 'Payment', number: '1', party: 'A', eff: -100}, {date: '2026-04-03', type: 'Receipt', number: '2', party: 'B', eff: 200}], dupOf: [], pick: new Set(), dEff: 0, openDiff: 0}; render(); }"""); pg.wait_for_timeout(300)
+    pg.check('input[aria-label="Delete Payment 1"]'); pg.wait_for_timeout(300)
+    ok(pg.evaluate("Array.from(S.recon.pick)") == [0] and "Delete the 1 ticked from Tally" in app(), "an entry ticked to delete from Tally")
+    pg.click('.recon button:text-is("Download Excel")'); pg.wait_for_timeout(300)
+    ok(pg.evaluate("window.__rx") is True, "the reconciliation as Excel")
+    pg.click('.recon button:text-is("Close")'); pg.wait_for_timeout(300)
+    ok(pg.evaluate("S.recon") is None, "and closed")
     # a second statement, and a bank account with no Tally ledger yet
     pg.evaluate("""() => { const b = B(); b.stmts.push({id: "s2", acctId: "a2", bank: "HDFC", acct: "9911", from: "2026-05-01", to: "2026-05-31", opening: 0, closing: 0});
       CO().bankAccounts.push({id: "a2", bank: "HDFC", last4: "9911", ledger: ""}); render(); }""")
