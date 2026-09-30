@@ -68,6 +68,21 @@ with sync_playwright() as p:
     pg.evaluate("""() => { const s = SUP.st(); s.newOpen = false; s.open = 'a'; s.detail = Object.assign({}, s.list[0], {category: 'problem', respond_by: '2026-09-30T12:00:00Z', resolve_by: '2026-10-01T10:00:00Z', context: {screen: 'GST', build: 'b196'},
       thread: [{author_name: 'Asha', body: 'Line one\\nLine two', created_at: '2026-09-29T04:00:00Z', files: [{path: 'f1/x', name: 'screen.png', size: 3000}]}, {author_name: 'Anshul', from_support: true, internal: true, body: 'Looking', created_at: '2026-09-29T05:00:00Z'}]}); s.mailNote = 'Email is not set up yet'; render(); }"""); grab("help-ticket-admin")
     pg.evaluate("() => { S.account = {me: {role: 'owner'}}; render(); }"); grab("help-ticket-firm")
+    # the firm account in Settings: signed out (the sign-in form), then signed in (plan and credit with its history,
+    # sign-in and people, documents, drop keys, backups) and the platform page
+    pg.evaluate("() => { S.sup = null; S.view = 'home'; S.homeTab = 'rules'; S.settingsTab = 'account'; Cloud.st.error = 'Wrong password.'; render(); }"); grab("acct-signedout")
+    pg.evaluate("""() => { Cloud.on = () => true; Cloud.aal = () => 'aal1'; Cloud.cfg = () => ({url: 'https://x.supabase.co', key: 'anon', auto: true}); Cloud.st = Object.assign(Cloud.st, {email: 'a@b.in', role: 'owner', pending: 2, error: '', busy: '', lastSync: 0, mfa: null, mfaInfo: {enrolled: false, admin: true},
+        members: [{name: 'Asha', email: 'a@b.in', role: 'owner', active: true}]});
+      S.lastSignIn = null; S.account = {me: {role: 'owner'}, superadmin: true, firm: {id: 'f1', balance: 40, warn_at: 100, period_start: '2026-09-01', plan: {name: 'Starter', monthly_fee: 999, includes: {}}},
+        modules: [{code: 'read', title: 'Reading bills', billing: 'unit', price: 2, unit: 'per page', enabled: true}, {code: 'post', title: 'Posting', billing: 'free', enabled: false}], usage: [{code: 'read', qty: 12, spent: 24}],
+        people: [{name: 'Asha', email: 'a@b.in', role: 'owner', active: true}, {name: '', email: 'b@b.in', role: 'staff', active: false}]};
+      S.newPerson = {email: 'b@b.in', password: 'Pw-123'}; S.docUsage = {files: 3, bytes: 5 * 1048576, oldest: '2025-01-02T00:00:00Z'}; S.dropKeys = [{id: 1, label: 'Agent', hint: 'ab12', created_at: '2026-01-01', uses: 4, last_used: '2026-02-01', active: true}, {id: 2, label: 'Old', hint: 'zz', created_at: '2025-01-01', active: false}];
+      S.newDropKey = 'dk_live_x'; S.backups = [{id: 7, taken_at: '2026-09-29T20:00:00Z', clients: 3, records: 120, bytes: 20480}]; render(); }"""); grab("acct-account")
+    pg.evaluate("() => { S.newDropKey = null; S.backups = []; S.dropKeys = []; S.docUsage = null; S.firm.cloudDocs = false; S.account.me.role = 'staff'; S.account.superadmin = false; render(); }"); grab("acct-account-staff")
+    pg.evaluate("() => { S.settingsTab = 'plan'; S.walletOpen = true; S.wallet = [{at: '2026-09-02T10:00:00Z', kind: 'credit', amount: 500, balance_after: 540, note: 'UPI'}, {at: '2026-09-03T10:00:00Z', kind: 'use', code: 'read', amount: -2, balance_after: 538}]; render(); }"); grab("acct-plan")
+    pg.evaluate("""() => { S.account.superadmin = true; S.settingsTab = 'platform'; S.adminData = {month: 1200, firms: [{id: 'f1', name: 'Firm A', active: true, plan_id: 'p1', balance: 40, used_this_period: 300, people: 2, modules: [{code: 'read', price: 1.5, enabled: true}]}, {id: 'f2', name: 'Firm B', active: false, note: 'trial', plan_id: 'p2', balance: 0, used_this_period: 0, people: 1, modules: []}],
+      plans: [{id: 'p1', name: 'Starter', monthly_fee: 999, includes: {read: {cap: 100}}, note: 'most firms'}, {id: 'p2', name: 'Pay as you go', monthly_fee: 0, includes: {}}], modules: [{code: 'read', title: 'Reading bills', price: 2, unit: 'per page', billing: 'unit'}],
+      signup: {open: true, trial_credit: 100, plan: 'Starter'}, secrets: [{name: 'claude_api_key', tail: 'x9', updated_at: '2026-09-01T00:00:00Z'}]}; S.adminPrices = 'f1'; S.planEdit = 'p1'; S.newFirm = {email: 'n@f.in', password: 'Pw-9'}; render(); }"""); grab("acct-platform")
     br.close()
 srv.shutdown()
 json.dump({"pages": res, "errors": errors}, open(out, "w"), indent=0)

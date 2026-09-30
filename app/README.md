@@ -74,6 +74,8 @@ screen. Add a screen to `PRINTABLE` there to print it the same way.
 - **One test per screen** in `tests/run_react_*.py`, written as a checklist a user would recognise. Run it with
   the testing build before you commit.
 
+Browser storage keys (`tdsdesk:…`) are named only in `src/js`: the test build renames them there (`build.py`), not in `app/src`. A React screen that needs a stored value calls a helper in `src/js` (like `idleMin()`).
+
 ## Run it
 
 ```

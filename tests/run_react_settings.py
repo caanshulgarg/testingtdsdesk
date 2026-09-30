@@ -99,6 +99,42 @@ with sync_playwright() as p:
     ok(pg.locator("#confirmBox .cbx").is_visible(), "removing a computer asks first")
     pg.click('#confirmBox button[data-cbx="yes"]'); pg.wait_for_timeout(400)
     ok(pg.evaluate("window.__tc[1]") == ["tally_device_revoke", {"p_id": "d1"}], "and removes it")
+    # the firm account: people's buttons, a backup, a drop key switched off, how long before signing out, syncing, documents;
+    # the platform page's prices (read from their boxes), a firm's plan
+    pg.evaluate("""() => { window.__calls = []; Cloud.on = () => true; Cloud.aal = () => 'aal1'; window.__cc = {url: 'https://x.supabase.co', key: 'anon', auto: true}; Cloud.cfg = () => window.__cc; Cloud.setCfg = (o) => { window.__calls.push(['cfg', o]); Object.assign(window.__cc, o); }; window.startCloudSync = () => {};
+      Cloud.fn = async (n, a) => { window.__calls.push([n, a]); return {email: a.email, password: 'Pw-1'}; }; Cloud.rpc = async (n, a) => { window.__calls.push([n, a]); return n === 'backup_data' ? {x: 1} : []; };
+      window.loadAccount = () => {}; window.loadAdminOverview = () => {}; window.saveFile = (n) => window.__calls.push(['save', n]);
+      Cloud.st = Object.assign(Cloud.st, {email: 'a@b.in', role: 'owner', mfa: null, mfaInfo: {}, members: []});
+      S.account = {me: {role: 'owner'}, superadmin: true, firm: {id: 'f1', balance: 400, warn_at: 100, period_start: '2026-09-01'}, modules: [], people: [{name: 'Bina', email: 'b@b.in', role: 'staff', active: true}]};
+      S.backups = [{id: 7, taken_at: '2026-09-29T20:00:00Z', clients: 3, records: 120, bytes: 20480}]; S.dropKeys = [{id: 3, label: 'Agent', hint: 'ab', created_at: '2026-01-01', active: true}];
+      S.view = 'home'; S.homeTab = 'rules'; S.settingsTab = 'account'; render(); }"""); pg.wait_for_timeout(400)
+    calls = lambda: pg.evaluate("window.__calls")
+    pg.click('tr[data-key="b@b.in"] button:text-is("New password")'); pg.wait_for_timeout(300)
+    ok(["admin", {"action": "reset_password", "email": "b@b.in"}] in calls() and "Pw-1" in pg.inner_text("#app"), "a new password for a person, shown once")
+    pg.click('tr[data-key="b@b.in"] button:text-is("Switch off")'); pg.wait_for_timeout(300)
+    ok(["admin", {"action": "set_person", "email": "b@b.in", "active": False}] in calls(), "a person switched off")
+    pg.click('button:text-is("Download")'); pg.wait_for_timeout(300)
+    ok(["backup_data", {"p_id": 7}] in calls() and any(c[0] == "save" for c in calls()), "a backup downloaded")
+    pg.click('tr:has(td:text-is("Agent")) button:text-is("Switch off")'); pg.wait_for_timeout(300)
+    ok(pg.locator("#confirmBox .cbx").is_visible(), "switching a drop key off asks first")
+    pg.click('#confirmBox button[data-cbx="yes"]'); pg.wait_for_timeout(400)
+    ok(["revoke_drop_key", {"p_id": 3}] in calls(), "and switches it off")
+    pg.select_option('select[aria-label="Sign out after"]', "60"); pg.wait_for_timeout(200)
+    pg.evaluate("render()"); pg.wait_for_timeout(200)
+    ok(pg.input_value('select[aria-label="Sign out after"]') == "60", "how long before signing out is kept")
+    pg.uncheck('label:has-text("Keep in sync automatically") input'); pg.wait_for_timeout(200)
+    ok(["cfg", {"auto": False}] in calls(), "syncing by itself switched off")
+    pg.uncheck('label:has-text("Keep documents in the firm account") input'); pg.wait_for_timeout(200)
+    ok(pg.evaluate("S.firm.cloudDocs") is False, "documents kept on this computer only")
+    pg.fill("#npEmail", "c@b.in"); pg.fill("#npName", "Chetan"); pg.click('button:text-is("Add this person")'); pg.wait_for_timeout(300)
+    ok(["admin", {"action": "add_person", "email": "c@b.in", "name": "Chetan", "role": "staff"}] in calls(), "a person added from the boxes")
+    pg.evaluate("""() => { S.settingsTab = 'platform'; S.adminData = {month: 0, firms: [{id: 'f1', name: 'Firm A', active: true, plan_id: 'p1', balance: 40, people: 2, modules: [{code: 'read', price: 2, enabled: true}]}],
+      plans: [{id: 'p1', name: 'Starter', includes: {}}, {id: 'p2', name: 'Pro', includes: {}}], modules: [{code: 'read', title: 'Reading bills', price: 2, unit: 'per page', billing: 'unit'}]}; render(); }"""); pg.wait_for_timeout(300)
+    pg.select_option('select[aria-label="Plan of Firm A"]', "p2"); pg.wait_for_timeout(300)
+    ok(["admin_set_plan", {"p_firm": "f1", "p_plan": "p2"}] in calls(), "a firm's plan changed")
+    pg.click('button:text-is("Prices")'); pg.wait_for_timeout(300); pg.fill("#pr_read", "1.5"); pg.click('button:text-is("Save prices")'); pg.wait_for_timeout(400)
+    ok(["admin_set_module", {"p_firm": "f1", "p_code": "read", "p_enabled": True, "p_price": 1.5}] in calls(), "a firm's price saved from its box")
+    pg.evaluate("() => { Cloud.on = () => false; S.account = null; render(); }")
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
     br.close()
 srv.shutdown()

@@ -9,6 +9,7 @@
 import Legacy from "../parts/Legacy.jsx";
 import { AiSettings } from "../parts/Ai.jsx";
 import { BridgeSettings, CloudBooks } from "./Tally.jsx";
+import { PlanCredit, FirmAccount, PeopleEtc, Platform } from "./Account.jsx";
 import GstSettings from "./gst/GstSettings.jsx";
 import Parties from "./Parties.jsx";
 import { PostLog } from "./Done.jsx";
@@ -94,15 +95,15 @@ export function FirmSettings() {
   const pick = (id) => { S.settingsTab = id; render(); window.scrollTo(0, 0); };
   const body = {
     firm: () => <FirmDetails />,
-    account: () => <Legacy html={viewCloudSettings() + (Cloud.on() ? viewAccountPeopleOnly() : "")} />,
-    plan: () => <Legacy html={viewAccount()} />,
+    account: () => <><FirmAccount />{Cloud.on() && <PeopleEtc />}</>,
+    plan: () => <PlanCredit />,
     bridge: () => <BridgeSettings />,
     tcloud: () => <CloudBooks />,
     postlog: () => <PostLog />,
     rates: () => <Legacy html={viewRates()} />,
     reading: () => <Legacy html={viewReading()} />,
     ai: () => <AiSettings />,
-    platform: () => <Legacy html={viewSuperadmin()} />,
+    platform: () => <Platform />,
   }[cur];
   return <Layout label="Settings" groups={groups} current={cur} pick={pick}>{body()}</Layout>;
 }

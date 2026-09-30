@@ -146,10 +146,9 @@ setInterval(() => {
   const mins = num(lsGet("tdsdesk:idlemin")) || IDLE_MIN_DEFAULT;
   if (Date.now() - idleLast > mins * 60000){ idleLast = Date.now(); signOutHere("Signed out after " + mins + " minutes without use. Sign in again to carry on."); }
 }, 30000);
-document.addEventListener("change", ev => {
-  const t = ev.target;
-  if (t && t.matches && t.matches("[data-idlemin]")){ lsSet("tdsdesk:idlemin", String(Math.max(5, Math.min(240, num(t.value) || IDLE_MIN_DEFAULT)))); toast("Saved: sign out after " + t.value + " minutes without use."); }
-}, true);
+// Settings, how long before signing out (app/src/screens/Account.jsx)
+function idleMin(){ return num(lsGet("tdsdesk:idlemin")) || IDLE_MIN_DEFAULT; }
+function idleSet(v){ lsSet("tdsdesk:idlemin", String(Math.max(5, Math.min(240, num(v) || IDLE_MIN_DEFAULT)))); toast("Saved: sign out after " + v + " minutes without use."); render(); }
 
 /* ---------- last sign-in: shown after signing in, so a sign-in you did not make stands out ---------- */
 function deviceName(ua){

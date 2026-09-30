@@ -333,39 +333,6 @@ function cloudChip(){
   const mins = st.lastSync ? Math.round((Date.now() - st.lastSync) / 60000) : null;
   return '<span class="tchip ok" title="' + esc(st.email) + (st.lastSync ? " \u00b7 last sync " + new Date(st.lastSync).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}) : "") + '">\u2601 Shared' + (mins > 5 ? " \u00b7 " + mins + "m" : "") + "</span>";
 }
-function viewCloudSettings(){
-  const c = Cloud.cfg(), st = Cloud.st;
-  let h = '<div class="pane"><h2>Firm account (shared data)</h2>';
-  if (!Cloud.on()){
-    h += '<p class="note" style="margin:0 0 10px">Sign in to share clients, bills, bank statements and sales invoices with the rest of the firm. Without signing in, everything stays on this computer only.</p>' +
-      '<div class="grid"><label class="f"><span>Email</span><input type="email" data-cloud="email" data-fk="cloudemail" value="' + esc((S.cloudForm && S.cloudForm.email) || c.email || "") + '" autocomplete="username"></label>' +
-      '<label class="f"><span>Password</span><input type="password" data-cloud="password" data-fk="cloudpw" value="' + esc((S.cloudForm && S.cloudForm.password) || "") + '" autocomplete="current-password"></label></div>' +
-      '<div class="row" style="margin-top:10px"><button class="btn small primary" data-act="cloudSignIn">Sign in</button></div>' +
-      (st.error ? '<p class="bk-warn" style="margin-top:10px">' + esc(st.error) + "</p>" : "");
-    return h + "</div>";
-  }
-  const pending = st.pending;
-  h += '<p class="note" style="margin:0 0 8px">Signed in as <b>' + esc(st.email) + "</b>" + (st.role ? " (" + esc(st.role) + ")" : "") + (st.lastSync ? " \u00b7 last sync " + new Date(st.lastSync).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}) : "") + (pending ? " \u00b7 " + pending + " change" + (pending > 1 ? "s" : "") + " waiting to be sent" : " \u00b7 everything is sent") + "</p>";
-  if (st.error) h += '<p class="bk-warn">' + esc(st.error) + "</p>";
-  h += '<label class="chk"><input type="checkbox" data-cloud="auto"' + (c.auto !== false ? " checked" : "") + "> Keep in sync automatically (every 45 seconds)</label>" +
-    '<div class="row" style="margin-top:10px"><button class="btn small primary" data-act="cloudSync"' + (st.busy ? " disabled" : "") + ">" + (st.busy ? "Syncing\u2026" : "Sync now") + '</button><button class="btn small" data-act="cloudSignOut">Sign out</button></div>';
-  h += '<h3 style="margin:14px 0 4px;font-size:15px">Change password</h3><div class="bk-form two"><label><span>New password (8 characters or more)</span><input type="password" data-cloud="newpw" data-fk="cloudnewpw" autocomplete="new-password"></label>' +
-    '<label><span>Repeat it</span><input type="password" data-cloud="newpw2" data-fk="cloudnewpw2" autocomplete="new-password"></label></div>' +
-    '<div class="row" style="margin-top:8px"><button class="btn small" data-act="cloudPassword">Change password</button></div>';
-  const aal2 = Cloud.aal() === "aal2", idle = num(lsGet("tdsdesk:idlemin")) || IDLE_MIN_DEFAULT;
-  const mi = st.mfaInfo || {};
-  h += '<h3 style="margin:14px 0 4px;font-size:15px">Two-step sign-in (optional)</h3><p class="note" style="margin:0 0 6px">' +
-    (aal2 ? '<span class="tag ok">On</span> This sign-in used a code from your authenticator app.'
-      : mi.enrolled ? "On for this account."
-      : 'Off. For extra safety you can add a code from an authenticator app on your phone. <button class="btn small" data-act="mfaOptIn">Turn it on</button>') + "</p>" +
-    (mi.admin && !aal2 ? '<p class="bk-warn" style="margin:6px 0">Platform administration is locked until you give the code from your phone. <button class="btn small primary" data-act="mfaAdmin">Unlock administration</button></p>' : "") +
-    (S.lastSignIn ? '<p class="note" style="margin:0 0 6px">Your last sign-in: ' + esc(new Date(S.lastSignIn.at).toLocaleString("en-IN")) + ", " + esc(S.lastSignIn.device) + ".</p>" : "") +
-    '<label class="f" style="max-width:320px"><span>Sign out after this many minutes without use</span><select data-idlemin aria-label="Sign out after">' +
-    [10, 15, 30, 60, 120].map(n => '<option value="' + n + '"' + (n === idle ? " selected" : "") + ">" + n + " minutes</option>").join("") + "</select></label>";
-  if ((st.members || []).length) h += '<h3 style="margin:14px 0 4px;font-size:15px">People in the firm</h3><table class="data"><thead><tr><th>Name</th><th>Email</th><th>Role</th></tr></thead><tbody>' +
-    st.members.map(m => "<tr><td>" + esc(m.name || "\u2014") + "</td><td>" + esc(m.email) + "</td><td>" + esc(m.role) + (m.active ? "" : " (off)") + "</td></tr>").join("") + "</tbody></table>";
-  return h + "</div>";
-}
 
 /* ---------- plan, balance and charging ---------- */
 const MODULE_ICON = {bills: "\u{1F9FE}", bank: "\u{1F3E6}", sales: "\u{1F4C4}", claude: "\u2728", vision: "\u{1F441}", tally: "\u{1F4D2}", cloud: "\u2601", clients: "\u{1F465}"};
@@ -428,73 +395,6 @@ function creditBanner(){
   return "";
 }
 /* ---------- the firm's own account screen ---------- */
-function viewAccount(){
-  const a = S.account;
-  if (!Cloud.on()) return "";
-  if (!a || !a.firm) return '<div class="pane"><h2>Plan and credit</h2><p class="note">Reading the account\u2026</p></div>';
-  const f = a.firm, plan = f.plan || {name: "No plan set", monthly_fee: 0, includes: {}};
-  const used = (a.usage || []).reduce((m, u) => (m[u.code] = u, m), {});
-  const isOwner = (a.me || {}).role === "owner";
-  let h = '<div class="pane"><h2>Plan and credit</h2>' +
-    '<div class="bk-figs" style="margin:0 0 10px"><div><dt>Credit left</dt><dd' + (num(f.balance) <= num(f.warn_at) ? ' style="color:var(--stop)"' : "") + ">" + INR.format(num(f.balance)) + "</dd></div>" +
-    "<div><dt>Plan</dt><dd>" + esc(plan.name) + "</dd></div>" +
-    "<div><dt>Monthly</dt><dd>" + (num(plan.monthly_fee) ? INR.format(num(plan.monthly_fee)) : "\u2014") + "</dd></div>" +
-    "<div><dt>Since</dt><dd>" + fmtDate(f.period_start) + "</dd></div></div>";
-  h += '<div class="tblwrap"><table class="data"><thead><tr><th>What</th><th>How it is charged</th><th class="n">This month</th><th class="n">Spent</th></tr></thead><tbody>' +
-    (a.modules || []).map(m => {
-      const inc = moduleIncluded(m.code), u = used[m.code];
-      return "<tr><td>" + (MODULE_ICON[m.code] || "") + " " + esc(m.title) + (m.enabled ? "" : ' <span class="tag no">off</span>') + "</td>" +
-        "<td>" + (m.billing === "free" ? "included" : inc ? '<span class="tag ok">in the plan</span>' : INR.format(num(m.price)) + " " + esc(m.unit)) + "</td>" +
-        '<td class="n">' + (u ? num(u.qty) : 0) + '</td><td class="n">' + (u && num(u.spent) ? INR.format(num(u.spent)) : "\u2014") + "</td></tr>";
-    }).join("") + "</tbody></table></div>";
-  h += '<div class="row" style="margin-top:10px"><button class="btn small" data-act="acctRefresh">Refresh</button><button class="btn small" data-act="acctHistory">' + (S.walletOpen ? "Hide" : "Show") + " credit history</button></div>";
-  if (S.walletOpen) h += walletHtml();
-  return h + "</div>";
-}
-function walletHtml(){
-  const rows = S.wallet || [];
-  if (!rows.length) return '<p class="note" style="margin-top:8px">No entries yet.</p>';
-  return '<div class="tblwrap" style="margin-top:8px"><table class="data"><thead><tr><th>When</th><th>What</th><th class="n">Amount</th><th class="n">Left</th><th>Note</th></tr></thead><tbody>' +
-    rows.map(w => "<tr><td>" + new Date(w.at).toLocaleString([], {day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit"}) + "</td>" +
-      "<td>" + esc(w.kind === "credit" ? "Credit added" : w.kind === "fee" ? "Monthly charge" : w.kind === "refund" ? "Refund" : (w.code || "use")) + "</td>" +
-      '<td class="n"' + (num(w.amount) < 0 ? "" : ' style="color:var(--ledger)"') + ">" + INR.format(num(w.amount)) + '</td><td class="n">' + INR.format(num(w.balance_after)) + "</td><td>" + esc(w.note || "") + "</td></tr>").join("") +
-    "</tbody></table></div>";
-}
-function viewAccountPeopleOnly(){
-  const a = S.account;
-  if (!a) return "";
-  return '<div class="pane">' + viewPeople((a.me || {}).role === "owner" || a.superadmin === true) + viewDocsSettings() + viewDropKeys() + viewBackups() + "</div>";
-}
-function viewBackups(){
-  if (!Cloud.on()) return "";
-  const list = S.backups;
-  let h = '<h3 style="margin:16px 0 6px;font-size:15px">Backups</h3>' +
-    '<p class="note" style="margin:0 0 6px">A copy of this firm\u2019s clients, bills, bank statements and sales is taken every night and the last fourteen are kept. Download one to keep outside the system.</p>' +
-    '<div class="row"><button class="btn small" data-act="backupList">' + (list ? "Refresh" : "Show backups") + '</button><button class="btn small" data-act="backupNow">Take one now</button></div>';
-  if (!list) return h;
-  if (!list.length) return h + '<p class="note" style="margin-top:6px">None yet. Press <b>Take one now</b>.</p>';
-  h += '<div class="tblwrap" style="margin-top:8px"><table class="data"><thead><tr><th>Taken</th><th class="n">Clients</th><th class="n">Records</th><th class="n">Size</th><th></th></tr></thead><tbody>' +
-    list.slice(0, 14).map(b => "<tr><td>" + new Date(b.taken_at).toLocaleString([], {day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit"}) + '</td><td class="n">' + b.clients +
-      '</td><td class="n">' + b.records + '</td><td class="n">' + Math.round(num(b.bytes) / 1024) + ' KB</td><td><button class="btn small" data-backup="' + b.id + '">Download</button></td></tr>').join("") +
-    "</tbody></table></div>";
-  return h;
-}
-function viewPeople(canManage){
-  const a = S.account;
-  if (!a) return "";
-  let h = '<h3 style="margin:16px 0 6px;font-size:15px">People in the firm</h3><div class="tblwrap"><table class="data"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th></th></tr></thead><tbody>' +
-    (a.people || []).map(p => "<tr><td>" + esc(p.name || "\u2014") + "</td><td>" + esc(p.email) + "</td><td>" + esc(p.role) + (p.active ? "" : " (off)") + "</td>" +
-      '<td style="white-space:nowrap">' + (canManage ? '<button class="linkbtn" data-person="reset" data-email="' + esc(p.email) + '">New password</button> ' +
-        '<button class="linkbtn" data-person="mfa" data-email="' + esc(p.email) + '" title="For a lost phone: they set up two-step sign-in again">Reset two-step</button> ' +
-        '<button class="linkbtn" data-person="' + (p.active ? "off" : "on") + '" data-email="' + esc(p.email) + '">' + (p.active ? "Switch off" : "Switch on") + "</button>" : "") + "</td></tr>").join("") +
-    "</tbody></table></div>";
-  if (canManage) h += '<div class="bk-form three" style="margin-top:8px"><label><span>Name</span><input type="text" id="npName"></label>' +
-    '<label><span>Email</span><input type="email" id="npEmail"></label>' +
-    '<label><span>Can do</span><select id="npRole"><option value="staff">Everything except billing</option><option value="readonly">Look only</option><option value="owner">Everything, including people</option></select></label></div>' +
-    '<div class="row" style="margin-top:6px"><button class="btn small primary" data-act="addPerson">Add this person</button><span class="note">A password is made for them; they can change it after signing in.</span></div>';
-  if (S.newPerson) h += '<p class="bk-alert" style="margin-top:8px"><b>' + esc(S.newPerson.email) + "</b> can sign in with the password <b>" + esc(S.newPerson.password) + "</b>. Write it down: it is shown only now.</p>";
-  return h;
-}
 /* ---------- superadmin: firms, credit, plans, prices, keys ---------- */
 async function loadAdminOverview(quiet){
   if (!Cloud.on()) return;
@@ -503,81 +403,6 @@ async function loadAdminOverview(quiet){
     S.adminData = d && d.firms ? d : null;
     if (!quiet) render();
   } catch (e){ if (!quiet) toast("Could not read the platform data: " + e.message); }
-}
-function viewSuperadmin(){
-  const a = S.account;
-  if (!a || !a.superadmin) return "";
-  const d = S.adminData;
-  let h = '<div class="pane"><h2>Platform (administrator only)</h2>';
-  if (!d) return h + '<p class="note">Reading\u2026 <button class="btn small" data-act="adminRefresh">Refresh</button></p></div>';
-  const firms = d.firms || [];
-  h += '<div class="bk-figs" style="margin:0 0 10px"><div><dt>Firms</dt><dd>' + firms.length + "</dd></div>" +
-    "<div><dt>Credit held</dt><dd>" + INR.format(firms.reduce((s, f) => s + num(f.balance), 0)) + "</dd></div>" +
-    "<div><dt>Charged this month</dt><dd>" + INR.format(num(d.month)) + "</dd></div></div>";
-  h += '<div class="tblwrap"><table class="data"><thead><tr><th>Firm</th><th>Plan</th><th class="n">Credit</th><th class="n">Used this period</th><th class="n">People</th><th></th></tr></thead><tbody>' +
-    firms.map(f => "<tr><td><b>" + esc(f.name) + "</b>" + (f.active ? "" : ' <span class="tag no">off</span>') + (f.note ? '<div class="nr">' + esc(f.note) + "</div>" : "") + "</td>" +
-      '<td><select data-adminplan="' + f.id + '">' + (d.plans || []).map(p => '<option value="' + p.id + '"' + (p.id === f.plan_id ? " selected" : "") + ">" + esc(p.name) + (num(p.monthly_fee) ? " (" + INR.format(num(p.monthly_fee)) + "/m)" : "") + "</option>").join("") + "</select></td>" +
-      '<td class="n"' + (num(f.balance) <= 0 ? ' style="color:var(--stop)"' : "") + ">" + INR.format(num(f.balance)) + '</td><td class="n">' + INR.format(num(f.used_this_period)) + '</td><td class="n">' + f.people + "</td>" +
-      '<td style="white-space:nowrap"><button class="btn small" data-adminact="credit" data-firm="' + f.id + '" data-name="' + esc(f.name) + '">Add credit</button> ' +
-      '<button class="linkbtn" data-adminact="prices" data-firm="' + f.id + '" data-name="' + esc(f.name) + '">Prices</button> ' +
-      '<button class="linkbtn" data-adminact="' + (f.active ? "off" : "on") + '" data-firm="' + f.id + '">' + (f.active ? "Switch off" : "Switch on") + "</button></td></tr>").join("") +
-    "</tbody></table></div>";
-  if (S.adminPrices){
-    const f = firms.find(x => x.id === S.adminPrices);
-    if (f) h += '<div class="bdiag" style="margin-top:10px"><b>Prices for ' + esc(f.name) + "</b> \u2014 blank means the standard price." +
-      '<table class="data" style="margin-top:6px"><tbody>' + (f.modules || []).map(m => {
-        const std = (d.modules || []).find(x => x.code === m.code) || {};
-        return "<tr><td>" + (MODULE_ICON[m.code] || "") + " " + esc(std.title || m.code) + '<div class="nr">' + esc(std.unit || "") + " \u00b7 standard " + INR.format(num(std.price)) + "</div></td>" +
-          '<td style="width:130px"><input type="number" step="0.01" min="0" id="pr_' + m.code + '" value="' + (num(m.price) === num(std.price) ? "" : num(m.price)) + '" placeholder="' + num(std.price) + '"></td>' +
-          '<td><label class="chk"><input type="checkbox" id="en_' + m.code + '"' + (m.enabled ? " checked" : "") + "> on</label></td></tr>";
-      }).join("") + "</tbody></table>" +
-      '<div class="row" style="margin-top:8px"><button class="btn small primary" data-adminact="savePrices" data-firm="' + f.id + '">Save prices</button><button class="btn small" data-adminact="closePrices">Close</button></div></div>';
-  }
-  // new firm
-  h += '<h3 style="margin:16px 0 6px;font-size:15px">Add a firm</h3>' +
-    '<div class="bk-form three"><label><span>Firm name</span><input type="text" id="nfName"></label>' +
-    '<label><span>Owner email</span><input type="email" id="nfEmail"></label>' +
-    '<label><span>Owner name</span><input type="text" id="nfOwner"></label></div>' +
-    '<div class="bk-form three" style="margin-top:6px"><label><span>Plan</span><select id="nfPlan">' + (d.plans || []).map(p => '<option value="' + p.id + '">' + esc(p.name) + "</option>").join("") + "</select></label>" +
-    '<label><span>Opening credit</span><input type="number" id="nfCredit" value="0" min="0" step="100"></label></div>' +
-    '<div class="row" style="margin-top:6px"><button class="btn small primary" data-adminact="createFirm">Create the firm</button></div>';
-  if (S.newFirm) h += '<p class="bk-alert" style="margin-top:8px">Firm made. <b>' + esc(S.newFirm.email) + "</b> signs in with the password <b>" + esc(S.newFirm.password) + "</b>. Shown only now.</p>";
-  // plans
-  h += '<h3 style="margin:16px 0 6px;font-size:15px">Plans</h3><div class="tblwrap"><table class="data"><thead><tr><th>Plan</th><th class="n">Monthly</th><th>Included</th><th></th></tr></thead><tbody>' +
-    (d.plans || []).map(p => "<tr><td>" + esc(p.name) + (p.note ? '<div class="nr">' + esc(p.note) + "</div>" : "") + '</td><td class="n">' + (num(p.monthly_fee) ? INR.format(num(p.monthly_fee)) : "\u2014") + "</td>" +
-      "<td>" + (Object.keys(p.includes || {}).length ? Object.entries(p.includes).map(([k, v]) => esc(k) + (v && v.cap ? " (" + v.cap + ")" : "")).join(", ") : "nothing \u2014 pay per use") + "</td>" +
-      '<td><button class="linkbtn" data-adminact="editPlan" data-plan="' + p.id + '">Change</button></td></tr>').join("") + "</tbody></table></div>";
-  if (S.planEdit){
-    const p = (d.plans || []).find(x => x.id === S.planEdit) || {name: "", monthly_fee: 0, includes: {}, note: ""};
-    h += '<div class="bdiag" style="margin-top:10px"><b>' + (p.id ? "Change this plan" : "New plan") + "</b>" +
-      '<div class="bk-form two" style="margin-top:6px"><label><span>Name</span><input type="text" id="plName" value="' + esc(p.name) + '"></label>' +
-      '<label><span>Monthly fee</span><input type="number" id="plFee" step="50" min="0" value="' + num(p.monthly_fee) + '"></label></div>' +
-      '<div style="margin-top:8px">Included, and how much of it:</div><table class="data"><tbody>' +
-      (d.modules || []).filter(m => m.billing !== "free").map(m => {
-        const inc = (p.includes || {})[m.code];
-        return "<tr><td>" + (MODULE_ICON[m.code] || "") + " " + esc(m.title) + '</td><td><label class="chk"><input type="checkbox" id="inc_' + m.code + '"' + (inc ? " checked" : "") + "> included</label></td>" +
-          '<td style="width:150px"><input type="number" id="cap_' + m.code + '" min="0" step="10" value="' + (inc && inc.cap ? inc.cap : "") + '" placeholder="no limit"></td></tr>';
-      }).join("") + "</tbody></table>" +
-      '<label class="f" style="margin-top:6px"><span>Note</span><input type="text" id="plNote" value="' + esc(p.note || "") + '"></label>' +
-      '<div class="row" style="margin-top:8px"><button class="btn small primary" data-adminact="savePlan" data-plan="' + (p.id || "") + '">Save the plan</button><button class="btn small" data-adminact="closePlan">Close</button></div></div>';
-  }
-  h += '<div class="row" style="margin-top:6px"><button class="btn small" data-adminact="newPlan">Add a plan</button><button class="btn small" data-adminact="runMonthly">Run this month\'s charges</button><button class="btn small" data-act="adminRefresh">Refresh</button></div>';
-  // keys
-  const su = (d.signup || {open: false});
-  h += '<h3 style="margin:16px 0 6px;font-size:15px">New accounts</h3>' +
-    '<div class="bk-form three"><label class="chk" style="align-self:end"><input type="checkbox" id="suOpen"' + (su.open ? " checked" : "") + "> Anyone may create an account</label>" +
-    '<label><span>Credit to start with</span><input type="number" id="suCredit" value="' + num(su.trial_credit || 0) + '" step="50" min="0"></label>' +
-    '<label><span>Plan they start on</span><select id="suPlan">' + (d.plans || []).map(p => '<option' + (p.name === su.plan ? " selected" : "") + ">" + esc(p.name) + "</option>").join("") + "</select></label></div>" +
-    '<div class="row" style="margin-top:6px"><button class="btn small" data-adminact="saveSignup">Save</button></div>';
-  h += '<h3 style="margin:16px 0 6px;font-size:15px">Keys (only you)</h3><p class="note" style="margin:0 0 6px">These stay on the server. Firms use Claude and Google through us and never see a key. A key cannot be read back here \u2014 only replaced.</p>' +
-    '<div class="tblwrap"><table class="data"><tbody>' +
-    [["claude_api_key", "Claude API key"], ["google_vision_key", "Google Cloud Vision key"]].map(([k, label]) => {
-      const s = (d.secrets || []).find(x => x.name === k);
-      return "<tr><td>" + esc(label) + "</td><td>" + (s ? '<span class="tag ok">set</span> \u2026' + esc(s.tail || "") + " \u00b7 " + new Date(s.updated_at).toLocaleDateString() : '<span class="tag no">not set</span>') + "</td>" +
-        '<td><input type="password" id="sec_' + k + '" placeholder="paste a new key"></td>' +
-        '<td><button class="btn small" data-adminact="saveSecret" data-name="' + k + '">Save</button></td></tr>';
-    }).join("") + "</tbody></table></div>";
-  return h + "</div>";
 }
 
 /* ---------- nothing is shown until someone signs in ---------- */
@@ -912,104 +737,107 @@ function revOpen(id){ S.selected = id; S.drawerOpen = true; render(); }
 function revApproveOne(id){ const e = D().entries[id]; if (e){ approve(e); refreshStats(S.coId); toast("Approved."); render(); } }
 function revNature(id, v){ const e = D().entries[id]; if (e){ e.natureId = v; e.confirmType = false; Store.saveEntry(S.coId, e); render(); } }
 function revTds(id, on){ const e = D().entries[id]; if (e){ revSet(e, on); render(); } }
+// the firm account in Settings (app/src/screens/Account.jsx): a person's password, two-step or switching on and off; a
+// backup downloaded; a drop key switched off; the platform page's buttons (they read its boxes by id) and a firm's plan
+function acctPerson(what, email){
+  if (what === "reset") Cloud.fn("admin", {action: "reset_password", email}).then(r => { S.newPerson = {email: r.email, password: r.password}; toast("New password made."); render(); }, e => toast(e.message));
+  else if (what === "mfa") askConfirm({title: "Reset two-step sign-in for " + email + "?", ok: "Reset", body: '<p class="note">Their authenticator entry is removed. At the next sign-in they set it up again with their phone. Do this only when you are sure it is them asking.</p>'})
+    .then(a => { if (a) Cloud.fn("admin", {action: "reset_two_step", email}).then(() => toast("Two-step sign-in reset for " + email + "."), e => toast(e.message)); });
+  else Cloud.fn("admin", {action: "set_person", email, active: what === "on"}).then(() => { toast(what === "on" ? "Switched on." : "Switched off."); loadAccount(); }, e => toast(e.message));
+}
+function acctBackup(id){
+  Cloud.rpc("backup_data", {p_id: num(id)}).then(d => {
+    saveFile("tds-desk-backup-" + new Date().toISOString().slice(0, 10) + ".json", new Blob([JSON.stringify(d, null, 1)], {type: "application/json"}));
+    toast("Downloaded. Keep it somewhere outside this system.");
+  }, e => toast(e.message));
+}
+function acctDropOff(id){
+  askConfirm({title: "Switch this key off?", ok: "Switch it off", body: '<p class="note">Anything using this key will no longer be able to send files in.</p>'}).then(a => {
+    if (!a) return;
+    Cloud.rpc("revoke_drop_key", {p_id: id}).then(() => Cloud.rpc("my_drop_keys")).then(k => { S.dropKeys = [].concat(k || []); render(); }, e => toast(e.message));
+  });
+}
+function adminPlan(firm, plan){ Cloud.rpc("admin_set_plan", {p_firm: firm, p_plan: plan}).then(() => { toast("Plan changed."); loadAdminOverview(); }, e => toast(e.message)); }
+function adminAct(act, firm, d){
+  d = d || {};
+  const g = id => (document.getElementById(id) || {}).value || "";
+  const after = msg => { toast(msg); loadAdminOverview(); loadAccount(true); };
+  if (act === "credit"){
+    askConfirm({title: "Add credit to " + (d.name || "this firm"), ok: "Add credit",
+      body: '<div class="bk-form two"><label><span>Amount</span><input type="number" id="crAmt" value="5000" step="500"></label><label><span>Note (payment reference)</span><input type="text" id="crNote"></label></div>',
+      read: () => ({amount: num((document.getElementById("crAmt") || {}).value), note: (document.getElementById("crNote") || {}).value || ""})
+    }).then(a => { if (!a) return; Cloud.rpc("admin_credit", {p_firm: firm, p_amount: a.data.amount, p_note: a.data.note}).then(r => after("Credit added. Balance: " + INR.format(num(r.balance))), e => toast(e.message)); });
+    return;
+  }
+  if (act === "prices"){ S.adminPrices = firm; render(); return; }
+  if (act === "closePrices"){ S.adminPrices = null; render(); return; }
+  if (act === "savePrices"){
+    const f = ((S.adminData || {}).firms || []).find(x => x.id === firm) || {};
+    const jobs = (f.modules || []).map(m => {
+      const v = (document.getElementById("pr_" + m.code) || {}).value;
+      const on = !!(document.getElementById("en_" + m.code) || {}).checked;
+      return Cloud.rpc("admin_set_module", {p_firm: firm, p_code: m.code, p_enabled: on, p_price: v === "" ? null : num(v)});
+    });
+    Promise.all(jobs).then(() => { S.adminPrices = null; after("Prices saved."); }, e => toast(e.message));
+    return;
+  }
+  if (act === "on" || act === "off"){ Cloud.rpc("admin_set_firm", {p_firm: firm, p_active: act === "on"}).then(() => after(act === "on" ? "Switched on." : "Switched off."), e => toast(e.message)); return; }
+  if (act === "createFirm"){
+    const name = g("nfName").trim(), email = g("nfEmail").trim();
+    if (!name || !email){ toast("The firm name and the owner's email are needed."); return; }
+    Cloud.fn("admin", {action: "create_firm", name, email, owner_name: g("nfOwner"), plan_id: g("nfPlan"), credit: num(g("nfCredit"))})
+      .then(r => { S.newFirm = {email: r.email, password: r.password}; after("Firm created."); }, e => toast(e.message));
+    return;
+  }
+  if (act === "editPlan"){ S.planEdit = d.plan; render(); return; }
+  if (act === "newPlan"){ S.planEdit = "new"; render(); return; }
+  if (act === "closePlan"){ S.planEdit = null; render(); return; }
+  if (act === "savePlan"){
+    const mods = ((S.adminData || {}).modules || []).filter(m => m.billing !== "free");
+    const includes = {};
+    mods.forEach(m => {
+      if ((document.getElementById("inc_" + m.code) || {}).checked){
+        const cap = (document.getElementById("cap_" + m.code) || {}).value;
+        includes[m.code] = cap === "" ? {cap: null} : {cap: num(cap), price_after: m.price};
+      }
+    });
+    Cloud.rpc("admin_save_plan", {p_id: d.plan && d.plan !== "new" ? d.plan : null, p_name: g("plName"), p_monthly: num(g("plFee")), p_includes: includes, p_note: g("plNote")})
+      .then(() => { S.planEdit = null; after("Plan saved."); }, e => toast(e.message));
+    return;
+  }
+  if (act === "runMonthly"){ Cloud.rpc("run_monthly", {}).then(r => after(r.charged + " firms charged" + (r.short_of_credit ? ", " + r.short_of_credit + " had too little credit" : "") + "."), e => toast(e.message)); return; }
+  if (act === "saveSignup"){
+    Cloud.rpc("admin_set_setting", {p_name: "signup", p_value: {open: !!(document.getElementById("suOpen") || {}).checked, trial_credit: num(g("suCredit")), plan: g("suPlan")}})
+      .then(() => after("Saved."), e => toast(e.message));
+    return;
+  }
+  if (act === "saveSecret"){
+    const k = d.name, v = (document.getElementById("sec_" + k) || {}).value || "";
+    if (!v.trim()){ toast("Paste the key first."); return; }
+    Cloud.rpc("admin_set_secret", {p_name: k, p_value: v.trim()}).then(() => { const el = document.getElementById("sec_" + k); if (el) el.value = ""; after("Key saved. It cannot be read back."); }, e => toast(e.message));
+    return;
+  }
+  return;
+}
+function cloudForm(k, v){ S.cloudForm = Object.assign({}, S.cloudForm, {[k]: v}); if (k === "email") Cloud.setCfg({email: v.trim()}); }
+function cloudAuto(on){ Cloud.setCfg({auto: on}); startCloudSync(); render(); }
+function docsKeep(on){ S.firm.cloudDocs = on; Store.saveFirm(); toast(on ? "Documents will be kept in the firm account." : "Documents stay on this computer only."); render(); }
+function docYearsSet(v){ S.firm.docYears = num(v); Store.saveFirm(); render(); }
 function reactOwned(el){ return !!(el && el.closest && el.closest(".react-host") && !el.closest("[data-legacy]")); }
 document.addEventListener("click", ev => {
   if (reactOwned(ev.target)) return;
   const t = ev.target.closest("button,[data-select],[data-open],#drop,#modal,#bankDrop,#salesDrop");
   if (!t) return;
   if (t.dataset.settab !== undefined){ S.settingsTab = t.dataset.settab || null; render(); window.scrollTo(0, 0); return; }
-  if (t.dataset.backup){
-    Cloud.rpc("backup_data", {p_id: num(t.dataset.backup)}).then(d => {
-      saveFile("tds-desk-backup-" + new Date().toISOString().slice(0, 10) + ".json", new Blob([JSON.stringify(d, null, 1)], {type: "application/json"}));
-      toast("Downloaded. Keep it somewhere outside this system.");
-    }, e => toast(e.message));
-    return;
-  }
   if (t.dataset.openentry){
     const e0 = S.data[t.dataset.openco] && S.data[t.dataset.openco].entries[t.dataset.openentry];
     if (e0){ if (S.coId !== t.dataset.openco) openCompany(t.dataset.openco); S.tab = "invoices"; S.reviewTable = false; S.filter = e0.status; S.selected = e0.id; render(); window.scrollTo(0, 0); }
-    return;
-  }
-  if (t.dataset.dropoff){
-    askConfirm({title: "Switch this key off?", ok: "Switch it off", body: '<p class="note">Anything using this key will no longer be able to send files in.</p>'}).then(a => {
-      if (!a) return;
-      Cloud.rpc("revoke_drop_key", {p_id: t.dataset.dropoff}).then(() => Cloud.rpc("my_drop_keys")).then(k => { S.dropKeys = [].concat(k || []); render(); }, e => toast(e.message));
-    });
     return;
   }
   if (t.dataset.useexp){
     billUseExpense(curEntry(), t.dataset.useexp);
     return;
   }
-  if (t.dataset.person){
-    const email = t.dataset.email, what = t.dataset.person;
-    if (what === "reset") Cloud.fn("admin", {action: "reset_password", email}).then(r => { S.newPerson = {email: r.email, password: r.password}; toast("New password made."); render(); }, e => toast(e.message));
-    else if (what === "mfa") askConfirm({title: "Reset two-step sign-in for " + email + "?", ok: "Reset", body: '<p class="note">Their authenticator entry is removed. At the next sign-in they set it up again with their phone. Do this only when you are sure it is them asking.</p>'})
-      .then(a => { if (a) Cloud.fn("admin", {action: "reset_two_step", email}).then(() => toast("Two-step sign-in reset for " + email + "."), e => toast(e.message)); });
-    else Cloud.fn("admin", {action: "set_person", email, active: what === "on"}).then(() => { toast(what === "on" ? "Switched on." : "Switched off."); loadAccount(); }, e => toast(e.message));
-    return;
-  }
-  if (t.dataset.adminact){
-    const act = t.dataset.adminact, firm = t.dataset.firm, g = id => (document.getElementById(id) || {}).value || "";
-    const after = msg => { toast(msg); loadAdminOverview(); loadAccount(true); };
-    if (act === "credit"){
-      askConfirm({title: "Add credit to " + (t.dataset.name || "this firm"), ok: "Add credit",
-        body: '<div class="bk-form two"><label><span>Amount</span><input type="number" id="crAmt" value="5000" step="500"></label><label><span>Note (payment reference)</span><input type="text" id="crNote"></label></div>',
-        read: () => ({amount: num((document.getElementById("crAmt") || {}).value), note: (document.getElementById("crNote") || {}).value || ""})
-      }).then(a => { if (!a) return; Cloud.rpc("admin_credit", {p_firm: firm, p_amount: a.data.amount, p_note: a.data.note}).then(r => after("Credit added. Balance: " + INR.format(num(r.balance))), e => toast(e.message)); });
-      return;
-    }
-    if (act === "prices"){ S.adminPrices = firm; render(); return; }
-    if (act === "closePrices"){ S.adminPrices = null; render(); return; }
-    if (act === "savePrices"){
-      const f = ((S.adminData || {}).firms || []).find(x => x.id === firm) || {};
-      const jobs = (f.modules || []).map(m => {
-        const v = (document.getElementById("pr_" + m.code) || {}).value;
-        const on = !!(document.getElementById("en_" + m.code) || {}).checked;
-        return Cloud.rpc("admin_set_module", {p_firm: firm, p_code: m.code, p_enabled: on, p_price: v === "" ? null : num(v)});
-      });
-      Promise.all(jobs).then(() => { S.adminPrices = null; after("Prices saved."); }, e => toast(e.message));
-      return;
-    }
-    if (act === "on" || act === "off"){ Cloud.rpc("admin_set_firm", {p_firm: firm, p_active: act === "on"}).then(() => after(act === "on" ? "Switched on." : "Switched off."), e => toast(e.message)); return; }
-    if (act === "createFirm"){
-      const name = g("nfName").trim(), email = g("nfEmail").trim();
-      if (!name || !email){ toast("The firm name and the owner's email are needed."); return; }
-      Cloud.fn("admin", {action: "create_firm", name, email, owner_name: g("nfOwner"), plan_id: g("nfPlan"), credit: num(g("nfCredit"))})
-        .then(r => { S.newFirm = {email: r.email, password: r.password}; after("Firm created."); }, e => toast(e.message));
-      return;
-    }
-    if (act === "editPlan"){ S.planEdit = t.dataset.plan; render(); return; }
-    if (act === "newPlan"){ S.planEdit = "new"; render(); return; }
-    if (act === "closePlan"){ S.planEdit = null; render(); return; }
-    if (act === "savePlan"){
-      const mods = ((S.adminData || {}).modules || []).filter(m => m.billing !== "free");
-      const includes = {};
-      mods.forEach(m => {
-        if ((document.getElementById("inc_" + m.code) || {}).checked){
-          const cap = (document.getElementById("cap_" + m.code) || {}).value;
-          includes[m.code] = cap === "" ? {cap: null} : {cap: num(cap), price_after: m.price};
-        }
-      });
-      Cloud.rpc("admin_save_plan", {p_id: t.dataset.plan && t.dataset.plan !== "new" ? t.dataset.plan : null, p_name: g("plName"), p_monthly: num(g("plFee")), p_includes: includes, p_note: g("plNote")})
-        .then(() => { S.planEdit = null; after("Plan saved."); }, e => toast(e.message));
-      return;
-    }
-    if (act === "runMonthly"){ Cloud.rpc("run_monthly", {}).then(r => after(r.charged + " firms charged" + (r.short_of_credit ? ", " + r.short_of_credit + " had too little credit" : "") + "."), e => toast(e.message)); return; }
-    if (act === "saveSignup"){
-      Cloud.rpc("admin_set_setting", {p_name: "signup", p_value: {open: !!(document.getElementById("suOpen") || {}).checked, trial_credit: num(g("suCredit")), plan: g("suPlan")}})
-        .then(() => after("Saved."), e => toast(e.message));
-      return;
-    }
-    if (act === "saveSecret"){
-      const k = t.dataset.name, v = (document.getElementById("sec_" + k) || {}).value || "";
-      if (!v.trim()){ toast("Paste the key first."); return; }
-      Cloud.rpc("admin_set_secret", {p_name: k, p_value: v.trim()}).then(() => { const el = document.getElementById("sec_" + k); if (el) el.value = ""; after("Key saved. It cannot be read back."); }, e => toast(e.message));
-      return;
-    }
-    return;
-  }
-  if (t.dataset.adminplan){ return; }
   if (t.closest && t.closest("[data-colf]")){ const bt = t.closest("[data-colf]"), k = bt.dataset.colf, tb = bt.dataset.colt; S.colPop = S.colPop && S.colPop.k === k && S.colPop.t === tb ? null : {t: tb, k, justOpened: true}; render(); return; }
   if (t.closest && t.closest("[data-cpclose]")){ S.colPop = null; render(); return; }
   if (t.closest && t.closest("[data-cpapply]")){ colPopApply(false); return; }
@@ -1727,10 +1555,6 @@ document.addEventListener("change", ev => {
     return;
   }
   const t = ev.target, e = curEntry(), cid = S.coId;
-  if (t.dataset && t.dataset.adminplan){
-    Cloud.rpc("admin_set_plan", {p_firm: t.dataset.adminplan, p_plan: t.value}).then(() => { toast("Plan changed."); loadAdminOverview(); }, e => toast(e.message));
-    return;
-  }
   if (t.dataset && t.dataset.cloud){
     const k = t.dataset.cloud;
     if (["email", "password", "firm", "name"].includes(k)){ S.cloudForm = Object.assign({}, S.cloudForm, {[k]: t.value}); } if (k === "auto"){ Cloud.setCfg({auto: t.checked}); startCloudSync(); } else if (k === "email") Cloud.setCfg({email: t.value.trim()}); return; }
@@ -1738,8 +1562,6 @@ document.addEventListener("change", ev => {
   if (S.view === "company" && S.tab === "sales" && salesChange(t)) return;
   if (t.dataset.actToggle === "askClaudeNew"){ S.askClaudeNewSupplier = t.checked; lsSet("tdsdesk:askClaudeNew", t.checked ? "1" : ""); render(); return; }
   if (t.dataset.actToggle === "freeFirst"){ S.freeFirst = t.checked; lsSet("tdsdesk:freeFirst", t.checked ? "1" : "0"); render(); return; }
-  if (t.dataset.actToggle === "cloudDocs"){ S.firm.cloudDocs = t.checked; Store.saveFirm(); toast(t.checked ? "Documents will be kept in the firm account." : "Documents stay on this computer only."); render(); return; }
-  if (t.dataset && t.dataset.firmset === "docYears"){ S.firm.docYears = num(t.value); Store.saveFirm(); render(); return; }
   if (t.id === "fileIn" || t.id === "camIn"){ const files = Array.from(t.files || []); t.value = ""; handleFiles(files, pickMode); return; }
   if (t.dataset.x === "invoiceDate" && e && e.status === "draft"){ billSetX(e, "invoiceDate", t.value); return; }
   if (t.dataset.gst && e && e.status === "draft"){ billGst(e, t.dataset.gst, t.type === "checkbox" ? t.checked : t.value); return; }

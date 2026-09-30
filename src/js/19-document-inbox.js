@@ -106,54 +106,6 @@ async function assignDocq(id, cid){
 /* ---------- on screen ---------- */
 /* ---------- drop keys: how the agent is allowed to send files in ---------- */
 // Documents in the firm account: switched on or off, how long they are kept, and what is held
-function viewDocsSettings(){
-  if (!Cloud.on()) return "";
-  const a = S.account, owner = a && ((a.me || {}).role === "owner" || a.superadmin);
-  const on = S.firm.cloudDocs !== false, years = num(S.firm.docYears || 3);
-  const u = S.docUsage;
-  let h = '<h3 style="margin:16px 0 6px;font-size:15px">Documents in the firm account</h3>' +
-    '<p class="note" style="margin:0 0 8px">Bills, sales invoices and bank statements are kept with the firm, so anyone in the firm can open them from Transactions on any computer. Photos are shrunk to reading size first, and nothing is kept for a bill marked \u201cno entry\u201d or held as a duplicate.</p>' +
-    '<label class="chk"><input type="checkbox" data-act-toggle="cloudDocs"' + (on ? " checked" : "") + "> Keep documents in the firm account</label>";
-  if (on && owner){
-    h += '<label class="f" style="max-width:280px"><span>Keep them for</span><select data-firmset="docYears">' +
-      [1, 3, 5, 7, 0].map(y => '<option value="' + y + '"' + (years === y ? " selected" : "") + ">" + (y ? y + " year" + (y === 1 ? "" : "s") : "as long as the client is here") + "</option>").join("") + "</select></label>";
-  }
-  if (on){
-    h += '<div class="row" style="gap:8px;margin-top:6px"><button class="btn small" data-act="docUsage">' + (u ? "Refresh" : "How much is stored?") + "</button>" +
-      (S.coId && S.companies[S.coId] ? '<button class="btn small" data-act="docSendPending">Send documents still on this computer for ' + esc(S.companies[S.coId].name) + "</button>" : "") +
-      (owner && years ? '<button class="btn small" data-act="docTidy">Clear out documents older than ' + years + " year" + (years === 1 ? "" : "s") + "</button>" : "") + "</div>";
-    if (u) h += '<p class="note">' + u.files + " document" + (u.files === 1 ? "" : "s") + " \u00b7 " + (u.bytes > 1073741824 ? (u.bytes / 1073741824).toFixed(2) + " GB" : Math.round(u.bytes / 1048576) + " MB") +
-      (u.oldest ? " \u00b7 oldest " + fmtDate(String(u.oldest).slice(0, 10)) : "") + ". The plan includes 100 GB.</p>";
-  }
-  return h;
-}
-function viewDropKeys(){
-  if (!Cloud.on()) return "";
-  const a = S.account, owner = a && ((a.me || {}).role === "owner" || a.superadmin);
-  if (!owner) return "";
-  const keys = S.dropKeys;
-  const url = Cloud.cfg().url.replace(/\/+$/, "") + "/functions/v1/inbox-drop";
-  let h = '<h3 style="margin:16px 0 6px;font-size:15px">Document inbox: keys for the agent</h3>' +
-    '<p class="note" style="margin:0 0 6px">A drop key lets office automation add waiting documents to a client\u2019s inbox, and refresh their links. The database refuses anything else: it cannot read, change entries, see other firms, or post to Tally. Switch a key off at any time.</p>' +
-    '<div class="row"><button class="btn small" data-act="dropKeysList">' + (keys ? "Refresh" : "Show keys") + '</button><button class="btn small primary" data-act="dropKeyNew">Make a key</button></div>';
-  if (S.newDropKey){
-    const rpc = Cloud.cfg().url.replace(/\/+$/, "") + "/rest/v1/rpc/post_inbox";
-    h += '<div class="bigwarn" style="border-color:var(--ledger)"><b>Copy this key now. It will not be shown again.</b>' +
-      '<div style="margin-top:6px"><code style="font-size:13px;user-select:all">' + esc(S.newDropKey) + "</code></div>" +
-      '<div style="margin-top:8px">The Poster adds one waiting document with one call:</div>' +
-      '<pre style="white-space:pre-wrap;font-size:12px;background:var(--paper);padding:8px;border-radius:6px;user-select:all">POST ' + esc(rpc) +
-      "\nHeader  apikey: " + esc(Cloud.cfg().key) + "\nHeader  Content-Type: application/json\nBody\n{\n  \"p_key\": \"" + esc(S.newDropKey) + "\",\n  \"p_id\": \"&lt;intake uuid&gt;\",\n  \"p_client_id\": \"&lt;FinCom client id&gt;\",\n  \"p_data\": { \"fileName\": ..., \"fileHash\": ..., \"url\": ..., \"urlExpiresAt\": ..., ... }\n}" +
-      "\n\nRefresh a link:  POST .../rest/v1/rpc/refresh_inbox_link\n{ \"p_key\": ..., \"p_id\": ..., \"p_url\": ..., \"p_expires_at\": ... }</pre>" +
-      '<button class="linkbtn" data-act="dropKeyHide">I have copied it</button></div>';
-  }
-  if (keys && keys.length){
-    h += '<div class="tblwrap" style="margin-top:8px"><table class="data"><thead><tr><th>Label</th><th>Ends in</th><th>Made</th><th class="n">Files sent</th><th>Last used</th><th></th></tr></thead><tbody>' +
-      keys.map(k => "<tr" + (k.active ? "" : ' style="opacity:.55"') + "><td>" + esc(k.label) + "</td><td>\u2026" + esc(k.hint) + "</td><td>" + fmtDate(String(k.created_at).slice(0, 10)) +
-        '</td><td class="n">' + (k.uses || 0) + "</td><td>" + (k.last_used ? fmtDate(String(k.last_used).slice(0, 10)) : "\u2014") + "</td><td>" +
-        (k.active ? '<button class="linkbtn" data-dropoff="' + k.id + '">Switch off</button>' : "off") + "</td></tr>").join("") + "</tbody></table></div>";
-  } else if (keys) h += '<p class="note" style="margin-top:6px">No keys yet.</p>';
-  return h;
-}
 
 // the document inbox panel and the upload block are React (app/src/parts/Docq.jsx, UploadBlock.jsx)
 function docqPanel(cid){ return Cloud.on() && docqFor(cid).length ? '<div data-react="DocqPanel" data-cid="' + esc(cid || "") + '"></div>' : ""; }
