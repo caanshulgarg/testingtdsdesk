@@ -4,6 +4,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import fs from "node:fs";
+import { execSync } from "node:child_process";
 
 const CSP = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
   "font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; " +
@@ -30,8 +31,15 @@ function legacy(mode) {
   };
 }
 
+// which React build is open: the time it was built (India time) and the commit, shown at the foot of the sidebar
+const stamp = () => {
+  let sha = ""; try { sha = execSync("git rev-parse --short HEAD").toString().trim(); } catch (e) {}
+  return "React · " + new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) + (sha ? " · " + sha : "");
+};
+
 export default defineConfig(({ mode }) => ({
   base: "./",
+  define: { __REACT_BUILD__: JSON.stringify(stamp()) },
   plugins: [react(), legacy(mode)],
   build: { outDir: mode === "test" ? "dist-test" : "dist", emptyOutDir: true },
 }));

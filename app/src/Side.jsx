@@ -67,7 +67,7 @@ export default function Side() {
       <Item icon="clients" label="All clients" on={home && !["rules", "help"].includes(S.homeTab)} onClick={() => navHome("clients")} />
       <Item icon="help" label="Help" on={home && S.homeTab === "help"} count={typeof SUP === "object" ? SUP.counts() : 0} onClick={() => navHome("help")} />
       <div className="side-grow" />
-      <div className="side-ver">{APP_VERSION.split("·")[1] || APP_VERSION}</div>
+      <div className="side-ver">{APP_VERSION.split("·")[1] || APP_VERSION}<br />{__REACT_BUILD__}</div>
     </>
   );
 }
