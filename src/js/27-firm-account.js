@@ -1060,7 +1060,6 @@ document.addEventListener("click", ev => {
   if (t.dataset.clearf){ clearFilter(t.dataset.clearf); return; }
   if (t.dataset.printid){ printTable(t.dataset.printid, t.dataset.printtitle); return; }
   if (t.dataset.qgo){ S.tdsQ = t.dataset.qgo; S.tdsForm = "26Q"; S.tdsView = "return"; S.tdsTab = ""; render(); return; }
-  if (t.dataset.assetdel){ S.books.assets = (S.books.assets || []).filter(a => a.id !== t.dataset.assetdel); saveBooks(); render(); return; }
   if (t.dataset["2btab"]){ S.twoBTab = t.dataset["2btab"]; render(); return; }
   if (t.dataset.goclient !== undefined && t.dataset.goclient !== null && t.dataset.goclient !== ""){ goClient(t.dataset.goclient); return; }
   if (t.dataset.nav){ navHome(t.dataset.nav); return; }

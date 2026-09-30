@@ -109,7 +109,8 @@ Status: **done** (in React, test passing) · **next** · blank = not started. Ab
 | | the input register (`viewInputRegister`) → `gst/InputRegister.jsx`; same text as live for the month, the year, a kind and a 2B status (61 GST pages) | **done** |
 | | column funnels (`GridF`, 31) now work on React tables too: the funnel is added to the heading, not redrawn over it; they were off on React tables before (GSTR-1/3B, the TDS returns) | **done** |
 | | 2B reconciliation (`viewBooks2B`) → `gst/TwoB.jsx`: every tab, a supplier opened, the year, a filter; checked on a 2B made from the books with faults planted (`tests/make2b.js`); 71 GST pages match live | **done** |
-| | still old, shown inside it: `viewGstAmend`, `viewGstAdv`, `viewGstRev`, `viewGst9`, `viewGst9c` (18) · filing (35) · settings and registrations (36) · QRMP, CMP-08, GSTR-4 (37) · returns filed (38) · ITC follow-up (32) · customer IMS (33) · vendor recon (42) | |
+| | amendments, advances (11A/11B) and reversal (rules 42, 43) (`viewGstAmend`, `viewGstAdv`, `viewGstRev`) → `gst/Workings.jsx`; checked with a filed copy changed, a capital good, the busiest month for advances; 75 GST pages match live | **done** |
+| | still old, shown inside it: `viewGst9`, `viewGst9c` (18) · filing (35) · settings and registrations (36) · QRMP, CMP-08, GSTR-4 (37) · returns filed (38) · ITC follow-up (32) · customer IMS (33) · vendor recon (42) | |
 | | 2B from the portal `viewGstApiCard` (39) | **done** |
 | **Books** | `viewBooks`, `viewBooksImport`, `viewBooksLedgers`, `viewLedPosting`, `viewTallyRead`, `viewSetupList` (18) · accounts (30) | |
 | **Audit and MIS** | `viewBooksAudit`, `viewAuditRel`, `viewAudit3cd`, `viewBooksMis`, `misPackHtml` (18) | |

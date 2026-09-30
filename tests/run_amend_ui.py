@@ -37,7 +37,7 @@ with sync_playwright() as p:
     ok("filed, but no longer in the books" in t, "removed invoice explained")
     pg.screenshot(path=OUT + "/amend.png", full_page=True)
     # leave the removed one
-    sel = pg.locator('select[data-amendact]').nth(1)
+    sel = pg.locator('select[aria-label="Report it as"]').nth(1)
     sel.select_option("skip"); pg.wait_for_timeout(400)
     ok(list(pg.evaluate("Object.values(S.books.amendFix)")) == ["skip"], "choice kept")
     # the JSON for August has the amendment and not the one left alone
@@ -61,7 +61,7 @@ with sync_playwright() as p:
     ok("the books against the return filed" in pg.inner_text("#app").lower(), "June shows the books against its own return")
     # 'not filed' takes a copy out
     pg.evaluate("S.gstYm = '202509'; render();"); pg.wait_for_timeout(300)
-    pg.locator('input[data-filednot]').nth(1).check(); pg.wait_for_timeout(400)
+    pg.locator('input[aria-label="This copy was not filed"]').nth(1).check(); pg.wait_for_timeout(400)
     ok(nos[0] in pg.inner_text("#app").split("To report in")[1], "marking August 'not filed' brings June's amendment back")
     bad = pg.evaluate("""() => { const bad = []; GSTR.months().forEach(m => ['07', '09', ''].forEach(r => ['r1', 'amend'].forEach(pt => {
       S.gstYm = m; S.gstReg = r; S.gstPart = pt; try { render(); } catch (e) { bad.push(m + r + pt + ': ' + e.message); } }))); return bad; }""")

@@ -44,6 +44,16 @@ with sync_playwright() as p:
     pg.evaluate("() => { S.r2Tab = 'suppliers'; const s = GST2B.suppliers(GST2B.scope(r2Reg(S.books), r2Scope().months)); S.r2Open = s.length ? (s[0].gstin || s[0].party) : ''; render(); }"); grab("r2b-opened")
     pg.evaluate("() => { S.r2Scope = 'year'; S.r2Tab = 'books'; S.r2F = {books: {flag: 'big'}}; render(); }"); grab("r2b-year-big")
     pg.evaluate("() => { S.r2Scope = 'all'; S.r2Tab = 'only2b'; S.r2F = {}; render(); }"); grab("r2b-all-only2b")
+    # amendments: the busiest sales month kept as filed, with one invoice changed and one left out; then the next month
+    pg.evaluate(r"""() => {
+      const reg = S.gstReg || '', ms = GSTR.months(), n = m => GSTR.one(m, reg).b2b.length, m1 = ms.slice().sort((a, c) => n(c) - n(a))[0];
+      const j = JSON.parse(JSON.stringify(GSTR.toJson(m1, reg)));
+      if (j.b2b && j.b2b[0]){ const inv = j.b2b[0].inv[0]; inv.itms[0].itm_det.txval = r2(num(inv.itms[0].itm_det.txval) + 100); if (j.b2b[1]) j.b2b[1].inv.pop(); }
+      GSTAmend.keep(j, 'portal', {at: '2026-01-01T00:00:00Z'}); S.gstYm = ms[ms.indexOf(m1) + 1] || m1; S.gstPart = 'amend'; render(); }"""); grab("amend-filed")
+    pg.evaluate("() => { const id = GSTAmend.pending(S.gstYm, S.gstReg || '').rows[0]; if (id) S.books.amendFix = {[id.id]: 'skip'}; render(); }"); grab("amend-skip")
+    # reversal with a capital good and the 5% rule; advances in the busiest month for receipts
+    pg.evaluate("() => { S.books.assets = [{id: 'as1', name: 'LED wall', date: '2025-05-10', igst: 180000, cgst: 0, sgst: 0, cess: 0, use: 'common', reg: S.gstReg || '', sold: ''}]; S.gstPart = 'rev'; render(); }"); grab("rev-asset")
+    pg.evaluate("() => { const ms = GSTR.months(), n = m => GSTAdv.ready() ? GSTAdv.month(m, S.gstReg || '').at.length + GSTAdv.month(m, S.gstReg || '').open.length : 0; S.gstYm = ms.slice().sort((a, c) => n(c) - n(a))[0]; S.gstPart = 'adv'; render(); }"); grab("adv-busiest")
     br.close()
 srv.shutdown()
 json.dump({"pages": res, "errors": errors}, open(out, "w"), indent=0)

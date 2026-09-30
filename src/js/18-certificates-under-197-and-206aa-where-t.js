@@ -951,7 +951,7 @@ async function gst9Excel(which){
   }
   saveFile(CO().name.replace(/[^A-Za-z0-9]+/g, "-") + "-GSTR-" + which + "-" + fy + "-" + reg + ".xlsx", new Blob([XLSX.write(wb, {bookType: "xlsx", type: "array"})], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
 }
-// the GST tab: React (app/src/screens/Gst.jsx); GSTR-1 and 3B are app/src/screens/gst/Returns.jsx, the input register gst/InputRegister.jsx, 2B gst/TwoB.jsx; the other parts are still the old pages below
+// the GST tab: React (app/src/screens/Gst.jsx); GSTR-1 and 3B are app/src/screens/gst/Returns.jsx, the input register gst/InputRegister.jsx, 2B gst/TwoB.jsx, amendments, advances and reversal gst/Workings.jsx; the other parts are still the old pages below
 function viewBooksGst(b){ return '<div data-react="Gst"></div>'; }
 // the parts of the GST tab for the GSTIN and month chosen, following its filing type
 function gstParts(b){
@@ -975,9 +975,6 @@ function gstPartHtml(b, part){
   if (part === "cmp08") return viewCmp08(b);
   if (part === "gstr4") return viewGstr4(b);
   if (part === "follow") return viewItcFollow(b);
-  if (part === "adv") return viewGstAdv(b);
-  if (part === "rev") return viewGstRev(b);
-  if (part === "amend") return viewGstAmend(b);
   if (part === "g9") return viewGst9(b);
   if (part === "g9c") return viewGst9c(b);
   return "";
@@ -986,173 +983,6 @@ function gstPartGo(id){ S.gstPart = id; render(); }
 function gstSetYm(ym){ S.gstYm = ym; S.books.reco = null; render(); }
 function gstSetReg(reg){ S.gstReg = reg; S.books.reco = null; render(); }
 
-function viewGstAmend(b){
-  const money = v => INR.format(r2(v || 0)), ym = S.gstYm || "", reg = S.gstReg || "", regs = GSTR.gstins(b) || [];
-  const kindName = {B2B: "B2B invoice", B2CL: "B2C large invoice", EXP: "Export invoice", CDNR: "Credit or debit note", B2CS: "B2C small, month total"};
-  const table = {B2B: "9A", B2CL: "9A", EXP: "9A", CDNR: "9C", B2CS: "10"};
-  let h = "";
-  const all = GSTAmend.filed(reg);
-  h += '<section class="dash-card"><h3>Filed GSTR-1 returns kept here</h3>' +
-    '<p class="note">Amendments are found by comparing the books now with what was filed. A copy is kept each time the GSTR-1 JSON is downloaded here; for a month filed some other way, bring in the JSON that was uploaded to the portal.</p>' +
-    '<div class="row" style="gap:8px;margin:8px 0"><button class="btn small primary" data-act="filedPick">Bring in filed GSTR-1 JSON</button></div>' +
-    (all.length ? '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Month</th><th>Registration</th><th>Copy from</th><th class="dt">Kept on</th><th class="n">Documents</th><th class="n">B2C small</th><th>Not filed</th></tr></thead><tbody>' +
-      all.map(f => {
-        const n = GSTAmend.norm(f.json); let bs = 0; n.b2cs.forEach(x => { bs += num(x.txval); });
-        return "<tr><td>" + GSTR.label(f.ym) + "</td><td>" + esc(f.gstin) + "</td><td>" + (f.source === "portal" ? "brought in" : "downloaded here") + "</td><td>" + fmtDate(String(f.at).slice(0, 10)) +
-          '</td><td class="n">' + n.docs.size + '</td><td class="n">' + money(bs) + '</td><td><input type="checkbox" data-filednot="' + esc(f.gstin + "|" + f.fp) + '"' + (f.notFiled ? " checked" : "") +
-          ' aria-label="This copy was not filed"></td></tr>';
-      }).join("") + "</tbody></table></div>" : '<p class="note">None yet.</p>') + "</section>";
-  if (regs.length > 1 && !reg) return h + '<p class="note" style="margin-top:12px">Choose a registration above to see its amendments.</p>';
-  if (!ym) return h;
-  const c = GSTAmend.check(ym, reg);
-  if (c){
-    h += '<section class="dash-card" style="margin-top:12px"><h3>' + GSTR.label(ym) + ": the books against the return filed</h3>" +
-      '<div class="dash-row"><span>Taxable value filed</span><b>' + money(c.filedTotal) + '</b></div><div class="dash-row"><span>Taxable value in the books now</span><b>' + money(c.booksTotal) + "</b></div>" +
-      (Math.abs(c.b2csF - c.b2csB) >= 1 ? '<div class="dash-row"><span>B2C small: filed / books</span><b>' + money(c.b2csF) + " / " + money(c.b2csB) + "</b></div>" : "") +
-      (c.rows.length ? '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Document</th><th>Party</th><th>Number</th><th class="dt">Date</th><th>What differs</th></tr></thead><tbody>' +
-        c.rows.slice(0, gfN(200)).map(r => "<tr><td>" + esc(kindName[r.kind] || r.kind) + "</td><td>" + esc(r.doc.ctin || "\u2014") + "</td><td>" + esc(r.doc.num) + "</td><td>" + fmtDate(tallyDate(r.doc.date)) + "</td><td>" + esc(r.changes.join("; ")) + "</td></tr>").join("") +
-        "</tbody></table></div>" : '<p class="note">Every document in the books matches the return filed.</p>') +
-      '<p class="note">Differences here are reported as amendments in a later month’s return, not by filing this month again.</p></section>';
-  }
-  const p = GSTAmend.pending(ym, reg);
-  const live = p.rows.filter(r => r.act !== "skip");
-  const count = f => live.filter(f).length;
-  h += '<div class="dash-tiles" style="margin-top:12px">' +
-    '<div class="dtile"><span>9A amended invoices</span><b>' + count(r => r.kind !== "CDNR" && (r.what === "amend" || r.what === "gone")) + "</b><small>B2B, B2C large and exports</small></div>" +
-    '<div class="dtile"><span>9C amended notes</span><b>' + count(r => r.kind === "CDNR" && (r.what === "amend" || r.what === "gone")) + "</b><small>credit and debit notes</small></div>" +
-    '<div class="dtile"><span>Missed, reported now</span><b>' + count(r => r.what === "missing") + "</b><small>with their original number and date</small></div>" +
-    '<div class="dtile"><span>10 B2C small corrected</span><b>' + count(r => r.kind === "B2CS") + "</b><small>months, rates and places revised</small></div></div>";
-  h += '<section class="dash-card" style="margin-top:12px"><h3>To report in ' + GSTR.label(ym) + "’s GSTR-1</h3>" +
-    '<p class="note">Earlier months’ documents that differ from what was filed. Each goes into this month’s JSON as chosen; an amendment already filed in an earlier month’s return is not repeated.</p>' +
-    (p.periods.length ? '<p class="note">Compared: ' + p.periods.map(GSTR.label).join(", ") + ".</p>" : "") +
-    (p.noCopy.length ? '<p class="note" style="color:#B9541B">No filed copy for ' + p.noCopy.map(GSTR.label).join(", ") + ", so those months are not compared.</p>" : "") +
-    (p.late.length ? '<p class="note">Past the time to amend (November after the year): ' + p.late.map(GSTR.label).join(", ") + ".</p>" : "") +
-    (p.rows.length ? '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Month filed</th><th>Document</th><th>GSTIN</th><th>Number</th><th class="dt">Date</th><th class="n">Taxable now</th><th>What differs</th><th>Report it as</th></tr></thead><tbody>' +
-      p.rows.map(r => {
-        const d = r.now || r.was;
-        const opts = r.what === "amend" ? [["amend", "amendment (" + table[r.kind] + ")"], ["skip", "leave it"]]
-          : r.what === "gone" ? [["nil", "amendment to nil (" + table[r.kind] + ")"], ["skip", "leave it"]]
-          : (r.kind === "B2B" ? [["b2c", "was in B2C small: 4A now and table 10"], ["missed", "missed: 4A now"]] : [["missed", "missed: report now"]]).concat([["skip", "leave it"]]);
-        return "<tr><td>" + GSTR.label(r.P) + "</td><td>" + esc(kindName[r.kind] || r.kind) + "</td><td>" + esc(d.ctin || "\u2014") + "</td><td>" + esc(d.num) + "</td><td>" + fmtDate(tallyDate(d.date)) +
-          '</td><td class="n">' + (r.now ? money(r.now.txval) : "\u2014") + "</td><td>" + esc(r.changes.join("; ")) + '</td><td><select data-amendact="' + esc(r.id) + '">' +
-          opts.map(([v, l]) => '<option value="' + v + '"' + (r.act === v ? " selected" : "") + ">" + esc(l) + "</option>").join("") + "</select></td></tr>";
-      }).join("") + "</tbody></table></div>"
-      : '<p class="note">' + (p.periods.length ? "Nothing to amend: the books agree with what was filed." : "Nothing to compare yet.") + "</p>") + "</section>";
-  h += '<p class="note">Amendments can be made up to 30 November after the end of the year (section 37(3)). A renumbered invoice, or one whose GSTIN was corrected, is one amendment (9A, with the original number). When B2C small figures of a month change \u2014 an invoice lost its GSTIN, or gained one \u2014 table 10 carries the month\u2019s revised figures.</p>';
-  if (typeof viewGstr1a === "function") h += viewGstr1a(b, ym, reg);
-  return h;
-}
-function viewGstAdv(b){
-  const money = v => INR.format(r2(v || 0));
-  if (!GSTAdv.ready()) return '<section class="dash-card"><h3>Advances need the day book read again</h3><p class="note">Advances are worked out from the bill-wise details in Tally (New Ref, Advance, On Account, Agst Ref). The day book here was read before those were kept. Under “From Tally”, choose the same day book XML again; nothing you set is lost.</p></section>';
-  const ym = S.gstYm || "", reg = S.gstReg || "", a = GSTAdv.month(ym, reg);
-  const tile = (label, s, note) => '<div class="dtile"><span>' + label + "</span><b>" + s.n + "</b><small>" + money(s.received) + " received, " + money(s.igst + s.cgst + s.sgst + s.cess) + " tax</small>" + (note ? "<small>" + note + "</small>" : "") + "</div>";
-  const netTax = r2(a.net.igst + a.net.cgst + a.net.sgst + a.net.cess);
-  let h = '<div class="dash-tiles">' + tile("Received, not billed this month (11A)", a.atSum) + tile("Billed now, received earlier (11B)", a.txpdSum) +
-    '<div class="dtile"><span>Into 3B 3.1(a)</span><b>' + money(netTax) + '</b><small>tax on ' + money(a.net.taxable) + " net of 11B</small></div>" +
-    '<div class="dtile"><span>Left out</span><b>' + a.untaxed.length + '</b><small>goods, exports, on account or marked</small></div></div>';
-  const months = GSTR.months();
-  const rateSel = r => '<select data-advrate="' + esc(r.id) + '" title="Rate: ' + esc(r.rateFrom) + '">' + GSTAdv.RATES.filter(x => x > 0).map(x => '<option value="' + x + '"' + (x === r.rate ? " selected" : "") + ">" + x + "%</option>").join("") + "</select>" +
-    (r.rateFrom === "set" ? "" : '<br><small class="note"' + (r.rateFrom === "assumed" ? ' style="color:#B9541B"' : "") + ">" + (r.rateFrom === "assumed" ? "assumed, no invoice" : "from the " + esc(r.rateFrom)) + "</small>");
-  const head = '<th class="dt">Date</th><th>Receipt</th><th>Customer</th><th>Bill ref</th><th class="n">Received</th><th class="n">Rate</th><th>Place of supply</th><th class="n">Advance, less tax</th><th class="n">IGST</th><th class="n">CGST</th><th class="n">SGST</th>';
-  const cells = r => '<td class="n">' + money(r.taxable) + '</td><td class="n">' + money(r.igst) + '</td><td class="n">' + money(r.cgst) + '</td><td class="n">' + money(r.sgst) + "</td>";
-  h += '<section class="dash-card" style="margin-top:12px"><h3>11A Advances received</h3>' +
-    '<p class="note">Money a customer paid before the invoice, for services. An advance billed in the same month is left out, as the return asks. The rate is taken from the customer’s invoice nearest the receipt; change it where it is wrong.</p>' +
-    (a.at.length ? '<div class="bk-tablewrap"><table class="bk-table"><thead><tr>' + head + '<th>Not an advance</th></tr></thead><tbody>' +
-      a.at.map(r => "<tr><td>" + fmtDate(tallyDate(r.date)) + "</td><td>" + esc(r.no) + "</td><td>" + esc(r.party) + (r.gstin ? '<br><small class="note">' + esc(r.gstin) + "</small>" : "") + "</td><td>" + esc(r.ref || "\u2014") +
-        '</td><td class="n">' + money(r.received) + '</td><td class="n">' + rateSel(r) + "</td><td>" + esc(r.pos) + '<br><small class="note">' + (r.inter ? "inter-state" : "same state") + "</small></td>" + cells(r) +
-        '<td><input type="checkbox" data-advskip="' + esc(r.id) + '" aria-label="Not an advance"></td></tr>').join("") +
-      '<tr><td colspan="4"><b>Total</b></td><td class="n"><b>' + money(a.atSum.received) + '</b></td><td></td><td></td>' + cells(a.atSum) + "<td></td></tr></tbody></table></div>"
-      : '<p class="note">No advance received this month.</p>') + "</section>";
-  h += '<section class="dash-card" style="margin-top:12px"><h3>11B Advances adjusted</h3>' +
-    '<p class="note">An advance from an earlier month that an invoice (or a refund) used up this month. The tax paid on it then comes off now, at the same rate.</p>' +
-    (a.txpd.length ? '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th class="dt">Adjusted on</th><th>By</th><th>Customer</th><th>Received in</th><th class="n">Amount</th><th class="n">Rate</th><th>Place of supply</th><th class="n">Advance, less tax</th><th class="n">IGST</th><th class="n">CGST</th><th class="n">SGST</th></tr></thead><tbody>' +
-      a.txpd.map(r => "<tr><td>" + fmtDate(tallyDate(r.adjDate)) + "</td><td>" + esc(r.how === "marked" ? "marked by hand" : (r.how === "refund" ? "refund " : "") + (r.by || "")) + "</td><td>" + esc(r.party) + "</td><td>" + GSTR.label(r.receivedYm) +
-        '</td><td class="n">' + money(r.received) + '</td><td class="n">' + r.rate + "%</td><td>" + esc(r.pos) + "</td>" + cells(r) + "</tr>").join("") +
-      '<tr><td colspan="4"><b>Total</b></td><td class="n"><b>' + money(a.txpdSum.received) + '</b></td><td></td><td></td>' + cells(a.txpdSum) + "</tr></tbody></table></div>"
-      : '<p class="note">No earlier advance was adjusted this month.</p>') + "</section>";
-  if (a.open.length && ym){
-    const later = months.filter(m => m > ym);
-    h += '<section class="dash-card" style="margin-top:12px"><h3>Advances still open at the end of ' + GSTR.label(ym) + "</h3>" +
-      '<p class="note">Not yet billed or refunded in these books. If one was used up by an invoice that is not tied to it in Tally, pick the month it was billed.</p>' +
-      '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th class="dt">Received</th><th>Customer</th><th>Bill ref</th><th class="n">Amount</th><th class="n">Still open</th><th>Billed in</th></tr></thead><tbody>' +
-      a.open.map(p => {
-        const left = r2(p.amount - p.adj.filter(x => x.ym <= ym).reduce((s, x) => s + x.amount, 0));
-        return "<tr><td>" + fmtDate(tallyDate(p.date)) + "</td><td>" + esc(p.party) + "</td><td>" + esc(p.ref || "\u2014") + '</td><td class="n">' + money(p.amount) + '</td><td class="n">' + money(left) +
-          '</td><td><select data-advadj="' + esc(p.id) + '"><option value="">not yet</option>' + later.concat(p.fix.adjYm && !later.includes(p.fix.adjYm) ? [p.fix.adjYm] : [])
-            .map(m => '<option value="' + m + '"' + (p.fix.adjYm === m ? " selected" : "") + ">" + GSTR.label(m) + "</option>").join("") + "</select></td></tr>";
-      }).join("") + "</tbody></table></div></section>";
-  }
-  if (a.untaxed.length){
-    h += '<section class="dash-card" style="margin-top:12px"><h3>Received early, but not in 11A</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th class="dt">Date</th><th>Customer</th><th>Bill ref</th><th class="n">Received</th><th>Why</th><th>Count it</th></tr></thead><tbody>' +
-      a.untaxed.map(r => {
-        const p = GSTAdv.build().pieces.find(x => x.id === r.id) || {fix: {}};
-        const ctl = p.skip ? '<input type="checkbox" data-advskip="' + esc(r.id) + '" checked aria-label="Not an advance"> not an advance'
-          : p.type === "On Account" ? '<input type="checkbox" data-advtake="' + esc(r.id) + '"' + (p.fix.isAdv ? " checked" : "") + ' aria-label="Count as an advance"> it is an advance' : "";
-        return "<tr><td>" + fmtDate(tallyDate(r.date)) + "</td><td>" + esc(r.party) + "</td><td>" + esc(r.ref || r.type) + '</td><td class="n">' + money(r.received) + "</td><td>" + esc(r.why) + "</td><td>" + ctl + "</td></tr>";
-      }).join("") + "</tbody></table></div></section>";
-  }
-  h += '<p class="note">Read from receipts against a customer before the invoice: a New Ref, an Advance, or an Agst Ref to such a ref before it is billed. A receipt from a ledger not under Sundry Debtors is not counted; bring the ledger masters in for this. Tax on advances for goods is not payable (notification 66/2017).</p>';
-  return h;
-}
-function viewGstRev(b){
-  const money = v => INR.format(r2(v || 0)), ym = S.gstYm || "", reg = S.gstReg || "";
-  const pct = k => (Math.round(k * 10000) / 100) + "%";
-  const heads = x => '<td class="n">' + money(x.igst) + '</td><td class="n">' + money(x.cgst) + '</td><td class="n">' + money(x.sgst) + '</td><td class="n">' + money(x.cess) + "</td>";
-  const th = '<th class="n">IGST</th><th class="n">CGST</th><th class="n">SGST</th><th class="n">Cess</th>';
-  if (!ym) return '<p class="note">Pick a month.</p>';
-  const r42 = GSTRev.rule42(ym, reg), r43 = GSTRev.rule43(ym, reg), q = r42.ratio, t = q.t, set = GSTRev.settings();
-  const commonLeds = Object.values(b.map || {}).filter(m => m.kind === "gst_common").length;
-  const tot = GSTRev.add(r42.reverse, r43.Te);
-  let h = '<div class="dash-tiles"><div class="dtile"><span>Exempt share of turnover (E ÷ F)</span><b>' + pct(r42.share) + "</b><small>" + money(q.E) + " of " + money(q.F) + (q.from && q.from !== ym ? ", taken from " + GSTR.label(q.from) : "") + "</small></div>" +
-    '<div class="dtile"><span>Rule 42, reversed</span><b>' + money(GSTRev.total(r42.reverse)) + "</b><small>on common credit of " + money(GSTRev.total(r42.C2)) + "</small></div>" +
-    '<div class="dtile"><span>Rule 43, reversed</span><b>' + money(GSTRev.total(r43.Te)) + "</b><small>" + r43.used.length + " capital good" + (r43.used.length === 1 ? "" : "s") + " in use</small></div>" +
-    '<div class="dtile"><span>Into 3B 4(B)(1)</span><b>' + money(GSTRev.total(tot)) + "</b><small>" + GSTR.label(ym) + "</small></div></div>";
-  h += '<section class="dash-card" style="margin-top:12px"><h3>Turnover of the month</h3><div class="bk-tablewrap"><table class="bk-table"><tbody>' +
-    '<tr><td>Taxable, net of credit notes</td><td class="n">' + money(t.taxable) + "</td></tr><tr><td>Exports and SEZ</td><td class=\"n\">" + money(t.zero) + "</td></tr>" +
-    "<tr><td>Exempt, nil rated and non-GST (E)</td><td class=\"n\">" + money(t.exempt) + "</td></tr><tr><td><b>Total turnover (F)</b></td><td class=\"n\"><b>" + money(t.total) + "</b></td></tr></tbody></table></div>" +
-    (t.total ? "" : '<p class="note">No turnover this month, so E and F of ' + (q.from ? GSTR.label(q.from) : "no earlier month") + " are used, as rule 42(1)(h) says.</p>") + "</section>";
-  h += '<section class="dash-card" style="margin-top:12px"><h3>Rule 42: common inputs and input services</h3>' +
-    (commonLeds ? "" : '<p class="note" style="color:#B9541B">No ledger is marked “GST, common credit” yet. On the Ledgers tab, mark the input tax ledgers that carry credit used for both taxable and exempt (or non-business) supplies.</p>') +
-    '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th></th>' + th + "</tr></thead><tbody>" +
-    "<tr><td>C2 Common credit (" + r42.n + " voucher" + (r42.n === 1 ? "" : "s") + ")</td>" + heads(r42.C2) + "</tr>" +
-    "<tr><td>D1 For exempt supplies: C2 × E ÷ F</td>" + heads(r42.D1) + "</tr>" +
-    "<tr><td>D2 For non-business use: 5% of C2</td>" + heads(r42.D2) + "</tr>" +
-    "<tr><td><b>Reversed: D1 + D2</b></td>" + heads(r42.reverse) + "</tr>" +
-    "<tr><td>C3 Credit kept</td>" + heads(r42.C3) + "</tr></tbody></table></div>" +
-    '<p class="note" style="margin-top:8px">D2 (5% for non-business use): <b>' + (set.d2 ? "applies" : "does not apply") + "</b> \u00b7 " + (typeof gstSetLink === "function" ? gstSetLink() : "") + "</p></section>";
-  const y = GSTRev.year(ym, reg);
-  if (y.rows.length){
-    const fyLabel = y.fy + "-" + String(num(y.fy) + 1).slice(2);
-    const more = GSTRev.total(y.diff);
-    h += '<section class="dash-card" style="margin-top:12px"><h3>Rule 42(2): the year ' + esc(fyLabel) + " worked out again</h3>" +
-      '<p class="note">After the year, D1 is worked out on the whole year’s turnover. ' + y.rows.length + " of 12 months are in these books.</p>" +
-      '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Month</th><th class="n">Common credit</th><th class="n">E ÷ F</th><th class="n">D1</th></tr></thead><tbody>' +
-      y.rows.map(r => "<tr><td>" + GSTR.label(r.ym) + '</td><td class="n">' + money(GSTRev.total(r.C2)) + '</td><td class="n">' + pct(r.share) + '</td><td class="n">' + money(GSTRev.total(r.D1)) + "</td></tr>").join("") +
-      '<tr><td><b>Year</b></td><td class="n"><b>' + money(GSTRev.total(y.C2)) + '</b></td><td class="n"><b>' + pct(y.share) + '</b></td><td class="n"><b>' + money(GSTRev.total(y.monthly)) + "</b></td></tr></tbody></table></div>" +
-      '<div class="bk-tablewrap" style="margin-top:8px"><table class="bk-table"><thead><tr><th></th>' + th + "</tr></thead><tbody>" +
-      "<tr><td>D1 on the year’s turnover</td>" + heads(y.annual) + "</tr><tr><td>Less: D1 reversed month by month</td>" + heads(y.monthly) + "</tr>" +
-      "<tr><td><b>" + (more > 0 ? "To reverse more, with interest under section 50" : more < 0 ? "To take back as credit" : "Difference") + "</b></td>" + heads(y.diff) + "</tr></tbody></table></div>" +
-      '<p class="note">Reverse the extra in 4(B)(1), or take the excess back in 4(A)(5), in a return up to September after the year ends.</p></section>';
-  }
-  const regs = GSTR.gstins(b) || [], assets = b.assets || [];
-  h += '<section class="dash-card" style="margin-top:12px"><h3>Rule 43: capital goods</h3>' +
-    '<p class="note">The credit on a capital good used for both taxable and exempt supplies is spread over 60 months, 5% a quarter, from the month it is put to use. Each month, the exempt share of that month’s part (Tr × E ÷ F) is reversed. A good used only for taxable supplies keeps all its credit; one used only for exempt or non-business supplies gets none, so mark those and they are left out.</p>' +
-    '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Capital good</th><th class="dt">Put to use</th>' + th + "<th>Used for</th>" + (regs.length > 1 ? "<th>Registration</th>" : "") + '<th class="dt">Sold on</th><th class="n">This month (Tm)</th><th></th></tr></thead><tbody>' +
-    assets.map(a => {
-      const f = (k, type, w) => '<input type="' + type + '" data-asset="' + esc(a.id) + ":" + k + '" value="' + esc(a[k] == null ? "" : a[k]) + '" style="width:' + w + '"' + (type === "number" ? ' step="0.01" min="0"' : "") + ">";
-      const tmv = GSTRev.tm(a, ym);
-      return "<tr><td>" + f("name", "text", "130px") + "</td><td>" + f("date", "date", "128px") + "</td><td>" + f("igst", "number", "88px") + "</td><td>" + f("cgst", "number", "80px") + "</td><td>" + f("sgst", "number", "80px") + "</td><td>" + f("cess", "number", "64px") + "</td>" +
-        '<td><select style="min-width:150px" data-asset="' + esc(a.id) + ':use">' + [["common", "taxable and exempt"], ["taxable", "taxable only"], ["exempt", "exempt or non-business only"]].map(([v, l]) => '<option value="' + v + '"' + ((a.use || "common") === v ? " selected" : "") + ">" + l + "</option>").join("") + "</select></td>" +
-        (regs.length > 1 ? '<td><select data-asset="' + esc(a.id) + ':reg"><option value="">any</option>' + regs.map(g => '<option value="' + g.slice(0, 2) + '"' + (a.reg === g.slice(0, 2) ? " selected" : "") + ">" + esc(g.slice(0, 2)) + "</option>").join("") + "</select></td>" : "") +
-        "<td>" + f("sold", "date", "130px") + '</td><td class="n">' + (tmv ? money(GSTRev.total(tmv)) : "\u2014") + '</td><td><button class="btn small" data-assetdel="' + esc(a.id) + '">Remove</button></td></tr>';
-    }).join("") + "</tbody></table></div>" +
-    '<div class="row" style="gap:8px;margin-top:8px"><button class="btn small" data-act="assetAdd">Add a capital good</button></div>' +
-    (r43.used.length ? '<div class="bk-tablewrap" style="margin-top:8px"><table class="bk-table"><thead><tr><th></th>' + th + "</tr></thead><tbody><tr><td>Tr, credit of the month on common capital goods</td>" + heads(r43.Tr) +
-      "</tr><tr><td><b>Te, reversed: Tr × E ÷ F</b></td>" + heads(r43.Te) + "</tr></tbody></table></div>" : "") + "</section>";
-  h += '<p class="note">Both rules go into 3B table 4(B)(1). Credit marked “GST, ITC not to be taken” stays in 4(B)(2), as before.</p>';
-  return h;
-}
 
 function inregRows(b){
   const reg = S.gstReg || "", ym = S.gstYm || "", mode = S.inregScope || "month";

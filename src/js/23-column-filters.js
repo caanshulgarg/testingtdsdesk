@@ -852,6 +852,21 @@ function gst3bSet(what, val){
   b.gst3b = Object.assign({}, b.gst3b); b.gst3b[k] = Object.assign({}, b.gst3b[k]); b.gst3b[k][grp] = Object.assign({}, b.gst3b[k][grp], {[hd]: val === "" ? "" : num(val)});
   saveBooks(); render();
 }
+// amendments (app/src/screens/gst/Workings.jsx): how an earlier month's document is reported now, and a filed copy
+// marked as never filed
+function amendSetAct(id, act){ const b = S.books; b.amendFix = Object.assign({}, b.amendFix, {[id]: act}); saveBooks(); render(); }
+function filedSetNotFiled(key, on){ const f = (S.books.filed || {})[key]; if (f){ f.notFiled = !!on; saveBooks(); render(); } }
+// advances: what the user corrects about one receipt (rate, not an advance, is an advance, the month it was billed)
+function advFix(id, key, val){
+  const b = S.books; b.advFix = b.advFix || {};
+  const f = Object.assign({}, b.advFix[id], {[key]: val});
+  Object.keys(f).forEach(k => { if (f[k] === "" || f[k] === false || f[k] == null) delete f[k]; });
+  if (Object.keys(f).length) b.advFix[id] = f; else delete b.advFix[id];
+  saveBooks(); render();
+}
+// rule 43: a capital good's name, date put to use, credit, use, registration, date sold
+function assetSet(id, k, v){ const a = (S.books.assets || []).find(x => x.id === id); if (a){ a[k] = /^(igst|cgst|sgst|cess)$/.test(k) ? r2(num(v)) : v; saveBooks(); render(); } }
+function assetRemove(id){ S.books.assets = (S.books.assets || []).filter(a => a.id !== id); saveBooks(); render(); }
 // what the user corrects on the Advances and Reversal screens
 function gstFixChange(t){
   const d = t.dataset, b = S.books;
@@ -907,25 +922,6 @@ function gstFixChange(t){
     m.byHand = true; m.ok = true; m.okAt = new Date().toISOString();
     LedMaster.tplLearn(b, [lmName]); try { LedMaster.applyPosting(b, CO(), "empty"); } catch (e){}
     b.mapV = (b.mapV || 0) + 1; b.reco = null; saveBooks(); render(); return true;
-  }
-  if (d.amendact){ b.amendFix = Object.assign({}, b.amendFix, {[d.amendact]: t.value}); saveBooks(); render(); return true; }
-  if (d.filednot){ const f = (b.filed || {})[d.filednot]; if (f){ f.notFiled = !!t.checked; saveBooks(); render(); } return true; }
-  const id = d.advrate || d.advskip || d.advtake || d.advadj;
-  if (id){
-    b.advFix = b.advFix || {};
-    const f = Object.assign({}, b.advFix[id]);
-    if (d.advrate) f.rate = t.value;
-    if (d.advskip) f.skip = !!t.checked;
-    if (d.advtake) f.isAdv = !!t.checked;
-    if (d.advadj) f.adjYm = t.value;
-    Object.keys(f).forEach(k => { if (f[k] === "" || f[k] === false || f[k] == null) delete f[k]; });
-    if (Object.keys(f).length) b.advFix[id] = f; else delete b.advFix[id];
-    saveBooks(); render(); return true;
-  }
-  if (d.asset){
-    const [aid, k] = d.asset.split(":"), a = (b.assets || []).find(x => x.id === aid);
-    if (a){ a[k] = /^(igst|cgst|sgst|cess)$/.test(k) ? r2(num(t.value)) : t.value; saveBooks(); render(); }
-    return true;
   }
   if (d.revd2 !== undefined){ b.rev = Object.assign({}, b.rev, {d2: !!t.checked}); saveBooks(); render(); return true; }
   return false;

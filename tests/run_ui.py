@@ -41,7 +41,7 @@ with sync_playwright() as p:
     ok("20,25,163.05" in txt and "3,64,529.35" in txt, "HMVL advance less tax and IGST shown")
     pg.screenshot(path=OUT + "/adv-jan.png", full_page=True)
     # change the rate of the HMVL row to 12%
-    sel = pg.locator("select[data-advrate]").first
+    sel = pg.locator('select[aria-label="Rate"]').first
     sel.select_option("12"); pg.wait_for_timeout(400)
     txt = pg.inner_text("#app")
     ok("21,33,653.93" in txt, "rate changed to 12%: 23,89,692.40 / 1.12 = 21,33,653.93")
@@ -54,17 +54,17 @@ with sync_playwright() as p:
     pg.screenshot(path=OUT + "/adv-feb.png", full_page=True)
     # mark the Jan advance as not an advance: it leaves 11A and 11B
     pg.evaluate("S.gstYm = '202601'; render();"); pg.wait_for_timeout(300)
-    pg.locator("input[data-advskip]").first.check(); pg.wait_for_timeout(400)
+    pg.locator('input[aria-label="Not an advance"]').first.check(); pg.wait_for_timeout(400)
     txt = pg.inner_text("#app")
     ok("No advance received this month" in txt and "marked as not an advance" in txt, "marking not an advance moves it to the left-out list")
-    pg.locator("input[data-advskip]").first.uncheck(); pg.wait_for_timeout(400)
+    pg.locator('input[aria-label="Not an advance"]').first.uncheck(); pg.wait_for_timeout(400)
     ok("20,25,163.05" not in pg.inner_text("#app") or True, "unmark restores it")
     t2 = pg.inner_text("#app"); ok("HINDUSTAN MEDIA" in t2.split("11A Advances received")[1].split("11B Advances adjusted")[0], "HMVL back in 11A after unmarking")
     # an open advance: Oct HMVL 66.5 lakh, mark it billed in Dec
     pg.evaluate("S.books.advFix = {}; S.gstYm = '202510'; render();"); pg.wait_for_timeout(400)
     txt = pg.inner_text("#app")
     ok("still open at the end of" in txt, "open advances listed for Oct")
-    pg.locator("select[data-advadj]").first.select_option("202512"); pg.wait_for_timeout(400)
+    pg.locator('select[aria-label="Billed in"]').first.select_option("202512"); pg.wait_for_timeout(400)
     pg.evaluate("S.gstYm = '202512'; render();"); pg.wait_for_timeout(400)
     txt = pg.inner_text("#app")
     ok("marked by hand" in txt, "Dec 11B shows the advance marked as billed in Dec")
@@ -100,17 +100,17 @@ with sync_playwright() as p:
     pg.locator('input[data-gset="d2"]').check(); pg.wait_for_timeout(500)
     pg.evaluate("S.tab = 'books'; render()"); pg.wait_for_timeout(800)
     # add a capital good and fill it in
-    pg.click('button[data-act="assetAdd"]'); pg.wait_for_timeout(300)
+    pg.click('button:text-is("Add a capital good")'); pg.wait_for_timeout(300)
     aid = pg.evaluate("S.books.assets[0].id")
-    pg.fill('input[data-asset="%s:name"]' % aid, "LED wall"); pg.press('input[data-asset="%s:name"]' % aid, "Tab"); pg.wait_for_timeout(200)
-    pg.fill('input[data-asset="%s:date"]' % aid, "2025-05-10"); pg.press('input[data-asset="%s:date"]' % aid, "Tab"); pg.wait_for_timeout(200)
-    pg.fill('input[data-asset="%s:igst"]' % aid, "180000"); pg.press('input[data-asset="%s:igst"]' % aid, "Tab"); pg.wait_for_timeout(400)
+    pg.fill('section:has(h3:text-is("Rule 43: capital goods")) table >> nth=0 >> tbody tr >> nth=-1 >> input[aria-label="name"]', "LED wall"); pg.press('section:has(h3:text-is("Rule 43: capital goods")) table >> nth=0 >> tbody tr >> nth=-1 >> input[aria-label="name"]', "Tab"); pg.wait_for_timeout(200)
+    pg.fill('section:has(h3:text-is("Rule 43: capital goods")) table >> nth=0 >> tbody tr >> nth=-1 >> input[aria-label="date"]', "2025-05-10"); pg.press('section:has(h3:text-is("Rule 43: capital goods")) table >> nth=0 >> tbody tr >> nth=-1 >> input[aria-label="date"]', "Tab"); pg.wait_for_timeout(200)
+    pg.fill('section:has(h3:text-is("Rule 43: capital goods")) table >> nth=0 >> tbody tr >> nth=-1 >> input[aria-label="igst"]', "180000"); pg.press('section:has(h3:text-is("Rule 43: capital goods")) table >> nth=0 >> tbody tr >> nth=-1 >> input[aria-label="igst"]', "Tab"); pg.wait_for_timeout(400)
     a = pg.evaluate("JSON.stringify(S.books.assets[0])")
     ok('"name":"LED wall"' in a and '"date":"2025-05-10"' in a and '"igst":180000' in a, "asset saved: " + a)
     txt = pg.inner_text("#app")
     ok("3,000.00" in txt, "Tm of 3,000 shown for June")
     pg.screenshot(path=OUT + "/rev-jun.png", full_page=True)
-    pg.click('button[data-assetdel="%s"]' % aid); pg.wait_for_timeout(300)
+    pg.click('section:has(h3:text-is("Rule 43: capital goods")) table >> nth=0 >> tbody tr >> nth=-1 >> button:text-is("Remove")'); pg.wait_for_timeout(300)
     ok(pg.evaluate("S.books.assets.length") == 0, "asset removed")
     # downloads build without error
     pg.evaluate("window.__saved = []; window.saveFile = (n, b) => window.__saved.push(n); S.gstYm = '202601';")

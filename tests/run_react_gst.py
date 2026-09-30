@@ -97,6 +97,39 @@ with sync_playwright() as p:
     ok(pg.locator('select[aria-label="Which month"]').count() == 1, "the year at once, with a month filter")
     tol = pg.locator('input[aria-label="Allow a difference of"]'); tol.fill("600"); tol.press("Tab"); pg.wait_for_timeout(500)
     ok(pg.evaluate("GST2B.settings().tol") == 600, "the difference allowed is kept")
+    # reversal: a capital good added, filled in, and removed
+    pg.click('nav[aria-label="GST"] button[data-part="rev"]'); pg.wait_for_timeout(500)
+    pg.click('button:text-is("Add a capital good")'); pg.wait_for_timeout(400)
+    row = 'section:has(h3:text-is("Rule 43: capital goods")) table >> nth=0 >> tbody tr >> nth=-1 >> '
+    for k, v in [("name", "LED wall"), ("date", "2025-05-10"), ("igst", "180000")]:
+        pg.fill(row + 'input[aria-label="%s"]' % k, v); pg.press(row + 'input[aria-label="%s"]' % k, "Tab"); pg.wait_for_timeout(300)
+    a = pg.evaluate("S.books.assets[0]")
+    ok(a["name"] == "LED wall" and a["date"] == "2025-05-10" and a["igst"] == 180000, "a capital good typed in is kept")
+    pg.select_option(row + 'select[aria-label="Used for"]', "taxable"); pg.wait_for_timeout(300)
+    ok(pg.evaluate("S.books.assets[0].use") == "taxable", "and what it is used for")
+    pg.click(row + 'button:text-is("Remove")'); pg.wait_for_timeout(300)
+    ok(pg.evaluate("S.books.assets.length") == 0, "Remove")
+    # advances: the month with the most, a rate changed, one marked not an advance and back
+    pg.evaluate("() => { const ms = GSTR.months(), n = m => GSTAdv.month(m, S.gstReg || '').at.length; S.gstYm = ms.slice().sort((a, c) => n(c) - n(a))[0]; S.gstPart = 'adv'; render(); }"); pg.wait_for_timeout(600)
+    if pg.locator('select[aria-label="Rate"]').count():
+        rid = pg.evaluate("GSTAdv.month(S.gstYm, S.gstReg || '').at[0].id")
+        pg.locator('select[aria-label="Rate"]').first.select_option("5"); pg.wait_for_timeout(400)
+        ok(pg.evaluate("S.books.advFix[%s].rate" % json.dumps(rid)) == "5" and "set" == pg.evaluate("GSTAdv.month(S.gstYm, S.gstReg || '').at[0].rateFrom"), "11A: the rate changed is kept")
+        n = pg.locator('select[aria-label="Rate"]').count()
+        pg.locator('input[aria-label="Not an advance"]').first.click(); pg.wait_for_timeout(400)
+        ok(pg.locator('select[aria-label="Rate"]').count() == n - 1 and "Received early, but not in 11A" in pg.inner_text("#app"), "“Not an advance”: out of 11A, into the list left out")
+        pg.locator('section:has(h3:text-is("Received early, but not in 11A")) input[aria-label="Not an advance"]').first.click(); pg.wait_for_timeout(400)
+        ok(pg.locator('select[aria-label="Rate"]').count() == n, "unticked there: back in 11A")
+    else: ok(False, "no advances in these books")
+    # amendments: a filed copy with a change, how it is reported, and a copy marked not filed
+    pg.evaluate("""() => { const reg = S.gstReg || '', ms = GSTR.months(), n = m => GSTR.one(m, reg).b2b.length, m1 = ms.slice().sort((a, c) => n(c) - n(a))[0];
+      const j = JSON.parse(JSON.stringify(GSTR.toJson(m1, reg))); const inv = j.b2b[0].inv[0]; inv.itms[0].itm_det.txval = r2(num(inv.itms[0].itm_det.txval) + 100);
+      GSTAmend.keep(j, 'portal'); S.gstYm = ms[ms.indexOf(m1) + 1]; S.gstPart = 'amend'; render(); }"""); pg.wait_for_timeout(600)
+    sel = pg.locator('select[aria-label="Report it as"]').first
+    sel.select_option("skip"); pg.wait_for_timeout(400)
+    ok(list(pg.evaluate("S.books.amendFix").values()) == ["skip"] and pg.locator('select[aria-label="Report it as"]').first.input_value() == "skip", "an amendment set to “leave it” is kept")
+    pg.locator('input[aria-label="This copy was not filed"]').first.click(); pg.wait_for_timeout(400)
+    ok(pg.evaluate("Object.values(S.books.filed)[0].notFiled") is True, "a filed copy marked as not filed")
     pg.click('nav[aria-label="GST"] button[data-part="r3b"]'); pg.wait_for_timeout(500)
     pg.click('button.linkbtn:text-is("change in GST settings")'); pg.wait_for_timeout(500)
     ok(pg.evaluate("S.tab") == "gstset", "“change in GST settings” opens them")
