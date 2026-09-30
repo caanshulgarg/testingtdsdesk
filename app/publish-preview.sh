@@ -21,7 +21,7 @@ cd "$tmp"
 git add -A "$folder"
 if git diff --cached --quiet; then echo "Preview already up to date."; else
   git commit -qm "Preview: React FinCom from branch $(git -C "$OLDPWD" rev-parse --abbrev-ref HEAD) ($(git -C "$OLDPWD" rev-parse --short HEAD)) at $folder/"
-  git diff --stat origin/main HEAD | tail -3
+  git diff --stat=120 origin/main HEAD
   outside=$(git diff --name-only origin/main HEAD | grep -v "^$folder/" || true)
   if [ -n "$outside" ]; then echo "Files outside $folder/ would change: stopped."; echo "$outside"
   elif [ -n "$DRY" ]; then echo "DRY: nothing pushed."
