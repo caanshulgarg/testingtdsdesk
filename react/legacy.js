@@ -8239,9 +8239,7 @@ function viewToday(){ return '<div data-react="Today"></div>'; }
 function viewInboxAll(){ return '<div data-react="InboxAll"></div>'; }
 function viewClients(){ return '<div data-react="Clients"></div>'; }
 /* ---------- Tally: the connection, and everything sent ---------- */
-function viewTallyHome(){
-  return '<section class="today"><h2>Tally</h2></section>' + viewBridgeSettings() + viewPostLog();
-}
+function viewTallyHome(){ return '<div data-react="TallyHome"></div>'; }
 
 // the top bar is drawn by React (app/src/TopBar.jsx); a change that touches only it redraws React alone
 function renderTop(){ if (window.FinComReact) FinComReact.redraw(); }
@@ -13618,37 +13616,14 @@ async function setAutoNumbering(){
   render();
 }
 /* ---------- settings ---------- */
-function viewReadTest(){
-  if (!Bridge.up()) return "";
-  const r = S.readTest || {};
-  let h = '<div style="margin-top:10px;border-top:1px solid var(--rule-soft);padding-top:10px"><div class="row" style="justify-content:space-between;align-items:center"><b>Test reading entries</b><button class="btn small" data-act="bridgeReadTest"' + (r.busy ? " disabled" : "") + ">" + (r.busy ? "Testing\u2026" : "Run test") + "</button></div>" +
-    '<p class="note" style="margin:4px 0">Checks how FinCom can read entries from the company open in Tally (nothing is written). If posts are \u201cnot confirmed\u201d, run this and send the result.</p>';
-  if (r.error) h += '<p class="bk-warn">' + esc(r.error) + "</p>";
-  if (r.tests) h += '<table class="data"><tbody>' + r.tests.map(t => "<tr><td>" + esc(t.name) + "</td><td>" + (t.ok ? '<span class="tag ok">works</span> ' + num(t.count) + " found" + (t.optional ? " (" + num(t.optional) + " Optional)" : "") : '<span class="tag bad">failed</span> ' + esc(t.error || "")) + '</td><td class="n">' + num(t.ms) + " ms</td></tr>").join("") + "</tbody></table>" +
-    '<p class="note" style="margin:4px 0 0">' + esc(r.company || "") + " \u00b7 port " + esc(r.port) + " \u00b7 " + esc(r.from) + " to " + esc(r.to) + "</p>";
-  return h + "</div>";
-}
-function viewBridgeDiagnosis(){
-  const d = Bridge.diag;
-  let h = '<div class="bdiag"><div class="row" style="justify-content:space-between;align-items:center"><h3 style="margin:0">Check my Tally</h3><button class="btn small" data-act="bridgeDiag">' + (d ? "Check again" : "Check now") + "</button></div>";
-  if (!d) return h + '<p class="note" style="margin:6px 0 0">Finds your TallyPrime on this server and explains anything that stops the connection.</p>' + viewReadTest() + "</div>";
-  if (d.error) return h + '<p class="bk-warn">' + esc(d.error) + "</p></div>";
-  h += '<p class="note" style="margin:6px 0">Bridge running as <b>' + esc(d.user || "") + "</b> (Windows session " + esc(d.mySession) + ").</p>";
-  h += (d.findings || []).map(f => '<div class="bd-f ' + esc(f.level) + '"><b>' + (f.level === "ok" ? "\u2714 " : "\u26A0 ") + esc(f.text) + "</b>" + (f.fix ? '<div class="bd-fix">What to do: ' + esc(f.fix) + "</div>" : "") + "</div>").join("");
-  if ((d.tallies || []).length) h += '<table class="data" style="margin-top:8px"><thead><tr><th>TallyPrime of</th><th>Accepting connections on</th><th>Its setting</th></tr></thead><tbody>' +
-    d.tallies.map(t => "<tr><td>" + esc(t.user || ("session " + t.session)) + (t.mine ? ' <span class="tag ok">you</span>' : "") + "</td><td>" + (t.ports.length ? "port " + esc(t.ports.join(", ")) : '<span class="tag bad">not accepting</span>') + "</td><td>" +
-      (t.ini && t.ini.found ? esc((t.ini.mode || "?") + ", port " + (t.ini.port || "9000")) : '<span class="note">\u2014</span>') + "</td></tr>").join("") + "</tbody></table>";
-  if (d.freePort) h += '<p class="note" style="margin:6px 0 0">A free port on this server: <b>' + esc(d.freePort) + "</b>. Each user\u2019s TallyPrime needs its own port.</p>";
-  return h + viewReadTest() + "</div>";
-}
-function bridgeDownHelp(c){
-  const url = c.url.replace(/\/+$/, "");
-  return '<div class="bdiag"><b>FinCom cannot reach the bridge. Check, in this order:</b><ol style="margin:8px 0 0 18px;padding:0;line-height:1.55">' +
-    "<li>On the computer where TallyPrime runs, is the window <b>FinCom - Tally Bridge</b> open and showing <b>READY</b>? If not, double-click <b>Start-TDS-Bridge.bat</b> in the bridge folder.</li>" +
-    "<li>If that window shows <b>BRIDGE STOPPED</b> or <b>Could not start on port</b>, do what it says, or send the file <b>tds-bridge-console.txt</b> from the bridge folder.</li>" +
-    '<li>In this same browser, open <a href="' + esc(url) + '/ping" target="_blank" rel="noopener">' + esc(url) + "/ping</a>. If it shows <code>\"ok\":true</code>, press <b>Retry</b> below (and choose <b>Allow</b> if the browser asks about apps on this device).</li>" +
-    "<li>If that page cannot be reached, FinCom and the bridge are on different computers: open FinCom (the downloaded file) inside the server session where TallyPrime runs.</li>" +
-    '</ol><div class="row" style="margin-top:8px"><button class="btn small primary" data-act="bridgeTest">Retry</button></div></div>';
+// the Tally Bridge settings (app/src/screens/Tally.jsx): an address, key or following typed; a Tally company linked to a
+// client; one Tally chosen (a port) or back to automatic
+function bridgeSet(k, v){ Bridge.setCfg({[k]: typeof v === "string" ? v.trim() : v}); if (k !== "follow"){ Bridge.lastOpenKey = null; startBridgePolling(); } render(); }
+function bridgeLink(name, cid){ const c = S.companies[cid]; if (c){ c.tallyName = name; Store.saveCompany(c); Bridge.lastOpenKey = null; toast(c.name + " is linked to the Tally company " + c.tallyName + "."); bridgeTick(false); render(); } }
+function bridgePin(port){
+  port = num(port); Bridge.setCfg({port: port || 0}); Bridge.lastOpenKey = null;
+  if (S.bank){ S.bank.syncedAt = {}; S.bank.ledgers.importedAt = ""; }
+  Bridge.refresh().then(() => { toast(port ? "FinCom now uses only the Tally on port " + port + "." : "FinCom picks your Tally automatically."); bridgeTick(false); render(); });
 }
 async function saveBridgeSetup(){
   let t = null;
@@ -13663,58 +13638,6 @@ async function saveBridgeSetup(){
   toast("Saved. On the computer where Tally runs, double-click Setup-FinCom-Bridge.bat and press I.");
   render();
 }
-function bridgeSetupSteps(){
-  const st = Bridge.st, connected = Bridge.on() && Bridge.up();
-  const step = (n, done, title, body) => '<li class="' + (done ? "done" : "") + '"><b>' + (done ? "\u2714 " : n + ". ") + title + "</b>" + (body ? "<div>" + body + "</div>" : "") + "</li>";
-  return '<div class="setupcard"><h3 style="margin:0 0 6px">Set up in three steps</h3><ol class="setup">' +
-    step(1, connected, "Put the bridge on the Tally computer",
-      'Press <button class="btn small" data-act="bridgeSetupFile">Download the bridge setup</button> and run the file there (double-click, press <b>I</b>). It installs itself, starts, and starts again at every sign-in. No admin rights needed.') +
-    (S.bridgeSha ? '<li class="note" style="list-style:none;font-size:12px">Fingerprint (SHA-256) of the file just saved: <code style="user-select:all;word-break:break-all">' + esc(S.bridgeSha) + "</code>. It must match the one published by FinCom before you run it.</li>" : "") +
-    step(2, connected && st.tallyUp, "Open TallyPrime and your company",
-      "In TallyPrime: F1 Help \u2192 Settings \u2192 Connectivity \u2192 <b>TallyPrime acts as: Both</b>. Each user's Tally needs its own port (9000, 9001, \u2026).") +
-    step(3, connected, "Press Connect here",
-      'Press <button class="btn small primary" data-act="bridgeConnect">Connect</button> and type the 6-digit code shown in the bridge window. The code works once, for 15 minutes after the bridge starts; no other web page can connect.') +
-    "</ol></div>";
-}
-function viewBridgeSettings(){
-  const c = Bridge.cfg(), st = Bridge.st;
-  if (Bridge.blocked()) return '<div class="pane"><h2>Tally Bridge</h2><p class="note" style="margin:0">Pages opened on claude.ai cannot reach programs on your computer. To connect to Tally, use the downloaded app (<b>Download standalone app</b>) on the computer where TallyPrime runs.</p></div>';
-  // the Windows app that keeps the bridge running, shows what it does, updates it and sends its log to support
-  const cn = '<div class="pane cn-card"><h2>FinCom Connector for Windows <span class="tag">recommended</span></h2>' +
-    '<p class="note" style="margin:0 0 10px">One program on the computer with Tally: it installs the bridge, starts with Windows, keeps the bridge running (and starts it again if it stops), ' +
-    "shows Tally, the companies kept in step and the cloud copy, checks the computer and says what to do in plain words, updates itself, and sends its log to FinCom support in one click. No admin rights needed.</p>" +
-    '<div class="row"><a class="btn primary" href="assets/connector/FinComConnector.exe?v=' + Date.now() + '" download="FinComConnector.exe">Download FinCom Connector</a>' +
-    '<span class="note" style="align-self:center">Windows 10 or 11. Until the program is signed, Windows may say \u201cWindows protected your PC\u201d: press More info, then Run anyway.</span></div></div>';
-  let h = cn + '<div class="pane"><h2>Tally Bridge</h2><p class="note" style="margin:0 0 12px">Connects FinCom to TallyPrime on this computer: the company open in Tally is followed, ledgers load straight from Tally, and entries are posted without files. Run <b>TDSBridge</b> on the computer where TallyPrime runs, then paste its key here.</p>' +
-    '<div class="grid"><label class="f"><span>Bridge address</span><input type="text" data-bridge="url" value="' + esc(c.url) + '"></label>' +
-    '<label class="f"><span>Bridge key (filled in by Connect)</span><input type="text" data-bridge="key" data-fk="bridgekey" value="' + esc(c.key) + '" autocomplete="off" placeholder="press Connect below"></label></div>' +
-    '<label class="chk" style="margin-top:8px"><input type="checkbox" data-bridge="follow"' + (c.follow ? " checked" : "") + "> Follow the company open in Tally (switch FinCom to it automatically)</label>" +
-    '<div class="row" style="margin-top:10px"><button class="btn small primary" data-act="bridgeTest">' + (c.key ? "Check connection" : "Connect") + "</button>" + (c.key ? '<button class="btn small" data-act="bridgeOff">Disconnect</button>' : "") +
-    '<button class="btn small" data-act="bridgeSetupFile">Download the bridge setup</button></div>';
-  if (!(Bridge.on() && Bridge.up())) h += bridgeSetupSteps();
-  if (c.key){
-    h += '<div style="margin-top:12px">' + (st.state === "ok"
-      ? '<p class="note" style="margin:0 0 6px">Bridge ' + esc(st.version || "") + " connected" + (st.allowImport === false ? " (posting switched off in the bridge)" : "") + ". Checked " + new Date(st.at).toLocaleTimeString() + ".</p>" +
-        '<p class="note" style="margin:0 0 6px">' + ({auto: "The bridge finds the TallyPrime running in your Windows session" + (st.user ? " (" + esc(st.user) + ")" : "") + " and ignores other users\u2019 Tally.", config: "The bridge uses the Tally ports listed in its settings file.", fallback: "Windows did not tell the bridge which Tally is yours: choose it below."}[st.mode] || "") + "</p>" +
-        ((st.clash || []).length ? '<p class="bk-warn">' + esc(st.clash.join(", ")) + " is open in more than one Tally. Choose yours with <b>Use this Tally</b>; until then nothing is read or posted for it.</p>" : "") +
-        (st.sessions.length ? '<table class="data"><thead><tr><th>Tally</th><th>Owner</th><th>Companies open</th><th>FinCom client</th><th></th></tr></thead><tbody>' +
-          st.sessions.filter(se => se.ok || se.skipped || num(c.port) === se.port || st.mode !== "fallback").map(se => {
-            const owner = se.skipped ? '<span class="tag no">Another user \u2014 not used</span>' : se.mine === true ? '<span class="tag ok">Your session</span>' : '<span class="tag warn">Not checked</span>';
-            const pinned = num(c.port) === se.port;
-            const comps = se.skipped ? '<span class="note">hidden</span>' : !se.ok ? '<span class="note">' + esc(se.error ? "not answering" : "\u2014") + "</span>" : se.companies.length ? se.companies.map(o => "<b>" + esc(o.name) + "</b>").join("<br>") : '<span class="note">no company open</span>';
-            const clients = se.skipped || !se.ok ? "" : se.companies.map(o => { const cl = Bridge.clientFor(o.name); return cl ? esc(cl.name) : '<select data-bridgelink="' + esc(o.name) + '"><option value="">Link to a client\u2026</option>' + sortedCompanies().map(x => '<option value="' + x.id + '">' + esc(x.name) + "</option>").join("") + "</select>"; }).join("<br>");
-            const act = se.skipped ? "" : pinned ? '<span class="tag ok">In use</span> <button class="linkbtn" data-bridgepin="0">Automatic</button>' : se.ok ? '<button class="btn small" data-bridgepin="' + esc(se.port) + '">Use this Tally</button>' : "";
-            return "<tr><td>Port " + esc(se.port) + "</td><td>" + owner + "</td><td>" + comps + "</td><td>" + clients + "</td><td>" + act + "</td></tr>";
-          }).join("") + "</tbody></table>" : '<p class="note">No TallyPrime found. Start TallyPrime in this Windows session.</p>') +
-        (num(c.port) && !st.sessions.some(se => se.port === num(c.port)) ? '<p class="bk-warn">The chosen Tally (port ' + num(c.port) + ') is not running. <button class="linkbtn" data-bridgepin="0">Go back to automatic</button></p>' : "") +
-        viewBridgeDiagnosis() +
-        (st.tallyUp || (Bridge.diag && (Bridge.diag.findings || []).length) ? "" : '<p class="bk-warn">TallyPrime is not answering. In TallyPrime: F1 Help \u2192 Settings \u2192 Connectivity \u2192 set \u201cTallyPrime acts as\u201d to Both, port 9000.</p>')
-      : '<p class="bk-warn">' + esc(st.error || "Not checked yet.") + "</p>" + (st.state === "down" ? bridgeDownHelp(c) : "")) + "</div>";
-  }
-  h += "</div>";
-  return h;
-}
-
 // A day book exported from Tally and chosen in FinCom also becomes the bridge's copy of the company (1.13.7): sent in
 // pieces of a few megabytes, month by month within the dates chosen (empty days are sent as empty, so the copy knows
 // them). Parts can come one period at a time, in any order. Nothing here asks Tally anything
@@ -16051,13 +15974,6 @@ document.addEventListener("click", ev => {
   if (t.dataset.chipall){ if (t.dataset.chipall === "bank"){ const b = B(); b.from = ""; b.to = ""; b.f = {}; b.sel.clear(); } else if (t.dataset.chipall === "sales"){ const sl = SL(); if (sl){ sl.f = {}; sl.sel.clear(); } } else if (t.dataset.chipall === "txn"){ S.txnF = S.txnF || {}; S.txnF[txnTab()] = {}; S.txnQ = ""; S.txnStatus = ""; } else { S.revF = {}; S.revSel = new Set(); } S.colPop = null; render(); return; }
   if (t.dataset.billdel){ billDelete(t.dataset.billdel); return; }
   if (t.dataset.reread){ const e0 = D().entries[t.dataset.rid]; if (e0) rereadEntry(e0, t.dataset.reread === "free" ? null : t.dataset.reread); return; }
-  if (t.dataset.bridgepin !== undefined){
-    const port = num(t.dataset.bridgepin);
-    Bridge.setCfg({port: port || 0}); Bridge.lastOpenKey = null;
-    if (S.bank){ S.bank.syncedAt = {}; S.bank.ledgers.importedAt = ""; }
-    Bridge.refresh().then(() => { toast(port ? "FinCom now uses only the Tally on port " + port + "." : "FinCom picks your Tally automatically."); bridgeTick(false); render(); });
-    return;
-  }
   if (S.view === "company" && (S.tab === "bank" || (S.tab === "export" && S.bank && S.bank.cid === S.coId)) && bankClick(t)) return;   // bank buttons also work on the Post step
   if (S.view === "company" && S.tab === "sales" && salesClick(t)) return;
   if (t.dataset.open){ openCompany(t.dataset.open); return; }
@@ -16773,8 +16689,6 @@ document.addEventListener("change", ev => {
   if (t.dataset && t.dataset.cloud){
     const k = t.dataset.cloud;
     if (["email", "password", "firm", "name"].includes(k)){ S.cloudForm = Object.assign({}, S.cloudForm, {[k]: t.value}); } if (k === "auto"){ Cloud.setCfg({auto: t.checked}); startCloudSync(); } else if (k === "email") Cloud.setCfg({email: t.value.trim()}); return; }
-  if (t.dataset && t.dataset.bridge){ const k = t.dataset.bridge; Bridge.setCfg({[k]: t.type === "checkbox" ? t.checked : t.value.trim()}); if (k !== "follow"){ Bridge.lastOpenKey = null; startBridgePolling(); } return; }
-  if (t.dataset && t.dataset.bridgelink !== undefined){ const c = S.companies[t.value]; if (c){ c.tallyName = t.dataset.bridgelink; Store.saveCompany(c); Bridge.lastOpenKey = null; toast(c.name + " is linked to the Tally company " + c.tallyName + "."); bridgeTick(false); render(); } return; }
   if (S.view === "company" && S.tab === "bank" && bankChange(t)) return;
   if (S.view === "company" && S.tab === "sales" && salesChange(t)) return;
   if (t.dataset.actToggle === "askClaudeNew"){ S.askClaudeNewSupplier = t.checked; lsSet("tdsdesk-test:askClaudeNew", t.checked ? "1" : ""); render(); return; }
@@ -20532,56 +20446,10 @@ const TCloud = {
     try { await this.rpc("tally_company_link", {p_company: company, p_client: client || null}); toast(client ? company + " is linked to " + ((CO(client) || {}).name || "the client") + ". Its books go to the cloud within a few minutes." : company + " is no longer linked."); }
     catch (e){ toast("Could not link it: " + ((e && e.message) || e)); }
     await this.refreshPane();
-  },
-  view(){
-    const p = this.pane;
-    if (!this.on()) return '<div class="pane"><p class="note">Sign in to the firm account to keep the books in FinCom’s cloud.</p></div>';
-    if (p.devices === null && !p.busy && !p.err) setTimeout(() => this.refreshPane(), 0);
-    const when = s => s ? new Date(s).toLocaleString("en-IN", {day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit"}) : "never";
-    const cos = Object.values(S.companies || {}).filter(c => !c.deleted).sort((a, c) => a.name.localeCompare(c.name));
-    let h = '<div class="pane"><h2>Books in FinCom’s cloud</h2><p class="note" style="margin:0 0 12px">The bridge on each connected computer sends the books of the Tally companies it keeps in step. ' +
-      "Then Look up, Reports and the books open on any computer or phone, even with Tally closed, and a trial balance or ledger for any date comes back in a moment. Kept in India, for your firm only.</p>" +
-      (p.err ? '<p class="note bad">' + esc(p.err) + "</p>" : "") + (p.busy ? '<p class="note">' + esc(p.busy) + "</p>" : "") +
-      '<p class="note">The computer with Tally and the bridge sends by itself once someone signs in to FinCom there. Nothing to press.</p>' +
-      (this.autoErr ? '<p class="note bad">Last try: ' + esc(this.autoErr) + "</p>" : "") + '<div class="row"><button class="btn small" data-tc="refresh">Refresh</button></div></div>';
-    const dv = (p.devices || []).filter(d => !d.revoked);
-    h += '<div class="pane"><h3 style="margin-top:0">Computers that send</h3>' + (dv.length ? '<div class="tblwrap"><table class="data"><thead><tr><th>Computer</th><th>Last heard from</th><th>Bridge</th><th></th></tr></thead><tbody>' +
-      dv.map(d => "<tr><td>" + esc(d.name) + ((d.info || {}).computer ? '<div class="nr">' + esc(d.info.computer) + (d.info.user ? " · " + esc(d.info.user) : "") + "</div>" : "") + "</td><td>" + when(d.last_seen) + "</td><td>" + esc(d.version || "—") +
-        '</td><td class="n"><button class="btn small" data-tc="revoke" data-tcid="' + esc(d.id) + '" data-tcname="' + esc(d.name) + '">Remove</button></td></tr>').join("") + "</tbody></table></div>"
-      : '<p class="note">None yet. Open FinCom on the computer with Tally, signed in to the firm, and it connects by itself within a minute.</p>') + "</div>";
-    const cl = p.companies || [];
-    h += '<div class="pane"><h3 style="margin-top:0">Tally companies and clients</h3><p class="note" style="margin:0 0 8px">A company named in Tally as a client’s “Tally name” is linked by itself. ' +
-      "Link the others here. A company whose GSTIN is not the client’s cannot be linked, so no one’s books land in the wrong client.</p>" +
-      (cl.length ? '<div class="tblwrap"><table class="data"><thead><tr><th>Company in Tally</th><th>GSTIN</th><th>Client in FinCom</th><th>Last seen</th></tr></thead><tbody>' +
-        cl.map(c => "<tr><td>" + esc(c.company) + "</td><td>" + esc(c.gstin || "—") + '</td><td><select data-tclink="' + esc(c.company) + '"><option value="">— not linked —</option>' +
-          cos.map(k => '<option value="' + esc(k.id) + '"' + (k.id === c.client_id ? " selected" : "") + ">" + esc(k.name) + "</option>").join("") + "</select></td><td>" + when(c.last_seen) + "</td></tr>").join("") + "</tbody></table></div>"
-        : '<p class="note">No Tally companies have been seen yet. They appear here once a connected computer has a company open in Tally.</p>') + "</div>";
-    return h;
-  },
-  // what Look up shows about the cloud copy
-  bar(cid){
-    const bk = this.book(cid); if (!bk) return "";
-    const st = bk.state || {}, sk = [].concat(st.skipped || []).filter(Boolean);
-    let t = "<b>The books</b>: " + (st.phase === "first" ? "the first copy is still being made (up to " + esc(FC.when(String(st.doneTo || ""))) + ")" : esc(this.age(bk))) + ".";
-    if (sk.length) t += ' <span class="bad"><b>' + sk.length + (sk.length === 1 ? " day" : " days") + " not read yet</b> from Tally.</span>";
-    if (st.trouble && st.trouble.at) t += ' <span class="note">Tally did not answer at ' + esc(String(st.trouble.at).slice(11, 16)) + "; the bridge carries on by itself.</span>";
-    const q = Math.max(0, Math.floor(Number(st.queue) || 0));
-    return t;
   }
+
 };
-(function(){
-  document.addEventListener("click", e => {
-    const t = e.target.closest && e.target.closest("[data-tc]");
-    if (!t) return;
-    const a = t.dataset.tc;
-    if (a === "refresh") TCloud.refreshPane();
-    else if (a === "revoke") TCloud.revoke(t.dataset.tcid, t.dataset.tcname);
-  });
-  document.addEventListener("change", e => {
-    const t = e.target.closest && e.target.closest("[data-tclink]");
-    if (t) TCloud.link(t.dataset.tclink, t.value);
-  });
-})();
+
 // FinCom opened by the FinCom Connector's "Connect FinCom on this computer": the page's address carries the bridge's
 // one-time connect code (#pair=123456). It is taken off the address at once, and used to connect to the bridge.
 (function(){
