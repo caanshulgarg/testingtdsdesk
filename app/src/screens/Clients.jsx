@@ -1,8 +1,8 @@
 // Clients: upload bills for any client, add a client, and the list of clients. Was viewClients() and
-// addCompanyForm() in src/js/18. The reading check, upload options and reading queue are still old screens.
+// addCompanyForm() in src/js/18.
 import { useState } from "react";
 import DropZone from "../parts/DropZone.jsx";
-import Legacy from "../parts/Legacy.jsx";
+import { Jobs, ReadingCheck, UploadOptions } from "../parts/Reading.jsx";
 
 function AddClient() {
   const others = sortedCompanies();
@@ -45,7 +45,7 @@ export default function Clients() {
         <strong>Upload invoices for any client</strong>
         <div className="note">Drop any number of bills. Each is filed under the client whose GSTIN it is billed to; anything that does not match waits in Unsorted uploads. Files already uploaded are skipped.</div>
       </DropZone>
-      <Legacy html={readingCheck()} />
+      <ReadingCheck />
       <div className="pane" style={{ marginTop: 0 }}>
         {S.addingCo ? <AddClient /> : <>
           <h2>{all.length} client{all.length === 1 ? "" : "s"}</h2>
@@ -54,8 +54,8 @@ export default function Clients() {
         </>}
       </div>
     </div>
-    <div style={{ marginTop: 8 }}><Legacy html={uploadOptions()} /></div>
-    <Legacy html={viewJobs((j) => j.target === "auto")} />
+    <div style={{ marginTop: 8 }}><UploadOptions /></div>
+    <Jobs which="auto" />
     {!all.length ? <div className="pane"><p className="empty" style={{ padding: 0 }}>No clients yet. Add your first client with its GSTIN and Tally company name.</p></div> : <>
       <div className="row" style={{ margin: "18px 0 8px", justifyContent: "space-between" }}>
         <label className="f" style={{ minWidth: 260 }}><span>Find a client</span>

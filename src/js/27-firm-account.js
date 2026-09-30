@@ -882,14 +882,11 @@ document.addEventListener("click", ev => {
     }, e => toast(e.message));
     return;
   }
-  if (t.dataset.docqread){ readDocq([t.dataset.docqread], S.view === "company" ? S.coId : ""); return; }
-  if (t.dataset.docqforce){ const id = t.dataset.docqforce; S.docqLocal[id] = {}; readDocq([id], S.view === "company" ? S.coId : "", {force: true}); return; }
   if (t.dataset.openentry){
     const e0 = S.data[t.dataset.openco] && S.data[t.dataset.openco].entries[t.dataset.openentry];
     if (e0){ if (S.coId !== t.dataset.openco) openCompany(t.dataset.openco); S.tab = "invoices"; S.reviewTable = false; S.filter = e0.status; S.selected = e0.id; render(); window.scrollTo(0, 0); }
     return;
   }
-  if (t.dataset.docqaside){ setAsideDocq(t.dataset.docqaside); return; }
   if (t.dataset.dropoff){
     askConfirm({title: "Switch this key off?", ok: "Switch it off", body: '<p class="note">Anything using this key will no longer be able to send files in.</p>'}).then(a => {
       if (!a) return;
@@ -1148,15 +1145,6 @@ document.addEventListener("click", ev => {
   if (t.dataset.select){ S.selected = t.dataset.select; render(); if (window.innerWidth < 860){ const d = document.querySelector(".detail"); if (d) d.scrollIntoView({behavior:"smooth", block:"start"}); } return; }
   if (t.id === "drop"){ pickFiles("company"); return; }
     if (t.dataset.editparty){ S.partySel = t.dataset.editparty; render(); return; }
-  if (t.dataset.job){
-    const j = S.jobs.find(x => x.id === t.dataset.jid);
-    if (!j) return;
-    if (t.dataset.job === "retry" || t.dataset.job === "google" || t.dataset.job === "claude"){ S.readBlocked = null; j.force = t.dataset.job === "retry" ? null : t.dataset.job; j.advanced = false; j.status = "waiting"; j.msg = ""; j.prev = null; j.donePromise = new Promise(res => { j.markDone = res; }); S.batchSize = 2; pump(); render(); }
-    else if (t.dataset.job === "type") typeItIn(j);
-    else if (t.dataset.job === "open") openJobEntry(j);
-    return;
-  }
-  if (t.dataset.delinbox){ const id = t.dataset.delinbox; delete S.inbox[id]; delete S.files[id]; Store.deleteInbox(id); render(); return; }
   if (t.dataset.act) doAct(t.dataset.act, t); else S.arm = null;   // any other button disarms a pending delete
 });
 /* ---------- the actions behind the buttons: doAct("name") from React, or a data-act button of an old screen ----------
@@ -1686,9 +1674,8 @@ function doAct(act, t){
     case "askPerm": askPermission(); break;
     case "toggleKey": S.apiKeyShown = !S.apiKeyShown; render(); break;
     case "saveKey": case "removeKey": toast("Keys are no longer kept in the browser. Sign in to the firm account to use Claude."); break;
-    case "pasteOpen": S.pasteOpen = true; render(); { const b = document.getElementById("pasteBox"); if (b) b.focus(); } break;
+    case "pasteOpen": S.pasteOpen = true; render(); break;
     case "pasteClose": S.pasteOpen = false; render(); break;
-    case "pasteAdd": addPasted(document.getElementById("pasteBox").value); break;
     case "notDup": if (e){ e.notDuplicate = true; if (e.status === "duplicate") e.status = "draft"; delete e.dupOf; Store.saveEntry(S.coId, e); S.filter = "draft"; refreshStats(S.coId); toast("Kept as a separate bill."); render(); } break;
     case "openOriginal": if (e && e.dupOf && D().entries[e.dupOf.entryId]){ const o = D().entries[e.dupOf.entryId]; S.filter = o.status; S.selected = o.id; render(); } break;
     case "clearJobs": { const keep = S.view === "company" ? (j => !(j.target === S.coId || j.cid === S.coId)) : (j => j.target !== "auto"); S.jobs = S.jobs.filter(j => keep(j) || ["waiting","checking","reading"].includes(j.status)); render(); } break;
@@ -1885,9 +1872,7 @@ document.addEventListener("change", ev => {
   if (t.dataset.actToggle === "freeFirst"){ S.freeFirst = t.checked; lsSet("tdsdesk:freeFirst", t.checked ? "1" : "0"); render(); return; }
   if (t.dataset.actToggle === "cloudDocs"){ S.firm.cloudDocs = t.checked; Store.saveFirm(); toast(t.checked ? "Documents will be kept in the firm account." : "Documents stay on this computer only."); render(); return; }
   if (t.dataset && t.dataset.firmset === "docYears"){ S.firm.docYears = num(t.value); Store.saveFirm(); render(); return; }
-  if (t.dataset.actToggle === "splitPdf"){ S.splitPdf = t.checked; lsSet("tdsdesk:splitPdf", t.checked ? "1" : ""); return; }
   if (t.id === "fileIn" || t.id === "camIn"){ const files = Array.from(t.files || []); t.value = ""; handleFiles(files, pickMode); return; }
-  if (t.dataset.assign){ assignInbox(t.dataset.assign, t.value); return; }
   if (t.dataset.x === "invoiceDate" && e && e.status === "draft"){ e.x.invoiceDate = t.value; if (e.uncertain) e.uncertain = e.uncertain.filter(k => k !== "invoiceDate"); Store.saveEntry(cid, e); render(); return; }
   if (t.dataset.gst && e && e.status === "draft"){
     const k = t.dataset.gst, co0 = CO(cid);
@@ -1929,7 +1914,6 @@ document.addEventListener("change", ev => {
     Store.saveEntry(cid, e); refreshStats(cid); render(); return;
   }
   if (t.hasAttribute("data-pnotds")){ const p = D().parties[S.partySel]; if (p){ p.noTds = t.checked; if (t.checked && !p.noTdsReason) p.noTdsReason = "na"; Store.saveParty(cid, p); refreshStats(cid); render(); } return; }
-  if (t.dataset && t.dataset.docqmove !== undefined && t.value){ assignDocq(t.dataset.docqmove, t.value); return true; }
   if (t.hasAttribute("data-ptransporter")){ const p = D().parties[S.partySel]; if (p){ p.transporter = t.checked; Store.saveParty(S.coId, p); render(); } return true; }
   if (t.hasAttribute("data-pnotdsreason")){ const p = D().parties[S.partySel]; if (p){ p.noTdsReason = t.value; Store.saveParty(cid, p); render(); } return; }
   if (t.dataset.p === "natureDefault"){ const p = D().parties[S.partySel]; if (p){ p.natureDefault = t.value; Store.saveParty(cid, p); render(); } return; }

@@ -18,9 +18,9 @@ export default function App() {
       {createPortal(<Guard name="the sidebar" v={v} quiet><Side /></Guard>, document.getElementById("side"))}
       <Guard name="the top bar" v={v} quiet><TopBar /></Guard>
       <Guard name="the client switcher" v={v} quiet><Switcher /></Guard>
-      {islands().map(({ key, name, host }) => {
+      {islands().map(({ key, name, host, props }) => {
         const Screen = SCREENS[name];
-        return Screen ? createPortal(<Guard name={name} v={v}><Screen /></Guard>, host, key) : null;
+        return Screen ? createPortal(<Guard name={name} v={v}><Screen {...props} /></Guard>, host, key) : null;
       })}
     </>
   );

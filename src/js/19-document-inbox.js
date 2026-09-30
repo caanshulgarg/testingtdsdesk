@@ -104,33 +104,6 @@ async function assignDocq(id, cid){
   render();
 }
 /* ---------- on screen ---------- */
-function docqPanel(cid){
-  if (!Cloud.on()) return "";
-  const list = docqFor(cid);
-  if (!list.length) return "";
-  const ago = t => { const m = Math.round((Date.now() - new Date(t).getTime()) / 60000); return !t ? "" : m < 1 ? "just now" : m < 60 ? m + " min ago" : m < 1440 ? Math.round(m / 60) + " h ago" : Math.round(m / 1440) + " d ago"; };
-  const kindTxt = {bill: "bill", purchase: "bill", bank: "bank statement", sales: "sales invoice"};
-  return '<section class="docq"><div class="row" style="justify-content:space-between;align-items:center"><h3 style="margin:0">\u{1F4E5} Inbox \u00b7 ' + list.length + " waiting</h3>" +
-    '<button class="btn small primary" data-act="docqReadAll">Read all ' + list.length + "</button></div>" +
-    '<p class="note" style="margin:4px 0 8px">Files sent in by office automation. They are read the same way as an upload, and charged the same.</p>' +
-    '<div class="tblwrap"><table class="data"><thead><tr><th>File</th><th>From</th><th>Received</th><th></th></tr></thead><tbody>' +
-    list.map(d => {
-      const st = docqState(d), loc = S.docqLocal[d.id] || {}, exp = docqExpired(d);
-      return "<tr><td><b>" + esc(d.fileName || "document") + "</b>" + (kindTxt[d.docKind] ? ' <span class="tag" title="A guess from the file name">' + kindTxt[d.docKind] + "?</span>" : "") +
-        (d.period ? ' <span class="nr">' + esc(d.period) + "</span>" : "") +
-        (st === "reading" ? ' <span class="tag">reading\u2026</span>' : "") +
-        (exp ? '<div class="nr">Link expired, refreshing shortly.</div>' : st === "failed" ? '<div class="nr bad">' + esc(loc.msg || "could not be read") + "</div>" : "") +
-        (st === "dup" ? (() => { const e0 = loc.entryId && S.data[loc.cid] && S.data[loc.cid].entries[loc.entryId];
-          return '<div class="nr bad">Already entered' + (e0 ? ": " + esc(e0.x.vendorName || e0.fileName || "") + (e0.x.invoiceNo ? " bill " + esc(e0.x.invoiceNo) : "") + " (" + esc(statusLabel(e0.status)) + ")" : loc.msg ? ": " + esc(loc.msg) : "") + ".</div>" +
-            '<div style="margin-top:4px">' + (e0 ? '<button class="linkbtn" data-openentry="' + loc.entryId + '" data-openco="' + loc.cid + '">Open that bill</button> \u00b7 ' : "") +
-            '<button class="linkbtn" data-docqforce="' + d.id + '">Read it anyway</button></div>'; })() : "") + "</td>" +
-        "<td>" + esc(d.sender || "") + (d.source ? '<div class="nr">' + esc(d.source) + (d.sourceTicketRef ? " \u00b7 #" + esc(d.sourceTicketRef) : "") + "</div>" : "") + "</td>" +
-        "<td>" + ago(d.receivedAt || d.createdAt) + "</td>" +
-        '<td style="white-space:nowrap">' + (st === "reading" || st === "dup" || exp ? "" : '<button class="btn small" data-docqread="' + d.id + '">' + (st === "failed" ? "Try again" : "Read") + "</button> ") +
-        (cid === "" ? '<select data-docqmove="' + d.id + '"><option value="">Assign to\u2026</option>' + sortedCompanies().map(c => '<option value="' + c.id + '">' + esc(c.name) + "</option>").join("") + "</select> " : "") +
-        '<button class="linkbtn" data-docqaside="' + d.id + '" title="Covering letter, duplicate or not for entry">Not for entry</button></td></tr>';
-    }).join("") + "</tbody></table></div></section>";
-}
 /* ---------- drop keys: how the agent is allowed to send files in ---------- */
 // Documents in the firm account: switched on or off, how long they are kept, and what is held
 function viewDocsSettings(){
@@ -182,15 +155,10 @@ function viewDropKeys(){
   return h;
 }
 
-function uploadBlock(co){
-  const d = D();
-  return '<div class="drop" id="drop" tabindex="0" role="button" aria-label="Upload invoices for ' + esc(co.name) + '"><strong>Upload for ' + esc(co.name) + '</strong><div class="note">Drop any number of PDFs, JPGs or photos here, or click to choose</div>' +
-    "</div>" + readingCheck() + (freeRate(co) ? '<p class="note" style="margin:6px 0 0">Read free for this client: <b>' + freeRate(co).pct + "%</b> of " + freeRate(co).n + " bills (" + freeRate(co).google + " by Google OCR, " + freeRate(co).claude + " by Claude)</p>" : "") + uploadOptions() +
-    '<div class="row" style="margin-top:8px"><button class="btn small" data-act="camera">Take photo</button><button class="btn small" data-act="manual">Type an invoice</button><button class="btn small" data-act="pasteOpen">Paste bill details</button></div>' +
-    (S.pasteOpen ? '<div class="pane" style="margin-top:10px;padding:12px"><label class="f"><span>Bill details in JSON (one bill, or a list of bills)</span><textarea data-draft id="pasteBox" rows="7" placeholder=\'{"vendorName": "...", "invoiceNo": "...", ...}\'></textarea></label>' +
-      '<p class="note" style="margin:6px 0">Use this when photos cannot be read in this view: ask Claude in a chat to read the bill and reply in this app\'s format, then paste the reply here.</p>' +
-      '<div class="row"><button class="btn primary small" data-act="pasteAdd">Add to ' + esc(co.name) + '</button><button class="btn small" data-act="pasteClose">Cancel</button></div></div>' : "");
-}
+// the document inbox panel and the upload block are React (app/src/parts/Docq.jsx, UploadBlock.jsx)
+function docqPanel(cid){ return Cloud.on() && docqFor(cid).length ? '<div data-react="DocqPanel" data-cid="' + esc(cid || "") + '"></div>' : ""; }
+function uploadBlock(co){ return '<div data-react="UploadBlock"></div>'; }
+function readDocqNow(id, cid, force){ if (force) S.docqLocal[id] = {}; readDocq([id], cid, force ? {force: true} : undefined); }
 function viewInvoices(){
   if (VR.st()) return viewVendorRecon();
   if (S.reviewTable && S.filter === "draft") return viewReviewTable();

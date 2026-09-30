@@ -3272,11 +3272,6 @@ async function rereadCarefully(e){
   Store.saveEntry(cid, e); refreshStats(cid); render();
 }
 function cidForCount(j){ return j.target && j.target !== "auto" ? j.target : null; }
-function freeRate(co){
-  const rc = (co && co.readCounts) || {}, n = (rc.free || 0) + (rc.google || 0) + (rc.claude || 0);
-  return n ? {n, pct: Math.round(100 * (rc.free || 0) / n), google: rc.google || 0, claude: rc.claude || 0, free: rc.free || 0} : null;
-}
-// "Working on it": a spinner, what it is doing now, and how far it has got
 function busyCard(title, detail, done, total){
   const pct = total ? Math.round(Math.min(1, done / total) * 100) : null;
   const m = pct === null && detail ? String(detail).match(/(?:page )?(\d+) of (\d+)/i) : null;
@@ -3286,59 +3281,25 @@ function busyCard(title, detail, done, total){
     (p2 === null ? "" : '<div class="busybar"><i style="width:' + p2 + '%"></i></div>') + "</div>" +
     (total ? '<span class="busyn">' + num(done) + " / " + num(total) + "</span>" : "") + "</div>";
 }
-// what the reading of this client's bills is doing right now
-function docsBusyCard(){
-  const n = CloudDocs.queue.length;
-  if (!n) return "";
-  return busyCard("Saving " + n + " document" + (n === 1 ? "" : "s") + " to the firm account\u2026", "This happens in the background; you can carry on.", 0, 0);
+// the reading queue, the reading check, the upload options and the "reading…" cards are React (app/src/parts/Reading.jsx)
+// which: "auto" (uploads for any client) or a client's id
+function viewJobs(which){ return S.jobs.some(j => which === "auto" ? j.target === "auto" : j.target === which || j.cid === which || j.target === "auto") ? '<div data-react="Jobs" data-which="' + esc(which) + '"></div>' : ""; }
+function readingCheck(){ return '<div data-react="ReadingCheck"></div>'; }
+function uploadOptions(){ return '<div data-react="UploadOptions"></div>'; }
+// a job in the reading queue: read it again (the same way, or with Google OCR or Claude), type it in, or open its bill
+function jobAction(kind, jid){
+  const j = S.jobs.find(x => x.id === jid);
+  if (!j) return;
+  if (kind === "retry" || kind === "google" || kind === "claude"){ S.readBlocked = null; j.force = kind === "retry" ? null : kind; j.advanced = false; j.status = "waiting"; j.msg = ""; j.prev = null; j.donePromise = new Promise(res => { j.markDone = res; }); S.batchSize = 2; pump(); render(); }
+  else if (kind === "type") typeItIn(j);
+  else if (kind === "open") openJobEntry(j);
 }
-function billsBusyCard(){
-  const mine = (S.jobs || []).filter(j => j.cid === S.coId || j.target === S.coId || j.target === "auto");
-  const busy = mine.filter(j => ["waiting", "checking", "reading"].includes(j.status));
-  if (!busy.length) return "";
-  const now = busy.find(j => j.status === "reading") || busy[0];
-  const done = mine.length - busy.length;
-  const stage = now.msg || ({waiting: "waiting its turn", checking: "checking whether it was uploaded before", reading: "reading it"})[now.status] || "";
-  const secs = now.startedAt ? Math.round((Date.now() - now.startedAt) / 1000) : 0;
-  return busyCard("Reading " + (busy.length === 1 ? "a bill" : busy.length + " bills") + "\u2026",
-    now.name + " \u00b7 " + stage + (secs > 3 ? " \u00b7 " + secs + "s" : ""), done, mine.length);
+function setSplitPdf(on){ S.splitPdf = on; lsSet("tdsdesk:splitPdf", on ? "1" : ""); }
+function freeRate(co){
+  const rc = (co && co.readCounts) || {}, n = (rc.free || 0) + (rc.google || 0) + (rc.claude || 0);
+  return n ? {n, pct: Math.round(100 * (rc.free || 0) / n), google: rc.google || 0, claude: rc.claude || 0, free: rc.free || 0} : null;
 }
-function viewJobs(filterFn){
-  const jobs = S.jobs.filter(filterFn);
-  if (!jobs.length) return "";
-  const n = st => jobs.filter(j => j.status === st).length;
-  const busy = n("waiting") + n("checking") + n("reading");
-  const label = {waiting:["Waiting","no"], checking:["Checking","no"], reading:["Reading","no"], done:["Done","ok"], held:["Held: duplicate","warn"],
-    duplicate:["Not uploaded: duplicate","warn"], failed:["Could not read","bad"], partial:["Partly read","warn"], unsorted:["Unsorted","warn"], typed:["Typed in","ok"]};
-  let h = '<div class="jobs"><div class="jobshead"><b>' + (busy ? "Reading " + (jobs.length - busy) + " of " + jobs.length + "…" : jobs.length + " file" + (jobs.length === 1 ? "" : "s") + " processed") + "</b>" +
-    '<span class="note">' + [n("done") + n("typed") ? (n("done") + n("typed")) + " added" : "",
-      jobs.filter(j => /^free-/.test(j.method || "")).length ? jobs.filter(j => /^free-/.test(j.method || "")).length + " free" : "",
-      jobs.filter(j => /claude/.test(j.method || "")).length ? jobs.filter(j => /claude/.test(j.method || "")).length + " by Claude" : "", n("duplicate") + n("held") ? (n("duplicate") + n("held")) + " duplicate" : "", n("failed") ? n("failed") + " failed" : "", n("unsorted") ? n("unsorted") + " unsorted" : ""].filter(Boolean).join(" · ") + "</span>" +
-    (busy ? "" : '<button class="btn small" data-act="clearJobs">Clear list</button>') + "</div>";
-  if (busy) h += '<div class="bar jobbar"><div class="add" style="left:0;width:' + Math.round((jobs.length - busy) / jobs.length * 100) + '%"></div></div>';
-  h += '<ul class="joblist">' + jobs.slice().reverse().map(j => {
-    const [t, cls] = label[j.status] || [j.status, "no"];
-    const acts = (j.status === "failed" || j.status === "partial" ? '<button class="btn small" data-job="retry" data-jid="' + j.id + '">Read again</button>' +
-        '<button class="btn small" data-job="google" data-jid="' + j.id + '"' + (googleReady() ? "" : " disabled") + '>With Google OCR</button>' +
-        '<button class="btn small" data-job="claude" data-jid="' + j.id + '"' + (claudeReady() ? "" : " disabled") + '>With Claude</button>' +
-        (j.status === "failed" ? '<button class="btn small" data-job="type" data-jid="' + j.id + '">Type it in</button>' : "") : "") +
-      ((j.status === "duplicate" && j.dupRef && j.dupRef.cid) || ((j.status === "held" || j.status === "done" || j.status === "typed") && j.entryId) ? '<button class="btn small" data-job="open" data-jid="' + j.id + '">Open</button>' : "");
-    const via = j.method ? " " + readBadge(READ_LABELS[j.method] || j.method) : "";
-    return '<li><div class="jn"><span class="jname">' + esc(j.name) + via + '</span><span class="tag ' + cls + '">' + (j.status === "reading" || j.status === "checking" ? '<span class="dot sm"></span>' : "") + t + "</span></div>" +
-      (j.msg ? '<div class="note">' + esc(j.msg) + "</div>" : "") + (acts ? '<div class="row" style="gap:6px;margin-top:4px">' + acts + "</div>" : "") + "</li>";
-  }).join("") + "</ul></div>";
-  return h;
-}
-function readingCheck(){
-  const ocr = {idle:["no","Free OCR: checking…"], available:["ok", S.ocrKind === "built-in" ? "Free OCR: built in" : "Free OCR: available"], loading:["no","Free OCR: loading…"], ready:["ok","Free OCR: working"], unavailable:["bad","Free OCR: blocked here"]}[S.ocrState] || ["no","Free OCR"];
-  const cl = !S.sampleReady ? ["no","Claude: checking…"] : viaPlatform() ? ["ok","Claude: in your plan"] : S.engine === "api" ? ["ok","Claude: your API key"] : S.engine === "claude" ? (S.readBlocked || S.samplePerm === "denied" ? ["bad","Claude: access declined"] : ["ok","Claude: available"]) : ["bad","Claude: not set up"];
-  const pdf = (window.pdfjsLib || window.TDS_ASSETS) ? ["ok","PDF text: free"] : ["bad","PDF reader missing"];
-  const sum = selfTestSummary();
-  const selfT = sum.state === "ok" ? ["ok", "Self-test: passed"] : sum.state === "fail" ? ["bad", "Self-test: failed"] : sum.state === "busy" ? ["no", "Self-test: running…"] : null;
-  return '<div class="rcheck">' + (selfT ? [selfT] : []).concat([pdf, ocr, cl]).map(([c, t]) => '<span class="tag ' + c + '">' + esc(t) + "</span>").join(" ") +
-    (hasGoogle() ? ((S.googleAuto && !S.googleAuto.ok) || (S.googleLast && !S.googleLast.ok) ? ' <span class="tag bad">Google OCR: not working</span>' : S.googleAuto && S.googleAuto.ok ? ' <span class="tag ok">Google OCR: working</span>' : ' <span class="tag ok">Google OCR: set up</span>') : "") +
-    ' <button class="linkbtn" data-act="goReading">Reading check</button></div>';
-}
+// "Working on it": a spinner, what it is doing now, and how far it has got
 function readerStatus(){
   const fix = ' <button class="linkbtn" data-act="goReading">Fix</button>';
   if (!S.sampleReady) return '<span class="tag no">Connecting to Claude…</span>';
@@ -3348,11 +3309,6 @@ function readerStatus(){
   if (S.samplePerm === "prompt") return '<span class="tag warn">Claude will ask permission on the first bill</span>' + fix;
   return S.imgMax ? '<span class="tag ok">Reads PDFs, scans and photos</span>' : '<span class="tag warn">Reads text PDFs only in this view</span>' + fix;
 }
-function uploadOptions(){
-  return '<label class="chk small"><input type="checkbox" data-act-toggle="splitPdf"' + (S.splitPdf ? " checked" : "") + "> A PDF holds many bills: read each page as a separate bill</label>";
-}
-
-// Upload from the client list: file it by the buyer's GSTIN
 function routeCompany(j){
   const cos = Object.values(S.companies);
   if (j.salesOf && S.companies[j.salesOf]) return {cid: null, salesCid: j.salesOf, how: "seller GSTIN"};
@@ -3697,7 +3653,7 @@ function render(){
     S.view = "home";
     body = S.homeTab === "help" && typeof viewHelp === "function" ? viewHelp() : S.homeTab === "today" ? viewToday() : S.homeTab === "inbox" ? viewInboxAll() : S.homeTab === "tally" ? viewTallyHome() : S.homeTab === "rules" ? viewRules() : viewClients();
   }
-  const working = S.view === "company" && CO() ? billsBusyCard() + docsBusyCard() : "";
+  const working = S.view === "company" && CO() ? '<div data-react="Working"></div>' : "";
   app.innerHTML = selfTestBanner() + banner + working + body + drawerHtml() + actionBar() + colPopHtml();
   placeColPop();
   Object.entries(drafts).forEach(([id, v]) => { const el = document.getElementById(id); if (el && el.hasAttribute("data-draft") && el.value !== v) el.value = v; });

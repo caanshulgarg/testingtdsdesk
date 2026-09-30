@@ -1971,21 +1971,8 @@ function renderTop(){ if (window.FinComReact) FinComReact.redraw(); }
 
 /* ---------- Home: client list ---------- */
 /* ---------- Home: unsorted uploads ---------- */
-function viewInbox(){
-  const items = Object.values(S.inbox).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  if (!items.length && docqFor("").length) return docqPanel("");
-  if (!items.length) return '<div class="pane" style="margin-top:0"><h2>Nothing unsorted</h2><p class="note" style="margin:0">Invoices uploaded from the client list land here only when their buyer does not match a client.</p></div>';
-  const opts = '<option value="">Choose client…</option>' + sortedCompanies().map(c => '<option value="' + c.id + '">' + esc(c.name) + "</option>").join("");
-  let h = '<div class="tblwrap"><table class="data"><thead><tr><th>File</th><th>Supplier</th><th>Billed to</th><th class="n">Total</th><th>Why it is here</th><th>Move to</th><th></th></tr></thead><tbody>';
-  items.forEach(i => {
-    const j = i.j || {};
-    h += "<tr><td>" + esc(i.fileName) + "</td><td>" + (i.reading ? '<span class="tag no">Reading…</span>' : esc(j.vendorName || "—")) + "</td><td>" + esc(j.buyerName || "—") + (j.buyerGstin ? '<div class="note">' + esc(j.buyerGstin) + "</div>" : "") +
-      '</td><td class="n">' + (j.totalAmount ? money0(j.totalAmount) : "—") + '</td><td class="note">' + esc(i.note || "") + "</td>" +
-      "<td>" + (i.reading ? "" : '<select data-assign="' + i.id + '" aria-label="Move to client">' + opts + "</select>") + "</td>" +
-      '<td class="n">' + (i.reading ? "" : '<button class="btn small danger" data-delinbox="' + i.id + '">Delete</button>') + "</td></tr>";
-  });
-  return h + "</tbody></table></div>";
-}
+// the unsorted uploads are React (app/src/parts/Unsorted.jsx)
+function viewInbox(){ return '<div data-react="Unsorted"></div>'; }
 
 /* ---------- Home: firm-wide rates ---------- */
 function keyBox(opts){

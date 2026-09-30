@@ -64,11 +64,12 @@ Status: **done** (in React, test passing) · **next** · blank = not started. Ab
 | | page frame `render` (01): banners, `actionBar`, `drawerHtml`, `colPopHtml` | |
 | | modal, toast, confirm dialogs | next |
 | **Sign in** | `viewSignIn`, `viewSignUp`, two-step `viewTwoStep` (27, 43) | |
-| **Home** | `viewClients`, `addCompanyForm`, `viewToday`, `viewInboxAll` (18) | **done** (inside: `readingCheck`, `uploadOptions`, `viewJobs`, `docqPanel`, `viewInbox` still old, shown through `Legacy`) |
+| **Home** | `viewClients`, `addCompanyForm`, `viewToday`, `viewInboxAll`, `viewInbox` (18) | **done** |
 | | `viewTallyHome` (18) | with Tally |
 | | Help and support: `viewHelp`, `viewSup*` (40) | |
-| **Client: Collect / Post / Done** | `viewCollect`, `viewPostStep`, `viewDoneStep`, `bankReportHtml` (02) · `viewJobs`, busy cards (01) | |
-| **Purchase bills** | `viewInvoices`, `viewDetail`, `docWarnHtml`, `viewParties`, `docqPanel` (19) · `viewReviewTable`, `reviewBar`, `drawerHtml` (18) · `itemsHtml`, `partyHistHtml` (01) | |
+| **Client: Collect** | `viewCollect` (02) · `viewJobs`, `readingCheck`, `uploadOptions`, busy cards (01) · `docqPanel`, `uploadBlock` (19) | **done** |
+| **Client: Post / Done** | `viewPostStep`, `viewDoneStep`, `bankReportHtml` (02) | |
+| **Purchase bills** | `viewInvoices`, `viewDetail`, `docWarnHtml`, `viewParties` (19) · `viewReviewTable`, `reviewBar`, `drawerHtml` (18) · `itemsHtml`, `partyHistHtml` (01) | |
 | **Bank** | `viewBank`, `viewSuggestions`, `viewRulesPanel` (22) · `bankRowHtml`, `viewBankGroups`, `bankBar`, `colPopHtml`, `colChipBar` (23) · `viewBankSetup` (02) · recon, balance, duplicates (24) · `fixBanner` (21) | |
 | **Sales** | `viewSales`, `viewSalesCreate`, invoice and print, settings, `postReportHtml` (26) | |
 | **Transactions** | `viewTransactions` (03) | |

@@ -105,16 +105,6 @@ function viewBankSetup(which){
   return which === "rules" ? viewRulesPanel() : '<div class="setup-inline">' + bankSettingsHtml() + "</div>";
 }
 
-/* ---------- Collect: everything that arrives for this client ---------- */
-function viewCollect(){
-  const t = docType();
-  if (t === "sales") return viewSales();
-  const inbox = docqPanel(S.coId);
-  const card = t === "bank"
-    ? '<section class="collect-card"><h3>Upload a bank statement</h3><div class="drop" id="bankDrop" tabindex="0" role="button" data-act="bankPick" aria-label="Upload a bank statement"><strong>Drop a statement here, or click to choose</strong>' +
-      '<div class="note">Excel, CSV or PDF from any bank. The balances are checked, and the statement is filed under the right account.</div></div><input type="file" id="bankIn" accept=".xls,.xlsx,.csv,.pdf,.txt" multiple class="hidden"></section>'
-    : '<section class="collect-card"><h3>Upload purchase bills</h3>' + uploadBlock(CO()) + "</section>";
-  const mine = viewJobs(j => j.target === S.coId || j.cid === S.coId || j.target === "auto");
-  return '<div class="collect">' + (inbox || '<p class="note" style="margin:0 0 12px">Nothing waiting in the inbox for ' + esc(CO().name) + ".</p>") + card +
-    (mine ? '<section class="collect-card">' + mine + '<button class="btn small" data-step="review">Review them</button></section>' : "") + "</div>";
-}
+/* ---------- Collect: everything that arrives for this client (React: app/src/screens/Collect.jsx) ---------- */
+function viewCollect(){ return docType() === "sales" ? viewSales() : '<div data-react="Collect"></div>'; }
+

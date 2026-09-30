@@ -5,6 +5,7 @@
 //
 // A React screen inside an old screen is marked there as <div data-react="Name">. The React screen lives in a host
 // element of its own, put back in that place after every redraw, so it keeps what was typed and where the cursor was.
+// The placeholder's other data-* attributes are passed to the screen as props: <div data-react="DocqPanel" data-cid="x">.
 import { flushSync } from "react-dom";
 
 const legacyRender = window.render;
@@ -12,22 +13,25 @@ let version = 0, hosts = new Map(), placed = [];
 const subs = new Set();
 export const subscribe = (f) => (subs.add(f), () => subs.delete(f));
 export const snapshot = () => version;
-export const islands = () => placed;   // [{key, name, host}] in page order
+export const islands = () => placed;   // [{key, name, host, props}] in page order
 
 // put each React screen's host where its placeholder is
 export function adopt() {
   const seen = {};
   document.querySelectorAll("[data-react]:not(.react-host)").forEach((el) => {
-    const name = el.dataset.react, key = name + "#" + (seen[name] = (seen[name] || 0) + 1);
+    // the same screen for another client (another data-cid) gets a host, and state, of its own
+    const name = el.dataset.react, props = Object.fromEntries(Object.entries(el.dataset).filter(([k]) => k !== "react"));
+    const base = name + JSON.stringify(props), key = base + "#" + (seen[base] = (seen[base] || 0) + 1);
     let host = hosts.get(key);
     if (!host) {
       host = document.createElement("div"); host.className = "react-host"; host.style.display = "contents";
       host.dataset.react = name; host.dataset.key = key; hosts.set(key, host);
     }
+    host.props = props;
     el.replaceWith(host);
   });
   // every host in the page now, whether just put back or left where it was (a redraw of React alone)
-  placed = [...document.querySelectorAll(".react-host")].map((host) => ({ key: host.dataset.key, name: host.dataset.react, host }));
+  placed = [...document.querySelectorAll(".react-host")].map((host) => ({ key: host.dataset.key, name: host.dataset.react, host, props: host.props || {} }));
 }
 
 // React only (no old screens redrawn): for tests, which put a placeholder in the page themselves
