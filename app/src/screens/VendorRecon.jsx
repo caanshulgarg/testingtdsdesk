@@ -6,7 +6,7 @@
 import { useRef } from "react";
 import { BusyCard } from "../parts/Reading.jsx";
 
-const m = (v) => v === null || v === undefined ? "—" : (v < 0 ? "−" : "") + INR.format(Math.abs(v));
+const m = (v) => v === null || v === undefined ? "—" : (v < 0 ? "−" : "") + money(Math.abs(v));
 const side = (v) => v === null ? "" : v > 0.004 ? " payable" : v < -0.004 ? " advance" : "";
 const amt = (x) => m(Math.abs(x.eff)), kind = (x) => x.eff > 0 ? "bill" : "payment / note";
 

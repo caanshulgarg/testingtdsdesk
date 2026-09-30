@@ -32,7 +32,7 @@ function Items({ e }) {
         <thead><tr><th>Description</th><th>HSN/SAC</th><th className="n">Quantity</th><th className="n">Rate</th><th className="n">Value</th><th className="n">GST</th></tr></thead>
         <tbody>{s.items.map((i, k) => (
           <tr key={k}><td>{i.desc}</td><td>{i.hsn || "—"}</td><td className="n">{i.qty ? i.qty + (i.unit ? " " + i.unit : "") : "—"}</td>
-            <td className="n">{i.rate ? INR.format(i.rate) : "—"}</td><td className="n">{INR.format(num(i.taxable))}</td><td className="n">{i.gstRate == null ? "—" : i.gstRate + "%"}</td></tr>
+            <td className="n">{i.rate ? money(i.rate) : "—"}</td><td className="n">{money(num(i.taxable))}</td><td className="n">{i.gstRate == null ? "—" : i.gstRate + "%"}</td></tr>
         ))}</tbody>
       </table></div>
       {(s.rates.length > 1 || s.multi) && <>
@@ -41,7 +41,7 @@ function Items({ e }) {
           <thead><tr><th>Rate</th><th>HSN/SAC</th><th className="n">Taxable</th><th className="n">GST</th></tr></thead>
           <tbody>{s.rates.map((r, k) => (
             <tr key={k}><td>{r.rate == null ? "rate not shown" : r.rate + "%"}</td><td>{r.hsn.size ? Array.from(r.hsn).join(", ") : "—"}</td>
-              <td className="n">{INR.format(r.taxable)}</td><td className="n">{r.rate ? INR.format(r2((r.taxable * r.rate) / 100)) : "—"}</td></tr>
+              <td className="n">{money(r.taxable)}</td><td className="n">{r.rate ? money(r2((r.taxable * r.rate) / 100)) : "—"}</td></tr>
           ))}</tbody>
         </table></div>
       </>}
@@ -149,7 +149,7 @@ function YtdSource({ e, c }) {
     const ours = ourYtd(party, fy, c.rule.id, S.coId, true), n = t.vouchers;
     return <p className="note" style={{ margin: "4px 0 0" }}>Year so far: <b>{money0(t.credited)}</b> credited to {t.ledger} in Tally ({n} voucher{n === 1 ? "" : "s"}, GST left out)
       {ours.credited ? <> + <b>{money0(ours.credited)}</b> from {ours.bills} bill{ours.bills === 1 ? "" : "s"} here not yet in Tally</> : null}
-      {" · read " + new Date(t.at).toLocaleString([], { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) + " "}{fetch(busy ? "Reading…" : "Check again")}</p>;
+      {" · read " + fmtDateTime(t.at) + " "}{fetch(busy ? "Reading…" : "Check again")}</p>;
   }
   if (!bridgeLive()) return <p className="note" style={{ margin: "4px 0 0" }}>This year’s total counts only the bills entered here. Connect the Tally Bridge to include what is already booked in Tally.</p>;
   if (!led) return <p className="note" style={{ margin: "4px 0 0" }}>Choose the supplier’s Tally ledger below to check what was already credited to it this year.</p>;
@@ -277,7 +277,7 @@ export default function BillDetail({ id }) {
           <button className="btn small" disabled={!googleReady()} title={googleReady() ? undefined : "Google OCR is not set up"} onClick={() => rereadEntry(e, "google")}>Google OCR</button>
           <button className="btn small" disabled={!claudeReady()} title={claudeReady() ? undefined : "Claude is not available here"} onClick={() => rereadEntry(e, "claude")}>Claude</button>
         </div>}
-        <div className="actions">{e.status === "draft" && <button className="btn small danger" onClick={() => doAct("delete")}>Delete</button>}</div>
+        <div className="actions">{e.status === "draft" && canDeleteBills() && <button className="linkbtn" onClick={() => billDelete(e.id)}>Delete…</button>}</div>
       </section>
       {e.readError && <section><p className="banner" style={{ margin: 0 }}>{e.readError}</p></section>}
       {!ro && e.readMode !== "free (partly read)" && (e.handwritten || (e.uncertain && e.uncertain.length > 0)) && <section><p className="banner" style={{ margin: 0 }}>
@@ -291,7 +291,7 @@ export default function BillDetail({ id }) {
         <div>
           <h3>Invoice details</h3>
           <div className="grid">
-            {f("Deductee name", "vendorName", { wide: true })}
+            {f("Supplier name", "vendorName", { wide: true })}
             {f("GSTIN", "vendorGstin")}{f("PAN", "vendorPan", { value: x.vendorPan || v.pan })}
             {f("Invoice no.", "invoiceNo")}{f("Invoice date", "invoiceDate", { type: "date" })}
             {f("Taxable value", "taxable", { type: "number" })}{f("CGST", "cgst", { type: "number" })}
@@ -310,6 +310,8 @@ export default function BillDetail({ id }) {
       <Tds e={e} c={c} v={v} ro={ro} />
       {v.flags.length > 0 && <section><h3>Check before approving</h3><ul className="flags">{v.flags.map((fl, i) => <li key={i} className={fl.lvl}>{fl.t}</li>)}</ul></section>}
       <Slip e={e} c={c} ro={ro} snap={snap} />
+      {e.status === "deleted" && <section><p className="banner" style={{ margin: 0 }}>Deleted {fmtDateTime(e.deleted && e.deleted.at)} by {(e.deleted && e.deleted.by) || "—"}: {(e.deleted && e.deleted.reason) || "no reason given"}.{" "}
+        {canDeleteBills() && <button className="btn small" onClick={() => billRestore(e.id)}>Restore</button>}</p></section>}
       {e.status === "duplicate" && <section><p className="banner" style={{ margin: 0 }}>Held as a duplicate. {(e.dupOf && e.dupOf.msg) || ""} It does not count towards limits and cannot be approved.</p></section>}
     </div>
   );

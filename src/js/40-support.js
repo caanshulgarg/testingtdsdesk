@@ -43,7 +43,7 @@ const SUP = {
     return "track";
   },
   ago(iso){ const m = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60000)); return m < 60 ? m + "m" : m < 48 * 60 ? Math.round(m / 60) + "h" : Math.round(m / 1440) + "d"; },
-  when(iso){ if (!iso) return "—"; const d = new Date(iso); return d.toLocaleDateString("en-IN", {day: "2-digit", month: "short", year: "numeric"}) + " " + d.toLocaleTimeString("en-IN", {hour: "2-digit", minute: "2-digit"}); },
+  when(iso){ return fmtDateTime(iso); },
   async load(quiet){
     const s = this.st();
     if (!this.on()) return;

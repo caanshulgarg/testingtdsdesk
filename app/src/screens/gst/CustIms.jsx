@@ -5,7 +5,7 @@
 // State: S.custImsQ (the number being looked for).
 import CommitBox from "../../parts/CommitBox.jsx";
 
-const money = (v) => INR.format(r2(v || 0));
+const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => fmtDate(tallyDate(d));
 const all4 = (x) => x.igst + x.cgst + x.sgst + (x.cess || 0);
 

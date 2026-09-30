@@ -9,7 +9,7 @@ import GstApiCard from "../GstApiCard.jsx";
 import CommitBox from "../../parts/CommitBox.jsx";
 import { Only2bNote } from "./InputRegister.jsx";
 
-const money = (v) => INR.format(r2(v || 0));
+const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => fmtDate(tallyDate(d));
 const tx = (o) => r2(num(o.igst) + num(o.cgst) + num(o.sgst) + num(o.cess));
 const sumTx = (list) => r2(list.reduce((a, o) => a + tx(o) * (o.dir || 1), 0));

@@ -57,9 +57,14 @@ const Card = ({ title, note, danger, children }) => (
 /* ---------------------------------------------------------------- for the firm */
 
 function FirmDetails() {
-  return <Card title="Firm name" note="Shown at the top of every page, and on reports, letters and MIS packs prepared for clients.">
+  const setAddr = (v) => { S.firm.firmAddress = v; later("firm", () => Store.saveFirm(), 600); FinComReact.redraw(); };
+  const pick = (ev) => { const f = ev.target.files && ev.target.files[0]; if (f) firmLogoRead(f).then((logo) => { S.firm.firmLogo = logo; Store.saveFirm(); render(); }, (e) => toast(e.message)); };
+  return <Card title="Firm details" note="Shown at the top of every page, and on reports, letters and MIS packs prepared for clients.">
     <div className="grid"><label className="f"><span>Firm name</span>
-      <input type="text" value={S.firm.firmName || ""} onChange={(ev) => { firmSetName(ev.target.value); FinComReact.redraw(); }} /></label></div>
+      <input type="text" value={S.firm.firmName || ""} onChange={(ev) => { firmSetName(ev.target.value); FinComReact.redraw(); }} /></label>
+      <label className="f wide"><span>Address</span><textarea rows={2} value={S.firm.firmAddress || ""} onChange={(ev) => setAddr(ev.target.value)} /></label>
+      <label className="f"><span>Logo</span><input type="file" accept="image/*" aria-label="Firm logo" onChange={pick} /></label>
+      {S.firm.firmLogo && <div><img src={S.firm.firmLogo} alt="Logo" style={{ maxHeight: 48 }} /> <button className="linkbtn" onClick={() => { S.firm.firmLogo = ""; Store.saveFirm(); render(); }}>Remove</button></div>}</div>
   </Card>;
 }
 
@@ -71,7 +76,7 @@ function firmGroups() {
       { id: "account", label: "Sign-in and people", about: "Who is signed in, the people in the firm and what each may do, and keeping work in step across computers.",
         status: Cloud.on() ? (a && a.me ? a.me.email : "signed in") : "not signed in" },
       { id: "plan", label: "Plan and credit", about: "What the firm pays, the credit left, and this month’s use.",
-        status: a && a.firm ? (a.firm.plan ? a.firm.plan.name : "no plan") + " · " + INR.format(num(a.firm.balance)) + " left" : "" },
+        status: a && a.firm ? (a.firm.plan ? a.firm.plan.name : "no plan") + " · " + money(num(a.firm.balance)) + " left" : "" },
     ] },
     { title: "Tally", items: [
       { id: "bridge", label: "Tally Bridge", about: "The small program that lets FinCom read from and post into TallyPrime on this computer: set it up and check it.",

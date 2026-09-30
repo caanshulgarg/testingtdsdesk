@@ -23,7 +23,8 @@ const KEYS = [
   ["/", "Look up any ledger, anywhere in a client"],
   ["?", "This list"],
   ["F3 or Ctrl+K", "Switch client"],
-  ["Ctrl+A", "Approve the bill on screen"],
+  ["Ctrl+Enter", "Approve the bill on screen"],
+  ["J or K", "Next or previous bill in the list"],
   ["Esc", "Close a panel, or go back"],
   ["Enter", "In Look up: show the answer"]
 ];

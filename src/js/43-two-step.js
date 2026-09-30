@@ -164,6 +164,6 @@ async function loadLastSignIn(){
     const rows = await Cloud.api("activity?select=at,detail&user_id=eq." + encodeURIComponent(s.user_id) + "&what=eq.signin&order=at.desc&limit=2");
     const prev = (rows || [])[1];
     S.lastSignIn = prev ? {at: prev.at, device: deviceName(prev.detail)} : null;
-    if (prev) toast("Your last sign-in: " + new Date(prev.at).toLocaleString("en-IN", {day: "numeric", month: "short", hour: "numeric", minute: "2-digit"}) + ", " + S.lastSignIn.device + ". Not you? Change your password in Settings.");
+    if (prev) toast("Your last sign-in: " + fmtDateTime(prev.at) + ", " + S.lastSignIn.device + ". Not you? Change your password in Settings.");
   } catch (e){}
 }

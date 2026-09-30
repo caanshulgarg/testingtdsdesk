@@ -4,7 +4,7 @@
 import { useState } from "react";
 import { OnbCard } from "../parts/Notes.jsx";
 
-const money = (x) => INR.format(r2(x || 0));
+const money = (x) => "₹" + INR.format(r2(x || 0));
 const sumTotal = (list) => money(list.reduce((a, e) => a + num(e.x.total), 0));
 
 function Tile({ label, n, sub, go }) {

@@ -6,7 +6,7 @@
 import { useRef } from "react";
 import CommitBox from "./CommitBox.jsx";
 
-const money = (v) => INR.format(r2(v || 0));
+const money = (v) => "₹" + INR.format(r2(v || 0));
 const pc = (k, n) => n ? Math.round(k * 100 / n) + "%" : "—";
 
 // how much the rules settled, how much AI, and how right AI has been

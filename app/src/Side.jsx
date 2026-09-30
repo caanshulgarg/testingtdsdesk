@@ -41,13 +41,23 @@ export default function Side() {
     <>
       <div className="side-brand">FinCom</div>
       {open && (
-        <>
           <div className="side-client">
             <span className="side-label">Client</span>
             <button className="side-co" onClick={() => openSwitcher()} title="Change client (F3)">
               <b>{open.name}</b><small>{(open.gstin || "No GSTIN") + " · change"}</small>
             </button>
-          </div>
+          </div>)}
+      {/* on the firm's own pages, the firm's menu instead of a client's (review item 29) */}
+      {home && <>
+        <div className="side-firm-label">Firm</div>
+        <Item icon="clients" label="Clients" on={["clients", "today", "inbox"].includes(S.homeTab)} onClick={() => navHome("clients")} />
+        <Item icon="clients" label="People" on={S.homeTab === "rules" && S.settingsTab === "account"} onClick={() => goSettings("account")} />
+        <Item icon="reports" label="Plan and credit" on={S.homeTab === "rules" && S.settingsTab === "plan"} onClick={() => goSettings("plan")} />
+        <Item icon="books" label="Tally" on={S.homeTab === "tally"} onClick={() => navHome("tally")} />
+        <Item icon="setup" label="Settings" on={S.homeTab === "rules" && !["account", "plan"].includes(S.settingsTab)} onClick={() => goSettings(null)} />
+      </>}
+      {open && !home && (
+        <>
           <Item icon="dash" label="Dashboard" on={onDash} onClick={() => goClient("dash")} />
           <Item icon="bills" label="Purchase" count={st.drafts || 0} onClick={() => goClient("bills")}
             on={inCo && mod === "bills" && !onDash && !isSetupTab(S.tab) && !["clientInbox", "txn", "books"].includes(S.tab)} />
@@ -67,7 +77,7 @@ export default function Side() {
         </>
       )}
       <div className="side-sep" />
-      <Item icon="clients" label="All clients" on={home && !["rules", "help"].includes(S.homeTab)} onClick={() => navHome("clients")} />
+      {!home && <Item icon="clients" label="All clients" on={false} onClick={() => navHome("clients")} />}
       <Item icon="help" label="Help" on={home && S.homeTab === "help"} count={typeof SUP === "object" ? SUP.counts() : 0} onClick={() => navHome("help")} />
       <div className="side-grow" />
       <div className="side-ver">{APP_VERSION.split("·")[1] || APP_VERSION}<br />{__REACT_BUILD__}</div>

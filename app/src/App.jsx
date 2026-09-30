@@ -7,6 +7,7 @@ import Guard from "./Guard.jsx";
 import Side from "./Side.jsx";
 import TopBar from "./TopBar.jsx";
 import Switcher from "./Switcher.jsx";
+import FirmSetup from "./parts/FirmSetup.jsx";
 import SCREENS from "./screens/index.js";
 
 export default function App() {
@@ -18,6 +19,7 @@ export default function App() {
       {createPortal(<Guard name="the sidebar" v={v} quiet><Side /></Guard>, document.getElementById("side"))}
       <Guard name="the top bar" v={v} quiet><TopBar /></Guard>
       <Guard name="the client switcher" v={v} quiet><Switcher /></Guard>
+      <Guard name="the firm's details" v={v} quiet><FirmSetup /></Guard>
       {islands().map(({ key, name, host, props }) => {
         const Screen = SCREENS[name];
         return Screen ? createPortal(<Guard name={name} v={v}><Screen {...props} /></Guard>, host, key) : null;

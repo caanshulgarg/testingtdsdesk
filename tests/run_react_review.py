@@ -100,8 +100,10 @@ with sync_playwright() as p:
     n = rows().count()
     rows().first.locator('button[aria-label="Delete this bill"]').click(); pg.wait_for_timeout(400)
     ok(pg.locator("#confirmBox .cbx").is_visible(), "✕ asks first")
-    pg.click('#confirmBox button[data-cbx="yes"]'); pg.wait_for_timeout(600)
-    ok(rows().count() == n - 1, "and deletes it")
+    pg.click('#confirmBox button[data-cbx="yes"]'); pg.wait_for_timeout(400)
+    ok(pg.locator("#confirmBox .cbx").is_visible() and rows().count() == n, "a reason is needed (review item 24)")
+    pg.fill("#delWhy", "uploaded twice"); pg.click('#confirmBox button[data-cbx="yes"]'); pg.wait_for_timeout(600)
+    ok(rows().count() == n - 1 and pg.evaluate("Object.values(D().entries).some(e => e.status === 'deleted' && e.deleted.reason === 'uploaded twice')"), "and deletes it softly: kept under Deleted with the reason")
     pg.screenshot(path=OUT + "/react-review.png", full_page=True)
     # one at a time: the bar for one bill
     pg.click('#app button:has-text("One at a time")'); pg.wait_for_timeout(500)

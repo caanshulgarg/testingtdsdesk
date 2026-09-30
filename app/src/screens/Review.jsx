@@ -28,12 +28,12 @@ function Row({ e, c, sel }) {
         {e.noteKind && <div className="nr"><span className="tag">{e.noteKind === "credit" ? "Credit note → Debit Note in Tally" : "Debit note"}</span></div>}
       </td>
       <td>{e.x.invoiceNo || "—"}</td>
-      <td className="n">{INR.format(num(e.x.total))}</td>
+      <td className="n">{money(num(e.x.total))}</td>
       <td><select value={e.natureId || ""} aria-label="Payment type" onChange={(ev) => revNature(e.id, ev.target.value)}><RuleOptions /></select></td>
       <td className="ck"><input type="checkbox" aria-label="Book TDS" checked={c.tdsWould > 0 && !c.skip} disabled={!!(c.rule && c.rule.basis === "never")}
         title={c.skip ? skipText(c.skip) : c.tdsWould > 0 ? "TDS is deducted on this bill" : "Below the limits: tick to deduct anyway"}
         onChange={(ev) => revTds(e.id, ev.target.checked)} /></td>
-      <td className="n">{c.tds ? <b>{INR.format(c.tds)}</b> : c.tdsWould ? <span className="src muted">{INR.format(c.tdsWould)} not booked</span> : "—"}</td>
+      <td className="n">{c.tds ? <b>{money(c.tds)}</b> : c.tdsWould ? <span className="src muted">{money(c.tdsWould)} not booked</span> : "—"}</td>
       <td>{!m || !m.limit ? <span className="src muted">no yearly limit</span> : <>
         <span className={over ? "src bad" : "src"}>{money0(m.used + m.add)} of {money0(m.limit)}{over ? " · crossed" : " · within"}</span>
         <span className="src muted">{t ? "incl. " + money0(t.credited) + " from Tally" : "bills here only"}</span></>}</td>
@@ -50,7 +50,7 @@ export function ReviewTable() {
   const co = CO(), all = draftRows(), rows = revFiltered();
   const sel = S.revSel = S.revSel || new Set();
   const nSel = rows.filter((r) => sel.has(r.e.id)).length;
-  const sum = (f) => INR.format(r2(rows.reduce((a, r) => a + num(f(r)), 0)));
+  const sum = (f) => money(r2(rows.reduce((a, r) => a + num(f(r)), 0)));
   return (
     <div className="bk">
       <div className="bk-head">
@@ -84,7 +84,7 @@ function ReviewBar() {
   const picked = rows.filter((r) => sel.has(r.e.id)), ready = rows.filter((r) => !needsLook(r));
   if (picked.length) return (
     <div className="actionbar bk-actionbar">
-      <div className="ab-left"><b>{picked.length} selected</b> <span className="muted">· TDS {INR.format(r2(picked.reduce((a, r) => a + num(r.c.tds), 0)))}</span> <button className="linkbtn" onClick={() => doAct("revNone")}>Clear</button></div>
+      <div className="ab-left"><b>{picked.length} selected</b> <span className="muted">· TDS {money(r2(picked.reduce((a, r) => a + num(r.c.tds), 0)))}</span> <button className="linkbtn" onClick={() => doAct("revNone")}>Clear</button></div>
       <div className="ab-right">
         <button className="btn" onClick={() => doAct("revTdsOn")}>Book TDS</button>
         <button className="btn" onClick={() => doAct("revTdsOff")}>Do not book TDS</button>
@@ -128,7 +128,7 @@ function BillBar({ e }) {
       : <><span className="tag ok">Ready to approve</span> <span className="note">{c.skip ? "No TDS booked (would be " + money0(c.tdsWould) + ")" : "TDS " + money(c.tds)} · {c.rule.label}</span> {items}</>;
     right = <>
       <button className="btn" onClick={() => doAct("reject")}>No entry needed</button>
-      <button className="btn primary" disabled={c.missing.length > 0} title={c.missing.length ? "Still needed: " + c.missing.join(", ") : undefined} onClick={() => doAct("approve")}>Approve <kbd>Ctrl+A</kbd></button>
+      <button className="btn primary" disabled={c.missing.length > 0} title={c.missing.length ? "Still needed: " + c.missing.join(", ") : undefined} onClick={() => doAct("approve")}>Approve <kbd>Ctrl+Enter</kbd></button>
       {next}
     </>;
   } else if (e.status === "duplicate") {

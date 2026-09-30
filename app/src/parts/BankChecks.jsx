@@ -5,7 +5,7 @@
 // postReportHtml (src/js/26). The work is in src/js; buttons go through bankAct, bankFocusGo, reconPick, reconExcelGo.
 
 const Btn = ({ act, className = "btn small", children, disabled, title, ...rest }) => <button className={className} disabled={disabled} title={title} onClick={() => bankAct(act)} {...rest}>{children}</button>;
-const inr = (v) => INR.format(v || 0), abs = (v) => INR.format(Math.abs(v || 0));
+const inr = (v) => money(v || 0), abs = (v) => money(Math.abs(v || 0));
 const plural2 = (n, one, many) => n + (n === 1 ? one : many);
 
 // show only some lines of the statement, with what they are
@@ -17,7 +17,7 @@ export function FocusBtn({ title, ids, label, note }) {
 function BalanceInner({ st }) {
   const b = B(), t = st.tallyBal, live = Bridge.on() && Bridge.up();
   const btn = live ? <Btn act="bankBalCheck" disabled={!!b.balBusy}>{b.balBusy ? "Checking…" : t ? "Check again" : "Check with Tally"}</Btn> : null;
-  const when = <>{t && t.at && <span className="muted">{" · checked " + new Date(t.at).toLocaleString([], { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</span>}
+  const when = <>{t && t.at && <span className="muted">{" · checked " + fmtDateTime(t.at)}</span>}
     {t && t.how === "worked back" && <span className="muted">{" · Tally gave its latest balance whatever the date, so the balance on " + fmtDate(t.to) + " was worked back from it" + (t.later ? ", less " + t.later + " later entr" + (t.later === 1 ? "y" : "ies") : "")}</span>}</>;
   const Box = ({ cls, children }) => <div className={"bk-balbox bk-bal" + (cls ? " " + cls : "")}>{children}{btn}<button className="icon bk-x" title="Close" aria-label="Close" onClick={() => bankAct("balHide")}>×</button></div>;
   if (!t) return <Box><div><b>Balance in Tally:</b> <span className="muted">{"not checked yet." + (live ? " FinCom checks it after every posting." : " Connect the Tally Bridge to check it.")}</span></div></Box>;
@@ -53,7 +53,7 @@ export function Recon() {
   if (!R || !st || R.sid !== st.id) return null;
   const rowById = new Map(b.rows.map((r) => [r.id, r])), live = Bridge.on() && Bridge.up();
   const balanced = R.unexplained !== null && Math.abs(R.sClose - R.tClose) < 0.01;
-  const head = <div className="recon-head"><div><h3>{"Bank reconciliation · " + R.ledger}</h3><div className="note">{R.company + " · " + fmtDate(R.from) + " to " + fmtDate(R.to) + " · " + R.pairs + " lines matched · read " + new Date(R.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div></div>
+  const head = <div className="recon-head"><div><h3>{"Bank reconciliation · " + R.ledger}</h3><div className="note">{R.company + " · " + fmtDate(R.from) + " to " + fmtDate(R.to) + " · " + R.pairs + " lines matched · read " + fmtTime(R.at)}</div></div>
     <div className="row" style={{ gap: 8 }}><button className="btn small" onClick={() => reconExcelGo()}>Download Excel</button>{live && <Btn act="reconRun">Reconcile again</Btn>}<Btn act="reconClose">Close</Btn></div></div>;
   if (balanced && !R.missing.length && !R.extra.length && !R.differ.length)
     return <section className="recon">{head}<div className="bk-bal ok"><div>✔ <b>Reconciled.</b> {"Every line of the statement is in Tally once, and nothing else is. " + R.ledger + " in Tally on " + fmtDate(R.to) + " is " + abs(R.tClose) + ", the same as the statement."}</div></div></section>;
@@ -109,7 +109,7 @@ export function Gone() {
 export function DupFind() {
   const d = S.dupFind;
   if (!d) return null;
-  const amt = (v) => INR.format(d.amountOf(v));
+  const amt = (v) => money(d.amountOf(v));
   const Tbl = ({ list, withWant }) => <div className="tblwrap" style={{ marginTop: 6, maxHeight: 260, overflow: "auto" }}><table className="data"><thead><tr><th>{withWant ? "In Tally on" : "Date"}</th>{withWant && <th>Should be</th>}<th>Type</th><th>Voucher</th><th>Party</th><th className="n">Amount</th></tr></thead><tbody>
     {list.slice(0, 400).map((v, i) => <tr key={i}><td>{fmtDate(tallyToIso(v.date))}</td>{withWant && <td>{fmtDate(v.wantDate)}</td>}<td>{v.type || ""}</td><td>{v.number || ""}</td><td>{v.party || ""}</td><td className="n">{amt(v)}</td></tr>)}</tbody></table></div>;
   const bad = d.extra.length || d.wrongDate.length || d.strangers.length;
@@ -153,7 +153,7 @@ export function PostReport({ rep }) {
   if (rep.failed && rep.failed.length) bits.push(rep.failed.length + " not posted");
   if (rep.movedBack) bits.push(rep.movedBack + " moved back to review (ledger not in Tally)");
   const failed = rep.failed || [];
-  return <div className={"bk-alert" + (failed.length ? " bad" : "")}><b>{"Tally, " + new Date(rep.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) + ":"}</b>{" " + bits.join(" · ")}
+  return <div className={"bk-alert" + (failed.length ? " bad" : "")}><b>{"Tally, " + fmtTime(rep.at) + ":"}</b>{" " + bits.join(" · ")}
     {failed.length > 0 && <><ul style={{ margin: "6px 0 0" }}>{failed.slice(0, 20).map((f, i) => <li key={i}>{f.what + " — " + f.msg}</li>)}</ul>
       {failed.length > 20 && <div className="note">{"and " + (failed.length - 20) + " more"}</div>}
       {S.tab === "bank" && <FocusBtn title="not posted in the last posting" ids={failed.map((f) => f.id).filter(Boolean)} label="Show the lines not posted" />}</>}

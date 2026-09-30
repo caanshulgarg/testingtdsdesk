@@ -4,7 +4,7 @@
 // figures are GSTF (35); what is typed goes through gstfSet, gstfSnap, gstfJournal, gst1aJson (35).
 import CommitBox from "../../parts/CommitBox.jsx";
 
-const money = (v) => INR.format(r2(v || 0));
+const money = (v) => "₹" + INR.format(r2(v || 0));
 const dmy = (s) => GSTAmend.dmy(String(s || "").replace(/-/g, ""));
 const SetLink = ({ children = "change in GST settings" }) => <button className="linkbtn" onClick={() => goGstSettings()}>{children}</button>;
 const Card = ({ title, children }) => <section className="dash-card" style={{ marginTop: 12 }}><h3>{title}</h3>{children}</section>;

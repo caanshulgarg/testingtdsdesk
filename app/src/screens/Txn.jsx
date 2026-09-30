@@ -4,7 +4,7 @@
 import ColHead from "../parts/ColHead.jsx";
 import { ChipBar, NoMatch } from "../parts/ChipBar.jsx";
 
-const amt = (v) => (v ? INR.format(r2(v)) : "—");
+const amt = (v) => (v ? money(r2(v)) : "—");
 const STATUS = [["", "Any status"], ["ok", "In Tally"], ["warn", "Ready or held"], ["no", "Not posted"], ["bad", "Refused by Tally"]];
 
 function Doc({ r }) {
@@ -27,7 +27,7 @@ export default function Txn() {
     return <p className="note">Opening…</p>;
   }
   if (!S.fileIndex || S.fileIndexCid !== co.id) { S.fileIndexCid = co.id; FileStore.index(co.id).then(() => render()); }
-  const rows = txnFiltered(all), bank = tab === "bank";
+  const rows = txnFiltered(all), bank = tab === "bank", c = txnColShown;
   const kinds = [["bills", "Purchase", txnRowsBills().length], ["sales", "Sales", S.sales && S.sales.cid === co.id ? S.sales.list.length : null], ["bank", "Bank", S.bank && S.bank.cid === co.id ? S.bank.rows.length : null]];
   return <>
     <nav className="sbar" aria-label="Kind">{kinds.map(([id, label, n]) =>
@@ -37,25 +37,29 @@ export default function Txn() {
         onChange={(ev) => { S.txnQ = ev.target.value; FinComReact.redraw(); later("txnq", render, 250); }} />
       <select aria-label="Status" value={S.txnStatus || ""} onChange={(ev) => { S.txnStatus = ev.target.value; render(); }}>{STATUS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
       <span className="note">{rows.length} of {all.length}</span>
-      <button className="btn small" onClick={() => txnCsv()}>Download as CSV</button>
+      <button className="btn small primary" onClick={() => txnExcel()}>Excel</button>
+      <button className="btn small" onClick={() => txnCsv()}>CSV</button>
+      <details className="colpick"><summary className="btn small">Columns</summary>
+        <div className="colpick-box">{TXN_COLS.map(([k, label]) => <label key={k} className="chk"><input type="checkbox" checked={txnColShown(k)} onChange={() => txnColToggle(k)} /> {label}</label>)}</div></details>
     </div>
     <ChipBar t="txn" shown={rows.length} total={all.length + (bank ? " lines" : tab === "sales" ? " invoices" : " bills")} />
-    <div className="bk-tablewrap">
+    {/* the first columns stay while the rest scrolls sideways; the scroll bar is always shown (review item 30) */}
+    <div className="bk-tablewrap txnwrap">
       <table className="bk-table txntbl">
         <thead><tr>
-          <th className="n">S. no.</th><ColHead t="txn" k="date" label="Date" cls="dt" /><ColHead t="txn" k="vch" label="Voucher" />
-          <ColHead t="txn" k="no" label={bank ? "Reference" : "Invoice no."} /><ColHead t="txn" k="party" label={tab === "sales" ? "Customer" : "Party"} />
-          {bank ? <><th className="n">Withdrawal</th><th className="n">Deposit</th></> : <><th className="n">Taxable</th><th className="n">GST</th></>}
-          <ColHead t="txn" k="val" label={bank ? "Amount" : "Invoice value"} cls="n" /><ColHead t="txn" k="status" label="In Tally" /><ColHead t="txn" k="doc" label="Document" /><th className="ac"></th>
+          <th className="n stick1">S. no.</th>{c("date") && <ColHead t="txn" k="date" label="Date" cls="dt stick2" />}{c("vch") && <ColHead t="txn" k="vch" label="Voucher" />}
+          {c("no") && <ColHead t="txn" k="no" label={bank ? "Reference" : "Invoice no."} />}{c("party") && <ColHead t="txn" k="party" label={tab === "sales" ? "Customer" : "Party"} />}
+          {c("amts") && (bank ? <><th className="n">Withdrawal ₹</th><th className="n">Deposit ₹</th></> : <><th className="n">Taxable ₹</th><th className="n">GST ₹</th></>)}
+          {c("val") && <ColHead t="txn" k="val" label={bank ? "Amount ₹" : "Invoice value ₹"} cls="n" />}{c("status") && <ColHead t="txn" k="status" label="In Tally" />}{c("doc") && <ColHead t="txn" k="doc" label="Document" />}<th className="ac"></th>
         </tr></thead>
         <tbody>{rows.map((r, i) => (
           <tr key={r.kind + r.id}>
-            <td className="n">{i + 1}</td>
-            <td>{r.date ? fmtDate(r.date) : "—"}{r.up && <div className="nr">up {fmtDate(r.up)}</div>}</td>
-            <td>{r.vch}</td><td>{r.no || "—"}</td><td>{r.party}</td>
-            {bank ? <><td className="n">{amt(r.dr)}</td><td className="n">{amt(r.cr)}</td></> : <><td className="n">{amt(r.taxable)}</td><td className="n">{amt(r.gst)}</td></>}
-            <td className="n">{amt(r.total)}</td><td><span className={"tag " + r.cls}>{r.label}</span></td>
-            <td><Doc r={r} /></td>
+            <td className="n stick1">{i + 1}</td>
+            {c("date") && <td className="stick2">{r.date ? fmtDate(r.date) : "—"}{r.up && <div className="nr">up {fmtDate(r.up)}</div>}</td>}
+            {c("vch") && <td>{r.vch}</td>}{c("no") && <td>{r.no || "—"}</td>}{c("party") && <td>{r.party}</td>}
+            {c("amts") && (bank ? <><td className="n">{amt(r.dr)}</td><td className="n">{amt(r.cr)}</td></> : <><td className="n">{amt(r.taxable)}</td><td className="n">{amt(r.gst)}</td></>)}
+            {c("val") && <td className="n">{amt(r.total)}</td>}{c("status") && <td><span className={"tag " + r.cls}>{r.label}</span></td>}
+            {c("doc") && <td><Doc r={r} /></td>}
             <td className="ac"><button className="btn small" onClick={() => txnGo(r.kind, r.id)}>Open</button></td>
           </tr>))}</tbody>
       </table>

@@ -21,10 +21,10 @@ export function PostLog() {
           <tbody>{mine.slice(0, 500).map((r, i) => {
             const t = r.tally || {};
             return <tr key={i} style={r.action === "removed" ? { opacity: 0.65 } : undefined}>
-              <td>{new Date(r.at).toLocaleString([], { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</td>
+              <td>{fmtDateTime(r.at)}</td>
               <td>{r.action === "removed" && <><b>taken back</b> · </>}{r.what === "bill" ? "purchase bill" : r.what === "bank" ? "bank entry" : r.what || ""}</td>
               <td>{(CO(r.co) || {}).name || "—"}</td><td>{r.ref || ""}</td>
-              <td className="n">{r.amount ? INR.format(num(r.amount)) : "—"}</td>
+              <td className="n">{r.amount ? money(num(r.amount)) : "—"}</td>
               <td>{(t.vchType || "") + " " + (t.masterId || "")}<div className="nr">{t.company || ""}</div></td>
               <td>{r.by || "—"}</td>
             </tr>;

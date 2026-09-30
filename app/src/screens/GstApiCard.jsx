@@ -59,7 +59,7 @@ export default function GstApiCard() {
   const have = new Set(GST2B.all2b(r).map((t) => t.ym).concat(Object.values(b.twoBs || {}).filter((t) => t.gstin === gstin).map((t) => t.ym)));
   // a month's 2B is made on the 14th of the next month
   const fy = S.gstYm ? GSTRev.fyMonths(S.gstYm) : [], missing = fy.filter(GSTAPI.ready).filter((m) => !have.has(m));
-  const pick = S.gstApiYm || S.gstYm, since = new Date(live.connectedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+  const pick = S.gstApiYm || S.gstYm, since = fmtDate(live.connectedAt);
   return card(<>
     <p className="note">Connected to the portal for {gstin} since {since}. FinCom keeps it connected for the whole firm, with no new OTP, until the taxpayer’s API access period ends (up to 30 days, set on the portal under My Profile → Manage API Access).</p>
     <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>

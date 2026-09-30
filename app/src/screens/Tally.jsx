@@ -91,7 +91,7 @@ export function BridgeSettings() {
       <div className="row" style={{ marginTop: 10 }}><Act act="bridgeTest" className="btn small primary">{c.key ? "Check connection" : "Connect"}</Act>{c.key && <Act act="bridgeOff">Disconnect</Act>}<Act act="bridgeSetupFile">Download the bridge setup</Act></div>
       {!(Bridge.on() && Bridge.up()) && <SetupSteps />}
       {c.key && <div style={{ marginTop: 12 }}>{st.state === "ok" ? <>
-        <p className="note" style={{ margin: "0 0 6px" }}>{"Bridge " + (st.version || "") + " connected" + (st.allowImport === false ? " (posting switched off in the bridge)" : "") + ". Checked " + new Date(st.at).toLocaleTimeString() + "."}</p>
+        <p className="note" style={{ margin: "0 0 6px" }}>{"Bridge " + (st.version || "") + " connected" + (st.allowImport === false ? " (posting switched off in the bridge)" : "") + ". Checked " + fmtTime(st.at) + "."}</p>
         <p className="note" style={{ margin: "0 0 6px" }}>{MODE[st.mode] || ""}</p>
         {(st.clash || []).length > 0 && <p className="bk-warn">{st.clash.join(", ") + " is open in more than one Tally. Choose yours with "}<b>Use this Tally</b>; until then nothing is read or posted for it.</p>}
         <Sessions c={c} st={st} />
@@ -103,7 +103,7 @@ export function BridgeSettings() {
   </>;
 }
 
-const when = (s) => s ? new Date(s).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "never";
+const when = (s) => s ? fmtDateTime(s) : "never";
 
 // the books in FinCom's cloud: the computers that send, and which client each Tally company is
 export function CloudBooks() {

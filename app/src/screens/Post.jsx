@@ -98,7 +98,7 @@ export function Export() {
               return <tr key={e.id}>
                 <td>{fmtDate(e.x.invoiceDate)}{cp.length > 0 && <> <span className="tag warn cp-tag" title={"Closed period: " + cp.join("; ")}>closed period</span></>}</td>
                 <td>{e.x.vendorName}{e.noteKind && <> <span className="tag">{e.noteKind === "credit" ? "credit note" : "debit note"}</span></>}</td>
-                <td>{e.x.invoiceNo || ""}</td><td className="n">{INR.format(num(e.x.total))}</td><td>{e.snapshot.ref}</td><td className="n">{money0(e.snapshot.tds)}</td>
+                <td>{e.x.invoiceNo || ""}</td><td className="n">{money(num(e.x.total))}</td><td>{e.snapshot.ref}</td><td className="n">{money0(e.snapshot.tds)}</td>
                 <td className="ac" style={{ whiteSpace: "nowrap" }}>
                   <button className="btn small" onClick={() => billBack(e.id)}>Back to review</button>{" "}
                   <button className="btn small danger" title="Delete this bill" onClick={() => billDelete(e.id)}>Delete</button>
@@ -160,7 +160,7 @@ export function PostStep() {
   return (
     <section className="poststep">
       <div className="post-sum">
-        {card("bills", "Purchase bills", bills.length, bills.length ? INR.format(billAmt) : "nothing approved")}
+        {card("bills", "Purchase bills", bills.length, bills.length ? money(billAmt) : "nothing approved")}
         {card("bank", "Bank lines", bankOn ? ready.length : "…", bankOn ? (st ? st.name || "current statement" : "no statement open") : "loading")}
         {card("sales", "Sales invoices", salesOn ? sales.length : "—", "posted from the Sales list")}
       </div>

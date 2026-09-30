@@ -355,7 +355,21 @@ function fyOf(d){
   return s + "-" + String((s + 1) % 100).padStart(2, "0");
 }
 S.partyFy = fyOf(null);
-function fmtDate(d){ if (!d) return "—"; const dt = new Date(String(d).slice(0, 10) + "T00:00:00"); return isNaN(dt) ? String(d).replace(/[^\w \-\/.:]/g, "") : dt.toLocaleDateString("en-IN", {day:"2-digit", month:"short", year:"numeric"}); }
+// One date format everywhere (review item 31): 19-Sep-2026, and 19-Sep-2026 09:32 with the time (24-hour, this computer's time)
+const MONTHS3 = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function toDateObj(d){
+  if (d instanceof Date) return d;
+  if (typeof d === "number") return new Date(d);
+  const t = String(d);
+  return /^\d{4}-\d{2}-\d{2}$/.test(t.slice(0, 10)) && t.length <= 10 ? new Date(t + "T00:00:00") : new Date(t);
+}
+function fmtDate(d){
+  if (!d && d !== 0) return "—";
+  const dt = toDateObj(d);
+  return isNaN(dt) ? String(d).replace(/[^\w \-\/.:]/g, "") : String(dt.getDate()).padStart(2, "0") + "-" + MONTHS3[dt.getMonth()] + "-" + dt.getFullYear();
+}
+function fmtTime(d){ if (!d && d !== 0) return ""; const dt = toDateObj(d); return isNaN(dt) ? "" : String(dt.getHours()).padStart(2, "0") + ":" + String(dt.getMinutes()).padStart(2, "0"); }
+function fmtDateTime(d){ if (!d && d !== 0) return "—"; const dt = toDateObj(d); return isNaN(dt) ? "—" : fmtDate(dt) + " " + fmtTime(dt); }
 function effectivePan(x){
   const pan = String(x.vendorPan || "").toUpperCase().trim();
   if (PAN_RE.test(pan)) return pan;
@@ -1094,7 +1108,7 @@ function compute(e, cid){
   const missing = [];
   if (e.docKind && !e.docOverride) missing.push("your confirmation that this really is a purchase bill");
   if (x.buyerGstin && co.gstin && String(x.buyerGstin).toUpperCase() !== co.gstin && !e.buyerOverride) missing.push("your confirmation that this bill belongs to " + co.name);
-  if (!x.vendorName) missing.push("deductee name");
+  if (!x.vendorName) missing.push("supplier name");
   if (!x.invoiceDate) missing.push("invoice date");
   if (!(base > 0)) missing.push("taxable value");
   if (!e.partyLedger) missing.push("party ledger");
@@ -2861,7 +2875,7 @@ async function fileHash(file){
   hashCache.set(file, h);
   return h;
 }
-function statusLabel(st){ return ({draft:"to review", approved:"approved", rejected:"marked no entry", duplicate:"held as duplicate"})[st] || st; }
+function statusLabel(st){ return ({draft:"to review", approved:"approved", rejected:"marked no entry", duplicate:"held as duplicate", deleted:"deleted"})[st] || st; }
 function findHash(h){
   if (S.pendingHashes[h]) return {msg:"The same file is already in this upload."};
   for (const c of Object.values(S.companies)){
@@ -2922,7 +2936,7 @@ function findDuplicate(e, cid){
   const k = invKey(e.x);
   if (k){
     for (const o of Object.values(D(cid).entries)){
-      if (o.id === e.id || o.status === "duplicate" || o.notDuplicate) continue;
+      if (o.id === e.id || o.status === "duplicate" || o.status === "deleted" || o.notDuplicate) continue;
       if (invKey(o.x) === k) return {entryId:o.id, strong:true,
         msg:"Same supplier and bill number as " + (o.x.vendorName || o.fileName) + " bill " + o.x.invoiceNo + " dated " + fmtDate(o.x.invoiceDate) + " (" + statusLabel(o.status) + ")."};
     }
@@ -3626,7 +3640,7 @@ function perRender(o, key, fn){
 function memoScope(fn){ if (!IN_RENDER) RENDER_GEN++; IN_RENDER++; try { return fn(); } finally { IN_RENDER--; } }
 function render(){
   RENDER_GEN++; IN_RENDER++;
-  try { return renderNow(); } finally { IN_RENDER--; }
+  try { return renderNow(); } finally { IN_RENDER--; if (!IN_RENDER && typeof Route === "object") Route.sync(); }
 }
 function renderNow(){
   requestAnimationFrame(padForBars);

@@ -6,7 +6,7 @@ import CommitBox from "../../parts/CommitBox.jsx";
 import { Filing } from "./Filing.jsx";
 import CustIms from "./CustIms.jsx";
 
-const money = (v) => INR.format(r2(v || 0));
+const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => fmtDate(tallyDate(d));
 const SetLink = ({ children = "change in GST settings" }) => <button className="linkbtn" onClick={() => goGstSettings()}>{children}</button>;
 const Box = ({ label, s, warn }) => <div className={"dtile" + (warn ? " warn" : "")}><span>{label}</span><b>{s.n}</b><small>{money(s.taxable)} + {money(s.igst + s.cgst + s.sgst)} tax</small></div>;

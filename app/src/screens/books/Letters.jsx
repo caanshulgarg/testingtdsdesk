@@ -48,7 +48,7 @@ function Confirm() {
           <td>{r.s.sentAt ? <>{fmtDate(r.s.sentAt.slice(0, 10))}<span className="nr">{r.s.via || ""}</span></> : <span className="note">not yet</span>}</td>
           <td><Sel className="ltr-in sm" label={"Reply from " + r.l} value={r.s.reply || ""} opts={[["", "—"], ["agreed", "Agreed"], ["differs", "Differs"], ["none", "No reply"]]} onChange={(v) => ltrReply(r.l, v)} />
             {r.s.reply === "differs" && <><input type="text" className="ltr-in sm" inputMode="decimal" defaultValue={r.s.their || ""} placeholder="their figure" aria-label="Their balance" onChange={(ev) => ltrTheir(r.l, ev.target.value)} />
-              {num(r.s.their) ? <span className="nr bad">{"difference " + INR.format(Math.abs(r2(Math.abs(r.bal) - num(r.s.their))))}</span> : null}</>}</td>
+              {num(r.s.their) ? <span className="nr bad">{"difference " + money(Math.abs(r2(Math.abs(r.bal) - num(r.s.their))))}</span> : null}</>}</td>
           <Sends kind="confirm" l={r.l} /></tr>)}
       </tbody></table></div></>}
   </>;
@@ -63,15 +63,15 @@ function Remind() {
       <label className="f"><span>Tone</span><Sel label="Tone" value={x.tone} opts={[["friendly", "Friendly"], ["firm", "Firm"], ["final", "Final reminder"]]} onChange={(v) => ltrSet("tone", v)} /></label>
       <label className="f lk-wide"><span>Find</span><input type="search" data-fk="ltrQ2" aria-label="Find a customer" value={x.q} placeholder="customer or GSTIN" onChange={(ev) => ltrQ(ev.target.value)} /></label></div>
       <label className="chk" style={{ marginTop: 8 }}><input type="checkbox" checked={!!c.msme} onChange={(ev) => ltrCfg("msme", ev.target.checked)} /> The client is a micro or small enterprise: mention the MSMED Act interest</label></section>
-    <div className="dash-tiles" style={{ marginTop: 12 }}><Tile l="Overdue" v={INR0.format(tot)} sub={"past " + num(x.credit) + " days"} cls="warn" /><Tile l="Customers" v={rows.length} sub="with bills overdue" />
-      <Tile l="Over 90 days" v={INR0.format(rows.reduce((s, r) => s + r.over.filter((z) => z.age > 90).reduce((a, z) => a + z.amt, 0), 0))} sub="the oldest" /><Tile l="Reminded" v={rows.filter((r) => r.last).length} sub="at least once" /></div>
+    <div className="dash-tiles" style={{ marginTop: 12 }}><Tile l="Overdue" v={money0(tot)} sub={"past " + num(x.credit) + " days"} cls="warn" /><Tile l="Customers" v={rows.length} sub="with bills overdue" />
+      <Tile l="Over 90 days" v={money0(rows.reduce((s, r) => s + r.over.filter((z) => z.age > 90).reduce((a, z) => a + z.amt, 0), 0))} sub="the oldest" /><Tile l="Reminded" v={rows.filter((r) => r.last).length} sub="at least once" /></div>
     {!rows.length ? <div className="fc-empty"><h3>Nothing overdue</h3><p className="note">{"No customer has a bill older than " + num(x.credit) + " days on " + FC.when(x.remOn) + ". Bills are read from the bill-wise details in Tally."}</p></div> : <>
       <div className="row ltr-bar"><button className="btn primary" disabled={!picked.length} onClick={() => ltrAct("rprint")}>{"Print or PDF the reminders (" + picked.length + ")"}</button>
         <button className="btn" onClick={() => ltrAct("rselall")}>{picked.length === rows.length ? "Untick all" : "Tick all " + rows.length}</button></div>
       <div className="bk-tablewrap"><table className="bk-table lk-t ltr-t"><thead><tr><th className="ck"></th><th>Customer</th><th className="n">Overdue</th><th className="n">Oldest</th><th>Email</th><th>Phone</th><th>Last reminder</th><th className="ac"></th></tr></thead><tbody>
         {rows.map((r, i) => <tr key={r.l + ":" + i} data-key={r.l}><td className="ck"><input type="checkbox" checked={!!x.sel["rem|" + r.l]} aria-label={"Tick " + r.l} onChange={(ev) => ltrSel("rem|" + r.l, ev.target.checked)} /></td>
-          <td><LedBtn l={r.l} /><span className="nr">{r.over.length + " bill" + (r.over.length === 1 ? "" : "s") + " · owes " + INR.format(r.total) + " in all"}</span></td>
-          <td className="n">{INR.format(r.amt)}</td><td className={"n" + (r.oldest > 90 ? " bad" : "")}>{r.oldest + " days"}</td><ContactCells r={r} />
+          <td><LedBtn l={r.l} /><span className="nr">{r.over.length + " bill" + (r.over.length === 1 ? "" : "s") + " · owes " + money(r.total) + " in all"}</span></td>
+          <td className="n">{money(r.amt)}</td><td className={"n" + (r.oldest > 90 ? " bad" : "")}>{r.oldest + " days"}</td><ContactCells r={r} />
           <td>{r.last ? <>{fmtDate(r.last.at.slice(0, 10))}<span className="nr">{r.last.via + ", " + (r.last.tone || "")}</span></> : <span className="note">never</span>}</td>
           <Sends kind="remind" l={r.l} /></tr>)}
       </tbody></table></div></>}

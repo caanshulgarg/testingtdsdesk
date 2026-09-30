@@ -312,7 +312,7 @@ const TLight = {
   work(cos, devs, now){
     const by = {}, dev = {};
     devs.filter(d => !d.revoked).forEach(d => { dev[d.id] = d; });
-    const when = t => new Date(t).toLocaleString("en-IN", {day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit"});
+    const when = t => fmtDateTime(t);
     const rank = {bad: 3, warn: 2, ok: 1};
     cos.forEach(c => {
       const d = dev[c.device_id]; if (!d) return;
@@ -375,7 +375,7 @@ function tallyStatus(co){
   const seenOf = d => Date.parse((((d.info || {}).beat) || {}).at || d.last_seen || 0) || 0;
   const heard = devs.reduce((a, d) => Math.max(a, seenOf(d)), 0);
   const fresh = devs.some(d => Date.now() - seenOf(d) <= 15 * 60000);
-  const when = t => fmtDate(new Date(t).toISOString().slice(0, 10)) + " " + new Date(t).toLocaleTimeString("en-IN", {hour: "2-digit", minute: "2-digit"});
+  const when = t => fmtDateTime(t);
   if (!local && !devs.length) return {state: "none", level: "bad", label: "Not set up", say: "No Tally Bridge on this computer, and no computer of the firm sends from Tally. Set up the Tally Bridge on the computer with TallyPrime."};
   if (!local && !fresh) return {state: "offline", level: "bad", label: "Offline since " + (heard ? when(heard) : "—"), say: "No word from the firm's Tally computer" + (heard ? " since " + when(heard) : "") + ": the computer, the FinCom Connector or the bridge is off."};
   const cos = co ? [co] : Object.values(S.companies || {}).filter(c => !c.deleted);

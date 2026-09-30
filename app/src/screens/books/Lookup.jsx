@@ -89,7 +89,7 @@ function Body({ r, x }) {
 function Result({ r, x }) {
   return <section className="dash-card lk-res" style={{ marginTop: 12 }}>
     <div className="lk-head"><h3>{(r.title || "") + " "}{r.src === "tally" ? <span className="tag stamp">from Tally</span> : <span className="tag ok">from the books</span>}{" "}
-      {r.src === "tally" && r.at && <><span className="note">{"read at " + new Date(r.at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}</span> <button className="linkbtn" onClick={() => lkAct("fresh")}>Read again</button></>}</h3>
+      {r.src === "tally" && r.at && <><span className="note">{"read at " + fmtTime(r.at)}</span> <button className="linkbtn" onClick={() => lkAct("fresh")}>Read again</button></>}</h3>
       <div className="row" style={{ gap: 6 }}><button className="btn small" onClick={() => lkAct("print")}>Print or PDF</button><button className="btn small" onClick={() => lkAct("excel")}>Excel</button><button className="btn small" onClick={() => lkAct("clear")}>Close</button></div></div>
     {r.note && <p className="note">{r.note}</p>}
     <Body r={r} x={x} />

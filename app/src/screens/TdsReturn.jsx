@@ -8,7 +8,7 @@
 // S.q24Open. Changes go through tdsFilter, tdsSortBy, tdsToggle, tdsAlloc, challanAdd, … (src/js/27).
 import { useState } from "react";
 
-const money = (v) => INR.format(r2(v || 0));
+const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => fmtDate(tallyDate(d));
 const NoPan = () => <span className="tag warn">no PAN</span>;
 const Pan = ({ pan }) => (Certs.validPan(pan) ? pan : <NoPan />);

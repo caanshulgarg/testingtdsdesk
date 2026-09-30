@@ -21,7 +21,7 @@ export default function Switcher() {
     if (!open) return;
     const keys = (ev) => {
       const list = switcherList(), k = ev.key;
-      if (k === "Escape") { ev.preventDefault(); closeSwitcher(); }
+      if (k === "Escape") { ev.preventDefault(); ev.stopPropagation(); closeSwitcher(); }   // Esc closes the switcher only, not the client too
       else if (k === "ArrowDown") { ev.preventDefault(); S.switcher.idx = Math.min(list.length - 1, S.switcher.idx + 1); renderSwitcher(); }
       else if (k === "ArrowUp") { ev.preventDefault(); S.switcher.idx = Math.max(0, S.switcher.idx - 1); renderSwitcher(); }
       else if (k === "Enter") { ev.preventDefault(); if (list[S.switcher.idx]) openCompany(list[S.switcher.idx].id); }

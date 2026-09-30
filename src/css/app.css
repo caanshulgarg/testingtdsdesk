@@ -1146,3 +1146,34 @@ header.top .tbar-title{align-items:center}
   .setnav button{white-space:nowrap;width:auto}
   .setnav button small{display:none}
 }
+
+/* Transactions (review item 30): a scroll bar that shows, the first columns kept in view, a column chooser */
+.txnwrap{overflow-x:scroll}
+.txntbl .stick1,.txntbl .stick2{position:sticky;background:var(--sheet);z-index:1}
+.txntbl .stick1{left:0;min-width:48px}
+.txntbl .stick2{left:48px;box-shadow:1px 0 0 var(--rule)}
+.colpick{position:relative;display:inline-block}
+.colpick summary{list-style:none;cursor:pointer}
+.colpick summary::-webkit-details-marker{display:none}
+.colpick-box{position:absolute;right:0;top:calc(100% + 4px);z-index:6;background:var(--sheet);border:1px solid var(--rule);border-radius:8px;padding:8px 12px;display:grid;gap:4px;min-width:240px;box-shadow:0 6px 18px rgba(0,0,0,.08)}
+.firmsetup-scrim{position:fixed;inset:0;z-index:80;background:rgba(20,20,20,.35);display:flex;align-items:center;justify-content:center;padding:16px}
+.firmsetup-scrim .cbx{background:var(--sheet);border-radius:10px;max-width:480px;width:100%;padding:18px 20px;box-shadow:0 12px 40px rgba(16,26,22,.25)}
+
+/* Page header (review item 26): a row with the title on the left, which wraps when long, and the page's buttons on the
+   right; nothing is hidden under the buttons down to 1024 px wide */
+header.top .headrow:not(:has(> .sbar)){display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px}
+header.top .headrow > .tbar{flex:1 1 320px;min-width:0}
+header.top .tbar{flex-wrap:wrap;row-gap:6px}
+header.top .tbar-title{flex:1 1 auto;min-width:0}
+header.top .tbar-title h2{white-space:normal;overflow-wrap:anywhere;line-height:1.25}
+header.top .tbar-actions{flex-wrap:wrap;justify-content:flex-end;flex:0 0 auto}
+header.top .topright{flex-wrap:wrap;justify-content:flex-end}
+/* Sidebar (review item 29): fixed in the window with its own scroll, the client switcher always at the top, and room
+   for the testing strip at the bottom */
+@media (min-width:901px){
+  /* fixed, not sticky: the page body hides sideways overflow, which stops a sticky sidebar from staying put */
+  .side{position:fixed;left:0;top:0;bottom:0;height:auto;overflow-y:auto;overscroll-behavior:contain;padding-bottom:36px}
+  .side:not(.hidden) + .mainwrap{margin-left:208px}
+  .side .side-client{position:sticky;top:0;z-index:2;background:inherit}
+}
+.side-firm-label{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#8FA398;padding:14px 12px 4px}

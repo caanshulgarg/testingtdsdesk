@@ -39,6 +39,7 @@ export default function Invoices() {
         <div className="filters">
           {filter("draft", "To review")}{filter("approved", "Approved")}{filter("rejected", "No entry")}
           {(cnt("duplicate") > 0 || S.filter === "duplicate") && filter("duplicate", "Duplicates")}
+          {(cnt("deleted") > 0 || S.filter === "deleted") && filter("deleted", "Deleted")}
         </div>
         {shown.length ? (
           <ul className="queue">
@@ -57,7 +58,7 @@ export default function Invoices() {
           <DropZone mode="company" className="drop-empty" label={"Upload invoices for " + co.name}>
             <strong>No bills yet for {co.name}</strong><div className="note">Drop PDFs or photos here, or click to choose. Several at once is fine.</div>
           </DropZone>
-        ) : <p className="empty">{(EMPTY[S.filter] || (() => "Nothing marked as no entry."))(co)}</p>}
+        ) : <p className="empty">{S.filter === "deleted" ? "No deleted bills." : (EMPTY[S.filter] || (() => "Nothing marked as no entry."))(co)}</p>}
       </div>
       <div>
         {S.selected ? <BillDetail id={S.selected} /> : <div className="detail"><section><p className="empty">Select an invoice to see its TDS draft.</p></section></div>}
