@@ -11968,6 +11968,15 @@ function lmViewGo(v){ S.lmView = v; S.booksTab = "ledgers"; render(); }
 function lmPost(k){ LedMaster.applyPosting(S.books, CO(), k); render(); }
 // the Audit tab (app/src/screens/books/Audit.jsx): the period, how often it runs by itself, and a finding's status
 // or note (kept with the books)
+// Accounts (app/src/screens/books/Accounts.jsx): the format, the year, stock, a manufacturer, shares, a ledger placed by
+// hand (the statements are worked out again) or given back to the rule
+function fsKindSet(v){ const b = S.books; b.fs = Object.assign({}, FS.cfg(b), {kind: v}); S.fsRun = null; saveBooks(); render(); }
+function fsFyGo(v){ S.fsFy = v; S.fsRun = null; render(); }
+function fsStockSet(which, v){ const b = S.books, c = FS.cfg(b); c.stock = Object.assign({}, c.stock, {[which]: v === "" ? "" : num(v)}); b.fs = c; saveBooks(); }
+function fsSet(key, v){ const b = S.books; b.fs = Object.assign({}, FS.cfg(b), {[key]: v}); saveBooks(); }
+function fsRedo(c){ S.books.fs = c; S.fsRun = S.fsRun ? {fy: S.fsRun.fy, kind: c.kind, d: FS.build(S.fsRun.fy)} : null; saveBooks(); render(); }
+function fsMapSet(l, v){ const c = FS.cfg(S.books); c.map = Object.assign({}, c.map, {[l]: v}); fsRedo(c); }
+function fsUnmap(l){ const c = FS.cfg(S.books); delete c.map[l]; fsRedo(c); }
 // MIS (app/src/screens/books/Mis.jsx): its period and quick picks, the tab, how often it runs by itself, a supplier
 // marked MSME (the run is worked out again), a month of the budget
 function misRangeSet(key, v){ const x = misRangeQuick("ytd", S.books); S.misRange = Object.assign({from: Audit.iso(x.from), to: Audit.iso(x.to)}, S.misRange, {[key]: v}); render(); }
@@ -11991,12 +12000,6 @@ function relRemove(name){ const b = S.books; b.auditRel = (b.auditRel || []).fil
 // what the user corrects on the Advances and Reversal screens
 function gstFixChange(t){
   const d = t.dataset, b = S.books;
-  if (d.fskind !== undefined){ b.fs = Object.assign({}, FS.cfg(b), {kind: t.value}); S.fsRun = null; saveBooks(); render(); return true; }
-  if (d.fsfy !== undefined){ S.fsFy = t.value; S.fsRun = null; render(); return true; }
-  if (d.fsstock !== undefined){ const c = FS.cfg(b); c.stock = Object.assign({}, c.stock, {[d.fsstock]: t.value === "" ? "" : num(t.value)}); b.fs = c; saveBooks(); return true; }
-  if (d.fsmfg !== undefined){ b.fs = Object.assign({}, FS.cfg(b), {mfg: !!t.checked}); saveBooks(); return true; }
-  if (d.fsshares !== undefined){ b.fs = Object.assign({}, FS.cfg(b), {shares: t.value}); saveBooks(); return true; }
-  if (d.fsmap !== undefined){ const c = FS.cfg(b); c.map = Object.assign({}, c.map, {[d.fsmap]: t.value}); b.fs = c; S.fsRun = S.fsRun ? {fy: S.fsRun.fy, kind: c.kind, d: FS.build(S.fsRun.fy)} : null; saveBooks(); render(); return true; }
   if (d.itctemail !== undefined || d.itctphone !== undefined){ const st = ITCT.store(S.gstReg || ""), k = d.itctemail !== undefined ? d.itctemail : d.itctphone; st.contact[k] = Object.assign({}, st.contact[k], d.itctemail !== undefined ? {email: t.value.trim()} : {phone: t.value.trim()}); saveBooks(); return true; }
   if (d.itcbasis !== undefined){ b.itcBasis = Object.assign({}, b.itcBasis, {[S.gstReg || ""]: t.value}); saveBooks(); render(); return true; }
   if (d.gstopen !== undefined){ const k = S.gstReg || ""; b.gstOpen = Object.assign({}, b.gstOpen); b.gstOpen[k] = Object.assign({}, b.gstOpen[k], {[d.gstopen]: t.value === "" ? "" : num(t.value)}); saveBooks(); render(); return true; }
@@ -16070,8 +16073,6 @@ document.addEventListener("click", ev => {
   if (t.dataset.tdstab){ tdsTabGo(t.dataset.tdstab); return; }
   if (t.dataset.tdsfclear){ tdsFilterClear(t.dataset.tdsfclear); return; }
   if (t.dataset.tdssort){ tdsSortBy(...t.dataset.tdssort.split("|")); return; }
-  if (t.dataset.fstab){ S.fsTab = t.dataset.fstab; render(); return; }
-  if (t.dataset.fsunmap !== undefined){ const c = FS.cfg(S.books); delete c.map[t.dataset.fsunmap]; S.books.fs = c; S.fsRun = S.fsRun ? {fy: S.fsRun.fy, kind: c.kind, d: FS.build(S.fsRun.fy)} : null; saveBooks(); render(); return; }
   if (t.dataset.mistab){ S.misTab = t.dataset.mistab; S.misQ = ""; S.misF = ""; render(); return; }
   if (t.dataset.misquick){ const x = misRangeQuick(t.dataset.misquick, S.books); S.misRange = {from: Audit.iso(x.from), to: Audit.iso(x.to)}; render(); return; }
   if (t.dataset.b2open){ S.b2Open = S.b2Open === t.dataset.b2open ? "" : t.dataset.b2open; render(); return; }
@@ -16676,7 +16677,6 @@ document.addEventListener("keydown", ev => {
 document.addEventListener("input", ev => {
   if (reactOwned(ev.target)) return;
   const t = ev.target;
-  if (t && t.id === "fsq"){ S.fsQ = t.value; later("fsq", render, 250); return; }
   if (t && t.id && /^(q24F|r1F|b2F)q$/.test(t.id)){ const k = t.id.slice(0, -1); S[k] = Object.assign({}, S[k], {q: t.value}); later(t.id, render, 250); return; }
   if (t && t.dataset){
     // the browser lowercases attribute names, so match without case
@@ -17074,36 +17074,6 @@ const FS = {
 
 /* ---------- the Accounts tab: the financial statements, and where each ledger goes ---------- */
 function fsYears(){ const ms = GSTR.months(); return Array.from(new Set(ms.map(m => Audit.fyStart(m + "01").slice(0, 4)))).sort().reverse(); }
-function viewBooksAccounts(b){
-  const c = FS.cfg(b), years = fsYears(), fy = S.fsFy && years.includes(S.fsFy) ? S.fsFy : years[0], m = v => INR.format(r2(v || 0));
-  if (!fy) return '<div class="bk-none">Bring in the day book first.</div>';
-  const d = S.fsRun && S.fsRun.fy === fy && S.fsRun.kind === c.kind ? S.fsRun.d : null;
-  let h = '<section class="dash-card"><h3>Financial statements</h3><div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">' +
-    '<select data-fskind style="width:auto"><option value="co"' + (c.kind === "co" ? " selected" : "") + '>Company: Schedule III (Division I)</option><option value="nc"' + (c.kind !== "co" ? " selected" : "") + ">Firm, LLP, proprietor, trust: ICAI format for non-corporate entities</option></select>" +
-    '<select data-fsfy style="width:auto">' + years.map(y => '<option value="' + y + '"' + (y === fy ? " selected" : "") + ">" + y + "-" + String(num(y) + 1).slice(2) + "</option>").join("") + "</select>" +
-    '<button class="btn small primary" data-act="fsRun">Run now</button>' + (d && !d.error ? '<button class="btn small" data-act="fsPdf">Download (PDF)</button><button class="btn small" data-act="fsExcel">Excel</button>' : "") + "</div>" +
-    '<div class="row" style="gap:12px;flex-wrap:wrap;align-items:center;margin-top:8px">' +
-    '<label class="note">Opening stock <input type="number" step="0.01" data-fsstock="open" value="' + esc(c.stock.open || "") + '" style="width:130px"></label><label class="note">Closing stock <input type="number" step="0.01" data-fsstock="close" value="' + esc(c.stock.close || "") + '" style="width:130px"></label>' +
-    '<label class="note"><input type="checkbox" data-fsmfg' + (c.mfg ? " checked" : "") + "> purchases are materials consumed (a manufacturer)</label>" +
-    (c.kind === "co" ? '<label class="note">Equity shares <input type="number" data-fsshares value="' + esc(c.shares || "") + '" style="width:110px"></label>' : "") + "</div>" +
-    '<p class="note">Stock is taken from the stock ledgers when Tally keeps inventory in the accounts; otherwise type it here. Each ledger is placed by its group in Tally and by its balance (a customer in credit is an advance received, a bank in credit is an overdraft); change any on the Mapping tab.</p></section>';
-  const tab = S.fsTab || "st";
-  h += '<nav class="sbar" aria-label="Accounts" style="margin-top:10px">' + [["st", "Statements"], ["map", "Mapping"]].map(([id, l]) => '<button data-fstab="' + id + '" aria-selected="' + (tab === id) + '">' + l + "</button>").join("") + "</nav>";
-  if (!d) return h + '<div class="bk-none">Press Run now.</div>';
-  if (d.error) return h + '<div class="bk-alert">The balances are needed: ' + esc(d.error) + ".</div>";
-  if (tab === "map"){
-    const lines = FS.LINES[c.kind === "co" ? "co" : "nc"].concat(FS.PL.map(z => [z[0], "P&L: " + z[1], "PL"]));
-    const q = String(S.fsQ || "").toLowerCase(), rows = [];
-    Object.entries(d.det).forEach(([k, list]) => list.forEach(([l, v]) => rows.push([l, k, v])));
-    Object.entries(d.plDet).forEach(([k, list]) => list.forEach(([l, v]) => rows.push([l, k, v])));
-    const shown = rows.filter(r => !/^(Surplus|Closing stock|Opening stock|Less: closing)/.test(r[0]) && (!q || r[0].toLowerCase().includes(q))).sort((a, c2) => a[1].localeCompare(c2[1]) || Math.abs(c2[2]) - Math.abs(a[2]));
-    return h + '<div class="revfilter"><input type="search" id="fsq" data-fk="fsq" data-keeptyped value="' + esc(S.fsQ || "") + '" placeholder="Find a ledger" style="width:260px"><span class="note">' + shown.length + ' ledgers \u00b7 <b>' + Object.keys(c.map || {}).length + "</b> placed by hand</span></div>" +
-      '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Ledger</th><th>Tally group</th><th class="n">Amount</th><th>Goes to</th></tr></thead><tbody>' +
-      shown.slice(0, 500).map(([l, k, v]) => "<tr><td>" + esc(l) + (c.map[l] ? ' <span class="tag">by hand</span>' : "") + '</td><td class="note">' + esc(FS.nature(l).path.join(" \u2190 ")) + '</td><td class="n">' + m(v) + '</td><td><select data-fsmap="' + esc(l) + '" style="width:auto">' +
-        lines.map(z => '<option value="' + z[0] + '"' + (z[0] === k ? " selected" : "") + ">" + esc(z[1]) + "</option>").join("") + '</select>' + (c.map[l] ? ' <button class="linkbtn" data-fsunmap="' + esc(l) + '">by rule</button>' : "") + "</td></tr>").join("") + "</tbody></table></div>";
-  }
-  return h + '<section class="dash-card fs-doc" style="margin-top:10px">' + (Math.abs(d.diff) >= 1 ? "" : '<p class="note" style="color:#1F7A4D">The balance sheet tallies.</p>') + FS.html(d).replace(/<table>/g, '<div class="bk-tablewrap"><table class="bk-table">').replace(/<\/table>/g, "</table></div>") + "</section>";
-}
 async function fsExcel(d){
   await ensureXlsx();
   const wb = XLSX.utils.book_new(), add = (n, rows) => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), n.slice(0, 31));
