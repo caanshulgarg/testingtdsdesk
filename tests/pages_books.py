@@ -22,6 +22,12 @@ with sync_playwright() as p:
     pg.evaluate("() => { S.booksTab = 'import'; render(); }"); grab("import")
     pg.evaluate("() => { S.books.meta = Object.assign({}, S.books.meta, {parts: [{from: '20250401', to: '20250930', n: 1200, file: 'db1.xml', at: '2026-01-02T10:00:00Z', bridge: 'filled', cloud: 'in the cloud'}, {from: '20251101', to: '20260331', n: 900, file: 'db2.xml', at: '2026-01-03T10:00:00Z'}]}); S.books.tb = {source: 'tb.xml', led: {A: 1, B: 2}, openAsOn: '20250331'}; S.books.ledInfoAt = '2026-01-04T00:00:00Z'; S.books.ledInfo = {A: {}, B: {}}; S.dbFrom = '2025-10-01'; S.tbOn = '2025-03-31'; render(); }"); grab("import-parts")
     pg.evaluate("() => { S.tallyCopy = {time: '03:00', at: '2026-01-05T02:00:00', from: '20250401', to: '20260104', months: ['1','2'], schedule: {on: true, next: '2026-01-06 03:00'}}; render(); }"); grab("import-copy")
+    # Tally ledgers: each list, a search, a ledger's meaning changed, a TDS ledger, and what FinCom posts to
+    for v in ["pending", "gst", "tds", "done", "other", "post"]:
+        pg.evaluate("(v) => { S.booksTab = 'ledgers'; S.lmView = v; S.ledQ = ''; render(); }", v); grab("led-" + v)
+    pg.evaluate("() => { S.lmView = 'gst'; S.ledQ = 'igst'; render(); }"); grab("led-find")
+    pg.evaluate("() => { const n = Object.keys(S.books.map).find(k => LedMaster.isGst(S.books.map[k].what)); if (n){ const m = S.books.map[n]; m.side = 'output'; m.byHand = true; m.ok = true; S.books.mapV = (S.books.mapV || 0) + 1; } S.ledQ = ''; render(); }"); grab("led-changed")
+    pg.evaluate("() => { const n = Object.keys(S.books.map).find(k => !LedMaster.taxLike(k, S.books.map[k], (S.books.ledInfo || {})[k])); if (n){ const m = S.books.map[n]; LedMaster.applyWhat(m, 'tds_payable'); m.section = '194J'; m.rate = 10; m.ok = true; } S.lmView = 'tds'; render(); }"); grab("led-tds")
     br.close()
 srv.shutdown()
 json.dump({"pages": res, "errors": errors}, open(out, "w"), indent=0)

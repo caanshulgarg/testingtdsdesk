@@ -1052,9 +1052,6 @@ document.addEventListener("click", ev => {
   if (t.dataset.reldel !== undefined){ const b = S.books; b.auditRel = (b.auditRel || []).filter(x => x.name !== t.dataset.reldel); saveBooks(); render(); return; }
   if (t.dataset.auditopen){ S.auditOpen = S.auditOpen === t.dataset.auditopen ? "" : t.dataset.auditopen; render(); return; }
   if (t.dataset.auditarea !== undefined && t.tagName === "BUTTON"){ S.auditArea = t.dataset.auditarea; render(); return; }
-  if (t.dataset.lmpost){ LedMaster.applyPosting(S.books, CO(), t.dataset.lmpost); render(); return; }
-  if (t.dataset.lmview){ S.lmView = t.dataset.lmview; S.booksTab = "ledgers"; render(); return; }
-  if (t.dataset.lmok){ const m = S.books.map[t.dataset.lmok]; if (m){ LedMaster.confirm(S.books, [t.dataset.lmok], !m.ok); S.books.reco = null; saveBooks(); render(); } return; }
   if (t.dataset.b2open){ S.b2Open = S.b2Open === t.dataset.b2open ? "" : t.dataset.b2open; render(); return; }
   if (t.dataset.clearf){ clearFilter(t.dataset.clearf); return; }
   if (t.dataset.printid){ printTable(t.dataset.printid, t.dataset.printtitle); return; }
@@ -1655,7 +1652,6 @@ document.addEventListener("input", ev => {
   const t = ev.target;
   if (t && t.id === "fsq"){ S.fsQ = t.value; later("fsq", render, 250); return; }
   if (t && t.id === "misq"){ S.misQ = t.value; later("misq", render, 250); return; }
-  if (t && t.id === "ledq"){ S.ledQ = t.value; later("ledq", render, 250); return; }
   if (t && t.id && /^(q24F|r1F|b2F)q$/.test(t.id)){ const k = t.id.slice(0, -1); S[k] = Object.assign({}, S[k], {q: t.value}); later(t.id, render, 250); return; }
   if (t && t.dataset){
     // the browser lowercases attribute names, so match without case

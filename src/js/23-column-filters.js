@@ -876,6 +876,22 @@ function gst9cSet(key, v){
   if (key.startsWith("adj.")) st.adj[key.slice(4)] = val; else if (key.startsWith("reasons.")) st.reasons[key.slice(8)] = val; else st[key] = val;
   saveBooks(); render();
 }
+// a Tally ledger's GST or TDS meaning, set on the Tally ledgers tab (app/src/screens/books/Ledgers.jsx): what (the
+// kind), tax, side, reg, gstRate, section, rate. A choice made here is the user's own: it counts as confirmed
+function lmSet(name, key, val){
+  const b = S.books, m = b.map[name] = b.map[name] || {n: 0};
+  if (key === "what") LedMaster.applyWhat(m, val || "none");
+  if (key === "tax" || key === "side" || key === "reg") m[key] = val;
+  if (key === "gstRate") m.gstRate = val ? num(val) : null;
+  if (key === "section") m.section = String(val).toUpperCase().replace(/\s+/g, "");
+  if (key === "rate") m.rate = val === "" ? null : num(val);
+  m.byHand = true; m.ok = true; m.okAt = new Date().toISOString();
+  LedMaster.tplLearn(b, [name]); try { LedMaster.applyPosting(b, CO(), "empty"); } catch (e){}
+  b.mapV = (b.mapV || 0) + 1; b.reco = null; saveBooks(); render();
+}
+function lmConfirmToggle(name){ const m = S.books.map[name]; if (m){ LedMaster.confirm(S.books, [name], !m.ok); S.books.reco = null; saveBooks(); render(); } }
+function lmViewGo(v){ S.lmView = v; S.booksTab = "ledgers"; render(); }
+function lmPost(k){ LedMaster.applyPosting(S.books, CO(), k); render(); }
 // what the user corrects on the Advances and Reversal screens
 function gstFixChange(t){
   const d = t.dataset, b = S.books;
@@ -904,21 +920,6 @@ function gstFixChange(t){
     au.st = au.st || {}; const cur = Object.assign({s: "open"}, au.st[id]);
     if (d.auditstatus) cur.s = t.value; else cur.note = t.value;
     cur.at = new Date().toISOString(); au.st[id] = cur; saveBooks(); render(); return true;
-  }
-  const lmName = d.lmwhat || d.lmtax || d.lmside || d.lmreg || d.lmgrate || d.lmsec || d.lmrate;
-  if (lmName){
-    const m = b.map[lmName] = b.map[lmName] || {n: 0};
-    if (d.lmwhat) LedMaster.applyWhat(m, t.value || "none");
-    if (d.lmtax) m.tax = t.value;
-    if (d.lmside) m.side = t.value;
-    if (d.lmreg) m.reg = t.value;
-    if (d.lmgrate) m.gstRate = t.value ? num(t.value) : null;
-    if (d.lmsec) m.section = t.value.toUpperCase().replace(/\s+/g, "");
-    if (d.lmrate) m.rate = t.value === "" ? null : num(t.value);
-    // a choice made here is the user's own: it counts as confirmed
-    m.byHand = true; m.ok = true; m.okAt = new Date().toISOString();
-    LedMaster.tplLearn(b, [lmName]); try { LedMaster.applyPosting(b, CO(), "empty"); } catch (e){}
-    b.mapV = (b.mapV || 0) + 1; b.reco = null; saveBooks(); render(); return true;
   }
   if (d.revd2 !== undefined){ b.rev = Object.assign({}, b.rev, {d2: !!t.checked}); saveBooks(); render(); return true; }
   return false;

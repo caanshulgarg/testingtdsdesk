@@ -117,6 +117,7 @@ Status: **done** (in React, test passing) · **next** · blank = not started. Ab
 | | GST settings and registrations (36) → `gst/GstSettings.jsx`, in Client setup; the page matches live (the blocked-credit sentence aside, added in the Client setup redesign); `run_gstregs_ui.py` passes in full. Fixed: the GST tab settles the month and GSTIN before working out the filing type, so a quarterly GSTIN is not shown as monthly on the first view | **done** |
 | | still old: notices (50) | |
 | **Books** | From Tally (`viewBooksImport`, `viewSetupList`, `viewBookParts`) → `books/FromTally.jsx`; the same text as main on its pages (`tests/pages_books.py`) | **done** |
+| | Tally ledgers (`viewBooksLedgers`, `viewLedPosting`, `ledChangedBanner`) → `books/Ledgers.jsx` (lmSet, lmConfirmToggle, lmViewGo, lmPost); every list the same as main; `run_react_booktabs.py` | **done** |
 | | 2B from the portal `viewGstApiCard` (39) | **done** |
 | **Books** | `viewBooks`, `viewBooksImport`, `viewBooksLedgers`, `viewLedPosting`, `viewTallyRead`, `viewSetupList` (18) · accounts (30) | |
 | **Audit and MIS** | `viewBooksAudit`, `viewAuditRel`, `viewAudit3cd`, `viewBooksMis`, `misPackHtml` (18) | |

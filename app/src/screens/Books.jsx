@@ -10,6 +10,7 @@ import { BusyCard } from "../parts/Reading.jsx";
 import { Return26, Return24, CertsPage } from "./TdsReturn.jsx";
 import Gst from "./Gst.jsx";
 import FromTally from "./books/FromTally.jsx";
+import Ledgers from "./books/Ledgers.jsx";
 import HelpButton from "../parts/HelpButton.jsx";
 
 const money = (v) => INR.format(r2(v || 0));
@@ -151,7 +152,8 @@ export default function Books() {
   else if (!n && !(tab === "tds" && (b.salary || []).length)) body = <div className="bk-none">Bring the day book in first, under “From Tally”. Salary for 24Q can be brought in on its own, under TDS.</div>;
   else if (tab === "tds") body = <Tds b={b} />;
   else if (tab === "gst" || !["ledgers", "audit", "mis", "fs"].includes(tab)) body = <Gst />;
-  else body = <Legacy html={tab === "ledgers" ? viewBooksLedgers(b) : tab === "audit" ? viewBooksAudit(b) : tab === "mis" ? viewBooksMis(b) : viewBooksAccounts(b)} />;
+  else if (tab === "ledgers") body = <Ledgers b={b} />;
+  else body = <Legacy html={tab === "audit" ? viewBooksAudit(b) : tab === "mis" ? viewBooksMis(b) : viewBooksAccounts(b)} />;
   return <>
     <nav className="sbar" aria-label="Books">{tabs.map(([id, label, c]) =>
       <button key={id} aria-selected={tab === id} onClick={() => booksTabGo(id)}>{label}{c != null && <> <span className="sbar-n">{c}</span></>}</button>)}</nav>

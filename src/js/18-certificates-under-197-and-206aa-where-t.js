@@ -265,63 +265,6 @@ function tbDefaultOn(b){
   return t.getFullYear() + "-" + String(t.getMonth() + 1).padStart(2, "0") + "-" + String(t.getDate()).padStart(2, "0");
 }
 function tallyDate(s){ return s && String(s).length === 8 ? String(s).slice(0, 4) + "-" + String(s).slice(4, 6) + "-" + String(s).slice(6, 8) : ""; }
-function viewBooksLedgers(b){
-  const regs = (GSTR.gstins(b) || []).map(g => g.slice(0, 2)), info = b.ledInfo || {};
-  const all = Object.entries(b.map || {});
-  const isTax = ([n, m]) => LedMaster.taxLike(n, m, info[n]);
-  const gst = all.filter(([n, m]) => LedMaster.isGst(m.what) && isTax([n, m])), tds = all.filter(([n, m]) => LedMaster.isTds(m.what) && isTax([n, m]));
-  const pend = LedMaster.pending(b), other = all.filter(x => !isTax(x));
-  const view = S.lmView || (pend.length ? "pending" : "gst");
-  const q = String(S.ledQ || "").toLowerCase();
-  const pool = {pending: pend, gst, tds, done: all.filter(([n, m]) => m.ok && isTax([n, m])), other}[view] || pend;
-  const shown = pool.filter(([n, m]) => !q || n.toLowerCase().includes(q) || String(m.section || "").toLowerCase().includes(q) || String((info[n] || {}).group || "").toLowerCase().includes(q))
-    .sort((a, c) => (LedMaster.isGst(a[1].what) ? 0 : 1) - (LedMaster.isGst(c[1].what) ? 0 : 1) || (c[1].n || 0) - (a[1].n || 0) || a[0].localeCompare(c[0]));
-  const fromTally = Object.keys(info).length;
-  const live = typeof bridgeLive === "function" && bridgeLive(CO());
-  let h = '<section class="dash-card" style="margin-bottom:12px"><h3>GST and TDS ledgers: confirm once for this client</h3>' +
-    '<p class="note">Each ledger is guessed from Tally \u2014 its tax type, duty head and group \u2014 and from how the day book uses it. Check the guess and confirm it. Returns count only confirmed ledgers; anything still to confirm is shown on the TDS and GST screens, and their files wait until it is done.</p>' +
-    '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">' +
-    '<button class="btn small' + (live ? " primary" : "") + '" data-act="ledRead"' + (live ? "" : ' title="Needs the Tally Bridge and this company open in Tally"') + ">Read ledgers from Tally</button>" +
-    '<span class="note">' + (fromTally ? fromTally + " ledgers read from Tally" + (b.ledInfoAt ? " on " + fmtDate(String(b.ledInfoAt).slice(0, 10)) : "") : live ? "not read yet" : "Tally is not connected; the ledger masters XML under \u201cFrom Tally\u201d does the same") + "</span></div>" +
-    '<div class="dash-tiles" style="margin-top:10px">' +
-    '<button class="dtile' + (pend.length ? " warn" : "") + '" data-lmview="pending" style="text-align:left"><span>To confirm</span><b>' + pend.length + "</b><small>" + (pend.length ? "returns wait for these" : "all done") + "</small></button>" +
-    '<button class="dtile" data-lmview="gst" style="text-align:left"><span>GST ledgers</span><b>' + gst.length + "</b><small>" + gst.filter(x => x[1].ok).length + " confirmed</small></button>" +
-    '<button class="dtile" data-lmview="tds" style="text-align:left"><span>TDS and TCS ledgers</span><b>' + tds.length + "</b><small>" + tds.filter(x => x[1].ok).length + " confirmed</small></button>" +
-    '<button class="dtile" data-lmview="other" style="text-align:left"><span>Other ledgers</span><b>' + other.length + "</b><small>add one to GST or TDS</small></button></div></section>";
-  h = ledChangedBanner(b) + h;
-  h += '<nav class="sbar" aria-label="Ledgers">' + [["pending", "To confirm", pend.length], ["gst", "GST", gst.length], ["tds", "TDS and TCS", tds.length], ["done", "Confirmed", null], ["other", "Other ledgers", other.length], ["post", "What FinCom posts to", null]].concat(AIH.enabled("tds") || AIH.enabled("audit") ? [["ai", "AI: TDS and credit", null]] : [])
-    .map(([id, l, c]) => '<button data-lmview="' + id + '" aria-selected="' + (view === id) + '">' + l + (c != null ? ' <span class="sbar-n">' + c + "</span>" : "") + "</button>").join("") + "</nav>";
-  if (view === "post") return h + viewLedPosting(b);
-  if (view === "ai") return h + AIH.viewLedgers(b);
-  h += '<div class="revfilter" style="flex-wrap:wrap;row-gap:6px"><input type="search" id="ledq" data-fk="ledq" data-keeptyped value="' + esc(S.ledQ || "") + '" placeholder="Find a ledger, section or group" style="width:260px;flex:0 0 auto">' +
-    '<span class="note">' + shown.length + " ledger" + (shown.length === 1 ? "" : "s") + "</span>" +
-    (view !== "other" && shown.some(([, m]) => !m.ok) ? '<button class="btn small primary" data-act="lmConfirmShown">Confirm the ' + shown.filter(([, m]) => !m.ok).length + " shown</button>" : "") + "</div>";
-  const whatSel = (n, m) => '<select style="width:auto;min-width:180px" data-lmwhat="' + esc(n) + '">' + (view === "other" ? '<option value="">\u2014</option>' : "") +
-    '<optgroup label="GST">' + LedMaster.WHAT.filter(w => LedMaster.isGst(w[0])).map(w => '<option value="' + w[0] + '"' + (m.what === w[0] ? " selected" : "") + ">" + w[1] + "</option>").join("") + "</optgroup>" +
-    '<optgroup label="TDS and TCS">' + LedMaster.WHAT.filter(w => LedMaster.isTds(w[0]) || w[0] === "tds_interest").map(w => '<option value="' + w[0] + '"' + (m.what === w[0] ? " selected" : "") + ">" + w[1] + "</option>").join("") + "</optgroup>" +
-    '<optgroup label="Other">' + LedMaster.WHAT.filter(w => ["bank", "roundoff", "none"].includes(w[0])).map(w => '<option value="' + w[0] + '"' + ((m.what || (view === "other" ? "" : "none")) === w[0] && view !== "other" ? " selected" : "") + ">" + w[1] + "</option>").join("") + "</optgroup></select>";
-  const detail = (n, m) => {
-    if (LedMaster.isGst(m.what) && !/^gst_(setoff|interest|control)$/.test(m.what)) return '<span style="display:flex;gap:4px;flex-wrap:nowrap">' +
-      '<select style="width:auto" data-lmtax="' + esc(n) + '">' + ["IGST", "CGST", "SGST", "CESS"].map(x => '<option' + (m.tax === x ? " selected" : "") + ">" + x + "</option>").join("") + "</select>" +
-      '<select style="width:auto" data-lmside="' + esc(n) + '"><option value="input"' + (m.side === "input" ? " selected" : "") + '>input</option><option value="output"' + (m.side === "output" ? " selected" : "") + ">output</option></select>" +
-      (regs.length > 1 ? '<select style="width:auto" data-lmreg="' + esc(n) + '"><option value="">registration?</option>' + regs.map(r => '<option value="' + r + '"' + (m.reg === r ? " selected" : "") + ">" + r + "</option>").join("") + "</select>" : "") +
-      '<select style="width:auto" data-lmgrate="' + esc(n) + '" title="Only if this ledger is for one rate"><option value="">any rate</option>' + LedMaster.RATES.map(r => '<option value="' + r + '"' + (num(m.gstRate) === r ? " selected" : "") + ">" + r + "%</option>").join("") + "</select></span>";
-    if (LedMaster.isGst(m.what) && regs.length > 1) return '<select style="width:auto" data-lmreg="' + esc(n) + '"><option value="">registration?</option>' + regs.map(r => '<option value="' + r + '"' + (m.reg === r ? " selected" : "") + ">" + r + "</option>").join("") + "</select>";
-    if (m.what === "tds_payable" || m.what === "tcs_payable") return '<span style="display:flex;gap:4px"><input type="text" data-lmsec="' + esc(n) + '" data-fk="lmsec-' + esc(n) + '" value="' + esc(m.section || "") + '" placeholder="' + (m.what === "tcs_payable" ? "206C(1H)" : "194C") + '" style="width:90px">' +
-      '<input type="number" step="0.01" min="0" data-lmrate="' + esc(n) + '" value="' + esc(m.rate == null ? "" : m.rate) + '" placeholder="rate %" style="width:80px"></span>';
-    return "";
-  };
-  h += '<div class="bk-tablewrap"><table class="bk-table" id="lmTable"><thead><tr><th>Tally ledger</th><th>What it is</th><th>Head, side, registration, rate or section</th><th class="n">Used</th><th>Why, and checks</th><th class="ac">Confirmed</th></tr></thead><tbody>' +
-    shown.slice(0, 400).map(([n, m]) => {
-      const warn = LedMaster.checks(b, n, m), inf = info[n] || {};
-      return "<tr><td>" + esc(n) + (inf.group ? '<div class="nr">' + esc(inf.group) + (inf.taxType && !/^(others|not applicable)$/i.test(String(inf.taxType).replace(/[^A-Za-z ]/g, "").trim()) ? " \u00b7 Tally: " + esc(inf.taxType) + (inf.dutyHead ? " " + esc(inf.dutyHead) : "") : "") + "</div>" : "") +
-        "</td><td>" + whatSel(n, m) + "</td><td>" + detail(n, m) + '</td><td class="n">' + (m.n || 0) + "</td>" +
-        '<td style="min-width:200px">' + (m.why ? '<div class="nr" style="white-space:normal">' + esc(m.why) + "</div>" : "") + warn.map(w => '<div class="nr bad" style="white-space:normal">' + esc(w) + "</div>").join("") + "</td>" +
-        '<td class="ac">' + (view === "other" ? "" : m.ok ? '<button class="linkbtn" data-lmok="' + esc(n) + '" title="Undo">\u2713 confirmed</button>' : '<button class="btn small" data-lmok="' + esc(n) + '">Confirm</button>') + "</td></tr>";
-    }).join("") + "</tbody></table>" + (shown.length > 400 ? '<p class="note">The first 400 are shown; find the rest by name.</p>' : "") + (shown.length ? "" : '<div class="bk-none">' + (view === "pending" ? "Every GST and TDS ledger is confirmed." : "Nothing here.") + "</div>") + "</div>";
-  h += '<p class="note">Add a ledger that was missed from \u201cOther ledgers\u201d by choosing what it is. Several ledgers for one head are fine \u2014 reverse-charge ledgers, or one ledger per rate. To take a ledger out, choose \u201cNot a tax ledger\u201d.</p>';
-  return h;
-}
 // the line shown on the TDS and GST screens while ledgers are still to be confirmed
 function ledgerBanner(b, which){
   const p = LedMaster.pending(b).filter(([, m]) => !which || (which === "gst" ? LedMaster.isGst(m.what) || !m.what || m.what === "none" : LedMaster.isTds(m.what) || !m.what || m.what === "none"));
@@ -765,21 +708,6 @@ function viewAudit3cd(b){
   return '<section class="dash-card"><div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:8px"><button class="btn small primary" data-act="audit3cdPdf">Download the draft (PDF)</button><button class="btn small" data-act="audit3cdExcel">Excel</button></div>' +
     '<div class="audit3cd">' + Audit.form3cdHtml(d).replace(/<table>/g, '<div class="bk-tablewrap"><table class="bk-table">').replace(/<\/table>/g, "</table></div>") + "</div></section>";
 }
-function viewLedPosting(b){
-  const co = CO(), rows = LedMaster.posting(b, co), diff = rows.filter(x => x.from && x.from !== x.now);
-  return '<section class="dash-card"><h3>What FinCom posts bills to</h3><p class="note">When FinCom posts a bill into Tally, these are the ledgers it uses. They come from the ledgers confirmed here; an empty one is filled in as soon as its ledger is confirmed, and one set by hand in Client setup is kept until you choose the master\u2019s.</p>' +
-    (diff.length ? '<div class="row" style="margin:8px 0"><button class="btn small primary" data-act="lmPostAll">Use the master\u2019s for all ' + diff.length + "</button></div>" : "") +
-    '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Used for</th><th>Now</th><th>From the master</th><th>Why</th><th class="ac"></th></tr></thead><tbody>' +
-    rows.map(x => "<tr><td>" + esc(x.label) + "</td><td>" + (x.now ? esc(x.now) + ((b.ledInfo || {})[x.now] || (b.map || {})[x.now] ? "" : ' <span class="tag warn">not in Tally</span>') : '<span class="note">\u2014</span>') + "</td><td>" + (x.from ? (x.from === x.now ? '<span style="color:#1F7A4D">\u2713 same</span>' : "<b>" + esc(x.from) + "</b>") : '<span class="note">none confirmed</span>') +
-      '</td><td><div class="nr" style="white-space:normal">' + esc(x.why) + '</div></td><td class="ac">' + (x.from && x.from !== x.now ? '<button class="btn small" data-lmpost="' + esc(x.k) + '">Use it</button>' : "") + "</td></tr>").join("") + "</tbody></table></div></section>";
-}
-function ledChangedBanner(b){
-  const ch = LedMaster.changesSince(b);
-  if (!ch.length) return "";
-  return '<section class="bk-alert" style="margin-bottom:12px"><b>' + ch.length + " ledger" + (ch.length === 1 ? " was" : "s were") + " changed after returns were made from them.</b> Check whether those returns need a revision or an amendment." +
-    '<div class="bk-tablewrap" style="margin-top:6px"><table class="bk-table"><thead><tr><th>Ledger</th><th>What changed</th><th>Returns made before the change</th></tr></thead><tbody>' +
-    ch.slice(0, 30).map(x => "<tr><td>" + esc(x.name) + "</td><td>" + esc(x.change) + "</td><td>" + esc(x.returns.slice(0, 4).join("; ") + (x.returns.length > 4 ? " and " + (x.returns.length - 4) + " more" : "")) + "</td></tr>").join("") + "</tbody></table></div></section>";
-}
 function gst9PackHtml(which){
   const b = S.books, reg = S.gstReg || ((GSTR.gstins(b) || [])[0] || "").slice(0, 2), fy = GST9.fyOf(S.gstYm || GSTR.months().slice(-1)[0]), co = CO();
   const head = (t) => '<div style="border-bottom:2px solid #15201B;padding-bottom:8px;margin-bottom:10px"><div style="font-size:12px;color:#5A6B63">' + t + ' \u2014 WORKING FROM THE BOOKS</div><h1 style="font-size:20px;margin:4px 0">' + esc(co.name) + "</h1><div>" + esc((GSTR.gstins(b) || []).find(g => g.slice(0, 2) === reg) || reg) + " \u00b7 " + GST9.label(fy) + "</div></div>";
@@ -827,6 +755,7 @@ function setupKeepFor(co){
 }
 // the time of the bridge's daily update from Tally (build 188: Tally is read once a day, or on Update now)
 function keepAtSet(v){ if (/^\d{2}:\d{2}$/.test(v)) LK.keepSet({dailyAt: v}, "Tally will be updated every day at " + v + "."); }
+// the Tally ledgers tab: React (app/src/screens/books/Ledgers.jsx)
 function gstParts(b){
   const regs = GSTR.gstins(b) || [], noBooks = !(b.vouchers || []).length;
   const ftype = typeof GSTSet === "object" && S.gstYm ? GSTSet.typeOf(S.gstYm, S.gstReg || "") : "monthly";

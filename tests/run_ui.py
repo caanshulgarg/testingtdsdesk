@@ -80,12 +80,12 @@ with sync_playwright() as p:
     pg.screenshot(path=OUT + "/r3b-jan.png", full_page=True)
     # Ledgers: mark 07 IGST INPUT as common credit through the select
     pg.evaluate("LedMaster.refresh(S.books); S.booksTab = 'ledgers'; S.lmView = 'gst'; S.ledQ = '07 IGST INPUT'; render();"); pg.wait_for_timeout(500)
-    ks = pg.locator('select[data-lmwhat="07 IGST INPUT"]')
+    ks = pg.locator('select[aria-label="What 07 IGST INPUT is"]')
     ok(ks.count() == 1, "ledger row found")
     ks.select_option("gst_common"); pg.wait_for_timeout(400)
     m = pg.evaluate("JSON.stringify(S.books.map['07 IGST INPUT'])")
     ok('"kind":"gst_common"' in m and '"tax":"IGST"' in m and '"side":"input"' in m, "kind set, tax and side kept: " + m[:160])
-    ok(pg.locator('select[data-lmtax="07 IGST INPUT"]').count() == 1, "tax and side selects shown for common credit")
+    ok(pg.locator('select[aria-label="Head of 07 IGST INPUT"]').count() == 1, "tax and side selects shown for common credit")
     # Reversal screen
     pg.evaluate("S.booksTab = 'gst'; S.gstPart = 'rev'; S.gstYm = '202506'; render();"); pg.wait_for_timeout(600)
     txt = pg.inner_text("#app")
