@@ -11,6 +11,7 @@ import { AiSettings } from "../parts/Ai.jsx";
 import { BridgeSettings, CloudBooks } from "./Tally.jsx";
 import { PlanCredit, FirmAccount, PeopleEtc, Platform } from "./Account.jsx";
 import { Rates, Reading, ClosedPeriods } from "./SettingsMore.jsx";
+import { BankSetup } from "../parts/BankSettings.jsx";
 import GstSettings from "./gst/GstSettings.jsx";
 import Parties from "./Parties.jsx";
 import { PostLog } from "./Done.jsx";
@@ -259,8 +260,8 @@ export function ClientSetup() {
     cotds: () => <TdsSetup />,
     deductees: () => <Parties />,
     gstset: () => <GstSetup />,
-    bankset: () => <Legacy html={viewBankSetup("accounts")} />,
-    bankrules: () => <Legacy html={viewBankSetup("rules")} />,
+    bankset: () => <BankSetup which="accounts" />,
+    bankrules: () => <BankSetup which="rules" />,
     coclosed: () => <ClosedPeriods co={co} />,
     coremove: () => <Remove />,
   }[tab] || (() => <Company />);

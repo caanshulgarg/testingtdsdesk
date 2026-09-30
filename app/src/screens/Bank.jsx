@@ -10,6 +10,7 @@
 // Tally, the column filters, the rules tab and the settings panel.
 import { useRef } from "react";
 import Legacy from "../parts/Legacy.jsx";
+import { BankSettings, RulesPanel } from "../parts/BankSettings.jsx";
 import ColHead from "../parts/ColHead.jsx";
 import LedgerBox from "../parts/LedgerBox.jsx";
 import { BusyCard } from "../parts/Reading.jsx";
@@ -212,7 +213,7 @@ export default function Bank() {
       </div>
       <div className="row" style={{ justifyContent: "flex-end", marginTop: 10 }}><button className="btn small" onClick={() => bankAct("bankSettings")}>Settings</button></div>
     </div>
-    <Legacy html={b.showSettings ? bankSettingsHtml() : ""} />
+    {b.showSettings && <BankSettings />}
   </>;
 
   const acc = accountFor(st), accLedger = exactLedger(acc.ledger), tc = tabCounts(bankRangeRows()), tab = bankTab();
@@ -269,9 +270,9 @@ export default function Bank() {
       {b.offerRule && <div className="bk-found" style={{ borderColor: "var(--ledger)" }}><b>Keep this as a rule?</b> Every future line containing “{b.offerRule.text}” would go to <b>{b.offerRule.ledger}</b> by itself.{" "}
         <button className="btn small primary" onClick={() => bankAct("ruleFromBulk")}>Yes, make the rule</button><button className="linkbtn" onClick={() => bankAct("ruleNoThanks")}>No thanks</button></div>}
       {b.q.trim() && <Found key={b.q} />}
-      {tab === "rules" ? <Legacy html={viewRulesPanel()} /> : tab === "review" && b.grouped ? <Groups /> : <Table tab={tab} />}
+      {tab === "rules" ? <RulesPanel /> : tab === "review" && b.grouped ? <Groups /> : <Table tab={tab} />}
     </div>
-    <Legacy html={b.showSettings ? bankSettingsHtml() : ""} />
+    {b.showSettings && <BankSettings />}
   </>;
 }
 

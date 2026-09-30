@@ -19,6 +19,21 @@ VR_RESULT = """(agree) => {
   S.vrec = Object.assign(VR.def(), {ledger: 'Alpha Traders', from: '2025-04-01', to: '2025-12-31', fileName: 'alpha.csv',
     res: Object.assign({V, T, ledger: 'Alpha Traders', company: 'ZZ TEST', from: '2025-04-01', to: '2025-12-31', file: 'alpha.csv', sides: "the vendor's books"}, r)});
   S.view = 'company'; S.step = 'review'; S.reviewTable = false; S.tab = 'invoices'; render(); }"""
+BANK_SETUP = """() => {
+  const c = newCompany({name: "GARG SHEKHAR & COMPANY", gstin: "09AAKFG1234C1Z5"}); c.bankAccounts = [{id: "a1", bank: "ICICI", acct: "0214", ledger: "ICICI Bank"}];
+  S.companies[c.id] = c; S.coId = c.id; S.view = "company"; S.tab = "bank";
+  const parties = ["DIPTI VATS", "PAYUAMAZON", "BHARATKOSH", "PERFEKT SENSE DIGITA", "CLOUD WIZARD CONSULTING", "AMAZON GROCERIES", "CCAPROTEAN", "NAVNEET TENDER DSC"];
+  const states = ["ready","ready","ready","attention","suggested","sent","intally","ready"];
+  let bal = 250000;
+  const rows = Array.from({length: 24}, (_, i) => { const out = i % 3 !== 1; const amt = [2000, 28788, 2970, 1000, 100000, 5.9, 16200, 1482][i % 8] * (1 + (i % 5) / 10);
+    bal += out ? -amt : amt;
+    return {id: "r" + i, fp: "fp" + i, date: "2026-04-" + String(1 + i).padStart(2, "0"), debit: out ? r2(amt) : 0, credit: out ? 0 : r2(amt), bal: r2(bal),
+      narr: (out ? "NEFT DR " : "NEFT CR ") + parties[i % 8] + " UTR" + (100000 + i), dec: {name: parties[i % 8], mode: "NEFT", utr: "UTR" + (100000 + i)},
+      ledger: states[i % 8] === "attention" ? "" : parties[i % 8], state: states[i % 8], balOk: true, why: states[i % 8] === "attention" ? ["No ledger found for this party."] : []}; });
+  S.bank = {cid: c.id, loading: false, stmts: [{id: "s1", acctId: "a1", bank: "ICICI", acct: "0214", from: "2026-04-01", to: "2026-04-24", opening: 250000, closing: bal, totDr: 0, totCr: 0}], cur: "s1", rows, rules: [], wrules: [],
+    ledgers: {list: parties.map(p => ({name: p, group: "Sundry Creditors"})).concat([{name: "ICICI Bank", group: "Bank Accounts"}]), importedAt: new Date().toISOString(), live: true}, newLed: [], keys: {}, books: {}, filter: "review", grouped: false, showSettings: false, q: "", limit: 100, pendingRule: null, busy: "",
+    createFor: null, sel: new Set(), sticky: new Set(), undo: null, hist: {rows: {}}, histVer: 0, postedTags: {}, salesRef: []};
+  render(); }"""
 with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1400, "height": 1000}); pg.on("pageerror", lambda e: errors.append(str(e)))
     pg.on("console", lambda m: errors.append("same key: " + m.text[:120]) if "same key" in m.text else None)
@@ -84,10 +99,19 @@ with sync_playwright() as p:
       plans: [{id: 'p1', name: 'Starter', monthly_fee: 999, includes: {read: {cap: 100}}, note: 'most firms'}, {id: 'p2', name: 'Pay as you go', monthly_fee: 0, includes: {}}], modules: [{code: 'read', title: 'Reading bills', price: 2, unit: 'per page', billing: 'unit'}],
       signup: {open: true, trial_credit: 100, plan: 'Starter'}, secrets: [{name: 'claude_api_key', tail: 'x9', updated_at: '2026-09-01T00:00:00Z'}]}; S.adminPrices = 'f1'; S.planEdit = 'p1'; S.newFirm = {email: 'n@f.in', password: 'Pw-9'}; render(); }"""); grab("acct-platform")
     # Settings: TDS rates (one changed), reading bills (tests run and failed), and a client's closed periods
-    pg.evaluate("() => { Cloud.on = () => false; S.account = null; S.settingsTab = 'rates'; const r = rules()[0]; S.firm.rules = {[r.id]: {rateInd: 7.5}}; render(); }"); grab("set-rates")
+    pg.evaluate("() => { Cloud.on = () => false; Cloud.cfg = () => ({url: 'https://x.supabase.co', key: 'anon', gate: false}); S.account = null; S.settingsTab = 'rates'; const r = rules()[0]; S.firm.rules = {[r.id]: {rateInd: 7.5}}; render(); }"); grab("set-rates")
     pg.evaluate("() => { S.settingsTab = 'reading'; S.ocrTest = {ok: false, msg: 'OCR failed on the sample'}; S.googleTest = {ok: false, msg: 'Google said no', code: 'google_billing'}; S.testResult = {busy: true}; S.selfTest = {results: {pdf: {ok: true, msg: 'read 3 fields'}, ocr: {ok: false, msg: 'too slow'}}}; render(); }"); grab("set-reading")
     pg.evaluate("() => { S.askClaudeNewSupplier = true; S.freeFirst = false; S.ocrTest = null; S.googleTest = null; S.testResult = null; render(); }"); grab("set-reading2")
     pg.evaluate("() => { const co = CO(); ClosedP.set(co, 'to', '2026-03-31'); ClosedP.set(co, 'gst', true); ClosedP.set(co, 'tdsFiled', {[ClosedP.quarters()[0]]: '2026-05-31'}); S.view = 'company'; S.tab = 'coclosed'; render(); }"); grab("set-closed")
+    # a client's bank settings (over the bank screen, and in Client setup) and its rules, with suggested rules
+    pg.evaluate(BANK_SETUP); pg.wait_for_timeout(500)
+    pg.evaluate("() => { S.bank.showSettings = true; S.bank.hist.rows = {a: 1}; CO().bankOptional = true; render(); }"); grab("bank-settings")
+    pg.evaluate("""() => { S.bank.showSettings = false; const r = (w, l, scope) => Object.assign(newRule({name: l + ' \u2013 ' + w, when: {text: [{op: 'has', v: w}], dir: 'out', amtMin: '', amtMax: '', modes: [], acNo: '', account: 'any', from: '', to: ''},
+        then: {action: 'set', ledger: l, kind: '', vtype: '', tdsNature: '', tdsAtPay: false, splits: [], narr: '', ready: true}}), {scope});
+      clientRules().push(r('AMAZON', 'AMAZON GROCERIES', 'client'), Object.assign(r('DSC', 'Not A Ledger', 'client'), {off: true})); firmRules().push(r('CHARGES', 'Bank Charges', 'firm'));
+      S.ruleSuggest = [{text: 'BHARATKOSH', sample: 'NEFT DR BHARATKOSH UTR1', dir: 'out', ledger: 'BHARATKOSH', n: 4, agree: 75}]; S.bank.filter = 'rules'; render(); }"""); grab("bank-rules")
+    pg.evaluate("() => { S.tab = 'bankset'; render(); }"); grab("setup-bankset")
+    pg.evaluate("() => { S.tab = 'bankrules'; S.ruleSuggest = []; render(); }"); grab("setup-bankrules")
     br.close()
 srv.shutdown()
 json.dump({"pages": res, "errors": errors}, open(out, "w"), indent=0)

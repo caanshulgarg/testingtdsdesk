@@ -196,19 +196,6 @@ function suggestRules(){
   });
   return out.sort((a, c) => c.n - a.n).slice(0, 25);
 }
-function viewSuggestions(){
-  const list = S.ruleSuggest;
-  if (!list) return '<div class="row" style="margin-top:10px"><button class="btn small" data-act="ruleFind">Look for rules in what we have done before</button></div>';
-  if (!list.length) return '<p class="note" style="margin-top:10px">Nothing worth a rule yet \u2014 the same wording has to be booked to the same ledger at least three times. <button class="linkbtn" data-act="ruleFindClose">Hide</button></p>';
-  return '<div class="bdiag" style="margin-top:12px"><b>' + list.length + " rule" + (list.length === 1 ? "" : "s") + " we can make from what you have already done</b>" +
-    '<div class="tblwrap" style="margin-top:6px"><table class="data"><thead><tr><th class="ck"><input type="checkbox" data-sugall checked></th><th>When the line says</th><th>Money</th><th>Use this ledger</th><th class="n">Done before</th></tr></thead><tbody>' +
-    list.map((s, i) => '<tr><td class="ck"><input type="checkbox" data-sug="' + i + '"' + (s.off ? "" : " checked") + "></td>" +
-      "<td><b>" + esc(s.text) + '</b><div class="nr">' + esc(String(s.sample).slice(0, 60)) + "</div></td>" +
-      "<td>" + (s.dir === "out" ? "going out" : s.dir === "in" ? "coming in" : "either") + "</td>" +
-      "<td>" + esc(s.ledger) + "</td>" +
-      '<td class="n">' + s.n + " times" + (s.agree < 100 ? '<div class="nr">' + s.agree + "% the same</div>" : "") + "</td></tr>").join("") +
-    '</tbody></table></div><div class="row" style="margin-top:8px"><button class="btn small primary" data-act="ruleMakeSug">Make the ticked rules</button><button class="btn small" data-act="ruleFindClose">Not now</button></div></div>';
-}
 /* ---------- the same rules for your other clients ---------- */
 async function copyRulesTo(rules){
   if (!rules.length){ toast("Choose at least one rule."); return; }
@@ -243,40 +230,6 @@ async function copyRulesTo(rules){
 }
 
 /* ---------- the rules screen ---------- */
-function viewRulesPanel(){
-  const b = B(), co = CO(b.cid);
-  const mine = clientRules(), firm = firmRules();
-  const line = (r, i, scope) => {
-    const p = rulePreview(r);
-    const led = ruleLedger(r, co);
-    const bad = r.then.action !== "ignore" && led && !exactLedger(led);
-    return '<tr' + (r.off ? ' class="off"' : "") + '><td class="ord">' +
-      (scope === "client" ? '<button class="icon" data-rmove="up" data-rid="' + r.id + '" title="Move up">\u2191</button><button class="icon" data-rmove="down" data-rid="' + r.id + '" title="Move down">\u2193</button>' : "") + "</td>" +
-      "<td><b>" + esc(ruleLabel(r)) + "</b>" + (r.off ? ' <span class="tag no">off</span>' : "") +
-        '<div class="nr">' + esc(ruleWhenText(r)) + "</div></td>" +
-      "<td>" + (r.then.action === "ignore" ? '<span class="tag">set aside</span>' :
-        (bad ? '<span class="tag bad">' + esc(led) + " not in Tally</span>" : esc(led || "\u2014")) +
-        ((r.then.splits || []).length ? '<div class="nr">split into ' + ((r.then.splits || []).length + 1) + " lines</div>" : "") +
-        (r.then.ready ? "" : '<div class="nr">shown for checking, not auto-ready</div>')) + "</td>" +
-      '<td class="n">' + (p.n ? "<b>" + p.n + "</b>" : "0") + '<div class="nr">now showing</div></td>' +
-      '<td class="n">' + ((r.stats && r.stats.used) || 0) + ((r.stats && r.stats.over) ? '<div class="nr bad">' + r.stats.over + " changed by hand</div>" : "") + "</td>" +
-      '<td style="white-space:nowrap"><button class="btn small" data-redit="' + r.id + '">Change</button> ' +
-        '<button class="linkbtn" data-rtoggle="' + r.id + '">' + (r.off ? "Use" : "Pause") + "</button> " +
-        (scope === "client" ? '<button class="linkbtn" data-rcopy="' + r.id + '">Copy to\u2026</button> ' : "") +
-        '<button class="linkbtn" data-rdel="' + r.id + '">Delete</button></td></tr>';
-  };
-  let h = '<section class="pane"><div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Rules</h2>' +
-    '<div><button class="btn small primary" data-act="ruleNew">New rule</button><button class="btn small" data-act="ruleRunNow">Apply to this statement</button>' +
-    (clientRules().length ? '<button class="btn small" data-act="ruleCopyAll">Copy to other clients</button>' : "") + "</div></div>" +
-    '<p class="note" style="margin:6px 0 10px">Rules are read from the top down; the first one that fits wins. Your own choices are never overwritten by a rule.</p>';
-  h += '<div class="tblwrap"><table class="data"><thead><tr><th></th><th>Rule</th><th>Does</th><th class="n">Matches</th><th class="n">Used</th><th></th></tr></thead><tbody>' +
-    (mine.length ? mine.map((r, i) => line(r, i, "client")).join("") : '<tr><td colspan="6" class="nr">No rules for ' + esc(co.name) + " yet. Make one from any line, or press New rule.</td></tr>") +
-    (firm.length ? '<tr><td colspan="6" style="background:var(--paper)"><b>Firm-wide rules</b> \u2014 used for every client, after this client\u2019s own rules</td></tr>' + firm.map((r, i) => line(r, i, "firm")).join("") : "") +
-    "</tbody></table></div>";
-  if (!firm.length) h += '<p class="note" style="margin-top:8px">Tip: bank charges, interest, salaries and the like are the same for every client. Make those firm-wide once.</p>';
-  h += viewSuggestions();
-  return h + "</section>";
-}
 function ruleWhenText(r){
   const w = r.when || {}, bits = [];
   (w.text || []).forEach(c => { if (String(c.v || "").trim()) bits.push({has: "contains", not: "does not contain", starts: "starts with", is: "is"}[c.op] + " \u201c" + c.v + "\u201d"); });

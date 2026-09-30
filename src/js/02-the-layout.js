@@ -60,14 +60,6 @@ function viewDoneStep(){ return '<div data-react="DoneStep"></div>'; }
 const SETUP_TABS = [["settings", "Company"], ["cotally", "Tally"], ["cotds", "TDS"], ["deductees", "Suppliers"], ["gstset", "GST"],
   ["bankset", "Bank accounts"], ["bankrules", "Bank rules"], ["coclosed", "Closed periods"], ["coremove", "Remove this client"]];
 function isSetupTab(t){ return SETUP_TABS.some(x => x[0] === t); }
-function viewBankSetup(which){
-  const co = CO();
-  if (!S.bank || S.bank.cid !== co.id || S.bank.loading){
-    if (!S.bank || S.bank.cid !== co.id) loadBank(co.id).then(() => render());
-    return '<p class="note">Loading this client\u2019s bank details\u2026</p>';
-  }
-  return which === "rules" ? viewRulesPanel() : '<div class="setup-inline">' + bankSettingsHtml() + "</div>";
-}
 
 /* ---------- Collect: everything that arrives for this client (React: app/src/screens/Collect.jsx) ---------- */
 function viewCollect(){ return docType() === "sales" ? viewSales() : '<div data-react="Collect"></div>'; }

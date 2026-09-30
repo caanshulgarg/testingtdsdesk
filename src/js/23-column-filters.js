@@ -272,33 +272,6 @@ function applyGroup(key, ledger){
   if (b.undo) b.undo.label = rows[0].dec.name || key;
   render();
 }
-function bankSettingsHtml(){
-  const b = B(), co = CO();
-  const std = Object.keys(BANK_LEDGER_DEFAULTS);
-  let h = '<div class="bk-overlay" data-bkoverlay><div class="bk-panel" role="dialog" aria-modal="true" aria-labelledby="bkSetT"><div class="bk-panel-head"><h2 id="bkSetT">Bank settings \u2014 ' + esc(co.name) + '</h2><button class="icon" data-act="bankSettingsClose" aria-label="Close">\u2715</button></div>';
-  if (bridgeLive(co)) h += '<section><h3>Tally ledger list</h3><p class="note">Live from Tally (' + esc(Bridge.openFor(co).name) + "): " + b.ledgers.list.length + " ledgers, updated " + (b.ledgers.importedAt ? new Date(b.ledgers.importedAt).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}) : "\u2014") + '.</p><button class="btn small" data-act="bankSync">Refresh from Tally</button></section>';
-  else h += '<section><h3>Tally ledger list</h3>' + (hasLedgerList()
-      ? '<p class="note">' + b.ledgers.list.length + " ledgers, imported " + fmtDate(b.ledgers.importedAt.slice(0, 10)) + " from " + esc(b.ledgers.file || "Tally") + "." + (Date.now() - new Date(b.ledgers.importedAt) > 30 * 864e5 ? " Over 30 days old: update it." : "") + "</p>"
-      : '<p class="note">Not imported yet. In Tally: Display More Reports \u2192 List of Accounts \u2192 Export (Excel or XML).</p>') +
-    '<button class="btn small" data-act="ledPick">' + (hasLedgerList() ? "Update ledger list" : "Import ledger list") + "</button>" +
-    (b.newLed.filter(l => !l.sent).length ? '<p class="note">' + plural(b.newLed.filter(l => !l.sent).length, "new ledger") + " will be created in Tally with the next Tally file.</p>" : "") + "</section>";
-  h += '<section><h3>Bank accounts</h3>' + ((co.bankAccounts || []).length ? '<div class="bk-form">' + (co.bankAccounts || []).map(a =>
-      '<label><span>' + esc(a.bank) + (a.last4 ? " \u00b7\u00b7" + esc(a.last4) : "") + (a.ifsc ? " \u00b7 " + esc(a.ifsc) : "") + '</span><select data-bankacc="' + a.id + '">' + ledgerOptions(exactLedger(a.ledger), BANK_GROUPS) + "</select></label>").join("") + "</div>"
-      : '<p class="note">Bank accounts are added when you upload their statements.</p>') + "</section>";
-  h += '<section><h3>Ledgers for standard entries</h3><p class="note">Found automatically in the ledger list; change them if this client uses different ledgers.</p><div class="bk-form">' + std.map(k =>
-      '<label><span>' + esc(BANK_LEDGER_LABELS[k]) + '</span><select data-bankled="' + k + '">' + ledgerOptions(stdLedger(co, k)) + "</select></label>").join("") + "</div></section>";
-  h += '<section><h3>Automation</h3>' +
-    '<label class="chk"><input type="checkbox" data-bankauto' + (co.bankAuto !== false ? " checked" : "") + "> Mark sure matches as Ready (saved rules, exact bill matches, standard entries)</label>" +
-    '<label class="chk"><input type="checkbox" data-bankoptional' + (co.bankOptional ? " checked" : "") + "> Post bank entries into Tally as Optional vouchers (they then have to be made regular in Tally)</label>" +
-    '<label class="chk"><input type="checkbox" data-bankautoapply' + (co.bankAutoApply !== false ? " checked" : "") + "> When I choose a ledger for an entry, use it for every entry of the same party and remember it</label></section>";
-  const nh = Object.keys(b.hist.rows).length;
-  h += '<section><h3>Clean up</h3><p class="note">' + b.rules.length + " saved rules \u00b7 " + nh + " remembered decisions \u00b7 " + b.stmts.length + ' statements</p><div class="row" style="gap:6px;flex-wrap:wrap">' +
-    '<button class="btn small" data-act="bankClearRules"' + (b.rules.length ? "" : " disabled") + ">Forget saved rules</button>" +
-    '<button class="btn small" data-act="bankClearHist"' + (nh ? "" : " disabled") + ">Forget remembered decisions</button>" +
-    '<button class="btn small danger" data-act="bankDelAll"' + (b.stmts.length ? "" : " disabled") + ">Delete all statements</button></div></section>";
-  h += "</div></div>";
-  return h;
-}
 // the bar at the bottom of the bank screen: React (app/src/screens/Bank.jsx)
 function bankBar(){ return B() && !B().loading && curStmt() ? '<div data-react="BankBar"></div>' : ""; }
 // Creating a ledger that is not yet in Tally
@@ -648,44 +621,48 @@ function bankSetAccLedger(accId, v){
 // tick a line; with Shift, every line between it and the one ticked before
 function bankToggleRow(id, on, shift){ bankToggle({dataset: {bsel: id}, checked: on}, shift); }
 function bankSelAll(on){ const b = B(); bankVisibleRows().filter(r => r.state !== "sent").forEach(r => { if (on) b.sel.add(r.id); else b.sel.delete(r.id); }); bankLightRefresh(); }
+// a client's bank settings and rules (app/src/parts/BankSettings.jsx): the settings shown or not, a standard entry's
+// ledger, an automation choice, and a rule changed, paused, deleted (asked first), moved or copied to other clients
+function bankSettingsShow(on){ B().showSettings = on; render(); }
+function bankStdLedger(k, v){ const b = B(), co = CO(); co.bankLedgerNames = co.bankLedgerNames || {}; co.bankLedgerNames[k] = v; Store.saveCompany(co); suggestAll(b.rows, true); saveBank({rows: true}); render(); }
+function bankOptSet(k, on){ const co = CO(); co[k] = on; Store.saveCompany(co); render(); }
+function ruleAct(what, id){
+  if (what === "copy"){ const r = clientRules().find(x => x.id === id); if (r) copyRulesTo([r]); return; }
+  const inClient = clientRules().some(x => x.id === id);
+  const list = inClient ? clientRules() : firmRules();
+  const i = list.findIndex(x => x.id === id), r = list[i];
+  if (!r) return;
+  if (what === "toggle"){ r.off = !r.off; saveRules(r.scope); runRules(null, {force: true}); toast(r.off ? "Rule paused." : "Rule in use again."); render(); return; }
+  if (what === "del"){
+    askConfirm({title: "Delete the rule \u201c" + ruleLabel(r) + "\u201d?", ok: "Delete", body: '<p class="note">Lines already set keep their ledger. Future statements will not use this rule.</p>'}).then(a => {
+      if (!a) return;
+      list.splice(i, 1); saveRules(r.scope); toast("Rule deleted."); render();
+    });
+    return;
+  }
+  if ((what === "up" || what === "down")){
+    const j = what === "up" ? i - 1 : i + 1;
+    if (j < 0 || j >= list.length) return;
+    list.splice(j, 0, list.splice(i, 1)[0]);
+    saveRules(r.scope); runRules(null, {force: true}); render();
+    return;
+  }
+  openRuleEditor(JSON.parse(JSON.stringify(r)), false).then(nr => {
+    if (!nr) return;
+    if (nr.scope !== r.scope){ list.splice(i, 1); (nr.scope === "firm" ? firmRules() : clientRules()).unshift(nr); saveRules("firm"); saveRules("client"); }
+    else list[i] = nr;
+    saveRules(nr.scope);
+    const n = runRules(null, {force: true});
+    toast("Rule saved" + (n ? " \u00b7 " + n + " lines set" : "") + ".");
+    render();
+  });
+  return;
+}
 function bankClick(t){
   const b = B(); if (!b) return false;
   if (t.dataset.bfocus){ const f = S.focusSets[t.dataset.bfocus]; if (f){ bankFocus(f.title, f.ids, f.note); render(); window.scrollTo({top: 0, behavior: "smooth"}); } return true; }
   if (t.dataset.btab){ bankTabGo(t.dataset.btab); return true; }
   if (t.dataset.delstmt){ deleteStatement(t.dataset.delstmt); return true; }
-  if (t.dataset.rcopy){ const r = clientRules().find(x => x.id === t.dataset.rcopy); if (r) copyRulesTo([r]); return true; }
-  if (t.dataset.redit || t.dataset.rtoggle || t.dataset.rdel || t.dataset.rmove){
-    const id = t.dataset.redit || t.dataset.rtoggle || t.dataset.rdel || t.dataset.rid;
-    const inClient = clientRules().some(x => x.id === id);
-    const list = inClient ? clientRules() : firmRules();
-    const i = list.findIndex(x => x.id === id), r = list[i];
-    if (!r) return true;
-    if (t.dataset.rtoggle){ r.off = !r.off; saveRules(r.scope); runRules(null, {force: true}); toast(r.off ? "Rule paused." : "Rule in use again."); render(); return true; }
-    if (t.dataset.rdel){
-      askConfirm({title: "Delete the rule \u201c" + ruleLabel(r) + "\u201d?", ok: "Delete", body: '<p class="note">Lines already set keep their ledger. Future statements will not use this rule.</p>'}).then(a => {
-        if (!a) return;
-        list.splice(i, 1); saveRules(r.scope); toast("Rule deleted."); render();
-      });
-      return true;
-    }
-    if (t.dataset.rmove){
-      const j = t.dataset.rmove === "up" ? i - 1 : i + 1;
-      if (j < 0 || j >= list.length) return true;
-      list.splice(j, 0, list.splice(i, 1)[0]);
-      saveRules(r.scope); runRules(null, {force: true}); render();
-      return true;
-    }
-    openRuleEditor(JSON.parse(JSON.stringify(r)), false).then(nr => {
-      if (!nr) return;
-      if (nr.scope !== r.scope){ list.splice(i, 1); (nr.scope === "firm" ? firmRules() : clientRules()).unshift(nr); saveRules("firm"); saveRules("client"); }
-      else list[i] = nr;
-      saveRules(nr.scope);
-      const n = runRules(null, {force: true});
-      toast("Rule saved" + (n ? " \u00b7 " + n + " lines set" : "") + ".");
-      render();
-    });
-    return true;
-  }
   if (t.dataset.brow){ bankRowAct(t.dataset.brow, t.dataset.rid); return true; }
   switch (t.dataset.act){
     case "bankPick": document.getElementById("bankIn").click(); return true;
@@ -1107,20 +1084,11 @@ function bankChange(t){
   if (t.id === "ledIn"){ const f = t.files && t.files[0]; t.value = ""; if (f) importLedgerList(f); return true; }
   if (t.id === "bookIn"){ const f = t.files && t.files[0]; t.value = ""; if (f) importTallyBook(f); return true; }
   if (t.dataset.bled){ if (!bankSetLedger(t.dataset.bled, t.value)) t.value = (bankRow(t.dataset.bled) || {}).ledger || ""; return true; }
-  if (t.hasAttribute("data-bankoptional")){ const co = CO(); co.bankOptional = t.checked; Store.saveCompany(co); return true; }
-  if (t.hasAttribute("data-bankautoapply")){ const co = CO(); co.bankAutoApply = t.checked; Store.saveCompany(co); return true; }
-  if (t.hasAttribute("data-bankauto")){ const co = CO(); co.bankAuto = t.checked; Store.saveCompany(co); render(); return true; }
-  if (t.dataset.bankacc){ bankSetAccLedger(t.dataset.bankacc, t.value); return true; }
-  if (t.dataset.bankled){ const co = CO(); co.bankLedgerNames = co.bankLedgerNames || {}; co.bankLedgerNames[t.dataset.bankled] = t.value; Store.saveCompany(co); suggestAll(b.rows, true); saveBank({rows: true}); render(); return true; }
   return false;
 }
 document.addEventListener("click", ev => {
-  const sa = ev.target.closest && ev.target.closest("[data-sugall]");
-  if (sa){ document.querySelectorAll("[data-sug]").forEach(x => { x.checked = sa.checked; }); return; }
   const rp = ev.target.closest && ev.target.closest("[data-reconpick]");
   if (rp && S.recon){ const i = +rp.dataset.reconpick; if (rp.checked) S.recon.pick.add(i); else S.recon.pick.delete(i); render(); return; }
-  const ov = ev.target.hasAttribute && ev.target.hasAttribute("data-bkoverlay");
-  if (ov && B()){ B().showSettings = false; render(); return; }
   if (!(ev.target.closest && ev.target.closest(".bk-menu"))) closeMenus();
 });
 document.addEventListener("keydown", ev => {
