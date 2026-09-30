@@ -2,6 +2,7 @@
 // draft. Was viewDetail() and its helpers (field, docWarnHtml, itemsHtml, partyHistHtml, ytdSourceHtml,
 // rereadButtons, viewGst) in src/js/19, 01 and 27. Every change goes through billSet…/billGst/… in src/js/27.
 import ReadBadge from "../parts/ReadBadge.jsx";
+import BillDoc from "../parts/BillDoc.jsx";
 
 const money_ = (n) => money(n);
 const isFree = (m) => /^(free (OCR|\(PDF)|Google OCR$)/.test(m);
@@ -80,15 +81,22 @@ function ReadBits({ e, ro }) {
 function Gst({ e, c, ro, snap }) {
   if (ro) {
     const s = snap || {};
-    if (!s.rcm && !s.blocked) return null;
+    if (!s.rcm && !s.blocked && !s.noItc) return null;
     return <section><h3>GST</h3><p className="note" style={{ margin: 0 }}>
       {s.rcm ? "Reverse charge: " + catLabel(RCM_CATS, s.rcm.cat) + " @ " + s.rcm.rate + "%, tax " + money_(s.rcm.tax) + ". " : ""}
-      {s.blocked ? "GST credit blocked: " + catLabel(BLOCK_CATS, s.blocked) + "." : ""}</p></section>;
+      {s.blocked ? "GST credit blocked: " + catLabel(BLOCK_CATS, s.blocked) + "." : ""}
+      {s.noItc ? (s.noItc === "unregistered" ? "No input credit: the client has no GSTIN." : "No input credit: billed to another GSTIN.") : ""}</p></section>;
   }
-  const gd = c.gd, r = c.rcmTax;
-  const bcat = c.blocked ? gd.block.cat : (e.itcBlock && e.itcBlock.cat) || (gd.blockSuggest && gd.blockSuggest.cat) || BLOCK_CATS[0].id;
+  const gd = c.gd, r = c.rcmTax, itc = c.itc || { ok: true, pos: {} }, pos = itc.pos || {};
+  const blocked175 = !!gd.block;
+  const bcat = blocked175 ? gd.block.cat : (e.itcBlock && e.itcBlock.cat) || (gd.blockSuggest && gd.blockSuggest.cat) || BLOCK_CATS[0].id;
+  const stateName = (k) => k + (typeof GST_STATES === "object" && GST_STATES[k] ? " " + GST_STATES[k] : "");
   return (
-    <section><h3>GST</h3><div className="gstgrid">
+    <section><h3>GST</h3>
+      <p className={itc.ok ? "note" : "bk-warn"} style={{ margin: "0 0 8px" }}>
+        {itc.ok ? "Input credit: allowed unless blocked below. " : itc.why === "unregistered" ? "No input credit: this client has no GSTIN, so the GST is added to the expense. " : "No input credit: the bill is billed to GSTIN " + e.x.buyerGstin + ", not this client's. The GST is added to the expense. "}
+        {pos.sup && pos.home ? "Place of supply: supplier in " + stateName(pos.sup) + ", client in " + stateName(pos.home) + ", so " + (pos.expect === "igst" ? "IGST" : "CGST + SGST") + " is expected" + (pos.charged && pos.charged !== pos.expect ? "; the bill charges " + (pos.charged === "igst" ? "IGST" : "CGST + SGST") + ". Check it." : ".") : ""}</p>
+      <div className="gstgrid">
       <div className="gstbox">
         <label className="chk"><input type="checkbox" checked={!!r} onChange={(ev) => billGst(e, "rcm", ev.target.checked)} /> <b>Reverse charge applies</b></label>
         {gd.rcmSuggest && <div className="suggest">Suggested: {catLabel(RCM_CATS, gd.rcmSuggest.cat)} <span className="note">({gd.rcmSuggest.why})</span>
@@ -100,14 +108,14 @@ function Gst({ e, c, ro, snap }) {
             <label className="f"><span>Rate %</span><input type="number" step="0.01" defaultValue={e.rcm.rate} key={e.id + ":" + e.rcm.cat} onChange={(ev) => billGst(e, "rcmRate", ev.target.value)} /></label>
             <label className="chk" style={{ alignSelf: "end" }}><input type="checkbox" checked={!!r.inter} onChange={(ev) => billGst(e, "rcmInter", ev.target.checked)} /> Inter-state (IGST)</label>
           </div>
-          <p className="note" style={{ margin: "6px 0 0" }}>Tax payable under reverse charge: <b>{money_(r.tax)}</b> ({r.inter ? "IGST " + money_(r.igst) : "CGST " + money_(r.cgst) + " + SGST " + money_(r.sgst)}){c.blocked ? ", with the input credit blocked" : ", and the same amount taken as input credit"}. Check the rate against the current notification.</p>
+          <p className="note" style={{ margin: "6px 0 0" }}>Tax payable under reverse charge: <b>{money_(r.tax)}</b> ({r.inter ? "IGST " + money_(r.igst) : "CGST " + money_(r.cgst) + " + SGST " + money_(r.sgst)}){c.blocked ? ", with no input credit" : ", and the same amount taken as input credit"}. Check the rate against the current notification.</p>
         </>}
       </div>
       <div className="gstbox">
-        <label className="chk"><input type="checkbox" checked={!!c.blocked} onChange={(ev) => billGst(e, "block", ev.target.checked)} /> <b>GST credit is blocked (section 17(5))</b></label>
-        {gd.blockSuggest && <div className="suggest">Possibly blocked: {catLabel(BLOCK_CATS, gd.blockSuggest.cat)}
+        <label className="chk"><input type="checkbox" checked={blocked175} onChange={(ev) => billGst(e, "block", ev.target.checked)} /> <b>GST credit is blocked (section 17(5))</b></label>
+        {gd.blockSuggest && <div className="suggest">Possibly blocked: {catLabel(BLOCK_CATS, gd.blockSuggest.cat)} <span className="note">(because {gd.blockSuggest.why})</span>
           <div className="row" style={{ marginTop: 6 }}><button className="btn small" onClick={() => doAct("blockAccept")}>Accept: block credit</button><button className="btn small" onClick={() => doAct("blockReject")}>Reject: credit allowed</button></div></div>}
-        {c.blocked && <>
+        {blocked175 && <>
           <label className="f" style={{ marginTop: 6 }}><span>Category</span><select value={bcat} onChange={(ev) => billGst(e, "blockCat", ev.target.value)}>
             {BLOCK_CATS.map((x) => <option key={x.id} value={x.id}>{x.label + " — " + x.sec}</option>)}</select></label>
           <p className="note" style={{ margin: "6px 0 0" }}>{gd.block.from === "client" ? "Blocked by this client's setting. Untick to claim credit on this bill. " : ""}GST of {money_(c.gstTotal + (r ? r.tax : 0))} is added to the expense instead of input credit.</p>
@@ -161,8 +169,10 @@ function Tds({ e, c, v, ro }) {
       <p className={"verdict " + (v.applicable ? "yes" : "nope")}>{v.applicable ? (v.skip ? "TDS applies: " + money_(v.tdsWould) + ", not booked" : "TDS applies: " + money_(v.tds)) : "No TDS on this invoice"}</p>
       {(v.tdsWould > 0 || e.tdsSkip || !v.never) && !ro ? (
         <div className="skipbox">
-          <label className="chk"><input type="checkbox" checked={v.tdsWould > 0 && !v.skip} onChange={(ev) => billBookTds(e, ev.target.checked)} /> <b>Deduct TDS on this bill</b></label>
-          {v.tdsWould <= 0 && !v.skip && <p className="note" style={{ margin: "4px 0 0" }}>Below the limits, so no TDS is due. Tick the box to deduct anyway (for example when you expect the yearly limit to be crossed).</p>}
+          {(v.tdsWould > 0 && !v.anyway) || v.skip
+            ? <label className="chk"><input type="checkbox" checked={v.tdsWould > 0 && !v.skip} onChange={(ev) => billBookTds(e, ev.target.checked)} /> <b>Deduct TDS on this bill</b></label>
+            : <label className="chk"><input type="checkbox" checked={v.tdsWould > 0} onChange={(ev) => billDeductAnyway(e, ev.target.checked)} /> <b>Deduct anyway (expected to cross the limit)</b></label>}
+          {v.tdsWould <= 0 && !v.skip && <p className="note" style={{ margin: "4px 0 0" }}>Below the limits, so no TDS is due and none is deducted. Tick “Deduct anyway” only if you expect this supplier to cross the yearly limit; your name and the reason are recorded.</p>}
           {v.skip && (v.skip.from === "bill"
             ? <label className="f" style={{ marginTop: 6 }}><span>Why not</span><select value={e.tdsSkip || ""} onChange={(ev) => billSetChoice(e, "tdsSkip", ev.target.value)}>
                 {Object.entries(SKIP_REASONS).map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select></label>
@@ -224,6 +234,9 @@ function Slip({ e, c, ro, snap }) {
         ))}</tbody>
         <tfoot><tr><td></td><td>Total</td><td className="n">{INR.format(r2(tot.Dr))}</td><td className="n">{INR.format(r2(tot.Cr))}</td></tr></tfoot>
       </table>
+      {!ro && !tallyCtx && <p className="note" style={{ margin: "8px 0 0" }}>The ledgers are not checked against Tally yet: this client's ledger list has not been read.{" "}
+        <button className="btn small" onClick={() => billReadLedgers()}>{bridgeLive(co) ? "Read the ledgers from Tally" : "Bring in the ledger list (from Tally)"}</button></p>}
+      {!ro && c.missing.some((m) => /ledger/i.test(m)) && <p className="bk-warn" style={{ margin: "8px 0 0" }}>Approve waits until every line has a Tally ledger: {c.missing.filter((m) => /ledger/i.test(m)).join("; ")}.</p>}
       {ro ? <div className="narr">{e.narration}</div>
         : <label className="f" style={{ marginTop: 10 }}><span>Narration</span><input type="text" data-fk="e:narration" value={e.narration || ""} onChange={(ev) => billSetText(e, "narration", ev.target.value)} /></label>}
       {e.status === "approved" && <div className="stampmark">{e.exportedAt ? "Sent to Tally" : "Approved"}<small>{fmtDate((e.exportedAt || e.approvedAt || "").slice(0, 10))}</small></div>}
@@ -246,8 +259,7 @@ export default function BillDetail({ id }) {
       ref: snap.ref, old: snap.old, pan: snap.pan, indHuf: !!snap.indHuf, fy: snap.fy || fyOf(x.invoiceDate), base: snap.base, tdsBase: snap.tdsBase, rate: snap.rate, rateNote: snap.rateNote || "",
       never: !!snap.never, flags: [], catchUp: 0 }
     : { applicable: c.applicable, tds: c.tds, tdsWould: c.tdsWould, skip: c.skip, why: c.why, meter: c.meter, ref: c.rule.ref, old: c.rule.old, pan: c.pan, indHuf: c.indHuf, fy: c.fy,
-      base: c.base, tdsBase: c.tdsBase, rate: c.rate, rateNote: c.rateNote, never: c.rule.basis === "never", flags: e.status === "draft" ? c.flags : [], catchUp: c.catchUp };
-  const prev = S.previews[e.id];
+      base: c.base, tdsBase: c.tdsBase, rate: c.rate, rateNote: c.rateNote, never: c.rule.basis === "never", flags: e.status === "draft" ? c.flags : [], catchUp: c.catchUp, anyway: c.anyway };
   const closed = typeof ClosedP === "object" && x.invoiceDate && e.status !== "rejected" && !e.exportedAt ? ClosedP.note(x.invoiceDate, !!(e.snapshot && e.snapshot.tds)) : [];
   const f = (label, k, o = {}) => <Field e={e} label={label} k={k} ro={ro} {...o} />;
   return (
@@ -274,8 +286,8 @@ export default function BillDetail({ id }) {
         {e.legibility ? " Claude noted: " + e.legibility : ""}</p></section>}
       <DocWarnings e={e} />
       {closed.length > 0 && <div className="banner cp-banner"><b>Closed period.</b> This bill is dated {fmtDate(x.invoiceDate)}: {closed.join("; ")}. It can still be posted; FinCom will ask first.</div>}
-      <section className={prev ? "withprev" : ""}>
-        {prev && <details className="prevbox" open><summary>Invoice image</summary><a href={prev} target="_blank" rel="noopener"><img className="preview" src={prev} alt="Uploaded invoice" /></a></details>}
+      <section className={e.fileName !== "Manual entry" ? "withprev" : ""}>
+        {e.fileName !== "Manual entry" && <BillDoc e={e} />}
         <div>
           <h3>Invoice details</h3>
           <div className="grid">
@@ -292,7 +304,6 @@ export default function BillDetail({ id }) {
           </div>
           <Items e={e} />
           <ReadBits e={e} ro={ro} />
-          {!prev && e.fileName !== "Manual entry" && !ro && e.readMode && <p className="note" style={{ margin: "6px 0 0" }}>The invoice image is shown only in the session it was uploaded.</p>}
         </div>
       </section>
       <Gst e={e} c={c} ro={ro} snap={snap} />

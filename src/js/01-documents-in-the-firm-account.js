@@ -655,6 +655,32 @@ function findParty(x, cid){
   const nm = norm(x.vendorName);
   return Object.values(parties).find(p => (pan && p.pan === pan) || (nm && norm(p.name) === nm)) || null;
 }
+// Suppliers on bills still waiting for review, not yet in the supplier list (review item 8): shown in Client setup as
+// "new, not yet approved" so PAN, payment type and amounts credited earlier can be filled before the first approval
+// (which is what makes the yearly limit right on that first bill).
+function pendingSuppliers(cid){
+  cid = cid || S.coId;
+  const out = new Map();
+  Object.values(D(cid).entries || {}).forEach(e => {
+    if (e.status !== "draft" || !e.x || !String(e.x.vendorName || "").trim() || findParty(e.x, cid)) return;
+    const pan = effectivePan(e.x), key = pan ? "pan:" + pan : "name:" + norm(e.x.vendorName);
+    const k = out.get(key) || {key, name: e.x.vendorName, pan: pan || "", gstin: e.x.vendorGstin || "", natureId: e.natureId || "", ledgerName: e.partyLedger || "", bills: 0, total: 0};
+    k.bills++; k.total = r2(k.total + num(e.x.total));
+    out.set(key, k);
+  });
+  return Array.from(out.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+// save a supplier from a waiting bill into the list (the same shape approval makes)
+function addPendingSupplier(key, cid){
+  cid = cid || S.coId;
+  const k = pendingSuppliers(cid).find(p => p.key === key);
+  if (!k) return null;
+  const id = k.pan ? "p-" + k.pan : "p-" + slug(k.name) + "-" + Date.now().toString(36);
+  const party = {id, name: k.name, pan: k.pan, gstin: k.gstin, ledgerName: k.ledgerName, natureDefault: k.natureId && k.natureId !== "none" ? k.natureId : "", expenseLedger: "", ldcRate: "", ldcValidTo: "", ytd: {}};
+  D(cid).parties[id] = party;
+  Store.saveParty(cid, party);
+  return party;
+}
 /* ---------- what this supplier was already credited in Tally this year ---------- */
 function fyStartEnd(fy){
   const m = String(fy).match(/(\d{4})/);
@@ -757,15 +783,27 @@ const RCM_CATS = [
   {id:"other", label:"Other reverse charge supply", rate:18, words:null}
 ];
 // Blocked credit under section 17(5). Each client decides: flag, always block, or credit allowed.
+// Matched on the bill's HSN/SAC codes and the expense ledger first; words only from the bill's own
+// description and item lines (never the whole page, whose footers name clubs, meals, memberships…).
+// codes: prefixes of HSN/SAC. words: tested on the description, items and the expense ledger.
+// alsoWords: a club has no code of its own (membership services 9995 include trade bodies), so words count even beside codes.
 const BLOCK_CATS = [
-  {id:"motor", label:"Motor vehicles, their repair, servicing and insurance", sec:"17(5)(a), (aa), (ab)", words:/(motor\s+(car|vehicle)|\bcar\b|four\s*wheeler|vehicle\s+(repair|servic|insurance|maintenance)|car\s+(wash|servic|repair|insurance)|\b8703\d*\b|motor\s+insurance)/i},
-  {id:"food", label:"Food, beverages and outdoor catering", sec:"17(5)(b)(i)", words:/(food|beverage|catering|caterer|restaurant|meals?\b|lunch|dinner|breakfast|snacks|refreshment|canteen|tiffin|sweets|\b9963\d*\b)/i},
-  {id:"beauty_health", label:"Beauty treatment, health services, cosmetic and plastic surgery", sec:"17(5)(b)(i)", words:/(beauty|salon|spa\b|cosmetic|plastic\s+surgery|health\s+check|hospital|medical\s+treatment|clinic)/i},
-  {id:"club", label:"Membership of a club, health and fitness centre", sec:"17(5)(b)(ii)", words:/(club\s+membership|membership\s+fee|\bgym\b|fitness\s+(centre|center)|health\s+club|golf)/i},
-  {id:"life_health_ins", label:"Life and health insurance", sec:"17(5)(b)(i)", words:/(life\s+insurance|health\s+insurance|mediclaim|group\s+(health|term)|term\s+insurance)/i},
-  {id:"travel", label:"Travel benefits to employees (leave or home travel)", sec:"17(5)(b)(iii)", words:/(leave\s+travel|\bltc\b|home\s+travel|holiday\s+package|tour\s+package|vacation)/i},
-  {id:"construction", label:"Works contract or goods and services for construction of immovable property", sec:"17(5)(c), (d)", words:/(works\s+contract|construction\s+of|civil\s+work|building\s+work|renovation|boundary\s+wall|flooring|\b9954\d*\b)/i},
-  {id:"gifts", label:"Gifts, free samples and personal consumption", sec:"17(5)(g), (h)", words:/(gift|hamper|diwali|festival\s+(gift|sweets)|free\s+sample|personal\s+use)/i}
+  {id:"motor", label:"Motor vehicles, their repair, servicing and insurance", sec:"17(5)(a), (aa), (ab)", codes:["8703", "997133"],
+    words:/(motor\s+(car|vehicle)|four\s*wheeler|vehicle\s+(repair|servic|insurance|maintenance|running)|car\s+(wash|servic|repair|insurance|maintenance)|motor\s+insurance)/i},
+  {id:"food", label:"Food, beverages and outdoor catering", sec:"17(5)(b)(i)", codes:["99633"],
+    words:/(food\s+and\s+beverages?|catering|caterer|restaurant|\bmeals?\b|\blunch\b|\bdinner\b|breakfast|snacks|refreshments?|canteen|tiffin)/i},
+  {id:"beauty_health", label:"Beauty treatment, health services, cosmetic and plastic surgery", sec:"17(5)(b)(i)", codes:["99931", "999721", "999722"],
+    words:/(beauty\s+(treatment|parlou?r)|\bsalon\b|\bspa\b|cosmetic|plastic\s+surgery|health\s+check|medical\s+treatment)/i},
+  {id:"club", label:"Membership of a club, health and fitness centre", sec:"17(5)(b)(ii)", codes:["999723"], alsoWords:true,
+    words:/(club\s+membership|membership\s+of\s+(a\s+|the\s+)?club|\b(golf|country|health|sports?|recreation)\s+club\b|\bgym(nasium)?\b|fitness\s+(centre|center|club))/i},
+  {id:"life_health_ins", label:"Life and health insurance", sec:"17(5)(b)(i)", codes:["997131", "997132"],
+    words:/(life\s+insurance|health\s+insurance|mediclaim|group\s+(health|term|mediclaim)|term\s+insurance)/i},
+  {id:"travel", label:"Travel benefits to employees (leave or home travel)", sec:"17(5)(b)(iii)", codes:["998552"],
+    words:/(leave\s+travel|\bltc\b|home\s+travel|holiday\s+package|tour\s+package)/i},
+  {id:"construction", label:"Works contract or goods and services for construction of immovable property", sec:"17(5)(c), (d)", codes:["9954"],
+    words:/(works\s+contract|construction\s+of|civil\s+work|building\s+work|boundary\s+wall)/i},
+  {id:"gifts", label:"Gifts, free samples and personal consumption", sec:"17(5)(g), (h)", codes:[],
+    words:/(\bgifts?\b|\bhampers?\b|diwali\s+(gift|sweets)|festival\s+(gift|sweets)|free\s+samples?|personal\s+use)/i}
 ];
 function rcmLedger(co, k){ return (co.gst && co.gst[k]) || RCM_LEDGER_DEFAULTS[k]; }
 function blockRule(co, id){ return (co.gstBlock && co.gstBlock[id]) || "flag"; }
@@ -785,12 +823,26 @@ function suggestRcm(e, co){
   }
   return says ? {cat: "other", why: "the bill says tax is payable under reverse charge"} : null;
 }
+// HSN/SAC codes on the bill's item lines
+function billCodes(e){ return Array.from(new Set(((e.x && e.x.items) || []).map(i => String(i.hsn || "").replace(/\D/g, "")).filter(c => c.length >= 4))); }
+// Which 17(5) category the bill looks like, and what made it look so: {cat, rule, why, by, hit}.
+// A bill with codes is judged by its codes (and its ledger); words count only where a category has no code
+// of its own (club, gifts) or the bill carries no code at all.
 function suggestBlock(e, co){
-  const t = gstText(e);
+  const codes = billCodes(e);
+  const led = String(e.expenseLedger || "");
+  const words = [e.x.description].concat(((e.x && e.x.items) || []).map(i => i.desc)).filter(Boolean).join(" \n ");
+  const say = w => "\u201c" + String(w).trim() + "\u201d";
   for (const c of BLOCK_CATS){
     const rule = blockRule(co, c.id);
-    if (rule === "allow" || !c.words.test(t)) continue;
-    return {cat: c.id, rule, why: "looks like " + c.label.toLowerCase()};
+    if (rule === "allow") continue;
+    const code = codes.find(k => c.codes.some(p => k.startsWith(p)));
+    if (code) return {cat: c.id, rule, by: "code", hit: code, why: "HSN/SAC " + code + " on the bill is " + c.label.toLowerCase()};
+    const ml = led && led.match(c.words);
+    if (ml) return {cat: c.id, rule, by: "ledger", hit: ml[0], why: "the expense ledger " + say(led) + " has the words " + say(ml[0])};
+    if (codes.length && c.codes.length && !c.alsoWords) continue;
+    const mw = words && words.match(c.words);
+    if (mw) return {cat: c.id, rule, by: "words", hit: mw[0], why: "the bill's description has the words " + say(mw[0])};
   }
   return null;
 }
@@ -842,6 +894,29 @@ function tdsSkipOf(e, co, party){
 function skipText(skip){
   return (SKIP_REASONS[skip.reason] || skip.reason) + (skip.from === "supplier" ? " (set for this supplier)" : skip.from === "client" ? " (set for this client)" : "");
 }
+// is this client's Tally ledger list loaded (so a ledger can be checked against it)?
+function ledgerListFor(cid){
+  if (typeof hasLedgerList !== "function" || typeof B !== "function") return false;
+  const b = B();
+  return !!(b && b.cid === cid && !b.loading && hasLedgerList());
+}
+// Can this client take input credit of the GST on this bill? (review item 4)
+// No: the client has no GSTIN (unregistered), or the bill is billed to another GSTIN. The GST then goes to the cost.
+// Also the place of supply: a supplier in the client's state charges CGST + SGST, one in another state IGST.
+function itcCheck(e, co){
+  const x = e.x || {}, notes = [];
+  const gst = num(x.cgst) + num(x.sgst) + num(x.igst);
+  const cli = String(co.gstin || "").toUpperCase(), billedTo = String(x.buyerGstin || "").toUpperCase();
+  const sup = gstinValid(x.vendorGstin) ? String(x.vendorGstin).slice(0, 2) : "";
+  const home = GSTIN_RE.test(cli) ? cli.slice(0, 2) : "";
+  const pos = {sup, home, expect: sup && home ? (sup === home ? "cgst" : "igst") : "", charged: num(x.igst) ? "igst" : (num(x.cgst) || num(x.sgst)) ? "cgst" : ""};
+  let ok = true, why = "";
+  if (!cli){ ok = false; why = "unregistered"; if (gst > 0) notes.push({lvl:"", t:"This client has no GSTIN, so no input credit: the GST of " + money(gst) + " is added to the expense. Add the GSTIN in Client setup if the client is registered."}); }
+  else if (billedTo && billedTo !== cli){ ok = false; why = "other-gstin"; if (gst > 0) notes.push({lvl:"hi", t:"No input credit: the bill is billed to GSTIN " + billedTo + ", not this client's " + cli + ". The GST of " + money(gst) + " is added to the expense. Ask the supplier for a bill on the right GSTIN."}); }
+  if (ok && gst > 0 && pos.expect && pos.charged && pos.expect !== pos.charged)
+    notes.push({lvl:"hi", t:pos.expect === "cgst" ? "The supplier is in the client's state (" + sup + "), so CGST + SGST are expected, but the bill charges IGST. Check the place of supply." : "The supplier is in another state (" + sup + ", client " + home + "), so IGST is expected, but the bill charges CGST + SGST. Check the place of supply."});
+  return {ok, why, pos, notes};
+}
 function compute(e, cid){
   cid = cid || S.coId;
   const co = CO(cid), x = e.x, party = findParty(x, cid), entries = D(cid).entries;
@@ -868,7 +943,8 @@ function compute(e, cid){
   }
 
   const after = ytd.credited + base;
-  const forceAlways = !!e.tdsAlways;
+  // "Deduct anyway" counts only when a person ticked it on this bill (review item 3: an unrecorded tick on a draft is dropped)
+  const forceAlways = !!e.tdsAlways && (e.status !== "draft" || !!e.tdsAlwaysBy);
   const pendingCatch = Math.max(0, r2(ytd.credited - ytd.tdsBase));
   switch (rule.basis){
     case "never":
@@ -914,9 +990,10 @@ function compute(e, cid){
       } else why.push("Purchases this year of " + money0(after) + " are within " + money0(rule.limit) + ".");
       break;
   }
-  if (!applicable && forceAlways && rule.basis !== "never"){
+  const anyway = !applicable && forceAlways && rule.basis !== "never";
+  if (anyway){
     applicable = true; tdsBase = base;
-    why.push("Deducted on your instruction, although this bill is below the limits.");
+    why.push("Deducted anyway on your instruction" + (e.tdsAlwaysBy ? " (" + e.tdsAlwaysBy + (e.tdsAlwaysAt ? ", " + fmtDate(String(e.tdsAlwaysAt).slice(0, 10)) : "") + ")" : "") + ", although this bill is below the limits" + (e.tdsAlwaysWhy ? ": " + e.tdsAlwaysWhy : "") + ".");
   }
   if (applicable && rule.basis !== "excess") why.push("TDS is worked on the value before GST, as GST is shown separately.");
 
@@ -971,11 +1048,13 @@ function compute(e, cid){
   // GST: reverse charge and blocked credit (your choices; suggestions never block approval)
   const gd = gstDecision(e, co);
   const rcmTax = rcmTaxOf(e, co, base);
-  const blocked = !!gd.block;
+  const itc = itcCheck(e, co);
+  itc.notes.forEach(n => flags.push(n));
+  const blocked = !!gd.block || !itc.ok;
   if (gd.rcmSuggest) flags.push({lvl:"info", t:"Reverse charge may apply: " + catLabel(RCM_CATS, gd.rcmSuggest.cat) + " (" + gd.rcmSuggest.why + "). Apply it or dismiss it in the GST section."});
-  if (gd.blockSuggest) flags.push({lvl:"info", t:"GST credit may be blocked under section 17(5): " + catLabel(BLOCK_CATS, gd.blockSuggest.cat) + ". Accept or reject it in the GST section."});
+  if (gd.blockSuggest) flags.push({lvl:"info", t:"GST credit may be blocked under section 17(5): " + catLabel(BLOCK_CATS, gd.blockSuggest.cat) + " (" + gd.blockSuggest.why + "). Accept or reject it in the GST section."});
   if (rcmTax && gstTotal > 0) flags.push({lvl:"", t:"Reverse charge is on, but the supplier also charged GST on the bill. Check the bill."});
-  if (blocked) flags.push({lvl:"info", t:"GST credit blocked (" + catLabel(BLOCK_CATS, gd.block.cat) + (gd.block.from === "client" ? ", client setting" : "") + "): the GST is added to the expense."});
+  if (gd.block) flags.push({lvl:"info", t:"GST credit blocked (" + catLabel(BLOCK_CATS, gd.block.cat) + (gd.block.from === "client" ? ", client setting" : "") + "): the GST is added to the expense."});
 
   const lines = [];
   const blockedGst = blocked ? r2(gstTotal + (rcmTax ? rcmTax.tax : 0)) : 0;
@@ -1014,8 +1093,17 @@ function compute(e, cid){
   if (Math.abs(dr - cr) >= 0.01) missing.push("a balanced entry");
   if (dup && dup.strong) missing.push("confirmation that this is not a duplicate");
   if (e.confirmType && e.status === "draft" && !(party && party.natureDefault) && !skip) missing.push("your confirmation of the payment type");
+  // every line of the Tally entry needs a Tally ledger (review item 2): a blank one always stops approval;
+  // with the client's ledger list read from Tally, a ledger Tally does not have stops it too
+  const ROLE_NAME = {gst:"GST", "rcm-in":"reverse charge input", "rcm-out":"reverse charge payable", roundoff:"round off", tds:"TDS"};
+  lines.forEach(l => { if (!l.ledger && ROLE_NAME[l.role]){ const w = "the " + ROLE_NAME[l.role] + " ledger (Client setup)"; if (!missing.includes(w) && !(l.role === "tds" && missing.includes("TDS ledger"))) missing.push(w); } });
+  const list = ledgerListFor(cid);
+  if (list){
+    const notIn = Array.from(new Set(lines.filter(l => l.ledger && !exactLedger(l.ledger)).map(l => l.ledger)));
+    notIn.forEach(n => missing.push("\u201c" + n + "\u201d is not a ledger in Tally: pick one or create it"));
+  } else if (e.status === "draft") flags.push({lvl:"", t:"The ledgers are not checked against Tally: this client's ledger list has not been read from Tally yet. Read it (Tally ledgers) so each line can be matched before approval."});
 
-  return {rule, party, base, total, gstTotal, fy, ytd, pan, panOk, indHuf, applicable, rate, rateNote, tdsBase, catchUp, tds, tdsWould, skip, gd, rcmTax, blocked, why, flags, meter, lines, dr, cr, missing, tdsLedger, dup};
+  return {rule, party, base, total, gstTotal, fy, ytd, pan, panOk, indHuf, applicable, rate, rateNote, tdsBase, catchUp, tds, tdsWould, skip, anyway, gd, rcmTax, blocked, itc, why, flags, meter, lines, dr, cr, missing, tdsLedger, dup};
 }
 
 /* ------------------------------------------------------------------ */
@@ -3324,7 +3412,7 @@ function approve(e){
   const k = invKey(e.x), co = CO(cid);
   if (k){ co.keys = co.keys || {}; co.keys[k] = e.approvedAt.slice(0, 10); pruneIndex(co.keys, 3000); Store.saveCompany(co); }
   e.applied = {partyId:party.id, fy:c.fy, natureId:c.rule.id, credited:c.base, tdsBase:addBase};
-  e.snapshot = {lines:c.lines, tds:c.tds, tdsWould:c.tdsWould, skip:c.skip, rcm:c.rcmTax ? Object.assign({cat:e.rcm.cat}, c.rcmTax) : null, blocked:c.blocked ? c.gd.block.cat : null, rate:c.rate, tdsBase:c.tdsBase, base:c.base, total:c.total, pan:c.pan, ref:c.rule.ref, old:c.rule.old, label:c.rule.label,
+  e.snapshot = {lines:c.lines, tds:c.tds, tdsWould:c.tdsWould, skip:c.skip, rcm:c.rcmTax ? Object.assign({cat:e.rcm.cat}, c.rcmTax) : null, blocked:c.gd.block ? c.gd.block.cat : null, noItc:c.itc && !c.itc.ok ? c.itc.why : null, rate:c.rate, tdsBase:c.tdsBase, base:c.base, total:c.total, pan:c.pan, ref:c.rule.ref, old:c.rule.old, label:c.rule.label,
     applicable:c.applicable, catchUp:e.includeCatchUp ? c.catchUp : 0, why:c.why, meter:c.meter, fy:c.fy, rateNote:c.rateNote, indHuf:c.indHuf, never:c.rule.basis === "never"};
   Store.saveParty(cid, party);
   Store.saveEntry(cid, e);
@@ -3475,7 +3563,7 @@ function envelope(list, co){
 function csvCell(v){ const s = String(v == null ? "" : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
 function registerCsv(list, co){
   const head = ["Client","Invoice date","Invoice no","Deductee","PAN","GSTIN","Payment type","Section (2025 Act)","Old section","Taxable value","Invoice total","TDS base","Rate %","TDS booked","TDS that applies","Reason TDS not booked","Reverse charge","RCM tax","GST credit","Party ledger","Expense ledger","Approved on","Sent to Tally"];
-  const rows = list.map(e => { const s = e.snapshot || {}; return [co.name, e.x.invoiceDate, e.x.invoiceNo, e.x.vendorName, s.pan, e.x.vendorGstin, s.label, s.ref, s.old, s.base, s.total, s.applicable ? s.tdsBase : 0, s.rate, s.tds, s.tdsWould != null ? s.tdsWould : s.tds, s.skip ? skipText(s.skip) : "", s.rcm ? catLabel(RCM_CATS, s.rcm.cat) + " @ " + s.rcm.rate + "%" : "No", s.rcm ? s.rcm.tax : 0, s.blocked ? "Blocked: " + catLabel(BLOCK_CATS, s.blocked) : "Claimed", e.partyLedger, e.expenseLedger, (e.approvedAt || "").slice(0, 10), e.exportedAt ? e.exportedAt.slice(0, 10) : "No"]; });
+  const rows = list.map(e => { const s = e.snapshot || {}; return [co.name, e.x.invoiceDate, e.x.invoiceNo, e.x.vendorName, s.pan, e.x.vendorGstin, s.label, s.ref, s.old, s.base, s.total, s.applicable ? s.tdsBase : 0, s.rate, s.tds, s.tdsWould != null ? s.tdsWould : s.tds, s.skip ? skipText(s.skip) : "", s.rcm ? catLabel(RCM_CATS, s.rcm.cat) + " @ " + s.rcm.rate + "%" : "No", s.rcm ? s.rcm.tax : 0, s.blocked ? "Blocked: " + catLabel(BLOCK_CATS, s.blocked) : s.noItc ? (s.noItc === "unregistered" ? "No credit: client not registered" : "No credit: billed to another GSTIN") : "Claimed", e.partyLedger, e.expenseLedger, (e.approvedAt || "").slice(0, 10), e.exportedAt ? e.exportedAt.slice(0, 10) : "No"]; });
   return "\uFEFF" + [head].concat(rows).map(r => r.map(csvCell).join(",")).join("\r\n");
 }
 async function saveFile(filename, data){

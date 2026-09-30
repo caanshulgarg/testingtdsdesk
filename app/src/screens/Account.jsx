@@ -58,7 +58,8 @@ export function FirmAccount() {
     {mi.admin && !aal2 && <p className="bk-warn" style={{ margin: "6px 0" }}>Platform administration is locked until you give the code from your phone. <Act act="mfaAdmin" className="btn small primary">Unlock administration</Act></p>}
     {S.lastSignIn && <p className="note" style={{ margin: "0 0 6px" }}>{"Your last sign-in: " + new Date(S.lastSignIn.at).toLocaleString("en-IN") + ", " + S.lastSignIn.device + "."}</p>}
     <label className="f" style={{ maxWidth: 320 }}><span>Sign out after this many minutes without use</span><select aria-label="Sign out after" value={idle} onChange={(ev) => idleSet(ev.target.value)}>{[10, 15, 30, 60, 120].map((n) => <option key={n} value={n}>{n + " minutes"}</option>)}</select></label>
-    {(st.members || []).length > 0 && <><H3 top={14}>People in the firm</H3><table className="data"><thead><tr><th>Name</th><th>Email</th><th>Role</th></tr></thead><tbody>
+    {/* the people table with its actions (New password, Reset two-step, Switch off) is drawn below by PeopleEtc; this plain list only stands in until that loads */}
+    {!S.account && (st.members || []).length > 0 && <><H3 top={14}>People in the firm</H3><table className="data"><thead><tr><th>Name</th><th>Email</th><th>Role</th></tr></thead><tbody>
       {st.members.map((m) => <tr key={m.email}><td>{m.name || "—"}</td><td>{m.email}</td><td>{m.role + (m.active ? "" : " (off)")}</td></tr>)}</tbody></table></>}
   </div>;
 }

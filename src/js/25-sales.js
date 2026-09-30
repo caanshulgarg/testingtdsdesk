@@ -6,7 +6,22 @@ const GST_STATES = {"01":"Jammu and Kashmir","02":"Himachal Pradesh","03":"Punja
   "19":"West Bengal","20":"Jharkhand","21":"Odisha","22":"Chhattisgarh","23":"Madhya Pradesh","24":"Gujarat","26":"Dadra and Nagar Haveli and Daman and Diu","27":"Maharashtra",
   "29":"Karnataka","30":"Goa","31":"Lakshadweep","32":"Kerala","33":"Tamil Nadu","34":"Puducherry","35":"Andaman and Nicobar Islands","36":"Telangana","37":"Andhra Pradesh",
   "38":"Ladakh","97":"Other Territory","96":"Other Country"};
+// the states in code order (01 … 38, then 96, 97): an object's number-like keys ("10") come before "01" in JavaScript
+function gstStateList(){ return Object.keys(GST_STATES).sort((a, b) => num(a) - num(b)).map(c => [c, GST_STATES[c]]); }
 const SALES_RATES = [0, 0.25, 3, 5, 12, 18, 28, 40];
+// From 22-09-2025 (GST rate rationalisation) most goods and services moved from 12% to 5% and from 28% to 18%;
+// 12% and 28% remain only for a few items. Kept in the list, with a warning on later invoices (review item 10).
+const GST_RATE_CHANGE = "2025-09-22";
+function salesRateWarnings(x){
+  const out = [];
+  if (!x || !x.date || x.date < GST_RATE_CHANGE) return out;
+  (x.items || []).forEach((it, i) => {
+    const r = num(it.gstRate);
+    if ((r === 12 || r === 28) && (String(it.desc || "").trim() || num(it.rate)))
+      out.push("Item " + (i + 1) + (it.hsn ? " (HSN/SAC " + it.hsn + ")" : "") + ": " + r + "% applies after 22-09-2025 only to a few items; most moved to " + (r === 12 ? "5%" : "18%") + ". Check the rate for this HSN/SAC.");
+  });
+  return out;
+}
 const SALES_UNITS = ["Nos", "Pcs", "Kg", "Gm", "Ltr", "Mtr", "Sq Ft", "Box", "Set", "Hrs", "Days", "Month", "Job"];
 function stateOfGstin(g){ return /^\d{2}[A-Z]/.test(String(g || "")) ? String(g).slice(0, 2) : ""; }
 function stateCodeFrom(text){

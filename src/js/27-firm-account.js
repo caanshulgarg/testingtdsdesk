@@ -539,12 +539,26 @@ function billSetChoice(e, key, value){
   if (key === "expenseLedger"){ e.expenseUserSet = true; e.expenseFrom = ""; }
   Store.saveEntry(cid, e); refreshStats(cid); render();
 }
+// who is signed in, for the audit trail
+function whoAmI(){ return (typeof Cloud === "object" && Cloud.st && Cloud.st.email) || "this computer"; }
+// "Deduct anyway (expected to cross the limit)": a bill below the limits, TDS deducted on a person's say-so.
+// Who ticked it and why is kept on the bill and in the audit trail (review item 3).
+function billDeductAnyway(e, on, why){
+  if (!e || e.status !== "draft") return;
+  const cid = S.coId;
+  if (on){
+    e.tdsAlways = true; e.tdsSkip = null; e.tdsForce = true;
+    e.tdsAlwaysBy = whoAmI(); e.tdsAlwaysAt = new Date().toISOString(); e.tdsAlwaysWhy = why || "expected to cross the yearly limit";
+  } else { e.tdsAlways = false; e.tdsForce = false; e.tdsAlwaysBy = ""; e.tdsAlwaysAt = ""; e.tdsAlwaysWhy = ""; }
+  auditEvent(on ? "tds_deduct_anyway" : "tds_deduct_anyway_off", (e.x.vendorName || "") + " bill " + (e.x.invoiceNo || e.id) + (on ? ": " + e.tdsAlwaysWhy : ""), cid);
+  Store.saveEntry(cid, e); refreshStats(cid); render();
+}
 // "Deduct TDS on this bill"
 function billBookTds(e, on){
   if (!e || e.status !== "draft") return;
   const cid = S.coId, c0 = compute(e, cid);
-  if (on && c0.tdsWould <= 0){ e.tdsAlways = true; e.tdsSkip = null; e.tdsForce = true; Store.saveEntry(cid, e); render(); return; }
-  if (!on && e.tdsAlways && c0.tdsWould > 0 && !c0.skip){ e.tdsAlways = false; Store.saveEntry(cid, e); render(); return; }
+  if (on && c0.tdsWould <= 0) return billDeductAnyway(e, true);
+  if (!on && c0.anyway) return billDeductAnyway(e, false);
   if (on){
     // book it: clear a bill-level choice, or override a supplier/client setting for this bill
     if (e.tdsSkip) e.tdsSkip = null;
@@ -570,6 +584,17 @@ function billGst(e, k, v){
   if (k === "block"){ const sg = suggestBlock(e, co0); e.itcBlock = {on: v, cat: (e.itcBlock && e.itcBlock.cat) || (sg && sg.cat) || BLOCK_CATS[0].id}; if (!v) e.blockDismissed = true; }
   if (k === "blockCat") e.itcBlock = {on:true, cat:v};
   Store.saveEntry(cid, e); refreshStats(cid); render();
+}
+// the client's Tally ledger list, so a bill's entry can be checked line by line before approval (review item 2):
+// straight from Tally when the bridge has the company open, else from a ledger list file exported from Tally
+async function billReadLedgers(){
+  const cid = S.coId, co = CO(cid);
+  if (!S.bank || S.bank.cid !== cid || S.bank.loading) await loadBank(cid);
+  if (bridgeLive(co)){ await syncLedgersFromTally(false); render(); return; }
+  const inp = document.createElement("input");
+  inp.type = "file"; inp.accept = ".xlsx,.xls,.csv,.xml";
+  inp.onchange = async () => { const f = inp.files && inp.files[0]; if (f && S.bank && S.bank.cid === cid){ await importLedgerList(f); render(); } };
+  inp.click();
 }
 // "Booked before for this supplier": use that expense ledger
 function billUseExpense(e, name){ if (e && e.status === "draft"){ e.expenseLedger = name; e.expenseUserSet = true; e.expenseFrom = ""; Store.saveEntry(S.coId, e); render(); } }
@@ -599,8 +624,8 @@ function goClient(to){
     if (to === "dash"){ S.tab = "dash"; S.step = null; render(); window.scrollTo(0, 0); return; }
     if (to === "inbox"){ S.tab = "clientInbox"; S.step = null; render(); window.scrollTo(0, 0); return; }
     if (to === "txn"){ S.tab = "txn"; S.step = null; render(); window.scrollTo(0, 0); return; }
-    if (to === "books"){ S.tab = "books"; S.step = null; if (["reports", "lookup", "letters"].includes(S.booksTab)) S.booksTab = S.booksLast || "import"; render(); window.scrollTo(0, 0); return; }
-    if (to.indexOf("books:") === 0){ if (!["reports", "lookup", "letters"].includes(S.booksTab)) S.booksLast = S.booksTab; S.tab = "books"; S.booksTab = to.slice(6); S.step = null; render(); window.scrollTo(0, 0); if (S.booksTab === "lookup") setTimeout(() => { const a = document.getElementById("lkAsk"); if (a && !(S.lk && S.lk.res)) a.focus(); }, 60); return; }
+    if (to === "books"){ S.tab = "books"; S.step = null; if (BOOKS_OWN_PAGES.includes(S.booksTab)) S.booksTab = S.booksLast || "import"; render(); window.scrollTo(0, 0); return; }
+    if (to.indexOf("books:") === 0){ if (!BOOKS_OWN_PAGES.includes(S.booksTab)) S.booksLast = S.booksTab; S.tab = "books"; S.booksTab = to.slice(6); S.step = null; render(); window.scrollTo(0, 0); if (S.booksTab === "lookup") setTimeout(() => { const a = document.getElementById("lkAsk"); if (a && !(S.lk && S.lk.res)) a.focus(); }, 60); return; }
     if (to === "post"){ goStep("post", "bills"); return; }
     if (to === "bank" && (!S.bank || S.bank.cid !== cid)) loadBank(cid).then(() => render());
     goStep("review", to === "bills" ? "bills" : to);
@@ -721,6 +746,8 @@ function printTable(id, title){
   printView(title || co.name, "<h1>" + esc(co.name) + '</h1><p class="note">' + esc(title || "") + " · printed " + fmtDate(new Date().toISOString().slice(0, 10)) + "</p>" + (el ? el.outerHTML : ""));
 }
 // TDS & GST from the books (app/src/screens/Books.jsx): a tab of the books; in TDS, a year, a quarter's return
+// parts of the books with a sidebar entry of their own, outside "TDS & GST" (MIS, Accounts and Audit moved out: review item 7)
+const BOOKS_OWN_PAGES = ["reports", "lookup", "letters", "mis", "fs", "audit"];
 function booksTabGo(tab, gstPart){ S.booksTab = tab; if (gstPart) S.gstPart = gstPart; render(); }
 function tdsNav(view){ S.tdsView = view; render(); window.scrollTo(0, 0); }
 function tdsGo(fy, q, form){
@@ -734,9 +761,15 @@ function tdsSetFy(fy){ S.tdsFy = fy; if (S.tdsView === "return") S.tdsView = "ye
 function revPick(id, on){ S.revSel = S.revSel || new Set(); if (on) S.revSel.add(id); else S.revSel.delete(id); render(); }
 function revPickAll(on){ S.revSel = new Set(on ? revFiltered().map(r => r.e.id) : []); render(); }   // only the rows the filter shows
 function revOpen(id){ S.selected = id; S.drawerOpen = true; render(); }
-function revApproveOne(id){ const e = D().entries[id]; if (e){ approve(e); refreshStats(S.coId); toast("Approved."); render(); } }
+function revApproveOne(id){ const e = D().entries[id]; if (e){ approve(e); refreshStats(S.coId); if (e.status === "approved") toast("Approved."); render(); } }
 function revNature(id, v){ const e = D().entries[id]; if (e){ e.natureId = v; e.confirmType = false; Store.saveEntry(S.coId, e); render(); } }
-function revTds(id, on){ const e = D().entries[id]; if (e){ revSet(e, on); render(); } }
+function revTds(id, on){
+  const e = D().entries[id]; if (!e) return;
+  // one bill ticked below the limits: "Deduct anyway", recorded with who and why
+  if (on && compute(e).tdsWould <= 0) return billDeductAnyway(e, true);
+  if (!on && compute(e).anyway) return billDeductAnyway(e, false);
+  revSet(e, on); render();
+}
 // the firm account in Settings (app/src/screens/Account.jsx): a person's password, two-step or switching on and off; a
 // backup downloaded; a drop key switched off; the platform page's buttons (they read its boxes by id) and a firm's plan
 function acctPerson(what, email){
@@ -1381,6 +1414,7 @@ function doAct(act, t){
       S.billCheck = null; refreshStats(S.coId); toast(ids.length + " bills are waiting to be posted again."); render(); break;
     }
     case "bridgeDiag": Bridge.diagnose().then(() => Bridge.refresh()).then(() => render()); break;
+    case "goTcloud": S.settingsTab = "tcloud"; S.firmMenu = false; S.tallyPanel = false; closeSwitcher(); S.view = "home"; S.homeTab = "rules"; S.arm = null; render(); window.scrollTo(0, 0); break;
     case "openSettings": S.settingsTab = S.settingsTab || null; S.firmMenu = false; S.tallyPanel = false; closeSwitcher(); S.view = "home"; S.homeTab = "rules"; S.arm = null; render(); window.scrollTo(0, 0); break;
     case "dlStandalone": downloadStandalone(); break;
     case "goReading": closeSwitcher(); S.view = "home"; S.homeTab = "rules"; S.settingsTab = "reading"; render(); { const r = document.getElementById("readingPane"); if (r && r.scrollIntoView) r.scrollIntoView(); } break;

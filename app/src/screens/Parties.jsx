@@ -52,6 +52,19 @@ function Party({ p, fy }) {
   );
 }
 
+// suppliers on bills waiting for review: fill their PAN, type and earlier amounts before the first approval
+function PendingSuppliers() {
+  const list = pendingSuppliers();
+  if (!list.length) return null;
+  return <div className="tblwrap" style={{ marginTop: 14 }}><table className="data">
+    <thead><tr><th>New supplier, not yet approved</th><th>PAN</th><th>Payment type on the bill</th><th className="n">Bills waiting</th><th className="n">Total</th><th></th></tr></thead>
+    <tbody>{list.map((k) => <tr key={k.key}>
+      <td>{k.name} <span className="tag warn">new</span></td><td>{k.pan || "—"}</td><td>{k.natureId && k.natureId !== "none" ? ruleOf(k.natureId).label : "—"}</td>
+      <td className="n">{k.bills}</td><td className="n">{money0(k.total)}</td>
+      <td><button className="linkbtn" onClick={() => { const p = addPendingSupplier(k.key); if (p) { S.partySel = p.id; render(); } }}>Save and fill in</button></td></tr>)}</tbody>
+  </table></div>;
+}
+
 export default function Parties() {
   const parties = D().parties, ps = Object.values(parties).sort((a, b) => a.name.localeCompare(b.name)), fy = S.partyFy;
   const fys = Array.from(new Set([fyOf(null)].concat(...ps.map((p) => Object.keys(p.ytd || {}))))).sort().reverse();
@@ -65,7 +78,8 @@ export default function Parties() {
         <button className="btn" onClick={() => doAct("addParty")}>Add supplier</button>
       </div>
     </div>
-    {!ps.length ? <div className="pane"><p className="empty" style={{ padding: 0 }}>No suppliers yet. They are added when you approve a bill, or add one now.</p></div> : (
+    <PendingSuppliers />
+    {!ps.length ? <div className="pane"><p className="empty" style={{ padding: 0 }}>No suppliers saved yet. They are added when you approve a bill, or add one now.</p></div> : (
       <div className="tblwrap" style={{ marginTop: 14 }}><table className="data">
         <thead><tr><th>Supplier</th><th>PAN</th><th>Usual payment type</th><th className="n">Credited {fy}</th><th className="n">TDS base {fy}</th><th></th></tr></thead>
         <tbody>{ps.map((q) => {

@@ -17,8 +17,17 @@ with sync_playwright() as p:
       return openCompany(c.id).then(() => { S.tab = "books"; S.booksTab = "tds"; S.step = null; render(); }); }""")
     pg.wait_for_timeout(1500)
     app = lambda: pg.inner_text("#app")
-    ok(pg.locator('#app nav[aria-label="Books"] button').count() == 7, "the books' seven tabs")
-    ok("Bring the day book in first" in app(), "no day book and no salary: says what to bring in")
+    ok(pg.locator('#app nav[aria-label="Books"] button').count() == 4, "TDS & GST has four tabs (MIS, Accounts and Audit have their own pages)")
+    ok("TDS is worked out from the day book" in app() and pg.locator('#app button:has-text("Read the books from Tally")').count() == 1 and pg.locator('#app button:has-text("Import salary for 24Q")').count() == 1,
+       "no day book and no salary: the TDS tab says what to bring in, with a button for each")
+    for t, say in [["Tally ledgers", "The Tally ledgers come from the client's books"]]:
+        pg.click('#app nav[aria-label="Books"] button:has-text("%s")' % t); pg.wait_for_timeout(400)
+        ok(say in app() and "Salary for 24Q" not in app(), "%s, empty: its own message, not the TDS one" % t)
+    for side, say in [["MIS", "MIS is worked out from the day book"], ["Accounts", "The accounts (balance sheet"], ["Audit", "The audit checks run over the day book"]]:
+        pg.click('#side button:has-text("%s")' % side); pg.wait_for_timeout(400)
+        ok(pg.evaluate("booksTab()") == {"MIS": "mis", "Accounts": "fs", "Audit": "audit"}[side] and say in app() and pg.locator('#app nav[aria-label="Books"]').count() == 0,
+           "%s: a page of its own in the sidebar, with its own empty message" % side)
+    pg.evaluate("booksTabGo('tds')"); pg.wait_for_timeout(400)
     pg.click('#app nav[aria-label="Books"] button:has-text("From Tally")'); pg.wait_for_timeout(500)
     ok(pg.evaluate("booksTab()") == "import" and pg.get_attribute('#app nav[aria-label="Books"] button:has-text("From Tally")', "aria-selected") == "true", "From Tally tab")
     # a salary sheet for 2026-27, two employees, two quarters
@@ -39,9 +48,12 @@ with sync_playwright() as p:
     ok(pg.evaluate("S.tdsView") == "year", "back to the year")
     pg.click('#app button:has-text("Certificates and rate questions")'); pg.wait_for_timeout(500)
     ok(pg.evaluate("S.tdsView") == "certs" and "Certificates and rate questions" in pg.inner_text("#app .tds-crumbs"), "Certificates and rate questions")
-    for t in ["Tally ledgers", "GST", "MIS", "Accounts", "Audit"]:
+    for t in ["Tally ledgers", "GST"]:
         pg.click('#app nav[aria-label="Books"] button:has-text("%s")' % t); pg.wait_for_timeout(500)
         ok(pg.get_attribute('#app nav[aria-label="Books"] button:has-text("%s")' % t, "aria-selected") == "true", "the %s tab opens" % t)
+    for side, tab in [["MIS", "mis"], ["Accounts", "fs"], ["Audit", "audit"]]:
+        pg.click('#side button:has-text("%s")' % side); pg.wait_for_timeout(500)
+        ok(pg.evaluate("booksTab()") == tab, "%s opens from the sidebar" % side)
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
     br.close()
 srv.shutdown()

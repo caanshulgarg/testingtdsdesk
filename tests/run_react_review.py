@@ -44,13 +44,22 @@ with sync_playwright() as p:
     pg.click('#app .actionbar button:has-text("Do not book TDS")'); pg.wait_for_timeout(500)
     ok(pg.evaluate("draftRows().every(r => !r.c.tds)"), "“Do not book TDS” on all three: no TDS booked")
     pg.click('#app .actionbar button:has-text("Book TDS")'); pg.wait_for_timeout(500)
-    ok(pg.evaluate("draftRows().every(r => r.c.tds > 0 || r.c.rule.basis === 'never')"), "“Book TDS”: booked on each (deducted even below the limit)")
+    ok(pg.evaluate("draftRows().every(r => r.c.tds > 0 || r.c.tdsWould <= 0 || r.c.rule.basis === 'never')") and pg.evaluate("draftRows().every(r => !r.c.anyway)"),
+       "“Book TDS”: booked where it is due; a bill below the limit is not forced (review item 3)")
     pg.click('#app .actionbar button:has-text("Clear")'); pg.wait_for_timeout(400)
     ok("to review" in bar() and "selected" not in bar(), "Clear: nothing selected")
     # one row's own controls
     row = rows().filter(has_text="Beta Traders")
+    beta = "draftRows().find(r => r.e.x.vendorName === 'Beta Traders')"
+    due = pg.evaluate(beta + ".c.tdsWould > 0 && !" + beta + ".c.anyway")
     row.locator('input[aria-label="Book TDS"]').click(); pg.wait_for_timeout(400)
-    ok(pg.evaluate("draftRows().find(r => r.e.x.vendorName === 'Beta Traders').c.tds") == 0, "untick the TDS box on one bill: not booked")
+    if due:
+        ok(pg.evaluate(beta + ".c.tds") == 0, "untick the TDS box on one bill: not booked")
+    else:
+        ok(pg.evaluate(beta + ".c.anyway") and pg.evaluate(beta + ".c.tds") > 0 and pg.evaluate("!!" + beta + ".e.tdsAlwaysBy"),
+           "tick the TDS box on a bill below the limit: deducted anyway, with who ticked it recorded")
+        row.locator('input[aria-label="Book TDS"]').click(); pg.wait_for_timeout(400)
+        ok(pg.evaluate(beta + ".c.tds") == 0 and not pg.evaluate(beta + ".c.anyway"), "untick it: not booked")
     other = pg.evaluate("rules().find(r => r.basis !== 'never' && r.id !== draftRows().find(x => x.e.x.vendorName === 'Beta Traders').e.natureId).id")
     row.locator('select[aria-label="Payment type"]').select_option(other); pg.wait_for_timeout(400)
     ok(pg.evaluate("draftRows().find(r => r.e.x.vendorName === 'Beta Traders').e.natureId") == other, "the payment type chosen in the row is kept")
