@@ -3,6 +3,7 @@
 // viewBridgeSettings, bridgeSetupSteps, bridgeDownHelp, viewBridgeDiagnosis and viewReadTest (src/js/24), and TCloud.view
 // (src/js/49). The work is Bridge and TCloud; boxes and choices go through bridgeSet, bridgeLink, bridgePin, tcLink
 // (src/js/24, 49), buttons through doAct (bridgeTest, bridgeConnect, bridgeOff, bridgeSetupFile, bridgeDiag, bridgeReadTest).
+import TallyPill from "../parts/TallyPill.jsx";
 import { PostLog } from "./Done.jsx";
 import CommitBox from "../parts/CommitBox.jsx";
 
@@ -108,11 +109,12 @@ const when = (s) => s ? new Date(s).toLocaleString("en-IN", { day: "2-digit", mo
 export function CloudBooks() {
   const p = TCloud.pane;
   if (!TCloud.on()) return <div className="pane"><p className="note">Sign in to the firm account to keep the books in FinCom’s cloud.</p></div>;
-  if (p.devices === null && !p.busy && !p.err) setTimeout(() => TCloud.refreshPane(), 0);
+  // read again when opened after a minute, so a link made elsewhere (another computer, the auto-link) shows
+  if (!p.busy && !p.err && (p.devices === null || Date.now() - (p.at || 0) > 60000)) { p.at = Date.now(); setTimeout(() => TCloud.refreshPane(), 0); }
   const cos = Object.values(S.companies || {}).filter((c) => !c.deleted).sort((a, c) => a.name.localeCompare(c.name));
   const dv = (p.devices || []).filter((d) => !d.revoked), cl = p.companies || [];
   return <>
-    <div className="pane"><h2>Books in FinCom’s cloud</h2><p className="note" style={{ margin: "0 0 12px" }}>The bridge on each connected computer sends the books of the Tally companies it keeps in step. Then Look up, Reports and the books open on any computer or phone, even with Tally closed, and a trial balance or ledger for any date comes back in a moment. Kept in India, for your firm only.</p>
+    <div className="pane"><h2>Books in FinCom’s cloud <TallyPill /></h2><p className="note" style={{ margin: "0 0 12px" }}>The bridge on each connected computer sends the books of the Tally companies it keeps in step. Then Look up, Reports and the books open on any computer or phone, even with Tally closed, and a trial balance or ledger for any date comes back in a moment. Kept in India, for your firm only.</p>
       {p.err && <p className="note bad">{p.err}</p>}{p.busy && <p className="note">{p.busy}</p>}
       <p className="note">The computer with Tally and the bridge sends by itself once someone signs in to FinCom there. Nothing to press.</p>
       {TCloud.autoErr && <p className="note bad">{"Last try: " + TCloud.autoErr}</p>}<div className="row"><button className="btn small" onClick={() => TCloud.refreshPane()}>Refresh</button></div></div>
@@ -120,9 +122,17 @@ export function CloudBooks() {
       {dv.map((d) => <tr key={d.id}><td>{d.name}{(d.info || {}).computer && <div className="nr">{d.info.computer + (d.info.user ? " · " + d.info.user : "")}</div>}</td><td>{when(d.last_seen)}</td><td>{d.version || "—"}</td>
         <td className="n"><button className="btn small" onClick={() => TCloud.revoke(d.id, d.name)}>Remove</button></td></tr>)}</tbody></table></div>
       : <p className="note">None yet. Open FinCom on the computer with Tally, signed in to the firm, and it connects by itself within a minute.</p>}</div>
-    <div className="pane"><h3 style={{ marginTop: 0 }}>Tally companies and clients</h3><p className="note" style={{ margin: "0 0 8px" }}>A company named in Tally as a client’s “Tally name” is linked by itself. Link the others here. A company whose GSTIN is not the client’s cannot be linked, so no one’s books land in the wrong client.</p>
+    <div className="pane"><h3 style={{ marginTop: 0 }}>Tally companies and clients</h3><p className="note" style={{ margin: "0 0 8px" }}>A company named in Tally as a client’s “Tally name”, or with exactly one client’s GSTIN, is linked by itself. Link the others here. A company whose GSTIN is not the client’s cannot be linked, so no one’s books land in the wrong client.</p>
       {cl.length ? <div className="tblwrap"><table className="data"><thead><tr><th>Company in Tally</th><th>GSTIN</th><th>Client in FinCom</th><th>Last seen</th></tr></thead><tbody>
-        {cl.map((c) => <tr key={c.company}><td>{c.company}</td><td>{c.gstin || "—"}</td><td><select aria-label={"Client for " + c.company} value={c.client_id || ""} onChange={(ev) => TCloud.link(c.company, ev.target.value)}><option value="">— not linked —</option>{cos.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}</select></td><td>{when(c.last_seen)}</td></tr>)}</tbody></table></div>
+        {cl.map((c) => {
+          const cid = String(c.client_id || ""), linked = cid && cos.find((k) => String(k.id) === cid), m = !cid && gstinMatch(c);
+          return <tr key={c.company}><td>{c.company}</td><td>{c.gstin || "—"}</td><td>
+            <select aria-label={"Client for " + c.company} value={cid} onChange={(ev) => TCloud.link(c.company, ev.target.value)}><option value="">— not linked —</option>
+              {cid && !linked && <option value={cid}>a client not on this computer</option>}
+              {cos.map((k) => <option key={k.id} value={String(k.id)}>{k.name}</option>)}</select>
+            {cid ? <div className="nr">{linked ? <>✓ Linked to <b>{linked.name}</b>{gstinMatch(c) && String(gstinMatch(c).id) === cid ? " (same GSTIN)" : ""}</> : "Linked to a client that is not on this computer."}</div>
+              : m ? <div className="nr">Same GSTIN as <b>{m.name}</b> <button className="btn small" onClick={() => TCloud.link(c.company, m.id)}>Link to {m.name}</button></div> : null}</td><td>{when(c.last_seen)}</td></tr>;
+        })}</tbody></table></div>
         : <p className="note">No Tally companies have been seen yet. They appear here once a connected computer has a company open in Tally.</p>}</div>
   </>;
 }

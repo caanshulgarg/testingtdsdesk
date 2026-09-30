@@ -5,6 +5,7 @@
 // keepNow, setup…); the daily time goes through keepAtSet.
 //
 // State: S.dbFrom / S.dbTo (a part's dates), S.tbOn (the trial balance date).
+import TallyPill from "../../parts/TallyPill.jsx";
 const d = (x) => fmtDate(tallyDate(x));
 const Act = ({ act, className = "btn small", children }) => <button className={className} onClick={() => doAct(act)}>{children}</button>;
 
@@ -26,7 +27,16 @@ function Setup({ b }) {
   const tbOk = b.tb && b.tb.source, firstFrom = parts.length ? parts[0].from : m.from;
   // 4. the bridge
   let bs, bok = false, bact = null;
-  if (!Bridge.on()) bs = "Not connected on this computer. Needed only on the computer with Tally: it posts entries and brings in each day’s changes.";
+  // the one Tally status (review item 5): the firm's Tally computer may be connected through the cloud even when this
+  // computer has no bridge of its own
+  const ts = tallyStatus(CO());
+  if (!Bridge.on()) {
+    const cloud = !["none", "offline"].includes(ts.state);
+    bok = ts.state === "ok";
+    bs = <><TallyPill co={CO()} />{" "}{cloud
+      ? "Through the firm’s Tally computer (FinCom’s cloud). There is no bridge on this computer; it is needed only on the computer with Tally, to post entries and bring in each day’s changes."
+      : "Needed only on the computer with Tally: it posts entries and brings in each day’s changes."}</>;
+  }
   else if (ks && ks.error) bs = "Did not answer: " + ks.error;
   else if (!k) bs = "asking…";
   else if (!k.on) { bs = "Updates from Tally are off."; bact = <Act act="setupKeepOn" className="btn small primary">Switch them on</Act>; }

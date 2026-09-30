@@ -41,8 +41,8 @@ function Crumbs() {
 // every year with TDS in the books, a salary sheet or a challan
 function Years({ b, rows, fys }) {
   if (!fys.length) return <>
-    <div className="bk-none">Bring in the day book, or a salary sheet under 24Q, and the years appear here.</div>
-    <div className="row" style={{ gap: 8, marginTop: 10 }}><button className="btn small primary" onClick={() => doAct("salaryPick")}>Bring in the salary sheet</button></div>
+    <div className="bk-none">TDS is worked out from the day book. Salary for 24Q can also be brought in on its own, from a salary sheet. The years appear here once either is in.</div>
+    <div className="row" style={{ gap: 8, marginTop: 10 }}><button className="btn small primary" onClick={() => booksTabGo("import")}>Read the books from Tally</button><button className="btn small" onClick={() => doAct("salaryPick")}>Import salary for 24Q</button></div>
   </>;
   return (
     <section className="dash-card"><h3>Choose the financial year</h3>
@@ -143,6 +143,21 @@ function FreshLine({ b }) {
     {can && <> <button className="linkbtn" onClick={() => doAct("keepNow")}>Update now</button></>}</p>;
 }
 
+// what a tab needs before it can show anything, and the button that brings it (review item 7)
+const EMPTY_TAB = {
+  ledgers: ["The Tally ledgers come from the client's books. Read the books from Tally first.", "Read the books from Tally", () => booksTabGo("import")],
+  mis: ["MIS is worked out from the day book. Read the books from Tally first.", "Read the books from Tally", () => goClient("books:import")],
+  fs: ["The accounts (balance sheet and profit and loss) are made from the day book. Read the books from Tally first.", "Read the books from Tally", () => goClient("books:import")],
+  audit: ["The audit checks run over the day book. Read the books from Tally first.", "Read the books from Tally", () => goClient("books:import")],
+};
+function EmptyTab({ tab }) {
+  const [say, label, go] = EMPTY_TAB[tab] || ["Read the books from Tally first.", "Read the books from Tally", () => goClient("books:import")];
+  return <>
+    <div className="bk-none">{say}</div>
+    <div className="row" style={{ gap: 8, marginTop: 10 }}><button className="btn small primary" onClick={go}>{label}</button></div>
+  </>;
+}
+
 export default function Books() {
   const co = CO();
   if (!S.books || S.books.cid !== co.id) { openBooks(co.id); return <p className="note">Opening the books…</p>; }
@@ -150,14 +165,24 @@ export default function Books() {
   const busy = b.busy && <BusyCard title="Reading the books…" detail={b.busy} />;
   if (tab === "reports" || tab === "lookup" || tab === "letters")
     return <>{busy}{tab === "reports" ? <Reports b={b} /> : tab === "lookup" ? <Lookup b={b} /> : <Letters b={b} />}</>;
+  // MIS, Accounts and Audit: pages of their own in the sidebar (review item 7)
+  if (tab === "mis" || tab === "fs" || tab === "audit") {
+    const title = { mis: "MIS", fs: "Accounts", audit: "Audit" }[tab];
+    return <>
+      <h2 className="bk-title" style={{ margin: "0 0 10px" }}>{title}</h2>
+      {n > 0 && <FreshLine b={b} />}
+      {busy}
+      {!n ? <EmptyTab tab={tab} /> : tab === "mis" ? <MisTab b={b} /> : tab === "audit" ? <AuditTab b={b} /> : <Accounts b={b} />}
+    </>;
+  }
   const pending = n ? LedMaster.pending(b).length : 0;
-  const highOpen = b.audit && b.audit.last ? b.audit.last.findings.filter((f) => f.sev === "high" && Audit.status(f.id).s === "open").length : 0;
   const tabs = [["import", "From Tally", n || null], ["ledgers", "Tally ledgers", n ? (pending ? pending + " to confirm" : "✓") : null], ["tds", "TDS", n ? TDS.rows().length : ((b.salary || []).length || null)],
-    ["gst", "GST", null], ["mis", "MIS", null], ["fs", "Accounts", null], ["audit", "Audit", highOpen || null]];
+    ["gst", "GST", null]];
   let body;
   if (tab === "import") body = <FromTally b={b} />;
   else if (!n && tab === "gst") body = <Gst />;
-  else if (!n && !(tab === "tds" && (b.salary || []).length)) body = <div className="bk-none">Bring the day book in first, under “From Tally”. Salary for 24Q can be brought in on its own, under TDS.</div>;
+  else if (!n && tab === "tds") body = <Tds b={b} />;
+  else if (!n) body = <EmptyTab tab={tab} />;
   else if (tab === "tds") body = <Tds b={b} />;
   else if (tab === "gst" || !["ledgers", "audit", "mis", "fs"].includes(tab)) body = <Gst />;
   else if (tab === "ledgers") body = <Ledgers b={b} />;

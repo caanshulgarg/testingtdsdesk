@@ -258,18 +258,22 @@ function startDraft(fromId){
 function recalcDraft(){
   const s = SL(), d = s.draft, co = CO(s.cid), x = d.x;
   const inter = isInterState(x, co);
+  // the client's state not known (no GSTIN): no GST is worked out until it is (CGST + SGST or IGST cannot be told)
+  const noState = !stateOfGstin(co.gstin);
   let taxable = 0, cgst = 0, sgst = 0, igst = 0;
   x.items.forEach(it => {
     it.taxable = r2(num(it.qty) * num(it.rate) * (1 - num(it.disc) / 100));
     taxable += it.taxable;
-    const t = r2(it.taxable * num(it.gstRate) / 100);
+    const t = noState ? 0 : r2(it.taxable * num(it.gstRate) / 100);
     if (inter) igst += t; else { cgst += r2(t / 2); sgst += r2(t - r2(t / 2)); }
   });
   x.taxable = r2(taxable); x.cgst = r2(cgst); x.sgst = r2(sgst); x.igst = r2(igst);
+  // cess typed on the item lines (cess goods); an invoice with cess only as one figure keeps it
+  if (x.items.some(it => it.cess !== undefined && it.cess !== "")) x.cess = r2(x.items.reduce((a, it) => a + num(it.cess), 0));
   const gross = r2(x.taxable + x.cgst + x.sgst + x.igst + num(x.cess));
   x.total = s.cfg.noRound ? gross : Math.round(gross);
   x.roundOff = r2(x.total - gross);
-  d.inter = inter;
+  d.inter = inter; d.noState = noState;
 }
 function draftProblems(){
   const s = SL(), x = s.draft.x, p = [];
@@ -279,6 +283,7 @@ function draftProblems(){
   if (!x.customerName.trim()) p.push("Choose the customer.");
   if (x.customerGstin && !gstinValid(x.customerGstin)) p.push("The customer GSTIN is not valid.");
   if (!x.pos) p.push("Choose the place of supply.");
+  if (!stateOfGstin(CO(s.cid).gstin) && x.items.some(it => num(it.gstRate) > 0 && num(it.rate) > 0)) p.push("This client has no GSTIN in Client setup, so GST cannot be charged: add the GSTIN, or set the items to 0%.");
   const items = x.items.filter(it => it.desc.trim() || num(it.rate));
   if (!items.length) p.push("Add at least one item.");
   items.forEach((it, i) => { if (!it.desc.trim()) p.push("Item " + (i + 1) + ": enter the description."); if (!(num(it.qty) > 0)) p.push("Item " + (i + 1) + ": enter the quantity."); if (!(num(it.rate) > 0)) p.push("Item " + (i + 1) + ": enter the rate."); });
@@ -598,7 +603,9 @@ function draftSet(k, val){
 }
 function draftItem(i, k, val){
   const s = SL(), it = s.draft.x.items[i]; if (!it) return;
-  it[k] = ["qty", "rate", "disc", "gstRate"].includes(k) ? num(val) : val;
+  it[k] = ["qty", "rate", "disc", "gstRate", "cess"].includes(k) ? num(val) : val;
+  // an HSN/SAC used before gives its GST rate (the item memory kept from saved invoices)
+  if (k === "hsn"){ const code = String(val).replace(/\D/g, ""); const m = code.length >= 4 && Object.values(s.cfg.items || {}).find(t => String(t.hsn || "").replace(/\D/g, "") === code); if (m && m.gstRate != null) it.gstRate = num(m.gstRate); }
   if (k === "desc"){ const m = s.cfg.items[String(val).trim().toLowerCase()]; if (m){ if (!it.hsn) it.hsn = m.hsn; if (!num(it.rate)) it.rate = m.rate; it.unit = m.unit || it.unit; it.gstRate = m.gstRate; } }
   recalcDraft(); render();
 }

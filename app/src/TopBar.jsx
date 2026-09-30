@@ -1,6 +1,7 @@
 // The top bar: the page title (client header with its status tabs, or the home screen's name), the Tally chip, the
 // firm account chip and the firm button, with the Tally panel and firm menu they open.
 // Was renderTop, clientHeader, topRight, tallyPanelHtml, firmMenuHtml (src/js/02 and 18); actions are doAct(...).
+import TallyPill from "./parts/TallyPill.jsx";
 import { useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 
@@ -54,11 +55,11 @@ function CloudChip() {
 
 function TopRight() {
   const bal = accountBalance(), plan = S.account && S.account.firm ? planName(S.account.firm.plan) : "";
-  const live = bridgeLive(S.view === "company" ? CO() : null), on = Bridge.on();
+  const t = tallyStatus(S.view === "company" ? CO() : null);
   return (
     <div className="topright">
-      <button className={"tallychip" + (live ? " live" : on ? " off" : " none")} onClick={() => doAct("tallyPanel")} title="Tally connection">
-        <span className="dotled" />Tally{live ? "" : on ? ": not answering" : ": not set up"}
+      <button className={"tallychip" + (t.level === "ok" ? " live" : t.level === "warn" ? " off" : " none")} onClick={() => doAct("tallyPanel")} title={t.say} data-tally={t.state}>
+        <span className="dotled" />{"Tally: " + t.label}
       </button>
       <CloudChip />
       <button className="firmbtn" onClick={() => doAct("firmMenu")}>
@@ -77,6 +78,7 @@ function TallyPanel() {
     <div className="tallypanel" role="dialog" aria-label="Tally connection">
       <div className="fm-head"><b>Tally connection</b><button className="icon" onClick={close} aria-label="Close">✕</button></div>
       <div className="tp-body">
+        <p><TallyPill co={co} /></p><p className="note">{tallyStatus(co).say}</p>
         {Bridge.on() ? <>
           <p><span className={"dotled " + (live ? "live" : "off")} /><b>{live ? "Connected" : "Not answering"}</b>{st.version && <span className="note"> · bridge {st.version}</span>}</p>
           {co && <p className="note">{Bridge.openFor(co).name ? Bridge.openFor(co).name + " is open in Tally." : (co.tallyName || co.name) + " is not open in Tally."}</p>}
@@ -99,7 +101,7 @@ function FirmMenu() {
       <div className="fm-head"><b>{S.firm.firmName || "Firm"}</b>{a && a.me && <span className="note">{(a.me.email || "") + " · " + (a.me.role || "")}</span>}</div>
       {a && a.firm && <div className="fm-plan"><span>{planName(a.firm.plan) || "Plan"}</span>{bal != null && <b>credit {INR.format(bal)}</b>}</div>}
       <button className="fm-item" onClick={() => doAct("openSettings")}>Settings</button>
-      <button className="fm-item" onClick={() => navHome("tally")}>Tally: everything sent</button>
+      <button className="fm-item" onClick={() => navHome("tally")}>Tally <TallyPill prefix="" /></button>
       <button className="fm-item" onClick={() => navHome("inbox")}>Inbox for all clients</button>
       <button className="fm-item" onClick={() => navHome("clients")}>All clients</button>
       {Cloud.on() && <button className="fm-item" onClick={() => doAct("signOutNow")}>Sign out</button>}

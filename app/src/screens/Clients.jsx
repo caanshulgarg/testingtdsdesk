@@ -39,9 +39,9 @@ function Free({ c }) {
 const MARK = { ok: "● ", warn: "◐ ", bad: "○ " };
 function TallyLight({ cid }) {
   if (typeof TLight !== "object") return null;
-  TLight.refresh();
-  const x = TLight.st.by[cid];
-  return x ? <span className={"tag " + x.level} title={x.say}>{MARK[x.level] + x.short}</span> : <span className="note">—</span>;
+  const co = CO(cid), t = tallyStatus(co), x = TLight.st.by[cid];
+  // the one status (review item 5); the heartbeat's detail (updated when, Tally closed) stays in the tip
+  return <span className={"tag " + t.level} title={t.say + (x && t.state === "ok" ? "" : x ? " " + x.say : "")} data-tally={t.state}>{MARK[t.level] + t.label}</span>;
 }
 
 export default function Clients() {

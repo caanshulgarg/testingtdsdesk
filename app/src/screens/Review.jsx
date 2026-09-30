@@ -118,7 +118,7 @@ function BillBar({ e }) {
     if (e.confirmType && !(c.party && c.party.natureDefault) && !c.skip) todo.push(["type", <B act="confirmType">Confirm payment type: {c.rule.label}</B>]);
     if (c.dup && c.dup.strong) todo.push(["dup", <B act="notDup">It is a different bill</B>]);
     if (c.gd.rcmSuggest) todo.push(["rcm", <><span className="tag warn" title={catLabel(RCM_CATS, c.gd.rcmSuggest.cat)}>RCM?</span><B act="rcmApply">Apply</B><B act="rcmDismiss">No</B></>, true]);
-    if (c.gd.blockSuggest) todo.push(["block", <><span className="tag warn" title={catLabel(BLOCK_CATS, c.gd.blockSuggest.cat)}>Blocked credit?</span><B act="blockAccept">Block</B><B act="blockReject">Allow</B></>, true]);
+    if (c.gd.blockSuggest) todo.push(["block", <><span className="tag warn" title={catLabel(BLOCK_CATS, c.gd.blockSuggest.cat) + ": " + c.gd.blockSuggest.why}>Blocked credit?</span><B act="blockAccept">Block</B><B act="blockReject">Allow</B></>, true]);
     if (c.tdsWould > 0 && !c.skip) todo.push(["skip", <B act="skipTds" title="Approve this bill without a TDS line">Don’t book TDS</B>, true]);
     if (c.skip) todo.push(["book", <><span className="tag warn" title={skipText(c.skip)}>TDS not booked</span><B act="bookTds">Book TDS {money0(c.tdsWould)}</B></>, true]);
     const other = c.missing.filter((m) => !/payment type|duplicate/.test(m));
