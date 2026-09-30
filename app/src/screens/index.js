@@ -12,9 +12,10 @@ import { PostStep, Export } from "./Post.jsx";
 import { DoneStep, PostLog } from "./Done.jsx";
 import Bank, { BankBar } from "./Bank.jsx";
 import { FirmSettings, ClientSetup } from "./Settings.jsx";
+import Sales, { SalesBar } from "./Sales.jsx";
 import DocqPanel from "../parts/Docq.jsx";
 import Unsorted from "../parts/Unsorted.jsx";
 import UploadBlock from "../parts/UploadBlock.jsx";
 import { Jobs, ReadingCheck, UploadOptions, Working } from "../parts/Reading.jsx";
 
-export default { GstApiCard, Today, InboxAll, Clients, Collect, Invoices, BillDetail, ReviewTable, ActionBar, Drawer, Parties, PostStep, Export, DoneStep, PostLog, Bank, BankBar, FirmSettings, ClientSetup, DocqPanel, Unsorted, UploadBlock, Jobs, ReadingCheck, UploadOptions, Working };
+export default { GstApiCard, Today, InboxAll, Clients, Collect, Invoices, BillDetail, ReviewTable, ActionBar, Drawer, Parties, PostStep, Export, DoneStep, PostLog, Bank, BankBar, FirmSettings, ClientSetup, Sales, SalesBar, DocqPanel, Unsorted, UploadBlock, Jobs, ReadingCheck, UploadOptions, Working };

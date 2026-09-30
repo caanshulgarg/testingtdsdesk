@@ -4,21 +4,12 @@
 // with the bank and sales tables.
 import { useRef } from "react";
 import Legacy from "../parts/Legacy.jsx";
+import ColHead from "../parts/ColHead.jsx";
 import BillDetail from "./Bill.jsx";
 
 const needsLook = (r) => (r.c.missing || []).length || r.c.flags.some((f) => f.lvl === "hi") || r.e.confirmType;
 const RuleOptions = () => rules().map((r) => <option key={r.id} value={r.id}>{r.label}</option>);
 
-// a column heading with its filter button (the old pop-up answers the button)
-function ColHead({ k, label, cls }) {
-  const on = colActive("rev", k), open = S.colPop && S.colPop.t === "rev" && S.colPop.k === k;
-  return (
-    <th className={cls}><span className="colh"><span>{label}</span>
-      <span data-legacy="" style={{ display: "contents" }}>
-        <button className={"colf" + (on ? " on" : "") + (open ? " open" : "")} data-colf={k} data-colt="rev" aria-label={"Filter " + label} title={"Filter " + label} dangerouslySetInnerHTML={{ __html: FUNNEL }} />
-      </span></span></th>
-  );
-}
 
 function Row({ e, c, sel }) {
   const t = tallyYtdFor(c.party, fyOf(e.x.invoiceDate), e), m = c.meter;
@@ -77,8 +68,8 @@ export function ReviewTable() {
         <div className="bk-tablewrap"><table className="bk-table revtbl">
           <thead><tr>
             <th className="ck"><input type="checkbox" aria-label="Select all shown" checked={!!nSel && nSel === rows.length} onChange={(ev) => revPickAll(ev.target.checked)} /></th>
-            <ColHead k="date" label="Date" cls="dt" /><ColHead k="sup" label="Supplier" /><ColHead k="no" label="Bill no." /><ColHead k="val" label="Value" cls="n" />
-            <ColHead k="nature" label="Payment type" /><ColHead k="tds" label="TDS" cls="ck" /><th className="n">TDS</th><ColHead k="look" label="This year vs limit" /><th className="ac"></th>
+            <ColHead t="rev" k="date" label="Date" cls="dt" /><ColHead t="rev" k="sup" label="Supplier" /><ColHead t="rev" k="no" label="Bill no." /><ColHead t="rev" k="val" label="Value" cls="n" />
+            <ColHead t="rev" k="nature" label="Payment type" /><ColHead t="rev" k="tds" label="TDS" cls="ck" /><th className="n">TDS</th><ColHead t="rev" k="look" label="This year vs limit" /><th className="ac"></th>
           </tr></thead>
           <tbody>{rows.map((r) => <Row key={r.e.id} e={r.e} c={r.c} sel={sel.has(r.e.id)} />)}</tbody>
         </table></div>

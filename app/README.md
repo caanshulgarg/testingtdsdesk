@@ -79,4 +79,6 @@ cd ../tests && TDSDESK_SITE=../app/dist-test python3 run_react_post.py
 | Post to Tally, Done, post log | `src/screens/Post.jsx`, `Done.jsx` |
 | Bank statement: lines, tabs, bar | `src/screens/Bank.jsx`, `src/parts/LedgerBox.jsx` |
 | Settings (firm) and Client setup | `src/screens/Settings.jsx` |
+| Sales: list, an invoice, creating one, settings | `src/screens/Sales.jsx` |
+| Shared pieces: boxes, ledger lists, column headings | `src/parts/CommitBox.jsx`, `LedgerBox.jsx`, `LedgerSelect.jsx`, `ColHead.jsx` |
 | GSTR-2B from the portal | `src/screens/GstApiCard.jsx` |

@@ -313,53 +313,6 @@ function saveDraft(){
   return v;
 }
 function stateOptions(sel){ return '<option value="">\u2014 Choose \u2014</option>' + Object.entries(GST_STATES).map(([c, n]) => '<option value="' + c + '"' + (c === sel ? " selected" : "") + ">" + c + " \u00b7 " + esc(n) + "</option>").join(""); }
-function viewSalesCreate(){
-  const s = SL(), d = s.draft, x = d.x, co = CO(s.cid), cfg = s.cfg;
-  const probs = d.showErrors ? draftProblems() : [];
-  const itemMemory = Object.values(cfg.items || {});
-  let h = '<div class="bk"><div class="bk-head"><div class="bk-id"><h2 class="bk-title">' + (d.editId ? "Edit sales invoice" : "New sales invoice") + '</h2><div class="bk-sub">' + esc(co.name) + (co.gstin ? " \u00b7 GSTIN " + esc(co.gstin) : "") + " \u00b7 " + esc(GST_STATES[stateOfGstin(co.gstin)] || "") + "</div></div>" +
-    '<div></div><div class="bk-actions"><button class="btn small" data-act="salesCancel">Cancel</button><button class="btn small" data-act="salesPrintDraft">Preview / Print</button><button class="btn primary small" data-act="salesSave">Save invoice</button></div></div>';
-  if (probs.length) h += '<div class="bk-alert bad">' + probs.map(esc).join("<br>") + "</div>";
-  h += '<div class="si-grid"><section class="si-card"><h3>Invoice</h3><div class="bk-form">' +
-    '<label><span>Invoice number</span><input type="text" data-sd="number" data-fk="sd:number" data-keeptyped value="' + esc(x.number) + '"></label>' +
-    '<label><span>Invoice date</span><input type="date" data-sd="date" value="' + esc(x.date) + '"></label>' +
-    '<label><span>Credit period (days)</span><input type="number" min="0" data-sd="dueDays" value="' + esc(x.dueDays || "") + '"></label>' +
-    '<label><span>Order / PO reference</span><input type="text" data-sd="poNo" data-fk="sd:poNo" data-keeptyped value="' + esc(x.poNo || "") + '"></label>' +
-    '<label><span>E-way bill no. (optional)</span><input type="text" data-sd="ewayNo" data-fk="sd:ewayNo" data-keeptyped value="' + esc(x.ewayNo || "") + '"></label>' +
-    '<label><span>IRN (if e-invoiced)</span><input type="text" data-sd="irn" data-fk="sd:irn" data-keeptyped value="' + esc(x.irn || "") + '"></label></div></section>' +
-    '<section class="si-card"><h3>Bill to</h3><div class="bk-form">' +
-    '<label><span>Customer ledger (Tally)</span><input type="text" class="lgbox' + (d.customerLedger ? " done" : "") + '" data-sdcust data-fk="sdcust" data-keeptyped data-ac="1" autocomplete="off" value="' + esc(d.customerLedger || "") + '" placeholder="Type to search customers"></label>' +
-    '<label><span>Name on invoice</span><input type="text" data-sd="customerName" data-fk="sd:customerName" data-keeptyped value="' + esc(x.customerName) + '"></label>' +
-    '<label><span>GSTIN (blank if unregistered)</span><input type="text" data-sd="customerGstin" data-fk="sd:customerGstin" data-keeptyped maxlength="15" value="' + esc(x.customerGstin) + '"></label>' +
-    '<label><span>Address</span><textarea rows="2" data-sd="address" data-fk="sd:address" data-keeptyped>' + esc(x.address || "") + "</textarea></label>" +
-    '<label><span>Place of supply</span><select data-sd="pos">' + stateOptions(x.pos) + "</select></label>" +
-    '<p class="note" style="margin:0">' + (d.inter ? "Another state: <b>IGST</b> is charged." : "Same state: <b>CGST + SGST</b> are charged.") + "</p></div></section></div>";
-  // items
-  h += '<datalist id="itemMemory">' + itemMemory.map(it => '<option value="' + esc(it.desc) + '">').join("") + "</datalist>";
-  h += '<section class="si-card"><h3>Items</h3><div class="bk-tablewrap"><table class="bk-table si-items"><thead><tr><th>#</th><th>Description</th><th>HSN/SAC</th><th class="n">Qty</th><th>Unit</th><th class="n">Rate</th><th class="n">Disc %</th><th class="n">Taxable</th><th class="n">GST %</th><th class="n">Tax</th><th></th></tr></thead><tbody>' +
-    x.items.map((it, i) => '<tr><td class="dt">' + (i + 1) + "</td>" +
-      '<td><input type="text" list="itemMemory" data-si="' + i + '" data-sk="desc" data-fk="si:' + i + ':desc" data-keeptyped value="' + esc(it.desc) + '" placeholder="Goods or service"></td>' +
-      '<td><input type="text" class="w90" data-si="' + i + '" data-sk="hsn" data-fk="si:' + i + ':hsn" data-keeptyped value="' + esc(it.hsn) + '"></td>' +
-      '<td class="n"><input type="number" step="any" min="0" class="w70 n" data-si="' + i + '" data-sk="qty" value="' + esc(it.qty) + '"></td>' +
-      '<td><select data-si="' + i + '" data-sk="unit">' + SALES_UNITS.map(u => "<option" + (u === it.unit ? " selected" : "") + ">" + u + "</option>").join("") + "</select></td>" +
-      '<td class="n"><input type="number" step="any" min="0" class="w100 n" data-si="' + i + '" data-sk="rate" value="' + esc(it.rate) + '"></td>' +
-      '<td class="n"><input type="number" step="any" min="0" max="100" class="w60 n" data-si="' + i + '" data-sk="disc" value="' + esc(it.disc || 0) + '"></td>' +
-      '<td class="n">' + INR.format(it.taxable) + "</td>" +
-      '<td class="n"><select data-si="' + i + '" data-sk="gstRate">' + SALES_RATES.map(r => '<option value="' + r + '"' + (num(it.gstRate) === r ? " selected" : "") + ">" + r + "%</option>").join("") + "</select></td>" +
-      '<td class="n">' + INR.format(r2(it.taxable * num(it.gstRate) / 100)) + "</td>" +
-      '<td class="ac"><button class="icon" data-sirm="' + i + '" aria-label="Remove item" title="Remove item">\u2715</button></td></tr>').join("") +
-    '</tbody></table></div><div class="row" style="margin-top:8px"><button class="btn small" data-act="salesAddItem">+ Add item</button></div></section>';
-  // totals
-  const groups = salesTotals(x);
-  h += '<div class="si-grid"><section class="si-card"><h3>Notes</h3><textarea rows="4" data-sd="notes" data-fk="sd:notes" data-keeptyped placeholder="Shown on the invoice">' + esc(x.notes || "") + '</textarea><p class="note">Bank details, terms and signatory come from Sales settings.</p></section>' +
-    '<section class="si-card"><h3>Totals</h3><dl class="si-tot"><div><dt>Taxable value</dt><dd>' + INR.format(x.taxable) + "</dd></div>" +
-    groups.filter(g => g.rate).map(g => d.inter ? "<div><dt>IGST @ " + g.rate + "%</dt><dd>" + INR.format(r2(g.taxable * g.rate / 100)) + "</dd></div>"
-      : "<div><dt>CGST @ " + g.rate / 2 + "%</dt><dd>" + INR.format(r2(g.taxable * g.rate / 200)) + "</dd></div><div><dt>SGST @ " + g.rate / 2 + "%</dt><dd>" + INR.format(r2(g.taxable * g.rate / 100 - r2(g.taxable * g.rate / 200))) + "</dd></div>").join("") +
-    (x.roundOff ? "<div><dt>Round off</dt><dd>" + INR.format(x.roundOff) + "</dd></div>" : "") +
-    '<div class="big"><dt>Invoice total</dt><dd>' + money(x.total) + '</dd></div></dl><p class="note">' + esc(rupeesInWords(x.total)) + "</p></section></div>";
-  h += "</div>";
-  return h;
-}
 /* ---------- the printed invoice ---------- */
 function invoiceHtml(x, co, cfg){
   const inter = isInterState(x, co);
@@ -438,162 +391,10 @@ function salesVisible(){
   return s.list.filter(v => salesColPass(v) && (states.includes(v.status) || s.sticky.has(v.id)) && (!q || [v.x.number, v.x.customerName, v.x.customerGstin, v.customerLedger, v.x.total].join(" ").toLowerCase().includes(q)))
     .sort((a, b) => String(b.x.date).localeCompare(String(a.x.date)) || String(b.x.number).localeCompare(String(a.x.number)));
 }
-function viewSales(){
-  const co = CO(), s = SL();
-  if (!s || s.cid !== co.id){ loadSales(co.id); return '<p class="note">Opening sales\u2026</p>'; }
-  if (s.loading) return '<p class="note">Opening sales\u2026</p>';
-  if (s.view === "create" && s.draft) return viewSalesCreate();
-  const tc = salesCounts();
-  const live = s.list.filter(v => v.status !== "ignored");
-  const sum = k => r2(live.reduce((a, v) => a + num(v.x[k]), 0));
-  ensureFileInputs();
-  let h = '<div class="bk sl">';
-  if (s.busy) h += busyCard("Working on sales\u2026", s.busy, 0, 0);
-  if (!hasLedgerList()){
-    if (bridgeLive(co)) h += '<div class="bk-setup"><div><b>Loading ledgers from Tally\u2026</b></div></div>';
-    else h += '<div class="bk-setup"><div><b>Tally ledgers are needed for Sales vouchers</b><div class="note">' + (Bridge.on() ? "Open " + esc(Bridge.tallyName(co)) + " in TallyPrime, or import the ledger list." : "Import the ledger list (Tally: Display More Reports \u2192 List of Accounts \u2192 Export), or connect the Tally Bridge.") + '</div></div><button class="btn small" data-act="ledPick">Import ledger list</button></div>';
-  }
-  h += '<div class="bk-head"><div class="bk-id"><h2 class="bk-title">Sales</h2><div class="bk-sub">' + live.length + " invoice" + (live.length === 1 ? "" : "s") + (live.length ? " \u00b7 " + fmtDate(live.map(v => v.x.date).filter(Boolean).sort()[0]) + " to " + fmtDate(live.map(v => v.x.date).filter(Boolean).sort().pop()) : "") + "</div></div>" +
-    '<dl class="bk-figs"><div><dt>Taxable</dt><dd>' + INR.format(sum("taxable")) + '</dd></div><div><dt>GST</dt><dd>' + INR.format(r2(sum("cgst") + sum("sgst") + sum("igst") + sum("cess"))) + '</dd></div><div><dt>Invoice value</dt><dd>' + INR.format(sum("total")) + "</dd></div></dl>" +
-    '<div class="bk-actions"><button class="btn small" data-act="salesPick">Upload invoices</button><button class="btn small" data-act="marketPick" title="Amazon MTR, Flipkart or Shopify sales report">Marketplace report</button><button class="btn small primary" data-act="salesNew">Create invoice</button><button class="btn small" data-act="salesSettings">Settings</button>' +
-    '<details class="bk-menu"><summary class="btn small">More</summary><div class="bk-menu-list">' +
-      (bridgeLive(co) ? '<button data-act="salesSync">Refresh from Tally</button><button data-act="salesFile">Create Tally file instead</button>' : "") +
-      '<button data-act="salesCsv">Download sales register (CSV)</button></div></details></div></div>';
-  if (!s.list.length){
-    h += '<div class="bk-empty" id="salesDrop" data-act="salesPick" tabindex="0" role="button"><div class="bk-empty-ic">\u2912</div><h2>Add sales invoices</h2><p class="note">Upload the invoices you issued (PDF or photo) to turn them into Sales vouchers, or create a new GST invoice here: it is printed and posted in one go.</p>' +
-      '<span class="btn primary">Choose files</span></div></div>';
-    return h + (s.showSettings ? salesSettingsHtml() : "");
-  }
-  h += '<div class="bk-bar"><div class="bk-tabs" role="tablist">' + SALES_TABS.map(([k, t]) => '<button role="tab" aria-selected="' + (s.filter === k) + '" data-stab="' + k + '">' + t + ' <span class="cnt">' + tc[k] + "</span></button>").join("") + "</div>" +
-    '<input type="search" class="bk-search" data-salesq data-fk="salesq" data-keeptyped autocomplete="off" placeholder="Search invoice, customer, GSTIN" value="' + esc(s.q) + '"></div>';
-  const list = salesVisible();
-  const nSel = list.filter(v => s.sel.has(v.id)).length;
-  h += colChipBar("sales", list.length, s.list.length + " invoices");
-  h += '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th class="ck"><input type="checkbox" data-sselall aria-label="Select all"' + (nSel && nSel === list.length ? " checked" : "") + "></th>" +
-    colHead("sales", "date", "Date", "dt") + colHead("sales", "no", "Invoice") + colHead("sales", "cust", "Customer") + '<th class="n">Taxable</th><th class="n">GST</th>' + colHead("sales", "val", "Total", "n") + colHead("sales", "led", "Customer ledger", "lg") + '<th class="ac"></th></tr></thead><tbody>' +
-    list.map(salesRowHtml).join("") + "</tbody></table>" + (list.length ? "" : salesColOn() ? noMatchNote("sales") : '<div class="bk-none">' + ({review: "Nothing to review.", ready: "No invoices are ready yet.", done: "Nothing posted or ignored yet."}[s.filter]) + "</div>") + "</div>";
-  h += "</div>";
-  if (s.openId && inv(s.openId)) h += salesDetailHtml(inv(s.openId));
-  if (s.showSettings) h += salesSettingsHtml();
-  return h;
-}
-function salesRowHtml(v){
-  const s = SL(), x = v.x, sel = s.sel.has(v.id);
-  const gst = r2(num(x.cgst) + num(x.sgst) + num(x.igst) + num(x.cess));
-  const editable = ["review", "ready"].includes(v.status);
-  const issue = (v.problems || [])[0] || (v.ledgerIssues || []).find(p => !/customer ledger/.test(p)) || "";
-  let cell, act;
-  if (editable){
-    const cls = v.status === "ready" ? " done" : v.customerLedger ? " sugg" : "";
-    cell = '<input type="text" class="lgbox' + cls + '" data-svcust="' + v.id + '" data-fk="svcust:' + v.id + '" data-keeptyped data-ac="1" autocomplete="off" value="' + esc(v.customerLedger) + '" placeholder="Select customer ledger">' +
-      (issue ? '<span class="src bad" title="' + esc((v.problems || []).concat(v.ledgerIssues || []).join("; ")) + '">' + esc(issue) + "</span>"
-        : '<span class="src' + (v.status === "ready" ? " ok" : "") + '">' + esc(v.status === "ready" ? (v.userLedger ? "Set by you" : v.custSource || "Ready") : v.customerLedger ? "Suggested \u00b7 " + (v.custSource || "match") : "No match found") + "</span>");
-    if (v.postError) cell = '<span class="src bad" title="' + esc(v.postError) + '">Tally: ' + esc(v.postError) + "</span>" + cell;
-    act = (v.status === "review" && v.customerLedger && !issue ? '<button class="btn small primary" data-svact="confirm" data-id="' + v.id + '">Confirm</button>' : '<button class="btn small" data-svopen="' + v.id + '">Open</button>') +
-      '<button class="icon" data-svact="ignore" data-id="' + v.id + '" title="Ignore" aria-label="Ignore">\u2715</button>';
-  } else {
-    cell = '<span class="lgtext">' + esc(v.customerLedger || "\u2014") + '</span><span class="src muted">' + esc(v.status === "posted" ? "Posted " + (v.postedAt ? shortDate(v.postedAt.slice(0, 10)) : "") : v.status === "intally" ? "Already in Tally" : "Ignored") + (v.receivedAt ? " \u00b7 paid " + shortDate(v.receivedAt) : "") + "</span>";
-    act = '<button class="btn small" data-svopen="' + v.id + '">Open</button>' + (v.status === "posted" ? "" : '<button class="linkbtn" data-svact="restore" data-id="' + v.id + '">Restore</button>');
-  }
-  return '<tr class="' + (sel ? "picked" : "") + '"><td class="ck"><input type="checkbox" data-ssel="' + v.id + '"' + (sel ? " checked" : "") + (v.status === "posted" ? " disabled" : "") + ' aria-label="Select"></td>' +
-    '<td class="dt" title="' + esc(fmtDate(x.date)) + '">' + (x.date ? shortDate(x.date) : "\u2014") + "</td>" +
-    '<td class="pt"><div class="pn"><button class="linkbtn strong" data-svopen="' + v.id + '">' + esc(x.number || "(no number)") + '</button></div><div class="nr">' + (v.source === "created" ? "Created here" : esc(v.fileName || "Uploaded")) + "</div></td>" +
-    '<td class="pt"><div class="pn">' + esc(x.customerName || "\u2014") + '</div><div class="nr">' + esc(x.customerGstin || "Unregistered") + (x.pos ? " \u00b7 " + esc(GST_STATES[x.pos] || x.pos) : "") + "</div></td>" +
-    '<td class="n">' + INR.format(num(x.taxable)) + '</td><td class="n">' + INR.format(gst) + '</td><td class="n"><b>' + INR.format(num(x.total)) + "</b></td>" +
-    '<td class="lg">' + cell + '</td><td class="ac">' + act + "</td></tr>";
-}
-function salesDetailHtml(v){
-  const s = SL(), x = v.x, co = CO(s.cid);
-  const ro = !["review", "ready"].includes(v.status);
-  const lines = salesLines(v);
-  const dr = r2(lines.filter(l => l.side === "Dr").reduce((a, l) => a + l.amt, 0)), cr = r2(lines.filter(l => l.side === "Cr").reduce((a, l) => a + l.amt, 0));
-  const fld = (label, k, type) => '<label><span>' + label + '</span><input type="' + (type || "text") + '"' + (type === "number" ? ' step="0.01"' : "") + ' data-sv="' + k + '" data-fk="sv:' + v.id + ":" + k + '"' + (type === "date" ? "" : " data-keeptyped") + ' value="' + esc(x[k] == null ? "" : x[k]) + '"' + (ro ? " disabled" : "") + "></label>";
-  const probs = (v.problems || []).concat(v.ledgerIssues || []);
-  let h = '<div class="bk-overlay" data-svoverlay><div class="bk-panel wide" role="dialog" aria-modal="true" aria-labelledby="svT"><div class="bk-panel-head"><h2 id="svT">Invoice ' + esc(x.number || "") + ' <span class="tag ' + ({ready: "ok", review: "warn", posted: "ok", intally: "no", ignored: "no"}[v.status]) + '">' + ({ready: "Ready", review: "To review", posted: "Posted", intally: "In Tally", ignored: "Ignored"}[v.status]) + '</span></h2><button class="icon" data-act="salesClose" aria-label="Close">\u2715</button></div>';
-  if (probs.length) h += '<div class="bk-alert bad">' + probs.map(esc).join("<br>") + "</div>";
-  if (v.postError) h += '<div class="bk-alert bad">Tally: ' + esc(v.postError) + "</div>";
-  h += '<section><h3>Invoice details</h3><div class="bk-form">' + fld("Invoice number", "number") + fld("Date", "date", "date") + fld("Customer name", "customerName") + fld("Customer GSTIN", "customerGstin") +
-    '<label><span>Place of supply</span><select data-sv="pos"' + (ro ? " disabled" : "") + ">" + stateOptions(x.pos) + "</select></label>" +
-    fld("Taxable value", "taxable", "number") + fld("CGST", "cgst", "number") + fld("SGST", "sgst", "number") + fld("IGST", "igst", "number") + fld("Cess", "cess", "number") + fld("Invoice total", "total", "number") + "</div>";
-  if ((x.items || []).length) h += '<div class="bk-tablewrap" style="margin-top:10px"><table class="bk-table"><thead><tr><th>Item</th><th>HSN</th><th class="n">Qty</th><th class="n">Rate</th><th class="n">Taxable</th><th class="n">GST %</th></tr></thead><tbody>' +
-    x.items.map(it => "<tr><td>" + esc(it.desc) + "</td><td>" + esc(it.hsn || "") + '</td><td class="n">' + esc(it.qty) + " " + esc(it.unit || "") + '</td><td class="n">' + INR.format(num(it.rate)) + '</td><td class="n">' + INR.format(num(it.taxable)) + '</td><td class="n">' + num(it.gstRate) + "%</td></tr>").join("") + "</tbody></table></div>";
-  h += "</section>";
-  h += '<section><h3>Sales voucher for Tally</h3><div class="bk-form"><label><span>Customer ledger</span><input type="text" class="lgbox" data-svcust="' + v.id + '" data-fk="svcustd:' + v.id + '" data-keeptyped data-ac="1" autocomplete="off" value="' + esc(v.customerLedger) + '"' + (ro ? " disabled" : "") + "></label>" +
-    salesTotals(x).map(g => '<label><span>Sales ledger ' + rateTag(g.rate) + "%</span><select data-svsales=\"" + g.rate + '"' + (ro ? " disabled" : "") + ">" + ledgerOptions(lines.find(l => l.role === "sales" && l.rate === g.rate).ledger, /sales accounts?/i) + "</select></label>").join("") + "</div>" +
-    '<div class="bk-tablewrap" style="margin-top:10px"><table class="bk-table"><thead><tr><th>Ledger</th><th class="n">Debit</th><th class="n">Credit</th></tr></thead><tbody>' +
-    lines.map(l => "<tr><td>" + (l.ledger ? esc(l.ledger) : '<span class="src bad">not set</span>') + (l.ledger && !exactLedger(l.ledger) ? ' <span class="src bad">not in Tally</span>' : "") + '</td><td class="n">' + (l.side === "Dr" ? INR.format(l.amt) : "") + '</td><td class="n">' + (l.side === "Cr" ? INR.format(l.amt) : "") + "</td></tr>").join("") +
-    '<tr><td><b>Total</b></td><td class="n"><b>' + INR.format(dr) + '</b></td><td class="n"><b>' + INR.format(cr) + "</b></td></tr></tbody></table></div>" +
-    '<p class="note">Voucher type \u201c' + esc(s.cfg.voucherType || "Sales") + "\u201d \u00b7 bill-wise New Ref " + esc(x.number) + (co.createOptional ? " \u00b7 posted as Optional" : "") + "</p></section>";
-  if ((v.trace || []).length) h += '<section><h3>How it was read</h3><ol class="note">' + v.trace.map(t => "<li>" + (t.ok ? "\u2714 " : "\u2716 ") + esc(t.step) + ": " + esc(t.note || "") + "</li>").join("") + "</ol></section>";
-  h += '<section class="row" style="gap:6px;flex-wrap:wrap">' +
-    (v.source === "upload" ? '<span class="note">Read again:</span><button class="btn small" data-svact="reread" data-force="" data-id="' + v.id + '">Free</button>' +
-      '<button class="btn small" data-svact="reread" data-force="google" data-id="' + v.id + '"' + (googleReady() ? "" : " disabled") + '>Google OCR</button>' +
-      '<button class="btn small" data-svact="reread" data-force="claude" data-id="' + v.id + '"' + (claudeReady() ? "" : " disabled") + ">Claude</button>" : "") +
-    (v.status === "review" ? '<button class="btn primary" data-svact="confirm" data-id="' + v.id + '">Confirm</button>' : "") +
-    (v.status === "ready" ? '<button class="btn" data-svact="unready" data-id="' + v.id + '">Back to review</button>' : "") +
-    '<button class="btn" data-svact="print" data-id="' + v.id + '">Print invoice</button>' +
-    (S.files["sv:" + v.id] ? '<button class="btn" data-svact="file" data-id="' + v.id + '">View uploaded file</button>' : "") +
-    (!ro ? '<button class="btn" data-svact="edit" data-id="' + v.id + '">' + (v.source === "created" ? "Edit invoice" : (x.items || []).length ? "Edit items" : "Enter items") + "</button>" : "") +
-    (!ro ? '<button class="btn" data-svact="ignore" data-id="' + v.id + '">Ignore</button>' : "") +
-    (v.status !== "posted" ? '<button class="btn danger" data-svact="delete" data-id="' + v.id + '">Delete</button>' : "") + "</section>";
-  return h + "</div></div>";
-}
-function salesSettingsHtml(){
-  const s = SL(), c = s.cfg, co = CO(s.cid);
-  const f = (label, k, ph) => '<label><span>' + label + '</span><input type="text" data-scfg="' + k + '" value="' + esc(c[k] == null ? "" : c[k]) + '" placeholder="' + esc(ph || "") + '"></label>';
-  const rates = Array.from(new Set(s.list.flatMap(v => salesTotals(v.x).map(g => g.rate)).concat([5, 18]))).sort((a, b) => a - b);
-  const home = stateOfGstin(co.gstin);
-  let h = '<div class="bk-overlay" data-svoverlay><div class="bk-panel" role="dialog" aria-modal="true" aria-labelledby="ssT"><div class="bk-panel-head"><h2 id="ssT">Sales settings \u2014 ' + esc(co.name) + '</h2><button class="icon" data-act="salesSettingsClose" aria-label="Close">\u2715</button></div>';
-  h += '<section><h3>Invoice numbers</h3><div class="bk-form">' + f("Series ({FY} = financial year)", "series", "INV/{FY}/") + f("Next number", "next") + f("Digits", "pad") + '</div><p class="note">Next invoice: <b>' + esc(nextInvoiceNumber(new Date().toISOString().slice(0, 10)).number) + "</b></p></section>";
-  h += '<section><h3>Your details on invoices</h3><div class="bk-form">' +
-    '<label><span>Address</span><textarea rows="3" data-scfg="address">' + esc(c.address) + "</textarea></label>" + f("Phone", "phone") + f("Email", "email") +
-    f("Bank name", "bankName") + f("Account number", "bankAc") + f("IFSC", "bankIfsc") + f("Branch", "bankBranch") +
-    '<label><span>Terms and conditions</span><textarea rows="3" data-scfg="terms">' + esc(c.terms) + "</textarea></label>" + f("Signatory (below the signature)", "signatory", "Authorised Signatory") +
-    '</div><p class="note">GSTIN, PAN and state come from Client setup → Company' + (co.gstin ? " (" + esc(co.gstin) + ", " + esc(GST_STATES[home] || "") + ")" : ": add the GSTIN there") + ".</p></section>";
-  h += '<section><h3>Tally ledgers</h3><p class="note">Found automatically in the ledger list. Choose them here if this client names them differently.</p><div class="bk-form">' +
-    f("Voucher type", "voucherType", "Sales") +
-    '<label><span>Sales ledger (all rates)</span><select data-sled="sales">' + ledgerOptions(exactLedger((c.ledgers || {}).sales) || "", /sales accounts?/i) + "</select></label>" +
-    rates.map(r => '<label><span>Sales ' + rateTag(r) + "% \u2014 same state</span><select data-sled=\"sales_" + rateTag(r) + '_l">' + ledgerOptions(salesLedgerFor(r, false), /sales accounts?/i) + "</select></label>" +
-      '<label><span>Sales ' + rateTag(r) + "% \u2014 other state</span><select data-sled=\"sales_" + rateTag(r) + '_i">' + ledgerOptions(salesLedgerFor(r, true), /sales accounts?/i) + "</select></label>").join("") +
-    ["cgst", "sgst", "igst", "cess"].map(k => '<label><span>Output ' + k.toUpperCase() + '</span><select data-sled="' + k + '">' + ledgerOptions(taxLedgerFor(k, 18), /duties|taxes/i) + "</select></label>").join("") +
-    '<label><span>Round off</span><select data-sled="roundOff">' + ledgerOptions(roundOffLedger(), /indirect/i) + "</select></label></div></section>";
-  h += '<section><h3>Automation</h3><label class="chk"><input type="checkbox" data-scfgc="auto"' + (c.auto !== false ? " checked" : "") + "> Mark invoices Ready when everything checks out and the customer is certain (GSTIN on the Tally ledger, or booked the same way before)</label>" +
-    '<label class="chk"><input type="checkbox" data-scfgc="noRound"' + (c.noRound ? " checked" : "") + "> Do not round invoice totals to the rupee</label></section>";
-  h += '<section><h3>Clean up</h3><div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn small" data-act="salesForget">Forget customer memory</button><button class="btn small danger" data-act="salesDelAll"' + (s.list.length ? "" : " disabled") + ">Delete all sales invoices</button></div></section>";
-  return h + "</div></div>";
-}
-function salesBar(){
-  const s = SL();
-  if (!s || s.loading || s.view === "create" || !s.list.length) return s && s.view === "create" && s.draft ? '<div class="actionbar bk-actionbar"><div class="ab-left"><span class="bk-stat"><b>' + money(s.draft.x.total) + '</b> invoice total</span></div><div class="ab-right"><button class="btn" data-act="salesCancel">Cancel</button><button class="btn" data-act="salesPrintDraft">Preview / Print</button><button class="btn primary" data-act="salesSave">Save invoice</button></div></div>' : "";
-  const tc = salesCounts();
-  const nsel = s.sel.size;
-  let left, right;
-  if (nsel){
-    const rows = s.list.filter(v => s.sel.has(v.id));
-    left = "<b>" + nsel + " selected</b> <span class=\"muted\">\u00b7 " + INR.format(r2(rows.reduce((a, v) => a + num(v.x.total), 0))) + '</span> <button class="linkbtn" data-act="salesSelNone">Clear</button>';
-    right = '<input type="text" class="lgbox" data-svbulk data-fk="svbulk" data-keeptyped data-ac="1" autocomplete="off" placeholder="Customer ledger for the ' + nsel + ' selected">' +
-      '<button class="btn" data-act="salesBulkLedger">Apply</button>' +
-      (rows.some(v => v.status === "review") ? '<button class="btn primary" data-act="salesBulkConfirm">Confirm</button>' : "") +
-      (rows.some(v => ["review", "ready"].includes(v.status)) ? '<button class="btn" data-act="salesBulkIgnore">Ignore</button>' : "") +
-      '<button class="btn" data-act="salesBulkPrint">Print</button>' +
-      (rows.every(v => v.status !== "posted") ? '<button class="btn danger" data-act="salesBulkDelete">Delete</button>' : "");
-  } else {
-    const confirmable = s.list.filter(v => v.status === "review" && v.customerLedger && !(v.problems || []).length && !(v.ledgerIssues || []).length).length;
-    left = '<span class="bk-stat"><b>' + tc.review + '</b> to review</span><span class="bk-stat"><b>' + tc.ready + "</b> ready to post</span>";
-    right = (confirmable ? '<button class="btn" data-act="salesConfirmAll">Confirm all suggestions (' + confirmable + ")</button>" : "") +
-      (Bridge.on() && Bridge.up() ? '<button class="btn primary" data-act="salesPost"' + (tc.ready ? "" : " disabled") + ">Post to Tally (" + tc.ready + ")</button>"
-        : '<button class="btn primary" data-act="salesFile"' + (tc.ready ? "" : " disabled") + ">Create Tally file (" + tc.ready + ")</button>");
-  }
-  let snack = "";
-  if (s.undo && !nsel) snack = '<div class="bk-snack"><span>' + s.undo.text + '</span><button class="linkbtn" data-act="salesUndo">Undo</button><button class="icon" data-act="salesUndoOk" aria-label="Close">\u2715</button></div>';
-  return '<div class="actionbar bk-actionbar">' + snack + '<div class="ab-left">' + left + '</div><div class="ab-right">' + right + "</div></div>";
-}
-function salesLightRefresh(){
-  const s = SL();
-  document.querySelectorAll("[data-ssel]").forEach(el => { const on = s.sel.has(el.dataset.ssel); if (el.checked !== on) el.checked = on; const tr = el.closest("tr"); if (tr) tr.classList.toggle("picked", on); });
-  const bar = document.querySelector(".actionbar"), html = salesBar();
-  if (bar && html){ const t = document.createElement("div"); t.innerHTML = html; bar.replaceWith(t.firstElementChild); }
-}
+// the Sales screen and its bar: React (app/src/screens/Sales.jsx)
+function viewSales(){ return '<div data-react="Sales"></div>'; }
+function salesBar(){ const s = SL(); return s && !s.loading && ((s.view === "create" && s.draft) || (s.view !== "create" && s.list.length)) ? '<div data-react="SalesBar"></div>' : ""; }
+function salesLightRefresh(){ FinComReact.redraw(); }
 /* ---------- to Tally ---------- */
 function salesReadyProblems(list){
   const out = [];
@@ -724,16 +525,11 @@ function salesBulk(kind, ledger){
   if (kind === "confirm" && n < rows.length) toast((rows.length - n) + " could not be confirmed: open them to see what is missing.");
   s.sel.clear(); saveSales(); render();
 }
-function salesClick(t){
-  const s = SL(); if (!s) return false;
-  if (t.dataset.stab){ s.filter = t.dataset.stab; s.sel.clear(); s.sticky.clear(); render(); return true; }
-  if (t.dataset.svopen){ s.openId = t.dataset.svopen; render(); return true; }
-  if (t.dataset.sirm !== undefined && s.draft){ s.draft.x.items.splice(+t.dataset.sirm, 1); if (!s.draft.x.items.length) s.draft.x.items.push(blankItem()); recalcDraft(); render(); return true; }
-  if (t.hasAttribute && (t.hasAttribute("data-ssel") || t.hasAttribute("data-sselall"))) return true;
-  if (t.dataset.svact){
-    const v = inv(t.dataset.id); if (!v) return true;
-    const a = t.dataset.svact;
-    if (a === "reread"){ rereadSales(v, t.dataset.force || null); return true; }
+// one invoice's buttons: reread, print, file, edit, confirm, unready, ignore, restore, delete
+function salesRowAct(a, id, force){
+  const s = SL(); if (!s) return true;
+    const v = inv(id); if (!v) return true;
+    if (a === "reread"){ rereadSales(v, force); return true; }
     if (a === "print"){ printInvoiceHtml(invoiceHtml(v.x, CO(s.cid), s.cfg), v.x.number); return true; }
     if (a === "file"){ const f = S.files["sv:" + v.id]; if (f){ const u = URL.createObjectURL(f); window.open(u, "_blank"); setTimeout(() => URL.revokeObjectURL(u), 60000); } return true; }
     if (a === "edit"){ s.openId = null; startDraft(v.id); return true; }
@@ -755,7 +551,69 @@ function salesClick(t){
       return true;
     }
     s.sticky.add(v.id); saveSales(); render(); return true;
-  }
+}
+// the React sales screen (app/src/screens/Sales.jsx)
+function salesAct(act){ return salesClick({dataset: {act}}); }
+function salesTabGo(k){ const s = SL(); s.filter = k; s.sel.clear(); s.sticky.clear(); render(); }
+function salesOpen(id){ SL().openId = id; render(); }
+function salesSearch(q){ const s = SL(); s.q = q; s.sticky.clear(); FinComReact.redraw(); later("sq", render, 250); }
+let salesLastClicked = null;
+function salesToggle(id, on, shift){
+  const s = SL();
+  if (shift && salesLastClicked){ const vis = salesVisible().map(v => v.id); const i = vis.indexOf(salesLastClicked), j = vis.indexOf(id); if (i >= 0 && j >= 0) vis.slice(Math.min(i, j), Math.max(i, j) + 1).forEach(x => on ? s.sel.add(x) : s.sel.delete(x)); }
+  else if (on) s.sel.add(id); else s.sel.delete(id);
+  salesLastClicked = id; salesLightRefresh();
+}
+function salesSelAll(on){ const s = SL(); salesVisible().filter(v => v.status !== "posted").forEach(v => on ? s.sel.add(v.id) : s.sel.delete(v.id)); salesLightRefresh(); }
+// an invoice's customer ledger; false when it is not a Tally ledger (the box goes back)
+function salesSetCust(id, val){
+  const s = SL(), v = inv(id); if (!v) return true;
+  val = String(val || "").trim();
+  if (!val){ v.customerLedger = ""; v.userLedger = false; mapInvoice(v); saveSales(); render(); return true; }
+  if (!exactLedger(val)){ toast("“" + val + "” is not a Tally ledger. Choose one from the list, or create it."); return false; }
+  if (s.sel.has(v.id) && s.sel.size > 1){ salesBulk("ledger", exactLedger(val)); return true; }
+  if (setCustomerLedger(v, val)) render();
+  return true;
+}
+// a field of the invoice that is open (number, date, customer, amounts)
+function salesSetField(k, val){
+  const v = inv(SL().openId); if (!v) return;
+  const before = [salesSnapshot(v)];
+  v.x[k] = ["taxable", "cgst", "sgst", "igst", "cess", "total"].includes(k) ? r2(num(val)) : k === "customerGstin" ? String(val).trim().toUpperCase() : String(val).trim();
+  if (k === "customerGstin" && gstinValid(v.x.customerGstin) && !v.x.pos) v.x.pos = stateOfGstin(v.x.customerGstin);
+  mapInvoice(v); salesSetUndo("Invoice " + esc(v.x.number) + " changed", before); saveSales(); render();
+}
+function salesSetSalesLedger(rate, val){ const v = inv(SL().openId); if (v){ v.salesLedgers = v.salesLedgers || {}; v.salesLedgers[num(rate)] = val; mapInvoice(v); saveSales(); render(); } }
+// the invoice being created
+function draftSet(k, val){
+  const s = SL(), x = s.draft.x;
+  x[k] = k === "dueDays" ? num(val) : k === "customerGstin" ? String(val).trim().toUpperCase() : val;
+  if (k === "customerGstin" && gstinValid(x.customerGstin)) x.pos = stateOfGstin(x.customerGstin);
+  if (k === "date" && !s.draft.editId){ const nn = nextInvoiceNumber(x.date); if (normInvNo(x.number) !== normInvNo(nn.number) && /\{FY\}/.test(s.cfg.series)){ x.number = nn.number; s.draft.seriesN = nn.n; } }
+  recalcDraft(); render();
+}
+function draftItem(i, k, val){
+  const s = SL(), it = s.draft.x.items[i]; if (!it) return;
+  it[k] = ["qty", "rate", "disc", "gstRate"].includes(k) ? num(val) : val;
+  if (k === "desc"){ const m = s.cfg.items[String(val).trim().toLowerCase()]; if (m){ if (!it.hsn) it.hsn = m.hsn; if (!num(it.rate)) it.rate = m.rate; it.unit = m.unit || it.unit; it.gstRate = m.gstRate; } }
+  recalcDraft(); render();
+}
+function draftItemRemove(i){ const s = SL(); s.draft.x.items.splice(i, 1); if (!s.draft.x.items.length) s.draft.x.items.push(blankItem()); recalcDraft(); render(); }
+// the customer of the invoice being created; false when it is not a Tally ledger
+function draftCust(val){
+  const s = SL(); val = String(val || "").trim();
+  if (!val){ s.draft.customerLedger = ""; render(); return true; }
+  const l = exactLedger(val);
+  if (!l){ toast("“" + val + "” is not a Tally ledger. Choose one, or create it from the list."); return false; }
+  applyDraftCustomer(l); return true;
+}
+// Sales settings
+function salesCfg(k, val){ const s = SL(); s.cfg[k] = ["next", "pad"].includes(k) ? Math.max(1, Math.round(num(val))) : val; saveSales({cfg: true}); render(); }
+function salesCfgCheck(k, on){ const s = SL(); s.cfg[k] = on; saveSales({cfg: true}); s.list.forEach(v => mapInvoice(v)); render(); }
+function salesCfgLedger(k, val){ const s = SL(); s.cfg.ledgers = s.cfg.ledgers || {}; s.cfg.ledgers[k] = val; saveSales({cfg: true}); s.list.forEach(v => mapInvoice(v)); saveSales(); render(); }
+function salesClick(t){
+  const s = SL(); if (!s) return false;
+  if (t.dataset.svact){ salesRowAct(t.dataset.svact, t.dataset.id, t.dataset.force || null); return true; }
   switch (t.dataset.act){
     case "salesPick": document.getElementById("salesIn").click(); return true;
     case "ledPick": { const el = document.getElementById("ledIn"); if (el) el.click(); return true; }
@@ -796,49 +654,6 @@ function salesChange(t){
   const s = SL(); if (!s) return false;
   if (t.id === "salesIn"){ const files = Array.from(t.files || []); t.value = ""; uploadSales(files); return true; }
   if (t.id === "ledIn"){ const f = t.files && t.files[0]; t.value = ""; if (f) importLedgerList(f).then(() => { s.list.forEach(v => mapInvoice(v)); saveSales(); render(); }); return true; }
-  if (t.dataset.svcust){
-    const v = inv(t.dataset.svcust); if (!v) return true;
-    const val = t.value.trim();
-    if (!val){ v.customerLedger = ""; v.userLedger = false; mapInvoice(v); saveSales(); render(); return true; }
-    if (!exactLedger(val)){ t.value = v.customerLedger || ""; toast("\u201c" + val + "\u201d is not a Tally ledger. Choose one from the list, or create it."); return true; }
-    if (s.sel.has(v.id) && s.sel.size > 1){ salesBulk("ledger", exactLedger(val)); return true; }
-    if (setCustomerLedger(v, val)) render();
-    return true;
-  }
-  if (t.dataset.sv){
-    const v = inv(s.openId); if (!v) return true;
-    const k = t.dataset.sv;
-    const before = [salesSnapshot(v)];
-    v.x[k] = ["taxable", "cgst", "sgst", "igst", "cess", "total"].includes(k) ? r2(num(t.value)) : k === "customerGstin" ? t.value.trim().toUpperCase() : t.value.trim();
-    if (k === "customerGstin" && gstinValid(v.x.customerGstin) && !v.x.pos) v.x.pos = stateOfGstin(v.x.customerGstin);
-    mapInvoice(v); salesSetUndo("Invoice " + esc(v.x.number) + " changed", before); saveSales(); render(); return true;
-  }
-  if (t.dataset.svsales !== undefined){ const v = inv(s.openId); if (v){ v.salesLedgers = v.salesLedgers || {}; v.salesLedgers[num(t.dataset.svsales)] = t.value; mapInvoice(v); saveSales(); render(); } return true; }
-  if (t.dataset.sd && s.draft){
-    const k = t.dataset.sd, x = s.draft.x;
-    x[k] = k === "dueDays" ? num(t.value) : k === "customerGstin" ? t.value.trim().toUpperCase() : t.value;
-    if (k === "customerGstin" && gstinValid(x.customerGstin)) x.pos = stateOfGstin(x.customerGstin);
-    if (k === "date" && !s.draft.editId){ const nn = nextInvoiceNumber(x.date); if (normInvNo(x.number) !== normInvNo(nn.number) && /\{FY\}/.test(s.cfg.series)) { x.number = nn.number; s.draft.seriesN = nn.n; } }
-    recalcDraft(); render(); return true;
-  }
-  if (t.dataset.si !== undefined && s.draft){
-    const it = s.draft.x.items[+t.dataset.si], k = t.dataset.sk;
-    if (!it) return true;
-    it[k] = ["qty", "rate", "disc", "gstRate"].includes(k) ? num(t.value) : t.value;
-    if (k === "desc"){ const m = s.cfg.items[t.value.trim().toLowerCase()]; if (m){ if (!it.hsn) it.hsn = m.hsn; if (!num(it.rate)) it.rate = m.rate; it.unit = m.unit || it.unit; it.gstRate = m.gstRate; } }
-    recalcDraft(); render(); return true;
-  }
-  if (t.hasAttribute("data-sdcust") && s.draft){
-    const val = t.value.trim();
-    if (!val){ s.draft.customerLedger = ""; render(); return true; }
-    const l = exactLedger(val);
-    if (!l){ t.value = s.draft.customerLedger || ""; toast("\u201c" + val + "\u201d is not a Tally ledger. Choose one, or create it from the list."); return true; }
-    applyDraftCustomer(l); return true;
-  }
-  if (t.dataset.scfg){ const k = t.dataset.scfg; s.cfg[k] = ["next", "pad"].includes(k) ? Math.max(k === "pad" ? 1 : 1, Math.round(num(t.value))) : t.value; saveSales({cfg: true}); render(); return true; }
-  if (t.dataset.scfgc){ s.cfg[t.dataset.scfgc] = t.checked; saveSales({cfg: true}); s.list.forEach(v => mapInvoice(v)); render(); return true; }
-  if (t.dataset.sled){ s.cfg.ledgers = s.cfg.ledgers || {}; s.cfg.ledgers[t.dataset.sled] = t.value; saveSales({cfg: true}); s.list.forEach(v => mapInvoice(v)); saveSales(); render(); return true; }
-  if (t.hasAttribute("data-ssel") || t.hasAttribute("data-sselall") || t.hasAttribute("data-svbulk") || t.dataset.salesq !== undefined) return true;
   return false;
 }
 function applyDraftCustomer(ledgerName){
@@ -850,25 +665,10 @@ function applyDraftCustomer(ledgerName){
   if (info.address && !d.x.address) d.x.address = info.address;
   recalcDraft(); render();
 }
-function salesInput(t){
-  const s = SL(); if (!s) return false;
-  if (t.hasAttribute("data-salesq")){ s.q = t.value; s.sticky.clear(); later("sq", render, 250); return true; }
-  return false;
-}
-let salesLastClicked = null;
+function salesInput(t){ return false; }
 document.addEventListener("click", ev => {
   if (!(S.view === "company" && S.tab === "sales" && SL())) return;
-  const s = SL();
-  const cb = ev.target.closest && ev.target.closest("[data-ssel]");
-  if (cb){
-    const id = cb.dataset.ssel;
-    if (ev.shiftKey && salesLastClicked){ const vis = salesVisible().map(v => v.id); const i = vis.indexOf(salesLastClicked), j = vis.indexOf(id); if (i >= 0 && j >= 0) vis.slice(Math.min(i, j), Math.max(i, j) + 1).forEach(x => cb.checked ? s.sel.add(x) : s.sel.delete(x)); }
-    else if (cb.checked) s.sel.add(id); else s.sel.delete(id);
-    salesLastClicked = id; salesLightRefresh(); return;
-  }
-  const all = ev.target.closest && ev.target.closest("[data-sselall]");
-  if (all){ salesVisible().filter(v => v.status !== "posted").forEach(v => all.checked ? s.sel.add(v.id) : s.sel.delete(v.id)); salesLightRefresh(); return; }
-  if (ev.target.hasAttribute && ev.target.hasAttribute("data-svoverlay")){ s.openId = null; s.showSettings = false; render(); }
+  if (ev.target.hasAttribute && ev.target.hasAttribute("data-svoverlay")){ const s = SL(); s.openId = null; s.showSettings = false; render(); }
 });
 document.addEventListener("keydown", ev => {
   if (!(S.view === "company" && S.tab === "sales" && SL())) return;

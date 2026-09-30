@@ -10,6 +10,7 @@
 // Tally, the column filters, the rules tab and the settings panel.
 import { useRef } from "react";
 import Legacy from "../parts/Legacy.jsx";
+import ColHead from "../parts/ColHead.jsx";
 import LedgerBox from "../parts/LedgerBox.jsx";
 import { BusyCard } from "../parts/Reading.jsx";
 
@@ -17,16 +18,6 @@ const MODE_NAME = { ATM: "ATM cash withdrawal", CASH: "Cash deposit", CHARGES: "
 const EMPTY = { review: "Nothing to review. Every entry has a ledger.", ready: "No entries are ready yet.", done: "Nothing posted or ignored yet." };
 const live = () => Bridge.on() && Bridge.up();
 
-// a column heading with its filter button (the old pop-up answers the button)
-function ColHead({ k, label, cls }) {
-  const on = colActive("bank", k), open = S.colPop && S.colPop.t === "bank" && S.colPop.k === k;
-  return (
-    <th className={cls}><span className="colh"><span>{label}</span>
-      <span data-legacy="" style={{ display: "contents" }}>
-        <button className={"colf" + (on ? " on" : "") + (open ? " open" : "")} data-colf={k} data-colt="bank" aria-label={"Filter " + label} title={"Filter " + label} dangerouslySetInnerHTML={{ __html: FUNNEL }} />
-      </span></span></th>
-  );
-}
 
 function RowLedger({ r }) {
   const b = B(), tip = r.why || undefined;
@@ -92,8 +83,8 @@ function Table({ tab }) {
       <table className="bk-table">
         <thead><tr>
           <th className="ck"><input type="checkbox" aria-label="Select all" checked={!!nSel && nSel === total} onChange={(ev) => bankSelAll(ev.target.checked)} /></th>
-          <ColHead k="date" label="Date" cls="dt" /><ColHead k="narr" label="Particulars" /><ColHead k="wd" label="Withdrawal" cls="n" />
-          <ColHead k="dep" label="Deposit" cls="n" /><ColHead k="led" label="Ledger" cls="lg" /><th className="ac"></th>
+          <ColHead t="bank" k="date" label="Date" cls="dt" /><ColHead t="bank" k="narr" label="Particulars" /><ColHead t="bank" k="wd" label="Withdrawal" cls="n" />
+          <ColHead t="bank" k="dep" label="Deposit" cls="n" /><ColHead t="bank" k="led" label="Ledger" cls="lg" /><th className="ac"></th>
         </tr></thead>
         <tbody>{list.map((r) => <Row key={r.id} r={r} sel={b.sel.has(r.id)} />)}</tbody>
       </table>

@@ -37,6 +37,8 @@ app/                      the React app (Vite)
   skip anything inside a React screen (`reactOwned` in src/js/27), except old pieces shown there (`data-legacy`).
 - **Column filters** (the funnel buttons, the chips and the pop-up) are still old pieces, shared by the tables; a React
   table draws the funnel button inside `data-legacy`, and `render()` places the pop-up again after React has drawn.
+- **Boxes that count when finished** (a figure on an uploaded invoice, a setting) are `parts/CommitBox.jsx`: saved when
+  the box is left, not on every key. Lists of Tally ledgers to choose from are `parts/LedgerSelect.jsx`.
 - **Ledger boxes** (a Tally ledger typed, with the list that drops down) are `parts/LedgerBox.jsx`: the choice is
   made when the box is left or a ledger is picked (the browser's change event), not on every key.
 - **Redraws and the mouse.** `render()` takes the React screens out of the page for a moment; a click whose button
@@ -88,7 +90,7 @@ Status: **done** (in React, test passing) · **next** · blank = not started. Ab
 | | review table `viewReviewTable`, `reviewBar`, `drawerHtml` (18), the bill's bar in `actionBar` (27) · `viewParties` (19) | **done** |
 | **Bank** | the screen `viewBank` (22) · `bankTable`, `bankRowHtml`, `viewBankGroups`, `bankBar` (23) | **done** |
 | | still old, shown inside it: `viewSuggestions`, `viewRulesPanel` (22) · `bankSettingsHtml`, `colPopHtml`, `colChipBar` (23) · recon, balance, duplicates, focus (24) · `fixBanner` (21) · `viewBankSetup` (02) | next |
-| **Sales** | `viewSales`, `viewSalesCreate`, invoice and print, settings, `postReportHtml` (26) | |
+| **Sales** | `viewSales`, `viewSalesCreate`, `salesRowHtml`, `salesDetailHtml`, `salesSettingsHtml`, `salesBar` (26); the printed invoice `invoiceHtml` stays a page of its own | **done** |
 | **Transactions** | `viewTransactions` (03) | |
 | **Dashboard** | `viewClientDash` (18) | |
 | **TDS** | `viewBooksTds`, `viewTdsYears`, `viewTdsYearPage`, `viewTdsReturn26`, `viewTdsReturn24`, `viewTdsCerts` (18) | |
