@@ -2,61 +2,8 @@
 /* The layout: a sidebar, and each client as Collect, Review, Post,    */
 /* Done. The screens inside are the ones the app already has.          */
 /* ================================================================== */
-const NAV = [
-  ["today", "Today", '<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/>'],
-  ["clients", "Clients", '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.6c2.6.2 4.6 1.9 5.3 5.4"/>'],
-  ["inbox", "Inbox", '<path d="M3 13l3-8h12l3 8v6H3z"/><path d="M3 13h5l1.5 2.5h5L16 13h5"/>'],
-  ["tally", "Tally", '<path d="M4 12h12"/><path d="M12 6l6 6-6 6"/><path d="M20 4v16"/>'],
-  ["rules", "Settings", '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>']
-];
+// the sidebar is drawn by React: app/src/Side.jsx
 function inboxTotal(){ return Object.values(S.docq || {}).filter(d => d.status === "waiting").length + Object.keys(S.inbox || {}).length; }
-function renderSide(){
-  const side = document.getElementById("side");
-  if (!side) return;
-  if (signInNeeded()){ side.innerHTML = ""; side.classList.add("hidden"); return; }
-  side.classList.remove("hidden");
-  const co = CO(), inCo = S.view === "company" && co, open = co || (S.coId && S.companies[S.coId]);
-  const st = open ? (open.stats || {}) : {};
-  const icon = d => '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">' + d + "</svg>";
-  const ICONS = {
-    dash: '<path d="M4 13h6V4H4zM14 20h6v-9h-6zM4 20h6v-4H4zM14 8h6V4h-6z"/>',
-    bills: '<path d="M6 3h9l3 3v15H6z"/><path d="M9 9h6M9 13h6M9 17h4"/>',
-    bank: '<path d="M3 10l9-6 9 6"/><path d="M5 10v8M9 10v8M15 10v8M19 10v8M3 20h18"/>',
-    sales: '<path d="M4 17l5-5 4 4 7-7"/><path d="M14 9h6v6"/>',
-    inbox: '<path d="M3 13l3-8h12l3 8v6H3z"/><path d="M3 13h5l1.5 2.5h5L16 13h5"/>',
-    setup: '<path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="8" cy="18" r="2"/>',
-    txn: '<path d="M4 5h16v14H4z"/><path d="M4 9h16M9 9v10"/>',
-    books: '<path d="M5 4h9l5 5v11H5z"/><path d="M13 4v5h5"/><path d="M8 13h7M8 17h5"/>',
-    reports: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
-    lookup: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/><path d="M8 10.5h5M10.5 8v5"/>',
-    letters: '<path d="M3 6h18v12H3z"/><path d="M3 7l9 6 9-6"/>',
-    help: '<circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.5v.6"/><circle cx="12" cy="17" r=".6"/>',
-    clients: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.6c2.6.2 4.6 1.9 5.3 5.4"/>'
-  };
-  const item = (id, label, on, n, kind, attr) => '<button class="side-link" ' + (attr || ("data-nav=\"" + id + "\"")) + (on ? ' aria-current="page"' : "") + ">" +
-    icon(ICONS[kind || id]) + "<span>" + label + "</span>" + (n ? '<span class="side-count">' + n + "</span>" : "") + "</button>";
-  const mod = inCo ? docType() : "";
-  const onDash = inCo && S.tab === "dash";
-  let h = '<div class="side-brand">FinCom</div>';
-  if (open){
-    h += '<div class="side-client"><span class="side-label">Client</span><button class="side-co" data-act="switch" title="Change client (F3)"><b>' + esc(open.name) + "</b><small>" + esc(open.gstin || "No GSTIN") + " \u00b7 change</small></button></div>" +
-      item("dash", "Dashboard", onDash, 0, "dash", 'data-goclient="dash"') +
-      item("bills", "Purchase", inCo && mod === "bills" && !onDash && !isSetupTab(S.tab) && !["clientInbox", "txn", "books"].includes(S.tab), st.drafts || 0, "bills", 'data-goclient="bills"') +
-      item("bank", "Bank", inCo && mod === "bank" && !isSetupTab(S.tab), S.bank && S.bank.cid === open.id ? tabCounts(S.bank.rows).review : 0, "bank", 'data-goclient="bank"') +
-      item("sales", "Sales", inCo && mod === "sales" && !isSetupTab(S.tab), 0, "sales", 'data-goclient="sales"') +
-      item("inbox", "Inbox", inCo && S.tab === "clientInbox", docqCount(open.id), "inbox", 'data-goclient="inbox"') +
-      item("txn", "Transactions", inCo && S.tab === "txn", 0, "txn", 'data-goclient="txn"') +
-      item("books", "TDS & GST", inCo && S.tab === "books" && !["reports", "lookup", "letters"].includes(booksTab()), 0, "books", 'data-goclient="books"') +
-      item("reports", "Reports", inCo && S.tab === "books" && booksTab() === "reports", 0, "reports", 'data-goclient="books:reports"') +
-      item("lookup", "Look up", inCo && S.tab === "books" && booksTab() === "lookup", 0, "lookup", 'data-goclient="books:lookup" title="Any ledger, any dates (press /)"') +
-      item("letters", "Letters", inCo && S.tab === "books" && booksTab() === "letters", 0, "letters", 'data-goclient="books:letters" title="Balance confirmations and dues reminders"') +
-      item("setup", "Client setup", inCo && isSetupTab(S.tab), 0, "setup", 'data-act="setup"');
-  }
-  h += '<div class="side-sep"></div>' + item("clients", "All clients", S.view === "home" && !["rules", "help"].includes(S.homeTab), 0, "clients");
-  h += item("help", "Help", S.view === "home" && S.homeTab === "help", typeof SUP === "object" ? SUP.counts() : 0, "help");
-  h += '<div class="side-grow"></div><div class="side-ver">' + esc(APP_VERSION.split("\u00b7")[1] || APP_VERSION) + "</div>";
-  side.innerHTML = h;
-}
 /* ---------- which step and which kind of document a client is showing ---------- */
 function docType(){ return ["export", "done"].includes(S.tab) ? (S.postFocus || "bills") : S.tab === "bank" ? "bank" : S.tab === "sales" ? "sales" : "bills"; }
 function curStep(){

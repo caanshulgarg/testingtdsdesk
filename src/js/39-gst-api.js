@@ -55,48 +55,5 @@ const GSTAPI = {
     return t;
   }
 };
-function viewGstApiCard(b){
-  const reg = S.gstReg || ((GSTR.gstins(b) || [])[0] || "").slice(0, 2), gstin = GSTAPI.gstinOf(reg);
-  if (!gstin) return "";
-  let h = '<section class="dash-card" style="margin-bottom:12px"><h3>Fetch 2B from the portal</h3>';
-  if (!GSTAPI.on()) return h + '<p class="note">Sign in to the firm account (top right) to fetch 2B straight from the GST portal through the firm’s GST API connection. Until then, bring in the JSON files downloaded from the portal.</p></section>';
-  if (GSTAPI.stale(gstin)) GSTAPI.status(gstin).then(render, () => {});
-  const user = GSTAPI.user(reg), live = GSTAPI.live(gstin), cur = GSTAPI.sess[gstin], pend = cur && cur.sentAt && !live, busy = S.gstApiBusy;
-  if (!user) return h + '<p class="note">Type ' + esc(gstin) + "’s GST portal username in " + gstSetLink("GST settings") + " to connect. The taxpayer must also allow API access on the portal (My Profile → Manage API Access).</p></section>";
-  if (!live){
-    if (cur && cur.connectedAt) h += '<p class="note"><b>The portal session has ended' + (cur.error ? ": " + esc(cur.error) : "") + ".</b> The taxpayer’s API access period is over; one OTP connects it again.</p>";
-    h += '<p class="note">' + esc(gstin) + " · portal user <b>" + esc(user) + "</b>. The OTP goes to the taxpayer’s registered mobile and email; the taxpayer must have allowed API access on the portal (My Profile → Manage API Access).</p>" +
-      '<div class="row" style="gap:8px;align-items:center;flex-wrap:wrap"><button class="btn small' + (pend ? "" : " primary") + '" data-gapi="otp"' + (busy ? " disabled" : "") + ">" + (pend ? "Send the OTP again" : "Send OTP") + "</button>" +
-      (pend ? '<input type="text" inputmode="numeric" maxlength="6" data-gapiotp data-fk="gapiotp" placeholder="6-digit OTP" style="width:130px"><button class="btn small primary" data-gapi="auth"' + (busy ? " disabled" : "") + ">Connect</button>" : "") + "</div>";
-    return h + (S.gstApiMsg ? '<p class="note">' + esc(S.gstApiMsg) + "</p>" : "") + "</section>";
-  }
-  const have = new Set(GST2B.all2b(reg).map(t => t.ym).concat(Object.values(b.twoBs || {}).filter(t => t.gstin === gstin).map(t => t.ym)));
-  // a month's 2B is made on the 14th of the next month
-  const fy = S.gstYm ? GSTRev.fyMonths(S.gstYm) : [], due = fy.filter(GSTAPI.ready);
-  const missing = due.filter(m => !have.has(m)), since = new Date(live.connectedAt);
-  h += '<p class="note">Connected to the portal for ' + esc(gstin) + " since " + since.toLocaleDateString("en-IN", {day: "numeric", month: "short"}) + ". FinCom keeps it connected for the whole firm, with no new OTP, until the taxpayer’s API access period ends (up to 30 days, set on the portal under My Profile → Manage API Access).</p>" +
-    '<div class="row" style="gap:8px;align-items:center;flex-wrap:wrap"><select data-gapiym style="width:auto">' + fy.map(m => '<option value="' + m + '"' + (m === (S.gstApiYm || S.gstYm) ? " selected" : "") + ">" + GSTR.label(m) + (have.has(m) ? " ✓" : "") + "</option>").join("") + "</select>" +
-    '<button class="btn small primary" data-gapi="one"' + (busy ? " disabled" : "") + ">Fetch 2B</button>" +
-    (missing.length ? '<button class="btn small" data-gapi="all"' + (busy ? " disabled" : "") + ">Fetch the " + missing.length + " month" + (missing.length === 1 ? "" : "s") + " not here yet</button>" : "") + "</div>";
-  return h + (S.gstApiMsg ? '<p class="note">' + esc(S.gstApiMsg) + "</p>" : "") + "</section>";
-}
-if (typeof document !== "undefined"){
-  document.addEventListener("change", e => { const t = e.target; if (t.dataset && t.dataset.gapiym !== undefined){ S.gstApiYm = t.value; } });
-  document.addEventListener("click", async e => {
-    const t = e.target.closest("[data-gapi]"); if (!t || !S.books || S.gstApiBusy) return;
-    const reg = S.gstReg || ((GSTR.gstins(S.books) || [])[0] || "").slice(0, 2), a = t.dataset.gapi;
-    const run = async (msg, f) => { S.gstApiBusy = true; S.gstApiMsg = msg; render(); try { S.gstApiMsg = await f(); } catch (err){ S.gstApiMsg = "Not done: " + ((err && err.message) || err); } S.gstApiBusy = false; render(); };
-    if (a === "otp") return run("Asking the portal to send the OTP…", async () => { await GSTAPI.otp(reg); return "OTP sent to the taxpayer’s registered mobile and email. Type it and press Connect."; });
-    if (a === "auth"){ const i = document.querySelector("[data-gapiotp]"), otp = i ? i.value.trim() : "";
-      return run("Connecting…", async () => { await GSTAPI.auth(reg, otp); return "Connected."; }); }
-    const months = a === "one" ? [S.gstApiYm || S.gstYm] : (() => { const gstin = GSTAPI.gstinOf(reg), have = new Set(Object.values(S.books.twoBs || {}).filter(x => x.gstin === gstin).map(x => x.ym));
-      return GSTRev.fyMonths(S.gstYm).filter(m => !have.has(m) && GSTAPI.ready(m)); })();
-    return run("Fetching 2B…", async () => {
-      const got = [], failed = [];
-      for (const m of months){ S.gstApiMsg = "Fetching 2B for " + GSTR.label(m) + "…"; render();
-        try { const x = await GSTAPI.twoB(reg, m); got.push(GSTR.label(m) + " (" + x.rows.length + ")"); } catch (err){ failed.push(GSTR.label(m) + ": " + ((err && err.message) || err)); } }
-      if (got.length) saveBooks();
-      return (got.length ? "2B fetched: " + got.join(", ") + "." : "") + (failed.length ? " Not fetched — " + failed.join("; ") : "");
-    });
-  });
-}
+// the card is drawn by React (app/src/screens/GstApiCard.jsx) in this place
+function viewGstApiCard(b){ return GSTAPI.gstinOf(S.gstReg || ((GSTR.gstins(b) || [])[0] || "").slice(0, 2)) ? '<div data-react="GstApiCard"></div>' : ""; }

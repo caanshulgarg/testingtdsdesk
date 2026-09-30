@@ -1992,7 +1992,6 @@ function viewTallyHome(){
 function renderTop(){
   const bar = document.getElementById("cobar"), tabs = document.getElementById("tabs");
   document.getElementById("firmLine").textContent = (S.firm.firmName || "") + " \u00b7 " + APP_VERSION;
-  renderSide();
   const top = document.querySelector("header.top");
   if (top) top.style.display = signInNeeded() ? "none" : "";
   if (S.view === "company" && CO()){ bar.innerHTML = '<div class="headrow">' + clientHeader() + topRight() + "</div>"; tabs.innerHTML = ""; }

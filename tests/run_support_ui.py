@@ -69,8 +69,8 @@ with sync_playwright() as p:
     pg.route("https://example.supabase.co/**", handle)
     pg.goto("http://localhost:8150/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1500)
     # the guide, without the firm account
-    ok(pg.locator('#side [data-nav="help"], [data-nav="help"]').count() >= 1, "Help is in the side bar")
-    pg.click('[data-nav="help"]'); pg.wait_for_timeout(800)
+    ok(pg.locator('#side .side-link:has-text("Help")').count() == 1, "Help is in the side bar")
+    pg.click('#side .side-link:has-text("Help")'); pg.wait_for_timeout(800)
     t = pg.inner_text("#app")
     ok("Help" in t and "Getting started with FinCom" in t and "2B reconciliation" in t and "Raising a ticket" in t, "the guide lists its topics and every tab guide, by area")
     pg.fill("input[data-supgq]", "tally port"); pg.wait_for_timeout(500)
@@ -83,7 +83,7 @@ with sync_playwright() as p:
     pg.evaluate(SIGN, "tok-a"); pg.wait_for_timeout(500)
     pg.evaluate("""() => { const c = newCompany({name: "ZZ Client", gstin: "09AANFG3202D1ZR"}); S.companies[c.id] = c; S.coId = c.id; S.view = "company"; S.tab = "books"; S.booksTab = "gst"; S.gstPart = "r2b"; S.loadingCo = false;
       S.books = {cid: c.id, loading: false, vouchers: [], map: {}, alloc: {}, challans: []}; render(); toast("Not fetched — Mar 2026: FYN Gateway sent back nothing"); }""")
-    pg.wait_for_timeout(800); pg.click('[data-nav="help"]'); pg.wait_for_timeout(800)
+    pg.wait_for_timeout(800); pg.click('#side .side-link:has-text("Help")'); pg.wait_for_timeout(800)
     ok(pg.evaluate("S.helpCtx && S.helpCtx.client") == "ZZ Client" and "gst" in pg.evaluate("S.helpCtx.screen"), "opening Help keeps the screen it came from: " + str(pg.evaluate("S.helpCtx && S.helpCtx.screen")))
     pg.click('[data-sup="new"]'); pg.wait_for_timeout(500)
     ok(pg.input_value('select[data-supd="module"]') == "GST", "the module is chosen from that screen (GST)")
@@ -111,7 +111,7 @@ with sync_playwright() as p:
     pg.evaluate(SIGN, "tok-admin"); pg.wait_for_timeout(300); pg.click('[data-suptab="desk"]'); pg.wait_for_timeout(1500)
     t = pg.inner_text("#app")
     ok("Support desk" in t and "OPEN NOW" in t and "Firm A & Co" in t and "Pipeline" in t and "Oldest open" in t, "the support desk: open now, SLA, pipeline, firms, oldest open")
-    ok(pg.evaluate("SUP.counts()") == 1 and "1" in pg.inner_text('[data-nav="help"]'), "the side bar counts tickets waiting for support")
+    ok(pg.evaluate("SUP.counts()") == 1 and "1" in pg.inner_text('#side .side-link:has-text("Help")'), "the side bar counts tickets waiting for support")
     pg.screenshot(path=OUT + "/support-desk.png", full_page=True)
     pg.click('tr[data-supopen]'); pg.wait_for_timeout(1200)
     ok("Screen details sent with the ticket" in pg.inner_text("#app") and "ZZ Client" in pg.inner_text("#app"), "support sees the screen's details")

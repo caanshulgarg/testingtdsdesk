@@ -106,6 +106,7 @@ async function gsetApply(reg, what, fn){
   if (to.length > 1) toast(what + ": saved for " + to.length + " GSTINs.");
   return true;
 }
+function goGstSettings(){ if (S.gstReg) S.gsetReg = S.gstReg; S.tab = "gstset"; render(); }
 function gstSetLink(label){ return '<button class="linkbtn" data-gotogstset>' + esc(label || "change in GST settings") + "</button>"; }
 function viewGstSettings(){
   const co = CO();
@@ -195,7 +196,7 @@ if (typeof document !== "undefined"){
   document.addEventListener("input", e => { const t = e.target; if (t.matches && t.matches("[data-gcontq]")){ S.gcontQ = t.value; render(); } });
   document.addEventListener("click", e => {
     const t = e.target.closest("[data-gsetadd],[data-gsetdel],[data-gotogstset],[data-gregadd],[data-gregdel],[data-gsetpick],[data-gsetuser]"); if (!t) return;
-    if (t.dataset.gotogstset !== undefined){ if (S.gstReg) S.gsetReg = S.gstReg; S.tab = "gstset"; render(); return; }
+    if (t.dataset.gotogstset !== undefined){ goGstSettings(); return; }
     if (!S.books) return;
     if (t.dataset.gsetpick){ S.gsetReg = t.dataset.gsetpick; render(); return; }
     if (t.dataset.gsetuser){ S.gsetReg = t.dataset.gsetuser; render();

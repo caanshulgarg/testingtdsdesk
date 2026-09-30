@@ -36,9 +36,9 @@ with sync_playwright() as p:
     ok("Getting Aarohi Textiles Pvt Ltd ready" in t, "the dashboard shows the getting-started list")
     ok("Read the books from Tally" in t and "done" in t, "steps done and to do are counted")
     ok(pg.locator("#dashAsk").count() == 1, "the dashboard has the question box")
-    ok(pg.locator('.side-link[data-goclient="books:reports"]').count() == 1 and pg.locator('.side-link[data-goclient="books:lookup"]').count() == 1 and pg.locator('.side-link[data-goclient="books:letters"]').count() == 1, "the side menu has Reports, Look up and Letters")
+    ok(pg.locator('#side .side-link:has-text("Reports")').count() == 1 and pg.locator('#side .side-link:has-text("Look up")').count() == 1 and pg.locator('#side .side-link:has-text("Letters")').count() == 1, "the side menu has Reports, Look up and Letters")
     # ---------- Reports
-    pg.click('.side-link[data-goclient="books:reports"]'); pg.wait_for_timeout(800)
+    pg.click('#side .side-link:has-text("Reports")'); pg.wait_for_timeout(800)
     t = pg.inner_text("#app")
     ok("How the business is doing" in t and "Customers and suppliers" in t and "Bank and cash" in t and "GST" in t and "Audit and accounts" in t, "Reports shows every area")
     ok(pg.locator(".rpt-area .fc-chart svg rect").count() > 20, "the areas carry charts")
@@ -52,7 +52,7 @@ with sync_playwright() as p:
     pg.click('[data-rpt="mis-recv"]'); pg.wait_for_timeout(1500)
     ok(pg.evaluate("S.booksTab") == "mis" and pg.evaluate("S.misTab") == "recv" and pg.evaluate("!!(S.books.mis && S.books.mis.last)"), "a report opens its screen with the MIS worked out")
     # ---------- Look up: a ledger
-    pg.click('.side-link[data-goclient="books:lookup"]'); pg.wait_for_timeout(600)
+    pg.click('#side .side-link:has-text("Look up")'); pg.wait_for_timeout(600)
     ok(pg.evaluate("document.activeElement && document.activeElement.id") == "lkAsk", "the question box has the focus")
     pg.fill("#lkAsk", "HDFC bank for August 2025"); pg.keyboard.press("Enter"); pg.wait_for_timeout(900)
     r = pg.evaluate("({kind: S.lk.kind, led: S.lk.led, from: S.lk.from, to: S.lk.to, rows: S.lk.res && S.lk.res.rows.length, open: S.lk.res && S.lk.res.open, close: S.lk.res && S.lk.res.close})")
@@ -93,7 +93,7 @@ with sync_playwright() as p:
     pg.evaluate("S.tab = 'dash'; render();"); pg.wait_for_timeout(300); pg.locator("body").click(position={"x": 700, "y": 900}); pg.keyboard.press("/"); pg.wait_for_timeout(500)
     ok(pg.evaluate("S.booksTab") == "lookup" and pg.evaluate("S.tab") == "books", "the / key opens Look up")
     # ---------- Letters: confirmations
-    pg.click('.side-link[data-goclient="books:letters"]'); pg.wait_for_timeout(800)
+    pg.click('#side .side-link:has-text("Letters")'); pg.wait_for_timeout(800)
     t = pg.inner_text("#app")
     ok("Balance confirmations" in t and "Dues reminders" in t, "the Letters page")
     ok(pg.evaluate("S.ltr.asOn") == "20260331", "confirmations default to the year end")

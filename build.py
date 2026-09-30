@@ -90,7 +90,21 @@ def add_csp(html):
     j = html.index("</head>")
     return html[:j] + meta + html[j:]
 
+def react_parts():
+    """The program and CSS for the React app in app/: live and test, the same rules as the one-file site."""
+    html = assemble(); live_checks(html)
+    out = os.path.join(ROOT, "app", "legacy"); os.makedirs(out, exist_ok=True)
+    for name, h in [("live", html), ("test", to_test(html))]:
+        js = re.search(r'<script id="app-main">(.*?)</script>', h, re.S).group(1)
+        open(os.path.join(out, name + ".js"), "w", encoding="utf-8").write(js)
+    open(os.path.join(out, "app.css"), "w", encoding="utf-8").write(read("src/css/app.css"))
+    open(os.path.join(out, "test-style.html"), "w", encoding="utf-8").write(read("build/test-style.html"))
+    import shutil
+    shutil.copytree(os.path.join(ROOT, "assets"), os.path.join(ROOT, "app", "public", "assets"), dirs_exist_ok=True)
+    print("app/legacy: live.js, test.js, app.css; app/public/assets")
+
 def main():
+    if "--react" in sys.argv: return react_parts()
     html = assemble()
     live_checks(html)
     test = add_csp(to_test(html))

@@ -870,6 +870,25 @@ const timers = {};
 function later(key, fn, ms){ clearTimeout(timers[key]); timers[key] = setTimeout(fn, ms); }
 function curEntry(){ return S.view === "company" && S.selected ? D().entries[S.selected] : null; }
 
+/* ---------- navigation actions: called by the React screens and by the click handler below ---------- */
+function goClient(to){
+  const cid = S.coId;
+  if (!cid) return;
+  const go = () => {
+    S.colPop = null; S.drawerOpen = false;
+    if (to === "dash"){ S.tab = "dash"; S.step = null; render(); window.scrollTo(0, 0); return; }
+    if (to === "inbox"){ S.tab = "clientInbox"; S.step = null; render(); window.scrollTo(0, 0); return; }
+    if (to === "txn"){ S.tab = "txn"; S.step = null; render(); window.scrollTo(0, 0); return; }
+    if (to === "books"){ S.tab = "books"; S.step = null; if (["reports", "lookup", "letters"].includes(S.booksTab)) S.booksTab = S.booksLast || "import"; render(); window.scrollTo(0, 0); return; }
+    if (to.indexOf("books:") === 0){ if (!["reports", "lookup", "letters"].includes(S.booksTab)) S.booksLast = S.booksTab; S.tab = "books"; S.booksTab = to.slice(6); S.step = null; render(); window.scrollTo(0, 0); if (S.booksTab === "lookup") setTimeout(() => { const a = document.getElementById("lkAsk"); if (a && !(S.lk && S.lk.res)) a.focus(); }, 60); return; }
+    if (to === "post"){ goStep("post", "bills"); return; }
+    if (to === "bank" && (!S.bank || S.bank.cid !== cid)) loadBank(cid).then(() => render());
+    goStep("review", to === "bills" ? "bills" : to);
+  };
+  if (S.view !== "company" || S.coId !== cid) openCompany(cid).then(go); else go();
+}
+function navHome(tab){ if (tab === "help" && typeof SUP === "object" && !(S.view === "home" && S.homeTab === "help")) S.helpCtx = SUP.context(); closeSwitcher(); S.firmMenu = false; S.tallyPanel = false; S.view = "home"; S.homeTab = tab; S.step = null; S.addingCo = false; S.arm = null; if (tab === "rules") S.settingsTab = null; render(); window.scrollTo(0, 0); }
+function toggleSetup(){ S.step = null; S.tab = isSetupTab(S.tab) ? "invoices" : "settings"; render(); }
 document.addEventListener("click", ev => {
   const t = ev.target.closest("button,[data-select],[data-open],#drop,#dropAuto,#modal,#bankDrop,#salesDrop");
   if (!t) return;
@@ -1132,24 +1151,8 @@ document.addEventListener("click", ev => {
     });
     return;
   }
-  if (t.dataset.goclient !== undefined && t.dataset.goclient !== null && t.dataset.goclient !== ""){
-    const to = t.dataset.goclient, cid = S.coId;
-    if (!cid) return;
-    const go = () => {
-      S.colPop = null; S.drawerOpen = false;
-      if (to === "dash"){ S.tab = "dash"; S.step = null; render(); window.scrollTo(0, 0); return; }
-      if (to === "inbox"){ S.tab = "clientInbox"; S.step = null; render(); window.scrollTo(0, 0); return; }
-      if (to === "txn"){ S.tab = "txn"; S.step = null; render(); window.scrollTo(0, 0); return; }
-      if (to === "books"){ S.tab = "books"; S.step = null; if (["reports", "lookup", "letters"].includes(S.booksTab)) S.booksTab = S.booksLast || "import"; render(); window.scrollTo(0, 0); return; }
-      if (to.indexOf("books:") === 0){ if (!["reports", "lookup", "letters"].includes(S.booksTab)) S.booksLast = S.booksTab; S.tab = "books"; S.booksTab = to.slice(6); S.step = null; render(); window.scrollTo(0, 0); if (S.booksTab === "lookup") setTimeout(() => { const a = document.getElementById("lkAsk"); if (a && !(S.lk && S.lk.res)) a.focus(); }, 60); return; }
-      if (to === "post"){ goStep("post", "bills"); return; }
-      if (to === "bank" && (!S.bank || S.bank.cid !== cid)) loadBank(cid).then(() => render());
-      goStep(to === "bills" ? "review" : "review", to === "bills" ? "bills" : to);
-    };
-    if (S.view !== "company" || S.coId !== cid) openCompany(cid).then(go); else go();
-    return;
-  }
-  if (t.dataset.nav){ closeSwitcher(); S.firmMenu = false; S.tallyPanel = false; S.view = "home"; S.homeTab = t.dataset.nav; S.step = null; S.addingCo = false; S.arm = null; if (t.dataset.nav === "rules") S.settingsTab = null; render(); window.scrollTo(0, 0); return; }
+  if (t.dataset.goclient !== undefined && t.dataset.goclient !== null && t.dataset.goclient !== ""){ goClient(t.dataset.goclient); return; }
+  if (t.dataset.nav){ navHome(t.dataset.nav); return; }
   if (t.dataset.step){ goStep(t.dataset.step); return; }
   if (t.dataset.dtype){
     const step = t.dataset.gstep || curStep(), type = t.dataset.dtype;
@@ -1262,7 +1265,7 @@ document.addEventListener("click", ev => {
     }
     case "dropKeyHide": S.newDropKey = null; render(); break;
     case "drawerClose": S.drawerOpen = false; render(); break;
-    case "setup": S.step = null; S.tab = isSetupTab(S.tab) ? "invoices" : "settings"; render(); break;
+    case "setup": toggleSetup(); break;
     case "toBankReady": S.tab = "bank"; if (S.bank) S.bank.filter = "ready"; render(); break;
     case "toBankDone": S.tab = "bank"; if (S.bank) S.bank.filter = "done"; render(); break;
     case "toBillsApproved": S.tab = "invoices"; S.filter = "approved"; S.selected = null; render(); break;

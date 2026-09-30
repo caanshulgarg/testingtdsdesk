@@ -314,7 +314,6 @@ if (typeof document !== "undefined"){
   window.addEventListener("error", e => SUP.note("error", (e && e.message) || "error"));
   window.addEventListener("unhandledrejection", e => SUP.note("error", (e && e.reason && (e.reason.message || e.reason)) || "rejected"));
   // Help opened from a screen: remember the screen before the view changes (capture runs first)
-  document.addEventListener("click", e => { const t = e.target.closest('[data-nav="help"]'); if (t && !(S.view === "home" && S.homeTab === "help")) S.helpCtx = SUP.context(); }, true);
   document.addEventListener("input", e => {
     const t = e.target, s = SUP.st(); if (!t.dataset) return;
     if (t.dataset.supgq !== undefined){ s.gq = t.value; const r = GUIDE.search(t.value); if (r[0]) s.art = r[0].k; render(); return; }
