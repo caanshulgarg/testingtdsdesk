@@ -473,10 +473,6 @@ function gstParts(b){
   return {parts, ftype, regs, noBooks};
 }
 // one part of the GST tab, as the old pages draw it
-function gstPartHtml(b, part){
-  if (part === "notices") return AIH.viewNotices(b, "gst");
-  return "";
-}
 function gstPartGo(id){ S.gstPart = id; render(); }
 function gstSetYm(ym){ S.gstYm = ym; S.books.reco = null; render(); }
 function gstSetReg(reg){ S.gstReg = reg; S.books.reco = null; render(); }

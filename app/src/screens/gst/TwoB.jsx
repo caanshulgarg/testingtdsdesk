@@ -4,7 +4,7 @@
 //
 // State: S.r2Scope (month, year or everything), S.r2Tab, S.r2F (filters, one set per tab), S.r2Open (the supplier
 // opened). What is settled is kept with the books: GST2B.state() (link, confirm, tag, opt.tol).
-import Legacy from "../../parts/Legacy.jsx";
+import { R2bBar, PairCell } from "../../parts/Ai.jsx";
 import GstApiCard from "../GstApiCard.jsx";
 import CommitBox from "../../parts/CommitBox.jsx";
 import { Only2bNote } from "./InputRegister.jsx";
@@ -114,7 +114,7 @@ const TagSelect = ({ id, tags, st }) => <select aria-label="Remark" value={(st.t
 function Only2b({ list, free, st }) {
   return <>
     <p className="note">In the supplier’s return but not found in Tally. If it is booked under another number, link it; otherwise book it, or note why the credit is not being taken.</p>
-    <Legacy html={AIH.r2bBar(list, free)} />
+    <R2bBar list={list} free={free} />
     <div className="bk-tablewrap"><table className="bk-table" id="r2Only2b">
       <thead><tr><th>Supplier</th><th>Number</th><th className="dt">Date</th><th className="n">Taxable</th><th className="n">Tax</th><th>Note</th><th>Booked in Tally as</th><th>Remark</th></tr></thead>
       <tbody>{list.slice(0, LIMIT).map((p, i) => {
@@ -128,7 +128,7 @@ function Only2b({ list, free, st }) {
           <td><select aria-label="Booked in Tally as" value="" style={{ maxWidth: 240 }} onChange={(ev) => r2Link(p.key, ev.target.value)}>
             <option value="">{cands.length ? "not found — choose" : "nothing close in Tally"}</option>
             {cands.map((d) => <option key={d.id} value={d.id}>{d.no + " · vch " + d.voucher + " · " + GSTAmend.dmy(d.date) + " · tax " + INR.format(tx(d)) + (d.gstin ? "" : " · no GSTIN")}</option>)}
-          </select><Legacy html={AIH.pairCell(p)} /></td>
+          </select><PairCell p={p} /></td>
           <td><TagSelect id={p.key} tags={TAGS_2B} st={st} /></td>
         </tr>; })}</tbody>
     </table>{!list.length && <div className="bk-none">Nothing here.</div>}</div>

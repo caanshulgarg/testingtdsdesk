@@ -18,6 +18,7 @@ import Lookup from "./books/Lookup.jsx";
 import Letters from "./books/Letters.jsx";
 import AuditTab from "./books/Audit.jsx";
 import HelpButton from "../parts/HelpButton.jsx";
+import { Notices } from "../parts/Ai.jsx";
 
 const money = (v) => INR.format(r2(v || 0));
 const Q_MONTHS = { Q1: "Apr to Jun", Q2: "Jul to Sep", Q3: "Oct to Dec", Q4: "Jan to Mar" };
@@ -123,7 +124,7 @@ function Tds({ b }) {
   return <>
     <Legacy html={ledgerBanner(b, "tds")} />
     <Crumbs />
-    {v === "notices" ? <Legacy html={AIH.viewNotices(b, "tds")} />
+    {v === "notices" ? <Notices b={b} kind="tds" />
       : v === "years" ? <Years b={b} rows={rows} fys={fys} />
       : v === "certs" ? <CertsPage />
       : v === "return" ? (S.tdsForm === "24Q" ? <Return24 b={b} /> : <Return26 b={b} allRows={rows} />)

@@ -60,15 +60,6 @@ const AIH = {
     Object.values(a.pairs || {}).forEach(s => { if (s.no) c.ai.rejected++; else if (s.okBy) c.ai.asIs++; else c.ai.waiting++; });
     return c;
   },
-  coverageCard(){
-    if (!S.books || !(S.books.vouchers || []).length) return "";
-    const c = this.coverage(), pc = (k, n) => n ? Math.round(k * 100 / n) + "%" : "\u2014", t = c.tds, i = c.itc, it = i.rules + i.ai + i.pend, a = c.ai, done = a.asIs + a.changed + a.rejected;
-    return '<section class="dash-card" style="margin-top:12px"><h3>Rules first, AI for the rest: ' + esc((CO() || {}).name || "this client") + "</h3>" +
-      '<div class="bk-tablewrap"><table class="bk-table compact"><thead><tr><th></th><th class="n">By FinCom\u2019s rules</th><th class="n">By AI, accepted</th><th class="n">Still open</th></tr></thead><tbody>' +
-      '<tr><td>TDS section of ' + c.n + " expense and purchase ledgers</td><td class=\"n\">" + t.rules + " (" + pc(t.rules, c.n) + ')</td><td class="n">' + t.ai + " (" + pc(t.ai, c.n) + ')</td><td class="n">' + t.pend + " (" + pc(t.pend, c.n) + ")</td></tr>" +
-      "<tr><td>GST credit on " + it + " ledgers with credit taken</td><td class=\"n\">" + i.rules + " (" + pc(i.rules, it) + ')</td><td class="n">' + i.ai + " (" + pc(i.ai, it) + ')</td><td class="n">' + i.pend + " (" + pc(i.pend, it) + ")</td></tr></tbody></table></div>" +
-      '<p class="note">How right AI has been here: ' + (done ? a.asIs + " accepted as suggested (" + pc(a.asIs, done) + "), " + a.changed + " corrected, " + a.rejected + " rejected" : "nothing decided yet") + (a.waiting ? "; " + a.waiting + " waiting for someone to look" : "") + ". 2B pairs by the rules are on the 2B screen.</p></section>";
-  },
   // ---------- 1 and 3: the ledgers the rules could not settle, once each (again only when asked)
   ledgerStats(){
     const b = S.books, A = Audit, out = {};
@@ -143,50 +134,7 @@ const AIH = {
     S.books.mapV = (S.books.mapV || 0) + 1; S.books.reco = null; delete this.st().tdsPay[n];
     this.log("accepted", n + ": section " + r.old);
   },
-  viewLedgers(b){
-    const a = this.st(), money = v => INR.format(r2(v || 0)), wantTds = this.enabled("tds"), wantItc = this.enabled("audit");
-    if (!wantTds && !wantItc) return '<p class="note">AI help for TDS and audit is off. Settings, AI help.</p>';
-    const stats = this.ledgerStats(), left = stats.filter(x => (wantTds && !this.ruleTds(x)) || (wantItc && !this.ruleItc(x)));
-    const rows = left.filter(x => a.led[x.l]), notYet = left.length - rows.length;
-    const pend = rows.filter(x => { const y = a.led[x.l]; return (y.tds && !y.tdsOk) || (y.itc && !y.itcOk); });
-    let h = '<section class="dash-card"><h3>AI: TDS section and blocked credit, ledger by ledger</h3>' +
-      '<p class="note">FinCom’s rules settle ' + (stats.length - left.length) + " of " + stats.length + " ledgers by themselves. For the " + left.length + " they cannot, AI reads each ledger’s name, group, narrations and parties" + (wantTds ? " and suggests its TDS section" : "") + (wantItc ? (wantTds ? ", and" : " and says") + " whether GST credit on it is blocked under section 17(5)" : "") +
-      ". Check and accept each: the audit’s checks for missed TDS and blocked credit then use what you accepted. Nothing here changes Tally or a return.</p>" +
-      '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><button class="btn small primary" data-aih="review">' + (notYet ? "Ask AI about " + notYet + " ledger" + (notYet === 1 ? "" : "s") : "Nothing new to ask") + "</button>" +
-      (rows.length ? '<button class="btn small" data-aih="reviewAgain">Review all again</button>' : "") +
-      '<span class="note">' + rows.length + " reviewed · " + pend.length + " to accept</span></div></section>" + this.coverageCard();
-    const pay = Object.entries(a.tdsPay).filter(([n]) => (b.map || {})[n] && !(b.map[n].ok && b.map[n].section));
-    if (wantTds && pay.length) h += '<section class="dash-card" style="margin-top:12px"><h3>TDS ledgers without a section</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Ledger</th><th>AI suggests</th><th>Why</th><th></th></tr></thead><tbody>' +
-      pay.map(([n, s]) => { const r = this.rule(s.rule); return "<tr><td>" + esc(n) + "</td><td>" + esc(r.old + " · " + r.label) + "</td><td>" + esc(s.reason) + '</td><td class="ac"><button class="btn small primary" data-aihpay="' + esc(n) + '">Accept</button> <button class="btn small" data-aihpayno="' + esc(n) + '">Not this</button></td></tr>'; }).join("") + "</tbody></table></div></section>";
-    if (!rows.length) return h;
-    const tdsOpts = [["unsure", "unsure"], ["none", "no TDS"]].concat(RULE_DEFAULTS.map(r => [r.id, r.old + " · " + r.label]));
-    const sel = (l, f, val, opts) => '<select data-aihfix="' + esc(l) + '" data-f="' + f + '">' + opts.map(([v, t]) => '<option value="' + esc(v) + '"' + (v === val ? " selected" : "") + ">" + esc(t) + "</option>").join("") + "</select>";
-    const list = rows.sort((x, y) => { const p = z => { const q = a.led[z.l]; return (q.tds && !q.tdsOk) || (q.itc && !q.itcOk) ? 0 : 1; }; return p(x) - p(y) || y.amt - x.amt; }).slice(0, 300);
-    h += '<div class="bk-tablewrap" style="margin-top:12px"><table class="bk-table"><thead><tr><th>Ledger</th><th class="n">Booked</th>' + (wantTds ? "<th>TDS section</th>" : "") + (wantItc ? "<th>GST credit</th>" : "") + "<th>AI’s reason</th><th>Status</th></tr></thead><tbody>" +
-      list.map(x => {
-        const y = a.led[x.l], open = (y.tds && !y.tdsOk) || (y.itc && !y.itcOk);
-        return "<tr><td>" + esc(x.l) + '<div class="nr">' + esc(x.group || "") + " · " + x.n + " entries" + (x.tds ? " · TDS on " + x.tds : "") + (x.itc ? " · credit on " + x.itc : "") + '</div></td><td class="n">' + money(x.amt) + "</td>" +
-          (wantTds ? "<td>" + sel(x.l, "tds", y.tds || "unsure", tdsOpts) + "</td>" : "") +
-          (wantItc ? "<td>" + sel(x.l, "itc", y.itc || "unsure", [["unsure", "unsure"], ["allowed", "allowed"], ["blocked", "blocked, 17(5)"]]) + (y.clause ? '<div class="nr">' + esc(y.clause) + "</div>" : "") + "</td>" : "") +
-          "<td>" + esc(y.reason || "") + "</td><td>" + (open ? '<button class="btn small primary" data-aihok="' + esc(x.l) + '">Accept</button> <button class="btn small" data-aihno="' + esc(x.l) + '">Reject</button>'
-            : '<span class="nr">' + ((y.tdsOk || y.itcOk) === "no" ? "rejected" : "accepted") + " by " + esc(y.okBy || "") + (y.okAt ? " on " + fmtDate(String(y.okAt).slice(0, 10)) : "") + "</span>") + "</td></tr>";
-      }).join("") + "</tbody></table></div>";
-    return h;
-  },
-  auditButton(){
-    if (!(this.enabled("tds") || this.enabled("audit"))) return "";
-    const a = (S.books || {}).ai || {}, led = a.led || {}, open = Object.values(led).filter(y => (y.tds && !y.tdsOk) || (y.itc && !y.itcOk)).length;
-    return '<button class="btn small" data-aih="auditReview">AI review of ledgers' + (open ? " (" + open + " to accept)" : "") + "</button>";
-  },
-
   // ---------- 2: 2B invoices left after the matching
-  r2bBar(list, free){
-    if (!this.enabled("r2b") || !list.length) return "";
-    this._r2 = {list, free};
-    const n = Object.keys(this.st().pairs).filter(k => !this.st().pairs[k].no).length;
-    return '<div class="row" style="gap:8px;align-items:center;margin:0 0 8px"><button class="btn small" data-aih="pair2b">Ask AI to pair these</button><span class="note">AI looks for the same invoice under another number or date format (e.g. INV/24-25/0045 and 45). ' +
-      (n ? n + " suggestion" + (n === 1 ? "" : "s") + " below, to accept or not." : "Each suggestion waits for you to accept it.") + "</span></div>";
-  },
   cands(p, free){
     const pan = String(p.gstin || "").slice(2, 12), t = this.tx(p);
     return free.filter(d => d.dir === p.dir && (!d.gstin || String(d.gstin).slice(2, 12) === pan) &&
@@ -223,14 +171,6 @@ const AIH = {
     } catch (e){ toast("AI could not pair them: " + errCopy(e && e.code)); }
     b.busy = ""; render();
   },
-  pairCell(p){
-    if (!this.enabled("r2b") || !S.books.ai) return "";
-    const s = (S.books.ai.pairs || {})[p.key];
-    if (!s || s.no || ((GST2B.state().link || {})[p.key])) return "";
-    return '<div class="nr" style="margin-top:4px">AI: ' + esc(s.label) + (s.diff ? " (tax differs by " + INR.format(s.diff) + ")" : "") + " — " + esc(s.reason) +
-      ' <button class="linkbtn" data-aihpair="' + esc(p.key) + '">accept</button> · <button class="linkbtn" data-aihpairno="' + esc(p.key) + '">not this</button></div>';
-  },
-
   // ---------- 4: notices
   noticeFigures(n){
     const b = S.books, out = {};
@@ -301,87 +241,40 @@ const AIH = {
       toast("The reply is drafted. Read every line and correct it before it goes.");
     } catch (e){ toast("AI could not draft the reply: " + errCopy(e && e.code)); }
     b.busy = ""; await saveBooks(); render();
-  },
-  viewNotices(b, kind){
-    if (!this.enabled("notices")) return '<p class="note">AI help for notices is off. Settings, AI help.</p>';
-    const list = ((b.ai || {}).notices || []).filter(n => n.kind === kind);
-    let h = '<section class="dash-card"><h3>' + (kind === "tds" ? "TDS" : "GST") + " notices</h3>" +
-      '<p class="note">Add the notice (PDF or photo). AI reads it, FinCom puts its points against this client’s books and returns, and AI drafts a reply for you to check. The draft uses only those figures; anything to verify is marked [to check]. Nothing is sent from here.</p>' +
-      '<label class="btn small primary">Add a notice<input type="file" accept=".pdf,image/*" data-aihnotice="' + kind + '" hidden></label></section>';
-    list.forEach(n => {
-      const f = n.fields || {};
-      h += '<section class="dash-card" style="margin-top:12px"><h3>' + esc((f.form || "Notice") + (f.ref ? " · " + f.ref : "")) + "</h3>" +
-        '<p class="note">' + esc(n.name) + " · added " + fmtDate(String(n.at).slice(0, 10)) + " by " + esc(n.by || "") + (f.date ? " · dated " + fmtDate(f.date) : "") + (f.reply_by ? ' · <b>reply by ' + fmtDate(f.reply_by) + "</b>" : "") +
-        ' · <button class="linkbtn" data-aihnopen="' + n.id + '">open</button> · <button class="linkbtn" data-aihndel="' + n.id + '">remove</button></p>' +
-        (n.step === "failed" ? '<p class="bk-warn">Could not be read: ' + esc(n.error || "") + ' <button class="linkbtn" data-aihnretry="' + n.id + '">try again</button></p>' : "") +
-        (f.summary ? "<p>" + esc(f.summary) + "</p>" : "") +
-        ((f.issues || []).length ? '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>The officer’s point</th><th>Period</th><th class="n">Amount</th></tr></thead><tbody>' +
-          f.issues.map(x => "<tr><td>" + esc(x.point || "") + "</td><td>" + esc(x.period || "") + '</td><td class="n">' + (num(x.amount) ? INR.format(num(x.amount)) : "") + "</td></tr>").join("") + "</tbody></table></div>" : "") +
-        (n.reply ? '<h4 style="margin:12px 0 6px">Draft reply (AI, to be checked)</h4><textarea data-aihnreply="' + n.id + '" rows="16" style="width:100%;font:13px/1.5 inherit">' + esc(n.reply) + "</textarea>" +
-          '<div class="row" style="gap:8px;margin-top:6px"><button class="btn small" data-aihncopy="' + n.id + '">Copy</button><button class="btn small" data-aihndl="' + n.id + '">Download as text</button><button class="btn small" data-aihnredo="' + n.id + '">Draft again with today’s books</button></div>'
-          : n.step === "read" ? '<button class="btn small primary" data-aihnredo="' + n.id + '">Draft the reply</button>' : "") + "</section>";
-    });
-    return h;
-  },
-
-  // ---------- Settings, AI help
-  viewSettings(){
-    const c = this.cfg(), cos = Object.values(S.companies || {}).sort((x, y) => String(x.name).localeCompare(String(y.name)));
-    const cb = (k, on, label, dis) => '<label style="display:flex;gap:8px;align-items:flex-start;margin:6px 0"><input type="checkbox" data-aihset="' + k + '"' + (on ? " checked" : "") + (dis ? " disabled" : "") + "><span>" + label + "</span></label>";
-    let h = '<section class="dash-card"><h3>AI help in TDS and GST</h3>' +
-      '<p class="note">Claude suggests; FinCom’s rules work out tax and make returns; your people accept or reject each suggestion, and who accepted it is kept. Each use is charged to the firm’s credit like reading a bill. The client’s ledger names, narrations, invoice details and notices are sent to Claude through the firm’s account: tell your clients, and switch it off below for any client who has not agreed.</p>' +
-      cb("on", c.on, "<b>Use AI help</b>") + '<div style="margin-left:24px">' + this.FEATURES.map(([k, l]) => cb(k, c[k] !== false, esc(l), !c.on)).join("") + "</div></section>";
-    h += '<section class="dash-card" style="margin-top:12px"><h3>Clients</h3><p class="note">Tick a client to keep its data away from AI, whatever is switched on above.</p><div class="bk-tablewrap"><table class="bk-table compact"><thead><tr><th>Client</th><th>AI off for this client</th></tr></thead><tbody>' +
-      cos.map(co => "<tr><td>" + esc(co.name || co.id) + '</td><td><input type="checkbox" data-aihco="' + esc(co.id) + '"' + (co.aiOff ? " checked" : "") + ' aria-label="AI off for ' + esc(co.name || "") + '"></td></tr>').join("") + "</tbody></table></div></section>";
-    if (S.books && S.books.cid === S.coId) h += this.coverageCard();
-    const lg = S.books && S.books.ai && S.books.ai.log || [];
-    if (lg.length) h += '<section class="dash-card" style="margin-top:12px"><h3>What AI did for ' + esc((CO() || {}).name || "this client") + '</h3><div class="bk-tablewrap"><table class="bk-table compact"><thead><tr><th class="dt">When</th><th>Who</th><th>What</th><th>Detail</th></tr></thead><tbody>' +
-      lg.slice(0, 40).map(x => '<tr><td class="dt">' + esc(String(x.at).replace("T", " ").slice(0, 16)) + "</td><td>" + esc(x.by) + "</td><td>" + esc(x.what) + "</td><td>" + esc(x.detail) + "</td></tr>").join("") + "</tbody></table></div></section>";
-    return h;
   }
 };
 
-if (typeof document !== "undefined"){
-  document.addEventListener("change", async e => {
-    const t = e.target; if (!t.dataset) return;
-    if (t.dataset.aihset !== undefined){
-      S.firm.ai = Object.assign(AIH.cfg(), {[t.dataset.aihset]: t.checked}); Store.saveFirm();
-      toast(t.dataset.aihset === "on" ? (t.checked ? "AI help is on." : "AI help is off.") : "Saved."); render(); return;
-    }
-    if (t.dataset.aihco !== undefined){ const co = S.companies[t.dataset.aihco]; if (co){ co.aiOff = t.checked; Store.saveCompany(co); render(); } return; }
-    if (!S.books) return;
-    if (t.dataset.aihnotice !== undefined && t.files && t.files[0]){ const f = t.files[0]; t.value = ""; AIH.readNotice(f, t.dataset.aihnotice); return; }
-    if (t.dataset.aihfix !== undefined){
-      const x = AIH.st().led[t.dataset.aihfix]; if (!x) return;
-      x[t.dataset.f] = t.value; x[t.dataset.f + "Ok"] = "yes"; x.okBy = AIH.who(); x.okAt = new Date().toISOString(); x.byHand = true;
-      AIH.log("set by hand", t.dataset.aihfix + ": " + t.dataset.f + " " + t.value); saveBooks(); render(); return;
-    }
-    if (t.dataset.aihnreply !== undefined){ const n = AIH.st().notices.find(z => z.id === t.dataset.aihnreply); if (n){ n.reply = t.value; n.editedBy = AIH.who(); saveBooks(); } }
-  });
-  document.addEventListener("click", async e => {
-    const t = e.target.closest("[data-aih],[data-aihok],[data-aihno],[data-aihpay],[data-aihpayno],[data-aihpair],[data-aihpairno],[data-aihnopen],[data-aihndel],[data-aihnretry],[data-aihnredo],[data-aihncopy],[data-aihndl]");
-    if (!t || !S.books) return;
-    const d = t.dataset, a = AIH.st(), note = id => a.notices.find(z => z.id === id);
-    if (d.aih === "review" || d.aih === "reviewAgain"){ AIH.reviewLedgers(d.aih === "reviewAgain"); return; }
-    if (d.aih === "auditReview"){ S.booksTab = "ledgers"; S.lmView = "ai"; render(); AIH.reviewLedgers(false); return; }
-    if (d.aih === "pair2b"){ AIH.pair2b(); return; }
-    if (d.aihok !== undefined || d.aihno !== undefined){ AIH.accept(d.aihok !== undefined ? d.aihok : d.aihno, d.aihok !== undefined ? "yes" : "no"); await saveBooks(); render(); return; }
-    if (d.aihpay !== undefined){ AIH.acceptPay(d.aihpay); await saveBooks(); render(); return; }
-    if (d.aihpayno !== undefined){ delete a.tdsPay[d.aihpayno]; AIH.log("rejected", d.aihpayno + ": TDS ledger section"); await saveBooks(); render(); return; }
-    if (d.aihpair !== undefined){
-      const s = a.pairs[d.aihpair], st = GST2B.state(); if (!s) return;
-      st.link[d.aihpair] = [s.id]; delete st.confirm[d.aihpair]; s.okBy = AIH.who(); s.okAt = new Date().toISOString();
-      AIH.log("accepted 2B pair", s.label); await saveBooks(); render(); return;
-    }
-    if (d.aihpairno !== undefined){ const s = a.pairs[d.aihpairno]; if (s){ s.no = true; AIH.log("rejected 2B pair", s.label); } await saveBooks(); render(); return; }
-    const n = note(d.aihnopen || d.aihndel || d.aihnretry || d.aihnredo || d.aihncopy || d.aihndl || "");
-    if (!n) return;
-    const file = async () => FileStore.get(CO().id, n.id, n.docPath, n.name);
-    if (d.aihnopen){ const f = await file(); if (!f){ toast("The notice is not on this computer and could not be fetched."); return; } window.open(URL.createObjectURL(f), "_blank"); return; }
-    if (d.aihndel){ const r = await askConfirm({title: "Remove this notice?", ok: "Remove", body: '<p class="note">The notice and its draft reply are removed from FinCom.</p>'}); if (!r || !r.ok) return; a.notices = a.notices.filter(z => z !== n); try { FileStore.drop(CO().id, n.id); } catch (x){} AIH.log("removed a notice", n.name); await saveBooks(); render(); return; }
-    if (d.aihnretry){ const f = await file(); if (!f){ toast("The notice file is not here any more; add it again."); return; } a.notices = a.notices.filter(z => z !== n); AIH.readNotice(f, n.kind); return; }
-    if (d.aihnredo){ n.figures = AIH.noticeFigures(n); AIH.draft(n); return; }
-    if (d.aihncopy){ try { await navigator.clipboard.writeText(n.reply || ""); toast("Copied."); } catch (x){ toast("Could not copy; select the text and copy it."); } return; }
-    if (d.aihndl){ saveFile("Reply " + String((n.fields || {}).form || "notice").replace(/[^\w.-]+/g, "_") + ".txt", new Blob([n.reply || ""], {type: "text/plain"})); return; }
-  });
+// AI help's buttons and boxes (app/src/parts/Ai.jsx)
+function aihSet(k, on){ S.firm.ai = Object.assign(AIH.cfg(), {[k]: on}); Store.saveFirm(); toast(k === "on" ? (on ? "AI help is on." : "AI help is off.") : "Saved."); render(); }
+function aihCo(id, on){ const co = S.companies[id]; if (co){ co.aiOff = on; Store.saveCompany(co); render(); } }
+function aihNotice(file, kind){ AIH.readNotice(file, kind); }
+function aihFix(l, f, v){
+  const x = AIH.st().led[l]; if (!x) return;
+  x[f] = v; x[f + "Ok"] = "yes"; x.okBy = AIH.who(); x.okAt = new Date().toISOString(); x.byHand = true;
+  AIH.log("set by hand", l + ": " + f + " " + v); saveBooks(); render();
+}
+function aihReply(id, v){ const n = AIH.st().notices.find(z => z.id === id); if (n){ n.reply = v; n.editedBy = AIH.who(); saveBooks(); } }
+function aihAct(a){
+  if (a === "review" || a === "reviewAgain") AIH.reviewLedgers(a === "reviewAgain");
+  else if (a === "auditReview"){ S.booksTab = "ledgers"; S.lmView = "ai"; render(); AIH.reviewLedgers(false); }
+  else if (a === "pair2b") AIH.pair2b();
+}
+async function aihAccept(l, yes){ AIH.accept(l, yes ? "yes" : "no"); await saveBooks(); render(); }
+async function aihPay(n, yes){ if (yes) AIH.acceptPay(n); else { delete AIH.st().tdsPay[n]; AIH.log("rejected", n + ": TDS ledger section"); } await saveBooks(); render(); }
+async function aihPair(key, yes){
+  const a = AIH.st(), s = a.pairs[key]; if (!s) return;
+  if (yes){ const st = GST2B.state(); st.link[key] = [s.id]; delete st.confirm[key]; s.okBy = AIH.who(); s.okAt = new Date().toISOString(); AIH.log("accepted 2B pair", s.label); }
+  else { s.no = true; AIH.log("rejected 2B pair", s.label); }
+  await saveBooks(); render();
+}
+// a notice: open its file, remove it (asked first), read it again, draft again, copy or download the reply
+async function aihNote(how, id){
+  const a = AIH.st(), n = a.notices.find(z => z.id === id); if (!n) return;
+  const file = async () => FileStore.get(CO().id, n.id, n.docPath, n.name);
+  if (how === "open"){ const f = await file(); if (!f){ toast("The notice is not on this computer and could not be fetched."); return; } window.open(URL.createObjectURL(f), "_blank"); return; }
+  if (how === "del"){ const r = await askConfirm({title: "Remove this notice?", ok: "Remove", body: '<p class="note">The notice and its draft reply are removed from FinCom.</p>'}); if (!r || !r.ok) return; a.notices = a.notices.filter(z => z !== n); try { FileStore.drop(CO().id, n.id); } catch (x){} AIH.log("removed a notice", n.name); await saveBooks(); render(); return; }
+  if (how === "retry"){ const f = await file(); if (!f){ toast("The notice file is not here any more; add it again."); return; } a.notices = a.notices.filter(z => z !== n); AIH.readNotice(f, n.kind); return; }
+  if (how === "redo"){ n.figures = AIH.noticeFigures(n); AIH.draft(n); return; }
+  if (how === "copy"){ try { await navigator.clipboard.writeText(n.reply || ""); toast("Copied."); } catch (x){ toast("Could not copy; select the text and copy it."); } return; }
+  if (how === "dl") saveFile("Reply " + String((n.fields || {}).form || "notice").replace(/[^\w.-]+/g, "_") + ".txt", new Blob([n.reply || ""], {type: "text/plain"}));
 }

@@ -7,6 +7,7 @@
 // Every change is saved as it is made: typed text a moment later (coSetText, firmSetName), a tick or choice at once
 // (coCommit). Sections not yet redrawn in React show the old screen's HTML through <Legacy>.
 import Legacy from "../parts/Legacy.jsx";
+import { AiSettings } from "../parts/Ai.jsx";
 import GstSettings from "./gst/GstSettings.jsx";
 import Parties from "./Parties.jsx";
 import { PostLog } from "./Done.jsx";
@@ -99,7 +100,7 @@ export function FirmSettings() {
     postlog: () => <PostLog />,
     rates: () => <Legacy html={viewRates()} />,
     reading: () => <Legacy html={viewReading()} />,
-    ai: () => <Legacy html={AIH.viewSettings()} />,
+    ai: () => <AiSettings />,
     platform: () => <Legacy html={viewSuperadmin()} />,
   }[cur];
   return <Layout label="Settings" groups={groups} current={cur} pick={pick}>{body()}</Layout>;

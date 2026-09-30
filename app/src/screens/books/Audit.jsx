@@ -6,6 +6,7 @@
 // State: S.auditTab (find, rel, 3cd), S.auditRange, S.auditArea, S.auditSt (a status), S.auditOpen (a finding opened).
 import Legacy from "../../parts/Legacy.jsx";
 import CommitBox from "../../parts/CommitBox.jsx";
+import { AuditButton } from "../../parts/Ai.jsx";
 
 const m = (v) => INR.format(r2(v || 0));
 const d = (x) => fmtDate(tallyDate(x));
@@ -29,7 +30,7 @@ function Head({ b, run }) {
     <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
       <label className="note">From <input type="date" aria-label="Audit from" defaultValue={range.from} onChange={(ev) => auditRangeSet("from", ev.target.value)} /></label>
       <label className="note">to <input type="date" aria-label="Audit to" defaultValue={range.to} onChange={(ev) => auditRangeSet("to", ev.target.value)} /></label>
-      <Act act="auditRun" className="btn small primary">Run now</Act><Legacy html={AIH.auditButton()} />
+      <Act act="auditRun" className="btn small primary">Run now</Act><AuditButton />
       {!lyHere && typeof bridgeLive === "function" && bridgeLive(CO()) && <Act act="auditReadLy" title={d(lyFrom) + " to " + d(lyTo)}>Read last year from Tally, to compare</Act>}
       <span className="note" style={{ marginLeft: 12 }}>Run on its own</span>
       <select aria-label="Run on its own" style={{ width: "auto" }} value={c.freq} onChange={(ev) => auditFreqSet(ev.target.value)}>

@@ -4,7 +4,7 @@
 // lmViewGo, lmPost (src/js/23) and the doAct cases ledRead, lmConfirmShown, lmPostAll.
 //
 // State: S.lmView (which list), S.ledQ (the find box).
-import Legacy from "../../parts/Legacy.jsx";
+import { AiLedgers } from "../../parts/Ai.jsx";
 import CommitBox from "../../parts/CommitBox.jsx";
 
 const NR = ({ children, bad }) => <div className={"nr" + (bad ? " bad" : "")} style={{ whiteSpace: "normal" }}>{children}</div>;
@@ -116,7 +116,7 @@ export default function Ledgers({ b }) {
       </div>
     </section>
     <nav className="sbar" aria-label="Ledgers">{tabs.map(([id, l, c]) => <button key={id} aria-selected={view === id} onClick={() => lmViewGo(id)}>{l}{c != null && <>{" "}<span className="sbar-n">{c}</span></>}</button>)}</nav>
-    {view === "post" ? <Posting b={b} /> : view === "ai" ? <Legacy html={AIH.viewLedgers(b)} /> : <>
+    {view === "post" ? <Posting b={b} /> : view === "ai" ? <AiLedgers b={b} /> : <>
       <div className="revfilter" style={{ flexWrap: "wrap", rowGap: 6 }}>
         <input type="search" aria-label="Find a ledger" data-fk="ledq" value={S.ledQ || ""} placeholder="Find a ledger, section or group" style={{ width: 260, flex: "0 0 auto" }} onChange={(ev) => setAndShow("ledQ", ev.target.value, true)} />
         <span className="note">{shown.length + " ledger" + (shown.length === 1 ? "" : "s")}</span>

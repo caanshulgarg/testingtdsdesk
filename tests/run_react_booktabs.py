@@ -176,6 +176,34 @@ with sync_playwright() as p:
     pg.click('.lk-kinds button:text-is("Letter settings")'); pg.wait_for_timeout(300)
     pg.fill('input[aria-label="Signed by (name and designation)"]', "A. Kumar, Partner"); pg.select_option('select[aria-label="Replies go to"]', "auditor"); pg.wait_for_timeout(1000)
     ok(pg.evaluate("[LTR.cfg().signer, LTR.cfg().replyTo]") == ["A. Kumar, Partner", "auditor"], "who signs, and replies to the auditor")
+    # AI help: a suggestion accepted, one set by hand, a TDS ledger's section, notices, the settings
+    pg.evaluate("""() => { S.firm.ai = {on: true}; const st = AIH.ledgerStats().filter(x => !AIH.ruleTds(x)).map(x => x.l), ls = [st[0], st[1], Object.keys(S.books.map).sort()[2]], R = RULE_DEFAULTS[0]; window.__ls = ls;
+      S.books.ai = {led: {[ls[0]]: {tds: R.id, reason: 'staff welfare'}, [ls[1]]: {tds: 'none', reason: 'bank charges'}}, tdsPay: {[ls[2]]: {rule: R.id, reason: 'contracts'}}, pairs: {},
+        notices: [{id: 'n1', kind: 'gst', name: 'asmt.pdf', at: '2026-02-02T00:00:00Z', by: 'a@b.in', step: 'drafted', reply: 'Dear Sir', fields: {form: 'ASMT-10'}}], log: []};
+      S.booksTab = 'ledgers'; S.lmView = 'ai'; render(); }"""); pg.wait_for_timeout(600)
+    ls = pg.evaluate("window.__ls")
+    pg.click('tr[data-key=%s] button:text-is("Accept")' % json.dumps(ls[0])); pg.wait_for_timeout(400)
+    ok(pg.evaluate("S.books.ai.led[%s].tdsOk" % json.dumps(ls[0])) == "yes" and "accepted by" in pg.inner_text('tr[data-key=%s]' % json.dumps(ls[0])), "a suggestion accepted, with who")
+    pg.select_option('select[aria-label=%s]' % json.dumps("TDS section: " + ls[1]), "unsure"); pg.wait_for_timeout(400)
+    ok(pg.evaluate("[S.books.ai.led[%s].tds, S.books.ai.led[%s].byHand]" % (json.dumps(ls[1]), json.dumps(ls[1]))) == ["unsure", True], "a section set by hand")
+    pg.click('tr:has(td:text-is(%s)) button:text-is("Accept")' % json.dumps(ls[2])); pg.wait_for_timeout(400)
+    ok(pg.evaluate("S.books.map[%s].section" % json.dumps(ls[2])) and pg.evaluate("!S.books.ai.tdsPay[%s]" % json.dumps(ls[2])), "a TDS ledger's section accepted")
+    pg.evaluate("() => { S.booksTab = 'audit'; S.auditTab = 'find'; render(); }"); pg.wait_for_timeout(500)
+    pg.click('button:has-text("AI review of ledgers")'); pg.wait_for_timeout(500)
+    ok(pg.evaluate("[S.booksTab, S.lmView]") == ["ledgers", "ai"], "the Audit button opens the AI review")
+    pg.evaluate("() => { S.booksTab = 'gst'; S.gstPart = 'notices'; render(); }"); pg.wait_for_timeout(500)
+    ta = pg.locator('textarea[aria-label="Draft reply"]'); ta.fill("Dear Sir, corrected."); ta.press("Tab"); pg.wait_for_timeout(300)
+    ok(pg.evaluate("S.books.ai.notices[0].reply") == "Dear Sir, corrected.", "the draft reply, corrected, is kept")
+    pg.click('.dash-card[data-key="n1"] button:text-is("remove")'); pg.wait_for_timeout(300)
+    ok(pg.locator("#confirmBox .cbx").is_visible(), "removing a notice asks first")
+    pg.click('#confirmBox button[data-cbx="yes"]'); pg.wait_for_timeout(600)
+    ok(pg.evaluate("S.books.ai.notices.length") == 0, "and removes it")
+    pg.evaluate("() => { S.view = 'home'; S.homeTab = 'rules'; S.settingsTab = 'ai'; render(); }"); pg.wait_for_timeout(500)
+    pg.uncheck('label:has-text("Use AI help") input'); pg.wait_for_timeout(300)
+    ok(pg.evaluate("AIH.cfg().on") is False and pg.locator('label:has-text("notices") input').first.is_disabled(), "AI help switched off, each kind greyed")
+    pg.check('input[aria-label="AI off for ZZ TEST"]'); pg.wait_for_timeout(300)
+    ok(pg.evaluate("S.companies[S.coId].aiOff") is True, "a client kept away from AI")
+    pg.evaluate("() => { S.firm.ai = {on: false}; S.companies[S.coId].aiOff = false; S.view = 'company'; S.tab = 'books'; render(); }"); pg.wait_for_timeout(300)
     # Accounts: run, the format, stock, a manufacturer, a ledger placed by hand and back, the search, Excel
     pg.evaluate("() => { const led = {}; Object.keys(S.books.map).forEach(n => { led[n] = {open: 0, close: 0}; }); S.books.tb = {from: '20250401', to: '20270331', at: '2026-01-01T00:00:00Z', led}; S.booksTab = 'fs'; S.fsRun = null; render(); }"); pg.wait_for_timeout(400)
     run = 'section:has(> h3:text-is("Financial statements")) button:text-is("Run now")'

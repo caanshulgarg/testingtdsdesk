@@ -101,6 +101,20 @@ with sync_playwright() as p:
     pg.evaluate("() => { const x = LTR.st(); x.credit = '0'; x.remOn = '20200101'; render(); }"); grab("ltr-remind-none")
     pg.evaluate("() => { const x = LTR.st(); x.mode = 'settings'; render(); }"); grab("ltr-settings")
     pg.evaluate("() => { Object.assign(LTR.store().cfg, {replyTo: 'auditor', auditor: 'Mehra & Iyer', auditorEmail: 'a@b.in', attach: false, negative: true}); LTR.st().mode = 'confirm'; LTR.st().remOn = '20260331'; render(); }"); grab("ltr-auditor")
+    # AI help (switched on): the ledgers' AI view, the Audit button, TDS and GST notices, and its settings
+    pg.evaluate("""() => { S.firm.ai = {on: true}; const ls = Object.keys(S.books.map).sort(), R = RULE_DEFAULTS[0];
+      S.books.ai = {led: {[ls[0]]: {tds: R.id, itc: 'blocked', clause: '17(5)(b)', reason: 'Looks like staff welfare'}, [ls[1]]: {tds: 'none', tdsOk: 'yes', okBy: 'a@b.in', okAt: '2026-01-02T00:00:00Z', reason: 'Bank charges'}},
+        tdsPay: {[ls[2]]: {rule: R.id, reason: 'TDS payable on contracts'}}, pairs: {},
+        notices: [{id: 'n1', kind: 'tds', name: 'notice.pdf', at: '2026-02-01T00:00:00Z', by: 'a@b.in', step: 'drafted', reply: 'Dear Sir, we reply.', fields: {form: '143(1)(a)', ref: 'CPC/123', date: '2026-01-20', reply_by: '2026-02-20', summary: 'A short deduction.', issues: [{point: 'Short deduction', period: 'Q2', amount: 1200}]}},
+          {id: 'n2', kind: 'gst', name: 'asmt.pdf', at: '2026-02-02T00:00:00Z', by: 'a@b.in', step: 'read', fields: {form: 'ASMT-10', summary: 'Differences in 3B.', issues: []}},
+          {id: 'n3', kind: 'gst', name: 'bad.jpg', at: '2026-02-03T00:00:00Z', by: 'a@b.in', step: 'failed', error: 'could not read'}],
+        log: [{at: '2026-02-01T10:00:00Z', by: 'a@b.in', what: 'AI read a notice', detail: '143(1)(a)'}]}; S.booksTab = 'ledgers'; S.lmView = 'ai'; render(); }"""); grab("ai-ledgers", 600)
+    pg.evaluate("() => { S.booksTab = 'audit'; S.auditTab = 'find'; render(); }"); grab("ai-audit")
+    pg.evaluate("() => { S.booksTab = 'tds'; S.tdsView = 'notices'; render(); }"); grab("ai-notices-tds")
+    pg.evaluate("() => { S.booksTab = 'gst'; S.gstPart = 'notices'; render(); }"); grab("ai-notices-gst")
+    pg.evaluate("() => { S.view = 'home'; S.homeTab = 'rules'; S.settingsTab = 'ai'; render(); }"); grab("ai-settings", 600)
+    pg.evaluate("() => { S.firm.ai = {on: true, notices: false, tds: false, audit: false}; S.companies[S.coId].aiOff = true; render(); }"); grab("ai-settings-off")
+    pg.evaluate("() => { S.view = 'company'; S.tab = 'books'; S.booksTab = 'ledgers'; render(); }"); grab("ai-ledgers-off")
     br.close()
 srv.shutdown()
 json.dump({"pages": res, "errors": errors}, open(out, "w"), indent=0)
