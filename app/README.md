@@ -76,6 +76,8 @@ screen. Add a screen to `PRINTABLE` there to print it the same way.
 
 Browser storage keys (`tdsdesk:…`) are named only in `src/js`: the test build renames them there (`build.py`), not in `app/src`. A React screen that needs a stored value calls a helper in `src/js` (like `idleMin()`).
 
+A screen asks for an old action by name (`doAct("cloudSync")`, `bankAct("bankPost")`). A name with no `case` does nothing when pressed, so `tests/check_acts.py` checks every name used in `app/src` against the cases; run it with the tests.
+
 ## Run it
 
 ```

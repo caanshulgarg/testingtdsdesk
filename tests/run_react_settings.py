@@ -127,6 +127,9 @@ with sync_playwright() as p:
     ok(["cfg", {"auto": False}] in calls(), "syncing by itself switched off")
     pg.uncheck('label:has-text("Keep documents in the firm account") input'); pg.wait_for_timeout(200)
     ok(pg.evaluate("S.firm.cloudDocs") is False, "documents kept on this computer only")
+    pg.click('button:text-is("Turn it on")'); pg.wait_for_timeout(300)
+    ok(pg.evaluate("Cloud.st.mfa && Cloud.st.mfa.need") == "enrol" and "Two-step sign-in" in pg.inner_text("#app"), "two-step sign-in: Turn it on opens its setup")
+    pg.evaluate("() => { Cloud.st.mfa = null; render(); }"); pg.wait_for_timeout(300)
     pg.fill("#npEmail", "c@b.in"); pg.fill("#npName", "Chetan"); pg.click('button:text-is("Add this person")'); pg.wait_for_timeout(300)
     ok(["admin", {"action": "add_person", "email": "c@b.in", "name": "Chetan", "role": "staff"}] in calls(), "a person added from the boxes")
     pg.evaluate("""() => { S.settingsTab = 'platform'; S.adminData = {month: 0, firms: [{id: 'f1', name: 'Firm A', active: true, plan_id: 'p1', balance: 40, people: 2, modules: [{code: 'read', price: 2, enabled: true}]}],
