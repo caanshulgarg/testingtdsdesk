@@ -224,56 +224,10 @@ const TCloud = {
     try { await this.rpc("tally_company_link", {p_company: company, p_client: client || null}); toast(client ? company + " is linked to " + ((CO(client) || {}).name || "the client") + ". Its books go to the cloud within a few minutes." : company + " is no longer linked."); }
     catch (e){ toast("Could not link it: " + ((e && e.message) || e)); }
     await this.refreshPane();
-  },
-  view(){
-    const p = this.pane;
-    if (!this.on()) return '<div class="pane"><p class="note">Sign in to the firm account to keep the books in FinCom’s cloud.</p></div>';
-    if (p.devices === null && !p.busy && !p.err) setTimeout(() => this.refreshPane(), 0);
-    const when = s => s ? new Date(s).toLocaleString("en-IN", {day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit"}) : "never";
-    const cos = Object.values(S.companies || {}).filter(c => !c.deleted).sort((a, c) => a.name.localeCompare(c.name));
-    let h = '<div class="pane"><h2>Books in FinCom’s cloud</h2><p class="note" style="margin:0 0 12px">The bridge on each connected computer sends the books of the Tally companies it keeps in step. ' +
-      "Then Look up, Reports and the books open on any computer or phone, even with Tally closed, and a trial balance or ledger for any date comes back in a moment. Kept in India, for your firm only.</p>" +
-      (p.err ? '<p class="note bad">' + esc(p.err) + "</p>" : "") + (p.busy ? '<p class="note">' + esc(p.busy) + "</p>" : "") +
-      '<p class="note">The computer with Tally and the bridge sends by itself once someone signs in to FinCom there. Nothing to press.</p>' +
-      (this.autoErr ? '<p class="note bad">Last try: ' + esc(this.autoErr) + "</p>" : "") + '<div class="row"><button class="btn small" data-tc="refresh">Refresh</button></div></div>';
-    const dv = (p.devices || []).filter(d => !d.revoked);
-    h += '<div class="pane"><h3 style="margin-top:0">Computers that send</h3>' + (dv.length ? '<div class="tblwrap"><table class="data"><thead><tr><th>Computer</th><th>Last heard from</th><th>Bridge</th><th></th></tr></thead><tbody>' +
-      dv.map(d => "<tr><td>" + esc(d.name) + ((d.info || {}).computer ? '<div class="nr">' + esc(d.info.computer) + (d.info.user ? " · " + esc(d.info.user) : "") + "</div>" : "") + "</td><td>" + when(d.last_seen) + "</td><td>" + esc(d.version || "—") +
-        '</td><td class="n"><button class="btn small" data-tc="revoke" data-tcid="' + esc(d.id) + '" data-tcname="' + esc(d.name) + '">Remove</button></td></tr>').join("") + "</tbody></table></div>"
-      : '<p class="note">None yet. Open FinCom on the computer with Tally, signed in to the firm, and it connects by itself within a minute.</p>') + "</div>";
-    const cl = p.companies || [];
-    h += '<div class="pane"><h3 style="margin-top:0">Tally companies and clients</h3><p class="note" style="margin:0 0 8px">A company named in Tally as a client’s “Tally name” is linked by itself. ' +
-      "Link the others here. A company whose GSTIN is not the client’s cannot be linked, so no one’s books land in the wrong client.</p>" +
-      (cl.length ? '<div class="tblwrap"><table class="data"><thead><tr><th>Company in Tally</th><th>GSTIN</th><th>Client in FinCom</th><th>Last seen</th></tr></thead><tbody>' +
-        cl.map(c => "<tr><td>" + esc(c.company) + "</td><td>" + esc(c.gstin || "—") + '</td><td><select data-tclink="' + esc(c.company) + '"><option value="">— not linked —</option>' +
-          cos.map(k => '<option value="' + esc(k.id) + '"' + (k.id === c.client_id ? " selected" : "") + ">" + esc(k.name) + "</option>").join("") + "</select></td><td>" + when(c.last_seen) + "</td></tr>").join("") + "</tbody></table></div>"
-        : '<p class="note">No Tally companies have been seen yet. They appear here once a connected computer has a company open in Tally.</p>') + "</div>";
-    return h;
-  },
-  // what Look up shows about the cloud copy
-  bar(cid){
-    const bk = this.book(cid); if (!bk) return "";
-    const st = bk.state || {}, sk = [].concat(st.skipped || []).filter(Boolean);
-    let t = "<b>The books</b>: " + (st.phase === "first" ? "the first copy is still being made (up to " + esc(FC.when(String(st.doneTo || ""))) + ")" : esc(this.age(bk))) + ".";
-    if (sk.length) t += ' <span class="bad"><b>' + sk.length + (sk.length === 1 ? " day" : " days") + " not read yet</b> from Tally.</span>";
-    if (st.trouble && st.trouble.at) t += ' <span class="note">Tally did not answer at ' + esc(String(st.trouble.at).slice(11, 16)) + "; the bridge carries on by itself.</span>";
-    const q = Math.max(0, Math.floor(Number(st.queue) || 0));
-    return t;
   }
+
 };
-(function(){
-  document.addEventListener("click", e => {
-    const t = e.target.closest && e.target.closest("[data-tc]");
-    if (!t) return;
-    const a = t.dataset.tc;
-    if (a === "refresh") TCloud.refreshPane();
-    else if (a === "revoke") TCloud.revoke(t.dataset.tcid, t.dataset.tcname);
-  });
-  document.addEventListener("change", e => {
-    const t = e.target.closest && e.target.closest("[data-tclink]");
-    if (t) TCloud.link(t.dataset.tclink, t.value);
-  });
-})();
+
 // FinCom opened by the FinCom Connector's "Connect FinCom on this computer": the page's address carries the bridge's
 // one-time connect code (#pair=123456). It is taken off the address at once, and used to connect to the bridge.
 (function(){

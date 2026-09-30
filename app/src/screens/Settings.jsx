@@ -8,6 +8,7 @@
 // (coCommit). Sections not yet redrawn in React show the old screen's HTML through <Legacy>.
 import Legacy from "../parts/Legacy.jsx";
 import { AiSettings } from "../parts/Ai.jsx";
+import { BridgeSettings, CloudBooks } from "./Tally.jsx";
 import GstSettings from "./gst/GstSettings.jsx";
 import Parties from "./Parties.jsx";
 import { PostLog } from "./Done.jsx";
@@ -95,8 +96,8 @@ export function FirmSettings() {
     firm: () => <FirmDetails />,
     account: () => <Legacy html={viewCloudSettings() + (Cloud.on() ? viewAccountPeopleOnly() : "")} />,
     plan: () => <Legacy html={viewAccount()} />,
-    bridge: () => <Legacy html={viewBridgeSettings()} />,
-    tcloud: () => <Legacy html={TCloud.view()} />,
+    bridge: () => <BridgeSettings />,
+    tcloud: () => <CloudBooks />,
     postlog: () => <PostLog />,
     rates: () => <Legacy html={viewRates()} />,
     reading: () => <Legacy html={viewReading()} />,

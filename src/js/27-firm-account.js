@@ -1019,13 +1019,6 @@ document.addEventListener("click", ev => {
   if (t.dataset.chipall){ if (t.dataset.chipall === "bank"){ const b = B(); b.from = ""; b.to = ""; b.f = {}; b.sel.clear(); } else if (t.dataset.chipall === "sales"){ const sl = SL(); if (sl){ sl.f = {}; sl.sel.clear(); } } else if (t.dataset.chipall === "txn"){ S.txnF = S.txnF || {}; S.txnF[txnTab()] = {}; S.txnQ = ""; S.txnStatus = ""; } else { S.revF = {}; S.revSel = new Set(); } S.colPop = null; render(); return; }
   if (t.dataset.billdel){ billDelete(t.dataset.billdel); return; }
   if (t.dataset.reread){ const e0 = D().entries[t.dataset.rid]; if (e0) rereadEntry(e0, t.dataset.reread === "free" ? null : t.dataset.reread); return; }
-  if (t.dataset.bridgepin !== undefined){
-    const port = num(t.dataset.bridgepin);
-    Bridge.setCfg({port: port || 0}); Bridge.lastOpenKey = null;
-    if (S.bank){ S.bank.syncedAt = {}; S.bank.ledgers.importedAt = ""; }
-    Bridge.refresh().then(() => { toast(port ? "FinCom now uses only the Tally on port " + port + "." : "FinCom picks your Tally automatically."); bridgeTick(false); render(); });
-    return;
-  }
   if (S.view === "company" && (S.tab === "bank" || (S.tab === "export" && S.bank && S.bank.cid === S.coId)) && bankClick(t)) return;   // bank buttons also work on the Post step
   if (S.view === "company" && S.tab === "sales" && salesClick(t)) return;
   if (t.dataset.open){ openCompany(t.dataset.open); return; }
@@ -1741,8 +1734,6 @@ document.addEventListener("change", ev => {
   if (t.dataset && t.dataset.cloud){
     const k = t.dataset.cloud;
     if (["email", "password", "firm", "name"].includes(k)){ S.cloudForm = Object.assign({}, S.cloudForm, {[k]: t.value}); } if (k === "auto"){ Cloud.setCfg({auto: t.checked}); startCloudSync(); } else if (k === "email") Cloud.setCfg({email: t.value.trim()}); return; }
-  if (t.dataset && t.dataset.bridge){ const k = t.dataset.bridge; Bridge.setCfg({[k]: t.type === "checkbox" ? t.checked : t.value.trim()}); if (k !== "follow"){ Bridge.lastOpenKey = null; startBridgePolling(); } return; }
-  if (t.dataset && t.dataset.bridgelink !== undefined){ const c = S.companies[t.value]; if (c){ c.tallyName = t.dataset.bridgelink; Store.saveCompany(c); Bridge.lastOpenKey = null; toast(c.name + " is linked to the Tally company " + c.tallyName + "."); bridgeTick(false); render(); } return; }
   if (S.view === "company" && S.tab === "bank" && bankChange(t)) return;
   if (S.view === "company" && S.tab === "sales" && salesChange(t)) return;
   if (t.dataset.actToggle === "askClaudeNew"){ S.askClaudeNewSupplier = t.checked; lsSet("tdsdesk:askClaudeNew", t.checked ? "1" : ""); render(); return; }

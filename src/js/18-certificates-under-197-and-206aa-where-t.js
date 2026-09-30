@@ -546,9 +546,7 @@ function viewToday(){ return '<div data-react="Today"></div>'; }
 function viewInboxAll(){ return '<div data-react="InboxAll"></div>'; }
 function viewClients(){ return '<div data-react="Clients"></div>'; }
 /* ---------- Tally: the connection, and everything sent ---------- */
-function viewTallyHome(){
-  return '<section class="today"><h2>Tally</h2></section>' + viewBridgeSettings() + viewPostLog();
-}
+function viewTallyHome(){ return '<div data-react="TallyHome"></div>'; }
 
 // the top bar is drawn by React (app/src/TopBar.jsx); a change that touches only it redraws React alone
 function renderTop(){ if (window.FinComReact) FinComReact.redraw(); }

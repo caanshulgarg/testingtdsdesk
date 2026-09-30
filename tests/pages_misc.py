@@ -32,6 +32,24 @@ with sync_playwright() as p:
     pg.evaluate(VR_RESULT, False); grab("vr-differs")
     pg.evaluate(VR_RESULT, True); grab("vr-agrees")
     pg.evaluate("() => { S.vrec.busy = 'Reading the vendor file'; render(); }"); grab("vr-busy")
+    # Tally: not connected (the three steps), the bridge down, connected with Tallys found, a clash, a Tally chosen that is
+    # not running, the check of this server's Tally and the reading test; the books in the cloud; in Settings too
+    pg.evaluate("""() => { window.__cfg = {url: 'http://127.0.0.1:9100', key: '', follow: true, port: 0}; Bridge.cfg = () => window.__cfg; Bridge.st = {state: 'off', sessions: [], open: [], at: Date.now(), error: ''};
+      S.vrec = null; S.view = 'home'; S.homeTab = 'tally'; render(); }"""); grab("tally-off")
+    pg.evaluate("() => { S.bridgeSha = 'ab12cd'; __cfg.key = 'k1'; Bridge.st = {state: 'down', sessions: [], open: [], at: Date.now(), error: 'The bridge did not answer.'}; render(); }"); grab("tally-down")
+    pg.evaluate("""() => { const other = Object.values(S.companies)[0];
+      Bridge.st = {state: 'ok', version: '1.14.3', at: Date.parse('2026-01-05T10:00:00Z'), mode: 'auto', user: 'OFFICE\\ravi', tallyUp: true, allowImport: false, clash: ['ACME LTD'],
+        sessions: [{port: 9000, ok: true, mine: true, companies: [{name: other.name}, {name: 'ACME LTD'}]}, {port: 9001, ok: false, error: 'x', companies: []}, {port: 9002, skipped: true, companies: []}], open: []};
+      Bridge.diag = null; S.readTest = null; render(); }"""); grab("tally-ok")
+    pg.evaluate("""() => { __cfg.port = 9005; Bridge.st.mode = 'fallback'; Bridge.st.tallyUp = false; Bridge.diag = {user: 'ravi', mySession: 2, findings: [{level: 'ok', text: 'TallyPrime found'}, {level: 'warn', text: 'Port 9000 used twice', fix: 'Give each Tally its own port'}],
+      tallies: [{user: 'ravi', session: 2, mine: true, ports: [9000], ini: {found: true, mode: 'Both', port: 9000}}, {session: 3, ports: [], ini: {found: false}}], freePort: 9003};
+      S.readTest = {tests: [{name: 'Day book', ok: true, count: 120, optional: 2, ms: 340}, {name: 'Light list', ok: false, error: 'timed out', ms: 9000}], company: 'ACME LTD', port: 9000, from: '20260401', to: '20260430'}; render(); }"""); grab("tally-diag")
+    pg.evaluate("() => { Bridge.diag = {error: 'Could not look.'}; S.readTest = {busy: true, error: 'Tally closed'}; render(); }"); grab("tally-diag-error")
+    pg.evaluate("() => { S.homeTab = 'rules'; S.settingsTab = 'bridge'; render(); }"); grab("settings-bridge")
+    pg.evaluate("() => { S.settingsTab = 'tcloud'; render(); }"); grab("settings-tcloud-off")
+    pg.evaluate("""() => { TCloud.on = () => true; TCloud.autoErr = 'no bridge'; const c0 = Object.values(S.companies)[0];
+      TCloud.pane = {devices: [{id: 'd1', name: 'Office PC', info: {computer: 'PC-1', user: 'ravi'}, last_seen: '2026-01-05T10:00:00Z', version: '1.14.3'}, {id: 'd2', name: 'Old', revoked: true}],
+        companies: [{company: 'ACME LTD', gstin: '09AAACA1111A1Z1', client_id: c0.id, last_seen: '2026-01-05T10:00:00Z'}, {company: 'BETA', client_id: null}], err: 'Could not refresh', busy: ''}; render(); }"""); grab("settings-tcloud")
     br.close()
 srv.shutdown()
 json.dump({"pages": res, "errors": errors}, open(out, "w"), indent=0)

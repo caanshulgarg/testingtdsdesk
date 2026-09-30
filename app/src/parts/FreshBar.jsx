@@ -1,7 +1,6 @@
 // How fresh FinCom's copy of the books is, on Reports and Look up: kept in step with Tally by the bridge, the last copy,
 // or the cloud's copy; with the buttons to switch keeping in step on, bring in today's entries or check against Tally,
 // and the result of that check. Was LK.freshBar (src/js/44); the work is LK (keepOn, bringToday, keepCheck).
-import Legacy from "./Legacy.jsx";
 
 const hhmm = (s2) => { const d = new Date(s2); return isNaN(d) ? "" : d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }); };
 const Btn = ({ onClick, className = "btn small", children }) => <button className={className} onClick={onClick}>{children}</button>;
@@ -13,12 +12,21 @@ function Check({ c }) {
     {c.listMatchesDayBook ? "matches" : <b>does not match</b>}{" the day book for the first days (" + c.list + " and " + c.dayBook + " entries)" + (c.listMatchesDayBook ? "." : ": please tell us, so the bridge can be adjusted for your Tally.")}</p>;
 }
 
+// the cloud's copy of the books: how old, days not read yet, Tally not answering. Was TCloud.bar (src/js/49)
+function CloudBar({ cid }) {
+  const bk = TCloud.book(cid); if (!bk) return null;
+  const st = bk.state || {}, sk = [].concat(st.skipped || []).filter(Boolean);
+  return <><b>The books</b>{": " + (st.phase === "first" ? "the first copy is still being made (up to " + FC.when(String(st.doneTo || "")) + ")" : TCloud.age(bk)) + "."}
+    {sk.length > 0 && <>{" "}<span className="bad"><b>{sk.length + (sk.length === 1 ? " day" : " days") + " not read yet"}</b> from Tally.</span></>}
+    {st.trouble && st.trouble.at && <>{" "}<span className="note">{"Tally did not answer at " + String(st.trouble.at).slice(11, 16) + "; the bridge carries on by itself."}</span></>}</>;
+}
+
 export default function FreshBar({ b }) {
   const f = LK.fr(), live = LK.live(), meta = (b && b.meta) || {}, have = (b.vouchers || []).length > 0, sch = f.sch || {}, today = Audit.today(), m = f.man || {}, kp = f.keep || {};
   if (!have && !live && !meta.keep && !TCloud.has(S.coId)) return null;
   const chk = f.check ? <Check c={f.check} /> : null;
   // the cloud's copy: what this page shows when it is the source
-  if (TCloud.has(S.coId) && ((meta.cloud && !m.keep) || !live)) return <div className="lk-fresh"><span className="note"><Legacy as="span" html={TCloud.bar(S.coId)} /> Totals come from this copy, so Tally is never held up.</span>{chk}</div>;
+  if (TCloud.has(S.coId) && ((meta.cloud && !m.keep) || !live)) return <div className="lk-fresh"><span className="note"><CloudBar cid={S.coId} /> Totals come from this copy, so Tally is never held up.</span>{chk}</div>;
   let upTo, btns = null;
   if (m.keep) {
     const seenMin = m.seen ? (Date.now() - Date.parse(m.seen)) / 60000 : 999;
