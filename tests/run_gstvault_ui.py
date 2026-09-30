@@ -61,9 +61,9 @@ with sync_playwright() as p:
     pg.evaluate("render()"); pg.wait_for_timeout(1500)
     ok(pg.evaluate("S.books.gstVault.length") == 4, "four PDFs on file")
     # 3B screen says the portal PDF is on file
-    pg.click('button[data-gstpart="r3b"]'); pg.wait_for_timeout(4000)
+    pg.click('nav[aria-label="GST"] button[data-part="r3b"]'); pg.wait_for_timeout(4000)
     ok("GSTR-3B ✓ on file" in pg.inner_text("#app"), "the 3B screen shows its portal PDF is on file")
-    pg.click('button[data-gstpart="vault"]'); pg.wait_for_timeout(2500)
+    pg.click('nav[aria-label="GST"] button[data-part="vault"]'); pg.wait_for_timeout(2500)
     # remove one
     rid = pg.evaluate("GSTV.copies('07','r3b','202601')[0].id")
     pg.locator('button[data-gstvdel="%s"]' % rid).first.click(); pg.wait_for_timeout(600); pg.click('[data-cbx="yes"]'); pg.wait_for_timeout(1500)

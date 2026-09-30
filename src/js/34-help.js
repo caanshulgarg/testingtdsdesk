@@ -92,7 +92,8 @@ const Help = {
       // on the row of month and downloads under the GST tabs, where there is room; on TDS, the line of years and quarters
       const gnav = document.querySelector('#app nav.sbar[aria-label="GST"]'), grow = gnav && gnav.nextElementSibling && gnav.nextElementSibling.classList.contains("revfilter") ? gnav.nextElementSibling : null;
       const bar = grow || gnav || document.querySelector("#app .tds-crumbs");
-      if (bar && !bar.querySelector("[data-help]")) bar.insertAdjacentHTML("beforeend", '<button class="help-btn" data-help="open" title="How this tab works">? How this tab works</button>');
+      // a bar drawn by React has the button drawn by React (app/src/parts/HelpButton.jsx)
+      if (bar && !bar.querySelector("[data-help]") && !(typeof reactOwned === "function" && reactOwned(bar))) bar.insertAdjacentHTML("beforeend", '<button class="help-btn" data-help="open" title="How this tab works">? How this tab works</button>');
     }
     if (S.helpOpen && has){
       if (!p){ p = document.createElement("aside"); p.id = "helpPanel"; p.className = "help-panel"; p.setAttribute("aria-label", "How this tab works"); document.body.appendChild(p); }

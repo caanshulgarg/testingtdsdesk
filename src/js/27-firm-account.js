@@ -1005,7 +1005,7 @@ document.addEventListener("click", ev => {
   if (S.view === "company" && S.tab === "sales" && salesClick(t)) return;
   if (t.dataset.open){ openCompany(t.dataset.open); return; }
   if (t.dataset.bookstab){ booksTabGo(t.dataset.bookstab, t.dataset.gstpart); return; }
-  if (t.dataset.gstpart){ S.gstPart = t.dataset.gstpart; render(); return; }
+  if (t.dataset.gstpart){ gstPartGo(t.dataset.gstpart); return; }
   if (t.dataset.itctcat !== undefined){ S.itctCat = S.itctCat === t.dataset.itctcat ? "" : t.dataset.itctcat; render(); return; }
   if (t.dataset.inregchip !== undefined){ S.inregF = S.inregF === t.dataset.inregchip ? "" : t.dataset.inregchip; render(); return; }
   if (t.dataset.tdspart){ S.tdsPart = t.dataset.tdspart; render(); return; }
@@ -1682,8 +1682,6 @@ document.addEventListener("input", ev => {
   if (t && t.dataset && t.dataset.tdsfsec !== undefined){ S.tdsF = Object.assign({}, S.tdsF, {section: t.value}); render(); return; }
   if (t && t.dataset && t.dataset.tdsfch !== undefined){ S.tdsF = Object.assign({}, S.tdsF, {challan: t.value}); render(); return; }
   if (t && t.dataset && t.dataset.tdsfpan !== undefined){ S.tdsF = Object.assign({}, S.tdsF, {pan: t.value}); render(); return; }
-  if (t && t.dataset && t.dataset.gstym !== undefined){ S.gstYm = t.value; S.books.reco = null; render(); return; }
-  if (t && t.dataset && t.dataset.gstreg !== undefined){ S.gstReg = t.value; S.books.reco = null; render(); return; }
   if (t && t.dataset && t.dataset.tdsq !== undefined){ S.tdsQ = t.value; render(); return; }
   if (t && t.dataset && t.dataset.ledkind){ const m = S.books.map[t.dataset.ledkind]; if (m){ m.kind = t.value; m.byHand = true; if (m.kind !== "tds_payable") delete m.section;
     if (/^(gst|gst_common|ineligible)$/.test(m.kind)){ const gg = Books.guess(t.dataset.ledkind); if (!m.tax) m.tax = gg.tax || "IGST"; if (!m.side) m.side = gg.side || "input"; if (m.reg == null && gg.reg) m.reg = gg.reg; }

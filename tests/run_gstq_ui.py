@@ -29,7 +29,7 @@ with sync_playwright() as p:
     ok(any(n.startswith("IFF_07AADCV3366N1ZU_112025") for n in pg.evaluate("window.__saved")), "IFF JSON for November downloads")
     pg.fill('input[data-gqpay="igst"]', "200000"); pg.press('input[data-gqpay="igst"]', "Tab"); pg.wait_for_timeout(3000)
     ok(pg.evaluate("GSTF.peek('202511','07').pmt06.igst") == 200000, "PMT-06 paid is kept")
-    pg.select_option('select[data-gstym]', "202512"); pg.wait_for_timeout(5000); t = pg.inner_text("#app")
+    pg.select_option('select[aria-label=Month]', "202512"); pg.wait_for_timeout(5000); t = pg.inner_text("#app")
     ok("GSTR-1 for the quarter" in t and "GSTR-3B for the quarter" in t and "Less: paid by PMT-06" in t and "2,00,000" in t, "December: the quarter's two returns, with PMT-06 set against the 3B")
     pg.screenshot(path=OUT + "/qrmp-quarter.png", full_page=False)
     pg.click('button[data-act="gstJson"]'); pg.wait_for_timeout(3000)
@@ -42,7 +42,7 @@ with sync_playwright() as p:
     print("   nav:", nav.replace("\n", " | "))
     ok("CMP-08" in nav and "GSTR-4" in nav and "Turnover and tax" in t and "ITC follow-up" not in nav and "GSTR-3B" not in nav, "composition: CMP-08 and GSTR-4 instead of GSTR-1 and 3B; no ITC follow-up")
     pg.screenshot(path=OUT + "/comp-cmp08.png", full_page=False)
-    pg.click('button[data-gstpart="gstr4"]'); pg.wait_for_timeout(4000)
+    pg.click('nav[aria-label="GST"] button[data-part="gstr4"]'); pg.wait_for_timeout(4000)
     ok("Table 4: purchases" in pg.inner_text("#app") and "Table 5" in pg.inner_text("#app"), "GSTR-4 for the year")
     br.close()
 errs = [e for e in errors if "supabase" not in e and "Failed to load" not in e]

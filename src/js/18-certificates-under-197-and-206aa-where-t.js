@@ -951,13 +951,11 @@ async function gst9Excel(which){
   }
   saveFile(CO().name.replace(/[^A-Za-z0-9]+/g, "-") + "-GSTR-" + which + "-" + fy + "-" + reg + ".xlsx", new Blob([XLSX.write(wb, {bookType: "xlsx", type: "array"})], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
 }
-function viewBooksGst(b){
-  const months = GSTR.months(), regs = GSTR.gstins(b) || [], noBooks = !(b.vouchers || []).length;
-  if (!regs.length) return '<div class="bk-none">Add the client\u2019s GSTIN in ' + gstSetLink("GST settings") + " to use the GST tab. With it, 2B can be fetched from the portal or brought in, and the returns filed kept, with or without a Tally day book. GSTR-1 and 3B are worked out from the day book, brought in under \u201cFrom Tally\u201d.</div>";
-  if (!S.gstYm || !months.includes(S.gstYm)) S.gstYm = months[months.length - 1] || "";
-  // a return is filed for one GSTIN: the company's own first, never the registrations added together
-  if (regs.length && !regs.some(g => g.slice(0, 2) === S.gstReg)){ const own = String((CO() || {}).gstin || "").slice(0, 2); S.gstReg = (regs.find(g => g.slice(0, 2) === own) || regs[0]).slice(0, 2); }
-  // the parts follow the GSTIN's filing type: QRMP starts from the quarter; composition has its own two returns
+// the GST tab: React (app/src/screens/Gst.jsx); its parts are still the old pages below (viewGstr1, viewGstr3b, …)
+function viewBooksGst(b){ return '<div data-react="Gst"></div>'; }
+// the parts of the GST tab for the GSTIN and month chosen, following its filing type
+function gstParts(b){
+  const regs = GSTR.gstins(b) || [], noBooks = !(b.vouchers || []).length;
   const ftype = typeof GSTSet === "object" && S.gstYm ? GSTSet.typeOf(S.gstYm, S.gstReg || "") : "monthly";
   const parts = ftype === "comp" ? [["cmp08", "CMP-08"], ["gstr4", "GSTR-4"], ["inreg", "Purchases"], ["r2b", "2B reconciliation"]]
     : (ftype === "qrmp" ? [["qtr", "This quarter"], ["r1", "GSTR-1 working"], ["r3b", "GSTR-3B working"]] : [["r1", "GSTR-1"], ["r3b", "GSTR-3B"]])
@@ -967,41 +965,28 @@ function viewBooksGst(b){
   // without the day book only what does not come from it: 2B (from the portal or its JSON) and the returns filed
   if (noBooks) parts.splice(0, parts.length, ["r2b", "2B"], ["vault", "Returns filed"]);
   if (noBooks && AIH.enabled("notices")) parts.push(["notices", "Notices"]);
-  // a GSTIN or filing type seen for the first time opens on its first part: This quarter, CMP-08, or GSTR-1
-  const seen = (S.gstReg || "") + "|" + ftype;
-  if (!S.gstPart || !parts.some(x => x[0] === S.gstPart) || (S.gstSeen && S.gstSeen !== seen)) S.gstPart = parts[0][0];
-  S.gstSeen = seen;
-  const part = S.gstPart, noReturn = ftype === "qrmp" && !GSTSet.isQEnd(S.gstYm || "");
-  let h = ledgerBanner(b, "gst") + '<nav class="sbar" aria-label="GST">' + parts
-    .map(([id, l]) => '<button data-gstpart="' + id + '" aria-selected="' + (part === id) + '">' + l + "</button>").join("") + "</nav>";
-  h += '<div class="revfilter"><select data-gstym>' + months.map(m => '<option value="' + m + '"' + (S.gstYm === m ? " selected" : "") + ">" + GSTR.label(m) + "</option>").join("") + "</select>" +
-    (regs.length > 1 ? '<select data-gstreg>' + regs.map(g => '<option value="' + g.slice(0, 2) + '"' + (S.gstReg === g.slice(0, 2) ? " selected" : "") + ">" + esc(g) + "</option>").join("") + "</select>" : "") +
-    (part === "r2b" || part === "rev" || part === "inreg" || part === "follow" || part === "qtr" || part === "vault" || ftype === "comp" ? "" : '<button class="btn small" data-act="gstExcel">Download GSTR-1 and 3B</button>') +
-    (part === "amend" && ftype === "monthly" ? '<button class="btn small primary" data-act="gstJson">Download GSTR-1 JSON with these</button>' : "") +
-    (part === "r1" && !noReturn ? '<button class="btn small primary" data-act="gstJson">Download GSTR-1 JSON' + (ftype === "qrmp" ? " for the quarter" : " for the portal") + "</button>" : "") +
-    (part === "r3b" && !noReturn ? '<button class="btn small primary" data-act="gst3bJson">Download GSTR-3B JSON' + (ftype === "qrmp" ? " for the quarter" : " for the portal") + "</button>" : "") + "</div>";
-  // the GSTIN chosen, with what GST settings hold for it
-  const gNow = regs.find(g => g.slice(0, 2) === S.gstReg) || "";
-  if (gNow) h = h.replace(/<\/div>$/, "") + '<span class="note" style="align-self:center"><b>' + esc(gNow) + "</b> \u00b7 " + esc(GSTRegs.state(gNow)) + " \u00b7 " + esc(GSTSet.typeLabel(ftype)) + (GSTSet.peek(S.gstReg).portalUser ? " \u00b7 portal user " + esc(GSTSet.peek(S.gstReg).portalUser) : "") + " \u00b7 " + gstSetLink("GST settings") + "</span></div>";
-  if (noBooks) h += '<p class="note" style="margin:0 0 10px;color:#B9541B">No Tally day book here yet. 2B and the returns filed work without it; GSTR-1, 3B, the input register and the other workings need the day book, brought in under \u201cFrom Tally\u201d or read from Tally.</p>';
-  // a GSTIN that is not a monthly filer: say so on every part, until its own returns are built
-  const ftp = typeof GSTSet === "object" && S.gstYm ? GSTSet.typeOf(S.gstYm, S.gstReg || "") : "monthly";
-  if (ftp === "qrmp" && (part === "r1" || part === "r3b")) h += '<p class="note" style="margin:0 0 10px">Quarterly (QRMP) filer: this is the working for ' + esc(GSTR.label(S.gstYm)) + (GSTSet.isQEnd(S.gstYm) ? "; the downloads cover the whole of " + esc(GSTSet.qLabel(S.gstYm)) + "." : ", for reference; this month has no GSTR-1 or 3B \u2014 see \u201cThis quarter\u201d.") + "</p>";
-  if (part === "notices") return h + AIH.viewNotices(b, "gst");
-  if (part === "vault") return h + viewGstReturnsFiled(b);
-  if (part === "qtr") return h + viewQrmp(b);
-  if (part === "cmp08") return h + viewCmp08(b);
-  if (part === "gstr4") return h + viewGstr4(b);
-  if (part === "r2b") return h + viewBooks2B(b);
-  if (part === "inreg") return h + viewInputRegister(b);
-  if (part === "follow") return h + viewItcFollow(b);
-  if (part === "adv") return h + viewGstAdv(b);
-  if (part === "rev") return h + viewGstRev(b);
-  if (part === "amend") return h + viewGstAmend(b);
-  if (part === "g9") return h + viewGst9(b);
-  if (part === "g9c") return h + viewGst9c(b);
-  return h + (part === "r1" ? viewGstr1(b) + viewCustRejections(b) : viewGstr3b(b));
+  return {parts, ftype, regs, noBooks};
 }
+// one part of the GST tab, as the old pages draw it
+function gstPartHtml(b, part){
+  if (part === "notices") return AIH.viewNotices(b, "gst");
+  if (part === "vault") return viewGstReturnsFiled(b);
+  if (part === "qtr") return viewQrmp(b);
+  if (part === "cmp08") return viewCmp08(b);
+  if (part === "gstr4") return viewGstr4(b);
+  if (part === "r2b") return viewBooks2B(b);
+  if (part === "inreg") return viewInputRegister(b);
+  if (part === "follow") return viewItcFollow(b);
+  if (part === "adv") return viewGstAdv(b);
+  if (part === "rev") return viewGstRev(b);
+  if (part === "amend") return viewGstAmend(b);
+  if (part === "g9") return viewGst9(b);
+  if (part === "g9c") return viewGst9c(b);
+  return part === "r1" ? viewGstr1(b) + viewCustRejections(b) : viewGstr3b(b);
+}
+function gstPartGo(id){ S.gstPart = id; render(); }
+function gstSetYm(ym){ S.gstYm = ym; S.books.reco = null; render(); }
+function gstSetReg(reg){ S.gstReg = reg; S.books.reco = null; render(); }
 
 function viewGstAmend(b){
   const money = v => INR.format(r2(v || 0)), ym = S.gstYm || "", reg = S.gstReg || "", regs = GSTR.gstins(b) || [];

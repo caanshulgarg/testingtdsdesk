@@ -16,9 +16,10 @@ import Sales, { SalesBar } from "./Sales.jsx";
 import Txn from "./Txn.jsx";
 import Dash from "./Dash.jsx";
 import Books from "./Books.jsx";
+import Gst from "./Gst.jsx";
 import DocqPanel from "../parts/Docq.jsx";
 import Unsorted from "../parts/Unsorted.jsx";
 import UploadBlock from "../parts/UploadBlock.jsx";
 import { Jobs, ReadingCheck, UploadOptions, Working } from "../parts/Reading.jsx";
 
-export default { GstApiCard, Today, InboxAll, Clients, Collect, Invoices, BillDetail, ReviewTable, ActionBar, Drawer, Parties, PostStep, Export, DoneStep, PostLog, Bank, BankBar, FirmSettings, ClientSetup, Sales, SalesBar, Txn, Dash, Books, DocqPanel, Unsorted, UploadBlock, Jobs, ReadingCheck, UploadOptions, Working };
+export default { GstApiCard, Today, InboxAll, Clients, Collect, Invoices, BillDetail, ReviewTable, ActionBar, Drawer, Parties, PostStep, Export, DoneStep, PostLog, Bank, BankBar, FirmSettings, ClientSetup, Sales, SalesBar, Txn, Dash, Books, Gst, DocqPanel, Unsorted, UploadBlock, Jobs, ReadingCheck, UploadOptions, Working };

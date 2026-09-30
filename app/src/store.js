@@ -61,7 +61,19 @@ function giveFocus(f) {
 }
 
 // React only (no old screens redrawn); also for tests, which put a placeholder in the page themselves
-export function redraw() { const f = noteFocus(); adopt(); version++; flushSync(() => subs.forEach((f) => f())); giveFocus(f); }
+// React draws, then any React screen placed inside an old piece it has just drawn (<Legacy>) is put in and drawn too
+// (an old piece puts such a screen in place itself, so a new one shows up as a new entry in `placed`)
+function drawReact() {
+  const keys = () => placed.map((p) => p.key).join("|");
+  adopt();
+  for (let i = 0; i < 4; i++) {
+    const before = keys();
+    version++; flushSync(() => subs.forEach((fn) => fn()));
+    if (document.querySelector("[data-react]:not(.react-host)")) adopt();
+    if (keys() === before) break;
+  }
+}
+export function redraw() { const f = noteFocus(); drawReact(); giveFocus(f); }
 window.FinComReact = { redraw };
 
 // A redraw of the old screens takes every React screen out of the page for a moment. If that happens while the mouse
@@ -82,9 +94,7 @@ window.render = function render() {
   const acFk = typeof AC === "object" ? AC.fk : null;
   try { legacyRender(); }
   finally {
-    adopt();
-    version++;
-    flushSync(() => subs.forEach((fn) => fn()));
+    drawReact();
     giveFocus(f);
     // the column filter pop-up sits under its funnel button, which may be in a React table
     if (typeof placeColPop === "function") placeColPop();

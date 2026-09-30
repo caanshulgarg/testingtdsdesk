@@ -8,6 +8,8 @@
 import Legacy from "../parts/Legacy.jsx";
 import { BusyCard } from "../parts/Reading.jsx";
 import { Return26, Return24, CertsPage } from "./TdsReturn.jsx";
+import Gst from "./Gst.jsx";
+import HelpButton from "../parts/HelpButton.jsx";
 
 const money = (v) => INR.format(r2(v || 0));
 const Q_MONTHS = { Q1: "Apr to Jun", Q2: "Jul to Sep", Q3: "Oct to Dec", Q4: "Jan to Mar" };
@@ -22,10 +24,7 @@ function Crumbs() {
       {v === "certs" && <><span className="note">›</span><b>Certificates and rate questions</b></>}
       {v === "notices" && <><span className="note">›</span><b>Notices</b></>}
       {v === "return" && <><span className="note">›</span><b>{S.tdsQ} · {S.tdsForm}</b></>}
-      {/* the help for this tab (src/js/34), answered by the old click handler */}
-      {typeof Help === "object" && Help.T[Help.key()] && <span data-legacy="" style={{ display: "contents" }}><button className="help-btn" data-help="open" title="How this tab works">? How this tab works</button></span>}
-      {/* the guide to this page (Help, src/js/34 — its click handler answers data-help) */}
-      {Help.T[Help.key()] && <button className="help-btn" data-help="open" title="How this tab works">? How this tab works</button>}
+      <HelpButton />
     </div>
   );
 }
@@ -108,6 +107,11 @@ function Tds({ b }) {
   if (["year", "return", "certs"].includes(S.tdsView) && !fys.includes(S.tdsFy)) S.tdsFy = fys[0] || "";
   if (!S.tdsFy && !["years", "notices"].includes(S.tdsView)) S.tdsView = "years";
   const v = S.tdsView;
+  // a return's tab is settled before the way back is drawn: the guide beside it is for that tab
+  if (v === "return") {
+    const tabs = S.tdsForm === "24Q" ? ["employees", "challans", "checks"].concat(S.tdsQ === "Q4" ? ["annex2"] : []) : ["challans", "deductees", "deductions", "checks"];
+    if (!tabs.includes(S.tdsTab)) S.tdsTab = tabs[0];
+  }
   return <>
     <Legacy html={ledgerBanner(b, "tds")} />
     <Crumbs />
@@ -132,10 +136,11 @@ export default function Books() {
     ["gst", "GST", null], ["mis", "MIS", null], ["fs", "Accounts", null], ["audit", "Audit", highOpen || null]];
   let body;
   if (tab === "import") body = <Legacy html={viewBooksImport(b)} />;
-  else if (!n && tab === "gst") body = <Legacy html={viewBooksGst(b)} />;
+  else if (!n && tab === "gst") body = <Gst />;
   else if (!n && !(tab === "tds" && (b.salary || []).length)) body = <div className="bk-none">Bring the day book in first, under “From Tally”. Salary for 24Q can be brought in on its own, under TDS.</div>;
   else if (tab === "tds") body = <Tds b={b} />;
-  else body = <Legacy html={tab === "ledgers" ? viewBooksLedgers(b) : tab === "audit" ? viewBooksAudit(b) : tab === "mis" ? viewBooksMis(b) : tab === "fs" ? viewBooksAccounts(b) : viewBooksGst(b)} />;
+  else if (tab === "gst" || !["ledgers", "audit", "mis", "fs"].includes(tab)) body = <Gst />;
+  else body = <Legacy html={tab === "ledgers" ? viewBooksLedgers(b) : tab === "audit" ? viewBooksAudit(b) : tab === "mis" ? viewBooksMis(b) : viewBooksAccounts(b)} />;
   return <>
     <nav className="sbar" aria-label="Books">{tabs.map(([id, label, c]) =>
       <button key={id} aria-selected={tab === id} onClick={() => booksTabGo(id)}>{label}{c != null && <> <span className="sbar-n">{c}</span></>}</button>)}</nav>

@@ -50,7 +50,7 @@ with sync_playwright() as p:
     # other screens: funnels there too
     found = {}
     for part in ["r1", "r3b", "r2b", "g9"]:
-        pg.click('button[data-gstpart="%s"]' % part); pg.wait_for_timeout(3500)
+        pg.click('nav[aria-label="GST"] button[data-part="%s"]' % part); pg.wait_for_timeout(3500)
         found[part] = pg.locator("#app .gff").count()
     pg.evaluate("S.booksTab = 'tds'; render()"); pg.wait_for_timeout(5000); found["tds"] = pg.locator("#app .gff").count()
     pg.evaluate("S.booksTab = 'mis'; render()"); pg.wait_for_timeout(5000); found["mis"] = pg.locator("#app .gff").count()

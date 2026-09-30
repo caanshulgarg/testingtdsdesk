@@ -50,6 +50,9 @@ app/                      the React app (Vite)
   text of every TDS page from a build; run it on the live build and the React build and compare (docs in the file).
 - **Column filters on old tables** (`GridF`, the funnels on every `table.bk-table`) run after React has drawn, so old
   pieces inside React screens keep them; tables drawn by React are left alone (their pages have their own filters).
+- **React screens inside old pieces** (the GST API card inside the 2B page) are put in place and drawn in the same
+  redraw (store.js `drawReact`, `Legacy` calls `adopt`).
+- **"How this tab works"** is `parts/HelpButton.jsx` wherever the bar it sits on is drawn by React.
 - **Editing a bill** goes through `billSetX`, `billSetText`, `billSetChoice`, `billBookTds`, `billGst`,
   `billUseExpense`, `billFixLedger` (src/js/27), for React and the old handlers alike.
 - **State** is still the one object `S`, and every change still ends in `render()`. A React screen's own passing
@@ -101,7 +104,8 @@ Status: **done** (in React, test passing) · **next** · blank = not started. Ab
 | **TDS** | years and year `viewTdsYears`, `viewTdsYearPage`, `tdsCrumbs` (18) | **done** |
 | | the returns `viewTdsReturn26`, `viewTdsReturn24`, `viewTdsCerts` (18): same text as the live site on all 92 TDS pages of the sample books (`tests/pages_tds.py`) | **done** |
 | | notices (`AIH.viewNotices`, 50) | |
-| **GST** | `viewBooksGst`, `viewBooks2B`, `viewGstr1`, `viewGstr3b`, `viewGstChecks`, `viewGstAmend`, `viewGstAdv`, `viewGstRev`, `viewInputRegister`, `viewGst9`, `viewGst9c` (18) · filing (35) · settings and registrations (36) · QRMP, CMP-08, GSTR-4 (37) · returns filed (38) · ITC follow-up (32) · customer IMS (33) · vendor recon (42) | |
+| **GST** | the tab `viewBooksGst` (18): parts, month, GSTIN, downloads; same text as the live site on 56 GST pages (`tests/pages_gst.py`) | **done** |
+| | the parts: `viewBooksGst`, `viewBooks2B`, `viewGstr1`, `viewGstr3b`, `viewGstChecks`, `viewGstAmend`, `viewGstAdv`, `viewGstRev`, `viewInputRegister`, `viewGst9`, `viewGst9c` (18) · filing (35) · settings and registrations (36) · QRMP, CMP-08, GSTR-4 (37) · returns filed (38) · ITC follow-up (32) · customer IMS (33) · vendor recon (42) | |
 | | 2B from the portal `viewGstApiCard` (39) | **done** |
 | **Books** | `viewBooks`, `viewBooksImport`, `viewBooksLedgers`, `viewLedPosting`, `viewTallyRead`, `viewSetupList` (18) · accounts (30) | |
 | **Audit and MIS** | `viewBooksAudit`, `viewAuditRel`, `viewAudit3cd`, `viewBooksMis`, `misPackHtml` (18) | |
