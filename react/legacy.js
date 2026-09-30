@@ -7947,63 +7947,6 @@ function tbDefaultOn(b){
   return t.getFullYear() + "-" + String(t.getMonth() + 1).padStart(2, "0") + "-" + String(t.getDate()).padStart(2, "0");
 }
 function tallyDate(s){ return s && String(s).length === 8 ? String(s).slice(0, 4) + "-" + String(s).slice(4, 6) + "-" + String(s).slice(6, 8) : ""; }
-function viewBooksLedgers(b){
-  const regs = (GSTR.gstins(b) || []).map(g => g.slice(0, 2)), info = b.ledInfo || {};
-  const all = Object.entries(b.map || {});
-  const isTax = ([n, m]) => LedMaster.taxLike(n, m, info[n]);
-  const gst = all.filter(([n, m]) => LedMaster.isGst(m.what) && isTax([n, m])), tds = all.filter(([n, m]) => LedMaster.isTds(m.what) && isTax([n, m]));
-  const pend = LedMaster.pending(b), other = all.filter(x => !isTax(x));
-  const view = S.lmView || (pend.length ? "pending" : "gst");
-  const q = String(S.ledQ || "").toLowerCase();
-  const pool = {pending: pend, gst, tds, done: all.filter(([n, m]) => m.ok && isTax([n, m])), other}[view] || pend;
-  const shown = pool.filter(([n, m]) => !q || n.toLowerCase().includes(q) || String(m.section || "").toLowerCase().includes(q) || String((info[n] || {}).group || "").toLowerCase().includes(q))
-    .sort((a, c) => (LedMaster.isGst(a[1].what) ? 0 : 1) - (LedMaster.isGst(c[1].what) ? 0 : 1) || (c[1].n || 0) - (a[1].n || 0) || a[0].localeCompare(c[0]));
-  const fromTally = Object.keys(info).length;
-  const live = typeof bridgeLive === "function" && bridgeLive(CO());
-  let h = '<section class="dash-card" style="margin-bottom:12px"><h3>GST and TDS ledgers: confirm once for this client</h3>' +
-    '<p class="note">Each ledger is guessed from Tally \u2014 its tax type, duty head and group \u2014 and from how the day book uses it. Check the guess and confirm it. Returns count only confirmed ledgers; anything still to confirm is shown on the TDS and GST screens, and their files wait until it is done.</p>' +
-    '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">' +
-    '<button class="btn small' + (live ? " primary" : "") + '" data-act="ledRead"' + (live ? "" : ' title="Needs the Tally Bridge and this company open in Tally"') + ">Read ledgers from Tally</button>" +
-    '<span class="note">' + (fromTally ? fromTally + " ledgers read from Tally" + (b.ledInfoAt ? " on " + fmtDate(String(b.ledInfoAt).slice(0, 10)) : "") : live ? "not read yet" : "Tally is not connected; the ledger masters XML under \u201cFrom Tally\u201d does the same") + "</span></div>" +
-    '<div class="dash-tiles" style="margin-top:10px">' +
-    '<button class="dtile' + (pend.length ? " warn" : "") + '" data-lmview="pending" style="text-align:left"><span>To confirm</span><b>' + pend.length + "</b><small>" + (pend.length ? "returns wait for these" : "all done") + "</small></button>" +
-    '<button class="dtile" data-lmview="gst" style="text-align:left"><span>GST ledgers</span><b>' + gst.length + "</b><small>" + gst.filter(x => x[1].ok).length + " confirmed</small></button>" +
-    '<button class="dtile" data-lmview="tds" style="text-align:left"><span>TDS and TCS ledgers</span><b>' + tds.length + "</b><small>" + tds.filter(x => x[1].ok).length + " confirmed</small></button>" +
-    '<button class="dtile" data-lmview="other" style="text-align:left"><span>Other ledgers</span><b>' + other.length + "</b><small>add one to GST or TDS</small></button></div></section>";
-  h = ledChangedBanner(b) + h;
-  h += '<nav class="sbar" aria-label="Ledgers">' + [["pending", "To confirm", pend.length], ["gst", "GST", gst.length], ["tds", "TDS and TCS", tds.length], ["done", "Confirmed", null], ["other", "Other ledgers", other.length], ["post", "What FinCom posts to", null]].concat(AIH.enabled("tds") || AIH.enabled("audit") ? [["ai", "AI: TDS and credit", null]] : [])
-    .map(([id, l, c]) => '<button data-lmview="' + id + '" aria-selected="' + (view === id) + '">' + l + (c != null ? ' <span class="sbar-n">' + c + "</span>" : "") + "</button>").join("") + "</nav>";
-  if (view === "post") return h + viewLedPosting(b);
-  if (view === "ai") return h + AIH.viewLedgers(b);
-  h += '<div class="revfilter" style="flex-wrap:wrap;row-gap:6px"><input type="search" id="ledq" data-fk="ledq" data-keeptyped value="' + esc(S.ledQ || "") + '" placeholder="Find a ledger, section or group" style="width:260px;flex:0 0 auto">' +
-    '<span class="note">' + shown.length + " ledger" + (shown.length === 1 ? "" : "s") + "</span>" +
-    (view !== "other" && shown.some(([, m]) => !m.ok) ? '<button class="btn small primary" data-act="lmConfirmShown">Confirm the ' + shown.filter(([, m]) => !m.ok).length + " shown</button>" : "") + "</div>";
-  const whatSel = (n, m) => '<select style="width:auto;min-width:180px" data-lmwhat="' + esc(n) + '">' + (view === "other" ? '<option value="">\u2014</option>' : "") +
-    '<optgroup label="GST">' + LedMaster.WHAT.filter(w => LedMaster.isGst(w[0])).map(w => '<option value="' + w[0] + '"' + (m.what === w[0] ? " selected" : "") + ">" + w[1] + "</option>").join("") + "</optgroup>" +
-    '<optgroup label="TDS and TCS">' + LedMaster.WHAT.filter(w => LedMaster.isTds(w[0]) || w[0] === "tds_interest").map(w => '<option value="' + w[0] + '"' + (m.what === w[0] ? " selected" : "") + ">" + w[1] + "</option>").join("") + "</optgroup>" +
-    '<optgroup label="Other">' + LedMaster.WHAT.filter(w => ["bank", "roundoff", "none"].includes(w[0])).map(w => '<option value="' + w[0] + '"' + ((m.what || (view === "other" ? "" : "none")) === w[0] && view !== "other" ? " selected" : "") + ">" + w[1] + "</option>").join("") + "</optgroup></select>";
-  const detail = (n, m) => {
-    if (LedMaster.isGst(m.what) && !/^gst_(setoff|interest|control)$/.test(m.what)) return '<span style="display:flex;gap:4px;flex-wrap:nowrap">' +
-      '<select style="width:auto" data-lmtax="' + esc(n) + '">' + ["IGST", "CGST", "SGST", "CESS"].map(x => '<option' + (m.tax === x ? " selected" : "") + ">" + x + "</option>").join("") + "</select>" +
-      '<select style="width:auto" data-lmside="' + esc(n) + '"><option value="input"' + (m.side === "input" ? " selected" : "") + '>input</option><option value="output"' + (m.side === "output" ? " selected" : "") + ">output</option></select>" +
-      (regs.length > 1 ? '<select style="width:auto" data-lmreg="' + esc(n) + '"><option value="">registration?</option>' + regs.map(r => '<option value="' + r + '"' + (m.reg === r ? " selected" : "") + ">" + r + "</option>").join("") + "</select>" : "") +
-      '<select style="width:auto" data-lmgrate="' + esc(n) + '" title="Only if this ledger is for one rate"><option value="">any rate</option>' + LedMaster.RATES.map(r => '<option value="' + r + '"' + (num(m.gstRate) === r ? " selected" : "") + ">" + r + "%</option>").join("") + "</select></span>";
-    if (LedMaster.isGst(m.what) && regs.length > 1) return '<select style="width:auto" data-lmreg="' + esc(n) + '"><option value="">registration?</option>' + regs.map(r => '<option value="' + r + '"' + (m.reg === r ? " selected" : "") + ">" + r + "</option>").join("") + "</select>";
-    if (m.what === "tds_payable" || m.what === "tcs_payable") return '<span style="display:flex;gap:4px"><input type="text" data-lmsec="' + esc(n) + '" data-fk="lmsec-' + esc(n) + '" value="' + esc(m.section || "") + '" placeholder="' + (m.what === "tcs_payable" ? "206C(1H)" : "194C") + '" style="width:90px">' +
-      '<input type="number" step="0.01" min="0" data-lmrate="' + esc(n) + '" value="' + esc(m.rate == null ? "" : m.rate) + '" placeholder="rate %" style="width:80px"></span>';
-    return "";
-  };
-  h += '<div class="bk-tablewrap"><table class="bk-table" id="lmTable"><thead><tr><th>Tally ledger</th><th>What it is</th><th>Head, side, registration, rate or section</th><th class="n">Used</th><th>Why, and checks</th><th class="ac">Confirmed</th></tr></thead><tbody>' +
-    shown.slice(0, 400).map(([n, m]) => {
-      const warn = LedMaster.checks(b, n, m), inf = info[n] || {};
-      return "<tr><td>" + esc(n) + (inf.group ? '<div class="nr">' + esc(inf.group) + (inf.taxType && !/^(others|not applicable)$/i.test(String(inf.taxType).replace(/[^A-Za-z ]/g, "").trim()) ? " \u00b7 Tally: " + esc(inf.taxType) + (inf.dutyHead ? " " + esc(inf.dutyHead) : "") : "") + "</div>" : "") +
-        "</td><td>" + whatSel(n, m) + "</td><td>" + detail(n, m) + '</td><td class="n">' + (m.n || 0) + "</td>" +
-        '<td style="min-width:200px">' + (m.why ? '<div class="nr" style="white-space:normal">' + esc(m.why) + "</div>" : "") + warn.map(w => '<div class="nr bad" style="white-space:normal">' + esc(w) + "</div>").join("") + "</td>" +
-        '<td class="ac">' + (view === "other" ? "" : m.ok ? '<button class="linkbtn" data-lmok="' + esc(n) + '" title="Undo">\u2713 confirmed</button>' : '<button class="btn small" data-lmok="' + esc(n) + '">Confirm</button>') + "</td></tr>";
-    }).join("") + "</tbody></table>" + (shown.length > 400 ? '<p class="note">The first 400 are shown; find the rest by name.</p>' : "") + (shown.length ? "" : '<div class="bk-none">' + (view === "pending" ? "Every GST and TDS ledger is confirmed." : "Nothing here.") + "</div>") + "</div>";
-  h += '<p class="note">Add a ledger that was missed from \u201cOther ledgers\u201d by choosing what it is. Several ledgers for one head are fine \u2014 reverse-charge ledgers, or one ledger per rate. To take a ledger out, choose \u201cNot a tax ledger\u201d.</p>';
-  return h;
-}
 // the line shown on the TDS and GST screens while ledgers are still to be confirmed
 function ledgerBanner(b, which){
   const p = LedMaster.pending(b).filter(([, m]) => !which || (which === "gst" ? LedMaster.isGst(m.what) || !m.what || m.what === "none" : LedMaster.isTds(m.what) || !m.what || m.what === "none"));
@@ -8076,84 +8019,6 @@ function printView(title, html){
   setTimeout(() => { w.focus(); w.print(); }, 400);
 }
 
-function viewBooksAudit(b){
-  const catchUp = TallyRead.catchUp(b, "audit");
-  if (catchUp) return catchUp;
-  if (S.auditTab === "rel") return auditTabs() + viewAuditRel(b);
-  if (S.auditTab === "3cd") return auditTabs() + viewAudit3cd(b);
-  const m = v => INR.format(r2(v || 0)), c = Audit.cfg(b), au = b.audit || {}, run = au.last, dr = Audit.defaultRange(b);
-  const range = S.auditRange || {from: Audit.iso(dr.from), to: Audit.iso(dr.to)};
-  const lyFrom = MIS.shift(Audit.ymd(range.from), -1), lyTo = MIS.shift(Audit.ymd(range.to), -1), lyHere = MIS.covered(lyFrom);
-  let h = auditTabs() + '<section class="dash-card"><h3>Audit of the books</h3>' +
-    '<p class="note">Every check runs on the vouchers read from Tally. Each finding says what is wrong, what it costs, what to do, and the journal entry where one is needed. Mark each one, then download the report.</p>' +
-    '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px">' +
-    '<label class="note">From <input type="date" data-auditfrom value="' + esc(range.from) + '"></label><label class="note">to <input type="date" data-auditto value="' + esc(range.to) + '"></label>' +
-    '<button class="btn small primary" data-act="auditRun">Run now</button>' + AIH.auditButton() +
-    (!lyHere && typeof bridgeLive === "function" && bridgeLive(CO()) ? '<button class="btn small" data-act="auditReadLy" title="' + esc(fmtDate(tallyDate(lyFrom)) + " to " + fmtDate(tallyDate(lyTo))) + '">Read last year from Tally, to compare</button>' : "") +
-    '<span class="note" style="margin-left:12px">Run on its own</span><select data-auditfreq style="width:auto">' +
-    [["daily", "every day"], ["weekly", "every week"], ["monthly", "every month"], ["off", "only when I run it"]].map(([v, l]) => '<option value="' + v + '"' + (c.freq === v ? " selected" : "") + ">" + l + "</option>").join("") + "</select></div>" +
-    '<p class="note" style="margin-top:6px">On its own, it runs the first time this client is opened on a new ' + ({daily: "day", weekly: "week", monthly: "month"}[c.freq] || "day") + ", and each time the day book is read. To run overnight with nobody here, the bridge on the Tally server will have to send the day book on a timer.</p>" +
-    (run ? '<div class="row" style="gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn small primary" data-act="auditReport">Download the report (PDF)</button><button class="btn small" data-act="auditExcel">Excel with the annexures</button>' +
-      '<button class="btn small" data-act="auditJe">Tally file of entries to pass (' + Audit.jesToPass(run).length + ")</button>" +
-      '<button class="btn small" data-act="auditFinal">Finalise this report</button></div>' : "") +
-    (run && Audit.finalFor(run.from, run.to) ? '<div class="bk-alert" style="margin-top:10px"><b>The report for ' + fmtDate(tallyDate(run.from)) + " to " + fmtDate(tallyDate(run.to)) + " is final</b>, locked on " + fmtDate(Audit.finalFor(run.from, run.to).at.slice(0, 10)) +
-      " (result code " + esc(Audit.finalFor(run.from, run.to).run.code || "") + '). Later runs track what gets put right, but the final report stays as it was. <button class="linkbtn" data-act="auditFinalPdf">Download the final report</button> \u00b7 <button class="linkbtn" data-act="auditUnlock">Unlock</button></div>' : "") + "</section>";
-  if (!run) return h + '<div class="bk-none" style="margin-top:12px">Not run yet. Choose the period and press Run now.</div>';
-  const f0 = run.findings, sev = s => f0.filter(f => f.sev === s);
-  h += '<p class="note" style="margin:10px 0">Last run ' + esc(run.how) + " on " + fmtDate(run.at.slice(0, 10)) + " at " + run.at.slice(11, 16) + " for " + fmtDate(tallyDate(run.from)) + " to " + fmtDate(tallyDate(run.to)) + ", " + run.vouchers + " vouchers." +
-    " Result code <b>" + esc(run.code || "") + "</b>: the same books always give the same code." + (run.balances ? " Balances from " + esc(run.balances) + "." : "") +
-    (run.notes.length ? " " + esc(run.notes.join(" ")) : "") + (run.errors.length ? ' <span class="bad">Some checks could not run: ' + esc(run.errors.join("; ")) + "</span>" : "") + "</p>";
-  const open = f0.filter(f => Audit.status(f.id).s === "open").length;
-  h += '<div class="dash-tiles">' +
-    '<div class="dtile' + (sev("high").length ? " warn" : "") + '"><span>Serious</span><b>' + sev("high").length + "</b><small>" + m(sev("high").reduce((s, f) => s + f.amount, 0)) + " involved</small></div>" +
-    '<div class="dtile"><span>To look at</span><b>' + sev("medium").length + "</b><small>" + m(sev("medium").reduce((s, f) => s + f.amount, 0)) + "</small></div>" +
-    '<div class="dtile"><span>Minor</span><b>' + sev("low").length + "</b><small>for good books</small></div>" +
-    '<div class="dtile"><span>Still open</span><b>' + open + "</b><small>of " + f0.length + " findings" + (f0.filter(f => f.isNew).length ? ", " + f0.filter(f => f.isNew).length + " new since the last run" : "") + "</small></div>" +
-    '<div class="dtile"><span>Put right</span><b>' + (run.solved || []).reduce((s2, x) => s2 + x.n, 0) + "</b><small>items found earlier and gone when checked again</small></div></div>";
-  const area = S.auditArea || "", fs = S.auditSt || "";
-  h += '<nav class="sbar" aria-label="Areas"><button data-auditarea="" aria-selected="' + (!area) + '">All <span class="sbar-n">' + f0.length + "</span></button>" +
-    Audit.AREAS.map(([a, l]) => { const n = f0.filter(f => f.area === a).length; return n ? '<button data-auditarea="' + a + '" aria-selected="' + (area === a) + '">' + l + ' <span class="sbar-n">' + n + "</span></button>" : ""; }).join("") + "</nav>";
-  h += '<div class="revfilter"><select data-auditst style="width:auto"><option value="">Every status</option>' + Audit.STATUS.map(([v, l]) => '<option value="' + v + '"' + (fs === v ? " selected" : "") + ">" + l + "</option>").join("") + "</select></div>";
-  const list = f0.filter(f => (!area || f.area === area) && (!fs || Audit.status(f.id).s === fs));
-  const col = {high: "#B42318", medium: "#B9541B", low: "#5A6B63"};
-  h += list.map(f => {
-    const st = Audit.status(f.id), isOpen = S.auditOpen === f.id;
-    let x = '<section class="dash-card" style="margin-top:10px;border-left:4px solid ' + col[f.sev] + '">' +
-      '<div class="row" style="justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap"><div style="flex:1;min-width:260px">' +
-      '<div class="nr" style="color:' + col[f.sev] + ';font-weight:700">' + {high: "SERIOUS", medium: "TO LOOK AT", low: "MINOR"}[f.sev] + " \u00b7 " + esc((Audit.AREAS.find(a => a[0] === f.area) || [])[1]) + (f.clause ? " \u00b7 " + esc(f.clause) : "") +
-      (f.isNew ? ' <span class="tag warn">new</span>' : f.more > 0 ? ' <span class="tag warn">+' + f.more + "</span>" : "") + "</div>" +
-      '<button class="linkbtn" data-auditopen="' + esc(f.id) + '" style="font-size:16px;font-weight:600;text-align:left">' + (isOpen ? "\u25be " : "\u25b8 ") + esc(f.title) + "</button>" +
-      '<div class="note">' + esc(f.problem) + (f.amount ? " \u00b7 \u20b9" + m(f.amount) : "") + (Audit.solvedOf(f.id).n ? ' \u00b7 <span style="color:#1F7A4D">' + Audit.solvedOf(f.id).n + " put right</span>" : "") + "</div></div>" +
-      '<div><select data-auditstatus="' + esc(f.id) + '" style="width:auto">' + Audit.STATUS.map(([v, l]) => '<option value="' + v + '"' + (st.s === v ? " selected" : "") + ">" + l + "</option>").join("") + "</select>" +
-      (f.je ? '<div class="nr">' + f.je.length + " suggested entr" + (f.je.length === 1 ? "y" : "ies") + "</div>" : "") + "</div></div>";
-    if (isOpen){
-      x += '<div style="margin-top:8px"><p><b>Effect.</b> ' + esc(f.impact) + "</p><p><b>What to do.</b> " + esc(f.suggestion) + "</p>" +
-        '<label class="note" style="display:block;margin:6px 0">Note for the report <input type="text" data-auditnote="' + esc(f.id) + '" data-fk="an-' + esc(f.id) + '" value="' + esc(st.note || "") + '" style="width:100%" placeholder="Management response, or why it is not an issue"></label>';
-      if (f.je && f.je.length){
-        const miss = Audit.missingLedgers(f.je);
-        x += "<p><b>Suggested entries</b>" + (miss.length ? ' <span class="note">\u2014 to create in Tally first: ' + esc(miss.join(", ")) + "</span>" : "") + '</p><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th class="dt">Date</th><th>Ledger</th><th class="n">Debit</th><th class="n">Credit</th></tr></thead><tbody>' +
-          f.je.slice(0, 30).map(j => j.lines.map((l, k) => "<tr><td>" + (k ? "" : fmtDate(tallyDate(j.date))) + "</td><td>" + (l.cr ? "\u2003To " : "") + esc(l.l) + '</td><td class="n">' + (l.dr ? m(l.dr) : "") + '</td><td class="n">' + (l.cr ? m(l.cr) : "") + "</td></tr>").join("") +
-            '<tr><td></td><td colspan="3" class="note">(' + esc(j.narr) + ")</td></tr>").join("") + "</tbody></table></div>" +
-          (f.je.length > 30 ? '<p class="note">' + (f.je.length - 30) + " more in the Excel.</p>" : "") + '<p class="note">Mark it \u201cEntry to pass\u201d and these go into the Tally file.</p>';
-      }
-      if (f.rows && f.rows.length) x += "<p><b>The entries behind it</b></p>" + '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th class="dt">Date</th><th>Voucher</th><th>Party or ledger</th><th class="n">Amount</th><th>Detail</th></tr></thead><tbody>' +
-        f.rows.slice(0, 100).map(r => "<tr><td>" + (r.date ? fmtDate(tallyDate(r.date)) : "") + "</td><td>" + esc(r.no || "") + (r.type ? '<div class="nr">' + esc(r.type) + "</div>" : "") + "</td><td>" + esc(r.party || "") + '</td><td class="n">' + (r.amount ? m(r.amount) : "") + "</td><td>" + esc(r.note || "") + "</td></tr>").join("") +
-        "</tbody></table></div>" + (f.rows.length > 100 ? '<p class="note">The first 100 of ' + f.rows.length + "; all are in the Excel.</p>" : "");
-      const sv = Audit.solvedOf(f.id);
-      if (sv.n) x += '<p><b style="color:#1F7A4D">Put right</b> <span class="note">found earlier, gone when checked again</span></p><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th class="dt">Date</th><th>Voucher</th><th>Party or ledger</th><th class="n">Amount</th><th>Put right by</th></tr></thead><tbody>' +
-        sv.items.slice(-100).map(it => { const r = it.row || {}; return '<tr style="color:#5A6B63"><td>' + (r.date ? fmtDate(tallyDate(r.date)) : "") + "</td><td><s>" + esc(r.no || "") + "</s></td><td>" + esc(r.party || "") + '</td><td class="n">' + (r.amount ? m(r.amount) : "") + "</td><td>" + fmtDate(String(it.solved).slice(0, 10)) + "</td></tr>"; }).join("") + "</tbody></table></div>";
-      x += "</div>";
-    }
-    return x + "</section>";
-  }).join("") + (list.length ? "" : '<div class="bk-none" style="margin-top:10px">Nothing here.</div>');
-  // findings where every item has been put right
-  const gone = (run.solved || []).filter(x => x.n && !f0.some(f => f.id === x.id) && (!area || x.area === area));
-  if (gone.length) h += '<section class="dash-card" style="margin-top:12px;border-left:4px solid #1F7A4D"><h3 style="color:#1F7A4D">Solved</h3><p class="note">Every item of these was put right in the books.</p><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Observation</th><th class="n">Items</th><th class="n">Amount</th><th>Last put right</th></tr></thead><tbody>' +
-    gone.map(x => "<tr><td>" + esc(x.title) + '</td><td class="n">' + x.n + '</td><td class="n">' + m(x.amount) + "</td><td>" + fmtDate(String(x.items[x.items.length - 1].solved).slice(0, 10)) + "</td></tr>").join("") + "</tbody></table></div></section>";
-  if ((au.history || []).length > 1) h += '<section class="dash-card" style="margin-top:12px"><h3>Earlier runs</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Run on</th><th>How</th><th>Period</th><th class="n">Findings</th><th class="n">Serious</th><th class="n">Amount involved</th></tr></thead><tbody>' +
-    au.history.slice(0, 12).map(x => "<tr><td>" + fmtDate(x.at.slice(0, 10)) + " " + x.at.slice(11, 16) + "</td><td>" + esc(x.how) + "</td><td>" + fmtDate(tallyDate(x.from)) + " to " + fmtDate(tallyDate(x.to)) + '</td><td class="n">' + x.n + '</td><td class="n">' + x.high + '</td><td class="n">' + m(x.amount) + "</td></tr>").join("") + "</tbody></table></div></section>";
-  return h;
-}
 
 function misRangeQuick(k, b){
   const t = Audit.today(), last = String((b.meta || {}).to || t), end = last < t ? last : t;
@@ -8422,46 +8287,6 @@ function misP2Html(tab, b, r){
   return h;
 }
 
-function auditTabs(){
-  const t = S.auditTab || "find";
-  return '<nav class="sbar" aria-label="Audit" style="margin-bottom:10px">' + [["find", "Findings"], ["rel", "Related parties"], ["3cd", "Form 3CD draft"]]
-    .map(([id, l]) => '<button data-audittab="' + id + '" aria-selected="' + (t === id) + '">' + l + "</button>").join("") + "</nav>";
-}
-function viewAuditRel(b){
-  const rel = b.auditRel || [], guess = Audit.relatedGuess(), pans = b.pans || {};
-  const REL = ["Director", "Relative of a director", "Partner or proprietor", "Shareholder with 10% or more", "Company or firm they control", "Key manager", "Other"];
-  let h = '<section class="dash-card"><h3>Related parties</h3><p class="note">Directors, partners, their relatives, and the concerns they control. Transactions with them feed clause 23 (section 40A(2)(b)), clause 36A (deemed dividend), and the related-party note. The audit only uses the people listed here.</p>' +
-    '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0"><input type="search" id="relq" list="relList" data-fk="relq" placeholder="Type a ledger name" style="width:300px"><datalist id="relList">' +
-    Object.keys(Object.assign({}, b.ledInfo || {}, b.map || {})).sort().slice(0, 3000).map(n => '<option value="' + esc(n) + '">').join("") + '</datalist><button class="btn small" data-act="relAddTyped">Add</button></div>' +
-    (rel.length ? '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Ledger in Tally</th><th>PAN</th><th>Relation</th><th class="ac"></th></tr></thead><tbody>' +
-      rel.map(x => "<tr><td>" + esc(x.name) + "</td><td>" + esc(pans[x.name] || "\u2014") + '</td><td><select data-relrel="' + esc(x.name) + '" style="width:auto"><option value="">choose</option>' + REL.map(r => "<option" + (x.relation === r ? " selected" : "") + ">" + r + "</option>").join("") + "</select></td>" +
-        '<td class="ac"><button class="linkbtn" data-reldel="' + esc(x.name) + '">remove</button></td></tr>').join("") + "</tbody></table></div>" : '<p class="note">No one listed yet.</p>') + "</section>";
-  if (guess.length) h += '<section class="dash-card" style="margin-top:12px"><h3>Possibly related</h3><p class="note">Found in the ledgers by where they sit or what they are called. Add the ones that are related.</p><div class="bk-tablewrap"><table class="bk-table"><tbody>' +
-    guess.map(g => "<tr><td>" + esc(g.name) + '<div class="nr">' + esc(g.why) + "</div></td><td>" + esc(pans[g.name] || "") + '</td><td class="ac"><button class="btn small" data-reladd="' + esc(g.name) + '">Add</button></td></tr>').join("") + "</tbody></table></div></section>";
-  return h;
-}
-function viewAudit3cd(b){
-  const run = (b.audit || {}).last;
-  if (!run) return '<div class="bk-none">Run the audit first (Findings \u2192 Run now); the draft is filled from it.</div>';
-  const d = Audit.form3cd(run);
-  return '<section class="dash-card"><div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:8px"><button class="btn small primary" data-act="audit3cdPdf">Download the draft (PDF)</button><button class="btn small" data-act="audit3cdExcel">Excel</button></div>' +
-    '<div class="audit3cd">' + Audit.form3cdHtml(d).replace(/<table>/g, '<div class="bk-tablewrap"><table class="bk-table">').replace(/<\/table>/g, "</table></div>") + "</div></section>";
-}
-function viewLedPosting(b){
-  const co = CO(), rows = LedMaster.posting(b, co), diff = rows.filter(x => x.from && x.from !== x.now);
-  return '<section class="dash-card"><h3>What FinCom posts bills to</h3><p class="note">When FinCom posts a bill into Tally, these are the ledgers it uses. They come from the ledgers confirmed here; an empty one is filled in as soon as its ledger is confirmed, and one set by hand in Client setup is kept until you choose the master\u2019s.</p>' +
-    (diff.length ? '<div class="row" style="margin:8px 0"><button class="btn small primary" data-act="lmPostAll">Use the master\u2019s for all ' + diff.length + "</button></div>" : "") +
-    '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Used for</th><th>Now</th><th>From the master</th><th>Why</th><th class="ac"></th></tr></thead><tbody>' +
-    rows.map(x => "<tr><td>" + esc(x.label) + "</td><td>" + (x.now ? esc(x.now) + ((b.ledInfo || {})[x.now] || (b.map || {})[x.now] ? "" : ' <span class="tag warn">not in Tally</span>') : '<span class="note">\u2014</span>') + "</td><td>" + (x.from ? (x.from === x.now ? '<span style="color:#1F7A4D">\u2713 same</span>' : "<b>" + esc(x.from) + "</b>") : '<span class="note">none confirmed</span>') +
-      '</td><td><div class="nr" style="white-space:normal">' + esc(x.why) + '</div></td><td class="ac">' + (x.from && x.from !== x.now ? '<button class="btn small" data-lmpost="' + esc(x.k) + '">Use it</button>' : "") + "</td></tr>").join("") + "</tbody></table></div></section>";
-}
-function ledChangedBanner(b){
-  const ch = LedMaster.changesSince(b);
-  if (!ch.length) return "";
-  return '<section class="bk-alert" style="margin-bottom:12px"><b>' + ch.length + " ledger" + (ch.length === 1 ? " was" : "s were") + " changed after returns were made from them.</b> Check whether those returns need a revision or an amendment." +
-    '<div class="bk-tablewrap" style="margin-top:6px"><table class="bk-table"><thead><tr><th>Ledger</th><th>What changed</th><th>Returns made before the change</th></tr></thead><tbody>' +
-    ch.slice(0, 30).map(x => "<tr><td>" + esc(x.name) + "</td><td>" + esc(x.change) + "</td><td>" + esc(x.returns.slice(0, 4).join("; ") + (x.returns.length > 4 ? " and " + (x.returns.length - 4) + " more" : "")) + "</td></tr>").join("") + "</tbody></table></div></section>";
-}
 function gst9PackHtml(which){
   const b = S.books, reg = S.gstReg || ((GSTR.gstins(b) || [])[0] || "").slice(0, 2), fy = GST9.fyOf(S.gstYm || GSTR.months().slice(-1)[0]), co = CO();
   const head = (t) => '<div style="border-bottom:2px solid #15201B;padding-bottom:8px;margin-bottom:10px"><div style="font-size:12px;color:#5A6B63">' + t + ' \u2014 WORKING FROM THE BOOKS</div><h1 style="font-size:20px;margin:4px 0">' + esc(co.name) + "</h1><div>" + esc((GSTR.gstins(b) || []).find(g => g.slice(0, 2) === reg) || reg) + " \u00b7 " + GST9.label(fy) + "</div></div>";
@@ -8509,6 +8334,7 @@ function setupKeepFor(co){
 }
 // the time of the bridge's daily update from Tally (build 188: Tally is read once a day, or on Update now)
 function keepAtSet(v){ if (/^\d{2}:\d{2}$/.test(v)) LK.keepSet({dailyAt: v}, "Tally will be updated every day at " + v + "."); }
+// the Tally ledgers and Audit tabs: React (app/src/screens/books/Ledgers.jsx, Audit.jsx)
 function gstParts(b){
   const regs = GSTR.gstins(b) || [], noBooks = !(b.vouchers || []).length;
   const ftype = typeof GSTSet === "object" && S.gstYm ? GSTSet.typeOf(S.gstYm, S.gstReg || "") : "monthly";
@@ -12307,6 +12133,36 @@ function gst9cSet(key, v){
   if (key.startsWith("adj.")) st.adj[key.slice(4)] = val; else if (key.startsWith("reasons.")) st.reasons[key.slice(8)] = val; else st[key] = val;
   saveBooks(); render();
 }
+// a Tally ledger's GST or TDS meaning, set on the Tally ledgers tab (app/src/screens/books/Ledgers.jsx): what (the
+// kind), tax, side, reg, gstRate, section, rate. A choice made here is the user's own: it counts as confirmed
+function lmSet(name, key, val){
+  const b = S.books, m = b.map[name] = b.map[name] || {n: 0};
+  if (key === "what") LedMaster.applyWhat(m, val || "none");
+  if (key === "tax" || key === "side" || key === "reg") m[key] = val;
+  if (key === "gstRate") m.gstRate = val ? num(val) : null;
+  if (key === "section") m.section = String(val).toUpperCase().replace(/\s+/g, "");
+  if (key === "rate") m.rate = val === "" ? null : num(val);
+  m.byHand = true; m.ok = true; m.okAt = new Date().toISOString();
+  LedMaster.tplLearn(b, [name]); try { LedMaster.applyPosting(b, CO(), "empty"); } catch (e){}
+  b.mapV = (b.mapV || 0) + 1; b.reco = null; saveBooks(); render();
+}
+function lmConfirmToggle(name){ const m = S.books.map[name]; if (m){ LedMaster.confirm(S.books, [name], !m.ok); S.books.reco = null; saveBooks(); render(); } }
+function lmViewGo(v){ S.lmView = v; S.booksTab = "ledgers"; render(); }
+function lmPost(k){ LedMaster.applyPosting(S.books, CO(), k); render(); }
+// the Audit tab (app/src/screens/books/Audit.jsx): the period, how often it runs by itself, and a finding's status
+// or note (kept with the books)
+function auditRangeSet(key, v){ const dr = Audit.defaultRange(S.books); S.auditRange = Object.assign({from: Audit.iso(dr.from), to: Audit.iso(dr.to)}, S.auditRange, {[key]: v}); }
+function auditFreqSet(v){ const b = S.books; b.auditCfg = Object.assign({}, b.auditCfg, {freq: v}); saveBooks(); render(); }
+function auditFindingSet(id, key, v){
+  const au = S.books.audit = S.books.audit || {st: {}};
+  au.st = au.st || {}; const cur = Object.assign({s: "open"}, au.st[id]);
+  if (key === "s") cur.s = v; else cur.note = v;
+  cur.at = new Date().toISOString(); au.st[id] = cur; saveBooks(); render();
+}
+// related parties: a ledger added (from the list or a guess), its relation, removed
+function relAdd(name){ const b = S.books; if (!(b.auditRel || []).some(x => x.name === name)) b.auditRel = (b.auditRel || []).concat([{name, relation: ""}]); saveBooks(); render(); }
+function relSet(name, relation){ const x = (S.books.auditRel || []).find(z => z.name === name); if (x){ x.relation = relation; saveBooks(); render(); } }
+function relRemove(name){ const b = S.books; b.auditRel = (b.auditRel || []).filter(x => x.name !== name); saveBooks(); render(); }
 // what the user corrects on the Advances and Reversal screens
 function gstFixChange(t){
   const d = t.dataset, b = S.books;
@@ -12326,31 +12182,6 @@ function gstFixChange(t){
   if (d.itctemail !== undefined || d.itctphone !== undefined){ const st = ITCT.store(S.gstReg || ""), k = d.itctemail !== undefined ? d.itctemail : d.itctphone; st.contact[k] = Object.assign({}, st.contact[k], d.itctemail !== undefined ? {email: t.value.trim()} : {phone: t.value.trim()}); saveBooks(); return true; }
   if (d.itcbasis !== undefined){ b.itcBasis = Object.assign({}, b.itcBasis, {[S.gstReg || ""]: t.value}); saveBooks(); render(); return true; }
   if (d.gstopen !== undefined){ const k = S.gstReg || ""; b.gstOpen = Object.assign({}, b.gstOpen); b.gstOpen[k] = Object.assign({}, b.gstOpen[k], {[d.gstopen]: t.value === "" ? "" : num(t.value)}); saveBooks(); render(); return true; }
-  if (d.relrel !== undefined){ const x = (b.auditRel || []).find(z => z.name === d.relrel); if (x){ x.relation = t.value; saveBooks(); render(); } return true; }
-  if (d.auditfreq !== undefined){ b.auditCfg = Object.assign({}, b.auditCfg, {freq: t.value}); saveBooks(); render(); return true; }
-  if (d.auditfrom !== undefined || d.auditto !== undefined){ const dr = Audit.defaultRange(b); S.auditRange = Object.assign({from: Audit.iso(dr.from), to: Audit.iso(dr.to)}, S.auditRange, d.auditfrom !== undefined ? {from: t.value} : {to: t.value}); return true; }
-  if (d.auditst !== undefined){ S.auditSt = t.value; render(); return true; }
-  if (d.auditstatus || d.auditnote){
-    const id = d.auditstatus || d.auditnote, au = b.audit = b.audit || {st: {}};
-    au.st = au.st || {}; const cur = Object.assign({s: "open"}, au.st[id]);
-    if (d.auditstatus) cur.s = t.value; else cur.note = t.value;
-    cur.at = new Date().toISOString(); au.st[id] = cur; saveBooks(); render(); return true;
-  }
-  const lmName = d.lmwhat || d.lmtax || d.lmside || d.lmreg || d.lmgrate || d.lmsec || d.lmrate;
-  if (lmName){
-    const m = b.map[lmName] = b.map[lmName] || {n: 0};
-    if (d.lmwhat) LedMaster.applyWhat(m, t.value || "none");
-    if (d.lmtax) m.tax = t.value;
-    if (d.lmside) m.side = t.value;
-    if (d.lmreg) m.reg = t.value;
-    if (d.lmgrate) m.gstRate = t.value ? num(t.value) : null;
-    if (d.lmsec) m.section = t.value.toUpperCase().replace(/\s+/g, "");
-    if (d.lmrate) m.rate = t.value === "" ? null : num(t.value);
-    // a choice made here is the user's own: it counts as confirmed
-    m.byHand = true; m.ok = true; m.okAt = new Date().toISOString();
-    LedMaster.tplLearn(b, [lmName]); try { LedMaster.applyPosting(b, CO(), "empty"); } catch (e){}
-    b.mapV = (b.mapV || 0) + 1; b.reco = null; saveBooks(); render(); return true;
-  }
   if (d.revd2 !== undefined){ b.rev = Object.assign({}, b.rev, {d2: !!t.checked}); saveBooks(); render(); return true; }
   return false;
 }
@@ -16282,14 +16113,6 @@ document.addEventListener("click", ev => {
   if (t.dataset.misopen !== undefined){ S.misOpen = S.misOpen === t.dataset.misopen ? "" : t.dataset.misopen; render(); return; }
   if (t.dataset.misopenhead !== undefined){ S.misOpenHead = S.misOpenHead === t.dataset.misopenhead ? "" : t.dataset.misopenhead; render(); return; }
   if (t.dataset.misled !== undefined){ S.misLed = t.dataset.misled; render(); return; }
-  if (t.dataset.audittab){ S.auditTab = t.dataset.audittab; render(); return; }
-  if (t.dataset.reladd !== undefined){ const b = S.books; b.auditRel = (b.auditRel || []).concat([{name: t.dataset.reladd, relation: ""}]); saveBooks(); render(); return; }
-  if (t.dataset.reldel !== undefined){ const b = S.books; b.auditRel = (b.auditRel || []).filter(x => x.name !== t.dataset.reldel); saveBooks(); render(); return; }
-  if (t.dataset.auditopen){ S.auditOpen = S.auditOpen === t.dataset.auditopen ? "" : t.dataset.auditopen; render(); return; }
-  if (t.dataset.auditarea !== undefined && t.tagName === "BUTTON"){ S.auditArea = t.dataset.auditarea; render(); return; }
-  if (t.dataset.lmpost){ LedMaster.applyPosting(S.books, CO(), t.dataset.lmpost); render(); return; }
-  if (t.dataset.lmview){ S.lmView = t.dataset.lmview; S.booksTab = "ledgers"; render(); return; }
-  if (t.dataset.lmok){ const m = S.books.map[t.dataset.lmok]; if (m){ LedMaster.confirm(S.books, [t.dataset.lmok], !m.ok); S.books.reco = null; saveBooks(); render(); } return; }
   if (t.dataset.b2open){ S.b2Open = S.b2Open === t.dataset.b2open ? "" : t.dataset.b2open; render(); return; }
   if (t.dataset.clearf){ clearFilter(t.dataset.clearf); return; }
   if (t.dataset.printid){ printTable(t.dataset.printid, t.dataset.printtitle); return; }
@@ -16890,7 +16713,6 @@ document.addEventListener("input", ev => {
   const t = ev.target;
   if (t && t.id === "fsq"){ S.fsQ = t.value; later("fsq", render, 250); return; }
   if (t && t.id === "misq"){ S.misQ = t.value; later("misq", render, 250); return; }
-  if (t && t.id === "ledq"){ S.ledQ = t.value; later("ledq", render, 250); return; }
   if (t && t.id && /^(q24F|r1F|b2F)q$/.test(t.id)){ const k = t.id.slice(0, -1); S[k] = Object.assign({}, S[k], {q: t.value}); later(t.id, render, 250); return; }
   if (t && t.dataset){
     // the browser lowercases attribute names, so match without case
