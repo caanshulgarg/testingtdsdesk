@@ -36,6 +36,14 @@ with sync_playwright() as p:
     pg.evaluate("() => { S.inregF = 'Reverse charge'; render(); }"); grab("inreg-rcm")
     pg.evaluate("() => { S.inregF = 'Not in 2B'; S.inregQ = 'a'; render(); }"); grab("inreg-not2b")
     pg.evaluate("() => { S.inregF = ''; S.inregQ = ''; S.inregScope = 'month'; render(); }")
+    # 2B for the last two months, made from the books with faults planted, then every tab of 2B reconciliation
+    made = pg.evaluate(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "make2b.js")).read())
+    grab("r2b-first")
+    for tab in ["suppliers", "matched", "diff", "probable", "only2b", "books"]:
+        pg.evaluate("(t) => { S.r2Tab = t; render(); }", tab); grab("r2b-" + tab)
+    pg.evaluate("() => { S.r2Tab = 'suppliers'; const s = GST2B.suppliers(GST2B.scope(r2Reg(S.books), r2Scope().months)); S.r2Open = s.length ? (s[0].gstin || s[0].party) : ''; render(); }"); grab("r2b-opened")
+    pg.evaluate("() => { S.r2Scope = 'year'; S.r2Tab = 'books'; S.r2F = {books: {flag: 'big'}}; render(); }"); grab("r2b-year-big")
+    pg.evaluate("() => { S.r2Scope = 'all'; S.r2Tab = 'only2b'; S.r2F = {}; render(); }"); grab("r2b-all-only2b")
     br.close()
 srv.shutdown()
 json.dump({"pages": res, "errors": errors}, open(out, "w"), indent=0)

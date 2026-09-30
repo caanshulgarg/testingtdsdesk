@@ -908,9 +908,6 @@ function gstFixChange(t){
     LedMaster.tplLearn(b, [lmName]); try { LedMaster.applyPosting(b, CO(), "empty"); } catch (e){}
     b.mapV = (b.mapV || 0) + 1; b.reco = null; saveBooks(); render(); return true;
   }
-  if (d.r2link !== undefined){ const st = GST2B.state(); if (t.value){ st.link[d.r2link] = [t.value]; delete st.confirm[d.r2link]; } saveBooks(); render(); return true; }
-  if (d.r2tag !== undefined){ const st = GST2B.state(); if (t.value) st.tag[d.r2tag] = {tag: t.value, at: new Date().toISOString()}; else delete st.tag[d.r2tag]; saveBooks(); render(); return true; }
-  if (d.r2tol !== undefined){ const st = GST2B.state(); st.opt = Object.assign({}, st.opt, {tol: Math.max(0, num(t.value))}); saveBooks(); render(); return true; }
   if (d.amendact){ b.amendFix = Object.assign({}, b.amendFix, {[d.amendact]: t.value}); saveBooks(); render(); return true; }
   if (d.filednot){ const f = (b.filed || {})[d.filednot]; if (f){ f.notFiled = !!t.checked; saveBooks(); render(); } return true; }
   const id = d.advrate || d.advskip || d.advtake || d.advadj;

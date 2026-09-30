@@ -834,6 +834,26 @@ function txnOpenDoc(key, path, name){
 // a filter kept in S[id] (S.r1F, S.b2F, …): a box typed in (typed: the page follows a moment later) or a choice
 function setFilter(id, key, val, typed){ S[id] = Object.assign({}, S[id], {[key]: val}); if (typed){ FinComReact.redraw(); later(id + "q", render, 250); } else render(); }
 function clearFilter(id){ S[id] = {}; render(); }
+// 2B reconciliation (app/src/screens/gst/TwoB.jsx): its tab, span, filters, and what the user settles about a document
+function r2TabGo(id){ S.r2Tab = id; render(); }
+function r2ScopeGo(mode){ S.r2Scope = mode; render(); }
+function r2Filter(key, val, typed){ const tab = S.r2Tab || "suppliers"; S.r2F = Object.assign({}, S.r2F, {[tab]: Object.assign({}, (S.r2F || {})[tab], {[key]: val})}); if (typed){ FinComReact.redraw(); later("r2f", render, 250); } else render(); }
+function r2FilterClear(tab){ S.r2F = Object.assign({}, S.r2F, {[tab]: {}}); render(); }
+function r2SetTol(v){ const st = GST2B.state(); st.opt = Object.assign({}, st.opt, {tol: Math.max(0, num(v))}); saveBooks(); render(); }
+// "Same": a likely pair confirmed; "Not the same" or "Unlink": the 2B document and those Tally entries are kept apart
+function r2Confirm(key){ const st = GST2B.state(); st.confirm[key] = "yes"; saveBooks(); render(); }
+function r2Unlink(key, ids){ const st = GST2B.state(); ids.forEach(id => { st.confirm[key + ">" + id] = "no"; }); delete st.link[key]; delete st.confirm[key]; saveBooks(); render(); }
+// a 2B document not found in Tally, linked by hand to the entry it was booked as
+function r2Link(key, id){ const st = GST2B.state(); if (id){ st.link[key] = [id]; delete st.confirm[key]; } saveBooks(); render(); }
+function r2Tag(key, tag){ const st = GST2B.state(); if (tag) st.tag[key] = {tag, at: new Date().toISOString()}; else delete st.tag[key]; saveBooks(); render(); }
+// a note to a supplier listing the invoices not in their return, to the clipboard (or on screen to copy)
+function r2Copy(k){
+  const reg = r2Reg(S.books), sc0 = r2Scope(), sc = GST2B.scope(reg, sc0.months);
+  const s = GST2B.suppliers(sc).find(x => (x.gstin || x.party) === k); if (!s) return;
+  const text = GST2B.followUp(s);
+  (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(() => toast("Note copied: paste it into an email or WhatsApp."),
+    () => printView("Note to " + s.party, "<pre style=\"white-space:pre-wrap;font:13px/1.5 inherit\">" + esc(text) + "</pre>"));
+}
 // one setting of a page kept in S (S.inregF, S.inregScope, …); typed: the page follows a moment later
 function setAndShow(key, val, typed){ S[key] = val; if (typed){ FinComReact.redraw(); later(key, render, 250); } else render(); }
 // a TDS return's pages (app/src/screens/TdsReturn.jsx): its tabs, filters, sorting, the rows opened, challans
@@ -1036,27 +1056,6 @@ document.addEventListener("click", ev => {
   if (t.dataset.lmpost){ LedMaster.applyPosting(S.books, CO(), t.dataset.lmpost); render(); return; }
   if (t.dataset.lmview){ S.lmView = t.dataset.lmview; S.booksTab = "ledgers"; render(); return; }
   if (t.dataset.lmok){ const m = S.books.map[t.dataset.lmok]; if (m){ LedMaster.confirm(S.books, [t.dataset.lmok], !m.ok); S.books.reco = null; saveBooks(); render(); } return; }
-  if (t.dataset.r2tab){ S.r2Tab = t.dataset.r2tab; render(); return; }
-  if (t.dataset.r2scope){ S.r2Scope = t.dataset.r2scope; render(); return; }
-  if (t.dataset.r2open){ S.r2Open = S.r2Open === t.dataset.r2open ? "" : t.dataset.r2open; render(); return; }
-  if (t.dataset.r2fclear){ S.r2F = Object.assign({}, S.r2F, {[t.dataset.r2fclear]: {}}); render(); return; }
-  if (t.dataset.r2ok){ const st = GST2B.state(); st.confirm[t.dataset.r2ok] = "yes"; saveBooks(); render(); return; }
-  if (t.dataset.r2no){
-    const st = GST2B.state(), [pk, ids] = t.dataset.r2no.split(">");
-    String(ids || "").split(",").filter(Boolean).forEach(id => { st.confirm[pk + ">" + id] = "no"; });
-    delete st.link[pk]; delete st.confirm[pk];
-    saveBooks(); render(); return;
-  }
-  if (t.dataset.r2copy){
-    const reg = r2Reg(S.books), sc0 = r2Scope(), sc = GST2B.scope(reg, sc0.months);
-    const s = GST2B.suppliers(sc).find(x => (x.gstin || x.party) === t.dataset.r2copy);
-    if (s){
-      const text = GST2B.followUp(s);
-      (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(() => toast("Note copied: paste it into an email or WhatsApp."),
-        () => printView("Note to " + s.party, "<pre style=\"white-space:pre-wrap;font:13px/1.5 inherit\">" + esc(text) + "</pre>"));
-    }
-    return;
-  }
   if (t.dataset.b2open){ S.b2Open = S.b2Open === t.dataset.b2open ? "" : t.dataset.b2open; render(); return; }
   if (t.dataset.clearf){ clearFilter(t.dataset.clearf); return; }
   if (t.dataset.printid){ printTable(t.dataset.printid, t.dataset.printtitle); return; }
@@ -1661,12 +1660,6 @@ document.addEventListener("keydown", ev => {
 document.addEventListener("input", ev => {
   if (reactOwned(ev.target)) return;
   const t = ev.target;
-  if (t && t.dataset && t.dataset.r2f){
-    const tab = S.r2Tab || "suppliers";
-    S.r2F = Object.assign({}, S.r2F, {[tab]: Object.assign({}, (S.r2F || {})[tab], {[t.dataset.r2f]: t.value})});
-    if (t.type === "search") later("r2f", render, 250); else render();
-    return;
-  }
   if (t && t.id === "fsq"){ S.fsQ = t.value; later("fsq", render, 250); return; }
   if (t && t.id === "misq"){ S.misQ = t.value; later("misq", render, 250); return; }
   if (t && t.id === "ledq"){ S.ledQ = t.value; later("ledq", render, 250); return; }

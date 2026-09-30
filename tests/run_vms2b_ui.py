@@ -34,7 +34,7 @@ with sync_playwright() as p:
     ok("SUTARA" in t.upper() and "Booked 2 times" in t, "the whole year, filtered: the bill booked twice (Sutara no. 21, January)")
     pg.select_option('select[aria-label="Period"]', "month"); pg.wait_for_timeout(3000)
     pg.select_option('select[aria-label="Show"]', ""); pg.click('nav[aria-label="GST"] button[data-part="r2b"]'); pg.wait_for_timeout(5000)
-    pg.click('button[data-r2tab="only2b"]'); pg.wait_for_timeout(3000); t = pg.inner_text("#app")
+    pg.click('nav[aria-label="2B reconciliation"] button:has-text("In 2B only")'); pg.wait_for_timeout(3000); t = pg.inner_text("#app")
     ok("booked without credit" in t, "2B screen, in 2B only: says where it is booked without credit")
     pg.screenshot(path=OUT + "/vms2b-feb-only2b.png", full_page=False)
     # 3B on the 2B basis, and GSTR-9's typed figures
