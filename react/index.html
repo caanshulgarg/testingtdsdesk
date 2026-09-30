@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="FinCom: read purchase bills and bank statements, work out TDS and GST, and post the entries to Tally.">
+<meta name="theme-color" content="#1E2A25">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231F6F5C'/%3E%3Cpath d='M11 9v14M11 9h11M11 16h8' stroke='white' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+<title>FinCom</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap" rel="stylesheet">
+<script src="./guard.js"></script>
+  <script type="module" crossorigin src="./assets/index-LOlWOMp-.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-Bbo2AzlX.css">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+<style>.is-test .side-brand::after{content:"TEST";display:block;margin-top:4px;font-size:11px;letter-spacing:.14em;color:#E9A06A}.is-test header.top{box-shadow:inset 0 3px 0 #E2761B}body.is-test::after{content:"TESTING SITE · not for real client work · post only to a ZZ TEST company in Tally";position:fixed;left:0;right:0;bottom:0;z-index:70;background:#E2761B;color:#fff;font-size:12.5px;text-align:center;padding:3px 8px;letter-spacing:.04em;pointer-events:none}.is-test .actionbar{bottom:22px}.is-test #app{padding-bottom:34px}</style></head>
+<body class="is-test">
+<a class="skip" id="skipLink" href="#app">Skip to the work</a>
+<div class="shell">
+<nav class="side" id="side" aria-label="Main"></nav>
+<div class="mainwrap">
+<header class="top">
+  <div class="wrap">
+    <div class="toprow">
+      <div class="brand">
+        <h1>FinCom</h1>
+        <p id="firmLine"></p>
+      </div>
+      <div class="cobar" id="cobar"></div>
+    </div>
+    <nav class="tabs" role="tablist" id="tabs"></nav>
+  </div>
+</header>
+<main class="wrap" id="app"><p class="note">Loading…</p></main>
+</div>
+</div>
+<div id="modal" class="hidden"></div>
+<div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
+<input type="file" id="fileIn" accept="application/pdf,image/*,.jpg,.jpeg,.jfif,.png,.webp,.heic" multiple class="hidden">
+<input type="file" id="camIn" accept="image/*" capture="environment" class="hidden">
+<input type="file" id="booksIn" accept=".xml" class="hidden">
+<input type="file" id="marketIn" accept=".csv,.txt,.xlsx,.xls" class="hidden">
+<input type="file" id="salaryIn" accept=".csv,.txt,.xlsx,.xls" class="hidden">
+<input type="file" id="mastersIn" accept=".xml" class="hidden">
+<input type="file" id="tbIn" accept=".xml" class="hidden">
+<input type="file" id="filedIn" accept=".json,application/json" multiple class="hidden">
+<input type="file" id="twoBIn" accept=".json,application/json" multiple class="hidden">
+<div id="react-root"></div>
+<!-- the business logic (Tally, GST, TDS, bank), then the React screens on top of it -->
+<script src="./legacy.js"></script>
+</body>
+</html>
