@@ -108,9 +108,9 @@ async function openBooks(cid){
   render();
 }
 // everything kept with a client's books, in this browser and (the TDS and GST work) in the firm's database
-const BOOKS_KEYS = ["vouchers", "map", "meta", "challans", "alloc", "pans", "twoB", "gstins", "under", "states", "groups", "salary", "certs", "advFix", "assets", "rev", "filed", "amendFix", "twoBs", "reco2b", "ledInfo", "ledInfoAt", "audit", "auditCfg", "auditRel", "ledSnaps", "gst9c", "groupInfo", "fs", "tb", "mis", "misCfg", "msme", "budget", "gst3b", "gst9", "gstOpen", "itcBasis", "itcTrack", "outRej", "gstFiled", "gstAato", "filed1a", "rule37On", "gstCashLedger", "gstSet", "gstContacts", "gstApi", "gstEst", "gstVault", "gstRegs", "letters", "ai"];
-async function saveBooks(opts){
-  const b = S.books; if (!b || !b.cid) return;
+const BOOKS_KEYS = ["vouchers", "map", "meta", "challans", "alloc", "pans", "twoB", "gstins", "under", "states", "groups", "salary", "certs", "advFix", "assets", "rev", "filed", "amendFix", "twoBs", "reco2b", "ledInfo", "ledInfoAt", "audit", "auditCfg", "auditRel", "ledSnaps", "gst9c", "groupInfo", "fs", "tb", "mis", "misCfg", "msme", "budget", "gst3b", "gst9", "gstOpen", "itcBasis", "itcTrack", "outRej", "gstFiled", "gstAato", "filed1a", "rule37On", "gstCashLedger", "gstSet", "gstContacts", "gstApi", "gstEst", "gstVault", "gstRegs", "letters", "ai", "tallyCo", "tbCheck"];
+async function saveBooks(opts, bb){
+  const b = bb || S.books; if (!b || !b.cid) return;
   const keep = {cid: b.cid}; BOOKS_KEYS.forEach(k => { keep[k] = b[k]; });
   await Books.save(b.cid, keep);
   if (!(opts && opts.fromCloud) && typeof BookSync === "object") BookSync.schedule(b.cid);

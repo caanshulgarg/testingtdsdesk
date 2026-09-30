@@ -1451,9 +1451,9 @@ const BridgeSeed = {
     }
     return out;
   },
-  async send(file, onStep, range){
+  async send(file, onStep, range, name0){
     if (!Bridge.on()) return {skipped: "the Tally Bridge is not connected"};
-    const name = this.company();
+    const name = name0 || this.company();
     if (!name) return {skipped: "no Tally company name"};
     const pieces = this.pieces(await file.text(), range || {});
     if (!pieces.length) return {skipped: "no entries in the file for those dates"};
@@ -1492,5 +1492,33 @@ const TBFile = {
       names.push({name, open: r2(cr - dr)});
     }
     return {rows: names, groupsSeen};
+  },
+  // build 195: a trial balance whose ledgers are mostly unknown here is another company's: refused (with why). Only
+  // when this client's ledgers are known (from the day book or the masters)
+  foreign(r, b){
+    const known = new Set(Object.keys(Object.assign({}, (b && b.map) || {}, (b && b.under) || {}, (b && b.ledInfo) || {})));
+    if (known.size < 10 || r.rows.length < 10) return "";
+    const hit = r.rows.filter(x => known.has(x.name)).length;
+    return hit / r.rows.length < 0.5 ? "Only " + hit + " of its " + r.rows.length + " ledgers are in this client\u2019s books. Export the trial balance of this client\u2019s company in Tally." : "";
+  }
+};
+// build 195: the books against Tally's own trial balance on a date: each ledger's opening plus the entries brought in
+// must equal Tally's closing balance. Every ledger agrees: Ready. Otherwise the ledgers that differ, largest first
+const TBCheck = {
+  run(b, rows, on, file){
+    const tb = b.tb || {}, led = tb.led || {}, m = b.meta || {};
+    const base = { at: new Date().toISOString(), on, file };
+    if (!tb.from || !Object.keys(led).length) return Object.assign(base, {ok: false, n: 0, list: [], why: "Bring in the opening balances (step 2) first; the check needs them."});
+    if (on < tb.from || on > String(m.to || "")) return Object.assign(base, {ok: false, n: 0, list: [], why: "The trial balance is as on " + fmtDate(tallyDate(on)) + ", outside the books here (" + fmtDate(tallyDate(tb.from)) + " to " + fmtDate(tallyDate(m.to)) + ")."});
+    const mv = MIS.moves(tb.from, on), inFile = {}, all = new Set();
+    rows.forEach(x => { inFile[x.name] = r2(num(x.open)); all.add(x.name); });
+    Object.keys(led).forEach(l => all.add(l)); Object.keys(mv).forEach(l => all.add(l));
+    const list = [];
+    all.forEach(l => {
+      const books = r2(num((led[l] || {}).open) + ((mv[l] || {}).t || 0)), tally = inFile[l] || 0;
+      if (Math.abs(books - tally) >= 1) list.push([l, tally, books, r2(books - tally)]);
+    });
+    list.sort((a, c) => Math.abs(c[3]) - Math.abs(a[3]));
+    return Object.assign(base, {ok: !list.length, n: list.length, list: list.slice(0, 200), ledgers: all.size});
   }
 };

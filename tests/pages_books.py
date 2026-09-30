@@ -22,6 +22,9 @@ with sync_playwright() as p:
     pg.evaluate("() => { S.booksTab = 'import'; render(); }"); grab("import")
     pg.evaluate("() => { S.books.meta = Object.assign({}, S.books.meta, {parts: [{from: '20250401', to: '20250930', n: 1200, file: 'db1.xml', at: '2026-01-02T10:00:00Z', bridge: 'filled', cloud: 'in the cloud'}, {from: '20251101', to: '20260331', n: 900, file: 'db2.xml', at: '2026-01-03T10:00:00Z'}]}); S.books.tb = {source: 'tb.xml', led: {A: 1, B: 2}, openAsOn: '20250331'}; S.books.ledInfoAt = '2026-01-04T00:00:00Z'; S.books.ledInfo = {A: {}, B: {}}; S.dbFrom = '2025-10-01'; S.tbOn = '2025-03-31'; render(); }"); grab("import-parts")
     pg.evaluate("() => { S.tallyCopy = {time: '03:00', at: '2026-01-05T02:00:00', from: '20250401', to: '20260104', months: ['1','2'], schedule: {on: true, next: '2026-01-06 03:00'}}; render(); }"); grab("import-copy")
+    pg.evaluate("() => { S.books.tbCheck = {ok: true, ledgers: 412, on: '20260331'}; render(); }"); grab("import-ready")
+    pg.evaluate("() => { S.books.tbCheck = {ok: false, n: 12, on: '20260331', list: Array.from({length: 12}, (_, i) => ['Ledger ' + i, -1000 * i, -900 * i, 100 * i])}; S.tbCheckOn = '2026-03-31'; render(); }"); grab("import-mismatch")
+    pg.evaluate("() => { S.books.tbCheck = {ok: false, n: 0, list: [], on: '20270101', why: 'The trial balance is as on 01 Jan 2027, outside the books here.'}; render(); }"); grab("import-why")
     # Tally ledgers: each list, a search, a ledger's meaning changed, a TDS ledger, and what FinCom posts to
     for v in ["pending", "gst", "tds", "done", "other", "post"]:
         pg.evaluate("(v) => { S.booksTab = 'ledgers'; S.lmView = v; S.ledQ = ''; render(); }", v); grab("led-" + v)

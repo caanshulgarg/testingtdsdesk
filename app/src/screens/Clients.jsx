@@ -2,6 +2,7 @@
 // addCompanyForm() in src/js/18.
 import { useState } from "react";
 import DropZone from "../parts/DropZone.jsx";
+import Legacy from "../parts/Legacy.jsx";
 import { Jobs, ReadingCheck, UploadOptions } from "../parts/Reading.jsx";
 
 function AddClient() {
@@ -66,6 +67,7 @@ export default function Clients() {
     </div>
     <div style={{ marginTop: 8 }}><UploadOptions /></div>
     <Jobs which="auto" />
+    <Legacy html={MultiUp.view()} />
     {!all.length ? <div className="pane"><p className="empty" style={{ padding: 0 }}>No clients yet. Add your first client with its GSTIN and Tally company name.</p></div> : <>
       <div className="row" style={{ margin: "18px 0 8px", justifyContent: "space-between" }}>
         <label className="f" style={{ minWidth: 260 }}><span>Find a client</span>

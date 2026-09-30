@@ -1264,6 +1264,10 @@ function doAct(act, t){
       Bridge.call("/keepmode" + (Bridge.pinQ() ? "?" + Bridge.pinQ().slice(1) : ""), {company: BridgeSeed.company(), mode: act === "setupModeBridge" ? "bridge" : "files"}, 20000)
         .then(j => { (S.setupKeep = S.setupKeep || {})[S.coId] = {at: Date.now(), st: j}; toast(act === "setupModeBridge" ? "The bridge will copy the year from Tally in the evening, or when nobody is at the computer." : "The bridge waits for the day book files."); render(); }, e => toast("The bridge could not do it: " + ((e && e.message) || e) + (/Unknown|No such/i.test(String(e && e.message)) ? " (it needs Tally Bridge 1.13.9)" : "")));
       break;
+    case "tbCheckPick": { const i = document.getElementById("tbCheckIn"); if (i){ i.value = ""; i.click(); } break; }
+    case "multiPick": { const i = document.getElementById("multiBooksIn"); if (i){ i.value = ""; i.click(); } break; }
+    case "multiStart": MultiUp.start(); break;
+    case "multiClose": S.multiUp = null; render(); break;
     case "tbPick": { const i = document.getElementById("tbIn"); if (i){ i.value = ""; i.click(); } break; }
     case "filedPick": { const i = document.getElementById("filedIn"); if (i){ i.value = ""; i.click(); } break; }
     case "twoBPick": { const i = document.getElementById("twoBIn"); if (i){ i.value = ""; i.click(); } break; }
@@ -1720,7 +1724,9 @@ function setPath(o, path, v){ const k = path.split("."); if (k.length === 2) o[k
 
 document.addEventListener("change", ev => {
   if (reactOwned(ev.target)) return;
-  if (ev.target && ev.target.id && ["booksIn", "mastersIn", "tbIn", "twoBIn", "filedIn"].includes(ev.target.id)){ booksChange(ev.target); return; }
+  if (ev.target && ev.target.id && ["booksIn", "mastersIn", "tbIn", "tbCheckIn", "twoBIn", "filedIn"].includes(ev.target.id)){ booksChange(ev.target); return; }
+  if (ev.target && ev.target.id === "multiBooksIn"){ MultiUp.pick(ev.target); return; }
+  if (ev.target && ev.target.dataset && ev.target.dataset.mucid !== undefined){ MultiUp.setClient(+ev.target.dataset.mucid, ev.target.value); return; }
   if (ev.target && ev.target.dataset && S.books && gstFixChange(ev.target)) return;
   if (ev.target && ev.target.id === "marketIn"){ const f = (ev.target.files || [])[0]; ev.target.value = ""; if (f) importMarketFile(f); return; }
   if (ev.target && ev.target.id === "salaryIn"){

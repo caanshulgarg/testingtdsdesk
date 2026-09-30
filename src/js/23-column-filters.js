@@ -928,18 +928,47 @@ function gstFixChange(t){
   if (d.revd2 !== undefined){ b.rev = Object.assign({}, b.rev, {d2: !!t.checked}); saveBooks(); render(); return true; }
   return false;
 }
-function booksChange(t){
-  if (t.id === "booksIn"){
-    const f = (t.files || [])[0]; t.value = "";
-    if (!f) return true;
-    const b = S.books; b.busy = "Opening " + f.name + "\u2026"; render();
-    Books.importDayBook(f, m => { b.busy = m; softRender(); }).then(async res => {
+// build 195: a file exported from another Tally company is never taken into this client's books. Once a client has a
+// file, every later file must come from the same company (same name, or the same company part of the GUIDs); the first
+// file's company must be the client's (its Tally name or name), or the person says it is
+async function companyGate(fc, b, co, fname, quiet){
+  if (!fc || !(fc.name || fc.guid)) return {ok: true};
+  const n = x => String(x || "").toLowerCase().replace(/\(\s*\d{4}\s*-\s*\d{2,4}\s*\)/g, "").replace(/[^a-z0-9]/g, "");
+  const had = b.tallyCo;
+  if (had && (had.guid || had.name)){
+    const same = (had.guid && fc.guid) ? had.guid === fc.guid : n(had.name) === n(fc.name);
+    if (!same){
+      const why = n(had.name) === n(fc.name)
+        ? fname + " is from another Tally company that has the same name (\u201c" + fc.name + "\u201d). Choose the file exported from the company these books came from."
+        : fname + " is from the Tally company \u201c" + (fc.name || "another company") + "\u201d; the books here are from \u201c" + (had.name || "another company") + "\u201d. Choose the file exported from that company.";
+      if (!quiet) askConfirm({title: "This file is from another Tally company", ok: "Close", body: '<p class="note">' + esc(why) + "</p>"});
+      return {ok: false, why};
+    }
+    return {ok: true};
+  }
+  const names = [co && co.tallyName, co && co.name].filter(Boolean).map(n);
+  const gstOk = fc.gstin && co && co.gstin && fc.gstin.slice(2, 12) === String(co.gstin).toUpperCase().slice(2, 12);
+  if (!fc.name || gstOk || names.some(x => x && (x === n(fc.name) || x.includes(n(fc.name)) || n(fc.name).includes(x)))) return {ok: true};
+  if (quiet) return {ok: true};                       // the upload for several clients: the person matched it there
+  const r = await askConfirm({title: "Is this the right company?", ok: "Yes, take it", body: '<p class="note">' + esc(fname) + " was exported from the Tally company <b>" + esc(fc.name) + "</b>. The client open here is <b>" + esc((co && co.name) || "") + "</b>" + (co && co.tallyName ? " (in Tally: " + esc(co.tallyName) + ")" : "") + ". Take it into this client\u2019s books?</p>"});
+  return r && r.ok ? {ok: true} : {ok: false, why: "not taken: it is from " + fc.name};
+}
+// build 195: a day book file for the client open (S.books): its company checked, then only the dates chosen replaced.
+// opts.quiet: from the upload for several clients (the mapping was confirmed there; the answer is returned, not shown)
+async function bringDayBookFile(f, from0, to0, opts){
+  opts = opts || {};
+  const b = S.books; b.busy = "Opening " + f.name + "\u2026"; render();
+  const who = {client: S.coId, company: BridgeSeed.company()};           // fixed now: the background sends below keep to this client
+  let fc = null; try { fc = await Books.fileCompany(f); } catch (e){}
+  const gate = await companyGate(fc, b, CO(), f.name, opts.quiet);
+  if (!gate.ok){ b.busy = ""; render(); return {refused: gate.why}; }
+    return Books.importDayBook(f, m => { b.busy = m; softRender(); }).then(async res => {
       const bad = notThisClient((res.meta || {}).gstins);
-      if (bad.length){ b.busy = ""; render(); askConfirm({title: "This day book is not this client\u2019s", ok: "Close", body: '<p class="note">' + esc(panRefusal("The day book " + f.name, bad)) + " Choose the day book exported from this client\u2019s company in Tally, or correct the client\u2019s GSTIN and PAN in Client setup.</p>"}); return; }
+      if (bad.length){ b.busy = ""; render(); if (opts.quiet) return {refused: panRefusal("The day book " + f.name, bad)}; askConfirm({title: "This day book is not this client\u2019s", ok: "Close", body: '<p class="note">' + esc(panRefusal("The day book " + f.name, bad)) + " Choose the day book exported from this client\u2019s company in Tally, or correct the client\u2019s GSTIN and PAN in Client setup.</p>"}); return; }
       // a part: the dates chosen (or the file's own first and last date); only those dates are replaced, the rest stays
-      const ds = res.vouchers.map(v => v.date).filter(Boolean).sort(), iso8 = v => String(v || "").replace(/-/g, "");
-      const from = iso8(S.dbFrom) || ds[0], to = iso8(S.dbTo) || ds[ds.length - 1];
-      if (!from || !to){ b.busy = ""; render(); toast("There are no entries in " + f.name + "."); return; }
+      const ds = res.vouchers.map(v => v.date).filter(Boolean).sort();
+      const from = from0 || ds[0], to = to0 || ds[ds.length - 1];
+      if (!from || !to){ b.busy = ""; render(); if (!opts.quiet) toast("There are no entries in " + f.name + "."); return {refused: "no entries in the file"}; }
       const inside = res.vouchers.filter(v => v.date >= from && v.date <= to), outside = res.vouchers.length - inside.length;
       if (!(b.vouchers || []).length){ b.vouchers = inside; b.meta = Object.assign(res.meta, {from, to}); }
       else TallyRead.merge(b, {vouchers: inside, meta: res.meta}, from, to);
@@ -948,26 +977,34 @@ function booksChange(t){
       b.meta.parts = ((b.meta.parts || []).filter(p => !(p.from >= from && p.to <= to))).concat([part]);
       b.map = Books.mapLedgers(b.vouchers, b.map); LedMaster.refresh(b); b.busy = "";
       TallyRead.after(b, "after the day book was read", {from: b.meta.from, to: b.meta.to});
+      if (fc && (fc.name || fc.guid) && !b.tallyCo) b.tallyCo = {name: fc.name, guid: fc.guid};
       await saveBooks();
-      toast(inside.length + " entries of " + fmtDate(tallyDate(from)) + " to " + fmtDate(tallyDate(to)) + " brought in" + (outside ? " (" + outside + " outside those dates left out)" : "") + ". Choose the next part, or check the ledgers, then TDS and GST.");
+      if (!opts.quiet) toast(inside.length + " entries of " + fmtDate(tallyDate(from)) + " to " + fmtDate(tallyDate(to)) + " brought in" + (outside ? " (" + outside + " outside those dates left out)" : "") + ". Choose the next part, or check the ledgers, then TDS and GST.");
       // the same file fills the bridge's copy for these dates (the bridge never reads them from Tally itself) and FinCom's
       // cloud (everyone in the firm sees the same books)
       (async () => {
         const step = m => { b.busy = m; softRender(); };
         if (Bridge.on()){
-          try { const r = await BridgeSeed.send(f, step, {from, to}); part.bridge = r && r.entries != null ? "filled (" + r.entries + ")" : r && r.skipped ? "not changed: " + r.skipped : ""; }
+          try { const r = await BridgeSeed.send(f, step, {from, to}, who.company); part.bridge = r && r.entries != null ? "filled (" + r.entries + ")" : r && r.skipped ? "not changed: " + r.skipped : ""; }
           catch (e){ part.bridge = "not taken: " + ((e && e.message) || e); }
         } else part.bridge = "not connected on this computer";
         if (TCloudUp.on()){
           // quietly, in the background: nothing on the screen unless it fails
-          try { const r = await TCloudUp.days(await f.text(), {from, to}, null); part.cloud = r && r.days != null ? "in the cloud (" + r.days + " days)" : (r && r.skipped) || ""; }
+          try { const r = await TCloudUp.days(await f.text(), {from, to}, null, who); part.cloud = r && r.days != null ? "in the cloud (" + r.days + " days)" : (r && r.skipped) || ""; }
           catch (e){ part.cloud = "not sent: " + ((e && e.message) || e); toast("Saved here, but it could not be shared with the firm just now (" + ((e && e.message) || e) + "). Choose the file again later."); }
         } else part.cloud = "sign in to the firm account to share it";
-        b.busy = ""; await saveBooks(); render();
+        b.busy = ""; await saveBooks(null, b); render();          // these books, even if another client is open by now
       })();
       render();
-
-    }, e => { b.busy = ""; toast("Could not read that file: " + (e && e.message || e)); render(); });
+      return {n: inside.length, from, to};
+    }, e => { b.busy = ""; if (!opts.quiet) toast("Could not read that file: " + (e && e.message || e)); render(); return {refused: "could not read it: " + ((e && e.message) || e)}; });
+}
+function booksChange(t){
+  if (t.id === "booksIn"){
+    const f = (t.files || [])[0]; t.value = "";
+    if (!f) return true;
+    const iso8 = v => String(v || "").replace(/-/g, "");
+    bringDayBookFile(f, iso8(S.dbFrom), iso8(S.dbTo));
     return true;
   }
   if (t.id === "tbIn"){
@@ -977,6 +1014,7 @@ function booksChange(t){
     if (!/^\d{8}$/.test(on)){ toast("Give the date of the trial balance (the day before the first date of the books) first."); return true; }
     f.text().then(async text => {
       const r = TBFile.read(text, b);
+      const odd = TBFile.foreign(r, b); if (odd){ askConfirm({title: "This trial balance does not look like this client\u2019s", ok: "Close", body: '<p class="note">' + esc(odd) + "</p>"}); return; }
       if (!r.rows.length){ toast(r.groupsSeen ? "This trial balance shows only groups. In Tally, press Alt+F5 (detailed) so each ledger is shown, then export it again." : "No ledger balances found in " + f.name + ". Export the Trial Balance from Tally as XML."); return; }
       const next = (t => t.getFullYear() + String(t.getMonth() + 1).padStart(2, "0") + String(t.getDate()).padStart(2, "0"))(new Date(+on.slice(0, 4), +on.slice(4, 6) - 1, +on.slice(6, 8) + 1));
       const to = (b.meta || {}).to || next;
@@ -994,10 +1032,29 @@ function booksChange(t){
     }, e => toast("Could not read that file: " + ((e && e.message) || e)));
     return true;
   }
+  if (t.dataset && t.dataset.tbcheckon !== undefined){ S.tbCheckOn = t.value; render(); return true; }
+  if (t.id === "tbCheckIn"){
+    const f = (t.files || [])[0]; t.value = "";
+    if (!f) return true;
+    const b = S.books, on = String(S.tbCheckOn || tallyDate((b.meta || {}).to) || "").replace(/-/g, "");
+    if (!/^\d{8}$/.test(on)){ toast("Give the date of the trial balance first."); return true; }
+    f.text().then(async text => {
+      const r = TBFile.read(text, b);
+      const odd = TBFile.foreign(r, b); if (odd){ askConfirm({title: "This trial balance does not look like this client\u2019s", ok: "Close", body: '<p class="note">' + esc(odd) + "</p>"}); return; }
+      if (!r.rows.length){ toast(r.groupsSeen ? "This trial balance shows only groups. In Tally, press Alt+F5 (detailed) so each ledger is shown, then export it again." : "No ledger balances found in " + f.name + "."); return; }
+      b.tbCheck = TBCheck.run(b, r.rows, on, f.name);
+      await saveBooks(); render();
+      toast(b.tbCheck.ok ? "Ready: every ledger agrees with Tally\u2019s trial balance as on " + fmtDate(tallyDate(on)) + "." : b.tbCheck.why || (b.tbCheck.n + " ledger" + (b.tbCheck.n === 1 ? " differs" : "s differ") + " from Tally\u2019s trial balance; they are listed under step 5."));
+    }, e => toast("Could not read that file: " + ((e && e.message) || e)));
+    return true;
+  }
   if (t.id === "mastersIn"){
     const f = (t.files || [])[0]; t.value = "";
     if (!f) return true;
     const b = S.books; b.busy = "Opening " + f.name + "\u2026"; render();
+    (async () => { let fc = null; try { fc = await Books.fileCompany(f); } catch (e){} return companyGate(fc, b, CO(), f.name).then(g => ({g, fc})); })().then(({g, fc}) => {
+    if (!g.ok){ b.busy = ""; render(); return; }
+    if (fc && (fc.name || fc.guid) && !b.tallyCo) b.tallyCo = {name: fc.name, guid: fc.guid};
     Books.importMasters(f, m => { b.busy = m; softRender(); }).then(async res => {
       b.pans = res.pans; b.gstins = res.gstins; b.under = res.under; b.states = res.states; b.groups = res.groups; b.groupInfo = res.groupInfo; b.busy = "";
       b.ledInfo = res.info; b.ledInfoAt = new Date().toISOString(); LedMaster.refresh(b);
@@ -1006,6 +1063,7 @@ function booksChange(t){
       toast(res.count + " ledgers read. " + Object.keys(res.pans).length + " carry a PAN; " + withPan + " of " + rows.length + " deductions now have one.");
       render();
     }, e => { b.busy = ""; toast("Could not read that file: " + (e && e.message || e)); render(); });
+    });
     return true;
   }
   if (t.id === "filedIn"){
@@ -1103,3 +1161,66 @@ window.addEventListener("scroll", () => {
   bankMoreBusy = true;
   requestAnimationFrame(() => { S.bank.limit += 200; render(); setTimeout(() => { bankMoreBusy = false; }, 250); });
 }, {passive: true});
+/* ================================================================== */
+/* Day books for several clients at once (build 195): each file's      */
+/* company is read from the file and matched to a client (GSTIN, else   */
+/* the Tally name); the person confirms the matches, then the files are */
+/* taken one at a time. Each file still passes the same checks          */
+/* ================================================================== */
+const MultiUp = {
+  norm(x){ return String(x || "").toLowerCase().replace(/\(\s*\d{4}\s*-\s*\d{2,4}\s*\)/g, "").replace(/[^a-z0-9]/g, ""); },
+  match(fc){
+    const cos = Object.values(S.companies || {}).filter(c => !c.deleted);
+    if (fc.gstin){
+      const g = cos.filter(c => String(c.gstin || "").toUpperCase() === fc.gstin); if (g.length === 1) return g[0].id;
+      const p = cos.filter(c => String(c.gstin || "").toUpperCase().slice(2, 12) === fc.gstin.slice(2, 12)); if (p.length === 1) return p[0].id;
+    }
+    if (fc.name){ const k = this.norm(fc.name), by = cos.filter(c => [c.tallyName, c.name].filter(Boolean).some(x => this.norm(x) === k)); if (by.length === 1) return by[0].id; }
+    return "";
+  },
+  async pick(inp){
+    const files = Array.from(inp.files || []); inp.value = "";
+    if (!files.length) return;
+    S.multiUp = {rows: [], busy: false, reading: true}; render();
+    for (const f of files){
+      let fc = {}; try { fc = await Books.fileCompany(f); } catch (e){}
+      S.multiUp.rows.push({f, name: fc.name || "", gstin: fc.gstin || "", cid: this.match(fc), status: "waiting"});
+    }
+    S.multiUp.reading = false; render();
+  },
+  setClient(i, cid){ const r = ((S.multiUp || {}).rows || [])[i]; if (r){ r.cid = cid; render(); } },
+  async start(){
+    const m = S.multiUp; if (!m || m.busy) return;
+    const todo = m.rows.filter(r => r.cid && r.status === "waiting");
+    if (!todo.length){ toast("Choose the client for each file first."); return; }
+    m.busy = true;
+    const keepCo = S.coId, keepView = S.view;
+    for (const r of todo){
+      r.status = "reading…"; render();
+      try {
+        S.coId = r.cid;
+        if (!S.books || S.books.cid !== r.cid){ S.books = null; await openBooks(r.cid); }
+        for (let i = 0; i < 400 && (!S.books || S.books.loading); i++) await new Promise(z => setTimeout(z, 50));
+        const res = await bringDayBookFile(r.f, "", "", {quiet: true});
+        r.ok = !!(res && !res.refused && res.n != null);
+        r.status = !res ? "not taken" : res.refused ? "not taken: " + res.refused : "done: " + res.n + " entries, " + fmtDate(tallyDate(res.from)) + " to " + fmtDate(tallyDate(res.to));
+      } catch (e){ r.status = "not taken: " + ((e && e.message) || e); }
+      S.view = keepView; render();
+    }
+    S.coId = keepCo; S.view = keepView; m.busy = false; render();
+    const ok = m.rows.filter(r => r.ok).length;
+    toast(ok + " of " + m.rows.length + " files brought in. Next, for each client: its opening balances (trial balance) and the check, under Books → From Tally.");
+  },
+  view(){
+    const m = S.multiUp;
+    const intro = '<div class="pane"><h3 style="margin-top:0">Day books for several clients at once</h3><p class="note" style="margin:0 0 8px">Choose the day book XML files exported from Tally, one or more per client. ' +
+      "Each file’s company is read from the file and matched to a client; check the matches, then start. A file whose company or GSTIN is not the client’s is not taken.</p>";
+    if (!m) return intro + '<button class="btn" data-act="multiPick">Choose day book files</button></div>';
+    const cos = Object.values(S.companies || {}).filter(c => !c.deleted).sort((a, c) => a.name.localeCompare(c.name));
+    return intro + (m.reading ? '<p class="note">Reading the files…</p>' : "") + '<div class="tblwrap"><table class="data"><thead><tr><th>File</th><th>Company in the file</th><th>Client</th><th>Status</th></tr></thead><tbody>' +
+      m.rows.map((r, i) => "<tr><td>" + esc(r.f.name) + '<div class="nr">' + Math.round(r.f.size / 1048576) + " MB</div></td><td>" + esc(r.name || "—") + (r.gstin ? '<div class="nr">' + esc(r.gstin) + "</div>" : "") + "</td><td>" +
+        (r.status === "waiting" && !m.busy ? '<select data-mucid="' + i + '"><option value="">— choose —</option>' + cos.map(c => '<option value="' + esc(c.id) + '"' + (c.id === r.cid ? " selected" : "") + ">" + esc(c.name) + "</option>").join("") + "</select>"
+          : esc(((S.companies || {})[r.cid] || {}).name || "—")) + '</td><td class="' + (r.ok ? "" : /not taken/.test(r.status) ? "bad" : "") + '">' + esc(r.status) + "</td></tr>").join("") + "</tbody></table></div>" +
+      '<div class="row" style="gap:8px;margin-top:8px">' + (m.busy ? '<span class="note">Bringing them in, one at a time…</span>' : '<button class="btn primary" data-act="multiStart">Bring them in</button><button class="btn small" data-act="multiPick">Choose other files</button><button class="btn small" data-act="multiClose">Close</button>') + "</div></div>";
+  }
+};

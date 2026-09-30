@@ -50,8 +50,21 @@ function Setup({ b }) {
       <Step ok={!!b.ledInfoAt} title="3. Ledger masters">
         {b.ledInfoAt ? Object.keys(b.ledInfo || {}).length + " ledgers (groups, PAN, GSTIN), " + d(String(b.ledInfoAt).slice(0, 10).replace(/-/g, "")) : "Choose the ledger masters XML below (List of Accounts)."}</Step>
       <Step ok={bok ? true : Bridge.on() && k && k.on ? "wait" : false} title="4. Tally Bridge">{bs}{bact && <> {bact}</>}</Step>
+      <Check b={b} />
     </section>
   );
+}
+
+// 5. the check against Tally's own trial balance (build 195): Ready, or the ledgers that differ. The file goes through
+// booksChange (tbCheckIn), TBCheck.run (24)
+function Check({ b }) {
+  const ck = b.tbCheck, endOn = tallyDate((b.meta || {}).to || "");
+  const pick = <><label className="note">as on <input type="date" aria-label="Trial balance to check as on" value={S.tbCheckOn || endOn} onChange={(ev) => setAndShow("tbCheckOn", ev.target.value)} /></label> <Act act="tbCheckPick">Choose Tally’s trial balance XML</Act></>;
+  if (!(b.vouchers || []).length) return <Step ok={false} title="5. Check">After the day book and opening balances: Tally’s trial balance on the last date, to check every ledger.</Step>;
+  if (!ck) return <Step ok={false} title="5. Check">Export Tally’s trial balance (Alt+F5, detailed) as on the last date of the books and choose it: every ledger is checked. {pick}</Step>;
+  if (ck.ok) return <Step ok title="5. Ready">{"Every ledger (" + (ck.ledgers || 0) + ") agrees with Tally’s trial balance as on " + d(ck.on) + "."} <Act act="tbCheckPick" className="linkbtn">check again</Act></Step>;
+  return <Step ok={false} title="5. Mismatch">{ck.why ? ck.why : <>{ck.n + " ledger" + (ck.n === 1 ? " differs" : "s differ") + " from Tally’s trial balance as on " + d(ck.on) + ":"}
+    <span style={{ display: "block", textAlign: "left", marginTop: 4 }}>{ck.list.slice(0, 10).map((x, i) => <span key={x[0] + ":" + i}>{i > 0 && <br />}{x[0] + ": Tally " + INR.format(-x[1]) + ", books " + INR.format(-x[2])}</span>)}{ck.n > 10 && <><br />{"and " + (ck.n - 10) + " more"}</>}</span></>} {pick}</Step>;
 }
 
 function Parts({ b }) {
