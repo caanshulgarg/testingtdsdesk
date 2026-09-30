@@ -48,7 +48,7 @@ const Bridge = {
       const clash = !pin && Object.keys(names).filter(n => names[n] > 1 && !(open.filter(o => o.name === n && o.mine === true).length === 1));
       this.st = {state: "ok", sessions: j.sessions || [], open: open.filter(o => !(clash && clash.includes(o.name)) || o.mine === true), clash: clash || [], at: Date.now(), error: "",
         version: j.version, allowImport: j.allowImport !== false, mode: j.mode || "", user: j.user || "", mySession: j.mySession, jobs: [].concat(j.jobs || []),
-        tallyUp: usable.length > 0, pinMissing: !!pin && !(j.sessions || []).some(s => s.port === pin && s.ok && !s.skipped)};
+        stuck: j.tallyStuck || null, tallyUp: usable.length > 0, pinMissing: !!pin && !(j.sessions || []).some(s => s.port === pin && s.ok && !s.skipped)};
       if (!this.st.tallyUp || this.st.pinMissing){ if (!this.diag || Date.now() - this.diag.at > 30000) await this.diagnose(); }
       else this.diag = null;
       this.misses = 0;
@@ -243,7 +243,7 @@ async function bridgeTick(first){
   bridgeBusy = true;
   try {
     const before = Bridge.st.state;
-    await Bridge.refresh(!!first);
+    await Bridge.refresh(false);          // build 194: opening FinCom does not ask Tally either; posting and Connect do
     if (first && Bridge.up() && !Bridge.posting) bridgeLeftover();
     if (first && Bridge.up() && Bridge.st.version && bridgeVer(Bridge.st.version) < bridgeVer("1.12.6") && !lsGet("tdsdesk:bridgenudge1126")){
       lsSet("tdsdesk:bridgenudge1126", "1");
@@ -297,6 +297,8 @@ function bridgeChip(co){
   if (st.state !== "ok") return '<span class="tchip off">Tally Bridge\u2026</span>';
   const run = (st.jobs || []).find(j => ["queued", "waiting", "running"].includes(j.status));
   if (run) return '<span class="tchip ok" title="' + esc((run.company || "") + ": " + (run.message || "")) + '">\u25CF Posting to Tally: ' + num(run.done) + " of " + num(run.total) + "</span>";
+  // build 194: Tally stopped answering (a message box open in Tally, or a long report): said plainly, with since when
+  if (st.stuck && st.stuck.since) return '<span class="tchip bad" title="Tally has not answered since ' + esc(String(st.stuck.since).slice(11, 16)) + '. Look at the Tally computer: a message box (a pop-up) in Tally, or a report still working, stops Tally answering anyone. Close it, and FinCom carries on by itself.">\u26A0 Tally not responding since ' + esc(String(st.stuck.since).slice(11, 16)) + " \u2014 check for a pop-up in Tally</span>";
   if (st.shaky) return '<span class="tchip warn" title="' + esc(st.error || "") + '">Tally Bridge: checking again\u2026</span>';
   const why = Bridge.diag && (Bridge.diag.findings || []).find(f => f.level !== "ok");
   if (st.pinMissing) return '<button class="tchip warn" data-act="openSettings" title="' + esc(why ? why.text : "The Tally chosen in Settings is not running") + '">Your Tally is not connected \u2014 check</button>';

@@ -24,7 +24,7 @@ namespace FinCom.Connector
 {
     public static class App
     {
-        public const string Version = "1.0.8";
+        public const string Version = "1.0.9";
         public const string Name = "FinCom Connector";
         public static readonly bool IsWindows = Environment.OSVersion.Platform == PlatformID.Win32NT;
         public static readonly JavaScriptSerializer Json = new JavaScriptSerializer { MaxJsonLength = 64 * 1024 * 1024 };
@@ -445,7 +445,10 @@ namespace FinCom.Connector
                     var cl = Get(s, "companies") as System.Collections.ArrayList;
                     if (cl != null) foreach (Dictionary<string, object> c in cl) cos.Add(Convert.ToString(Get(c, "name")));
                 }
-                if (up) list.Add(new Check("Tally", "ok", "Open" + (cos.Count > 0 ? ": " + string.Join(", ", cos) : "") + "."));
+                var stuck = Get(st, "tallyStuck") as Dictionary<string, object>;
+                var since = stuck != null ? Convert.ToString(Get(stuck, "since") ?? "") : "";
+                if (up && since.Length >= 16) list.Add(new Check("Tally", "bad", "Not responding since " + since.Substring(11, 5) + ".", "Look at Tally on this computer: a message box (a pop-up) or a report still working stops Tally answering. Close it; FinCom carries on by itself."));
+                else if (up) list.Add(new Check("Tally", "ok", "Open" + (cos.Count > 0 ? ": " + string.Join(", ", cos) : "") + "."));
                 else if (tallyProc) list.Add(new Check("Tally", "bad", "TallyPrime is open but does not answer the bridge.", "In TallyPrime: F1 (Help) > Settings > Connectivity > Client/Server configuration: set \"TallyPrime acts as\" to Both, Enable ODBC to Yes, and the port (usually 9000). Then restart TallyPrime."));
                 else list.Add(new Check("Tally", "warn", "TallyPrime is not open.", "Open TallyPrime and the company. The bridge carries on by itself."));
                 if (up && cos.Count == 0) list.Add(new Check("Company", "warn", "No company is open in Tally.", "Open the company in TallyPrime."));

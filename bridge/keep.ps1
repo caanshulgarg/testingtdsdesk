@@ -40,9 +40,31 @@ function Add-TallyUse([int]$Port, [double]$Sec, [string]$Xml, [string]$Fail) {
 # asked again for a while: 10 s, then 20, 40, 80, at most 2 minutes, until it answers again. Requests meanwhile fail at
 # once with a plain message instead of piling up behind the one Tally is busy with.
 $script:TallyCool = @{}
+# 1.14.2: "Tally not responding since HH:MM": kept in a file the bridge, its copier and FinCom's status all see. A Tally
+# showing a message box (or busy in a long report) answers nothing until someone deals with it
+function Get-TallyStuckFile { return (Join-Path (Get-SyncDir) 'tally-stuck.json') }
+function Set-TallyStuck([int]$Port) {
+  try {
+    $o = $null; $f = Get-TallyStuckFile; if (Test-Path -LiteralPath $f) { $o = Get-Content -Raw -LiteralPath $f | ConvertFrom-Json }
+    $since = $(if ($o -and $o.port -eq $Port -and $o.last -and ((Get-Date) - [DateTime]$o.last).TotalMinutes -lt 15) { [string]$o.since } else { (Get-Date).ToString('s') })
+    New-Item -ItemType Directory -Force -Path (Get-SyncDir) | Out-Null
+    [IO.File]::WriteAllText($f, ([ordered]@{ port = $Port; since = $since; last = (Get-Date).ToString('s') } | ConvertTo-Json -Compress))
+  } catch { }
+}
+function Clear-TallyStuck([int]$Port) { try { $f = Get-TallyStuckFile; if (Test-Path -LiteralPath $f) { $o = Get-Content -Raw -LiteralPath $f | ConvertFrom-Json; if ($o.port -eq $Port) { Remove-Item -LiteralPath $f -Force } } } catch { } }
+function Get-TallyStuck { try { $o = Get-Content -Raw -LiteralPath (Get-TallyStuckFile) -ErrorAction Stop | ConvertFrom-Json; if (((Get-Date) - [DateTime]$o.last).TotalMinutes -lt 10) { return $o } } catch { }; return $null }
 # 1.14.1: one request at a time to each Tally. The bridge, its copier and its posting worker are separate programs; a
 # lock they share (by name) makes a request wait its turn instead of reaching Tally alongside another one
+# 1.14.2: FinCom first. A request from FinCom (posting, Update now, a check someone asked for) marks that it is waiting;
+# the copier gives way between its reads while that mark is fresh, so posting never queues behind the routine copy
+function Get-TallyWantFile { return (Join-Path (Get-SyncDir) 'tally-want.txt') }
+function Set-TallyWant { try { New-Item -ItemType Directory -Force -Path (Get-SyncDir) | Out-Null; [IO.File]::WriteAllText((Get-TallyWantFile), (Get-Date).ToString('s')) } catch { } }
+function Test-TallyWanted { try { return ((Get-Date) - (Get-Item -LiteralPath (Get-TallyWantFile) -ErrorAction Stop).LastWriteTime).TotalSeconds -lt 4 } catch { return $false } }
 function Enter-TallyLock([int]$Port, [int]$WaitSec) {
+  if ($script:IsCopier) {
+    $sw0 = [Diagnostics.Stopwatch]::StartNew()
+    while ((Test-TallyWanted) -and $sw0.Elapsed.TotalSeconds -lt 180) { Start-Sleep -Milliseconds 500 }
+  } else { Set-TallyWant }
   $m = New-Object Threading.Mutex($false, ('Local\FinComTally' + $Port))
   $got = $false; $sw = [Diagnostics.Stopwatch]::StartNew()
   try { $got = $m.WaitOne([Math]::Max(1, $WaitSec) * 1000) } catch [Threading.AbandonedMutexException] { $got = $true }     # its holder ended without letting go
@@ -55,18 +77,19 @@ function Invoke-Tally([int]$TallyPort, [string]$Xml, [int]$TimeoutSec) {
   if ($c -and [DateTime]::UtcNow -lt $c.until) { throw ('Tally (port ' + $TallyPort + ') is busy and did not answer the last request; not asked again until ' + $c.until.ToLocalTime().ToString('HH:mm:ss')) }
   $lock = Enter-TallyLock $TallyPort $(if ($TimeoutSec -gt 0) { [Math]::Min(300, $TimeoutSec) } else { 120 })
   $sw = [Diagnostics.Stopwatch]::StartNew(); $fail = ''
-  try { $r = (& $script:TallyInvokeOrig $TallyPort $Xml $TimeoutSec); $script:TallyCool.Remove($TallyPort); return $r }
+  try { $r = (& $script:TallyInvokeOrig $TallyPort $Xml $TimeoutSec); $script:TallyCool.Remove($TallyPort); Clear-TallyStuck $TallyPort; return $r }
   catch {
     $fail = $_.Exception.Message
     if ($fail -match 'timed out|was closed|unexpected error occurred on a receive|forcibly closed') {
       $n = $(if ($c) { [int]$c.n + 1 } else { 1 })
       $wait = [int][Math]::Min(120, 10 * [Math]::Pow(2, $n - 1))
       $script:TallyCool[$TallyPort] = @{ n = $n; until = [DateTime]::UtcNow.AddSeconds($wait) }
+      Set-TallyStuck $TallyPort
       try { Write-Log ('Tally ' + $TallyPort + ' is busy and did not answer in time; it is not asked again for ' + $wait + 's, so requests do not pile up') } catch { }
     }
     throw
   }
-  finally { try { $lock.ReleaseMutex() } catch { }; $lock.Dispose(); Add-TallyUse $TallyPort $sw.Elapsed.TotalSeconds $Xml $fail; Test-KeepSlowRead $sw.Elapsed.TotalSeconds }
+  finally { if (-not $script:IsCopier) { Set-TallyWant }; try { $lock.ReleaseMutex() } catch { }; $lock.Dispose(); Add-TallyUse $TallyPort $sw.Elapsed.TotalSeconds $Xml $fail; Test-KeepSlowRead $sw.Elapsed.TotalSeconds }
 }
 # the share of one Tally's time used by this program in the last minute (0..1)
 function Get-TallyShare([int]$Port, [int]$WindowSec = 60) {
@@ -885,6 +908,7 @@ function Invoke-KeepWorker {
   $parent = 0
   try { $parent = [int](Get-CimInstance Win32_Process -Filter ('ProcessId=' + $PID) -ErrorAction Stop).ParentProcessId } catch { try { $parent = [int](Get-Process -Id $PID).Parent.Id } catch { $parent = 0 } }
   $held = ''
+  $script:IsCopier = $true
   $due = Test-KeepDue; $once = $due -eq 'daily' -or $due -eq 'now'
   $script:KeepForce = $due -eq 'now'
   $runEnd = (Get-Date).AddMinutes((Get-KeepNum 'KeepRunMin' 30)); $upToDate = @{}

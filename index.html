@@ -1128,7 +1128,7 @@ header.top .tbar-title{align-items:center}
 .lk-fresh .note{flex:1 1 320px}
 .fc-empty .lk-fresh{text-align:left;margin-top:12px}
 </style>
-<style>.is-test .side-brand::after{content:"TEST";display:block;margin-top:4px;font-size:11px;letter-spacing:.14em;color:#E9A06A}.is-test header.top{box-shadow:inset 0 3px 0 #E2761B}body.is-test::after{content:"TESTING SITE · not for real client work · post only to a ZZ TEST company in Tally";position:fixed;left:0;right:0;bottom:0;z-index:70;background:#E2761B;color:#fff;font-size:12.5px;text-align:center;padding:3px 8px;letter-spacing:.04em;pointer-events:none}.is-test .actionbar{bottom:22px}.is-test #app{padding-bottom:34px}</style><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-JUZRiA/pD/Q1MSIv1WkOX00eklOKXLcOHszD3zr3UBc=' 'sha256-eQPIM7qxjmGQP2khVe23YnbRfoRmtEjpasLIbTfddlY=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+<style>.is-test .side-brand::after{content:"TEST";display:block;margin-top:4px;font-size:11px;letter-spacing:.14em;color:#E9A06A}.is-test header.top{box-shadow:inset 0 3px 0 #E2761B}body.is-test::after{content:"TESTING SITE · not for real client work · post only to a ZZ TEST company in Tally";position:fixed;left:0;right:0;bottom:0;z-index:70;background:#E2761B;color:#fff;font-size:12.5px;text-align:center;padding:3px 8px;letter-spacing:.04em;pointer-events:none}.is-test .actionbar{bottom:22px}.is-test #app{padding-bottom:34px}</style><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-JUZRiA/pD/Q1MSIv1WkOX00eklOKXLcOHszD3zr3UBc=' 'sha256-choK6ts+1GNsqtVdxq1fnOvjeebWpQkJhbNkab5rLB0=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
 </head>
 <body class="is-test">
 <a class="skip" id="skipLink" href="#app">Skip to the work</a>
@@ -1204,9 +1204,9 @@ const DEFAULT_FIRM = {firmName:"", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "TEST · 30 Sep 2026 · build 193 (MIS 4x and the audit 2x faster: figures worked out once per run, not again and again)";
+const APP_VERSION = "TEST · 30 Sep 2026 · build 194 (screens never ask Tally by themselves; posting ahead of the routine copy; Tally not responding since HH:MM; bridge 1.14.2)";
 // the Tally Bridge setup file's fingerprint, put in by build.py: a new setup file is never served from an old cache
-const BRIDGE_SETUP_SHA = "d6ea3e4a47d15b80";
+const BRIDGE_SETUP_SHA = "03e30c07b0db0dd3";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;
@@ -9264,7 +9264,7 @@ function viewBooks(){
   }
   let h = '<nav class="sbar" aria-label="Books">' + [["import", "From Tally", n || null], ["ledgers", "Tally ledgers", n ? (LedMaster.pending(b).length ? LedMaster.pending(b).length + " to confirm" : "\u2713") : null], ["tds", "TDS", n ? TDS.rows().length : ((b.salary || []).length || null)], ["gst", "GST", null], ["mis", "MIS", null], ["fs", "Accounts", null], ["audit", "Audit", b.audit && b.audit.last ? (b.audit.last.findings.filter(f => f.sev === "high" && Audit.status(f.id).s === "open").length || null) : null]]
     .map(([id, label, c]) => '<button data-bookstab="' + id + '" aria-selected="' + (tab === id) + '">' + label + (c == null ? "" : ' <span class="sbar-n">' + c + "</span>") + "</button>").join("") + "</nav>";
-  h += BookSync.note(co.id, tab) + gstDriftNote(b);
+  h += BookSync.note(co.id, tab) + gstDriftNote(b) + (tab === "import" ? "" : booksFreshLine(b));
   if (b.busy) h += busyCard("Reading the books…", b.busy, 0, 0);
   if (tab === "import") h += viewBooksImport(b);
   else if (!n && tab === "gst") h += viewBooksGst(b);
@@ -9412,6 +9412,15 @@ const TallyRead = {
 function viewTallyRead(b){ return ""; }
 // Setting a company up, in order: what is done, what is missing, and what the bridge does next. The bridge does not
 // read the year from Tally by itself: it waits for the day book files (or is told to copy the year in the evening)
+// build 194: on every Books screen, how up to date the books are, and Update now (a job for the bridge: nobody waits on Tally)
+function booksFreshLine(b){
+  const m = b.meta || {};
+  if (!(b.vouchers || []).length || !m.to) return "";
+  const at = m.at ? new Date(m.at).toLocaleString("en-IN", {day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit"}) : "";
+  const can = typeof Bridge === "object" && Bridge.on() && Bridge.up();
+  return '<p class="note" style="margin:0 0 10px">Books up to <b>' + fmtDate(tallyDate(m.to)) + "</b>" + (at ? ", brought in " + esc(at) : "") + "." +
+    (can ? ' <button class="linkbtn" data-act="keepNow">Update now</button>' : "") + "</p>";
+}
 function viewSetupList(b){
   const co = CO(), m = b.meta || {}, parts = (m.parts || []).slice().sort((x, y) => String(x.from).localeCompare(String(y.from)));
   const today = Audit.today(), d = x => fmtDate(tallyDate(x));
@@ -15713,7 +15722,7 @@ const Bridge = {
       const clash = !pin && Object.keys(names).filter(n => names[n] > 1 && !(open.filter(o => o.name === n && o.mine === true).length === 1));
       this.st = {state: "ok", sessions: j.sessions || [], open: open.filter(o => !(clash && clash.includes(o.name)) || o.mine === true), clash: clash || [], at: Date.now(), error: "",
         version: j.version, allowImport: j.allowImport !== false, mode: j.mode || "", user: j.user || "", mySession: j.mySession, jobs: [].concat(j.jobs || []),
-        tallyUp: usable.length > 0, pinMissing: !!pin && !(j.sessions || []).some(s => s.port === pin && s.ok && !s.skipped)};
+        stuck: j.tallyStuck || null, tallyUp: usable.length > 0, pinMissing: !!pin && !(j.sessions || []).some(s => s.port === pin && s.ok && !s.skipped)};
       if (!this.st.tallyUp || this.st.pinMissing){ if (!this.diag || Date.now() - this.diag.at > 30000) await this.diagnose(); }
       else this.diag = null;
       this.misses = 0;
@@ -15908,7 +15917,7 @@ async function bridgeTick(first){
   bridgeBusy = true;
   try {
     const before = Bridge.st.state;
-    await Bridge.refresh(!!first);
+    await Bridge.refresh(false);          // build 194: opening FinCom does not ask Tally either; posting and Connect do
     if (first && Bridge.up() && !Bridge.posting) bridgeLeftover();
     if (first && Bridge.up() && Bridge.st.version && bridgeVer(Bridge.st.version) < bridgeVer("1.12.6") && !lsGet("tdsdesk-test:bridgenudge1126")){
       lsSet("tdsdesk-test:bridgenudge1126", "1");
@@ -15962,6 +15971,8 @@ function bridgeChip(co){
   if (st.state !== "ok") return '<span class="tchip off">Tally Bridge\u2026</span>';
   const run = (st.jobs || []).find(j => ["queued", "waiting", "running"].includes(j.status));
   if (run) return '<span class="tchip ok" title="' + esc((run.company || "") + ": " + (run.message || "")) + '">\u25CF Posting to Tally: ' + num(run.done) + " of " + num(run.total) + "</span>";
+  // build 194: Tally stopped answering (a message box open in Tally, or a long report): said plainly, with since when
+  if (st.stuck && st.stuck.since) return '<span class="tchip bad" title="Tally has not answered since ' + esc(String(st.stuck.since).slice(11, 16)) + '. Look at the Tally computer: a message box (a pop-up) in Tally, or a report still working, stops Tally answering anyone. Close it, and FinCom carries on by itself.">\u26A0 Tally not responding since ' + esc(String(st.stuck.since).slice(11, 16)) + " \u2014 check for a pop-up in Tally</span>";
   if (st.shaky) return '<span class="tchip warn" title="' + esc(st.error || "") + '">Tally Bridge: checking again\u2026</span>';
   const why = Bridge.diag && (Bridge.diag.findings || []).find(f => f.level !== "ok");
   if (st.pinMissing) return '<button class="tchip warn" data-act="openSettings" title="' + esc(why ? why.text : "The Tally chosen in Settings is not running") + '">Your Tally is not connected \u2014 check</button>';
@@ -23603,10 +23614,25 @@ const LK = {
   live(){ const co = CO(); return !!(co && typeof bridgeLive === "function" && bridgeLive(co) && Bridge.openFor(co)); },
   light(){ return bridgeVer(Bridge.st.version) >= bridgeVer("1.12.10"); },
   tname(){ const co = CO(), o = Bridge.openFor(co); if (!o) throw new Error("Open " + (co.tallyName || co.name) + " in Tally first."); return o.name; },
+  // build 194: the ledger names come from the cloud copy of the books (Tally is not asked); read from Tally only when
+  // someone presses "refresh" and there is no cloud copy
   async loadNames(force){
     const cid = S.coId;
-    if (!this.live() || !this.light() || this._namesBusy) return;
+    if (this._namesBusy) return;
     if (!force && this.names && this.names.cid === cid && Date.now() - this.names.at < 30 * 60000) return;
+    const bk = typeof TCloud === "object" && TCloud.on() ? TCloud.book(cid) : null;
+    if (bk && bk.book){
+      this._namesBusy = true;
+      try {
+        const rows = await TCloud.restAll("tally_ledgers?select=name,parent&book_id=eq." + encodeURIComponent(bk.book) + "&order=name.asc");
+        const under = {}; rows.forEach(r => { under[r.name] = r.parent || ""; });
+        this.names = {cid, at: Date.now(), leds: Object.keys(under), under, groups: {}, src: "cloud"};
+      } catch (e){ if (force) toast("Could not bring the ledger names: " + ((e && e.message) || e)); }
+      this._namesBusy = false;
+      if (S.booksTab === "lookup") render();
+      return;
+    }
+    if (!force || !this.live() || !this.light()) return;
     this._namesBusy = true;
     try {
       const j = await Bridge.call("/ledgernames?company=" + encodeURIComponent(this.tname()) + Bridge.pinQ(), null, 90000);
@@ -24018,7 +24044,7 @@ const LK = {
   view(b){
     const x = this.st(), live = this.live(), have = (b.vouchers || []).length > 0;
     // Tally's ledger names, once per client (light), so typing offers what is in Tally today
-    if (live && this.light() && !(this.names && this.names.cid === S.coId) && !this._namesBusy && this._namesTried !== S.coId){ this._namesTried = S.coId; setTimeout(() => this.loadNames(), 0); }
+    if (!(this.names && this.names.cid === S.coId) && !this._namesBusy && this._namesTried !== S.coId && typeof TCloud === "object" && TCloud.has(S.coId)){ this._namesTried = S.coId; setTimeout(() => this.loadNames(), 0); }
     if (live) setTimeout(() => this.autoFresh(), 0);
     const leds = FC.ledgers(), grps = FC.groups(), T = FC.tn();
     const dl = '<datalist id="lkLeds">' + leds.slice(0, 5000).map(l => '<option value="' + esc(l) + '">').join("") + '</datalist><datalist id="lkGrps">' + grps.map(g => '<option value="' + esc(g) + '">').join("") + "</datalist>";
@@ -24045,7 +24071,7 @@ const LK = {
     const srcRow = can ? '<div class="lk-src" role="radiogroup" aria-label="Where from"><span class="note">From</span><button role="radio" data-lksrc="tally" aria-checked="' + fromTally + '">Tally, live</button>' +
         (have ? '<button role="radio" data-lksrc="books" aria-checked="' + !fromTally + '">The books read into FinCom' + (this.booksAge() ? " on " + this.booksAge() : "") + "</button>" : "") + "</div>"
       : "";
-    const names = live ? '<p class="note lk-names">' + (T ? "Ledger names from Tally: " + T.leds.length + ' \u00b7 <button class="linkbtn" data-lk="names">refresh</button>' : this.light() ? (this._namesBusy ? "Reading the ledger names from Tally\u2026" : "") : "Install Tally Bridge 1.12.10 so ledger names come from Tally.") + "</p>" : "";
+    const names = T || live ? '<p class="note lk-names">' + (T ? "Ledger names: " + T.leds.length + (T.src === "cloud" ? " (the books in the cloud)" : " (from Tally)") + ' \u00b7 <button class="linkbtn" data-lk="names">refresh</button>' : this._namesBusy ? "Bringing the ledger names\u2026" : live ? '<button class="linkbtn" data-lk="names">Bring the ledger names from Tally</button>' : "") + "</p>" : "";
     h += this.freshBar(b) + '<div class="lk-form">' + form + "</div>" + presets + srcRow +
       '<div class="row" style="gap:8px;margin-top:10px;align-items:center"><button class="btn primary" data-lk="show"' + (x.busy ? " disabled" : "") + ">" + (x.busy ? "Reading Tally\u2026" : "Show") + "</button>" + names + "</div>" + dl + "</section>";
     const rec = this.recent();
@@ -24414,7 +24440,7 @@ const LTR = {
   // ---------- balances on a date: from the books, or read from Tally
   balances(asOn){
     const x = this.st();
-    if (x.tally && x.tally.asOn === asOn) return {ok: true, src: "Tally, read " + fmtDate(x.tally.at.slice(0, 10)), bal: x.tally.bal};
+    if (x.tally && x.tally.asOn === asOn) return {ok: true, src: (x.tally.cloud ? "the books in the cloud, " : "Tally, read ") + fmtDate(x.tally.at.slice(0, 10)), bal: x.tally.bal};
     const B = LK.bal(Audit.fyStart(asOn), asOn);
     if (!B.ok) return {ok: false, why: B.why};
     const at = B.at(asOn), bal = {};
@@ -24423,8 +24449,10 @@ const LTR = {
   },
   async readTally(asOn){
     const x = this.st();
-    x.busy = "Reading every ledger’s balance from Tally…"; render();
-    try { await LK.loadNames(); const r = await LK.tbTally(asOn); const bal = {}; r.rows.forEach(z => { bal[z.l] = z.bal; }); x.tally = {asOn, at: new Date().toISOString(), bal}; }
+    // build 194: from the books in the cloud when there are any (worked out there in a moment); Tally only without them
+    const cloud = typeof TCloud === "object" && TCloud.on() && TCloud.has(S.coId);
+    x.busy = cloud ? "Working out every ledger\u2019s balance\u2026" : "Reading every ledger\u2019s balance from Tally\u2026"; render();
+    try { const r = cloud ? await TCloud.tb(S.coId, asOn) : (await LK.loadNames(), await LK.tbTally(asOn)); const bal = {}; r.rows.forEach(z => { bal[z.l] = z.bal; }); x.tally = {asOn, at: new Date().toISOString(), bal, cloud}; }
     catch (e){ toast("Could not read Tally: " + ((e && e.message) || e)); }
     x.busy = ""; render();
   },

@@ -197,10 +197,25 @@ const LK = {
   live(){ const co = CO(); return !!(co && typeof bridgeLive === "function" && bridgeLive(co) && Bridge.openFor(co)); },
   light(){ return bridgeVer(Bridge.st.version) >= bridgeVer("1.12.10"); },
   tname(){ const co = CO(), o = Bridge.openFor(co); if (!o) throw new Error("Open " + (co.tallyName || co.name) + " in Tally first."); return o.name; },
+  // build 194: the ledger names come from the cloud copy of the books (Tally is not asked); read from Tally only when
+  // someone presses "refresh" and there is no cloud copy
   async loadNames(force){
     const cid = S.coId;
-    if (!this.live() || !this.light() || this._namesBusy) return;
+    if (this._namesBusy) return;
     if (!force && this.names && this.names.cid === cid && Date.now() - this.names.at < 30 * 60000) return;
+    const bk = typeof TCloud === "object" && TCloud.on() ? TCloud.book(cid) : null;
+    if (bk && bk.book){
+      this._namesBusy = true;
+      try {
+        const rows = await TCloud.restAll("tally_ledgers?select=name,parent&book_id=eq." + encodeURIComponent(bk.book) + "&order=name.asc");
+        const under = {}; rows.forEach(r => { under[r.name] = r.parent || ""; });
+        this.names = {cid, at: Date.now(), leds: Object.keys(under), under, groups: {}, src: "cloud"};
+      } catch (e){ if (force) toast("Could not bring the ledger names: " + ((e && e.message) || e)); }
+      this._namesBusy = false;
+      if (S.booksTab === "lookup") render();
+      return;
+    }
+    if (!force || !this.live() || !this.light()) return;
     this._namesBusy = true;
     try {
       const j = await Bridge.call("/ledgernames?company=" + encodeURIComponent(this.tname()) + Bridge.pinQ(), null, 90000);
@@ -612,7 +627,7 @@ const LK = {
   view(b){
     const x = this.st(), live = this.live(), have = (b.vouchers || []).length > 0;
     // Tally's ledger names, once per client (light), so typing offers what is in Tally today
-    if (live && this.light() && !(this.names && this.names.cid === S.coId) && !this._namesBusy && this._namesTried !== S.coId){ this._namesTried = S.coId; setTimeout(() => this.loadNames(), 0); }
+    if (!(this.names && this.names.cid === S.coId) && !this._namesBusy && this._namesTried !== S.coId && typeof TCloud === "object" && TCloud.has(S.coId)){ this._namesTried = S.coId; setTimeout(() => this.loadNames(), 0); }
     if (live) setTimeout(() => this.autoFresh(), 0);
     const leds = FC.ledgers(), grps = FC.groups(), T = FC.tn();
     const dl = '<datalist id="lkLeds">' + leds.slice(0, 5000).map(l => '<option value="' + esc(l) + '">').join("") + '</datalist><datalist id="lkGrps">' + grps.map(g => '<option value="' + esc(g) + '">').join("") + "</datalist>";
@@ -639,7 +654,7 @@ const LK = {
     const srcRow = can ? '<div class="lk-src" role="radiogroup" aria-label="Where from"><span class="note">From</span><button role="radio" data-lksrc="tally" aria-checked="' + fromTally + '">Tally, live</button>' +
         (have ? '<button role="radio" data-lksrc="books" aria-checked="' + !fromTally + '">The books read into FinCom' + (this.booksAge() ? " on " + this.booksAge() : "") + "</button>" : "") + "</div>"
       : "";
-    const names = live ? '<p class="note lk-names">' + (T ? "Ledger names from Tally: " + T.leds.length + ' \u00b7 <button class="linkbtn" data-lk="names">refresh</button>' : this.light() ? (this._namesBusy ? "Reading the ledger names from Tally\u2026" : "") : "Install Tally Bridge 1.12.10 so ledger names come from Tally.") + "</p>" : "";
+    const names = T || live ? '<p class="note lk-names">' + (T ? "Ledger names: " + T.leds.length + (T.src === "cloud" ? " (the books in the cloud)" : " (from Tally)") + ' \u00b7 <button class="linkbtn" data-lk="names">refresh</button>' : this._namesBusy ? "Bringing the ledger names\u2026" : live ? '<button class="linkbtn" data-lk="names">Bring the ledger names from Tally</button>' : "") + "</p>" : "";
     h += this.freshBar(b) + '<div class="lk-form">' + form + "</div>" + presets + srcRow +
       '<div class="row" style="gap:8px;margin-top:10px;align-items:center"><button class="btn primary" data-lk="show"' + (x.busy ? " disabled" : "") + ">" + (x.busy ? "Reading Tally\u2026" : "Show") + "</button>" + names + "</div>" + dl + "</section>";
     const rec = this.recent();

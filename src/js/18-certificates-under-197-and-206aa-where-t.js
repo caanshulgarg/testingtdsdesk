@@ -135,7 +135,7 @@ function viewBooks(){
   }
   let h = '<nav class="sbar" aria-label="Books">' + [["import", "From Tally", n || null], ["ledgers", "Tally ledgers", n ? (LedMaster.pending(b).length ? LedMaster.pending(b).length + " to confirm" : "\u2713") : null], ["tds", "TDS", n ? TDS.rows().length : ((b.salary || []).length || null)], ["gst", "GST", null], ["mis", "MIS", null], ["fs", "Accounts", null], ["audit", "Audit", b.audit && b.audit.last ? (b.audit.last.findings.filter(f => f.sev === "high" && Audit.status(f.id).s === "open").length || null) : null]]
     .map(([id, label, c]) => '<button data-bookstab="' + id + '" aria-selected="' + (tab === id) + '">' + label + (c == null ? "" : ' <span class="sbar-n">' + c + "</span>") + "</button>").join("") + "</nav>";
-  h += BookSync.note(co.id, tab) + gstDriftNote(b);
+  h += BookSync.note(co.id, tab) + gstDriftNote(b) + (tab === "import" ? "" : booksFreshLine(b));
   if (b.busy) h += busyCard("Reading the books…", b.busy, 0, 0);
   if (tab === "import") h += viewBooksImport(b);
   else if (!n && tab === "gst") h += viewBooksGst(b);
@@ -283,6 +283,15 @@ const TallyRead = {
 function viewTallyRead(b){ return ""; }
 // Setting a company up, in order: what is done, what is missing, and what the bridge does next. The bridge does not
 // read the year from Tally by itself: it waits for the day book files (or is told to copy the year in the evening)
+// build 194: on every Books screen, how up to date the books are, and Update now (a job for the bridge: nobody waits on Tally)
+function booksFreshLine(b){
+  const m = b.meta || {};
+  if (!(b.vouchers || []).length || !m.to) return "";
+  const at = m.at ? new Date(m.at).toLocaleString("en-IN", {day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit"}) : "";
+  const can = typeof Bridge === "object" && Bridge.on() && Bridge.up();
+  return '<p class="note" style="margin:0 0 10px">Books up to <b>' + fmtDate(tallyDate(m.to)) + "</b>" + (at ? ", brought in " + esc(at) : "") + "." +
+    (can ? ' <button class="linkbtn" data-act="keepNow">Update now</button>' : "") + "</p>";
+}
 function viewSetupList(b){
   const co = CO(), m = b.meta || {}, parts = (m.parts || []).slice().sort((x, y) => String(x.from).localeCompare(String(y.from)));
   const today = Audit.today(), d = x => fmtDate(tallyDate(x));

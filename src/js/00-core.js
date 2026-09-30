@@ -33,7 +33,7 @@ const DEFAULT_FIRM = {firmName:"", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "30 Sep 2026 · build 193 (MIS 4x and the audit 2x faster: figures worked out once per run, not again and again)";
+const APP_VERSION = "30 Sep 2026 · build 194 (screens never ask Tally by themselves; posting ahead of the routine copy; Tally not responding since HH:MM; bridge 1.14.2)";
 // the Tally Bridge setup file's fingerprint, put in by build.py: a new setup file is never served from an old cache
 const BRIDGE_SETUP_SHA = "{{BRIDGE_SETUP_SHA}}";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
