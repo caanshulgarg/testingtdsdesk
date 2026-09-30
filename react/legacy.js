@@ -33,9 +33,9 @@ const DEFAULT_FIRM = {firmName:"", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "TEST · 30 Sep 2026 · build 187 (the Tally computer joins the cloud by itself; filters on every table, with dates, over all rows)";
+const APP_VERSION = "TEST · 30 Sep 2026 · build 194 (screens never ask Tally by themselves; posting ahead of the routine copy; Tally not responding since HH:MM; bridge 1.14.2)";
 // the Tally Bridge setup file's fingerprint, put in by build.py: a new setup file is never served from an old cache
-const BRIDGE_SETUP_SHA = "2c81eb2db190c23e";
+const BRIDGE_SETUP_SHA = "03e30c07b0db0dd3";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;
@@ -2913,41 +2913,36 @@ function applyExtraction(e, j, cid){
 /* ---------- how this supplier has been booked before, in Tally ---------- */
 const NOT_EXPENSE = /(duties|taxes|bank|cash|sundry\s*creditors|sundry\s*debtors|current\s*liabilities|capital)/i;
 function isTaxLike(name){ return /\b(c|s|i|ut)gst\b|\bcess\b|\btds\b|\btcs\b|round\s*off|input\s*(c|s|i)gst/i.test(name || ""); }
-// read the supplier's ledger for the last twelve months and count what the other side was
-async function partyExpensesFromTally(partyLedger, cid){
-  const co = CO(cid || S.coId);
-  if (!bridgeLive(co) || !partyLedger) return null;
-  co.partyExp = co.partyExp || {};
-  const key = normName(partyLedger);
-  const had = co.partyExp[key];
-  if (had && Date.now() - new Date(had.at).getTime() < 7 * 86400000) return had;     // a week is fresh enough
-  const to = new Date(), from = new Date(to.getTime() - 365 * 86400000);
-  let rows = [];
-  try {
-    const j = await Bridge.call("/ledgervouchers?company=" + encodeURIComponent(Bridge.openFor(co).name) + "&ledger=" + encodeURIComponent(partyLedger) +
-      "&from=" + isoToTally(from.toISOString().slice(0, 10)) + "&to=" + isoToTally(to.toISOString().slice(0, 10)) + Bridge.pinQ(), null, 120000);
-    rows = [].concat(j.rows || []);
-  } catch (e){ return had || null; }
-  const count = {};
-  rows.forEach(r => {
-    const credited = num(String(r.cr || "").replace(/,/g, "")) !== 0;          // the supplier was credited: a bill
-    const other = String(r.other || "").trim();
-    if (!credited || !other || normName(other) === key || isTaxLike(other)) return;
-    const info = ledgerInfo(other);
-    if (info && NOT_EXPENSE.test(info.group || "")) return;
-    const c = count[other] || (count[other] = {ledger: other, n: 0, amount: 0});
-    c.n++; c.amount = r2(c.amount + Math.abs(num(String(r.cr).replace(/,/g, ""))));
+// the supplier's bills of the last twelve months and what the other side was, from the books FinCom already has (the
+// bridge's copy, the cloud, or the day book files). Build 190: never a live read of Tally while bills are processed (it
+// read each supplier's ledger from Tally, one after another, and made processing slow whenever Tally was connected)
+function partyExpensesFromTally(partyLedger, cid){
+  const b = S.books;
+  if (!partyLedger || !b || b.cid !== (cid || S.coId) || !(b.vouchers || []).length) return null;
+  const key = normName(partyLedger), t = new Date(Date.now() - 365 * 86400000);
+  const since = t.getFullYear() + String(t.getMonth() + 1).padStart(2, "0") + String(t.getDate()).padStart(2, "0");
+  const count = {}; let bills = 0;
+  b.vouchers.forEach(v => {
+    if (v.cancel || v.opt || String(v.date) < since) return;
+    const mine = (v.ent || []).filter(e => normName(e.l) === key);
+    if (!mine.length || !(mine.reduce((x, e) => x + num(e.a), 0) > 0)) return;       // the supplier credited: a bill (Tally keeps a credit positive)
+    bills++;
+    const seen = new Set();
+    (v.ent || []).forEach(e => {
+      if (!(num(e.a) < 0) || normName(e.l) === key || isTaxLike(e.l) || seen.has(e.l)) return;
+      const info = ledgerInfo(e.l);
+      if (info && NOT_EXPENSE.test(info.group || "")) return;
+      seen.add(e.l);
+      const c = count[e.l] || (count[e.l] = {ledger: e.l, n: 0, amount: 0});
+      c.n++; c.amount = r2(c.amount + Math.abs(num(e.a)));
+    });
   });
-  const top = Object.values(count).sort((a, b) => b.n - a.n || b.amount - a.amount).slice(0, 4);
-  const res = {at: new Date().toISOString(), bills: rows.filter(r => num(String(r.cr || "").replace(/,/g, "")) !== 0).length, top};
-  co.partyExp[key] = res;
-  Store.saveCompany(co);
-  return res;
+  const top = Object.values(count).sort((x, y) => y.n - x.n || y.amount - x.amount).slice(0, 4);
+  return {at: new Date().toISOString(), bills, top};
 }
 // fill the expense ledger on drafts from what Tally shows, unless a person already chose one
 async function applyPartyHistory(entries, cid){
-  const co = CO(cid);
-  if (!bridgeLive(co)) return 0;
+  if (!S.books || S.books.cid !== cid || !(S.books.vouchers || []).length) return 0;       // the client's books are not open here
   const byLedger = new Map();
   entries.forEach(e => {
     if (!e || e.status !== "draft" || !e.partyLedger || !exactLedger(e.partyLedger)) return;
@@ -2955,7 +2950,7 @@ async function applyPartyHistory(entries, cid){
   });
   let changed = 0;
   for (const [led, list] of byLedger){
-    const h = await partyExpensesFromTally(exactLedger(led), cid);
+    const h = partyExpensesFromTally(exactLedger(led), cid);
     if (!h || !h.top.length) continue;
     const best = h.top.find(t => exactLedger(t.ledger));
     list.forEach(e => {
@@ -3758,7 +3753,23 @@ function padForBars(){
   if (document.body.style.paddingBottom !== pad + "px") document.body.style.paddingBottom = pad + "px";
 }
 window.addEventListener("resize", () => requestAnimationFrame(padForBars));
+// build 190: a figure worked out from the whole books (TDS rows, say) is worked out once per drawing of the page, not
+// each time a part of the page asks for it (the TDS page asked 15 times). Outside a drawing it is always fresh
+let RENDER_GEN = 0, IN_RENDER = 0;
+function perRender(o, key, fn){
+  if (!IN_RENDER) return fn();
+  const m = o._pr = o._pr && o._pr.gen === RENDER_GEN && o._pr.books === S.books ? o._pr : {gen: RENDER_GEN, books: S.books, v: {}};
+  if (Object.prototype.hasOwnProperty.call(m.v, key)) return m.v[key];
+  return (m.v[key] = fn());
+}
+// a long calculation (the MIS, the audit) shares figures the same way while it runs: GST 3B for a month was worked out
+// 48 times in one MIS run, and the TDS rows 18 times
+function memoScope(fn){ if (!IN_RENDER) RENDER_GEN++; IN_RENDER++; try { return fn(); } finally { IN_RENDER--; } }
 function render(){
+  RENDER_GEN++; IN_RENDER++;
+  try { return renderNow(); } finally { IN_RENDER--; }
+}
+function renderNow(){
   requestAnimationFrame(padForBars);
   const drafts = {};
   document.querySelectorAll("#app [data-draft]").forEach(el => { if (el.id) drafts[el.id] = el.value; });
@@ -4010,7 +4021,11 @@ const Books = {
     meta.gstins = Array.from(meta.gstins);
     const dates = out.map(v => v.date).filter(Boolean).sort();
     meta.from = dates[0] || ""; meta.to = dates[dates.length - 1] || "";
-    return {vouchers: out, meta};
+    // build 191: each entry's words are cut from the file's text, and the browser keeps the whole text alive behind
+    // them (a year's day book of 400 MB stayed in memory: 430 MB used for 7 MB of entries). A copy lets it go
+    let clean = out;
+    try { clean = typeof structuredClone === "function" ? structuredClone(out) : JSON.parse(JSON.stringify(out)); } catch (e){ clean = out; }
+    return {vouchers: clean, meta};
   },
   async decoder(file){
     const head = new Uint8Array(await file.slice(0, 4).arrayBuffer());
@@ -4197,7 +4212,14 @@ const Books = {
   },
   ledgerOf(name){ return (S.books && S.books.map && S.books.map[name]) || {}; },
   // the purchase and sales side of a voucher, ready for GST and TDS
+  // build 193: an entry's lines are worked out once per drawing or calculation (the same entry is asked many times)
   lines(v){
+    if (typeof IN_RENDER === "undefined" || !IN_RENDER) return this.linesNow(v);
+    const c = this._lc && this._lc.gen === RENDER_GEN && this._lc.books === S.books ? this._lc : (this._lc = {gen: RENDER_GEN, books: S.books, map: new WeakMap()});
+    let r = c.map.get(v); if (!r){ r = this.linesNow(v); c.map.set(v, r); }
+    return r;
+  },
+  linesNow(v){
     const out = {taxable: 0, tax: {CGST: 0, SGST: 0, IGST: 0, CESS: 0}, tds: [], tdsPaid: [], party: 0, rates: {}, roundoff: 0}, vals = [];
     v.ent.forEach(e => {
       const m = Books.ledgerOf(e.l), amt = Math.abs(e.a), sign = e.a < 0 ? -1 : 1;
@@ -4938,7 +4960,8 @@ const Audit = {
   hash(str){ let h = 2166136261; for (let i = 0; i < str.length; i++){ h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(16).toUpperCase().padStart(8, "0"); },
   itemKey(f, r){ return f.id + "|" + [r.vid || "", r.party || "", r.date || "", r.no || "", r.type || ""].join("|"); },
   // run every check for a period; rules only, so the same books always give the same findings
-  run(from, to, how){
+  run(from, to, how){ return typeof memoScope === "function" ? memoScope(() => this.runNow(from, to, how)) : this.runNow(from, to, how); },
+  runNow(from, to, how){
     const b = S.books;
     from = this.ymd(from); to = this.ymd(to);
     const V = this.vouchers(from, to).sort((a, c) => a.date.localeCompare(c.date) || String(a.id).localeCompare(String(c.id)));
@@ -5280,7 +5303,8 @@ const MIS = {
     return out.sort((a, c) => a[0].localeCompare(c[0]));
   },
   // one run: every table for the period, the same every time for the same books
-  run(from, to, how){
+  run(from, to, how){ return typeof memoScope === "function" ? memoScope(() => this.runNow(from, to, how)) : this.runNow(from, to, how); },
+  runNow(from, to, how){
     const b = S.books;
     from = Audit.ymd(from); to = Audit.ymd(to);
     const days = Audit.days(from, to) + 1, lyFrom = this.shift(from, -1), lyTo = this.shift(to, -1);
@@ -6004,7 +6028,8 @@ const TDS = {
   // salary TDS the books carry under section 192; 24Q takes the detail from the salary sheet
   salaryRows(){ return this.allRows().filter(r => /^192/.test(String(r.section || ""))); },
   // every voucher that carries a TDS ledger becomes one deduction row
-  allRows(){
+  allRows(){ return typeof perRender === "function" ? perRender(this, "allRows", () => this.allRowsNow()) : this.allRowsNow(); },
+  allRowsNow(){
     const b = S.books;
     if (!b || !b.vouchers) return [];
     const out = [];
@@ -6024,7 +6049,8 @@ const TDS = {
     return out.sort((a, c) => String(a.date).localeCompare(String(c.date)));
   },
   // the TDS payment vouchers in the books: the challan's amount and date are already there
-  paymentsFromBooks(){
+  paymentsFromBooks(){ return typeof perRender === "function" ? perRender(this, "pay", () => this.paymentsFromBooksNow()) : this.paymentsFromBooksNow(); },
+  paymentsFromBooksNow(){
     const b = S.books;
     if (!b || !b.vouchers) return [];
     const out = [];
@@ -6462,10 +6488,16 @@ const GSTR = {
     for (const e of v.ent){ const m = Books.ledgerOf(e.l); if ((m.kind === "gst" || m.kind === "gst_common" || m.kind === "ineligible") && m.reg){ if (r && r !== m.reg){ r = ""; break; } r = m.reg; } }
     return r || String(v.cmp || "").slice(0, 2);
   },
+  // the entries of one month (build 193): from an index made once per drawing or calculation, not the whole year each time
+  vIn(ym){
+    const all = S.books.vouchers || [];
+    if (typeof perRender !== "function" || !ym || String(ym).length !== 6) return all;
+    return perRender(this, "byMonth", () => { const m = {}; all.forEach(v => { const k = String(v.date).slice(0, 6); (m[k] = m[k] || []).push(v); }); return m; })[ym] || [];
+  },
   // one row per invoice and rate, from the sales side
   outward(ym, reg){
     const b = S.books, out = [];
-    (b.vouchers || []).forEach(v => {
+    this.vIn(ym).forEach(v => {
       if (!Books.isSale(v)) return;
       if (ym && !this.inP(v.date, ym)) return;
       if (reg && this.regOf(v) !== reg) return;
@@ -6509,7 +6541,7 @@ const GSTR = {
   // and not tax only moved between ledgers (to a control account, or a rounding)
   inward(ym, reg){
     const b = S.books, out = [], gst = b.gstins || {};
-    (b.vouchers || []).forEach(v => {
+    this.vIn(ym).forEach(v => {
       if (Books.isSale(v)) return;
       if (ym && !this.inP(v.date, ym)) return;
       const purch = Books.isPurchase(v);
@@ -6607,7 +6639,8 @@ const GSTR = {
   },
   signedIn(r){ return r.dir < 0 ? Object.assign({}, r, {taxable: -r.taxable, cgst: -r.cgst, sgst: -r.sgst, igst: -r.igst, cess: -r.cess, ineligible: -(r.ineligible || 0)}) : r; },
   // the 3B as filed for a month: a monthly filer's month, or at the end of a QRMP quarter the quarter's
-  threeB(ym, reg){
+  threeB(ym, reg){ return typeof perRender === "function" ? perRender(this, "3b|" + ym + "|" + (reg || ""), () => this.threeBNow(ym, reg)) : this.threeBNow(ym, reg); },
+  threeBNow(ym, reg){
     if (typeof GSTSet === "object" && reg && GSTSet.typeOf(ym, reg) === "qrmp" && GSTSet.isQEnd(ym) && typeof GSTQ === "object") return GSTQ.threeBQ(ym, reg);
     return this.threeBm(ym, reg);
   },
@@ -7904,105 +7937,14 @@ const TallyRead = {
     return b.vouchers.length;
   }
 };
-function viewTallyRead(b){
-  const co = CO(), live = typeof bridgeLive === "function" && bridgeLive(co);
-  const t = Audit.today(), r = S.tallyRange || {from: Audit.iso(Audit.fyStart(t)), to: Audit.iso(t)};
-  const cp = S.tallyCopy || null;
-  let h = '<section class="dash-card" style="max-width:760px;margin-bottom:12px"><h3>Straight from Tally</h3>';
-  if (!live) return h + '<p class="note">With the Tally Bridge running and this company open in Tally, the day book and Tally\u2019s own balances are read here directly, month by month \u2014 no exporting. Set it up under Settings \u2192 Tally Bridge.</p></section>';
-  const bv = String((Bridge.st && Bridge.st.version) || ""), vnum = v2 => v2.split(".").map(x => String(num(x)).padStart(3, "0")).join(".");
-  if (bv && vnum(bv) < vnum("1.10.0")) return h + '<p class="note">The Tally Bridge on this computer is ' + esc(bv) + '. Reading straight from Tally, the nightly copy and the FVU check need <b>1.10</b>: download it under Settings \u2192 Tally Bridge and run the setup on the Tally computer.</p></section>';
-  h += '<p class="note">Reads every voucher of the period, and each ledger\u2019s balance as Tally works it out, from <b>' + esc(Bridge.openFor(co).name) + "</b>.</p>" +
-    '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><label class="note">From <input type="date" data-tallyfrom value="' + esc(r.from) + '"></label><label class="note">to <input type="date" data-tallyto value="' + esc(r.to) + '"></label>' +
-    '<button class="btn primary" data-act="tallyRead">Read from Tally</button></div>' +
-    '<p class="note" style="margin-top:8px"><b>A big company, or the first time?</b> Export the day book from Tally once (Display More Reports \u2192 Day Book \u2192 F2 for the period \u2192 Ctrl+E \u2192 XML) and choose it below under \u201cChoose the day book XML\u201d. It is the fastest way, and the bridge\u2019s copy starts from the same file, so the bridge never reads the year from Tally; after that only changes are read.</p>' +
-    '<div style="margin-top:10px;border-top:1px solid var(--line);padding-top:10px"><b>Every night</b><p class="note">The bridge on the Tally server copies each open company\u2019s day book and balances at night, so in the morning they are read in seconds and the audit is ready. The companies have to be open in Tally at that hour.</p>' +
-    '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><button class="btn small" data-act="tallyCopyCheck">See last night\u2019s copy</button>' +
-    '<label class="note">at <input type="time" data-tallytime value="' + esc((cp && cp.time) || "02:00") + '" style="width:110px"></label>' +
-    '<button class="btn small" data-act="tallyScheduleOn">Copy every night</button><button class="btn small" data-act="tallyScheduleOff">Stop</button></div>' +
-    (cp ? '<div class="note" style="margin-top:6px">' + (cp.error ? '<span class="bad">' + esc(cp.error) + "</span>" : cp.none ? "No copy for this company yet." :
-      "Copy made " + esc(String(cp.at || "").replace("T", " ").slice(0, 16)) + " for " + fmtDate(tallyDate(cp.from)) + " to " + fmtDate(tallyDate(cp.to)) + ", " + (cp.months || []).length + ' months. <button class="btn small primary" data-act="tallyCopyUse">Use it</button>') +
-      (cp.schedule ? " \u00b7 Nightly: " + (cp.schedule.on ? "on, next " + esc(cp.schedule.next || "") : "off") : "") + "</div>" : "") + "</div></section>";
-  return h;
-}
 // Setting a company up, in order: what is done, what is missing, and what the bridge does next. The bridge does not
 // read the year from Tally by itself: it waits for the day book files (or is told to copy the year in the evening)
-function viewSetupList(b){
-  const co = CO(), m = b.meta || {}, parts = (m.parts || []).slice().sort((x, y) => String(x.from).localeCompare(String(y.from)));
-  const today = Audit.today(), d = x => fmtDate(tallyDate(x));
-  // the bridge's own view of this company, asked now and then (it asks Tally nothing)
-  const ks = (S.setupKeep || {})[co.id];
-  if (Bridge.on() && (!ks || Date.now() - ks.at > 60000) && !S.setupKeepBusy){
-    S.setupKeepBusy = true;
-    Bridge.call("/keep?company=" + encodeURIComponent(BridgeSeed.company()) + Bridge.pinQ(), null, 20000).then(j => ({at: Date.now(), st: j}), e => ({at: Date.now(), error: (e && e.message) || String(e)}))
-      .then(x => { S.setupKeep = S.setupKeep || {}; S.setupKeep[co.id] = x; S.setupKeepBusy = false; render(); });
-  }
-  const k = ks && ks.st, row = (ok, title, say, act) => '<div class="dash-row" style="align-items:flex-start"><span>' + (ok === true ? "\u2714" : ok === "wait" ? "\u23F3" : "\u2716") + " <b>" + title + "</b></span><span style=\"text-align:right;max-width:70%\">" + say + (act ? " " + act : "") + "</span></div>";
-  // 1. the day book: which dates, and any gap between the parts
-  let gaps = [], cov = "";
-  if (parts.length){
-    let end = parts[0].to;
-    parts.slice(1).forEach(p => { if (p.from > BridgeSeed.add(end, 1)) gaps.push(d(BridgeSeed.add(end, 1)) + " to " + d(BridgeSeed.add(p.from, -1))); if (p.to > end) end = p.to; });
-    cov = d(parts[0].from) + " to " + d(end);
-  }
-  let h = '<section class="dash-card" style="margin-bottom:12px"><h3>Setting up ' + esc(co.name) + "</h3>";
-  h += row(parts.length ? (gaps.length ? "wait" : true) : false, "1. Day book", parts.length ? "from files, " + cov + (gaps.length ? '; <span class="bad">missing ' + gaps.join(", ") + "</span>" : "") + ". The days after it are read from Tally a day at a time." : (m.from ? "read from Tally (" + d(m.from) + " to " + d(m.to) + ")" : "Choose the dates and the day book XML below, part by part."));
-  // 2. opening balances
-  const tbOk = b.tb && b.tb.source, firstFrom = parts.length ? parts[0].from : m.from;
-  h += row(tbOk ? true : b.tb ? "wait" : false, "2. Opening balances", tbOk ? Object.keys(b.tb.led || {}).length + " ledgers, as on " + d(b.tb.openAsOn) + (b.tb.cloud ? ", in the cloud" : "") : b.tb ? "read from Tally" : "Choose the trial balance XML as on " + (firstFrom ? d(BridgeSeed.add(firstFrom, -1)) : "the day before the first date") + " below.");
-  // 3. ledger masters
-  h += row(b.ledInfoAt ? true : false, "3. Ledger masters", b.ledInfoAt ? Object.keys(b.ledInfo || {}).length + " ledgers (groups, PAN, GSTIN), " + d(String(b.ledInfoAt).slice(0, 10).replace(/-/g, "")) + ", shared with the firm" : "Choose the ledger masters XML below (List of Accounts).");
-  // 4. the bridge
-  let bs, bok = false, bact = "";
-  if (!Bridge.on()) bs = "Not connected on this computer. Needed only on the computer with Tally: it posts entries and brings in each day\u2019s changes.";
-  else if (ks && ks.error) bs = "Did not answer: " + esc(ks.error);
-  else if (!k) bs = "asking\u2026";
-  else if (!k.on){ bs = "Keeping in step is off."; bact = '<button class="btn small primary" data-act="setupKeepOn">Switch it on</button>'; }
-  else if (!k.phase && k.mode !== "bridge"){ bs = "Waiting for the day book files (step 1). It does not read the year from Tally by itself."; bact = '<button class="linkbtn" data-act="setupModeBridge">or let the bridge copy the year from Tally, in the evening</button>'; }
-  else if (!k.phase){ bs = "Will copy the year from Tally in the evening (or when nobody is at the computer)."; bact = '<button class="linkbtn" data-act="setupModeFiles">use files instead</button>'; }
-  else if (k.phase === "live"){ bok = true; bs = "In step: reads only changes, a few entries at a time."; }
-  else { bs = "Has the files; " + (k.openPending ? "reads the opening balances and " : "") + "checks them against Tally month by month this evening, then reads only changes." + (k.next && k.next <= today ? " Days from " + d(k.next) + " are read from Tally a day at a time." : ""); }
-  h += row(bok ? true : Bridge.on() && k && k.on ? "wait" : false, "4. Tally Bridge", bs, bact);
-  // 5. the cloud
-  const inCloud = parts.filter(p => /^in the cloud/.test(p.cloud || "")).length;
-  h += row(TCloudUp.on() ? (parts.length && inCloud === parts.length ? true : "wait") : false, "5. FinCom\u2019s cloud", TCloudUp.on() ? (parts.length ? inCloud + " of " + parts.length + " parts in the cloud: everyone in the firm sees the same books." : "Each file chosen below goes to the cloud too.") : "Sign in to the firm account (Settings) so everyone in the firm sees the same books.");
-  return h + "</section>";
-}
 // the parts of the day book brought in from files, and the default date for the trial balance: the day before the first
-function viewBookParts(b){
-  const parts = ((b.meta || {}).parts || []).slice().sort((x, y) => String(x.from).localeCompare(String(y.from)));
-  if (!parts.length) return "";
-  return '<div class="bk-tablewrap"><table class="bk-table compact"><thead><tr><th>Part brought in</th><th class="n">Entries</th><th>File</th><th class="dt">On</th><th>Bridge\u2019s copy</th><th>Cloud</th></tr></thead><tbody>' +
-    parts.map(p => "<tr><td>" + fmtDate(tallyDate(p.from)) + " to " + fmtDate(tallyDate(p.to)) + '</td><td class="n">' + p.n + "</td><td>" + esc(p.file || "") + '</td><td class="dt">' + fmtDate(String(p.at || "").slice(0, 10)) + "</td><td>" + esc(p.bridge || "\u2014") + "</td><td>" + esc(p.cloud || "\u2014") + "</td></tr>").join("") + "</tbody></table></div>";
-}
 function tbDefaultOn(b){
   const parts = ((b.meta || {}).parts || []).map(p => p.from).sort(), f = parts[0] || (b.meta || {}).from;
   if (!f) return "";
   const t = new Date(+f.slice(0, 4), +f.slice(4, 6) - 1, +f.slice(6, 8) - 1);
   return t.getFullYear() + "-" + String(t.getMonth() + 1).padStart(2, "0") + "-" + String(t.getDate()).padStart(2, "0");
-}
-function viewBooksImport(b){
-  const m = b.meta || {};
-  return viewSetupList(b) + viewTallyRead(b) + '<section class="dash-card" style="max-width:760px"><h3>Or bring in files exported from Tally</h3>' +
-    '<p class="note">In Tally: <b>Display More Reports → Day Book</b>, <b>F2</b> for the period, then <b>Ctrl+E</b> (Export) as XML. A big company can be brought in <b>part by part</b>: choose the dates, then that part’s file, as many times as needed; each part fills only its dates. The bridge’s copy is filled from the same files, so Tally is not read for them.</p>' +
-    '<div class="row" style="gap:8px;margin:10px 0;flex-wrap:wrap;align-items:center"><label class="note">From <input type="date" data-dbfrom value="' + esc(S.dbFrom || "") + '"></label><label class="note">to <input type="date" data-dbto value="' + esc(S.dbTo || "") + '"></label>' +
-    '<button class="btn primary" data-act="booksPick">Choose the day book XML' + (S.dbFrom || S.dbTo ? " for these dates" : "") + '</button><span class="note">(no dates: the whole file)</span></div>' +
-    viewBookParts(b) +
-    '<p class="note" style="margin-top:10px"><b>Opening balances:</b> in Tally, <b>Display More Reports → Trial Balance</b>, show the ledgers (<b>Alt+F5</b>, detailed), set the date to the day <b>before</b> the first date above, then <b>Ctrl+E</b> as XML. The closing balances there are the opening balances here, so Tally is not asked for them.</p>' +
-    '<div class="row" style="gap:8px;margin:6px 0;flex-wrap:wrap;align-items:center"><label class="note">Balances as on <input type="date" data-tbon value="' + esc(S.tbOn || tbDefaultOn(b)) + '"></label><button class="btn" data-act="tbPick">Choose the trial balance XML</button>' +
-    (b.tb && b.tb.source ? '<span class="note">' + Object.keys(b.tb.led || {}).length + " opening balances from " + esc(b.tb.source) + " (as on " + fmtDate(tallyDate(b.tb.openAsOn || "")) + ")</span>" : "") + "</div>" +
-    '<p class="note" style="margin-top:10px">For the deductees’ PAN and the ledger groups, also export <b>Display → List of Accounts</b> as XML.</p>' +
-    '<div class="row" style="gap:8px;margin:10px 0"><button class="btn" data-act="mastersPick">Choose the ledger masters XML</button>' +
-    (b.vouchers && b.vouchers.length ? '<button class="btn small" data-act="booksClear">Remove what is here</button>' : "") +
-    (booksHasAny(b) ? '<button class="btn small" data-act="booksWipe">Remove Tally data and all GST work</button>' : "") + "</div>" +
-    ((b.meta || {}).gstins && notThisClient(b.meta.gstins).length ? '<p class="bk-warn">The books here are for ' + esc(notThisClient(b.meta.gstins).join(", ")) + ", not this client\u2019s PAN (" + esc(clientPan()) + "). Remove them with \u201cRemove Tally data and all GST work\u201d.</p>" : "") +
-    (b.vouchers && b.vouchers.length
-      ? '<div class="dash-row"><span>Vouchers</span><b>' + b.vouchers.length + "</b></div>" +
-        '<div class="dash-row"><span>Period</span><b>' + fmtDate(tallyDate(m.from)) + " to " + fmtDate(tallyDate(m.to)) + "</b></div>" +
-        '<div class="dash-row"><span>Registrations in the file</span><b>' + esc((m.gstins || []).join(", ") || "—") + "</b></div>" +
-        '<div class="dash-row"><span>Read on</span><b>' + esc(m.at ? fmtDate(String(m.at).slice(0, 10)) : "—") + "</b></div>" +
-        '<div class="dash-row"><span>Ledger masters</span><b>' + (Object.keys(b.pans || {}).length ? Object.keys(b.pans).length + " with PAN, " + Object.keys(b.gstins || {}).length + " with GSTIN" : "not brought in yet") + "</b></div>"
-      : '<p class="note">Nothing here yet.</p>') + "</section>";
 }
 function tallyDate(s){ return s && String(s).length === 8 ? String(s).slice(0, 4) + "-" + String(s).slice(4, 6) + "-" + String(s).slice(6, 8) : ""; }
 function viewBooksLedgers(b){
@@ -8554,6 +8496,19 @@ async function gst9Excel(which){
 // the GST tab: React (app/src/screens/Gst.jsx); GSTR-1 and 3B are app/src/screens/gst/Returns.jsx, the input register gst/InputRegister.jsx, 2B gst/TwoB.jsx, amendments, advances and reversal gst/Workings.jsx, GSTR-9 and 9C gst/Annual.jsx, ITC follow-up gst/ItcFollow.jsx, returns filed gst/ReturnsFiled.jsx, QRMP, CMP-08 and GSTR-4 gst/Periodic.jsx; the other parts are still the old pages below
 function viewBooksGst(b){ return '<div data-react="Gst"></div>'; }
 // the parts of the GST tab for the GSTIN and month chosen, following its filing type
+// the From Tally tab: React (app/src/screens/books/FromTally.jsx). What it asks:
+// the bridge's own view of this client's company (it asks Tally nothing), asked at most once a minute
+function setupKeepFor(co){
+  const ks = (S.setupKeep || {})[co.id];
+  if (Bridge.on() && (!ks || Date.now() - ks.at > 60000) && !S.setupKeepBusy){
+    S.setupKeepBusy = true;
+    Bridge.call("/keep?company=" + encodeURIComponent(BridgeSeed.company()) + Bridge.pinQ(), null, 20000).then(j => ({at: Date.now(), st: j}), e => ({at: Date.now(), error: (e && e.message) || String(e)}))
+      .then(x => { S.setupKeep = S.setupKeep || {}; S.setupKeep[co.id] = x; S.setupKeepBusy = false; render(); });
+  }
+  return ks;
+}
+// the time of the bridge's daily update from Tally (build 188: Tally is read once a day, or on Update now)
+function keepAtSet(v){ if (/^\d{2}:\d{2}$/.test(v)) LK.keepSet({dailyAt: v}, "Tally will be updated every day at " + v + "."); }
 function gstParts(b){
   const regs = GSTR.gstins(b) || [], noBooks = !(b.vouchers || []).length;
   const ftype = typeof GSTSet === "object" && S.gstYm ? GSTSet.typeOf(S.gstYm, S.gstReg || "") : "monthly";
@@ -12355,8 +12310,6 @@ function gst9cSet(key, v){
 // what the user corrects on the Advances and Reversal screens
 function gstFixChange(t){
   const d = t.dataset, b = S.books;
-  if (d.tallyfrom !== undefined || d.tallyto !== undefined){ const t0 = Audit.today(); S.tallyRange = Object.assign({from: Audit.iso(Audit.fyStart(t0)), to: Audit.iso(t0)}, S.tallyRange, d.tallyfrom !== undefined ? {from: t.value} : {to: t.value}); return true; }
-  if (d.tallytime !== undefined){ S.tallyCopy = Object.assign({}, S.tallyCopy, {time: t.value}); return true; }
   if (d.fskind !== undefined){ b.fs = Object.assign({}, FS.cfg(b), {kind: t.value}); S.fsRun = null; saveBooks(); render(); return true; }
   if (d.fsfy !== undefined){ S.fsFy = t.value; S.fsRun = null; render(); return true; }
   if (d.fsstock !== undefined){ const c = FS.cfg(b); c.stock = Object.assign({}, c.stock, {[d.fsstock]: t.value === "" ? "" : num(t.value)}); b.fs = c; saveBooks(); return true; }
@@ -12432,8 +12385,9 @@ function booksChange(t){
           catch (e){ part.bridge = "not taken: " + ((e && e.message) || e); }
         } else part.bridge = "not connected on this computer";
         if (TCloudUp.on()){
-          try { const r = await TCloudUp.days(await f.text(), {from, to}, step); part.cloud = r && r.days != null ? "in the cloud (" + r.days + " days)" : (r && r.skipped) || ""; }
-          catch (e){ part.cloud = "not sent: " + ((e && e.message) || e); toast("The part is in FinCom here, but the cloud did not take it: " + ((e && e.message) || e)); }
+          // quietly, in the background: nothing on the screen unless it fails
+          try { const r = await TCloudUp.days(await f.text(), {from, to}, null); part.cloud = r && r.days != null ? "in the cloud (" + r.days + " days)" : (r && r.skipped) || ""; }
+          catch (e){ part.cloud = "not sent: " + ((e && e.message) || e); toast("Saved here, but it could not be shared with the firm just now (" + ((e && e.message) || e) + "). Choose the file again later."); }
         } else part.cloud = "sign in to the firm account to share it";
         b.busy = ""; await saveBooks(); render();
       })();
@@ -12442,9 +12396,6 @@ function booksChange(t){
     }, e => { b.busy = ""; toast("Could not read that file: " + (e && e.message || e)); render(); });
     return true;
   }
-  if (t.dataset && t.dataset.dbfrom !== undefined){ S.dbFrom = t.value; render(); return true; }
-  if (t.dataset && t.dataset.dbto !== undefined){ S.dbTo = t.value; render(); return true; }
-  if (t.dataset && t.dataset.tbon !== undefined){ S.tbOn = t.value; render(); return true; }
   if (t.id === "tbIn"){
     const f = (t.files || [])[0]; t.value = "";
     if (!f) return true;
@@ -12611,10 +12562,12 @@ const Bridge = {
     if (!r.ok || !j || j.ok === false) throw {code: r.status === 401 ? "bridge_key" : "bridge", message: (j && (j.error || j.message)) || ("The bridge answered with error " + r.status + ".")};
     return j;
   },
-  async refresh(){
+  // fresh: a person's action (opening FinCom, posting, connecting) may ask Tally which companies are open. The minute
+  // checks do not: the bridge answers them without asking Tally (1.14.0)
+  async refresh(fresh = true){
     if (!this.on()){ this.st = {state: "off", sessions: [], open: [], at: Date.now(), error: ""}; return this.st; }
     try {
-      const j = await this.call("/status", null, 15000);
+      const j = await this.call("/status" + (fresh ? "?fresh=1" : ""), null, 15000);
       j.sessions = [].concat(j.sessions || []).map(se => Object.assign({}, se, {companies: [].concat(se.companies || [])}));
       const pin = num(this.cfg().port);
       const usable = (j.sessions || []).filter(s => !s.skipped && s.ok && (!pin || s.port === pin));
@@ -12626,7 +12579,7 @@ const Bridge = {
       const clash = !pin && Object.keys(names).filter(n => names[n] > 1 && !(open.filter(o => o.name === n && o.mine === true).length === 1));
       this.st = {state: "ok", sessions: j.sessions || [], open: open.filter(o => !(clash && clash.includes(o.name)) || o.mine === true), clash: clash || [], at: Date.now(), error: "",
         version: j.version, allowImport: j.allowImport !== false, mode: j.mode || "", user: j.user || "", mySession: j.mySession, jobs: [].concat(j.jobs || []),
-        tallyUp: usable.length > 0, pinMissing: !!pin && !(j.sessions || []).some(s => s.port === pin && s.ok && !s.skipped)};
+        stuck: j.tallyStuck || null, tallyUp: usable.length > 0, pinMissing: !!pin && !(j.sessions || []).some(s => s.port === pin && s.ok && !s.skipped)};
       if (!this.st.tallyUp || this.st.pinMissing){ if (!this.diag || Date.now() - this.diag.at > 30000) await this.diagnose(); }
       else this.diag = null;
       this.misses = 0;
@@ -12822,7 +12775,7 @@ async function bridgeTick(first){
   bridgeBusy = true;
   try {
     const before = Bridge.st.state;
-    await Bridge.refresh();
+    await Bridge.refresh(false);          // build 194: opening FinCom does not ask Tally either; posting and Connect do
     if (first && Bridge.up() && !Bridge.posting) bridgeLeftover();
     if (first && Bridge.up() && Bridge.st.version && bridgeVer(Bridge.st.version) < bridgeVer("1.12.6") && !lsGet("tdsdesk-test:bridgenudge1126")){
       lsSet("tdsdesk-test:bridgenudge1126", "1");
@@ -12876,6 +12829,8 @@ function bridgeChip(co){
   if (st.state !== "ok") return '<span class="tchip off">Tally Bridge\u2026</span>';
   const run = (st.jobs || []).find(j => ["queued", "waiting", "running"].includes(j.status));
   if (run) return '<span class="tchip ok" title="' + esc((run.company || "") + ": " + (run.message || "")) + '">\u25CF Posting to Tally: ' + num(run.done) + " of " + num(run.total) + "</span>";
+  // build 194: Tally stopped answering (a message box open in Tally, or a long report): said plainly, with since when
+  if (st.stuck && st.stuck.since) return '<span class="tchip bad" title="Tally has not answered since ' + esc(String(st.stuck.since).slice(11, 16)) + '. Look at the Tally computer: a message box (a pop-up) in Tally, or a report still working, stops Tally answering anyone. Close it, and FinCom carries on by itself.">\u26A0 Tally not responding since ' + esc(String(st.stuck.since).slice(11, 16)) + " \u2014 check for a pop-up in Tally</span>";
   if (st.shaky) return '<span class="tchip warn" title="' + esc(st.error || "") + '">Tally Bridge: checking again\u2026</span>';
   const why = Bridge.diag && (Bridge.diag.findings || []).find(f => f.level !== "ok");
   if (st.pinMissing) return '<button class="tchip warn" data-act="openSettings" title="' + esc(why ? why.text : "The Tally chosen in Settings is not running") + '">Your Tally is not connected \u2014 check</button>';
@@ -12970,7 +12925,8 @@ async function bankAutoSync(force){
   bankSyncing = true;
   try {
     const before = (b.ledgers.list || []).length;
-    const stale = !b.ledgers.live || !(b.ledgers.list || []).length;
+    // build 190: by itself only when there is no ledger list at all; a fresh read of Tally's ledgers when someone asks
+    const stale = !(b.ledgers.list || []).length;
     if (force || stale) await syncLedgersFromTally(true);
     const st = curStmt();
     if (st && force) await syncBankBookFromTally(true);   // only when asked: this reads the Day Book
@@ -12978,7 +12934,8 @@ async function bankAutoSync(force){
   } finally { bankSyncing = false; }
   // lines marked as posted that were deleted in Tally since: looked for quietly, at most every 3 minutes per statement
   const st = curStmt();
-  if (st && bridgeVer(Bridge.st.version) >= bridgeVer("1.12.3") && b.rows.some(r => ["sent", "intally"].includes(r.state))){
+  // build 190: only when someone asks (Refresh from Tally); not every 3 minutes by itself (it read the day book each time)
+  if (force && st && bridgeVer(Bridge.st.version) >= bridgeVer("1.12.3") && b.rows.some(r => ["sent", "intally"].includes(r.state))){
     const k = st.id, last = (b.goneAt || {})[k] || 0;
     if (Date.now() - last > 3 * 60000){ b.goneAt = Object.assign({}, b.goneAt, {[k]: Date.now()}); try { await checkMarkedInTally({quiet: true}); } catch (e){} }
   }
@@ -14859,13 +14816,15 @@ async function salesCheckTally(list){
   list.forEach(v => { if (nums.has(normInvNo(v.x.number))){ v.status = "intally"; v.postNote = "Already in Tally"; n++; } });
   return n;
 }
-async function salesAutoSync(checkOnly){
+// asked: someone pressed Refresh from Tally. By itself (opening the page) Tally is not read, except a first ledger list;
+// sales already in Tally are still found when posting (build 190)
+async function salesAutoSync(checkOnly, asked){
   const s = SL(), co = CO(s.cid);
   if (!bridgeLive(co)) return;
   try {
-    if (!checkOnly && (!B().ledgers.live || Date.now() - new Date(B().ledgers.importedAt || 0) > 10 * 60000)) await syncLedgersFromTally(true);
+    if (!checkOnly && (asked || !(B().ledgers.list || []).length)) await syncLedgersFromTally(true);
     s.list.forEach(v => mapInvoice(v));
-    await salesCheckTally(s.list.filter(v => ["review", "ready"].includes(v.status)));
+    if (asked) await salesCheckTally(s.list.filter(v => ["review", "ready"].includes(v.status)));
     saveSales(); render();
   } catch (e){ /* shown when posting */ }
 }
@@ -15070,7 +15029,7 @@ function salesClick(t){
     case "salesCsv": closeMenus(); exportSalesCsv(); return true;
     case "salesFile": closeMenus(); exportSalesXml(); return true;
     case "salesPost": postSalesToTally(); return true;
-    case "salesSync": closeMenus(); salesAutoSync(false).then(() => toast("Refreshed from Tally.")); return true;
+    case "salesSync": closeMenus(); salesAutoSync(false, true).then(() => toast("Refreshed from Tally.")); return true;
     case "salesUndo": salesUndo(); return true;
     case "salesUndoOk": s.undo = null; salesLightRefresh(); return true;
     case "salesSelNone": s.sel.clear(); salesLightRefresh(); return true;
@@ -16543,6 +16502,7 @@ function doAct(act, t){
     case "booksPick": { const i = document.getElementById("booksIn"); if (i){ i.value = ""; i.click(); } break; }
     case "mastersPick": { const i = document.getElementById("mastersIn"); if (i){ i.value = ""; i.click(); } break; }
     case "setupKeepOn": LK.keepOn(true).then(() => { (S.setupKeep || {})[S.coId] = null; render(); }); break;
+    case "keepNow": LK.keepSet({now: true}, "Updating from Tally now. The books here follow in a few minutes."); break;
     case "setupModeBridge": case "setupModeFiles":
       Bridge.call("/keepmode" + (Bridge.pinQ() ? "?" + Bridge.pinQ().slice(1) : ""), {company: BridgeSeed.company(), mode: act === "setupModeBridge" ? "bridge" : "files"}, 20000)
         .then(j => { (S.setupKeep = S.setupKeep || {})[S.coId] = {at: Date.now(), st: j}; toast(act === "setupModeBridge" ? "The bridge will copy the year from Tally in the evening, or when nobody is at the computer." : "The bridge waits for the day book files."); render(); }, e => toast("The bridge could not do it: " + ((e && e.message) || e) + (/Unknown|No such/i.test(String(e && e.message)) ? " (it needs Tally Bridge 1.13.9)" : "")));
@@ -16555,8 +16515,7 @@ function doAct(act, t){
       const from = Audit.ymd(r.from), to = Audit.ymd(r.to);
       if (!from || !to || from > to){ toast("Choose a period: from a date to a later one."); break; }
       if (!bridgeLive(CO())){ toast("Open this company in Tally with the bridge running."); break; }
-      TallyRead.read(from, to, "live").then(n2 => { toast(n2 + " vouchers and Tally's balances read."); render(); },
-        e => { b.busy = ""; const msg = String(e && e.message || e); toast(/Unknown address/.test(msg) ? "This needs Tally Bridge 1.10. Update the bridge on the Tally computer." : "Could not read Tally: " + msg); render(); });
+      LK.keepSet({now: true}, "Updating from Tally now. The books here follow in a few minutes.");
       break;
     }
     case "tallyCopyCheck": {
@@ -17006,7 +16965,6 @@ function setPath(o, path, v){ const k = path.split("."); if (k.length === 2) o[k
 document.addEventListener("change", ev => {
   if (reactOwned(ev.target)) return;
   if (ev.target && ev.target.id && ["booksIn", "mastersIn", "tbIn", "twoBIn", "filedIn"].includes(ev.target.id)){ booksChange(ev.target); return; }
-  if (ev.target && ev.target.dataset && (ev.target.dataset.dbfrom !== undefined || ev.target.dataset.dbto !== undefined || ev.target.dataset.tbon !== undefined)){ booksChange(ev.target); return; }
   if (ev.target && ev.target.dataset && S.books && gstFixChange(ev.target)) return;
   if (ev.target && ev.target.id === "marketIn"){ const f = (ev.target.files || [])[0]; ev.target.value = ""; if (f) importMarketFile(f); return; }
   if (ev.target && ev.target.id === "salaryIn"){
@@ -19704,10 +19662,25 @@ const LK = {
   live(){ const co = CO(); return !!(co && typeof bridgeLive === "function" && bridgeLive(co) && Bridge.openFor(co)); },
   light(){ return bridgeVer(Bridge.st.version) >= bridgeVer("1.12.10"); },
   tname(){ const co = CO(), o = Bridge.openFor(co); if (!o) throw new Error("Open " + (co.tallyName || co.name) + " in Tally first."); return o.name; },
+  // build 194: the ledger names come from the cloud copy of the books (Tally is not asked); read from Tally only when
+  // someone presses "refresh" and there is no cloud copy
   async loadNames(force){
     const cid = S.coId;
-    if (!this.live() || !this.light() || this._namesBusy) return;
+    if (this._namesBusy) return;
     if (!force && this.names && this.names.cid === cid && Date.now() - this.names.at < 30 * 60000) return;
+    const bk = typeof TCloud === "object" && TCloud.on() ? TCloud.book(cid) : null;
+    if (bk && bk.book){
+      this._namesBusy = true;
+      try {
+        const rows = await TCloud.restAll("tally_ledgers?select=name,parent&book_id=eq." + encodeURIComponent(bk.book) + "&order=name.asc");
+        const under = {}; rows.forEach(r => { under[r.name] = r.parent || ""; });
+        this.names = {cid, at: Date.now(), leds: Object.keys(under), under, groups: {}, src: "cloud"};
+      } catch (e){ if (force) toast("Could not bring the ledger names: " + ((e && e.message) || e)); }
+      this._namesBusy = false;
+      if (S.booksTab === "lookup") render();
+      return;
+    }
+    if (!force || !this.live() || !this.light()) return;
     this._namesBusy = true;
     try {
       const j = await Bridge.call("/ledgernames?company=" + encodeURIComponent(this.tname()) + Bridge.pinQ(), null, 90000);
@@ -19826,12 +19799,14 @@ const LK = {
     const x = this.st();
     if (x.busy) return;
     const tally = this.useTally(x, how), have = (S.books.vouchers || []).length > 0;
-    // a large company, or books not loaded here: the trial balance and ledgers from the cloud's ready totals
-    const cloud = !tally && ["tb", "ledger"].includes(x.kind) && TCloud.has(S.coId) && (!have || TCloud.big(S.coId));
+    // build 192: whenever the client's books are in the cloud, the answer is worked out there (under a second, on any
+    // computer); the books loaded in this browser are used only without the cloud (offline), and for open bills
+    if (!tally && TCloud.on() && !(TCloud.st[S.coId] || {}).books){ try { await TCloud.status(S.coId); } catch (e){} }
+    const cloud = !tally && how !== "books" && ["tb", "ledger", "group", "monthly", "find"].includes(x.kind) && TCloud.has(S.coId);
     const need = (c, m) => { if (!c){ toast(m); throw null; } };
     try {
       if (x.kind === "ledger") need(x.led, "Choose a ledger.");
-      if (["ledger", "bills"].includes(x.kind) && x.led) need(FC.ledgers().includes(x.led) || tally, "\u201c" + x.led + "\u201d is not a ledger " + (FC.tn() ? "in Tally" : "in these books") + ". Pick one from the list.");
+      if (["ledger", "bills"].includes(x.kind) && x.led) need(FC.ledgers().includes(x.led) || tally || cloud, "\u201c" + x.led + "\u201d is not a ledger " + (FC.tn() ? "in Tally" : "in these books") + ". Pick one from the list.");
       if (x.kind === "group") need(x.grp, "Choose a group.");
       if (x.kind === "monthly") need(x.led || x.grp, "Choose a ledger or a group.");
       if (["ledger", "group", "monthly", "find"].includes(x.kind)) need(x.from && x.to && x.from <= x.to, "The dates are the wrong way round.");
@@ -19839,9 +19814,18 @@ const LK = {
     } catch (e){ if (e) throw e; return; }
     x.open = {};
     if (cloud){
-      x.busy = "Asking the copy in FinCom\u2019s cloud\u2026"; render();
-      try { x.res = x.kind === "tb" ? await TCloud.tb(S.coId, x.asOn) : await TCloud.ledger(S.coId, x.led, x.from, x.to); }
-      catch (e){ x.busy = ""; toast("Could not ask the cloud copy: " + ((e && e.message) || e)); render(); return; }
+      x.busy = "Working it out\u2026"; render();
+      try {
+        x.res = x.kind === "tb" ? await TCloud.tb(S.coId, x.asOn) : x.kind === "ledger" ? await TCloud.ledger(S.coId, x.led, x.from, x.to)
+          : x.kind === "group" ? await TCloud.group(S.coId, x.grp, x.from, x.to) : x.kind === "monthly" ? await TCloud.monthly(S.coId, x.led, x.grp, x.from, x.to)
+          : await TCloud.find(S.coId, x.q, x.from, x.to, x.typ);
+      }
+      catch (e){
+        x.busy = "";
+        // no copy in the cloud for these dates (or no internet): the books here, when there are any
+        if (have){ x.res = null; return this.run("books"); }
+        toast("Could not ask the cloud: " + ((e && e.message) || e)); render(); return;
+      }
       x.busy = "";
     } else if (tally){
       const force = how === "fresh";
@@ -19931,6 +19915,15 @@ const LK = {
   async keepOn(on){
     try { const f = this.fr(); f.keep = await Bridge.call("/keep?company=" + encodeURIComponent(this.tname()) + Bridge.pinQ(), {on: !!on}, 30000); toast(on ? "The bridge will keep this company in step whenever it is open in Tally." : "Keeping in step switched off."); f.at = 0; setTimeout(() => this.autoFresh(true), 3000); render(); }
     catch (e){ toast(/Unknown address|No such/i.test(String(e && e.message)) ? "This needs Tally Bridge 1.13.0. Download the new setup and install it." : "The bridge could not do it: " + ((e && e.message) || e)); }
+  },
+  // the bridge's update from Tally: when it runs each day, or now (the bridge reads only changes, then stops)
+  async keepSet(o, say){
+    try {
+      const j = await Bridge.call("/keep?company=" + encodeURIComponent(BridgeSeed.company()) + Bridge.pinQ(), o, 30000);
+      (S.setupKeep = S.setupKeep || {})[S.coId] = {at: Date.now(), st: j}; toast(say);
+      if (o.now){ [60, 180, 420].forEach(s => setTimeout(() => { try { this.autoFresh(true, true); (S.setupKeep || {})[S.coId] = null; render(); } catch (e){} }, s * 1000)); }
+    } catch (e){ toast(/Unknown address|No such/i.test(String(e && e.message)) ? "This needs Tally Bridge 1.14. It updates by itself within a few minutes." : "The bridge could not do it: " + ((e && e.message) || e)); }
+    render();
   },
   async keepCheck(){
     const f = this.fr(), ym = Audit.today().slice(0, 6);
@@ -20099,7 +20092,7 @@ const LK = {
   view(b){
     const x = this.st(), live = this.live(), have = (b.vouchers || []).length > 0;
     // Tally's ledger names, once per client (light), so typing offers what is in Tally today
-    if (live && this.light() && !(this.names && this.names.cid === S.coId) && !this._namesBusy && this._namesTried !== S.coId){ this._namesTried = S.coId; setTimeout(() => this.loadNames(), 0); }
+    if (!(this.names && this.names.cid === S.coId) && !this._namesBusy && this._namesTried !== S.coId && typeof TCloud === "object" && TCloud.has(S.coId)){ this._namesTried = S.coId; setTimeout(() => this.loadNames(), 0); }
     if (live) setTimeout(() => this.autoFresh(), 0);
     const leds = FC.ledgers(), grps = FC.groups(), T = FC.tn();
     const dl = '<datalist id="lkLeds">' + leds.slice(0, 5000).map(l => '<option value="' + esc(l) + '">').join("") + '</datalist><datalist id="lkGrps">' + grps.map(g => '<option value="' + esc(g) + '">').join("") + "</datalist>";
@@ -20126,7 +20119,7 @@ const LK = {
     const srcRow = can ? '<div class="lk-src" role="radiogroup" aria-label="Where from"><span class="note">From</span><button role="radio" data-lksrc="tally" aria-checked="' + fromTally + '">Tally, live</button>' +
         (have ? '<button role="radio" data-lksrc="books" aria-checked="' + !fromTally + '">The books read into FinCom' + (this.booksAge() ? " on " + this.booksAge() : "") + "</button>" : "") + "</div>"
       : "";
-    const names = live ? '<p class="note lk-names">' + (T ? "Ledger names from Tally: " + T.leds.length + ' \u00b7 <button class="linkbtn" data-lk="names">refresh</button>' : this.light() ? (this._namesBusy ? "Reading the ledger names from Tally\u2026" : "") : "Install Tally Bridge 1.12.10 so ledger names come from Tally.") + "</p>" : "";
+    const names = T || live ? '<p class="note lk-names">' + (T ? "Ledger names: " + T.leds.length + (T.src === "cloud" ? " (the books in the cloud)" : " (from Tally)") + ' \u00b7 <button class="linkbtn" data-lk="names">refresh</button>' : this._namesBusy ? "Bringing the ledger names\u2026" : live ? '<button class="linkbtn" data-lk="names">Bring the ledger names from Tally</button>' : "") + "</p>" : "";
     h += this.freshBar(b) + '<div class="lk-form">' + form + "</div>" + presets + srcRow +
       '<div class="row" style="gap:8px;margin-top:10px;align-items:center"><button class="btn primary" data-lk="show"' + (x.busy ? " disabled" : "") + ">" + (x.busy ? "Reading Tally\u2026" : "Show") + "</button>" + names + "</div>" + dl + "</section>";
     const rec = this.recent();
@@ -20191,7 +20184,7 @@ const LK = {
         '<tr class="lk-tot">' + (r.led ? "" : "<td></td>") + '<td><b>Total</b></td><td></td><td></td><td class="n"><b>' + FC.amt(r.total) + "</b></td></tr></tbody></table></div>";
     }
     else {
-      h += '<p class="note"><b>' + r.rows.length + "</b> entries, together " + money(r.total) + ".</p>";
+      h += '<p class="note"><b>' + (r.n || r.rows.length) + "</b> entries, together " + money(r.total) + "." + (r.n > r.rows.length ? " The first " + r.rows.length + ' are here; <button class="linkbtn" data-lk="more">show ' + Math.min(TCloud.FIND_PAGE, r.n - r.rows.length) + " more</button>." : "") + "</p>";
       if (!r.rows.length) return h + '<div class="bk-none">Nothing matches. Try fewer words, or a wider period.</div></section>';
       h += '<div class="bk-tablewrap"><table class="bk-table lk-t"><thead><tr><th>Date</th><th>Type</th><th>No.</th><th>Party or ledger</th><th class="n">Amount</th></tr></thead><tbody>' +
         r.rows.slice(0, LIMIT).map(v => this.voucherRow(v, "<td>" + FC.when(v.date) + "</td><td>" + esc(v.type) + "</td><td>" + esc(v.no || "") + '</td><td><span class="lk-part">' + esc(v.party) + "</span>" + (v.narr ? '<span class="nr">' + esc(v.narr) + "</span>" : "") + '</td><td class="n">' + FC.amt(v.amt) + "</td>", x)).join("") +
@@ -20247,6 +20240,8 @@ if (typeof document !== "undefined"){
     else if (a === "keepcheck") LK.keepCheck();
     else if (a === "syncnow") LK.syncNow();
     else if (a === "clear"){ x.res = null; render(); }
+    else if (a === "more" && x.res && x.res.src === "cloud"){ const r = x.res; x.busy = "Bringing the next entries\u2026"; render();
+      TCloud.find(S.coId, r.q, r.from, r.to, r.typ, r).then(res => { x.busy = ""; x.res = Object.assign(res, {title: r.title}); render(); }, er => { x.busy = ""; toast("Could not ask the cloud: " + ((er && er.message) || er)); render(); }); }
     else if (a === "print") LK.printIt();
     else if (a === "excel" && x.res) FC.excel(x.res.title, [[x.res.kind === "tb" ? "Trial balance" : "Look up", LK.sheet(x.res)]]).catch(er => toast("Could not build the file: " + (er && er.message)));
   });
@@ -20493,7 +20488,7 @@ const LTR = {
   // ---------- balances on a date: from the books, or read from Tally
   balances(asOn){
     const x = this.st();
-    if (x.tally && x.tally.asOn === asOn) return {ok: true, src: "Tally, read " + fmtDate(x.tally.at.slice(0, 10)), bal: x.tally.bal};
+    if (x.tally && x.tally.asOn === asOn) return {ok: true, src: (x.tally.cloud ? "the books in the cloud, " : "Tally, read ") + fmtDate(x.tally.at.slice(0, 10)), bal: x.tally.bal};
     const B = LK.bal(Audit.fyStart(asOn), asOn);
     if (!B.ok) return {ok: false, why: B.why};
     const at = B.at(asOn), bal = {};
@@ -20502,8 +20497,10 @@ const LTR = {
   },
   async readTally(asOn){
     const x = this.st();
-    x.busy = "Reading every ledger’s balance from Tally…"; render();
-    try { await LK.loadNames(); const r = await LK.tbTally(asOn); const bal = {}; r.rows.forEach(z => { bal[z.l] = z.bal; }); x.tally = {asOn, at: new Date().toISOString(), bal}; }
+    // build 194: from the books in the cloud when there are any (worked out there in a moment); Tally only without them
+    const cloud = typeof TCloud === "object" && TCloud.on() && TCloud.has(S.coId);
+    x.busy = cloud ? "Working out every ledger\u2019s balance\u2026" : "Reading every ledger\u2019s balance from Tally\u2026"; render();
+    try { const r = cloud ? await TCloud.tb(S.coId, asOn) : (await LK.loadNames(), await LK.tbTally(asOn)); const bal = {}; r.rows.forEach(z => { bal[z.l] = z.bal; }); x.tally = {asOn, at: new Date().toISOString(), bal, cloud}; }
     catch (e){ toast("Could not read Tally: " + ((e && e.message) || e)); }
     x.busy = ""; render();
   },
@@ -20965,12 +20962,43 @@ const TCloud = {
       return {id: guid, date: d, type, no, part: party && party !== led ? party : "", narr: narr || "", dr: dd, cr: c, run};
     });
     const ends = j.to && this.d8(j.to) < to ? " This copy (" + (j.company || "") + ") has entries up to " + FC.when(this.d8(j.to)) + "; a later year kept as another company in Tally is asked separately." : "";
-    return {kind: "ledger", src: "cloud", led, from, to, open, close: run, dr, cr, rows, note: "From the copy in FinCom's cloud (" + (j.company || "") + "), " + this.age(this.book(cid)) + "." + ends};
+    return {kind: "ledger", src: "cloud", led, from, to, open, close: run, dr, cr, rows, note: "From the books (" + (j.company || "") + "), " + this.age(this.book(cid)) + "." + ends};
+  },
+  // build 192: a group, month by month, and any entry: worked out by the cloud, not from books loaded here
+  inG(l, parent, grp){ try { if (FC.inGroup(l, grp)) return true; } catch (e){} return String(parent || "").toLowerCase() === String(grp || "").toLowerCase(); },
+  async period(cid, from, to){ return await this.rpcAll("tally_period", {p_client: cid, p_from: this.iso(from), p_to: this.iso(to)}) || []; },
+  async group(cid, grp, from, to){
+    const all = await this.period(cid, from, to), bk = this.book(cid) || {};
+    const rows = all.filter(r => this.inG(r.ledger, r.parent, grp)).map(r => { const op = -r2(num(r.open)), dr = r2(num(r.dr)), cr = r2(num(r.cr)); return {l: r.ledger, sub: r.parent || "", open: op, dr, cr, close: r2(op + dr - cr)}; })
+      .filter(r => r.dr || r.cr || (r.open && Math.abs(r.open) >= 0.5)).sort((a, c) => Math.abs(c.close) - Math.abs(a.close) || a.l.localeCompare(c.l));
+    const sum = k => r2(rows.reduce((t, r) => t + (r[k] || 0), 0));
+    return {kind: "group", src: "cloud", grp, from, to, rows, open: sum("open"), dr: sum("dr"), cr: sum("cr"), close: sum("close"), note: "From the books (" + (bk.company || "") + "), " + this.age(bk) + "."};
+  },
+  async monthly(cid, led, grp, from, to){
+    const [per, mon] = await Promise.all([this.period(cid, from, to), this.rpcAll("tally_monthly", {p_client: cid, p_from: this.iso(from), p_to: this.iso(to)})]);
+    const set = new Set(per.filter(r => led ? r.ledger === led : this.inG(r.ledger, r.parent, grp)).map(r => r.ledger));
+    const months = MIS.monthsOf(from, to), m = {};
+    months.forEach(k => { m[k] = {dr: 0, cr: 0}; });
+    (mon || []).forEach(r => { const x = m[r.ym]; if (x && set.has(r.ledger)){ x.dr = r2(x.dr + num(r.dr)); x.cr = r2(x.cr + num(r.cr)); } });
+    let run = -r2(per.filter(r => set.has(r.ledger)).reduce((t, r) => t + num(r.open), 0));
+    const open = run, bk = this.book(cid) || {};
+    const rows = months.map(k => { const x = m[k]; run = r2(run + x.dr - x.cr); return {ym: k, dr: x.dr, cr: x.cr, net: r2(x.dr - x.cr), close: run}; });
+    return {kind: "monthly", src: "cloud", led, grp, from, to, open, rows, dr: r2(rows.reduce((t, r) => t + r.dr, 0)), cr: r2(rows.reduce((t, r) => t + r.cr, 0)), note: "From the books (" + (bk.company || "") + "), " + this.age(bk) + "."};
+  },
+  FIND_PAGE: 500,
+  async find(cid, q, from, to, typ, had){
+    const j = await this.rpc("tally_find", {p_client: cid, p_q: q || "", p_from: this.iso(from), p_to: this.iso(to), p_type: typ || null, p_limit: this.FIND_PAGE, p_offset: had ? had.rows.length : 0});
+    if (!j || j.none) throw new Error("The cloud has no copy of these books yet.");
+    const rows = [].concat(j.rows || []).map(([d, type, no, party, narr, amt, guid, ent]) => {
+      const e = [].concat(ent || []).map(([l, a]) => ({l, a: num(a)}));
+      return {id: guid, date: d, type, no, party: party || (e.find(x => x.a < 0) || {}).l || "", narr: narr || "", amt: r2(num(amt)), ent: e};
+    });
+    return {kind: "find", src: "cloud", q, from, to, typ, rows: (had ? had.rows : []).concat(rows), n: num(j.n), total: r2(num(j.total))};
   },
   age(bk){
     if (!bk) return "";
     const st = bk.state || {}, at = String(st.seen || bk.stateAt || bk.daysAt || "");
-    return at ? "in step with Tally as of " + at.replace("T", " ").slice(0, 16) + (st.computer ? " (sent by " + String(st.computer).slice(0, 60) + ")" : "") : "not sent yet";
+    return at ? "in step with Tally as of " + at.replace("T", " ").slice(0, 16) : "not updated yet";
   },
   // ---------- one day's day book, from this browser's store or the cloud
   async day(bk, d, at){
@@ -21118,11 +21146,10 @@ const TCloud = {
   bar(cid){
     const bk = this.book(cid); if (!bk) return "";
     const st = bk.state || {}, sk = [].concat(st.skipped || []).filter(Boolean);
-    let t = "<b>From FinCom’s cloud</b>: " + (st.phase === "first" ? "the first copy is still being made (up to " + esc(FC.when(String(st.doneTo || ""))) + ")" : esc(this.age(bk))) + ".";
+    let t = "<b>The books</b>: " + (st.phase === "first" ? "the first copy is still being made (up to " + esc(FC.when(String(st.doneTo || ""))) + ")" : esc(this.age(bk))) + ".";
     if (sk.length) t += ' <span class="bad"><b>' + sk.length + (sk.length === 1 ? " day" : " days") + " not read yet</b> from Tally.</span>";
     if (st.trouble && st.trouble.at) t += ' <span class="note">Tally did not answer at ' + esc(String(st.trouble.at).slice(11, 16)) + "; the bridge carries on by itself.</span>";
     const q = Math.max(0, Math.floor(Number(st.queue) || 0));
-    if (q) t += ' <span class="note">' + q + " day" + (q === 1 ? "" : "s") + " waiting to be sent.</span>";
     return t;
   }
 };
@@ -21199,6 +21226,49 @@ const TCloudUp = {
   }
 };
 
+
+// The light on the clients list (build 189): for each client with Tally, whether its Tally computer is on, Tally open and
+// the books up to date, from the bridge's heartbeat (every 5 minutes; the bridge asks Tally nothing for it)
+const TLight = {
+  st: {at: 0, busy: false, by: {}},
+  refresh(){
+    if (!TCloud.on() || this.st.busy || Date.now() - this.st.at < 120000) return;
+    this.st.busy = true;
+    Promise.all([TCloud.restAll("tally_companies?select=company,client_id,device_id&client_id=not.is.null&order=company.asc"), Cloud.api("tally_devices?select=id,name,last_seen,info,revoked")])
+      .then(([cos, devs]) => { this.st.by = this.work(cos || [], devs || [], Date.now()); }, () => {})
+      .then(() => { this.st.at = Date.now(); this.st.busy = false; if (S.view === "home") render(); });
+  },
+  // client id -> {level: ok | warn | bad, short, say}
+  work(cos, devs, now){
+    const by = {}, dev = {};
+    devs.filter(d => !d.revoked).forEach(d => { dev[d.id] = d; });
+    const when = t => new Date(t).toLocaleString("en-IN", {day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit"});
+    const rank = {bad: 3, warn: 2, ok: 1};
+    cos.forEach(c => {
+      const d = dev[c.device_id]; if (!d) return;
+      const beat = (d.info || {}).beat || null, seen = Date.parse((beat && beat.at) || d.last_seen || 0) || 0;
+      let x;
+      if (!beat || now - seen > 15 * 60000) x = {level: "bad", short: "computer off", say: "No word from " + d.name + (seen ? " since " + when(seen) : "") + ": the computer, the FinCom Connector or the bridge is off."};
+      else {
+        const co = (beat.companies || []).find(k => k.name === c.company), at = co && Date.parse(co.at);
+        if (!beat.tally) x = {level: "warn", short: "Tally closed", say: "Tally is not open on " + d.name + "."};
+        else if (!co) x = {level: "warn", short: "not updated yet", say: c.company + " has no copy on " + d.name + " yet: it comes with the next update (" + (beat.dailyAt || "20:00") + ")."};
+        else if (co.waiting) x = {level: "warn", short: co.waiting + " day" + (co.waiting === 1 ? "" : "s") + " to send", say: co.waiting + " day(s) of " + c.company + " wait on " + d.name + " to go to FinCom (the internet or FinCom's cloud was not reachable)."};
+        else if (!at || now - at > 36 * 3600000) x = {level: "warn", short: at ? "updated " + when(at) : "not updated yet", say: c.company + " was last updated from Tally " + (at ? "on " + when(at) : "never") + ". Books \u2192 From Tally \u2192 Update now."};
+        else x = {level: "ok", short: "updated " + when(at), say: c.company + " is up to date as of " + when(at) + " (" + d.name + ")."};
+        if (beat.updating && x.level !== "bad") x.short = "updating now";
+      }
+      const had = by[c.client_id];
+      if (!had || rank[x.level] > rank[had.level]) by[c.client_id] = x;
+    });
+    return by;
+  },
+  cell(cid){
+    this.refresh();
+    const x = this.st.by[cid];
+    return x ? '<span class="tag ' + x.level + '" title="' + esc(x.say) + '">' + (x.level === "ok" ? "\u25CF " : x.level === "warn" ? "\u25D0 " : "\u25CB ") + esc(x.short) + "</span>" : '<span class="note">\u2014</span>';
+  }
+};
 /* ================================================================== */
 /* AI help (Claude) in TDS and GST: it suggests, FinCom's rules and   */
 /* people decide. Off unless the firm switches it on (Settings, AI    */
