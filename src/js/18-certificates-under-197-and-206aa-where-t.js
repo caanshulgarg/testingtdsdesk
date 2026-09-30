@@ -1912,49 +1912,8 @@ function viewBooks2B(b){
 
 
 /* ---------- The client's dashboard ---------- */
-function viewClientDash(){
-  const co = CO(), d = D(), st = co.stats || {}, v = Object.values(d.entries);
-  const drafts = v.filter(e => e.status === "draft"), approved = v.filter(e => e.status === "approved" && !e.exportedAt), posted = v.filter(e => e.exportedAt);
-  const bank = S.bank && S.bank.cid === co.id ? S.bank : null;
-  const bc = bank ? tabCounts(bank.rows) : null;
-  const stmt = bank ? curStmt() : null;
-  const sales = S.sales && S.sales.cid === co.id ? S.sales.list : null;
-  const money = x => INR.format(r2(x || 0));
-  const tile = (label, n, sub, go, warn) => '<button class="dtile' + (warn && n ? " warn" : "") + '" data-goclient="' + go + '"><span>' + label + "</span><b>" + n + "</b><small>" + sub + "</small></button>";
-  let h = '<section class="dash">' + (typeof ONB === "object" ? ONB.card(co) : "") +
-    '<div class="dash-ask"><input type="search" id="dashAsk" data-fk="dashAsk" placeholder="Ask the books: a ledger for any dates, open bills, trial balance\u2026 (press /)" aria-label="Ask the books"><button class="btn primary" data-dashask>Look up</button>' +
-    '<button class="btn" data-goclient="books:reports">Reports</button><button class="btn" data-goclient="books:letters">Letters</button></div><div class="dash-tiles">' +
-    tile("To read", docqCount(co.id), "in the inbox", "inbox") +
-    tile("Bills to review", drafts.length, drafts.length ? money(drafts.reduce((a, e) => a + num(e.x.total), 0)) : "nothing waiting", "bills") +
-    tile("Ready to post", approved.length, approved.length ? money(approved.reduce((a, e) => a + num(e.x.total), 0)) : "nothing approved", "post") +
-    tile("Bank lines to review", bc ? bc.review : "\u2026", bc ? bc.ready + " ready to post" : "opening the bank", "bank") + "</div>";
-  if (CloudDocs.on()){
-    h += '<p class="note" style="margin:-6px 0 14px">Documents are kept in the firm account, so anyone in the firm can open a bill from Transactions on any computer.' +
-      (CloudDocs.queue.length ? " <b>" + CloudDocs.queue.length + " waiting to go up.</b>" : "") + "</p>";
-  }
-  h += '<div class="dash-cols">';
-  // TDS this year
-  const fy = fyOf(null), tds = v.filter(e => e.status !== "rejected" && e.snapshot).reduce((a, e) => a + num(e.snapshot.tds), 0);
-  h += '<section class="dash-card"><h3>TDS this year</h3><div class="dash-big">' + money(tds) + '</div><p class="note">On bills approved here for ' + esc(fy) + ". Deductees over their limit show in red on the bills list.</p>" +
-    '<button class="btn small" data-goclient="post">Open Post to Tally</button></section>';
-  // the bank statement
-  h += '<section class="dash-card"><h3>Bank</h3>' + (stmt
-    ? '<p><b>' + esc(stmt.bank || "") + "</b> \u00b7 " + fmtDate(stmt.from) + " to " + fmtDate(stmt.to) + '</p><div class="dash-row"><span>Opening</span><b>' + money(stmt.opening) + "</b></div>" +
-      '<div class="dash-row"><span>Closing</span><b>' + money(stmt.closing) + "</b></div>" +
-      '<p class="note">' + (bank.rows.filter(r => r.balOk === false).length ? bank.rows.filter(r => r.balOk === false).length + " lines do not fit the running balance." : "Every line fits the running balance.") + "</p>"
-    : '<p class="note">No statement uploaded yet.</p>') + '<button class="btn small" data-goclient="bank">Open bank</button></section>';
-  // sales
-  h += '<section class="dash-card"><h3>Sales</h3>' + (sales
-    ? '<div class="dash-row"><span>Invoices</span><b>' + sales.length + "</b></div><div class=\"dash-row\"><span>Posted</span><b>" + sales.filter(x => x.status === "posted").length + "</b></div>"
-    : '<p class="note">Open Sales to see this client\u2019s invoices.</p>') + '<button class="btn small" data-goclient="sales">Open sales</button></section>';
-  // what was done lately
-  const recent = v.filter(e => e.exportedAt).sort((a, b) => String(b.exportedAt).localeCompare(String(a.exportedAt))).slice(0, 5);
-  h += '<section class="dash-card"><h3>Posted lately</h3>' + (recent.length
-    ? '<ul class="dash-list">' + recent.map(e => "<li><b>" + esc(e.x.vendorName || e.fileName || "") + "</b> \u00b7 " + money(e.x.total) + '<span class="note">' + fmtDate(String(e.exportedAt).slice(0, 10)) + "</span></li>").join("") + "</ul>"
-    : '<p class="note">Nothing posted yet.</p>') + "</section>";
-  h += "</div></section>";
-  return h;
-}
+// the client's dashboard: React (app/src/screens/Dash.jsx)
+function viewClientDash(){ return '<div data-react="Dash"></div>'; }
 /* ---------- Today: what needs doing, across every client ---------- */
 /* ---------- Inbox: every waiting document, and uploads that matched no client ---------- */
 // Today, Inbox and Clients are drawn by React (app/src/screens/Today.jsx, InboxAll.jsx, Clients.jsx)

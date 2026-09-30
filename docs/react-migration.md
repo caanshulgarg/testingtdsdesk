@@ -91,8 +91,8 @@ Status: **done** (in React, test passing) · **next** · blank = not started. Ab
 | **Bank** | the screen `viewBank` (22) · `bankTable`, `bankRowHtml`, `viewBankGroups`, `bankBar` (23) | **done** |
 | | still old, shown inside it: `viewSuggestions`, `viewRulesPanel` (22) · `bankSettingsHtml`, `colPopHtml`, `colChipBar` (23) · recon, balance, duplicates, focus (24) · `fixBanner` (21) · `viewBankSetup` (02) | next |
 | **Sales** | `viewSales`, `viewSalesCreate`, `salesRowHtml`, `salesDetailHtml`, `salesSettingsHtml`, `salesBar` (26); the printed invoice `invoiceHtml` stays a page of its own | **done** |
-| **Transactions** | `viewTransactions` (03) | |
-| **Dashboard** | `viewClientDash` (18) | |
+| **Transactions** | `viewTransactions` (03) | **done** |
+| **Dashboard** | `viewClientDash` (18); the first-steps card `ONB.card` (48) still old | **done** |
 | **TDS** | `viewBooksTds`, `viewTdsYears`, `viewTdsYearPage`, `viewTdsReturn26`, `viewTdsReturn24`, `viewTdsCerts` (18) | |
 | **GST** | `viewBooksGst`, `viewBooks2B`, `viewGstr1`, `viewGstr3b`, `viewGstChecks`, `viewGstAmend`, `viewGstAdv`, `viewGstRev`, `viewInputRegister`, `viewGst9`, `viewGst9c` (18) · filing (35) · settings and registrations (36) · QRMP, CMP-08, GSTR-4 (37) · returns filed (38) · ITC follow-up (32) · customer IMS (33) · vendor recon (42) | |
 | | 2B from the portal `viewGstApiCard` (39) | **done** |

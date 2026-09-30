@@ -72,42 +72,8 @@ function txnFiltered(rows){
   const st = S.txnStatus || "";
   return rows.filter(r => txnColPass(r) && (!q || [r.no, r.party, r.file, r.vch, String(r.total)].join(" ").toLowerCase().includes(q)) && (!st || r.cls === st));
 }
-function viewTransactions(){
-  const co = CO();
-  const tab = txnTab();
-  const rowsAll = tab === "bills" ? txnRowsBills() : tab === "sales" ? txnRowsSales() : txnRowsBank();
-  if (rowsAll === null){
-    if (tab === "sales" && (!S.sales || S.sales.cid !== co.id)) loadSales(co.id).then(() => render());
-    if (tab === "bank" && (!S.bank || S.bank.cid !== co.id)) loadBank(co.id).then(() => render());
-    return '<p class="note">Opening\u2026</p>';
-  }
-  if (!S.fileIndex || S.fileIndexCid !== co.id){ S.fileIndexCid = co.id; FileStore.index(co.id).then(() => render()); }
-  const rows = txnFiltered(rowsAll);
-  const money = v => v ? INR.format(r2(v)) : "\u2014";
-  let h = '<nav class="sbar" aria-label="Kind">' + [["bills", "Purchase", txnRowsBills().length], ["sales", "Sales", S.sales && S.sales.cid === co.id ? S.sales.list.length : null], ["bank", "Bank", S.bank && S.bank.cid === co.id ? S.bank.rows.length : null]]
-    .map(([id, label, n]) => '<button data-txntab="' + id + '" aria-selected="' + (tab === id) + '">' + label + (n == null ? "" : ' <span class="sbar-n">' + n + "</span>") + "</button>").join("") + "</nav>";
-  h += '<div class="revfilter"><input type="search" id="txnq" data-fk="txnq" data-keeptyped value="' + esc(S.txnQ || "") + '" placeholder="Find by invoice no., party, file or amount">' +
-    '<select data-txnstatus aria-label="Status"><option value="">Any status</option>' +
-    [["ok", "In Tally"], ["warn", "Ready or held"], ["no", "Not posted"], ["bad", "Refused by Tally"]].map(([v, l]) => '<option value="' + v + '"' + (S.txnStatus === v ? " selected" : "") + ">" + l + "</option>").join("") + "</select>" +
-    '<span class="note">' + rows.length + " of " + rowsAll.length + "</span>" +
-    '<button class="btn small" data-act="txnCsv">Download as CSV</button></div>';
-  h += colChipBar("txn", rows.length, rowsAll.length + (tab === "bank" ? " lines" : tab === "sales" ? " invoices" : " bills"));
-  h += '<div class="bk-tablewrap"><table class="bk-table txntbl"><thead><tr><th class="n">S. no.</th>' +
-    colHead("txn", "date", "Date", "dt") + colHead("txn", "vch", "Voucher") + colHead("txn", "no", tab === "bank" ? "Reference" : "Invoice no.") + colHead("txn", "party", tab === "sales" ? "Customer" : "Party") +
-    (tab === "bank" ? '<th class="n">Withdrawal</th><th class="n">Deposit</th>' : '<th class="n">Taxable</th><th class="n">GST</th>') +
-    colHead("txn", "val", tab === "bank" ? "Amount" : "Invoice value", "n") + colHead("txn", "status", "In Tally") + colHead("txn", "doc", "Document") + '<th class="ac"></th></tr></thead><tbody>';
-  h += rows.map((r, i) => "<tr><td class=\"n\">" + (i + 1) + '</td><td>' + (r.date ? fmtDate(r.date) : "\u2014") + (r.up ? '<div class="nr">up ' + fmtDate(r.up) + "</div>" : "") + "</td>" +
-    "<td>" + esc(r.vch) + "</td><td>" + esc(r.no || "\u2014") + "</td><td>" + esc(r.party) + "</td>" +
-    (tab === "bank" ? '<td class="n">' + money(r.dr) + '</td><td class="n">' + money(r.cr) + "</td>" : '<td class="n">' + money(r.taxable) + '</td><td class="n">' + money(r.gst) + "</td>") +
-    '<td class="n">' + money(r.total) + '</td><td><span class="tag ' + r.cls + '">' + esc(r.label) + "</span></td>" +
-    "<td>" + (r.file ? (r.hasFile
-      ? '<button class="linkbtn" data-txnopen="' + (r.kind === "bank" ? "st:" + r.stId : r.kind === "sale" ? "sv:" + r.id : r.id) + '" data-txnpath="' + esc(r.docPath || "") + '" data-txnname="' + esc(r.file) + '" title="Open ' + esc(r.file) + '">\ud83d\udcce ' + esc(r.file.slice(0, 18)) + "</button>" +
-        '<div class="nr">' + (r.docPath ? '<span class="tag ok" title="Anyone in the firm can open it, from any computer">in the firm account</span>' : '<span class="tag" title="It is on this computer only">this computer only</span>') + "</div>"
-      : '<span class="note" title="The file was uploaded before documents were kept, or on another computer">' + esc(r.file.slice(0, 18)) + "</span>") : "\u2014") + "</td>" +
-    '<td class="ac"><button class="btn small" data-txngo="' + r.id + '" data-txnkind="' + r.kind + '">Open</button></td></tr>').join("");
-  h += "</tbody></table>" + (rows.length ? "" : ((S.txnQ || S.txnStatus || txnColOn()) ? noMatchNote("txn") : '<div class="bk-none">Nothing here yet.</div>')) + "</div>";
-  return h;
-}
+// the register: React (app/src/screens/Txn.jsx)
+function viewTransactions(){ return '<div data-react="Txn"></div>'; }
 function txnCsv(){
   const tab = txnTab(), co = CO();
   const rows = txnFiltered(tab === "bills" ? txnRowsBills() : tab === "sales" ? txnRowsSales() : txnRowsBank());

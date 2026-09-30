@@ -173,7 +173,7 @@ const RPT = {
     if (to.ledgers){ FC.go("ledgers", {lmView: to.ledgers}); return; }
     if (to.fs){ FC.go("fs", R ? {fsFy: R.fy} : {}); return; }
     if (to.letters){ FC.go("letters", {ltrMode: to.letters}); return; }
-    if (to.go){ S.tab = "books"; const el = document.createElement("button"); el.dataset.goclient = to.go; document.body.appendChild(el); el.click(); el.remove(); return; }
+    if (to.go){ S.tab = "books"; goClient(to.go); return; }
     if (to.lk){
       const x = LK.st(), spec = Object.assign({}, to.lk), p = R ? {from: R.from, to: R.to} : FC.period("ytd");
       if (spec.led === "@cash") spec.led = FC.ledgers().find(l => Audit.isCash(l)) || "";

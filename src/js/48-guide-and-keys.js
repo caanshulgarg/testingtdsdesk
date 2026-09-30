@@ -47,29 +47,16 @@ if (typeof document !== "undefined"){
     if (e.key === "?"){ e.preventDefault(); showKeys(); return; }
     if (e.key === "/" && S.view === "company" && S.coId){
       e.preventDefault();
-      const el = document.createElement("button"); el.dataset.goclient = "books:lookup"; el.style.display = "none"; document.body.appendChild(el); el.click(); el.remove();
+      goClient("books:lookup");
       setTimeout(() => { const i = document.getElementById("lkAsk"); if (i){ i.focus(); i.select(); } }, 80);
     }
   });
 }
-// the dashboard's question box: opens Look up with the question asked
-if (typeof document !== "undefined"){
-  const dashAsk = () => {
-    const i = document.getElementById("dashAsk"), q = i ? i.value.trim() : "";
-    const el = document.createElement("button"); el.dataset.goclient = "books:lookup"; el.style.display = "none"; document.body.appendChild(el); el.click(); el.remove();
-    if (!q) return;
-    const go = (n) => { if (S.books && S.books.cid === S.coId && !S.books.loading){ LK.st().ask = q; render(); const b = document.querySelector('[data-lk="ask"]'); if (b) b.click(); } else if (n < 40) setTimeout(() => go(n + 1), 100); };
-    setTimeout(() => go(0), 50);
-  };
-  document.addEventListener("click", e => { if (e.target.closest && e.target.closest("[data-dashask]")) dashAsk(); });
-  document.addEventListener("keydown", e => { if (e.key === "Enter" && e.target && e.target.id === "dashAsk"){ e.preventDefault(); dashAsk(); } });
+// the dashboard's question box (app/src/screens/Dash.jsx): opens Look up with the question asked
+function dashAsk(q){
+  goClient("books:lookup");
+  q = String(q || "").trim();
+  if (!q) return;
+  const go = (n) => { if (S.books && S.books.cid === S.coId && !S.books.loading){ LK.st().ask = q; render(); const b = document.querySelector('[data-lk="ask"]'); if (b) b.click(); } else if (n < 40) setTimeout(() => go(n + 1), 100); };
+  setTimeout(() => go(0), 50);
 }
-// after the nightly copy is switched on anywhere, Look up shows it
-if (typeof document !== "undefined") document.addEventListener("click", e => {
-  const t = e.target.closest && e.target.closest('[data-act="tallyScheduleOn"]');
-  if (t && S.lkFr) setTimeout(() => { S.lkFr.at = 0; LK.autoFresh(); }, 4000);
-});
-// while Look up, Reports or Letters is on screen: pick up what the bridge has brought in, once a minute
-if (typeof window !== "undefined") setInterval(() => {
-  try { if (document.visibilityState === "visible" && S.view === "company" && S.tab === "books" && ["lookup", "reports", "letters"].includes(S.booksTab) && typeof LK === "object") LK.autoFresh(); } catch (e){}
-}, 60000);

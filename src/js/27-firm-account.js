@@ -817,6 +817,20 @@ function goDocType(type, step){
   if (type === "bank" && (!S.bank || S.bank.cid !== S.coId)) loadBank(S.coId).then(() => { if (S.pendingBankFilter && S.bank){ S.bank.filter = S.pendingBankFilter; S.pendingBankFilter = null; } render(); });
   goStep(step === "post" && type === "sales" ? "review" : step, type);
 }
+// Transactions (app/src/screens/Txn.jsx): a kind of register, an entry opened where it is worked on, its document
+function txnTabGo(k){ S.txnTab = k; render(); }
+function txnGo(kind, id){
+  if (kind === "bill"){ const e = D().entries[id]; if (e){ S.tab = "invoices"; S.filter = e.status === "duplicate" ? "duplicate" : e.status; S.reviewTable = e.status === "draft"; S.selected = id; S.drawerOpen = e.status === "draft"; render(); window.scrollTo(0, 0); } return; }
+  if (kind === "sale"){ S.tab = "sales"; if (SL()) SL().openId = id; render(); window.scrollTo(0, 0); return; }
+  S.tab = "bank"; if (S.bank){ S.bank.filter = "all"; S.bank.sticky.add(id); } render(); window.scrollTo(0, 0);
+}
+function txnOpenDoc(key, path, name){
+  toast("Opening the document…");
+  FileStore.get(S.coId, key, path || "", name || "").then(f => {
+    if (f) window.open(URL.createObjectURL(f), "_blank");
+    else toast("That document could not be found on this computer or in the firm account.");
+  });
+}
 // the review table (app/src/screens/Review.jsx)
 function revPick(id, on){ S.revSel = S.revSel || new Set(); if (on) S.revSel.add(id); else S.revSel.delete(id); render(); }
 function revPickAll(on){ S.revSel = new Set(on ? revFiltered().map(r => r.e.id) : []); render(); }   // only the rows the filter shows
@@ -1026,22 +1040,6 @@ document.addEventListener("click", ev => {
   if (t.dataset.chdel){ S.books.challans = (S.books.challans || []).filter(c => c.id !== t.dataset.chdel);
     Object.keys(S.books.alloc || {}).forEach(k => { if (S.books.alloc[k] === t.dataset.chdel) delete S.books.alloc[k]; });
     saveBooks(); render(); return; }
-  if (t.dataset.txntab){ S.txnTab = t.dataset.txntab; render(); return; }
-  if (t.dataset.txngo){
-    const id = t.dataset.txngo, kind = t.dataset.txnkind;
-    if (kind === "bill"){ const e = D().entries[id]; if (e){ S.tab = "invoices"; S.filter = e.status === "duplicate" ? "duplicate" : e.status; S.reviewTable = e.status === "draft"; S.selected = id; S.drawerOpen = e.status === "draft"; render(); window.scrollTo(0, 0); } return; }
-    if (kind === "sale"){ S.tab = "sales"; if (SL()) SL().openId = id; render(); window.scrollTo(0, 0); return; }
-    S.tab = "bank"; if (S.bank){ S.bank.filter = "all"; S.bank.sticky.add(id); } render(); window.scrollTo(0, 0); return;
-  }
-  if (t.dataset.txnopen){
-    const id = t.dataset.txnopen;
-    toast("Opening the document\u2026");
-    FileStore.get(S.coId, id, t.dataset.txnpath || "", t.dataset.txnname || "").then(f => {
-      if (f) window.open(URL.createObjectURL(f), "_blank");
-      else toast("That document could not be found on this computer or in the firm account.");
-    });
-    return;
-  }
   if (t.dataset.goclient !== undefined && t.dataset.goclient !== null && t.dataset.goclient !== ""){ goClient(t.dataset.goclient); return; }
   if (t.dataset.nav){ navHome(t.dataset.nav); return; }
   if (t.dataset.step){ goStep(t.dataset.step); return; }
@@ -1667,7 +1665,6 @@ document.addEventListener("input", ev => {
     if (t.type === "search" || t.type === "text") later("tdsf", render, 250); else render();
     return;
   }
-  if (t && t.id === "txnq"){ S.txnQ = t.value; later("txnq", render, 250); return; }
   if (t && t.id === "fsq"){ S.fsQ = t.value; later("fsq", render, 250); return; }
   if (t && t.id === "misq"){ S.misQ = t.value; later("misq", render, 250); return; }
   if (t && t.id === "ledq"){ S.ledQ = t.value; later("ledq", render, 250); return; }
@@ -1705,7 +1702,6 @@ document.addEventListener("input", ev => {
   }
   if (t && t.dataset && t.dataset.ledsec){ const m = S.books.map[t.dataset.ledsec]; if (m){ m.section = t.value.toUpperCase(); m.byHand = true; later("ledsec", () => { saveBooks(); render(); }, 500); } return; }
   if (t && t.dataset && t.dataset.alloc){ S.books.alloc = S.books.alloc || {}; if (t.value) S.books.alloc[t.dataset.alloc] = t.value; else delete S.books.alloc[t.dataset.alloc]; saveBooks(); render(); return; }
-  if (t && t.dataset && t.dataset.txnstatus !== undefined){ S.txnStatus = t.value; render(); return; }
   if (t && t.dataset && ["email", "password", "firm", "name"].includes(t.dataset.cloud)){ S.cloudForm = Object.assign({}, S.cloudForm, {[t.dataset.cloud]: t.value}); }
   if (S.view === "company" && S.tab === "bank" && bankInput(t)) return;
   if (S.view === "company" && S.tab === "sales" && salesInput(t)) return;
