@@ -2,6 +2,7 @@
 ledgers (a meaning set, confirmed and undone, the find box, confirm the shown, the posting ledgers), and more as they
 move. Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_react_booktabs.py"""
 import json, os, threading, functools, http.server
+FCY = lambda y: y + '-' + str(int(y) + 1)[2:]
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
 H = functools.partial(http.server.SimpleHTTPRequestHandler, directory=os.environ.get("TDSDESK_SITE", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "app", "dist-test"))); H.log_message = lambda *a: None
@@ -106,6 +107,18 @@ with sync_playwright() as p:
     ok("2,50,000.00" in pg.inner_text("#app"), "and the year's total follows")
     pg.select_option('select[aria-label="MIS runs on its own"]', "weekly"); pg.wait_for_timeout(300)
     ok(pg.evaluate("MIS.cfg(S.books).freq") == "weekly", "how often the MIS runs by itself is kept")
+    # Reports: charts, the year, finding a report, a figure and a report opening their screens
+    pg.evaluate("() => { S.booksTab = 'reports'; S.rptQ = ''; render(); }"); pg.wait_for_timeout(800)
+    ok(pg.locator(".rpt-area .fc-chart svg rect").count() > 20 and pg.locator(".rpt-link").count() >= 30, "every area with its chart, every report listed")
+    y = pg.evaluate("RPT.fys()[1]"); pg.select_option('select[aria-label="Year"]', y); pg.wait_for_timeout(600)
+    ok(pg.evaluate("RPT.range().fy") == y and FCY(y) in pg.inner_text(".rpt-overview .rpt-ah"), "another year")
+    pg.fill("#rptQ", "ageing"); pg.wait_for_timeout(600)
+    ok(pg.locator(".rpt-link").count() == 2 and pg.evaluate("document.activeElement.id") == "rptQ", "finding a report by name, keeping the cursor")
+    pg.click('.rpt-link:has(b:text-is("Receivables ageing"))'); pg.wait_for_timeout(1500)
+    ok(pg.evaluate("[S.booksTab, S.misTab, !!(S.books.mis && S.books.mis.last)]") == ["mis", "recv", True], "a report opens its screen, worked out")
+    pg.evaluate("() => { S.booksTab = 'reports'; S.rptQ = ''; render(); }"); pg.wait_for_timeout(600)
+    pg.click('.rpt-gst button.dtile:has(span:text-is("Input credit"))'); pg.wait_for_timeout(800)
+    ok(pg.evaluate("[S.booksTab, S.gstPart]") == ["gst", "inreg"], "a figure opens its report")
     # Accounts: run, the format, stock, a manufacturer, a ledger placed by hand and back, the search, Excel
     pg.evaluate("() => { const led = {}; Object.keys(S.books.map).forEach(n => { led[n] = {open: 0, close: 0}; }); S.books.tb = {from: '20250401', to: '20270331', at: '2026-01-01T00:00:00Z', led}; S.booksTab = 'fs'; S.fsRun = null; render(); }"); pg.wait_for_timeout(400)
     run = 'section:has(> h3:text-is("Financial statements")) button:text-is("Run now")'

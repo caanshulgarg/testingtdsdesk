@@ -89,70 +89,6 @@ const RPT = {
     this._d = {key, d};
     return d;
   },
-  tile(l, v, sub, rid, cls){ return '<button class="dtile' + (cls ? " " + cls : "") + '"' + (rid ? ' data-rpt="' + rid + '"' : "") + "><span>" + esc(l) + "</span><b>" + v + "</b>" + (sub ? "<small>" + sub + "</small>" : "") + "</button>"; },
-  areaDash(id, d){
-    const m = v => INR0.format(r2(v || 0)), mon = d.months.map(x => FC.shortMonth(x)), T = this.tile.bind(this), pct = (a, c) => c ? (Math.round(a / c * 1000) / 10) + "%" : "—";
-    if (id === "overview"){
-      const rev = (d.pl.heads.rev || {t: 0}).t;
-      return '<div class="dash-tiles">' + T("Sales", m(rev), "the year so far", "mis-sales") + T("Gross profit", m(d.pl.gross.t), pct(d.pl.gross.t, rev) + " of sales", "mis-pl") +
-        T("Profit before tax", m(d.pl.pbt.t), pct(d.pl.pbt.t, rev) + " of sales", "mis-pl", d.pl.pbt.t < 0 ? "warn" : "") + T("Cash and bank", d.cashBank == null ? "—" : m(d.cashBank), d.cashBank == null ? "balances not read yet" : "on " + FC.when(d.R.to), "lk-group-bank") + "</div>" +
-        FC.bars(mon, [{name: "Sales", cls: "c1", values: d.months.map(x => d.sales[x])}, {name: "Purchases and direct costs", cls: "c2", values: d.months.map(x => d.purch[x])}], {label: "Sales and purchases by month"});
-    }
-    if (id === "parties"){
-      const owed = A => A.sum.tally != null ? A.sum.tally : A.sum.open;
-      return '<div class="dash-tiles">' + T("Owed to you", m(owed(d.recv)), d.recv.rows.length + " customers", "mis-recv") + T("Over 90 days", m(d.recv.sum.b[3] + d.recv.sum.b[4]), "customers", "let-remind", d.recv.sum.b[3] + d.recv.sum.b[4] > 0 ? "warn" : "") +
-        T("You owe", m(owed(d.pay)), d.pay.rows.length + " suppliers", "mis-pay") + T("MSME past " + MIS.cfg(S.books).msmeDays + " days", m(d.msmeDue), "section 43B(h)", "mis-pay", d.msmeDue > 0 ? "warn" : "") + "</div>" +
-        FC.bars(MIS.BUCKETS.map(z => z[1]), [{name: "Owed to you", cls: "c1", values: d.recv.sum.b}, {name: "You owe", cls: "c3", values: d.pay.sum.b}], {label: "Ageing, in days"});
-    }
-    if (id === "cash"){
-      const ti = Object.values(d.inM).reduce((s, x) => s + x, 0), to = Object.values(d.outM).reduce((s, x) => s + x, 0);
-      return '<div class="dash-tiles">' + T("Received", m(ti), "into bank and cash", "lk-group-bank") + T("Paid out", m(to), "from bank and cash", "lk-group-bank") + T("Net", m(ti - to), ti - to < 0 ? "more went out" : "more came in", "mis-cash", ti - to < 0 ? "warn" : "") +
-        T("Balance now", d.cashBank == null ? "—" : m(d.cashBank), d.cashBank == null ? "balances not read yet" : "on " + FC.when(d.R.to), "lk-group-bank") + "</div>" +
-        FC.bars(mon, [{name: "Received", cls: "c1", values: d.months.map(x => d.inM[x])}, {name: "Paid", cls: "c3", values: d.months.map(x => d.outM[x])}], {label: "Money in and out by month"});
-    }
-    if (id === "gst"){
-      const g = d.comp.gst || [], s = k => g.reduce((a, x) => a + num(x[k]), 0), last = g[g.length - 1] || {};
-      return '<div class="dash-tiles">' + T("Tax on sales", m(s("out")), "the year so far", "gst-r3b") + T("Input credit", m(s("itc")), "the year so far", "gst-inreg") + T("Paid in cash", m(s("pay")), "after credit", "gst-r3b") +
-        T("Last month", m(last.pay), last.ym ? "to pay for " + FC.monthLabel(last.ym) : "", "gst-r3b") + "</div>" +
-        (g.length ? FC.bars(g.map(x => FC.shortMonth(x.ym)), [{name: "Tax on sales", cls: "c4", values: g.map(x => x.out)}, {name: "Input credit", cls: "c2", values: g.map(x => x.itc)}], {label: "GST by month"}) : "");
-    }
-    if (id === "tds"){
-      const t = d.comp.tds || [], ded = t.reduce((a, x) => a + x.ded, 0), dep = t.reduce((a, x) => a + x.dep, 0);
-      return '<div class="dash-tiles">' + T("Deducted", m(ded), "the year so far", "tds-q") + T("Deposited", m(dep), "by challan", "tds-q") + T("Not yet deposited", m(Math.max(0, ded - dep)), "", "tds-checks", ded - dep > 1 ? "warn" : "") + T("Deductees", String(d.tdsDeductees), "with TDS this year", "tds-q") + "</div>" +
-        (t.length ? FC.bars(t.map(x => FC.shortMonth(x.ym)), [{name: "Deducted", cls: "c5", values: t.map(x => x.ded)}, {name: "Deposited", cls: "c2", values: t.map(x => x.dep)}], {label: "TDS by month"}) : "");
-    }
-    if (id === "audit"){
-      if (!d.au) return '<div class="fc-empty small"><p class="note">The audit has not been run for this client yet.</p><button class="btn small primary" data-rpt="au-find">Run the audit</button></div>';
-      const high = d.open.filter(f => f.sev === "high");
-      return '<div class="dash-tiles">' + T("Serious, still open", String(high.length), m(high.reduce((s, f) => s + num(f.amount), 0)) + " involved", "au-find", high.length ? "warn" : "") + T("All open", String(d.open.length), "findings", "au-find") +
-        T("Put right", String((d.au.solved || []).reduce((s, x) => s + x.n, 0)), "since earlier runs", "au-find") + T("Last run", FC.when(String(d.au.at).slice(0, 10).replace(/-/g, "")), esc(FC.span(d.au.from, d.au.to)), "au-find") + "</div>" +
-        (high.length ? '<ul class="rpt-top">' + high.slice(0, 3).map(f => '<li><span class="tag bad">serious</span> ' + esc(f.title) + "</li>").join("") + "</ul>" : "");
-    }
-    return "";
-  },
-  view(b){
-    const have = (b.vouchers || []).length > 0, q = String(S.rptQ || "").toLowerCase().trim();
-    if (LK.live()) setTimeout(() => LK.autoFresh(), 0);
-    let h = '<section class="dash-card rpt-head"><div class="rpt-top-row"><div><h3>Reports</h3><p class="note" style="margin:0">Every report for ' + esc(CO().name) + " in one place. Click a figure or a report to open it.</p></div>" +
-      '<input type="search" id="rptQ" data-fk="rptQ" data-keeptyped value="' + esc(S.rptQ || "") + '" placeholder="Find a report: ageing, 3B, cash, ratios…" aria-label="Find a report">' +
-      (have ? '<select data-rptfy aria-label="Year">' + this.fys().map(y => '<option value="' + y + '"' + (this.range().fy === y ? " selected" : "") + ">" + FC.fyLabel(y) + "</option>").join("") + "</select>" : "") + "</div></section>";
-    if (LK.fr().busy) h += busyCard("Bringing the books up to date\u2026", LK.fr().busy, 0, 0);
-    if (have || LK.live()) h += LK.freshBar(b);
-    if (!have) h += FC.noBooks("Reports");
-    const d = have ? this.data() : null;
-    if (q){
-      const hits = this.LIST.filter(r => (r[2] + " " + r[3] + " " + this.AREAS.find(a => a.id === r[1]).title).toLowerCase().includes(q));
-      return h + '<section class="dash-card" style="margin-top:12px"><h3>' + hits.length + " report" + (hits.length === 1 ? "" : "s") + ' found</h3><div class="rpt-links">' +
-        (hits.length ? hits.map(r => this.link(r)).join("") : '<p class="note">Nothing by that name. Try Look up for a ledger or an entry.</p>') + "</div></section>";
-    }
-    h += '<div class="rpt-grid">';
-    this.AREAS.forEach(a => {
-      h += '<section class="dash-card rpt-area rpt-' + a.id + '"><div class="rpt-ah"><i class="rpt-dot ' + a.ic + '" aria-hidden="true"></i><h3>' + esc(a.title) + "</h3>" + (d ? '<span class="note">' + FC.fyLabel(d.R.fy) + (d.R.to < d.R.fyEnd ? ", to " + FC.when(d.R.to) : "") + "</span>" : "") + "</div>" +
-        (d ? this.areaDash(a.id, d) : "") + '<div class="rpt-links">' + this.LIST.filter(r => r[1] === a.id).map(r => this.link(r)).join("") + "</div></section>";
-    });
-    return h + "</div>";
-  },
-  link(r){ return '<button class="rpt-link" data-rpt="' + r[0] + '"><b>' + esc(r[2]) + "</b><span>" + esc(r[3]) + "</span></button>"; },
   open(id){
     const r = this.LIST.find(x => x[0] === id); if (!r) return;
     const to = r[4], R = this.range(), b = S.books;
@@ -185,12 +121,4 @@ const RPT = {
     }
   }
 };
-function viewBooksReports(b){ return RPT.view(b); }
-if (typeof document !== "undefined"){
-  document.addEventListener("click", e => {
-    const t = e.target.closest && e.target.closest("[data-rpt]"); if (!t || !S.books) return;
-    e.preventDefault(); RPT.open(t.dataset.rpt);
-  });
-  document.addEventListener("input", e => { if (e.target && e.target.id === "rptQ"){ S.rptQ = e.target.value; softRender(); } });
-  document.addEventListener("change", e => { if (e.target && e.target.hasAttribute && e.target.hasAttribute("data-rptfy")){ S.rptFy = e.target.value; render(); } });
-}
+// the page itself is app/src/screens/books/Reports.jsx

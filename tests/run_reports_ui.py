@@ -49,7 +49,7 @@ with sync_playwright() as p:
     t = pg.inner_text("#app")
     ok("Receivables ageing" in t and "Payables ageing" in t and "How the business is doing" not in t, "finding a report by name")
     pg.fill("#rptQ", ""); pg.wait_for_timeout(400)
-    pg.click('[data-rpt="mis-recv"]'); pg.wait_for_timeout(1500)
+    pg.click('.rpt-link:has(b:text-is("Receivables ageing"))'); pg.wait_for_timeout(1500)
     ok(pg.evaluate("S.booksTab") == "mis" and pg.evaluate("S.misTab") == "recv" and pg.evaluate("!!(S.books.mis && S.books.mis.last)"), "a report opens its screen with the MIS worked out")
     # ---------- Look up: a ledger
     pg.click('#side .side-link:has-text("Look up")'); pg.wait_for_timeout(600)
