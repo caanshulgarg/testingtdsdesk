@@ -224,7 +224,14 @@ const Books = {
   },
   ledgerOf(name){ return (S.books && S.books.map && S.books.map[name]) || {}; },
   // the purchase and sales side of a voucher, ready for GST and TDS
+  // build 193: an entry's lines are worked out once per drawing or calculation (the same entry is asked many times)
   lines(v){
+    if (typeof IN_RENDER === "undefined" || !IN_RENDER) return this.linesNow(v);
+    const c = this._lc && this._lc.gen === RENDER_GEN && this._lc.books === S.books ? this._lc : (this._lc = {gen: RENDER_GEN, books: S.books, map: new WeakMap()});
+    let r = c.map.get(v); if (!r){ r = this.linesNow(v); c.map.set(v, r); }
+    return r;
+  },
+  linesNow(v){
     const out = {taxable: 0, tax: {CGST: 0, SGST: 0, IGST: 0, CESS: 0}, tds: [], tdsPaid: [], party: 0, rates: {}, roundoff: 0}, vals = [];
     v.ent.forEach(e => {
       const m = Books.ledgerOf(e.l), amt = Math.abs(e.a), sign = e.a < 0 ? -1 : 1;

@@ -3652,16 +3652,19 @@ function padForBars(){
 window.addEventListener("resize", () => requestAnimationFrame(padForBars));
 // build 190: a figure worked out from the whole books (TDS rows, say) is worked out once per drawing of the page, not
 // each time a part of the page asks for it (the TDS page asked 15 times). Outside a drawing it is always fresh
-let RENDER_GEN = 0, IN_RENDER = false;
+let RENDER_GEN = 0, IN_RENDER = 0;
 function perRender(o, key, fn){
   if (!IN_RENDER) return fn();
-  const m = o["_pr_" + key];
-  if (m && m.gen === RENDER_GEN && m.books === S.books) return m.v;
-  const v = fn(); o["_pr_" + key] = {gen: RENDER_GEN, books: S.books, v}; return v;
+  const m = o._pr = o._pr && o._pr.gen === RENDER_GEN && o._pr.books === S.books ? o._pr : {gen: RENDER_GEN, books: S.books, v: {}};
+  if (Object.prototype.hasOwnProperty.call(m.v, key)) return m.v[key];
+  return (m.v[key] = fn());
 }
+// a long calculation (the MIS, the audit) shares figures the same way while it runs: GST 3B for a month was worked out
+// 48 times in one MIS run, and the TDS rows 18 times
+function memoScope(fn){ if (!IN_RENDER) RENDER_GEN++; IN_RENDER++; try { return fn(); } finally { IN_RENDER--; } }
 function render(){
-  RENDER_GEN++; IN_RENDER = true;
-  try { return renderNow(); } finally { IN_RENDER = false; }
+  RENDER_GEN++; IN_RENDER++;
+  try { return renderNow(); } finally { IN_RENDER--; }
 }
 function renderNow(){
   requestAnimationFrame(padForBars);

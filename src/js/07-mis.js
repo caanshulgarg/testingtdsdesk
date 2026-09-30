@@ -184,7 +184,8 @@ const MIS = {
     return out.sort((a, c) => a[0].localeCompare(c[0]));
   },
   // one run: every table for the period, the same every time for the same books
-  run(from, to, how){
+  run(from, to, how){ return typeof memoScope === "function" ? memoScope(() => this.runNow(from, to, how)) : this.runNow(from, to, how); },
+  runNow(from, to, how){
     const b = S.books;
     from = Audit.ymd(from); to = Audit.ymd(to);
     const days = Audit.days(from, to) + 1, lyFrom = this.shift(from, -1), lyTo = this.shift(to, -1);

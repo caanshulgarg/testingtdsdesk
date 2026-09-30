@@ -38,10 +38,16 @@ const GSTR = {
     for (const e of v.ent){ const m = Books.ledgerOf(e.l); if ((m.kind === "gst" || m.kind === "gst_common" || m.kind === "ineligible") && m.reg){ if (r && r !== m.reg){ r = ""; break; } r = m.reg; } }
     return r || String(v.cmp || "").slice(0, 2);
   },
+  // the entries of one month (build 193): from an index made once per drawing or calculation, not the whole year each time
+  vIn(ym){
+    const all = S.books.vouchers || [];
+    if (typeof perRender !== "function" || !ym || String(ym).length !== 6) return all;
+    return perRender(this, "byMonth", () => { const m = {}; all.forEach(v => { const k = String(v.date).slice(0, 6); (m[k] = m[k] || []).push(v); }); return m; })[ym] || [];
+  },
   // one row per invoice and rate, from the sales side
   outward(ym, reg){
     const b = S.books, out = [];
-    (b.vouchers || []).forEach(v => {
+    this.vIn(ym).forEach(v => {
       if (!Books.isSale(v)) return;
       if (ym && !this.inP(v.date, ym)) return;
       if (reg && this.regOf(v) !== reg) return;
@@ -85,7 +91,7 @@ const GSTR = {
   // and not tax only moved between ledgers (to a control account, or a rounding)
   inward(ym, reg){
     const b = S.books, out = [], gst = b.gstins || {};
-    (b.vouchers || []).forEach(v => {
+    this.vIn(ym).forEach(v => {
       if (Books.isSale(v)) return;
       if (ym && !this.inP(v.date, ym)) return;
       const purch = Books.isPurchase(v);
@@ -183,7 +189,8 @@ const GSTR = {
   },
   signedIn(r){ return r.dir < 0 ? Object.assign({}, r, {taxable: -r.taxable, cgst: -r.cgst, sgst: -r.sgst, igst: -r.igst, cess: -r.cess, ineligible: -(r.ineligible || 0)}) : r; },
   // the 3B as filed for a month: a monthly filer's month, or at the end of a QRMP quarter the quarter's
-  threeB(ym, reg){
+  threeB(ym, reg){ return typeof perRender === "function" ? perRender(this, "3b|" + ym + "|" + (reg || ""), () => this.threeBNow(ym, reg)) : this.threeBNow(ym, reg); },
+  threeBNow(ym, reg){
     if (typeof GSTSet === "object" && reg && GSTSet.typeOf(ym, reg) === "qrmp" && GSTSet.isQEnd(ym) && typeof GSTQ === "object") return GSTQ.threeBQ(ym, reg);
     return this.threeBm(ym, reg);
   },
