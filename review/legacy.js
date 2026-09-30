@@ -14067,11 +14067,13 @@ function startDraft(fromId){
 function recalcDraft(){
   const s = SL(), d = s.draft, co = CO(s.cid), x = d.x;
   const inter = isInterState(x, co);
+  // the client's state not known (no GSTIN): no GST is worked out until it is (CGST + SGST or IGST cannot be told)
+  const noState = !stateOfGstin(co.gstin);
   let taxable = 0, cgst = 0, sgst = 0, igst = 0;
   x.items.forEach(it => {
     it.taxable = r2(num(it.qty) * num(it.rate) * (1 - num(it.disc) / 100));
     taxable += it.taxable;
-    const t = r2(it.taxable * num(it.gstRate) / 100);
+    const t = noState ? 0 : r2(it.taxable * num(it.gstRate) / 100);
     if (inter) igst += t; else { cgst += r2(t / 2); sgst += r2(t - r2(t / 2)); }
   });
   x.taxable = r2(taxable); x.cgst = r2(cgst); x.sgst = r2(sgst); x.igst = r2(igst);
@@ -14080,7 +14082,7 @@ function recalcDraft(){
   const gross = r2(x.taxable + x.cgst + x.sgst + x.igst + num(x.cess));
   x.total = s.cfg.noRound ? gross : Math.round(gross);
   x.roundOff = r2(x.total - gross);
-  d.inter = inter;
+  d.inter = inter; d.noState = noState;
 }
 function draftProblems(){
   const s = SL(), x = s.draft.x, p = [];
@@ -19571,7 +19573,7 @@ function dashAsk(q){
 const TCloud = {
   BIG: 60000,
   st: {},                 // cid -> {books, at, err}
-  pane: {devices: null, companies: null, busy: "", err: ""},
+  pane: {devices: null, companies: null, busy: "", err: "", at: 0},
   on(){ return typeof Cloud === "object" && Cloud.on() && !!(Cloud.st && Cloud.st.firm); },
   ingestUrl(){ return Cloud.cfg().url.replace(/\/+$/, "") + "/functions/v1/tally-ingest"; },
   iso(d8){ return String(d8).slice(0, 4) + "-" + String(d8).slice(4, 6) + "-" + String(d8).slice(6, 8); },
@@ -19743,7 +19745,8 @@ const TCloud = {
     try {
       p.devices = await Cloud.api("tally_devices?select=id,name,created_at,last_seen,version,info,revoked&order=created_at.desc");
       p.companies = await this.restAll("tally_companies?select=company,client_id,gstin,last_seen,linked_at&order=company.asc");
-      p.err = "";
+      p.err = ""; p.at = Date.now();
+      linkByGstin(p.companies);
     } catch (e){ p.err = /tally_devices|does not exist|schema cache/i.test(String(e && e.message)) ? "The cloud copy is not set up in this database yet." : (e && e.message) || String(e); }
     p.busy = ""; render();
   },
@@ -19902,10 +19905,11 @@ const TLight = {
 // A Tally company whose GSTIN is exactly one client's GSTIN is linked to that client by itself (review item 6).
 // Not when a person unlinked it by hand (linked_at set, no client), and not when two clients share the GSTIN:
 // those are offered in Books in the cloud with one click (gstinMatch). The server's link checks the PAN part again.
+const gstinKey = g => String(g || "").toUpperCase().replace(/[^0-9A-Z]/g, "");
 function gstinMatch(company){
-  const g = String((company && company.gstin) || "").toUpperCase();
+  const g = gstinKey(company && company.gstin);
   if (!GSTIN_RE.test(g)) return null;
-  const hits = Object.values(S.companies || {}).filter(c => !c.deleted && String(c.gstin || "").toUpperCase() === g);
+  const hits = Object.values(S.companies || {}).filter(c => !c.deleted && gstinKey(c.gstin) === g);
   return hits.length === 1 ? hits[0] : null;
 }
 const linkTried = new Set();
@@ -19917,7 +19921,8 @@ function linkByGstin(cos){
     if (!k) return;
     linkTried.add(c.company);
     TCloud.rpc("tally_company_link", {p_company: c.company, p_client: k.id})
-      .then(() => { c.client_id = k.id; if (!k.tallyName){ k.tallyName = c.company; Store.saveCompany(k); } TLight.st.at = 0; toast(c.company + " linked to " + k.name + " (same GSTIN " + k.gstin + ")."); render(); }, () => {});
+      .then(() => { c.client_id = k.id; if (!k.tallyName){ k.tallyName = c.company; Store.saveCompany(k); } TLight.st.at = 0; toast(c.company + " linked to " + k.name + " (same GSTIN " + k.gstin + ")."); render(); },
+        err => { TCloud.autoErr = "Could not link " + c.company + " to " + k.name + ": " + ((err && err.message) || err); render(); });
   });
 }
 
@@ -19938,7 +19943,9 @@ function tallyStatus(co){
   const waiting = cos.reduce((a, c) => a + num((c.stats || {}).waiting), 0);
   if (co){
     const cloudRow = ((typeof TLight === "object" && TLight.st.cos) || []).some(r => r.client_id === co.id);
-    const linked = cloudRow || (local && !!Bridge.openFor(co)) || !!co.tallyName;
+    // linked means a Tally company is this client's (in the cloud, or open in Tally through the bridge here);
+    // a "Tally name" typed in Client setup alone does not link anything (review recheck: Mastercad)
+    const linked = cloudRow || (local && !!Bridge.openFor(co));
     if (!linked) return {state: "unlinked", level: "warn", label: "Connected – company not linked", say: "Tally is connected, but no Tally company is linked to " + co.name + ". Link it in Client setup → Tally, or in Settings → Books in the cloud."};
   }
   if (waiting > 0) return {state: "waiting", level: "warn", label: waiting + " entr" + (waiting === 1 ? "y" : "ies") + " waiting", say: waiting + " approved entr" + (waiting === 1 ? "y is" : "ies are") + " not yet in Tally" + (co ? "" : " (all clients)") + "."};
