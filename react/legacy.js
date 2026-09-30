@@ -19281,36 +19281,12 @@ const FC = {
   },
   inGroup(l, g){ const G = String(g || "").toLowerCase(); return this.path(l).some(x => x.toLowerCase() === G); },
   top(l){ const p = this.path(l); return p[p.length - 1] || "Not in a group"; },
-  // a small bar chart, drawn as SVG: series [{name, cls, values}], one bar group per label
-  bars(labels, series, o){
-    o = o || {}; const H = o.h || 120, W = Math.max(280, labels.length * (series.length * 12 + 10)), pad = 4;
-    const all = series.flatMap(s => s.values.map(v => num(v)));
-    if (!all.some(v => Math.abs(v) >= 0.5)) return "";
-    const max = Math.max(1, ...all.map(v => Math.abs(v))), neg = all.some(v => v < 0);
-    const zero = neg ? H / 2 : H - 2, scale = (neg ? H / 2 - 6 : H - 8) / max, gw = (W - pad * 2) / Math.max(1, labels.length), bw = Math.max(3, Math.min(22, (gw - 6) / series.length));
-    let g = "";
-    labels.forEach((l, i) => {
-      series.forEach((s, j) => {
-        const v = num(s.values[i]), hgt = Math.max(v ? 1.5 : 0, Math.abs(v) * scale), x = pad + i * gw + (gw - bw * series.length) / 2 + j * bw;
-        g += '<rect class="' + (s.cls || "c1") + (v < 0 ? " neg" : "") + '" x="' + x.toFixed(1) + '" y="' + (v >= 0 ? zero - hgt : zero).toFixed(1) + '" width="' + (bw - 1.5).toFixed(1) + '" height="' + hgt.toFixed(1) + '" rx="2"><title>' + esc(l + ": " + s.name + " " + INR0.format(v)) + "</title></rect>";
-      });
-    });
-    g += '<line x1="0" x2="' + W + '" y1="' + zero.toFixed(1) + '" y2="' + zero.toFixed(1) + '" class="axis"/>';
-    const key = series.length > 1 ? '<div class="chart-key">' + series.map(s => '<span><i class="' + (s.cls || "c1") + '"></i>' + esc(s.name) + "</span>").join("") + "</div>" : "";
-    const every = Math.ceil(labels.length / 12), xl = '<div class="fc-xl" aria-hidden="true">' + labels.map((l, i) => "<span>" + (i % every === 0 ? esc(String(l).slice(0, 8)) : "") + "</span>").join("") + "</div>";
-    return '<figure class="fc-chart"' + (o.label ? ' aria-label="' + esc(o.label) + '"' : "") + '><svg viewBox="0 0 ' + W + " " + H + '" preserveAspectRatio="none" role="img">' + g + "</svg>" + xl + key + "</figure>";
-  },
   monthLabel(ym){ return typeof GSTR === "object" ? GSTR.label(ym) : ym; },
   shortMonth(ym){ const m = num(String(ym).slice(4, 6)); return ["", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"][((m + 8) % 12) + 1]; },
   go(tab, extra){
     Object.assign(S, extra || {});
     S.tab = "books"; S.booksTab = tab; S.step = null; S.drawerOpen = false;
     render(); window.scrollTo(0, 0);
-  },
-  noBooks(what){
-    const live = typeof bridgeLive === "function" && bridgeLive(CO());
-    return '<div class="fc-empty"><div class="fc-empty-ic" aria-hidden="true">▤</div><h3>' + esc(what) + ' needs the books</h3><p class="note">Read the day book and balances from Tally first. It takes a minute a month through the Tally Bridge.</p>' +
-      '<div class="row" style="justify-content:center;gap:8px"><button class="btn primary" data-fcgo="import">Read the books from Tally</button>' + (live ? "" : '<button class="btn" data-act="tallyGuide">Set up the Tally Bridge</button>') + "</div></div>";
   },
   async excel(name, sheets){
     await ensureXlsx();
@@ -19724,41 +19700,6 @@ const LK = {
     try { await Bridge.call("/syncnow", {company: this.tname()}, 3600000); f.at = 0; f.busy = ""; await this.autoFresh(); }
     catch (e){ f.busy = ""; toast("The copy did not finish: " + ((e && e.message) || e)); render(); }
   },
-  freshBar(b){
-    const f = this.fr(), live = this.live(), meta = (b && b.meta) || {}, have = (b.vouchers || []).length > 0, sch = f.sch || {}, today = Audit.today(), m = f.man || {}, kp = f.keep || {};
-    if (!have && !live && !meta.keep && !TCloud.has(S.coId)) return "";
-    const hhmm = s2 => { const d = new Date(s2); return isNaN(d) ? "" : d.toLocaleTimeString("en-IN", {hour: "2-digit", minute: "2-digit"}); };
-    let upTo, btns = "";
-    if (m.keep){
-      const seenMin = m.seen ? (Date.now() - Date.parse(m.seen)) / 60000 : 999;
-      if (m.phase === "open") upTo = "The bridge is reading the opening balances, a few ledgers at a time.";
-      else if (m.phase === "first"){ const pct = Math.max(0, Math.min(99, Math.round(Audit.days(m.from, m.doneTo || m.from) / Math.max(1, Audit.days(m.from, today)) * 100))); upTo = "The bridge is copying this company from Tally a few days at a time: up to <b>" + FC.when(m.doneTo) + "</b> (" + pct + "%). It carries on whenever the company is open in Tally."; }
-      else upTo = seenMin < 5 ? "<b>In step with Tally</b> (checked at " + hhmm(m.seen) + ")." : "In step with Tally as of <b>" + fmtDate(String(m.seen).slice(0, 10)) + " " + hhmm(m.seen) + "</b>, when the company was last open.";
-      const sk = (m.skipped || []).filter(Boolean);
-      if (sk.length) upTo += ' <span class="bad"><b>' + sk.length + (sk.length === 1 ? " day" : " days") + " not read yet</b> from Tally: " + esc(sk.slice(0, 3).map(d => fmtDate(Audit.iso(d))).join(", ")) + (sk.length > 3 ? " and " + (sk.length - 3) + " more" : "") + ". Figures touching " + (sk.length === 1 ? "that day" : "those days") + " may be out; the bridge tries again every few minutes.</span>";
-      if (m.trouble && m.trouble.at) upTo += ' <span class="note">Tally did not answer at ' + hhmm(m.trouble.at) + "; the bridge is leaving it alone for a while and will carry on by itself.</span>";
-      btns = live ? '<button class="btn small" data-lk="keepcheck">Check against Tally</button>' : "";
-    } else {
-      upTo = have ? "The books in FinCom run to <b>" + FC.when(meta.to) + "</b>" + (meta.copyAt ? " (copy made " + esc(String(meta.copyAt).replace("T", " ").slice(0, 16)) + (meta.todayAt ? "; today\u2019s entries brought in at " + hhmm(meta.todayAt) : "") + ")" : meta.at ? " (read " + this.booksAge() + ")" : "") + "." : "No books in FinCom yet.";
-      if (live){
-        btns = (kp.ok ? (kp.on ? "" : '<button class="btn small primary" data-lk="keepon">Keep this company in step with Tally</button>') : '<span class="note">Install Tally Bridge 1.13.0 to keep companies in step while they are open.</span>') +
-          (have && String(meta.to) < today ? '<button class="btn small" data-lk="today">Bring in today\u2019s entries</button>' : "") +
-          (sch.on ? '<span class="note">Nightly copy is on' + (sch.next ? ", next " + esc(sch.next) : "") + ".</span>" : "");
-        if (kp.on) upTo += " The bridge starts keeping it in step within a minute of the company being open in Tally.";
-      } else btns = '<span class="note">Connect the Tally Bridge to keep this up to date.</span>';
-    }
-    let chk = "";
-    if (f.check){
-      const c = f.check;
-      chk = c.error ? '<p class="note bad">The check could not run: ' + esc(c.error) + "</p>"
-        : '<p class="note ' + (c.missing || c.differ || c.extra || !c.listMatchesDayBook ? "bad" : "ok") + '">Checked ' + esc(FC.monthLabel(c.ym)) + " against Tally: Tally has " + c.tally + " entries, the copy " + c.copy + (c.missing || c.differ || c.extra ? " (" + c.missing + " missing, " + c.differ + " changed, " + c.extra + " no longer in Tally; the bridge puts these right on its next turn)" : ", all the same") +
-          ". The light list " + (c.listMatchesDayBook ? "matches" : "<b>does not match</b>") + " the day book for the first days (" + c.list + " and " + c.dayBook + " entries)" + (c.listMatchesDayBook ? "." : ": please tell us, so the bridge can be adjusted for your Tally.") + "</p>";
-    }
-    // the cloud's copy: what this page shows when it is the source
-    if (TCloud.has(S.coId) && ((meta.cloud && !m.keep) || !live)) return '<div class="lk-fresh"><span class="note">' + TCloud.bar(S.coId) + " Totals come from this copy, so Tally is never held up.</span>" + chk + "</div>";
-    return '<div class="lk-fresh"><span class="note">' + upTo + " Totals come from this copy, so Tally is never held up.</span>" + btns + chk + "</div>";
-  },
-
   // ---------- a question in plain words, turned into a look-up
   STOP: new Set(["the", "of", "for", "and", "to", "a", "an", "in", "on", "from", "show", "me", "give", "what", "is", "was", "ledger", "account", "a/c", "ac", "statement", "balance", "balances", "all", "with", "by", "as", "at", "till", "upto", "up", "this", "last", "year", "month", "quarter", "fy", "ltd", "pvt", "private", "limited", "llp", "co", "&", "m/s", "ms", "entries", "entry", "list", "please", "details", "detail", "how", "much", "many", "our", "my", "we", "us"]),
   MONTHS: {jan: 1, january: 1, feb: 2, february: 2, mar: 3, march: 3, apr: 4, april: 4, may: 5, jun: 6, june: 6, jul: 7, july: 7, aug: 8, august: 8, sep: 9, sept: 9, september: 9, oct: 10, october: 10, nov: 11, november: 11, dec: 12, december: 12},
@@ -19847,109 +19788,6 @@ const LK = {
     return out;
   },
   // ---------- the page
-  view(b){
-    const x = this.st(), live = this.live(), have = (b.vouchers || []).length > 0;
-    // Tally's ledger names, once per client (light), so typing offers what is in Tally today
-    if (!(this.names && this.names.cid === S.coId) && !this._namesBusy && this._namesTried !== S.coId && typeof TCloud === "object" && TCloud.has(S.coId)){ this._namesTried = S.coId; setTimeout(() => this.loadNames(), 0); }
-    if (live) setTimeout(() => this.autoFresh(), 0);
-    const leds = FC.ledgers(), grps = FC.groups(), T = FC.tn();
-    const dl = '<datalist id="lkLeds">' + leds.slice(0, 5000).map(l => '<option value="' + esc(l) + '">').join("") + '</datalist><datalist id="lkGrps">' + grps.map(g => '<option value="' + esc(g) + '">').join("") + "</datalist>";
-    let h = '<section class="dash-card lk-ask"><h3>Look up</h3>' +
-      '<p class="note" style="margin:0 0 10px">Ask in plain words, or choose below. ' + "Answers come at once from FinCom\u2019s copy of the books; one ledger can also be read straight from Tally." + "</p>" +
-      '<div class="lk-askrow"><input type="search" id="lkAsk" data-fk="lkAsk" data-lkf="ask" data-keeptyped value="' + esc(x.ask || "") + '" placeholder="Try: HDFC bank for August · Raj Fabrics open bills · sales month by month this year · trial balance as on 31/03/2026" aria-label="Ask a question about the books">' +
-      '<button class="btn primary" data-lk="ask">Look up</button></div>' +
-      (x.heard ? '<p class="note lk-heard">Understood as: <b>' + esc(x.heard) + "</b>. Change anything below.</p>" : "") +
-      '<div class="lk-kinds" role="tablist" aria-label="What to look up">' + this.KINDS.map(([k, l]) => '<button role="tab" data-lkkind="' + k + '" aria-selected="' + (x.kind === k) + '">' + l + "</button>").join("") + "</div>";
-    const dates = '<label class="f"><span>From</span><input type="date" data-lkf="from" value="' + FC.iso(x.from) + '"></label><label class="f"><span>To</span><input type="date" data-lkf="to" value="' + FC.iso(x.to) + '"></label>';
-    const asOn = '<label class="f"><span>As on</span><input type="date" data-lkf="asOn" value="' + FC.iso(x.asOn) + '"></label>';
-    const ledIn = (label, req) => '<label class="f lk-wide"><span>' + label + '</span><input type="text" list="lkLeds" data-fk="lkLed" data-lkf="led" value="' + esc(x.led || "") + '" placeholder="' + (req ? "Start typing a ledger name" : "Every party") + '" autocomplete="off"></label>';
-    const grpIn = '<label class="f lk-wide"><span>Group</span><input type="text" list="lkGrps" data-fk="lkGrp" data-lkf="grp" value="' + esc(x.grp || "") + '" placeholder="Sundry Debtors, Indirect Expenses…" autocomplete="off"></label>';
-    let form = "";
-    if (x.kind === "ledger") form = ledIn("Ledger", true) + dates;
-    else if (x.kind === "group") form = grpIn + dates;
-    else if (x.kind === "tb") form = asOn;
-    else if (x.kind === "monthly") form = ledIn("Ledger (or leave empty and choose a group)", true) + grpIn + dates;
-    else if (x.kind === "bills") form = ledIn("Party", false) + asOn + '<label class="f"><span>Side</span><select data-lkf="side"><option value="r"' + (x.side !== "p" ? " selected" : "") + '>Owed to the client</option><option value="p"' + (x.side === "p" ? " selected" : "") + ">Owed by the client</option></select></label>";
-    else form = '<label class="f lk-wide"><span>Words, a number or an amount</span><input type="search" data-fk="lkQ" data-lkf="q" value="' + esc(x.q || "") + '" placeholder="party, narration, bill number or 25000"></label>' + dates +
-      '<label class="f"><span>Type</span><select data-lkf="typ"><option value="">Every type</option>' + this.types().map(t => '<option' + (x.typ === t ? " selected" : "") + ">" + esc(t) + "</option>").join("") + "</select></label>";
-    const presets = ["ledger", "group", "monthly", "find"].includes(x.kind) ? '<div class="lk-presets">' + FC.PRESETS.map(([k, l]) => '<button class="btn small" data-lkper="' + k + '">' + l + "</button>").join("") + "</div>" : "";
-    const can = this.canTally(x), fromTally = can && this.useTally(x, "auto");
-    const srcRow = can ? '<div class="lk-src" role="radiogroup" aria-label="Where from"><span class="note">From</span><button role="radio" data-lksrc="tally" aria-checked="' + fromTally + '">Tally, live</button>' +
-        (have ? '<button role="radio" data-lksrc="books" aria-checked="' + !fromTally + '">The books read into FinCom' + (this.booksAge() ? " on " + this.booksAge() : "") + "</button>" : "") + "</div>"
-      : "";
-    const names = T || live ? '<p class="note lk-names">' + (T ? "Ledger names: " + T.leds.length + (T.src === "cloud" ? " (the books in the cloud)" : " (from Tally)") + ' \u00b7 <button class="linkbtn" data-lk="names">refresh</button>' : this._namesBusy ? "Bringing the ledger names\u2026" : live ? '<button class="linkbtn" data-lk="names">Bring the ledger names from Tally</button>' : "") + "</p>" : "";
-    h += this.freshBar(b) + '<div class="lk-form">' + form + "</div>" + presets + srcRow +
-      '<div class="row" style="gap:8px;margin-top:10px;align-items:center"><button class="btn primary" data-lk="show"' + (x.busy ? " disabled" : "") + ">" + (x.busy ? "Reading Tally\u2026" : "Show") + "</button>" + names + "</div>" + dl + "</section>";
-    const rec = this.recent();
-    if (rec.length && !x.res) h += '<section class="dash-card" style="margin-top:12px"><h3>Looked up lately</h3><div class="lk-recent">' + rec.map((r, i) => '<button class="btn small" data-lkrec="' + i + '">' + esc(r.label) + "</button>").join("") + "</div></section>";
-    if (!have && !live) h += FC.noBooks("Look up");
-    if (x.busy) h += busyCard("Reading Tally…", x.busy, 0, 0);
-    if (this.fr().busy) h += busyCard("Bringing the books up to date\u2026", this.fr().busy, 0, 0);
-    if (x.res) h += this.result(x.res, x);
-    return h;
-  },
-  voucherRow(r, cols, x){
-    const open = x.open[r.id];
-    return '<tr class="lk-v' + (open ? " open" : "") + '" data-lkopen="' + esc(r.id) + '" tabindex="0">' + cols + "</tr>" +
-      (open ? '<tr class="lk-sub"><td colspan="9"><div class="lk-entries">' + (r.narr ? '<p class="note">' + esc(r.narr) + "</p>" : "") +
-        '<table class="bk-table lk-in"><tbody>' + r.ent.map(e => '<tr><td><button class="linkbtn strong" data-lkled="' + esc(e.l) + '">' + esc(e.l) + '</button></td><td class="n">' + (e.a < 0 ? FC.amt(-e.a) : "") + '</td><td class="n">' + (e.a > 0 ? FC.amt(e.a) : "") + "</td></tr>").join("") + "</tbody></table></div></td></tr>" : "");
-  },
-  result(r, x){
-    const src = r.src === "tally" ? '<span class="tag stamp">from Tally</span>' : '<span class="tag ok">from the books</span>';
-    const when = r.src === "tally" && r.at ? '<span class="note">read at ' + new Date(r.at).toLocaleTimeString("en-IN", {hour: "2-digit", minute: "2-digit"}) + '</span> <button class="linkbtn" data-lk="fresh">Read again</button>' : "";
-    let h = '<section class="dash-card lk-res" style="margin-top:12px"><div class="lk-head"><h3>' + esc(r.title || "") + " " + src + " " + when + '</h3><div class="row" style="gap:6px"><button class="btn small" data-lk="print">Print or PDF</button><button class="btn small" data-lk="excel">Excel</button><button class="btn small" data-lk="clear">Close</button></div></div>';
-    if (r.note) h += '<p class="note">' + esc(r.note) + "</p>";
-    const tile = (l, v, cls) => '<div class="dtile' + (cls ? " " + cls : "") + '"><span>' + l + "</span><b>" + v + "</b></div>";
-    const LIMIT = gfN(1500);
-    if (r.kind === "ledger"){
-      h += '<div class="dash-tiles">' + tile("Opening", r.open == null ? "not known" : FC.drcr(r.open)) + tile("Debits", FC.amt(r.dr) || "0.00") + tile("Credits", FC.amt(r.cr) || "0.00") + tile("Closing", r.close == null ? FC.drcr(r.dr - r.cr) + " (movement)" : FC.drcr(r.close)) + "</div>";
-      if (!r.rows.length) return h + '<div class="bk-none">No entries in ' + esc(r.led) + " for these dates.</div></section>";
-      h += '<div class="bk-tablewrap"><table class="bk-table lk-t"><thead><tr><th>Date</th><th>Particulars</th><th>Type</th><th>No.</th><th class="n">Debit</th><th class="n">Credit</th><th class="n">Balance</th></tr></thead><tbody>' +
-        (r.open != null ? '<tr class="lk-ob"><td>' + FC.when(r.from) + "</td><td><b>Opening balance</b></td><td></td><td></td><td class=\"n\">" + (r.open > 0 ? FC.amt(r.open) : "") + '</td><td class="n">' + (r.open < 0 ? FC.amt(-r.open) : "") + '</td><td class="n">' + FC.drcr(r.open) + "</td></tr>" : "") +
-        r.rows.slice(0, LIMIT).map(v => this.voucherRow(v, "<td>" + FC.when(v.date) + '</td><td><span class="lk-part">' + esc(v.part) + "</span>" + (v.narr ? '<span class="nr">' + esc(v.narr) + "</span>" : "") + "</td><td>" + esc(v.type) + "</td><td>" + esc(v.no || "") + '</td><td class="n">' + FC.amt(v.dr) + '</td><td class="n">' + FC.amt(v.cr) + '</td><td class="n">' + (r.open == null ? "" : FC.drcr(v.run)) + "</td>", x)).join("") +
-        '<tr class="lk-tot"><td></td><td><b>Total</b></td><td></td><td></td><td class="n"><b>' + FC.amt(r.dr) + '</b></td><td class="n"><b>' + FC.amt(r.cr) + '</b></td><td class="n"><b>' + (r.close == null ? "" : FC.drcr(r.close)) + "</b></td></tr></tbody></table></div>" +
-        (r.rows.length > LIMIT ? '<p class="note">The first ' + LIMIT + " of " + r.rows.length + " entries are shown; Excel has them all.</p>" : "") + '<p class="note">Click an entry to see both sides. Click a ledger in it to open that ledger.</p>';
-    }
-    else if (r.kind === "group"){
-      h += '<div class="dash-tiles">' + tile("Opening", r.open == null ? "not known" : FC.drcr(r.open)) + tile("Debits", FC.amt(r.dr) || "0.00") + tile("Credits", FC.amt(r.cr) || "0.00") + tile("Closing", r.close == null ? "not known" : FC.drcr(r.close)) + "</div>";
-      if (!r.rows.length) return h + '<div class="bk-none">No ledger under ' + esc(r.grp) + " moved in these dates.</div></section>";
-      h += '<div class="bk-tablewrap"><table class="bk-table lk-t"><thead><tr><th>Ledger</th><th>Under</th><th class="n">Opening</th><th class="n">' + (r.net ? "Net debit" : "Debit") + '</th><th class="n">' + (r.net ? "Net credit" : "Credit") + '</th><th class="n">Closing</th></tr></thead><tbody>' +
-        r.rows.slice(0, LIMIT).map(z => '<tr><td><button class="linkbtn strong" data-lkled="' + esc(z.l) + '">' + esc(z.l) + "</button></td><td>" + esc(z.sub) + '</td><td class="n">' + (z.open == null ? "" : FC.drcr(z.open)) + '</td><td class="n">' + FC.amt(z.dr) + '</td><td class="n">' + FC.amt(z.cr) + '</td><td class="n">' + (z.close == null ? "" : FC.drcr(z.close)) + "</td></tr>").join("") +
-        '<tr class="lk-tot"><td><b>' + r.rows.length + ' ledgers</b></td><td></td><td class="n"><b>' + (r.open == null ? "" : FC.drcr(r.open)) + '</b></td><td class="n"><b>' + FC.amt(r.dr) + '</b></td><td class="n"><b>' + FC.amt(r.cr) + '</b></td><td class="n"><b>' + (r.close == null ? "" : FC.drcr(r.close)) + "</b></td></tr></tbody></table></div>";
-    }
-    else if (r.kind === "tb"){
-      if (r.none) return h + '<div class="bk-none">The balances on this date are not in FinCom\u2019s copy of the books yet: ' + esc(r.none) + ". Bring in last night\u2019s copy or today\u2019s entries above; the trial balance is then worked out here, without holding Tally up.</div></section>";
-      const diff = r2(r.dr - r.cr);
-      h += '<div class="dash-tiles">' + tile("Debit balances", FC.amt(r.dr)) + tile("Credit balances", FC.amt(r.cr)) + tile("Difference", Math.abs(diff) < 0.5 ? "agrees" : FC.amt(diff), Math.abs(diff) < 0.5 ? "" : "warn") + tile("Ledgers", String(r.rows.length)) + "</div>";
-      h += '<div class="bk-tablewrap"><table class="bk-table lk-t"><thead><tr><th>Ledger</th><th>Under</th><th class="n">Debit</th><th class="n">Credit</th></tr></thead><tbody>' +
-        r.groups.map(g => '<tr class="lk-grp"><td colspan="2"><b>' + esc(g.g) + '</b></td><td class="n"><b>' + FC.amt(g.dr) + '</b></td><td class="n"><b>' + FC.amt(g.cr) + "</b></td></tr>" +
-          g.rows.map(z => '<tr><td style="padding-left:22px"><button class="linkbtn strong" data-lkled="' + esc(z.l) + '">' + esc(z.l) + "</button></td><td>" + esc(z.sub) + '</td><td class="n">' + (z.bal > 0 ? FC.amt(z.bal) : "") + '</td><td class="n">' + (z.bal < 0 ? FC.amt(-z.bal) : "") + "</td></tr>").join("")).join("") +
-        '<tr class="lk-tot"><td><b>Total</b></td><td></td><td class="n"><b>' + FC.amt(r.dr) + '</b></td><td class="n"><b>' + FC.amt(r.cr) + "</b></td></tr></tbody></table></div>";
-    }
-    else if (r.kind === "monthly"){
-      h += FC.bars(r.rows.map(z => FC.shortMonth(z.ym)), [{name: "Debits", cls: "c1", values: r.rows.map(z => z.dr)}, {name: "Credits", cls: "c2", values: r.rows.map(z => z.cr)}], {label: "Debits and credits by month"});
-      h += '<div class="bk-tablewrap"><table class="bk-table lk-t"><thead><tr><th>Month</th><th class="n">Debit</th><th class="n">Credit</th><th class="n">Net</th><th class="n">Closing</th></tr></thead><tbody>' +
-        (r.open != null ? '<tr class="lk-ob"><td><b>Opening</b></td><td></td><td></td><td></td><td class="n">' + FC.drcr(r.open) + "</td></tr>" : "") +
-        r.rows.map(z => '<tr><td><button class="linkbtn strong" data-lkmonth="' + z.ym + '">' + esc(FC.monthLabel(z.ym)) + '</button></td><td class="n">' + FC.amt(z.dr) + '</td><td class="n">' + FC.amt(z.cr) + '</td><td class="n">' + FC.drcr(z.net) + '</td><td class="n">' + (z.close == null ? "" : FC.drcr(z.close)) + "</td></tr>").join("") +
-        '<tr class="lk-tot"><td><b>Total</b></td><td class="n"><b>' + FC.amt(r.dr) + '</b></td><td class="n"><b>' + FC.amt(r.cr) + '</b></td><td class="n"><b>' + FC.drcr(r.dr - r.cr) + "</b></td><td></td></tr></tbody></table></div>";
-    }
-    else if (r.kind === "bills"){
-      const over = d => r.rows.filter(z => z.age > d && z.amt > 0).reduce((s, z) => s + z.amt, 0);
-      h += '<div class="dash-tiles">' + tile("Outstanding", FC.amt(r.total) || "0.00") + tile("Bills", String(r.rows.length)) + tile("Over 90 days", FC.amt(over(90)) || "0.00", over(90) ? "warn" : "") + tile("Over 180 days", FC.amt(over(180)) || "0.00", over(180) ? "warn" : "") + "</div>";
-      if (!r.rows.length) return h + '<div class="bk-none">Nothing open on ' + FC.when(r.asOn) + ".</div></section>";
-      h += '<div class="bk-tablewrap"><table class="bk-table lk-t"><thead><tr>' + (r.led ? "" : "<th>Party</th>") + '<th>Bill</th><th>Date</th><th class="n">Days</th><th class="n">Outstanding</th></tr></thead><tbody>' +
-        r.rows.slice(0, LIMIT).map(z => "<tr>" + (r.led ? "" : '<td><button class="linkbtn strong" data-lkled="' + esc(z.party) + '">' + esc(z.party) + "</button></td>") + "<td>" + esc(z.ref || "on account") + (z.hasNew ? "" : ' <span class="tag no" title="Raised before the books read here">older</span>') + "</td><td>" + FC.when(z.date) + '</td><td class="n' + (z.age > 90 ? " bad" : "") + '">' + z.age + '</td><td class="n">' + FC.amt(z.amt) + "</td></tr>").join("") +
-        '<tr class="lk-tot">' + (r.led ? "" : "<td></td>") + '<td><b>Total</b></td><td></td><td></td><td class="n"><b>' + FC.amt(r.total) + "</b></td></tr></tbody></table></div>";
-    }
-    else {
-      h += '<p class="note"><b>' + (r.n || r.rows.length) + "</b> entries, together " + money(r.total) + "." + (r.n > r.rows.length ? " The first " + r.rows.length + ' are here; <button class="linkbtn" data-lk="more">show ' + Math.min(TCloud.FIND_PAGE, r.n - r.rows.length) + " more</button>." : "") + "</p>";
-      if (!r.rows.length) return h + '<div class="bk-none">Nothing matches. Try fewer words, or a wider period.</div></section>';
-      h += '<div class="bk-tablewrap"><table class="bk-table lk-t"><thead><tr><th>Date</th><th>Type</th><th>No.</th><th>Party or ledger</th><th class="n">Amount</th></tr></thead><tbody>' +
-        r.rows.slice(0, LIMIT).map(v => this.voucherRow(v, "<td>" + FC.when(v.date) + "</td><td>" + esc(v.type) + "</td><td>" + esc(v.no || "") + '</td><td><span class="lk-part">' + esc(v.party) + "</span>" + (v.narr ? '<span class="nr">' + esc(v.narr) + "</span>" : "") + '</td><td class="n">' + FC.amt(v.amt) + "</td>", x)).join("") +
-        "</tbody></table></div>" + (r.rows.length > LIMIT ? '<p class="note">The first ' + LIMIT + " are shown; Excel has them all.</p>" : "");
-    }
-    return h + "</section>";
-  },
   sheet(r){
     if (r.kind === "ledger") return [["Date", "Particulars", "Type", "No.", "Narration", "Debit", "Credit", "Balance"]].concat(r.open != null ? [[FC.iso(r.from), "Opening balance", "", "", "", r.open > 0 ? r.open : "", r.open < 0 ? -r.open : "", FC.drcr(r.open)]] : [])
       .concat(r.rows.map(v => [FC.iso(v.date), v.part, v.type, v.no, v.narr, v.dr || "", v.cr || "", r.open == null ? "" : FC.drcr(v.run)])).concat([["", "Total", "", "", "", r.dr, r.cr, r.close == null ? "" : FC.drcr(r.close)]]);
@@ -19968,55 +19806,36 @@ const LK = {
     printView(co.name + " " + r.title, "<style>@page{size:A4 portrait;margin:12mm}</style>" + html);
   }
 };
-function viewBooksLookup(b){ return LK.view(b); }
-
-if (typeof document !== "undefined"){
-  document.addEventListener("click", e => {
-    const t = e.target.closest && e.target.closest("[data-lk],[data-lkkind],[data-lkper],[data-lkrec],[data-lkled],[data-lkopen],[data-lkmonth],[data-fcgo],[data-lksrc]");
-    if (!t || !S.books) return;
-    const x = LK.st();
-    if (t.dataset.fcgo){ FC.go(t.dataset.fcgo); return; }
-    if (t.dataset.lksrc){ x.src = t.dataset.lksrc; render(); return; }
-    if (t.dataset.lkkind){ x.kind = t.dataset.lkkind; x.res = null; x.heard = ""; if (x.typ && !LK.types().includes(x.typ)) x.typ = ""; if (x.kind === "bills" && x.led && !(Audit.isDebtor(x.led) || Audit.isCreditor(x.led))) x.led = ""; render(); return; }
-    if (t.dataset.lkper){ const p = FC.period(t.dataset.lkper); x.from = p.from; x.to = p.to; LK.run("auto"); return; }
-    if (t.dataset.lkrec){ const r = LK.recent()[+t.dataset.lkrec]; if (r){ Object.assign(x, r); x.heard = ""; LK.run("auto"); } return; }
-    if (t.dataset.lkled !== undefined){ e.preventDefault(); e.stopPropagation(); const p = x.res && x.res.from ? {from: x.res.from, to: x.res.to} : x.res && x.res.asOn ? {from: Audit.fyStart(x.res.asOn), to: x.res.asOn} : {from: x.from, to: x.to};
-      Object.assign(x, {kind: "ledger", led: t.dataset.lkled, from: p.from, to: p.to, heard: ""}); if (S.booksTab !== "lookup") FC.go("lookup"); LK.run("auto"); return; }
-    if (t.dataset.lkmonth){ const ym = t.dataset.lkmonth, y = num(ym.slice(0, 4)), m = num(ym.slice(4, 6)); Object.assign(x, {kind: x.led ? "ledger" : "group", from: ym + "01", to: FC.monthEnd(y, m)}); LK.run("auto"); return; }
-    if (t.dataset.lkopen){ if (e.target.closest("button")) return; x.open[t.dataset.lkopen] = !x.open[t.dataset.lkopen]; render(); return; }
-    const a = t.dataset.lk;
-    if (a === "ask"){ const q = (document.getElementById("lkAsk") || {}).value || x.ask || ""; x.ask = q; if (!q.trim()){ toast("Type what you want to see."); return; }
-      const o = LK.understand(q); x.heard = LK.title(Object.assign({}, x, o)); if (["ledger", "group", "monthly"].includes(o.kind) && !(o.led || o.grp)){ render(); return; }
-      LK.run("auto"); return; }
-    if (a === "show") LK.run("auto");
-    else if (a === "books") LK.run("books");
-    else if (a === "tally") LK.run("tally");
-    else if (a === "fresh") LK.run("fresh");
-    else if (a === "names"){ LK.names = null; LK.loadNames(true); render(); }
-    else if (a === "today") LK.bringToday();
-    else if (a === "keepon") LK.keepOn(true);
-    else if (a === "keepcheck") LK.keepCheck();
-    else if (a === "syncnow") LK.syncNow();
-    else if (a === "clear"){ x.res = null; render(); }
-    else if (a === "more" && x.res && x.res.src === "cloud"){ const r = x.res; x.busy = "Bringing the next entries\u2026"; render();
-      TCloud.find(S.coId, r.q, r.from, r.to, r.typ, r).then(res => { x.busy = ""; x.res = Object.assign(res, {title: r.title}); render(); }, er => { x.busy = ""; toast("Could not ask the cloud: " + ((er && er.message) || er)); render(); }); }
-    else if (a === "print") LK.printIt();
-    else if (a === "excel" && x.res) FC.excel(x.res.title, [[x.res.kind === "tb" ? "Trial balance" : "Look up", LK.sheet(x.res)]]).catch(er => toast("Could not build the file: " + (er && er.message)));
-  });
-  document.addEventListener("input", e => {
-    const t = e.target; if (!t.dataset || !t.dataset.lkf || !S.lk) return;
-    const k = t.dataset.lkf, v = t.value;
-    S.lk[k] = t.type === "date" ? FC.d8(v) : v;
-  });
-  document.addEventListener("change", e => {
-    const t = e.target; if (!t.dataset || !t.dataset.lkf || !S.lk) return;
-    if (t.tagName === "SELECT" || t.type === "date"){ S.lk[t.dataset.lkf] = t.type === "date" ? FC.d8(t.value) : t.value; }
-  });
-  document.addEventListener("keydown", e => {
-    const t = e.target;
-    if (e.key === "Enter" && t && t.dataset && t.dataset.lkf){ e.preventDefault(); if (t.dataset.lkf === "ask"){ const b = document.querySelector('[data-lk="ask"]'); if (b) b.click(); } else LK.run("auto"); }
-    if (e.key === "Enter" && t && t.dataset && t.dataset.lkopen){ e.preventDefault(); t.click(); }
-  });
+// Look up (app/src/screens/books/Lookup.jsx): what its buttons and boxes do
+function lkType(k, v){ const x = LK.st(); x[k] = k === "from" || k === "to" || k === "asOn" ? FC.d8(v) : v; FinComReact.redraw(); }
+function lkSrc(src){ LK.st().src = src; render(); }
+function lkKind(k){ const x = LK.st(); x.kind = k; x.res = null; x.heard = ""; if (x.typ && !LK.types().includes(x.typ)) x.typ = ""; if (x.kind === "bills" && x.led && !(Audit.isDebtor(x.led) || Audit.isCreditor(x.led))) x.led = ""; render(); }
+function lkPer(k){ const x = LK.st(), p = FC.period(k); x.from = p.from; x.to = p.to; LK.run("auto"); }
+function lkRec(i){ const x = LK.st(), r = LK.recent()[i]; if (r){ Object.assign(x, r); x.heard = ""; LK.run("auto"); } }
+// a ledger clicked anywhere (an entry, a group, the trial balance, a letter): its account for the same dates
+function lkLed(l){
+  const x = LK.st(), p = x.res && x.res.from ? {from: x.res.from, to: x.res.to} : x.res && x.res.asOn ? {from: Audit.fyStart(x.res.asOn), to: x.res.asOn} : {from: x.from, to: x.to};
+  Object.assign(x, {kind: "ledger", led: l, from: p.from, to: p.to, heard: ""}); if (S.booksTab !== "lookup") FC.go("lookup"); LK.run("auto");
+}
+function lkMonth(ym){ const x = LK.st(), y = num(ym.slice(0, 4)), m = num(ym.slice(4, 6)); Object.assign(x, {kind: x.led ? "ledger" : "group", from: ym + "01", to: FC.monthEnd(y, m)}); LK.run("auto"); }
+function lkOpen(id){ const x = LK.st(); x.open[id] = !x.open[id]; render(); }
+// a question in plain words (also from the dashboard's question box)
+function lkAsk(q){
+  const x = LK.st(); x.ask = q = q || "";
+  if (!q.trim()){ toast("Type what you want to see."); return; }
+  const o = LK.understand(q); x.heard = LK.title(Object.assign({}, x, o));
+  if (["ledger", "group", "monthly"].includes(o.kind) && !(o.led || o.grp)){ render(); return; }
+  LK.run("auto");
+}
+function lkAct(a){
+  const x = LK.st();
+  if (a === "fresh") LK.run("fresh");
+  else if (a === "names"){ LK.names = null; LK.loadNames(true); render(); }
+  else if (a === "clear"){ x.res = null; render(); }
+  else if (a === "more" && x.res && x.res.src === "cloud"){ const r = x.res; x.busy = "Bringing the next entries\u2026"; render();
+    TCloud.find(S.coId, r.q, r.from, r.to, r.typ, r).then(res => { x.busy = ""; x.res = Object.assign(res, {title: r.title}); render(); }, er => { x.busy = ""; toast("Could not ask the cloud: " + ((er && er.message) || er)); render(); }); }
+  else if (a === "print") LK.printIt();
+  else if (a === "excel" && x.res) FC.excel(x.res.title, [[x.res.kind === "tb" ? "Trial balance" : "Look up", LK.sheet(x.res)]]).catch(er => toast("Could not build the file: " + (er && er.message)));
 }
 
 // the books follow Tally on every screen, not only while Look up is open: once a minute, quietly (only the bridge's
@@ -20302,126 +20121,41 @@ const LTR = {
     window.open("https://wa.me/" + (ph.length === 10 ? "91" + ph : ph) + "?text=" + encodeURIComponent(t.subject + "\n\n" + t.body.slice(0, 1500)), "_blank");
     return true;
   },
-  // ---------- the page
-  view(b){
-    const x = this.st(), have = (b.vouchers || []).length > 0, live = typeof bridgeLive === "function" && bridgeLive(CO());
-    let h = '<section class="dash-card"><div class="rpt-top-row"><div><h3>Confirmations and reminders</h3><p class="note" style="margin:0">Letters are printed or saved as PDF, or opened in your own email or WhatsApp to send. Nothing is sent from FinCom.</p></div></div>' +
-      '<div class="lk-kinds" role="tablist" aria-label="Letters"><button role="tab" data-ltrmode="confirm" aria-selected="' + (x.mode === "confirm") + '">Balance confirmations</button><button role="tab" data-ltrmode="remind" aria-selected="' + (x.mode === "remind") + '">Dues reminders</button><button role="tab" data-ltrmode="settings" aria-selected="' + (x.mode === "settings") + '">Letter settings</button></div></section>';
-    if (!have && x.mode !== "settings") return h + FC.noBooks("Letters");
-    if (x.busy) h += busyCard("Reading Tally…", x.busy, 0, 0);
-    if (live) setTimeout(() => LK.autoFresh(), 0);
-    if (LK.fr().busy) h += busyCard("Bringing the books up to date\u2026", LK.fr().busy, 0, 0);
-    if (x.mode === "settings") return h + this.viewSettings();
-    return h + (x.mode === "confirm" ? this.viewConfirm(live) : this.viewRemind());
-  },
-  contactCells(r){
-    return '<td><input type="email" class="ltr-in" data-ltrc="' + esc(r.l) + '|email" value="' + esc(r.c.email) + '" placeholder="email" aria-label="' + esc(r.l) + ' email"></td>' +
-      '<td><input type="tel" class="ltr-in sm" data-ltrc="' + esc(r.l) + '|phone" value="' + esc(r.c.phone) + '" placeholder="phone" aria-label="' + esc(r.l) + ' phone"></td>';
-  },
-  viewConfirm(live){
-    const x = this.st(), {B, rows} = this.confirmRows(), c = this.cfg();
-    let h = '<section class="dash-card" style="margin-top:12px"><div class="lk-form">' +
-      '<label class="f"><span>Balance as on</span><input type="date" data-ltrf="asOn" value="' + FC.iso(x.asOn) + '"></label>' +
-      '<div class="f"><span>Write to</span><div class="row" style="gap:12px">' + [["r", "Customers"], ["p", "Suppliers"], ["o", "Loans and advances"]].map(([k, l]) => '<label class="chk"><input type="checkbox" data-ltrside="' + k + '"' + (x.sides[k] ? " checked" : "") + "> " + l + "</label>").join("") + "</div></div>" +
-      '<label class="f"><span>Balances of at least</span><input type="text" inputmode="decimal" data-ltrf="min" value="' + esc(x.min) + '"></label>' +
-      '<label class="f"><span>Show</span><select data-ltrf="show">' + [["all", "Every party"], ["notsent", "Not sent yet"], ["waiting", "Sent, no reply yet"], ["differs", "Replied with a difference"]].map(([v, l]) => '<option value="' + v + '"' + (x.show === v ? " selected" : "") + ">" + l + "</option>").join("") + "</select></label>" +
-      '<label class="f lk-wide"><span>Find</span><input type="search" data-fk="ltrQ" data-ltrf="q" data-keeptyped value="' + esc(x.q) + '" placeholder="party or GSTIN"></label></div>' +
-      '<p class="note" style="margin:8px 0 0">Replies go to <b>' + esc(this.replyTo().name) + "</b>" + (c.replyTo === "auditor" ? " (the auditor)" : "") + ". " + (c.attach ? "Each letter carries the party’s statement of account for the year." : "") + ' <button class="linkbtn" data-ltrmode="settings">Change</button></p></section>';
-    if (!B.ok) return h + '<div class="fc-empty"><h3>The balances on ' + FC.when(x.asOn) + ' are not in FinCom\u2019s copy of the books yet</h3><p class="note">' + esc(B.why || "") + '.</p>' + LK.freshBar(S.books) + "</div>";
-    const rec = this.store().conf[x.asOn] || {}, all = Object.values(rec), sent = all.filter(s => s.sentAt).length, agreed = all.filter(s => s.reply === "agreed").length, diff = all.filter(s => s.reply === "differs").length;
-    const picked = rows.filter(r => x.sel[r.l]);
-    h += '<div class="dash-tiles" style="margin-top:12px"><div class="dtile"><span>Parties</span><b>' + rows.length + "</b><small>" + esc(B.src) + '</small></div><div class="dtile"><span>Sent</span><b>' + sent + '</b><small>for this date</small></div><div class="dtile"><span>Agreed</span><b>' + agreed + '</b><small>confirmed by the party</small></div><div class="dtile' + (diff ? " warn" : "") + '"><span>Differences</span><b>' + diff + "</b><small>to reconcile</small></div></div>";
-    if (!rows.length) return h + '<div class="bk-none">No party with a balance matches. Change the choices above.</div>';
-    h += '<div class="row ltr-bar"><button class="btn primary" data-ltr="print"' + (picked.length ? "" : " disabled") + ">Print or PDF the letters (" + picked.length + ")</button>" +
-      '<button class="btn" data-ltr="selall">' + (picked.length === rows.length ? "Untick all" : "Tick all " + rows.length) + '</button><button class="btn" data-ltr="excel">Excel of the list</button></div>';
-    h += '<div class="bk-tablewrap"><table class="bk-table lk-t ltr-t"><thead><tr><th class="ck"></th><th>Party</th><th class="n">Balance</th><th>Email</th><th>Phone</th><th>Sent</th><th>Reply</th><th class="ac"></th></tr></thead><tbody>' +
-      rows.map(r => '<tr><td class="ck"><input type="checkbox" data-ltrsel="' + esc(r.l) + '"' + (x.sel[r.l] ? " checked" : "") + ' aria-label="Tick ' + esc(r.l) + '"></td><td><button class="linkbtn strong" data-lkled="' + esc(r.l) + '">' + esc(r.l) + '</button><span class="nr">' + ({r: "customer", p: "supplier", o: "loan or advance"}[r.side]) + (r.gstin ? " · " + esc(r.gstin) : "") + "</span></td>" +
-        '<td class="n">' + FC.drcr(r.bal) + "</td>" + this.contactCells(r) +
-        "<td>" + (r.s.sentAt ? fmtDate(r.s.sentAt.slice(0, 10)) + '<span class="nr">' + esc(r.s.via || "") + "</span>" : '<span class="note">not yet</span>') + "</td>" +
-        '<td><select class="ltr-in sm" data-ltrreply="' + esc(r.l) + '">' + [["", "—"], ["agreed", "Agreed"], ["differs", "Differs"], ["none", "No reply"]].map(([v, l]) => '<option value="' + v + '"' + ((r.s.reply || "") === v ? " selected" : "") + ">" + l + "</option>").join("") + "</select>" +
-        (r.s.reply === "differs" ? '<input type="text" class="ltr-in sm" inputmode="decimal" data-ltrtheir="' + esc(r.l) + '" value="' + esc(r.s.their || "") + '" placeholder="their figure" aria-label="Their balance">' + (num(r.s.their) ? '<span class="nr bad">difference ' + INR.format(Math.abs(r2(Math.abs(r.bal) - num(r.s.their)))) + "</span>" : "") : "") + "</td>" +
-        '<td class="ac"><button class="btn small" data-ltrone="confirm|print|' + esc(r.l) + '">Letter</button><button class="btn small" data-ltrone="confirm|mail|' + esc(r.l) + '" title="Opens your email with the letter written">Email</button><button class="btn small" data-ltrone="confirm|wa|' + esc(r.l) + '">WhatsApp</button></td></tr>').join("") +
-      "</tbody></table></div>";
-    return h;
-  },
-  viewRemind(){
-    const x = this.st(), rows = this.remindRows(), c = this.cfg(), picked = rows.filter(r => x.sel["rem|" + r.l]);
-    let h = '<section class="dash-card" style="margin-top:12px"><div class="lk-form">' +
-      '<label class="f"><span>Bills due as on</span><input type="date" data-ltrf="remOn" value="' + FC.iso(x.remOn) + '"></label>' +
-      '<label class="f"><span>Credit allowed</span><select data-ltrf="credit">' + [0, 15, 30, 45, 60, 90].map(d => '<option value="' + d + '"' + (num(x.credit) === d ? " selected" : "") + ">" + (d ? d + " days" : "none") + "</option>").join("") + "</select></label>" +
-      '<label class="f"><span>Tone</span><select data-ltrf="tone">' + [["friendly", "Friendly"], ["firm", "Firm"], ["final", "Final reminder"]].map(([v, l]) => '<option value="' + v + '"' + (x.tone === v ? " selected" : "") + ">" + l + "</option>").join("") + "</select></label>" +
-      '<label class="f lk-wide"><span>Find</span><input type="search" data-fk="ltrQ2" data-ltrf="q" data-keeptyped value="' + esc(x.q) + '" placeholder="customer or GSTIN"></label></div>' +
-      '<label class="chk" style="margin-top:8px"><input type="checkbox" data-ltrcfg="msme"' + (c.msme ? " checked" : "") + "> The client is a micro or small enterprise: mention the MSMED Act interest</label></section>";
-    const tot = rows.reduce((s, r) => s + r.amt, 0);
-    h += '<div class="dash-tiles" style="margin-top:12px"><div class="dtile warn"><span>Overdue</span><b>' + INR0.format(tot) + "</b><small>past " + num(x.credit) + ' days</small></div><div class="dtile"><span>Customers</span><b>' + rows.length + '</b><small>with bills overdue</small></div><div class="dtile"><span>Over 90 days</span><b>' + INR0.format(rows.reduce((s, r) => s + r.over.filter(z => z.age > 90).reduce((a, z) => a + z.amt, 0), 0)) + '</b><small>the oldest</small></div><div class="dtile"><span>Reminded</span><b>' + rows.filter(r => r.last).length + "</b><small>at least once</small></div></div>";
-    if (!rows.length) return h + '<div class="fc-empty"><h3>Nothing overdue</h3><p class="note">No customer has a bill older than ' + num(x.credit) + " days on " + FC.when(x.remOn) + ". Bills are read from the bill-wise details in Tally.</p></div>";
-    h += '<div class="row ltr-bar"><button class="btn primary" data-ltr="rprint"' + (picked.length ? "" : " disabled") + ">Print or PDF the reminders (" + picked.length + ")</button>" +
-      '<button class="btn" data-ltr="rselall">' + (picked.length === rows.length ? "Untick all" : "Tick all " + rows.length) + "</button></div>";
-    h += '<div class="bk-tablewrap"><table class="bk-table lk-t ltr-t"><thead><tr><th class="ck"></th><th>Customer</th><th class="n">Overdue</th><th class="n">Oldest</th><th>Email</th><th>Phone</th><th>Last reminder</th><th class="ac"></th></tr></thead><tbody>' +
-      rows.map(r => '<tr><td class="ck"><input type="checkbox" data-ltrsel="rem|' + esc(r.l) + '"' + (x.sel["rem|" + r.l] ? " checked" : "") + ' aria-label="Tick ' + esc(r.l) + '"></td><td><button class="linkbtn strong" data-lkled="' + esc(r.l) + '">' + esc(r.l) + '</button><span class="nr">' + r.over.length + " bill" + (r.over.length === 1 ? "" : "s") + " · owes " + INR.format(r.total) + " in all</span></td>" +
-        '<td class="n">' + INR.format(r.amt) + '</td><td class="n' + (r.oldest > 90 ? " bad" : "") + '">' + r.oldest + " days</td>" + this.contactCells(r) +
-        "<td>" + (r.last ? fmtDate(r.last.at.slice(0, 10)) + '<span class="nr">' + esc(r.last.via) + ", " + esc(r.last.tone || "") + "</span>" : '<span class="note">never</span>') + "</td>" +
-        '<td class="ac"><button class="btn small" data-ltrone="remind|print|' + esc(r.l) + '">Letter</button><button class="btn small" data-ltrone="remind|mail|' + esc(r.l) + '">Email</button><button class="btn small" data-ltrone="remind|wa|' + esc(r.l) + '">WhatsApp</button></td></tr>').join("") +
-      "</tbody></table></div>";
-    return h;
-  },
-  viewSettings(){
-    const c = this.cfg(), inp = (k, l, ph, t) => '<label class="f"><span>' + l + '</span><input type="' + (t || "text") + '" data-ltrcfg="' + k + '" value="' + esc(c[k] || "") + '" placeholder="' + esc(ph || "") + '"></label>';
-    return '<section class="dash-card" style="margin-top:12px"><h3>Who the letters are from, and where replies go</h3><div class="lk-form">' +
-      inp("signer", "Signed by (name and designation)", "Rakesh Mehra, Director") + inp("companyEmail", "The client’s email for replies", "accounts@client.in", "email") +
-      '<label class="f"><span>Replies go to</span><select data-ltrcfg="replyTo"><option value="company"' + (c.replyTo !== "auditor" ? " selected" : "") + '>The client</option><option value="auditor"' + (c.replyTo === "auditor" ? " selected" : "") + ">The auditor, directly</option></select></label>" +
-      inp("auditor", "Auditor’s name", "Mehra & Iyer, Chartered Accountants") + inp("auditorEmail", "Auditor’s email", "audit@firm.in", "email") +
-      '<label class="f"><span>Days to reply</span><input type="text" inputmode="numeric" data-ltrcfg="days" value="' + esc(c.days) + '"></label>' + inp("udyam", "Udyam number (for reminders)", "UDYAM-UP-00-0000000") + "</div>" +
-      '<div class="stack" style="gap:6px;margin-top:10px"><label class="chk"><input type="checkbox" data-ltrcfg="attach"' + (c.attach ? " checked" : "") + "> Put the party’s statement of account for the year under each confirmation</label>" +
-      '<label class="chk"><input type="checkbox" data-ltrcfg="negative"' + (c.negative ? " checked" : "") + "> Say that no reply means the balance is taken as correct (a negative confirmation; the auditor decides whether that is enough)</label>" +
-      '<label class="chk"><input type="checkbox" data-ltrcfg="msme"' + (c.msme ? " checked" : "") + "> The client is a micro or small enterprise: mention the MSMED Act interest in reminders</label></div>" +
-      '<p class="note" style="margin-top:10px">For an audit, confirmations are best sent by the auditor with replies coming straight back to the auditor (SA 505). Choose “The auditor, directly” for that.</p></section>';
-  },
   byName(kind, l){ return (kind === "confirm" ? this.confirmRows().rows : this.remindRows()).find(r => r.l === l); }
 };
-function viewBooksLetters(b){ return LTR.view(b); }
-if (typeof document !== "undefined"){
-  document.addEventListener("click", e => {
-    const t = e.target.closest && e.target.closest("[data-ltr],[data-ltrmode],[data-ltrone]"); if (!t || !S.books) return;
-    const x = LTR.st();
-    if (t.dataset.ltrmode){ x.mode = t.dataset.ltrmode; x.q = ""; render(); return; }
-    if (t.dataset.ltrone){
-      const [kind, how, l] = t.dataset.ltrone.split("|"), r = LTR.byName(kind, l); if (!r) return;
-      if (how === "print"){ LTR.print(kind, [r]); return; }
-      const ok = how === "mail" ? LTR.mailto(kind, r) : LTR.whatsapp(kind, r);
-      if (ok){ LTR.mark(kind, r, how === "mail" ? "email" : "WhatsApp", new Date().toISOString()); saveBooks(); render(); }
-      return;
-    }
-    const a = t.dataset.ltr;
-    if (a === "print") LTR.print("confirm", LTR.confirmRows().rows.filter(r => x.sel[r.l]));
-    else if (a === "rprint") LTR.print("remind", LTR.remindRows().filter(r => x.sel["rem|" + r.l]));
-    else if (a === "selall" || a === "rselall"){
-      const rows = a === "selall" ? LTR.confirmRows().rows : LTR.remindRows(), key = r => (a === "selall" ? "" : "rem|") + r.l, all = rows.every(r => x.sel[key(r)]);
-      rows.forEach(r => { x.sel[key(r)] = !all; }); render();
-    }
-    else if (a === "excel"){
-      const rows = LTR.confirmRows().rows;
-      FC.excel("balance-confirmations-" + FC.iso(x.asOn), [["Confirmations", [["Party", "Kind", "GSTIN", "Balance", "Dr or Cr", "Email", "Phone", "Sent on", "Sent by", "Reply", "Their figure", "Difference"]].concat(rows.map(r => [r.l, {r: "Customer", p: "Supplier", o: "Loan or advance"}[r.side], r.gstin, Math.abs(r.bal), r.bal > 0 ? "Dr" : "Cr", r.c.email, r.c.phone, r.s.sentAt ? r.s.sentAt.slice(0, 10) : "", r.s.via || "", r.s.reply || "", r.s.their || "", r.s.their ? r2(Math.abs(r.bal) - num(r.s.their)) : ""]))]])
-        .catch(er => toast("Could not build the file: " + (er && er.message)));
-    }
-  });
-  document.addEventListener("input", e => {
-    const t = e.target; if (!t.dataset || !S.books || !S.ltr) return;
-    if (t.dataset.ltrf === "q"){ S.ltr.q = t.value; softRender(); return; }
-    if (t.dataset.ltrc){ const [l, k] = t.dataset.ltrc.split("|"), s = LTR.store(); s.contacts[l] = Object.assign({}, s.contacts[l], {[k]: t.value.trim()}); later("ltrc", saveBooks, 800); return; }
-    if (t.dataset.ltrtheir){ const s = LTR.store(), m = s.conf[S.ltr.asOn] = s.conf[S.ltr.asOn] || {}; m[t.dataset.ltrtheir] = Object.assign({}, m[t.dataset.ltrtheir], {their: t.value}); later("ltrt", () => { saveBooks(); render(); }, 900); return; }
-    if (t.dataset.ltrcfg && t.type !== "checkbox" && t.tagName !== "SELECT"){ LTR.store().cfg[t.dataset.ltrcfg] = t.value; later("ltrcfg", saveBooks, 800); }
-  });
-  document.addEventListener("change", e => {
-    const t = e.target; if (!t.dataset || !S.books || !S.ltr) return;
-    const x = S.ltr;
-    if (t.dataset.ltrf && t.dataset.ltrf !== "q"){ x[t.dataset.ltrf] = t.type === "date" ? FC.d8(t.value) : t.value; if (t.dataset.ltrf === "asOn") x.sel = {}; render(); return; }
-    if (t.dataset.ltrside){ x.sides[t.dataset.ltrside] = t.checked; render(); return; }
-    if (t.dataset.ltrsel !== undefined){ x.sel[t.dataset.ltrsel] = t.checked; render(); return; }
-    if (t.dataset.ltrreply){ const s = LTR.store(), m = s.conf[x.asOn] = s.conf[x.asOn] || {}; m[t.dataset.ltrreply] = Object.assign({}, m[t.dataset.ltrreply], {reply: t.value, replyAt: new Date().toISOString()}); saveBooks(); render(); return; }
-    if (t.dataset.ltrcfg && (t.type === "checkbox" || t.tagName === "SELECT")){ LTR.store().cfg[t.dataset.ltrcfg] = t.type === "checkbox" ? t.checked : t.value; saveBooks(); render(); }
-  });
+// Letters (app/src/screens/books/Letters.jsx): what its buttons, ticks and boxes do
+function ltrMode(m){ const x = LTR.st(); x.mode = m; x.q = ""; render(); }
+function ltrSet(k, v, isDate){ const x = LTR.st(); x[k] = isDate ? FC.d8(v) : v; if (k === "asOn") x.sel = {}; render(); }
+function ltrQ(v){ LTR.st().q = v; FinComReact.redraw(); }
+function ltrSide(k, on){ LTR.st().sides[k] = on; render(); }
+function ltrSel(key, on){ LTR.st().sel[key] = on; render(); }
+function ltrOne(kind, how, l){
+  const r = LTR.byName(kind, l); if (!r) return;
+  if (how === "print"){ LTR.print(kind, [r]); return; }
+  const ok = how === "mail" ? LTR.mailto(kind, r) : LTR.whatsapp(kind, r);
+  if (ok){ LTR.mark(kind, r, how === "mail" ? "email" : "WhatsApp", new Date().toISOString()); saveBooks(); render(); }
 }
+function ltrAct(a){
+  const x = LTR.st();
+  if (a === "print") LTR.print("confirm", LTR.confirmRows().rows.filter(r => x.sel[r.l]));
+  else if (a === "rprint") LTR.print("remind", LTR.remindRows().filter(r => x.sel["rem|" + r.l]));
+  else if (a === "selall" || a === "rselall"){
+    const rows = a === "selall" ? LTR.confirmRows().rows : LTR.remindRows(), key = r => (a === "selall" ? "" : "rem|") + r.l, all = rows.every(r => x.sel[key(r)]);
+    rows.forEach(r => { x.sel[key(r)] = !all; }); render();
+  }
+  else if (a === "excel"){
+    const rows = LTR.confirmRows().rows;
+    FC.excel("balance-confirmations-" + FC.iso(x.asOn), [["Confirmations", [["Party", "Kind", "GSTIN", "Balance", "Dr or Cr", "Email", "Phone", "Sent on", "Sent by", "Reply", "Their figure", "Difference"]].concat(rows.map(r => [r.l, {r: "Customer", p: "Supplier", o: "Loan or advance"}[r.side], r.gstin, Math.abs(r.bal), r.bal > 0 ? "Dr" : "Cr", r.c.email, r.c.phone, r.s.sentAt ? r.s.sentAt.slice(0, 10) : "", r.s.via || "", r.s.reply || "", r.s.their || "", r.s.their ? r2(Math.abs(r.bal) - num(r.s.their)) : ""]))]])
+      .catch(er => toast("Could not build the file: " + (er && er.message)));
+  }
+}
+// typed: kept a moment after the typing stops
+function ltrContact(l, k, v){ const s = LTR.store(); s.contacts[l] = Object.assign({}, s.contacts[l], {[k]: v.trim()}); later("ltrc", saveBooks, 800); }
+function ltrTheir(l, v){ const s = LTR.store(), asOn = LTR.st().asOn, m = s.conf[asOn] = s.conf[asOn] || {}; m[l] = Object.assign({}, m[l], {their: v}); later("ltrt", () => { saveBooks(); render(); }, 900); }
+function ltrCfgType(k, v){ LTR.store().cfg[k] = v; later("ltrcfg", saveBooks, 800); }
+// chosen: kept and shown at once
+function ltrReply(l, v){ const s = LTR.store(), asOn = LTR.st().asOn, m = s.conf[asOn] = s.conf[asOn] || {}; m[l] = Object.assign({}, m[l], {reply: v, replyAt: new Date().toISOString()}); saveBooks(); render(); }
+function ltrCfg(k, v){ LTR.store().cfg[k] = v; saveBooks(); render(); }
 /* ================================================================== */
 /* Closed periods: entries dated where the books are closed, or where */
 /* a GST or TDS return has been filed, are not stopped; FinCom warns   */
@@ -20573,7 +20307,7 @@ function dashAsk(q){
   goClient("books:lookup");
   q = String(q || "").trim();
   if (!q) return;
-  const go = (n) => { if (S.books && S.books.cid === S.coId && !S.books.loading){ LK.st().ask = q; render(); const b = document.querySelector('[data-lk="ask"]'); if (b) b.click(); } else if (n < 40) setTimeout(() => go(n + 1), 100); };
+  const go = (n) => { if (S.books && S.books.cid === S.coId && !S.books.loading){ lkAsk(q); } else if (n < 40) setTimeout(() => go(n + 1), 100); };
   setTimeout(() => go(0), 50);
 }
 /* ================================================================== */
