@@ -33,7 +33,11 @@ const Books = {
     meta.gstins = Array.from(meta.gstins);
     const dates = out.map(v => v.date).filter(Boolean).sort();
     meta.from = dates[0] || ""; meta.to = dates[dates.length - 1] || "";
-    return {vouchers: out, meta};
+    // build 191: each entry's words are cut from the file's text, and the browser keeps the whole text alive behind
+    // them (a year's day book of 400 MB stayed in memory: 430 MB used for 7 MB of entries). A copy lets it go
+    let clean = out;
+    try { clean = typeof structuredClone === "function" ? structuredClone(out) : JSON.parse(JSON.stringify(out)); } catch (e){ clean = out; }
+    return {vouchers: clean, meta};
   },
   async decoder(file){
     const head = new Uint8Array(await file.slice(0, 4).arrayBuffer());
