@@ -1,4 +1,4 @@
-"""python3 run_lock_beat.py - bridge 1.14.3:
+"""python3 run_lock_beat.py - bridge 1.14.4:
   - one request at a time to Tally, even when the bridge (FinCom's requests) and its copier both want it: the second
     waits its turn;
   - a heartbeat to the cloud every few minutes (Tally open, the companies, how many days wait), asking Tally nothing."""
@@ -14,7 +14,7 @@ import fake_tally, fake_cloud
 fake_tally.start(); fake_cloud.start()
 os.environ["TDSBRIDGE_FAKE"] = _os.path.join(BRUN, "fake.json")
 CFG = _os.path.join(BRUN, "tds-bridge.config.json")
-json.dump({"TallyTimeoutSec": 60, "KeepInStep": True, "KeepSchedule": "daily", "KeepDailyAt": "23:59", "KeepStartSec": 3, "KeepCycleSec": 3, "KeepIdleMin": 1,
+json.dump({"TallyTimeoutSec": 60, "KeepInStep": True, "KeepSchedule": "daily", "KeepLightMin": -1, "KeepDailyAt": "23:59", "KeepStartSec": 3, "KeepCycleSec": 3, "KeepIdleMin": 1,
            "KeepFrom": "20260301", "KeepFakeOffice": False, "KeepRunMin": 4, "CloudBeatSec": 5, "CloudLinksSec": 5}, open(CFG, "w"))
 br = subprocess.Popen([os.environ.get("PWSH", "/opt/pwsh/pwsh"), "-NoProfile", "-File", _os.path.join(BRUN, "TDSBridge.ps1")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=BRUN)
 fails = []

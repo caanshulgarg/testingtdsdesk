@@ -1,4 +1,4 @@
-"""python3 run_priority.py - bridge 1.14.3:
+"""python3 run_priority.py - bridge 1.14.4:
   - FinCom first: while the copier is reading Tally, FinCom's requests (posting, a check someone asked for) go ahead;
     the copier waits between its reads, so FinCom's requests follow one another with nothing of the copier between them;
   - "Tally not responding since HH:MM": when Tally stops answering, the status says since when, until it answers again."""
@@ -14,7 +14,7 @@ import fake_tally
 fake_tally.start()
 os.environ["TDSBRIDGE_FAKE"] = _os.path.join(BRUN, "fake.json")
 CFG = _os.path.join(BRUN, "tds-bridge.config.json")
-json.dump({"TallyTimeoutSec": 6, "KeepInStep": True, "KeepSchedule": "daily", "KeepDailyAt": "23:59", "KeepStartSec": 3, "KeepCycleSec": 3, "KeepIdleMin": 1,
+json.dump({"TallyTimeoutSec": 6, "KeepInStep": True, "KeepSchedule": "daily", "KeepLightMin": -1, "KeepDailyAt": "23:59", "KeepStartSec": 3, "KeepCycleSec": 3, "KeepIdleMin": 1,
            "KeepFrom": "20260301", "KeepFakeOffice": False, "KeepRunMin": 6}, open(CFG, "w"))
 br = subprocess.Popen([os.environ.get("PWSH", "/opt/pwsh/pwsh"), "-NoProfile", "-File", _os.path.join(BRUN, "TDSBridge.ps1")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=BRUN)
 fails = []

@@ -221,7 +221,7 @@ function Get-CloudLinkStatus {
 $script:BeatAt = [DateTime]::MinValue
 function Send-CloudBeat {
   if (-not (Test-CloudOn)) { return }
-  if (([DateTime]::UtcNow - $script:BeatAt).TotalSeconds -lt (Get-KeepNum 'CloudBeatSec' 300)) { return }
+  if (([DateTime]::UtcNow - $script:BeatAt).TotalSeconds -lt (Get-KeepNum 'CloudBeatSec' 60)) { return }
   $script:BeatAt = [DateTime]::UtcNow
   $open = @(); $tally = $false
   try { foreach ($s in @(Get-OpenCompaniesCached)) { if ($s.skipped) { continue }; if ($s.ok) { $tally = $true; $open += @($s.companies | ForEach-Object { [string]$_.name }) } } } catch { }
@@ -233,5 +233,7 @@ function Send-CloudBeat {
   $running = $false; try { $p = [int]('0' + [IO.File]::ReadAllText((Join-Path (Get-SyncDir) 'keep.pid')).Trim()); $running = [bool]($p -and (Test-ProcessAlive $p)) } catch { }
   $beat = [ordered]@{ kind = 'beat'; tally = $tally; open = $open; companies = $cos; updating = $running; dailyAt = (Get-KeepDailyAt); lastRun = (Get-KeepLastRun) }
   $r = Invoke-Cloud $beat 10
+  # 1.14.4: Update now pressed in FinCom on another computer
+  if ($r.code -eq 200 -and $r.json -and $r.json.updateNow) { Request-KeepNow; try { Start-KeepIfNeeded } catch { } }
   if ($r.code -ne 200) { $script:BeatAt = [DateTime]::UtcNow.AddMinutes(25) }       # the cloud or the internet is down: tried again in half an hour
 }

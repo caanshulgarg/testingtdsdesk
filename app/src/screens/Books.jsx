@@ -137,7 +137,8 @@ function FreshLine({ b }) {
   const m = b.meta || {};
   if (!(b.vouchers || []).length || !m.to) return null;
   const at = m.at ? new Date(m.at).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
-  const can = typeof Bridge === "object" && Bridge.on() && Bridge.up();
+  // build 197: from any computer: on the Tally computer through its bridge, elsewhere through the cloud
+  const can = (typeof Bridge === "object" && Bridge.on() && Bridge.up()) || (typeof TCloud === "object" && S.coId && TCloud.has(S.coId));
   return <p className="note" style={{ margin: "0 0 10px" }}>Books up to <b>{fmtDate(tallyDate(m.to))}</b>{at ? ", brought in " + at : ""}.
     {can && <> <button className="linkbtn" onClick={() => doAct("keepNow")}>Update now</button></>}</p>;
 }

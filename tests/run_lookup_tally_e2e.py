@@ -47,7 +47,7 @@ try:
         pg.goto("http://localhost:8143/"); pg.wait_for_timeout(2000)
         pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
         pg.evaluate(SETUP, [key, CO]); pg.evaluate("Bridge.refresh()"); pg.wait_for_timeout(1500)
-        ok(pg.evaluate("Bridge.st.version") == "1.14.3", "bridge 1.14.3 running")
+        ok(pg.evaluate("Bridge.st.version") == "1.14.4", "bridge 1.14.4 running")
         ok(pg.evaluate("LK.live()"), "Look up sees Tally live")
         n0 = sum(1 for k, a, b in fake_tally.LOG if k == "TDSDeskNames")
         pg.evaluate("render()"); pg.wait_for_timeout(4000)
