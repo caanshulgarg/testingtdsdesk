@@ -1730,7 +1730,6 @@ function setPath(o, path, v){ const k = path.split("."); if (k.length === 2) o[k
 document.addEventListener("change", ev => {
   if (reactOwned(ev.target)) return;
   if (ev.target && ev.target.id && ["booksIn", "mastersIn", "tbIn", "twoBIn", "filedIn"].includes(ev.target.id)){ booksChange(ev.target); return; }
-  if (ev.target && ev.target.dataset && (ev.target.dataset.dbfrom !== undefined || ev.target.dataset.dbto !== undefined || ev.target.dataset.tbon !== undefined)){ booksChange(ev.target); return; }
   if (ev.target && ev.target.dataset && S.books && gstFixChange(ev.target)) return;
   if (ev.target && ev.target.id === "marketIn"){ const f = (ev.target.files || [])[0]; ev.target.value = ""; if (f) importMarketFile(f); return; }
   if (ev.target && ev.target.id === "salaryIn"){

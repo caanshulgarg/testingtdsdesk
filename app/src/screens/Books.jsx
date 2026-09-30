@@ -9,6 +9,7 @@ import Legacy from "../parts/Legacy.jsx";
 import { BusyCard } from "../parts/Reading.jsx";
 import { Return26, Return24, CertsPage } from "./TdsReturn.jsx";
 import Gst from "./Gst.jsx";
+import FromTally from "./books/FromTally.jsx";
 import HelpButton from "../parts/HelpButton.jsx";
 
 const money = (v) => INR.format(r2(v || 0));
@@ -135,7 +136,7 @@ export default function Books() {
   const tabs = [["import", "From Tally", n || null], ["ledgers", "Tally ledgers", n ? (pending ? pending + " to confirm" : "✓") : null], ["tds", "TDS", n ? TDS.rows().length : ((b.salary || []).length || null)],
     ["gst", "GST", null], ["mis", "MIS", null], ["fs", "Accounts", null], ["audit", "Audit", highOpen || null]];
   let body;
-  if (tab === "import") body = <Legacy html={viewBooksImport(b)} />;
+  if (tab === "import") body = <FromTally b={b} />;
   else if (!n && tab === "gst") body = <Gst />;
   else if (!n && !(tab === "tds" && (b.salary || []).length)) body = <div className="bk-none">Bring the day book in first, under “From Tally”. Salary for 24Q can be brought in on its own, under TDS.</div>;
   else if (tab === "tds") body = <Tds b={b} />;

@@ -879,8 +879,6 @@ function gst9cSet(key, v){
 // what the user corrects on the Advances and Reversal screens
 function gstFixChange(t){
   const d = t.dataset, b = S.books;
-  if (d.tallyfrom !== undefined || d.tallyto !== undefined){ const t0 = Audit.today(); S.tallyRange = Object.assign({from: Audit.iso(Audit.fyStart(t0)), to: Audit.iso(t0)}, S.tallyRange, d.tallyfrom !== undefined ? {from: t.value} : {to: t.value}); return true; }
-  if (d.tallytime !== undefined){ S.tallyCopy = Object.assign({}, S.tallyCopy, {time: t.value}); return true; }
   if (d.fskind !== undefined){ b.fs = Object.assign({}, FS.cfg(b), {kind: t.value}); S.fsRun = null; saveBooks(); render(); return true; }
   if (d.fsfy !== undefined){ S.fsFy = t.value; S.fsRun = null; render(); return true; }
   if (d.fsstock !== undefined){ const c = FS.cfg(b); c.stock = Object.assign({}, c.stock, {[d.fsstock]: t.value === "" ? "" : num(t.value)}); b.fs = c; saveBooks(); return true; }
@@ -966,9 +964,6 @@ function booksChange(t){
     }, e => { b.busy = ""; toast("Could not read that file: " + (e && e.message || e)); render(); });
     return true;
   }
-  if (t.dataset && t.dataset.dbfrom !== undefined){ S.dbFrom = t.value; render(); return true; }
-  if (t.dataset && t.dataset.dbto !== undefined){ S.dbTo = t.value; render(); return true; }
-  if (t.dataset && t.dataset.tbon !== undefined){ S.tbOn = t.value; render(); return true; }
   if (t.id === "tbIn"){
     const f = (t.files || [])[0]; t.value = "";
     if (!f) return true;
