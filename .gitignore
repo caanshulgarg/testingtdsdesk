@@ -6,3 +6,6 @@ tests/data/
 __pycache__/
 *.whl
 connector/FinComConnector.exe
+
+# the React build published on main for checking (staging.fincom.live/react/, app/publish-preview.sh)
+/react/

@@ -116,6 +116,7 @@ Status: **done** (in React, test passing) · **next** · blank = not started. Ab
 | | customers' IMS rejections (33) → `gst/CustIms.jsx`; 94 GST pages match live. Every GST part worked out from the books is now React | **done** |
 | | GST settings and registrations (36) → `gst/GstSettings.jsx`, in Client setup; the page matches live (the blocked-credit sentence aside, added in the Client setup redesign); `run_gstregs_ui.py` passes in full. Fixed: the GST tab settles the month and GSTIN before working out the filing type, so a quarterly GSTIN is not shown as monthly on the first view | **done** |
 | | still old: notices (50) | |
+| **Books** | From Tally (`viewBooksImport`, `viewSetupList`, `viewBookParts`) → `books/FromTally.jsx`; the same text as main on its pages (`tests/pages_books.py`) | **done** |
 | | 2B from the portal `viewGstApiCard` (39) | **done** |
 | **Books** | `viewBooks`, `viewBooksImport`, `viewBooksLedgers`, `viewLedPosting`, `viewTallyRead`, `viewSetupList` (18) · accounts (30) | |
 | **Audit and MIS** | `viewBooksAudit`, `viewAuditRel`, `viewAudit3cd`, `viewBooksMis`, `misPackHtml` (18) | |
@@ -134,3 +135,8 @@ Status: **done** (in React, test passing) · **next** · blank = not started. Ab
 ## Dates in India
 
 `addDays` (24) read a local midnight back in UTC, a day early east of London: the bank reconciliation's “opening balance as on the day before” was two days before, and fetches “from the day after” fetched the same day again. The marketplace sales import read Excel dates a day early for the same reason. Both fixed; `TZ=Asia/Kolkata node tests/run_dates.js` checks addDays. The live site (main) still has these; they move with the switch unless taken there first.
+
+
+## Keeping up with main
+
+`main` goes on changing while the rewrite runs (builds 188–194 on 30 Sep 2026). Merge it into `react` before each part is compared, and carry changes to old views that are already React into their screens by hand: after the 30 Sep merge, the From Tally tab lost “Straight from Tally” and gained the daily update time (`keepAtSet`), every Books tab has the “Books up to … · Update now” line (`FreshLine` in Books.jsx), and the clients list has the Tally light (`TallyLight` in Clients.jsx). React drawing runs inside `memoScope` (src/js/01) so figures from the whole books are worked out once per drawing, as main's old screens do. Compare against a fresh build of `main` (`python3 build.py` in a worktree of origin/main), not an old one. The react/ folder on main (the preview) is kept out of this branch (.gitignore).

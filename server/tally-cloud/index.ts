@@ -13,6 +13,7 @@
 //                                                       tally-days, read into entries and lines, totals made ready
 //   {kind:"ledgers", company, from, openAsOn, ledgers:[[name, parent, open]]}
 //   {kind:"state", company, state}
+//   {kind:"beat", tally, open, companies:[{name, open, at, phase, waiting}], updating, dailyAt, lastRun}
 //   {kind:"support", note, zip}                      -> the Connector's log and details for FinCom support
 // Or a person signed in to FinCom (Authorization: Bearer, two-step done, a member of the firm), for one of the firm's
 // clients, giving the books from files exported from Tally:
@@ -50,6 +51,10 @@ async function gunzip(u: Uint8Array, max: number) {
   }
   const all = new Uint8Array(n); let o = 0; for (const p of parts) { all.set(p, o); o += p.length; }
   return { text: new TextDecoder("utf-8").decode(all), size: n };
+}
+async function gzipBytes(u: Uint8Array) {
+  const b = await new Response(new Blob([u]).stream().pipeThrough(new CompressionStream("gzip"))).arrayBuffer();
+  return new Uint8Array(b);
 }
 // the body read a piece at a time, whatever the request says its length is
 async function readBody(req: Request) {
@@ -90,10 +95,22 @@ async function ingestDays(firm: string, book: string, daysIn: unknown) {
   const days = (Array.isArray(daysIn) ? daysIn : []).slice(0, 62);
   const done: string[] = [];
   let unzipped = 0;
+  const bad: { day: string; error: string }[] = [];
   for (const d of days as any[]) {
-    if (!isDay(d?.day) || typeof d?.gz !== "string") continue;
-    const gz = b64bytes(d.gz);
-    const z = await gunzip(gz, Math.min(MAX_DAY, MAX_UNZIP - unzipped));
+    if (!isDay(d?.day) || (typeof d?.gz !== "string" && typeof d?.b64 !== "string")) continue;
+    // a day sent as text (b64, the bridge from 1.14.0) is packed here; one sent packed (gz) is opened to be read
+    let gz: Uint8Array, z: { text: string; size: number };
+    try {
+      if (typeof d.b64 === "string") {
+        const raw = b64bytes(d.b64);
+        if (raw.length > Math.min(MAX_DAY, MAX_UNZIP - unzipped)) throw new Error("A day's day book is larger than FinCom takes in one go.");
+        z = { text: new TextDecoder("utf-8").decode(raw), size: raw.length };
+        gz = await gzipBytes(raw);
+      } else {
+        gz = b64bytes(d.gz);
+        z = await gunzip(gz, Math.min(MAX_DAY, MAX_UNZIP - unzipped));
+      }
+    } catch (e) { bad.push({ day: d.day, error: String((e as Error)?.message || e).slice(0, 200) }); continue; }
     unzipped += z.size;
     const r = parseDay(z.text);
     // every entry of a day is dated that day; anything else means the file is not what it says
@@ -107,7 +124,7 @@ async function ingestDays(firm: string, book: string, daysIn: unknown) {
     if (error) throw new Error(error.message);
     done.push(d.day);
   }
-  return reply(200, { ok: true, done });
+  return reply(200, { ok: true, done, bad });
 }
 async function ingestLedgers(book: string, body: any) {
   if (!isDay(body.from) || !isDay(body.openAsOn)) return reply(400, { ok: false, error: "from and openAsOn are dates (yyyymmdd)" });
@@ -169,7 +186,7 @@ Deno.serve(async (req) => {
   if (!/^fcd_[0-9a-f]{48}$/.test(key)) return reply(401, { ok: false, error: "This computer is not connected to FinCom. Connect it from FinCom: Settings, Tally connection." });
   const len = Number(req.headers.get("content-length") || 0);
   if (len > MAX_BODY) return reply(413, { ok: false, error: "Too much in one go; send fewer days at a time." });
-  const { data: dev } = await db.from("tally_devices").select("id, firm_id, name, revoked").eq("key_hash", await sha256(key)).maybeSingle();
+  const { data: dev } = await db.from("tally_devices").select("id, firm_id, name, revoked, info").eq("key_hash", await sha256(key)).maybeSingle();
   if (!dev || dev.revoked) return reply(401, { ok: false, error: "This computer's key is not valid any more. Connect it again from FinCom." });
   let body: any;
   try { body = JSON.parse(await readBody(req)); } catch (e) { return (e as Error).message === "too large" ? reply(413, { ok: false, error: "Too much in one go; send fewer days at a time." }) : reply(400, { ok: false, error: "Bad request" }); }
@@ -186,6 +203,19 @@ Deno.serve(async (req) => {
       case "hello": {
         const { data: f } = await db.from("firms").select("name").eq("id", firm).maybeSingle();
         return reply(200, { ok: true, firm: f?.name || "", device: dev.name });
+      }
+      case "beat": {
+        // every few minutes from the bridge (1.14.1): is Tally open, which companies, when each was last updated and
+        // how many days wait to be sent. FinCom's clients list shows a light from it. Nothing of the books is in it
+        const b = body || {};
+        const s = (v: unknown, n = 80) => typeof v === "string" ? v.slice(0, n) : "";
+        const beat = { at: new Date().toISOString(), tally: !!b.tally, updating: !!b.updating, dailyAt: s(b.dailyAt, 5), lastRun: s(b.lastRun, 8),
+          open: (Array.isArray(b.open) ? b.open : []).slice(0, 50).map((x: unknown) => s(x, 200)),
+          companies: (Array.isArray(b.companies) ? b.companies : []).slice(0, 200).map((c: any) => ({ name: s(c?.name, 200), open: !!c?.open, at: s(c?.at, 30), phase: s(c?.phase, 12),
+            waiting: Math.max(0, Math.min(1e6, Math.floor(Number(c?.waiting) || 0))) })) };
+        const info = { ...(((dev as any).info && typeof (dev as any).info === "object") ? (dev as any).info : {}), beat };
+        await db.from("tally_devices").update({ info }).eq("id", dev.id);
+        return reply(200, { ok: true });
       }
       case "companies": {
         const list = (Array.isArray(body.companies) ? body.companies : []).slice(0, 200)

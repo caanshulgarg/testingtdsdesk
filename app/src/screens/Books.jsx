@@ -124,6 +124,16 @@ function Tds({ b }) {
   </>;
 }
 
+// how up to date the books are, on every tab but From Tally, and Update now (a job for the bridge: nobody waits on Tally)
+function FreshLine({ b }) {
+  const m = b.meta || {};
+  if (!(b.vouchers || []).length || !m.to) return null;
+  const at = m.at ? new Date(m.at).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
+  const can = typeof Bridge === "object" && Bridge.on() && Bridge.up();
+  return <p className="note" style={{ margin: "0 0 10px" }}>Books up to <b>{fmtDate(tallyDate(m.to))}</b>{at ? ", brought in " + at : ""}.
+    {can && <> <button className="linkbtn" onClick={() => doAct("keepNow")}>Update now</button></>}</p>;
+}
+
 export default function Books() {
   const co = CO();
   if (!S.books || S.books.cid !== co.id) { openBooks(co.id); return <p className="note">Opening the books…</p>; }
@@ -146,6 +156,7 @@ export default function Books() {
     <nav className="sbar" aria-label="Books">{tabs.map(([id, label, c]) =>
       <button key={id} aria-selected={tab === id} onClick={() => booksTabGo(id)}>{label}{c != null && <> <span className="sbar-n">{c}</span></>}</button>)}</nav>
     <Legacy html={BookSync.note(co.id, tab) + gstDriftNote(b)} />
+    {tab !== "import" && <FreshLine b={b} />}
     {busy}
     {body}
   </>;

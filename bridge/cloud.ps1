@@ -120,6 +120,8 @@ function Push-CloudCompany([string]$Company, [string]$Dir, [double]$BudgetSec) {
     }
   }
   $q = @(Get-CloudQueue $Dir)
+  $pf = Join-Path $Dir 'cloud-plain.txt'
+  $plain = @(); if (Test-Path -LiteralPath $pf) { $plain = @([IO.File]::ReadAllLines($pf) | Where-Object { $_ -match '^\d{8}$' }) }
   $maxB = (Get-KeepNum 'CloudBatchKB' 3000) * 1024
   $i = 0
   while ($i -lt $q.Count -and $sw.Elapsed.TotalSeconds -lt $BudgetSec) {
@@ -127,15 +129,26 @@ function Push-CloudCompany([string]$Company, [string]$Dir, [double]$BudgetSec) {
     while ($i -lt $q.Count -and $batch.Count -lt 31) {
       $d = $q[$i]; $f = Join-Path (Join-Path $Dir 'days') ($d + '.xml')
       $t = ''; if (Test-Path -LiteralPath $f) { $t = [IO.File]::ReadAllText($f) }
-      $gz = ConvertTo-GzipBase64 $t
-      if ($batch.Count -and $size + $gz.Length -gt $maxB) { break }
-      $batch += [ordered]@{ day = $d; gz = $gz }; $size += $gz.Length; $i++
+      # 1.14.0: packed here (gzip); a day the cloud could not open that way is sent again as plain text, packed there
+      if ($plain -contains $d) { $one = [ordered]@{ day = $d; b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($t)) }; $len = $one.b64.Length }
+      else { $one = [ordered]@{ day = $d; gz = (ConvertTo-GzipBase64 $t) }; $len = $one.gz.Length }
+      if ($batch.Count -and $size + $len -gt $maxB) { break }
+      $batch += $one; $size += $len; $i++
     }
     $r = Invoke-Cloud @{ kind = 'days'; company = $Company; days = $batch } 180
     if ($r.code -eq 409) { $script:CloudLinks[$Company] = $false; return }
     if ($r.code -ne 200) { throw ('days did not go: ' + $r.error) }
     $done = @($r.json.done | ForEach-Object { [string]$_ })
-    Remove-CloudDays $Dir $done
+    # a day the cloud could not open (Windows' gzip): sent again as plain text; any other refusal is logged and the day
+    # left out, so it does not hold up every day after it
+    $bad = @($r.json.bad | Where-Object { $_ })
+    $again = @($bad | Where-Object { [string]$_.error -match 'gzip|checksum|corrupt|invalid' -and -not ($plain -contains [string]$_.day) } | ForEach-Object { [string]$_.day })
+    if ($again.Count) { $plain = @($plain + $again | Sort-Object -Unique); [IO.File]::WriteAllLines($pf, [string[]]$plain); Write-Log ('Cloud: ' + $Company + ': ' + $again.Count + ' day(s) go again as plain text') }
+    $dropped = @($bad | Where-Object { -not ($again -contains [string]$_.day) })
+    foreach ($b in $dropped) { Write-Log ('Cloud: ' + $Company + ' ' + $b.day + ' was not taken: ' + $b.error) }
+    Remove-CloudDays $Dir (@($done) + @($dropped | ForEach-Object { [string]$_.day }))
+    $done = @($done) + @($dropped | ForEach-Object { [string]$_.day }) + $again
+    if ($again.Count) { $i = $q.Count }
     $script:CloudLast.sentDays += $done.Count
     if ($done.Count -lt $batch.Count) { throw ('only ' + $done.Count + ' of ' + $batch.Count + ' days were taken') }
   }
@@ -201,4 +214,24 @@ function Set-CloudLink($o) {
 function Get-CloudLinkStatus {
   $s = $null; try { $f = Join-Path (Get-SyncDir) 'cloud-status.json'; if (Test-Path $f) { $s = Get-Content -Raw $f | ConvertFrom-Json } } catch { }
   return [ordered]@{ ok = $true; connected = (Test-CloudOn); url = [string]$Cfg.CloudUrl; status = $s }
+}
+
+# 1.14.1: a heartbeat to the cloud every few minutes, so FinCom shows for each client whether its Tally computer is on,
+# Tally open, and when the books were last updated. Tally is asked nothing: all of it is what the bridge already knows
+$script:BeatAt = [DateTime]::MinValue
+function Send-CloudBeat {
+  if (-not (Test-CloudOn)) { return }
+  if (([DateTime]::UtcNow - $script:BeatAt).TotalSeconds -lt (Get-KeepNum 'CloudBeatSec' 300)) { return }
+  $script:BeatAt = [DateTime]::UtcNow
+  $open = @(); $tally = $false
+  try { foreach ($s in @(Get-OpenCompaniesCached)) { if ($s.skipped) { continue }; if ($s.ok) { $tally = $true; $open += @($s.companies | ForEach-Object { [string]$_.name }) } } } catch { }
+  $cos = @()
+  foreach ($d in @(Get-ChildItem -LiteralPath (Get-SyncDir) -Directory -ErrorAction SilentlyContinue)) {
+    $st = Read-KeepState $d.FullName; if (-not $st -or -not $st.company) { continue }
+    $cos += [ordered]@{ name = [string]$st.company; open = [bool]($open -contains [string]$st.company); at = [string]$st.at; phase = [string]$st.phase; waiting = @(Get-CloudQueue $d.FullName).Count }
+  }
+  $running = $false; try { $p = [int]('0' + [IO.File]::ReadAllText((Join-Path (Get-SyncDir) 'keep.pid')).Trim()); $running = [bool]($p -and (Test-ProcessAlive $p)) } catch { }
+  $beat = [ordered]@{ kind = 'beat'; tally = $tally; open = $open; companies = $cos; updating = $running; dailyAt = (Get-KeepDailyAt); lastRun = (Get-KeepLastRun) }
+  $r = Invoke-Cloud $beat 10
+  if ($r.code -ne 200) { $script:BeatAt = [DateTime]::UtcNow.AddMinutes(25) }       # the cloud or the internet is down: tried again in half an hour
 }

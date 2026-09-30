@@ -419,13 +419,15 @@ async function salesCheckTally(list){
   list.forEach(v => { if (nums.has(normInvNo(v.x.number))){ v.status = "intally"; v.postNote = "Already in Tally"; n++; } });
   return n;
 }
-async function salesAutoSync(checkOnly){
+// asked: someone pressed Refresh from Tally. By itself (opening the page) Tally is not read, except a first ledger list;
+// sales already in Tally are still found when posting (build 190)
+async function salesAutoSync(checkOnly, asked){
   const s = SL(), co = CO(s.cid);
   if (!bridgeLive(co)) return;
   try {
-    if (!checkOnly && (!B().ledgers.live || Date.now() - new Date(B().ledgers.importedAt || 0) > 10 * 60000)) await syncLedgersFromTally(true);
+    if (!checkOnly && (asked || !(B().ledgers.list || []).length)) await syncLedgersFromTally(true);
     s.list.forEach(v => mapInvoice(v));
-    await salesCheckTally(s.list.filter(v => ["review", "ready"].includes(v.status)));
+    if (asked) await salesCheckTally(s.list.filter(v => ["review", "ready"].includes(v.status)));
     saveSales(); render();
   } catch (e){ /* shown when posting */ }
 }
@@ -630,7 +632,7 @@ function salesClick(t){
     case "salesCsv": closeMenus(); exportSalesCsv(); return true;
     case "salesFile": closeMenus(); exportSalesXml(); return true;
     case "salesPost": postSalesToTally(); return true;
-    case "salesSync": closeMenus(); salesAutoSync(false).then(() => toast("Refreshed from Tally.")); return true;
+    case "salesSync": closeMenus(); salesAutoSync(false, true).then(() => toast("Refreshed from Tally.")); return true;
     case "salesUndo": salesUndo(); return true;
     case "salesUndoOk": s.undo = null; salesLightRefresh(); return true;
     case "salesSelNone": s.sel.clear(); salesLightRefresh(); return true;

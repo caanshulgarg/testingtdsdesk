@@ -197,10 +197,25 @@ const LK = {
   live(){ const co = CO(); return !!(co && typeof bridgeLive === "function" && bridgeLive(co) && Bridge.openFor(co)); },
   light(){ return bridgeVer(Bridge.st.version) >= bridgeVer("1.12.10"); },
   tname(){ const co = CO(), o = Bridge.openFor(co); if (!o) throw new Error("Open " + (co.tallyName || co.name) + " in Tally first."); return o.name; },
+  // build 194: the ledger names come from the cloud copy of the books (Tally is not asked); read from Tally only when
+  // someone presses "refresh" and there is no cloud copy
   async loadNames(force){
     const cid = S.coId;
-    if (!this.live() || !this.light() || this._namesBusy) return;
+    if (this._namesBusy) return;
     if (!force && this.names && this.names.cid === cid && Date.now() - this.names.at < 30 * 60000) return;
+    const bk = typeof TCloud === "object" && TCloud.on() ? TCloud.book(cid) : null;
+    if (bk && bk.book){
+      this._namesBusy = true;
+      try {
+        const rows = await TCloud.restAll("tally_ledgers?select=name,parent&book_id=eq." + encodeURIComponent(bk.book) + "&order=name.asc");
+        const under = {}; rows.forEach(r => { under[r.name] = r.parent || ""; });
+        this.names = {cid, at: Date.now(), leds: Object.keys(under), under, groups: {}, src: "cloud"};
+      } catch (e){ if (force) toast("Could not bring the ledger names: " + ((e && e.message) || e)); }
+      this._namesBusy = false;
+      if (S.booksTab === "lookup") render();
+      return;
+    }
+    if (!force || !this.live() || !this.light()) return;
     this._namesBusy = true;
     try {
       const j = await Bridge.call("/ledgernames?company=" + encodeURIComponent(this.tname()) + Bridge.pinQ(), null, 90000);
@@ -319,12 +334,14 @@ const LK = {
     const x = this.st();
     if (x.busy) return;
     const tally = this.useTally(x, how), have = (S.books.vouchers || []).length > 0;
-    // a large company, or books not loaded here: the trial balance and ledgers from the cloud's ready totals
-    const cloud = !tally && ["tb", "ledger"].includes(x.kind) && TCloud.has(S.coId) && (!have || TCloud.big(S.coId));
+    // build 192: whenever the client's books are in the cloud, the answer is worked out there (under a second, on any
+    // computer); the books loaded in this browser are used only without the cloud (offline), and for open bills
+    if (!tally && TCloud.on() && !(TCloud.st[S.coId] || {}).books){ try { await TCloud.status(S.coId); } catch (e){} }
+    const cloud = !tally && how !== "books" && ["tb", "ledger", "group", "monthly", "find"].includes(x.kind) && TCloud.has(S.coId);
     const need = (c, m) => { if (!c){ toast(m); throw null; } };
     try {
       if (x.kind === "ledger") need(x.led, "Choose a ledger.");
-      if (["ledger", "bills"].includes(x.kind) && x.led) need(FC.ledgers().includes(x.led) || tally, "\u201c" + x.led + "\u201d is not a ledger " + (FC.tn() ? "in Tally" : "in these books") + ". Pick one from the list.");
+      if (["ledger", "bills"].includes(x.kind) && x.led) need(FC.ledgers().includes(x.led) || tally || cloud, "\u201c" + x.led + "\u201d is not a ledger " + (FC.tn() ? "in Tally" : "in these books") + ". Pick one from the list.");
       if (x.kind === "group") need(x.grp, "Choose a group.");
       if (x.kind === "monthly") need(x.led || x.grp, "Choose a ledger or a group.");
       if (["ledger", "group", "monthly", "find"].includes(x.kind)) need(x.from && x.to && x.from <= x.to, "The dates are the wrong way round.");
@@ -332,9 +349,18 @@ const LK = {
     } catch (e){ if (e) throw e; return; }
     x.open = {};
     if (cloud){
-      x.busy = "Asking the copy in FinCom\u2019s cloud\u2026"; render();
-      try { x.res = x.kind === "tb" ? await TCloud.tb(S.coId, x.asOn) : await TCloud.ledger(S.coId, x.led, x.from, x.to); }
-      catch (e){ x.busy = ""; toast("Could not ask the cloud copy: " + ((e && e.message) || e)); render(); return; }
+      x.busy = "Working it out\u2026"; render();
+      try {
+        x.res = x.kind === "tb" ? await TCloud.tb(S.coId, x.asOn) : x.kind === "ledger" ? await TCloud.ledger(S.coId, x.led, x.from, x.to)
+          : x.kind === "group" ? await TCloud.group(S.coId, x.grp, x.from, x.to) : x.kind === "monthly" ? await TCloud.monthly(S.coId, x.led, x.grp, x.from, x.to)
+          : await TCloud.find(S.coId, x.q, x.from, x.to, x.typ);
+      }
+      catch (e){
+        x.busy = "";
+        // no copy in the cloud for these dates (or no internet): the books here, when there are any
+        if (have){ x.res = null; return this.run("books"); }
+        toast("Could not ask the cloud: " + ((e && e.message) || e)); render(); return;
+      }
       x.busy = "";
     } else if (tally){
       const force = how === "fresh";
@@ -424,6 +450,15 @@ const LK = {
   async keepOn(on){
     try { const f = this.fr(); f.keep = await Bridge.call("/keep?company=" + encodeURIComponent(this.tname()) + Bridge.pinQ(), {on: !!on}, 30000); toast(on ? "The bridge will keep this company in step whenever it is open in Tally." : "Keeping in step switched off."); f.at = 0; setTimeout(() => this.autoFresh(true), 3000); render(); }
     catch (e){ toast(/Unknown address|No such/i.test(String(e && e.message)) ? "This needs Tally Bridge 1.13.0. Download the new setup and install it." : "The bridge could not do it: " + ((e && e.message) || e)); }
+  },
+  // the bridge's update from Tally: when it runs each day, or now (the bridge reads only changes, then stops)
+  async keepSet(o, say){
+    try {
+      const j = await Bridge.call("/keep?company=" + encodeURIComponent(BridgeSeed.company()) + Bridge.pinQ(), o, 30000);
+      (S.setupKeep = S.setupKeep || {})[S.coId] = {at: Date.now(), st: j}; toast(say);
+      if (o.now){ [60, 180, 420].forEach(s => setTimeout(() => { try { this.autoFresh(true, true); (S.setupKeep || {})[S.coId] = null; render(); } catch (e){} }, s * 1000)); }
+    } catch (e){ toast(/Unknown address|No such/i.test(String(e && e.message)) ? "This needs Tally Bridge 1.14. It updates by itself within a few minutes." : "The bridge could not do it: " + ((e && e.message) || e)); }
+    render();
   },
   async keepCheck(){
     const f = this.fr(), ym = Audit.today().slice(0, 6);
@@ -592,7 +627,7 @@ const LK = {
   view(b){
     const x = this.st(), live = this.live(), have = (b.vouchers || []).length > 0;
     // Tally's ledger names, once per client (light), so typing offers what is in Tally today
-    if (live && this.light() && !(this.names && this.names.cid === S.coId) && !this._namesBusy && this._namesTried !== S.coId){ this._namesTried = S.coId; setTimeout(() => this.loadNames(), 0); }
+    if (!(this.names && this.names.cid === S.coId) && !this._namesBusy && this._namesTried !== S.coId && typeof TCloud === "object" && TCloud.has(S.coId)){ this._namesTried = S.coId; setTimeout(() => this.loadNames(), 0); }
     if (live) setTimeout(() => this.autoFresh(), 0);
     const leds = FC.ledgers(), grps = FC.groups(), T = FC.tn();
     const dl = '<datalist id="lkLeds">' + leds.slice(0, 5000).map(l => '<option value="' + esc(l) + '">').join("") + '</datalist><datalist id="lkGrps">' + grps.map(g => '<option value="' + esc(g) + '">').join("") + "</datalist>";
@@ -619,7 +654,7 @@ const LK = {
     const srcRow = can ? '<div class="lk-src" role="radiogroup" aria-label="Where from"><span class="note">From</span><button role="radio" data-lksrc="tally" aria-checked="' + fromTally + '">Tally, live</button>' +
         (have ? '<button role="radio" data-lksrc="books" aria-checked="' + !fromTally + '">The books read into FinCom' + (this.booksAge() ? " on " + this.booksAge() : "") + "</button>" : "") + "</div>"
       : "";
-    const names = live ? '<p class="note lk-names">' + (T ? "Ledger names from Tally: " + T.leds.length + ' \u00b7 <button class="linkbtn" data-lk="names">refresh</button>' : this.light() ? (this._namesBusy ? "Reading the ledger names from Tally\u2026" : "") : "Install Tally Bridge 1.12.10 so ledger names come from Tally.") + "</p>" : "";
+    const names = T || live ? '<p class="note lk-names">' + (T ? "Ledger names: " + T.leds.length + (T.src === "cloud" ? " (the books in the cloud)" : " (from Tally)") + ' \u00b7 <button class="linkbtn" data-lk="names">refresh</button>' : this._namesBusy ? "Bringing the ledger names\u2026" : live ? '<button class="linkbtn" data-lk="names">Bring the ledger names from Tally</button>' : "") + "</p>" : "";
     h += this.freshBar(b) + '<div class="lk-form">' + form + "</div>" + presets + srcRow +
       '<div class="row" style="gap:8px;margin-top:10px;align-items:center"><button class="btn primary" data-lk="show"' + (x.busy ? " disabled" : "") + ">" + (x.busy ? "Reading Tally\u2026" : "Show") + "</button>" + names + "</div>" + dl + "</section>";
     const rec = this.recent();
@@ -684,7 +719,7 @@ const LK = {
         '<tr class="lk-tot">' + (r.led ? "" : "<td></td>") + '<td><b>Total</b></td><td></td><td></td><td class="n"><b>' + FC.amt(r.total) + "</b></td></tr></tbody></table></div>";
     }
     else {
-      h += '<p class="note"><b>' + r.rows.length + "</b> entries, together " + money(r.total) + ".</p>";
+      h += '<p class="note"><b>' + (r.n || r.rows.length) + "</b> entries, together " + money(r.total) + "." + (r.n > r.rows.length ? " The first " + r.rows.length + ' are here; <button class="linkbtn" data-lk="more">show ' + Math.min(TCloud.FIND_PAGE, r.n - r.rows.length) + " more</button>." : "") + "</p>";
       if (!r.rows.length) return h + '<div class="bk-none">Nothing matches. Try fewer words, or a wider period.</div></section>';
       h += '<div class="bk-tablewrap"><table class="bk-table lk-t"><thead><tr><th>Date</th><th>Type</th><th>No.</th><th>Party or ledger</th><th class="n">Amount</th></tr></thead><tbody>' +
         r.rows.slice(0, LIMIT).map(v => this.voucherRow(v, "<td>" + FC.when(v.date) + "</td><td>" + esc(v.type) + "</td><td>" + esc(v.no || "") + '</td><td><span class="lk-part">' + esc(v.party) + "</span>" + (v.narr ? '<span class="nr">' + esc(v.narr) + "</span>" : "") + '</td><td class="n">' + FC.amt(v.amt) + "</td>", x)).join("") +
@@ -740,6 +775,8 @@ if (typeof document !== "undefined"){
     else if (a === "keepcheck") LK.keepCheck();
     else if (a === "syncnow") LK.syncNow();
     else if (a === "clear"){ x.res = null; render(); }
+    else if (a === "more" && x.res && x.res.src === "cloud"){ const r = x.res; x.busy = "Bringing the next entries\u2026"; render();
+      TCloud.find(S.coId, r.q, r.from, r.to, r.typ, r).then(res => { x.busy = ""; x.res = Object.assign(res, {title: r.title}); render(); }, er => { x.busy = ""; toast("Could not ask the cloud: " + ((er && er.message) || er)); render(); }); }
     else if (a === "print") LK.printIt();
     else if (a === "excel" && x.res) FC.excel(x.res.title, [[x.res.kind === "tb" ? "Trial balance" : "Look up", LK.sheet(x.res)]]).catch(er => toast("Could not build the file: " + (er && er.message)));
   });

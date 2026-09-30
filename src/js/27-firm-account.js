@@ -1267,6 +1267,7 @@ function doAct(act, t){
     case "booksPick": { const i = document.getElementById("booksIn"); if (i){ i.value = ""; i.click(); } break; }
     case "mastersPick": { const i = document.getElementById("mastersIn"); if (i){ i.value = ""; i.click(); } break; }
     case "setupKeepOn": LK.keepOn(true).then(() => { (S.setupKeep || {})[S.coId] = null; render(); }); break;
+    case "keepNow": LK.keepSet({now: true}, "Updating from Tally now. The books here follow in a few minutes."); break;
     case "setupModeBridge": case "setupModeFiles":
       Bridge.call("/keepmode" + (Bridge.pinQ() ? "?" + Bridge.pinQ().slice(1) : ""), {company: BridgeSeed.company(), mode: act === "setupModeBridge" ? "bridge" : "files"}, 20000)
         .then(j => { (S.setupKeep = S.setupKeep || {})[S.coId] = {at: Date.now(), st: j}; toast(act === "setupModeBridge" ? "The bridge will copy the year from Tally in the evening, or when nobody is at the computer." : "The bridge waits for the day book files."); render(); }, e => toast("The bridge could not do it: " + ((e && e.message) || e) + (/Unknown|No such/i.test(String(e && e.message)) ? " (it needs Tally Bridge 1.13.9)" : "")));
@@ -1279,8 +1280,7 @@ function doAct(act, t){
       const from = Audit.ymd(r.from), to = Audit.ymd(r.to);
       if (!from || !to || from > to){ toast("Choose a period: from a date to a later one."); break; }
       if (!bridgeLive(CO())){ toast("Open this company in Tally with the bridge running."); break; }
-      TallyRead.read(from, to, "live").then(n2 => { toast(n2 + " vouchers and Tally's balances read."); render(); },
-        e => { b.busy = ""; const msg = String(e && e.message || e); toast(/Unknown address/.test(msg) ? "This needs Tally Bridge 1.10. Update the bridge on the Tally computer." : "Could not read Tally: " + msg); render(); });
+      LK.keepSet({now: true}, "Updating from Tally now. The books here follow in a few minutes.");
       break;
     }
     case "tallyCopyCheck": {

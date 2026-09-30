@@ -24,7 +24,7 @@ namespace FinCom.Connector
 {
     public static class App
     {
-        public const string Version = "1.0.7";
+        public const string Version = "1.0.9";
         public const string Name = "FinCom Connector";
         public static readonly bool IsWindows = Environment.OSVersion.Platform == PlatformID.Win32NT;
         public static readonly JavaScriptSerializer Json = new JavaScriptSerializer { MaxJsonLength = 64 * 1024 * 1024 };
@@ -445,7 +445,10 @@ namespace FinCom.Connector
                     var cl = Get(s, "companies") as System.Collections.ArrayList;
                     if (cl != null) foreach (Dictionary<string, object> c in cl) cos.Add(Convert.ToString(Get(c, "name")));
                 }
-                if (up) list.Add(new Check("Tally", "ok", "Answering" + (cos.Count > 0 ? "; open: " + string.Join(", ", cos) : "") + "."));
+                var stuck = Get(st, "tallyStuck") as Dictionary<string, object>;
+                var since = stuck != null ? Convert.ToString(Get(stuck, "since") ?? "") : "";
+                if (up && since.Length >= 16) list.Add(new Check("Tally", "bad", "Not responding since " + since.Substring(11, 5) + ".", "Look at Tally on this computer: a message box (a pop-up) or a report still working stops Tally answering. Close it; FinCom carries on by itself."));
+                else if (up) list.Add(new Check("Tally", "ok", "Open" + (cos.Count > 0 ? ": " + string.Join(", ", cos) : "") + "."));
                 else if (tallyProc) list.Add(new Check("Tally", "bad", "TallyPrime is open but does not answer the bridge.", "In TallyPrime: F1 (Help) > Settings > Connectivity > Client/Server configuration: set \"TallyPrime acts as\" to Both, Enable ODBC to Yes, and the port (usually 9000). Then restart TallyPrime."));
                 else list.Add(new Check("Tally", "warn", "TallyPrime is not open.", "Open TallyPrime and the company. The bridge carries on by itself."));
                 if (up && cos.Count == 0) list.Add(new Check("Company", "warn", "No company is open in Tally.", "Open the company in TallyPrime."));
@@ -456,17 +459,12 @@ namespace FinCom.Connector
                 try
                 {
                     var k = Bridge.Call("/keep", null, 10000);
-                    var cloud = Get(k, "cloud") as Dictionary<string, object>;
-                    var cs = cloud != null ? Get(cloud, "status") as Dictionary<string, object> : null;
-                    if (cloud == null || !Convert.ToBoolean(Get(cloud, "connected") ?? false))
-                        list.Add(new Check("FinCom cloud", "warn", "This computer is not sending the books to FinCom's cloud.", "In FinCom: Settings > Books in the cloud > Connect this computer."));
-                    else if (cs != null && !string.IsNullOrEmpty(Convert.ToString(Get(cs, "error"))))
-                        list.Add(new Check("FinCom cloud", "warn", "Last try: " + Get(cs, "error"), "Nothing is lost: waiting days are sent when the internet or FinCom's cloud is back."));
-                    else list.Add(new Check("FinCom cloud", "ok", "Connected" + (cs != null ? "; last sent " + (Get(cs, "lastSent") ?? "not yet") + ", waiting to send: " + (Get(cs, "waiting") ?? 0) + " day(s)" : "") + "."));
-                    var load = Get(k, "load") as Dictionary<string, object>;
-                    var ports = load != null ? Get(load, "ports") as System.Collections.ArrayList : null;
-                    if (ports != null) foreach (Dictionary<string, object> p in ports)
-                        list.Add(new Check("Load on Tally", "ok", "Port " + Get(p, "port") + ": the bridge used " + Get(p, "sharePct") + "% of Tally's time in the last minute (its limit is " + Get(p, "limitPct") + "%)."));
+                    // 1.0.8: the bridge asks Tally only at its daily update (or Update now in FinCom); the cloud needs nothing here
+                    var at = Convert.ToString(Get(k, "dailyAt") ?? ""); var last = Convert.ToString(Get(k, "lastRun") ?? "");
+                    var sched = Convert.ToString(Get(k, "schedule") ?? "");
+                    var running = Convert.ToBoolean(Get(k, "running") ?? false);
+                    if (!Convert.ToBoolean(Get(k, "on") ?? true)) list.Add(new Check("Updates from Tally", "warn", "Off.", "Switch them on in FinCom: Books > From Tally."));
+                    else list.Add(new Check("Updates from Tally", "ok", running ? "Updating now." : sched == "daily" ? "Once a day at " + at + (last.Length == 8 ? "; last on " + last.Substring(6, 2) + "-" + last.Substring(4, 2) + "-" + last.Substring(0, 4) : "") + ". Tally is not asked anything in between." : "Every minute."));
                 }
                 catch { }
             }
@@ -489,7 +487,7 @@ namespace FinCom.Connector
                 list.Add(new Check("Internet", "ok", "FinCom can be reached."));
             }
             catch (WebException e) when (e.Response != null) { list.Add(new Check("Internet", "ok", "FinCom can be reached.")); }
-            catch (Exception e) { list.Add(new Check("Internet", "warn", "FinCom cannot be reached: " + e.Message, "Check the internet connection or the office proxy. The bridge keeps working with Tally; the cloud copy waits.")); }
+            catch (Exception e) { list.Add(new Check("Internet", "warn", "FinCom cannot be reached: " + e.Message, "Check the internet connection or the office proxy. The bridge keeps working with Tally.")); }
             return list;
         }
     }

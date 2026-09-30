@@ -814,7 +814,7 @@ async function gst9Excel(which){
 // the GST tab: React (app/src/screens/Gst.jsx); GSTR-1 and 3B are app/src/screens/gst/Returns.jsx, the input register gst/InputRegister.jsx, 2B gst/TwoB.jsx, amendments, advances and reversal gst/Workings.jsx, GSTR-9 and 9C gst/Annual.jsx, ITC follow-up gst/ItcFollow.jsx, returns filed gst/ReturnsFiled.jsx, QRMP, CMP-08 and GSTR-4 gst/Periodic.jsx; the other parts are still the old pages below
 function viewBooksGst(b){ return '<div data-react="Gst"></div>'; }
 // the parts of the GST tab for the GSTIN and month chosen, following its filing type
-// the From Tally tab: React (app/src/screens/books/FromTally.jsx). What it asks and sets:
+// the From Tally tab: React (app/src/screens/books/FromTally.jsx). What it asks:
 // the bridge's own view of this client's company (it asks Tally nothing), asked at most once a minute
 function setupKeepFor(co){
   const ks = (S.setupKeep || {})[co.id];
@@ -825,9 +825,8 @@ function setupKeepFor(co){
   }
   return ks;
 }
-// the dates to read from Tally, and the time of the nightly copy (kept, nothing redrawn)
-function tallyRangeSet(key, v){ const t0 = Audit.today(); S.tallyRange = Object.assign({from: Audit.iso(Audit.fyStart(t0)), to: Audit.iso(t0)}, S.tallyRange, {[key]: v}); }
-function tallyTimeSet(v){ S.tallyCopy = Object.assign({}, S.tallyCopy, {time: v}); }
+// the time of the bridge's daily update from Tally (build 188: Tally is read once a day, or on Update now)
+function keepAtSet(v){ if (/^\d{2}:\d{2}$/.test(v)) LK.keepSet({dailyAt: v}, "Tally will be updated every day at " + v + "."); }
 function gstParts(b){
   const regs = GSTR.gstins(b) || [], noBooks = !(b.vouchers || []).length;
   const ftype = typeof GSTSet === "object" && S.gstYm ? GSTSet.typeOf(S.gstYm, S.gstReg || "") : "monthly";

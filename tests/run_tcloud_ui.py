@@ -51,6 +51,40 @@ def route(r):
             for m in re.finditer(r"<LEDGERNAME>([^<]*)</LEDGERNAME>.*?<AMOUNT>(-?[\d.]+)</AMOUNT>", pc, re.S):
                 if html.unescape(m.group(1)) == led: lines.append([d, "Journal", "", "", "", float(m.group(2)), re.search(r"<GUID>([^<]*)</GUID>", pc).group(1)])
         return j({"open": opn, "lines": lines, "from": "2026-03-01", "company": CO})
+    if path.endswith("/rpc/tally_period"):
+        a = json.loads(body); f = a["p_from"].replace("-", ""); t = a["p_to"].replace("-", ""); calls["period"] = calls.get("period", 0) + 1
+        before = fake_tally.amounts_until(str(int(f) - 1)); mv28 = fake_tally.amounts_until("20260228"); drcr = {}
+        for d, pc in fake_tally.V:
+            if f <= d <= t:
+                for m in re.finditer(r"<LEDGERNAME>([^<]*)</LEDGERNAME>.*?<AMOUNT>(-?[\d.]+)</AMOUNT>", pc, re.S):
+                    n = html.unescape(m.group(1)); x = drcr.setdefault(n, [0.0, 0.0]); v = float(m.group(2))
+                    if v < 0: x[0] += -v
+                    else: x[1] += v
+        out = []
+        for (n, par, ob), l in zip(fake_tally.L, LED):
+            k = n.replace("&amp;", "&"); o = l["open"] + before.get(k, before.get(n, 0)) - mv28.get(k, mv28.get(n, 0))
+            dc = drcr.get(html.unescape(n), [0, 0]); out.append({"ledger": l["name"], "parent": l["parent"], "open": -round(o, 2), "dr": round(dc[0], 2), "cr": round(dc[1], 2)})
+        q = parse_qs(u.query); off = int((q.get("offset") or ["0"])[0]); return j(out[off:off + 1000])
+    if path.endswith("/rpc/tally_monthly"):
+        a = json.loads(body); f = a["p_from"].replace("-", ""); t = a["p_to"].replace("-", ""); m = {}
+        for d, pc in fake_tally.V:
+            if f <= d <= t:
+                for g in re.finditer(r"<LEDGERNAME>([^<]*)</LEDGERNAME>.*?<AMOUNT>(-?[\d.]+)</AMOUNT>", pc, re.S):
+                    k = (html.unescape(g.group(1)), d[:6]); x = m.setdefault(k, [0.0, 0.0]); v = float(g.group(2))
+                    if v < 0: x[0] += -v
+                    else: x[1] += v
+        out = [{"ledger": k[0], "ym": k[1], "amount": round(v[1] - v[0], 2), "dr": round(v[0], 2), "cr": round(v[1], 2)} for k, v in sorted(m.items())]
+        q = parse_qs(u.query); off = int((q.get("offset") or ["0"])[0]); return j(out[off:off + 1000])
+    if path.endswith("/rpc/tally_find"):
+        a = json.loads(body); f = a["p_from"].replace("-", ""); t = a["p_to"].replace("-", ""); w = (a["p_q"] or "").lower().split(); calls["find"] = calls.get("find", 0) + 1
+        hits = []
+        for d, pc in fake_tally.V:
+            hay = " ".join(html.unescape(m) for m in re.findall(r"<(?:LEDGERNAME|NARRATION|PARTYLEDGERNAME|PARTYNAME|VOUCHERNUMBER|REFERENCE)>([^<]*)<", pc)).lower() + " " + (re.search(r'VCHTYPE="([^"]*)"', pc) or [0, ""])[1].lower()
+            if not (f <= d <= t) or not all(x in hay for x in w): continue
+            ent = [[html.unescape(m.group(1)), float(m.group(2))] for m in re.finditer(r"<LEDGERNAME>([^<]*)</LEDGERNAME>.*?<AMOUNT>(-?[\d.]+)</AMOUNT>", pc, re.S)]
+            hits.append([d, "Journal", "", "", "", round(sum(v for l, v in ent if v > 0), 2), re.search(r"<GUID>([^<]*)</GUID>", pc).group(1), ent])
+        off = a["p_offset"] or 0
+        return j({"n": len(hits), "total": round(sum(h[5] for h in hits), 2), "rows": hits[off:off + a["p_limit"]]})
     if path.endswith("/tally_devices"): return j([{"id": "d1", "name": "OFFICE-PC", "created_at": "2026-09-28T09:00:00Z", "last_seen": "2026-09-28T10:05:00Z", "version": "1.13.0", "info": {"computer": "OFFICE-PC", "user": "accounts"}, "revoked": False}])
     if path.endswith("/tally_companies"): return j([{"company": CO, "client_id": None, "gstin": "07AADCV3366N1ZU", "last_seen": "2026-09-28T10:05:00Z", "linked_at": None}, {"company": "SOMEONE ELSE PVT LTD", "client_id": None, "gstin": "", "last_seen": None, "linked_at": None}])
     if path.endswith("/rpc/tally_company_link"): calls["link"].append(json.loads(body)); return r.fulfill(status=204, body="")
@@ -85,7 +119,7 @@ with sync_playwright() as p:
     ok(got == own and got > 1000, "every March entry, as FinCom reads them: %d of %d" % (got, own))
     ok(len(calls["storage"]) == 31, "each day fetched once: %d" % len(calls["storage"]))
     bar = pg.inner_text(".lk-fresh")
-    ok("From FinCom" in bar and "OFFICE-PC" in bar and "not read yet" in bar, "the page says the books are from the cloud, sent by which computer, and a day not read yet: " + bar[:180].replace("\n", " "))
+    ok("The books" in bar and "cloud" not in bar.lower() and "OFFICE-PC" not in bar and "not read yet" in bar, "the page says how up to date the books are (no talk of the cloud), and a day not read yet: " + bar[:180].replace("\n", " "))
     # ---------- a day changed: only that day is fetched again
     AT["20260310"] = "2026-09-28T11:00:00+00:00"; n0 = len(calls["storage"])
     pg.evaluate("TCloud.st = {}; LK.fr().cat = 0; LK.autoFresh(true)"); wait_for(pg, "!S.lkFr.busy && S.books.meta.cloud.days['20260310'] === '2026-09-28T11:00:00+00:00'", 60)
@@ -94,7 +128,22 @@ with sync_playwright() as p:
     # ---------- the trial balance from the loaded copy: Tally is not asked
     pg.fill("#lkAsk", "trial balance as on 31/03/2026"); pg.keyboard.press("Enter")
     wait_for(pg, "S.lk.res && S.lk.res.kind === 'tb' && !S.lk.busy")
-    ok(pg.evaluate("S.lk.res.src") == "books" and calls["tb"] == 0, "the trial balance comes from the books brought in (the cloud's totals are not needed)")
+    ok(pg.evaluate("S.lk.res.src") == "cloud" and calls["tb"] >= 1, "build 192: the trial balance is worked out by the cloud, even with the books here")
+    tb_cloud = pg.evaluate("[S.lk.res.dr, S.lk.res.cr]")
+    pg.evaluate("LK.run('books')"); wait_for(pg, "S.lk.res && S.lk.res.src === 'books' && !S.lk.busy")
+    tb_books = pg.evaluate("[S.lk.res.dr, S.lk.res.cr]")
+    ok(tb_books[0] > 0, "the books here can still be asked for it (%s)" % (tb_books,))
+    # a group, month by month, and found entries: from the cloud, the same as from the books here
+    grp = pg.evaluate("S.lk.res.groups.map(g => g.rows).flat().map(r => r.sub).filter(Boolean)[0]")
+    for kind, setup in [("group", "x.kind = 'group'; x.grp = %s;" % json.dumps(grp)), ("monthly", "x.kind = 'monthly'; x.grp = %s; x.led = '';" % json.dumps(grp)), ("find", "x.kind = 'find'; x.q = 'bank';")]:
+        pg.evaluate("() => { const x = LK.st(); " + setup + " x.from = '20260301'; x.to = '20260331'; x.res = null; LK.run(); }")
+        wait_for(pg, "S.lk.res && S.lk.res.kind === '%s' && !S.lk.busy" % kind)
+        c = pg.evaluate("({src: S.lk.res.src, n: S.lk.res.n || S.lk.res.rows.length, dr: S.lk.res.dr, cr: S.lk.res.cr, total: S.lk.res.total})")
+        pg.evaluate("LK.run('books')"); wait_for(pg, "S.lk.res && S.lk.res.src === 'books' && !S.lk.busy")
+        bk = pg.evaluate("({src: S.lk.res.src, n: S.lk.res.rows.length, dr: S.lk.res.dr, cr: S.lk.res.cr, total: S.lk.res.total})")
+        # (the stand-in cloud reads the entries more roughly than FinCom does, so for found entries only the count is compared)
+        same = c["n"] == bk["n"] and all(abs((c[k] or 0) - (bk[k] or 0)) < 1 for k in (("dr", "cr") if kind != "find" else ()))
+        ok(c["src"] == "cloud" and same, "%s: from the cloud, and the same as from the books here: %s against %s" % (kind, json.dumps(c), json.dumps(bk)))
     # ---------- a large company: not loaded; its trial balance and ledger come from the cloud's ready totals
     ST["entries"] = 250000; n1 = len(calls["storage"])
     pg.evaluate("S.books = {cid: 'c_vms', loading: false, vouchers: [], meta: {}, map: {}, challans: [], alloc: {}}; TCloud.st = {}; LK.fr().cat = 0; S.lk = null; render(); LK.autoFresh(true)")

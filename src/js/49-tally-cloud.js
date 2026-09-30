@@ -70,12 +70,43 @@ const TCloud = {
       return {id: guid, date: d, type, no, part: party && party !== led ? party : "", narr: narr || "", dr: dd, cr: c, run};
     });
     const ends = j.to && this.d8(j.to) < to ? " This copy (" + (j.company || "") + ") has entries up to " + FC.when(this.d8(j.to)) + "; a later year kept as another company in Tally is asked separately." : "";
-    return {kind: "ledger", src: "cloud", led, from, to, open, close: run, dr, cr, rows, note: "From the copy in FinCom's cloud (" + (j.company || "") + "), " + this.age(this.book(cid)) + "." + ends};
+    return {kind: "ledger", src: "cloud", led, from, to, open, close: run, dr, cr, rows, note: "From the books (" + (j.company || "") + "), " + this.age(this.book(cid)) + "." + ends};
+  },
+  // build 192: a group, month by month, and any entry: worked out by the cloud, not from books loaded here
+  inG(l, parent, grp){ try { if (FC.inGroup(l, grp)) return true; } catch (e){} return String(parent || "").toLowerCase() === String(grp || "").toLowerCase(); },
+  async period(cid, from, to){ return await this.rpcAll("tally_period", {p_client: cid, p_from: this.iso(from), p_to: this.iso(to)}) || []; },
+  async group(cid, grp, from, to){
+    const all = await this.period(cid, from, to), bk = this.book(cid) || {};
+    const rows = all.filter(r => this.inG(r.ledger, r.parent, grp)).map(r => { const op = -r2(num(r.open)), dr = r2(num(r.dr)), cr = r2(num(r.cr)); return {l: r.ledger, sub: r.parent || "", open: op, dr, cr, close: r2(op + dr - cr)}; })
+      .filter(r => r.dr || r.cr || (r.open && Math.abs(r.open) >= 0.5)).sort((a, c) => Math.abs(c.close) - Math.abs(a.close) || a.l.localeCompare(c.l));
+    const sum = k => r2(rows.reduce((t, r) => t + (r[k] || 0), 0));
+    return {kind: "group", src: "cloud", grp, from, to, rows, open: sum("open"), dr: sum("dr"), cr: sum("cr"), close: sum("close"), note: "From the books (" + (bk.company || "") + "), " + this.age(bk) + "."};
+  },
+  async monthly(cid, led, grp, from, to){
+    const [per, mon] = await Promise.all([this.period(cid, from, to), this.rpcAll("tally_monthly", {p_client: cid, p_from: this.iso(from), p_to: this.iso(to)})]);
+    const set = new Set(per.filter(r => led ? r.ledger === led : this.inG(r.ledger, r.parent, grp)).map(r => r.ledger));
+    const months = MIS.monthsOf(from, to), m = {};
+    months.forEach(k => { m[k] = {dr: 0, cr: 0}; });
+    (mon || []).forEach(r => { const x = m[r.ym]; if (x && set.has(r.ledger)){ x.dr = r2(x.dr + num(r.dr)); x.cr = r2(x.cr + num(r.cr)); } });
+    let run = -r2(per.filter(r => set.has(r.ledger)).reduce((t, r) => t + num(r.open), 0));
+    const open = run, bk = this.book(cid) || {};
+    const rows = months.map(k => { const x = m[k]; run = r2(run + x.dr - x.cr); return {ym: k, dr: x.dr, cr: x.cr, net: r2(x.dr - x.cr), close: run}; });
+    return {kind: "monthly", src: "cloud", led, grp, from, to, open, rows, dr: r2(rows.reduce((t, r) => t + r.dr, 0)), cr: r2(rows.reduce((t, r) => t + r.cr, 0)), note: "From the books (" + (bk.company || "") + "), " + this.age(bk) + "."};
+  },
+  FIND_PAGE: 500,
+  async find(cid, q, from, to, typ, had){
+    const j = await this.rpc("tally_find", {p_client: cid, p_q: q || "", p_from: this.iso(from), p_to: this.iso(to), p_type: typ || null, p_limit: this.FIND_PAGE, p_offset: had ? had.rows.length : 0});
+    if (!j || j.none) throw new Error("The cloud has no copy of these books yet.");
+    const rows = [].concat(j.rows || []).map(([d, type, no, party, narr, amt, guid, ent]) => {
+      const e = [].concat(ent || []).map(([l, a]) => ({l, a: num(a)}));
+      return {id: guid, date: d, type, no, party: party || (e.find(x => x.a < 0) || {}).l || "", narr: narr || "", amt: r2(num(amt)), ent: e};
+    });
+    return {kind: "find", src: "cloud", q, from, to, typ, rows: (had ? had.rows : []).concat(rows), n: num(j.n), total: r2(num(j.total))};
   },
   age(bk){
     if (!bk) return "";
     const st = bk.state || {}, at = String(st.seen || bk.stateAt || bk.daysAt || "");
-    return at ? "in step with Tally as of " + at.replace("T", " ").slice(0, 16) + (st.computer ? " (sent by " + String(st.computer).slice(0, 60) + ")" : "") : "not sent yet";
+    return at ? "in step with Tally as of " + at.replace("T", " ").slice(0, 16) : "not updated yet";
   },
   // ---------- one day's day book, from this browser's store or the cloud
   async day(bk, d, at){
@@ -223,11 +254,10 @@ const TCloud = {
   bar(cid){
     const bk = this.book(cid); if (!bk) return "";
     const st = bk.state || {}, sk = [].concat(st.skipped || []).filter(Boolean);
-    let t = "<b>From FinCom’s cloud</b>: " + (st.phase === "first" ? "the first copy is still being made (up to " + esc(FC.when(String(st.doneTo || ""))) + ")" : esc(this.age(bk))) + ".";
+    let t = "<b>The books</b>: " + (st.phase === "first" ? "the first copy is still being made (up to " + esc(FC.when(String(st.doneTo || ""))) + ")" : esc(this.age(bk))) + ".";
     if (sk.length) t += ' <span class="bad"><b>' + sk.length + (sk.length === 1 ? " day" : " days") + " not read yet</b> from Tally.</span>";
     if (st.trouble && st.trouble.at) t += ' <span class="note">Tally did not answer at ' + esc(String(st.trouble.at).slice(11, 16)) + "; the bridge carries on by itself.</span>";
     const q = Math.max(0, Math.floor(Number(st.queue) || 0));
-    if (q) t += ' <span class="note">' + q + " day" + (q === 1 ? "" : "s") + " waiting to be sent.</span>";
     return t;
   }
 };
@@ -304,3 +334,46 @@ const TCloudUp = {
   }
 };
 
+
+// The light on the clients list (build 189): for each client with Tally, whether its Tally computer is on, Tally open and
+// the books up to date, from the bridge's heartbeat (every 5 minutes; the bridge asks Tally nothing for it)
+const TLight = {
+  st: {at: 0, busy: false, by: {}},
+  refresh(){
+    if (!TCloud.on() || this.st.busy || Date.now() - this.st.at < 120000) return;
+    this.st.busy = true;
+    Promise.all([TCloud.restAll("tally_companies?select=company,client_id,device_id&client_id=not.is.null&order=company.asc"), Cloud.api("tally_devices?select=id,name,last_seen,info,revoked")])
+      .then(([cos, devs]) => { this.st.by = this.work(cos || [], devs || [], Date.now()); }, () => {})
+      .then(() => { this.st.at = Date.now(); this.st.busy = false; if (S.view === "home") render(); });
+  },
+  // client id -> {level: ok | warn | bad, short, say}
+  work(cos, devs, now){
+    const by = {}, dev = {};
+    devs.filter(d => !d.revoked).forEach(d => { dev[d.id] = d; });
+    const when = t => new Date(t).toLocaleString("en-IN", {day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit"});
+    const rank = {bad: 3, warn: 2, ok: 1};
+    cos.forEach(c => {
+      const d = dev[c.device_id]; if (!d) return;
+      const beat = (d.info || {}).beat || null, seen = Date.parse((beat && beat.at) || d.last_seen || 0) || 0;
+      let x;
+      if (!beat || now - seen > 15 * 60000) x = {level: "bad", short: "computer off", say: "No word from " + d.name + (seen ? " since " + when(seen) : "") + ": the computer, the FinCom Connector or the bridge is off."};
+      else {
+        const co = (beat.companies || []).find(k => k.name === c.company), at = co && Date.parse(co.at);
+        if (!beat.tally) x = {level: "warn", short: "Tally closed", say: "Tally is not open on " + d.name + "."};
+        else if (!co) x = {level: "warn", short: "not updated yet", say: c.company + " has no copy on " + d.name + " yet: it comes with the next update (" + (beat.dailyAt || "20:00") + ")."};
+        else if (co.waiting) x = {level: "warn", short: co.waiting + " day" + (co.waiting === 1 ? "" : "s") + " to send", say: co.waiting + " day(s) of " + c.company + " wait on " + d.name + " to go to FinCom (the internet or FinCom's cloud was not reachable)."};
+        else if (!at || now - at > 36 * 3600000) x = {level: "warn", short: at ? "updated " + when(at) : "not updated yet", say: c.company + " was last updated from Tally " + (at ? "on " + when(at) : "never") + ". Books \u2192 From Tally \u2192 Update now."};
+        else x = {level: "ok", short: "updated " + when(at), say: c.company + " is up to date as of " + when(at) + " (" + d.name + ")."};
+        if (beat.updating && x.level !== "bad") x.short = "updating now";
+      }
+      const had = by[c.client_id];
+      if (!had || rank[x.level] > rank[had.level]) by[c.client_id] = x;
+    });
+    return by;
+  },
+  cell(cid){
+    this.refresh();
+    const x = this.st.by[cid];
+    return x ? '<span class="tag ' + x.level + '" title="' + esc(x.say) + '">' + (x.level === "ok" ? "\u25CF " : x.level === "warn" ? "\u25D0 " : "\u25CB ") + esc(x.short) + "</span>" : '<span class="note">\u2014</span>';
+  }
+};

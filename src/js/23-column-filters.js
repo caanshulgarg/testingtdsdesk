@@ -954,8 +954,9 @@ function booksChange(t){
           catch (e){ part.bridge = "not taken: " + ((e && e.message) || e); }
         } else part.bridge = "not connected on this computer";
         if (TCloudUp.on()){
-          try { const r = await TCloudUp.days(await f.text(), {from, to}, step); part.cloud = r && r.days != null ? "in the cloud (" + r.days + " days)" : (r && r.skipped) || ""; }
-          catch (e){ part.cloud = "not sent: " + ((e && e.message) || e); toast("The part is in FinCom here, but the cloud did not take it: " + ((e && e.message) || e)); }
+          // quietly, in the background: nothing on the screen unless it fails
+          try { const r = await TCloudUp.days(await f.text(), {from, to}, null); part.cloud = r && r.days != null ? "in the cloud (" + r.days + " days)" : (r && r.skipped) || ""; }
+          catch (e){ part.cloud = "not sent: " + ((e && e.message) || e); toast("Saved here, but it could not be shared with the firm just now (" + ((e && e.message) || e) + "). Choose the file again later."); }
         } else part.cloud = "sign in to the firm account to share it";
         b.busy = ""; await saveBooks(); render();
       })();

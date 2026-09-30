@@ -31,10 +31,12 @@ const Bridge = {
     if (!r.ok || !j || j.ok === false) throw {code: r.status === 401 ? "bridge_key" : "bridge", message: (j && (j.error || j.message)) || ("The bridge answered with error " + r.status + ".")};
     return j;
   },
-  async refresh(){
+  // fresh: a person's action (opening FinCom, posting, connecting) may ask Tally which companies are open. The minute
+  // checks do not: the bridge answers them without asking Tally (1.14.0)
+  async refresh(fresh = true){
     if (!this.on()){ this.st = {state: "off", sessions: [], open: [], at: Date.now(), error: ""}; return this.st; }
     try {
-      const j = await this.call("/status", null, 15000);
+      const j = await this.call("/status" + (fresh ? "?fresh=1" : ""), null, 15000);
       j.sessions = [].concat(j.sessions || []).map(se => Object.assign({}, se, {companies: [].concat(se.companies || [])}));
       const pin = num(this.cfg().port);
       const usable = (j.sessions || []).filter(s => !s.skipped && s.ok && (!pin || s.port === pin));
@@ -46,7 +48,7 @@ const Bridge = {
       const clash = !pin && Object.keys(names).filter(n => names[n] > 1 && !(open.filter(o => o.name === n && o.mine === true).length === 1));
       this.st = {state: "ok", sessions: j.sessions || [], open: open.filter(o => !(clash && clash.includes(o.name)) || o.mine === true), clash: clash || [], at: Date.now(), error: "",
         version: j.version, allowImport: j.allowImport !== false, mode: j.mode || "", user: j.user || "", mySession: j.mySession, jobs: [].concat(j.jobs || []),
-        tallyUp: usable.length > 0, pinMissing: !!pin && !(j.sessions || []).some(s => s.port === pin && s.ok && !s.skipped)};
+        stuck: j.tallyStuck || null, tallyUp: usable.length > 0, pinMissing: !!pin && !(j.sessions || []).some(s => s.port === pin && s.ok && !s.skipped)};
       if (!this.st.tallyUp || this.st.pinMissing){ if (!this.diag || Date.now() - this.diag.at > 30000) await this.diagnose(); }
       else this.diag = null;
       this.misses = 0;
@@ -242,7 +244,7 @@ async function bridgeTick(first){
   bridgeBusy = true;
   try {
     const before = Bridge.st.state;
-    await Bridge.refresh();
+    await Bridge.refresh(false);          // build 194: opening FinCom does not ask Tally either; posting and Connect do
     if (first && Bridge.up() && !Bridge.posting) bridgeLeftover();
     if (first && Bridge.up() && Bridge.st.version && bridgeVer(Bridge.st.version) < bridgeVer("1.12.6") && !lsGet("tdsdesk:bridgenudge1126")){
       lsSet("tdsdesk:bridgenudge1126", "1");
@@ -296,6 +298,8 @@ function bridgeChip(co){
   if (st.state !== "ok") return '<span class="tchip off">Tally Bridge\u2026</span>';
   const run = (st.jobs || []).find(j => ["queued", "waiting", "running"].includes(j.status));
   if (run) return '<span class="tchip ok" title="' + esc((run.company || "") + ": " + (run.message || "")) + '">\u25CF Posting to Tally: ' + num(run.done) + " of " + num(run.total) + "</span>";
+  // build 194: Tally stopped answering (a message box open in Tally, or a long report): said plainly, with since when
+  if (st.stuck && st.stuck.since) return '<span class="tchip bad" title="Tally has not answered since ' + esc(String(st.stuck.since).slice(11, 16)) + '. Look at the Tally computer: a message box (a pop-up) in Tally, or a report still working, stops Tally answering anyone. Close it, and FinCom carries on by itself.">\u26A0 Tally not responding since ' + esc(String(st.stuck.since).slice(11, 16)) + " \u2014 check for a pop-up in Tally</span>";
   if (st.shaky) return '<span class="tchip warn" title="' + esc(st.error || "") + '">Tally Bridge: checking again\u2026</span>';
   const why = Bridge.diag && (Bridge.diag.findings || []).find(f => f.level !== "ok");
   if (st.pinMissing) return '<button class="tchip warn" data-act="openSettings" title="' + esc(why ? why.text : "The Tally chosen in Settings is not running") + '">Your Tally is not connected \u2014 check</button>';
@@ -390,7 +394,8 @@ async function bankAutoSync(force){
   bankSyncing = true;
   try {
     const before = (b.ledgers.list || []).length;
-    const stale = !b.ledgers.live || !(b.ledgers.list || []).length;
+    // build 190: by itself only when there is no ledger list at all; a fresh read of Tally's ledgers when someone asks
+    const stale = !(b.ledgers.list || []).length;
     if (force || stale) await syncLedgersFromTally(true);
     const st = curStmt();
     if (st && force) await syncBankBookFromTally(true);   // only when asked: this reads the Day Book
@@ -398,7 +403,8 @@ async function bankAutoSync(force){
   } finally { bankSyncing = false; }
   // lines marked as posted that were deleted in Tally since: looked for quietly, at most every 3 minutes per statement
   const st = curStmt();
-  if (st && bridgeVer(Bridge.st.version) >= bridgeVer("1.12.3") && b.rows.some(r => ["sent", "intally"].includes(r.state))){
+  // build 190: only when someone asks (Refresh from Tally); not every 3 minutes by itself (it read the day book each time)
+  if (force && st && bridgeVer(Bridge.st.version) >= bridgeVer("1.12.3") && b.rows.some(r => ["sent", "intally"].includes(r.state))){
     const k = st.id, last = (b.goneAt || {})[k] || 0;
     if (Date.now() - last > 3 * 60000){ b.goneAt = Object.assign({}, b.goneAt, {[k]: Date.now()}); try { await checkMarkedInTally({quiet: true}); } catch (e){} }
   }

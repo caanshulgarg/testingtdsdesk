@@ -40,22 +40,56 @@ function Add-TallyUse([int]$Port, [double]$Sec, [string]$Xml, [string]$Fail) {
 # asked again for a while: 10 s, then 20, 40, 80, at most 2 minutes, until it answers again. Requests meanwhile fail at
 # once with a plain message instead of piling up behind the one Tally is busy with.
 $script:TallyCool = @{}
+# 1.14.2: "Tally not responding since HH:MM": kept in a file the bridge, its copier and FinCom's status all see. A Tally
+# showing a message box (or busy in a long report) answers nothing until someone deals with it
+function Get-TallyStuckFile { return (Join-Path (Get-SyncDir) 'tally-stuck.json') }
+function Set-TallyStuck([int]$Port) {
+  try {
+    $o = $null; $f = Get-TallyStuckFile; if (Test-Path -LiteralPath $f) { $o = Get-Content -Raw -LiteralPath $f | ConvertFrom-Json }
+    $since = $(if ($o -and $o.port -eq $Port -and $o.last -and ((Get-Date) - [DateTime]$o.last).TotalMinutes -lt 15) { [string]$o.since } else { (Get-Date).ToString('s') })
+    New-Item -ItemType Directory -Force -Path (Get-SyncDir) | Out-Null
+    [IO.File]::WriteAllText($f, ([ordered]@{ port = $Port; since = $since; last = (Get-Date).ToString('s') } | ConvertTo-Json -Compress))
+  } catch { }
+}
+function Clear-TallyStuck([int]$Port) { try { $f = Get-TallyStuckFile; if (Test-Path -LiteralPath $f) { $o = Get-Content -Raw -LiteralPath $f | ConvertFrom-Json; if ($o.port -eq $Port) { Remove-Item -LiteralPath $f -Force } } } catch { } }
+function Get-TallyStuck { try { $o = Get-Content -Raw -LiteralPath (Get-TallyStuckFile) -ErrorAction Stop | ConvertFrom-Json; if (((Get-Date) - [DateTime]$o.last).TotalMinutes -lt 10) { return $o } } catch { }; return $null }
+# 1.14.1: one request at a time to each Tally. The bridge, its copier and its posting worker are separate programs; a
+# lock they share (by name) makes a request wait its turn instead of reaching Tally alongside another one
+# 1.14.2: FinCom first. A request from FinCom (posting, Update now, a check someone asked for) marks that it is waiting;
+# the copier gives way between its reads while that mark is fresh, so posting never queues behind the routine copy
+function Get-TallyWantFile { return (Join-Path (Get-SyncDir) 'tally-want.txt') }
+function Set-TallyWant { try { New-Item -ItemType Directory -Force -Path (Get-SyncDir) | Out-Null; [IO.File]::WriteAllText((Get-TallyWantFile), (Get-Date).ToString('s')) } catch { } }
+function Test-TallyWanted { try { return ((Get-Date) - (Get-Item -LiteralPath (Get-TallyWantFile) -ErrorAction Stop).LastWriteTime).TotalSeconds -lt 4 } catch { return $false } }
+function Enter-TallyLock([int]$Port, [int]$WaitSec) {
+  if ($script:IsCopier) {
+    $sw0 = [Diagnostics.Stopwatch]::StartNew()
+    while ((Test-TallyWanted) -and $sw0.Elapsed.TotalSeconds -lt 180) { Start-Sleep -Milliseconds 500 }
+  } else { Set-TallyWant }
+  $m = New-Object Threading.Mutex($false, ('Local\FinComTally' + $Port))
+  $got = $false; $sw = [Diagnostics.Stopwatch]::StartNew()
+  try { $got = $m.WaitOne([Math]::Max(1, $WaitSec) * 1000) } catch [Threading.AbandonedMutexException] { $got = $true }     # its holder ended without letting go
+  if (-not $got) { $m.Dispose(); throw ('Tally (port ' + $Port + ') is busy with another FinCom request; try again in a moment') }
+  if ($sw.Elapsed.TotalSeconds -ge 3) { try { Write-Log ('Tally ' + $Port + ': waited ' + [int]$sw.Elapsed.TotalSeconds + 's for another FinCom request to finish first') } catch { } }
+  return $m
+}
 function Invoke-Tally([int]$TallyPort, [string]$Xml, [int]$TimeoutSec) {
   $c = $script:TallyCool[$TallyPort]
   if ($c -and [DateTime]::UtcNow -lt $c.until) { throw ('Tally (port ' + $TallyPort + ') is busy and did not answer the last request; not asked again until ' + $c.until.ToLocalTime().ToString('HH:mm:ss')) }
+  $lock = Enter-TallyLock $TallyPort $(if ($TimeoutSec -gt 0) { [Math]::Min(300, $TimeoutSec) } else { 120 })
   $sw = [Diagnostics.Stopwatch]::StartNew(); $fail = ''
-  try { $r = (& $script:TallyInvokeOrig $TallyPort $Xml $TimeoutSec); $script:TallyCool.Remove($TallyPort); return $r }
+  try { $r = (& $script:TallyInvokeOrig $TallyPort $Xml $TimeoutSec); $script:TallyCool.Remove($TallyPort); Clear-TallyStuck $TallyPort; return $r }
   catch {
     $fail = $_.Exception.Message
     if ($fail -match 'timed out|was closed|unexpected error occurred on a receive|forcibly closed') {
       $n = $(if ($c) { [int]$c.n + 1 } else { 1 })
       $wait = [int][Math]::Min(120, 10 * [Math]::Pow(2, $n - 1))
       $script:TallyCool[$TallyPort] = @{ n = $n; until = [DateTime]::UtcNow.AddSeconds($wait) }
+      Set-TallyStuck $TallyPort
       try { Write-Log ('Tally ' + $TallyPort + ' is busy and did not answer in time; it is not asked again for ' + $wait + 's, so requests do not pile up') } catch { }
     }
     throw
   }
-  finally { Add-TallyUse $TallyPort $sw.Elapsed.TotalSeconds $Xml $fail; Test-KeepSlowRead $sw.Elapsed.TotalSeconds }
+  finally { if (-not $script:IsCopier) { Set-TallyWant }; try { $lock.ReleaseMutex() } catch { }; $lock.Dispose(); Add-TallyUse $TallyPort $sw.Elapsed.TotalSeconds $Xml $fail; Test-KeepSlowRead $sw.Elapsed.TotalSeconds }
 }
 # the share of one Tally's time used by this program in the last minute (0..1)
 function Get-TallyShare([int]$Port, [int]$WindowSec = 60) {
@@ -189,6 +223,35 @@ function Get-OpenCompanies([switch]$Fresh) {
   return $sessions
 }
 # FinCom reading from Tally (a day book or the balances): the copier waits until it is done
+# 1.14.0: the status checks (FinCom's page every minute, the Connector every half minute) never ask Tally. They get the
+# companies Tally named the last time it was asked (by something a person did: posting, Update now, opening FinCom),
+# and whether Tally's port takes connections (a connection opened and closed; Tally is asked nothing)
+function Test-TallyPortOpen([int]$Port) {
+  $c = New-Object Net.Sockets.TcpClient
+  try { $ar = $c.BeginConnect('127.0.0.1', $Port, $null, $null); if (-not $ar.AsyncWaitHandle.WaitOne(500)) { return $false }; $c.EndConnect($ar); return $true } catch { return $false } finally { try { $c.Close() } catch { } }
+}
+$script:EmptyAskAt = [DateTime]::MinValue
+function Get-OpenCompaniesCached {
+  $shared = Join-Path (Get-SyncDir) 'open-companies.json'
+  $list = $null
+  try { if (Test-Path -LiteralPath $shared) { $list = @(Get-Content -Raw -LiteralPath $shared | ConvertFrom-Json | ForEach-Object { $h = [ordered]@{}; foreach ($p in $_.PSObject.Properties) { $h[$p.Name] = $p.Value }; $h.companies = @($h.companies | Where-Object { $_ } | ForEach-Object { $c = [ordered]@{}; foreach ($q in $_.PSObject.Properties) { $c[$q.Name] = $q.Value }; $c }); $h }) } } catch { $list = $null }
+  $stale = $false
+  if ($list) {
+    foreach ($e in $list) {
+      if ($e.skipped) { continue }
+      $open = Test-TallyPortOpen ([int]$e.port)
+      if ($open -and (-not $e.ok -or -not @($e.companies).Count)) { $stale = $true }     # Tally opened since it was last asked
+      $e.ok = $open; if (-not $open) { $e.companies = @() }
+    }
+  }
+  # nothing known yet, or Tally has been opened since: asked once, and not again for ten minutes
+  if ((-not $list -or $stale) -and ((Get-Date) - $script:EmptyAskAt).TotalMinutes -ge 10 -and -not (Get-KeepUserInTally)) {
+    $script:EmptyAskAt = Get-Date
+    return @(Get-OpenCompanies)
+  }
+  if (-not $list) { return @() }
+  return $list
+}
 function Set-FinComReading { try { New-Item -ItemType Directory -Force -Path (Get-SyncDir) | Out-Null; [IO.File]::WriteAllText((Join-Path (Get-SyncDir) 'fincom-reading.txt'), (Get-Date).ToString('s')) } catch { } }
 # why Tally is to be left alone right now ('' when it is free)
 function Get-KeepHold {
@@ -228,6 +291,26 @@ function Get-KeepCounters([string]$Company, [int]$Port) {
   return @{ ok = $true; v = [long]$v; m = [long]$m }
 }
 function Save-Config { try { ($Cfg | ConvertTo-Json -Depth 4) | Set-Content -Path $ConfigPath -Encoding UTF8 } catch { Write-Log ('Could not save the settings: ' + $_.Exception.Message) } }
+# 1.14.0: when the copier reads Tally. 'daily' (the default): once a day, at KeepDailyAt (20:00 unless set), and when
+# someone presses Update now in FinCom; never through the working day by itself. 'continuous': every minute (as before)
+function Get-KeepSchedule {
+  $v = [string]$Cfg.KeepSchedule
+  if ($v -eq 'daily' -or $v -eq 'continuous') { return $v }
+  if ($script:Fake) { return 'continuous' }
+  return 'daily'
+}
+function Get-KeepDailyAt { $v = [string]$Cfg.KeepDailyAt; if ($v -match '^([01]?\d|2[0-3]):[0-5]\d$') { return $v }; return '20:00' }
+function Get-KeepLastRun { try { return ([IO.File]::ReadAllText((Join-Path (Get-SyncDir) 'keep-lastrun.txt'))).Trim() } catch { return '' } }
+# '' (not now), 'now' (someone asked) or 'daily' (the day's run is due)
+function Test-KeepDue {
+  if (Test-Path -LiteralPath (Join-Path (Get-SyncDir) 'keep-now.txt')) { return 'now' }
+  if ((Get-KeepSchedule) -ne 'daily') { return 'continuous' }
+  $now = Get-Date; $p = (Get-KeepDailyAt).Split(':')
+  $at = $now.Date.AddHours([int]$p[0]).AddMinutes([int]$p[1])
+  if ($now -ge $at -and (Get-KeepLastRun) -ne $now.ToString('yyyyMMdd')) { return 'daily' }
+  return ''
+}
+function Request-KeepNow { New-Item -ItemType Directory -Force -Path (Get-SyncDir) | Out-Null; [IO.File]::WriteAllText((Join-Path (Get-SyncDir) 'keep-now.txt'), (Get-Date).ToString('s')); Write-Log 'Update from Tally asked for now' }
 function Test-KeepOn {
   if ($null -ne $Cfg.KeepInStep) { return [bool]$Cfg.KeepInStep }
   return (-not $script:Fake)             # on by default; off in test mode unless asked for
@@ -615,7 +698,8 @@ function Step-Keep([string]$Company, [int]$Port, [string]$BooksFrom) {
   }
   # 1.13.5: the heavy work (the first copy of the year, its opening balances, the month-by-month check) only at a
   # quiet time: after office hours, or when nobody has used the computer for a while. In the day only changes are read
-  if ($st.phase -ne 'live' -and -not (Test-KeepQuiet)) {
+  $script:KeepCaughtUp = $false
+  if ($st.phase -ne 'live' -and -not $script:KeepForce -and -not (Test-KeepQuiet)) {
     if (-not $st.waitNoted){ $st.waitNoted = $true; Save-KeepFile (Join-Path $dir 'keep.json') ($st | ConvertTo-Json -Depth 6 -Compress); Write-Log ('Keeping ' + $Company + ': the first copy is made at a quiet time (after ' + (Get-KeepNum 'KeepOfficeTo' 19) + ':00, or when nobody has used this computer for ' + (Get-KeepNum 'KeepQuietMin' 10) + ' minutes), so Tally is not held up while you work') }
     return
   }
@@ -723,6 +807,7 @@ function Step-Keep([string]$Company, [int]$Port, [string]$BooksFrom) {
   # entries changed since the last change number seen: their dates now, and where the copy had them before.
   # Recent months every turn; the whole period only when the counter says something changed that they did not explain
   # (or, without counters, every few turns)
+  $ch = @()
   if ($st.phase -eq 'live' -and [long]$st.last -gt 0 -and -not $quiet) {
     $rf = (Get-Date).AddMonths(-2).ToString('yyyyMM') + '01'; if ($rf -lt [string]$st.from) { $rf = [string]$st.from }
     $ch = Get-KeepList $Company $Port $rf $today ([long]$st.last)
@@ -747,6 +832,8 @@ function Step-Keep([string]$Company, [int]$Port, [string]$BooksFrom) {
       }
     }
   }
+  # 1.14.0: nothing changed since the last look (or nothing new came in): this company is up to date for today's run
+  if ($st.phase -eq 'live' -and ($quiet -or -not @($ch).Count)) { $script:KeepCaughtUp = $true }
   # ledger masters changed since the last look
   if ($st.phase -eq 'live' -and $sw.Elapsed.TotalSeconds -lt $budget -and -not ($cn.ok -and $null -ne $st.cm -and [long]$st.cm -eq $cn.m)) { Update-KeepLedgers $Company $Port $dir $st $false }
   if ($cn.ok) { $st.cv = $cn.v; $st.cm = $cn.m }
@@ -821,10 +908,16 @@ function Invoke-KeepWorker {
   $parent = 0
   try { $parent = [int](Get-CimInstance Win32_Process -Filter ('ProcessId=' + $PID) -ErrorAction Stop).ParentProcessId } catch { try { $parent = [int](Get-Process -Id $PID).Parent.Id } catch { $parent = 0 } }
   $held = ''
+  $script:IsCopier = $true
+  $due = Test-KeepDue; $once = $due -eq 'daily' -or $due -eq 'now'
+  $script:KeepForce = $due -eq 'now'
+  $runEnd = (Get-Date).AddMinutes((Get-KeepNum 'KeepRunMin' 30)); $upToDate = @{}
+  if ($once) { Write-Log ('Update from Tally: ' + $(if ($due -eq 'now') { 'asked for now' } else { 'the daily update (' + (Get-KeepDailyAt) + ')' })) }
   try {
     Sync-WorkerConfig
     while ($(Sync-WorkerConfig; Test-KeepOn)) {
       if ($parent -and -not (Test-ProcessAlive $parent)) { Write-Log 'Keeping copies in step: the bridge has stopped, so this stops too'; break }
+      if ($once -and (Get-Date) -gt $runEnd) { Write-Log 'Update from Tally: time is up for today; the rest follows at the next update'; break }
       $hold = Get-KeepHold
       if ($hold) {
         if ($hold -ne $held) { Write-Log ('Keeping copies in step: waiting, ' + $hold) }
@@ -843,7 +936,12 @@ function Invoke-KeepWorker {
           }
         }
       }
+      if ($once -and $open.Count -and -not @($open | Where-Object { -not $upToDate[$_[0]] }).Count) {
+        Write-Log 'Update from Tally: every open company is up to date'
+        break
+      }
       if (-not $open.Count) {
+        if ($once -and -not $busy) { Write-Log 'Update from Tally: no company is open in Tally; tried again at the next update'; break }
         $waiting = 0; try { $waiting = Invoke-CloudPush } catch { }
         if (((Get-Date) - $idle).TotalMinutes -ge (Get-KeepNum 'KeepIdleMin' 10) -and ($waiting -eq 0 -or ((Get-Date) - $idle).TotalMinutes -ge 60)) { break }
         Start-Sleep -Seconds 20; continue
@@ -862,7 +960,8 @@ function Invoke-KeepWorker {
             Write-Log ('Keeping ' + $name + ': one read took ' + [int]$script:KeepLong + 's, so Tally is left alone for ' + [Math]::Max(1, [int]($rest / 60)) + ' min to stay usable; the next reads will be smaller')
           }
         }
-        try { Step-Keep $o[0] $o[1] $o[2]; $script:KeepBack.Remove($o[0]); & $rested $o[0] }
+        if ($upToDate[$o[0]]) { continue }
+        try { Step-Keep $o[0] $o[1] $o[2]; $script:KeepBack.Remove($o[0]); & $rested $o[0]; if ($once -and $script:KeepCaughtUp) { $upToDate[$o[0]] = $true } }
         catch {
           $n = $(if ($bk) { [int]$bk.n + 1 } else { 1 })
           $wait = [Math]::Min(1800, (Get-KeepNum 'KeepCycleSec' 60) * [Math]::Pow(2, $n))
@@ -874,7 +973,15 @@ function Invoke-KeepWorker {
       }
       Write-KeepLoad
       try { $null = Invoke-CloudPush } catch { Write-Log ('Cloud: ' + $_.Exception.Message) }
-      Start-Sleep -Seconds (Get-KeepNum 'KeepCycleSec' 60)
+      Start-Sleep -Seconds $(if ($once) { [Math]::Min(5, (Get-KeepNum 'KeepCycleSec' 60)) } else { Get-KeepNum 'KeepCycleSec' 60 })
+    }
+    if ($once) {
+      # what came in goes on to the cloud before this stops (a few minutes at most)
+      $until = (Get-Date).AddMinutes(10)
+      while ((Get-Date) -lt $until) { $w = 0; try { $w = Invoke-CloudPush } catch { }; if (-not $w) { break }; Start-Sleep -Seconds 10 }
+      [IO.File]::WriteAllText((Join-Path (Get-SyncDir) 'keep-lastrun.txt'), (Get-Date).ToString('yyyyMMdd'))
+      Remove-Item -LiteralPath (Join-Path (Get-SyncDir) 'keep-now.txt') -Force -ErrorAction SilentlyContinue
+      Write-Log ('Update from Tally: done; the next one at ' + (Get-KeepDailyAt) + ', or when someone presses Update now')
     }
   } finally { try { if ([IO.File]::ReadAllText($lock) -eq [string]$PID) { [IO.File]::WriteAllText($lock, '') } } catch { } ; Write-Log 'Keeping copies in step: stopped' }
 }
@@ -891,9 +998,11 @@ function Start-KeepIfNeeded {
       try { $pr = Get-Process -Id $p -ErrorAction Stop; if ($pr.ProcessName -match 'powershell|pwsh') { Write-Log ('Stopping the copier of bridge ' + $(if ($ver) { $ver } else { 'before 1.13.2' }) + ' (process ' + $p + ')'); $pr.Kill(); $null = $pr.WaitForExit(5000) } else { return } } catch { }
     }
   }
-  $any = $false
-  try { foreach ($s in @(Get-OpenCompanies)) { if (-not $s.skipped -and $s.ok -and @($s.companies).Count) { $any = $true } } } catch { }
-  if (-not $any) { return }
+  # 1.14.0: Tally is not asked here. The copier starts only when its run is due (once a day, or Update now); in the
+  # 'continuous' schedule, when Tally's port takes connections
+  $due = Test-KeepDue
+  if (-not $due) { return }
+  if ($due -eq 'continuous') { $any = $false; foreach ($pp in @((Get-PortPlan).ports)) { if (Test-TallyPortOpen ([int]$pp.port)) { $any = $true } }; if (-not $any) { return } }
   $exe = (Get-Process -Id $PID).Path
   $psi = New-Object Diagnostics.ProcessStartInfo
   $psi.FileName = $exe
@@ -913,6 +1022,7 @@ function Get-KeepStatus([string]$Company) {
   $load = $null; try { $lf = Join-Path (Get-SyncDir) 'keep-load.json'; if (Test-Path $lf) { $load = Get-Content -Raw $lf | ConvertFrom-Json } } catch { }
   $cloud = $null; try { $cloud = Get-CloudLinkStatus } catch { }
   return [ordered]@{ ok = $true; on = (Test-KeepOn); running = [bool]($p -and (Test-ProcessAlive $p)); load = $load; cloud = $cloud; phase = $(if ($st) { $st.phase } else { '' }); next = $(if ($st) { $st.next } else { '' }); from = $(if ($st) { $st.from } else { '' }); at = $(if ($st) { $st.at } else { '' });
+    schedule = (Get-KeepSchedule); dailyAt = (Get-KeepDailyAt); lastRun = (Get-KeepLastRun); now = [bool](Test-Path -LiteralPath (Join-Path (Get-SyncDir) 'keep-now.txt'));
     mode = $(if ($Company) { Get-KeepMode $Company } else { '' }); seeded = [bool]($st -and $st.seeded); openPending = [bool]($st -and $st.openPending); balances = [bool]($st -and $st.balAt) }
 }
 # the check: one month of the copy against Tally's own list of entries

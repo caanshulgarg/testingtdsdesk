@@ -63,7 +63,10 @@ function giveFocus(f) {
 // React only (no old screens redrawn); also for tests, which put a placeholder in the page themselves
 // React draws, then any React screen placed inside an old piece it has just drawn (<Legacy>) is put in and drawn too
 // (an old piece puts such a screen in place itself, so a new one shows up as a new entry in `placed`)
-function drawReact() {
+// A drawing of React is one calculation for the business logic: figures worked out from the whole books (the TDS rows,
+// a month's 3B) are worked out once for it, not each time a screen asks (memoScope, src/js/01)
+function drawReact() { return typeof window.memoScope === "function" ? window.memoScope(drawReactNow) : drawReactNow(); }
+function drawReactNow() {
   const keys = () => placed.map((p) => p.key).join("|");
   adopt();
   for (let i = 0; i < 4; i++) {

@@ -56,6 +56,7 @@ try:
     time.sleep(8)
     ok(not fake_cloud.DAYS and not fake_cloud.LEDGERS, "nothing of a company goes before it is linked to a client in FinCom")
     # ---------- linked: everything kept goes, the ledgers first
+    fake_cloud.CTRL["badgz"] = {"20260305"}          # a day Windows' gzip gets wrong: sent again as plain text
     fake_cloud.LINKS[CO] = "client-1"
     want = day_files()
     ok(until(lambda: all((CO, d) in fake_cloud.DAYS for d in want), 240, 2), "once linked, every day kept goes to the cloud: %d of %d" % (sum(1 for d in want if (CO, d) in fake_cloud.DAYS), len(want)))
@@ -66,6 +67,7 @@ try:
     ok(mar == sum(1 for d, p in fake_tally.V if d.startswith("202603")), "March in the cloud has every entry: %d" % mar)
     big = max(n for k, n in fake_cloud.CALLS if k == "days")
     ok(big < 400 * 1024 * 1.5, "sent a little at a time: the largest call was %d KB" % (big // 1024))
+    ok((CO, "20260305") in fake_cloud.DAYS and "go again as plain text" in "".join(open(f, encoding="utf-8", errors="replace").read() for f in glob.glob(_os.path.join(BRUN, "*.log"))), "a day the cloud could not open went again as plain text, and arrived")
     ok(until(lambda: (fake_cloud.STATE.get(CO) or {}).get("phase") == "live", 60), "the copy's state goes too: " + json.dumps(fake_cloud.STATE.get(CO))[:120])
     # ---------- a change in Tally: only that day goes again
     n0 = len(fake_cloud.SENT)

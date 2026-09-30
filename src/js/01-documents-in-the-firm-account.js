@@ -2723,41 +2723,36 @@ function applyExtraction(e, j, cid){
 /* ---------- how this supplier has been booked before, in Tally ---------- */
 const NOT_EXPENSE = /(duties|taxes|bank|cash|sundry\s*creditors|sundry\s*debtors|current\s*liabilities|capital)/i;
 function isTaxLike(name){ return /\b(c|s|i|ut)gst\b|\bcess\b|\btds\b|\btcs\b|round\s*off|input\s*(c|s|i)gst/i.test(name || ""); }
-// read the supplier's ledger for the last twelve months and count what the other side was
-async function partyExpensesFromTally(partyLedger, cid){
-  const co = CO(cid || S.coId);
-  if (!bridgeLive(co) || !partyLedger) return null;
-  co.partyExp = co.partyExp || {};
-  const key = normName(partyLedger);
-  const had = co.partyExp[key];
-  if (had && Date.now() - new Date(had.at).getTime() < 7 * 86400000) return had;     // a week is fresh enough
-  const to = new Date(), from = new Date(to.getTime() - 365 * 86400000);
-  let rows = [];
-  try {
-    const j = await Bridge.call("/ledgervouchers?company=" + encodeURIComponent(Bridge.openFor(co).name) + "&ledger=" + encodeURIComponent(partyLedger) +
-      "&from=" + isoToTally(from.toISOString().slice(0, 10)) + "&to=" + isoToTally(to.toISOString().slice(0, 10)) + Bridge.pinQ(), null, 120000);
-    rows = [].concat(j.rows || []);
-  } catch (e){ return had || null; }
-  const count = {};
-  rows.forEach(r => {
-    const credited = num(String(r.cr || "").replace(/,/g, "")) !== 0;          // the supplier was credited: a bill
-    const other = String(r.other || "").trim();
-    if (!credited || !other || normName(other) === key || isTaxLike(other)) return;
-    const info = ledgerInfo(other);
-    if (info && NOT_EXPENSE.test(info.group || "")) return;
-    const c = count[other] || (count[other] = {ledger: other, n: 0, amount: 0});
-    c.n++; c.amount = r2(c.amount + Math.abs(num(String(r.cr).replace(/,/g, ""))));
+// the supplier's bills of the last twelve months and what the other side was, from the books FinCom already has (the
+// bridge's copy, the cloud, or the day book files). Build 190: never a live read of Tally while bills are processed (it
+// read each supplier's ledger from Tally, one after another, and made processing slow whenever Tally was connected)
+function partyExpensesFromTally(partyLedger, cid){
+  const b = S.books;
+  if (!partyLedger || !b || b.cid !== (cid || S.coId) || !(b.vouchers || []).length) return null;
+  const key = normName(partyLedger), t = new Date(Date.now() - 365 * 86400000);
+  const since = t.getFullYear() + String(t.getMonth() + 1).padStart(2, "0") + String(t.getDate()).padStart(2, "0");
+  const count = {}; let bills = 0;
+  b.vouchers.forEach(v => {
+    if (v.cancel || v.opt || String(v.date) < since) return;
+    const mine = (v.ent || []).filter(e => normName(e.l) === key);
+    if (!mine.length || !(mine.reduce((x, e) => x + num(e.a), 0) > 0)) return;       // the supplier credited: a bill (Tally keeps a credit positive)
+    bills++;
+    const seen = new Set();
+    (v.ent || []).forEach(e => {
+      if (!(num(e.a) < 0) || normName(e.l) === key || isTaxLike(e.l) || seen.has(e.l)) return;
+      const info = ledgerInfo(e.l);
+      if (info && NOT_EXPENSE.test(info.group || "")) return;
+      seen.add(e.l);
+      const c = count[e.l] || (count[e.l] = {ledger: e.l, n: 0, amount: 0});
+      c.n++; c.amount = r2(c.amount + Math.abs(num(e.a)));
+    });
   });
-  const top = Object.values(count).sort((a, b) => b.n - a.n || b.amount - a.amount).slice(0, 4);
-  const res = {at: new Date().toISOString(), bills: rows.filter(r => num(String(r.cr || "").replace(/,/g, "")) !== 0).length, top};
-  co.partyExp[key] = res;
-  Store.saveCompany(co);
-  return res;
+  const top = Object.values(count).sort((x, y) => y.n - x.n || y.amount - x.amount).slice(0, 4);
+  return {at: new Date().toISOString(), bills, top};
 }
 // fill the expense ledger on drafts from what Tally shows, unless a person already chose one
 async function applyPartyHistory(entries, cid){
-  const co = CO(cid);
-  if (!bridgeLive(co)) return 0;
+  if (!S.books || S.books.cid !== cid || !(S.books.vouchers || []).length) return 0;       // the client's books are not open here
   const byLedger = new Map();
   entries.forEach(e => {
     if (!e || e.status !== "draft" || !e.partyLedger || !exactLedger(e.partyLedger)) return;
@@ -2765,7 +2760,7 @@ async function applyPartyHistory(entries, cid){
   });
   let changed = 0;
   for (const [led, list] of byLedger){
-    const h = await partyExpensesFromTally(exactLedger(led), cid);
+    const h = partyExpensesFromTally(exactLedger(led), cid);
     if (!h || !h.top.length) continue;
     const best = h.top.find(t => exactLedger(t.ledger));
     list.forEach(e => {
@@ -3568,7 +3563,23 @@ function padForBars(){
   if (document.body.style.paddingBottom !== pad + "px") document.body.style.paddingBottom = pad + "px";
 }
 window.addEventListener("resize", () => requestAnimationFrame(padForBars));
+// build 190: a figure worked out from the whole books (TDS rows, say) is worked out once per drawing of the page, not
+// each time a part of the page asks for it (the TDS page asked 15 times). Outside a drawing it is always fresh
+let RENDER_GEN = 0, IN_RENDER = 0;
+function perRender(o, key, fn){
+  if (!IN_RENDER) return fn();
+  const m = o._pr = o._pr && o._pr.gen === RENDER_GEN && o._pr.books === S.books ? o._pr : {gen: RENDER_GEN, books: S.books, v: {}};
+  if (Object.prototype.hasOwnProperty.call(m.v, key)) return m.v[key];
+  return (m.v[key] = fn());
+}
+// a long calculation (the MIS, the audit) shares figures the same way while it runs: GST 3B for a month was worked out
+// 48 times in one MIS run, and the TDS rows 18 times
+function memoScope(fn){ if (!IN_RENDER) RENDER_GEN++; IN_RENDER++; try { return fn(); } finally { IN_RENDER--; } }
 function render(){
+  RENDER_GEN++; IN_RENDER++;
+  try { return renderNow(); } finally { IN_RENDER--; }
+}
+function renderNow(){
   requestAnimationFrame(padForBars);
   const drafts = {};
   document.querySelectorAll("#app [data-draft]").forEach(el => { if (el.id) drafts[el.id] = el.value; });

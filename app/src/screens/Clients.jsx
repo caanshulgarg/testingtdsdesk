@@ -33,6 +33,16 @@ function Free({ c }) {
   return <span className={"tag " + (f.pct >= 90 ? "ok" : "warn")} title={f.free + " free, " + f.google + " Google, " + f.claude + " Claude"}>{f.pct}% of {f.n}</span>;
 }
 
+// whether the client's Tally computer is on, Tally open and the books up to date (TLight, src/js/49: the bridge's
+// heartbeat, asked every two minutes at most)
+const MARK = { ok: "● ", warn: "◐ ", bad: "○ " };
+function TallyLight({ cid }) {
+  if (typeof TLight !== "object") return null;
+  TLight.refresh();
+  const x = TLight.st.by[cid];
+  return x ? <span className={"tag " + x.level} title={x.say}>{MARK[x.level] + x.short}</span> : <span className="note">—</span>;
+}
+
 export default function Clients() {
   // the search box: typed at once, the list follows a moment later (as before)
   const [q, setQ] = useState(S.homeQuery || "");
@@ -65,16 +75,16 @@ export default function Clients() {
       </div>
       <div className="tblwrap">
         <table className="data">
-          <thead><tr><th>Client</th><th>GSTIN</th><th className="n">To review</th><th className="n">Need a check</th><th className="n">Waiting for Tally</th><th className="n">TDS {fy}</th><th className="n">Read free</th><th></th></tr></thead>
+          <thead><tr><th>Client</th><th>GSTIN</th><th>Tally</th><th className="n">To review</th><th className="n">Need a check</th><th className="n">Waiting for Tally</th><th className="n">TDS {fy}</th><th className="n">Read free</th><th></th></tr></thead>
           <tbody>
-            {!cos.length && <tr><td colSpan={8} className="note">No client matches “{q}”.</td></tr>}
+            {!cos.length && <tr><td colSpan={9} className="note">No client matches “{q}”.</td></tr>}
             {cos.map((c) => {
               const st = c.stats || {}, inbox = docqCount(c.id);
               return (
                 <tr key={c.id} className="rowlink" onClick={() => openCompany(c.id)}>
                   <td><b>{c.name}</b>{inbox > 0 && <> <span className="tag" title="Files waiting in the inbox">{"\u{1F4E5} " + inbox}</span></>}
                     {c.tallyName && c.tallyName !== c.name && <div className="note">Tally: {c.tallyName}</div>}</td>
-                  <td>{c.gstin || "—"}</td>
+                  <td>{c.gstin || "—"}</td><td><TallyLight cid={c.id} /></td>
                   <td className="n">{st.drafts || "—"}</td>
                   <td className="n">{st.check ? <span className="tag warn">{st.check}</span> : "—"}</td>
                   <td className="n">{st.waiting ? <span className="tag ok">{st.waiting}</span> : "—"}</td>
