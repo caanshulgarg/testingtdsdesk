@@ -549,7 +549,7 @@ function salesSettingsHtml(){
     '<label><span>Address</span><textarea rows="3" data-scfg="address">' + esc(c.address) + "</textarea></label>" + f("Phone", "phone") + f("Email", "email") +
     f("Bank name", "bankName") + f("Account number", "bankAc") + f("IFSC", "bankIfsc") + f("Branch", "bankBranch") +
     '<label><span>Terms and conditions</span><textarea rows="3" data-scfg="terms">' + esc(c.terms) + "</textarea></label>" + f("Signatory (below the signature)", "signatory", "Authorised Signatory") +
-    '</div><p class="note">GSTIN, PAN and state come from Company settings' + (co.gstin ? " (" + esc(co.gstin) + ", " + esc(GST_STATES[home] || "") + ")" : ": add the GSTIN there") + ".</p></section>";
+    '</div><p class="note">GSTIN, PAN and state come from Client setup → Company' + (co.gstin ? " (" + esc(co.gstin) + ", " + esc(GST_STATES[home] || "") + ")" : ": add the GSTIN there") + ".</p></section>";
   h += '<section><h3>Tally ledgers</h3><p class="note">Found automatically in the ledger list. Choose them here if this client names them differently.</p><div class="bk-form">' +
     f("Voucher type", "voucherType", "Sales") +
     '<label><span>Sales ledger (all rates)</span><select data-sled="sales">' + ledgerOptions(exactLedger((c.ledgers || {}).sales) || "", /sales accounts?/i) + "</select></label>" +

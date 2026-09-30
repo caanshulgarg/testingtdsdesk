@@ -157,7 +157,7 @@ function viewGstSettings(){
     '</div><p class="note">Used for the late fee caps, QRMP (\u20b95 crore or less), e-invoicing and the 30-day IRN limit (\u20b910 crore and above).</p>' +
     '<h4 style="margin:12px 0 4px">Rule 42</h4><label class="note"><input type="checkbox" data-gset="d2"' + (GSTRev.settings().d2 ? " checked" : "") + "> Some of the common credit is used for non-business purposes, so D2 (5%) applies</label>" +
     '<p class="note">Ledgers carrying common credit are marked \u201cGST, common credit\u201d on the Tally ledgers tab.</p>' +
-    '<h4 style="margin:12px 0 4px">Blocked credit, section 17(5)</h4><p class="note">Reported in 3B table 4(B)(1), with rules 38, 42 and 43.</p></section>';
+    '<h4 style="margin:12px 0 4px">Blocked credit, section 17(5)</h4><p class="note">Reported in 3B table 4(B)(1), with rules 38, 42 and 43. Which kinds of purchase are blocked for this client is set further down this page.</p></section>';
   // contacts
   const q = String(S.gcontQ || "").toLowerCase(), all = GSTSet.parties(), shown = all.filter(p => !q || (p.party + " " + p.gstin).toLowerCase().includes(q)), c = b.gstContacts || {};
   h += '<section class="dash-card"><h3>Contacts for GST letters</h3><p class="note">Email and phone for the letters to suppliers (ITC follow-up) and customers (IMS rejections). Taken from Tally where it has them; type or correct them here.</p>' +

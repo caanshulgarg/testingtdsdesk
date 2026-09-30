@@ -56,7 +56,9 @@ function planName(p){ return p && typeof p === "object" ? String(p.name || "") :
 function viewPostStep(){ return '<div data-react="PostStep"></div>'; }
 function viewDoneStep(){ return '<div data-react="DoneStep"></div>'; }
 /* ---------- Client setup: four tabs, out of the daily path ---------- */
-const SETUP_TABS = [["settings", "Company and Tally"], ["gstset", "GST"], ["bankset", "Bank accounts"], ["bankrules", "Bank rules"], ["deductees", "Suppliers and TDS"]];
+// the sections of Client setup, in the order of the list on its left (app/src/screens/Settings.jsx)
+const SETUP_TABS = [["settings", "Company"], ["cotally", "Tally"], ["cotds", "TDS"], ["deductees", "Suppliers"], ["gstset", "GST"],
+  ["bankset", "Bank accounts"], ["bankrules", "Bank rules"], ["coclosed", "Closed periods"], ["coremove", "Remove this client"]];
 function isSetupTab(t){ return SETUP_TABS.some(x => x[0] === t); }
 function viewBankSetup(which){
   const co = CO();

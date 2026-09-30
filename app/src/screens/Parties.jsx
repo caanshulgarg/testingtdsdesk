@@ -29,7 +29,7 @@ function Party({ p, fy }) {
       <div className="skipbox" style={{ marginTop: 12 }}>
         <label className="chk"><input type="checkbox" checked={!!p.noTds} onChange={(ev) => {
           p.noTds = ev.target.checked; if (p.noTds && !p.noTdsReason) p.noTdsReason = "na"; save(p, true); refreshStats(S.coId); render();
-        }} /> <b>Do not book TDS for this deductee</b></label>
+        }} /> <b>Do not book TDS for this supplier</b></label>
         <label className="chk" style={{ marginTop: 6 }}><input type="checkbox" checked={!!p.transporter} onChange={(ev) => set(p, "transporter", ev.target.checked, true)} /> Transporter with ten or fewer goods carriages, declaration and PAN on file (no TDS on contract payments)</label>
         {p.noTds && <label className="f" style={{ marginTop: 6, maxWidth: 420 }}><span>Reason</span>
           <select value={p.noTdsReason || "na"} onChange={(ev) => set(p, "noTdsReason", ev.target.value, true)}>
@@ -58,16 +58,16 @@ export default function Parties() {
   const p = S.partySel && parties[S.partySel];
   return <>
     <div className="row" style={{ justifyContent: "space-between" }}>
-      <div><h2 style={{ font: "600 20px var(--serif)", margin: 0 }}>Deductees of {CO().name}</h2>
-        <p className="note" style={{ margin: "2px 0 0" }}>Limits are checked against the amounts credited here. Add bills booked before you started using this desk.</p></div>
+      {/* the heading ("Suppliers") is Client setup's */}
+      <p className="note" style={{ margin: 0, maxWidth: "60ch" }}>Yearly TDS limits are checked against the amounts credited here. Add what was booked before FinCom was used for {CO().name}.</p>
       <div className="row">
         <label className="f"><span>Tax year</span><select value={fy} onChange={(ev) => { S.partyFy = ev.target.value; render(); }}>{fys.map((y) => <option key={y}>{y}</option>)}</select></label>
-        <button className="btn" onClick={() => doAct("addParty")}>Add deductee</button>
+        <button className="btn" onClick={() => doAct("addParty")}>Add supplier</button>
       </div>
     </div>
-    {!ps.length ? <div className="pane"><p className="empty" style={{ padding: 0 }}>No deductees yet. They are added when you approve an invoice, or add one now.</p></div> : (
+    {!ps.length ? <div className="pane"><p className="empty" style={{ padding: 0 }}>No suppliers yet. They are added when you approve a bill, or add one now.</p></div> : (
       <div className="tblwrap" style={{ marginTop: 14 }}><table className="data">
-        <thead><tr><th>Deductee</th><th>PAN</th><th>Usual payment type</th><th className="n">Credited {fy}</th><th className="n">TDS base {fy}</th><th></th></tr></thead>
+        <thead><tr><th>Supplier</th><th>PAN</th><th>Usual payment type</th><th className="n">Credited {fy}</th><th className="n">TDS base {fy}</th><th></th></tr></thead>
         <tbody>{ps.map((q) => {
           const y = Object.values((q.ytd && q.ytd[fy]) || {}), tot = (k) => y.reduce((a, v) => a + num(v[k]), 0);
           return <tr key={q.id} className={S.partySel === q.id ? "sel" : ""}>

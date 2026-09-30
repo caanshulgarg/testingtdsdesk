@@ -9,7 +9,7 @@ import Legacy from "../parts/Legacy.jsx";
 
 const plural = (n, one, many) => n + " " + (n === 1 ? one : many);
 const ROLE = { party: "Supplier", expense: "Expense", gst: "Input GST", tds: "TDS payable", roundoff: "Round off", "rcm-in": "RCM input", "rcm-out": "RCM payable" };
-const OPTIONAL_HELP = "Tally does not show these in the Day Book. See them in TallyPrime: Display More Reports → Exception Reports → Optional Vouchers (or in the Day Book: F12 / Ctrl+B → show Optional vouchers). Open one and press Ctrl+L to make it a regular entry. To post regular entries directly, untick “Create entries as Optional vouchers” in Company settings.";
+const OPTIONAL_HELP = "Tally does not show these in the Day Book. See them in TallyPrime: Display More Reports → Exception Reports → Optional Vouchers (or in the Day Book: F12 / Ctrl+B → show Optional vouchers). Open one and press Ctrl+L to make it a regular entry. To post regular entries directly, untick “Post … as Optional vouchers” in Client setup → Tally.";
 
 // a ledger used by waiting bills that Tally does not have: pick the right one, or create it
 function LedgerFix({ x }) {

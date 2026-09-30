@@ -34,23 +34,58 @@ export function adopt() {
   placed = [...document.querySelectorAll(".react-host")].map((host) => ({ key: host.dataset.key, name: host.dataset.react, host, props: host.props || {} }));
 }
 
-// React only (no old screens redrawn): for tests, which put a placeholder in the page themselves
-export function redraw() { adopt(); version++; flushSync(() => subs.forEach((f) => f())); }
+// The box being typed in, inside a React screen, can leave the page in a redraw: taken out while the old screens are
+// redrawn, or replaced when an old piece shown in a React screen (<Legacy>) is drawn again. Note it before, and give
+// it back after: the same box, or the one with the same data-fk (with what was typed, for data-keeptyped boxes),
+// with the cursor where it was; and what was typed in data-draft boxes. The old render() did this for its own screens.
+function noteFocus() {
+  const a = document.activeElement;
+  if (!a || !a.closest || !a.closest(".react-host")) return null;
+  let sel = null; try { sel = [a.selectionStart, a.selectionEnd]; } catch { /* not a text field */ }
+  const drafts = {};
+  document.querySelectorAll(".react-host [data-draft]").forEach((x) => { if (x.id) drafts[x.id] = x.value; });
+  const fk = a.dataset && (a.dataset.fk || (a.hasAttribute("data-draft") && a.id ? "id:" + a.id : null));
+  return { a, fk, sel, value: a.value, keep: a.hasAttribute("data-keeptyped"), drafts };
+}
+function giveFocus(f) {
+  if (!f) return;
+  Object.entries(f.drafts).forEach(([id, v]) => { const x = document.getElementById(id); if (x && x.value !== v) x.value = v; });
+  const el = f.a.isConnected ? f.a : !f.fk ? null : f.fk.startsWith("id:") ? document.getElementById(f.fk.slice(3))
+    : document.querySelector('.react-host [data-fk="' + CSS.escape(f.fk) + '"]');
+  // only when the focus was lost in the redraw: a screen that moved it on purpose (a box opened) keeps its choice
+  const now = document.activeElement;
+  if (!el || now === el || (now && now !== document.body && now.isConnected)) return;
+  if (el !== f.a && f.keep && el.value !== f.value) el.value = f.value;
+  el.focus();
+  try { if (f.sel && f.sel[0] != null) el.setSelectionRange(f.sel[0], f.sel[1]); } catch { /* not a text field */ }
+}
+
+// React only (no old screens redrawn); also for tests, which put a placeholder in the page themselves
+export function redraw() { const f = noteFocus(); adopt(); version++; flushSync(() => subs.forEach((f) => f())); giveFocus(f); }
 window.FinComReact = { redraw };
 
+// A redraw of the old screens takes every React screen out of the page for a moment. If that happens while the mouse
+// button is down (a box being left because a button was pressed: the box's change or blur redraws), the browser
+// drops the click, since the button it went down on left the page. So while the button is held, only React redraws
+// (it never takes anything out), and the full redraw follows as soon as the button is let go and the click is done.
+let held = false, owed = false;
+addEventListener("pointerdown", () => { held = true; }, true);
+const letGo = () => { held = false; if (owed) { owed = false; setTimeout(() => window.render(), 0); } };
+addEventListener("pointerup", letGo, true);
+addEventListener("pointercancel", letGo, true);
+
 window.render = function render() {
-  // focus inside a React screen is lost when the old screen around it is redrawn: note it, give it back after
-  const a = document.activeElement, inHost = a && a.closest && a.closest(".react-host");
-  let sel = null; try { sel = inHost ? [a.selectionStart, a.selectionEnd] : null; } catch { /* not a text field */ }
+  if (held) { owed = true; redraw(); return; }
+  const f = noteFocus();
   // the ledger list open under a box in a React screen: the old screens' redraw closes it (the box is out of the page
   // for a moment), so it is opened again once React has put the box back
   const acFk = typeof AC === "object" ? AC.fk : null;
   try { legacyRender(); }
   finally {
     adopt();
-    if (inHost && a.isConnected && document.activeElement !== a) { a.focus(); try { if (sel && sel[0] != null) a.setSelectionRange(sel[0], sel[1]); } catch { /* not a text field */ } }
     version++;
-    flushSync(() => subs.forEach((f) => f()));
+    flushSync(() => subs.forEach((fn) => fn()));
+    giveFocus(f);
     // the column filter pop-up sits under its funnel button, which may be in a React table
     if (typeof placeColPop === "function") placeColPop();
     if (acFk && !AC.fk) { const el = document.querySelector('[data-fk="' + CSS.escape(acFk) + '"]'); if (el && document.activeElement === el) acOpen(el); }

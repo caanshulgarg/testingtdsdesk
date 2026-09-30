@@ -257,7 +257,7 @@ const Store = {
       es.docs.forEach(d => this.put("entries/" + d.id, null));
       if (cfg.exists) this.put("config/settings", null);
     }
-    toast("Your earlier invoices were moved into the client \u201c" + co.name + "\u201d. Rename it in Company settings.");
+    toast("Your earlier invoices were moved into the client \u201c" + co.name + "\u201d. Rename it in Client setup.");
   },
   async loadCompany(cid){
     if (S.data[cid] && S.data[cid].loaded) return;
@@ -906,7 +906,7 @@ function compute(e, cid){
     case "excess":
       meter = {used:ytd.credited, add:base, limit:num(rule.limit), label:"Purchases from this seller this year vs limit"};
       if (!co.turnover10cr){
-        why.push("Not applied: this client's previous-year turnover is set as ₹10 crore or less (Company settings).");
+        why.push("Not applied: this client's previous-year turnover is set as ₹10 crore or less (Client setup → TDS).");
       } else if (after > num(rule.limit)){
         applicable = true;
         tdsBase = r2(Math.min(base, after - Math.max(num(rule.limit), ytd.credited)));
@@ -966,7 +966,7 @@ function compute(e, cid){
   }
   if (!party && rule.basis !== "never" && e.status === "draft") flags.push({lvl:"info", t:"New deductee for this client. If bills were credited earlier this year outside this desk, enter them in Deductees so the limits are right."});
   const tdsLedger = co.tdsLedgers[rule.id] || "";
-  if (tds > 0 && !tdsLedger) flags.push({lvl:"hi", t:"No TDS ledger is set for " + rule.label + ". Add it in Company settings."});
+  if (tds > 0 && !tdsLedger) flags.push({lvl:"hi", t:"No TDS ledger is set for " + rule.label + ". Add it in Client setup → TDS."});
 
   // GST: reverse charge and blocked credit (your choices; suggestions never block approval)
   const gd = gstDecision(e, co);
@@ -3598,8 +3598,8 @@ function render(){
     body = viewPostStep();
   } else if (S.view === "company" && CO() && !S.loadingCo && S.tab === "done"){
     body = viewDoneStep();
-  } else if (S.view === "company" && CO() && !S.loadingCo && (S.tab === "bankset" || S.tab === "bankrules")){
-    body = viewBankSetup(S.tab === "bankrules" ? "rules" : "accounts");
+  } else if (S.view === "company" && CO() && !S.loadingCo && isSetupTab(S.tab)){
+    body = '<div data-react="ClientSetup"></div>';   // app/src/screens/Settings.jsx
   } else if (S.view === "company" && CO() && S.step === "collect" && !isSetupTab(S.tab) && !S.loadingCo){
     body = viewCollect();
   } else if (S.view === "company" && CO()){

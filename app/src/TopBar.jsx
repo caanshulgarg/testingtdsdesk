@@ -31,9 +31,7 @@ function ClientHeader() {
     </Title>
   );
   if (["dash", "clientInbox", "txn", "books"].includes(S.tab)) return head;
-  if (setup) return <>{head}<nav className="sbar" aria-label="Client setup">
-    {SETUP_TABS.map(([id, label]) => <button key={id} aria-selected={S.tab === id} onClick={() => goTab(id)}>{label}</button>)}
-  </nav></>;
+  if (setup) return head;   // its sections are listed on the left of the page (screens/Settings.jsx)
   // sales and the bank page have their own tabs
   if ((t === "sales" && S.tab === "sales") || (t === "bank" && S.tab === "bank")) return head;
   const now = curStep(), c = stepCounts(), n = (x) => (String(x || "").match(/\d+/) || [""])[0];

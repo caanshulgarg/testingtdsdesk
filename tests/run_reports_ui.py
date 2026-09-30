@@ -125,7 +125,7 @@ with sync_playwright() as p:
     pg.select_option('[data-ltrf="tone"]', "final"); pg.wait_for_timeout(300)
     ok("Final reminder" in pg.evaluate("LTR.remindText(LTR.remindRows()[0]).subject"), "the tone changes the words")
     # ---------- closed periods
-    pg.evaluate("S.tab = 'settings'; render();"); pg.wait_for_timeout(500)
+    pg.evaluate("S.tab = 'coclosed'; render();"); pg.wait_for_timeout(500)
     ok("Closed periods" in pg.inner_text("#app"), "Client setup has closed periods")
     pg.fill("[data-cpto]", "2025-06-30"); pg.dispatch_event("[data-cpto]", "change"); pg.wait_for_timeout(300)
     pg.evaluate("S.books.gstFiled = {'09': {'202508': {r1: '2025-09-11', r3b: '2025-09-20'}}}; ClosedP.set(CO(), 'tdsFiled', {'2025-26|Q2': '2025-10-30'});")

@@ -2044,35 +2044,6 @@ function viewReading(){
       : "<b>nothing: bills cannot be read here</b>") + ".</p></div>";
   return h;
 }
-const SETTING_TILES = [
-  {id: "account",  title: "Firm account",      note: "Who is signed in, people in the firm, sync",       icon: "\u{1F465}"},
-  {id: "plan",     title: "Plan and credit",   note: "What you pay, credit left, usage this month",      icon: "\u{1F4B3}"},
-  {id: "bridge",   title: "Tally Bridge",      note: "Connect to TallyPrime, set it up, check it",       icon: "\u{1F517}"},
-  {id: "tcloud",   title: "Books in the cloud", note: "Computers that send Tally's books, and which company is which client", icon: "\u2601\uFE0F"},
-  {id: "reading",  title: "Reading bills",     note: "How bills are read, and a test of each way",       icon: "\u{1F441}"},
-  {id: "rates",    title: "Rates and limits",  note: "TDS rates, limits and the firm's own details",     icon: "\u{1F4D0}"},
-  {id: "ai",       title: "AI help",           note: "Claude's suggestions in TDS, GST, audit and notices: on or off", icon: "\u2728"},
-  {id: "postlog",  title: "Sent to Tally",     note: "Every entry posted, by whom, and taking one back", icon: "\u{1F4DC}"},
-  {id: "platform", title: "Platform",          note: "All firms, credit, plans, prices, keys",           icon: "\u{1F3E2}", superadmin: true}
-];
-function settingsTiles(){
-  const sa = !!(S.account && S.account.superadmin);
-  const a = S.account;
-  const sub = {
-    account: Cloud.on() ? (a && a.me ? esc(a.me.email) + " \u00b7 " + esc(a.me.role) : "signed in") : "not signed in",
-    plan: a && a.firm ? (a.firm.plan ? esc(a.firm.plan.name) : "no plan") + " \u00b7 " + INR.format(num(a.firm.balance)) + " left" : "",
-    ai: AIH.sub(),
-    bridge: Bridge.on() && Bridge.up() ? (Bridge.st.tallyUp ? "connected to Tally" : "bridge running, Tally not open") : "not connected",
-    reading: S.engine === "api" ? "free steps, then Claude" : hasGoogle() ? "free steps, then Google OCR" : "free reading only",
- tcloud: TCloud.pane.devices ? TCloud.pane.devices.filter(d => !d.revoked).length + " computer(s) sending" : "",
-    rates: "tax year " + (S.firm && S.firm.fy ? esc(S.firm.fy) : "2026-27"),
-    postlog: ((S.firm.postLog || []).filter(r => r.co === S.coId).length) + " entries",
-    platform: S.adminData ? (S.adminData.firms || []).length + " firms" : "administrator"
-  };
-  return '<div class="tiles">' + SETTING_TILES.filter(t => !t.superadmin || sa).map(t =>
-    '<button class="tile" data-settab="' + t.id + '"><span class="ti">' + t.icon + '</span><span class="tt">' + esc(t.title) + "</span>" +
-    '<span class="tn">' + esc(t.note) + "</span>" + (sub[t.id] ? '<span class="ts">' + sub[t.id] + "</span>" : "") + "</button>").join("") + "</div>";
-}
 // everything sent to Tally: React (app/src/screens/Done.jsx)
 function viewPostLog(){ return '<div data-react="PostLog"></div>'; }
 function postLogCsv(){
@@ -2081,9 +2052,10 @@ function postLogCsv(){
     log.map(r => [r.at, r.what || "", r.action || "", (CO(r.co) || {}).name || "", r.ref || "", r.party || "", r.amount || "", (r.tally || {}).vchType || "", (r.tally || {}).masterId || "", (r.tally || {}).company || "", r.by || ""]));
   saveFile("posted-to-tally-" + new Date().toISOString().slice(0, 10) + ".csv", new Blob([rows.map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(",")).join("\n")], {type: "text/csv"}));
 }
+// the TDS rates and limits for all clients (the firm's name is in Settings → Firm details)
 function viewRates(){
-  let h = '<div class="pane"><h2>Firm</h2><div class="grid"><label class="f"><span>Firm name</span><input type="text" data-firm="firmName" value="' + esc(S.firm.firmName) + '"></label></div></div>';
-  h += '<div class="pane"><h2>Rates and limits for all clients</h2><p class="note" style="margin:0 0 12px">Set for tax year 2026-27 under section 393 of the Income-tax Act, 2025. Check them against the Act and any Finance Act changes before relying on them. Ledger names are set per client in Company settings.</p>' +
+  let h = "";
+  h += '<div class="pane"><h2>Rates and limits for all clients</h2><p class="note" style="margin:0 0 12px">Set for tax year 2026-27 under section 393 of the Income-tax Act, 2025. Check them against the Act and any Finance Act changes before relying on them. Ledger names are set per client in Client setup \u2192 TDS.</p>' +
     '<div class="tblwrap"><table class="data"><thead><tr><th>Payment type</th><th>Section</th><th class="n">Rate: Ind/HUF %</th><th class="n">Rate: others %</th><th class="n">Single bill limit</th><th class="n">Limit</th></tr></thead><tbody>' +
     rules().map(r => {
       const lim = r.basis === "never" || r.basis === "always" ? '<td class="n">—</td>' : '<td class="n"><input type="number" data-rule="' + r.id + '" data-k="limit" value="' + r.limit + '" aria-label="Limit"><div class="note">' + ({annual:"per year", single_or_annual:"per year", monthly:"per month", excess:"per year, TDS on excess"}[r.basis]) + "</div></td>";
@@ -2095,21 +2067,8 @@ function viewRates(){
     '<p class="note" style="margin:10px 0 0">Without a PAN the rate is 20%, or 5% for purchase of goods. TDS is worked on the value before GST where GST is shown separately.</p></div>';
   return h;
 }
-function viewRules(){
-  const tab = S.settingsTab;
-  if (!tab) return '<div class="pane" style="background:none;border:0;padding:0"><h2 style="margin:0 0 4px">Settings</h2><p class="note" style="margin:0 0 14px">Choose what you want to change.</p></div>' + settingsTiles();
-  const t = SETTING_TILES.find(x => x.id === tab) || SETTING_TILES[0];
-  const head = '<div class="row" style="margin:0 0 12px;align-items:center"><button class="btn small" data-settab="">\u2190 All settings</button><h2 style="margin:0;font-size:19px">' + t.icon + " " + esc(t.title) + "</h2></div>";
-  if (tab === "account") return head + viewCloudSettings() + (Cloud.on() ? viewAccountPeopleOnly() : "");
-  if (tab === "plan") return head + viewAccount();
-  if (tab === "bridge") return head + viewBridgeSettings();
-  if (tab === "tcloud") return head + TCloud.view();
-  if (tab === "ai") return head + AIH.viewSettings();
-  if (tab === "reading") return head + viewReading();
-  if (tab === "postlog") return head + viewPostLog();
-  if (tab === "platform") return head + viewSuperadmin();
-  return head + viewRates();
-}
+// Settings for the firm: React (app/src/screens/Settings.jsx)
+function viewRules(){ return '<div data-react="FirmSettings"></div>'; }
 
 /* ---------- Client: invoices ---------- */
 /* ---------- all drafts in one table (for uploads of many bills) ---------- */

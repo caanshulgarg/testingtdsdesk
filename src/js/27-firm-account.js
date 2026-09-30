@@ -634,44 +634,7 @@ function actionBar(){
   return S.tab === "invoices" ? '<div data-react="ActionBar"></div>' : "";   // the purchase bars: React (app/src/screens/Review.jsx)
 }
 
-/* ---------- Client: settings ---------- */
-function viewCompanySettings(){
-  const c = CO();
-  const cf = (label, key, val) => '<label class="f"><span>' + label + '</span><input type="text" data-c="' + key + '" data-fk="c:' + key + '" value="' + esc(val) + '"></label>';
-  const cc = (key, val, label) => '<label class="chk"><input type="checkbox" data-c="' + key + '"' + (val ? " checked" : "") + "> " + esc(label) + "</label>";
-  let h = '<div class="stack"><div class="pane" style="margin-top:0"><h2>' + esc(c.name) + '</h2><p class="note" style="margin:0 0 12px">These settings apply to this client only. Ledger names must match this company in Tally exactly.</p><div class="grid">' +
-    cf("Client name", "name", c.name) + cf("GSTIN", "gstin", c.gstin) + cf("PAN", "pan", c.pan) + cf("Company name in Tally", "tallyName", c.tallyName) +
-    (Bridge.up() && Bridge.st.open.length ? '<label class="f"><span>Or pick the company open in Tally</span><select data-picktally><option value="">\u2014</option>' + Bridge.st.open.map(o => '<option' + (o.name === c.tallyName ? " selected" : "") + ">" + esc(o.name) + "</option>").join("") + "</select></label>" : "") +
-    '<label class="f"><span>Voucher type</span><select data-c="voucherType">' + ["Journal", "Purchase"].map(v => "<option" + (c.voucherType === v ? " selected" : "") + ">" + v + "</option>").join("") + "</select></label>" +
-    '<div class="f wide vnum"><span>Voucher numbering</span>' + (c.vchNumbering === "tally"
-      ? '<div class="note"><span class="tag ok">Automatic in Tally</span> Tally gives every entry its own next number' + (c.vchAutoAt ? " (set " + fmtDate(String(c.vchAutoAt).slice(0, 10)) + ")" : "") + '. FinCom sends no voucher numbers. <button class="linkbtn" data-act="vchUseBillNo">Use supplier bill numbers instead</button></div>'
-      : '<div class="note">FinCom sends the supplier\u2019s bill number as the voucher number; a number already in Tally is retried with the supplier\u2019s initials.</div>' +
-        '<div class="row" style="gap:8px"><button class="btn small" data-act="vchAuto"' + (Bridge.on() && Bridge.up() ? "" : " disabled title=\"Needs the Tally Bridge and Tally open\"") + '>Set automatic numbering in Tally</button>' +
-        '<button class="btn small" data-act="vchTallyDone">It is set in Tally already: use Tally\u2019s automatic numbers</button></div>') + "</div>" +
-    cf("Input CGST ledger", "gst.cgst", c.gst.cgst) + cf("Input SGST ledger", "gst.sgst", c.gst.sgst) + cf("Input IGST ledger", "gst.igst", c.gst.igst) + cf("Round off ledger", "roundOff", c.roundOff) +
-    '</div><div class="stack" style="margin-top:14px;gap:8px">' +
-    cc("bookTds", c.bookTds !== false, "Book TDS in purchase entries. Untick if this client books TDS separately (for example at the time of payment); TDS is still worked out and shown.") +
-    cc("turnover10cr", c.turnover10cr, "Turnover last year was above ₹10 crore (needed for TDS on purchase of goods)") +
-    '<label class="chk"><input type="checkbox" data-c="mustDeduct"' + (c.mustDeduct === false ? "" : " checked") + "> This client has to deduct TDS</label>" +
-    '<p class="note" style="margin:-4px 0 8px 24px">An individual or HUF deducts only if last year\u2019s business turnover was above \u20b91 crore, or professional receipts above \u20b950 lakh. Companies, firms and LLPs always deduct. Untick this and no TDS is worked out for any bill of this client.</p>' +
-    cc("createOptional", c.createOptional, "Post purchase bills and sales invoices into Tally as Optional vouchers (Tally hides these from the Day Book until they are made regular with Ctrl+L)") +
-    cc("billwise", c.billwise, "Add the invoice number as a bill-wise reference on the party") + "</div></div>";
-  h += '<div class="pane"><h2>GST: reverse charge and blocked credit</h2>' +
-    '<p class="note" style="margin:0 0 10px">Reverse charge entries use these ledgers: the input side is debited (unless the credit is blocked) and the payable side is credited.</p><div class="grid">' +
-    Object.keys(RCM_LEDGER_DEFAULTS).map(k => cf({rcmCgstIn:"RCM input CGST", rcmSgstIn:"RCM input SGST", rcmIgstIn:"RCM input IGST", rcmCgstOut:"RCM payable CGST", rcmSgstOut:"RCM payable SGST", rcmIgstOut:"RCM payable IGST"}[k], "gst." + k, rcmLedger(c, k))).join("") + "</div>" +
-    '<h3 style="margin-top:16px">Blocked credit for this client (section 17(5))</h3><p class="note" style="margin:-6px 0 10px">Flag: suggest on matching bills; you accept or reject. Always blocked: apply automatically (you can still untick it on a bill). Credit allowed: never flag, for example a car dealer for motor vehicles.</p>' +
-    '<div class="tblwrap"><table class="data"><thead><tr><th>Category</th><th>Section</th><th>For this client</th></tr></thead><tbody>' +
-    BLOCK_CATS.map(b => "<tr><td>" + esc(b.label) + "</td><td>" + esc(b.sec) + '</td><td><select data-gstrule="' + b.id + '">' +
-      [["flag","Flag for review"],["block","Always blocked"],["allow","Credit allowed"]].map(([v, t]) => '<option value="' + v + '"' + (blockRule(c, b.id) === v ? " selected" : "") + ">" + t + "</option>").join("") + "</select></td></tr>").join("") +
-    "</tbody></table></div></div>";
-  h += '<div class="pane"><h2>Ledgers by payment type</h2><div class="tblwrap"><table class="data"><thead><tr><th>Payment type</th><th>TDS ledger in Tally</th><th>Default expense ledger</th></tr></thead><tbody>' +
-    rules().map(r => "<tr><td>" + esc(r.label) + "</td><td>" + (r.basis === "never" ? "—" : '<input type="text" data-tdsled="' + r.id + '" value="' + esc(c.tdsLedgers[r.id] || "") + '" aria-label="TDS ledger">') +
-      '</td><td><input type="text" data-expled="' + r.id + '" value="' + esc(c.expenseLedgers[r.id] || "") + '" aria-label="Expense ledger"></td></tr>').join("") + "</tbody></table></div></div>";
-  if (typeof ClosedP === "object") h += ClosedP.pane(c);
-  h += '<div class="pane"><h2>Remove this client</h2><p class="note" style="margin:0 0 10px">Deletes this client with all its invoices and deductees from the desk. Nothing in Tally is touched.</p>' +
-    '<button class="btn danger" data-act="delCo">' + (S.arm === "delCo" ? "Click again to delete " + esc(c.name) : "Delete client") + "</button></div></div>";
-  return h;
-}
+/* ---------- Client setup: React (app/src/screens/Settings.jsx) ---------- */
 
 /* ---------- Client: send to Tally: React (app/src/screens/Post.jsx) ---------- */
 function viewExport(){ return '<div data-react="Export"></div>'; }
@@ -796,7 +759,7 @@ function billFixLedger(role, old, to){
       Store.saveEntry(cid, e0);
     }
     const n = replaceLedgerInWaiting(cid, old, name, role);
-    toast("\u201c" + name + "\u201d used" + (n > 1 ? " in " + n + " bills" : "") + (["gst", "tds", "roundoff", "rcm-in", "rcm-out"].includes(role) ? ", and saved in Company settings" : "") + ".");
+    toast("\u201c" + name + "\u201d used" + (n > 1 ? " in " + n + " bills" : "") + (["gst", "tds", "roundoff", "rcm-in", "rcm-out"].includes(role) ? ", and saved in Client setup" : "") + ".");
     refreshStats(cid); render();
   };
   if (to) apply(to);
@@ -1610,7 +1573,7 @@ function doAct(act, t){
     case "bridgeDiag": Bridge.diagnose().then(() => Bridge.refresh()).then(() => render()); break;
     case "openSettings": S.settingsTab = S.settingsTab || null; S.firmMenu = false; S.tallyPanel = false; closeSwitcher(); S.view = "home"; S.homeTab = "rules"; S.arm = null; render(); window.scrollTo(0, 0); break;
     case "dlStandalone": downloadStandalone(); break;
-    case "goReading": closeSwitcher(); S.view = "home"; S.homeTab = "rules"; render(); { const r = document.getElementById("readingPane"); if (r && r.scrollIntoView) r.scrollIntoView(); } break;
+    case "goReading": closeSwitcher(); S.view = "home"; S.homeTab = "rules"; S.settingsTab = "reading"; render(); { const r = document.getElementById("readingPane"); if (r && r.scrollIntoView) r.scrollIntoView(); } break;
     case "testReader": testReader(); break;
     case "testOcr": testFreeOcr(); break;
     case "testGoogle": testGoogle(); break;
@@ -1630,7 +1593,7 @@ function doAct(act, t){
     case "restore": if (e) setStatus(e, "draft"); break;
     case "undo": if (e) undoApproval(e); break;
     case "delete": if (e) removeEntry(e); break;
-    case "addParty": { const id = "p-new-" + Date.now().toString(36); D().parties[id] = {id, name:"New deductee", pan:"", gstin:"", ledgerName:"", natureDefault:"", expenseLedger:"", ldcRate:"", ldcValidTo:"", ytd:{}}; S.partySel = id; Store.saveParty(S.coId, D().parties[id]); render(); break; }
+    case "addParty": { const id = "p-new-" + Date.now().toString(36); D().parties[id] = {id, name:"New supplier", pan:"", gstin:"", ledgerName:"", natureDefault:"", expenseLedger:"", ldcRate:"", ldcValidTo:"", ytd:{}}; S.partySel = id; Store.saveParty(S.coId, D().parties[id]); render(); break; }
     case "closeParty": S.partySel = null; render(); break;
     case "resetRules": S.firm.rules = {}; Store.saveFirm(); toast("Default rates and limits restored."); render(); break;
     case "delCo":
@@ -1750,17 +1713,38 @@ document.addEventListener("input", ev => {
   if (t.dataset.x && e && e.status === "draft" && t.type !== "date"){ billSetX(e, t.dataset.x, t.value); return; }
   if (t.dataset.e && e && e.status === "draft" && t.type === "text"){ billSetText(e, t.dataset.e, t.value); return; }
   const co = CO();
-  if (t.dataset.c && co && t.type === "text"){
-    setPath(co, t.dataset.c, /^(gstin|pan)$/.test(t.dataset.c) ? t.value.toUpperCase().trim() : t.value);
-    later("c" + co.id, () => Store.saveCompany(co), 600);
-    if (t.dataset.c === "name") later("top", renderTop, 200);
-    return;
-  }
-  if (t.dataset.tdsled && co){ co.tdsLedgers[t.dataset.tdsled] = t.value; later("c" + co.id, () => Store.saveCompany(co), 600); return; }
-  if (t.dataset.expled && co){ co.expenseLedgers[t.dataset.expled] = t.value; later("c" + co.id, () => Store.saveCompany(co), 600); return; }
-  if (t.dataset.firm){ S.firm[t.dataset.firm] = t.value; later("firm", () => Store.saveFirm(), 600); document.getElementById("firmLine").textContent = t.value; return; }
+  if (t.dataset.c && co && t.type === "text"){ coSetText(t.dataset.c, t.value); return; }
   if (t.dataset.rule){ const r = S.firm.rules[t.dataset.rule] = S.firm.rules[t.dataset.rule] || {}; r[t.dataset.k] = num(t.value); later("firm", () => Store.saveFirm(), 600); return; }
 });
+// a client's setting typed (saved a moment later); path is "name", "gst.cgst", ...
+function coSetText(path, v){
+  const co = CO(); if (!co) return;
+  setPath(co, path, /^(gstin|pan)$/.test(path) ? String(v).toUpperCase().trim() : v);
+  later("c" + co.id, () => Store.saveCompany(co), 600);
+  if (path === "name") later("top", renderTop, 200);
+}
+// a client's setting chosen or finished (ticked, picked, or a box left): checked, saved, and the page drawn again
+function coCommit(path, v){
+  const co = CO(); if (!co) return;
+  if (v !== undefined) setPath(co, path, /^(gstin|pan)$/.test(path) ? String(v).toUpperCase().trim() : v);
+  if (path === "gstin"){
+    const g = String(co.gstin || "").toUpperCase().trim();
+    if (g && !gstinValid(g)) toast("That GSTIN fails its check digit. Check each character.");
+    else if (g && Object.values(S.companies).some(c => c.id !== co.id && c.gstin === g)) toast("Another client already has this GSTIN.");
+    if (GSTIN_RE.test(g) && !co.pan) co.pan = g.slice(2, 12);
+    else if (GSTIN_RE.test(g) && co.pan && String(co.pan).toUpperCase() !== g.slice(2, 12)) toast("This GSTIN’s PAN is " + g.slice(2, 12) + ", but the client’s PAN is " + co.pan + ". Correct one of them.");
+  } else if (path === "pan"){
+    const p0 = String(co.pan || "").toUpperCase().trim(), g0 = String(co.gstin || "").toUpperCase();
+    if (p0 && GSTIN_RE.test(g0) && g0.slice(2, 12) !== p0) toast("The client’s GSTIN " + g0 + " carries PAN " + g0.slice(2, 12) + ", not " + p0 + ". Correct one of them.");
+  }
+  Store.saveCompany(co); refreshStats(co.id); render();
+}
+function coSetTallyName(name){ const co = CO(); if (co && name){ co.tallyName = name; Store.saveCompany(co); Bridge.lastOpenKey = null; render(); } }
+// per payment type: the TDS ledger (kind "tds") or the default expense ledger (kind "exp")
+function coSetRuleLedger(kind, ruleId, v){ const co = CO(); (kind === "tds" ? co.tdsLedgers : co.expenseLedgers)[ruleId] = v; later("c" + co.id, () => Store.saveCompany(co), 600); }
+function coSetBlockRule(catId, v){ const co = CO(); co.gstBlock = co.gstBlock || {}; co.gstBlock[catId] = v; Store.saveCompany(co); render(); }
+// the firm's own name, shown in the top bar and on reports
+function firmSetName(v){ S.firm.firmName = v; later("firm", () => Store.saveFirm(), 600); const el = document.getElementById("firmLine"); if (el) el.textContent = v; }
 function setPath(o, path, v){ const k = path.split("."); if (k.length === 2) o[k[0]][k[1]] = v; else o[k[0]] = v; }
 
 document.addEventListener("change", ev => {
@@ -1793,7 +1777,6 @@ document.addEventListener("change", ev => {
     if (["email", "password", "firm", "name"].includes(k)){ S.cloudForm = Object.assign({}, S.cloudForm, {[k]: t.value}); } if (k === "auto"){ Cloud.setCfg({auto: t.checked}); startCloudSync(); } else if (k === "email") Cloud.setCfg({email: t.value.trim()}); return; }
   if (t.dataset && t.dataset.bridge){ const k = t.dataset.bridge; Bridge.setCfg({[k]: t.type === "checkbox" ? t.checked : t.value.trim()}); if (k !== "follow"){ Bridge.lastOpenKey = null; startBridgePolling(); } return; }
   if (t.dataset && t.dataset.bridgelink !== undefined){ const c = S.companies[t.value]; if (c){ c.tallyName = t.dataset.bridgelink; Store.saveCompany(c); Bridge.lastOpenKey = null; toast(c.name + " is linked to the Tally company " + c.tallyName + "."); bridgeTick(false); render(); } return; }
-  if (t.hasAttribute && t.hasAttribute("data-picktally")){ const co = CO(); if (co && t.value){ co.tallyName = t.value; Store.saveCompany(co); Bridge.lastOpenKey = null; render(); } return; }
   if (S.view === "company" && S.tab === "bank" && bankChange(t)) return;
   if (S.view === "company" && S.tab === "sales" && salesChange(t)) return;
   if (t.dataset.actToggle === "askClaudeNew"){ S.askClaudeNewSupplier = t.checked; lsSet("tdsdesk:askClaudeNew", t.checked ? "1" : ""); render(); return; }
@@ -1811,23 +1794,8 @@ document.addEventListener("change", ev => {
     return;
   }
   const co = CO();
-  if (t.dataset.c && co){
-    if (t.type === "checkbox") co[t.dataset.c] = t.checked;
-    else if (t.tagName === "SELECT") co[t.dataset.c] = t.value;
-    else if (t.dataset.c === "gstin"){
-      const g = t.value.toUpperCase().trim();
-      if (g && !gstinValid(g)) toast("That GSTIN fails its check digit. Check each character.");
-      else if (g && Object.values(S.companies).some(c => c.id !== co.id && c.gstin === g)) toast("Another client already has this GSTIN.");
-      if (GSTIN_RE.test(g) && !co.pan) co.pan = g.slice(2, 12);
-      else if (GSTIN_RE.test(g) && co.pan && String(co.pan).toUpperCase() !== g.slice(2, 12)) toast("This GSTIN\u2019s PAN is " + g.slice(2, 12) + ", but the client\u2019s PAN is " + co.pan + ". Correct one of them.");
-    }
-    else if (t.dataset.c === "pan"){
-      const p0 = t.value.toUpperCase().trim(), g0 = String(co.gstin || "").toUpperCase();
-      if (p0 && GSTIN_RE.test(g0) && g0.slice(2, 12) !== p0) toast("The client\u2019s GSTIN " + g0 + " carries PAN " + g0.slice(2, 12) + ", not " + p0 + ". Correct one of them.");
-    }
-    Store.saveCompany(co); refreshStats(co.id); render(); return;
-  }
-  if (t.dataset.rule || t.dataset.firm){ Store.saveFirm(); return; }
+  if (t.dataset.c && co){ coCommit(t.dataset.c, t.type === "checkbox" ? t.checked : t.tagName === "SELECT" ? t.value : undefined); return; }
+  if (t.dataset.rule){ Store.saveFirm(); return; }
 });
 document.addEventListener("dragover", ev => { const d = ev.target.closest && ev.target.closest("#drop,#bankDrop,.bk"); if (d){ ev.preventDefault(); d.classList.add("over"); } });
 document.addEventListener("dragleave", ev => { const d = ev.target.closest && ev.target.closest("#drop,#bankDrop"); if (d) d.classList.remove("over"); });

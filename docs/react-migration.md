@@ -39,6 +39,11 @@ app/                      the React app (Vite)
   table draws the funnel button inside `data-legacy`, and `render()` places the pop-up again after React has drawn.
 - **Ledger boxes** (a Tally ledger typed, with the list that drops down) are `parts/LedgerBox.jsx`: the choice is
   made when the box is left or a ledger is picked (the browser's change event), not on every key.
+- **Redraws and the mouse.** `render()` takes the React screens out of the page for a moment; a click whose button
+  left the page is dropped by the browser. So while the mouse button is held (a box being left because a button was
+  pressed), `render()` only redraws React, and the full redraw follows the click (store.js).
+- **The cursor** in a box inside a React screen is given back after a redraw: the same box, or the one with the same
+  `data-fk`. Old pieces (`<Legacy>`) are drawn again from their HTML every time, as the old screens were.
 - **Editing a bill** goes through `billSetX`, `billSetText`, `billSetChoice`, `billBookTds`, `billGst`,
   `billUseExpense`, `billFixLedger` (src/js/27), for React and the old handlers alike.
 - **State** is still the one object `S`, and every change still ends in `render()`. A React screen's own passing
@@ -93,6 +98,7 @@ Status: **done** (in React, test passing) · **next** · blank = not started. Ab
 | **Audit and MIS** | `viewBooksAudit`, `viewAuditRel`, `viewAudit3cd`, `viewBooksMis`, `misPackHtml` (18) | |
 | **Reports, Look up, Letters** | `viewBooksReports` (45) · `viewBooksLookup` (44) · `viewBooksLetters` (46) | |
 | **Tally** | `viewBridgeSettings`, `viewBridgeDiagnosis`, `viewReadTest` (24) · `viewPostLog`, `viewReading` (18) | |
-| **Settings** | `viewRules`, `viewRates` (18) · `viewCompanySettings`, `viewExport`, `viewGst` (27) · `viewDocsSettings`, `viewDropKeys` (19) · `viewSelfTest` (01) | |
+| **Settings** | Settings for the firm and Client setup: one layout, sections listed on the left (`screens/Settings.jsx`); in React: firm details, company, Tally, TDS, reverse charge and blocked credit, remove client | **done** |
+| | still old, shown inside it: sign-in and people, plan, Tally Bridge, books in the cloud, rates, reading, AI help (27, 18, 24) · GST registrations `viewGstSettings` (36) · bank accounts and rules · closed periods (47) | |
 | **Firm account** | `viewAccount`, `viewCloudSettings`, `walletHtml`, `viewPeople`, `viewBackups`, `viewSuperadmin`, `creditBanner` (27) | |
 | **Last step** | `render()` and string screens removed; `src/js` as ES modules | |

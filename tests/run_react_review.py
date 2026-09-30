@@ -91,8 +91,8 @@ with sync_playwright() as p:
     ok(pg.evaluate("Object.values(D().entries).filter(e => e.status === 'rejected').length") == 1, "“No entry needed” marks it so")
     # deductees
     pg.evaluate("goTab('deductees')"); pg.wait_for_timeout(600)
-    ok("Deductees of ZZ Zeta Exports" in app(), "the deductees page")
-    pg.click('#app button:has-text("Add deductee")'); pg.wait_for_timeout(500)
+    ok(pg.inner_text("#app .sethead h2") == "Suppliers" and "Add what was booked before FinCom was used for ZZ Zeta Exports" in app(), "Client setup → Suppliers")
+    pg.click('#app button:has-text("Add supplier")'); pg.wait_for_timeout(500)
     nm = pg.locator('#app .pane label:has-text("Name") >> nth=0 >> input')
     nm.fill(""); nm.click(); pg.keyboard.type("Delta Transport", delay=10); pg.wait_for_timeout(400)
     ok(pg.locator("#app .pane h2").inner_text() == "Delta Transport" and "Delta Transport" in pg.inner_text("#app table.data"), "typing the name: the heading and the table follow")

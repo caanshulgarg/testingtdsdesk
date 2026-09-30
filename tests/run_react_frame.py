@@ -46,9 +46,9 @@ with sync_playwright() as p:
     pg.click('#cobar .sbar button:has-text("Ready to post")'); pg.wait_for_timeout(800)
     ok(pg.evaluate("S.tab") == "export" and pg.get_attribute('#cobar .sbar button:has-text("Ready to post")', "aria-selected") == "true", "a status tab switches the step")
     pg.click('#side .side-link:has-text("Client setup")'); pg.wait_for_timeout(800)
-    ok("Client setup" in top() and pg.locator('#cobar nav[aria-label="Client setup"] button').count() == 5, "Client setup: its five tabs")
-    pg.click('#cobar nav[aria-label="Client setup"] button:has-text("GST")'); pg.wait_for_timeout(800)
-    ok(pg.evaluate("S.tab") == "gstset", "a setup tab opens it")
+    ok("Client setup" in top() and pg.locator('#app nav[aria-label="Client setup"] button').count() == 9, "Client setup: its sections, listed on the left")
+    pg.click('#app nav[aria-label="Client setup"] button:has(span:text-is("GST"))'); pg.wait_for_timeout(800)
+    ok(pg.evaluate("S.tab") == "gstset", "a section in the list opens it" + " [" + pg.evaluate("S.tab") + "]")
     pg.click('#cobar button:has-text("Back to the work")'); pg.wait_for_timeout(800)
     ok(pg.evaluate("S.tab") == "invoices", "Back to the work")
     # the Tally panel and the firm menu
