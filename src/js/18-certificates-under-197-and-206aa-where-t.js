@@ -951,7 +951,7 @@ async function gst9Excel(which){
   }
   saveFile(CO().name.replace(/[^A-Za-z0-9]+/g, "-") + "-GSTR-" + which + "-" + fy + "-" + reg + ".xlsx", new Blob([XLSX.write(wb, {bookType: "xlsx", type: "array"})], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
 }
-// the GST tab: React (app/src/screens/Gst.jsx); its parts are still the old pages below (viewGstr1, viewGstr3b, …)
+// the GST tab: React (app/src/screens/Gst.jsx); GSTR-1 and 3B are app/src/screens/gst/Returns.jsx; the other parts are still the old pages below
 function viewBooksGst(b){ return '<div data-react="Gst"></div>'; }
 // the parts of the GST tab for the GSTIN and month chosen, following its filing type
 function gstParts(b){
@@ -982,7 +982,7 @@ function gstPartHtml(b, part){
   if (part === "amend") return viewGstAmend(b);
   if (part === "g9") return viewGst9(b);
   if (part === "g9c") return viewGst9c(b);
-  return part === "r1" ? viewGstr1(b) + viewCustRejections(b) : viewGstr3b(b);
+  return "";
 }
 function gstPartGo(id){ S.gstPart = id; render(); }
 function gstSetYm(ym){ S.gstYm = ym; S.books.reco = null; render(); }
@@ -1156,127 +1156,6 @@ function viewGstRev(b){
   return h;
 }
 
-function viewGstr1(b){
-  const g = GSTR.one(S.gstYm || "", S.gstReg || ""), money = v => INR.format(r2(v || 0));
-  const box = (label, s, cls) => '<div class="dtile' + (cls || "") + '"><span>' + label + "</span><b>" + s.n + "</b><small>" + money(s.taxable) + " + " + money(s.igst + s.cgst + s.sgst) + " tax</small></div>";
-  let h = '<div class="dash-tiles">' + box("B2B (4A)", GSTR.sum(g.b2b)) + box("B2C large (5)", GSTR.sum(g.b2cl)) + box("B2C small (7)", GSTR.sum(g.b2c)) + box("Notes (9B)", GSTR.sum(g.cdnr)) + "</div>" +
-    '<div class="dash-tiles">' + box("Exports and SEZ (6)", GSTR.sum(g.exp)) + box("Nil, exempt, non-GST (8)", GSTR.sum(g.nil)) + box("Reverse charge (4B)", GSTR.sum(g.rcm)) + box("All outward", g.total) + "</div>";
-  if (S.gstReg && GSTAmend.filed(S.gstReg).length){
-    const p = GSTAmend.pending(S.gstYm || "", S.gstReg), live = p.rows.filter(r => r.act !== "skip");
-    if (live.length) h += '<div class="dash-tiles"><div class="dtile warn"><span>Earlier months to amend</span><b>' + live.length + '</b><small><button class="linkbtn" data-gstpart="amend">See them</button>; they go into this month\u2019s JSON</small></div></div>';
-  }
-  if (GSTAdv.ready()){
-    const a = GSTAdv.month(S.gstYm || "", S.gstReg || "");
-    if (a.at.length || a.txpd.length) h += '<div class="dash-tiles">' + box("Advances received (11A)", a.atSum) + box("Advances adjusted (11B)", a.txpdSum) +
-      '<div class="dtile"><span>Advances</span><b><button class="linkbtn" data-gstpart="adv">See them</button></b><small>in the JSON as at and txpd</small></div></div>';
-  }
-  const rows = g.b2b.concat(g.b2cl).concat(g.b2c).concat(g.cdnr).concat(g.exp).concat(g.nil);
-  {
-    const f = S.r1F || {}, qq = String(f.q || "").toLowerCase();
-    const shown = rows.filter(r => (!qq || (r.party + " " + r.no + " " + r.gstin).toLowerCase().includes(qq)) && (!f.part || r.kind === f.part));
-    const by = {};
-    shown.forEach(r => {
-      const k = r.gstin || normName(r.party) || "retail";
-      const p = by[k] = by[k] || {party: r.party || "Retail customers", gstin: r.gstin, n: 0, taxable: 0, tax: 0, rows: []};
-      p.n++; p.taxable = r2(p.taxable + r.taxable); p.tax = r2(p.tax + r.igst + r.cgst + r.sgst); p.rows.push(r);
-    });
-    const parties = Object.values(by).sort((a, b) => b.taxable - a.taxable);
-    h += filterBar("r1F", {placeholder: "Find a customer, invoice or GSTIN", table: "r1Table", title: CO().name + " GSTR-1 " + GSTR.label(S.gstYm || ""), excel: "gstExcel",
-      count: parties.length + " customers \u00b7 " + shown.length + " of " + rows.length + " documents",
-      selects: [{key: "part", options: [["", "Every part"], ["B2B", "B2B (4A)"], ["B2CL", "B2C large (5)"], ["B2C", "B2C small (7)"], ["CDNR", "Credit notes (9B)"], ["EXP", "Exports (6)"], ["NIL", "Nil and exempt (8)"]]}]});
-    h += '<div class="bk-tablewrap"><table class="bk-table" id="r1Table"><thead><tr><th>Customer</th><th>GSTIN</th><th class="n">Documents</th><th class="n">Taxable</th><th class="n">Tax</th></tr></thead><tbody>' +
-      parties.map(p => {
-        const key = p.gstin || normName(p.party), isOpen = S.r1Open === key;
-        let row = "<tr><td>" + '<button class="linkbtn" data-r1open="' + esc(key) + '">' + (isOpen ? "\u25be " : "\u25b8 ") + esc(p.party) + "</button></td><td>" + esc(p.gstin || "\u2014") +
-          '</td><td class="n"><button class="linkbtn" data-r1open="' + esc(key) + '">' + p.n + '</button></td><td class="n">' + money(p.taxable) + '</td><td class="n"><b>' + money(p.tax) + "</b></td></tr>";
-        if (isOpen) row += '<tr><td colspan="5" style="background:var(--paper);padding:0"><table class="bk-table" style="margin:0"><thead><tr><th>Part</th><th class="dt">Date</th><th>Invoice</th><th>Place of supply</th><th class="n">Rate</th><th class="n">Taxable</th><th class="n">IGST</th><th class="n">CGST</th><th class="n">SGST</th></tr></thead><tbody>' +
-          p.rows.map(r => "<tr><td>" + r.kind + "</td><td>" + fmtDate(tallyDate(r.date)) + "</td><td>" + esc(r.no) + "</td><td>" + esc(r.pos || "") + '</td><td class="n">' + r.rate +
-            '%</td><td class="n">' + money(r.taxable) + '</td><td class="n">' + money(r.igst) + '</td><td class="n">' + money(r.cgst) + '</td><td class="n">' + money(r.sgst) + "</td></tr>").join("") +
-          "</tbody></table></td></tr>";
-        return row;
-      }).join("") +
-      '<tr><td><b>Total</b></td><td></td><td class="n">' + shown.length + '</td><td class="n">' + money(shown.reduce((a, r) => a + r.taxable, 0)) +
-      '</td><td class="n"><b>' + money(shown.reduce((a, r) => a + r.igst + r.cgst + r.sgst, 0)) + "</b></td></tr>" +
-      "</tbody></table>" + (parties.length ? "" : '<div class="bk-none">Nothing matches.</div>') + "</div>";
-  }
-  h += '<section class="dash-card" style="margin-top:12px"><h3>HSN summary (12)</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>HSN</th><th>Goods or services</th><th class="n">Rate</th><th class="n">Invoices</th><th class="n">Taxable</th><th class="n">IGST</th><th class="n">CGST</th><th class="n">SGST</th></tr></thead><tbody>' +
-    g.hsn.map(x => "<tr><td>" + (x.hsn ? esc(x.hsn) : '<span class="tag warn">no HSN</span>') + "</td><td>" + esc(x.supply || "") + '</td><td class="n">' + x.rate + '%</td><td class="n">' + x.n + '</td><td class="n">' + money(x.taxable) + '</td><td class="n">' + money(x.igst) + '</td><td class="n">' + money(x.cgst) + '</td><td class="n">' + money(x.sgst) + "</td></tr>").join("") + "</tbody></table></div></section>";
-  if (g.ecoBy && g.ecoBy.length){
-    h += '<section class="dash-card" style="margin-top:12px"><h3>Supplies through an e-commerce operator (14)</h3>' +
-      '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Operator</th><th class="n">Documents</th><th class="n">Taxable</th><th class="n">IGST</th><th class="n">CGST</th><th class="n">SGST</th><th class="n">TCS collected</th></tr></thead><tbody>' +
-      g.ecoBy.map(e => "<tr><td>" + esc(({amazon: "Amazon", flipkart: "Flipkart", shopify: "Shopify"})[e.eco] || e.eco) + '</td><td class="n">' + e.n +
-        '</td><td class="n">' + money(e.taxable) + '</td><td class="n">' + money(e.igst) + '</td><td class="n">' + money(e.cgst) + '</td><td class="n">' + money(e.sgst) +
-        '</td><td class="n">' + money(e.tcs) + "</td></tr>").join("") + "</tbody></table></div>" +
-      '<p class="note">The operator pays this TCS under section 52; claim it from your cash ledger after checking it against GSTR-2B or the TCS statement.</p></section>';
-  }
-  h += '<section class="dash-card" style="margin-top:12px"><h3>Documents issued (13)</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Nature</th><th>Series</th><th>From</th><th>To</th><th class="n">Total</th><th class="n">Cancelled</th><th class="n">Net issued</th></tr></thead><tbody>' +
-    g.series.slice().sort((a, c) => a.nat - c.nat).map(x => "<tr><td>" + ({1: "Invoices for outward supply", 4: "Debit notes", 5: "Credit notes"})[x.nat] + "</td><td>" + esc(x.pre || "\u2014") + "</td><td>" + esc(x.from) + "</td><td>" + esc(x.to) + '</td><td class="n">' + x.n + '</td><td class="n">' + x.cancelled + '</td><td class="n">' + (x.n - x.cancelled) + "</td></tr>").join("") + "</tbody></table></div>" +
-    '<p class="note">Cancelled vouchers are counted from Tally (marked cancelled there); a number missing from a series is not, so enter or cancel it in Tally first.</p></section>';
-  h += viewGstChecks();
-  return h;
-}
-function viewGstChecks(){
-  const list = GSTR.checks(S.gstYm || "", S.gstReg || "");
-  if (!list.length) return '<section class="dash-card" style="margin-top:12px"><h3>Before filing</h3><p class="note">Nothing to fix for this month.</p></section>';
-  return '<section class="dash-card" style="margin-top:12px"><h3>Before filing</h3>' +
-    list.map(c => '<div class="dash-row"><span>' + esc(c.what) + '</span><b>' + c.n + "</b></div>" +
-      '<p class="note" style="margin:0 0 8px">' + esc(c.how) + " e.g. " + esc(c.rows.map(r => (r.no || r.party || "").slice(0, 22)).join(", ")) + "</p>").join("") + "</section>";
-}
-function viewGstr3b(b){
-  const t = GSTR.threeB(S.gstYm || "", S.gstReg || ""), money = v => INR.format(r2(v || 0));
-  const choice = ((b.itcBasis || {})[S.gstReg || ""]) || "2b";
-  const ft = typeof GSTSet === "object" ? GSTSet.typeOf(S.gstYm || "", S.gstReg || "") : "monthly";
-  const basisBar = '<div class="gf-ctl" style="margin-bottom:10px"><span class="note">Credit in table 4: <b>' + (choice === "2b" ? "as far as 2B shows it" : "as booked in Tally") + "</b> \u00b7 filing " + esc(typeof GSTSet === "object" ? GSTSet.typeLabel(ft).toLowerCase() : "monthly") + " \u00b7 " + (typeof gstSetLink === "function" ? gstSetLink() : "") + "</span>" +
-    '<span class="note">' + (t.basis === "2b" ? "This month\u2019s 2B is here; bills not in it are held back." : t.basis === "no 2B" ? "No 2B for this month here, so the books are used; bring it in under 2B reconciliation." : "As booked.") + "</span></div>";
-  const row = (label, x, bold) => "<tr><td>" + (bold ? "<b>" + label + "</b>" : label) + '</td><td class="n">' + money(x.taxable) + '</td><td class="n">' + money(x.igst) + '</td><td class="n">' + money(x.cgst) + '</td><td class="n">' + money(x.sgst) + "</td></tr>";
-  const gap = '<tr><td colspan="5" style="height:8px"></td></tr>';
-  let h = basisBar + '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>3.1 Outward supplies and inward on reverse charge</th><th class="n">Taxable</th><th class="n">IGST</th><th class="n">CGST</th><th class="n">SGST</th></tr></thead><tbody>' +
-    row("(a) Outward taxable supplies, other than zero rated, nil and exempt", t.sale) +
-    (t.adv.taxable || t.adv.igst || t.adv.cgst ? row("Add: tax on advances, 11A less 11B", t.adv) : "") +
-    row("Less: credit notes", {taxable: -t.cn.taxable, igst: -t.cn.igst, cgst: -t.cn.cgst, sgst: -t.cn.sgst}) +
-    (t.custRej && t.custRej.add.n ? row("Add: our credit notes rejected by customers in IMS (" + t.custRej.add.n + ")", t.custRej.add) : "") +
-    (t.custRej && t.custRej.back.n ? row("Less: of those, accepted later (" + t.custRej.back.n + ")", {taxable: -t.custRej.back.taxable, igst: -t.custRej.back.igst, cgst: -t.custRej.back.cgst, sgst: -t.custRej.back.sgst}) : "") +
-    row("(b) Outward zero rated: exports and SEZ", t.zero) +
-    row("(c) Other outward: nil rated and exempt", t.nil) +
-    row("(d) Inward supplies on which tax is payable by you (reverse charge)", t.rcmOut) +
-    row("(e) Non-GST outward supplies", t.nongst) +
-    gap + row("Net outward, taxable", t.net, true) +
-    "</tbody></table></div>";
-  h += '<div class="bk-tablewrap" style="margin-top:12px"><table class="bk-table"><thead><tr><th>3.2 Of 3.1(a), inter-state supplies to unregistered persons, by place of supply</th><th class="n">Taxable</th><th class="n">IGST</th></tr></thead><tbody>' +
-    (t.unregPos.length ? t.unregPos.map(x => "<tr><td>" + esc(x.pos + " " + (Object.keys(STATE_CODES).find(k => STATE_CODES[k] === x.pos) || "").toLowerCase().replace(/\b\w/g, c => c.toUpperCase())) + '</td><td class="n">' + money(x.taxable) + '</td><td class="n">' + money(x.igst) + "</td></tr>").join("") : '<tr><td colspan="3" class="nr">None this month.</td></tr>') + "</tbody></table></div>";
-  h += '<div class="bk-tablewrap" style="margin-top:12px"><table class="bk-table"><thead><tr><th>4 Input tax credit</th><th class="n">Value</th><th class="n">IGST</th><th class="n">CGST</th><th class="n">SGST</th></tr></thead><tbody>' +
-    row("(A)(1) Import of goods", {taxable: t.impGoods.taxable, igst: t.impGoods.igst, cgst: t.impGoods.cgst, sgst: t.impGoods.sgst}) +
-    row("(A)(2) Import of services", {taxable: t.impServ.taxable, igst: t.impServ.igst, cgst: t.impServ.cgst, sgst: t.impServ.sgst}) +
-    row("(A)(3) Inward supplies on reverse charge", {taxable: t.rcmIn.taxable, igst: t.rcmIn.igst, cgst: t.rcmIn.cgst, sgst: t.rcmIn.sgst}) +
-    row("(A)(5) All other ITC", {taxable: t.other.taxable, igst: t.other.igst, cgst: t.other.cgst, sgst: t.other.sgst}) +
-    (t.basis === "2b" && (t.held.n || t.released.n || (t.cn2b && t.cn2b.n) || (t.rejBack && t.rejBack.n)) ? '<tr><td colspan="5" class="nr" style="white-space:normal">' + (t.held.n ? "Held back, not yet in 2B: " + t.held.n + " bill" + (t.held.n === 1 ? "" : "s") + ", \u20b9" + money(t.held.igst + t.held.cgst + t.held.sgst + t.held.cess) + ". " : "") +
-      (t.released.n ? "Taken now, booked earlier and in this month\u2019s 2B: " + t.released.n + ", \u20b9" + money(t.released.igst + t.released.cgst + t.released.sgst + t.released.cess) + ". " : "") +
-      (t.rejBack && t.rejBack.n ? "Credit notes rejected in IMS, not reducing credit: " + t.rejBack.n + ", \u20b9" + money(t.rejBack.igst + t.rejBack.cgst + t.rejBack.sgst + t.rejBack.cess) + ". " : "") +
-      (t.cn2b && t.cn2b.n ? "Less suppliers\u2019 credit notes in 2B, not in Tally: " + t.cn2b.n + ", \u20b9" + money(t.cn2b.igst + t.cn2b.cgst + t.cn2b.sgst + t.cn2b.cess) + ". " : "") + '<button class="linkbtn" data-gstpart="follow">See them</button></td></tr>' : "") +
-    gap + row("(B)(1) Reversed: rules 38, 42, 43 and section 17(5)", {taxable: "", igst: t.rev1.igst, cgst: t.rev1.cgst, sgst: t.rev1.sgst}) +
-    '<tr><td>(B)(2) Reversed: others (rule 37, and credit that may come back)<div class="nr">type any here</div></td><td class="n"></td>' + ["igst", "cgst", "sgst"].map(k => '<td class="n"><input type="number" step="0.01" data-g3b="rev2.' + k + '" value="' + esc((((b.gst3b || {})[(S.gstReg || "") + "|" + S.gstYm] || {}).rev2 || {})[k] || "") + '" placeholder="0" style="width:100px;text-align:right"></td>').join("") + "</tr>" +
-    gap + row("(C) Net ITC available", {taxable: "", igst: t.netItc.igst, cgst: t.netItc.cgst, sgst: t.netItc.sgst}, true) +
-    '<tr><td>(D)(1) ITC reclaimed, reversed under 4(B)(2) earlier<div class="nr">type any here</div></td><td class="n"></td>' + ["igst", "cgst", "sgst"].map(k => '<td class="n"><input type="number" step="0.01" data-g3b="reclaim.' + k + '" value="' + esc((((b.gst3b || {})[(S.gstReg || "") + "|" + S.gstYm] || {}).reclaim || {})[k] || "") + '" placeholder="0" style="width:100px;text-align:right"></td>').join("") + "</tr>" +
-    row("(D)(2) Ineligible: section 16(4) and place of supply" + (GST2B.all2b(S.gstReg || "").some(z => z.ym === S.gstYm) ? " (from 2B)" : " (bring in 2B)"), {taxable: "", igst: t.na.igst, cgst: t.na.cgst, sgst: t.na.sgst}) +
-    (t.ineligible ? '<tr><td class="nr">Tax charged to cost in the books</td><td class="n">' + money(t.ineligible) + '</td><td colspan="3"></td></tr>' : "") +
-    "</tbody></table></div>";
-  h += '<div class="bk-tablewrap" style="margin-top:12px"><table class="bk-table"><thead><tr><th>5 Exempt, nil and non-GST inward supplies</th><th class="n">Inter-state</th><th class="n">Intra-state</th></tr></thead><tbody>' +
-    "<tr><td>From a supplier under composition, exempt and nil rated</td><td class=\"n\">" + money(t.inw5.gstInter) + '</td><td class="n">' + money(t.inw5.gstIntra) + "</td></tr>" +
-    "<tr><td>Non-GST supply</td><td class=\"n\">" + money(t.inw5.ngInter) + '</td><td class="n">' + money(t.inw5.ngIntra) + "</td></tr></tbody></table></div>";
-  // 6.1: how the tax is paid, in the order the law sets, and the credit carried to next month
-  const P = t.pay, months = GSTR.months(), first = months[0] === S.gstYm, open = (b.gstOpen || {})[S.gstReg || ""] || {};
-  const hd = [["igst", "Integrated tax"], ["cgst", "Central tax"], ["sgst", "State/UT tax"], ["cess", "Cess"]];
-  h += '<div class="bk-tablewrap" style="margin-top:12px"><table class="bk-table"><thead><tr><th>6.1 Payment of tax</th><th class="n">Tax payable</th><th class="n">Through IGST credit</th><th class="n">CGST credit</th><th class="n">SGST credit</th><th class="n">Cess credit</th><th class="n">In cash</th><th class="n">Reverse charge, in cash</th></tr></thead><tbody>' +
-    hd.map(([k, l]) => "<tr><td>" + l + '</td><td class="n">' + money(num(t.net[k]) + num(t.rcmOut[k])) + '</td><td class="n">' + money((P.use.igst || {})[k]) + '</td><td class="n">' + money((P.use.cgst || {})[k]) + '</td><td class="n">' + money((P.use.sgst || {})[k]) + '</td><td class="n">' + money((P.use.cess || {})[k]) + '</td><td class="n"><b>' + money(r2(P.cash[k] - P.rcmCash[k])) + '</b></td><td class="n"><b>' + money(P.rcmCash[k]) + "</b></td></tr>").join("") +
-    '<tr><td colspan="8" style="height:6px"></td></tr>' +
-    "<tr><td>Credit brought forward" + (first ? '<div class="nr">the balance in the electronic credit ledger at the start of ' + esc(GSTR.label(S.gstYm)) + ", from the portal</div>" : '<div class="nr">left over from ' + esc(GSTR.label(months[months.indexOf(S.gstYm) - 1] || "")) + "</div>") + '</td><td></td>' +
-    hd.map(([k]) => '<td class="n">' + money(t.opening[k]) + "</td>").join("") + "<td>" + (first && typeof gstSetLink === "function" ? gstSetLink("typed in GST settings") : "") + "</td><td></td></tr>" +
-    "<tr><td><b>Credit carried to next month</b></td><td></td>" + hd.map(([k]) => '<td class="n"><b>' + money(P.carry[k]) + "</b></td>").join("") + "<td></td><td></td></tr></tbody></table></div>";
-  h += '<p class="note">Worked out from the books. Credit is used as sections 49 and 49A and rule 88A require: IGST credit first against IGST, the rest against CGST and SGST; then CGST and SGST credit against their own tax and then IGST; CGST never against SGST. Reverse charge is paid in cash. Interest and late fee, and anything paid outside the books, are not included; check the ledgers on the portal before paying.</p>';
-  h += viewGstChecks();
-  if (typeof viewGstFiling === "function") h += viewGstFiling(b, t);
-  return h;
-}
 function inregRows(b){
   const reg = S.gstReg || "", ym = S.gstYm || "", mode = S.inregScope || "month";
   const months = mode === "year" ? GSTRev.fyMonths(ym).filter(m => GSTR.months().includes(m)) : [ym];

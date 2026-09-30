@@ -105,7 +105,8 @@ Status: **done** (in React, test passing) · **next** · blank = not started. Ab
 | | the returns `viewTdsReturn26`, `viewTdsReturn24`, `viewTdsCerts` (18): same text as the live site on all 92 TDS pages of the sample books (`tests/pages_tds.py`) | **done** |
 | | notices (`AIH.viewNotices`, 50) | |
 | **GST** | the tab `viewBooksGst` (18): parts, month, GSTIN, downloads; same text as the live site on 56 GST pages (`tests/pages_gst.py`) | **done** |
-| | the parts: `viewBooksGst`, `viewBooks2B`, `viewGstr1`, `viewGstr3b`, `viewGstChecks`, `viewGstAmend`, `viewGstAdv`, `viewGstRev`, `viewInputRegister`, `viewGst9`, `viewGst9c` (18) · filing (35) · settings and registrations (36) · QRMP, CMP-08, GSTR-4 (37) · returns filed (38) · ITC follow-up (32) · customer IMS (33) · vendor recon (42) | |
+| | GSTR-1 and GSTR-3B with the checks before filing (`viewGstr1`, `viewGstr3b`, `viewGstChecks`) → `gst/Returns.jsx`; same text as live on 58 GST pages, a customer opened and a filter included; `run_react_gst.py` | **done** |
+| | still old, shown inside it: `viewBooks2B`, `viewGstAmend`, `viewGstAdv`, `viewGstRev`, `viewInputRegister`, `viewGst9`, `viewGst9c` (18) · filing (35) · settings and registrations (36) · QRMP, CMP-08, GSTR-4 (37) · returns filed (38) · ITC follow-up (32) · customer IMS (33) · vendor recon (42) | |
 | | 2B from the portal `viewGstApiCard` (39) | **done** |
 | **Books** | `viewBooks`, `viewBooksImport`, `viewBooksLedgers`, `viewLedPosting`, `viewTallyRead`, `viewSetupList` (18) · accounts (30) | |
 | **Audit and MIS** | `viewBooksAudit`, `viewAuditRel`, `viewAudit3cd`, `viewBooksMis`, `misPackHtml` (18) | |

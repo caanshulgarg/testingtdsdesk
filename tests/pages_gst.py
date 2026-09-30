@@ -28,6 +28,9 @@ with sync_playwright() as p:
     for ym in months[:1] + months[-3:]:
         for part in parts:
             pg.evaluate("([ym, part]) => { S.gstYm = ym; S.gstPart = part; S.books.reco = null; render(); }", [ym, part]); grab("%s/%s/%s" % (ym, part, pg.evaluate("S.gstPart")))
+    # GSTR-1 with a customer opened, then filtered to B2B
+    pg.evaluate("() => { S.gstPart = 'r1'; const g = GSTR.one(S.gstYm, S.gstReg || ''); const r = g.b2b[0] || g.b2c[0]; S.r1Open = r ? (r.gstin || normName(r.party)) : ''; render(); }"); grab("r1-opened")
+    pg.evaluate("() => { S.r1F = {part: 'B2B', q: ''}; render(); }"); grab("r1-b2b")
     br.close()
 srv.shutdown()
 json.dump({"pages": res, "errors": errors}, open(out, "w"), indent=0)

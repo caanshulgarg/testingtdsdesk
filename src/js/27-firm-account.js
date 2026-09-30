@@ -831,6 +831,9 @@ function txnOpenDoc(key, path, name){
     else toast("That document could not be found on this computer or in the firm account.");
   });
 }
+// a filter kept in S[id] (S.r1F, S.b2F, …): a box typed in (typed: the page follows a moment later) or a choice
+function setFilter(id, key, val, typed){ S[id] = Object.assign({}, S[id], {[key]: val}); if (typed){ FinComReact.redraw(); later(id + "q", render, 250); } else render(); }
+function clearFilter(id){ S[id] = {}; render(); }
 // a TDS return's pages (app/src/screens/TdsReturn.jsx): its tabs, filters, sorting, the rows opened, challans
 function tdsTabGo(id){ S.tdsTab = id; render(); }
 function tdsFilter(tab, key, val, typed){ S.tdsFl = Object.assign({}, S.tdsFl, {[tab]: Object.assign({}, (S.tdsFl || {})[tab], {[key]: val})}); if (typed){ FinComReact.redraw(); later("tdsf", render, 250); } else render(); }
@@ -1053,9 +1056,8 @@ document.addEventListener("click", ev => {
     }
     return;
   }
-  if (t.dataset.r1open){ S.r1Open = S.r1Open === t.dataset.r1open ? "" : t.dataset.r1open; render(); return; }
   if (t.dataset.b2open){ S.b2Open = S.b2Open === t.dataset.b2open ? "" : t.dataset.b2open; render(); return; }
-  if (t.dataset.clearf){ S[t.dataset.clearf] = {}; render(); return; }
+  if (t.dataset.clearf){ clearFilter(t.dataset.clearf); return; }
   if (t.dataset.printid){ printTable(t.dataset.printid, t.dataset.printtitle); return; }
   if (t.dataset.qgo){ S.tdsQ = t.dataset.qgo; S.tdsForm = "26Q"; S.tdsView = "return"; S.tdsTab = ""; render(); return; }
   if (t.dataset.assetdel){ S.books.assets = (S.books.assets || []).filter(a => a.id !== t.dataset.assetdel); saveBooks(); render(); return; }

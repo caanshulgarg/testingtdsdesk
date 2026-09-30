@@ -846,6 +846,12 @@ function bulkLedgerFrom(inp){
   acClose();
   bulkAction("ledger", l);
 }
+// a figure typed into GSTR-3B (4(B)(2), 4(D)(1)), from app/src/screens/gst/Returns.jsx: what = "rev2.igst", …; kept for the GSTIN and month
+function gst3bSet(what, val){
+  const b = S.books, k = (S.gstReg || "") + "|" + S.gstYm, [grp, hd] = what.split(".");
+  b.gst3b = Object.assign({}, b.gst3b); b.gst3b[k] = Object.assign({}, b.gst3b[k]); b.gst3b[k][grp] = Object.assign({}, b.gst3b[k][grp], {[hd]: val === "" ? "" : num(val)});
+  saveBooks(); render();
+}
 // what the user corrects on the Advances and Reversal screens
 function gstFixChange(t){
   const d = t.dataset, b = S.books;
@@ -870,7 +876,6 @@ function gstFixChange(t){
   if (d.itctemail !== undefined || d.itctphone !== undefined){ const st = ITCT.store(S.gstReg || ""), k = d.itctemail !== undefined ? d.itctemail : d.itctphone; st.contact[k] = Object.assign({}, st.contact[k], d.itctemail !== undefined ? {email: t.value.trim()} : {phone: t.value.trim()}); saveBooks(); return true; }
   if (d.itctshow !== undefined){ S.itctShow = t.value; render(); return true; }
   if (d.itcbasis !== undefined){ b.itcBasis = Object.assign({}, b.itcBasis, {[S.gstReg || ""]: t.value}); saveBooks(); render(); return true; }
-  if (d.g3b !== undefined){ const k = (S.gstReg || "") + "|" + S.gstYm, [grp, hd] = d.g3b.split("."); b.gst3b = Object.assign({}, b.gst3b); b.gst3b[k] = Object.assign({}, b.gst3b[k]); b.gst3b[k][grp] = Object.assign({}, b.gst3b[k][grp], {[hd]: t.value === "" ? "" : num(t.value)}); saveBooks(); render(); return true; }
   if (d.gstopen !== undefined){ const k = S.gstReg || ""; b.gstOpen = Object.assign({}, b.gstOpen); b.gstOpen[k] = Object.assign({}, b.gstOpen[k], {[d.gstopen]: t.value === "" ? "" : num(t.value)}); saveBooks(); render(); return true; }
   if (d.inregscope !== undefined){ S.inregScope = t.value; render(); return true; }
   if (d.inregf !== undefined){ S.inregF = t.value; render(); return true; }

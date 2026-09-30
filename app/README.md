@@ -83,6 +83,7 @@ cd ../tests && TDSDESK_SITE=../app/dist-test python3 run_react_post.py
 | A client's dashboard; Transactions | `src/screens/Dash.jsx`, `Txn.jsx` |
 | The books (TDS & GST tabs); TDS by year and quarter | `src/screens/Books.jsx` |
 | A TDS return (26Q, 24Q) and certificates | `src/screens/TdsReturn.jsx` |
-| The GST tab (its parts are still old pages) | `src/screens/Gst.jsx` |
+| The GST tab; GSTR-1 and 3B (other parts are still old pages) | `src/screens/Gst.jsx`, `src/screens/gst/Returns.jsx` |
+| A filter bar (find box, choices, print, Excel) | `src/parts/FilterBar.jsx` |
 | Shared pieces: boxes, ledger lists, column headings | `src/parts/CommitBox.jsx`, `LedgerBox.jsx`, `LedgerSelect.jsx`, `ColHead.jsx` |
 | GSTR-2B from the portal | `src/screens/GstApiCard.jsx` |

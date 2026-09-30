@@ -1,12 +1,14 @@
 // The GST tab of a client's books: which return or working (the parts), for which month and GSTIN, and the
 // downloads for the portal. Was viewBooksGst (src/js/18). The parts follow the GSTIN's filing type (gstParts):
 // monthly (GSTR-1, 3B, …), quarterly QRMP (This quarter, …) or composition (CMP-08, GSTR-4); without a day book only
-// 2B and the returns filed. Each part is still an old page (gstPartHtml), shown through <Legacy>.
+// 2B and the returns filed. GSTR-1 and 3B are gst/Returns.jsx; the other parts are still old pages (gstPartHtml),
+// shown through <Legacy>.
 //
 // State: S.gstYm (the month, YYYYMM), S.gstReg (the GSTIN's state code), S.gstPart; a GSTIN or filing type seen
 // for the first time opens on its first part (S.gstSeen).
 import Legacy from "../parts/Legacy.jsx";
 import HelpButton from "../parts/HelpButton.jsx";
+import { Gstr1, Gstr3b } from "./gst/Returns.jsx";
 
 export default function Gst() {
   const b = S.books, months = GSTR.months(), { parts, ftype, regs, noBooks } = gstParts(b);
@@ -38,6 +40,6 @@ export default function Gst() {
     {noBooks && <p className="note" style={{ margin: "0 0 10px", color: "#B9541B" }}>No Tally day book here yet. 2B and the returns filed work without it; GSTR-1, 3B, the input register and the other workings need the day book, brought in under “From Tally” or read from Tally.</p>}
     {ftype === "qrmp" && (part === "r1" || part === "r3b") && <p className="note" style={{ margin: "0 0 10px" }}>Quarterly (QRMP) filer: this is the working for {GSTR.label(S.gstYm)}
       {GSTSet.isQEnd(S.gstYm) ? "; the downloads cover the whole of " + GSTSet.qLabel(S.gstYm) + "." : ", for reference; this month has no GSTR-1 or 3B — see “This quarter”."}</p>}
-    <Legacy html={gstPartHtml(b, part)} />
+    {part === "r1" ? <Gstr1 b={b} /> : part === "r3b" ? <Gstr3b b={b} /> : <Legacy html={gstPartHtml(b, part)} />}
   </>;
 }
