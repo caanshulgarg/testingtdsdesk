@@ -33,9 +33,9 @@ const DEFAULT_FIRM = {firmName:"", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "TEST · 30 Sep 2026 · build 196 (the daily update also compares every month with Tally once, so deleted entries are found; bridge 1.14.3)";
+const APP_VERSION = "TEST · 30 Sep 2026 · build 197 (entries from Tally appear during the day: a light check every 30 minutes and right after posting; Update now from any computer; bridge 1.14.4)";
 // the Tally Bridge setup file's fingerprint, put in by build.py: a new setup file is never served from an old cache
-const BRIDGE_SETUP_SHA = "ea1851b826f3404f";
+const BRIDGE_SETUP_SHA = "01879009d6583262";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;
@@ -15900,7 +15900,10 @@ function doAct(act, t){
     case "booksPick": { const i = document.getElementById("booksIn"); if (i){ i.value = ""; i.click(); } break; }
     case "mastersPick": { const i = document.getElementById("mastersIn"); if (i){ i.value = ""; i.click(); } break; }
     case "setupKeepOn": LK.keepOn(true).then(() => { (S.setupKeep || {})[S.coId] = null; render(); }); break;
-    case "keepNow": LK.keepSet({now: true}, "Updating from Tally now. The books here follow in a few minutes."); break;
+    case "keepNow":
+      if (Bridge.on() && (Bridge.up() || !TCloud.has(S.coId))) LK.keepSet({now: true}, "Updating from Tally now. The books here follow in a few minutes.");
+      else TCloud.rpc("tally_want_update", {p_client: S.coId}).then(j => toast(j && j.ok ? "The Tally computer is asked to update; it starts within a minute, and the books here follow in a few minutes." : "No Tally computer is linked to this client yet."), e => toast("Could not ask the Tally computer: " + ((e && e.message) || e)));
+      break;
     case "setupModeBridge": case "setupModeFiles":
       Bridge.call("/keepmode" + (Bridge.pinQ() ? "?" + Bridge.pinQ().slice(1) : ""), {company: BridgeSeed.company(), mode: act === "setupModeBridge" ? "bridge" : "files"}, 20000)
         .then(j => { (S.setupKeep = S.setupKeep || {})[S.coId] = {at: Date.now(), st: j}; toast(act === "setupModeBridge" ? "The bridge will copy the year from Tally in the evening, or when nobody is at the computer." : "The bridge waits for the day book files."); render(); }, e => toast("The bridge could not do it: " + ((e && e.message) || e) + (/Unknown|No such/i.test(String(e && e.message)) ? " (it needs Tally Bridge 1.13.9)" : "")));
