@@ -319,12 +319,14 @@ const LK = {
     const x = this.st();
     if (x.busy) return;
     const tally = this.useTally(x, how), have = (S.books.vouchers || []).length > 0;
-    // a large company, or books not loaded here: the trial balance and ledgers from the cloud's ready totals
-    const cloud = !tally && ["tb", "ledger"].includes(x.kind) && TCloud.has(S.coId) && (!have || TCloud.big(S.coId));
+    // build 192: whenever the client's books are in the cloud, the answer is worked out there (under a second, on any
+    // computer); the books loaded in this browser are used only without the cloud (offline), and for open bills
+    if (!tally && TCloud.on() && !(TCloud.st[S.coId] || {}).books){ try { await TCloud.status(S.coId); } catch (e){} }
+    const cloud = !tally && how !== "books" && ["tb", "ledger", "group", "monthly", "find"].includes(x.kind) && TCloud.has(S.coId);
     const need = (c, m) => { if (!c){ toast(m); throw null; } };
     try {
       if (x.kind === "ledger") need(x.led, "Choose a ledger.");
-      if (["ledger", "bills"].includes(x.kind) && x.led) need(FC.ledgers().includes(x.led) || tally, "\u201c" + x.led + "\u201d is not a ledger " + (FC.tn() ? "in Tally" : "in these books") + ". Pick one from the list.");
+      if (["ledger", "bills"].includes(x.kind) && x.led) need(FC.ledgers().includes(x.led) || tally || cloud, "\u201c" + x.led + "\u201d is not a ledger " + (FC.tn() ? "in Tally" : "in these books") + ". Pick one from the list.");
       if (x.kind === "group") need(x.grp, "Choose a group.");
       if (x.kind === "monthly") need(x.led || x.grp, "Choose a ledger or a group.");
       if (["ledger", "group", "monthly", "find"].includes(x.kind)) need(x.from && x.to && x.from <= x.to, "The dates are the wrong way round.");
@@ -333,8 +335,17 @@ const LK = {
     x.open = {};
     if (cloud){
       x.busy = "Working it out\u2026"; render();
-      try { x.res = x.kind === "tb" ? await TCloud.tb(S.coId, x.asOn) : await TCloud.ledger(S.coId, x.led, x.from, x.to); }
-      catch (e){ x.busy = ""; toast("Could not ask the cloud copy: " + ((e && e.message) || e)); render(); return; }
+      try {
+        x.res = x.kind === "tb" ? await TCloud.tb(S.coId, x.asOn) : x.kind === "ledger" ? await TCloud.ledger(S.coId, x.led, x.from, x.to)
+          : x.kind === "group" ? await TCloud.group(S.coId, x.grp, x.from, x.to) : x.kind === "monthly" ? await TCloud.monthly(S.coId, x.led, x.grp, x.from, x.to)
+          : await TCloud.find(S.coId, x.q, x.from, x.to, x.typ);
+      }
+      catch (e){
+        x.busy = "";
+        // no copy in the cloud for these dates (or no internet): the books here, when there are any
+        if (have){ x.res = null; return this.run("books"); }
+        toast("Could not ask the cloud: " + ((e && e.message) || e)); render(); return;
+      }
       x.busy = "";
     } else if (tally){
       const force = how === "fresh";
@@ -693,7 +704,7 @@ const LK = {
         '<tr class="lk-tot">' + (r.led ? "" : "<td></td>") + '<td><b>Total</b></td><td></td><td></td><td class="n"><b>' + FC.amt(r.total) + "</b></td></tr></tbody></table></div>";
     }
     else {
-      h += '<p class="note"><b>' + r.rows.length + "</b> entries, together " + money(r.total) + ".</p>";
+      h += '<p class="note"><b>' + (r.n || r.rows.length) + "</b> entries, together " + money(r.total) + "." + (r.n > r.rows.length ? " The first " + r.rows.length + ' are here; <button class="linkbtn" data-lk="more">show ' + Math.min(TCloud.FIND_PAGE, r.n - r.rows.length) + " more</button>." : "") + "</p>";
       if (!r.rows.length) return h + '<div class="bk-none">Nothing matches. Try fewer words, or a wider period.</div></section>';
       h += '<div class="bk-tablewrap"><table class="bk-table lk-t"><thead><tr><th>Date</th><th>Type</th><th>No.</th><th>Party or ledger</th><th class="n">Amount</th></tr></thead><tbody>' +
         r.rows.slice(0, LIMIT).map(v => this.voucherRow(v, "<td>" + FC.when(v.date) + "</td><td>" + esc(v.type) + "</td><td>" + esc(v.no || "") + '</td><td><span class="lk-part">' + esc(v.party) + "</span>" + (v.narr ? '<span class="nr">' + esc(v.narr) + "</span>" : "") + '</td><td class="n">' + FC.amt(v.amt) + "</td>", x)).join("") +
@@ -749,6 +760,8 @@ if (typeof document !== "undefined"){
     else if (a === "keepcheck") LK.keepCheck();
     else if (a === "syncnow") LK.syncNow();
     else if (a === "clear"){ x.res = null; render(); }
+    else if (a === "more" && x.res && x.res.src === "cloud"){ const r = x.res; x.busy = "Bringing the next entries\u2026"; render();
+      TCloud.find(S.coId, r.q, r.from, r.to, r.typ, r).then(res => { x.busy = ""; x.res = Object.assign(res, {title: r.title}); render(); }, er => { x.busy = ""; toast("Could not ask the cloud: " + ((er && er.message) || er)); render(); }); }
     else if (a === "print") LK.printIt();
     else if (a === "excel" && x.res) FC.excel(x.res.title, [[x.res.kind === "tb" ? "Trial balance" : "Look up", LK.sheet(x.res)]]).catch(er => toast("Could not build the file: " + (er && er.message)));
   });
