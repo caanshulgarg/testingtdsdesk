@@ -33,6 +33,8 @@ app/                      the React app (Vite)
   their buttons keep working through the old handlers until they move too.
 - **Events**: a control drawn by React answers its own events. The old document-wide click/input/change handlers
   skip anything inside a React screen (`reactOwned` in src/js/27), except old pieces shown there (`data-legacy`).
+- **Column filters** (the funnel buttons, the chips and the pop-up) are still old pieces, shared by the tables; a React
+  table draws the funnel button inside `data-legacy`, and `render()` places the pop-up again after React has drawn.
 - **Editing a bill** goes through `billSetX`, `billSetText`, `billSetChoice`, `billBookTds`, `billGst`,
   `billUseExpense`, `billFixLedger` (src/js/27), for React and the old handlers alike.
 - **State** is still the one object `S`, and every change still ends in `render()`. A React screen's own passing
@@ -65,16 +67,16 @@ Status: **done** (in React, test passing) · **next** · blank = not started. Ab
 |---|---|---|
 | **Frame** | sidebar `renderSide` (02) | **done** |
 | | top bar `renderTop`, `clientHeader`, `topRight` (18), Tally panel, firm menu (02) · client switcher `renderSwitcher` (27) | **done** |
-| | page frame `render` (01): banners, `actionBar`, `drawerHtml`, `colPopHtml` | |
+| | page frame `render` (01): banners, `colPopHtml` (column filters, shared with Bank, Sales, Transactions) | |
 | | modal, toast, confirm dialogs | next |
 | **Sign in** | `viewSignIn`, `viewSignUp`, two-step `viewTwoStep` (27, 43) | |
 | **Home** | `viewClients`, `addCompanyForm`, `viewToday`, `viewInboxAll`, `viewInbox` (18) | **done** |
 | | `viewTallyHome` (18) | with Tally |
 | | Help and support: `viewHelp`, `viewSup*` (40) | |
 | **Client: Collect** | `viewCollect` (02) · `viewJobs`, `readingCheck`, `uploadOptions`, busy cards (01) · `docqPanel`, `uploadBlock` (19) | **done** |
-| **Client: Post / Done** | `viewPostStep`, `viewDoneStep`, `bankReportHtml` (02) | |
+| **Client: Post / Done** | `viewPostStep`, `viewDoneStep`, `bankReportHtml` (02) | next |
 | **Purchase bills** | `viewInvoices`, `viewDetail`, `field`, `docWarnHtml` (19) · `itemsHtml`, `partyHistHtml`, `ytdSourceHtml`, `rereadButtons` (01) · `viewGst` (27) | **done** |
-| | review table `viewReviewTable`, `reviewBar`, `drawerHtml` (18) · `viewParties` (19) | next |
+| | review table `viewReviewTable`, `reviewBar`, `drawerHtml` (18), the bill's bar in `actionBar` (27) · `viewParties` (19) | **done** |
 | **Bank** | `viewBank`, `viewSuggestions`, `viewRulesPanel` (22) · `bankRowHtml`, `viewBankGroups`, `bankBar`, `colPopHtml`, `colChipBar` (23) · `viewBankSetup` (02) · recon, balance, duplicates (24) · `fixBanner` (21) | |
 | **Sales** | `viewSales`, `viewSalesCreate`, invoice and print, settings, `postReportHtml` (26) | |
 | **Transactions** | `viewTransactions` (03) | |

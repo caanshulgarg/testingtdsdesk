@@ -2139,16 +2139,8 @@ function drawerEntry(){
   if (!e || (e.status !== "draft" && e.status !== "duplicate")){ S.drawerOpen = false; return null; }
   return e;
 }
-let drawerWasOpen = false;   // the drawer slides in only when it opens, not each time the page is drawn again
-function drawerHtml(){
-  const e = drawerEntry();
-  if (!e){ drawerWasOpen = false; return ""; }
-  const rows = draftRows(), i = rows.findIndex(r => r.e.id === e.id);
-  const enter = drawerWasOpen ? "" : " enter"; drawerWasOpen = true;
-  return '<button class="drawer-scrim' + enter + '" data-act="drawerClose" aria-label="Close"></button><aside class="drawer' + enter + '" role="dialog" aria-modal="true" aria-label="Bill">' +
-    '<div class="drawer-head"><div><b>' + esc(e.x.vendorName || e.fileName || "Bill") + '</b><span class="note">' + esc(e.x.invoiceNo || "") + (i >= 0 ? " \u00b7 " + (i + 1) + " of " + rows.length : "") + "</span></div>" +
-    '<button class="btn small" data-act="drawerClose">Close</button></div>' + viewDetail(e) + "</aside>";
-}
+// the drawer with a bill, over the review table: React (app/src/screens/Review.jsx)
+function drawerHtml(){ return drawerEntry() ? '<div data-react="Drawer"></div>' : ""; }
 function revColOn(){ const f = S.revF || {}; return Object.keys(f).some(k => Array.isArray(f[k]) ? f[k].length : f[k]); }
 function revColPass(r){
   const f = S.revF || {}, x = r.e.x, c = r.c;
@@ -2173,69 +2165,8 @@ function revFiltered(){
   return all.filter(r => [r.e.x.vendorName, r.e.x.invoiceNo, r.e.x.vendorGstin, r.e.x.vendorPan, r.e.expenseLedger, r.e.partyLedger, r.c.rule && r.c.rule.label,
     String(r.e.x.total), INR.format(num(r.e.x.total)), r.e.noteKind ? r.e.noteKind + " note" : "", r.e.postError || ""].join(" ").toLowerCase().includes(q));
 }
-function revFilterRow(){
-  const f = S.revF || {};
-  const txt = (k, ph) => '<input type="text" data-rf="' + k + '" data-fk="rf' + k + '" data-keeptyped autocomplete="off" placeholder="' + ph + '" value="' + esc(f[k] || "") + '" aria-label="' + ph + '">';
-  return '<tr class="bk-frow"><th class="ck"></th>' +
-    '<th class="dt"><input type="date"' + (f.from ? ' class="on"' : '') + ' data-rf="from" data-fk="rffrom" value="' + esc(f.from || "") + '" aria-label="From date"><input type="date"' + (f.to ? ' class="on"' : '') + ' data-rf="to" data-fk="rfto" value="' + esc(f.to || "") + '" aria-label="To date"></th>' +
-    "<th>" + txt("sup", "supplier, GSTIN or ledger") + "</th><th>" + txt("no", "bill no.") + "</th>" +
-    '<th class="n"><input type="number" data-rf="min" data-fk="rfmin" placeholder="from" value="' + esc(f.min || "") + '" aria-label="Value from"><input type="number" data-rf="max" data-fk="rfmax" placeholder="to" value="' + esc(f.max || "") + '" aria-label="Value to"></th>' +
-    '<th><select' + (f.nature ? ' class="on"' : '') + ' data-rf="nature" aria-label="Payment type"><option value="">Any type</option>' + rules().map(r => '<option value="' + r.id + '"' + (f.nature === r.id ? " selected" : "") + ">" + esc(r.label) + "</option>").join("") + "</select></th>" +
-    '<th class="ck" colspan="2"><select' + (f.tds ? ' class="on"' : '') + ' data-rf="tds" aria-label="TDS"><option value="">Any</option><option value="yes"' + (f.tds === "yes" ? " selected" : "") + '>TDS booked</option><option value="no"' + (f.tds === "no" ? " selected" : "") + ">No TDS</option></select></th>" +
-    '<th><select' + (f.look ? ' class="on"' : '') + ' data-rf="look" aria-label="Needs a look"><option value="">All bills</option><option value="yes"' + (f.look === "yes" ? " selected" : "") + '>Need a look</option><option value="no"' + (f.look === "no" ? " selected" : "") + ">Ready to approve</option></select></th>" +
-    '<th class="ac">' + (revColOn() ? '<button class="linkbtn" data-act="revFClear">Clear</button>' : "") + "</th></tr>";
-}
-function viewReviewTable(){
-  const co = CO(), all = draftRows(), rows = revFiltered();
-  const busyTop = "";
-  const sel = S.revSel = S.revSel || new Set();
-  const nSel = rows.filter(r => sel.has(r.e.id)).length;
-  let h = '<div class="bk"><div class="bk-head"><div class="bk-id"><h2 class="bk-title">Review ' + rows.length + " uploaded bill" + (rows.length === 1 ? "" : "s") + '</h2><div class="bk-sub">' + esc(co.name) + " \u00b7 tick the ones to book TDS on, then approve together</div></div>" +
-    '<dl class="bk-figs"><div><dt>Bills</dt><dd>' + rows.length + '</dd></div><div><dt>Value</dt><dd>' + INR.format(r2(rows.reduce((a, r) => a + num(r.e.x.total), 0))) + '</dd></div><div><dt>TDS</dt><dd>' + INR.format(r2(rows.reduce((a, r) => a + num(r.c.tds), 0))) + "</dd></div></dl>" +
-    '<div class="bk-actions"><button class="btn small" data-act="revList">One at a time</button></div></div>';
-  if (!rows.length) return h + '<div class="bk-none" style="background:var(--sheet);border:1px solid var(--rule);border-radius:10px">Nothing waiting. Upload bills above.</div></div>';
-  h = busyTop + h;
-  h += '<div class="revfilter"><input type="search" id="revq" data-fk="revq" value="' + esc(S.revQuery || "") + '" placeholder="Filter by supplier, bill no., GSTIN, ledger, payment type or amount" aria-label="Filter the bills">' +
-    (S.revQuery && !revColOn() ? '<span class="note">' + rows.length + " of " + all.length + " shown</span>" : "") + "</div>" + colChipBar("rev", rows.length, all.length + " bills");
-  h += '<div class="bk-tablewrap"><table class="bk-table revtbl"><thead><tr><th class="ck"><input type="checkbox" data-revall' + (nSel && nSel === rows.length ? " checked" : "") + '></th>' + colHead("rev", "date", "Date", "dt") + colHead("rev", "sup", "Supplier") + colHead("rev", "no", "Bill no.") + colHead("rev", "val", "Value", "n") + colHead("rev", "nature", "Payment type") + colHead("rev", "tds", "TDS", "ck") + '<th class="n">TDS</th>' + colHead("rev", "look", "This year vs limit") + '<th class="ac"></th></tr></thead><tbody>';
-  h += rows.map(({e, c}) => {
-    const fy = fyOf(e.x.invoiceDate), t = tallyYtdFor(c.party, fy, e);
-    const m = c.meter;
-    const limitCell = !m || !m.limit ? '<span class="src muted">no yearly limit</span>'
-      : '<span class="' + (m.used + m.add > m.limit ? "src bad" : "src") + '">' + money0(m.used + m.add) + " of " + money0(m.limit) + (m.used + m.add > m.limit ? " \u00b7 crossed" : " \u00b7 within") + "</span>" +
-        '<span class="src muted">' + (t ? "incl. " + money0(t.credited) + " from Tally" : "bills here only") + "</span>";
-    const miss = (c.missing || []).length || c.flags.some(f => f.lvl === "hi") || e.confirmType;
-    const led = e.expenseLedger || "", ledOk = led && (!hasLedgerList() || exactLedger(led));
-    return '<tr class="' + (sel.has(e.id) ? "picked " : "") + (miss ? "needs" : "") + (S.drawerOpen && S.selected === e.id ? " open" : "") + '"><td class="ck"><input type="checkbox" data-revsel="' + e.id + '"' + (sel.has(e.id) ? " checked" : "") + "></td>" +
-      '<td class="dt">' + (e.x.invoiceDate ? shortDate(e.x.invoiceDate) : "\u2014") + "</td>" +
-      '<td class="pt"><button class="linkbtn pn" data-revopen="' + e.id + '">' + esc(e.x.vendorName || e.fileName || "\u2014") + '</button><div class="nr">' + esc(e.x.vendorGstin || e.x.vendorPan || "no GSTIN or PAN") + "</div>" +
-        '<div class="nr ' + (ledOk ? "led-ok" : "led-bad") + '">' + (led ? "\u2192 " + esc(led) + (ledOk ? " \u2713" : " \u00b7 not in Tally") : "\u2192 no ledger yet") + "</div>" +
-        (e.postFailedAt && e.postError ? '<div class="nr bad">Tally refused: ' + esc(e.postError) + "</div>" : "") +
-        (e.noteKind ? '<div class="nr"><span class="tag">' + (e.noteKind === "credit" ? "Credit note \u2192 Debit Note in Tally" : "Debit note") + "</span></div>" : "") + "</td>" +
-      "<td>" + esc(e.x.invoiceNo || "\u2014") + '</td><td class="n">' + INR.format(num(e.x.total)) + "</td>" +
-      '<td><select data-revnature="' + e.id + '">' + rules().map(r => '<option value="' + r.id + '"' + (r.id === e.natureId ? " selected" : "") + ">" + esc(r.label) + "</option>").join("") + "</select></td>" +
-      '<td class="ck"><input type="checkbox" data-revtds="' + e.id + '"' + (c.tdsWould > 0 && !c.skip ? " checked" : "") + (c.rule && c.rule.basis === "never" ? " disabled" : "") + ' title="' + esc(c.skip ? skipText(c.skip) : c.tdsWould > 0 ? "TDS is deducted on this bill" : "Below the limits: tick to deduct anyway") + '"></td>' +
-      '<td class="n">' + (c.tds ? "<b>" + INR.format(c.tds) + "</b>" : c.tdsWould ? '<span class="src muted">' + INR.format(c.tdsWould) + " not booked</span>" : "\u2014") + "</td>" +
-      "<td>" + limitCell + "</td>" +
-      '<td class="ac">' + (miss ? '<button class="btn small" data-revopen="' + e.id + '">Check</button>' : '<button class="btn small primary" data-revapprove="' + e.id + '">Approve</button>') +
-      '<button class="icon" data-revopen="' + e.id + '" title="Open this bill">\u2197</button><button class="icon danger" data-billdel="' + e.id + '" title="Delete this bill" aria-label="Delete this bill">\u2715</button></td></tr>';
-  }).join("");
-  h += "</tbody></table></div></div>";
-  return h;
-}
-function reviewBar(){
-  const rows = draftRows(), sel = S.revSel || new Set();
-  const picked = rows.filter(r => sel.has(r.e.id));
-  const ready = rows.filter(r => !(r.c.missing || []).length && !r.c.flags.some(f => f.lvl === "hi") && !r.e.confirmType);
-  if (picked.length){
-    return '<div class="actionbar bk-actionbar"><div class="ab-left"><b>' + picked.length + " selected</b> <span class=\"muted\">\u00b7 TDS " + INR.format(r2(picked.reduce((a, r) => a + num(r.c.tds), 0))) + '</span> <button class="linkbtn" data-act="revNone">Clear</button></div>' +
-      '<div class="ab-right"><button class="btn" data-act="revTdsOn">Book TDS</button><button class="btn" data-act="revTdsOff">Do not book TDS</button>' +
-      '<button class="btn" data-act="revCheckTally"' + (bridgeLive() ? "" : " disabled") + '>Check year in Tally</button>' +
-      '<button class="btn danger" data-act="revDelete">Delete ' + picked.length + '</button><button class="btn primary" data-act="revApprove">Approve ' + picked.length + "</button></div></div>";
-  }
-  return '<div class="actionbar bk-actionbar"><div class="ab-left"><span class="bk-stat"><b>' + rows.length + '</b> to review</span><span class="bk-stat"><b>' + ready.length + "</b> ready to approve</span></div>" +
-    '<div class="ab-right"><button class="btn" data-act="revCheckTallyAll"' + (bridgeLive() ? "" : " disabled") + '>Check the year in Tally for all</button><button class="btn primary" data-act="revApproveAll"' + (ready.length ? "" : " disabled") + ">Approve all that are ready (" + ready.length + ")</button></div></div>";
-}
+// the review table and its bar at the bottom: React (app/src/screens/Review.jsx)
+function viewReviewTable(){ return '<div data-react="ReviewTable"></div>'; }
 function revSet(e, on){
   const c = compute(e);
   if (on){ e.tdsSkip = null; if (c.skip && c.skip.from !== "bill") e.tdsForce = true; if (c.tdsWould <= 0){ e.tdsAlways = true; e.tdsForce = true; } }

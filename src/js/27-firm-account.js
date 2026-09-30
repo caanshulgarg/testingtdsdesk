@@ -628,47 +628,11 @@ function viewSignIn(){
 
 // Always-visible bar at the bottom of the screen for the bill that is open
 function actionBar(){
-  if (S.view === "company" && S.tab === "invoices" && S.reviewTable && S.filter === "draft" && !drawerEntry()) return reviewBar();
-  if (S.view === "company" && S.tab === "bank") return bankBar();
-  if (S.view === "company" && S.tab === "sales") return salesBar();
-  if (S.view !== "company" || S.tab !== "invoices") return "";
-  const e = S.selected && D().entries[S.selected];
-  if (!e || S.reading[e.id]) return "";
-  const drafts = Object.values(D().entries).filter(o => o.status === "draft" && o.id !== e.id).sort(byDate);
-  const nextBtn = drafts.length ? '<button class="btn" data-act="nextBill">Next bill →</button>' : "";
-  let left = "", right = "";
-  if (e.status === "draft"){
-    const c = compute(e);
-    const todo = [];
-    if (e.uncertain && e.uncertain.length) todo.push('<button class="btn small" data-act="fieldsOk">Fields look right</button><span class="note">' + e.uncertain.length + " amber field" + (e.uncertain.length > 1 ? "s" : "") + "</span>");
-    if (e.confirmType && !(c.party && c.party.natureDefault) && !c.skip) todo.push('<button class="btn small" data-act="confirmType">Confirm payment type: ' + esc(c.rule.label) + '</button>');
-    if (c.dup && c.dup.strong) todo.push('<button class="btn small" data-act="notDup">It is a different bill</button>');
-    if (c.gd.rcmSuggest) todo.push('<span class="tag warn" title="' + esc(catLabel(RCM_CATS, c.gd.rcmSuggest.cat)) + '">RCM?</span><button class="btn small" data-act="rcmApply">Apply</button><button class="btn small" data-act="rcmDismiss">No</button>');
-    if (c.gd.blockSuggest) todo.push('<span class="tag warn" title="' + esc(catLabel(BLOCK_CATS, c.gd.blockSuggest.cat)) + '">Blocked credit?</span><button class="btn small" data-act="blockAccept">Block</button><button class="btn small" data-act="blockReject">Allow</button>');
-    if (c.tdsWould > 0 && !c.skip) todo.push('<button class="btn small" data-act="skipTds" title="Approve this bill without a TDS line">Don\u2019t book TDS</button>');
-    if (c.skip) todo.push('<span class="tag warn" title="' + esc(skipText(c.skip)) + '">TDS not booked</span><button class="btn small" data-act="bookTds">Book TDS ' + money0(c.tdsWould) + "</button>");
-    const other = c.missing.filter(m => !/payment type|duplicate/.test(m));
-    if (other.length) todo.push('<span class="missing">Fill in: ' + esc(other.join(", ")) + "</span>");
-    const onlyTdsBits = todo.every(t => /skipTds|bookTds|TDS not booked|rcmApply|blockAccept/.test(t));
-    left = todo.length && !onlyTdsBits ? "<b>To do:</b> " + todo.join(" ")
-      : '<span class="tag ok">Ready to approve</span> <span class="note">' + (c.skip ? "No TDS booked (would be " + money0(c.tdsWould) + ")" : "TDS " + money(c.tds)) + " · " + esc(c.rule.label) + "</span> " + todo.join(" ");
-    right = '<button class="btn" data-act="reject">No entry needed</button>' +
-      '<button class="btn primary" data-act="approve"' + (c.missing.length ? ' disabled title="' + esc("Still needed: " + c.missing.join(", ")) + '"' : "") + ">Approve <kbd>Ctrl+A</kbd></button>" + nextBtn;
-  } else if (e.status === "duplicate"){
-    left = '<span class="tag warn">Held as duplicate</span> <span class="note">' + esc((e.dupOf && e.dupOf.msg) || "") + "</span>";
-    right = '<button class="btn danger" data-act="delete">Delete this copy</button>' +
-      (e.dupOf && e.dupOf.entryId && D().entries[e.dupOf.entryId] ? '<button class="btn" data-act="openOriginal">Open the earlier bill</button>' : "") +
-      '<button class="btn" data-act="notDup">It is a different bill</button>' + nextBtn;
-  } else if (e.status === "approved"){
-    left = '<span class="tag ok">Approved</span> <span class="note">' + (e.exportedAt ? "Sent to Tally" : "Waiting in Send to Tally") + "</span>";
-    right = (e.exportedAt ? "" : '<button class="btn" data-act="undo">Undo approval</button><button class="btn" data-act="goExport">Send to Tally</button>') + nextBtn;
-  } else {
-    left = '<span class="tag no">No entry</span>';
-    right = '<button class="btn" data-act="restore">Move back to review</button>' + nextBtn;
-  }
-  return '<div class="actionbar"><div class="ab-left">' + left + '</div><div class="ab-right">' + right + "</div></div>";
+  if (S.view !== "company") return "";
+  if (S.tab === "bank") return bankBar();
+  if (S.tab === "sales") return salesBar();
+  return S.tab === "invoices" ? '<div data-react="ActionBar"></div>' : "";   // the purchase bars: React (app/src/screens/Review.jsx)
 }
-function pf(label, key, val, type){ return '<label class="f"><span>' + label + '</span><input type="' + (type || "text") + '" data-p="' + key + '" data-fk="p:' + key + '" value="' + esc(val == null ? "" : val) + '"' + (type === "number" ? ' step="0.01"' : "") + "></label>"; }
 
 /* ---------- Client: settings ---------- */
 function viewCompanySettings(){
@@ -925,6 +889,26 @@ function goTab(tab){ S.tab = tab; S.step = null; S.arm = null; render(); }
 function toggleSetup(){ S.step = null; S.tab = isSetupTab(S.tab) ? "invoices" : "settings"; render(); }
 // a control drawn by React answers its own events; these handlers take the old screens, and the old pieces a React
 // screen still shows inside it (marked data-legacy)
+// delete a bill (asks first); not one already in Tally
+function billDelete(id){
+  const e = D().entries[id];
+  if (!e) return;
+  if (e.exportedAt){ toast("This bill is in Tally. Take it back from Tally first (Posted \u2192 Take it back), then delete it."); return; }
+  askConfirm({title: "Delete this bill?", ok: "Delete", body: '<p class="note">' + esc(e.x.vendorName || e.fileName || "") + (e.x.invoiceNo ? " \u00b7 " + esc(e.x.invoiceNo) : "") + ". The file can be uploaded again later.</p>"}).then(ok => {
+    if (!ok) return;
+    if (e.status === "approved") unapply(e, S.coId);
+    if (S.revSel) S.revSel.delete(e.id);
+    if (S.drawerOpen && S.selected === e.id) S.drawerOpen = false;
+    removeEntry(e); refreshStats(S.coId); toast("Deleted."); render();
+  });
+}
+// the review table (app/src/screens/Review.jsx)
+function revPick(id, on){ S.revSel = S.revSel || new Set(); if (on) S.revSel.add(id); else S.revSel.delete(id); render(); }
+function revPickAll(on){ S.revSel = new Set(on ? revFiltered().map(r => r.e.id) : []); render(); }   // only the rows the filter shows
+function revOpen(id){ S.selected = id; S.drawerOpen = true; render(); }
+function revApproveOne(id){ const e = D().entries[id]; if (e){ approve(e); refreshStats(S.coId); toast("Approved."); render(); } }
+function revNature(id, v){ const e = D().entries[id]; if (e){ e.natureId = v; e.confirmType = false; Store.saveEntry(S.coId, e); render(); } }
+function revTds(id, on){ const e = D().entries[id]; if (e){ revSet(e, on); render(); } }
 function reactOwned(el){ return !!(el && el.closest && el.closest(".react-host") && !el.closest("[data-legacy]")); }
 document.addEventListener("click", ev => {
   if (reactOwned(ev.target)) return;
@@ -1031,23 +1015,8 @@ document.addEventListener("click", ev => {
   if (t.dataset.chipx){ S.colPop = {t: t.dataset.colt, k: t.dataset.chipx}; colPopApply(true); return; }
   if (t.dataset.chipall){ if (t.dataset.chipall === "bank"){ const b = B(); b.from = ""; b.to = ""; b.f = {}; b.sel.clear(); } else if (t.dataset.chipall === "sales"){ const sl = SL(); if (sl){ sl.f = {}; sl.sel.clear(); } } else if (t.dataset.chipall === "txn"){ S.txnF = S.txnF || {}; S.txnF[txnTab()] = {}; S.txnQ = ""; S.txnStatus = ""; } else { S.revF = {}; S.revSel = new Set(); } S.colPop = null; render(); return; }
   if (t.dataset.billback){ const e = D().entries[t.dataset.billback]; if (e){ const keep = S.tab; undoApproval(e); S.tab = keep; render(); } return; }
-  if (t.dataset.billdel){
-    const e = D().entries[t.dataset.billdel];
-    if (!e) return;
-    if (e.exportedAt){ toast("This bill is in Tally. Take it back from Tally first (Posted \u2192 Take it back), then delete it."); return; }
-    askConfirm({title: "Delete this bill?", ok: "Delete", body: '<p class="note">' + esc(e.x.vendorName || e.fileName || "") + (e.x.invoiceNo ? " \u00b7 " + esc(e.x.invoiceNo) : "") + ". The file can be uploaded again later.</p>"}).then(ok => {
-      if (!ok) return;
-      if (e.status === "approved") unapply(e, S.coId);
-      if (S.revSel) S.revSel.delete(e.id);
-      if (S.drawerOpen && S.selected === e.id) S.drawerOpen = false;
-      removeEntry(e); refreshStats(S.coId); toast("Deleted."); render();
-    });
-    return;
-  }
+  if (t.dataset.billdel){ billDelete(t.dataset.billdel); return; }
   if (t.dataset.reread){ const e0 = D().entries[t.dataset.rid]; if (e0) rereadEntry(e0, t.dataset.reread === "free" ? null : t.dataset.reread); return; }
-  if (t.dataset.revopen){ S.selected = t.dataset.revopen; S.drawerOpen = true; render(); return; }
-  if (t.dataset.revapprove){ const e0 = D().entries[t.dataset.revapprove]; if (e0){ approve(e0); refreshStats(S.coId); toast("Approved."); render(); } return; }
-  if (t.hasAttribute && (t.hasAttribute("data-revsel") || t.hasAttribute("data-revall"))) return;
   if (t.dataset.billfixsel){
     const sel = document.getElementById(t.dataset.billfixsel), to = sel && sel.value;
     if (!to){ toast("Choose the Tally ledger first."); return; }
@@ -1183,7 +1152,6 @@ document.addEventListener("click", ev => {
   if (t.dataset.filter){ S.filter = t.dataset.filter; S.selected = null; render(); return; }
   if (t.dataset.select){ S.selected = t.dataset.select; render(); if (window.innerWidth < 860){ const d = document.querySelector(".detail"); if (d) d.scrollIntoView({behavior:"smooth", block:"start"}); } return; }
   if (t.id === "drop"){ pickFiles("company"); return; }
-    if (t.dataset.editparty){ S.partySel = t.dataset.editparty; render(); return; }
   if (t.dataset.act) doAct(t.dataset.act, t); else S.arm = null;   // any other button disarms a pending delete
 });
 /* ---------- the actions behind the buttons: doAct("name") from React, or a data-act button of an old screen ----------
@@ -1207,13 +1175,13 @@ function doAct(act, t){
     case "bankPickBills": S.reviewTable = false; render(); setTimeout(() => { const el = document.getElementById("fileIn"); if (el) el.click(); }, 50); break;
     case "revNone": S.revSel = new Set(); render(); break;
     case "revTdsOn": case "revTdsOff": {
-      const on = S.arm === null || true, want = t.dataset.act === "revTdsOn";
+      const want = act === "revTdsOn";
       draftRows().filter(r => S.revSel.has(r.e.id)).forEach(r => revSet(r.e, want));
       toast((want ? "TDS will be booked on " : "TDS will not be booked on ") + S.revSel.size + " bills.");
       render(); break;
     }
     case "revApprove": case "revApproveAll": {
-      const rows = draftRows().filter(r => t.dataset.act === "revApprove" ? S.revSel.has(r.e.id) : (!(r.c.missing || []).length && !r.c.flags.some(f => f.lvl === "hi") && !r.e.confirmType));
+      const rows = draftRows().filter(r => act === "revApprove" ? S.revSel.has(r.e.id) : (!(r.c.missing || []).length && !r.c.flags.some(f => f.lvl === "hi") && !r.e.confirmType));
       let ok = 0, held = 0;
       rows.forEach(r => { const c = compute(r.e); if ((c.missing || []).length){ held++; return; } approve(r.e); ok++; });
       S.revSel = new Set();
@@ -1799,7 +1767,6 @@ document.addEventListener("input", ev => {
     if (t.type === "search" || t.type === "text") later("tdsf", render, 250); else render();
     return;
   }
-  if (t && t.id === "revq"){ S.revQuery = t.value; softRender(); return; }
   if (t && t.id === "txnq"){ S.txnQ = t.value; later("txnq", render, 250); return; }
   if (t && t.id === "fsq"){ S.fsQ = t.value; later("fsq", render, 250); return; }
   if (t && t.id === "misq"){ S.misQ = t.value; later("misq", render, 250); return; }
@@ -1839,20 +1806,12 @@ document.addEventListener("input", ev => {
   if (t && t.dataset && t.dataset.ledsec){ const m = S.books.map[t.dataset.ledsec]; if (m){ m.section = t.value.toUpperCase(); m.byHand = true; later("ledsec", () => { saveBooks(); render(); }, 500); } return; }
   if (t && t.dataset && t.dataset.alloc){ S.books.alloc = S.books.alloc || {}; if (t.value) S.books.alloc[t.dataset.alloc] = t.value; else delete S.books.alloc[t.dataset.alloc]; saveBooks(); render(); return; }
   if (t && t.dataset && t.dataset.txnstatus !== undefined){ S.txnStatus = t.value; render(); return; }
-  if (t && t.dataset && t.dataset.rf){ S.revF = S.revF || {}; S.revF[t.dataset.rf] = t.value; S.revSel = new Set(); softRender(); return; }
   if (t && t.dataset && ["email", "password", "firm", "name"].includes(t.dataset.cloud)){ S.cloudForm = Object.assign({}, S.cloudForm, {[t.dataset.cloud]: t.value}); }
   if (S.view === "company" && S.tab === "bank" && bankInput(t)) return;
   if (S.view === "company" && S.tab === "sales" && salesInput(t)) return;
     const e = curEntry(), cid = S.coId;
   if (t.dataset.x && e && e.status === "draft" && t.type !== "date"){ billSetX(e, t.dataset.x, t.value); return; }
   if (t.dataset.e && e && e.status === "draft" && t.type === "text"){ billSetText(e, t.dataset.e, t.value); return; }
-  const p = S.partySel && D().parties[S.partySel];
-  if (t.dataset.p && p && t.tagName === "INPUT"){ p[t.dataset.p] = /^(pan|gstin)$/.test(t.dataset.p) ? t.value.toUpperCase().trim() : t.value; later("p" + p.id, () => Store.saveParty(cid, p), 600); return; }
-  if (t.dataset.ytd && p){
-    const fy = S.partyFy; p.ytd = p.ytd || {}; p.ytd[fy] = p.ytd[fy] || {};
-    const cur = p.ytd[fy][t.dataset.ytd] || {credited:0, tdsBase:0};
-    cur[t.dataset.k] = num(t.value); p.ytd[fy][t.dataset.ytd] = cur; later("p" + p.id, () => Store.saveParty(cid, p), 600); return;
-  }
   const co = CO();
   if (t.dataset.c && co && t.type === "text"){
     setPath(co, t.dataset.c, /^(gstin|pan)$/.test(t.dataset.c) ? t.value.toUpperCase().trim() : t.value);
@@ -1892,8 +1851,6 @@ document.addEventListener("change", ev => {
     Cloud.rpc("admin_set_plan", {p_firm: t.dataset.adminplan, p_plan: t.value}).then(() => { toast("Plan changed."); loadAdminOverview(); }, e => toast(e.message));
     return;
   }
-  if (t.dataset && t.dataset.revtds){ const e0 = D().entries[t.dataset.revtds]; if (e0){ revSet(e0, t.checked); render(); } return; }
-  if (t.dataset && t.dataset.revnature){ const e0 = D().entries[t.dataset.revnature]; if (e0){ e0.natureId = t.value; e0.confirmType = false; Store.saveEntry(S.coId, e0); render(); } return; }
   if (t.dataset && t.dataset.cloud){
     const k = t.dataset.cloud;
     if (["email", "password", "firm", "name"].includes(k)){ S.cloudForm = Object.assign({}, S.cloudForm, {[k]: t.value}); } if (k === "auto"){ Cloud.setCfg({auto: t.checked}); startCloudSync(); } else if (k === "email") Cloud.setCfg({email: t.value.trim()}); return; }
@@ -1916,12 +1873,6 @@ document.addEventListener("change", ev => {
     else { Store.saveEntry(cid, e); refreshStats(cid); render(); }
     return;
   }
-  if (t.hasAttribute("data-pnotds")){ const p = D().parties[S.partySel]; if (p){ p.noTds = t.checked; if (t.checked && !p.noTdsReason) p.noTdsReason = "na"; Store.saveParty(cid, p); refreshStats(cid); render(); } return; }
-  if (t.hasAttribute("data-ptransporter")){ const p = D().parties[S.partySel]; if (p){ p.transporter = t.checked; Store.saveParty(S.coId, p); render(); } return true; }
-  if (t.hasAttribute("data-pnotdsreason")){ const p = D().parties[S.partySel]; if (p){ p.noTdsReason = t.value; Store.saveParty(cid, p); render(); } return; }
-  if (t.dataset.p === "natureDefault"){ const p = D().parties[S.partySel]; if (p){ p.natureDefault = t.value; Store.saveParty(cid, p); render(); } return; }
-  if (t.dataset.p && S.partySel){ render(); return; }
-  if (t.hasAttribute("data-pfy")){ S.partyFy = t.value; render(); return; }
   const co = CO();
   if (t.dataset.c && co){
     if (t.type === "checkbox") co[t.dataset.c] = t.checked;

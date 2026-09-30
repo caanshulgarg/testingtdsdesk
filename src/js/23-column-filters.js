@@ -200,6 +200,7 @@ function placeColPop(){
   const pop = document.getElementById("colpop"); if (!pop || !S.colPop) return;
   const btn = document.querySelector('.colf[data-colf="' + S.colPop.k + '"][data-colt="' + S.colPop.t + '"]');
   if (!btn){ pop.style.display = "none"; return; }
+  pop.style.display = "";   // hidden while its button was not in the page (a React table is put back after the old screens)
   const th = btn.closest("th") || btn, cell = th.getBoundingClientRect(), r = btn.getBoundingClientRect();
   const body = pop.querySelector(".cp-body"), foot = pop.querySelector(".cp-foot"), head = pop.querySelector(".cp-head"), auto = pop.querySelector(".cp-auto");
   const chrome = (head ? head.offsetHeight : 0) + (foot ? foot.offsetHeight : 0) + (auto ? auto.offsetHeight : 0) + 8;
@@ -1160,10 +1161,6 @@ function bankChange(t){
 document.addEventListener("click", ev => {
   const sa = ev.target.closest && ev.target.closest("[data-sugall]");
   if (sa){ document.querySelectorAll("[data-sug]").forEach(x => { x.checked = sa.checked; }); return; }
-  const rs = ev.target.closest && ev.target.closest("[data-revsel]");
-  if (rs){ S.revSel = S.revSel || new Set(); if (rs.checked) S.revSel.add(rs.dataset.revsel); else S.revSel.delete(rs.dataset.revsel); render(); return; }
-  const ra = ev.target.closest && ev.target.closest("[data-revall]");
-  if (ra){ S.revSel = new Set(ra.checked ? revFiltered().map(r => r.e.id) : []); render(); return; }   // only the rows the filter shows
   const cb = ev.target.closest && ev.target.closest("[data-bsel]");
   if (cb){ bankToggle(cb, ev.shiftKey); return; }
   const rp = ev.target.closest && ev.target.closest("[data-reconpick]");

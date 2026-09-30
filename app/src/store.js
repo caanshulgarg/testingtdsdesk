@@ -48,5 +48,7 @@ window.render = function render() {
     if (inHost && a.isConnected && document.activeElement !== a) { a.focus(); try { if (sel && sel[0] != null) a.setSelectionRange(sel[0], sel[1]); } catch { /* not a text field */ } }
     version++;
     flushSync(() => subs.forEach((f) => f()));
+    // the column filter pop-up sits under its funnel button, which may be in a React table
+    if (typeof placeColPop === "function") placeColPop();
   }
 };

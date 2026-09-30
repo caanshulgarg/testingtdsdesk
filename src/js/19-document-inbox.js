@@ -169,38 +169,5 @@ function viewInvoices(){
 function viewDetail(e){ return '<div data-react="BillDetail" data-id="' + esc(e.id) + '"></div>'; }
 
 /* ---------- Client: deductees ---------- */
-function viewParties(){
-  const parties = D().parties, ps = Object.values(parties).sort((a, b) => a.name.localeCompare(b.name));
-  const fy = S.partyFy;
-  const fys = Array.from(new Set([fyOf(null)].concat(...ps.map(p => Object.keys(p.ytd || {}))))).sort().reverse();
-  let h = '<div class="row" style="justify-content:space-between"><div><h2 style="font:600 20px var(--serif);margin:0">Deductees of ' + esc(CO().name) + '</h2><p class="note" style="margin:2px 0 0">Limits are checked against the amounts credited here. Add bills booked before you started using this desk.</p></div>' +
-    '<div class="row"><label class="f"><span>Tax year</span><select data-pfy>' + fys.map(y => "<option" + (y === fy ? " selected" : "") + ">" + y + "</option>").join("") + '</select></label><button class="btn" data-act="addParty">Add deductee</button></div></div>';
-  if (!ps.length) h += '<div class="pane"><p class="empty" style="padding:0">No deductees yet. They are added when you approve an invoice, or add one now.</p></div>';
-  else {
-    h += '<div class="tblwrap" style="margin-top:14px"><table class="data"><thead><tr><th>Deductee</th><th>PAN</th><th>Usual payment type</th><th class="n">Credited ' + fy + '</th><th class="n">TDS base ' + fy + "</th><th></th></tr></thead><tbody>";
-    ps.forEach(p => {
-      const y = (p.ytd && p.ytd[fy]) || {};
-      const cr = Object.values(y).reduce((a, v) => a + num(v.credited), 0), tb = Object.values(y).reduce((a, v) => a + num(v.tdsBase), 0);
-      h += '<tr class="' + (S.partySel === p.id ? "sel" : "") + '"><td>' + esc(p.name) + "</td><td>" + esc(p.pan || "—") + "</td><td>" + esc(p.natureDefault ? ruleOf(p.natureDefault).label : "—") +
-        '</td><td class="n">' + money0(cr) + '</td><td class="n">' + money0(tb) + '</td><td class="n"><button class="btn small" data-editparty="' + p.id + '">Edit</button></td></tr>';
-    });
-    h += "</tbody></table></div>";
-  }
-  const p = S.partySel && parties[S.partySel];
-  if (p){
-    const opt = '<option value="">Decide per invoice</option>' + rules().map(r => '<option value="' + r.id + '"' + (r.id === p.natureDefault ? " selected" : "") + ">" + esc(r.label) + "</option>").join("");
-    h += '<div class="pane"><div class="row" style="justify-content:space-between"><h2>' + esc(p.name) + '</h2><button class="btn small" data-act="closeParty">Close</button></div><div class="grid" style="margin-top:10px">' +
-      pf("Name", "name", p.name) + pf("PAN", "pan", p.pan) + pf("GSTIN", "gstin", p.gstin) + pf("Ledger name in Tally", "ledgerName", p.ledgerName) + pf("Expense ledger", "expenseLedger", p.expenseLedger) +
-      '<label class="f"><span>Usual payment type</span><select data-p="natureDefault">' + opt + "</select></label>" +
-      pf("Lower deduction rate %", "ldcRate", p.ldcRate, "number") + pf("Certificate valid to", "ldcValidTo", p.ldcValidTo, "date") + "</div>" +
-      '<div class="skipbox" style="margin-top:12px"><label class="chk"><input type="checkbox" data-pnotds' + (p.noTds ? " checked" : "") + "> <b>Do not book TDS for this deductee</b></label>" +
-      '<label class="chk" style="margin-top:6px"><input type="checkbox" data-ptransporter' + (p.transporter ? " checked" : "") + "> Transporter with ten or fewer goods carriages, declaration and PAN on file (no TDS on contract payments)</label>" +
-      (p.noTds ? '<label class="f" style="margin-top:6px;max-width:420px"><span>Reason</span><select data-pnotdsreason>' + Object.entries(SKIP_REASONS).map(([k, t]) => '<option value="' + k + '"' + (k === (p.noTdsReason || "na") ? " selected" : "") + ">" + esc(t) + "</option>").join("") + "</select></label>" : "") +
-      '<p class="note" style="margin:4px 0 0">TDS is still worked out on each bill and shown; a single bill can still be booked with TDS.</p></div>' +
-      '<h3 style="margin-top:18px">Amounts credited in ' + fy + '</h3><p class="note" style="margin:-6px 0 10px">"TDS base" is the part of the credited amount on which TDS was already deducted.</p>' +
-      '<div class="tblwrap"><table class="data"><thead><tr><th>Payment type</th><th class="n">Credited (before GST)</th><th class="n">TDS base</th></tr></thead><tbody>' +
-      rules().filter(r => r.basis !== "never" && r.basis !== "always").map(r => { const y = ytdOf(p, fy, r.id); return "<tr><td>" + esc(r.label) + '</td><td class="n"><input type="number" step="0.01" data-ytd="' + r.id + '" data-k="credited" value="' + (y.credited || "") + '"></td><td class="n"><input type="number" step="0.01" data-ytd="' + r.id + '" data-k="tdsBase" value="' + (y.tdsBase || "") + '"></td></tr>'; }).join("") +
-      "</tbody></table></div></div>";
-  }
-  return h;
-}
+// the deductees of a client: React (app/src/screens/Parties.jsx)
+function viewParties(){ return '<div data-react="Parties"></div>'; }
