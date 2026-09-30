@@ -108,9 +108,9 @@ async function openBooks(cid){
   render();
 }
 // everything kept with a client's books, in this browser and (the TDS and GST work) in the firm's database
-const BOOKS_KEYS = ["vouchers", "map", "meta", "challans", "alloc", "pans", "twoB", "gstins", "under", "states", "groups", "salary", "certs", "advFix", "assets", "rev", "filed", "amendFix", "twoBs", "reco2b", "ledInfo", "ledInfoAt", "audit", "auditCfg", "auditRel", "ledSnaps", "gst9c", "groupInfo", "fs", "tb", "mis", "misCfg", "msme", "budget", "gst3b", "gst9", "gstOpen", "itcBasis", "itcTrack", "outRej", "gstFiled", "gstAato", "filed1a", "rule37On", "gstCashLedger", "gstSet", "gstContacts", "gstApi", "gstEst", "gstVault", "gstRegs", "letters", "ai"];
-async function saveBooks(opts){
-  const b = S.books; if (!b || !b.cid) return;
+const BOOKS_KEYS = ["vouchers", "map", "meta", "challans", "alloc", "pans", "twoB", "gstins", "under", "states", "groups", "salary", "certs", "advFix", "assets", "rev", "filed", "amendFix", "twoBs", "reco2b", "ledInfo", "ledInfoAt", "audit", "auditCfg", "auditRel", "ledSnaps", "gst9c", "groupInfo", "fs", "tb", "mis", "misCfg", "msme", "budget", "gst3b", "gst9", "gstOpen", "itcBasis", "itcTrack", "outRej", "gstFiled", "gstAato", "filed1a", "rule37On", "gstCashLedger", "gstSet", "gstContacts", "gstApi", "gstEst", "gstVault", "gstRegs", "letters", "ai", "tallyCo", "tbCheck"];
+async function saveBooks(opts, bb){
+  const b = bb || S.books; if (!b || !b.cid) return;
   const keep = {cid: b.cid}; BOOKS_KEYS.forEach(k => { keep[k] = b[k]; });
   await Books.save(b.cid, keep);
   if (!(opts && opts.fromCloud) && typeof BookSync === "object") BookSync.schedule(b.cid);
@@ -333,6 +333,14 @@ function viewSetupList(b){
     bact = k.running || k.now ? "" : '<button class="btn small" data-act="keepNow">Update now</button>';
   }
   h += row(bok ? true : Bridge.on() && k && k.on ? "wait" : false, "4. Tally Bridge", bs, bact);
+  // 5. the check against Tally's own trial balance: Ready, or the ledgers that differ
+  const ck = b.tbCheck, endOn = tallyDate(m.to || "");
+  const pickCk = '<label class="note">as on <input type="date" data-tbcheckon value="' + esc(S.tbCheckOn || endOn) + '"></label> <button class="btn small" data-act="tbCheckPick">Choose Tally\u2019s trial balance XML</button>';
+  if (!(b.vouchers || []).length) h += row(false, "5. Check", "After the day book and opening balances: Tally\u2019s trial balance on the last date, to check every ledger.");
+  else if (!ck) h += row(false, "5. Check", "Export Tally\u2019s trial balance (Alt+F5, detailed) as on the last date of the books and choose it: every ledger is checked.", pickCk);
+  else if (ck.ok) h += row(true, "5. Ready", "Every ledger (" + (ck.ledgers || 0) + ") agrees with Tally\u2019s trial balance as on " + d(ck.on) + ".", '<button class="linkbtn" data-act="tbCheckPick">check again</button>');
+  else h += row(false, "5. Mismatch", (ck.why ? esc(ck.why) : ck.n + " ledger" + (ck.n === 1 ? " differs" : "s differ") + " from Tally\u2019s trial balance as on " + d(ck.on) + ":" +
+      '<span style="display:block;text-align:left;margin-top:4px">' + ck.list.slice(0, 10).map(x => esc(x[0]) + ": Tally " + INR.format(-x[1]) + ", books " + INR.format(-x[2])).join("<br>") + (ck.n > 10 ? "<br>and " + (ck.n - 10) + " more" : "") + "</span>"), pickCk);
   return h + "</section>";
 }
 // the parts of the day book brought in from files, and the default date for the trial balance: the day before the first
@@ -2009,7 +2017,7 @@ function viewClients(){
   h += '<div class="pane" style="margin-top:0">' + (S.addingCo ? addCompanyForm() :
     '<h2>' + all.length + " client" + (all.length === 1 ? "" : "s") + '</h2><p class="note" style="margin:0 0 12px">Open a client to upload, review and send its entries, like selecting a company in Tally.</p>' +
     '<button class="btn primary" data-act="addCo">Add client</button>') + "</div></div>";
-  h += '<div style="margin-top:8px">' + uploadOptions() + "</div>" + viewJobs(j => j.target === "auto");
+  h += '<div style="margin-top:8px">' + uploadOptions() + "</div>" + viewJobs(j => j.target === "auto") + MultiUp.view();
   if (!all.length){
     return h + '<div class="pane"><p class="empty" style="padding:0">No clients yet. Add your first client with its GSTIN and Tally company name.</p></div>';
   }

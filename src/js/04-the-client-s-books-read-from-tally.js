@@ -39,6 +39,17 @@ const Books = {
     try { clean = typeof structuredClone === "function" ? structuredClone(out) : JSON.parse(JSON.stringify(out)); } catch (e){ clean = out; }
     return {vouchers: clean, meta};
   },
+  // build 195: which Tally company a file was exported from: its name (SVCURRENTCOMPANY) and the company part of the
+  // entries' GUIDs (the same in every export of that company), and the first registration in it
+  async fileCompany(file){
+    const dec = await this.decoder(file);
+    const head = dec.decode(new Uint8Array(await file.slice(0, 262144).arrayBuffer()));
+    const un = t => String(t || "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").trim();
+    const name = un((head.match(/<SVCURRENTCOMPANY>([^<]*)<\/SVCURRENTCOMPANY>/) || [])[1]);
+    const guid = ((head.match(/<GUID>([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})-[0-9a-f]+<\/GUID>/i) || [])[1] || "").toLowerCase();
+    const gstin = ((head.match(/<CMPGSTIN>([0-9A-Z]{15})<\/CMPGSTIN>/i) || [])[1] || "").toUpperCase();
+    return {name, guid, gstin};
+  },
   async decoder(file){
     const head = new Uint8Array(await file.slice(0, 4).arrayBuffer());
     if (head[0] === 0xFF && head[1] === 0xFE) return new TextDecoder("utf-16le");

@@ -1128,7 +1128,7 @@ header.top .tbar-title{align-items:center}
 .lk-fresh .note{flex:1 1 320px}
 .fc-empty .lk-fresh{text-align:left;margin-top:12px}
 </style>
-<style>.is-test .side-brand::after{content:"TEST";display:block;margin-top:4px;font-size:11px;letter-spacing:.14em;color:#E9A06A}.is-test header.top{box-shadow:inset 0 3px 0 #E2761B}body.is-test::after{content:"TESTING SITE · not for real client work · post only to a ZZ TEST company in Tally";position:fixed;left:0;right:0;bottom:0;z-index:70;background:#E2761B;color:#fff;font-size:12.5px;text-align:center;padding:3px 8px;letter-spacing:.04em;pointer-events:none}.is-test .actionbar{bottom:22px}.is-test #app{padding-bottom:34px}</style><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-JUZRiA/pD/Q1MSIv1WkOX00eklOKXLcOHszD3zr3UBc=' 'sha256-choK6ts+1GNsqtVdxq1fnOvjeebWpQkJhbNkab5rLB0=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+<style>.is-test .side-brand::after{content:"TEST";display:block;margin-top:4px;font-size:11px;letter-spacing:.14em;color:#E9A06A}.is-test header.top{box-shadow:inset 0 3px 0 #E2761B}body.is-test::after{content:"TESTING SITE · not for real client work · post only to a ZZ TEST company in Tally";position:fixed;left:0;right:0;bottom:0;z-index:70;background:#E2761B;color:#fff;font-size:12.5px;text-align:center;padding:3px 8px;letter-spacing:.04em;pointer-events:none}.is-test .actionbar{bottom:22px}.is-test #app{padding-bottom:34px}</style><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-JUZRiA/pD/Q1MSIv1WkOX00eklOKXLcOHszD3zr3UBc=' 'sha256-x2GrN/JhzTf8FRADW9WVXAxicmh32H1El4e7qhSYvW0=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
 </head>
 <body class="is-test">
 <a class="skip" id="skipLink" href="#app">Skip to the work</a>
@@ -1158,6 +1158,8 @@ header.top .tbar-title{align-items:center}
 <input type="file" id="marketIn" accept=".csv,.txt,.xlsx,.xls" class="hidden">
 <input type="file" id="salaryIn" accept=".csv,.txt,.xlsx,.xls" class="hidden">
 <input type="file" id="mastersIn" accept=".xml" class="hidden">
+<input type="file" id="tbCheckIn" accept=".xml" class="hidden">
+<input type="file" id="multiBooksIn" accept=".xml" multiple class="hidden">
 <input type="file" id="tbIn" accept=".xml" class="hidden">
 <input type="file" id="filedIn" accept=".json,application/json" multiple class="hidden">
 <input type="file" id="twoBIn" accept=".json,application/json" multiple class="hidden">
@@ -1204,7 +1206,7 @@ const DEFAULT_FIRM = {firmName:"", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "TEST · 30 Sep 2026 · build 194 (screens never ask Tally by themselves; posting ahead of the routine copy; Tally not responding since HH:MM; bridge 1.14.2)";
+const APP_VERSION = "TEST · 30 Sep 2026 · build 195 (a file from another Tally company is refused; check against Tally's trial balance: Ready or Mismatch; day books for several clients at once; bridge 1.14.2)";
 // the Tally Bridge setup file's fingerprint, put in by build.py: a new setup file is never served from an old cache
 const BRIDGE_SETUP_SHA = "03e30c07b0db0dd3";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -4562,7 +4564,7 @@ async function downloadStandalone(){
       (tag === "link" && /fonts\.(googleapis|gstatic)\.com/.test(el.getAttribute("href") || "")) || (tag === "style" && el.id === "app-style") || (tag === "script" && keepScript(el));
     if (!keep) el.remove();
   });
-  const bodyKeep = new Set(["app", "modal", "toast", "skipLink", "fileIn", "camIn", "bankIn", "ledIn", "bookIn", "salesIn", "booksIn", "mastersIn", "tbIn", "twoBIn", "filedIn", "marketIn", "salaryIn", "app-main", "tess-core", "tess-eng", "pdfjs-lib", "pdfjs-worker", "xlsx-lib", "sample-jpg", "sample-pdf"]);
+  const bodyKeep = new Set(["app", "modal", "toast", "skipLink", "fileIn", "camIn", "bankIn", "ledIn", "bookIn", "salesIn", "booksIn", "mastersIn", "tbIn", "tbCheckIn", "multiBooksIn", "twoBIn", "filedIn", "marketIn", "salaryIn", "app-main", "tess-core", "tess-eng", "pdfjs-lib", "pdfjs-worker", "xlsx-lib", "sample-jpg", "sample-pdf"]);
   Array.from(root.querySelector("body").children).forEach(el => {
     if (el.tagName.toLowerCase() === "header" && el.classList.contains("top")) return;
     if (el.tagName.toLowerCase() === "script" && keepScript(el)) return;
@@ -5473,6 +5475,17 @@ const Books = {
     let clean = out;
     try { clean = typeof structuredClone === "function" ? structuredClone(out) : JSON.parse(JSON.stringify(out)); } catch (e){ clean = out; }
     return {vouchers: clean, meta};
+  },
+  // build 195: which Tally company a file was exported from: its name (SVCURRENTCOMPANY) and the company part of the
+  // entries' GUIDs (the same in every export of that company), and the first registration in it
+  async fileCompany(file){
+    const dec = await this.decoder(file);
+    const head = dec.decode(new Uint8Array(await file.slice(0, 262144).arrayBuffer()));
+    const un = t => String(t || "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").trim();
+    const name = un((head.match(/<SVCURRENTCOMPANY>([^<]*)<\/SVCURRENTCOMPANY>/) || [])[1]);
+    const guid = ((head.match(/<GUID>([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})-[0-9a-f]+<\/GUID>/i) || [])[1] || "").toLowerCase();
+    const gstin = ((head.match(/<CMPGSTIN>([0-9A-Z]{15})<\/CMPGSTIN>/i) || [])[1] || "").toUpperCase();
+    return {name, guid, gstin};
   },
   async decoder(file){
     const head = new Uint8Array(await file.slice(0, 4).arrayBuffer());
@@ -9237,9 +9250,9 @@ async function openBooks(cid){
   render();
 }
 // everything kept with a client's books, in this browser and (the TDS and GST work) in the firm's database
-const BOOKS_KEYS = ["vouchers", "map", "meta", "challans", "alloc", "pans", "twoB", "gstins", "under", "states", "groups", "salary", "certs", "advFix", "assets", "rev", "filed", "amendFix", "twoBs", "reco2b", "ledInfo", "ledInfoAt", "audit", "auditCfg", "auditRel", "ledSnaps", "gst9c", "groupInfo", "fs", "tb", "mis", "misCfg", "msme", "budget", "gst3b", "gst9", "gstOpen", "itcBasis", "itcTrack", "outRej", "gstFiled", "gstAato", "filed1a", "rule37On", "gstCashLedger", "gstSet", "gstContacts", "gstApi", "gstEst", "gstVault", "gstRegs", "letters", "ai"];
-async function saveBooks(opts){
-  const b = S.books; if (!b || !b.cid) return;
+const BOOKS_KEYS = ["vouchers", "map", "meta", "challans", "alloc", "pans", "twoB", "gstins", "under", "states", "groups", "salary", "certs", "advFix", "assets", "rev", "filed", "amendFix", "twoBs", "reco2b", "ledInfo", "ledInfoAt", "audit", "auditCfg", "auditRel", "ledSnaps", "gst9c", "groupInfo", "fs", "tb", "mis", "misCfg", "msme", "budget", "gst3b", "gst9", "gstOpen", "itcBasis", "itcTrack", "outRej", "gstFiled", "gstAato", "filed1a", "rule37On", "gstCashLedger", "gstSet", "gstContacts", "gstApi", "gstEst", "gstVault", "gstRegs", "letters", "ai", "tallyCo", "tbCheck"];
+async function saveBooks(opts, bb){
+  const b = bb || S.books; if (!b || !b.cid) return;
   const keep = {cid: b.cid}; BOOKS_KEYS.forEach(k => { keep[k] = b[k]; });
   await Books.save(b.cid, keep);
   if (!(opts && opts.fromCloud) && typeof BookSync === "object") BookSync.schedule(b.cid);
@@ -9462,6 +9475,14 @@ function viewSetupList(b){
     bact = k.running || k.now ? "" : '<button class="btn small" data-act="keepNow">Update now</button>';
   }
   h += row(bok ? true : Bridge.on() && k && k.on ? "wait" : false, "4. Tally Bridge", bs, bact);
+  // 5. the check against Tally's own trial balance: Ready, or the ledgers that differ
+  const ck = b.tbCheck, endOn = tallyDate(m.to || "");
+  const pickCk = '<label class="note">as on <input type="date" data-tbcheckon value="' + esc(S.tbCheckOn || endOn) + '"></label> <button class="btn small" data-act="tbCheckPick">Choose Tally\u2019s trial balance XML</button>';
+  if (!(b.vouchers || []).length) h += row(false, "5. Check", "After the day book and opening balances: Tally\u2019s trial balance on the last date, to check every ledger.");
+  else if (!ck) h += row(false, "5. Check", "Export Tally\u2019s trial balance (Alt+F5, detailed) as on the last date of the books and choose it: every ledger is checked.", pickCk);
+  else if (ck.ok) h += row(true, "5. Ready", "Every ledger (" + (ck.ledgers || 0) + ") agrees with Tally\u2019s trial balance as on " + d(ck.on) + ".", '<button class="linkbtn" data-act="tbCheckPick">check again</button>');
+  else h += row(false, "5. Mismatch", (ck.why ? esc(ck.why) : ck.n + " ledger" + (ck.n === 1 ? " differs" : "s differ") + " from Tally\u2019s trial balance as on " + d(ck.on) + ":" +
+      '<span style="display:block;text-align:left;margin-top:4px">' + ck.list.slice(0, 10).map(x => esc(x[0]) + ": Tally " + INR.format(-x[1]) + ", books " + INR.format(-x[2])).join("<br>") + (ck.n > 10 ? "<br>and " + (ck.n - 10) + " more" : "") + "</span>"), pickCk);
   return h + "</section>";
 }
 // the parts of the day book brought in from files, and the default date for the trial balance: the day before the first
@@ -11138,7 +11159,7 @@ function viewClients(){
   h += '<div class="pane" style="margin-top:0">' + (S.addingCo ? addCompanyForm() :
     '<h2>' + all.length + " client" + (all.length === 1 ? "" : "s") + '</h2><p class="note" style="margin:0 0 12px">Open a client to upload, review and send its entries, like selecting a company in Tally.</p>' +
     '<button class="btn primary" data-act="addCo">Add client</button>') + "</div></div>";
-  h += '<div style="margin-top:8px">' + uploadOptions() + "</div>" + viewJobs(j => j.target === "auto");
+  h += '<div style="margin-top:8px">' + uploadOptions() + "</div>" + viewJobs(j => j.target === "auto") + MultiUp.view();
   if (!all.length){
     return h + '<div class="pane"><p class="empty" style="padding:0">No clients yet. Add your first client with its GSTIN and Tally company name.</p></div>';
   }
@@ -15468,18 +15489,47 @@ function gstFixChange(t){
   if (d.revd2 !== undefined){ b.rev = Object.assign({}, b.rev, {d2: !!t.checked}); saveBooks(); render(); return true; }
   return false;
 }
-function booksChange(t){
-  if (t.id === "booksIn"){
-    const f = (t.files || [])[0]; t.value = "";
-    if (!f) return true;
-    const b = S.books; b.busy = "Opening " + f.name + "\u2026"; render();
-    Books.importDayBook(f, m => { b.busy = m; softRender(); }).then(async res => {
+// build 195: a file exported from another Tally company is never taken into this client's books. Once a client has a
+// file, every later file must come from the same company (same name, or the same company part of the GUIDs); the first
+// file's company must be the client's (its Tally name or name), or the person says it is
+async function companyGate(fc, b, co, fname, quiet){
+  if (!fc || !(fc.name || fc.guid)) return {ok: true};
+  const n = x => String(x || "").toLowerCase().replace(/\(\s*\d{4}\s*-\s*\d{2,4}\s*\)/g, "").replace(/[^a-z0-9]/g, "");
+  const had = b.tallyCo;
+  if (had && (had.guid || had.name)){
+    const same = (had.guid && fc.guid) ? had.guid === fc.guid : n(had.name) === n(fc.name);
+    if (!same){
+      const why = n(had.name) === n(fc.name)
+        ? fname + " is from another Tally company that has the same name (\u201c" + fc.name + "\u201d). Choose the file exported from the company these books came from."
+        : fname + " is from the Tally company \u201c" + (fc.name || "another company") + "\u201d; the books here are from \u201c" + (had.name || "another company") + "\u201d. Choose the file exported from that company.";
+      if (!quiet) askConfirm({title: "This file is from another Tally company", ok: "Close", body: '<p class="note">' + esc(why) + "</p>"});
+      return {ok: false, why};
+    }
+    return {ok: true};
+  }
+  const names = [co && co.tallyName, co && co.name].filter(Boolean).map(n);
+  const gstOk = fc.gstin && co && co.gstin && fc.gstin.slice(2, 12) === String(co.gstin).toUpperCase().slice(2, 12);
+  if (!fc.name || gstOk || names.some(x => x && (x === n(fc.name) || x.includes(n(fc.name)) || n(fc.name).includes(x)))) return {ok: true};
+  if (quiet) return {ok: true};                       // the upload for several clients: the person matched it there
+  const r = await askConfirm({title: "Is this the right company?", ok: "Yes, take it", body: '<p class="note">' + esc(fname) + " was exported from the Tally company <b>" + esc(fc.name) + "</b>. The client open here is <b>" + esc((co && co.name) || "") + "</b>" + (co && co.tallyName ? " (in Tally: " + esc(co.tallyName) + ")" : "") + ". Take it into this client\u2019s books?</p>"});
+  return r && r.ok ? {ok: true} : {ok: false, why: "not taken: it is from " + fc.name};
+}
+// build 195: a day book file for the client open (S.books): its company checked, then only the dates chosen replaced.
+// opts.quiet: from the upload for several clients (the mapping was confirmed there; the answer is returned, not shown)
+async function bringDayBookFile(f, from0, to0, opts){
+  opts = opts || {};
+  const b = S.books; b.busy = "Opening " + f.name + "\u2026"; render();
+  const who = {client: S.coId, company: BridgeSeed.company()};           // fixed now: the background sends below keep to this client
+  let fc = null; try { fc = await Books.fileCompany(f); } catch (e){}
+  const gate = await companyGate(fc, b, CO(), f.name, opts.quiet);
+  if (!gate.ok){ b.busy = ""; render(); return {refused: gate.why}; }
+    return Books.importDayBook(f, m => { b.busy = m; softRender(); }).then(async res => {
       const bad = notThisClient((res.meta || {}).gstins);
-      if (bad.length){ b.busy = ""; render(); askConfirm({title: "This day book is not this client\u2019s", ok: "Close", body: '<p class="note">' + esc(panRefusal("The day book " + f.name, bad)) + " Choose the day book exported from this client\u2019s company in Tally, or correct the client\u2019s GSTIN and PAN in Client setup.</p>"}); return; }
+      if (bad.length){ b.busy = ""; render(); if (opts.quiet) return {refused: panRefusal("The day book " + f.name, bad)}; askConfirm({title: "This day book is not this client\u2019s", ok: "Close", body: '<p class="note">' + esc(panRefusal("The day book " + f.name, bad)) + " Choose the day book exported from this client\u2019s company in Tally, or correct the client\u2019s GSTIN and PAN in Client setup.</p>"}); return; }
       // a part: the dates chosen (or the file's own first and last date); only those dates are replaced, the rest stays
-      const ds = res.vouchers.map(v => v.date).filter(Boolean).sort(), iso8 = v => String(v || "").replace(/-/g, "");
-      const from = iso8(S.dbFrom) || ds[0], to = iso8(S.dbTo) || ds[ds.length - 1];
-      if (!from || !to){ b.busy = ""; render(); toast("There are no entries in " + f.name + "."); return; }
+      const ds = res.vouchers.map(v => v.date).filter(Boolean).sort();
+      const from = from0 || ds[0], to = to0 || ds[ds.length - 1];
+      if (!from || !to){ b.busy = ""; render(); if (!opts.quiet) toast("There are no entries in " + f.name + "."); return {refused: "no entries in the file"}; }
       const inside = res.vouchers.filter(v => v.date >= from && v.date <= to), outside = res.vouchers.length - inside.length;
       if (!(b.vouchers || []).length){ b.vouchers = inside; b.meta = Object.assign(res.meta, {from, to}); }
       else TallyRead.merge(b, {vouchers: inside, meta: res.meta}, from, to);
@@ -15488,26 +15538,34 @@ function booksChange(t){
       b.meta.parts = ((b.meta.parts || []).filter(p => !(p.from >= from && p.to <= to))).concat([part]);
       b.map = Books.mapLedgers(b.vouchers, b.map); LedMaster.refresh(b); b.busy = "";
       TallyRead.after(b, "after the day book was read", {from: b.meta.from, to: b.meta.to});
+      if (fc && (fc.name || fc.guid) && !b.tallyCo) b.tallyCo = {name: fc.name, guid: fc.guid};
       await saveBooks();
-      toast(inside.length + " entries of " + fmtDate(tallyDate(from)) + " to " + fmtDate(tallyDate(to)) + " brought in" + (outside ? " (" + outside + " outside those dates left out)" : "") + ". Choose the next part, or check the ledgers, then TDS and GST.");
+      if (!opts.quiet) toast(inside.length + " entries of " + fmtDate(tallyDate(from)) + " to " + fmtDate(tallyDate(to)) + " brought in" + (outside ? " (" + outside + " outside those dates left out)" : "") + ". Choose the next part, or check the ledgers, then TDS and GST.");
       // the same file fills the bridge's copy for these dates (the bridge never reads them from Tally itself) and FinCom's
       // cloud (everyone in the firm sees the same books)
       (async () => {
         const step = m => { b.busy = m; softRender(); };
         if (Bridge.on()){
-          try { const r = await BridgeSeed.send(f, step, {from, to}); part.bridge = r && r.entries != null ? "filled (" + r.entries + ")" : r && r.skipped ? "not changed: " + r.skipped : ""; }
+          try { const r = await BridgeSeed.send(f, step, {from, to}, who.company); part.bridge = r && r.entries != null ? "filled (" + r.entries + ")" : r && r.skipped ? "not changed: " + r.skipped : ""; }
           catch (e){ part.bridge = "not taken: " + ((e && e.message) || e); }
         } else part.bridge = "not connected on this computer";
         if (TCloudUp.on()){
           // quietly, in the background: nothing on the screen unless it fails
-          try { const r = await TCloudUp.days(await f.text(), {from, to}, null); part.cloud = r && r.days != null ? "in the cloud (" + r.days + " days)" : (r && r.skipped) || ""; }
+          try { const r = await TCloudUp.days(await f.text(), {from, to}, null, who); part.cloud = r && r.days != null ? "in the cloud (" + r.days + " days)" : (r && r.skipped) || ""; }
           catch (e){ part.cloud = "not sent: " + ((e && e.message) || e); toast("Saved here, but it could not be shared with the firm just now (" + ((e && e.message) || e) + "). Choose the file again later."); }
         } else part.cloud = "sign in to the firm account to share it";
-        b.busy = ""; await saveBooks(); render();
+        b.busy = ""; await saveBooks(null, b); render();          // these books, even if another client is open by now
       })();
       render();
-
-    }, e => { b.busy = ""; toast("Could not read that file: " + (e && e.message || e)); render(); });
+      return {n: inside.length, from, to};
+    }, e => { b.busy = ""; if (!opts.quiet) toast("Could not read that file: " + (e && e.message || e)); render(); return {refused: "could not read it: " + ((e && e.message) || e)}; });
+}
+function booksChange(t){
+  if (t.id === "booksIn"){
+    const f = (t.files || [])[0]; t.value = "";
+    if (!f) return true;
+    const iso8 = v => String(v || "").replace(/-/g, "");
+    bringDayBookFile(f, iso8(S.dbFrom), iso8(S.dbTo));
     return true;
   }
   if (t.dataset && t.dataset.dbfrom !== undefined){ S.dbFrom = t.value; render(); return true; }
@@ -15520,6 +15578,7 @@ function booksChange(t){
     if (!/^\d{8}$/.test(on)){ toast("Give the date of the trial balance (the day before the first date of the books) first."); return true; }
     f.text().then(async text => {
       const r = TBFile.read(text, b);
+      const odd = TBFile.foreign(r, b); if (odd){ askConfirm({title: "This trial balance does not look like this client\u2019s", ok: "Close", body: '<p class="note">' + esc(odd) + "</p>"}); return; }
       if (!r.rows.length){ toast(r.groupsSeen ? "This trial balance shows only groups. In Tally, press Alt+F5 (detailed) so each ledger is shown, then export it again." : "No ledger balances found in " + f.name + ". Export the Trial Balance from Tally as XML."); return; }
       const next = (t => t.getFullYear() + String(t.getMonth() + 1).padStart(2, "0") + String(t.getDate()).padStart(2, "0"))(new Date(+on.slice(0, 4), +on.slice(4, 6) - 1, +on.slice(6, 8) + 1));
       const to = (b.meta || {}).to || next;
@@ -15537,10 +15596,29 @@ function booksChange(t){
     }, e => toast("Could not read that file: " + ((e && e.message) || e)));
     return true;
   }
+  if (t.dataset && t.dataset.tbcheckon !== undefined){ S.tbCheckOn = t.value; render(); return true; }
+  if (t.id === "tbCheckIn"){
+    const f = (t.files || [])[0]; t.value = "";
+    if (!f) return true;
+    const b = S.books, on = String(S.tbCheckOn || tallyDate((b.meta || {}).to) || "").replace(/-/g, "");
+    if (!/^\d{8}$/.test(on)){ toast("Give the date of the trial balance first."); return true; }
+    f.text().then(async text => {
+      const r = TBFile.read(text, b);
+      const odd = TBFile.foreign(r, b); if (odd){ askConfirm({title: "This trial balance does not look like this client\u2019s", ok: "Close", body: '<p class="note">' + esc(odd) + "</p>"}); return; }
+      if (!r.rows.length){ toast(r.groupsSeen ? "This trial balance shows only groups. In Tally, press Alt+F5 (detailed) so each ledger is shown, then export it again." : "No ledger balances found in " + f.name + "."); return; }
+      b.tbCheck = TBCheck.run(b, r.rows, on, f.name);
+      await saveBooks(); render();
+      toast(b.tbCheck.ok ? "Ready: every ledger agrees with Tally\u2019s trial balance as on " + fmtDate(tallyDate(on)) + "." : b.tbCheck.why || (b.tbCheck.n + " ledger" + (b.tbCheck.n === 1 ? " differs" : "s differ") + " from Tally\u2019s trial balance; they are listed under step 5."));
+    }, e => toast("Could not read that file: " + ((e && e.message) || e)));
+    return true;
+  }
   if (t.id === "mastersIn"){
     const f = (t.files || [])[0]; t.value = "";
     if (!f) return true;
     const b = S.books; b.busy = "Opening " + f.name + "\u2026"; render();
+    (async () => { let fc = null; try { fc = await Books.fileCompany(f); } catch (e){} return companyGate(fc, b, CO(), f.name).then(g => ({g, fc})); })().then(({g, fc}) => {
+    if (!g.ok){ b.busy = ""; render(); return; }
+    if (fc && (fc.name || fc.guid) && !b.tallyCo) b.tallyCo = {name: fc.name, guid: fc.guid};
     Books.importMasters(f, m => { b.busy = m; softRender(); }).then(async res => {
       b.pans = res.pans; b.gstins = res.gstins; b.under = res.under; b.states = res.states; b.groups = res.groups; b.groupInfo = res.groupInfo; b.busy = "";
       b.ledInfo = res.info; b.ledInfoAt = new Date().toISOString(); LedMaster.refresh(b);
@@ -15549,6 +15627,7 @@ function booksChange(t){
       toast(res.count + " ledgers read. " + Object.keys(res.pans).length + " carry a PAN; " + withPan + " of " + rows.length + " deductions now have one.");
       render();
     }, e => { b.busy = ""; toast("Could not read that file: " + (e && e.message || e)); render(); });
+    });
     return true;
   }
   if (t.id === "filedIn"){
@@ -15672,6 +15751,69 @@ window.addEventListener("scroll", () => {
   bankMoreBusy = true;
   requestAnimationFrame(() => { S.bank.limit += 200; render(); setTimeout(() => { bankMoreBusy = false; }, 250); });
 }, {passive: true});
+/* ================================================================== */
+/* Day books for several clients at once (build 195): each file's      */
+/* company is read from the file and matched to a client (GSTIN, else   */
+/* the Tally name); the person confirms the matches, then the files are */
+/* taken one at a time. Each file still passes the same checks          */
+/* ================================================================== */
+const MultiUp = {
+  norm(x){ return String(x || "").toLowerCase().replace(/\(\s*\d{4}\s*-\s*\d{2,4}\s*\)/g, "").replace(/[^a-z0-9]/g, ""); },
+  match(fc){
+    const cos = Object.values(S.companies || {}).filter(c => !c.deleted);
+    if (fc.gstin){
+      const g = cos.filter(c => String(c.gstin || "").toUpperCase() === fc.gstin); if (g.length === 1) return g[0].id;
+      const p = cos.filter(c => String(c.gstin || "").toUpperCase().slice(2, 12) === fc.gstin.slice(2, 12)); if (p.length === 1) return p[0].id;
+    }
+    if (fc.name){ const k = this.norm(fc.name), by = cos.filter(c => [c.tallyName, c.name].filter(Boolean).some(x => this.norm(x) === k)); if (by.length === 1) return by[0].id; }
+    return "";
+  },
+  async pick(inp){
+    const files = Array.from(inp.files || []); inp.value = "";
+    if (!files.length) return;
+    S.multiUp = {rows: [], busy: false, reading: true}; render();
+    for (const f of files){
+      let fc = {}; try { fc = await Books.fileCompany(f); } catch (e){}
+      S.multiUp.rows.push({f, name: fc.name || "", gstin: fc.gstin || "", cid: this.match(fc), status: "waiting"});
+    }
+    S.multiUp.reading = false; render();
+  },
+  setClient(i, cid){ const r = ((S.multiUp || {}).rows || [])[i]; if (r){ r.cid = cid; render(); } },
+  async start(){
+    const m = S.multiUp; if (!m || m.busy) return;
+    const todo = m.rows.filter(r => r.cid && r.status === "waiting");
+    if (!todo.length){ toast("Choose the client for each file first."); return; }
+    m.busy = true;
+    const keepCo = S.coId, keepView = S.view;
+    for (const r of todo){
+      r.status = "reading…"; render();
+      try {
+        S.coId = r.cid;
+        if (!S.books || S.books.cid !== r.cid){ S.books = null; await openBooks(r.cid); }
+        for (let i = 0; i < 400 && (!S.books || S.books.loading); i++) await new Promise(z => setTimeout(z, 50));
+        const res = await bringDayBookFile(r.f, "", "", {quiet: true});
+        r.ok = !!(res && !res.refused && res.n != null);
+        r.status = !res ? "not taken" : res.refused ? "not taken: " + res.refused : "done: " + res.n + " entries, " + fmtDate(tallyDate(res.from)) + " to " + fmtDate(tallyDate(res.to));
+      } catch (e){ r.status = "not taken: " + ((e && e.message) || e); }
+      S.view = keepView; render();
+    }
+    S.coId = keepCo; S.view = keepView; m.busy = false; render();
+    const ok = m.rows.filter(r => r.ok).length;
+    toast(ok + " of " + m.rows.length + " files brought in. Next, for each client: its opening balances (trial balance) and the check, under Books → From Tally.");
+  },
+  view(){
+    const m = S.multiUp;
+    const intro = '<div class="pane"><h3 style="margin-top:0">Day books for several clients at once</h3><p class="note" style="margin:0 0 8px">Choose the day book XML files exported from Tally, one or more per client. ' +
+      "Each file’s company is read from the file and matched to a client; check the matches, then start. A file whose company or GSTIN is not the client’s is not taken.</p>";
+    if (!m) return intro + '<button class="btn" data-act="multiPick">Choose day book files</button></div>';
+    const cos = Object.values(S.companies || {}).filter(c => !c.deleted).sort((a, c) => a.name.localeCompare(c.name));
+    return intro + (m.reading ? '<p class="note">Reading the files…</p>' : "") + '<div class="tblwrap"><table class="data"><thead><tr><th>File</th><th>Company in the file</th><th>Client</th><th>Status</th></tr></thead><tbody>' +
+      m.rows.map((r, i) => "<tr><td>" + esc(r.f.name) + '<div class="nr">' + Math.round(r.f.size / 1048576) + " MB</div></td><td>" + esc(r.name || "—") + (r.gstin ? '<div class="nr">' + esc(r.gstin) + "</div>" : "") + "</td><td>" +
+        (r.status === "waiting" && !m.busy ? '<select data-mucid="' + i + '"><option value="">— choose —</option>' + cos.map(c => '<option value="' + esc(c.id) + '"' + (c.id === r.cid ? " selected" : "") + ">" + esc(c.name) + "</option>").join("") + "</select>"
+          : esc(((S.companies || {})[r.cid] || {}).name || "—")) + '</td><td class="' + (r.ok ? "" : /not taken/.test(r.status) ? "bad" : "") + '">' + esc(r.status) + "</td></tr>").join("") + "</tbody></table></div>" +
+      '<div class="row" style="gap:8px;margin-top:8px">' + (m.busy ? '<span class="note">Bringing them in, one at a time…</span>' : '<button class="btn primary" data-act="multiStart">Bring them in</button><button class="btn small" data-act="multiPick">Choose other files</button><button class="btn small" data-act="multiClose">Close</button>') + "</div></div>";
+  }
+};
 /* ================================================================== */
 /* Tally Bridge: live connection to TallyPrime on this computer        */
 /* ================================================================== */
@@ -17124,9 +17266,9 @@ const BridgeSeed = {
     }
     return out;
   },
-  async send(file, onStep, range){
+  async send(file, onStep, range, name0){
     if (!Bridge.on()) return {skipped: "the Tally Bridge is not connected"};
-    const name = this.company();
+    const name = name0 || this.company();
     if (!name) return {skipped: "no Tally company name"};
     const pieces = this.pieces(await file.text(), range || {});
     if (!pieces.length) return {skipped: "no entries in the file for those dates"};
@@ -17165,6 +17307,34 @@ const TBFile = {
       names.push({name, open: r2(cr - dr)});
     }
     return {rows: names, groupsSeen};
+  },
+  // build 195: a trial balance whose ledgers are mostly unknown here is another company's: refused (with why). Only
+  // when this client's ledgers are known (from the day book or the masters)
+  foreign(r, b){
+    const known = new Set(Object.keys(Object.assign({}, (b && b.map) || {}, (b && b.under) || {}, (b && b.ledInfo) || {})));
+    if (known.size < 10 || r.rows.length < 10) return "";
+    const hit = r.rows.filter(x => known.has(x.name)).length;
+    return hit / r.rows.length < 0.5 ? "Only " + hit + " of its " + r.rows.length + " ledgers are in this client\u2019s books. Export the trial balance of this client\u2019s company in Tally." : "";
+  }
+};
+// build 195: the books against Tally's own trial balance on a date: each ledger's opening plus the entries brought in
+// must equal Tally's closing balance. Every ledger agrees: Ready. Otherwise the ledgers that differ, largest first
+const TBCheck = {
+  run(b, rows, on, file){
+    const tb = b.tb || {}, led = tb.led || {}, m = b.meta || {};
+    const base = { at: new Date().toISOString(), on, file };
+    if (!tb.from || !Object.keys(led).length) return Object.assign(base, {ok: false, n: 0, list: [], why: "Bring in the opening balances (step 2) first; the check needs them."});
+    if (on < tb.from || on > String(m.to || "")) return Object.assign(base, {ok: false, n: 0, list: [], why: "The trial balance is as on " + fmtDate(tallyDate(on)) + ", outside the books here (" + fmtDate(tallyDate(tb.from)) + " to " + fmtDate(tallyDate(m.to)) + ")."});
+    const mv = MIS.moves(tb.from, on), inFile = {}, all = new Set();
+    rows.forEach(x => { inFile[x.name] = r2(num(x.open)); all.add(x.name); });
+    Object.keys(led).forEach(l => all.add(l)); Object.keys(mv).forEach(l => all.add(l));
+    const list = [];
+    all.forEach(l => {
+      const books = r2(num((led[l] || {}).open) + ((mv[l] || {}).t || 0)), tally = inFile[l] || 0;
+      if (Math.abs(books - tally) >= 1) list.push([l, tally, books, r2(books - tally)]);
+    });
+    list.sort((a, c) => Math.abs(c[3]) - Math.abs(a[3]));
+    return Object.assign(base, {ok: !list.length, n: list.length, list: list.slice(0, 200), ledgers: all.size});
   }
 };
 /* ================================================================== */
@@ -19946,6 +20116,10 @@ document.addEventListener("click", ev => {
       Bridge.call("/keepmode" + (Bridge.pinQ() ? "?" + Bridge.pinQ().slice(1) : ""), {company: BridgeSeed.company(), mode: act === "setupModeBridge" ? "bridge" : "files"}, 20000)
         .then(j => { (S.setupKeep = S.setupKeep || {})[S.coId] = {at: Date.now(), st: j}; toast(act === "setupModeBridge" ? "The bridge will copy the year from Tally in the evening, or when nobody is at the computer." : "The bridge waits for the day book files."); render(); }, e => toast("The bridge could not do it: " + ((e && e.message) || e) + (/Unknown|No such/i.test(String(e && e.message)) ? " (it needs Tally Bridge 1.13.9)" : "")));
       break;
+    case "tbCheckPick": { const i = document.getElementById("tbCheckIn"); if (i){ i.value = ""; i.click(); } break; }
+    case "multiPick": { const i = document.getElementById("multiBooksIn"); if (i){ i.value = ""; i.click(); } break; }
+    case "multiStart": MultiUp.start(); break;
+    case "multiClose": S.multiUp = null; render(); break;
     case "tbPick": { const i = document.getElementById("tbIn"); if (i){ i.value = ""; i.click(); } break; }
     case "filedPick": { const i = document.getElementById("filedIn"); if (i){ i.value = ""; i.click(); } break; }
     case "twoBPick": { const i = document.getElementById("twoBIn"); if (i){ i.value = ""; i.click(); } break; }
@@ -20444,8 +20618,10 @@ document.addEventListener("input", ev => {
 function setPath(o, path, v){ const k = path.split("."); if (k.length === 2) o[k[0]][k[1]] = v; else o[k[0]] = v; }
 
 document.addEventListener("change", ev => {
-  if (ev.target && ev.target.id && ["booksIn", "mastersIn", "tbIn", "twoBIn", "filedIn"].includes(ev.target.id)){ booksChange(ev.target); return; }
-  if (ev.target && ev.target.dataset && (ev.target.dataset.dbfrom !== undefined || ev.target.dataset.dbto !== undefined || ev.target.dataset.tbon !== undefined)){ booksChange(ev.target); return; }
+  if (ev.target && ev.target.id && ["booksIn", "mastersIn", "tbIn", "tbCheckIn", "twoBIn", "filedIn"].includes(ev.target.id)){ booksChange(ev.target); return; }
+  if (ev.target && ev.target.id === "multiBooksIn"){ MultiUp.pick(ev.target); return; }
+  if (ev.target && ev.target.dataset && ev.target.dataset.mucid !== undefined){ MultiUp.setClient(+ev.target.dataset.mucid, ev.target.value); return; }
+  if (ev.target && ev.target.dataset && (ev.target.dataset.dbfrom !== undefined || ev.target.dataset.dbto !== undefined || ev.target.dataset.tbon !== undefined || ev.target.dataset.tbcheckon !== undefined)){ booksChange(ev.target); return; }
   if (ev.target && ev.target.dataset && ev.target.dataset.keepat !== undefined && /^\d{2}:\d{2}$/.test(ev.target.value)){ LK.keepSet({dailyAt: ev.target.value}, "Tally will be updated every day at " + ev.target.value + "."); return; }
   if (ev.target && ev.target.dataset && S.books && gstFixChange(ev.target)) return;
   if (ev.target && ev.target.id === "marketIn"){ const f = (ev.target.files || [])[0]; ev.target.value = ""; if (f) importMarketFile(f); return; }
@@ -25160,22 +25336,25 @@ const TCloudUp = {
   on(){ return typeof Cloud === "object" && Cloud.on() && !!(Cloud.st && Cloud.st.firm); },
   b64(u){ let s = ""; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); },
   async gz(text){ const cs = new Blob([text]).stream().pipeThrough(new CompressionStream("gzip")); return this.b64(new Uint8Array(await new Response(cs).arrayBuffer())); },
-  async post(body){
+  // who: the client and Tally company, fixed when the upload starts (build 195: the upload for several clients moves on
+  // to the next client while an earlier upload is still going; the earlier one must not follow it)
+  async post(body, who){
     const c = Cloud.cfg(), s = Cloud.sess();
     if (!s) throw new Error("Sign in to the firm account first.");
-    const r = await fetch(TCloud.ingestUrl(), {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": "application/json"}, body: JSON.stringify(Object.assign({client: S.coId, company: BridgeSeed.company()}, body))});
+    const r = await fetch(TCloud.ingestUrl(), {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": "application/json"}, body: JSON.stringify(Object.assign(who || {client: S.coId, company: BridgeSeed.company()}, body))});
     const j = await r.json().catch(() => ({}));
     if (!r.ok || j.ok === false) throw new Error(j.error || ("FinCom's cloud answered with error " + r.status));
     return j;
   },
-  async days(text, range, onStep){
+  async days(text, range, onStep, who){
     if (!this.on()) return {skipped: "not signed in to the firm account"};
+    who = who || {client: S.coId, company: BridgeSeed.company()};
     const re = /<VOUCHER\b[\s\S]*?<\/VOUCHER>/g, byDay = new Map();
     let m;
     while ((m = re.exec(text))){ const d = (m[0].match(/<DATE>(\d{8})<\/DATE>/) || [])[1]; if (!d || d < range.from || d > range.to) continue; if (!byDay.has(d)) byDay.set(d, []); byDay.get(d).push(m[0]); }
     const all = []; for (let d = range.from; d <= range.to; d = BridgeSeed.add(d, 1)) all.push(d);
     let batch = [], size = 0, sent = 0, done = 0;
-    const flush = async () => { if (!batch.length) return; if (onStep) onStep("Putting the day book in FinCom’s cloud (" + Math.round(done * 100 / all.length) + "%), for everyone in the firm…"); const j = await this.post({kind: "upload_days", days: batch}); sent += (j.done || []).length; batch = []; size = 0; };
+    const flush = async () => { if (!batch.length) return; if (onStep) onStep("Putting the day book in FinCom’s cloud (" + Math.round(done * 100 / all.length) + "%), for everyone in the firm…"); const j = await this.post({kind: "upload_days", days: batch}, who); sent += (j.done || []).length; batch = []; size = 0; };
     for (const d of all){
       const xml = "<ENVELOPE><BODY><DATA>" + (byDay.get(d) || []).map(v => "<TALLYMESSAGE>" + v + "</TALLYMESSAGE>").join("") + "</DATA></BODY></ENVELOPE>";
       const gz = await this.gz(xml);
@@ -25185,9 +25364,9 @@ const TCloudUp = {
     await flush();
     return {days: sent};
   },
-  async opening(from, asOn, led){
+  async opening(from, asOn, led, who){
     if (!this.on()) return {skipped: "not signed in to the firm account"};
-    return this.post({kind: "upload_ledgers", from, openAsOn: asOn, ledgers: Object.entries(led).map(([n, x]) => [n, x.parent || "", String(x.open)])});
+    return this.post({kind: "upload_ledgers", from, openAsOn: asOn, ledgers: Object.entries(led).map(([n, x]) => [n, x.parent || "", String(x.open)])}, who);
   }
 };
 
