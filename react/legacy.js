@@ -7781,14 +7781,6 @@ async function saveBooks(opts, bb){
   if (!(opts && opts.fromCloud) && typeof BookSync === "object") BookSync.schedule(b.cid);
 }
 // filed GST returns whose documents changed in Tally since: on every Books tab until the amendments are reported
-function gstDriftNote(b){
-  if (b.gstDrift === undefined){ try { b.gstDrift = GSTAmend.drift(); } catch (e){ b.gstDrift = []; } }
-  const d = b.gstDrift || [];
-  if (!d.length) return "";
-  return '<div class="bk-warn" role="status">' + d.slice(0, 3).map(x => "<p>" + esc(GSTAmend.driftLine(x)) + "</p>").join("") +
-    (d.length > 3 ? "<p>" + (d.length - 3) + " more filed return" + (d.length > 4 ? "s" : "") + " changed.</p>" : "") +
-    '<button class="btn small" data-bookstab="gst" data-gstpart="amend">See the amendments</button></div>';
-}
 // the books of a client (TDS & GST, MIS, Accounts, Audit, …): React (app/src/screens/Books.jsx)
 function viewBooks(){ return '<div data-react="Books"></div>'; }
 
@@ -7931,12 +7923,6 @@ function tbDefaultOn(b){
 }
 function tallyDate(s){ return s && String(s).length === 8 ? String(s).slice(0, 4) + "-" + String(s).slice(4, 6) + "-" + String(s).slice(6, 8) : ""; }
 // the line shown on the TDS and GST screens while ledgers are still to be confirmed
-function ledgerBanner(b, which){
-  const p = LedMaster.pending(b).filter(([, m]) => !which || (which === "gst" ? LedMaster.isGst(m.what) || !m.what || m.what === "none" : LedMaster.isTds(m.what) || !m.what || m.what === "none"));
-  if (!p.length) return "";
-  return '<div class="bk-alert bad" style="margin-bottom:12px"><b>' + p.length + " ledger" + (p.length === 1 ? " is" : "s are") + " still to be confirmed.</b> The figures below use the guesses; the return files wait until they are confirmed. " +
-    '<button class="linkbtn" data-bookstab="ledgers">Confirm them</button><div class="nr" style="white-space:normal">' + esc(p.slice(0, 6).map(x => x[0]).join(", ") + (p.length > 6 ? " and " + (p.length - 6) + " more" : "")) + "</div></div>";
-}
 // the files for filing are made only from confirmed ledgers
 function ledgersReady(which){
   const p = LedMaster.pending(S.books).filter(([, m]) => which === "gst" ? !LedMaster.isTds(m.what) : !LedMaster.isGst(m.what));
@@ -12055,19 +12041,8 @@ const MultiUp = {
     S.coId = keepCo; S.view = keepView; m.busy = false; render();
     const ok = m.rows.filter(r => r.ok).length;
     toast(ok + " of " + m.rows.length + " files brought in. Next, for each client: its opening balances (trial balance) and the check, under Books → From Tally.");
-  },
-  view(){
-    const m = S.multiUp;
-    const intro = '<div class="pane"><h3 style="margin-top:0">Day books for several clients at once</h3><p class="note" style="margin:0 0 8px">Choose the day book XML files exported from Tally, one or more per client. ' +
-      "Each file’s company is read from the file and matched to a client; check the matches, then start. A file whose company or GSTIN is not the client’s is not taken.</p>";
-    if (!m) return intro + '<button class="btn" data-act="multiPick">Choose day book files</button></div>';
-    const cos = Object.values(S.companies || {}).filter(c => !c.deleted).sort((a, c) => a.name.localeCompare(c.name));
-    return intro + (m.reading ? '<p class="note">Reading the files…</p>' : "") + '<div class="tblwrap"><table class="data"><thead><tr><th>File</th><th>Company in the file</th><th>Client</th><th>Status</th></tr></thead><tbody>' +
-      m.rows.map((r, i) => "<tr><td>" + esc(r.f.name) + '<div class="nr">' + Math.round(r.f.size / 1048576) + " MB</div></td><td>" + esc(r.name || "—") + (r.gstin ? '<div class="nr">' + esc(r.gstin) + "</div>" : "") + "</td><td>" +
-        (r.status === "waiting" && !m.busy ? '<select data-mucid="' + i + '"><option value="">— choose —</option>' + cos.map(c => '<option value="' + esc(c.id) + '"' + (c.id === r.cid ? " selected" : "") + ">" + esc(c.name) + "</option>").join("") + "</select>"
-          : esc(((S.companies || {})[r.cid] || {}).name || "—")) + '</td><td class="' + (r.ok ? "" : /not taken/.test(r.status) ? "bad" : "") + '">' + esc(r.status) + "</td></tr>").join("") + "</tbody></table></div>" +
-      '<div class="row" style="gap:8px;margin-top:8px">' + (m.busy ? '<span class="note">Bringing them in, one at a time…</span>' : '<button class="btn primary" data-act="multiStart">Bring them in</button><button class="btn small" data-act="multiPick">Choose other files</button><button class="btn small" data-act="multiClose">Close</button>') + "</div></div>";
   }
+
 };
 /* ================================================================== */
 /* Tally Bridge: live connection to TallyPrime on this computer        */
@@ -16110,7 +16085,6 @@ document.addEventListener("change", ev => {
   if (reactOwned(ev.target)) return;
   if (ev.target && ev.target.id && ["booksIn", "mastersIn", "tbIn", "tbCheckIn", "twoBIn", "filedIn"].includes(ev.target.id)){ booksChange(ev.target); return; }
   if (ev.target && ev.target.id === "multiBooksIn"){ MultiUp.pick(ev.target); return; }
-  if (ev.target && ev.target.dataset && ev.target.dataset.mucid !== undefined){ MultiUp.setClient(+ev.target.dataset.mucid, ev.target.value); return; }
   if (ev.target && ev.target.dataset && S.books && gstFixChange(ev.target)) return;
   if (ev.target && ev.target.id === "marketIn"){ const f = (ev.target.files || [])[0]; ev.target.value = ""; if (f) importMarketFile(f); return; }
   if (ev.target && ev.target.id === "salaryIn"){
@@ -18013,15 +17987,7 @@ const BookSync = {
   },
   // one line under the books' tabs
   // information on the From Tally tab only; warnings (look-only, not saved) on every tab
-  note(cid, tab){
-    const info = !tab || tab === "import";
-    if (!(typeof Cloud === "object" && Cloud.on())) return !info ? "" : '<p class="note" style="margin:6px 0">TDS and GST work is kept in this browser only. Sign in to the firm account to share it with your colleagues.</p>';
-    if (this.off) return !info ? "" : '<p class="note" style="margin:6px 0">The firm’s database is not set up for shared TDS and GST work yet: it is kept in this browser only.</p>';
-    const s = this.st[cid] || {};
-    if (s.readonly) return '<p class="note" style="margin:6px 0">Look-only access: changes here are not saved for the firm.</p>';
-    if (s.error) return '<p class="note warn" style="margin:6px 0">TDS and GST work not saved to the firm yet: ' + esc(s.error) + ". It is safe in this browser and will be sent at the next sync.</p>";
-    return "";
-  }
+
 };
 if (typeof window === "object") window.addEventListener("beforeunload", () => { try { Object.keys(BookSync.st).forEach(cid => { if (BookSync.st[cid].timer){ clearTimeout(BookSync.st[cid].timer); BookSync.push(cid); } }); } catch (e){} });
 /* ================================================================== */
@@ -19417,23 +19383,15 @@ const ONB = {
   steps(co){
     const b = S.books && S.books.cid === co.id ? S.books : null, bridge = typeof Bridge === "object" && Bridge.on() && Bridge.up();
     return [
-      {id: "tally", done: !!co.tallyName, t: "Name the company as it is in Tally", d: "So entries go to the right company.", btn: ["Client setup", 'data-act="setup"']},
-      {id: "bridge", done: !!bridge, t: "Connect the Tally Bridge", d: "A small program on the computer where Tally is open.", btn: ["Connect", 'data-act="tallyGuide"']},
-      {id: "books", done: !!(b && (b.vouchers || []).length), t: "Read the books from Tally", d: "Unlocks MIS, audit review, reports, look up and letters.", btn: ["Read the books", 'data-goclient="books:import"']},
-      {id: "gst", done: !!co.gstin, t: "Add the GSTIN", d: "For GST returns and 2B.", btn: ["Add it", 'data-act="setup"']},
-      {id: "bank", done: !!(co.bankAccounts || []).length, t: "Add a bank account", d: "Then bring in a statement.", btn: ["Bank", 'data-goclient="bank"']},
-      {id: "bills", done: Object.keys(D(co.id).entries || {}).length > 0, t: "Upload the first bills", d: "PDF, photo or email.", btn: ["Upload", 'data-goclient="bills"']}
+      {id: "tally", done: !!co.tallyName, t: "Name the company as it is in Tally", d: "So entries go to the right company.", btn: ["Client setup", {act: "setup"}]},
+      {id: "bridge", done: !!bridge, t: "Connect the Tally Bridge", d: "A small program on the computer where Tally is open.", btn: ["Connect", {act: "tallyGuide"}]},
+      {id: "books", done: !!(b && (b.vouchers || []).length), t: "Read the books from Tally", d: "Unlocks MIS, audit review, reports, look up and letters.", btn: ["Read the books", {go: "books:import"}]},
+      {id: "gst", done: !!co.gstin, t: "Add the GSTIN", d: "For GST returns and 2B.", btn: ["Add it", {act: "setup"}]},
+      {id: "bank", done: !!(co.bankAccounts || []).length, t: "Add a bank account", d: "Then bring in a statement.", btn: ["Bank", {go: "bank"}]},
+      {id: "bills", done: Object.keys(D(co.id).entries || {}).length > 0, t: "Upload the first bills", d: "PDF, photo or email.", btn: ["Upload", {go: "bills"}]}
     ];
-  },
-  card(co){
-    if (!co || co.onbHide) return "";
-    if (!S.books || S.books.cid !== co.id){ if (typeof openBooks === "function" && S.view === "company") setTimeout(() => { if (!S.books || S.books.cid !== co.id) openBooks(co.id); }, 0); }
-    const st = this.steps(co), n = st.filter(s => s.done).length;
-    if (n === st.length) return "";
-    return '<section class="dash-card onb"><div class="onb-h"><div><h3>Getting ' + esc(co.name) + ' ready</h3><p class="note" style="margin:0">' + n + " of " + st.length + ' done</p></div><button class="linkbtn" data-onbhide>Hide this</button></div>' +
-      '<div class="onb-bar" role="progressbar" aria-valuemin="0" aria-valuemax="' + st.length + '" aria-valuenow="' + n + '"><i style="width:' + Math.round(n / st.length * 100) + '%"></i></div><ol class="onb-list">' +
-      st.map(s => '<li class="' + (s.done ? "done" : "") + '"><span class="onb-n" aria-hidden="true">' + (s.done ? "✓" : "") + "</span><div><b>" + esc(s.t) + "</b><span>" + esc(s.d) + "</span></div>" + (s.done ? "" : '<button class="btn small" ' + s.btn[1] + ">" + esc(s.btn[0]) + "</button>") + "</li>").join("") + "</ol></section>";
   }
+
 };
 const KEYS = [
   ["/", "Look up any ledger, anywhere in a client"],
@@ -19443,14 +19401,14 @@ const KEYS = [
   ["Esc", "Close a panel, or go back"],
   ["Enter", "In Look up: show the answer"]
 ];
+// a new client's first steps hidden (app/src/parts/Notes.jsx)
+function onbHide(){ const co = CO(); if (co){ co.onbHide = true; Store.saveCompany(co); render(); } }
 function showKeys(){
   askConfirm({title: "Keyboard shortcuts", ok: "Close", body: '<table class="bk-table keys-t"><tbody>' + KEYS.map(([k, d]) => "<tr><td>" + k.split(" or ").map(x => "<kbd>" + esc(x) + "</kbd>").join(" or ") + "</td><td>" + esc(d) + "</td></tr>").join("") + "</tbody></table>"});
 }
 if (typeof document !== "undefined"){
   document.addEventListener("click", e => {
-    const t = e.target.closest && e.target.closest("[data-onbhide],[data-showkeys]"); if (!t) return;
-    if (t.hasAttribute("data-showkeys")){ showKeys(); return; }
-    const co = CO(); if (co){ co.onbHide = true; Store.saveCompany(co); render(); }
+    const t = e.target.closest && e.target.closest("[data-showkeys]"); if (t) showKeys();
   });
   document.addEventListener("keydown", e => {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
