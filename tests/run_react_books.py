@@ -1,0 +1,48 @@
+"""python3 run_react_books.py - the books (TDS & GST) in React: the tabs, and TDS by year, then quarter, then the
+return (a salary sheet brought in, no day book). Offline, a made-up client.
+Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_react_books.py"""
+import os, threading, functools, http.server
+os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
+from playwright.sync_api import sync_playwright
+H = functools.partial(http.server.SimpleHTTPRequestHandler, directory=os.environ.get("TDSDESK_SITE", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "app", "dist-test"))); H.log_message = lambda *a: None
+srv = http.server.ThreadingHTTPServer(("localhost", 8163), H); threading.Thread(target=srv.serve_forever, daemon=True).start()
+fails, errors = [], []
+def ok(c, w):
+    print(("  ok   " if c else "  FAIL ") + w)
+    if not c: fails.append(w)
+with sync_playwright() as p:
+    br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1400, "height": 900}); pg.on("pageerror", lambda e: errors.append(str(e)))
+    pg.goto("http://localhost:8163/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+    pg.evaluate("""() => { const c = newCompany({name: "ZZ Zeta Exports", gstin: "09AANFG3202D1ZR"}); S.companies[c.id] = c; S.data[c.id] = {parties: {}, entries: {}, loaded: true}; c.stats = {};
+      return openCompany(c.id).then(() => { S.tab = "books"; S.booksTab = "tds"; S.step = null; render(); }); }""")
+    pg.wait_for_timeout(1500)
+    app = lambda: pg.inner_text("#app")
+    ok(pg.locator('#app nav[aria-label="Books"] button').count() == 7, "the books' seven tabs")
+    ok("Bring the day book in first" in app(), "no day book and no salary: says what to bring in")
+    pg.click('#app nav[aria-label="Books"] button:has-text("From Tally")'); pg.wait_for_timeout(500)
+    ok(pg.evaluate("booksTab()") == "import" and pg.get_attribute('#app nav[aria-label="Books"] button:has-text("From Tally")', "aria-selected") == "true", "From Tally tab")
+    # a salary sheet for 2026-27, two employees, two quarters
+    pg.evaluate("""() => { S.books.salary = [["2026-05-31", "Asha Rao", "ABCPR1234K", 60000, 5000], ["2026-05-31", "Vikram Das", "ABCPD5678L", 45000, 2500], ["2026-08-31", "Asha Rao", "ABCPR1234K", 60000, 5000]]
+        .map(([date, name, pan, gross, tds]) => ({date, name, pan, code: "", gross, tds, exempt: 0, standard: 0, profTax: 0, chapter6: 0, surcharge: 0, cess: 0}));
+      S.tdsView = null; booksTabGo("tds"); }""")
+    pg.wait_for_timeout(600)
+    ok("2026-27: returns by quarter" in app() and pg.inner_text("#app .tds-crumbs").startswith("TDS"), "one year: TDS opens on it, with the way back above")
+    q1 = pg.inner_text("#app table.bk-table tbody tr:has-text('Q1')")
+    ok("7,500" in q1 and "2 employees" in q1, "Q1 24Q: ₹7,500 from two employees" + " [" + q1.replace("\n", " ") + "]")
+    pg.click("#app .tds-crumbs button:has-text('TDS')"); pg.wait_for_timeout(400)
+    ok("Choose the financial year" in app() and "2026-27" in app(), "TDS: the years")
+    pg.click('#app table.bk-table button:has-text("Open")'); pg.wait_for_timeout(400)
+    ok(pg.evaluate("S.tdsView") == "year" and pg.evaluate("S.tdsFy") == "2026-27", "Open: the year")
+    pg.click("#app table.bk-table tr:has-text('Q2') button.linkbtn >> nth=-1"); pg.wait_for_timeout(700)
+    ok(pg.evaluate("[S.tdsView, S.tdsQ, S.tdsForm]") == ["return", "Q2", "24Q"] and "Q2 · 24Q" in pg.inner_text("#app .tds-crumbs"), "Q2 24Q: its return opens")
+    pg.click("#app .tds-crumbs button:has-text('2026-27')"); pg.wait_for_timeout(400)
+    ok(pg.evaluate("S.tdsView") == "year", "back to the year")
+    pg.click('#app button:has-text("Certificates and rate questions")'); pg.wait_for_timeout(500)
+    ok(pg.evaluate("S.tdsView") == "certs" and "Certificates and rate questions" in pg.inner_text("#app .tds-crumbs"), "Certificates and rate questions")
+    for t in ["Tally ledgers", "GST", "MIS", "Accounts", "Audit"]:
+        pg.click('#app nav[aria-label="Books"] button:has-text("%s")' % t); pg.wait_for_timeout(500)
+        ok(pg.get_attribute('#app nav[aria-label="Books"] button:has-text("%s")' % t, "aria-selected") == "true", "the %s tab opens" % t)
+    ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
+    br.close()
+srv.shutdown()
+print("\nall passed" if not fails else "\nFAILED: %d" % len(fails)); raise SystemExit(1 if fails else 0)

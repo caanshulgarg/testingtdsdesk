@@ -124,31 +124,8 @@ function gstDriftNote(b){
     (d.length > 3 ? "<p>" + (d.length - 3) + " more filed return" + (d.length > 4 ? "s" : "") + " changed.</p>" : "") +
     '<button class="btn small" data-bookstab="gst" data-gstpart="amend">See the amendments</button></div>';
 }
-function viewBooks(){
-  const co = CO();
-  if (!S.books || S.books.cid !== co.id){ openBooks(co.id); return '<p class="note">Opening the books…</p>'; }
-  const b = S.books, tab = booksTab(), n = (b.vouchers || []).length;
-  // Reports, Look up and the letters are pages of their own, opened from the side menu
-  if (tab === "reports" || tab === "lookup" || tab === "letters"){
-    const busy = b.busy ? busyCard("Reading the books\u2026", b.busy, 0, 0) : "";
-    return busy + (tab === "reports" ? viewBooksReports(b) : tab === "lookup" ? viewBooksLookup(b) : viewBooksLetters(b));
-  }
-  let h = '<nav class="sbar" aria-label="Books">' + [["import", "From Tally", n || null], ["ledgers", "Tally ledgers", n ? (LedMaster.pending(b).length ? LedMaster.pending(b).length + " to confirm" : "\u2713") : null], ["tds", "TDS", n ? TDS.rows().length : ((b.salary || []).length || null)], ["gst", "GST", null], ["mis", "MIS", null], ["fs", "Accounts", null], ["audit", "Audit", b.audit && b.audit.last ? (b.audit.last.findings.filter(f => f.sev === "high" && Audit.status(f.id).s === "open").length || null) : null]]
-    .map(([id, label, c]) => '<button data-bookstab="' + id + '" aria-selected="' + (tab === id) + '">' + label + (c == null ? "" : ' <span class="sbar-n">' + c + "</span>") + "</button>").join("") + "</nav>";
-  h += BookSync.note(co.id, tab) + gstDriftNote(b);
-  if (b.busy) h += busyCard("Reading the books…", b.busy, 0, 0);
-  if (tab === "import") h += viewBooksImport(b);
-  else if (!n && tab === "gst") h += viewBooksGst(b);
-  else if (!n && !(tab === "tds" && (b.salary || []).length)) h += '<div class="bk-none">Bring the day book in first, under “From Tally”. Salary for 24Q can be brought in on its own, under TDS.</div>';
-  else if (!n && tab === "tds") h += viewBooksTds(b);
-  else if (tab === "ledgers") h += viewBooksLedgers(b);
-  else if (tab === "tds") h += viewBooksTds(b);
-  else if (tab === "audit") h += viewBooksAudit(b);
-  else if (tab === "mis") h += viewBooksMis(b);
-  else if (tab === "fs") h += viewBooksAccounts(b);
-  else h += viewBooksGst(b);
-  return h;
-}
+// the books of a client (TDS & GST, MIS, Accounts, Audit, …): React (app/src/screens/Books.jsx)
+function viewBooks(){ return '<div data-react="Books"></div>'; }
 
 /* ---------- straight from Tally through the bridge: the day book month by month, and Tally's own balances ---------- */
 const TallyRead = {
@@ -456,69 +433,6 @@ function ledgersReady(which){
 function tdsYears(b, rows){
   return Array.from(new Set(rows.map(r => r.fy).concat((b.salary || []).map(r => TDS.fyOf(r.date))).concat(TDS.challans().map(c => TDS.fyOf(c.date)))))
     .filter(f => /^\d{4}-\d{2}$/.test(f)).sort().reverse();
-}
-function tdsCrumbs(){
-  const v = S.tdsView, parts = ['<button class="linkbtn" data-tdsnav="years">TDS</button>'];
-  if (S.tdsFy && v !== "years") parts.push('<button class="linkbtn" data-tdsnav="year">' + esc(S.tdsFy) + "</button>");
-  if (v === "certs") parts.push("<b>Certificates and rate questions</b>");
-  if (v === "notices") parts.push("<b>Notices</b>");
-  if (v === "return") parts.push("<b>" + esc(S.tdsQ) + " \u00b7 " + esc(S.tdsForm) + "</b>");
-  return '<div class="tds-crumbs" style="display:flex;gap:8px;align-items:center;margin:0 0 12px;font-size:15px">' + parts.join('<span class="note">\u203a</span>') + "</div>";
-}
-function viewBooksTds(b){
-  const rows = TDS.rows(), fys = tdsYears(b, rows);
-  if (!S.tdsView) S.tdsView = fys.length === 1 ? "year" : "years";
-  if (S.tdsView === "notices") return ledgerBanner(b, "tds") + tdsCrumbs() + AIH.viewNotices(b, "tds");
-  if ((S.tdsView === "year" || S.tdsView === "return" || S.tdsView === "certs") && !fys.includes(S.tdsFy)) S.tdsFy = fys[0] || "";
-  if (!S.tdsFy && S.tdsView !== "years") S.tdsView = "years";
-  let h = ledgerBanner(b, "tds") + tdsCrumbs();
-  if (S.tdsView === "years") return h + viewTdsYears(b, rows, fys);
-  if (S.tdsView === "certs") return h + viewTdsCerts(b);
-  if (S.tdsView === "return") return h + (S.tdsForm === "24Q" ? viewTdsReturn24(b) : viewTdsReturn26(b, rows));
-  return h + viewTdsYearPage(b, rows);
-}
-function viewTdsYears(b, rows, fys){
-  const money = v => INR.format(r2(v || 0));
-  if (!fys.length) return '<div class="bk-none">Bring in the day book, or a salary sheet under 24Q, and the years appear here.</div>' +
-    '<div class="row" style="gap:8px;margin-top:10px"><button class="btn small primary" data-act="salaryPick">Bring in the salary sheet</button></div>';
-  return '<section class="dash-card"><h3>Choose the financial year</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Year</th><th class="n">Deductions</th><th class="n">TDS</th><th class="n">Challans</th><th class="n">Not against a challan</th><th class="n">Without PAN</th><th class="n">Salary employees</th><th class="ac"></th></tr></thead><tbody>' +
-    fys.map(fy => {
-      const r = rows.filter(x => x.fy === fy), ch = TDS.challans().filter(c => TDS.fyOf(c.date) === fy);
-      const emp = new Set(TDS24Q.rows().filter(x => TDS.fyOf(x.date) === fy).map(x => x.pan || x.name)).size;
-      const un = r2(r.filter(x => !x.challan).reduce((a, x) => a + x.tds, 0));
-      return '<tr><td><button class="linkbtn" data-tdsgo="' + fy + '"><b>' + esc(fy) + '</b></button></td><td class="n">' + r.length + '</td><td class="n">' + money(r.reduce((a, x) => a + x.tds, 0)) +
-        '</td><td class="n">' + ch.length + '</td><td class="n' + (un ? " bad" : "") + '">' + (un ? money(un) : "\u2014") + '</td><td class="n' + (r.some(x => !Certs.validPan(x.pan)) ? " bad" : "") + '">' +
-        r.filter(x => !Certs.validPan(x.pan)).length + '</td><td class="n">' + (emp || "\u2014") + '</td><td class="ac"><button class="btn small" data-tdsgo="' + fy + '">Open</button></td></tr>';
-    }).join("") + "</tbody></table></div></section>";
-}
-function viewTdsYearPage(b, rows){
-  const fy = S.tdsFy, money = v => INR.format(r2(v || 0)), qs = TDSYear.quarters(fy);
-  const cell = (x, form) => {
-    if (form === "26Q"){
-      if (!x.deductions && !x.challans) return '<td class="note">nothing</td>';
-      return '<td><button class="linkbtn" data-tdsgo="' + fy + "|" + x.q + '|26Q"><b>' + money(x.tds) + "</b></button>" +
-        '<div class="nr">' + x.deductions + " deductions \u00b7 " + x.challans + " challan" + (x.challans === 1 ? "" : "s") + "</div>" +
-        ((x.unallocated || x.noPan || x.issues) ? [x.unallocated ? money(x.unallocated) + " not against a challan" : "", x.noPan ? x.noPan + " without PAN" : "", x.issues ? x.issues + " rate question" + (x.issues === 1 ? "" : "s") : ""].filter(Boolean).map(w => '<div class="nr bad" style="white-space:normal">' + w + "</div>").join("") : '<div class="nr">ready</div>') + "</td>";
-    }
-    const inBooks = TDS.salaryRows().filter(r => r.fy === fy && r.q === x.q), booksTds = r2(inBooks.reduce((a, r) => a + r.tds, 0));
-    if (!x.salaryEmployees) return "<td>" + (booksTds ? '<button class="linkbtn" data-tdsgo="' + fy + "|" + x.q + '|24Q"><b>' + money(booksTds) + '</b></button><div class="nr">in the books under 192</div>' : "") +
-      '<div class="nr">' + ((b.salary || []).length ? (booksTds ? "" : "nothing") : '<button class="linkbtn" data-tdsgo="' + fy + "|" + x.q + '|24Q">bring in the salary sheet</button>') + "</div></td>";
-    return '<td><button class="linkbtn" data-tdsgo="' + fy + "|" + x.q + '|24Q"><b>' + money(x.salaryTds) + '</b></button><div class="nr">' + x.salaryEmployees + " employee" + (x.salaryEmployees === 1 ? "" : "s") + "</div></td>";
-  };
-  let h = '<div class="revfilter"><select data-tdsfy>' + tdsYears(b, rows).map(f => '<option value="' + f + '"' + (fy === f ? " selected" : "") + ">" + f + "</option>").join("") + "</select>" +
-    '<button class="btn small" data-tdsnav="certs">Certificates and rate questions</button>' + (AIH.enabled("notices") ? '<button class="btn small" data-tdsnav="notices">Notices</button>' : "") +
-    '<button class="btn small" data-act="yearExcel26">Download the year, 26Q</button><button class="btn small" data-act="yearExcel24">Download the year, 24Q</button>' +
-    '<button class="btn small primary" data-act="yearExcelAll">Download the whole year</button></div>';
-  h += '<section class="dash-card"><h3>' + esc(fy) + ": returns by quarter</h3>" +
-    '<p class="note">Open a return to see its challans, deductees and deductions on separate tabs.</p>' +
-    '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Quarter</th><th>26Q, other than salary</th><th>24Q, salary</th><th>Due</th></tr></thead><tbody>' +
-    qs.map(x => {
-      const due = {Q1: "31 Jul", Q2: "31 Oct", Q3: "31 Jan", Q4: "31 May"}[x.q];
-      return "<tr><td><b>" + x.q + '</b><div class="nr">' + {Q1: "Apr to Jun", Q2: "Jul to Sep", Q3: "Oct to Dec", Q4: "Jan to Mar"}[x.q] + "</div></td>" + cell(x, "26Q") + cell(x, "24Q") + "<td>" + due + "</td></tr>";
-    }).join("") +
-    '<tr><td><b>Year</b></td><td><b>' + money(qs.reduce((a, x) => a + x.tds, 0)) + '</b><div class="nr">' + qs.reduce((a, x) => a + x.deductions, 0) + " deductions</div></td><td><b>" +
-    money(qs.reduce((a, x) => a + x.salaryTds, 0)) + "</b></td><td></td></tr></tbody></table></div></section>";
-  return h;
 }
 // one filter bar for every tab of a return; each tab keeps its own filters
 function tdsFilterBar(tab, opts){

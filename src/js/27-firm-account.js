@@ -831,6 +831,16 @@ function txnOpenDoc(key, path, name){
     else toast("That document could not be found on this computer or in the firm account.");
   });
 }
+// TDS & GST from the books (app/src/screens/Books.jsx): a tab of the books; in TDS, a year, a quarter's return
+function booksTabGo(tab, gstPart){ S.booksTab = tab; if (gstPart) S.gstPart = gstPart; render(); }
+function tdsNav(view){ S.tdsView = view; render(); window.scrollTo(0, 0); }
+function tdsGo(fy, q, form){
+  S.tdsFy = fy;
+  if (q){ S.tdsQ = q; S.tdsForm = form || "26Q"; S.tdsView = "return"; S.tdsTab = ""; S.tdsOpen = ""; S.chOpen = ""; }
+  else S.tdsView = "year";
+  render(); window.scrollTo(0, 0);
+}
+function tdsSetFy(fy){ S.tdsFy = fy; if (S.tdsView === "return") S.tdsView = "year"; render(); }
 // the review table (app/src/screens/Review.jsx)
 function revPick(id, on){ S.revSel = S.revSel || new Set(); if (on) S.revSel.add(id); else S.revSel.delete(id); render(); }
 function revPickAll(on){ S.revSel = new Set(on ? revFiltered().map(r => r.e.id) : []); render(); }   // only the rows the filter shows
@@ -955,19 +965,13 @@ document.addEventListener("click", ev => {
   if (S.view === "company" && (S.tab === "bank" || (S.tab === "export" && S.bank && S.bank.cid === S.coId)) && bankClick(t)) return;   // bank buttons also work on the Post step
   if (S.view === "company" && S.tab === "sales" && salesClick(t)) return;
   if (t.dataset.open){ openCompany(t.dataset.open); return; }
-  if (t.dataset.bookstab){ S.booksTab = t.dataset.bookstab; if (t.dataset.gstpart) S.gstPart = t.dataset.gstpart; render(); return; }
+  if (t.dataset.bookstab){ booksTabGo(t.dataset.bookstab, t.dataset.gstpart); return; }
   if (t.dataset.gstpart){ S.gstPart = t.dataset.gstpart; render(); return; }
   if (t.dataset.itctcat !== undefined){ S.itctCat = S.itctCat === t.dataset.itctcat ? "" : t.dataset.itctcat; render(); return; }
   if (t.dataset.inregchip !== undefined){ S.inregF = S.inregF === t.dataset.inregchip ? "" : t.dataset.inregchip; render(); return; }
   if (t.dataset.tdspart){ S.tdsPart = t.dataset.tdspart; render(); return; }
-  if (t.dataset.tdsnav){ S.tdsView = t.dataset.tdsnav; render(); window.scrollTo(0, 0); return; }
-  if (t.dataset.tdsgo){
-    const [fy, q, form] = t.dataset.tdsgo.split("|");
-    S.tdsFy = fy;
-    if (q){ S.tdsQ = q; S.tdsForm = form || "26Q"; S.tdsView = "return"; S.tdsTab = ""; S.tdsOpen = ""; S.chOpen = ""; }
-    else S.tdsView = "year";
-    render(); window.scrollTo(0, 0); return;
-  }
+  if (t.dataset.tdsnav){ tdsNav(t.dataset.tdsnav); return; }
+  if (t.dataset.tdsgo){ tdsGo(...t.dataset.tdsgo.split("|")); return; }
   if (t.dataset.tdstab){ S.tdsTab = t.dataset.tdstab; render(); return; }
   if (t.dataset.tdsfclear){ S.tdsFl = Object.assign({}, S.tdsFl, {[t.dataset.tdsfclear]: {}}); render(); return; }
   if (t.dataset.tdssort){
@@ -1685,7 +1689,6 @@ document.addEventListener("input", ev => {
   if (t && t.dataset && t.dataset.tdsfpan !== undefined){ S.tdsF = Object.assign({}, S.tdsF, {pan: t.value}); render(); return; }
   if (t && t.dataset && t.dataset.gstym !== undefined){ S.gstYm = t.value; S.books.reco = null; render(); return; }
   if (t && t.dataset && t.dataset.gstreg !== undefined){ S.gstReg = t.value; S.books.reco = null; render(); return; }
-  if (t && t.dataset && t.dataset.tdsfy !== undefined){ S.tdsFy = t.value; if (S.tdsView === "return") S.tdsView = "year"; render(); return; }
   if (t && t.dataset && t.dataset.tdsq !== undefined){ S.tdsQ = t.value; render(); return; }
   if (t && t.dataset && t.dataset.ledkind){ const m = S.books.map[t.dataset.ledkind]; if (m){ m.kind = t.value; m.byHand = true; if (m.kind !== "tds_payable") delete m.section;
     if (/^(gst|gst_common|ineligible)$/.test(m.kind)){ const gg = Books.guess(t.dataset.ledkind); if (!m.tax) m.tax = gg.tax || "IGST"; if (!m.side) m.side = gg.side || "input"; if (m.reg == null && gg.reg) m.reg = gg.reg; }
