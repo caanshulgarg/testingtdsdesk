@@ -215,3 +215,23 @@ function Get-CloudLinkStatus {
   $s = $null; try { $f = Join-Path (Get-SyncDir) 'cloud-status.json'; if (Test-Path $f) { $s = Get-Content -Raw $f | ConvertFrom-Json } } catch { }
   return [ordered]@{ ok = $true; connected = (Test-CloudOn); url = [string]$Cfg.CloudUrl; status = $s }
 }
+
+# 1.14.1: a heartbeat to the cloud every few minutes, so FinCom shows for each client whether its Tally computer is on,
+# Tally open, and when the books were last updated. Tally is asked nothing: all of it is what the bridge already knows
+$script:BeatAt = [DateTime]::MinValue
+function Send-CloudBeat {
+  if (-not (Test-CloudOn)) { return }
+  if (([DateTime]::UtcNow - $script:BeatAt).TotalSeconds -lt (Get-KeepNum 'CloudBeatSec' 300)) { return }
+  $script:BeatAt = [DateTime]::UtcNow
+  $open = @(); $tally = $false
+  try { foreach ($s in @(Get-OpenCompaniesCached)) { if ($s.skipped) { continue }; if ($s.ok) { $tally = $true; $open += @($s.companies | ForEach-Object { [string]$_.name }) } } } catch { }
+  $cos = @()
+  foreach ($d in @(Get-ChildItem -LiteralPath (Get-SyncDir) -Directory -ErrorAction SilentlyContinue)) {
+    $st = Read-KeepState $d.FullName; if (-not $st -or -not $st.company) { continue }
+    $cos += [ordered]@{ name = [string]$st.company; open = [bool]($open -contains [string]$st.company); at = [string]$st.at; phase = [string]$st.phase; waiting = @(Get-CloudQueue $d.FullName).Count }
+  }
+  $running = $false; try { $p = [int]('0' + [IO.File]::ReadAllText((Join-Path (Get-SyncDir) 'keep.pid')).Trim()); $running = [bool]($p -and (Test-ProcessAlive $p)) } catch { }
+  $beat = [ordered]@{ kind = 'beat'; tally = $tally; open = $open; companies = $cos; updating = $running; dailyAt = (Get-KeepDailyAt); lastRun = (Get-KeepLastRun) }
+  $r = Invoke-Cloud $beat 10
+  if ($r.code -ne 200) { $script:BeatAt = [DateTime]::UtcNow.AddMinutes(25) }       # the cloud or the internet is down: tried again in half an hour
+}

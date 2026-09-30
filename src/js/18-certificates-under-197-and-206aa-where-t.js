@@ -2006,12 +2006,12 @@ function viewClients(){
   }
   h += '<div class="row" style="margin:18px 0 8px;justify-content:space-between"><label class="f" style="min-width:260px"><span>Find a client</span><input type="text" data-hq data-fk="hq" value="' + esc(S.homeQuery) + '" placeholder="Name, GSTIN or Tally name"></label>' +
     '<span class="note">About ' + INR0.format(used) + " of " + INR0.format(DB_LIMIT) + " records used</span></div>";
-  h += '<div class="tblwrap"><table class="data"><thead><tr><th>Client</th><th>GSTIN</th><th class="n">To review</th><th class="n">Need a check</th><th class="n">Waiting for Tally</th><th class="n">TDS ' + fyOf(null) + '</th><th class="n">Read free</th><th></th></tr></thead><tbody>';
-  if (!cos.length) h += '<tr><td colspan="7" class="note">No client matches \u201c' + esc(S.homeQuery) + "\u201d.</td></tr>";
+  h += '<div class="tblwrap"><table class="data"><thead><tr><th>Client</th><th>GSTIN</th><th>Tally</th><th class="n">To review</th><th class="n">Need a check</th><th class="n">Waiting for Tally</th><th class="n">TDS ' + fyOf(null) + '</th><th class="n">Read free</th><th></th></tr></thead><tbody>';
+  if (!cos.length) h += '<tr><td colspan="8" class="note">No client matches \u201c' + esc(S.homeQuery) + "\u201d.</td></tr>";
   cos.forEach(c => {
     const st = c.stats || {}, cur = st.fy === fyOf(null);
     h += '<tr class="rowlink" data-open="' + c.id + '"><td><b>' + esc(c.name) + "</b>" + (docqCount(c.id) ? ' <span class="tag" title="Files waiting in the inbox">\u{1F4E5} ' + docqCount(c.id) + "</span>" : "") + (c.tallyName && c.tallyName !== c.name ? '<div class="note">Tally: ' + esc(c.tallyName) + "</div>" : "") +
-      "</td><td>" + esc(c.gstin || "—") + '</td><td class="n">' + (st.drafts || "—") + '</td><td class="n">' + (st.check ? '<span class="tag warn">' + st.check + "</span>" : "—") +
+      "</td><td>" + esc(c.gstin || "—") + "</td><td>" + (typeof TLight === "object" ? TLight.cell(c.id) : "") + '</td><td class="n">' + (st.drafts || "—") + '</td><td class="n">' + (st.check ? '<span class="tag warn">' + st.check + "</span>" : "—") +
       '</td><td class="n">' + (st.waiting ? '<span class="tag ok">' + st.waiting + "</span>" : "—") + '</td><td class="n">' + (cur && st.tdsFy ? money0(st.tdsFy) : "—") +
       '</td><td class="n">' + (freeRate(c) ? '<span class="tag ' + (freeRate(c).pct >= 90 ? "ok" : "warn") + '" title="' + freeRate(c).free + " free, " + freeRate(c).google + " Google, " + freeRate(c).claude + ' Claude">' + freeRate(c).pct + "% of " + freeRate(c).n + "</span>" : "—") +
       '</td><td class="n"><button class="btn small" data-open="' + c.id + '">Open</button></td></tr>';

@@ -27,7 +27,7 @@ trap {
   try { Stop-Transcript | Out-Null } catch { }
   break
 }
-$BridgeVersion = '1.14.0'
+$BridgeVersion = '1.14.1'
 
 # ------------------------------------------------------------------ settings
 function New-BridgeKey {
@@ -1730,9 +1730,20 @@ function Add-TallyUse([int]$Port, [double]$Sec, [string]$Xml, [string]$Fail) {
 # asked again for a while: 10 s, then 20, 40, 80, at most 2 minutes, until it answers again. Requests meanwhile fail at
 # once with a plain message instead of piling up behind the one Tally is busy with.
 $script:TallyCool = @{}
+# 1.14.1: one request at a time to each Tally. The bridge, its copier and its posting worker are separate programs; a
+# lock they share (by name) makes a request wait its turn instead of reaching Tally alongside another one
+function Enter-TallyLock([int]$Port, [int]$WaitSec) {
+  $m = New-Object Threading.Mutex($false, ('Local\FinComTally' + $Port))
+  $got = $false; $sw = [Diagnostics.Stopwatch]::StartNew()
+  try { $got = $m.WaitOne([Math]::Max(1, $WaitSec) * 1000) } catch [Threading.AbandonedMutexException] { $got = $true }     # its holder ended without letting go
+  if (-not $got) { $m.Dispose(); throw ('Tally (port ' + $Port + ') is busy with another FinCom request; try again in a moment') }
+  if ($sw.Elapsed.TotalSeconds -ge 3) { try { Write-Log ('Tally ' + $Port + ': waited ' + [int]$sw.Elapsed.TotalSeconds + 's for another FinCom request to finish first') } catch { } }
+  return $m
+}
 function Invoke-Tally([int]$TallyPort, [string]$Xml, [int]$TimeoutSec) {
   $c = $script:TallyCool[$TallyPort]
   if ($c -and [DateTime]::UtcNow -lt $c.until) { throw ('Tally (port ' + $TallyPort + ') is busy and did not answer the last request; not asked again until ' + $c.until.ToLocalTime().ToString('HH:mm:ss')) }
+  $lock = Enter-TallyLock $TallyPort $(if ($TimeoutSec -gt 0) { [Math]::Min(300, $TimeoutSec) } else { 120 })
   $sw = [Diagnostics.Stopwatch]::StartNew(); $fail = ''
   try { $r = (& $script:TallyInvokeOrig $TallyPort $Xml $TimeoutSec); $script:TallyCool.Remove($TallyPort); return $r }
   catch {
@@ -1745,7 +1756,7 @@ function Invoke-Tally([int]$TallyPort, [string]$Xml, [int]$TimeoutSec) {
     }
     throw
   }
-  finally { Add-TallyUse $TallyPort $sw.Elapsed.TotalSeconds $Xml $fail; Test-KeepSlowRead $sw.Elapsed.TotalSeconds }
+  finally { try { $lock.ReleaseMutex() } catch { }; $lock.Dispose(); Add-TallyUse $TallyPort $sw.Elapsed.TotalSeconds $Xml $fail; Test-KeepSlowRead $sw.Elapsed.TotalSeconds }
 }
 # the share of one Tally's time used by this program in the last minute (0..1)
 function Get-TallyShare([int]$Port, [int]$WindowSec = 60) {
@@ -2920,6 +2931,26 @@ function Get-CloudLinkStatus {
   return [ordered]@{ ok = $true; connected = (Test-CloudOn); url = [string]$Cfg.CloudUrl; status = $s }
 }
 
+# 1.14.1: a heartbeat to the cloud every few minutes, so FinCom shows for each client whether its Tally computer is on,
+# Tally open, and when the books were last updated. Tally is asked nothing: all of it is what the bridge already knows
+$script:BeatAt = [DateTime]::MinValue
+function Send-CloudBeat {
+  if (-not (Test-CloudOn)) { return }
+  if (([DateTime]::UtcNow - $script:BeatAt).TotalSeconds -lt (Get-KeepNum 'CloudBeatSec' 300)) { return }
+  $script:BeatAt = [DateTime]::UtcNow
+  $open = @(); $tally = $false
+  try { foreach ($s in @(Get-OpenCompaniesCached)) { if ($s.skipped) { continue }; if ($s.ok) { $tally = $true; $open += @($s.companies | ForEach-Object { [string]$_.name }) } } } catch { }
+  $cos = @()
+  foreach ($d in @(Get-ChildItem -LiteralPath (Get-SyncDir) -Directory -ErrorAction SilentlyContinue)) {
+    $st = Read-KeepState $d.FullName; if (-not $st -or -not $st.company) { continue }
+    $cos += [ordered]@{ name = [string]$st.company; open = [bool]($open -contains [string]$st.company); at = [string]$st.at; phase = [string]$st.phase; waiting = @(Get-CloudQueue $d.FullName).Count }
+  }
+  $running = $false; try { $p = [int]('0' + [IO.File]::ReadAllText((Join-Path (Get-SyncDir) 'keep.pid')).Trim()); $running = [bool]($p -and (Test-ProcessAlive $p)) } catch { }
+  $beat = [ordered]@{ kind = 'beat'; tally = $tally; open = $open; companies = $cos; updating = $running; dailyAt = (Get-KeepDailyAt); lastRun = (Get-KeepLastRun) }
+  $r = Invoke-Cloud $beat 10
+  if ($r.code -ne 200) { $script:BeatAt = [DateTime]::UtcNow.AddMinutes(25) }       # the cloud or the internet is down: tried again in half an hour
+}
+
 # the nightly copy runs on its own and stops; it does not start the bridge
 # a posting job runs on its own, reports to its folder and stops
 if ($Job) {
@@ -2997,7 +3028,7 @@ $lastCheck = Get-Date
 while ($true) {
   while (-not $listener.Pending()) {
     Start-Sleep -Milliseconds 100
-    if (((Get-Date) - $lastCheck).TotalSeconds -ge (Get-KeepNum 'KeepStartSec' 60)) { $lastCheck = Get-Date; Show-Diagnosis; try { Start-KeepIfNeeded } catch { Write-Log ('Could not start keeping copies in step: ' + $_.Exception.Message) } }
+    if (((Get-Date) - $lastCheck).TotalSeconds -ge (Get-KeepNum 'KeepStartSec' 60)) { $lastCheck = Get-Date; Show-Diagnosis; try { Start-KeepIfNeeded } catch { Write-Log ('Could not start keeping copies in step: ' + $_.Exception.Message) }; try { Send-CloudBeat } catch { } }
   }
   $client = $listener.AcceptTcpClient()
   try { Invoke-Client $client }

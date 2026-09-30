@@ -13,6 +13,7 @@
 //                                                       tally-days, read into entries and lines, totals made ready
 //   {kind:"ledgers", company, from, openAsOn, ledgers:[[name, parent, open]]}
 //   {kind:"state", company, state}
+//   {kind:"beat", tally, open, companies:[{name, open, at, phase, waiting}], updating, dailyAt, lastRun}
 //   {kind:"support", note, zip}                      -> the Connector's log and details for FinCom support
 // Or a person signed in to FinCom (Authorization: Bearer, two-step done, a member of the firm), for one of the firm's
 // clients, giving the books from files exported from Tally:
@@ -185,7 +186,7 @@ Deno.serve(async (req) => {
   if (!/^fcd_[0-9a-f]{48}$/.test(key)) return reply(401, { ok: false, error: "This computer is not connected to FinCom. Connect it from FinCom: Settings, Tally connection." });
   const len = Number(req.headers.get("content-length") || 0);
   if (len > MAX_BODY) return reply(413, { ok: false, error: "Too much in one go; send fewer days at a time." });
-  const { data: dev } = await db.from("tally_devices").select("id, firm_id, name, revoked").eq("key_hash", await sha256(key)).maybeSingle();
+  const { data: dev } = await db.from("tally_devices").select("id, firm_id, name, revoked, info").eq("key_hash", await sha256(key)).maybeSingle();
   if (!dev || dev.revoked) return reply(401, { ok: false, error: "This computer's key is not valid any more. Connect it again from FinCom." });
   let body: any;
   try { body = JSON.parse(await readBody(req)); } catch (e) { return (e as Error).message === "too large" ? reply(413, { ok: false, error: "Too much in one go; send fewer days at a time." }) : reply(400, { ok: false, error: "Bad request" }); }
@@ -202,6 +203,19 @@ Deno.serve(async (req) => {
       case "hello": {
         const { data: f } = await db.from("firms").select("name").eq("id", firm).maybeSingle();
         return reply(200, { ok: true, firm: f?.name || "", device: dev.name });
+      }
+      case "beat": {
+        // every few minutes from the bridge (1.14.1): is Tally open, which companies, when each was last updated and
+        // how many days wait to be sent. FinCom's clients list shows a light from it. Nothing of the books is in it
+        const b = body || {};
+        const s = (v: unknown, n = 80) => typeof v === "string" ? v.slice(0, n) : "";
+        const beat = { at: new Date().toISOString(), tally: !!b.tally, updating: !!b.updating, dailyAt: s(b.dailyAt, 5), lastRun: s(b.lastRun, 8),
+          open: (Array.isArray(b.open) ? b.open : []).slice(0, 50).map((x: unknown) => s(x, 200)),
+          companies: (Array.isArray(b.companies) ? b.companies : []).slice(0, 200).map((c: any) => ({ name: s(c?.name, 200), open: !!c?.open, at: s(c?.at, 30), phase: s(c?.phase, 12),
+            waiting: Math.max(0, Math.min(1e6, Math.floor(Number(c?.waiting) || 0))) })) };
+        const info = { ...(((dev as any).info && typeof (dev as any).info === "object") ? (dev as any).info : {}), beat };
+        await db.from("tally_devices").update({ info }).eq("id", dev.id);
+        return reply(200, { ok: true });
       }
       case "companies": {
         const list = (Array.isArray(body.companies) ? body.companies : []).slice(0, 200)

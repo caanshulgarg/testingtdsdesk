@@ -46,6 +46,8 @@ POSTED = []          # (date, narration, number, xml) of every voucher created h
 DELETED = []
 BODIES = []
 REQS = {}
+INFLIGHT = [0, 0]     # [now, most at once]
+_cnt = __import__("threading").Lock()
 LOG = []             # (kind, from, to) of every request, for the tests to see how much was asked at a time            # how many requests of each kind this Tally was asked (the tests check nothing heavy is asked)
 def _kind(body):
     for k in ("TDSDeskKeepList", "TDSDeskKeepLed", "TDSDeskKeepCo", "TDSDeskKeepBal", "TDSDeskLedVch", "TDSDeskOneLed", "TDSDeskVchHeads", "TDSDeskBalances", "TDSDeskGroupNames", "TDSDeskNames", "TDSDeskTB", "TDSDeskLedgers", "TDSDeskCompanies"):
@@ -62,6 +64,11 @@ def posted_tags():
 class H(http.server.BaseHTTPRequestHandler):
     def log_message(self, *a): pass
     def do_POST(self):
+        with _cnt: INFLIGHT[0] += 1; INFLIGHT[1] = max(INFLIGHT[1], INFLIGHT[0])      # requests at Tally at the same moment
+        try: return self._post_serial()
+        finally:
+            with _cnt: INFLIGHT[0] -= 1
+    def _post_serial(self):
         with _serial:                           # like TallyPrime: one request at a time
             import time as _tb
             t0 = _tb.time()

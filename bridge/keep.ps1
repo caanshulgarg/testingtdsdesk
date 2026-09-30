@@ -40,9 +40,20 @@ function Add-TallyUse([int]$Port, [double]$Sec, [string]$Xml, [string]$Fail) {
 # asked again for a while: 10 s, then 20, 40, 80, at most 2 minutes, until it answers again. Requests meanwhile fail at
 # once with a plain message instead of piling up behind the one Tally is busy with.
 $script:TallyCool = @{}
+# 1.14.1: one request at a time to each Tally. The bridge, its copier and its posting worker are separate programs; a
+# lock they share (by name) makes a request wait its turn instead of reaching Tally alongside another one
+function Enter-TallyLock([int]$Port, [int]$WaitSec) {
+  $m = New-Object Threading.Mutex($false, ('Local\FinComTally' + $Port))
+  $got = $false; $sw = [Diagnostics.Stopwatch]::StartNew()
+  try { $got = $m.WaitOne([Math]::Max(1, $WaitSec) * 1000) } catch [Threading.AbandonedMutexException] { $got = $true }     # its holder ended without letting go
+  if (-not $got) { $m.Dispose(); throw ('Tally (port ' + $Port + ') is busy with another FinCom request; try again in a moment') }
+  if ($sw.Elapsed.TotalSeconds -ge 3) { try { Write-Log ('Tally ' + $Port + ': waited ' + [int]$sw.Elapsed.TotalSeconds + 's for another FinCom request to finish first') } catch { } }
+  return $m
+}
 function Invoke-Tally([int]$TallyPort, [string]$Xml, [int]$TimeoutSec) {
   $c = $script:TallyCool[$TallyPort]
   if ($c -and [DateTime]::UtcNow -lt $c.until) { throw ('Tally (port ' + $TallyPort + ') is busy and did not answer the last request; not asked again until ' + $c.until.ToLocalTime().ToString('HH:mm:ss')) }
+  $lock = Enter-TallyLock $TallyPort $(if ($TimeoutSec -gt 0) { [Math]::Min(300, $TimeoutSec) } else { 120 })
   $sw = [Diagnostics.Stopwatch]::StartNew(); $fail = ''
   try { $r = (& $script:TallyInvokeOrig $TallyPort $Xml $TimeoutSec); $script:TallyCool.Remove($TallyPort); return $r }
   catch {
@@ -55,7 +66,7 @@ function Invoke-Tally([int]$TallyPort, [string]$Xml, [int]$TimeoutSec) {
     }
     throw
   }
-  finally { Add-TallyUse $TallyPort $sw.Elapsed.TotalSeconds $Xml $fail; Test-KeepSlowRead $sw.Elapsed.TotalSeconds }
+  finally { try { $lock.ReleaseMutex() } catch { }; $lock.Dispose(); Add-TallyUse $TallyPort $sw.Elapsed.TotalSeconds $Xml $fail; Test-KeepSlowRead $sw.Elapsed.TotalSeconds }
 }
 # the share of one Tally's time used by this program in the last minute (0..1)
 function Get-TallyShare([int]$Port, [int]$WindowSec = 60) {

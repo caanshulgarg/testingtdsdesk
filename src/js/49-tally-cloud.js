@@ -303,3 +303,46 @@ const TCloudUp = {
   }
 };
 
+
+// The light on the clients list (build 189): for each client with Tally, whether its Tally computer is on, Tally open and
+// the books up to date, from the bridge's heartbeat (every 5 minutes; the bridge asks Tally nothing for it)
+const TLight = {
+  st: {at: 0, busy: false, by: {}},
+  refresh(){
+    if (!TCloud.on() || this.st.busy || Date.now() - this.st.at < 120000) return;
+    this.st.busy = true;
+    Promise.all([TCloud.restAll("tally_companies?select=company,client_id,device_id&client_id=not.is.null&order=company.asc"), Cloud.api("tally_devices?select=id,name,last_seen,info,revoked")])
+      .then(([cos, devs]) => { this.st.by = this.work(cos || [], devs || [], Date.now()); }, () => {})
+      .then(() => { this.st.at = Date.now(); this.st.busy = false; if (S.view === "home") render(); });
+  },
+  // client id -> {level: ok | warn | bad, short, say}
+  work(cos, devs, now){
+    const by = {}, dev = {};
+    devs.filter(d => !d.revoked).forEach(d => { dev[d.id] = d; });
+    const when = t => new Date(t).toLocaleString("en-IN", {day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit"});
+    const rank = {bad: 3, warn: 2, ok: 1};
+    cos.forEach(c => {
+      const d = dev[c.device_id]; if (!d) return;
+      const beat = (d.info || {}).beat || null, seen = Date.parse((beat && beat.at) || d.last_seen || 0) || 0;
+      let x;
+      if (!beat || now - seen > 15 * 60000) x = {level: "bad", short: "computer off", say: "No word from " + d.name + (seen ? " since " + when(seen) : "") + ": the computer, the FinCom Connector or the bridge is off."};
+      else {
+        const co = (beat.companies || []).find(k => k.name === c.company), at = co && Date.parse(co.at);
+        if (!beat.tally) x = {level: "warn", short: "Tally closed", say: "Tally is not open on " + d.name + "."};
+        else if (!co) x = {level: "warn", short: "not updated yet", say: c.company + " has no copy on " + d.name + " yet: it comes with the next update (" + (beat.dailyAt || "20:00") + ")."};
+        else if (co.waiting) x = {level: "warn", short: co.waiting + " day" + (co.waiting === 1 ? "" : "s") + " to send", say: co.waiting + " day(s) of " + c.company + " wait on " + d.name + " to go to FinCom (the internet or FinCom's cloud was not reachable)."};
+        else if (!at || now - at > 36 * 3600000) x = {level: "warn", short: at ? "updated " + when(at) : "not updated yet", say: c.company + " was last updated from Tally " + (at ? "on " + when(at) : "never") + ". Books \u2192 From Tally \u2192 Update now."};
+        else x = {level: "ok", short: "updated " + when(at), say: c.company + " is up to date as of " + when(at) + " (" + d.name + ")."};
+        if (beat.updating && x.level !== "bad") x.short = "updating now";
+      }
+      const had = by[c.client_id];
+      if (!had || rank[x.level] > rank[had.level]) by[c.client_id] = x;
+    });
+    return by;
+  },
+  cell(cid){
+    this.refresh();
+    const x = this.st.by[cid];
+    return x ? '<span class="tag ' + x.level + '" title="' + esc(x.say) + '">' + (x.level === "ok" ? "\u25CF " : x.level === "warn" ? "\u25D0 " : "\u25CB ") + esc(x.short) + "</span>" : '<span class="note">\u2014</span>';
+  }
+};

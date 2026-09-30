@@ -6,7 +6,7 @@ def R(a, b):
     assert base.count(a) == 1, ('anchor', a[:60], base.count(a))
     base = base.replace(a, b)
 import re
-base = re.sub(r"\$BridgeVersion = '[0-9.]+'", "$BridgeVersion = '1.14.0'", base, 1)
+base = re.sub(r"\$BridgeVersion = '[0-9.]+'", "$BridgeVersion = '1.14.1'", base, 1)
 # 1.12.7 (security): the log never holds keys, codes or passwords, and is rotated at 5 MB keeping 5 old copies
 R(r"""function Write-Log([string]$msg) {
   $line = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + '  ' + $msg
@@ -190,7 +190,7 @@ R("""        foreach ($s in (Get-OpenCompanies -Fresh)) { if ($s.skipped) { cont
 R("[switch]$Sync,", "[switch]$Sync,\n  [switch]$Keep,")
 R("  SyncCompanies   = @()\n", "  SyncCompanies   = @()\n  KeepInStep      = $null\n  CloudUrl        = ''\n  CloudKey        = ''\n  KeepSchedule    = ''\n  KeepDailyAt     = ''\n")
 R("if ($Sync) {\n  $r = Invoke-NightlySync", "if ($Keep) {\n  try { Invoke-KeepWorker } catch { Write-Log ('Keeping copies in step stopped: ' + $_.Exception.Message) }\n  exit 0\n}\nif ($Sync) {\n  $r = Invoke-NightlySync")
-R("""    if (((Get-Date) - $lastCheck).TotalSeconds -ge 60) { $lastCheck = Get-Date; Show-Diagnosis }""", """    if (((Get-Date) - $lastCheck).TotalSeconds -ge (Get-KeepNum 'KeepStartSec' 60)) { $lastCheck = Get-Date; Show-Diagnosis; try { Start-KeepIfNeeded } catch { Write-Log ('Could not start keeping copies in step: ' + $_.Exception.Message) } }""")
+R("""    if (((Get-Date) - $lastCheck).TotalSeconds -ge 60) { $lastCheck = Get-Date; Show-Diagnosis }""", """    if (((Get-Date) - $lastCheck).TotalSeconds -ge (Get-KeepNum 'KeepStartSec' 60)) { $lastCheck = Get-Date; Show-Diagnosis; try { Start-KeepIfNeeded } catch { Write-Log ('Could not start keeping copies in step: ' + $_.Exception.Message) }; try { Send-CloudBeat } catch { } }""")
 R("""      '/ledgerbalance' {""", """      '/paircode' {
         # the FinCom Connector (which holds the key) opens a fresh connect code for FinCom on this computer
         if ($method -eq 'POST') {
