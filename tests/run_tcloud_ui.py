@@ -85,7 +85,7 @@ with sync_playwright() as p:
     ok(got == own and got > 1000, "every March entry, as FinCom reads them: %d of %d" % (got, own))
     ok(len(calls["storage"]) == 31, "each day fetched once: %d" % len(calls["storage"]))
     bar = pg.inner_text(".lk-fresh")
-    ok("From FinCom" in bar and "OFFICE-PC" in bar and "not read yet" in bar, "the page says the books are from the cloud, sent by which computer, and a day not read yet: " + bar[:180].replace("\n", " "))
+    ok("The books" in bar and "cloud" not in bar.lower() and "OFFICE-PC" not in bar and "not read yet" in bar, "the page says how up to date the books are (no talk of the cloud), and a day not read yet: " + bar[:180].replace("\n", " "))
     # ---------- a day changed: only that day is fetched again
     AT["20260310"] = "2026-09-28T11:00:00+00:00"; n0 = len(calls["storage"])
     pg.evaluate("TCloud.st = {}; LK.fr().cat = 0; LK.autoFresh(true)"); wait_for(pg, "!S.lkFr.busy && S.books.meta.cloud.days['20260310'] === '2026-09-28T11:00:00+00:00'", 60)

@@ -6,7 +6,7 @@ def R(a, b):
     assert base.count(a) == 1, ('anchor', a[:60], base.count(a))
     base = base.replace(a, b)
 import re
-base = re.sub(r"\$BridgeVersion = '[0-9.]+'", "$BridgeVersion = '1.13.9'", base, 1)
+base = re.sub(r"\$BridgeVersion = '[0-9.]+'", "$BridgeVersion = '1.14.0'", base, 1)
 # 1.12.7 (security): the log never holds keys, codes or passwords, and is rotated at 5 MB keeping 5 old copies
 R(r"""function Write-Log([string]$msg) {
   $line = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + '  ' + $msg
@@ -185,10 +185,10 @@ if ($IsWindows -or $env:OS -eq 'Windows_NT') {
 }
 Write-Host ''
 Write-Host '  TDS Desk - Tally Bridge' $BridgeVersion -ForegroundColor Green""")
-R("""        $sessions = @($(if ($jobsNow.Count) { Get-OpenCompanies } else { Get-OpenCompanies -Fresh }))""", """        $sessions = @(Get-OpenCompanies)          # 1.13.5: the shared answer, at most 30 s old; Tally is not asked on every check""")
+R("""        $sessions = @($(if ($jobsNow.Count) { Get-OpenCompanies } else { Get-OpenCompanies -Fresh }))""", """        $sessions = @($(if ($qs['fresh']) { Get-OpenCompanies } else { Get-OpenCompaniesCached }))          # 1.14.0: Tally is not asked on a status check, unless a person's action asks (fresh=1)""")
 R("""        foreach ($s in (Get-OpenCompanies -Fresh)) { if ($s.skipped) { continue }; foreach ($c in $s.companies) { $list += [ordered]@{ name = $c.name; port = $s.port; mine = $s.mine; from = $c.from; to = $c.to } } }""", """        foreach ($s in (Get-OpenCompanies)) { if ($s.skipped) { continue }; foreach ($c in $s.companies) { $list += [ordered]@{ name = $c.name; port = $s.port; mine = $s.mine; from = $c.from; to = $c.to } } }""")
 R("[switch]$Sync,", "[switch]$Sync,\n  [switch]$Keep,")
-R("  SyncCompanies   = @()\n", "  SyncCompanies   = @()\n  KeepInStep      = $null\n  CloudUrl        = ''\n  CloudKey        = ''\n")
+R("  SyncCompanies   = @()\n", "  SyncCompanies   = @()\n  KeepInStep      = $null\n  CloudUrl        = ''\n  CloudKey        = ''\n  KeepSchedule    = ''\n  KeepDailyAt     = ''\n")
 R("if ($Sync) {\n  $r = Invoke-NightlySync", "if ($Keep) {\n  try { Invoke-KeepWorker } catch { Write-Log ('Keeping copies in step stopped: ' + $_.Exception.Message) }\n  exit 0\n}\nif ($Sync) {\n  $r = Invoke-NightlySync")
 R("""    if (((Get-Date) - $lastCheck).TotalSeconds -ge 60) { $lastCheck = Get-Date; Show-Diagnosis }""", """    if (((Get-Date) - $lastCheck).TotalSeconds -ge (Get-KeepNum 'KeepStartSec' 60)) { $lastCheck = Get-Date; Show-Diagnosis; try { Start-KeepIfNeeded } catch { Write-Log ('Could not start keeping copies in step: ' + $_.Exception.Message) } }""")
 R("""      '/ledgerbalance' {""", """      '/paircode' {
@@ -204,7 +204,7 @@ R("""      '/ledgerbalance' {""", """      '/paircode' {
       }
       '/shutdown' { if ($method -ne 'POST') { throw 'Use POST.' }; $script:ShutdownAfter = $true; $result = [ordered]@{ ok = $true; stopping = $true } }
       '/cloudlink' { if ($method -eq 'POST') { $result = Set-CloudLink ($body | ConvertFrom-Json) } else { $result = Get-CloudLinkStatus } }
-      '/keep' { if ($method -eq 'POST') { $o = $body | ConvertFrom-Json; $Cfg.KeepInStep = [bool]$o.on; Save-Config; if ($o.on) { Start-KeepIfNeeded } }; $result = Get-KeepStatus ([string]$qs['company']) }
+      '/keep' { if ($method -eq 'POST') { $o = $body | ConvertFrom-Json; if ($null -ne $o.on) { $Cfg.KeepInStep = [bool]$o.on }; if ($o.dailyAt -and [string]$o.dailyAt -match '^([01]?\d|2[0-3]):[0-5]\d$') { $Cfg.KeepDailyAt = [string]$o.dailyAt }; if ($o.schedule -eq 'daily' -or $o.schedule -eq 'continuous') { $Cfg.KeepSchedule = [string]$o.schedule }; Save-Config; if ($o.now) { $Cfg.KeepInStep = $true; Save-Config; Request-KeepNow }; if (Test-KeepOn) { Start-KeepIfNeeded } }; $result = Get-KeepStatus ([string]$qs['company']) }
       '/keepcheck' { $result = Test-KeepMonth ([string]$qs['company']) ([string]$qs['ym']) ([int]('0' + $qs['port'])) }
       '/ledgerbalance' {""")
 # 1.13.0: the FinCom Connector may ask the bridge to stop (to update it, or restart it cleanly)

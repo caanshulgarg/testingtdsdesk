@@ -39,7 +39,7 @@ with sync_playwright() as p:
     t = pg.inner_text("#app")
     ok("01 Apr 2025 to 30 Sept 2025" in t.replace("Sep ", "Sept ") or "Apr 2025 to 30 Sep" in t, "the parts brought in are listed")
     ok(pg.evaluate("S.books.meta.parts.length") == 2, "two parts kept (the repeat replaced the first)")
-    ok("Setting up ZZ TEST" in t and "1. Day book" in t and "2. Opening balances" in t and "4. Tally Bridge" in t and "5. FinCom" in t, "the setup list shows each step and what is missing")
+    ok("Setting up ZZ TEST" in t and "1. Day book" in t and "2. Opening balances" in t and "4. Tally Bridge" in t and "5. FinCom" not in t and "cloud" not in t.split("Setting up")[1].split("Or bring in")[0].lower(), "the setup list shows each step and what is missing, and says nothing of the cloud")
     # opening balances from a trial balance exported from Tally (ledgers shown), as on 31 March 2025
     led = pg.evaluate("Object.keys(S.books.map).slice(0, 3)")
     tb = ("<ENVELOPE><DSPACCNAME><DSPDISPNAME>Capital Account</DSPDISPNAME></DSPACCNAME><DSPACCINFO><DSPCLDRAMT><DSPCLDRAMTA></DSPCLDRAMTA></DSPCLDRAMT><DSPCLCRAMT><DSPCLCRAMTA>500.00</DSPCLCRAMTA></DSPCLCRAMT></DSPACCINFO>"
@@ -57,6 +57,16 @@ with sync_playwright() as p:
     fg = os.path.join(OUT, "tb-groups.xml"); open(fg, "w").write("<ENVELOPE><DSPACCNAME><DSPDISPNAME>Current Assets</DSPDISPNAME></DSPACCNAME><DSPACCINFO><DSPCLDRAMT><DSPCLDRAMTA>-5.00</DSPCLDRAMTA></DSPCLDRAMT></DSPACCINFO></ENVELOPE>")
     pg.set_input_files("#tbIn", fg); pg.wait_for_timeout(1200)
     ok("Alt+F5" in pg.inner_text("#app") or pg.evaluate("Object.keys(S.books.tb.led).length") == 2, "a trial balance of groups only is refused, with how to export it with ledgers")
+    # the bridge's update from Tally: once a day at a time chosen, or Update now; nothing asked of Tally in between
+    posts = pg.evaluate("""async () => { const got = window.__got = [];
+      Object.assign(Bridge, {on: () => true, call: async (path, body) => { got.push([path, body || null]); return {ok: true, on: true, phase: "live", schedule: "daily", dailyAt: "20:00", lastRun: "20260929", running: false, now: !!(body && body.now), mode: "files"}; }});
+      S.booksTab = "import"; S.setupKeep = {}; render(); await new Promise(r => setTimeout(r, 800)); render(); return got; }""")
+    t = pg.inner_text("#app")
+    ok("once a day at" in t and "Nothing is asked of Tally during the day" in t and pg.input_value("input[data-keepat]") == "20:00", "step 4: updates from Tally once a day at 20:00, nothing asked during the day")
+    pg.click('[data-act="keepNow"]'); pg.wait_for_timeout(800)
+    ok("Updating from Tally now" in pg.inner_text("body"), "Update now asks the bridge, and says the books follow")
+    pg.fill("input[data-keepat]", "19:30"); pg.dispatch_event("input[data-keepat]", "change"); pg.wait_for_timeout(800)
+    ok(pg.evaluate("window.__got.some(([p, b]) => b && b.dailyAt === '19:30')") and pg.evaluate("window.__got.some(([p, b]) => b && b.now === true)"), "the daily time can be changed, and Update now was asked of the bridge")
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
     pg.screenshot(path=OUT + "/parts.png", full_page=True)
     br.close()

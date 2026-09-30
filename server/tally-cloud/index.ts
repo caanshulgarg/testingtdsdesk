@@ -51,6 +51,10 @@ async function gunzip(u: Uint8Array, max: number) {
   const all = new Uint8Array(n); let o = 0; for (const p of parts) { all.set(p, o); o += p.length; }
   return { text: new TextDecoder("utf-8").decode(all), size: n };
 }
+async function gzipBytes(u: Uint8Array) {
+  const b = await new Response(new Blob([u]).stream().pipeThrough(new CompressionStream("gzip"))).arrayBuffer();
+  return new Uint8Array(b);
+}
 // the body read a piece at a time, whatever the request says its length is
 async function readBody(req: Request) {
   if (!req.body) return "";
@@ -90,10 +94,22 @@ async function ingestDays(firm: string, book: string, daysIn: unknown) {
   const days = (Array.isArray(daysIn) ? daysIn : []).slice(0, 62);
   const done: string[] = [];
   let unzipped = 0;
+  const bad: { day: string; error: string }[] = [];
   for (const d of days as any[]) {
-    if (!isDay(d?.day) || typeof d?.gz !== "string") continue;
-    const gz = b64bytes(d.gz);
-    const z = await gunzip(gz, Math.min(MAX_DAY, MAX_UNZIP - unzipped));
+    if (!isDay(d?.day) || (typeof d?.gz !== "string" && typeof d?.b64 !== "string")) continue;
+    // a day sent as text (b64, the bridge from 1.14.0) is packed here; one sent packed (gz) is opened to be read
+    let gz: Uint8Array, z: { text: string; size: number };
+    try {
+      if (typeof d.b64 === "string") {
+        const raw = b64bytes(d.b64);
+        if (raw.length > Math.min(MAX_DAY, MAX_UNZIP - unzipped)) throw new Error("A day's day book is larger than FinCom takes in one go.");
+        z = { text: new TextDecoder("utf-8").decode(raw), size: raw.length };
+        gz = await gzipBytes(raw);
+      } else {
+        gz = b64bytes(d.gz);
+        z = await gunzip(gz, Math.min(MAX_DAY, MAX_UNZIP - unzipped));
+      }
+    } catch (e) { bad.push({ day: d.day, error: String((e as Error)?.message || e).slice(0, 200) }); continue; }
     unzipped += z.size;
     const r = parseDay(z.text);
     // every entry of a day is dated that day; anything else means the file is not what it says
@@ -107,7 +123,7 @@ async function ingestDays(firm: string, book: string, daysIn: unknown) {
     if (error) throw new Error(error.message);
     done.push(d.day);
   }
-  return reply(200, { ok: true, done });
+  return reply(200, { ok: true, done, bad });
 }
 async function ingestLedgers(book: string, body: any) {
   if (!isDay(body.from) || !isDay(body.openAsOn)) return reply(400, { ok: false, error: "from and openAsOn are dates (yyyymmdd)" });

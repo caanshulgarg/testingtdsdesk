@@ -120,6 +120,8 @@ function Push-CloudCompany([string]$Company, [string]$Dir, [double]$BudgetSec) {
     }
   }
   $q = @(Get-CloudQueue $Dir)
+  $pf = Join-Path $Dir 'cloud-plain.txt'
+  $plain = @(); if (Test-Path -LiteralPath $pf) { $plain = @([IO.File]::ReadAllLines($pf) | Where-Object { $_ -match '^\d{8}$' }) }
   $maxB = (Get-KeepNum 'CloudBatchKB' 3000) * 1024
   $i = 0
   while ($i -lt $q.Count -and $sw.Elapsed.TotalSeconds -lt $BudgetSec) {
@@ -127,15 +129,26 @@ function Push-CloudCompany([string]$Company, [string]$Dir, [double]$BudgetSec) {
     while ($i -lt $q.Count -and $batch.Count -lt 31) {
       $d = $q[$i]; $f = Join-Path (Join-Path $Dir 'days') ($d + '.xml')
       $t = ''; if (Test-Path -LiteralPath $f) { $t = [IO.File]::ReadAllText($f) }
-      $gz = ConvertTo-GzipBase64 $t
-      if ($batch.Count -and $size + $gz.Length -gt $maxB) { break }
-      $batch += [ordered]@{ day = $d; gz = $gz }; $size += $gz.Length; $i++
+      # 1.14.0: packed here (gzip); a day the cloud could not open that way is sent again as plain text, packed there
+      if ($plain -contains $d) { $one = [ordered]@{ day = $d; b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($t)) }; $len = $one.b64.Length }
+      else { $one = [ordered]@{ day = $d; gz = (ConvertTo-GzipBase64 $t) }; $len = $one.gz.Length }
+      if ($batch.Count -and $size + $len -gt $maxB) { break }
+      $batch += $one; $size += $len; $i++
     }
     $r = Invoke-Cloud @{ kind = 'days'; company = $Company; days = $batch } 180
     if ($r.code -eq 409) { $script:CloudLinks[$Company] = $false; return }
     if ($r.code -ne 200) { throw ('days did not go: ' + $r.error) }
     $done = @($r.json.done | ForEach-Object { [string]$_ })
-    Remove-CloudDays $Dir $done
+    # a day the cloud could not open (Windows' gzip): sent again as plain text; any other refusal is logged and the day
+    # left out, so it does not hold up every day after it
+    $bad = @($r.json.bad | Where-Object { $_ })
+    $again = @($bad | Where-Object { [string]$_.error -match 'gzip|checksum|corrupt|invalid' -and -not ($plain -contains [string]$_.day) } | ForEach-Object { [string]$_.day })
+    if ($again.Count) { $plain = @($plain + $again | Sort-Object -Unique); [IO.File]::WriteAllLines($pf, [string[]]$plain); Write-Log ('Cloud: ' + $Company + ': ' + $again.Count + ' day(s) go again as plain text') }
+    $dropped = @($bad | Where-Object { -not ($again -contains [string]$_.day) })
+    foreach ($b in $dropped) { Write-Log ('Cloud: ' + $Company + ' ' + $b.day + ' was not taken: ' + $b.error) }
+    Remove-CloudDays $Dir (@($done) + @($dropped | ForEach-Object { [string]$_.day }))
+    $done = @($done) + @($dropped | ForEach-Object { [string]$_.day }) + $again
+    if ($again.Count) { $i = $q.Count }
     $script:CloudLast.sentDays += $done.Count
     if ($done.Count -lt $batch.Count) { throw ('only ' + $done.Count + ' of ' + $batch.Count + ' days were taken') }
   }

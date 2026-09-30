@@ -1366,6 +1366,7 @@ document.addEventListener("click", ev => {
     case "booksPick": { const i = document.getElementById("booksIn"); if (i){ i.value = ""; i.click(); } break; }
     case "mastersPick": { const i = document.getElementById("mastersIn"); if (i){ i.value = ""; i.click(); } break; }
     case "setupKeepOn": LK.keepOn(true).then(() => { (S.setupKeep || {})[S.coId] = null; render(); }); break;
+    case "keepNow": LK.keepSet({now: true}, "Updating from Tally now. The books here follow in a few minutes."); break;
     case "setupModeBridge": case "setupModeFiles":
       Bridge.call("/keepmode" + (Bridge.pinQ() ? "?" + Bridge.pinQ().slice(1) : ""), {company: BridgeSeed.company(), mode: act === "setupModeBridge" ? "bridge" : "files"}, 20000)
         .then(j => { (S.setupKeep = S.setupKeep || {})[S.coId] = {at: Date.now(), st: j}; toast(act === "setupModeBridge" ? "The bridge will copy the year from Tally in the evening, or when nobody is at the computer." : "The bridge waits for the day book files."); render(); }, e => toast("The bridge could not do it: " + ((e && e.message) || e) + (/Unknown|No such/i.test(String(e && e.message)) ? " (it needs Tally Bridge 1.13.9)" : "")));
@@ -1378,8 +1379,7 @@ document.addEventListener("click", ev => {
       const from = Audit.ymd(r.from), to = Audit.ymd(r.to);
       if (!from || !to || from > to){ toast("Choose a period: from a date to a later one."); break; }
       if (!bridgeLive(CO())){ toast("Open this company in Tally with the bridge running."); break; }
-      TallyRead.read(from, to, "live").then(n2 => { toast(n2 + " vouchers and Tally's balances read."); render(); },
-        e => { b.busy = ""; const msg = String(e && e.message || e); toast(/Unknown address/.test(msg) ? "This needs Tally Bridge 1.10. Update the bridge on the Tally computer." : "Could not read Tally: " + msg); render(); });
+      LK.keepSet({now: true}, "Updating from Tally now. The books here follow in a few minutes.");
       break;
     }
     case "tallyCopyCheck": {
@@ -1871,6 +1871,7 @@ function setPath(o, path, v){ const k = path.split("."); if (k.length === 2) o[k
 document.addEventListener("change", ev => {
   if (ev.target && ev.target.id && ["booksIn", "mastersIn", "tbIn", "twoBIn", "filedIn"].includes(ev.target.id)){ booksChange(ev.target); return; }
   if (ev.target && ev.target.dataset && (ev.target.dataset.dbfrom !== undefined || ev.target.dataset.dbto !== undefined || ev.target.dataset.tbon !== undefined)){ booksChange(ev.target); return; }
+  if (ev.target && ev.target.dataset && ev.target.dataset.keepat !== undefined && /^\d{2}:\d{2}$/.test(ev.target.value)){ LK.keepSet({dailyAt: ev.target.value}, "Tally will be updated every day at " + ev.target.value + "."); return; }
   if (ev.target && ev.target.dataset && S.books && gstFixChange(ev.target)) return;
   if (ev.target && ev.target.id === "marketIn"){ const f = (ev.target.files || [])[0]; ev.target.value = ""; if (f) importMarketFile(f); return; }
   if (ev.target && ev.target.id === "salaryIn"){

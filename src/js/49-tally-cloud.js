@@ -70,12 +70,12 @@ const TCloud = {
       return {id: guid, date: d, type, no, part: party && party !== led ? party : "", narr: narr || "", dr: dd, cr: c, run};
     });
     const ends = j.to && this.d8(j.to) < to ? " This copy (" + (j.company || "") + ") has entries up to " + FC.when(this.d8(j.to)) + "; a later year kept as another company in Tally is asked separately." : "";
-    return {kind: "ledger", src: "cloud", led, from, to, open, close: run, dr, cr, rows, note: "From the copy in FinCom's cloud (" + (j.company || "") + "), " + this.age(this.book(cid)) + "." + ends};
+    return {kind: "ledger", src: "cloud", led, from, to, open, close: run, dr, cr, rows, note: "From the books (" + (j.company || "") + "), " + this.age(this.book(cid)) + "." + ends};
   },
   age(bk){
     if (!bk) return "";
     const st = bk.state || {}, at = String(st.seen || bk.stateAt || bk.daysAt || "");
-    return at ? "in step with Tally as of " + at.replace("T", " ").slice(0, 16) + (st.computer ? " (sent by " + String(st.computer).slice(0, 60) + ")" : "") : "not sent yet";
+    return at ? "in step with Tally as of " + at.replace("T", " ").slice(0, 16) : "not updated yet";
   },
   // ---------- one day's day book, from this browser's store or the cloud
   async day(bk, d, at){
@@ -223,11 +223,10 @@ const TCloud = {
   bar(cid){
     const bk = this.book(cid); if (!bk) return "";
     const st = bk.state || {}, sk = [].concat(st.skipped || []).filter(Boolean);
-    let t = "<b>From FinCom’s cloud</b>: " + (st.phase === "first" ? "the first copy is still being made (up to " + esc(FC.when(String(st.doneTo || ""))) + ")" : esc(this.age(bk))) + ".";
+    let t = "<b>The books</b>: " + (st.phase === "first" ? "the first copy is still being made (up to " + esc(FC.when(String(st.doneTo || ""))) + ")" : esc(this.age(bk))) + ".";
     if (sk.length) t += ' <span class="bad"><b>' + sk.length + (sk.length === 1 ? " day" : " days") + " not read yet</b> from Tally.</span>";
     if (st.trouble && st.trouble.at) t += ' <span class="note">Tally did not answer at ' + esc(String(st.trouble.at).slice(11, 16)) + "; the bridge carries on by itself.</span>";
     const q = Math.max(0, Math.floor(Number(st.queue) || 0));
-    if (q) t += ' <span class="note">' + q + " day" + (q === 1 ? "" : "s") + " waiting to be sent.</span>";
     return t;
   }
 };

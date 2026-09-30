@@ -31,10 +31,12 @@ const Bridge = {
     if (!r.ok || !j || j.ok === false) throw {code: r.status === 401 ? "bridge_key" : "bridge", message: (j && (j.error || j.message)) || ("The bridge answered with error " + r.status + ".")};
     return j;
   },
-  async refresh(){
+  // fresh: a person's action (opening FinCom, posting, connecting) may ask Tally which companies are open. The minute
+  // checks do not: the bridge answers them without asking Tally (1.14.0)
+  async refresh(fresh = true){
     if (!this.on()){ this.st = {state: "off", sessions: [], open: [], at: Date.now(), error: ""}; return this.st; }
     try {
-      const j = await this.call("/status", null, 15000);
+      const j = await this.call("/status" + (fresh ? "?fresh=1" : ""), null, 15000);
       j.sessions = [].concat(j.sessions || []).map(se => Object.assign({}, se, {companies: [].concat(se.companies || [])}));
       const pin = num(this.cfg().port);
       const usable = (j.sessions || []).filter(s => !s.skipped && s.ok && (!pin || s.port === pin));
@@ -241,7 +243,7 @@ async function bridgeTick(first){
   bridgeBusy = true;
   try {
     const before = Bridge.st.state;
-    await Bridge.refresh();
+    await Bridge.refresh(!!first);
     if (first && Bridge.up() && !Bridge.posting) bridgeLeftover();
     if (first && Bridge.up() && Bridge.st.version && bridgeVer(Bridge.st.version) < bridgeVer("1.12.6") && !lsGet("tdsdesk:bridgenudge1126")){
       lsSet("tdsdesk:bridgenudge1126", "1");

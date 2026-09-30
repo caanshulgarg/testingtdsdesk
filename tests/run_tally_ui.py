@@ -37,10 +37,9 @@ try:
           const c = newCompany({name: "VMS EVENTS PRIVATE LIMITED (2024-25)", gstin: "07AADCV3366N1ZU"}); S.companies[c.id] = c; S.coId = c.id; S.view = "company"; S.tab = "books"; S.booksTab = "import"; render(); }""", key)
         pg.wait_for_timeout(1500); pg.evaluate("Bridge.refresh().then(() => render())"); pg.wait_for_timeout(6000)
         t = pg.inner_text("#app")
-        ok("Straight from Tally" in t and "Read from Tally" in t, "From Tally tab offers reading straight from Tally")
-        pg.fill("input[data-tallyfrom]", "2025-06-01"); pg.dispatch_event("input[data-tallyfrom]", "change")
-        pg.fill("input[data-tallyto]", "2025-07-31"); pg.dispatch_event("input[data-tallyto]", "change")
-        pg.click('button[data-act="tallyRead"]')
+        ok("Straight from Tally" not in t and not pg.query_selector('button[data-act="tallyRead"]'), "build 188: no whole-period read straight from Tally on the From Tally tab (it could hold Tally for minutes)")
+        # the read itself stays for the audit's "last year from Tally": run here directly
+        pg.evaluate("TallyRead.read('20250601', '20250731', 'live').catch(e => { window.__re = String(e && e.message || e); })")
         for i in range(120):
             pg.wait_for_timeout(1000)
             if pg.evaluate("S.books && !S.books.busy && (S.books.vouchers || []).length > 0 && !!S.books.tb"): break
@@ -67,8 +66,7 @@ try:
         cdir = _os.path.join(BRUN, "sync", "VMS EVENTS PRIVATE LIMITED (2024-25)"); _os.makedirs(cdir, exist_ok=True)
         json.dump({"ok": True, "company": "VMS EVENTS PRIVATE LIMITED (2024-25)", "from": "20250601", "to": "20250731", "openAsOn": "20250531", "ledgers": led, "keep": True}, open(_os.path.join(cdir, "balances.json"), "w"))
         nb = len([1 for k, a2, b2 in fake_tally.LOG if k == "TDSDeskBalances"])
-        pg.evaluate("S.booksTab = 'import'; render()"); pg.wait_for_timeout(300)
-        pg.click('button[data-act="tallyRead"]'); pg.wait_for_timeout(1500)
+        pg.evaluate("S.booksTab = 'import'; render(); TallyRead.read('20250601', '20250731', 'live')"); pg.wait_for_timeout(1500)
         for i in range(120):
             pg.wait_for_timeout(1000)
             if pg.evaluate("S.books && !S.books.busy"): break
@@ -78,7 +76,7 @@ try:
         ok('"bs":true' in rt and '"open":null' not in rt, "with Tally's balances: balance-sheet ratios and the forecast's opening cash: " + rt[:120])
         # read the same period again: the same result code
         code1 = pg.evaluate("S.books.audit.last.code")
-        pg.click('button[data-act="tallyRead"]')
+        pg.evaluate("TallyRead.read('20250601', '20250731', 'live')")
         for i in range(120):
             pg.wait_for_timeout(1000)
             if pg.evaluate("S.books && !S.books.busy && S.books.audit.last.code && S.books.audit.history.length >= 2"): break
@@ -98,15 +96,13 @@ try:
             print("  (26Q text could not be built for the check: " + built + ")")
             res = pg.evaluate("Bridge.call('/fvu', {text: 'FH^NS^R', name: '26Q.txt', fvuJar: " + json.dumps(FVU_JAR) + ", outDir: " + json.dumps(_os.path.join(BRUN, "fvuout")) + "}, 60000).then(r => JSON.stringify(r))")
             ok('"accepted":true' in res, "the FVU runs through the app's bridge call: " + res[:100])
-        pg.evaluate("Bridge.st.version = '1.8.1'; S.booksTab = 'import'; render();"); pg.wait_for_timeout(400)
-        ok("need <b>1.10</b>" in pg.content() or "need 1.10" in pg.inner_text("#app"), "an older bridge: the app says 1.10 is needed")
-        pg.evaluate("Bridge.refresh().then(() => render())"); pg.wait_for_timeout(3000)
+        pg.evaluate("S.booksTab = 'import'; render()"); pg.wait_for_timeout(400)
         # nightly copy: make one, then use it
         urllib.request.urlopen(urllib.request.Request("http://127.0.0.1:9100/syncnow", data=json.dumps({"company": fake_tally.COMPANY}).encode(), headers={"X-Bridge-Key": key, "Content-Type": "application/json"}), timeout=900).read()
-        pg.click('button[data-act="tallyCopyCheck"]'); pg.wait_for_timeout(2500)
-        t = pg.inner_text("#app")
-        ok("Copy made" in t and "18 months" in t, "last night's copy found")
-        pg.click('button[data-act="tallyCopyUse"]')
+        act = lambda a: pg.evaluate("(a) => { const b = document.createElement('button'); b.dataset.act = a; b.style.display = 'none'; document.getElementById('app').appendChild(b); b.click(); }", a)
+        act("tallyCopyCheck"); pg.wait_for_timeout(2500)
+        ok(len(pg.evaluate("(S.tallyCopy || {}).months || []")) == 18, "last night's copy found")
+        act("tallyCopyUse")
         for i in range(300):
             pg.wait_for_timeout(1000)
             if pg.evaluate("S.books && !S.books.busy && S.books.meta.file === \"last night's copy from Tally\""): break

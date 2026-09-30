@@ -278,27 +278,9 @@ const TallyRead = {
     return b.vouchers.length;
   }
 };
-function viewTallyRead(b){
-  const co = CO(), live = typeof bridgeLive === "function" && bridgeLive(co);
-  const t = Audit.today(), r = S.tallyRange || {from: Audit.iso(Audit.fyStart(t)), to: Audit.iso(t)};
-  const cp = S.tallyCopy || null;
-  let h = '<section class="dash-card" style="max-width:760px;margin-bottom:12px"><h3>Straight from Tally</h3>';
-  if (!live) return h + '<p class="note">With the Tally Bridge running and this company open in Tally, the day book and Tally\u2019s own balances are read here directly, month by month \u2014 no exporting. Set it up under Settings \u2192 Tally Bridge.</p></section>';
-  const bv = String((Bridge.st && Bridge.st.version) || ""), vnum = v2 => v2.split(".").map(x => String(num(x)).padStart(3, "0")).join(".");
-  if (bv && vnum(bv) < vnum("1.10.0")) return h + '<p class="note">The Tally Bridge on this computer is ' + esc(bv) + '. Reading straight from Tally, the nightly copy and the FVU check need <b>1.10</b>: download it under Settings \u2192 Tally Bridge and run the setup on the Tally computer.</p></section>';
-  h += '<p class="note">Reads every voucher of the period, and each ledger\u2019s balance as Tally works it out, from <b>' + esc(Bridge.openFor(co).name) + "</b>.</p>" +
-    '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><label class="note">From <input type="date" data-tallyfrom value="' + esc(r.from) + '"></label><label class="note">to <input type="date" data-tallyto value="' + esc(r.to) + '"></label>' +
-    '<button class="btn primary" data-act="tallyRead">Read from Tally</button></div>' +
-    '<p class="note" style="margin-top:8px"><b>A big company, or the first time?</b> Export the day book from Tally once (Display More Reports \u2192 Day Book \u2192 F2 for the period \u2192 Ctrl+E \u2192 XML) and choose it below under \u201cChoose the day book XML\u201d. It is the fastest way, and the bridge\u2019s copy starts from the same file, so the bridge never reads the year from Tally; after that only changes are read.</p>' +
-    '<div style="margin-top:10px;border-top:1px solid var(--line);padding-top:10px"><b>Every night</b><p class="note">The bridge on the Tally server copies each open company\u2019s day book and balances at night, so in the morning they are read in seconds and the audit is ready. The companies have to be open in Tally at that hour.</p>' +
-    '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><button class="btn small" data-act="tallyCopyCheck">See last night\u2019s copy</button>' +
-    '<label class="note">at <input type="time" data-tallytime value="' + esc((cp && cp.time) || "02:00") + '" style="width:110px"></label>' +
-    '<button class="btn small" data-act="tallyScheduleOn">Copy every night</button><button class="btn small" data-act="tallyScheduleOff">Stop</button></div>' +
-    (cp ? '<div class="note" style="margin-top:6px">' + (cp.error ? '<span class="bad">' + esc(cp.error) + "</span>" : cp.none ? "No copy for this company yet." :
-      "Copy made " + esc(String(cp.at || "").replace("T", " ").slice(0, 16)) + " for " + fmtDate(tallyDate(cp.from)) + " to " + fmtDate(tallyDate(cp.to)) + ", " + (cp.months || []).length + ' months. <button class="btn small primary" data-act="tallyCopyUse">Use it</button>') +
-      (cp.schedule ? " \u00b7 Nightly: " + (cp.schedule.on ? "on, next " + esc(cp.schedule.next || "") : "off") : "") + "</div>" : "") + "</div></section>";
-  return h;
-}
+// 1.14.0 (build 188): the whole-period read straight from Tally (every voucher and every balance, from the browser) is
+// gone: it could hold Tally for minutes. Tally's changes come in with the bridge's update, once a day or on Update now
+function viewTallyRead(b){ return ""; }
 // Setting a company up, in order: what is done, what is missing, and what the bridge does next. The bridge does not
 // read the year from Tally by itself: it waits for the day book files (or is told to copy the year in the evening)
 function viewSetupList(b){
@@ -320,34 +302,36 @@ function viewSetupList(b){
     cov = d(parts[0].from) + " to " + d(end);
   }
   let h = '<section class="dash-card" style="margin-bottom:12px"><h3>Setting up ' + esc(co.name) + "</h3>";
-  h += row(parts.length ? (gaps.length ? "wait" : true) : false, "1. Day book", parts.length ? "from files, " + cov + (gaps.length ? '; <span class="bad">missing ' + gaps.join(", ") + "</span>" : "") + ". The days after it are read from Tally a day at a time." : (m.from ? "read from Tally (" + d(m.from) + " to " + d(m.to) + ")" : "Choose the dates and the day book XML below, part by part."));
+  h += row(parts.length ? (gaps.length ? "wait" : true) : false, "1. Day book", parts.length ? "from files, " + cov + (gaps.length ? '; <span class="bad">missing ' + gaps.join(", ") + "</span>" : "") + ". The days after it come in with the update from Tally." : (m.from ? "read from Tally (" + d(m.from) + " to " + d(m.to) + ")" : "Choose the dates and the day book XML below, part by part."));
   // 2. opening balances
   const tbOk = b.tb && b.tb.source, firstFrom = parts.length ? parts[0].from : m.from;
-  h += row(tbOk ? true : b.tb ? "wait" : false, "2. Opening balances", tbOk ? Object.keys(b.tb.led || {}).length + " ledgers, as on " + d(b.tb.openAsOn) + (b.tb.cloud ? ", in the cloud" : "") : b.tb ? "read from Tally" : "Choose the trial balance XML as on " + (firstFrom ? d(BridgeSeed.add(firstFrom, -1)) : "the day before the first date") + " below.");
+  h += row(tbOk ? true : b.tb ? "wait" : false, "2. Opening balances", tbOk ? Object.keys(b.tb.led || {}).length + " ledgers, as on " + d(b.tb.openAsOn)  : b.tb ? "read from Tally" : "Choose the trial balance XML as on " + (firstFrom ? d(BridgeSeed.add(firstFrom, -1)) : "the day before the first date") + " below.");
   // 3. ledger masters
-  h += row(b.ledInfoAt ? true : false, "3. Ledger masters", b.ledInfoAt ? Object.keys(b.ledInfo || {}).length + " ledgers (groups, PAN, GSTIN), " + d(String(b.ledInfoAt).slice(0, 10).replace(/-/g, "")) + ", shared with the firm" : "Choose the ledger masters XML below (List of Accounts).");
+  h += row(b.ledInfoAt ? true : false, "3. Ledger masters", b.ledInfoAt ? Object.keys(b.ledInfo || {}).length + " ledgers (groups, PAN, GSTIN), " + d(String(b.ledInfoAt).slice(0, 10).replace(/-/g, "")) + "" : "Choose the ledger masters XML below (List of Accounts).");
   // 4. the bridge
   let bs, bok = false, bact = "";
   if (!Bridge.on()) bs = "Not connected on this computer. Needed only on the computer with Tally: it posts entries and brings in each day\u2019s changes.";
   else if (ks && ks.error) bs = "Did not answer: " + esc(ks.error);
   else if (!k) bs = "asking\u2026";
-  else if (!k.on){ bs = "Keeping in step is off."; bact = '<button class="btn small primary" data-act="setupKeepOn">Switch it on</button>'; }
-  else if (!k.phase && k.mode !== "bridge"){ bs = "Waiting for the day book files (step 1). It does not read the year from Tally by itself."; bact = '<button class="linkbtn" data-act="setupModeBridge">or let the bridge copy the year from Tally, in the evening</button>'; }
-  else if (!k.phase){ bs = "Will copy the year from Tally in the evening (or when nobody is at the computer)."; bact = '<button class="linkbtn" data-act="setupModeFiles">use files instead</button>'; }
-  else if (k.phase === "live"){ bok = true; bs = "In step: reads only changes, a few entries at a time."; }
-  else { bs = "Has the files; " + (k.openPending ? "reads the opening balances and " : "") + "checks them against Tally month by month this evening, then reads only changes." + (k.next && k.next <= today ? " Days from " + d(k.next) + " are read from Tally a day at a time." : ""); }
+  else if (!k.on){ bs = "Updates from Tally are off."; bact = '<button class="btn small primary" data-act="setupKeepOn">Switch them on</button>'; }
+  else if (!k.phase && k.mode !== "bridge"){ bs = "Waiting for the day book files (step 1). Tally is not read for the year."; bact = '<button class="linkbtn" data-act="setupModeBridge">or let the bridge copy the year from Tally, at the daily update</button>'; }
+  else {
+    bok = k.phase === "live";
+    const at = k.dailyAt || "20:00", last = k.lastRun ? d(k.lastRun) : "not yet";
+    bs = (k.running || k.now ? "<b>Updating from Tally now…</b> " : "") + (k.schedule === "continuous" ? "Reads Tally’s changes every minute. " :
+      'Updates from Tally once a day at <input type="time" data-keepat value="' + esc(at) + '" style="width:104px"> (last: ' + last + "). Nothing is asked of Tally during the day. ") +
+      (!k.phase ? "The year is copied from Tally at the update." : k.phase === "live" ? "" : "It checks the files against Tally at the update" + (k.openPending ? ", with the opening balances" : "") + ".");
+    bact = k.running || k.now ? "" : '<button class="btn small" data-act="keepNow">Update now</button>';
+  }
   h += row(bok ? true : Bridge.on() && k && k.on ? "wait" : false, "4. Tally Bridge", bs, bact);
-  // 5. the cloud
-  const inCloud = parts.filter(p => /^in the cloud/.test(p.cloud || "")).length;
-  h += row(TCloudUp.on() ? (parts.length && inCloud === parts.length ? true : "wait") : false, "5. FinCom\u2019s cloud", TCloudUp.on() ? (parts.length ? inCloud + " of " + parts.length + " parts in the cloud: everyone in the firm sees the same books." : "Each file chosen below goes to the cloud too.") : "Sign in to the firm account (Settings) so everyone in the firm sees the same books.");
   return h + "</section>";
 }
 // the parts of the day book brought in from files, and the default date for the trial balance: the day before the first
 function viewBookParts(b){
   const parts = ((b.meta || {}).parts || []).slice().sort((x, y) => String(x.from).localeCompare(String(y.from)));
   if (!parts.length) return "";
-  return '<div class="bk-tablewrap"><table class="bk-table compact"><thead><tr><th>Part brought in</th><th class="n">Entries</th><th>File</th><th class="dt">On</th><th>Bridge\u2019s copy</th><th>Cloud</th></tr></thead><tbody>' +
-    parts.map(p => "<tr><td>" + fmtDate(tallyDate(p.from)) + " to " + fmtDate(tallyDate(p.to)) + '</td><td class="n">' + p.n + "</td><td>" + esc(p.file || "") + '</td><td class="dt">' + fmtDate(String(p.at || "").slice(0, 10)) + "</td><td>" + esc(p.bridge || "\u2014") + "</td><td>" + esc(p.cloud || "\u2014") + "</td></tr>").join("") + "</tbody></table></div>";
+  return '<div class="bk-tablewrap"><table class="bk-table compact"><thead><tr><th>Part brought in</th><th class="n">Entries</th><th>File</th><th class="dt">On</th><th>Bridge\u2019s copy</th></tr></thead><tbody>' +
+    parts.map(p => "<tr><td>" + fmtDate(tallyDate(p.from)) + " to " + fmtDate(tallyDate(p.to)) + '</td><td class="n">' + p.n + "</td><td>" + esc(p.file || "") + '</td><td class="dt">' + fmtDate(String(p.at || "").slice(0, 10)) + "</td><td>" + esc(p.bridge || "\u2014") + "</td></tr>").join("") + "</tbody></table></div>";
 }
 function tbDefaultOn(b){
   const parts = ((b.meta || {}).parts || []).map(p => p.from).sort(), f = parts[0] || (b.meta || {}).from;

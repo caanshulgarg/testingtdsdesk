@@ -46,7 +46,7 @@ march = [(d, p) for d, p in fake_tally.V if d.startswith("202603")]
 try:
     until(lambda: urllib.request.urlopen("http://127.0.0.1:9100/ping", timeout=2).read(), 60)
     key = json.load(open(_os.path.join(BRUN, "tds-bridge.config.json"), encoding="utf-8-sig"))["Key"]
-    ok(json.loads(urllib.request.urlopen("http://127.0.0.1:9100/ping").read())["version"] == "1.13.9", "bridge 1.13.9 running")
+    ok(json.loads(urllib.request.urlopen("http://127.0.0.1:9100/ping").read())["version"] == "1.14.0", "bridge 1.14.0 running")
     # ---------- the worker starts on its own and makes the first copy
     t0 = time.time()
     m = until(lambda: (lambda x: x if x and x.get("phase") == "live" else None)(man()), 300)

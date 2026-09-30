@@ -332,7 +332,7 @@ const LK = {
     } catch (e){ if (e) throw e; return; }
     x.open = {};
     if (cloud){
-      x.busy = "Asking the copy in FinCom\u2019s cloud\u2026"; render();
+      x.busy = "Working it out\u2026"; render();
       try { x.res = x.kind === "tb" ? await TCloud.tb(S.coId, x.asOn) : await TCloud.ledger(S.coId, x.led, x.from, x.to); }
       catch (e){ x.busy = ""; toast("Could not ask the cloud copy: " + ((e && e.message) || e)); render(); return; }
       x.busy = "";
@@ -424,6 +424,15 @@ const LK = {
   async keepOn(on){
     try { const f = this.fr(); f.keep = await Bridge.call("/keep?company=" + encodeURIComponent(this.tname()) + Bridge.pinQ(), {on: !!on}, 30000); toast(on ? "The bridge will keep this company in step whenever it is open in Tally." : "Keeping in step switched off."); f.at = 0; setTimeout(() => this.autoFresh(true), 3000); render(); }
     catch (e){ toast(/Unknown address|No such/i.test(String(e && e.message)) ? "This needs Tally Bridge 1.13.0. Download the new setup and install it." : "The bridge could not do it: " + ((e && e.message) || e)); }
+  },
+  // the bridge's update from Tally: when it runs each day, or now (the bridge reads only changes, then stops)
+  async keepSet(o, say){
+    try {
+      const j = await Bridge.call("/keep?company=" + encodeURIComponent(BridgeSeed.company()) + Bridge.pinQ(), o, 30000);
+      (S.setupKeep = S.setupKeep || {})[S.coId] = {at: Date.now(), st: j}; toast(say);
+      if (o.now){ [60, 180, 420].forEach(s => setTimeout(() => { try { this.autoFresh(true, true); (S.setupKeep || {})[S.coId] = null; render(); } catch (e){} }, s * 1000)); }
+    } catch (e){ toast(/Unknown address|No such/i.test(String(e && e.message)) ? "This needs Tally Bridge 1.14. It updates by itself within a few minutes." : "The bridge could not do it: " + ((e && e.message) || e)); }
+    render();
   },
   async keepCheck(){
     const f = this.fr(), ym = Audit.today().slice(0, 6);
