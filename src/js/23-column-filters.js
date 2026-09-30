@@ -892,6 +892,20 @@ function lmSet(name, key, val){
 function lmConfirmToggle(name){ const m = S.books.map[name]; if (m){ LedMaster.confirm(S.books, [name], !m.ok); S.books.reco = null; saveBooks(); render(); } }
 function lmViewGo(v){ S.lmView = v; S.booksTab = "ledgers"; render(); }
 function lmPost(k){ LedMaster.applyPosting(S.books, CO(), k); render(); }
+// the Audit tab (app/src/screens/books/Audit.jsx): the period, how often it runs by itself, and a finding's status
+// or note (kept with the books)
+function auditRangeSet(key, v){ const dr = Audit.defaultRange(S.books); S.auditRange = Object.assign({from: Audit.iso(dr.from), to: Audit.iso(dr.to)}, S.auditRange, {[key]: v}); }
+function auditFreqSet(v){ const b = S.books; b.auditCfg = Object.assign({}, b.auditCfg, {freq: v}); saveBooks(); render(); }
+function auditFindingSet(id, key, v){
+  const au = S.books.audit = S.books.audit || {st: {}};
+  au.st = au.st || {}; const cur = Object.assign({s: "open"}, au.st[id]);
+  if (key === "s") cur.s = v; else cur.note = v;
+  cur.at = new Date().toISOString(); au.st[id] = cur; saveBooks(); render();
+}
+// related parties: a ledger added (from the list or a guess), its relation, removed
+function relAdd(name){ const b = S.books; if (!(b.auditRel || []).some(x => x.name === name)) b.auditRel = (b.auditRel || []).concat([{name, relation: ""}]); saveBooks(); render(); }
+function relSet(name, relation){ const x = (S.books.auditRel || []).find(z => z.name === name); if (x){ x.relation = relation; saveBooks(); render(); } }
+function relRemove(name){ const b = S.books; b.auditRel = (b.auditRel || []).filter(x => x.name !== name); saveBooks(); render(); }
 // what the user corrects on the Advances and Reversal screens
 function gstFixChange(t){
   const d = t.dataset, b = S.books;
@@ -911,16 +925,6 @@ function gstFixChange(t){
   if (d.itctemail !== undefined || d.itctphone !== undefined){ const st = ITCT.store(S.gstReg || ""), k = d.itctemail !== undefined ? d.itctemail : d.itctphone; st.contact[k] = Object.assign({}, st.contact[k], d.itctemail !== undefined ? {email: t.value.trim()} : {phone: t.value.trim()}); saveBooks(); return true; }
   if (d.itcbasis !== undefined){ b.itcBasis = Object.assign({}, b.itcBasis, {[S.gstReg || ""]: t.value}); saveBooks(); render(); return true; }
   if (d.gstopen !== undefined){ const k = S.gstReg || ""; b.gstOpen = Object.assign({}, b.gstOpen); b.gstOpen[k] = Object.assign({}, b.gstOpen[k], {[d.gstopen]: t.value === "" ? "" : num(t.value)}); saveBooks(); render(); return true; }
-  if (d.relrel !== undefined){ const x = (b.auditRel || []).find(z => z.name === d.relrel); if (x){ x.relation = t.value; saveBooks(); render(); } return true; }
-  if (d.auditfreq !== undefined){ b.auditCfg = Object.assign({}, b.auditCfg, {freq: t.value}); saveBooks(); render(); return true; }
-  if (d.auditfrom !== undefined || d.auditto !== undefined){ const dr = Audit.defaultRange(b); S.auditRange = Object.assign({from: Audit.iso(dr.from), to: Audit.iso(dr.to)}, S.auditRange, d.auditfrom !== undefined ? {from: t.value} : {to: t.value}); return true; }
-  if (d.auditst !== undefined){ S.auditSt = t.value; render(); return true; }
-  if (d.auditstatus || d.auditnote){
-    const id = d.auditstatus || d.auditnote, au = b.audit = b.audit || {st: {}};
-    au.st = au.st || {}; const cur = Object.assign({s: "open"}, au.st[id]);
-    if (d.auditstatus) cur.s = t.value; else cur.note = t.value;
-    cur.at = new Date().toISOString(); au.st[id] = cur; saveBooks(); render(); return true;
-  }
   if (d.revd2 !== undefined){ b.rev = Object.assign({}, b.rev, {d2: !!t.checked}); saveBooks(); render(); return true; }
   return false;
 }

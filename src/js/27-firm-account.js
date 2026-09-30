@@ -1047,11 +1047,6 @@ document.addEventListener("click", ev => {
   if (t.dataset.misopen !== undefined){ S.misOpen = S.misOpen === t.dataset.misopen ? "" : t.dataset.misopen; render(); return; }
   if (t.dataset.misopenhead !== undefined){ S.misOpenHead = S.misOpenHead === t.dataset.misopenhead ? "" : t.dataset.misopenhead; render(); return; }
   if (t.dataset.misled !== undefined){ S.misLed = t.dataset.misled; render(); return; }
-  if (t.dataset.audittab){ S.auditTab = t.dataset.audittab; render(); return; }
-  if (t.dataset.reladd !== undefined){ const b = S.books; b.auditRel = (b.auditRel || []).concat([{name: t.dataset.reladd, relation: ""}]); saveBooks(); render(); return; }
-  if (t.dataset.reldel !== undefined){ const b = S.books; b.auditRel = (b.auditRel || []).filter(x => x.name !== t.dataset.reldel); saveBooks(); render(); return; }
-  if (t.dataset.auditopen){ S.auditOpen = S.auditOpen === t.dataset.auditopen ? "" : t.dataset.auditopen; render(); return; }
-  if (t.dataset.auditarea !== undefined && t.tagName === "BUTTON"){ S.auditArea = t.dataset.auditarea; render(); return; }
   if (t.dataset.b2open){ S.b2Open = S.b2Open === t.dataset.b2open ? "" : t.dataset.b2open; render(); return; }
   if (t.dataset.clearf){ clearFilter(t.dataset.clearf); return; }
   if (t.dataset.printid){ printTable(t.dataset.printid, t.dataset.printtitle); return; }

@@ -100,7 +100,7 @@ cd ../tests && TDSDESK_SITE=../app/dist-test python3 run_react_post.py
 | Sales: list, an invoice, creating one, settings | `src/screens/Sales.jsx` |
 | A client's dashboard; Transactions | `src/screens/Dash.jsx`, `Txn.jsx` |
 | The books (TDS & GST tabs); TDS by year and quarter | `src/screens/Books.jsx` |
-| From Tally; Tally ledgers | `src/screens/books/FromTally.jsx`, `books/Ledgers.jsx` |
+| From Tally; Tally ledgers; Audit | `src/screens/books/FromTally.jsx`, `books/Ledgers.jsx`, `books/Audit.jsx` |
 | A TDS return (26Q, 24Q) and certificates | `src/screens/TdsReturn.jsx` |
 | The GST tab and its parts (other parts are still old pages) | `src/screens/Gst.jsx`, `src/screens/gst/Returns.jsx`, `gst/InputRegister.jsx`, `gst/TwoB.jsx` (2B reconciliation), `gst/Workings.jsx` (amendments, advances, reversal), `gst/Annual.jsx` (GSTR-9, 9C), `gst/ItcFollow.jsx`, `gst/ReturnsFiled.jsx`, `gst/Periodic.jsx` (QRMP, CMP-08, GSTR-4), `gst/Filing.jsx` (filing, GSTR-1A), `gst/CustIms.jsx`, `gst/GstSettings.jsx` (in Client setup) |
 | A filter bar (find box, choices, print, Excel) | `src/parts/FilterBar.jsx` |

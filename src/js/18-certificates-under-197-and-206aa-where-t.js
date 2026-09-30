@@ -337,84 +337,6 @@ function printView(title, html){
   setTimeout(() => { w.focus(); w.print(); }, 400);
 }
 
-function viewBooksAudit(b){
-  const catchUp = TallyRead.catchUp(b, "audit");
-  if (catchUp) return catchUp;
-  if (S.auditTab === "rel") return auditTabs() + viewAuditRel(b);
-  if (S.auditTab === "3cd") return auditTabs() + viewAudit3cd(b);
-  const m = v => INR.format(r2(v || 0)), c = Audit.cfg(b), au = b.audit || {}, run = au.last, dr = Audit.defaultRange(b);
-  const range = S.auditRange || {from: Audit.iso(dr.from), to: Audit.iso(dr.to)};
-  const lyFrom = MIS.shift(Audit.ymd(range.from), -1), lyTo = MIS.shift(Audit.ymd(range.to), -1), lyHere = MIS.covered(lyFrom);
-  let h = auditTabs() + '<section class="dash-card"><h3>Audit of the books</h3>' +
-    '<p class="note">Every check runs on the vouchers read from Tally. Each finding says what is wrong, what it costs, what to do, and the journal entry where one is needed. Mark each one, then download the report.</p>' +
-    '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px">' +
-    '<label class="note">From <input type="date" data-auditfrom value="' + esc(range.from) + '"></label><label class="note">to <input type="date" data-auditto value="' + esc(range.to) + '"></label>' +
-    '<button class="btn small primary" data-act="auditRun">Run now</button>' + AIH.auditButton() +
-    (!lyHere && typeof bridgeLive === "function" && bridgeLive(CO()) ? '<button class="btn small" data-act="auditReadLy" title="' + esc(fmtDate(tallyDate(lyFrom)) + " to " + fmtDate(tallyDate(lyTo))) + '">Read last year from Tally, to compare</button>' : "") +
-    '<span class="note" style="margin-left:12px">Run on its own</span><select data-auditfreq style="width:auto">' +
-    [["daily", "every day"], ["weekly", "every week"], ["monthly", "every month"], ["off", "only when I run it"]].map(([v, l]) => '<option value="' + v + '"' + (c.freq === v ? " selected" : "") + ">" + l + "</option>").join("") + "</select></div>" +
-    '<p class="note" style="margin-top:6px">On its own, it runs the first time this client is opened on a new ' + ({daily: "day", weekly: "week", monthly: "month"}[c.freq] || "day") + ", and each time the day book is read. To run overnight with nobody here, the bridge on the Tally server will have to send the day book on a timer.</p>" +
-    (run ? '<div class="row" style="gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn small primary" data-act="auditReport">Download the report (PDF)</button><button class="btn small" data-act="auditExcel">Excel with the annexures</button>' +
-      '<button class="btn small" data-act="auditJe">Tally file of entries to pass (' + Audit.jesToPass(run).length + ")</button>" +
-      '<button class="btn small" data-act="auditFinal">Finalise this report</button></div>' : "") +
-    (run && Audit.finalFor(run.from, run.to) ? '<div class="bk-alert" style="margin-top:10px"><b>The report for ' + fmtDate(tallyDate(run.from)) + " to " + fmtDate(tallyDate(run.to)) + " is final</b>, locked on " + fmtDate(Audit.finalFor(run.from, run.to).at.slice(0, 10)) +
-      " (result code " + esc(Audit.finalFor(run.from, run.to).run.code || "") + '). Later runs track what gets put right, but the final report stays as it was. <button class="linkbtn" data-act="auditFinalPdf">Download the final report</button> \u00b7 <button class="linkbtn" data-act="auditUnlock">Unlock</button></div>' : "") + "</section>";
-  if (!run) return h + '<div class="bk-none" style="margin-top:12px">Not run yet. Choose the period and press Run now.</div>';
-  const f0 = run.findings, sev = s => f0.filter(f => f.sev === s);
-  h += '<p class="note" style="margin:10px 0">Last run ' + esc(run.how) + " on " + fmtDate(run.at.slice(0, 10)) + " at " + run.at.slice(11, 16) + " for " + fmtDate(tallyDate(run.from)) + " to " + fmtDate(tallyDate(run.to)) + ", " + run.vouchers + " vouchers." +
-    " Result code <b>" + esc(run.code || "") + "</b>: the same books always give the same code." + (run.balances ? " Balances from " + esc(run.balances) + "." : "") +
-    (run.notes.length ? " " + esc(run.notes.join(" ")) : "") + (run.errors.length ? ' <span class="bad">Some checks could not run: ' + esc(run.errors.join("; ")) + "</span>" : "") + "</p>";
-  const open = f0.filter(f => Audit.status(f.id).s === "open").length;
-  h += '<div class="dash-tiles">' +
-    '<div class="dtile' + (sev("high").length ? " warn" : "") + '"><span>Serious</span><b>' + sev("high").length + "</b><small>" + m(sev("high").reduce((s, f) => s + f.amount, 0)) + " involved</small></div>" +
-    '<div class="dtile"><span>To look at</span><b>' + sev("medium").length + "</b><small>" + m(sev("medium").reduce((s, f) => s + f.amount, 0)) + "</small></div>" +
-    '<div class="dtile"><span>Minor</span><b>' + sev("low").length + "</b><small>for good books</small></div>" +
-    '<div class="dtile"><span>Still open</span><b>' + open + "</b><small>of " + f0.length + " findings" + (f0.filter(f => f.isNew).length ? ", " + f0.filter(f => f.isNew).length + " new since the last run" : "") + "</small></div>" +
-    '<div class="dtile"><span>Put right</span><b>' + (run.solved || []).reduce((s2, x) => s2 + x.n, 0) + "</b><small>items found earlier and gone when checked again</small></div></div>";
-  const area = S.auditArea || "", fs = S.auditSt || "";
-  h += '<nav class="sbar" aria-label="Areas"><button data-auditarea="" aria-selected="' + (!area) + '">All <span class="sbar-n">' + f0.length + "</span></button>" +
-    Audit.AREAS.map(([a, l]) => { const n = f0.filter(f => f.area === a).length; return n ? '<button data-auditarea="' + a + '" aria-selected="' + (area === a) + '">' + l + ' <span class="sbar-n">' + n + "</span></button>" : ""; }).join("") + "</nav>";
-  h += '<div class="revfilter"><select data-auditst style="width:auto"><option value="">Every status</option>' + Audit.STATUS.map(([v, l]) => '<option value="' + v + '"' + (fs === v ? " selected" : "") + ">" + l + "</option>").join("") + "</select></div>";
-  const list = f0.filter(f => (!area || f.area === area) && (!fs || Audit.status(f.id).s === fs));
-  const col = {high: "#B42318", medium: "#B9541B", low: "#5A6B63"};
-  h += list.map(f => {
-    const st = Audit.status(f.id), isOpen = S.auditOpen === f.id;
-    let x = '<section class="dash-card" style="margin-top:10px;border-left:4px solid ' + col[f.sev] + '">' +
-      '<div class="row" style="justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap"><div style="flex:1;min-width:260px">' +
-      '<div class="nr" style="color:' + col[f.sev] + ';font-weight:700">' + {high: "SERIOUS", medium: "TO LOOK AT", low: "MINOR"}[f.sev] + " \u00b7 " + esc((Audit.AREAS.find(a => a[0] === f.area) || [])[1]) + (f.clause ? " \u00b7 " + esc(f.clause) : "") +
-      (f.isNew ? ' <span class="tag warn">new</span>' : f.more > 0 ? ' <span class="tag warn">+' + f.more + "</span>" : "") + "</div>" +
-      '<button class="linkbtn" data-auditopen="' + esc(f.id) + '" style="font-size:16px;font-weight:600;text-align:left">' + (isOpen ? "\u25be " : "\u25b8 ") + esc(f.title) + "</button>" +
-      '<div class="note">' + esc(f.problem) + (f.amount ? " \u00b7 \u20b9" + m(f.amount) : "") + (Audit.solvedOf(f.id).n ? ' \u00b7 <span style="color:#1F7A4D">' + Audit.solvedOf(f.id).n + " put right</span>" : "") + "</div></div>" +
-      '<div><select data-auditstatus="' + esc(f.id) + '" style="width:auto">' + Audit.STATUS.map(([v, l]) => '<option value="' + v + '"' + (st.s === v ? " selected" : "") + ">" + l + "</option>").join("") + "</select>" +
-      (f.je ? '<div class="nr">' + f.je.length + " suggested entr" + (f.je.length === 1 ? "y" : "ies") + "</div>" : "") + "</div></div>";
-    if (isOpen){
-      x += '<div style="margin-top:8px"><p><b>Effect.</b> ' + esc(f.impact) + "</p><p><b>What to do.</b> " + esc(f.suggestion) + "</p>" +
-        '<label class="note" style="display:block;margin:6px 0">Note for the report <input type="text" data-auditnote="' + esc(f.id) + '" data-fk="an-' + esc(f.id) + '" value="' + esc(st.note || "") + '" style="width:100%" placeholder="Management response, or why it is not an issue"></label>';
-      if (f.je && f.je.length){
-        const miss = Audit.missingLedgers(f.je);
-        x += "<p><b>Suggested entries</b>" + (miss.length ? ' <span class="note">\u2014 to create in Tally first: ' + esc(miss.join(", ")) + "</span>" : "") + '</p><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th class="dt">Date</th><th>Ledger</th><th class="n">Debit</th><th class="n">Credit</th></tr></thead><tbody>' +
-          f.je.slice(0, 30).map(j => j.lines.map((l, k) => "<tr><td>" + (k ? "" : fmtDate(tallyDate(j.date))) + "</td><td>" + (l.cr ? "\u2003To " : "") + esc(l.l) + '</td><td class="n">' + (l.dr ? m(l.dr) : "") + '</td><td class="n">' + (l.cr ? m(l.cr) : "") + "</td></tr>").join("") +
-            '<tr><td></td><td colspan="3" class="note">(' + esc(j.narr) + ")</td></tr>").join("") + "</tbody></table></div>" +
-          (f.je.length > 30 ? '<p class="note">' + (f.je.length - 30) + " more in the Excel.</p>" : "") + '<p class="note">Mark it \u201cEntry to pass\u201d and these go into the Tally file.</p>';
-      }
-      if (f.rows && f.rows.length) x += "<p><b>The entries behind it</b></p>" + '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th class="dt">Date</th><th>Voucher</th><th>Party or ledger</th><th class="n">Amount</th><th>Detail</th></tr></thead><tbody>' +
-        f.rows.slice(0, 100).map(r => "<tr><td>" + (r.date ? fmtDate(tallyDate(r.date)) : "") + "</td><td>" + esc(r.no || "") + (r.type ? '<div class="nr">' + esc(r.type) + "</div>" : "") + "</td><td>" + esc(r.party || "") + '</td><td class="n">' + (r.amount ? m(r.amount) : "") + "</td><td>" + esc(r.note || "") + "</td></tr>").join("") +
-        "</tbody></table></div>" + (f.rows.length > 100 ? '<p class="note">The first 100 of ' + f.rows.length + "; all are in the Excel.</p>" : "");
-      const sv = Audit.solvedOf(f.id);
-      if (sv.n) x += '<p><b style="color:#1F7A4D">Put right</b> <span class="note">found earlier, gone when checked again</span></p><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th class="dt">Date</th><th>Voucher</th><th>Party or ledger</th><th class="n">Amount</th><th>Put right by</th></tr></thead><tbody>' +
-        sv.items.slice(-100).map(it => { const r = it.row || {}; return '<tr style="color:#5A6B63"><td>' + (r.date ? fmtDate(tallyDate(r.date)) : "") + "</td><td><s>" + esc(r.no || "") + "</s></td><td>" + esc(r.party || "") + '</td><td class="n">' + (r.amount ? m(r.amount) : "") + "</td><td>" + fmtDate(String(it.solved).slice(0, 10)) + "</td></tr>"; }).join("") + "</tbody></table></div>";
-      x += "</div>";
-    }
-    return x + "</section>";
-  }).join("") + (list.length ? "" : '<div class="bk-none" style="margin-top:10px">Nothing here.</div>');
-  // findings where every item has been put right
-  const gone = (run.solved || []).filter(x => x.n && !f0.some(f => f.id === x.id) && (!area || x.area === area));
-  if (gone.length) h += '<section class="dash-card" style="margin-top:12px;border-left:4px solid #1F7A4D"><h3 style="color:#1F7A4D">Solved</h3><p class="note">Every item of these was put right in the books.</p><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Observation</th><th class="n">Items</th><th class="n">Amount</th><th>Last put right</th></tr></thead><tbody>' +
-    gone.map(x => "<tr><td>" + esc(x.title) + '</td><td class="n">' + x.n + '</td><td class="n">' + m(x.amount) + "</td><td>" + fmtDate(String(x.items[x.items.length - 1].solved).slice(0, 10)) + "</td></tr>").join("") + "</tbody></table></div></section>";
-  if ((au.history || []).length > 1) h += '<section class="dash-card" style="margin-top:12px"><h3>Earlier runs</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Run on</th><th>How</th><th>Period</th><th class="n">Findings</th><th class="n">Serious</th><th class="n">Amount involved</th></tr></thead><tbody>' +
-    au.history.slice(0, 12).map(x => "<tr><td>" + fmtDate(x.at.slice(0, 10)) + " " + x.at.slice(11, 16) + "</td><td>" + esc(x.how) + "</td><td>" + fmtDate(tallyDate(x.from)) + " to " + fmtDate(tallyDate(x.to)) + '</td><td class="n">' + x.n + '</td><td class="n">' + x.high + '</td><td class="n">' + m(x.amount) + "</td></tr>").join("") + "</tbody></table></div></section>";
-  return h;
-}
 
 function misRangeQuick(k, b){
   const t = Audit.today(), last = String((b.meta || {}).to || t), end = last < t ? last : t;
@@ -683,31 +605,6 @@ function misP2Html(tab, b, r){
   return h;
 }
 
-function auditTabs(){
-  const t = S.auditTab || "find";
-  return '<nav class="sbar" aria-label="Audit" style="margin-bottom:10px">' + [["find", "Findings"], ["rel", "Related parties"], ["3cd", "Form 3CD draft"]]
-    .map(([id, l]) => '<button data-audittab="' + id + '" aria-selected="' + (t === id) + '">' + l + "</button>").join("") + "</nav>";
-}
-function viewAuditRel(b){
-  const rel = b.auditRel || [], guess = Audit.relatedGuess(), pans = b.pans || {};
-  const REL = ["Director", "Relative of a director", "Partner or proprietor", "Shareholder with 10% or more", "Company or firm they control", "Key manager", "Other"];
-  let h = '<section class="dash-card"><h3>Related parties</h3><p class="note">Directors, partners, their relatives, and the concerns they control. Transactions with them feed clause 23 (section 40A(2)(b)), clause 36A (deemed dividend), and the related-party note. The audit only uses the people listed here.</p>' +
-    '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0"><input type="search" id="relq" list="relList" data-fk="relq" placeholder="Type a ledger name" style="width:300px"><datalist id="relList">' +
-    Object.keys(Object.assign({}, b.ledInfo || {}, b.map || {})).sort().slice(0, 3000).map(n => '<option value="' + esc(n) + '">').join("") + '</datalist><button class="btn small" data-act="relAddTyped">Add</button></div>' +
-    (rel.length ? '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Ledger in Tally</th><th>PAN</th><th>Relation</th><th class="ac"></th></tr></thead><tbody>' +
-      rel.map(x => "<tr><td>" + esc(x.name) + "</td><td>" + esc(pans[x.name] || "\u2014") + '</td><td><select data-relrel="' + esc(x.name) + '" style="width:auto"><option value="">choose</option>' + REL.map(r => "<option" + (x.relation === r ? " selected" : "") + ">" + r + "</option>").join("") + "</select></td>" +
-        '<td class="ac"><button class="linkbtn" data-reldel="' + esc(x.name) + '">remove</button></td></tr>').join("") + "</tbody></table></div>" : '<p class="note">No one listed yet.</p>') + "</section>";
-  if (guess.length) h += '<section class="dash-card" style="margin-top:12px"><h3>Possibly related</h3><p class="note">Found in the ledgers by where they sit or what they are called. Add the ones that are related.</p><div class="bk-tablewrap"><table class="bk-table"><tbody>' +
-    guess.map(g => "<tr><td>" + esc(g.name) + '<div class="nr">' + esc(g.why) + "</div></td><td>" + esc(pans[g.name] || "") + '</td><td class="ac"><button class="btn small" data-reladd="' + esc(g.name) + '">Add</button></td></tr>').join("") + "</tbody></table></div></section>";
-  return h;
-}
-function viewAudit3cd(b){
-  const run = (b.audit || {}).last;
-  if (!run) return '<div class="bk-none">Run the audit first (Findings \u2192 Run now); the draft is filled from it.</div>';
-  const d = Audit.form3cd(run);
-  return '<section class="dash-card"><div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:8px"><button class="btn small primary" data-act="audit3cdPdf">Download the draft (PDF)</button><button class="btn small" data-act="audit3cdExcel">Excel</button></div>' +
-    '<div class="audit3cd">' + Audit.form3cdHtml(d).replace(/<table>/g, '<div class="bk-tablewrap"><table class="bk-table">').replace(/<\/table>/g, "</table></div>") + "</div></section>";
-}
 function gst9PackHtml(which){
   const b = S.books, reg = S.gstReg || ((GSTR.gstins(b) || [])[0] || "").slice(0, 2), fy = GST9.fyOf(S.gstYm || GSTR.months().slice(-1)[0]), co = CO();
   const head = (t) => '<div style="border-bottom:2px solid #15201B;padding-bottom:8px;margin-bottom:10px"><div style="font-size:12px;color:#5A6B63">' + t + ' \u2014 WORKING FROM THE BOOKS</div><h1 style="font-size:20px;margin:4px 0">' + esc(co.name) + "</h1><div>" + esc((GSTR.gstins(b) || []).find(g => g.slice(0, 2) === reg) || reg) + " \u00b7 " + GST9.label(fy) + "</div></div>";
@@ -755,7 +652,7 @@ function setupKeepFor(co){
 }
 // the time of the bridge's daily update from Tally (build 188: Tally is read once a day, or on Update now)
 function keepAtSet(v){ if (/^\d{2}:\d{2}$/.test(v)) LK.keepSet({dailyAt: v}, "Tally will be updated every day at " + v + "."); }
-// the Tally ledgers tab: React (app/src/screens/books/Ledgers.jsx)
+// the Tally ledgers and Audit tabs: React (app/src/screens/books/Ledgers.jsx, Audit.jsx)
 function gstParts(b){
   const regs = GSTR.gstins(b) || [], noBooks = !(b.vouchers || []).length;
   const ftype = typeof GSTSet === "object" && S.gstYm ? GSTSet.typeOf(S.gstYm, S.gstReg || "") : "monthly";

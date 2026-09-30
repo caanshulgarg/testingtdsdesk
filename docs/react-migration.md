@@ -119,8 +119,9 @@ Status: **done** (in React, test passing) · **next** · blank = not started. Ab
 | **Books** | From Tally (`viewBooksImport`, `viewSetupList`, `viewBookParts`) → `books/FromTally.jsx`; the same text as main on its pages (`tests/pages_books.py`) | **done** |
 | | Tally ledgers (`viewBooksLedgers`, `viewLedPosting`, `ledChangedBanner`) → `books/Ledgers.jsx` (lmSet, lmConfirmToggle, lmViewGo, lmPost); every list the same as main; `run_react_booktabs.py` | **done** |
 | | 2B from the portal `viewGstApiCard` (39) | **done** |
+| | Audit (`viewBooksAudit`, `auditTabs`, `viewAuditRel`, `viewAudit3cd`) → `books/Audit.jsx` (auditRangeSet, auditFreqSet, auditFindingSet, relAdd, relSet, relRemove); the default export is `Audit_`, imported as `AuditTab`, so the global `Audit` is not shadowed; the 3CD draft stays an old piece; 17 book pages match main; `run_react_booktabs.py` runs it, opens a finding, adds a related party | **done** |
 | **Books** | `viewBooks`, `viewBooksImport`, `viewBooksLedgers`, `viewLedPosting`, `viewTallyRead`, `viewSetupList` (18) · accounts (30) | |
-| **Audit and MIS** | `viewBooksAudit`, `viewAuditRel`, `viewAudit3cd`, `viewBooksMis`, `misPackHtml` (18) | |
+| **MIS** | `viewBooksMis`, `misPackHtml` (18) | |
 | **Reports, Look up, Letters** | `viewBooksReports` (45) · `viewBooksLookup` (44) · `viewBooksLetters` (46) | |
 | **Tally** | `viewBridgeSettings`, `viewBridgeDiagnosis`, `viewReadTest` (24) · `viewPostLog`, `viewReading` (18) | |
 | **Settings** | Settings for the firm and Client setup: one layout, sections listed on the left (`screens/Settings.jsx`); in React: firm details, company, Tally, TDS, reverse charge and blocked credit, remove client | **done** |

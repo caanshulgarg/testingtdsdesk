@@ -11,6 +11,7 @@ import { Return26, Return24, CertsPage } from "./TdsReturn.jsx";
 import Gst from "./Gst.jsx";
 import FromTally from "./books/FromTally.jsx";
 import Ledgers from "./books/Ledgers.jsx";
+import AuditTab from "./books/Audit.jsx";
 import HelpButton from "../parts/HelpButton.jsx";
 
 const money = (v) => INR.format(r2(v || 0));
@@ -153,7 +154,8 @@ export default function Books() {
   else if (tab === "tds") body = <Tds b={b} />;
   else if (tab === "gst" || !["ledgers", "audit", "mis", "fs"].includes(tab)) body = <Gst />;
   else if (tab === "ledgers") body = <Ledgers b={b} />;
-  else body = <Legacy html={tab === "audit" ? viewBooksAudit(b) : tab === "mis" ? viewBooksMis(b) : viewBooksAccounts(b)} />;
+  else if (tab === "audit") body = <AuditTab b={b} />;
+  else body = <Legacy html={tab === "mis" ? viewBooksMis(b) : viewBooksAccounts(b)} />;
   return <>
     <nav className="sbar" aria-label="Books">{tabs.map(([id, label, c]) =>
       <button key={id} aria-selected={tab === id} onClick={() => booksTabGo(id)}>{label}{c != null && <> <span className="sbar-n">{c}</span></>}</button>)}</nav>
