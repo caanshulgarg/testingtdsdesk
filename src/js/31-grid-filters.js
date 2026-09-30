@@ -52,7 +52,8 @@ const GridF = {
     this.cutSeen = this.cut; this.cut = false;
     const tables = Array.from(document.querySelectorAll("#app table.bk-table"));
     tables.forEach((t, ti) => {
-      if (t.querySelector(".colf") || t.classList.contains("gf-off")) return;
+      // tables drawn by React are left alone (React owns their cells); old pieces shown inside React screens are not
+    if (t.querySelector(".colf") || t.classList.contains("gf-off") || (typeof reactOwned === "function" && reactOwned(t))) return;
       const hs = this.heads(t); if (!hs.length) return;
       const rows = this.rows(t);
       t.dataset.gfkey = this.key(t, ti);

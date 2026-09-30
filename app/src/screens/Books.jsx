@@ -4,9 +4,10 @@
 //
 // State: S.books (the open client's books: vouchers, ledgers, salary, the work saved with them), S.booksTab (the
 // tab); for TDS, S.tdsView (years → year → return or certs or notices), S.tdsFy, S.tdsQ, S.tdsForm (26Q or 24Q).
-// Still old pieces, shown through <Legacy>: each tab's own pages except TDS's years and year, and a return's tabs.
+// A return's pages are TdsReturn.jsx. Still old pieces, shown through <Legacy>: every other tab's own pages.
 import Legacy from "../parts/Legacy.jsx";
 import { BusyCard } from "../parts/Reading.jsx";
+import { Return26, Return24, CertsPage } from "./TdsReturn.jsx";
 
 const money = (v) => INR.format(r2(v || 0));
 const Q_MONTHS = { Q1: "Apr to Jun", Q2: "Jul to Sep", Q3: "Oct to Dec", Q4: "Jan to Mar" };
@@ -21,6 +22,8 @@ function Crumbs() {
       {v === "certs" && <><span className="note">›</span><b>Certificates and rate questions</b></>}
       {v === "notices" && <><span className="note">›</span><b>Notices</b></>}
       {v === "return" && <><span className="note">›</span><b>{S.tdsQ} · {S.tdsForm}</b></>}
+      {/* the help for this tab (src/js/34), answered by the old click handler */}
+      {typeof Help === "object" && Help.T[Help.key()] && <span data-legacy="" style={{ display: "contents" }}><button className="help-btn" data-help="open" title="How this tab works">? How this tab works</button></span>}
       {/* the guide to this page (Help, src/js/34 — its click handler answers data-help) */}
       {Help.T[Help.key()] && <button className="help-btn" data-help="open" title="How this tab works">? How this tab works</button>}
     </div>
@@ -110,8 +113,8 @@ function Tds({ b }) {
     <Crumbs />
     {v === "notices" ? <Legacy html={AIH.viewNotices(b, "tds")} />
       : v === "years" ? <Years b={b} rows={rows} fys={fys} />
-      : v === "certs" ? <Legacy html={viewTdsCerts(b)} />
-      : v === "return" ? <Legacy html={S.tdsForm === "24Q" ? viewTdsReturn24(b) : viewTdsReturn26(b, rows)} />
+      : v === "certs" ? <CertsPage />
+      : v === "return" ? (S.tdsForm === "24Q" ? <Return24 b={b} /> : <Return26 b={b} allRows={rows} />)
       : <Year b={b} rows={rows} />}
   </>;
 }

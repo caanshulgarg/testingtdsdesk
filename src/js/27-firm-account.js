@@ -831,6 +831,45 @@ function txnOpenDoc(key, path, name){
     else toast("That document could not be found on this computer or in the firm account.");
   });
 }
+// a TDS return's pages (app/src/screens/TdsReturn.jsx): its tabs, filters, sorting, the rows opened, challans
+function tdsTabGo(id){ S.tdsTab = id; render(); }
+function tdsFilter(tab, key, val, typed){ S.tdsFl = Object.assign({}, S.tdsFl, {[tab]: Object.assign({}, (S.tdsFl || {})[tab], {[key]: val})}); if (typed){ FinComReact.redraw(); later("tdsf", render, 250); } else render(); }
+function tdsFilterClear(tab){ S.tdsFl = Object.assign({}, S.tdsFl, {[tab]: {}}); render(); }
+function tdsSortBy(tab, k){ const cur = (S.tdsSort || {})[tab] || {}; S.tdsSort = Object.assign({}, S.tdsSort, {[tab]: {k, d: cur.k === k ? -(cur.d || 1) : 1}}); render(); }
+// one row opened under a table (a challan's deductions, a deductee's, an employee's months); a second click closes it
+function tdsToggle(which, key){ S[which] = S[which] === key ? "" : key; render(); }
+function tdsAlloc(rowId, chId){ S.books.alloc = S.books.alloc || {}; if (chId) S.books.alloc[rowId] = chId; else delete S.books.alloc[rowId]; saveBooks(); render(); }
+function challanAdd(c){
+  const bsr = String(c.bsr || "").trim(), ser = String(c.serial || "").trim(), dt = String(c.date || "").replace(/-/g, ""), tax = num(c.tax);
+  if (!bsr || !ser || !dt || !tax){ toast("Fill the BSR code, serial number, date and tax."); return false; }
+  S.books.challans = (S.books.challans || []).concat([{id: uid("ch"), bsr, serial: ser, date: dt, tax, interest: num(c.interest)}]);
+  saveBooks(); toast("Challan added."); render(); return true;
+}
+function challanDelete(id){
+  S.books.challans = (S.books.challans || []).filter(c => c.id !== id);
+  Object.keys(S.books.alloc || {}).forEach(k => { if (S.books.alloc[k] === id) delete S.books.alloc[k]; });
+  saveBooks(); render();
+}
+// a TDS payment voucher in Tally becomes a challan, once its BSR code and serial are given
+function challanFromBooks(vid, bsr, ser){
+  const p = TDS.paymentsFromBooks().find(x => x.vid === vid); if (!p) return false;
+  if (!String(bsr || "").trim() || !String(ser || "").trim()){ toast("Fill the BSR code and the challan serial number first."); return false; }
+  S.books.challans = (S.books.challans || []).concat([{id: uid("ch"), bsr: bsr.trim(), serial: ser.trim(), date: p.date, tax: p.tax, interest: 0, fromVoucher: p.vid}]);
+  saveBooks(); toast("Challan added from the books."); render(); return true;
+}
+function certAdd(c){
+  const party = String(c.party || "").trim();
+  if (!party){ toast("Name the deductee as it appears in Tally."); return false; }
+  S.books.certs = (S.books.certs || []).concat([{id: uid("ct"), party, pan: String(c.pan || "").toUpperCase().trim(), section: String(c.section || "").toUpperCase().trim(),
+    certNo: String(c.certNo || "").trim(), rate: num(c.rate), from: c.from || "", to: c.to || ""}]);
+  saveBooks(); toast("Certificate added."); render(); return true;
+}
+function certDelete(id){ S.books.certs = (S.books.certs || []).filter(c => c.id !== id); saveBooks(); render(); }
+// a table printed, or saved as PDF, with the client's name above it
+function printTable(id, title){
+  const co = CO(), el = document.getElementById(id);
+  printView(title || co.name, "<h1>" + esc(co.name) + '</h1><p class="note">' + esc(title || "") + " · printed " + fmtDate(new Date().toISOString().slice(0, 10)) + "</p>" + (el ? el.outerHTML : ""));
+}
 // TDS & GST from the books (app/src/screens/Books.jsx): a tab of the books; in TDS, a year, a quarter's return
 function booksTabGo(tab, gstPart){ S.booksTab = tab; if (gstPart) S.gstPart = gstPart; render(); }
 function tdsNav(view){ S.tdsView = view; render(); window.scrollTo(0, 0); }
@@ -972,12 +1011,9 @@ document.addEventListener("click", ev => {
   if (t.dataset.tdspart){ S.tdsPart = t.dataset.tdspart; render(); return; }
   if (t.dataset.tdsnav){ tdsNav(t.dataset.tdsnav); return; }
   if (t.dataset.tdsgo){ tdsGo(...t.dataset.tdsgo.split("|")); return; }
-  if (t.dataset.tdstab){ S.tdsTab = t.dataset.tdstab; render(); return; }
-  if (t.dataset.tdsfclear){ S.tdsFl = Object.assign({}, S.tdsFl, {[t.dataset.tdsfclear]: {}}); render(); return; }
-  if (t.dataset.tdssort){
-    const [tab, k] = t.dataset.tdssort.split("|"), cur = (S.tdsSort || {})[tab] || {};
-    S.tdsSort = Object.assign({}, S.tdsSort, {[tab]: {k, d: cur.k === k ? -(cur.d || 1) : 1}}); render(); return;
-  }
+  if (t.dataset.tdstab){ tdsTabGo(t.dataset.tdstab); return; }
+  if (t.dataset.tdsfclear){ tdsFilterClear(t.dataset.tdsfclear); return; }
+  if (t.dataset.tdssort){ tdsSortBy(...t.dataset.tdssort.split("|")); return; }
   if (t.dataset.misweek !== undefined){ const w = num(t.dataset.misweek); S.misWeek = S.misWeek === w ? -1 : w; render(); return; }
   if (t.dataset.miscf !== undefined){ S.misCf = S.misCf === t.dataset.miscf ? "" : t.dataset.miscf; render(); return; }
   if (t.dataset.miscc !== undefined){ S.misCc = S.misCc === t.dataset.miscc ? "" : t.dataset.miscc; render(); return; }
@@ -1017,33 +1053,13 @@ document.addEventListener("click", ev => {
     }
     return;
   }
-  if (t.dataset.chopen){ S.chOpen = S.chOpen === t.dataset.chopen ? "" : t.dataset.chopen; render(); return; }
-  if (t.dataset.q24open){ S.q24Open = S.q24Open === t.dataset.q24open ? "" : t.dataset.q24open; render(); return; }
   if (t.dataset.r1open){ S.r1Open = S.r1Open === t.dataset.r1open ? "" : t.dataset.r1open; render(); return; }
   if (t.dataset.b2open){ S.b2Open = S.b2Open === t.dataset.b2open ? "" : t.dataset.b2open; render(); return; }
   if (t.dataset.clearf){ S[t.dataset.clearf] = {}; render(); return; }
-  if (t.dataset.printid){
-    const co = CO(), el = document.getElementById(t.dataset.printid);
-    printView(t.dataset.printtitle || co.name, "<h1>" + esc(co.name) + '</h1><p class="note">' + esc(t.dataset.printtitle || "") + " \u00b7 printed " + fmtDate(new Date().toISOString().slice(0, 10)) + "</p>" + (el ? el.outerHTML : ""));
-    return;
-  }
-  if (t.dataset.tdsopen){ S.tdsOpen = S.tdsOpen === t.dataset.tdsopen ? "" : t.dataset.tdsopen; render(); return; }
+  if (t.dataset.printid){ printTable(t.dataset.printid, t.dataset.printtitle); return; }
   if (t.dataset.qgo){ S.tdsQ = t.dataset.qgo; S.tdsForm = "26Q"; S.tdsView = "return"; S.tdsTab = ""; render(); return; }
   if (t.dataset.assetdel){ S.books.assets = (S.books.assets || []).filter(a => a.id !== t.dataset.assetdel); saveBooks(); render(); return; }
-  if (t.dataset.certdel){ S.books.certs = (S.books.certs || []).filter(c => c.id !== t.dataset.certdel); saveBooks(); render(); return; }
   if (t.dataset["2btab"]){ S.twoBTab = t.dataset["2btab"]; render(); return; }
-  if (t.dataset.paymake){
-    const p = TDS.paymentsFromBooks().find(x => x.vid === t.dataset.paymake);
-    const bsr = (document.querySelector('[data-paybsr="' + t.dataset.paymake + '"]') || {}).value || "";
-    const ser = (document.querySelector('[data-payser="' + t.dataset.paymake + '"]') || {}).value || "";
-    if (!p) return;
-    if (!bsr.trim() || !ser.trim()){ toast("Fill the BSR code and the challan serial number first."); return; }
-    S.books.challans = (S.books.challans || []).concat([{id: uid("ch"), bsr: bsr.trim(), serial: ser.trim(), date: p.date, tax: p.tax, interest: 0, fromVoucher: p.vid}]);
-    saveBooks(); toast("Challan added from the books."); render(); return;
-  }
-  if (t.dataset.chdel){ S.books.challans = (S.books.challans || []).filter(c => c.id !== t.dataset.chdel);
-    Object.keys(S.books.alloc || {}).forEach(k => { if (S.books.alloc[k] === t.dataset.chdel) delete S.books.alloc[k]; });
-    saveBooks(); render(); return; }
   if (t.dataset.goclient !== undefined && t.dataset.goclient !== null && t.dataset.goclient !== ""){ goClient(t.dataset.goclient); return; }
   if (t.dataset.nav){ navHome(t.dataset.nav); return; }
   if (t.dataset.step){ goStep(t.dataset.step); return; }
@@ -1421,14 +1437,6 @@ function doAct(act, t){
       break;
     }
     case "tdsAuto": { const n = TDS.autoAllocate(); saveBooks(); toast(n ? n + " deduction" + (n === 1 ? "" : "s") + " put against challans." : "Nothing could be matched to a challan. Check the amounts and dates."); render(); break; }
-    case "certAdd": {
-      const g = id => (document.getElementById(id) || {}).value || "";
-      const party = g("ctParty").trim();
-      if (!party){ toast("Name the deductee as it appears in Tally."); break; }
-      S.books.certs = (S.books.certs || []).concat([{id: uid("ct"), party, pan: g("ctPan").toUpperCase().trim(), section: g("ctSec").toUpperCase().trim(),
-        certNo: g("ctNo").trim(), rate: num(g("ctRate")), from: g("ctFrom"), to: g("ctTo")}]);
-      saveBooks(); toast("Certificate added."); render(); break;
-    }
     case "yearExcel26": TDSYear.toExcel(S.tdsFy || "", "26Q").then(() => toast("Downloaded."), e => toast("Could not build it: " + (e && e.message))); break;
     case "yearExcel24": TDSYear.toExcel(S.tdsFy || "", "24Q").then(() => toast("Downloaded."), e => toast("Could not build it: " + (e && e.message))); break;
     case "yearExcelAll": TDSYear.toExcel(S.tdsFy || "", "").then(() => toast("Downloaded."), e => toast("Could not build it: " + (e && e.message))); break;
@@ -1475,13 +1483,6 @@ function doAct(act, t){
     }
     case "gstExcel": GSTR.toExcel(S.gstYm || "", S.gstReg || "").then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break;
     case "twoBExcel": { const sc0 = r2Scope(); GST2B.toExcel(GST2B.scope(r2Reg(S.books), sc0.months), sc0.label).then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break; }
-    case "chAdd": {
-      const g = id => (document.getElementById(id) || {}).value || "";
-      const bsr = g("chBsr").trim(), ser = g("chSer").trim(), dt = g("chDate").replace(/-/g, ""), tax = num(g("chTax"));
-      if (!bsr || !ser || !dt || !tax){ toast("Fill the BSR code, serial number, date and tax."); break; }
-      S.books.challans = (S.books.challans || []).concat([{id: uid("ch"), bsr, serial: ser, date: dt, tax, interest: num(g("chInt"))}]);
-      saveBooks(); toast("Challan added."); render(); break;
-    }
     case "txnCsv": txnCsv(); break;
     case "txnClear": S.txnQ = ""; S.txnStatus = ""; S.txnF = S.txnF || {}; S.txnF[txnTab()] = {}; render(); break;
     case "tallyPanel": S.tallyPanel = !S.tallyPanel; S.firmMenu = false; render(); break;
@@ -1663,12 +1664,6 @@ document.addEventListener("input", ev => {
     if (t.type === "search") later("r2f", render, 250); else render();
     return;
   }
-  if (t && t.dataset && t.dataset.tdsf){
-    const tab = S.tdsTab || "deductions";
-    S.tdsFl = Object.assign({}, S.tdsFl, {[tab]: Object.assign({}, (S.tdsFl || {})[tab], {[t.dataset.tdsf]: t.value})});
-    if (t.type === "search" || t.type === "text") later("tdsf", render, 250); else render();
-    return;
-  }
   if (t && t.id === "fsq"){ S.fsQ = t.value; later("fsq", render, 250); return; }
   if (t && t.id === "misq"){ S.misQ = t.value; later("misq", render, 250); return; }
   if (t && t.id === "ledq"){ S.ledQ = t.value; later("ledq", render, 250); return; }
@@ -1704,7 +1699,6 @@ document.addEventListener("input", ev => {
     return;
   }
   if (t && t.dataset && t.dataset.ledsec){ const m = S.books.map[t.dataset.ledsec]; if (m){ m.section = t.value.toUpperCase(); m.byHand = true; later("ledsec", () => { saveBooks(); render(); }, 500); } return; }
-  if (t && t.dataset && t.dataset.alloc){ S.books.alloc = S.books.alloc || {}; if (t.value) S.books.alloc[t.dataset.alloc] = t.value; else delete S.books.alloc[t.dataset.alloc]; saveBooks(); render(); return; }
   if (t && t.dataset && ["email", "password", "firm", "name"].includes(t.dataset.cloud)){ S.cloudForm = Object.assign({}, S.cloudForm, {[t.dataset.cloud]: t.value}); }
   if (S.view === "company" && S.tab === "bank" && bankInput(t)) return;
   if (S.view === "company" && S.tab === "sales" && salesInput(t)) return;

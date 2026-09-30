@@ -88,6 +88,10 @@ window.render = function render() {
     giveFocus(f);
     // the column filter pop-up sits under its funnel button, which may be in a React table
     if (typeof placeColPop === "function") placeColPop();
+    // the old screens' finishing touches, for old pieces shown inside React screens: the funnels on their tables
+    // and the "How this tab works" button (they ran while those pieces were out of the page)
+    if (typeof GridF === "object") GridF.after();
+    if (typeof Help === "object") Help.after();
     // the guide beside a tab ("How this tab works") follows the page, which React may have just changed
     if (typeof Help === "object") Help.after();
     if (acFk && !AC.fk) { const el = document.querySelector('[data-fk="' + CSS.escape(acFk) + '"]'); if (el && document.activeElement === el) acOpen(el); }

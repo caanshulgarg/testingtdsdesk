@@ -46,6 +46,10 @@ app/                      the React app (Vite)
   pressed), `render()` only redraws React, and the full redraw follows the click (store.js).
 - **The cursor** in a box inside a React screen is given back after a redraw: the same box, or the one with the same
   `data-fk`. Old pieces (`<Legacy>`) are drawn again from their HTML every time, as the old screens were.
+- **Checking a move against the live site.** With a client's books in `tests/data`, `tests/pages_tds.py` writes the
+  text of every TDS page from a build; run it on the live build and the React build and compare (docs in the file).
+- **Column filters on old tables** (`GridF`, the funnels on every `table.bk-table`) run after React has drawn, so old
+  pieces inside React screens keep them; tables drawn by React are left alone (their pages have their own filters).
 - **Editing a bill** goes through `billSetX`, `billSetText`, `billSetChoice`, `billBookTds`, `billGst`,
   `billUseExpense`, `billFixLedger` (src/js/27), for React and the old handlers alike.
 - **State** is still the one object `S`, and every change still ends in `render()`. A React screen's own passing
@@ -95,7 +99,8 @@ Status: **done** (in React, test passing) · **next** · blank = not started. Ab
 | **Dashboard** | `viewClientDash` (18); the first-steps card `ONB.card` (48) still old | **done** |
 | **Books** (shell) | `viewBooks` (18): the tabs, sync note, busy card | **done** |
 | **TDS** | years and year `viewTdsYears`, `viewTdsYearPage`, `tdsCrumbs` (18) | **done** |
-| | the returns `viewTdsReturn26`, `viewTdsReturn24`, `viewTdsCerts` (18), notices | next |
+| | the returns `viewTdsReturn26`, `viewTdsReturn24`, `viewTdsCerts` (18): same text as the live site on all 92 TDS pages of the sample books (`tests/pages_tds.py`) | **done** |
+| | notices (`AIH.viewNotices`, 50) | |
 | **GST** | `viewBooksGst`, `viewBooks2B`, `viewGstr1`, `viewGstr3b`, `viewGstChecks`, `viewGstAmend`, `viewGstAdv`, `viewGstRev`, `viewInputRegister`, `viewGst9`, `viewGst9c` (18) · filing (35) · settings and registrations (36) · QRMP, CMP-08, GSTR-4 (37) · returns filed (38) · ITC follow-up (32) · customer IMS (33) · vendor recon (42) | |
 | | 2B from the portal `viewGstApiCard` (39) | **done** |
 | **Books** | `viewBooks`, `viewBooksImport`, `viewBooksLedgers`, `viewLedPosting`, `viewTallyRead`, `viewSetupList` (18) · accounts (30) | |
