@@ -58,7 +58,7 @@ try:
         bj = pg.evaluate("async () => (await Bridge.call('/balances?company=' + encodeURIComponent('VMS EVENTS PRIVATE LIMITED (2024-25)') + '&from=20250602&to=20250605')).ledgers.find(l => l.name === '%s')" % BANK)
         t_open = -float(bj["open"] or 0)
         pg.evaluate("(o) => { const st = curStmt(); st.opening = o; st.closing = r2(o - 1000 - 2500 - 330 - 47000); render(); }", t_open); pg.wait_for_timeout(500)
-        ok(pg.locator(".sbar").count() == 0 and pg.locator("[data-btab='ready']").count() == 1 and "2 · Ready to post" in pg.inner_text(".bk-tabs"), "one row of tabs on the bank page, numbered in the order of the work")
+        ok(pg.locator(".sbar").count() == 0 and pg.locator('.bk-tabs button:has-text("Ready to post")').count() == 1 and "2 · Ready to post" in pg.inner_text(".bk-tabs"), "one row of tabs on the bank page, numbered in the order of the work")
         ok(pg.locator(".bk-actions [data-act='bankPick']").count() == 0 and pg.locator(".tbar [data-act='uploadHere']").count() == 1, "one Upload statement button")
         # an entry an earlier build left in Tally under another date
         tag0 = pg.evaluate("fpHash('fp-e2e-0')")

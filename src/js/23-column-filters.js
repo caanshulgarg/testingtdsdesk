@@ -249,63 +249,6 @@ function bankFilterRow(){
       '<input type="text" data-bf="ledText" data-fk="bfled" data-keeptyped autocomplete="off" placeholder="ledger has\u2026" value="' + esc(f.ledText || "") + '" aria-label="Ledger contains"></th>' +
     '<th class="ac">' + (bankRangeOn() ? '<button class="linkbtn" data-act="bankRangeClear">Clear</button>' : "") + "</th></tr>";
 }
-function bankTable(tab){
-  const b = B();
-  let list = bankVisibleRows();
-  const total = list.length;
-  const nSel = list.filter(r => b.sel.has(r.id)).length;
-  list = list.slice(0, b.limit);
-  const empty = {review: "Nothing to review. Every entry has a ledger.", ready: "No entries are ready yet.", done: "Nothing posted or ignored yet."}[tab] || "Nothing here.";
-  let h = '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th class="ck"><input type="checkbox" data-bselall aria-label="Select all"' + (nSel && nSel === total ? " checked" : "") + "></th>" +
-    colHead("bank", "date", "Date", "dt") + colHead("bank", "narr", "Particulars") + colHead("bank", "wd", "Withdrawal", "n") + colHead("bank", "dep", "Deposit", "n") + colHead("bank", "led", "Ledger", "lg") + '<th class="ac"></th></tr></thead><tbody>';
-  h += list.map(r => bankRowHtml(r, tab)).join("");
-  h += "</tbody></table>";
-  if (!total) h += bankRangeOn() ? noMatchNote("bank") : '<div class="bk-none">' + empty + "</div>";
-  h += "</div>";
-  if (total > list.length) h += '<div class="bk-more"><button class="btn small" data-act="bankMore">Show ' + Math.min(100, total - list.length) + " more (" + (total - list.length) + " left)</button></div>";
-  return h;
-}
-function bankRowHtml(r, tab){
-  const b = B();
-  const editable = ["attention", "suggested", "ready"].includes(r.state);
-  const sel = b.sel.has(r.id);
-  const modeName = {ATM: "ATM cash withdrawal", CASH: "Cash deposit", CHARGES: "Bank charges", INTEREST: "Interest credit"}[r.dec.mode];
-  const party = modeName || r.dec.name || r.dec.upi || "";
-  const ref = r.dec.chq ? "Chq " + r.dec.chq : r.dec.utr || "";
-  const sub = [r.dec.mode !== "OTHER" ? r.dec.mode : "", ref].filter(Boolean).join(" \u00b7 ");
-  let ledgerCell, action;
-  if (editable){
-    const cls = r.state === "suggested" ? " sugg" : r.state === "ready" ? " done" : "";
-    const tip = r.why ? ' title="' + esc(r.why) + '"' : "";
-    const label = r.state === "suggested" ? '<span class="src"' + tip + ">Suggested \u00b7 " + esc(r.srcLabel || "Match") + "</span>"
-      : r.state === "ready" ? '<span class="src ok"' + tip + ">" + esc(r.source === "you" || r.userSet ? "Set by you" : (r.srcLabel || "Confirmed")) + (r.vtype === "Contra" ? " \u00b7 Contra" : "") + (r.billRef ? " \u00b7 Bill " + esc(r.billRef) : "") + "</span>"
-      : '<span class="src muted"' + tip + ">" + esc(hasLedgerList() ? "No match found" : "Import the ledger list") + "</span>";
-    const held = B().postedTags && String(B().postedTags[fpHash(r.fp || r.id)] || "").startsWith("unconfirmed");
-    const perr = r.state === "ready" && r.postError ? '<span class="src bad" title="' + esc(r.postError) + '">Tally: ' + esc(r.postError) +
-      (held ? ' <button class="linkbtn" data-brow="notintally" data-rid="' + r.id + '">I checked \u2014 it is not in Tally</button>' : "") + "</span>" : "";
-    const ruleTag = r.ruleId ? '<span class="src"><button class="linkbtn" data-redit="' + r.ruleId + '">rule: ' + esc(ruleLabel(allRules().find(x => x.id === r.ruleId) || {name: "gone"})) + "</button></span>" : "";
-    ledgerCell = perr + '<input type="text" class="lgbox' + cls + '" data-bled="' + r.id + '" data-fk="bled:' + r.id + '" data-keeptyped data-ac="1" autocomplete="off" value="' + esc(r.ledger) + '" placeholder="Select ledger" aria-label="Ledger">' + label +
-      ruleTag + (r.tdsAtPay ? '<span class="src">TDS ' + money(r.tdsAtPay) + " deducted at payment</span>" : "") +
-      ((r.splits || []).length ? '<span class="src">split: ' + r.splits.map(sp => esc(sp.ledger) + " " + INR.format(sp.amt)).join(", ") + "</span>" : "");
-    const ruleBtn = '<button class="linkbtn" data-brow="rule" data-rid="' + r.id + '" title="Make a rule from this line">Rule</button>';
-    action = r.state === "suggested" ? '<button class="btn small primary" data-brow="accept" data-rid="' + r.id + '">Confirm</button>' + ruleBtn + '<button class="icon" data-brow="ignore" data-rid="' + r.id + '" title="Ignore this entry" aria-label="Ignore">\u2715</button>'
-      : r.state === "ready" ? (Bridge.on() && Bridge.up() ? '<button class="btn small" data-brow="post" data-rid="' + r.id + '">Post</button> ' : "") + '<button class="linkbtn" data-brow="rule" data-rid="' + r.id + '" title="Make a rule from this line">Rule</button> <button class="linkbtn" data-brow="unready" data-rid="' + r.id + '">Undo</button>'
-      : ruleBtn + '<button class="icon" data-brow="ignore" data-rid="' + r.id + '" title="Ignore this entry" aria-label="Ignore">\u2715</button>';
-  } else {
-    const canUndo = r.state === "sent" && r.tally && r.tally.guid && Bridge.on() && Bridge.up();
-    const status = r.state === "sent" ? "Posted " + (r.sentAt ? shortDate(r.sentAt.slice(0, 10)) : "") + (r.checking ? " \u00b7 checking in Tally\u2026" : r.tally && r.tally.number ? " \u00b7 Tally voucher " + r.tally.number : "")
-      : r.state === "intally" ? "Already in Tally" + (r.tallyRef ? ": " + r.tallyRef : "") + (r.tallyHow ? " (" + r.tallyHow + ")" : "") : "Ignored";
-    ledgerCell = '<span class="lgtext">' + esc(r.ledger || "\u2014") + '</span><span class="src muted">' + esc(status) +
-      (canUndo ? ' <button class="linkbtn" data-brow="unpost" data-rid="' + r.id + '">Take it back</button>' : "") + "</span>";
-    action = r.state === "sent" ? "" : '<button class="linkbtn" data-brow="restore" data-rid="' + r.id + '">Restore</button>';
-  }
-  const flag = r.balOk === false ? ' <span class="flag bad" title="This entry does not agree with the running balance">!</span>' : r.repaired ? ' <span class="flag warn" title="Amount read from the balance change: check it">\u2248</span>' : "";
-  return '<tr class="st-' + r.state + (sel ? " picked" : "") + '"><td class="ck"><input type="checkbox" data-bsel="' + r.id + '"' + (sel ? " checked" : "") + (r.state === "sent" ? " disabled" : "") + ' aria-label="Select"></td>' +
-    '<td class="dt" title="' + esc(fmtDate(r.date)) + '">' + shortDate(r.date) + "</td>" +
-    '<td class="pt"><div class="pn">' + esc(party || r.narr.slice(0, 60)) + '</div><div class="nr" title="' + esc(r.narr) + '">' + (sub ? '<span class="md">' + esc(sub) + "</span> " : "") + esc(r.narr) + "</div></td>" +
-    '<td class="n">' + bkAmt(r.debit) + (r.debit ? flag : "") + '</td><td class="n">' + bkAmt(r.credit) + (r.credit ? flag : "") + "</td>" +
-    '<td class="lg">' + ledgerCell + '</td><td class="ac">' + action + "</td></tr>";
-}
 // One line per party among the entries to review
 function bankGroups(){
   const b = B(), m = new Map();
@@ -318,28 +261,6 @@ function bankGroups(){
     if (r.ledger) g.ledgers[r.ledger] = (g.ledgers[r.ledger] || 0) + 1;
   });
   return Array.from(m.values()).sort((a, b2) => b2.n - a.n || (b2.out + b2.inn) - (a.out + a.inn));
-}
-function viewBankGroups(){
-  const b = B();
-  const q = b.q.trim().toLowerCase();
-  let groups = bankGroups().filter(g => !q || (g.name + " " + g.sample).toLowerCase().includes(q));
-  const total = groups.length;
-  groups = groups.slice(0, b.limit);
-  let h = '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Party</th><th class="n">Entries</th><th class="n">Withdrawals</th><th class="n">Deposits</th><th class="lg">Ledger for all its entries</th><th class="ac"></th></tr></thead><tbody>';
-  h += groups.map((g, i) => {
-    const sug = Object.entries(g.ledgers).sort((a, b2) => b2[1] - a[1])[0];
-    const id = "g" + i;
-    return '<tr><td class="pt"><div class="pn">' + esc(g.name) + '</div><div class="nr" title="' + esc(g.sample) + '">' + esc(g.sample) + "</div></td>" +
-      '<td class="n">' + g.n + '</td><td class="n">' + bkAmt(g.out) + '</td><td class="n">' + bkAmt(g.inn) + "</td>" +
-      '<td class="lg"><input type="text" class="lgbox' + (sug ? " sugg" : "") + '" id="' + id + '" data-gkey="' + esc(g.key) + '" data-fk="gkey:' + esc(g.key) + '" data-draft data-keeptyped data-ac="1" autocomplete="off" value="' + esc(sug ? sug[0] : "") + '" placeholder="Select ledger">' +
-      (sug ? '<span class="src">Suggested for ' + sug[1] + " of " + g.n + "</span>" : "") + "</td>" +
-      '<td class="ac"><button class="btn small primary" data-gapply="' + id + '">Apply</button></td></tr>';
-  }).join("");
-  h += "</tbody></table>";
-  if (!total) h += (S.revQuery || revColOn()) ? noMatchNote("rev") : '<div class="bk-none">Nothing to review.</div>';
-  h += "</div>";
-  if (total > groups.length) h += '<div class="bk-more"><button class="btn small" data-act="bankMore">Show more parties (' + (total - groups.length) + " left)</button></div>";
-  return h;
 }
 function applyGroup(key, ledger){
   const b = B();
@@ -378,39 +299,8 @@ function bankSettingsHtml(){
   h += "</div></div>";
   return h;
 }
-function bankBar(){
-  const b = B();
-  if (!b || b.loading || !curStmt()) return "";
-  const tc = tabCounts(bankRangeRows());
-  const nsel = b.sel.size;
-  let left, right;
-  if (nsel){
-    const selRows = bankSelected();
-    left = "<b>" + nsel + " selected</b> <span class=\"muted\">\u00b7 " + INR.format(r2(selRows.reduce((a, r) => a + (r.debit || r.credit), 0))) + '</span> <button class="linkbtn" data-act="bankSelNone">Clear</button>';
-    right = '<input type="text" class="lgbox" data-bulkled data-fk="bulkled" data-keeptyped data-ac="1" autocomplete="off" placeholder="Ledger for the ' + nsel + ' selected">' +
-      '<button class="btn" data-act="bankBulkLedger">Apply ledger</button>' +
-      (selRows.some(r => r.state === "suggested") ? '<button class="btn primary" data-act="bankBulkAccept">Confirm</button>' : "") +
-      (selRows.some(r => ["attention", "suggested", "ready"].includes(r.state)) ? '<button class="btn" data-act="bankBulkIgnore">Ignore</button>' : "") +
-      (selRows.some(r => r.state === "ignored" || r.state === "intally") ? '<button class="btn" data-act="bankBulkRestore">Restore</button>' : "") +
-      (Bridge.on() && Bridge.up() && selRows.some(r => r.state === "ready") ? '<button class="btn primary" data-act="bankBulkPost">Post ' + selRows.filter(r => r.state === "ready").length + " to Tally</button>" : "");
-  } else {
-    left = '<span class="bk-stat"><b>' + tc.review + '</b> to review</span><span class="bk-stat"><b>' + tc.ready + "</b> ready to post</span>";
-    right = (tc.suggested ? '<button class="btn" data-act="bankAcceptAll">Confirm all suggestions (' + tc.suggested + ")</button>" : "") +
-      (Bridge.on() && Bridge.up() ? '<button class="btn primary" data-act="bankPost"' + (tc.ready ? "" : " disabled") + ">Post to Tally (" + tc.ready + ")</button>"
-        : '<button class="btn primary" data-act="bankXml"' + (tc.ready ? "" : " disabled") + ">Create Tally file (" + tc.ready + ")</button>");
-  }
-  let snack = "";
-  if (b.undo && !nsel){
-    const u = b.undo;
-    const text = u.what === "set" || u.what === "bulk"
-      ? esc(u.label) + " \u2192 <b>" + esc(u.ledger) + "</b>" + (u.others ? " \u00b7 also " + entries(u.others) + " of this party" : "") + (u.ruleKeys && u.ruleKeys.length ? " \u00b7 remembered" : "")
-      : u.what === "clear" && u.n > 1 ? "All decisions cleared" : entries(u.n) + " " + ({accept: "confirmed", ignore: "ignored", restore: "restored", clear: "cleared", unready: "moved back to review"}[u.what] || "changed");
-    snack = '<div class="bk-snack"><span>' + text + '</span><button class="linkbtn" data-act="bankUndo">Undo</button>' +
-      (u.ruleKeys && u.ruleKeys.length ? '<button class="linkbtn" data-act="bankForget">Don\u2019t remember</button>' : "") +
-      '<button class="icon" data-act="bankUndoOk" aria-label="Close">\u2715</button></div>';
-  }
-  return '<div class="actionbar bk-actionbar">' + snack + '<div class="ab-left">' + left + '</div><div class="ab-right">' + right + "</div></div>";
-}
+// the bar at the bottom of the bank screen: React (app/src/screens/Bank.jsx)
+function bankBar(){ return B() && !B().loading && curStmt() ? '<div data-react="BankBar"></div>' : ""; }
 // Creating a ledger that is not yet in Tally
 async function openCreateLedger(name, rowId, targetFk, opts){
   opts = opts || {};
@@ -688,13 +578,81 @@ async function clearRules(){
   render();
 }
 function bankRow(id){ const b = B(); return b && b.rows.find(r => r.id === id); }
+// one line's buttons: rule, notintally, unpost, post, accept, ignore, restore, unready
+function bankRowAct(a, id){
+  const b = B(); if (!b) return true;
+  if (a === "rule"){
+    const row = bankRow(id);
+    if (!row) return true;
+    openRuleEditor(ruleFromRow(row), true).then(r => {
+      if (!r) return;
+      (r.scope === "firm" ? firmRules() : clientRules()).unshift(r);
+      saveRules(r.scope);
+      const n = runRules(null, {force: true});
+      toast("Rule saved \u00b7 " + n + " lines set.");
+      render();
+    });
+    return true;
+  }
+  if (a === "notintally"){
+    const row = bankRow(id);
+    if (row && B().postedTags){ delete B().postedTags[fpHash(row.fp || row.id)]; row.postError = ""; saveBank({rows: true, posted: true}); toast("It will be checked in Tally again, then posted."); render(); }
+    return true;
+  }
+  if (a === "unpost"){
+    const row = bankRow(id);
+    if (row) unpostFromTally("bank", row, B().cid).then(ok => {
+      if (!ok) return;
+      row.state = row.ledger ? "ready" : "attention"; row.sentAt = ""; row.postVerified = false; row.tally = null;
+      if (B().postedTags) delete B().postedTags[fpHash(row.fp || row.id)];
+      saveBank({rows: true, posted: true}); render();
+    });
+    return true;
+  }
+  if (a === "post"){ postBankToTally([id]); return true; }
+  {
+    const r = bankRow(id); if (!r) return true;
+    b.undo = {what: a === "accept" ? "accept" : a, label: "1 entry", n: 1, others: 0, snaps: [rowSnapshot(r)], ruleKeys: [], oldRules: []};
+    b.sticky.add(r.id);
+    if (a === "accept"){
+      const l = exactLedger(r.ledger);
+      if (!l){ b.undo = null; toast("Choose a Tally ledger first."); return true; }
+      r.ledger = l; r.state = "ready"; b.undo.histPrev = learnRows([r], "accepted");
+    }
+    if (a === "ignore"){ r.prevState = r.state; r.state = "ignored"; b.undo.histPrev = unlearnRows([r]); }
+    if (a === "restore"){ r.state = exactLedger(r.ledger) ? "ready" : "attention"; delete r.tallyIdx; }
+    if (a === "unready"){ r.state = r.ledger ? "suggested" : "attention"; r.userSet = false; b.undo.histPrev = unlearnRows([r]); }
+    saveBank({rows: true}); render(); return true;
+  }
+}
+// the React bank screen (app/src/screens/Bank.jsx)
+function bankTabGo(k){ const b = B(); b.focus = null; b.filter = k; b.limit = 100; b.sticky.clear(); b.sel.clear(); render(); }
+function bankSetGrouped(on){ const b = B(); b.grouped = on; b.limit = 100; b.sel.clear(); render(); }
+function bankSearch(q){ const b = B(); b.q = q; b.sticky.clear(); FinComReact.redraw(); later("bq", render, 250); }
+// a line's ledger, typed or picked; returns false when it is not a Tally ledger (the box goes back to the line's ledger)
+function bankSetLedger(id, v){
+  const b = B(), r = bankRow(id); if (!r) return true;
+  v = String(v || "").trim();
+  if (!v){ if (r.ledger){ setRowLedger(r, ""); saveBank({rows: true}); render(); } return true; }
+  const l = exactLedger(v);
+  if (!l){ toast("\u201c" + v + "\u201d is not a Tally ledger. Choose one from the list, or create it."); return false; }
+  if (b.sel.has(r.id) && b.sel.size > 1){ acClose(); bulkAction("ledger", l); return true; }
+  if (l !== r.ledger || r.state !== "ready"){ setRowLedger(r, l); saveBank({rows: true}); render(); }
+  return true;
+}
+// which Tally ledger a bank account is
+function bankSetAccLedger(accId, v){
+  const b = B(), co = CO(), a = (co.bankAccounts || []).find(x => x.id === accId);
+  if (a){ a.ledger = v; Store.saveCompany(co); suggestAll(b.rows, true); saveBank({rows: true}); render(); }
+}
+// tick a line; with Shift, every line between it and the one ticked before
+function bankToggleRow(id, on, shift){ bankToggle({dataset: {bsel: id}, checked: on}, shift); }
+function bankSelAll(on){ const b = B(); bankVisibleRows().filter(r => r.state !== "sent").forEach(r => { if (on) b.sel.add(r.id); else b.sel.delete(r.id); }); bankLightRefresh(); }
 function bankClick(t){
   const b = B(); if (!b) return false;
   if (t.dataset.bfocus){ const f = S.focusSets[t.dataset.bfocus]; if (f){ bankFocus(f.title, f.ids, f.note); render(); window.scrollTo({top: 0, behavior: "smooth"}); } return true; }
-  if (t.dataset.btab){ b.focus = null; b.filter = t.dataset.btab; b.limit = 100; b.sticky.clear(); b.sel.clear(); render(); return true; }
+  if (t.dataset.btab){ bankTabGo(t.dataset.btab); return true; }
   if (t.dataset.delstmt){ deleteStatement(t.dataset.delstmt); return true; }
-  if (t.dataset.gapply){ const inp = document.getElementById(t.dataset.gapply); if (inp) applyGroup(inp.dataset.gkey, inp.value); acClose(); return true; }
-  if (t.hasAttribute && (t.hasAttribute("data-bselall") || t.hasAttribute("data-bsel"))) return true;
   if (t.dataset.rcopy){ const r = clientRules().find(x => x.id === t.dataset.rcopy); if (r) copyRulesTo([r]); return true; }
   if (t.dataset.redit || t.dataset.rtoggle || t.dataset.rdel || t.dataset.rmove){
     const id = t.dataset.redit || t.dataset.rtoggle || t.dataset.rdel || t.dataset.rid;
@@ -728,50 +686,7 @@ function bankClick(t){
     });
     return true;
   }
-  if (t.dataset.brow === "rule"){
-    const row = bankRow(t.dataset.rid);
-    if (!row) return true;
-    openRuleEditor(ruleFromRow(row), true).then(r => {
-      if (!r) return;
-      (r.scope === "firm" ? firmRules() : clientRules()).unshift(r);
-      saveRules(r.scope);
-      const n = runRules(null, {force: true});
-      toast("Rule saved \u00b7 " + n + " lines set.");
-      render();
-    });
-    return true;
-  }
-  if (t.dataset.brow === "notintally"){
-    const row = bankRow(t.dataset.rid);
-    if (row && B().postedTags){ delete B().postedTags[fpHash(row.fp || row.id)]; row.postError = ""; saveBank({rows: true, posted: true}); toast("It will be checked in Tally again, then posted."); render(); }
-    return true;
-  }
-  if (t.dataset.brow === "unpost"){
-    const row = bankRow(t.dataset.rid);
-    if (row) unpostFromTally("bank", row, B().cid).then(ok => {
-      if (!ok) return;
-      row.state = row.ledger ? "ready" : "attention"; row.sentAt = ""; row.postVerified = false; row.tally = null;
-      if (B().postedTags) delete B().postedTags[fpHash(row.fp || row.id)];
-      saveBank({rows: true, posted: true}); render();
-    });
-    return true;
-  }
-  if (t.dataset.brow === "post"){ postBankToTally([t.dataset.rid]); return true; }
-  if (t.dataset.brow){
-    const r = bankRow(t.dataset.rid); if (!r) return true;
-    const a = t.dataset.brow;
-    b.undo = {what: a === "accept" ? "accept" : a, label: "1 entry", n: 1, others: 0, snaps: [rowSnapshot(r)], ruleKeys: [], oldRules: []};
-    b.sticky.add(r.id);
-    if (a === "accept"){
-      const l = exactLedger(r.ledger);
-      if (!l){ b.undo = null; toast("Choose a Tally ledger first."); return true; }
-      r.ledger = l; r.state = "ready"; b.undo.histPrev = learnRows([r], "accepted");
-    }
-    if (a === "ignore"){ r.prevState = r.state; r.state = "ignored"; b.undo.histPrev = unlearnRows([r]); }
-    if (a === "restore"){ r.state = exactLedger(r.ledger) ? "ready" : "attention"; delete r.tallyIdx; }
-    if (a === "unready"){ r.state = r.ledger ? "suggested" : "attention"; r.userSet = false; b.undo.histPrev = unlearnRows([r]); }
-    saveBank({rows: true}); render(); return true;
-  }
+  if (t.dataset.brow){ bankRowAct(t.dataset.brow, t.dataset.rid); return true; }
   switch (t.dataset.act){
     case "bankPick": document.getElementById("bankIn").click(); return true;
     case "ledPick": document.getElementById("ledIn").click(); return true;
@@ -1134,39 +1049,19 @@ function bankChange(t){
     const was = S.step; Promise.resolve(uploadStatements(files)).then(() => { if (was === "collect" && S.step === "collect") goStep("review", "bank"); }); return true; }
   if (t.id === "ledIn"){ const f = t.files && t.files[0]; t.value = ""; if (f) importLedgerList(f); return true; }
   if (t.id === "bookIn"){ const f = t.files && t.files[0]; t.value = ""; if (f) importTallyBook(f); return true; }
-  if (t.dataset.stmtsel){ openStatement(t.value); return true; }
-  if (t.hasAttribute("data-bgroup")){ b.grouped = t.checked; b.limit = 100; b.sel.clear(); render(); return true; }
-  if (t.dataset.bled){
-    const r = bankRow(t.dataset.bled); if (!r) return true;
-    const v = t.value.trim();
-    if (!v){ if (r.ledger){ setRowLedger(r, ""); saveBank({rows: true}); render(); } return true; }
-    const l = exactLedger(v);
-    if (!l){ t.value = r.ledger || ""; toast("\u201c" + v + "\u201d is not a Tally ledger. Choose one from the list, or create it."); return true; }
-    if (b.sel.has(r.id) && b.sel.size > 1){ acClose(); bulkAction("ledger", l); return true; }
-    if (l !== r.ledger || r.state !== "ready"){ setRowLedger(r, l); saveBank({rows: true}); render(); }
-    return true;
-  }
-  if (t.dataset.bsel !== undefined || t.hasAttribute("data-bselall") || t.hasAttribute("data-bulkled") || t.dataset.gkey !== undefined) return true;
+  if (t.dataset.bled){ if (!bankSetLedger(t.dataset.bled, t.value)) t.value = (bankRow(t.dataset.bled) || {}).ledger || ""; return true; }
   if (t.hasAttribute("data-bankoptional")){ const co = CO(); co.bankOptional = t.checked; Store.saveCompany(co); return true; }
   if (t.hasAttribute("data-bankautoapply")){ const co = CO(); co.bankAutoApply = t.checked; Store.saveCompany(co); return true; }
   if (t.hasAttribute("data-bankauto")){ const co = CO(); co.bankAuto = t.checked; Store.saveCompany(co); render(); return true; }
-  if (t.dataset.bankacc){
-    const co = CO(); const a = (co.bankAccounts || []).find(x => x.id === t.dataset.bankacc);
-    if (a){ a.ledger = t.value; Store.saveCompany(co); suggestAll(b.rows, true); saveBank({rows: true}); render(); }
-    return true;
-  }
+  if (t.dataset.bankacc){ bankSetAccLedger(t.dataset.bankacc, t.value); return true; }
   if (t.dataset.bankled){ const co = CO(); co.bankLedgerNames = co.bankLedgerNames || {}; co.bankLedgerNames[t.dataset.bankled] = t.value; Store.saveCompany(co); suggestAll(b.rows, true); saveBank({rows: true}); render(); return true; }
   return false;
 }
 document.addEventListener("click", ev => {
   const sa = ev.target.closest && ev.target.closest("[data-sugall]");
   if (sa){ document.querySelectorAll("[data-sug]").forEach(x => { x.checked = sa.checked; }); return; }
-  const cb = ev.target.closest && ev.target.closest("[data-bsel]");
-  if (cb){ bankToggle(cb, ev.shiftKey); return; }
   const rp = ev.target.closest && ev.target.closest("[data-reconpick]");
   if (rp && S.recon){ const i = +rp.dataset.reconpick; if (rp.checked) S.recon.pick.add(i); else S.recon.pick.delete(i); render(); return; }
-  const all = ev.target.closest && ev.target.closest("[data-bselall]");
-  if (all && B()){ const b = B(); const vis = bankVisibleRows().filter(r => r.state !== "sent"); if (all.checked) vis.forEach(r => b.sel.add(r.id)); else vis.forEach(r => b.sel.delete(r.id)); bankLightRefresh(); return; }
   const ov = ev.target.hasAttribute && ev.target.hasAttribute("data-bkoverlay");
   if (ov && B()){ B().showSettings = false; render(); return; }
   if (!(ev.target.closest && ev.target.closest(".bk-menu"))) closeMenus();
@@ -1181,7 +1076,6 @@ document.addEventListener("keydown", ev => {
 }, true);
 function bankInput(t){
   const b = B(); if (!b) return false;
-  if (t.hasAttribute("data-bankq")){ b.q = t.value; b.sticky.clear(); later("bq", render, 250); return true; }
   if (t.dataset && t.dataset.bf){
     b.f = b.f || {}; b.f[t.dataset.bf] = t.value; b.sel.clear();
     later("bcol", render, t.tagName === "SELECT" ? 0 : 250); return true;
@@ -1201,7 +1095,6 @@ function bankInput(t){
     if (v === "fy"){ b.from = iso(new Date(Date.UTC(fyStart, 3, 1))); b.to = iso(new Date(Date.UTC(fyStart + 1, 2, 31))); }
     b.sel.clear(); render(); return true;
   }
-  if (t.hasAttribute("data-allled")){ b.allLed = t.value; return true; }
   return false;
 }
 

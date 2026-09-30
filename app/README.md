@@ -77,4 +77,5 @@ cd ../tests && TDSDESK_SITE=../app/dist-test python3 run_react_post.py
 | Review table, drawer, bottom bars | `src/screens/Review.jsx` |
 | Suppliers and TDS | `src/screens/Parties.jsx` |
 | Post to Tally, Done, post log | `src/screens/Post.jsx`, `Done.jsx` |
+| Bank statement: lines, tabs, bar | `src/screens/Bank.jsx`, `src/parts/LedgerBox.jsx` |
 | GSTR-2B from the portal | `src/screens/GstApiCard.jsx` |

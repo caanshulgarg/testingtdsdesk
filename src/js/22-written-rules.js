@@ -813,16 +813,8 @@ function bankToggle(cb, shift){
   bankLastClicked = id;
   bankLightRefresh();
 }
-// Update only the ticks and the bottom bar (no full redraw)
-function bankLightRefresh(){
-  const b = B();
-  document.querySelectorAll("[data-bsel]").forEach(el => { const on = b.sel.has(el.dataset.bsel); if (el.checked !== on) el.checked = on; const tr = el.closest("tr"); if (tr) tr.classList.toggle("picked", on); });
-  const all = document.querySelector("[data-bselall]");
-  if (all){ const vis = bankVisibleRows(); const n = vis.filter(r => b.sel.has(r.id)).length; all.checked = n > 0 && n === vis.length; all.indeterminate = n > 0 && n < vis.length; }
-  const bar = document.querySelector(".actionbar");
-  const html = bankBar();
-  if (bar && html){ const tmp = document.createElement("div"); tmp.innerHTML = html; bar.replaceWith(tmp.firstElementChild); }
-}
+// the ticks and the bottom bar only (React alone redraws, not the old screens around it)
+function bankLightRefresh(){ FinComReact.redraw(); }
 async function askClaudeForLedgers(){
   const b = B();
   const todo = b.rows.filter(r => r.state === "attention").slice(0, 150);
@@ -1025,102 +1017,5 @@ function ledgerOptions(selected, preferGroups){
 }
 const BANK_GROUPS = /bank accounts|bank od|cash-in-hand/i;
 
-function viewBank(){
-  const b = B(), co = CO();
-  if (!b || b.cid !== co.id){ loadBank(co.id); return '<p class="note">Opening bank statements\u2026</p>'; }
-  if (b.loading) return '<p class="note">Opening bank statements\u2026</p>';
-  const st = curStmt();
-  ensureFileInputs();
-  let h = "";
-  h += '<div class="bk">';
-  if (BankDB.mode === "memory only" || BankDB.lost) h += '<div class="bk-alert bad">This browser is not keeping bank statements' + (BankDB.lost ? " (storage is full)" : "") + ". Create the Tally file before closing, or use Chrome.</div>";
-  // what FinCom is doing floats in view wherever you are on the page, instead of at the top
-  if (b.busy) h += '<div class="busy-float">' + busyCard(/Tally/.test(b.busy) ? "Working with Tally\u2026" : "Working on the statement\u2026", b.busy, 0, 0) + "</div>";
-  if (b.moved) h += '<div class="bk-alert"><b>' + esc(b.moved.file) + "</b> is a statement of " + esc(b.moved.name) + " (account \u00b7\u00b7" + esc(b.moved.last4) + "), so it was filed there. " +
-    '<button class="linkbtn" data-act="bankOpenMoved">Open ' + esc(b.moved.name) + '</button> <button class="linkbtn" data-act="bankDismissMoved">Dismiss</button></div>';
-  if (b.postReport) h += postReportHtml(b.postReport);
-  h += fixBanner();
-  if (b.lastFail) h += '<div class="bk-alert bad"><b>' + esc(b.lastFail.file) + " was not read.</b> " + esc(b.lastFail.msg) +
-    '<div class="row" style="gap:8px;margin-top:8px"><span class="note">Read it again:</span>' +
-    '<button class="btn small" data-act="bankRetryFree">Try again</button>' +
-    '<button class="btn small" data-act="bankRetryGoogle"' + (googleReady() ? "" : " disabled title=\"Google OCR is not set up\"") + '>With Google OCR</button>' +
-    '<button class="btn small primary" data-act="bankRetryClaude"' + (claudeReady() ? "" : " disabled title=\"Claude is not available here\"") + '>With Claude</button>' +
-    '<button class="linkbtn" data-act="bankCopyReport">Copy details for support</button><button class="linkbtn" data-act="bankDismissFail">Dismiss</button></div><textarea id="bankReport" readonly hidden>' + esc(b.lastFail.report) + "</textarea></div>";
-  // set-up steps
-  if (!hasLedgerList()){
-    if (bridgeLive(co)) h += '<div class="bk-setup"><div><b>Loading ledgers from Tally\u2026</b><div class="note">' + esc(Bridge.openFor(co).name) + " is open in Tally.</div></div></div>";
-    else if (Bridge.on() && Bridge.up()) h += '<div class="bk-setup"><div><b>Open ' + esc(Bridge.tallyName(co)) + ' in TallyPrime</b><div class="note">Its ledgers load automatically once it is open. Or import the ledger list from a file.</div></div><button class="btn small" data-act="ledPick">Import from file</button></div>';
-    else h += '<div class="bk-setup"><div><b>Import the Tally ledger list for ' + esc(co.name) + '</b><div class="note">Suggestions only use ledgers that exist in Tally. In Tally: Display More Reports \u2192 List of Accounts \u2192 Export (Excel or XML). With the Tally Bridge this happens automatically.</div></div><button class="btn primary small" data-act="ledPick">Import ledger list</button></div>';
-  }
-  if (!st){
-    h += '<div class="bk-empty" id="bankDrop" data-act="bankPick" tabindex="0" role="button"><div class="bk-empty-ic">\u2912</div><h2>Upload a bank statement</h2>' +
-      '<p class="note">Excel or CSV from net banking works best. E-statement PDFs, scanned PDFs and photos are also read. Every entry is checked against the running balance.</p>' +
-      '<span class="btn primary">Choose files</span></div>';
-    h += '<div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn small" data-act="bankSettings">Settings</button></div>';
-    h += "</div>" + (b.showSettings ? bankSettingsHtml() : "");
-    return h;
-  }
-  const acc = accountFor(st);
-  const accLedger = exactLedger(acc.ledger);
-  const tc = tabCounts(bankRangeRows());
-  // header
-  h += '<div class="bk-head"><div class="bk-id">' +
-    (b.stmts.length > 1 ? '<select class="bk-stmtsel" data-stmtsel aria-label="Statement">' + b.stmts.slice().reverse().map(s => '<option value="' + s.id + '"' + (s.id === b.cur ? " selected" : "") + ">" + esc(stmtLabel(s)) + "</option>").join("") + "</select>"
-      : '<h2 class="bk-title">' + esc(accLedger || st.bank) + "</h2>") +
-    '<div class="bk-sub">' + esc(st.bank) + (st.acct ? " \u00b7 A/c " + esc(st.acct) : "") + " \u00b7 " + fmtDate(st.from) + " to " + fmtDate(st.to) + " \u00b7 " + b.rows.length + " entries</div></div>" +
-    '<dl class="bk-figs"><div><dt>Opening</dt><dd>' + (st.opening !== undefined ? INR.format(st.opening) : "\u2014") + '</dd></div><div><dt>Withdrawals</dt><dd>' + INR.format(st.totDr || b.rows.reduce((a2, r) => a2 + num(r.debit), 0)) + '</dd></div><div><dt>Deposits</dt><dd>' + INR.format(st.totCr || b.rows.reduce((a2, r) => a2 + num(r.credit), 0)) + '</dd></div><div><dt>Closing</dt><dd>' + (st.closing !== undefined ? INR.format(st.closing) : "\u2014") + "</dd></div></dl>" +
-    '<div class="bk-actions"><button class="btn small" data-act="bankSettings">Settings</button>' +
-    '<details class="bk-menu"><summary class="btn small">More</summary><div class="bk-menu-list">' +
-      (Bridge.on() && Bridge.up() ? '<button data-act="reconRun">Reconcile with Tally<small>Every statement line against the bank ledger in Tally: what to post, what to delete</small></button>' +
-        '<button data-act="bankBalCheck">Check the balance with Tally<small>Tally\u2019s bank balance against the statement\u2019s closing</small></button>' +
-        '<button data-act="bankCheckTally">Mark lines already in Tally<small>Reads the bank ledger; lines found there are not posted again</small></button>' +
-        '<button data-act="dupFind">Find double or wrong-date entries<small>Entries from this statement that are in Tally twice or under another date</small></button>' +
-        '<button data-act="bankSync">Reload ledgers from Tally<small>After you create or rename a ledger in Tally</small></button>' +
-        '<button data-act="bankFile">Create a Tally file instead<small>Download an XML to import in Tally yourself</small></button>' : '<button data-act="bookPick">Match with Tally bank book</button>') +
-      '<button data-act="bankCsv">Download as Excel (CSV)</button>' +
-      (S.engine && tc.attention ? '<button data-act="bankClaude">Ask Claude for the remaining entries</button>' : "") +
-      '<button data-act="bankClearStmt">Clear all decisions</button>' +
-      '<button class="danger" data-act="bankDelStmt">Delete this statement</button></div></details></div></div>';
-  const repaired = b.rows.filter(r => r.repaired).length;
-  h += '<div class="bk-check">' + (st.badRows ? '<span class="bad">\u2716 ' + st.badRows + " entries do not agree with the running balance \u2014 check them before posting</span>"
-      : '<span class="ok">\u2714 The statement adds up: every line agrees with its running balance' + (st.summaryOk ? ", and opening + deposits \u2212 withdrawals = closing" : "") + "</span>") +
-    (repaired ? ' <span class="warn">\u00b7 ' + repaired + " amounts were read from the balance change (marked \u2248)</span>" : "") +
-    (st.dupRows ? ' <span class="muted">\u00b7 ' + st.dupRows + " entries skipped (already uploaded)</span>" : "") +
-    (b.books[st.acctId] ? ' <span class="muted">\u00b7 ' + (b.books[st.acctId].live ? "Checked against Tally " + new Date(b.books[st.acctId].importedAt).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}) : "Matched with the Tally bank book") + "</span>" : "") + "</div>";
-  if (accLedger && (Bridge.on() || st.tallyBal)) h += bankBalanceHtml(st);
-  h += reconHtml();
-  if (!accLedger) h += '<div class="bk-setup"><div><b>Which Tally ledger is this bank account?</b><div class="note">' + esc(st.bank) + (acc.last4 ? " \u00b7\u00b7" + esc(acc.last4) : "") + (acc.ifsc ? " \u00b7 " + esc(acc.ifsc) : "") + "</div></div>" +
-    (hasLedgerList() ? '<select data-bankacc="' + acc.id + '">' + ledgerOptions("", BANK_GROUPS) + "</select>" : '<span class="note">Import the ledger list first.</span>') + "</div>";
-  // tabs
-  const tab = bankTab();
-  h += '<div class="bk-bar"><div class="bk-tabs" role="tablist">' + BANK_TABS.concat([]).map(([k, t]) => '<button role="tab" aria-selected="' + (tab === k && !b.focus) + '" data-btab="' + k + '">' + t + ' <span class="cnt">' + tc[k] + "</span></button>").join("") +
-    '<button role="tab" aria-selected="' + (tab === "rules") + '" data-btab="rules">Rules <span class="cnt">' + allRules().length + "</span></button></div>" +
-    (tab === "review" ? '<label class="bk-switch"><input type="checkbox" data-bgroup' + (b.grouped ? " checked" : "") + "> Group by party</label>" : "") +
-    '<input type="search" class="bk-search" data-bankq data-fk="bankq" data-keeptyped autocomplete="off" placeholder="Search the description, party or amount" value="' + esc(b.q) + '"></div>';
-  if (bankRangeOn()){
-    const inR = bankRangeRows(), out = inR.reduce((a2, r) => a2 + num(r.debit), 0), inn = inR.reduce((a2, r) => a2 + num(r.credit), 0);
-    h += colChipBar("bank", inR.length, b.rows.length + " lines", "out " + INR.format(r2(out)) + " \u00b7 in " + INR.format(r2(inn)));
-  }
-  h += goneHtml();
-  h += dupFindHtml();
-  h += bankFocusHtml();
-  if (tab === "done" && !b.focus && Bridge.on() && Bridge.up() && tc.done) h += '<div class="bk-found"><span class="muted">Deleted some of these in Tally?</span> <button class="btn small" data-act="goneCheck">Check they are still in Tally</button></div>';
-  if (b.offerRule){
-    const o = b.offerRule;
-    h += '<div class="bk-found" style="border-color:var(--ledger)"><b>Keep this as a rule?</b> Every future line containing \u201c' + esc(o.text) + '\u201d would go to <b>' + esc(o.ledger) + "</b> by itself." +
-      ' <button class="btn small primary" data-act="ruleFromBulk">Yes, make the rule</button><button class="linkbtn" data-act="ruleNoThanks">No thanks</button></div>';
-  }
-  if (b.q.trim()){
-    const hits = bankVisibleRows().filter(r => r.state !== "sent" && r.state !== "intally");
-    h += '<div class="bk-found"><b>' + hits.length + "</b> entr" + (hits.length === 1 ? "y" : "ies") + ' match \u201c' + esc(b.q.trim()) + "\u201d" +
-      (hits.length ? ' \u00b7 <span class="muted">set them all to</span> <input type="text" class="bk-allled" data-allled data-fk="allled" data-ac="1" autocomplete="off" placeholder="a ledger from Tally" value="' + esc(b.allLed || "") + '">' +
-        '<button class="btn small primary" data-act="bankApplyAll">Set all ' + hits.length + "</button>" : "") +
-      ' <button class="linkbtn" data-act="bankClearSearch">Clear</button></div>';
-  }
-  if (tab === "rules") h += viewRulesPanel();
-  else if (tab === "review" && b.grouped) h += viewBankGroups();
-  else h += bankTable(tab);
-  h += "</div>";
-  if (b.showSettings) h += bankSettingsHtml();
-  return h;
-}
+// the bank screen: React (app/src/screens/Bank.jsx)
+function viewBank(){ return '<div data-react="Bank"></div>'; }

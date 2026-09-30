@@ -42,6 +42,9 @@ window.render = function render() {
   // focus inside a React screen is lost when the old screen around it is redrawn: note it, give it back after
   const a = document.activeElement, inHost = a && a.closest && a.closest(".react-host");
   let sel = null; try { sel = inHost ? [a.selectionStart, a.selectionEnd] : null; } catch { /* not a text field */ }
+  // the ledger list open under a box in a React screen: the old screens' redraw closes it (the box is out of the page
+  // for a moment), so it is opened again once React has put the box back
+  const acFk = typeof AC === "object" ? AC.fk : null;
   try { legacyRender(); }
   finally {
     adopt();
@@ -50,5 +53,6 @@ window.render = function render() {
     flushSync(() => subs.forEach((f) => f()));
     // the column filter pop-up sits under its funnel button, which may be in a React table
     if (typeof placeColPop === "function") placeColPop();
+    if (acFk && !AC.fk) { const el = document.querySelector('[data-fk="' + CSS.escape(acFk) + '"]'); if (el && document.activeElement === el) acOpen(el); }
   }
 };
