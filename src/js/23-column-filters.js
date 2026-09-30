@@ -543,7 +543,7 @@ function acPick(i){
     openCreateLedger(it.name, input.dataset.bled || null, input.dataset.bled ? null : input.dataset.fk);
     return;
   }
-  input.value = it.name;
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(input, it.name);
   AC.picked.at = Date.now();
   if (input.dataset.bled){ input.dispatchEvent(new Event("change", {bubbles: true})); AC.picked.at = Date.now(); setTimeout(() => { const el = acInput() || document.querySelector('[data-fk="' + AC.picked.fk.replace(/"/g, '\\"') + '"]'); if (el && document.activeElement === el) el.blur(); acClose(); }, 0); }
   else if (input.hasAttribute("data-bulkled")) bulkLedgerFrom(input);

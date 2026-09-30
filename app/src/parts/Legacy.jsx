@@ -2,5 +2,5 @@
 // piece moves to React too. Its buttons keep working through the old click handlers.
 export default function Legacy({ html, as: Tag = "div", ...rest }) {
   if (!html) return null;
-  return <Tag style={{ display: "contents" }} {...rest} dangerouslySetInnerHTML={{ __html: html }} />;
+  return <Tag style={{ display: "contents" }} data-legacy="" {...rest} dangerouslySetInnerHTML={{ __html: html }} />;
 }

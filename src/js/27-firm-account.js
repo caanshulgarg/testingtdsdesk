@@ -670,38 +670,6 @@ function actionBar(){
 }
 function pf(label, key, val, type){ return '<label class="f"><span>' + label + '</span><input type="' + (type || "text") + '" data-p="' + key + '" data-fk="p:' + key + '" value="' + esc(val == null ? "" : val) + '"' + (type === "number" ? ' step="0.01"' : "") + "></label>"; }
 
-function viewGst(e, c, ro, snap){
-  const co = CO();
-  if (ro){
-    const s = snap || {};
-    if (!s.rcm && !s.blocked) return "";
-    return '<section><h3>GST</h3><p class="note" style="margin:0">' + (s.rcm ? "Reverse charge: " + esc(catLabel(RCM_CATS, s.rcm.cat)) + " @ " + s.rcm.rate + "%, tax " + money(s.rcm.tax) + ". " : "") +
-      (s.blocked ? "GST credit blocked: " + esc(catLabel(BLOCK_CATS, s.blocked)) + "." : "") + "</p></section>";
-  }
-  const gd = c.gd, r = c.rcmTax;
-  let h = '<section><h3>GST</h3><div class="gstgrid">';
-  // reverse charge
-  h += '<div class="gstbox"><label class="chk"><input type="checkbox" data-gst="rcm"' + (r ? " checked" : "") + "> <b>Reverse charge applies</b></label>";
-  if (gd.rcmSuggest) h += '<div class="suggest">Suggested: ' + esc(catLabel(RCM_CATS, gd.rcmSuggest.cat)) + ' <span class="note">(' + esc(gd.rcmSuggest.why) + ')</span><div class="row" style="margin-top:6px"><button class="btn small" data-act="rcmApply">Apply reverse charge</button><button class="btn small" data-act="rcmDismiss">Not reverse charge</button></div></div>';
-  if (r){
-    h += '<div class="grid" style="margin-top:6px"><label class="f wide"><span>Category</span><select data-gst="rcmCat">' + RCM_CATS.map(x => '<option value="' + x.id + '"' + (x.id === e.rcm.cat ? " selected" : "") + ">" + esc(x.label) + "</option>").join("") + "</select></label>" +
-      '<label class="f"><span>Rate %</span><input type="number" step="0.01" data-gst="rcmRate" value="' + esc(e.rcm.rate) + '"></label>' +
-      '<label class="chk" style="align-self:end"><input type="checkbox" data-gst="rcmInter"' + (r.inter ? " checked" : "") + "> Inter-state (IGST)</label></div>" +
-      '<p class="note" style="margin:6px 0 0">Tax payable under reverse charge: <b>' + money(r.tax) + "</b> (" + (r.inter ? "IGST " + money(r.igst) : "CGST " + money(r.cgst) + " + SGST " + money(r.sgst)) + ")" + (c.blocked ? ", with the input credit blocked" : ", and the same amount taken as input credit") + ". Check the rate against the current notification.</p>";
-  }
-  h += "</div>";
-  // blocked credit
-  const bcat = c.blocked ? gd.block.cat : (e.itcBlock && e.itcBlock.cat) || (gd.blockSuggest && gd.blockSuggest.cat) || BLOCK_CATS[0].id;
-  h += '<div class="gstbox"><label class="chk"><input type="checkbox" data-gst="block"' + (c.blocked ? " checked" : "") + "> <b>GST credit is blocked (section 17(5))</b></label>";
-  if (gd.blockSuggest) h += '<div class="suggest">Possibly blocked: ' + esc(catLabel(BLOCK_CATS, gd.blockSuggest.cat)) + '<div class="row" style="margin-top:6px"><button class="btn small" data-act="blockAccept">Accept: block credit</button><button class="btn small" data-act="blockReject">Reject: credit allowed</button></div></div>';
-  if (c.blocked){
-    h += '<label class="f" style="margin-top:6px"><span>Category</span><select data-gst="blockCat">' + BLOCK_CATS.map(x => '<option value="' + x.id + '"' + (x.id === bcat ? " selected" : "") + ">" + esc(x.label) + " — " + esc(x.sec) + "</option>").join("") + "</select></label>" +
-      '<p class="note" style="margin:6px 0 0">' + (gd.block.from === "client" ? "Blocked by this client's setting. Untick to claim credit on this bill. " : "") + "GST of " + money(c.gstTotal + (r ? r.tax : 0)) + " is added to the expense instead of input credit.</p>";
-  }
-  h += "</div></div></section>";
-  return h;
-}
-
 /* ---------- Client: settings ---------- */
 function viewCompanySettings(){
   const c = CO();
@@ -851,6 +819,90 @@ const timers = {};
 function later(key, fn, ms){ clearTimeout(timers[key]); timers[key] = setTimeout(fn, ms); }
 function curEntry(){ return S.view === "company" && S.selected ? D().entries[S.selected] : null; }
 
+/* ---------- editing a draft bill: called by the bill screen (React: app/src/screens/Bill.jsx) ---------- */
+// a field read from the bill (e.x): saved a moment after typing stops; the date at once
+function billSetX(e, key, value){
+  if (!e || e.status !== "draft") return;
+  const cid = S.coId;
+  if (key === "vendorName" && (!e.partyLedger || e.partyLedger === e.x.vendorName)) e.partyLedger = value;
+  e.x[key] = /vendorGstin|vendorPan|buyerGstin/.test(key) ? String(value).toUpperCase() : value;
+  if (e.uncertain) e.uncertain = e.uncertain.filter(k => k !== key);
+  if (key === "invoiceDate"){ Store.saveEntry(cid, e); render(); return; }
+  later("e" + e.id, () => Store.saveEntry(cid, e), 600);
+  later("r", render, 350);
+  if (window.FinComReact) FinComReact.redraw();
+}
+// a ledger or the narration, as typed
+function billSetText(e, key, value){
+  if (!e || e.status !== "draft") return;
+  const cid = S.coId;
+  e[key] = value;
+  later("e" + e.id, () => Store.saveEntry(cid, e), 600); later("r", render, 350);
+  if (window.FinComReact) FinComReact.redraw();
+}
+// a choice on the bill: the payment type, why TDS is not booked, earlier bills' TDS, a ledger picked from a list
+function billSetChoice(e, key, value){
+  if (!e || e.status !== "draft") return;
+  const cid = S.coId, prev = e.natureId;
+  e[key] = value;
+  if (key === "natureId"){
+    e.confirmType = false;
+    if (!e.expenseLedger || e.expenseLedger === CO().expenseLedgers[prev]) e.expenseLedger = CO().expenseLedgers[value] || e.expenseLedger;
+  }
+  if (key === "expenseLedger"){ e.expenseUserSet = true; e.expenseFrom = ""; }
+  Store.saveEntry(cid, e); refreshStats(cid); render();
+}
+// "Deduct TDS on this bill"
+function billBookTds(e, on){
+  if (!e || e.status !== "draft") return;
+  const cid = S.coId, c0 = compute(e, cid);
+  if (on && c0.tdsWould <= 0){ e.tdsAlways = true; e.tdsSkip = null; e.tdsForce = true; Store.saveEntry(cid, e); render(); return; }
+  if (!on && e.tdsAlways && c0.tdsWould > 0 && !c0.skip){ e.tdsAlways = false; Store.saveEntry(cid, e); render(); return; }
+  if (on){
+    // book it: clear a bill-level choice, or override a supplier/client setting for this bill
+    if (e.tdsSkip) e.tdsSkip = null;
+    if (c0.skip && c0.skip.from !== "bill") e.tdsForce = true;
+    if (!compute(e, cid).skip) e.tdsForce = e.tdsForce || false;
+  } else {
+    e.tdsForce = false;
+    if (!tdsSkipOf(e, CO(cid), c0.party)) e.tdsSkip = "pay";
+  }
+  Store.saveEntry(cid, e); refreshStats(cid); render();
+}
+// the GST section: reverse charge (on, category, rate, inter-state) and blocked credit (on, category)
+function billGst(e, k, v){
+  if (!e || e.status !== "draft") return;
+  const cid = S.coId, co0 = CO(cid);
+  if (k === "rcm"){
+    if (v){ const sg = suggestRcm(e, co0); const cat = (e.rcm && e.rcm.cat) || (sg && sg.cat) || "other"; e.rcm = {on:true, cat, rate:catRate(cat), inter:null}; }
+    else { e.rcm = Object.assign({}, e.rcm || {}, {on:false}); e.rcmDismissed = true; }
+  }
+  if (k === "rcmCat"){ e.rcm.cat = v; e.rcm.rate = catRate(v); }
+  if (k === "rcmRate") e.rcm.rate = num(v);
+  if (k === "rcmInter") e.rcm.inter = v;
+  if (k === "block"){ const sg = suggestBlock(e, co0); e.itcBlock = {on: v, cat: (e.itcBlock && e.itcBlock.cat) || (sg && sg.cat) || BLOCK_CATS[0].id}; if (!v) e.blockDismissed = true; }
+  if (k === "blockCat") e.itcBlock = {on:true, cat:v};
+  Store.saveEntry(cid, e); refreshStats(cid); render();
+}
+// "Booked before for this supplier": use that expense ledger
+function billUseExpense(e, name){ if (e && e.status === "draft"){ e.expenseLedger = name; e.expenseUserSet = true; e.expenseFrom = ""; Store.saveEntry(S.coId, e); render(); } }
+// a ledger not in Tally: use a suggested one (to) or create it; the same fix goes to every bill waiting with it
+function billFixLedger(role, old, to){
+  const cid = S.coId;
+  const apply = name => {
+    const e0 = curEntry();
+    if (e0 && !e0.snapshot){
+      if (role === "party") e0.partyLedger = name;
+      else if (role === "expense") e0.expenseLedger = name;
+      Store.saveEntry(cid, e0);
+    }
+    const n = replaceLedgerInWaiting(cid, old, name, role);
+    toast("\u201c" + name + "\u201d used" + (n > 1 ? " in " + n + " bills" : "") + (["gst", "tds", "roundoff", "rcm-in", "rcm-out"].includes(role) ? ", and saved in Company settings" : "") + ".");
+    refreshStats(cid); render();
+  };
+  if (to) apply(to);
+  else openCreateLedger(old, null, null, {group: role === "party" ? "Sundry Creditors" : role === "expense" ? "Indirect Expenses" : role === "roundoff" ? "Indirect Expenses" : "Duties & Taxes", onCreated: name => apply(name)});
+}
 /* ---------- navigation actions: called by the React screens and by the click handler below ---------- */
 function goClient(to){
   const cid = S.coId;
@@ -871,7 +923,11 @@ function goClient(to){
 function navHome(tab){ if (tab === "help" && typeof SUP === "object" && !(S.view === "home" && S.homeTab === "help")) S.helpCtx = SUP.context(); closeSwitcher(); S.firmMenu = false; S.tallyPanel = false; S.view = "home"; S.homeTab = tab; S.step = null; S.addingCo = false; S.arm = null; if (tab === "rules") S.settingsTab = null; render(); window.scrollTo(0, 0); }
 function goTab(tab){ S.tab = tab; S.step = null; S.arm = null; render(); }
 function toggleSetup(){ S.step = null; S.tab = isSetupTab(S.tab) ? "invoices" : "settings"; render(); }
+// a control drawn by React answers its own events; these handlers take the old screens, and the old pieces a React
+// screen still shows inside it (marked data-legacy)
+function reactOwned(el){ return !!(el && el.closest && el.closest(".react-host") && !el.closest("[data-legacy]")); }
 document.addEventListener("click", ev => {
+  if (reactOwned(ev.target)) return;
   const t = ev.target.closest("button,[data-select],[data-open],#drop,#modal,#bankDrop,#salesDrop");
   if (!t) return;
   if (t.dataset.settab !== undefined){ S.settingsTab = t.dataset.settab || null; render(); window.scrollTo(0, 0); return; }
@@ -895,8 +951,7 @@ document.addEventListener("click", ev => {
     return;
   }
   if (t.dataset.useexp){
-    const e0 = curEntry();
-    if (e0 && e0.status === "draft"){ e0.expenseLedger = t.dataset.useexp; e0.expenseUserSet = true; e0.expenseFrom = ""; Store.saveEntry(S.coId, e0); render(); }
+    billUseExpense(curEntry(), t.dataset.useexp);
     return;
   }
   if (t.dataset.person){
@@ -1001,23 +1056,7 @@ document.addEventListener("click", ev => {
     refreshStats(S.coId); render();
     return;
   }
-  if (t.dataset.billfix !== undefined || t.dataset.billcreate !== undefined){
-    const cid = S.coId, role = t.dataset.billfix || t.dataset.billcreate, old = t.dataset.old;
-    const apply = to => {
-      const e0 = curEntry();
-      if (e0 && !e0.snapshot){
-        if (role === "party") e0.partyLedger = to;
-        else if (role === "expense") e0.expenseLedger = to;
-        Store.saveEntry(cid, e0);
-      }
-      const n = replaceLedgerInWaiting(cid, old, to, role);
-      toast("\u201c" + to + "\u201d used" + (n > 1 ? " in " + n + " bills" : "") + (["gst", "tds", "roundoff", "rcm-in", "rcm-out"].includes(role) ? ", and saved in Company settings" : "") + ".");
-      refreshStats(cid); render();
-    };
-    if (t.dataset.billfix !== undefined) apply(t.dataset.new);
-    else openCreateLedger(old, null, null, {group: role === "party" ? "Sundry Creditors" : role === "expense" ? "Indirect Expenses" : role === "roundoff" ? "Indirect Expenses" : "Duties & Taxes", onCreated: name => apply(name)});
-    return;
-  }
+  if (t.dataset.billfix !== undefined || t.dataset.billcreate !== undefined){ billFixLedger(t.dataset.billfix || t.dataset.billcreate, t.dataset.old, t.dataset.billfix !== undefined ? t.dataset.new : null); return; }
   if (t.dataset.bridgepin !== undefined){
     const port = num(t.dataset.bridgepin);
     Bridge.setCfg({port: port || 0}); Bridge.lastOpenKey = null;
@@ -1746,6 +1785,7 @@ document.addEventListener("keydown", ev => {
 });
 
 document.addEventListener("input", ev => {
+  if (reactOwned(ev.target)) return;
   const t = ev.target;
   if (t && t.dataset && t.dataset.r2f){
     const tab = S.r2Tab || "suppliers";
@@ -1804,15 +1844,8 @@ document.addEventListener("input", ev => {
   if (S.view === "company" && S.tab === "bank" && bankInput(t)) return;
   if (S.view === "company" && S.tab === "sales" && salesInput(t)) return;
     const e = curEntry(), cid = S.coId;
-  if (t.dataset.x && e && e.status === "draft"){
-    if (t.dataset.x === "vendorName" && (!e.partyLedger || e.partyLedger === e.x.vendorName)) e.partyLedger = t.value;
-    e.x[t.dataset.x] = /vendorGstin|vendorPan|buyerGstin/.test(t.dataset.x) ? t.value.toUpperCase() : t.value;
-    if (e.uncertain) e.uncertain = e.uncertain.filter(k => k !== t.dataset.x);
-    later("e" + e.id, () => Store.saveEntry(cid, e), 600);
-    if (t.type !== "date") later("r", render, 350);
-    return;
-  }
-  if (t.dataset.e && e && e.status === "draft" && t.type === "text"){ e[t.dataset.e] = t.value; later("e" + e.id, () => Store.saveEntry(cid, e), 600); later("r", render, 350); return; }
+  if (t.dataset.x && e && e.status === "draft" && t.type !== "date"){ billSetX(e, t.dataset.x, t.value); return; }
+  if (t.dataset.e && e && e.status === "draft" && t.type === "text"){ billSetText(e, t.dataset.e, t.value); return; }
   const p = S.partySel && D().parties[S.partySel];
   if (t.dataset.p && p && t.tagName === "INPUT"){ p[t.dataset.p] = /^(pan|gstin)$/.test(t.dataset.p) ? t.value.toUpperCase().trim() : t.value; later("p" + p.id, () => Store.saveParty(cid, p), 600); return; }
   if (t.dataset.ytd && p){
@@ -1835,6 +1868,7 @@ document.addEventListener("input", ev => {
 function setPath(o, path, v){ const k = path.split("."); if (k.length === 2) o[k[0]][k[1]] = v; else o[k[0]] = v; }
 
 document.addEventListener("change", ev => {
+  if (reactOwned(ev.target)) return;
   if (ev.target && ev.target.id && ["booksIn", "mastersIn", "tbIn", "twoBIn", "filedIn"].includes(ev.target.id)){ booksChange(ev.target); return; }
   if (ev.target && ev.target.dataset && (ev.target.dataset.dbfrom !== undefined || ev.target.dataset.dbto !== undefined || ev.target.dataset.tbon !== undefined)){ booksChange(ev.target); return; }
   if (ev.target && ev.target.dataset && S.books && gstFixChange(ev.target)) return;
@@ -1873,45 +1907,14 @@ document.addEventListener("change", ev => {
   if (t.dataset.actToggle === "cloudDocs"){ S.firm.cloudDocs = t.checked; Store.saveFirm(); toast(t.checked ? "Documents will be kept in the firm account." : "Documents stay on this computer only."); render(); return; }
   if (t.dataset && t.dataset.firmset === "docYears"){ S.firm.docYears = num(t.value); Store.saveFirm(); render(); return; }
   if (t.id === "fileIn" || t.id === "camIn"){ const files = Array.from(t.files || []); t.value = ""; handleFiles(files, pickMode); return; }
-  if (t.dataset.x === "invoiceDate" && e && e.status === "draft"){ e.x.invoiceDate = t.value; if (e.uncertain) e.uncertain = e.uncertain.filter(k => k !== "invoiceDate"); Store.saveEntry(cid, e); render(); return; }
-  if (t.dataset.gst && e && e.status === "draft"){
-    const k = t.dataset.gst, co0 = CO(cid);
-    if (k === "rcm"){
-      if (t.checked){ const sg = suggestRcm(e, co0); const cat = (e.rcm && e.rcm.cat) || (sg && sg.cat) || "other"; e.rcm = {on:true, cat, rate:catRate(cat), inter:null}; }
-      else { e.rcm = Object.assign({}, e.rcm || {}, {on:false}); e.rcmDismissed = true; }
-    }
-    if (k === "rcmCat"){ e.rcm.cat = t.value; e.rcm.rate = catRate(t.value); }
-    if (k === "rcmRate") e.rcm.rate = num(t.value);
-    if (k === "rcmInter") e.rcm.inter = t.checked;
-    if (k === "block"){ const sg = suggestBlock(e, co0); e.itcBlock = {on: t.checked, cat: (e.itcBlock && e.itcBlock.cat) || (sg && sg.cat) || BLOCK_CATS[0].id}; if (!t.checked) e.blockDismissed = true; }
-    if (k === "blockCat") e.itcBlock = {on:true, cat:t.value};
-    Store.saveEntry(cid, e); refreshStats(cid); render(); return;
-  }
+  if (t.dataset.x === "invoiceDate" && e && e.status === "draft"){ billSetX(e, "invoiceDate", t.value); return; }
+  if (t.dataset.gst && e && e.status === "draft"){ billGst(e, t.dataset.gst, t.type === "checkbox" ? t.checked : t.value); return; }
   if (t.dataset.gstrule && CO()){ const co = CO(); co.gstBlock = co.gstBlock || {}; co.gstBlock[t.dataset.gstrule] = t.value; Store.saveCompany(co); render(); return; }
-  if (t.hasAttribute("data-bookTds") && e && e.status === "draft"){
-    const c0 = compute(e, cid);
-    if (t.checked && c0.tdsWould <= 0){ e.tdsAlways = true; e.tdsSkip = null; e.tdsForce = true; Store.saveEntry(cid, e); render(); return true; }
-    if (!t.checked && e.tdsAlways && c0.tdsWould > 0 && !c0.skip){ e.tdsAlways = false; Store.saveEntry(cid, e); render(); return true; }
-    if (t.checked){
-      // book it: clear a bill-level choice, or override a supplier/client setting for this bill
-      if (e.tdsSkip) e.tdsSkip = null;
-      if (c0.skip && c0.skip.from !== "bill") e.tdsForce = true;
-      if (!compute(e, cid).skip) e.tdsForce = e.tdsForce || false;
-    } else {
-      e.tdsForce = false;
-      if (!tdsSkipOf(e, CO(cid), c0.party)) e.tdsSkip = "pay";
-    }
-    Store.saveEntry(cid, e); refreshStats(cid); render(); return;
-  }
+  if (t.hasAttribute("data-bookTds") && e && e.status === "draft"){ billBookTds(e, t.checked); return; }
   if (t.dataset.e && e && e.status === "draft"){
-    if (t.type === "checkbox") e[t.dataset.e] = t.checked;
-    else if (t.tagName === "SELECT"){
-      const prev = e.natureId; e[t.dataset.e] = t.value;
-      if (t.dataset.e === "natureId") e.confirmType = false;
-      if (t.dataset.e === "expenseLedger"){ e.expenseUserSet = true; e.expenseFrom = ""; }
-      if (t.dataset.e === "natureId" && (!e.expenseLedger || e.expenseLedger === CO().expenseLedgers[prev])) e.expenseLedger = CO().expenseLedgers[t.value] || e.expenseLedger;
-    }
-    Store.saveEntry(cid, e); refreshStats(cid); render(); return;
+    if (t.type === "checkbox" || t.tagName === "SELECT") billSetChoice(e, t.dataset.e, t.type === "checkbox" ? t.checked : t.value);
+    else { Store.saveEntry(cid, e); refreshStats(cid); render(); }
+    return;
   }
   if (t.hasAttribute("data-pnotds")){ const p = D().parties[S.partySel]; if (p){ p.noTds = t.checked; if (t.checked && !p.noTdsReason) p.noTdsReason = "na"; Store.saveParty(cid, p); refreshStats(cid); render(); } return; }
   if (t.hasAttribute("data-ptransporter")){ const p = D().parties[S.partySel]; if (p){ p.transporter = t.checked; Store.saveParty(S.coId, p); render(); } return true; }
@@ -1963,6 +1966,7 @@ document.addEventListener("keydown", ev => {
   else if (ev.key === "Enter" && ev.target.closest && ev.target.closest("#colpop")){ ev.preventDefault(); ev.stopImmediatePropagation(); colPopApply(false); }
 }, true);
 document.addEventListener("input", ev => {
+  if (reactOwned(ev.target)) return;
   const t = ev.target;
   if (!t || !t.closest || !t.closest("#colpop")) return;
   ev.stopImmediatePropagation();

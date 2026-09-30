@@ -14,12 +14,14 @@ export default function Collect() {
       {bank ? (
         <section className="collect-card">
           <h3>Upload a bank statement</h3>
-          {/* until the bank screens move, the bank's own handlers take this box's clicks and drops (id, data-act) */}
-          <div className="drop" id="bankDrop" data-act="bankPick" tabIndex={0} role="button" aria-label="Upload a bank statement">
+          {/* the file chosen, or dropped here (id bankDrop), is taken by the bank's own handlers until the bank screens move */}
+          <div className="drop" id="bankDrop" tabIndex={0} role="button" aria-label="Upload a bank statement"
+            onClick={() => document.getElementById("bankIn").click()}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); document.getElementById("bankIn").click(); } }}>
             <strong>Drop a statement here, or click to choose</strong>
             <div className="note">Excel, CSV or PDF from any bank. The balances are checked, and the statement is filed under the right account.</div>
           </div>
-          <input type="file" id="bankIn" accept=".xls,.xlsx,.csv,.pdf,.txt" multiple className="hidden" />
+          <input type="file" id="bankIn" accept=".xls,.xlsx,.csv,.pdf,.txt" multiple className="hidden" onChange={(e) => bankChange(e.target)} />
         </section>
       ) : <section className="collect-card"><h3>Upload purchase bills</h3><UploadBlock /></section>}
       {jobs && <section className="collect-card"><Jobs which={S.coId} /><button className="btn small" onClick={() => goStep("review")}>Review them</button></section>}

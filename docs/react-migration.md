@@ -31,6 +31,10 @@ app/                      the React app (Vite)
   and the error goes to the console, instead of the whole page going blank.
 - **Pieces not yet moved** inside a React screen are shown with `<Legacy html={viewX()} />` (parts/Legacy.jsx);
   their buttons keep working through the old handlers until they move too.
+- **Events**: a control drawn by React answers its own events. The old document-wide click/input/change handlers
+  skip anything inside a React screen (`reactOwned` in src/js/27), except old pieces shown there (`data-legacy`).
+- **Editing a bill** goes through `billSetX`, `billSetText`, `billSetChoice`, `billBookTds`, `billGst`,
+  `billUseExpense`, `billFixLedger` (src/js/27), for React and the old handlers alike.
 - **State** is still the one object `S`, and every change still ends in `render()`. A React screen's own passing
   state (a half-typed OTP) can live in the component: its host element is kept through redraws.
 - **The last step** (after every screen): `render()` and the string screens go, and the logic files become ES
@@ -69,7 +73,8 @@ Status: **done** (in React, test passing) · **next** · blank = not started. Ab
 | | Help and support: `viewHelp`, `viewSup*` (40) | |
 | **Client: Collect** | `viewCollect` (02) · `viewJobs`, `readingCheck`, `uploadOptions`, busy cards (01) · `docqPanel`, `uploadBlock` (19) | **done** |
 | **Client: Post / Done** | `viewPostStep`, `viewDoneStep`, `bankReportHtml` (02) | |
-| **Purchase bills** | `viewInvoices`, `viewDetail`, `docWarnHtml`, `viewParties` (19) · `viewReviewTable`, `reviewBar`, `drawerHtml` (18) · `itemsHtml`, `partyHistHtml` (01) | |
+| **Purchase bills** | `viewInvoices`, `viewDetail`, `field`, `docWarnHtml` (19) · `itemsHtml`, `partyHistHtml`, `ytdSourceHtml`, `rereadButtons` (01) · `viewGst` (27) | **done** |
+| | review table `viewReviewTable`, `reviewBar`, `drawerHtml` (18) · `viewParties` (19) | next |
 | **Bank** | `viewBank`, `viewSuggestions`, `viewRulesPanel` (22) · `bankRowHtml`, `viewBankGroups`, `bankBar`, `colPopHtml`, `colChipBar` (23) · `viewBankSetup` (02) · recon, balance, duplicates (24) · `fixBanner` (21) | |
 | **Sales** | `viewSales`, `viewSalesCreate`, invoice and print, settings, `postReportHtml` (26) | |
 | **Transactions** | `viewTransactions` (03) | |

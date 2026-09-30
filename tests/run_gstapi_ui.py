@@ -30,7 +30,7 @@ def fake(route):
     route.fulfill(status=200, content_type="application/json", body=json.dumps(r))
 with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1400, "height": 900}); pg.on("pageerror", lambda e: errors.append(str(e)))
-    pg.route("**/functions/v1/gst-taxpro", fake)
+    pg.route("**/functions/v1/gst-taxpro", fake)  # the React build: TDSDESK_SITE=../app/dist-test
     pg.goto("http://localhost:8147/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1500)
     pg.evaluate("""(bk) => { const c = newCompany({name: "ZZ TEST (VMS books)", gstin: "07AADCV3366N1ZU"}); S.companies[c.id] = c; S.coId = c.id; S.view = "company"; S.tab = "books"; S.loadingCo = false;
       S.books = Object.assign({loading: false, challans: [], alloc: {}}, bk, {cid: c.id, misCfg: {freq: "off"}, auditCfg: {freq: "off"}, twoBs: {}}); S.books.map = Books.mapLedgers(bk.vouchers, {}); LedMaster.refresh(S.books); window.__bk = S.books;
@@ -44,13 +44,13 @@ with sync_playwright() as p:
     pg.fill('input[data-gset="puser"][data-greg="07"]', "vmsevents07"); pg.press('input[data-gset="puser"][data-greg="07"]', "Tab"); pg.wait_for_timeout(800)
     ok(pg.evaluate("GSTSet.peek('07').portalUser") == "vmsevents07", "the portal username is kept in GST settings")
     pg.evaluate("S.tab = 'books'; render()"); pg.wait_for_timeout(2000)
-    pg.click('button[data-gapi="otp"]'); pg.wait_for_timeout(1500)
+    pg.click('#app button:has-text("Send OTP")'); pg.wait_for_timeout(1500)
     ok({"action": "otp", "gstin": "07AADCV3366N1ZU", "username": "vmsevents07"} in seen and "OTP sent" in pg.inner_text("#app"), "Send OTP: the GSTIN and username go to the firm's server function; the OTP box appears")
-    pg.fill("input[data-gapiotp]", "111111"); pg.click('button[data-gapi="auth"]'); pg.wait_for_timeout(1500)
+    pg.fill('#app input[aria-label="OTP"]', "111111"); pg.click('#app button:has-text("Connect")'); pg.wait_for_timeout(1500)
     ok("Invalid OTP" in pg.inner_text("#app") and not pg.evaluate("GSTAPI.live('07AADCV3366N1ZU')"), "a wrong OTP: the portal's reason is shown, not connected")
-    pg.fill("input[data-gapiotp]", "575757"); pg.click('button[data-gapi="auth"]'); pg.wait_for_timeout(1500)
+    pg.fill('#app input[aria-label="OTP"]', "575757"); pg.click('#app button:has-text("Connect")'); pg.wait_for_timeout(1500)
     ok("Connected to the portal" in pg.inner_text("#app"), "the right OTP: connected, with the time the session ends")
-    pg.select_option("select[data-gapiym]", "202603"); pg.click('button[data-gapi="one"]'); pg.wait_for_timeout(5000)
+    pg.select_option('#app select[aria-label="Month"]', "202603"); pg.click('#app button:has-text("Fetch 2B")'); pg.wait_for_timeout(5000)
     t = pg.inner_text("#app")
     ok(pg.evaluate("!!S.books.twoBs['07AADCV3366N1ZU|032026'] && S.books.twoBs['07AADCV3366N1ZU|032026'].source === 'api'") and "2B fetched: Mar 2026" in t, "March 2B fetched and put where a 2B file goes")
     rows = pg.evaluate("S.books.twoBs['07AADCV3366N1ZU|032026'].rows.length"); want = pg.evaluate("(j) => GST2B.fromJson({data: j}).rows.length", mar)
@@ -58,7 +58,7 @@ with sync_playwright() as p:
     ok(not any(k in seen[-1] for k in ("auth_token", "app_key", "sek")) and seen[-1].get("period") == "032026", "the browser sends no portal token: the server keeps the session")
     ok("matched" in t.lower() or "Matched" in t, "the 2B reconciliation runs on it")
     pg.screenshot(path=OUT + "/gstapi-2b.png", full_page=False)
-    pg.select_option("select[data-gapiym]", "202602"); pg.click('button[data-gapi="one"]'); pg.wait_for_timeout(2500)
+    pg.select_option('#app select[aria-label="Month"]', "202602"); pg.click('#app button:has-text("Fetch 2B")'); pg.wait_for_timeout(2500)
     ok("RET2B1016" in pg.inner_text("#app"), "a month the portal has no 2B for: its reason is shown")
     ok("at-1" not in json.dumps(pg.evaluate("S.books"), default=str), "the portal session is never saved with the books")
     br.close()

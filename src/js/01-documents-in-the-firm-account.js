@@ -839,21 +839,6 @@ function tdsSkipOf(e, co, party){
   return null;
 }
 // where the year's figure comes from: Tally plus bills here
-function ytdSourceHtml(e, c){
-  const party = c.party, fy = fyOf(e.x.invoiceDate), t = tallyYtdFor(party, fy, e);
-  const led = partyLedgerName(party, e);
-  const busy = S.ytdBusy === e.id;
-  if (t){
-    const ours = ourYtd(party, fy, c.rule.id, S.coId, true);
-    return '<p class="note" style="margin:4px 0 0">Year so far: <b>' + money0(t.credited) + "</b> credited to " + esc(t.ledger) + " in Tally (" + t.vouchers + " voucher" + (t.vouchers === 1 ? "" : "s") + ", GST left out)" +
-      (ours.credited ? " + <b>" + money0(ours.credited) + "</b> from " + ours.bills + " bill" + (ours.bills === 1 ? "" : "s") + " here not yet in Tally" : "") +
-      " \u00b7 read " + new Date(t.at).toLocaleString([], {day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit"}) +
-      ' <button class="linkbtn" data-act="ytdFetch"' + (busy ? " disabled" : "") + ">" + (busy ? "Reading\u2026" : "Check again") + "</button></p>";
-  }
-  if (!bridgeLive()) return '<p class="note" style="margin:4px 0 0">This year\u2019s total counts only the bills entered here. Connect the Tally Bridge to include what is already booked in Tally.</p>';
-  if (!led) return '<p class="note" style="margin:4px 0 0">Choose the supplier\u2019s Tally ledger below to check what was already credited to it this year.</p>';
-  return '<p class="note" style="margin:4px 0 0">This year\u2019s total counts only the bills entered here. <button class="linkbtn" data-act="ytdFetch"' + (busy ? " disabled" : "") + ">" + (busy ? "Reading from Tally\u2026" : "Check " + esc(led) + " in Tally") + "</button></p>";
-}
 function skipText(skip){
   return (SKIP_REASONS[skip.reason] || skip.reason) + (skip.from === "supplier" ? " (set for this supplier)" : skip.from === "client" ? " (set for this client)" : "");
 }
@@ -1148,20 +1133,6 @@ function itemChecks(x){
   if (s.multi)
     out.push({lvl: "info", text: "This bill has more than one GST rate (" + s.rates.filter(r => r.rate).map(r => r.rate + "%: " + INR.format(r.taxable)).join(", ") + "). Check the expense ledger and the input GST split."});
   return out;
-}
-function itemsHtml(e, ro){
-  const x = e.x, s = itemSummary(x);
-  if (!s) return "";
-  const rows = s.items.map((i, k) => "<tr><td>" + esc(i.desc) + "</td><td>" + esc(i.hsn || "\u2014") + '</td><td class="n">' + (i.qty ? i.qty + (i.unit ? " " + esc(i.unit) : "") : "\u2014") +
-    '</td><td class="n">' + (i.rate ? INR.format(i.rate) : "\u2014") + '</td><td class="n">' + INR.format(num(i.taxable)) + '</td><td class="n">' + (i.gstRate == null ? "\u2014" : i.gstRate + "%") + "</td></tr>").join("");
-  const rateRows = s.rates.map(r => "<tr><td>" + (r.rate == null ? "rate not shown" : r.rate + "%") + "</td><td>" + (r.hsn.size ? esc(Array.from(r.hsn).join(", ")) : "\u2014") +
-    '</td><td class="n">' + INR.format(r.taxable) + '</td><td class="n">' + (r.rate ? INR.format(r2(r.taxable * r.rate / 100)) : "\u2014") + "</td></tr>").join("");
-  if (s.unreliable) return '<p class="note" style="margin:6px 0">The line items on this bill could not be read reliably, so only the totals are used.</p>';
-  return '<details class="itembox"' + (s.multi ? " open" : "") + '><summary>What was billed \u00b7 ' + s.items.length + " line" + (s.items.length === 1 ? "" : "s") +
-    (s.multi ? ' <span class="tag">two GST rates</span>' : "") + "</summary>" +
-    '<div class="tblwrap"><table class="data"><thead><tr><th>Description</th><th>HSN/SAC</th><th class="n">Quantity</th><th class="n">Rate</th><th class="n">Value</th><th class="n">GST</th></tr></thead><tbody>' + rows + "</tbody></table></div>" +
-    (s.rates.length > 1 || s.multi ? '<h4 style="margin:10px 0 4px;font-size:14px">By GST rate</h4><div class="tblwrap"><table class="data"><thead><tr><th>Rate</th><th>HSN/SAC</th><th class="n">Taxable</th><th class="n">GST</th></tr></thead><tbody>' + rateRows + "</tbody></table></div>" : "") +
-    "</details>";
 }
 /* ---------- what kind of paper is this, and whose is it? ---------- */
 const DOC_KINDS = [
@@ -2812,14 +2783,6 @@ async function applyPartyHistory(entries, cid){
   }
   return changed;
 }
-function partyHistHtml(e, ro){
-  const h = e.partyHist;
-  if (!h || !h.top || !h.top.length) return "";
-  return '<div class="phist"><span class="muted">Booked before for this supplier:</span> ' +
-    h.top.map(t => (ro ? '<span class="chip">' : '<button class="chip' + (norm(t.ledger) === norm(e.expenseLedger) ? " on" : "") + '" data-useexp="' + esc(t.ledger) + '">') +
-      esc(t.ledger) + " <b>" + t.n + "\u00d7</b>" + (ro ? "</span>" : "</button>")).join(" ") + "</div>";
-}
-
 function fillLedgers(e, party, cid){
   if (!e.partyLedger){
     const t = tallyPartyFor(e.x, cid);
@@ -3442,12 +3405,6 @@ async function rereadEntry(e, force){
     toast("Could not read it that way: " + errCopy(err && err.code));
   }
   delete S.reading[e.id]; refreshStats(cid); render();
-}
-function rereadButtons(e){
-  return '<div class="row" style="gap:8px;margin-top:8px"><span class="note">Read again:</span>' +
-    '<button class="btn small" data-reread="free" data-rid="' + e.id + '">Free</button>' +
-    '<button class="btn small" data-reread="google" data-rid="' + e.id + '"' + (googleReady() ? "" : " disabled title=\"Google OCR is not set up\"") + ">Google OCR</button>" +
-    '<button class="btn small" data-reread="claude" data-rid="' + e.id + '"' + (claudeReady() ? "" : " disabled title=\"Claude is not available here\"") + ">Claude</button></div>";
 }
 function removeEntry(e){
   FileStore.drop(S.coId, e.id);
