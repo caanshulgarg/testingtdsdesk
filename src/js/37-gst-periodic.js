@@ -103,85 +103,16 @@ const GSTQ = {
   },
   apiMode(){ return ((S.books || {}).gstApi) || "save"; }
 };
-// ---- the screens: one simple card for each step ----
-function gstStep(n, title, body, done){ return '<div class="gq-step' + (done ? " done" : "") + '"><div class="gq-n">' + (done ? "\u2713" : n) + '</div><div class="gq-b"><div class="gq-t">' + title + "</div>" + body + "</div></div>"; }
-function gstMoney(v){ return "\u20b9" + INR.format(r2(v || 0)); }
-function gstD(s){ return s ? GSTAmend.dmy(String(s).replace(/-/g, "")) : ""; }
-function viewQrmp(b, part){
-  const ym = S.gstYm || "", reg = S.gstReg || "", qEnd = GSTSet.qEnd(ym), first = !GSTSet.isQEnd(ym), rec = GSTF.peek(ym, reg), q = GSTSet.qLabel(ym);
-  let h = '<section class="dash-card gq"><h3>' + esc(q) + " \u00b7 " + esc(GSTR.label(ym)) + ' <span class="tag">Quarterly (QRMP)</span></h3>';
-  if (first){
-    const f = GSTQ.iff(ym, reg), p = GSTQ.pmt06(ym, reg);
-    h += '<p class="note">This month has no GSTR-1 or 3B. Two things only:</p>' +
-      gstStep(1, "IFF \u2014 optional, by " + esc(gstD(GSTF.due(ym, "iff", reg))),
-        (f.all ? "<p>" + f.n + " invoice" + (f.n === 1 ? "" : "s") + (f.notes ? " and " + f.notes + " note" + (f.notes === 1 ? "" : "s") : "") + " to registered customers" + (f.over ? " in the IFF" : "") + ", value " + gstMoney(f.val) + ", tax " + gstMoney(f.tax) + ". Filing IFF lets your customers take the credit this month instead of at quarter end.</p>" +
-          (f.over ? '<p class="note"><b>IFF allows \u20b950 lakh a month.</b> The month has ' + f.all + " documents worth " + gstMoney(f.allVal) + "; the IFF file carries the first " + (f.n + f.notes) + " by date, and the other " + f.left + " go in the quarter\u2019s GSTR-1.</p>" : "") +
-          '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><button class="btn small" data-gq="iffjson">Download IFF JSON</button><span class="note">Filed on</span><input type="date" data-gqf="iff" value="' + esc(rec.iff || "") + '" style="width:auto"></div>' +
-          (rec.iff ? (GSTQ.iffFiled(ym, reg) ? '<p class="note">Filed: these are already on the portal and flow into the quarter\u2019s GSTR-1 by themselves, so the GSTR-1 file here leaves them out.</p>' : '<p class="bad">IFF cannot be filed after ' + esc(gstD(GSTF.due(ym, "iff", reg))) + ": these invoices go in the quarter\u2019s GSTR-1 instead.</p>") : "")
-          : "<p>No invoices to registered customers this month; nothing to file.</p>"), GSTQ.iffFiled(ym, reg) || !f.all) +
-      gstStep(2, "Pay tax by PMT-06 \u2014 by " + esc(gstD(p.due)),
-        '<p><select data-gqf="pmtMethod" style="width:auto"><option value="fixed"' + (p.method === "fixed" ? " selected" : "") + '>Fixed sum (35% method)</option><option value="self"' + (p.method === "self" ? " selected" : "") + ">Self-assessment (this month\u2019s tax)</option></select></p>" +
-        (p.known ? "<p><b>" + gstMoney(p.total) + "</b> to pay: " + esc(p.why) + ".</p>" + (p.total ? '<p class="note">IGST ' + gstMoney(p.amt.igst) + " \u00b7 CGST " + gstMoney(p.amt.cgst) + " \u00b7 SGST " + gstMoney(p.amt.sgst) + (p.amt.cess ? " \u00b7 cess " + gstMoney(p.amt.cess) : "") + "</p>" : '<p class="note">Nothing to pay this month.</p>') : '<p class="note">' + esc(p.why) + ".</p>") +
-        '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><span class="note">Paid:</span>' + GSTQ.H.map(k => '<label class="note">' + k.toUpperCase() + ' <input type="number" step="1" data-gqpay="' + k + '" value="' + (p.paid[k] != null ? esc(String(p.paid[k])) : "") + '" style="width:110px"></label>').join("") + "</div>" +
-        '<p class="note">What you pay here sits in the cash ledger and is used in the quarter\u2019s 3B.</p>', p.paidTotal > 0 || (p.known && !p.total));
-    h += '<p class="note">GSTR-1 and GSTR-3B for ' + esc(q) + " are due " + esc(gstD(GSTF.due(qEnd, "r1", reg))) + " and " + esc(gstD(GSTF.due(qEnd, "r3b", reg))) + ".</p>";
-    return h + "</section>";
-  }
-  // the quarter's last month: the two returns
-  const r1 = GSTQ.r1Q(qEnd, reg), t = GSTR.threeB(qEnd, reg), j = r1.json;
-  const cnt = k => (j[k] || []).reduce((a, g) => a + (g.inv || g.nt || []).length, 0);
-  h += '<p class="note">Two returns for the whole quarter, ' + esc(t.months.map(m => GSTR.label(m)).join(", ")) + ":</p>" +
-    gstStep(1, "GSTR-1 for the quarter \u2014 by " + esc(gstD(GSTF.due(qEnd, "r1", reg))),
-      "<p>" + cnt("b2b") + " B2B invoices, " + cnt("cdnr") + " notes, " + (j.b2cs || []).length + " B2C small lines, " + (cnt("b2cl") + cnt("exp")) + " B2C large and export invoices." +
-      (r1.skipped.length ? " Invoices already sent in IFF for " + esc(r1.skipped.map(m => GSTR.label(m)).join(" and ")) + " are left out." : "") + "</p>" +
-      '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><button class="btn small primary" data-act="gstJson">Download GSTR-1 JSON for the quarter</button><span class="note">Filed on</span><input type="date" data-gstf="r1" value="' + esc(GSTF.peek(qEnd, reg).r1 || "") + '" style="width:auto"></div>', !!GSTF.peek(qEnd, reg).r1) +
-    gstStep(2, "GSTR-3B for the quarter \u2014 by " + esc(gstD(GSTF.due(qEnd, "r3b", reg))),
-      '<div class="dash-row"><span>Tax for the quarter (after credit)</span><b>' + gstMoney(GSTQ.H.reduce((a, k) => a + num(t.pay.cash[k]), 0)) + "</b></div>" +
-      '<div class="dash-row"><span>Less: paid by PMT-06 in the first two months</span><b>' + gstMoney(GSTQ.H.reduce((a, k) => a + num(t.pmt[k]), 0)) + "</b></div>" +
-      '<div class="dash-row"><span><b>Still to pay</b></span><b>' + gstMoney(t.payable) + "</b></div>" +
-      (GSTQ.H.some(k => t.pmtLeft[k] > 0) ? '<p class="note">PMT-06 paid more than needed: ' + gstMoney(GSTQ.H.reduce((a, k) => a + t.pmtLeft[k], 0)) + " stays in the cash ledger.</p>" : "") +
-      '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><button class="btn small primary" data-act="gst3bJson">Download GSTR-3B JSON for the quarter</button></div>' +
-      '<p class="note">The full 3B working is on the GSTR-3B tab.</p>', !!GSTF.peek(qEnd, reg).r3b);
-  return h + "</section>";
-}
-function viewCmp08(b){
-  const ym = S.gstYm || "", reg = S.gstReg || "", qEnd = GSTSet.qEnd(ym), c = GSTQ.cmp08(qEnd, reg), rec = GSTF.peek(qEnd, reg);
-  let h = '<section class="dash-card gq"><h3>CMP-08 \u00b7 ' + esc(GSTSet.qLabel(qEnd)) + ' <span class="tag">Composition</span></h3>' +
-    '<p class="note">One statement a quarter, due ' + esc(gstD(c.due)) + ". Fill these figures on the portal (Returns \u2192 CMP-08).</p>" +
-    gstStep(1, "Turnover and tax",
-      '<div class="dash-row"><span>Sales in the quarter' + (c.cat.base === "taxable" ? " (taxable supplies)" : "") + "</span><b>" + gstMoney(c.turnover) + "</b></div>" +
-      '<div class="dash-row"><span>Rate: ' + esc(c.cat.l) + " (" + gstSetLink() + ")</span><b>" + gstMoney(c.tax) + "</b></div>" +
-      '<p class="note">CGST ' + gstMoney(c.cgst) + " \u00b7 SGST " + gstMoney(c.sgst) + (c.cat.base === "taxable" && c.exempt ? " \u00b7 exempt sales " + gstMoney(c.exempt) + " carry no tax" : "") + "</p>", false) +
-    gstStep(2, "Tax on purchases under reverse charge",
-      '<div class="dash-row"><span>Reverse charge in the quarter</span><b>' + gstMoney(c.rcm.igst + c.rcm.cgst + c.rcm.sgst + c.rcm.cess) + "</b></div>", false) +
-    gstStep(3, "Pay and file",
-      '<div class="dash-row"><span><b>Total to pay, in cash</b></span><b>' + gstMoney(c.payable) + "</b></div>" +
-      (c.late && S.books.gstEst ? '<p class="note">FinCom\u2019s estimate: filed ' + c.late + " days late, interest " + gstMoney(c.interest) + " (18% a year). The portal\u2019s figure is the one to pay.</p>" : "") +
-      '<div class="row" style="gap:8px;align-items:center"><span class="note">Filed on</span><input type="date" data-gqf="cmp08" data-gqq="' + qEnd + '" value="' + esc(rec.cmp08 || "") + '" style="width:auto"></div>' +
-      '<p class="note">A composition dealer takes no input tax credit and charges no tax on its invoices.</p>', !!rec.cmp08);
-  return h + "</section>";
-}
-function viewGstr4(b){
-  const ym = S.gstYm || "", reg = S.gstReg || "", fy = GSTF.fyOf(ym), g = GSTQ.gstr4(fy, reg), m = gstMoney, row = (l, x) => '<tr><td>' + l + '</td><td class="n">' + m(x.taxable) + '</td><td class="n">' + m(x.igst) + '</td><td class="n">' + m(x.cgst) + '</td><td class="n">' + m(x.sgst) + "</td></tr>";
-  return '<section class="dash-card gq"><h3>GSTR-4 \u00b7 ' + esc(fy) + ' <span class="tag">Composition, the year</span></h3><p class="note">The annual return, due ' + esc(gstD(g.due)) + ". Fill these figures on the portal (Returns \u2192 GSTR-4).</p>" +
-    gstStep(1, "Table 4: purchases", '<div class="bk-tablewrap"><table class="bk-table compact"><thead><tr><th></th><th class="n">Value</th><th class="n">IGST</th><th class="n">CGST</th><th class="n">SGST</th></tr></thead><tbody>' +
-      row("4A From registered suppliers (not reverse charge)", g.t4.reg) + row("4B From registered suppliers, reverse charge", g.t4.regRcm) + row("4C From unregistered suppliers, reverse charge", g.t4.unregRcm) + row("4D Import of services", g.t4.imps) + "</tbody></table></div>", false) +
-    gstStep(2, "Table 5: the year\u2019s CMP-08s", '<div class="bk-tablewrap"><table class="bk-table compact"><thead><tr><th>Quarter</th><th class="n">Turnover</th><th class="n">Tax</th><th class="n">Reverse charge</th>' + (S.books.gstEst ? '<th class="n">Interest, estimate</th>' : "") + "</tr></thead><tbody>" +
-      g.quarters.map(x => "<tr><td>" + esc(x.label) + '</td><td class="n">' + m(x.turnover) + '</td><td class="n">' + m(x.tax) + '</td><td class="n">' + m(x.rcm.igst + x.rcm.cgst + x.rcm.sgst + x.rcm.cess) + "</td>" + (S.books.gstEst ? '<td class="n">' + m(x.interest) + "</td>" : "") + "</tr>").join("") +
-      '<tr><td><b>Year</b></td><td class="n"><b>' + m(g.turnover) + '</b></td><td class="n"><b>' + m(g.tax) + '</b></td><td class="n"><b>' + m(g.rcm.igst + g.rcm.cgst + g.rcm.sgst + g.rcm.cess) + "</b></td>" + (S.books.gstEst ? '<td class="n"><b>' + m(g.interest) + "</b></td>" : "") + "</tr></tbody></table></div>", false) +
-    gstStep(3, "Table 6: sales by rate", "<p>" + esc(GSTQ.RATES[GSTQ.compCat(reg)].l) + ": turnover " + m(g.turnover) + ", tax " + m(g.tax) + ".</p>", false) +
-    '<p class="note">Tables 7 (TDS and TCS credit) and 8 (tax paid) are taken from the portal as filed through the year.</p></section>';
-}
-if (typeof document !== "undefined"){
-  document.addEventListener("change", e => {
-    const t = e.target; if (!t.dataset || !S.books) return;
-    const ym = S.gstYm || "", reg = S.gstReg || "";
-    if (t.dataset.gqf !== undefined){ const k = t.dataset.gqf, r = GSTF.rec(t.dataset.gqq || ym, reg); if (t.value === "") delete r[k]; else r[k] = t.value; GSTR._carry = null; saveBooks(); render(); return; }
-    if (t.dataset.gqpay !== undefined){ const r = GSTF.rec(ym, reg); r.pmt06 = Object.assign({}, r.pmt06, {[t.dataset.gqpay]: t.value === "" ? 0 : num(t.value)}); GSTR._carry = null; saveBooks(); render(); }
-  });
-  document.addEventListener("click", e => {
-    const t = e.target.closest("[data-gq]"); if (!t || !S.books) return;
-    const ym = S.gstYm || "", reg = S.gstReg || "";
-    if (t.dataset.gq === "iffjson"){ if (typeof ledgersReady === "function" && !ledgersReady("gst")) return; const f = GSTQ.iff(ym, reg); GSTF.rec(ym, reg).iffKeys = f.keys; try { GSTAmend.keep(JSON.parse(JSON.stringify(f.json)), "downloaded", {iff: true}); } catch (e2){} saveBooks(); saveFile("IFF_" + f.json.gstin + "_" + f.json.fp + ".json", new Blob([JSON.stringify(f.json)], {type: "application/json"})); }
-  });
+// the QRMP, CMP-08 and GSTR-4 pages: React (app/src/screens/gst/Periodic.jsx)
+// a date or choice kept for a month (or quarter end) and GSTIN: IFF filed on, PMT-06 method, CMP-08 filed on
+function gqSetField(k, v, ym){ const r = GSTF.rec(ym || S.gstYm || "", S.gstReg || ""); if (v === "") delete r[k]; else r[k] = v; GSTR._carry = null; saveBooks(); render(); }
+// PMT-06 paid, head by head
+function gqSetPaid(k, v){ const r = GSTF.rec(S.gstYm || "", S.gstReg || ""); r.pmt06 = Object.assign({}, r.pmt06, {[k]: v === "" ? 0 : num(v)}); GSTR._carry = null; saveBooks(); render(); }
+// the IFF file for the month; a copy is kept so the quarter's GSTR-1 leaves these invoices out once filed
+function gqIffJson(){
+  const ym = S.gstYm || "", reg = S.gstReg || "";
+  if (typeof ledgersReady === "function" && !ledgersReady("gst")) return;
+  const f = GSTQ.iff(ym, reg); GSTF.rec(ym, reg).iffKeys = f.keys;
+  try { GSTAmend.keep(JSON.parse(JSON.stringify(f.json)), "downloaded", {iff: true}); } catch (e2){}
+  saveBooks(); saveFile("IFF_" + f.json.gstin + "_" + f.json.fp + ".json", new Blob([JSON.stringify(f.json)], {type: "application/json"}));
 }

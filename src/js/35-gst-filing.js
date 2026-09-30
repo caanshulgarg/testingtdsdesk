@@ -177,99 +177,27 @@ const GSTF = {
   }
 };
 function label0(ym){ return GSTR.label(ym); }
-function viewGstFiling(b, t){
-  const ym = S.gstYm || "", reg = S.gstReg || "", money = v => INR.format(r2(v || 0)), rec = GSTF.peek(ym, reg), d = s => s ? GSTAmend.dmy(s.replace(/-/g, "")) : "";
-  const nil3b = !(t.net.igst || t.net.cgst || t.net.sgst || t.rcmOut.igst || t.rcmOut.cgst || t.rcmOut.sgst || t.other.igst || t.other.cgst || t.other.sgst);
-  const ftype = typeof GSTSet === "object" ? GSTSet.typeOf(ym, reg) : "monthly";
-  if (ftype === "comp") return '<section class="dash-card" style="margin-top:12px"><h3>Filing</h3><p class="note">This GSTIN is set as <b>composition</b>: GSTR-1 and GSTR-3B do not apply. CMP-08 for ' + esc(GSTSet.qLabel(ym)) + " is due " + esc(GSTAmend.dmy(GSTF.due(ym, "cmp08", reg).replace(/-/g, ""))) + " and GSTR-4 by 30 June after the year. FinCom does not prepare CMP-08 or GSTR-4 yet; the working above is for reference only. " + gstSetLink() + "</p></section>";
-  if (ftype === "qrmp" && !GSTSet.isQEnd(ym)) return '<section class="dash-card" style="margin-top:12px"><h3>Filing</h3><p class="note">This GSTIN files <b>quarterly (QRMP)</b>: no GSTR-1 or 3B for ' + esc(label0(ym)) + ". Invoices to registered customers may go in IFF by " + esc(GSTAmend.dmy(GSTF.due(ym, "iff", reg).replace(/-/g, ""))) + ", and tax is paid by PMT-06 by " + esc(GSTAmend.dmy(GSTF.due(ym, "pmt06", reg).replace(/-/g, ""))) + ". GSTR-1 and 3B for " + esc(GSTSet.qLabel(ym)) + " are due " + esc(GSTAmend.dmy(GSTF.due(GSTSet.qEnd(ym), "r1", reg).replace(/-/g, ""))) + " and " + esc(GSTAmend.dmy(GSTF.due(GSTSet.qEnd(ym), "r3b", reg).replace(/-/g, ""))) + ". " + gstSetLink() + "</p></section>";
-  const nil1 = !GSTR.outward(ym, reg).length;
-  const f1 = GSTF.lateFee(ym, reg, "r1", nil1), f3 = GSTF.lateFee(ym, reg, "r3b", nil3b), it = GSTF.interest(ym, reg, t), dr = GSTF.drc(ym, reg, t), a = GSTF.aato(GSTF.fyOf(ym));
-  const dateIn = (k, v) => '<input type="date" data-gstf="' + k + '" value="' + esc(v || "") + '" style="width:auto">';
-  const cmp = (est, portal) => portal === undefined || portal === "" ? "" : Math.abs(num(est) - num(portal)) < 1 ? '<div class="nr">agrees</div>' : '<div class="bad">estimate \u20b9' + money(est) + "</div>";
-  const pf = (k, v) => '<input type="number" step="0.01" data-gstf="' + k + '" value="' + (v === undefined || v === "" ? "" : esc(String(v))) + '" placeholder="as on the portal" style="width:140px">';
-  // interest and late fee are the portal's: FinCom's own estimate shows only if switched on in GST settings (off by default)
-  const est = !!S.books.gstEst, cell = (lbl, k) => '<div class="dash-row"><span>' + lbl + "</span><b>" + (rec[k] === undefined ? '<span class="nr">not yet from the portal</span>' : "\u20b9" + money(rec[k])) + "</b></div>";
-  let h = '<section class="dash-card" style="margin-top:12px"><h3>Filing, interest and late fee</h3>' +
-    '<div class="bk-tablewrap"><table class="bk-table compact"><thead><tr><th>Return</th><th>Due</th><th>Filed on</th>' + (est ? '<th class="n">Days late</th><th class="n">Late fee, estimate</th>' : "") + '<th class="n">Late fee, from the portal</th></tr></thead><tbody>' +
-    "<tr><td>GSTR-1" + (nil1 ? ' <span class="nr">nil</span>' : "") + "</td><td>" + d(f1.due || GSTF.due(ym, "r1", reg)) + "</td><td>" + dateIn("r1", rec.r1) + "</td>" +
-      (est ? '<td class="n">' + (f1.unknown ? '<span class="nr">type the date filed</span>' : f1.days || "\u2014") + '</td><td class="n">' + (f1.fee ? money(f1.fee) + (f1.estimated ? '<div class="nr">if filed today</div>' : "") : "\u2014") + "</td>" : "") +
-      '<td class="n">' + pf("portalFee1", rec.portalFee1) + (est ? cmp(f1.fee, rec.portalFee1) : "") + "</td></tr>" +
-    "<tr><td>GSTR-3B" + (nil3b ? ' <span class="nr">nil</span>' : "") + "</td><td>" + d(GSTF.due(ym, "r3b", reg)) + "</td><td>" + dateIn("r3b", rec.r3b) + "</td>" +
-      (est ? '<td class="n">' + (f3.unknown ? '<span class="nr">type the date filed</span>' : f3.days || "\u2014") + '</td><td class="n">' + (f3.fee ? money(f3.fee) + (f3.estimated ? '<div class="nr">if filed today</div>' : "") : "\u2014") + "</td>" : "") +
-      '<td class="n">' + pf("portalFee3", rec.portalFee3) + (est ? cmp(f3.fee, rec.portalFee3) : "") + "</td></tr></tbody></table></div>";
-  h += '<div class="dash-row"><span>Interest under section 50, from the portal (table 5.1)</span><b>' + pf("portalInt", rec.portalInt) + (est ? cmp(it.total, rec.portalInt) : "") + "</b></div>" +
-    '<p class="note">Late fee and interest are the portal\u2019s own figures. They will be fetched from the portal once the GST API is connected; until then type what the portal shows. GSTR-1\u2019s late fee is charged by the portal in the next 3B.</p>';
-  if (est){
-    h += '<p class="note"><b>FinCom\u2019s estimate</b> (' + gstSetLink("switched on in GST settings") + "): late fee under section 47, \u20b950 a day (\u20b920 for nil), capped at \u20b9" + money(f3.cap || f1.cap || 0).replace(/\.00$/, "") + " by the turnover of the year before" +
-      (a.from === "part" || a.from === "none" ? " (not all of that year is in the books; type it in GST settings)" : "") + ".";
-    if (it.days && it.total) h += " Interest under section 50(1), 18% a year on \u20b9" + money(t.quarter ? t.payable : t.pay.cash.igst + t.pay.cash.cgst + t.pay.cash.sgst + t.pay.cash.cess) + (t.quarter ? " still to pay after PMT-06" : " paid in cash") + " for " + it.days + " days" + (it.estimated ? " if filed today" : "") + ": \u20b9" + money(it.total) + ".";
-    h += "</p>";
-  }
-  // DRC-01B and DRC-01C
-  const flag = (on, txt) => '<div class="dash-row"><span>' + txt + "</span><b" + (on ? ' class="bad"' : "") + ">" + (on ? "check before filing" : "within the limit") + "</b></div>";
-  h += "<h4 style=\"margin:12px 0 4px\">Checks the portal runs</h4>" +
-    flag(dr.b.flag, "DRC-01B: tax in GSTR-1 (" + (dr.b.from === "filed" ? "as filed" : "from the books") + ") \u20b9" + money(dr.b.r1) + " against 3B \u20b9" + money(dr.b.r3) + ", short by \u20b9" + money(Math.max(0, dr.b.gap)) + " (limit \u20b9" + money(dr.b.lim) + ")") +
-    (dr.c.have2b ? flag(dr.c.flag, "DRC-01C: credit in 3B 4(A)(5) \u20b9" + money(dr.c.claimed) + " against 2B \u20b9" + money(dr.c.avl) + ", above 2B by \u20b9" + money(Math.max(0, dr.c.gap)) + " (limit \u20b9" + money(dr.c.lim) + ")") : '<div class="dash-row"><span>DRC-01C: credit against 2B</span><b class="nr">no 2B for this month</b></div>') +
-    '<p class="note">Limits as notified under rules 88C and 88D (the higher of an amount and a percentage); a difference is not wrong in itself \u2014 reclaims, credit of earlier months and 2B timing explain most \u2014 but be ready to explain it.</p>';
-  // rule 37: a GST setting, off unless switched on for this GSTIN
-  const r = t.r37, on = !!((b.rule37On || {})[reg]);
-  h += '<h4 style="margin:12px 0 4px">Rule 37: suppliers unpaid after 180 days</h4><p class="note">' + (on ? "On for this GSTIN" : "Off for this GSTIN") + " \u00b7 " + gstSetLink() + "</p>";
-  if (on) h += (r && (r.rev.n || r.re.n) ? '<div class="bk-tablewrap"><table class="bk-table compact"><thead><tr><th>Supplier</th><th>Bill</th><th class="dt">Date</th><th>Why</th><th class="n">Tax</th><th>In 3B</th></tr></thead><tbody>' +
-      r.rev.list.map(x => "<tr><td>" + esc(x.party) + "</td><td>" + esc(x.ref) + "</td><td>" + fmtDate(tallyDate(x.date)) + "</td><td>" + esc(x.why) + '</td><td class="n">' + money(x.tax) + "</td><td>4(B)(2) reversed</td></tr>").join("") +
-      r.re.list.map(x => "<tr><td>" + esc(x.party) + "</td><td>" + esc(x.ref) + "</td><td>" + fmtDate(tallyDate(x.date)) + "</td><td>" + esc(x.why) + '</td><td class="n">' + money(x.tax) + "</td><td>4(A)(5) and 4(D)(1) reclaimed</td></tr>").join("") +
-      "</tbody></table></div>" : '<p class="note">No bill reaches 180 days unpaid this month, and none reversed earlier was paid.</p>') +
-    '<p class="note">Only bills kept bill-wise in Tally can be followed. Interest under section 50 applies to credit reversed here only where it was used to pay tax (rule 88B).</p>';
-  // the filed copy and the Tally journal
-  const J = GSTF.journal(ym, reg);
-  const pdfs = typeof GSTV === "object" ? ["r1", "r3b"].map(f => [f, GSTV.copies(reg, f, ym)[0]]) : [];
-  h += '<h4 style="margin:12px 0 4px">After filing</h4>' + (pdfs.length ? '<p class="note">Portal PDFs: ' + pdfs.map(([f, r]) => GSTV.label(f) + " " + (r ? "\u2713 on file" : "not yet")).join(" \u00b7 ") + ' \u00b7 <button class="linkbtn" data-gstpart="vault">Returns filed</button></p>' : "") +
-    '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">' +
-    (rec.snap ? '<span class="tag">3B kept as filed on ' + esc(d(rec.r3b) || fmtDate(String(rec.snapAt || "").slice(0, 10))) + '</span><button class="linkbtn" data-gstfact="unsnap">remove the kept copy</button>'
-      : '<button class="btn small" data-gstfact="snap">Mark this 3B as filed and keep a copy</button>') +
-    '<button class="btn small" data-gstfact="journal">Set-off journal for Tally</button><span class="note">cash ledger in Tally: <b>' + esc(J.cashL) + "</b> \u00b7 " + gstSetLink() + "</span></div>" +
-    '<p class="note">The kept copy is used for GSTR-9 and for the credit carried into the next month, so later changes in Tally do not move a month already filed.' + (J.missing.length ? " <b>Ledger not found in Tally: " + esc(J.missing.join(", ")) + (J.balanced ? "" : "; the journal will not balance until it is there") + ".</b>" : "") + "</p></section>";
-  return h;
-}
-if (typeof document !== "undefined") document.addEventListener("change", e => {
-  const t = e.target; if (!t.dataset || t.dataset.gstf === undefined || !S.books) return;
-  const ym = S.gstYm || "", reg = S.gstReg || "", k = t.dataset.gstf, b = S.books;
-  if (k === "r1" || k === "r3b") GSTF.rec(ym, reg)[k] = t.value;
-  if (k === "portalFee1" || k === "portalFee3" || k === "portalInt"){ const r = GSTF.rec(ym, reg); if (t.value === "") delete r[k]; else r[k] = num(t.value); }
+// the filing card under GSTR-3B and GSTR-1A under Amendments: React (app/src/screens/gst/Filing.jsx)
+// a filing date (r1, r3b) or a figure from the portal (portalFee1, portalFee3, portalInt) for the month and GSTIN
+function gstfSet(k, v){
+  const r = GSTF.rec(S.gstYm || "", S.gstReg || "");
+  if (k === "r1" || k === "r3b") r[k] = v;
+  if (k === "portalFee1" || k === "portalFee3" || k === "portalInt"){ if (v === "") delete r[k]; else r[k] = num(v); }
   GSTR._carry = null; saveBooks(); render();
-});
-if (typeof document !== "undefined") document.addEventListener("click", e => {
-  const t = e.target.closest("[data-gstfact]"); if (!t || !S.books) return;
-  const ym = S.gstYm || "", reg = S.gstReg || "", a = t.dataset.gstfact;
-  if (a === "snap"){ const r = GSTF.rec(ym, reg); r.snap = GSTF.snapOf(GSTR.threeB(ym, reg)); r.snapAt = new Date().toISOString(); if (!r.r3b) r.r3b = GSTF.today(); GSTR._carry = null; saveBooks(); render(); toast("3B for " + GSTR.label(ym) + " kept as filed."); return; }
-  if (a === "unsnap"){ const r = GSTF.rec(ym, reg); delete r.snap; delete r.snapAt; GSTR._carry = null; saveBooks(); render(); return; }
-  if (a === "journal"){ const J = GSTF.journal(ym, reg); if (!J.lines.length){ toast("Nothing to set off this month."); return; }
-    if (!J.balanced){ toast("A ledger is missing in Tally (" + J.missing.join(", ") + "); the journal would not balance."); return; }
-    const co = CO() || {}; saveFile(String(co.name || "client").replace(/[^A-Za-z0-9]+/g, "-") + "-GST-setoff-" + reg + "-" + ym + ".xml", new Blob([Audit.jeXml([{date: J.date, narr: J.narr, lines: J.lines}])], {type: "application/xml"})); }
-});
-function viewGstr1a(b, ym, reg){
-  if (!ym || !reg) return "";
-  const c = GSTAmend.can1a(ym, reg), label = GSTR.label(ym);
-  if (!c.filed1) return "";
-  let h = '<section class="dash-card" style="margin-top:12px"><h3>GSTR-1A for ' + esc(label) + "</h3>";
-  if (c.qrmpMonth) return h + '<p class="note">Quarterly (QRMP) filer: GSTR-1A is for the whole quarter, in its last month (' + esc(GSTR.label(GSTSet.qEnd(ym))) + ").</p></section>";
-  if (!c.period) return h + '<p class="note">GSTR-1A is available from the July 2024 period; for this month, differences go as amendments in a later GSTR-1.</p></section>';
-  if (c.threeB) return h + '<p class="note">The 3B for ' + esc(label) + " is marked as filed, so GSTR-1A is closed; the differences above go as amendments in the next GSTR-1.</p></section>";
-  const r = GSTAmend.json1a(ym, reg), n = r ? r.rows.length : 0;
-  h += '<p class="note">After GSTR-1 is filed and until the 3B for the month is filed (due ' + esc(GSTAmend.dmy(c.due.replace(/-/g, ""))) + "), a missed invoice or a wrong one can be put right in GSTR-1A for the same month, so the tax lands in this month\\u2019s 3B and your customer sees it in this month\\u2019s 2B. Type the 3B filing date on the GSTR-3B tab once it is filed, and this closes.</p>";
-  if (!n) return h + '<p class="note">' + (c.kept ? "A GSTR-1A was made for this month and the books now agree with it." : "Nothing to put in GSTR-1A: the books agree with the GSTR-1 filed.") + "</p></section>";
-  const kind = {B2B: "B2B invoice", B2CL: "B2C large", EXP: "Export", CDNR: "Credit or debit note", B2CS: "B2C small"};
-  h += '<div class="bk-tablewrap"><table class="bk-table compact"><thead><tr><th>Document</th><th>Number</th><th>Customer</th><th>What changes</th></tr></thead><tbody>' +
-    r.rows.map(x => { const d = x.now || x.was || {}; return "<tr><td>" + esc(kind[x.kind] || x.kind) + "</td><td>" + esc(d.num || (x.b2cs ? "place " + x.b2cs.pos + ", " + x.b2cs.rt + "%" : "")) + "</td><td>" + esc(d.ctin || "") + "</td><td>" + esc((x.changes || []).join("; ")) + "</td></tr>"; }).join("") + "</tbody></table></div>" +
-    '<div class="row" style="gap:8px;margin-top:8px"><button class="btn small primary" data-act1a="json">Download GSTR-1A JSON (' + n + ")</button></div>" +
-    '<p class="note">Downloading keeps a copy, so the next GSTR-1 does not report these again. This is a first version: check it opens in the offline tool, and send me a GSTR-1A JSON exported from the portal so the layout can be matched exactly.</p></section>';
-  return h;
 }
-if (typeof document !== "undefined") document.addEventListener("click", e => {
-  const t = e.target.closest("[data-act1a]"); if (!t || !S.books) return;
+// after filing: keep the 3B as filed (or remove the kept copy), and the set-off journal for Tally
+function gstfSnap(){ const ym = S.gstYm || "", r = GSTF.rec(ym, S.gstReg || ""); r.snap = GSTF.snapOf(GSTR.threeB(ym, S.gstReg || "")); r.snapAt = new Date().toISOString(); if (!r.r3b) r.r3b = GSTF.today(); GSTR._carry = null; saveBooks(); render(); toast("3B for " + GSTR.label(ym) + " kept as filed."); }
+function gstfUnsnap(){ const r = GSTF.rec(S.gstYm || "", S.gstReg || ""); delete r.snap; delete r.snapAt; GSTR._carry = null; saveBooks(); render(); }
+function gstfJournal(){
+  const ym = S.gstYm || "", reg = S.gstReg || "", J = GSTF.journal(ym, reg); if (!J.lines.length){ toast("Nothing to set off this month."); return; }
+  if (!J.balanced){ toast("A ledger is missing in Tally (" + J.missing.join(", ") + "); the journal would not balance."); return; }
+  const co = CO() || {}; saveFile(String(co.name || "client").replace(/[^A-Za-z0-9]+/g, "-") + "-GST-setoff-" + reg + "-" + ym + ".xml", new Blob([Audit.jeXml([{date: J.date, narr: J.narr, lines: J.lines}])], {type: "application/xml"}));
+}
+// the GSTR-1A file; a copy is kept so the next GSTR-1 does not report these again
+function gst1aJson(){
   const ym = S.gstYm || "", reg = S.gstReg || "", r = GSTAmend.json1a(ym, reg); if (!r || !r.rows.length) return;
   const out = Object.assign({version: "GST3.2.1", hash: "hash"}, r.json);
   GSTAmend.keep1a(out); saveBooks();
   saveFile("GSTR1A_" + out.gstin + "_" + out.fp + ".json", new Blob([JSON.stringify(out)], {type: "application/json"}));
   render(); toast("GSTR-1A for " + GSTR.label(ym) + " downloaded and kept.");
-});
+}

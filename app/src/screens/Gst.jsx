@@ -1,7 +1,7 @@
 // The GST tab of a client's books: which return or working (the parts), for which month and GSTIN, and the
 // downloads for the portal. Was viewBooksGst (src/js/18). The parts follow the GSTIN's filing type (gstParts):
 // monthly (GSTR-1, 3B, …), quarterly QRMP (This quarter, …) or composition (CMP-08, GSTR-4); without a day book only
-// 2B and the returns filed. GSTR-1 and 3B are gst/Returns.jsx, the input register gst/InputRegister.jsx, 2B gst/TwoB.jsx, amendments, advances and reversal gst/Workings.jsx, GSTR-9 and 9C gst/Annual.jsx, ITC follow-up gst/ItcFollow.jsx; the other parts are still old pages (gstPartHtml),
+// 2B and the returns filed. GSTR-1 and 3B are gst/Returns.jsx, the input register gst/InputRegister.jsx, 2B gst/TwoB.jsx, amendments, advances and reversal gst/Workings.jsx, GSTR-9 and 9C gst/Annual.jsx, ITC follow-up gst/ItcFollow.jsx, returns filed gst/ReturnsFiled.jsx, QRMP, CMP-08 and GSTR-4 gst/Periodic.jsx; the other parts are still old pages (gstPartHtml),
 // shown through <Legacy>.
 //
 // State: S.gstYm (the month, YYYYMM), S.gstReg (the GSTIN's state code), S.gstPart; a GSTIN or filing type seen
@@ -14,6 +14,8 @@ import TwoB from "./gst/TwoB.jsx";
 import { Amendments, Advances, Reversal } from "./gst/Workings.jsx";
 import { Gst9, Gst9c } from "./gst/Annual.jsx";
 import ItcFollow from "./gst/ItcFollow.jsx";
+import ReturnsFiled from "./gst/ReturnsFiled.jsx";
+import { Qrmp, Cmp08, Gstr4 } from "./gst/Periodic.jsx";
 
 export default function Gst() {
   const b = S.books, months = GSTR.months(), { parts, ftype, regs, noBooks } = gstParts(b);
@@ -45,6 +47,6 @@ export default function Gst() {
     {noBooks && <p className="note" style={{ margin: "0 0 10px", color: "#B9541B" }}>No Tally day book here yet. 2B and the returns filed work without it; GSTR-1, 3B, the input register and the other workings need the day book, brought in under “From Tally” or read from Tally.</p>}
     {ftype === "qrmp" && (part === "r1" || part === "r3b") && <p className="note" style={{ margin: "0 0 10px" }}>Quarterly (QRMP) filer: this is the working for {GSTR.label(S.gstYm)}
       {GSTSet.isQEnd(S.gstYm) ? "; the downloads cover the whole of " + GSTSet.qLabel(S.gstYm) + "." : ", for reference; this month has no GSTR-1 or 3B — see “This quarter”."}</p>}
-    {part === "r1" ? <Gstr1 b={b} /> : part === "r3b" ? <Gstr3b b={b} /> : part === "inreg" ? <InputRegister b={b} /> : part === "r2b" ? <TwoB b={b} /> : part === "amend" ? <Amendments b={b} /> : part === "adv" ? <Advances /> : part === "rev" ? <Reversal b={b} /> : part === "g9" ? <Gst9 b={b} /> : part === "g9c" ? <Gst9c /> : part === "follow" ? <ItcFollow /> : <Legacy html={gstPartHtml(b, part)} />}
+    {part === "r1" ? <Gstr1 b={b} /> : part === "r3b" ? <Gstr3b b={b} /> : part === "inreg" ? <InputRegister b={b} /> : part === "r2b" ? <TwoB b={b} /> : part === "amend" ? <Amendments b={b} /> : part === "adv" ? <Advances /> : part === "rev" ? <Reversal b={b} /> : part === "g9" ? <Gst9 b={b} /> : part === "g9c" ? <Gst9c /> : part === "follow" ? <ItcFollow /> : part === "vault" ? <ReturnsFiled b={b} /> : part === "qtr" ? <Qrmp /> : part === "cmp08" ? <Cmp08 /> : part === "gstr4" ? <Gstr4 /> : <Legacy html={gstPartHtml(b, part)} />}
   </>;
 }

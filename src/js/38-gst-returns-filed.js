@@ -165,79 +165,34 @@ async function gstvTake(files, bound){
   toast([added ? added + " return" + (added === 1 ? "" : "s") + " filed away" : "", sorted ? sorted + " to sort" : "", dupes.length ? dupes.length + " already here" : "", refused.length ? "not taken: " + refused.join(", ") : ""].filter(Boolean).join(" · ") || "Nothing added.");
 }
 async function gstvFile(rec){ return FileStore.get((CO() || {}).id, rec.id, rec.docPath, rec.name); }
-function viewGstReturnsFiled(b){
-  const reg = S.gstReg || "", years = GSTV.years(reg), fy = years.includes(S.gstvFy) ? S.gstvFy : (GSTF.fyOf(S.gstYm || GSTR.months().slice(-1)[0] || "") || years[0]);
-  S.gstvFy = fy;
-  const g = ((GSTR.gstins(b)) || []).find(z => z.slice(0, 2) === reg) || reg, rows = GSTV.expected(fy, reg), d = s => s ? GSTAmend.dmy(String(s).replace(/-/g, "")) : "";
-  const exp = new Set(rows.map(r => r.form + "|" + r.per));
-  const extra = GSTV.list().filter(x => x.reg === reg && !x.sort && x.form && GSTV.fyOfPer(x.per) === fy && !exp.has(x.form + "|" + x.per));
-  const seenX = new Set(); extra.forEach(x => { if (!seenX.has(x.form + "|" + x.per)){ seenX.add(x.form + "|" + x.per); rows.push({form: x.form, per: x.per, extra: true}); } });
-  rows.sort((a, c) => GSTV.isAnnual(a.form) - GSTV.isAnnual(c.form) || String(a.per).localeCompare(String(c.per)) || GSTV.FORMS[a.form].order - GSTV.FORMS[c.form].order);
-  const st = rows.map(r => Object.assign({}, r, GSTV.status(r, reg))), have = st.filter(x => x.s === "have").length, miss = st.filter(x => x.s === "missing").length, toSort = GSTV.list().filter(x => x.sort);
-  let h = '<section class="dash-card"><div class="gf-ctl" style="flex-wrap:wrap;gap:8px"><h3 style="margin:0">Returns filed · ' + esc(g) + "</h3>" +
-    '<select data-gstvfy style="width:auto">' + years.map(y => '<option value="' + y + '"' + (y === fy ? " selected" : "") + ">" + y + "</option>").join("") + "</select>" +
-    '<label class="btn small primary" style="cursor:pointer">Add PDFs from the portal<input type="file" accept="application/pdf,.pdf" multiple data-gstvpick hidden></label>' +
-    (have ? '<button class="btn small" data-gstv="zip">Download the year (' + have + " PDF" + (have === 1 ? "" : "s") + ", zip)</button>" : "") + "</div>" +
-    '<div class="gf-chips"><span class="gf-chip">On file <b>' + have + "</b></span>" + (miss ? '<span class="gf-chip warn">PDF missing <b>' + miss + "</b></span>" : "") + (toSort.length ? '<a class="gf-chip warn" href="#gstvsort">To sort <b>' + toSort.length + "</b></a>" : "") + "</div>" +
-    '<div class="gstv-drop" data-gstvdrop>Drop the PDFs downloaded from the GST portal here — GSTR-1, GSTR-3B, IFF, GSTR-1A, CMP-08, GSTR-4, GSTR-9, 9C, PMT-06 challans. Each is read for its return, GSTIN, period and ARN and filed in its place.</div>' +
-    '<div class="bk-tablewrap"><table class="bk-table compact"><thead><tr><th>Period</th><th>Return</th><th>Due</th><th>Filed on</th><th>ARN</th><th>Portal PDF</th></tr></thead><tbody>' +
-    st.map(r => {
-      const c = GSTV.copies(reg, r.form, r.per), rec = c[0], filed = (rec && rec.arnDate) || GSTV.filedOn(reg, r.form, r.per);
-      const pick = '<label class="linkbtn" style="cursor:pointer">add<input type="file" accept="application/pdf,.pdf" data-gstvpick data-gform="' + r.form + '" data-gper="' + esc(r.per) + '" hidden></label>';
-      const pdf = rec ? '<button class="linkbtn" data-gstvopen="' + rec.id + '">open</button> · <button class="linkbtn" data-gstvdl="' + rec.id + '">download</button>' + (c.length > 1 ? ' <span class="nr">' + c.length + " copies</span>" : "") + (rec.note ? '<div class="bad">' + esc(rec.note) + "</div>" : "")
-        : r.s === "missing" ? '<span class="bad">missing</span> · ' + pick : r.s === "notdue" ? '<span class="nr">not due yet</span> · ' + pick : '<span class="nr">' + esc(r.note || "optional") + "</span> · " + pick;
-      return "<tr><td>" + esc(GSTV.perLabel(r.form, r.per, reg)) + "</td><td>" + esc(GSTV.label(r.form)) + (r.optional && !rec ? ' <span class="nr">optional</span>' : "") + "</td><td>" + esc(d(r.due)) + "</td><td>" + esc(d(filed)) + "</td><td>" + esc((rec && rec.arn) || "") + "</td><td>" + pdf + "</td></tr>";
-    }).join("") + "</tbody></table></div>";
-  h += '<p class="note">Kept in this browser and, when the firm account is on, in its cloud documents, so any computer of the firm can open them. The checklist follows the filing type in GST settings. Filing dates typed on the GST screens and ARN dates read from the PDFs fill each other in. When the GST API is connected, filing status and ARN will be fetched; the portal’s PDF itself is still downloaded from the portal and added here.</p></section>';
-  if (toSort.length){
-    const forms = Object.entries(GSTV.FORMS), gl = (GSTR.gstins(b) || []);
-    h += '<section class="dash-card" id="gstvsort" style="margin-top:12px"><h3>To sort</h3><p class="note">These could not be read for sure. Say which return and period each is, and it is filed in its place.</p><div class="bk-tablewrap"><table class="bk-table compact"><thead><tr><th>File</th><th>GSTIN</th><th>Return</th><th>Period</th><th></th></tr></thead><tbody>' +
-      toSort.map(x => "<tr><td>" + esc(x.name) + (x.why ? '<div class="nr">' + esc(x.why) + "</div>" : "") + ' <button class="linkbtn" data-gstvopen="' + x.id + '">open</button></td>' +
-        '<td><select data-gstvs="reg" data-gid="' + x.id + '" style="width:auto">' + gl.map(z => '<option value="' + z.slice(0, 2) + '"' + (x.reg === z.slice(0, 2) ? " selected" : "") + ">" + esc(z) + "</option>").join("") + "</select></td>" +
-        '<td><select data-gstvs="form" data-gid="' + x.id + '" style="width:auto"><option value="">—</option>' + forms.map(([k, f]) => '<option value="' + k + '"' + (x.form === k ? " selected" : "") + ">" + f.l + "</option>").join("") + "</select></td>" +
-        '<td><input type="text" data-gstvs="per" data-gid="' + x.id + '" value="' + esc(x.per || "") + '" placeholder="' + (GSTV.isAnnual(x.form) ? "2025-26" : "YYYYMM, e.g. 202603") + '" style="width:150px"></td>' +
-        '<td><button class="btn small" data-gstvok="' + x.id + '">File it</button> <button class="linkbtn" data-gstvdel="' + x.id + '">remove</button></td></tr>').join("") + "</tbody></table></div></section>";
-  }
-  // every copy on file, the older ones too, for this GSTIN and year
-  const kept = GSTV.list().filter(x => x.reg === reg && !x.sort && GSTV.fyOfPer(x.per) === fy).sort((a, c) => String(a.per).localeCompare(String(c.per)) || String(c.at).localeCompare(String(a.at)));
-  if (kept.length) h += '<section class="dash-card" style="margin-top:12px"><h3>Every PDF on file, ' + esc(fy) + '</h3><div class="bk-tablewrap"><table class="bk-table compact"><thead><tr><th>Return</th><th>Period</th><th>File</th><th class="dt">Added</th><th>By</th><th>Cloud</th><th></th></tr></thead><tbody>' +
-    kept.map(x => "<tr><td>" + esc(GSTV.label(x.form)) + "</td><td>" + esc(GSTV.perLabel(x.form, x.per, reg)) + "</td><td>" + esc(x.name) + '<div class="nr">' + Math.max(1, Math.round((x.size || 0) / 1024)) + " KB</div></td><td>" + esc(d(String(x.at).slice(0, 10))) + "</td><td>" + esc(x.by || "") + "</td><td>" + (x.docPath ? "✓" : '<span class="nr">this computer</span>') +
-      '</td><td><button class="linkbtn" data-gstvopen="' + x.id + '">open</button> · <button class="linkbtn" data-gstvdl="' + x.id + '">download</button> · <button class="linkbtn" data-gstvdel="' + x.id + '">remove</button></td></tr>').join("") + "</tbody></table></div></section>";
-  return h;
+// the Returns filed page: React (app/src/screens/gst/ReturnsFiled.jsx)
+// what the Returns filed page does (app/src/screens/gst/ReturnsFiled.jsx)
+const gstvFind = id => GSTV.list().find(x => x.id === id);
+async function gstvOpen(id){ const x = gstvFind(id), f = x && await gstvFile(x); if (!f){ toast("This PDF is not on this computer and could not be fetched from the firm’s cloud documents."); return; } window.open(URL.createObjectURL(f), "_blank"); }
+async function gstvDownload(id){ const x = gstvFind(id), f = x && await gstvFile(x); if (!f){ toast("This PDF could not be found."); return; } saveFile(GSTV.fileName(x), f); }
+// a PDF that could not be read for sure: its GSTIN, return or period said by the user, then filed in its place
+function gstvSetSort(id, key, val){ const x = gstvFind(id); if (x){ x[key] = String(val).trim(); saveBooks(); if (key !== "per") render(); } }
+function gstvFileIt(id){
+  const x = gstvFind(id); if (!x) return;
+  const ok = x.form && (GSTV.isAnnual(x.form) ? /^\d{4}-\d{2}$/.test(x.per) : /^\d{4}(0[1-9]|1[0-2])$/.test(x.per));
+  if (!ok){ toast(GSTV.isAnnual(x.form) ? "Give the year as 2025-26." : "Give the return and the period as YYYYMM, e.g. 202603 (for a quarter, its last month)."); return; }
+  x.sort = false; const k = GSTV.filedKey(x.form); if (k && x.arnDate){ const r = GSTF.rec(x.per, x.reg); if (!r[k]) r[k] = x.arnDate; }
+  saveBooks(); render();
 }
-if (typeof document !== "undefined"){
-  document.addEventListener("change", e => {
-    const t = e.target; if (!t.dataset || !S.books) return;
-    if (t.dataset.gstvpick !== undefined && t.files && t.files.length){ const bound = t.dataset.gform ? {form: t.dataset.gform, per: t.dataset.gper, reg: S.gstReg || ""} : null; gstvTake(t.files, bound); t.value = ""; return; }
-    if (t.dataset.gstvfy !== undefined){ S.gstvFy = t.value; render(); return; }
-    if (t.dataset.gstvs !== undefined){ const x = GSTV.list().find(z => z.id === t.dataset.gid); if (x){ x[t.dataset.gstvs] = t.value.trim(); saveBooks(); if (t.dataset.gstvs !== "per") render(); } }
-  });
-  document.addEventListener("dragover", e => { if (e.target.closest && e.target.closest("[data-gstvdrop]")){ e.preventDefault(); e.target.closest("[data-gstvdrop]").classList.add("on"); } });
-  document.addEventListener("dragleave", e => { const z = e.target.closest && e.target.closest("[data-gstvdrop]"); if (z) z.classList.remove("on"); });
-  document.addEventListener("drop", e => { const z = e.target.closest && e.target.closest("[data-gstvdrop]"); if (!z || !S.books) return; e.preventDefault(); z.classList.remove("on"); gstvTake(e.dataTransfer.files, null); });
-  document.addEventListener("click", async e => {
-    const t = e.target.closest("[data-gstvopen],[data-gstvdl],[data-gstvdel],[data-gstvok],[data-gstv]"); if (!t || !S.books) return;
-    const find = id => GSTV.list().find(x => x.id === id);
-    if (t.dataset.gstvopen){ const x = find(t.dataset.gstvopen), f = x && await gstvFile(x); if (!f){ toast("This PDF is not on this computer and could not be fetched from the firm’s cloud documents."); return; } window.open(URL.createObjectURL(f), "_blank"); return; }
-    if (t.dataset.gstvdl){ const x = find(t.dataset.gstvdl), f = x && await gstvFile(x); if (!f){ toast("This PDF could not be found."); return; } saveFile(GSTV.fileName(x), f); return; }
-    if (t.dataset.gstvok){ const x = find(t.dataset.gstvok); if (!x) return;
-      const ok = x.form && (GSTV.isAnnual(x.form) ? /^\d{4}-\d{2}$/.test(x.per) : /^\d{4}(0[1-9]|1[0-2])$/.test(x.per));
-      if (!ok){ toast(GSTV.isAnnual(x.form) ? "Give the year as 2025-26." : "Give the return and the period as YYYYMM, e.g. 202603 (for a quarter, its last month)."); return; }
-      x.sort = false; const k = GSTV.filedKey(x.form); if (k && x.arnDate){ const r = GSTF.rec(x.per, x.reg); if (!r[k]) r[k] = x.arnDate; }
-      saveBooks(); render(); return; }
-    if (t.dataset.gstvdel){ const x = find(t.dataset.gstvdel); if (!x) return;
-      const ans = await askConfirm({title: "Remove this PDF?", body: esc(GSTV.label(x.form) + " " + GSTV.perLabel(x.form, x.per, x.reg) + " — " + x.name) + " is removed from FinCom and the firm’s cloud documents. The return on the portal is not touched.", ok: "Remove", danger: true});
-      if (!ans) return;
-      const co = CO(); await FileStore.drop(co.id, x.id); if (x.docPath && typeof CloudDocs === "object") CloudDocs.remove(x.docPath);
-      S.books.gstVault = GSTV.list().filter(z => z !== x); saveBooks(); render(); return; }
-    if (t.dataset.gstv === "zip"){
-      const reg = S.gstReg || "", fy = S.gstvFy, recs = GSTV.list().filter(x => x.reg === reg && !x.sort && GSTV.fyOfPer(x.per) === fy), files = [], missed = [];
-      const used = new Set();
-      for (const x of recs){ const f = await gstvFile(x); if (!f){ missed.push(x.name); continue; } let n = GSTV.fileName(x); let i = 2; while (used.has(n)){ n = GSTV.fileName(x).replace(/\.pdf$/, "_" + i++ + ".pdf"); } used.add(n); files.push({name: n, data: new Uint8Array(await f.arrayBuffer())}); }
-      if (!files.length){ toast("No PDF could be read."); return; }
-      const g = ((GSTR.gstins(S.books)) || []).find(z => z.slice(0, 2) === reg) || reg;
-      saveFile(String((CO() || {}).name || "client").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "") + "_" + g + "_GST-returns_" + fy + ".zip", GSTV.zip(files));
-      if (missed.length) toast(missed.length + " could not be read and were left out: " + missed.join(", "));
-    }
-  });
+async function gstvRemove(id){
+  const x = gstvFind(id); if (!x) return;
+  const ans = await askConfirm({title: "Remove this PDF?", body: esc(GSTV.label(x.form) + " " + GSTV.perLabel(x.form, x.per, x.reg) + " — " + x.name) + " is removed from FinCom and the firm’s cloud documents. The return on the portal is not touched.", ok: "Remove", danger: true});
+  if (!ans) return;
+  const co = CO(); await FileStore.drop(co.id, x.id); if (x.docPath && typeof CloudDocs === "object") CloudDocs.remove(x.docPath);
+  S.books.gstVault = GSTV.list().filter(z => z !== x); saveBooks(); render();
+}
+// every PDF of the GSTIN and year in one zip
+async function gstvZip(){
+  const reg = S.gstReg || "", fy = S.gstvFy, recs = GSTV.list().filter(x => x.reg === reg && !x.sort && GSTV.fyOfPer(x.per) === fy), files = [], missed = [];
+  const used = new Set();
+  for (const x of recs){ const f = await gstvFile(x); if (!f){ missed.push(x.name); continue; } let n = GSTV.fileName(x); let i = 2; while (used.has(n)){ n = GSTV.fileName(x).replace(/\.pdf$/, "_" + i++ + ".pdf"); } used.add(n); files.push({name: n, data: new Uint8Array(await f.arrayBuffer())}); }
+  if (!files.length){ toast("No PDF could be read."); return; }
+  const g = ((GSTR.gstins(S.books)) || []).find(z => z.slice(0, 2) === reg) || reg;
+  saveFile(String((CO() || {}).name || "client").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "") + "_" + g + "_GST-returns_" + fy + ".zip", GSTV.zip(files));
+  if (missed.length) toast(missed.length + " could not be read and were left out: " + missed.join(", "));
 }

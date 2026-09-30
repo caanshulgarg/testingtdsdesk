@@ -902,7 +902,7 @@ async function gst9Excel(which){
   }
   saveFile(CO().name.replace(/[^A-Za-z0-9]+/g, "-") + "-GSTR-" + which + "-" + fy + "-" + reg + ".xlsx", new Blob([XLSX.write(wb, {bookType: "xlsx", type: "array"})], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
 }
-// the GST tab: React (app/src/screens/Gst.jsx); GSTR-1 and 3B are app/src/screens/gst/Returns.jsx, the input register gst/InputRegister.jsx, 2B gst/TwoB.jsx, amendments, advances and reversal gst/Workings.jsx, GSTR-9 and 9C gst/Annual.jsx, ITC follow-up gst/ItcFollow.jsx; the other parts are still the old pages below
+// the GST tab: React (app/src/screens/Gst.jsx); GSTR-1 and 3B are app/src/screens/gst/Returns.jsx, the input register gst/InputRegister.jsx, 2B gst/TwoB.jsx, amendments, advances and reversal gst/Workings.jsx, GSTR-9 and 9C gst/Annual.jsx, ITC follow-up gst/ItcFollow.jsx, returns filed gst/ReturnsFiled.jsx, QRMP, CMP-08 and GSTR-4 gst/Periodic.jsx; the other parts are still the old pages below
 function viewBooksGst(b){ return '<div data-react="Gst"></div>'; }
 // the parts of the GST tab for the GSTIN and month chosen, following its filing type
 function gstParts(b){
@@ -921,10 +921,6 @@ function gstParts(b){
 // one part of the GST tab, as the old pages draw it
 function gstPartHtml(b, part){
   if (part === "notices") return AIH.viewNotices(b, "gst");
-  if (part === "vault") return viewGstReturnsFiled(b);
-  if (part === "qtr") return viewQrmp(b);
-  if (part === "cmp08") return viewCmp08(b);
-  if (part === "gstr4") return viewGstr4(b);
   return "";
 }
 function gstPartGo(id){ S.gstPart = id; render(); }

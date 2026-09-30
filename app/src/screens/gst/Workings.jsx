@@ -1,9 +1,9 @@
 // Three GST workings for the month: amendments to earlier GSTR-1s, tax on advances (tables 11A and 11B), and credit
 // reversed under rules 42 and 43. Were viewGstAmend, viewGstAdv and viewGstRev (src/js/18). The figures come from
 // GSTAmend (13), GSTAdv (14) and GSTRev (15); what the user corrects is saved by amendSetAct, advFix, assetSet
-// (src/js/23). GSTR-1A under Amendments (viewGstr1a, src/js/35) is still an old piece.
-import Legacy from "../../parts/Legacy.jsx";
+// (src/js/23). GSTR-1A under Amendments is Filing.jsx.
 import CommitBox from "../../parts/CommitBox.jsx";
+import { Gstr1a } from "./Filing.jsx";
 
 const money = (v) => INR.format(r2(v || 0));
 const day = (d) => fmtDate(tallyDate(d));
@@ -85,7 +85,7 @@ export function Amendments({ b }) {
     {c && <BooksAgainstFiled c={c} ym={ym} />}
     <ToReport p={GSTAmend.pending(ym, reg)} ym={ym} />
     <p className="note">Amendments can be made up to 30 November after the end of the year (section 37(3)). A renumbered invoice, or one whose GSTIN was corrected, is one amendment (9A, with the original number). When B2C small figures of a month change — an invoice lost its GSTIN, or gained one — table 10 carries the month’s revised figures.</p>
-    {typeof viewGstr1a === "function" && <Legacy html={viewGstr1a(b, ym, reg)} />}
+    <Gstr1a ym={ym} reg={reg} />
   </>;
 }
 

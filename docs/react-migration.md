@@ -112,7 +112,8 @@ Status: **done** (in React, test passing) · **next** · blank = not started. Ab
 | | amendments, advances (11A/11B) and reversal (rules 42, 43) (`viewGstAmend`, `viewGstAdv`, `viewGstRev`) → `gst/Workings.jsx`; checked with a filed copy changed, a capital good, the busiest month for advances; 75 GST pages match live | **done** |
 | | GSTR-9 and 9C (`viewGst9`, `viewGst9c`) → `gst/Annual.jsx`; the 9C PDF is printed from the React screen (`FinComReact.markup`); both PDFs' text and 79 GST pages match live. GSTR-9's tables (`GST9.html`) are still the print template, shown as an old piece | **done** |
 | | ITC follow-up (`viewItcFollow`) → `gst/ItcFollow.jsx`; 84 GST pages match live. Row keys made unique in every GST list and in the TDS filters: a development build (React warns about repeated keys) now shows none on any GST or TDS page | **done** |
-| | still old, shown inside it: filing (35) · settings and registrations (36) · QRMP, CMP-08, GSTR-4 (37) · returns filed (38) · customer IMS (33) · vendor recon (42) | |
+| | returns filed (38) → `gst/ReturnsFiled.jsx`; QRMP, CMP-08, GSTR-4 (37) → `gst/Periodic.jsx`; filing and GSTR-1A (35) → `gst/Filing.jsx`; 91 GST pages match live, including a quarterly and a composition GSTIN | **done** |
+| | still old, shown inside it: settings and registrations (36) · customer IMS (33) · vendor recon (42) | |
 | | 2B from the portal `viewGstApiCard` (39) | **done** |
 | **Books** | `viewBooks`, `viewBooksImport`, `viewBooksLedgers`, `viewLedPosting`, `viewTallyRead`, `viewSetupList` (18) · accounts (30) | |
 | **Audit and MIS** | `viewBooksAudit`, `viewAuditRel`, `viewAudit3cd`, `viewBooksMis`, `misPackHtml` (18) | |

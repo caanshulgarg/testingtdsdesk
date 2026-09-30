@@ -68,6 +68,18 @@ with sync_playwright() as p:
     pg.evaluate("() => { S.itctShow = 'all'; render(); }"); grab("follow-all")
     pg.evaluate("() => { const it = ITCT.items(S.gstReg || '').items.find(x => ITCT.CATS[x.cat].acts.length); if (it){ S.itctCat = it.cat; const st = ITCT.store(S.gstReg || ''); st.dec[it.key] = {act: ITCT.CATS[it.cat].acts.slice(-1)[0][0], note: 'asked on phone', at: '20260101'}; } render(); }"); grab("follow-decided")
     pg.evaluate("() => { S.itctCat = ''; const sp = ITCT.suppliers(S.gstReg || '', ITCT.items(S.gstReg || '').items)[0]; if (sp){ const st = ITCT.store(S.gstReg || ''); st.sent[sp.key] = ['20260105', '20260110']; } render(); }"); grab("follow-sent")
+    # a quarterly (QRMP) GSTIN: a first month (IFF, PMT-06), its 3B card, and a quarter end; then composition
+    busy = "(() => { const ms = GSTR.months(), n = m => GSTR.one(m, S.gstReg || '').b2b.length; return ms.slice().sort((a, c) => n(c) - n(a))[0]; })()"
+    pg.evaluate("(busy) => { S.books.gstSet = S.books.gstSet || {}; const st = GSTSet.store(S.gstReg || ''); st.filing = [{type: 'qrmp', from: GSTR.months()[0]}]; S.gstYm = GSTSet.qStart(eval(busy)); S.gstPart = 'qtr'; render(); }", busy); grab("qrmp-first")
+    pg.evaluate("() => { const r = GSTF.rec(S.gstYm, S.gstReg || ''); r.iff = '2026-01-10'; r.pmt06 = {igst: 1000}; r.pmtMethod = 'self'; render(); }"); grab("qrmp-first-filled")
+    pg.evaluate("() => { S.gstPart = 'r3b'; render(); }"); grab("qrmp-first-3b")
+    pg.evaluate("() => { S.gstYm = GSTSet.qEnd(S.gstYm); S.gstPart = 'qtr'; render(); }"); grab("qrmp-qend")
+    pg.evaluate("() => { GSTSet.store(S.gstReg || '').filing = [{type: 'comp', from: GSTR.months()[0]}]; S.gstPart = 'cmp08'; render(); }"); grab("comp-cmp08")
+    pg.evaluate("() => { S.books.gstEst = true; GSTF.rec(GSTSet.qEnd(S.gstYm), S.gstReg || '').cmp08 = '2026-02-28'; render(); }"); grab("comp-cmp08-late")
+    pg.evaluate("() => { S.gstPart = 'gstr4'; render(); }"); grab("comp-gstr4")
+    # monthly again, the filing card with FinCom's estimate on and figures from the portal
+    pg.evaluate("() => { GSTSet.store(S.gstReg || '').filing = []; S.gstPart = 'r3b'; const r = GSTF.rec(S.gstYm, S.gstReg || ''); r.r1 = '2026-02-15'; r.portalFee1 = 500; r.portalInt = 123; render(); }"); grab("filing-est")
+    pg.evaluate("() => { S.books.gstEst = false; render(); }")
     br.close()
 srv.shutdown()
 json.dump({"pages": res, "errors": errors}, open(out, "w"), indent=0)

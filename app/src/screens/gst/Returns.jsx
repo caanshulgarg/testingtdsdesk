@@ -1,10 +1,10 @@
 // GSTR-1 and GSTR-3B for the month and GSTIN chosen, worked out from the day book, and the checks before filing.
 // Was viewGstr1, viewGstr3b and viewGstChecks (src/js/18). The figures are GSTR.one() and GSTR.threeB() (src/js/12);
-// the customers' IMS rejections (viewCustRejections, src/js/33) and filing (viewGstFiling, src/js/35) are still old
-// pieces.
+// the customers' IMS rejections (viewCustRejections, src/js/33) are still an old piece; filing is Filing.jsx.
 import Legacy from "../../parts/Legacy.jsx";
 import FilterBar from "../../parts/FilterBar.jsx";
 import CommitBox from "../../parts/CommitBox.jsx";
+import { Filing } from "./Filing.jsx";
 
 const money = (v) => INR.format(r2(v || 0));
 const day = (d) => fmtDate(tallyDate(d));
@@ -179,6 +179,6 @@ export function Gstr3b({ b }) {
     </table></div>
     <p className="note">Worked out from the books. Credit is used as sections 49 and 49A and rule 88A require: IGST credit first against IGST, the rest against CGST and SGST; then CGST and SGST credit against their own tax and then IGST; CGST never against SGST. Reverse charge is paid in cash. Interest and late fee, and anything paid outside the books, are not included; check the ledgers on the portal before paying.</p>
     <Checks />
-    <Legacy html={typeof viewGstFiling === "function" ? viewGstFiling(b, t) : ""} />
+    <Filing b={b} t={t} />
   </>;
 }

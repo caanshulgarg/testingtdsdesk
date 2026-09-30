@@ -29,7 +29,7 @@ with sync_playwright() as p:
     pg.wait_for_timeout(1500); pg.evaluate("S.books = window.__bk; S.gstPart = 'vault'; render();"); pg.wait_for_timeout(3000)
     t = pg.inner_text("#app")
     ok("Returns filed" in t and "Add PDFs from the portal" in t and "PDF missing" in t, "the Returns filed tab, with the year's checklist")
-    pg.set_input_files('.gf-ctl input[data-gstvpick]', [f3b, f1, fch, fother]); pg.wait_for_timeout(6000)
+    pg.set_input_files('.gf-ctl input[type=file]', [f3b, f1, fch, fother]); pg.wait_for_timeout(6000)
     v = pg.evaluate("GSTV.list().map(x => [x.form, x.per, x.reg, x.sort, x.arn || ''])")
     print("   records:", v)
     ok(["r3b", "202603", "07", False, "AA070426123456X"] in v and ["r1", "202602", "07", False, "AA0703261234567"] in v, "the 3B for March and the GSTR-1 for February are read from their PDFs and filed in place")
@@ -41,19 +41,19 @@ with sync_playwright() as p:
     pg.screenshot(path=OUT + "/gstv-register.png", full_page=False)
     # sort the challan
     cid = pg.evaluate("GSTV.list().find(x => x.sort).id")
-    pg.fill('input[data-gstvs="per"][data-gid="%s"]' % cid, "202511"); pg.press('input[data-gstvs="per"][data-gid="%s"]' % cid, "Tab"); pg.wait_for_timeout(800)
-    pg.click('button[data-gstvok="%s"]' % cid); pg.wait_for_timeout(1500)
+    pg.fill('tr[data-key="%s"] input[aria-label="Period"]' % cid, "202511"); pg.press('tr[data-key="%s"] input[aria-label="Period"]' % cid, "Tab"); pg.wait_for_timeout(800)
+    pg.click('tr[data-key="%s"] button:text-is("File it")' % cid); pg.wait_for_timeout(1500)
     ok(pg.evaluate("GSTV.list().find(x => x.id === '%s').sort" % cid) is False, "sorted: the challan filed under November 2025")
     # a blank scan added from the January 3B line
-    pg.set_input_files('input[data-gstvpick][data-gform="r3b"][data-gper="202601"]', fscan); pg.wait_for_timeout(4000)
+    pg.set_input_files('tr[data-key="r3b|202601"] input[type=file]', fscan); pg.wait_for_timeout(4000)
     ok(pg.evaluate("!!GSTV.copies('07','r3b','202601')[0]"), "a PDF with nothing to read, added from its line, is filed on that line")
     # open and download
     pg.evaluate("() => { window.__opened = []; window.open = u => { window.__opened.push(u); return null; }; }")
-    pg.click('button[data-gstvopen="%s"]' % pg.evaluate("GSTV.copies('07','r3b','202603')[0].id")); pg.wait_for_timeout(1500)
+    pg.click('button[data-id="%s"]:text-is("open")' % pg.evaluate("GSTV.copies('07','r3b','202603')[0].id")); pg.wait_for_timeout(1500)
     head = pg.evaluate("async () => { const u = window.__opened[0]; if (!u) return ''; const t = await (await fetch(u)).text(); return u.slice(0, 5) + '|' + t.slice(0, 5); }")
     ok(head == "blob:|%PDF-", "open shows the PDF itself, in a new tab")
     pg.evaluate("() => { window.__saved = []; window.saveFile = (n, blob) => window.__saved.push([n, blob]); }")
-    pg.click('button[data-gstv="zip"]'); pg.wait_for_timeout(3000)
+    pg.click('button:has-text("Download the year")'); pg.wait_for_timeout(3000)
     zname = pg.evaluate("window.__saved.map(x => x[0])"); zb = pg.evaluate("async () => Array.from(new Uint8Array(await window.__saved[0][1].arrayBuffer()))")
     z = zipfile.ZipFile(io.BytesIO(bytes(zb))); names = z.namelist()
     ok(zname and zname[0] == "ZZ-TEST-VMS-books_07AADCV3366N1ZU_GST-returns_2025-26.zip" and z.testzip() is None and "ZZ-TEST-VMS-books_07AADCV3366N1ZU_GSTR-3B_2026-03.pdf" in names and all(z.read(n)[:5] == b"%PDF-" for n in names), "the year's zip: %d PDFs, intact, named by client, GSTIN, return and period" % len(names))
@@ -66,7 +66,7 @@ with sync_playwright() as p:
     pg.click('nav[aria-label="GST"] button[data-part="vault"]'); pg.wait_for_timeout(2500)
     # remove one
     rid = pg.evaluate("GSTV.copies('07','r3b','202601')[0].id")
-    pg.locator('button[data-gstvdel="%s"]' % rid).first.click(); pg.wait_for_timeout(600); pg.click('[data-cbx="yes"]'); pg.wait_for_timeout(1500)
+    pg.locator('button[data-id="%s"]:text-is("remove")' % rid).first.click(); pg.wait_for_timeout(600); pg.click('[data-cbx="yes"]'); pg.wait_for_timeout(1500)
     ok(pg.evaluate("GSTV.copies('07','r3b','202601').length") == 0, "remove asks first, then takes it off")
     br.close()
 errs = [e for e in errors if "supabase" not in e and "Failed to load" not in e]
