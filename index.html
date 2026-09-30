@@ -1128,7 +1128,7 @@ header.top .tbar-title{align-items:center}
 .lk-fresh .note{flex:1 1 320px}
 .fc-empty .lk-fresh{text-align:left;margin-top:12px}
 </style>
-<style>.is-test .side-brand::after{content:"TEST";display:block;margin-top:4px;font-size:11px;letter-spacing:.14em;color:#E9A06A}.is-test header.top{box-shadow:inset 0 3px 0 #E2761B}body.is-test::after{content:"TESTING SITE · not for real client work · post only to a ZZ TEST company in Tally";position:fixed;left:0;right:0;bottom:0;z-index:70;background:#E2761B;color:#fff;font-size:12.5px;text-align:center;padding:3px 8px;letter-spacing:.04em;pointer-events:none}.is-test .actionbar{bottom:22px}.is-test #app{padding-bottom:34px}</style><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-JUZRiA/pD/Q1MSIv1WkOX00eklOKXLcOHszD3zr3UBc=' 'sha256-fNOoxefqfCeXazmDwY8zFwmXp/yjGHd1cbAVC67bTVs=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+<style>.is-test .side-brand::after{content:"TEST";display:block;margin-top:4px;font-size:11px;letter-spacing:.14em;color:#E9A06A}.is-test header.top{box-shadow:inset 0 3px 0 #E2761B}body.is-test::after{content:"TESTING SITE · not for real client work · post only to a ZZ TEST company in Tally";position:fixed;left:0;right:0;bottom:0;z-index:70;background:#E2761B;color:#fff;font-size:12.5px;text-align:center;padding:3px 8px;letter-spacing:.04em;pointer-events:none}.is-test .actionbar{bottom:22px}.is-test #app{padding-bottom:34px}</style><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-JUZRiA/pD/Q1MSIv1WkOX00eklOKXLcOHszD3zr3UBc=' 'sha256-ORdvtbIQLy1uRdFWlvOmLG+dFwYZ1evN3XROwIC/wFs=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
 </head>
 <body class="is-test">
 <a class="skip" id="skipLink" href="#app">Skip to the work</a>
@@ -1204,7 +1204,7 @@ const DEFAULT_FIRM = {firmName:"", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "TEST · 30 Sep 2026 · build 189 (one request to Tally at a time; a light per client on the clients list from the bridge heartbeat; bridge 1.14.1)";
+const APP_VERSION = "TEST · 30 Sep 2026 · build 190 (no live Tally reads while processing bills or opening bank and sales; the TDS page draws 8x faster)";
 // the Tally Bridge setup file's fingerprint, put in by build.py: a new setup file is never served from an old cache
 const BRIDGE_SETUP_SHA = "d6ea3e4a47d15b80";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -4113,41 +4113,36 @@ function applyExtraction(e, j, cid){
 /* ---------- how this supplier has been booked before, in Tally ---------- */
 const NOT_EXPENSE = /(duties|taxes|bank|cash|sundry\s*creditors|sundry\s*debtors|current\s*liabilities|capital)/i;
 function isTaxLike(name){ return /\b(c|s|i|ut)gst\b|\bcess\b|\btds\b|\btcs\b|round\s*off|input\s*(c|s|i)gst/i.test(name || ""); }
-// read the supplier's ledger for the last twelve months and count what the other side was
-async function partyExpensesFromTally(partyLedger, cid){
-  const co = CO(cid || S.coId);
-  if (!bridgeLive(co) || !partyLedger) return null;
-  co.partyExp = co.partyExp || {};
-  const key = normName(partyLedger);
-  const had = co.partyExp[key];
-  if (had && Date.now() - new Date(had.at).getTime() < 7 * 86400000) return had;     // a week is fresh enough
-  const to = new Date(), from = new Date(to.getTime() - 365 * 86400000);
-  let rows = [];
-  try {
-    const j = await Bridge.call("/ledgervouchers?company=" + encodeURIComponent(Bridge.openFor(co).name) + "&ledger=" + encodeURIComponent(partyLedger) +
-      "&from=" + isoToTally(from.toISOString().slice(0, 10)) + "&to=" + isoToTally(to.toISOString().slice(0, 10)) + Bridge.pinQ(), null, 120000);
-    rows = [].concat(j.rows || []);
-  } catch (e){ return had || null; }
-  const count = {};
-  rows.forEach(r => {
-    const credited = num(String(r.cr || "").replace(/,/g, "")) !== 0;          // the supplier was credited: a bill
-    const other = String(r.other || "").trim();
-    if (!credited || !other || normName(other) === key || isTaxLike(other)) return;
-    const info = ledgerInfo(other);
-    if (info && NOT_EXPENSE.test(info.group || "")) return;
-    const c = count[other] || (count[other] = {ledger: other, n: 0, amount: 0});
-    c.n++; c.amount = r2(c.amount + Math.abs(num(String(r.cr).replace(/,/g, ""))));
+// the supplier's bills of the last twelve months and what the other side was, from the books FinCom already has (the
+// bridge's copy, the cloud, or the day book files). Build 190: never a live read of Tally while bills are processed (it
+// read each supplier's ledger from Tally, one after another, and made processing slow whenever Tally was connected)
+function partyExpensesFromTally(partyLedger, cid){
+  const b = S.books;
+  if (!partyLedger || !b || b.cid !== (cid || S.coId) || !(b.vouchers || []).length) return null;
+  const key = normName(partyLedger), t = new Date(Date.now() - 365 * 86400000);
+  const since = t.getFullYear() + String(t.getMonth() + 1).padStart(2, "0") + String(t.getDate()).padStart(2, "0");
+  const count = {}; let bills = 0;
+  b.vouchers.forEach(v => {
+    if (v.cancel || v.opt || String(v.date) < since) return;
+    const mine = (v.ent || []).filter(e => normName(e.l) === key);
+    if (!mine.length || !(mine.reduce((x, e) => x + num(e.a), 0) > 0)) return;       // the supplier credited: a bill (Tally keeps a credit positive)
+    bills++;
+    const seen = new Set();
+    (v.ent || []).forEach(e => {
+      if (!(num(e.a) < 0) || normName(e.l) === key || isTaxLike(e.l) || seen.has(e.l)) return;
+      const info = ledgerInfo(e.l);
+      if (info && NOT_EXPENSE.test(info.group || "")) return;
+      seen.add(e.l);
+      const c = count[e.l] || (count[e.l] = {ledger: e.l, n: 0, amount: 0});
+      c.n++; c.amount = r2(c.amount + Math.abs(num(e.a)));
+    });
   });
-  const top = Object.values(count).sort((a, b) => b.n - a.n || b.amount - a.amount).slice(0, 4);
-  const res = {at: new Date().toISOString(), bills: rows.filter(r => num(String(r.cr || "").replace(/,/g, "")) !== 0).length, top};
-  co.partyExp[key] = res;
-  Store.saveCompany(co);
-  return res;
+  const top = Object.values(count).sort((x, y) => y.n - x.n || y.amount - x.amount).slice(0, 4);
+  return {at: new Date().toISOString(), bills, top};
 }
 // fill the expense ledger on drafts from what Tally shows, unless a person already chose one
 async function applyPartyHistory(entries, cid){
-  const co = CO(cid);
-  if (!bridgeLive(co)) return 0;
+  if (!S.books || S.books.cid !== cid || !(S.books.vouchers || []).length) return 0;       // the client's books are not open here
   const byLedger = new Map();
   entries.forEach(e => {
     if (!e || e.status !== "draft" || !e.partyLedger || !exactLedger(e.partyLedger)) return;
@@ -4155,7 +4150,7 @@ async function applyPartyHistory(entries, cid){
   });
   let changed = 0;
   for (const [led, list] of byLedger){
-    const h = await partyExpensesFromTally(exactLedger(led), cid);
+    const h = partyExpensesFromTally(exactLedger(led), cid);
     if (!h || !h.top.length) continue;
     const best = h.top.find(t => exactLedger(t.ledger));
     list.forEach(e => {
@@ -5016,7 +5011,20 @@ function padForBars(){
   if (document.body.style.paddingBottom !== pad + "px") document.body.style.paddingBottom = pad + "px";
 }
 window.addEventListener("resize", () => requestAnimationFrame(padForBars));
+// build 190: a figure worked out from the whole books (TDS rows, say) is worked out once per drawing of the page, not
+// each time a part of the page asks for it (the TDS page asked 15 times). Outside a drawing it is always fresh
+let RENDER_GEN = 0, IN_RENDER = false;
+function perRender(o, key, fn){
+  if (!IN_RENDER) return fn();
+  const m = o["_pr_" + key];
+  if (m && m.gen === RENDER_GEN && m.books === S.books) return m.v;
+  const v = fn(); o["_pr_" + key] = {gen: RENDER_GEN, books: S.books, v}; return v;
+}
 function render(){
+  RENDER_GEN++; IN_RENDER = true;
+  try { return renderNow(); } finally { IN_RENDER = false; }
+}
+function renderNow(){
   requestAnimationFrame(padForBars);
   const drafts = {};
   document.querySelectorAll("#app [data-draft]").forEach(el => { if (el.id) drafts[el.id] = el.value; });
@@ -7451,7 +7459,8 @@ const TDS = {
   // salary TDS the books carry under section 192; 24Q takes the detail from the salary sheet
   salaryRows(){ return this.allRows().filter(r => /^192/.test(String(r.section || ""))); },
   // every voucher that carries a TDS ledger becomes one deduction row
-  allRows(){
+  allRows(){ return typeof perRender === "function" ? perRender(this, "allRows", () => this.allRowsNow()) : this.allRowsNow(); },
+  allRowsNow(){
     const b = S.books;
     if (!b || !b.vouchers) return [];
     const out = [];
@@ -7471,7 +7480,8 @@ const TDS = {
     return out.sort((a, c) => String(a.date).localeCompare(String(c.date)));
   },
   // the TDS payment vouchers in the books: the challan's amount and date are already there
-  paymentsFromBooks(){
+  paymentsFromBooks(){ return typeof perRender === "function" ? perRender(this, "pay", () => this.paymentsFromBooksNow()) : this.paymentsFromBooksNow(); },
+  paymentsFromBooksNow(){
     const b = S.books;
     if (!b || !b.vouchers) return [];
     const out = [];
@@ -16023,7 +16033,8 @@ async function bankAutoSync(force){
   bankSyncing = true;
   try {
     const before = (b.ledgers.list || []).length;
-    const stale = !b.ledgers.live || !(b.ledgers.list || []).length;
+    // build 190: by itself only when there is no ledger list at all; a fresh read of Tally's ledgers when someone asks
+    const stale = !(b.ledgers.list || []).length;
     if (force || stale) await syncLedgersFromTally(true);
     const st = curStmt();
     if (st && force) await syncBankBookFromTally(true);   // only when asked: this reads the Day Book
@@ -16031,7 +16042,8 @@ async function bankAutoSync(force){
   } finally { bankSyncing = false; }
   // lines marked as posted that were deleted in Tally since: looked for quietly, at most every 3 minutes per statement
   const st = curStmt();
-  if (st && bridgeVer(Bridge.st.version) >= bridgeVer("1.12.3") && b.rows.some(r => ["sent", "intally"].includes(r.state))){
+  // build 190: only when someone asks (Refresh from Tally); not every 3 minutes by itself (it read the day book each time)
+  if (force && st && bridgeVer(Bridge.st.version) >= bridgeVer("1.12.3") && b.rows.some(r => ["sent", "intally"].includes(r.state))){
     const k = st.id, last = (b.goneAt || {})[k] || 0;
     if (Date.now() - last > 3 * 60000){ b.goneAt = Object.assign({}, b.goneAt, {[k]: Date.now()}); try { await checkMarkedInTally({quiet: true}); } catch (e){} }
   }
@@ -18109,13 +18121,15 @@ async function salesCheckTally(list){
   list.forEach(v => { if (nums.has(normInvNo(v.x.number))){ v.status = "intally"; v.postNote = "Already in Tally"; n++; } });
   return n;
 }
-async function salesAutoSync(checkOnly){
+// asked: someone pressed Refresh from Tally. By itself (opening the page) Tally is not read, except a first ledger list;
+// sales already in Tally are still found when posting (build 190)
+async function salesAutoSync(checkOnly, asked){
   const s = SL(), co = CO(s.cid);
   if (!bridgeLive(co)) return;
   try {
-    if (!checkOnly && (!B().ledgers.live || Date.now() - new Date(B().ledgers.importedAt || 0) > 10 * 60000)) await syncLedgersFromTally(true);
+    if (!checkOnly && (asked || !(B().ledgers.list || []).length)) await syncLedgersFromTally(true);
     s.list.forEach(v => mapInvoice(v));
-    await salesCheckTally(s.list.filter(v => ["review", "ready"].includes(v.status)));
+    if (asked) await salesCheckTally(s.list.filter(v => ["review", "ready"].includes(v.status)));
     saveSales(); render();
   } catch (e){ /* shown when posting */ }
 }
@@ -18263,7 +18277,7 @@ function salesClick(t){
     case "salesCsv": closeMenus(); exportSalesCsv(); return true;
     case "salesFile": closeMenus(); exportSalesXml(); return true;
     case "salesPost": postSalesToTally(); return true;
-    case "salesSync": closeMenus(); salesAutoSync(false).then(() => toast("Refreshed from Tally.")); return true;
+    case "salesSync": closeMenus(); salesAutoSync(false, true).then(() => toast("Refreshed from Tally.")); return true;
     case "salesUndo": salesUndo(); return true;
     case "salesUndoOk": s.undo = null; salesLightRefresh(); return true;
     case "salesSelNone": s.sel.clear(); salesLightRefresh(); return true;

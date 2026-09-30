@@ -42,7 +42,8 @@ const TDS = {
   // salary TDS the books carry under section 192; 24Q takes the detail from the salary sheet
   salaryRows(){ return this.allRows().filter(r => /^192/.test(String(r.section || ""))); },
   // every voucher that carries a TDS ledger becomes one deduction row
-  allRows(){
+  allRows(){ return typeof perRender === "function" ? perRender(this, "allRows", () => this.allRowsNow()) : this.allRowsNow(); },
+  allRowsNow(){
     const b = S.books;
     if (!b || !b.vouchers) return [];
     const out = [];
@@ -62,7 +63,8 @@ const TDS = {
     return out.sort((a, c) => String(a.date).localeCompare(String(c.date)));
   },
   // the TDS payment vouchers in the books: the challan's amount and date are already there
-  paymentsFromBooks(){
+  paymentsFromBooks(){ return typeof perRender === "function" ? perRender(this, "pay", () => this.paymentsFromBooksNow()) : this.paymentsFromBooksNow(); },
+  paymentsFromBooksNow(){
     const b = S.books;
     if (!b || !b.vouchers) return [];
     const out = [];
