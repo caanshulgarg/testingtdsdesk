@@ -1037,8 +1037,6 @@ document.addEventListener("click", ev => {
   if (t.dataset.tdstab){ tdsTabGo(t.dataset.tdstab); return; }
   if (t.dataset.tdsfclear){ tdsFilterClear(t.dataset.tdsfclear); return; }
   if (t.dataset.tdssort){ tdsSortBy(...t.dataset.tdssort.split("|")); return; }
-  if (t.dataset.fstab){ S.fsTab = t.dataset.fstab; render(); return; }
-  if (t.dataset.fsunmap !== undefined){ const c = FS.cfg(S.books); delete c.map[t.dataset.fsunmap]; S.books.fs = c; S.fsRun = S.fsRun ? {fy: S.fsRun.fy, kind: c.kind, d: FS.build(S.fsRun.fy)} : null; saveBooks(); render(); return; }
   if (t.dataset.mistab){ S.misTab = t.dataset.mistab; S.misQ = ""; S.misF = ""; render(); return; }
   if (t.dataset.misquick){ const x = misRangeQuick(t.dataset.misquick, S.books); S.misRange = {from: Audit.iso(x.from), to: Audit.iso(x.to)}; render(); return; }
   if (t.dataset.b2open){ S.b2Open = S.b2Open === t.dataset.b2open ? "" : t.dataset.b2open; render(); return; }
@@ -1643,7 +1641,6 @@ document.addEventListener("keydown", ev => {
 document.addEventListener("input", ev => {
   if (reactOwned(ev.target)) return;
   const t = ev.target;
-  if (t && t.id === "fsq"){ S.fsQ = t.value; later("fsq", render, 250); return; }
   if (t && t.id && /^(q24F|r1F|b2F)q$/.test(t.id)){ const k = t.id.slice(0, -1); S[k] = Object.assign({}, S[k], {q: t.value}); later(t.id, render, 250); return; }
   if (t && t.dataset){
     // the browser lowercases attribute names, so match without case

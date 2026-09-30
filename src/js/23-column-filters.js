@@ -894,6 +894,15 @@ function lmViewGo(v){ S.lmView = v; S.booksTab = "ledgers"; render(); }
 function lmPost(k){ LedMaster.applyPosting(S.books, CO(), k); render(); }
 // the Audit tab (app/src/screens/books/Audit.jsx): the period, how often it runs by itself, and a finding's status
 // or note (kept with the books)
+// Accounts (app/src/screens/books/Accounts.jsx): the format, the year, stock, a manufacturer, shares, a ledger placed by
+// hand (the statements are worked out again) or given back to the rule
+function fsKindSet(v){ const b = S.books; b.fs = Object.assign({}, FS.cfg(b), {kind: v}); S.fsRun = null; saveBooks(); render(); }
+function fsFyGo(v){ S.fsFy = v; S.fsRun = null; render(); }
+function fsStockSet(which, v){ const b = S.books, c = FS.cfg(b); c.stock = Object.assign({}, c.stock, {[which]: v === "" ? "" : num(v)}); b.fs = c; saveBooks(); }
+function fsSet(key, v){ const b = S.books; b.fs = Object.assign({}, FS.cfg(b), {[key]: v}); saveBooks(); }
+function fsRedo(c){ S.books.fs = c; S.fsRun = S.fsRun ? {fy: S.fsRun.fy, kind: c.kind, d: FS.build(S.fsRun.fy)} : null; saveBooks(); render(); }
+function fsMapSet(l, v){ const c = FS.cfg(S.books); c.map = Object.assign({}, c.map, {[l]: v}); fsRedo(c); }
+function fsUnmap(l){ const c = FS.cfg(S.books); delete c.map[l]; fsRedo(c); }
 // MIS (app/src/screens/books/Mis.jsx): its period and quick picks, the tab, how often it runs by itself, a supplier
 // marked MSME (the run is worked out again), a month of the budget
 function misRangeSet(key, v){ const x = misRangeQuick("ytd", S.books); S.misRange = Object.assign({from: Audit.iso(x.from), to: Audit.iso(x.to)}, S.misRange, {[key]: v}); render(); }
@@ -917,12 +926,6 @@ function relRemove(name){ const b = S.books; b.auditRel = (b.auditRel || []).fil
 // what the user corrects on the Advances and Reversal screens
 function gstFixChange(t){
   const d = t.dataset, b = S.books;
-  if (d.fskind !== undefined){ b.fs = Object.assign({}, FS.cfg(b), {kind: t.value}); S.fsRun = null; saveBooks(); render(); return true; }
-  if (d.fsfy !== undefined){ S.fsFy = t.value; S.fsRun = null; render(); return true; }
-  if (d.fsstock !== undefined){ const c = FS.cfg(b); c.stock = Object.assign({}, c.stock, {[d.fsstock]: t.value === "" ? "" : num(t.value)}); b.fs = c; saveBooks(); return true; }
-  if (d.fsmfg !== undefined){ b.fs = Object.assign({}, FS.cfg(b), {mfg: !!t.checked}); saveBooks(); return true; }
-  if (d.fsshares !== undefined){ b.fs = Object.assign({}, FS.cfg(b), {shares: t.value}); saveBooks(); return true; }
-  if (d.fsmap !== undefined){ const c = FS.cfg(b); c.map = Object.assign({}, c.map, {[d.fsmap]: t.value}); b.fs = c; S.fsRun = S.fsRun ? {fy: S.fsRun.fy, kind: c.kind, d: FS.build(S.fsRun.fy)} : null; saveBooks(); render(); return true; }
   if (d.itctemail !== undefined || d.itctphone !== undefined){ const st = ITCT.store(S.gstReg || ""), k = d.itctemail !== undefined ? d.itctemail : d.itctphone; st.contact[k] = Object.assign({}, st.contact[k], d.itctemail !== undefined ? {email: t.value.trim()} : {phone: t.value.trim()}); saveBooks(); return true; }
   if (d.itcbasis !== undefined){ b.itcBasis = Object.assign({}, b.itcBasis, {[S.gstReg || ""]: t.value}); saveBooks(); render(); return true; }
   if (d.gstopen !== undefined){ const k = S.gstReg || ""; b.gstOpen = Object.assign({}, b.gstOpen); b.gstOpen[k] = Object.assign({}, b.gstOpen[k], {[d.gstopen]: t.value === "" ? "" : num(t.value)}); saveBooks(); render(); return true; }
