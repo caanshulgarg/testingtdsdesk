@@ -26,6 +26,9 @@ function legacy(mode) {
     transformIndexHtml(html) {
       html = html.replace("</head>", '<meta http-equiv="Content-Security-Policy" content="' + CSP + '">\n</head>');
       if (test) html = html.replace("</head>", fs.readFileSync(new URL("./legacy/test-style.html", import.meta.url), "utf8") + "</head>").replace("<body>", '<body class="is-test">');
+      // a named preview (publish-preview.sh review "REVIEW BUILD – Phase 1"): its own words on the strip and under the logo
+      const banner = test && String(process.env.FINCOM_BANNER || "").replace(/["\\<>]/g, "");
+      if (banner) html = html.replace("</head>", '<style>body.is-test::after{content:"' + banner + ' · staging database · not for real client work";background:#6B3FA0}.is-test .side-brand::after{content:"' + banner + '";color:#C9A8F0}</style>\n</head>');
       return html;
     },
   };

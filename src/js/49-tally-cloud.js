@@ -12,7 +12,7 @@
 const TCloud = {
   BIG: 60000,
   st: {},                 // cid -> {books, at, err}
-  pane: {devices: null, companies: null, busy: "", err: ""},
+  pane: {devices: null, companies: null, busy: "", err: "", at: 0},
   on(){ return typeof Cloud === "object" && Cloud.on() && !!(Cloud.st && Cloud.st.firm); },
   ingestUrl(){ return Cloud.cfg().url.replace(/\/+$/, "") + "/functions/v1/tally-ingest"; },
   iso(d8){ return String(d8).slice(0, 4) + "-" + String(d8).slice(4, 6) + "-" + String(d8).slice(6, 8); },
@@ -184,7 +184,8 @@ const TCloud = {
     try {
       p.devices = await Cloud.api("tally_devices?select=id,name,created_at,last_seen,version,info,revoked&order=created_at.desc");
       p.companies = await this.restAll("tally_companies?select=company,client_id,gstin,last_seen,linked_at&order=company.asc");
-      p.err = "";
+      p.err = ""; p.at = Date.now();
+      linkByGstin(p.companies);
     } catch (e){ p.err = /tally_devices|does not exist|schema cache/i.test(String(e && e.message)) ? "The cloud copy is not set up in this database yet." : (e && e.message) || String(e); }
     p.busy = ""; render();
   },
@@ -299,8 +300,12 @@ const TLight = {
   refresh(){
     if (!TCloud.on() || this.st.busy || Date.now() - this.st.at < 120000) return;
     this.st.busy = true;
-    Promise.all([TCloud.restAll("tally_companies?select=company,client_id,device_id&client_id=not.is.null&order=company.asc"), Cloud.api("tally_devices?select=id,name,last_seen,info,revoked")])
-      .then(([cos, devs]) => { this.st.by = this.work(cos || [], devs || [], Date.now()); }, () => {})
+    Promise.all([TCloud.restAll("tally_companies?select=company,client_id,device_id,gstin,linked_at&order=company.asc"), Cloud.api("tally_devices?select=id,name,last_seen,info,revoked")])
+      .then(([cos, devs]) => {
+        this.st.devs = (devs || []).filter(d => !d.revoked); this.st.cos = cos || [];
+        this.st.by = this.work((cos || []).filter(c => c.client_id), devs || [], Date.now());
+        linkByGstin(this.st.cos);
+      }, () => {})
       .then(() => { this.st.at = Date.now(); this.st.busy = false; if (S.view === "home") render(); });
   },
   // client id -> {level: ok | warn | bad, short, say}
@@ -334,3 +339,55 @@ const TLight = {
     return x ? '<span class="tag ' + x.level + '" title="' + esc(x.say) + '">' + (x.level === "ok" ? "\u25CF " : x.level === "warn" ? "\u25D0 " : "\u25CB ") + esc(x.short) + "</span>" : '<span class="note">\u2014</span>';
   }
 };
+
+
+// A Tally company whose GSTIN is exactly one client's GSTIN is linked to that client by itself (review item 6).
+// Not when a person unlinked it by hand (linked_at set, no client), and not when two clients share the GSTIN:
+// those are offered in Books in the cloud with one click (gstinMatch). The server's link checks the PAN part again.
+const gstinKey = g => String(g || "").toUpperCase().replace(/[^0-9A-Z]/g, "");
+function gstinMatch(company){
+  const g = gstinKey(company && company.gstin);
+  if (!GSTIN_RE.test(g)) return null;
+  const hits = Object.values(S.companies || {}).filter(c => !c.deleted && gstinKey(c.gstin) === g);
+  return hits.length === 1 ? hits[0] : null;
+}
+const linkTried = new Set();
+function linkByGstin(cos){
+  if (!TCloud.on()) return;
+  (cos || []).forEach(c => {
+    if (c.client_id || c.linked_at || linkTried.has(c.company)) return;
+    const k = gstinMatch(c);
+    if (!k) return;
+    linkTried.add(c.company);
+    TCloud.rpc("tally_company_link", {p_company: c.company, p_client: k.id})
+      .then(() => { c.client_id = k.id; if (!k.tallyName){ k.tallyName = c.company; Store.saveCompany(k); } TLight.st.at = 0; toast(c.company + " linked to " + k.name + " (same GSTIN " + k.gstin + ")."); render(); },
+        err => { TCloud.autoErr = "Could not link " + c.company + " to " + k.name + ": " + ((err && err.message) || err); render(); });
+  });
+}
+
+// One Tally status for every screen (review item 5): the bridge on this computer and the heartbeat of the firm's
+// Tally computers (tally_devices), for a client or for the firm.
+// state: none | offline | unlinked | waiting | ok;  level: ok | warn | bad (the pill's colour)
+function tallyStatus(co){
+  if (typeof TLight === "object") TLight.refresh();
+  const local = typeof Bridge === "object" && Bridge.on() && Bridge.up();
+  const devs = (typeof TLight === "object" && TLight.st.devs) || [];
+  const seenOf = d => Date.parse((((d.info || {}).beat) || {}).at || d.last_seen || 0) || 0;
+  const heard = devs.reduce((a, d) => Math.max(a, seenOf(d)), 0);
+  const fresh = devs.some(d => Date.now() - seenOf(d) <= 15 * 60000);
+  const when = t => fmtDate(new Date(t).toISOString().slice(0, 10)) + " " + new Date(t).toLocaleTimeString("en-IN", {hour: "2-digit", minute: "2-digit"});
+  if (!local && !devs.length) return {state: "none", level: "bad", label: "Not set up", say: "No Tally Bridge on this computer, and no computer of the firm sends from Tally. Set up the Tally Bridge on the computer with TallyPrime."};
+  if (!local && !fresh) return {state: "offline", level: "bad", label: "Offline since " + (heard ? when(heard) : "—"), say: "No word from the firm's Tally computer" + (heard ? " since " + when(heard) : "") + ": the computer, the FinCom Connector or the bridge is off."};
+  const cos = co ? [co] : Object.values(S.companies || {}).filter(c => !c.deleted);
+  const waiting = cos.reduce((a, c) => a + num((c.stats || {}).waiting), 0);
+  if (co){
+    const cloudRow = ((typeof TLight === "object" && TLight.st.cos) || []).some(r => r.client_id === co.id);
+    // linked means a Tally company is this client's (in the cloud, or open in Tally through the bridge here);
+    // a "Tally name" typed in Client setup alone does not link anything (review recheck: Mastercad)
+    const linked = cloudRow || (local && !!Bridge.openFor(co));
+    if (!linked) return {state: "unlinked", level: "warn", label: "Connected – company not linked", say: "Tally is connected, but no Tally company is linked to " + co.name + ". Link it in Client setup → Tally, or in Settings → Books in the cloud."};
+  }
+  if (waiting > 0) return {state: "waiting", level: "warn", label: waiting + " entr" + (waiting === 1 ? "y" : "ies") + " waiting", say: waiting + " approved entr" + (waiting === 1 ? "y is" : "ies are") + " not yet in Tally" + (co ? "" : " (all clients)") + "."};
+  const light = co && typeof TLight === "object" ? TLight.st.by[co.id] : null;
+  return {state: "ok", level: "ok", label: "Connected & in sync", say: "Tally is connected" + (local ? " on this computer" : " (" + devs.length + " computer" + (devs.length === 1 ? "" : "s") + " sending)") + " and nothing waits to be sent." + (light ? " " + light.say : "")};
+}

@@ -17,7 +17,7 @@ import { ChipBar, NoMatch } from "../parts/ChipBar.jsx";
 const live = () => Bridge.on() && Bridge.up();
 const STATUS = { ready: ["ok", "Ready"], review: ["warn", "To review"], posted: ["ok", "Posted"], intally: ["no", "In Tally"], ignored: ["no", "Ignored"] };
 const EMPTY = { review: "Nothing to review.", ready: "No invoices are ready yet.", done: "Nothing posted or ignored yet." };
-const States = () => <><option value="">— Choose —</option>{Object.entries(GST_STATES).map(([c, n]) => <option key={c} value={c}>{c} · {n}</option>)}</>;
+const States = () => <><option value="">— Choose —</option>{gstStateList().map(([c, n]) => <option key={c} value={c}>{c} · {n}</option>)}</>;
 const gstOf = (x) => r2(num(x.cgst) + num(x.sgst) + num(x.igst) + num(x.cess));
 
 function Row({ v, sel }) {
@@ -181,6 +181,7 @@ function Create() {
         <div className="bk-actions"><button className="btn small" onClick={() => salesAct("salesCancel")}>Cancel</button><button className="btn small" onClick={() => salesAct("salesPrintDraft")}>Preview / Print</button><button className="btn primary small" onClick={() => salesAct("salesSave")}>Save invoice</button></div>
       </div>
       {probs.length > 0 && <div className="bk-alert bad">{probs.map((p, i) => <div key={i}>{p}</div>)}</div>}
+      {salesRateWarnings(x).length > 0 && <div className="bk-alert">{salesRateWarnings(x).map((p, i) => <div key={i}>{p}</div>)}</div>}
       <div className="si-grid">
         <section className="si-card"><h3>Invoice</h3><div className="bk-form">
           <DraftText x={x} label="Invoice number" k="number" data-fk="sd:number" />
@@ -192,13 +193,14 @@ function Create() {
           <label><span>Customer ledger (Tally)</span><LedgerBox className={"lgbox" + (d.customerLedger ? " done" : "")} value={d.customerLedger || ""} fk="sdcust" data-sdcust="" placeholder="Type to search customers" onCommit={draftCust} /></label>
           <DraftText x={x} label="Name on invoice" k="customerName" /><DraftText x={x} label="GSTIN (blank if unregistered)" k="customerGstin" maxLength={15} /><DraftText x={x} label="Address" k="address" area />
           <label><span>Place of supply</span><select value={x.pos || ""} onChange={(ev) => draftSet("pos", ev.target.value)}><States /></select></label>
-          <p className="note" style={{ margin: 0 }}>{d.inter ? <>Another state: <b>IGST</b> is charged.</> : <>Same state: <b>CGST + SGST</b> are charged.</>}</p>
+          {stateOfGstin(co.gstin) && x.pos ? <p className="note" style={{ margin: 0 }}>{d.inter ? <>Another state: <b>IGST</b> is charged.</> : <>Same state: <b>CGST + SGST</b> are charged.</>}</p>
+            : !stateOfGstin(co.gstin) ? <p className="note" style={{ margin: 0 }}>The client's state is not known: add its GSTIN in Client setup to charge GST.</p> : null}
         </div></section>
       </div>
       <datalist id="itemMemory">{Object.values(s.cfg.items || {}).map((it) => <option key={it.desc} value={it.desc} />)}</datalist>
       <section className="si-card"><h3>Items</h3>
         <div className="bk-tablewrap"><table className="bk-table si-items">
-          <thead><tr><th>#</th><th>Description</th><th>HSN/SAC</th><th className="n">Qty</th><th>Unit</th><th className="n">Rate</th><th className="n">Disc %</th><th className="n">Taxable</th><th className="n">GST %</th><th className="n">Tax</th><th></th></tr></thead>
+          <thead><tr><th>#</th><th>Description</th><th>HSN/SAC</th><th className="n">Qty</th><th>Unit</th><th className="n">Rate</th><th className="n">Disc %</th><th className="n">Taxable</th><th className="n">GST %</th><th className="n">Tax</th><th className="n">Cess ₹</th><th></th></tr></thead>
           <tbody>{x.items.map((it, i) => {
             const set = (k) => (ev) => draftItem(i, k, ev.target.value);
             return <tr key={i}>
@@ -211,7 +213,8 @@ function Create() {
               <td className="n"><input type="number" step="any" min="0" max="100" className="w60 n" value={it.disc || 0} aria-label="Discount %" onChange={set("disc")} /></td>
               <td className="n">{INR.format(it.taxable)}</td>
               <td className="n"><select value={num(it.gstRate)} aria-label="GST rate" onChange={set("gstRate")}>{SALES_RATES.map((r) => <option key={r} value={r}>{r}%</option>)}</select></td>
-              <td className="n">{INR.format(r2((it.taxable * num(it.gstRate)) / 100))}</td>
+              <td className="n">{d.noState ? "—" : INR.format(r2((it.taxable * num(it.gstRate)) / 100))}</td>
+              <td className="n"><input type="number" step="any" min="0" className="w90 n" value={it.cess === undefined ? "" : it.cess} placeholder="—" aria-label="Cess" onChange={set("cess")} /></td>
               <td className="ac"><button className="icon" aria-label="Remove item" title="Remove item" onClick={() => draftItemRemove(i)}>✕</button></td>
             </tr>;
           })}</tbody>
@@ -224,11 +227,13 @@ function Create() {
         <section className="si-card"><h3>Totals</h3>
           <dl className="si-tot">
             <div><dt>Taxable value</dt><dd>{INR.format(x.taxable)}</dd></div>
-            {groups.filter((g) => g.rate).map((g) => d.inter
+            {d.noState && <div><dt>GST</dt><dd className="note">shown once the client’s state is known</dd></div>}
+            {!d.noState && groups.filter((g) => g.rate).map((g) => d.inter
               ? <div key={g.rate}><dt>IGST @ {g.rate}%</dt><dd>{INR.format(r2((g.taxable * g.rate) / 100))}</dd></div>
               : <span key={g.rate} style={{ display: "contents" }}>
                 <div><dt>CGST @ {g.rate / 2}%</dt><dd>{INR.format(r2((g.taxable * g.rate) / 200))}</dd></div>
                 <div><dt>SGST @ {g.rate / 2}%</dt><dd>{INR.format(r2((g.taxable * g.rate) / 100 - r2((g.taxable * g.rate) / 200)))}</dd></div></span>)}
+            {num(x.cess) ? <div><dt>Cess</dt><dd>{INR.format(x.cess)}</dd></div> : null}
             {x.roundOff ? <div><dt>Round off</dt><dd>{INR.format(x.roundOff)}</dd></div> : null}
             <div className="big"><dt>Invoice total</dt><dd>{money(x.total)}</dd></div>
           </dl>

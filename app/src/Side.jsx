@@ -56,8 +56,11 @@ export default function Side() {
           <Item icon="sales" label="Sales" on={inCo && mod === "sales" && !isSetupTab(S.tab)} onClick={() => goClient("sales")} />
           <Item icon="inbox" label="Inbox" on={inCo && S.tab === "clientInbox"} count={docqCount(open.id)} onClick={() => goClient("inbox")} />
           <Item icon="txn" label="Transactions" on={inCo && S.tab === "txn"} onClick={() => goClient("txn")} />
-          <Item icon="books" label="TDS & GST" on={!!bt && !["reports", "lookup", "letters"].includes(bt)} onClick={() => goClient("books")} />
+          <Item icon="books" label="TDS & GST" on={!!bt && !BOOKS_OWN_PAGES.includes(bt)} onClick={() => goClient("books")} />
           <Item icon="reports" label="Reports" on={bt === "reports"} onClick={() => goClient("books:reports")} />
+          <Item icon="reports" label="MIS" on={bt === "mis"} onClick={() => goClient("books:mis")} title="Management reports from the books" />
+          <Item icon="books" label="Accounts" on={bt === "fs"} onClick={() => goClient("books:fs")} title="Financial statements" />
+          <Item icon="lookup" label="Audit" on={bt === "audit"} onClick={() => goClient("books:audit")} title="Checks over the books" />
           <Item icon="lookup" label="Look up" on={bt === "lookup"} onClick={() => goClient("books:lookup")} title="Any ledger, any dates (press /)" />
           <Item icon="letters" label="Letters" on={bt === "letters"} onClick={() => goClient("books:letters")} title="Balance confirmations and dues reminders" />
           <Item icon="setup" label="Client setup" on={inCo && isSetupTab(S.tab)} onClick={() => toggleSetup()} />

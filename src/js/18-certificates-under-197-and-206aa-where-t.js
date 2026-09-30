@@ -623,8 +623,10 @@ function revFiltered(){
 function viewReviewTable(){ return '<div data-react="ReviewTable"></div>'; }
 function revSet(e, on){
   const c = compute(e);
-  if (on){ e.tdsSkip = null; if (c.skip && c.skip.from !== "bill") e.tdsForce = true; if (c.tdsWould <= 0){ e.tdsAlways = true; e.tdsForce = true; } }
-  else { e.tdsForce = false; e.tdsAlways = false; if (c.tdsWould > 0) e.tdsSkip = e.tdsSkip || "pay"; }
+  // "TDS on" for many bills books TDS where it is due; a bill below the limits stays without TDS
+  // (deducting there is a per-bill choice, "Deduct anyway", with who and why recorded: review item 3)
+  if (on){ e.tdsSkip = null; if (c.skip && c.skip.from !== "bill") e.tdsForce = true; }
+  else { e.tdsForce = false; e.tdsAlways = false; e.tdsAlwaysBy = ""; if (c.tdsWould > 0) e.tdsSkip = e.tdsSkip || "pay"; }
   Store.saveEntry(S.coId, e);
 }
 async function reviewCheckTally(list){

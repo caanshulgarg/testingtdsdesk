@@ -75,9 +75,9 @@ function firmGroups() {
     ] },
     { title: "Tally", items: [
       { id: "bridge", label: "Tally Bridge", about: "The small program that lets FinCom read from and post into TallyPrime on this computer: set it up and check it.",
-        status: Bridge.on() && Bridge.up() ? (Bridge.st.tallyUp ? "connected to Tally" : "running, Tally not open") : "not connected" },
+        status: "Tally: " + tallyStatus(null).label + (Bridge.on() && Bridge.up() && !Bridge.st.tallyUp ? " (bridge here running, Tally not open)" : "") },
       { id: "tcloud", label: "Books in the cloud", about: "Computers that send Tally’s books to the firm account, and which Tally company is which client.",
-        status: TCloud.pane.devices ? TCloud.pane.devices.filter((d) => !d.revoked).length + " computer(s) sending" : "" },
+        status: "Tally: " + tallyStatus(null).label },
       { id: "postlog", label: "Sent to Tally", about: "A record of every entry posted to Tally, by whom and when, for all clients.", status: (S.firm.postLog || []).length + " entries" },
     ] },
     { title: "How the work is done", items: [
@@ -214,7 +214,8 @@ function GstSetup() {
         <thead><tr><th>Kind of purchase</th><th>Section</th><th>For this client</th></tr></thead>
         <tbody>{BLOCK_CATS.map((b) => <tr key={b.id}><td>{b.label}</td><td>{b.sec}</td>
           <td><select aria-label={"Blocked credit: " + b.label} value={blockRule(co, b.id)} onChange={(ev) => coSetBlockRule(b.id, ev.target.value)}>
-            <option value="flag">Flag for review</option><option value="block">Always blocked</option><option value="allow">Credit allowed</option></select></td></tr>)}</tbody>
+            <option value="flag">Flag for review</option>{!b.flagOnly && <option value="block">Always blocked</option>}<option value="allow">Credit allowed</option></select>
+            {b.flagOnly && <div className="nr">Flag only: never blocked by itself{b.id === "construction" ? " (repairs and plant and machinery are allowed)" : " (vehicles over 13 seats, dealers and transporters are allowed)"}.</div>}</td></tr>)}</tbody>
       </table></div>
     </Card>
   </>;
@@ -228,17 +229,17 @@ function Remove() {
 }
 
 function clientGroups() {
-  const co = CO(), accs = (co.bankAccounts || []).length, sup = Object.keys(D().parties || {}).length;
+  const co = CO(), accs = (co.bankAccounts || []).length, sup = Object.keys(D().parties || {}).length, supNew = pendingSuppliers().length;
   const label = Object.fromEntries(SETUP_TABS);
   const it = (id, about, status, danger) => ({ id, label: label[id], about, status, danger });
   return [
     { title: "The client", items: [
       it("settings", "Who the client is: name, GSTIN and PAN.", co.gstin || "no GSTIN yet"),
-      it("cotally", "Which Tally company entries go into, how they are numbered, and the ledgers used in every entry.", co.tallyName || "not linked to Tally"),
+      it("cotally", "Which Tally company entries go into, how they are numbered, and the ledgers used in every entry.", "Tally: " + tallyStatus(co).label + (co.tallyName ? " · " + co.tallyName : "")),
     ] },
     { title: "Tax", items: [
       it("cotds", "Whether the client deducts TDS, and the ledgers each kind of payment uses.", co.mustDeduct === false ? "does not deduct" : "deducts TDS"),
-      it("deductees", "Each supplier’s PAN and usual payment type, and amounts credited before FinCom, so yearly limits are right.", sup + " supplier" + (sup === 1 ? "" : "s")),
+      it("deductees", "Each supplier’s PAN and usual payment type, and amounts credited before FinCom, so yearly limits are right.", sup + " supplier" + (sup === 1 ? "" : "s") + (supNew ? " + " + supNew + " new, not yet approved" : "")),
       it("gstset", "GST registrations and how each is filed, reverse charge ledgers, and which purchases have blocked credit.", ""),
     ] },
     { title: "Bank", items: [
