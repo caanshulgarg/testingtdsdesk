@@ -27,7 +27,7 @@ trap {
   try { Stop-Transcript | Out-Null } catch { }
   break
 }
-$BridgeVersion = '1.14.2'
+$BridgeVersion = '1.14.3'
 
 # ------------------------------------------------------------------ settings
 function New-BridgeKey {
@@ -2523,7 +2523,9 @@ function Step-Keep([string]$Company, [int]$Port, [string]$BooksFrom) {
     }
   }
   # 1.14.0: nothing changed since the last look (or nothing new came in): this company is up to date for today's run
-  if ($st.phase -eq 'live' -and ($quiet -or -not @($ch).Count)) { $script:KeepCaughtUp = $true }
+  # 1.14.3: in the daily update, every month is also compared with Tally's list once (deleted entries leave no change
+  # number): the company is up to date only when a whole round of months has been checked today
+  if ($st.phase -eq 'live' -and ($quiet -or -not @($ch).Count) -and (-not $script:KeepOnce -or ([string]$st.roundFrom -eq $today -and [string]$st.roundAt -eq $today))) { $script:KeepCaughtUp = $true }
   # ledger masters changed since the last look
   if ($st.phase -eq 'live' -and $sw.Elapsed.TotalSeconds -lt $budget -and -not ($cn.ok -and $null -ne $st.cm -and [long]$st.cm -eq $cn.m)) { Update-KeepLedgers $Company $Port $dir $st $false }
   if ($cn.ok) { $st.cv = $cn.v; $st.cm = $cn.m }
@@ -2537,14 +2539,17 @@ function Step-Keep([string]$Company, [int]$Port, [string]$BooksFrom) {
   $every = $(if ($st.phase -eq 'check') { 1 } else { Get-KeepNum 'KeepCheckEvery' 5 })
   $nowEvery = Get-KeepNum 'KeepNowEvery' 2
   if ($quiet) { $every = $every * 3; $nowEvery = $nowEvery * 3 }       # nothing changed: look less often
+  if ($script:KeepOnce) { $every = 1 }                                  # the daily update: a month every turn
   if ($sw.Elapsed.TotalSeconds -lt $budget -and (Test-KeepRoom $Port)) {
     if (([int]$st.cycle % $every) -eq 0) {
       $ym = [string]$st.checkYm; if (-not $ym) { $ym = $st.from.Substring(0, 6) }
+      if ($ym -eq $st.from.Substring(0, 6)) { $st.roundFrom = $today }
       $null = Test-KeepMonthFix $Company $Port $dir $st $ym $today
       if ($st.checkYm -eq $ym) {
         $nx = (ConvertFrom-TallyDate ($ym + '01')).AddMonths(1).ToString('yyyyMM')
         if ($nx -gt $today.Substring(0, 6)) {
           $nx = $st.from.Substring(0, 6)
+          if ([string]$st.roundFrom -eq $today) { $st.roundAt = $today }
           if ($st.phase -eq 'check') { $st.phase = 'live'; Write-Log ('Keeping ' + $Company + ': in step with Tally') }
           if ($st.phase -eq 'live' -and $sw.Elapsed.TotalSeconds -lt $budget) { Update-KeepLedgers $Company $Port $dir $st $true }   # once a round: ledgers no longer in Tally
         }
@@ -2601,6 +2606,7 @@ function Invoke-KeepWorker {
   $script:IsCopier = $true
   $due = Test-KeepDue; $once = $due -eq 'daily' -or $due -eq 'now'
   $script:KeepForce = $due -eq 'now'
+  $script:KeepOnce = $once
   $runEnd = (Get-Date).AddMinutes((Get-KeepNum 'KeepRunMin' 30)); $upToDate = @{}
   if ($once) { Write-Log ('Update from Tally: ' + $(if ($due -eq 'now') { 'asked for now' } else { 'the daily update (' + (Get-KeepDailyAt) + ')' })) }
   try {

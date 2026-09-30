@@ -34,7 +34,7 @@ try:
         except Exception: pass
     KEY = json.load(open(os.path.join(BRUN, "tds-bridge.config.json"), encoding="utf-8-sig"))["Key"]
     CO = T.COMPANY
-    ok(json.loads(urllib.request.urlopen("http://127.0.0.1:9100/ping").read())["version"] == "1.14.2", "bridge 1.14.2")
+    ok(json.loads(urllib.request.urlopen("http://127.0.0.1:9100/ping").read())["version"] == "1.14.3", "bridge 1.14.3")
     # 1. a batch of 100: handed over at once; the bridge answers while it posts; every entry created once and found in Tally
     jid = str(uuid.uuid4()); t0 = time.time()
     j = call("/jobs", {"jobId": jid, "company": CO, "masters": [{"id": "led:Rent", "xml": '<LEDGER NAME="Rent" ACTION="Create"><PARENT>Indirect Expenses</PARENT></LEDGER>'}], "vouchers": vouchers(100, "A")})

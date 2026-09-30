@@ -6,7 +6,7 @@ def R(a, b):
     assert base.count(a) == 1, ('anchor', a[:60], base.count(a))
     base = base.replace(a, b)
 import re
-base = re.sub(r"\$BridgeVersion = '[0-9.]+'", "$BridgeVersion = '1.14.2'", base, 1)
+base = re.sub(r"\$BridgeVersion = '[0-9.]+'", "$BridgeVersion = '1.14.3'", base, 1)
 # 1.12.7 (security): the log never holds keys, codes or passwords, and is rotated at 5 MB keeping 5 old copies
 R(r"""function Write-Log([string]$msg) {
   $line = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + '  ' + $msg

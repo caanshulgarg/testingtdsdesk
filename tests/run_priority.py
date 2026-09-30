@@ -1,4 +1,4 @@
-"""python3 run_priority.py - bridge 1.14.2:
+"""python3 run_priority.py - bridge 1.14.3:
   - FinCom first: while the copier is reading Tally, FinCom's requests (posting, a check someone asked for) go ahead;
     the copier waits between its reads, so FinCom's requests follow one another with nothing of the copier between them;
   - "Tally not responding since HH:MM": when Tally stops answering, the status says since when, until it answers again."""
