@@ -8041,121 +8041,6 @@ function misRangeQuick(k, b){
   if (k === "lastyear"){ const fs = Audit.fyStart(t), y = num(fs.slice(0, 4)); return {from: (y - 1) + "0401", to: y + "0331"}; }   // the last complete financial year
   return null;
 }
-function viewBooksMis(b){
-  const catchUp = TallyRead.catchUp(b, "mis");
-  if (catchUp) return catchUp;
-  const m = v => INR.format(r2(v || 0)), r = (b.mis || {}).last, c = MIS.cfg(b);
-  const rg = S.misRange || (r ? {from: Audit.iso(r.from), to: Audit.iso(r.to)} : (x => ({from: Audit.iso(x.from), to: Audit.iso(x.to)}))(misRangeQuick("ytd", b)));
-  let h = '<section class="dash-card"><h3>MIS</h3>' +
-    '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">' +
-    '<label class="note">From <input type="date" data-misfrom value="' + esc(rg.from) + '"></label><label class="note">to <input type="date" data-misto value="' + esc(rg.to) + '"></label>' +
-    [["month", "This month"], ["lastmonth", "Last month"], ["quarter", "This quarter"], ["ytd", "Year to date"], ["lastyear", "Last year"]].map(([k, l]) => '<button class="btn small" data-misquick="' + k + '">' + l + "</button>").join("") +
-    '<button class="btn small primary" data-act="misRun">Run now</button></div>' +
-    '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px"><span class="note">Run on its own</span><select data-misfreq style="width:auto">' +
-    [["monthly", "on the 1st, for the month just ended"], ["weekly", "every week, the year so far"], ["daily", "every day, the year so far"], ["off", "only when I run it"]].map(([v, l]) => '<option value="' + v + '"' + (c.freq === v ? " selected" : "") + ">" + l + "</option>").join("") + "</select>" +
-    (r ? '<button class="btn small primary" data-act="misPack">Download the MIS pack (PDF)</button><button class="btn small" data-act="misExcel">Excel</button>' : "") + "</div></section>";
-  if (!r) return h + '<div class="bk-none" style="margin-top:12px">Choose a period and press Run now.</div>';
-  h += '<p class="note" style="margin:10px 0">' + fmtDate(tallyDate(r.from)) + " to " + fmtDate(tallyDate(r.to)) + " \u00b7 " + esc(r.how) + " on " + fmtDate(r.at.slice(0, 10)) + " at " + r.at.slice(11, 16) + " \u00b7 result code <b>" + esc(r.code) + "</b>" +
-    (r.control ? (r.control.ok ? ' \u00b7 <span style="color:#1F7A4D">agrees with Tally\u2019s balances, ledger by ledger</span>' : ' \u00b7 <span class="bad">' + r.control.n + " ledgers differ from Tally by \u20b9" + m(r.control.amt) + "</span>") : " \u00b7 read the period from Tally through the bridge to check it against Tally\u2019s balances") + "</p>";
-  const tab = S.misTab || "summary";
-  h += '<nav class="sbar" aria-label="MIS">' + [["summary", "Summary"], ["pl", "Profit and loss"], ["recv", "Receivables"], ["pay", "Payables"], ["sales", "Sales"], ["purch", "Purchases and expenses"], ["cash", "Cash flow"], ["ratios", "Ratios"], ["regs", "Registrations"], ["cc", "Cost centres"], ["budget", "Budget"], ["comp", "Compliance"]]
-    .map(([id, l]) => '<button data-mistab="' + id + '" aria-selected="' + (tab === id) + '">' + l + "</button>").join("") + "</nav>";
-  const pct = (a, c2) => c2 ? (Math.round((a - c2) / Math.abs(c2) * 1000) / 10) + "%" : "\u2014";
-  const q = String(S.misQ || "").toLowerCase();
-  const search = ph => '<div class="revfilter"><input type="search" id="misq" data-fk="misq" data-keeptyped value="' + esc(S.misQ || "") + '" placeholder="' + esc(ph) + '" style="width:260px">' + (tab === "recv" || tab === "pay" ?
-    '<select data-misf style="width:auto"><option value="">Every party</option><option value="90"' + (S.misF === "90" ? " selected" : "") + ">Over 90 days due</option>" + (tab === "pay" ? '<option value="msme"' + (S.misF === "msme" ? " selected" : "") + ">MSME suppliers</option>" : "") + "</select>" : "") + "</div>";
-  if (tab === "summary"){
-    const tile = (l, v, sub) => '<div class="dtile"><span>' + l + "</span><b>" + v + "</b><small>" + (sub || "") + "</small></div>";
-    h += '<div class="dash-tiles">' + tile("Sales, the period", m(r.sales.total), (r.prev ? "previous period " + m(r.prev.sales) + " (" + pct(r.sales.total, r.prev.sales) + ")" : "") + (r.ly ? " \u00b7 last year " + m(r.ly.sales) + " (" + pct(r.sales.total, r.ly.sales) + ")" : "")) +
-      tile("Profit before tax", m(r.pl.pbt.t), "gross profit " + m(r.pl.gross.t) + (r.pl.heads.rev ? " (" + (Math.round(r.pl.gross.t / r.pl.heads.rev.t * 1000) / 10) + "% of revenue)" : "")) +
-      tile("Month to date \u00b7 year to date", r.mtd != null ? m(r.mtd) : "\u2014", r.ytd != null ? "year to date " + m(r.ytd) : "") +
-      tile("Received \u00b7 paid", m(r.cash.rec), "paid out " + m(r.cash.pay) + ", net " + m(r.cash.rec - r.cash.pay)) + "</div>";
-    const owed = A => A.sum.tally != null ? A.sum.tally : A.sum.open;
-    const owedNote = A => A.sum.tally != null ? "as in Tally" : "bills raised in these books still open" + (Math.abs(A.sum.pre) >= 1 ? "; " + m(Math.abs(A.sum.pre)) + " settled against older bills not in these books" : "");
-    h += '<div class="dash-tiles">' + tile("Owed to you", m(owed(r.recv)), owedNote(r.recv) + " \u00b7 over 90 days " + m(r.recv.sum.b[3] + r.recv.sum.b[4]) + (r.dso != null ? " \u00b7 " + r.dso + " days of sales" : "")) +
-      tile("You owe", m(owed(r.pay)), owedNote(r.pay) + " \u00b7 over 90 days " + m(r.pay.sum.b[3] + r.pay.sum.b[4]) + (r.dpo != null ? " \u00b7 " + r.dpo + " days of purchases" : "")) +
-      tile("MSME suppliers past " + MIS.cfg(b).msmeDays + " days", m(r.msme.reduce((s, x) => s + x.amt, 0)), r.msme.length + " suppliers \u00b7 section 43B(h)") +
-      tile("GST payable, last month", m((r.comp.gst[r.comp.gst.length - 1] || {}).pay), "after credit, as per 3B") + "</div>";
-    if (r.balances.cash || r.balances.bank) h += '<section class="dash-card" style="margin-top:12px"><h3>Cash and bank on ' + fmtDate(tallyDate(r.to)) + '</h3><div class="bk-tablewrap"><table class="bk-table"><tbody>' +
-      r.balances.cash.concat(r.balances.bank).filter(x => Math.abs(x[1]) >= 1).map(([l, v]) => "<tr><td>" + esc(l) + '</td><td class="n' + (v < 0 ? " bad" : "") + '">' + m(v) + "</td></tr>").join("") +
-      '<tr><td><b>Total</b></td><td class="n"><b>' + m(r.balances.cash.concat(r.balances.bank).reduce((s, x) => s + x[1], 0)) + '</b></td></tr></tbody></table></div><p class="note">From ' + esc(r.balances.src) + ".</p></section>";
-    else h += '<p class="note">Cash and bank balances: ' + esc(r.balances.why || "") + ".</p>";
-    h += '<section class="dash-card" style="margin-top:12px"><h3>Due in the coming weeks</h3>' + r.dues.map(([d, l]) => '<div class="dash-row"><span>' + esc(l) + "</span><b>" + fmtDate(tallyDate(d)) + "</b></div>").join("") + "</section>";
-    return h;
-  }
-  if (tab === "pl"){
-    const months = r.pl.months, cols = months.length <= 12;
-    const row = (label, x, bold, key) => "<tr><td>" + (bold ? "<b>" + esc(label) + "</b>" : key ? '<button class="linkbtn" data-misled="' + esc(key) + '">' + esc(label) + "</button>" : esc(label)) + "</td>" +
-      (cols ? months.map(mm => '<td class="n">' + m((x.m || {})[mm]) + "</td>").join("") : "") + '<td class="n">' + (bold ? "<b>" + m(x.t) + "</b>" : m(x.t)) + "</td>" +
-      (r.prev ? '<td class="n">' + (x.p != null ? m(x.p) : "") + "</td>" : "") + (r.ly ? '<td class="n">' + (x.y != null ? m(x.y) : "") + "</td>" : "") + "</tr>";
-    const pv = k => r.prev && r.prev.pl.heads[k] ? r.prev.pl.heads[k].t : (r.prev ? 0 : null), lv = k => r.ly && r.ly.pl.heads[k] ? r.ly.pl.heads[k].t : (r.ly ? 0 : null);
-    let body = "";
-    const block = keys => keys.forEach(k => { const H = r.pl.heads[k]; if (!H) return; const lab = MIS.HEADS.find(z => z[0] === k)[1];
-      body += row(lab, Object.assign({}, H, {p: pv(k), y: lv(k)}), true);
-      if (S.misOpenHead === k) H.led.forEach(x => { body += row("\u2003" + x.l, x, false, x.l); }); else body += '<tr><td colspan="' + (2 + (cols ? months.length : 0) + (r.prev ? 1 : 0) + (r.ly ? 1 : 0)) + '"><button class="linkbtn" data-misopenhead="' + k + '">\u25b8 ' + H.led.length + " ledgers</button></td></tr>"; });
-    block(["rev", "oth"]); body += row("Total income", Object.assign({}, r.pl.income, {p: r.prev ? r.prev.pl.income.t : null, y: r.ly ? r.ly.pl.income.t : null}), true);
-    block(["pur", "dir"]); body += row("Gross profit", Object.assign({}, r.pl.gross, {p: r.prev ? r.prev.pl.gross.t : null, y: r.ly ? r.ly.pl.gross.t : null}), true);
-    block(["emp", "exp"]); body += row("Profit before interest and depreciation", Object.assign({}, r.pl.ebitda, {p: r.prev ? r.prev.pl.ebitda.t : null, y: r.ly ? r.ly.pl.ebitda.t : null}), true);
-    block(["fin", "dep"]); body += row("Profit before tax", Object.assign({}, r.pl.pbt, {p: r.prev ? r.prev.pl.pbt.t : null, y: r.ly ? r.ly.pl.pbt.t : null}), true);
-    block(["tax"]); body += row("Profit after tax", Object.assign({}, r.pl.pat, {p: r.prev ? r.prev.pl.pat.t : null, y: r.ly ? r.ly.pl.pat.t : null}), true);
-    h += '<div class="bk-tablewrap"><table class="bk-table" id="misPl"><thead><tr><th></th>' + (cols ? months.map(mm => '<th class="n">' + GSTR.label(mm) + "</th>").join("") : "") + '<th class="n">Period</th>' +
-      (r.prev ? '<th class="n">Previous period</th>' : "") + (r.ly ? '<th class="n">Last year</th>' : "") + "</tr></thead><tbody>" + body + "</tbody></table></div>" +
-      '<p class="note">Opening and closing stock are not in the day book, so gross profit is before the change in stock. Ledgers are placed by their group in Tally.' + (r.ly ? "" : " Last year is shown once last year\u2019s books are read.") + "</p>";
-    if (S.misLed){
-      const vs = (b.vouchers || []).filter(v => v.date >= r.from && v.date <= r.to && v.ent.some(e => e.l === S.misLed)).sort((a, c) => a.date.localeCompare(c.date));
-      h += '<section class="dash-card" style="margin-top:12px"><h3>' + esc(S.misLed) + ' <button class="linkbtn" data-misled="">close</button></h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th class="dt">Date</th><th>Voucher</th><th>Party</th><th class="n">Debit</th><th class="n">Credit</th><th>Narration</th></tr></thead><tbody>' +
-        vs.slice(0, gfN(300)).map(v => { const a = v.ent.filter(e => e.l === S.misLed).reduce((s, e) => s + e.a, 0); return "<tr><td>" + fmtDate(tallyDate(v.date)) + "</td><td>" + esc(v.no) + '<div class="nr">' + esc(v.type) + "</div></td><td>" + esc(v.party || "") + '</td><td class="n">' + (a < 0 ? m(-a) : "") + '</td><td class="n">' + (a > 0 ? m(a) : "") + "</td><td>" + esc(v.narr || "") + "</td></tr>"; }).join("") +
-        "</tbody></table></div>" + (vs.length > 300 ? '<p class="note">The first 300 of ' + vs.length + ".</p>" : "") + "</section>";
-    }
-    return h;
-  }
-  if (tab === "recv" || tab === "pay"){
-    const A = tab === "recv" ? r.recv : r.pay;
-    const list = A.rows.filter(p => (!q || p.party.toLowerCase().includes(q)) && (S.misF !== "90" || p.b[3] + p.b[4] > 0) && (S.misF !== "msme" || /micro|small/i.test(p.msme)));
-    h += search("Find a " + (tab === "recv" ? "customer" : "supplier"));
-    h += '<div class="bk-tablewrap"><table class="bk-table" id="misAge"><thead><tr><th>' + (tab === "recv" ? "Customer" : "Supplier") + "</th>" + MIS.BUCKETS.map(z => '<th class="n">' + z[1] + " days</th>").join("") +
-      '<th class="n">Before these books</th><th class="n">Advances</th><th class="n">On account</th><th class="n">Total</th>' + (A.rows.some(p => p.tally != null) ? '<th class="n">Tally balance</th>' : "") + (tab === "pay" ? "<th>MSME</th>" : "") + "</tr></thead><tbody>" +
-      list.slice(0, gfN(400)).map(p => {
-        const open = S.misOpen === p.party;
-        let x = '<tr><td><button class="linkbtn" data-misopen="' + esc(p.party) + '">' + (open ? "\u25be " : "\u25b8 ") + esc(p.party) + "</button></td>" + p.b.map((v, i) => '<td class="n' + (i >= 3 && v > 0 ? " bad" : "") + '">' + (v ? m(v) : "") + "</td>").join("") +
-          '<td class="n">' + (p.pre ? m(p.pre) : "") + '</td><td class="n">' + (p.adv ? m(p.adv) : "") + '</td><td class="n">' + (p.unalloc ? m(p.unalloc) : "") + '</td><td class="n"><b>' + m(p.total) + "</b></td>" +
-          (A.rows.some(z => z.tally != null) ? '<td class="n' + (p.diff && Math.abs(p.diff) >= 1 ? " bad" : "") + '" title="' + (p.diff ? "differs from the bills by " + m(p.diff) : "") + '">' + (p.tally != null ? m(p.tally) : "") + "</td>" : "") +
-          (tab === "pay" ? '<td><select data-mismsme="' + esc(p.party) + '" style="width:auto"><option value="">\u2014</option>' + ["Micro", "Small", "Medium"].map(t => '<option' + (p.msme === t ? " selected" : "") + ">" + t + "</option>").join("") + "</select></td>" : "") + "</tr>";
-        if (open) x += '<tr><td colspan="12" style="background:var(--paper);padding:0"><table class="bk-table" style="margin:0"><thead><tr><th>Bill</th><th class="dt">Date</th><th class="n">Days</th><th class="n">Outstanding</th></tr></thead><tbody>' +
-          p.bills.map(z => "<tr><td>" + esc(z.ref || "on account") + (z.no ? '<div class="nr">vch ' + esc(z.no) + "</div>" : "") + "</td><td>" + fmtDate(tallyDate(z.date)) + '</td><td class="n">' + z.age + '</td><td class="n">' + m(z.amt) + "</td></tr>").join("") + "</tbody></table></td></tr>";
-        return x;
-      }).join("") +
-      '<tr><td><b>Total</b></td>' + A.sum.b.map(v => '<td class="n"><b>' + m(v) + "</b></td>").join("") + '<td class="n">' + m(A.sum.pre) + '</td><td class="n">' + m(A.sum.adv) + '</td><td class="n">' + m(A.sum.unalloc) + '</td><td class="n"><b>' + m(A.sum.total) + "</b></td></tr></tbody></table></div>" +
-      (Math.abs(A.sum.pre) >= 1 && A.sum.tally == null ? '<p class="bk-alert" style="margin-top:8px">' + m(Math.abs(A.sum.pre)) + " was " + (tab === "recv" ? "received" : "paid") + " against bills raised before the day book read here, so the total is not the balance. Read the books through the bridge (its balances fix the total), or a day book from when those bills were raised.</p>" : "") +
-      '<p class="note">Age is counted from the bill date to ' + fmtDate(tallyDate(r.to)) + ". \u201cBefore these books\u201d are payments or receipts against bills older than the day book read here." + (tab === "pay" ? " MSME comes from the Udyam details in Tally; mark others here." : "") + "</p>";
-    if (tab === "pay" && r.msme.length) h += '<section class="dash-card" style="margin-top:12px"><h3>MSME suppliers unpaid past ' + MIS.cfg(b).msmeDays + ' days</h3><p class="note">Under section 43B(h), what is owed to a micro or small enterprise and unpaid beyond the agreed period (at most 45 days) is allowed only when paid.</p><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Supplier</th><th>Type</th><th class="n">Bills</th><th class="n">Amount</th><th class="n">Oldest, days</th></tr></thead><tbody>' +
-      r.msme.map(x => "<tr><td>" + esc(x.party) + "</td><td>" + esc(x.type) + '</td><td class="n">' + x.bills.length + '</td><td class="n">' + m(x.amt) + '</td><td class="n">' + Math.max.apply(null, x.bills.map(z => z.age)) + "</td></tr>").join("") + "</tbody></table></div></section>";
-    return h;
-  }
-  if (tab === "sales" || tab === "purch"){
-    const S2 = tab === "sales" ? r.sales : r.purchases, months = S2.months, cols = months.length <= 12;
-    const list = S2.rows.filter(x => !q || x.party.toLowerCase().includes(q));
-    h += search("Find a " + (tab === "sales" ? "customer" : "supplier"));
-    if (tab === "sales") h += '<div class="dash-tiles"><div class="dtile"><span>Customers</span><b>' + S2.rows.length + "</b><small>" + (S2.fresh != null ? S2.fresh + " new in the period" : "") + '</small></div><div class="dtile"><span>Top five customers</span><b>' + (S2.total ? Math.round(S2.top5 / S2.total * 1000) / 10 : 0) + "%</b><small>of sales</small></div>" +
-      '<div class="dtile"><span>By registration</span><b>' + S2.byReg.length + "</b><small>" + S2.byReg.map(([k, v]) => esc(k) + " " + m(v)).join(" \u00b7 ") + '</small></div><div class="dtile"><span>By state of the customer</span><b>' + S2.byState.length + "</b><small>" + S2.byState.slice(0, 4).map(([k, v]) => esc(k) + " " + m(v)).join(" \u00b7 ") + "</small></div></div>";
-    h += '<div class="bk-tablewrap"><table class="bk-table" id="misParty"><thead><tr><th>' + (tab === "sales" ? "Customer" : "Supplier") + "</th>" + (cols ? months.map(mm => '<th class="n">' + GSTR.label(mm) + "</th>").join("") : "") + '<th class="n">Total</th><th class="n">Share</th></tr></thead><tbody>' +
-      list.slice(0, gfN(400)).map(x => "<tr><td>" + esc(x.party || "\u2014") + "</td>" + (cols ? months.map(mm => '<td class="n">' + (x.m[mm] ? m(x.m[mm]) : "") + "</td>").join("") : "") + '<td class="n"><b>' + m(x.t) + '</b></td><td class="n">' + (S2.total ? Math.round(x.t / S2.total * 1000) / 10 + "%" : "") + "</td></tr>").join("") +
-      '<tr><td><b>Total</b></td>' + (cols ? months.map(mm => '<td class="n">' + m(S2.rows.reduce((s, x) => s + (x.m[mm] || 0), 0)) + "</td>").join("") : "") + '<td class="n"><b>' + m(S2.total) + "</b></td><td></td></tr></tbody></table></div>" +
-      '<p class="note">' + (tab === "sales" ? "Sales are shown without GST, less credit notes." : "Purchases and expenses booked against suppliers, without GST.") + "</p>";
-    if (tab === "purch") h += '<section class="dash-card" style="margin-top:12px"><h3>Expense heads by month</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Ledger</th>' + (cols ? months.map(mm => '<th class="n">' + GSTR.label(mm) + "</th>").join("") : "") + '<th class="n">Total</th></tr></thead><tbody>' +
-      S2.heads.filter(x => !q || x.l.toLowerCase().includes(q)).slice(0, gfN(200)).map(x => "<tr><td>" + esc(x.l) + (x.jumps.length ? ' <span class="tag warn">jumped</span>' : "") + "</td>" + (cols ? months.map(mm => '<td class="n' + (x.jumps.includes(mm) ? " bad" : "") + '">' + (x.m[mm] ? m(x.m[mm]) : "") + "</td>").join("") : "") + '<td class="n"><b>' + m(x.t) + "</b></td></tr>").join("") +
-      '</tbody></table></div><p class="note">\u201cJumped\u201d: a month at least \u20b950,000 and more than one and a half times the average of the other months.</p></section>';
-    return h;
-  }
-  if (["cash", "ratios", "regs", "cc", "budget"].includes(tab)) return h + misP2Html(tab, b, r);
-  const C = r.comp;
-  h += '<section class="dash-card"><h3>GST by month</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Month</th><th class="n">Output tax</th><th class="n">Credit</th><th class="n">Payable in cash</th></tr></thead><tbody>' +
-    C.gst.map(x => "<tr><td>" + GSTR.label(x.ym) + '</td><td class="n">' + m(x.out) + '</td><td class="n">' + m(x.itc) + '</td><td class="n">' + m(x.pay) + "</td></tr>").join("") + "</tbody></table></div></section>";
-  h += '<section class="dash-card" style="margin-top:12px"><h3>TDS by month</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Month</th><th class="n">Deducted</th><th class="n">Deposited (challans here)</th><th class="n">Difference</th></tr></thead><tbody>' +
-    C.tds.map(x => "<tr><td>" + GSTR.label(x.ym) + '</td><td class="n">' + m(x.ded) + '</td><td class="n">' + m(x.dep) + '</td><td class="n' + (Math.abs(x.ded - x.dep) >= 1 ? " bad" : "") + '">' + m(x.ded - x.dep) + "</td></tr>").join("") + "</tbody></table></div></section>";
-  h += '<section class="dash-card" style="margin-top:12px"><h3>Audit</h3>' + (C.audit ? '<div class="dash-row"><span>Findings open</span><b>' + C.audit.open + '</b></div><div class="dash-row"><span>Serious</span><b>' + C.audit.high + '</b></div><div class="dash-row"><span>Put right</span><b>' + C.audit.solved + "</b></div>" : '<p class="note">Not run yet.</p>') + "</section>";
-  return h;
-}
 // the monthly pack: one document for the owner
 function misPackHtml(r){
   const m = v => INR.format(r2(v || 0)), co = CO();
@@ -8217,85 +8102,6 @@ async function misExcel(r){
   }
   const out = XLSX.write(wb, {bookType: "xlsx", type: "array"});
   saveFile(CO().name.replace(/[^A-Za-z0-9]+/g, "-") + "-MIS-" + r.from + "-" + r.to + ".xlsx", new Blob([out], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
-}
-
-function misP2Html(tab, b, r){
-  const m = v => INR.format(r2(v || 0)), p2 = r.p2;
-  if (!p2) return '<p class="note">Run again to see this.</p>';
-  if (tab === "cash"){
-    const C = p2.cash, F = p2.fc, months = C.months, cols = months.length <= 12;
-    const secName = {op: "From operations", inv: "From investing", fin: "From financing"};
-    let h = '<section class="dash-card"><h3>Cash and bank: what came in and went out</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th></th>' + (cols ? months.map(mm => '<th class="n">' + GSTR.label(mm) + "</th>").join("") : "") + '<th class="n">Period</th></tr></thead><tbody>';
-    ["op", "inv", "fin"].forEach(sc => {
-      const S3 = C[sc]; if (!C.rows.some(x => x.sec === sc)) return;
-      C.rows.filter(x => x.sec === sc).forEach(x => { const k = sc + "|" + x.lab, open = S.misCf === k;
-        h += '<tr><td>\u2003<button class="linkbtn" data-miscf="' + esc(k) + '">' + (open ? "\u25be " : "\u25b8 ") + esc(x.lab) + "</button></td>" + (cols ? months.map(mm => '<td class="n">' + (x.m[mm] ? m(x.m[mm]) : "") + "</td>").join("") : "") + '<td class="n">' + m(x.t) + "</td></tr>";
-        if (open) Object.entries(x.led).sort((a, c) => Math.abs(c[1]) - Math.abs(a[1])).slice(0, 40).forEach(([l, v]) => { h += '<tr><td class="note">\u2003\u2003' + esc(l) + '</td>' + (cols ? months.map(() => "<td></td>").join("") : "") + '<td class="n note">' + m(v) + "</td></tr>"; }); });
-      h += "<tr><td><b>" + secName[sc] + "</b></td>" + (cols ? months.map(mm => '<td class="n"><b>' + m(S3.m[mm]) + "</b></td>").join("") : "") + '<td class="n"><b>' + m(S3.t) + "</b></td></tr>";
-    });
-    h += '<tr><td><b>Net change in cash and bank</b></td>' + (cols ? months.map(mm => '<td class="n"><b>' + m(C.op.m[mm] + C.inv.m[mm] + C.fin.m[mm]) + "</b></td>").join("") : "") + '<td class="n"><b>' + m(C.net) + "</b></td></tr></tbody></table></div>" +
-      '<p class="note">Each receipt or payment is placed by the ledger on the other side of it: customers, suppliers, taxes, staff, fixed assets, loans or capital. Moves between cash and bank are left out.</p></section>';
-    h += '<section class="dash-card" style="margin-top:12px"><h3>The next 13 weeks, from ' + fmtDate(tallyDate(F.start)) + "</h3>" +
-      (F.opening != null ? '<p class="note">Starting with cash and bank of \u20b9' + m(F.opening) + (F.low ? "; the lowest point is \u20b9" + m(F.low.close) + " in the week of " + fmtDate(tallyDate(F.low.from)) + "." : ".") + "</p>" : '<p class="note">The cash in hand at the start is not known here (see the Summary); the table shows what comes in and goes out.</p>') +
-      '<div class="bk-tablewrap"><table class="bk-table" id="misFc"><thead><tr><th>Week of</th><th class="n">Coming in</th><th class="n">Going out</th><th class="n">Net</th>' + (F.opening != null ? '<th class="n">Cash at the end</th>' : "") + "</tr></thead><tbody>" +
-      F.weeks.map(w => { const open = S.misWeek === w.i;
-        let x = '<tr><td><button class="linkbtn" data-misweek="' + w.i + '">' + (open ? "\u25be " : "\u25b8 ") + fmtDate(tallyDate(w.from)) + '</button></td><td class="n">' + m(w.inn) + '</td><td class="n">' + m(w.out) + '</td><td class="n' + (w.net < 0 ? " bad" : "") + '">' + m(w.net) + "</td>" +
-          (F.opening != null ? '<td class="n' + (w.close < 0 ? " bad" : "") + '"><b>' + m(w.close) + "</b></td>" : "") + "</tr>";
-        if (open) x += '<tr><td colspan="5" style="background:var(--paper);padding:0"><table class="bk-table" style="margin:0"><thead><tr><th class="dt">Date</th><th>What</th><th>Who</th><th class="n">Amount</th><th>Why this date</th></tr></thead><tbody>' +
-          w.items.map(z => "<tr><td>" + fmtDate(tallyDate(z.d)) + "</td><td>" + esc(z.what) + "</td><td>" + esc(z.who) + '</td><td class="n' + (z.amt < 0 ? " bad" : "") + '">' + m(z.amt) + "</td><td>" + esc(z.why) + "</td></tr>").join("") + "</tbody></table></td></tr>";
-        return x; }).join("") + "</tbody></table></div>" +
-      '<p class="note">The rules: each open bill is expected when that party usually settles (from its past bills; ' + F.rd + " days for customers and " + F.pd + " for suppliers when a party has no history), and an overdue bill in the first week; MSME suppliers within " + MIS.cfg(b).msmeDays + " days; a payment made in at least three of the last four months, within 20% of the same amount, repeats on its usual day; GST on the 20th and TDS on the 7th, at last month\u2019s figure and then the usual month.</p></section>";
-    return h;
-  }
-  if (tab === "ratios"){
-    const R = p2.ratios, fmt = (v, u) => v == null ? "\u2014" : u === "\u20b9" ? "\u20b9" + m(v) : v + (u === "%" ? "%" : " " + u);
-    return '<section class="dash-card"><h3>Ratios for the period</h3><div class="bk-tablewrap"><table class="bk-table"><tbody>' +
-      R.list.map(([l, v, u, how]) => "<tr><td>" + esc(l) + (how ? '<div class="nr">' + esc(how) + "</div>" : "") + '</td><td class="n"><b>' + fmt(v, u) + "</b></td></tr>").join("") + "</tbody></table></div>" +
-      (R.bs ? "" : '<p class="note">Current ratio, debt to equity and working capital need the balances; read the period from Tally through the bridge.</p>') + "</section>" +
-      '<section class="dash-card" style="margin-top:12px"><h3>Margins month by month</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Month</th><th class="n">Revenue</th><th class="n">Gross margin</th><th class="n">Before-tax margin</th></tr></thead><tbody>' +
-      R.trend.map(t2 => "<tr><td>" + GSTR.label(t2.ym) + '</td><td class="n">' + m(t2.rev) + '</td><td class="n">' + (t2.gross == null ? "\u2014" : t2.gross + "%") + '</td><td class="n' + (t2.pbt != null && t2.pbt < 0 ? " bad" : "") + '">' + (t2.pbt == null ? "\u2014" : t2.pbt + "%") + "</td></tr>").join("") + "</tbody></table></div></section>";
-  }
-  if (tab === "regs"){
-    const G = p2.regs;
-    if (G.length < 2) return '<p class="note">This client has one GST registration' + (G[0] ? " (" + esc(G[0].gstin) + ")" : "") + ". With more than one, sales, purchases and GST are shown for each here.</p>";
-    const months = G[0].months, cols = months.length <= 12;
-    return '<section class="dash-card"><h3>By GST registration</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Registration</th><th class="n">Sales</th><th class="n">Purchases</th><th class="n">GST paid in cash</th><th class="n">Share of sales</th></tr></thead><tbody>' +
-      G.map(x => "<tr><td>" + esc(x.gstin) + '</td><td class="n">' + m(x.sales) + '</td><td class="n">' + m(x.purch) + '</td><td class="n">' + m(x.gstPay) + '</td><td class="n">' + (r.sales.total ? Math.round(x.sales / r.sales.total * 1000) / 10 + "%" : "") + "</td></tr>").join("") + "</tbody></table></div></section>" +
-      '<section class="dash-card" style="margin-top:12px"><h3>Sales by month</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Registration</th>' + (cols ? months.map(mm => '<th class="n">' + GSTR.label(mm) + "</th>").join("") : "") + "</tr></thead><tbody>" +
-      G.map(x => "<tr><td>" + esc(x.reg) + "</td>" + (cols ? months.map(mm => '<td class="n">' + m((x.m[mm] || {}).s) + "</td>").join("") : "") + "</tr>").join("") + "</tbody></table></div>" +
-      '<p class="note">A voucher belongs to the registration of its GST ledgers. Expenses without GST are not split by registration; use cost centres for that.</p></section>';
-  }
-  if (tab === "cc"){
-    const X = p2.cc, q = String(S.misQ || "").toLowerCase();
-    if (!X.read) return '<div class="bk-alert">Cost centres are read from the day book from this build on. Read the day book again (or read it from Tally), then run the MIS.</div>';
-    if (!X.rows.length) return '<p class="note">No income or expense in the period is allocated to cost centres in Tally.</p>';
-    const list = X.rows.filter(x => (!q || x.name.toLowerCase().includes(q)) && (!S.misCat || x.cat === S.misCat));
-    let h = '<div class="dash-tiles"><div class="dtile"><span>Cost centres</span><b>' + X.rows.length + "</b><small>" + X.cats.length + " categor" + (X.cats.length === 1 ? "y" : "ies") + '</small></div><div class="dtile"><span>Income allocated</span><b>' + (X.cover.inc == null ? "\u2014" : X.cover.inc + "%") + "</b><small>not allocated \u20b9" + m(X.un.inc) + '</small></div><div class="dtile"><span>Expenses allocated</span><b>' + (X.cover.exp == null ? "\u2014" : X.cover.exp + "%") + "</b><small>not allocated \u20b9" + m(X.un.exp) + '</small></div><div class="dtile"><span>Made a loss</span><b>' + X.rows.filter(x => x.inc && x.profit < 0).length + "</b><small>of those with income</small></div></div>";
-    h += '<div class="revfilter"><input type="search" id="misq" data-fk="misq" data-keeptyped value="' + esc(S.misQ || "") + '" placeholder="Find a cost centre" style="width:260px">' +
-      (X.cats.length > 1 ? '<select data-miscat style="width:auto"><option value="">Every category</option>' + X.cats.map(c2 => '<option' + (S.misCat === c2 ? " selected" : "") + ">" + esc(c2) + "</option>").join("") + "</select>" : "") + "</div>";
-    h += '<div class="bk-tablewrap"><table class="bk-table" id="misCc"><thead><tr><th>Cost centre</th><th class="dt">From</th><th class="dt">To</th><th class="n">Income</th><th class="n">Costs</th><th class="n">Profit</th><th class="n">Margin</th></tr></thead><tbody>' +
-      list.slice(0, gfN(300)).map(x => { const open = S.misCc === x.cat + "|" + x.name;
-        let y = '<tr><td><button class="linkbtn" data-miscc="' + esc(x.cat + "|" + x.name) + '">' + (open ? "\u25be " : "\u25b8 ") + esc(x.name) + "</button>" + (X.cats.length > 1 ? '<div class="nr">' + esc(x.cat) + "</div>" : "") + "</td><td>" + fmtDate(tallyDate(x.first)) + "</td><td>" + fmtDate(tallyDate(x.last)) +
-          '</td><td class="n">' + m(x.inc) + '</td><td class="n">' + m(x.exp) + '</td><td class="n' + (x.profit < 0 ? " bad" : "") + '"><b>' + m(x.profit) + '</b></td><td class="n">' + (x.margin == null ? "\u2014" : x.margin + "%") + "</td></tr>";
-        if (open) y += '<tr><td colspan="7" style="background:var(--paper);padding:0"><table class="bk-table" style="margin:0"><thead><tr><th>Ledger</th><th class="n">Amount</th></tr></thead><tbody>' +
-          Object.entries(x.led).sort((a, c) => Math.abs(c[1]) - Math.abs(a[1])).map(([l, v]) => "<tr><td>" + esc(l) + '</td><td class="n">' + m(v) + "</td></tr>").join("") + "</tbody></table></td></tr>";
-        return y; }).join("") + "</tbody></table></div>" +
-      '<p class="note">From the cost centre allocations in Tally, on income and expense ledgers. Anything not allocated is shown above, not spread over the cost centres.</p>';
-    return h;
-  }
-  // budget
-  const V = MIS.budgetVs(r), fy = V.fy, bud = MIS.budgetFor(fy), fyMonths = GSTRev.fyMonths(fy + "04");
-  let h = '<section class="dash-card"><h3>Budget against actual, ' + fy + "-" + String(num(fy) + 1).slice(2) + "</h3>" +
-    (V.has ? '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Head</th><th class="n">Budget for the period</th><th class="n">Actual</th><th class="n">Difference</th><th class="n">%</th></tr></thead><tbody>' +
-      V.rows.map(x => { const worse = x.sign > 0 ? x.diff < 0 : x.diff > 0; return "<tr><td>" + esc(x.l) + '</td><td class="n">' + m(x.budget) + '</td><td class="n">' + m(x.actual) + '</td><td class="n' + (worse && Math.abs(x.diff) >= 1 ? " bad" : "") + '">' + m(x.diff) + '</td><td class="n">' + (x.pct == null ? "\u2014" : x.pct + "%") + "</td></tr>"; }).join("") +
-      '<tr><td><b>Profit before tax</b></td><td class="n"><b>' + m(V.pbt.budget) + '</b></td><td class="n"><b>' + m(V.pbt.actual) + '</b></td><td class="n' + (V.pbt.diff < 0 ? " bad" : "") + '"><b>' + m(V.pbt.diff) + "</b></td><td></td></tr></tbody></table></div>" : '<p class="note">No budget for this year yet. Fill it in below, or start from last year.</p>') + "</section>";
-  h += '<section class="dash-card" style="margin-top:12px"><h3>The budget</h3><div class="row" style="gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">' +
-    '<button class="btn small" data-act="misBudFill">Fill from this year\u2019s actual so far</button><label class="note">plus <input type="number" data-misbudpct value="' + esc(S.misBudPct || "10") + '" style="width:70px">%</label>' +
-    '<span class="note">Figures in rupees for each month; income and costs as positive amounts.</span></div>' +
-    '<div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>Head</th>' + fyMonths.map(mm => '<th class="n">' + GSTR.label(mm).replace(/ \d{4}$/, "") + "</th>").join("") + '<th class="n">Year</th></tr></thead><tbody>' +
-    MIS.HEADS.map(([k, l]) => "<tr><td>" + esc(l) + "</td>" + fyMonths.map(mm => '<td><input type="number" step="1" data-misbud="' + k + "|" + mm + '" value="' + esc((bud[k] || {})[mm] || "") + '" style="width:92px;text-align:right"></td>').join("") +
-      '<td class="n"><b>' + m(fyMonths.reduce((s2, mm) => s2 + num((bud[k] || {})[mm]), 0)) + "</b></td></tr>").join("") + "</tbody></table></div></section>";
-  return h;
 }
 
 function gst9PackHtml(which){
@@ -12162,6 +11968,14 @@ function lmViewGo(v){ S.lmView = v; S.booksTab = "ledgers"; render(); }
 function lmPost(k){ LedMaster.applyPosting(S.books, CO(), k); render(); }
 // the Audit tab (app/src/screens/books/Audit.jsx): the period, how often it runs by itself, and a finding's status
 // or note (kept with the books)
+// MIS (app/src/screens/books/Mis.jsx): its period and quick picks, the tab, how often it runs by itself, a supplier
+// marked MSME (the run is worked out again), a month of the budget
+function misRangeSet(key, v){ const x = misRangeQuick("ytd", S.books); S.misRange = Object.assign({from: Audit.iso(x.from), to: Audit.iso(x.to)}, S.misRange, {[key]: v}); render(); }
+function misQuickGo(k){ const x = misRangeQuick(k, S.books); S.misRange = {from: Audit.iso(x.from), to: Audit.iso(x.to)}; render(); }
+function misTabGo(id){ S.misTab = id; S.misQ = ""; S.misF = ""; render(); }
+function misFreqSet(v){ const b = S.books; b.misCfg = Object.assign({}, b.misCfg, {freq: v}); saveBooks(); render(); }
+function misMsmeSet(party, v){ const b = S.books; b.msme = Object.assign({}, b.msme, {[party]: v}); const r = (b.mis || {}).last; if (r) MIS.run(r.from, r.to, r.how); saveBooks(); render(); }
+function misBudSet(h2, mm, v){ const b = S.books, fy = Audit.fyStart(mm + "01").slice(0, 4); b.budget = b.budget || {}; b.budget[fy] = b.budget[fy] || {}; b.budget[fy][h2] = Object.assign({}, b.budget[fy][h2], {[mm]: v === "" ? "" : num(v)}); saveBooks(); render(); }
 function auditRangeSet(key, v){ const dr = Audit.defaultRange(S.books); S.auditRange = Object.assign({from: Audit.iso(dr.from), to: Audit.iso(dr.to)}, S.auditRange, {[key]: v}); }
 function auditFreqSet(v){ const b = S.books; b.auditCfg = Object.assign({}, b.auditCfg, {freq: v}); saveBooks(); render(); }
 function auditFindingSet(id, key, v){
@@ -12183,13 +11997,6 @@ function gstFixChange(t){
   if (d.fsmfg !== undefined){ b.fs = Object.assign({}, FS.cfg(b), {mfg: !!t.checked}); saveBooks(); return true; }
   if (d.fsshares !== undefined){ b.fs = Object.assign({}, FS.cfg(b), {shares: t.value}); saveBooks(); return true; }
   if (d.fsmap !== undefined){ const c = FS.cfg(b); c.map = Object.assign({}, c.map, {[d.fsmap]: t.value}); b.fs = c; S.fsRun = S.fsRun ? {fy: S.fsRun.fy, kind: c.kind, d: FS.build(S.fsRun.fy)} : null; saveBooks(); render(); return true; }
-  if (d.misfrom !== undefined || d.misto !== undefined){ const x = misRangeQuick("ytd", b); S.misRange = Object.assign({from: Audit.iso(x.from), to: Audit.iso(x.to)}, S.misRange, d.misfrom !== undefined ? {from: t.value} : {to: t.value}); return true; }
-  if (d.misfreq !== undefined){ b.misCfg = Object.assign({}, b.misCfg, {freq: t.value}); saveBooks(); render(); return true; }
-  if (d.miscat !== undefined){ S.misCat = t.value; render(); return true; }
-  if (d.misbudpct !== undefined){ S.misBudPct = t.value; return true; }
-  if (d.misbud !== undefined){ const [h2, mm] = d.misbud.split("|"), fy = Audit.fyStart(mm + "01").slice(0, 4); b.budget = b.budget || {}; b.budget[fy] = b.budget[fy] || {}; b.budget[fy][h2] = Object.assign({}, b.budget[fy][h2], {[mm]: t.value === "" ? "" : num(t.value)}); saveBooks(); render(); return true; }
-  if (d.misf !== undefined){ S.misF = t.value; render(); return true; }
-  if (d.mismsme !== undefined){ b.msme = Object.assign({}, b.msme, {[d.mismsme]: t.value}); const r = (b.mis || {}).last; if (r) MIS.run(r.from, r.to, r.how); saveBooks(); render(); return true; }
   if (d.itctemail !== undefined || d.itctphone !== undefined){ const st = ITCT.store(S.gstReg || ""), k = d.itctemail !== undefined ? d.itctemail : d.itctphone; st.contact[k] = Object.assign({}, st.contact[k], d.itctemail !== undefined ? {email: t.value.trim()} : {phone: t.value.trim()}); saveBooks(); return true; }
   if (d.itcbasis !== undefined){ b.itcBasis = Object.assign({}, b.itcBasis, {[S.gstReg || ""]: t.value}); saveBooks(); render(); return true; }
   if (d.gstopen !== undefined){ const k = S.gstReg || ""; b.gstOpen = Object.assign({}, b.gstOpen); b.gstOpen[k] = Object.assign({}, b.gstOpen[k], {[d.gstopen]: t.value === "" ? "" : num(t.value)}); saveBooks(); render(); return true; }
@@ -16263,16 +16070,10 @@ document.addEventListener("click", ev => {
   if (t.dataset.tdstab){ tdsTabGo(t.dataset.tdstab); return; }
   if (t.dataset.tdsfclear){ tdsFilterClear(t.dataset.tdsfclear); return; }
   if (t.dataset.tdssort){ tdsSortBy(...t.dataset.tdssort.split("|")); return; }
-  if (t.dataset.misweek !== undefined){ const w = num(t.dataset.misweek); S.misWeek = S.misWeek === w ? -1 : w; render(); return; }
-  if (t.dataset.miscf !== undefined){ S.misCf = S.misCf === t.dataset.miscf ? "" : t.dataset.miscf; render(); return; }
-  if (t.dataset.miscc !== undefined){ S.misCc = S.misCc === t.dataset.miscc ? "" : t.dataset.miscc; render(); return; }
   if (t.dataset.fstab){ S.fsTab = t.dataset.fstab; render(); return; }
   if (t.dataset.fsunmap !== undefined){ const c = FS.cfg(S.books); delete c.map[t.dataset.fsunmap]; S.books.fs = c; S.fsRun = S.fsRun ? {fy: S.fsRun.fy, kind: c.kind, d: FS.build(S.fsRun.fy)} : null; saveBooks(); render(); return; }
   if (t.dataset.mistab){ S.misTab = t.dataset.mistab; S.misQ = ""; S.misF = ""; render(); return; }
   if (t.dataset.misquick){ const x = misRangeQuick(t.dataset.misquick, S.books); S.misRange = {from: Audit.iso(x.from), to: Audit.iso(x.to)}; render(); return; }
-  if (t.dataset.misopen !== undefined){ S.misOpen = S.misOpen === t.dataset.misopen ? "" : t.dataset.misopen; render(); return; }
-  if (t.dataset.misopenhead !== undefined){ S.misOpenHead = S.misOpenHead === t.dataset.misopenhead ? "" : t.dataset.misopenhead; render(); return; }
-  if (t.dataset.misled !== undefined){ S.misLed = t.dataset.misled; render(); return; }
   if (t.dataset.b2open){ S.b2Open = S.b2Open === t.dataset.b2open ? "" : t.dataset.b2open; render(); return; }
   if (t.dataset.clearf){ clearFilter(t.dataset.clearf); return; }
   if (t.dataset.printid){ printTable(t.dataset.printid, t.dataset.printtitle); return; }
@@ -16876,7 +16677,6 @@ document.addEventListener("input", ev => {
   if (reactOwned(ev.target)) return;
   const t = ev.target;
   if (t && t.id === "fsq"){ S.fsQ = t.value; later("fsq", render, 250); return; }
-  if (t && t.id === "misq"){ S.misQ = t.value; later("misq", render, 250); return; }
   if (t && t.id && /^(q24F|r1F|b2F)q$/.test(t.id)){ const k = t.id.slice(0, -1); S[k] = Object.assign({}, S[k], {q: t.value}); later(t.id, render, 250); return; }
   if (t && t.dataset){
     // the browser lowercases attribute names, so match without case
