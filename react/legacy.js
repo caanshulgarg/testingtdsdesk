@@ -3868,14 +3868,6 @@ function viewDoneStep(){ return '<div data-react="DoneStep"></div>'; }
 const SETUP_TABS = [["settings", "Company"], ["cotally", "Tally"], ["cotds", "TDS"], ["deductees", "Suppliers"], ["gstset", "GST"],
   ["bankset", "Bank accounts"], ["bankrules", "Bank rules"], ["coclosed", "Closed periods"], ["coremove", "Remove this client"]];
 function isSetupTab(t){ return SETUP_TABS.some(x => x[0] === t); }
-function viewBankSetup(which){
-  const co = CO();
-  if (!S.bank || S.bank.cid !== co.id || S.bank.loading){
-    if (!S.bank || S.bank.cid !== co.id) loadBank(co.id).then(() => render());
-    return '<p class="note">Loading this client\u2019s bank details\u2026</p>';
-  }
-  return which === "rules" ? viewRulesPanel() : '<div class="setup-inline">' + bankSettingsHtml() + "</div>";
-}
 
 /* ---------- Collect: everything that arrives for this client (React: app/src/screens/Collect.jsx) ---------- */
 function viewCollect(){ return docType() === "sales" ? viewSales() : '<div data-react="Collect"></div>'; }
@@ -10116,19 +10108,6 @@ function suggestRules(){
   });
   return out.sort((a, c) => c.n - a.n).slice(0, 25);
 }
-function viewSuggestions(){
-  const list = S.ruleSuggest;
-  if (!list) return '<div class="row" style="margin-top:10px"><button class="btn small" data-act="ruleFind">Look for rules in what we have done before</button></div>';
-  if (!list.length) return '<p class="note" style="margin-top:10px">Nothing worth a rule yet \u2014 the same wording has to be booked to the same ledger at least three times. <button class="linkbtn" data-act="ruleFindClose">Hide</button></p>';
-  return '<div class="bdiag" style="margin-top:12px"><b>' + list.length + " rule" + (list.length === 1 ? "" : "s") + " we can make from what you have already done</b>" +
-    '<div class="tblwrap" style="margin-top:6px"><table class="data"><thead><tr><th class="ck"><input type="checkbox" data-sugall checked></th><th>When the line says</th><th>Money</th><th>Use this ledger</th><th class="n">Done before</th></tr></thead><tbody>' +
-    list.map((s, i) => '<tr><td class="ck"><input type="checkbox" data-sug="' + i + '"' + (s.off ? "" : " checked") + "></td>" +
-      "<td><b>" + esc(s.text) + '</b><div class="nr">' + esc(String(s.sample).slice(0, 60)) + "</div></td>" +
-      "<td>" + (s.dir === "out" ? "going out" : s.dir === "in" ? "coming in" : "either") + "</td>" +
-      "<td>" + esc(s.ledger) + "</td>" +
-      '<td class="n">' + s.n + " times" + (s.agree < 100 ? '<div class="nr">' + s.agree + "% the same</div>" : "") + "</td></tr>").join("") +
-    '</tbody></table></div><div class="row" style="margin-top:8px"><button class="btn small primary" data-act="ruleMakeSug">Make the ticked rules</button><button class="btn small" data-act="ruleFindClose">Not now</button></div></div>';
-}
 /* ---------- the same rules for your other clients ---------- */
 async function copyRulesTo(rules){
   if (!rules.length){ toast("Choose at least one rule."); return; }
@@ -10163,40 +10142,6 @@ async function copyRulesTo(rules){
 }
 
 /* ---------- the rules screen ---------- */
-function viewRulesPanel(){
-  const b = B(), co = CO(b.cid);
-  const mine = clientRules(), firm = firmRules();
-  const line = (r, i, scope) => {
-    const p = rulePreview(r);
-    const led = ruleLedger(r, co);
-    const bad = r.then.action !== "ignore" && led && !exactLedger(led);
-    return '<tr' + (r.off ? ' class="off"' : "") + '><td class="ord">' +
-      (scope === "client" ? '<button class="icon" data-rmove="up" data-rid="' + r.id + '" title="Move up">\u2191</button><button class="icon" data-rmove="down" data-rid="' + r.id + '" title="Move down">\u2193</button>' : "") + "</td>" +
-      "<td><b>" + esc(ruleLabel(r)) + "</b>" + (r.off ? ' <span class="tag no">off</span>' : "") +
-        '<div class="nr">' + esc(ruleWhenText(r)) + "</div></td>" +
-      "<td>" + (r.then.action === "ignore" ? '<span class="tag">set aside</span>' :
-        (bad ? '<span class="tag bad">' + esc(led) + " not in Tally</span>" : esc(led || "\u2014")) +
-        ((r.then.splits || []).length ? '<div class="nr">split into ' + ((r.then.splits || []).length + 1) + " lines</div>" : "") +
-        (r.then.ready ? "" : '<div class="nr">shown for checking, not auto-ready</div>')) + "</td>" +
-      '<td class="n">' + (p.n ? "<b>" + p.n + "</b>" : "0") + '<div class="nr">now showing</div></td>' +
-      '<td class="n">' + ((r.stats && r.stats.used) || 0) + ((r.stats && r.stats.over) ? '<div class="nr bad">' + r.stats.over + " changed by hand</div>" : "") + "</td>" +
-      '<td style="white-space:nowrap"><button class="btn small" data-redit="' + r.id + '">Change</button> ' +
-        '<button class="linkbtn" data-rtoggle="' + r.id + '">' + (r.off ? "Use" : "Pause") + "</button> " +
-        (scope === "client" ? '<button class="linkbtn" data-rcopy="' + r.id + '">Copy to\u2026</button> ' : "") +
-        '<button class="linkbtn" data-rdel="' + r.id + '">Delete</button></td></tr>';
-  };
-  let h = '<section class="pane"><div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Rules</h2>' +
-    '<div><button class="btn small primary" data-act="ruleNew">New rule</button><button class="btn small" data-act="ruleRunNow">Apply to this statement</button>' +
-    (clientRules().length ? '<button class="btn small" data-act="ruleCopyAll">Copy to other clients</button>' : "") + "</div></div>" +
-    '<p class="note" style="margin:6px 0 10px">Rules are read from the top down; the first one that fits wins. Your own choices are never overwritten by a rule.</p>';
-  h += '<div class="tblwrap"><table class="data"><thead><tr><th></th><th>Rule</th><th>Does</th><th class="n">Matches</th><th class="n">Used</th><th></th></tr></thead><tbody>' +
-    (mine.length ? mine.map((r, i) => line(r, i, "client")).join("") : '<tr><td colspan="6" class="nr">No rules for ' + esc(co.name) + " yet. Make one from any line, or press New rule.</td></tr>") +
-    (firm.length ? '<tr><td colspan="6" style="background:var(--paper)"><b>Firm-wide rules</b> \u2014 used for every client, after this client\u2019s own rules</td></tr>' + firm.map((r, i) => line(r, i, "firm")).join("") : "") +
-    "</tbody></table></div>";
-  if (!firm.length) h += '<p class="note" style="margin-top:8px">Tip: bank charges, interest, salaries and the like are the same for every client. Make those firm-wide once.</p>';
-  h += viewSuggestions();
-  return h + "</section>";
-}
 function ruleWhenText(r){
   const w = r.when || {}, bits = [];
   (w.text || []).forEach(c => { if (String(c.v || "").trim()) bits.push({has: "contains", not: "does not contain", starts: "starts with", is: "is"}[c.op] + " \u201c" + c.v + "\u201d"); });
@@ -11213,33 +11158,6 @@ function applyGroup(key, ledger){
   if (b.undo) b.undo.label = rows[0].dec.name || key;
   render();
 }
-function bankSettingsHtml(){
-  const b = B(), co = CO();
-  const std = Object.keys(BANK_LEDGER_DEFAULTS);
-  let h = '<div class="bk-overlay" data-bkoverlay><div class="bk-panel" role="dialog" aria-modal="true" aria-labelledby="bkSetT"><div class="bk-panel-head"><h2 id="bkSetT">Bank settings \u2014 ' + esc(co.name) + '</h2><button class="icon" data-act="bankSettingsClose" aria-label="Close">\u2715</button></div>';
-  if (bridgeLive(co)) h += '<section><h3>Tally ledger list</h3><p class="note">Live from Tally (' + esc(Bridge.openFor(co).name) + "): " + b.ledgers.list.length + " ledgers, updated " + (b.ledgers.importedAt ? new Date(b.ledgers.importedAt).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}) : "\u2014") + '.</p><button class="btn small" data-act="bankSync">Refresh from Tally</button></section>';
-  else h += '<section><h3>Tally ledger list</h3>' + (hasLedgerList()
-      ? '<p class="note">' + b.ledgers.list.length + " ledgers, imported " + fmtDate(b.ledgers.importedAt.slice(0, 10)) + " from " + esc(b.ledgers.file || "Tally") + "." + (Date.now() - new Date(b.ledgers.importedAt) > 30 * 864e5 ? " Over 30 days old: update it." : "") + "</p>"
-      : '<p class="note">Not imported yet. In Tally: Display More Reports \u2192 List of Accounts \u2192 Export (Excel or XML).</p>') +
-    '<button class="btn small" data-act="ledPick">' + (hasLedgerList() ? "Update ledger list" : "Import ledger list") + "</button>" +
-    (b.newLed.filter(l => !l.sent).length ? '<p class="note">' + plural(b.newLed.filter(l => !l.sent).length, "new ledger") + " will be created in Tally with the next Tally file.</p>" : "") + "</section>";
-  h += '<section><h3>Bank accounts</h3>' + ((co.bankAccounts || []).length ? '<div class="bk-form">' + (co.bankAccounts || []).map(a =>
-      '<label><span>' + esc(a.bank) + (a.last4 ? " \u00b7\u00b7" + esc(a.last4) : "") + (a.ifsc ? " \u00b7 " + esc(a.ifsc) : "") + '</span><select data-bankacc="' + a.id + '">' + ledgerOptions(exactLedger(a.ledger), BANK_GROUPS) + "</select></label>").join("") + "</div>"
-      : '<p class="note">Bank accounts are added when you upload their statements.</p>') + "</section>";
-  h += '<section><h3>Ledgers for standard entries</h3><p class="note">Found automatically in the ledger list; change them if this client uses different ledgers.</p><div class="bk-form">' + std.map(k =>
-      '<label><span>' + esc(BANK_LEDGER_LABELS[k]) + '</span><select data-bankled="' + k + '">' + ledgerOptions(stdLedger(co, k)) + "</select></label>").join("") + "</div></section>";
-  h += '<section><h3>Automation</h3>' +
-    '<label class="chk"><input type="checkbox" data-bankauto' + (co.bankAuto !== false ? " checked" : "") + "> Mark sure matches as Ready (saved rules, exact bill matches, standard entries)</label>" +
-    '<label class="chk"><input type="checkbox" data-bankoptional' + (co.bankOptional ? " checked" : "") + "> Post bank entries into Tally as Optional vouchers (they then have to be made regular in Tally)</label>" +
-    '<label class="chk"><input type="checkbox" data-bankautoapply' + (co.bankAutoApply !== false ? " checked" : "") + "> When I choose a ledger for an entry, use it for every entry of the same party and remember it</label></section>";
-  const nh = Object.keys(b.hist.rows).length;
-  h += '<section><h3>Clean up</h3><p class="note">' + b.rules.length + " saved rules \u00b7 " + nh + " remembered decisions \u00b7 " + b.stmts.length + ' statements</p><div class="row" style="gap:6px;flex-wrap:wrap">' +
-    '<button class="btn small" data-act="bankClearRules"' + (b.rules.length ? "" : " disabled") + ">Forget saved rules</button>" +
-    '<button class="btn small" data-act="bankClearHist"' + (nh ? "" : " disabled") + ">Forget remembered decisions</button>" +
-    '<button class="btn small danger" data-act="bankDelAll"' + (b.stmts.length ? "" : " disabled") + ">Delete all statements</button></div></section>";
-  h += "</div></div>";
-  return h;
-}
 // the bar at the bottom of the bank screen: React (app/src/screens/Bank.jsx)
 function bankBar(){ return B() && !B().loading && curStmt() ? '<div data-react="BankBar"></div>' : ""; }
 // Creating a ledger that is not yet in Tally
@@ -11589,44 +11507,48 @@ function bankSetAccLedger(accId, v){
 // tick a line; with Shift, every line between it and the one ticked before
 function bankToggleRow(id, on, shift){ bankToggle({dataset: {bsel: id}, checked: on}, shift); }
 function bankSelAll(on){ const b = B(); bankVisibleRows().filter(r => r.state !== "sent").forEach(r => { if (on) b.sel.add(r.id); else b.sel.delete(r.id); }); bankLightRefresh(); }
+// a client's bank settings and rules (app/src/parts/BankSettings.jsx): the settings shown or not, a standard entry's
+// ledger, an automation choice, and a rule changed, paused, deleted (asked first), moved or copied to other clients
+function bankSettingsShow(on){ B().showSettings = on; render(); }
+function bankStdLedger(k, v){ const b = B(), co = CO(); co.bankLedgerNames = co.bankLedgerNames || {}; co.bankLedgerNames[k] = v; Store.saveCompany(co); suggestAll(b.rows, true); saveBank({rows: true}); render(); }
+function bankOptSet(k, on){ const co = CO(); co[k] = on; Store.saveCompany(co); render(); }
+function ruleAct(what, id){
+  if (what === "copy"){ const r = clientRules().find(x => x.id === id); if (r) copyRulesTo([r]); return; }
+  const inClient = clientRules().some(x => x.id === id);
+  const list = inClient ? clientRules() : firmRules();
+  const i = list.findIndex(x => x.id === id), r = list[i];
+  if (!r) return;
+  if (what === "toggle"){ r.off = !r.off; saveRules(r.scope); runRules(null, {force: true}); toast(r.off ? "Rule paused." : "Rule in use again."); render(); return; }
+  if (what === "del"){
+    askConfirm({title: "Delete the rule \u201c" + ruleLabel(r) + "\u201d?", ok: "Delete", body: '<p class="note">Lines already set keep their ledger. Future statements will not use this rule.</p>'}).then(a => {
+      if (!a) return;
+      list.splice(i, 1); saveRules(r.scope); toast("Rule deleted."); render();
+    });
+    return;
+  }
+  if ((what === "up" || what === "down")){
+    const j = what === "up" ? i - 1 : i + 1;
+    if (j < 0 || j >= list.length) return;
+    list.splice(j, 0, list.splice(i, 1)[0]);
+    saveRules(r.scope); runRules(null, {force: true}); render();
+    return;
+  }
+  openRuleEditor(JSON.parse(JSON.stringify(r)), false).then(nr => {
+    if (!nr) return;
+    if (nr.scope !== r.scope){ list.splice(i, 1); (nr.scope === "firm" ? firmRules() : clientRules()).unshift(nr); saveRules("firm"); saveRules("client"); }
+    else list[i] = nr;
+    saveRules(nr.scope);
+    const n = runRules(null, {force: true});
+    toast("Rule saved" + (n ? " \u00b7 " + n + " lines set" : "") + ".");
+    render();
+  });
+  return;
+}
 function bankClick(t){
   const b = B(); if (!b) return false;
   if (t.dataset.bfocus){ const f = S.focusSets[t.dataset.bfocus]; if (f){ bankFocus(f.title, f.ids, f.note); render(); window.scrollTo({top: 0, behavior: "smooth"}); } return true; }
   if (t.dataset.btab){ bankTabGo(t.dataset.btab); return true; }
   if (t.dataset.delstmt){ deleteStatement(t.dataset.delstmt); return true; }
-  if (t.dataset.rcopy){ const r = clientRules().find(x => x.id === t.dataset.rcopy); if (r) copyRulesTo([r]); return true; }
-  if (t.dataset.redit || t.dataset.rtoggle || t.dataset.rdel || t.dataset.rmove){
-    const id = t.dataset.redit || t.dataset.rtoggle || t.dataset.rdel || t.dataset.rid;
-    const inClient = clientRules().some(x => x.id === id);
-    const list = inClient ? clientRules() : firmRules();
-    const i = list.findIndex(x => x.id === id), r = list[i];
-    if (!r) return true;
-    if (t.dataset.rtoggle){ r.off = !r.off; saveRules(r.scope); runRules(null, {force: true}); toast(r.off ? "Rule paused." : "Rule in use again."); render(); return true; }
-    if (t.dataset.rdel){
-      askConfirm({title: "Delete the rule \u201c" + ruleLabel(r) + "\u201d?", ok: "Delete", body: '<p class="note">Lines already set keep their ledger. Future statements will not use this rule.</p>'}).then(a => {
-        if (!a) return;
-        list.splice(i, 1); saveRules(r.scope); toast("Rule deleted."); render();
-      });
-      return true;
-    }
-    if (t.dataset.rmove){
-      const j = t.dataset.rmove === "up" ? i - 1 : i + 1;
-      if (j < 0 || j >= list.length) return true;
-      list.splice(j, 0, list.splice(i, 1)[0]);
-      saveRules(r.scope); runRules(null, {force: true}); render();
-      return true;
-    }
-    openRuleEditor(JSON.parse(JSON.stringify(r)), false).then(nr => {
-      if (!nr) return;
-      if (nr.scope !== r.scope){ list.splice(i, 1); (nr.scope === "firm" ? firmRules() : clientRules()).unshift(nr); saveRules("firm"); saveRules("client"); }
-      else list[i] = nr;
-      saveRules(nr.scope);
-      const n = runRules(null, {force: true});
-      toast("Rule saved" + (n ? " \u00b7 " + n + " lines set" : "") + ".");
-      render();
-    });
-    return true;
-  }
   if (t.dataset.brow){ bankRowAct(t.dataset.brow, t.dataset.rid); return true; }
   switch (t.dataset.act){
     case "bankPick": document.getElementById("bankIn").click(); return true;
@@ -12048,20 +11970,11 @@ function bankChange(t){
   if (t.id === "ledIn"){ const f = t.files && t.files[0]; t.value = ""; if (f) importLedgerList(f); return true; }
   if (t.id === "bookIn"){ const f = t.files && t.files[0]; t.value = ""; if (f) importTallyBook(f); return true; }
   if (t.dataset.bled){ if (!bankSetLedger(t.dataset.bled, t.value)) t.value = (bankRow(t.dataset.bled) || {}).ledger || ""; return true; }
-  if (t.hasAttribute("data-bankoptional")){ const co = CO(); co.bankOptional = t.checked; Store.saveCompany(co); return true; }
-  if (t.hasAttribute("data-bankautoapply")){ const co = CO(); co.bankAutoApply = t.checked; Store.saveCompany(co); return true; }
-  if (t.hasAttribute("data-bankauto")){ const co = CO(); co.bankAuto = t.checked; Store.saveCompany(co); render(); return true; }
-  if (t.dataset.bankacc){ bankSetAccLedger(t.dataset.bankacc, t.value); return true; }
-  if (t.dataset.bankled){ const co = CO(); co.bankLedgerNames = co.bankLedgerNames || {}; co.bankLedgerNames[t.dataset.bankled] = t.value; Store.saveCompany(co); suggestAll(b.rows, true); saveBank({rows: true}); render(); return true; }
   return false;
 }
 document.addEventListener("click", ev => {
-  const sa = ev.target.closest && ev.target.closest("[data-sugall]");
-  if (sa){ document.querySelectorAll("[data-sug]").forEach(x => { x.checked = sa.checked; }); return; }
   const rp = ev.target.closest && ev.target.closest("[data-reconpick]");
   if (rp && S.recon){ const i = +rp.dataset.reconpick; if (rp.checked) S.recon.pick.add(i); else S.recon.pick.delete(i); render(); return; }
-  const ov = ev.target.hasAttribute && ev.target.hasAttribute("data-bkoverlay");
-  if (ov && B()){ B().showSettings = false; render(); return; }
   if (!(ev.target.closest && ev.target.closest(".bk-menu"))) closeMenus();
 });
 document.addEventListener("keydown", ev => {
