@@ -213,7 +213,7 @@ function Create() {
               <td className="n"><input type="number" step="any" min="0" max="100" className="w60 n" value={it.disc || 0} aria-label="Discount %" onChange={set("disc")} /></td>
               <td className="n">{INR.format(it.taxable)}</td>
               <td className="n"><select value={num(it.gstRate)} aria-label="GST rate" onChange={set("gstRate")}>{SALES_RATES.map((r) => <option key={r} value={r}>{r}%</option>)}</select></td>
-              <td className="n">{INR.format(r2((it.taxable * num(it.gstRate)) / 100))}</td>
+              <td className="n">{d.noState ? "—" : INR.format(r2((it.taxable * num(it.gstRate)) / 100))}</td>
               <td className="n"><input type="number" step="any" min="0" className="w90 n" value={it.cess === undefined ? "" : it.cess} placeholder="—" aria-label="Cess" onChange={set("cess")} /></td>
               <td className="ac"><button className="icon" aria-label="Remove item" title="Remove item" onClick={() => draftItemRemove(i)}>✕</button></td>
             </tr>;
@@ -227,7 +227,8 @@ function Create() {
         <section className="si-card"><h3>Totals</h3>
           <dl className="si-tot">
             <div><dt>Taxable value</dt><dd>{INR.format(x.taxable)}</dd></div>
-            {groups.filter((g) => g.rate).map((g) => d.inter
+            {d.noState && <div><dt>GST</dt><dd className="note">shown once the client’s state is known</dd></div>}
+            {!d.noState && groups.filter((g) => g.rate).map((g) => d.inter
               ? <div key={g.rate}><dt>IGST @ {g.rate}%</dt><dd>{INR.format(r2((g.taxable * g.rate) / 100))}</dd></div>
               : <span key={g.rate} style={{ display: "contents" }}>
                 <div><dt>CGST @ {g.rate / 2}%</dt><dd>{INR.format(r2((g.taxable * g.rate) / 200))}</dd></div>

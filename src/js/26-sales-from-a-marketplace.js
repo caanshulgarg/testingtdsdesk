@@ -258,11 +258,13 @@ function startDraft(fromId){
 function recalcDraft(){
   const s = SL(), d = s.draft, co = CO(s.cid), x = d.x;
   const inter = isInterState(x, co);
+  // the client's state not known (no GSTIN): no GST is worked out until it is (CGST + SGST or IGST cannot be told)
+  const noState = !stateOfGstin(co.gstin);
   let taxable = 0, cgst = 0, sgst = 0, igst = 0;
   x.items.forEach(it => {
     it.taxable = r2(num(it.qty) * num(it.rate) * (1 - num(it.disc) / 100));
     taxable += it.taxable;
-    const t = r2(it.taxable * num(it.gstRate) / 100);
+    const t = noState ? 0 : r2(it.taxable * num(it.gstRate) / 100);
     if (inter) igst += t; else { cgst += r2(t / 2); sgst += r2(t - r2(t / 2)); }
   });
   x.taxable = r2(taxable); x.cgst = r2(cgst); x.sgst = r2(sgst); x.igst = r2(igst);
@@ -271,7 +273,7 @@ function recalcDraft(){
   const gross = r2(x.taxable + x.cgst + x.sgst + x.igst + num(x.cess));
   x.total = s.cfg.noRound ? gross : Math.round(gross);
   x.roundOff = r2(x.total - gross);
-  d.inter = inter;
+  d.inter = inter; d.noState = noState;
 }
 function draftProblems(){
   const s = SL(), x = s.draft.x, p = [];

@@ -79,6 +79,25 @@ with sync_playwright() as p:
     pg.evaluate("() => salesAct('salesCancel')"); pg.wait_for_timeout(400)
     pg.evaluate("(cid) => openCompany(cid).then(() => { goClient('sales'); startDraft(); })", nog); pg.wait_for_timeout(900)
     ok("Same state: CGST + SGST" not in app() and "The client's state is not known" in app(), "9. client state not known: no CGST/SGST note, it says what to add")
+    pg.evaluate("() => { draftItem(0, 'desc', 'Chairs'); draftItem(0, 'rate', 1000); draftItem(0, 'gstRate', 28); }"); pg.wait_for_timeout(500)
+    tot = pg.inner_text("#app .si-tot")
+    ok("CGST" not in tot and "SGST" not in tot and "IGST" not in tot and pg.evaluate("SL().draft.x.total") == 1000, "9. client state not known: no GST lines in the totals, and none in the total (" + tot.replace("\n", " ") + ")")
+    pg.evaluate("() => salesAct('salesCancel')"); pg.wait_for_timeout(300)
+    # 5 (recheck). a firm Tally computer heard just now: linked client in sync, a client with only a Tally name typed is not linked
+    st = pg.evaluate("""(a) => { const [cid, nog] = a; S.companies[nog].tallyName = "Mastercad Solutions"; TCloud.on = () => true; TLight.st.at = Date.now();
+      TLight.st.devs = [{id: "d1", name: "Office", last_seen: new Date().toISOString(), info: {beat: {at: new Date().toISOString(), tally: true, companies: []}}}];
+      TLight.st.cos = [{company: "GARG SHEKHAR & COMPANY", client_id: cid, gstin: "09AANFG3202D1ZR"}];
+      return [tallyStatus(S.companies[cid]).state, tallyStatus(S.companies[nog]).label]; }""", [cid, nog])
+    ok(st[0] in ("ok", "waiting") and st[1] == "Connected \u2013 company not linked", "5. linked client: connected; a client with only a Tally name typed: “Connected – company not linked” (" + str(st) + ")")
+    pg.evaluate("(cid) => openCompany(cid).then(() => { S.tab = 'books'; S.booksTab = 'import'; render(); })", nog); pg.wait_for_timeout(1200)
+    ok("Not connected on this computer" not in app() and "company not linked" in app(), "5. From Tally, step 4: the same status as the top bar, not “Not connected on this computer”")
+    # 6 (recheck). the link as the cloud has it, and the GSTIN matched whatever its spacing or case
+    ok(pg.evaluate("(cid) => (gstinMatch({gstin: ' 09aanfg3202d1zr '}) || {}).id === cid", cid), "6. a Tally company's GSTIN matches the client's, whatever the case or spaces")
+    pg.evaluate("""(cid) => { TCloud.rpc = async () => ({}); Cloud.api = async (q) => /tally_devices/.test(q) ? [] : [];
+      TCloud.restAll = async () => [{company: "GARG SHEKHAR & COMPANY", client_id: cid, gstin: "09AANFG3202D1ZR", last_seen: new Date().toISOString(), linked_at: new Date().toISOString()}];
+      TCloud.pane.devices = null; S.view = "home"; S.homeTab = "rules"; S.settingsTab = "tcloud"; render(); }""", cid); pg.wait_for_timeout(1200)
+    ok("Linked to Testing AAD" in app() and pg.eval_on_selector('#app select[aria-label="Client for GARG SHEKHAR & COMPANY"]', "s => s.options[s.selectedIndex].text") == "Testing AAD",
+       "6. Books in the cloud: GARG SHEKHAR & COMPANY shows as linked to Testing AAD")
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
     br.close()
 srv.shutdown()
