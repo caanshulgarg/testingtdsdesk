@@ -14,6 +14,8 @@ books = json.load(open(os.environ.get("TDSDESK_CACHE", os.path.join(os.path.dirn
 res, errors = {}, []
 with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1400, "height": 1000}); pg.on("pageerror", lambda e: errors.append(str(e)))
+    # a React development build warns about rows with the same key (they can be left on screen): counted as errors
+    pg.on("console", lambda m: errors.append("same key: " + " | ".join(str(a.json_value())[:80] for a in m.args[1:3])) if "same key" in m.text else None)
     pg.goto("http://localhost:%d/" % port); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1500)
     pg.evaluate("""(bk) => { const c = newCompany({name: "ZZ TEST", gstin: "09AANFG3202D1ZR"}); S.companies[c.id] = c; S.coId = c.id; S.view = "company"; S.tab = "books"; S.loadingCo = false;
       S.books = Object.assign({loading: false, challans: [], alloc: {}}, bk, {cid: c.id}); S.books.map = Books.mapLedgers(bk.vouchers, {}); LedMaster.refresh(S.books); window.__bk = S.books; S.booksTab = "tds"; render(); }""", books)
@@ -61,6 +63,11 @@ with sync_playwright() as p:
     for w in ["9", "9C"]:
         t = pg.evaluate("(w) => { const d = document.createElement('div'); d.innerHTML = gst9PackHtml(w); document.body.appendChild(d); const t = d.innerText; d.remove(); return t; }", w)
         res["pdf-" + w] = re.sub(r"\s+", " ", t).strip()
+    # ITC follow-up with the 2B made above: everything, one kind, a decision and a note, and a letter logged
+    pg.evaluate("() => { S.gstYm = GSTR.months().filter(m => GST2B.all2b(S.gstReg || '').some(t => t.ym === m)).slice(-1)[0]; S.gstPart = 'follow'; S.itctShow = 'open'; render(); }"); grab("follow-open")
+    pg.evaluate("() => { S.itctShow = 'all'; render(); }"); grab("follow-all")
+    pg.evaluate("() => { const it = ITCT.items(S.gstReg || '').items.find(x => ITCT.CATS[x.cat].acts.length); if (it){ S.itctCat = it.cat; const st = ITCT.store(S.gstReg || ''); st.dec[it.key] = {act: ITCT.CATS[it.cat].acts.slice(-1)[0][0], note: 'asked on phone', at: '20260101'}; } render(); }"); grab("follow-decided")
+    pg.evaluate("() => { S.itctCat = ''; const sp = ITCT.suppliers(S.gstReg || '', ITCT.items(S.gstReg || '').items)[0]; if (sp){ const st = ITCT.store(S.gstReg || ''); st.sent[sp.key] = ['20260105', '20260110']; } render(); }"); grab("follow-sent")
     br.close()
 srv.shutdown()
 json.dump({"pages": res, "errors": errors}, open(out, "w"), indent=0)

@@ -97,6 +97,23 @@ with sync_playwright() as p:
     ok(pg.locator('select[aria-label="Which month"]').count() == 1, "the year at once, with a month filter")
     tol = pg.locator('input[aria-label="Allow a difference of"]'); tol.fill("600"); tol.press("Tab"); pg.wait_for_timeout(500)
     ok(pg.evaluate("GST2B.settings().tol") == 600, "the difference allowed is kept")
+    # ITC follow-up (from the 2B above): a decision, a note, a kind chosen, and a letter logged as written
+    pg.evaluate("() => { S.itctShow = 'all'; gstPartGo('follow'); }"); pg.wait_for_timeout(700)
+    row = pg.locator('tr:has(select[aria-label="What to do"])').first; key = row.get_attribute("data-key")
+    last = row.locator('select[aria-label="What to do"] option').last.get_attribute("value")
+    row.locator('select[aria-label="What to do"]').select_option(last); pg.wait_for_timeout(400)
+    ok(pg.evaluate("ITCT.store(S.gstReg || '').dec[%s].act" % json.dumps(key)) == last, "follow-up: what to do is kept")
+    note = pg.locator('tr[data-key=%s] input[aria-label="Note"]' % json.dumps(key)); note.fill("asked on phone"); note.press("Tab"); pg.wait_for_timeout(400)
+    ok(pg.evaluate("ITCT.store(S.gstReg || '').dec[%s].note" % json.dumps(key)) == "asked on phone", "and a note to it")
+    pg.click('.gf-chips button.gf-chip >> nth=0'); pg.wait_for_timeout(400)
+    cat = pg.evaluate("S.itctCat"); shown = pg.evaluate("Array.from(document.querySelector('.bk-table.fixed').querySelectorAll('tbody tr td:first-child')).map(td => td.innerText.split('\\n')[0])")
+    ok(cat and len(set(shown)) == 1, "a chip shows one kind only (%d lines)" % len(shown))
+    pg.click('.gf-chips button.gf-chip.on'); pg.wait_for_timeout(300)
+    sup = pg.locator('section:has(h3:text-is("Suppliers to write to")) tbody tr').first
+    if sup.count():
+        k = sup.get_attribute("data-key"); sup.locator('button:text-is("copy")').click(); pg.wait_for_timeout(500)
+        ok(len(pg.evaluate("ITCT.store(S.gstReg || '').sent[%s] || []" % json.dumps(k))) == 1 and "not yet" not in pg.locator('tr[data-key=%s]' % json.dumps(k)).inner_text(), "a letter copied is logged as written")
+    else: ok(False, "no supplier to write to")
     # reversal: a capital good added, filled in, and removed
     pg.click('nav[aria-label="GST"] button[data-part="rev"]'); pg.wait_for_timeout(500)
     pg.click('button:text-is("Add a capital good")'); pg.wait_for_timeout(400)

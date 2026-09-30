@@ -110,7 +110,7 @@ export default function InputRegister({ b }) {
         <colgroup>{widths.map((w, i) => <col key={i} style={{ width: w + "%" }} />)}</colgroup>
         <thead><tr>{cols.map((c, i) => <th key={c} className={i >= 4 && i <= numTo ? "n" : undefined}>{c}</th>)}</tr></thead>
         <tbody>
-          {list.slice(0, gfN(5000)).map((r, i) => <Row key={r.ym + ":" + (r.id || i)} r={r} cess={cess} />)}
+          {list.slice(0, gfN(5000)).map((r, i) => <Row key={r.ym + ":" + r.id + ":" + i} r={r} cess={cess} />)}
           <tr><td colSpan={4}><b>{shown.n + " document" + (shown.n === 1 ? "" : "s") + (shown.n !== all.n ? " of " + all.n : "")}</b></td>
             <td className="n"><b>{money(shown.taxable)}</b></td><td className="n"><b>{money(shown.igst)}</b></td><td className="n"><b>{money(shown.cgst)}</b></td><td className="n"><b>{money(shown.sgst)}</b></td>
             {cess && <td className="n"><b>{money(shown.cess)}</b></td>}<td colSpan={2}></td></tr>

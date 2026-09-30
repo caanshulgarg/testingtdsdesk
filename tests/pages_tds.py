@@ -13,6 +13,8 @@ books = json.load(open(os.environ.get("TDSDESK_CACHE", os.path.join(os.path.dirn
 res, errors = {}, []
 with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1400, "height": 1000}); pg.on("pageerror", lambda e: errors.append(str(e)))
+    # a React development build warns about rows with the same key (they can be left on screen): counted as errors
+    pg.on("console", lambda m: errors.append("same key: " + " | ".join(str(a.json_value())[:80] for a in m.args[1:3])) if "same key" in m.text else None)
     pg.goto("http://localhost:%d/" % port); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1500)
     pg.evaluate("""(bk) => { const c = newCompany({name: "ZZ TEST", gstin: "09AANFG3202D1ZR"}); S.companies[c.id] = c; S.coId = c.id; S.view = "company"; S.tab = "books"; S.loadingCo = false;
       S.books = Object.assign({loading: false, challans: [], alloc: {}}, bk, {cid: c.id}); S.books.map = Books.mapLedgers(bk.vouchers, {}); LedMaster.refresh(S.books); window.__bk = S.books; S.booksTab = "tds"; render(); }""", books)

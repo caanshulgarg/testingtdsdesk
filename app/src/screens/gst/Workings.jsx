@@ -66,7 +66,7 @@ function ToReport({ p, ym }) {
       {p.late.length > 0 && <p className="note">Past the time to amend (November after the year): {p.late.map(GSTR.label).join(", ")}.</p>}
       {p.rows.length ? <div className="bk-tablewrap"><table className="bk-table">
         <thead><tr><th>Month filed</th><th>Document</th><th>GSTIN</th><th>Number</th><th className="dt">Date</th><th className="n">Taxable now</th><th>What differs</th><th>Report it as</th></tr></thead>
-        <tbody>{p.rows.map((r) => { const d = r.now || r.was; return <tr key={r.id}>
+        <tbody>{p.rows.map((r, i) => { const d = r.now || r.was; return <tr key={r.id + ":" + i}>
           <td>{GSTR.label(r.P)}</td><td>{KIND[r.kind] || r.kind}</td><td>{d.ctin || "—"}</td><td>{d.num}</td><td>{day(d.date)}</td>
           <td className="n">{r.now ? money(r.now.txval) : "—"}</td><td>{r.changes.join("; ")}</td>
           <td><select aria-label="Report it as" value={r.act} onChange={(ev) => amendSetAct(r.id, ev.target.value)}>{optsOf(r).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></td></tr>; })}</tbody>
@@ -106,7 +106,7 @@ function Received({ a }) {
     <p className="note">Money a customer paid before the invoice, for services. An advance billed in the same month is left out, as the return asks. The rate is taken from the customer’s invoice nearest the receipt; change it where it is wrong.</p>
     {a.at.length ? <div className="bk-tablewrap"><table className="bk-table">
       <thead><tr><th className="dt">Date</th><th>Receipt</th><th>Customer</th><th>Bill ref</th><th className="n">Received</th><th className="n">Rate</th>{ADV_HEAD.map((h, i) => <th key={h} className={i ? "n" : undefined}>{h}</th>)}<th>Not an advance</th></tr></thead>
-      <tbody>{a.at.map((r) => <tr key={r.id}>
+      <tbody>{a.at.map((r, i) => <tr key={r.id + ":" + i}>
         <td>{day(r.date)}</td><td>{r.no}</td><td>{r.party}{r.gstin && <><br /><small className="note">{r.gstin}</small></>}</td><td>{r.ref || "—"}</td>
         <td className="n">{money(r.received)}</td><td className="n"><Rate r={r} /></td><td>{r.pos}<br /><small className="note">{r.inter ? "inter-state" : "same state"}</small></td><TaxCells r={r} />
         <td><input type="checkbox" checked={false} aria-label="Not an advance" onChange={(ev) => advFix(r.id, "skip", ev.target.checked)} /></td></tr>)}
@@ -135,9 +135,9 @@ function StillOpen({ a, ym }) {
     <p className="note">Not yet billed or refunded in these books. If one was used up by an invoice that is not tied to it in Tally, pick the month it was billed.</p>
     <div className="bk-tablewrap"><table className="bk-table">
       <thead><tr><th className="dt">Received</th><th>Customer</th><th>Bill ref</th><th className="n">Amount</th><th className="n">Still open</th><th>Billed in</th></tr></thead>
-      <tbody>{a.open.map((p) => { const left = r2(p.amount - p.adj.filter((x) => x.ym <= ym).reduce((s, x) => s + x.amount, 0));
+      <tbody>{a.open.map((p, i) => { const left = r2(p.amount - p.adj.filter((x) => x.ym <= ym).reduce((s, x) => s + x.amount, 0));
         const ms = later.concat(p.fix.adjYm && !later.includes(p.fix.adjYm) ? [p.fix.adjYm] : []);
-        return <tr key={p.id}><td>{day(p.date)}</td><td>{p.party}</td><td>{p.ref || "—"}</td><td className="n">{money(p.amount)}</td><td className="n">{money(left)}</td>
+        return <tr key={p.id + ":" + i}><td>{day(p.date)}</td><td>{p.party}</td><td>{p.ref || "—"}</td><td className="n">{money(p.amount)}</td><td className="n">{money(left)}</td>
           <td><select aria-label="Billed in" value={p.fix.adjYm || ""} onChange={(ev) => advFix(p.id, "adjYm", ev.target.value)}><option value="">not yet</option>{ms.map((m) => <option key={m} value={m}>{GSTR.label(m)}</option>)}</select></td></tr>; })}</tbody>
     </table></div>
   </Card>;
@@ -148,10 +148,10 @@ function LeftOut({ a }) {
   return <Card title="Received early, but not in 11A">
     <div className="bk-tablewrap"><table className="bk-table">
       <thead><tr><th className="dt">Date</th><th>Customer</th><th>Bill ref</th><th className="n">Received</th><th>Why</th><th>Count it</th></tr></thead>
-      <tbody>{a.untaxed.map((r) => { const p = pieces.find((x) => x.id === r.id) || { fix: {} };
+      <tbody>{a.untaxed.map((r, i) => { const p = pieces.find((x) => x.id === r.id) || { fix: {} };
         const ctl = p.skip ? <><input type="checkbox" checked aria-label="Not an advance" onChange={(ev) => advFix(r.id, "skip", ev.target.checked)} /> not an advance</>
           : p.type === "On Account" ? <><input type="checkbox" checked={!!p.fix.isAdv} aria-label="Count as an advance" onChange={(ev) => advFix(r.id, "isAdv", ev.target.checked)} /> it is an advance</> : null;
-        return <tr key={r.id}><td>{day(r.date)}</td><td>{r.party}</td><td>{r.ref || r.type}</td><td className="n">{money(r.received)}</td><td>{r.why}</td><td>{ctl}</td></tr>; })}</tbody>
+        return <tr key={r.id + ":" + i}><td>{day(r.date)}</td><td>{r.party}</td><td>{r.ref || r.type}</td><td className="n">{money(r.received)}</td><td>{r.why}</td><td>{ctl}</td></tr>; })}</tbody>
     </table></div>
   </Card>;
 }

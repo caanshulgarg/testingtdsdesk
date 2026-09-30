@@ -894,10 +894,7 @@ function gstFixChange(t){
   if (d.misbud !== undefined){ const [h2, mm] = d.misbud.split("|"), fy = Audit.fyStart(mm + "01").slice(0, 4); b.budget = b.budget || {}; b.budget[fy] = b.budget[fy] || {}; b.budget[fy][h2] = Object.assign({}, b.budget[fy][h2], {[mm]: t.value === "" ? "" : num(t.value)}); saveBooks(); render(); return true; }
   if (d.misf !== undefined){ S.misF = t.value; render(); return true; }
   if (d.mismsme !== undefined){ b.msme = Object.assign({}, b.msme, {[d.mismsme]: t.value}); const r = (b.mis || {}).last; if (r) MIS.run(r.from, r.to, r.how); saveBooks(); render(); return true; }
-  if (d.itctact !== undefined){ const st = ITCT.store(S.gstReg || ""); st.dec[d.itctact] = Object.assign({}, st.dec[d.itctact], {act: t.value, at: ITCT.today()}); saveBooks(); render(); return true; }
-  if (d.itctnote !== undefined){ const st = ITCT.store(S.gstReg || ""); st.dec[d.itctnote] = Object.assign({}, st.dec[d.itctnote], {note: t.value}); saveBooks(); return true; }
   if (d.itctemail !== undefined || d.itctphone !== undefined){ const st = ITCT.store(S.gstReg || ""), k = d.itctemail !== undefined ? d.itctemail : d.itctphone; st.contact[k] = Object.assign({}, st.contact[k], d.itctemail !== undefined ? {email: t.value.trim()} : {phone: t.value.trim()}); saveBooks(); return true; }
-  if (d.itctshow !== undefined){ S.itctShow = t.value; render(); return true; }
   if (d.itcbasis !== undefined){ b.itcBasis = Object.assign({}, b.itcBasis, {[S.gstReg || ""]: t.value}); saveBooks(); render(); return true; }
   if (d.gstopen !== undefined){ const k = S.gstReg || ""; b.gstOpen = Object.assign({}, b.gstOpen); b.gstOpen[k] = Object.assign({}, b.gstOpen[k], {[d.gstopen]: t.value === "" ? "" : num(t.value)}); saveBooks(); render(); return true; }
   if (d.relrel !== undefined){ const x = (b.auditRel || []).find(z => z.name === d.relrel); if (x){ x.relation = t.value; saveBooks(); render(); } return true; }

@@ -23,7 +23,7 @@ function FilterBar({ tab, placeholder, table, title, excel, count, selects = [] 
         onChange={(ev) => tdsFilter(tab, "q", ev.target.value, true)} />
       {selects.map((sel) => (
         <select key={sel.key} style={{ width: "auto", flex: "0 0 auto" }} aria-label={sel.label || sel.key} value={f[sel.key] || ""} onChange={(ev) => tdsFilter(tab, sel.key, ev.target.value)}>
-          {sel.options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          {sel.options.map(([v, l], i) => <option key={i} value={v}>{l}</option>)}
         </select>))}
       <span className="note">{count || ""}</span>
       {Object.keys(f).some((k) => f[k]) && <button className="linkbtn" onClick={() => tdsFilterClear(tab)}>Clear filters</button>}

@@ -52,6 +52,13 @@ A `<table className="bk-table">` gets the funnels on its headings (filter any co
 long, as the old tables did: `GridF` (`src/js/31-grid-filters.js`) adds them after each redraw. Add `gf-off` only to a
 table with its own filters or a single figure per row group.
 
+## Keys in lists
+
+Every row in a list needs a key no other row has. Supplier, bill and document keys can repeat (two lines for one bill),
+so add the position: `key={x.key + ":" + i}`. A repeated key leaves old rows on screen when a list is filtered. The page
+comparisons (`tests/pages_gst.py`, `pages_tds.py`) run on a development build report any repeated key as an error:
+`NODE_ENV=development npx vite build --mode test --outDir /tmp/dist-dev`.
+
 ## Printing a screen
 
 `FinComReact.markup("Gst9c")` (in `src/main.jsx`) gives a React screen as plain HTML, for a PDF made from what is on
@@ -94,7 +101,7 @@ cd ../tests && TDSDESK_SITE=../app/dist-test python3 run_react_post.py
 | A client's dashboard; Transactions | `src/screens/Dash.jsx`, `Txn.jsx` |
 | The books (TDS & GST tabs); TDS by year and quarter | `src/screens/Books.jsx` |
 | A TDS return (26Q, 24Q) and certificates | `src/screens/TdsReturn.jsx` |
-| The GST tab; GSTR-1 and 3B; the input register; 2B (other parts are still old pages) | `src/screens/Gst.jsx`, `src/screens/gst/Returns.jsx`, `gst/InputRegister.jsx`, `gst/TwoB.jsx` (2B reconciliation), `gst/Workings.jsx` (amendments, advances, reversal), `gst/Annual.jsx` (GSTR-9, 9C) |
+| The GST tab; GSTR-1 and 3B; the input register; 2B (other parts are still old pages) | `src/screens/Gst.jsx`, `src/screens/gst/Returns.jsx`, `gst/InputRegister.jsx`, `gst/TwoB.jsx` (2B reconciliation), `gst/Workings.jsx` (amendments, advances, reversal), `gst/Annual.jsx` (GSTR-9, 9C), `gst/ItcFollow.jsx` |
 | A filter bar (find box, choices, print, Excel) | `src/parts/FilterBar.jsx` |
 | Shared pieces: boxes, ledger lists, column headings | `src/parts/CommitBox.jsx`, `LedgerBox.jsx`, `LedgerSelect.jsx`, `ColHead.jsx` |
 | GSTR-2B from the portal | `src/screens/GstApiCard.jsx` |

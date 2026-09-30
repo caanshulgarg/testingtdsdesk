@@ -40,10 +40,10 @@ function Customers({ rows }) {
     <div className="bk-tablewrap"><table className="bk-table" id="r1Table">
       <thead><tr><th>Customer</th><th>GSTIN</th><th className="n">Documents</th><th className="n">Taxable</th><th className="n">Tax</th></tr></thead>
       <tbody>
-        {parties.map((p) => { const key = p.gstin || normName(p.party), open = S.r1Open === key; return [<tr key={key}>
+        {parties.map((p, i) => { const key = p.gstin || normName(p.party), open = S.r1Open === key; return [<tr key={key + ":" + i}>
           <td><button className="linkbtn" onClick={() => tdsToggle("r1Open", key)}>{open ? "▾ " : "▸ "}{p.party}</button></td><td>{p.gstin || "—"}</td>
           <td className="n"><button className="linkbtn" onClick={() => tdsToggle("r1Open", key)}>{p.n}</button></td><td className="n">{money(p.taxable)}</td><td className="n"><b>{money(p.tax)}</b></td>
-        </tr>, open && <tr key={key + ":open"}><td colSpan={5} style={{ background: "var(--paper)", padding: 0 }}><table className="bk-table" style={{ margin: 0 }}>
+        </tr>, open && <tr key={key + ":open:" + i}><td colSpan={5} style={{ background: "var(--paper)", padding: 0 }}><table className="bk-table" style={{ margin: 0 }}>
           <thead><tr><th>Part</th><th className="dt">Date</th><th>Invoice</th><th>Place of supply</th><th className="n">Rate</th><th className="n">Taxable</th><th className="n">IGST</th><th className="n">CGST</th><th className="n">SGST</th></tr></thead>
           <tbody>{p.rows.map((r, i) => <tr key={i}><td>{r.kind}</td><td>{day(r.date)}</td><td>{r.no}</td><td>{r.pos || ""}</td><td className="n">{r.rate}%</td>
             <td className="n">{money(r.taxable)}</td><td className="n">{money(r.igst)}</td><td className="n">{money(r.cgst)}</td><td className="n">{money(r.sgst)}</td></tr>)}</tbody>

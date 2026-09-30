@@ -7,7 +7,7 @@ export default function FilterBar({ id, placeholder = "Find", table, title, exce
       <input type="search" value={f.q || ""} placeholder={placeholder} aria-label={placeholder} data-fk={id + "q"} onChange={(ev) => setFilter(id, "q", ev.target.value, true)} />
       {selects.map((sel) => (
         <select key={sel.key} aria-label={sel.label || sel.key} value={f[sel.key] || ""} onChange={(ev) => setFilter(id, sel.key, ev.target.value)}>
-          {sel.options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          {sel.options.map(([v, l], i) => <option key={i} value={v}>{l}</option>)}
         </select>))}
       <span className="note">{count || ""}</span>
       {Object.keys(f).some((k) => f[k]) && <button className="linkbtn" onClick={() => clearFilter(id)}>Clear</button>}

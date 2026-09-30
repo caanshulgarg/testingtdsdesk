@@ -114,51 +114,19 @@ const ITCT = {
   tallyPhone(party){ const i = ((S.books.ledInfo || {})[party]) || {}; return i.phone || ""; }
 };
 
-function viewItcFollow(b){
-  const reg = S.gstReg || "", money = v => INR.format(r2(v || 0));
-  if (!reg) return '<p class="note">Choose a registration above.</p>';
-  if (!GST2B.all2b(reg).length) return '<section class="dash-card"><h3>ITC follow-up</h3><p class="note">Bring in this registration\u2019s 2B under 2B reconciliation, month by month as they come. From then on every bill 2B and Tally do not agree on is listed here and carried forward on its own until it is settled: nothing to remember, nothing to copy across.</p></section>';
-  const R = ITCT.items(reg), show = S.itctShow || "open", cat = S.itctCat || "";
-  const all = R.items, open = all.filter(x => x.open);
-  const base = show === "open" ? open : all;
-  const list = base.filter(x => !cat || x.cat === cat).sort((a, c) => Object.keys(ITCT.CATS).indexOf(a.cat) - Object.keys(ITCT.CATS).indexOf(c.cat) || c.tax - a.tax);
-  const today = ITCT.today(), dt = x => new Date(String(x).slice(0, 4) + "-" + String(x).slice(4, 6) + "-" + String(x).slice(6, 8)).getTime();
-  const soon = d => !!d && d >= today && (dt(d) - dt(today)) / 86400000 <= 60;   // the last date is within two months
-  const chips = Object.entries(ITCT.CATS).map(([k, c]) => { const l = base.filter(x => x.cat === k); if (!l.length) return "";
-    const t = l.reduce((a, x) => a + (x.cat === "diff" ? Math.abs(x.gap) : x.tax), 0);
-    return '<button class="gf-chip' + (c.warn ? " warn" : "") + (cat === k ? " on" : "") + '" data-itctcat="' + k + '">' + esc(c.label) + " <b>" + l.length + "</b> \u00b7 \u20b9" + money(t) + "</button>"; }).join("");
-  const miss = R.missing.filter(m => m < R.last || m > R.last);
-  let h = '<section class="dash-card"><div class="gf-ctl"><h3>ITC follow-up</h3>' +
-    '<select data-itctshow><option value="open"' + (show === "open" ? " selected" : "") + '>Still open</option><option value="all"' + (show === "all" ? " selected" : "") + ">Everything, settled too</option></select>" +
-    '<button class="btn small primary" data-act="itctExcel">Excel</button></div>' +
-    '<p class="note" style="margin:6px 0">Worked out again each time from Tally and every 2B here (' + R.loaded.map(GSTR.label).join(", ") + "). What you decide on each line is kept and carried to later months; a bill that turns up in a later 2B moves itself to \u201ctaken in a later month\u201d." +
-    (miss.length ? ' <span class="bad">No 2B here for ' + (miss.length > 4 ? miss.length + " months (" + GSTR.label(miss[0]) + " to " + GSTR.label(miss[miss.length - 1]) + ")" : miss.map(GSTR.label).join(", ")) + ": bills of those months cannot be checked.</span>" : "") + "</p>" +
-    '<div class="gf-chips">' + chips + "</div>" +
-    '<details style="margin:6px 0 10px"><summary class="linkbtn">How each kind is handled, and why</summary><div class="bk-tablewrap"><table class="bk-table gf-off"><tbody>' +
-      Object.values(ITCT.CATS).map(c => "<tr><td style=\"width:220px\"><b>" + esc(c.label) + "</b></td><td>" + esc(c.law) + "</td></tr>").join("") + "</tbody></table></div></details>";
-  const cols = ["What", "Supplier \u00b7 GSTIN", "Bill no. \u00b7 date", "In Tally", "In 2B", "Tax", "Last date", "What to do", "Note"];
-  h += '<div class="bk-tablewrap"><table class="bk-table compact fixed"><colgroup>' + [11, 16, 12, 11, 8, 9, 8, 14, 11].map(w => '<col style="width:' + w + '%">').join("") + "</colgroup><thead><tr>" + cols.map((c, i) => "<th" + (i === 5 ? ' class="n"' : "") + ">" + c + "</th>").join("") + "</tr></thead><tbody>" +
-    list.slice(0, gfN(3000)).map(x => {
-      const c = ITCT.CATS[x.cat], dlCls = x.deadline && x.deadline < today ? "bad" : soon(x.deadline) ? "bad" : "nr";
-      const tallyCell = x.where === "2B" ? (x.bookedAs ? '<span class="nr">' + esc(x.bookedAs) + "</span>" : '<span class="nr">not booked</span>') : esc(GSTAmend.dmy(x.booked || x.date)) + '<div class="nr">' + esc(x.voucher || "") + "</div>";
-      const twoB = x.where === "Tally" ? '<span class="' + (x.covered ? "bad" : "nr") + '">' + esc(x.covered ? "not in 2B" : "no 2B yet") + "</span>" : esc(GSTR.label(x.ym2b || x.ym)) + (x.ims === "rejected" ? '<div class="bad">rejected in IMS</div>' : x.claimedIn ? '<div class="nr">taken then</div>' : x.reason ? '<div class="nr">' + esc(x.reason) + "</div>" : x.ims ? '<div class="nr">IMS: ' + esc(x.ims) + "</div>" : "");
-      const taxCell = money(x.tax) + (x.cat === "diff" ? '<div class="nr">2B ' + money(x.tax2b) + "</div>" : "");
-      const acts = c.acts.length ? '<select data-itctact="' + esc(x.key) + '">' + c.acts.map(([v, l]) => '<option value="' + v + '"' + (x.act === v ? " selected" : "") + ">" + esc(l) + "</option>").join("") + "</select>" : (x.cat === "confirm" ? '<button class="linkbtn" data-gstpart="r2b">confirm under 2B</button>' : '<span class="nr">nothing to do</span>');
-      return "<tr><td>" + esc(c.label) + (x.issues && x.cat === "diff" ? '<div class="nr" title="' + esc(x.issues.join("; ")) + '">' + esc(x.issues.filter(z => !/^booked in|^value differs/.test(z)).join("; ")) + "</div>" : "") + "</td><td>" + esc(x.supplier || "") + '<div class="nr">' + esc(x.gstin || "no GSTIN") + "</div></td><td>" + esc(x.no || "") + '<div class="nr">' + esc(GSTAmend.dmy(x.date)) + "</div></td><td>" + tallyCell + "</td><td>" + twoB +
-        '</td><td class="n">' + taxCell + '</td><td><span class="' + dlCls + '">' + esc(x.deadline ? GSTAmend.dmy(x.deadline) : "") + "</span></td><td>" + acts + '</td><td><input type="text" data-itctnote="' + esc(x.key) + '" data-fk="itctnote-' + esc(x.key) + '" value="' + esc(x.note) + '" placeholder="note" style="width:100%"></td></tr>';
-    }).join("") + (list.length ? "" : '<tr><td colspan="9" class="nr">Nothing ' + (show === "open" ? "open" : "here") + ".</td></tr>") + "</tbody></table></div></section>";
-  // one letter per supplier, with every bill still waiting on them
-  const sups = ITCT.suppliers(reg, all);
-  h += '<section class="dash-card" style="margin-top:12px"><h3>Suppliers to write to</h3><p class="note">Every bill set to \u201cfollow up\u201d or \u201cask the supplier to amend\u201d, supplier by supplier, in one letter. Email and phone come from Tally, or from GST settings (' + gstSetLink("contacts") + "). Writing is logged, so the next month shows when each was last chased.</p>" +
-    (sups.length ? '<div class="bk-tablewrap"><table class="bk-table compact fixed"><colgroup>' + [20, 7, 10, 10, 18, 12, 10, 13].map(w => '<col style="width:' + w + '%">').join("") + '</colgroup><thead><tr><th>Supplier \u00b7 GSTIN</th><th class="n">Bills</th><th class="n">Tax waiting</th><th>Last date</th><th>Email</th><th>Phone</th><th>Last written</th><th>Write</th></tr></thead><tbody>' +
-      sups.map(s => "<tr><td>" + esc(s.party || "") + '<div class="nr">' + esc(s.gstin || "no GSTIN") + '</div></td><td class="n">' + s.items.length + '</td><td class="n">' + money(s.tax) + '</td><td><span class="' + (s.deadline && s.deadline < today ? "bad" : "nr") + '">' + esc(GSTAmend.dmy(s.deadline)) + "</span></td>" +
-        "<td>" + (s.email ? esc(s.email) : '<span class="nr">none</span>') + "</td><td>" + (s.phone ? esc(s.phone) : '<span class="nr">none</span>') + "</td>" +
-        "<td>" + (s.lastSent ? esc(GSTAmend.dmy(s.lastSent)) + (s.sent.length > 1 ? '<div class="nr">' + s.sent.length + " times</div>" : "") : '<span class="nr">not yet</span>') + "</td>" +
-        '<td><button class="linkbtn" data-act="itctCopy" data-sup="' + esc(s.key) + '">copy</button> \u00b7 <button class="linkbtn" data-act="itctMail" data-sup="' + esc(s.key) + '">email</button> \u00b7 <button class="linkbtn" data-act="itctWa" data-sup="' + esc(s.key) + '">WhatsApp</button></td></tr>').join("") + "</tbody></table></div>"
-      : '<p class="note">No supplier to write to.</p>') + "</section>";
-  return h;
-}
+// the ITC follow-up page: React (app/src/screens/gst/ItcFollow.jsx)
 function itctSupplier(key){ const reg = S.gstReg || "", R = ITCT.items(reg), s = ITCT.suppliers(reg, R.items).find(z => z.key === key); return s ? {reg, s, L: ITCT.letter(reg, s.gstin, s.party, s.items)} : null; }
+// what the user decides on a line, and a note to it (kept, carried to later months)
+function itctSetAct(key, act){ const st = ITCT.store(S.gstReg || ""); st.dec[key] = Object.assign({}, st.dec[key], {act, at: ITCT.today()}); saveBooks(); render(); }
+function itctSetNote(key, note){ const st = ITCT.store(S.gstReg || ""); st.dec[key] = Object.assign({}, st.dec[key], {note}); saveBooks(); }
+// one letter to a supplier with every bill waiting on them: copied, or opened in the mail app or WhatsApp; logged as written
+function itctWrite(how, key){
+  const x = itctSupplier(key); if (!x) return;
+  if (how === "itctCopy") (navigator.clipboard ? navigator.clipboard.writeText(x.L.text) : Promise.reject()).then(() => toast("Letter copied."), () => toast("Could not copy; use the Excel."));
+  if (how === "itctMail"){ if (!x.s.email){ toast("Type the supplier's email first."); return; } window.open("mailto:" + encodeURIComponent(x.s.email) + "?subject=" + encodeURIComponent("GST: invoices not in our GSTR-2B") + "&body=" + encodeURIComponent(x.L.text), "_blank"); }
+  if (how === "itctWa"){ const ph = String(x.s.phone || "").replace(/\D/g, ""); if (!ph){ toast("Type the supplier's phone first."); return; } window.open("https://wa.me/" + (ph.length === 10 ? "91" + ph : ph) + "?text=" + encodeURIComponent(x.L.text), "_blank"); }
+  itctLogSent(x.reg, x.s.key); render();
+}
 function itctLogSent(reg, key){ const st = ITCT.store(reg); st.sent[key] = (st.sent[key] || []).concat([ITCT.today()]); saveBooks(); }
 async function itctExcel(){
   await ensureXlsx();

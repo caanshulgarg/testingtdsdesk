@@ -78,12 +78,12 @@ function SupplierDocs({ s, k }) {
 function Suppliers({ sup }) {
   return <div className="bk-tablewrap"><table className="bk-table" id="r2Sup">
     <thead><tr><th>Supplier</th><th>GSTIN</th><th className="n">Tax in 2B</th><th className="n">Tax in Tally</th><th className="n">Gap</th><th className="n">Matched</th><th className="n">Differences</th><th className="n">To confirm</th><th className="n">2B only</th><th className="n">Tally only</th></tr></thead>
-    <tbody>{sup.slice(0, LIMIT).map((s) => { const k = s.gstin || s.party, open = S.r2Open === k; return [<tr key={k}>
+    <tbody>{sup.slice(0, LIMIT).map((s, i) => { const k = s.gstin || s.party, open = S.r2Open === k; return [<tr key={k + ":" + i}>
       <td><button className="linkbtn" onClick={() => tdsToggle("r2Open", k)}>{(open ? "▾ " : "▸ ") + (s.party || "—")}</button></td>
       <td>{s.gstin || <span className="tag warn">no GSTIN in Tally</span>}</td>
       <td className="n">{money(s.t2b)}</td><td className="n">{money(s.tbk)}</td><td className={"n" + (Math.abs(s.gap) > 1 ? " bad" : "")}>{money(s.gap)}</td>
       <td className="n">{s.matched || ""}</td><td className="n">{s.diff || ""}</td><td className="n">{s.probable || ""}</td><td className="n">{s.only2b || ""}</td><td className="n">{s.onlyBooks || ""}</td>
-    </tr>, open && <SupplierDocs key={k + ":open"} s={s} k={k} />]; })}</tbody>
+    </tr>, open && <SupplierDocs key={k + ":open:" + i} s={s} k={k} />]; })}</tbody>
   </table>{!sup.length && <div className="bk-none">Nothing matches.</div>}</div>;
 }
 
@@ -91,7 +91,7 @@ function Suppliers({ sup }) {
 function Pairs({ list, tol }) {
   return <div className="bk-tablewrap"><table className="bk-table" id="r2Pairs">
     <thead><tr><th>Supplier</th><th>2B</th><th className="dt">Date</th><th className="n">Taxable</th><th className="n">Tax</th><th>Tally</th><th className="n">Taxable</th><th className="n">Tax</th><th className="n">Difference</th><th style={{ minWidth: 230 }}>What differs</th><th className="ac"></th></tr></thead>
-    <tbody>{list.slice(0, LIMIT).map((x) => { const ids = x.books.map((d) => d.id); return <tr key={x.p.key}>
+    <tbody>{list.slice(0, LIMIT).map((x, i) => { const ids = x.books.map((d) => d.id); return <tr key={x.p.key + ":" + i}>
       <td>{x.p.party || "—"}<div className="nr">{x.p.gstin}</div></td>
       <td>{x.p.no}<div className="nr">{secName(x.p) + " · " + GSTR.label(x.p.ym)}</div></td><td>{day(x.p.date)}</td>
       <td className="n">{money(x.p.taxable)}</td><td className="n">{money(tx(x.p))}</td>
@@ -117,10 +117,10 @@ function Only2b({ list, free, st }) {
     <Legacy html={AIH.r2bBar(list, free)} />
     <div className="bk-tablewrap"><table className="bk-table" id="r2Only2b">
       <thead><tr><th>Supplier</th><th>Number</th><th className="dt">Date</th><th className="n">Taxable</th><th className="n">Tax</th><th>Note</th><th>Booked in Tally as</th><th>Remark</th></tr></thead>
-      <tbody>{list.slice(0, LIMIT).map((p) => {
+      <tbody>{list.slice(0, LIMIT).map((p, i) => {
         const cands = free.filter((d) => d.dir === p.dir && (d.gstin === p.gstin || (!d.gstin && GST2B.lastDigits(d.no) === GST2B.lastDigits(p.no)) || (d.gstin && d.gstin.slice(2, 12) === p.gstin.slice(2, 12))))
           .sort((a, c) => Math.abs(tx(a) - tx(p)) - Math.abs(tx(c) - tx(p))).slice(0, 12);
-        return <tr key={p.key}>
+        return <tr key={p.key + ":" + i}>
           <td>{p.party || "—"}<div className="nr">{p.gstin}</div></td>
           <td>{p.no}<div className="nr">{secName(p) + " · " + GSTR.label(p.ym)}</div></td><td>{day(p.date)}</td>
           <td className="n">{money(p.taxable)}</td><td className="n">{money(tx(p))}</td>
@@ -139,7 +139,7 @@ function Only2b({ list, free, st }) {
 function OnlyBooks({ list, st }) {
   return <div className="bk-tablewrap"><table className="bk-table" id="r2Books">
     <thead><tr><th>Supplier</th><th>Invoice</th><th className="dt">Date</th><th>Voucher</th><th className="n">Taxable</th><th className="n">Tax</th><th>Note</th><th>Remark</th></tr></thead>
-    <tbody>{list.slice(0, LIMIT).map((d) => <tr key={d.id}>
+    <tbody>{list.slice(0, LIMIT).map((d, i) => <tr key={d.id + ":" + i}>
       <td>{d.party || "—"}<div className="nr">{d.gstin || <span className="bad">no GSTIN in Tally</span>}</div></td>
       <td>{d.no}</td><td>{day(d.date)}</td><td>{d.voucher}<div className="nr">{d.type + " · " + GSTR.label(d.ym)}</div></td>
       <td className="n">{money(d.taxable)}</td><td className="n">{money(tx(d))}</td>
