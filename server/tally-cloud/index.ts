@@ -13,7 +13,7 @@
 //                                                       tally-days, read into entries and lines, totals made ready
 //   {kind:"ledgers", company, from, openAsOn, ledgers:[[name, parent, open]]}
 //   {kind:"state", company, state}
-//   {kind:"beat", tally, open, companies:[{name, open, at, phase, waiting}], updating, dailyAt, lastRun}
+//   {kind:"beat", tally, open, companies:[{name, open, at, phase, waiting}], updating, dailyAt, lastRun} -> {updateNow}
 //   {kind:"support", note, zip}                      -> the Connector's log and details for FinCom support
 // Or a person signed in to FinCom (Authorization: Bearer, two-step done, a member of the firm), for one of the firm's
 // clients, giving the books from files exported from Tally:
@@ -186,7 +186,7 @@ Deno.serve(async (req) => {
   if (!/^fcd_[0-9a-f]{48}$/.test(key)) return reply(401, { ok: false, error: "This computer is not connected to FinCom. Connect it from FinCom: Settings, Tally connection." });
   const len = Number(req.headers.get("content-length") || 0);
   if (len > MAX_BODY) return reply(413, { ok: false, error: "Too much in one go; send fewer days at a time." });
-  const { data: dev } = await db.from("tally_devices").select("id, firm_id, name, revoked, info").eq("key_hash", await sha256(key)).maybeSingle();
+  const { data: dev } = await db.from("tally_devices").select("id, firm_id, name, revoked, info, want_update_at, want_sent_at").eq("key_hash", await sha256(key)).maybeSingle();
   if (!dev || dev.revoked) return reply(401, { ok: false, error: "This computer's key is not valid any more. Connect it again from FinCom." });
   let body: any;
   try { body = JSON.parse(await readBody(req)); } catch (e) { return (e as Error).message === "too large" ? reply(413, { ok: false, error: "Too much in one go; send fewer days at a time." }) : reply(400, { ok: false, error: "Bad request" }); }
@@ -214,8 +214,11 @@ Deno.serve(async (req) => {
           companies: (Array.isArray(b.companies) ? b.companies : []).slice(0, 200).map((c: any) => ({ name: s(c?.name, 200), open: !!c?.open, at: s(c?.at, 30), phase: s(c?.phase, 12),
             waiting: Math.max(0, Math.min(1e6, Math.floor(Number(c?.waiting) || 0))) })) };
         const info = { ...(((dev as any).info && typeof (dev as any).info === "object") ? (dev as any).info : {}), beat };
-        await db.from("tally_devices").update({ info }).eq("id", dev.id);
-        return reply(200, { ok: true });
+        // build 197: someone pressed Update now on another computer: the bridge is told in this answer, once
+        const want = (dev as any).want_update_at, sent = (dev as any).want_sent_at;
+        const updateNow = !!want && (!sent || Date.parse(want) > Date.parse(sent));
+        await db.from("tally_devices").update(updateNow ? { info, want_sent_at: want } : { info }).eq("id", dev.id);
+        return reply(200, { ok: true, updateNow });
       }
       case "companies": {
         const list = (Array.isArray(body.companies) ? body.companies : []).slice(0, 200)

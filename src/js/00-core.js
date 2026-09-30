@@ -33,7 +33,7 @@ const DEFAULT_FIRM = {firmName:"", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "30 Sep 2026 · build 196 (the daily update also compares every month with Tally once, so deleted entries are found; bridge 1.14.3)";
+const APP_VERSION = "30 Sep 2026 · build 197 (entries from Tally appear during the day: a light check every 30 minutes and right after posting; Update now from any computer; bridge 1.14.4)";
 // the Tally Bridge setup file's fingerprint, put in by build.py: a new setup file is never served from an old cache
 const BRIDGE_SETUP_SHA = "{{BRIDGE_SETUP_SHA}}";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";

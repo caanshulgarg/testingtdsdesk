@@ -18,7 +18,9 @@ class H(http.server.BaseHTTPRequestHandler):
         if CTRL["down"]: self.close_connection = True; return
         if self.headers.get("x-fincom-device") != KEY or CTRL["revoked"]: return self._send(401, {"ok": False, "error": "This computer's key is not valid any more."})
         o = json.loads(raw); k = o.get("kind"); CALLS.append((k + ("-plain" if k == "days" and any("b64" in d for d in o.get("days", [])) else ""), n))
-        if k == "beat": BEATS.append(o); return self._send(200, {"ok": True})
+        if k == "beat":
+            BEATS.append(o); w = CTRL.pop("want", False)
+            return self._send(200, {"ok": True, "updateNow": w})
         if k == "hello": return self._send(200, {"ok": True, "firm": "ZZ TEST FIRM", "device": "TEST-PC"})
         if k == "companies":
             for c in o.get("companies", []): LINKS.setdefault(c["name"], None)

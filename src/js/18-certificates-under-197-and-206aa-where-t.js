@@ -288,7 +288,8 @@ function booksFreshLine(b){
   const m = b.meta || {};
   if (!(b.vouchers || []).length || !m.to) return "";
   const at = m.at ? new Date(m.at).toLocaleString("en-IN", {day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit"}) : "";
-  const can = typeof Bridge === "object" && Bridge.on() && Bridge.up();
+  // build 197: from any computer: on the Tally computer through its bridge, elsewhere through the cloud
+  const can = (typeof Bridge === "object" && Bridge.on() && Bridge.up()) || (typeof TCloud === "object" && S.coId && TCloud.has(S.coId));
   return '<p class="note" style="margin:0 0 10px">Books up to <b>' + fmtDate(tallyDate(m.to)) + "</b>" + (at ? ", brought in " + esc(at) : "") + "." +
     (can ? ' <button class="linkbtn" data-act="keepNow">Update now</button>' : "") + "</p>";
 }

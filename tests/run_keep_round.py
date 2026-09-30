@@ -1,4 +1,4 @@
-"""python3 run_keep_round.py - bridge 1.14.3, step 3 of the Tally plan: the daily update brings only what changed
+"""python3 run_keep_round.py - bridge 1.14.4, step 3 of the Tally plan: the daily update brings only what changed
 (entries with a higher change number), and compares every month's list of entries with Tally's once a day, so an
 entry deleted in an old month is found even when Tally's change counter does not move. What it finds reaches the cloud."""
 import os as _os, shutil as _sh
@@ -13,7 +13,7 @@ import fake_tally, fake_cloud
 fake_tally.start(); fake_cloud.start()
 os.environ["TDSBRIDGE_FAKE"] = _os.path.join(BRUN, "fake.json")
 CFG = _os.path.join(BRUN, "tds-bridge.config.json")
-json.dump({"TallyTimeoutSec": 20, "KeepInStep": True, "KeepSchedule": "daily", "KeepDailyAt": "23:59", "KeepStartSec": 3, "KeepCycleSec": 3, "KeepBudgetSec": 30,
+json.dump({"TallyTimeoutSec": 20, "KeepInStep": True, "KeepSchedule": "daily", "KeepDailyAt": "23:59", "KeepLightMin": -1, "KeepStartSec": 3, "KeepCycleSec": 3, "KeepBudgetSec": 30,
            "KeepIdleMin": 1, "KeepFrom": "20260101", "KeepFakeOffice": False, "KeepRunMin": 15, "KeepSharePct": 100, "KeepNightSharePct": 100,
            "CloudLinksSec": 5, "CloudStateSec": 5}, open(CFG, "w"))
 br = subprocess.Popen([os.environ.get("PWSH", "/opt/pwsh/pwsh"), "-NoProfile", "-File", _os.path.join(BRUN, "TDSBridge.ps1")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=BRUN)
