@@ -24,6 +24,11 @@ app/                      the React app (Vite)
   3. In `src/js`, the old `viewName()` returns `<div data-react="Name"></div>`, and its handlers are deleted.
   4. List it in `app/src/screens/index.js`; update its test to find things by what they say, not by `data-*`.
   5. `python3 build.py --react && cd app && npm run build:test`, then its test with `TDSDESK_SITE=../app/dist-test`.
+- **Actions**: the buttons of the old screens ran through one big click handler; its `switch (act)` is now
+  `doAct(name)` in `src/js/27-firm-account.js`, which React buttons call (`onClick={() => doAct("firmMenu")}`).
+  Navigation has its own functions: `goClient`, `navHome`, `goTab`, `goStep`, `toggleSetup`, `goGstSettings`.
+- **Guarded**: each React part is wrapped in `Guard`; one that fails shows a short note (or nothing, for the frame)
+  and the error goes to the console, instead of the whole page going blank.
 - **State** is still the one object `S`, and every change still ends in `render()`. A React screen's own passing
   state (a half-typed OTP) can live in the component: its host element is kept through redraws.
 - **The last step** (after every screen): `render()` and the string screens go, and the logic files become ES
@@ -53,8 +58,8 @@ Status: **done** (in React, test passing) · **next** · blank = not started. Ab
 | Area | Old functions (src/js file) | Status |
 |---|---|---|
 | **Frame** | sidebar `renderSide` (02) | **done** |
-| | top bar `renderTop`, `clientHeader`, `topRight` (18) · client switcher `renderSwitcher` (27) | next |
-| | page frame `render` (01): banners, `actionBar`, `drawerHtml`, `colPopHtml`, `tallyPanelHtml`, `firmMenuHtml` | next |
+| | top bar `renderTop`, `clientHeader`, `topRight` (18), Tally panel, firm menu (02) · client switcher `renderSwitcher` (27) | **done** |
+| | page frame `render` (01): banners, `actionBar`, `drawerHtml`, `colPopHtml` | |
 | | modal, toast, confirm dialogs | next |
 | **Sign in** | `viewSignIn`, `viewSignUp`, two-step `viewTwoStep` (27, 43) | |
 | **Home** | `viewClients`, `viewToday`, `viewInboxAll`, `viewTallyHome` (18) | |

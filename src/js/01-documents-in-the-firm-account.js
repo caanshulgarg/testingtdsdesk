@@ -3662,7 +3662,6 @@ function render(){
   const a = document.activeElement, fk = a && a.dataset ? (a.dataset.fk || (a.hasAttribute("data-draft") ? "id:" + a.id : null)) : null;
   let pos = null; try { pos = fk && (a.type === "text" || a.type === "search") ? a.selectionStart : null; } catch(e){}
   const typed = fk && a.hasAttribute && a.hasAttribute("data-keeptyped") ? a.value : null;
-  renderTop();
   if (signInNeeded()){
     app.innerHTML = viewSignIn();
     if (typeof acAfterRender === "function") acAfterRender();
@@ -3699,10 +3698,9 @@ function render(){
     body = S.homeTab === "help" && typeof viewHelp === "function" ? viewHelp() : S.homeTab === "today" ? viewToday() : S.homeTab === "inbox" ? viewInboxAll() : S.homeTab === "tally" ? viewTallyHome() : S.homeTab === "rules" ? viewRules() : viewClients();
   }
   const working = S.view === "company" && CO() ? billsBusyCard() + docsBusyCard() : "";
-  app.innerHTML = selfTestBanner() + banner + working + body + drawerHtml() + actionBar() + colPopHtml() + tallyPanelHtml() + firmMenuHtml();
+  app.innerHTML = selfTestBanner() + banner + working + body + drawerHtml() + actionBar() + colPopHtml();
   placeColPop();
   Object.entries(drafts).forEach(([id, v]) => { const el = document.getElementById(id); if (el && el.hasAttribute("data-draft") && el.value !== v) el.value = v; });
-  renderSwitcher();
   if (fk){
     const el = fk.indexOf("id:") === 0 ? document.getElementById(fk.slice(3)) : document.querySelector('[data-fk="' + fk + '"]');
     if (el && typed !== null && el.value !== typed) el.value = typed;

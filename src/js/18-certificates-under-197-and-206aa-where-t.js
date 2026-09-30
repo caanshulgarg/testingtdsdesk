@@ -1989,18 +1989,8 @@ function viewTallyHome(){
   return '<section class="today"><h2>Tally</h2></section>' + viewBridgeSettings() + viewPostLog();
 }
 
-function renderTop(){
-  const bar = document.getElementById("cobar"), tabs = document.getElementById("tabs");
-  document.getElementById("firmLine").textContent = (S.firm.firmName || "") + " \u00b7 " + APP_VERSION;
-  const top = document.querySelector("header.top");
-  if (top) top.style.display = signInNeeded() ? "none" : "";
-  if (S.view === "company" && CO()){ bar.innerHTML = '<div class="headrow">' + clientHeader() + topRight() + "</div>"; tabs.innerHTML = ""; }
-  else {
-    const title = {clients: "Clients", today: "Today", inbox: "Inbox", tally: "Tally", rules: "Settings", help: "Help"}[S.homeTab] || "Clients";
-    bar.innerHTML = '<div class="headrow"><div class="tbar"><div class="tbar-title"><h2>' + title + '</h2><span class="note">' + esc(S.firm.firmName || "") + "</span></div></div>" + topRight() + "</div>";
-    tabs.innerHTML = "";
-  }
-}
+// the top bar is drawn by React (app/src/TopBar.jsx); a change that touches only it redraws React alone
+function renderTop(){ if (window.FinComReact) FinComReact.redraw(); }
 
 /* ---------- Home: client list ---------- */
 function viewClients(){

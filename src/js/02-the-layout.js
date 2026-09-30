@@ -52,60 +52,6 @@ function stepCounts(){
 }
 // the firm's plan comes as {name, includes, …} from the firm account; older copies kept only its name
 function planName(p){ return p && typeof p === "object" ? String(p.name || "") : String(p || ""); }
-function topRight(){
-  const bal = accountBalance();
-  const plan = S.account && S.account.firm ? planName(S.account.firm.plan) : "";
-  return '<div class="topright">' +
-    '<button class="tallychip' + (bridgeLive(S.view === "company" ? CO() : null) ? " live" : Bridge.on() ? " off" : " none") + '" data-act="tallyPanel" title="Tally connection">' +
-      '<span class="dotled"></span>Tally' + (bridgeLive(S.view === "company" ? CO() : null) ? "" : Bridge.on() ? ": not answering" : ": not set up") + "</button>" +
-    cloudChip() +
-    '<button class="firmbtn" data-act="firmMenu"><b>' + esc((S.firm.firmName || "Firm").slice(0, 26)) + "</b>" +
-      (plan || bal != null ? "<small>" + esc(plan) + (bal != null ? (plan ? " \u00b7 " : "") + "credit " + INR.format(bal) : "") + "</small>" : "") + "</button></div>";
-}
-function tallyPanelHtml(){
-  if (!S.tallyPanel) return "";
-  const co = S.view === "company" ? CO() : null, live = bridgeLive(co), st = Bridge.st || {};
-  return '<button class="menu-scrim" data-act="tallyPanelClose" aria-label="Close"></button><div class="tallypanel" role="dialog" aria-label="Tally connection">' +
-    '<div class="fm-head"><b>Tally connection</b><button class="icon" data-act="tallyPanelClose" aria-label="Close">\u2715</button></div>' +
-    '<div class="tp-body">' + (Bridge.on()
-      ? '<p><span class="dotled ' + (live ? "live" : "off") + '"></span><b>' + (live ? "Connected" : "Not answering") + "</b>" + (st.version ? '<span class="note"> \u00b7 bridge ' + esc(st.version) + "</span>" : "") + "</p>" +
-        (co ? '<p class="note">' + (Bridge.openFor(co).name ? esc(Bridge.openFor(co).name) + " is open in Tally." : esc(co.tallyName || co.name) + " is not open in Tally.") + "</p>" : "") +
-        (live ? "" : '<p class="note">Open TallyPrime on the computer where the bridge runs, and keep the company open.</p>')
-      : '<p class="note">The Tally Bridge is not set up on this computer. Install it on the computer where TallyPrime runs, then come back here.</p>') + "</div>" +
-    '<div class="tp-foot"><button class="btn small" data-act="tallyGuide">Connection guide</button><button class="btn small" data-nav="tally">Everything sent to Tally</button></div></div>';
-}
-function firmMenuHtml(){
-  if (!S.firmMenu) return "";
-  const a = S.account, bal = accountBalance();
-  return '<button class="menu-scrim" data-act="firmMenuClose" aria-label="Close"></button><div class="firmmenu" role="menu">' +
-    '<div class="fm-head"><b>' + esc(S.firm.firmName || "Firm") + "</b>" + (a && a.me ? '<span class="note">' + esc(a.me.email || "") + " \u00b7 " + esc(a.me.role || "") + "</span>" : "") + "</div>" +
-    (a && a.firm ? '<div class="fm-plan"><span>' + esc(planName(a.firm.plan) || "Plan") + "</span>" + (bal != null ? "<b>credit " + INR.format(bal) + "</b>" : "") + "</div>" : "") +
-    '<button class="fm-item" data-act="openSettings">Settings</button>' +
-    '<button class="fm-item" data-nav="tally">Tally: everything sent</button>' +
-    '<button class="fm-item" data-nav="inbox">Inbox for all clients</button>' +
-    '<button class="fm-item" data-nav="clients">All clients</button>' +
-    (Cloud.on() ? '<button class="fm-item" data-act="signOutNow">Sign out</button>' : "") + "</div>";
-}
-function clientHeader(){
-  const co = CO(), setup = isSetupTab(S.tab), t = docType();
-  const names = {bills: "Purchase bills", bank: "Bank", sales: "Sales invoices"};
-  const inbox = docqCount(S.coId);
-  const title = S.tab === "dash" ? "Dashboard" : S.tab === "clientInbox" ? "Inbox" : S.tab === "txn" ? "Transactions" : S.tab === "books" ? ({reports: "Reports", lookup: "Look up", letters: "Confirmations and reminders"}[booksTab()] || "TDS & GST from the books") : setup ? "Client setup" : names[t];
-  let h = '<div class="tbar"><div class="tbar-title"><h2>' + title + '</h2><span class="note">' + esc(co.name) + "</span></div>" +
-    '<div class="tbar-actions">' + (inbox && !setup && S.tab !== "clientInbox" ? '<button class="btn small" data-step="collect">\u{1F4E5} ' + inbox + " in inbox</button>" : "") +
-    (setup ? '<button class="btn small" data-act="setup">Back to the work</button>' : (t === "sales" ? "" : '<button class="btn primary small" data-act="uploadHere">' + (t === "bank" ? "Upload statement" : "Upload bills") + "</button>")) + "</div></div>";
-  if (S.tab === "dash" || S.tab === "clientInbox" || S.tab === "txn" || S.tab === "books") return h;
-  if (setup){
-    return h + '<nav class="sbar" aria-label="Client setup">' + SETUP_TABS.map(([id, l]) => '<button data-tab="' + id + '" aria-selected="' + (S.tab === id) + '">' + l + "</button>").join("") + "</nav>";
-  }
-  if (t === "sales" && S.tab === "sales") return h;
-  if (t === "bank" && S.tab === "bank") return h;      // the bank page has its own tabs (review, ready, in Tally)
-  const now = curStep(), c = stepCounts();
-  const num0 = x => { const m = String(x || "").match(/\d+/); return m ? m[0] : ""; };
-  const items = [["review", "To review", num0(c.review)], ["post", "Ready to post", num0(c.post)], ["done", "Posted", num0(c.done)]];
-  return h + '<nav class="sbar" aria-label="Status">' + items.map(([id, l, n]) => '<button data-step="' + id + '" aria-selected="' + (now === id) + '">' + l +
-    (n !== "" ? ' <span class="sbar-n">' + n + "</span>" : "") + "</button>").join("") + "</nav>";
-}
 /* ---------- Post to Tally: everything this client has approved, in one place ---------- */
 function viewPostStep(){
   const co = CO(), v = Object.values(D().entries);

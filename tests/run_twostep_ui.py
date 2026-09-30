@@ -58,7 +58,7 @@ with sync_playwright() as p:
     ok(any(a.get("what") == "tally.unpost" and "g-1" in a.get("detail", "") for a in ST["activity"]), "a delete in Tally is in the trail")
     # sign out: the server is told
     pg.evaluate("() => { S.firmMenu = true; render(); }"); pg.wait_for_timeout(300)
-    pg.click('[data-act="signOutNow"]'); pg.wait_for_timeout(400); pg.click('[data-cbx="yes"]'); pg.wait_for_timeout(1200)
+    pg.click('.firmmenu button:has-text("Sign out")'); pg.wait_for_timeout(400); pg.click('[data-cbx="yes"]'); pg.wait_for_timeout(1200)
     ok(ST["logout"] == 1 and pg.locator('[data-act="cloudSignIn"]').count() == 1, "signing out ends the session on the server too")
     # next sign-in asks only for the code
     pg.fill('[data-cloud="email"]', "owner@firm.in"); pg.fill('[data-cloud="password"]', "pw12345678"); pg.click('[data-act="cloudSignIn"]'); pg.wait_for_timeout(1500)

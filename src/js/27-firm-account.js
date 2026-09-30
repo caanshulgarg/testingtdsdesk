@@ -818,27 +818,8 @@ function switcherList(){
   else list.sort((a, b) => { const ia = rec.indexOf(a.id), ib = rec.indexOf(b.id); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.name.localeCompare(b.name); });
   return list;
 }
-function renderSwitcher(){
-  const m = document.getElementById("modal");
-  if (!S.switcher){ m.innerHTML = ""; m.classList.add("hidden"); return; }
-  m.classList.remove("hidden");
-  const list = switcherList();
-  S.switcher.idx = Math.max(0, Math.min(S.switcher.idx, list.length - 1));
-  const rec = recentIds();
-  if (!m.querySelector(".sw")){
-    m.innerHTML = '<div class="sw" role="dialog" aria-modal="true" aria-label="Select company"><div class="swhead"><b>Select company</b><span class="note">↑↓ to move, Enter to open, Esc to close</span></div>' +
-      '<input type="text" id="swq" placeholder="Type a client name or GSTIN" autocomplete="off"><ul class="swlist" id="swlist" role="listbox"></ul>' +
-      '<div class="swfoot"><button class="btn small" data-act="swHome">All clients</button><button class="btn small" data-act="swAdd">Add client</button></div></div>';
-    const inp = m.querySelector("#swq"); inp.value = S.switcher.q || ""; inp.focus();
-  }
-  m.querySelector("#swlist").innerHTML = list.length ? list.map((c, i) => {
-    const st = c.stats || {};
-    return '<li role="option" aria-selected="' + (i === S.switcher.idx) + '" data-open="' + c.id + '"><span><b>' + esc(c.name) + "</b>" + (c.id === S.coId ? ' <span class="tag stamp">Open</span>' : "") +
-      (!S.switcher.q && rec.indexOf(c.id) >= 0 && rec.indexOf(c.id) < 5 ? ' <span class="note">recent</span>' : "") + '<br><span class="note">' + esc(c.gstin || "No GSTIN") + "</span></span>" +
-      "<span>" + (st.drafts ? '<span class="tag warn">' + st.drafts + " to review</span>" : "") + "</span></li>";
-  }).join("") : '<li class="note">No client matches.</li>';
-  const sel = m.querySelector('[aria-selected="true"]'); if (sel && sel.scrollIntoView) sel.scrollIntoView({block:"nearest"});
-}
+// the client switcher is drawn by React (app/src/Switcher.jsx), with its own keys
+function renderSwitcher(){ if (window.FinComReact) FinComReact.redraw(); }
 function openSwitcher(){ if (!Object.keys(S.companies).length){ goHome(); S.addingCo = true; render(); return; } S.switcher = {q:"", idx:0}; renderSwitcher(); }
 function closeSwitcher(){ S.switcher = null; renderSwitcher(); }
 
@@ -888,6 +869,7 @@ function goClient(to){
   if (S.view !== "company" || S.coId !== cid) openCompany(cid).then(go); else go();
 }
 function navHome(tab){ if (tab === "help" && typeof SUP === "object" && !(S.view === "home" && S.homeTab === "help")) S.helpCtx = SUP.context(); closeSwitcher(); S.firmMenu = false; S.tallyPanel = false; S.view = "home"; S.homeTab = tab; S.step = null; S.addingCo = false; S.arm = null; if (tab === "rules") S.settingsTab = null; render(); window.scrollTo(0, 0); }
+function goTab(tab){ S.tab = tab; S.step = null; S.arm = null; render(); }
 function toggleSetup(){ S.step = null; S.tab = isSetupTab(S.tab) ? "invoices" : "settings"; render(); }
 document.addEventListener("click", ev => {
   const t = ev.target.closest("button,[data-select],[data-open],#drop,#dropAuto,#modal,#bankDrop,#salesDrop");
@@ -1048,7 +1030,6 @@ document.addEventListener("click", ev => {
   }
   if (S.view === "company" && (S.tab === "bank" || (S.tab === "export" && S.bank && S.bank.cid === S.coId)) && bankClick(t)) return;   // bank buttons also work on the Post step
   if (S.view === "company" && S.tab === "sales" && salesClick(t)) return;
-  if (t.id === "modal"){ if (ev.target.id === "modal") closeSwitcher(); return; }
   if (t.dataset.open){ openCompany(t.dataset.open); return; }
   if (t.dataset.bookstab){ S.booksTab = t.dataset.bookstab; if (t.dataset.gstpart) S.gstPart = t.dataset.gstpart; render(); return; }
   if (t.dataset.gstpart){ S.gstPart = t.dataset.gstpart; render(); return; }
@@ -1161,7 +1142,7 @@ document.addEventListener("click", ev => {
     return;
   }
   if (t.dataset.goto){ const st = t.dataset.gstep || "review"; openCompany(t.dataset.goto).then(() => goStep(st, "bills")); return; }
-  if (t.dataset.tab){ S.tab = t.dataset.tab; S.step = null; S.arm = null; render(); return; }
+  if (t.dataset.tab){ goTab(t.dataset.tab); return; }
   if (t.dataset.htab){ S.homeTab = t.dataset.htab; S.addingCo = false; render(); return; }
   if (t.dataset.filter){ S.filter = t.dataset.filter; S.selected = null; render(); return; }
   if (t.dataset.select){ S.selected = t.dataset.select; render(); if (window.innerWidth < 860){ const d = document.querySelector(".detail"); if (d) d.scrollIntoView({behavior:"smooth", block:"start"}); } return; }
@@ -1177,7 +1158,13 @@ document.addEventListener("click", ev => {
     return;
   }
   if (t.dataset.delinbox){ const id = t.dataset.delinbox; delete S.inbox[id]; delete S.files[id]; Store.deleteInbox(id); render(); return; }
-  const e = curEntry(), act = t.dataset.act;
+  if (t.dataset.act) doAct(t.dataset.act, t); else S.arm = null;   // any other button disarms a pending delete
+});
+/* ---------- the actions behind the buttons: doAct("name") from React, or a data-act button of an old screen ----------
+   t is the button (only a few actions read more of it than its data-act); from React it may be left out */
+function doAct(act, t){
+  t = t || {dataset: {act}};
+  const e = curEntry();
   if (act !== "delCo" && act !== "clearSent") S.arm = null;
   switch (act){
     case "switch": openSwitcher(); break;
@@ -1728,7 +1715,7 @@ document.addEventListener("click", ev => {
     case "xml": { const m = document.getElementById("markSent"); exportXml(m ? m.checked : true); break; }
     case "csv": exportCsv(); break;
   }
-});
+}
 function saveNewCompany(){
   const name = (document.getElementById("ncName").value || "").trim();
   const gstin = (document.getElementById("ncGstin").value || "").trim().toUpperCase();
@@ -1759,15 +1746,7 @@ async function handleFiles(files, mode){
 
 document.addEventListener("keydown", ev => {
   const k = ev.key, ctrl = ev.ctrlKey || ev.metaKey;
-  if (S.switcher){
-    const list = switcherList();
-    if (k === "Escape"){ ev.preventDefault(); closeSwitcher(); return; }
-    if (k === "ArrowDown"){ ev.preventDefault(); S.switcher.idx = Math.min(list.length - 1, S.switcher.idx + 1); renderSwitcher(); return; }
-    if (k === "ArrowUp"){ ev.preventDefault(); S.switcher.idx = Math.max(0, S.switcher.idx - 1); renderSwitcher(); return; }
-    if (k === "Enter"){ ev.preventDefault(); if (list[S.switcher.idx]) openCompany(list[S.switcher.idx].id); return; }
-    if (k === "F3"){ ev.preventDefault(); return; }
-    return;
-  }
+  if (S.switcher) return;   // the switcher (React) has the keys while it is open
   if (k === "F3" || (ctrl && k.toLowerCase() === "k")){ ev.preventDefault(); openSwitcher(); return; }
   const tag = (document.activeElement && document.activeElement.tagName) || "";
   const inField = /INPUT|SELECT|TEXTAREA/.test(tag);
@@ -1838,7 +1817,6 @@ document.addEventListener("input", ev => {
   if (t && t.dataset && ["email", "password", "firm", "name"].includes(t.dataset.cloud)){ S.cloudForm = Object.assign({}, S.cloudForm, {[t.dataset.cloud]: t.value}); }
   if (S.view === "company" && S.tab === "bank" && bankInput(t)) return;
   if (S.view === "company" && S.tab === "sales" && salesInput(t)) return;
-  if (t.id === "swq"){ S.switcher.q = t.value; S.switcher.idx = 0; renderSwitcher(); return; }
   if (t.hasAttribute("data-hq")){ S.homeQuery = t.value; later("hq", render, 150); return; }
   const e = curEntry(), cid = S.coId;
   if (t.dataset.x && e && e.status === "draft"){
