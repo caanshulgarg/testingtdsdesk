@@ -1,5 +1,7 @@
 # FinCom in React: the rewrite, screen by screen
 
+New to the code? Read `app/README.md` first.
+
 Branch `react`. The site on `main` keeps running unchanged until every screen below is done; then `main` switches.
 
 ## How the React app is put together
@@ -74,7 +76,7 @@ Status: **done** (in React, test passing) · **next** · blank = not started. Ab
 | | `viewTallyHome` (18) | with Tally |
 | | Help and support: `viewHelp`, `viewSup*` (40) | |
 | **Client: Collect** | `viewCollect` (02) · `viewJobs`, `readingCheck`, `uploadOptions`, busy cards (01) · `docqPanel`, `uploadBlock` (19) | **done** |
-| **Client: Post / Done** | `viewPostStep`, `viewDoneStep`, `bankReportHtml` (02) | next |
+| **Client: Post / Done** | `viewPostStep`, `viewDoneStep` (02) · `viewExport` (27) · `viewPostLog` (18) | **done** |
 | **Purchase bills** | `viewInvoices`, `viewDetail`, `field`, `docWarnHtml` (19) · `itemsHtml`, `partyHistHtml`, `ytdSourceHtml`, `rereadButtons` (01) · `viewGst` (27) | **done** |
 | | review table `viewReviewTable`, `reviewBar`, `drawerHtml` (18), the bill's bar in `actionBar` (27) · `viewParties` (19) | **done** |
 | **Bank** | `viewBank`, `viewSuggestions`, `viewRulesPanel` (22) · `bankRowHtml`, `viewBankGroups`, `bankBar`, `colPopHtml`, `colChipBar` (23) · `viewBankSetup` (02) · recon, balance, duplicates (24) · `fixBanner` (21) | |

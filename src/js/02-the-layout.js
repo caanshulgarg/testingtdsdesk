@@ -52,47 +52,9 @@ function stepCounts(){
 }
 // the firm's plan comes as {name, includes, …} from the firm account; older copies kept only its name
 function planName(p){ return p && typeof p === "object" ? String(p.name || "") : String(p || ""); }
-/* ---------- Post to Tally: everything this client has approved, in one place ---------- */
-function viewPostStep(){
-  const co = CO(), v = Object.values(D().entries);
-  const bills = v.filter(e => e.status === "approved" && !e.exportedAt);
-  const billAmt = bills.reduce((a, e) => a + num(e.x.total), 0);
-  const bankOn = S.bank && S.bank.cid === co.id && !S.bank.loading;
-  const ready = bankOn ? S.bank.rows.filter(r => r.state === "ready") : [];
-  const st = bankOn ? curStmt() : null;
-  const sales = S.sales && S.sales.cid === co.id ? S.sales.list.filter(x => x.status === "approved" && !x.postedAt) : [];
-  const card = (id, title, n, sub) => '<a class="pcard' + (S.postFocus === id ? " on" : "") + '" href="#post-' + id + '"><span>' + title + "</span><b>" + n + "</b><small>" + sub + "</small></a>";
-  let h = '<section class="poststep"><div class="post-sum">' +
-    card("bills", "Purchase bills", bills.length, bills.length ? INR.format(billAmt) : "nothing approved") +
-    card("bank", "Bank lines", bankOn ? ready.length : "\u2026", bankOn ? (st ? esc(st.name || "current statement") : "no statement open") : "loading") +
-    card("sales", "Sales invoices", S.sales && S.sales.cid === co.id ? sales.length : "\u2014", "posted from the Sales list") + "</div>";
-  h += '<p class="note" style="margin:0 0 16px">Every entry is checked against Tally before it goes, and read back after. Nothing is posted twice.</p>';
-  h += '<section class="psec" id="post-bills"><h3>Purchase bills</h3>' + viewExport() + "</section>";
-  h += '<section class="psec" id="post-bank"><h3>Bank lines</h3>';
-  if (!bankOn) h += '<p class="note">Loading the bank statements\u2026</p>';
-  else if (!st) h += '<p class="note">No bank statement yet. <button class="linkbtn" data-dtype="bank" data-gstep="collect">Upload one</button>.</p>';
-  else {
-    h += (S.bank.postReport ? bankReportHtml() : "") +
-      '<div class="row" style="align-items:center;gap:12px"><span><b>' + ready.length + "</b> line" + (ready.length === 1 ? "" : "s") + " ready in " + esc(st.name || "this statement") + "</span>" +
-      (ready.length && Bridge.on() && Bridge.up() ? '<button class="btn primary" data-act="bankPost">Post ' + ready.length + " bank line" + (ready.length === 1 ? "" : "s") + "</button>" : "") +
-      '<button class="btn small" data-act="toBankReady">See the lines</button>' +
-      (S.bank.stmts.length > 1 ? '<span class="note">' + S.bank.stmts.length + " statements: choose another in the bank tab</span>" : "") + "</div>";
-  }
-  h += "</section>";
-  h += '<section class="psec" id="post-sales"><h3>Sales invoices</h3><p class="note">Sales invoices are posted from the list on the Sales tab.</p><button class="btn small" data-dtype="sales">Open sales</button></section>';
-  return h + "</section>";
-}
-function bankReportHtml(){ return S.bank.postReport ? postReportHtml(S.bank.postReport) : ""; }
-/* ---------- Done: what went to Tally for this client, and taking an entry back ---------- */
-function viewDoneStep(){
-  const v = Object.values(D().entries);
-  const posted = v.filter(e => e.exportedAt).length, approved = v.filter(e => e.status === "approved").length;
-  return '<section class="poststep"><div class="post-sum">' +
-    '<div class="pcard"><span>Bills posted</span><b>' + posted + "</b><small>" + approved + " approved in all</small></div>" +
-    '<div class="pcard"><span>Bank lines posted</span><b>' + (S.bank && S.bank.cid === S.coId ? S.bank.rows.filter(r => r.state === "sent").length : "\u2014") + "</b><small>in the open statement</small></div>" +
-    '</div><div class="row" style="margin:0 0 14px;gap:10px"><button class="btn small" data-act="toBillsApproved">Approved bills</button><button class="btn small" data-act="toBankDone">Bank lines done</button></div>' +
-    viewPostLog() + "</section>";
-}
+/* ---------- Post to Tally and Done: React (app/src/screens/Post.jsx, Done.jsx) ---------- */
+function viewPostStep(){ return '<div data-react="PostStep"></div>'; }
+function viewDoneStep(){ return '<div data-react="DoneStep"></div>'; }
 /* ---------- Client setup: four tabs, out of the daily path ---------- */
 const SETUP_TABS = [["settings", "Company and Tally"], ["gstset", "GST"], ["bankset", "Bank accounts"], ["bankrules", "Bank rules"], ["deductees", "Suppliers and TDS"]];
 function isSetupTab(t){ return SETUP_TABS.some(x => x[0] === t); }

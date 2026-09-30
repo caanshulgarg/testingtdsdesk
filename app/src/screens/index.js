@@ -8,9 +8,11 @@ import Invoices from "./Invoices.jsx";
 import BillDetail from "./Bill.jsx";
 import { ReviewTable, ActionBar, Drawer } from "./Review.jsx";
 import Parties from "./Parties.jsx";
+import { PostStep, Export } from "./Post.jsx";
+import { DoneStep, PostLog } from "./Done.jsx";
 import DocqPanel from "../parts/Docq.jsx";
 import Unsorted from "../parts/Unsorted.jsx";
 import UploadBlock from "../parts/UploadBlock.jsx";
 import { Jobs, ReadingCheck, UploadOptions, Working } from "../parts/Reading.jsx";
 
-export default { GstApiCard, Today, InboxAll, Clients, Collect, Invoices, BillDetail, ReviewTable, ActionBar, Drawer, Parties, DocqPanel, Unsorted, UploadBlock, Jobs, ReadingCheck, UploadOptions, Working };
+export default { GstApiCard, Today, InboxAll, Clients, Collect, Invoices, BillDetail, ReviewTable, ActionBar, Drawer, Parties, PostStep, Export, DoneStep, PostLog, DocqPanel, Unsorted, UploadBlock, Jobs, ReadingCheck, UploadOptions, Working };

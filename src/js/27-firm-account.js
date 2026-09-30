@@ -673,73 +673,8 @@ function viewCompanySettings(){
   return h;
 }
 
-/* ---------- Client: send to Tally ---------- */
-function viewExport(){
-  const co = CO(), v = Object.values(D().entries);
-  const waiting = v.filter(e => e.status === "approved" && !e.exportedAt).sort(byDate);
-  const sent = v.filter(e => e.exportedAt).length;
-  const ledgers = new Set();
-  waiting.forEach(e => (e.snapshot ? e.snapshot.lines : []).forEach(l => ledgers.add(l.ledger)));
-  const totTds = waiting.reduce((a, e) => a + (e.snapshot ? e.snapshot.tds : 0), 0);
-  let h = '<div class="two"><div class="pane" style="margin-top:0"><h2>' + waiting.length + " approved entr" + (waiting.length === 1 ? "y" : "ies") + " waiting</h2>" +
-    '<p class="note" style="margin:0 0 12px">TDS in these entries: ' + money(totTds) + ". " + sent + " sent earlier.</p>";
-  if (waiting.length){
-    h += '<div class="tblwrap"><table class="data"><thead><tr><th>Date</th><th>Supplier</th><th>Bill no.</th><th class="n">Amount</th><th>Section</th><th class="n">TDS</th><th></th></tr></thead><tbody>' +
-      waiting.map(e => "<tr><td>" + fmtDate(e.x.invoiceDate) + (typeof ClosedP === "object" ? ClosedP.tag(e.x.invoiceDate, !!(e.snapshot && e.snapshot.tds)) : "") + "</td><td>" + esc(e.x.vendorName) + (e.noteKind ? ' <span class="tag">' + (e.noteKind === "credit" ? "credit note" : "debit note") + "</span>" : "") + "</td><td>" + esc(e.x.invoiceNo || "") + '</td><td class="n">' + INR.format(num(e.x.total)) + "</td><td>" + esc(e.snapshot.ref) + '</td><td class="n">' + money0(e.snapshot.tds) + "</td>" +
-        '<td class="ac" style="white-space:nowrap"><button class="btn small" data-billback="' + e.id + '">Back to review</button> <button class="btn small danger" data-billdel="' + e.id + '" title="Delete this bill">Delete</button></td></tr>').join("") + "</tbody></table></div>" +
-      (waiting.length > 1 ? '<div class="row" style="margin-top:8px"><button class="btn small" data-act="billBackAll">Send all ' + waiting.length + " back to review</button></div>" : "");
-  }
-  const bp = S.billPost || {};
-  const ctx = !!(S.bank && S.bank.cid === co.id && !S.bank.loading && hasLedgerList());
-  if (ctx) canonicalizeBills(waiting);
-  const issues = ctx ? billLedgerIssues(waiting) : [];
-  if (issues.length){
-    const opts = (sel) => '<option value="">\u2014 Choose the Tally ledger \u2014</option>' + (S.bank.ledgers.list || []).map(l => '<option' + (l.name === sel ? " selected" : "") + ">" + esc(l.name) + "</option>").join("");
-    h += '<div class="bk-alert bad" style="margin:10px 0 0"><b>' + issues.length + " ledger" + (issues.length > 1 ? "s are" : " is") + ' not in Tally.</b> Bills using them are not posted until you choose the right Tally ledger (or create it). Fixes are saved for future bills.' +
-      '<table class="data" style="margin-top:8px"><thead><tr><th>Name used</th><th>Used as</th><th class="n">Bills</th><th>Tally ledger</th><th></th></tr></thead><tbody>' +
-      issues.map((x, i) => { const sug = suggestLedgers(x.name, x.role, 1)[0] || "";
-        return "<tr><td><b>" + esc(x.name) + "</b></td><td>" + esc({party: "Supplier", expense: "Expense", gst: "Input GST", tds: "TDS payable", roundoff: "Round off", "rcm-in": "RCM input", "rcm-out": "RCM payable"}[x.role] || x.role) + '</td><td class="n">' + x.bills + '</td><td><select id="bfx' + i + '">' + opts(sug) + "</select></td>" +
-          '<td style="white-space:nowrap"><button class="btn small primary" data-billfixsel="bfx' + i + '" data-role="' + esc(x.role) + '" data-old="' + esc(x.name) + '">Replace</button> <button class="linkbtn" data-billcreate="' + esc(x.role) + '" data-old="' + esc(x.name) + '">Create in Tally</button></td></tr>'; }).join("") + "</tbody></table></div>";
-  }
-  if (bp.busy) h += '<p class="bk-alert" style="margin:10px 0 0">' + esc(bp.busy) + "</p>";
-  if (bp.error) h += '<p class="bk-alert bad" style="margin:10px 0 0">' + esc(bp.error) + "</p>";
-  const unconf = waiting.filter(e => e.postUnconfirmed);
-  if (unconf.length && !bp.done) h += '<div class="bk-alert bad" style="margin:10px 0 0"><b>' + unconf.length + " bill" + (unconf.length > 1 ? "s were" : " was") + " sent to Tally earlier but not confirmed there:</b> " + unconf.map(e => esc(e.x.invoiceNo) + " \u00b7 " + esc(e.x.vendorName)).join("; ") +
-    '. Check Tally first. <button class="btn small" data-act="billCheckWaiting">Check these in Tally</button></div>';
-  if (bp.done) h += '<div class="bk-alert' + (bp.unverified || (bp.failed && bp.failed.length) ? " bad" : "") + '" style="margin:10px 0 0">' + (bp.ok || 0) + " posted into <b>" + esc(bp.company || "") + "</b> and confirmed there" + (bp.dup ? " \u00b7 " + bp.dup + " already in Tally (not posted again)" : "") + (bp.failed && bp.failed.length - (bp.unverified || 0) > 0 ? " \u00b7 " + (bp.failed.length - (bp.unverified || 0)) + " not posted" : "") +
-    (bp.optional ? '<div style="margin-top:4px"><b>' + bp.optional + " went in as Optional vouchers.</b> Tally does not show these in the Day Book. See them in TallyPrime: Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers (or in the Day Book: F12 / Ctrl+B \u2192 show Optional vouchers). Open one and press Ctrl+L to make it a regular entry. To post regular entries directly, untick \u201cCreate entries as Optional vouchers\u201d in Company settings.</div>" : "") +
-    (bp.unverified ? '<div style="margin-top:4px"><b>' + bp.unverified + " not confirmed:</b> Tally replied \u2018created\u2019 but the entry could not be found afterwards, so " + (bp.unverified > 1 ? "they stay" : "it stays") + " in the waiting list. Look in Tally; if it is not there, post again. Use <b>Settings \u2192 Tally Bridge \u2192 Test reading entries</b> and send the result if this repeats.</div>" : "") + "</div>";
-  if (bp.done && bp.failed && bp.failed.length) h += '<div class="bk-alert bad" style="margin:10px 0 0"><b>' + bp.failed.length + " not posted.</b> They are back in <b>To review</b> with Tally\u2019s reason on each.<ul>" +
-    bp.failed.map(f => "<li>" + esc(f.no) + " \u00b7 " + esc(f.party) + ": " + esc(f.msg) + "</li>").join("") + "</ul>" +
-    '<div class="row" style="gap:8px;margin-top:6px"><button class="btn small primary" data-act="billRetry">Retry these ' + bp.failed.length + '</button><button class="btn small" data-step="review">Open them in To review</button>' +
-    (/already\s+exists/i.test(bp.failed.map(f => f.msg).join(" ")) ? '<span class="note">Tally already has these voucher numbers. In Tally, set the Purchase voucher type\u2019s numbering to Automatic, or retry: numbers get the supplier\u2019s initials.</span>' : "") + "</div></div>";
-  const canPost = Bridge.on() && Bridge.up();
-  const bc = S.billCheck || {};
-  const undoable = v.filter(e => e.exportedAt && e.tally && e.tally.guid);
-  if (canPost && undoable.length) h += '<div class="row" style="margin-top:10px"><button class="btn small" data-act="billUnpost">Take an entry back out of Tally</button><span class="note">' + undoable.length + " posted bills can be removed from Tally from here.</span></div>";
-  if (canPost && sent) h += '<div class="row" style="margin-top:10px"><button class="btn small" data-act="billCheck"' + (bc.busy ? " disabled" : "") + ">" + (bc.busy ? "Checking Tally\u2026" : "Check sent bills in Tally") + '</button><span class="note">Confirms that every bill marked as sent is really in Tally.</span></div>';
-  if (bc.error) h += '<p class="bk-alert bad" style="margin:8px 0 0">' + esc(bc.error) + "</p>";
-  if (bc.at){
-    const miss = (bc.missing || []).map(id => D().entries[id]).filter(e => e && e.exportedAt);
-    h += '<div class="bk-alert' + (miss.length || (bc.wrongDate || []).length ? " bad" : "") + '" style="margin:8px 0 0"><b>' + bc.checked + " sent bills checked in " + esc(bc.company) + ":</b> " + bc.found + " found" + (bc.optional ? " (" + bc.optional + " as Optional vouchers \u2014 Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers)" : "") +
-      (miss.length ? '<br><b>' + miss.length + " not in Tally:</b><ul>" + miss.map(e => "<li>" + esc(e.x.invoiceNo) + " \u00b7 " + esc(e.x.vendorName) + " \u00b7 " + fmtDate(e.x.invoiceDate) + "</li>").join("") + '</ul><button class="btn small primary" data-act="billRepost">Mark these ' + miss.length + " as not sent (to post them again)</button>" : "") +
-      ((bc.wrongDate || []).length ? '<br><b>' + bc.wrongDate.length + " in Tally under the wrong date</b> (correct the date in Tally, or delete it there and post again):<ul>" + bc.wrongDate.map(w => "<li>" + esc(w.no) + " \u00b7 " + esc(w.party) + " \u00b7 in Tally on " + fmtDate(w.got) + ", should be " + fmtDate(w.want) + "</li>").join("") + "</ul>" : "") + "</div>";
-  }
-  h += '<div class="row" style="margin-top:14px">' + (canPost ? '<button class="btn primary" data-act="billPost"' + (waiting.length ? "" : " disabled") + ">Post " + waiting.length + " to Tally</button>" : "") +
-    '<button class="btn' + (canPost ? "" : " primary") + '" data-act="xml"' + (waiting.length ? "" : " disabled") + ">Download Tally file</button>" +
-    '<button class="btn" data-act="csv">Download TDS register (Excel CSV)</button></div>' +
-    '<label class="chk" style="margin-top:12px"><input type="checkbox" id="markSent" checked> Mark these as sent after download</label>' +
-    '<div style="margin-top:16px"><button class="btn small" data-act="clearSent">' + (S.arm === "clearSent" ? "Click again to clear" : "Clear sent invoices older than 90 days") + '</button><div class="note" style="margin-top:4px">Frees space. Download the register first; deductee year totals are kept.</div></div></div>';
-  if (bridgeLive(co)) h += '<div class="pane" style="margin-top:0"><h2>Straight into Tally</h2><p class="note">' + esc(Bridge.openFor(co).name) + " is open in Tally. <b>Post to Tally</b> checks for bills already booked (same bill number and party), then creates the rest" + (co.createOptional ? " as Optional vouchers" : "") + ". Any bill Tally refuses is listed with Tally\u2019s reason.</p></div>";
-  else h += '<div class="pane" style="margin-top:0"><h2>Import into Tally</h2><ol class="steps">' +
-    "<li>Download the Tally file and unzip it to get the .xml file.</li>" +
-    "<li>Open <b>" + esc(co.tallyName || co.name) + "</b> in TallyPrime.</li>" +
-    "<li>Check these ledgers exist in it with the same names" + (ledgers.size ? ": " + Array.from(ledgers).filter(Boolean).map(esc).join(", ") : "") + ".</li>" +
-    "<li>Go to Gateway of Tally, then Import, then Transactions, and choose the .xml file.</li>" +
-    "<li>" + (co.createOptional ? "The vouchers arrive as Optional. Review them in Day Book (include optional vouchers), then regularise them." : "The vouchers post straight to the books. Review them in Day Book.") + "</li></ol>" +
-    '<p class="note" style="margin:12px 0 0">The file names this company, so Tally will not import it into a different one. These are plain accounting entries; Tally\'s Form 140 (old 26Q) screen may list them under exceptions until the nature of payment is set on the TDS ledger.</p></div></div>';
-  return h;
-}
+/* ---------- Client: send to Tally: React (app/src/screens/Post.jsx) ---------- */
+function viewExport(){ return '<div data-react="Export"></div>'; }
 
 /* ---------- Company switcher (F3) ---------- */
 function switcherList(){
@@ -902,6 +837,23 @@ function billDelete(id){
     removeEntry(e); refreshStats(S.coId); toast("Deleted."); render();
   });
 }
+// an approved bill, not yet in Tally, back to To review (staying on the page it was sent back from)
+function billBack(id){ const e = D().entries[id]; if (e){ const keep = S.tab; undoApproval(e); S.tab = keep; render(); } }
+// a ledger Tally does not have, in the bills waiting to be posted: use the Tally ledger chosen instead
+function billFixPick(old, role, to){
+  if (!to){ toast("Choose the Tally ledger first."); return; }
+  const n = replaceLedgerInWaiting(S.coId, old, to, role);
+  toast("\u201c" + to + "\u201d used in " + n + " bill" + (n === 1 ? "" : "s") + " and saved for future bills.");
+  refreshStats(S.coId); render();
+}
+// the bank's buttons (data-act="bank…" in the old bank screen), for a React screen
+function bankAct(act){ return bankClick({dataset: {act}}); }
+// open a kind of document (bills, bank, sales) at a step; the step the client is on when none is given
+function goDocType(type, step){
+  step = step || curStep();
+  if (type === "bank" && (!S.bank || S.bank.cid !== S.coId)) loadBank(S.coId).then(() => { if (S.pendingBankFilter && S.bank){ S.bank.filter = S.pendingBankFilter; S.pendingBankFilter = null; } render(); });
+  goStep(step === "post" && type === "sales" ? "review" : step, type);
+}
 // the review table (app/src/screens/Review.jsx)
 function revPick(id, on){ S.revSel = S.revSel || new Set(); if (on) S.revSel.add(id); else S.revSel.delete(id); render(); }
 function revPickAll(on){ S.revSel = new Set(on ? revFiltered().map(r => r.e.id) : []); render(); }   // only the rows the filter shows
@@ -1014,18 +966,8 @@ document.addEventListener("click", ev => {
   if (t.dataset.cpquick){ const [a2, b2] = quickRange(t.dataset.cpquick), pop = document.getElementById("colpop"); if (pop){ pop.querySelector('[data-pf="from"]').value = a2; pop.querySelector('[data-pf="to"]').value = b2; } colPopApply(false, false); return; }   // a quick pick is a whole choice: close
   if (t.dataset.chipx){ S.colPop = {t: t.dataset.colt, k: t.dataset.chipx}; colPopApply(true); return; }
   if (t.dataset.chipall){ if (t.dataset.chipall === "bank"){ const b = B(); b.from = ""; b.to = ""; b.f = {}; b.sel.clear(); } else if (t.dataset.chipall === "sales"){ const sl = SL(); if (sl){ sl.f = {}; sl.sel.clear(); } } else if (t.dataset.chipall === "txn"){ S.txnF = S.txnF || {}; S.txnF[txnTab()] = {}; S.txnQ = ""; S.txnStatus = ""; } else { S.revF = {}; S.revSel = new Set(); } S.colPop = null; render(); return; }
-  if (t.dataset.billback){ const e = D().entries[t.dataset.billback]; if (e){ const keep = S.tab; undoApproval(e); S.tab = keep; render(); } return; }
   if (t.dataset.billdel){ billDelete(t.dataset.billdel); return; }
   if (t.dataset.reread){ const e0 = D().entries[t.dataset.rid]; if (e0) rereadEntry(e0, t.dataset.reread === "free" ? null : t.dataset.reread); return; }
-  if (t.dataset.billfixsel){
-    const sel = document.getElementById(t.dataset.billfixsel), to = sel && sel.value;
-    if (!to){ toast("Choose the Tally ledger first."); return; }
-    const n = replaceLedgerInWaiting(S.coId, t.dataset.old, to, t.dataset.role);
-    toast("\u201c" + to + "\u201d used in " + n + " bill" + (n === 1 ? "" : "s") + " and saved for future bills.");
-    refreshStats(S.coId); render();
-    return;
-  }
-  if (t.dataset.billfix !== undefined || t.dataset.billcreate !== undefined){ billFixLedger(t.dataset.billfix || t.dataset.billcreate, t.dataset.old, t.dataset.billfix !== undefined ? t.dataset.new : null); return; }
   if (t.dataset.bridgepin !== undefined){
     const port = num(t.dataset.bridgepin);
     Bridge.setCfg({port: port || 0}); Bridge.lastOpenKey = null;
@@ -1140,12 +1082,7 @@ document.addEventListener("click", ev => {
   if (t.dataset.goclient !== undefined && t.dataset.goclient !== null && t.dataset.goclient !== ""){ goClient(t.dataset.goclient); return; }
   if (t.dataset.nav){ navHome(t.dataset.nav); return; }
   if (t.dataset.step){ goStep(t.dataset.step); return; }
-  if (t.dataset.dtype){
-    const step = t.dataset.gstep || curStep(), type = t.dataset.dtype;
-    if (type === "bank" && (!S.bank || S.bank.cid !== S.coId)) loadBank(S.coId).then(() => { if (S.pendingBankFilter && S.bank){ S.bank.filter = S.pendingBankFilter; S.pendingBankFilter = null; } render(); });
-    goStep(step === "post" && type === "sales" ? "review" : step, type);
-    return;
-  }
+  if (t.dataset.dtype){ goDocType(t.dataset.dtype, t.dataset.gstep); return; }
   if (t.dataset.goto){ const st = t.dataset.gstep || "review"; openCompany(t.dataset.goto).then(() => goStep(st, "bills")); return; }
   if (t.dataset.tab){ goTab(t.dataset.tab); return; }
   if (t.dataset.htab){ S.homeTab = t.dataset.htab; S.addingCo = false; render(); return; }

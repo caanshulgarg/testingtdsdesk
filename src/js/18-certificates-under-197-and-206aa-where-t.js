@@ -2073,21 +2073,8 @@ function settingsTiles(){
     '<button class="tile" data-settab="' + t.id + '"><span class="ti">' + t.icon + '</span><span class="tt">' + esc(t.title) + "</span>" +
     '<span class="tn">' + esc(t.note) + "</span>" + (sub[t.id] ? '<span class="ts">' + sub[t.id] + "</span>" : "") + "</button>").join("") + "</div>";
 }
-function viewPostLog(){
-  const log = (S.firm.postLog || []).slice().reverse();
-  const mine = S.logAll || !CO() ? log : log.filter(r => r.co === S.coId);
-  let h = '<div class="pane"><div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Everything sent to Tally</h2>' +
-    '<div><button class="btn small" data-act="logAll">' + (S.logAll ? "This client only" : "All clients") + '</button><button class="btn small" data-act="logCsv">Download as a file</button></div></div>' +
-    '<p class="note" style="margin:6px 0 10px">' + mine.length + " entr" + (mine.length === 1 ? "y" : "ies") + (S.logAll || !CO() ? " across every client" : " for " + esc(CO().name)) + ". Kept so you can prove what was posted, by whom, and when.</p>";
-  if (!mine.length) return h + '<p class="note">Nothing yet.</p></div>';
-  h += '<div class="tblwrap"><table class="data"><thead><tr><th>When</th><th>What</th><th>Client</th><th>Reference</th><th class="n">Amount</th><th>Voucher in Tally</th><th>By</th></tr></thead><tbody>' +
-    mine.slice(0, 500).map(r => "<tr" + (r.action === "removed" ? ' style="opacity:.65"' : "") + "><td>" + new Date(r.at).toLocaleString([], {day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit"}) + "</td>" +
-      "<td>" + (r.action === "removed" ? "<b>taken back</b> \u00b7 " : "") + esc(r.what === "bill" ? "purchase bill" : r.what === "bank" ? "bank entry" : r.what || "") + "</td>" +
-      "<td>" + esc((CO(r.co) || {}).name || "\u2014") + "</td><td>" + esc(r.ref || "") + '</td><td class="n">' + (r.amount ? INR.format(num(r.amount)) : "\u2014") + "</td>" +
-      "<td>" + esc(((r.tally || {}).vchType || "") + " " + ((r.tally || {}).masterId || "")) + '<div class="nr">' + esc((r.tally || {}).company || "") + "</div></td>" +
-      "<td>" + esc(r.by || "\u2014") + "</td></tr>").join("") + "</tbody></table></div>";
-  return h + "</div>";
-}
+// everything sent to Tally: React (app/src/screens/Done.jsx)
+function viewPostLog(){ return '<div data-react="PostLog"></div>'; }
 function postLogCsv(){
   const log = (S.firm.postLog || []).slice().reverse();
   const rows = [["When", "What", "Action", "Client", "Reference", "Party", "Amount", "Voucher type", "Tally id", "Company", "By"]].concat(
