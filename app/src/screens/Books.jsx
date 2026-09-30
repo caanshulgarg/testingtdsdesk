@@ -4,8 +4,7 @@
 //
 // State: S.books (the open client's books: vouchers, ledgers, salary, the work saved with them), S.booksTab (the
 // tab); for TDS, S.tdsView (years → year → return or certs or notices), S.tdsFy, S.tdsQ, S.tdsForm (26Q or 24Q).
-// A return's pages are TdsReturn.jsx. Still old pieces, shown through <Legacy>: every other tab's own pages.
-import Legacy from "../parts/Legacy.jsx";
+// A return's pages are TdsReturn.jsx; every other tab is in screens/books/ or Gst.jsx.
 import { BusyCard } from "../parts/Reading.jsx";
 import { Return26, Return24, CertsPage } from "./TdsReturn.jsx";
 import Gst from "./Gst.jsx";
@@ -19,6 +18,7 @@ import Letters from "./books/Letters.jsx";
 import AuditTab from "./books/Audit.jsx";
 import HelpButton from "../parts/HelpButton.jsx";
 import { Notices } from "../parts/Ai.jsx";
+import { LedgerBanner, GstDriftNote, SyncNote } from "../parts/Notes.jsx";
 
 const money = (v) => INR.format(r2(v || 0));
 const Q_MONTHS = { Q1: "Apr to Jun", Q2: "Jul to Sep", Q3: "Oct to Dec", Q4: "Jan to Mar" };
@@ -122,7 +122,7 @@ function Tds({ b }) {
     if (!tabs.includes(S.tdsTab)) S.tdsTab = tabs[0];
   }
   return <>
-    <Legacy html={ledgerBanner(b, "tds")} />
+    <LedgerBanner b={b} which="tds" />
     <Crumbs />
     {v === "notices" ? <Notices b={b} kind="tds" />
       : v === "years" ? <Years b={b} rows={rows} fys={fys} />
@@ -167,7 +167,7 @@ export default function Books() {
   return <>
     <nav className="sbar" aria-label="Books">{tabs.map(([id, label, c]) =>
       <button key={id} aria-selected={tab === id} onClick={() => booksTabGo(id)}>{label}{c != null && <> <span className="sbar-n">{c}</span></>}</button>)}</nav>
-    <Legacy html={BookSync.note(co.id, tab) + gstDriftNote(b)} />
+    <SyncNote cid={co.id} tab={tab} /><GstDriftNote b={b} />
     {tab !== "import" && <FreshLine b={b} />}
     {busy}
     {body}

@@ -1182,17 +1182,6 @@ const MultiUp = {
     S.coId = keepCo; S.view = keepView; m.busy = false; render();
     const ok = m.rows.filter(r => r.ok).length;
     toast(ok + " of " + m.rows.length + " files brought in. Next, for each client: its opening balances (trial balance) and the check, under Books → From Tally.");
-  },
-  view(){
-    const m = S.multiUp;
-    const intro = '<div class="pane"><h3 style="margin-top:0">Day books for several clients at once</h3><p class="note" style="margin:0 0 8px">Choose the day book XML files exported from Tally, one or more per client. ' +
-      "Each file’s company is read from the file and matched to a client; check the matches, then start. A file whose company or GSTIN is not the client’s is not taken.</p>";
-    if (!m) return intro + '<button class="btn" data-act="multiPick">Choose day book files</button></div>';
-    const cos = Object.values(S.companies || {}).filter(c => !c.deleted).sort((a, c) => a.name.localeCompare(c.name));
-    return intro + (m.reading ? '<p class="note">Reading the files…</p>' : "") + '<div class="tblwrap"><table class="data"><thead><tr><th>File</th><th>Company in the file</th><th>Client</th><th>Status</th></tr></thead><tbody>' +
-      m.rows.map((r, i) => "<tr><td>" + esc(r.f.name) + '<div class="nr">' + Math.round(r.f.size / 1048576) + " MB</div></td><td>" + esc(r.name || "—") + (r.gstin ? '<div class="nr">' + esc(r.gstin) + "</div>" : "") + "</td><td>" +
-        (r.status === "waiting" && !m.busy ? '<select data-mucid="' + i + '"><option value="">— choose —</option>' + cos.map(c => '<option value="' + esc(c.id) + '"' + (c.id === r.cid ? " selected" : "") + ">" + esc(c.name) + "</option>").join("") + "</select>"
-          : esc(((S.companies || {})[r.cid] || {}).name || "—")) + '</td><td class="' + (r.ok ? "" : /not taken/.test(r.status) ? "bad" : "") + '">' + esc(r.status) + "</td></tr>").join("") + "</tbody></table></div>" +
-      '<div class="row" style="gap:8px;margin-top:8px">' + (m.busy ? '<span class="note">Bringing them in, one at a time…</span>' : '<button class="btn primary" data-act="multiStart">Bring them in</button><button class="btn small" data-act="multiPick">Choose other files</button><button class="btn small" data-act="multiClose">Close</button>') + "</div></div>";
   }
+
 };

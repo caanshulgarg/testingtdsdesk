@@ -7,8 +7,8 @@
 // State: S.misRange, S.misTab, S.misQ / S.misF / S.misCat (filters), S.misOpen (a party opened), S.misOpenHead,
 // S.misLed (a ledger's entries), S.misCf, S.misWeek, S.misCc (rows opened), S.misBudPct.
 import { Fragment } from "react";
-import Legacy from "../../parts/Legacy.jsx";
 import CommitBox from "../../parts/CommitBox.jsx";
+import { CatchUp } from "../../parts/Notes.jsx";
 
 const m = (v) => INR.format(r2(v || 0));
 const d = (x) => fmtDate(tallyDate(x));
@@ -276,7 +276,7 @@ function Compliance({ r }) {
 export default function Mis({ b }) {
   // Tally changed since the last run: the tab says so while it is worked out again (TallyRead.catchUp, src/js/18)
   const catchUp = TallyRead.catchUp(b, "mis");
-  if (catchUp) return <Legacy html={catchUp} />;
+  if (catchUp) return <CatchUp text={catchUp} />;
   const r = (b.mis || {}).last;
   const rg = S.misRange || (r ? { from: Audit.iso(r.from), to: Audit.iso(r.to) } : ((x) => ({ from: Audit.iso(x.from), to: Audit.iso(x.to) }))(misRangeQuick("ytd", b)));
   if (!r) return <><Head b={b} r={r} rg={rg} /><div className="bk-none" style={{ marginTop: 12 }}>Choose a period and press Run now.</div></>;
