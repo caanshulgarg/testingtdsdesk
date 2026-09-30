@@ -145,6 +145,16 @@ function colPopApply(clearOnly, keepOpen){
   render();
 }
 // chips above the table: what is filtered, each removable
+// the chips over a list (app/src/parts/ChipBar.jsx): a chip opens its column's filter box, ✕ removes it, Clear all
+function colChipOpen(t, k){ S.colPop = S.colPop && S.colPop.k === k && S.colPop.t === t ? null : {t, k, justOpened: true}; render(); }
+function colChipX(t, k){ S.colPop = {t, k}; colPopApply(true); }
+function colChipAll(t){
+  if (t === "bank"){ const b = B(); b.from = ""; b.to = ""; b.f = {}; b.sel.clear(); }
+  else if (t === "sales"){ const sl = SL(); if (sl){ sl.f = {}; sl.sel.clear(); } }
+  else if (t === "txn"){ S.txnF = S.txnF || {}; S.txnF[txnTab()] = {}; S.txnQ = ""; S.txnStatus = ""; }
+  else { S.revF = {}; S.revSel = new Set(); }
+  S.colPop = null; render();
+}
 function colChips(t){
   const chips = [];
   const money = v => INR.format(num(v));
@@ -185,16 +195,6 @@ function colChips(t){
     if (f.look) chips.push(["look", f.look === "yes" ? "Need a look" : "Ready to approve"]);
   }
   return chips;
-}
-function noMatchNote(t){
-  return '<div class="bk-none">Nothing matches these filters. <button class="linkbtn" data-chipall="' + t + '">Clear all filters</button></div>';
-}
-function colChipBar(t, shown, total, extra){
-  const chips = colChips(t);
-  if (!chips.length) return "";
-  return '<div class="chipbar"><span class="note">' + shown + " of " + total + (extra ? " \u00b7 " + extra : "") + "</span>" +
-    chips.map(([k, l]) => '<span class="fchip"><button class="fchip-l" data-colf="' + k + '" data-colt="' + t + '">' + esc(l) + '</button><button class="fchip-x" data-chipx="' + k + '" data-colt="' + t + '" aria-label="Remove this filter">\u2715</button></span>').join("") +
-    '<button class="linkbtn" data-chipall="' + t + '">Clear all</button></div>';
 }
 function placeColPop(){
   const pop = document.getElementById("colpop"); if (!pop || !S.colPop) return;

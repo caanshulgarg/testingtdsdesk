@@ -7,12 +7,12 @@
 // status review → ready → posted, or intally / ignored), filter (the tab), q (search), sel (ticked), openId (the one
 // open in the panel), draft (an invoice being created), cfg (numbering, the firm's details, ledgers), undo.
 // The actions are in src/js/26: salesAct("salesPost"), salesRowAct("confirm", id), salesSetCust(id, name), …
-import Legacy from "../parts/Legacy.jsx";
 import ColHead from "../parts/ColHead.jsx";
 import CommitBox from "../parts/CommitBox.jsx";
 import LedgerBox from "../parts/LedgerBox.jsx";
 import LedgerSelect from "../parts/LedgerSelect.jsx";
 import { BusyCard } from "../parts/Reading.jsx";
+import { ChipBar, NoMatch } from "../parts/ChipBar.jsx";
 
 const live = () => Bridge.on() && Bridge.up();
 const STATUS = { ready: ["ok", "Ready"], review: ["warn", "To review"], posted: ["ok", "Posted"], intally: ["no", "In Tally"], ignored: ["no", "Ignored"] };
@@ -287,7 +287,7 @@ export default function Sales() {
         <div className="bk-tabs" role="tablist">{SALES_TABS.map(([k, t]) => <button key={k} role="tab" aria-selected={s.filter === k} onClick={() => salesTabGo(k)}>{t} <span className="cnt">{tc[k]}</span></button>)}</div>
         <input type="search" className="bk-search" autoComplete="off" placeholder="Search invoice, customer, GSTIN" aria-label="Search the invoices" value={s.q} onChange={(ev) => salesSearch(ev.target.value)} />
       </div>
-      <Legacy html={colChipBar("sales", list.length, s.list.length + " invoices")} />
+      <ChipBar t="sales" shown={list.length} total={s.list.length + " invoices"} />
       <div className="bk-tablewrap">
         <table className="bk-table">
           <thead><tr>
@@ -297,7 +297,7 @@ export default function Sales() {
           </tr></thead>
           <tbody>{list.map((v) => <Row key={v.id} v={v} sel={s.sel.has(v.id)} />)}</tbody>
         </table>
-        {!list.length && (salesColOn() ? <Legacy html={noMatchNote("sales")} /> : <div className="bk-none">{EMPTY[s.filter]}</div>)}
+        {!list.length && (salesColOn() ? <NoMatch t="sales" /> : <div className="bk-none">{EMPTY[s.filter]}</div>)}
       </div>
     </div>
     {open && <Detail v={open} />}

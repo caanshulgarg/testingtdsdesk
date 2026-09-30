@@ -2,8 +2,7 @@
 // reading check, keys, the reading order), and, in Client setup, closed periods. Was viewRates, viewReading (src/js/18),
 // viewSelfTest (src/js/01) and ClosedP.pane (src/js/47). Buttons are doAct cases (resetRules, runSelfTest, copyDiag,
 // testOcr, testGoogle, testReader, askPerm, dlStandalone); boxes go through rateSet, readingToggle and closedSet
-// (src/js/18, 27, 47). How to fix Google OCR is still googleHelpHtml, an old piece of fixed help text.
-import Legacy from "../parts/Legacy.jsx";
+// (src/js/18, 27, 47).
 import CommitBox from "../parts/CommitBox.jsx";
 
 const Act = ({ act, className = "btn small", children, disabled }) => <button className={className} disabled={disabled} onClick={() => doAct(act)}>{children}</button>;
@@ -21,6 +20,28 @@ export function Rates() {
         {r.basis === "never" || r.basis === "always" ? none : box(r, "limit", "Limit")}</tr>)}</tbody></table></div>
     <div className="row" style={{ marginTop: 12 }}><Act act="resetRules">Restore default rates and limits</Act></div>
     <p className="note" style={{ margin: "10px 0 0" }}>Without a PAN the rate is 20%, or 5% for purchase of goods. TDS is worked on the value before GST where GST is shown separately.</p></div>;
+}
+
+// how to fix Google OCR, for the reason Google gave (only after a failed test)
+function GoogleHelp() {
+  const t = S.googleTest;
+  if (!t || t.busy || t.ok || !t.code) return null;
+  const A = ({ href, children }) => <a href={href} target="_blank" rel="noopener">{children}</a>;
+  const proj = <A href="https://console.cloud.google.com/apis/credentials">Google Cloud console → APIs &amp; Services → Credentials</A>;
+  const vision = <A href="https://console.cloud.google.com/apis/library/vision.googleapis.com">Cloud Vision API</A>;
+  const billing = <A href="https://console.cloud.google.com/billing">Billing</A>;
+  const steps = {
+    google_referrer: [<>Open {proj} and click the API key you are using here.</>, <>Under <b>Application restrictions</b> choose <b>None</b>. A website restriction cannot work here, because the app is opened as a file and the browser sends no website address.</>,
+      <>Under <b>API restrictions</b> keep <b>Restrict key</b> and tick only <b>Cloud Vision API</b>, so the key stays safe.</>, <>Save, wait a minute, then press <b>Test</b> again.</>],
+    google_not_enabled: [<>Open {vision} and check the right project is selected at the top.</>, <>Press <b>Enable</b>.</>, <>Wait a minute and press <b>Test</b> again.</>],
+    google_billing: [<>Open {billing} and link a billing account to this project.</>, "The first 1,000 pages each month stay free; billing only has to be enabled.", <>Press <b>Test</b> again.</>],
+    google_bad_key: [<>Open {proj} and copy the API key again, with no spaces.</>, <>Paste it in the Google Cloud Vision OCR box below and press <b>Save and test</b>.</>, "If it still fails, create a new key and restrict it to the Cloud Vision API."],
+    google_forbidden: [<>Open {proj} and click the key.</>, <>Set <b>Application restrictions</b> to <b>None</b>, and under <b>API restrictions</b> tick <b>Cloud Vision API</b>.</>, <>Check that {vision} is enabled for the project and {billing} is linked.</>, <>Press <b>Test</b> again.</>],
+    google_quota: ["The usage limit has been reached for now. Wait, or raise the quota in the Google Cloud console.", "The built-in OCR keeps working in the meantime."],
+    google_blocked: ["This page cannot reach Google. Open the downloaded file (TDS-Desk-standalone.html) instead of the claude.ai page.", "If you already use the downloaded file, check that the network or antivirus does not block vision.googleapis.com."],
+    google_timeout: [<>Google did not answer in time. Press <b>Test</b> again.</>, "If it keeps happening, check this computer's internet connection."],
+  }[t.code] || [<>Press <b>Test</b> again.</>, "If it keeps failing, send me the message above."];
+  return <div className="bdiag" style={{ marginTop: 10 }}><b>How to fix this</b><ol style={{ margin: "8px 0 0 18px", lineHeight: 1.55 }}>{steps.map((x, i) => <li key={i}>{x}</li>)}</ol></div>;
 }
 
 function SelfTest() {
@@ -69,7 +90,7 @@ export function Reading() {
         <Row label="4. Claude" state={clState} detail={viaPlatform() ? "Through your plan: the platform holds the key and your firm is charged for what it uses." : S.engine === "api" ? "Your Claude API key (" + cfg.model + ")." : S.engine === "claude" ? "Claude inside claude.ai (access: " + permText + ")." : "Used only when steps 1–3 fail the checks."}
           btn={<><Act act="testReader" disabled={!(S.engine && !(S.testResult && S.testResult.busy))}>Test</Act>{(S.samplePerm === "prompt" || S.samplePerm === "denied") && <> <Act act="askPerm">Allow</Act></>}</>} />
       </tbody></table></div>
-      <Banner t={S.ocrTest} busyText="Testing built-in OCR…" /><Banner t={S.googleTest} busyText="Testing Google OCR…" /><Legacy html={googleHelpHtml()} /><Banner t={S.testResult} busyText="Testing Claude… it may ask for permission first." />
+      <Banner t={S.ocrTest} busyText="Testing built-in OCR…" /><Banner t={S.googleTest} busyText="Testing Google OCR…" /><GoogleHelp /><Banner t={S.testResult} busyText="Testing Claude… it may ask for permission first." />
       <p style={{ margin: "12px 0 0" }}>Bills read since this page opened: <b>{st.free}</b> free · <b>{st.google || 0}</b> by Google OCR · <b>{st.freePlusClaude || 0}</b> free figures + Claude for the supplier name · <b>{st.claudeText}</b> by Claude (text) · <b>{st.claudeImages}</b> by Claude (images).</p></div>
     <div className="pane" id="keysPane"><h2>Keys</h2><p className="note" style={{ margin: 0 }}>No API keys are kept on this computer. Claude and Google OCR are reached through the firm account, which holds the keys on the server; sign in to the firm account to use them. The free built-in OCR works without signing in.</p></div>
     <div className="pane"><h2>Reading order</h2>
