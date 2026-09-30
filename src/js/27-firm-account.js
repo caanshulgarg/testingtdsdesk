@@ -384,16 +384,6 @@ async function charge(code, qty, ref, note){
     return false;
   } catch (e){ return true; }                            // never block work because the internet is down
 }
-function creditBanner(){
-  const a = S.account;
-  if (!a || !a.firm) return "";
-  const bal = num(a.firm.balance), warn = num(a.firm.warn_at);
-  if (S.creditStop && Date.now() - S.creditStop.at < 6 * 3600e3 && bal <= 0)
-    return '<p class="banner" style="border-left-color:var(--stop);background:var(--stop-soft)"><b>Credit finished.</b> Reading new bills, bank statements and invoices is paused. Everything already in FinCom still works, and entries can still be posted to Tally. Ask the administrator to add credit.</p>';
-  if (bal <= warn)
-    return '<p class="banner">Credit left: <b>' + INR.format(bal) + "</b>. Ask the administrator to top it up before it runs out.</p>";
-  return "";
-}
 /* ---------- the firm's own account screen ---------- */
 /* ---------- superadmin: firms, credit, plans, prices, keys ---------- */
 async function loadAdminOverview(quiet){
@@ -405,7 +395,7 @@ async function loadAdminOverview(quiet){
   } catch (e){ if (!quiet) toast("Could not read the platform data: " + e.message); }
 }
 
-/* ---------- nothing is shown until someone signs in ---------- */
+/* ---------- nothing is shown until someone signs in: the page is React (app/src/screens/SignIn.jsx) ---------- */
 function signInNeeded(){
   if (window.claude) return false;                 // inside claude.ai, for trying things out
   if (Cloud.on()) return !!Cloud.st.mfa;           // signed in (works offline once signed in), unless the code is still due
@@ -418,46 +408,7 @@ Cloud.signUp = async function(d){
   if (!r.ok || j.ok === false) throw new Error(j.error || "The account could not be made.");
   return j;
 };
-function viewSignUp(){
-  const st = Cloud.st, f = S.cloudForm || {};
-  return '<div class="signin"><div class="signin-box">' +
-    "<h1>Create an account</h1>" +
-    '<p class="note" style="margin:8px 0 14px">Your firm gets its own space. Nobody else can see your data.</p>' +
-    '<label class="f"><span>Firm name</span><input type="text" data-cloud="firm" data-fk="sufirm" value="' + esc(f.firm || "") + '"></label>' +
-    '<label class="f" style="margin-top:8px"><span>Your name</span><input type="text" data-cloud="name" data-fk="suname" value="' + esc(f.name || "") + '"></label>' +
-    '<label class="f" style="margin-top:8px"><span>Email</span><input type="email" data-cloud="email" data-fk="cloudemail" value="' + esc(f.email || "") + '" autocomplete="username"></label>' +
-    '<label class="f" style="margin-top:8px"><span>Password (8 characters or more)</span><input type="password" data-cloud="password" data-fk="cloudpw" value="' + esc(f.password || "") + '" autocomplete="new-password"></label>' +
-    '<div class="row" style="margin-top:12px"><button class="btn primary" data-act="cloudSignUp"' + (st.busy ? " disabled" : "") + ">" + (st.busy ? "Making the account\u2026" : "Create the account") + "</button></div>" +
-    (st.error ? '<p class="bk-warn" style="margin-top:10px">' + esc(st.error) + "</p>" : "") +
-    '<p class="note" style="margin-top:14px">Already have one? <button class="linkbtn" data-act="showSignIn">Sign in</button></p>' +
-    "</div></div>";
-}
-function viewSignIn(){
-  const c = Cloud.cfg(), st = Cloud.st;
-  if (Cloud.on() && st.mfa) return viewTwoStep();
-  if (S.signUpOpen) return viewSignUp();
-  return '<div class="signin"><div class="signin-box">' +
-    '<h1>FinCom</h1>' +
-    '<p class="note">' + esc(S.firm && S.firm.firmName ? S.firm.firmName : "Finance and compliance, in one place") + "</p>" +
-    '<p class="note" style="margin:2px 0 0"><a href="welcome/">What is FinCom?</a></p>' +
-    '<p class="note" style="margin:10px 0 14px">Sign in to see your firm\u2019s work. Nothing is shown before that.</p>' +
-    '<label class="f"><span>Email</span><input type="email" data-cloud="email" data-fk="cloudemail" value="' + esc((S.cloudForm && S.cloudForm.email) || c.email || "") + '" autocomplete="username" autofocus></label>' +
-    '<label class="f" style="margin-top:8px"><span>Password</span><input type="password" data-cloud="password" data-fk="cloudpw" value="' + esc((S.cloudForm && S.cloudForm.password) || "") + '" autocomplete="current-password"></label>' +
-    '<div class="row" style="margin-top:12px"><button class="btn primary" data-act="cloudSignIn"' + (st.busy ? " disabled" : "") + ">" + (st.busy ? "Signing in\u2026" : "Sign in") + "</button></div>" +
-    (st.error ? '<p class="bk-warn" style="margin-top:10px">' + esc(st.error) + "</p>" : "") +
-    '<p class="note" style="margin-top:14px">Forgotten the password? Ask the person who runs your firm\u2019s account to make a new one.</p>' +
-    '<p class="note" style="margin-top:10px">No internet on this computer? <button class="linkbtn" data-act="useOffline">Use it here without an account</button> \u2014 the work stays on this computer only.</p>' +
-    (S.signupInfo && S.signupInfo.open !== false ? '<p class="note" style="margin-top:6px">New here? <button class="linkbtn" data-act="showSignUp">Create an account</button>' + (num(S.signupInfo.trial_credit) ? " \u00b7 starts with " + INR.format(num(S.signupInfo.trial_credit)) + " of credit" : "") + "</p>" : "") +
-    "</div></div>";
-}
 
-// Always-visible bar at the bottom of the screen for the bill that is open
-function actionBar(){
-  if (S.view !== "company") return "";
-  if (S.tab === "bank") return bankBar();
-  if (S.tab === "sales") return salesBar();
-  return S.tab === "invoices" ? '<div data-react="ActionBar"></div>' : "";   // the purchase bars: React (app/src/screens/Review.jsx)
-}
 
 /* ---------- Client setup: React (app/src/screens/Settings.jsx) ---------- */
 

@@ -53,31 +53,6 @@ Cloud.mfaVerify = async function(code){
   await this.whoAmI();
   return true;
 };
-function viewTwoStep(){
-  const m = Cloud.st.mfa || {}, busy = Cloud.st.busy;
-  let h = '<div class="signin"><div class="signin-box"><h1>Two-step sign-in</h1>';
-  if (m.forAdmin) h += '<p class="note" style="margin:8px 0 0">Platform administration changes every firm and the credit, so it needs the code from your phone. Your firm work does not.</p>';
-  if (m.need === "code"){
-    h += '<p class="note" style="margin:8px 0 14px">Open the authenticator app on your phone (Google Authenticator, Microsoft Authenticator or similar) and type the 6-digit code for FinCom.</p>';
-  } else if (!m.factorId){
-    h += '<p class="note" style="margin:8px 0 14px">' + (m.required ? "This account must" : "You can") +
-      " protect this account with a code from an authenticator app on your phone, as well as the password. Install Google Authenticator or Microsoft Authenticator, then press the button.</p>" +
-      '<div class="row"><button class="btn primary" data-act="mfaStart"' + (busy ? " disabled" : "") + ">Set it up</button></div>";
-  } else {
-    h += '<p class="note" style="margin:8px 0 10px">1. In the authenticator app choose <b>Add</b> → <b>Scan a QR code</b> and scan this.</p>' +
-      (m.qr ? '<p style="text-align:center"><' + 'img alt="QR code for the authenticator app" style="width:190px;height:190px;background:#fff;padding:6px;border-radius:8px" src="' + esc(/^data:image\/svg\+xml|^data:image\/png/.test(m.qr) ? m.qr : "") + '"></p>' : "") +
-      '<p class="note" style="margin:6px 0">Cannot scan? Type this key in the app instead: <code style="user-select:all;word-break:break-all">' + esc(m.secret || "") + "</code></p>" +
-      '<p class="note" style="margin:10px 0 6px">2. Type the 6-digit code the app now shows.</p>';
-  }
-  if (m.need === "code" || m.factorId){
-    h += '<label class="f"><span>Code</span><input type="text" id="mfaCode" data-fk="mfacode" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="123456"></label>' +
-      '<div class="row" style="margin-top:12px"><button class="btn primary" data-act="mfaVerify"' + (busy ? " disabled" : "") + ">" + (busy ? "Checking…" : "Continue") + "</button></div>";
-  }
-  if (Cloud.st.error) h += '<p class="bk-warn" style="margin-top:10px">' + esc(Cloud.st.error) + "</p>";
-  h += '<p class="note" style="margin-top:14px">' + (m.required || (m.need === "code" && !m.forAdmin) ? "" : '<button class="linkbtn" data-act="mfaCancel">Not now</button> · ') +
-    'Lost your phone? Ask the platform administrator to reset your two-step sign-in. <button class="linkbtn" data-act="mfaSignOut">Sign out</button></p>';
-  return h + "</div></div>";
-}
 async function mfaAction(act){
   const done = () => { Cloud.st.busy = ""; render(); };
   if (act === "mfaStart"){

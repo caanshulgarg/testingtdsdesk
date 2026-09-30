@@ -9,8 +9,9 @@ Branch `react`. The site on `main` keeps running unchanged until every screen be
 ```
 app/                      the React app (Vite)
   index.html              the page frame (same ids as src/shell.html: #side, #cobar, #app, #modal, ...)
-  src/store.js            render(): old screens redraw, then React; <div data-react="Name"> places a React screen
-  src/App.jsx             React's part of the page
+  src/store.js            render(): the logic's prep (renderNow), React draws, then afterRender; <div data-react="Name"> places a React screen
+  src/App.jsx             the page: sidebar, top bar, switcher, and #app (Main.jsx, in a .react-host)
+  src/Main.jsx            #app: the sign-in page, or the banners, the screen of the moment, the drawer, the bar
   src/Side.jsx            the sidebar
   src/screens/*.jsx       screens already in React, listed in src/screens/index.js
   legacy/                 built, not kept: the business logic from src/js (python3 build.py --react)
@@ -41,9 +42,9 @@ app/                      the React app (Vite)
   the box is left, not on every key. Lists of Tally ledgers to choose from are `parts/LedgerSelect.jsx`.
 - **Ledger boxes** (a Tally ledger typed, with the list that drops down) are `parts/LedgerBox.jsx`: the choice is
   made when the box is left or a ledger is picked (the browser's change event), not on every key.
-- **Redraws and the mouse.** `render()` takes the React screens out of the page for a moment; a click whose button
-  left the page is dropped by the browser. So while the mouse button is held (a box being left because a button was
-  pressed), `render()` only redraws React, and the full redraw follows the click (store.js).
+- **Redraws.** `render()` no longer puts any HTML into #app: `renderNow` (src/js/01) only loads what the screen
+  needs, React draws #app (`Main.jsx`), then `afterRender` (the ledger list's box, keeping in step with Tally). The old
+  workaround for clicks lost while the old screens redrew (waiting for the mouse button) is gone with the redraw.
 - **The cursor** in a box inside a React screen is given back after a redraw: the same box, or the one with the same
   `data-fk`. Old pieces (`<Legacy>`) are drawn again from their HTML every time, as the old screens were.
 - **Checking a move against the live site.** With a client's books in `tests/data`, `tests/pages_tds.py` writes the
@@ -85,9 +86,9 @@ Status: **done** (in React, test passing) · **next** · blank = not started. Ab
 |---|---|---|
 | **Frame** | sidebar `renderSide` (02) | **done** |
 | | top bar `renderTop`, `clientHeader`, `topRight` (18), Tally panel, firm menu (02) · client switcher `renderSwitcher` (27) | **done** |
-| | page frame `render` (01): banners, `colPopHtml` (column filters, shared with Bank, Sales, Transactions) | |
+| | page frame `render` (01): banners, the screen of the moment, the drawer, the bars → `Main.jsx`; `colPopHtml` (the column filter box) stays an old piece inside it (`<Legacy>`) | **done** |
 | | modal, toast, confirm dialogs | kept as they are (drawn outside the screens) |
-| **Sign in** | `viewSignIn`, `viewSignUp`, two-step `viewTwoStep` (27, 43) | |
+| **Sign in** | `viewSignIn`, `viewSignUp`, two-step `viewTwoStep` (27, 43) → `screens/SignIn.jsx`; buttons keep their `data-act` for the old tests | **done** |
 | **Home** | `viewClients`, `addCompanyForm`, `viewToday`, `viewInboxAll`, `viewInbox` (18) | **done** |
 | | `viewTallyHome` (18) | with Tally |
 | | Help and support (`viewHelp`, `viewSupGuide`, `viewSupMine`, `viewSupDesk`, `viewSupNew`, `viewSupTicket`, `GUIDE.html`, 40) → `screens/Help.jsx`; through supTab, supArt, supFilter, supDstat, supAct, supType, supDraft, supFiles, supFdel, supDl, supSet; the reply is kept in `S.sup.rtext` (no more reading the box). `run_support_ui.py` (firm and support, stood-in firm account) passes in full; 12 Help pages match main in `pages_misc.py` | **done** |
@@ -132,7 +133,7 @@ Status: **done** (in React, test passing) · **next** · blank = not started. Ab
 | | Small shared notes → `parts/Notes.jsx`: ledgers to confirm (`ledgerBanner`), filed GST returns the books no longer match (`gstDriftNote`), whether TDS and GST work is saved for the firm (`BookSync.note`), Tally changed since a tab was worked out (`TallyRead.catchUp`'s message), a new client's first steps (`ONB.card`, its buttons now `{act}` or `{go}`), day books for several clients (`MultiUp.view`); `onbHide`; the `data-onbhide` and `data-mucid` listeners are gone. `run_multi_ui.py` (which passes on main) passes in full on React; the GST, TDS and books pages still match | **done** |
 | | The filter chips over the bills, bank, sales and transactions lists and the note when nothing matches (`colChipBar`, `noMatchNote`, 23) → `parts/ChipBar.jsx`, through colChipOpen, colChipX, colChipAll; the `data-chipx` and `data-chipall` listeners are gone; `run_react_review.py` works them. Every screen is now React inside; what is still drawn as text: the print templates (GSTR-9's tables, the financial statements, Form 3CD, letters), and the shell below | **done** |
 | **Firm account** | plan and credit (`viewAccount`, `walletHtml`), sign-in and people (`viewCloudSettings`, `viewAccountPeopleOnly`, `viewPeople`, `viewBackups`, 27; `viewDocsSettings`, `viewDropKeys`, 19), the platform page (`viewSuperadmin`) → `screens/Account.jsx`; the doAct cases still read their boxes by id and `data-cloud`, which the React boxes keep; acctPerson, acctBackup, acctDropOff, adminAct, adminPlan, cloudForm, cloudAuto, idleSet, docsKeep, docYearsSet replace the old listeners. The section text matches main on every state in `pages_misc.py`; `run_react_settings.py` works each button. Found on the way: React code must not name a `tdsdesk:` storage key (the test build renames them only in the old code), hence `idleMin()` | **done** |
-| | still old: the sign-in page (`viewSignIn`, `viewSignUp`, `viewTwoStep`) and `creditBanner`, drawn by `render()` outside React | |
+| | the sign-in page, the self-test, credit and storage banners (`selfTestBanner`, `creditBanner`), `actionBar`, `drawerHtml`, `bankBar` → `Main.jsx`, `screens/SignIn.jsx`; #app is React's (a `.react-host`, so the old listeners leave it alone). Nothing of the page is drawn as text now but the print templates and the column filter box | **done** |
 | **Last step** | `render()` and string screens removed; `src/js` as ES modules | |
 
 
