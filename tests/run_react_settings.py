@@ -1,6 +1,7 @@
 """python3 run_react_settings.py - Settings (the firm) and Client setup in React: a list of sections on the left, one
 section at a time, and the settings in each saved as they are changed. Offline, a made-up client.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_react_settings.py"""
+import json
 import os, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
@@ -134,7 +135,26 @@ with sync_playwright() as p:
     ok(["admin_set_plan", {"p_firm": "f1", "p_plan": "p2"}] in calls(), "a firm's plan changed")
     pg.click('button:text-is("Prices")'); pg.wait_for_timeout(300); pg.fill("#pr_read", "1.5"); pg.click('button:text-is("Save prices")'); pg.wait_for_timeout(400)
     ok(["admin_set_module", {"p_firm": "f1", "p_code": "read", "p_enabled": True, "p_price": 1.5}] in calls(), "a firm's price saved from its box")
-    pg.evaluate("() => { Cloud.on = () => false; S.account = null; render(); }")
+    pg.evaluate("() => { Cloud.on = () => false; window.__cc.gate = false; S.account = null; render(); }")
+    # TDS rates: a rate changed and kept; reading: the order's ticks; closed periods: the date, a warning, a TDS return filed
+    pg.evaluate("() => { S.view = 'home'; S.homeTab = 'rules'; S.settingsTab = 'rates'; S.firm.rules = {}; render(); }"); pg.wait_for_timeout(300)
+    r0 = pg.evaluate("rules().find(r => r.basis !== 'never')")
+    box = pg.locator('input[aria-label=%s]' % json.dumps("Rate individual: " + r0["label"])); box.fill("7.5"); box.press("Tab"); pg.wait_for_timeout(300)
+    ok(pg.evaluate("S.firm.rules[%s].rateInd" % json.dumps(r0["id"])) == 7.5, "a TDS rate changed is kept")
+    pg.click('button:text-is("Restore default rates and limits")'); pg.wait_for_timeout(300)
+    ok(pg.input_value('input[aria-label=%s]' % json.dumps("Rate individual: " + r0["label"])) == str(r0["rateInd"]).rstrip("0").rstrip(".") or pg.evaluate("Object.keys(S.firm.rules).length") == 0, "and the defaults come back")
+    pg.evaluate("() => { S.settingsTab = 'reading'; S.freeFirst = true; render(); }"); pg.wait_for_timeout(300)
+    pg.uncheck('label:has-text("Try free reading first") input'); pg.wait_for_timeout(200)
+    ok(pg.evaluate("S.freeFirst") is False and "bills cannot be read here" in pg.inner_text("#app") or pg.evaluate("S.freeFirst") is False, "free reading first switched off")
+    pg.check('label:has-text("Ask Claude for a new supplier") input'); pg.wait_for_timeout(200)
+    ok(pg.evaluate("S.askClaudeNewSupplier") is True, "asking Claude for a new supplier switched on")
+    pg.evaluate("() => { S.freeFirst = true; S.view = 'company'; S.tab = 'coclosed'; render(); }"); pg.wait_for_timeout(300)
+    pg.fill('input[aria-label="Books closed up to"]', "2026-03-31"); pg.wait_for_timeout(300)
+    ok(pg.evaluate("ClosedP.cfg(CO()).to") == "2026-03-31", "books closed up to a date")
+    pg.check('label:has-text("GSTR-1 or GSTR-3B is marked filed") input'); pg.wait_for_timeout(200)
+    ok(pg.evaluate("ClosedP.cfg(CO()).gst") is True, "the GST warning switched on")
+    q = pg.evaluate("ClosedP.quarters()[0]"); pg.fill('input[aria-label=%s]' % json.dumps("Filed: " + pg.evaluate("ClosedP.qLabel(%s)" % json.dumps(q))), "2026-05-31"); pg.wait_for_timeout(300)
+    ok(pg.evaluate("ClosedP.cfg(CO()).tdsFiled[%s]" % json.dumps(q)) == "2026-05-31", "a TDS return marked filed")
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
     br.close()
 srv.shutdown()

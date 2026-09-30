@@ -2287,26 +2287,6 @@ function selfTestSummary(){
   const r = st.results, fails = ["pdf", "ocr"].filter(k => r[k] && !r[k].ok);
   return {state: fails.length ? "fail" : "ok", fails, r};
 }
-function viewSelfTest(){
-  const e = envInfo(), sum = selfTestSummary(), r = (S.selfTest && S.selfTest.results) || {};
-  const line = (label, res) => '<tr><td><b>' + label + '</b></td><td>' + (!res ? (sum.state === "busy" ? '<span class="tag no">Testing…</span>' : '<span class="tag no">Not run</span>') : res.ok ? '<span class="tag ok">Pass</span>' : '<span class="tag bad">Fail</span>') + '</td><td class="note">' + (res ? esc(res.msg) : "") + "</td></tr>";
-  const yn = (label, v, fix) => '<tr><td>' + label + '</td><td>' + (v ? '<span class="tag ok">Yes</span>' : '<span class="tag bad">No</span>') + '</td><td class="note">' + (v ? "" : fix) + "</td></tr>";
-  return '<div class="pane" id="selfTestPane"><h2>Self-test</h2>' +
-    '<p class="note" style="margin:0 0 10px">Reads two sample bills built into this app (a PDF and a photo) with the free engines only. No cost. Runs by itself when the app opens.</p>' +
-    '<div class="tblwrap"><table class="data"><tbody>' + line("Sample PDF (free PDF reading)", r.pdf) + line("Sample photo (built-in OCR)", r.ocr) + "</tbody></table></div>" +
-    '<div class="row" style="margin-top:10px"><button class="btn" data-act="runSelfTest"' + (sum.state === "busy" ? " disabled" : "") + ">Run self-test again</button></div>" +
-    '<h3 style="margin-top:16px">This browser</h3><div class="tblwrap"><table class="data"><tbody>' +
-    '<tr><td>Opened</td><td colspan="2">' + esc(e.where) + "</td></tr>" +
-    yn("WebAssembly", e.wasm, "This browser cannot run the OCR. Use a current Chrome or Edge.") +
-    yn("WebAssembly SIMD", e.simd, "Needed by the built-in OCR. Update the browser (Chrome 91+, Edge 91+, Firefox 89+, Safari 16.4+).") +
-    yn("Gzip support", e.gunzip, "Needed by the built-in OCR. Update the browser (Chrome 80+, Firefox 113+, Safari 16.4+).") +
-    yn("PDF reader loaded", e.pdf, "Reload the page. If it stays No, download the standalone file again.") +
-    yn("Built-in OCR inside the file", e.ocrBuiltIn, "This copy is incomplete. Download the standalone file again.") +
-    "</tbody></table></div>" +
-    '<h3 style="margin-top:16px">Diagnostic report</h3><p class="note" style="margin:0 0 6px">If something is still not working, copy this and send it to me.</p>' +
-    '<textarea id="diagBox" rows="9" readonly>' + esc(diagnosticReport()) + "</textarea>" +
-    '<div class="row" style="margin-top:6px"><button class="btn small" data-act="copyDiag">Copy report</button></div></div>';
-}
 function selfTestBanner(){
   const sum = selfTestSummary();
   if (sum.state !== "fail") return "";

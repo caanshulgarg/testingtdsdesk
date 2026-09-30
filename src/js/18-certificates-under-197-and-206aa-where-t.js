@@ -546,6 +546,13 @@ function viewToday(){ return '<div data-react="Today"></div>'; }
 function viewInboxAll(){ return '<div data-react="InboxAll"></div>'; }
 function viewClients(){ return '<div data-react="Clients"></div>'; }
 /* ---------- Tally: the connection, and everything sent ---------- */
+// Settings, TDS rates and limits and reading bills (app/src/screens/SettingsMore.jsx)
+function rateSet(id, k, v){ const r = S.firm.rules[id] = S.firm.rules[id] || {}; r[k] = num(v); Store.saveFirm(); render(); }
+function readingToggle(which, on){
+  if (which === "askClaudeNew"){ S.askClaudeNewSupplier = on; lsSet("tdsdesk:askClaudeNew", on ? "1" : ""); }
+  else { S.freeFirst = on; lsSet("tdsdesk:freeFirst", on ? "1" : "0"); }
+  render();
+}
 function viewTallyHome(){ return '<div data-react="TallyHome"></div>'; }
 
 // the top bar is drawn by React (app/src/TopBar.jsx); a change that touches only it redraws React alone
@@ -574,58 +581,6 @@ function keyBox(opts){
   return h + "</div>";
 }
 function viaPlatform(){ return Cloud.on() && !!S.account && !S.account.superadmin && !apiSettings().key; }
-function viewReading(){
-  const cfg = apiSettings(), gcfg = googleSettings(), inClaude = !!window.claude;
-  const permText = {granted:"allowed", prompt:"not asked yet", denied:"declined for this page load", unavailable:"not available in this view"}[S.samplePerm] || (S.sample ? "available" : "not available in this view");
-  const st = S.readStats, row = (label, state, detail, btn) => '<tr><td><b>' + label + '</b></td><td>' + state + '</td><td class="note">' + detail + "</td><td>" + (btn || "") + "</td></tr>";
-  const ocrState = {idle:'<span class="tag no">Checking…</span>', available:'<span class="tag ok">Available</span>', loading:'<span class="tag no">Loading…</span>',
-    ready:'<span class="tag ok">Working</span>', unavailable:'<span class="tag bad">Not working</span>'}[S.ocrState] || "";
-  const clState = viaPlatform() ? '<span class="tag ok">In your plan</span>'
-    : S.engine ? (S.readBlocked ? '<span class="tag bad">Declined</span>' : '<span class="tag ok">Set up</span>') : '<span class="tag bad">Not set up</span>';
-  const banner = (t, busyText) => !t ? "" : '<p class="banner" style="margin:10px 0 0;' + (t.busy ? "" : t.ok ? "border-left-color:var(--ledger);background:var(--ledger-soft)" : "border-left-color:var(--stop);background:var(--stop-soft)") + '">' + (t.busy ? busyText : esc(t.msg)) + "</p>";
-
-  // 1. where am I?
-  let h = '<div class="pane" style="margin-top:0"><h2>Settings</h2><p style="margin:4px 0 0">' +
-    (inClaude ? "You are using the app <b>inside claude.ai</b>. Here Claude can read bills, but the free OCR and Google OCR may be blocked. For those, download the standalone app below."
-      : "You are using the <b>standalone app</b> (this file on your computer or website). Free OCR, Google OCR and your Claude API key all work here.") +
-    '</p><p class="note" style="margin:4px 0 0">App version: ' + esc(APP_VERSION) + "</p>" +
-    (inClaude ? '<div class="row" style="margin-top:10px"><button class="btn primary" data-act="dlStandalone">Download the standalone app</button><span class="note">About 8 MB. Open it in Chrome or Edge.</span></div>' : "") + "</div>";
-
-  h += viewSelfTest();
-  // 2. reading check
-  h += '<div class="pane" id="readingPane"><h2>Reading check</h2>' +
-    '<p class="note" style="margin:0 0 10px">Press Test on each line to see whether it really works here. Every bill shows a badge: <span class="tag ok">Free</span> or <span class="tag ok">Google OCR</span> means no Claude cost, <span class="tag stamp">Claude</span> means Claude read it.</p>' +
-    '<div class="tblwrap"><table class="data"><tbody>' +
-    row("1. Free: PDF text", (window.pdfjsLib || window.TDS_ASSETS) ? '<span class="tag ok">Working</span>' : '<span class="tag bad">Not loaded</span>', "Computer-made PDFs are read from their own text. No cost.", "") +
-    row("2. Free: built-in OCR", ocrState,
-      S.ocrState === "unavailable" ? esc(ocrProblem()) + "." : S.ocrKind === "built-in" ? "For photos and scans. Built into this app, works offline." : "For photos and scans.",
-      '<button class="btn small" data-act="testOcr"' + (S.ocrTest && S.ocrTest.busy ? " disabled" : "") + ">Test</button>") +
-    row("3. Google Cloud Vision OCR", inClaude ? '<span class="tag no">Standalone only</span>' : viaPlatform() ? '<span class="tag ok">In your plan</span>' : !hasGoogle() ? '<span class="tag no">No key yet</span>' : (S.googleAuto && !S.googleAuto.ok) || (S.googleLast && !S.googleLast.ok) ? '<span class="tag bad">Not working</span>' : S.googleAuto && S.googleAuto.ok ? '<span class="tag ok">Working</span>' : '<span class="tag ok">Set up</span>',
-      inClaude ? "Blocked inside claude.ai." : viaPlatform() ? "Through your plan: used when the built-in OCR fails its checks; your firm is charged per page."
-      : hasGoogle() ? "Used when the built-in OCR fails its checks." + (S.googleAuto ? " Daily check: " + (S.googleAuto.ok ? "working." : "FAILED — " + esc(S.googleAuto.msg)) : "") + (S.googleLast && !S.googleLast.ok ? " Last bill: FAILED — " + esc(S.googleLast.msg) : "") : "Stronger on photos and handwriting. Add the key in the box below.",
-      hasGoogle() ? '<button class="btn small" data-act="testGoogle"' + (S.googleTest && S.googleTest.busy ? " disabled" : "") + ">Test</button>" : "") +
-    row("4. Claude", clState, viaPlatform() ? "Through your plan: the platform holds the key and your firm is charged for what it uses."
-      : S.engine === "api" ? "Your Claude API key (" + esc(cfg.model) + ")." : S.engine === "claude" ? "Claude inside claude.ai (access: " + esc(permText) + ")." : "Used only when steps 1–3 fail the checks.",
-      '<button class="btn small" data-act="testReader"' + (S.engine && !(S.testResult && S.testResult.busy) ? "" : " disabled") + ">Test</button>" +
-      (S.samplePerm === "prompt" || S.samplePerm === "denied" ? ' <button class="btn small" data-act="askPerm">Allow</button>' : "")) +
-    "</tbody></table></div>" +
-    banner(S.ocrTest, "Testing built-in OCR…") + banner(S.googleTest, "Testing Google OCR…") + googleHelpHtml() + banner(S.testResult, "Testing Claude… it may ask for permission first.") +
-    '<p style="margin:12px 0 0">Bills read since this page opened: <b>' + st.free + "</b> free · <b>" + (st.google || 0) + "</b> by Google OCR · <b>" + (st.freePlusClaude || 0) + "</b> free figures + Claude for the supplier name · <b>" + st.claudeText + "</b> by Claude (text) · <b>" + st.claudeImages + "</b> by Claude (images).</p></div>";
-
-  // 3. keys: none in the browser any more
-  h += '<div class="pane" id="keysPane"><h2>Keys</h2><p class="note" style="margin:0">No API keys are kept on this computer. Claude and Google OCR are reached through the firm account, which holds the keys on the server; sign in to the firm account to use them. The free built-in OCR works without signing in.</p></div>';
-
-  // 4. order
-  h += '<div class="pane"><h2>Reading order</h2>' +
-    '<label class="chk" style="margin:6px 0 10px"><input type="checkbox" data-act-toggle="askClaudeNew"' + (S.askClaudeNewSupplier ? " checked" : "") + "> <span><b>Ask Claude for a new supplier's name and payment type</b> when free reading got all the figures (a small text-only call). When off, you confirm them yourself; the app remembers them for that supplier's later bills.</span></label>" +
-    '<label class="chk" style="margin:6px 0 4px"><input type="checkbox" data-act-toggle="freeFirst"' + (S.freeFirst ? " checked" : "") + "> <span><b>Try free reading first</b> (steps 1–3 above). A result is accepted only when the checks pass: supplier GSTIN check digit, bill number, valid date, taxable value + GST = total, standard GST rate. Otherwise Claude reads the bill.</span></label>" +
-    '<p style="margin:8px 0 0">Now: ' + (viaPlatform() ? "<b>free steps, then Claude through your plan</b>"
-      : S.engine === "api" ? "<b>free steps, then your Claude API key</b>"
-      : S.engine === "claude" ? "<b>free steps, then Claude inside claude.ai</b>" + (S.imgMax ? "" : " (text PDFs only)")
-      : S.freeFirst ? (hasGoogle() ? "<b>built-in OCR, then Google OCR</b>. No Claude: bills that fail the checks go to Type it in" : "<b>free reading only</b>. Handwritten bills need the Google or Claude key")
-      : "<b>nothing: bills cannot be read here</b>") + ".</p></div>";
-  return h;
-}
 // everything sent to Tally: React (app/src/screens/Done.jsx)
 function viewPostLog(){ return '<div data-react="PostLog"></div>'; }
 function postLogCsv(){
@@ -635,20 +590,6 @@ function postLogCsv(){
   saveFile("posted-to-tally-" + new Date().toISOString().slice(0, 10) + ".csv", new Blob([rows.map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(",")).join("\n")], {type: "text/csv"}));
 }
 // the TDS rates and limits for all clients (the firm's name is in Settings → Firm details)
-function viewRates(){
-  let h = "";
-  h += '<div class="pane"><h2>Rates and limits for all clients</h2><p class="note" style="margin:0 0 12px">Set for tax year 2026-27 under section 393 of the Income-tax Act, 2025. Check them against the Act and any Finance Act changes before relying on them. Ledger names are set per client in Client setup \u2192 TDS.</p>' +
-    '<div class="tblwrap"><table class="data"><thead><tr><th>Payment type</th><th>Section</th><th class="n">Rate: Ind/HUF %</th><th class="n">Rate: others %</th><th class="n">Single bill limit</th><th class="n">Limit</th></tr></thead><tbody>' +
-    rules().map(r => {
-      const lim = r.basis === "never" || r.basis === "always" ? '<td class="n">—</td>' : '<td class="n"><input type="number" data-rule="' + r.id + '" data-k="limit" value="' + r.limit + '" aria-label="Limit"><div class="note">' + ({annual:"per year", single_or_annual:"per year", monthly:"per month", excess:"per year, TDS on excess"}[r.basis]) + "</div></td>";
-      return "<tr><td>" + esc(r.label) + "</td><td>" + esc(r.ref) + '<div class="note">' + esc(r.old) + "</div></td>" +
-        (r.basis === "never" ? '<td class="n">—</td><td class="n">—</td>' : '<td class="n"><input type="number" step="0.01" data-rule="' + r.id + '" data-k="rateInd" value="' + r.rateInd + '" aria-label="Rate individual"></td><td class="n"><input type="number" step="0.01" data-rule="' + r.id + '" data-k="rateOth" value="' + r.rateOth + '" aria-label="Rate others"></td>') +
-        (r.basis === "single_or_annual" ? '<td class="n"><input type="number" data-rule="' + r.id + '" data-k="single" value="' + r.single + '" aria-label="Single bill limit"></td>' : '<td class="n">—</td>') + lim + "</tr>";
-    }).join("") + "</tbody></table></div>" +
-    '<div class="row" style="margin-top:12px"><button class="btn small" data-act="resetRules">Restore default rates and limits</button></div>' +
-    '<p class="note" style="margin:10px 0 0">Without a PAN the rate is 20%, or 5% for purchase of goods. TDS is worked on the value before GST where GST is shown separately.</p></div>';
-  return h;
-}
 // Settings for the firm: React (app/src/screens/Settings.jsx)
 function viewRules(){ return '<div data-react="FirmSettings"></div>'; }
 

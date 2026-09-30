@@ -68,25 +68,13 @@ const ClosedP = {
       return [];
     }
     return hits.map(h => ({id: h.id, message: "Not sent: dated in a closed period (" + h.w[0] + "). You chose to hold it back; post it again to send it."}));
-  },
-  // ---------- the settings pane, under Client setup
-  pane(co){
-    const c = this.cfg(co), b = S.books && S.books.cid === co.id ? S.books : null;
-    const gf = b ? Object.values(b.gstFiled || {}).flatMap(recs => Object.entries(recs || {}).filter(([, r]) => r && (r.r3b || r.r1)).map(([ym]) => ym)) : [];
-    const lastGst = gf.sort().pop();
-    return '<div class="pane"><h2>Closed periods</h2><p class="note" style="margin:0 0 12px">Entries dated in a closed period are not stopped. Before they go to Tally, FinCom says which ones they are and why, and asks. Choosing to post them is recorded in the audit trail.</p>' +
-      '<div class="grid"><label class="f"><span>Books closed up to</span><input type="date" data-cpto value="' + esc(c.to ? FC.iso(FC.d8(c.to)) : "") + '"></label></div>' +
-      '<div class="stack" style="gap:6px;margin-top:10px"><label class="chk"><input type="checkbox" data-cpk="gst"' + (c.gst ? " checked" : "") + "> Warn for a month whose GSTR-1 or GSTR-3B is marked filed" + (lastGst ? ' <span class="note">(the latest marked filed: ' + esc(FC.monthLabel(lastGst)) + ")</span>" : "") + "</label>" +
-      '<label class="chk"><input type="checkbox" data-cpk="tds"' + (c.tds ? " checked" : "") + "> Warn for an entry with TDS in a quarter whose TDS return is filed</label></div>" +
-      '<h3 style="margin:14px 0 6px;font-size:14px">TDS returns filed</h3><div class="cp-q">' + this.quarters().map(k => '<label class="f"><span>' + esc(this.qLabel(k)) + '</span><input type="date" data-cpq="' + esc(k) + '" value="' + esc((c.tdsFiled || {})[k] || "") + '"></label>').join("") + "</div>" +
-      '<p class="note" style="margin-top:8px">GST months are marked filed under TDS & GST, GST, on the GSTR-3B page or from the portal.</p></div>';
   }
+
 };
-if (typeof document !== "undefined"){
-  document.addEventListener("change", e => {
-    const t = e.target, co = CO(); if (!t.dataset || !co) return;
-    if (t.hasAttribute("data-cpto")){ ClosedP.set(co, "to", t.value); toast(t.value ? "Books closed up to " + fmtDate(t.value) + " for " + co.name + "." : "No closing date."); render(); }
-    else if (t.dataset.cpk){ ClosedP.set(co, t.dataset.cpk, t.checked); }
-    else if (t.dataset.cpq){ const f = Object.assign({}, ClosedP.cfg(co).tdsFiled); if (t.value) f[t.dataset.cpq] = t.value; else delete f[t.dataset.cpq]; ClosedP.set(co, "tdsFiled", f); }
-  });
+// Client setup, closed periods (app/src/screens/SettingsMore.jsx): the closing date, a warning on or off, a TDS return filed
+function closedSet(co, k, v){
+  if (k === "to"){ ClosedP.set(co, "to", v); toast(v ? "Books closed up to " + fmtDate(v) + " for " + co.name + "." : "No closing date."); }
+  else if (k.indexOf("q:") === 0){ const q = k.slice(2), f = Object.assign({}, ClosedP.cfg(co).tdsFiled); if (v) f[q] = v; else delete f[q]; ClosedP.set(co, "tdsFiled", f); }
+  else ClosedP.set(co, k, v);
+  render();
 }

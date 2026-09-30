@@ -10,6 +10,7 @@ import Legacy from "../parts/Legacy.jsx";
 import { AiSettings } from "../parts/Ai.jsx";
 import { BridgeSettings, CloudBooks } from "./Tally.jsx";
 import { PlanCredit, FirmAccount, PeopleEtc, Platform } from "./Account.jsx";
+import { Rates, Reading, ClosedPeriods } from "./SettingsMore.jsx";
 import GstSettings from "./gst/GstSettings.jsx";
 import Parties from "./Parties.jsx";
 import { PostLog } from "./Done.jsx";
@@ -100,8 +101,8 @@ export function FirmSettings() {
     bridge: () => <BridgeSettings />,
     tcloud: () => <CloudBooks />,
     postlog: () => <PostLog />,
-    rates: () => <Legacy html={viewRates()} />,
-    reading: () => <Legacy html={viewReading()} />,
+    rates: () => <Rates />,
+    reading: () => <Reading />,
     ai: () => <AiSettings />,
     platform: () => <Platform />,
   }[cur];
@@ -260,7 +261,7 @@ export function ClientSetup() {
     gstset: () => <GstSetup />,
     bankset: () => <Legacy html={viewBankSetup("accounts")} />,
     bankrules: () => <Legacy html={viewBankSetup("rules")} />,
-    coclosed: () => <Legacy html={typeof ClosedP === "object" ? ClosedP.pane(co) : ""} />,
+    coclosed: () => <ClosedPeriods co={co} />,
     coremove: () => <Remove />,
   }[tab] || (() => <Company />);
   return <Layout label="Client setup" groups={clientGroups()} current={isSetupTab(tab) ? tab : "settings"} pick={(id) => { goTab(id); window.scrollTo(0, 0); }}>{body()}</Layout>;

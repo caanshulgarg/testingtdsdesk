@@ -1500,7 +1500,6 @@ document.addEventListener("input", ev => {
   if (t.dataset.e && e && e.status === "draft" && t.type === "text"){ billSetText(e, t.dataset.e, t.value); return; }
   const co = CO();
   if (t.dataset.c && co && t.type === "text"){ coSetText(t.dataset.c, t.value); return; }
-  if (t.dataset.rule){ const r = S.firm.rules[t.dataset.rule] = S.firm.rules[t.dataset.rule] || {}; r[t.dataset.k] = num(t.value); later("firm", () => Store.saveFirm(), 600); return; }
 });
 // a client's setting typed (saved a moment later); path is "name", "gst.cgst", ...
 function coSetText(path, v){
@@ -1560,8 +1559,6 @@ document.addEventListener("change", ev => {
     if (["email", "password", "firm", "name"].includes(k)){ S.cloudForm = Object.assign({}, S.cloudForm, {[k]: t.value}); } if (k === "auto"){ Cloud.setCfg({auto: t.checked}); startCloudSync(); } else if (k === "email") Cloud.setCfg({email: t.value.trim()}); return; }
   if (S.view === "company" && S.tab === "bank" && bankChange(t)) return;
   if (S.view === "company" && S.tab === "sales" && salesChange(t)) return;
-  if (t.dataset.actToggle === "askClaudeNew"){ S.askClaudeNewSupplier = t.checked; lsSet("tdsdesk:askClaudeNew", t.checked ? "1" : ""); render(); return; }
-  if (t.dataset.actToggle === "freeFirst"){ S.freeFirst = t.checked; lsSet("tdsdesk:freeFirst", t.checked ? "1" : "0"); render(); return; }
   if (t.id === "fileIn" || t.id === "camIn"){ const files = Array.from(t.files || []); t.value = ""; handleFiles(files, pickMode); return; }
   if (t.dataset.x === "invoiceDate" && e && e.status === "draft"){ billSetX(e, "invoiceDate", t.value); return; }
   if (t.dataset.gst && e && e.status === "draft"){ billGst(e, t.dataset.gst, t.type === "checkbox" ? t.checked : t.value); return; }
@@ -1574,7 +1571,6 @@ document.addEventListener("change", ev => {
   }
   const co = CO();
   if (t.dataset.c && co){ coCommit(t.dataset.c, t.type === "checkbox" ? t.checked : t.tagName === "SELECT" ? t.value : undefined); return; }
-  if (t.dataset.rule){ Store.saveFirm(); return; }
 });
 document.addEventListener("dragover", ev => { const d = ev.target.closest && ev.target.closest("#drop,#bankDrop,.bk"); if (d){ ev.preventDefault(); d.classList.add("over"); } });
 document.addEventListener("dragleave", ev => { const d = ev.target.closest && ev.target.closest("#drop,#bankDrop"); if (d) d.classList.remove("over"); });

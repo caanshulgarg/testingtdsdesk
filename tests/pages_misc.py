@@ -83,6 +83,11 @@ with sync_playwright() as p:
     pg.evaluate("""() => { S.account.superadmin = true; S.settingsTab = 'platform'; S.adminData = {month: 1200, firms: [{id: 'f1', name: 'Firm A', active: true, plan_id: 'p1', balance: 40, used_this_period: 300, people: 2, modules: [{code: 'read', price: 1.5, enabled: true}]}, {id: 'f2', name: 'Firm B', active: false, note: 'trial', plan_id: 'p2', balance: 0, used_this_period: 0, people: 1, modules: []}],
       plans: [{id: 'p1', name: 'Starter', monthly_fee: 999, includes: {read: {cap: 100}}, note: 'most firms'}, {id: 'p2', name: 'Pay as you go', monthly_fee: 0, includes: {}}], modules: [{code: 'read', title: 'Reading bills', price: 2, unit: 'per page', billing: 'unit'}],
       signup: {open: true, trial_credit: 100, plan: 'Starter'}, secrets: [{name: 'claude_api_key', tail: 'x9', updated_at: '2026-09-01T00:00:00Z'}]}; S.adminPrices = 'f1'; S.planEdit = 'p1'; S.newFirm = {email: 'n@f.in', password: 'Pw-9'}; render(); }"""); grab("acct-platform")
+    # Settings: TDS rates (one changed), reading bills (tests run and failed), and a client's closed periods
+    pg.evaluate("() => { Cloud.on = () => false; S.account = null; S.settingsTab = 'rates'; const r = rules()[0]; S.firm.rules = {[r.id]: {rateInd: 7.5}}; render(); }"); grab("set-rates")
+    pg.evaluate("() => { S.settingsTab = 'reading'; S.ocrTest = {ok: false, msg: 'OCR failed on the sample'}; S.googleTest = {ok: false, msg: 'Google said no', code: 'google_billing'}; S.testResult = {busy: true}; S.selfTest = {results: {pdf: {ok: true, msg: 'read 3 fields'}, ocr: {ok: false, msg: 'too slow'}}}; render(); }"); grab("set-reading")
+    pg.evaluate("() => { S.askClaudeNewSupplier = true; S.freeFirst = false; S.ocrTest = null; S.googleTest = null; S.testResult = null; render(); }"); grab("set-reading2")
+    pg.evaluate("() => { const co = CO(); ClosedP.set(co, 'to', '2026-03-31'); ClosedP.set(co, 'gst', true); ClosedP.set(co, 'tdsFiled', {[ClosedP.quarters()[0]]: '2026-05-31'}); S.view = 'company'; S.tab = 'coclosed'; render(); }"); grab("set-closed")
     br.close()
 srv.shutdown()
 json.dump({"pages": res, "errors": errors}, open(out, "w"), indent=0)
