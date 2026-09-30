@@ -894,6 +894,14 @@ function lmViewGo(v){ S.lmView = v; S.booksTab = "ledgers"; render(); }
 function lmPost(k){ LedMaster.applyPosting(S.books, CO(), k); render(); }
 // the Audit tab (app/src/screens/books/Audit.jsx): the period, how often it runs by itself, and a finding's status
 // or note (kept with the books)
+// MIS (app/src/screens/books/Mis.jsx): its period and quick picks, the tab, how often it runs by itself, a supplier
+// marked MSME (the run is worked out again), a month of the budget
+function misRangeSet(key, v){ const x = misRangeQuick("ytd", S.books); S.misRange = Object.assign({from: Audit.iso(x.from), to: Audit.iso(x.to)}, S.misRange, {[key]: v}); render(); }
+function misQuickGo(k){ const x = misRangeQuick(k, S.books); S.misRange = {from: Audit.iso(x.from), to: Audit.iso(x.to)}; render(); }
+function misTabGo(id){ S.misTab = id; S.misQ = ""; S.misF = ""; render(); }
+function misFreqSet(v){ const b = S.books; b.misCfg = Object.assign({}, b.misCfg, {freq: v}); saveBooks(); render(); }
+function misMsmeSet(party, v){ const b = S.books; b.msme = Object.assign({}, b.msme, {[party]: v}); const r = (b.mis || {}).last; if (r) MIS.run(r.from, r.to, r.how); saveBooks(); render(); }
+function misBudSet(h2, mm, v){ const b = S.books, fy = Audit.fyStart(mm + "01").slice(0, 4); b.budget = b.budget || {}; b.budget[fy] = b.budget[fy] || {}; b.budget[fy][h2] = Object.assign({}, b.budget[fy][h2], {[mm]: v === "" ? "" : num(v)}); saveBooks(); render(); }
 function auditRangeSet(key, v){ const dr = Audit.defaultRange(S.books); S.auditRange = Object.assign({from: Audit.iso(dr.from), to: Audit.iso(dr.to)}, S.auditRange, {[key]: v}); }
 function auditFreqSet(v){ const b = S.books; b.auditCfg = Object.assign({}, b.auditCfg, {freq: v}); saveBooks(); render(); }
 function auditFindingSet(id, key, v){
@@ -915,13 +923,6 @@ function gstFixChange(t){
   if (d.fsmfg !== undefined){ b.fs = Object.assign({}, FS.cfg(b), {mfg: !!t.checked}); saveBooks(); return true; }
   if (d.fsshares !== undefined){ b.fs = Object.assign({}, FS.cfg(b), {shares: t.value}); saveBooks(); return true; }
   if (d.fsmap !== undefined){ const c = FS.cfg(b); c.map = Object.assign({}, c.map, {[d.fsmap]: t.value}); b.fs = c; S.fsRun = S.fsRun ? {fy: S.fsRun.fy, kind: c.kind, d: FS.build(S.fsRun.fy)} : null; saveBooks(); render(); return true; }
-  if (d.misfrom !== undefined || d.misto !== undefined){ const x = misRangeQuick("ytd", b); S.misRange = Object.assign({from: Audit.iso(x.from), to: Audit.iso(x.to)}, S.misRange, d.misfrom !== undefined ? {from: t.value} : {to: t.value}); return true; }
-  if (d.misfreq !== undefined){ b.misCfg = Object.assign({}, b.misCfg, {freq: t.value}); saveBooks(); render(); return true; }
-  if (d.miscat !== undefined){ S.misCat = t.value; render(); return true; }
-  if (d.misbudpct !== undefined){ S.misBudPct = t.value; return true; }
-  if (d.misbud !== undefined){ const [h2, mm] = d.misbud.split("|"), fy = Audit.fyStart(mm + "01").slice(0, 4); b.budget = b.budget || {}; b.budget[fy] = b.budget[fy] || {}; b.budget[fy][h2] = Object.assign({}, b.budget[fy][h2], {[mm]: t.value === "" ? "" : num(t.value)}); saveBooks(); render(); return true; }
-  if (d.misf !== undefined){ S.misF = t.value; render(); return true; }
-  if (d.mismsme !== undefined){ b.msme = Object.assign({}, b.msme, {[d.mismsme]: t.value}); const r = (b.mis || {}).last; if (r) MIS.run(r.from, r.to, r.how); saveBooks(); render(); return true; }
   if (d.itctemail !== undefined || d.itctphone !== undefined){ const st = ITCT.store(S.gstReg || ""), k = d.itctemail !== undefined ? d.itctemail : d.itctphone; st.contact[k] = Object.assign({}, st.contact[k], d.itctemail !== undefined ? {email: t.value.trim()} : {phone: t.value.trim()}); saveBooks(); return true; }
   if (d.itcbasis !== undefined){ b.itcBasis = Object.assign({}, b.itcBasis, {[S.gstReg || ""]: t.value}); saveBooks(); render(); return true; }
   if (d.gstopen !== undefined){ const k = S.gstReg || ""; b.gstOpen = Object.assign({}, b.gstOpen); b.gstOpen[k] = Object.assign({}, b.gstOpen[k], {[d.gstopen]: t.value === "" ? "" : num(t.value)}); saveBooks(); render(); return true; }

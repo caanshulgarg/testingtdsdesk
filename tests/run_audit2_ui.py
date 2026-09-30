@@ -28,7 +28,7 @@ with sync_playwright() as p:
     pg.click('tr[data-key="SUMIT LAL LOAN"] button:text-is("remove")'); pg.wait_for_timeout(300)
     ok(pg.evaluate("JSON.stringify(S.books.auditRel)") == '[{"name":"Pradeep Sharma (Loan)","relation":"Director"},{"name":"KARISHMA GAUR (Loan)","relation":""}]', "relation set, one removed")
     pg.click('nav[aria-label="Audit"] button:text-is("Findings")'); pg.wait_for_timeout(300)
-    pg.click('button[data-misquick="lastyear"]') if pg.locator('button[data-misquick]').count() else None
+    pg.click('button:text-is("Last year")') if pg.locator('button:text-is("Last year")').count() else None
     pg.fill('input[aria-label="Audit from"]', "2025-04-01"); pg.dispatch_event('input[aria-label="Audit from"]', "change"); pg.fill('input[aria-label="Audit to"]', "2026-03-31"); pg.dispatch_event('input[aria-label="Audit to"]', "change")
     pg.click('button:text-is("Run now")'); pg.wait_for_timeout(4500)
     t = pg.inner_text("#app")
