@@ -545,7 +545,21 @@ function fyOf(d){
   return s + "-" + String((s + 1) % 100).padStart(2, "0");
 }
 S.partyFy = fyOf(null);
-function fmtDate(d){ if (!d) return "—"; const dt = new Date(String(d).slice(0, 10) + "T00:00:00"); return isNaN(dt) ? String(d).replace(/[^\w \-\/.:]/g, "") : dt.toLocaleDateString("en-IN", {day:"2-digit", month:"short", year:"numeric"}); }
+// One date format everywhere (review item 31): 19-Sep-2026, and 19-Sep-2026 09:32 with the time (24-hour, this computer's time)
+const MONTHS3 = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function toDateObj(d){
+  if (d instanceof Date) return d;
+  if (typeof d === "number") return new Date(d);
+  const t = String(d);
+  return /^\d{4}-\d{2}-\d{2}$/.test(t.slice(0, 10)) && t.length <= 10 ? new Date(t + "T00:00:00") : new Date(t);
+}
+function fmtDate(d){
+  if (!d && d !== 0) return "—";
+  const dt = toDateObj(d);
+  return isNaN(dt) ? String(d).replace(/[^\w \-\/.:]/g, "") : String(dt.getDate()).padStart(2, "0") + "-" + MONTHS3[dt.getMonth()] + "-" + dt.getFullYear();
+}
+function fmtTime(d){ if (!d && d !== 0) return ""; const dt = toDateObj(d); return isNaN(dt) ? "" : String(dt.getHours()).padStart(2, "0") + ":" + String(dt.getMinutes()).padStart(2, "0"); }
+function fmtDateTime(d){ if (!d && d !== 0) return "—"; const dt = toDateObj(d); return isNaN(dt) ? "—" : fmtDate(dt) + " " + fmtTime(dt); }
 function effectivePan(x){
   const pan = String(x.vendorPan || "").toUpperCase().trim();
   if (PAN_RE.test(pan)) return pan;
@@ -1284,7 +1298,7 @@ function compute(e, cid){
   const missing = [];
   if (e.docKind && !e.docOverride) missing.push("your confirmation that this really is a purchase bill");
   if (x.buyerGstin && co.gstin && String(x.buyerGstin).toUpperCase() !== co.gstin && !e.buyerOverride) missing.push("your confirmation that this bill belongs to " + co.name);
-  if (!x.vendorName) missing.push("deductee name");
+  if (!x.vendorName) missing.push("supplier name");
   if (!x.invoiceDate) missing.push("invoice date");
   if (!(base > 0)) missing.push("taxable value");
   if (!e.partyLedger) missing.push("party ledger");
@@ -3051,7 +3065,7 @@ async function fileHash(file){
   hashCache.set(file, h);
   return h;
 }
-function statusLabel(st){ return ({draft:"to review", approved:"approved", rejected:"marked no entry", duplicate:"held as duplicate"})[st] || st; }
+function statusLabel(st){ return ({draft:"to review", approved:"approved", rejected:"marked no entry", duplicate:"held as duplicate", deleted:"deleted"})[st] || st; }
 function findHash(h){
   if (S.pendingHashes[h]) return {msg:"The same file is already in this upload."};
   for (const c of Object.values(S.companies)){
@@ -3112,7 +3126,7 @@ function findDuplicate(e, cid){
   const k = invKey(e.x);
   if (k){
     for (const o of Object.values(D(cid).entries)){
-      if (o.id === e.id || o.status === "duplicate" || o.notDuplicate) continue;
+      if (o.id === e.id || o.status === "duplicate" || o.status === "deleted" || o.notDuplicate) continue;
       if (invKey(o.x) === k) return {entryId:o.id, strong:true,
         msg:"Same supplier and bill number as " + (o.x.vendorName || o.fileName) + " bill " + o.x.invoiceNo + " dated " + fmtDate(o.x.invoiceDate) + " (" + statusLabel(o.status) + ")."};
     }
@@ -3816,7 +3830,7 @@ function perRender(o, key, fn){
 function memoScope(fn){ if (!IN_RENDER) RENDER_GEN++; IN_RENDER++; try { return fn(); } finally { IN_RENDER--; } }
 function render(){
   RENDER_GEN++; IN_RENDER++;
-  try { return renderNow(); } finally { IN_RENDER--; }
+  try { return renderNow(); } finally { IN_RENDER--; if (!IN_RENDER && typeof Route === "object") Route.sync(); }
 }
 function renderNow(){
   requestAnimationFrame(padForBars);
@@ -3960,7 +3974,7 @@ function tallyStateOf(e){
 }
 function txnRowsBills(){
   const co = CO(), d = D();
-  return Object.values(d.entries).map(e => {
+  return Object.values(d.entries).filter(e => e.status !== "deleted").map(e => {
     const x = e.x || {}, gst = num(x.cgst) + num(x.sgst) + num(x.igst) + num(x.cess);
     const [cls, label] = tallyStateOf(e);
     return {id: e.id, kind: "bill", date: x.invoiceDate || "", up: (e.createdAt || "").slice(0, 10), vch: vchTypeOf(e, co), no: x.invoiceNo || "",
@@ -4017,6 +4031,24 @@ function txnFiltered(rows){
 }
 // the register: React (app/src/screens/Txn.jsx)
 function viewTransactions(){ return '<div data-react="Txn"></div>'; }
+// the register as an Excel file (review item 30), the same rows and columns as the CSV, amounts as numbers
+function txnTable(){
+  const tab = txnTab();
+  const rows = txnFiltered(tab === "bills" ? txnRowsBills() : tab === "sales" ? txnRowsSales() : txnRowsBank());
+  const head = ["S. no.", "Date", "Uploaded", "Voucher", tab === "bank" ? "Reference" : "Invoice no.", tab === "sales" ? "Customer" : "Party",
+    tab === "bank" ? "Withdrawal (₹)" : "Taxable (₹)", tab === "bank" ? "Deposit (₹)" : "GST (₹)", tab === "bank" ? "Amount (₹)" : "Invoice value (₹)", "In Tally", "Document"];
+  const body = rows.map((r, i) => [i + 1, r.date ? fmtDate(r.date) : "", r.up ? fmtDate(r.up) : "", r.vch, r.no, r.party,
+    num(tab === "bank" ? r.dr : r.taxable) || "", num(tab === "bank" ? r.cr : r.gst) || "", num(r.total) || "", r.label, r.file]);
+  return {tab, head, body};
+}
+function txnExcel(){
+  const t = txnTable();
+  FC.excel("transactions-" + t.tab + "-" + new Date().toISOString().slice(0, 10), [[{bills: "Purchase", sales: "Sales", bank: "Bank"}[t.tab] || t.tab, [t.head].concat(t.body)]]);
+}
+// columns that can be hidden (the chooser on the Transactions page)
+const TXN_COLS = [["date", "Date"], ["vch", "Voucher"], ["no", "Invoice no. / Reference"], ["party", "Party"], ["amts", "Taxable and GST / Withdrawal and deposit"], ["val", "Invoice value / Amount"], ["status", "In Tally"], ["doc", "Document"]];
+function txnColShown(k){ return !(S.txnHide && S.txnHide[k]); }
+function txnColToggle(k){ S.txnHide = Object.assign({}, S.txnHide, {[k]: txnColShown(k)}); render(); }
 function txnCsv(){
   const tab = txnTab(), co = CO();
   const rows = txnFiltered(tab === "bills" ? txnRowsBills() : tab === "sales" ? txnRowsSales() : txnRowsBank());
@@ -14661,8 +14693,20 @@ const Cloud = {
     if (!r.ok) throw new Error(j.error_description || j.msg || j.message || ("Sign-in failed (" + r.status + ")"));
     return j;
   },
+  // through the sign-in function, which counts wrong passwords and locks the account after 5 (review item 21);
+  // straight at Supabase Auth where that function is not deployed (the lock is then kept by the token hook alone)
+  async signInCall(email, password){
+    const c = this.cfg();
+    let r;
+    try { r = await fetch(c.url.replace(/\/+$/, "") + "/functions/v1/signin", {method: "POST", headers: {apikey: c.key, "Content-Type": "application/json"}, body: JSON.stringify({email, password})}); }
+    catch (e){ r = null; }
+    if (!r || r.status === 404) return this.authCall("token?grant_type=password", {email, password});
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || ("Sign-in failed (" + r.status + ")"));
+    return j;
+  },
   async signIn(email, password){
-    const j = await this.authCall("token?grant_type=password", {email: String(email).trim(), password});
+    const j = await this.signInCall(String(email).trim(), password);
     this.setSess({access_token: j.access_token, refresh_token: j.refresh_token, at: Date.now(), expires_in: j.expires_in || 3600, email: (j.user && j.user.email) || email, user_id: j.user && j.user.id});
     this.setCfg({email: String(email).trim()});
     if (await this.checkMfa()) return true;      // the code is asked for before anything of the firm is shown
@@ -14970,7 +15014,7 @@ function cloudChip(){
   if (st.state === "signedout") return '<button class="tchip bad" data-act="openSettings">Sign in again</button>';
   if (st.error) return '<button class="tchip warn" data-act="openSettings" title="' + esc(st.error) + '">Sync problem</button>';
   const mins = st.lastSync ? Math.round((Date.now() - st.lastSync) / 60000) : null;
-  return '<span class="tchip ok" title="' + esc(st.email) + (st.lastSync ? " \u00b7 last sync " + new Date(st.lastSync).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}) : "") + '">\u2601 Shared' + (mins > 5 ? " \u00b7 " + mins + "m" : "") + "</span>";
+  return '<span class="tchip ok" title="' + esc(st.email) + (st.lastSync ? " \u00b7 last sync " + fmtTime(st.lastSync) : "") + '">\u2601 Shared' + (mins > 5 ? " \u00b7 " + mins + "m" : "") + "</span>";
 }
 
 /* ---------- plan, balance and charging ---------- */
@@ -15044,9 +15088,54 @@ async function loadAdminOverview(quiet){
   } catch (e){ if (!quiet) toast("Could not read the platform data: " + e.message); }
 }
 
+// where a link in an email should bring the person back: this page, without its #…
+function appUrl(){ return location.origin + location.pathname; }
+// An invite or reset link lands here with the session in the address (#access_token=…&type=invite|recovery):
+// the person is signed in and asked to choose their password before anything else (review item 21)
+function takeAuthLink(){
+  const h = String(location.hash || "");
+  if (!/access_token=/.test(h) || !/type=(invite|recovery|signup|magiclink)/.test(h)) return false;
+  const q = new URLSearchParams(h.replace(/^#/, ""));
+  try { history.replaceState(null, "", location.pathname + location.search); } catch (e){}
+  Cloud.setSess({access_token: q.get("access_token"), refresh_token: q.get("refresh_token"), at: Date.now(), expires_in: num(q.get("expires_in")) || 3600, email: "", user_id: ""});
+  S.setPassword = {type: q.get("type")};
+  return true;
+}
+function viewSetPassword(){
+  const f = S.setPassword || {}, st = Cloud.st;
+  return '<div class="signin"><div class="signin-box">' +
+    "<h1>" + (f.type === "recovery" ? "Choose a new password" : "Welcome to FinCom") + "</h1>" +
+    '<p class="note" style="margin:8px 0 14px">' + (f.type === "recovery" ? "Choose the password you will sign in with from now on." : "You have been added to your firm\u2019s account. Choose the password you will sign in with.") + "</p>" +
+    '<label class="f"><span>New password (10 characters or more, letters and digits)</span><input type="password" id="spw1" autocomplete="new-password" autofocus></label>' +
+    '<label class="f" style="margin-top:8px"><span>Repeat it</span><input type="password" id="spw2" autocomplete="new-password"></label>' +
+    '<div class="row" style="margin-top:12px"><button class="btn primary" data-act="setPasswordGo"' + (st.busy ? " disabled" : "") + ">" + (st.busy ? "Saving\u2026" : "Save and continue") + "</button></div>" +
+    (f.error ? '<p class="bk-warn" style="margin-top:10px">' + esc(f.error) + "</p>" : "") +
+    "</div></div>";
+}
+async function setPasswordGo(){
+  const a = (document.getElementById("spw1") || {}).value || "", b = (document.getElementById("spw2") || {}).value || "";
+  const f = S.setPassword || (S.setPassword = {});
+  if (a.length < 10 || !/[A-Za-z]/.test(a) || !/\d/.test(a)){ f.error = "Use 10 characters or more, with letters and digits."; render(); return; }
+  if (a !== b){ f.error = "The two passwords are not the same."; render(); return; }
+  const c = Cloud.cfg(), s = Cloud.sess();
+  Cloud.st.busy = "saving"; render();
+  try {
+    const r = await fetch(c.url.replace(/\/+$/, "") + "/auth/v1/user", {method: "PUT", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": "application/json"}, body: JSON.stringify({password: a})});
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.msg || j.error_description || j.message || "The password could not be saved.");
+    Cloud.setSess(Object.assign({}, s, {email: j.email || "", user_id: j.id || ""}));
+    Cloud.setCfg({email: j.email || ""});
+    S.setPassword = null; Cloud.st.busy = "";
+    auditEvent("password_set", f.type || "");
+    if (!(await Cloud.checkMfa())) await Cloud.whoAmI();
+    render();
+  } catch (e){ Cloud.st.busy = ""; f.error = e.message; render(); }
+}
+
 /* ---------- nothing is shown until someone signs in ---------- */
 function signInNeeded(){
   if (window.claude) return false;                 // inside claude.ai, for trying things out
+  if (S.setPassword) return true;                  // arrived from an invite or reset link: the password comes first
   if (Cloud.on()) return !!Cloud.st.mfa;           // signed in (works offline once signed in), unless the code is still due
   return Cloud.cfg().gate !== false;
 }
@@ -15065,7 +15154,7 @@ function viewSignUp(){
     '<label class="f"><span>Firm name</span><input type="text" data-cloud="firm" data-fk="sufirm" value="' + esc(f.firm || "") + '"></label>' +
     '<label class="f" style="margin-top:8px"><span>Your name</span><input type="text" data-cloud="name" data-fk="suname" value="' + esc(f.name || "") + '"></label>' +
     '<label class="f" style="margin-top:8px"><span>Email</span><input type="email" data-cloud="email" data-fk="cloudemail" value="' + esc(f.email || "") + '" autocomplete="username"></label>' +
-    '<label class="f" style="margin-top:8px"><span>Password (8 characters or more)</span><input type="password" data-cloud="password" data-fk="cloudpw" value="' + esc(f.password || "") + '" autocomplete="new-password"></label>' +
+    '<label class="f" style="margin-top:8px"><span>Password (10 characters or more, letters and digits)</span><input type="password" data-cloud="password" data-fk="cloudpw" value="' + esc(f.password || "") + '" autocomplete="new-password"></label>' +
     '<div class="row" style="margin-top:12px"><button class="btn primary" data-act="cloudSignUp"' + (st.busy ? " disabled" : "") + ">" + (st.busy ? "Making the account\u2026" : "Create the account") + "</button></div>" +
     (st.error ? '<p class="bk-warn" style="margin-top:10px">' + esc(st.error) + "</p>" : "") +
     '<p class="note" style="margin-top:14px">Already have one? <button class="linkbtn" data-act="showSignIn">Sign in</button></p>' +
@@ -15073,6 +15162,7 @@ function viewSignUp(){
 }
 function viewSignIn(){
   const c = Cloud.cfg(), st = Cloud.st;
+  if (S.setPassword) return viewSetPassword();
   if (Cloud.on() && st.mfa) return viewTwoStep();
   if (S.signUpOpen) return viewSignUp();
   return '<div class="signin"><div class="signin-box">' +
@@ -15084,7 +15174,7 @@ function viewSignIn(){
     '<label class="f" style="margin-top:8px"><span>Password</span><input type="password" data-cloud="password" data-fk="cloudpw" value="' + esc((S.cloudForm && S.cloudForm.password) || "") + '" autocomplete="current-password"></label>' +
     '<div class="row" style="margin-top:12px"><button class="btn primary" data-act="cloudSignIn"' + (st.busy ? " disabled" : "") + ">" + (st.busy ? "Signing in\u2026" : "Sign in") + "</button></div>" +
     (st.error ? '<p class="bk-warn" style="margin-top:10px">' + esc(st.error) + "</p>" : "") +
-    '<p class="note" style="margin-top:14px">Forgotten the password? Ask the person who runs your firm\u2019s account to make a new one.</p>' +
+    '<p class="note" style="margin-top:14px">Forgotten the password? Ask the person who runs your firm\u2019s account to send you a reset link. After 5 wrong passwords the account is locked for 15 minutes.</p>' +
     '<p class="note" style="margin-top:10px">No internet on this computer? <button class="linkbtn" data-act="useOffline">Use it here without an account</button> \u2014 the work stays on this computer only.</p>' +
     (S.signupInfo && S.signupInfo.open !== false ? '<p class="note" style="margin-top:6px">New here? <button class="linkbtn" data-act="showSignUp">Create an account</button>' + (num(S.signupInfo.trial_credit) ? " \u00b7 starts with " + INR.format(num(S.signupInfo.trial_credit)) + " of credit" : "") + "</p>" : "") +
     "</div></div>";
@@ -15271,23 +15361,67 @@ function goClient(to){
   };
   if (S.view !== "company" || S.coId !== cid) openCompany(cid).then(go); else go();
 }
+// a section of the firm's Settings (the firm menu in the sidebar, and page links)
+function goSettings(sec){ closeSwitcher(); S.firmMenu = false; S.tallyPanel = false; S.view = "home"; S.homeTab = "rules"; S.settingsTab = sec || null; S.step = null; S.arm = null; render(); window.scrollTo(0, 0); }
 function navHome(tab){ if (tab === "help" && typeof SUP === "object" && !(S.view === "home" && S.homeTab === "help")) S.helpCtx = SUP.context(); closeSwitcher(); S.firmMenu = false; S.tallyPanel = false; S.view = "home"; S.homeTab = tab; S.step = null; S.addingCo = false; S.arm = null; if (tab === "rules") S.settingsTab = null; render(); window.scrollTo(0, 0); }
 function goTab(tab){ S.tab = tab; S.step = null; S.arm = null; render(); }
 function toggleSetup(){ S.step = null; S.tab = isSetupTab(S.tab) ? "invoices" : "settings"; render(); }
 // a control drawn by React answers its own events; these handlers take the old screens, and the old pieces a React
 // screen still shows inside it (marked data-legacy)
 // delete a bill (asks first); not one already in Tally
+// Delete is a soft delete (review item 24): only the firm's owner, with a reason; the bill is kept under "Deleted"
+// with its document and can be restored. Working offline (no firm account) there is no owner to ask for.
+function canDeleteBills(){
+  if (!Cloud.on() || !S.account) return true;
+  return S.account.superadmin === true || ((S.account.me || {}).role === "owner");
+}
 function billDelete(id){
   const e = D().entries[id];
   if (!e) return;
   if (e.exportedAt){ toast("This bill is in Tally. Take it back from Tally first (Posted \u2192 Take it back), then delete it."); return; }
-  askConfirm({title: "Delete this bill?", ok: "Delete", body: '<p class="note">' + esc(e.x.vendorName || e.fileName || "") + (e.x.invoiceNo ? " \u00b7 " + esc(e.x.invoiceNo) : "") + ". The file can be uploaded again later.</p>"}).then(ok => {
-    if (!ok) return;
+  if (!canDeleteBills()){ toast("Only the firm\u2019s owner can delete a bill. Mark it \u201cNo entry\u201d instead, or ask the owner."); return; }
+  askConfirm({title: "Delete this bill?", ok: "Delete", danger: true,
+    body: '<p class="note">' + esc(e.x.vendorName || e.fileName || "") + (e.x.invoiceNo ? " \u00b7 " + esc(e.x.invoiceNo) : "") + ". It moves to \u201cDeleted\u201d with its document, and can be restored from there.</p>" +
+      '<label class="f" style="margin-top:8px"><span>Why is it deleted?</span><input type="text" id="delWhy" maxlength="200" placeholder="For example: uploaded twice, not this client\u2019s bill"></label>',
+    read: () => ((document.getElementById("delWhy") || {}).value || "").trim(),
+    validate: why => why.length < 3 ? "Write why the bill is deleted." : ""}).then(r => {
+    if (!r) return;
     if (e.status === "approved") unapply(e, S.coId);
     if (S.revSel) S.revSel.delete(e.id);
     if (S.drawerOpen && S.selected === e.id) S.drawerOpen = false;
-    removeEntry(e); refreshStats(S.coId); toast("Deleted."); render();
+    softDeleteEntry(e, r.data); refreshStats(S.coId); toast("Deleted. It is under \u201cDeleted\u201d, where it can be restored."); render();
   });
+}
+function softDeleteEntry(e, why){
+  e.deleted = {at: new Date().toISOString(), by: whoAmI(), reason: String(why || "").slice(0, 200), status: e.status};
+  e.status = "deleted";
+  unregisterHash(S.coId, e.fileHash);            // the same file can be uploaded again
+  if (S.selected === e.id) S.selected = null;
+  Store.saveEntry(S.coId, e);
+  auditEvent("bill_delete", (e.x.vendorName || e.fileName || "") + " " + (e.x.invoiceNo || e.id) + ": " + e.deleted.reason, S.coId);
+}
+// back to To review (an approved bill was taken off its supplier's totals when deleted, so it is approved again)
+function billRestore(id){
+  const e = D().entries[id];
+  if (!e || e.status !== "deleted") return;
+  if (!canDeleteBills()){ toast("Only the firm\u2019s owner can restore a deleted bill."); return; }
+  e.restored = {at: new Date().toISOString(), by: whoAmI(), was: e.deleted};
+  e.status = "draft"; e.deleted = null;
+  if (e.fileHash) registerHash(S.coId, e.fileHash, e.id);
+  Store.saveEntry(S.coId, e);
+  auditEvent("bill_restore", (e.x.vendorName || e.fileName || "") + " " + (e.x.invoiceNo || e.id), S.coId);
+  S.filter = "draft"; S.selected = e.id; refreshStats(S.coId); toast("Restored to To review."); render();
+}
+// the bills in the list as shown (Invoices.jsx orders them the same way), and a step to the next or previous one
+function billList(){
+  const all = Object.values(D().entries || {}), f = S.filter || "draft";
+  return all.filter(e => e.status === f).sort((a, b) => (f === "draft" ? byDate(a, b) : byDate(b, a)));
+}
+function billStep(dir){
+  const list = billList(); if (!list.length) return;
+  const i = list.findIndex(e => e.id === S.selected);
+  const next = list[Math.min(list.length - 1, Math.max(0, i < 0 ? 0 : i + dir))];
+  if (next && next.id !== S.selected){ S.selected = next.id; render(); }
 }
 // an approved bill, not yet in Tally, back to To review (staying on the page it was sent back from)
 function billBack(id){ const e = D().entries[id]; if (e){ const keep = S.tab; undoApproval(e); S.tab = keep; render(); } }
@@ -15412,7 +15546,10 @@ function revTds(id, on){
 // the firm account in Settings (app/src/screens/Account.jsx): a person's password, two-step or switching on and off; a
 // backup downloaded; a drop key switched off; the platform page's buttons (they read its boxes by id) and a firm's plan
 function acctPerson(what, email){
-  if (what === "reset") Cloud.fn("admin", {action: "reset_password", email}).then(r => { S.newPerson = {email: r.email, password: r.password}; toast("New password made."); render(); }, e => toast(e.message));
+  // a reset link by email: they choose the new password; "makepw" is the fallback where email is not set up
+  if (what === "reset") Cloud.fn("admin", {action: "send_reset", email, redirect: appUrl()}).then(r => { S.newPerson = null; toast(r.note || "Reset link sent."); render(); }, e => toast(e.message));
+  else if (what === "makepw") Cloud.fn("admin", {action: "reset_password", email}).then(r => { S.newPerson = {email: r.email, password: r.password}; toast("New password made."); render(); }, e => toast(e.message));
+  else if (what === "unlock") Cloud.fn("admin", {action: "unlock", email}).then(r => toast(r.note || "Unlocked."), e => toast(e.message));
   else if (what === "mfa") askConfirm({title: "Reset two-step sign-in for " + email + "?", ok: "Reset", body: '<p class="note">Their authenticator entry is removed. At the next sign-in they set it up again with their phone. Do this only when you are sure it is them asking.</p>'})
     .then(a => { if (a) Cloud.fn("admin", {action: "reset_two_step", email}).then(() => toast("Two-step sign-in reset for " + email + "."), e => toast(e.message)); });
   else Cloud.fn("admin", {action: "set_person", email, active: what === "on"}).then(() => { toast(what === "on" ? "Switched on." : "Switched off."); loadAccount(); }, e => toast(e.message));
@@ -15613,6 +15750,7 @@ function doAct(act, t){
       else { if (box){ box.focus(); box.select(); } toast("Select the report and copy it (Ctrl+C)."); }
       break;
     }
+    case "setPasswordGo": setPasswordGo(); break;
     case "cloudSignIn": {
       const em = document.querySelector('[data-cloud="email"]'), pw = document.querySelector('[data-cloud="password"]');
       const email = em ? em.value.trim() : "", pass = pw ? pw.value : "";
@@ -15667,7 +15805,7 @@ function doAct(act, t){
       Cloud.st.busy = "Making the account\u2026"; Cloud.st.error = ""; render();
       Cloud.signUp({firm: f.firm, name: f.name || "", email: f.email, password: f.password})
         .then(() => Cloud.signIn(f.email, f.password))
-        .then(() => { Cloud.st.busy = ""; S.cloudForm = null; S.signUpOpen = false; toast("Welcome. Your firm is ready."); startCloudSync(); loadAccount(true).then(() => render()); render(); },
+        .then(() => { Cloud.st.busy = ""; S.cloudForm = null; S.signUpOpen = false; if (!S.firm.firmName){ S.firm.firmName = f.firm; Store.saveFirm(); } toast("Welcome. Your firm is ready."); startCloudSync(); loadAccount(true).then(() => render()); render(); },
               err => { Cloud.st.busy = ""; Cloud.st.error = err.message; render(); });
       break;
     }
@@ -15689,6 +15827,16 @@ function doAct(act, t){
       S.walletOpen = !S.walletOpen;
       if (S.walletOpen) Cloud.api("wallet_entries?select=at,kind,code,qty,amount,balance_after,note&order=at.desc&limit=50").then(r => { S.wallet = r || []; render(); }, e => toast(e.message));
       render(); break;
+    }
+    case "invitePerson": {
+      // an email with a link to set their own password (review item 21)
+      const g = id => (document.getElementById(id) || {}).value || "";
+      const email = g("npEmail").trim();
+      if (!email){ toast("An email address is needed."); break; }
+      Cloud.fn("admin", {action: "invite_person", email, name: g("npName"), role: g("npRole"), redirect: appUrl()}).then(r => {
+        S.newPerson = null; toast(r.note || ("Invited " + r.email + ".")); loadAccount();
+      }, e => toast(e.message));
+      break;
     }
     case "addPerson": {
       const g = id => (document.getElementById(id) || {}).value || "";
@@ -16073,7 +16221,7 @@ function doAct(act, t){
     case "reject": if (e){ if (e.docPath){ CloudDocs.remove(e.docPath); delete e.docPath; } setStatus(e, "rejected", "Marked as no entry needed."); } break;
     case "restore": if (e) setStatus(e, "draft"); break;
     case "undo": if (e) undoApproval(e); break;
-    case "delete": if (e) removeEntry(e); break;
+    case "delete": if (e) billDelete(e.id); break;
     case "addParty": { const id = "p-new-" + Date.now().toString(36); D().parties[id] = {id, name:"New supplier", pan:"", gstin:"", ledgerName:"", natureDefault:"", expenseLedger:"", ldcRate:"", ldcValidTo:"", ytd:{}}; S.partySel = id; Store.saveParty(S.coId, D().parties[id]); render(); break; }
     case "closeParty": S.partySel = null; render(); break;
     case "resetRules": S.firm.rules = {}; Store.saveFirm(); toast("Default rates and limits restored."); render(); break;
@@ -16124,10 +16272,20 @@ document.addEventListener("keydown", ev => {
   if (k === "F3" || (ctrl && k.toLowerCase() === "k")){ ev.preventDefault(); openSwitcher(); return; }
   const tag = (document.activeElement && document.activeElement.tagName) || "";
   const inField = /INPUT|SELECT|TEXTAREA/.test(tag);
-  if (ctrl && k.toLowerCase() === "a" && !inField && S.view === "company" && S.tab === "invoices"){
+  // Ctrl+Enter approves the bill on screen (review item 33: Ctrl+A is the browser's Select All, left alone now);
+  // from inside a box too: the box is left first, so what was typed counts
+  if (ctrl && k === "Enter" && S.view === "company" && S.tab === "invoices"){
     const e = curEntry();
-    if (e && e.status === "draft" && !S.reading[e.id]){ ev.preventDefault(); approve(e); }
+    if (e && e.status === "draft" && !S.reading[e.id]){
+      ev.preventDefault();
+      if (inField && document.activeElement.blur) document.activeElement.blur();
+      setTimeout(() => { const e2 = curEntry(); if (e2 && e2.status === "draft") { approve(e2); render(); } }, 60);
+    }
     return;
+  }
+  // J / K: the next or previous bill in the list shown
+  if (!ctrl && !ev.altKey && !inField && (k === "j" || k === "k") && S.view === "company" && S.tab === "invoices" && !S.reviewTable){
+    ev.preventDefault(); billStep(k === "j" ? 1 : -1); return;
   }
   if (k === "Escape" && !inField && S.view === "company"){ goHome(); return; }
   if ((k === "Enter" || k === " ") && ev.target.id === "drop"){ ev.preventDefault(); pickFiles("company"); }
@@ -16203,6 +16361,36 @@ function coSetTallyName(name){ const co = CO(); if (co && name){ co.tallyName = 
 function coSetRuleLedger(kind, ruleId, v){ const co = CO(); (kind === "tds" ? co.tdsLedgers : co.expenseLedgers)[ruleId] = v; later("c" + co.id, () => Store.saveCompany(co), 600); }
 function coSetBlockRule(catId, v){ const co = CO(); co.gstBlock = co.gstBlock || {}; co.gstBlock[catId] = v; Store.saveCompany(co); render(); }
 // the firm's own name, shown in the top bar and on reports
+// First sign-in of an owner with no firm name yet (review item 32): the name (from sign-up where given), address and
+// logo are asked for once; "Later" puts it off until the next sign-in
+function firmSetupDue(){
+  return !!(S.firm && !S.firm.firmName && !S.firmSetupLater && typeof Cloud === "object" && Cloud.on() && S.account && ((S.account.me || {}).role === "owner"));
+}
+function firmSetupSave(d){
+  const name = String(d.name || "").trim();
+  if (!name){ toast("The firm\u2019s name is needed."); return false; }
+  S.firm.firmName = name.slice(0, 120);
+  S.firm.firmAddress = String(d.address || "").trim().slice(0, 400);
+  if (d.logo !== undefined) S.firm.firmLogo = d.logo || "";
+  Store.saveFirm(); toast("Saved."); render();
+  return true;
+}
+// a logo picked from the computer, kept small (a data URL of at most about 150 KB)
+function firmLogoRead(file){
+  return new Promise((ok, no) => {
+    if (!file || !/^image\//.test(file.type)){ no(new Error("Choose a picture (PNG or JPG).")); return; }
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      const k = Math.min(1, 320 / Math.max(img.width, img.height)), c = document.createElement("canvas");
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+      const out = c.toDataURL("image/png");
+      out.length > 200000 ? no(new Error("The logo is too large; use a smaller picture.")) : ok(out);
+    };
+    img.onerror = () => no(new Error("That picture could not be read."));
+    img.src = url;
+  });
+}
 function firmSetName(v){ S.firm.firmName = v; later("firm", () => Store.saveFirm(), 600); const el = document.getElementById("firmLine"); if (el) el.textContent = v; }
 function setPath(o, path, v){ const k = path.split("."); if (k.length === 2) o[k[0]][k[1]] = v; else o[k[0]] = v; }
 
@@ -16305,6 +16493,7 @@ function applyEntryHash(){
 }
 window.addEventListener("hashchange", () => { applyEntryHash(); render(); });
 (async function start(){
+  takeAuthLink();
   applyEntryHash();
   S.splitPdf = lsGet("tdsdesk-test:splitPdf") === "1";
   S.freeFirst = lsGet("tdsdesk-test:freeFirst") !== "0";
@@ -16316,8 +16505,12 @@ window.addEventListener("hashchange", () => { applyEntryHash(); render(); });
   catch (e){ S.firm = S.firm || Object.assign({}, DEFAULT_FIRM); toast("Saved data could not be loaded. Reload the page to try again."); }
   Object.keys(S.data).forEach(refreshStats);
   render();
+  // a page link (#/…) opens that page; otherwise the client open last time
+  if (/^#\//.test(location.hash) && typeof Route === "object" && signInNeeded()) Route.pending = location.hash;
+  const linked = /^#\//.test(location.hash) && typeof Route === "object" && !signInNeeded() ? await Route.apply(location.hash) : false;
   const last = lsGet("tdsdesk-test:last") || recentIds()[0];
-  if (last && S.companies[last]) openCompany(last);
+  if (!linked && last && S.companies[last]) openCompany(last);
+  if (typeof Route === "object"){ Route.ready = true; Route.replaceNext = true; }
   S.sample = await samplePromise;
   if (S.sample){
     try { const lim = await S.sample.limits(); S.imgMax = lim && lim.images ? Math.min(6, lim.images.maxCount) : 0; } catch(e){ S.imgMax = 0; }
@@ -17782,7 +17975,7 @@ const SUP = {
     return "track";
   },
   ago(iso){ const m = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60000)); return m < 60 ? m + "m" : m < 48 * 60 ? Math.round(m / 60) + "h" : Math.round(m / 1440) + "d"; },
-  when(iso){ if (!iso) return "—"; const d = new Date(iso); return d.toLocaleDateString("en-IN", {day: "2-digit", month: "short", year: "numeric"}) + " " + d.toLocaleTimeString("en-IN", {hour: "2-digit", minute: "2-digit"}); },
+  when(iso){ return fmtDateTime(iso); },
   async load(quiet){
     const s = this.st();
     if (!this.on()) return;
@@ -18483,7 +18676,7 @@ async function loadLastSignIn(){
     const rows = await Cloud.api("activity?select=at,detail&user_id=eq." + encodeURIComponent(s.user_id) + "&what=eq.signin&order=at.desc&limit=2");
     const prev = (rows || [])[1];
     S.lastSignIn = prev ? {at: prev.at, device: deviceName(prev.detail)} : null;
-    if (prev) toast("Your last sign-in: " + new Date(prev.at).toLocaleString("en-IN", {day: "numeric", month: "short", hour: "numeric", minute: "2-digit"}) + ", " + S.lastSignIn.device + ". Not you? Change your password in Settings.");
+    if (prev) toast("Your last sign-in: " + fmtDateTime(prev.at) + ", " + S.lastSignIn.device + ". Not you? Change your password in Settings.");
   } catch (e){}
 }
 /* ================================================================== */
@@ -19526,7 +19719,8 @@ const KEYS = [
   ["/", "Look up any ledger, anywhere in a client"],
   ["?", "This list"],
   ["F3 or Ctrl+K", "Switch client"],
-  ["Ctrl+A", "Approve the bill on screen"],
+  ["Ctrl+Enter", "Approve the bill on screen"],
+  ["J or K", "Next or previous bill in the list"],
   ["Esc", "Close a panel, or go back"],
   ["Enter", "In Look up: show the answer"]
 ];
@@ -19873,7 +20067,7 @@ const TLight = {
   work(cos, devs, now){
     const by = {}, dev = {};
     devs.filter(d => !d.revoked).forEach(d => { dev[d.id] = d; });
-    const when = t => new Date(t).toLocaleString("en-IN", {day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit"});
+    const when = t => fmtDateTime(t);
     const rank = {bad: 3, warn: 2, ok: 1};
     cos.forEach(c => {
       const d = dev[c.device_id]; if (!d) return;
@@ -19936,7 +20130,7 @@ function tallyStatus(co){
   const seenOf = d => Date.parse((((d.info || {}).beat) || {}).at || d.last_seen || 0) || 0;
   const heard = devs.reduce((a, d) => Math.max(a, seenOf(d)), 0);
   const fresh = devs.some(d => Date.now() - seenOf(d) <= 15 * 60000);
-  const when = t => fmtDate(new Date(t).toISOString().slice(0, 10)) + " " + new Date(t).toLocaleTimeString("en-IN", {hour: "2-digit", minute: "2-digit"});
+  const when = t => fmtDateTime(t);
   if (!local && !devs.length) return {state: "none", level: "bad", label: "Not set up", say: "No Tally Bridge on this computer, and no computer of the firm sends from Tally. Set up the Tally Bridge on the computer with TallyPrime."};
   if (!local && !fresh) return {state: "offline", level: "bad", label: "Offline since " + (heard ? when(heard) : "—"), say: "No word from the firm's Tally computer" + (heard ? " since " + when(heard) : "") + ": the computer, the FinCom Connector or the bridge is off."};
   const cos = co ? [co] : Object.values(S.companies || {}).filter(c => !c.deleted);
@@ -20231,4 +20425,93 @@ async function aihNote(how, id){
   if (how === "redo"){ n.figures = AIH.noticeFigures(n); AIH.draft(n); return; }
   if (how === "copy"){ try { await navigator.clipboard.writeText(n.reply || ""); toast("Copied."); } catch (x){ toast("Could not copy; select the text and copy it."); } return; }
   if (how === "dl") saveFile("Reply " + String((n.fields || {}).form || "notice").replace(/[^\w.-]+/g, "_") + ".txt", new Blob([n.reply || ""], {type: "text/plain"}));
+}
+/* ================================================================== */
+/* Page links (review item 25): every page has its own address, so    */
+/* Back, Forward and Refresh work and a bill can be sent as a link.    */
+/* ================================================================== */
+// The address is kept after the # (#/c/<client>/bill/<id>): the site is plain files, so a path like /c/… would not be
+// found on refresh. The page state (S) stays the only truth: the address is written from it after each drawing, and
+// read into it when the address changes (Back, Forward, a link opened, Refresh).
+//   #/clients  #/today  #/inbox  #/tally  #/help  #/settings[/<section>]
+//   #/c/<client>/dash | inbox | upload | txn/<kind> | books/<tab> | purchase/review | purchase/<filter> | bill/<id>
+//                | bank | sales | post/<kind> | done/<kind> | setup/<section>
+const Route = {
+  applying: false,
+  of(){
+    if (S.view !== "company" || !S.coId || !CO()){
+      if (S.homeTab === "rules") return "#/settings" + (S.settingsTab ? "/" + encodeURIComponent(S.settingsTab) : "");
+      return "#/" + (["clients", "today", "inbox", "tally", "help"].includes(S.homeTab) ? S.homeTab : "clients");
+    }
+    const c = "#/c/" + encodeURIComponent(S.coId) + "/";
+    if (S.step === "collect") return c + "upload";
+    if (S.tab === "dash") return c + "dash";
+    if (S.tab === "clientInbox") return c + "inbox";
+    if (S.tab === "txn") return c + "txn/" + txnTab();
+    if (S.tab === "books") return c + "books/" + booksTab();
+    if (isSetupTab(S.tab)) return c + "setup/" + S.tab;
+    if (S.tab === "bank") return c + "bank";
+    if (S.tab === "sales") return c + "sales";
+    if (S.tab === "export") return c + "post/" + (S.postFocus || "bills");
+    if (S.tab === "done") return c + "done/" + (S.postFocus || "bills");
+    if (S.tab === "invoices"){
+      if (S.selected && !S.reviewTable) return c + "bill/" + encodeURIComponent(S.selected);
+      return c + "purchase/" + (S.reviewTable ? "review" : (S.filter || "draft"));
+    }
+    return c + "dash";
+  },
+  // after each drawing: the address follows the page; a new page is a new step in the browser's history
+  pending: null,                    // a link opened before signing in: applied once signed in
+  ready: false,                     // set once the page has started: until then the address is the one opened, not ours
+  sync(){
+    if (!this.ready || this.applying || typeof history === "undefined" || signInNeeded() || !S.firm) return;
+    if (this.pending){ const p = this.pending; this.pending = null; this.apply(p); return; }
+    const h = this.of();
+    if (h === location.hash){ this.replaceNext = false; return; }
+    try {
+      if (!/^#\//.test(location.hash) || this.replaceNext) history.replaceState(null, "", location.pathname + location.search + h);
+      else history.pushState(null, "", location.pathname + location.search + h);
+    } catch (e){}
+    this.replaceNext = false;
+  },
+  // the address into the page: from Back/Forward, a link, or a refresh
+  async apply(h){
+    const p = String(h || "").replace(/^#\/?/, "").split("/").map(x => { try { return decodeURIComponent(x); } catch (e){ return x; } });
+    if (!p[0]) return false;
+    this.applying = true;
+    try {
+      if (p[0] === "c" && p[1]){
+        if (!S.companies[p[1]]){ toast("That client is not in this firm’s list."); return false; }
+        await openCompany(p[1]);
+        const what = p[2] || "dash", arg = p[3] || "";
+        S.step = null; S.drawerOpen = false; S.colPop = null;
+        if (what === "upload"){ S.tab = S.tab === "dash" ? "invoices" : S.tab; S.step = "collect"; }
+        else if (what === "dash") S.tab = "dash";
+        else if (what === "inbox") S.tab = "clientInbox";
+        else if (what === "txn"){ S.tab = "txn"; if (arg) S.txnTab = arg; }
+        else if (what === "books"){ S.tab = "books"; if (arg) S.booksTab = arg; }
+        else if (what === "setup" && isSetupTab(arg)) S.tab = arg;
+        else if (what === "bank"){ S.tab = "bank"; if (!S.bank || S.bank.cid !== S.coId) loadBank(S.coId).then(() => render()); }
+        else if (what === "sales") S.tab = "sales";
+        else if (what === "post" || what === "done"){ S.tab = what === "post" ? "export" : "done"; S.postFocus = arg || "bills"; if (!S.bank || S.bank.cid !== S.coId) loadBank(S.coId).then(() => render()); }
+        else if (what === "purchase"){ S.tab = "invoices"; S.selected = null; S.reviewTable = arg === "review"; if (arg && arg !== "review") S.filter = arg; }
+        else if (what === "bill"){
+          const e = D().entries[arg];
+          S.tab = "invoices"; S.reviewTable = false;
+          if (e){ S.filter = e.status; S.selected = e.id; } else toast("That bill is not in this client’s list (deleted, or not yet sent to this computer).");
+        }
+      } else if (p[0] === "settings"){ S.view = "home"; S.homeTab = "rules"; S.settingsTab = p[1] || null; }
+      else if (["clients", "today", "inbox", "tally", "help"].includes(p[0])){ S.view = "home"; S.homeTab = p[0]; S.step = null; }
+      else return false;
+      return true;
+    } finally {
+      this.applying = false;
+      this.replaceNext = true;       // the address already says where we are
+      render();
+    }
+  }
+};
+if (typeof window !== "undefined"){
+  window.addEventListener("popstate", () => { if (/^#\//.test(location.hash)) Route.apply(location.hash); });
+  window.addEventListener("hashchange", () => { if (/^#\//.test(location.hash) && location.hash !== Route.of()) Route.apply(location.hash); });
 }
