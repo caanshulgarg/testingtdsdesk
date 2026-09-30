@@ -951,7 +951,7 @@ async function gst9Excel(which){
   }
   saveFile(CO().name.replace(/[^A-Za-z0-9]+/g, "-") + "-GSTR-" + which + "-" + fy + "-" + reg + ".xlsx", new Blob([XLSX.write(wb, {bookType: "xlsx", type: "array"})], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
 }
-// the GST tab: React (app/src/screens/Gst.jsx); GSTR-1 and 3B are app/src/screens/gst/Returns.jsx; the other parts are still the old pages below
+// the GST tab: React (app/src/screens/Gst.jsx); GSTR-1 and 3B are app/src/screens/gst/Returns.jsx, the input register gst/InputRegister.jsx; the other parts are still the old pages below
 function viewBooksGst(b){ return '<div data-react="Gst"></div>'; }
 // the parts of the GST tab for the GSTIN and month chosen, following its filing type
 function gstParts(b){
@@ -975,7 +975,6 @@ function gstPartHtml(b, part){
   if (part === "cmp08") return viewCmp08(b);
   if (part === "gstr4") return viewGstr4(b);
   if (part === "r2b") return viewBooks2B(b);
-  if (part === "inreg") return viewInputRegister(b);
   if (part === "follow") return viewItcFollow(b);
   if (part === "adv") return viewGstAdv(b);
   if (part === "rev") return viewGstRev(b);
@@ -1192,52 +1191,6 @@ function only2bNote(p){
   if (nb) return (na ? '<span class="nr">' : '<span class="bad">') + "booked without credit: " + esc(nb.type + " " + (nb.no || "") + " of " + GSTAmend.dmy(nb.date) + ", " + (nb.party || "")) + "</span>" +
     '<div class="nr">' + (na ? "2B says not available" + (p.rsn === "P" ? " (place of supply in another state)" : p.rsn === "C" ? " (after the section 16(4) time limit)" : "") + "; charging the tax to cost is right" : "2B says available: take the credit (time limit 30 November after the year)") + "</div>";
   return na ? '<span class="nr">not in Tally; 2B says not available</span>' : '<span class="bad">not in Tally</span>';
-}
-function viewInputRegister(b){
-  const R = inregRows(b), money = v => INR.format(r2(v || 0)), f = S.inregF || "", q = String(S.inregQ || "").toLowerCase();
-  const sgn = r => r.dir < 0 ? -1 : 1;
-  const tot = list => list.reduce((a, r) => ({n: a.n + 1, taxable: r2(a.taxable + sgn(r) * r.taxable), igst: r2(a.igst + sgn(r) * r.igst), cgst: r2(a.cgst + sgn(r) * r.cgst), sgst: r2(a.sgst + sgn(r) * r.sgst), cess: r2(a.cess + sgn(r) * r.cess)}), {n: 0, taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0});
-  const kinds = ["Eligible", "Credit reduced", "Reverse charge", "Import of goods", "Import of services", "Not to be taken"];
-  const statuses = ["In 2B", "In 2B, differs", "In 2B? confirm", "Not in 2B", "Rejected in IMS", "Booked and reversed", "2B not brought in", "not expected in 2B"];
-  let list = R.rows.filter(r => !f || r.kindL === f || r.twoB === f || (f === "Booked more than once" && r.dupe));
-  if (q) list = list.filter(r => [r.party, r.gstin, r.no, r.voucher, r.hsn, r.type].join(" ").toLowerCase().includes(q));
-  const all = tot(R.rows), shown = tot(list);
-  // it ties to 3B table 4: what the register gives against what the 3B takes
-  const hr = {held: 0, rel: 0};
-  const t3 = R.months.reduce((a, m) => { const t = GSTR.threeBm(m, R.reg); ["igst", "cgst", "sgst", "cess"].forEach(k => { a[k] = r2(a[k] + num(t.itc[k]) - num(t.reversal[k]) - num((t.reclaim || {})[k])); }); hr.held = r2(hr.held + t.held.igst + t.held.cgst + t.held.sgst + t.held.cess); hr.rel = r2(hr.rel + t.released.igst + t.released.cgst + t.released.sgst + t.released.cess); return a; }, {igst: 0, cgst: 0, sgst: 0, cess: 0});
-  const reg = tot(R.rows.filter(r => r.kindL !== "Not to be taken"));
-  const gap = r2(reg.igst + reg.cgst + reg.sgst + reg.cess - (t3.igst + t3.cgst + t3.sgst + t3.cess));
-  const tx4 = x => money(x.igst + x.cgst + x.sgst + x.cess);
-  // one line of chips instead of a row of tiles, so the bills are on the first screen
-  const chip = (label, n, amt, warn, filt) => n ? '<button class="gf-chip' + (warn ? " warn" : "") + (f === filt ? " on" : "") + '" data-inregchip="' + esc(filt || "") + '">' + label + " <b>" + n + "</b> \u00b7 \u20b9" + amt + "</button>" : "";
-  const dupes = R.rows.filter(r => r.dupe), notTaken = R.only2b.filter(p => p.itcavl !== "N" && p.bookedNoCredit);
-  let h = '<section class="dash-card"><div class="gf-ctl"><h3>Input register, ' + esc(R.months.length > 1 ? "the year " + GSTR.label(R.months[0]) + " to " + GSTR.label(R.months[R.months.length - 1]) : GSTR.label(R.months[0] || "")) + "</h3>" +
-    '<select data-inregscope><option value="month"' + ((S.inregScope || "month") === "month" ? " selected" : "") + '>This month</option><option value="year"' + (S.inregScope === "year" ? " selected" : "") + '>The whole year</option></select>' +
-    '<select data-inregf><option value="">Every document</option><optgroup label="Kind">' + kinds.map(k => '<option' + (f === k ? " selected" : "") + ">" + k + "</option>").join("") + '</optgroup><optgroup label="2B">' + statuses.map(k => '<option' + (f === k ? " selected" : "") + ">" + k + "</option>").join("") + '</optgroup><option' + (f === "Booked more than once" ? " selected" : "") + ">Booked more than once</option></select>" +
-    '<input type="search" data-inregq data-fk="inregq" placeholder="Supplier, GSTIN, bill no." value="' + esc(S.inregQ || "") + '" style="min-width:200px">' +
-    '<button class="btn small primary" data-act="inregExcel">Excel</button></div>' +
-    '<div class="gf-chips">' + kinds.map(k => { const x = tot(R.rows.filter(r => r.kindL === k)); return chip(k, x.n, tx4(x), false, k); }).join("") +
-    (R.loaded.size ? statuses.slice(0, 5).map(k => { const x = tot(R.rows.filter(r => r.twoB === k)); return chip(k, x.n, tx4(x), k !== "In 2B" && k !== "Booked and reversed", k); }).join("") +
-      (R.only2b.length ? '<a class="gf-chip warn" href="#inreg2b">In 2B, not in the books <b>' + R.only2b.length + "</b> \u00b7 \u20b9" + money(R.only2b.reduce((a, p) => a + p.dir * (p.igst + p.cgst + p.sgst + p.cess), 0)) + "</a>" : "") : "") +
-    chip("Booked more than once", dupes.length, money(dupes.reduce((a, r) => a + r.tax, 0) / 2), true, "Booked more than once") +
-    (notTaken.length ? '<a class="gf-chip warn" href="#inreg2b">Credit in 2B not taken <b>' + notTaken.length + "</b> \u00b7 \u20b9" + money(notTaken.reduce((a, p) => a + p.dir * (p.igst + p.cgst + p.sgst + p.cess), 0)) + "</a>" : "") + "</div>" +
-    '<p class="note" style="margin:4px 0 8px">Register \u20b9' + money(reg.igst + reg.cgst + reg.sgst + reg.cess) + "; 3B table 4 \u20b9" + money(t3.igst + t3.cgst + t3.sgst + t3.cess) + (Math.abs(gap) >= 1 ? (Math.abs(gap - r2(hr.held - hr.rel)) < 1 ? " \u2014 held for 2B \u20b9" + money(hr.held) + (hr.rel ? ", taken from earlier \u20b9" + money(hr.rel) : "") + "." : ' <span class="bad">Difference \u20b9' + money(gap) + (hr.held || hr.rel ? ": held back for 2B \u20b9" + money(hr.held - hr.rel) + ", the rest from reversals under rules 42 and 43." : ", from reversals under rules 42 and 43 taken in 3B.") + "</span>") : " \u2014 they agree.") +
-    (R.loaded.size ? "" : ' <span class="bad">No 2B for this registration yet; bring it in under 2B reconciliation.</span>') +
-    ' <details style="display:inline"><summary class="linkbtn" style="display:inline">What is in it</summary>Every document in Tally that takes input tax for this registration: purchase bills, and journals or payments that carry input tax (reverse charge on rent, bank charges, an expense booked in a journal). GSTR-3B table 4 is made from it, and it is what is matched against 2B. Use the funnel on any column heading to filter.</details></p>';
-  // narrow enough for the amounts to be on screen: voucher number only (type on hover), HSN and rate together, cess only when there is any
-  const cess = list.some(r => Math.abs(r.cess) >= 0.01);
-  const cols = ["Booked \u00b7 voucher", "Supplier \u00b7 GSTIN", "Bill no. \u00b7 date", "HSN \u00b7 rate", "Value", "IGST", "CGST", "SGST"].concat(cess ? ["Cess"] : []).concat(["Kind", "2B"]);
-  const numFrom = 4, numTo = cess ? 8 : 7;
-  // fixed widths, so the amounts are always on screen
-  const widths = [10, 17, 12, 11, 9, 8, 7, 7].concat(cess ? [5] : []).concat([8, 11]);
-  h += '<div class="bk-tablewrap"><table class="bk-table compact fixed"><colgroup>' + widths.map(w => '<col style="width:' + w + '%">').join("") + "</colgroup><thead><tr>" + cols.map((c, i) => "<th" + (i >= numFrom && i <= numTo ? ' class="n"' : "") + ">" + c + "</th>").join("") + "</tr></thead><tbody>" +
-    list.slice(0, gfN(5000)).map(r => { const s2 = sgn(r), rates = Array.from(new Set((r.parts || []).map(x => x.rate))).join(", ");
-      return "<tr><td>" + esc(fmtDate(tallyDate(r.date))) + '<div class="nr" title="' + esc(r.type + " " + (r.voucher || "")) + '">' + esc(r.voucher || "") + "</div></td><td>" + esc(r.party || "") + '<div class="nr">' + esc(r.gstin || "no GSTIN") + "</div></td><td>" + esc(r.no || "") + (r.refDate ? '<div class="nr">' + esc(fmtDate(tallyDate(r.refDate))) + "</div>" : "") + '</td><td class="hr">' + esc([r.hsn, rates ? rates + "%" : ""].filter(Boolean).join(" \u00b7 ")) + '</td><td class="n">' + money(s2 * r.taxable) + (r.valueGuessed ? '<div class="nr">from the tax</div>' : "") + '</td><td class="n">' + money(s2 * r.igst) + '</td><td class="n">' + money(s2 * r.cgst) + '</td><td class="n">' + money(s2 * r.sgst) + "</td>" + (cess ? '<td class="n">' + money(s2 * r.cess) + "</td>" : "") + "<td>" + esc(r.kindL) + '</td><td><span class="' + ((r.twoB === "In 2B" || r.twoB === "not expected in 2B" || r.twoB === "Booked and reversed") && !r.dupe ? "" : r.twoB === "2B not brought in" && !r.dupe ? "nr" : "bad") + '">' + esc(r.dupe ? "Booked " + r.dupe.n + " times" : r.twoB) + "</span>" + (r.twoBWhy ? '<div class="nr" title="' + esc(r.twoBWhy) + '">' + esc(r.twoBWhy) + "</div>" : "") + "</td></tr>"; }).join("") +
-    '<tr><td colspan="4"><b>' + shown.n + " document" + (shown.n === 1 ? "" : "s") + (shown.n !== all.n ? " of " + all.n : "") + '</b></td><td class="n"><b>' + money(shown.taxable) + '</b></td><td class="n"><b>' + money(shown.igst) + '</b></td><td class="n"><b>' + money(shown.cgst) + '</b></td><td class="n"><b>' + money(shown.sgst) + "</b></td>" + (cess ? '<td class="n"><b>' + money(shown.cess) + "</b></td>" : "") + '<td colspan="2"></td></tr></tbody></table></div>' +
-    (list.length > 5000 ? '<p class="note">The first 5,000 are shown; the Excel has all ' + list.length + ".</p>" : "");
-  if (R.only2b.length && (!f || f === "Not in 2B")) h += '<h3 id="inreg2b" style="margin-top:14px">In 2B, not in the books</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>2B month</th><th>Supplier</th><th>GSTIN</th><th>Bill no.</th><th>Date</th><th class="n">Value</th><th class="n">Tax</th><th>In Tally</th></tr></thead><tbody>' +
-    R.only2b.slice().sort((a, c) => (c.igst + c.cgst + c.sgst) - (a.igst + a.cgst + a.sgst)).slice(0, gfN(300)).map(p => "<tr><td>" + esc(GSTR.label(p.ym)) + "</td><td>" + esc(p.party) + "</td><td>" + esc(p.gstin) + "</td><td>" + esc(p.no) + "</td><td>" + esc(p.date ? fmtDate(tallyDate(p.date)) : "") + '</td><td class="n">' + money(p.dir * p.taxable) + '</td><td class="n">' + money(p.dir * (p.igst + p.cgst + p.sgst + p.cess)) + "</td><td>" + only2bNote(p) + "</td></tr>").join("") + "</tbody></table></div>";
-  return h + "</section>";
 }
 async function inregExcel(){
   await ensureXlsx();

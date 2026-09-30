@@ -46,6 +46,12 @@ Take `src/screens/Parties.jsx` (a client's suppliers):
 
 Every screen file starts with a comment saying what it shows and which old function it replaced.
 
+## Tables
+
+A `<table className="bk-table">` gets the funnels on its headings (filter any column) and scrolls in its own box when
+long, as the old tables did: `GridF` (`src/js/31-grid-filters.js`) adds them after each redraw. Add `gf-off` only to a
+table with its own filters or a single figure per row group.
+
 ## Rules of the house
 
 - **Change state, then `render()`.** There is no other store; React redraws from `S`.
@@ -83,7 +89,7 @@ cd ../tests && TDSDESK_SITE=../app/dist-test python3 run_react_post.py
 | A client's dashboard; Transactions | `src/screens/Dash.jsx`, `Txn.jsx` |
 | The books (TDS & GST tabs); TDS by year and quarter | `src/screens/Books.jsx` |
 | A TDS return (26Q, 24Q) and certificates | `src/screens/TdsReturn.jsx` |
-| The GST tab; GSTR-1 and 3B (other parts are still old pages) | `src/screens/Gst.jsx`, `src/screens/gst/Returns.jsx` |
+| The GST tab; GSTR-1 and 3B; the input register (other parts are still old pages) | `src/screens/Gst.jsx`, `src/screens/gst/Returns.jsx`, `gst/InputRegister.jsx` |
 | A filter bar (find box, choices, print, Excel) | `src/parts/FilterBar.jsx` |
 | Shared pieces: boxes, ledger lists, column headings | `src/parts/CommitBox.jsx`, `LedgerBox.jsx`, `LedgerSelect.jsx`, `ColHead.jsx` |
 | GSTR-2B from the portal | `src/screens/GstApiCard.jsx` |

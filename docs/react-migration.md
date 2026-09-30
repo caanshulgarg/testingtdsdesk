@@ -106,7 +106,9 @@ Status: **done** (in React, test passing) · **next** · blank = not started. Ab
 | | notices (`AIH.viewNotices`, 50) | |
 | **GST** | the tab `viewBooksGst` (18): parts, month, GSTIN, downloads; same text as the live site on 56 GST pages (`tests/pages_gst.py`) | **done** |
 | | GSTR-1 and GSTR-3B with the checks before filing (`viewGstr1`, `viewGstr3b`, `viewGstChecks`) → `gst/Returns.jsx`; same text as live on 58 GST pages, a customer opened and a filter included; `run_react_gst.py` | **done** |
-| | still old, shown inside it: `viewBooks2B`, `viewGstAmend`, `viewGstAdv`, `viewGstRev`, `viewInputRegister`, `viewGst9`, `viewGst9c` (18) · filing (35) · settings and registrations (36) · QRMP, CMP-08, GSTR-4 (37) · returns filed (38) · ITC follow-up (32) · customer IMS (33) · vendor recon (42) | |
+| | the input register (`viewInputRegister`) → `gst/InputRegister.jsx`; same text as live for the month, the year, a kind and a 2B status (61 GST pages) | **done** |
+| | column funnels (`GridF`, 31) now work on React tables too: the funnel is added to the heading, not redrawn over it; they were off on React tables before (GSTR-1/3B, the TDS returns) | **done** |
+| | still old, shown inside it: `viewBooks2B`, `viewGstAmend`, `viewGstAdv`, `viewGstRev`, `viewGst9`, `viewGst9c` (18) · filing (35) · settings and registrations (36) · QRMP, CMP-08, GSTR-4 (37) · returns filed (38) · ITC follow-up (32) · customer IMS (33) · vendor recon (42) | |
 | | 2B from the portal `viewGstApiCard` (39) | **done** |
 | **Books** | `viewBooks`, `viewBooksImport`, `viewBooksLedgers`, `viewLedPosting`, `viewTallyRead`, `viewSetupList` (18) · accounts (30) | |
 | **Audit and MIS** | `viewBooksAudit`, `viewAuditRel`, `viewAudit3cd`, `viewBooksMis`, `misPackHtml` (18) | |

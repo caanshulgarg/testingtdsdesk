@@ -385,6 +385,7 @@ header.top .toprow{display:block}
 .bk-dates-s{color:var(--ink)}
 .bk-cols{margin-top:0}
 .colh{display:inline-flex;align-items:center;gap:6px}
+th > .gff{vertical-align:middle;margin:0 4px}
 th.n .colh{flex-direction:row-reverse}
 .colf{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border:1px solid transparent;border-radius:6px;background:transparent;color:#9AA5A0;cursor:pointer;padding:0}
 .colf:hover{border-color:var(--rule);color:var(--ink);background:var(--sheet)}

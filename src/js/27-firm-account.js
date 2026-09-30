@@ -834,6 +834,8 @@ function txnOpenDoc(key, path, name){
 // a filter kept in S[id] (S.r1F, S.b2F, …): a box typed in (typed: the page follows a moment later) or a choice
 function setFilter(id, key, val, typed){ S[id] = Object.assign({}, S[id], {[key]: val}); if (typed){ FinComReact.redraw(); later(id + "q", render, 250); } else render(); }
 function clearFilter(id){ S[id] = {}; render(); }
+// one setting of a page kept in S (S.inregF, S.inregScope, …); typed: the page follows a moment later
+function setAndShow(key, val, typed){ S[key] = val; if (typed){ FinComReact.redraw(); later(key, render, 250); } else render(); }
 // a TDS return's pages (app/src/screens/TdsReturn.jsx): its tabs, filters, sorting, the rows opened, challans
 function tdsTabGo(id){ S.tdsTab = id; render(); }
 function tdsFilter(tab, key, val, typed){ S.tdsFl = Object.assign({}, S.tdsFl, {[tab]: Object.assign({}, (S.tdsFl || {})[tab], {[key]: val})}); if (typed){ FinComReact.redraw(); later("tdsf", render, 250); } else render(); }
@@ -1010,7 +1012,6 @@ document.addEventListener("click", ev => {
   if (t.dataset.bookstab){ booksTabGo(t.dataset.bookstab, t.dataset.gstpart); return; }
   if (t.dataset.gstpart){ gstPartGo(t.dataset.gstpart); return; }
   if (t.dataset.itctcat !== undefined){ S.itctCat = S.itctCat === t.dataset.itctcat ? "" : t.dataset.itctcat; render(); return; }
-  if (t.dataset.inregchip !== undefined){ S.inregF = S.inregF === t.dataset.inregchip ? "" : t.dataset.inregchip; render(); return; }
   if (t.dataset.tdspart){ S.tdsPart = t.dataset.tdspart; render(); return; }
   if (t.dataset.tdsnav){ tdsNav(t.dataset.tdsnav); return; }
   if (t.dataset.tdsgo){ tdsGo(...t.dataset.tdsgo.split("|")); return; }

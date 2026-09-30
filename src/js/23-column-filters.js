@@ -877,9 +877,6 @@ function gstFixChange(t){
   if (d.itctshow !== undefined){ S.itctShow = t.value; render(); return true; }
   if (d.itcbasis !== undefined){ b.itcBasis = Object.assign({}, b.itcBasis, {[S.gstReg || ""]: t.value}); saveBooks(); render(); return true; }
   if (d.gstopen !== undefined){ const k = S.gstReg || ""; b.gstOpen = Object.assign({}, b.gstOpen); b.gstOpen[k] = Object.assign({}, b.gstOpen[k], {[d.gstopen]: t.value === "" ? "" : num(t.value)}); saveBooks(); render(); return true; }
-  if (d.inregscope !== undefined){ S.inregScope = t.value; render(); return true; }
-  if (d.inregf !== undefined){ S.inregF = t.value; render(); return true; }
-  if (d.inregq !== undefined){ S.inregQ = t.value; render(); return true; }
   if (d.g9c !== undefined){
     const fy = GST9.fyOf(S.gstYm || GSTR.months().slice(-1)[0]), reg = S.gstReg || ((GSTR.gstins(b) || [])[0] || "").slice(0, 2), st = GST9C.st(fy, reg), k = d.g9c;
     const v = t.tagName === "TEXTAREA" ? t.value : (t.value === "" ? "" : num(t.value));

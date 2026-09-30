@@ -52,14 +52,18 @@ const GridF = {
     this.cutSeen = this.cut; this.cut = false;
     const tables = Array.from(document.querySelectorAll("#app table.bk-table"));
     tables.forEach((t, ti) => {
-      // tables drawn by React are left alone (React owns their cells); old pieces shown inside React screens are not
-    if (t.querySelector(".colf") || t.classList.contains("gf-off") || (typeof reactOwned === "function" && reactOwned(t))) return;
+      // a table with filters of its own (bills, bank) is left as it is; a funnel added here is not one of those
+      if (t.querySelector(".colf:not(.gff)") || t.classList.contains("gf-off")) return;
+      // React draws its headings again only when they change: the funnel is added beside them, not by rewriting them
+      const own = typeof reactOwned === "function" && reactOwned(t);
       const hs = this.heads(t); if (!hs.length) return;
       const rows = this.rows(t);
       t.dataset.gfkey = this.key(t, ti);
       if (rows.length >= 4) hs.forEach((th, i) => {
         if (th.querySelector(".gff") || !this.label(th) || th.querySelector("input")) return;
-        th.innerHTML = '<span class="colh"><span class="gfl">' + th.innerHTML + '</span><button class="colf gff" data-gfi="' + i + '" aria-label="Filter" title="Filter this column">' + FUNNEL + "</button></span>";
+        const btn = '<button class="colf gff" data-gfi="' + i + '" aria-label="Filter" title="Filter this column">' + FUNNEL + "</button>";
+        if (own) th.insertAdjacentHTML(th.classList.contains("n") ? "afterbegin" : "beforeend", btn);
+        else th.innerHTML = '<span class="colh"><span class="gfl">' + th.innerHTML + "</span>" + btn + "</span>";
       });
       this.apply(t);
       const wrap = t.closest(".bk-tablewrap");

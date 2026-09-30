@@ -31,6 +31,11 @@ with sync_playwright() as p:
     # GSTR-1 with a customer opened, then filtered to B2B
     pg.evaluate("() => { S.gstPart = 'r1'; const g = GSTR.one(S.gstYm, S.gstReg || ''); const r = g.b2b[0] || g.b2c[0]; S.r1Open = r ? (r.gstin || normName(r.party)) : ''; render(); }"); grab("r1-opened")
     pg.evaluate("() => { S.r1F = {part: 'B2B', q: ''}; render(); }"); grab("r1-b2b")
+    # the input register for the whole year, one kind, and a chip
+    pg.evaluate("() => { S.gstPart = 'inreg'; S.inregScope = 'year'; render(); }"); grab("inreg-year")
+    pg.evaluate("() => { S.inregF = 'Reverse charge'; render(); }"); grab("inreg-rcm")
+    pg.evaluate("() => { S.inregF = 'Not in 2B'; S.inregQ = 'a'; render(); }"); grab("inreg-not2b")
+    pg.evaluate("() => { S.inregF = ''; S.inregQ = ''; S.inregScope = 'month'; render(); }")
     br.close()
 srv.shutdown()
 json.dump({"pages": res, "errors": errors}, open(out, "w"), indent=0)

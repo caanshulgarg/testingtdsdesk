@@ -95,14 +95,14 @@ function Challans({ fy, q, ch, allRows, allCh, use, title }) {
   return <>
     {pays.length > 0 && <section className="dash-card" style={{ marginBottom: 12 }}><h3>Paid to the government, from the books</h3>
       <p className="note">TDS payment vouchers in Tally for this quarter. Add the BSR code and challan serial number and each becomes a challan.</p>
-      <div className="bk-tablewrap"><table className="bk-table gf-off">
+      <div className="bk-tablewrap"><table className="bk-table">
         <thead><tr><th>Date</th><th className="n">Tax</th><th>Sections</th><th>Voucher</th><th>BSR code</th><th>Serial</th><th className="ac"></th></tr></thead>
         <tbody>{pays.map((p) => <PayRow key={p.vid} p={p} />)}</tbody>
       </table></div></section>}
     <FilterBar tab="challans" placeholder="Find a BSR code or serial" table="tdsChTable" title={title + " challans"} excel="tdsExcel" count={shown.length + " of " + ch.length + " challans"}
       selects={[{ key: "month", label: "Month", options: [["", "Every month"]].concat(tdsMonths(fy, q).map((m) => [m, monthName(m)])) },
         { key: "state", label: "Use", options: [["", "Used: any"], ["unused", "Not used"], ["part", "Part used"], ["full", "Fully used"], ["over", "Used more than paid"]] }]} />
-    <div className="bk-tablewrap"><table className="bk-table gf-off" id="tdsChTable">
+    <div className="bk-tablewrap"><table className="bk-table" id="tdsChTable">
       <thead><tr><th className="n">Sl.</th><SortHead tab="challans" k="bsr" label="BSR code" /><SortHead tab="challans" k="serial" label="Serial" /><SortHead tab="challans" k="date" label="Deposited" cls="dt" />
         <th>Sections</th><SortHead tab="challans" k="tax" label="Tax" cls="n" /><th className="n">Interest</th><SortHead tab="challans" k="used" label="Used" cls="n" /><SortHead tab="challans" k="left" label="Left" cls="n" />
         <th className="n">Deductions</th><th className="ac"></th></tr></thead>
@@ -117,7 +117,7 @@ function Challans({ fy, q, ch, allRows, allCh, use, title }) {
             <td className="n"><button className="linkbtn" onClick={() => tdsToggle("chOpen", c.id)}>{mine.length}</button></td>
             <td className="ac"><button className="icon danger" title="Remove this challan" aria-label="Remove this challan" onClick={() => challanDelete(c.id)}>✕</button></td>
           </tr>, open && <tr key={c.id + ":open"}><td colSpan={11} style={{ background: "var(--paper)", padding: 0 }}>
-            {mine.length ? <table className="bk-table gf-off" style={{ margin: 0 }}>
+            {mine.length ? <table className="bk-table" style={{ margin: 0 }}>
               <thead><tr><th className="dt">Date</th><th>Deductee</th><th>PAN</th><th>Section</th><th className="n">Paid or credited</th><th className="n">TDS</th></tr></thead>
               <tbody>{mine.map((r) => <tr key={r.id}><td>{day(r.date)}</td><td>{r.party}</td><td><Pan pan={r.pan} /></td><td>{r.section}</td><td className="n">{money(r.paid)}</td><td className="n">{money(r.tds)}</td></tr>)}</tbody>
             </table> : <p className="note" style={{ margin: 8 }}>No deduction is against this challan yet.</p>}
@@ -154,7 +154,7 @@ function Deductees({ rows, deductees, issueOf, pass, common, chOpts, title }) {
   return <>
     <FilterBar tab="deductees" placeholder="Find a deductee, PAN or voucher" table="tdsDeTable" title={title + " deductees"} excel="tdsExcel" count={list.length + " of " + deductees + " deductees"}
       selects={common.concat([{ key: "rate", label: "Rate", options: [["", "Rate: any"], ["q", "Rate questions"], ["ok", "Rate as expected"]] }])} />
-    <div className="bk-tablewrap"><table className="bk-table gf-off" id="tdsDeTable">
+    <div className="bk-tablewrap"><table className="bk-table" id="tdsDeTable">
       <thead><tr><SortHead tab="deductees" k="party" label="Deductee" /><SortHead tab="deductees" k="pan" label="PAN" /><th>Code</th><SortHead tab="deductees" k="secs" label="Sections" />
         <SortHead tab="deductees" k="n" label="Deductions" cls="n" /><SortHead tab="deductees" k="paid" label="Paid or credited" cls="n" /><SortHead tab="deductees" k="tds" label="TDS" cls="n" /><SortHead tab="deductees" k="unallocated" label="Not against a challan" cls="n" /></tr></thead>
       <tbody>
@@ -163,7 +163,7 @@ function Deductees({ rows, deductees, issueOf, pass, common, chOpts, title }) {
           <td><Pan pan={p.pan} /></td><td>{Certs.validPan(p.pan) ? (/^[A-Z]{3}C/.test(p.pan) ? "01 company" : "02 other") : "—"}</td><td>{Array.from(p.secs).join(", ")}</td>
           <td className="n"><button className="linkbtn" onClick={() => tdsToggle("tdsOpen", p.key)}>{p.n}</button></td><td className="n">{money(p.paid)}</td><td className="n"><b>{money(p.tds)}</b></td>
           <td className={"n" + (p.unallocated ? " bad" : "")}>{p.unallocated ? money(p.unallocated) : "—"}</td>
-        </tr>, S.tdsOpen === p.key && <tr key={p.key + ":open"}><td colSpan={8} style={{ background: "var(--paper)", padding: 0 }}><table className="bk-table gf-off" style={{ margin: 0 }}>
+        </tr>, S.tdsOpen === p.key && <tr key={p.key + ":open"}><td colSpan={8} style={{ background: "var(--paper)", padding: 0 }}><table className="bk-table" style={{ margin: 0 }}>
           <thead><tr><th className="dt">Date</th><th>Voucher</th><th>Section</th><th className="n">Paid or credited</th><th className="n">Rate</th><th className="n">TDS</th><th>Challan</th></tr></thead>
           <tbody>{p.rows.map((r) => <tr key={r.id}><td>{day(r.date)}</td><td>{r.voucher || ""}</td><td>{r.section}</td><td className="n">{money(r.paid)}</td>
             <td className="n"><Rate r={r} issue={issueOf[r.id]} /></td><td className="n">{money(r.tds)}</td><td><ChallanPick r={r} chOpts={chOpts} /></td></tr>)}</tbody>
@@ -183,7 +183,7 @@ function Deductions({ fy, q, rows, issueOf, pass, common, chOpts, title }) {
       count={shown.length + " of " + rows.length + " deductions · TDS " + sum("tds")}
       selects={[{ key: "month", label: "Month", options: [["", "Every month"]].concat(tdsMonths(fy, q).map((m) => [m, monthName(m)])) }].concat(common)
         .concat([{ key: "rate", label: "Rate", options: [["", "Rate: any"], ["q", "Rate questions"], ["ok", "Rate as expected"]] }])} />
-    <div className="bk-tablewrap"><table className="bk-table gf-off" id="tdsDnTable">
+    <div className="bk-tablewrap"><table className="bk-table" id="tdsDnTable">
       <thead><tr><th className="n">Sl.</th><SortHead tab="deductions" k="date" label="Date" cls="dt" /><SortHead tab="deductions" k="voucher" label="Voucher" /><SortHead tab="deductions" k="party" label="Deductee" />
         <SortHead tab="deductions" k="pan" label="PAN" /><SortHead tab="deductions" k="section" label="Section" /><SortHead tab="deductions" k="paid" label="Paid or credited" cls="n" />
         <SortHead tab="deductions" k="rate" label="Rate" cls="n" /><SortHead tab="deductions" k="tds" label="TDS" cls="n" /><SortHead tab="deductions" k="challan" label="Challan" /></tr></thead>
@@ -200,7 +200,7 @@ function Deductions({ fy, q, rows, issueOf, pass, common, chOpts, title }) {
 
 // the rate questions table, shared by the return's checks and the certificates page
 function RateQuestions({ list }) {
-  return <div className="bk-tablewrap"><table className="bk-table gf-off">
+  return <div className="bk-tablewrap"><table className="bk-table">
     <thead><tr><th className="dt">Date</th><th>Deductee</th><th>PAN</th><th>Section</th><th className="n">Paid</th><th className="n">Rate used</th><th className="n">Rate that applies</th><th>Why</th><th className="n">Short or excess</th></tr></thead>
     <tbody>{list.map((x, i) => <tr key={i}><td>{day(x.row.date)}</td><td>{x.row.party}</td><td><Pan pan={x.row.pan} /></td><td>{x.row.section}</td><td className="n">{money(x.row.paid)}</td>
       <td className="n">{x.row.rate == null ? "" : x.row.rate + "%"}</td><td className="n">{x.expected}%</td><td>{x.why}</td><td className={"n" + (x.short > 0 ? " bad" : "")}>{money(x.short)}</td></tr>)}</tbody>
@@ -219,14 +219,14 @@ function Checks26({ fy, q, int1A, fee, issues }) {
       <div className="dash-row"><span>Interest under 201(1A), paid after the due date</span><b>{money(total)}</b></div>
       <div className="dash-row"><span>Late filing fee under 234E, if filed today</span><b>{money(fee && fee.days > 0 ? fee.fee : 0)}</b></div>
       {fee && fee.days > 0 && <p className="note">{fee.days} day{fee.days === 1 ? "" : "s"} past {day(fee.due)} at 200 a day, capped at the TDS of the quarter ({money(fee.cap)}).</p>}
-      {int1A.length ? <div className="bk-tablewrap"><table className="bk-table gf-off">
+      {int1A.length ? <div className="bk-tablewrap"><table className="bk-table">
         <thead><tr><th className="dt">Deducted</th><th>Deductee</th><th className="n">TDS</th><th>Due</th><th>Paid</th><th className="n">Months</th><th className="n">Interest</th></tr></thead>
         <tbody>{int1A.slice(0, 100).map((x, i) => <tr key={i}><td>{day(x.row.date)}</td><td>{x.row.party}</td><td className="n">{money(x.row.tds)}</td><td>{day(x.due)}</td><td>{day(x.challan.date)}</td>
           <td className="n">{x.months}</td><td className="n bad">{money(x.amount)}</td></tr>)}</tbody>
       </table></div> : <p className="note">No deduction was paid late.</p>}
     </section>
     <section className="dash-card" style={{ marginBottom: 12 }}><h3>Rate questions</h3>{issues.length ? <RateQuestions list={issues} /> : <p className="note">Every deduction matches the rate that applies.</p>}</section>
-    <section className="dash-card"><h3>By section</h3><div className="bk-tablewrap"><table className="bk-table gf-off">
+    <section className="dash-card"><h3>By section</h3><div className="bk-tablewrap"><table className="bk-table">
       <thead><tr><th>Section</th><th className="n">Deductions</th><th className="n">Paid or credited</th><th className="n">TDS</th><th className="n">Not against a challan</th></tr></thead>
       <tbody>{sum.map((s) => <tr key={s.section}><td>{s.section}</td><td className="n">{s.count}</td><td className="n">{money(s.paid)}</td><td className="n">{money(s.tds)}</td><td className="n">{money(s.unallocated)}</td></tr>)}</tbody>
     </table></div></section>
@@ -294,13 +294,13 @@ function Employees({ fy, q, a1 }) {
   return <>
     <FilterBar tab="employees" placeholder="Find an employee or PAN" table="q24Table" title={CO().name + " 24Q " + q + " " + fy} excel="q24Excel" count={shown.length + " of " + a1.length + " employees"}
       selects={[{ key: "pan", label: "PAN", options: [["", "PAN: any"], ["no", "No valid PAN"], ["yes", "Has a PAN"]] }, { key: "tds", label: "TDS", options: [["", "TDS: any"], ["yes", "TDS deducted"], ["no", "No TDS"]] }]} />
-    <div className="bk-tablewrap"><table className="bk-table gf-off" id="q24Table">
+    <div className="bk-tablewrap"><table className="bk-table" id="q24Table">
       <thead><tr><SortHead tab="employees" k="name" label="Employee" /><SortHead tab="employees" k="pan" label="PAN" /><SortHead tab="employees" k="months" label="Months" cls="n" />
         <SortHead tab="employees" k="paid" label="Paid" cls="n" /><SortHead tab="employees" k="tds" label="TDS" cls="n" /></tr></thead>
       <tbody>
         {shown.map((e) => { const key = e.pan || e.name; return [<tr key={key}>
           <td><Toggle which="q24Open" k={key}>{e.name}</Toggle></td><td><Pan pan={e.pan} /></td><td className="n">{e.months}</td><td className="n">{money(e.paid)}</td><td className="n"><b>{money(e.tds)}</b></td>
-        </tr>, S.q24Open === key && <tr key={key + ":open"}><td colSpan={5} style={{ background: "var(--paper)", padding: 0 }}><table className="bk-table gf-off" style={{ margin: 0 }}>
+        </tr>, S.q24Open === key && <tr key={key + ":open"}><td colSpan={5} style={{ background: "var(--paper)", padding: 0 }}><table className="bk-table" style={{ margin: 0 }}>
           <thead><tr><th className="dt">Month</th><th className="n">Gross</th><th className="n">Exempt</th><th className="n">Chapter VI-A</th><th className="n">TDS</th></tr></thead>
           <tbody>{e.rows.map((r, i) => <tr key={i}><td>{fmtDate(r.date)}</td><td className="n">{money(r.gross)}</td><td className="n">{money(r.exempt)}</td><td className="n">{money(r.chapter6)}</td><td className="n">{money(r.tds)}</td></tr>)}</tbody>
         </table></td></tr>]; })}
@@ -322,7 +322,7 @@ export function Return24({ b }) {
     const inB = TDS.salaryRows().filter((r) => r.fy === fy && r.q === q);
     return <>{top}
       {inB.length > 0 && <section className="dash-card" style={{ maxWidth: 760, marginBottom: 12 }}><h3>Salary TDS in the books</h3>
-        <div className="bk-tablewrap"><table className="bk-table gf-off"><thead><tr><th className="dt">Date</th><th>Employee</th><th>PAN</th><th className="n">Paid</th><th className="n">TDS</th></tr></thead>
+        <div className="bk-tablewrap"><table className="bk-table"><thead><tr><th className="dt">Date</th><th>Employee</th><th>PAN</th><th className="n">Paid</th><th className="n">TDS</th></tr></thead>
           <tbody>{inB.map((r, i) => <tr key={i}><td>{day(r.date)}</td><td>{r.party}</td><td>{r.pan || "—"}</td><td className="n">{money(r.paid)}</td><td className="n">{money(r.tds)}</td></tr>)}</tbody></table></div>
         <p className="note">These are kept out of 26Q. For Annexure I and II, bring in the salary sheet.</p></section>}
       <section className="dash-card" style={{ maxWidth: 760 }}><h3>24Q needs the salary sheet</h3>
@@ -344,11 +344,11 @@ export function Return24({ b }) {
     {S.tdsTab === "employees" ? <Employees fy={fy} q={q} a1={a1} />
       : S.tdsTab === "challans" ? <>
         <p className="note">Challans deposited in {q}. Salary TDS is paid under section 192; add a challan under 26Q’s Challans tab if it is not here.</p>
-        <div className="bk-tablewrap"><table className="bk-table gf-off" id="q24ChTable">
+        <div className="bk-tablewrap"><table className="bk-table" id="q24ChTable">
           <thead><tr><th>BSR code</th><th>Serial</th><th className="dt">Deposited</th><th>Section</th><th className="n">Tax</th><th className="n">Interest</th><th className="n">Used in 26Q</th></tr></thead>
           <tbody>{ch.map((c) => <tr key={c.id}><td>{c.bsr}</td><td>{c.serial}</td><td>{day(c.date)}</td><td>{c.section || "—"}</td><td className="n">{money(c.tax)}</td><td className="n">{money(c.interest)}</td><td className="n">{money(use[c.id] || 0)}</td></tr>)}</tbody>
         </table>{!ch.length && <Empty>No challan deposited in this quarter.</Empty>}</div></>
-      : S.tdsTab === "annex2" ? <div className="bk-tablewrap"><table className="bk-table gf-off">
+      : S.tdsTab === "annex2" ? <div className="bk-tablewrap"><table className="bk-table">
           <thead><tr><th>Employee</th><th>PAN</th><th>Regime</th><th className="n">Gross</th><th className="n">Exempt</th><th className="n">Standard</th><th className="n">Chapter VI-A</th><th className="n">Taxable</th><th className="n">TDS</th></tr></thead>
           <tbody>{TDS24Q.annexII(fy).map((e) => <tr key={e.pan || e.name}><td>{e.name}</td><td>{e.pan || "—"}</td><td>{e.regime === "N" ? "New" : e.regime === "O" ? "Old" : "—"}</td>
             <td className="n">{money(e.gross)}</td><td className="n">{money(e.exempt)}</td><td className="n">{money(e.standard)}</td><td className="n">{money(e.chapter6)}</td><td className="n">{money(e.taxable)}</td><td className="n">{money(e.tds)}</td></tr>)}</tbody>
@@ -380,7 +380,7 @@ export function CertsPage() {
   return <>
     <section className="dash-card" style={{ marginBottom: 12 }}><h3>Certificates under section 197</h3>
       <p className="note">A deductee with a certificate for a lower rate, or nil. Where a payment is covered by one, that rate is what the system expects instead of the usual rate.</p>
-      <div className="bk-tablewrap"><table className="bk-table gf-off">
+      <div className="bk-tablewrap"><table className="bk-table">
         <thead><tr><th>Deductee</th><th>PAN</th><th>Section</th><th>Certificate no.</th><th className="n">Rate</th><th>From</th><th>To</th><th className="ac"></th></tr></thead>
         <tbody>
           {list.map((c) => <tr key={c.id}><td>{c.party}</td><td>{c.pan || ""}</td><td>{c.section || "any"}</td><td>{c.certNo || ""}</td><td className="n">{num(c.rate)}%</td>
