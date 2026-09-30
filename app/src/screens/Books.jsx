@@ -14,6 +14,8 @@ import Ledgers from "./books/Ledgers.jsx";
 import MisTab from "./books/Mis.jsx";
 import Accounts from "./books/Accounts.jsx";
 import Reports from "./books/Reports.jsx";
+import Lookup from "./books/Lookup.jsx";
+import Letters from "./books/Letters.jsx";
 import AuditTab from "./books/Audit.jsx";
 import HelpButton from "../parts/HelpButton.jsx";
 
@@ -145,7 +147,7 @@ export default function Books() {
   const b = S.books, tab = booksTab(), n = (b.vouchers || []).length;
   const busy = b.busy && <BusyCard title="Reading the books…" detail={b.busy} />;
   if (tab === "reports" || tab === "lookup" || tab === "letters")
-    return <>{busy}{tab === "reports" ? <Reports b={b} /> : <Legacy html={tab === "lookup" ? viewBooksLookup(b) : viewBooksLetters(b)} />}</>;
+    return <>{busy}{tab === "reports" ? <Reports b={b} /> : tab === "lookup" ? <Lookup b={b} /> : <Letters b={b} />}</>;
   const pending = n ? LedMaster.pending(b).length : 0;
   const highOpen = b.audit && b.audit.last ? b.audit.last.findings.filter((f) => f.sev === "high" && Audit.status(f.id).s === "open").length : 0;
   const tabs = [["import", "From Tally", n || null], ["ledgers", "Tally ledgers", n ? (pending ? pending + " to confirm" : "✓") : null], ["tds", "TDS", n ? TDS.rows().length : ((b.salary || []).length || null)],

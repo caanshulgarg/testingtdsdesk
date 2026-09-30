@@ -57,6 +57,6 @@ function dashAsk(q){
   goClient("books:lookup");
   q = String(q || "").trim();
   if (!q) return;
-  const go = (n) => { if (S.books && S.books.cid === S.coId && !S.books.loading){ LK.st().ask = q; render(); const b = document.querySelector('[data-lk="ask"]'); if (b) b.click(); } else if (n < 40) setTimeout(() => go(n + 1), 100); };
+  const go = (n) => { if (S.books && S.books.cid === S.coId && !S.books.loading){ lkAsk(q); } else if (n < 40) setTimeout(() => go(n + 1), 100); };
   setTimeout(() => go(0), 50);
 }

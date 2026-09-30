@@ -1,12 +1,12 @@
 // The Reports tab of a client's books: every report in one place, by area, each area opening with a few figures and a
 // small chart for the year. Was RPT.view and RPT.areaDash (src/js/45); the figures are RPT.data, a report opens with
-// RPT.open. The line saying how fresh the books are is still LK.freshBar (src/js/44), an old piece.
+// RPT.open. The line saying how fresh the books are is parts/FreshBar.jsx.
 //
 // State: S.rptQ (the search), S.rptFy (the year).
 import { useEffect } from "react";
-import Legacy from "../../parts/Legacy.jsx";
 import Bars from "../../parts/Bars.jsx";
 import NoBooks from "../../parts/NoBooks.jsx";
+import FreshBar from "../../parts/FreshBar.jsx";
 import { BusyCard } from "../../parts/Reading.jsx";
 
 const m = (v) => INR0.format(r2(v || 0));
@@ -71,7 +71,7 @@ export default function Reports({ b }) {
       <input type="search" id="rptQ" data-fk="rptQ" value={S.rptQ || ""} placeholder="Find a report: ageing, 3B, cash, ratios…" aria-label="Find a report" onChange={(ev) => setAndShow("rptQ", ev.target.value, true)} />
       {have && <select aria-label="Year" value={RPT.range().fy} onChange={(ev) => setAndShow("rptFy", ev.target.value)}>{RPT.fys().map((y) => <option key={y} value={y}>{FC.fyLabel(y)}</option>)}</select>}</div></section>
     {LK.fr().busy && <BusyCard title="Bringing the books up to date…" detail={LK.fr().busy} done={0} total={0} />}
-    {(have || LK.live()) && <Legacy html={LK.freshBar(b)} />}
+    {(have || LK.live()) && <FreshBar b={b} />}
     {!have && <NoBooks what="Reports" />}
   </>;
   if (q) {

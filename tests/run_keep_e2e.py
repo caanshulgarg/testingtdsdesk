@@ -187,7 +187,7 @@ try:
         good_ck = lambda c: c.get("listMatchesDayBook") and c.get("missing") == 0 and c.get("extra") == 0 and c.get("differ") == 0
         chk = until(lambda: (lambda c: c if good_ck(c) else None)(ck()), 300, 10) or ck()
         ok(chk.get("listMatchesDayBook") and chk.get("missing") == 0 and chk.get("extra") == 0 and chk.get("differ") == 0, "the check against Tally agrees: " + json.dumps(chk))
-        pg.click('[data-lk="keepcheck"]'); wait_for(pg, "LK.fr().check && !LK.fr().busy", 60)
+        pg.click('button:text-is("Check against Tally")'); wait_for(pg, "LK.fr().check && !LK.fr().busy", 60)
         ok("against Tally" in pg.inner_text(".lk-fresh"), "Check against Tally shows its answer on the page")
         ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0][:200]))
         br.close()

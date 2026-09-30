@@ -152,123 +152,38 @@ const LTR = {
     window.open("https://wa.me/" + (ph.length === 10 ? "91" + ph : ph) + "?text=" + encodeURIComponent(t.subject + "\n\n" + t.body.slice(0, 1500)), "_blank");
     return true;
   },
-  // ---------- the page
-  view(b){
-    const x = this.st(), have = (b.vouchers || []).length > 0, live = typeof bridgeLive === "function" && bridgeLive(CO());
-    let h = '<section class="dash-card"><div class="rpt-top-row"><div><h3>Confirmations and reminders</h3><p class="note" style="margin:0">Letters are printed or saved as PDF, or opened in your own email or WhatsApp to send. Nothing is sent from FinCom.</p></div></div>' +
-      '<div class="lk-kinds" role="tablist" aria-label="Letters"><button role="tab" data-ltrmode="confirm" aria-selected="' + (x.mode === "confirm") + '">Balance confirmations</button><button role="tab" data-ltrmode="remind" aria-selected="' + (x.mode === "remind") + '">Dues reminders</button><button role="tab" data-ltrmode="settings" aria-selected="' + (x.mode === "settings") + '">Letter settings</button></div></section>';
-    if (!have && x.mode !== "settings") return h + FC.noBooks("Letters");
-    if (x.busy) h += busyCard("Reading Tally…", x.busy, 0, 0);
-    if (live) setTimeout(() => LK.autoFresh(), 0);
-    if (LK.fr().busy) h += busyCard("Bringing the books up to date\u2026", LK.fr().busy, 0, 0);
-    if (x.mode === "settings") return h + this.viewSettings();
-    return h + (x.mode === "confirm" ? this.viewConfirm(live) : this.viewRemind());
-  },
-  contactCells(r){
-    return '<td><input type="email" class="ltr-in" data-ltrc="' + esc(r.l) + '|email" value="' + esc(r.c.email) + '" placeholder="email" aria-label="' + esc(r.l) + ' email"></td>' +
-      '<td><input type="tel" class="ltr-in sm" data-ltrc="' + esc(r.l) + '|phone" value="' + esc(r.c.phone) + '" placeholder="phone" aria-label="' + esc(r.l) + ' phone"></td>';
-  },
-  viewConfirm(live){
-    const x = this.st(), {B, rows} = this.confirmRows(), c = this.cfg();
-    let h = '<section class="dash-card" style="margin-top:12px"><div class="lk-form">' +
-      '<label class="f"><span>Balance as on</span><input type="date" data-ltrf="asOn" value="' + FC.iso(x.asOn) + '"></label>' +
-      '<div class="f"><span>Write to</span><div class="row" style="gap:12px">' + [["r", "Customers"], ["p", "Suppliers"], ["o", "Loans and advances"]].map(([k, l]) => '<label class="chk"><input type="checkbox" data-ltrside="' + k + '"' + (x.sides[k] ? " checked" : "") + "> " + l + "</label>").join("") + "</div></div>" +
-      '<label class="f"><span>Balances of at least</span><input type="text" inputmode="decimal" data-ltrf="min" value="' + esc(x.min) + '"></label>' +
-      '<label class="f"><span>Show</span><select data-ltrf="show">' + [["all", "Every party"], ["notsent", "Not sent yet"], ["waiting", "Sent, no reply yet"], ["differs", "Replied with a difference"]].map(([v, l]) => '<option value="' + v + '"' + (x.show === v ? " selected" : "") + ">" + l + "</option>").join("") + "</select></label>" +
-      '<label class="f lk-wide"><span>Find</span><input type="search" data-fk="ltrQ" data-ltrf="q" data-keeptyped value="' + esc(x.q) + '" placeholder="party or GSTIN"></label></div>' +
-      '<p class="note" style="margin:8px 0 0">Replies go to <b>' + esc(this.replyTo().name) + "</b>" + (c.replyTo === "auditor" ? " (the auditor)" : "") + ". " + (c.attach ? "Each letter carries the party’s statement of account for the year." : "") + ' <button class="linkbtn" data-ltrmode="settings">Change</button></p></section>';
-    if (!B.ok) return h + '<div class="fc-empty"><h3>The balances on ' + FC.when(x.asOn) + ' are not in FinCom\u2019s copy of the books yet</h3><p class="note">' + esc(B.why || "") + '.</p>' + LK.freshBar(S.books) + "</div>";
-    const rec = this.store().conf[x.asOn] || {}, all = Object.values(rec), sent = all.filter(s => s.sentAt).length, agreed = all.filter(s => s.reply === "agreed").length, diff = all.filter(s => s.reply === "differs").length;
-    const picked = rows.filter(r => x.sel[r.l]);
-    h += '<div class="dash-tiles" style="margin-top:12px"><div class="dtile"><span>Parties</span><b>' + rows.length + "</b><small>" + esc(B.src) + '</small></div><div class="dtile"><span>Sent</span><b>' + sent + '</b><small>for this date</small></div><div class="dtile"><span>Agreed</span><b>' + agreed + '</b><small>confirmed by the party</small></div><div class="dtile' + (diff ? " warn" : "") + '"><span>Differences</span><b>' + diff + "</b><small>to reconcile</small></div></div>";
-    if (!rows.length) return h + '<div class="bk-none">No party with a balance matches. Change the choices above.</div>';
-    h += '<div class="row ltr-bar"><button class="btn primary" data-ltr="print"' + (picked.length ? "" : " disabled") + ">Print or PDF the letters (" + picked.length + ")</button>" +
-      '<button class="btn" data-ltr="selall">' + (picked.length === rows.length ? "Untick all" : "Tick all " + rows.length) + '</button><button class="btn" data-ltr="excel">Excel of the list</button></div>';
-    h += '<div class="bk-tablewrap"><table class="bk-table lk-t ltr-t"><thead><tr><th class="ck"></th><th>Party</th><th class="n">Balance</th><th>Email</th><th>Phone</th><th>Sent</th><th>Reply</th><th class="ac"></th></tr></thead><tbody>' +
-      rows.map(r => '<tr><td class="ck"><input type="checkbox" data-ltrsel="' + esc(r.l) + '"' + (x.sel[r.l] ? " checked" : "") + ' aria-label="Tick ' + esc(r.l) + '"></td><td><button class="linkbtn strong" data-lkled="' + esc(r.l) + '">' + esc(r.l) + '</button><span class="nr">' + ({r: "customer", p: "supplier", o: "loan or advance"}[r.side]) + (r.gstin ? " · " + esc(r.gstin) : "") + "</span></td>" +
-        '<td class="n">' + FC.drcr(r.bal) + "</td>" + this.contactCells(r) +
-        "<td>" + (r.s.sentAt ? fmtDate(r.s.sentAt.slice(0, 10)) + '<span class="nr">' + esc(r.s.via || "") + "</span>" : '<span class="note">not yet</span>') + "</td>" +
-        '<td><select class="ltr-in sm" data-ltrreply="' + esc(r.l) + '">' + [["", "—"], ["agreed", "Agreed"], ["differs", "Differs"], ["none", "No reply"]].map(([v, l]) => '<option value="' + v + '"' + ((r.s.reply || "") === v ? " selected" : "") + ">" + l + "</option>").join("") + "</select>" +
-        (r.s.reply === "differs" ? '<input type="text" class="ltr-in sm" inputmode="decimal" data-ltrtheir="' + esc(r.l) + '" value="' + esc(r.s.their || "") + '" placeholder="their figure" aria-label="Their balance">' + (num(r.s.their) ? '<span class="nr bad">difference ' + INR.format(Math.abs(r2(Math.abs(r.bal) - num(r.s.their)))) + "</span>" : "") : "") + "</td>" +
-        '<td class="ac"><button class="btn small" data-ltrone="confirm|print|' + esc(r.l) + '">Letter</button><button class="btn small" data-ltrone="confirm|mail|' + esc(r.l) + '" title="Opens your email with the letter written">Email</button><button class="btn small" data-ltrone="confirm|wa|' + esc(r.l) + '">WhatsApp</button></td></tr>').join("") +
-      "</tbody></table></div>";
-    return h;
-  },
-  viewRemind(){
-    const x = this.st(), rows = this.remindRows(), c = this.cfg(), picked = rows.filter(r => x.sel["rem|" + r.l]);
-    let h = '<section class="dash-card" style="margin-top:12px"><div class="lk-form">' +
-      '<label class="f"><span>Bills due as on</span><input type="date" data-ltrf="remOn" value="' + FC.iso(x.remOn) + '"></label>' +
-      '<label class="f"><span>Credit allowed</span><select data-ltrf="credit">' + [0, 15, 30, 45, 60, 90].map(d => '<option value="' + d + '"' + (num(x.credit) === d ? " selected" : "") + ">" + (d ? d + " days" : "none") + "</option>").join("") + "</select></label>" +
-      '<label class="f"><span>Tone</span><select data-ltrf="tone">' + [["friendly", "Friendly"], ["firm", "Firm"], ["final", "Final reminder"]].map(([v, l]) => '<option value="' + v + '"' + (x.tone === v ? " selected" : "") + ">" + l + "</option>").join("") + "</select></label>" +
-      '<label class="f lk-wide"><span>Find</span><input type="search" data-fk="ltrQ2" data-ltrf="q" data-keeptyped value="' + esc(x.q) + '" placeholder="customer or GSTIN"></label></div>' +
-      '<label class="chk" style="margin-top:8px"><input type="checkbox" data-ltrcfg="msme"' + (c.msme ? " checked" : "") + "> The client is a micro or small enterprise: mention the MSMED Act interest</label></section>";
-    const tot = rows.reduce((s, r) => s + r.amt, 0);
-    h += '<div class="dash-tiles" style="margin-top:12px"><div class="dtile warn"><span>Overdue</span><b>' + INR0.format(tot) + "</b><small>past " + num(x.credit) + ' days</small></div><div class="dtile"><span>Customers</span><b>' + rows.length + '</b><small>with bills overdue</small></div><div class="dtile"><span>Over 90 days</span><b>' + INR0.format(rows.reduce((s, r) => s + r.over.filter(z => z.age > 90).reduce((a, z) => a + z.amt, 0), 0)) + '</b><small>the oldest</small></div><div class="dtile"><span>Reminded</span><b>' + rows.filter(r => r.last).length + "</b><small>at least once</small></div></div>";
-    if (!rows.length) return h + '<div class="fc-empty"><h3>Nothing overdue</h3><p class="note">No customer has a bill older than ' + num(x.credit) + " days on " + FC.when(x.remOn) + ". Bills are read from the bill-wise details in Tally.</p></div>";
-    h += '<div class="row ltr-bar"><button class="btn primary" data-ltr="rprint"' + (picked.length ? "" : " disabled") + ">Print or PDF the reminders (" + picked.length + ")</button>" +
-      '<button class="btn" data-ltr="rselall">' + (picked.length === rows.length ? "Untick all" : "Tick all " + rows.length) + "</button></div>";
-    h += '<div class="bk-tablewrap"><table class="bk-table lk-t ltr-t"><thead><tr><th class="ck"></th><th>Customer</th><th class="n">Overdue</th><th class="n">Oldest</th><th>Email</th><th>Phone</th><th>Last reminder</th><th class="ac"></th></tr></thead><tbody>' +
-      rows.map(r => '<tr><td class="ck"><input type="checkbox" data-ltrsel="rem|' + esc(r.l) + '"' + (x.sel["rem|" + r.l] ? " checked" : "") + ' aria-label="Tick ' + esc(r.l) + '"></td><td><button class="linkbtn strong" data-lkled="' + esc(r.l) + '">' + esc(r.l) + '</button><span class="nr">' + r.over.length + " bill" + (r.over.length === 1 ? "" : "s") + " · owes " + INR.format(r.total) + " in all</span></td>" +
-        '<td class="n">' + INR.format(r.amt) + '</td><td class="n' + (r.oldest > 90 ? " bad" : "") + '">' + r.oldest + " days</td>" + this.contactCells(r) +
-        "<td>" + (r.last ? fmtDate(r.last.at.slice(0, 10)) + '<span class="nr">' + esc(r.last.via) + ", " + esc(r.last.tone || "") + "</span>" : '<span class="note">never</span>') + "</td>" +
-        '<td class="ac"><button class="btn small" data-ltrone="remind|print|' + esc(r.l) + '">Letter</button><button class="btn small" data-ltrone="remind|mail|' + esc(r.l) + '">Email</button><button class="btn small" data-ltrone="remind|wa|' + esc(r.l) + '">WhatsApp</button></td></tr>').join("") +
-      "</tbody></table></div>";
-    return h;
-  },
-  viewSettings(){
-    const c = this.cfg(), inp = (k, l, ph, t) => '<label class="f"><span>' + l + '</span><input type="' + (t || "text") + '" data-ltrcfg="' + k + '" value="' + esc(c[k] || "") + '" placeholder="' + esc(ph || "") + '"></label>';
-    return '<section class="dash-card" style="margin-top:12px"><h3>Who the letters are from, and where replies go</h3><div class="lk-form">' +
-      inp("signer", "Signed by (name and designation)", "Rakesh Mehra, Director") + inp("companyEmail", "The client’s email for replies", "accounts@client.in", "email") +
-      '<label class="f"><span>Replies go to</span><select data-ltrcfg="replyTo"><option value="company"' + (c.replyTo !== "auditor" ? " selected" : "") + '>The client</option><option value="auditor"' + (c.replyTo === "auditor" ? " selected" : "") + ">The auditor, directly</option></select></label>" +
-      inp("auditor", "Auditor’s name", "Mehra & Iyer, Chartered Accountants") + inp("auditorEmail", "Auditor’s email", "audit@firm.in", "email") +
-      '<label class="f"><span>Days to reply</span><input type="text" inputmode="numeric" data-ltrcfg="days" value="' + esc(c.days) + '"></label>' + inp("udyam", "Udyam number (for reminders)", "UDYAM-UP-00-0000000") + "</div>" +
-      '<div class="stack" style="gap:6px;margin-top:10px"><label class="chk"><input type="checkbox" data-ltrcfg="attach"' + (c.attach ? " checked" : "") + "> Put the party’s statement of account for the year under each confirmation</label>" +
-      '<label class="chk"><input type="checkbox" data-ltrcfg="negative"' + (c.negative ? " checked" : "") + "> Say that no reply means the balance is taken as correct (a negative confirmation; the auditor decides whether that is enough)</label>" +
-      '<label class="chk"><input type="checkbox" data-ltrcfg="msme"' + (c.msme ? " checked" : "") + "> The client is a micro or small enterprise: mention the MSMED Act interest in reminders</label></div>" +
-      '<p class="note" style="margin-top:10px">For an audit, confirmations are best sent by the auditor with replies coming straight back to the auditor (SA 505). Choose “The auditor, directly” for that.</p></section>';
-  },
   byName(kind, l){ return (kind === "confirm" ? this.confirmRows().rows : this.remindRows()).find(r => r.l === l); }
 };
-function viewBooksLetters(b){ return LTR.view(b); }
-if (typeof document !== "undefined"){
-  document.addEventListener("click", e => {
-    const t = e.target.closest && e.target.closest("[data-ltr],[data-ltrmode],[data-ltrone]"); if (!t || !S.books) return;
-    const x = LTR.st();
-    if (t.dataset.ltrmode){ x.mode = t.dataset.ltrmode; x.q = ""; render(); return; }
-    if (t.dataset.ltrone){
-      const [kind, how, l] = t.dataset.ltrone.split("|"), r = LTR.byName(kind, l); if (!r) return;
-      if (how === "print"){ LTR.print(kind, [r]); return; }
-      const ok = how === "mail" ? LTR.mailto(kind, r) : LTR.whatsapp(kind, r);
-      if (ok){ LTR.mark(kind, r, how === "mail" ? "email" : "WhatsApp", new Date().toISOString()); saveBooks(); render(); }
-      return;
-    }
-    const a = t.dataset.ltr;
-    if (a === "print") LTR.print("confirm", LTR.confirmRows().rows.filter(r => x.sel[r.l]));
-    else if (a === "rprint") LTR.print("remind", LTR.remindRows().filter(r => x.sel["rem|" + r.l]));
-    else if (a === "selall" || a === "rselall"){
-      const rows = a === "selall" ? LTR.confirmRows().rows : LTR.remindRows(), key = r => (a === "selall" ? "" : "rem|") + r.l, all = rows.every(r => x.sel[key(r)]);
-      rows.forEach(r => { x.sel[key(r)] = !all; }); render();
-    }
-    else if (a === "excel"){
-      const rows = LTR.confirmRows().rows;
-      FC.excel("balance-confirmations-" + FC.iso(x.asOn), [["Confirmations", [["Party", "Kind", "GSTIN", "Balance", "Dr or Cr", "Email", "Phone", "Sent on", "Sent by", "Reply", "Their figure", "Difference"]].concat(rows.map(r => [r.l, {r: "Customer", p: "Supplier", o: "Loan or advance"}[r.side], r.gstin, Math.abs(r.bal), r.bal > 0 ? "Dr" : "Cr", r.c.email, r.c.phone, r.s.sentAt ? r.s.sentAt.slice(0, 10) : "", r.s.via || "", r.s.reply || "", r.s.their || "", r.s.their ? r2(Math.abs(r.bal) - num(r.s.their)) : ""]))]])
-        .catch(er => toast("Could not build the file: " + (er && er.message)));
-    }
-  });
-  document.addEventListener("input", e => {
-    const t = e.target; if (!t.dataset || !S.books || !S.ltr) return;
-    if (t.dataset.ltrf === "q"){ S.ltr.q = t.value; softRender(); return; }
-    if (t.dataset.ltrc){ const [l, k] = t.dataset.ltrc.split("|"), s = LTR.store(); s.contacts[l] = Object.assign({}, s.contacts[l], {[k]: t.value.trim()}); later("ltrc", saveBooks, 800); return; }
-    if (t.dataset.ltrtheir){ const s = LTR.store(), m = s.conf[S.ltr.asOn] = s.conf[S.ltr.asOn] || {}; m[t.dataset.ltrtheir] = Object.assign({}, m[t.dataset.ltrtheir], {their: t.value}); later("ltrt", () => { saveBooks(); render(); }, 900); return; }
-    if (t.dataset.ltrcfg && t.type !== "checkbox" && t.tagName !== "SELECT"){ LTR.store().cfg[t.dataset.ltrcfg] = t.value; later("ltrcfg", saveBooks, 800); }
-  });
-  document.addEventListener("change", e => {
-    const t = e.target; if (!t.dataset || !S.books || !S.ltr) return;
-    const x = S.ltr;
-    if (t.dataset.ltrf && t.dataset.ltrf !== "q"){ x[t.dataset.ltrf] = t.type === "date" ? FC.d8(t.value) : t.value; if (t.dataset.ltrf === "asOn") x.sel = {}; render(); return; }
-    if (t.dataset.ltrside){ x.sides[t.dataset.ltrside] = t.checked; render(); return; }
-    if (t.dataset.ltrsel !== undefined){ x.sel[t.dataset.ltrsel] = t.checked; render(); return; }
-    if (t.dataset.ltrreply){ const s = LTR.store(), m = s.conf[x.asOn] = s.conf[x.asOn] || {}; m[t.dataset.ltrreply] = Object.assign({}, m[t.dataset.ltrreply], {reply: t.value, replyAt: new Date().toISOString()}); saveBooks(); render(); return; }
-    if (t.dataset.ltrcfg && (t.type === "checkbox" || t.tagName === "SELECT")){ LTR.store().cfg[t.dataset.ltrcfg] = t.type === "checkbox" ? t.checked : t.value; saveBooks(); render(); }
-  });
+// Letters (app/src/screens/books/Letters.jsx): what its buttons, ticks and boxes do
+function ltrMode(m){ const x = LTR.st(); x.mode = m; x.q = ""; render(); }
+function ltrSet(k, v, isDate){ const x = LTR.st(); x[k] = isDate ? FC.d8(v) : v; if (k === "asOn") x.sel = {}; render(); }
+function ltrQ(v){ LTR.st().q = v; FinComReact.redraw(); }
+function ltrSide(k, on){ LTR.st().sides[k] = on; render(); }
+function ltrSel(key, on){ LTR.st().sel[key] = on; render(); }
+function ltrOne(kind, how, l){
+  const r = LTR.byName(kind, l); if (!r) return;
+  if (how === "print"){ LTR.print(kind, [r]); return; }
+  const ok = how === "mail" ? LTR.mailto(kind, r) : LTR.whatsapp(kind, r);
+  if (ok){ LTR.mark(kind, r, how === "mail" ? "email" : "WhatsApp", new Date().toISOString()); saveBooks(); render(); }
 }
+function ltrAct(a){
+  const x = LTR.st();
+  if (a === "print") LTR.print("confirm", LTR.confirmRows().rows.filter(r => x.sel[r.l]));
+  else if (a === "rprint") LTR.print("remind", LTR.remindRows().filter(r => x.sel["rem|" + r.l]));
+  else if (a === "selall" || a === "rselall"){
+    const rows = a === "selall" ? LTR.confirmRows().rows : LTR.remindRows(), key = r => (a === "selall" ? "" : "rem|") + r.l, all = rows.every(r => x.sel[key(r)]);
+    rows.forEach(r => { x.sel[key(r)] = !all; }); render();
+  }
+  else if (a === "excel"){
+    const rows = LTR.confirmRows().rows;
+    FC.excel("balance-confirmations-" + FC.iso(x.asOn), [["Confirmations", [["Party", "Kind", "GSTIN", "Balance", "Dr or Cr", "Email", "Phone", "Sent on", "Sent by", "Reply", "Their figure", "Difference"]].concat(rows.map(r => [r.l, {r: "Customer", p: "Supplier", o: "Loan or advance"}[r.side], r.gstin, Math.abs(r.bal), r.bal > 0 ? "Dr" : "Cr", r.c.email, r.c.phone, r.s.sentAt ? r.s.sentAt.slice(0, 10) : "", r.s.via || "", r.s.reply || "", r.s.their || "", r.s.their ? r2(Math.abs(r.bal) - num(r.s.their)) : ""]))]])
+      .catch(er => toast("Could not build the file: " + (er && er.message)));
+  }
+}
+// typed: kept a moment after the typing stops
+function ltrContact(l, k, v){ const s = LTR.store(); s.contacts[l] = Object.assign({}, s.contacts[l], {[k]: v.trim()}); later("ltrc", saveBooks, 800); }
+function ltrTheir(l, v){ const s = LTR.store(), asOn = LTR.st().asOn, m = s.conf[asOn] = s.conf[asOn] || {}; m[l] = Object.assign({}, m[l], {their: v}); later("ltrt", () => { saveBooks(); render(); }, 900); }
+function ltrCfgType(k, v){ LTR.store().cfg[k] = v; later("ltrcfg", saveBooks, 800); }
+// chosen: kept and shown at once
+function ltrReply(l, v){ const s = LTR.store(), asOn = LTR.st().asOn, m = s.conf[asOn] = s.conf[asOn] || {}; m[l] = Object.assign({}, m[l], {reply: v, replyAt: new Date().toISOString()}); saveBooks(); render(); }
+function ltrCfg(k, v){ LTR.store().cfg[k] = v; saveBooks(); render(); }
