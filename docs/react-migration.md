@@ -90,7 +90,7 @@ Status: **done** (in React, test passing) · **next** · blank = not started. Ab
 | **Sign in** | `viewSignIn`, `viewSignUp`, two-step `viewTwoStep` (27, 43) | |
 | **Home** | `viewClients`, `addCompanyForm`, `viewToday`, `viewInboxAll`, `viewInbox` (18) | **done** |
 | | `viewTallyHome` (18) | with Tally |
-| | Help and support: `viewHelp`, `viewSup*` (40) | |
+| | Help and support (`viewHelp`, `viewSupGuide`, `viewSupMine`, `viewSupDesk`, `viewSupNew`, `viewSupTicket`, `GUIDE.html`, 40) → `screens/Help.jsx`; through supTab, supArt, supFilter, supDstat, supAct, supType, supDraft, supFiles, supFdel, supDl, supSet; the reply is kept in `S.sup.rtext` (no more reading the box). `run_support_ui.py` (firm and support, stood-in firm account) passes in full; 12 Help pages match main in `pages_misc.py` | **done** |
 | **Client: Collect** | `viewCollect` (02) · `viewJobs`, `readingCheck`, `uploadOptions`, busy cards (01) · `docqPanel`, `uploadBlock` (19) | **done** |
 | **Client: Post / Done** | `viewPostStep`, `viewDoneStep` (02) · `viewExport` (27) · `viewPostLog` (18) | **done** |
 | **Purchase bills** | `viewInvoices`, `viewDetail`, `field`, `docWarnHtml` (19) · `itemsHtml`, `partyHistHtml`, `ytdSourceHtml`, `rereadButtons` (01) · `viewGst` (27) | **done** |

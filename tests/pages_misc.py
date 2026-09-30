@@ -50,6 +50,24 @@ with sync_playwright() as p:
     pg.evaluate("""() => { TCloud.on = () => true; TCloud.autoErr = 'no bridge'; const c0 = Object.values(S.companies)[0];
       TCloud.pane = {devices: [{id: 'd1', name: 'Office PC', info: {computer: 'PC-1', user: 'ravi'}, last_seen: '2026-01-05T10:00:00Z', version: '1.14.3'}, {id: 'd2', name: 'Old', revoked: true}],
         companies: [{company: 'ACME LTD', gstin: '09AAACA1111A1Z1', client_id: c0.id, last_seen: '2026-01-05T10:00:00Z'}, {company: 'BETA', client_id: null}], err: 'Could not refresh', busy: ''}; render(); }"""); grab("settings-tcloud")
+    # Help: the guide, a search, an article; tickets (not signed in, then a firm's list, the desk, a new ticket, a thread)
+    pg.evaluate("() => { S.sup = null; S.view = 'home'; S.homeTab = 'help'; render(); }"); grab("help")
+    pg.evaluate("() => { const s = SUP.st(); s.gq = 'rule 37'; const r = GUIDE.search(s.gq); if (r[0]) s.art = r[0].k; render(); }"); grab("help-search")
+    pg.evaluate("() => { const s = SUP.st(); s.gq = ''; s.art = 'tickets'; render(); }"); grab("help-article")
+    pg.evaluate("() => { const s = SUP.st(); s.gq = 'zzqq'; render(); }"); grab("help-none")
+    pg.evaluate("() => { const s = SUP.st(); s.gq = ''; s.tab = 'tickets'; render(); }"); grab("help-signedout")
+    pg.evaluate("""() => { SUP.on = () => true; SUP.load = async () => {}; SUP.sla = (t) => t.sla || 'track'; const s = SUP.st(), d = (n) => new Date(Date.parse('2026-09-30T10:00:00Z') - n * 3600e3).toISOString();
+      s.list = [{id: 'a', num: 1001, subject: '2B fetch empty', module: 'GST', priority: 'high', status: 'waiting', last_by: 'support', firm_id: 'f1', firm_name: 'Firm A', created_name: 'Asha', created_at: d(30), updated_at: d(2), first_response_at: d(28), sla: 'risk'},
+        {id: 'b', num: 1002, subject: 'Tally port', module: 'Tally connection', priority: 'low', status: 'open', last_by: 'firm', firm_id: 'f2', firm_name: 'Firm B', created_name: 'Bina', created_at: d(60), updated_at: d(5), sla: 'late', assignee: 'Anshul'},
+        {id: 'c', num: 1003, subject: 'Credit top up', module: 'Firm account and billing', priority: 'medium', status: 'resolved', last_by: 'support', firm_id: 'f1', firm_name: 'Firm A', created_at: d(90), updated_at: d(40), resolved_at: d(40), first_response_at: d(88), sla: 'met'}];
+      S.account = {me: {role: 'owner'}}; s.filter = 'all'; render(); }"""); grab("help-mine")
+    pg.evaluate("() => { const s = SUP.st(); s.filter = 'waiting'; s.q = '2b'; render(); }"); grab("help-mine-filter")
+    pg.evaluate("() => { S.account = {superadmin: true, me: {role: 'owner'}}; const s = SUP.st(); s.q = ''; s.tab = 'desk'; render(); }"); grab("help-desk")
+    pg.evaluate("() => { const s = SUP.st(); s.dstat = 'all'; s.dpri = 'low'; render(); }"); grab("help-desk-filter")
+    pg.evaluate("() => { const s = SUP.st(); s.dstat = 'active'; s.dpri = ''; S.helpCtx = {screen: 'GST › 2B', client: 'ZZ TEST', gstin: '09AANFG3202D1ZR', build: 'b196', recent: [{kind: 'error', msg: 'boom'}]}; s.newOpen = true; s.draft = {module: 'GST', category: 'problem', priority: 'high', withCtx: true, subject: 'rule 37 reversal', body: 'x'}; s.files = [{name: 'a.png', size: 2048}]; render(); }"); grab("help-new")
+    pg.evaluate("""() => { const s = SUP.st(); s.newOpen = false; s.open = 'a'; s.detail = Object.assign({}, s.list[0], {category: 'problem', respond_by: '2026-09-30T12:00:00Z', resolve_by: '2026-10-01T10:00:00Z', context: {screen: 'GST', build: 'b196'},
+      thread: [{author_name: 'Asha', body: 'Line one\\nLine two', created_at: '2026-09-29T04:00:00Z', files: [{path: 'f1/x', name: 'screen.png', size: 3000}]}, {author_name: 'Anshul', from_support: true, internal: true, body: 'Looking', created_at: '2026-09-29T05:00:00Z'}]}); s.mailNote = 'Email is not set up yet'; render(); }"""); grab("help-ticket-admin")
+    pg.evaluate("() => { S.account = {me: {role: 'owner'}}; render(); }"); grab("help-ticket-firm")
     br.close()
 srv.shutdown()
 json.dump({"pages": res, "errors": errors}, open(out, "w"), indent=0)
