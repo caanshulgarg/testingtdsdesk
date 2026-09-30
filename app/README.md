@@ -52,6 +52,11 @@ A `<table className="bk-table">` gets the funnels on its headings (filter any co
 long, as the old tables did: `GridF` (`src/js/31-grid-filters.js`) adds them after each redraw. Add `gf-off` only to a
 table with its own filters or a single figure per row group.
 
+## Printing a screen
+
+`FinComReact.markup("Gst9c")` (in `src/main.jsx`) gives a React screen as plain HTML, for a PDF made from what is on
+screen. Add a screen to `PRINTABLE` there to print it the same way.
+
 ## Rules of the house
 
 - **Change state, then `render()`.** There is no other store; React redraws from `S`.
@@ -89,7 +94,7 @@ cd ../tests && TDSDESK_SITE=../app/dist-test python3 run_react_post.py
 | A client's dashboard; Transactions | `src/screens/Dash.jsx`, `Txn.jsx` |
 | The books (TDS & GST tabs); TDS by year and quarter | `src/screens/Books.jsx` |
 | A TDS return (26Q, 24Q) and certificates | `src/screens/TdsReturn.jsx` |
-| The GST tab; GSTR-1 and 3B; the input register; 2B (other parts are still old pages) | `src/screens/Gst.jsx`, `src/screens/gst/Returns.jsx`, `gst/InputRegister.jsx`, `gst/TwoB.jsx` (2B reconciliation), `gst/Workings.jsx` (amendments, advances, reversal) |
+| The GST tab; GSTR-1 and 3B; the input register; 2B (other parts are still old pages) | `src/screens/Gst.jsx`, `src/screens/gst/Returns.jsx`, `gst/InputRegister.jsx`, `gst/TwoB.jsx` (2B reconciliation), `gst/Workings.jsx` (amendments, advances, reversal), `gst/Annual.jsx` (GSTR-9, 9C) |
 | A filter bar (find box, choices, print, Excel) | `src/parts/FilterBar.jsx` |
 | Shared pieces: boxes, ledger lists, column headings | `src/parts/CommitBox.jsx`, `LedgerBox.jsx`, `LedgerSelect.jsx`, `ColHead.jsx` |
 | GSTR-2B from the portal | `src/screens/GstApiCard.jsx` |

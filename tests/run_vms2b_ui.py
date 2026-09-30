@@ -50,7 +50,7 @@ with sync_playwright() as p:
     pg.evaluate("S.tab = 'books'; render()"); pg.wait_for_timeout(3000)
     pg.click('nav[aria-label="GST"] button[data-part="g9"]'); pg.wait_for_timeout(6000)
     ok("Figures not in the books" in pg.inner_text("#app"), "GSTR-9: the typed figures section")
-    pg.fill('input[data-g9t="15E.igst"]', "5000"); pg.press('input[data-g9t="15E.igst"]', "Tab"); pg.wait_for_timeout(5000)
+    pg.fill('input[aria-label="15E igst"]', "5000"); pg.press('input[aria-label="15E igst"]', "Tab"); pg.wait_for_timeout(5000)
     ok(pg.evaluate("S.books.gst9['2025|07']['15E'].igst") == 5000 and "15E Total demand of taxes" in pg.inner_text("#app"), "a typed figure is kept and shown in Part VI")
     pg.screenshot(path=OUT + "/b138-gst9.png", full_page=False)
     br.close()

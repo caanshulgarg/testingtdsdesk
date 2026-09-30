@@ -871,61 +871,12 @@ function ledChangedBanner(b){
     '<div class="bk-tablewrap" style="margin-top:6px"><table class="bk-table"><thead><tr><th>Ledger</th><th>What changed</th><th>Returns made before the change</th></tr></thead><tbody>' +
     ch.slice(0, 30).map(x => "<tr><td>" + esc(x.name) + "</td><td>" + esc(x.change) + "</td><td>" + esc(x.returns.slice(0, 4).join("; ") + (x.returns.length > 4 ? " and " + (x.returns.length - 4) + " more" : "")) + "</td></tr>").join("") + "</tbody></table></div></section>";
 }
-function viewGst9(b){
-  const reg = S.gstReg || (GSTR.gstins(b).length === 1 ? GSTR.gstins(b)[0].slice(0, 2) : "");
-  if (!reg) return '<p class="note">Choose a registration above; the annual return is filed for each GSTIN.</p>';
-  const fy = GST9.fyOf(S.gstYm || GSTR.months().slice(-1)[0]), d = GST9.build(fy, reg), m = v => INR.format(r2(v || 0));
-  let h = '<section class="dash-card"><h3>GSTR-9 for ' + GST9.label(fy) + ", " + esc((GSTR.gstins(b) || []).find(g => g.slice(0, 2) === reg) || reg) + "</h3>" +
-    '<p class="note">Built from the months in the books, the same figures as each month\u2019s GSTR-1 and 3B. ' + (d.missing.length ? '<span class="bad">Not in the books: ' + d.missing.map(GSTR.label).join(", ") + ".</span> " : "") +
-    (d.twoB ? d.twoB + " months of 2B here for table 8A." : '<span class="bad">No 2B here for this year, so table 8A is empty; bring the 2B files in under 2B reconciliation.</span>') + "</p>" +
-    '<div class="row" style="gap:8px;margin:8px 0"><button class="btn small primary" data-act="gst9Pdf">Download (PDF)</button><button class="btn small" data-act="gst9Excel">Excel</button></div>' + GST9.html(d) +
-    (Math.abs(d.T["6J"].igst + d.T["6J"].cgst + d.T["6J"].sgst + d.T["6J"].cess) >= 1 ? '<p class="bk-alert">6J: \u20b9' + m(d.T["6J"].igst + d.T["6J"].cgst + d.T["6J"].sgst + d.T["6J"].cess) + " of the credit in the 3Bs is not in 6B to 6H. It usually comes from bills marked as ITC not available, or credit entered in a 3B that is not in the books; check before filing.</p>" : "") +
-    (d.heldEnd && Math.abs(d.T["6J"].igst + d.T["6J"].cgst + d.T["6J"].sgst + d.T["6J"].cess + d.heldEnd) < 2 ? '<p class="note">6J: \u20b9' + m(d.heldEnd) + " of this year\u2019s bills was held back from 3B because it was not in 2B by March; it is taken in next year\u2019s returns and belongs in 8C and 13 when it is.</p>" : "") +
-    '<p class="note">Table 8C and 13 count bills of this year booked in Tally from April to November of the next year; table 12, this year\u2019s credit reversed then (\u20b9' + m(d.T["12books"].igst + d.T["12books"].cgst + d.T["12books"].sgst + d.T["12books"].cess) + " in the books). Figures that are not in the books are typed below.</p></section>";
-  // what is not in the books, typed once for the year
-  const ty = d.typed || {}, cell = (k, f) => '<input type="number" step="0.01" data-g9t="' + k + "." + f + '" value="' + esc(ty[k] && ty[k][f] != null ? ty[k][f] : "") + '" placeholder="0" style="width:105px;text-align:right">';
-  h += '<section class="dash-card" style="margin-top:12px"><h3>Figures not in the books</h3><p class="note">Amendments made on the portal, credit from an ISD, reversals under rules 37 and 39, refunds and demands, late fee. Typed here, they go into the tables above and into the PDF and Excel.' + (d.T["12books"] && (d.T["12books"].igst + d.T["12books"].cgst + d.T["12books"].sgst) ? " Table 12 is taken from the books unless typed." : "") + '</p><div class="bk-tablewrap"><table class="bk-table gf-off"><thead><tr><th>Table</th><th class="n">Value</th><th class="n">IGST</th><th class="n">CGST</th><th class="n">SGST</th><th class="n">Cess</th></tr></thead><tbody>' +
-    GST9.TYPED.map(([k, l]) => "<tr><td>" + esc(/^\d+[A-Z]? /.test(l) ? l : k + " " + l) + "</td>" + ["taxable", "igst", "cgst", "sgst", "cess"].map(f => '<td class="n">' + cell(k, f) + "</td>").join("") + "</tr>").join("") +
-    "<tr><td>14 Differential tax on 10 and 11: payable / paid</td><td class=\"n\">" + cell("14", "payable") + '</td><td class="n">' + cell("14", "paid") + '</td><td colspan="3"></td></tr></tbody></table></div></section>';
-  h += '<section class="dash-card" style="margin-top:12px"><h3>17. HSN summary of outward supplies</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>HSN</th><th class="n">Rate</th><th class="n">Taxable value</th><th class="n">IGST</th><th class="n">CGST</th><th class="n">SGST</th></tr></thead><tbody>' +
-    d.hsnOut.slice(0, 100).map(x => "<tr><td>" + esc(x.hsn || "\u2014") + '</td><td class="n">' + x.rate + '%</td><td class="n">' + m(x.taxable) + '</td><td class="n">' + m(x.igst) + '</td><td class="n">' + m(x.cgst) + '</td><td class="n">' + m(x.sgst) + "</td></tr>").join("") + "</tbody></table></div></section>";
-  h += '<section class="dash-card" style="margin-top:12px"><h3>18. HSN summary of inward supplies</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th>HSN</th><th class="n">Taxable value</th><th class="n">IGST</th><th class="n">CGST</th><th class="n">SGST</th></tr></thead><tbody>' +
-    d.hsnIn.slice(0, 100).map(x => "<tr><td>" + esc(x.hsn || "no HSN in Tally") + '</td><td class="n">' + m(x.taxable) + '</td><td class="n">' + m(x.igst) + '</td><td class="n">' + m(x.cgst) + '</td><td class="n">' + m(x.sgst) + "</td></tr>").join("") + "</tbody></table></div></section>";
-  return h;
-}
-function viewGst9c(b){
-  const reg = S.gstReg || (GSTR.gstins(b).length === 1 ? GSTR.gstins(b)[0].slice(0, 2) : "");
-  if (!reg) return '<p class="note">Choose a registration above.</p>';
-  const fy = GST9.fyOf(S.gstYm || GSTR.months().slice(-1)[0]), c = GST9C.build(fy, reg), m = v => INR.format(r2(v || 0)), st = c.st;
-  const inp = (k, v, ph) => '<input type="number" step="0.01" data-g9c="' + k + '" value="' + esc(v == null ? "" : v) + '" placeholder="' + esc(ph || "0") + '" style="width:140px;text-align:right">';
-  const row = (no, l, v, bold, bad) => "<tr><td>" + no + "</td><td>" + (bold ? "<b>" + l + "</b>" : l) + '</td><td class="n' + (bad && Math.abs(v) >= 1 ? " bad" : "") + '">' + (bold ? "<b>" + m(v) + "</b>" : m(v)) + "</td></tr>";
-  let h = '<section class="dash-card"><h3>GSTR-9C for ' + GST9.label(fy) + '</h3><p class="note">The reconciliation of the audited accounts with the annual return. The books give each figure; type the audited turnover and the adjustments where they apply. Reasons for any difference go in the boxes below each table.</p>' +
-    '<div class="row" style="gap:8px;margin:8px 0"><button class="btn small primary" data-act="gst9cPdf">Download (PDF)</button><button class="btn small" data-act="gst9cExcel">Excel</button></div>' +
-    '<h3 style="margin-top:10px">5. Reconciliation of gross turnover</h3><div class="bk-tablewrap"><table class="bk-table"><tbody>' +
-    "<tr><td>5A</td><td>Turnover (including exports) as per the audited financial statements<div class=\"nr\">from the books: " + m(c.booksTurnover) + '</div></td><td class="n">' + inp("turnover", st.turnover, String(c.booksTurnover)) + "</td></tr>" +
-    GST9C.ADJ.map(([k, l, sg]) => "<tr><td>" + k + "</td><td>" + esc(l) + " (" + (sg > 0 ? "+" : "\u2013") + ")" + (c.def[k] != null ? '<div class="nr">from the books (table 4F): ' + m(c.def[k]) + "</div>" : "") + '</td><td class="n">' + inp("adj." + k, st.adj[k], c.def[k] != null ? String(c.def[k]) : "0") + "</td></tr>").join("") +
-    row("5O", "Annual turnover after adjustments", c.o5, 1) + row("5P", "Turnover as declared in the annual return (GSTR-9)", c.p5) + row("5Q", "Unreconciled turnover (5O \u2013 5P)", c.q5, 1, 1) + "</tbody></table></div>" +
-    '<label class="note" style="display:block">6. Reasons for the unreconciled difference<textarea data-g9c="reasons.6" rows="2" style="width:100%">' + esc(st.reasons["6"] || "") + "</textarea></label>" +
-    '<h3 style="margin-top:12px">7. Reconciliation of taxable turnover</h3><div class="bk-tablewrap"><table class="bk-table"><tbody>' +
-    row("7A", "Annual turnover after adjustments (5O)", c.o5) + row("7B", "Exempted, nil rated, non-GST supplies", c.exempt) + row("7C", "Zero rated supplies without payment of tax", c.zero) + row("7D", "Supplies on which tax is paid by the recipient on reverse charge", c.rcm) +
-    row("7E", "Taxable turnover as per adjustments (A \u2013 (B + C + D))", c.e7, 1) + row("7F", "Taxable turnover as per liability declared in the annual return", c.f7) + row("7G", "Unreconciled taxable turnover (E \u2013 F)", c.g7, 1, 1) + "</tbody></table></div>" +
-    '<label class="note" style="display:block">8. Reasons<textarea data-g9c="reasons.8" rows="2" style="width:100%">' + esc(st.reasons["8"] || "") + "</textarea></label>" +
-    '<h3 style="margin-top:12px">9. Reconciliation of tax paid, rate by rate</h3><div class="bk-tablewrap"><table class="bk-table"><thead><tr><th class="n">Rate</th><th class="n">Taxable value</th><th class="n">Tax payable</th></tr></thead><tbody>' +
-    c.rates.map(x => '<tr><td class="n">' + x.rate + '%</td><td class="n">' + m(x.taxable) + '</td><td class="n">' + m(x.tax) + "</td></tr>").join("") + "</tbody></table></div>" +
-    '<label class="note" style="display:block">10. Reasons<textarea data-g9c="reasons.10" rows="2" style="width:100%">' + esc(st.reasons["10"] || "") + "</textarea></label>" +
-    '<h3 style="margin-top:12px">12. Reconciliation of input tax credit</h3><div class="bk-tablewrap"><table class="bk-table"><tbody>' +
-    "<tr><td>12A</td><td>ITC availed as per the audited financial statements<div class=\"nr\">from the books: " + m(c.itcBooks) + '</div></td><td class="n">' + inp("itcBooks", st.itcBooks, String(c.itcBooks)) + "</td></tr>" +
-    "<tr><td>12B</td><td>ITC booked in earlier years claimed in this year (+)</td><td class=\"n\">" + inp("adj.12B", st.adj["12B"]) + "</td></tr>" +
-    "<tr><td>12C</td><td>ITC booked in this year to be claimed in later years (\u2013)</td><td class=\"n\">" + inp("adj.12C", st.adj["12C"]) + "</td></tr>" +
-    row("12D", "ITC as per the audited financial statements after adjustments", c.d12, 1) + row("12E", "ITC claimed in the annual return (7J)", c.e12) + row("12F", "Unreconciled ITC", c.f12, 1, 1) + "</tbody></table></div>" +
-    '<label class="note" style="display:block">13. Reasons<textarea data-g9c="reasons.13" rows="2" style="width:100%">' + esc(st.reasons["13"] || "") + "</textarea></label></section>";
-  return h;
-}
 function gst9PackHtml(which){
   const b = S.books, reg = S.gstReg || ((GSTR.gstins(b) || [])[0] || "").slice(0, 2), fy = GST9.fyOf(S.gstYm || GSTR.months().slice(-1)[0]), co = CO();
   const head = (t) => '<div style="border-bottom:2px solid #15201B;padding-bottom:8px;margin-bottom:10px"><div style="font-size:12px;color:#5A6B63">' + t + ' \u2014 WORKING FROM THE BOOKS</div><h1 style="font-size:20px;margin:4px 0">' + esc(co.name) + "</h1><div>" + esc((GSTR.gstins(b) || []).find(g => g.slice(0, 2) === reg) || reg) + " \u00b7 " + GST9.label(fy) + "</div></div>";
   if (which === "9") return head("GSTR-9") + GST9.html(GST9.build(fy, reg)).replace(/<div class="bk-tablewrap">|<\/div>/g, "");
-  return head("GSTR-9C") + viewGst9c(b).replace(/<input[^>]*value="([^"]*)"[^>]*>/g, "$1").replace(/<textarea[^>]*>([^<]*)<\/textarea>/g, "<p>$1</p>").replace(/<button[^>]*>[^<]*<\/button>/g, "").replace(/class="bk-tablewrap"/g, "");
+  // the 9C screen itself (app/src/screens/gst/Annual.jsx), with the boxes turned into their values
+  return head("GSTR-9C") + FinComReact.markup("Gst9c").replace(/<input[^>]*value="([^"]*)"[^>]*>/g, "$1").replace(/<textarea[^>]*>([^<]*)<\/textarea>/g, "<p>$1</p>").replace(/<button[^>]*>[^<]*<\/button>/g, "").replace(/class="bk-tablewrap"/g, "");
 }
 async function gst9Excel(which){
   await ensureXlsx();
@@ -951,7 +902,7 @@ async function gst9Excel(which){
   }
   saveFile(CO().name.replace(/[^A-Za-z0-9]+/g, "-") + "-GSTR-" + which + "-" + fy + "-" + reg + ".xlsx", new Blob([XLSX.write(wb, {bookType: "xlsx", type: "array"})], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
 }
-// the GST tab: React (app/src/screens/Gst.jsx); GSTR-1 and 3B are app/src/screens/gst/Returns.jsx, the input register gst/InputRegister.jsx, 2B gst/TwoB.jsx, amendments, advances and reversal gst/Workings.jsx; the other parts are still the old pages below
+// the GST tab: React (app/src/screens/Gst.jsx); GSTR-1 and 3B are app/src/screens/gst/Returns.jsx, the input register gst/InputRegister.jsx, 2B gst/TwoB.jsx, amendments, advances and reversal gst/Workings.jsx, GSTR-9 and 9C gst/Annual.jsx; the other parts are still the old pages below
 function viewBooksGst(b){ return '<div data-react="Gst"></div>'; }
 // the parts of the GST tab for the GSTIN and month chosen, following its filing type
 function gstParts(b){
@@ -975,8 +926,6 @@ function gstPartHtml(b, part){
   if (part === "cmp08") return viewCmp08(b);
   if (part === "gstr4") return viewGstr4(b);
   if (part === "follow") return viewItcFollow(b);
-  if (part === "g9") return viewGst9(b);
-  if (part === "g9c") return viewGst9c(b);
   return "";
 }
 function gstPartGo(id){ S.gstPart = id; render(); }

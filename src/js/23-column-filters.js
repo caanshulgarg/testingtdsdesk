@@ -867,6 +867,15 @@ function advFix(id, key, val){
 // rule 43: a capital good's name, date put to use, credit, use, registration, date sold
 function assetSet(id, k, v){ const a = (S.books.assets || []).find(x => x.id === id); if (a){ a[k] = /^(igst|cgst|sgst|cess)$/.test(k) ? r2(num(v)) : v; saveBooks(); render(); } }
 function assetRemove(id){ S.books.assets = (S.books.assets || []).filter(a => a.id !== id); saveBooks(); render(); }
+// GSTR-9 and 9C (app/src/screens/gst/Annual.jsx): figures not in the books, typed once for the year and GSTIN
+function gst9Where(){ const b = S.books; return {fy: GST9.fyOf(S.gstYm || GSTR.months().slice(-1)[0]), reg: S.gstReg || ((GSTR.gstins(b) || [])[0] || "").slice(0, 2)}; }
+function gst9Typed(k, f, v){ const w = gst9Where(), st = GST9.typed(w.fy, S.gstReg || ""); st[k] = Object.assign({}, st[k], {[f]: v === "" ? "" : num(v)}); if (Object.values(st[k]).every(x => x === "")) delete st[k]; saveBooks(); render(); }
+// 9C: key is "turnover", "itcBooks", "adj.5B", "reasons.6"…; reasons are text, the rest amounts
+function gst9cSet(key, v){
+  const w = gst9Where(), st = GST9C.st(w.fy, w.reg), val = key.startsWith("reasons.") ? v : (v === "" ? "" : num(v));
+  if (key.startsWith("adj.")) st.adj[key.slice(4)] = val; else if (key.startsWith("reasons.")) st.reasons[key.slice(8)] = val; else st[key] = val;
+  saveBooks(); render();
+}
 // what the user corrects on the Advances and Reversal screens
 function gstFixChange(t){
   const d = t.dataset, b = S.books;
@@ -885,19 +894,12 @@ function gstFixChange(t){
   if (d.misbud !== undefined){ const [h2, mm] = d.misbud.split("|"), fy = Audit.fyStart(mm + "01").slice(0, 4); b.budget = b.budget || {}; b.budget[fy] = b.budget[fy] || {}; b.budget[fy][h2] = Object.assign({}, b.budget[fy][h2], {[mm]: t.value === "" ? "" : num(t.value)}); saveBooks(); render(); return true; }
   if (d.misf !== undefined){ S.misF = t.value; render(); return true; }
   if (d.mismsme !== undefined){ b.msme = Object.assign({}, b.msme, {[d.mismsme]: t.value}); const r = (b.mis || {}).last; if (r) MIS.run(r.from, r.to, r.how); saveBooks(); render(); return true; }
-  if (d.g9t !== undefined){ const fy = GST9.fyOf(S.gstYm || GSTR.months().slice(-1)[0]), reg = S.gstReg || "", st = GST9.typed(fy, reg), [k, f] = d.g9t.split("."); st[k] = Object.assign({}, st[k], {[f]: t.value === "" ? "" : num(t.value)}); if (Object.values(st[k]).every(v => v === "")) delete st[k]; saveBooks(); render(); return true; }
   if (d.itctact !== undefined){ const st = ITCT.store(S.gstReg || ""); st.dec[d.itctact] = Object.assign({}, st.dec[d.itctact], {act: t.value, at: ITCT.today()}); saveBooks(); render(); return true; }
   if (d.itctnote !== undefined){ const st = ITCT.store(S.gstReg || ""); st.dec[d.itctnote] = Object.assign({}, st.dec[d.itctnote], {note: t.value}); saveBooks(); return true; }
   if (d.itctemail !== undefined || d.itctphone !== undefined){ const st = ITCT.store(S.gstReg || ""), k = d.itctemail !== undefined ? d.itctemail : d.itctphone; st.contact[k] = Object.assign({}, st.contact[k], d.itctemail !== undefined ? {email: t.value.trim()} : {phone: t.value.trim()}); saveBooks(); return true; }
   if (d.itctshow !== undefined){ S.itctShow = t.value; render(); return true; }
   if (d.itcbasis !== undefined){ b.itcBasis = Object.assign({}, b.itcBasis, {[S.gstReg || ""]: t.value}); saveBooks(); render(); return true; }
   if (d.gstopen !== undefined){ const k = S.gstReg || ""; b.gstOpen = Object.assign({}, b.gstOpen); b.gstOpen[k] = Object.assign({}, b.gstOpen[k], {[d.gstopen]: t.value === "" ? "" : num(t.value)}); saveBooks(); render(); return true; }
-  if (d.g9c !== undefined){
-    const fy = GST9.fyOf(S.gstYm || GSTR.months().slice(-1)[0]), reg = S.gstReg || ((GSTR.gstins(b) || [])[0] || "").slice(0, 2), st = GST9C.st(fy, reg), k = d.g9c;
-    const v = t.tagName === "TEXTAREA" ? t.value : (t.value === "" ? "" : num(t.value));
-    if (k.startsWith("adj.")) st.adj[k.slice(4)] = v; else if (k.startsWith("reasons.")) st.reasons[k.slice(8)] = v; else st[k] = v;
-    saveBooks(); render(); return true;
-  }
   if (d.relrel !== undefined){ const x = (b.auditRel || []).find(z => z.name === d.relrel); if (x){ x.relation = t.value; saveBooks(); render(); } return true; }
   if (d.auditfreq !== undefined){ b.auditCfg = Object.assign({}, b.auditCfg, {freq: t.value}); saveBooks(); render(); return true; }
   if (d.auditfrom !== undefined || d.auditto !== undefined){ const dr = Audit.defaultRange(b); S.auditRange = Object.assign({from: Audit.iso(dr.from), to: Audit.iso(dr.to)}, S.auditRange, d.auditfrom !== undefined ? {from: t.value} : {to: t.value}); return true; }
