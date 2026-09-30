@@ -1,8 +1,8 @@
 // Transactions: everything filed for this client in one register — purchase bills, sales invoices or bank lines —
 // with where each stands in Tally and its document. Was viewTransactions (src/js/03). The rows are made by
 // txnRowsBills / txnRowsSales / txnRowsBank and filtered by txnFiltered (src/js/03), shared with the CSV download.
-import Legacy from "../parts/Legacy.jsx";
 import ColHead from "../parts/ColHead.jsx";
+import { ChipBar, NoMatch } from "../parts/ChipBar.jsx";
 
 const amt = (v) => (v ? INR.format(r2(v)) : "—");
 const STATUS = [["", "Any status"], ["ok", "In Tally"], ["warn", "Ready or held"], ["no", "Not posted"], ["bad", "Refused by Tally"]];
@@ -39,7 +39,7 @@ export default function Txn() {
       <span className="note">{rows.length} of {all.length}</span>
       <button className="btn small" onClick={() => txnCsv()}>Download as CSV</button>
     </div>
-    <Legacy html={colChipBar("txn", rows.length, all.length + (bank ? " lines" : tab === "sales" ? " invoices" : " bills"))} />
+    <ChipBar t="txn" shown={rows.length} total={all.length + (bank ? " lines" : tab === "sales" ? " invoices" : " bills")} />
     <div className="bk-tablewrap">
       <table className="bk-table txntbl">
         <thead><tr>
@@ -59,7 +59,7 @@ export default function Txn() {
             <td className="ac"><button className="btn small" onClick={() => txnGo(r.kind, r.id)}>Open</button></td>
           </tr>))}</tbody>
       </table>
-      {!rows.length && (S.txnQ || S.txnStatus || txnColOn() ? <Legacy html={noMatchNote("txn")} /> : <div className="bk-none">Nothing here yet.</div>)}
+      {!rows.length && (S.txnQ || S.txnStatus || txnColOn() ? <NoMatch t="txn" /> : <div className="bk-none">Nothing here yet.</div>)}
     </div>
   </>;
 }

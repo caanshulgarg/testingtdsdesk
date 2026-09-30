@@ -7,6 +7,7 @@
 import Legacy from "../../parts/Legacy.jsx";
 import CommitBox from "../../parts/CommitBox.jsx";
 import { AuditButton } from "../../parts/Ai.jsx";
+import { CatchUp } from "../../parts/Notes.jsx";
 
 const m = (v) => INR.format(r2(v || 0));
 const d = (x) => fmtDate(tallyDate(x));
@@ -160,7 +161,7 @@ function Form3cd({ b }) {
 export default function Audit_({ b }) {
   // Tally changed since the last run: the tab says so while it is worked out again (TallyRead.catchUp, src/js/18)
   const catchUp = TallyRead.catchUp(b, "audit");
-  if (catchUp) return <Legacy html={catchUp} />;
+  if (catchUp) return <CatchUp text={catchUp} />;
   const t = S.auditTab || "find";
   return <><Tabs />{t === "rel" ? <Related b={b} /> : t === "3cd" ? <Form3cd b={b} /> : <Findings b={b} />}</>;
 }

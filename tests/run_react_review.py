@@ -67,6 +67,16 @@ with sync_playwright() as p:
     pg.click('#app button[aria-label="Filter Payment type"]'); pg.wait_for_timeout(500)
     ok(pg.evaluate("(() => { const p = document.getElementById('colpop'); return !!p && getComputedStyle(p).display !== 'none' && p.getBoundingClientRect().top > 0; })()"), "the column filter opens, placed under its column")
     pg.keyboard.press("Escape"); pg.evaluate("S.colPop = null; render()"); pg.wait_for_timeout(300)
+    # the filter chips over the list: a chip opens its column's filter box, ✕ removes it, Clear all
+    pg.evaluate("S.revF = {sup: 'Alpha', no: 'A/'}; render()"); pg.wait_for_timeout(400)
+    ok(pg.locator("#app .chipbar .fchip").count() == 2 and "Supplier has “Alpha”" in pg.inner_text("#app .chipbar"), "the filters set show as chips")
+    pg.click('#app .chipbar .fchip-l:has-text("Supplier")'); pg.wait_for_timeout(400)
+    ok(pg.evaluate("S.colPop && S.colPop.k") == "sup", "a chip opens its column's filter box")
+    pg.evaluate("S.colPop = null; render()"); pg.wait_for_timeout(200)
+    pg.click('#app .chipbar .fchip:has-text("Bill no.") .fchip-x'); pg.wait_for_timeout(400)
+    ok(not pg.evaluate("S.revF.no") and pg.locator("#app .chipbar .fchip").count() == 1, "✕ removes that filter")
+    pg.click('#app .chipbar button:text-is("Clear all")'); pg.wait_for_timeout(400)
+    ok(pg.evaluate("Object.keys(S.revF).length") == 0 and pg.locator("#app .chipbar").count() == 0, "Clear all removes every filter")
     # the drawer
     pg.click('#app button.pn:has-text("Alpha Consultants")'); pg.wait_for_timeout(600)
     ok(pg.locator("#app aside.drawer").count() == 1 and "1 of 3" in pg.inner_text("#app .drawer-head") and pg.locator("#app aside.drawer .detail h2").inner_text() == "Alpha Consultants", "a click on the supplier opens the bill in the drawer (1 of 3)")

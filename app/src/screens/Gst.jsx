@@ -1,13 +1,12 @@
 // The GST tab of a client's books: which return or working (the parts), for which month and GSTIN, and the
 // downloads for the portal. Was viewBooksGst (src/js/18). The parts follow the GSTIN's filing type (gstParts):
 // monthly (GSTR-1, 3B, …), quarterly QRMP (This quarter, …) or composition (CMP-08, GSTR-4); without a day book only
-// 2B and the returns filed. GSTR-1 and 3B are gst/Returns.jsx, the input register gst/InputRegister.jsx, 2B gst/TwoB.jsx, amendments, advances and reversal gst/Workings.jsx, GSTR-9 and 9C gst/Annual.jsx, ITC follow-up gst/ItcFollow.jsx, returns filed gst/ReturnsFiled.jsx, QRMP, CMP-08 and GSTR-4 gst/Periodic.jsx; the other parts are still old pages (gstPartHtml),
-// shown through <Legacy>.
+// 2B and the returns filed. GSTR-1 and 3B are gst/Returns.jsx, the input register gst/InputRegister.jsx, 2B gst/TwoB.jsx, amendments, advances and reversal gst/Workings.jsx, GSTR-9 and 9C gst/Annual.jsx, ITC follow-up gst/ItcFollow.jsx, returns filed gst/ReturnsFiled.jsx, QRMP, CMP-08 and GSTR-4 gst/Periodic.jsx, notices parts/Ai.jsx.
 //
 // State: S.gstYm (the month, YYYYMM), S.gstReg (the GSTIN's state code), S.gstPart; a GSTIN or filing type seen
 // for the first time opens on its first part (S.gstSeen).
-import Legacy from "../parts/Legacy.jsx";
 import { Notices } from "../parts/Ai.jsx";
+import { LedgerBanner } from "../parts/Notes.jsx";
 import HelpButton from "../parts/HelpButton.jsx";
 import { Gstr1, Gstr3b } from "./gst/Returns.jsx";
 import InputRegister from "./gst/InputRegister.jsx";
@@ -34,7 +33,7 @@ export default function Gst() {
   const noDownload = ["r2b", "rev", "inreg", "follow", "qtr", "vault"].includes(part) || ftype === "comp";
   const forWhat = ftype === "qrmp" ? " for the quarter" : " for the portal";
   return <>
-    <Legacy html={ledgerBanner(b, "gst")} />
+    <LedgerBanner b={b} which="gst" />
     <nav className="sbar" aria-label="GST">{parts.map(([id, l]) => <button key={id} data-part={id} aria-selected={part === id} onClick={() => gstPartGo(id)}>{l}</button>)}</nav>
     <div className="revfilter">
       <select aria-label="Month" value={S.gstYm} onChange={(ev) => gstSetYm(ev.target.value)}>{months.map((m) => <option key={m} value={m}>{GSTR.label(m)}</option>)}</select>

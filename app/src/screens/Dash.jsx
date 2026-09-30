@@ -2,7 +2,7 @@
 // sales and what was posted lately. Was viewClientDash (src/js/18). The first-steps card (ONB.card, src/js/48)
 // is still an old piece.
 import { useState } from "react";
-import Legacy from "../parts/Legacy.jsx";
+import { OnbCard } from "../parts/Notes.jsx";
 
 const money = (x) => INR.format(r2(x || 0));
 const sumTotal = (list) => money(list.reduce((a, e) => a + num(e.x.total), 0));
@@ -21,7 +21,7 @@ export default function Dash() {
   const off = bank ? bank.rows.filter((r) => r.balOk === false).length : 0;
   return (
     <section className="dash">
-      <Legacy html={typeof ONB === "object" ? ONB.card(co) : ""} />
+      <OnbCard co={co} />
       <form className="dash-ask" onSubmit={(ev) => { ev.preventDefault(); dashAsk(q); }}>
         <input type="search" id="dashAsk" value={q} onChange={(ev) => setQ(ev.target.value)} placeholder="Ask the books: a ledger for any dates, open bills, trial balance… (press /)" aria-label="Ask the books" />
         <button className="btn primary" type="submit">Look up</button>

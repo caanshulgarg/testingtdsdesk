@@ -116,14 +116,6 @@ async function saveBooks(opts, bb){
   if (!(opts && opts.fromCloud) && typeof BookSync === "object") BookSync.schedule(b.cid);
 }
 // filed GST returns whose documents changed in Tally since: on every Books tab until the amendments are reported
-function gstDriftNote(b){
-  if (b.gstDrift === undefined){ try { b.gstDrift = GSTAmend.drift(); } catch (e){ b.gstDrift = []; } }
-  const d = b.gstDrift || [];
-  if (!d.length) return "";
-  return '<div class="bk-warn" role="status">' + d.slice(0, 3).map(x => "<p>" + esc(GSTAmend.driftLine(x)) + "</p>").join("") +
-    (d.length > 3 ? "<p>" + (d.length - 3) + " more filed return" + (d.length > 4 ? "s" : "") + " changed.</p>" : "") +
-    '<button class="btn small" data-bookstab="gst" data-gstpart="amend">See the amendments</button></div>';
-}
 // the books of a client (TDS & GST, MIS, Accounts, Audit, …): React (app/src/screens/Books.jsx)
 function viewBooks(){ return '<div data-react="Books"></div>'; }
 
@@ -266,12 +258,6 @@ function tbDefaultOn(b){
 }
 function tallyDate(s){ return s && String(s).length === 8 ? String(s).slice(0, 4) + "-" + String(s).slice(4, 6) + "-" + String(s).slice(6, 8) : ""; }
 // the line shown on the TDS and GST screens while ledgers are still to be confirmed
-function ledgerBanner(b, which){
-  const p = LedMaster.pending(b).filter(([, m]) => !which || (which === "gst" ? LedMaster.isGst(m.what) || !m.what || m.what === "none" : LedMaster.isTds(m.what) || !m.what || m.what === "none"));
-  if (!p.length) return "";
-  return '<div class="bk-alert bad" style="margin-bottom:12px"><b>' + p.length + " ledger" + (p.length === 1 ? " is" : "s are") + " still to be confirmed.</b> The figures below use the guesses; the return files wait until they are confirmed. " +
-    '<button class="linkbtn" data-bookstab="ledgers">Confirm them</button><div class="nr" style="white-space:normal">' + esc(p.slice(0, 6).map(x => x[0]).join(", ") + (p.length > 6 ? " and " + (p.length - 6) + " more" : "")) + "</div></div>";
-}
 // the files for filing are made only from confirmed ledgers
 function ledgersReady(which){
   const p = LedMaster.pending(S.books).filter(([, m]) => which === "gst" ? !LedMaster.isTds(m.what) : !LedMaster.isGst(m.what));

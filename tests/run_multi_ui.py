@@ -49,14 +49,14 @@ with sync_playwright() as p:
       const a = add("ZZ TEST VMS EVENTS", "07AADCV3366N1ZU", "VMS EVENTS PRIVATE LIMITED (2024-25)"), b = add("ZZ TEST OTHER", "09AAACZ1111A1Z5", "ZZ OTHER LTD");
       S.view = "home"; S.homeTab = "clients"; render(); return [a, b]; }""")
     pg.wait_for_timeout(800)
-    ok(pg.locator('[data-act="multiPick"]').count() == 1, "the clients list offers day books for several clients at once")
+    ok(pg.locator('button:text-is("Choose day book files")').count() == 1, "the clients list offers day books for several clients at once")
     pg.set_input_files("#multiBooksIn", [paths[n] for n in ["vms.xml", "other.xml", "stranger.xml", "vms-lookalike.xml"]])
     for i in range(40):
         pg.wait_for_timeout(250)
         if pg.evaluate("S.multiUp && !S.multiUp.reading && S.multiUp.rows.length === 4"): break
     m = pg.evaluate("S.multiUp.rows.map(r => [r.f.name, r.name, r.cid])")
     ok(m[0][2] == ids[0] and m[1][2] == ids[1] and m[2][2] == "" and m[3][2] == ids[0], "each file matched to its client by GSTIN; the stranger's file matched to nobody: " + json.dumps([[x[0], x[2] == ids[0] and "VMS" or x[2] == ids[1] and "OTHER" or "-"] for x in m]))
-    pg.click('[data-act="multiStart"]')
+    pg.click('button:text-is("Bring them in")')
     for i in range(120):
         pg.wait_for_timeout(500)
         if pg.evaluate("!S.multiUp.busy && S.multiUp.rows.filter(r => r.status !== 'waiting').length >= 3"): break
@@ -80,7 +80,7 @@ with sync_playwright() as p:
     # opening balances (31 March), then the check against Tally's trial balance on 24 April
     opening = {n: -100.0 * (i + 1) for i, n in enumerate(PARTIES)}; opening["Capital Account X"] = sum(-v for v in opening.values())
     fo = os.path.join(OUT, "tb-open.xml"); open(fo, "w").write(tb(opening))
-    pg.fill("input[data-tbon]", "2025-03-31"); pg.dispatch_event("input[data-tbon]", "change"); pg.wait_for_timeout(200)
+    pg.fill('input[aria-label="Balances as on"]', "2025-03-31"); pg.wait_for_timeout(200)
     pg.set_input_files("#tbIn", fo); pg.wait_for_timeout(2000)
     ok(pg.evaluate("Object.keys(S.books.tb.led).length") == 13, "opening balances taken")
     moves = {}

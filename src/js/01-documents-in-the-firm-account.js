@@ -1498,35 +1498,6 @@ async function dailyGoogleCheck(){
   render();
 }
 // what to do when Google refuses, based on the reason it gave
-function googleHelpHtml(){
-  const t = S.googleTest;
-  if (!t || t.busy || t.ok || !t.code) return "";
-  const proj = '<a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Google Cloud console \u2192 APIs &amp; Services \u2192 Credentials</a>';
-  const vision = '<a href="https://console.cloud.google.com/apis/library/vision.googleapis.com" target="_blank" rel="noopener">Cloud Vision API</a>';
-  const billing = '<a href="https://console.cloud.google.com/billing" target="_blank" rel="noopener">Billing</a>';
-  const steps = {
-    google_referrer: ["Open " + proj + " and click the API key you are using here.",
-      "Under <b>Application restrictions</b> choose <b>None</b>. A website restriction cannot work here, because the app is opened as a file and the browser sends no website address.",
-      "Under <b>API restrictions</b> keep <b>Restrict key</b> and tick only <b>Cloud Vision API</b>, so the key stays safe.",
-      "Save, wait a minute, then press <b>Test</b> again."],
-    google_not_enabled: ["Open " + vision + " and check the right project is selected at the top.",
-      "Press <b>Enable</b>.", "Wait a minute and press <b>Test</b> again."],
-    google_billing: ["Open " + billing + " and link a billing account to this project.",
-      "The first 1,000 pages each month stay free; billing only has to be enabled.", "Press <b>Test</b> again."],
-    google_bad_key: ["Open " + proj + " and copy the API key again, with no spaces.",
-      "Paste it in the Google Cloud Vision OCR box below and press <b>Save and test</b>.",
-      "If it still fails, create a new key and restrict it to the Cloud Vision API."],
-    google_forbidden: ["Open " + proj + " and click the key.",
-      "Set <b>Application restrictions</b> to <b>None</b>, and under <b>API restrictions</b> tick <b>Cloud Vision API</b>.",
-      "Check that " + vision + " is enabled for the project and " + billing + " is linked.", "Press <b>Test</b> again."],
-    google_quota: ["The usage limit has been reached for now. Wait, or raise the quota in the Google Cloud console.",
-      "The built-in OCR keeps working in the meantime."],
-    google_blocked: ["This page cannot reach Google. Open the downloaded file (TDS-Desk-standalone.html) instead of the claude.ai page.",
-      "If you already use the downloaded file, check that the network or antivirus does not block vision.googleapis.com."],
-    google_timeout: ["Google did not answer in time. Press <b>Test</b> again.", "If it keeps happening, check this computer's internet connection."]
-  }[t.code] || ["Press <b>Test</b> again.", "If it keeps failing, send me the message above."];
-  return '<div class="bdiag" style="margin-top:10px"><b>How to fix this</b><ol style="margin:8px 0 0 18px;line-height:1.55">' + steps.map(x => "<li>" + x + "</li>").join("") + "</ol></div>";
-}
 async function testGoogle(){
   S.googleTest = {busy: true}; render();
   const c = document.createElement("canvas"); c.width = 1000; c.height = 360;

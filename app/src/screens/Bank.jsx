@@ -7,14 +7,14 @@
 // The actions are in src/js/22-23: bankAct("bankPost"), bankRowAct("accept", id), bankSetLedger(id, name), …
 //
 // The checks over a statement are parts/BankChecks.jsx; the rules tab and the settings panel parts/BankSettings.jsx.
-// Still old pieces, shown through <Legacy>: the column filters' chips (colChipBar, noMatchNote).
+// The column filters' chips are parts/ChipBar.jsx.
 import { useRef } from "react";
-import Legacy from "../parts/Legacy.jsx";
 import { BankSettings, RulesPanel } from "../parts/BankSettings.jsx";
 import { PostReport, FixBanner, BankBalance, Recon, Gone, DupFind, BankFocus } from "../parts/BankChecks.jsx";
 import ColHead from "../parts/ColHead.jsx";
 import LedgerBox from "../parts/LedgerBox.jsx";
 import { BusyCard } from "../parts/Reading.jsx";
+import { ChipBar, NoMatch } from "../parts/ChipBar.jsx";
 
 const MODE_NAME = { ATM: "ATM cash withdrawal", CASH: "Cash deposit", CHARGES: "Bank charges", INTEREST: "Interest credit" };
 const EMPTY = { review: "Nothing to review. Every entry has a ledger.", ready: "No entries are ready yet.", done: "Nothing posted or ignored yet." };
@@ -90,7 +90,7 @@ function Table({ tab }) {
         </tr></thead>
         <tbody>{list.map((r) => <Row key={r.id} r={r} sel={b.sel.has(r.id)} />)}</tbody>
       </table>
-      {!total && (bankRangeOn() ? <Legacy html={noMatchNote("bank")} /> : <div className="bk-none">{EMPTY[tab] || "Nothing here."}</div>)}
+      {!total && (bankRangeOn() ? <NoMatch t="bank" /> : <div className="bk-none">{EMPTY[tab] || "Nothing here."}</div>)}
     </div>
     {/* a long statement: more lines load as the end comes into view (the scroll listener in src/js/23 finds this button) */}
     {total > list.length && <div className="bk-more"><button className="btn small" data-act="bankMore" onClick={() => bankAct("bankMore")}>Show {Math.min(100, total - list.length)} more ({total - list.length} left)</button></div>}
@@ -223,7 +223,7 @@ export default function Bank() {
   let range = null;
   if (bankRangeOn()) {
     const inR = bankRangeRows();
-    range = colChipBar("bank", inR.length, b.rows.length + " lines", "out " + INR.format(r2(inR.reduce((a, r) => a + num(r.debit), 0))) + " · in " + INR.format(r2(inR.reduce((a, r) => a + num(r.credit), 0))));
+    range = <ChipBar t="bank" shown={inR.length} total={b.rows.length + " lines"} extra={"out " + INR.format(r2(inR.reduce((a, r) => a + num(r.debit), 0))) + " · in " + INR.format(r2(inR.reduce((a, r) => a + num(r.credit), 0)))} />;
   }
   return <>
     <div className="bk">
@@ -265,7 +265,7 @@ export default function Bank() {
         {tab === "review" && <label className="bk-switch"><input type="checkbox" checked={!!b.grouped} onChange={(ev) => bankSetGrouped(ev.target.checked)} /> Group by party</label>}
         <input type="search" className="bk-search" autoComplete="off" placeholder="Search the description, party or amount" aria-label="Search the statement" value={b.q} onChange={(ev) => bankSearch(ev.target.value)} />
       </div>
-      <Legacy html={range} />
+      {range}
       <Gone /><DupFind /><BankFocus />
       {tab === "done" && !b.focus && live() && tc.done > 0 && <div className="bk-found"><span className="muted">Deleted some of these in Tally?</span> <button className="btn small" onClick={() => bankAct("goneCheck")}>Check they are still in Tally</button></div>}
       {b.offerRule && <div className="bk-found" style={{ borderColor: "var(--ledger)" }}><b>Keep this as a rule?</b> Every future line containing “{b.offerRule.text}” would go to <b>{b.offerRule.ledger}</b> by itself.{" "}

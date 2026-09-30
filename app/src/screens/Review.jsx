@@ -3,9 +3,9 @@
 // actionBar (src/js/27). The column filters (funnel buttons, the chips and their pop-up) are still old pieces, shared
 // with the bank and sales tables.
 import { useRef } from "react";
-import Legacy from "../parts/Legacy.jsx";
 import ColHead from "../parts/ColHead.jsx";
 import BillDetail from "./Bill.jsx";
+import { ChipBar } from "../parts/ChipBar.jsx";
 
 const needsLook = (r) => (r.c.missing || []).length || r.c.flags.some((f) => f.lvl === "hi") || r.e.confirmType;
 const RuleOptions = () => rules().map((r) => <option key={r.id} value={r.id}>{r.label}</option>);
@@ -64,7 +64,7 @@ export function ReviewTable() {
             onChange={(ev) => { S.revQuery = ev.target.value; render(); }} />
           {S.revQuery && !revColOn() && <span className="note">{rows.length} of {all.length} shown</span>}
         </div>
-        <Legacy html={colChipBar("rev", rows.length, all.length + " bills")} />
+        <ChipBar t="rev" shown={rows.length} total={all.length + " bills"} />
         <div className="bk-tablewrap"><table className="bk-table revtbl">
           <thead><tr>
             <th className="ck"><input type="checkbox" aria-label="Select all shown" checked={!!nSel && nSel === rows.length} onChange={(ev) => revPickAll(ev.target.checked)} /></th>
