@@ -46,8 +46,8 @@ with sync_playwright() as p:
     ok(not pg.evaluate("AIH.enabled('tds') || AIH.enabled('r2b') || AIH.enabled('audit') || AIH.enabled('notices')"), "every part is off until the firm switches AI help on")
     # ---------- Settings, AI help: switch it on
     pg.evaluate("S.view = 'home'; S.homeTab = 'rules'; S.settingsTab = ''; render()"); pg.wait_for_timeout(400)
-    ok(pg.locator('[data-settab="ai"]').count() == 1 and "off" in pg.inner_text('[data-settab="ai"]'), "Settings has an AI help tile, showing off")
-    pg.click('[data-settab="ai"]'); pg.wait_for_timeout(400)
+    ok(pg.locator('.setnav button:has(span:text-is("AI help"))').count() == 1 and "off" in pg.inner_text('.setnav button:has(span:text-is("AI help"))'), "Settings has an AI help tile, showing off")
+    pg.click('.setnav button:has(span:text-is("AI help"))'); pg.wait_for_timeout(400)
     ok(pg.locator('input[data-aihset="tds"]').is_disabled(), "the parts cannot be ticked while AI help is off")
     pg.check('input[data-aihset="on"]'); pg.wait_for_timeout(400)
     ok(pg.evaluate("S.firm.ai.on === true && AIH.enabled('tds') && AIH.enabled('notices')"), "switched on: all four parts on")

@@ -21,6 +21,8 @@ function Crumbs() {
       {v === "certs" && <><span className="note">›</span><b>Certificates and rate questions</b></>}
       {v === "notices" && <><span className="note">›</span><b>Notices</b></>}
       {v === "return" && <><span className="note">›</span><b>{S.tdsQ} · {S.tdsForm}</b></>}
+      {/* the guide to this page (Help, src/js/34 — its click handler answers data-help) */}
+      {Help.T[Help.key()] && <button className="help-btn" data-help="open" title="How this tab works">? How this tab works</button>}
     </div>
   );
 }
