@@ -93,11 +93,11 @@ with sync_playwright() as p:
     ok("Rule 42: common inputs" in txt and "16,09,172.58" in txt, "Rule 42 shows June C2 of 16,09,172.58")
     ok("80,458.63" in txt, "D2 = 5% = 80,458.63")
     pg.evaluate("S.tab = 'gstset'; render()"); pg.wait_for_timeout(1500)
-    pg.locator('input[data-gset="d2"]').uncheck(); pg.wait_for_timeout(600)
+    pg.locator('input[aria-label="Rule 42 D2"]').uncheck(); pg.wait_for_timeout(600)
     pg.evaluate("S.tab = 'books'; render()"); pg.wait_for_timeout(800)
     ok(pg.evaluate("S.books.rev && S.books.rev.d2") is False and "80,458.63" not in pg.inner_text("#app"), "D2 switched off in GST settings")
     pg.evaluate("S.tab = 'gstset'; render()"); pg.wait_for_timeout(1200)
-    pg.locator('input[data-gset="d2"]').check(); pg.wait_for_timeout(500)
+    pg.locator('input[aria-label="Rule 42 D2"]').check(); pg.wait_for_timeout(500)
     pg.evaluate("S.tab = 'books'; render()"); pg.wait_for_timeout(800)
     # add a capital good and fill it in
     pg.click('button:text-is("Add a capital good")'); pg.wait_for_timeout(300)

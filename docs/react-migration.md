@@ -114,13 +114,14 @@ Status: **done** (in React, test passing) · **next** · blank = not started. Ab
 | | ITC follow-up (`viewItcFollow`) → `gst/ItcFollow.jsx`; 84 GST pages match live. Row keys made unique in every GST list and in the TDS filters: a development build (React warns about repeated keys) now shows none on any GST or TDS page | **done** |
 | | returns filed (38) → `gst/ReturnsFiled.jsx`; QRMP, CMP-08, GSTR-4 (37) → `gst/Periodic.jsx`; filing and GSTR-1A (35) → `gst/Filing.jsx`; 91 GST pages match live, including a quarterly and a composition GSTIN | **done** |
 | | customers' IMS rejections (33) → `gst/CustIms.jsx`; 94 GST pages match live. Every GST part worked out from the books is now React | **done** |
-| | still old: GST settings and registrations (36) · vendor recon (42) · notices (50) | |
+| | GST settings and registrations (36) → `gst/GstSettings.jsx`, in Client setup; the page matches live (the blocked-credit sentence aside, added in the Client setup redesign); `run_gstregs_ui.py` passes in full. Fixed: the GST tab settles the month and GSTIN before working out the filing type, so a quarterly GSTIN is not shown as monthly on the first view | **done** |
+| | still old: vendor recon (42) · notices (50) | |
 | | 2B from the portal `viewGstApiCard` (39) | **done** |
 | **Books** | `viewBooks`, `viewBooksImport`, `viewBooksLedgers`, `viewLedPosting`, `viewTallyRead`, `viewSetupList` (18) · accounts (30) | |
 | **Audit and MIS** | `viewBooksAudit`, `viewAuditRel`, `viewAudit3cd`, `viewBooksMis`, `misPackHtml` (18) | |
 | **Reports, Look up, Letters** | `viewBooksReports` (45) · `viewBooksLookup` (44) · `viewBooksLetters` (46) | |
 | **Tally** | `viewBridgeSettings`, `viewBridgeDiagnosis`, `viewReadTest` (24) · `viewPostLog`, `viewReading` (18) | |
 | **Settings** | Settings for the firm and Client setup: one layout, sections listed on the left (`screens/Settings.jsx`); in React: firm details, company, Tally, TDS, reverse charge and blocked credit, remove client | **done** |
-| | still old, shown inside it: sign-in and people, plan, Tally Bridge, books in the cloud, rates, reading, AI help (27, 18, 24) · GST registrations `viewGstSettings` (36) · bank accounts and rules · closed periods (47) | |
+| | still old, shown inside it: sign-in and people, plan, Tally Bridge, books in the cloud, rates, reading, AI help (27, 18, 24) · bank accounts and rules · closed periods (47) | |
 | **Firm account** | `viewAccount`, `viewCloudSettings`, `walletHtml`, `viewPeople`, `viewBackups`, `viewSuperadmin`, `creditBanner` (27) | |
 | **Last step** | `render()` and string screens removed; `src/js` as ES modules | |

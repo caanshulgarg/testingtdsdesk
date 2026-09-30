@@ -18,12 +18,14 @@ import ReturnsFiled from "./gst/ReturnsFiled.jsx";
 import { Qrmp, Cmp08, Gstr4 } from "./gst/Periodic.jsx";
 
 export default function Gst() {
-  const b = S.books, months = GSTR.months(), { parts, ftype, regs, noBooks } = gstParts(b);
+  const b = S.books, months = GSTR.months(), regs = GSTR.gstins(b) || [];
   if (!regs.length) return <div className="bk-none">Add the client’s GSTIN in <button className="linkbtn" onClick={() => goGstSettings()}>GST settings</button> to use the GST tab.
     With it, 2B can be fetched from the portal or brought in, and the returns filed kept, with or without a Tally day book. GSTR-1 and 3B are worked out from the day book, brought in under “From Tally”.</div>;
   if (!S.gstYm || !months.includes(S.gstYm)) S.gstYm = months[months.length - 1] || "";
   // a return is filed for one GSTIN: the company's own first, never the registrations added together
   if (!regs.some((g) => g.slice(0, 2) === S.gstReg)) { const own = String((CO() || {}).gstin || "").slice(0, 2); S.gstReg = (regs.find((g) => g.slice(0, 2) === own) || regs[0]).slice(0, 2); }
+  // the parts follow the filing type of this month and GSTIN, so both are settled first
+  const { parts, ftype, noBooks } = gstParts(b);
   const seen = (S.gstReg || "") + "|" + ftype;
   if (!S.gstPart || !parts.some((x) => x[0] === S.gstPart) || (S.gstSeen && S.gstSeen !== seen)) S.gstPart = parts[0][0];
   S.gstSeen = seen;

@@ -41,7 +41,7 @@ with sync_playwright() as p:
     pg.evaluate("() => { Cloud.on = () => true; Cloud.cfg = () => ({url: 'https://example.supabase.co', key: 'anon'}); Cloud.sess = () => ({access_token: 'tok-firm'}); Cloud.refreshToken = async () => {}; S.account = {email: 'a@b.c'}; render(); }"); pg.wait_for_timeout(800)
     ok("GST portal username in" in pg.inner_text("#app"), "signed in, no username yet: points to GST settings")
     pg.evaluate("S.tab = 'gstset'; render()"); pg.wait_for_timeout(2000)
-    pg.fill('input[data-gset="puser"][data-greg="07"]', "vmsevents07"); pg.press('input[data-gset="puser"][data-greg="07"]', "Tab"); pg.wait_for_timeout(800)
+    pg.fill('section[data-greg="07"] input[aria-label="GST portal username"]', "vmsevents07"); pg.press('section[data-greg="07"] input[aria-label="GST portal username"]', "Tab"); pg.wait_for_timeout(800)
     ok(pg.evaluate("GSTSet.peek('07').portalUser") == "vmsevents07", "the portal username is kept in GST settings")
     pg.evaluate("S.tab = 'books'; render()"); pg.wait_for_timeout(2000)
     pg.click('#app button:has-text("Send OTP")'); pg.wait_for_timeout(1500)

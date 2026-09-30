@@ -84,6 +84,10 @@ with sync_playwright() as p:
     pg.evaluate("() => { const reg = S.gstReg || '', docs = CustIMS.find(reg, '') ; S.gstPart = 'r1'; const all = GSTR.months().flatMap(m => GSTR.one(m, reg).cdnr.concat(GSTR.one(m, reg).b2b)); const cn = all.find(r => r.kind === 'CDNR') || all[0]; S.custImsQ = String((cn && cn.no) || '1'); render(); }"); grab("custims-find")
     pg.evaluate("() => { const reg = S.gstReg || '', hits = CustIMS.find(reg, S.custImsQ); hits.slice(0, 1).forEach(r => CustIMS.add(reg, r.id)); const inv = GSTR.months().flatMap(m => GSTR.one(m, reg).b2b)[0]; if (inv){ const h = CustIMS.find(reg, inv.no)[0]; if (h) CustIMS.add(reg, h.id); } S.custImsQ = ''; GSTR._carry = null; render(); }"); grab("custims-marked")
     pg.evaluate("() => { const x = CustIMS.items(S.gstReg || '')[0]; if (x){ S.gstYm = x.addYm || x.rejYm; } S.gstPart = 'r3b'; render(); }"); grab("custims-3b")
+    # GST settings in Client setup: as it stands after all the above, then the contacts searched
+    pg.evaluate("() => { S.tab = 'gstset'; render(); }"); grab("gstset")
+    pg.evaluate("() => { S.gcontQ = 'a'; render(); }"); grab("gstset-contacts")
+    pg.evaluate("() => { S.gcontQ = ''; S.tab = 'books'; render(); }")
     br.close()
 srv.shutdown()
 json.dump({"pages": res, "errors": errors}, open(out, "w"), indent=0)

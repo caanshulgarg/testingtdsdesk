@@ -30,7 +30,7 @@ with sync_playwright() as p:
     before = pg.evaluate("GSTR.threeB('202504','09').pay.cash.igst + GSTR.threeB('202504','09').pay.cash.cgst")
     pg.evaluate("S.tab = 'gstset'; S.gsetReg = '09'; render()"); pg.wait_for_timeout(2500)
     ok("GST settings" in pg.inner_text("#app") and "Filing type" in pg.inner_text("#app"), "Client setup \u2192 GST: the settings for each GSTIN")
-    pg.fill('input[data-gset="open"][data-ghead="cgst"][data-greg="09"]', "500000"); pg.press('input[data-gset="open"][data-ghead="cgst"][data-greg="09"]', "Tab"); pg.wait_for_timeout(2500)
+    pg.fill('section[data-greg="09"] input[aria-label="Opening CGST"]', "500000"); pg.press('section[data-greg="09"] input[aria-label="Opening CGST"]', "Tab"); pg.wait_for_timeout(2500)
     after = pg.evaluate("GSTR.threeB('202504','09').pay.cash.igst + GSTR.threeB('202504','09').pay.cash.cgst")
     ok(pg.evaluate("S.books.gstOpen['09'].cgst") == 500000 and after < before, "an opening balance typed in settings reduces cash payable: %s to %s" % (before, after))
     pg.screenshot(path=OUT + "/gst-settings.png", full_page=False)

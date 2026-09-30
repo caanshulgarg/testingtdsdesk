@@ -38,8 +38,8 @@ with sync_playwright() as p:
     # a supplier letter, logged
     sup = pg.evaluate("ITCT.suppliers('07', ITCT.items('07').items)[0].key"); sg = pg.evaluate("ITCT.suppliers('07', ITCT.items('07').items)[0].gstin")
     pg.evaluate("S.tab = 'gstset'; render()"); pg.wait_for_timeout(2500)
-    pg.fill('input[data-gcontq]', sg); pg.wait_for_timeout(2500)
-    pg.fill('input[data-gcont=%s][data-cf="email"]' % json.dumps(sg), "accounts@supplier.example"); pg.press('input[data-gcont=%s][data-cf="email"]' % json.dumps(sg), "Tab"); pg.wait_for_timeout(800)
+    pg.fill('input[aria-label="Party or GSTIN"]', sg); pg.wait_for_timeout(2500)
+    pg.fill('tr[data-key=%s] input[type=email]' % json.dumps(sg), "accounts@supplier.example"); pg.press('tr[data-key=%s] input[type=email]' % json.dumps(sg), "Tab"); pg.wait_for_timeout(800)
     pg.evaluate("S.tab = 'books'; render()"); pg.wait_for_timeout(4000)
     ctx.grant_permissions(["clipboard-read", "clipboard-write"])
     pg.click('tr[data-key=%s] button:text-is("copy")' % json.dumps(sup)); pg.wait_for_timeout(2500)

@@ -7,6 +7,7 @@
 // Every change is saved as it is made: typed text a moment later (coSetText, firmSetName), a tick or choice at once
 // (coCommit). Sections not yet redrawn in React show the old screen's HTML through <Legacy>.
 import Legacy from "../parts/Legacy.jsx";
+import GstSettings from "./gst/GstSettings.jsx";
 import Parties from "./Parties.jsx";
 import { PostLog } from "./Done.jsx";
 
@@ -196,7 +197,7 @@ const RCM_LABEL = { rcmCgstIn: "Input CGST (RCM)", rcmSgstIn: "Input SGST (RCM)"
 function GstSetup() {
   const co = CO();
   return <>
-    <Legacy html={viewGstSettings()} />
+    <GstSettings />
     <Card title="Reverse charge ledgers" note="Reverse charge entries debit the input side (unless the credit is blocked) and credit the payable side.">
       <div className="grid">{Object.keys(RCM_LEDGER_DEFAULTS).map((k) => (
         <label className="f" key={k}><span>{RCM_LABEL[k]}</span>
