@@ -159,10 +159,9 @@ function viewDropKeys(){
 function docqPanel(cid){ return Cloud.on() && docqFor(cid).length ? '<div data-react="DocqPanel" data-cid="' + esc(cid || "") + '"></div>' : ""; }
 function uploadBlock(co){ return '<div data-react="UploadBlock"></div>'; }
 function readDocqNow(id, cid, force){ if (force) S.docqLocal[id] = {}; readDocq([id], cid, force ? {force: true} : undefined); }
-// the bill list and a bill are React (app/src/screens/Invoices.jsx, Bill.jsx); the vendor reconciliation and the
-// review table are still old screens
+// the bill list, a bill and the vendor reconciliation are React (app/src/screens/Invoices.jsx, Bill.jsx, VendorRecon.jsx)
 function viewInvoices(){
-  if (VR.st()) return viewVendorRecon();
+  if (VR.st()) return '<div data-react="VendorRecon"></div>';
   if (S.reviewTable && S.filter === "draft") return viewReviewTable();
   return '<div data-react="Invoices"></div>';
 }

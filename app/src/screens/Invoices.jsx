@@ -34,7 +34,7 @@ export default function Invoices() {
       <div>
         {drafts > 1 && <div className="row" style={{ margin: "8px 0 0" }}><button className="btn small" onClick={() => doAct("revTable")}>Review all {drafts} in a table</button></div>}
         <div className="row" style={{ margin: "8px 0 0", justifyContent: "flex-end" }}>
-          <button className="btn small" onClick={() => doAct("vrOpen")} title="Match a vendor’s ledger with the party’s ledger in Tally">Reconcile a vendor ledger</button>
+          <button className="btn small" onClick={() => vrOpen()} title="Match a vendor’s ledger with the party’s ledger in Tally">Reconcile a vendor ledger</button>
         </div>
         <div className="filters">
           {filter("draft", "To review")}{filter("approved", "Approved")}{filter("rejected", "No entry")}

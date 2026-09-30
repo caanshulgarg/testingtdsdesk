@@ -91,7 +91,7 @@ cd ../tests && TDSDESK_SITE=../app/dist-test python3 run_react_post.py
 | Sidebar, top bar, client switcher | `src/Side.jsx`, `src/TopBar.jsx`, `src/Switcher.jsx` |
 | Home: clients, today, inbox | `src/screens/Clients.jsx`, `Today.jsx`, `InboxAll.jsx` |
 | Collect (uploads, reading) | `src/screens/Collect.jsx`, `src/parts/*` |
-| Purchase bills: list, one bill | `src/screens/Invoices.jsx`, `Bill.jsx` |
+| Purchase bills: list, one bill, vendor reconciliation | `src/screens/Invoices.jsx`, `Bill.jsx`, `VendorRecon.jsx` |
 | Review table, drawer, bottom bars | `src/screens/Review.jsx` |
 | Suppliers and TDS | `src/screens/Parties.jsx` |
 | Post to Tally, Done, post log | `src/screens/Post.jsx`, `Done.jsx` |

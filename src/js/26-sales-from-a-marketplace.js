@@ -21,7 +21,9 @@ const Market = {
   },
   date(v){
     if (v == null || v === "") return "";
-    if (v instanceof Date) return v.toISOString().slice(0, 10);
+    // a date from Excel (or a date written out) is local midnight: read it by its local day, not in UTC (a day early in India)
+    const day = d => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    if (v instanceof Date) return day(v);
     const s = String(v).trim();
     let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
     if (m) return m[1] + "-" + m[2] + "-" + m[3];
@@ -32,7 +34,7 @@ const Market = {
       const y = m[3].length === 2 ? "20" + m[3] : m[3];
       if (mo) return y + "-" + String(mo).padStart(2, "0") + "-" + String(m[1]).padStart(2, "0"); }
     const d = new Date(s);
-    return isNaN(d) ? "" : d.toISOString().slice(0, 10);
+    return isNaN(d) ? "" : day(d);
   },
   // one row per invoice line, whichever marketplace it came from
   read(grid, kind){

@@ -67,13 +67,13 @@ try:
           const c = newCompany({name: "VMS EVENTS PRIVATE LIMITED (2024-25)", gstin: "07AADCV3366N1ZU"}); S.companies[c.id] = c; S.coId = c.id; S.view = "company"; S.tab = "invoices"; render(); }""", key)
         pg.evaluate("Bridge.refresh()"); pg.wait_for_timeout(1500)
         pg.evaluate("syncLedgersFromTally(true)"); pg.evaluate("render()"); pg.wait_for_timeout(300)
-        ok(pg.locator("[data-act='vrOpen']").count() == 1, "the purchase page has 'Reconcile a vendor ledger'")
-        pg.click("[data-act='vrOpen']"); pg.wait_for_timeout(300)
+        ok(pg.locator('button[title^="Match a vendor"]').count() == 1, "the purchase page has 'Reconcile a vendor ledger'")
+        pg.click('button[title^="Match a vendor"]'); pg.wait_for_timeout(300)
         opts = pg.evaluate("Array.from(document.querySelectorAll('#vrLedgers option')).map(o => o.value)")
         ok(LED in opts, "the vendor's ledger can be chosen by typing (a list of %d Tally ledgers, creditors first)" % len(opts))
-        pg.fill("[data-vr='ledger']", LED); pg.fill("[data-vr='from']", "2025-04-01"); pg.fill("[data-vr='to']", "2025-12-31")
-        pg.set_input_files("#vrFile", CSV1); pg.wait_for_timeout(300)
-        pg.click("[data-act='vrRun']")
+        pg.fill('input[aria-label="Vendor ledger in Tally"]', LED); pg.fill('input[aria-label="From"]', "2025-04-01"); pg.fill('input[aria-label="Up to"]', "2025-12-31")
+        pg.set_input_files('input[aria-label="Vendor’s ledger file"]', CSV1); pg.wait_for_timeout(300)
+        pg.click('.vrec button:text-is("Reconcile")')
         for i in range(120):
             pg.wait_for_timeout(500)
             if pg.evaluate("!!(S.vrec && S.vrec.res) || !!(S.vrec && !S.vrec.busy && document.getElementById('toast').textContent.includes('Could not'))"): break
@@ -87,11 +87,11 @@ try:
         if os.environ.get("SHOT"): pg.evaluate("window.scrollTo(0,0)"); pg.screenshot(path=os.environ["SHOT"], full_page=True)
         t = pg.inner_text(".vrec")
         ok("first move apart" in t and "In the vendor" in t and "In Tally, not in the vendor" in t and "Same document, different amount" in t, "the page shows the statement and the three lists")
-        with pg.expect_download() as dl: pg.click("[data-act='vrExcel']")
+        with pg.expect_download() as dl: pg.click('.vrec button:text-is("Download Excel")')
         f = dl.value; path = f.path()
         ok(f.suggested_filename.endswith(".xlsx") and _os.path.getsize(path) > 2000, "the reconciliation downloads as Excel (%s)" % f.suggested_filename)
         # the same, with another opening balance on the vendor's side
-        pg.set_input_files("#vrFile", CSV2); pg.wait_for_timeout(300); pg.click("[data-act='vrRun']")
+        pg.set_input_files('input[aria-label="Vendor’s ledger file"]', CSV2); pg.wait_for_timeout(300); pg.click('.vrec button:text-is("Reconcile")')
         for i in range(120):
             pg.wait_for_timeout(500)
             if pg.evaluate("!!(S.vrec && S.vrec.res)"): break

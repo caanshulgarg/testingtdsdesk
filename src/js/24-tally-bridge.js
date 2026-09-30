@@ -204,7 +204,8 @@ const Bridge = {
 function bridgeLive(co){ return Bridge.on() && Bridge.up() && !!Bridge.openFor(co || CO()); }
 function tallyToIso(d){ const s = String(d || ""); return /^\d{8}$/.test(s) ? s.slice(0, 4) + "-" + s.slice(4, 6) + "-" + s.slice(6, 8) : ""; }
 function isoToTally(d){ return String(d || "").replace(/-/g, ""); }
-function addDays(iso, n){ const d = new Date(iso + "T00:00:00"); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); }
+// a date n days on, in UTC: a local midnight read back with toISOString is the day before east of London (India)
+function addDays(iso, n){ const d = new Date(iso + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
 
 // Poll the bridge; follow the company open in Tally
 let bridgeTimer = null, bridgeBusy = false;
