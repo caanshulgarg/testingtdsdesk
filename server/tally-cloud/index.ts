@@ -15,6 +15,9 @@
 //   {kind:"state", company, state}
 //   {kind:"beat", tally, open, companies:[{name, open, at, phase, waiting}], updating, dailyAt, lastRun} -> {updateNow}
 //   {kind:"support", note, zip}                      -> the Connector's log and details for FinCom support
+//   {kind:"posts_take"}                              -> {job: {id, company, payload} | null}: the next posting queued in
+//                                                       FinCom for this computer (build 199); the beat says how many wait
+//   {kind:"posts_update", id, status, done, message, results, checking} -> how a posting taken by this computer is going
 // Or a person signed in to FinCom (Authorization: Bearer, two-step done, a member of the firm), for one of the firm's
 // clients, giving the books from files exported from Tally:
 //   {kind:"upload_days", client, company?, days:[{day, gz}]}
@@ -218,7 +221,25 @@ Deno.serve(async (req) => {
         const want = (dev as any).want_update_at, sent = (dev as any).want_sent_at;
         const updateNow = !!want && (!sent || Date.parse(want) > Date.parse(sent));
         await db.from("tally_devices").update(updateNow ? { info, want_sent_at: want } : { info }).eq("id", dev.id);
-        return reply(200, { ok: true, updateNow });
+        const { count: posts } = await db.from("tally_post_jobs").select("id", { count: "exact", head: true }).eq("device_id", dev.id).eq("status", "waiting");
+        return reply(200, { ok: true, updateNow, posts: posts || 0 });
+      }
+      case "posts_take": {
+        const { data, error } = await db.rpc("tally_post_take", { p_device: dev.id });
+        if (error) throw new Error(error.message);
+        const j = (data || [])[0];
+        return reply(200, { ok: true, job: j ? { id: j.id, company: j.company, payload: j.payload } : null });
+      }
+      case "posts_update": {
+        const st = ["taken", "running", "done", "failed"].includes(body.status) ? body.status : "running";
+        const s = (v: unknown, n: number) => typeof v === "string" ? v.slice(0, n) : "";
+        const results = (Array.isArray(body.results) ? body.results : []).slice(0, 5000).map((r: any) => ({ id: s(r?.id, 200), ok: !!r?.ok, verified: r?.verified === true ? true : r?.verified === false ? false : null,
+          message: s(r?.message, 1000), vchNumber: s(r?.vchNumber, 60), vchType: s(r?.vchType, 100), guid: s(r?.guid, 100), masterId: s(r?.masterId, 30), vchDate: s(r?.vchDate, 8),
+          optional: !!r?.optional, alreadyThere: !!r?.alreadyThere, kind: s(r?.kind, 10) }));
+        const { error } = await db.from("tally_post_jobs").update({ status: st, done: Math.max(0, Math.floor(Number(body.done) || 0)), message: s(body.message, 500), results, checking: !!body.checking, updated_at: new Date().toISOString() })
+          .eq("id", String(body.id || "")).eq("device_id", dev.id).neq("status", "cancelled");
+        if (error) throw new Error(error.message);
+        return reply(200, { ok: true });
       }
       case "companies": {
         const list = (Array.isArray(body.companies) ? body.companies : []).slice(0, 200)

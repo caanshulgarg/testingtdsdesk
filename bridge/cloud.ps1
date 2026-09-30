@@ -235,5 +235,58 @@ function Send-CloudBeat {
   $r = Invoke-Cloud $beat 10
   # 1.14.4: Update now pressed in FinCom on another computer
   if ($r.code -eq 200 -and $r.json -and $r.json.updateNow) { Request-KeepNow; try { Start-KeepIfNeeded } catch { } }
+  if ($r.code -eq 200 -and $r.json -and [int]$r.json.posts -gt 0 -and $Cfg.AllowImport) { try { Invoke-CloudPostTake } catch { Write-Log ('Posting queue: ' + $_.Exception.Message) } }
   if ($r.code -ne 200) { $script:BeatAt = [DateTime]::UtcNow.AddMinutes(25) }       # the cloud or the internet is down: tried again in half an hour
+}
+
+# 1.14.6 (build 199, step 4): the posting queue. FinCom on any computer queues entries in the cloud; the heartbeat says
+# how many wait for this computer, and they are taken one posting at a time and run as the bridge's usual posting job
+# (batches, one writer per Tally, FinCom's ID stamped in each entry). A queued posting always checks Tally for those IDs
+# first, so an entry posted before (a posting pressed twice, a computer restarted) is never posted again. How it goes is
+# written back to the cloud, where FinCom follows it.
+$script:CloudPosts = $null; $script:CloudPostsAt = [DateTime]::MinValue
+function Get-CloudPostsFile { return (Join-Path (Get-SyncDir) 'cloud-posts.txt') }
+function Get-CloudPosts {
+  if ($null -eq $script:CloudPosts) {
+    $script:CloudPosts = @{}
+    try { foreach ($l in ([IO.File]::ReadAllLines((Get-CloudPostsFile)))) { if ($l.Trim()) { $script:CloudPosts[$l.Trim()] = '' } } } catch { }
+  }
+  return $script:CloudPosts
+}
+function Save-CloudPosts { try { New-Item -ItemType Directory -Force -Path (Get-SyncDir) | Out-Null; [IO.File]::WriteAllLines((Get-CloudPostsFile), [string[]]@((Get-CloudPosts).Keys)) } catch { } }
+function Invoke-CloudPostTake {
+  $cp = Get-CloudPosts
+  for ($i = 0; $i -lt 5; $i++) {
+    $r = Invoke-Cloud ([ordered]@{ kind = 'posts_take' }) 30
+    if ($r.code -ne 200 -or -not $r.json -or -not $r.json.job) { return }
+    $j = $r.json.job
+    try {
+      $pl = [pscustomobject]@{ jobId = [string]$j.id; company = [string]$j.company; masters = @($j.payload.masters | Where-Object { $_ }); vouchers = @($j.payload.vouchers | Where-Object { $_ }); ledger = [string]$j.payload.ledger; checkFirst = $true }
+      $v = New-PostJob $pl
+      $cp[[string]$j.id] = ''; Save-CloudPosts
+      Write-Log ('Posting from FinCom''s queue: ' + $v.total + ' item(s) for ' + $j.company + ' (job ' + $j.id + ')')
+    } catch {
+      $null = Invoke-Cloud ([ordered]@{ kind = 'posts_update'; id = [string]$j.id; status = 'failed'; done = 0; message = ('The Tally computer could not start this posting: ' + $_.Exception.Message); results = @() }) 30
+    }
+  }
+}
+function Sync-CloudPosts {
+  $cp = Get-CloudPosts
+  if (-not $cp.Count) { return }
+  if (([DateTime]::UtcNow - $script:CloudPostsAt).TotalSeconds -lt (Get-KeepNum 'CloudPostSyncSec' 3)) { return }
+  $script:CloudPostsAt = [DateTime]::UtcNow
+  foreach ($id in @($cp.Keys)) {
+    $v = Get-JobView (Get-JobDir $id)
+    if (-not $v) { $cp.Remove($id); Save-CloudPosts; continue }
+    if ($v.status -eq 'interrupted') { try { $v = Resume-PostJob $id } catch { } }
+    $st = $(if ($v.status -eq 'done' -or $v.status -eq 'failed') { [string]$v.status } else { 'running' })
+    $sig = $st + '|' + $v.done + '|' + $v.message + '|' + $v.checking
+    if ($sig -eq $cp[$id]) { continue }
+    $res = @(@($v.results) | Where-Object { $_ } | ForEach-Object { [ordered]@{ id = [string]$_.id; kind = [string]$_.kind; ok = [bool]$_.ok; verified = $_.verified; message = [string]$_.message; vchNumber = [string]$_.vchNumber; vchType = [string]$_.vchType; guid = [string]$_.guid; masterId = [string]$_.masterId; vchDate = [string]$_.vchDate; optional = [bool]$_.optional; alreadyThere = [bool]$_.alreadyThere } })
+    $r = Invoke-Cloud ([ordered]@{ kind = 'posts_update'; id = $id; status = $st; done = [int]$v.done; message = [string]$v.message; results = $res; checking = [bool]$v.checking }) 30
+    if ($r.code -eq 200) {
+      $cp[$id] = $sig
+      if (($st -eq 'done' -or $st -eq 'failed') -and -not $v.checking) { $cp.Remove($id); Save-CloudPosts; Write-Log ('Posting from FinCom''s queue ' + $id + ': ' + $v.message) }
+    }
+  }
 }

@@ -395,7 +395,7 @@ function bankBar(){
   } else {
     left = '<span class="bk-stat"><b>' + tc.review + '</b> to review</span><span class="bk-stat"><b>' + tc.ready + "</b> ready to post</span>";
     right = (tc.suggested ? '<button class="btn" data-act="bankAcceptAll">Confirm all suggestions (' + tc.suggested + ")</button>" : "") +
-      (Bridge.on() && Bridge.up() ? '<button class="btn primary" data-act="bankPost"' + (tc.ready ? "" : " disabled") + ">Post to Tally (" + tc.ready + ")</button>"
+      (canPostTally(CO()) ? '<button class="btn primary" data-act="bankPost"' + (tc.ready ? "" : " disabled") + ">Post to Tally (" + tc.ready + ")</button>"
         : '<button class="btn primary" data-act="bankXml"' + (tc.ready ? "" : " disabled") + ">Create Tally file (" + tc.ready + ")</button>");
   }
   let snack = "";

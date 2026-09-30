@@ -781,7 +781,7 @@ function viewExport(){
     bp.failed.map(f => "<li>" + esc(f.no) + " \u00b7 " + esc(f.party) + ": " + esc(f.msg) + "</li>").join("") + "</ul>" +
     '<div class="row" style="gap:8px;margin-top:6px"><button class="btn small primary" data-act="billRetry">Retry these ' + bp.failed.length + '</button><button class="btn small" data-step="review">Open them in To review</button>' +
     (/already\s+exists/i.test(bp.failed.map(f => f.msg).join(" ")) ? '<span class="note">Tally already has these voucher numbers. In Tally, set the Purchase voucher type\u2019s numbering to Automatic, or retry: numbers get the supplier\u2019s initials.</span>' : "") + "</div></div>";
-  const canPost = Bridge.on() && Bridge.up();
+  const canPost = canPostTally(CO());
   const bc = S.billCheck || {};
   const undoable = v.filter(e => e.exportedAt && e.tally && e.tally.guid);
   if (canPost && undoable.length) h += '<div class="row" style="margin-top:10px"><button class="btn small" data-act="billUnpost">Take an entry back out of Tally</button><span class="note">' + undoable.length + " posted bills can be removed from Tally from here.</span></div>";
