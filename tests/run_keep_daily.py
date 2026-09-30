@@ -1,4 +1,4 @@
-"""python3 run_keep_daily.py - bridge 1.14.2: through the working day nothing asks Tally by itself.
+"""python3 run_keep_daily.py - bridge 1.14.3: through the working day nothing asks Tally by itself.
   - status checks (FinCom's page, the Connector) are answered without asking Tally;
   - the copier reads Tally only once a day at the set time, or when someone presses Update now; then it stops;
   - a check a person asks for (fresh=1) does ask Tally."""
