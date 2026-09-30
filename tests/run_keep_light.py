@@ -1,4 +1,4 @@
-"""python3 run_keep_light.py - bridge 1.14.4: entries appear during the day too.
+"""python3 run_keep_light.py - bridge 1.14.6: entries appear during the day too.
   - a light check every KeepLightMin minutes (30 on real computers): Tally's change counters, and when they moved, only
     the changed entries' days; no month checks (those stay with the evening update);
   - right after FinCom posts to Tally, a light check runs at once (within a minute), so the posted entry reaches the cloud;

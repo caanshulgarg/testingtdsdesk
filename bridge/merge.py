@@ -6,7 +6,7 @@ def R(a, b):
     assert base.count(a) == 1, ('anchor', a[:60], base.count(a))
     base = base.replace(a, b)
 import re
-base = re.sub(r"\$BridgeVersion = '[0-9.]+'", "$BridgeVersion = '1.14.4'", base, 1)
+base = re.sub(r"\$BridgeVersion = '[0-9.]+'", "$BridgeVersion = '1.14.6'", base, 1)
 # 1.12.7 (security): the log never holds keys, codes or passwords, and is rotated at 5 MB keeping 5 old copies
 R(r"""function Write-Log([string]$msg) {
   $line = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + '  ' + $msg
@@ -207,6 +207,17 @@ R("""      '/ledgerbalance' {""", """      '/paircode' {
       '/keep' { if ($method -eq 'POST') { $o = $body | ConvertFrom-Json; if ($null -ne $o.on) { $Cfg.KeepInStep = [bool]$o.on }; if ($o.dailyAt -and [string]$o.dailyAt -match '^([01]?\d|2[0-3]):[0-5]\d$') { $Cfg.KeepDailyAt = [string]$o.dailyAt }; if ($o.schedule -eq 'daily' -or $o.schedule -eq 'continuous') { $Cfg.KeepSchedule = [string]$o.schedule }; Save-Config; if ($o.now) { $Cfg.KeepInStep = $true; Save-Config; Request-KeepNow }; if (Test-KeepOn) { Start-KeepIfNeeded } }; $result = Get-KeepStatus ([string]$qs['company']) }
       '/keepcheck' { $result = Test-KeepMonth ([string]$qs['company']) ([string]$qs['ym']) ([int]('0' + $qs['port'])) }
       '/ledgerbalance' {""")
+# 1.14.5: the read-back after posting carries Tally's change number, and what it found is put into the copy (and sent to
+# the cloud) without reading the day again from Tally
+R("MASTERID,GUID,ISOPTIONAL,ISCANCELLED</FETCH></COLLECTION>", "MASTERID,GUID,ALTERID,ISOPTIONAL,ISCANCELLED</FETCH></COLLECTION>")
+R("""    $list += [ordered]@{ guid = (Get-NodeText $v 'GUID'); masterId = (Get-NodeText $v 'MASTERID'); date = $d; type = $type;""", """    $list += [ordered]@{ guid = (Get-NodeText $v 'GUID'); masterId = (Get-NodeText $v 'MASTERID'); alter = (Get-NodeText $v 'ALTERID'); date = $d; type = $type;""")
+R("""      if ($hit) {
+        $r['verified'] = $true;""", """      if ($hit) {
+        Add-PostedForCopy $company $hit @{ xml = [string]$r.xmlSent }
+        $r['verified'] = $true;""")
+# 1.14.6: postings queued in FinCom's cloud are followed and reported every few seconds while they run
+R("""    if (((Get-Date) - $lastCheck).TotalSeconds -ge (Get-KeepNum 'KeepStartSec' 60)) { $lastCheck = Get-Date; Show-Diagnosis;""", """    try { Sync-CloudPosts } catch { }
+    if (((Get-Date) - $lastCheck).TotalSeconds -ge (Get-KeepNum 'KeepStartSec' 60)) { $lastCheck = Get-Date; Show-Diagnosis;""")
 # 1.13.0: the FinCom Connector may ask the bridge to stop (to update it, or restart it cleanly)
 R("""  finally { try { $client.Close() } catch { } }
 }""", """  finally { try { $client.Close() } catch { } }

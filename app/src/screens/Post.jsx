@@ -82,7 +82,7 @@ export function Export() {
   const ctx = !!(S.bank && S.bank.cid === co.id && !S.bank.loading && hasLedgerList());
   if (ctx) canonicalizeBills(waiting);
   const issues = ctx ? billLedgerIssues(waiting) : [];
-  const canPost = Bridge.on() && Bridge.up(), bc = S.billCheck || {};
+  const canPost = canPostTally(CO()), bc = S.billCheck || {};
   const undoable = v.filter((e) => e.exportedAt && e.tally && e.tally.guid).length;
   const closed = (e) => typeof ClosedP === "object" ? ClosedP.note(e.x.invoiceDate, !!(e.snapshot && e.snapshot.tds)) : [];
   return (
@@ -174,7 +174,7 @@ export function PostStep() {
             <PostReport rep={S.bank.postReport} />
             <div className="row" style={{ alignItems: "center", gap: 12 }}>
               <span><b>{ready.length}</b> line{ready.length === 1 ? "" : "s"} ready in {st.name || "this statement"}</span>
-              {ready.length > 0 && Bridge.on() && Bridge.up() && <button className="btn primary" onClick={() => bankAct("bankPost")}>Post {plural(ready.length, "bank line", "bank lines")}</button>}
+              {ready.length > 0 && canPostTally(CO()) && <button className="btn primary" onClick={() => bankAct("bankPost")}>Post {plural(ready.length, "bank line", "bank lines")}</button>}
               <button className="btn small" onClick={() => doAct("toBankReady")}>See the lines</button>
               {S.bank.stmts.length > 1 && <span className="note">{S.bank.stmts.length} statements: choose another in the bank tab</span>}
             </div>

@@ -101,6 +101,13 @@ const Bridge = {
     });
     payload = Object.assign({}, payload, {masters: keep(payload.masters), vouchers: keep(payload.vouchers)});
     if (!payload.masters.length && !payload.vouchers.length) return {ok: true, company: payload.company, results: refused};
+    // build 199: Tally on another computer: through the queue in the cloud
+    const coP = (payload.client && S.companies[payload.client]) || (typeof CO === "function" ? CO() : null);
+    if (coP && typeof tallyVia === "function" && tallyVia(coP) === "cloud"){
+      const outC = await CloudPost.run(coP.id, payload, onProgress, onChecked);
+      outC.results = [].concat(outC.results || []).concat(refused);
+      return outC;
+    }
     const out = await this.postChecked(payload, onProgress, onChecked);
     out.results = [].concat(out.results || []).concat(refused);
     return out;
@@ -318,12 +325,12 @@ function bridgeChip(co){
 /* ---------- ledgers and bank entries straight from Tally ---------- */
 async function syncLedgersFromTally(silent){
   const b = B(), co = CO(b.cid);
-  if (!bridgeLive(co)) return false;
+  if (!tallyVia(co)) return false;
   try {
-    const j = await Bridge.call("/ledgers?company=" + encodeURIComponent(Bridge.openFor(co).name) + Bridge.pinQ());
+    const j = await tallyCall(co, "/ledgers?company=" + encodeURIComponent(tallyCoName(co)) + Bridge.pinQ());
     const list = [].concat(j.ledgers || []).filter(l => l && l.name).map(l => ({name: l.name, group: l.group || "", pan: l.pan || "", gstin: l.gstin || "", acNo: l.acNo || "", ifsc: l.ifsc || "", taxType: l.taxType || "", tdsNature: l.tdsNature || "", dutyHead: l.dutyHead || ""}));
     const groups = Array.from(new Set([].concat(j.groups || []).map(g => g.name).concat(list.map(l => l.group)).filter(Boolean))).sort();
-    b.ledgers = {list, groups, importedAt: new Date().toISOString(), file: "Tally (live)", live: true};
+    b.ledgers = {list, groups, importedAt: new Date().toISOString(), file: j.via === "cloud" ? "Tally, from the copy in FinCom's cloud" : "Tally (live)", live: true};
     const have = new Set(list.map(l => l.name.toLowerCase()));
     b.newLed = b.newLed.filter(n => !have.has(n.name.toLowerCase()));
     saveBank({ledgers: true, newLed: true});
@@ -350,13 +357,13 @@ function guessBankLedger(a){
 // Tally's own entries in this bank ledger: rows already booked are marked, and their ledgers are learnt
 async function syncBankBookFromTally(silent, win){
   const b = B(), co = CO(b.cid), st = curStmt();
-  if (!st || !bridgeLive(co)) return 0;
+  if (!st || !tallyVia(co)) return 0;
   const acc = (co.bankAccounts || []).find(a => a.id === st.acctId);
   const ledger = acc && exactLedger(acc.ledger);
   if (!ledger) return 0;
   try {
     const from = win ? win.from : addDays(st.from || b.rows[0].date, -20), to = win ? win.to : addDays(st.to || b.rows[b.rows.length - 1].date, 20);
-    const j = win && win.pre ? win.pre : await Bridge.call(ledgerLinesUrl(Bridge.openFor(co).name, ledger, from, to), null, 300000);
+    const j = win && win.pre ? win.pre : await tallyCall(co, ledgerLinesUrl(tallyCoName(co), ledger, from, to), null, 300000);
     const entries = [];
     [].concat(j.vouchers || []).forEach(v => {
       if (/^yes$/i.test(v.cancelled || "")) return;
@@ -625,10 +632,10 @@ async function scanStatementInTally(opts){
   let to = addDays(last, 31);
   // bridge 1.12.1: one light read of FinCom's own entries (heads only); older: this bank ledger month by month
   // 1.12.3: this bank ledger's own vouchers (light, with amounts); 1.12.1-2: FinCom's tagged entries; older: the Day Book
-  const byLedger = bridgeVer(Bridge.st.version) >= bridgeVer("1.12.3");
+  const byLedger = tallyVia(co) === "cloud" || bridgeVer(Bridge.st.version) >= bridgeVer("1.12.3");
   const light = !byLedger && bridgeVer(Bridge.st.version) >= bridgeVer("1.12.1");
   if (opts.pre){ from = opts.from; to = opts.to; }
-  const j = opts.pre || await Bridge.call(light ? "/tags?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(from) + "&to=" + isoToTally(to) + Bridge.pinQ() : ledgerLinesUrl(tname, ledger, from, to), null, 600000);
+  const j = opts.pre || await tallyCall(co, light ? "/tags?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(from) + "&to=" + isoToTally(to) + Bridge.pinQ() : ledgerLinesUrl(tname, ledger, from, to), null, 600000);
   const vs = [].concat(j.vouchers || []).filter(v => !/^yes$/i.test(v.cancelled || ""));
   const rowByTag = new Map(b.rows.map(r => [fpHash(r.fp || r.id), r]));
   const groups = new Map();
@@ -911,7 +918,7 @@ async function postBankToTally(ids){
   const toCheck = b.rows.filter(r => r.state === "ready" && (!ids || ids.includes(r.id)));
   // bridge 1.12.3+: ONE read of this bank ledger covers both looks (these dates, and anything FinCom put in before),
   // and is reused for 30 minutes, so posting the next batch starts at once
-  const oneRead = bridgeVer(Bridge.st.version) >= bridgeVer("1.12.3");
+  const oneRead = tallyVia(co) === "cloud" || bridgeVer(Bridge.st.version) >= bridgeVer("1.12.3");
   if (toCheck.length && !heavy && oneRead){
     try {
       const look = b.tallyLook && b.tallyLook.sid === st.id && Date.now() - b.tallyLook.at < 30 * 60000 ? b.tallyLook : null;
@@ -920,7 +927,7 @@ async function postBankToTally(ids){
       const from = addDays(dsAll[0], -15), to = addDays(dsAll[dsAll.length - 1] > today ? dsAll[dsAll.length - 1] : today, 7);
       if (!pre){
         b.busy = "Looking at " + acc.ledger + " in Tally before posting\u2026"; render();
-        pre = await Bridge.call(ledgerLinesUrl(tname, acc.ledger, from, to), null, 600000);
+        pre = await tallyCall(co, ledgerLinesUrl(tname, acc.ledger, from, to), null, 600000);
         b.tallyLook = {sid: st.id, at: Date.now(), data: pre};
       }
       const g = markedGone(pre, from, to);
@@ -1006,7 +1013,7 @@ async function postBankToTally(ids){
   const masters = b.newLed.filter(l => !l.sent && used.has(l.name.toLowerCase()));
   b.busy = "Posting " + entries(rows.length) + " to " + tname + "\u2026"; render();
   try {
-    const j = await Bridge.post({company: tname, ledger: acc.ledger,
+    const j = await Bridge.post({company: tname, client: co.id, ledger: acc.ledger,
       masters: masters.map(l => ({id: "led:" + l.name, xml: ledgerMasterXml(l)})),
       vouchers: rows.map(r => ({id: r.id, xml: bankVoucherXml(r, acc, co)}))}, pj => { b.busy = postingLine(pj, tname); refreshBusy(); },
       chk => bankAfterCheck(b.cid, st.id, chk, tname));
@@ -1039,7 +1046,7 @@ async function postBankToTally(ids){
     b.postReport = {at: Date.now(), posted: ok, skipped, movedBack, failed, dismiss: "bankReportOk", company: tname, optional: optionalN, noPreCheck: !heavy, checking: !!j.checking};
     toast(ok + " posted to Tally" + (skipped ? ", " + skipped + " were already there" : "") + (failed.length ? ", " + failed.length + " not posted" : "") + ".");
     if (!failed.length && !b.rows.some(r => r.state === "ready")) b.filter = "done";
-    b.afterPost = !j.checking;
+    b.afterPost = !j.checking && !j.viaCloud;
     b.tallyLook = null;          // Tally has changed: the next posting looks again
   } catch (e){ toast("Posting failed: " + e.message); b.postReport = {at: Date.now(), posted: 0, skipped, movedBack, failed: failed.concat([{what: "Posting", msg: e.message}]), dismiss: "bankReportOk"}; }
   b.busy = "";
@@ -1056,7 +1063,7 @@ async function checkBillsInTally(onlyUnconfirmed){
   try {
     const dates = sent.map(e => e.x.invoiceDate).sort();
     const vt = co.voucherType || "Journal";
-    const j = await Bridge.call("/vouchers?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(addDays(dates[0], -5)) + "&to=" + isoToTally(addDays(dates[dates.length - 1] > new Date().toISOString().slice(0, 10) ? dates[dates.length - 1] : new Date().toISOString().slice(0, 10), 31)) + "&types=" + encodeURIComponent([vt, "Purchase", "Journal", co.debitNoteType || "Debit Note"].join(",")) + Bridge.pinQ(), null, 300000);
+    const j = await tallyCall(co, "/vouchers?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(addDays(dates[0], -5)) + "&to=" + isoToTally(addDays(dates[dates.length - 1] > new Date().toISOString().slice(0, 10) ? dates[dates.length - 1] : new Date().toISOString().slice(0, 10), 31)) + "&types=" + encodeURIComponent([vt, "Purchase", "Journal", co.debitNoteType || "Debit Note"].join(",")) + Bridge.pinQ(), null, 300000);
     const vs = [].concat(j.vouchers || []).filter(v => !/^yes$/i.test(v.cancelled || ""));
     const now = new Date().toISOString();
     const missing = [], wrongDate = [];
@@ -1097,7 +1104,7 @@ async function postBillsToTally(){
     let dup = [];
     if (dates.length){
       const vt = co.voucherType || "Journal";
-      const j0 = await Bridge.call("/vouchers?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(addDays(dates[0], -5)) + "&to=" + isoToTally(addDays(dates[dates.length - 1], 5)) + "&types=" + encodeURIComponent([vt, "Purchase", "Journal"].join(",")) + Bridge.pinQ());
+      const j0 = await tallyCall(co, "/vouchers?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(addDays(dates[0], -5)) + "&to=" + isoToTally(addDays(dates[dates.length - 1], 5)) + "&types=" + encodeURIComponent([vt, "Purchase", "Journal"].join(",")) + Bridge.pinQ());
       const vs0 = [].concat(j0.vouchers || []).filter(v => !/^yes$/i.test(v.cancelled || ""));
       const seen = new Set(vs0.map(v => norm(v.reference) + "|" + norm(v.party)).concat(vs0.flatMap(v => [].concat(v.entries || []).flatMap(en => [].concat(en.bills || []).map(bl => norm(bl.name) + "|" + norm(en.ledger))))));
       const marks = vs0.map(v => String(v.narration || "")).join("\n");
@@ -1110,7 +1117,7 @@ async function postBillsToTally(){
       const used = new Set(todo.flatMap(e => e.snapshot.lines.map(l => String(l.ledger).toLowerCase())));
       const masters = B().newLed.filter(l => !l.sent && used.has(l.name.toLowerCase()));
       S.billPost = {busy: "Posting " + entries(todo.length) + " to " + tname + "\u2026"}; render();
-      const j = await Bridge.post({company: tname, masters: masters.map(l => ({id: "led:" + l.name, xml: ledgerMasterXml(l)})), vouchers: todo.map(e => ({id: e.id, xml: voucherXml(e, co)}))}, pj => { S.billPost = {busy: postingLine(pj, tname)}; refreshBusy(); });
+      const j = await Bridge.post({company: tname, client: co.id, masters: masters.map(l => ({id: "led:" + l.name, xml: ledgerMasterXml(l)})), vouchers: todo.map(e => ({id: e.id, xml: voucherXml(e, co)}))}, pj => { S.billPost = {busy: postingLine(pj, tname)}; refreshBusy(); });
       const byId = new Map([].concat(j.results || []).map(x => [x.id, x]));
       masters.forEach(l => { const x = byId.get("led:" + l.name); if (x && x.ok){ l.sent = true; l.sentAt = now; } });
       saveBank({newLed: true});
@@ -1120,7 +1127,7 @@ async function postBillsToTally(){
         clash.forEach(e => { e.vchNo = (e.x.invoiceNo || "B") + "/" + initialsOf(e.x.vendorName || e.partyLedger); });
         S.billPost = {busy: "Voucher numbers already used in Tally: trying " + clash.length + " again with the supplier\u2019s initials\u2026"}; render();
         try {
-          const j2 = await Bridge.post({company: tname, masters: [], vouchers: clash.map(e => ({id: e.id, xml: voucherXml(e, co)}))});
+          const j2 = await Bridge.post({company: tname, client: co.id, masters: [], vouchers: clash.map(e => ({id: e.id, xml: voucherXml(e, co)}))});
           [].concat(j2.results || []).forEach(x => byId.set(x.id, x));
         } catch (err){ /* reported below as refused */ }
       }

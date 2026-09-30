@@ -1,4 +1,4 @@
-"""python3 run_keep_round.py - bridge 1.14.4, step 3 of the Tally plan: the daily update brings only what changed
+"""python3 run_keep_round.py - bridge 1.14.6, step 3 of the Tally plan: the daily update brings only what changed
 (entries with a higher change number), and compares every month's list of entries with Tally's once a day, so an
 entry deleted in an old month is found even when Tally's change counter does not move. What it finds reaches the cloud."""
 import os as _os, shutil as _sh

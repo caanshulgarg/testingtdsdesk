@@ -48,5 +48,6 @@
  "47-closed-periods.js",
  "48-guide-and-keys.js",
  "49-tally-cloud.js",
+ "51-tally-queue.js",
  "50-ai-help.js"
 ]

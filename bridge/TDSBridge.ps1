@@ -27,7 +27,7 @@ trap {
   try { Stop-Transcript | Out-Null } catch { }
   break
 }
-$BridgeVersion = '1.14.4'
+$BridgeVersion = '1.14.6'
 
 # ------------------------------------------------------------------ settings
 function New-BridgeKey {
@@ -538,7 +538,7 @@ function Get-VoucherHeads([int]$Port, [string]$Company, [string]$From, [string]$
   $req = '<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TDSDeskVchHeads</ID></HEADER>' +
     '<BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + (Esc $Company) + '</SVCURRENTCOMPANY>' +
     '<SVFROMDATE>' + $From + '</SVFROMDATE><SVTODATE>' + $To + '</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE>' +
-    '<COLLECTION NAME="TDSDeskVchHeads" ISMODIFY="No"><TYPE>Voucher</TYPE><FETCH>DATE,VOUCHERTYPENAME,VOUCHERNUMBER,REFERENCE,PARTYLEDGERNAME,NARRATION,MASTERID,GUID,ISOPTIONAL,ISCANCELLED</FETCH></COLLECTION>' +
+    '<COLLECTION NAME="TDSDeskVchHeads" ISMODIFY="No"><TYPE>Voucher</TYPE><FETCH>DATE,VOUCHERTYPENAME,VOUCHERNUMBER,REFERENCE,PARTYLEDGERNAME,NARRATION,MASTERID,GUID,ALTERID,ISOPTIONAL,ISCANCELLED</FETCH></COLLECTION>' +
     '</TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>'
   $doc = Get-XmlDoc (Invoke-Tally -TallyPort $Port -Xml $req)
   $list = @()
@@ -546,7 +546,7 @@ function Get-VoucherHeads([int]$Port, [string]$Company, [string]$From, [string]$
     $d = Get-NodeText $v 'DATE'
     if ($d -and ($d -lt $From -or $d -gt $To)) { continue }
     $type = Get-NodeText $v 'VOUCHERTYPENAME'; if (-not $type) { $type = $v.GetAttribute('VCHTYPE') }
-    $list += [ordered]@{ guid = (Get-NodeText $v 'GUID'); masterId = (Get-NodeText $v 'MASTERID'); date = $d; type = $type; number = (Get-NodeText $v 'VOUCHERNUMBER')
+    $list += [ordered]@{ guid = (Get-NodeText $v 'GUID'); masterId = (Get-NodeText $v 'MASTERID'); alter = (Get-NodeText $v 'ALTERID'); date = $d; type = $type; number = (Get-NodeText $v 'VOUCHERNUMBER')
       reference = (Get-NodeText $v 'REFERENCE'); party = (Get-NodeText $v 'PARTYLEDGERNAME'); narration = (Get-NodeText $v 'NARRATION')
       optional = (Get-NodeText $v 'ISOPTIONAL'); cancelled = (Get-NodeText $v 'ISCANCELLED'); entries = @() }
   }
@@ -735,6 +735,7 @@ function Invoke-Import($payload) {
       # Tally's "last voucher id" can point at an older voucher, so it is only trusted when the entry carries no tag of its own
       elseif ($r.lastVchId) { foreach ($h in $heads) { if ($h.masterId -eq $r.lastVchId) { $hit = $h; break } } }
       if ($hit) {
+        Add-PostedForCopy $company $hit @{ xml = [string]$r.xmlSent }
         $r['verified'] = $true; $r['optional'] = ([string]$hit.optional -match '^yes$'); $r['vchNumber'] = [string]$hit.number; $r['vchType'] = [string]$hit.type
         $r['guid'] = [string]$hit.guid; $r['masterId'] = [string]$hit.masterId; $r['vchDate'] = [string]$hit.date
       } elseif ([string]$r.xmlSent -match '<ISOPTIONAL>\s*Yes' -and -not $listSeesOptional) {
@@ -1366,7 +1367,7 @@ function New-PostJob($payload) {
   $items = @()
   foreach ($m in @($payload.masters)) { if ($m) { $items += [ordered]@{ id = [string]$m.id; kind = 'master'; xml = [string]$m.xml } } }
   foreach ($v in @($payload.vouchers)) { if ($v) { $items += [ordered]@{ id = [string]$v.id; kind = 'voucher'; xml = [string]$v.xml } } }
-  [IO.File]::WriteAllText((Join-Path $dir 'payload.json'), (ConvertTo-Json -InputObject ([ordered]@{ company = [string]$payload.company; port = [int]('0' + $payload.port); ledger = [string]$payload.ledger; items = $items }) -Depth 8 -Compress))
+  [IO.File]::WriteAllText((Join-Path $dir 'payload.json'), (ConvertTo-Json -InputObject ([ordered]@{ company = [string]$payload.company; port = [int]('0' + $payload.port); ledger = [string]$payload.ledger; checkFirst = [bool]$payload.checkFirst; items = $items }) -Depth 8 -Compress))
   $p = [ordered]@{ ok = $true; id = $id; status = 'queued'; company = [string]$payload.company; port = 0; total = $items.Count; done = 0; results = @(); message = 'Starting'; pid = 0; resumed = $false; startedAt = (Get-Date).ToString('o'); updatedAt = ''; finishedAt = ''; checking = $false; checkFailed = $false }
   Write-JobProgress $dir $p
   $p.pid = Start-JobWorker $dir
@@ -1402,7 +1403,7 @@ function Get-LedgerVoucherList([int]$Port, [string]$Company, [string]$Ledger, [s
     '<BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + (Esc $Company) + '</SVCURRENTCOMPANY>' +
     '<SVFROMDATE>' + $From + '</SVFROMDATE><SVTODATE>' + $To + '</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE>' +
     '<COLLECTION NAME="TDSDeskLedVch" ISMODIFY="No"><TYPE>Vouchers : Ledger</TYPE><CHILDOF>' + (Esc $Ledger) + '</CHILDOF>' +
-    '<FETCH>DATE,VOUCHERTYPENAME,VOUCHERNUMBER,REFERENCE,PARTYLEDGERNAME,NARRATION,MASTERID,GUID,ISOPTIONAL,ISCANCELLED,ALLLEDGERENTRIES.LIST</FETCH></COLLECTION>' +
+    '<FETCH>DATE,VOUCHERTYPENAME,VOUCHERNUMBER,REFERENCE,PARTYLEDGERNAME,NARRATION,MASTERID,GUID,ALTERID,ISOPTIONAL,ISCANCELLED,ALLLEDGERENTRIES.LIST</FETCH></COLLECTION>' +
     '</TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>'
   $raw = Invoke-Tally -TallyPort $Port -Xml $req
   if ($raw -match '<LINEERROR>|Could not find|Unknown Request') { return $null }
@@ -1418,7 +1419,7 @@ function Get-LedgerVoucherList([int]$Port, [string]$Company, [string]$Ledger, [s
       $bills = @(); foreach ($bl in $e.SelectNodes('BILLALLOCATIONS.LIST')) { $bn = Get-NodeText $bl 'NAME'; if ($bn) { $bills += $bn } }
       $entries += [ordered]@{ ledger = (Get-NodeText $e 'LEDGERNAME'); amount = (Get-NodeText $e 'AMOUNT'); instrument = (Get-NodeText $bank 'INSTRUMENTNUMBER'); bills = $bills }
     }
-    $null = $list.Add([ordered]@{ guid = (Get-NodeText $v 'GUID'); masterId = (Get-NodeText $v 'MASTERID'); date = $d; type = $type; number = (Get-NodeText $v 'VOUCHERNUMBER'); reference = (Get-NodeText $v 'REFERENCE')
+    $null = $list.Add([ordered]@{ guid = (Get-NodeText $v 'GUID'); masterId = (Get-NodeText $v 'MASTERID'); alter = (Get-NodeText $v 'ALTERID'); date = $d; type = $type; number = (Get-NodeText $v 'VOUCHERNUMBER'); reference = (Get-NodeText $v 'REFERENCE')
       party = (Get-NodeText $v 'PARTYLEDGERNAME'); narration = (Get-NodeText $v 'NARRATION'); optional = (Get-NodeText $v 'ISOPTIONAL'); cancelled = (Get-NodeText $v 'ISCANCELLED'); entries = $entries })
   }
   return ,$list
@@ -1522,7 +1523,7 @@ function Confirm-Posted($port, [string]$company, $pending, $results, $items, [st
     $k = [string]$r.id
     if (-not ($pending -contains $k)) { continue }
     if ($null -eq $there) { $r.verified = $null; $r.message = "Tally said it created this, but did not answer the check afterwards. Use 'Check Tally' before posting it again." }
-    elseif ($there.ContainsKey($k)) { $h = $there[$k]; $r.verified = $true; $r.vchNumber = [string]$h.number; $r.vchType = [string]$h.type; $r.masterId = [string]$h.masterId; $r.guid = [string]$h.guid; $r.vchDate = [string]$h.date; $r.message = '' }
+    elseif ($there.ContainsKey($k)) { $h = $there[$k]; Add-PostedForCopy $company $h $byId[$k]; $r.verified = $true; $r.vchNumber = [string]$h.number; $r.vchType = [string]$h.type; $r.masterId = [string]$h.masterId; $r.guid = [string]$h.guid; $r.vchDate = [string]$h.date; $r.message = '' }
     else { $r.ok = $false; $r.verified = $false; $r.message = "Tally replied 'created', but the entry cannot be found in '" + $company + "'. It was not sent again: look for it in Tally (another company open in Tally, or an Optional voucher)." }
   }
   $pending.Clear()
@@ -1557,7 +1558,7 @@ function Invoke-JobWorker([string]$dir) {
     $p.status = 'running'
     $todo = @($pl.items | Where-Object { -not $doneIds.ContainsKey([string]$_.id) })
     # resuming: whatever reached Tally before the stop is counted, not sent again
-    if ($results.Count -gt 0 -or $p.resumed) {
+    if ($results.Count -gt 0 -or $p.resumed -or $pl.checkFirst) {
       $there = $null
       for ($a = 0; $null -eq $there -and $a -lt 6; $a++) {
         $there = Find-PostedTags $port ([string]$pl.company) @($todo | Where-Object { $_.kind -eq 'voucher' }) ([string]$pl.ledger)
@@ -2002,7 +2003,13 @@ function Test-KeepDue {
   if ((Get-KeepSchedule) -ne 'daily') { return 'continuous' }
   $now = Get-Date; $p = (Get-KeepDailyAt).Split(':')
   $at = $now.Date.AddHours([int]$p[0]).AddMinutes([int]$p[1])
-  if ($now -ge $at -and (Get-KeepLastRun) -ne $now.ToString('yyyyMMdd')) { return 'daily' }
+  # 1.14.5: the update last due (today's after its time, else yesterday's) stays due until it has run with Tally open:
+  # Tally closed at that time, it runs the next time Tally is open. A try that found nothing open waits 30 minutes
+  $dueDay = $(if ($now -ge $at) { $now } else { $now.AddDays(-1) }).ToString('yyyyMMdd')
+  $tried = [DateTime]::MinValue; try { $tried = [DateTime]::Parse(([IO.File]::ReadAllText((Join-Path (Get-SyncDir) 'keep-tried.txt'))).Trim()) } catch { }
+  $lr = Get-KeepLastRun
+  if (-not $lr -and $now -lt $at) { return $(if (Test-KeepLightDue) { 'light' } else { '' }) }     # never run yet: its first time is today's
+  if ($lr -lt $dueDay -and ((Get-Date) - $tried).TotalMinutes -ge 30) { return 'daily' }
   if (Test-KeepLightDue) { return 'light' }
   return ''
 }
@@ -2384,6 +2391,60 @@ function Save-KeepOpening([string]$Company, [int]$Port, [string]$Dir, $St, $Rows
   $St.lastM = 0; Update-KeepLedgers $Company $Port $Dir $St $false        # the ledgers' own numbers, to follow renames and changes
   Write-Log ('Keeping ' + $Company + ': opening balances read (' + $led.Count + ' ledgers)')
 }
+# 1.14.5: an entry FinCom posted and the read-back found (with its GUID and change number): noted for the copier, which
+# puts it into the copy and sends its day to the cloud without reading the day from Tally. The posting runs in another
+# process, so it only writes this note; the copier alone changes the copy
+function Add-PostedForCopy([string]$Company, $Head, $Item) {
+  try {
+    $g = [string]$Head.guid; $a = [string]$Head.alter; $d = [string]$Head.date; $x = [string]$Item.xml
+    if (-not $g -or $a -notmatch '^\s*\d+\s*$' -or $d -notmatch '^\d{8}$' -or -not $x) { return }
+    $dir = Get-SyncFolder $Company
+    if (-not (Test-Path -LiteralPath (Join-Path $dir 'keep.json'))) { return }
+    $o = [ordered]@{ guid = $g; alter = [long]$a.Trim(); date = $d; number = [string]$Head.number; type = [string]$Head.type; xml = $x }
+    [IO.File]::AppendAllText((Join-Path $dir 'posted-in.jsonl'), (($o | ConvertTo-Json -Compress -Depth 3) + "`n"))
+  } catch { }
+}
+function Use-KeepPosted([string]$Dir, $St) {
+  $f = Join-Path $Dir 'posted-in.jsonl'
+  if (-not (Test-Path -LiteralPath $f)) { return 0 }
+  $w = Join-Path $Dir ('posted-in.' + [DateTime]::UtcNow.Ticks + '.work')
+  try { Move-Item -LiteralPath $f -Destination $w -Force } catch { return 0 }
+  $days = Join-Path $Dir 'days'; New-Item -ItemType Directory -Force -Path $days | Out-Null
+  $where = Get-KeepWhere $Dir; $touched = @{}; $n = 0
+  foreach ($ln in ([IO.File]::ReadAllText($w) -split "`n")) {
+    if (-not $ln.Trim()) { continue }
+    try { $e = $ln | ConvertFrom-Json } catch { continue }
+    if ([string]$e.date -lt [string]$St.from) { continue }
+    $x = ([string]$e.xml).Trim()
+    $m = [regex]::Match($x, '^<VOUCHER\b[^>]*>')
+    if (-not $m.Success) { continue }
+    $open = $m.Value
+    if ($open -notmatch 'VCHTYPE=' -and $e.type) { $open = $open -replace '^<VOUCHER', ('<VOUCHER VCHTYPE="' + (Esc ([string]$e.type)) + '"') }
+    $rest = $x.Substring($m.Length) -replace '<GUID>[^<]*</GUID>', '' -replace '<ALTERID>[^<]*</ALTERID>', '' -replace '<VOUCHERNUMBER>[^<]*</VOUCHERNUMBER>', ''
+    $rest = ([regex]'<DATE>[^<]*</DATE>').Replace($rest, ('<DATE>' + $e.date + '</DATE>'), 1)
+    $v = $open + '<GUID>' + (Esc ([string]$e.guid)) + '</GUID><ALTERID> ' + [long]$e.alter + '</ALTERID>' + $(if ($e.number) { '<VOUCHERNUMBER>' + (Esc ([string]$e.number)) + '</VOUCHERNUMBER>' } else { '' }) + $rest
+    $tag = '<GUID>' + (Esc ([string]$e.guid)) + '</GUID>'
+    foreach ($day in @(@([string]$e.date, [string]$where[[string]$e.guid]) | Where-Object { $_ } | Sort-Object -Unique)) {
+      $df = Join-Path $days ($day + '.xml')
+      $t = ''; if (Test-Path -LiteralPath $df) { $t = [IO.File]::ReadAllText($df) }
+      $keep = New-Object Text.StringBuilder
+      foreach ($pc in [regex]::Matches($t, '<TALLYMESSAGE>[\s\S]*?</TALLYMESSAGE>')) { if (-not $pc.Value.Contains($tag)) { $null = $keep.Append($pc.Value) } }
+      if ($day -eq [string]$e.date) { $null = $keep.Append('<TALLYMESSAGE>').Append($v).Append('</TALLYMESSAGE>') }
+      $t2 = $keep.ToString()
+      Save-KeepFile $df $t2; Save-KeepFile ([IO.Path]::ChangeExtension($df, '.idx')) (Get-KeepIndexText $t2)
+      $touched[$day] = $true
+    }
+    $where[[string]$e.guid] = [string]$e.date
+    $St.verify = @(@($St.verify) + [string]$e.date | Where-Object { $_ } | Sort-Object -Unique)
+    $n++
+  }
+  Remove-Item -LiteralPath $w -Force -ErrorAction SilentlyContinue
+  if ($touched.Count) {
+    Add-CloudDays $Dir @($touched.Keys)
+    foreach ($ym in @($touched.Keys | ForEach-Object { $_.Substring(0, 6) } | Sort-Object -Unique)) { Write-KeepMonth $Dir $ym $St }
+  }
+  return $n
+}
 # one turn for one open company: at most a few seconds of Tally's time, with pauses between reads
 function Step-Keep([string]$Company, [int]$Port, [string]$BooksFrom) {
   $dir = Get-SyncFolder $Company
@@ -2499,6 +2560,8 @@ function Step-Keep([string]$Company, [int]$Port, [string]$BooksFrom) {
     $st.trouble = $null; & $save
     return
   }
+  # 1.14.5: entries just posted from FinCom: into the copy and on to the cloud, without reading Tally
+  if ($st.phase -eq 'live') { $pn = Use-KeepPosted $dir $st; if ($pn) { Write-Log ('Keeping ' + $Company + ': ' + $pn + ' entries posted from FinCom put in the copy and sent to the cloud (Tally not read)'); & $save } }
   # a new day: the days since the last turn
   if ([string]$st.next -le $today) { $null = Update-KeepDates $Company $Port $dir $st @(Get-KeepDayRange ([string]$st.next) $today); $st.next = Add-KeepDays $today 1 }
   # Tally's own change counters first: when neither has moved since the last turn, nothing changed in the company
@@ -2525,12 +2588,23 @@ function Step-Keep([string]$Company, [int]$Port, [string]$BooksFrom) {
     if ($wide -and (Test-KeepRoom $Port)) { $ch = Get-KeepList $Company $Port ([string]$st.from) $today ([long]$st.last) }
     if ($ch.Count) {
       $where = Get-KeepWhere $dir
-      $dates = @($ch | ForEach-Object { $_[2] })
-      foreach ($c in $ch) { $o = $where[$c[0]]; if ($o -and $o -ne $c[2]) { $dates += $o } }
-      $dates = @($dates | Sort-Object -Unique)
-      $null = Update-KeepDates $Company $Port $dir $st $dates
+      # 1.14.5: an entry already in the copy with the same change number on the same date (posted from FinCom and put
+      # in the copy then) is not read again
+      $ix = @{}; $need = @()
+      foreach ($c in $ch) {
+        $o = $where[$c[0]]
+        if ($o -and $o -eq $c[2]) {
+          if (-not $ix.ContainsKey($o)) { $m = @{}; $f = Join-Path (Join-Path $dir 'days') ($o + '.xml'); if (Test-Path -LiteralPath $f) { foreach ($ln in ((Read-KeepIndex $f) -split "`n")) { $q = $ln -split "`t"; if ($q[0]) { $m[$q[0]] = [long]('0' + $q[1]) } } }; $ix[$o] = $m }
+          if ($ix[$o][$c[0]] -eq [long]$c[1]) { continue }
+        }
+        $need += , $c
+      }
+      $dates = @($need | ForEach-Object { $_[2] })
+      foreach ($c in $need) { $o = $where[$c[0]]; if ($o -and $o -ne $c[2]) { $dates += $o } }
+      $dates = @($dates | Where-Object { $_ } | Sort-Object -Unique)
+      if ($dates.Count) { $null = Update-KeepDates $Company $Port $dir $st $dates }
       $st.last = [long](($ch | ForEach-Object { $_[1] } | Measure-Object -Maximum).Maximum)
-      Write-Log ('Keeping ' + $Company + ': ' + $ch.Count + ' changed entries on ' + $dates.Count + ' dates brought in')
+      Write-Log ('Keeping ' + $Company + ': ' + $ch.Count + ' changed entries' + $(if ($dates.Count) { ' on ' + $dates.Count + ' dates brought in' } else { ', already in the copy' }))
     }
     # the counter moved but no entry has a newer change number: most likely an entry was deleted. Recent months are
     # compared with Tally's list now; older ones in their turn
@@ -2540,8 +2614,6 @@ function Step-Keep([string]$Company, [int]$Port, [string]$BooksFrom) {
       }
     }
   }
-  # 1.14.4: the light check stops here: the ledgers' changes, the month checks and the retries wait for the daily update
-  if ($script:KeepLight) { if ($cn.ok) { $st.cv = $cn.v; $st.cm = $cn.m }; $st.trouble = $null; & $save; $script:KeepCaughtUp = $true; return }
   # 1.14.0: nothing changed since the last look (or nothing new came in): this company is up to date for today's run
   # 1.14.3: in the daily update, every month is also compared with Tally's list once (deleted entries leave no change
   # number): the company is up to date only when a whole round of months has been checked today
@@ -2549,6 +2621,15 @@ function Step-Keep([string]$Company, [int]$Port, [string]$BooksFrom) {
   # ledger masters changed since the last look
   if ($st.phase -eq 'live' -and $sw.Elapsed.TotalSeconds -lt $budget -and -not ($cn.ok -and $null -ne $st.cm -and [long]$st.cm -eq $cn.m)) { Update-KeepLedgers $Company $Port $dir $st $false }
   if ($cn.ok) { $st.cv = $cn.v; $st.cm = $cn.m }
+  # 1.14.4: the light check stops here: the month checks and the retries wait for the daily update
+  if ($script:KeepLight) { $st.trouble = $null; & $save; $script:KeepCaughtUp = $true; return }
+  # 1.14.5: the days posted from FinCom (put in the copy from what was posted) read once from Tally, in the evening,
+  # so the copy is exactly as Tally keeps them
+  if (@($st.verify | Where-Object { $_ }).Count -and $sw.Elapsed.TotalSeconds -lt $budget) {
+    $vd = @($st.verify | Where-Object { $_ }); $st.verify = @()
+    $null = Update-KeepDates $Company $Port $dir $st $vd
+    Write-Log ('Keeping ' + $Company + ': ' + $vd.Count + ' day(s) posted from FinCom read as Tally keeps them')
+  }
   # a month FinCom asked to be checked, now
   $rq = Join-Path $dir 'recheck.txt'
   if ((Test-Path -LiteralPath $rq) -and $sw.Elapsed.TotalSeconds -lt $budget) {
@@ -2625,7 +2706,7 @@ function Invoke-KeepWorker {
   $held = ''
   $script:IsCopier = $true
   $due = Test-KeepDue; $once = $due -eq 'daily' -or $due -eq 'now' -or $due -eq 'light'
-  $script:KeepLight = $due -eq 'light'
+  $script:KeepLight = $due -eq 'light'; $script:KeepAllDone = $false
   if ($script:KeepLight) { Remove-Item -LiteralPath (Join-Path (Get-SyncDir) 'keep-light-now.txt') -Force -ErrorAction SilentlyContinue; [IO.File]::WriteAllText((Get-KeepLightFile), (Get-Date).ToString('s')) }
   $script:KeepForce = $due -eq 'now'
   $script:KeepOnce = $once
@@ -2655,6 +2736,7 @@ function Invoke-KeepWorker {
         }
       }
       if ($once -and $open.Count -and -not @($open | Where-Object { -not $upToDate[$_[0]] }).Count) {
+        $script:KeepAllDone = $true
         if (-not $script:KeepLight) { Write-Log 'Update from Tally: every open company is up to date' }
         break
       }
@@ -2698,6 +2780,11 @@ function Invoke-KeepWorker {
       $until = (Get-Date).AddMinutes(10)
       while ((Get-Date) -lt $until) { $w = 0; try { $w = Invoke-CloudPush } catch { }; if (-not $w) { break }; Start-Sleep -Seconds 10 }
       if ($script:KeepLight) { Write-Log 'Light check of Tally: done' }
+      elseif (-not $script:KeepAllDone) {
+        [IO.File]::WriteAllText((Join-Path (Get-SyncDir) 'keep-tried.txt'), (Get-Date).ToString('s'))
+        Remove-Item -LiteralPath (Join-Path (Get-SyncDir) 'keep-now.txt') -Force -ErrorAction SilentlyContinue
+        Write-Log 'Update from Tally: not finished (Tally or the company not open, or time up); it runs again when Tally is open'
+      }
       else {
         [IO.File]::WriteAllText((Join-Path (Get-SyncDir) 'keep-lastrun.txt'), (Get-Date).ToString('yyyyMMdd'))
         [IO.File]::WriteAllText((Get-KeepLightFile), (Get-Date).ToString('s'))
@@ -2724,7 +2811,7 @@ function Start-KeepIfNeeded {
   # 'continuous' schedule, when Tally's port takes connections
   $due = Test-KeepDue
   if (-not $due) { return }
-  if ($due -eq 'continuous') { $any = $false; foreach ($pp in @((Get-PortPlan).ports)) { if (Test-TallyPortOpen ([int]$pp.port)) { $any = $true } }; if (-not $any) { return } }
+  if ($due -ne 'now') { $any = $false; foreach ($pp in @((Get-PortPlan).ports)) { if (Test-TallyPortOpen ([int]$pp.port)) { $any = $true } }; if (-not $any) { return } }
   $exe = (Get-Process -Id $PID).Path
   $psi = New-Object Diagnostics.ProcessStartInfo
   $psi.FileName = $exe
@@ -3006,7 +3093,60 @@ function Send-CloudBeat {
   $r = Invoke-Cloud $beat 10
   # 1.14.4: Update now pressed in FinCom on another computer
   if ($r.code -eq 200 -and $r.json -and $r.json.updateNow) { Request-KeepNow; try { Start-KeepIfNeeded } catch { } }
+  if ($r.code -eq 200 -and $r.json -and [int]$r.json.posts -gt 0 -and $Cfg.AllowImport) { try { Invoke-CloudPostTake } catch { Write-Log ('Posting queue: ' + $_.Exception.Message) } }
   if ($r.code -ne 200) { $script:BeatAt = [DateTime]::UtcNow.AddMinutes(25) }       # the cloud or the internet is down: tried again in half an hour
+}
+
+# 1.14.6 (build 199, step 4): the posting queue. FinCom on any computer queues entries in the cloud; the heartbeat says
+# how many wait for this computer, and they are taken one posting at a time and run as the bridge's usual posting job
+# (batches, one writer per Tally, FinCom's ID stamped in each entry). A queued posting always checks Tally for those IDs
+# first, so an entry posted before (a posting pressed twice, a computer restarted) is never posted again. How it goes is
+# written back to the cloud, where FinCom follows it.
+$script:CloudPosts = $null; $script:CloudPostsAt = [DateTime]::MinValue
+function Get-CloudPostsFile { return (Join-Path (Get-SyncDir) 'cloud-posts.txt') }
+function Get-CloudPosts {
+  if ($null -eq $script:CloudPosts) {
+    $script:CloudPosts = @{}
+    try { foreach ($l in ([IO.File]::ReadAllLines((Get-CloudPostsFile)))) { if ($l.Trim()) { $script:CloudPosts[$l.Trim()] = '' } } } catch { }
+  }
+  return $script:CloudPosts
+}
+function Save-CloudPosts { try { New-Item -ItemType Directory -Force -Path (Get-SyncDir) | Out-Null; [IO.File]::WriteAllLines((Get-CloudPostsFile), [string[]]@((Get-CloudPosts).Keys)) } catch { } }
+function Invoke-CloudPostTake {
+  $cp = Get-CloudPosts
+  for ($i = 0; $i -lt 5; $i++) {
+    $r = Invoke-Cloud ([ordered]@{ kind = 'posts_take' }) 30
+    if ($r.code -ne 200 -or -not $r.json -or -not $r.json.job) { return }
+    $j = $r.json.job
+    try {
+      $pl = [pscustomobject]@{ jobId = [string]$j.id; company = [string]$j.company; masters = @($j.payload.masters | Where-Object { $_ }); vouchers = @($j.payload.vouchers | Where-Object { $_ }); ledger = [string]$j.payload.ledger; checkFirst = $true }
+      $v = New-PostJob $pl
+      $cp[[string]$j.id] = ''; Save-CloudPosts
+      Write-Log ('Posting from FinCom''s queue: ' + $v.total + ' item(s) for ' + $j.company + ' (job ' + $j.id + ')')
+    } catch {
+      $null = Invoke-Cloud ([ordered]@{ kind = 'posts_update'; id = [string]$j.id; status = 'failed'; done = 0; message = ('The Tally computer could not start this posting: ' + $_.Exception.Message); results = @() }) 30
+    }
+  }
+}
+function Sync-CloudPosts {
+  $cp = Get-CloudPosts
+  if (-not $cp.Count) { return }
+  if (([DateTime]::UtcNow - $script:CloudPostsAt).TotalSeconds -lt (Get-KeepNum 'CloudPostSyncSec' 3)) { return }
+  $script:CloudPostsAt = [DateTime]::UtcNow
+  foreach ($id in @($cp.Keys)) {
+    $v = Get-JobView (Get-JobDir $id)
+    if (-not $v) { $cp.Remove($id); Save-CloudPosts; continue }
+    if ($v.status -eq 'interrupted') { try { $v = Resume-PostJob $id } catch { } }
+    $st = $(if ($v.status -eq 'done' -or $v.status -eq 'failed') { [string]$v.status } else { 'running' })
+    $sig = $st + '|' + $v.done + '|' + $v.message + '|' + $v.checking
+    if ($sig -eq $cp[$id]) { continue }
+    $res = @(@($v.results) | Where-Object { $_ } | ForEach-Object { [ordered]@{ id = [string]$_.id; kind = [string]$_.kind; ok = [bool]$_.ok; verified = $_.verified; message = [string]$_.message; vchNumber = [string]$_.vchNumber; vchType = [string]$_.vchType; guid = [string]$_.guid; masterId = [string]$_.masterId; vchDate = [string]$_.vchDate; optional = [bool]$_.optional; alreadyThere = [bool]$_.alreadyThere } })
+    $r = Invoke-Cloud ([ordered]@{ kind = 'posts_update'; id = $id; status = $st; done = [int]$v.done; message = [string]$v.message; results = $res; checking = [bool]$v.checking }) 30
+    if ($r.code -eq 200) {
+      $cp[$id] = $sig
+      if (($st -eq 'done' -or $st -eq 'failed') -and -not $v.checking) { $cp.Remove($id); Save-CloudPosts; Write-Log ('Posting from FinCom''s queue ' + $id + ': ' + $v.message) }
+    }
+  }
 }
 
 # the nightly copy runs on its own and stops; it does not start the bridge
@@ -3086,6 +3226,7 @@ $lastCheck = Get-Date
 while ($true) {
   while (-not $listener.Pending()) {
     Start-Sleep -Milliseconds 100
+    try { Sync-CloudPosts } catch { }
     if (((Get-Date) - $lastCheck).TotalSeconds -ge (Get-KeepNum 'KeepStartSec' 60)) { $lastCheck = Get-Date; Show-Diagnosis; try { Start-KeepIfNeeded } catch { Write-Log ('Could not start keeping copies in step: ' + $_.Exception.Message) }; try { Send-CloudBeat } catch { } }
   }
   $client = $listener.AcceptTcpClient()

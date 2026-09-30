@@ -339,7 +339,7 @@ export function SalesBar() {
     left = <><span className="bk-stat"><b>{tc.review}</b> to review</span><span className="bk-stat"><b>{tc.ready}</b> ready to post</span></>;
     right = <>
       {confirmable > 0 && <button className="btn" onClick={() => salesAct("salesConfirmAll")}>Confirm all suggestions ({confirmable})</button>}
-      {live() ? <button className="btn primary" disabled={!tc.ready} onClick={() => salesAct("salesPost")}>Post to Tally ({tc.ready})</button>
+      {canPostTally(CO()) ? <button className="btn primary" disabled={!tc.ready} onClick={() => salesAct("salesPost")}>Post to Tally ({tc.ready})</button>
         : <button className="btn primary" disabled={!tc.ready} onClick={() => salesAct("salesFile")}>Create Tally file ({tc.ready})</button>}
     </>;
   }

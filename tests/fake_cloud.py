@@ -9,6 +9,7 @@ LEDGERS = {}        # company -> body
 STATE = {}          # company -> state
 CALLS = []          # (kind, bytes)
 BEATS = []          # heartbeats
+POSTS = {}          # the posting queue (build 199): id -> {company, payload, status, done, message, results, checking}
 class H(http.server.BaseHTTPRequestHandler):
     def log_message(self, *a): pass
     def _send(self, code, obj):
@@ -20,7 +21,17 @@ class H(http.server.BaseHTTPRequestHandler):
         o = json.loads(raw); k = o.get("kind"); CALLS.append((k + ("-plain" if k == "days" and any("b64" in d for d in o.get("days", [])) else ""), n))
         if k == "beat":
             BEATS.append(o); w = CTRL.pop("want", False)
-            return self._send(200, {"ok": True, "updateNow": w})
+            return self._send(200, {"ok": True, "updateNow": w, "posts": sum(1 for j in POSTS.values() if j["status"] == "waiting")})
+        if k == "posts_take":
+            for jid, j in POSTS.items():
+                if j["status"] == "waiting":
+                    j["status"] = "taken"; return self._send(200, {"ok": True, "job": {"id": jid, "company": j["company"], "payload": j["payload"]}})
+            return self._send(200, {"ok": True, "job": None})
+        if k == "posts_update":
+            j = POSTS.get(o.get("id"))
+            if j and j["status"] != "cancelled":
+                j.update({x: o.get(x) for x in ("status", "done", "message", "results", "checking")}); j.setdefault("log", []).append((o.get("status"), o.get("done"), o.get("checking")))
+            return self._send(200, {"ok": True})
         if k == "hello": return self._send(200, {"ok": True, "firm": "ZZ TEST FIRM", "device": "TEST-PC"})
         if k == "companies":
             for c in o.get("companies", []): LINKS.setdefault(c["name"], None)

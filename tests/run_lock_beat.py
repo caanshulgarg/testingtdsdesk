@@ -1,4 +1,4 @@
-"""python3 run_lock_beat.py - bridge 1.14.4:
+"""python3 run_lock_beat.py - bridge 1.14.6:
   - one request at a time to Tally, even when the bridge (FinCom's requests) and its copier both want it: the second
     waits its turn;
   - a heartbeat to the cloud every few minutes (Tally open, the companies, how many days wait), asking Tally nothing."""
