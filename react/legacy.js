@@ -8977,10 +8977,9 @@ function viewDropKeys(){
 function docqPanel(cid){ return Cloud.on() && docqFor(cid).length ? '<div data-react="DocqPanel" data-cid="' + esc(cid || "") + '"></div>' : ""; }
 function uploadBlock(co){ return '<div data-react="UploadBlock"></div>'; }
 function readDocqNow(id, cid, force){ if (force) S.docqLocal[id] = {}; readDocq([id], cid, force ? {force: true} : undefined); }
-// the bill list and a bill are React (app/src/screens/Invoices.jsx, Bill.jsx); the vendor reconciliation and the
-// review table are still old screens
+// the bill list, a bill and the vendor reconciliation are React (app/src/screens/Invoices.jsx, Bill.jsx, VendorRecon.jsx)
 function viewInvoices(){
-  if (VR.st()) return viewVendorRecon();
+  if (VR.st()) return '<div data-react="VendorRecon"></div>';
   if (S.reviewTable && S.filter === "draft") return viewReviewTable();
   return '<div data-react="Invoices"></div>';
 }
@@ -12785,7 +12784,8 @@ const Bridge = {
 function bridgeLive(co){ return Bridge.on() && Bridge.up() && !!Bridge.openFor(co || CO()); }
 function tallyToIso(d){ const s = String(d || ""); return /^\d{8}$/.test(s) ? s.slice(0, 4) + "-" + s.slice(4, 6) + "-" + s.slice(6, 8) : ""; }
 function isoToTally(d){ return String(d || "").replace(/-/g, ""); }
-function addDays(iso, n){ const d = new Date(iso + "T00:00:00"); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); }
+// a date n days on, in UTC: a local midnight read back with toISOString is the day before east of London (India)
+function addDays(iso, n){ const d = new Date(iso + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
 
 // Poll the bridge; follow the company open in Tally
 let bridgeTimer = null, bridgeBusy = false;
@@ -14461,7 +14461,9 @@ const Market = {
   },
   date(v){
     if (v == null || v === "") return "";
-    if (v instanceof Date) return v.toISOString().slice(0, 10);
+    // a date from Excel (or a date written out) is local midnight: read it by its local day, not in UTC (a day early in India)
+    const day = d => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    if (v instanceof Date) return day(v);
     const s = String(v).trim();
     let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
     if (m) return m[1] + "-" + m[2] + "-" + m[3];
@@ -14472,7 +14474,7 @@ const Market = {
       const y = m[3].length === 2 ? "20" + m[3] : m[3];
       if (mo) return y + "-" + String(mo).padStart(2, "0") + "-" + String(m[1]).padStart(2, "0"); }
     const d = new Date(s);
-    return isNaN(d) ? "" : d.toISOString().slice(0, 10);
+    return isNaN(d) ? "" : day(d);
   },
   // one row per invoice line, whichever marketplace it came from
   read(grid, kind){
@@ -19257,56 +19259,7 @@ async function runVendorRecon(){
   } catch (e){ V0.busy = ""; toast("Could not reconcile: " + (e.message || e.code || e)); render(); }
 }
 
-function viewVendorRecon(){
-  const V0 = VR.st(), R = V0.res;
-  const m = v => v === null || v === undefined ? "—" : (v < 0 ? "−" : "") + INR.format(Math.abs(v));
-  const side = v => v === null ? "" : v > 0.004 ? " payable" : v < -0.004 ? " advance" : "";
-  const live = Bridge.on() && Bridge.up();
-  const leds = VR.ledgers();
-  let h = '<section class="recon vrec"><div class="recon-head"><div><h3>Vendor ledger reconciliation</h3><div class="note">The vendor’s ledger (the account they sent) against the party’s ledger in Tally, for the dates you choose.</div></div>' +
-    '<div class="row" style="gap:8px">' + (R ? '<button class="btn small" data-act="vrExcel">Download Excel</button>' : "") + '<button class="btn small" data-act="vrClose">Close</button></div></div>';
-  h += '<div class="vr-form">' +
-    '<label><span>Vendor ledger in Tally</span><input type="text" list="vrLedgers" data-vr="ledger" data-fk="vr:ledger" data-keeptyped autocomplete="off" placeholder="Start typing the name" value="' + esc(V0.ledger) + '">' +
-      '<datalist id="vrLedgers">' + leds.slice(0, 3000).map(l => '<option value="' + esc(l.name) + '">' + esc(l.group || "") + "</option>").join("") + "</datalist>" +
-      (V0.ledger && !exactLedger(V0.ledger) ? '<small class="bad">Not a Tally ledger yet — choose one from the list</small>' : "") + "</label>" +
-    '<label><span>From</span><input type="date" data-vr="from" value="' + esc(V0.from) + '"></label>' +
-    '<label><span>Up to</span><input type="date" data-vr="to" value="' + esc(V0.to) + '"></label>' +
-    '<label><span>Vendor’s ledger file</span><button class="btn small" data-act="vrPick">' + (V0.fileName ? esc(V0.fileName) : "Choose Excel, CSV or PDF") + '</button><input type="file" id="vrFile" hidden accept=".xlsx,.xls,.xlsm,.csv,.txt,.pdf,image/*"></label>' +
-    '<div style="align-self:end"><button class="btn primary" data-act="vrRun"' + (live && !V0.busy ? "" : " disabled") + ">Reconcile</button></div></div>" +
-    (!live ? '<p class="note">Connect the Tally Bridge and open the company in Tally to reconcile.</p>' : "");
-  if (V0.busy) h += '<div class="busy-float">' + busyCard("Reconciling the vendor’s ledger…", V0.busy, 0, 0) + "</div>";
-  if (!R) return h + "</section>";
-  const V = R.V, T = R.T;
-  const agreed = R.unexplained !== null && Math.abs(R.vClose - R.tClose) < 0.01 && !R.onlyV.length && !R.onlyT.length && !R.differ.length && !(R.openDiff && Math.abs(R.openDiff) >= 0.01);
-  h += '<div class="note" style="margin:6px 0 10px">' + esc(R.ledger) + " in " + esc(R.company) + " · " + fmtDate(R.from) + " to " + fmtDate(R.to) + " · " + esc(R.file) + " read as " + esc(R.sides) + " · " + R.pairs.length + " entries matched</div>";
-  if (agreed) return h + '<div class="bk-bal ok"><div>✔ <b>The ledgers agree.</b> Every entry is on both sides, and the balance on ' + fmtDate(R.to) + " is " + m(R.tClose) + side(R.tClose) + " in both.</div></div></section>";
-  // what to look at first
-  const firstMid = R.timeline.find(x => x.date > R.from || !(R.openDiff && Math.abs(R.openDiff) >= 0.01));
-  const notes = [];
-  if (R.openDiff !== null && Math.abs(R.openDiff) >= 0.01) notes.push("<b>The opening balances differ</b> by " + m(Math.abs(R.openDiff)) + ": the vendor opens at " + m(R.vOpen) + side(R.vOpen) + ", Tally at " + m(R.tOpen) + side(R.tOpen) + " on " + fmtDate(addDays(R.from, -1)) + ". Entries before " + fmtDate(R.from) + " differ — reconcile the earlier period too.");
-  else if (R.openDiff !== null) notes.push("The opening balances agree (" + m(R.tOpen) + side(R.tOpen) + ").");
-  if (firstMid) notes.push("<b>The balances first move apart on " + fmtDate(firstMid.date) + "</b> (by " + m(Math.abs(firstMid.change)) + ")" + (firstMid.why.length ? ": " + esc(firstMid.why.slice(0, 3).join("; ")) : "") + ".");
-  h += '<div class="bk-alert bad" style="margin-bottom:10px">' + notes.map(x => "<div>" + x + "</div>").join("") + "</div>";
-  const line = (label, v, sign) => "<tr><td>" + label + '</td><td class="n">' + (v ? sign + m(Math.abs(v)) : "—") + "</td></tr>";
-  h += '<table class="data recon-stmt"><tbody>' +
-    "<tr><td><b>Balance in Tally on " + fmtDate(R.to) + '</b></td><td class="n"><b>' + m(R.tClose) + side(R.tClose) + "</b></td></tr>" +
-    (R.openDiff && Math.abs(R.openDiff) >= 0.01 ? line("Opening balance difference (vendor less Tally)", R.openDiff, R.openDiff > 0 ? "+ " : "− ") : "") +
-    line("Add: bills in the vendor’s ledger, not in Tally", sum0(R.onlyV.map(i => V[i]).filter(x => x.eff > 0)), "+ ") +
-    line("Less: payments and credit notes in the vendor’s ledger, not in Tally", sum0(R.onlyV.map(i => V[i]).filter(x => x.eff < 0)), "− ") +
-    line("Less: bills in Tally, not in the vendor’s ledger", sum0(R.onlyT.map(i => T[i]).filter(x => x.eff > 0)), "− ") +
-    line("Add: payments and debit notes in Tally, not in the vendor’s ledger", sum0(R.onlyT.map(i => T[i]).filter(x => x.eff < 0)), "+ ") +
-    (R.differ.length ? line("Amounts that differ (vendor less Tally)", R.dEff, R.dEff >= 0 ? "+ " : "− ") : "") +
-    (R.unexplained !== null && Math.abs(R.unexplained) >= 0.01 ? line("Not explained by the entries below", R.unexplained, R.unexplained >= 0 ? "+ " : "− ") : "") +
-    '<tr class="tot"><td><b>Balance in the vendor’s ledger on ' + fmtDate(R.to) + '</b></td><td class="n"><b>' + m(R.vClose) + side(R.vClose) + "</b></td></tr></tbody></table>";
-  const tbl = (title, rows, cols) => rows.length ? '<div class="recon-sec"><h4>' + title + ' <span class="cnt">' + rows.length + '</span></h4><div class="tblwrap"><table class="data"><thead><tr>' + cols.map(c => "<th" + (c[2] ? ' class="n"' : "") + ">" + c[0] + "</th>").join("") + "</tr></thead><tbody>" +
-    rows.slice(0, 500).map(r => "<tr>" + cols.map(c => "<td" + (c[2] ? ' class="n"' : "") + ">" + c[1](r) + "</td>").join("") + "</tr>").join("") + "</tbody></table></div></div>" : "";
-  const amt = x => m(Math.abs(x.eff)), kind = x => x.eff > 0 ? "bill" : "payment / note";
-  h += tbl("In the vendor’s ledger, not in Tally", R.onlyV.map(i => V[i]), [["Date", x => fmtDate(x.date)], ["Particulars", x => esc(x.narr.slice(0, 90))], ["Kind", kind], ["Amount", amt, 1]]);
-  h += tbl("In Tally, not in the vendor’s ledger", R.onlyT.map(i => T[i]), [["Date", x => fmtDate(x.date)], ["Voucher", x => esc([x.type, x.number].filter(Boolean).join(" "))], ["Reference", x => esc(x.ref || x.bills.join(", "))], ["Kind", kind], ["Amount", amt, 1]]);
-  h += tbl("Same document, different amount", R.differ, [["Date", d => fmtDate(V[d.v].date)], ["Vendor’s particulars", d => esc(V[d.v].narr.slice(0, 60))], ["Tally voucher", d => esc([T[d.t].type, T[d.t].number].filter(Boolean).join(" "))], ["Vendor", d => m(V[d.v].eff), 1], ["Tally", d => m(T[d.t].eff), 1], ["Difference", d => m(V[d.v].eff - T[d.t].eff), 1]]);
-  h += tbl("Where the balances move apart", R.timeline, [["Date", x => fmtDate(x.date)], ["Difference after this date", x => m(x.diff), 1], ["Change", x => m(x.change), 1], ["Why", x => esc(x.why.join("; ") || "entries on this date differ")]]);
-  return h + "</section>";
-}
+// the vendor reconciliation page: React (app/src/screens/VendorRecon.jsx), shown on the purchase bills tab
 function sum0(list){ return r2(list.reduce((a, x) => a + Math.abs(x.eff), 0)); }
 
 async function vendorReconExcel(){
@@ -19365,28 +19318,22 @@ async function bankReconExcel(){
   saveFile((R.ledger + "-bank-reconciliation-" + R.from + "-to-" + R.to).replace(/[^A-Za-z0-9.-]+/g, "-") + ".xlsx", new Blob([out], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
 }
 
-// the form's inputs and buttons
-document.addEventListener("input", ev => {
-  const t = ev.target;
-  if (!t || !t.dataset || !t.dataset.vr || !VR.st()) return;
-  S.vrec[t.dataset.vr] = t.value;
-  if (t.dataset.vr === "ledger" && exactLedger(t.value)) { S.vrec.ledger = exactLedger(t.value); softRender(); }
-});
-document.addEventListener("change", ev => {
-  const t = ev.target;
-  if (t && t.id === "vrFile" && t.files && t.files[0] && VR.st()){ S.vrec.file = t.files[0]; S.vrec.fileName = t.files[0].name; S.vrec.res = null; render(); }
-  else if (t && t.dataset && t.dataset.vr && VR.st()){ S.vrec[t.dataset.vr] = t.value; render(); }
-});
+// what the vendor reconciliation page does
+function vrOpen(){ S.vrec = VR.def(); render(); window.scrollTo(0, 0); }
+function vrClose(){ S.vrec = null; render(); }
+// the ledger, from and to; a ledger typed that is a Tally ledger takes Tally's spelling
+function vrSet(key, val){
+  if (!VR.st()) return;
+  S.vrec[key] = val;
+  if (key === "ledger"){ const x = exactLedger(val); if (x) S.vrec.ledger = x; FinComReact.redraw(); return; }
+  render();
+}
+function vrFile(file){ if (!file || !VR.st()) return; S.vrec.file = file; S.vrec.fileName = file.name; S.vrec.res = null; render(); }
+function vrExcel(){ vendorReconExcel().catch(e => toast("Could not make the file: " + (e.message || e))); }
+// the bank reconciliation's Excel (its page is still old, src/js/24)
 document.addEventListener("click", ev => {
-  const t = ev.target.closest && ev.target.closest("[data-act]");
-  if (!t) return;
-  const a = t.dataset.act;
-  if (a === "vrOpen"){ S.vrec = VR.def(); render(); window.scrollTo(0, 0); }
-  else if (a === "vrClose"){ S.vrec = null; render(); }
-  else if (a === "vrPick"){ const f = document.getElementById("vrFile"); if (f) f.click(); }
-  else if (a === "vrRun") runVendorRecon();
-  else if (a === "vrExcel") vendorReconExcel().catch(e => toast("Could not make the file: " + (e.message || e)));
-  else if (a === "reconExcel") bankReconExcel().catch(e => toast("Could not make the file: " + (e.message || e)));
+  const t = ev.target.closest && ev.target.closest('[data-act="reconExcel"]');
+  if (t) bankReconExcel().catch(e => toast("Could not make the file: " + (e.message || e)));
 });
 /* ================================================================== */
 /* Two-step sign-in (an authenticator-app code) and signing out when  */
