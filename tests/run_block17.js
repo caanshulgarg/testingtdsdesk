@@ -76,6 +76,26 @@ const led = x.suggestBlock({x: {description: "", items: []}, expenseLedger: "Clu
 ok(led && led.by === "ledger" && /Club Membership/.test(led.why), "the reason names the ledger: " + (led && led.why));
 const w = x.suggestBlock({x: {description: "Canteen charges", items: []}, expenseLedger: "Misc"}, co);
 ok(w && w.by === "words" && /Canteen/.test(w.why), "the reason names the words: " + (w && w.why));
+// the codes confirmed by the firm (30 Sep 2026)
+const flag = (items, ledger, desc) => x.suggestBlock({x: {description: desc || "", items: items.map(([d, h]) => ({desc: d, hsn: h}))}, expenseLedger: ledger || ""}, co);
+const is = (s, cat) => s && s.cat === cat;
+ok(is(flag([["Outdoor catering", "996334"]]), "food"), "996334 outdoor catering: food");
+ok(is(flag([["Grooming", "999729"]]), "beauty_health"), "999729: beauty");
+ok(is(flag([["Annual subscription", "999591"]]), "club"), "99959x other membership organisations: club");
+ok(flag([["CII membership", "999511"]]) === null, "999511 (a trade body, not 99959x): not flagged");
+ok(is(flag([["Servicing of car", "998714"]]), "motor"), "998714 repair and servicing: motor");
+ok(is(flag([["Room charges", "996311"]], "Staff Welfare", "Hotel stay for employee on leave travel (LTC)"), "travel"), "hotel 996311 on an employee's leave travel: travel");
+ok(flag([["Room charges", "996311"]], "Travelling Expenses", "Hotel stay for sales meeting") === null, "hotel 996311 on business travel: not flagged");
+ok(is(flag([["Air ticket", "996425"]], "LTC Reimbursement", ""), "travel"), "air ticket 9964 with an LTC ledger: travel");
+ok(flag([["Air ticket", "996425"]], "Travelling Expenses", "Air travel DEL-BOM") === null, "air ticket 9964 on business: not flagged");
+ok(flag([["Consultancy", "998311"]], "Staff Welfare - Canteen", "") === null, "codes decide: a consultancy code with a canteen ledger is not flagged");
+// "Always blocked" only where the client says so, and never for construction or motor (flag for review only)
+const blockAll = {gstBlock: Object.fromEntries(x.BLOCK_CATS.map(c => [c.id, "block"]))};
+const r = (items, c) => (x.suggestBlock({x: {description: "", items: items.map(([d, h]) => ({desc: d, hsn: h}))}, expenseLedger: ""}, c) || {}).rule;
+ok(r([["Dinner", "996331"]], co) === "flag", "no client setting: flag for review");
+ok(r([["Dinner", "996331"]], blockAll) === "block", "client set food to always blocked: blocked");
+ok(r([["Construction of building", "995411"]], blockAll) === "flag", "construction stays flag for review even if the client set always blocked");
+ok(r([["Motor car", "87038040"]], blockAll) === "flag", "motor stays flag for review even if the client set always blocked");
 // a client's "credit allowed" choice is respected
 ok(x.suggestBlock({x: {description: "Gym", items: [{desc: "Gym", hsn: "999723"}]}, expenseLedger: ""}, {gstBlock: {club: "allow", beauty_health: "allow"}}) === null, "a category the client allows is not flagged");
 console.log(fails ? fails + " FAILED" : "all passed");

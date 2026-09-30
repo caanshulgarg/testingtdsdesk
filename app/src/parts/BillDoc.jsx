@@ -47,8 +47,8 @@ export default function BillDoc({ e }) {
         <a className="linkbtn" href={url} target="_blank" rel="noopener">Open in a new tab</a>
       </div>
       {pdf
-        ? <object key={page + ":" + zoom} data={url + "#page=" + page + "&zoom=" + zoom} type="application/pdf" aria-label="The bill" style={{ width: "100%", height: "75vh", border: "1px solid var(--rule)", borderRadius: 4 }}>
-            <a href={url} target="_blank" rel="noopener">Open the bill</a></object>
+        // an iframe, not <object>: the page's security policy has object-src 'none' and frame-src 'self' blob:
+        ? <iframe key={page + ":" + zoom} src={url + "#page=" + page + "&zoom=" + zoom} title="The bill" style={{ width: "100%", height: "75vh", border: "1px solid var(--rule)", borderRadius: 4 }} />
         : <div style={{ overflow: "auto", maxHeight: "75vh", border: "1px solid var(--rule)", borderRadius: 4, background: "#fff" }}>
             <img className="preview" src={url} alt="The bill" style={{ maxHeight: "none", maxWidth: "none", width: zoom + "%", border: 0 }} /></div>}
     </div>

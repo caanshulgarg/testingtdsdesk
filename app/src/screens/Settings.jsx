@@ -214,7 +214,8 @@ function GstSetup() {
         <thead><tr><th>Kind of purchase</th><th>Section</th><th>For this client</th></tr></thead>
         <tbody>{BLOCK_CATS.map((b) => <tr key={b.id}><td>{b.label}</td><td>{b.sec}</td>
           <td><select aria-label={"Blocked credit: " + b.label} value={blockRule(co, b.id)} onChange={(ev) => coSetBlockRule(b.id, ev.target.value)}>
-            <option value="flag">Flag for review</option><option value="block">Always blocked</option><option value="allow">Credit allowed</option></select></td></tr>)}</tbody>
+            <option value="flag">Flag for review</option>{!b.flagOnly && <option value="block">Always blocked</option>}<option value="allow">Credit allowed</option></select>
+            {b.flagOnly && <div className="nr">Flag only: never blocked by itself{b.id === "construction" ? " (repairs and plant and machinery are allowed)" : " (vehicles over 13 seats, dealers and transporters are allowed)"}.</div>}</td></tr>)}</tbody>
       </table></div>
     </Card>
   </>;

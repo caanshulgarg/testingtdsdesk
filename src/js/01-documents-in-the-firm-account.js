@@ -782,25 +782,29 @@ const RCM_CATS = [
   {id:"recovery_agent", label:"Services by a recovery agent", rate:18, words:/recovery\s+agent/i},
   {id:"other", label:"Other reverse charge supply", rate:18, words:null}
 ];
-// Blocked credit under section 17(5). Each client decides: flag, always block, or credit allowed.
-// Matched on the bill's HSN/SAC codes and the expense ledger first; words only from the bill's own
-// description and item lines (never the whole page, whose footers name clubs, meals, memberships…).
-// codes: prefixes of HSN/SAC. words: tested on the description, items and the expense ledger.
-// alsoWords: a club has no code of its own (membership services 9995 include trade bodies), so words count even beside codes.
+// Blocked credit under section 17(5). Each client decides per category: flag for review (the default), always block,
+// or credit allowed. Codes decide (codes confirmed by the firm, 30 Sep 2026): a bill with HSN/SAC codes is judged by
+// them alone. A bill without codes is judged by the expense ledger and the bill's own description and item lines,
+// never the whole page (whose footers name clubs, meals and memberships).
+// codes: HSN/SAC prefixes. when: codes that count only if the ledger or description also says so (hotel and
+// passenger transport, only for employees' leave or home travel). flagOnly: never blocked by a client's "always block"
+// (construction: repairs and plant are allowed; motor: vehicles over 13 seats, dealers and transporters are allowed).
+// A category with no codes (gifts) goes by words, codes or not.
 const BLOCK_CATS = [
-  {id:"motor", label:"Motor vehicles, their repair, servicing and insurance", sec:"17(5)(a), (aa), (ab)", codes:["8703", "997133"],
+  {id:"motor", label:"Motor vehicles, their repair, servicing and insurance", sec:"17(5)(a), (aa), (ab)", codes:["8703", "997133", "998714"], flagOnly:true,
     words:/(motor\s+(car|vehicle)|four\s*wheeler|vehicle\s+(repair|servic|insurance|maintenance|running)|car\s+(wash|servic|repair|insurance|maintenance)|motor\s+insurance)/i},
-  {id:"food", label:"Food, beverages and outdoor catering", sec:"17(5)(b)(i)", codes:["99633"],
+  {id:"food", label:"Food, beverages and outdoor catering", sec:"17(5)(b)(i)", codes:["99633", "996334"],
     words:/(food\s+and\s+beverages?|catering|caterer|restaurant|\bmeals?\b|\blunch\b|\bdinner\b|breakfast|snacks|refreshments?|canteen|tiffin)/i},
-  {id:"beauty_health", label:"Beauty treatment, health services, cosmetic and plastic surgery", sec:"17(5)(b)(i)", codes:["99931", "999721", "999722"],
+  {id:"beauty_health", label:"Beauty treatment, health services, cosmetic and plastic surgery", sec:"17(5)(b)(i)", codes:["99931", "999721", "999722", "999729"],
     words:/(beauty\s+(treatment|parlou?r)|\bsalon\b|\bspa\b|cosmetic|plastic\s+surgery|health\s+check|medical\s+treatment)/i},
-  {id:"club", label:"Membership of a club, health and fitness centre", sec:"17(5)(b)(ii)", codes:["999723"], alsoWords:true,
+  {id:"club", label:"Membership of a club, health and fitness centre", sec:"17(5)(b)(ii)", codes:["999723", "99959"],
     words:/(club\s+membership|membership\s+of\s+(a\s+|the\s+)?club|\b(golf|country|health|sports?|recreation)\s+club\b|\bgym(nasium)?\b|fitness\s+(centre|center|club))/i},
   {id:"life_health_ins", label:"Life and health insurance", sec:"17(5)(b)(i)", codes:["997131", "997132"],
     words:/(life\s+insurance|health\s+insurance|mediclaim|group\s+(health|term|mediclaim)|term\s+insurance)/i},
   {id:"travel", label:"Travel benefits to employees (leave or home travel)", sec:"17(5)(b)(iii)", codes:["998552"],
+    when:{codes:["9964", "99631"], words:/(leave\s+travel|\bltc\b|\blta\b|home\s+(town\s+)?travel|home\s+town|travel\s+on\s+leave|employees?'?\s+(holiday|vacation))/i},
     words:/(leave\s+travel|\bltc\b|home\s+travel|holiday\s+package|tour\s+package)/i},
-  {id:"construction", label:"Works contract or goods and services for construction of immovable property", sec:"17(5)(c), (d)", codes:["9954"],
+  {id:"construction", label:"Works contract or goods and services for construction of immovable property", sec:"17(5)(c), (d)", codes:["9954"], flagOnly:true,
     words:/(works\s+contract|construction\s+of|civil\s+work|building\s+work|boundary\s+wall)/i},
   {id:"gifts", label:"Gifts, free samples and personal consumption", sec:"17(5)(g), (h)", codes:[],
     words:/(\bgifts?\b|\bhampers?\b|diwali\s+(gift|sweets)|festival\s+(gift|sweets)|free\s+samples?|personal\s+use)/i}
@@ -826,21 +830,27 @@ function suggestRcm(e, co){
 // HSN/SAC codes on the bill's item lines
 function billCodes(e){ return Array.from(new Set(((e.x && e.x.items) || []).map(i => String(i.hsn || "").replace(/\D/g, "")).filter(c => c.length >= 4))); }
 // Which 17(5) category the bill looks like, and what made it look so: {cat, rule, why, by, hit}.
-// A bill with codes is judged by its codes (and its ledger); words count only where a category has no code
-// of its own (club, gifts) or the bill carries no code at all.
+// rule: "flag" (review) or "block" (the client's setting, never for a flagOnly category).
 function suggestBlock(e, co){
   const codes = billCodes(e);
   const led = String(e.expenseLedger || "");
   const words = [e.x.description].concat(((e.x && e.x.items) || []).map(i => i.desc)).filter(Boolean).join(" \n ");
   const say = w => "\u201c" + String(w).trim() + "\u201d";
+  const has = (list, k) => (list || []).some(p => k.startsWith(p));
   for (const c of BLOCK_CATS){
-    const rule = blockRule(co, c.id);
+    let rule = blockRule(co, c.id);
     if (rule === "allow") continue;
-    const code = codes.find(k => c.codes.some(p => k.startsWith(p)));
-    if (code) return {cat: c.id, rule, by: "code", hit: code, why: "HSN/SAC " + code + " on the bill is " + c.label.toLowerCase()};
+    if (c.flagOnly) rule = "flag";
+    if (codes.length && c.codes.length){
+      const code = codes.find(k => has(c.codes, k));
+      if (code) return {cat: c.id, rule, by: "code", hit: code, why: "HSN/SAC " + code + " on the bill is " + c.label.toLowerCase()};
+      const wc = c.when && codes.find(k => has(c.when.codes, k));
+      const ww = wc && ((led.match(c.when.words) || words.match(c.when.words) || [])[0]);
+      if (ww) return {cat: c.id, rule, by: "code", hit: wc, why: "HSN/SAC " + wc + " on the bill, and it says " + say(ww)};
+      continue;                                        // codes decide
+    }
     const ml = led && led.match(c.words);
     if (ml) return {cat: c.id, rule, by: "ledger", hit: ml[0], why: "the expense ledger " + say(led) + " has the words " + say(ml[0])};
-    if (codes.length && c.codes.length && !c.alsoWords) continue;
     const mw = words && words.match(c.words);
     if (mw) return {cat: c.id, rule, by: "words", hit: mw[0], why: "the bill's description has the words " + say(mw[0])};
   }
