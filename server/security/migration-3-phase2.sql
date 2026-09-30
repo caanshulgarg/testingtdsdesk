@@ -12,7 +12,8 @@ alter function public.support_sla(text, timestamptz, text) set search_path = '';
 --    functions signed-in users could still call although the app never does: trigger functions (a trigger runs
 --    without EXECUTE), helpers called only from inside SECURITY DEFINER functions (which run as their owner), and
 --    functions nothing calls. Kept for signed-in users: everything the app or an edge function calls, and the
---    helpers used inside row-level-security policies (my_firm, can_write, is_superadmin) and mfa_ok.
+--    helpers used inside row-level-security policies (my_firm, can_write, is_superadmin) and mfa_ok, and the cloud
+--    posting queue of build 199 (tally_post_enqueue, tally_post_cancel, tally_vouchers_in: src/js/51-tally-queue.js on main).
 revoke execute on function public.touch_row() from authenticated;
 revoke execute on function public.inbox_guard() from authenticated;
 revoke execute on function public.support_sla(text, timestamptz, text) from authenticated;
@@ -23,9 +24,6 @@ revoke execute on function public.admin_firms() from authenticated;
 revoke execute on function public.admin_secrets() from authenticated;
 revoke execute on function public.admin_price(text, numeric, text, text) from authenticated;
 revoke execute on function public.tally_pick(text, date) from authenticated;
-revoke execute on function public.tally_post_cancel(uuid) from authenticated;
-revoke execute on function public.tally_post_enqueue(uuid, text, jsonb) from authenticated;
-revoke execute on function public.tally_vouchers_in(text, date, date, text, text[]) from authenticated;
 -- New functions are no longer callable by signed-in users until granted by name (migration-1 already did this for
 -- PUBLIC and anon).
 alter default privileges for role postgres in schema public revoke execute on functions from authenticated;
