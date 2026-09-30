@@ -872,7 +872,7 @@ function navHome(tab){ if (tab === "help" && typeof SUP === "object" && !(S.view
 function goTab(tab){ S.tab = tab; S.step = null; S.arm = null; render(); }
 function toggleSetup(){ S.step = null; S.tab = isSetupTab(S.tab) ? "invoices" : "settings"; render(); }
 document.addEventListener("click", ev => {
-  const t = ev.target.closest("button,[data-select],[data-open],#drop,#dropAuto,#modal,#bankDrop,#salesDrop");
+  const t = ev.target.closest("button,[data-select],[data-open],#drop,#modal,#bankDrop,#salesDrop");
   if (!t) return;
   if (t.dataset.settab !== undefined){ S.settingsTab = t.dataset.settab || null; render(); window.scrollTo(0, 0); return; }
   if (t.dataset.backup){
@@ -1147,8 +1147,7 @@ document.addEventListener("click", ev => {
   if (t.dataset.filter){ S.filter = t.dataset.filter; S.selected = null; render(); return; }
   if (t.dataset.select){ S.selected = t.dataset.select; render(); if (window.innerWidth < 860){ const d = document.querySelector(".detail"); if (d) d.scrollIntoView({behavior:"smooth", block:"start"}); } return; }
   if (t.id === "drop"){ pickFiles("company"); return; }
-  if (t.id === "dropAuto"){ pickFiles("auto"); return; }
-  if (t.dataset.editparty){ S.partySel = t.dataset.editparty; render(); return; }
+    if (t.dataset.editparty){ S.partySel = t.dataset.editparty; render(); return; }
   if (t.dataset.job){
     const j = S.jobs.find(x => x.id === t.dataset.jid);
     if (!j) return;
@@ -1173,7 +1172,6 @@ function doAct(act, t){
     case "swAdd": S.homeTab = "clients"; S.addingCo = true; goHome(); break;
     case "addCo": S.view = "home"; S.homeTab = "clients"; S.addingCo = true; render(); { const n = document.getElementById("ncName"); if (n) n.focus(); } break;
     case "cancelCo": S.addingCo = false; render(); break;
-    case "saveCo": saveNewCompany(); break;
     case "reread": if (e) rereadCarefully(e); break;
     case "confirmType": if (e){ e.confirmType = false; Store.saveEntry(S.coId, e); refreshStats(S.coId); toast("Payment type confirmed: " + ruleOf(e.natureId).label + ". It will be remembered for this supplier when you approve."); render(); } break;
     case "skipTds": if (e && e.status === "draft"){ e.tdsForce = false; e.tdsSkip = "pay"; Store.saveEntry(S.coId, e); refreshStats(S.coId); toast("TDS will not be booked on this bill. Choose the reason in the TDS decision section."); render(); } break;
@@ -1716,21 +1714,22 @@ function doAct(act, t){
     case "csv": exportCsv(); break;
   }
 }
-function saveNewCompany(){
-  const name = (document.getElementById("ncName").value || "").trim();
-  const gstin = (document.getElementById("ncGstin").value || "").trim().toUpperCase();
-  if (!name){ toast("Enter the client name."); document.getElementById("ncName").focus(); return; }
-  if (gstin && !gstinValid(gstin)){ toast("That GSTIN fails its check digit. Check each character or leave it blank."); return; }
-  if (gstin && Object.values(S.companies).some(c => c.gstin === gstin)){ toast("A client with this GSTIN already exists."); return; }
-  const copyEl = document.getElementById("ncCopy"), src = copyEl && copyEl.value ? S.companies[copyEl.value] : null;
+// v: {name, gstin, tallyName, copyFrom, turnover10cr} from the add-client form; false when something is missing
+function saveNewCompany(v){
+  const name = String(v.name || "").trim(), gstin = String(v.gstin || "").trim().toUpperCase();
+  if (!name){ toast("Enter the client name."); return false; }
+  if (gstin && !gstinValid(gstin)){ toast("That GSTIN fails its check digit. Check each character or leave it blank."); return false; }
+  if (gstin && Object.values(S.companies).some(c => c.gstin === gstin)){ toast("A client with this GSTIN already exists."); return false; }
+  const src = v.copyFrom ? S.companies[v.copyFrom] : null;
   const co = newCompany(Object.assign(src ? {voucherType:src.voucherType, createOptional:src.createOptional, billwise:src.billwise, gst:src.gst, roundOff:src.roundOff, tdsLedgers:src.tdsLedgers, expenseLedgers:src.expenseLedgers} : {},
-    {name, gstin, tallyName:(document.getElementById("ncTally").value || "").trim() || name, turnover10cr:document.getElementById("ncTurn").checked}));
+    {name, gstin, tallyName:String(v.tallyName || "").trim() || name, turnover10cr:!!v.turnover10cr}));
   S.companies[co.id] = co; S.data[co.id] = {parties:{}, entries:{}, loaded:true};
   co.stats = {drafts:0, check:0, waiting:0, tdsFy:0, invoicesFy:0, records:1, fy:fyOf(null)};
   Store.saveCompany(co);
   S.addingCo = false;
   toast(name + " added.");
   openCompany(co.id);
+  return true;
 }
 let pickMode = "company";
 function pickFiles(mode){ pickMode = mode; document.getElementById("fileIn").click(); }
@@ -1756,7 +1755,7 @@ document.addEventListener("keydown", ev => {
     return;
   }
   if (k === "Escape" && !inField && S.view === "company"){ goHome(); return; }
-  if ((k === "Enter" || k === " ") && (ev.target.id === "drop" || ev.target.id === "dropAuto")){ ev.preventDefault(); pickFiles(ev.target.id === "drop" ? "company" : "auto"); }
+  if ((k === "Enter" || k === " ") && ev.target.id === "drop"){ ev.preventDefault(); pickFiles("company"); }
 });
 
 document.addEventListener("input", ev => {
@@ -1817,8 +1816,7 @@ document.addEventListener("input", ev => {
   if (t && t.dataset && ["email", "password", "firm", "name"].includes(t.dataset.cloud)){ S.cloudForm = Object.assign({}, S.cloudForm, {[t.dataset.cloud]: t.value}); }
   if (S.view === "company" && S.tab === "bank" && bankInput(t)) return;
   if (S.view === "company" && S.tab === "sales" && salesInput(t)) return;
-  if (t.hasAttribute("data-hq")){ S.homeQuery = t.value; later("hq", render, 150); return; }
-  const e = curEntry(), cid = S.coId;
+    const e = curEntry(), cid = S.coId;
   if (t.dataset.x && e && e.status === "draft"){
     if (t.dataset.x === "vendorName" && (!e.partyLedger || e.partyLedger === e.x.vendorName)) e.partyLedger = t.value;
     e.x[t.dataset.x] = /vendorGstin|vendorPan|buyerGstin/.test(t.dataset.x) ? t.value.toUpperCase() : t.value;
@@ -1956,17 +1954,17 @@ document.addEventListener("change", ev => {
   }
   if (t.dataset.rule || t.dataset.firm){ Store.saveFirm(); return; }
 });
-document.addEventListener("dragover", ev => { const d = ev.target.closest && ev.target.closest("#drop,#dropAuto,#bankDrop,.bk"); if (d){ ev.preventDefault(); d.classList.add("over"); } });
-document.addEventListener("dragleave", ev => { const d = ev.target.closest && ev.target.closest("#drop,#dropAuto,#bankDrop"); if (d) d.classList.remove("over"); });
+document.addEventListener("dragover", ev => { const d = ev.target.closest && ev.target.closest("#drop,#bankDrop,.bk"); if (d){ ev.preventDefault(); d.classList.add("over"); } });
+document.addEventListener("dragleave", ev => { const d = ev.target.closest && ev.target.closest("#drop,#bankDrop"); if (d) d.classList.remove("over"); });
 document.addEventListener("drop", ev => {
   const sd = ev.target.closest && ev.target.closest("#salesDrop, .sl");
   if (sd && S.tab === "sales"){ ev.preventDefault(); sd.classList.remove("over"); uploadSales(Array.from(ev.dataTransfer.files || []).filter(f => isPdf(f) || isImage(f))); return; }
   const bd = ev.target.closest && ev.target.closest("#bankDrop, .bk");
   if (bd){ ev.preventDefault(); bd.classList.remove("over"); const was = S.step; Promise.resolve(uploadStatements(Array.from(ev.dataTransfer.files || []).filter(isBankFile))).then(() => { if (was === "collect" && S.step === "collect") goStep("review", "bank"); }); return; }
-  const d = ev.target.closest && ev.target.closest("#drop,#dropAuto");
+  const d = ev.target.closest && ev.target.closest("#drop");
   if (!d) return;
   ev.preventDefault(); d.classList.remove("over");
-  handleFiles(Array.from(ev.dataTransfer.files || []), d.id === "drop" ? "company" : "auto");
+  handleFiles(Array.from(ev.dataTransfer.files || []), "company");
 });
 
 document.addEventListener("mousedown", ev => {

@@ -1956,34 +1956,11 @@ function viewClientDash(){
   return h;
 }
 /* ---------- Today: what needs doing, across every client ---------- */
-function viewToday(){
-  const cos = sortedCompanies();
-  const tot = {read: inboxTotal(), review: 0, post: 0, problems: 0};
-  cos.forEach(c => { const s = c.stats || {}; tot.review += s.drafts || 0; tot.post += s.waiting || 0; tot.problems += (s.dups || 0) + (s.check || 0); });
-  const card = (label, n, warn, nav) => '<button class="metric' + (warn && n ? " warn" : "") + '"' + (nav ? ' data-nav="' + nav + '"' : "") + "><span>" + label + "</span><b>" + n + "</b></button>";
-  let h = '<section class="today"><div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0 0 12px">What needs doing</h2><button class="btn small" data-act="addCo">Add client</button></div>' +
-    '<div class="metrics">' + card("To read", tot.read, false, "inbox") + card("To review", tot.review) + card("To post", tot.post) + card("Need a look", tot.problems, true) + "</div>";
-  const rows = cos.map(c => { const s = c.stats || {}; return {c, read: docqCount(c.id), review: s.drafts || 0, post: s.waiting || 0, look: (s.dups || 0) + (s.check || 0)}; })
-    .sort((a, b) => (b.read + b.review + b.post + b.look) - (a.read + a.review + a.post + a.look));
-  if (!rows.length) return h + '<p class="note">No clients yet. <button class="linkbtn" data-nav="clients">Add your first client</button>.</p></section>';
-  const cell = (r, key, step) => r[key] ? '<button class="linkbtn tcell" data-goto="' + r.c.id + '" data-gstep="' + step + '">' + r[key] + "</button>" : '<span class="muted">\u2014</span>';
-  h += '<div class="tblwrap"><table class="data"><thead><tr><th>Client</th><th class="n">To read</th><th class="n">To review</th><th class="n">To post</th><th class="n">Need a look</th></tr></thead><tbody>' +
-    rows.map(r => '<tr><td><button class="linkbtn" data-goto="' + r.c.id + '" data-gstep="review"><b>' + esc(r.c.name) + "</b></button>" + (r.c.gstin ? ' <span class="note">' + esc(r.c.gstin) + "</span>" : "") + "</td>" +
-      '<td class="n">' + cell(r, "read", "collect") + '</td><td class="n">' + cell(r, "review", "review") + '</td><td class="n">' + cell(r, "post", "post") + '</td><td class="n">' + cell(r, "look", "review") + "</td></tr>").join("") +
-    "</tbody></table></div>";
-  return h + '<p class="note" style="margin-top:8px">Counts cover clients opened on this computer; open a client to bring its figures up to date.</p></section>';
-}
 /* ---------- Inbox: every waiting document, and uploads that matched no client ---------- */
-function viewInboxAll(){
-  const cos = sortedCompanies().filter(c => docqFor(c.id).length);
-  let h = '<section class="today"><h2>Inbox</h2><p class="note" style="margin:0 0 12px">Documents from office automation, by client, and uploads that matched no client.</p></section>';
-  cos.forEach(c => { h += '<div class="inbox-client"><div class="row" style="justify-content:space-between;align-items:center"><h3 style="margin:0">' + esc(c.name) + '</h3><button class="btn small" data-goto="' + c.id + '" data-gstep="collect">Open this client</button></div>' + docqPanel(c.id) + "</div>"; });
-  if (docqFor("").length) h += '<div class="inbox-client"><h3 style="margin:0 0 6px">Not matched to a client</h3>' + docqPanel("") + "</div>";
-  const un = Object.keys(S.inbox || {}).length;
-  if (un) h += '<div class="inbox-client"><h3 style="margin:0 0 6px">Uploads that matched no client</h3>' + viewInbox() + "</div>";
-  if (!cos.length && !docqFor("").length && !un) h += '<p class="note">Nothing waiting. New documents appear here as soon as they arrive.</p>';
-  return h;
-}
+// Today, Inbox and Clients are drawn by React (app/src/screens/Today.jsx, InboxAll.jsx, Clients.jsx)
+function viewToday(){ return '<div data-react="Today"></div>'; }
+function viewInboxAll(){ return '<div data-react="InboxAll"></div>'; }
+function viewClients(){ return '<div data-react="Clients"></div>'; }
 /* ---------- Tally: the connection, and everything sent ---------- */
 function viewTallyHome(){
   return '<section class="today"><h2>Tally</h2></section>' + viewBridgeSettings() + viewPostLog();
@@ -1993,47 +1970,6 @@ function viewTallyHome(){
 function renderTop(){ if (window.FinComReact) FinComReact.redraw(); }
 
 /* ---------- Home: client list ---------- */
-function viewClients(){
-  const q = S.homeQuery.trim().toLowerCase();
-  const cos = sortedCompanies().filter(c => !q || c.name.toLowerCase().includes(q) || (c.gstin || "").toLowerCase().includes(q) || (c.tallyName || "").toLowerCase().includes(q));
-  const all = Object.values(S.companies);
-  const used = all.reduce((a, c) => a + num((c.stats || {}).records || 1), 0) + Object.keys(S.inbox).length + 1;
-  let h = '<div class="two">';
-  h += '<div class="drop" id="dropAuto" tabindex="0" role="button" aria-label="Upload invoices for any client"><strong>Upload invoices for any client</strong>' +
-    '<div class="note">Drop any number of bills. Each is filed under the client whose GSTIN it is billed to; anything that does not match waits in Unsorted uploads. Files already uploaded are skipped.</div>' +
-    "</div>" + readingCheck();
-  h += '<div class="pane" style="margin-top:0">' + (S.addingCo ? addCompanyForm() :
-    '<h2>' + all.length + " client" + (all.length === 1 ? "" : "s") + '</h2><p class="note" style="margin:0 0 12px">Open a client to upload, review and send its entries, like selecting a company in Tally.</p>' +
-    '<button class="btn primary" data-act="addCo">Add client</button>') + "</div></div>";
-  h += '<div style="margin-top:8px">' + uploadOptions() + "</div>" + viewJobs(j => j.target === "auto");
-  if (!all.length){
-    return h + '<div class="pane"><p class="empty" style="padding:0">No clients yet. Add your first client with its GSTIN and Tally company name.</p></div>';
-  }
-  h += '<div class="row" style="margin:18px 0 8px;justify-content:space-between"><label class="f" style="min-width:260px"><span>Find a client</span><input type="text" data-hq data-fk="hq" value="' + esc(S.homeQuery) + '" placeholder="Name, GSTIN or Tally name"></label>' +
-    '<span class="note">About ' + INR0.format(used) + " of " + INR0.format(DB_LIMIT) + " records used</span></div>";
-  h += '<div class="tblwrap"><table class="data"><thead><tr><th>Client</th><th>GSTIN</th><th class="n">To review</th><th class="n">Need a check</th><th class="n">Waiting for Tally</th><th class="n">TDS ' + fyOf(null) + '</th><th class="n">Read free</th><th></th></tr></thead><tbody>';
-  if (!cos.length) h += '<tr><td colspan="7" class="note">No client matches \u201c' + esc(S.homeQuery) + "\u201d.</td></tr>";
-  cos.forEach(c => {
-    const st = c.stats || {}, cur = st.fy === fyOf(null);
-    h += '<tr class="rowlink" data-open="' + c.id + '"><td><b>' + esc(c.name) + "</b>" + (docqCount(c.id) ? ' <span class="tag" title="Files waiting in the inbox">\u{1F4E5} ' + docqCount(c.id) + "</span>" : "") + (c.tallyName && c.tallyName !== c.name ? '<div class="note">Tally: ' + esc(c.tallyName) + "</div>" : "") +
-      "</td><td>" + esc(c.gstin || "—") + '</td><td class="n">' + (st.drafts || "—") + '</td><td class="n">' + (st.check ? '<span class="tag warn">' + st.check + "</span>" : "—") +
-      '</td><td class="n">' + (st.waiting ? '<span class="tag ok">' + st.waiting + "</span>" : "—") + '</td><td class="n">' + (cur && st.tdsFy ? money0(st.tdsFy) : "—") +
-      '</td><td class="n">' + (freeRate(c) ? '<span class="tag ' + (freeRate(c).pct >= 90 ? "ok" : "warn") + '" title="' + freeRate(c).free + " free, " + freeRate(c).google + " Google, " + freeRate(c).claude + ' Claude">' + freeRate(c).pct + "% of " + freeRate(c).n + "</span>" : "—") +
-      '</td><td class="n"><button class="btn small" data-open="' + c.id + '">Open</button></td></tr>';
-  });
-  return h + "</tbody></table></div>";
-}
-function addCompanyForm(){
-  const others = sortedCompanies();
-  return '<h2>Add client</h2><div class="grid" style="margin-top:10px">' +
-    '<label class="f wide"><span>Client name</span><input data-draft type="text" id="ncName" placeholder="e.g. Gupta Traders Pvt Ltd"></label>' +
-    '<label class="f"><span>GSTIN</span><input data-draft type="text" id="ncGstin" placeholder="09AAACG1111A1Z5"></label>' +
-    '<label class="f"><span>Company name in Tally</span><input data-draft type="text" id="ncTally" placeholder="Same as client name"></label>' +
-    (others.length ? '<label class="f wide"><span>Copy ledger names from</span><select data-draft id="ncCopy"><option value="">Standard names</option>' + others.map(c => '<option value="' + c.id + '">' + esc(c.name) + "</option>").join("") + "</select></label>" : "") +
-    '</div><label class="chk" style="margin-top:10px"><input type="checkbox" id="ncTurn"> Turnover last year was above ₹10 crore</label>' +
-    '<div class="row" style="margin-top:12px"><button class="btn primary" data-act="saveCo">Add and open</button><button class="btn" data-act="cancelCo">Cancel</button></div>';
-}
-
 /* ---------- Home: unsorted uploads ---------- */
 function viewInbox(){
   const items = Object.values(S.inbox).sort((a, b) => b.createdAt.localeCompare(a.createdAt));

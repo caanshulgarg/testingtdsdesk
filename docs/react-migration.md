@@ -29,6 +29,8 @@ app/                      the React app (Vite)
   Navigation has its own functions: `goClient`, `navHome`, `goTab`, `goStep`, `toggleSetup`, `goGstSettings`.
 - **Guarded**: each React part is wrapped in `Guard`; one that fails shows a short note (or nothing, for the frame)
   and the error goes to the console, instead of the whole page going blank.
+- **Pieces not yet moved** inside a React screen are shown with `<Legacy html={viewX()} />` (parts/Legacy.jsx);
+  their buttons keep working through the old handlers until they move too.
 - **State** is still the one object `S`, and every change still ends in `render()`. A React screen's own passing
   state (a half-typed OTP) can live in the component: its host element is kept through redraws.
 - **The last step** (after every screen): `render()` and the string screens go, and the logic files become ES
@@ -62,7 +64,8 @@ Status: **done** (in React, test passing) · **next** · blank = not started. Ab
 | | page frame `render` (01): banners, `actionBar`, `drawerHtml`, `colPopHtml` | |
 | | modal, toast, confirm dialogs | next |
 | **Sign in** | `viewSignIn`, `viewSignUp`, two-step `viewTwoStep` (27, 43) | |
-| **Home** | `viewClients`, `viewToday`, `viewInboxAll`, `viewTallyHome` (18) | |
+| **Home** | `viewClients`, `addCompanyForm`, `viewToday`, `viewInboxAll` (18) | **done** (inside: `readingCheck`, `uploadOptions`, `viewJobs`, `docqPanel`, `viewInbox` still old, shown through `Legacy`) |
+| | `viewTallyHome` (18) | with Tally |
 | | Help and support: `viewHelp`, `viewSup*` (40) | |
 | **Client: Collect / Post / Done** | `viewCollect`, `viewPostStep`, `viewDoneStep`, `bankReportHtml` (02) · `viewJobs`, busy cards (01) | |
 | **Purchase bills** | `viewInvoices`, `viewDetail`, `docWarnHtml`, `viewParties`, `docqPanel` (19) · `viewReviewTable`, `reviewBar`, `drawerHtml` (18) · `itemsHtml`, `partyHistHtml` (01) | |
