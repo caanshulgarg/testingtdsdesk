@@ -1590,35 +1590,6 @@ async function dailyGoogleCheck(){
   render();
 }
 // what to do when Google refuses, based on the reason it gave
-function googleHelpHtml(){
-  const t = S.googleTest;
-  if (!t || t.busy || t.ok || !t.code) return "";
-  const proj = '<a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Google Cloud console \u2192 APIs &amp; Services \u2192 Credentials</a>';
-  const vision = '<a href="https://console.cloud.google.com/apis/library/vision.googleapis.com" target="_blank" rel="noopener">Cloud Vision API</a>';
-  const billing = '<a href="https://console.cloud.google.com/billing" target="_blank" rel="noopener">Billing</a>';
-  const steps = {
-    google_referrer: ["Open " + proj + " and click the API key you are using here.",
-      "Under <b>Application restrictions</b> choose <b>None</b>. A website restriction cannot work here, because the app is opened as a file and the browser sends no website address.",
-      "Under <b>API restrictions</b> keep <b>Restrict key</b> and tick only <b>Cloud Vision API</b>, so the key stays safe.",
-      "Save, wait a minute, then press <b>Test</b> again."],
-    google_not_enabled: ["Open " + vision + " and check the right project is selected at the top.",
-      "Press <b>Enable</b>.", "Wait a minute and press <b>Test</b> again."],
-    google_billing: ["Open " + billing + " and link a billing account to this project.",
-      "The first 1,000 pages each month stay free; billing only has to be enabled.", "Press <b>Test</b> again."],
-    google_bad_key: ["Open " + proj + " and copy the API key again, with no spaces.",
-      "Paste it in the Google Cloud Vision OCR box below and press <b>Save and test</b>.",
-      "If it still fails, create a new key and restrict it to the Cloud Vision API."],
-    google_forbidden: ["Open " + proj + " and click the key.",
-      "Set <b>Application restrictions</b> to <b>None</b>, and under <b>API restrictions</b> tick <b>Cloud Vision API</b>.",
-      "Check that " + vision + " is enabled for the project and " + billing + " is linked.", "Press <b>Test</b> again."],
-    google_quota: ["The usage limit has been reached for now. Wait, or raise the quota in the Google Cloud console.",
-      "The built-in OCR keeps working in the meantime."],
-    google_blocked: ["This page cannot reach Google. Open the downloaded file (TDS-Desk-standalone.html) instead of the claude.ai page.",
-      "If you already use the downloaded file, check that the network or antivirus does not block vision.googleapis.com."],
-    google_timeout: ["Google did not answer in time. Press <b>Test</b> again.", "If it keeps happening, check this computer's internet connection."]
-  }[t.code] || ["Press <b>Test</b> again.", "If it keeps failing, send me the message above."];
-  return '<div class="bdiag" style="margin-top:10px"><b>How to fix this</b><ol style="margin:8px 0 0 18px;line-height:1.55">' + steps.map(x => "<li>" + x + "</li>").join("") + "</ol></div>";
-}
 async function testGoogle(){
   S.googleTest = {busy: true}; render();
   const c = document.createElement("canvas"); c.width = 1000; c.height = 360;
@@ -11004,6 +10975,16 @@ function colPopApply(clearOnly, keepOpen){
   render();
 }
 // chips above the table: what is filtered, each removable
+// the chips over a list (app/src/parts/ChipBar.jsx): a chip opens its column's filter box, ✕ removes it, Clear all
+function colChipOpen(t, k){ S.colPop = S.colPop && S.colPop.k === k && S.colPop.t === t ? null : {t, k, justOpened: true}; render(); }
+function colChipX(t, k){ S.colPop = {t, k}; colPopApply(true); }
+function colChipAll(t){
+  if (t === "bank"){ const b = B(); b.from = ""; b.to = ""; b.f = {}; b.sel.clear(); }
+  else if (t === "sales"){ const sl = SL(); if (sl){ sl.f = {}; sl.sel.clear(); } }
+  else if (t === "txn"){ S.txnF = S.txnF || {}; S.txnF[txnTab()] = {}; S.txnQ = ""; S.txnStatus = ""; }
+  else { S.revF = {}; S.revSel = new Set(); }
+  S.colPop = null; render();
+}
 function colChips(t){
   const chips = [];
   const money = v => INR.format(num(v));
@@ -11044,16 +11025,6 @@ function colChips(t){
     if (f.look) chips.push(["look", f.look === "yes" ? "Need a look" : "Ready to approve"]);
   }
   return chips;
-}
-function noMatchNote(t){
-  return '<div class="bk-none">Nothing matches these filters. <button class="linkbtn" data-chipall="' + t + '">Clear all filters</button></div>';
-}
-function colChipBar(t, shown, total, extra){
-  const chips = colChips(t);
-  if (!chips.length) return "";
-  return '<div class="chipbar"><span class="note">' + shown + " of " + total + (extra ? " \u00b7 " + extra : "") + "</span>" +
-    chips.map(([k, l]) => '<span class="fchip"><button class="fchip-l" data-colf="' + k + '" data-colt="' + t + '">' + esc(l) + '</button><button class="fchip-x" data-chipx="' + k + '" data-colt="' + t + '" aria-label="Remove this filter">\u2715</button></span>').join("") +
-    '<button class="linkbtn" data-chipall="' + t + '">Clear all</button></div>';
 }
 function placeColPop(){
   const pop = document.getElementById("colpop"); if (!pop || !S.colPop) return;
@@ -15389,8 +15360,6 @@ document.addEventListener("click", ev => {
   if (t.closest && t.closest("[data-cpapply]")){ colPopApply(false); return; }
   if (t.closest && t.closest("[data-cpclear]")){ colPopApply(true, S.colAuto); return; }
   if (t.dataset.cpquick){ const [a2, b2] = quickRange(t.dataset.cpquick), pop = document.getElementById("colpop"); if (pop){ pop.querySelector('[data-pf="from"]').value = a2; pop.querySelector('[data-pf="to"]').value = b2; } colPopApply(false, false); return; }   // a quick pick is a whole choice: close
-  if (t.dataset.chipx){ S.colPop = {t: t.dataset.colt, k: t.dataset.chipx}; colPopApply(true); return; }
-  if (t.dataset.chipall){ if (t.dataset.chipall === "bank"){ const b = B(); b.from = ""; b.to = ""; b.f = {}; b.sel.clear(); } else if (t.dataset.chipall === "sales"){ const sl = SL(); if (sl){ sl.f = {}; sl.sel.clear(); } } else if (t.dataset.chipall === "txn"){ S.txnF = S.txnF || {}; S.txnF[txnTab()] = {}; S.txnQ = ""; S.txnStatus = ""; } else { S.revF = {}; S.revSel = new Set(); } S.colPop = null; render(); return; }
   if (t.dataset.billdel){ billDelete(t.dataset.billdel); return; }
   if (t.dataset.reread){ const e0 = D().entries[t.dataset.rid]; if (e0) rereadEntry(e0, t.dataset.reread === "free" ? null : t.dataset.reread); return; }
   if (S.view === "company" && (S.tab === "bank" || (S.tab === "export" && S.bank && S.bank.cid === S.coId)) && bankClick(t)) return;   // bank buttons also work on the Post step
