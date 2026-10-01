@@ -10263,7 +10263,9 @@ function runRules(rows, opts){
   let hit = 0;
   (rows || b.rows).forEach(r => {
     if (r.state === "sent" || r.state === "intally") return;
-    if (r.userSet && !(opts && opts.force)) return;          // never overwrite a person's choice
+    // never overwrite a person's choice, whatever runs the rules: "Apply to this statement", a rule made, changed,
+    // paused or moved (review of 01-Oct-2026: opts.force used to re-apply over lines set by hand)
+    if (r.userSet) return;
     const rule = matchRule(r, co, acc);
     if (!rule) return;
     applyRule(rule, r, co, acc);
@@ -10629,9 +10631,10 @@ function bulkAction(kind, ledger){
   else {
     rows.forEach(r => {
       if (r.state === "sent"){ skipped++; return; }
-      if (kind === "accept"){ if (r.ledger){ r.state = "ready"; n++; } else skipped++; }
-      if (kind === "ignore"){ if (r.state !== "ignored"){ r.prevState = r.state; r.state = "ignored"; n++; } }
-      if (kind === "restore"){ if (r.state === "ignored" || r.state === "intally"){ r.state = r.ledger ? "ready" : "attention"; delete r.tallyIdx; n++; } }
+      // accepted, set aside or brought back by hand: a person's choice, which no rule changes afterwards
+      if (kind === "accept"){ if (r.ledger){ r.state = "ready"; r.userSet = true; n++; } else skipped++; }
+      if (kind === "ignore"){ if (r.state !== "ignored"){ r.prevState = r.state; r.state = "ignored"; r.userSet = true; n++; } }
+      if (kind === "restore"){ if (r.state === "ignored" || r.state === "intally"){ r.state = r.ledger ? "ready" : "attention"; r.userSet = true; delete r.tallyIdx; n++; } }
       b.sticky.add(r.id);
     });
     b.undo = {what: kind, label: entries(rows.length), n, others: 0, snaps, ruleKeys: [], oldRules: []};
@@ -11505,10 +11508,10 @@ function bankRowAct(a, id){
     if (a === "accept"){
       const l = exactLedger(r.ledger);
       if (!l){ b.undo = null; toast("Choose a Tally ledger first."); return true; }
-      r.ledger = l; r.state = "ready"; b.undo.histPrev = learnRows([r], "accepted");
+      r.ledger = l; r.state = "ready"; r.userSet = true; b.undo.histPrev = learnRows([r], "accepted");
     }
-    if (a === "ignore"){ r.prevState = r.state; r.state = "ignored"; b.undo.histPrev = unlearnRows([r]); }
-    if (a === "restore"){ r.state = exactLedger(r.ledger) ? "ready" : "attention"; delete r.tallyIdx; }
+    if (a === "ignore"){ r.prevState = r.state; r.state = "ignored"; r.userSet = true; b.undo.histPrev = unlearnRows([r]); }
+    if (a === "restore"){ r.state = exactLedger(r.ledger) ? "ready" : "attention"; r.userSet = true; delete r.tallyIdx; }
     if (a === "unready"){ r.state = r.ledger ? "suggested" : "attention"; r.userSet = false; b.undo.histPrev = unlearnRows([r]); }
     saveBank({rows: true}); render(); return true;
   }
