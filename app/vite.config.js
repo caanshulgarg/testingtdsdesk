@@ -23,7 +23,13 @@ function legacy(mode) {
     configureServer(server) {
       server.middlewares.use("/legacy.js", (_req, res) => { res.setHeader("Content-Type", "text/javascript"); res.end(read()); });
     },
-    generateBundle() { this.emitFile({ type: "asset", fileName: "legacy.js", source: read() }); },
+    generateBundle() {
+      this.emitFile({ type: "asset", fileName: "legacy.js", source: read() });
+      // go-bridge: FinCom Bridge 2.0 (Go) is handed out by the testing site only (assets-test/bridge-go); a live build
+      // never carries it, so what live users download stays as it is
+      const goDir = new URL("../assets-test/bridge-go/", import.meta.url);
+      if (test && fs.existsSync(goDir)) for (const f of fs.readdirSync(goDir)) this.emitFile({ type: "asset", fileName: "assets/bridge-go/" + f, source: fs.readFileSync(new URL(f, goDir)) });
+    },
     transformIndexHtml(html) {
       // review of 01-Oct-2026: legacy.js has no hash in its name, so a browser kept an older copy after a new build (the
       // Pages cache, or a tab left open) and ran old code under the new screens. Its address now changes with its content

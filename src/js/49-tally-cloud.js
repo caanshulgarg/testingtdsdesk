@@ -521,10 +521,32 @@ Object.assign(TCloud, {
   }
 });
 
+// go-bridge (review of 01-Oct-2026: the status went between connected and disconnected while the bridge was busy with
+// Tally): a Tally computer's state from its heartbeats, in three parts.
+//   bridge: online | reconnecting (a beat late) | offline (three beats missed: about 2 minutes at 30 s a beat; 1.15.0
+//           beats every 60 s) | none. Timed on this computer's clock from when each new beat was seen, so a clock
+//           that is not right here does not make a computer look offline
+//   tally:  open | busy (open, slow to answer: never shown as disconnected) | closed
+const BeatSeen = {};
+function beatEvery(beat){ return Math.max(10, Math.min(600, num((beat || {}).every) || 60)); }
+function devState(d, now){
+  now = now || Date.now();
+  const beat = ((d && d.info) || {}).beat || null;
+  if (!beat || !beat.at) return {bridge: "none", tally: "closed", age: Infinity, every: 60};
+  const every = beatEvery(beat), k = BeatSeen[d.id];
+  let seen;
+  if (k && k.at === beat.at) seen = k.seen;
+  else { seen = Math.min(now, Date.parse(beat.at) || now); if (k) seen = now; BeatSeen[d.id] = {at: beat.at, seen}; }
+  const age = Math.max(0, now - seen), poll = 30000;
+  const bridge = age <= (every + 15) * 1000 + poll ? "online" : age <= (3 * every + 30) * 1000 ? "reconnecting" : "offline";
+  const tally = ["open", "busy", "closed"].includes(beat.tallyState) ? beat.tallyState : (beat.tally ? "open" : "closed");
+  return {bridge, tally, age, every, busySince: beat.busySince || "", at: seen};
+}
 const TLight = {
   st: {at: 0, busy: false, by: {}},
   refresh(){
-    if (!TCloud.on() || this.st.busy || Date.now() - this.st.at < 120000) return;
+    // every 30 s (a small database call; nothing is asked of Tally): a beat comes every 30 s, and "offline" is three missed
+    if (!TCloud.on() || this.st.busy || Date.now() - this.st.at < 30000) return;
     this.st.busy = true;
     Promise.all([TCloud.restAll("tally_companies?select=company,client_id,device_id,gstin,linked_at&order=company.asc"), Cloud.api("tally_devices?select=id,name,last_seen,info,revoked")])
       .then(([cos, devs]) => {
@@ -532,7 +554,14 @@ const TLight = {
         this.st.by = this.work((cos || []).filter(c => c.client_id), devs || [], Date.now());
         linkByGstin(this.st.cos);
       }, () => {})
-      .then(() => { this.st.at = Date.now(); this.st.busy = false; if (S.view === "home") render(); });
+      .then(() => {
+        this.st.at = Date.now(); this.st.busy = false;
+        // the top bar follows a change of state at once; nothing else is redrawn while someone types
+        const sig = JSON.stringify(tallyStatus(typeof CO === "function" && S.view === "company" ? CO() : null).parts || {});
+        const typing = document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
+        if (S.view === "home" || (sig !== this.sig && !typing)) render();
+        this.sig = sig;
+      });
   },
   // client id -> {level: ok | warn | bad, short, say}
   work(cos, devs, now){
@@ -542,12 +571,14 @@ const TLight = {
     const rank = {bad: 3, warn: 2, ok: 1};
     cos.forEach(c => {
       const d = dev[c.device_id]; if (!d) return;
-      const beat = (d.info || {}).beat || null, seen = Date.parse((beat && beat.at) || d.last_seen || 0) || 0;
+      const beat = (d.info || {}).beat || null, seen = Date.parse((beat && beat.at) || d.last_seen || 0) || 0, ds = devState(d, now);
       let x;
-      if (!beat || now - seen > 15 * 60000) x = {level: "bad", short: "computer off", say: "No word from " + d.name + (seen ? " since " + when(seen) : "") + ": the computer, the FinCom Connector or the bridge is off."};
+      if (!beat || ds.bridge === "offline") x = {level: "bad", short: "computer off", say: "No word from " + d.name + (seen ? " since " + when(seen) : "") + ": the computer or its bridge is off, or it has no internet."};
       else {
         const co = (beat.companies || []).find(k => k.name === c.company), at = co && Date.parse(co.at);
-        if (!beat.tally) x = {level: "warn", short: "Tally closed", say: "Tally is not open on " + d.name + "."};
+        if (ds.bridge === "reconnecting") x = {level: "warn", short: "reconnecting\u2026", say: d.name + "'s heartbeat is late (last " + when(seen) + "); it shows as offline only after three missed beats."};
+        else if (ds.tally === "busy") x = {level: "warn", short: "Tally busy", say: "Tally on " + d.name + " is open but answering slowly (a long report or a message box?); the bridge asks again by itself."};
+        else if (ds.tally === "closed") x = {level: "warn", short: "Tally closed", say: "Tally is not open on " + d.name + "."};
         else if (!co) x = {level: "warn", short: "not updated yet", say: c.company + " has no copy on " + d.name + " yet: it comes with the next update (" + (beat.dailyAt || "20:00") + ")."};
         else if (co.waiting) x = {level: "warn", short: co.waiting + " day" + (co.waiting === 1 ? "" : "s") + " to send", say: co.waiting + " day(s) of " + c.company + " wait on " + d.name + " to go to FinCom (the internet or FinCom's cloud was not reachable)."};
         else if (!at || now - at > 36 * 3600000) x = {level: "warn", short: at ? "updated " + when(at) : "not updated yet", say: c.company + " was last updated from Tally " + (at ? "on " + when(at) : "never") + ". Books \u2192 From Tally \u2192 Update now."};
@@ -597,23 +628,47 @@ function linkByGstin(cos){
 function tallyStatus(co){
   if (typeof TLight === "object") TLight.refresh();
   const local = typeof Bridge === "object" && Bridge.on() && Bridge.up();
+  const lst = typeof Bridge === "object" ? Bridge.st : {};
   const devs = (typeof TLight === "object" && TLight.st.devs) || [];
+  const now = Date.now(), dss = devs.map(d => Object.assign({d}, devState(d, now)));
   const seenOf = d => Date.parse((((d.info || {}).beat) || {}).at || d.last_seen || 0) || 0;
   const heard = devs.reduce((a, d) => Math.max(a, seenOf(d)), 0);
-  const fresh = devs.some(d => Date.now() - seenOf(d) <= 15 * 60000);
   const when = t => fmtDateTime(t);
-  if (!local && !devs.length) return {state: "none", level: "bad", label: "Not set up", say: "No Tally Bridge on this computer, and no computer of the firm sends from Tally. Set up the Tally Bridge on the computer with TallyPrime."};
-  if (!local && !fresh) return {state: "offline", level: "bad", label: "Offline since " + (heard ? when(heard) : "—"), say: "No word from the firm's Tally computer" + (heard ? " since " + when(heard) : "") + ": the computer, the FinCom Connector or the bridge is off."};
-  const cos = co ? [co] : Object.values(S.companies || {}).filter(c => !c.deleted);
-  const waiting = cos.reduce((a, c) => a + num((c.stats || {}).waiting), 0);
+  const rankB = {online: 3, reconnecting: 2, offline: 1, none: 0}, rankT = {open: 3, busy: 2, closed: 1};
+  // the three parts: the bridge (this computer's, else the best of the firm's computers), Tally, the company
+  let bridge = local ? (lst.shaky ? "reconnecting" : "online") : "none";
+  dss.forEach(x => { if (rankB[x.bridge] > rankB[bridge]) bridge = x.bridge; });
+  let tally = "closed", busySince = "";
+  if (local) { tally = lst.tallyState || (lst.tallyUp ? "open" : "closed"); busySince = lst.busySince || ""; }
+  dss.filter(x => x.bridge !== "offline" && x.bridge !== "none").forEach(x => { if (rankT[x.tally] > rankT[tally]) { tally = x.tally; busySince = x.busySince; } });
+  let company = "";
   if (co){
     const cloudRow = ((typeof TLight === "object" && TLight.st.cos) || []).some(r => r.client_id === co.id);
     // linked means a Tally company is this client's (in the cloud, or open in Tally through the bridge here);
     // a "Tally name" typed in Client setup alone does not link anything (review recheck: Mastercad)
-    const linked = cloudRow || (local && !!Bridge.openFor(co));
-    if (!linked) return {state: "unlinked", level: "warn", label: "Connected – company not linked", say: "Tally is connected, but no Tally company is linked to " + co.name + ". Link it in Client setup → Tally, or in Settings → Books in the cloud."};
+    company = cloudRow || (local && !!Bridge.openFor(co)) ? "linked" : "unlinked";
   }
-  if (waiting > 0) return {state: "waiting", level: "warn", label: waiting + " entr" + (waiting === 1 ? "y" : "ies") + " waiting", say: waiting + " approved entr" + (waiting === 1 ? "y is" : "ies are") + " not yet in Tally" + (co ? "" : " (all clients)") + "."};
+  const parts = {bridge, tally, company, busySince};
+  const out = o => Object.assign(o, {parts});
+  if (!local && !devs.length) return out({state: "none", level: "bad", label: "Not set up", say: "No Tally Bridge on this computer, and no computer of the firm sends from Tally. Set up the Tally Bridge on the computer with TallyPrime."});
+  if (bridge === "offline" || bridge === "none") return out({state: "offline", level: "bad", label: "Offline since " + (heard ? when(heard) : "\u2014"), say: "No word from the firm's Tally computer" + (heard ? " since " + when(heard) : "") + " (three heartbeats missed): the computer or its bridge is off, or it has no internet."});
+  if (bridge === "reconnecting") return out({state: "reconnecting", level: "warn", label: "Reconnecting\u2026", say: "The bridge's last heartbeat is late. FinCom keeps listening; it shows Offline only after three missed heartbeats (about two minutes)."});
+  const cos = co ? [co] : Object.values(S.companies || {}).filter(c => !c.deleted);
+  const waiting = cos.reduce((a, c) => a + num((c.stats || {}).waiting), 0);
+  if (co && company === "unlinked") return out({state: "unlinked", level: "warn", label: "Connected \u2013 company not linked", say: "Tally is connected, but no Tally company is linked to " + co.name + ". Link it in Client setup \u2192 Tally, or in Settings \u2192 Books in the cloud."});
+  if (waiting > 0) return out({state: "waiting", level: "warn", label: waiting + " entr" + (waiting === 1 ? "y" : "ies") + " waiting", say: waiting + " approved entr" + (waiting === 1 ? "y is" : "ies are") + " not yet in Tally" + (co ? "" : " (all clients)") + "."});
+  if (tally === "busy") return out({state: "busy", level: "warn", label: "Connected \u2013 Tally busy", say: "The bridge is connected. Tally is open but answering slowly" + (busySince ? " since " + fmtDateTime(Date.parse(busySince)) : "") + " (a long report, or a message box in Tally); the bridge asks again by itself and nothing is lost."});
   const light = co && typeof TLight === "object" ? TLight.st.by[co.id] : null;
-  return {state: "ok", level: "ok", label: "Connected & in sync", say: "Tally is connected" + (local ? " on this computer" : " (" + devs.length + " computer" + (devs.length === 1 ? "" : "s") + " sending)") + " and nothing waits to be sent." + (light ? " " + light.say : "")};
+  return out({state: "ok", level: "ok", label: "Connected & in sync", say: "Tally is connected" + (local ? " on this computer" : " (" + devs.length + " computer" + (devs.length === 1 ? "" : "s") + " sending)") + " and nothing waits to be sent." + (light ? " " + light.say : "")});
+}
+// the computers' connection history for the last 24 hours (tally_devices.info.history, kept by tally-ingest from the
+// heartbeats), newest first, with a gap going on now shown as "offline since"
+function tallyHistory(){
+  const devs = (typeof TLight === "object" && TLight.st.devs) || [], now = Date.now(), day = 24 * 3600000, rows = [];
+  devs.forEach(d => {
+    [].concat(((d.info || {}).history) || []).forEach(e => { if (e && Date.parse(e.to || e.at) > now - day) rows.push(Object.assign({device: d.name}, e)); });
+    const ds = devState(d, now);
+    if (ds.bridge === "offline" && d.info && d.info.beat) rows.push({device: d.name, kind: "bridge", state: "offline", at: d.info.beat.at, now: true});
+  });
+  return rows.sort((a, b) => String(b.at).localeCompare(String(a.at)));
 }
