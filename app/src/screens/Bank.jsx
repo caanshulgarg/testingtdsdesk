@@ -167,10 +167,30 @@ function LedgerSetup({ co }) {
   return <div className="bk-setup"><div><b>Import the Tally ledger list for {co.name}</b><div className="note">Suggestions only use ledgers that exist in Tally. In Tally: Display More Reports → List of Accounts → Export (Excel or XML). With the Tally Bridge this happens automatically.</div></div><button className="btn primary small" onClick={() => bankAct("ledPick")}>Import ledger list</button></div>;
 }
 
+// the deleted statements (soft deletes, kept on the server and in this browser), read once for the Restore item
+function trashOf(b) {
+  if (b && (b.stmtsTrash === undefined || b.stmtsTrash === null)) {
+    b.stmtsTrash = [];
+    Promise.all([Trash.list(b.cid, "statement"), BankDB.get("stmtsTrash:" + b.cid)]).then(([l, old]) => {
+      b.stmtsTrash = l.concat((old || []).map((x) => ({ label: x.st.bank + " " + fmtDate(x.st.from) + " to " + fmtDate(x.st.to), at: x.at, by: x.by, reason: "" })));
+      if (b.stmtsTrash.length) render();
+    }, () => {});
+  }
+  return b.stmtsTrash || [];
+}
+
+// with no statement open, a deleted one can still be put back
+function RestoreMenu() {
+  const t = trashOf(B());
+  if (!t.length) return null;
+  return <details className="bk-menu" data-more="bank-restore"><summary className="btn small">More</summary><div className="bk-menu-list">
+    <button onClick={() => bankAct("bankRestoreStmt")}>Restore a deleted statement<small>{Trash.say(t[0])}</small></button>
+  </div></details>;
+}
+
 function MoreMenu({ tc }) {
   const b = B();
-  // the statements deleted before (soft deletes), read once for the Restore item
-  if (b && b.stmtsTrash === undefined) { b.stmtsTrash = []; BankDB.get("stmtsTrash:" + b.cid).then((t) => { b.stmtsTrash = t || []; if (b.stmtsTrash.length) render(); }, () => {}); }
+  trashOf(b);
   const M = ({ act, title, children, danger }) => <button className={danger ? "danger" : undefined} onClick={() => bankAct(act)}>{title}{children && <small>{children}</small>}</button>;
   return (
     <details className="bk-menu"><summary className="btn small">More</summary><div className="bk-menu-list">
@@ -186,7 +206,7 @@ function MoreMenu({ tc }) {
       {S.engine && tc.attention > 0 && <M act="bankClaude" title="Ask Claude for the remaining entries" />}
       <M act="bankClearStmt" title="Clear all decisions" />
       <M act="bankDelStmt" title="Delete this statement" danger>Asks for the client’s name; it can be restored</M>
-      {(b.stmtsTrash || []).length > 0 && <M act="bankRestoreStmt" title="Restore a deleted statement">{(() => { const x = b.stmtsTrash[0]; return x.st.bank + " " + fmtDate(x.st.from) + " to " + fmtDate(x.st.to) + ", deleted " + fmtDateTime(x.at); })()}</M>}
+      {(b.stmtsTrash || []).length > 0 && <M act="bankRestoreStmt" title="Restore a deleted statement">{Trash.say(b.stmtsTrash[0])}</M>}
     </div></details>
   );
 }
@@ -216,7 +236,7 @@ export default function Bank() {
         <p className="note">Excel or CSV from net banking works best. E-statement PDFs, scanned PDFs and photos are also read. Every entry is checked against the running balance.</p>
         <span className="btn primary">Choose files</span>
       </div>
-      <div className="row" style={{ justifyContent: "flex-end", marginTop: 10 }}><button className="btn small" onClick={() => bankAct("bankSettings")}>Settings</button></div>
+      <div className="row" style={{ justifyContent: "flex-end", marginTop: 10, gap: 8 }}><button className="btn small" onClick={() => bankAct("bankSettings")}>Settings</button><RestoreMenu /></div>
     </div>
     {b.showSettings && <BankSettings />}
   </>;

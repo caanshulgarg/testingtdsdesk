@@ -1361,15 +1361,20 @@ function doAct(act, t){
     case "assetAdd": { const b = S.books; b.assets = (b.assets || []).concat([{id: uid("as"), name: "", date: "", igst: 0, cgst: 0, sgst: 0, cess: 0, use: "common", reg: S.gstReg || "", sold: ""}]); saveBooks(); render(); break; }
     case "booksClear": confirmTyped({title: "Remove the books read from Tally?", ok: "Remove", body: '<p class="note">Challans and what you corrected stay. Nothing in Tally or in FinCom\u2019s cloud copy is touched, and a copy is kept: <b>More \u2192 Restore</b> puts the books back.</p>'}).then(async ok => {
       if (!ok) return; const b = S.books, cid = S.coId;
-      await Trash.put(cid, "books", "The books read from Tally (" + (b.vouchers || []).length + " entries)", {vouchers: b.vouchers, meta: b.meta, reco: b.reco});
-      b.trashLog = (b.trashLog || []).concat([{kind: "books", at: new Date().toISOString(), by: whoAmI()}]);
+      const kept = await Trash.put(cid, "books", "The books read from Tally (" + (b.vouchers || []).length + " entries)", {vouchers: b.vouchers, meta: b.meta, reco: b.reco}, ok.reason);
+      b.trashLog = (b.trashLog || []).concat([{kind: "books", id: kept.id, server: kept.server, reason: ok.reason, at: new Date().toISOString(), by: whoAmI()}]);
       b.vouchers = []; b.meta = null; b.reco = null; saveBooks(); toast("Removed. More \u2192 Restore puts them back."); render(); }); break;
     case "trashRestore": {
-      const cid = S.coId;
-      Trash.list(cid).then(async list => {
-        const x = list[0]; if (!x){ toast("Nothing removed here to restore."); return; }
-        Object.assign(S.books, x.data); await Trash.restored(x);
-        S.books.trashLog = (S.books.trashLog || []).concat([{kind: "restore:" + x.kind, at: new Date().toISOString(), by: whoAmI()}]);
+      // the newest removal of the books or of Tally data and GST work, or the one picked (data-i) in More; from the
+      // server, so it can be put back on any computer
+      const cid = S.coId, i = num(t && t.dataset && t.dataset.i);
+      Trash.list(cid).then(async all => {
+        const list = all.filter(x => x.kind === "books" || x.kind === "wipe"), x = list[i] || list[0];
+        if (!x){ toast("Nothing removed here to restore."); return; }
+        let data; try { data = await Trash.take(x); } catch (e){ toast("Could not restore it: " + ((e && e.message) || e)); return; }
+        if (!data){ toast("Nothing kept to restore for that removal."); return; }
+        Object.assign(S.books, data);
+        S.books.trashLog = (S.books.trashLog || []).concat([{kind: "restore:" + x.kind, id: x.id, at: new Date().toISOString(), by: whoAmI()}]);
         GST2B._memo = null; GSTR._carry = null; await saveBooks(); toast("Restored: " + x.label + "."); render();
       }); break;
     }
@@ -1382,8 +1387,8 @@ function doAct(act, t){
         const co = CO(), snap = {};
         // a soft delete: everything removed is kept as it was (the PDFs stay where they are), and can be put back
         BOOKS_WIPE.forEach(k => { if (b[k] !== undefined) snap[k] = b[k]; });
-        await Trash.put(co.id, "wipe", "Tally data and all GST work", snap);
-        b.trashLog = (b.trashLog || []).concat([{kind: "wipe", at: new Date().toISOString(), by: whoAmI()}]);
+        const kept = await Trash.put(co.id, "wipe", "Tally data and all GST work", snap, ok.reason);
+        b.trashLog = (b.trashLog || []).concat([{kind: "wipe", id: kept.id, server: kept.server, reason: ok.reason, at: new Date().toISOString(), by: whoAmI()}]);
         booksWipe(b); GST2B._memo = null; GSTR._carry = null; if (typeof GSTAPI === "object") GSTAPI.sess = {};
         await saveBooks(); toast("Tally data and all GST work removed for " + co.name + "."); render();
       }); break;
@@ -1570,7 +1575,7 @@ function doAct(act, t){
       break;
     case "clearSent":
       confirmTyped({title: "Clear sent invoices older than 90 days?", ok: "Clear them", body: '<p class="note">Invoices sent to Tally more than 90 days ago move to \u201cDeleted\u201d, where each can be restored. Nothing in Tally changes, and deductee year totals are kept. Download the register first if you need it.</p>'})
-        .then(ok => { if (ok) clearSent(); }); break;
+        .then(ok => { if (ok) clearSent(ok.reason); }); break;
     case "xml": { const m = document.getElementById("markSent"); exportXml(m ? m.checked : true); break; }
     case "csv": exportCsv(); break;
   }

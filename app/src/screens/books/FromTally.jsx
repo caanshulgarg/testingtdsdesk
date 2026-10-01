@@ -125,10 +125,10 @@ function Files({ b }) {
 // that Restore puts back
 function MoreMenu({ b, n }) {
   const [trash, setTrash] = useState(null);
-  useEffect(() => { let on = true; Trash.list(S.coId).then((l) => { if (on) setTrash(l); }, () => {}); return () => { on = false; }; }, [S.coId, (b.trashLog || []).length]);
+  useEffect(() => { let on = true; Trash.list(S.coId).then((l) => { if (on) setTrash(l.filter((x) => x.kind === "books" || x.kind === "wipe")); }, () => {}); return () => { on = false; }; }, [S.coId, (b.trashLog || []).length]);
   if (!n && !booksHasAny(b) && !(trash && trash.length)) return null;
   return <details className="bk-menu" data-more="books"><summary className="btn small">More</summary><div className="bk-menu-list">
-    {trash && trash.length > 0 && <button onClick={() => doAct("trashRestore")}>Restore<small>{trash[0].label + ", removed " + fmtDateTime(trash[0].at) + " by " + trash[0].by}</small></button>}
+    {trash && trash.slice(0, 5).map((x, i) => <button key={x.id} data-i={i} data-restore="" onClick={(ev) => doAct("trashRestore", ev.currentTarget)}>Restore<small>{Trash.say(x)}</small></button>)}
     {n > 0 && <button className="danger" onClick={() => doAct("booksClear")}>Remove what is here<small>The day book read from Tally, on this page only</small></button>}
     {booksHasAny(b) && <button className="danger" onClick={() => doAct("booksWipe")}>Remove Tally data and all GST work<small>The day book, masters, balances and every piece of GST work here</small></button>}
   </div></details>;

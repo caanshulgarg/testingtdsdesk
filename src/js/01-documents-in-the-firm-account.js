@@ -3629,11 +3629,11 @@ async function exportCsv(){
   if (!list.length){ toast("Nothing approved yet for this client."); return; }
   await saveFile("tds-register-" + slug(co.name) + "-" + new Date().toISOString().slice(0, 10) + ".csv", registerCsv(list, co));
 }
-function clearSent(){
+function clearSent(why){
   const cutoff = new Date(Date.now() - 90 * 864e5).toISOString();
   const old = Object.values(D().entries).filter(e => e.exportedAt && e.exportedAt < cutoff);
   // a soft delete (review of 01-Oct-2026): each goes to "Deleted", where it can be restored; deductee year totals are kept
-  old.filter(e => e.status !== "deleted").forEach(e => softDeleteEntry(e, "Cleared: sent to Tally more than 90 days ago"));
+  old.filter(e => e.status !== "deleted").forEach(e => softDeleteEntry(e, "Cleared: sent to Tally more than 90 days ago" + (why ? " \u00b7 " + why : "")));
   toast(old.length ? old.length + " old sent invoices cleared. They are under \u201cDeleted\u201d, where they can be restored; deductee year totals are kept." : "No sent invoices older than 90 days.");
   refreshStats(S.coId); render();
 }

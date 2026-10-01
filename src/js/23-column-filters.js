@@ -439,28 +439,66 @@ document.addEventListener("mousedown", ev => {
 window.addEventListener("resize", () => { if (AC.fk) acDraw(acInput()); });
 document.addEventListener("scroll", () => { if (AC.fk) acDraw(acInput()); }, true);
 /* ---------- confirmation box (browser pop-ups can be blocked inside claude.ai) ---------- */
-// a removal goes ahead only when the client's name is typed (review of 01-Oct-2026); resolves true or false
+// a removal goes ahead only when the client's name is typed (review of 01-Oct-2026), with a reason that is kept with it
+// (request of 02-Oct-2026); resolves {reason} or false
 function confirmTyped(o){
   const name = String((CO() || {}).name || "").trim();
   return askConfirm(Object.assign({danger: true}, o, {
-    body: o.body + '<label class="f" style="margin-top:12px"><span>To go ahead, type the client\u2019s name: <b>' + esc(name) + '</b></span><input type="text" id="cbxName" autocomplete="off" aria-label="Type the client\u2019s name"></label>',
-    read: () => ((document.getElementById("cbxName") || {}).value || "").trim(),
-    validate: v => v.toLowerCase().replace(/\s+/g, " ") === name.toLowerCase().replace(/\s+/g, " ") ? "" : "Type the client\u2019s name exactly as shown: " + name + "."
-  })).then(r => !!r);
+    body: o.body + '<label class="f" style="margin-top:12px"><span>Reason (kept with what is removed)</span><input type="text" id="cbxWhy" autocomplete="off" aria-label="Reason" placeholder="e.g. read again from Tally"></label>' +
+      '<label class="f" style="margin-top:10px"><span>To go ahead, type the client\u2019s name: <b>' + esc(name) + '</b></span><input type="text" id="cbxName" autocomplete="off" aria-label="Type the client\u2019s name"></label>',
+    read: () => ({name: ((document.getElementById("cbxName") || {}).value || "").trim(), reason: ((document.getElementById("cbxWhy") || {}).value || "").trim()}),
+    validate: v => v.name.toLowerCase().replace(/\s+/g, " ") === name.toLowerCase().replace(/\s+/g, " ") ? "" : "Type the client\u2019s name exactly as shown: " + name + "."
+  })).then(r => r ? {reason: (r.data && r.data.reason) || ""} : false);
 }
-// what was removed, kept in this browser so it can be put back (review of 01-Oct-2026: every removal is a soft delete).
-// The books' own record (b.trashLog) says what was removed, when and by whom, on every computer
+// What is removed from a client, kept so it can be put back (every removal is a soft delete). Since 02-Oct-2026 it is
+// kept on the server (client_trash: who, when, why), so any computer of the firm can restore it; this browser keeps a
+// copy as an extra, and is the only copy while the server table is not there (or the firm works offline).
 const Trash = {
-  async put(cid, kind, label, data){
+  off: false,          // the database has no client_trash yet
+  missing(e){ return /client_trash|trash_put|trash_restore|PGRST202|PGRST205|schema cache|does not exist|404/i.test(String(e && e.message || e)); },
+  cloud(){ return typeof Cloud === "object" && Cloud.on && Cloud.on() && !this.off; },
+  // keeps a removal; resolves {id, server} where server says whether the server has it
+  async put(cid, kind, label, data, reason){
+    const at = new Date().toISOString(), rec = {cid, kind, label, reason: reason || "", at, by: whoAmI(), data};
+    let sid = null;
+    if (this.cloud()){
+      try { sid = await Cloud.api("rpc/trash_put", {method: "POST", body: {p_client: cid, p_kind: kind, p_label: label, p_reason: reason || "", p_data: data}}); }
+      catch (e){ if (this.missing(e)) this.off = true; else toast("Kept in this browser only: the server did not take it (" + ((e && e.message) || e) + ")."); }
+    }
     const id = "trash:" + cid + ":" + Date.now();
-    await IDBStore.write([[id, {id, cid, kind, label, at: new Date().toISOString(), by: whoAmI(), data}]]);
-    return id;
+    try { await IDBStore.write([[id, Object.assign({id, sid}, rec)]]); } catch (e){ if (!sid) throw e; }
+    return {id: sid || id, server: !!sid};
   },
+  // what can be put back for a client, newest first: the server's rows (from any computer) and this browser's own
+  // copies that the server does not have
   async list(cid, kind){
-    let all = []; try { all = (await IDBStore.prefix("trash:" + cid + ":")).map(x => x[1]); } catch (e){}
-    return all.filter(x => x && (!kind || x.kind === kind) && !x.restoredAt).sort((a, c) => String(c.at).localeCompare(String(a.at)));
+    let local = []; try { local = (await IDBStore.prefix("trash:" + cid + ":")).map(x => x[1]).filter(Boolean); } catch (e){}
+    let server = [];
+    if (this.cloud()){
+      try {
+        const rows = await Cloud.api("client_trash?select=id,kind,label,reason,deleted_at,deleted_by_email,restored_at&client_id=eq." + encodeURIComponent(cid) + "&restored_at=is.null&order=deleted_at.desc&limit=50") || [];
+        server = rows.map(r => ({id: r.id, sid: r.id, cid, kind: r.kind, label: r.label, reason: r.reason, at: r.deleted_at, by: r.deleted_by_email || "", server: true}));
+      } catch (e){ if (this.missing(e)) this.off = true; }
+    }
+    const onServer = new Set(server.map(x => x.sid));
+    const mine = local.filter(x => !x.restoredAt && !(x.sid && (onServer.has(x.sid) || this.cloud())));
+    return server.concat(mine).filter(x => !kind || x.kind === kind).sort((a, c) => String(c.at).localeCompare(String(a.at)));
   },
-  async restored(x){ x.restoredAt = new Date().toISOString(); x.restoredBy = whoAmI(); await IDBStore.write([[x.id, x]]); }
+  // puts one back: from the server (marked restored there, with who and when) or from this browser; resolves its data
+  async take(x){
+    let data = x.data;
+    if (x.server){
+      const j = await Cloud.api("rpc/trash_restore", {method: "POST", body: {p_id: x.sid}});
+      data = j && j.data;
+    }
+    try {
+      const local = (await IDBStore.prefix("trash:" + x.cid + ":")).map(z => z[1]).filter(z => z && (z.id === x.id || (x.sid && z.sid === x.sid)));
+      for (const z of local){ if (data === undefined) data = z.data; z.restoredAt = new Date().toISOString(); z.restoredBy = whoAmI(); await IDBStore.write([[z.id, z]]); }
+    } catch (e){}
+    return data;
+  },
+  // the line under a Restore item: what, when, by whom, why
+  say(x){ return x.label + " \u00b7 removed " + fmtDateTime(x.at) + (x.by ? " by " + x.by : "") + (x.reason ? " \u00b7 " + x.reason : "") + (x.server ? "" : " \u00b7 kept in this browser only"); }
 };
 function askConfirm(o){
   return new Promise(done => {
@@ -497,24 +535,32 @@ async function deleteStatement(sid){
       "It leaves the list with the ledger choices made on its rows; they are kept, and <b>More \u2192 Restore a deleted statement</b> puts it back. Saved rules and new ledgers stay." +
       (sent ? "<br><br><b>" + sent + " entries from it were already sent to Tally.</b> Tally is not changed: if you upload it again, those rows could be sent twice. Match with the Tally bank book first." : "")});
   if (!ans) return;
-  // a soft delete: the statement leaves the list, its rows stay kept, and More \u2192 Restore puts it back
+  // a soft delete: the statement leaves the list, its rows stay kept here, and a copy of the statement with its rows is
+  // kept on the server so any computer can put it back (More \u2192 Restore)
   const keys = Object.keys(b.keys).filter(k => b.keys[k] === sid);
+  await Trash.put(b.cid, "statement", (acc.ledger || st.bank) + " " + fmtDate(st.from) + " to " + fmtDate(st.to) + " (" + st.n + " rows)", {st, keys, rows}, ans.reason);
   keys.forEach(k => { delete b.keys[k]; });
   b.stmts = b.stmts.filter(x => x.id !== sid);
-  const trash = ((await BankDB.get("stmtsTrash:" + b.cid)) || []).concat([{st, keys, at: new Date().toISOString(), by: whoAmI()}]);
-  await BankDB.set("stmtsTrash:" + b.cid, trash); b.stmtsTrash = trash;
+  b.stmtsTrash = null;
   saveBank({stmts: true, keys: true});
   if (b.cur === sid){ clearTimeout(bankSaveTimer); bankSaveTimer = null; b.cur = null; b.rows = []; b.sel.clear(); b.sticky.clear(); b.undo = null; }
   toast("Statement deleted. More \u2192 Restore a deleted statement puts it back.");
   if (!b.cur && b.stmts.length) await openStatement(b.stmts[b.stmts.length - 1].id); else render();
 }
-// a deleted statement back in the list, as it was
+// a deleted statement back in the list, as it was (from the server, so from any computer; or this browser's own copy)
 async function restoreStatement(i){
-  const b = B(), trash = (await BankDB.get("stmtsTrash:" + b.cid)) || [], x = trash[i];
-  if (!x) return;
+  const b = B(), list = await Trash.list(b.cid, "statement");
+  // statements deleted before 02-Oct-2026 were kept only in this browser
+  const old = ((await BankDB.get("stmtsTrash:" + b.cid)) || []).map((x, j) => ({old: j, x}));
+  const pick = list[i || 0] || null;
+  let x = null;
+  if (pick) x = await Trash.take(pick);
+  else if (old.length){ const o = old[0]; x = o.x; const rest = (await BankDB.get("stmtsTrash:" + b.cid)) || []; rest.splice(o.old, 1); await BankDB.set("stmtsTrash:" + b.cid, rest); }
+  if (!x || !x.st) return toast("Nothing deleted here to restore.");
+  if (x.rows && x.rows.length && !(await BankDB.get("stmt:" + b.cid + ":" + x.st.id))) await BankDB.set("stmt:" + b.cid + ":" + x.st.id, x.rows);
   if (!b.stmts.some(s => s.id === x.st.id)) b.stmts.push(x.st);
   (x.keys || []).forEach(k => { if (!b.keys[k]) b.keys[k] = x.st.id; });
-  trash.splice(i, 1); await BankDB.set("stmtsTrash:" + b.cid, trash); b.stmtsTrash = trash;
+  b.stmtsTrash = null;
   saveBank({stmts: true, keys: true});
   toast("Statement restored."); await openStatement(x.st.id);
 }
