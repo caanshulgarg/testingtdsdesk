@@ -69,7 +69,19 @@ const Help = {
     "tds:24Q:annex2": {t: "24Q \u2014 Annexure II", what: "The whole year\u2019s salary details per employee, filed with Q4.", steps: ["Check gross salary, exemptions, deductions and tax for each employee.", "Tie the TDS to what was deducted over the year."], from: "The salary sheet for the year.", watch: []},
     "tds:24Q:checks": {t: "24Q \u2014 Checks", what: "What to fix before filing: missing PANs, TDS that differs from the books, and the like.", steps: ["Fix each item listed, in the sheet or in Tally."], from: "The salary sheet and the books.", watch: []}
   },
+  // review item 37: every screen's "?" opens its own topic. GST and TDS tabs have theirs above; the other screens of a
+  // client use the guide's articles (GUIDE.A in src/js/40), as "page:<article>"
+  PAGES: {reports: "reports", lookup: "lookup", letters: "letters", mis: "mis", audit: "audit"},
+  topic(k){ return this.T[k] || (String(k).startsWith("page:") && typeof GUIDE === "object" ? GUIDE.A[k.slice(5)] : null) || null; },
   key(){
+    if (S.view === "company" && S.tab !== "books"){
+      if (S.tab === "clientInbox") return "page:inbox";
+      if (S.tab === "bank") return "page:" + (typeof bankTab === "function" && S.bank && bankTab() === "rules" ? "bankrules" : "bank");
+      if (S.tab === "sales") return "page:sales";
+      if (["invoices", "review", "export", "done", "collect"].includes(S.tab) && typeof docType === "function" && docType() === "bills") return "page:bills";
+      return "";
+    }
+    if (S.view === "company" && S.tab === "books" && typeof booksTab === "function" && this.PAGES[booksTab()]) return "page:" + this.PAGES[booksTab()];
     if (S.view !== "company" || S.tab !== "books" || !S.books || S.books.loading) return "";
     const t = typeof booksTab === "function" ? booksTab() : "";
     if (t === "gst") return "gst:" + (S.gstPart || "r1");
@@ -77,7 +89,7 @@ const Help = {
     return "";
   },
   html(k){
-    const x = this.T[k]; if (!x) return "";
+    const x = this.topic(k); if (!x) return "";
     return '<div class="help-head"><b>How this tab works: ' + esc(x.t) + '</b><button class="linkbtn" data-help="close" aria-label="Close">\u2715</button></div>' +
       "<h4>What it is for</h4><p>" + esc(x.what) + "</p>" +
       (x.steps && x.steps.length ? "<h4>What to do</h4><ol>" + x.steps.map(s => "<li>" + esc(s) + "</li>").join("") + "</ol>" : "") +
@@ -86,7 +98,7 @@ const Help = {
   },
   // after every render: a button beside the tab bar, and the panel kept in step with the tab shown
   after(){
-    const k = this.key(), has = !!this.T[k];
+    const k = this.key(), has = !!this.topic(k);
     let p = document.getElementById("helpPanel");
     if (has){
       // on the row of month and downloads under the GST tabs, where there is room; on TDS, the line of years and quarters

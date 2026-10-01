@@ -2,6 +2,7 @@
 // firm account chip and the firm button, with the Tally panel and firm menu they open.
 // Was renderTop, clientHeader, topRight, tallyPanelHtml, firmMenuHtml (src/js/02 and 18); actions are doAct(...).
 import TallyPill from "./parts/TallyPill.jsx";
+import HelpButton from "./parts/HelpButton.jsx";
 import { useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 
@@ -69,6 +70,7 @@ function TopRight() {
   const inCo = S.view === "company" && CO();
   return (
     <div className="topright">
+      {inCo && <HelpButton page />}
       {inCo && <button className="btn small" title="Upload bills, statements or sales invoices for this client" onClick={() => goStep("collect")}>+ Upload</button>}
       <button className={"tallychip" + (t.level === "ok" ? " live" : t.level === "warn" ? " off" : " none")} onClick={() => doAct("tallyPanel")} title={t.say} data-tally={t.state}>
         <span className="dotled" />{"Tally: " + t.label}

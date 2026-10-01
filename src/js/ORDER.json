@@ -50,5 +50,6 @@
  "49-tally-cloud.js",
  "51-tally-queue.js",
  "50-ai-help.js",
- "52-routes.js"
+ "52-routes.js",
+ "53-phone.js"
 ]

@@ -20,7 +20,9 @@ const ICONS = {
 
 function Item({ icon, label, on, count, onClick, title }) {
   return (
-    <button className="side-link" aria-current={on ? "page" : undefined} onClick={onClick} title={title}>
+    // a name a screen reader reads out (review item 34): the label, what it is for, and the count beside it
+    <button className="side-link" aria-current={on ? "page" : undefined} onClick={onClick} title={title || label}
+      aria-label={label + (title ? ": " + title : "") + (count ? ", " + count + " waiting" : "")}>
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">{ICONS[icon]}</svg>
       <span>{label}</span>
       {count ? <span className="side-count">{count}</span> : null}
@@ -50,7 +52,7 @@ export default function Side() {
       {open && (
           <div className="side-client">
             <span className="side-label">Client</span>
-            <button className="side-co" onClick={() => openSwitcher()} title="Change client (F3)">
+            <button className="side-co" onClick={() => openSwitcher()} title="Change client (F3)" aria-label={"Client: " + open.name + ". Change client (F3)"}>
               <b>{open.name}</b><small>{(open.gstin || "No GSTIN") + " · change"}</small>
             </button>
           </div>)}
