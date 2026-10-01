@@ -304,9 +304,10 @@ const CloudDocs = {
     });
     return out;
   },
-  async sendPending(cid){
+  // quiet: on opening a client (server-books), the documents kept only on this computer go up on their own
+  async sendPending(cid, quiet){
     const list = await this.pending(cid);
-    if (!list.length){ toast("Every document for this client is already in the firm account."); return; }
+    if (!list.length){ if (quiet) return; toast("Every document for this client is already in the firm account."); return; }
     for (const it of list){
       const f = await FileStore.get(cid, it.id);
       if (f) this.add(cid, it.id, f, it.kind);
@@ -502,6 +503,8 @@ const Store = {
       clearTimeout(this.lsTimer);
       this.lsTimer = setTimeout(() => this.saveLocal(), 300);
     }
+    // live sync: to the firm's server at once, not on the 45-second round (54-live-sync.js)
+    if (typeof cloudSoon === "function") cloudSoon();
   },
   saveLocal(){
     try {
@@ -5875,8 +5878,14 @@ Object.assign(LedMaster, {
   },
   // what the firm has confirmed for other clients, by ledger name
   tplKey(name){ return String(name || "").toUpperCase().replace(/^\s*\d{2}\s+/, "").replace(/\s+/g, " ").trim(); },
-  tplAll(){ try { return JSON.parse(lsGet("tdsdesk-test:ledtpl") || "{}"); } catch (e){ return {}; } },
-  tplSave(t){ try { lsSet("tdsdesk-test:ledtpl", JSON.stringify(t)); } catch (e){} },
+  // server-books: kept with the firm's settings (in the firm account, for every computer), not in this browser; what an
+  // earlier build kept here is brought in once (the browser's copy is left as it was)
+  tplAll(){
+    const f = S.firm || {};
+    if (!f.ledTpl){ let old = {}; try { old = JSON.parse(lsGet("tdsdesk-test:ledtpl") || "{}"); } catch (e){} if (Object.keys(old).length && S.firm){ S.firm.ledTpl = old; try { Store.saveFirm(); } catch (e){} } return old; }
+    return f.ledTpl;
+  },
+  tplSave(t){ if (!S.firm) return; S.firm.ledTpl = t; try { Store.saveFirm(); } catch (e){} },
   tplLearn(b, names){
     const t = this.tplAll(), cid = b.cid || "";
     names.forEach(n => {
@@ -7900,10 +7909,22 @@ async function openBooks(cid){
   if (S.books && S.books.cid === cid) return;
   S.books = {cid, loading: true};
   render();
-  const saved = await Books.load(cid);
-  S.books = saved && saved.cid === cid ? Object.assign({loading: false}, saved) : {cid, loading: false, vouchers: [], map: {}, challans: [], alloc: {}, pans: {}};
+  const t0 = Date.now(), saved = await Books.load(cid);
+  if (!S.books || S.books.cid !== cid) return;                // another client was opened meanwhile
+  S.books = saved && saved.cid === cid ? Object.assign({loading: true}, saved) : {cid, loading: true, vouchers: [], map: {}, challans: [], alloc: {}, pans: {}};
+  // live sync: the server's latest first (only what changed since this computer last looked); this browser's copy is
+  // a cache and is not shown in place of a newer one. Offline, or the server slow, the copy here is shown and said so
+  if (typeof BookSync === "object" && BookSync.on()){
+    const pull = BookSync.pull(cid).catch(() => {});
+    const late = await Promise.race([pull.then(() => false), new Promise(ok => setTimeout(() => ok(true), 6000))]);
+    if (!S.books || S.books.cid !== cid) return;
+    if (late || Live.sv.state === "offline"){ S.books.offline = true; toast("The server could not be reached: this is this computer’s copy of the books, as last saved here. It is brought up to date as soon as the server answers."); pull.then(() => { if (S.books && S.books.cid === cid){ S.books.offline = false; render(); } }); }
+  }
+  S.books.loading = false; S.books.openMs = Date.now() - t0; S.books.openAt = t0;
   if (S.books.vouchers && S.books.vouchers.length) try { LedMaster.refresh(S.books); } catch (e){}
-  if (typeof BookSync === "object") BookSync.pull(cid);
+  // server-books: the cloud copy is where the books are; this browser's copy is only a cache of it
+  if (typeof TCloud === "object" && TCloud.on()) setTimeout(() => { TCloud.openLoad(cid).catch(() => {}); }, 0);
+  setTimeout(() => { try { if (typeof CloudDocs === "object" && CloudDocs.on() && S.coId === cid) CloudDocs.sendPending(cid, true); } catch (e){} }, 3000);
   setTimeout(() => { try { if (S.books && S.books.cid === cid){ Audit.maybeRun(); MIS.maybeRun(); } } catch (e){} }, 400);
   render();
 }
@@ -8695,6 +8716,7 @@ function curStmt(){ const b = B(); return b && b.stmts.find(s => s.id === b.cur)
 let bankSaveTimer = null;
 function saveBank(what){
   const b = B(); if (!b) return;
+  if (typeof cloudSoon === "function") setTimeout(cloudSoon, 950);     // after the rows are kept here
   const cid = b.cid;
   if (!what || what.rows){
     clearTimeout(bankSaveTimer);
@@ -12003,6 +12025,9 @@ async function bringDayBookFile(f, from0, to0, opts){
           try { const r = await BridgeSeed.send(f, step, {from, to}, who.company); part.bridge = r && r.entries != null ? "filled (" + r.entries + ")" : r && r.skipped ? "not changed: " + r.skipped : ""; }
           catch (e){ part.bridge = "not taken: " + ((e && e.message) || e); }
         } else part.bridge = "not connected on this computer";
+        // server-books: the file waits in this browser until FinCom's cloud has every day of it; a send cut short (or
+        // made before signing in) goes again on its own the next time the client is opened, so it is never left here only
+        const wait = await TCloudUp.hold(who.client, f, {from, to}, who);
         if (TCloudUp.on()){
           // review of 01-Oct-2026: on the screen while it goes (a year takes minutes), the page warns before it is left
           // half sent, and says when every day is in the cloud. Before, it went quietly and a reload lost the rest
@@ -12012,11 +12037,11 @@ async function bringDayBookFile(f, from0, to0, opts){
           try {
             const r = await TCloudUp.days(await f.text(), {from, to}, step, who);
             part.cloud = r && r.days != null ? "in the cloud (" + r.days + " days)" : (r && r.skipped) || "";
-            if (r && r.days != null) toast(f.name + ": all " + r.days + " days, " + fmtDate(tallyDate(from)) + " to " + fmtDate(tallyDate(to)) + ", are in FinCom’s cloud.");
+            if (r && r.days != null){ await TCloudUp.drop(wait); toast(f.name + ": all " + r.days + " days, " + fmtDate(tallyDate(from)) + " to " + fmtDate(tallyDate(to)) + ", are in FinCom’s cloud."); }
           }
-          catch (e){ part.cloud = "not sent: " + ((e && e.message) || e); toast("Saved here, but it could not be shared with the firm just now (" + ((e && e.message) || e) + "). Choose the file again later."); }
-          finally { window.removeEventListener("beforeunload", stay); }
-        } else part.cloud = "sign in to the firm account to share it";
+          catch (e){ part.cloud = "not sent: " + ((e && e.message) || e); toast("It could not go to FinCom’s cloud just now (" + ((e && e.message) || e) + "). It goes on its own the next time this client is opened."); }
+          finally { window.removeEventListener("beforeunload", stay); TCloudUp.live.delete(wait); }
+        } else { part.cloud = "waiting: it goes to FinCom’s cloud once you sign in to the firm account"; toast("Sign in to the firm account: until then this day book is only on this computer, and other computers show nothing."); }
         b.busy = ""; await saveBooks(null, b); render();          // these books, even if another client is open by now
       })();
       render();
@@ -13620,6 +13645,7 @@ let salesSaveTimer = null;
 function saveSales(what){
   const s = SL(); if (!s) return;
   const cid = s.cid, list = s.list;
+  if (typeof cloudSoon === "function") cloudSoon();
   clearTimeout(salesSaveTimer);
   if (S.bank && S.bank.cid === cid) S.bank.salesRef = list;
   salesSaveTimer = setTimeout(() => { salesSaveTimer = null; BankDB.set("sales:" + cid, list); }, 500);
@@ -14830,7 +14856,7 @@ const Cloud = {
     const until = num(s.at) + (num(s.expires_in) || 3600) * 1000;
     if (Date.now() > until - 120000) await this.refreshToken();
   },
-  signOut(){ this.setSess(null); this.st = {state: "off", email: "", role: "", firm: "", lastSync: 0, pending: 0, error: "", busy: "", members: []}; },
+  signOut(){ try { Live.stop(); } catch (e){} this.setSess(null); this.st = {state: "off", email: "", role: "", firm: "", lastSync: 0, pending: 0, error: "", busy: "", members: []}; },
   async api(path, opts, retry){
     if (!retry) await this.fresh().catch(() => {});
     const c = this.cfg(), s = this.sess();
@@ -14989,6 +15015,10 @@ function cleanIds(v, depth){
 }
 function cloudRowOk(r){ return r && SAFE_ID.test(String(r.id || "")) && (!r.client_id || SAFE_ID.test(String(r.client_id))); }
 async function cloudApply(rows){
+  const was = Live.applying; Live.applying = true;          // what comes from the server is not sent back
+  try { await cloudApplyNow(rows); } finally { Live.applying = was; }
+}
+async function cloudApplyNow(rows){
   const marks = Cloud.marks();
   rows = [].concat(rows || []).filter(cloudRowOk);
   rows.forEach(r => { if (r.data) cleanIds(r.data, 0); });
@@ -15107,7 +15137,7 @@ function startCloudSync(){
 }
 function startCloudSync2(){
   loadAccount(true);
-  cloudSync(false);
+  cloudSync(false).then(() => { try { Live.start(); } catch (e){} });
   cloudTimer = setInterval(() => { if (document.visibilityState === "visible" && Cloud.cfg().auto !== false) cloudSync(false); }, 45000);
 }
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && Cloud.on() && Cloud.cfg().auto !== false) cloudSync(false); });
@@ -15122,11 +15152,14 @@ function whoChipInner(){
 function cloudChip(){
   if (!Cloud.on()) return "";
   const st = Cloud.st;
+  const sv = Live.sv;
+  if (st.state !== "signedout" && sv.state === "offline") return '<span class="tchip warn" title="Changes are kept on this computer and sent when it is back online">Offline \u00b7 changes kept here</span>';
+  if (sv.state === "saving") return '<span class="tchip off">Saving\u2026</span>';
   if (st.busy) return '<span class="tchip off">Syncing\u2026</span>';
   if (st.state === "signedout") return '<button class="tchip bad" data-act="openSettings">Sign in again</button>';
   if (st.error) return '<button class="tchip warn" data-act="openSettings" title="' + esc(st.error) + '">Sync problem</button>';
   const mins = st.lastSync ? Math.round((Date.now() - st.lastSync) / 60000) : null;
-  return '<span class="tchip ok" title="' + esc(st.email) + (st.lastSync ? " \u00b7 last sync " + fmtTime(st.lastSync) : "") + '">\u2601 Shared' + (mins > 5 ? " \u00b7 " + mins + "m" : "") + "</span>";
+  return '<span class="tchip ok" title="' + esc(st.email) + (st.lastSync ? " \u00b7 last sync " + fmtTime(st.lastSync) : "") + '">\u2601 ' + (sv.at ? "Saved " + fmtTime(sv.at) : "Shared") + (Live.st === "live" ? " \u00b7 live" : "") + "</span>";
 }
 
 /* ---------- plan, balance and charging ---------- */
@@ -18324,16 +18357,19 @@ const BookSync = {
     return rows && rows[0] ? rows[0] : null;
   },
   // put what came back into the open books (and this browser's copy)
+  // server-books: what Tally's masters give (the ledgers' groups, GSTINs, states...) is filled by the cloud copy too; a work
+  // part without them must not wipe what the cloud copy just brought in (another computer then showed MIS with no groups)
+  MASTERS: ["under", "groups", "gstins", "states", "groupInfo", "ledInfo", "ledInfoAt", "tallyCo"],
   async apply(cid, data){
-    const keys = this.keys();
+    const keys = this.keys(), drop = k => data[k] === undefined && this.MASTERS.indexOf(k) < 0;
     if (S.books && S.books.cid === cid){
-      keys.forEach(k => { if (data[k] === undefined) delete S.books[k]; else S.books[k] = clone(data[k]); });
+      keys.forEach(k => { if (drop(k)) delete S.books[k]; else if (data[k] !== undefined) S.books[k] = clone(data[k]); });
       if (S.books.vouchers && S.books.vouchers.length) try { LedMaster.refresh(S.books); } catch (e){}
       await saveBooks({fromCloud: true});
       render();
     } else {
       const saved = (await Books.load(cid)) || {cid};
-      keys.forEach(k => { if (data[k] === undefined) delete saved[k]; else saved[k] = data[k]; });
+      keys.forEach(k => { if (drop(k)) delete saved[k]; else if (data[k] !== undefined) saved[k] = data[k]; });
       await Books.save(cid, saved);
     }
   },
@@ -18352,6 +18388,7 @@ const BookSync = {
   /* ---------- sending ---------- */
   schedule(cid){
     if (!this.on() || !cid) return;
+    if (typeof BookItems === "object" && BookItems.on()){ BookItems.schedule(cid); return; }     // live sync: item by item, at once (54-live-sync.js)
     const s = this.of(cid);
     clearTimeout(s.timer);
     s.timer = setTimeout(() => this.push(cid), this.wait);
@@ -18389,6 +18426,7 @@ const BookSync = {
   /* ---------- receiving ---------- */
   async pull(cid){
     if (!this.on() || !cid) return;
+    if (typeof BookItems === "object" && BookItems.on()){ try { if (await BookItems.pull(cid) !== "off") return; } catch (e){ this.of(cid).error = e.message; return; } }
     const s = this.of(cid);
     if (s.busy) return;
     s.busy = true;
@@ -18419,6 +18457,7 @@ const BookSync = {
   // called with every firm sync: send what is waiting, bring in what others saved for the client that is open
   async tick(){
     if (!this.on()) return;
+    if (typeof BookItems === "object" && BookItems.on()){ await BookItems.flush(); const o = S.books && S.books.cid && !S.books.loading ? S.books.cid : null; if (o) await BookItems.pull(o).catch(() => {}); return; }
     const open = S.books && S.books.cid && !S.books.loading ? S.books.cid : null;
     for (const cid of Object.keys(this.st)){ if (cid !== open && this.st[cid].timer && !this.st[cid].busy) await this.push(cid); }
     if (open) await this.pull(open);
@@ -18427,7 +18466,7 @@ const BookSync = {
   // information on the From Tally tab only; warnings (look-only, not saved) on every tab
 
 };
-if (typeof window === "object") window.addEventListener("beforeunload", () => { try { Object.keys(BookSync.st).forEach(cid => { if (BookSync.st[cid].timer){ clearTimeout(BookSync.st[cid].timer); BookSync.push(cid); } }); } catch (e){} });
+if (typeof window === "object") window.addEventListener("beforeunload", () => { try { if (typeof BookItems === "object") Object.keys(BookItems.st).forEach(cid => { if (BookItems.st[cid].timer){ clearTimeout(BookItems.st[cid].timer); BookItems.push(cid); } }); } catch (e){} try { Object.keys(BookSync.st).forEach(cid => { if (BookSync.st[cid].timer){ clearTimeout(BookSync.st[cid].timer); BookSync.push(cid); } }); } catch (e){} });
 /* ================================================================== */
 /* Vendor ledger reconciliation: the vendor's ledger against the      */
 /* party's ledger in Tally, for a period, with a downloadable report   */
@@ -19153,7 +19192,7 @@ const LK = {
     if (!force && Date.now() - (f.cat || 0) < 60000) return;
     f.cat = Date.now();
     const at = ((S.books || {}).meta || {}).at;
-    try { await TCloud.status(S.coId, force); if (TCloud.has(S.coId)) await TCloud.load(force); } catch (e){}
+    try { await TCloud.status(S.coId, force); if (TCloud.has(S.coId) && await TCloud.load(force) === "new") TCloud.rework(S.books); } catch (e){}
     if (!quiet || at !== ((S.books || {}).meta || {}).at) render();
   },
   // quiet: the once-a-minute look from any screen; the page is drawn again only when the books changed
@@ -20027,7 +20066,10 @@ const TCloud = {
     const todo = Object.keys(byMonth).sort().filter(ym => byMonth[ym].some(x => known[x.day] !== x.at));
     const ledNew = !same || meta.cloud.ledgersAt !== bk.ledgersAt;
     if (!todo.length && !ledNew) return true;
-    f.busy = "Bringing in " + (todo.length === 1 ? FC.monthLabel(todo[0]) : todo.length + " months") + " from the copy in FinCom's cloud…"; render();
+    // server-books: the progress shows on every Books screen (TDS, GST, MIS, Reports...), not only on Look up
+    const say = t => { f.busy = b.busy = t; render(); };
+    say("Bringing in " + (todo.length === 1 ? FC.monthLabel(todo[0]) : todo.length + " months") + " from the copy in FinCom's cloud…");
+    let changed = false;
     try {
       if (!same){ b.vouchers = []; b.tb = null; }
       if (ledNew){
@@ -20035,10 +20077,15 @@ const TCloud = {
         TallyRead.balances(b, {ledgers: led.map(l => ({name: l.name, parent: l.parent, open: String(l.open), close: ""}))}, from, to);
         await this.groupsInto(b, bk.book);
       }
-      const days = {};
+      // the days, sixteen at a time (one by one, a year of 365 files took minutes on a new computer; the server answers
+      // many at once over one connection)
+      const days = {}, want = [].concat(...todo.map(ym => byMonth[ym])), text = {};
+      let got = 0, next = 0;
+      const one = async () => { while (next < want.length){ const x = want[next++]; text[x.day] = await this.day(bk.book, x.day, x.at); days[x.day] = x.at; got++;
+        if (got % 10 === 0 || got === want.length) say("Bringing in the books from FinCom's cloud: " + got + " of " + want.length + " days…"); } };
+      await Promise.all(Array.from({length: Math.min(16, want.length)}, one));
       for (const ym of todo){
-        const parts = [];
-        for (const x of byMonth[ym]){ parts.push(await this.day(bk.book, x.day, x.at)); days[x.day] = x.at; }
+        const parts = byMonth[ym].map(x => text[x.day] || "");
         const res = await Books.importDayBook(new Blob(["<ENVELOPE>" + parts.join("") + "</ENVELOPE>"], {type: "text/xml"}));
         const bad = notThisClient((res.meta || {}).gstins);
         if (bad.length) throw new Error(panRefusal("The company in the cloud copy", bad));
@@ -20050,10 +20097,37 @@ const TCloud = {
       meta.cloud = {book: bk.book, company: bk.company, ledgersAt: bk.ledgersAt, days: Object.assign({}, known, days), at: new Date().toISOString()};
       meta.at = meta.cloud.at; meta.keep = true; meta.file = "the copy in FinCom's cloud"; meta.from = meta.from && meta.from < from ? meta.from : from;
       TallyRead.after(b, "after changes came from the cloud copy");
-      LK.cache = {}; await saveBooks();
+      LK.cache = {}; changed = true; await saveBooks();
     } catch (e){ toast("Could not bring in the cloud copy: " + ((e && e.message) || e)); }
-    f.busy = ""; render();
-    return true;
+    f.busy = b.busy = ""; render();
+    return changed ? "new" : true;
+  },
+  // server-books: opening a client on any computer brings its books in from the cloud copy, with no button and no upload
+  // (this browser keeps a copy of each day, so only the days that changed are fetched). Then MIS and the audit are
+  // worked out again from what came in.
+  async openLoad(cid){
+    if (!this.on() || S.coId !== cid) return false;
+    const f = LK.fr();
+    if (f.busy) return false;
+    f.cat = Date.now();
+    let r = false;
+    const b = S.books, empty = b && b.cid === cid && !(b.vouchers || []).length;
+    if (empty){ f.busy = b.busy = "Looking for the books in FinCom's cloud…"; render(); }
+    // a day book chosen on this computer that has not reached the cloud yet goes first
+    try { if (await TCloudUp.retry(cid, t => { if (S.books && S.books.cid === cid){ f.busy = S.books.busy = t; render(); } })) this.st[cid] = {}; } catch (e){}
+    try { await this.status(cid, true); if (this.has(cid) && S.books && S.books.cid === cid){ if (empty) f.busy = ""; r = await this.load(true); } } catch (e){}
+    if (S.books && S.books.cid === cid && /FinCom.s cloud/.test(S.books.busy || "")){ f.busy = S.books.busy = ""; render(); }
+    if (r === "new" && S.books && S.books.cid === cid) this.rework(S.books);
+    // how long until every entry was in (said on the books' first line, with the time to open)
+    if (S.books && S.books.cid === cid && S.books.openAt){ S.books.readyMs = Date.now() - S.books.openAt; render(); }
+    return r;
+  },
+  rework(b){
+    try {
+      const last = b.mis && b.mis.last;
+      if (last && last.from && last.to) MIS.run(last.from, last.to, "after the books came in from the cloud copy"); else MIS.maybeRun();
+      Audit.maybeRun(); saveBooks(); render();
+    } catch (e){}
   },
   // ---------- Settings: computers and companies
   async refreshPane(){
@@ -20163,6 +20237,31 @@ const TCloudUp = {
     }
     await flush();
     return {days: sent};
+  },
+  // server-books: a day book file waiting to go to the cloud ("tcup:<client>:<from>-<to>" in this browser's store)
+  async hold(cid, file, range, who){
+    const k = "tcup:" + cid + ":" + range.from + "-" + range.to;
+    this.live.add(k);
+    try { await IDBStore.write([[k, {blob: file, name: file.name, from: range.from, to: range.to, who: Object.assign({}, who), at: new Date().toISOString()}]]); } catch (e){}
+    return k;
+  },
+  live: new Set(),          // the files this page is sending now (not to be sent twice)
+  async drop(k){ this.live.delete(k); try { await IDBStore.write([[k, null]]); } catch (e){} },
+  async waiting(cid){ try { return await IDBStore.prefix("tcup:" + cid + ":"); } catch (e){ return []; } },
+  // sent again on opening the client; true when something went
+  async retry(cid, onStep){
+    if (!this.on() || this.retrying) return false;
+    const list = (await this.waiting(cid)).filter(([k]) => !this.live.has(k));
+    if (!list.length) return false;
+    this.retrying = true; let sent = 0;
+    try {
+      for (const [k, x] of list){
+        try { const r = await this.days(await x.blob.text(), {from: x.from, to: x.to}, onStep, x.who); if (r && r.days != null){ await this.drop(k); sent++; } }
+        catch (e){ toast("A day book (" + (x.name || "file") + ") is still waiting to go to FinCom’s cloud: " + ((e && e.message) || e)); }
+      }
+    } finally { this.retrying = false; }
+    if (sent) toast(sent + " day book file" + (sent === 1 ? " that was waiting is" : "s that were waiting are") + " now in FinCom’s cloud.");
+    return sent > 0;
   },
   async opening(from, asOn, led, who){
     if (!this.on()) return {skipped: "not signed in to the firm account"};
@@ -20834,4 +20933,330 @@ if (typeof document !== "undefined" && PHONE && typeof MutationObserver === "fun
   watch();
   const flip = () => { if (PHONE.matches) cardLabels(); else cardsOff(); };
   if (PHONE.addEventListener) PHONE.addEventListener("change", flip); else if (PHONE.addListener) PHONE.addListener(flip);
+}
+/* ================================================================== */
+/* Live sync: every change on every open computer at once            */
+/* ================================================================== */
+// Review of 01-Oct-2026 (branch server-books). Four TDS ledgers confirmed on one computer still showed the old state on
+// another, even after a refresh, and changing them there said someone else had changed them first. The work of a
+// client's books was one blob per client (client_books), sent 1.5 s after a change and fetched every 45 s; any two
+// changes to the same client clashed. Now:
+//   - BookItems: the work is kept item by item (client_book_items, migration-12): each ledger's mapping, each challan,
+//     each 2B month... A change sends only its items, at once; the latest save of an item wins and nothing else is
+//     touched, so confirming a TDS ledger never clashes with someone working on a bill or another ledger.
+//   - On opening a client the server's items come first (only those changed since this computer last looked); this
+//     browser's copy is a cache, never shown in place of a newer one.
+//   - Live: one connection to Supabase Realtime per page; a change to the firm's items, bills, suppliers, settings or
+//     clients by anyone reaches every open computer in a second or two and the screen is drawn again. Realtime checks
+//     the same read policies as the database, so only the firm's own rows come.
+//   - cloudSoon: every change on this computer (a bill, a setting, a bank line...) goes to the server at once, not on
+//     the 45-second round; the top bar says Saving..., Saved 14:05, or that the computer is offline.
+//   - A change by someone else is applied with a short note ("Updated by Rahul at 14:05"), never an error.
+// Without migration-12 on the database the books are shared as before (BookSync, the blob).
+const BookItems = {
+  off: false,              // client_book_items not in the database: BookSync's blob as before
+  st: {},                  // cid -> {seq, base: {itemKey: hash}, chain, timer, editAt, error}
+  MAXI: 290,
+  on(){ return !this.off && typeof BookSync === "object" && BookSync.on() && !BookSync.off; },
+  ik(k, i){ return k + "\u0001" + i; },
+  h(d, o){ return fpHash(stableStr(d === undefined ? null : d) + "|" + (o == null ? "" : o)); },
+  missing(e){ return /client_book_items|save_book_items|PGRST202|PGRST205|schema cache|does not exist|404/i.test(String(e && e.message || e)); },
+  // ---------- the work as items, and back
+  // an object: an item for each of its keys (".name"); a list of things with ids: an item for each ("#id", in order);
+  // anything else is one item. The item "" says which (the shape), so an empty object or list comes back as it was
+  split(work){
+    const out = new Map(), M = this.MAXI;
+    Object.keys(work || {}).forEach(k => {
+      const v = work[k];
+      if (v === undefined) return;
+      const isObj = v && typeof v === "object" && !Array.isArray(v) && Object.keys(v).every(s => s.length < M);
+      const ids = Array.isArray(v) && v.length && v.every(x => x && typeof x === "object" && typeof x.id === "string" && x.id && x.id.length < M) && new Set(v.map(x => x.id)).size === v.length;
+      if (isObj){
+        out.set(this.ik(k, ""), {k, i: "", d: {$t: "obj"}});
+        Object.keys(v).forEach(s => { if (v[s] !== undefined) out.set(this.ik(k, "." + s), {k, i: "." + s, d: v[s]}); });
+      } else if (ids){
+        out.set(this.ik(k, ""), {k, i: "", d: {$t: "arr"}});
+        v.forEach((x, n) => out.set(this.ik(k, "#" + x.id), {k, i: "#" + x.id, o: n, d: x}));
+      } else out.set(this.ik(k, ""), {k, i: "", d: v});
+    });
+    return out;
+  },
+  join(items){
+    const m = items.find(x => x.i === "");
+    if (!m) return undefined;
+    const t = m.d && typeof m.d === "object" && !Array.isArray(m.d) && Object.keys(m.d).length === 1 ? m.d.$t : null;
+    if (t === "obj"){ const o = {}; items.forEach(x => { if (x.i[0] === ".") o[x.i.slice(1)] = x.d; }); return o; }
+    if (t === "arr") return items.filter(x => x.i[0] === "#").sort((a, c) => (a.o || 0) - (c.o || 0)).map(x => x.d);
+    return m.d;
+  },
+  // rows from the server into a books object: only the keys they touch are rebuilt
+  put(b, rows){
+    const by = {}, keys = BookSync.keys();
+    rows.forEach(r => { if (keys.indexOf(r.k) >= 0) (by[r.k] = by[r.k] || []).push(r); });
+    Object.keys(by).forEach(k => {
+      const cur = this.split({[k]: b[k]});
+      by[k].forEach(r => { const key = this.ik(k, r.i); if (r.del) cur.delete(key); else cur.set(key, {k, i: r.i, o: r.o, d: clone(r.d)}); });
+      const v = this.join([...cur.values()]);
+      if (v === undefined){ if (BookSync.MASTERS.indexOf(k) < 0) delete b[k]; } else b[k] = v;
+    });
+    return Object.keys(by);
+  },
+  // ---------- what this computer last agreed with the server, item by item
+  async state(cid){
+    let s = this.st[cid];
+    if (s && s.ready) return s;
+    s = this.st[cid] = s || {seq: 0, base: {}, chain: Promise.resolve()};
+    try { const m = await IDBStore.get("bookitems:" + cid); if (m){ s.seq = m.seq || 0; s.base = m.base || {}; } } catch (e){}
+    s.ready = true;
+    return s;
+  },
+  async keep(cid){ const s = this.st[cid]; try { await IDBStore.write([["bookitems:" + cid, {seq: s.seq, base: s.base, at: new Date().toISOString()}]]); } catch (e){} },
+  // one thing at a time for a client: fetching, sending and live changes are not interleaved
+  queue(cid, fn){ const s = this.st[cid] || (this.st[cid] = {seq: 0, base: {}, chain: Promise.resolve()}); const p = s.chain.then(fn, fn); s.chain = p.catch(() => {}); return p; },
+  // ---------- from the server
+  async fetch(cid, after){
+    let out = [];
+    for (;;){
+      const rows = await Cloud.api("client_book_items?select=key,item,ord,data,deleted,seq,updated_at,updated_by&client_id=eq." + encodeURIComponent(cid) + "&seq=gt." + after + "&order=seq.asc&limit=1000") || [];
+      out = out.concat(rows);
+      if (rows.length < 1000) return out;
+      after = rows[rows.length - 1].seq;
+    }
+  },
+  // on opening a client (and after being offline): what changed on the server since this computer last looked
+  pull(cid){ return this.queue(cid, () => this.pullNow(cid)); },
+  async pullNow(cid){
+    const s = await this.state(cid);
+    let rows;
+    try { rows = await this.fetch(cid, s.seq); Live.ok(); }
+    catch (e){ if (this.missing(e)){ this.off = true; return "off"; } Live.fail(e); s.error = e.message; throw e; }
+    s.error = "";
+    if (!s.seq && !rows.length && !Object.keys(s.base).length) await this.fromBlob(cid);
+    const first = !s.seq;
+    await this.take(cid, rows, {first, cursor: true});
+    await this.pushNow(cid);
+    return "ok";
+  },
+  // rows from the server (fetched, or live): applied unless this computer changed the same item later
+  async take(cid, rows, o){
+    const s = await this.state(cid), me = Live.me();
+    const work = (await BookSync.localWork(cid)) || {}, mine = this.split(work), use = [], notes = [];
+    rows.forEach(r => {
+      const key = this.ik(r.key, r.item), hNew = r.deleted ? "gone" : this.h(r.data, r.ord);
+      if (o.cursor) s.seq = Math.max(s.seq, num(r.seq));
+      if (s.base[key] === hNew) return;                                       // known already (this computer's own save, come back)
+      const loc = mine.get(key), hLoc = loc ? this.h(loc.d, loc.o) : "gone";
+      const changedHere = hLoc !== (s.base[key] || "gone");
+      s.base[key] = hNew;
+      if (hLoc === hNew) return;
+      // changed here too and not sent yet: the later change stays (it is sent next)
+      if (changedHere && s.editAt && s.editAt > Date.parse(r.updated_at || 0)) return;
+      use.push({k: r.key, i: r.item, o: r.ord, d: r.data, del: !!r.deleted});
+      if (!o.first && r.updated_by && r.updated_by !== me) notes.push(r);
+    });
+    if (use.length) await this.into(cid, use);
+    await this.keep(cid);
+    if (notes.length) Live.noteItems(cid, notes);
+    return use.length;
+  },
+  async into(cid, use){
+    if (S.books && S.books.cid === cid){
+      const keys = this.put(S.books, use);
+      if (keys.indexOf("map") >= 0 || keys.indexOf("ledInfo") >= 0){ S.books.mapV = (S.books.mapV || 0) + 1; S.books.reco = null; try { if ((S.books.vouchers || []).length) LedMaster.refresh(S.books); } catch (e){} }
+      LK.cache = {};
+      await saveBooks({fromCloud: true});
+      render();
+    } else {
+      const saved = (await Books.load(cid)) || {cid};
+      this.put(saved, use);
+      await Books.save(cid, saved);
+    }
+  },
+  // the first time a client's work comes to the items: what was kept in the blob (client_books), merged with this
+  // browser's copy as BookSync did, then sent as items. client_books stays as it was
+  async fromBlob(cid){
+    let row = null;
+    try { row = await BookSync.fetch(cid); } catch (e){ row = null; }
+    if (!row || !row.data) return;
+    const sb = await BookSync.loadBase(cid), mine = (await BookSync.localWork(cid)) || {}, clash = [];
+    const merged = sb.rev === 0 && !Object.keys(sb.base || {}).length && !Object.keys(mine).length ? row.data : BookSync.merge(sb.base || {}, mine, row.data, [], clash);
+    await BookSync.keepBase(cid, row.rev, row.data);
+    await BookSync.apply(cid, merged);
+  },
+  // ---------- to the server: the items changed since this computer last agreed with it
+  schedule(cid){
+    const s = this.st[cid] || (this.st[cid] = {seq: 0, base: {}, chain: Promise.resolve()});
+    s.editAt = Date.now();
+    Live.saving();
+    clearTimeout(s.timer);
+    s.timer = setTimeout(() => { s.timer = null; this.push(cid).catch(() => {}); }, 300);
+  },
+  push(cid){ return this.queue(cid, () => this.pushNow(cid)); },
+  async pushNow(cid){
+    const s = await this.state(cid);
+    if (BookSync.of(cid).readonly) return 0;
+    const work = await BookSync.localWork(cid);
+    if (!work) return 0;
+    const mine = this.split(work), send = [], present = new Set(Object.keys(work));
+    mine.forEach((x, key) => { const hh = this.h(x.d, x.o); if (s.base[key] !== hh) send.push([key, hh, {k: x.k, i: x.i, o: x.o, d: x.d}]); });
+    Object.keys(s.base).forEach(key => {
+      if (s.base[key] === "gone" || mine.has(key)) return;
+      const [k, i] = key.split("\u0001");
+      if (!present.has(k) && BookSync.MASTERS.indexOf(k) >= 0) return;         // filled from Tally; not here yet is not removed
+      send.push([key, "gone", {k, i, del: true}]);
+    });
+    if (!send.length){ Live.saved(); return 0; }
+    Live.saving();
+    try {
+      for (let at = 0; at < send.length;){
+        // up to 400 items or about 2 MB a call
+        let size = 0, end = at;
+        while (end < send.length && end - at < 400 && (end === at || size < 2e6)){ size += JSON.stringify(send[end][2]).length; end++; }
+        const part = send.slice(at, end);
+        const res = await Cloud.api("rpc/save_book_items", {method: "POST", body: {p_client: cid, p_items: part.map(x => x[2])}});
+        if (!res || !res.ok) throw new Error("The server did not take the change.");
+        part.forEach(x => { s.base[x[0]] = x[1]; });
+        at = end;
+      }
+      s.error = ""; await this.keep(cid); Live.saved();
+    } catch (e){
+      if (this.missing(e)){ this.off = true; BookSync.schedule(cid); return 0; }
+      if (/not allowed|42501|permission/i.test(e.message)){ BookSync.of(cid).readonly = true; Live.saved(); return 0; }
+      s.error = e.message; Live.fail(e); await this.keep(cid);
+    }
+    return send.length;
+  },
+  // a change arriving live: for the client open here; others are brought in when they are opened
+  remote(r){
+    const cid = r.client_id;
+    if (!cid || !S.books || S.books.cid !== cid || S.books.loading) return;
+    this.queue(cid, () => this.take(cid, [r], {first: false, cursor: false}));
+  },
+  // anything not sent yet (after being offline)
+  async flush(){ for (const cid of Object.keys(this.st)) if (this.st[cid].error || this.st[cid].timer) await this.push(cid).catch(() => {}); },
+  // what the screen says of this client's work
+  note(cid){
+    const s = this.st[cid] || {};
+    if (Live.sv.state === "offline") return {t: "Offline: changes are kept on this computer and sent when it is back online.", cls: "warn"};
+    if (s.error) return {t: "Not saved to the server yet (" + s.error + "). It is kept on this computer and sent again on its own.", cls: "warn"};
+    if (s.timer || Live.sv.state === "saving") return {t: "Saving…"};
+    return Live.sv.at ? {t: "Saved " + fmtTime(Live.sv.at) + (Live.st === "live" ? " · changes by others appear here at once" : "")} : null;
+  }
+};
+
+/* ---------- Supabase Realtime: one connection a page (the Phoenix protocol, version 1) ---------- */
+const Live = {
+  ws: null, st: "off", ref: 0, joinRef: "", topic: "", token: "", wait: 1000, hb: null, rt: null, err: "", stopped: false,
+  sv: {state: "", at: 0, pending: 0},     // Saving..., Saved, offline
+  notes: [],
+  me(){ const s = (typeof Cloud === "object" && Cloud.sess()) || {}; return s.user_id || Cloud.st.me || ""; },
+  on(){ return typeof Cloud === "object" && Cloud.on() && !!Cloud.st.firm && !Cloud.st.mfa; },
+  url(){ const c = Cloud.cfg(); return c.url.replace(/^http/, "ws").replace(/\/+$/, "") + "/realtime/v1/websocket?apikey=" + encodeURIComponent(c.key) + "&vsn=1.0.0"; },
+  start(){
+    this.stopped = false;
+    if (!this.on() || this.ws || typeof WebSocket !== "function") return;
+    let ws;
+    try { ws = new WebSocket(this.url()); } catch (e){ this.later(); return; }
+    this.ws = ws; this.st = "connecting";
+    ws.onopen = () => { this.join(); clearInterval(this.hb); this.hb = setInterval(() => { this.send("phoenix", "heartbeat", {}); this.tokenTick(); }, 25000); };
+    ws.onmessage = ev => { let m = null; try { m = JSON.parse(ev.data); } catch (e){} if (m) this.got(m); };
+    ws.onclose = () => { clearInterval(this.hb); if (this.ws === ws) this.ws = null; this.st = "off"; this.top(); if (!this.stopped) this.later(); };
+    ws.onerror = () => { try { ws.close(); } catch (e){} };
+  },
+  stop(){ this.stopped = true; clearTimeout(this.rt); clearInterval(this.hb); const w = this.ws; this.ws = null; this.st = "off"; try { if (w) w.close(); } catch (e){} },
+  later(){ clearTimeout(this.rt); if (!this.on() || this.stopped) return; this.rt = setTimeout(() => this.start(), this.wait); this.wait = Math.min(30000, this.wait * 2); },
+  send(topic, event, payload){ if (!this.ws || this.ws.readyState !== 1) return ""; const ref = String(++this.ref); this.ws.send(JSON.stringify({topic, event, payload, ref, join_ref: this.joinRef || null})); return ref; },
+  async join(){
+    await Cloud.fresh().catch(() => {});
+    const f = Cloud.st.firm, s = Cloud.sess() || {};
+    this.topic = "realtime:fincom-" + f; this.token = s.access_token || "";
+    const pc = ["client_book_items", "records", "clients"].map(t => ({event: "*", schema: "public", table: t, filter: "firm_id=eq." + f}));
+    this.joinRef = String(this.ref + 1);
+    this.send(this.topic, "phx_join", {config: {broadcast: {self: false, ack: false}, presence: {key: ""}, postgres_changes: pc, private: false}, access_token: this.token});
+  },
+  // a new access token (refreshed every hour) is given to the open connection
+  tokenTick(){ const t = (Cloud.sess() || {}).access_token; if (this.st === "live" && t && t !== this.token){ this.token = t; this.send(this.topic, "access_token", {access_token: t}); } },
+  got(m){
+    if (m.event === "phx_reply" && m.ref === this.joinRef){
+      if (m.payload && m.payload.status === "ok"){ this.st = "live"; this.err = ""; this.wait = 1000; this.catchUp(); }
+      else { this.st = "error"; this.err = JSON.stringify((m.payload || {}).response || {}).slice(0, 200); }
+      this.top(); return;
+    }
+    if (m.event === "system" && m.payload && m.payload.status === "error"){ this.st = "error"; this.err = String(m.payload.message || "").slice(0, 200); this.top(); return; }
+    if (m.event === "postgres_changes"){ const d = m.payload && m.payload.data; if (d) this.change(d); return; }
+    if (m.event === "phx_error" || m.event === "phx_close"){ try { this.ws.close(); } catch (e){} }
+  },
+  // (re)connected: what changed while the connection was down
+  catchUp(){
+    try { if (typeof cloudSync === "function" && !cloudBusy) cloudSync(false); } catch (e){}
+    const cid = S.books && S.books.cid && !S.books.loading ? S.books.cid : null;
+    if (cid && BookItems.on()) BookItems.pull(cid).catch(() => {});
+  },
+  change(d){
+    const r = d.record;
+    if (!r || (d.errors && d.errors.length)){ this.catchUp(); return; }      // too big to come live: fetched instead
+    if (d.table === "client_book_items") BookItems.remote(r);
+    else if (d.table === "records" || d.table === "clients") this.rec(d.table, r).catch(() => {});
+  },
+  async rec(table, r){
+    const row = table === "clients" ? {kind: "client", id: r.id, client_id: r.id, data: r.data, deleted: r.deleted, updated_at: r.updated_at}
+      : {kind: r.kind, id: r.id, client_id: r.client_id || "", data: r.data, deleted: r.deleted, updated_at: r.updated_at};
+    if (!row.deleted && (row.data === undefined || row.data === null)){ this.catchUp(); return; }
+    const before = row.kind === "entry" && S.data[row.client_id] && S.data[row.client_id].entries[row.id] ? stableStr(S.data[row.client_id].entries[row.id]) : null;
+    this.applying = true;
+    try { await cloudApply([row]); } finally { this.applying = false; }
+    const changed = row.kind !== "entry" || before !== stableStr(row.data);
+    if (changed && r.updated_by && r.updated_by !== this.me()) this.noteRec(row, r.updated_by, r.updated_at);
+    render();
+  },
+  // ---------- notes: who changed what
+  who(uid){ const m = ((Cloud.st && Cloud.st.members) || []).find(x => x.user_id === uid); return m ? (m.name || m.email) : "a colleague"; },
+  when(at){ try { return fmtTime(at ? Date.parse(at) : Date.now()); } catch (e){ return ""; } },
+  say(text){ this.notes = [{text, at: Date.now()}].concat(this.notes).slice(0, 8); toast(text); },
+  noteItems(cid, rows){
+    const by = {};
+    rows.forEach(r => { (by[r.updated_by] = by[r.updated_by] || []).push(r); });
+    Object.entries(by).forEach(([uid, rs]) => {
+      const leds = rs.filter(r => r.key === "map" && r.item[0] === ".").map(r => r.item.slice(1));
+      const what = leds.length ? (leds.length === 1 ? "ledger “" + leds[0] + "”" : leds.length + " ledgers") : "the TDS and GST work";
+      this.say("Updated by " + this.who(uid) + " at " + this.when(rs[rs.length - 1].updated_at) + ": " + what + ".");
+    });
+  },
+  noteRec(row, uid, at){
+    const who = this.who(uid), t = this.when(at);
+    if (row.kind === "entry"){ const e = row.data || {}; this.say("Updated by " + who + " at " + t + ": bill " + (e.billNo || e.invNo || e.party || e.vendor || "") + (e.status ? " (" + e.status + ")" : "") + "."); }
+    else if (row.kind === "client"){ const c = row.data || {}; this.say("Updated by " + who + " at " + t + ": client setup of " + (c.name || "a client") + "."); }
+    else if (row.kind === "firm") this.say("Updated by " + who + " at " + t + ": the firm’s settings.");
+  },
+  // ---------- Saving..., Saved, offline (the top bar and the books)
+  saving(){ if (this.sv.state !== "saving"){ this.sv.state = "saving"; this.top(); } },
+  saved(){ this.sv = {state: "saved", at: Date.now()}; this.top(); },
+  ok(){ if (this.sv.state === "offline"){ this.sv.state = "saved"; this.top(); } },
+  fail(e){
+    const off = (typeof navigator === "object" && navigator.onLine === false) || /Failed to fetch|NetworkError|network|Load failed/i.test(String(e && e.message || e));
+    this.sv = {state: off ? "offline" : "error", at: this.sv.at, err: String(e && e.message || e).slice(0, 160)}; this.top();
+  },
+  top(){ try { if (typeof renderTop === "function") renderTop(); else render(); } catch (e){} }
+};
+
+/* ---------- every change on this computer goes to the server at once ---------- */
+let cloudSoonT = null;
+function cloudSoon(){
+  if (Live.applying || typeof Cloud !== "object" || !Cloud.on() || !Cloud.st.firm || Cloud.st.mfa || Cloud.cfg().auto === false) return;
+  Live.saving();
+  clearTimeout(cloudSoonT);
+  cloudSoonT = setTimeout(cloudPushNow, 400);
+}
+async function cloudPushNow(){
+  if (cloudBusy){ clearTimeout(cloudSoonT); cloudSoonT = setTimeout(cloudPushNow, 300); return; }
+  cloudBusy = true;
+  try { await cloudPush(); Cloud.st.pending = 0; Cloud.st.error = ""; Live.saved(); }
+  catch (e){ Live.fail(e); Cloud.st.pending = (cloudChanges().changes || []).length; }
+  cloudBusy = false;
+}
+if (typeof window === "object"){
+  window.addEventListener("online", () => { try { Live.ok(); cloudSoon(); BookItems.flush(); if (!Live.ws) Live.start(); } catch (e){} });
+  window.addEventListener("offline", () => { try { Live.fail(new Error("offline")); } catch (e){} });
+  // a safety net: anything not sent (offline, an error) is tried again every 20 seconds
+  setInterval(() => { try { if (Live.sv.state === "offline" || Live.sv.state === "error"){ cloudSoon(); BookItems.flush(); } } catch (e){} }, 20000);
 }
