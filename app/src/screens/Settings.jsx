@@ -16,6 +16,7 @@ import { BankSetup } from "../parts/BankSettings.jsx";
 import GstSettings from "./gst/GstSettings.jsx";
 import Parties from "./Parties.jsx";
 import { PostLog } from "./Done.jsx";
+import GstApiAll from "./GstApiAll.jsx";
 
 // the list on the left: groups of sections; each section has a label and, below it, where it stands now
 function SetNav({ label, groups, current, pick }) {
@@ -86,6 +87,10 @@ function firmGroups() {
         status: "Tally: " + tallyStatus(null).label },
       { id: "postlog", label: "Sent to Tally", about: "A record of every entry posted to Tally, by whom and when, for all clients.", status: (S.firm.postLog || []).length + " entries" },
     ] },
+    { title: "GST", items: [
+      { id: "gstapi", label: "GST API, all clients", about: "Every client's GST portal connection: until when, the returns fetched, the e-invoice user.",
+        status: (() => { const xs = Object.values(GSTAPI.sess || {}); const soon = xs.filter((x) => x.accessUntil && Date.parse(x.accessUntil) - Date.now() < 3 * 86400000 && !x.endedAt).length; return xs.filter((x) => GSTAPI.live && x.connectedAt && !x.endedAt).length + " connected" + (soon ? ", " + soon + " ending soon" : ""); })() },
+    ] },
     { title: "How the work is done", items: [
       { id: "rates", label: "TDS rates and limits", about: "The rates and yearly limits used to work out TDS on every client’s bills.", status: "tax year " + (S.firm.fy || "2026-27") },
       { id: "reading", label: "Reading bills", about: "How bills and statements are read — free reading first, then Google OCR or Claude — and a test of each.",
@@ -108,6 +113,7 @@ export function FirmSettings() {
     bridge: () => <BridgeSettings />,
     tcloud: () => <CloudBooks />,
     postlog: () => <PostLog />,
+    gstapi: () => <GstApiAll />,
     rates: () => <Rates />,
     reading: () => <Reading />,
     ai: () => <AiSettings />,

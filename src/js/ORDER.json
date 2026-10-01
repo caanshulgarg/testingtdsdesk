@@ -52,5 +52,6 @@
  "50-ai-help.js",
  "52-routes.js",
  "53-phone.js",
- "54-live-sync.js"
+ "54-live-sync.js",
+ "55-einvoice.js"
 ]

@@ -337,7 +337,12 @@ function invoiceHtml(x, co, cfg){
     "th{background:#f0f0f0;font-size:10px}.n{text-align:right;white-space:nowrap}.muted{color:#555}.w50{width:50%}.tot td{font-weight:bold}.sign{height:70px}" +
     "@media print{.noprint{display:none}}</style></head><body>" +
     '<p class="noprint" style="text-align:center"><button onclick="window.print()">Print / Save as PDF</button></p>' +
-    '<div class="inv"><div class="cell b" style="text-align:center"><h2>TAX INVOICE</h2>' + (x.irn ? '<div class="muted">IRN: ' + e(x.irn) + "</div>" : "") + "</div>" +
+    '<div class="inv"><div class="cell b" style="text-align:center"><h2>TAX INVOICE</h2>' + (x.irn ? '<div class="muted">IRN: ' + e(x.irn) + "</div>" : "") +
+      (x.ackNo ? '<div class="muted">Ack. No.: ' + e(x.ackNo) + (x.ackDt ? " · Ack. Date: " + e(fmtDateTime(x.ackDt)) : "") + "</div>" : "") +
+      (x.irnStatus === "cancelled" ? '<div><b>IRN CANCELLED</b></div>' : "") +
+      // the signed QR code of the e-invoice (rule 48(4)), drawn in the printed page from the IRP's signed text
+      (x.signedQr && x.irnStatus !== "cancelled" ? '<div id="einvqr" style="display:inline-block;margin-top:6px"></div><scr' + 'ipt src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></scr' + 'ipt>' +
+        "<scr" + "ipt>try{new QRCode(document.getElementById('einvqr'),{text:" + JSON.stringify(String(x.signedQr)).replace(/</g, "\\u003c") + ",width:150,height:150,correctLevel:QRCode.CorrectLevel.L})}catch(e){}</scr" + "ipt>" : "") + "</div>" +
     '<div class="row b"><div class="cell r w50"><h1>' + e(co.name) + "</h1>" + (cfg.address ? "<div>" + e(cfg.address).replace(/\n/g, "<br>") + "</div>" : "") +
       (co.gstin ? "<div><b>GSTIN:</b> " + e(co.gstin) + "</div>" : "") + (co.pan || co.gstin ? "<div><b>PAN:</b> " + e(co.pan || String(co.gstin).slice(2, 12)) + "</div>" : "") +
       (home ? "<div><b>State:</b> " + e(GST_STATES[home] || "") + " (" + home + ")</div>" : "") + (cfg.phone ? "<div>Phone: " + e(cfg.phone) + "</div>" : "") + (cfg.email ? "<div>Email: " + e(cfg.email) + "</div>" : "") + "</div>" +

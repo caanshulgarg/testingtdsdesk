@@ -5,7 +5,7 @@
 //
 // State: S.gsetReg (the GSTIN whose settings are shown), S.gsetFrom / S.gsetType (a filing type being chosen),
 // S.gcontQ (the contacts search).
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import CommitBox from "../../parts/CommitBox.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
@@ -78,11 +78,32 @@ function OneGstin({ b, g, regs }) {
       <H4>Rule 37</H4><label className="note"><input type="checkbox" aria-label="Rule 37" key={k("r37", !!((b.rule37On || {})[reg]))} defaultChecked={!!((b.rule37On || {})[reg])} onChange={shared("r37")} /> Reverse credit on bills unpaid 180 days after their date, and reclaim it when paid (off unless switched on)</label>
       <H4>E-invoicing</H4>
       <select aria-label="E-invoicing" style={{ width: "auto" }} key={k("einv", GSTSet.einvMode(reg))} defaultValue={GSTSet.einvMode(reg)} onChange={shared("einv")}>{[["auto", "Found from Tally: checked when the books carry IRNs"], ["outside", "Applies, e-invoices made outside Tally"], ["no", "Does not apply"]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+      <EinvLogin gstin={(GSTR.gstins(b) || []).find((g) => g.slice(0, 2) === reg) || ""} />
       <H4>Tally ledger for GST paid in cash</H4>
       <CommitBox aria-label="Tally ledger for GST paid in cash" data-fk={"gset-cash-" + reg} value={((b.gstCashLedger || {})[reg]) || (reg + " GST ELECTRONIC CASH LEDGER")} style={{ width: 320 }} onCommit={(v) => gsetSet("cash", v, reg)} />
       {" "}<span className="note">used in the set-off journal</span>
     </section>
   );
+}
+
+// tax-accuracy: the client's e-invoice (IRP) API user, for IRN and e-way bills from Sales; the password goes straight to
+// the firm's server, which keeps it in Vault: it is never kept in this browser
+function EinvLogin({ gstin }) {
+  const [u, setU] = useState(""), [p, setP] = useState(""), [msg, setMsg] = useState(""), [busy, setBusy] = useState(false);
+  const a = gstin && GSTAPI.on() ? EINV.need(gstin) : undefined;
+  if (!gstin || !GSTAPI.on()) return null;
+  const save = async () => { setBusy(true); try { await EINV.login(gstin, u.trim(), p); setP(""); setMsg("Signed in to the e-invoice portal (" + (EINV.host || "") + ")."); } catch (e) { setMsg((e && e.message) || String(e)); } setBusy(false); render(); };
+  return <div data-einv-login={gstin}>
+    <H4>E-invoice and e-way bill API user</H4>
+    {a ? <p className="note">{gstin}: user <b>{a.username}</b>{a.last_error ? <> · <span className="bad">sign-in failed: {a.last_error}</span></> : a.token_until ? " · signed in" : ""}. Give it again to change it.</p>
+      : <p className="note">Made by the taxpayer on the e-invoice portal (API registration → through GSP → TaxPro). FinCom keeps the password on the firm's server, in Vault.</p>}
+    <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+      <input type="text" placeholder="API username" aria-label="E-invoice API username" value={u} autoComplete="off" style={{ width: 200 }} onChange={(ev) => setU(ev.target.value)} />
+      <input type="password" placeholder="API password" aria-label="E-invoice API password" value={p} autoComplete="new-password" style={{ width: 200 }} onChange={(ev) => setP(ev.target.value)} />
+      <button className="btn small" disabled={busy || !u.trim() || !p} onClick={save}>{busy ? "Signing in…" : "Save and sign in"}</button>
+    </div>
+    {msg && <p className="note">{msg}</p>}
+  </div>;
 }
 
 function ForClient({ b }) {

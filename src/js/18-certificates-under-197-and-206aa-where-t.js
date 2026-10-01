@@ -138,7 +138,7 @@ async function openBooks(cid){
   render();
 }
 // everything kept with a client's books, in this browser and (the TDS and GST work) in the firm's database
-const BOOKS_KEYS = ["vouchers", "map", "meta", "challans", "alloc", "pans", "twoB", "gstins", "under", "states", "groups", "salary", "certs", "advFix", "assets", "rev", "filed", "amendFix", "twoBs", "reco2b", "ledInfo", "ledInfoAt", "audit", "auditCfg", "auditRel", "ledSnaps", "gst9c", "groupInfo", "fs", "tb", "mis", "misCfg", "msme", "budget", "gst3b", "gst9", "gstOpen", "itcBasis", "itcTrack", "outRej", "gstFiled", "gstAato", "filed1a", "rule37On", "gstCashLedger", "gstSet", "gstContacts", "gstApi", "gstEst", "gstVault", "gstRegs", "letters", "ai", "tallyCo", "tbCheck", "nrInfo", "tcsCodes", "panInoperative"];
+const BOOKS_KEYS = ["vouchers", "map", "meta", "challans", "alloc", "pans", "twoB", "gstins", "under", "states", "groups", "salary", "certs", "advFix", "assets", "rev", "filed", "amendFix", "twoBs", "reco2b", "ledInfo", "ledInfoAt", "audit", "auditCfg", "auditRel", "ledSnaps", "gst9c", "groupInfo", "fs", "tb", "mis", "misCfg", "msme", "budget", "gst3b", "gst9", "gstOpen", "itcBasis", "itcTrack", "outRej", "gstFiled", "gstAato", "filed1a", "rule37On", "gstCashLedger", "gstSet", "gstContacts", "gstApi", "gstEst", "gstVault", "gstRegs", "letters", "ai", "tallyCo", "tbCheck", "nrInfo", "tcsCodes", "panInoperative", "filed3b", "apiTaken"];
 async function saveBooks(opts, bb){
   const b = bb || S.books; if (!b || !b.cid) return;
   const keep = {cid: b.cid}; BOOKS_KEYS.forEach(k => { keep[k] = b[k]; });
@@ -516,6 +516,8 @@ function gstParts(b){
   const parts = ftype === "comp" ? [["cmp08", "CMP-08"], ["gstr4", "GSTR-4"], ["inreg", "Purchases"], ["r2b", "2B reconciliation"]]
     : (ftype === "qrmp" ? [["qtr", "This quarter"], ["r1", "GSTR-1 working"], ["r3b", "GSTR-3B working"]] : [["r1", "GSTR-1"], ["r3b", "GSTR-3B"]])
       .concat([["inreg", "Input register"], ["r2b", "2B reconciliation"], ["follow", "ITC follow-up"], ["adv", "Advances"], ["rev", "Reversal"], ["amend", "Amendments"], ["g9", "GSTR-9"], ["g9c", "GSTR-9C"]]);
+  // tax-accuracy: the filed GSTR-1 and 3B (fetched from the portal) against FinCom's working, month by month
+  if (ftype !== "comp") parts.push(["filedcmp", "Filed vs FinCom"]);
   parts.push(["vault", "Returns filed"]);
   if (AIH.enabled("notices")) parts.push(["notices", "Notices"]);
   // without the day book only what does not come from it: 2B (from the portal or its JSON) and the returns filed

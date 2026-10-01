@@ -7,6 +7,7 @@
 // status review → ready → posted, or intally / ignored), filter (the tab), q (search), sel (ticked), openId (the one
 // open in the panel), draft (an invoice being created), cfg (numbering, the firm's details, ledgers), undo.
 // The actions are in src/js/26: salesAct("salesPost"), salesRowAct("confirm", id), salesSetCust(id, name), …
+import { useState } from "react";
 import ColHead from "../parts/ColHead.jsx";
 import CommitBox from "../parts/CommitBox.jsx";
 import LedgerBox from "../parts/LedgerBox.jsx";
@@ -78,6 +79,39 @@ function DraftText({ x, label, k, area, ...p }) {
     : <input type="text" value={x[k] || ""} onChange={(ev) => draftSet(k, ev.target.value)} {...p} />}</label>;
 }
 
+// tax-accuracy: the e-invoice (IRN) and e-way bill of this invoice, made through the firm's GST API
+function EinvPanel({ v }) {
+  const s = SL(), co = CO(s.cid), x = v.x, gstin = String(co.gstin || "").toUpperCase();
+  const [busy, setBusy] = useState(""), [msg, setMsg] = useState(""), [t, setT] = useState({ distance: "", vehicleNo: "", transporterId: "", mode: "1" });
+  if (!GSTAPI.on() || !GSTIN_RE.test(gstin) || !GSTIN_RE.test(String(x.customerGstin || "").toUpperCase())) return null;
+  const a = EINV.need(gstin), probs = EINV.problems(v, co, s.cfg);
+  const go = (label, f) => async () => { setBusy(label); setMsg(""); try { setMsg(await f()); } catch (e) { setMsg((e && e.message) || String(e)); } setBusy(""); render(); };
+  const active = x.irn && x.irnStatus !== "cancelled", canCancel = active && x.ackDt && Date.now() - Date.parse(x.ackDt) < 24 * 3600000;
+  return <section data-einv={v.id}><h3>E-invoice and e-way bill</h3>
+    {EINV.host === "sandbox" && <p className="note">The firm's server sends to the IRP's <b>sandbox</b> (test): an IRN made here is not a real one.</p>}
+    {active ? <div className="bk-alert"><b>IRN</b> {x.irn}<div className="note">Ack. no. {x.ackNo} · {fmtDateTime(x.ackDt)}{x.ewayNo ? " · E-way bill " + x.ewayNo + (x.ewayValidTill ? ", valid till " + fmtDateTime(x.ewayValidTill) : "") : ""}</div></div>
+      : x.irnStatus === "cancelled" ? <p className="note"><b>IRN cancelled</b> {x.irn}.</p> : null}
+    {!a ? <p className="note">Give the client's e-invoice API user in <button className="linkbtn" onClick={() => goGstSettings()}>GST settings</button> to make the IRN here.</p>
+      : !active ? <>
+        {probs.length > 0 && <div className="bk-alert bad">{probs.map((p, i) => <div key={i}>{p}</div>)}</div>}
+        <button className="btn small primary" disabled={!!busy || probs.length > 0} onClick={go("irn", async () => { const j = await EINV.irn(v); return "IRN made: " + j.irn; })}>{busy === "irn" ? "Making the IRN…" : "Make the IRN"}</button>
+      </> : <>
+        {!x.ewayNo && <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 6 }}>
+          <input type="number" min="0" placeholder="Distance (km)" aria-label="Distance in km" value={t.distance} style={{ width: 120 }} onChange={(ev) => setT({ ...t, distance: ev.target.value })} />
+          <select aria-label="Mode" value={t.mode} style={{ width: "auto" }} onChange={(ev) => setT({ ...t, mode: ev.target.value })}><option value="1">Road</option><option value="2">Rail</option><option value="3">Air</option><option value="4">Ship</option></select>
+          <input type="text" placeholder="Vehicle no." aria-label="Vehicle number" value={t.vehicleNo} style={{ width: 130 }} onChange={(ev) => setT({ ...t, vehicleNo: ev.target.value })} />
+          <input type="text" placeholder="Transporter GSTIN / ID" aria-label="Transporter ID" value={t.transporterId} style={{ width: 170 }} onChange={(ev) => setT({ ...t, transporterId: ev.target.value })} />
+          <button className="btn small" disabled={!!busy || !num(t.distance) || (!t.vehicleNo && !t.transporterId)} onClick={go("ewb", async () => { const j = await EINV.ewb(v, t); return "E-way bill " + j.ewbNo + " made."; })}>{busy === "ewb" ? "Making…" : "Make the e-way bill"}</button>
+        </div>}
+        {canCancel && <button className="linkbtn" style={{ marginTop: 6 }} disabled={!!busy} onClick={go("cancel", async () => {
+          const ok = await askConfirm({ title: "Cancel this IRN?", ok: "Cancel the IRN", body: '<p class="note">Within 24 hours of the IRN only. The invoice number cannot be used again for another invoice.</p>' });
+          if (!ok) return ""; await EINV.cancel(v, "2", "Cancelled from FinCom"); return "IRN cancelled.";
+        })}>Cancel the IRN</button>}
+      </>}
+    {msg && <p className="note">{msg}</p>}
+  </section>;
+}
+
 function Detail({ v }) {
   const s = SL(), x = v.x, co = CO(s.cid), ro = !["review", "ready"].includes(v.status);
   const lines = salesLines(v), tot = (side) => r2(lines.filter((l) => l.side === side).reduce((a, l) => a + l.amt, 0));
@@ -115,6 +149,7 @@ function Detail({ v }) {
         </table></div>
         <p className="note">Voucher type “{s.cfg.voucherType || "Sales"}” · bill-wise New Ref {x.number}{co.createOptional ? " · posted as Optional" : ""}</p>
       </section>
+      <EinvPanel v={v} />
       {(v.trace || []).length > 0 && <section><h3>How it was read</h3><ol className="note">{v.trace.map((t, i) => <li key={i}>{t.ok ? "✔ " : "✖ "}{t.step}: {t.note || ""}</li>)}</ol></section>}
       <section className="row" style={{ gap: 6, flexWrap: "wrap" }}>
         {v.source === "upload" && <><span className="note">Read again:</span>
