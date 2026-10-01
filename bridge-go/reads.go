@@ -14,7 +14,7 @@ func getLedgers(company string, pref int) (M, error) {
 	if err != nil {
 		return nil, err
 	}
-	fetch := "NAME,PARENT,INCOMETAXNUMBER,PARTYGSTIN,GSTREGISTRATIONTYPE,LEDSTATENAME,ISBILLWISEON,GUID,ALTERID,LEDGSTREGDETAILS.LIST,PAYMENTDETAILS.LIST,TAXTYPE,GSTDUTYHEAD,TDSNATUREOFPAYMENT,NATUREOFPAYMENT,TDSDEDUCTEETYPE,TDSAPPLICABLE,EMAIL,LEDGERPHONE,LEDGERMOBILE,ADDRESS.LIST,LEDMAILINGDETAILS.LIST"
+	fetch := "NAME,PARENT,INCOMETAXNUMBER,PARTYGSTIN,GSTREGISTRATIONTYPE,LEDSTATENAME,ISBILLWISEON,GUID,ALTERID,LEDGSTREGDETAILS.LIST,PAYMENTDETAILS.LIST,TAXTYPE,GSTDUTYHEAD,RATEOFTAXCALCULATION,TDSNATUREOFPAYMENT,NATUREOFPAYMENT,TDSDEDUCTEETYPE,TDSAPPLICABLE,EMAIL,LEDGERPHONE,LEDGERMOBILE,ADDRESS.LIST,LEDMAILINGDETAILS.LIST"
 	raw, err := invokeTally(fin, port, collectionRequest("TDSDeskLedgers", "Ledger", fetch, company, ""), 0)
 	if err != nil {
 		return nil, err
@@ -50,7 +50,7 @@ func getLedgers(company string, pref int) (M, error) {
 			"email": nt(l, "EMAIL"), "phone": nt(l, "LEDGERPHONE"), "mobile": nt(l, "LEDGERMOBILE"), "address": addr,
 			"billwise": nt(l, "ISBILLWISEON"), "guid": nt(l, "GUID"), "alterId": nt(l, "ALTERID"),
 			"acNo": nt(l, "PAYMENTDETAILS.LIST/ACCOUNTNUMBER"), "ifsc": nt(l, "PAYMENTDETAILS.LIST/IFSCODE"),
-			"taxType": nt(l, "TAXTYPE"), "dutyHead": nt(l, "GSTDUTYHEAD"), "tdsNature": nature})
+			"taxType": nt(l, "TAXTYPE"), "dutyHead": nt(l, "GSTDUTYHEAD"), "tdsNature": nature, "rate": nt(l, "RATEOFTAXCALCULATION")})
 	}
 	graw, err := invokeTally(fin, port, collectionRequest("TDSDeskGroups", "Group", "NAME,PARENT,GUID", company, ""), 0)
 	if err != nil {

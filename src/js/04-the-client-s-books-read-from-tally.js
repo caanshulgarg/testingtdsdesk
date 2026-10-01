@@ -203,7 +203,7 @@ const Books = {
       if (gst) gstins[name] = gst;
       if (par) under[name] = par;
       const tt = this.one(piece, "TAXTYPE").replace(/[^A-Za-z ]/g, "").trim();
-      info[name] = {group: par, taxType: tt, dutyHead: this.one(piece, "GSTDUTYHEAD"), tdsNature: this.one(piece, "TDSNATUREOFPAYMENT") || this.one(piece, "NATUREOFPAYMENT"), gstin: gst, pan,
+      info[name] = {group: par, taxType: tt, dutyHead: this.one(piece, "GSTDUTYHEAD"), tdsNature: this.one(piece, "TDSNATUREOFPAYMENT") || this.one(piece, "NATUREOFPAYMENT"), rate: num(this.one(piece, "RATEOFTAXCALCULATION")) || undefined, gstin: gst, pan,
         ob: this.amt(this.one(piece, "OPENINGBALANCE")), from: this.one(piece, "STARTINGFROM"),
         msme: this.one(piece, "UDYAMREGNUMBER") ? (this.one(piece, "ENTERPRISETYPE") || "Micro") : "", regType: (lastReg && lastReg.type) || (regs.length ? regs[regs.length - 1].type : "") || this.one(piece, "GSTREGISTRATIONTYPE"),
         panFrom: pan ? "Tally" : panG ? "GSTIN" : "", email: this.one(piece, "EMAIL"), phone: this.one(piece, "LEDGERMOBILE") || this.one(piece, "LEDGERPHONE"), gstinHistory: regs.filter(x => x.gstin).length > 1 ? regs.filter(x => x.gstin).map(x => x.from + ":" + x.gstin) : undefined};
@@ -255,7 +255,12 @@ const Books = {
     if (/BANK|CASH\b/.test(u)) return {kind: "bank"};
     return {kind: ""};
   },
-  ledgerOf(name){ return (S.books && S.books.map && S.books.map[name]) || {}; },
+  ledgerOf(name){
+    const b = S.books, m = (b && b.map && b.map[name]) || {};
+    // once a client's ledger check is saved, a tax ledger not confirmed counts in no return (src/js/57)
+    if (b && b.ledCheck && b.ledCheck.strict && !m.ok && typeof LedCheck === "object"){ const h = LedCheck.held(b); if (h && h.has(name)) return LedCheck.PENDING; }
+    return m;
+  },
   // the purchase and sales side of a voucher, ready for GST and TDS
   // build 193: an entry's lines are worked out once per drawing or calculation (the same entry is asked many times)
   lines(v){
@@ -272,8 +277,10 @@ const Books = {
       // the reverse-charge liability credited beside the input tax is what we owe, not tax on the bill
       if (m.kind === "gst" && m.rcm && m.side === "output"){ out.rcmOwed = r2((out.rcmOwed || 0) + amt); return; }
       if (m.kind === "gst" || m.kind === "gst_common"){
-        out.tax[m.tax] = r2(out.tax[m.tax] + amt);
-        if (m.kind === "gst_common"){ out.common = out.common || {CGST: 0, SGST: 0, IGST: 0, CESS: 0}; out.common[m.tax] = r2(out.common[m.tax] + amt); }
+        // one ledger for CGST and SGST together (a "RCM Payable" of both): half each
+        const heads = m.tax === "CGST+SGST" ? [["CGST", amt / 2], ["SGST", amt / 2]] : [[m.tax, amt]];
+        heads.forEach(([h, a]) => { out.tax[h] = r2((out.tax[h] || 0) + a); });
+        if (m.kind === "gst_common"){ out.common = out.common || {CGST: 0, SGST: 0, IGST: 0, CESS: 0}; heads.forEach(([h, a]) => { out.common[h] = r2((out.common[h] || 0) + a); }); }
         return;
       }
       if (m.kind === "tds_clearing"){

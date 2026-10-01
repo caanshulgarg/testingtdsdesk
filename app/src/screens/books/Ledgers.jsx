@@ -7,6 +7,7 @@
 import { AiLedgers } from "../../parts/Ai.jsx";
 import CommitBox from "../../parts/CommitBox.jsx";
 
+import LedCheckCard from "./LedCheck.jsx";
 const NR = ({ children, bad }) => <div className={"nr" + (bad ? " bad" : "")} style={{ whiteSpace: "normal" }}>{children}</div>;
 
 // ledgers changed after returns were made from them: those returns may need a revision
@@ -101,6 +102,7 @@ export default function Ledgers({ b }) {
     .concat(AIH.enabled("tds") || AIH.enabled("audit") ? [["ai", "AI: TDS and credit", null]] : []);
   const unconfirmed = shown.filter(([, m]) => !m.ok).length;
   return <>
+    <LedCheckCard b={b} />
     <Changed b={b} />
     <section className="dash-card" style={{ marginBottom: 12 }}><h3>GST and TDS ledgers: confirm once for this client</h3>
       <p className="note">Each ledger is guessed from Tally — its tax type, duty head and group — and from how the day book uses it. Check the guess and confirm it. Returns count only confirmed ledgers; anything still to confirm is shown on the TDS and GST screens, and their files wait until it is done.</p>

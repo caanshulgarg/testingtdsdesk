@@ -1344,7 +1344,7 @@ function doAct(act, t){
       Bridge.call("/ledgers?company=" + encodeURIComponent(Bridge.openFor(co).name) + Bridge.pinQ(), null, 180000).then(async j => {
         const info = {}, groups = {};
         [].concat(j.ledgers || []).forEach(l => { if (!l || !l.name) return;
-          info[l.name] = {group: l.group || "", taxType: String(l.taxType || "").replace(/[^A-Za-z ]/g, "").trim(), dutyHead: l.dutyHead || "", tdsNature: l.tdsNature || "", gstin: l.gstin || "", pan: l.pan || ""};
+          info[l.name] = {group: l.group || "", taxType: String(l.taxType || "").replace(/[^A-Za-z ]/g, "").trim(), dutyHead: l.dutyHead || "", tdsNature: l.tdsNature || "", rate: num(l.rate) || undefined, gstin: l.gstin || "", pan: l.pan || ""};
           // contact details, from Tally Bridge 1.12.9: for letters to the party
           if (l.email) info[l.name].email = String(l.email).trim(); if (l.phone) info[l.name].phone = String(l.phone).trim(); if (l.mobile) info[l.name].mobile = String(l.mobile).trim();
           if (l.address) info[l.name].addr = [].concat(l.address).filter(Boolean).join("\n");
@@ -1364,6 +1364,13 @@ function doAct(act, t){
       const kept = await Trash.put(cid, "books", "The books read from Tally (" + (b.vouchers || []).length + " entries)", {vouchers: b.vouchers, meta: b.meta, reco: b.reco}, ok.reason);
       b.trashLog = (b.trashLog || []).concat([{kind: "books", id: kept.id, server: kept.server, reason: ok.reason, at: new Date().toISOString(), by: whoAmI()}]);
       b.vouchers = []; b.meta = null; b.reco = null; saveBooks(); toast("Removed. More \u2192 Restore puts them back."); render(); }); break;
+    // the GST and TDS ledger check (src/js/57, request of 02-Oct-2026)
+    case "lcRun": { const b = S.books; if (!b) break; const c = LedCheck.run(b); const high = c.names.filter(n => c.items[n].s.conf === "high").length; toast(c.names.length + " tax-like ledgers checked: " + high + " settled by Tally’s masters or the day book, " + (c.names.length - high) + " to look at."); saveBooks(); render(); break; }
+    case "lcConfirm": { const b = S.books, c = b && b.ledCheck; if (!c) break;
+      const names = (c.names || []).filter(n => !((b.map || {})[n] || {}).ok && LedCheck.ticked(c.items[n]));
+      const n = LedCheck.confirm(b, names); GSTR._carry = null; GST2B._memo = null; saveBooks(); toast(n + " ledger" + (n === 1 ? "" : "s") + " confirmed. Only confirmed ledgers count in the returns now."); render(); break; }
+    case "lcAi": { const b = S.books; if (!b || !b.ledCheck) break; b.busy = "Asking AI about the unclear ledgers…"; render();
+      LedCheck.askAi(b).then(n => { b.busy = ""; if (n){ toast("AI answered for " + n + " ledger" + (n === 1 ? "" : "s") + ". Its answers are not ticked: check each."); saveBooks(); } render(); }, e => { b.busy = ""; toast("AI could not be asked: " + ((e && e.message) || e)); render(); }); break; }
     case "trashRestore": {
       // the newest removal of the books or of Tally data and GST work, or the one picked (data-i) in More; from the
       // server, so it can be put back on any computer
