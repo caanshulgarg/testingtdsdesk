@@ -1,7 +1,7 @@
 // The one state object S lives in the business logic (legacy.js), and every change there ends in render().
-// render() now does two things, in the same moment as before: the screens not yet in React redraw (they are HTML
-// strings put into the page), then React redraws its own. Nothing waits: code that looks at the page right after
-// render() finds it drawn.
+// render() does, in the same moment: the business logic's part (what the screen needs loaded: renderNow, src/js/01),
+// then React draws the page, then the finishing touches (afterRender, the tables' funnels). Nothing waits: code that
+// looks at the page right after render() finds it drawn.
 //
 // A React screen inside an old screen is marked there as <div data-react="Name">. The React screen lives in a host
 // element of its own, put back in that place after every redraw, so it keeps what was typed and where the cursor was.
@@ -79,32 +79,20 @@ function drawReactNow() {
 export function redraw() { const f = noteFocus(); drawReact(); giveFocus(f); }
 window.FinComReact = { redraw };
 
-// A redraw of the old screens takes every React screen out of the page for a moment. If that happens while the mouse
-// button is down (a box being left because a button was pressed: the box's change or blur redraws), the browser
-// drops the click, since the button it went down on left the page. So while the button is held, only React redraws
-// (it never takes anything out), and the full redraw follows as soon as the button is let go and the click is done.
-let held = false, owed = false;
-addEventListener("pointerdown", () => { held = true; }, true);
-const letGo = () => { held = false; if (owed) { owed = false; setTimeout(() => window.render(), 0); } };
-addEventListener("pointerup", letGo, true);
-addEventListener("pointercancel", letGo, true);
-
 window.render = function render() {
-  if (held) { owed = true; redraw(); return; }
   const f = noteFocus();
-  // the ledger list open under a box in a React screen: the old screens' redraw closes it (the box is out of the page
-  // for a moment), so it is opened again once React has put the box back
+  // the ledger list open under a box: opened again if the drawing closed it
   const acFk = typeof AC === "object" ? AC.fk : null;
   try { legacyRender(); }
   finally {
     drawReact();
     giveFocus(f);
+    // what the page needs once drawn: the ledger list's box, keeping in step with Tally (afterRender, src/js/01)
+    if (typeof afterRender === "function") afterRender();
     // the column filter pop-up sits under its funnel button, which may be in a React table
     if (typeof placeColPop === "function") placeColPop();
-    // the old screens' finishing touches, for old pieces shown inside React screens: the funnels on their tables
-    // and the "How this tab works" button (they ran while those pieces were out of the page)
+    // the funnels on the tables that are still old pieces
     if (typeof GridF === "object") GridF.after();
-    if (typeof Help === "object") Help.after();
     // the guide beside a tab ("How this tab works") follows the page, which React may have just changed
     if (typeof Help === "object") Help.after();
     if (acFk && !AC.fk) { const el = document.querySelector('[data-fk="' + CSS.escape(acFk) + '"]'); if (el && document.activeElement === el) acOpen(el); }

@@ -13,6 +13,13 @@ function one(s, tag){ const m = s.match(new RegExp("<" + tag + ">([^<]*)</" + ta
 // "$17000.00 @ ₹ 86.40/$ = ₹ 1468800.00" is 1468800: the rupee value after the last "="
 function amt(v){ const t = String(v || ""), i = t.lastIndexOf("="); return num(i >= 0 ? t.slice(i + 1) : t); }
 
+// a long narration is cut to 300 characters, keeping FinCom's own mark at its end ("TDSDesk:<id>"): the checks before
+// posting look for it in the cloud copy
+function shortNarr(t){
+  if (t.length <= 300) return t;
+  const m = t.match(/TDSDesk:[A-Za-z0-9._-]+\s*$/);
+  return m ? t.slice(0, 300 - m[0].length - 3) + " | " + m[0] : t.slice(0, 300);
+}
 function takeVoucher(s){
   const id = String(one(s, "GUID") || (s.match(/REMOTEID="([^"]*)"/) || [])[1] || "").replace(/[^\w\-.:]/g, "");
   const v = {
@@ -22,7 +29,7 @@ function takeVoucher(s){
     type: (s.match(/VCHTYPE="([^"]*)"/) || [])[1] || one(s, "VOUCHERTYPENAME"),
     no: one(s, "VOUCHERNUMBER"),
     party: one(s, "PARTYNAME") || one(s, "PARTYLEDGERNAME"),
-    narr: one(s, "NARRATION").slice(0, 300),
+    narr: shortNarr(one(s, "NARRATION")),
     cancel: one(s, "ISCANCELLED") === "Yes",
     opt: one(s, "ISOPTIONAL") === "Yes"
   };

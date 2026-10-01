@@ -1128,7 +1128,7 @@ header.top .tbar-title{align-items:center}
 .lk-fresh .note{flex:1 1 320px}
 .fc-empty .lk-fresh{text-align:left;margin-top:12px}
 </style>
-<style>.is-test .side-brand::after{content:"TEST";display:block;margin-top:4px;font-size:11px;letter-spacing:.14em;color:#E9A06A}.is-test header.top{box-shadow:inset 0 3px 0 #E2761B}body.is-test::after{content:"TESTING SITE · not for real client work · post only to a ZZ TEST company in Tally";position:fixed;left:0;right:0;bottom:0;z-index:70;background:#E2761B;color:#fff;font-size:12.5px;text-align:center;padding:3px 8px;letter-spacing:.04em;pointer-events:none}.is-test .actionbar{bottom:22px}.is-test #app{padding-bottom:34px}</style><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-JUZRiA/pD/Q1MSIv1WkOX00eklOKXLcOHszD3zr3UBc=' 'sha256-BHYAQE7D/rO5GDygh5xDlrMTqYWUn4G7STspYWrrleI=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+<style>.is-test .side-brand::after{content:"TEST";display:block;margin-top:4px;font-size:11px;letter-spacing:.14em;color:#E9A06A}.is-test header.top{box-shadow:inset 0 3px 0 #E2761B}body.is-test::after{content:"TESTING SITE · not for real client work · post only to a ZZ TEST company in Tally";position:fixed;left:0;right:0;bottom:0;z-index:70;background:#E2761B;color:#fff;font-size:12.5px;text-align:center;padding:3px 8px;letter-spacing:.04em;pointer-events:none}.is-test .actionbar{bottom:22px}.is-test #app{padding-bottom:34px}</style><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-JUZRiA/pD/Q1MSIv1WkOX00eklOKXLcOHszD3zr3UBc=' 'sha256-nENvmECMk5j8Ex+6okVxM2Wxdg1Kd8iMdvoCQCntaRQ=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
 </head>
 <body class="is-test">
 <a class="skip" id="skipLink" href="#app">Skip to the work</a>
@@ -1206,9 +1206,9 @@ const DEFAULT_FIRM = {firmName:"", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "TEST · 30 Sep 2026 · build 197 (entries from Tally appear during the day: a light check every 30 minutes and right after posting; Update now from any computer; bridge 1.14.4)";
+const APP_VERSION = "TEST · 30 Sep 2026 · build 199 (posting queue: post from any computer, the Tally computer posts when Tally is free; posted entries go to the cloud without reading Tally again; bridge 1.14.6)";
 // the Tally Bridge setup file's fingerprint, put in by build.py: a new setup file is never served from an old cache
-const BRIDGE_SETUP_SHA = "01879009d6583262";
+const BRIDGE_SETUP_SHA = "22f7d1ed37e77dee";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;
@@ -5271,7 +5271,7 @@ function viewPostStep(){
   else {
     h += (S.bank.postReport ? bankReportHtml() : "") +
       '<div class="row" style="align-items:center;gap:12px"><span><b>' + ready.length + "</b> line" + (ready.length === 1 ? "" : "s") + " ready in " + esc(st.name || "this statement") + "</span>" +
-      (ready.length && Bridge.on() && Bridge.up() ? '<button class="btn primary" data-act="bankPost">Post ' + ready.length + " bank line" + (ready.length === 1 ? "" : "s") + "</button>" : "") +
+      (ready.length && canPostTally(CO()) ? '<button class="btn primary" data-act="bankPost">Post ' + ready.length + " bank line" + (ready.length === 1 ? "" : "s") + "</button>" : "") +
       '<button class="btn small" data-act="toBankReady">See the lines</button>' +
       (S.bank.stmts.length > 1 ? '<span class="note">' + S.bank.stmts.length + " statements: choose another in the bank tab</span>" : "") + "</div>";
   }
@@ -14870,7 +14870,7 @@ function bankBar(){
   } else {
     left = '<span class="bk-stat"><b>' + tc.review + '</b> to review</span><span class="bk-stat"><b>' + tc.ready + "</b> ready to post</span>";
     right = (tc.suggested ? '<button class="btn" data-act="bankAcceptAll">Confirm all suggestions (' + tc.suggested + ")</button>" : "") +
-      (Bridge.on() && Bridge.up() ? '<button class="btn primary" data-act="bankPost"' + (tc.ready ? "" : " disabled") + ">Post to Tally (" + tc.ready + ")</button>"
+      (canPostTally(CO()) ? '<button class="btn primary" data-act="bankPost"' + (tc.ready ? "" : " disabled") + ">Post to Tally (" + tc.ready + ")</button>"
         : '<button class="btn primary" data-act="bankXml"' + (tc.ready ? "" : " disabled") + ">Create Tally file (" + tc.ready + ")</button>");
   }
   let snack = "";
@@ -15918,6 +15918,13 @@ const Bridge = {
     });
     payload = Object.assign({}, payload, {masters: keep(payload.masters), vouchers: keep(payload.vouchers)});
     if (!payload.masters.length && !payload.vouchers.length) return {ok: true, company: payload.company, results: refused};
+    // build 199: Tally on another computer: through the queue in the cloud
+    const coP = (payload.client && S.companies[payload.client]) || (typeof CO === "function" ? CO() : null);
+    if (coP && typeof tallyVia === "function" && tallyVia(coP) === "cloud"){
+      const outC = await CloudPost.run(coP.id, payload, onProgress, onChecked);
+      outC.results = [].concat(outC.results || []).concat(refused);
+      return outC;
+    }
     const out = await this.postChecked(payload, onProgress, onChecked);
     out.results = [].concat(out.results || []).concat(refused);
     return out;
@@ -16134,12 +16141,12 @@ function bridgeChip(co){
 /* ---------- ledgers and bank entries straight from Tally ---------- */
 async function syncLedgersFromTally(silent){
   const b = B(), co = CO(b.cid);
-  if (!bridgeLive(co)) return false;
+  if (!tallyVia(co)) return false;
   try {
-    const j = await Bridge.call("/ledgers?company=" + encodeURIComponent(Bridge.openFor(co).name) + Bridge.pinQ());
+    const j = await tallyCall(co, "/ledgers?company=" + encodeURIComponent(tallyCoName(co)) + Bridge.pinQ());
     const list = [].concat(j.ledgers || []).filter(l => l && l.name).map(l => ({name: l.name, group: l.group || "", pan: l.pan || "", gstin: l.gstin || "", acNo: l.acNo || "", ifsc: l.ifsc || "", taxType: l.taxType || "", tdsNature: l.tdsNature || "", dutyHead: l.dutyHead || ""}));
     const groups = Array.from(new Set([].concat(j.groups || []).map(g => g.name).concat(list.map(l => l.group)).filter(Boolean))).sort();
-    b.ledgers = {list, groups, importedAt: new Date().toISOString(), file: "Tally (live)", live: true};
+    b.ledgers = {list, groups, importedAt: new Date().toISOString(), file: j.via === "cloud" ? "Tally, from the copy in FinCom's cloud" : "Tally (live)", live: true};
     const have = new Set(list.map(l => l.name.toLowerCase()));
     b.newLed = b.newLed.filter(n => !have.has(n.name.toLowerCase()));
     saveBank({ledgers: true, newLed: true});
@@ -16166,13 +16173,13 @@ function guessBankLedger(a){
 // Tally's own entries in this bank ledger: rows already booked are marked, and their ledgers are learnt
 async function syncBankBookFromTally(silent, win){
   const b = B(), co = CO(b.cid), st = curStmt();
-  if (!st || !bridgeLive(co)) return 0;
+  if (!st || !tallyVia(co)) return 0;
   const acc = (co.bankAccounts || []).find(a => a.id === st.acctId);
   const ledger = acc && exactLedger(acc.ledger);
   if (!ledger) return 0;
   try {
     const from = win ? win.from : addDays(st.from || b.rows[0].date, -20), to = win ? win.to : addDays(st.to || b.rows[b.rows.length - 1].date, 20);
-    const j = win && win.pre ? win.pre : await Bridge.call(ledgerLinesUrl(Bridge.openFor(co).name, ledger, from, to), null, 300000);
+    const j = win && win.pre ? win.pre : await tallyCall(co, ledgerLinesUrl(tallyCoName(co), ledger, from, to), null, 300000);
     const entries = [];
     [].concat(j.vouchers || []).forEach(v => {
       if (/^yes$/i.test(v.cancelled || "")) return;
@@ -16511,10 +16518,10 @@ async function scanStatementInTally(opts){
   let to = addDays(last, 31);
   // bridge 1.12.1: one light read of FinCom's own entries (heads only); older: this bank ledger month by month
   // 1.12.3: this bank ledger's own vouchers (light, with amounts); 1.12.1-2: FinCom's tagged entries; older: the Day Book
-  const byLedger = bridgeVer(Bridge.st.version) >= bridgeVer("1.12.3");
+  const byLedger = tallyVia(co) === "cloud" || bridgeVer(Bridge.st.version) >= bridgeVer("1.12.3");
   const light = !byLedger && bridgeVer(Bridge.st.version) >= bridgeVer("1.12.1");
   if (opts.pre){ from = opts.from; to = opts.to; }
-  const j = opts.pre || await Bridge.call(light ? "/tags?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(from) + "&to=" + isoToTally(to) + Bridge.pinQ() : ledgerLinesUrl(tname, ledger, from, to), null, 600000);
+  const j = opts.pre || await tallyCall(co, light ? "/tags?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(from) + "&to=" + isoToTally(to) + Bridge.pinQ() : ledgerLinesUrl(tname, ledger, from, to), null, 600000);
   const vs = [].concat(j.vouchers || []).filter(v => !/^yes$/i.test(v.cancelled || ""));
   const rowByTag = new Map(b.rows.map(r => [fpHash(r.fp || r.id), r]));
   const groups = new Map();
@@ -16869,7 +16876,7 @@ async function postBankToTally(ids){
   const toCheck = b.rows.filter(r => r.state === "ready" && (!ids || ids.includes(r.id)));
   // bridge 1.12.3+: ONE read of this bank ledger covers both looks (these dates, and anything FinCom put in before),
   // and is reused for 30 minutes, so posting the next batch starts at once
-  const oneRead = bridgeVer(Bridge.st.version) >= bridgeVer("1.12.3");
+  const oneRead = tallyVia(co) === "cloud" || bridgeVer(Bridge.st.version) >= bridgeVer("1.12.3");
   if (toCheck.length && !heavy && oneRead){
     try {
       const look = b.tallyLook && b.tallyLook.sid === st.id && Date.now() - b.tallyLook.at < 30 * 60000 ? b.tallyLook : null;
@@ -16878,7 +16885,7 @@ async function postBankToTally(ids){
       const from = addDays(dsAll[0], -15), to = addDays(dsAll[dsAll.length - 1] > today ? dsAll[dsAll.length - 1] : today, 7);
       if (!pre){
         b.busy = "Looking at " + acc.ledger + " in Tally before posting\u2026"; render();
-        pre = await Bridge.call(ledgerLinesUrl(tname, acc.ledger, from, to), null, 600000);
+        pre = await tallyCall(co, ledgerLinesUrl(tname, acc.ledger, from, to), null, 600000);
         b.tallyLook = {sid: st.id, at: Date.now(), data: pre};
       }
       const g = markedGone(pre, from, to);
@@ -16964,7 +16971,7 @@ async function postBankToTally(ids){
   const masters = b.newLed.filter(l => !l.sent && used.has(l.name.toLowerCase()));
   b.busy = "Posting " + entries(rows.length) + " to " + tname + "\u2026"; render();
   try {
-    const j = await Bridge.post({company: tname, ledger: acc.ledger,
+    const j = await Bridge.post({company: tname, client: co.id, ledger: acc.ledger,
       masters: masters.map(l => ({id: "led:" + l.name, xml: ledgerMasterXml(l)})),
       vouchers: rows.map(r => ({id: r.id, xml: bankVoucherXml(r, acc, co)}))}, pj => { b.busy = postingLine(pj, tname); refreshBusy(); },
       chk => bankAfterCheck(b.cid, st.id, chk, tname));
@@ -16997,7 +17004,7 @@ async function postBankToTally(ids){
     b.postReport = {at: Date.now(), posted: ok, skipped, movedBack, failed, dismiss: "bankReportOk", company: tname, optional: optionalN, noPreCheck: !heavy, checking: !!j.checking};
     toast(ok + " posted to Tally" + (skipped ? ", " + skipped + " were already there" : "") + (failed.length ? ", " + failed.length + " not posted" : "") + ".");
     if (!failed.length && !b.rows.some(r => r.state === "ready")) b.filter = "done";
-    b.afterPost = !j.checking;
+    b.afterPost = !j.checking && !j.viaCloud;
     b.tallyLook = null;          // Tally has changed: the next posting looks again
   } catch (e){ toast("Posting failed: " + e.message); b.postReport = {at: Date.now(), posted: 0, skipped, movedBack, failed: failed.concat([{what: "Posting", msg: e.message}]), dismiss: "bankReportOk"}; }
   b.busy = "";
@@ -17014,7 +17021,7 @@ async function checkBillsInTally(onlyUnconfirmed){
   try {
     const dates = sent.map(e => e.x.invoiceDate).sort();
     const vt = co.voucherType || "Journal";
-    const j = await Bridge.call("/vouchers?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(addDays(dates[0], -5)) + "&to=" + isoToTally(addDays(dates[dates.length - 1] > new Date().toISOString().slice(0, 10) ? dates[dates.length - 1] : new Date().toISOString().slice(0, 10), 31)) + "&types=" + encodeURIComponent([vt, "Purchase", "Journal", co.debitNoteType || "Debit Note"].join(",")) + Bridge.pinQ(), null, 300000);
+    const j = await tallyCall(co, "/vouchers?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(addDays(dates[0], -5)) + "&to=" + isoToTally(addDays(dates[dates.length - 1] > new Date().toISOString().slice(0, 10) ? dates[dates.length - 1] : new Date().toISOString().slice(0, 10), 31)) + "&types=" + encodeURIComponent([vt, "Purchase", "Journal", co.debitNoteType || "Debit Note"].join(",")) + Bridge.pinQ(), null, 300000);
     const vs = [].concat(j.vouchers || []).filter(v => !/^yes$/i.test(v.cancelled || ""));
     const now = new Date().toISOString();
     const missing = [], wrongDate = [];
@@ -17055,7 +17062,7 @@ async function postBillsToTally(){
     let dup = [];
     if (dates.length){
       const vt = co.voucherType || "Journal";
-      const j0 = await Bridge.call("/vouchers?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(addDays(dates[0], -5)) + "&to=" + isoToTally(addDays(dates[dates.length - 1], 5)) + "&types=" + encodeURIComponent([vt, "Purchase", "Journal"].join(",")) + Bridge.pinQ());
+      const j0 = await tallyCall(co, "/vouchers?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(addDays(dates[0], -5)) + "&to=" + isoToTally(addDays(dates[dates.length - 1], 5)) + "&types=" + encodeURIComponent([vt, "Purchase", "Journal"].join(",")) + Bridge.pinQ());
       const vs0 = [].concat(j0.vouchers || []).filter(v => !/^yes$/i.test(v.cancelled || ""));
       const seen = new Set(vs0.map(v => norm(v.reference) + "|" + norm(v.party)).concat(vs0.flatMap(v => [].concat(v.entries || []).flatMap(en => [].concat(en.bills || []).map(bl => norm(bl.name) + "|" + norm(en.ledger))))));
       const marks = vs0.map(v => String(v.narration || "")).join("\n");
@@ -17068,7 +17075,7 @@ async function postBillsToTally(){
       const used = new Set(todo.flatMap(e => e.snapshot.lines.map(l => String(l.ledger).toLowerCase())));
       const masters = B().newLed.filter(l => !l.sent && used.has(l.name.toLowerCase()));
       S.billPost = {busy: "Posting " + entries(todo.length) + " to " + tname + "\u2026"}; render();
-      const j = await Bridge.post({company: tname, masters: masters.map(l => ({id: "led:" + l.name, xml: ledgerMasterXml(l)})), vouchers: todo.map(e => ({id: e.id, xml: voucherXml(e, co)}))}, pj => { S.billPost = {busy: postingLine(pj, tname)}; refreshBusy(); });
+      const j = await Bridge.post({company: tname, client: co.id, masters: masters.map(l => ({id: "led:" + l.name, xml: ledgerMasterXml(l)})), vouchers: todo.map(e => ({id: e.id, xml: voucherXml(e, co)}))}, pj => { S.billPost = {busy: postingLine(pj, tname)}; refreshBusy(); });
       const byId = new Map([].concat(j.results || []).map(x => [x.id, x]));
       masters.forEach(l => { const x = byId.get("led:" + l.name); if (x && x.ok){ l.sent = true; l.sentAt = now; } });
       saveBank({newLed: true});
@@ -17078,7 +17085,7 @@ async function postBillsToTally(){
         clash.forEach(e => { e.vchNo = (e.x.invoiceNo || "B") + "/" + initialsOf(e.x.vendorName || e.partyLedger); });
         S.billPost = {busy: "Voucher numbers already used in Tally: trying " + clash.length + " again with the supplier\u2019s initials\u2026"}; render();
         try {
-          const j2 = await Bridge.post({company: tname, masters: [], vouchers: clash.map(e => ({id: e.id, xml: voucherXml(e, co)}))});
+          const j2 = await Bridge.post({company: tname, client: co.id, masters: [], vouchers: clash.map(e => ({id: e.id, xml: voucherXml(e, co)}))});
           [].concat(j2.results || []).forEach(x => byId.set(x.id, x));
         } catch (err){ /* reported below as refused */ }
       }
@@ -18291,7 +18298,7 @@ function salesBar(){
     const confirmable = s.list.filter(v => v.status === "review" && v.customerLedger && !(v.problems || []).length && !(v.ledgerIssues || []).length).length;
     left = '<span class="bk-stat"><b>' + tc.review + '</b> to review</span><span class="bk-stat"><b>' + tc.ready + "</b> ready to post</span>";
     right = (confirmable ? '<button class="btn" data-act="salesConfirmAll">Confirm all suggestions (' + confirmable + ")</button>" : "") +
-      (Bridge.on() && Bridge.up() ? '<button class="btn primary" data-act="salesPost"' + (tc.ready ? "" : " disabled") + ">Post to Tally (" + tc.ready + ")</button>"
+      (canPostTally(CO()) ? '<button class="btn primary" data-act="salesPost"' + (tc.ready ? "" : " disabled") + ">Post to Tally (" + tc.ready + ")</button>"
         : '<button class="btn primary" data-act="salesFile"' + (tc.ready ? "" : " disabled") + ">Create Tally file (" + tc.ready + ")</button>");
   }
   let snack = "";
@@ -18318,9 +18325,9 @@ function mastersFor(list){
 // sales vouchers already in Tally (same number) are set aside
 async function salesCheckTally(list){
   const co = CO(SL().cid);
-  if (!bridgeLive(co) || !list.length) return 0;
+  if (!tallyVia(co) || !list.length) return 0;
   const dates = list.map(v => v.x.date).filter(Boolean).sort();
-  const j = await Bridge.call("/vouchers?company=" + encodeURIComponent(Bridge.openFor(co).name) + "&from=" + isoToTally(addDays(dates[0], -3)) + "&to=" + isoToTally(addDays(dates[dates.length - 1], 3)) + "&types=" + encodeURIComponent([SL().cfg.voucherType || "Sales", "Sales"].join(",")) + Bridge.pinQ());
+  const j = await tallyCall(co, "/vouchers?company=" + encodeURIComponent(tallyCoName(co)) + "&from=" + isoToTally(addDays(dates[0], -3)) + "&to=" + isoToTally(addDays(dates[dates.length - 1], 3)) + "&types=" + encodeURIComponent([SL().cfg.voucherType || "Sales", "Sales"].join(",")) + Bridge.pinQ());
   const nums = new Set([].concat(j.vouchers || []).filter(v => !/^yes$/i.test(v.cancelled || "")).flatMap(v => [normInvNo(v.number), normInvNo(v.reference)]).filter(Boolean));
   let n = 0;
   list.forEach(v => { if (nums.has(normInvNo(v.x.number))){ v.status = "intally"; v.postNote = "Already in Tally"; n++; } });
@@ -18353,8 +18360,8 @@ async function postSalesToTally(){
     if (!list.length){ s.busy = ""; saveSales(); toast(probs.length ? "Fix these first: " + probs.slice(0, 2).join("; ") : "These invoices are already in Tally."); render(); return; }
     const masters = mastersFor(list);
     s.busy = "Posting " + list.length + " invoice" + (list.length > 1 ? "s" : "") + " to Tally\u2026"; render();
-    const tn = Bridge.openFor(co).name;
-    const j = await Bridge.post({company: tn,
+    const tn = tallyCoName(co);
+    const j = await Bridge.post({company: tn, client: co.id,
       masters: masters.map(l => ({id: "led:" + l.name, xml: customerMasterXml(l)})),
       vouchers: list.map(v => ({id: v.id, xml: salesVoucherXml(v, co)}))}, pj => { s.busy = postingLine(pj, tn); refreshBusy(); });
     const by = new Map([].concat(j.results || []).map(r => [r.id, r]));
@@ -18691,6 +18698,8 @@ function canonicalizeBills(list){
 }
 // Which Tally company is this client? Asked once when names do not match.
 async function ensureTallyCompany(co){
+  // build 199: Tally on another computer, the client's books in the cloud: posted through the queue there
+  if (!bridgeLive(co) && typeof TCloud === "object" && TCloud.on()){ await TCloud.status(co.id); if (tallyVia(co) === "cloud") return tallyCoName(co); }
   if (!Bridge.on()){ toast("Connect the Tally Bridge first: Settings \u2192 Tally Bridge."); return null; }
   if (!Bridge.up() || !Bridge.st.tallyUp) await Bridge.refresh();
   if (!Bridge.up() || !Bridge.st.tallyUp){ toast("Tally is not connected. See Settings \u2192 Tally Bridge \u2192 Check my Tally."); return null; }
@@ -19527,7 +19536,7 @@ function viewExport(){
     bp.failed.map(f => "<li>" + esc(f.no) + " \u00b7 " + esc(f.party) + ": " + esc(f.msg) + "</li>").join("") + "</ul>" +
     '<div class="row" style="gap:8px;margin-top:6px"><button class="btn small primary" data-act="billRetry">Retry these ' + bp.failed.length + '</button><button class="btn small" data-step="review">Open them in To review</button>' +
     (/already\s+exists/i.test(bp.failed.map(f => f.msg).join(" ")) ? '<span class="note">Tally already has these voucher numbers. In Tally, set the Purchase voucher type\u2019s numbering to Automatic, or retry: numbers get the supplier\u2019s initials.</span>' : "") + "</div></div>";
-  const canPost = Bridge.on() && Bridge.up();
+  const canPost = canPostTally(CO());
   const bc = S.billCheck || {};
   const undoable = v.filter(e => e.exportedAt && e.tally && e.tally.guid);
   if (canPost && undoable.length) h += '<div class="row" style="margin-top:10px"><button class="btn small" data-act="billUnpost">Take an entry back out of Tally</button><span class="note">' + undoable.length + " posted bills can be removed from Tally from here.</span></div>";
@@ -25417,6 +25426,114 @@ const TLight = {
     return x ? '<span class="tag ' + x.level + '" title="' + esc(x.say) + '">' + (x.level === "ok" ? "\u25CF " : x.level === "warn" ? "\u25D0 " : "\u25CB ") + esc(x.short) + "</span>" : '<span class="note">\u2014</span>';
   }
 };
+/* ================================================================== */
+/* Posting from any computer: the queue in FinCom's cloud (build 199)  */
+/* ================================================================== */
+// On the computer with Tally, FinCom posts through the bridge there, as before. On any other computer, when the client's
+// books are in the cloud, the entries are queued in the cloud (tally_post_jobs); the bridge on the Tally computer takes
+// them with its heartbeat (within a minute), posts them with its usual job (FinCom's ID stamped in each entry, and Tally
+// checked for those IDs first, so nothing is posted twice), and writes each entry's result back, with Tally's own words
+// when it refused one. The checks before posting (the ledgers, entries already in Tally) read the cloud copy instead.
+
+// how this computer reaches the client's Tally: "bridge" (here), "cloud" (the queue), or null
+function tallyVia(co){
+  if (!co) return null;
+  if (bridgeLive(co)) return "bridge";
+  return typeof TCloud === "object" && TCloud.on() && TCloud.has(co.id) ? "cloud" : null;
+}
+function tallyCoName(co){
+  const o = typeof Bridge === "object" && Bridge.up() ? Bridge.openFor(co) : null;
+  return o ? o.name : ((typeof TCloud === "object" && TCloud.book(co.id) || {}).company || co.tallyName || co.name);
+}
+// a read the bridge answers (/ledgers, /ledgerlines, /vouchers), from the bridge here or from the cloud copy
+function tallyCall(co, url, body, timeout){
+  return tallyVia(co) === "cloud" ? CloudTally.call(co, url) : Bridge.call(url, body, timeout);
+}
+const CloudTally = {
+  async call(co, url){
+    const q = new URLSearchParams(url.split("?")[1] || ""), path = url.split("?")[0];
+    if (path === "/ledgers"){
+      const bk = TCloud.book(co.id);
+      const rows = bk ? await TCloud.restAll("tally_ledgers?select=name,parent&book_id=eq." + encodeURIComponent(bk.book) + "&order=name.asc") : [];
+      return {ok: true, via: "cloud", ledgers: rows.map(r => ({name: r.name, group: r.parent || ""})), groups: []};
+    }
+    if (path === "/ledgerlines" || path === "/vouchers"){
+      const types = (q.get("types") || "").split(",").map(s => s.trim()).filter(Boolean);
+      const vs = await TCloud.rpc("tally_vouchers_in", {p_client: co.id, p_from: TCloud.iso(q.get("from")), p_to: TCloud.iso(q.get("to")),
+        p_ledger: q.get("ledger") || null, p_types: types.length ? types : null});
+      return {ok: true, via: "cloud", vouchers: [].concat(vs || [])};
+    }
+    throw {code: "cloud", message: "This needs the Tally computer (" + path + ")."};
+  }
+};
+const CloudPost = {
+  uuid(){
+    if (crypto.randomUUID) return crypto.randomUUID();
+    const b = crypto.getRandomValues(new Uint8Array(16)); b[6] = (b[6] & 15) | 64; b[8] = (b[8] & 63) | 128;
+    const h = Array.from(b, x => x.toString(16).padStart(2, "0")).join("");
+    return h.slice(0, 8) + "-" + h.slice(8, 12) + "-" + h.slice(12, 16) + "-" + h.slice(16, 20) + "-" + h.slice(20);
+  },
+  async row(id){ const r = await Cloud.api("tally_post_jobs?select=id,status,done,n,message,results,checking,company&id=eq." + id); return (r || [])[0] || null; },
+  // the same answer as Bridge.postChecked: {ok, company, results: [{id, ok, message, ...}], checking, job}
+  async run(cid, payload, onProgress, onChecked){
+    const id = this.uuid(), sleep = ms => new Promise(r => setTimeout(r, ms));
+    const ids = [].concat(payload.masters || [], payload.vouchers || []).map(x => x.id);
+    const r = await TCloud.rpc("tally_post_enqueue", {p_id: id, p_client: cid, p_payload: {masters: payload.masters || [], vouchers: payload.vouchers || [], ledger: payload.ledger || ""}});
+    if (!r || !r.ok) throw {code: "cloud_post", message: (r && r.error) || "The entries could not be queued."};
+    try { lsSet("tdsdesk-test:cloudpost", JSON.stringify({id, cid, at: Date.now(), n: ids.length})); } catch (e){}
+    const tell = j => { try { onProgress && onProgress(j); } catch (e){} };
+    const t0 = Date.now();
+    let j = null;
+    for (;;){
+      await sleep(j ? 2500 : 1200);
+      try { j = await this.row(id) || j; } catch (e){ /* the internet: tried again */ }
+      if (!j) continue;
+      if (["done", "failed", "cancelled"].includes(j.status)) break;
+      const waitMin = Math.floor((Date.now() - t0) / 60000);
+      tell({done: j.done || 0, total: j.n || ids.length, message: j.status === "waiting"
+        ? "Queued for the Tally computer; it takes it within a minute when Tally is open" + (waitMin >= 2 ? " (waiting " + waitMin + " min: is Tally open there?)" : "")
+        : (j.message || "Posting on the Tally computer")});
+      if (Date.now() - t0 > 30 * 60000){ j = Object.assign({}, j, {status: "failed", message: "Still waiting for the Tally computer after 30 minutes. The posting stays queued and runs when Tally is open there; entries already in Tally are never posted twice."}); break; }
+    }
+    const why = j.status === "done" ? "Not posted." : (j.message || "The posting stopped.");
+    const resultsOf = jj => { const got = new Map([].concat(jj.results || []).map(x => [x.id, x])); return ids.map(x => got.get(x) || {id: x, ok: false, message: why}); };
+    const results = resultsOf(j);
+    if (j.checking){
+      results.forEach(x => { if (x.ok && x.verified == null) x.pendingCheck = true; });
+      (async () => {
+        for (let n = 0; n < 400; n++){
+          await sleep(n < 10 ? 2000 : 5000);
+          let k; try { k = await this.row(id); } catch (e){ continue; }
+          if (k && !k.checking){ try { lsDel("tdsdesk-test:cloudpost"); } catch (e){} try { onChecked && onChecked({results: resultsOf(k)}); } catch (e){} return; }
+        }
+      })();
+    } else { try { lsDel("tdsdesk-test:cloudpost"); } catch (e){} }
+    return {ok: true, company: j.company || payload.company, results, checking: !!j.checking, viaCloud: true, job: {id, status: j.status, message: j.message}};
+  }
+};
+// the Post button: on the Tally computer, or anywhere once the client's books are in the cloud
+function canPostTally(co){
+  if (Bridge.on() && Bridge.up()) return true;
+  if (!co || typeof TCloud !== "object" || !TCloud.on()) return false;
+  const s = TCloud.st[co.id];
+  if (!s || !s.at){ TCloud.st[co.id] = {at: Date.now(), books: null}; TCloud.status(co.id, true).then(() => { if (TCloud.has(co.id)) render(); }, () => {}); return false; }
+  return TCloud.has(co.id);
+}
+// a posting queued before this page was reloaded or closed: how it ended (it goes on in the cloud and on the Tally
+// computer by itself). Post again for anything left: entries already in Tally are recognised and not posted twice
+async function cloudPostLeftover(){
+  let m = null; try { m = JSON.parse(lsGet("tdsdesk-test:cloudpost") || "null"); } catch (e){}
+  if (!m || !m.id || typeof TCloud !== "object" || !TCloud.on()) return;
+  try {
+    const j = await CloudPost.row(m.id);
+    if (!j){ if (Date.now() - (m.at || 0) > 7 * 86400000) lsDel("tdsdesk-test:cloudpost"); return; }
+    if (["waiting", "taken", "running"].includes(j.status) || j.checking){ toast("An earlier posting to " + j.company + " is " + (j.status === "waiting" ? "still queued for the Tally computer" : "going on at the Tally computer: " + (j.done || 0) + " of " + j.n + " done") + "."); return; }
+    lsDel("tdsdesk-test:cloudpost");
+    const ok = [].concat(j.results || []).filter(r => r.ok).length;
+    toast("The earlier posting to " + j.company + " finished: " + ok + " of " + j.n + " in Tally. Post again for any left; entries already in Tally are not sent twice.");
+  } catch (e){}
+}
+setTimeout(() => { try { cloudPostLeftover(); } catch (e){} }, 9000);
 /* ================================================================== */
 /* AI help (Claude) in TDS and GST: it suggests, FinCom's rules and   */
 /* people decide. Off unless the firm switches it on (Settings, AI    */

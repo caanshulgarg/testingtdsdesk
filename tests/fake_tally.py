@@ -55,8 +55,10 @@ def _kind(body):
     if "<REPORTNAME>Day Book</REPORTNAME>" in body: return "DayBook"
     if "Import Data" in body: return "Import"
     return "other"
+PALT = {}           # CTRL["posted_alter"]: posted entries get a change number, as in a real Tally, and show in the change list
+def _alt(num): return ("<ALTERID> %d</ALTERID>" % PALT[num]) if num in PALT else ""
 def _with_ids(vx, d, num):
-    return re.sub(r"^(<VOUCHER\b[^>]*>)", lambda m: m.group(1) + "<GUID>g-%s</GUID><MASTERID>%d</MASTERID><VOUCHERNUMBER>%s</VOUCHERNUMBER>" % (num, 900000 + int(num), num), re.sub(r"<DATE>[^<]*</DATE>", "<DATE>%s</DATE>" % d, vx, 1))
+    return re.sub(r"^(<VOUCHER\b[^>]*>)", lambda m: m.group(1) + "<GUID>g-%s</GUID><MASTERID>%d</MASTERID>%s<VOUCHERNUMBER>%s</VOUCHERNUMBER>" % (num, 900000 + int(num), _alt(num), num), re.sub(r"<DATE>[^<]*</DATE>", "<DATE>%s</DATE>" % d, vx, 1))
 LEDGERS_MADE = []
 _lock = threading.Lock(); _serial = threading.Lock()
 def posted_tags():
@@ -115,6 +117,7 @@ class H(http.server.BaseHTTPRequestHandler):
                             if not CTRL.get("empty_date_creates"): continue
                             d = CTRL["empty_date_creates"]
                         num = str(len(POSTED) + 1 + len(DELETED)); POSTED.append((d, n, num, vx)); made += 1
+                        if CTRL.get("posted_alter"): _alter[0] += 1; PALT[num] = _alter[0]
                     vid = str(900000 + len(POSTED))
                     out = "<RESPONSE><CREATED>%d</CREATED><ALTERED>0</ALTERED><ERRORS>%d</ERRORS><EXCEPTIONS>0</EXCEPTIONS>%s<LASTVCHID>%s</LASTVCHID></RESPONSE>" % (made, len(errs), "".join("<LINEERROR>%s</LINEERROR>" % e for e in errs), vid)
                 else:
@@ -144,7 +147,9 @@ class H(http.server.BaseHTTPRequestHandler):
         elif "TDSDeskVchHeads" in body:
             a, b = g("SVFROMDATE"), g("SVTODATE")
             with _lock: mine = [x for x in POSTED if a <= x[0] <= b]
-            out = "<ENVELOPE><BODY><DATA><COLLECTION>" + "".join('<VOUCHER><DATE>%s</DATE><VOUCHERTYPENAME>Journal</VOUCHERTYPENAME><VOUCHERNUMBER>%s</VOUCHERNUMBER><NARRATION>%s</NARRATION><MASTERID>%d</MASTERID><GUID>g-%s</GUID><ISOPTIONAL>No</ISOPTIONAL></VOUCHER>' % (d, num, n, 900000 + int(num), num) for d, n, num, _ in mine) + "</COLLECTION></DATA></BODY></ENVELOPE>"
+            out = "<ENVELOPE><BODY><DATA><COLLECTION>" + "".join('<VOUCHER><DATE>%s</DATE><VOUCHERTYPENAME>Journal</VOUCHERTYPENAME><VOUCHERNUMBER>%s</VOUCHERNUMBER><NARRATION>%s</NARRATION><MASTERID>%d</MASTERID><GUID>g-%s</GUID>%s<ISOPTIONAL>No</ISOPTIONAL></VOUCHER>' % (d, num, n, 900000 + int(num), num, _alt(num)) for d, n, num, _ in mine) + "</COLLECTION></DATA></BODY></ENVELOPE>"
+        elif ("TDSDeskCompanies" in body or "TDSDeskCompanyInfo" in body) and CTRL.get("no_company"):
+            out = "<ENVELOPE><BODY><DATA><COLLECTION></COLLECTION></DATA></BODY></ENVELOPE>"     # Tally open, no company loaded
         elif "TDSDeskCompanies" in body or "TDSDeskCompanyInfo" in body:
             out = '<ENVELOPE><BODY><DATA><COLLECTION><COMPANY NAME="%s"><NAME>%s</NAME><STARTINGFROM>20240401</STARTINGFROM></COMPANY></COLLECTION></DATA></BODY></ENVELOPE>' % (COMPANY.replace("&", "&amp;"), COMPANY)
         elif "<REPORTNAME>Day Book</REPORTNAME>" in body:
@@ -155,7 +160,7 @@ class H(http.server.BaseHTTPRequestHandler):
                 # like a Tally that cannot give these days: the request just dies
                 self.close_connection = True; return
             lo, hi = bisect.bisect_left(dates, a), bisect.bisect_right(dates, b)
-            out = "<ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>Vouchers</REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY>%s</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><REQUESTDATA>" % COMPANY + "".join(p for _, p in V[lo:hi]) + "".join('<TALLYMESSAGE xmlns:UDF="TallyUDF">' + re.sub(r"^(<VOUCHER\b[^>]*>)", lambda m: m.group(1) + "<GUID>g-%s</GUID><MASTERID>%d</MASTERID><VOUCHERNUMBER>%s</VOUCHERNUMBER>" % (num, 900000 + int(num), num), re.sub(r"<DATE>[^<]*</DATE>", "<DATE>%s</DATE>" % d, vx, 1)) + "</TALLYMESSAGE>" for d, _, num, vx in list(POSTED) if a <= d <= b) + "</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>"
+            out = "<ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>Vouchers</REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY>%s</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><REQUESTDATA>" % COMPANY + "".join(p for _, p in V[lo:hi]) + "".join('<TALLYMESSAGE xmlns:UDF="TallyUDF">' + _with_ids(vx, d, num) + "</TALLYMESSAGE>" for d, _, num, vx in list(POSTED) if a <= d <= b) + "</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>"
         elif "TDSDeskKeepCo" in body:
             if CTRL.get("no_counters"):
                 out = '<ENVELOPE><BODY><DATA><COLLECTION><COMPANY NAME="%s"><NAME>%s</NAME></COMPANY></COLLECTION></DATA></BODY></ENVELOPE>' % (COMPANY, COMPANY)
@@ -174,6 +179,9 @@ class H(http.server.BaseHTTPRequestHandler):
                 gu = re.search(r"<GUID>([^<]*)</GUID>", pc).group(1); al = int(re.search(r"<ALTERID>\s*(\d+)", pc).group(1))
                 if after and al <= int(after.group(1)): continue
                 rows.append("<VOUCHER><GUID>%s</GUID><ALTERID> %d</ALTERID><DATE>%s</DATE></VOUCHER>" % (gu, al, d))
+            with _lock:
+                for d, _, num, _ in list(POSTED):
+                    if num in PALT and a <= d <= b and not (after and PALT[num] <= int(after.group(1))): rows.append("<VOUCHER><GUID>g-%s</GUID><ALTERID> %d</ALTERID><DATE>%s</DATE></VOUCHER>" % (num, PALT[num], d))
             out = "<ENVELOPE><BODY><DATA><COLLECTION>" + "".join(rows) + "</COLLECTION></DATA></BODY></ENVELOPE>"
         elif "TDSDeskKeepBal" in body:
             asOn = g("SVTODATE"); mv = amounts_until(asOn)

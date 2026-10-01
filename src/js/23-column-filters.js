@@ -273,7 +273,6 @@ function applyGroup(key, ledger){
   render();
 }
 // the bar at the bottom of the bank screen: React (app/src/screens/Bank.jsx)
-function bankBar(){ return B() && !B().loading && curStmt() ? '<div data-react="BankBar"></div>' : ""; }
 // Creating a ledger that is not yet in Tally
 async function openCreateLedger(name, rowId, targetFk, opts){
   opts = opts || {};

@@ -595,7 +595,6 @@ function drawerEntry(){
   return e;
 }
 // the drawer with a bill, over the review table: React (app/src/screens/Review.jsx)
-function drawerHtml(){ return drawerEntry() ? '<div data-react="Drawer"></div>' : ""; }
 function revColOn(){ const f = S.revF || {}; return Object.keys(f).some(k => Array.isArray(f[k]) ? f[k].length : f[k]); }
 function revColPass(r){
   const f = S.revF || {}, x = r.e.x, c = r.c;

@@ -86,7 +86,7 @@ function New-PostJob($payload) {
   $items = @()
   foreach ($m in @($payload.masters)) { if ($m) { $items += [ordered]@{ id = [string]$m.id; kind = 'master'; xml = [string]$m.xml } } }
   foreach ($v in @($payload.vouchers)) { if ($v) { $items += [ordered]@{ id = [string]$v.id; kind = 'voucher'; xml = [string]$v.xml } } }
-  [IO.File]::WriteAllText((Join-Path $dir 'payload.json'), (ConvertTo-Json -InputObject ([ordered]@{ company = [string]$payload.company; port = [int]('0' + $payload.port); ledger = [string]$payload.ledger; items = $items }) -Depth 8 -Compress))
+  [IO.File]::WriteAllText((Join-Path $dir 'payload.json'), (ConvertTo-Json -InputObject ([ordered]@{ company = [string]$payload.company; port = [int]('0' + $payload.port); ledger = [string]$payload.ledger; checkFirst = [bool]$payload.checkFirst; items = $items }) -Depth 8 -Compress))
   $p = [ordered]@{ ok = $true; id = $id; status = 'queued'; company = [string]$payload.company; port = 0; total = $items.Count; done = 0; results = @(); message = 'Starting'; pid = 0; resumed = $false; startedAt = (Get-Date).ToString('o'); updatedAt = ''; finishedAt = ''; checking = $false; checkFailed = $false }
   Write-JobProgress $dir $p
   $p.pid = Start-JobWorker $dir
@@ -122,7 +122,7 @@ function Get-LedgerVoucherList([int]$Port, [string]$Company, [string]$Ledger, [s
     '<BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + (Esc $Company) + '</SVCURRENTCOMPANY>' +
     '<SVFROMDATE>' + $From + '</SVFROMDATE><SVTODATE>' + $To + '</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE>' +
     '<COLLECTION NAME="TDSDeskLedVch" ISMODIFY="No"><TYPE>Vouchers : Ledger</TYPE><CHILDOF>' + (Esc $Ledger) + '</CHILDOF>' +
-    '<FETCH>DATE,VOUCHERTYPENAME,VOUCHERNUMBER,REFERENCE,PARTYLEDGERNAME,NARRATION,MASTERID,GUID,ISOPTIONAL,ISCANCELLED,ALLLEDGERENTRIES.LIST</FETCH></COLLECTION>' +
+    '<FETCH>DATE,VOUCHERTYPENAME,VOUCHERNUMBER,REFERENCE,PARTYLEDGERNAME,NARRATION,MASTERID,GUID,ALTERID,ISOPTIONAL,ISCANCELLED,ALLLEDGERENTRIES.LIST</FETCH></COLLECTION>' +
     '</TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>'
   $raw = Invoke-Tally -TallyPort $Port -Xml $req
   if ($raw -match '<LINEERROR>|Could not find|Unknown Request') { return $null }
@@ -138,7 +138,7 @@ function Get-LedgerVoucherList([int]$Port, [string]$Company, [string]$Ledger, [s
       $bills = @(); foreach ($bl in $e.SelectNodes('BILLALLOCATIONS.LIST')) { $bn = Get-NodeText $bl 'NAME'; if ($bn) { $bills += $bn } }
       $entries += [ordered]@{ ledger = (Get-NodeText $e 'LEDGERNAME'); amount = (Get-NodeText $e 'AMOUNT'); instrument = (Get-NodeText $bank 'INSTRUMENTNUMBER'); bills = $bills }
     }
-    $null = $list.Add([ordered]@{ guid = (Get-NodeText $v 'GUID'); masterId = (Get-NodeText $v 'MASTERID'); date = $d; type = $type; number = (Get-NodeText $v 'VOUCHERNUMBER'); reference = (Get-NodeText $v 'REFERENCE')
+    $null = $list.Add([ordered]@{ guid = (Get-NodeText $v 'GUID'); masterId = (Get-NodeText $v 'MASTERID'); alter = (Get-NodeText $v 'ALTERID'); date = $d; type = $type; number = (Get-NodeText $v 'VOUCHERNUMBER'); reference = (Get-NodeText $v 'REFERENCE')
       party = (Get-NodeText $v 'PARTYLEDGERNAME'); narration = (Get-NodeText $v 'NARRATION'); optional = (Get-NodeText $v 'ISOPTIONAL'); cancelled = (Get-NodeText $v 'ISCANCELLED'); entries = $entries })
   }
   return ,$list
@@ -242,7 +242,7 @@ function Confirm-Posted($port, [string]$company, $pending, $results, $items, [st
     $k = [string]$r.id
     if (-not ($pending -contains $k)) { continue }
     if ($null -eq $there) { $r.verified = $null; $r.message = "Tally said it created this, but did not answer the check afterwards. Use 'Check Tally' before posting it again." }
-    elseif ($there.ContainsKey($k)) { $h = $there[$k]; $r.verified = $true; $r.vchNumber = [string]$h.number; $r.vchType = [string]$h.type; $r.masterId = [string]$h.masterId; $r.guid = [string]$h.guid; $r.vchDate = [string]$h.date; $r.message = '' }
+    elseif ($there.ContainsKey($k)) { $h = $there[$k]; Add-PostedForCopy $company $h $byId[$k]; $r.verified = $true; $r.vchNumber = [string]$h.number; $r.vchType = [string]$h.type; $r.masterId = [string]$h.masterId; $r.guid = [string]$h.guid; $r.vchDate = [string]$h.date; $r.message = '' }
     else { $r.ok = $false; $r.verified = $false; $r.message = "Tally replied 'created', but the entry cannot be found in '" + $company + "'. It was not sent again: look for it in Tally (another company open in Tally, or an Optional voucher)." }
   }
   $pending.Clear()
@@ -277,7 +277,7 @@ function Invoke-JobWorker([string]$dir) {
     $p.status = 'running'
     $todo = @($pl.items | Where-Object { -not $doneIds.ContainsKey([string]$_.id) })
     # resuming: whatever reached Tally before the stop is counted, not sent again
-    if ($results.Count -gt 0 -or $p.resumed) {
+    if ($results.Count -gt 0 -or $p.resumed -or $pl.checkFirst) {
       $there = $null
       for ($a = 0; $null -eq $there -and $a -lt 6; $a++) {
         $there = Find-PostedTags $port ([string]$pl.company) @($todo | Where-Object { $_.kind -eq 'voucher' }) ([string]$pl.ledger)

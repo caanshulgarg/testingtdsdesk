@@ -2370,13 +2370,6 @@ function selfTestSummary(){
   const r = st.results, fails = ["pdf", "ocr"].filter(k => r[k] && !r[k].ok);
   return {state: fails.length ? "fail" : "ok", fails, r};
 }
-function selfTestBanner(){
-  const sum = selfTestSummary();
-  if (sum.state !== "fail") return "";
-  const msgs = sum.fails.map(k => (k === "pdf" ? "PDF reading: " : "Photo OCR: ") + sum.r[k].msg);
-  return '<div class="banner" style="border-left-color:var(--stop);background:var(--stop-soft);margin-bottom:12px"><b>Bill reading has a problem here.</b> ' + esc(msgs.join(" ")) +
-    ' <button class="linkbtn" data-act="goSelfTest">See the self-test</button></div>';
-}
 
 /* ------------------------------------------------------------------ */
 /* Reading order: free first, Claude only when needed                  */
@@ -3642,60 +3635,20 @@ function render(){
   RENDER_GEN++; IN_RENDER++;
   try { return renderNow(); } finally { IN_RENDER--; if (!IN_RENDER && typeof Route === "object") Route.sync(); }
 }
+// render(): what the screen of the moment needs loaded, before React draws the page (app/src/Main.jsx); and what the
+// page needs once drawn (afterRender, called by app/src/store.js after React has drawn)
 function renderNow(){
   requestAnimationFrame(padForBars);
-  const drafts = {};
-  document.querySelectorAll("#app [data-draft]").forEach(el => { if (el.id) drafts[el.id] = el.value; });
-  const a = document.activeElement, fk = a && a.dataset ? (a.dataset.fk || (a.hasAttribute("data-draft") ? "id:" + a.id : null)) : null;
-  let pos = null; try { pos = fk && (a.type === "text" || a.type === "search") ? a.selectionStart : null; } catch(e){}
-  const typed = fk && a.hasAttribute && a.hasAttribute("data-keeptyped") ? a.value : null;
-  if (signInNeeded()){
-    app.innerHTML = viewSignIn();
-    if (typeof acAfterRender === "function") acAfterRender();
-    const f0 = document.querySelector('[data-cloud="email"]');
-    if (f0 && !document.activeElement.matches("input")) f0.focus();
-    return;
+  if (signInNeeded()) return;
+  const co = CO();
+  if (!(S.view === "company" && co)){ S.view = "home"; return; }
+  // the bills screen shows the bank's ledgers too: the client's bank data is loaded for it
+  if (!S.loadingCo && S.tab === "invoices" && S.step !== "collect" && (!S.bank || S.bank.cid !== co.id) && !S.bankCtxLoading){
+    S.bankCtxLoading = true; loadBank(co.id).then(() => { S.bankCtxLoading = false; autoMapCompanyLedgers(CO()); render(); });
   }
-  const banner = creditBanner() + (S.storeKind === "db" || (Cloud.on() && Cloud.st && !Cloud.st.error) ? "" :
-    '<p class="banner">' + (S.storeKind === "local" || S.storeKind === "idb" ? "Your work is saved in this browser only. Clearing browser data will remove it." : "Your work is not being saved. It will be lost when you close this page.") + "</p>");
-  let body;
-  if (S.view === "company" && CO() && !S.loadingCo && S.tab === "books"){
-    body = viewBooks();
-  } else if (S.view === "company" && CO() && !S.loadingCo && S.tab === "txn"){
-    body = viewTransactions();
-  } else if (S.view === "company" && CO() && !S.loadingCo && S.tab === "dash"){
-    body = viewClientDash();
-  } else if (S.view === "company" && CO() && !S.loadingCo && S.tab === "clientInbox"){
-    body = (docqPanel(S.coId) || '<p class="note">Nothing is waiting for this client. Documents sent in by office automation appear here.</p>') +
-      '<div class="row" style="margin-top:10px"><button class="btn small" data-nav="inbox">Inbox for all clients</button></div>';
-  } else if (S.view === "company" && CO() && !S.loadingCo && S.tab === "export"){
-    body = viewPostStep();
-  } else if (S.view === "company" && CO() && !S.loadingCo && S.tab === "done"){
-    body = viewDoneStep();
-  } else if (S.view === "company" && CO() && !S.loadingCo && isSetupTab(S.tab)){
-    body = '<div data-react="ClientSetup"></div>';   // app/src/screens/Settings.jsx
-  } else if (S.view === "company" && CO() && S.step === "collect" && !isSetupTab(S.tab) && !S.loadingCo){
-    body = viewCollect();
-  } else if (S.view === "company" && CO()){
-    body = S.loadingCo ? '<p class="note">Opening ' + esc(CO().name) + "…</p>" :
-      ((S.tab === "invoices" || S.tab === "export") && (!S.bank || S.bank.cid !== CO().id) && !S.bankCtxLoading ? (S.bankCtxLoading = true, loadBank(CO().id).then(() => { S.bankCtxLoading = false; autoMapCompanyLedgers(CO()); render(); }), "") : "") +
-      (S.tab === "invoices" ? viewInvoices() : S.tab === "bank" ? viewBank() : S.tab === "sales" ? viewSales() : S.tab === "deductees" ? viewParties() : S.tab === "settings" ? viewCompanySettings() : viewExport());
-  } else {
-    S.view = "home";
-    body = S.homeTab === "help" && typeof viewHelp === "function" ? viewHelp() : S.homeTab === "today" ? viewToday() : S.homeTab === "inbox" ? viewInboxAll() : S.homeTab === "tally" ? viewTallyHome() : S.homeTab === "rules" ? viewRules() : viewClients();
-  }
-  const working = S.view === "company" && CO() ? '<div data-react="Working"></div>' : "";
-  app.innerHTML = selfTestBanner() + banner + working + body + drawerHtml() + actionBar() + colPopHtml();
-  placeColPop();
-  Object.entries(drafts).forEach(([id, v]) => { const el = document.getElementById(id); if (el && el.hasAttribute("data-draft") && el.value !== v) el.value = v; });
-  if (fk){
-    const el = fk.indexOf("id:") === 0 ? document.getElementById(fk.slice(3)) : document.querySelector('[data-fk="' + fk + '"]');
-    if (el && typed !== null && el.value !== typed) el.value = typed;
-    if (el && el !== document.activeElement){ el.focus(); try { if (pos != null) el.setSelectionRange(pos, pos); } catch(e){} }
-  }
+}
+function afterRender(){
   if (typeof acAfterRender === "function") acAfterRender();
-  if (typeof GridF === "object") GridF.after();
-  if (typeof Help === "object") Help.after();
   if (S.view === "company" && ["bank", "invoices", "export", "sales"].includes(S.tab) && typeof maybeLiveSync === "function") maybeLiveSync();
 }
 

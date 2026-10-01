@@ -312,7 +312,13 @@ function Test-KeepDue {
   if ((Get-KeepSchedule) -ne 'daily') { return 'continuous' }
   $now = Get-Date; $p = (Get-KeepDailyAt).Split(':')
   $at = $now.Date.AddHours([int]$p[0]).AddMinutes([int]$p[1])
-  if ($now -ge $at -and (Get-KeepLastRun) -ne $now.ToString('yyyyMMdd')) { return 'daily' }
+  # 1.14.5: the update last due (today's after its time, else yesterday's) stays due until it has run with Tally open:
+  # Tally closed at that time, it runs the next time Tally is open. A try that found nothing open waits 30 minutes
+  $dueDay = $(if ($now -ge $at) { $now } else { $now.AddDays(-1) }).ToString('yyyyMMdd')
+  $tried = [DateTime]::MinValue; try { $tried = [DateTime]::Parse(([IO.File]::ReadAllText((Join-Path (Get-SyncDir) 'keep-tried.txt'))).Trim()) } catch { }
+  $lr = Get-KeepLastRun
+  if (-not $lr -and $now -lt $at) { return $(if (Test-KeepLightDue) { 'light' } else { '' }) }     # never run yet: its first time is today's
+  if ($lr -lt $dueDay -and ((Get-Date) - $tried).TotalMinutes -ge 30) { return 'daily' }
   if (Test-KeepLightDue) { return 'light' }
   return ''
 }
@@ -694,6 +700,60 @@ function Save-KeepOpening([string]$Company, [int]$Port, [string]$Dir, $St, $Rows
   $St.lastM = 0; Update-KeepLedgers $Company $Port $Dir $St $false        # the ledgers' own numbers, to follow renames and changes
   Write-Log ('Keeping ' + $Company + ': opening balances read (' + $led.Count + ' ledgers)')
 }
+# 1.14.5: an entry FinCom posted and the read-back found (with its GUID and change number): noted for the copier, which
+# puts it into the copy and sends its day to the cloud without reading the day from Tally. The posting runs in another
+# process, so it only writes this note; the copier alone changes the copy
+function Add-PostedForCopy([string]$Company, $Head, $Item) {
+  try {
+    $g = [string]$Head.guid; $a = [string]$Head.alter; $d = [string]$Head.date; $x = [string]$Item.xml
+    if (-not $g -or $a -notmatch '^\s*\d+\s*$' -or $d -notmatch '^\d{8}$' -or -not $x) { return }
+    $dir = Get-SyncFolder $Company
+    if (-not (Test-Path -LiteralPath (Join-Path $dir 'keep.json'))) { return }
+    $o = [ordered]@{ guid = $g; alter = [long]$a.Trim(); date = $d; number = [string]$Head.number; type = [string]$Head.type; xml = $x }
+    [IO.File]::AppendAllText((Join-Path $dir 'posted-in.jsonl'), (($o | ConvertTo-Json -Compress -Depth 3) + "`n"))
+  } catch { }
+}
+function Use-KeepPosted([string]$Dir, $St) {
+  $f = Join-Path $Dir 'posted-in.jsonl'
+  if (-not (Test-Path -LiteralPath $f)) { return 0 }
+  $w = Join-Path $Dir ('posted-in.' + [DateTime]::UtcNow.Ticks + '.work')
+  try { Move-Item -LiteralPath $f -Destination $w -Force } catch { return 0 }
+  $days = Join-Path $Dir 'days'; New-Item -ItemType Directory -Force -Path $days | Out-Null
+  $where = Get-KeepWhere $Dir; $touched = @{}; $n = 0
+  foreach ($ln in ([IO.File]::ReadAllText($w) -split "`n")) {
+    if (-not $ln.Trim()) { continue }
+    try { $e = $ln | ConvertFrom-Json } catch { continue }
+    if ([string]$e.date -lt [string]$St.from) { continue }
+    $x = ([string]$e.xml).Trim()
+    $m = [regex]::Match($x, '^<VOUCHER\b[^>]*>')
+    if (-not $m.Success) { continue }
+    $open = $m.Value
+    if ($open -notmatch 'VCHTYPE=' -and $e.type) { $open = $open -replace '^<VOUCHER', ('<VOUCHER VCHTYPE="' + (Esc ([string]$e.type)) + '"') }
+    $rest = $x.Substring($m.Length) -replace '<GUID>[^<]*</GUID>', '' -replace '<ALTERID>[^<]*</ALTERID>', '' -replace '<VOUCHERNUMBER>[^<]*</VOUCHERNUMBER>', ''
+    $rest = ([regex]'<DATE>[^<]*</DATE>').Replace($rest, ('<DATE>' + $e.date + '</DATE>'), 1)
+    $v = $open + '<GUID>' + (Esc ([string]$e.guid)) + '</GUID><ALTERID> ' + [long]$e.alter + '</ALTERID>' + $(if ($e.number) { '<VOUCHERNUMBER>' + (Esc ([string]$e.number)) + '</VOUCHERNUMBER>' } else { '' }) + $rest
+    $tag = '<GUID>' + (Esc ([string]$e.guid)) + '</GUID>'
+    foreach ($day in @(@([string]$e.date, [string]$where[[string]$e.guid]) | Where-Object { $_ } | Sort-Object -Unique)) {
+      $df = Join-Path $days ($day + '.xml')
+      $t = ''; if (Test-Path -LiteralPath $df) { $t = [IO.File]::ReadAllText($df) }
+      $keep = New-Object Text.StringBuilder
+      foreach ($pc in [regex]::Matches($t, '<TALLYMESSAGE>[\s\S]*?</TALLYMESSAGE>')) { if (-not $pc.Value.Contains($tag)) { $null = $keep.Append($pc.Value) } }
+      if ($day -eq [string]$e.date) { $null = $keep.Append('<TALLYMESSAGE>').Append($v).Append('</TALLYMESSAGE>') }
+      $t2 = $keep.ToString()
+      Save-KeepFile $df $t2; Save-KeepFile ([IO.Path]::ChangeExtension($df, '.idx')) (Get-KeepIndexText $t2)
+      $touched[$day] = $true
+    }
+    $where[[string]$e.guid] = [string]$e.date
+    $St.verify = @(@($St.verify) + [string]$e.date | Where-Object { $_ } | Sort-Object -Unique)
+    $n++
+  }
+  Remove-Item -LiteralPath $w -Force -ErrorAction SilentlyContinue
+  if ($touched.Count) {
+    Add-CloudDays $Dir @($touched.Keys)
+    foreach ($ym in @($touched.Keys | ForEach-Object { $_.Substring(0, 6) } | Sort-Object -Unique)) { Write-KeepMonth $Dir $ym $St }
+  }
+  return $n
+}
 # one turn for one open company: at most a few seconds of Tally's time, with pauses between reads
 function Step-Keep([string]$Company, [int]$Port, [string]$BooksFrom) {
   $dir = Get-SyncFolder $Company
@@ -809,6 +869,8 @@ function Step-Keep([string]$Company, [int]$Port, [string]$BooksFrom) {
     $st.trouble = $null; & $save
     return
   }
+  # 1.14.5: entries just posted from FinCom: into the copy and on to the cloud, without reading Tally
+  if ($st.phase -eq 'live') { $pn = Use-KeepPosted $dir $st; if ($pn) { Write-Log ('Keeping ' + $Company + ': ' + $pn + ' entries posted from FinCom put in the copy and sent to the cloud (Tally not read)'); & $save } }
   # a new day: the days since the last turn
   if ([string]$st.next -le $today) { $null = Update-KeepDates $Company $Port $dir $st @(Get-KeepDayRange ([string]$st.next) $today); $st.next = Add-KeepDays $today 1 }
   # Tally's own change counters first: when neither has moved since the last turn, nothing changed in the company
@@ -835,12 +897,23 @@ function Step-Keep([string]$Company, [int]$Port, [string]$BooksFrom) {
     if ($wide -and (Test-KeepRoom $Port)) { $ch = Get-KeepList $Company $Port ([string]$st.from) $today ([long]$st.last) }
     if ($ch.Count) {
       $where = Get-KeepWhere $dir
-      $dates = @($ch | ForEach-Object { $_[2] })
-      foreach ($c in $ch) { $o = $where[$c[0]]; if ($o -and $o -ne $c[2]) { $dates += $o } }
-      $dates = @($dates | Sort-Object -Unique)
-      $null = Update-KeepDates $Company $Port $dir $st $dates
+      # 1.14.5: an entry already in the copy with the same change number on the same date (posted from FinCom and put
+      # in the copy then) is not read again
+      $ix = @{}; $need = @()
+      foreach ($c in $ch) {
+        $o = $where[$c[0]]
+        if ($o -and $o -eq $c[2]) {
+          if (-not $ix.ContainsKey($o)) { $m = @{}; $f = Join-Path (Join-Path $dir 'days') ($o + '.xml'); if (Test-Path -LiteralPath $f) { foreach ($ln in ((Read-KeepIndex $f) -split "`n")) { $q = $ln -split "`t"; if ($q[0]) { $m[$q[0]] = [long]('0' + $q[1]) } } }; $ix[$o] = $m }
+          if ($ix[$o][$c[0]] -eq [long]$c[1]) { continue }
+        }
+        $need += , $c
+      }
+      $dates = @($need | ForEach-Object { $_[2] })
+      foreach ($c in $need) { $o = $where[$c[0]]; if ($o -and $o -ne $c[2]) { $dates += $o } }
+      $dates = @($dates | Where-Object { $_ } | Sort-Object -Unique)
+      if ($dates.Count) { $null = Update-KeepDates $Company $Port $dir $st $dates }
       $st.last = [long](($ch | ForEach-Object { $_[1] } | Measure-Object -Maximum).Maximum)
-      Write-Log ('Keeping ' + $Company + ': ' + $ch.Count + ' changed entries on ' + $dates.Count + ' dates brought in')
+      Write-Log ('Keeping ' + $Company + ': ' + $ch.Count + ' changed entries' + $(if ($dates.Count) { ' on ' + $dates.Count + ' dates brought in' } else { ', already in the copy' }))
     }
     # the counter moved but no entry has a newer change number: most likely an entry was deleted. Recent months are
     # compared with Tally's list now; older ones in their turn
@@ -850,8 +923,6 @@ function Step-Keep([string]$Company, [int]$Port, [string]$BooksFrom) {
       }
     }
   }
-  # 1.14.4: the light check stops here: the ledgers' changes, the month checks and the retries wait for the daily update
-  if ($script:KeepLight) { if ($cn.ok) { $st.cv = $cn.v; $st.cm = $cn.m }; $st.trouble = $null; & $save; $script:KeepCaughtUp = $true; return }
   # 1.14.0: nothing changed since the last look (or nothing new came in): this company is up to date for today's run
   # 1.14.3: in the daily update, every month is also compared with Tally's list once (deleted entries leave no change
   # number): the company is up to date only when a whole round of months has been checked today
@@ -859,6 +930,15 @@ function Step-Keep([string]$Company, [int]$Port, [string]$BooksFrom) {
   # ledger masters changed since the last look
   if ($st.phase -eq 'live' -and $sw.Elapsed.TotalSeconds -lt $budget -and -not ($cn.ok -and $null -ne $st.cm -and [long]$st.cm -eq $cn.m)) { Update-KeepLedgers $Company $Port $dir $st $false }
   if ($cn.ok) { $st.cv = $cn.v; $st.cm = $cn.m }
+  # 1.14.4: the light check stops here: the month checks and the retries wait for the daily update
+  if ($script:KeepLight) { $st.trouble = $null; & $save; $script:KeepCaughtUp = $true; return }
+  # 1.14.5: the days posted from FinCom (put in the copy from what was posted) read once from Tally, in the evening,
+  # so the copy is exactly as Tally keeps them
+  if (@($st.verify | Where-Object { $_ }).Count -and $sw.Elapsed.TotalSeconds -lt $budget) {
+    $vd = @($st.verify | Where-Object { $_ }); $st.verify = @()
+    $null = Update-KeepDates $Company $Port $dir $st $vd
+    Write-Log ('Keeping ' + $Company + ': ' + $vd.Count + ' day(s) posted from FinCom read as Tally keeps them')
+  }
   # a month FinCom asked to be checked, now
   $rq = Join-Path $dir 'recheck.txt'
   if ((Test-Path -LiteralPath $rq) -and $sw.Elapsed.TotalSeconds -lt $budget) {
@@ -935,7 +1015,7 @@ function Invoke-KeepWorker {
   $held = ''
   $script:IsCopier = $true
   $due = Test-KeepDue; $once = $due -eq 'daily' -or $due -eq 'now' -or $due -eq 'light'
-  $script:KeepLight = $due -eq 'light'
+  $script:KeepLight = $due -eq 'light'; $script:KeepAllDone = $false
   if ($script:KeepLight) { Remove-Item -LiteralPath (Join-Path (Get-SyncDir) 'keep-light-now.txt') -Force -ErrorAction SilentlyContinue; [IO.File]::WriteAllText((Get-KeepLightFile), (Get-Date).ToString('s')) }
   $script:KeepForce = $due -eq 'now'
   $script:KeepOnce = $once
@@ -965,6 +1045,7 @@ function Invoke-KeepWorker {
         }
       }
       if ($once -and $open.Count -and -not @($open | Where-Object { -not $upToDate[$_[0]] }).Count) {
+        $script:KeepAllDone = $true
         if (-not $script:KeepLight) { Write-Log 'Update from Tally: every open company is up to date' }
         break
       }
@@ -1008,6 +1089,11 @@ function Invoke-KeepWorker {
       $until = (Get-Date).AddMinutes(10)
       while ((Get-Date) -lt $until) { $w = 0; try { $w = Invoke-CloudPush } catch { }; if (-not $w) { break }; Start-Sleep -Seconds 10 }
       if ($script:KeepLight) { Write-Log 'Light check of Tally: done' }
+      elseif (-not $script:KeepAllDone) {
+        [IO.File]::WriteAllText((Join-Path (Get-SyncDir) 'keep-tried.txt'), (Get-Date).ToString('s'))
+        Remove-Item -LiteralPath (Join-Path (Get-SyncDir) 'keep-now.txt') -Force -ErrorAction SilentlyContinue
+        Write-Log 'Update from Tally: not finished (Tally or the company not open, or time up); it runs again when Tally is open'
+      }
       else {
         [IO.File]::WriteAllText((Join-Path (Get-SyncDir) 'keep-lastrun.txt'), (Get-Date).ToString('yyyyMMdd'))
         [IO.File]::WriteAllText((Get-KeepLightFile), (Get-Date).ToString('s'))
@@ -1034,7 +1120,7 @@ function Start-KeepIfNeeded {
   # 'continuous' schedule, when Tally's port takes connections
   $due = Test-KeepDue
   if (-not $due) { return }
-  if ($due -eq 'continuous') { $any = $false; foreach ($pp in @((Get-PortPlan).ports)) { if (Test-TallyPortOpen ([int]$pp.port)) { $any = $true } }; if (-not $any) { return } }
+  if ($due -ne 'now') { $any = $false; foreach ($pp in @((Get-PortPlan).ports)) { if (Test-TallyPortOpen ([int]$pp.port)) { $any = $true } }; if (-not $any) { return } }
   $exe = (Get-Process -Id $PID).Path
   $psi = New-Object Diagnostics.ProcessStartInfo
   $psi.FileName = $exe
