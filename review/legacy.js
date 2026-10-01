@@ -35,7 +35,7 @@ const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
 const APP_VERSION = "TEST · 30 Sep 2026 · build 199 (posting queue: post from any computer, the Tally computer posts when Tally is free; posted entries go to the cloud without reading Tally again; bridge 1.14.6)";
 // the Tally Bridge setup file's fingerprint, put in by build.py: a new setup file is never served from an old cache
-const BRIDGE_SETUP_SHA = "22f7d1ed37e77dee";
+const BRIDGE_SETUP_SHA = "531e3cb40ba6b3b2";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;
@@ -5265,6 +5265,20 @@ const MIS = {
     rows.sort((a, c) => c.total - a.total || a.party.localeCompare(c.party));
     const sum = rows.reduce((s, p) => ({total: r2(s.total + p.total), b: s.b.map((v, i) => r2(v + p.b[i])), adv: r2(s.adv + p.adv), unalloc: r2(s.unalloc + p.unalloc), pre: r2(s.pre + p.pre), tally: p.tally != null ? r2((s.tally || 0) + p.tally) : s.tally}), {total: 0, b: [0, 0, 0, 0, 0], adv: 0, unalloc: 0, pre: 0, tally: null});
     sum.open = r2(sum.b.reduce((a, v) => a + v, 0));
+    // review of 01-Oct-2026: what each party owes on balance (Tally's balance when known, else its bills), aged so the
+    // ages add up to it: payments on account, advances, older settlements and any difference to Tally are set against
+    // the oldest bills first; an amount owed that no bill dates is "not dated". A party whose balance runs the other
+    // way (a supplier with a debit balance) owes nothing here: it is an advance, shown on its own, as a positive figure
+    rows.forEach(p => {
+      const net = r2(p.tally != null ? p.tally : p.total), nb = p.b.slice();
+      let extra = r2(net - nb.reduce((a, v) => a + v, 0));
+      for (let i = nb.length - 1; i >= 0 && extra < 0; i--){ const take = Math.min(nb[i], -extra); nb[i] = r2(nb[i] - take); extra = r2(extra + take); }
+      p.net = net; p.nb = net > 0 ? nb : nb.map(() => 0); p.und = net > 0 && extra > 0 ? extra : 0; p.advance = net < 0 ? r2(-net) : 0;
+    });
+    sum.owe = r2(rows.reduce((a, p) => a + Math.max(0, p.net), 0));
+    sum.advance = r2(rows.reduce((a, p) => a + p.advance, 0));
+    sum.nb = MIS.BUCKETS.map((_, i) => r2(rows.reduce((a, p) => a + p.nb[i], 0)));
+    sum.und = r2(rows.reduce((a, p) => a + p.und, 0));
     return {rows, sum};
   },
   msme(){
@@ -5364,8 +5378,9 @@ const MIS = {
       mtd: this.covered(mFrom) ? this.sales(mFrom, to).total : null, ytd: this.covered(fyFrom) ? this.sales(fyFrom, to).total : null,
       cash: this.cashflow(from, to), recv: this.ageing(to, "r", balTo), pay: this.ageing(to, "p", balTo), comp: this.compliance(from, to), dues: this.dues(to),
       balances: bal.ok ? {src: bal.src, cash: Object.keys(balTo).filter(l => Audit.isCash(l)).sort().map(l => [l, r2(-balTo[l])]), bank: Object.keys(balTo).filter(l => Audit.isBankL(l)).sort().map(l => [l, r2(-balTo[l])])} : {why: bal.why}};
-    r.dso = r.recv.sum.total && s.total ? Math.round(r.recv.sum.total / (s.total / days)) : null;
-    r.dpo = r.pay.sum.total && pr.total ? Math.round(r.pay.sum.total / (pr.total / days)) : null;
+    // days of sales or purchases owed: from what is owed on balance; never below nought (an advance is not "negative days")
+    r.dso = r.recv.sum.owe > 0 && s.total > 0 ? Math.round(r.recv.sum.owe / (s.total / days)) : null;
+    r.dpo = r.pay.sum.owe > 0 && pr.total > 0 ? Math.round(r.pay.sum.owe / (pr.total / days)) : null;
     r.p2 = this.phase2(r, balTo, bal.ok ? r2(r.balances.cash.concat(r.balances.bank).reduce((s2, x) => s2 + x[1], 0)) : null);
     const md = this.cfg(b).msmeDays, msme = this.msme();
     r.msme = r.pay.rows.filter(p => /micro|small/i.test(msme[p.party] || "")).map(p => ({party: p.party, type: msme[p.party], bills: p.bills.filter(x => x.ref && x.amt > 0 && x.age > md)})).filter(x => x.bills.length)
@@ -19682,7 +19697,10 @@ const ONB = {
     const b = S.books && S.books.cid === co.id ? S.books : null, ts = typeof tallyStatus === "function" ? tallyStatus(co) : {state: "none"};
     const bridge = !["none", "offline"].includes(ts.state);
     // linked: a Tally company is this client's, in the cloud or open through the bridge here (review item 6)
-    const linked = bridge && ts.state !== "unlinked" && (((typeof TLight === "object" && TLight.st.cos) || []).some(r => r.client_id === co.id) || (typeof Bridge === "object" && Bridge.on() && Bridge.up() && !!Bridge.openFor(co)));
+    // review of 01-Oct-2026: a company linked in the cloud is linked whether or not the Tally computer is on now (it was
+    // shown not done for a client linked in "Books in the cloud" while that computer was off)
+    const cloudLinked = ((typeof TLight === "object" && TLight.st.cos) || []).some(r => r.client_id === co.id) || (typeof TCloud === "object" && TCloud.has(co.id));
+    const linked = cloudLinked || (bridge && ts.state !== "unlinked" && typeof Bridge === "object" && Bridge.on() && Bridge.up() && !!Bridge.openFor(co));
     return [
       {id: "tally", done: !!co.tallyName, t: "Name the company as it is in Tally", d: "So entries go to the right company.", btn: ["Client setup", {act: "setup"}]},
       {id: "bridge", done: !!bridge, t: "Connect the Tally Bridge", d: "A small program on the computer where Tally is open.", btn: ["Connect", {act: "tallyGuide"}]},
@@ -19858,6 +19876,15 @@ const TCloud = {
     try { await IDBStore.write([[k, {at, text}]]); } catch (e){}
     return text;
   },
+  // Tally's groups, sent by the bridge from 1.14.7 (review of 01-Oct-2026): each group's parent, so a ledger's chain up
+  // to its primary group is known (expenses, incomes, debtors...). A copy sent before has none: the names decide, as before
+  async groupsInto(b, book){
+    let g = [];
+    try { g = await this.restAll("tally_groups?select=name,parent&book_id=eq." + book); } catch (e){ g = []; }
+    if (!g.length) return;
+    b.groups = Object.assign({}, b.groups || {});
+    g.forEach(x => { b.groups[x.name] = x.parent || ""; });
+  },
   // ---------- bring the cloud's copy into FinCom: only the months with a day that changed
   async load(force){
     const co = CO(), b = S.books;
@@ -19872,6 +19899,7 @@ const TCloud = {
       if (!(m0.cloud && m0.cloud.book === bk.book && m0.cloud.big && m0.cloud.ledgersAt === bk.ledgersAt)){
         const led = await this.restAll("tally_ledgers?select=name,parent,open&order=name&book_id=eq." + bk.book);
         b.vouchers = []; TallyRead.balances(b, {ledgers: led.map(l => ({name: l.name, parent: l.parent, open: String(l.open), close: ""}))}, this.d8(bk.from), Audit.today());
+        await this.groupsInto(b, bk.book);
         m0.cloud = {book: bk.book, company: bk.company, ledgersAt: bk.ledgersAt, big: true, at: new Date().toISOString()};
         LK.cache = {}; render();
       }
@@ -19893,6 +19921,7 @@ const TCloud = {
       if (ledNew){
         const led = await this.restAll("tally_ledgers?select=name,parent,open&order=name&book_id=eq." + bk.book);
         TallyRead.balances(b, {ledgers: led.map(l => ({name: l.name, parent: l.parent, open: String(l.open), close: ""}))}, from, to);
+        await this.groupsInto(b, bk.book);
       }
       const days = {};
       for (const ym of todo){
@@ -20004,6 +20033,23 @@ const TCloudUp = {
     const j = await r.json().catch(() => ({}));
     if (!r.ok || j.ok === false) throw new Error(j.error || ("FinCom's cloud answered with error " + r.status));
     return j;
+  },
+  // review of 01-Oct-2026: the day books kept in the cloud, read again by FinCom's cloud with today's reading (the party's
+  // GSTIN, the place of supply, HSN and rate on lines were not kept before). One month a call; owners only. Nothing is
+  // asked of the computer with Tally
+  async reparse(cid){
+    const co = S.companies[cid]; if (!co) return;
+    const p = this.pane; let month = null, n = 0, bad = 0, total = 0;
+    try {
+      do {
+        p.busy = "Reading " + co.name + "’s kept day books again" + (month ? " (" + FC.monthLabel(month) + ")" : "") + "…"; render();
+        const j = await this.post({kind: "reparse", month}, {client: cid});
+        n += (j.done || []).length; bad += (j.bad || []).length; total = j.months || total; month = j.next;
+      } while (month);
+      p.busy = ""; toast(co.name + ": " + n + " days read again" + (bad ? ", " + bad + " could not be read" : "") + ". Open the client again to see them.");
+      const s = this.st[cid]; if (s) s.at = 0;
+    } catch (e){ p.busy = ""; toast("Could not read the kept day books again: " + ((e && e.message) || e)); }
+    render();
   },
   async days(text, range, onStep, who){
     if (!this.on()) return {skipped: "not signed in to the firm account"};
