@@ -282,7 +282,8 @@ export function Return26({ b, allRows, form = "26Q" }) {
   if (!["challans", "deductees", "deductions", "checks"].includes(S.tdsTab)) S.tdsTab = "challans";
   const tds = r2(rows.reduce((a, r) => a + r.tds, 0)), un = rows.filter((r) => !r.challan), chTax = r2(ch.reduce((a, c) => a + num(c.tax), 0));
   const int1A = form === "26Q" ? TDS.interest(fy, q) : [], fee = form === "26Q" ? TDS.lateFee(fy, q, (b.filedOn || {})[fy + q]) : null, noPan = rows.filter((r) => !Certs.validPan(r.pan)).length;
-  const title = CO().name + " " + form + " " + q + " " + fy;
+  const fname = TDS.formName(form, fy), draft = TDS.isNew(fy) && !NEW_FORMS_VALIDATED;
+  const title = CO().name + " " + fname + " " + q + " " + fy;
   const other = form === "27Q" ? TDS26Q.nrChecks(fy, q) : form === "27EQ" ? TCS27EQ.checks(fy, q) : [];
   const chOpts = ch.concat(allCh.filter((c) => !ch.includes(c) && TDS.fyOf(c.date) === fy));
   const secs = Array.from(new Set(rows.map((r) => r.section))).sort();
@@ -307,10 +308,11 @@ export function Return26({ b, allRows, form = "26Q" }) {
   return <>
     <div className="revfilter">
       <button className="btn small" onClick={() => doAct("tdsAuto")}>Put them against challans</button>
-      <button className="btn small" onClick={() => doAct("tdsExcel")}>Download the {form} working</button>
-      <button className="btn small" onClick={() => doAct("tdsTxt")}>Download the {form} text file</button>
-      <button className="btn small primary" disabled={!Bridge.on()} title={Bridge.on() ? undefined : "Needs the Tally Bridge"} onClick={() => doAct("tdsFvu")}>Check it with the FVU</button>
+      <button className="btn small" onClick={() => doAct("tdsExcel")}>Download the {fname} working</button>
+      <button className="btn small" onClick={() => doAct("tdsTxt")}>Download the {fname} text file{draft ? " (draft)" : ""}</button>
+      <button className="btn small primary" disabled={!Bridge.on() || draft} title={draft ? "A draft is not sent to the FVU" : Bridge.on() ? undefined : "Needs the Tally Bridge"} onClick={() => doAct("tdsFvu")}>Check it with the FVU</button>
     </div>
+    {draft && <section className="bk-alert" data-draft={TDS.formNo(form, fy)}><b>{fname} (was {form}): draft – not yet validated.</b> From 1 April 2026 the return is {fname} under the Income-tax Act, 2025, with new payment codes and file layout. FinCom’s file is not yet matched to Protean’s file format or run through their FVU: do not file it.</section>}
     <div className="dash-tiles">
       <Tile label={form === "27EQ" ? "TCS collected" : "TDS deducted"} value={money(tds)} sub={rows.length + (form === "27EQ" ? " collections, " + deductees + " buyers" : " deductions, " + deductees + " deductees")} />
       <Tile label="Challans" value={money(chTax)} sub={ch.length + " challan" + (ch.length === 1 ? "" : "s")} />

@@ -103,34 +103,48 @@ with sync_playwright() as p:
     t = pg.evaluate("() => TDS.tcsRows()[0]")
     ok(t and t["party"] == "Scrap Buyer" and t["tds"] == 1000 and t["paid"] == 100000 and t["code"] == "6CF" and t["rate"] == 1, "27EQ: TCS of ₹1,000 on scrap of ₹1,00,000, code 6CF, from the books")
     ok(pg.evaluate("() => Certs.expected(TDS.rows().find(r => r.party === 'No Pan Prof')).rate") == 20, "no PAN on a 194J deduction: 20% expected")
-    f26 = pg.evaluate("() => TDS26Q.build('2026-27', 'Q2', {tan: 'DELT12345A', pan: 'AANFG3202D', name: 'Testing TDS'}, '26Q')")
+    pg.evaluate("() => { S.books.nrInfo = {'Foreign Co': {country: 'US', nature: '49', email: 'a@b.com', address: '1 Main St', tin: 'TIN1', dtaa: false}}; }")
+    # from 1 April 2026: Forms 140 / 144 / 143, with payment codes, a draft until matched to Protean's format
+    n = pg.evaluate("() => { const f = (k) => { const r = TDS26Q.build('2026-27', 'Q2', {tan: 'DELT12345A', name: 'T'}, k); return [r.name, r.formNo, r.draft, r.missingCodes.join(','), r.text.split('\\r\\n')[1].split('^')[4]]; }; return [f('26Q'), f('27Q'), f('27EQ')]; }")
+    ok(n[0][0] == "DELT12345A_Form140_Q2_202627_DRAFT.txt" and n[0][1] == "140" and n[0][2] and n[0][4] == "140", "2026-27 Q2 other than salary: Form 140 (was 26Q), file named DRAFT, batch header says 140")
+    ok(n[1][1] == "144" and n[1][4] == "144" and n[2][1] == "143" and n[2][4] == "143", "non-residents: Form 144 (was 27Q); TCS: Form 143 (was 27EQ)")
+    ok(n[0][3] == "194C,194J" and n[2][3] == "6CF", "the payment codes not yet filled in are named (%s; %s)" % (n[0][3], n[2][3]))
+    # up to 2025-26: 26Q / 27Q / 27EQ as before (late returns and corrections)
+    pg.evaluate("""() => { S.books.vouchers.forEach(v => { v.date = String(Number(v.date.slice(0, 4)) - 1) + v.date.slice(4); });
+      S.books.challans.forEach(c => { c.date = String(Number(c.date.slice(0, 4)) - 1) + c.date.slice(4); }); S.books.certs[0].from = '20250401'; S.books.certs[0].to = '20260331'; }""")
+    f26 = pg.evaluate("() => TDS26Q.build('2025-26', 'Q2', {tan: 'DELT12345A', pan: 'AANFG3202D', name: 'Testing TDS'}, '26Q')")
     dd = [l.split("^") for l in f26["text"].strip().split("\r\n") if l.split("^")[1] == "DD"]
     by = {d[8]: d for d in dd}
-    ok(f26["name"].endswith("_26Q_Q2_202627.txt") and len(dd) == 3, "26Q file: three deductions (%d)" % len(dd))
+    ok(f26["name"].endswith("_26Q_Q2_202526.txt") and not f26["draft"] and len(dd) == 3, "2025-26: 26Q file, not a draft, three deductions (%d)" % len(dd))
     ok(by["Cert Contractor"][21] == "A" and by["Cert Contractor"][22] == "CERT000001", "26Q: the certificate deduction carries remark A and the certificate number")
     ok(by["No Pan Prof"][21] == "C" and by["No Pan Prof"][7] == "PANNOTAVBL", "26Q: the deduction without PAN carries remark C and PANNOTAVBL")
     ok(by["Ok Contractor"][21] == "" and by["Ok Contractor"][20] == "94C", "26Q: a plain deduction has no remark; section code 94C")
-    pg.evaluate("() => { S.books.nrInfo = {'Foreign Co': {country: 'US', nature: '49', email: 'a@b.com', address: '1 Main St', tin: 'TIN1', dtaa: false}}; }")
-    f27 = pg.evaluate("() => TDS26Q.build('2026-27', 'Q2', {tan: 'DELT12345A', name: 'Testing TDS'}, '27Q')")
+    f27 = pg.evaluate("() => TDS26Q.build('2025-26', 'Q2', {tan: 'DELT12345A', name: 'Testing TDS'}, '27Q')")
     d27 = [l.split("^") for l in f27["text"].strip().split("\r\n") if l.split("^")[1] == "DD"]
     bh27 = [l.split("^") for l in f27["text"].strip().split("\r\n") if l.split("^")[1] == "BH"][0]
     ok(bh27[4] == "27Q" and len(d27) == 1 and d27[0][20] == "195" and d27[0][30:34] == ["A", "49", "", "US"], "27Q file: form 27Q in the batch header, section 195, Act rate (A), nature 49, country US")
-    fq = pg.evaluate("() => TDS26Q.build('2026-27', 'Q2', {tan: 'DELT12345A', name: 'Testing TDS'}, '27EQ')")
+    fq = pg.evaluate("() => TDS26Q.build('2025-26', 'Q2', {tan: 'DELT12345A', name: 'Testing TDS'}, '27EQ')")
     dq = [l.split("^") for l in fq["text"].strip().split("\r\n") if l.split("^")[1] == "DD"]
-    ok(fq["name"].endswith("_27EQ_Q2_202627.txt") and len(dq) == 1 and dq[0][20] == "6CF" and dq[0][10] == "100000.00", "27EQ file: the scrap collection, code 6CF, received ₹1,00,000")
+    ok(fq["name"].endswith("_27EQ_Q2_202526.txt") and len(dq) == 1 and dq[0][20] == "6CF" and dq[0][10] == "100000.00", "27EQ file: the scrap collection, code 6CF, received ₹1,00,000")
+    # TCS rates by date: scrap 1% before April 2026, 2% from then; overseas tours 2% flat from then
+    ok(pg.evaluate("() => [TDS.tcsRate('6CF', '20251001'), TDS.tcsRate('6CF', '20260401'), TDS.tcsRate('6CJ', '20260501'), TDS.tcsRate('6CO', '20260401'), TDS.tcsRate('6CO', '20250401')].join()") == "1,2,2,2,5",
+       "TCS by date: scrap 1% then 2%, minerals 2%, overseas tour 2% from April 2026 (5% before)")
+    ok(pg.evaluate("() => TCS27EQ.checks('2025-26', 'Q2').length") == 0, "2025-26: scrap at 1% is right")
+    pg.evaluate("() => { S.books.vouchers.forEach(v => { v.date = String(Number(v.date.slice(0, 4)) + 1) + v.date.slice(4); }); S.books.challans.forEach(c => { c.date = String(Number(c.date.slice(0, 4)) + 1) + c.date.slice(4); }); S.books.certs[0].from = '20260401'; S.books.certs[0].to = '20270331'; }")
+    ok(any("2% applies to 6CF" in x["why"] for x in pg.evaluate("() => TCS27EQ.checks('2026-27', 'Q2')")), "2026-27: scrap collected at 1% is flagged: 2% applies")
     ok(pg.evaluate("() => TDS26Q.nrChecks('2026-27', 'Q2').length") == 0, "27Q: nothing missing once the deductee's details are in")
 
     # the TDS screens: the year shows 27Q and 27EQ beside 26Q and 24Q; each opens with its own checks
     pg.evaluate("(cid) => { S.view = 'company'; S.coId = cid; S.tab = 'books'; S.booksTab = 'tds'; S.loadingCo = false; S.books.loading = false; S.books.cid = cid; S.tdsView = 'year'; S.tdsFy = '2026-27'; window.__bk = S.books; render(); }", cid)
     pg.wait_for_timeout(800); pg.evaluate("S.books = window.__bk; render();"); pg.wait_for_timeout(500)
     txt = pg.inner_text("#app")
-    ok("27q, non-residents" in txt.lower() and "27eq, tcs" in txt.lower(), "the year's table has 27Q and 27EQ columns")
+    ok("form 144 (was 27q), non-residents" in txt.lower() and "form 143 (was 27eq), tcs" in txt.lower() and "form 140 (was 26q)" in txt.lower(), "2026-27: the year's table shows Forms 140, 138, 144 and 143 with the old names beside")
     pg.evaluate("() => { tdsGo('2026-27', 'Q2', '27Q'); S.tdsTab = 'checks'; render(); }"); pg.wait_for_timeout(400)
     txt = pg.inner_text("#app")
-    ok("Download the 27Q text file" in txt and "Non-resident deductees" in txt and pg.locator('[data-nr="Foreign Co"]').count() == 1, "27Q opens: its own text file, and the non-resident's details to fill")
+    ok("Download the Form 144 text file (draft)" in txt and "draft – not yet validated" in txt and "Non-resident deductees" in txt and pg.locator('[data-nr="Foreign Co"]').count() == 1, "2026-27 non-residents open as Form 144, marked draft – not yet validated, with the non-resident's details to fill")
     pg.evaluate("() => { tdsGo('2026-27', 'Q2', '27EQ'); S.tdsTab = 'checks'; render(); }"); pg.wait_for_timeout(400)
     txt = pg.inner_text("#app")
-    ok("Download the 27EQ text file" in txt and "Collection codes" in txt and "TCS collected" in txt, "27EQ opens: TCS collected, and the collection code of each TCS ledger")
+    ok("Download the Form 143 text file (draft)" in txt and "Collection codes" in txt and "TCS collected" in txt, "2026-27 TCS opens as Form 143: TCS collected, and the collection code of each TCS ledger")
     # screens: Parties shows the certificates and the inoperative mark; the year shows 27Q and 27EQ
     pg.evaluate("(cid) => { S.view = 'company'; S.coId = cid; S.step = null; S.tab = 'deductees'; S.partySel = 'Cert Prof'; render(); }", cid)
     pg.wait_for_timeout(500)

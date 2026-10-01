@@ -10,10 +10,18 @@ const TDS_FORMS = {
   "27Q": {rows: () => TDS.nrRows(), title: "27Q, payments to non-residents"},
   "27EQ": {rows: () => TDS.tcsRows(), title: "27EQ, tax collected at source", tcs: true}
 };
+// The forms of the Income-tax Act, 2025 (periods from 1 April 2026): Form 140 (was 26Q), 144 (was 27Q), 143 (was 27EQ),
+// 138 (was 24Q). Their deductions carry a numeric payment code in place of the old section code. The codes and the layout
+// are to be matched field by field to Protean's file-format documents and run through their FVU; until that is done
+// (NEW_FORMS_VALIDATED), a new-form file is a draft: named so, and not sent to the FVU from FinCom.
+const NEW_FORMS_VALIDATED = false;
+// payment code by old section (TDS) or 27EQ collection code (TCS): to be filled from Protean's documents
+const PAY_CODES = {};
 const TDS26Q = {
   // the file is caret-delimited ASCII; each line is one record
   build(fy, q, firm, form){
     form = TDS_FORMS[form] ? form : "26Q";
+    const isNew = TDS.isNew(fy), fno = TDS.formNo(form, fy), missing = new Set();
     const rows = TDS_FORMS[form].rows().filter(r => r.fy === fy && r.q === q && r.challan);
     const chs = TDS.challans().filter(c => TDS.fyOf(c.date) === fy && TDS.qOf(c.date) === q);
     const used = {};
@@ -34,7 +42,7 @@ const TDS26Q = {
     // FH: file header
     put(["FH", "NS1", "R", fileDate, "1", "D", firm.tan, "1", "FinCom", "", "", "", "", "", "", "", ""]);
     // BH: batch header, one batch for this form and quarter
-    put(["BH", "1", String(live.length), form, firm.tan, firm.pan || "PANNOTREQD", fy.replace("-", ""), ay.replace("-", ""),
+    put(["BH", "1", String(live.length), fno, firm.tan, firm.pan || "PANNOTREQD", fy.replace("-", ""), ay.replace("-", ""),
       txt(firm.name), txt(firm.branch), txt(firm.flat), txt(firm.premises), txt(firm.road), txt(firm.area), txt(firm.town),
       txt(firm.state), txt(firm.pin), txt(firm.email), txt(firm.phone), firm.deductorType || "F",
       txt(firm.person), txt(firm.personDesignation), firm.personFlat || "", firm.personPremises || "", firm.personRoad || "",
@@ -48,7 +56,9 @@ const TDS26Q = {
         money(num(c.tax) + num(c.interest)), "", c.bsr, dmy(c.date), c.serial, "C", "200", "N", "", "", money(tax), "0.00", "0.00", "0.00", "0.00", "0.00"]);
       mine.forEach((r, di) => {
         const m = this.remark(r, form);
-        const code = form === "27EQ" ? r.code || "" : this.code(r.section);
+        const old = form === "27EQ" ? r.code || "" : this.code(r.section);
+        const code = isNew ? this.payCode(r, form) : old;
+        if (isNew && !code) missing.add(form === "27EQ" ? r.code || r.ledger : TDS.sec(r.section));
         const tail = form === "27Q" ? this.nrTail(r) : form === "27EQ" ? this.tcsTail(r) : [];
         put(["DD", "1", String(ci + 1), String(di + 1), "", r.pan && /^[A-Z]{5}\d{4}[A-Z]$/.test(r.pan) ? (/^[A-Z]{3}C/.test(r.pan) ? "01" : "02") : "02",
           r.pan && Certs.validPan(r.pan) ? r.pan : "PANNOTAVBL", txt(r.party), "", money(r.paid), money(r.tds), "0.00", "0.00", money(r.tds), "0.00", money(r.tds),
@@ -56,9 +66,12 @@ const TDS26Q = {
       });
     });
     return {text: lines.join("\r\n") + "\r\n", rows: rows.length, challans: live.length,
-      name: (firm.tan || "TAN") + "_" + form + "_" + q + "_" + fy.replace("-", "") + ".txt", form,
+      name: (firm.tan || "TAN") + "_" + (isNew ? "Form" + fno : form) + "_" + q + "_" + fy.replace("-", "") + (isNew && !NEW_FORMS_VALIDATED ? "_DRAFT" : "") + ".txt", form,
+      formNo: fno, isNew, draft: isNew && !NEW_FORMS_VALIDATED, missingCodes: Array.from(missing),
       remarks: rows.filter(r => this.remark(r, form).remark).length};
   },
+  // the payment code of the Act of 2025 for a deduction or collection (new forms); "" until the table has it
+  payCode(r, form){ return String(PAY_CODES[form === "27EQ" ? r.code : TDS.sec(r.section)] || ""); },
   // the section code as the 26Q file has carried it: 194C is 94C; 195 stays 195
   code(section){ const s = TDS.sec(section); return /^19[5-6]/.test(s) ? s : "9" + s.replace(/^19/, ""); },
   // A: a certificate covers the payment (its number goes beside); C: the higher rate, with no PAN or an inoperative one
@@ -115,7 +128,8 @@ const TCS27EQ = {
     ["6CH", "Toll plaza (lease or licence)", /TOLL/],
     ["6CI", "Mining and quarrying (lease or licence)", /MINING|QUARR/],
     ["6CJ", "Minerals: coal, lignite or iron ore", /COAL|LIGNITE|IRON\s*ORE|MINERAL/],
-    ["6CL", "Motor vehicle above ₹10 lakh", /MOTOR|VEHICLE|CAR\b/]
+    ["6CL", "Motor vehicle above ₹10 lakh", /MOTOR|VEHICLE|CAR\b/],
+    ["6CO", "Overseas tour programme package", /OVERSEAS|TOUR\s*PACKAGE|FOREIGN\s*TOUR/]
   ],
   codeOf(ledger, section){
     const set = ((S.books || {}).tcsCodes || {})[ledger];
@@ -133,7 +147,11 @@ const TCS27EQ = {
   checks(fy, q){
     const out = [];
     TDS.tcsRows().filter(r => r.fy === fy && r.q === q).forEach(r => {
-      if (!r.code) out.push({row: r, why: "No collection code for the ledger " + r.ledger + ". Choose one."});
+      if (!r.code){ out.push({row: r, why: "No collection code for the ledger " + r.ledger + ". Choose one."}); return; }
+      // the rate that applies on the collection's date (overseas tours before April 2026: 5%, or 20% above ₹10 lakh)
+      const want = TDS.tcsRate(r.code, r.date), alt = r.code === "6CO" && TDS.ymd(r.date) < "20260401" ? [5, 20] : [want];
+      if (want != null && r.rate != null && !alt.some(a => Math.abs(a - r.rate) < 0.05))
+        out.push({row: r, why: r.party + " (" + fmtDate(tallyDate(r.date)) + "): TCS at " + r.rate + "%, but " + alt.join("% or ") + "% applies to " + r.code + " on that date."});
     });
     return out;
   }

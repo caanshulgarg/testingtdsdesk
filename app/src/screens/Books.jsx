@@ -33,7 +33,7 @@ function Crumbs() {
       {S.tdsFy && v !== "years" && <><span className="note">›</span><button className="linkbtn" onClick={() => tdsNav("year")}>{S.tdsFy}</button></>}
       {v === "certs" && <><span className="note">›</span><b>Certificates and rate questions</b></>}
       {v === "notices" && <><span className="note">›</span><b>Notices</b></>}
-      {v === "return" && <><span className="note">›</span><b>{S.tdsQ} · {S.tdsForm}</b></>}
+      {v === "return" && <><span className="note">›</span><b>{S.tdsQ} · {TDS.formName(S.tdsForm || "26Q", S.tdsFy)}</b></>}
       <HelpButton />
     </div>
   );
@@ -105,14 +105,14 @@ function Year({ b, rows }) {
       <select aria-label="Financial year" value={fy} onChange={(ev) => tdsSetFy(ev.target.value)}>{tdsYears(b, rows).map((f) => <option key={f} value={f}>{f}</option>)}</select>
       <button className="btn small" onClick={() => tdsNav("certs")}>Certificates and rate questions</button>
       {AIH.enabled("notices") && <button className="btn small" onClick={() => tdsNav("notices")}>Notices</button>}
-      <button className="btn small" onClick={() => doAct("yearExcel26")}>Download the year, 26Q</button>
-      <button className="btn small" onClick={() => doAct("yearExcel24")}>Download the year, 24Q</button>
+      <button className="btn small" onClick={() => doAct("yearExcel26")}>Download the year, {TDS.formName("26Q", fy)}</button>
+      <button className="btn small" onClick={() => doAct("yearExcel24")}>Download the year, {TDS.formName("24Q", fy)}</button>
       <button className="btn small primary" onClick={() => doAct("yearExcelAll")}>Download the whole year</button>
     </div>
     <section className="dash-card"><h3>{fy}: returns by quarter</h3>
       <p className="note">Open a return to see its challans, deductees and deductions on separate tabs.</p>
       <div className="bk-tablewrap"><table className="bk-table">
-        <thead><tr><th>Quarter</th><th>26Q, other than salary</th><th>24Q, salary</th>{hasNr && <th>27Q, non-residents</th>}{hasTcs && <th>27EQ, TCS</th>}<th>Due</th></tr></thead>
+        <thead><tr><th>Quarter</th><th>{TDS.formNameLong("26Q", fy)}, other than salary</th><th>{TDS.formNameLong("24Q", fy)}, salary</th>{hasNr && <th>{TDS.formNameLong("27Q", fy)}, non-residents</th>}{hasTcs && <th>{TDS.formNameLong("27EQ", fy)}, TCS</th>}<th>Due</th></tr></thead>
         <tbody>
           {qs.map((x) => <tr key={x.q}><td><b>{x.q}</b><div className="nr">{Q_MONTHS[x.q]}</div></td><Cell26 fy={fy} x={x} /><Cell24 b={b} fy={fy} x={x} />
             {hasNr && <CellOther fy={fy} x={x} form="27Q" />}{hasTcs && <CellOther fy={fy} x={x} form="27EQ" />}<td>{Q_DUE[x.q]}</td></tr>)}

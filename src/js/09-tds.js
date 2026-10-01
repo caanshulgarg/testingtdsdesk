@@ -7,6 +7,30 @@ const TDS = {
   STD: {"192B": [], "193": [10], "194": [10], "194A": [10], "194B": [30], "194BB": [30], "194C": [1, 2], "194D": [2, 10], "194DA": [2], "194G": [2], "194H": [2],
     "194I": [2, 10], "194IA": [1], "194IB": [2], "194IC": [10], "194J": [2, 10], "194K": [10], "194LA": [10], "194M": [2], "194N": [2, 5], "194O": [0.1], "194Q": [0.1],
     "194R": [10], "194S": [1], "194T": [10], "195": [20, 20.8, 10, 10.4, 15, 15.6, 30, 31.2], "206C": [0.1, 1, 2, 5]},
+  // the form a quarter's return is filed on: up to tax year 2025-26 the old forms (late returns and corrections too); from
+  // 1 April 2026, under the Income-tax Act, 2025, Form 138 (was 24Q), 140 (was 26Q), 144 (was 27Q) and 143 (was 27EQ);
+  // Form 130 replaces Form 16. kind is the old name, which FinCom keeps as the return's key
+  NEW_FORM: {"24Q": "138", "26Q": "140", "27Q": "144", "27EQ": "143"},
+  NEW_FROM: "2026-27",
+  isNew(fy){ return String(fy || "") >= this.NEW_FROM; },
+  formNo(kind, fy){ return this.isNew(fy) && this.NEW_FORM[kind] ? this.NEW_FORM[kind] : kind; },
+  formName(kind, fy){ return this.isNew(fy) && this.NEW_FORM[kind] ? "Form " + this.NEW_FORM[kind] : kind; },
+  formNameLong(kind, fy){ return this.isNew(fy) && this.NEW_FORM[kind] ? "Form " + this.NEW_FORM[kind] + " (was " + kind + ")" : kind; },
+  certName(fy){ return this.isNew(fy) ? "Form 130" : "Form 16"; },
+  // TCS rates by date (old section 206C; section 394 of the Act of 2025 from 1 April 2026): [from, code, rate %]. The latest
+  // row on or before the collection's date applies. From 1 April 2026: scrap and minerals 2%, overseas tour packages 2% flat
+  TCS_RATES: [
+    ["2016-06-01", "6CA", 1], ["2016-06-01", "6CB", 5], ["2016-06-01", "6CC", 2.5], ["2016-06-01", "6CD", 2.5], ["2016-06-01", "6CE", 2.5],
+    ["2016-06-01", "6CF", 1], ["2016-06-01", "6CG", 2], ["2016-06-01", "6CH", 2], ["2016-06-01", "6CI", 2], ["2016-06-01", "6CJ", 1], ["2016-06-01", "6CL", 1],
+    ["2020-10-01", "6CO", 5],
+    ["2026-04-01", "6CF", 2], ["2026-04-01", "6CJ", 2], ["2026-04-01", "6CO", 2]
+  ],
+  tcsRate(code, date){
+    const d = this.ymd(date), iso = d.length === 8 ? d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6, 8) : "";
+    let hit = null;
+    this.TCS_RATES.forEach(([from, c, rate]) => { if (c === code && (!iso || from <= iso) && (!hit || from >= hit.from)) hit = {from, rate}; });
+    return hit ? hit.rate : null;
+  },
   // a deduction from a non-resident goes in 27Q, not 26Q
   NR: /^(195|194E|194LB|194LBA|194LC|194LD|196[A-D])/,
   sec(s){ return String(s || "").replace(/\s.*$/, "").replace(/-/g, "").toUpperCase(); },

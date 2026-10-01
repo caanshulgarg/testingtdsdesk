@@ -1395,7 +1395,8 @@ function doAct(act, t){
       const r = TDS26Q.build(fy, q, TDS26Q.firmDetails(), S.tdsForm);
       if (r.error){ toast(r.error); break; }
       saveFile(r.name, new Blob([r.text], {type: "text/plain"}));
-      toast(r.rows + (r.form === "27EQ" ? " collections" : " deductions") + " under " + r.challans + " challan" + (r.challans === 1 ? "" : "s") + (r.remarks ? ", " + r.remarks + " with a remark (certificate or higher rate)" : "") + ". Check it with the FVU before filing.");
+      toast((r.draft ? "Form " + r.formNo + ", draft – not yet validated: " : "") + r.rows + (r.form === "27EQ" ? " collections" : " deductions") + " under " + r.challans + " challan" + (r.challans === 1 ? "" : "s") + (r.remarks ? ", " + r.remarks + " with a remark (certificate or higher rate)" : "") +
+        (r.missingCodes && r.missingCodes.length ? ". No payment code yet for " + r.missingCodes.join(", ") : "") + (r.draft ? ". Do not file it." : ". Check it with the FVU before filing."));
       break;
     }
     case "tdsFvu": { if (!ledgersReady("tds")) break;
@@ -1403,6 +1404,7 @@ function doAct(act, t){
       if (!q || !fy){ toast("Choose the year and the quarter first."); break; }
       const r = TDS26Q.build(fy, q, TDS26Q.firmDetails(), S.tdsForm);
       if (r.error){ toast(r.error); break; }
+      if (r.draft){ toast("Form " + r.formNo + " is a draft – not yet validated against Protean’s file format, so it is not sent to the FVU yet."); break; }
       const co = CO();
       toast("Running the FVU on the Tally computer\u2026");
       Bridge.call("/fvu", {text: r.text, name: r.name, fvuJar: (co.fvuJar || ""), csi: (co.csiFile || ""), outDir: (co.fvuOut || "")}, 200000).then(res => {
