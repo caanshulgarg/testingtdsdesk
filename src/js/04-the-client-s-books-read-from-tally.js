@@ -68,6 +68,16 @@ const Books = {
       .replace(/&#(\d+);/g, (m, n) => { const c = num(n); return c >= 32 && c < 127 ? String.fromCharCode(c) : " "; })
       .replace(/&amp;/g, "&").trim();
   },
+  // each pay head of a payroll voucher, summed over its employees: [[pay head, amount]] (Tally's sign: debit negative)
+  payheads(s){
+    if (s.indexOf("<PAYHEADALLOCATIONS.LIST>") < 0) return [];
+    const by = new Map();
+    s.split("<PAYHEADALLOCATIONS.LIST>").slice(1).forEach(p => {
+      const q = p.split("</PAYHEADALLOCATIONS.LIST>")[0], n = this.one(q, "PAYHEADNAME"), a = this.amt(this.one(q, "AMOUNT"));
+      if (n && a) by.set(n, Math.round(((by.get(n) || 0) + a) * 100) / 100);
+    });
+    return Array.from(by.entries()).filter(([, a]) => Math.abs(a) >= 0.005);
+  },
   takeVoucher(s, out, meta){
     const type = (s.match(/VCHTYPE="([^"]*)"/) || [])[1] || "";
     const v = {
@@ -143,6 +153,16 @@ const Books = {
         v.ent.push(x);
       });
     });
+    // review of 01-Oct-2026: a payroll voucher (Tally's PaySlip view) has no ledger lines; its pay heads sit in each
+    // employee's allocations. A pay head is a ledger in Tally: earnings are debits, deductions (PF, advance) credits, and
+    // the party ledger (Salary Payable) takes the net. A pay head already among the ledger lines is not counted again
+    const pays = this.payheads(s);
+    if (pays.length){
+      const have = new Set(v.ent.map(e => e.l)); let tot = 0;
+      pays.forEach(([l, a]) => { tot = Math.round((tot + a) * 100) / 100; if (!have.has(l)) v.ent.push({l, a, r: null}); });
+      const party = this.one(s, "PARTYLEDGERNAME");
+      if (party && !have.has(party) && Math.abs(tot) >= 0.005) v.ent.push({l: party, a: Math.round(-tot * 100) / 100, r: null});
+    }
     // the rate on an item line, when the tax ledgers do not carry one
     if (!v.ent.some(e => e.r)){
       const rate = this.one(s, "GSTRATE");

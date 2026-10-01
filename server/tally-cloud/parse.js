@@ -77,6 +77,20 @@ function takeVoucher(s){
       lines.push([id, name, Math.round(amt(one(e, "AMOUNT")) * 100) / 100, hsn, rate == null ? null : rate, bills]);
     });
   });
+  // review of 01-Oct-2026: a payroll voucher (Tally's PaySlip view) has no ledger lines; its pay heads sit in each
+  // employee's allocations. A pay head is a ledger in Tally: earnings are debits, deductions (PF, advance) credits, and
+  // the party ledger (Salary Payable) takes the net. A pay head already among the ledger lines is not counted again
+  if (s.indexOf("<PAYHEADALLOCATIONS.LIST>") >= 0){
+    const by = new Map();
+    s.split("<PAYHEADALLOCATIONS.LIST>").slice(1).forEach(p => {
+      const q = p.split("</PAYHEADALLOCATIONS.LIST>")[0], n = one(q, "PAYHEADNAME"), a = amt(one(q, "AMOUNT"));
+      if (n && a) by.set(n, Math.round(((by.get(n) || 0) + a) * 100) / 100);
+    });
+    const have = new Set(lines.map(l => l[1])); let tot = 0;
+    by.forEach((a, n) => { if (Math.abs(a) < 0.005) return; tot = Math.round((tot + a) * 100) / 100; if (!have.has(n)) lines.push([id, n, a, "", null, []]); });
+    const party = one(s, "PARTYLEDGERNAME");
+    if (party && !have.has(party) && Math.abs(tot) >= 0.005) lines.push([id, party, Math.round(-tot * 100) / 100, "", null, []]);
+  }
   return {v, lines};
 }
 

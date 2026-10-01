@@ -86,6 +86,24 @@ try:
     ok(bool(got2) and len(got2.get("ledgers", [])) >= len(LEDGERS) and len(got2.get("groups", [])) == len(GROUPS), "Update now: every ledger and group sent again (%d ledgers, %d groups)" % (len((got2 or {}).get("ledgers", [])), len((got2 or {}).get("groups", []))))
     logs = "".join(open(f, encoding="utf-8", errors="replace").read() for f in glob.glob(_os.path.join(BRUN, "*.log")))
     ok("every ledger and group read from Tally, to go to the cloud" in logs, "the bridge's log says so")
+    # bridge 1.14.9: with no opening balances read yet (they wait for a quiet time), the ledgers and groups still go,
+    # on their own (kind "groups"): the cloud keeps each ledger's group without touching openings or entries
+    sd = [x for x in glob.glob(_os.path.join(BRUN, "sync", "*")) if _os.path.isdir(x)][0]
+    os.rename(_os.path.join(sd, "balances.json"), _os.path.join(sd, "balances.keep"))
+    fake_cloud.GROUPS.pop(CO, None)
+    r = call("/keep?company=" + urllib.parse.quote(CO), {"now": True})
+    g3 = until(lambda: fake_cloud.GROUPS.get(CO), 180, 2) or {}
+    led3 = {l[0]: l for l in g3.get("ledgers", [])}
+    ok(set(LEDGERS) <= set(led3) and all(led3[n][1] == LEDGERS[n] and len(led3[n]) == 2 for n in LEDGERS), "no balances read yet: every ledger still goes with its group, and no opening (%d ledgers)" % len(led3))
+    ok({g[0]: g[1] for g in g3.get("groups", [])} == GROUPS, "and Tally's groups (%d)" % len(g3.get("groups", [])))
+    os.rename(_os.path.join(sd, "balances.keep"), _os.path.join(sd, "balances.json"))
+    # the bridge's log, for FinCom's "Show bridge log" (Settings > Tally > Tally Bridge)
+    lt = call("/logtail?n=50")
+    ok(lt.get("ok") and lt.get("file", "").endswith("tds-bridge.log") and 0 < len(lt.get("lines", [])) <= 50, "the bridge shows the last lines of its log (%d lines of %s)" % (len(lt.get("lines", [])), lt.get("file")))
+    ok(any("with their groups and" in x for x in lt.get("lines", [])) or any("every ledger and group" in x for x in lt.get("lines", [])), "and they say what went to the cloud")
+    # the heartbeat says how the bridge sees each Tally port (so a "Tally not open" can be explained from FinCom)
+    bt = until(lambda: [b for b in fake_cloud.BEATS if b.get("ports")], 120, 2) or []
+    ok(bool(bt) and all("port" in p and "ok" in p for p in bt[-1]["ports"]) and bt[-1].get("tally"), "the heartbeat lists the Tally ports it sees (%s)" % json.dumps((bt[-1] if bt else {}).get("ports")))
     # the cloud's parser on the days it got: the party's GSTIN, the place of supply, and HSN and rate on the lines
     days = [t for (c, d), t in sorted(fake_cloud.DAYS.items()) if c == CO]
     ok(len(days) >= 20, "the days went to the cloud (%d)" % len(days))

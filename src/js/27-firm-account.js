@@ -1341,7 +1341,7 @@ function doAct(act, t){
           if (l.pan) (b.pans = b.pans || {})[l.name] = String(l.pan).toUpperCase();
           if (l.group) (b.under = b.under || {})[l.name] = l.group; });
         [].concat(j.groups || []).forEach(g => { if (g && g.name) groups[g.name] = g.parent || ""; });
-        b.ledInfo = info; b.ledInfoAt = new Date().toISOString(); if (Object.keys(groups).length) b.groups = groups;
+        b.ledInfo = info; b.ledInfoAt = new Date().toISOString(); if (Object.keys(groups).length){ b.groups = groups; TallyRead.yearOpen(b); }
         LedMaster.refresh(b); b.busy = ""; b.reco = null; await saveBooks();
         toast(Object.keys(info).length + " ledgers read from Tally. " + LedMaster.pending(b).length + " GST or TDS ledgers to confirm."); render();
       }, e => { b.busy = ""; toast("Could not read Tally: " + (e && e.message || e)); render(); });

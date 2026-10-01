@@ -6,6 +6,7 @@ LINKS = {}          # company -> client id (None: seen, not linked)
 DAYS = {}           # (company, day) -> text
 SENT = []           # (company, day) in the order received
 LEDGERS = {}        # company -> body
+GROUPS = {}         # company -> body of a groups-only send (bridge 1.14.9)
 STATE = {}          # company -> state
 CALLS = []          # (kind, bytes)
 BEATS = []          # heartbeats
@@ -44,6 +45,7 @@ class H(http.server.BaseHTTPRequestHandler):
                 if "gz" in d and d["day"] in CTRL["badgz"]: bad.append({"day": d["day"], "error": "corrupt gzip stream does not have a matching checksum"}); continue
                 DAYS[(co, d["day"])] = (base64.b64decode(d["b64"]) if "b64" in d else gzip.decompress(base64.b64decode(d["gz"]))).decode("utf-8"); SENT.append((co, d["day"])); done.append(d["day"])
             return self._send(200, {"ok": True, "done": done, "bad": bad})
+        if k == "groups": GROUPS[co] = o; return self._send(200, {"ok": True, "ledgers": len(o.get("ledgers", [])), "groups": len(o.get("groups", []))})
         if k == "ledgers": LEDGERS[co] = o; return self._send(200, {"ok": True, "ledgers": len(o.get("ledgers", []))})
         if k == "state": STATE[co] = o.get("state"); return self._send(200, {"ok": True})
         return self._send(400, {"ok": False, "error": "unknown kind"})

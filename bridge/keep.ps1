@@ -241,7 +241,7 @@ function Get-OpenCompaniesCached {
   $shared = Join-Path (Get-SyncDir) 'open-companies.json'
   $list = $null
   try { if (Test-Path -LiteralPath $shared) { $list = @(Get-Content -Raw -LiteralPath $shared | ConvertFrom-Json | ForEach-Object { $h = [ordered]@{}; foreach ($p in $_.PSObject.Properties) { $h[$p.Name] = $p.Value }; $h.companies = @($h.companies | Where-Object { $_ } | ForEach-Object { $c = [ordered]@{}; foreach ($q in $_.PSObject.Properties) { $c[$q.Name] = $q.Value }; $c }); $h }) } } catch { $list = $null }
-  $stale = $false
+  $stale = $false; $newPort = $false
   if ($list) {
     foreach ($e in $list) {
       if ($e.skipped) { continue }
@@ -255,12 +255,14 @@ function Get-OpenCompaniesCached {
     try {
       foreach ($pp in @((Get-PortPlan).ports)) {
         if ($Cfg.OnlyMySession -and $pp.mine -eq $false) { continue }
-        if (-not @($list | Where-Object { [int]$_.port -eq [int]$pp.port }).Count -and (Test-TallyPortOpen ([int]$pp.port))) { $stale = $true }
+        if (-not @($list | Where-Object { [int]$_.port -eq [int]$pp.port }).Count -and (Test-TallyPortOpen ([int]$pp.port))) { $stale = $true; $newPort = $true }
       }
     } catch { }
   }
-  # nothing known yet, or Tally has been opened since: asked once, and not again for ten minutes
-  if ((-not $list -or $stale) -and ((Get-Date) - $script:EmptyAskAt).TotalMinutes -ge 10 -and -not (Get-KeepUserInTally)) {
+  # nothing known yet, or Tally has been opened since: asked once, and not again for ten minutes. 1.14.9 (review of
+  # 01-Oct-2026): a Tally on a port not in the list is asked even while someone works in Tally (only the list of open
+  # companies, a moment's question): otherwise, with the person busy in Tally all day, the bridge never learnt of it
+  if ((-not $list -or $stale) -and ((Get-Date) - $script:EmptyAskAt).TotalMinutes -ge 10 -and ($newPort -or -not $list -or -not (Get-KeepUserInTally))) {
     $script:EmptyAskAt = Get-Date
     return @(Get-OpenCompanies)
   }

@@ -131,6 +131,7 @@ const TCloud = {
     if (!g.length) return;
     b.groups = Object.assign({}, b.groups || {});
     g.forEach(x => { b.groups[x.name] = x.parent || ""; });
+    TallyRead.yearOpen(b);
   },
   // ---------- bring the cloud's copy into FinCom: only the months with a day that changed
   async load(force){
@@ -333,11 +334,11 @@ Object.assign(TCloud, {
     const co = S.companies[cid]; if (!co) return;
     const here = typeof Bridge === "object" && Bridge.on() && Bridge.up();
     try {
-      if (here){ await LK.keepSet({now: true}, "Asked the bridge here to read every ledger and group from Tally and send them."); }
-      else {
-        const j = await this.rpc("tally_want_update", {p_client: cid});
-        toast(j && j.ok ? "The Tally computer is asked to send every ledger and group; it starts within a minute (Tally must be open there)." : "No Tally computer is linked to this client yet.");
-      }
+      // review of 01-Oct-2026: asked through the cloud too, always: the bridge here may keep another company, or this
+      // may not be the computer that keeps this client's books
+      if (here){ try { await LK.keepSet({now: true}, "Asked the bridge here to read every ledger and group from Tally and send them."); } catch (e){} }
+      const j = await this.rpc("tally_want_update", {p_client: cid});
+      toast(j && j.ok ? "The Tally computer is asked to send every ledger and group; it starts within a minute (Tally must be open there). Press What is in the cloud? after two minutes." : here ? "Asked the bridge here. No other Tally computer is linked to this client." : "No Tally computer is linked to this client yet.");
     } catch (e){ toast("Could not ask the Tally computer: " + ((e && e.message) || e)); }
     setTimeout(() => this.groupStatus(cid), 1500);
   },

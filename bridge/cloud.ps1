@@ -109,6 +109,21 @@ function Update-CloudLinks {
 function Push-CloudCompany([string]$Company, [string]$Dir, [double]$BudgetSec) {
   $sw = [Diagnostics.Stopwatch]::StartNew()
   $lf = Join-Path $Dir 'cloud-ledgers.flag'; $bf = Join-Path $Dir 'balances.json'
+  # 1.14.9 (review of 01-Oct-2026): with no opening balances read yet (they wait for a quiet time), the ledgers and their
+  # groups still go, on their own: the cloud keeps each ledger's group and Tally's groups, and leaves openings and
+  # entries as they are
+  if ((Test-Path -LiteralPath $lf) -and -not (Test-Path -LiteralPath $bf)) {
+    $kj = Read-KeepJson (Join-Path $Dir 'ledgers.json'); $gj = Read-KeepJson (Join-Path $Dir 'groups.json')
+    if ($kj -and $gj) {
+      $led = @($kj.PSObject.Properties | ForEach-Object { $v = @($_.Value); if ([string]$v[0]) { , @([string]$v[0], [string]$v[1]) } })
+      $grp = @(@($gj) | ForEach-Object { , @([string]$_[0], [string]$_[1]) })
+      $r = Invoke-Cloud @{ kind = 'groups'; company = $Company; ledgers = $led; groups = $grp } 120
+      if ($r.code -eq 409) { $script:CloudLinks[$Company] = $false; return }
+      if ($r.code -ne 200) { throw ('the ledger groups did not go: ' + $r.error) }
+      Remove-Item -LiteralPath $lf -Force -ErrorAction SilentlyContinue
+      Write-Log ('Cloud: ' + $Company + ': ' + $led.Count + ' ledgers with their groups and ' + $grp.Count + ' groups sent')
+    }
+  }
   if ((Test-Path -LiteralPath $lf) -and (Test-Path -LiteralPath $bf)) {
     $bal = Read-KeepJson $bf
     if ($bal -and $bal.from -and $bal.openAsOn) {
@@ -129,6 +144,7 @@ function Push-CloudCompany([string]$Company, [string]$Dir, [double]$BudgetSec) {
       $grp = @(); $gj = Read-KeepJson (Join-Path $Dir 'groups.json')
       if ($gj) { $grp = @(@($gj) | ForEach-Object { , @([string]$_[0], [string]$_[1]) }) }
       $r = Invoke-Cloud @{ kind = 'ledgers'; company = $Company; from = [string]$bal.from; openAsOn = [string]$bal.openAsOn; ledgers = $led; groups = $grp } 120
+      if ($r.code -eq 200 -and $r.json -and $r.json.kept) { Write-Log ('Cloud: ' + $Company + ': ' + [string]$r.json.kept) }
       if ($r.code -eq 409) { $script:CloudLinks[$Company] = $false; return }
       if ($r.code -ne 200) { throw ('the ledgers did not go: ' + $r.error) }
       Remove-Item -LiteralPath $lf -Force -ErrorAction SilentlyContinue
@@ -238,15 +254,18 @@ function Send-CloudBeat {
   if (-not (Test-CloudOn)) { return }
   if (([DateTime]::UtcNow - $script:BeatAt).TotalSeconds -lt (Get-KeepNum 'CloudBeatSec' 60)) { return }
   $script:BeatAt = [DateTime]::UtcNow
-  $open = @(); $tally = $false
-  try { foreach ($s in @(Get-OpenCompaniesCached)) { if ($s.skipped) { continue }; if ($s.ok) { $tally = $true; $open += @($s.companies | ForEach-Object { [string]$_.name }) } } } catch { }
+  $open = @(); $tally = $false; $ports = @()
+  try { foreach ($s in @(Get-OpenCompaniesCached)) {
+    # 1.14.9: each Tally port as the bridge sees it, so FinCom (and support) can tell why Tally shows as not open
+    $ports += [ordered]@{ port = [int]$s.port; ok = [bool]$s.ok; skipped = [bool]$s.skipped; n = @($s.companies).Count; error = ([string]$s.error).Substring(0, [Math]::Min(120, ([string]$s.error).Length)) }
+    if ($s.skipped) { continue }; if ($s.ok) { $tally = $true; $open += @($s.companies | ForEach-Object { [string]$_.name }) } } } catch { }
   $cos = @()
   foreach ($d in @(Get-ChildItem -LiteralPath (Get-SyncDir) -Directory -ErrorAction SilentlyContinue)) {
     $st = Read-KeepState $d.FullName; if (-not $st -or -not $st.company) { continue }
     $cos += [ordered]@{ name = [string]$st.company; open = [bool]($open -contains [string]$st.company); at = [string]$st.at; phase = [string]$st.phase; waiting = @(Get-CloudQueue $d.FullName).Count }
   }
   $running = $false; try { $p = [int]('0' + [IO.File]::ReadAllText((Join-Path (Get-SyncDir) 'keep.pid')).Trim()); $running = [bool]($p -and (Test-ProcessAlive $p)) } catch { }
-  $beat = [ordered]@{ kind = 'beat'; tally = $tally; open = $open; companies = $cos; updating = $running; dailyAt = (Get-KeepDailyAt); lastRun = (Get-KeepLastRun) }
+  $beat = [ordered]@{ kind = 'beat'; tally = $tally; open = $open; ports = $ports; companies = $cos; updating = $running; dailyAt = (Get-KeepDailyAt); lastRun = (Get-KeepLastRun) }
   $r = Invoke-Cloud $beat 10
   # 1.14.4: Update now pressed in FinCom on another computer
   if ($r.code -eq 200 -and $r.json -and $r.json.updateNow) { Request-KeepNow; try { Start-KeepIfNeeded } catch { } }

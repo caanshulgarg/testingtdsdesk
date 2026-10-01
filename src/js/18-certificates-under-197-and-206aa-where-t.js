@@ -152,6 +152,35 @@ const TallyRead = {
     [].concat(j.ledgers || []).forEach(l => { led[l.name] = {open: Books.amt(l.open), close: Books.amt(l.close), parent: l.parent || ""}; });
     b.tb = {from, to, at: new Date().toISOString(), led};
     Object.entries(led).forEach(([n, x]) => { if (x.parent) (b.under = b.under || {})[n] = (b.under[n] || x.parent); });
+    this.yearOpen(b);
+  },
+  // review of 01-Oct-2026 (owner's go-ahead): at the start of a financial year, income and expense ledgers open at nil
+  // and their total goes to Profit & Loss A/c, as Tally does. Balances taken as on 31 March (a trial balance file, the
+  // cloud copy before its groups came) still carry last year's income and expenses. Needs the groups; what was read is
+  // kept as openSent, so this can be done again whenever the groups or the balances change. The cloud copy does the same
+  // (tally_year_openings, migration-8)
+  NOMINAL: ["Sales Accounts", "Purchase Accounts", "Direct Incomes", "Direct Expenses", "Indirect Incomes", "Indirect Expenses"],
+  primaryOf(b, n){
+    const under = b.under || {}, groups = b.groups || {}, prim = s => !s || /^\W*Primary$/i.test(s);
+    let p = under[n], last = "";
+    for (let i = 0; !prim(p) && i < 30; i++){ last = p; p = groups[p]; }
+    return last;
+  },
+  yearOpen(b){
+    const tb = b && b.tb, led = tb && tb.led;
+    if (!led || !Object.keys(b.groups || {}).length) return false;
+    Object.values(led).forEach(x => { if (x.openSent == null) x.openSent = x.open; x.open = x.openSent; });
+    if (!/0401$/.test(String(tb.from || ""))) return false;
+    const PL = "Profit & Loss A/c", nominal = new Set(this.NOMINAL);
+    let moved = 0, n = 0;
+    Object.entries(led).forEach(([name, x]) => {
+      if (name === PL || !nominal.has(this.primaryOf(b, name)) || !num(x.openSent)) return;
+      moved = r2(moved + num(x.openSent)); x.open = 0; n++;
+    });
+    if (!n) return false;
+    const pl = led[PL] = led[PL] || {open: 0, openSent: 0, close: 0, parent: ""};
+    pl.open = r2(num(pl.openSent) + moved);
+    return true;
   },
   // after the books changed (read from Tally, changes brought in from the kept copy or the cloud, a day book file):
   // every section follows. Screens work from the entries as they are; audit and MIS are worked out again for the

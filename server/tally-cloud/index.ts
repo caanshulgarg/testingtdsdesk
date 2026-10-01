@@ -14,8 +14,10 @@
 //   {kind:"ledgers", company, from, openAsOn, ledgers:[[name, parent, open]], groups?:[[name, parent]]}
 //                                                       (groups from bridge 1.14.7: each ledger's chain of groups up to
 //                                                       the primary group is worked out from them and kept)
+//   {kind:"groups", company, ledgers:[[name, parent]], groups:[[name, parent]]} -> (bridge 1.14.9) every ledger's group
+//                                                       and Tally's groups, without openings: openings and entries stay
 //   {kind:"state", company, state}
-//   {kind:"beat", tally, open, companies:[{name, open, at, phase, waiting}], updating, dailyAt, lastRun} -> {updateNow}
+//   {kind:"beat", tally, open, ports?, companies:[{name, open, at, phase, waiting}], updating, dailyAt, lastRun} -> {updateNow}
 //   {kind:"support", note, zip}                      -> the Connector's log and details for FinCom support
 //   {kind:"posts_take"}                              -> {job: {id, company, payload} | null}: the next posting queued in
 //                                                       FinCom for this computer (build 199); the beat says how many wait
@@ -166,8 +168,44 @@ async function reparseMonth(firm: string, book: string, monthIn: unknown) {
   const next = all.find((m: string) => m > month) || null;
   return reply(200, { ok: true, month, done, bad, next, months: all.length });
 }
-async function ingestLedgers(book: string, body: any) {
+// review of 01-Oct-2026: each ledger's group and Tally's groups, kept without touching openings or entries; each ledger's
+// chain up to its primary group is worked out here. A ledger not in the copy yet is added with a nil opening
+async function applyGroups(firm: string, book: string, ledIn: unknown, grpIn: unknown) {
+  const groups = (Array.isArray(grpIn) ? grpIn : []).slice(0, 20000)
+    .map((g: any) => [String(g?.[0] || "").slice(0, 300), String(g?.[1] || "").replace(/^\W*Primary$/i, "").slice(0, 300)]).filter((g: any) => g[0]);
+  const leds = (Array.isArray(ledIn) ? ledIn : []).slice(0, 100000)
+    .map((l: any) => [String(l?.[0] || "").slice(0, 300), String(l?.[1] || "").replace(/^\W*Primary$/i, "").slice(0, 300)]).filter((l: any) => l[0]);
+  for (let i = 0; i < groups.length; i += 1000) {
+    const { error } = await db.from("tally_groups").upsert(groups.slice(i, i + 1000).map((g: any) => ({ book_id: book, firm_id: firm, name: g[0], parent: g[1] })), { onConflict: "book_id,name" });
+    if (error) throw new Error(error.message);
+  }
+  const { data: allG, error: eg } = await db.from("tally_groups").select("name, parent").eq("book_id", book);
+  if (eg) throw new Error(eg.message);
+  const up = new Map((allG || []).map((g: any) => [g.name, g.parent || ""]));
+  const chain = (p: string) => { const out: string[] = []; while (p && out.length < 30 && !out.includes(p)) { out.push(p); p = up.get(p) || ""; } return out; };
+  for (let i = 0; i < leds.length; i += 1000) {
+    const rows = leds.slice(i, i + 1000).map((l: any) => { const c = chain(l[1]); return { book_id: book, firm_id: firm, name: l[0], parent: l[1], chain: c, primary_group: c.length ? c[c.length - 1] : "" }; });
+    const { error } = await db.from("tally_ledgers").upsert(rows, { onConflict: "book_id,name" });
+    if (error) throw new Error(error.message);
+  }
+  const { error: eo } = await db.rpc("tally_year_openings", { p_book: book });
+  if (eo) throw new Error(eo.message);
+  return { ledgers: leds.length, groups: groups.length };
+}
+async function ingestLedgers(book: string, body: any, firm?: string) {
   if (!isDay(body.from) || !isDay(body.openAsOn)) return reply(400, { ok: false, error: "from and openAsOn are dates (yyyymmdd)" });
+  // review of 01-Oct-2026: a copy that starts later than the book's own (the bridge keeping 2026-27 where the year 2025-26
+  // came from files) must not move the book's start: that would take away the earlier entries. The groups are kept;
+  // the openings and entries stay as they are
+  const { data: bk } = await db.from("tally_books").select("from_date, firm_id").eq("book_id", book).maybeSingle();
+  if (bk && bk.from_date && iso(body.from) > String(bk.from_date)) {
+    const { count } = await db.from("tally_vouchers").select("guid", { count: "exact", head: true }).eq("book_id", book).lt("day", iso(body.from));
+    if ((count || 0) > 0) {
+      const g = await applyGroups(String(firm || bk.firm_id), book, (Array.isArray(body.ledgers) ? body.ledgers : []).map((l: any) => [l?.[0], l?.[1]]), body.groups);
+      console.log("tally-ingest ledgers kept", book, body.from, "book from", bk.from_date, count);
+      return reply(200, { ok: true, ...g, kept: "the copy in the cloud starts on " + bk.from_date + " and has " + count + " entries before " + iso(body.from) + ": its openings and entries are kept; the groups are taken" });
+    }
+  }
   const led = (Array.isArray(body.ledgers) ? body.ledgers : []).slice(0, 100000)
     .map((l: any) => [String(l?.[0] || "").slice(0, 300), String(l?.[1] || "").slice(0, 300), String(Math.round(amt(l?.[2]) * 100) / 100)]).filter((l: any) => l[0]);
   // the groups (bridge 1.14.7 on): [[name, parent]]; a primary group's parent is empty. Without them the groups kept
@@ -261,6 +299,9 @@ Deno.serve(async (req) => {
         const s = (v: unknown, n = 80) => typeof v === "string" ? v.slice(0, n) : "";
         const beat = { at: new Date().toISOString(), tally: !!b.tally, updating: !!b.updating, dailyAt: s(b.dailyAt, 5), lastRun: s(b.lastRun, 8),
           open: (Array.isArray(b.open) ? b.open : []).slice(0, 50).map((x: unknown) => s(x, 200)),
+          // bridge 1.14.9: each Tally port as the bridge sees it (open, another user's, how many companies, the error)
+          ports: (Array.isArray(b.ports) ? b.ports : []).slice(0, 20).map((p: any) => ({ port: Math.max(0, Math.min(65535, Math.floor(Number(p?.port) || 0))), ok: !!p?.ok, skipped: !!p?.skipped,
+            n: Math.max(0, Math.min(1000, Math.floor(Number(p?.n) || 0))), error: s(p?.error, 120) })),
           companies: (Array.isArray(b.companies) ? b.companies : []).slice(0, 200).map((c: any) => ({ name: s(c?.name, 200), open: !!c?.open, at: s(c?.at, 30), phase: s(c?.phase, 12),
             waiting: Math.max(0, Math.min(1e6, Math.floor(Number(c?.waiting) || 0))) })) };
         const info = { ...(((dev as any).info && typeof (dev as any).info === "object") ? (dev as any).info : {}), beat };
@@ -318,7 +359,12 @@ Deno.serve(async (req) => {
       case "ledgers": {
         const book = await bookFor(firm, String(body.company || ""));
         if (!book) return reply(409, { ok: false, notLinked: true, error: "This Tally company is not linked to a FinCom client yet." });
-        return await ingestLedgers(book, body);
+        return await ingestLedgers(book, body, firm);
+      }
+      case "groups": {
+        const book = await bookFor(firm, String(body.company || ""));
+        if (!book) return reply(409, { ok: false, notLinked: true, error: "This Tally company is not linked to a FinCom client yet." });
+        return reply(200, { ok: true, ...(await applyGroups(firm, book, body.ledgers, body.groups)) });
       }
       case "state": {
         const book = await bookFor(firm, String(body.company || ""));
