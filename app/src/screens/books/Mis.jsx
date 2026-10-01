@@ -18,20 +18,25 @@ const Table = ({ id, head, children, style }) => <div className="bk-tablewrap"><
 const Card = ({ title, top, children }) => <section className="dash-card" style={top ? { marginTop: 12 } : undefined}>{title && <h3>{title}</h3>}{children}</section>;
 const Opener = ({ open, onClick, children }) => <button className="linkbtn" onClick={onClick}>{(open ? "▾ " : "▸ ")}{children}</button>;
 const toggle = (key, v, none = "") => () => setAndShow(key, S[key] === v ? none : v);
-const MonthHeads = ({ months, cols, short }) => cols ? months.map((mm) => <th key={mm} className="n">{short ? GSTR.label(mm).replace(/ \d{4}$/, "") : GSTR.label(mm)}</th>) : null;
+const MonthHeads = ({ months, cols, short }) => cols ? months.map((mm) => <th key={mm} className="n">{short ? GSTR.label(mm).replace(/[-\s]\d{4}$/, "") : GSTR.label(mm)}</th>) : null;
 const TABS = [["summary", "Summary"], ["pl", "Profit and loss"], ["recv", "Receivables"], ["pay", "Payables"], ["sales", "Sales"], ["purch", "Purchases and expenses"], ["cash", "Cash flow"], ["ratios", "Ratios"], ["regs", "Registrations"], ["cc", "Cost centres"], ["budget", "Budget"], ["comp", "Compliance"]];
 
+// the period and Run now, under the tabs; how often it runs on its own and the downloads fold away (review of 01-Oct-2026)
 function Head({ b, r, rg }) {
   const c = MIS.cfg(b);
-  return <section className="dash-card"><h3>MIS</h3>
-    <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-      <label className="note">From <input type="date" aria-label="MIS from" value={rg.from || ""} onChange={(ev) => misRangeSet("from", ev.target.value)} /></label><label className="note">to <input type="date" aria-label="MIS to" value={rg.to || ""} onChange={(ev) => misRangeSet("to", ev.target.value)} /></label>
+  return <section className="dash-card" data-mis-head="">
+    <div className="row" style={{ gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+      <label className="f" style={{ minWidth: 150 }}><span>From</span><input type="date" aria-label="MIS from" value={rg.from || ""} onChange={(ev) => misRangeSet("from", ev.target.value)} /></label>
+      <label className="f" style={{ minWidth: 150 }}><span>To</span><input type="date" aria-label="MIS to" value={rg.to || ""} onChange={(ev) => misRangeSet("to", ev.target.value)} /></label>
+      <span className="note" style={{ alignSelf: "center" }} data-mis-period="">{rg.from && rg.to ? fmtDate(rg.from) + " to " + fmtDate(rg.to) : ""}</span>
       {[["month", "This month"], ["lastmonth", "Last month"], ["quarter", "This quarter"], ["ytd", "Year to date"], ["lastyear", "Last year"]].map(([k, l]) => <button key={k} className="btn small" onClick={() => misQuickGo(k)}>{l}</button>)}
-      <Act act="misRun" className="btn small primary">Run now</Act></div>
-    <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}><span className="note">Run on its own</span>
-      <select aria-label="MIS runs on its own" style={{ width: "auto" }} value={c.freq} onChange={(ev) => misFreqSet(ev.target.value)}>
-        {[["monthly", "on the 1st, for the month just ended"], ["weekly", "every week, the year so far"], ["daily", "every day, the year so far"], ["off", "only when I run it"]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
-      {r && <><Act act="misPack" className="btn small primary">Download the MIS pack (PDF)</Act><Act act="misExcel">Excel</Act></>}</div>
+      <Act act="misRun" className="btn small primary">Run now</Act>
+      {r && <><Act act="misPack" className="btn small">Download the MIS pack (PDF)</Act><Act act="misExcel">Excel</Act></>}</div>
+    <details style={{ marginTop: 8 }}><summary className="note" style={{ cursor: "pointer" }}>Settings: run on its own</summary>
+      <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 6 }}><span className="note">Run on its own</span>
+        <select aria-label="MIS runs on its own" style={{ width: "auto" }} value={c.freq} onChange={(ev) => misFreqSet(ev.target.value)}>
+          {[["monthly", "on the 1st, for the month just ended"], ["weekly", "every week, the year so far"], ["daily", "every day, the year so far"], ["off", "only when I run it"]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>
+    </details>
   </section>;
 }
 
@@ -286,8 +291,11 @@ export default function Mis({ b }) {
   if (catchUp) return <CatchUp text={catchUp} />;
   const r = (b.mis || {}).last;
   const rg = S.misRange || (r ? { from: Audit.iso(r.from), to: Audit.iso(r.to) } : ((x) => ({ from: Audit.iso(x.from), to: Audit.iso(x.to) }))(misRangeQuick("ytd", b)));
-  if (!r) return <><Head b={b} r={r} rg={rg} /><div className="bk-none" style={{ marginTop: 12 }}>Choose a period and press Run now.</div></>;
-  const tab = S.misTab || "summary", p2 = r.p2;
+  const tab = S.misTab || "summary";
+  // the tabs first, at the top of the page (review of 01-Oct-2026), then the period
+  const tabs = <nav className="sbar" aria-label="MIS">{TABS.map(([id, l]) => <button key={id} aria-selected={tab === id} onClick={() => misTabGo(id)}>{l}</button>)}</nav>;
+  if (!r) return <>{tabs}<Head b={b} r={r} rg={rg} /><div className="bk-none" style={{ marginTop: 12 }}>Choose a period and press Run now.</div></>;
+  const p2 = r.p2;
   let body;
   if (tab === "summary") body = <Summary b={b} r={r} />;
   else if (tab === "pl") body = <ProfitLoss b={b} r={r} />;
@@ -297,8 +305,8 @@ export default function Mis({ b }) {
   else if (!p2) body = <p className="note">Run again to see this.</p>;
   else body = tab === "cash" ? <CashFlow b={b} p2={p2} /> : tab === "ratios" ? <Ratios p2={p2} /> : tab === "regs" ? <Regs r={r} p2={p2} /> : tab === "cc" ? <CostCentres p2={p2} /> : <Budget r={r} />;
   return <>
+    {tabs}
     <Head b={b} r={r} rg={rg} /><RunLine r={r} />
-    <nav className="sbar" aria-label="MIS">{TABS.map(([id, l]) => <button key={id} aria-selected={tab === id} onClick={() => misTabGo(id)}>{l}</button>)}</nav>
     {body}
   </>;
 }

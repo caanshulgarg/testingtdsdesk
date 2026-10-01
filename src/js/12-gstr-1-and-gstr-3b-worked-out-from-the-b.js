@@ -13,7 +13,11 @@ const GSTR = {
   months(){
     const b = S.books;
     if (!b) return [];
-    const m = Array.from(new Set((b.vouchers || []).map(v => this.ym(v.date)).filter(x => x.length === 6))).sort();
+    const seen = Array.from(new Set((b.vouchers || []).map(v => this.ym(v.date)).filter(x => x.length === 6))).sort();
+    // every month from the books' first to their last, with or without entries (review of 01-Oct-2026: Apr-Jun 2026 were
+    // missing because no entry fell in them)
+    const m = [];
+    if (seen.length){ let x = seen[0]; while (x <= seen[seen.length - 1] && m.length < 240){ m.push(x); x = this.nextYm(x); } }
     if (m.length || !this.gstins(b).length) return m;
     const d = new Date(), y = d.getFullYear(), mo = d.getMonth() + 1, fy = mo >= 4 ? y : y - 1, out = [];
     let x = (fy - 1) + "04"; const last = (mo === 1 ? (y - 1) + "12" : y + String(mo - 1).padStart(2, "0"));
@@ -32,7 +36,8 @@ const GSTR = {
   pEnd(per){ const p = String(per); return p.length > 6 ? p.slice(7, 13) : p; },
   expand(per){ const out = []; let m = this.pStart(per); const e = this.pEnd(per); while (m <= e){ out.push(m); m = this.nextYm(m); } return out; },
   nextYm(ym){ const y = +ym.slice(0, 4), m = +ym.slice(4, 6); return m === 12 ? (y + 1) + "01" : y + String(m + 1).padStart(2, "0"); },
-  label(ym){ return fmtDate(ym.slice(0, 4) + "-" + ym.slice(4, 6) + "-01").replace(/^\d+\s/, ""); },
+  // a month as "Apr-2025" (the date format of the rest of FinCom, without the day)
+  label(ym){ return fmtDate(ym.slice(0, 4) + "-" + ym.slice(4, 6) + "-01").replace(/^\d+[-\s]/, ""); },
   regOf(v){
     let r = "";
     for (const e of v.ent){ const m = Books.ledgerOf(e.l); if ((m.kind === "gst" || m.kind === "gst_common" || m.kind === "ineligible") && m.reg){ if (r && r !== m.reg){ r = ""; break; } r = m.reg; } }

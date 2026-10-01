@@ -382,7 +382,7 @@ function printInvoiceHtml(html, number){
   toast("The invoice was downloaded. Open it and choose Print \u2192 Save as PDF.");
 }
 /* ---------- the Sales screen ---------- */
-const SALES_TABS = [["review", "To review"], ["ready", "Ready"], ["done", "Done"]];
+const SALES_TABS = [["review", "To review"], ["ready", "Post to Tally"], ["done", "In Tally"]];
 function salesTabStates(t){ return t === "ready" ? ["ready"] : t === "done" ? ["posted", "intally", "ignored"] : ["review"]; }
 function salesCounts(){ const c = {review: 0, ready: 0, done: 0}; SL().list.forEach(v => { if (v.status === "review") c.review++; else if (v.status === "ready") c.ready++; else c.done++; }); return c; }
 function salesColPass(v){

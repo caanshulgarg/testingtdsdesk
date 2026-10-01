@@ -160,14 +160,11 @@ function lastEntryDate(b) {
 function FreshLine({ b }) {
   const m = b.meta || {};
   if (!(b.vouchers || []).length || !m.to) return null;
-  const at = m.at ? fmtDateTime(m.at) : "";
   // build 197: from any computer: on the Tally computer through its bridge, elsewhere through the cloud
   const can = (typeof Bridge === "object" && Bridge.on() && Bridge.up()) || (typeof TCloud === "object" && S.coId && TCloud.has(S.coId));
-  // review of 01-Oct-2026: the books' last entry, not how far the copy was checked (a copy kept to 30-Sep-2026 of a
-  // year whose last entry is 31-Mar-2026 said "Books up to 30-Sep-2026")
-  const last = lastEntryDate(b), checked = String(m.to || "");
-  return <p className="note" style={{ margin: "0 0 10px" }}>Books up to <b>{fmtDate(tallyDate(last || checked))}</b>{last ? " (the last entry)" : ""}
-    {last && checked > last ? " · checked with Tally to " + fmtDate(tallyDate(checked)) : ""}{at ? " · brought in " + at : ""}.
+  // one sentence on every page (booksFresh, src/js/49): the last entry, how far it was checked with Tally, days not read
+  const f = booksFresh(b, S.coId);
+  return <p className="note" style={{ margin: "0 0 10px" }} data-fresh="">{f.text}
     {b.openMs != null && <span className="nr" data-opentime>{" Opened in " + (b.openMs / 1000).toFixed(1) + " s" + (b.readyMs != null ? ", every entry in " + (b.readyMs / 1000).toFixed(1) + " s" : "") + "."}</span>}
     {can && <> <button className="linkbtn" onClick={() => doAct("keepNow")}>Update now</button></>}</p>;
 }

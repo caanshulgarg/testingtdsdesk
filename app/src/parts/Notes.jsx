@@ -5,7 +5,8 @@
 
 // the ledgers still to be confirmed, above the TDS or GST work that uses them
 export function LedgerBanner({ b, which }) {
-  const p = LedMaster.pending(b).filter(([, m]) => !which || (which === "gst" ? LedMaster.isGst(m.what) || !m.what || m.what === "none" : LedMaster.isTds(m.what) || !m.what || m.what === "none"));
+  // one count everywhere (review of 01-Oct-2026): the same ledgers as the "N to confirm" on the Tally ledgers tab
+  const p = LedMaster.pending(b);
   if (!p.length) return null;
   return <div className="bk-alert bad" style={{ marginBottom: 12 }}><b>{p.length + " ledger" + (p.length === 1 ? " is" : "s are") + " still to be confirmed."}</b> The figures below use the guesses; the return files wait until they are confirmed.{" "}
     <button className="linkbtn" onClick={() => booksTabGo("ledgers")}>Confirm them</button><div className="nr" style={{ whiteSpace: "normal" }}>{p.slice(0, 6).map((x) => x[0]).join(", ") + (p.length > 6 ? " and " + (p.length - 6) + " more" : "")}</div></div>;

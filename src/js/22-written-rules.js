@@ -943,7 +943,8 @@ function exportBankCsv(){
 /* ---------- screen ---------- */
 /* ---------- the bank screen ---------- */
 const BANK_TABS_EXTRA = [["rules", "Rules"]];
-const BANK_TABS = [["review", "1 \u00b7 To review"], ["ready", "2 \u00b7 Ready to post"], ["done", "3 \u00b7 In Tally"]];
+// the same three steps on Purchase, Bank and Sales (review of 01-Oct-2026): To review · Post to Tally · In Tally
+const BANK_TABS = [["review", "To review"], ["ready", "Post to Tally"], ["done", "In Tally"]];
 function tabStates(tab){ return tab === "ready" ? ["ready"] : tab === "done" ? ["sent", "intally", "ignored"] : tab === "all" ? null : ["attention", "suggested"]; }
 function bankTab(){ const b = B(); return ["review", "ready", "done", "all", "rules"].includes(b.filter) ? b.filter : "review"; }
 function tabCounts(rows){
@@ -952,11 +953,8 @@ function tabCounts(rows){
 }
 function plural(n, word){ return n + " " + word + (n === 1 ? "" : word.endsWith("y") ? "" : "s"); }
 function entries(n){ return n + (n === 1 ? " entry" : " entries"); }
-function shortDate(iso){
-  if (!iso) return "";
-  const d = new Date(iso + "T00:00:00");
-  return String(d.getDate()).padStart(2, "0") + " " + ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()];
-}
+// one date format everywhere, DD-MMM-YYYY (review of 01-Oct-2026: lists showed "05 Aug" with no year)
+function shortDate(iso){ return iso ? fmtDate(String(iso).slice(0, 10)) : ""; }
 function bkAmt(n){ return n ? INR.format(r2(n)) : ""; }
 function accountFor(st){ const co = CO(B().cid); return (co.bankAccounts || []).find(a => a.id === st.acctId) || {}; }
 function stmtLabel(st){

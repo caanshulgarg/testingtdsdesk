@@ -10,7 +10,7 @@ function vchTypeOf(e, co){
 function tallyStateOf(e){
   if (e.exportedAt) return e.postUnverified ? ["sent", "In Tally, not confirmed"] : ["ok", "In Tally"];
   if (e.postError) return ["bad", "Tally refused: " + e.postError];
-  if (e.status === "approved") return ["warn", "Ready to post"];
+  if (e.status === "approved") return ["warn", "Post to Tally"];
   if (e.status === "rejected") return ["no", "No entry needed"];
   if (e.status === "duplicate") return ["warn", "Held as duplicate"];
   return ["no", "To review"];
@@ -31,7 +31,7 @@ function txnRowsSales(){
   return s.list.map(v => {
     const x = v.x || {}, gst = num(x.cgst) + num(x.sgst) + num(x.igst) + num(x.cess);
     const cls = v.status === "posted" ? "ok" : v.status === "ready" ? "warn" : v.status === "ignored" ? "no" : "no";
-    const label = v.status === "posted" ? "In Tally" : v.status === "ready" ? "Ready to post" : v.status === "ignored" ? "Set aside" : "To review";
+    const label = v.status === "posted" ? "In Tally" : v.status === "ready" ? "Post to Tally" : v.status === "ignored" ? "Set aside" : "To review";
     return {id: v.id, kind: "sale", date: x.date || "", up: (v.addedAt || "").slice(0, 10), vch: x.noteKind === "credit" ? "Credit Note" : x.noteKind === "debit" ? "Debit Note" : (s.cfg.voucherType || "Sales"),
       no: x.number || "", party: x.customerName || "", taxable: num(x.taxable), gst, total: num(x.total), cls, label, file: v.fileName || "", docPath: v.docPath || "", hasFile: !!(S.files["sv:" + v.id] || v.docPath || (S.fileIndex && S.fileIndex.has("sv:" + v.id))), v};
   }).sort((a, b) => String(b.date).localeCompare(String(a.date)));
@@ -44,7 +44,7 @@ function txnRowsBank(){
   return b.rows.map(r => {
     const st = stName[(r.id || "").split("-")[0]] || curStmt() || {};
     const cls = r.state === "sent" ? "ok" : r.state === "intally" ? "ok" : r.state === "ready" ? "warn" : r.state === "ignored" ? "no" : "no";
-    const label = r.state === "sent" ? "In Tally" : r.state === "intally" ? "Already in Tally" : r.state === "ready" ? "Ready to post" : r.state === "ignored" ? "Left out" : "To review";
+    const label = r.state === "sent" ? "In Tally" : r.state === "intally" ? "Already in Tally" : r.state === "ready" ? "Post to Tally" : r.state === "ignored" ? "Left out" : "To review";
     return {id: r.id, kind: "bank", date: r.date, up: (st.uploadedAt || "").slice(0, 10), vch: r.credit ? (CO().receiptType || "Receipt") : (CO().paymentType || "Payment"),
       no: (r.dec && (r.dec.utr || r.dec.chq)) || "", party: (r.dec && r.dec.name) || r.narr.slice(0, 40), taxable: 0, gst: 0,
       total: num(r.debit) || num(r.credit), dr: num(r.debit), cr: num(r.credit), cls, label, file: st.fileName || "", docPath: st.docPath || "", hasFile: !!(S.files["st:" + st.id] || st.docPath || (S.fileIndex && S.fileIndex.has("st:" + st.id))), stId: st.id, r};

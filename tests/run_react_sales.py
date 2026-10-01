@@ -76,7 +76,7 @@ with sync_playwright() as p:
     # confirm one
     pg.click('#app tr:has-text("S/102") button:has-text("Confirm")'); pg.wait_for_timeout(400)
     ok(pg.evaluate("SL().list.find(v => v.x.number === 'S/102').status") == "ready", "Confirm: ready to post")
-    pg.click('#app .bk-tabs button:has-text("Ready")'); pg.wait_for_timeout(300)
+    pg.click('#app .bk-tabs button:has-text("Post to Tally")'); pg.wait_for_timeout(300)
     ok(rows().count() == pg.evaluate("SL().list.filter(v => v.status === 'ready').length"), "the Ready tab")
     # settings
     pg.click('#app .bk-actions button:has-text("Settings")'); pg.wait_for_timeout(400)

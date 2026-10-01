@@ -43,8 +43,8 @@ with sync_playwright() as p:
     # the sidebar and the top bar move together
     pg.click('#side .side-link:has-text("Purchase")'); pg.wait_for_timeout(800)
     ok("Purchase bills" in top() and pg.locator("#cobar .sbar button").count() == 3, "Purchase: its title and the status tabs")
-    pg.click('#cobar .sbar button:has-text("Ready to post")'); pg.wait_for_timeout(800)
-    ok(pg.evaluate("S.tab") == "export" and pg.get_attribute('#cobar .sbar button:has-text("Ready to post")', "aria-selected") == "true", "a status tab switches the step")
+    pg.click('#cobar .sbar button:has-text("Post to Tally")'); pg.wait_for_timeout(800)
+    ok(pg.evaluate("S.tab") == "export" and pg.get_attribute('#cobar .sbar button:has-text("Post to Tally")', "aria-selected") == "true", "a status tab switches the step")
     pg.click('#side .side-link:has-text("Client setup")'); pg.wait_for_timeout(800)
     ok("Client setup" in top() and pg.locator('#app nav[aria-label="Client setup"] button').count() == 9, "Client setup: its sections, listed on the left")
     pg.click('#app nav[aria-label="Client setup"] button:has(span:text-is("GST"))'); pg.wait_for_timeout(800)

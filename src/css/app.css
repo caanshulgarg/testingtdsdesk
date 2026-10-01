@@ -1084,29 +1084,21 @@ kbd{display:inline-block;min-width:22px;padding:2px 7px;border:1px solid var(--r
 .rpt-top-row select{flex:0 0 auto;width:auto}
 .ltr-in{width:170px}.ltr-in.sm{width:110px}
 .ltr-t .ac{white-space:nowrap}.ltr-t .ac .btn{padding:4px 8px}
-/* header on laptop widths: title, tabs and the Tally/Firm buttons stay on one line; the tabs scroll if they must */
-@media (min-width:761px){
-  header.top .headrow:has(> .sbar){display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;column-gap:18px}
-  header.top .headrow:has(> .sbar) > .sbar{flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;min-width:0;margin-top:0}
-  header.top .headrow:has(> .sbar) > .sbar button{white-space:nowrap;flex:none}
-  header.top .headrow:has(> .sbar) > .topright{justify-self:end}
-}
+/* header (review of 01-Oct-2026): the title and the Tally / firm chips on the first row, the tabs on a row of their own,
+   full width, at every width; the tabs wrap rather than hide or scroll */
+header.top .headrow:has(> .sbar){display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"t r" "s s";align-items:center;column-gap:16px;row-gap:4px}
+header.top .headrow:has(> .sbar) > .tbar{grid-area:t;min-width:0}
+header.top .headrow:has(> .sbar) > .topright{grid-area:r;justify-self:end}
+header.top .headrow:has(> .sbar) > .sbar{grid-area:s;flex-wrap:wrap;margin-top:6px;min-width:0}
+header.top .headrow:has(> .sbar) > .sbar button{white-space:nowrap;flex:none}
+@media (max-width:760px){header.top .headrow:has(> .sbar){grid-template-columns:minmax(0,1fr);grid-template-areas:"t" "r" "s"}header.top .headrow:has(> .sbar) > .topright{justify-self:start}}
 header.top .tbar{align-items:center;gap:12px}
 header.top .tbar-title{align-items:center}
 /* settings fields wide enough for real names */
 .pane .grid{grid-template-columns:repeat(auto-fill,minmax(210px,1fr))}
 @media (min-width:761px) and (max-width:1439px){
-  header.top .headrow:has(> .sbar) > .sbar button{margin-right:10px;padding-right:6px;font-size:13.5px}
-  header.top .headrow:has(> .sbar){column-gap:12px}
   header.top .tbar-title h2{font-size:19px}
   header.top .tallychip{font-size:12.5px}
-}
-@media (min-width:761px) and (max-width:1359px){
-  header.top .headrow:has(> .sbar){grid-template-columns:auto 1fr auto;grid-template-areas:"t . r" "s s s";row-gap:2px}
-  header.top .headrow:has(> .sbar) > .tbar{grid-area:t}
-  header.top .headrow:has(> .sbar) > .topright{grid-area:r}
-  header.top .headrow:has(> .sbar) > .sbar{grid-area:s}
-  header.top .headrow:has(> .sbar) > .sbar button{margin-right:18px;padding-right:0;font-size:14px}
 }
 .lk-src{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:10px}
 .lk-src button{border:1px solid var(--rule);background:var(--sheet);color:var(--ink);border-radius:999px;padding:5px 12px;font:inherit;font-size:13px;cursor:pointer}
@@ -1242,3 +1234,25 @@ header.top .topright{flex-wrap:wrap;justify-content:flex-end}
 .txn-more{position:absolute;right:6px;top:4px;z-index:3;width:34px;height:34px;border-radius:50%;border:1px solid var(--rule);background:var(--sheet);color:var(--ink);font:600 20px/1 var(--sans);cursor:pointer;box-shadow:0 4px 12px rgba(16,26,22,.18)}
 .txn-more:hover{background:var(--ledger-soft)}
 @media (max-width:600px){.txnscroll.more::after,.txn-more{display:none}}
+
+/* tabs that look like tabs (review of 01-Oct-2026, item 2): dark text, a pill on hover, the chosen one filled and
+   underlined, count badges with enough contrast; the same for the page tabs (.sbar), the step tabs (.bk-tabs) and nav.tabs.
+   Colours from the theme, so dark mode follows */
+.sbar{gap:4px;row-gap:6px;border-bottom:1px solid var(--rule)}
+.sbar button,nav.tabs button{color:var(--ink);font-weight:500;padding:8px 14px;margin:0 0 -1px;border-radius:8px 8px 0 0;border-bottom:3px solid transparent;background:transparent}
+.sbar button:hover,nav.tabs button:hover{background:var(--rule-soft);color:var(--ink)}
+.sbar button[aria-selected="true"],nav.tabs button[aria-selected="true"]{color:var(--ledger);font-weight:700;background:var(--ledger-soft);border-bottom:3px solid var(--ledger);background-image:none}
+.sbar-n,nav.tabs .count{background:var(--rule);color:var(--ink);font-weight:700;min-width:20px;text-align:center}
+.sbar button[aria-selected="true"] .sbar-n,nav.tabs button[aria-selected="true"] .count{background:var(--ledger);color:var(--sheet)}
+.bk-tabs{background:var(--rule-soft);padding:4px;gap:2px;flex-wrap:wrap;border:1px solid var(--rule)}
+.bk-tabs button{color:var(--ink);font-weight:500}
+.bk-tabs button:hover{background:var(--sheet)}
+.bk-tabs button[aria-selected=true]{background:var(--sheet);color:var(--ledger);font-weight:700;box-shadow:inset 0 -3px 0 var(--ledger),0 1px 2px rgba(16,26,22,.15)}
+.bk-tabs .cnt{background:var(--rule);color:var(--ink);font-weight:700}
+.bk-tabs button[aria-selected=true] .cnt{background:var(--ledger);color:var(--sheet)}
+/* settings panes never wider than the page (review of 01-Oct-2026: GST settings pushed the page sideways at 1366 px) */
+.stack{grid-template-columns:minmax(0,1fr)}
+.stack > *,.setbody .pane,.setbody .dash-card{min-width:0;max-width:100%}
+.setbody .dash-card table{max-width:100%}
+.setbody .dash-card .bk-tablewrap,.setbody .pane .tblwrap{overflow-x:auto}
+@media (max-width:760px){.setnav{flex-wrap:wrap;overflow-x:visible}.setgroup{flex-wrap:wrap}}

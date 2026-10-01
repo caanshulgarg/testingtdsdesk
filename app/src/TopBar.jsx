@@ -49,7 +49,7 @@ function ClientHeader() {
   if ((t === "sales" && S.tab === "sales") || (t === "bank" && S.tab === "bank")) return head;
   const now = curStep(), c = stepCounts(), n = (x) => (String(x || "").match(/\d+/) || [""])[0];
   return <>{head}<nav className="sbar" aria-label="Status">
-    {[["review", "To review", n(c.review)], ["post", "Ready to post", n(c.post)], ["done", "Posted", n(c.done)]].map(([id, label, k]) =>
+    {[["review", "To review", n(c.review)], ["post", "Post to Tally", n(c.post)], ["done", "In Tally", n(c.done)]].map(([id, label, k]) =>
       <button key={id} aria-selected={now === id} onClick={() => goStep(id)}>{label}{k !== "" && <> <span className="sbar-n">{k}</span></>}</button>)}
   </nav></>;
 }
@@ -77,13 +77,13 @@ function TopRight() {
     <div className="topright">
       {inCo && <HelpButton page />}
       {inCo && <button className="btn small" title="Upload bills, statements or sales invoices for this client" onClick={() => goStep("collect")}>+ Upload</button>}
-      <button className={"tallychip" + (t.level === "ok" ? " live" : t.level === "warn" ? " off" : " none")} onClick={() => doAct("tallyPanel")} title={t.say} data-tally={t.state}>
-        <span className="dotled" />{"Tally: " + t.label}
+      <button className={"tallychip" + (t.level === "ok" ? " live" : t.level === "warn" ? " off" : " none")} onClick={() => doAct("tallyPanel")} title={"Tally: " + t.label + " \u2014 " + t.say} data-tally={t.state}>
+        <span className="dotled" />{t.short}
       </button>
       <CloudChip />
-      <button className="firmbtn" onClick={() => doAct("firmMenu")}>
+      <button className="firmbtn" onClick={() => doAct("firmMenu")} title={(S.firm.firmName || "Firm") + (plan ? " · plan " + plan : "") + (bal != null ? " · credit " + money(bal) : "")}>
         <b>{(S.firm.firmName || "Firm").slice(0, 26)}</b>
-        {(plan || bal != null) && <small>{plan + (bal != null ? (plan ? " · " : "") + "credit " + money(bal) : "")}</small>}
+        {bal != null ? <small data-credit="">{moneyShort(bal) + " credit"}</small> : plan ? <small>{plan}</small> : null}
       </button>
     </div>
   );

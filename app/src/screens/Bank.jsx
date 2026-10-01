@@ -168,6 +168,9 @@ function LedgerSetup({ co }) {
 }
 
 function MoreMenu({ tc }) {
+  const b = B();
+  // the statements deleted before (soft deletes), read once for the Restore item
+  if (b && b.stmtsTrash === undefined) { b.stmtsTrash = []; BankDB.get("stmtsTrash:" + b.cid).then((t) => { b.stmtsTrash = t || []; if (b.stmtsTrash.length) render(); }, () => {}); }
   const M = ({ act, title, children, danger }) => <button className={danger ? "danger" : undefined} onClick={() => bankAct(act)}>{title}{children && <small>{children}</small>}</button>;
   return (
     <details className="bk-menu"><summary className="btn small">More</summary><div className="bk-menu-list">
@@ -182,7 +185,8 @@ function MoreMenu({ tc }) {
       <M act="bankCsv" title="Download as Excel (CSV)" />
       {S.engine && tc.attention > 0 && <M act="bankClaude" title="Ask Claude for the remaining entries" />}
       <M act="bankClearStmt" title="Clear all decisions" />
-      <M act="bankDelStmt" title="Delete this statement" danger />
+      <M act="bankDelStmt" title="Delete this statement" danger>Asks for the client’s name; it can be restored</M>
+      {(b.stmtsTrash || []).length > 0 && <M act="bankRestoreStmt" title="Restore a deleted statement">{(() => { const x = b.stmtsTrash[0]; return x.st.bank + " " + fmtDate(x.st.from) + " to " + fmtDate(x.st.to) + ", deleted " + fmtDateTime(x.at); })()}</M>}
     </div></details>
   );
 }

@@ -208,7 +208,7 @@ export default function TwoB({ b }) {
       <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
         <button className="btn small primary" onClick={() => doAct("twoBPick")}>Bring in 2B JSON</button>
         <span className="note">2B here for {regs.length > 1 ? reg + ": " : ""}</span>
-        {fyM.map((m) => <span key={m} className={"tag" + (have.has(m) ? "" : " warn")} title={have.has(m) ? "brought in" : "not brought in yet"}>{GSTR.label(m).replace(/ \d{4}$/, "")}</span>)}
+        {fyM.map((m) => <span key={m} className={"tag" + (have.has(m) ? "" : " warn")} title={have.has(m) ? "brought in" : "not brought in yet"}>{GSTR.label(m).replace(/[-\s]\d{4}$/, "")}</span>)}
       </div>
       {wrong.length > 0 && <p className="note" style={{ color: "#B9541B" }}>{wrong.length + " 2B file" + (wrong.length === 1 ? " is" : "s are") + " for " + Array.from(new Set(wrong.map((t) => t.gstin))).join(", ") + ", not this client’s registration."}</p>}
       <div className="row" style={{ gap: 6, marginTop: 8, alignItems: "center", flexWrap: "wrap" }}>

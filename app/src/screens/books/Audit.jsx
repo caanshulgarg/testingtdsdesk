@@ -26,18 +26,21 @@ function Head({ b, run }) {
   const c = Audit.cfg(b), dr = Audit.defaultRange(b), range = S.auditRange || { from: Audit.iso(dr.from), to: Audit.iso(dr.to) };
   const lyFrom = MIS.shift(Audit.ymd(range.from), -1), lyTo = MIS.shift(Audit.ymd(range.to), -1), lyHere = MIS.covered(lyFrom);
   const fin = run && Audit.finalFor(run.from, run.to);
-  return <section className="dash-card"><h3>Audit of the books</h3>
-    <p className="note">Every check runs on the vouchers read from Tally. Each finding says what is wrong, what it costs, what to do, and the journal entry where one is needed. Mark each one, then download the report.</p>
-    <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
-      <label className="note">From <input type="date" aria-label="Audit from" defaultValue={range.from} onChange={(ev) => auditRangeSet("from", ev.target.value)} /></label>
-      <label className="note">to <input type="date" aria-label="Audit to" defaultValue={range.to} onChange={(ev) => auditRangeSet("to", ev.target.value)} /></label>
+  return <section className="dash-card" data-audit-head="">
+    <div className="row" style={{ gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+      <label className="f" style={{ minWidth: 150 }}><span>From</span><input type="date" aria-label="Audit from" defaultValue={range.from} onChange={(ev) => auditRangeSet("from", ev.target.value)} /></label>
+      <label className="f" style={{ minWidth: 150 }}><span>To</span><input type="date" aria-label="Audit to" defaultValue={range.to} onChange={(ev) => auditRangeSet("to", ev.target.value)} /></label>
+      <span className="note" style={{ alignSelf: "center" }}>{fmtDate(range.from) + " to " + fmtDate(range.to)}</span>
       <Act act="auditRun" className="btn small primary">Run now</Act><AuditButton />
       {!lyHere && typeof bridgeLive === "function" && bridgeLive(CO()) && <Act act="auditReadLy" title={d(lyFrom) + " to " + d(lyTo)}>Read last year from Tally, to compare</Act>}
-      <span className="note" style={{ marginLeft: 12 }}>Run on its own</span>
-      <select aria-label="Run on its own" style={{ width: "auto" }} value={c.freq} onChange={(ev) => auditFreqSet(ev.target.value)}>
-        {[["daily", "every day"], ["weekly", "every week"], ["monthly", "every month"], ["off", "only when I run it"]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
     </div>
-    <p className="note" style={{ marginTop: 6 }}>On its own, it runs the first time this client is opened on a new {({ daily: "day", weekly: "week", monthly: "month" })[c.freq] || "day"}, and each time the day book is read. To run overnight with nobody here, the bridge on the Tally server will have to send the day book on a timer.</p>
+    <details style={{ marginTop: 8 }}><summary className="note" style={{ cursor: "pointer" }}>Settings and how it works</summary>
+      <p className="note">Every check runs on the vouchers read from Tally. Each finding says what is wrong, what it costs, what to do, and the journal entry where one is needed. Mark each one, then download the report.</p>
+      <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}><span className="note">Run on its own</span>
+        <select aria-label="Run on its own" style={{ width: "auto" }} value={c.freq} onChange={(ev) => auditFreqSet(ev.target.value)}>
+          {[["daily", "every day"], ["weekly", "every week"], ["monthly", "every month"], ["off", "only when I run it"]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>
+      <p className="note" style={{ marginTop: 6 }}>On its own, it runs the first time this client is opened on a new {({ daily: "day", weekly: "week", monthly: "month" })[c.freq] || "day"}, and each time the day book is read. To run overnight with nobody here, the bridge on the Tally server will have to send the day book on a timer.</p>
+    </details>
     {run && <div className="row" style={{ gap: 8, flexWrap: "wrap", marginTop: 8 }}>
       <Act act="auditReport" className="btn small primary">Download the report (PDF)</Act><Act act="auditExcel">Excel with the annexures</Act>
       <Act act="auditJe">Tally file of entries to pass ({Audit.jesToPass(run).length})</Act><Act act="auditFinal">Finalise this report</Act></div>}
@@ -103,7 +106,10 @@ function Findings({ b }) {
   const open = f0.filter((f) => Audit.status(f.id).s === "open").length, fresh = f0.filter((f) => f.isNew).length;
   const area = S.auditArea || "", fs = S.auditSt || "", list = f0.filter((f) => (!area || f.area === area) && (!fs || Audit.status(f.id).s === fs));
   const gone = (run.solved || []).filter((x) => x.n && !f0.some((f) => f.id === x.id) && (!area || x.area === area));
+  // the area tabs first, at the top (review of 01-Oct-2026), then the period, the last run and the tiles
   return <>
+    <nav className="sbar" aria-label="Areas"><button aria-selected={!area} onClick={() => setAndShow("auditArea", "")}>All <span className="sbar-n">{f0.length}</span></button>
+      {Audit.AREAS.map(([a, l]) => { const n = f0.filter((f) => f.area === a).length; return n ? <button key={a} aria-selected={area === a} onClick={() => setAndShow("auditArea", a)}>{l} <span className="sbar-n">{n}</span></button> : null; })}</nav>
     <Head b={b} run={run} />
     <p className="note" style={{ margin: "10px 0" }}>{"Last run " + run.how + " on " + fmtDate(run.at.slice(0, 10)) + " at " + run.at.slice(11, 16) + " for " + d(run.from) + " to " + d(run.to) + ", " + run.vouchers + " vouchers. Result code "}
       <b>{run.code || ""}</b>{": the same books always give the same code." + (run.balances ? " Balances from " + run.balances + "." : "") + (run.notes.length ? " " + run.notes.join(" ") : "")}
@@ -115,8 +121,6 @@ function Findings({ b }) {
       <div className="dtile"><span>Still open</span><b>{open}</b><small>{"of " + f0.length + " findings" + (fresh ? ", " + fresh + " new since the last run" : "")}</small></div>
       <div className="dtile"><span>Put right</span><b>{(run.solved || []).reduce((s2, x) => s2 + x.n, 0)}</b><small>items found earlier and gone when checked again</small></div>
     </div>
-    <nav className="sbar" aria-label="Areas"><button aria-selected={!area} onClick={() => setAndShow("auditArea", "")}>All <span className="sbar-n">{f0.length}</span></button>
-      {Audit.AREAS.map(([a, l]) => { const n = f0.filter((f) => f.area === a).length; return n ? <button key={a} aria-selected={area === a} onClick={() => setAndShow("auditArea", a)}>{l} <span className="sbar-n">{n}</span></button> : null; })}</nav>
     <div className="revfilter"><select aria-label="Status" style={{ width: "auto" }} value={fs} onChange={(ev) => setAndShow("auditSt", ev.target.value)}><option value="">Every status</option>{Audit.STATUS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>
     {list.map((f, i) => <Finding key={f.id + ":" + i} f={f} />)}
     {!list.length && <div className="bk-none" style={{ marginTop: 10 }}>Nothing here.</div>}

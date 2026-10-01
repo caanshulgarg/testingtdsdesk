@@ -710,7 +710,8 @@ function billRestore(id){
   if (!e || e.status !== "deleted") return;
   if (!canDeleteBills()){ toast("Only the firm\u2019s owner can restore a deleted bill."); return; }
   e.restored = {at: new Date().toISOString(), by: whoAmI(), was: e.deleted};
-  e.status = "draft"; e.deleted = null;
+  // a bill already in Tally (cleared after 90 days) goes back to where it was, not to be posted again
+  e.status = e.exportedAt && e.deleted && e.deleted.status ? e.deleted.status : "draft"; e.deleted = null;
   if (e.fileHash) registerHash(S.coId, e.fileHash, e.id);
   Store.saveEntry(S.coId, e);
   auditEvent("bill_restore", (e.x.vendorName || e.fileName || "") + " " + (e.x.invoiceNo || e.id), S.coId);
@@ -1252,7 +1253,7 @@ function doAct(act, t){
         e => toast("The bridge could not set it: " + (e && e.message || e)));
       break;
     }
-    case "fsRun": { const y = S.fsFy || fsYears()[0], c = FS.cfg(S.books); S.fsRun = {fy: y, kind: c.kind, d: FS.build(y)}; render(); break; }
+    case "fsRun": { const y = fsYearNow(), c = FS.cfg(S.books); S.fsRun = {fy: y, kind: c.kind, d: FS.build(y)}; render(); break; }
     case "fsPdf": { const d = S.fsRun && S.fsRun.d; if (d && !d.error) printView(CO().name + " financial statements " + d.fy, "<style>@page{size:A4 portrait;margin:14mm}h2{font-size:14px;margin:14px 0 6px;border-bottom:1px solid #D7DEDA}</style>" + FS.html(d)); break; }
     case "fsExcel": { const d = S.fsRun && S.fsRun.d; if (d && !d.error) fsExcel(d).then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break; }
     case "misRun": {
@@ -1358,16 +1359,31 @@ function doAct(act, t){
       break;
     }
     case "assetAdd": { const b = S.books; b.assets = (b.assets || []).concat([{id: uid("as"), name: "", date: "", igst: 0, cgst: 0, sgst: 0, cess: 0, use: "common", reg: S.gstReg || "", sold: ""}]); saveBooks(); render(); break; }
-    case "booksClear": askConfirm({title: "Remove the books read from Tally?", ok: "Remove", body: '<p class="note">Challans and what you corrected stay. The day book can be brought in again.</p>'}).then(ok => {
-      if (!ok) return; S.books.vouchers = []; S.books.meta = null; S.books.reco = null; saveBooks(); toast("Removed."); render(); }); break;
+    case "booksClear": confirmTyped({title: "Remove the books read from Tally?", ok: "Remove", body: '<p class="note">Challans and what you corrected stay. Nothing in Tally or in FinCom\u2019s cloud copy is touched, and a copy is kept: <b>More \u2192 Restore</b> puts the books back.</p>'}).then(async ok => {
+      if (!ok) return; const b = S.books, cid = S.coId;
+      await Trash.put(cid, "books", "The books read from Tally (" + (b.vouchers || []).length + " entries)", {vouchers: b.vouchers, meta: b.meta, reco: b.reco});
+      b.trashLog = (b.trashLog || []).concat([{kind: "books", at: new Date().toISOString(), by: whoAmI()}]);
+      b.vouchers = []; b.meta = null; b.reco = null; saveBooks(); toast("Removed. More \u2192 Restore puts them back."); render(); }); break;
+    case "trashRestore": {
+      const cid = S.coId;
+      Trash.list(cid).then(async list => {
+        const x = list[0]; if (!x){ toast("Nothing removed here to restore."); return; }
+        Object.assign(S.books, x.data); await Trash.restored(x);
+        S.books.trashLog = (S.books.trashLog || []).concat([{kind: "restore:" + x.kind, at: new Date().toISOString(), by: whoAmI()}]);
+        GST2B._memo = null; GSTR._carry = null; await saveBooks(); toast("Restored: " + x.label + "."); render();
+      }); break;
+    }
     case "booksWipe": {
       const b = S.books; if (!b) break;
-      askConfirm({title: "Remove Tally data and all GST work?", ok: "Remove", danger: true, wide: true,
+      confirmTyped({title: "Remove Tally data and all GST work?", ok: "Remove", wide: true,
         body: '<p class="note"><b>Removed for ' + esc(CO().name) + ":</b> the day book and ledger masters read from Tally, Tally\u2019s balances, the audit, MIS and trial balance worked from them; every 2B, filed GSTR-1 and GSTR-1A copy; GST settings and contacts; 3B and GSTR-9 figures typed; filing dates and portal figures; ITC follow-up and IMS decisions; advances, reversal and amendment choices; and the returns-filed PDFs.</p>" +
-          '<p class="note"><b>Kept:</b> TDS challans, certificates and the salary sheet; bills, bank and sales; the client\u2019s own settings. It cannot be undone; the day book can be brought in again.</p>'}).then(async ok => {
+          '<p class="note"><b>Kept:</b> TDS challans, certificates and the salary sheet; bills, bank and sales; the client\u2019s own settings; the returns-filed PDF files themselves. A copy of what is removed is kept: <b>More \u2192 Restore</b> puts it back.</p>'}).then(async ok => {
         if (!ok) return;
-        const co = CO(), vault = (b.gstVault || []).slice();
-        for (const x of vault){ try { await FileStore.drop(co.id, x.id); } catch (e){} if (x.docPath && typeof CloudDocs === "object") CloudDocs.remove(x.docPath); }
+        const co = CO(), snap = {};
+        // a soft delete: everything removed is kept as it was (the PDFs stay where they are), and can be put back
+        BOOKS_WIPE.forEach(k => { if (b[k] !== undefined) snap[k] = b[k]; });
+        await Trash.put(co.id, "wipe", "Tally data and all GST work", snap);
+        b.trashLog = (b.trashLog || []).concat([{kind: "wipe", at: new Date().toISOString(), by: whoAmI()}]);
         booksWipe(b); GST2B._memo = null; GSTR._carry = null; if (typeof GSTAPI === "object") GSTAPI.sess = {};
         await saveBooks(); toast("Tally data and all GST work removed for " + co.name + "."); render();
       }); break;
@@ -1553,8 +1569,8 @@ function doAct(act, t){
         Store.deleteCompany(cid).then(() => { toast(name + " deleted from the desk."); render(); }); render(); }
       break;
     case "clearSent":
-      if (S.arm !== "clearSent"){ S.arm = "clearSent"; render(); break; }
-      S.arm = null; clearSent(); break;
+      confirmTyped({title: "Clear sent invoices older than 90 days?", ok: "Clear them", body: '<p class="note">Invoices sent to Tally more than 90 days ago move to \u201cDeleted\u201d, where each can be restored. Nothing in Tally changes, and deductee year totals are kept. Download the register first if you need it.</p>'})
+        .then(ok => { if (ok) clearSent(); }); break;
     case "xml": { const m = document.getElementById("markSent"); exportXml(m ? m.checked : true); break; }
     case "csv": exportCsv(); break;
   }

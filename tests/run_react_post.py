@@ -59,7 +59,7 @@ with sync_playwright() as p:
     ok(pg.evaluate("S.tab") == "invoices" and pg.evaluate("S.filter") == "approved", "“Approved bills” opens them")
     # the same record in Settings (an old screen around it)
     pg.evaluate("S.view = 'home'; S.homeTab = 'rules'; S.settingsTab = 'postlog'; render()"); pg.wait_for_timeout(500)
-    ok("Everything sent to Tally" in app() and "across every client" in app() and pg.locator('#app button:has-text("All clients")').count() == 0, "in Settings: every client, no per-client switch")
+    ok("Everything sent to Tally" in app() and "across every client" in app() and pg.locator('#app button:text-is("All clients")').count() == 0, "in Settings: every client, no per-client switch")
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
     br.close()
 srv.shutdown()

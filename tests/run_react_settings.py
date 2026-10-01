@@ -19,7 +19,7 @@ with sync_playwright() as p:
     toasts = lambda: pg.evaluate("Array.from(document.querySelectorAll('.toast, #toast')).map(t => t.innerText).join(' | ')")
     # the firm
     pg.evaluate("navHome('rules')"); pg.wait_for_timeout(500)
-    ok(head() == "Firm details" and pg.locator("#app .setnav .setgroup-t").count() == 3, "Settings opens on Firm details, sections in three groups")
+    ok(head() == "Firm details" and pg.locator("#app .setnav .setgroup-t").count() == 4, "Settings opens on Firm details, sections in four groups (GST API added)")
     pg.fill('#app label:has-text("Firm name") input', "Garg Shekhar & Co (test)"); pg.wait_for_timeout(900)
     ok(pg.evaluate("S.firm.firmName") == "Garg Shekhar & Co (test)" and "Garg Shekhar & Co (test)" in pg.inner_text("#app .setnav"), "the firm's name: kept, and shown in the list")
     for label, text in [("Sign-in and people", "Sign-in and people"), ("Plan and credit", "Plan and credit"), ("Tally Bridge", "Bridge address"), ("Books in the cloud", "Books in the cloud"),

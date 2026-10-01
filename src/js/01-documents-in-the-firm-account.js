@@ -368,6 +368,15 @@ function toDateObj(d){
   const t = String(d);
   return /^\d{4}-\d{2}-\d{2}$/.test(t.slice(0, 10)) && t.length <= 10 ? new Date(t + "T00:00:00") : new Date(t);
 }
+// a large sum in a few characters, as said in India: ₹49.99 Cr, ₹3.20 L, ₹45,000 (review of 01-Oct-2026: header chips)
+function moneyShort(v){
+  const n = num(v), a = Math.abs(n), sg = n < 0 ? "-" : "";
+  // rounded down, so a balance never reads as more than it is (₹49,99,99,912 is ₹49.99 Cr, not ₹50.00 Cr)
+  const down = (x) => (Math.floor(x * 100 + 1e-9) / 100).toFixed(2);
+  if (a >= 1e7) return sg + "\u20b9" + down(a / 1e7) + " Cr";
+  if (a >= 1e5) return sg + "\u20b9" + down(a / 1e5) + " L";
+  return sg + "\u20b9" + Math.round(a).toLocaleString("en-IN");
+}
 function fmtDate(d){
   if (!d && d !== 0) return "—";
   const dt = toDateObj(d);
@@ -3623,8 +3632,9 @@ async function exportCsv(){
 function clearSent(){
   const cutoff = new Date(Date.now() - 90 * 864e5).toISOString();
   const old = Object.values(D().entries).filter(e => e.exportedAt && e.exportedAt < cutoff);
-  old.forEach(e => { delete D().entries[e.id]; Store.deleteEntry(S.coId, e.id); });
-  toast(old.length ? old.length + " old sent invoices cleared. Deductee year totals are kept." : "No sent invoices older than 90 days.");
+  // a soft delete (review of 01-Oct-2026): each goes to "Deleted", where it can be restored; deductee year totals are kept
+  old.filter(e => e.status !== "deleted").forEach(e => softDeleteEntry(e, "Cleared: sent to Tally more than 90 days ago"));
+  toast(old.length ? old.length + " old sent invoices cleared. They are under \u201cDeleted\u201d, where they can be restored; deductee year totals are kept." : "No sent invoices older than 90 days.");
   refreshStats(S.coId); render();
 }
 

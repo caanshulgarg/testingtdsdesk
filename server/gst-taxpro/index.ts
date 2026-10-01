@@ -113,7 +113,8 @@ async function tpv(kind: string, paths: string[], query: Record<string, string>,
   return last;
 }
 // a return that is not there yet (not filed, not made, nothing in it) is "none", not a failure
-const isNone = (msg: string) => /not\s+(been\s+)?filed|not\s+generated|no\s+(invoices?|data|records?|details)\s+found|is\s+not\s+available|RET1\d{4}|RT-?3B/i.test(msg);
+// (the sandbox, 01-Oct-2026: "Latest Summary is not available" (RET09001) and "GSTR-2B is being generated" (RET2B1023))
+const isNone = (msg: string) => /not\s+(been\s+)?filed|not\s+generated|being\s+generated|generation\s+is\s+(still\s+)?in\s+progress|summary\s+is\s+not\s+available|no\s+(invoices?|data|records?|details)\s+found|is\s+not\s+available|RET1\d{4}|RET09001|RET2B1023|RT-?3B/i.test(msg);
 
 // ---------- the token at rest before migration-16: AES-GCM, key derived from the service key ----------
 let keyP: Promise<CryptoKey> | null = null;

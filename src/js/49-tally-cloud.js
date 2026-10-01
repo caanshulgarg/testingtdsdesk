@@ -164,7 +164,7 @@ const TCloud = {
   age(bk){
     if (!bk) return "";
     const st = bk.state || {}, at = String(st.seen || bk.stateAt || bk.daysAt || "");
-    return at ? "in step with Tally as of " + at.replace("T", " ").slice(0, 16) : "not updated yet";
+    return at ? "in step with Tally as of " + fmtDateTime(at) : "not updated yet";
   },
   // ---------- one day's day book, from this browser's store or the cloud
   async day(bk, d, at){
@@ -625,6 +625,27 @@ function linkByGstin(cos){
 // One Tally status for every screen (review item 5): the bridge on this computer and the heartbeat of the firm's
 // Tally computers (tally_devices), for a client or for the firm.
 // state: none | offline | unlinked | waiting | ok;  level: ok | warn | bad (the pill's colour)
+// how fresh the books are, in one sentence used on every page (review of 01-Oct-2026: "Books up to …", "checked with
+// Tally to …" and "N days not read yet" were said differently in different places): the last entry, how far FinCom's copy
+// has been checked against Tally and when, and the days the bridge has not been able to read yet
+function booksFresh(b, cid){
+  b = b || S.books || {}; cid = cid || S.coId;
+  const meta = b.meta || {}, bk = typeof TCloud === "object" && cid ? TCloud.book(cid) : null, st = (bk && bk.state) || {};
+  const man = typeof LK === "object" && LK.fr ? ((LK.fr() || {}).man || {}) : {};
+  let last = "";
+  (b.vouchers || []).forEach(v => { if (!v.cancel && String(v.date) > last) last = String(v.date); });
+  const d8 = x => String(x || "").replace(/-/g, "").slice(0, 8);
+  if (!last && bk) last = d8(bk.to);
+  const checked = [d8(meta.to), d8(st.doneTo), d8(man.doneTo)].filter(Boolean).sort().pop() || "";
+  const at = [String(st.seen || ""), String(man.seen || ""), String(meta.at || "")].filter(Boolean).sort().pop() || "";
+  const skipped = Array.from(new Set([].concat(st.skipped || [], man.skipped || []).filter(Boolean))).sort();
+  const day = x => fmtDate(tallyDate(x));
+  const parts = [last ? "last entry " + day(last) : "no entries yet"];
+  if (checked && checked > last) parts.push("checked with Tally to " + day(checked));
+  const text = "Books: " + parts.join(", ") + (at ? " (as of " + fmtDateTime(at) + ")" : "") +
+    (skipped.length ? "; " + skipped.length + (skipped.length === 1 ? " day" : " days") + " not read from Tally yet (" + skipped.slice(0, 3).map(day).join(", ") + (skipped.length > 3 ? " and " + (skipped.length - 3) + " more" : "") + ")" : "") + ".";
+  return {last, checked, at, skipped, text};
+}
 function tallyStatus(co){
   if (typeof TLight === "object") TLight.refresh();
   const local = typeof Bridge === "object" && Bridge.on() && Bridge.up();
@@ -649,7 +670,12 @@ function tallyStatus(co){
     company = cloudRow || (local && !!Bridge.openFor(co)) ? "linked" : "unlinked";
   }
   const parts = {bridge, tally, company, busySince};
-  const out = o => Object.assign(o, {parts});
+  // the short words for the header chip (review of 01-Oct-2026: the long label pushed the tabs off the row); the full
+  // label and sentence go in its tooltip
+  const hhmm = t => { const d = new Date(t), today = new Date(); return d.toDateString() === today.toDateString() ? fmtTime(t) : fmtDate(d); };
+  const SHORT = {none: "Tally not set up", offline: "Tally offline" + (heard ? " \u00b7 " + hhmm(heard) : ""), reconnecting: "Tally reconnecting\u2026",
+    unlinked: "Tally: not linked", busy: "Tally busy", ok: "Tally in sync"};
+  const out = o => Object.assign(o, {parts, short: o.state === "waiting" ? o.label.replace(/ waiting$/, "") + " for Tally" : SHORT[o.state] || o.label});
   if (!local && !devs.length) return out({state: "none", level: "bad", label: "Not set up", say: "No Tally Bridge on this computer, and no computer of the firm sends from Tally. Set up the Tally Bridge on the computer with TallyPrime."});
   if (bridge === "offline" || bridge === "none") return out({state: "offline", level: "bad", label: "Offline since " + (heard ? when(heard) : "\u2014"), say: "No word from the firm's Tally computer" + (heard ? " since " + when(heard) : "") + " (three heartbeats missed): the computer or its bridge is off, or it has no internet."});
   if (bridge === "reconnecting") return out({state: "reconnecting", level: "warn", label: "Reconnecting\u2026", say: "The bridge's last heartbeat is late. FinCom keeps listening; it shows Offline only after three missed heartbeats (about two minutes)."});

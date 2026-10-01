@@ -264,8 +264,20 @@ function Remove() {
   </Card>;
 }
 
+// the client's bank accounts and suppliers as Tally has them (review of 01-Oct-2026: Client setup said "0 accounts,
+// 3 suppliers"): the ledgers under Bank Accounts (and the bank OD / OCC groups) and under Sundry Creditors
+function tallyCounts(co) {
+  const b = S.books && (!S.books.cid || S.books.cid === co.id) ? S.books : null;
+  if (!b) return null;
+  const names = Array.from(new Set(Object.keys(b.under || {}).concat(Object.keys(b.ledInfo || {}))));
+  if (!names.length) return null;
+  const inG = (l, gs) => gs.some((g) => FC.inGroup(l, g));
+  return { bank: names.filter((l) => inG(l, ["Bank Accounts", "Bank OD A/c", "Bank OCC A/c"])).length, sup: names.filter((l) => inG(l, ["Sundry Creditors"])).length };
+}
+
 function clientGroups() {
-  const co = CO(), accs = (co.bankAccounts || []).length, sup = Object.keys(D().parties || {}).length, supNew = pendingSuppliers().length;
+  const co = CO(), tc = tallyCounts(co), here = (co.bankAccounts || []).length, known = Object.keys(D().parties || {}).length, supNew = pendingSuppliers().length;
+  const accs = tc ? tc.bank : here, sup = tc ? tc.sup : known;
   const label = Object.fromEntries(SETUP_TABS);
   const it = (id, about, status, danger) => ({ id, label: label[id], about, status, danger });
   return [
@@ -275,11 +287,11 @@ function clientGroups() {
     ] },
     { title: "Tax", items: [
       it("cotds", "Whether the client deducts TDS, and the ledgers each kind of payment uses.", co.mustDeduct === false ? "does not deduct" : "deducts TDS"),
-      it("deductees", "Each supplier’s PAN and usual payment type, and amounts credited before FinCom, so yearly limits are right.", sup + " supplier" + (sup === 1 ? "" : "s") + (supNew ? " + " + supNew + " new, not yet approved" : "")),
+      it("deductees", "Each supplier’s PAN and usual payment type, and amounts credited before FinCom, so yearly limits are right.", sup + " supplier" + (sup === 1 ? "" : "s") + (tc ? " in Tally (Sundry Creditors)" + (known ? ", " + known + " with details here" : "") : "") + (supNew ? " + " + supNew + " new, not yet approved" : "")),
       it("gstset", "GST registrations and how each is filed, reverse charge ledgers, and which purchases have blocked credit.", ""),
     ] },
     { title: "Bank", items: [
-      it("bankset", "The client’s bank accounts and the Tally ledger of each.", accs + " account" + (accs === 1 ? "" : "s")),
+      it("bankset", "The client’s bank accounts and the Tally ledger of each.", accs + " account" + (accs === 1 ? "" : "s") + (tc ? " in Tally (Bank Accounts)" + (here ? ", " + here + " with statements here" : "") : "")),
       it("bankrules", "Rules that give bank lines their ledger by themselves, for this client or the whole firm.", ""),
     ] },
     { title: "Books", items: [

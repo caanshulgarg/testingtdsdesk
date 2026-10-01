@@ -5,6 +5,7 @@ import { adopt } from "./store.js";
 import { createElement } from "react";
 import { flushSync } from "react-dom";
 import { Gst9c } from "./screens/gst/Annual.jsx";
+import { watchFresh } from "./fresh.js";
 
 // a screen as plain HTML, for printing (the GSTR-9C PDF is printed from its screen: gst9PackHtml in src/js/18)
 const PRINTABLE = { Gst9c };
@@ -16,3 +17,4 @@ window.FinComReact.markup = (name, props) => {
 
 adopt();
 createRoot(document.getElementById("react-root")).render(<App />);
+watchFresh();

@@ -89,7 +89,8 @@ export default function Side() {
       {!home && <Item icon="clients" label="All clients" on={false} onClick={() => navHome("clients")} />}
       <Item icon="help" label="Help" on={home && S.homeTab === "help"} count={typeof SUP === "object" ? SUP.counts() : 0} onClick={() => navHome("help")} />
       <div className="side-grow" />
-      <div className="side-ver">{buildDate(APP_VERSION)}<br />{__REACT_BUILD__}</div>
+      {/* review of 01-Oct-2026: the date here was the build's, read as today's; now each says what it is */}
+      <div className="side-ver" data-side-date=""><span>Today {fmtDate(new Date())}</span><br /><span title={__REACT_BUILD__}>{"Build of " + buildDate(APP_VERSION)}</span><br /><small>{__REACT_BUILD__}</small></div>
     </>
   );
 }

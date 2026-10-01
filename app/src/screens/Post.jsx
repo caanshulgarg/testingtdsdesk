@@ -126,10 +126,9 @@ export function Export() {
         </div>
         {/* read by doAct("xml") */}
         <label className="chk" style={{ marginTop: 12 }}><input type="checkbox" id="markSent" defaultChecked /> Mark these as sent after download</label>
-        <div style={{ marginTop: 16 }}>
-          <button className="btn small" onClick={() => doAct("clearSent")}>{S.arm === "clearSent" ? "Click again to clear" : "Clear sent invoices older than 90 days"}</button>
-          <div className="note" style={{ marginTop: 4 }}>Frees space. Download the register first; deductee year totals are kept.</div>
-        </div>
+        <details className="bk-menu" data-more="post" style={{ marginTop: 16 }}><summary className="btn small">More</summary><div className="bk-menu-list">
+          <button className="danger" onClick={() => doAct("clearSent")}>Clear sent invoices older than 90 days<small>They move to “Deleted”, where each can be restored; deductee year totals are kept</small></button>
+        </div></details>
       </div>
       {bridgeLive(co) ? (
         <div className="pane" style={{ marginTop: 0 }}><h2>Straight into Tally</h2><p className="note">{Bridge.openFor(co).name} is open in Tally. <b>Post to Tally</b> checks for bills already booked (same bill number and party), then creates the rest{co.createOptional ? " as Optional vouchers" : ""}. Any bill Tally refuses is listed with Tally’s reason.</p></div>

@@ -102,7 +102,7 @@ export function Gone() {
   if (!g || !st || g.sid !== st.id || !g.ids.length) return null;
   const n = g.ids.length, all = n === g.marked;
   return <div className="bk-bal bad"><div style={{ flex: 1 }}><b>{plural2(n, " line is", " lines are") + " marked as posted, but " + (n === 1 ? "is" : "are") + " no longer in Tally."}</b>{" " + (all ? "None of this statement’s posted lines are in " + g.ledger + " in " + g.company + " any more" + (g.bankLines ? "" : " (Tally shows no entries in this ledger for these dates)") + "." : "They were probably deleted in Tally, or moved to another company.")}
-    <div className="row" style={{ marginTop: 8, gap: 8 }}><Btn act="goneBack" className="btn small primary">{"Put " + (n === 1 ? "it" : "them") + " back in Ready to post"}</Btn><FocusBtn title="no longer in Tally" ids={g.ids} label={"Show " + (n === 1 ? "it" : "them")} /><Btn act="goneKeep" className="linkbtn">Leave them as posted</Btn></div></div></div>;
+    <div className="row" style={{ marginTop: 8, gap: 8 }}><Btn act="goneBack" className="btn small primary">{"Put " + (n === 1 ? "it" : "them") + " back in Post to Tally"}</Btn><FocusBtn title="no longer in Tally" ids={g.ids} label={"Show " + (n === 1 ? "it" : "them")} /><Btn act="goneKeep" className="linkbtn">Leave them as posted</Btn></div></div></div>;
 }
 
 // FinCom's entries found in Tally twice, or under the wrong date

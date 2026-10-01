@@ -45,7 +45,7 @@ with sync_playwright() as p:
     ok("No budget for this year yet" in pg.inner_text("#app"), "budget: none yet")
     pg.click('button[data-act="misBudFill"]'); pg.wait_for_timeout(600)
     ok("budget for the period" in pg.inner_text("#app").lower(), "filled from this year's actual plus 10%")
-    pg.fill('input[aria-label="Budget Revenue from operations Apr 2025"]', "10000000"); pg.press('input[aria-label="Budget Revenue from operations Apr 2025"]', "Tab"); pg.wait_for_timeout(500)
+    pg.fill('input[aria-label="Budget Revenue from operations Apr-2025"]', "10000000"); pg.press('input[aria-label="Budget Revenue from operations Apr-2025"]', "Tab"); pg.wait_for_timeout(500)
     ok(pg.evaluate("S.books.budget['2025'].rev['202504']") == 10000000, "a month of the budget changed by hand")
     with ctx.expect_page() as pop:
         pg.click('button[data-act="misPack"]')

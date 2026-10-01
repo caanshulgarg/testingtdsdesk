@@ -37,7 +37,7 @@ export function ServerMis({ b }) {
       <Tile l="You owe" v={m(r.pay.owe)} sub={"on " + fmtDate(tallyDate(r.to)) + (r.pay.advance >= 1 ? " · advance to suppliers " + m(r.pay.advance) : "")} />
     </div>
     <section className="dash-card" style={{ marginTop: 12 }}><h3>Profit and loss</h3>
-      <div className="bk-tablewrap"><table className="bk-table" id="srvPl"><thead><tr><th></th>{cols && months.map((mm) => <th key={mm} className="n">{GSTR.label(mm).replace(/ \d{4}$/, "")}</th>)}<th className="n">Total</th></tr></thead><tbody>
+      <div className="bk-tablewrap"><table className="bk-table" id="srvPl"><thead><tr><th></th>{cols && months.map((mm) => <th key={mm} className="n">{GSTR.label(mm).replace(/[-\s]\d{4}$/, "")}</th>)}<th className="n">Total</th></tr></thead><tbody>
         {HEADS.filter(([k]) => H[k]).map(([k, l]) => <tr key={k}><td>{l}</td>{cols && months.map((mm) => <td key={mm} className="n">{m((H[k].m || {})[mm])}</td>)}<td className="n">{m(H[k].t)}</td></tr>)}
         {[["gross", "Gross profit"], ["pbt", "Profit before tax"]].map(([k, l]) => <tr key={k}><td><b>{l}</b></td>{cols && months.map((mm) => <td key={mm} className="n"><b>{m((r[k].m || {})[mm])}</b></td>)}<td className="n"><b>{m(r[k].t)}</b></td></tr>)}
       </tbody></table></div></section>

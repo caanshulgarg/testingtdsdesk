@@ -4,6 +4,7 @@
 // Changes go through fsKindSet, fsFyGo, fsStockSet, fsSet, fsMapSet, fsUnmap (src/js/23) and doAct (fsRun, fsPdf, fsExcel).
 //
 // State: S.fsFy (the year), S.fsRun (the statements worked out), S.fsTab (st, map), S.fsQ (the ledger search).
+import { useEffect } from "react";
 import Legacy from "../../parts/Legacy.jsx";
 import CommitBox from "../../parts/CommitBox.jsx";
 
@@ -11,18 +12,20 @@ const m = (v) => INR.format(r2(v || 0));
 const Act = ({ act, className = "btn small", children }) => <button className={className} onClick={() => doAct(act)}>{children}</button>;
 
 function Head({ c, years, fy, d }) {
-  return <section className="dash-card"><h3>Financial statements</h3>
+  return <section className="dash-card" data-fs-head="">
     <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
       <select aria-label="Format" style={{ width: "auto" }} value={c.kind === "co" ? "co" : "nc"} onChange={(ev) => fsKindSet(ev.target.value)}>
         <option value="co">Company: Schedule III (Division I)</option><option value="nc">Firm, LLP, proprietor, trust: ICAI format for non-corporate entities</option></select>
       <select aria-label="Year" style={{ width: "auto" }} value={fy} onChange={(ev) => fsFyGo(ev.target.value)}>{years.map((y) => <option key={y} value={y}>{y + "-" + String(num(y) + 1).slice(2)}</option>)}</select>
       <Act act="fsRun" className="btn small primary">Run now</Act>{d && !d.error && <><Act act="fsPdf">Download (PDF)</Act><Act act="fsExcel">Excel</Act></>}</div>
+    <details style={{ marginTop: 8 }}><summary className="note" style={{ cursor: "pointer" }}>Settings: stock, manufacturer, shares</summary>
     <div className="row" style={{ gap: 12, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
       <label className="note">Opening stock <CommitBox type="number" step="0.01" aria-label="Opening stock" value={c.stock.open || ""} style={{ width: 130 }} onCommit={(v) => fsStockSet("open", v)} /></label>
       <label className="note">Closing stock <CommitBox type="number" step="0.01" aria-label="Closing stock" value={c.stock.close || ""} style={{ width: 130 }} onCommit={(v) => fsStockSet("close", v)} /></label>
       <label className="note"><input type="checkbox" defaultChecked={!!c.mfg} key={"mfg" + !!c.mfg} onChange={(ev) => fsSet("mfg", !!ev.target.checked)} /> purchases are materials consumed (a manufacturer)</label>
       {c.kind === "co" && <label className="note">Equity shares <CommitBox type="number" aria-label="Equity shares" value={c.shares || ""} style={{ width: 110 }} onCommit={(v) => fsSet("shares", v)} /></label>}</div>
     <p className="note">Stock is taken from the stock ledgers when Tally keeps inventory in the accounts; otherwise type it here. Each ledger is placed by its group in Tally and by its balance (a customer in credit is an advance received, a bank in credit is an overdraft); change any on the Mapping tab.</p>
+    </details>
   </section>;
 }
 
@@ -45,18 +48,23 @@ function Mapping({ c, d }) {
 }
 
 export default function Accounts({ b }) {
-  const c = FS.cfg(b), years = fsYears(), fy = S.fsFy && years.includes(S.fsFy) ? S.fsFy : years[0];
+  const c = FS.cfg(b), years = fsYears(), fy = fsYearNow();
+  const d = fy && S.fsRun && S.fsRun.fy === fy && S.fsRun.kind === c.kind ? S.fsRun.d : null, tab = S.fsTab || "st";
+  // run by itself for the year shown (the last full year, unless another is chosen), once per year and format
+  useEffect(() => {
+    const key = fy + "|" + c.kind + "|" + (S.coId || "");
+    if (fy && !d && !(S.fsAuto || {})[key]) { S.fsAuto = Object.assign({}, S.fsAuto, { [key]: 1 }); doAct("fsRun"); }
+  });
   if (!fy) return <div className="bk-none">Bring in the day book first.</div>;
-  const d = S.fsRun && S.fsRun.fy === fy && S.fsRun.kind === c.kind ? S.fsRun.d : null, tab = S.fsTab || "st";
   let body;
-  if (!d) body = <div className="bk-none">Press Run now.</div>;
+  if (!d) body = <div className="bk-none">Working out the statements for {fy + "-" + String(num(fy) + 1).slice(2)}…</div>;
   else if (d.error) body = <div className="bk-alert">The balances are needed: {d.error}.</div>;
   else if (tab === "map") body = <Mapping c={c} d={d} />;
   else body = <section className="dash-card fs-doc" style={{ marginTop: 10 }}>{Math.abs(d.diff) >= 1 ? null : <p className="note" style={{ color: "#1F7A4D" }}>The balance sheet tallies.</p>}
     <Legacy html={FS.html(d).replace(/<table>/g, '<div class="bk-tablewrap"><table class="bk-table">').replace(/<\/table>/g, "</table></div>")} /></section>;
   return <>
+    <nav className="sbar" aria-label="Accounts" style={{ marginBottom: 10 }}>{[["st", "Statements"], ["map", "Mapping"]].map(([id, l]) => <button key={id} aria-selected={tab === id} onClick={() => setAndShow("fsTab", id)}>{l}</button>)}</nav>
     <Head c={c} years={years} fy={fy} d={d} />
-    <nav className="sbar" aria-label="Accounts" style={{ marginTop: 10 }}>{[["st", "Statements"], ["map", "Mapping"]].map(([id, l]) => <button key={id} aria-selected={tab === id} onClick={() => setAndShow("fsTab", id)}>{l}</button>)}</nav>
     {body}
   </>;
 }

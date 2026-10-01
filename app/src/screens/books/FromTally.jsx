@@ -5,6 +5,7 @@
 // keepNow, setup…); the daily time goes through keepAtSet.
 //
 // State: S.dbFrom / S.dbTo (a part's dates), S.tbOn (the trial balance date).
+import { useEffect, useState } from "react";
 import TallyPill from "../../parts/TallyPill.jsx";
 const d = (x) => fmtDate(tallyDate(x));
 const Act = ({ act, className = "btn small", children }) => <button className={className} onClick={() => doAct(act)}>{children}</button>;
@@ -106,10 +107,9 @@ function Files({ b }) {
       <p className="note" style={{ marginTop: 10 }}>For the deductees’ PAN and the ledger groups, also export <b>Display → List of Accounts</b> as XML.</p>
       <div className="row" style={{ gap: 8, margin: "10px 0" }}>
         <Act act="mastersPick" className="btn">Choose the ledger masters XML</Act>
-        {n > 0 && <Act act="booksClear">Remove what is here</Act>}
-        {booksHasAny(b) && <Act act="booksWipe">Remove Tally data and all GST work</Act>}
+        <MoreMenu b={b} n={n} />
       </div>
-      {other.length > 0 && <p className="bk-warn">The books here are for {other.join(", ")}, not this client’s PAN ({clientPan()}). Remove them with “Remove Tally data and all GST work”.</p>}
+      {other.length > 0 && <p className="bk-warn">The books here are for {other.join(", ")}, not this client’s PAN ({clientPan()}). Remove them with More → “Remove Tally data and all GST work”.</p>}
       {n ? <>
         <div className="dash-row"><span>Vouchers</span><b>{n}</b></div>
         <div className="dash-row"><span>Period</span><b>{d(m.from) + " to " + d(m.to)}</b></div>
@@ -119,6 +119,19 @@ function Files({ b }) {
       </> : <p className="note">Nothing here yet.</p>}
     </section>
   );
+}
+
+// the removals, out of the way in a More menu (review of 01-Oct-2026); each asks for the client's name and keeps a copy
+// that Restore puts back
+function MoreMenu({ b, n }) {
+  const [trash, setTrash] = useState(null);
+  useEffect(() => { let on = true; Trash.list(S.coId).then((l) => { if (on) setTrash(l); }, () => {}); return () => { on = false; }; }, [S.coId, (b.trashLog || []).length]);
+  if (!n && !booksHasAny(b) && !(trash && trash.length)) return null;
+  return <details className="bk-menu" data-more="books"><summary className="btn small">More</summary><div className="bk-menu-list">
+    {trash && trash.length > 0 && <button onClick={() => doAct("trashRestore")}>Restore<small>{trash[0].label + ", removed " + fmtDateTime(trash[0].at) + " by " + trash[0].by}</small></button>}
+    {n > 0 && <button className="danger" onClick={() => doAct("booksClear")}>Remove what is here<small>The day book read from Tally, on this page only</small></button>}
+    {booksHasAny(b) && <button className="danger" onClick={() => doAct("booksWipe")}>Remove Tally data and all GST work<small>The day book, masters, balances and every piece of GST work here</small></button>}
+  </div></details>;
 }
 
 export default function FromTally({ b }) {

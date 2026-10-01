@@ -613,7 +613,7 @@ function goneBack(){
   b.gone = null; b.focus = null; b.filter = "ready"; b.tallyLook = null;
   lsDel(wideCheckKey());
   saveBank({rows: true, posted: true});
-  toast(n + " line" + (n === 1 ? " is" : "s are") + " back in Ready to post. Press Post to send " + (n === 1 ? "it" : "them") + " to Tally again.");
+  toast(n + " line" + (n === 1 ? " is" : "s are") + " back in Post to Tally. Press Post to send " + (n === 1 ? "it" : "them") + " to Tally again.");
   render();
 }
 /* ---------- finding double entries, and entries Tally holds under the wrong date ---------- */

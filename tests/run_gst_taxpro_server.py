@@ -39,6 +39,10 @@ class TPH(http.server.BaseHTTPRequestHandler):
             if a == "REFRESHTOKEN":
                 if TP["refresh_fails"]: return self.out(200, {"status_cd": "0", "error": {"message": "API access period has ended", "error_cd": "AUTH4037"}})
                 return self.out(200, {"status_cd": "1", "auth_token": "TOK2", "expiry": 360})
+        if p == "/taxpayerapi/dec/v4.2/returns/gstr2b" and q["ret_period"] == per(5):
+            return self.out(200, {"status_cd": "0", "error": {"message": "GSTR-2B is being generated and should be available by 14/02/2021.", "error_cd": "RET2B1023"}})
+        if p == "/taxpayerapi/dec/v3.1/returns/gstr1" and q["ret_period"] == per(5):
+            return self.out(200, {"status_cd": "0", "error": {"message": "Latest Summary is not available. Please generate summary and try again.", "error_cd": "RET09001"}})
         if p == "/taxpayerapi/dec/v4.2/returns/gstr2b":
             return self.out(200, {"chksum": "x", "data": {"gstin": q["gstin"], "rtnprd": q["ret_period"], "docdata": {"b2b": [{"ctin": "09AAACB1234C1Z5", "inv": [{"inum": "A1", "val": 118}]}]}}})
         if p == "/taxpayerapi/dec/v4.0/returns/gstr1": return self.out(404, {"message": "Resource not found"})      # the newest version is not there: the next is used
@@ -114,6 +118,9 @@ try:
     ok(r.get("ok") and ret("3B", per(1))["data"]["sup_details"]["osup_det"]["iamt"] == 18, "filed 3B: its summary kept")
     r = call({"action": "fetch", "gstin": G, "form": "3B", "period": per(3)})
     ok(ret("3B", per(3))["status"] == "none" and "not filed" in ret("3B", per(3))["error"], "a month not filed: kept as none, not an error")
+    r = call({"action": "fetch", "gstin": G, "form": "R1", "period": per(5)}); r2 = call({"action": "fetch", "gstin": G, "form": "2B", "period": per(5)})
+    ok(ret("R1", per(5))["status"] == "none" and ret("2B", per(5))["status"] == "none", "GSTN's 'summary not available' and '2B being generated' are kept as not there yet, not as failures")
+    F.T["gst_returns"] = [x for x in F.T["gst_returns"] if x["period"] != per(5)]
     lst = call({"action": "returns", "gstins": [G]})["returns"]
     ok(len(lst) == 4 and all("data" not in x for x in lst), "the list of kept returns (without their data)")
     one = call({"action": "return", "gstin": G, "form": "R1", "period": per(1)})["ret"]

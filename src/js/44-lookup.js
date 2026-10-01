@@ -418,7 +418,7 @@ const LK = {
       return;
     }
     if ((!meta.copyAt || m.at > meta.copyAt) && (!meta.to || m.to >= meta.to || !meta.copyAt)){
-      f.busy = "Bringing in last night\u2019s copy of the books (made " + String(m.at).replace("T", " ").slice(0, 16) + "); Tally is not asked anything\u2026"; render();
+      f.busy = "Bringing in last night\u2019s copy of the books (made " + fmtDateTime(m.at) + "); Tally is not asked anything\u2026"; render();
       try { await TallyRead.read(m.from, m.to, "copy"); b.meta.copyAt = m.at; b.meta.copyTo = m.to; await saveBooks(); toast("The books are up to " + FC.when(m.to) + ", from last night\u2019s copy."); }
       catch (e){ toast("Could not bring in last night\u2019s copy: " + ((e && e.message) || e)); }
       f.busy = "";

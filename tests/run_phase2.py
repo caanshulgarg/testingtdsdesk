@@ -84,7 +84,8 @@ with sync_playwright() as p:
     pg.fill('.firmsetup-scrim input[aria-label="Firm name"]', "Garg Shekhar & Company"); pg.fill('.firmsetup-scrim textarea', "Kanpur"); pg.click('.firmsetup-scrim button:text-is("Save")'); pg.wait_for_timeout(500)
     ok(pg.evaluate("[S.firm.firmName, S.firm.firmAddress]") == ["Garg Shekhar & Company", "Kanpur"] and pg.locator(".firmsetup-scrim").count() == 0 and "Garg Shekhar" in top(), "32. saved: the name in the header, the address kept")
     pg.evaluate("() => { S.account = {me: {role: 'owner'}, firm: {balance: 499999912, plan: {name: 'Pro'}}}; render(); }"); pg.wait_for_timeout(400)
-    ok("₹49,99,99,912.00" in pg.inner_text("header.top .firmbtn"), "32. the credit shows with ₹ (" + pg.inner_text("header.top .firmbtn").replace("\n", " ") + ")")
+    # review of 01-Oct-2026: the chip says it short (₹49.99 Cr credit), the full figure on hover
+    ok("₹49.99 Cr credit" in pg.inner_text("header.top .firmbtn") and "₹49,99,99,912.00" in (pg.get_attribute("header.top .firmbtn", "title") or ""), "32. the credit shows with ₹ (" + pg.inner_text("header.top .firmbtn").replace("\n", " ") + ")")
     # 27 and 26. the page's main button; the header at 1024 px
     pg.evaluate("() => goClient('books:letters')"); pg.wait_for_timeout(700)
     ok("New confirmation" in top() and "Upload bills" not in top() and "+ Upload" in top(), "27. Letters: New confirmation, and + Upload in the top bar")

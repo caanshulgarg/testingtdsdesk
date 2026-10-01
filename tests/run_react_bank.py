@@ -37,8 +37,8 @@ with sync_playwright() as p:
     ok(pg.inner_text("#app .bk-title") == "ICICI Bank" and "24 entries" in pg.inner_text("#app .bk-sub"), "the statement: its Tally ledger and 24 entries")
     ok("The statement adds up" in pg.inner_text("#app .bk-check"), "the running-balance check")
     ok(rows().count() == tc["review"] and ("%d to review" % tc["review"]) in bar().replace("\n", " "), "To review: %d lines, and the bar says so" % tc["review"])
-    pg.click('#app .bk-tabs button:has-text("Ready to post")'); pg.wait_for_timeout(400)
-    ok(rows().count() == tc["ready"] and pg.get_attribute('#app .bk-tabs button:has-text("Ready to post")', "aria-selected") == "true", "Ready to post: %d lines" % tc["ready"])
+    pg.click('#app .bk-tabs button:has-text("Post to Tally")'); pg.wait_for_timeout(400)
+    ok(rows().count() == tc["ready"] and pg.get_attribute('#app .bk-tabs button:has-text("Post to Tally")', "aria-selected") == "true", "Ready to post: %d lines" % tc["ready"])
     # ticking, with Shift for a run of lines
     pg.click('#app table.bk-table tbody tr >> nth=0 >> input[type=checkbox]')
     pg.click('#app table.bk-table tbody tr >> nth=3 >> input[type=checkbox]', modifiers=["Shift"]); pg.wait_for_timeout(400)
@@ -69,7 +69,7 @@ with sync_playwright() as p:
     pg.click('#app table.bk-table tr:has-text("Ignored") button:has-text("Restore")'); pg.wait_for_timeout(400)
     ok(pg.evaluate("B().rows.filter(r => r.state === 'ignored').length") == 0, "Restore")
     # search, and give every line found one ledger
-    pg.click('#app .bk-tabs button:has-text("Ready to post")'); pg.wait_for_timeout(300)
+    pg.click('#app .bk-tabs button:has-text("Post to Tally")'); pg.wait_for_timeout(300)
     pg.fill('#app input[aria-label="Search the statement"]', "DIPTI"); pg.wait_for_timeout(600)
     n = pg.evaluate("bankVisibleRows().length")
     ok(n >= 1 and rows().count() == n and ("%d entr" % n) in pg.inner_text('#app .bk-found:has-text("match")').replace("\n", " ") and pg.evaluate("document.activeElement.getAttribute('aria-label')") == "Search the statement", "search “DIPTI”: %d lines, the cursor stays in the box" % n)

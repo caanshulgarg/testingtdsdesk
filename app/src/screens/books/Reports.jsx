@@ -21,16 +21,26 @@ function AreaDash({ id, d }) {
   const mon = d.months.map((x) => FC.shortMonth(x));
   if (id === "overview") {
     const rev = (d.pl.heads.rev || { t: 0 }).t;
-    return <><Tiles><T l="Sales" v={m(rev)} sub="the year so far" rid="mis-sales" /><T l="Gross profit" v={m(d.pl.gross.t)} sub={pct(d.pl.gross.t, rev) + " of sales"} rid="mis-pl" />
+    const yc = RPT.yearCount(d.R.fy);
+    const salesSub = yc.sales ? "the year so far" : "no sales entries in " + FC.fyLabel(d.R.fy) + " yet (" + yc.n + " entr" + (yc.n === 1 ? "y" : "ies") + " in the books this year)";
+    return <><Tiles><T l="Sales" v={m(rev)} sub={salesSub} rid="mis-sales" /><T l="Gross profit" v={m(d.pl.gross.t)} sub={pct(d.pl.gross.t, rev) + " of sales"} rid="mis-pl" />
       <T l="Profit before tax" v={m(d.pl.pbt.t)} sub={pct(d.pl.pbt.t, rev) + " of sales"} rid="mis-pl" cls={d.pl.pbt.t < 0 ? "warn" : ""} />
       <T l="Cash and bank" v={d.cashBank == null ? "—" : m(d.cashBank)} sub={d.cashBank == null ? "balances not read yet" : "on " + FC.when(d.R.to)} rid="lk-group-bank" /></Tiles>
       <Bars labels={mon} series={[{ name: "Sales", cls: "c1", values: d.months.map((x) => d.sales[x]) }, { name: "Purchases and direct costs", cls: "c2", values: d.months.map((x) => d.purch[x]) }]} label="Sales and purchases by month" /></>;
   }
   if (id === "parties") {
-    const owed = (A) => A.sum.tally != null ? A.sum.tally : A.sum.open, over = d.recv.sum.b[3] + d.recv.sum.b[4];
-    return <><Tiles><T l="Owed to you" v={m(owed(d.recv))} sub={d.recv.rows.length + " customers"} rid="mis-recv" /><T l="Over 90 days" v={m(over)} sub="customers" rid="let-remind" cls={over > 0 ? "warn" : ""} />
-      <T l="You owe" v={m(owed(d.pay))} sub={d.pay.rows.length + " suppliers"} rid="mis-pay" /><T l={"MSME past " + MIS.cfg(S.books).msmeDays + " days"} v={m(d.msmeDue)} sub="section 43B(h)" rid="mis-pay" cls={d.msmeDue > 0 ? "warn" : ""} /></Tiles>
-      <Bars labels={MIS.BUCKETS.map((z) => z[1])} series={[{ name: "Owed to you", cls: "c1", values: d.recv.sum.b }, { name: "You owe", cls: "c3", values: d.pay.sum.b }]} label="Ageing, in days" /></>;
+    // one basis for every figure (review of 01-Oct-2026): what each party owes on balance, aged so that the ages add up to
+    // it (MIS.ageing: sum.owe and sum.nb); a balance the other way is an advance, shown on its own as a positive figure
+    const owed = (A) => A.sum.owe != null ? A.sum.owe : Math.max(0, A.sum.tally != null ? A.sum.tally : A.sum.open);
+    const ages = (A) => A.sum.nb || A.sum.b, over = ages(d.recv)[3] + ages(d.recv)[4];
+    const nOwe = (A) => A.rows.filter((p) => (p.net != null ? p.net : p.total) > 0).length;
+    const advR = d.recv.sum.advance || 0, advP = d.pay.sum.advance || 0;
+    return <><Tiles><T l="Owed to you" v={m(owed(d.recv))} sub={nOwe(d.recv) + " customers" + (advR >= 1 ? " · advances received " + m(advR) : "")} rid="mis-recv" />
+      <T l="Over 90 days" v={m(over)} sub={owed(d.recv) ? pct(over, owed(d.recv)) + " of what is owed to you" : "customers"} rid="let-remind" cls={over > 0 ? "warn" : ""} />
+      <T l="You owe" v={m(owed(d.pay))} sub={nOwe(d.pay) + " suppliers"} rid="mis-pay" />
+      <T l="Advances to suppliers" v={m(advP)} sub="suppliers with a debit balance" rid="mis-pay" />
+      <T l={"MSME past " + MIS.cfg(S.books).msmeDays + " days"} v={m(d.msmeDue)} sub="section 43B(h)" rid="mis-pay" cls={d.msmeDue > 0 ? "warn" : ""} /></Tiles>
+      <Bars labels={MIS.BUCKETS.map((z) => z[1])} series={[{ name: "Owed to you", cls: "c1", values: ages(d.recv) }, { name: "You owe", cls: "c3", values: ages(d.pay) }]} label="Ageing, in days" /></>;
   }
   if (id === "cash") {
     const ti = Object.values(d.inM).reduce((s, x) => s + x, 0), to = Object.values(d.outM).reduce((s, x) => s + x, 0);

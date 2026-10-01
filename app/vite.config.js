@@ -53,9 +53,22 @@ const stamp = () => {
   return "React · " + p.day + "-" + p.month.slice(0, 3) + "-" + p.year + " " + p.hour + ":" + p.minute + (sha ? " · " + sha : "");
 };
 
+// review of 01-Oct-2026: a republished site was not picked up until a hard refresh. Each build has an id; build.json says
+// which build is current (fetched without the cache by src/fresh.js), and index.html asks not to be cached
+const BUILD_ID = Date.now().toString(36) + "-" + crypto.randomBytes(3).toString("hex");
+function fresh() {
+  return {
+    name: "fincom-fresh",
+    generateBundle() { this.emitFile({ type: "asset", fileName: "build.json", source: JSON.stringify({ build: BUILD_ID, stamp: stamp() }) }); },
+    transformIndexHtml(html) {
+      return html.replace("<head>", '<head>\n<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">\n<meta http-equiv="Pragma" content="no-cache">\n<meta http-equiv="Expires" content="0">');
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => ({
   base: "./",
-  define: { __REACT_BUILD__: JSON.stringify(stamp()) },
-  plugins: [react(), legacy(mode)],
+  define: { __REACT_BUILD__: JSON.stringify(stamp()), __BUILD_ID__: JSON.stringify(BUILD_ID) },
+  plugins: [react(), legacy(mode), fresh()],
   build: { outDir: mode === "test" ? "dist-test" : "dist", emptyOutDir: true },
 }));

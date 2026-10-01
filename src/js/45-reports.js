@@ -58,8 +58,15 @@ const RPT = {
     const out = []; for (let y = num(Audit.fyStart(t).slice(0, 4)); y >= num(Audit.fyStart(f).slice(0, 4)); y--) out.push(String(y));
     return out;
   },
+  // the entries of a year, and its sales entries (review of 01-Oct-2026: 2026-27 held one journal and no sales, and the
+  // page opened on it showing sales of nil): the page opens on the latest year that has sales
+  yearCount(fy){
+    const from = fy + "0401", to = (num(fy) + 1) + "0331", vs = ((S.books || {}).vouchers || []).filter(v => !v.cancel && String(v.date) >= from && String(v.date) <= to);
+    return {n: vs.length, sales: vs.filter(v => typeof Books === "object" && Books.isSale(v)).length};
+  },
   range(){
-    const ys = this.fys(), fy = S.rptFy && ys.includes(S.rptFy) ? S.rptFy : ys[0];
+    const ys = this.fys(), withSales = ys.find(y => this.yearCount(y).sales > 0);
+    const fy = S.rptFy && ys.includes(S.rptFy) ? S.rptFy : (withSales || ys[0]);
     if (!fy) return null;
     const to = (num(fy) + 1) + "0331", end = String((S.books.meta || {}).to || "");
     return {fy, from: fy + "0401", to: end && end < to ? end : to, fyEnd: to};

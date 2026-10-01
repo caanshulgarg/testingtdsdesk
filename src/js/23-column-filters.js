@@ -439,6 +439,29 @@ document.addEventListener("mousedown", ev => {
 window.addEventListener("resize", () => { if (AC.fk) acDraw(acInput()); });
 document.addEventListener("scroll", () => { if (AC.fk) acDraw(acInput()); }, true);
 /* ---------- confirmation box (browser pop-ups can be blocked inside claude.ai) ---------- */
+// a removal goes ahead only when the client's name is typed (review of 01-Oct-2026); resolves true or false
+function confirmTyped(o){
+  const name = String((CO() || {}).name || "").trim();
+  return askConfirm(Object.assign({danger: true}, o, {
+    body: o.body + '<label class="f" style="margin-top:12px"><span>To go ahead, type the client\u2019s name: <b>' + esc(name) + '</b></span><input type="text" id="cbxName" autocomplete="off" aria-label="Type the client\u2019s name"></label>',
+    read: () => ((document.getElementById("cbxName") || {}).value || "").trim(),
+    validate: v => v.toLowerCase().replace(/\s+/g, " ") === name.toLowerCase().replace(/\s+/g, " ") ? "" : "Type the client\u2019s name exactly as shown: " + name + "."
+  })).then(r => !!r);
+}
+// what was removed, kept in this browser so it can be put back (review of 01-Oct-2026: every removal is a soft delete).
+// The books' own record (b.trashLog) says what was removed, when and by whom, on every computer
+const Trash = {
+  async put(cid, kind, label, data){
+    const id = "trash:" + cid + ":" + Date.now();
+    await IDBStore.write([[id, {id, cid, kind, label, at: new Date().toISOString(), by: whoAmI(), data}]]);
+    return id;
+  },
+  async list(cid, kind){
+    let all = []; try { all = (await IDBStore.prefix("trash:" + cid + ":")).map(x => x[1]); } catch (e){}
+    return all.filter(x => x && (!kind || x.kind === kind) && !x.restoredAt).sort((a, c) => String(c.at).localeCompare(String(a.at)));
+  },
+  async restored(x){ x.restoredAt = new Date().toISOString(); x.restoredBy = whoAmI(); await IDBStore.write([[x.id, x]]); }
+};
 function askConfirm(o){
   return new Promise(done => {
     let box = document.getElementById("confirmBox");
@@ -469,18 +492,31 @@ async function deleteStatement(sid){
   const rows = sid === b.cur ? b.rows : ((await BankDB.get("stmt:" + b.cid + ":" + sid)) || []);
   const sent = rows.filter(r => r.state === "sent").length;
   const acc = (CO(b.cid).bankAccounts || []).find(a => a.id === st.acctId) || {};
-  const ans = await askConfirm({title: "Delete this statement?", danger: true, ok: "Delete statement",
+  const ans = await confirmTyped({title: "Delete this statement?", ok: "Delete statement",
     body: "<b>" + esc(acc.ledger || st.bank) + "</b>, " + fmtDate(st.from) + " to " + fmtDate(st.to) + " (" + esc(st.fileName) + ", " + st.n + " rows).<br>" +
-      "All ledger choices made on its rows are removed. Saved rules and new ledgers stay. You can upload the file again afterwards." +
+      "It leaves the list with the ledger choices made on its rows; they are kept, and <b>More \u2192 Restore a deleted statement</b> puts it back. Saved rules and new ledgers stay." +
       (sent ? "<br><br><b>" + sent + " entries from it were already sent to Tally.</b> Tally is not changed: if you upload it again, those rows could be sent twice. Match with the Tally bank book first." : "")});
   if (!ans) return;
-  Object.keys(b.keys).forEach(k => { if (b.keys[k] === sid) delete b.keys[k]; });
+  // a soft delete: the statement leaves the list, its rows stay kept, and More \u2192 Restore puts it back
+  const keys = Object.keys(b.keys).filter(k => b.keys[k] === sid);
+  keys.forEach(k => { delete b.keys[k]; });
   b.stmts = b.stmts.filter(x => x.id !== sid);
-  await BankDB.del("stmt:" + b.cid + ":" + sid);
+  const trash = ((await BankDB.get("stmtsTrash:" + b.cid)) || []).concat([{st, keys, at: new Date().toISOString(), by: whoAmI()}]);
+  await BankDB.set("stmtsTrash:" + b.cid, trash); b.stmtsTrash = trash;
   saveBank({stmts: true, keys: true});
   if (b.cur === sid){ clearTimeout(bankSaveTimer); bankSaveTimer = null; b.cur = null; b.rows = []; b.sel.clear(); b.sticky.clear(); b.undo = null; }
-  toast("Statement deleted.");
+  toast("Statement deleted. More \u2192 Restore a deleted statement puts it back.");
   if (!b.cur && b.stmts.length) await openStatement(b.stmts[b.stmts.length - 1].id); else render();
+}
+// a deleted statement back in the list, as it was
+async function restoreStatement(i){
+  const b = B(), trash = (await BankDB.get("stmtsTrash:" + b.cid)) || [], x = trash[i];
+  if (!x) return;
+  if (!b.stmts.some(s => s.id === x.st.id)) b.stmts.push(x.st);
+  (x.keys || []).forEach(k => { if (!b.keys[k]) b.keys[k] = x.st.id; });
+  trash.splice(i, 1); await BankDB.set("stmtsTrash:" + b.cid, trash); b.stmtsTrash = trash;
+  saveBank({stmts: true, keys: true});
+  toast("Statement restored."); await openStatement(x.st.id);
 }
 async function clearStatement(){
   const b = B(), st = curStmt();
@@ -808,6 +844,7 @@ function bankClick(t){
     case "bankBulkRestore": bulkAction("restore"); return true;
     case "bankBulkLedger": { const inp = document.querySelector("[data-bulkled]"); bulkLedgerFrom(inp); return true; }
     case "bankDelStmt": closeMenus(); if (b.cur) deleteStatement(b.cur); return true;
+    case "bankRestoreStmt": closeMenus(); restoreStatement(0); return true;
     case "bankClearStmt": closeMenus(); clearStatement(); return true;
     case "bankDelAll": deleteAllStatements(); return true;
     case "bankClearRules": clearRules(); return true;

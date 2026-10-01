@@ -31,7 +31,7 @@ export default function Dash() {
       <div className="dash-tiles">
         <Tile label="To read" n={docqCount(co.id)} sub="in the inbox" go="inbox" />
         <Tile label="Bills to review" n={drafts.length} sub={drafts.length ? sumTotal(drafts) : "nothing waiting"} go="bills" />
-        <Tile label="Ready to post" n={approved.length} sub={approved.length ? sumTotal(approved) : "nothing approved"} go="post" />
+        <Tile label="Post to Tally" n={approved.length} sub={approved.length ? sumTotal(approved) : "nothing approved"} go="post" />
         <Tile label="Bank lines to review" n={bc ? bc.review : "…"} sub={bc ? bc.ready + " ready to post" : "opening the bank"} go="bank" />
       </div>
       {CloudDocs.on() && <p className="note" style={{ margin: "-6px 0 14px" }}>Documents are kept in the firm account, so anyone in the firm can open a bill from Transactions on any computer.

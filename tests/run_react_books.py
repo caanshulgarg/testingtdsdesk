@@ -43,7 +43,7 @@ with sync_playwright() as p:
     pg.click('#app table.bk-table button:has-text("Open")'); pg.wait_for_timeout(400)
     ok(pg.evaluate("S.tdsView") == "year" and pg.evaluate("S.tdsFy") == "2026-27", "Open: the year")
     pg.click("#app table.bk-table tr:has-text('Q2') button.linkbtn >> nth=-1"); pg.wait_for_timeout(700)
-    ok(pg.evaluate("[S.tdsView, S.tdsQ, S.tdsForm]") == ["return", "Q2", "24Q"] and "Q2 · 24Q" in pg.inner_text("#app .tds-crumbs"), "Q2 24Q: its return opens")
+    ok(pg.evaluate("[S.tdsView, S.tdsQ, S.tdsForm]") == ["return", "Q2", "24Q"] and any(x in pg.inner_text("#app .tds-crumbs") for x in ("Q2 · 24Q", "Q2 · Form 138")), "Q2 24Q: its return opens")
     pg.click("#app .tds-crumbs button:has-text('2026-27')"); pg.wait_for_timeout(400)
     ok(pg.evaluate("S.tdsView") == "year", "back to the year")
     pg.click('#app button:has-text("Certificates and rate questions")'); pg.wait_for_timeout(500)
