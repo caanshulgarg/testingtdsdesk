@@ -589,10 +589,10 @@ function bankRowAct(a, id){
     if (a === "accept"){
       const l = exactLedger(r.ledger);
       if (!l){ b.undo = null; toast("Choose a Tally ledger first."); return true; }
-      r.ledger = l; r.state = "ready"; b.undo.histPrev = learnRows([r], "accepted");
+      r.ledger = l; r.state = "ready"; r.userSet = true; b.undo.histPrev = learnRows([r], "accepted");
     }
-    if (a === "ignore"){ r.prevState = r.state; r.state = "ignored"; b.undo.histPrev = unlearnRows([r]); }
-    if (a === "restore"){ r.state = exactLedger(r.ledger) ? "ready" : "attention"; delete r.tallyIdx; }
+    if (a === "ignore"){ r.prevState = r.state; r.state = "ignored"; r.userSet = true; b.undo.histPrev = unlearnRows([r]); }
+    if (a === "restore"){ r.state = exactLedger(r.ledger) ? "ready" : "attention"; r.userSet = true; delete r.tallyIdx; }
     if (a === "unready"){ r.state = r.ledger ? "suggested" : "attention"; r.userSet = false; b.undo.histPrev = unlearnRows([r]); }
     saveBank({rows: true}); render(); return true;
   }
