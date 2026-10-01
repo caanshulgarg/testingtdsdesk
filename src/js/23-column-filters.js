@@ -970,6 +970,9 @@ async function bringDayBookFile(f, from0, to0, opts){
           try { const r = await BridgeSeed.send(f, step, {from, to}, who.company); part.bridge = r && r.entries != null ? "filled (" + r.entries + ")" : r && r.skipped ? "not changed: " + r.skipped : ""; }
           catch (e){ part.bridge = "not taken: " + ((e && e.message) || e); }
         } else part.bridge = "not connected on this computer";
+        // server-books: the file waits in this browser until FinCom's cloud has every day of it; a send cut short (or
+        // made before signing in) goes again on its own the next time the client is opened, so it is never left here only
+        const wait = await TCloudUp.hold(who.client, f, {from, to}, who);
         if (TCloudUp.on()){
           // review of 01-Oct-2026: on the screen while it goes (a year takes minutes), the page warns before it is left
           // half sent, and says when every day is in the cloud. Before, it went quietly and a reload lost the rest
@@ -979,11 +982,11 @@ async function bringDayBookFile(f, from0, to0, opts){
           try {
             const r = await TCloudUp.days(await f.text(), {from, to}, step, who);
             part.cloud = r && r.days != null ? "in the cloud (" + r.days + " days)" : (r && r.skipped) || "";
-            if (r && r.days != null) toast(f.name + ": all " + r.days + " days, " + fmtDate(tallyDate(from)) + " to " + fmtDate(tallyDate(to)) + ", are in FinCom’s cloud.");
+            if (r && r.days != null){ await TCloudUp.drop(wait); toast(f.name + ": all " + r.days + " days, " + fmtDate(tallyDate(from)) + " to " + fmtDate(tallyDate(to)) + ", are in FinCom’s cloud."); }
           }
-          catch (e){ part.cloud = "not sent: " + ((e && e.message) || e); toast("Saved here, but it could not be shared with the firm just now (" + ((e && e.message) || e) + "). Choose the file again later."); }
-          finally { window.removeEventListener("beforeunload", stay); }
-        } else part.cloud = "sign in to the firm account to share it";
+          catch (e){ part.cloud = "not sent: " + ((e && e.message) || e); toast("It could not go to FinCom’s cloud just now (" + ((e && e.message) || e) + "). It goes on its own the next time this client is opened."); }
+          finally { window.removeEventListener("beforeunload", stay); TCloudUp.live.delete(wait); }
+        } else { part.cloud = "waiting: it goes to FinCom’s cloud once you sign in to the firm account"; toast("Sign in to the firm account: until then this day book is only on this computer, and other computers show nothing."); }
         b.busy = ""; await saveBooks(null, b); render();          // these books, even if another client is open by now
       })();
       render();

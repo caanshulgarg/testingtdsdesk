@@ -74,16 +74,19 @@ const BookSync = {
     return rows && rows[0] ? rows[0] : null;
   },
   // put what came back into the open books (and this browser's copy)
+  // server-books: what Tally's masters give (the ledgers' groups, GSTINs, states...) is filled by the cloud copy too; a work
+  // part without them must not wipe what the cloud copy just brought in (another computer then showed MIS with no groups)
+  MASTERS: ["under", "groups", "gstins", "states", "groupInfo", "ledInfo", "ledInfoAt", "tallyCo"],
   async apply(cid, data){
-    const keys = this.keys();
+    const keys = this.keys(), drop = k => data[k] === undefined && this.MASTERS.indexOf(k) < 0;
     if (S.books && S.books.cid === cid){
-      keys.forEach(k => { if (data[k] === undefined) delete S.books[k]; else S.books[k] = clone(data[k]); });
+      keys.forEach(k => { if (drop(k)) delete S.books[k]; else if (data[k] !== undefined) S.books[k] = clone(data[k]); });
       if (S.books.vouchers && S.books.vouchers.length) try { LedMaster.refresh(S.books); } catch (e){}
       await saveBooks({fromCloud: true});
       render();
     } else {
       const saved = (await Books.load(cid)) || {cid};
-      keys.forEach(k => { if (data[k] === undefined) delete saved[k]; else saved[k] = data[k]; });
+      keys.forEach(k => { if (drop(k)) delete saved[k]; else if (data[k] !== undefined) saved[k] = data[k]; });
       await Books.save(cid, saved);
     }
   },

@@ -111,9 +111,10 @@ const CloudDocs = {
     });
     return out;
   },
-  async sendPending(cid){
+  // quiet: on opening a client (server-books), the documents kept only on this computer go up on their own
+  async sendPending(cid, quiet){
     const list = await this.pending(cid);
-    if (!list.length){ toast("Every document for this client is already in the firm account."); return; }
+    if (!list.length){ if (quiet) return; toast("Every document for this client is already in the firm account."); return; }
     for (const it of list){
       const f = await FileStore.get(cid, it.id);
       if (f) this.add(cid, it.id, f, it.kind);

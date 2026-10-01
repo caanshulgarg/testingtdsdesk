@@ -184,7 +184,7 @@ export default function Books() {
     return <>
       {n > 0 && <FreshLine b={b} />}
       {busy}
-      {!n ? <EmptyTab tab={tab} /> : tab === "mis" ? <MisTab b={b} /> : tab === "audit" ? <AuditTab b={b} /> : <Accounts b={b} />}
+      {!n ? (b.busy ? null : <EmptyTab tab={tab} />) : tab === "mis" ? <MisTab b={b} /> : tab === "audit" ? <AuditTab b={b} /> : <Accounts b={b} />}
     </>;
   }
   const pending = n ? LedMaster.pending(b).length : 0;
@@ -194,7 +194,7 @@ export default function Books() {
   if (tab === "import") body = <FromTally b={b} />;
   else if (!n && tab === "gst") body = <Gst />;
   else if (!n && tab === "tds") body = <Tds b={b} />;
-  else if (!n) body = <EmptyTab tab={tab} />;
+  else if (!n) body = b.busy ? null : <EmptyTab tab={tab} />;
   else if (tab === "tds") body = <Tds b={b} />;
   else if (tab === "gst" || !["ledgers", "audit", "mis", "fs"].includes(tab)) body = <Gst />;
   else if (tab === "ledgers") body = <Ledgers b={b} />;
