@@ -20,7 +20,7 @@ alter table public.tally_ledgers add column if not exists chain text[] not null 
 alter table public.tally_ledgers add column if not exists primary_group text not null default '';
 
 create table if not exists public.tally_groups (
-  book_id uuid not null references public.tally_books (book_id),
+  book_id uuid not null references public.tally_books (book_id) on delete cascade,
   firm_id uuid not null,
   name text not null,
   parent text not null default '',
