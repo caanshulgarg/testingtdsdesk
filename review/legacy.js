@@ -33,9 +33,9 @@ const DEFAULT_FIRM = {firmName:"", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "TEST · 30 Sep 2026 · build 197 (entries from Tally appear during the day: a light check every 30 minutes and right after posting; Update now from any computer; bridge 1.14.4)";
+const APP_VERSION = "TEST · 30 Sep 2026 · build 199 (posting queue: post from any computer, the Tally computer posts when Tally is free; posted entries go to the cloud without reading Tally again; bridge 1.14.6)";
 // the Tally Bridge setup file's fingerprint, put in by build.py: a new setup file is never served from an old cache
-const BRIDGE_SETUP_SHA = "01879009d6583262";
+const BRIDGE_SETUP_SHA = "22f7d1ed37e77dee";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;
@@ -2560,13 +2560,6 @@ function selfTestSummary(){
   const r = st.results, fails = ["pdf", "ocr"].filter(k => r[k] && !r[k].ok);
   return {state: fails.length ? "fail" : "ok", fails, r};
 }
-function selfTestBanner(){
-  const sum = selfTestSummary();
-  if (sum.state !== "fail") return "";
-  const msgs = sum.fails.map(k => (k === "pdf" ? "PDF reading: " : "Photo OCR: ") + sum.r[k].msg);
-  return '<div class="banner" style="border-left-color:var(--stop);background:var(--stop-soft);margin-bottom:12px"><b>Bill reading has a problem here.</b> ' + esc(msgs.join(" ")) +
-    ' <button class="linkbtn" data-act="goSelfTest">See the self-test</button></div>';
-}
 
 /* ------------------------------------------------------------------ */
 /* Reading order: free first, Claude only when needed                  */
@@ -3832,60 +3825,20 @@ function render(){
   RENDER_GEN++; IN_RENDER++;
   try { return renderNow(); } finally { IN_RENDER--; if (!IN_RENDER && typeof Route === "object") Route.sync(); }
 }
+// render(): what the screen of the moment needs loaded, before React draws the page (app/src/Main.jsx); and what the
+// page needs once drawn (afterRender, called by app/src/store.js after React has drawn)
 function renderNow(){
   requestAnimationFrame(padForBars);
-  const drafts = {};
-  document.querySelectorAll("#app [data-draft]").forEach(el => { if (el.id) drafts[el.id] = el.value; });
-  const a = document.activeElement, fk = a && a.dataset ? (a.dataset.fk || (a.hasAttribute("data-draft") ? "id:" + a.id : null)) : null;
-  let pos = null; try { pos = fk && (a.type === "text" || a.type === "search") ? a.selectionStart : null; } catch(e){}
-  const typed = fk && a.hasAttribute && a.hasAttribute("data-keeptyped") ? a.value : null;
-  if (signInNeeded()){
-    app.innerHTML = viewSignIn();
-    if (typeof acAfterRender === "function") acAfterRender();
-    const f0 = document.querySelector('[data-cloud="email"]');
-    if (f0 && !document.activeElement.matches("input")) f0.focus();
-    return;
+  if (signInNeeded()) return;
+  const co = CO();
+  if (!(S.view === "company" && co)){ S.view = "home"; return; }
+  // the bills screen shows the bank's ledgers too: the client's bank data is loaded for it
+  if (!S.loadingCo && S.tab === "invoices" && S.step !== "collect" && (!S.bank || S.bank.cid !== co.id) && !S.bankCtxLoading){
+    S.bankCtxLoading = true; loadBank(co.id).then(() => { S.bankCtxLoading = false; autoMapCompanyLedgers(CO()); render(); });
   }
-  const banner = creditBanner() + (S.storeKind === "db" || (Cloud.on() && Cloud.st && !Cloud.st.error) ? "" :
-    '<p class="banner">' + (S.storeKind === "local" || S.storeKind === "idb" ? "Your work is saved in this browser only. Clearing browser data will remove it." : "Your work is not being saved. It will be lost when you close this page.") + "</p>");
-  let body;
-  if (S.view === "company" && CO() && !S.loadingCo && S.tab === "books"){
-    body = viewBooks();
-  } else if (S.view === "company" && CO() && !S.loadingCo && S.tab === "txn"){
-    body = viewTransactions();
-  } else if (S.view === "company" && CO() && !S.loadingCo && S.tab === "dash"){
-    body = viewClientDash();
-  } else if (S.view === "company" && CO() && !S.loadingCo && S.tab === "clientInbox"){
-    body = (docqPanel(S.coId) || '<p class="note">Nothing is waiting for this client. Documents sent in by office automation appear here.</p>') +
-      '<div class="row" style="margin-top:10px"><button class="btn small" data-nav="inbox">Inbox for all clients</button></div>';
-  } else if (S.view === "company" && CO() && !S.loadingCo && S.tab === "export"){
-    body = viewPostStep();
-  } else if (S.view === "company" && CO() && !S.loadingCo && S.tab === "done"){
-    body = viewDoneStep();
-  } else if (S.view === "company" && CO() && !S.loadingCo && isSetupTab(S.tab)){
-    body = '<div data-react="ClientSetup"></div>';   // app/src/screens/Settings.jsx
-  } else if (S.view === "company" && CO() && S.step === "collect" && !isSetupTab(S.tab) && !S.loadingCo){
-    body = viewCollect();
-  } else if (S.view === "company" && CO()){
-    body = S.loadingCo ? '<p class="note">Opening ' + esc(CO().name) + "…</p>" :
-      ((S.tab === "invoices" || S.tab === "export") && (!S.bank || S.bank.cid !== CO().id) && !S.bankCtxLoading ? (S.bankCtxLoading = true, loadBank(CO().id).then(() => { S.bankCtxLoading = false; autoMapCompanyLedgers(CO()); render(); }), "") : "") +
-      (S.tab === "invoices" ? viewInvoices() : S.tab === "bank" ? viewBank() : S.tab === "sales" ? viewSales() : S.tab === "deductees" ? viewParties() : S.tab === "settings" ? viewCompanySettings() : viewExport());
-  } else {
-    S.view = "home";
-    body = S.homeTab === "help" && typeof viewHelp === "function" ? viewHelp() : S.homeTab === "today" ? viewToday() : S.homeTab === "inbox" ? viewInboxAll() : S.homeTab === "tally" ? viewTallyHome() : S.homeTab === "rules" ? viewRules() : viewClients();
-  }
-  const working = S.view === "company" && CO() ? '<div data-react="Working"></div>' : "";
-  app.innerHTML = selfTestBanner() + banner + working + body + drawerHtml() + actionBar() + colPopHtml();
-  placeColPop();
-  Object.entries(drafts).forEach(([id, v]) => { const el = document.getElementById(id); if (el && el.hasAttribute("data-draft") && el.value !== v) el.value = v; });
-  if (fk){
-    const el = fk.indexOf("id:") === 0 ? document.getElementById(fk.slice(3)) : document.querySelector('[data-fk="' + fk + '"]');
-    if (el && typed !== null && el.value !== typed) el.value = typed;
-    if (el && el !== document.activeElement){ el.focus(); try { if (pos != null) el.setSelectionRange(pos, pos); } catch(e){} }
-  }
+}
+function afterRender(){
   if (typeof acAfterRender === "function") acAfterRender();
-  if (typeof GridF === "object") GridF.after();
-  if (typeof Help === "object") Help.after();
   if (S.view === "company" && ["bank", "invoices", "export", "sales"].includes(S.tab) && typeof maybeLiveSync === "function") maybeLiveSync();
 }
 
@@ -8361,7 +8314,6 @@ function drawerEntry(){
   return e;
 }
 // the drawer with a bill, over the review table: React (app/src/screens/Review.jsx)
-function drawerHtml(){ return drawerEntry() ? '<div data-react="Drawer"></div>' : ""; }
 function revColOn(){ const f = S.revF || {}; return Object.keys(f).some(k => Array.isArray(f[k]) ? f[k].length : f[k]); }
 function revColPass(r){
   const f = S.revF || {}, x = r.e.x, c = r.c;
@@ -11235,7 +11187,6 @@ function applyGroup(key, ledger){
   render();
 }
 // the bar at the bottom of the bank screen: React (app/src/screens/Bank.jsx)
-function bankBar(){ return B() && !B().loading && curStmt() ? '<div data-react="BankBar"></div>' : ""; }
 // Creating a ledger that is not yet in Tally
 async function openCreateLedger(name, rowId, targetFk, opts){
   opts = opts || {};
@@ -12250,6 +12201,13 @@ const Bridge = {
     });
     payload = Object.assign({}, payload, {masters: keep(payload.masters), vouchers: keep(payload.vouchers)});
     if (!payload.masters.length && !payload.vouchers.length) return {ok: true, company: payload.company, results: refused};
+    // build 199: Tally on another computer: through the queue in the cloud
+    const coP = (payload.client && S.companies[payload.client]) || (typeof CO === "function" ? CO() : null);
+    if (coP && typeof tallyVia === "function" && tallyVia(coP) === "cloud"){
+      const outC = await CloudPost.run(coP.id, payload, onProgress, onChecked);
+      outC.results = [].concat(outC.results || []).concat(refused);
+      return outC;
+    }
     const out = await this.postChecked(payload, onProgress, onChecked);
     out.results = [].concat(out.results || []).concat(refused);
     return out;
@@ -12467,12 +12425,12 @@ function bridgeChip(co){
 /* ---------- ledgers and bank entries straight from Tally ---------- */
 async function syncLedgersFromTally(silent){
   const b = B(), co = CO(b.cid);
-  if (!bridgeLive(co)) return false;
+  if (!tallyVia(co)) return false;
   try {
-    const j = await Bridge.call("/ledgers?company=" + encodeURIComponent(Bridge.openFor(co).name) + Bridge.pinQ());
+    const j = await tallyCall(co, "/ledgers?company=" + encodeURIComponent(tallyCoName(co)) + Bridge.pinQ());
     const list = [].concat(j.ledgers || []).filter(l => l && l.name).map(l => ({name: l.name, group: l.group || "", pan: l.pan || "", gstin: l.gstin || "", acNo: l.acNo || "", ifsc: l.ifsc || "", taxType: l.taxType || "", tdsNature: l.tdsNature || "", dutyHead: l.dutyHead || ""}));
     const groups = Array.from(new Set([].concat(j.groups || []).map(g => g.name).concat(list.map(l => l.group)).filter(Boolean))).sort();
-    b.ledgers = {list, groups, importedAt: new Date().toISOString(), file: "Tally (live)", live: true};
+    b.ledgers = {list, groups, importedAt: new Date().toISOString(), file: j.via === "cloud" ? "Tally, from the copy in FinCom's cloud" : "Tally (live)", live: true};
     const have = new Set(list.map(l => l.name.toLowerCase()));
     b.newLed = b.newLed.filter(n => !have.has(n.name.toLowerCase()));
     saveBank({ledgers: true, newLed: true});
@@ -12499,13 +12457,13 @@ function guessBankLedger(a){
 // Tally's own entries in this bank ledger: rows already booked are marked, and their ledgers are learnt
 async function syncBankBookFromTally(silent, win){
   const b = B(), co = CO(b.cid), st = curStmt();
-  if (!st || !bridgeLive(co)) return 0;
+  if (!st || !tallyVia(co)) return 0;
   const acc = (co.bankAccounts || []).find(a => a.id === st.acctId);
   const ledger = acc && exactLedger(acc.ledger);
   if (!ledger) return 0;
   try {
     const from = win ? win.from : addDays(st.from || b.rows[0].date, -20), to = win ? win.to : addDays(st.to || b.rows[b.rows.length - 1].date, 20);
-    const j = win && win.pre ? win.pre : await Bridge.call(ledgerLinesUrl(Bridge.openFor(co).name, ledger, from, to), null, 300000);
+    const j = win && win.pre ? win.pre : await tallyCall(co, ledgerLinesUrl(tallyCoName(co), ledger, from, to), null, 300000);
     const entries = [];
     [].concat(j.vouchers || []).forEach(v => {
       if (/^yes$/i.test(v.cancelled || "")) return;
@@ -12774,10 +12732,10 @@ async function scanStatementInTally(opts){
   let to = addDays(last, 31);
   // bridge 1.12.1: one light read of FinCom's own entries (heads only); older: this bank ledger month by month
   // 1.12.3: this bank ledger's own vouchers (light, with amounts); 1.12.1-2: FinCom's tagged entries; older: the Day Book
-  const byLedger = bridgeVer(Bridge.st.version) >= bridgeVer("1.12.3");
+  const byLedger = tallyVia(co) === "cloud" || bridgeVer(Bridge.st.version) >= bridgeVer("1.12.3");
   const light = !byLedger && bridgeVer(Bridge.st.version) >= bridgeVer("1.12.1");
   if (opts.pre){ from = opts.from; to = opts.to; }
-  const j = opts.pre || await Bridge.call(light ? "/tags?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(from) + "&to=" + isoToTally(to) + Bridge.pinQ() : ledgerLinesUrl(tname, ledger, from, to), null, 600000);
+  const j = opts.pre || await tallyCall(co, light ? "/tags?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(from) + "&to=" + isoToTally(to) + Bridge.pinQ() : ledgerLinesUrl(tname, ledger, from, to), null, 600000);
   const vs = [].concat(j.vouchers || []).filter(v => !/^yes$/i.test(v.cancelled || ""));
   const rowByTag = new Map(b.rows.map(r => [fpHash(r.fp || r.id), r]));
   const groups = new Map();
@@ -13060,7 +13018,7 @@ async function postBankToTally(ids){
   const toCheck = b.rows.filter(r => r.state === "ready" && (!ids || ids.includes(r.id)));
   // bridge 1.12.3+: ONE read of this bank ledger covers both looks (these dates, and anything FinCom put in before),
   // and is reused for 30 minutes, so posting the next batch starts at once
-  const oneRead = bridgeVer(Bridge.st.version) >= bridgeVer("1.12.3");
+  const oneRead = tallyVia(co) === "cloud" || bridgeVer(Bridge.st.version) >= bridgeVer("1.12.3");
   if (toCheck.length && !heavy && oneRead){
     try {
       const look = b.tallyLook && b.tallyLook.sid === st.id && Date.now() - b.tallyLook.at < 30 * 60000 ? b.tallyLook : null;
@@ -13069,7 +13027,7 @@ async function postBankToTally(ids){
       const from = addDays(dsAll[0], -15), to = addDays(dsAll[dsAll.length - 1] > today ? dsAll[dsAll.length - 1] : today, 7);
       if (!pre){
         b.busy = "Looking at " + acc.ledger + " in Tally before posting\u2026"; render();
-        pre = await Bridge.call(ledgerLinesUrl(tname, acc.ledger, from, to), null, 600000);
+        pre = await tallyCall(co, ledgerLinesUrl(tname, acc.ledger, from, to), null, 600000);
         b.tallyLook = {sid: st.id, at: Date.now(), data: pre};
       }
       const g = markedGone(pre, from, to);
@@ -13155,7 +13113,7 @@ async function postBankToTally(ids){
   const masters = b.newLed.filter(l => !l.sent && used.has(l.name.toLowerCase()));
   b.busy = "Posting " + entries(rows.length) + " to " + tname + "\u2026"; render();
   try {
-    const j = await Bridge.post({company: tname, ledger: acc.ledger,
+    const j = await Bridge.post({company: tname, client: co.id, ledger: acc.ledger,
       masters: masters.map(l => ({id: "led:" + l.name, xml: ledgerMasterXml(l)})),
       vouchers: rows.map(r => ({id: r.id, xml: bankVoucherXml(r, acc, co)}))}, pj => { b.busy = postingLine(pj, tname); refreshBusy(); },
       chk => bankAfterCheck(b.cid, st.id, chk, tname));
@@ -13188,7 +13146,7 @@ async function postBankToTally(ids){
     b.postReport = {at: Date.now(), posted: ok, skipped, movedBack, failed, dismiss: "bankReportOk", company: tname, optional: optionalN, noPreCheck: !heavy, checking: !!j.checking};
     toast(ok + " posted to Tally" + (skipped ? ", " + skipped + " were already there" : "") + (failed.length ? ", " + failed.length + " not posted" : "") + ".");
     if (!failed.length && !b.rows.some(r => r.state === "ready")) b.filter = "done";
-    b.afterPost = !j.checking;
+    b.afterPost = !j.checking && !j.viaCloud;
     b.tallyLook = null;          // Tally has changed: the next posting looks again
   } catch (e){ toast("Posting failed: " + e.message); b.postReport = {at: Date.now(), posted: 0, skipped, movedBack, failed: failed.concat([{what: "Posting", msg: e.message}]), dismiss: "bankReportOk"}; }
   b.busy = "";
@@ -13205,7 +13163,7 @@ async function checkBillsInTally(onlyUnconfirmed){
   try {
     const dates = sent.map(e => e.x.invoiceDate).sort();
     const vt = co.voucherType || "Journal";
-    const j = await Bridge.call("/vouchers?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(addDays(dates[0], -5)) + "&to=" + isoToTally(addDays(dates[dates.length - 1] > new Date().toISOString().slice(0, 10) ? dates[dates.length - 1] : new Date().toISOString().slice(0, 10), 31)) + "&types=" + encodeURIComponent([vt, "Purchase", "Journal", co.debitNoteType || "Debit Note"].join(",")) + Bridge.pinQ(), null, 300000);
+    const j = await tallyCall(co, "/vouchers?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(addDays(dates[0], -5)) + "&to=" + isoToTally(addDays(dates[dates.length - 1] > new Date().toISOString().slice(0, 10) ? dates[dates.length - 1] : new Date().toISOString().slice(0, 10), 31)) + "&types=" + encodeURIComponent([vt, "Purchase", "Journal", co.debitNoteType || "Debit Note"].join(",")) + Bridge.pinQ(), null, 300000);
     const vs = [].concat(j.vouchers || []).filter(v => !/^yes$/i.test(v.cancelled || ""));
     const now = new Date().toISOString();
     const missing = [], wrongDate = [];
@@ -13246,7 +13204,7 @@ async function postBillsToTally(){
     let dup = [];
     if (dates.length){
       const vt = co.voucherType || "Journal";
-      const j0 = await Bridge.call("/vouchers?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(addDays(dates[0], -5)) + "&to=" + isoToTally(addDays(dates[dates.length - 1], 5)) + "&types=" + encodeURIComponent([vt, "Purchase", "Journal"].join(",")) + Bridge.pinQ());
+      const j0 = await tallyCall(co, "/vouchers?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(addDays(dates[0], -5)) + "&to=" + isoToTally(addDays(dates[dates.length - 1], 5)) + "&types=" + encodeURIComponent([vt, "Purchase", "Journal"].join(",")) + Bridge.pinQ());
       const vs0 = [].concat(j0.vouchers || []).filter(v => !/^yes$/i.test(v.cancelled || ""));
       const seen = new Set(vs0.map(v => norm(v.reference) + "|" + norm(v.party)).concat(vs0.flatMap(v => [].concat(v.entries || []).flatMap(en => [].concat(en.bills || []).map(bl => norm(bl.name) + "|" + norm(en.ledger))))));
       const marks = vs0.map(v => String(v.narration || "")).join("\n");
@@ -13259,7 +13217,7 @@ async function postBillsToTally(){
       const used = new Set(todo.flatMap(e => e.snapshot.lines.map(l => String(l.ledger).toLowerCase())));
       const masters = B().newLed.filter(l => !l.sent && used.has(l.name.toLowerCase()));
       S.billPost = {busy: "Posting " + entries(todo.length) + " to " + tname + "\u2026"}; render();
-      const j = await Bridge.post({company: tname, masters: masters.map(l => ({id: "led:" + l.name, xml: ledgerMasterXml(l)})), vouchers: todo.map(e => ({id: e.id, xml: voucherXml(e, co)}))}, pj => { S.billPost = {busy: postingLine(pj, tname)}; refreshBusy(); });
+      const j = await Bridge.post({company: tname, client: co.id, masters: masters.map(l => ({id: "led:" + l.name, xml: ledgerMasterXml(l)})), vouchers: todo.map(e => ({id: e.id, xml: voucherXml(e, co)}))}, pj => { S.billPost = {busy: postingLine(pj, tname)}; refreshBusy(); });
       const byId = new Map([].concat(j.results || []).map(x => [x.id, x]));
       masters.forEach(l => { const x = byId.get("led:" + l.name); if (x && x.ok){ l.sent = true; l.sentAt = now; } });
       saveBank({newLed: true});
@@ -13269,7 +13227,7 @@ async function postBillsToTally(){
         clash.forEach(e => { e.vchNo = (e.x.invoiceNo || "B") + "/" + initialsOf(e.x.vendorName || e.partyLedger); });
         S.billPost = {busy: "Voucher numbers already used in Tally: trying " + clash.length + " again with the supplier\u2019s initials\u2026"}; render();
         try {
-          const j2 = await Bridge.post({company: tname, masters: [], vouchers: clash.map(e => ({id: e.id, xml: voucherXml(e, co)}))});
+          const j2 = await Bridge.post({company: tname, client: co.id, masters: [], vouchers: clash.map(e => ({id: e.id, xml: voucherXml(e, co)}))});
           [].concat(j2.results || []).forEach(x => byId.set(x.id, x));
         } catch (err){ /* reported below as refused */ }
       }
@@ -14241,7 +14199,8 @@ function salesVisible(){
 }
 // the Sales screen and its bar: React (app/src/screens/Sales.jsx)
 function viewSales(){ return '<div data-react="Sales"></div>'; }
-function salesBar(){ const s = SL(); return s && !s.loading && ((s.view === "create" && s.draft) || (s.view !== "create" && s.list.length)) ? '<div data-react="SalesBar"></div>' : ""; }
+// the bar at the foot of sales: while making an invoice, or when there is a list (app/src/Main.jsx)
+function salesBarOn(){ const s = SL(); return !!(s && !s.loading && ((s.view === "create" && s.draft) || (s.view !== "create" && s.list.length))); }
 function salesLightRefresh(){ FinComReact.redraw(); }
 /* ---------- to Tally ---------- */
 function salesReadyProblems(list){
@@ -14257,9 +14216,9 @@ function mastersFor(list){
 // sales vouchers already in Tally (same number) are set aside
 async function salesCheckTally(list){
   const co = CO(SL().cid);
-  if (!bridgeLive(co) || !list.length) return 0;
+  if (!tallyVia(co) || !list.length) return 0;
   const dates = list.map(v => v.x.date).filter(Boolean).sort();
-  const j = await Bridge.call("/vouchers?company=" + encodeURIComponent(Bridge.openFor(co).name) + "&from=" + isoToTally(addDays(dates[0], -3)) + "&to=" + isoToTally(addDays(dates[dates.length - 1], 3)) + "&types=" + encodeURIComponent([SL().cfg.voucherType || "Sales", "Sales"].join(",")) + Bridge.pinQ());
+  const j = await tallyCall(co, "/vouchers?company=" + encodeURIComponent(tallyCoName(co)) + "&from=" + isoToTally(addDays(dates[0], -3)) + "&to=" + isoToTally(addDays(dates[dates.length - 1], 3)) + "&types=" + encodeURIComponent([SL().cfg.voucherType || "Sales", "Sales"].join(",")) + Bridge.pinQ());
   const nums = new Set([].concat(j.vouchers || []).filter(v => !/^yes$/i.test(v.cancelled || "")).flatMap(v => [normInvNo(v.number), normInvNo(v.reference)]).filter(Boolean));
   let n = 0;
   list.forEach(v => { if (nums.has(normInvNo(v.x.number))){ v.status = "intally"; v.postNote = "Already in Tally"; n++; } });
@@ -14292,8 +14251,8 @@ async function postSalesToTally(){
     if (!list.length){ s.busy = ""; saveSales(); toast(probs.length ? "Fix these first: " + probs.slice(0, 2).join("; ") : "These invoices are already in Tally."); render(); return; }
     const masters = mastersFor(list);
     s.busy = "Posting " + list.length + " invoice" + (list.length > 1 ? "s" : "") + " to Tally\u2026"; render();
-    const tn = Bridge.openFor(co).name;
-    const j = await Bridge.post({company: tn,
+    const tn = tallyCoName(co);
+    const j = await Bridge.post({company: tn, client: co.id,
       masters: masters.map(l => ({id: "led:" + l.name, xml: customerMasterXml(l)})),
       vouchers: list.map(v => ({id: v.id, xml: salesVoucherXml(v, co)}))}, pj => { s.busy = postingLine(pj, tn); refreshBusy(); });
     const by = new Map([].concat(j.results || []).map(r => [r.id, r]));
@@ -14631,6 +14590,8 @@ function canonicalizeBills(list){
 }
 // Which Tally company is this client? Asked once when names do not match.
 async function ensureTallyCompany(co){
+  // build 199: Tally on another computer, the client's books in the cloud: posted through the queue there
+  if (!bridgeLive(co) && typeof TCloud === "object" && TCloud.on()){ await TCloud.status(co.id); if (tallyVia(co) === "cloud") return tallyCoName(co); }
   if (!Bridge.on()){ toast("Connect the Tally Bridge first: Settings \u2192 Tally Bridge."); return null; }
   if (!Bridge.up() || !Bridge.st.tallyUp) await Bridge.refresh();
   if (!Bridge.up() || !Bridge.st.tallyUp){ toast("Tally is not connected. See Settings \u2192 Tally Bridge \u2192 Check my Tally."); return null; }
@@ -14701,7 +14662,9 @@ const Cloud = {
     try { r = await fetch(c.url.replace(/\/+$/, "") + "/functions/v1/signin", {method: "POST", headers: {apikey: c.key, "Content-Type": "application/json"}, body: JSON.stringify({email, password})}); }
     catch (e){ r = null; }
     if (!r || r.status === 404) return this.authCall("token?grant_type=password", {email, password});
-    const j = await r.json().catch(() => ({}));
+    const j = await r.json().catch(() => null);
+    // an answer that is not the sign-in function's own (the gateway's "function not found", a proxy page): sign in as before
+    if (!j || (!r.ok && !("ok" in j)) || (r.ok && !j.access_token)) return this.authCall("token?grant_type=password", {email, password});
     if (!r.ok) throw new Error(j.error || ("Sign-in failed (" + r.status + ")"));
     return j;
   },
@@ -15067,16 +15030,6 @@ async function charge(code, qty, ref, note){
     return false;
   } catch (e){ return true; }                            // never block work because the internet is down
 }
-function creditBanner(){
-  const a = S.account;
-  if (!a || !a.firm) return "";
-  const bal = num(a.firm.balance), warn = num(a.firm.warn_at);
-  if (S.creditStop && Date.now() - S.creditStop.at < 6 * 3600e3 && bal <= 0)
-    return '<p class="banner" style="border-left-color:var(--stop);background:var(--stop-soft)"><b>Credit finished.</b> Reading new bills, bank statements and invoices is paused. Everything already in FinCom still works, and entries can still be posted to Tally. Ask the administrator to add credit.</p>';
-  if (bal <= warn)
-    return '<p class="banner">Credit left: <b>' + INR.format(bal) + "</b>. Ask the administrator to top it up before it runs out.</p>";
-  return "";
-}
 /* ---------- the firm's own account screen ---------- */
 /* ---------- superadmin: firms, credit, plans, prices, keys ---------- */
 async function loadAdminOverview(quiet){
@@ -15101,17 +15054,6 @@ function takeAuthLink(){
   S.setPassword = {type: q.get("type")};
   return true;
 }
-function viewSetPassword(){
-  const f = S.setPassword || {}, st = Cloud.st;
-  return '<div class="signin"><div class="signin-box">' +
-    "<h1>" + (f.type === "recovery" ? "Choose a new password" : "Welcome to FinCom") + "</h1>" +
-    '<p class="note" style="margin:8px 0 14px">' + (f.type === "recovery" ? "Choose the password you will sign in with from now on." : "You have been added to your firm\u2019s account. Choose the password you will sign in with.") + "</p>" +
-    '<label class="f"><span>New password (10 characters or more, letters and digits)</span><input type="password" id="spw1" autocomplete="new-password" autofocus></label>' +
-    '<label class="f" style="margin-top:8px"><span>Repeat it</span><input type="password" id="spw2" autocomplete="new-password"></label>' +
-    '<div class="row" style="margin-top:12px"><button class="btn primary" data-act="setPasswordGo"' + (st.busy ? " disabled" : "") + ">" + (st.busy ? "Saving\u2026" : "Save and continue") + "</button></div>" +
-    (f.error ? '<p class="bk-warn" style="margin-top:10px">' + esc(f.error) + "</p>" : "") +
-    "</div></div>";
-}
 async function setPasswordGo(){
   const a = (document.getElementById("spw1") || {}).value || "", b = (document.getElementById("spw2") || {}).value || "";
   const f = S.setPassword || (S.setPassword = {});
@@ -15132,7 +15074,7 @@ async function setPasswordGo(){
   } catch (e){ Cloud.st.busy = ""; f.error = e.message; render(); }
 }
 
-/* ---------- nothing is shown until someone signs in ---------- */
+/* ---------- nothing is shown until someone signs in: the page is React (app/src/screens/SignIn.jsx) ---------- */
 function signInNeeded(){
   if (window.claude) return false;                 // inside claude.ai, for trying things out
   if (S.setPassword) return true;                  // arrived from an invite or reset link: the password comes first
@@ -15146,47 +15088,7 @@ Cloud.signUp = async function(d){
   if (!r.ok || j.ok === false) throw new Error(j.error || "The account could not be made.");
   return j;
 };
-function viewSignUp(){
-  const st = Cloud.st, f = S.cloudForm || {};
-  return '<div class="signin"><div class="signin-box">' +
-    "<h1>Create an account</h1>" +
-    '<p class="note" style="margin:8px 0 14px">Your firm gets its own space. Nobody else can see your data.</p>' +
-    '<label class="f"><span>Firm name</span><input type="text" data-cloud="firm" data-fk="sufirm" value="' + esc(f.firm || "") + '"></label>' +
-    '<label class="f" style="margin-top:8px"><span>Your name</span><input type="text" data-cloud="name" data-fk="suname" value="' + esc(f.name || "") + '"></label>' +
-    '<label class="f" style="margin-top:8px"><span>Email</span><input type="email" data-cloud="email" data-fk="cloudemail" value="' + esc(f.email || "") + '" autocomplete="username"></label>' +
-    '<label class="f" style="margin-top:8px"><span>Password (10 characters or more, letters and digits)</span><input type="password" data-cloud="password" data-fk="cloudpw" value="' + esc(f.password || "") + '" autocomplete="new-password"></label>' +
-    '<div class="row" style="margin-top:12px"><button class="btn primary" data-act="cloudSignUp"' + (st.busy ? " disabled" : "") + ">" + (st.busy ? "Making the account\u2026" : "Create the account") + "</button></div>" +
-    (st.error ? '<p class="bk-warn" style="margin-top:10px">' + esc(st.error) + "</p>" : "") +
-    '<p class="note" style="margin-top:14px">Already have one? <button class="linkbtn" data-act="showSignIn">Sign in</button></p>' +
-    "</div></div>";
-}
-function viewSignIn(){
-  const c = Cloud.cfg(), st = Cloud.st;
-  if (S.setPassword) return viewSetPassword();
-  if (Cloud.on() && st.mfa) return viewTwoStep();
-  if (S.signUpOpen) return viewSignUp();
-  return '<div class="signin"><div class="signin-box">' +
-    '<h1>FinCom</h1>' +
-    '<p class="note">' + esc(S.firm && S.firm.firmName ? S.firm.firmName : "Finance and compliance, in one place") + "</p>" +
-    '<p class="note" style="margin:2px 0 0"><a href="welcome/">What is FinCom?</a></p>' +
-    '<p class="note" style="margin:10px 0 14px">Sign in to see your firm\u2019s work. Nothing is shown before that.</p>' +
-    '<label class="f"><span>Email</span><input type="email" data-cloud="email" data-fk="cloudemail" value="' + esc((S.cloudForm && S.cloudForm.email) || c.email || "") + '" autocomplete="username" autofocus></label>' +
-    '<label class="f" style="margin-top:8px"><span>Password</span><input type="password" data-cloud="password" data-fk="cloudpw" value="' + esc((S.cloudForm && S.cloudForm.password) || "") + '" autocomplete="current-password"></label>' +
-    '<div class="row" style="margin-top:12px"><button class="btn primary" data-act="cloudSignIn"' + (st.busy ? " disabled" : "") + ">" + (st.busy ? "Signing in\u2026" : "Sign in") + "</button></div>" +
-    (st.error ? '<p class="bk-warn" style="margin-top:10px">' + esc(st.error) + "</p>" : "") +
-    '<p class="note" style="margin-top:14px">Forgotten the password? Ask the person who runs your firm\u2019s account to send you a reset link. After 5 wrong passwords the account is locked for 15 minutes.</p>' +
-    '<p class="note" style="margin-top:10px">No internet on this computer? <button class="linkbtn" data-act="useOffline">Use it here without an account</button> \u2014 the work stays on this computer only.</p>' +
-    (S.signupInfo && S.signupInfo.open !== false ? '<p class="note" style="margin-top:6px">New here? <button class="linkbtn" data-act="showSignUp">Create an account</button>' + (num(S.signupInfo.trial_credit) ? " \u00b7 starts with " + INR.format(num(S.signupInfo.trial_credit)) + " of credit" : "") + "</p>" : "") +
-    "</div></div>";
-}
 
-// Always-visible bar at the bottom of the screen for the bill that is open
-function actionBar(){
-  if (S.view !== "company") return "";
-  if (S.tab === "bank") return bankBar();
-  if (S.tab === "sales") return salesBar();
-  return S.tab === "invoices" ? '<div data-react="ActionBar"></div>' : "";   // the purchase bars: React (app/src/screens/Review.jsx)
-}
 
 /* ---------- Client setup: React (app/src/screens/Settings.jsx) ---------- */
 
@@ -15545,11 +15447,15 @@ function revTds(id, on){
 }
 // the firm account in Settings (app/src/screens/Account.jsx): a person's password, two-step or switching on and off; a
 // backup downloaded; a drop key switched off; the platform page's buttons (they read its boxes by id) and a firm's plan
+// the firm account's admin service not yet updated (Phase 2 waits for the database): it does not know the new actions
+function adminNotYet(e){ return /unknown action/i.test(String((e && e.message) || "")); }
 function acctPerson(what, email){
   // a reset link by email: they choose the new password; "makepw" is the fallback where email is not set up
-  if (what === "reset") Cloud.fn("admin", {action: "send_reset", email, redirect: appUrl()}).then(r => { S.newPerson = null; toast(r.note || "Reset link sent."); render(); }, e => toast(e.message));
+  if (what === "reset") Cloud.fn("admin", {action: "send_reset", email, redirect: appUrl()}).then(r => { S.newPerson = null; toast(r.note || "Reset link sent."); render(); },
+    e => toast(adminNotYet(e) ? "Reset links by email start once the firm account\u2019s update is done. For now, use \u201cMake a password\u201d." : e.message));
   else if (what === "makepw") Cloud.fn("admin", {action: "reset_password", email}).then(r => { S.newPerson = {email: r.email, password: r.password}; toast("New password made."); render(); }, e => toast(e.message));
-  else if (what === "unlock") Cloud.fn("admin", {action: "unlock", email}).then(r => toast(r.note || "Unlocked."), e => toast(e.message));
+  else if (what === "unlock") Cloud.fn("admin", {action: "unlock", email}).then(r => toast(r.note || "Unlocked."),
+    e => toast(adminNotYet(e) ? "The lockout starts once the firm account\u2019s update is done: nobody is locked out until then." : e.message));
   else if (what === "mfa") askConfirm({title: "Reset two-step sign-in for " + email + "?", ok: "Reset", body: '<p class="note">Their authenticator entry is removed. At the next sign-in they set it up again with their phone. Do this only when you are sure it is them asking.</p>'})
     .then(a => { if (a) Cloud.fn("admin", {action: "reset_two_step", email}).then(() => toast("Two-step sign-in reset for " + email + "."), e => toast(e.message)); });
   else Cloud.fn("admin", {action: "set_person", email, active: what === "on"}).then(() => { toast(what === "on" ? "Switched on." : "Switched off."); loadAccount(); }, e => toast(e.message));
@@ -15833,9 +15739,18 @@ function doAct(act, t){
       const g = id => (document.getElementById(id) || {}).value || "";
       const email = g("npEmail").trim();
       if (!email){ toast("An email address is needed."); break; }
-      Cloud.fn("admin", {action: "invite_person", email, name: g("npName"), role: g("npRole"), redirect: appUrl()}).then(r => {
+      const who = {email, name: g("npName"), role: g("npRole")};
+      Cloud.fn("admin", Object.assign({action: "invite_person", redirect: appUrl()}, who)).then(r => {
         S.newPerson = null; toast(r.note || ("Invited " + r.email + ".")); loadAccount();
-      }, e => toast(e.message));
+      }, e => {
+        if (!adminNotYet(e)){ toast(e.message); return; }
+        // until the update is done: added as before, with a password made for them and shown once
+        Cloud.fn("admin", Object.assign({action: "add_person"}, who)).then(r => {
+          S.newPerson = r.password ? {email: r.email, password: r.password} : null;
+          toast("Email invites start once the firm account\u2019s update is done, so a password was made instead." + (r.password ? "" : " " + (r.note || "")));
+          render(); loadAccount();
+        }, e2 => toast(e2.message));
+      });
       break;
     }
     case "addPerson": {
@@ -18565,31 +18480,6 @@ Cloud.mfaVerify = async function(code){
   await this.whoAmI();
   return true;
 };
-function viewTwoStep(){
-  const m = Cloud.st.mfa || {}, busy = Cloud.st.busy;
-  let h = '<div class="signin"><div class="signin-box"><h1>Two-step sign-in</h1>';
-  if (m.forAdmin) h += '<p class="note" style="margin:8px 0 0">Platform administration changes every firm and the credit, so it needs the code from your phone. Your firm work does not.</p>';
-  if (m.need === "code"){
-    h += '<p class="note" style="margin:8px 0 14px">Open the authenticator app on your phone (Google Authenticator, Microsoft Authenticator or similar) and type the 6-digit code for FinCom.</p>';
-  } else if (!m.factorId){
-    h += '<p class="note" style="margin:8px 0 14px">' + (m.required ? "This account must" : "You can") +
-      " protect this account with a code from an authenticator app on your phone, as well as the password. Install Google Authenticator or Microsoft Authenticator, then press the button.</p>" +
-      '<div class="row"><button class="btn primary" data-act="mfaStart"' + (busy ? " disabled" : "") + ">Set it up</button></div>";
-  } else {
-    h += '<p class="note" style="margin:8px 0 10px">1. In the authenticator app choose <b>Add</b> → <b>Scan a QR code</b> and scan this.</p>' +
-      (m.qr ? '<p style="text-align:center"><' + 'img alt="QR code for the authenticator app" style="width:190px;height:190px;background:#fff;padding:6px;border-radius:8px" src="' + esc(/^data:image\/svg\+xml|^data:image\/png/.test(m.qr) ? m.qr : "") + '"></p>' : "") +
-      '<p class="note" style="margin:6px 0">Cannot scan? Type this key in the app instead: <code style="user-select:all;word-break:break-all">' + esc(m.secret || "") + "</code></p>" +
-      '<p class="note" style="margin:10px 0 6px">2. Type the 6-digit code the app now shows.</p>';
-  }
-  if (m.need === "code" || m.factorId){
-    h += '<label class="f"><span>Code</span><input type="text" id="mfaCode" data-fk="mfacode" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="123456"></label>' +
-      '<div class="row" style="margin-top:12px"><button class="btn primary" data-act="mfaVerify"' + (busy ? " disabled" : "") + ">" + (busy ? "Checking…" : "Continue") + "</button></div>";
-  }
-  if (Cloud.st.error) h += '<p class="bk-warn" style="margin-top:10px">' + esc(Cloud.st.error) + "</p>";
-  h += '<p class="note" style="margin-top:14px">' + (m.required || (m.need === "code" && !m.forAdmin) ? "" : '<button class="linkbtn" data-act="mfaCancel">Not now</button> · ') +
-    'Lost your phone? Ask the platform administrator to reset your two-step sign-in. <button class="linkbtn" data-act="mfaSignOut">Sign out</button></p>';
-  return h + "</div></div>";
-}
 async function mfaAction(act){
   const done = () => { Cloud.st.busy = ""; render(); };
   if (act === "mfaStart"){
@@ -20146,6 +20036,114 @@ function tallyStatus(co){
   const light = co && typeof TLight === "object" ? TLight.st.by[co.id] : null;
   return {state: "ok", level: "ok", label: "Connected & in sync", say: "Tally is connected" + (local ? " on this computer" : " (" + devs.length + " computer" + (devs.length === 1 ? "" : "s") + " sending)") + " and nothing waits to be sent." + (light ? " " + light.say : "")};
 }
+/* ================================================================== */
+/* Posting from any computer: the queue in FinCom's cloud (build 199)  */
+/* ================================================================== */
+// On the computer with Tally, FinCom posts through the bridge there, as before. On any other computer, when the client's
+// books are in the cloud, the entries are queued in the cloud (tally_post_jobs); the bridge on the Tally computer takes
+// them with its heartbeat (within a minute), posts them with its usual job (FinCom's ID stamped in each entry, and Tally
+// checked for those IDs first, so nothing is posted twice), and writes each entry's result back, with Tally's own words
+// when it refused one. The checks before posting (the ledgers, entries already in Tally) read the cloud copy instead.
+
+// how this computer reaches the client's Tally: "bridge" (here), "cloud" (the queue), or null
+function tallyVia(co){
+  if (!co) return null;
+  if (bridgeLive(co)) return "bridge";
+  return typeof TCloud === "object" && TCloud.on() && TCloud.has(co.id) ? "cloud" : null;
+}
+function tallyCoName(co){
+  const o = typeof Bridge === "object" && Bridge.up() ? Bridge.openFor(co) : null;
+  return o ? o.name : ((typeof TCloud === "object" && TCloud.book(co.id) || {}).company || co.tallyName || co.name);
+}
+// a read the bridge answers (/ledgers, /ledgerlines, /vouchers), from the bridge here or from the cloud copy
+function tallyCall(co, url, body, timeout){
+  return tallyVia(co) === "cloud" ? CloudTally.call(co, url) : Bridge.call(url, body, timeout);
+}
+const CloudTally = {
+  async call(co, url){
+    const q = new URLSearchParams(url.split("?")[1] || ""), path = url.split("?")[0];
+    if (path === "/ledgers"){
+      const bk = TCloud.book(co.id);
+      const rows = bk ? await TCloud.restAll("tally_ledgers?select=name,parent&book_id=eq." + encodeURIComponent(bk.book) + "&order=name.asc") : [];
+      return {ok: true, via: "cloud", ledgers: rows.map(r => ({name: r.name, group: r.parent || ""})), groups: []};
+    }
+    if (path === "/ledgerlines" || path === "/vouchers"){
+      const types = (q.get("types") || "").split(",").map(s => s.trim()).filter(Boolean);
+      const vs = await TCloud.rpc("tally_vouchers_in", {p_client: co.id, p_from: TCloud.iso(q.get("from")), p_to: TCloud.iso(q.get("to")),
+        p_ledger: q.get("ledger") || null, p_types: types.length ? types : null});
+      return {ok: true, via: "cloud", vouchers: [].concat(vs || [])};
+    }
+    throw {code: "cloud", message: "This needs the Tally computer (" + path + ")."};
+  }
+};
+const CloudPost = {
+  uuid(){
+    if (crypto.randomUUID) return crypto.randomUUID();
+    const b = crypto.getRandomValues(new Uint8Array(16)); b[6] = (b[6] & 15) | 64; b[8] = (b[8] & 63) | 128;
+    const h = Array.from(b, x => x.toString(16).padStart(2, "0")).join("");
+    return h.slice(0, 8) + "-" + h.slice(8, 12) + "-" + h.slice(12, 16) + "-" + h.slice(16, 20) + "-" + h.slice(20);
+  },
+  async row(id){ const r = await Cloud.api("tally_post_jobs?select=id,status,done,n,message,results,checking,company&id=eq." + id); return (r || [])[0] || null; },
+  // the same answer as Bridge.postChecked: {ok, company, results: [{id, ok, message, ...}], checking, job}
+  async run(cid, payload, onProgress, onChecked){
+    const id = this.uuid(), sleep = ms => new Promise(r => setTimeout(r, ms));
+    const ids = [].concat(payload.masters || [], payload.vouchers || []).map(x => x.id);
+    const r = await TCloud.rpc("tally_post_enqueue", {p_id: id, p_client: cid, p_payload: {masters: payload.masters || [], vouchers: payload.vouchers || [], ledger: payload.ledger || ""}});
+    if (!r || !r.ok) throw {code: "cloud_post", message: (r && r.error) || "The entries could not be queued."};
+    try { lsSet("tdsdesk-test:cloudpost", JSON.stringify({id, cid, at: Date.now(), n: ids.length})); } catch (e){}
+    const tell = j => { try { onProgress && onProgress(j); } catch (e){} };
+    const t0 = Date.now();
+    let j = null;
+    for (;;){
+      await sleep(j ? 2500 : 1200);
+      try { j = await this.row(id) || j; } catch (e){ /* the internet: tried again */ }
+      if (!j) continue;
+      if (["done", "failed", "cancelled"].includes(j.status)) break;
+      const waitMin = Math.floor((Date.now() - t0) / 60000);
+      tell({done: j.done || 0, total: j.n || ids.length, message: j.status === "waiting"
+        ? "Queued for the Tally computer; it takes it within a minute when Tally is open" + (waitMin >= 2 ? " (waiting " + waitMin + " min: is Tally open there?)" : "")
+        : (j.message || "Posting on the Tally computer")});
+      if (Date.now() - t0 > 30 * 60000){ j = Object.assign({}, j, {status: "failed", message: "Still waiting for the Tally computer after 30 minutes. The posting stays queued and runs when Tally is open there; entries already in Tally are never posted twice."}); break; }
+    }
+    const why = j.status === "done" ? "Not posted." : (j.message || "The posting stopped.");
+    const resultsOf = jj => { const got = new Map([].concat(jj.results || []).map(x => [x.id, x])); return ids.map(x => got.get(x) || {id: x, ok: false, message: why}); };
+    const results = resultsOf(j);
+    if (j.checking){
+      results.forEach(x => { if (x.ok && x.verified == null) x.pendingCheck = true; });
+      (async () => {
+        for (let n = 0; n < 400; n++){
+          await sleep(n < 10 ? 2000 : 5000);
+          let k; try { k = await this.row(id); } catch (e){ continue; }
+          if (k && !k.checking){ try { lsDel("tdsdesk-test:cloudpost"); } catch (e){} try { onChecked && onChecked({results: resultsOf(k)}); } catch (e){} return; }
+        }
+      })();
+    } else { try { lsDel("tdsdesk-test:cloudpost"); } catch (e){} }
+    return {ok: true, company: j.company || payload.company, results, checking: !!j.checking, viaCloud: true, job: {id, status: j.status, message: j.message}};
+  }
+};
+// the Post button: on the Tally computer, or anywhere once the client's books are in the cloud
+function canPostTally(co){
+  if (Bridge.on() && Bridge.up()) return true;
+  if (!co || typeof TCloud !== "object" || !TCloud.on()) return false;
+  const s = TCloud.st[co.id];
+  if (!s || !s.at){ TCloud.st[co.id] = {at: Date.now(), books: null}; TCloud.status(co.id, true).then(() => { if (TCloud.has(co.id)) render(); }, () => {}); return false; }
+  return TCloud.has(co.id);
+}
+// a posting queued before this page was reloaded or closed: how it ended (it goes on in the cloud and on the Tally
+// computer by itself). Post again for anything left: entries already in Tally are recognised and not posted twice
+async function cloudPostLeftover(){
+  let m = null; try { m = JSON.parse(lsGet("tdsdesk-test:cloudpost") || "null"); } catch (e){}
+  if (!m || !m.id || typeof TCloud !== "object" || !TCloud.on()) return;
+  try {
+    const j = await CloudPost.row(m.id);
+    if (!j){ if (Date.now() - (m.at || 0) > 7 * 86400000) lsDel("tdsdesk-test:cloudpost"); return; }
+    if (["waiting", "taken", "running"].includes(j.status) || j.checking){ toast("An earlier posting to " + j.company + " is " + (j.status === "waiting" ? "still queued for the Tally computer" : "going on at the Tally computer: " + (j.done || 0) + " of " + j.n + " done") + "."); return; }
+    lsDel("tdsdesk-test:cloudpost");
+    const ok = [].concat(j.results || []).filter(r => r.ok).length;
+    toast("The earlier posting to " + j.company + " finished: " + ok + " of " + j.n + " in Tally. Post again for any left; entries already in Tally are not sent twice.");
+  } catch (e){}
+}
+setTimeout(() => { try { cloudPostLeftover(); } catch (e){} }, 9000);
 /* ================================================================== */
 /* AI help (Claude) in TDS and GST: it suggests, FinCom's rules and   */
 /* people decide. Off unless the firm switches it on (Settings, AI    */
