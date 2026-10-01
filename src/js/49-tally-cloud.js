@@ -112,10 +112,11 @@ const TCloud = {
   async day(bk, d, at){
     const k = "tcday:" + bk + ":" + d;
     try { const c = await IDBStore.get(k); if (c && c.at === at) return c.text; } catch (e){}
+    await Cloud.fresh().catch(() => {});
     const c = Cloud.cfg(), s = Cloud.sess();
     const url = c.url.replace(/\/+$/, "") + "/storage/v1/object/authenticated/tally-days/" + Cloud.st.firm + "/" + bk + "/" + d.slice(0, 6) + "/" + d + ".xml.gz";
     let r = await fetch(url, {headers: {apikey: c.key, Authorization: "Bearer " + s.access_token}, cache: "no-store"});
-    if (r.status === 401 || r.status === 400){ await Cloud.refreshToken(); r = await fetch(url, {headers: {apikey: c.key, Authorization: "Bearer " + Cloud.sess().access_token}, cache: "no-store"}); }
+    if (r.status === 401 || r.status === 400){ await Cloud.refreshToken(s.access_token); r = await fetch(url, {headers: {apikey: c.key, Authorization: "Bearer " + Cloud.sess().access_token}, cache: "no-store"}); }
     if (r.status === 404) return "";
     if (!r.ok) throw new Error("Could not fetch " + d + " from the cloud (" + r.status + ").");
     const text = await new Response(r.body.pipeThrough(new DecompressionStream("gzip"))).text();
@@ -261,6 +262,7 @@ const TCloudUp = {
   // who: the client and Tally company, fixed when the upload starts (build 195: the upload for several clients moves on
   // to the next client while an earlier upload is still going; the earlier one must not follow it)
   async post(body, who){
+    await Cloud.fresh().catch(() => {});
     const c = Cloud.cfg(), s = Cloud.sess();
     if (!s) throw new Error("Sign in to the firm account first.");
     const r = await fetch(TCloud.ingestUrl(), {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": "application/json"}, body: JSON.stringify(Object.assign(who || {client: S.coId, company: BridgeSeed.company()}, body))});

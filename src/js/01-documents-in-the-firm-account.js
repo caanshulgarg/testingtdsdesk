@@ -41,10 +41,11 @@ const CloudDocs = {
       try {
         const small = await this.shrink(job.file);
         const path = this.path(job.cid, job.id, small.name);
+        await Cloud.fresh().catch(() => {});
         const c = Cloud.cfg(), s = Cloud.sess();
         const url = c.url.replace(/\/+$/, "") + "/storage/v1/object/client-docs/" + path.split("/").map(encodeURIComponent).join("/");
         let r = await fetch(url, {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "x-upsert": "true", "Content-Type": small.type || "application/octet-stream"}, body: small});
-        if (r.status === 401){ await Cloud.refreshToken(); r = await fetch(url, {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + Cloud.sess().access_token, "x-upsert": "true", "Content-Type": small.type || "application/octet-stream"}, body: small}); }
+        if (r.status === 401){ await Cloud.refreshToken(s.access_token); r = await fetch(url, {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + Cloud.sess().access_token, "x-upsert": "true", "Content-Type": small.type || "application/octet-stream"}, body: small}); }
         if (!r.ok) throw new Error("upload " + r.status);
         this.note(job, path, small.size);
         this.queue.shift();
@@ -80,10 +81,11 @@ const CloudDocs = {
     }
   },
   async fetchFile(path, name){
+    await Cloud.fresh().catch(() => {});
     const c = Cloud.cfg(), s = Cloud.sess();
     const url = c.url.replace(/\/+$/, "") + "/storage/v1/object/client-docs/" + path.split("/").map(encodeURIComponent).join("/");
     let r = await fetch(url, {headers: {apikey: c.key, Authorization: "Bearer " + s.access_token}});
-    if (r.status === 401){ await Cloud.refreshToken(); r = await fetch(url, {headers: {apikey: c.key, Authorization: "Bearer " + Cloud.sess().access_token}}); }
+    if (r.status === 401){ await Cloud.refreshToken(s.access_token); r = await fetch(url, {headers: {apikey: c.key, Authorization: "Bearer " + Cloud.sess().access_token}}); }
     if (!r.ok) throw {code: "doc_missing", message: "the document could not be fetched (" + r.status + ")"};
     const blob = await r.blob();
     return new File([blob], name || path.split("-").slice(1).join("-") || "document", {type: blob.type || "application/octet-stream"});

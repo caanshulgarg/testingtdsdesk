@@ -9,10 +9,12 @@ Cloud.aal = function(){
   const s = this.sess();
   try { return JSON.parse(atob(String(s.access_token).split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).aal || "aal1"; } catch (e){ return "aal1"; }
 };
-Cloud.authApi = async function(path, method, body){
+Cloud.authApi = async function(path, method, body, retry){
+  if (!retry) await this.fresh().catch(() => {});
   const c = this.cfg(), s = this.sess();
   const r = await fetch(c.url.replace(/\/+$/, "") + "/auth/v1/" + path, {method: method || "GET",
     headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": "application/json"}, body: body ? JSON.stringify(body) : undefined});
+  if (r.status === 401 && !retry){ await this.refreshToken(s.access_token); return this.authApi(path, method, body, true); }
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.msg || j.message || j.error_description || ("Request failed (" + r.status + ")"));
   return j;
@@ -119,7 +121,13 @@ let idleLast = Date.now();
 setInterval(() => {
   if (!Cloud.on() || window.claude) return;
   const mins = num(lsGet("tdsdesk:idlemin")) || IDLE_MIN_DEFAULT;
-  if (Date.now() - idleLast > mins * 60000){ idleLast = Date.now(); signOutHere("Signed out after " + mins + " minutes without use. Sign in again to carry on."); }
+  if (Date.now() - idleLast > mins * 60000){
+    idleLast = Date.now();
+    // the page open now comes back after signing in again; the sign-in page says why (it is not an error)
+    if (typeof Route === "object" && !signInNeeded()) Route.pending = Route.of();
+    S.signedOutWhy = "Signed out after " + mins + " minutes without use, as set in Settings \u2192 Sign-in and people. Sign in again to carry on where you were.";
+    signOutHere("Signed out after " + mins + " minutes without use. Sign in again to carry on.");
+  }
 }, 30000);
 // Settings, how long before signing out (app/src/screens/Account.jsx)
 function idleMin(){ return num(lsGet("tdsdesk:idlemin")) || IDLE_MIN_DEFAULT; }

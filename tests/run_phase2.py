@@ -19,7 +19,7 @@ SETUP = """() => { const c = newCompany({name: "ZZ Phase Two", gstin: "09AANFG32
   Store.saveCompany(c); Object.values(S.data[c.id].entries).forEach(e => Store.saveEntry(c.id, e));
   return [c.id, a, b]; }"""
 with sync_playwright() as p:
-    br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1400, "height": 900}); pg.on("pageerror", lambda e: errors.append(str(e)))
+    br = p.chromium.launch(ignore_default_args=["--hide-scrollbars"]); pg = br.new_page(viewport={"width": 1400, "height": 900})   # real scroll bars (item 30); pg.on("pageerror", lambda e: errors.append(str(e)))
     pg.goto(BASE); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1000)
     app = lambda: pg.inner_text("#app"); top = lambda: pg.inner_text("#cobar")
     cid, a, b = pg.evaluate(SETUP)
@@ -37,6 +37,15 @@ with sync_playwright() as p:
     ok(pg.evaluate("location.hash").endswith("/txn/bills"), "25. Transactions has its own address")
     pg.go_back(); pg.wait_for_timeout(900)
     ok(pg.evaluate("S.selected") == a, "25. Back returns to the bill")
+    # 25 (recheck). a bill opened from the review table (the drawer) has its own address too, and a refresh reopens it
+    pg.evaluate("() => { goStep('review', 'bills'); }"); pg.wait_for_timeout(600)
+    ok(pg.evaluate("location.hash").endswith("/purchase/review"), "25. the review table's address")
+    pg.evaluate("(a) => revOpen(a)", a); pg.wait_for_timeout(500)
+    ok(pg.evaluate("location.hash") == "#/c/%s/bill/%s" % (cid, a), "25. a bill opened from the review table: #/c/<client>/bill/<id> (" + pg.evaluate("location.hash") + ")")
+    pg.reload(); pg.wait_for_timeout(2500)
+    if pg.locator('button[data-act="useOffline"]').count(): pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
+    ok(pg.evaluate("[S.selected, location.hash.endsWith('/bill/' + S.selected)]") == [a, True], "25. Refresh reopens that bill")
+    pg.evaluate("() => { S.reviewTable = false; S.drawerOpen = false; render(); }"); pg.wait_for_timeout(300)
     # 33. keys: J/K move between bills, Ctrl+Enter approves
     pg.click("#app .detail h2"); pg.keyboard.press("j"); pg.wait_for_timeout(400)
     ok(pg.evaluate("S.selected") == b, "33. J: the next bill")
@@ -67,6 +76,11 @@ with sync_playwright() as p:
     pg.evaluate("() => { S.account = {me: {role: 'owner'}}; S.firm.firmName = ''; S.firmSetupLater = false; render(); }"); pg.wait_for_timeout(500)
     # 32. firm details at an owner's first sign-in; ₹ on amounts
     ok(pg.locator(".firmsetup-scrim").count() == 1 and "Your firm’s details" in pg.inner_text(".firmsetup-scrim"), "32. an owner with no firm name is asked for the firm's details")
+    pg.click('.firmsetup-scrim button:text-is("Later")'); pg.wait_for_timeout(300)
+    pg.evaluate("() => { S.firmSetupLater = false; render(); }"); pg.wait_for_timeout(300)
+    ok(pg.locator(".firmsetup-scrim").count() == 0, "32. Later: not asked again the same day (it is kept past a refresh, on this computer)")
+    pg.evaluate("() => { localStorage.removeItem(Object.keys(localStorage).find(k => /firmSetupLater$/.test(k))); render(); }"); pg.wait_for_timeout(300)
+    ok(pg.locator(".firmsetup-scrim").count() == 1, "32. the next day it is asked again (or filled in any time in Settings)")
     pg.fill('.firmsetup-scrim input[aria-label="Firm name"]', "Garg Shekhar & Company"); pg.fill('.firmsetup-scrim textarea', "Kanpur"); pg.click('.firmsetup-scrim button:text-is("Save")'); pg.wait_for_timeout(500)
     ok(pg.evaluate("[S.firm.firmName, S.firm.firmAddress]") == ["Garg Shekhar & Company", "Kanpur"] and pg.locator(".firmsetup-scrim").count() == 0 and "Garg Shekhar" in top(), "32. saved: the name in the header, the address kept")
     pg.evaluate("() => { S.account = {me: {role: 'owner'}, firm: {balance: 499999912, plan: {name: 'Pro'}}}; render(); }"); pg.wait_for_timeout(400)
@@ -88,6 +102,17 @@ with sync_playwright() as p:
     pg.evaluate("() => goClient('txn')"); pg.wait_for_timeout(600); pg.mouse.wheel(0, 2000); pg.wait_for_timeout(300)
     ok(pg.evaluate("document.querySelector('#side .side-co').getBoundingClientRect().top") >= 0, "29. scrolled down, the sidebar and the client name stay in view")
     pg.set_viewport_size({"width": 1400, "height": 900})
+    # 30 (recheck). at about 1,050 px the table scrolls sideways with a bar that shows, and the last column can be reached
+    pg.set_viewport_size({"width": 1050, "height": 800}); pg.evaluate("() => goClient('txn')"); pg.wait_for_timeout(700)
+    w = pg.evaluate("""() => { const w = document.querySelector('#app .txnwrap'), cs = getComputedStyle(w); w.scrollLeft = w.scrollWidth;
+      const last = [...w.querySelectorAll('thead th')].slice(-2)[0].getBoundingClientRect(), box = w.getBoundingClientRect();
+      return {scroll: cs.overflowX, bar: w.offsetHeight - w.clientHeight, inside: box.right <= window.innerWidth + 1, lastSeen: last.right <= box.right + 1 && last.left >= box.left - 1}; }""")
+    ok(w["scroll"] == "scroll" and w["bar"] >= 8 and w["inside"] and w["lastSeen"], "30. at 1,050 px: a scroll bar that always shows, the table inside the window, the last column reachable (" + str(w) + ")")
+    pg.set_viewport_size({"width": 1400, "height": 900})
+    # 31 (recheck). the sidebar's foot in the same date format
+    foot = pg.inner_text("#side .side-ver")
+    ok(re.search(r"\d{2}-[A-Z][a-z]{2}-\d{4}\n", foot + "\n") and re.search(r"\d{2}-[A-Z][a-z]{2}-\d{4} \d{2}:\d{2}", foot) and "Sept" not in foot and " am" not in foot and " pm" not in foot,
+       "31. the sidebar foot reads 30-Sep-2026 and 01-Oct-2026 00:04 (" + foot.replace("\n", " / ") + ")")
     # 30. Transactions: Excel, columns, the first columns kept
     ok(pg.locator('#app button:text-is("Excel")').count() == 1 and pg.locator("#app .txntbl th.stick1").count() == 1, "30. Transactions: Excel export and the first columns kept in view")
     pg.click('#app .colpick summary'); pg.click('#app .colpick label:has-text("Voucher") input'); pg.wait_for_timeout(300)

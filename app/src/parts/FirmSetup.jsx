@@ -19,7 +19,7 @@ export default function FirmSetup() {
         {d.logo && <img src={d.logo} alt="Logo" style={{ maxHeight: 60, marginTop: 6 }} />}
         {err && <p className="bk-warn">{err}</p>}
         <div className="row" style={{ justifyContent: "flex-end", marginTop: 14 }}>
-          <button className="btn" onClick={() => { S.firmSetupLater = true; render(); }}>Later</button>
+          <button className="btn" title="Asked again tomorrow; or fill them in any time in Settings → Firm details" onClick={() => firmSetupLater()}>Later</button>
           <button className="btn primary" onClick={() => firmSetupSave(d)}>Save</button>
         </div>
       </div>

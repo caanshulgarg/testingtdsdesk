@@ -60,7 +60,8 @@ export default function SignIn() {
   return <Box><h1>FinCom</h1>
     <p className="note">{S.firm && S.firm.firmName ? S.firm.firmName : "Finance and compliance, in one place"}</p>
     <p className="note" style={{ margin: "2px 0 0" }}><a href="welcome/">What is FinCom?</a></p>
-    <p className="note" style={{ margin: "10px 0 14px" }}>Sign in to see your firm’s work. Nothing is shown before that.</p>
+    {S.signedOutWhy ? <p className="bk-alert" style={{ margin: "10px 0 14px" }}>{S.signedOutWhy}</p>
+      : <p className="note" style={{ margin: "10px 0 14px" }}>Sign in to see your firm’s work. Nothing is shown before that.</p>}
     <Field label="Email" k="email" type="email" fk="cloudemail" auto="username" first /><Field label="Password" k="password" type="password" fk="cloudpw" auto="current-password" />
     <div className="row" style={{ marginTop: 12 }}><Act act="cloudSignIn" disabled={!!st.busy}>{st.busy ? "Signing in…" : "Sign in"}</Act></div><Err />
     <p className="note" style={{ marginTop: 14 }}>Forgotten the password? Ask the person who runs your firm’s account to send you a reset link. After 5 wrong passwords the account is locked for 15 minutes.</p>

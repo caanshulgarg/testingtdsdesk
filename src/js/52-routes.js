@@ -27,7 +27,8 @@ const Route = {
     if (S.tab === "export") return c + "post/" + (S.postFocus || "bills");
     if (S.tab === "done") return c + "done/" + (S.postFocus || "bills");
     if (S.tab === "invoices"){
-      if (S.selected && !S.reviewTable) return c + "bill/" + encodeURIComponent(S.selected);
+      // one at a time, or opened in the drawer over the review table: either way the bill has its own address
+      if (S.selected && (!S.reviewTable || S.drawerOpen)) return c + "bill/" + encodeURIComponent(S.selected);
       return c + "purchase/" + (S.reviewTable ? "review" : (S.filter || "draft"));
     }
     return c + "dash";
@@ -66,11 +67,12 @@ const Route = {
         else if (what === "bank"){ S.tab = "bank"; if (!S.bank || S.bank.cid !== S.coId) loadBank(S.coId).then(() => render()); }
         else if (what === "sales") S.tab = "sales";
         else if (what === "post" || what === "done"){ S.tab = what === "post" ? "export" : "done"; S.postFocus = arg || "bills"; if (!S.bank || S.bank.cid !== S.coId) loadBank(S.coId).then(() => render()); }
-        else if (what === "purchase"){ S.tab = "invoices"; S.selected = null; S.reviewTable = arg === "review"; if (arg && arg !== "review") S.filter = arg; }
+        else if (what === "purchase"){ S.tab = "invoices"; S.selected = null; S.drawerOpen = false; S.reviewTable = arg === "review"; if (arg && arg !== "review") S.filter = arg; }
         else if (what === "bill"){
           const e = D().entries[arg];
-          S.tab = "invoices"; S.reviewTable = false;
-          if (e){ S.filter = e.status; S.selected = e.id; } else toast("That bill is not in this client’s list (deleted, or not yet sent to this computer).");
+          S.tab = "invoices";
+          // over the review table when that is where it was opened (Back closes it), else one at a time
+          if (e){ if (S.reviewTable && e.status === "draft") S.drawerOpen = true; else S.reviewTable = false; S.filter = e.status; S.selected = e.id; } else toast("That bill is not in this client’s list (deleted, or not yet sent to this computer).");
         }
       } else if (p[0] === "settings"){ S.view = "home"; S.homeTab = "rules"; S.settingsTab = p[1] || null; }
       else if (["clients", "today", "inbox", "tally", "help"].includes(p[0])){ S.view = "home"; S.homeTab = p[0]; S.step = null; }

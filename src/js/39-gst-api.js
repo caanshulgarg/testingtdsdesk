@@ -11,9 +11,10 @@ const GSTAPI = {
   on(){ return typeof Cloud === "object" && Cloud.on() && !!S.account; },
   url(){ return String(Cloud.cfg().url || "").replace(/\/+$/, "") + "/functions/v1/gst-taxpro"; },
   async call(body, retry){
+    if (!retry) await Cloud.fresh().catch(() => {});
     const c = Cloud.cfg(), s = Cloud.sess();
     const r = await fetch(this.url(), {method: "POST", headers: {"Content-Type": "application/json", apikey: c.key, Authorization: "Bearer " + (s && s.access_token)}, body: JSON.stringify(body)});
-    if (r.status === 401 && !retry){ await Cloud.refreshToken(); return this.call(body, true); }
+    if (r.status === 401 && !retry){ await Cloud.refreshToken(s && s.access_token); return this.call(body, true); }
     let j = null; try { j = await r.json(); } catch (e){}
     if (!j) throw new Error("The GST API answered HTTP " + r.status + ".");
     if (!j.ok) throw new Error(j.error || "The GST API refused the request.");

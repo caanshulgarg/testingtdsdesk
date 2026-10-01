@@ -37,7 +37,10 @@ function legacy(mode) {
 // which React build is open: the time it was built (India time) and the commit, shown at the foot of the sidebar
 const stamp = () => {
   let sha = ""; try { sha = execSync("git rev-parse --short HEAD").toString().trim(); } catch (e) {}
-  return "React · " + new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) + (sha ? " · " + sha : "");
+  // the app's one date format (review item 31): 01-Oct-2026 00:04, India time
+  const p = Object.fromEntries(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })
+    .formatToParts(new Date()).map((x) => [x.type, x.value]));
+  return "React · " + p.day + "-" + p.month.slice(0, 3) + "-" + p.year + " " + p.hour + ":" + p.minute + (sha ? " · " + sha : "");
 };
 
 export default defineConfig(({ mode }) => ({

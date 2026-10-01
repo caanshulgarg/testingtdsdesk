@@ -44,20 +44,41 @@ const Cloud = {
     await this.whoAmI();
     return true;
   },
-  async refreshToken(){
+  // A new access token from the refresh token. One refresh at a time: requests that fail together (opening a bill
+  // fetches its document while the sync runs) share it, and a token another tab has refreshed meanwhile is used as
+  // it is. Two refreshes with the same refresh token can make Supabase end the session (review: signed out after
+  // the page was left idle). used: the token a failed request carried; skipped when the session already has a newer one.
+  refreshToken(used){
+    const s0 = this.sess();
+    if (used && s0 && s0.access_token && s0.access_token !== used) return Promise.resolve();
+    if (this._refreshing) return this._refreshing;
+    this._refreshing = (async () => {
+      const s = this.sess();
+      if (!s || !s.refresh_token) throw new Error("Signed out");
+      const j = await this.authCall("token?grant_type=refresh_token", {refresh_token: s.refresh_token});
+      const now = this.sess();
+      if (!now || now.refresh_token !== s.refresh_token) return;      // signed out, or another tab got there first
+      this.setSess(Object.assign({}, s, {access_token: j.access_token, refresh_token: j.refresh_token || s.refresh_token, at: Date.now(), expires_in: j.expires_in || 3600}));
+    })().finally(() => { this._refreshing = null; });
+    return this._refreshing;
+  },
+  // before a request: a token that has run out, or will within two minutes, is refreshed first (a page left idle for
+  // an hour no longer sends an expired token and depends on the 401 to recover)
+  async fresh(){
     const s = this.sess();
-    if (!s || !s.refresh_token) throw new Error("Signed out");
-    const j = await this.authCall("token?grant_type=refresh_token", {refresh_token: s.refresh_token});
-    this.setSess(Object.assign({}, s, {access_token: j.access_token, refresh_token: j.refresh_token || s.refresh_token, at: Date.now(), expires_in: j.expires_in || 3600}));
+    if (!s || !s.refresh_token) return;
+    const until = num(s.at) + (num(s.expires_in) || 3600) * 1000;
+    if (Date.now() > until - 120000) await this.refreshToken();
   },
   signOut(){ this.setSess(null); this.st = {state: "off", email: "", role: "", firm: "", lastSync: 0, pending: 0, error: "", busy: "", members: []}; },
   async api(path, opts, retry){
+    if (!retry) await this.fresh().catch(() => {});
     const c = this.cfg(), s = this.sess();
     if (!s) throw new Error("Signed out");
     opts = opts || {};
     const headers = Object.assign({apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": "application/json"}, opts.headers || {});
     const r = await fetch(c.url.replace(/\/+$/, "") + "/rest/v1/" + path, {method: opts.method || "GET", headers, body: opts.body ? JSON.stringify(opts.body) : undefined});
-    if (r.status === 401 && !retry){ await this.refreshToken(); return this.api(path, opts, true); }
+    if (r.status === 401 && !retry){ await this.refreshToken(s.access_token); return this.api(path, opts, true); }
     const text = await r.text();
     let j = null;
     try { j = text ? JSON.parse(text) : null; } catch (e){ j = null; }
@@ -351,11 +372,13 @@ function cloudChip(){
 /* ---------- plan, balance and charging ---------- */
 const MODULE_ICON = {bills: "\u{1F9FE}", bank: "\u{1F3E6}", sales: "\u{1F4C4}", claude: "\u2728", vision: "\u{1F441}", tally: "\u{1F4D2}", cloud: "\u2601", clients: "\u{1F465}"};
 Cloud.rpc = async function(name, args){ return this.api("rpc/" + name, {method: "POST", body: args || {}}); };
-Cloud.fn = async function(name, body){
+Cloud.fn = async function(name, body, retry){
+  if (!retry) await this.fresh().catch(() => {});
   const c = this.cfg(), s = this.sess();
   if (!s) throw new Error("Sign in to the firm account first.");
   const r = await fetch(c.url.replace(/\/+$/, "") + "/functions/v1/" + name, {
     method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": "application/json"}, body: JSON.stringify(body || {})});
+  if (r.status === 401 && !retry){ await this.refreshToken(s.access_token); return this.fn(name, body, true); }
   const j = await r.json().catch(() => ({}));
   if (!r.ok || j.ok === false) throw Object.assign(new Error(j.error || ("Request failed (" + r.status + ")")), {reason: j.reason, balance: j.balance});
   return j;
@@ -1030,7 +1053,7 @@ function doAct(act, t){
       const email = em ? em.value.trim() : "", pass = pw ? pw.value : "";
       if (!email || !pass){ toast("Enter your email and password."); break; }
       Cloud.st.busy = "Signing in\u2026"; Cloud.st.error = ""; render();
-      Cloud.signIn(email, pass).then(() => { Cloud.st.busy = ""; S.cloudForm = null; toast("Signed in as " + email + "."); setTimeout(() => { auditEvent("signin", navigator.userAgent.slice(0, 160)); setTimeout(loadLastSignIn, 1500); }, 3000); startCloudSync(); loadAccount(true).then(() => render()); render(); },
+      Cloud.signIn(email, pass).then(() => { Cloud.st.busy = ""; S.cloudForm = null; S.signedOutWhy = ""; toast("Signed in as " + email + "."); setTimeout(() => { auditEvent("signin", navigator.userAgent.slice(0, 160)); setTimeout(loadLastSignIn, 1500); }, 3000); startCloudSync(); loadAccount(true).then(() => render()); render(); },
         err => { Cloud.st.busy = ""; Cloud.st.error = err.message; render(); });
       break;
     }
@@ -1647,8 +1670,11 @@ function coSetBlockRule(catId, v){ const co = CO(); co.gstBlock = co.gstBlock ||
 // First sign-in of an owner with no firm name yet (review item 32): the name (from sign-up where given), address and
 // logo are asked for once; "Later" puts it off until the next sign-in
 function firmSetupDue(){
-  return !!(S.firm && !S.firm.firmName && !S.firmSetupLater && typeof Cloud === "object" && Cloud.on() && S.account && ((S.account.me || {}).role === "owner"));
+  // "Later" holds for the rest of the day on this computer (review recheck: it came back on every refresh)
+  const later = S.firmSetupLater || lsGet("tdsdesk:firmSetupLater") === fmtDate(new Date());
+  return !!(S.firm && !S.firm.firmName && !later && typeof Cloud === "object" && Cloud.on() && S.account && ((S.account.me || {}).role === "owner"));
 }
+function firmSetupLater(){ S.firmSetupLater = true; lsSet("tdsdesk:firmSetupLater", fmtDate(new Date())); render(); }
 function firmSetupSave(d){
   const name = String(d.name || "").trim();
   if (!name){ toast("The firm\u2019s name is needed."); return false; }

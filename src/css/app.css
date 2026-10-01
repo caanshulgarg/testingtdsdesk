@@ -1148,7 +1148,10 @@ header.top .tbar-title{align-items:center}
 }
 
 /* Transactions (review item 30): a scroll bar that shows, the first columns kept in view, a column chooser */
-.txnwrap{overflow-x:scroll}
+#app .bk-tablewrap.txnwrap{overflow-x:scroll;max-width:100%;scrollbar-width:auto;scrollbar-color:#8a9a92 var(--rule-soft,#eef1ef)}
+#app .txnwrap::-webkit-scrollbar{height:12px;background:var(--rule-soft,#eef1ef)}
+#app .txnwrap::-webkit-scrollbar-thumb{background:#8a9a92;border-radius:6px;border:2px solid var(--rule-soft,#eef1ef)}
+#app .txnwrap .txntbl{min-width:max-content}
 .txntbl .stick1,.txntbl .stick2{position:sticky;background:var(--sheet);z-index:1}
 .txntbl .stick1{left:0;min-width:48px}
 .txntbl .stick2{left:48px;box-shadow:1px 0 0 var(--rule)}

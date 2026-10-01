@@ -64,6 +64,7 @@ const SUP = {
       const safe = String(f.name || "file").replace(/[^A-Za-z0-9._-]+/g, "_").slice(0, 80), path = firm + "/" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7) + "-" + safe;
       const url = c.url.replace(/\/+$/, "") + "/storage/v1/object/support-files/" + path.split("/").map(encodeURIComponent).join("/");
       const put = () => fetch(url, {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + Cloud.sess().access_token, "Content-Type": f.type || "application/octet-stream"}, body: f});
+      await Cloud.fresh().catch(() => {});
       let r = await put(); if (r.status === 401){ await Cloud.refreshToken(); r = await put(); }
       if (!r.ok) throw new Error("Could not upload " + f.name + " (" + r.status + ").");
       out.push({path, name: f.name, size: f.size, type: f.type || ""});
@@ -73,6 +74,7 @@ const SUP = {
   async download(path, name){
     const c = Cloud.cfg(), url = c.url.replace(/\/+$/, "") + "/storage/v1/object/support-files/" + path.split("/").map(encodeURIComponent).join("/");
     const get = () => fetch(url, {headers: {apikey: c.key, Authorization: "Bearer " + Cloud.sess().access_token}});
+    await Cloud.fresh().catch(() => {});
     let r = await get(); if (r.status === 401){ await Cloud.refreshToken(); r = await get(); }
     if (!r.ok) throw new Error("The file could not be fetched (" + r.status + ").");
     const blob = await r.blob(), a = document.createElement("a");
