@@ -144,9 +144,14 @@ func trayStatus() M {
 		}
 	}
 	cloud := cloudOn()
-	online := cloud && !beatOK.IsZero() && time.Since(beatOK) < time.Duration(3*keepNum("CloudBeatSec", 60)+120)*time.Second
+	bOK, bFail := beatTimes()
+	// offline only after three missed heartbeats (about two minutes); in between it is "reconnecting"
+	missed := cloud && !bFail.IsZero()
+	online := cloud && !bOK.IsZero() && (!missed || time.Since(bFail) < time.Duration(3*beatEvery()+30)*time.Second)
+	reconnecting := missed && online
+	tstate, tsince := tallyOverall(openCompaniesCached())
 	return M{"ok": true, "version": BridgeVersion, "testMode": testMode(), "readOnly": readOnlyWhy(), "paused": paused(), "tallyOpen": tallyOpen, "companies": cos,
-		"cloudConnected": cloud, "online": online, "needKey": cfgS("CloudUrl") != "" && cloudKey() == "", "lastBeat": fmtTime(beatOK), "beatFailed": fmtTime(beatFailAt), "wake": wakeStatus(), "updating": keepRunning(),
+		"cloudConnected": cloud, "online": online, "reconnecting": reconnecting, "tallyState": tstate, "busySince": tsince, "needKey": cfgS("CloudUrl") != "" && cloudKey() == "", "lastBeat": fmtTime(bOK), "beatFailed": fmtTime(bFail), "wake": wakeStatus(), "updating": keepRunning(),
 		"port": toInt(cfg("Port")), "fincomUrl": fincomURL(), "log": logFile(), "shadow": shadowStats, "update": updateInfo(), "owner": ownerName()}
 }
 func fmtTime(t time.Time) string {
@@ -332,6 +337,7 @@ func runBridge(console bool) int {
 		f()
 	}
 	go updateLoop()
+	go beatLoop()
 	last := time.Now()
 	lastPush := time.Now()
 	for !stopping() {
@@ -343,7 +349,6 @@ func runBridge(console bool) int {
 			syncConfig()
 			safe("Check", showDiagnosis)
 			safe("Could not start keeping copies in step", startKeepIfNeeded)
-			safe("Cloud", sendCloudBeat)
 		}
 		// the outbox goes on without the copier too (days kept while offline go as soon as FinCom can be reached)
 		if !keepRunning() && time.Since(lastPush) >= 60*time.Second {

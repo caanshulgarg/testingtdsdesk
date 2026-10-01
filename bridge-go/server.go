@@ -220,7 +220,7 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 		coMu.Unlock()
 		return M{"ok": true, "version": BridgeVersion, "computer": computerName(), "user": ownerName(), "mySession": mySession(), "mode": pm, "onlyMySession": cfgB("OnlyMySession"), "time": nowS(),
 			"sessions": sessions, "allowImport": cfgB("AllowImport") && why == "", "readOnly": why, "impl": "go", "testMode": testMode(), "paused": paused(),
-			"tallyStuck": getTallyStuck(), "wake": wakeStatus(), "jobs": jobsNow}, nil
+			"tallyStuck": getTallyStuck(), "wake": wakeStatus(), "jobs": jobsNow, "tally": tallyStatus(sessions), "beat": beatStatus()}, nil
 	case "/companies":
 		list := []any{}
 		for _, s := range openCompanies(false) {
@@ -593,4 +593,16 @@ func computerName() string {
 	}
 	h, _ := os.Hostname()
 	return h
+}
+
+// for FinCom: Tally open / busy / closed (a busy Tally is open, only slow to answer)
+func tallyStatus(sessions []M) M {
+	st, since := tallyOverall(sessions)
+	return M{"state": st, "since": since}
+}
+
+// for FinCom: the heartbeat to the cloud (every 30 s), and since when it has not got through
+func beatStatus() M {
+	ok, fail := beatTimes()
+	return M{"every": beatEvery(), "last": fmtTime(ok), "missedSince": fmtTime(fail), "on": cloudOn()}
 }

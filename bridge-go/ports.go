@@ -376,7 +376,10 @@ func openCompanies(fresh bool) []M {
 			continue
 		}
 		raw, err := invokeTally(fin, toInt(pp["port"]), collectionRequest("TDSDeskCompanies", "Company", "NAME,STARTINGFROM,ENDINGAT,GUID", "", ""), 8)
-		if err != nil {
+		if err != nil && isBusyErr(err) && tallyPortOpen(toInt(pp["port"])) && prevCompanies(toInt(pp["port"])) != nil {
+			// a busy Tally is still open: the companies it named last time stay, marked busy
+			e["ok"], e["companies"], e["busy"], e["tallyState"] = true, prevCompanies(toInt(pp["port"])), true, "busy"
+		} else if err != nil {
 			e["error"] = err.Error()
 		} else {
 			list := []any{}
@@ -390,6 +393,7 @@ func openCompanies(fresh bool) []M {
 			}
 			e["ok"] = true
 			e["companies"] = list
+			e["tallyState"] = "open"
 		}
 		sessions = append(sessions, e)
 	}
@@ -399,6 +403,22 @@ func openCompanies(fresh bool) []M {
 	coMu.Unlock()
 	_ = saveFile(shared, jsonText(sessions))
 	return copySessions(sessions)
+}
+
+// the companies a Tally named the last time it answered
+func prevCompanies(port int) []any {
+	coMu.Lock()
+	c := coCache
+	coMu.Unlock()
+	if c == nil {
+		c = sessionsFromFile(filepath.Join(syncDir(), "open-companies.json"))
+	}
+	for _, e := range c {
+		if toInt(e["port"]) == port && e["ok"] == true && len(sessCompanies(e)) > 0 {
+			return arr(e["companies"])
+		}
+	}
+	return nil
 }
 
 func sessionsFromFile(f string) []M {
@@ -459,11 +479,13 @@ func openCompaniesCached() []M {
 			if e["skipped"] == true {
 				continue
 			}
-			open := tallyPortOpen(toInt(e["port"]))
+			st := tallyState(toInt(e["port"]))
+			open := st != "closed"
 			if open && (e["ok"] != true || len(sessCompanies(e)) == 0) {
 				stale = true // Tally opened since it was last asked
 			}
 			e["ok"] = open
+			e["tallyState"], e["busy"] = st, st == "busy"
 			if !open {
 				e["companies"] = []any{}
 			}
@@ -492,7 +514,14 @@ func openCompaniesCached() []M {
 		coMu.Lock()
 		emptyAskAt = time.Now()
 		coMu.Unlock()
-		return openCompanies(false)
+		if list == nil {
+			return openCompanies(false) // nothing known at all yet: asked now (the bridge's first minute)
+		}
+		// asked in the background: a status check or the heartbeat never waits for Tally
+		go func() {
+			defer func() { recover() }()
+			openCompanies(false)
+		}()
 	}
 	if list == nil {
 		return []M{}

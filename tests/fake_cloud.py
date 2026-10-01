@@ -26,7 +26,7 @@ class H(http.server.BaseHTTPRequestHandler):
             # with what is kept (bridge 1.15.0's), never kept
             SHADOW.append((k, o))
             if k in ("posts_take", "posts_update"): return self._send(403, {"ok": False, "error": "A bridge in test mode does not post."})
-            if k == "beat": return self._send(200, {"ok": True, "updateNow": False, "posts": 0, "wake": CTRL.get("wake"), "shadow": True})
+            if k == "beat": o["_t"] = __import__("time").time(); BEATS.append(o); return self._send(200, {"ok": True, "updateNow": False, "posts": 0, "wake": CTRL.get("wake"), "shadow": True})
             if k == "hello": return self._send(200, {"ok": True, "firm": "ZZ TEST FIRM", "device": "TEST-PC"})
             if k == "companies": return self._send(200, {"ok": True, "links": {c["name"]: bool(LINKS.get(c["name"])) for c in o.get("companies", [])}})
             co = o.get("company", "")
@@ -41,7 +41,7 @@ class H(http.server.BaseHTTPRequestHandler):
             return self._send(200, {"ok": True, "shadow": True})
         CALLS.append((k + ("-plain" if k == "days" and any("b64" in d for d in o.get("days", [])) else ""), n))
         if k == "beat":
-            BEATS.append(o); w = CTRL.pop("want", False)
+            o["_t"] = __import__("time").time(); BEATS.append(o); w = CTRL.pop("want", False)
             return self._send(200, {"ok": True, "updateNow": w, "posts": sum(1 for j in POSTS.values() if j["status"] == "waiting"), "wake": CTRL.get("wake")})   # wake: bridge 1.15.0
         if k == "posts_take":
             for jid, j in POSTS.items():

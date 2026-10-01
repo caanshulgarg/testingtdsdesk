@@ -41,7 +41,7 @@ def call(name, path, body=None, raw=False, method=None):
         t = e.read().decode("utf-8"); code = e.code; h = dict(e.headers)
     return code, (t if raw else (json.loads(t) if t.strip() else None)), h
 VOLATILE = {"time", "ms", "version", "file", "updatedAt", "startedAt", "finishedAt", "pid", "impl", "testMode", "readOnly", "paused", "wake", "at", "user", "computer",
-            "lightAt", "load", "cloud", "seen", "tallyStuck", "folder", "input", "bridge"}
+            "lightAt", "load", "cloud", "seen", "tallyStuck", "folder", "input", "bridge", "tallyState", "busy", "tally", "beat"}
 def norm(v):
     if isinstance(v, dict): return {k: norm(x) for k, x in sorted(v.items()) if k not in VOLATILE}
     if isinstance(v, list): return [norm(x) for x in v]

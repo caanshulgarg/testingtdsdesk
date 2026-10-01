@@ -354,6 +354,60 @@ var (
 	tallyCool = map[int]cool{}
 )
 
+// --- a Tally busy with a long report, a message box or another user's work: still open, only slow to answer. It is
+// reported as "busy" (never as closed or offline), its companies are kept, and it is asked again quietly
+var (
+	busyMu    sync.Mutex
+	inflight  = map[int]time.Time{} // a request at Tally since
+	busySince = map[int]time.Time{} // the first time this busy spell was noticed
+)
+
+func setInflight(port int, on bool) {
+	busyMu.Lock()
+	defer busyMu.Unlock()
+	if on {
+		inflight[port] = time.Now()
+	} else {
+		delete(inflight, port)
+	}
+}
+
+// busy: a request has been at Tally for more than TallyBusySec (8) seconds, or Tally did not answer one lately
+func tallyBusy(port int) (bool, time.Time) {
+	busyMu.Lock()
+	t, at := inflight[port]
+	since, was := busySince[port]
+	busyMu.Unlock()
+	coolMu.Lock()
+	c, cooling := tallyCool[port]
+	coolMu.Unlock()
+	busy := (at && time.Since(t) > time.Duration(keepNum("TallyBusySec", 8))*time.Second) || (cooling && time.Now().Before(c.until))
+	if !busy {
+		return false, time.Time{}
+	}
+	if !was {
+		since = t
+		if since.IsZero() || !at {
+			since = time.Now()
+		}
+	}
+	return true, since
+}
+
+// one of open / busy / closed, for the heartbeat, FinCom's status and the tray
+func tallyState(port int) string {
+	if !tallyPortOpen(port) {
+		return "closed"
+	}
+	if b, _ := tallyBusy(port); b {
+		return "busy"
+	}
+	return "open"
+}
+func isBusyErr(err error) bool {
+	return err != nil && re(`timed out|is busy|was closed|unexpected error occurred on a receive|forcibly closed`).MatchString(err.Error())
+}
+
 func invokeTally(tc *TC, port int, x string, timeoutSec int) (string, error) {
 	coolMu.Lock()
 	c, had := tallyCool[port]
@@ -370,12 +424,21 @@ func invokeTally(tc *TC, port int, x string, timeoutSec int) (string, error) {
 		return "", err
 	}
 	t0 := time.Now()
+	setInflight(port, true)
 	r, err := tallyRaw(port, x, timeoutSec)
+	setInflight(port, false)
 	fail := ""
 	if err == nil {
 		coolMu.Lock()
 		delete(tallyCool, port)
 		coolMu.Unlock()
+		busyMu.Lock()
+		since, was := busySince[port]
+		delete(busySince, port)
+		busyMu.Unlock()
+		if was {
+			writeLog(fmt.Sprintf("Tally %d answers again (it was busy for %s)", port, time.Since(since).Round(time.Second)))
+		}
 		clearTallyStuck(port)
 		// something was posted to Tally: the changed days are brought in and sent to the cloud in a minute or so
 		if !tc.copier && re(`<TALLYREQUEST>\s*Import`).MatchString(x) {
@@ -393,7 +456,16 @@ func invokeTally(tc *TC, port int, x string, timeoutSec int) (string, error) {
 			tallyCool[port] = cool{n, time.Now().Add(time.Duration(w) * time.Second)}
 			coolMu.Unlock()
 			setTallyStuck(port)
-			writeLog(fmt.Sprintf("Tally %d is busy and did not answer in time; it is not asked again for %ds, so requests do not pile up", port, w))
+			// said once a busy spell; the next tries are quiet
+			busyMu.Lock()
+			_, was := busySince[port]
+			if !was {
+				busySince[port] = t0
+			}
+			busyMu.Unlock()
+			if !was {
+				writeLog(fmt.Sprintf("Tally %d is busy (no answer in time); FinCom shows it as busy, and it is asked again quietly (first in %ds)", port, w))
+			}
 		}
 	}
 	if !tc.copier {
@@ -493,7 +565,11 @@ func addTallyUse(tc *TC, port int, sec float64, x, fail string) {
 		}
 		useMu.Unlock()
 	}
-	if fail != "" || sec >= float64(keepNum("KeepSlowSec", 3)) {
+	quiet := false
+	if fail != "" && re(`is busy and did not answer the last request`).MatchString(fail) {
+		quiet = true // a quiet retry while Tally is busy
+	}
+	if !quiet && (fail != "" || sec >= float64(keepNum("KeepSlowSec", 3))) {
 		f := group(`<SVFROMDATE>(\d{8})</SVFROMDATE>`, x, 1)
 		to := group(`<SVTODATE>(\d{8})</SVTODATE>`, x, 1)
 		span := ""

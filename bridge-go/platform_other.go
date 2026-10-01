@@ -56,4 +56,4 @@ func trayQuitSession(session int)       {}
 func openFile(f string)                 { println(f) }
 func attachConsole()                    {}
 func stopCmd() int                      { return 0 }
-func restartServiceCmd() int { return 0 }
+func restartServiceCmd() int            { return 0 }

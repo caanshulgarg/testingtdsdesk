@@ -151,6 +151,25 @@ async function shadowCall(dev: any, firm: string, body: any) {
   }
   return reply(200, { ok: true, shadow: true });
 }
+// go-bridge: the connection history of a computer for the last 24 hours (FinCom: Settings, Tally Bridge), worked out from
+// its heartbeats: a gap of three missed beats or more (the bridge offline from - to), each change of Tally's state
+// (open / busy / closed), and the companies opened and closed in Tally. Kept in tally_devices.info (no table of its own)
+function beatHistory(prev: any, beat: any) {
+  const now = Date.parse(beat.at), day = 24 * 3600 * 1000;
+  const h = (Array.isArray(prev.history) ? prev.history : []).filter((e: any) => e && Date.parse(e.to || e.at) > now - day);
+  const last = prev.beat && typeof prev.beat === "object" ? prev.beat : null;
+  if (!last || !last.at) h.push({ kind: "bridge", state: "online", at: beat.at });
+  else {
+    const every = Math.max(10, Math.min(600, Number(last.every) || 60)) * 1000;
+    if (now - Date.parse(last.at) > 3 * every + 30000) h.push({ kind: "bridge", state: "offline", at: last.at, to: beat.at });
+    const was = last.tallyState || (last.tally ? "open" : "closed");
+    if (was !== beat.tallyState) h.push({ kind: "tally", state: beat.tallyState, at: beat.at, was });
+    const before = new Set(Array.isArray(last.open) ? last.open : []), nowOpen = new Set(beat.open);
+    for (const c of nowOpen) if (!before.has(c)) h.push({ kind: "company", state: "open", name: c, at: beat.at });
+    for (const c of before) if (!nowOpen.has(c)) h.push({ kind: "company", state: "closed", name: c, at: beat.at });
+  }
+  return h.slice(-300);
+}
 async function bookFor(firm: string, company: string) {
   const { data, error } = await db.rpc("tally_book_for", { p_firm: firm, p_company: company });
   if (error) throw new Error(error.message);
@@ -460,8 +479,12 @@ Deno.serve(async (req) => {
           ports: (Array.isArray(b.ports) ? b.ports : []).slice(0, 20).map((p: any) => ({ port: Math.max(0, Math.min(65535, Math.floor(Number(p?.port) || 0))), ok: !!p?.ok, skipped: !!p?.skipped,
             n: Math.max(0, Math.min(1000, Math.floor(Number(p?.n) || 0))), error: s(p?.error, 120) })),
           companies: (Array.isArray(b.companies) ? b.companies : []).slice(0, 200).map((c: any) => ({ name: s(c?.name, 200), open: !!c?.open, at: s(c?.at, 30), phase: s(c?.phase, 12),
-            waiting: Math.max(0, Math.min(1e6, Math.floor(Number(c?.waiting) || 0))) })) };
-        const info = { ...(((dev as any).info && typeof (dev as any).info === "object") ? (dev as any).info : {}), beat };
+            waiting: Math.max(0, Math.min(1e6, Math.floor(Number(c?.waiting) || 0))) })),
+          // go-bridge: Tally open / busy (open, slow to answer) / closed, and how often the beat comes (2.0: 30 s; 1.15.0: 60 s)
+          tallyState: ["open", "busy", "closed"].includes(b.tallyState) ? b.tallyState : (b.tally ? "open" : "closed"), busySince: s(b.busySince, 30),
+          every: Math.max(10, Math.min(600, Math.floor(Number(b.every) || 60))), version: s(body.version, 40) };
+        const prevInfo = ((dev as any).info && typeof (dev as any).info === "object") ? (dev as any).info : {};
+        const info = { ...prevInfo, beat, history: beatHistory(prevInfo, beat) };
         // build 197: someone pressed Update now on another computer: the bridge is told in this answer, once
         const want = (dev as any).want_update_at, sent = (dev as any).want_sent_at;
         const updateNow = !!want && (!sent || Date.parse(want) > Date.parse(sent));

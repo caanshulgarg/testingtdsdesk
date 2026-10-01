@@ -23,6 +23,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -53,15 +54,13 @@ type cloudResp struct {
 var cloudHTTP = &http.Client{Transport: &http.Transport{Proxy: http.ProxyFromEnvironment, MaxIdleConns: 4, IdleConnTimeout: 60 * time.Second}}
 
 // test mode: nothing but the heartbeat goes until FinCom's cloud has answered that it keeps a test bridge's calls apart
-// (an older cloud would take them as bridge 1.15.0's)
-var shadowOK bool
-
+// (an older cloud would take them as bridge 1.15.0's): shadowOK, set by the heartbeat
 // one call to the cloud
 func invokeCloud(body M, timeoutSec int) cloudResp {
 	body["version"] = BridgeVersion
 	if testMode() {
 		body["shadow"] = true
-		if k := str(body["kind"]); !shadowOK && k != "beat" {
+		if k := str(body["kind"]); !shadowOK.Load() && k != "beat" {
 			return cloudResp{0, nil, "FinCom's cloud has not confirmed test mode yet; nothing is sent"}
 		}
 	}
@@ -580,22 +579,75 @@ func cloudLinkStatus() M {
 	return M{"ok": true, "connected": cloudOn(), "url": cfgS("CloudUrl"), "status": readJSONFile(sp("cloud-status.json"))}
 }
 
-// --- the heartbeat (1.14.1): is Tally open, which companies, when each was last updated. Tally is asked nothing
+// --- the heartbeat: every 30 seconds (CloudBeatSec), on its own, so FinCom always knows the bridge is there. It is made
+// only from what the bridge already knows (Tally is asked nothing), and nothing it does waits for Tally or a posting:
+// a slow Tally shows as "busy", not as a bridge gone. A beat that does not reach FinCom is tried again at the next tick
 var (
-	beatAt     time.Time
+	beatMu     sync.Mutex
 	beatOK     time.Time // the last heartbeat the cloud answered (for the tray: "Bridge offline")
-	beatFailAt time.Time
+	beatFailAt time.Time // since when the heartbeat has not reached FinCom (zero: it does)
+	shadowOK   atomic.Bool
+	postTaking atomic.Bool
+	beatNow    = make(chan struct{}, 1)
 )
 
-func sendCloudBeat() {
-	if !cloudOn() || time.Since(beatAt).Seconds() < float64(keepNum("CloudBeatSec", 60)) {
-		return
+func beatTimes() (time.Time, time.Time) {
+	beatMu.Lock()
+	defer beatMu.Unlock()
+	return beatOK, beatFailAt
+}
+func beatEvery() int { return keepNum("CloudBeatSec", 30) }
+
+// the state of the owner's Tally overall: open, busy (open, slow to answer), or closed
+func tallyOverall(sessions []M) (string, string) {
+	st, since := "closed", ""
+	for _, s := range sessions {
+		if s["skipped"] == true {
+			continue
+		}
+		switch str(s["tallyState"]) {
+		case "open":
+			st = "open"
+		case "busy":
+			if st != "open" {
+				st = "busy"
+				if b, t := tallyBusy(toInt(s["port"])); b {
+					since = t.Format("2006-01-02T15:04:05")
+				}
+			}
+		}
 	}
-	beatAt = time.Now()
+	return st, since
+}
+
+func beatLoop() {
+	sleepOrStop(3 * time.Second)
+	for !stopping() {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					writeLog(fmt.Sprint("Heartbeat: ", r))
+				}
+			}()
+			if cloudOn() {
+				beatOnce()
+			}
+		}()
+		select {
+		case <-stopCh:
+			return
+		case <-beatNow:
+		case <-time.After(time.Duration(beatEvery()) * time.Second):
+		}
+	}
+}
+
+func beatOnce() {
 	open, ports := []any{}, []any{}
+	sessions := openCompaniesCached()
 	tally := false
-	for _, s := range openCompaniesCached() {
-		ports = append(ports, M{"port": toInt(s["port"]), "ok": s["ok"] == true, "skipped": s["skipped"] == true, "n": len(sessCompanies(s)), "error": cut(str(s["error"]), 120)})
+	for _, s := range sessions {
+		ports = append(ports, M{"port": toInt(s["port"]), "ok": s["ok"] == true, "skipped": s["skipped"] == true, "n": len(sessCompanies(s)), "error": cut(str(s["error"]), 120), "state": str(s["tallyState"])})
 		if s["skipped"] == true {
 			continue
 		}
@@ -606,6 +658,7 @@ func sendCloudBeat() {
 			}
 		}
 	}
+	tstate, tsince := tallyOverall(sessions)
 	cos := []any{}
 	for _, d := range keptDirs() {
 		st := readKeepState(d)
@@ -620,35 +673,49 @@ func sendCloudBeat() {
 		}
 		cos = append(cos, M{"name": str(st["company"]), "open": isOpen, "at": str(st["at"]), "phase": str(st["phase"]), "waiting": len(cloudQueue(d))})
 	}
-	r := invokeCloud(M{"kind": "beat", "tally": tally, "open": open, "ports": ports, "companies": cos, "updating": keepRunning(), "dailyAt": keepDailyAt(), "lastRun": keepLastRun()}, 10)
+	r := invokeCloud(M{"kind": "beat", "tally": tally, "tallyState": tstate, "busySince": tsince, "every": beatEvery(), "open": open, "ports": ports, "companies": cos,
+		"updating": keepRunning(), "dailyAt": keepDailyAt(), "lastRun": keepLastRun()}, 10)
 	if r.code == 200 && r.json != nil {
 		if testMode() && !truthy(r.json["shadow"]) {
-			if shadowOK || beatFailAt.IsZero() {
+			if shadowOK.Swap(false) || beatMissedSince().IsZero() {
 				writeLog("Test mode: FinCom's cloud does not keep a test bridge apart yet, so nothing is sent to it (only the heartbeat)")
 			}
-			shadowOK = false
-			beatFailAt = time.Now()
+			beatMu.Lock()
+			if beatFailAt.IsZero() {
+				beatFailAt = time.Now()
+			}
+			beatMu.Unlock()
 			return
 		}
-		shadowOK = true
-		beatOK = time.Now()
-		setCloudWake(obj(r.json["wake"]))
-		// Update now pressed in FinCom on another computer
-		if truthy(r.json["updateNow"]) {
-			requestKeepNow()
-			startKeepIfNeeded()
+		shadowOK.Store(true)
+		beatMu.Lock()
+		was := beatFailAt
+		beatOK, beatFailAt = time.Now(), time.Time{}
+		beatMu.Unlock()
+		if !was.IsZero() {
+			writeLog(fmt.Sprintf("Heartbeat: FinCom reached again (not reached for %s)", time.Since(was).Round(time.Second)))
 		}
-		if toInt(r.json["posts"]) > 0 && cfgB("AllowImport") && readOnlyWhy() == "" {
-			cloudPostTake()
+		setCloudWake(obj(r.json["wake"]))
+		// Update now pressed in FinCom on another computer; postings waiting: started, never waited for here
+		if truthy(r.json["updateNow"]) && !paused() {
+			go func() { requestKeepNow(); startKeepIfNeeded() }()
+		}
+		if toInt(r.json["posts"]) > 0 && cfgB("AllowImport") && readOnlyWhy() == "" && !paused() && postTaking.CompareAndSwap(false, true) {
+			go func() { defer postTaking.Store(false); cloudPostTake() }()
 		}
 		return
 	}
-	beatFailAt = time.Now()
-	beatAt = time.Now().Add(25 * time.Minute) // the cloud or the internet is down: tried again in half an hour
-	if r.code == 0 {
-		beatAt = time.Now().Add(time.Duration(keepNum("CloudRetrySec", 120)) * time.Second) // no internet: sooner, the outbox waits
+	beatMu.Lock()
+	first := beatFailAt.IsZero()
+	if first {
+		beatFailAt = time.Now()
+	}
+	beatMu.Unlock()
+	if first { // said once; tried again quietly every 30 seconds
+		writeLog("Heartbeat: FinCom could not be reached (" + r.err + "); tried again every " + fmt.Sprint(beatEvery()) + " s, nothing is lost")
 	}
 }
+func beatMissedSince() time.Time { _, f := beatTimes(); return f }
 
 // --- the posting queue (build 199): postings queued in FinCom on any computer, taken one at a time
 var (
@@ -921,8 +988,8 @@ func wakeSession(u, key, topic string) error {
 			writeLog("Woken by FinCom: a posting is waiting")
 			if why := readOnlyWhy(); why != "" {
 				writeLog("Not taken here: " + why)
-			} else if cfgB("AllowImport") {
-				go cloudPostTake()
+			} else if cfgB("AllowImport") && postTaking.CompareAndSwap(false, true) {
+				go func() { defer postTaking.Store(false); cloudPostTake() }()
 			}
 		case "update":
 			writeLog("Woken by FinCom: Update now")

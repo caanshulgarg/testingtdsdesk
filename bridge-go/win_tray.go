@@ -272,6 +272,10 @@ func (t *tray) poll() {
 				tip = append(tip, "- not connected to FinCom")
 			case !online:
 				tip = append(tip, "- offline")
+			case truthy(st["reconnecting"]):
+				tip = append(tip, "- reconnecting to FinCom")
+			case str(st["tallyState"]) == "busy":
+				tip = append(tip, "- Tally busy (answers slowly; asked again quietly)")
 			default:
 				tip = append(tip, "- working: "+strings.Join(strs(st["companies"]), ", "))
 			}
@@ -346,7 +350,9 @@ func (t *tray) statusText() string {
 	if truthy(st["paused"]) {
 		b.WriteString("Paused: Tally is not read and nothing is posted.\n")
 	}
-	if truthy(st["tallyOpen"]) {
+	if str(st["tallyState"]) == "busy" {
+		fmt.Fprintf(&b, "Tally: busy since %s (open, answers slowly; asked again quietly) (%s)\n", str(st["busySince"]), strings.Join(strs(st["companies"]), ", "))
+	} else if truthy(st["tallyOpen"]) {
 		fmt.Fprintf(&b, "Tally: open (%s)\n", strings.Join(strs(st["companies"]), ", "))
 	} else {
 		b.WriteString("Tally: not open in your Windows session\n")
