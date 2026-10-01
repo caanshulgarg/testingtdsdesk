@@ -17114,7 +17114,19 @@ const Help = {
     "tds:24Q:annex2": {t: "24Q \u2014 Annexure II", what: "The whole year\u2019s salary details per employee, filed with Q4.", steps: ["Check gross salary, exemptions, deductions and tax for each employee.", "Tie the TDS to what was deducted over the year."], from: "The salary sheet for the year.", watch: []},
     "tds:24Q:checks": {t: "24Q \u2014 Checks", what: "What to fix before filing: missing PANs, TDS that differs from the books, and the like.", steps: ["Fix each item listed, in the sheet or in Tally."], from: "The salary sheet and the books.", watch: []}
   },
+  // review item 37: every screen's "?" opens its own topic. GST and TDS tabs have theirs above; the other screens of a
+  // client use the guide's articles (GUIDE.A in src/js/40), as "page:<article>"
+  PAGES: {reports: "reports", lookup: "lookup", letters: "letters", mis: "mis", audit: "audit"},
+  topic(k){ return this.T[k] || (String(k).startsWith("page:") && typeof GUIDE === "object" ? GUIDE.A[k.slice(5)] : null) || null; },
   key(){
+    if (S.view === "company" && S.tab !== "books"){
+      if (S.tab === "clientInbox") return "page:inbox";
+      if (S.tab === "bank") return "page:" + (typeof bankTab === "function" && S.bank && bankTab() === "rules" ? "bankrules" : "bank");
+      if (S.tab === "sales") return "page:sales";
+      if (["invoices", "review", "export", "done", "collect"].includes(S.tab) && typeof docType === "function" && docType() === "bills") return "page:bills";
+      return "";
+    }
+    if (S.view === "company" && S.tab === "books" && typeof booksTab === "function" && this.PAGES[booksTab()]) return "page:" + this.PAGES[booksTab()];
     if (S.view !== "company" || S.tab !== "books" || !S.books || S.books.loading) return "";
     const t = typeof booksTab === "function" ? booksTab() : "";
     if (t === "gst") return "gst:" + (S.gstPart || "r1");
@@ -17122,7 +17134,7 @@ const Help = {
     return "";
   },
   html(k){
-    const x = this.T[k]; if (!x) return "";
+    const x = this.topic(k); if (!x) return "";
     return '<div class="help-head"><b>How this tab works: ' + esc(x.t) + '</b><button class="linkbtn" data-help="close" aria-label="Close">\u2715</button></div>' +
       "<h4>What it is for</h4><p>" + esc(x.what) + "</p>" +
       (x.steps && x.steps.length ? "<h4>What to do</h4><ol>" + x.steps.map(s => "<li>" + esc(s) + "</li>").join("") + "</ol>" : "") +
@@ -17131,7 +17143,7 @@ const Help = {
   },
   // after every render: a button beside the tab bar, and the panel kept in step with the tab shown
   after(){
-    const k = this.key(), has = !!this.T[k];
+    const k = this.key(), has = !!this.topic(k);
     let p = document.getElementById("helpPanel");
     if (has){
       // on the row of month and downloads under the GST tabs, where there is room; on TDS, the line of years and quarters
@@ -18007,22 +18019,54 @@ const GUIDE = {
       steps: ["Add each GSTIN; its PAN must be the client's PAN.", "Choose the GSTIN in the list to see its settings.", "When a setting changes, choose whether it is for this GSTIN only, for all, or for the ones you tick."]},
     "account": {area: "Firm account", t: "Firm account, people and credit", what: "Signing in to the firm account keeps the work in the cloud, shares it with the firm's people, and uses the firm's credit for reading documents.",
       steps: ["Sign in at the top right.", "Owners add people under Settings → People, with what each may do.", "Credit and plan are shown on the firm button; ask the administrator to top up before it runs out."]},
+    // review item 37: a topic for every screen on the left (Reports, MIS, Audit, Look up, Letters, Bank rules) and for 27Q and TCS
+    "bankrules": {area: "Documents", t: "Bank rules", what: "A written rule gives bank lines their ledger (or sets them aside) from what the line says, so lines that come every month need no work.",
+      steps: ["Bank → Rules → New rule, or the Rule button on a line (“Make a rule from this line”).", "Say what to look for: words in the description (contains, starts with, is exactly, does not contain), money going out or coming in, an amount range, the way of payment (UPI, NEFT, CHQ…), the bank account.", "Say what to do: use this ledger (it must exist in Tally, or pick a standard ledger), or set the line aside. Optionally a split, a narration for Tally and a voucher type.", "Tick “Mark matching lines ready to post” to skip checking; untick it to see the lines first.", "Apply to this statement, or let it work on the next statement read. “Look for rules in what we have done before” proposes rules from your earlier choices."],
+      watch: ["Rules are read from the top down and the first one that fits wins; the client’s own rules come before the firm-wide ones. Use ↑ and ↓ to order them.", "Lines already in Tally are never changed by a rule. “Apply to this statement”, and changing or moving a rule, apply the rules again to the open statement, also over lines you set by hand.", "Deleting a rule leaves lines already set as they are."]},
+    "tds27q": {area: "TDS", t: "27Q (TDS on payments to non-residents)", what: "FinCom does not prepare 27Q yet. It prepares 26Q (payments to residents) and 24Q (salary).",
+      steps: ["Keep TDS on payments to non-residents on a TDS ledger of its own whose name says so (for example “TDS on Non Resident Payments”); FinCom reads such a ledger as section 195. Before filing 26Q, check that none of these deductions is in it.", "Prepare 27Q, and Form 15CA/15CB where they apply, in the return preparation utility or your usual software."],
+      watch: ["The Audit screen flags parties that look foreign (Inc, LLC, GmbH, no GSTIN) as possibly section 195 or the equalisation levy, so they are not missed.", "Rates for non-residents depend on the Act and the tax treaty; FinCom does not work them out."]},
+    "tcs": {area: "TDS", t: "TCS (tax collected at source)", what: "FinCom does not prepare 27EQ (the TCS return) yet. It recognises TCS ledgers in the books and shows them in MIS and the compliance calendar.",
+      steps: ["Under TDS & GST → Tally ledgers → TDS and TCS, check that each TCS ledger is marked TCS payable or TCS receivable, with its section.", "File 27EQ in the return preparation utility or your usual software.", "TCS deducted by an e-commerce operator on your sales (GST, section 52) is shown in GSTR-1 table 14 and claimed from the cash ledger."],
+      watch: ["MIS lists TDS and TCS ledgers together, and the compliance calendar shows “TDS and TCS deposit” by the 7th.", "Interest on late TDS or TCS is not allowed as an expense; MIS points it out."]},
+    "reports": {area: "Reports", t: "Reports", what: "Every report for the client in one place, in six areas: how the business is doing, customers and suppliers, bank and cash, GST, TDS, and audit and accounts.",
+      steps: ["Open Reports on the left and choose the year.", "Click a figure or a report name to open it (each opens its own screen: MIS, GST, TDS, Audit, Look up or Letters).", "Type in “Find a report” (ageing, 3B, cash, ratios…) to go straight to one.", "Refresh books (the button at the top) reads the latest from Tally first."],
+      from: "The books read from Tally.", watch: ["Without the books read from Tally the page asks you to read them first.", "A name not found as a report: try Look up for a ledger or an entry."]},
+    "mis": {area: "MIS", t: "MIS (management reports)", what: "Management reports from the books: summary, profit and loss, receivables, payables, sales, purchases and expenses, cash flow, ratios, registrations, cost centres, budget and compliance.",
+      steps: ["Choose the dates, or This month, Last month, This quarter, Year to date, Last year, then Run now.", "Set “Run on its own”: on the 1st for the month just ended (the default), every week, every day, or only when you run it.", "Download the MIS pack (PDF) from the print view, or Excel."],
+      from: "The books read from Tally; each run says whether the figures agree with Tally’s balances ledger by ledger.",
+      watch: ["“Run on its own” runs when the client is opened, not on a timer.", "MSME suppliers unpaid after 45 days are shown under Payables."]},
+    "audit": {area: "Audit", t: "Audit of the books", what: "Checks over every voucher, the way an auditor would: cash and loans, TDS, GST, the books and audit trail, and balances. Also related parties and a Form 3CD draft.",
+      steps: ["Open Audit and press Run now (it also runs on its own: every day, week or month, or only when you run it).", "Go through Findings: each has the problem, the amount, a suggestion and the entry to pass where one is needed.", "Mark each one: Explained, Entry to pass, Entry passed or Not an issue.", "Download the Tally file of entries to pass, the report (PDF) or the Excel with annexures; Finalise this report locks it."],
+      from: "The vouchers read from Tally, from the start of the year to the last date in the books.", watch: ["Findings are observations to confirm against documents, not conclusions."]},
+    "lookup": {area: "Look up", t: "Look up", what: "Any ledger, group, trial balance, month-by-month figure, a party’s open bills, or entries, for any dates.",
+      steps: ["Press / anywhere in a client, or open Look up on the left.", "Ask in words: “HDFC bank for August”, “Raj Fabrics open bills”, “trial balance as on 31/03/2026”; or choose the kind and the period and press Show.", "Click a name in the result to go further; Print or PDF, or Excel."],
+      from: "Totals come from FinCom’s copy of the books. One ledger can be read live from Tally when the Tally Bridge is on (“From: Tally, live”).",
+      watch: ["Without the books or the bridge, read the books from Tally first."]},
+    "letters": {area: "Letters", t: "Confirmations and reminders", what: "Balance confirmation letters to customers, suppliers and loan parties, and reminders of dues, from the client’s books.",
+      steps: ["Balance confirmations: choose the date, who to write to and the smallest balance; tick the parties.", "Print or save the letters as PDF, or open each in your own email or WhatsApp.", "Record each reply and the party’s figure; differences are listed.", "Dues reminders: choose the date, the credit allowed and the tone (friendly, firm, final)."],
+      from: "Balances and bill-wise dues in Tally.", watch: ["Nothing is sent from FinCom; letters go from your own email or WhatsApp.", "For a micro or small enterprise client, reminders can mention MSMED Act interest (set the Udyam number under Letter settings)."]},
     "tickets": {area: "Help", t: "Raising a ticket", what: "When the guide does not answer it, raise a ticket to FinCom support. It carries the screen you were on, the client, the build and the last messages shown, so there is less back and forth.",
       steps: ["Open Help from the screen where the problem is.", "Help → My tickets → New ticket: a subject, the module, how urgent, and what happened.", "Attach screenshots or the file that was being read.", "Replies appear on the ticket (and by email when email is set up). Reply on the ticket, or mark it resolved."],
       watch: ["Response targets: urgent 2 hours, high 4, medium 8, low 24; resolution: urgent 8 hours, high 1 day, medium 3 days, low 5 days."]}
   },
+  // the sections in the order of the menu on the left; Help last (review item 37)
+  AREAS: ["Getting started", "Documents", "TDS", "GST", "Reports", "MIS", "Audit", "Look up", "Letters", "Tally", "Firm account", "Help"],
   // the guide's articles and every tab guide, in one list
   all(){
     const out = Object.entries(this.A).map(([k, x]) => Object.assign({k, area: x.area}, x));
     if (typeof Help === "object") Object.entries(Help.T).forEach(([k, x]) => out.push(Object.assign({k: "tab:" + k, area: k.startsWith("gst") ? "GST" : "TDS"}, x)));
-    return out;
+    const at = a => { const i = this.AREAS.indexOf(a); return i < 0 ? this.AREAS.length - 1 : i; };
+    return out.map((x, i) => [x, i]).sort((a, b) => at(a[0].area) - at(b[0].area) || a[1] - b[1]).map(r => r[0]);
   },
   text(x){ return [x.t, x.what, (x.steps || []).join(" "), x.from || "", (x.watch || []).join(" ")].join(" ").toLowerCase(); },
   search(q){
     const words = String(q || "").toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length > 1);
     if (!words.length) return [];
+    // a word is matched where a word starts ("port" finds "port 9000", not "Reports")
+    const at = w => new RegExp("(^|[^a-z0-9])" + w.replace(/[^a-z0-9]/g, ""), "g");
     return this.all().map(x => { const t = x.t.toLowerCase(), all = this.text(x); let s = 0;
-      words.forEach(w => { if (t.includes(w)) s += 5; const m = all.split(w).length - 1; s += Math.min(m, 4); }); return {x, s}; })
+      words.forEach(w => { const re = at(w); if (re.test(t)) s += 5; const m = (all.match(at(w)) || []).length; s += Math.min(m, 4); }); return {x, s}; })
       .filter(r => r.s > 0).sort((a, b) => b.s - a.s).map(r => r.x);
   }
 
@@ -20559,4 +20603,30 @@ const Route = {
 if (typeof window !== "undefined"){
   window.addEventListener("popstate", () => { if (/^#\//.test(location.hash)) Route.apply(location.hash); });
   window.addEventListener("hashchange", () => { if (/^#\//.test(location.hash) && location.hash !== Route.of()) Route.apply(location.hash); });
+}
+/* ================================================================== */
+/* Phone (review item 38): at 600 px and less every table on the page */
+/* is shown as cards, one card a row, each value with its column's    */
+/* name beside it. The look is in app.css; this only names the cells. */
+/* ================================================================== */
+const PHONE = typeof matchMedia === "function" ? matchMedia("(max-width:600px)") : null;
+// each cell gets data-label from its column's header (colspan counted); a table opts out with class "nocards"
+function cardLabels(root){
+  if (!PHONE || !PHONE.matches || typeof document === "undefined") return;
+  (root || document.getElementById("app") || document).querySelectorAll("table").forEach(t => {
+    if (t.classList.contains("nocards") || !t.tHead || !t.tHead.rows.length) return;
+    const heads = []; [...t.tHead.rows[t.tHead.rows.length - 1].cells].forEach(c => { const n = c.colSpan || 1, txt = (c.getAttribute("aria-label") || c.textContent || "").replace(/[▲▼⇅↑↓]/g, "").trim(); for (let i = 0; i < n; i++) heads.push(txt); });
+    [...t.tBodies].forEach(b => [...b.rows].forEach(r => { let i = 0; [...r.cells].forEach(c => { const want = c.colSpan > 1 ? "" : (heads[i] || ""); if (c.getAttribute("data-label") !== want) c.setAttribute("data-label", want); i += c.colSpan || 1; }); }));
+    if (!t.classList.contains("cards")) t.classList.add("cards");
+  });
+}
+function cardsOff(){ if (typeof document !== "undefined") document.querySelectorAll("#app table.cards").forEach(t => t.classList.remove("cards")); }
+if (typeof document !== "undefined" && PHONE && typeof MutationObserver === "function"){
+  let queued = false;
+  const run = () => { queued = false; cardLabels(); };
+  const watch = () => { const app = document.getElementById("app"); if (!app) return setTimeout(watch, 300);
+    new MutationObserver(() => { if (PHONE.matches && !queued){ queued = true; requestAnimationFrame(run); } }).observe(app, {childList: true, subtree: true}); run(); };
+  watch();
+  const flip = () => { if (PHONE.matches) cardLabels(); else cardsOff(); };
+  if (PHONE.addEventListener) PHONE.addEventListener("change", flip); else if (PHONE.addListener) PHONE.addListener(flip);
 }
