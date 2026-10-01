@@ -171,8 +171,10 @@ const GUIDE = {
   search(q){
     const words = String(q || "").toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length > 1);
     if (!words.length) return [];
+    // a word is matched where a word starts ("port" finds "port 9000", not "Reports")
+    const at = w => new RegExp("(^|[^a-z0-9])" + w.replace(/[^a-z0-9]/g, ""), "g");
     return this.all().map(x => { const t = x.t.toLowerCase(), all = this.text(x); let s = 0;
-      words.forEach(w => { if (t.includes(w)) s += 5; const m = all.split(w).length - 1; s += Math.min(m, 4); }); return {x, s}; })
+      words.forEach(w => { const re = at(w); if (re.test(t)) s += 5; const m = (all.match(at(w)) || []).length; s += Math.min(m, 4); }); return {x, s}; })
       .filter(r => r.s > 0).sort((a, b) => b.s - a.s).map(r => r.x);
   }
 

@@ -63,7 +63,9 @@ def handle(route):
     return route.fulfill(status=200, content_type="application/json", body="[]")
 SIGN = """(tok) => { Cloud.on = () => true; Cloud.cfg = () => ({url: 'https://example.supabase.co', key: 'anon'}); Cloud.sess = () => ({access_token: tok}); Cloud.refreshToken = async () => {};
   Cloud.st.firm = tok === 'tok-a' ? 'firm-a' : tok === 'tok-b' ? 'firm-b' : 'firm-x';
-  S.account = tok === 'tok-admin' ? {superadmin: true, me: {role: 'owner'}} : {me: {role: 'owner'}, firm: {balance: 100}}; S.sup = null; render(); }"""
+  S.account = tok === 'tok-admin' ? {superadmin: true, me: {role: 'owner'}} : {me: {role: 'owner'}, firm: {balance: 100}}; S.sup = null;
+  S.firm.firmName = S.firm.firmName || 'ZZ Test Firm';   // an owner with no firm name is asked for it first (review item 32)
+  render(); }"""
 with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1400, "height": 900}); pg.on("pageerror", lambda e: errors.append(str(e)))
     pg.route("https://example.supabase.co/**", handle)
