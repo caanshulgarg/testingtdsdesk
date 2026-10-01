@@ -16,7 +16,8 @@ const ROLES = ["owner", "staff", "readonly"];
 // email (review item 21): an invite or a reset link goes through Resend when it is set up (the same secrets as the
 // support mail), otherwise through Supabase Auth's own mailer
 const RESEND = Deno.env.get("RESEND_API_KEY") || "";
-const FROM = Deno.env.get("SUPPORT_MAIL_FROM") || "FinCom <onboarding@resend.dev>";
+// invites and reset links come from no-reply@fincom.live (the domain must be verified in Resend); INVITE_MAIL_FROM overrides
+const FROM = Deno.env.get("INVITE_MAIL_FROM") || "FinCom <no-reply@fincom.live>";
 const APP = Deno.env.get("APP_URL") || "https://staging.fincom.live/";
 // a link may only send people back to FinCom's own pages
 const safeRedirect = (u: unknown) => {
