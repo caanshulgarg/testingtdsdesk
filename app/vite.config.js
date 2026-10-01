@@ -5,6 +5,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import fs from "node:fs";
 import { execSync } from "node:child_process";
+import crypto from "node:crypto";
 
 const CSP = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
   "font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; " +
@@ -24,6 +25,9 @@ function legacy(mode) {
     },
     generateBundle() { this.emitFile({ type: "asset", fileName: "legacy.js", source: read() }); },
     transformIndexHtml(html) {
+      // review of 01-Oct-2026: legacy.js has no hash in its name, so a browser kept an older copy after a new build (the
+      // Pages cache, or a tab left open) and ran old code under the new screens. Its address now changes with its content
+      if (fs.existsSync(file)) html = html.replace('src="./legacy.js"', 'src="./legacy.js?v=' + crypto.createHash("sha256").update(read()).digest("hex").slice(0, 12) + '"');
       html = html.replace("</head>", '<meta http-equiv="Content-Security-Policy" content="' + CSP + '">\n</head>');
       if (test) html = html.replace("</head>", fs.readFileSync(new URL("./legacy/test-style.html", import.meta.url), "utf8") + "</head>").replace("<body>", '<body class="is-test">');
       // a named preview (publish-preview.sh review "REVIEW BUILD – Phase 1"): its own words on the strip and under the logo

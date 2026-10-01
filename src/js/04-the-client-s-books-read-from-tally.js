@@ -367,6 +367,24 @@ const Books = {
     if (/SALE|SALES|CREDIT NOTE|EXPORT/i.test(v.type)) return false;
     return this.byContent(v, /^purchase accounts$/i, true);
   },
+  // review of 01-Oct-2026: the supplier's invoice number of a purchase or expense entry, for 2B reconciliation and the
+  // inward register. Many clients keep it in the voucher number, or write it in the narration, not in Tally's Reference
+  // field. Client setup > Tally says where (co.supInvFrom: "ref", "vno" or "narr"); whichever is chosen, an empty field
+  // gives way to the next: Reference, the voucher number, then an invoice number found in the narration
+  SUPINV: {ref: "Reference", vno: "Voucher no.", narr: "Narration"},
+  invInNarr(t){
+    const s = String(t || "");
+    const m = s.match(/\b(?:inv(?:oice)?|bill)\s*(?:no\.?|number|num|#)?\s*[:.\-#]?\s*([A-Z0-9][A-Z0-9\/\-_.]{0,29}\d[A-Z0-9\/\-_.]*)/i)
+      || s.match(/\b([A-Z]{1,8}[\/\-][A-Z0-9\/\-]{1,25}\d)\b/i);
+    return m ? m[1].replace(/[.\-\/]+$/, "") : "";
+  },
+  supInv(v, how){
+    how = how || ((typeof CO === "function" && CO()) || {}).supInvFrom || "ref";
+    const ref = String(v.ref || "").trim(), no = String(v.no || "").trim(), nr = () => this.invInNarr(v.narr);
+    if (how === "vno") return no || ref || nr();
+    if (how === "narr") return nr() || ref || no;
+    return ref || no || nr();
+  },
   isSale(v){
     if (this.NONACC.test(v.type)) return false;
     if (/SALE|SALES|CREDIT NOTE|EXPORT/i.test(v.type)) return true;

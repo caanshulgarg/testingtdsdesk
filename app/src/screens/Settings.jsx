@@ -151,6 +151,16 @@ function VoucherType({ co }) {
   </fieldset>;
 }
 
+// review of 01-Oct-2026: where the client keeps the supplier's invoice number, for matching purchases with GSTR-2B
+function SupInvFrom({ co }) {
+  const how = co.supInvFrom || "ref";
+  return <fieldset className="f wide supinv" style={{ border: 0, padding: 0, margin: "0 0 12px" }}>
+    <legend style={{ fontWeight: 600, marginBottom: 6 }}>Supplier invoice no. is in</legend>
+    {Object.entries(Books.SUPINV).map(([k, l]) => <label key={k} className="chk"><input type="radio" name="supinv" value={k} checked={how === k} onChange={() => coCommit("supInvFrom", k)} /> {l}</label>)}
+    <p className="note" style={{ margin: "6px 0 0" }}>{"2B reconciliation and the inward register match purchases on the number in the " + Books.SUPINV[how].toLowerCase() + (how === "narr" ? " (the first invoice or bill number written there)" : "") + ". When it is empty they use the Reference, then the voucher no., then an invoice number in the narration."}</p>
+  </fieldset>;
+}
+
 function TallySetup() {
   const co = CO(), open = Bridge.up() && Bridge.st.open.length ? Bridge.st.open : null, auto = co.vchNumbering === "tally";
   return <>
@@ -164,6 +174,7 @@ function TallySetup() {
     </Card>
     <Card title="How purchase bills are entered">
       <VoucherType co={co} />
+      <SupInvFrom co={co} />
       <div className="f wide vnum" style={{ marginBottom: 12 }}><span>Voucher numbering</span>
         {auto ? <div className="note"><span className="tag ok">Automatic in Tally</span> Tally gives every entry its own next number{co.vchAutoAt ? " (set " + fmtDate(String(co.vchAutoAt).slice(0, 10)) + ")" : ""}. FinCom sends no voucher numbers.{" "}
             <button className="linkbtn" onClick={() => doAct("vchUseBillNo")}>Use supplier bill numbers instead</button></div>
