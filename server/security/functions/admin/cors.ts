@@ -1,6 +1,7 @@
 // Only TDS Desk's own pages may call these functions from a browser.
 const ALLOWED = [
   "https://caanshulgarg.github.io",
+  "https://staging.fincom.live", "https://app.fincom.live", "https://fincom.live",   // FinCom's own sites (review, 01-Oct-2026: "Load failed" from staging)
   "null",                         // the standalone file opened from disk
   "http://localhost:8000", "http://127.0.0.1:8000",
 ];

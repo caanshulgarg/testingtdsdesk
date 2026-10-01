@@ -376,8 +376,12 @@ Cloud.fn = async function(name, body, retry){
   if (!retry) await this.fresh().catch(() => {});
   const c = this.cfg(), s = this.sess();
   if (!s) throw new Error("Sign in to the firm account first.");
-  const r = await fetch(c.url.replace(/\/+$/, "") + "/functions/v1/" + name, {
-    method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": "application/json"}, body: JSON.stringify(body || {})});
+  let r;
+  // a request the browser stopped before the server answered (no connection, or this site not allowed by the
+  // function): said in words, not the browser's "Load failed" / "Failed to fetch"
+  try { r = await fetch(c.url.replace(/\/+$/, "") + "/functions/v1/" + name, {
+    method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": "application/json"}, body: JSON.stringify(body || {})}); }
+  catch (e){ throw new Error("FinCom\u2019s server could not be reached from this page (" + ((e && e.message) || "no answer") + "). Check the connection and try again; if it keeps happening, tell support which page you were on."); }
   if (r.status === 401 && !retry){ await this.refreshToken(s.access_token); return this.fn(name, body, true); }
   const j = await r.json().catch(() => ({}));
   if (!r.ok || j.ok === false) throw Object.assign(new Error(j.error || ("Request failed (" + r.status + ")")), {reason: j.reason, balance: j.balance});
