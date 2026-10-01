@@ -35,7 +35,7 @@ const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
 const APP_VERSION = "TEST · 30 Sep 2026 · build 199 (posting queue: post from any computer, the Tally computer posts when Tally is free; posted entries go to the cloud without reading Tally again; bridge 1.14.6)";
 // the Tally Bridge setup file's fingerprint, put in by build.py: a new setup file is never served from an old cache
-const BRIDGE_SETUP_SHA = "708c175910ab9d56";
+const BRIDGE_SETUP_SHA = "80b1c111b2273048";
 // the bridge Setup handed out: assets/bridge-setup.txt on the live site; the testing builds (build.py to_test) hand out
 // assets/bridge-setup-test.txt, so a new bridge is tried on staging without changing what live users download
 const BRIDGE_SETUP_ID = "bridge-setup-test";
@@ -6348,7 +6348,7 @@ const GST2B = {
     const out = [];
     this.skipped = {setOff: 0, taxOnly: 0};
     b.vouchers.forEach(v => {
-      if (Books.isSale(v)) return;
+      if (Books.isSale(v) || v.opt) return;                                   // an Optional entry is no document
       const tax = {IGST: 0, CGST: 0, SGST: 0, CESS: 0};
       let signed = 0, reg = "", inel = 0, any = false, setOff = false;
       v.ent.forEach(e => {
@@ -6508,7 +6508,7 @@ const GST2B = {
     // a bill in 2B and in Tally, but booked with no input tax (the tax charged to the expense)
     const docIds = new Set(books.map(d => d.id)), gstMap = b.gstins || {};
     const noCredit = new Map();
-    (b.vouchers || []).forEach(v => { if (docIds.has(v.id) || Books.isSale(v) || v.cancel) return; const k = this.normNo(v.ref || v.no); if (k.length >= 3) (noCredit.get(k) || noCredit.set(k, []).get(k)).push(v); });
+    (b.vouchers || []).forEach(v => { if (docIds.has(v.id) || Books.isSale(v) || v.cancel || v.opt) return; const k = this.normNo(v.ref || v.no); if (k.length >= 3) (noCredit.get(k) || noCredit.set(k, []).get(k)).push(v); });
     portal.forEach(p => { delete p.bookedNoCredit; });
     only2b.forEach(p => {
       const c = (noCredit.get(p.noN) || []).filter(v => (!p.date || days(p.date, v.date) <= 62) && (!gstMap[v.party] || String(gstMap[v.party]).toUpperCase() === p.gstin || pan(gstMap[v.party]) === pan(p.gstin)));
@@ -6616,8 +6616,11 @@ const GSTR = {
     return r || String(v.cmp || "").slice(0, 2);
   },
   // the entries of one month (build 193): from an index made once per drawing or calculation, not the whole year each time
+  // the entries GST is worked out from. Optional entries are memoranda in Tally, not in the books, and never in a return
+  // (review of 01-Oct-2026: GSTR-1 counted 13 Optional sales of one client, each also entered as a regular invoice: their
+  // tax twice; the server's GST summary, which leaves them out, showed it)
   vIn(ym){
-    const all = S.books.vouchers || [];
+    const all = (S.books.vouchers || []).filter(v => !v.opt);
     if (typeof perRender !== "function" || !ym || String(ym).length !== 6) return all;
     return perRender(this, "byMonth", () => { const m = {}; all.forEach(v => { const k = String(v.date).slice(0, 6); (m[k] = m[k] || []).push(v); }); return m; })[ym] || [];
   },
@@ -12035,9 +12038,10 @@ async function bringDayBookFile(f, from0, to0, opts){
           window.addEventListener("beforeunload", stay);
           part.cloud = "going to the cloud…";
           try {
-            const r = await TCloudUp.days(await f.text(), {from, to}, step, who);
-            part.cloud = r && r.days != null ? "in the cloud (" + r.days + " days)" : (r && r.skipped) || "";
-            if (r && r.days != null){ await TCloudUp.drop(wait); toast(f.name + ": all " + r.days + " days, " + fmtDate(tallyDate(from)) + " to " + fmtDate(tallyDate(to)) + ", are in FinCom’s cloud."); }
+            // fast-sync: handed to FinCom's server, which reads it into the cloud copy even if this page is closed
+            const r = await TCloudUp.handOver(await f.text(), {from, to}, step, who, f.name);
+            part.cloud = r && r.job ? "with FinCom’s server (" + r.days + " days), read in by the server" : r && r.days != null ? "in the cloud (" + r.days + " days)" : (r && r.skipped) || "";
+            if (r && r.days != null){ await TCloudUp.drop(wait); toast(r.job ? f.name + ": all " + r.days + " days are with FinCom’s server, which reads them into the cloud copy now. You can close this page." : f.name + ": all " + r.days + " days, " + fmtDate(tallyDate(from)) + " to " + fmtDate(tallyDate(to)) + ", are in FinCom’s cloud."); }
           }
           catch (e){ part.cloud = "not sent: " + ((e && e.message) || e); toast("It could not go to FinCom’s cloud just now (" + ((e && e.message) || e) + "). It goes on its own the next time this client is opened."); }
           finally { window.removeEventListener("beforeunload", stay); TCloudUp.live.delete(wait); }
@@ -17456,7 +17460,7 @@ const GSTF = {
   lateCn(ym, reg){
     const out = [];
     (S.books.vouchers || []).forEach(v => {
-      if (!Books.isSale(v) || !/CREDIT NOTE/i.test(v.type) || (ym && GSTR.ym(v.date) !== ym) || (reg && GSTR.regOf(v) !== reg)) return;
+      if (!Books.isSale(v) || v.opt || !/CREDIT NOTE/i.test(v.type) || (ym && GSTR.ym(v.date) !== ym) || (reg && GSTR.regOf(v) !== reg)) return;
       const od = String(v.refDate || ""); if (!/^\d{8}$/.test(od)) return;
       const fyEnd = +od.slice(4, 6) >= 4 ? +od.slice(0, 4) + 1 : +od.slice(0, 4), lim = fyEnd + "1130";
       if (String(v.date) > lim) out.push({no: v.no, party: v.party, date: v.date, orig: v.ref, origDate: od, lim});
@@ -17467,7 +17471,7 @@ const GSTF = {
   // one are listed, and so are IRNs taken more than 30 days after the invoice (the limit for turnover of Rs 10 crore and above)
   einv(ym, reg){
     const mode = typeof GSTSet === "object" ? GSTSet.einvMode(reg) : "auto";
-    const vs = (S.books.vouchers || []).filter(v => Books.isSale(v) && (!reg || GSTR.regOf(v) === reg));
+    const vs = (S.books.vouchers || []).filter(v => Books.isSale(v) && !v.opt && (!reg || GSTR.regOf(v) === reg));
     if (mode !== "auto" || !vs.some(v => v.irn)) return {uses: false, missing: [], late: [], mode};
     const iso = d => { const x = String(d || "").replace(/-/g, ""); return x.slice(0, 4) + "-" + x.slice(4, 6) + "-" + x.slice(6, 8); };
     const kinds = new Set(["B2B", "EXP", "CDNR", "DBNR"]), byId = new Map(vs.map(v => [v.id, v]));
@@ -20006,6 +20010,63 @@ const TCloud = {
     // migration-10: an Optional entry comes marked and is not in the total
     return {kind: "find", src: "cloud", q, from, to, typ, rows: (had ? had.rows : []).concat(rows), n: num(j.n), total: r2(num(j.total)), opt: num(j.opt)};
   },
+  // fast-sync (migration-14): MIS and the TDS and GST summaries worked out by the database from the cloud copy's ready
+  // totals, so a computer without the books loaded (a new one, or one still bringing them in) shows them in a moment.
+  // One answer per client, report and period, kept for the page's life; asked again after a minute
+  srv: {},
+  report(kind, cid, from, to){
+    const fn = {mis: "tally_mis", tds: "tally_tds_summary", gst: "tally_gst_summary"}[kind];
+    const k = kind + "|" + cid + "|" + from + "|" + to, x = this.srv[k] = this.srv[k] || {};
+    if (!fn || !this.on() || x.busy || (x.at && Date.now() - x.at < 60000)) return x;
+    x.busy = true; x.err = ""; const t0 = Date.now();
+    this.rpc(fn, {p_client: cid, p_from: this.iso(from), p_to: this.iso(to)}).then(j => { x.res = j; x.ms = Date.now() - t0; }, e => { x.err = (e && e.message) || String(e); if (/tally_mis|tally_tds_summary|tally_gst_summary|does not exist|PGRST202|schema cache/i.test(x.err)) x.missing = true; })
+      .finally(() => { x.busy = false; x.at = Date.now(); render(); });
+    return x;
+  },
+  // fast-sync (migration-13): the server's jobs for a client (a day book handed over, the kept day books read again),
+  // the latest five; changes come live (Live.joinJobs), else every few seconds while one is going
+  jobs: {}, jobsOk: null,
+  async jobsLoad(cid){
+    if (!this.on() || !cid) return;
+    try {
+      this.jobs[cid] = await Cloud.api("tally_jobs?select=id,client_id,kind,status,total,done,sealed,bad,message,created_at,updated_at&client_id=eq." + encodeURIComponent(cid) + "&order=created_at.desc&limit=5") || [];
+      this.jobsOk = true;
+      this.jobs[cid].forEach(j => { if (!this.done[j.id]) this.done[j.id] = j.status; });      // so a change to done is noticed
+    } catch (e){ this.jobsOk = false; return; }
+    render(); this.jobsPoll(cid);
+  },
+  jobsPoll(cid){
+    clearTimeout(this.jobsT);
+    if ((this.jobs[cid] || []).some(j => j.status === "queued" || j.status === "running") && !(typeof Live === "object" && Live.jobsLive)) this.jobsT = setTimeout(() => this.jobsLoad(cid).then(() => this.jobsSeen(cid)), 5000);
+  },
+  jobsSeen(cid){ (this.jobs[cid] || []).forEach(j => this.jobRow(j, true)); },
+  done: {},            // job id -> its status when last seen here
+  jobRow(r, quiet){
+    if (!r || !r.client_id) return;
+    const list = this.jobs[r.client_id] = this.jobs[r.client_id] || [], i = list.findIndex(x => x.id === r.id);
+    if (i >= 0) list[i] = Object.assign({}, list[i], r); else list.unshift(r);
+    const was = this.done[r.id]; this.done[r.id] = r.status;
+    if (was && was !== r.status && (r.status === "done" || r.status === "failed")){
+      const co = S.companies[r.client_id] || {name: "The client"}, what = r.kind === "reparse" ? "reading the kept day books again" : "reading the day book" + (r.message && r.status === "done" ? " " + r.message : "");
+      toast(co.name + ": the server " + (r.status === "done" ? "has finished " + what + "." : "stopped " + what + ": " + (r.message || "")));
+      // what the server read comes in here
+      if (r.status === "done" && S.books && S.books.cid === r.client_id){ this.st[r.client_id] = {}; this.openLoad(r.client_id).catch(() => {}); }
+    }
+    if (!quiet) render();
+    this.jobsPoll(r.client_id);
+  },
+  jobLine(j){
+    const unit = j.kind === "reparse" ? "month" : "day", n = j.total, pl = x => x + " " + unit + (x === 1 ? "" : "s");
+    const what = j.kind === "reparse" ? "Reading the kept day books again" : "Reading the day book" + (j.message && j.status !== "failed" ? " " + j.message : "");
+    if (j.status === "done") return what + ": done, " + pl(j.done) + (j.bad && j.bad.length ? " (" + j.bad.length + " could not be read)" : "") + ", " + fmtTime(Date.parse(j.updated_at)) + ".";
+    if (j.status === "failed") return what + ": stopped. " + (j.message || "");
+    return what + " on FinCom’s server: " + j.done + " of " + pl(n) + (j.sealed ? "" : " handed over so far") + ". It carries on if this page is closed.";
+  },
+  // the period a client's cloud copy covers: the financial year of its last entry
+  fyOf(cid){
+    const bk = this.book(cid) || {}, last = this.d8(bk.to || "") || Audit.today(), y = num(last.slice(0, 4)) - (num(last.slice(4, 6)) < 4 ? 1 : 0);
+    return {from: y + "0401", to: last < (y + 1) + "0331" ? last : (y + 1) + "0331"};
+  },
   age(bk){
     if (!bk) return "";
     const st = bk.state || {}, at = String(st.seen || bk.stateAt || bk.daysAt || "");
@@ -20256,12 +20317,40 @@ const TCloudUp = {
     this.retrying = true; let sent = 0;
     try {
       for (const [k, x] of list){
-        try { const r = await this.days(await x.blob.text(), {from: x.from, to: x.to}, onStep, x.who); if (r && r.days != null){ await this.drop(k); sent++; } }
+        try { const r = await this.handOver(await x.blob.text(), {from: x.from, to: x.to}, onStep, x.who, x.name); if (r && r.days != null){ await this.drop(k); sent++; } }
         catch (e){ toast("A day book (" + (x.name || "file") + ") is still waiting to go to FinCom’s cloud: " + ((e && e.message) || e)); }
       }
     } finally { this.retrying = false; }
     if (sent) toast(sent + " day book file" + (sent === 1 ? " that was waiting is" : "s that were waiting are") + " now in FinCom’s cloud.");
     return sent > 0;
+  },
+  // fast-sync (migration-13): the day book handed over to the server's queue, a part at a time; the server reads it into
+  // the cloud copy even if this page is closed afterwards. A cloud without the queue: days() as before
+  split(text, range){
+    const re = /<VOUCHER\b[\s\S]*?<\/VOUCHER>/g, byDay = new Map(); let m;
+    while ((m = re.exec(text))){ const d = (m[0].match(/<DATE>(\d{8})<\/DATE>/) || [])[1]; if (!d || d < range.from || d > range.to) continue; if (!byDay.has(d)) byDay.set(d, []); byDay.get(d).push(m[0]); }
+    const all = []; for (let d = range.from; d <= range.to; d = BridgeSeed.add(d, 1)) all.push(d);
+    return {all, byDay};
+  },
+  async handOver(text, range, onStep, who, name){
+    if (!this.on()) return {skipped: "not signed in to the firm account"};
+    who = who || {client: S.coId, company: BridgeSeed.company()};
+    const {all, byDay} = this.split(text, range);
+    let job;
+    try { job = (await this.post({kind: "job_new", total: all.length, name: String(name || "").slice(0, 120)}, who)).job; }
+    catch (e){ return this.days(text, range, onStep, who); }      // a cloud without the queue (or not ready): sent as before
+    if (!job) return this.days(text, range, onStep, who);
+    let batch = [], size = 0, done = 0;
+    const flush = async last => { if (onStep) onStep("Handing the day book to FinCom’s server (" + Math.round(done * 100 / all.length) + "%)…"); await this.post({kind: "stage_days", job, days: batch, last: !!last}, who); batch = []; size = 0; };
+    for (const d of all){
+      const xml = "<ENVELOPE><BODY><DATA>" + (byDay.get(d) || []).map(v => "<TALLYMESSAGE>" + v + "</TALLYMESSAGE>").join("") + "</DATA></BODY></ENVELOPE>";
+      const gz = await this.gz(xml);
+      if (batch.length && (size + gz.length > 4e6 || batch.length >= 31)) await flush(false);
+      batch.push({day: d, gz}); size += gz.length; done++;
+    }
+    await flush(true);
+    try { TCloud.jobsLoad(who.client); } catch (e){}
+    return {days: all.length, job};
   },
   async opening(from, asOn, led, who){
     if (!this.on()) return {skipped: "not signed in to the firm account"};
@@ -20285,6 +20374,11 @@ Object.assign(TCloud, {
     const p = this.pane; p.rp = p.rp || {};
     let host = ""; try { host = new URL(this.ingestUrl()).host.split(".")[0]; } catch (e){}
     if (p.rp[cid] && p.rp[cid].busy){ toast("Already reading " + co.name + "’s kept day books again."); return; }
+    // fast-sync: handed to the server's queue (a month a piece); it carries on if this page is closed
+    try {
+      const j = await TCloudUp.post({kind: "reparse_queue"}, {client: cid});
+      if (j && j.job){ p.rp[cid] = {job: j.job, months: j.months, host, at: new Date().toISOString()}; this.done[j.job] = "queued"; await this.jobsLoad(cid); toast(co.name + ": the server reads the " + j.months + " months of kept day books again; it carries on if this page is closed."); render(); return; }
+    } catch (e){ if (/not allowed|owner/i.test(String(e && e.message))){ p.rp[cid] = {err: (e && e.message) || String(e), n: 0, host}; render(); return; } }   // no queue yet: read again as before
     let month = null, n = 0, bad = 0, total = 0, calls = 0;
     const seen = new Set();
     try {
@@ -21160,7 +21254,7 @@ const Live = {
     this.ws = ws; this.st = "connecting";
     ws.onopen = () => { this.join(); clearInterval(this.hb); this.hb = setInterval(() => { this.send("phoenix", "heartbeat", {}); this.tokenTick(); }, 25000); };
     ws.onmessage = ev => { let m = null; try { m = JSON.parse(ev.data); } catch (e){} if (m) this.got(m); };
-    ws.onclose = () => { clearInterval(this.hb); if (this.ws === ws) this.ws = null; this.st = "off"; this.top(); if (!this.stopped) this.later(); };
+    ws.onclose = () => { clearInterval(this.hb); if (this.ws === ws) this.ws = null; this.st = "off"; this.jobsTopic = ""; this.jobsLive = false; this.booksTopic = ""; this.booksLive = false; this.top(); if (!this.stopped) this.later(); };
     ws.onerror = () => { try { ws.close(); } catch (e){} };
   },
   stop(){ this.stopped = true; clearTimeout(this.rt); clearInterval(this.hb); const w = this.ws; this.ws = null; this.st = "off"; try { if (w) w.close(); } catch (e){} },
@@ -21175,14 +21269,49 @@ const Live = {
     this.send(this.topic, "phx_join", {config: {broadcast: {self: false, ack: false}, presence: {key: ""}, postgres_changes: pc, private: false}, access_token: this.token});
   },
   // a new access token (refreshed every hour) is given to the open connection
-  tokenTick(){ const t = (Cloud.sess() || {}).access_token; if (this.st === "live" && t && t !== this.token){ this.token = t; this.send(this.topic, "access_token", {access_token: t}); } },
+  tokenTick(){ const t = (Cloud.sess() || {}).access_token; if (this.st === "live" && t && t !== this.token){ this.token = t; this.send(this.topic, "access_token", {access_token: t}); if (this.jobsTopic) this.send(this.jobsTopic, "access_token", {access_token: t}); if (this.booksTopic) this.send(this.booksTopic, "access_token", {access_token: t}); } },
+  // fast-sync: the server's jobs (a day book being read, the kept day books read again) on a channel of their own, joined
+  // only when the database has tally_jobs (migration-13): the live sync above never depends on it
+  async joinJobs(){
+    if (typeof TCloud !== "object" || !TCloud.on() || this.jobsTopic) return;
+    try { await Cloud.api("tally_jobs?select=id&limit=1"); } catch (e){ return; }
+    const f = Cloud.st.firm; this.jobsTopic = "realtime:fincom-jobs-" + f; this.jobsRef = String(this.ref + 1);
+    this.send(this.jobsTopic, "phx_join", {config: {broadcast: {self: false, ack: false}, presence: {key: ""}, postgres_changes: [{event: "*", schema: "public", table: "tally_jobs", filter: "firm_id=eq." + f}], private: false}, access_token: this.token});
+  },
+  // fast-sync (migration-15): the cloud copy of a client's books changed (the Tally computer sent new days): a page open
+  // on that client brings them in at once, instead of looking once a minute. A channel of its own, so nothing else
+  // depends on it
+  joinBooks(){
+    if (typeof TCloud !== "object" || !TCloud.on() || this.booksTopic) return;
+    const f = Cloud.st.firm; this.booksTopic = "realtime:fincom-books-" + f; this.booksRef = String(this.ref + 1); this.daysAt = this.daysAt || {};
+    this.send(this.booksTopic, "phx_join", {config: {broadcast: {self: false, ack: false}, presence: {key: ""}, postgres_changes: [{event: "UPDATE", schema: "public", table: "tally_books", filter: "firm_id=eq." + f}], private: false}, access_token: this.token});
+  },
+  bookChanged(r){
+    if (!r || !r.client_id || !r.days_at || this.daysAt[r.book_id] === r.days_at) return;
+    const first = !(r.book_id in this.daysAt); this.daysAt[r.book_id] = r.days_at;
+    if (first && !S.books) return;
+    const cid = r.client_id;
+    if (!(S.books && S.books.cid === cid && !S.books.loading && S.coId === cid)) return;
+    clearTimeout(this.bookT);
+    this.bookT = setTimeout(() => { try { if (TCloud.st[cid]) TCloud.st[cid].at = 0; const f = LK.fr(); f.cat = 0; LK.cloudFresh(true, true); } catch (e){} }, 1500);   // the day's last pieces settle first
+  },
   got(m){
+    if (this.booksTopic && m.topic === this.booksTopic){
+      if (m.event === "phx_reply" && m.ref === this.booksRef) this.booksLive = !!(m.payload && m.payload.status === "ok");
+      else if (m.event === "postgres_changes"){ const d = m.payload && m.payload.data; if (d && d.record) this.bookChanged(d.record); }
+      return;
+    }
+    if (this.jobsTopic && m.topic === this.jobsTopic){
+      if (m.event === "phx_reply" && m.ref === this.jobsRef) this.jobsLive = !!(m.payload && m.payload.status === "ok");
+      else if (m.event === "postgres_changes"){ const d = m.payload && m.payload.data; if (d && d.record) TCloud.jobRow(d.record); }
+      return;
+    }
     if (m.event === "phx_reply" && m.ref === this.joinRef){
-      if (m.payload && m.payload.status === "ok"){ this.st = "live"; this.err = ""; this.wait = 1000; this.catchUp(); }
+      if (m.payload && m.payload.status === "ok"){ this.st = "live"; this.err = ""; this.wait = 1000; this.catchUp(); this.joinJobs(); this.joinBooks(); }
       else { this.st = "error"; this.err = JSON.stringify((m.payload || {}).response || {}).slice(0, 200); }
       this.top(); return;
     }
-    if (m.event === "system" && m.payload && m.payload.status === "error"){ this.st = "error"; this.err = String(m.payload.message || "").slice(0, 200); this.top(); return; }
+    if (m.event === "system" && m.payload && m.payload.status === "error" && (!m.topic || m.topic === this.topic)){ this.st = "error"; this.err = String(m.payload.message || "").slice(0, 200); this.top(); return; }
     if (m.event === "postgres_changes"){ const d = m.payload && m.payload.data; if (d) this.change(d); return; }
     if (m.event === "phx_error" || m.event === "phx_close"){ try { this.ws.close(); } catch (e){} }
   },
@@ -21191,6 +21320,7 @@ const Live = {
     try { if (typeof cloudSync === "function" && !cloudBusy) cloudSync(false); } catch (e){}
     const cid = S.books && S.books.cid && !S.books.loading ? S.books.cid : null;
     if (cid && BookItems.on()) BookItems.pull(cid).catch(() => {});
+    if (cid && typeof TCloud === "object" && TCloud.on()) TCloud.jobsLoad(cid);
   },
   change(d){
     const r = d.record;
