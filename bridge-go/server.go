@@ -535,7 +535,11 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 		if err := needPost(r, "Use POST."); err != nil {
 			return nil, err
 		}
-		go func() { time.Sleep(300 * time.Millisecond); writeLog("Restarting: asked from the tray icon"); requestStop(3) }()
+		go func() {
+			time.Sleep(300 * time.Millisecond)
+			writeLog("Restarting: asked from the tray icon")
+			requestStop(3)
+		}()
 		return M{"ok": true, "restarting": true}, nil
 	case "/tray/update":
 		if err := needPost(r, "Use POST."); err != nil {
@@ -547,6 +551,13 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 		// is in front: a service cannot see that itself
 		o, _ := bodyObj(body)
 		setTrayIdle(num(o["idleSec"]), truthy(o["tallyFront"]))
+		trayAlive(toInt(o["session"]))
+		return M{"ok": true}, nil
+	case "/tray/quit":
+		// Quit in the tray: the service does not start the icon again in this session until the next sign-in
+		o, _ := bodyObj(body)
+		trayQuitSession(toInt(o["session"]))
+		writeLog("The tray icon was closed (Quit); the bridge keeps running")
 		return M{"ok": true}, nil
 	case "/tray/cloudkey":
 		// the tray hands over bridge 1.15.0's key (protected for the Windows user, which the service cannot open)

@@ -1,0 +1,557 @@
+//go:build windows
+
+// The tray icon, in the signed-in owner's session (the service starts it): green when the bridge reaches Tally and
+// FinCom, red when not. Its menu: Open FinCom, Pause, Restart, Show log, Check for updates, Connect FinCom, Quit; and
+// Windows notifications for "Bridge offline" and "Tally not open". It also tells the service how long the keyboard and
+// mouse have been idle and whether Tally is in front (a service cannot see that), and hands over bridge 1.15.0's
+// computer key, which only this Windows user can open.
+package main
+
+import (
+	_ "embed"
+	"encoding/binary"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"os/exec"
+	"runtime"
+	"strings"
+	"sync"
+	"time"
+	"unsafe"
+
+	"golang.org/x/sys/windows"
+)
+
+//go:embed icons/green.ico
+var icoGreen []byte
+
+//go:embed icons/red.ico
+var icoRed []byte
+
+var (
+	shell32                 = windows.NewLazySystemDLL("shell32.dll")
+	pShellNotifyIcon        = shell32.NewProc("Shell_NotifyIconW")
+	pShellExecute           = shell32.NewProc("ShellExecuteW")
+	pRegisterClassEx        = user32.NewProc("RegisterClassExW")
+	pCreateWindowEx         = user32.NewProc("CreateWindowExW")
+	pDefWindowProc          = user32.NewProc("DefWindowProcW")
+	pGetMessage             = user32.NewProc("GetMessageW")
+	pTranslateMessage       = user32.NewProc("TranslateMessage")
+	pDispatchMessage        = user32.NewProc("DispatchMessageW")
+	pPostQuitMessage        = user32.NewProc("PostQuitMessage")
+	pCreatePopupMenu        = user32.NewProc("CreatePopupMenu")
+	pAppendMenu             = user32.NewProc("AppendMenuW")
+	pTrackPopupMenu         = user32.NewProc("TrackPopupMenu")
+	pSetForegroundWindow    = user32.NewProc("SetForegroundWindow")
+	pDestroyMenu            = user32.NewProc("DestroyMenu")
+	pRegisterWindowMessage  = user32.NewProc("RegisterWindowMessageW")
+	pCreateIconFromResource = user32.NewProc("CreateIconFromResourceEx")
+	pMessageBox             = user32.NewProc("MessageBoxW")
+	pPostMessage            = user32.NewProc("PostMessageW")
+	pFindWindow             = user32.NewProc("FindWindowW")
+	pGetCursorPos           = user32.NewProc("GetCursorPos")
+	pGetSystemMetrics       = user32.NewProc("GetSystemMetrics")
+)
+
+const (
+	wmCommand     = 0x0111
+	wmDestroy     = 0x0002
+	wmNull        = 0x0000
+	wmApp         = 0x8000
+	wmTray        = wmApp + 1
+	wmShowStatus  = wmApp + 3
+	wmRButtonUp   = 0x0205
+	wmLButtonDbl  = 0x0203
+	nimAdd        = 0
+	nimModify     = 1
+	nimDelete     = 2
+	nifMessage    = 1
+	nifIcon       = 2
+	nifTip        = 4
+	nifInfo       = 0x10
+	mfString      = 0
+	mfGrayed      = 1
+	mfSeparator   = 0x800
+	mfChecked     = 8
+	tpmRightBtn   = 2
+	tpmReturnCmd  = 0x100
+	trayClass     = "FinComBridgeTray"
+	mbIconInfo    = 0x40
+	mbIconWarning = 0x30
+)
+
+type notifyIconData struct {
+	CbSize           uint32
+	HWnd             uintptr
+	UID              uint32
+	UFlags           uint32
+	UCallbackMessage uint32
+	HIcon            uintptr
+	SzTip            [128]uint16
+	DwState          uint32
+	DwStateMask      uint32
+	SzInfo           [256]uint16
+	UVersion         uint32
+	SzInfoTitle      [64]uint16
+	DwInfoFlags      uint32
+	GuidItem         windows.GUID
+	HBalloonIcon     uintptr
+}
+type wndClassEx struct {
+	cbSize        uint32
+	style         uint32
+	lpfnWndProc   uintptr
+	cbClsExtra    int32
+	cbWndExtra    int32
+	hInstance     uintptr
+	hIcon         uintptr
+	hCursor       uintptr
+	hbrBackground uintptr
+	lpszMenuName  *uint16
+	lpszClassName *uint16
+	hIconSm       uintptr
+}
+type msgT struct {
+	hwnd    uintptr
+	message uint32
+	wParam  uintptr
+	lParam  uintptr
+	time    uint32
+	pt      struct{ x, y int32 }
+	private uint32
+}
+
+func u16(s string) *uint16 { p, _ := windows.UTF16PtrFromString(s); return p }
+func copyU16(dst []uint16, s string) {
+	u, _ := windows.UTF16FromString(s)
+	if len(u) > len(dst) {
+		u = u[:len(dst)-1]
+		u = append(u, 0)
+	}
+	copy(dst, u)
+}
+
+// an icon from an .ico file in memory, at the size Windows uses for the tray
+func iconFrom(ico []byte) uintptr {
+	want := 16
+	if s, _, _ := pGetSystemMetrics.Call(49); s > 0 { // SM_CXSMICON
+		want = int(s)
+	}
+	n := int(binary.LittleEndian.Uint16(ico[4:]))
+	best, bestSize := -1, 0
+	for i := 0; i < n; i++ {
+		e := ico[6+16*i:]
+		w := int(e[0])
+		if w == 0 {
+			w = 256
+		}
+		if best < 0 || (w >= want && (bestSize < want || w < bestSize)) || (bestSize < want && w > bestSize) {
+			best, bestSize = i, w
+		}
+	}
+	e := ico[6+16*best:]
+	size, off := binary.LittleEndian.Uint32(e[8:]), binary.LittleEndian.Uint32(e[12:])
+	h, _, _ := pCreateIconFromResource.Call(uintptr(unsafe.Pointer(&ico[off])), uintptr(size), 1, 0x00030000, uintptr(bestSize), uintptr(bestSize), 0)
+	return h
+}
+
+type tray struct {
+	mu        sync.Mutex
+	hwnd      uintptr
+	nid       notifyIconData
+	green     uintptr
+	red       uintptr
+	st        M
+	reachable bool
+	since     map[string]time.Time
+	told      map[string]bool
+	started   time.Time
+	tallySeen bool
+}
+
+var tr = &tray{since: map[string]time.Time{}, told: map[string]bool{}, started: time.Now()}
+var taskbarCreated uintptr
+
+// --- talking to the service
+func trayCall(method, path string, body any) M {
+	loadConfigRO()
+	var rd io.Reader
+	if body != nil {
+		rd = strings.NewReader(jsonText(body))
+	}
+	req, _ := http.NewRequest(method, fmt.Sprintf("http://127.0.0.1:%d%s", toInt(cfg("Port")), path), rd)
+	req.Header.Set("X-Bridge-Key", cfgS("Key"))
+	req.Header.Set("Content-Type", "application/json")
+	c := &http.Client{Timeout: 20 * time.Second, Transport: &http.Transport{Proxy: nil}}
+	r, err := c.Do(req)
+	if err != nil {
+		return nil
+	}
+	defer r.Body.Close()
+	b, _ := io.ReadAll(r.Body)
+	return parseObj(string(b))
+}
+
+func (t *tray) setIcon(green bool, tip string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.nid.UFlags = nifIcon | nifTip | nifMessage
+	t.nid.HIcon = t.red
+	if green {
+		t.nid.HIcon = t.green
+	}
+	t.nid.SzTip = [128]uint16{}
+	copyU16(t.nid.SzTip[:], tip)
+	pShellNotifyIcon.Call(nimModify, uintptr(unsafe.Pointer(&t.nid)))
+}
+func (t *tray) balloon(title, text string, warn bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.nid.UFlags = nifInfo
+	t.nid.SzInfo, t.nid.SzInfoTitle = [256]uint16{}, [64]uint16{}
+	copyU16(t.nid.SzInfo[:], text)
+	copyU16(t.nid.SzInfoTitle[:], title)
+	t.nid.DwInfoFlags = 1
+	if warn {
+		t.nid.DwInfoFlags = 2
+	}
+	pShellNotifyIcon.Call(nimModify, uintptr(unsafe.Pointer(&t.nid)))
+}
+func notify(title, text string) { tr.balloon(title, text, true) }
+
+// once, until the condition clears; and only after it has lasted a while
+func (t *tray) warnIf(cond bool, key string, after time.Duration, title, text string) {
+	if !cond {
+		delete(t.since, key)
+		t.told[key] = false
+		return
+	}
+	if _, ok := t.since[key]; !ok {
+		t.since[key] = time.Now()
+	}
+	if !t.told[key] && time.Since(t.since[key]) >= after {
+		t.told[key] = true
+		t.balloon(title, text, true)
+	}
+}
+
+func (t *tray) poll() {
+	keyTried := time.Time{}
+	for {
+		trayCall("POST", "/tray/idle", M{"idleSec": localIdleSec(), "tallyFront": localFrontIsTally(), "session": ownSession()})
+		st := trayCall("GET", "/tray/status", nil)
+		t.mu.Lock()
+		t.st, t.reachable = st, st != nil
+		t.mu.Unlock()
+		if st == nil {
+			t.setIcon(false, "FinCom Bridge: not running")
+			t.warnIf(time.Since(t.started) > 30*time.Second, "down", 30*time.Second, "FinCom Bridge is not running",
+				"The bridge on this computer has stopped. Windows starts it again by itself; if this stays, choose Restart from this icon.")
+		} else {
+			t.warnIf(false, "down", 0, "", "")
+			if str(st["version"]) != BridgeVersion && !truthy(obj(st["update"])["applying"]) {
+				restartTray() // the bridge was updated: the icon starts again from the new program
+			}
+			tally, online, cloud, pausedNow := truthy(st["tallyOpen"]), truthy(st["online"]), truthy(st["cloudConnected"]), truthy(st["paused"])
+			if tally {
+				t.tallySeen = true
+			}
+			var tip []string
+			tip = append(tip, "FinCom Bridge "+str(st["version"]))
+			if truthy(st["testMode"]) {
+				tip = append(tip, "(test, never posts)")
+			}
+			switch {
+			case pausedNow:
+				tip = append(tip, "- paused")
+			case !tally:
+				tip = append(tip, "- Tally not open")
+			case !cloud:
+				tip = append(tip, "- not connected to FinCom")
+			case !online:
+				tip = append(tip, "- offline")
+			default:
+				tip = append(tip, "- working: "+strings.Join(strs(st["companies"]), ", "))
+			}
+			t.setIcon(tally && online && !pausedNow, cut(strings.Join(tip, " "), 120))
+			t.warnIf(cloud && !online && !pausedNow, "offline", 2*time.Minute, "Bridge offline",
+				"This computer cannot reach FinCom. Changes from Tally wait here and go as soon as FinCom can be reached.")
+			t.warnIf(!tally && !pausedNow && time.Since(t.started) > 2*time.Minute && (t.tallySeen || officeHours()), "tally", 3*time.Minute, "Tally not open",
+				"Open TallyPrime with your company, so FinCom stays up to date and postings reach Tally.")
+			// bridge 1.15.0's computer key, protected for this Windows user: handed to the service, which cannot open it
+			if truthy(st["needKey"]) && time.Since(keyTried) > 10*time.Minute {
+				keyTried = time.Now()
+				handOverKey()
+			}
+		}
+		time.Sleep(5 * time.Second)
+	}
+}
+
+func handOverKey() {
+	for _, f := range []string{"tds-bridge.config.json", "go-bridge.config.json"} {
+		c := newOrdered()
+		if c.UnmarshalText(readText(Home+`\`+f)) != nil {
+			continue
+		}
+		for _, k := range []string{"CloudKey", "CloudKeyGo"} {
+			if v := str(c.Get(k)); strings.HasPrefix(v, "dpapi:") {
+				if key := unprotectKey(v); key != "" {
+					trayCall("POST", "/tray/cloudkey", M{"key": key})
+					return
+				}
+			}
+		}
+	}
+}
+
+func restartTray() {
+	exe, _ := os.Executable()
+	c := exec.Command(exe, "tray")
+	_ = c.Start()
+	tr.mu.Lock()
+	pShellNotifyIcon.Call(nimDelete, uintptr(unsafe.Pointer(&tr.nid)))
+	tr.mu.Unlock()
+	os.Exit(0)
+}
+
+func shellOpen(file, params string) {
+	var p *uint16
+	if params != "" {
+		p = u16(params)
+	}
+	pShellExecute.Call(0, uintptr(unsafe.Pointer(u16("open"))), uintptr(unsafe.Pointer(u16(file))), uintptr(unsafe.Pointer(p)), 0, 1)
+}
+func msgBox(title, text string, icon uintptr) {
+	pMessageBox.Call(0, uintptr(unsafe.Pointer(u16(text))), uintptr(unsafe.Pointer(u16(title))), icon|0x00040000) // MB_TOPMOST
+}
+
+func (t *tray) statusText() string {
+	t.mu.Lock()
+	st := t.st
+	t.mu.Unlock()
+	if st == nil {
+		return "The FinCom Bridge service is not answering on this computer.\n\nWindows starts it again by itself. If this stays, choose Restart, or see the log."
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "FinCom Bridge %s, working for %s\n", str(st["version"]), str(st["owner"]))
+	if truthy(st["testMode"]) {
+		b.WriteString("TEST MODE beside bridge 1.15.0: reads Tally and sends to FinCom as a shadow; never posts.\n")
+	} else if r := str(st["readOnly"]); r != "" {
+		b.WriteString(r + "\n")
+	}
+	b.WriteString("\n")
+	if truthy(st["paused"]) {
+		b.WriteString("Paused: Tally is not read and nothing is posted.\n")
+	}
+	if truthy(st["tallyOpen"]) {
+		fmt.Fprintf(&b, "Tally: open (%s)\n", strings.Join(strs(st["companies"]), ", "))
+	} else {
+		b.WriteString("Tally: not open in your Windows session\n")
+	}
+	switch {
+	case !truthy(st["cloudConnected"]):
+		b.WriteString("FinCom: this computer is not connected yet (FinCom > Settings > Tally Bridge)\n")
+	case truthy(st["online"]):
+		fmt.Fprintf(&b, "FinCom: online (last heartbeat %s)\n", str(st["lastBeat"]))
+	default:
+		fmt.Fprintf(&b, "FinCom: OFFLINE since %s; changes wait on this computer\n", str(st["beatFailed"]))
+	}
+	w := obj(st["wake"])
+	fmt.Fprintf(&b, "Wake-up channel: %s\n", map[bool]string{true: "connected", false: "not connected (the heartbeat carries on)"}[truthy(w["joined"])])
+	if truthy(st["updating"]) {
+		b.WriteString("Update from Tally: running now\n")
+	}
+	if sh := obj(st["shadow"]); truthy(st["testMode"]) && sh != nil {
+		fmt.Fprintf(&b, "Shadow check: %d day(s) the same as bridge 1.15.0's, %d different\n", toInt(sh["same"]), toInt(sh["differ"]))
+	}
+	if u := obj(st["update"]); u != nil && str(u["message"]) != "" {
+		b.WriteString("Updates: " + str(u["message"]) + "\n")
+	}
+	fmt.Fprintf(&b, "\nAddress for FinCom: http://127.0.0.1:%d\nLog: %s", toInt(st["port"]), str(st["log"]))
+	return b.String()
+}
+
+func (t *tray) menu() {
+	t.mu.Lock()
+	st := t.st
+	t.mu.Unlock()
+	m, _, _ := pCreatePopupMenu.Call()
+	add := func(id int, text string, flags uintptr) {
+		pAppendMenu.Call(m, flags, uintptr(id), uintptr(unsafe.Pointer(u16(text))))
+	}
+	head := "FinCom Bridge " + BridgeVersion
+	if st == nil {
+		head += ": not running"
+	} else if truthy(st["testMode"]) {
+		head += " (test mode)"
+	}
+	add(1, head, mfGrayed)
+	pAppendMenu.Call(m, mfSeparator, 0, 0)
+	add(2, "Open FinCom", mfString)
+	add(10, "Status...", mfString)
+	add(7, "Connect FinCom on this computer...", mfString)
+	pAppendMenu.Call(m, mfSeparator, 0, 0)
+	if st != nil && truthy(st["paused"]) {
+		add(3, "Resume", mfString)
+	} else {
+		add(3, "Pause", mfString)
+	}
+	add(4, "Restart", mfString)
+	add(5, "Show log", mfString)
+	add(6, "Check for updates", mfString)
+	if st != nil && truthy(st["testMode"]) {
+		add(8, "Compare with bridge 1.15.0", mfString)
+	}
+	pAppendMenu.Call(m, mfSeparator, 0, 0)
+	add(9, "Quit (hide this icon)", mfString)
+	var pt struct{ x, y int32 }
+	pGetCursorPos.Call(uintptr(unsafe.Pointer(&pt)))
+	pSetForegroundWindow.Call(t.hwnd)
+	id, _, _ := pTrackPopupMenu.Call(m, tpmRightBtn|tpmReturnCmd, uintptr(pt.x), uintptr(pt.y), 0, t.hwnd, 0)
+	pPostMessage.Call(t.hwnd, wmNull, 0, 0)
+	pDestroyMenu.Call(m)
+	go t.command(int(id), st)
+}
+
+func (t *tray) command(id int, st M) {
+	switch id {
+	case 2:
+		u := "https://staging.fincom.live/review/"
+		if st != nil && str(st["fincomUrl"]) != "" {
+			u = str(st["fincomUrl"])
+		}
+		shellOpen(u, "")
+	case 10:
+		msgBox("FinCom Bridge", t.statusText(), mbIconInfo)
+	case 7:
+		r := trayCall("POST", "/paircode", M{})
+		if r == nil || str(r["code"]) == "" {
+			msgBox("FinCom Bridge", "The bridge is not answering, so no connect code could be made.", mbIconWarning)
+			return
+		}
+		u := "https://staging.fincom.live/review/"
+		if st != nil && str(st["fincomUrl"]) != "" {
+			u = str(st["fincomUrl"])
+		}
+		shellOpen(u, "")
+		until := str(r["until"])
+		if len(until) >= 16 {
+			until = until[11:16]
+		}
+		msgBox("Connect FinCom", "In FinCom on this computer: Settings > Tally Bridge > Connect, and type this code:\n\n        "+str(r["code"])+"\n\n(until "+until+")", mbIconInfo)
+	case 3:
+		on := !(st != nil && truthy(st["paused"]))
+		trayCall("POST", "/tray/pause", M{"on": on})
+		if on {
+			t.balloon("FinCom Bridge paused", "Tally is not read and nothing is posted until you choose Resume.", false)
+		} else {
+			t.balloon("FinCom Bridge", "Working again.", false)
+		}
+	case 4:
+		if trayCall("POST", "/tray/restart", M{}) == nil {
+			msgBox("FinCom Bridge", "The bridge is not answering. Windows starts it again by itself within a minute; if not, restart the computer.", mbIconWarning)
+			return
+		}
+		t.balloon("FinCom Bridge", "Starting again; it is back in a few seconds.", false)
+	case 5:
+		f := ""
+		if st != nil {
+			f = str(st["log"])
+		}
+		if f == "" {
+			loadConfigRO()
+			f = logFile()
+		}
+		shellOpen("notepad.exe", `"`+f+`"`)
+	case 6:
+		t.balloon("FinCom Bridge", "Checking for updates...", false)
+		r := trayCall("POST", "/tray/update", M{})
+		if r == nil {
+			t.balloon("FinCom Bridge", "The bridge is not answering.", true)
+			return
+		}
+		t.balloon("FinCom Bridge updates", str(r["message"]), false)
+	case 8:
+		exe, _ := os.Executable()
+		shellOpen("cmd.exe", `/k ""`+exe+`" compare"`)
+	case 9:
+		trayCall("POST", "/tray/quit", M{"session": ownSession()})
+		t.mu.Lock()
+		pShellNotifyIcon.Call(nimDelete, uintptr(unsafe.Pointer(&t.nid)))
+		t.mu.Unlock()
+		pPostQuitMessage.Call(0)
+		os.Exit(0)
+	}
+}
+
+func wndProc(hwnd, msg, wp, lp uintptr) uintptr {
+	switch {
+	case msg == wmTray:
+		switch lp & 0xffff {
+		case wmRButtonUp:
+			tr.menu()
+		case wmLButtonDbl:
+			go msgBox("FinCom Bridge", tr.statusText(), mbIconInfo)
+		}
+		return 0
+	case msg == wmShowStatus:
+		go msgBox("FinCom Bridge", tr.statusText(), mbIconInfo)
+		return 0
+	case taskbarCreated != 0 && msg == taskbarCreated:
+		tr.mu.Lock()
+		tr.nid.UFlags = nifIcon | nifTip | nifMessage
+		pShellNotifyIcon.Call(nimAdd, uintptr(unsafe.Pointer(&tr.nid)))
+		tr.mu.Unlock()
+		return 0
+	case msg == wmDestroy:
+		pPostQuitMessage.Call(0)
+		return 0
+	}
+	r, _, _ := pDefWindowProc.Call(hwnd, msg, wp, lp)
+	return r
+}
+
+func runTray(args []string) int {
+	runtime.LockOSThread()
+	setPaths("", "")
+	loadConfigRO()
+	if o := cfgS("Owner"); o != "" && !sameUser(o, currentUser()) {
+		return 0 // the bridge works for another Windows user of this computer
+	}
+	// one icon per session: a second start (the Start menu, the desktop) shows the status of the first
+	if _, err := windows.CreateMutex(nil, false, u16(`Local\FinComBridgeTray`)); err == windows.ERROR_ALREADY_EXISTS {
+		if h, _, _ := pFindWindow.Call(uintptr(unsafe.Pointer(u16(trayClass))), 0); h != 0 {
+			pPostMessage.Call(h, wmShowStatus, 0, 0)
+		}
+		return 0
+	}
+	hinst, _, _ := windows.NewLazySystemDLL("kernel32.dll").NewProc("GetModuleHandleW").Call(0)
+	wc := wndClassEx{cbSize: uint32(unsafe.Sizeof(wndClassEx{})), lpfnWndProc: windows.NewCallback(wndProc), hInstance: hinst, lpszClassName: u16(trayClass)}
+	pRegisterClassEx.Call(uintptr(unsafe.Pointer(&wc)))
+	hwnd, _, _ := pCreateWindowEx.Call(0, uintptr(unsafe.Pointer(u16(trayClass))), uintptr(unsafe.Pointer(u16("FinCom Bridge"))), 0, 0, 0, 0, 0, 0, 0, hinst, 0)
+	taskbarCreated, _, _ = pRegisterWindowMessage.Call(uintptr(unsafe.Pointer(u16("TaskbarCreated"))))
+	tr.hwnd, tr.green, tr.red = hwnd, iconFrom(icoGreen), iconFrom(icoRed)
+	tr.nid = notifyIconData{HWnd: hwnd, UID: 1, UFlags: nifIcon | nifTip | nifMessage, UCallbackMessage: wmTray, HIcon: tr.red}
+	tr.nid.CbSize = uint32(unsafe.Sizeof(tr.nid))
+	copyU16(tr.nid.SzTip[:], "FinCom Bridge: starting")
+	pShellNotifyIcon.Call(nimAdd, uintptr(unsafe.Pointer(&tr.nid)))
+	go tr.poll()
+	var m msgT
+	for {
+		r, _, _ := pGetMessage.Call(uintptr(unsafe.Pointer(&m)), 0, 0, 0)
+		if int32(r) <= 0 {
+			break
+		}
+		pTranslateMessage.Call(uintptr(unsafe.Pointer(&m)))
+		pDispatchMessage.Call(uintptr(unsafe.Pointer(&m)))
+	}
+	pShellNotifyIcon.Call(nimDelete, uintptr(unsafe.Pointer(&tr.nid)))
+	return 0
+}
+
+func currentUser() string {
+	return wtsString(uint32(ownSession()), wtsUserName)
+}

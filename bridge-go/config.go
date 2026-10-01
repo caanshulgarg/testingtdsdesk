@@ -21,7 +21,7 @@ type Ordered struct {
 	vals map[string]any
 }
 
-func newOrdered() *Ordered { return &Ordered{vals: map[string]any{}} }
+func newOrdered() *Ordered          { return &Ordered{vals: map[string]any{}} }
 func (o *Ordered) Get(k string) any { return o.vals[k] }
 func (o *Ordered) Has(k string) bool {
 	_, ok := o.vals[k]
@@ -176,6 +176,20 @@ func loadConfig() {
 	if need {
 		saveConfig()
 	}
+}
+
+// loadConfigRO: the settings read for the tray and the compare tool, which never write them (the service does)
+func loadConfigRO() {
+	d := defaultSettings()
+	o := newOrdered()
+	if o.UnmarshalText(readText(ConfigPath)) == nil {
+		for _, k := range o.keys {
+			d.Set(k, o.Get(k))
+		}
+	}
+	cfgMu.Lock()
+	Cfg = d
+	cfgMu.Unlock()
 }
 
 var cfgStamp time.Time

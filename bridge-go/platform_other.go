@@ -39,7 +39,7 @@ func ownerName() string {
 }
 func ownerProfile() string { h, _ := os.UserHomeDir(); return h }
 
-func runService(args []string) int  { return runBridge(true) }
+func runService(args []string) int   { return runBridge(true) }
 func isWindowsService() bool         { return false }
 func runTray(args []string) int      { println("The tray icon is for Windows."); return 1 }
 func installCmd(args []string) int   { println("Installing is for Windows."); return 1 }
@@ -49,5 +49,11 @@ func applyUpdate(exe string, b []byte) error {
 	return os.WriteFile(exe+".new", b, 0o755)
 }
 
-func defaultHome() string                    { return "" }
-func checkCodeSignature(b []byte) error       { return errNoCodeSign }
+func defaultHome() string               { return "" }
+func checkCodeSignature(b []byte) error { return errNoCodeSign }
+func trayAlive(session int)             {}
+func trayQuitSession(session int)       {}
+func openFile(f string)                 { println(f) }
+func attachConsole()                    {}
+func stopCmd() int                      { return 0 }
+func restartServiceCmd() int { return 0 }

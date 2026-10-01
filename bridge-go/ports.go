@@ -150,7 +150,9 @@ func diagnosis() M {
 	users := sessionUsers()
 	me := users[mySession()]
 	findings := []M{}
-	add := func(level, text, fix string) { findings = append(findings, M{"level": level, "text": text, "fix": fix}) }
+	add := func(level, text, fix string) {
+		findings = append(findings, M{"level": level, "text": text, "fix": fix})
+	}
 	tallies := []M{}
 	listeners := []M{}
 	owner := map[int]M{}
@@ -282,12 +284,12 @@ func portPlan() (string, []M) {
 
 // --- which companies are open: shared through a file and kept 30 s, so status checks cost Tally nothing
 var (
-	coMu        sync.Mutex
-	coCache     []M
-	coCacheAt   time.Time
-	planMode    string
-	coInfo      M
-	emptyAskAt  time.Time
+	coMu       sync.Mutex
+	coCache    []M
+	coCacheAt  time.Time
+	planMode   string
+	coInfo     M
+	emptyAskAt time.Time
 )
 
 func coInfoFile() string { return filepath.Join(syncDir(), "company-info.json") }

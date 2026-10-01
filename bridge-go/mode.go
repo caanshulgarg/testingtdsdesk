@@ -52,7 +52,7 @@ var (
 	oldFound bool
 )
 
-// why this bridge does not post ('' when it may): only one bridge may ever post
+// why this bridge does not post (” when it may): only one bridge may ever post
 func readOnlyWhy() string {
 	if testMode() {
 		return "This FinCom Bridge is the test install beside bridge 1.15.0: it reads Tally but never posts. Postings go through bridge 1.15.0."
@@ -114,10 +114,10 @@ func setPaused(on bool) {
 
 // --- the person at the computer, as the tray in the owner's session sees it
 var (
-	trayMu      sync.Mutex
-	trayIdle    float64
-	trayFront   bool
-	trayIdleAt  time.Time
+	trayMu     sync.Mutex
+	trayIdle   float64
+	trayFront  bool
+	trayIdleAt time.Time
 )
 
 func setTrayIdle(idle float64, front bool) {
@@ -146,7 +146,7 @@ func trayStatus() M {
 	cloud := cloudOn()
 	online := cloud && !beatOK.IsZero() && time.Since(beatOK) < time.Duration(3*keepNum("CloudBeatSec", 60)+120)*time.Second
 	return M{"ok": true, "version": BridgeVersion, "testMode": testMode(), "readOnly": readOnlyWhy(), "paused": paused(), "tallyOpen": tallyOpen, "companies": cos,
-		"cloudConnected": cloud, "online": online, "lastBeat": fmtTime(beatOK), "beatFailed": fmtTime(beatFailAt), "wake": wakeStatus(), "updating": keepRunning(),
+		"cloudConnected": cloud, "online": online, "needKey": cfgS("CloudUrl") != "" && cloudKey() == "", "lastBeat": fmtTime(beatOK), "beatFailed": fmtTime(beatFailAt), "wake": wakeStatus(), "updating": keepRunning(),
 		"port": toInt(cfg("Port")), "fincomUrl": fincomURL(), "log": logFile(), "shadow": shadowStats, "update": updateInfo(), "owner": ownerName()}
 }
 func fmtTime(t time.Time) string {

@@ -26,7 +26,7 @@ func syncDir() string {
 	return filepath.Join(Home, "sync")
 }
 func syncFolder(company string) string { return filepath.Join(syncDir(), safeName(company)) }
-func sp(name string) string             { return filepath.Join(syncDir(), name) }
+func sp(name string) string            { return filepath.Join(syncDir(), name) }
 
 // --- when the copier reads Tally
 func keepOn() bool {
@@ -76,7 +76,7 @@ func keepLightDue() bool {
 	return !ok || time.Since(last).Minutes() >= float64(min)
 }
 
-// '' (not now), 'now' (someone asked), 'daily' (the day's run is due), 'light', or 'continuous'
+// ” (not now), 'now' (someone asked), 'daily' (the day's run is due), 'light', or 'continuous'
 func keepDue() string {
 	if exists(sp("keep-now.txt")) {
 		return "now"
@@ -145,7 +145,7 @@ func keepQuiet() bool {
 
 func setFinComReading() { _ = saveFile(sp("fincom-reading.txt"), nowS()) }
 
-// why Tally is to be left alone right now ('' when it is free)
+// why Tally is to be left alone right now (” when it is free)
 func keepHold() string {
 	for _, d := range []string{syncDir(), psSyncDir()} {
 		if d == "" {
@@ -563,7 +563,9 @@ func nonEmpty(a []string) []any {
 	return o
 }
 
-func addKeepSkipped(st M, d string) { st["skipped"] = toAny(uniqSorted(append(strs(st["skipped"]), d))) }
+func addKeepSkipped(st M, d string) {
+	st["skipped"] = toAny(uniqSorted(append(strs(st["skipped"]), d)))
+}
 func toAny(a []string) []any {
 	o := make([]any, len(a))
 	for i, s := range a {

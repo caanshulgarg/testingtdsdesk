@@ -46,11 +46,21 @@ func main() {
 	_ = fs.String("mode", "", "")
 	_ = fs.String("fincom", "", "")
 	_ = fs.Bool("quiet", false, "")
+	_ = fs.Bool("show", false, "")
 	_ = fs.Parse(rest)
+	switch cmd {
+	case "", "service", "tray", "install", "uninstall", "stop", "restart-service":
+	default:
+		attachConsole() // the program is a windowed one (no console flashes for the tray): commands typed in a window print there
+	}
 	switch cmd {
 	case "version":
 		fmt.Println(BridgeVersion)
 		return
+	case "stop":
+		os.Exit(stopCmd())
+	case "restart-service":
+		os.Exit(restartServiceCmd())
 	case "tray":
 		os.Exit(runTray(rest))
 	case "install":
@@ -60,10 +70,18 @@ func main() {
 	}
 	setPaths(*config, *home)
 	switch cmd {
+	case "log":
+		loadConfigRO()
+		openFile(logFile())
+		return
 	case "compare":
-		loadConfig()
+		loadConfigRO()
 		logEcho = false
-		os.Exit(compareCopies(fs.Args()))
+		code := compareCopies(fs.Args())
+		if contains(rest, "--show") {
+			openFile(filepath.Join(Home, "compare-report.txt"))
+		}
+		os.Exit(code)
 	case "sync":
 		loadConfig()
 		r := nightlySync()
@@ -71,7 +89,9 @@ func main() {
 		return
 	case "run":
 		os.Exit(runBridge(true))
-	case "", "service":
+	case "service":
+		os.Exit(runService(rest)) // Windows starts it as "FinComBridge.exe service --config ..."
+	case "":
 		if isWindowsService() {
 			os.Exit(runService(rest))
 		}

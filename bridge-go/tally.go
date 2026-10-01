@@ -443,10 +443,10 @@ type use struct {
 	sec float64
 }
 type stat struct {
-	port            int
-	kind            string
-	n, fail         int
-	sec, max        float64
+	port     int
+	kind     string
+	n, fail  int
+	sec, max float64
 }
 
 var (

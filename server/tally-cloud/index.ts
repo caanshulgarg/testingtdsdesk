@@ -22,6 +22,8 @@
 //   {kind:"posts_take"}                              -> {job: {id, company, payload} | null}: the next posting queued in
 //                                                       FinCom for this computer (build 199); the beat says how many wait
 //   {kind:"posts_update", id, status, done, message, results, checking} -> how a posting taken by this computer is going
+//   any of these with shadow:true (go-bridge: FinCom Bridge 2.0.0 in test mode, beside bridge 1.15.0): compared, never
+//                                                       kept, never a posting (shadowCall)
 // Or a person signed in to FinCom (Authorization: Bearer, two-step done, a member of the firm), for one of the firm's
 // clients, giving the books from files exported from Tally:
 //   {kind:"upload_days", client, company?, days:[{day, gz}]}
@@ -95,6 +97,60 @@ const isDay = (d: unknown) => typeof d === "string" && /^(19|20)\d\d(0[1-9]|1[0-
 const iso = (d: string) => d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6, 8);
 const pan = (g: unknown) => String(g || "").toUpperCase().slice(2, 12);
 
+// go-bridge: a call from FinCom Bridge 2.0.0 in test mode ("shadow"). It runs beside bridge 1.15.0 with the same computer
+// key to be compared with it, so nothing it sends may change what 1.15.0 keeps:
+//   - postings: never handed to it (only one bridge may ever post);
+//   - heartbeat: noted apart (info.shadow), the device's own heartbeat, version and "Update now" left to 1.15.0;
+//   - days: each compared with the day kept in the cloud (1.15.0's): same / differ / new; nothing stored;
+//   - companies, ledgers, groups, state: answered, nothing stored.
+async function shadowCall(dev: any, firm: string, body: any) {
+  const kind = String(body.kind || "");
+  if (kind === "posts_take" || kind === "posts_update") return reply(403, { ok: false, error: "A bridge in test mode does not post." });
+  if (kind === "hello") {
+    const { data: f } = await db.from("firms").select("name").eq("id", firm).maybeSingle();
+    return reply(200, { ok: true, firm: f?.name || "", device: dev.name, shadow: true });
+  }
+  if (kind === "beat") {
+    const s = (v: unknown, n = 80) => typeof v === "string" ? v.slice(0, n) : "";
+    const shadow = { at: new Date().toISOString(), version: s(body.version, 40), tally: !!body.tally, updating: !!body.updating,
+      open: (Array.isArray(body.open) ? body.open : []).slice(0, 50).map((x: unknown) => s(x, 200)) };
+    // read and written together, so 1.15.0's own heartbeat in between is not lost
+    const { data: cur } = await db.from("tally_devices").select("info").eq("id", dev.id).maybeSingle();
+    const info = { ...((cur?.info && typeof cur.info === "object") ? cur.info : {}), shadow };
+    await db.from("tally_devices").update({ info }).eq("id", dev.id);
+    const tok = dev.wake_token;
+    const wake = tok ? { url: URL.replace(/^http/, "ws").replace(/\/+$/, "") + "/realtime/v1/websocket", key: ANON, topic: "tb-" + tok } : null;
+    return reply(200, { ok: true, updateNow: false, posts: 0, wake, shadow: true });
+  }
+  if (kind === "companies") {
+    const { data: have } = await db.from("tally_companies").select("company, client_id").eq("firm_id", firm);
+    const linked = new Map((have || []).map((r: any) => [r.company, !!r.client_id]));
+    const links: Record<string, boolean> = {};
+    for (const c of (Array.isArray(body.companies) ? body.companies : []).slice(0, 200)) { const n = String(c?.name || "").trim(); if (n) links[n] = !!linked.get(n); }
+    return reply(200, { ok: true, links, shadow: true });
+  }
+  const book = await bookFor(firm, String(body.company || ""));
+  if (!book) return reply(409, { ok: false, notLinked: true, error: "This Tally company is not linked to a FinCom client yet." });
+  if (kind === "days") {
+    const done: string[] = [], same: string[] = [], differ: string[] = [], fresh: string[] = [], bad: { day: string; error: string }[] = [];
+    for (const d of (Array.isArray(body.days) ? body.days : []).slice(0, 62) as any[]) {
+      if (!isDay(d?.day)) continue;
+      let text = "";
+      try {
+        if (typeof d.b64 === "string") text = new TextDecoder("utf-8").decode(b64bytes(d.b64));
+        else text = (await gunzip(b64bytes(d.gz), MAX_DAY)).text;
+      } catch (e) { bad.push({ day: d.day, error: String((e as Error)?.message || e).slice(0, 200) }); continue; }
+      done.push(d.day);
+      const { data: blob } = await db.storage.from("tally-days").download(`${firm}/${book}/${d.day.slice(0, 6)}/${d.day}.xml.gz`);
+      if (!blob) { fresh.push(d.day); continue; }
+      const kept = (await gunzip(new Uint8Array(await blob.arrayBuffer()), MAX_DAY)).text;
+      (kept === text ? same : differ).push(d.day);
+    }
+    if (differ.length) console.log("tally-ingest shadow: days differ from the kept copy", book, differ.slice(0, 10).join(","));
+    return reply(200, { ok: true, done, bad, same, differ, new: fresh, shadow: true });
+  }
+  return reply(200, { ok: true, shadow: true });
+}
 async function bookFor(firm: string, company: string) {
   const { data, error } = await db.rpc("tally_book_for", { p_firm: firm, p_company: company });
   if (error) throw new Error(error.message);
@@ -376,6 +432,10 @@ Deno.serve(async (req) => {
   let body: any;
   try { body = JSON.parse(await readBody(req)); } catch (e) { return (e as Error).message === "too large" ? reply(413, { ok: false, error: "Too much in one go; send fewer days at a time." }) : reply(400, { ok: false, error: "Bad request" }); }
   const firm = dev.firm_id as string;
+  // go-bridge (FinCom Bridge 2.0.0 in test mode, beside bridge 1.15.0 on the same computer and key): compared, never kept
+  if (body?.shadow === true) {
+    try { return await shadowCall(dev, firm, body); } catch (e) { console.error("tally-ingest shadow", body?.kind, (e as Error).message); return reply(500, { ok: false, error: (e as Error).message }); }
+  }
   const seen = { last_seen: new Date().toISOString() } as Record<string, unknown>;
   if (body.version) seen.version = String(body.version).slice(0, 40);
   if (body.kind === "hello" && body.info && typeof body.info === "object") {

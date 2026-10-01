@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-const BridgeVersion = "2.0.0"
+var BridgeVersion = "2.0.0" // set at build time for test builds (-X main.BridgeVersion=...)
 
 // M is a JSON object, as PowerShell's [ordered]@{} was
 type M = map[string]any
@@ -145,8 +145,8 @@ func num(v any) float64 {
 	}
 	return 0
 }
-func toInt(v any) int    { return int(num(v)) }
-func toI64(v any) int64  { return int64(num(v)) }
+func toInt(v any) int   { return int(num(v)) }
+func toI64(v any) int64 { return int64(num(v)) }
 func truthy(v any) bool {
 	switch x := v.(type) {
 	case nil:
@@ -264,10 +264,10 @@ func fromTallyDate(d string) time.Time {
 	}
 	return t
 }
-func tallyDate(t time.Time) string    { return t.Format("20060102") }
-func addDays(d string, n int) string   { return tallyDate(fromTallyDate(d).AddDate(0, 0, n)) }
-func today() string                    { return tallyDate(time.Now()) }
-func nowS() string                     { return time.Now().Format("2006-01-02T15:04:05") }
+func tallyDate(t time.Time) string   { return t.Format("20060102") }
+func addDays(d string, n int) string { return tallyDate(fromTallyDate(d).AddDate(0, 0, n)) }
+func today() string                  { return tallyDate(time.Now()) }
+func nowS() string                   { return time.Now().Format("2006-01-02T15:04:05") }
 func fyStart(t time.Time) time.Time {
 	y := t.Year()
 	if t.Month() < 4 {
@@ -276,7 +276,7 @@ func fyStart(t time.Time) time.Time {
 	return time.Date(y, 4, 1, 0, 0, 0, 0, time.Local)
 }
 func monthEnd(ym string) string { return tallyDate(fromTallyDate(ym+"01").AddDate(0, 1, -1)) }
-func nextYm(ym string) string   { return fromTallyDate(ym + "01").AddDate(0, 1, 0).Format("200601") }
+func nextYm(ym string) string   { return fromTallyDate(ym+"01").AddDate(0, 1, 0).Format("200601") }
 func parseTime(s string) (time.Time, bool) {
 	s = strings.TrimSpace(s)
 	for _, f := range []string{"2006-01-02T15:04:05", time.RFC3339Nano, time.RFC3339, "2006-01-02T15:04:05.9999999Z07:00", "2006-01-02T15:04:05.9999999"} {

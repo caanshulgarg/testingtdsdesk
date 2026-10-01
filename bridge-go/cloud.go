@@ -52,11 +52,18 @@ type cloudResp struct {
 
 var cloudHTTP = &http.Client{Transport: &http.Transport{Proxy: http.ProxyFromEnvironment, MaxIdleConns: 4, IdleConnTimeout: 60 * time.Second}}
 
+// test mode: nothing but the heartbeat goes until FinCom's cloud has answered that it keeps a test bridge's calls apart
+// (an older cloud would take them as bridge 1.15.0's)
+var shadowOK bool
+
 // one call to the cloud
 func invokeCloud(body M, timeoutSec int) cloudResp {
 	body["version"] = BridgeVersion
 	if testMode() {
 		body["shadow"] = true
+		if k := str(body["kind"]); !shadowOK && k != "beat" {
+			return cloudResp{0, nil, "FinCom's cloud has not confirmed test mode yet; nothing is sent"}
+		}
 	}
 	req, _ := http.NewRequest("POST", cfgS("CloudUrl"), strings.NewReader(jsonText(body)))
 	req.Header.Set("Content-Type", "application/json")
@@ -615,6 +622,15 @@ func sendCloudBeat() {
 	}
 	r := invokeCloud(M{"kind": "beat", "tally": tally, "open": open, "ports": ports, "companies": cos, "updating": keepRunning(), "dailyAt": keepDailyAt(), "lastRun": keepLastRun()}, 10)
 	if r.code == 200 && r.json != nil {
+		if testMode() && !truthy(r.json["shadow"]) {
+			if shadowOK || beatFailAt.IsZero() {
+				writeLog("Test mode: FinCom's cloud does not keep a test bridge apart yet, so nothing is sent to it (only the heartbeat)")
+			}
+			shadowOK = false
+			beatFailAt = time.Now()
+			return
+		}
+		shadowOK = true
 		beatOK = time.Now()
 		setCloudWake(obj(r.json["wake"]))
 		// Update now pressed in FinCom on another computer
