@@ -131,8 +131,14 @@ export function CloudBooks() {
               {cid && !linked && <option value={cid}>a client not on this computer</option>}
               {cos.map((k) => <option key={k.id} value={String(k.id)}>{k.name}</option>)}</select>
             {cid ? <div className="nr">{linked ? <>✓ Linked to <b>{linked.name}</b>{gstinMatch(c) && String(gstinMatch(c).id) === cid ? " (same GSTIN)" : ""}
-                {S.account && S.account.me && S.account.me.role === "owner" && <> · <button className="linkbtn" disabled={!!p.busy} title="FinCom's cloud reads the day books it keeps again: the party's GSTIN, place of supply, HSN and rate"
-                  onClick={() => TCloud.reparse(cid)}>Read the kept day books again</button></>}</> : "Linked to a client that is not on this computer."}</div>
+                {S.account && S.account.me && S.account.me.role === "owner" && <> · <button className="linkbtn" disabled={!!p.busy} title="FinCom's cloud reads the day books it keeps again: the party's GSTIN, place of supply, HSN, rate and bill-wise details"
+                  onClick={() => TCloud.reparse(cid)}>Read the kept day books again</button></>}
+                <div className="row" style={{ gap: 8, marginTop: 6, flexWrap: "wrap", alignItems: "center" }}>
+                  <button className="btn small" onClick={() => TCloud.sendLedgers(cid)} title="The Tally computer reads every ledger and group now and sends them (bridge 1.14.8 or later; Tally open there)">Send ledgers and groups now</button>
+                  {(() => { const g = (p.gs || {})[cid]; return g ? (g.err ? <span className="note bad">{g.err}</span> : g.none ? <span className="note">No books in the cloud yet.</span>
+                    : <span className="note">{"In the cloud: " + g.groups + " groups · " + g.grouped + " of " + g.ledgers + " ledgers with a group"} <button className="linkbtn" onClick={() => TCloud.groupStatus(cid)}>check again</button></span>)
+                    : <button className="linkbtn" onClick={() => TCloud.groupStatus(cid)}>What is in the cloud?</button>; })()}
+                </div></> : "Linked to a client that is not on this computer."}</div>
               : m ? <div className="nr">Same GSTIN as <b>{m.name}</b> <button className="btn small" onClick={() => TCloud.link(c.company, m.id)}>Link to {m.name}</button></div> : null}</td><td>{when(c.last_seen)}</td></tr>;
         })}</tbody></table></div>
         : <p className="note">No Tally companies have been seen yet. They appear here once a connected computer has a company open in Tally.</p>}</div>

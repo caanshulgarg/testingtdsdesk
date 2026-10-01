@@ -125,7 +125,9 @@ const Books = {
         if (e.indexOf("<BILLALLOCATIONS.LIST>") >= 0){
           const bl = e.split("<BILLALLOCATIONS.LIST>").slice(1).map(p2 => {
             const q = p2.split("</BILLALLOCATIONS.LIST>")[0];
-            return [this.one(q, "NAME"), this.one(q, "BILLTYPE"), this.amt(this.one(q, "AMOUNT"))];
+            // review of 01-Oct-2026: Tally's credit period on a New Ref ("30 Days"), so ageing can run from the due date
+            const cp = (q.match(/<BILLCREDITPERIOD\b[^>]*>([^<]*)<\/BILLCREDITPERIOD>/) || [])[1] || "", dm = cp.match(/^\s*(\d{1,4})\s*Days?\s*$/i);
+            return dm ? [this.one(q, "NAME"), this.one(q, "BILLTYPE"), this.amt(this.one(q, "AMOUNT")), Number(dm[1])] : [this.one(q, "NAME"), this.one(q, "BILLTYPE"), this.amt(this.one(q, "AMOUNT"))];
           }).filter(z => z[1] && z[2]);
           if (bl.length) x.b = bl;
         }

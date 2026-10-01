@@ -78,16 +78,22 @@ const MIS = {
       v.ent.forEach(e => {
         if (!want(e.l)) return;
         const alloc = e.b && e.b.length ? e.b : [["", "On Account", e.a]];
-        alloc.forEach(([name, type, amt]) => {
+        alloc.forEach(([name, type, amt, days]) => {
           const k = e.l + "|" + (type === "On Account" || !name ? "\u0000" : name);
           const x = ref[k] = ref[k] || {party: e.l, ref: type === "On Account" || !name ? "" : name, date: "", amt: 0, first: v.date, no: ""};
           const signed = side === "r" ? -amt : amt;            // what is owed to us (r) or by us (p)
-          if ((type === "New Ref" || type === "Advance") && !x.date){ x.date = v.date; x.no = v.no; x.hasNew = true; }
+          if ((type === "New Ref" || type === "Advance") && !x.date){ x.date = v.date; x.no = v.no; x.hasNew = true; if (type === "New Ref" && days > 0) x.days = days; }
           x.amt = r2(x.amt + signed);
         });
       });
     });
-    return Object.values(ref).filter(x => Math.abs(x.amt) >= 0.5).map(x => Object.assign(x, {date: x.date || x.first, age: Audit.days(x.date || x.first, asOn)}));
+    // age: days since the bill (MSME's 45 days, reminders and Look up count from here). od (review of 01-Oct-2026): what
+    // the ageing goes by, the days overdue from the due date (bill date + Tally's credit days; nought while not yet due),
+    // or the age when the bill has no credit period
+    return Object.values(ref).filter(x => Math.abs(x.amt) >= 0.5).map(x => {
+      const date = x.date || x.first, due = x.days ? this.shift(date, 0, x.days) : "", age = Audit.days(date, asOn);
+      return Object.assign(x, {date, due, age, od: due ? Math.max(0, Audit.days(due, asOn)) : age});
+    });
   },
   BUCKETS: [[30, "0\u201330"], [60, "31\u201360"], [90, "61\u201390"], [180, "91\u2013180"], [1e9, "over 180"]],
   ageing(asOn, side, bal){
@@ -97,7 +103,7 @@ const MIS = {
       if (!x.ref){ p.unalloc = r2(p.unalloc + x.amt); }
       else if (!x.hasNew){ p.pre = r2(p.pre + x.amt); }                // a bill from before the books read here
       else if (x.amt < 0){ p.adv = r2(p.adv + x.amt); }
-      else { const i = this.BUCKETS.findIndex(([d]) => x.age <= d); p.b[i] = r2(p.b[i] + x.amt); p.oldest = Math.max(p.oldest, x.age); }
+      else { const a = x.od != null ? x.od : x.age, i = this.BUCKETS.findIndex(([d]) => a <= d); p.b[i] = r2(p.b[i] + x.amt); p.oldest = Math.max(p.oldest, a); }
       p.total = r2(p.total + x.amt); p.bills.push(x);
     });
     const rows = Object.values(by);

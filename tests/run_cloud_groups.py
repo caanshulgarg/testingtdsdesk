@@ -77,6 +77,15 @@ try:
     ok(set(LEDGERS) <= set(sent) and all(sent[n][1] == LEDGERS[n] for n in LEDGERS), "after the trial balance file: still every ledger, with its group (the bridge's ledger list fills what the file lacks)")
     ok(float(sent["ZZ Bank"][2]) == -200000 and float(sent["Cab Hire"][2]) == 0, "and the opening balances from the file (ZZ Bank %s, Cab Hire %s)" % (sent["ZZ Bank"][2], sent["Cab Hire"][2]))
     ok(len(got.get("groups", [])) == len(GROUPS), "and the groups with them")
+    # Update now (and FinCom's "Send ledgers and groups now", which asks the same): every ledger and group read again
+    # and sent, though nothing changed in Tally (bridge 1.14.8)
+    n1 = len([c for c in fake_cloud.CALLS if c[0] == "ledgers"])
+    fake_cloud.LEDGERS.pop(CO, None)
+    r = call("/keep?company=" + urllib.parse.quote(CO), {"now": True})
+    got2 = until(lambda: fake_cloud.LEDGERS.get(CO) if len([c for c in fake_cloud.CALLS if c[0] == "ledgers"]) > n1 else None, 180, 2)
+    ok(bool(got2) and len(got2.get("ledgers", [])) >= len(LEDGERS) and len(got2.get("groups", [])) == len(GROUPS), "Update now: every ledger and group sent again (%d ledgers, %d groups)" % (len((got2 or {}).get("ledgers", [])), len((got2 or {}).get("groups", []))))
+    logs = "".join(open(f, encoding="utf-8", errors="replace").read() for f in glob.glob(_os.path.join(BRUN, "*.log")))
+    ok("every ledger and group read from Tally, to go to the cloud" in logs, "the bridge's log says so")
     # the cloud's parser on the days it got: the party's GSTIN, the place of supply, and HSN and rate on the lines
     days = [t for (c, d), t in sorted(fake_cloud.DAYS.items()) if c == CO]
     ok(len(days) >= 20, "the days went to the cloud (%d)" % len(days))

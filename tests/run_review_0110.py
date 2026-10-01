@@ -66,6 +66,30 @@ with sync_playwright() as p:
     ok(abs(r["owe"] - 50000) < 0.01 and abs(r["adv"] - 50000) < 0.01 and abs(sum(r["nb"]) + r["und"] - r["owe"]) < 0.01, "3c/3d. in all: owed 50,000, advanced 50,000, the ages add up to what is owed")
     ok(r["oldB"][3] + r["oldB"][4] > r["owe"], "3d. (the bills alone put %.0f over 90 days, more than the 50,000 owed: what the review saw)" % (r["oldB"][3] + r["oldB"][4]))
     ok(r["dpo"] is None or r["dpo"] >= 0, "3c. days of purchases never below nought (%s)" % r["dpo"])
+    # ageing by due date: a bill of 01-Aug-2026 with Tally's 30 days' credit is due 31-Aug-2026, 30 days overdue on
+    # 30-Sep-2026 (0-30), though 60 days old; MSME's 45 days still count from the bill's date
+    d = pg.evaluate("""() => { const V = (id, date, ent) => ({id, date, type: "Purchase", no: id, party: ent[0].l, narr: "", cancel: false, opt: false, ent});
+      S.books.vouchers = S.books.vouchers.concat([V("p9", "20260801", [{l: "ZZ Credit Supplier", a: 40000, b: [["C-1", "New Ref", 40000, 30]]}, {l: "Purchases", a: -40000}])]);
+      S.books.under["ZZ Credit Supplier"] = "Sundry Creditors";
+      const x = MIS.bills("20260930", "p").find(z => z.party === "ZZ Credit Supplier"), A = MIS.ageing("20260930", "p", null), p = A.rows.find(z => z.party === "ZZ Credit Supplier");
+      return {due: x.due, age: x.age, od: x.od, b: p.b}; }""")
+    ok(d["due"] == "20260831" and d["od"] == 30 and d["age"] == 60 and d["b"][0] == 40000, "ageing by due date: 30 days' credit, due 31-Aug-2026, 30 days overdue (0-30 column), though 60 days old (%s)" % d)
+    # Settings > Tally > Books in the cloud: the button, and what is in the cloud
+    pg.evaluate("""(c) => { Cloud.on = () => true; Cloud.st = Object.assign(Cloud.st || {}, {firm: 'firm-a'}); S.account = {me: {role: 'owner'}, firm: {}}; S.firm.firmName = S.firm.firmName || 'ZZ Test Firm';
+      TCloud.pane = Object.assign(TCloud.pane || {}, {devices: [], companies: [{company: 'ZZ LINK CO', client_id: c, gstin: '', last_seen: new Date().toISOString()}], at: Date.now(), busy: '', err: ''});
+      TCloud.refreshPane = async () => {}; TCloud.status = async () => [{book: 'bk1', from: '2025-04-01'}];
+      TCloud.restAll = async (q) => q.startsWith('tally_groups') ? Array.from({length: 28}, (_, i) => ({name: 'G' + i})) : Array.from({length: 300}, (_, i) => ({parent: i < 290 ? 'Sundry Debtors' : ''}));
+      TCloud.rpc = async (f, a) => { window.__asked = [f, a]; return {ok: true}; }; Bridge.on = () => false; goSettings('tcloud'); }""", cid)
+    pg.wait_for_timeout(800)
+    ok(pg.locator('button:has-text("Send ledgers and groups now")').count() == 1, "Books in the cloud: “Send ledgers and groups now” beside the linked company")
+    pg.click('button:has-text("Send ledgers and groups now")'); pg.wait_for_timeout(2500)
+    ok(pg.evaluate("window.__asked") == ["tally_want_update", {"p_client": cid}], "from another computer it asks the Tally computer through the cloud, as Update now does")
+    ok("In the cloud: 28 groups · 290 of 300 ledgers with a group" in pg.inner_text("#app"), "and shows what is in the cloud: groups, and ledgers with a group")
+    # "Read the kept day books again" (owners): FinCom's cloud reads month after month until there is no next
+    pg.evaluate("""() => { window.__months = []; TCloudUp.post = async (body, who) => { window.__months.push(body.month || 'first'); const all = ['202504', '202505', '202506'];
+      const m = body.month || all[0], i = all.indexOf(m); return {ok: true, month: m, done: ['x', 'y'], bad: [], next: all[i + 1] || null, months: 3}; }; }""")
+    pg.evaluate("[...document.querySelectorAll('button')].find(b => /kept day books/.test(b.textContent)).click()"); pg.wait_for_timeout(1500)   # (a toast from the click before sits over it)
+    ok(pg.evaluate("window.__months") == ["first", "202505", "202506"], "Read the kept day books again: month after month until the last (%s)" % pg.evaluate("window.__months"))
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
     br.close()
 srv.shutdown()

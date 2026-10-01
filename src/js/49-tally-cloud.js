@@ -281,23 +281,6 @@ const TCloudUp = {
     if (!r.ok || j.ok === false) throw new Error(j.error || ("FinCom's cloud answered with error " + r.status));
     return j;
   },
-  // review of 01-Oct-2026: the day books kept in the cloud, read again by FinCom's cloud with today's reading (the party's
-  // GSTIN, the place of supply, HSN and rate on lines were not kept before). One month a call; owners only. Nothing is
-  // asked of the computer with Tally
-  async reparse(cid){
-    const co = S.companies[cid]; if (!co) return;
-    const p = this.pane; let month = null, n = 0, bad = 0, total = 0;
-    try {
-      do {
-        p.busy = "Reading " + co.name + "’s kept day books again" + (month ? " (" + FC.monthLabel(month) + ")" : "") + "…"; render();
-        const j = await this.post({kind: "reparse", month}, {client: cid});
-        n += (j.done || []).length; bad += (j.bad || []).length; total = j.months || total; month = j.next;
-      } while (month);
-      p.busy = ""; toast(co.name + ": " + n + " days read again" + (bad ? ", " + bad + " could not be read" : "") + ". Open the client again to see them.");
-      const s = this.st[cid]; if (s) s.at = 0;
-    } catch (e){ p.busy = ""; toast("Could not read the kept day books again: " + ((e && e.message) || e)); }
-    render();
-  },
   async days(text, range, onStep, who){
     if (!this.on()) return {skipped: "not signed in to the firm account"};
     who = who || {client: S.coId, company: BridgeSeed.company()};
@@ -325,6 +308,51 @@ const TCloudUp = {
 
 // The light on the clients list (build 189): for each client with Tally, whether its Tally computer is on, Tally open and
 // the books up to date, from the bridge's heartbeat (every 5 minutes; the bridge asks Tally nothing for it)
+// review of 01-Oct-2026: on TCloud (its pane, status, rpc and restAll); the call to FinCom's cloud goes through TCloudUp.post
+Object.assign(TCloud, {
+  // review of 01-Oct-2026: the day books kept in the cloud, read again by FinCom's cloud with today's reading (the party's
+  // GSTIN, the place of supply, HSN and rate on lines were not kept before). One month a call; owners only. Nothing is
+  // asked of the computer with Tally
+  async reparse(cid){
+    const co = S.companies[cid]; if (!co) return;
+    const p = this.pane; let month = null, n = 0, bad = 0, total = 0;
+    try {
+      do {
+        p.busy = "Reading " + co.name + "’s kept day books again" + (month ? " (" + FC.monthLabel(month) + ")" : "") + "…"; render();
+        const j = await TCloudUp.post({kind: "reparse", month}, {client: cid});
+        n += (j.done || []).length; bad += (j.bad || []).length; total = j.months || total; month = j.next;
+      } while (month);
+      p.busy = ""; toast(co.name + ": " + n + " days read again" + (bad ? ", " + bad + " could not be read" : "") + ". Open the client again to see them.");
+      const s = this.st[cid]; if (s) s.at = 0;
+    } catch (e){ p.busy = ""; toast("Could not read the kept day books again: " + ((e && e.message) || e)); }
+    render();
+  },
+  // review of 01-Oct-2026: "Send ledgers and groups now": the Tally computer reads every ledger and group and sends
+  // them (bridge 1.14.8), asked the way Update now is: through the bridge here, or through the cloud's heartbeat
+  async sendLedgers(cid){
+    const co = S.companies[cid]; if (!co) return;
+    const here = typeof Bridge === "object" && Bridge.on() && Bridge.up();
+    try {
+      if (here){ await LK.keepSet({now: true}, "Asked the bridge here to read every ledger and group from Tally and send them."); }
+      else {
+        const j = await this.rpc("tally_want_update", {p_client: cid});
+        toast(j && j.ok ? "The Tally computer is asked to send every ledger and group; it starts within a minute (Tally must be open there)." : "No Tally computer is linked to this client yet.");
+      }
+    } catch (e){ toast("Could not ask the Tally computer: " + ((e && e.message) || e)); }
+    setTimeout(() => this.groupStatus(cid), 1500);
+  },
+  // what of the client's ledgers is in the cloud: groups, and ledgers with a group
+  async groupStatus(cid){
+    const p = this.pane; p.gs = p.gs || {};
+    try {
+      const bk = (await this.status(cid, true) || []).find(b => b.from); if (!bk){ p.gs[cid] = {none: true}; render(); return; }
+      const [g, led] = await Promise.all([this.restAll("tally_groups?select=name&book_id=eq." + bk.book).catch(() => []), this.restAll("tally_ledgers?select=parent&book_id=eq." + bk.book).catch(() => [])]);
+      p.gs[cid] = {groups: g.length, ledgers: led.length, grouped: led.filter(l => l.parent).length, at: new Date().toISOString()};
+    } catch (e){ p.gs[cid] = {err: (e && e.message) || String(e)}; }
+    render();
+  }
+});
+
 const TLight = {
   st: {at: 0, busy: false, by: {}},
   refresh(){

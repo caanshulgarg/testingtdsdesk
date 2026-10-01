@@ -27,7 +27,7 @@ trap {
   try { Stop-Transcript | Out-Null } catch { }
   break
 }
-$BridgeVersion = '1.14.7'
+$BridgeVersion = '1.14.8'
 
 # ------------------------------------------------------------------ settings
 function New-BridgeKey {
@@ -1927,6 +1927,7 @@ function Test-TallyPortOpen([int]$Port) {
   try { $ar = $c.BeginConnect('127.0.0.1', $Port, $null, $null); if (-not $ar.AsyncWaitHandle.WaitOne(500)) { return $false }; $c.EndConnect($ar); return $true } catch { return $false } finally { try { $c.Close() } catch { } }
 }
 $script:EmptyAskAt = [DateTime]::MinValue
+$script:KeepLedSent = @{}
 function Get-OpenCompaniesCached {
   $shared = Join-Path (Get-SyncDir) 'open-companies.json'
   $list = $null
@@ -1939,6 +1940,15 @@ function Get-OpenCompaniesCached {
       if ($open -and (-not $e.ok -or -not @($e.companies).Count)) { $stale = $true }     # Tally opened since it was last asked
       $e.ok = $open; if (-not $open) { $e.companies = @() }
     }
+    # 1.14.8 (review of 01-Oct-2026): Tally reopened on another port (9002 where the list still had 9001): a port of
+    # this session that takes connections and is not in the list makes it stale, so the heartbeat does not say "Tally
+    # not open" while it is
+    try {
+      foreach ($pp in @((Get-PortPlan).ports)) {
+        if ($Cfg.OnlyMySession -and $pp.mine -eq $false) { continue }
+        if (-not @($list | Where-Object { [int]$_.port -eq [int]$pp.port }).Count -and (Test-TallyPortOpen ([int]$pp.port))) { $stale = $true }
+      }
+    } catch { }
   }
   # nothing known yet, or Tally has been opened since: asked once, and not again for ten minutes
   if ((-not $list -or $stale) -and ((Get-Date) - $script:EmptyAskAt).TotalMinutes -ge 10 -and -not (Get-KeepUserInTally)) {
@@ -2658,6 +2668,16 @@ function Step-Keep([string]$Company, [int]$Port, [string]$BooksFrom) {
   if ($st.phase -eq 'live' -and $sw.Elapsed.TotalSeconds -lt $budget -and -not ($cn.ok -and $null -ne $st.cm -and [long]$st.cm -eq $cn.m)) { Update-KeepLedgers $Company $Port $dir $st $false }
   # 1.14.7: a copy kept by an older bridge has no groups yet: the ledgers and groups read once, and sent to the cloud
   elseif ($st.phase -eq 'live' -and $sw.Elapsed.TotalSeconds -lt $budget -and -not (Test-Path -LiteralPath (Join-Path $dir 'groups.json'))) { Update-KeepLedgers $Company $Port $dir $st $true }
+  # 1.14.8: a run someone asked for (Update now, Send ledgers and groups now) reads every ledger and group once and
+  # sends them to the cloud, whatever changed, so nobody waits for a timer
+  $nowAsk = ''; try { $nowAsk = ([IO.File]::ReadAllText((Join-Path (Get-SyncDir) 'keep-now.txt'))).Trim() } catch { }
+  if ($st.phase -eq 'live' -and $nowAsk -and [string]$script:KeepLedSent[$Company] -ne $nowAsk -and $sw.Elapsed.TotalSeconds -lt $budget) {
+    $script:KeepLedSent[$Company] = $nowAsk          # once for each time it is asked, also when a copier was already running
+    Update-KeepLedgers $Company $Port $dir $st $true
+    Remove-Item -LiteralPath (Join-Path $dir 'cloud-ledgers.sig') -Force -ErrorAction SilentlyContinue
+    Set-CloudLedgers $dir
+    Write-Log ('Keeping ' + $Company + ': every ledger and group read from Tally, to go to the cloud')
+  }
   if ($cn.ok) { $st.cv = $cn.v; $st.cm = $cn.m }
   # 1.14.4: the light check stops here: the month checks and the retries wait for the daily update
   if ($script:KeepLight) { $st.trouble = $null; & $save; $script:KeepCaughtUp = $true; return }
