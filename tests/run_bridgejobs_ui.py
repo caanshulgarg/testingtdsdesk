@@ -89,8 +89,12 @@ with sync_playwright() as p:
     ok(pg.evaluate("Bridge.up() && Bridge.st.shaky === true"), "one missed status check: still connected (checking again), not 'offline'")
     pg.evaluate("Bridge.refresh()")
     ok(pg.evaluate("Bridge.up() && !Bridge.st.shaky"), "the next answer clears it")
+    # go-bridge (review of 01-Oct-2026): misses close together (a bridge busy with Tally) are "reconnecting"; offline
+    # only when it has not answered for two minutes (about three missed heartbeats)
     M["statusFail"] = 3; pg.evaluate("Bridge.refresh()"); pg.evaluate("Bridge.refresh()"); pg.evaluate("Bridge.refresh()")
-    ok(pg.evaluate("Bridge.st.state") == "down", "three missed in a row: shown as offline")
+    ok(pg.evaluate("Bridge.up() && Bridge.st.shaky === true"), "three missed close together: still connected, reconnecting")
+    M["statusFail"] = 1; pg.evaluate("() => { Bridge.okAt = Date.now() - 125000; }"); pg.evaluate("Bridge.refresh()")
+    ok(pg.evaluate("Bridge.st.state") == "down", "no answer for over two minutes: shown as offline")
     M["statusFail"] = 0; pg.evaluate("Bridge.refresh()")
 
     M["jobs"].clear(); M["jobs"]["left-over-job-1"] = {"status": "running", "done": 4, "total": 10, "items": [], "creates": 1}

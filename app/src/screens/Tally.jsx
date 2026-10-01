@@ -4,9 +4,10 @@
 // (src/js/49). The work is Bridge and TCloud; boxes and choices go through bridgeSet, bridgeLink, bridgePin, tcLink
 // (src/js/24, 49), buttons through doAct (bridgeTest, bridgeConnect, bridgeOff, bridgeSetupFile, bridgeDiag, bridgeReadTest).
 import TallyPill from "../parts/TallyPill.jsx";
+import { TallyStates, TallyHistory } from "../parts/TallyStates.jsx";
 import { PostLog } from "./Done.jsx";
 import CommitBox from "../parts/CommitBox.jsx";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const Act = ({ act, className = "btn small", children, disabled }) => <button className={className} disabled={disabled} onClick={() => doAct(act)}>{children}</button>;
 
@@ -36,6 +37,21 @@ function Diagnosis() {
     {d.freePort && <p className="note" style={{ margin: "6px 0 0" }}>A free port on this server: <b>{d.freePort}</b>. Each user’s TallyPrime needs its own port.</p>}
     <ReadTest />
   </div>;
+}
+
+// go-bridge (testing site only): FinCom Bridge 2.0, the bridge as one Windows program and service, to be tried beside
+// bridge 1.15.0 (test mode: reads Tally, never posts) or in its place. Its file and fingerprint come from latest.json
+function GoBridgeCard() {
+  const [m, setM] = useState(null);
+  useEffect(() => { fetch("assets/bridge-go/latest.json", { cache: "no-store" }).then((r) => r.ok ? r.json() : null).then(setM).catch(() => setM(null)); }, []);
+  const set = m && m.setup;
+  if (!set) return null;
+  const file = set.url.split("/").pop();
+  return <div className="pane cn-card"><h2>FinCom Bridge {set.version} for Windows <span className="tag warn">test build · staging only</span></h2>
+    <p className="note" style={{ margin: "0 0 10px" }}>The new bridge: one program that runs as a Windows service (starts with Windows, starts again by itself), with an icon near the clock (green or red, with Open FinCom, Pause, Restart, Show log, Check for updates). Setup asks how to run it: <b>Test beside bridge 1.15.0</b> (reads Tally and sends to FinCom only to be compared; never posts) or <b>Replace bridge 1.15.0</b> (keeps its pairing, settings and copy of the books). Needs an administrator's password once, to install the service.</p>
+    <div className="row"><a className="btn primary" href={"assets/bridge-go/" + file + "?v=" + set.sha256.slice(0, 12)} download={file}>Download FinCom Bridge {set.version}</a>
+      <span className="note" style={{ alignSelf: "center" }}>Not signed yet: Windows may say “Windows protected your PC”: press More info, then Run anyway.</span></div>
+    <p className="note" style={{ fontSize: 12, margin: "8px 0 0" }}>Fingerprint (SHA-256): <code style={{ userSelect: "all", wordBreak: "break-all" }}>{set.sha256}</code></p></div>;
 }
 
 function DownHelp({ c }) {
@@ -98,6 +114,7 @@ export function BridgeSettings() {
   if (Bridge.blocked()) return <div className="pane"><h2>Tally Bridge</h2><p className="note" style={{ margin: 0 }}>Pages opened on claude.ai cannot reach programs on your computer. To connect to Tally, use the downloaded app (<b>Download standalone app</b>) on the computer where TallyPrime runs.</p></div>;
   const MODE = { auto: "The bridge finds the TallyPrime running in your Windows session" + (st.user ? " (" + st.user + ")" : "") + " and ignores other users’ Tally.", config: "The bridge uses the Tally ports listed in its settings file.", fallback: "Windows did not tell the bridge which Tally is yours: choose it below." };
   return <>
+    {document.body.classList.contains("is-test") && <GoBridgeCard />}
     {/* the Windows app that keeps the bridge running, shows what it does, updates it and sends its log to support */}
     <div className="pane cn-card"><h2>FinCom Connector for Windows <span className="tag">recommended</span></h2>
       <p className="note" style={{ margin: "0 0 10px" }}>One program on the computer with Tally: it installs the bridge, starts with Windows, keeps the bridge running (and starts it again if it stops), shows Tally, the companies kept in step and the cloud copy, checks the computer and says what to do in plain words, updates itself, and sends its log to FinCom support in one click. No admin rights needed.</p>
@@ -108,6 +125,7 @@ export function BridgeSettings() {
         <label className="f"><span>Bridge key (filled in by Connect)</span><CommitBox data-bridge="key" data-fk="bridgekey" aria-label="Bridge key" value={c.key} autoComplete="off" placeholder="press Connect below" onCommit={(v) => bridgeSet("key", v)} /></label></div>
       <label className="chk" style={{ marginTop: 8 }}><input type="checkbox" checked={!!c.follow} onChange={(ev) => bridgeSet("follow", ev.target.checked)} /> Follow the company open in Tally (switch FinCom to it automatically)</label>
       <div className="row" style={{ marginTop: 10 }}><Act act="bridgeTest" className="btn small primary">{c.key ? "Check connection" : "Connect"}</Act>{c.key && <Act act="bridgeOff">Disconnect</Act>}<Act act="bridgeSetupFile">Download the bridge setup</Act></div>
+      <div style={{ margin: "12px 0 0" }}><TallyStates co={S.coId ? CO() : null} /></div>
       {!(Bridge.on() && Bridge.up()) && <SetupSteps />}
       {c.key && <div style={{ marginTop: 12 }}>{st.state === "ok" ? <>
         <p className="note" style={{ margin: "0 0 6px" }}>{"Bridge " + (st.version || "") + " connected" + (st.allowImport === false ? " (posting switched off in the bridge)" : "") + ". Checked " + fmtTime(st.at) + "."}</p>
@@ -120,6 +138,7 @@ export function BridgeSettings() {
         {st.tallyUp || (Bridge.diag && (Bridge.diag.findings || []).length) ? null : <p className="bk-warn">TallyPrime is not answering. In TallyPrime: F1 Help → Settings → Connectivity → set “TallyPrime acts as” to Both, port 9000.</p>}
       </> : <><p className="bk-warn">{st.error || "Not checked yet."}</p>{st.state === "down" && <DownHelp c={c} />}</>}</div>}
     </div>
+    <TallyHistory />
   </>;
 }
 

@@ -48,17 +48,22 @@ const Bridge = {
       const clash = !pin && Object.keys(names).filter(n => names[n] > 1 && !(open.filter(o => o.name === n && o.mine === true).length === 1));
       this.st = {state: "ok", sessions: j.sessions || [], open: open.filter(o => !(clash && clash.includes(o.name)) || o.mine === true), clash: clash || [], at: Date.now(), error: "",
         version: j.version, allowImport: j.allowImport !== false, mode: j.mode || "", user: j.user || "", mySession: j.mySession, jobs: [].concat(j.jobs || []),
-        stuck: j.tallyStuck || null, tallyUp: usable.length > 0, pinMissing: !!pin && !(j.sessions || []).some(s => s.port === pin && s.ok && !s.skipped)};
+        stuck: j.tallyStuck || null, tallyUp: usable.length > 0, pinMissing: !!pin && !(j.sessions || []).some(s => s.port === pin && s.ok && !s.skipped),
+        // go-bridge: Tally open / busy / closed (a busy Tally is open, only slow); bridge 1.15.0: busy when it says Tally is stuck
+        tallyState: (j.tally && j.tally.state) || (usable.length ? (j.tallyStuck ? "busy" : "open") : "closed"), busySince: (j.tally && j.tally.since) || (j.tallyStuck && j.tallyStuck.since) || "",
+        beat: j.beat || null};
       if (!this.st.tallyUp || this.st.pinMissing){ if (!this.diag || Date.now() - this.diag.at > 30000) await this.diagnose(); }
       else this.diag = null;
-      this.misses = 0;
+      this.misses = 0; this.okAt = Date.now();
     } catch (e){
-      // one missed answer (or any while this tab is posting) is not a lost bridge: keep what was known and ask again soon
+      // a bridge busy with Tally (1.15.0 answers one request at a time) is not a lost bridge: it stays connected,
+      // "reconnecting", and is asked again every 15 s; offline only when it has not answered for two minutes (about
+      // three missed heartbeats), or never while this tab is posting through it
       this.misses = (this.misses || 0) + 1;
-      const was = this.st && this.st.state === "ok" && Date.now() - (this.st.at || 0) < 5 * 60000;
-      if (e.code !== "bridge_key" && was && (this.misses < 3 || this.posting)){
+      const was = this.st && this.st.state === "ok" && Date.now() - (this.okAt || this.st.at || 0) < 120000;
+      if (e.code !== "bridge_key" && this.st && this.st.state === "ok" && (was || this.posting)){
         this.st = Object.assign({}, this.st, {shaky: true, error: e.message});
-        clearTimeout(this.again); this.again = setTimeout(() => { if (typeof bridgeTick === "function") bridgeTick(false); }, 8000);
+        clearTimeout(this.again); this.again = setTimeout(() => { if (typeof bridgeTick === "function") bridgeTick(false); }, this.misses === 1 ? 8000 : 15000);
       } else this.st = {state: e.code === "bridge_key" ? "key" : "down", sessions: [], open: [], at: Date.now(), error: e.message};
     }
     if (this.st.state === "ok" && !this.misses) this.st.shaky = false;
@@ -306,8 +311,10 @@ function bridgeChip(co){
   const run = (st.jobs || []).find(j => ["queued", "waiting", "running"].includes(j.status));
   if (run) return '<span class="tchip ok" title="' + esc((run.company || "") + ": " + (run.message || "")) + '">\u25CF Posting to Tally: ' + num(run.done) + " of " + num(run.total) + "</span>";
   // build 194: Tally stopped answering (a message box open in Tally, or a long report): said plainly, with since when
-  if (st.stuck && st.stuck.since) return '<span class="tchip bad" title="Tally has not answered since ' + esc(String(st.stuck.since).slice(11, 16)) + '. Look at the Tally computer: a message box (a pop-up) in Tally, or a report still working, stops Tally answering anyone. Close it, and FinCom carries on by itself.">\u26A0 Tally not responding since ' + esc(String(st.stuck.since).slice(11, 16)) + " \u2014 check for a pop-up in Tally</span>";
-  if (st.shaky) return '<span class="tchip warn" title="' + esc(st.error || "") + '">Tally Bridge: checking again\u2026</span>';
+  // go-bridge: a slow Tally is busy, never "disconnected" (it is open; the bridge asks again by itself)
+  const busyAt = (st.stuck && st.stuck.since) || (st.tallyState === "busy" && st.busySince) || "";
+  if (busyAt || st.tallyState === "busy") return '<span class="tchip warn" title="Tally is open but answering slowly' + (busyAt ? " since " + esc(String(busyAt).slice(11, 16)) : "") + '. A message box (a pop-up) in Tally, or a report still working, holds it up: close it, and FinCom carries on by itself. Nothing is lost meanwhile.">\u25D0 Tally busy' + (busyAt ? " since " + esc(String(busyAt).slice(11, 16)) : "") + "</span>";
+  if (st.shaky) return '<span class="tchip warn" title="' + esc(st.error || "") + '">Tally Bridge: reconnecting\u2026</span>';
   const why = Bridge.diag && (Bridge.diag.findings || []).find(f => f.level !== "ok");
   if (st.pinMissing) return '<button class="tchip warn" data-act="openSettings" title="' + esc(why ? why.text : "The Tally chosen in Settings is not running") + '">Your Tally is not connected \u2014 check</button>';
   if (!st.tallyUp) return '<button class="tchip warn" data-act="openSettings" title="' + esc(why ? why.text : "No TallyPrime is answering in your Windows session") + '">Tally not connected \u2014 check</button>';

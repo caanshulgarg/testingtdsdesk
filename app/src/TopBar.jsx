@@ -2,6 +2,7 @@
 // firm account chip and the firm button, with the Tally panel and firm menu they open.
 // Was renderTop, clientHeader, topRight, tallyPanelHtml, firmMenuHtml (src/js/02 and 18); actions are doAct(...).
 import TallyPill from "./parts/TallyPill.jsx";
+import { TallyStates } from "./parts/TallyStates.jsx";
 import HelpButton from "./parts/HelpButton.jsx";
 import { useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
@@ -97,8 +98,9 @@ function TallyPanel() {
       <div className="fm-head"><b>Tally connection</b><button className="icon" onClick={close} aria-label="Close">✕</button></div>
       <div className="tp-body">
         <p><TallyPill co={co} /></p><p className="note">{tallyStatus(co).say}</p>
+        <TallyStates co={co} />
         {Bridge.on() ? <>
-          <p><span className={"dotled " + (live ? "live" : "off")} /><b>{live ? "Connected" : "Not answering"}</b>{st.version && <span className="note"> · bridge {st.version}</span>}</p>
+          <p><span className={"dotled " + (live ? "live" : "off")} /><b>{live ? (st.shaky ? "Reconnecting…" : "Connected") : "Not answering"}</b>{st.version && <span className="note"> · bridge {st.version}</span>}</p>
           {co && <p className="note">{Bridge.openFor(co).name ? Bridge.openFor(co).name + " is open in Tally." : (co.tallyName || co.name) + " is not open in Tally."}</p>}
           {!live && <p className="note">Open TallyPrime on the computer where the bridge runs, and keep the company open.</p>}
         </> : <p className="note">The Tally Bridge is not set up on this computer. Install it on the computer where TallyPrime runs, then come back here.</p>}
