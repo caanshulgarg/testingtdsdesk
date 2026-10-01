@@ -112,8 +112,23 @@ function Push-CloudCompany([string]$Company, [string]$Dir, [double]$BudgetSec) {
   if ((Test-Path -LiteralPath $lf) -and (Test-Path -LiteralPath $bf)) {
     $bal = Read-KeepJson $bf
     if ($bal -and $bal.from -and $bal.openAsOn) {
-      $led = @(@($bal.ledgers) | ForEach-Object { , @([string]$_.name, [string]$_.parent, [string]$_.open) })
-      $r = Invoke-Cloud @{ kind = 'ledgers'; company = $Company; from = [string]$bal.from; openAsOn = [string]$bal.openAsOn; ledgers = $led } 120
+      # 1.14.7 (review of 01-Oct-2026): every ledger in Tally goes, with its group. The opening balances may come from a
+      # trial balance file, which lists only ledgers with a balance and no groups: names and groups come from the
+      # ledger list read from Tally (ledgers.json), the opening from the balances (0 when a ledger has none)
+      $rows = [ordered]@{}
+      foreach ($l in @($bal.ledgers)) { $n = [string]$l.name; if ($n) { $rows[$n] = @($n, [string]$l.parent, [string]$l.open) } }
+      $kj = Read-KeepJson (Join-Path $Dir 'ledgers.json')
+      if ($kj) {
+        foreach ($p in $kj.PSObject.Properties) {
+          $v = @($p.Value); $n = [string]$v[0]; $par = [string]$v[1]
+          if (-not $n) { continue }
+          if ($rows.Contains($n)) { if (-not $rows[$n][1]) { $rows[$n][1] = $par } } else { $rows[$n] = @($n, $par, '0') }
+        }
+      }
+      $led = @($rows.Values | ForEach-Object { , @([string]$_[0], [string]$_[1], [string]$_[2]) })
+      $grp = @(); $gj = Read-KeepJson (Join-Path $Dir 'groups.json')
+      if ($gj) { $grp = @(@($gj) | ForEach-Object { , @([string]$_[0], [string]$_[1]) }) }
+      $r = Invoke-Cloud @{ kind = 'ledgers'; company = $Company; from = [string]$bal.from; openAsOn = [string]$bal.openAsOn; ledgers = $led; groups = $grp } 120
       if ($r.code -eq 409) { $script:CloudLinks[$Company] = $false; return }
       if ($r.code -ne 200) { throw ('the ledgers did not go: ' + $r.error) }
       Remove-Item -LiteralPath $lf -Force -ErrorAction SilentlyContinue

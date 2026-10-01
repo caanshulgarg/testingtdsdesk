@@ -123,6 +123,15 @@ const TCloud = {
     try { await IDBStore.write([[k, {at, text}]]); } catch (e){}
     return text;
   },
+  // Tally's groups, sent by the bridge from 1.14.7 (review of 01-Oct-2026): each group's parent, so a ledger's chain up
+  // to its primary group is known (expenses, incomes, debtors...). A copy sent before has none: the names decide, as before
+  async groupsInto(b, book){
+    let g = [];
+    try { g = await this.restAll("tally_groups?select=name,parent&book_id=eq." + book); } catch (e){ g = []; }
+    if (!g.length) return;
+    b.groups = Object.assign({}, b.groups || {});
+    g.forEach(x => { b.groups[x.name] = x.parent || ""; });
+  },
   // ---------- bring the cloud's copy into FinCom: only the months with a day that changed
   async load(force){
     const co = CO(), b = S.books;
@@ -137,6 +146,7 @@ const TCloud = {
       if (!(m0.cloud && m0.cloud.book === bk.book && m0.cloud.big && m0.cloud.ledgersAt === bk.ledgersAt)){
         const led = await this.restAll("tally_ledgers?select=name,parent,open&order=name&book_id=eq." + bk.book);
         b.vouchers = []; TallyRead.balances(b, {ledgers: led.map(l => ({name: l.name, parent: l.parent, open: String(l.open), close: ""}))}, this.d8(bk.from), Audit.today());
+        await this.groupsInto(b, bk.book);
         m0.cloud = {book: bk.book, company: bk.company, ledgersAt: bk.ledgersAt, big: true, at: new Date().toISOString()};
         LK.cache = {}; render();
       }
@@ -158,6 +168,7 @@ const TCloud = {
       if (ledNew){
         const led = await this.restAll("tally_ledgers?select=name,parent,open&order=name&book_id=eq." + bk.book);
         TallyRead.balances(b, {ledgers: led.map(l => ({name: l.name, parent: l.parent, open: String(l.open), close: ""}))}, from, to);
+        await this.groupsInto(b, bk.book);
       }
       const days = {};
       for (const ym of todo){
@@ -269,6 +280,23 @@ const TCloudUp = {
     const j = await r.json().catch(() => ({}));
     if (!r.ok || j.ok === false) throw new Error(j.error || ("FinCom's cloud answered with error " + r.status));
     return j;
+  },
+  // review of 01-Oct-2026: the day books kept in the cloud, read again by FinCom's cloud with today's reading (the party's
+  // GSTIN, the place of supply, HSN and rate on lines were not kept before). One month a call; owners only. Nothing is
+  // asked of the computer with Tally
+  async reparse(cid){
+    const co = S.companies[cid]; if (!co) return;
+    const p = this.pane; let month = null, n = 0, bad = 0, total = 0;
+    try {
+      do {
+        p.busy = "Reading " + co.name + "’s kept day books again" + (month ? " (" + FC.monthLabel(month) + ")" : "") + "…"; render();
+        const j = await this.post({kind: "reparse", month}, {client: cid});
+        n += (j.done || []).length; bad += (j.bad || []).length; total = j.months || total; month = j.next;
+      } while (month);
+      p.busy = ""; toast(co.name + ": " + n + " days read again" + (bad ? ", " + bad + " could not be read" : "") + ". Open the client again to see them.");
+      const s = this.st[cid]; if (s) s.at = 0;
+    } catch (e){ p.busy = ""; toast("Could not read the kept day books again: " + ((e && e.message) || e)); }
+    render();
   },
   async days(text, range, onStep, who){
     if (!this.on()) return {skipped: "not signed in to the firm account"};

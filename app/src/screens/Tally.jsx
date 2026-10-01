@@ -130,7 +130,9 @@ export function CloudBooks() {
             <select aria-label={"Client for " + c.company} value={cid} onChange={(ev) => TCloud.link(c.company, ev.target.value)}><option value="">— not linked —</option>
               {cid && !linked && <option value={cid}>a client not on this computer</option>}
               {cos.map((k) => <option key={k.id} value={String(k.id)}>{k.name}</option>)}</select>
-            {cid ? <div className="nr">{linked ? <>✓ Linked to <b>{linked.name}</b>{gstinMatch(c) && String(gstinMatch(c).id) === cid ? " (same GSTIN)" : ""}</> : "Linked to a client that is not on this computer."}</div>
+            {cid ? <div className="nr">{linked ? <>✓ Linked to <b>{linked.name}</b>{gstinMatch(c) && String(gstinMatch(c).id) === cid ? " (same GSTIN)" : ""}
+                {S.account && S.account.me && S.account.me.role === "owner" && <> · <button className="linkbtn" disabled={!!p.busy} title="FinCom's cloud reads the day books it keeps again: the party's GSTIN, place of supply, HSN and rate"
+                  onClick={() => TCloud.reparse(cid)}>Read the kept day books again</button></>}</> : "Linked to a client that is not on this computer."}</div>
               : m ? <div className="nr">Same GSTIN as <b>{m.name}</b> <button className="btn small" onClick={() => TCloud.link(c.company, m.id)}>Link to {m.name}</button></div> : null}</td><td>{when(c.last_seen)}</td></tr>;
         })}</tbody></table></div>
         : <p className="note">No Tally companies have been seen yet. They appear here once a connected computer has a company open in Tally.</p>}</div>

@@ -1,6 +1,7 @@
 // Transactions: everything filed for this client in one register — purchase bills, sales invoices or bank lines —
 // with where each stands in Tally and its document. Was viewTransactions (src/js/03). The rows are made by
 // txnRowsBills / txnRowsSales / txnRowsBank and filtered by txnFiltered (src/js/03), shared with the CSV download.
+import { useLayoutEffect, useRef, useState } from "react";
 import ColHead from "../parts/ColHead.jsx";
 import { ChipBar, NoMatch } from "../parts/ChipBar.jsx";
 
@@ -44,7 +45,7 @@ export default function Txn() {
     </div>
     <ChipBar t="txn" shown={rows.length} total={all.length + (bank ? " lines" : tab === "sales" ? " invoices" : " bills")} />
     {/* the first columns stay while the rest scrolls sideways; the scroll bar is always shown (review item 30) */}
-    <div className="bk-tablewrap txnwrap">
+    <SideScroll>
       <table className="bk-table txntbl">
         <thead><tr>
           <th className="n stick1">S. no.</th>{c("date") && <ColHead t="txn" k="date" label="Date" cls="dt stick2" />}{c("vch") && <ColHead t="txn" k="vch" label="Voucher" />}
@@ -64,6 +65,27 @@ export default function Txn() {
           </tr>))}</tbody>
       </table>
       {!rows.length && (S.txnQ || S.txnStatus || txnColOn() ? <NoMatch t="txn" /> : <div className="bk-none">Nothing here yet.</div>)}
-    </div>
+    </SideScroll>
   </>;
+}
+
+// review of 01-Oct-2026 (item 30 again): a Mac hides scroll bars until one scrolls, so the sign that more columns wait
+// to the right is a fade at the right edge with an arrow, shown while there is more; the arrow scrolls along
+function SideScroll({ children }) {
+  const ref = useRef(null), [more, setMore] = useState(false);
+  useLayoutEffect(() => {
+    const el = ref.current; if (!el) return undefined;
+    const check = () => setMore(el.scrollLeft + el.clientWidth < el.scrollWidth - 2);
+    check();
+    el.addEventListener("scroll", check, { passive: true });
+    const ro = typeof ResizeObserver === "function" ? new ResizeObserver(check) : null;
+    if (ro) { ro.observe(el); if (el.firstElementChild) ro.observe(el.firstElementChild); }
+    window.addEventListener("resize", check);
+    return () => { el.removeEventListener("scroll", check); if (ro) ro.disconnect(); window.removeEventListener("resize", check); };
+  });
+  return <div className={"txnscroll" + (more ? " more" : "")}>
+    <div className="bk-tablewrap txnwrap" ref={ref}>{children}</div>
+    {more && <button className="txn-more" aria-label="More columns to the right" title="More columns to the right"
+      onClick={() => ref.current && ref.current.scrollBy({ left: Math.max(240, ref.current.clientWidth * 0.6), behavior: "smooth" })}>›</button>}
+  </div>;
 }

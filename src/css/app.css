@@ -1235,3 +1235,10 @@ header.top .topright{flex-wrap:wrap;justify-content:flex-end}
   .bk-figs{flex-wrap:wrap;gap:12px}
   .bk-actions .btn{flex:1 1 auto}
 }
+
+/* Transactions on a Mac (scroll bars hidden until used): a fade at the right edge and an arrow while more columns wait */
+.txnscroll{position:relative}
+.txnscroll.more::after{content:"";position:absolute;top:0;right:0;bottom:14px;width:56px;pointer-events:none;background:linear-gradient(90deg,rgba(255,255,255,0),var(--sheet) 85%);border-radius:0 10px 10px 0}
+.txn-more{position:absolute;right:6px;top:4px;z-index:3;width:34px;height:34px;border-radius:50%;border:1px solid var(--rule);background:var(--sheet);color:var(--ink);font:600 20px/1 var(--sans);cursor:pointer;box-shadow:0 4px 12px rgba(16,26,22,.18)}
+.txn-more:hover{background:var(--ledger-soft)}
+@media (max-width:600px){.txnscroll.more::after,.txn-more{display:none}}

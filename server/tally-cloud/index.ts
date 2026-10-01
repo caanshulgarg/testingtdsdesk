@@ -11,7 +11,9 @@
 //                                                       client's Tally name, with no GSTIN clash, is linked by itself
 //   {kind:"days", company, days:[{day, gz}]}         -> each day's day book (gzip, base64): kept in the bucket
 //                                                       tally-days, read into entries and lines, totals made ready
-//   {kind:"ledgers", company, from, openAsOn, ledgers:[[name, parent, open]]}
+//   {kind:"ledgers", company, from, openAsOn, ledgers:[[name, parent, open]], groups?:[[name, parent]]}
+//                                                       (groups from bridge 1.14.7: each ledger's chain of groups up to
+//                                                       the primary group is worked out from them and kept)
 //   {kind:"state", company, state}
 //   {kind:"beat", tally, open, companies:[{name, open, at, phase, waiting}], updating, dailyAt, lastRun} -> {updateNow}
 //   {kind:"support", note, zip}                      -> the Connector's log and details for FinCom support
@@ -21,7 +23,11 @@
 // Or a person signed in to FinCom (Authorization: Bearer, two-step done, a member of the firm), for one of the firm's
 // clients, giving the books from files exported from Tally:
 //   {kind:"upload_days", client, company?, days:[{day, gz}]}
-//   {kind:"upload_ledgers", client, company?, from, openAsOn, ledgers:[[name, parent, open]]}
+//   {kind:"upload_ledgers", client, company?, from, openAsOn, ledgers:[[name, parent, open]], groups?}
+//   {kind:"reparse", client, month?}               -> the day books kept in the bucket read again into entries and
+//                                                       lines (review of 01-Oct-2026: GSTIN, place of supply, HSN and
+//                                                       rate were not kept before); one month a call, owners only;
+//                                                       answers {done, next} until next is null
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { parseDay, amt } from "./parse.js";
 
@@ -122,18 +128,53 @@ async function ingestDays(firm: string, book: string, daysIn: unknown) {
     const up = await db.storage.from("tally-days").upload(path, gz, { upsert: true, contentType: "application/gzip" });
     if (up.error) throw new Error("storage: " + up.error.message);
     const { error } = await db.rpc("tally_ingest_day", { p_book: book, p_day: iso(d.day),
-      p_vouchers: r.vouchers.map((v: any) => ({ guid: v.guid, alter: v.alter, type: v.type, no: v.no, party: v.party, narr: v.narr, cancel: v.cancel, opt: v.opt })),
+      p_vouchers: r.vouchers.map((v: any) => ({ guid: v.guid, alter: v.alter, type: v.type, no: v.no, party: v.party, narr: v.narr, cancel: v.cancel, opt: v.opt, gstin: v.gstin, pos: v.pos })),
       p_lines: r.lines, p_n: r.n, p_alter: r.alterMax, p_bytes: gz.length });
     if (error) throw new Error(error.message);
     done.push(d.day);
   }
   return reply(200, { ok: true, done, bad });
 }
+// the day books already kept in the bucket, read again with today's parser: one month a call (a year is 12 calls), so
+// no call runs long. Nothing is asked of the computer with Tally; the files are the ones it sent
+async function reparseMonth(firm: string, book: string, monthIn: unknown) {
+  const base = `${firm}/${book}`;
+  const { data: months, error: e1 } = await db.storage.from("tally-days").list(base, { limit: 1000, sortBy: { column: "name", order: "asc" } });
+  if (e1) throw new Error("storage: " + e1.message);
+  const all = (months || []).map((m: any) => String(m.name)).filter((m: string) => /^\d{6}$/.test(m)).sort();
+  const month = /^\d{6}$/.test(String(monthIn || "")) ? String(monthIn) : all[0];
+  if (!month) return reply(200, { ok: true, done: [], next: null, months: 0 });
+  const { data: files, error: e2 } = await db.storage.from("tally-days").list(`${base}/${month}`, { limit: 100, sortBy: { column: "name", order: "asc" } });
+  if (e2) throw new Error("storage: " + e2.message);
+  const done: string[] = [], bad: { day: string; error: string }[] = [];
+  for (const f of files || []) {
+    const day = String(f.name).slice(0, 8);
+    if (!isDay(day) || !/\.xml\.gz$/.test(f.name)) continue;
+    const { data: blob, error: e3 } = await db.storage.from("tally-days").download(`${base}/${month}/${f.name}`);
+    if (e3 || !blob) { bad.push({ day, error: "could not read the kept file" }); continue; }
+    const gz = new Uint8Array(await blob.arrayBuffer());
+    let z: { text: string; size: number };
+    try { z = await gunzip(gz, MAX_DAY); } catch (e) { bad.push({ day, error: String((e as Error)?.message || e).slice(0, 200) }); continue; }
+    const r = parseDay(z.text);
+    if (r.dates.some((x: string) => x !== day)) { bad.push({ day, error: "entries of other dates" }); continue; }
+    const { error } = await db.rpc("tally_ingest_day", { p_book: book, p_day: iso(day),
+      p_vouchers: r.vouchers.map((v: any) => ({ guid: v.guid, alter: v.alter, type: v.type, no: v.no, party: v.party, narr: v.narr, cancel: v.cancel, opt: v.opt, gstin: v.gstin, pos: v.pos })),
+      p_lines: r.lines, p_n: r.n, p_alter: r.alterMax, p_bytes: gz.length });
+    if (error) throw new Error(error.message);
+    done.push(day);
+  }
+  const next = all.find((m: string) => m > month) || null;
+  return reply(200, { ok: true, month, done, bad, next, months: all.length });
+}
 async function ingestLedgers(book: string, body: any) {
   if (!isDay(body.from) || !isDay(body.openAsOn)) return reply(400, { ok: false, error: "from and openAsOn are dates (yyyymmdd)" });
   const led = (Array.isArray(body.ledgers) ? body.ledgers : []).slice(0, 100000)
     .map((l: any) => [String(l?.[0] || "").slice(0, 300), String(l?.[1] || "").slice(0, 300), String(Math.round(amt(l?.[2]) * 100) / 100)]).filter((l: any) => l[0]);
-  const { data, error } = await db.rpc("tally_ingest_ledgers", { p_book: book, p_from: iso(body.from), p_open_as_on: iso(body.openAsOn), p_ledgers: led });
+  // the groups (bridge 1.14.7 on): [[name, parent]]; a primary group's parent is empty. Without them the groups kept
+  // before stay as they are
+  const groups = (Array.isArray(body.groups) ? body.groups : []).slice(0, 20000)
+    .map((g: any) => [String(g?.[0] || "").slice(0, 300), String(g?.[1] || "").replace(/^\W*Primary$/i, "").slice(0, 300)]).filter((g: any) => g[0]);
+  const { data, error } = await db.rpc("tally_ingest_ledgers_g", { p_book: book, p_from: iso(body.from), p_open_as_on: iso(body.openAsOn), p_ledgers: led, p_groups: groups });
   if (error) throw new Error(error.message);
   return reply(200, { ok: true, ...data });
 }
@@ -157,6 +198,7 @@ async function userUpload(req: Request, auth: string) {
   // the client's Tally company in the cloud: the one linked to it, or one made for it now, named as in Tally
   const { data: tcs } = await db.from("tally_companies").select("company, last_seen").eq("firm_id", firm).eq("client_id", clientId);
   let company = ((tcs || []).sort((a: any, b: any) => String(b.last_seen || "").localeCompare(String(a.last_seen || "")))[0] || {} as any).company as string | undefined;
+  if (!company && body.kind === "reparse") return reply(404, { ok: false, error: "This client has no Tally company in the cloud yet." });
   if (!company) {
     company = String(body.company || cl.tally_name || cl.name || "").trim().slice(0, 200);
     if (!company) return reply(400, { ok: false, error: "Give the client's company name as in Tally (Client setup)." });
@@ -170,6 +212,11 @@ async function userUpload(req: Request, auth: string) {
   try {
     if (body.kind === "upload_days") return await ingestDays(firm, book, body.days);
     if (body.kind === "upload_ledgers") return await ingestLedgers(book, body);
+    if (body.kind === "reparse") {
+      const { data: me } = await db.from("members").select("role").eq("user_id", user.id).eq("firm_id", firm).maybeSingle();
+      if (!me || me.role !== "owner") return reply(403, { ok: false, error: "Only the firm's owner can read the kept day books again." });
+      return await reparseMonth(firm, book, body.month);
+    }
     return reply(400, { ok: false, error: "unknown kind" });
   } catch (e) {
     console.error("tally-ingest upload", body?.kind, (e as Error).message);

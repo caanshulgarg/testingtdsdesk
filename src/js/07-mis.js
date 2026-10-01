@@ -107,6 +107,20 @@ const MIS = {
     rows.sort((a, c) => c.total - a.total || a.party.localeCompare(c.party));
     const sum = rows.reduce((s, p) => ({total: r2(s.total + p.total), b: s.b.map((v, i) => r2(v + p.b[i])), adv: r2(s.adv + p.adv), unalloc: r2(s.unalloc + p.unalloc), pre: r2(s.pre + p.pre), tally: p.tally != null ? r2((s.tally || 0) + p.tally) : s.tally}), {total: 0, b: [0, 0, 0, 0, 0], adv: 0, unalloc: 0, pre: 0, tally: null});
     sum.open = r2(sum.b.reduce((a, v) => a + v, 0));
+    // review of 01-Oct-2026: what each party owes on balance (Tally's balance when known, else its bills), aged so the
+    // ages add up to it: payments on account, advances, older settlements and any difference to Tally are set against
+    // the oldest bills first; an amount owed that no bill dates is "not dated". A party whose balance runs the other
+    // way (a supplier with a debit balance) owes nothing here: it is an advance, shown on its own, as a positive figure
+    rows.forEach(p => {
+      const net = r2(p.tally != null ? p.tally : p.total), nb = p.b.slice();
+      let extra = r2(net - nb.reduce((a, v) => a + v, 0));
+      for (let i = nb.length - 1; i >= 0 && extra < 0; i--){ const take = Math.min(nb[i], -extra); nb[i] = r2(nb[i] - take); extra = r2(extra + take); }
+      p.net = net; p.nb = net > 0 ? nb : nb.map(() => 0); p.und = net > 0 && extra > 0 ? extra : 0; p.advance = net < 0 ? r2(-net) : 0;
+    });
+    sum.owe = r2(rows.reduce((a, p) => a + Math.max(0, p.net), 0));
+    sum.advance = r2(rows.reduce((a, p) => a + p.advance, 0));
+    sum.nb = MIS.BUCKETS.map((_, i) => r2(rows.reduce((a, p) => a + p.nb[i], 0)));
+    sum.und = r2(rows.reduce((a, p) => a + p.und, 0));
     return {rows, sum};
   },
   msme(){
@@ -206,8 +220,9 @@ const MIS = {
       mtd: this.covered(mFrom) ? this.sales(mFrom, to).total : null, ytd: this.covered(fyFrom) ? this.sales(fyFrom, to).total : null,
       cash: this.cashflow(from, to), recv: this.ageing(to, "r", balTo), pay: this.ageing(to, "p", balTo), comp: this.compliance(from, to), dues: this.dues(to),
       balances: bal.ok ? {src: bal.src, cash: Object.keys(balTo).filter(l => Audit.isCash(l)).sort().map(l => [l, r2(-balTo[l])]), bank: Object.keys(balTo).filter(l => Audit.isBankL(l)).sort().map(l => [l, r2(-balTo[l])])} : {why: bal.why}};
-    r.dso = r.recv.sum.total && s.total ? Math.round(r.recv.sum.total / (s.total / days)) : null;
-    r.dpo = r.pay.sum.total && pr.total ? Math.round(r.pay.sum.total / (pr.total / days)) : null;
+    // days of sales or purchases owed: from what is owed on balance; never below nought (an advance is not "negative days")
+    r.dso = r.recv.sum.owe > 0 && s.total > 0 ? Math.round(r.recv.sum.owe / (s.total / days)) : null;
+    r.dpo = r.pay.sum.owe > 0 && pr.total > 0 ? Math.round(r.pay.sum.owe / (pr.total / days)) : null;
     r.p2 = this.phase2(r, balTo, bal.ok ? r2(r.balances.cash.concat(r.balances.bank).reduce((s2, x) => s2 + x[1], 0)) : null);
     const md = this.cfg(b).msmeDays, msme = this.msme();
     r.msme = r.pay.rows.filter(p => /micro|small/i.test(msme[p.party] || "")).map(p => ({party: p.party, type: msme[p.party], bills: p.bills.filter(x => x.ref && x.amt > 0 && x.age > md)})).filter(x => x.bills.length)

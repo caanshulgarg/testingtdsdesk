@@ -6,7 +6,10 @@ const ONB = {
     const b = S.books && S.books.cid === co.id ? S.books : null, ts = typeof tallyStatus === "function" ? tallyStatus(co) : {state: "none"};
     const bridge = !["none", "offline"].includes(ts.state);
     // linked: a Tally company is this client's, in the cloud or open through the bridge here (review item 6)
-    const linked = bridge && ts.state !== "unlinked" && (((typeof TLight === "object" && TLight.st.cos) || []).some(r => r.client_id === co.id) || (typeof Bridge === "object" && Bridge.on() && Bridge.up() && !!Bridge.openFor(co)));
+    // review of 01-Oct-2026: a company linked in the cloud is linked whether or not the Tally computer is on now (it was
+    // shown not done for a client linked in "Books in the cloud" while that computer was off)
+    const cloudLinked = ((typeof TLight === "object" && TLight.st.cos) || []).some(r => r.client_id === co.id) || (typeof TCloud === "object" && TCloud.has(co.id));
+    const linked = cloudLinked || (bridge && ts.state !== "unlinked" && typeof Bridge === "object" && Bridge.on() && Bridge.up() && !!Bridge.openFor(co));
     return [
       {id: "tally", done: !!co.tallyName, t: "Name the company as it is in Tally", d: "So entries go to the right company.", btn: ["Client setup", {act: "setup"}]},
       {id: "bridge", done: !!bridge, t: "Connect the Tally Bridge", d: "A small program on the computer where Tally is open.", btn: ["Connect", {act: "tallyGuide"}]},
