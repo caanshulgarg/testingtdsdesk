@@ -138,7 +138,7 @@ async function openBooks(cid){
   render();
 }
 // everything kept with a client's books, in this browser and (the TDS and GST work) in the firm's database
-const BOOKS_KEYS = ["vouchers", "map", "meta", "challans", "alloc", "pans", "twoB", "gstins", "under", "states", "groups", "salary", "certs", "advFix", "assets", "rev", "filed", "amendFix", "twoBs", "reco2b", "ledInfo", "ledInfoAt", "audit", "auditCfg", "auditRel", "ledSnaps", "gst9c", "groupInfo", "fs", "tb", "mis", "misCfg", "msme", "budget", "gst3b", "gst9", "gstOpen", "itcBasis", "itcTrack", "outRej", "gstFiled", "gstAato", "filed1a", "rule37On", "gstCashLedger", "gstSet", "gstContacts", "gstApi", "gstEst", "gstVault", "gstRegs", "letters", "ai", "tallyCo", "tbCheck", "nrInfo", "tcsCodes", "panInoperative", "filed3b", "apiTaken", "trashLog"];
+const BOOKS_KEYS = ["vouchers", "map", "meta", "challans", "alloc", "pans", "twoB", "gstins", "under", "states", "groups", "salary", "certs", "advFix", "assets", "rev", "filed", "amendFix", "twoBs", "reco2b", "ledInfo", "ledInfoAt", "audit", "auditCfg", "auditRel", "ledSnaps", "gst9c", "groupInfo", "fs", "tb", "mis", "misCfg", "msme", "budget", "gst3b", "gst9", "gstOpen", "itcBasis", "itcTrack", "outRej", "gstFiled", "gstAato", "filed1a", "rule37On", "gstCashLedger", "gstSet", "gstContacts", "gstApi", "gstEst", "gstVault", "gstRegs", "letters", "ai", "tallyCo", "tbCheck", "nrInfo", "tcsCodes", "panInoperative", "filed3b", "apiTaken", "trashLog", "gone", "filedDocs", "portalFiled", "gstNotes"];
 async function saveBooks(opts, bb){
   const b = bb || S.books; if (!b || !b.cid) return;
   const keep = {cid: b.cid}; BOOKS_KEYS.forEach(k => { keep[k] = b[k]; });
@@ -171,7 +171,17 @@ const TallyRead = {
   },
   // put a month's vouchers in place of what was there for those dates
   merge(b, res, from, to){
+    const before = (b.vouchers || []).filter(v => v.date >= from && v.date <= to);
     b.vouchers = (b.vouchers || []).filter(v => v.date < from || v.date > to).concat(res.vouchers);
+    // an entry that Tally no longer sends for these dates, and that is not elsewhere in the books (moved to another date),
+    // was deleted in Tally: it is kept, marked with the day FinCom saw it gone (request of 02-Oct-2026), and is marked back
+    // (not removed) if Tally sends it again
+    if (before.length || b.gone){
+      const now = new Set(b.vouchers.map(v => v.id)), today = new Date().toISOString().slice(0, 10);
+      b.gone = b.gone || {};
+      before.forEach(v => { const g = b.gone[v.id]; if (v.id && !now.has(v.id) && !v.cancel && (!g || g.back)) b.gone[v.id] = {v, at: today, by: whoAmI()}; });
+      Object.keys(b.gone).forEach(id => { if (now.has(id) && !b.gone[id].back) b.gone[id].back = today; });
+    }
     const m = b.meta = b.meta || {};
     const g = new Set((m.gstins || []).concat(res.meta.gstins || []));
     m.gstins = Array.from(g).sort(); m.bills = 1; m.company = res.meta.company || m.company;
@@ -519,6 +529,8 @@ function gstParts(b){
       .concat([["inreg", "Input register"], ["r2b", "2B reconciliation"], ["follow", "ITC follow-up"], ["adv", "Advances"], ["rev", "Reversal"], ["amend", "Amendments"], ["g9", "GSTR-9"], ["g9c", "GSTR-9C"]]);
   // tax-accuracy: the filed GSTR-1 and 3B (fetched from the portal) against FinCom's working, month by month
   if (ftype !== "comp") parts.push(["filedcmp", "Filed vs FinCom"]);
+  // request of 02-Oct-2026: the books invoice by invoice against the returns filed and 2B, for the year
+  if (ftype !== "comp") parts.push(["recon", "Filed vs books"]);
   parts.push(["vault", "Returns filed"]);
   if (AIH.enabled("notices")) parts.push(["notices", "Notices"]);
   // without the day book only what does not come from it: 2B (from the portal or its JSON) and the returns filed

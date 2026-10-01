@@ -54,6 +54,10 @@ class TPH(http.server.BaseHTTPRequestHandler):
         if p == "/taxpayerapi/dec/v4.0/returns/gstr3b":
             if q["ret_period"] not in FILED: return self.out(200, {"status_cd": "0", "error": {"message": "Return not filed for the period", "error_cd": "RET11402"}})
             return self.out(200, {"status_cd": "1", "data": {"ret_period": q["ret_period"], "sup_details": {"osup_det": {"txval": 100, "iamt": 18, "camt": 0, "samt": 0, "csamt": 0}}}})
+        if p == "/taxpayerapi/dec/v1.0/returns" and q.get("action") == "RETTRACK":
+            TP["track"] = q.get("fy")
+            return self.out(200, {"status_cd": "1", "data": {"EFiledlist": [{"valid": "Y", "mof": "ONLINE", "dof": "24-10-2025", "rtntype": "GSTR3B", "ret_prd": "062025", "arn": "AA0906250000001", "status": "Filed"},
+                {"valid": "Y", "mof": "ONLINE", "dof": "13-05-2025", "rtntype": "GSTR1", "ret_prd": "042025", "arn": "AA0904250000002", "status": "Filed"}]}})
         if p == "/eivital/dec/v1.04/auth":
             return self.out(200, {"Status": 1, "Data": {"AuthToken": "EINV1", "TokenExpiry": "2099-01-01 10:00:00"}} if q.get("eInvPwd") == "irp-pass" else {"Status": 0, "ErrorDetails": [{"ErrorCode": "108", "ErrorMessage": "Invalid login credentials"}]})
         if p == "/eicore/dec/v1.03/Invoice":
@@ -125,11 +129,18 @@ try:
     ok(len(lst) == 4 and all("data" not in x for x in lst), "the list of kept returns (without their data)")
     one = call({"action": "return", "gstin": G, "form": "R1", "period": per(1)})["ret"]
     ok(one and one["data"]["b2b"], "one kept return, with its data")
+    # the portal's return status list (RETTRACK): kept for the year, each return with its ARN and date
+    r = call({"action": "fetch", "gstin": G, "form": "TRACK", "period": "2025-26"})
+    tr = ret("TRACK", "2025-26")
+    ok(r.get("ok") and TP.get("track") == "2025-26" and tr and tr["status"] == "ok" and tr["data"]["EFiledlist"][0]["arn"] == "AA0906250000001", "return status list (RETTRACK) fetched and kept, with ARN and date of filing")
+    ok(not call({"action": "fetch", "gstin": G, "form": "TRACK", "period": "062025"}).get("ok"), "the status list is asked for a year (2025-26), not a month")
+    F.T["gst_returns"] = [x for x in F.T["gst_returns"] if x["form"] != "TRACK"]
     # the daily run: what is not kept yet; a reminder 3 days before the access period ends
     F.T["gst_returns"] = [x for x in F.T["gst_returns"] if not (x["form"] == "3B" and x["period"] == per(2))]
     n0 = len(TP["calls"])
     r = call({"action": "daily"}, cron=True)
     ok(r.get("ok") and ret("3B", per(2)) and ret("3B", per(2))["status"] == "ok" and ret("R1", per(2))["status"] == "ok", "daily run: last months' GSTR-1 and 3B not kept yet are fetched (%s)" % {k: r.get(k) for k in ("fetched", "none", "failed")})
+    ok(any(x["form"] == "TRACK" and x["status"] == "ok" for x in F.T["gst_returns"]), "daily run: the year's return status list is read too")
     ok(not any(c[1] == "RETSUM" and c[0].endswith("gstr3b") for c in TP["calls"][n0:] if False) and r.get("reminded") == 0, "no reminder while the access period has 7 days left")
     s = row(); s["access_until"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + 2 * 86400))
     r = call({"action": "daily"}, cron=True)

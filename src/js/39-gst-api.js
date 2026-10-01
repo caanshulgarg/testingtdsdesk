@@ -81,7 +81,7 @@ Object.assign(GSTAPI, {
   // put one kept return into the books
   take(r){
     const b = S.books; if (!b || !r || !r.data) return;
-    const ym = r.period.slice(2, 6) + r.period.slice(0, 2), at = r.fetched_at || new Date().toISOString();
+    const ym = /^\d{6}$/.test(r.period) ? r.period.slice(2, 6) + r.period.slice(0, 2) : r.period, at = r.fetched_at || new Date().toISOString();
     if (r.form === "2B"){
       const t = GST2B.fromJson({data: r.data});
       if (!t.gstin || !t.ym) return;
@@ -89,6 +89,9 @@ Object.assign(GSTAPI, {
       delete b.twoB; GST2B._memo = null; GSTR._carry = null;
     } else if (r.form === "R1"){
       GSTAmend.keep(Object.assign({}, r.data, {gstin: r.gstin, fp: r.period}), "portal", {via: "api", fetchedAt: at});
+    } else if (r.form === "TRACK"){
+      // the portal's return status list: each filed return marked with its ARN and date (request of 02-Oct-2026)
+      if (typeof GSTX === "object") GSTX.takePortal(String(r.gstin).slice(0, 2), (r.data || {}).EFiledlist || []);
     } else if (r.form === "3B"){
       b.filed3b = Object.assign({}, b.filed3b, {[r.gstin + "|" + ym]: {gstin: r.gstin, ym, json: r.data, fetchedAt: at}});
     }
@@ -112,6 +115,15 @@ Object.assign(GSTAPI, {
     }
     if (n) saveBooks();
     return n;
+  },
+  // the portal's list of returns filed in a year: each one marked filed here with its ARN and date
+  async track(reg, fy){
+    const gstin = this.gstinOf(reg), j = await this.call({action: "fetch", gstin, form: "TRACK", period: fy});
+    if (j.status === "none") return 0;
+    const k = await this.call({action: "return", gstin, form: "TRACK", period: fy});
+    const n = k.ret && k.ret.status === "ok" ? GSTX.takePortal(reg, (k.ret.data || {}).EFiledlist || []) : 0;
+    if (k.ret) this.take(k.ret);
+    saveBooks(); return n;
   },
   keptFor(gstin, form, ym){ if (!ym) return null; return (this.kept || []).find(r => r.gstin === gstin && r.form === form && r.period === ym.slice(4, 6) + ym.slice(0, 4)) || null; }
 });

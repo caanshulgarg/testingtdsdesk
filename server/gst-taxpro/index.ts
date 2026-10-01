@@ -98,6 +98,9 @@ const AUTH = "/taxpayerapi/dec/v1.0/authenticate", R2B = "/taxpayerapi/dec/v4.2/
 // TAXPRO_R1_PATH / TAXPRO_R3B_PATH pin one
 const R1_PATHS = (Deno.env.get("TAXPRO_R1_PATH") ? [Deno.env.get("TAXPRO_R1_PATH")!] : ["v4.0", "v3.1", "v1.1"].map((v) => `/taxpayerapi/dec/${v}/returns/gstr1`));
 const R3B_PATHS = (Deno.env.get("TAXPRO_R3B_PATH") ? [Deno.env.get("TAXPRO_R3B_PATH")!] : ["v4.0", "v3.0", "v1.1", "v1.0"].map((v) => `/taxpayerapi/dec/${v}/returns/gstr3b`));
+// the return status list (RETTRACK, request of 02-Oct-2026): each return filed for a financial year, with its ARN and date
+const TRACK_PATHS = (Deno.env.get("TAXPRO_TRACK_PATH") ? [Deno.env.get("TAXPRO_TRACK_PATH")!] : ["/taxpayerapi/dec/v1.0/returns", "/taxpayerapi/v1.0/returns"]);
+const FY = /^20\d{2}-\d{2}$/;
 const hdr = (gstin: string, username: string, ip = "127.0.0.1") => ({ "ip-usr": ip, "state-cd": gstin.slice(0, 2), gstin, username });
 const ret = (g: { http: number; j: any; text: string }) => ok(g) || (g.j && !g.j.error && (g.j.data || Object.keys(g.j).length > 1));
 const wrongPath = (g: { http: number; text: string }) => g.http === 404 || g.http === 405 || /invalid\s+(url|api|version)|no\s+such\s+api|resource\s+not\s+found|not\s+a\s+valid\s+api/i.test(g.text);
@@ -210,13 +213,23 @@ async function get3b(h: Record<string, string>, gstin: string, username: string,
   if (!ret(g)) throw new Error(tpErr(g));
   return { parts: 1, data: unwrap(g), path: g.path };
 }
+async function getTrack(h: Record<string, string>, gstin: string, username: string, fy: string, base = BASE) {
+  const g = await tpv("TRACK", TRACK_PATHS, { gstin, username, action: "RETTRACK", fy }, h, base);
+  if (!ret(g)) throw new Error(tpErr(g));
+  const d = unwrap(g) || {};
+  const list = d.EFiledlist || d.efiledlist || d.EFiledList || (Array.isArray(d) ? d : []);
+  return { parts: 1, data: { fy, EFiledlist: Array.isArray(list) ? list : [] }, path: g.path };
+}
+// the financial year of today, or of n months ago (India time)
+function fyBack(n = 0) { const p = periodBack(n), m = +p.slice(0, 2), y = +p.slice(2); const s = m >= 4 ? y : y - 1; return s + "-" + String(s + 1).slice(2); }
 // fetched and kept: ok, none (not there yet) or error, each with when
 async function fetchStore(firm: string, gstin: string, form: string, period: string, by: string | null) {
   const row: Record<string, unknown> = { firm_id: firm, gstin, form, period, fetched_at: new Date().toISOString(), fetched_by: by };
   try {
     const { token, s } = await liveSession(firm, gstin);
     const h = { ...hdr(gstin, s.username), "auth-token": token, ret_period: period };
-    const r = form === "2B" ? await get2b(h, gstin, s.username, period) : form === "R1" ? await getR1(h, gstin, s.username, period) : await get3b(h, gstin, s.username, period);
+    const r = form === "2B" ? await get2b(h, gstin, s.username, period) : form === "R1" ? await getR1(h, gstin, s.username, period)
+      : form === "TRACK" ? await getTrack(h, gstin, s.username, period) : await get3b(h, gstin, s.username, period);
     Object.assign(row, { status: "ok", data: r.data, parts: r.parts, error: (r.data as any)?.partial ? "Some tables could not be read: " + (r.data as any).partial.join("; ") : null });
   } catch (e) {
     const m = String((e as Error).message || e).slice(0, 500);
@@ -250,12 +263,15 @@ async function daily() {
     const want: [string, string][] = [];
     if (istDay >= 14) want.push(["2B", periodBack(1)]);
     for (const n of [1, 2, 3]) { want.push(["R1", periodBack(n)]); want.push(["3B", periodBack(n)]); }
+    // the returns filed this year (and last year's, until June): marked filed in the books with ARN and date
+    want.push(["TRACK", fyBack(0)]); if (fyBack(3) !== fyBack(0)) want.push(["TRACK", fyBack(3)]);
     const { data: have } = await admin.from("gst_returns").select("form, period, status, fetched_at").eq("firm_id", s.firm_id).eq("gstin", s.gstin);
     const seen = new Map((have || []).map((h: any) => [h.form + "|" + h.period, h]));
     for (const [form, period] of want) {
       if (Date.now() > until) break;
       const h: any = seen.get(form + "|" + period);
-      if (h && (h.status === "ok" || Date.now() - Date.parse(h.fetched_at) < 20 * 3600000)) continue;
+      // a return fetched is kept; the status list changes as returns are filed, so it is read again after 20 hours
+      if (h && ((h.status === "ok" && form !== "TRACK") || Date.now() - Date.parse(h.fetched_at) < 20 * 3600000)) continue;
       const r = await fetchStore(s.firm_id, s.gstin, form, period, null).catch((e) => ({ status: "error", error: String(e) }));
       if (r.status === "ok") fetched++; else if (r.status === "none") none++; else failed++;
       if (/Send an OTP again/.test(String(r.error || ""))) break;
@@ -444,8 +460,8 @@ Deno.serve(async (req) => {
     }
     if (action === "fetch") {
       const form = String(body.form || ""), period = String(body.period || "");
-      if (!["2B", "R1", "3B"].includes(form)) return reply(400, { ok: false, error: "Which return: 2B, R1 or 3B." });
-      if (!PERIOD.test(period)) return reply(400, { ok: false, error: "The period is MMYYYY, e.g. 032026." });
+      if (!["2B", "R1", "3B", "TRACK"].includes(form)) return reply(400, { ok: false, error: "Which return: 2B, R1, 3B or TRACK." });
+      if (form === "TRACK" ? !FY.test(period) : !PERIOD.test(period)) return reply(400, { ok: false, error: form === "TRACK" ? "The year is 2025-26." : "The period is MMYYYY, e.g. 032026." });
       const r = await fetchStore(firm, gstin, form, period, me);
       return reply(200, { ok: r.status !== "error", ...r });
     }
