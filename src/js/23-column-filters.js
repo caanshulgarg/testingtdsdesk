@@ -971,9 +971,18 @@ async function bringDayBookFile(f, from0, to0, opts){
           catch (e){ part.bridge = "not taken: " + ((e && e.message) || e); }
         } else part.bridge = "not connected on this computer";
         if (TCloudUp.on()){
-          // quietly, in the background: nothing on the screen unless it fails
-          try { const r = await TCloudUp.days(await f.text(), {from, to}, null, who); part.cloud = r && r.days != null ? "in the cloud (" + r.days + " days)" : (r && r.skipped) || ""; }
+          // review of 01-Oct-2026: on the screen while it goes (a year takes minutes), the page warns before it is left
+          // half sent, and says when every day is in the cloud. Before, it went quietly and a reload lost the rest
+          const stay = ev => { ev.preventDefault(); ev.returnValue = "The day book is still going to FinCom’s cloud."; return ev.returnValue; };
+          window.addEventListener("beforeunload", stay);
+          part.cloud = "going to the cloud…";
+          try {
+            const r = await TCloudUp.days(await f.text(), {from, to}, step, who);
+            part.cloud = r && r.days != null ? "in the cloud (" + r.days + " days)" : (r && r.skipped) || "";
+            if (r && r.days != null) toast(f.name + ": all " + r.days + " days, " + fmtDate(tallyDate(from)) + " to " + fmtDate(tallyDate(to)) + ", are in FinCom’s cloud.");
+          }
           catch (e){ part.cloud = "not sent: " + ((e && e.message) || e); toast("Saved here, but it could not be shared with the firm just now (" + ((e && e.message) || e) + "). Choose the file again later."); }
+          finally { window.removeEventListener("beforeunload", stay); }
         } else part.cloud = "sign in to the firm account to share it";
         b.busy = ""; await saveBooks(null, b); render();          // these books, even if another client is open by now
       })();
