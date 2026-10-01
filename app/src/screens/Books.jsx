@@ -11,6 +11,7 @@ import Gst from "./Gst.jsx";
 import FromTally from "./books/FromTally.jsx";
 import Ledgers from "./books/Ledgers.jsx";
 import MisTab from "./books/Mis.jsx";
+import { ServerMis, ServerTds, ServerGst } from "./books/ServerReports.jsx";
 import Accounts from "./books/Accounts.jsx";
 import Reports from "./books/Reports.jsx";
 import Lookup from "./books/Lookup.jsx";
@@ -178,6 +179,8 @@ export default function Books() {
   // live sync: the server's latest first; this computer's copy is not shown in place of a newer one
   if (S.books.loading) return <p className="note" data-opening>Getting the latest from the server…</p>;
   const b = S.books, tab = booksTab(), n = (b.vouchers || []).length;
+  // fast-sync: the books not in on this computer yet (or still coming in): MIS, TDS and GST from the server meanwhile
+  const srv = (!n || !!b.busy) && typeof TCloud === "object" && TCloud.on() && TCloud.has(co.id);
   const busy = b.busy && <BusyCard title="Reading the books…" detail={b.busy} />;
   if (tab === "reports" || tab === "lookup" || tab === "letters")
     return <>{busy}{tab === "reports" ? <Reports b={b} /> : tab === "lookup" ? <Lookup b={b} /> : <Letters b={b} />}</>;
@@ -187,7 +190,7 @@ export default function Books() {
     return <>
       {n > 0 && <FreshLine b={b} />}
       {busy}
-      {!n ? (b.busy ? null : <EmptyTab tab={tab} />) : tab === "mis" ? <MisTab b={b} /> : tab === "audit" ? <AuditTab b={b} /> : <Accounts b={b} />}
+      {tab === "mis" && srv ? <ServerMis b={b} /> : !n ? (b.busy ? null : <EmptyTab tab={tab} />) : tab === "mis" ? <MisTab b={b} /> : tab === "audit" ? <AuditTab b={b} /> : <Accounts b={b} />}
     </>;
   }
   const pending = n ? LedMaster.pending(b).length : 0;
@@ -195,6 +198,8 @@ export default function Books() {
     ["gst", "GST", null]];
   let body;
   if (tab === "import") body = <FromTally b={b} />;
+  else if (srv && tab === "gst") body = <><ServerGst b={b} />{n ? <Gst /> : null}</>;
+  else if (srv && tab === "tds") body = <><ServerTds b={b} />{n ? <Tds b={b} /> : null}</>;
   else if (!n && tab === "gst") body = <Gst />;
   else if (!n && tab === "tds") body = <Tds b={b} />;
   else if (!n) body = b.busy ? null : <EmptyTab tab={tab} />;

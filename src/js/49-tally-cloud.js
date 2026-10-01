@@ -104,6 +104,24 @@ const TCloud = {
     // migration-10: an Optional entry comes marked and is not in the total
     return {kind: "find", src: "cloud", q, from, to, typ, rows: (had ? had.rows : []).concat(rows), n: num(j.n), total: r2(num(j.total)), opt: num(j.opt)};
   },
+  // fast-sync (migration-14): MIS and the TDS and GST summaries worked out by the database from the cloud copy's ready
+  // totals, so a computer without the books loaded (a new one, or one still bringing them in) shows them in a moment.
+  // One answer per client, report and period, kept for the page's life; asked again after a minute
+  srv: {},
+  report(kind, cid, from, to){
+    const fn = {mis: "tally_mis", tds: "tally_tds_summary", gst: "tally_gst_summary"}[kind];
+    const k = kind + "|" + cid + "|" + from + "|" + to, x = this.srv[k] = this.srv[k] || {};
+    if (!fn || !this.on() || x.busy || (x.at && Date.now() - x.at < 60000)) return x;
+    x.busy = true; x.err = ""; const t0 = Date.now();
+    this.rpc(fn, {p_client: cid, p_from: this.iso(from), p_to: this.iso(to)}).then(j => { x.res = j; x.ms = Date.now() - t0; }, e => { x.err = (e && e.message) || String(e); if (/tally_mis|tally_tds_summary|tally_gst_summary|does not exist|PGRST202|schema cache/i.test(x.err)) x.missing = true; })
+      .finally(() => { x.busy = false; x.at = Date.now(); render(); });
+    return x;
+  },
+  // the period a client's cloud copy covers: the financial year of its last entry
+  fyOf(cid){
+    const bk = this.book(cid) || {}, last = this.d8(bk.to || "") || Audit.today(), y = num(last.slice(0, 4)) - (num(last.slice(4, 6)) < 4 ? 1 : 0);
+    return {from: y + "0401", to: last < (y + 1) + "0331" ? last : (y + 1) + "0331"};
+  },
   age(bk){
     if (!bk) return "";
     const st = bk.state || {}, at = String(st.seen || bk.stateAt || bk.daysAt || "");
