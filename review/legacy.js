@@ -36,6 +36,9 @@ const DB_LIMIT = 5000;
 const APP_VERSION = "TEST · 30 Sep 2026 · build 199 (posting queue: post from any computer, the Tally computer posts when Tally is free; posted entries go to the cloud without reading Tally again; bridge 1.14.6)";
 // the Tally Bridge setup file's fingerprint, put in by build.py: a new setup file is never served from an old cache
 const BRIDGE_SETUP_SHA = "708c175910ab9d56";
+// the bridge Setup handed out: assets/bridge-setup.txt on the live site; the testing builds (build.py to_test) hand out
+// assets/bridge-setup-test.txt, so a new bridge is tried on staging without changing what live users download
+const BRIDGE_SETUP_ID = "bridge-setup-test";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;
@@ -1501,7 +1504,7 @@ function blockText(id){
   const el = document.getElementById(id);
   if (el) return Promise.resolve(el.textContent);
   if (!window.TDS_ASSETS) return Promise.resolve(null);
-  if (!blockCache[id]) blockCache[id] = fetch(window.TDS_ASSETS + id + ".txt?b=" + ((String(typeof APP_VERSION === "string" ? APP_VERSION : "").match(/build (\d+)/) || [])[1] || "") + (id === "bridge-setup" ? "&s=" + BRIDGE_SETUP_SHA : ""), {cache: "force-cache"}).then(r => {
+  if (!blockCache[id]) blockCache[id] = fetch(window.TDS_ASSETS + id + ".txt?b=" + ((String(typeof APP_VERSION === "string" ? APP_VERSION : "").match(/build (\d+)/) || [])[1] || "") + (id === BRIDGE_SETUP_ID ? "&s=" + BRIDGE_SETUP_SHA : ""), {cache: "force-cache"}).then(r => {
     if (!r.ok) throw {code: "asset_missing", message: id + " could not be fetched (" + r.status + ")"};
     return r.text();
   }).catch(e => { delete blockCache[id]; throw e; });
@@ -4383,6 +4386,24 @@ const Books = {
     if (/SALE|SALES|CREDIT NOTE|EXPORT/i.test(v.type)) return false;
     return this.byContent(v, /^purchase accounts$/i, true);
   },
+  // review of 01-Oct-2026: the supplier's invoice number of a purchase or expense entry, for 2B reconciliation and the
+  // inward register. Many clients keep it in the voucher number, or write it in the narration, not in Tally's Reference
+  // field. Client setup > Tally says where (co.supInvFrom: "ref", "vno" or "narr"); whichever is chosen, an empty field
+  // gives way to the next: Reference, the voucher number, then an invoice number found in the narration
+  SUPINV: {ref: "Reference", vno: "Voucher no.", narr: "Narration"},
+  invInNarr(t){
+    const s = String(t || "");
+    const m = s.match(/\b(?:inv(?:oice)?|bill)\s*(?:no\.?|number|num|#)?\s*[:.\-#]?\s*([A-Z0-9][A-Z0-9\/\-_.]{0,29}\d[A-Z0-9\/\-_.]*)/i)
+      || s.match(/\b([A-Z]{1,8}[\/\-][A-Z0-9\/\-]{1,25}\d)\b/i);
+    return m ? m[1].replace(/[.\-\/]+$/, "") : "";
+  },
+  supInv(v, how){
+    how = how || ((typeof CO === "function" && CO()) || {}).supInvFrom || "ref";
+    const ref = String(v.ref || "").trim(), no = String(v.no || "").trim(), nr = () => this.invInNarr(v.narr);
+    if (how === "vno") return no || ref || nr();
+    if (how === "narr") return nr() || ref || no;
+    return ref || no || nr();
+  },
   isSale(v){
     if (this.NONACC.test(v.type)) return false;
     if (/SALE|SALES|CREDIT NOTE|EXPORT/i.test(v.type)) return true;
@@ -6345,7 +6366,7 @@ const GST2B = {
       // tax alone, with no supplier's GSTIN and no value beside it: a rounding or reversal entry
       if (!taxable && !gstin){ this.skipped.taxOnly++; return; }
       if (!reg) reg = String(v.cmp || "").slice(0, 2) || (regs.length === 1 ? regs[0] : "");
-      const no = v.ref || v.no || "";
+      const no = Books.supInv(v);
       out.push({id: v.id, voucher: v.no || "", type: v.type, party: party || "", gstin, no: String(no), noN: this.normNo(no), core: this.coreNo(no),
         date: v.refDate || v.date, bookDate: v.date, ym: String(v.date).slice(0, 6), reg,
         taxable, igst: tax.IGST, cgst: tax.CGST, sgst: tax.SGST, cess: tax.CESS,
@@ -6367,7 +6388,7 @@ const GST2B = {
   // match every 2B document against every book document, strongest evidence first
   run(reg){
     const b = S.books, st = this.state(), tol = num(this.settings().tol) || 1;
-    const key = [reg, b.vouchers && b.vouchers.length, b.mapV || 0, Object.keys(b.gstins || {}).length, Object.keys(b.twoBs || {}).join(","), JSON.stringify(st.confirm), JSON.stringify(st.link), tol, S.coId].join("|");
+    const key = [reg, b.vouchers && b.vouchers.length, b.mapV || 0, Object.keys(b.gstins || {}).length, Object.keys(b.twoBs || {}).join(","), JSON.stringify(st.confirm), JSON.stringify(st.link), tol, S.coId, (CO() || {}).supInvFrom || "ref"].join("|");
     if (this._memo && this._memo.key === key && this._memo.v === b.vouchers) return this._memo.res;
     const portal = [], rejRows = [];
     this.all2b(reg).forEach(t => t.rows.forEach(r => (r.rej ? rejRows : portal).push(r)));
@@ -6663,7 +6684,7 @@ const GSTR = {
         parts = [{rate: rt, hsn: parts[0] ? parts[0].hsn : "", supply: v.supply || "", taxable, igst: L.tax.IGST, cgst: L.tax.CGST, sgst: L.tax.SGST, cess: L.tax.CESS, guessed}];
       }
       if (!taxable && !tax) return;
-      out.push({id: v.id, date: v.date, no: v.ref || v.no || "", voucher: v.no || "", type: v.type, party, gstin, refDate: v.refDate || "",
+      out.push({id: v.id, date: v.date, no: Books.supInv(v), voucher: v.no || "", type: v.type, party, gstin, refDate: v.refDate || "",
         taxable, cgst: L.tax.CGST, sgst: L.tax.SGST, igst: L.tax.IGST, cess: L.tax.CESS, parts, valueGuessed: guessed, bill: purch,
         cls: Books.supplyClass(v), rcm, import: Books.isImport(v), supply: v.supply || (parts[0] && parts[0].supply) || "",
         blocked: !!v.ineligibleFlag, hsn: (parts[0] && parts[0].hsn) || (v.hsn || [])[0] || "",
@@ -13401,7 +13422,7 @@ function bridgePin(port){
 }
 async function saveBridgeSetup(){
   let t = null;
-  try { t = await blockText("bridge-setup"); } catch (e){ t = null; }
+  try { t = await blockText(BRIDGE_SETUP_ID); } catch (e){ t = null; }
   if (!t || !t.trim()){ toast("This copy of the app does not carry the setup file. Use the downloaded app (TDS-Desk-standalone.html)."); return; }
   const raw = atob(t.trim());
   const bytes = new Uint8Array(raw.length);
