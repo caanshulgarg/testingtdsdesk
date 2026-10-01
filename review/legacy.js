@@ -304,9 +304,10 @@ const CloudDocs = {
     });
     return out;
   },
-  async sendPending(cid){
+  // quiet: on opening a client (server-books), the documents kept only on this computer go up on their own
+  async sendPending(cid, quiet){
     const list = await this.pending(cid);
-    if (!list.length){ toast("Every document for this client is already in the firm account."); return; }
+    if (!list.length){ if (quiet) return; toast("Every document for this client is already in the firm account."); return; }
     for (const it of list){
       const f = await FileStore.get(cid, it.id);
       if (f) this.add(cid, it.id, f, it.kind);
@@ -5875,8 +5876,14 @@ Object.assign(LedMaster, {
   },
   // what the firm has confirmed for other clients, by ledger name
   tplKey(name){ return String(name || "").toUpperCase().replace(/^\s*\d{2}\s+/, "").replace(/\s+/g, " ").trim(); },
-  tplAll(){ try { return JSON.parse(lsGet("tdsdesk-test:ledtpl") || "{}"); } catch (e){ return {}; } },
-  tplSave(t){ try { lsSet("tdsdesk-test:ledtpl", JSON.stringify(t)); } catch (e){} },
+  // server-books: kept with the firm's settings (in the firm account, for every computer), not in this browser; what an
+  // earlier build kept here is brought in once (the browser's copy is left as it was)
+  tplAll(){
+    const f = S.firm || {};
+    if (!f.ledTpl){ let old = {}; try { old = JSON.parse(lsGet("tdsdesk-test:ledtpl") || "{}"); } catch (e){} if (Object.keys(old).length && S.firm){ S.firm.ledTpl = old; try { Store.saveFirm(); } catch (e){} } return old; }
+    return f.ledTpl;
+  },
+  tplSave(t){ if (!S.firm) return; S.firm.ledTpl = t; try { Store.saveFirm(); } catch (e){} },
   tplLearn(b, names){
     const t = this.tplAll(), cid = b.cid || "";
     names.forEach(n => {
@@ -7904,6 +7911,9 @@ async function openBooks(cid){
   S.books = saved && saved.cid === cid ? Object.assign({loading: false}, saved) : {cid, loading: false, vouchers: [], map: {}, challans: [], alloc: {}, pans: {}};
   if (S.books.vouchers && S.books.vouchers.length) try { LedMaster.refresh(S.books); } catch (e){}
   if (typeof BookSync === "object") BookSync.pull(cid);
+  // server-books: the cloud copy is where the books are; this browser's copy is only a cache of it
+  if (typeof TCloud === "object" && TCloud.on()) setTimeout(() => { TCloud.openLoad(cid).catch(() => {}); }, 0);
+  setTimeout(() => { try { if (typeof CloudDocs === "object" && CloudDocs.on() && S.coId === cid) CloudDocs.sendPending(cid, true); } catch (e){} }, 3000);
   setTimeout(() => { try { if (S.books && S.books.cid === cid){ Audit.maybeRun(); MIS.maybeRun(); } } catch (e){} }, 400);
   render();
 }
@@ -12003,6 +12013,9 @@ async function bringDayBookFile(f, from0, to0, opts){
           try { const r = await BridgeSeed.send(f, step, {from, to}, who.company); part.bridge = r && r.entries != null ? "filled (" + r.entries + ")" : r && r.skipped ? "not changed: " + r.skipped : ""; }
           catch (e){ part.bridge = "not taken: " + ((e && e.message) || e); }
         } else part.bridge = "not connected on this computer";
+        // server-books: the file waits in this browser until FinCom's cloud has every day of it; a send cut short (or
+        // made before signing in) goes again on its own the next time the client is opened, so it is never left here only
+        const wait = await TCloudUp.hold(who.client, f, {from, to}, who);
         if (TCloudUp.on()){
           // review of 01-Oct-2026: on the screen while it goes (a year takes minutes), the page warns before it is left
           // half sent, and says when every day is in the cloud. Before, it went quietly and a reload lost the rest
@@ -12012,11 +12025,11 @@ async function bringDayBookFile(f, from0, to0, opts){
           try {
             const r = await TCloudUp.days(await f.text(), {from, to}, step, who);
             part.cloud = r && r.days != null ? "in the cloud (" + r.days + " days)" : (r && r.skipped) || "";
-            if (r && r.days != null) toast(f.name + ": all " + r.days + " days, " + fmtDate(tallyDate(from)) + " to " + fmtDate(tallyDate(to)) + ", are in FinCom’s cloud.");
+            if (r && r.days != null){ await TCloudUp.drop(wait); toast(f.name + ": all " + r.days + " days, " + fmtDate(tallyDate(from)) + " to " + fmtDate(tallyDate(to)) + ", are in FinCom’s cloud."); }
           }
-          catch (e){ part.cloud = "not sent: " + ((e && e.message) || e); toast("Saved here, but it could not be shared with the firm just now (" + ((e && e.message) || e) + "). Choose the file again later."); }
-          finally { window.removeEventListener("beforeunload", stay); }
-        } else part.cloud = "sign in to the firm account to share it";
+          catch (e){ part.cloud = "not sent: " + ((e && e.message) || e); toast("It could not go to FinCom’s cloud just now (" + ((e && e.message) || e) + "). It goes on its own the next time this client is opened."); }
+          finally { window.removeEventListener("beforeunload", stay); TCloudUp.live.delete(wait); }
+        } else { part.cloud = "waiting: it goes to FinCom’s cloud once you sign in to the firm account"; toast("Sign in to the firm account: until then this day book is only on this computer, and other computers show nothing."); }
         b.busy = ""; await saveBooks(null, b); render();          // these books, even if another client is open by now
       })();
       render();
@@ -18324,16 +18337,19 @@ const BookSync = {
     return rows && rows[0] ? rows[0] : null;
   },
   // put what came back into the open books (and this browser's copy)
+  // server-books: what Tally's masters give (the ledgers' groups, GSTINs, states...) is filled by the cloud copy too; a work
+  // part without them must not wipe what the cloud copy just brought in (another computer then showed MIS with no groups)
+  MASTERS: ["under", "groups", "gstins", "states", "groupInfo", "ledInfo", "ledInfoAt", "tallyCo"],
   async apply(cid, data){
-    const keys = this.keys();
+    const keys = this.keys(), drop = k => data[k] === undefined && this.MASTERS.indexOf(k) < 0;
     if (S.books && S.books.cid === cid){
-      keys.forEach(k => { if (data[k] === undefined) delete S.books[k]; else S.books[k] = clone(data[k]); });
+      keys.forEach(k => { if (drop(k)) delete S.books[k]; else if (data[k] !== undefined) S.books[k] = clone(data[k]); });
       if (S.books.vouchers && S.books.vouchers.length) try { LedMaster.refresh(S.books); } catch (e){}
       await saveBooks({fromCloud: true});
       render();
     } else {
       const saved = (await Books.load(cid)) || {cid};
-      keys.forEach(k => { if (data[k] === undefined) delete saved[k]; else saved[k] = data[k]; });
+      keys.forEach(k => { if (drop(k)) delete saved[k]; else if (data[k] !== undefined) saved[k] = data[k]; });
       await Books.save(cid, saved);
     }
   },
@@ -19153,7 +19169,7 @@ const LK = {
     if (!force && Date.now() - (f.cat || 0) < 60000) return;
     f.cat = Date.now();
     const at = ((S.books || {}).meta || {}).at;
-    try { await TCloud.status(S.coId, force); if (TCloud.has(S.coId)) await TCloud.load(force); } catch (e){}
+    try { await TCloud.status(S.coId, force); if (TCloud.has(S.coId) && await TCloud.load(force) === "new") TCloud.rework(S.books); } catch (e){}
     if (!quiet || at !== ((S.books || {}).meta || {}).at) render();
   },
   // quiet: the once-a-minute look from any screen; the page is drawn again only when the books changed
@@ -20027,7 +20043,10 @@ const TCloud = {
     const todo = Object.keys(byMonth).sort().filter(ym => byMonth[ym].some(x => known[x.day] !== x.at));
     const ledNew = !same || meta.cloud.ledgersAt !== bk.ledgersAt;
     if (!todo.length && !ledNew) return true;
-    f.busy = "Bringing in " + (todo.length === 1 ? FC.monthLabel(todo[0]) : todo.length + " months") + " from the copy in FinCom's cloud…"; render();
+    // server-books: the progress shows on every Books screen (TDS, GST, MIS, Reports...), not only on Look up
+    const say = t => { f.busy = b.busy = t; render(); };
+    say("Bringing in " + (todo.length === 1 ? FC.monthLabel(todo[0]) : todo.length + " months") + " from the copy in FinCom's cloud…");
+    let changed = false;
     try {
       if (!same){ b.vouchers = []; b.tb = null; }
       if (ledNew){
@@ -20035,10 +20054,14 @@ const TCloud = {
         TallyRead.balances(b, {ledgers: led.map(l => ({name: l.name, parent: l.parent, open: String(l.open), close: ""}))}, from, to);
         await this.groupsInto(b, bk.book);
       }
-      const days = {};
+      // the days, eight at a time (one by one, a year of 365 files took minutes on a new computer)
+      const days = {}, want = [].concat(...todo.map(ym => byMonth[ym])), text = {};
+      let got = 0, next = 0;
+      const one = async () => { while (next < want.length){ const x = want[next++]; text[x.day] = await this.day(bk.book, x.day, x.at); days[x.day] = x.at; got++;
+        if (got % 10 === 0 || got === want.length) say("Bringing in the books from FinCom's cloud: " + got + " of " + want.length + " days…"); } };
+      await Promise.all(Array.from({length: Math.min(8, want.length)}, one));
       for (const ym of todo){
-        const parts = [];
-        for (const x of byMonth[ym]){ parts.push(await this.day(bk.book, x.day, x.at)); days[x.day] = x.at; }
+        const parts = byMonth[ym].map(x => text[x.day] || "");
         const res = await Books.importDayBook(new Blob(["<ENVELOPE>" + parts.join("") + "</ENVELOPE>"], {type: "text/xml"}));
         const bad = notThisClient((res.meta || {}).gstins);
         if (bad.length) throw new Error(panRefusal("The company in the cloud copy", bad));
@@ -20050,10 +20073,35 @@ const TCloud = {
       meta.cloud = {book: bk.book, company: bk.company, ledgersAt: bk.ledgersAt, days: Object.assign({}, known, days), at: new Date().toISOString()};
       meta.at = meta.cloud.at; meta.keep = true; meta.file = "the copy in FinCom's cloud"; meta.from = meta.from && meta.from < from ? meta.from : from;
       TallyRead.after(b, "after changes came from the cloud copy");
-      LK.cache = {}; await saveBooks();
+      LK.cache = {}; changed = true; await saveBooks();
     } catch (e){ toast("Could not bring in the cloud copy: " + ((e && e.message) || e)); }
-    f.busy = ""; render();
-    return true;
+    f.busy = b.busy = ""; render();
+    return changed ? "new" : true;
+  },
+  // server-books: opening a client on any computer brings its books in from the cloud copy, with no button and no upload
+  // (this browser keeps a copy of each day, so only the days that changed are fetched). Then MIS and the audit are
+  // worked out again from what came in.
+  async openLoad(cid){
+    if (!this.on() || S.coId !== cid) return false;
+    const f = LK.fr();
+    if (f.busy) return false;
+    f.cat = Date.now();
+    let r = false;
+    const b = S.books, empty = b && b.cid === cid && !(b.vouchers || []).length;
+    if (empty){ f.busy = b.busy = "Looking for the books in FinCom's cloud…"; render(); }
+    // a day book chosen on this computer that has not reached the cloud yet goes first
+    try { if (await TCloudUp.retry(cid, t => { if (S.books && S.books.cid === cid){ f.busy = S.books.busy = t; render(); } })) this.st[cid] = {}; } catch (e){}
+    try { await this.status(cid, true); if (this.has(cid) && S.books && S.books.cid === cid){ if (empty) f.busy = ""; r = await this.load(true); } } catch (e){}
+    if (S.books && S.books.cid === cid && /FinCom.s cloud/.test(S.books.busy || "")){ f.busy = S.books.busy = ""; render(); }
+    if (r === "new" && S.books && S.books.cid === cid) this.rework(S.books);
+    return r;
+  },
+  rework(b){
+    try {
+      const last = b.mis && b.mis.last;
+      if (last && last.from && last.to) MIS.run(last.from, last.to, "after the books came in from the cloud copy"); else MIS.maybeRun();
+      Audit.maybeRun(); saveBooks(); render();
+    } catch (e){}
   },
   // ---------- Settings: computers and companies
   async refreshPane(){
@@ -20163,6 +20211,31 @@ const TCloudUp = {
     }
     await flush();
     return {days: sent};
+  },
+  // server-books: a day book file waiting to go to the cloud ("tcup:<client>:<from>-<to>" in this browser's store)
+  async hold(cid, file, range, who){
+    const k = "tcup:" + cid + ":" + range.from + "-" + range.to;
+    this.live.add(k);
+    try { await IDBStore.write([[k, {blob: file, name: file.name, from: range.from, to: range.to, who: Object.assign({}, who), at: new Date().toISOString()}]]); } catch (e){}
+    return k;
+  },
+  live: new Set(),          // the files this page is sending now (not to be sent twice)
+  async drop(k){ this.live.delete(k); try { await IDBStore.write([[k, null]]); } catch (e){} },
+  async waiting(cid){ try { return await IDBStore.prefix("tcup:" + cid + ":"); } catch (e){ return []; } },
+  // sent again on opening the client; true when something went
+  async retry(cid, onStep){
+    if (!this.on() || this.retrying) return false;
+    const list = (await this.waiting(cid)).filter(([k]) => !this.live.has(k));
+    if (!list.length) return false;
+    this.retrying = true; let sent = 0;
+    try {
+      for (const [k, x] of list){
+        try { const r = await this.days(await x.blob.text(), {from: x.from, to: x.to}, onStep, x.who); if (r && r.days != null){ await this.drop(k); sent++; } }
+        catch (e){ toast("A day book (" + (x.name || "file") + ") is still waiting to go to FinCom’s cloud: " + ((e && e.message) || e)); }
+      }
+    } finally { this.retrying = false; }
+    if (sent) toast(sent + " day book file" + (sent === 1 ? " that was waiting is" : "s that were waiting are") + " now in FinCom’s cloud.");
+    return sent > 0;
   },
   async opening(from, asOn, led, who){
     if (!this.on()) return {skipped: "not signed in to the firm account"};
