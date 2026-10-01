@@ -6,7 +6,7 @@ def R(a, b):
     assert base.count(a) == 1, ('anchor', a[:60], base.count(a))
     base = base.replace(a, b)
 import re
-base = re.sub(r"\$BridgeVersion = '[0-9.]+'", "$BridgeVersion = '1.14.9'", base, 1)
+base = re.sub(r"\$BridgeVersion = '[0-9.]+'", "$BridgeVersion = '1.15.0'", base, 1)
 # 1.12.7 (security): the log never holds keys, codes or passwords, and is rotated at 5 MB keeping 5 old copies
 R(r"""function Write-Log([string]$msg) {
   $line = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + '  ' + $msg
@@ -218,6 +218,8 @@ R("""      if ($hit) {
         $r['verified'] = $true;""")
 # 1.14.6: postings queued in FinCom's cloud are followed and reported every few seconds while they run
 R("""    if (((Get-Date) - $lastCheck).TotalSeconds -ge (Get-KeepNum 'KeepStartSec' 60)) { $lastCheck = Get-Date; Show-Diagnosis;""", """    try { Sync-CloudPosts } catch { }
+    try { Step-CloudWake } catch { }
+    try { Test-KeepWatch } catch { }
     if (((Get-Date) - $lastCheck).TotalSeconds -ge (Get-KeepNum 'KeepStartSec' 60)) { $lastCheck = Get-Date; Show-Diagnosis;""")
 # 1.13.0: the FinCom Connector may ask the bridge to stop (to update it, or restart it cleanly)
 R("""  finally { try { $client.Close() } catch { } }
@@ -225,7 +227,7 @@ R("""  finally { try { $client.Close() } catch { } }
   if ($script:ShutdownAfter) { Write-Log 'Stopping: the FinCom Connector asked'; try { $listener.Stop() } catch { }; exit 0 }
 }""")
 # 1.14.2: the status says when Tally stopped answering (a message box in Tally, say), for FinCom and the Connector
-R("sessions = $sessions; allowImport = [bool]$Cfg.AllowImport }", "sessions = $sessions; allowImport = [bool]$Cfg.AllowImport; tallyStuck = (Get-TallyStuck) }")
+R("sessions = $sessions; allowImport = [bool]$Cfg.AllowImport }", "sessions = $sessions; allowImport = [bool]$Cfg.AllowImport; tallyStuck = (Get-TallyStuck); wake = (Get-WakeStatus) }")
 # 1.12.8: the product is now called FinCom. Only what people read changes; the scheduled task keeps its old name
 # (an installed bridge finds and replaces it by that name)
 base = '\n'.join(l if "$script:TaskName = 'TDS Desk - nightly Tally copy'" in l else l.replace('TDS Desk', 'FinCom') for l in base.split('\n'))

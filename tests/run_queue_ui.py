@@ -100,6 +100,18 @@ with sync_playwright() as p:
     r = JOBS[rid[0]]; r.update(status="running", done=2, updated_at=now()); push(r)
     ok(wait_for(pg, "(TCloud.jobs['%s'] || []).some(j => j.kind === 'reparse' && j.done === 2)" % CID, 5) and "2 of 3 months" in pg.evaluate("TCloud.jobLine(TCloud.jobs['%s'].find(j => j.kind === 'reparse'))" % CID),
        "and its line follows the job: " + pg.evaluate("TCloud.jobLine(TCloud.jobs['%s'].find(j => j.kind === 'reparse'))" % CID))
+    # the Tally computer sent new days (tally_books.days_at moved, migration-15): the page brings them in at once
+    ok(wait_for(pg, "Live.booksLive", 5), "the page listens for changes to the cloud copy (its own channel)")
+    n1 = CALLS.count("status"); t0 = time.time()
+    for s2 in list(SOCKS):
+        try: s2.send(json.dumps({"topic": "realtime:fincom-books-" + FIRM, "event": "postgres_changes", "ref": None, "payload": {"data": {"table": "tally_books", "type": "UPDATE", "errors": None,
+                 "record": {"book_id": "bk1", "firm_id": FIRM, "client_id": CID, "days_at": now()}}}}))
+        except Exception: pass
+    t_in = None
+    while time.time() - t0 < 6:
+        if CALLS.count("status") > n1: t_in = time.time() - t0; break
+        pg.wait_for_timeout(100)               # (the stand-in answers only while Playwright is asked something)
+    ok(t_in is not None and t_in < 4, "the Tally computer sent new days: this page asks the cloud copy for them in %.1f s (not within the minute)" % (t_in or 99))
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
     br.close()
 srv.shutdown()

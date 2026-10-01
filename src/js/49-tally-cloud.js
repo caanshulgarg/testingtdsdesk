@@ -432,7 +432,7 @@ const TCloudUp = {
     const {all, byDay} = this.split(text, range);
     let job;
     try { job = (await this.post({kind: "job_new", total: all.length, name: String(name || "").slice(0, 120)}, who)).job; }
-    catch (e){ if (/unknown kind|404/i.test(String(e && e.message))) return this.days(text, range, onStep, who); throw e; }
+    catch (e){ return this.days(text, range, onStep, who); }      // a cloud without the queue (or not ready): sent as before
     if (!job) return this.days(text, range, onStep, who);
     let batch = [], size = 0, done = 0;
     const flush = async last => { if (onStep) onStep("Handing the day book to FinCom’s server (" + Math.round(done * 100 / all.length) + "%)…"); await this.post({kind: "stage_days", job, days: batch, last: !!last}, who); batch = []; size = 0; };
@@ -472,7 +472,7 @@ Object.assign(TCloud, {
     try {
       const j = await TCloudUp.post({kind: "reparse_queue"}, {client: cid});
       if (j && j.job){ p.rp[cid] = {job: j.job, months: j.months, host, at: new Date().toISOString()}; this.done[j.job] = "queued"; await this.jobsLoad(cid); toast(co.name + ": the server reads the " + j.months + " months of kept day books again; it carries on if this page is closed."); render(); return; }
-    } catch (e){ if (!/unknown kind|404/i.test(String(e && e.message))){ p.rp[cid] = {err: (e && e.message) || String(e), n: 0, host}; render(); return; } }
+    } catch (e){ if (/not allowed|owner/i.test(String(e && e.message))){ p.rp[cid] = {err: (e && e.message) || String(e), n: 0, host}; render(); return; } }   // no queue yet: read again as before
     let month = null, n = 0, bad = 0, total = 0, calls = 0;
     const seen = new Set();
     try {

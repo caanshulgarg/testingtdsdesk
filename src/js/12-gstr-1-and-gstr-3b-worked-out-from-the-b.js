@@ -39,8 +39,11 @@ const GSTR = {
     return r || String(v.cmp || "").slice(0, 2);
   },
   // the entries of one month (build 193): from an index made once per drawing or calculation, not the whole year each time
+  // the entries GST is worked out from. Optional entries are memoranda in Tally, not in the books, and never in a return
+  // (review of 01-Oct-2026: GSTR-1 counted 13 Optional sales of one client, each also entered as a regular invoice: their
+  // tax twice; the server's GST summary, which leaves them out, showed it)
   vIn(ym){
-    const all = S.books.vouchers || [];
+    const all = (S.books.vouchers || []).filter(v => !v.opt);
     if (typeof perRender !== "function" || !ym || String(ym).length !== 6) return all;
     return perRender(this, "byMonth", () => { const m = {}; all.forEach(v => { const k = String(v.date).slice(0, 6); (m[k] = m[k] || []).push(v); }); return m; })[ym] || [];
   },

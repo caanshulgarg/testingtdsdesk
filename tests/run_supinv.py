@@ -52,6 +52,18 @@ with sync_playwright() as p:
       inv: [{inum: 'XF/2025-26/00007', dt: '10-05-2025', val: 1180, txval: 1000, igst: 180, cgst: 0, sgst: 0, cess: 0, rev: 'N', itcavl: 'Y', rsn: '', typ: 'R', pos: '09'}]}]}}}); b.twoBs[x.gstin + '|' + x.period] = x; GST2B._memo = null; }""" % GSTIN)
     m = pg.evaluate("() => { CO().supInvFrom = 'vno'; GST2B._memo = null; const r = GST2B.run('09'); return {pairs: JSON.stringify(r.pairs || []), only2b: (r.only2b || []).length}; }")
     ok("zz-1" in m["pairs"] and "XF/2025-26/00007" in m["pairs"] and m["only2b"] == 0, "2B: the supplier's invoice XF/2025-26/00007 is paired with the journal numbered so, nothing left in 2B only")
+    # review of 01-Oct-2026: an Optional entry (a memorandum in Tally) is in no return: here an Optional copy of an invoice
+    # also entered as a regular one, as a client had them, counted twice in GSTR-1 before
+    r = pg.evaluate("""() => { const b = S.books, base = b.vouchers.slice();
+      const sale = {id: "zz-s1", date: "20250512", type: "Sales", no: "S/1", ref: "", party: "ZZ Customer", gstin: "09YYYYY1234Y1Z5", pos: "", cmp: "09AAAAA0000A1Z5", narr: "", hsn: [], cancel: false, opt: false,
+        ent: [{l: "ZZ Customer", a: -11800, r: null}, {l: "ZZ Fees", a: 10000, r: null}, {l: "Output IGST", a: 1800, r: null}]};
+      const optSale = Object.assign({}, sale, {id: "zz-s1-opt", opt: true}), optBuy = Object.assign({}, b.vouchers[1], {id: "zz-2-opt", opt: true});
+      b.vouchers = base.concat([sale, optSale, optBuy]); b.map["Output IGST"] = {kind: "gst", side: "output", tax: "IGST", ok: true}; b.map["ZZ Fees"] = {kind: "", what: "none"}; GST2B._memo = null;
+      const out = GSTR.outward('202505', ''), inw = GSTR.inward('202505', ''), docs = GST2B.bookDocs();
+      b.vouchers = base; GST2B._memo = null;
+      return {out: out.map(x => x.id), igst: GSTR.sum(out).igst, inw: inw.map(x => x.id), docs: docs.map(d => d.id)}; }""")
+    ok(r["out"] == ["zz-s1"] and r["igst"] == 1800, "GSTR-1: the Optional copy of an invoice is left out, the tax counted once (%s, IGST %s)" % (r["out"], r["igst"]))
+    ok("zz-2-opt" not in r["inw"] and "zz-2-opt" not in r["docs"], "the input register and 2B leave out an Optional purchase too")
     ok(not errors, "no page errors %s" % errors[:2])
     br.close()
 print("\nall passed" if not fails else "\nFAILED: %d" % len(fails)); raise SystemExit(1 if fails else 0)

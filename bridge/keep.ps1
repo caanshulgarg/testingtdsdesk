@@ -345,6 +345,32 @@ function Test-KeepLightDue {
   $last = [DateTime]::MinValue; try { $last = [DateTime]::Parse(([IO.File]::ReadAllText((Get-KeepLightFile))).Trim()) } catch { }
   return ((Get-Date) - $last).TotalMinutes -ge $min
 }
+# 1.15.0 (fast-sync): every KeepWatchSec seconds (60; 0 = off) the bridge asks Tally only its two change counters for
+# each company kept in step and open there: one tiny request a company, nothing read. When a counter moved since the copy
+# last looked, the light check runs at once (only the entries changed are read and sent), so an entry made in Tally is
+# in FinCom in a minute or two. A copier already running looks for itself.
+$script:WatchAt = [DateTime]::MinValue
+function Test-KeepWatch {
+  if (-not (Test-KeepOn)) { return }
+  $sec = Get-KeepNum 'KeepWatchSec' 60
+  if ($sec -le 0 -or ([DateTime]::UtcNow - $script:WatchAt).TotalSeconds -lt $sec) { return }
+  $script:WatchAt = [DateTime]::UtcNow
+  try { $p = [int]('0' + [IO.File]::ReadAllText((Join-Path (Get-SyncDir) 'keep.pid')).Trim()); if ($p -and (Test-ProcessAlive $p)) { return } } catch { }
+  if (Test-Path -LiteralPath (Join-Path (Get-SyncDir) 'keep-light-now.txt')) { return }
+  $want = @($Cfg.KeepCompanies | Where-Object { $_ }); $moved = @()
+  foreach ($s in @(Get-OpenCompaniesCached)) {
+    if ($s.skipped -or -not $s.ok) { continue }
+    foreach ($c in @($s.companies)) {
+      $name = [string]$c.name
+      if ($want.Count -and -not ($want -contains $name)) { continue }
+      $st = Read-KeepState (Get-SyncFolder $name)
+      if (-not $st -or $st.phase -ne 'live' -or $null -eq $st.cv) { continue }
+      $cn = $null; try { $cn = Get-KeepCounters $name ([int]$s.port) } catch { continue }
+      if ($cn.ok -and ([long]$cn.v -ne [long]$st.cv -or [long]$cn.m -ne [long]$st.cm)) { $moved += $name }
+    }
+  }
+  if ($moved.Count) { Write-Log ('Tally changed (' + ($moved -join ', ') + '): reading the changed entries now'); Request-KeepLight; try { Start-KeepIfNeeded } catch { Write-Log ('Could not start the light check: ' + $_.Exception.Message) } }
+}
 function Request-KeepNow { New-Item -ItemType Directory -Force -Path (Get-SyncDir) | Out-Null; [IO.File]::WriteAllText((Join-Path (Get-SyncDir) 'keep-now.txt'), (Get-Date).ToString('s')); Write-Log 'Update from Tally asked for now' }
 function Test-KeepOn {
   if ($null -ne $Cfg.KeepInStep) { return [bool]$Cfg.KeepInStep }

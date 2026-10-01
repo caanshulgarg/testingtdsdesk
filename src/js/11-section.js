@@ -51,7 +51,7 @@ const GST2B = {
     const out = [];
     this.skipped = {setOff: 0, taxOnly: 0};
     b.vouchers.forEach(v => {
-      if (Books.isSale(v)) return;
+      if (Books.isSale(v) || v.opt) return;                                   // an Optional entry is no document
       const tax = {IGST: 0, CGST: 0, SGST: 0, CESS: 0};
       let signed = 0, reg = "", inel = 0, any = false, setOff = false;
       v.ent.forEach(e => {
@@ -211,7 +211,7 @@ const GST2B = {
     // a bill in 2B and in Tally, but booked with no input tax (the tax charged to the expense)
     const docIds = new Set(books.map(d => d.id)), gstMap = b.gstins || {};
     const noCredit = new Map();
-    (b.vouchers || []).forEach(v => { if (docIds.has(v.id) || Books.isSale(v) || v.cancel) return; const k = this.normNo(v.ref || v.no); if (k.length >= 3) (noCredit.get(k) || noCredit.set(k, []).get(k)).push(v); });
+    (b.vouchers || []).forEach(v => { if (docIds.has(v.id) || Books.isSale(v) || v.cancel || v.opt) return; const k = this.normNo(v.ref || v.no); if (k.length >= 3) (noCredit.get(k) || noCredit.set(k, []).get(k)).push(v); });
     portal.forEach(p => { delete p.bookedNoCredit; });
     only2b.forEach(p => {
       const c = (noCredit.get(p.noN) || []).filter(v => (!p.date || days(p.date, v.date) <= 62) && (!gstMap[v.party] || String(gstMap[v.party]).toUpperCase() === p.gstin || pan(gstMap[v.party]) === pan(p.gstin)));

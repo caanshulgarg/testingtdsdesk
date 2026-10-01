@@ -3,7 +3,7 @@
 -- cron.schedule replaces a job of the same name. Adds only; nothing is dropped or deleted (a "drop trigger if exists" /
 -- "drop policy if exists" is followed by the same trigger or policy made again). All of it, or nothing (one transaction).
 -- It ends with a check that lists what is in place.
--- Source: server/tally-cloud/migration-13-fast-sync.sql and migration-14-reports.sql (branch fast-sync).
+-- Source: server/tally-cloud/migration-13-fast-sync.sql, migration-14-reports.sql and migration-15-books-live.sql (branch fast-sync).
 
 begin;
 set local lock_timeout = '15s';      -- waits at most 15 s for a table instead of hanging
@@ -212,7 +212,9 @@ end $function$;
 -- the ledgers FinCom's ledger list says are of a kind (client_book_items, key "map"; the caller's firm only)
 create or replace function public.tally_led_kinds(p_client text)
 returns table (ledger text, kind text, side text, tax text, what text) language sql stable security definer set search_path to 'public' as $function$
-  select substr(i.item, 2), coalesce(i.data->>'kind', ''), coalesce(i.data->>'side', ''), coalesce(i.data->>'tax', ''), coalesce(i.data->>'what', '')
+  -- a ledger not confirmed yet carries FinCom's guess without "what": its kind says it (reverse charge when marked so)
+  select substr(i.item, 2), coalesce(i.data->>'kind', ''), coalesce(i.data->>'side', ''), coalesce(i.data->>'tax', ''),
+         coalesce(nullif(i.data->>'what', ''), case when i.data->>'kind' = 'gst' and coalesce(i.data->>'rcm', '') = 'true' then 'gst_rcm' else coalesce(i.data->>'kind', '') end)
     from client_book_items i where i.firm_id = my_firm() and i.client_id = p_client and i.key = 'map' and i.item like '.%' and not i.deleted;
 $function$;
 
@@ -249,8 +251,20 @@ begin
   with k as (select * from tally_led_kinds(p_client) where kind = 'gst' and what in ('gst', 'gst_rcm', 'gst_import')),
   sales as (select l.name from tally_ledgers l where l.book_id = bk and l.merged_into is null and exists (select 1 from unnest(l.chain) g where lower(g) = 'sales accounts')),
   months as (select to_char(gs, 'YYYYMM') as ym from generate_series(date_trunc('month', p_from), date_trunc('month', p_to), interval '1 month') gs),
-  tx as (select to_char(d.day, 'YYYYMM') as ym, k.side, k.what, upper(k.tax) as tax, sum(d.cr - d.dr) as net from tally_ledger_day d join k on k.ledger = d.ledger
-          where d.book_id = bk and d.day between greatest(p_from, b.from_date) and p_to group by 1, 2, 3, 4),
+  -- the tax on documents only (review: the month's set-off and payment entries moved the tax ledgers too): output tax on
+  -- entries with a sales or income line, input tax on entries with an expense, purchase or fixed-asset line
+  nom as (select l.name from tally_ledgers l where l.book_id = bk and l.merged_into is null
+            and exists (select 1 from unnest(l.chain) g where lower(g) in ('sales accounts', 'direct incomes', 'indirect incomes', 'purchase accounts', 'direct expenses', 'indirect expenses', 'fixed assets'))),
+  inc as (select l.name from tally_ledgers l where l.book_id = bk and l.merged_into is null
+            and exists (select 1 from unnest(l.chain) g where lower(g) in ('sales accounts', 'direct incomes', 'indirect incomes'))),
+  docs as (select v.guid,
+             exists (select 1 from tally_lines x join inc on inc.name = x.ledger where x.book_id = bk and x.guid = v.guid) as outward,
+             exists (select 1 from tally_lines x join nom on nom.name = x.ledger where x.book_id = bk and x.guid = v.guid) as doc
+             from tally_vouchers v where v.book_id = bk and v.day between greatest(p_from, b.from_date) and p_to and not v.cancelled and not v.optional),
+  tx as (select to_char(t.day, 'YYYYMM') as ym, k.side, k.what, upper(k.tax) as tax, sum(t.amount) as net
+           from tally_lines t join k on k.ledger = t.ledger join docs on docs.guid = t.guid
+          where t.book_id = bk and t.day between greatest(p_from, b.from_date) and p_to
+            and ((k.side = 'output' and docs.outward) or (k.side <> 'output' and docs.doc)) group by 1, 2, 3, 4),
   sv as (select to_char(d.day, 'YYYYMM') as ym, sum(d.amount) as v from tally_ledger_day d join sales s on s.name = d.ledger
           where d.book_id = bk and d.day between greatest(p_from, b.from_date) and p_to group by 1),
   heads as (select * from (values ('CGST'), ('SGST'), ('IGST'), ('CESS')) h(tax)),
@@ -269,6 +283,13 @@ end $function$;
 
 revoke all on function public.tally_mis(text, date, date), public.tally_tds_summary(text, date, date), public.tally_gst_summary(text, date, date), public.tally_led_kinds(text) from public, anon;
 grant execute on function public.tally_mis(text, date, date), public.tally_tds_summary(text, date, date), public.tally_gst_summary(text, date, date), public.tally_led_kinds(text) to authenticated;
+
+-- ======================================================================== migration-15: the cloud copy's changes heard at once
+do $$ begin
+  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'tally_books') then
+    alter publication supabase_realtime add table public.tally_books;
+  end if;
+end $$;
 
 commit;
 
@@ -292,5 +313,6 @@ select x.what, x.applied from (values
   ('14 index tally_lines_book_day',        to_regclass('public.tally_lines_book_day') is not null),
   ('14 report functions (5)',              (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname in ('tally_mis_head', 'tally_mis', 'tally_led_kinds', 'tally_tds_summary', 'tally_gst_summary')) = 5),
   ('14 anon cannot run tally_mis',         case when to_regprocedure('public.tally_mis(text,date,date)') is null then false else not has_function_privilege('anon', 'public.tally_mis(text,date,date)', 'execute') end),
+  ('15 tally_books in Realtime',           exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and tablename = 'tally_books')),
   ('14 signed-in users can run tally_mis', case when to_regprocedure('public.tally_mis(text,date,date)') is null then false else has_function_privilege('authenticated', 'public.tally_mis(text,date,date)', 'execute') end)
 ) as x(what, applied);

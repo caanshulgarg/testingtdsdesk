@@ -100,6 +100,18 @@ try:
             b = pg.evaluate("""(bk) => { S.books = Object.assign({map: {}}, bk); TallyRead.balances(S.books, {ledgers: Object.entries(bk.tb.led).map(([name, x]) => ({name, parent: x.parent, open: String(x.open), close: ""}))}, "20250401", "20260331");
               S.books.map = Books.mapLedgers(bk.vouchers, {}); const pl = MIS.pl('20250401', '20260331'), s = MIS.sales('20250401', '20260331');
               return {pbt: pl.pbt, gross: pl.gross, heads: Object.fromEntries(Object.entries(pl.heads).map(([k, h]) => [k, {t: h.t, m: h.m}])), sales: s.total, rows: s.rows.map(r => [r.party, r.t])}; }""", books)
+            # GST: the database's output tax against the browser's GSTR-1, month by month, with the same ledger settings
+            gb = pg.evaluate("""(bk) => { const c = newCompany({name: "Z", gstin: "09AANFG3202D1ZR"}); S.companies[c.id] = c; S.coId = c.id; S.books = Object.assign({map: {}, cid: c.id}, bk);
+              S.books.map = Books.mapLedgers(bk.vouchers, {}); const out = {};
+              // GSTR-1 lists a credit note's tax as a positive figure in its own table; the tax for the month nets it off
+              GSTR.months().forEach(ym => { out[ym] = r2(GSTR.outward(ym, '').reduce((t, x) => t + (/^CDN/.test(x.kind) ? -1 : 1) * ((x.cgst || 0) + (x.sgst || 0) + (x.igst || 0)), 0)); });
+              return {map: S.books.map, out}; }""", books)
+            items = [(n, m) for n, m in gb["map"].items() if m.get("kind")]
+            db.sql("insert into client_book_items (firm_id, client_id, key, item, data) values " + ",".join("(%s, 'cmufksrrqjub2g', 'map', %s, %s::jsonb)" % (q(FIRM), q("." + n), q(json.dumps(m))) for n, m in items) + ";")
+            g2 = json.loads(db.one("select tally_gst_summary('cmufksrrqjub2g', '2025-04-01', '2026-03-31')", ME))
+            sv = {x["ym"]: round(x["out"]["CGST"] + x["out"]["SGST"] + x["out"]["IGST"], 2) for x in g2["months"]}
+            diff = {k: (v, sv.get(k)) for k, v in gb["out"].items() if abs(v - sv.get(k, 0)) >= 0.01}
+            ok(not diff, "GST: the database's output tax is the browser's GSTR-1 tax in every month (year %s)%s" % (round(sum(gb["out"].values()), 2), "" if not diff else ": " + str(diff)[:300]))
             # a fresh browser opening Testing AAD: the day files come slowly (a slow line), MIS comes from the database
             import re, gzip, time as _t
             from urllib.parse import urlparse, parse_qs
