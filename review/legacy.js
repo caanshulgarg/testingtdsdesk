@@ -231,10 +231,11 @@ const CloudDocs = {
       try {
         const small = await this.shrink(job.file);
         const path = this.path(job.cid, job.id, small.name);
+        await Cloud.fresh().catch(() => {});
         const c = Cloud.cfg(), s = Cloud.sess();
         const url = c.url.replace(/\/+$/, "") + "/storage/v1/object/client-docs/" + path.split("/").map(encodeURIComponent).join("/");
         let r = await fetch(url, {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "x-upsert": "true", "Content-Type": small.type || "application/octet-stream"}, body: small});
-        if (r.status === 401){ await Cloud.refreshToken(); r = await fetch(url, {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + Cloud.sess().access_token, "x-upsert": "true", "Content-Type": small.type || "application/octet-stream"}, body: small}); }
+        if (r.status === 401){ await Cloud.refreshToken(s.access_token); r = await fetch(url, {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + Cloud.sess().access_token, "x-upsert": "true", "Content-Type": small.type || "application/octet-stream"}, body: small}); }
         if (!r.ok) throw new Error("upload " + r.status);
         this.note(job, path, small.size);
         this.queue.shift();
@@ -270,10 +271,11 @@ const CloudDocs = {
     }
   },
   async fetchFile(path, name){
+    await Cloud.fresh().catch(() => {});
     const c = Cloud.cfg(), s = Cloud.sess();
     const url = c.url.replace(/\/+$/, "") + "/storage/v1/object/client-docs/" + path.split("/").map(encodeURIComponent).join("/");
     let r = await fetch(url, {headers: {apikey: c.key, Authorization: "Bearer " + s.access_token}});
-    if (r.status === 401){ await Cloud.refreshToken(); r = await fetch(url, {headers: {apikey: c.key, Authorization: "Bearer " + Cloud.sess().access_token}}); }
+    if (r.status === 401){ await Cloud.refreshToken(s.access_token); r = await fetch(url, {headers: {apikey: c.key, Authorization: "Bearer " + Cloud.sess().access_token}}); }
     if (!r.ok) throw {code: "doc_missing", message: "the document could not be fetched (" + r.status + ")"};
     const blob = await r.blob();
     return new File([blob], name || path.split("-").slice(1).join("-") || "document", {type: blob.type || "application/octet-stream"});
@@ -14676,20 +14678,41 @@ const Cloud = {
     await this.whoAmI();
     return true;
   },
-  async refreshToken(){
+  // A new access token from the refresh token. One refresh at a time: requests that fail together (opening a bill
+  // fetches its document while the sync runs) share it, and a token another tab has refreshed meanwhile is used as
+  // it is. Two refreshes with the same refresh token can make Supabase end the session (review: signed out after
+  // the page was left idle). used: the token a failed request carried; skipped when the session already has a newer one.
+  refreshToken(used){
+    const s0 = this.sess();
+    if (used && s0 && s0.access_token && s0.access_token !== used) return Promise.resolve();
+    if (this._refreshing) return this._refreshing;
+    this._refreshing = (async () => {
+      const s = this.sess();
+      if (!s || !s.refresh_token) throw new Error("Signed out");
+      const j = await this.authCall("token?grant_type=refresh_token", {refresh_token: s.refresh_token});
+      const now = this.sess();
+      if (!now || now.refresh_token !== s.refresh_token) return;      // signed out, or another tab got there first
+      this.setSess(Object.assign({}, s, {access_token: j.access_token, refresh_token: j.refresh_token || s.refresh_token, at: Date.now(), expires_in: j.expires_in || 3600}));
+    })().finally(() => { this._refreshing = null; });
+    return this._refreshing;
+  },
+  // before a request: a token that has run out, or will within two minutes, is refreshed first (a page left idle for
+  // an hour no longer sends an expired token and depends on the 401 to recover)
+  async fresh(){
     const s = this.sess();
-    if (!s || !s.refresh_token) throw new Error("Signed out");
-    const j = await this.authCall("token?grant_type=refresh_token", {refresh_token: s.refresh_token});
-    this.setSess(Object.assign({}, s, {access_token: j.access_token, refresh_token: j.refresh_token || s.refresh_token, at: Date.now(), expires_in: j.expires_in || 3600}));
+    if (!s || !s.refresh_token) return;
+    const until = num(s.at) + (num(s.expires_in) || 3600) * 1000;
+    if (Date.now() > until - 120000) await this.refreshToken();
   },
   signOut(){ this.setSess(null); this.st = {state: "off", email: "", role: "", firm: "", lastSync: 0, pending: 0, error: "", busy: "", members: []}; },
   async api(path, opts, retry){
+    if (!retry) await this.fresh().catch(() => {});
     const c = this.cfg(), s = this.sess();
     if (!s) throw new Error("Signed out");
     opts = opts || {};
     const headers = Object.assign({apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": "application/json"}, opts.headers || {});
     const r = await fetch(c.url.replace(/\/+$/, "") + "/rest/v1/" + path, {method: opts.method || "GET", headers, body: opts.body ? JSON.stringify(opts.body) : undefined});
-    if (r.status === 401 && !retry){ await this.refreshToken(); return this.api(path, opts, true); }
+    if (r.status === 401 && !retry){ await this.refreshToken(s.access_token); return this.api(path, opts, true); }
     const text = await r.text();
     let j = null;
     try { j = text ? JSON.parse(text) : null; } catch (e){ j = null; }
@@ -14983,11 +15006,13 @@ function cloudChip(){
 /* ---------- plan, balance and charging ---------- */
 const MODULE_ICON = {bills: "\u{1F9FE}", bank: "\u{1F3E6}", sales: "\u{1F4C4}", claude: "\u2728", vision: "\u{1F441}", tally: "\u{1F4D2}", cloud: "\u2601", clients: "\u{1F465}"};
 Cloud.rpc = async function(name, args){ return this.api("rpc/" + name, {method: "POST", body: args || {}}); };
-Cloud.fn = async function(name, body){
+Cloud.fn = async function(name, body, retry){
+  if (!retry) await this.fresh().catch(() => {});
   const c = this.cfg(), s = this.sess();
   if (!s) throw new Error("Sign in to the firm account first.");
   const r = await fetch(c.url.replace(/\/+$/, "") + "/functions/v1/" + name, {
     method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": "application/json"}, body: JSON.stringify(body || {})});
+  if (r.status === 401 && !retry){ await this.refreshToken(s.access_token); return this.fn(name, body, true); }
   const j = await r.json().catch(() => ({}));
   if (!r.ok || j.ok === false) throw Object.assign(new Error(j.error || ("Request failed (" + r.status + ")")), {reason: j.reason, balance: j.balance});
   return j;
@@ -15662,7 +15687,7 @@ function doAct(act, t){
       const email = em ? em.value.trim() : "", pass = pw ? pw.value : "";
       if (!email || !pass){ toast("Enter your email and password."); break; }
       Cloud.st.busy = "Signing in\u2026"; Cloud.st.error = ""; render();
-      Cloud.signIn(email, pass).then(() => { Cloud.st.busy = ""; S.cloudForm = null; toast("Signed in as " + email + "."); setTimeout(() => { auditEvent("signin", navigator.userAgent.slice(0, 160)); setTimeout(loadLastSignIn, 1500); }, 3000); startCloudSync(); loadAccount(true).then(() => render()); render(); },
+      Cloud.signIn(email, pass).then(() => { Cloud.st.busy = ""; S.cloudForm = null; S.signedOutWhy = ""; toast("Signed in as " + email + "."); setTimeout(() => { auditEvent("signin", navigator.userAgent.slice(0, 160)); setTimeout(loadLastSignIn, 1500); }, 3000); startCloudSync(); loadAccount(true).then(() => render()); render(); },
         err => { Cloud.st.busy = ""; Cloud.st.error = err.message; render(); });
       break;
     }
@@ -16279,8 +16304,11 @@ function coSetBlockRule(catId, v){ const co = CO(); co.gstBlock = co.gstBlock ||
 // First sign-in of an owner with no firm name yet (review item 32): the name (from sign-up where given), address and
 // logo are asked for once; "Later" puts it off until the next sign-in
 function firmSetupDue(){
-  return !!(S.firm && !S.firm.firmName && !S.firmSetupLater && typeof Cloud === "object" && Cloud.on() && S.account && ((S.account.me || {}).role === "owner"));
+  // "Later" holds for the rest of the day on this computer (review recheck: it came back on every refresh)
+  const later = S.firmSetupLater || lsGet("tdsdesk-test:firmSetupLater") === fmtDate(new Date());
+  return !!(S.firm && !S.firm.firmName && !later && typeof Cloud === "object" && Cloud.on() && S.account && ((S.account.me || {}).role === "owner"));
 }
+function firmSetupLater(){ S.firmSetupLater = true; lsSet("tdsdesk-test:firmSetupLater", fmtDate(new Date())); render(); }
 function firmSetupSave(d){
   const name = String(d.name || "").trim();
   if (!name){ toast("The firm\u2019s name is needed."); return false; }
@@ -17799,9 +17827,10 @@ const GSTAPI = {
   on(){ return typeof Cloud === "object" && Cloud.on() && !!S.account; },
   url(){ return String(Cloud.cfg().url || "").replace(/\/+$/, "") + "/functions/v1/gst-taxpro"; },
   async call(body, retry){
+    if (!retry) await Cloud.fresh().catch(() => {});
     const c = Cloud.cfg(), s = Cloud.sess();
     const r = await fetch(this.url(), {method: "POST", headers: {"Content-Type": "application/json", apikey: c.key, Authorization: "Bearer " + (s && s.access_token)}, body: JSON.stringify(body)});
-    if (r.status === 401 && !retry){ await Cloud.refreshToken(); return this.call(body, true); }
+    if (r.status === 401 && !retry){ await Cloud.refreshToken(s && s.access_token); return this.call(body, true); }
     let j = null; try { j = await r.json(); } catch (e){}
     if (!j) throw new Error("The GST API answered HTTP " + r.status + ".");
     if (!j.ok) throw new Error(j.error || "The GST API refused the request.");
@@ -17911,6 +17940,7 @@ const SUP = {
       const safe = String(f.name || "file").replace(/[^A-Za-z0-9._-]+/g, "_").slice(0, 80), path = firm + "/" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7) + "-" + safe;
       const url = c.url.replace(/\/+$/, "") + "/storage/v1/object/support-files/" + path.split("/").map(encodeURIComponent).join("/");
       const put = () => fetch(url, {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + Cloud.sess().access_token, "Content-Type": f.type || "application/octet-stream"}, body: f});
+      await Cloud.fresh().catch(() => {});
       let r = await put(); if (r.status === 401){ await Cloud.refreshToken(); r = await put(); }
       if (!r.ok) throw new Error("Could not upload " + f.name + " (" + r.status + ").");
       out.push({path, name: f.name, size: f.size, type: f.type || ""});
@@ -17920,6 +17950,7 @@ const SUP = {
   async download(path, name){
     const c = Cloud.cfg(), url = c.url.replace(/\/+$/, "") + "/storage/v1/object/support-files/" + path.split("/").map(encodeURIComponent).join("/");
     const get = () => fetch(url, {headers: {apikey: c.key, Authorization: "Bearer " + Cloud.sess().access_token}});
+    await Cloud.fresh().catch(() => {});
     let r = await get(); if (r.status === 401){ await Cloud.refreshToken(); r = await get(); }
     if (!r.ok) throw new Error("The file could not be fetched (" + r.status + ").");
     const blob = await r.blob(), a = document.createElement("a");
@@ -18436,10 +18467,12 @@ Cloud.aal = function(){
   const s = this.sess();
   try { return JSON.parse(atob(String(s.access_token).split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).aal || "aal1"; } catch (e){ return "aal1"; }
 };
-Cloud.authApi = async function(path, method, body){
+Cloud.authApi = async function(path, method, body, retry){
+  if (!retry) await this.fresh().catch(() => {});
   const c = this.cfg(), s = this.sess();
   const r = await fetch(c.url.replace(/\/+$/, "") + "/auth/v1/" + path, {method: method || "GET",
     headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": "application/json"}, body: body ? JSON.stringify(body) : undefined});
+  if (r.status === 401 && !retry){ await this.refreshToken(s.access_token); return this.authApi(path, method, body, true); }
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.msg || j.message || j.error_description || ("Request failed (" + r.status + ")"));
   return j;
@@ -18546,7 +18579,13 @@ let idleLast = Date.now();
 setInterval(() => {
   if (!Cloud.on() || window.claude) return;
   const mins = num(lsGet("tdsdesk-test:idlemin")) || IDLE_MIN_DEFAULT;
-  if (Date.now() - idleLast > mins * 60000){ idleLast = Date.now(); signOutHere("Signed out after " + mins + " minutes without use. Sign in again to carry on."); }
+  if (Date.now() - idleLast > mins * 60000){
+    idleLast = Date.now();
+    // the page open now comes back after signing in again; the sign-in page says why (it is not an error)
+    if (typeof Route === "object" && !signInNeeded()) Route.pending = Route.of();
+    S.signedOutWhy = "Signed out after " + mins + " minutes without use, as set in Settings \u2192 Sign-in and people. Sign in again to carry on where you were.";
+    signOutHere("Signed out after " + mins + " minutes without use. Sign in again to carry on.");
+  }
 }, 30000);
 // Settings, how long before signing out (app/src/screens/Account.jsx)
 function idleMin(){ return num(lsGet("tdsdesk-test:idlemin")) || IDLE_MIN_DEFAULT; }
@@ -19757,10 +19796,11 @@ const TCloud = {
   async day(bk, d, at){
     const k = "tcday:" + bk + ":" + d;
     try { const c = await IDBStore.get(k); if (c && c.at === at) return c.text; } catch (e){}
+    await Cloud.fresh().catch(() => {});
     const c = Cloud.cfg(), s = Cloud.sess();
     const url = c.url.replace(/\/+$/, "") + "/storage/v1/object/authenticated/tally-days/" + Cloud.st.firm + "/" + bk + "/" + d.slice(0, 6) + "/" + d + ".xml.gz";
     let r = await fetch(url, {headers: {apikey: c.key, Authorization: "Bearer " + s.access_token}, cache: "no-store"});
-    if (r.status === 401 || r.status === 400){ await Cloud.refreshToken(); r = await fetch(url, {headers: {apikey: c.key, Authorization: "Bearer " + Cloud.sess().access_token}, cache: "no-store"}); }
+    if (r.status === 401 || r.status === 400){ await Cloud.refreshToken(s.access_token); r = await fetch(url, {headers: {apikey: c.key, Authorization: "Bearer " + Cloud.sess().access_token}, cache: "no-store"}); }
     if (r.status === 404) return "";
     if (!r.ok) throw new Error("Could not fetch " + d + " from the cloud (" + r.status + ").");
     const text = await new Response(r.body.pipeThrough(new DecompressionStream("gzip"))).text();
@@ -19906,6 +19946,7 @@ const TCloudUp = {
   // who: the client and Tally company, fixed when the upload starts (build 195: the upload for several clients moves on
   // to the next client while an earlier upload is still going; the earlier one must not follow it)
   async post(body, who){
+    await Cloud.fresh().catch(() => {});
     const c = Cloud.cfg(), s = Cloud.sess();
     if (!s) throw new Error("Sign in to the firm account first.");
     const r = await fetch(TCloud.ingestUrl(), {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": "application/json"}, body: JSON.stringify(Object.assign(who || {client: S.coId, company: BridgeSeed.company()}, body))});
@@ -20453,7 +20494,8 @@ const Route = {
     if (S.tab === "export") return c + "post/" + (S.postFocus || "bills");
     if (S.tab === "done") return c + "done/" + (S.postFocus || "bills");
     if (S.tab === "invoices"){
-      if (S.selected && !S.reviewTable) return c + "bill/" + encodeURIComponent(S.selected);
+      // one at a time, or opened in the drawer over the review table: either way the bill has its own address
+      if (S.selected && (!S.reviewTable || S.drawerOpen)) return c + "bill/" + encodeURIComponent(S.selected);
       return c + "purchase/" + (S.reviewTable ? "review" : (S.filter || "draft"));
     }
     return c + "dash";
@@ -20492,11 +20534,12 @@ const Route = {
         else if (what === "bank"){ S.tab = "bank"; if (!S.bank || S.bank.cid !== S.coId) loadBank(S.coId).then(() => render()); }
         else if (what === "sales") S.tab = "sales";
         else if (what === "post" || what === "done"){ S.tab = what === "post" ? "export" : "done"; S.postFocus = arg || "bills"; if (!S.bank || S.bank.cid !== S.coId) loadBank(S.coId).then(() => render()); }
-        else if (what === "purchase"){ S.tab = "invoices"; S.selected = null; S.reviewTable = arg === "review"; if (arg && arg !== "review") S.filter = arg; }
+        else if (what === "purchase"){ S.tab = "invoices"; S.selected = null; S.drawerOpen = false; S.reviewTable = arg === "review"; if (arg && arg !== "review") S.filter = arg; }
         else if (what === "bill"){
           const e = D().entries[arg];
-          S.tab = "invoices"; S.reviewTable = false;
-          if (e){ S.filter = e.status; S.selected = e.id; } else toast("That bill is not in this client’s list (deleted, or not yet sent to this computer).");
+          S.tab = "invoices";
+          // over the review table when that is where it was opened (Back closes it), else one at a time
+          if (e){ if (S.reviewTable && e.status === "draft") S.drawerOpen = true; else S.reviewTable = false; S.filter = e.status; S.selected = e.id; } else toast("That bill is not in this client’s list (deleted, or not yet sent to this computer).");
         }
       } else if (p[0] === "settings"){ S.view = "home"; S.homeTab = "rules"; S.settingsTab = p[1] || null; }
       else if (["clients", "today", "inbox", "tally", "help"].includes(p[0])){ S.view = "home"; S.homeTab = p[0]; S.step = null; }
