@@ -91,6 +91,7 @@ function curStmt(){ const b = B(); return b && b.stmts.find(s => s.id === b.cur)
 let bankSaveTimer = null;
 function saveBank(what){
   const b = B(); if (!b) return;
+  if (typeof cloudSoon === "function") setTimeout(cloudSoon, 950);     // after the rows are kept here
   const cid = b.cid;
   if (!what || what.rows){
     clearTimeout(bankSaveTimer);

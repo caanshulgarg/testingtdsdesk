@@ -100,10 +100,19 @@ async function openBooks(cid){
   if (S.books && S.books.cid === cid) return;
   S.books = {cid, loading: true};
   render();
-  const saved = await Books.load(cid);
-  S.books = saved && saved.cid === cid ? Object.assign({loading: false}, saved) : {cid, loading: false, vouchers: [], map: {}, challans: [], alloc: {}, pans: {}};
+  const t0 = Date.now(), saved = await Books.load(cid);
+  if (!S.books || S.books.cid !== cid) return;                // another client was opened meanwhile
+  S.books = saved && saved.cid === cid ? Object.assign({loading: true}, saved) : {cid, loading: true, vouchers: [], map: {}, challans: [], alloc: {}, pans: {}};
+  // live sync: the server's latest first (only what changed since this computer last looked); this browser's copy is
+  // a cache and is not shown in place of a newer one. Offline, or the server slow, the copy here is shown and said so
+  if (typeof BookSync === "object" && BookSync.on()){
+    const pull = BookSync.pull(cid).catch(() => {});
+    const late = await Promise.race([pull.then(() => false), new Promise(ok => setTimeout(() => ok(true), 6000))]);
+    if (!S.books || S.books.cid !== cid) return;
+    if (late || Live.sv.state === "offline"){ S.books.offline = true; toast("The server could not be reached: this is this computer’s copy of the books, as last saved here. It is brought up to date as soon as the server answers."); pull.then(() => { if (S.books && S.books.cid === cid){ S.books.offline = false; render(); } }); }
+  }
+  S.books.loading = false; S.books.openMs = Date.now() - t0; S.books.openAt = t0;
   if (S.books.vouchers && S.books.vouchers.length) try { LedMaster.refresh(S.books); } catch (e){}
-  if (typeof BookSync === "object") BookSync.pull(cid);
   // server-books: the cloud copy is where the books are; this browser's copy is only a cache of it
   if (typeof TCloud === "object" && TCloud.on()) setTimeout(() => { TCloud.openLoad(cid).catch(() => {}); }, 0);
   setTimeout(() => { try { if (typeof CloudDocs === "object" && CloudDocs.on() && S.coId === cid) CloudDocs.sendPending(cid, true); } catch (e){} }, 3000);

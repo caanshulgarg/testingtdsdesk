@@ -175,12 +175,13 @@ const TCloud = {
         TallyRead.balances(b, {ledgers: led.map(l => ({name: l.name, parent: l.parent, open: String(l.open), close: ""}))}, from, to);
         await this.groupsInto(b, bk.book);
       }
-      // the days, eight at a time (one by one, a year of 365 files took minutes on a new computer)
+      // the days, sixteen at a time (one by one, a year of 365 files took minutes on a new computer; the server answers
+      // many at once over one connection)
       const days = {}, want = [].concat(...todo.map(ym => byMonth[ym])), text = {};
       let got = 0, next = 0;
       const one = async () => { while (next < want.length){ const x = want[next++]; text[x.day] = await this.day(bk.book, x.day, x.at); days[x.day] = x.at; got++;
         if (got % 10 === 0 || got === want.length) say("Bringing in the books from FinCom's cloud: " + got + " of " + want.length + " days…"); } };
-      await Promise.all(Array.from({length: Math.min(8, want.length)}, one));
+      await Promise.all(Array.from({length: Math.min(16, want.length)}, one));
       for (const ym of todo){
         const parts = byMonth[ym].map(x => text[x.day] || "");
         const res = await Books.importDayBook(new Blob(["<ENVELOPE>" + parts.join("") + "</ENVELOPE>"], {type: "text/xml"}));
@@ -215,6 +216,8 @@ const TCloud = {
     try { await this.status(cid, true); if (this.has(cid) && S.books && S.books.cid === cid){ if (empty) f.busy = ""; r = await this.load(true); } } catch (e){}
     if (S.books && S.books.cid === cid && /FinCom.s cloud/.test(S.books.busy || "")){ f.busy = S.books.busy = ""; render(); }
     if (r === "new" && S.books && S.books.cid === cid) this.rework(S.books);
+    // how long until every entry was in (said on the books' first line, with the time to open)
+    if (S.books && S.books.cid === cid && S.books.openAt){ S.books.readyMs = Date.now() - S.books.openAt; render(); }
     return r;
   },
   rework(b){

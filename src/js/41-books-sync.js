@@ -105,6 +105,7 @@ const BookSync = {
   /* ---------- sending ---------- */
   schedule(cid){
     if (!this.on() || !cid) return;
+    if (typeof BookItems === "object" && BookItems.on()){ BookItems.schedule(cid); return; }     // live sync: item by item, at once (54-live-sync.js)
     const s = this.of(cid);
     clearTimeout(s.timer);
     s.timer = setTimeout(() => this.push(cid), this.wait);
@@ -142,6 +143,7 @@ const BookSync = {
   /* ---------- receiving ---------- */
   async pull(cid){
     if (!this.on() || !cid) return;
+    if (typeof BookItems === "object" && BookItems.on()){ try { if (await BookItems.pull(cid) !== "off") return; } catch (e){ this.of(cid).error = e.message; return; } }
     const s = this.of(cid);
     if (s.busy) return;
     s.busy = true;
@@ -172,6 +174,7 @@ const BookSync = {
   // called with every firm sync: send what is waiting, bring in what others saved for the client that is open
   async tick(){
     if (!this.on()) return;
+    if (typeof BookItems === "object" && BookItems.on()){ await BookItems.flush(); const o = S.books && S.books.cid && !S.books.loading ? S.books.cid : null; if (o) await BookItems.pull(o).catch(() => {}); return; }
     const open = S.books && S.books.cid && !S.books.loading ? S.books.cid : null;
     for (const cid of Object.keys(this.st)){ if (cid !== open && this.st[cid].timer && !this.st[cid].busy) await this.push(cid); }
     if (open) await this.pull(open);
@@ -180,4 +183,4 @@ const BookSync = {
   // information on the From Tally tab only; warnings (look-only, not saved) on every tab
 
 };
-if (typeof window === "object") window.addEventListener("beforeunload", () => { try { Object.keys(BookSync.st).forEach(cid => { if (BookSync.st[cid].timer){ clearTimeout(BookSync.st[cid].timer); BookSync.push(cid); } }); } catch (e){} });
+if (typeof window === "object") window.addEventListener("beforeunload", () => { try { if (typeof BookItems === "object") Object.keys(BookItems.st).forEach(cid => { if (BookItems.st[cid].timer){ clearTimeout(BookItems.st[cid].timer); BookItems.push(cid); } }); } catch (e){} try { Object.keys(BookSync.st).forEach(cid => { if (BookSync.st[cid].timer){ clearTimeout(BookSync.st[cid].timer); BookSync.push(cid); } }); } catch (e){} });

@@ -310,6 +310,8 @@ const Store = {
       clearTimeout(this.lsTimer);
       this.lsTimer = setTimeout(() => this.saveLocal(), 300);
     }
+    // live sync: to the firm's server at once, not on the 45-second round (54-live-sync.js)
+    if (typeof cloudSoon === "function") cloudSoon();
   },
   saveLocal(){
     try {
