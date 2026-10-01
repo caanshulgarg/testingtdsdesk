@@ -35,7 +35,7 @@ const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
 const APP_VERSION = "TEST · 30 Sep 2026 · build 199 (posting queue: post from any computer, the Tally computer posts when Tally is free; posted entries go to the cloud without reading Tally again; bridge 1.14.6)";
 // the Tally Bridge setup file's fingerprint, put in by build.py: a new setup file is never served from an old cache
-const BRIDGE_SETUP_SHA = "5ba22f31108af87d";
+const BRIDGE_SETUP_SHA = "708c175910ab9d56";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;
@@ -4084,6 +4084,16 @@ const Books = {
       .replace(/&#(\d+);/g, (m, n) => { const c = num(n); return c >= 32 && c < 127 ? String.fromCharCode(c) : " "; })
       .replace(/&amp;/g, "&").trim();
   },
+  // each pay head of a payroll voucher, summed over its employees: [[pay head, amount]] (Tally's sign: debit negative)
+  payheads(s){
+    if (s.indexOf("<PAYHEADALLOCATIONS.LIST>") < 0) return [];
+    const by = new Map();
+    s.split("<PAYHEADALLOCATIONS.LIST>").slice(1).forEach(p => {
+      const q = p.split("</PAYHEADALLOCATIONS.LIST>")[0], n = this.one(q, "PAYHEADNAME"), a = this.amt(this.one(q, "AMOUNT"));
+      if (n && a) by.set(n, Math.round(((by.get(n) || 0) + a) * 100) / 100);
+    });
+    return Array.from(by.entries()).filter(([, a]) => Math.abs(a) >= 0.005);
+  },
   takeVoucher(s, out, meta){
     const type = (s.match(/VCHTYPE="([^"]*)"/) || [])[1] || "";
     const v = {
@@ -4159,6 +4169,16 @@ const Books = {
         v.ent.push(x);
       });
     });
+    // review of 01-Oct-2026: a payroll voucher (Tally's PaySlip view) has no ledger lines; its pay heads sit in each
+    // employee's allocations. A pay head is a ledger in Tally: earnings are debits, deductions (PF, advance) credits, and
+    // the party ledger (Salary Payable) takes the net. A pay head already among the ledger lines is not counted again
+    const pays = this.payheads(s);
+    if (pays.length){
+      const have = new Set(v.ent.map(e => e.l)); let tot = 0;
+      pays.forEach(([l, a]) => { tot = Math.round((tot + a) * 100) / 100; if (!have.has(l)) v.ent.push({l, a, r: null}); });
+      const party = this.one(s, "PARTYLEDGERNAME");
+      if (party && !have.has(party) && Math.abs(tot) >= 0.005) v.ent.push({l: party, a: Math.round(-tot * 100) / 100, r: null});
+    }
     // the rate on an item line, when the tax ledgers do not carry one
     if (!v.ent.some(e => e.r)){
       const rate = this.one(s, "GSTRATE");
@@ -7896,6 +7916,35 @@ const TallyRead = {
     [].concat(j.ledgers || []).forEach(l => { led[l.name] = {open: Books.amt(l.open), close: Books.amt(l.close), parent: l.parent || ""}; });
     b.tb = {from, to, at: new Date().toISOString(), led};
     Object.entries(led).forEach(([n, x]) => { if (x.parent) (b.under = b.under || {})[n] = (b.under[n] || x.parent); });
+    this.yearOpen(b);
+  },
+  // review of 01-Oct-2026 (owner's go-ahead): at the start of a financial year, income and expense ledgers open at nil
+  // and their total goes to Profit & Loss A/c, as Tally does. Balances taken as on 31 March (a trial balance file, the
+  // cloud copy before its groups came) still carry last year's income and expenses. Needs the groups; what was read is
+  // kept as openSent, so this can be done again whenever the groups or the balances change. The cloud copy does the same
+  // (tally_year_openings, migration-8)
+  NOMINAL: ["Sales Accounts", "Purchase Accounts", "Direct Incomes", "Direct Expenses", "Indirect Incomes", "Indirect Expenses"],
+  primaryOf(b, n){
+    const under = b.under || {}, groups = b.groups || {}, prim = s => !s || /^\W*Primary$/i.test(s);
+    let p = under[n], last = "";
+    for (let i = 0; !prim(p) && i < 30; i++){ last = p; p = groups[p]; }
+    return last;
+  },
+  yearOpen(b){
+    const tb = b && b.tb, led = tb && tb.led;
+    if (!led || !Object.keys(b.groups || {}).length) return false;
+    Object.values(led).forEach(x => { if (x.openSent == null) x.openSent = x.open; x.open = x.openSent; });
+    if (!/0401$/.test(String(tb.from || ""))) return false;
+    const PL = "Profit & Loss A/c", nominal = new Set(this.NOMINAL);
+    let moved = 0, n = 0;
+    Object.entries(led).forEach(([name, x]) => {
+      if (name === PL || !nominal.has(this.primaryOf(b, name)) || !num(x.openSent)) return;
+      moved = r2(moved + num(x.openSent)); x.open = 0; n++;
+    });
+    if (!n) return false;
+    const pl = led[PL] = led[PL] || {open: 0, openSent: 0, close: 0, parent: ""};
+    pl.open = r2(num(pl.openSent) + moved);
+    return true;
   },
   // after the books changed (read from Tally, changes brought in from the kept copy or the cloud, a day book file):
   // every section follows. Screens work from the entries as they are; audit and MIS are worked out again for the
@@ -11980,7 +12029,7 @@ function booksChange(t){
     if (!g.ok){ b.busy = ""; render(); return; }
     if (fc && (fc.name || fc.guid) && !b.tallyCo) b.tallyCo = {name: fc.name, guid: fc.guid};
     Books.importMasters(f, m => { b.busy = m; softRender(); }).then(async res => {
-      b.pans = res.pans; b.gstins = res.gstins; b.under = res.under; b.states = res.states; b.groups = res.groups; b.groupInfo = res.groupInfo; b.busy = "";
+      b.pans = res.pans; b.gstins = res.gstins; b.under = res.under; b.states = res.states; b.groups = res.groups; b.groupInfo = res.groupInfo; b.busy = ""; TallyRead.yearOpen(b);
       b.ledInfo = res.info; b.ledInfoAt = new Date().toISOString(); LedMaster.refresh(b);
       await saveBooks();
       const rows = TDS.rows(), withPan = rows.filter(r => r.pan).length;
@@ -16001,7 +16050,7 @@ function doAct(act, t){
           if (l.pan) (b.pans = b.pans || {})[l.name] = String(l.pan).toUpperCase();
           if (l.group) (b.under = b.under || {})[l.name] = l.group; });
         [].concat(j.groups || []).forEach(g => { if (g && g.name) groups[g.name] = g.parent || ""; });
-        b.ledInfo = info; b.ledInfoAt = new Date().toISOString(); if (Object.keys(groups).length) b.groups = groups;
+        b.ledInfo = info; b.ledInfoAt = new Date().toISOString(); if (Object.keys(groups).length){ b.groups = groups; TallyRead.yearOpen(b); }
         LedMaster.refresh(b); b.busy = ""; b.reco = null; await saveBooks();
         toast(Object.keys(info).length + " ledgers read from Tally. " + LedMaster.pending(b).length + " GST or TDS ledgers to confirm."); render();
       }, e => { b.busy = ""; toast("Could not read Tally: " + (e && e.message || e)); render(); });
@@ -19892,6 +19941,7 @@ const TCloud = {
     if (!g.length) return;
     b.groups = Object.assign({}, b.groups || {});
     g.forEach(x => { b.groups[x.name] = x.parent || ""; });
+    TallyRead.yearOpen(b);
   },
   // ---------- bring the cloud's copy into FinCom: only the months with a day that changed
   async load(force){
@@ -20094,11 +20144,11 @@ Object.assign(TCloud, {
     const co = S.companies[cid]; if (!co) return;
     const here = typeof Bridge === "object" && Bridge.on() && Bridge.up();
     try {
-      if (here){ await LK.keepSet({now: true}, "Asked the bridge here to read every ledger and group from Tally and send them."); }
-      else {
-        const j = await this.rpc("tally_want_update", {p_client: cid});
-        toast(j && j.ok ? "The Tally computer is asked to send every ledger and group; it starts within a minute (Tally must be open there)." : "No Tally computer is linked to this client yet.");
-      }
+      // review of 01-Oct-2026: asked through the cloud too, always: the bridge here may keep another company, or this
+      // may not be the computer that keeps this client's books
+      if (here){ try { await LK.keepSet({now: true}, "Asked the bridge here to read every ledger and group from Tally and send them."); } catch (e){} }
+      const j = await this.rpc("tally_want_update", {p_client: cid});
+      toast(j && j.ok ? "The Tally computer is asked to send every ledger and group; it starts within a minute (Tally must be open there). Press What is in the cloud? after two minutes." : here ? "Asked the bridge here. No other Tally computer is linked to this client." : "No Tally computer is linked to this client yet.");
     } catch (e){ toast("Could not ask the Tally computer: " + ((e && e.message) || e)); }
     setTimeout(() => this.groupStatus(cid), 1500);
   },
