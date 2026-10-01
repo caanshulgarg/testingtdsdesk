@@ -34,6 +34,7 @@ with sync_playwright() as p:
     ok(r["total"] == 13000, "Sales: the Sales Accounts ledgers, 10,000 + 5,000 − 2,000 credit note, the Optional sale left out (%s)" % r["total"])
     ok(r["other"] == 1500, "other income on its own: 1,500 of interest (%s)" % r["other"])
     ok(abs(sum(x[1] for x in r["rows"]) - r["total"]) < 0.01, "the customers add up to the tile (%s)" % r["rows"])
+    ok(sorted(r["rows"]) == [["ZZ Alpha", 8000], ["ZZ Beta", 5000]], "a sale with no party name is under its customer, from the debtor line (%s)" % r["rows"])
     # with the client's own books, when at hand: the tile is Tally's Sales Accounts for the year
     cache = os.path.join(HERE, "data", "books-cache.json")
     if os.path.exists(cache):

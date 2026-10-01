@@ -153,7 +153,9 @@ const MIS = {
       const L = masters ? null : Books.lines(v), sign = /CREDIT NOTE/i.test(v.type) ? -1 : 1;
       const amt = masters ? r2(v.ent.filter(e => A.under(e.l, /^sales accounts$/i)).reduce((t, e) => t + e.a, 0)) : r2(L.taxable * sign), ym = this.ym(v.date);
       if (!amt) return;
-      const p = by[v.party] = by[v.party] || {party: v.party, t: 0, m: {}, n: 0}; p.t = r2(p.t + amt); p.m[ym] = r2((p.m[ym] || 0) + amt); p.n++;
+      // an entry with no party name: the customer is its debtor line (or the line taking the other side)
+      const who = v.party || (v.ent.find(e => Audit.isDebtor(e.l)) || v.ent.find(e => (e.a < 0) !== (amt < 0) && !Audit.under(e.l, /^sales accounts$/i)) || {}).l || "\u2014";
+      const p = by[who] = by[who] || {party: who, t: 0, m: {}, n: 0}; p.t = r2(p.t + amt); p.m[ym] = r2((p.m[ym] || 0) + amt); p.n++;
       const st = v.pos || "\u2014"; byState[st] = r2((byState[st] || 0) + amt);
       const rg = GSTR.regOf(v) || "\u2014"; byReg[rg] = r2((byReg[rg] || 0) + amt);
     });
