@@ -145,7 +145,7 @@ const TCloud = {
       // answered from the cloud's totals, not loaded here; only the ledgers and their groups, for choosing and grouping
       const m0 = b.meta = b.meta || {};
       if (!(m0.cloud && m0.cloud.book === bk.book && m0.cloud.big && m0.cloud.ledgersAt === bk.ledgersAt)){
-        const led = await this.restAll("tally_ledgers?select=name,parent,open&order=name&book_id=eq." + bk.book);
+        const led = await this.restAll("tally_ledgers?select=name,parent,open&merged_into=is.null&order=name&book_id=eq." + bk.book);
         b.vouchers = []; TallyRead.balances(b, {ledgers: led.map(l => ({name: l.name, parent: l.parent, open: String(l.open), close: ""}))}, this.d8(bk.from), Audit.today());
         await this.groupsInto(b, bk.book);
         m0.cloud = {book: bk.book, company: bk.company, ledgersAt: bk.ledgersAt, big: true, at: new Date().toISOString()};
@@ -167,7 +167,7 @@ const TCloud = {
     try {
       if (!same){ b.vouchers = []; b.tb = null; }
       if (ledNew){
-        const led = await this.restAll("tally_ledgers?select=name,parent,open&order=name&book_id=eq." + bk.book);
+        const led = await this.restAll("tally_ledgers?select=name,parent,open&merged_into=is.null&order=name&book_id=eq." + bk.book);
         TallyRead.balances(b, {ledgers: led.map(l => ({name: l.name, parent: l.parent, open: String(l.open), close: ""}))}, from, to);
         await this.groupsInto(b, bk.book);
       }
@@ -315,23 +315,25 @@ Object.assign(TCloud, {
   // GSTIN, the place of supply, HSN and rate on lines were not kept before). One month a call; owners only. Nothing is
   // asked of the computer with Tally
   async reparse(cid){
-    const co = S.companies[cid]; if (!co) return;
-    const p = this.pane; let month = null, n = 0, bad = 0, total = 0;
+    // review of 01-Oct-2026: what happened stays on the screen (p.rp), not only in a toast, so "finished" means days read
+    const co = S.companies[cid] || {name: "This client"};
+    const p = this.pane; let month = null, n = 0, bad = 0, total = 0, months = 0;
+    p.rp = p.rp || {};
     try {
       do {
-        p.busy = "Reading " + co.name + "’s kept day books again" + (month ? " (" + FC.monthLabel(month) + ")" : "") + "…"; render();
+        p.busy = "Reading " + co.name + "’s kept day books again" + (month ? " (" + FC.monthLabel(month) + ")" : "") + "…"; p.rp[cid] = {busy: true, n, months}; render();
         const j = await TCloudUp.post({kind: "reparse", month}, {client: cid});
-        n += (j.done || []).length; bad += (j.bad || []).length; total = j.months || total; month = j.next;
+        n += (j.done || []).length; bad += (j.bad || []).length; total = j.months || total; month = j.next; months++;
       } while (month);
-      p.busy = ""; toast(co.name + ": " + n + " days read again" + (bad ? ", " + bad + " could not be read" : "") + ". Open the client again to see them.");
+      p.busy = ""; p.rp[cid] = {n, bad, months: total, at: new Date().toISOString()};
+      toast(co.name + ": " + n + " days of " + total + " months read again" + (bad ? ", " + bad + " could not be read" : "") + ". Open the client again to see them.");
       const s = this.st[cid]; if (s) s.at = 0;
-    } catch (e){ p.busy = ""; toast("Could not read the kept day books again: " + ((e && e.message) || e)); }
+    } catch (e){ p.busy = ""; p.rp[cid] = {err: (e && e.message) || String(e), n}; toast("Could not read the kept day books again: " + ((e && e.message) || e)); }
     render();
   },
   // review of 01-Oct-2026: "Send ledgers and groups now": the Tally computer reads every ledger and group and sends
   // them (bridge 1.14.8), asked the way Update now is: through the bridge here, or through the cloud's heartbeat
   async sendLedgers(cid){
-    const co = S.companies[cid]; if (!co) return;
     const here = typeof Bridge === "object" && Bridge.on() && Bridge.up();
     try {
       // review of 01-Oct-2026: asked through the cloud too, always: the bridge here may keep another company, or this
@@ -347,8 +349,11 @@ Object.assign(TCloud, {
     const p = this.pane; p.gs = p.gs || {};
     try {
       const bk = (await this.status(cid, true) || []).find(b => b.from); if (!bk){ p.gs[cid] = {none: true}; render(); return; }
-      const [g, led] = await Promise.all([this.restAll("tally_groups?select=name&book_id=eq." + bk.book).catch(() => []), this.restAll("tally_ledgers?select=parent&book_id=eq." + bk.book).catch(() => [])]);
-      p.gs[cid] = {groups: g.length, ledgers: led.length, grouped: led.filter(l => l.parent).length, at: new Date().toISOString()};
+      // a twin kept from a trial balance file (merged_into, migration-9) is not a ledger of its own; Profit & Loss A/c has
+      // no group in Tally either
+      const [g, led] = await Promise.all([this.restAll("tally_groups?select=name&book_id=eq." + bk.book).catch(() => []), this.restAll("tally_ledgers?select=name,parent&merged_into=is.null&book_id=eq." + bk.book).catch(() => [])]);
+      const own = led.filter(l => l.name !== "Profit & Loss A/c");
+      p.gs[cid] = {groups: g.length, ledgers: own.length, grouped: own.filter(l => l.parent).length, pl: own.length < led.length, at: new Date().toISOString()};
     } catch (e){ p.gs[cid] = {err: (e && e.message) || String(e)}; }
     render();
   }

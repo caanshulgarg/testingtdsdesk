@@ -90,6 +90,8 @@ with sync_playwright() as p:
       const m = body.month || all[0], i = all.indexOf(m); return {ok: true, month: m, done: ['x', 'y'], bad: [], next: all[i + 1] || null, months: 3}; }; }""")
     pg.evaluate("[...document.querySelectorAll('button')].find(b => /kept day books/.test(b.textContent)).click()"); pg.wait_for_timeout(1500)   # (a toast from the click before sits over it)
     ok(pg.evaluate("window.__months") == ["first", "202505", "202506"], "Read the kept day books again: month after month until the last (%s)" % pg.evaluate("window.__months"))
+    rp = pg.evaluate("(document.querySelector('[data-rp]') || {}).textContent || ''")
+    ok("6 days of 3 months read again" in rp, "and what was done stays on the screen (%s)" % rp.strip())
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
     br.close()
 srv.shutdown()
