@@ -267,6 +267,8 @@ function Send-CloudBeat {
   $running = $false; try { $p = [int]('0' + [IO.File]::ReadAllText((Join-Path (Get-SyncDir) 'keep.pid')).Trim()); $running = [bool]($p -and (Test-ProcessAlive $p)) } catch { }
   $beat = [ordered]@{ kind = 'beat'; tally = $tally; open = $open; ports = $ports; companies = $cos; updating = $running; dailyAt = (Get-KeepDailyAt); lastRun = (Get-KeepLastRun) }
   $r = Invoke-Cloud $beat 10
+  # 1.15.0: the computer's own Realtime channel, where FinCom's database wakes it at once (a posting, Update now)
+  if ($r.code -eq 200 -and $r.json) { try { Set-CloudWake $r.json.wake } catch { } }
   # 1.14.4: Update now pressed in FinCom on another computer
   if ($r.code -eq 200 -and $r.json -and $r.json.updateNow) { Request-KeepNow; try { Start-KeepIfNeeded } catch { } }
   if ($r.code -eq 200 -and $r.json -and [int]$r.json.posts -gt 0 -and $Cfg.AllowImport) { try { Invoke-CloudPostTake } catch { Write-Log ('Posting queue: ' + $_.Exception.Message) } }
@@ -322,5 +324,80 @@ function Sync-CloudPosts {
       $cp[$id] = $sig
       if (($st -eq 'done' -or $st -eq 'failed') -and -not $v.checking) { $cp.Remove($id); Save-CloudPosts; Write-Log ('Posting from FinCom''s queue ' + $id + ': ' + $v.message) }
     }
+  }
+}
+
+
+# ------------------------------------------------------------------ 1.15.0 (fast-sync): woken at once through Realtime
+# "Post to Tally", "Update now" and "Send ledgers and groups now" in FinCom reached this computer with its next heartbeat
+# (up to a minute). Now FinCom's database sends a wake-up on this computer's own channel the moment one is asked for
+# (Supabase Realtime, a websocket kept open here), and the bridge asks for the work at once, with its key, as before.
+# The wake-up says only "post" or "update"; the channel's name is a random token of this computer, given in the
+# heartbeat's answer. Without the channel (an older FinCom, no internet, a Windows without websockets) the heartbeat
+# carries on as before. CloudWake = 'off' in the settings turns it off.
+$script:Wake = @{ ws = $null; recv = $null; buf = $null; sb = $null; topic = ''; url = ''; key = ''; ref = 0; joinRef = ''; hbAt = [DateTime]::MinValue; retryAt = [DateTime]::MinValue; wait = 5; joined = $false; info = '' }
+function Set-CloudWake($w) {
+  if (-not $w -or -not [string]$w.topic -or -not [string]$w.url) { return }
+  $n = [string]$w.url + '|' + [string]$w.topic
+  if ($n -eq $script:Wake.info) { return }
+  $script:Wake.info = $n; $script:Wake.url = [string]$w.url; $script:Wake.key = [string]$w.key; $script:Wake.topic = [string]$w.topic; $script:Wake.wait = 5; $script:Wake.retryAt = [DateTime]::MinValue
+  Stop-CloudWake
+}
+function Stop-CloudWake { try { if ($script:Wake.ws) { $script:Wake.ws.Abort(); $script:Wake.ws.Dispose() } } catch { }; $script:Wake.ws = $null; $script:Wake.recv = $null; $script:Wake.joined = $false }
+function Send-WakeMsg([string]$topic, [string]$event, $payload) {
+  $script:Wake.ref++
+  $t = ([ordered]@{ topic = $topic; event = $event; payload = $payload; ref = [string]$script:Wake.ref } | ConvertTo-Json -Depth 6 -Compress)
+  $b = [Text.Encoding]::UTF8.GetBytes($t)
+  $seg = New-Object 'System.ArraySegment[byte]' -ArgumentList @(, $b)
+  if (-not $script:Wake.ws.SendAsync($seg, [System.Net.WebSockets.WebSocketMessageType]::Text, $true, [Threading.CancellationToken]::None).Wait(5000)) { throw 'the channel did not take a message' }
+  return [string]$script:Wake.ref
+}
+function Get-WakeStatus { return [ordered]@{ on = [bool]$script:Wake.topic; joined = [bool]$script:Wake.joined } }
+# from the main loop, ten times a second: nothing waits here (the socket is read only when a message has come)
+function Step-CloudWake {
+  $w = $script:Wake
+  if (-not $w.topic -or -not (Test-CloudOn) -or [string]$Cfg.CloudWake -eq 'off') { return }
+  if (-not $w.ws -or $w.ws.State -ne [System.Net.WebSockets.WebSocketState]::Open) {
+    if ($w.ws) { Stop-CloudWake; $w.retryAt = [DateTime]::UtcNow.AddSeconds($w.wait); $w.wait = [Math]::Min(300, $w.wait * 2); return }
+    if ([DateTime]::UtcNow -lt $w.retryAt) { return }
+    try {
+      $ws = New-Object System.Net.WebSockets.ClientWebSocket
+      $ws.Options.KeepAliveInterval = [TimeSpan]::FromSeconds(20)
+      $u = [Uri]($w.url + '?apikey=' + [Uri]::EscapeDataString($w.key) + '&vsn=1.0.0')
+      if (-not $ws.ConnectAsync($u, [Threading.CancellationToken]::None).Wait(10000)) { throw 'no answer in 10 s' }
+      $w.ws = $ws; $w.recv = $null; $w.sb = New-Object Text.StringBuilder
+      $w.joinRef = Send-WakeMsg ('realtime:' + $w.topic) 'phx_join' ([ordered]@{ config = [ordered]@{ broadcast = [ordered]@{ self = $false; ack = $false }; presence = [ordered]@{ key = '' }; postgres_changes = @(); private = $false } })
+      $w.hbAt = [DateTime]::UtcNow
+    } catch {
+      if ($w.wait -le 10) { Write-Log ('Wake-up channel: could not connect (' + $_.Exception.Message + '); the heartbeat carries on meanwhile') }
+      Stop-CloudWake; $w.retryAt = [DateTime]::UtcNow.AddSeconds($w.wait); $w.wait = [Math]::Min(300, $w.wait * 2); return
+    }
+  }
+  for ($i = 0; $i -lt 20; $i++) {
+    if ($null -eq $w.recv) { $w.buf = New-Object byte[] 16384; $seg = New-Object 'System.ArraySegment[byte]' -ArgumentList @(, $w.buf); $w.recv = $w.ws.ReceiveAsync($seg, [Threading.CancellationToken]::None) }
+    if (-not $w.recv.IsCompleted) { break }
+    $r = $null; try { $r = $w.recv.Result } catch { Stop-CloudWake; return }
+    $w.recv = $null
+    if ($r.MessageType -eq [System.Net.WebSockets.WebSocketMessageType]::Close) { Stop-CloudWake; return }
+    $null = $w.sb.Append([Text.Encoding]::UTF8.GetString($w.buf, 0, $r.Count))
+    if ($r.EndOfMessage) { $t = $w.sb.ToString(); $null = $w.sb.Clear(); try { Invoke-WakeMsg ($t | ConvertFrom-Json) } catch { Write-Log ('Wake-up channel: ' + $_.Exception.Message) } }
+  }
+  if (([DateTime]::UtcNow - $w.hbAt).TotalSeconds -ge 25) { $w.hbAt = [DateTime]::UtcNow; try { $null = Send-WakeMsg 'phoenix' 'heartbeat' @{} } catch { Stop-CloudWake } }
+}
+function Invoke-WakeMsg($m) {
+  $w = $script:Wake
+  if ([string]$m.event -eq 'phx_reply' -and [string]$m.ref -eq $w.joinRef) {
+    $w.joined = ([string]$m.payload.status -eq 'ok')
+    if ($w.joined) { $w.wait = 5; Write-Log 'Wake-up channel: connected (postings and Update now reach this computer at once)' } else { Write-Log 'Wake-up channel: not taken by FinCom''s cloud; the heartbeat carries on' }
+    return
+  }
+  if ([string]$m.event -ne 'broadcast' -or -not $m.payload) { return }
+  $what = [string]$m.payload.event
+  if ($what -eq 'post') {
+    Write-Log 'Woken by FinCom: a posting is waiting'
+    if ($Cfg.AllowImport) { try { Invoke-CloudPostTake } catch { Write-Log ('Posting queue: ' + $_.Exception.Message) } }
+  } elseif ($what -eq 'update') {
+    Write-Log 'Woken by FinCom: Update now'
+    Request-KeepNow; try { Start-KeepIfNeeded } catch { Write-Log ('Could not start the update: ' + $_.Exception.Message) }
   }
 }

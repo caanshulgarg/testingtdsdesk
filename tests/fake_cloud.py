@@ -22,7 +22,7 @@ class H(http.server.BaseHTTPRequestHandler):
         o = json.loads(raw); k = o.get("kind"); CALLS.append((k + ("-plain" if k == "days" and any("b64" in d for d in o.get("days", [])) else ""), n))
         if k == "beat":
             BEATS.append(o); w = CTRL.pop("want", False)
-            return self._send(200, {"ok": True, "updateNow": w, "posts": sum(1 for j in POSTS.values() if j["status"] == "waiting")})
+            return self._send(200, {"ok": True, "updateNow": w, "posts": sum(1 for j in POSTS.values() if j["status"] == "waiting"), "wake": CTRL.get("wake")})   # wake: bridge 1.15.0
         if k == "posts_take":
             for jid, j in POSTS.items():
                 if j["status"] == "waiting":

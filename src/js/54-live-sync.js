@@ -224,7 +224,7 @@ const Live = {
     this.ws = ws; this.st = "connecting";
     ws.onopen = () => { this.join(); clearInterval(this.hb); this.hb = setInterval(() => { this.send("phoenix", "heartbeat", {}); this.tokenTick(); }, 25000); };
     ws.onmessage = ev => { let m = null; try { m = JSON.parse(ev.data); } catch (e){} if (m) this.got(m); };
-    ws.onclose = () => { clearInterval(this.hb); if (this.ws === ws) this.ws = null; this.st = "off"; this.top(); if (!this.stopped) this.later(); };
+    ws.onclose = () => { clearInterval(this.hb); if (this.ws === ws) this.ws = null; this.st = "off"; this.jobsTopic = ""; this.jobsLive = false; this.booksTopic = ""; this.booksLive = false; this.top(); if (!this.stopped) this.later(); };
     ws.onerror = () => { try { ws.close(); } catch (e){} };
   },
   stop(){ this.stopped = true; clearTimeout(this.rt); clearInterval(this.hb); const w = this.ws; this.ws = null; this.st = "off"; try { if (w) w.close(); } catch (e){} },
@@ -239,14 +239,49 @@ const Live = {
     this.send(this.topic, "phx_join", {config: {broadcast: {self: false, ack: false}, presence: {key: ""}, postgres_changes: pc, private: false}, access_token: this.token});
   },
   // a new access token (refreshed every hour) is given to the open connection
-  tokenTick(){ const t = (Cloud.sess() || {}).access_token; if (this.st === "live" && t && t !== this.token){ this.token = t; this.send(this.topic, "access_token", {access_token: t}); } },
+  tokenTick(){ const t = (Cloud.sess() || {}).access_token; if (this.st === "live" && t && t !== this.token){ this.token = t; this.send(this.topic, "access_token", {access_token: t}); if (this.jobsTopic) this.send(this.jobsTopic, "access_token", {access_token: t}); if (this.booksTopic) this.send(this.booksTopic, "access_token", {access_token: t}); } },
+  // fast-sync: the server's jobs (a day book being read, the kept day books read again) on a channel of their own, joined
+  // only when the database has tally_jobs (migration-13): the live sync above never depends on it
+  async joinJobs(){
+    if (typeof TCloud !== "object" || !TCloud.on() || this.jobsTopic) return;
+    try { await Cloud.api("tally_jobs?select=id&limit=1"); } catch (e){ return; }
+    const f = Cloud.st.firm; this.jobsTopic = "realtime:fincom-jobs-" + f; this.jobsRef = String(this.ref + 1);
+    this.send(this.jobsTopic, "phx_join", {config: {broadcast: {self: false, ack: false}, presence: {key: ""}, postgres_changes: [{event: "*", schema: "public", table: "tally_jobs", filter: "firm_id=eq." + f}], private: false}, access_token: this.token});
+  },
+  // fast-sync (migration-15): the cloud copy of a client's books changed (the Tally computer sent new days): a page open
+  // on that client brings them in at once, instead of looking once a minute. A channel of its own, so nothing else
+  // depends on it
+  joinBooks(){
+    if (typeof TCloud !== "object" || !TCloud.on() || this.booksTopic) return;
+    const f = Cloud.st.firm; this.booksTopic = "realtime:fincom-books-" + f; this.booksRef = String(this.ref + 1); this.daysAt = this.daysAt || {};
+    this.send(this.booksTopic, "phx_join", {config: {broadcast: {self: false, ack: false}, presence: {key: ""}, postgres_changes: [{event: "UPDATE", schema: "public", table: "tally_books", filter: "firm_id=eq." + f}], private: false}, access_token: this.token});
+  },
+  bookChanged(r){
+    if (!r || !r.client_id || !r.days_at || this.daysAt[r.book_id] === r.days_at) return;
+    const first = !(r.book_id in this.daysAt); this.daysAt[r.book_id] = r.days_at;
+    if (first && !S.books) return;
+    const cid = r.client_id;
+    if (!(S.books && S.books.cid === cid && !S.books.loading && S.coId === cid)) return;
+    clearTimeout(this.bookT);
+    this.bookT = setTimeout(() => { try { if (TCloud.st[cid]) TCloud.st[cid].at = 0; const f = LK.fr(); f.cat = 0; LK.cloudFresh(true, true); } catch (e){} }, 1500);   // the day's last pieces settle first
+  },
   got(m){
+    if (this.booksTopic && m.topic === this.booksTopic){
+      if (m.event === "phx_reply" && m.ref === this.booksRef) this.booksLive = !!(m.payload && m.payload.status === "ok");
+      else if (m.event === "postgres_changes"){ const d = m.payload && m.payload.data; if (d && d.record) this.bookChanged(d.record); }
+      return;
+    }
+    if (this.jobsTopic && m.topic === this.jobsTopic){
+      if (m.event === "phx_reply" && m.ref === this.jobsRef) this.jobsLive = !!(m.payload && m.payload.status === "ok");
+      else if (m.event === "postgres_changes"){ const d = m.payload && m.payload.data; if (d && d.record) TCloud.jobRow(d.record); }
+      return;
+    }
     if (m.event === "phx_reply" && m.ref === this.joinRef){
-      if (m.payload && m.payload.status === "ok"){ this.st = "live"; this.err = ""; this.wait = 1000; this.catchUp(); }
+      if (m.payload && m.payload.status === "ok"){ this.st = "live"; this.err = ""; this.wait = 1000; this.catchUp(); this.joinJobs(); this.joinBooks(); }
       else { this.st = "error"; this.err = JSON.stringify((m.payload || {}).response || {}).slice(0, 200); }
       this.top(); return;
     }
-    if (m.event === "system" && m.payload && m.payload.status === "error"){ this.st = "error"; this.err = String(m.payload.message || "").slice(0, 200); this.top(); return; }
+    if (m.event === "system" && m.payload && m.payload.status === "error" && (!m.topic || m.topic === this.topic)){ this.st = "error"; this.err = String(m.payload.message || "").slice(0, 200); this.top(); return; }
     if (m.event === "postgres_changes"){ const d = m.payload && m.payload.data; if (d) this.change(d); return; }
     if (m.event === "phx_error" || m.event === "phx_close"){ try { this.ws.close(); } catch (e){} }
   },
@@ -255,6 +290,7 @@ const Live = {
     try { if (typeof cloudSync === "function" && !cloudBusy) cloudSync(false); } catch (e){}
     const cid = S.books && S.books.cid && !S.books.loading ? S.books.cid : null;
     if (cid && BookItems.on()) BookItems.pull(cid).catch(() => {});
+    if (cid && typeof TCloud === "object" && TCloud.on()) TCloud.jobsLoad(cid);
   },
   change(d){
     const r = d.record;

@@ -130,7 +130,7 @@ const GSTF = {
   lateCn(ym, reg){
     const out = [];
     (S.books.vouchers || []).forEach(v => {
-      if (!Books.isSale(v) || !/CREDIT NOTE/i.test(v.type) || (ym && GSTR.ym(v.date) !== ym) || (reg && GSTR.regOf(v) !== reg)) return;
+      if (!Books.isSale(v) || v.opt || !/CREDIT NOTE/i.test(v.type) || (ym && GSTR.ym(v.date) !== ym) || (reg && GSTR.regOf(v) !== reg)) return;
       const od = String(v.refDate || ""); if (!/^\d{8}$/.test(od)) return;
       const fyEnd = +od.slice(4, 6) >= 4 ? +od.slice(0, 4) + 1 : +od.slice(0, 4), lim = fyEnd + "1130";
       if (String(v.date) > lim) out.push({no: v.no, party: v.party, date: v.date, orig: v.ref, origDate: od, lim});
@@ -141,7 +141,7 @@ const GSTF = {
   // one are listed, and so are IRNs taken more than 30 days after the invoice (the limit for turnover of Rs 10 crore and above)
   einv(ym, reg){
     const mode = typeof GSTSet === "object" ? GSTSet.einvMode(reg) : "auto";
-    const vs = (S.books.vouchers || []).filter(v => Books.isSale(v) && (!reg || GSTR.regOf(v) === reg));
+    const vs = (S.books.vouchers || []).filter(v => Books.isSale(v) && !v.opt && (!reg || GSTR.regOf(v) === reg));
     if (mode !== "auto" || !vs.some(v => v.irn)) return {uses: false, missing: [], late: [], mode};
     const iso = d => { const x = String(d || "").replace(/-/g, ""); return x.slice(0, 4) + "-" + x.slice(4, 6) + "-" + x.slice(6, 8); };
     const kinds = new Set(["B2B", "EXP", "CDNR", "DBNR"]), byId = new Map(vs.map(v => [v.id, v]));
