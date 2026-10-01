@@ -86,7 +86,8 @@ with sync_playwright() as p:
     ok(pg.evaluate("window.__asked") == ["tally_want_update", {"p_client": cid}], "from another computer it asks the Tally computer through the cloud, as Update now does")
     ok("In the cloud: 28 groups · 290 of 300 ledgers with a group" in pg.inner_text("#app"), "and shows what is in the cloud: groups, and ledgers with a group")
     # "Read the kept day books again" (owners): FinCom's cloud reads month after month until there is no next
-    pg.evaluate("""() => { window.__months = []; TCloudUp.post = async (body, who) => { window.__months.push(body.month || 'first'); const all = ['202504', '202505', '202506'];
+    pg.evaluate("""() => { window.__months = []; TCloudUp.post = async (body, who) => { if (body.kind === 'reparse_queue') throw new Error('unknown kind');   /* a cloud without the queue (fast-sync): read again as before */
+      window.__months.push(body.month || 'first'); const all = ['202504', '202505', '202506'];
       const m = body.month || all[0], i = all.indexOf(m); return {ok: true, month: m, done: ['x', 'y'], bad: [], next: all[i + 1] || null, months: 3}; }; }""")
     pg.evaluate("[...document.querySelectorAll('button')].find(b => /kept day books/.test(b.textContent)).click()"); pg.wait_for_timeout(1500)   # (a toast from the click before sits over it)
     ok(pg.evaluate("window.__months") == ["first", "202505", "202506"], "Read the kept day books again: month after month until the last (%s)" % pg.evaluate("window.__months"))
