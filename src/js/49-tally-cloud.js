@@ -97,11 +97,12 @@ const TCloud = {
   async find(cid, q, from, to, typ, had){
     const j = await this.rpc("tally_find", {p_client: cid, p_q: q || "", p_from: this.iso(from), p_to: this.iso(to), p_type: typ || null, p_limit: this.FIND_PAGE, p_offset: had ? had.rows.length : 0});
     if (!j || j.none) throw new Error("The cloud has no copy of these books yet.");
-    const rows = [].concat(j.rows || []).map(([d, type, no, party, narr, amt, guid, ent]) => {
+    const rows = [].concat(j.rows || []).map(([d, type, no, party, narr, amt, guid, ent, opt]) => {
       const e = [].concat(ent || []).map(([l, a]) => ({l, a: num(a)}));
-      return {id: guid, date: d, type, no, party: party || (e.find(x => x.a < 0) || {}).l || "", narr: narr || "", amt: r2(num(amt)), ent: e};
+      return {id: guid, date: d, type, no, party: party || (e.find(x => x.a < 0) || {}).l || "", narr: narr || "", amt: r2(num(amt)), ent: e, opt: opt === true};
     });
-    return {kind: "find", src: "cloud", q, from, to, typ, rows: (had ? had.rows : []).concat(rows), n: num(j.n), total: r2(num(j.total))};
+    // migration-10: an Optional entry comes marked and is not in the total
+    return {kind: "find", src: "cloud", q, from, to, typ, rows: (had ? had.rows : []).concat(rows), n: num(j.n), total: r2(num(j.total)), opt: num(j.opt)};
   },
   age(bk){
     if (!bk) return "";

@@ -288,9 +288,11 @@ const LK = {
     }).sort((a, c) => a.date.localeCompare(c.date)).map(v => {
       const big = v.ent.reduce((m, e) => Math.abs(e.a) > Math.abs(m) ? e.a : m, 0);
       const tot = r2(v.ent.filter(e => e.a > 0).reduce((x, e) => x + e.a, 0));
-      return {id: v.id, date: v.date, type: v.type, no: v.no, party: v.party || (v.ent.find(e => e.a < 0) || {}).l || "", narr: v.narr || "", amt: tot || Math.abs(big), ent: v.ent.map(e => ({l: e.l, a: e.a}))};
+      return {id: v.id, date: v.date, type: v.type, no: v.no, party: v.party || (v.ent.find(e => e.a < 0) || {}).l || "", narr: v.narr || "", amt: tot || Math.abs(big), ent: v.ent.map(e => ({l: e.l, a: e.a})), opt: !!v.opt};
     });
-    return {kind: "find", src: "books", q, from, to, typ, rows, total: r2(rows.reduce((x, r) => x + r.amt, 0))};
+    // review of 01-Oct-2026: an Optional entry (not in Tally's books, e.g. a payroll kept as Optional) is listed and
+    // marked, and left out of the total, as Tally leaves it out of every balance
+    return {kind: "find", src: "books", q, from, to, typ, rows, total: r2(rows.filter(r => !r.opt).reduce((x, r) => x + r.amt, 0)), opt: rows.filter(r => r.opt).length};
   },
   types(){ return Array.from(new Set((S.books.vouchers || []).map(v => v.type).filter(Boolean))).sort(); },
   // ---------- run what the page asks for

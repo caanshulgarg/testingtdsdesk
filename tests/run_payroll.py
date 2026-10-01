@@ -49,6 +49,13 @@ ok(abs(sum(pay.values())) < 0.005, "and the payroll voucher balances")
 jv = [l for l in r["lines"] if l[0] == "zz-jv-guid-1"]
 ok(sorted((l[1], l[2]) for l in jv) == [("ZZ Basic", -1000.0), ("ZZ Salary Payable", 1000.0)], "an ordinary journal naming a pay head is read as before")
 
+# an Optional payroll (Tally keeps it out of every balance): both readers mark it, and Look up's search lists it marked
+# and leaves it out of its total (review of 01-Oct-2026: an Optional payroll of 30,000 showed in a total)
+OPTPAY = PAYROLL.replace("zz-pay-1", "zz-pay-2").replace("zz-pay-guid-1", "zz-pay-guid-2").replace("<ISOPTIONAL>No</ISOPTIONAL>", "<ISOPTIONAL>Yes</ISOPTIONAL>").replace("<VOUCHERNUMBER>1</VOUCHERNUMBER>", "<VOUCHERNUMBER>2</VOUCHERNUMBER>")
+DAY2 = "<ENVELOPE><BODY><IMPORTDATA><REQUESTDATA>" + PAYROLL + OPTPAY + "</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>"
+r2_ = json.loads(subprocess.run(["node", "--input-type=module", "-e", js], input=DAY2, capture_output=True, text=True, timeout=60).stdout)
+ok(sorted((v["guid"], v["opt"]) for v in r2_["vouchers"]) == [("zz-pay-guid-1", False), ("zz-pay-guid-2", True)], "the cloud's parser marks the Optional payroll as Optional")
+
 # FinCom's own reader, and the year's openings
 with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page()
@@ -60,6 +67,10 @@ with sync_playwright() as p:
     ok(got == WANT, "FinCom's reader: the same pay-head lines (%s)" % json.dumps(got))
     jvs = [v for v in res if v["type"] == "Journal"]
     ok(jvs and sorted(map(tuple, jvs[0]["ent"])) == [("ZZ Basic", -1000.0), ("ZZ Salary Payable", 1000.0)], "and the journal as before")
+    fo = pg.evaluate("""async (x) => { const r = await Books.importDayBook(new Blob([x], {type: 'text/xml'})); S.books = {vouchers: r.vouchers};
+      const f = LK.find("payroll", "20260301", "20260331", ""); return {opt: r.vouchers.map(v => [v.id, !!v.opt]).sort(), n: f.rows.length, total: f.total, nopt: f.opt, marked: f.rows.filter(z => z.opt).map(z => z.no)}; }""", DAY2)
+    ok(fo["opt"] == [["zz-pay-guid-1", False], ["zz-pay-guid-2", True]], "FinCom's reader marks the Optional payroll as Optional")
+    ok(fo["n"] == 2 and fo["nopt"] == 1 and fo["marked"] == ["2"] and fo["total"] == 75000, "Look up's search lists both, the Optional one marked and out of the total (75,000 of one, not 150,000 of two) (%s)" % json.dumps(fo))
     yo = pg.evaluate("""() => {
       const b = {groups: {"Indirect Expenses": "", "Office Costs": "Indirect Expenses", "Sales Accounts": "", "Current Assets": "", "Bank Accounts": "Current Assets"},
                  under: {"ZZ Rent": "Office Costs", "ZZ Sales": "Sales Accounts", "ZZ Bank": "Bank Accounts"}};
