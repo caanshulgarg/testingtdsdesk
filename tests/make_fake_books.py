@@ -22,9 +22,12 @@ LEDGERS = [  # name, parent, opening (Tally's sign: debit negative)
 ]
 def esc(s): return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 def rate_block(r): return ("<RATEDETAILS.LIST><GSTRATEDUTYHEAD>IGST</GSTRATEDUTYHEAD><GSTRATEVALUATIONTYPE>Based on Value</GSTRATEVALUATIONTYPE><GSTRATE> %g</GSTRATE></RATEDETAILS.LIST>" % r) if r is not None else ""
-def line(led, amt, hsn="", rate=None):
-    return ("<ALLLEDGERENTRIES.LIST><LEDGERNAME>%s</LEDGERNAME><ISDEEMEDPOSITIVE>%s</ISDEEMEDPOSITIVE>%s%s<AMOUNT>%.2f</AMOUNT></ALLLEDGERENTRIES.LIST>"
-            % (esc(led), "Yes" if amt < 0 else "No", ("<GSTHSNNAME>%s</GSTHSNNAME>" % hsn) if hsn else "", rate_block(rate), amt))
+def bill(name, kind, amt, days=None):
+    return ("<BILLALLOCATIONS.LIST><NAME>%s</NAME>%s<BILLTYPE>%s</BILLTYPE><AMOUNT>%.2f</AMOUNT></BILLALLOCATIONS.LIST>"
+            % (esc(name), ('<BILLCREDITPERIOD JD="0" P="%d Days">%d Days</BILLCREDITPERIOD>' % (days, days)) if days else "", kind, amt))
+def line(led, amt, hsn="", rate=None, bills=()):
+    return ("<ALLLEDGERENTRIES.LIST><LEDGERNAME>%s</LEDGERNAME><ISDEEMEDPOSITIVE>%s</ISDEEMEDPOSITIVE>%s%s<AMOUNT>%.2f</AMOUNT>%s</ALLLEDGERENTRIES.LIST>"
+            % (esc(led), "Yes" if amt < 0 else "No", ("<GSTHSNNAME>%s</GSTHSNNAME>" % hsn) if hsn else "", rate_block(rate), amt, "".join(bills)))
 def voucher(n, day, vtype, party, gstin, pos, lines, alter):
     return ('<TALLYMESSAGE xmlns:UDF="TallyUDF"><VOUCHER REMOTEID="zz-%d" VCHTYPE="%s" ACTION="Create" OBJVIEW="Accounting Voucher View"><DATE>%s</DATE>'
             "<GUID>zz-guid-%04d</GUID><ALTERID> %d</ALTERID><VOUCHERTYPENAME>%s</VOUCHERTYPENAME><VOUCHERNUMBER>%d</VOUCHERNUMBER>"
@@ -37,7 +40,7 @@ def entries():
         n += 1   # a service sold out of state: IGST 18%, SAC 998311
         t = 10000 + 500 * d; tax = round(t * 0.18, 2)
         out.append((day, voucher(n, day, "Sales", "ZZ Alpha Customers", "27AAACZ1234A1Z5", "Maharashtra",
-            [line("ZZ Alpha Customers", -(t + tax)), line("Consultancy Income", t, "998311", 18), line("Output IGST", tax)], n)))
+            [line("ZZ Alpha Customers", -(t + tax), bills=[bill("A/%d" % n, "New Ref", -(t + tax), 30)]), line("Consultancy Income", t, "998311", 18), line("Output IGST", tax)], n)))
         n += 1   # goods sold in the state: CGST + SGST at 5%, HSN 6109
         t = 4000 + 100 * d; half = round(t * 0.025, 2)
         out.append((day, voucher(n, day, "Sales", "ZZ Beta Customers", "09AAACZ5678B1Z2", "Uttar Pradesh",
@@ -46,6 +49,9 @@ def entries():
         t = 1500 + 10 * d; tax = round(t * 0.05, 2)
         out.append((day, voucher(n, day, "Purchase", "ZZ Gamma Suppliers", "09AAACZ9999C1Z1", "Uttar Pradesh",
             [line("Cab Hire", -t, "996601", 5), line("Input IGST", -tax), line("ZZ Gamma Suppliers", t + tax)], n)))
+        if d % 10 == 0:
+            n += 1   # ZZ Alpha pays the first bill of the month in part, against that bill
+            out.append((day, voucher(n, day, "Receipt", "ZZ Alpha Customers", "", "", [line("ZZ Bank", -5000), line("ZZ Alpha Customers", 5000, bills=[bill("A/1", "Agst Ref", 5000)])], n)))
         if d % 5 == 0:
             n += 1   # rent paid from the bank: no GST
             out.append((day, voucher(n, day, "Payment", "ZZ Bank", "", "", [line("Office Rent", -25000), line("ZZ Bank", 25000)], n)))

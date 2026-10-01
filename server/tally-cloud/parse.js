@@ -51,7 +51,7 @@ function takeVoucher(s){
       at = z + 1;
     }
   }
-  // each line: [guid, ledger, amount, HSN or SAC, GST rate (the whole rate, IGST's) or null]
+  // each line: [guid, ledger, amount, HSN or SAC, GST rate (the whole rate, IGST's) or null, bill-wise details]
   const lines = [];
   [["<ALLLEDGERENTRIES.LIST>", "</ALLLEDGERENTRIES.LIST>"], ["<LEDGERENTRIES.LIST>", "</LEDGERENTRIES.LIST>"], ["<ACCOUNTINGALLOCATIONS.LIST>", "</ACCOUNTINGALLOCATIONS.LIST>"]].forEach(([open, close]) => {
     let pos = -1;
@@ -63,7 +63,18 @@ function takeVoucher(s){
       const it = open === "<ACCOUNTINGALLOCATIONS.LIST>" ? items.find(q => pos > q.a && pos < q.z) : null;
       const hsn = (it ? it.h : one(e, "GSTHSNNAME")).slice(0, 20);
       const rate = it ? it.gr : igstRate(e);
-      lines.push([id, name, Math.round(amt(one(e, "AMOUNT")) * 100) / 100, hsn, rate == null ? null : rate]);
+      // bill-wise details on the line (review of 01-Oct-2026): [bill name, New Ref / Agst Ref / Advance / On Account,
+      // amount, credit days or null], as FinCom reads them in the browser, so ageing works from the cloud copy too
+      const bills = [];
+      if (e.indexOf("<BILLALLOCATIONS.LIST>") >= 0){
+        e.split("<BILLALLOCATIONS.LIST>").slice(1).forEach(p2 => {
+          const q = p2.split("</BILLALLOCATIONS.LIST>")[0], type = one(q, "BILLTYPE"), a = Math.round(amt(one(q, "AMOUNT")) * 100) / 100;
+          if (!type || !a) return;
+          const cp = (q.match(/<BILLCREDITPERIOD\b[^>]*>([^<]*)<\/BILLCREDITPERIOD>/) || [])[1] || "", dm = cp.match(/^\s*(\d{1,4})\s*Days?\s*$/i);
+          bills.push([one(q, "NAME").slice(0, 200), type.slice(0, 20), a, dm ? Number(dm[1]) : null]);
+        });
+      }
+      lines.push([id, name, Math.round(amt(one(e, "AMOUNT")) * 100) / 100, hsn, rate == null ? null : rate, bills]);
     });
   });
   return {v, lines};
