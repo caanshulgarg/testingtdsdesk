@@ -10,6 +10,7 @@ GROUPS = {}         # company -> body of a groups-only send (bridge 1.14.9)
 STATE = {}          # company -> state
 CALLS = []          # (kind, bytes)
 BEATS = []          # heartbeats
+SHADOW = []         # calls marked shadow (the Go bridge in test mode, beside bridge 1.15.0): (kind, body)
 POSTS = {}          # the posting queue (build 199): id -> {company, payload, status, done, message, results, checking}
 class H(http.server.BaseHTTPRequestHandler):
     def log_message(self, *a): pass
@@ -19,7 +20,26 @@ class H(http.server.BaseHTTPRequestHandler):
         n = int(self.headers.get("Content-Length", 0)); raw = self.rfile.read(n)
         if CTRL["down"]: self.close_connection = True; return
         if self.headers.get("x-fincom-device") != KEY or CTRL["revoked"]: return self._send(401, {"ok": False, "error": "This computer's key is not valid any more."})
-        o = json.loads(raw); k = o.get("kind"); CALLS.append((k + ("-plain" if k == "days" and any("b64" in d for d in o.get("days", [])) else ""), n))
+        o = json.loads(raw); k = o.get("kind")
+        if o.get("shadow"):
+            # as tally-ingest does for a bridge in test mode: never a posting, its heartbeat kept apart, its days compared
+            # with what is kept (bridge 1.15.0's), never kept
+            SHADOW.append((k, o))
+            if k in ("posts_take", "posts_update"): return self._send(403, {"ok": False, "error": "A bridge in test mode does not post."})
+            if k == "beat": return self._send(200, {"ok": True, "updateNow": False, "posts": 0, "wake": CTRL.get("wake"), "shadow": True})
+            if k == "hello": return self._send(200, {"ok": True, "firm": "ZZ TEST FIRM", "device": "TEST-PC"})
+            if k == "companies": return self._send(200, {"ok": True, "links": {c["name"]: bool(LINKS.get(c["name"])) for c in o.get("companies", [])}})
+            co = o.get("company", "")
+            if not LINKS.get(co): return self._send(409, {"ok": False, "notLinked": True, "error": "not linked"})
+            if k == "days":
+                done, same, differ, new = [], [], [], []
+                for d in o.get("days", []):
+                    t = (base64.b64decode(d["b64"]) if "b64" in d else gzip.decompress(base64.b64decode(d["gz"]))).decode("utf-8")
+                    had = DAYS.get((co, d["day"])); done.append(d["day"])
+                    (new if had is None else same if had == t else differ).append(d["day"])
+                return self._send(200, {"ok": True, "done": done, "bad": [], "same": same, "differ": differ, "new": new, "shadow": True})
+            return self._send(200, {"ok": True, "shadow": True})
+        CALLS.append((k + ("-plain" if k == "days" and any("b64" in d for d in o.get("days", [])) else ""), n))
         if k == "beat":
             BEATS.append(o); w = CTRL.pop("want", False)
             return self._send(200, {"ok": True, "updateNow": w, "posts": sum(1 for j in POSTS.values() if j["status"] == "waiting"), "wake": CTRL.get("wake")})   # wake: bridge 1.15.0
