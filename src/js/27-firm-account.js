@@ -30,7 +30,9 @@ const Cloud = {
     try { r = await fetch(c.url.replace(/\/+$/, "") + "/functions/v1/signin", {method: "POST", headers: {apikey: c.key, "Content-Type": "application/json"}, body: JSON.stringify({email, password})}); }
     catch (e){ r = null; }
     if (!r || r.status === 404) return this.authCall("token?grant_type=password", {email, password});
-    const j = await r.json().catch(() => ({}));
+    const j = await r.json().catch(() => null);
+    // an answer that is not the sign-in function's own (the gateway's "function not found", a proxy page): sign in as before
+    if (!j || (!r.ok && !("ok" in j)) || (r.ok && !j.access_token)) return this.authCall("token?grant_type=password", {email, password});
     if (!r.ok) throw new Error(j.error || ("Sign-in failed (" + r.status + ")"));
     return j;
   },
@@ -874,11 +876,15 @@ function revTds(id, on){
 }
 // the firm account in Settings (app/src/screens/Account.jsx): a person's password, two-step or switching on and off; a
 // backup downloaded; a drop key switched off; the platform page's buttons (they read its boxes by id) and a firm's plan
+// the firm account's admin service not yet updated (Phase 2 waits for the database): it does not know the new actions
+function adminNotYet(e){ return /unknown action/i.test(String((e && e.message) || "")); }
 function acctPerson(what, email){
   // a reset link by email: they choose the new password; "makepw" is the fallback where email is not set up
-  if (what === "reset") Cloud.fn("admin", {action: "send_reset", email, redirect: appUrl()}).then(r => { S.newPerson = null; toast(r.note || "Reset link sent."); render(); }, e => toast(e.message));
+  if (what === "reset") Cloud.fn("admin", {action: "send_reset", email, redirect: appUrl()}).then(r => { S.newPerson = null; toast(r.note || "Reset link sent."); render(); },
+    e => toast(adminNotYet(e) ? "Reset links by email start once the firm account\u2019s update is done. For now, use \u201cMake a password\u201d." : e.message));
   else if (what === "makepw") Cloud.fn("admin", {action: "reset_password", email}).then(r => { S.newPerson = {email: r.email, password: r.password}; toast("New password made."); render(); }, e => toast(e.message));
-  else if (what === "unlock") Cloud.fn("admin", {action: "unlock", email}).then(r => toast(r.note || "Unlocked."), e => toast(e.message));
+  else if (what === "unlock") Cloud.fn("admin", {action: "unlock", email}).then(r => toast(r.note || "Unlocked."),
+    e => toast(adminNotYet(e) ? "The lockout starts once the firm account\u2019s update is done: nobody is locked out until then." : e.message));
   else if (what === "mfa") askConfirm({title: "Reset two-step sign-in for " + email + "?", ok: "Reset", body: '<p class="note">Their authenticator entry is removed. At the next sign-in they set it up again with their phone. Do this only when you are sure it is them asking.</p>'})
     .then(a => { if (a) Cloud.fn("admin", {action: "reset_two_step", email}).then(() => toast("Two-step sign-in reset for " + email + "."), e => toast(e.message)); });
   else Cloud.fn("admin", {action: "set_person", email, active: what === "on"}).then(() => { toast(what === "on" ? "Switched on." : "Switched off."); loadAccount(); }, e => toast(e.message));
@@ -1162,9 +1168,18 @@ function doAct(act, t){
       const g = id => (document.getElementById(id) || {}).value || "";
       const email = g("npEmail").trim();
       if (!email){ toast("An email address is needed."); break; }
-      Cloud.fn("admin", {action: "invite_person", email, name: g("npName"), role: g("npRole"), redirect: appUrl()}).then(r => {
+      const who = {email, name: g("npName"), role: g("npRole")};
+      Cloud.fn("admin", Object.assign({action: "invite_person", redirect: appUrl()}, who)).then(r => {
         S.newPerson = null; toast(r.note || ("Invited " + r.email + ".")); loadAccount();
-      }, e => toast(e.message));
+      }, e => {
+        if (!adminNotYet(e)){ toast(e.message); return; }
+        // until the update is done: added as before, with a password made for them and shown once
+        Cloud.fn("admin", Object.assign({action: "add_person"}, who)).then(r => {
+          S.newPerson = r.password ? {email: r.email, password: r.password} : null;
+          toast("Email invites start once the firm account\u2019s update is done, so a password was made instead." + (r.password ? "" : " " + (r.note || "")));
+          render(); loadAccount();
+        }, e2 => toast(e2.message));
+      });
       break;
     }
     case "addPerson": {

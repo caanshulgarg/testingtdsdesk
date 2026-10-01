@@ -107,6 +107,35 @@ with sync_playwright() as p:
     ok("Welcome to FinCom" in app() and pg.locator("#spw1").count() == 1 and pg.evaluate("location.hash") == "", "21. an invite link opens “choose your password” and is taken off the address")
     pg.fill("#spw1", "short"); pg.fill("#spw2", "short"); pg.click('button:has-text("Save and continue")'); pg.wait_for_timeout(300)
     ok("10 characters or more" in app(), "21. a short password is refused")
+    # Until the database update ("Waiting for database" on the pull request): nothing may break
+    pg.goto("about:blank"); pg.goto(BASE); pg.wait_for_timeout(2500)
+    if pg.locator('button[data-act="useOffline"]').count(): pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+    # sign-in: the sign-in function not deployed (the gateway's "not found", or the browser blocking the call) -> signs in as before
+    r = pg.evaluate("""async () => { const out = [], tok = {access_token: 'T', refresh_token: 'R', user: {id: 'u', email: 'a@b.in'}};
+      const fake = mode => async (u, o) => { u = String(u);
+        if (/functions\/v1\/signin/.test(u)){ if (mode === 'cors') throw new TypeError('Failed to fetch'); return new Response(JSON.stringify({code: 'NOT_FOUND', message: 'Requested function was not found'}), {status: mode === '404' ? 404 : 401}); }
+        if (/auth\/v1\/token/.test(u)) return new Response(JSON.stringify(tok), {status: 200});
+        return new Response('{}', {status: 200}); };
+      for (const m of ['404', 'cors', 'other']){ window.fetch = fake(m); try { const j = await Cloud.signInCall('a@b.in', 'pw'); out.push(m + ':' + j.access_token); } catch (e){ out.push(m + ':ERR ' + e.message); } }
+      return out; }""")
+    ok(r == ["404:T", "cors:T", "other:T"], "waiting: with no sign-in function on the server, signing in works as before (" + ", ".join(r) + ")")
+    # the admin service not yet updated: invite falls back to a made-up password, reset link and unlock say so
+    r = pg.evaluate("""async () => { window.__c = []; window.__t = []; window.toast = m => window.__t.push(m);
+      Cloud.on = () => true; S.account = {me: {role: 'owner'}, people: [{name: 'Bina', email: 'b@b.in', role: 'staff', active: true}]}; window.loadAccount = () => {};
+      Cloud.fn = async (n, a) => { window.__c.push(a.action); if (['invite_person', 'send_reset', 'unlock'].includes(a.action)) throw new Error('Unknown action'); return {email: a.email, password: 'Made-Pw-1'}; };
+      S.firm.firmName = S.firm.firmName || 'Test firm'; S.view = 'home'; S.homeTab = 'rules'; S.settingsTab = 'account'; render(); return true; }""")
+    pg.wait_for_timeout(400)
+    pg.fill("#npEmail", "c@b.in"); pg.click('button:text-is("Invite by email")'); pg.wait_for_timeout(500)
+    calls, toasts = pg.evaluate("window.__c"), pg.evaluate("window.__t")
+    ok(calls[:2] == ["invite_person", "add_person"] and "Made-Pw-1" in app() and any("Email invites start once" in t for t in toasts), "waiting: Invite by email adds the person with a password shown once, and says why")
+    pg.click('tr[data-key="b@b.in"] button:text-is("Send reset link")'); pg.wait_for_timeout(300)
+    pg.click('tr[data-key="b@b.in"] button:text-is("Unlock")'); pg.wait_for_timeout(300)
+    toasts = pg.evaluate("window.__t")
+    ok(any("Reset links by email start once" in t for t in toasts) and any("nobody is locked out until then" in t for t in toasts), "waiting: Send reset link and Unlock explain, nothing else happens")
+    # soft delete needs nothing on the server: a deleted bill goes to the firm account as an ordinary record, not a removal
+    r = pg.evaluate("""() => { const c = Object.values(S.companies)[0], e = Object.values(D(c.id).entries)[0]; S.coId = c.id; softDeleteEntry(e, 'test');
+      const ch = cloudChanges().changes.find(x => x.kind === 'entry' && x.id === e.id); return ch ? [!!ch.deleted, ch.data.status] : null; }""")
+    ok(r == [False, "deleted"], "waiting: a deleted bill is sent to the firm account as a kept record with status deleted (" + str(r) + ")")
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
     br.close()
 srv.shutdown()
