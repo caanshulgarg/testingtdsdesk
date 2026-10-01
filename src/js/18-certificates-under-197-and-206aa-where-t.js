@@ -10,14 +10,26 @@ const Certs = {
       (!c.from || TDS.ymd(r.date) >= TDS.ymd(c.from)) && (!c.to || TDS.ymd(r.date) <= TDS.ymd(c.to)));
   },
   validPan(p){ return /^[A-Z]{5}\d{4}[A-Z]$/.test(String(p || "").toUpperCase()); },
+  // PANs marked inoperative (not linked with Aadhaar) for this client's books: S.books.panInoperative = {PAN: date checked}
+  inoperative(p){
+    const P = String(p || "").toUpperCase();
+    if (!P) return false;
+    if (((S.books || {}).panInoperative || {})[P]) return true;
+    return Object.values(D().parties || {}).some(x => x && x.panInoperative && String(x.pan || "").toUpperCase() === P);
+  },
   // what the rate should have been, and why
   expected(r){
     const cert = this.forRow(r);
     if (cert) return {rate: num(cert.rate), why: "certificate " + (cert.certNo || "under 197"), cert};
-    if (!this.validPan(r.pan)) return {rate: 20, why: "no valid PAN, section 206AA"};
-    const std = (TDS.STD[String(r.section).replace(/\s.*$/, "")] || []);
-    if (!std.length) return {rate: null, why: ""};
-    const near = std.slice().sort((a, b) => Math.abs(a - (r.rate || 0)) - Math.abs(b - (r.rate || 0)))[0];
+    const std = (TDS.STD[TDS.sec(r.section)] || []);
+    const near = std.length ? std.slice().sort((a, b) => Math.abs(a - (r.rate || 0)) - Math.abs(b - (r.rate || 0)))[0] : null;
+    // no PAN (or one marked inoperative under Deductees): the higher of the usual rate and 20%; 5% for 194Q and 194-O
+    const noPan = !this.validPan(r.pan) ? "no valid PAN" : this.inoperative(r.pan) ? "PAN inoperative" : "";
+    if (noPan){
+      const sec = TDS.sec(r.section), rule = sec === "194Q" || sec === "194O" ? {noPanRate: 5} : null;
+      return {rate: noPanRate(rule, near == null ? 0 : near), why: noPan + ", section 206AA (higher rate)", noPan: true};
+    }
+    if (near == null) return {rate: null, why: ""};
     return {rate: near, why: "usual rate for " + r.section};
   },
   // where the books deducted at a different rate from the one that applies
@@ -46,8 +58,14 @@ const TDSYear = {
         challans: mine.length, challanTax: r2(mine.reduce((a, c) => a + num(c.tax), 0)),
         used: r2(mine.reduce((a, c) => a + (use[c.id] || 0), 0)),
         salaryEmployees: sal.length, salaryPaid: r2(sal.reduce((a, e) => a + e.paid, 0)), salaryTds: r2(sal.reduce((a, e) => a + e.tds, 0)),
-        issues: Certs.issues(fy, q).length};
+        issues: Certs.issues(fy, q).length, nr: this.other(TDS.nrRows(), fy, q), tcs: this.other(TDS.tcsRows(), fy, q)};
     });
+  },
+  // a quarter of 27Q or 27EQ in the year's table
+  other(all, fy, q){
+    const rows = all.filter(r => r.fy === fy && r.q === q);
+    return {n: rows.length, tds: r2(rows.reduce((a, r) => a + r.tds, 0)), unallocated: r2(rows.filter(r => !r.challan).reduce((a, r) => a + r.tds, 0)),
+      noPan: rows.filter(r => !Certs.validPan(r.pan)).length};
   },
   async toExcel(fy, which){
     await ensureXlsx();
@@ -120,7 +138,7 @@ async function openBooks(cid){
   render();
 }
 // everything kept with a client's books, in this browser and (the TDS and GST work) in the firm's database
-const BOOKS_KEYS = ["vouchers", "map", "meta", "challans", "alloc", "pans", "twoB", "gstins", "under", "states", "groups", "salary", "certs", "advFix", "assets", "rev", "filed", "amendFix", "twoBs", "reco2b", "ledInfo", "ledInfoAt", "audit", "auditCfg", "auditRel", "ledSnaps", "gst9c", "groupInfo", "fs", "tb", "mis", "misCfg", "msme", "budget", "gst3b", "gst9", "gstOpen", "itcBasis", "itcTrack", "outRej", "gstFiled", "gstAato", "filed1a", "rule37On", "gstCashLedger", "gstSet", "gstContacts", "gstApi", "gstEst", "gstVault", "gstRegs", "letters", "ai", "tallyCo", "tbCheck"];
+const BOOKS_KEYS = ["vouchers", "map", "meta", "challans", "alloc", "pans", "twoB", "gstins", "under", "states", "groups", "salary", "certs", "advFix", "assets", "rev", "filed", "amendFix", "twoBs", "reco2b", "ledInfo", "ledInfoAt", "audit", "auditCfg", "auditRel", "ledSnaps", "gst9c", "groupInfo", "fs", "tb", "mis", "misCfg", "msme", "budget", "gst3b", "gst9", "gstOpen", "itcBasis", "itcTrack", "outRej", "gstFiled", "gstAato", "filed1a", "rule37On", "gstCashLedger", "gstSet", "gstContacts", "gstApi", "gstEst", "gstVault", "gstRegs", "letters", "ai", "tallyCo", "tbCheck", "nrInfo", "tcsCodes", "panInoperative"];
 async function saveBooks(opts, bb){
   const b = bb || S.books; if (!b || !b.cid) return;
   const keep = {cid: b.cid}; BOOKS_KEYS.forEach(k => { keep[k] = b[k]; });

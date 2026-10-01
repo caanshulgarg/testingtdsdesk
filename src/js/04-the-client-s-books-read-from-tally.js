@@ -265,7 +265,7 @@ const Books = {
     return r;
   },
   linesNow(v){
-    const out = {taxable: 0, tax: {CGST: 0, SGST: 0, IGST: 0, CESS: 0}, tds: [], tdsPaid: [], party: 0, rates: {}, roundoff: 0}, vals = [];
+    const out = {taxable: 0, tax: {CGST: 0, SGST: 0, IGST: 0, CESS: 0}, tds: [], tdsPaid: [], tcs: [], tcsPaid: [], party: 0, rates: {}, roundoff: 0}, vals = [];
     v.ent.forEach(e => {
       const m = Books.ledgerOf(e.l), amt = Math.abs(e.a), sign = e.a < 0 ? -1 : 1;
       if (m.kind === "ineligible"){ out.ineligible = r2((out.ineligible || 0) + amt); out.taxable = r2(out.taxable + amt); return; }
@@ -289,7 +289,13 @@ const Books = {
         return;
       }
       if (m.kind === "roundoff"){ out.roundoff = r2(out.roundoff + e.a); return; }
-      if (m.kind === "tax_other" || m.kind === "tcs_payable" || m.kind === "tcs_receivable") return;
+      // TCS collected on a sale (credited), or paid over from the bank (debited): for 27EQ; neither is part of the sale's value
+      if (m.kind === "tcs_payable"){
+        if (e.a > 0) out.tcs.push({ledger: e.l, section: m.section, rate: m.rate, amount: amt});
+        else if (v.ent.some(z => Books.ledgerOf(z.l).kind === "bank")) out.tcsPaid.push({ledger: e.l, section: m.section, amount: amt});
+        return;
+      }
+      if (m.kind === "tax_other" || m.kind === "tcs_receivable") return;
       if (e.l === v.party){ out.party = amt; return; }
       if (m.kind === "bank" || m.kind === "tds_receivable") return;
       out.taxable = r2(out.taxable + amt);

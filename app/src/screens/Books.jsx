@@ -3,7 +3,7 @@
 // viewTdsYearPage (src/js/18). Reports, Look up and Letters are pages of their own, opened from the side menu.
 //
 // State: S.books (the open client's books: vouchers, ledgers, salary, the work saved with them), S.booksTab (the
-// tab); for TDS, S.tdsView (years → year → return or certs or notices), S.tdsFy, S.tdsQ, S.tdsForm (26Q or 24Q).
+// tab); for TDS, S.tdsView (years → year → return or certs or notices), S.tdsFy, S.tdsQ, S.tdsForm (26Q, 24Q, 27Q or 27EQ).
 // A return's pages are TdsReturn.jsx; every other tab is in screens/books/ or Gst.jsx.
 import { BusyCard } from "../parts/Reading.jsx";
 import { Return26, Return24, CertsPage } from "./TdsReturn.jsx";
@@ -75,6 +75,17 @@ function Cell26({ fy, x }) {
     {warn.length ? warn.map((w) => <div key={w} className="nr bad" style={{ whiteSpace: "normal" }}>{w}</div>) : <div className="nr">ready</div>}
   </td>;
 }
+// a quarter's 27Q (non-residents) or 27EQ (TCS) in the year's table
+function CellOther({ fy, x, form }) {
+  const o = form === "27EQ" ? x.tcs : x.nr;
+  if (!o.n) return <td className="note">nothing</td>;
+  const warn = [o.unallocated ? money(o.unallocated) + " not against a challan" : "", o.noPan ? o.noPan + " without PAN" : ""].filter(Boolean);
+  return <td data-form={form}>
+    <button className="linkbtn" onClick={() => tdsGo(fy, x.q, form)}><b>{money(o.tds)}</b></button>
+    <div className="nr">{o.n} {form === "27EQ" ? "collections" : "deductions"}</div>
+    {warn.length ? warn.map((w) => <div key={w} className="nr bad" style={{ whiteSpace: "normal" }}>{w}</div>) : <div className="nr">ready</div>}
+  </td>;
+}
 // a quarter's 24Q (salary): from the salary sheet, or what the books carry under 192
 function Cell24({ b, fy, x }) {
   const go = () => tdsGo(fy, x.q, "24Q");
@@ -88,6 +99,7 @@ function Cell24({ b, fy, x }) {
 
 function Year({ b, rows }) {
   const fy = S.tdsFy, qs = TDSYear.quarters(fy);
+  const hasNr = qs.some((x) => x.nr.n), hasTcs = qs.some((x) => x.tcs.n);
   return <>
     <div className="revfilter">
       <select aria-label="Financial year" value={fy} onChange={(ev) => tdsSetFy(ev.target.value)}>{tdsYears(b, rows).map((f) => <option key={f} value={f}>{f}</option>)}</select>
@@ -100,11 +112,13 @@ function Year({ b, rows }) {
     <section className="dash-card"><h3>{fy}: returns by quarter</h3>
       <p className="note">Open a return to see its challans, deductees and deductions on separate tabs.</p>
       <div className="bk-tablewrap"><table className="bk-table">
-        <thead><tr><th>Quarter</th><th>26Q, other than salary</th><th>24Q, salary</th><th>Due</th></tr></thead>
+        <thead><tr><th>Quarter</th><th>26Q, other than salary</th><th>24Q, salary</th>{hasNr && <th>27Q, non-residents</th>}{hasTcs && <th>27EQ, TCS</th>}<th>Due</th></tr></thead>
         <tbody>
-          {qs.map((x) => <tr key={x.q}><td><b>{x.q}</b><div className="nr">{Q_MONTHS[x.q]}</div></td><Cell26 fy={fy} x={x} /><Cell24 b={b} fy={fy} x={x} /><td>{Q_DUE[x.q]}</td></tr>)}
+          {qs.map((x) => <tr key={x.q}><td><b>{x.q}</b><div className="nr">{Q_MONTHS[x.q]}</div></td><Cell26 fy={fy} x={x} /><Cell24 b={b} fy={fy} x={x} />
+            {hasNr && <CellOther fy={fy} x={x} form="27Q" />}{hasTcs && <CellOther fy={fy} x={x} form="27EQ" />}<td>{Q_DUE[x.q]}</td></tr>)}
           <tr><td><b>Year</b></td><td><b>{money(qs.reduce((a, x) => a + x.tds, 0))}</b><div className="nr">{qs.reduce((a, x) => a + x.deductions, 0)} deductions</div></td>
-            <td><b>{money(qs.reduce((a, x) => a + x.salaryTds, 0))}</b></td><td></td></tr>
+            <td><b>{money(qs.reduce((a, x) => a + x.salaryTds, 0))}</b></td>
+            {hasNr && <td><b>{money(qs.reduce((a, x) => a + x.nr.tds, 0))}</b></td>}{hasTcs && <td><b>{money(qs.reduce((a, x) => a + x.tcs.tds, 0))}</b></td>}<td></td></tr>
         </tbody>
       </table></div>
     </section>
@@ -128,7 +142,7 @@ function Tds({ b }) {
     {v === "notices" ? <Notices b={b} kind="tds" />
       : v === "years" ? <Years b={b} rows={rows} fys={fys} />
       : v === "certs" ? <CertsPage />
-      : v === "return" ? (S.tdsForm === "24Q" ? <Return24 b={b} /> : <Return26 b={b} allRows={rows} />)
+      : v === "return" ? (S.tdsForm === "24Q" ? <Return24 b={b} /> : <Return26 b={b} allRows={S.tdsForm === "27Q" ? TDS.nrRows() : S.tdsForm === "27EQ" ? TDS.tcsRows() : rows} form={S.tdsForm || "26Q"} />)
       : <Year b={b} rows={rows} />}
   </>;
 }

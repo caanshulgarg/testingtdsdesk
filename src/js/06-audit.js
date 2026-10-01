@@ -170,7 +170,7 @@ const Audit = {
       Object.values(agg).forEach(x => {
         const r = RULE_DEFAULTS.find(z => z.id === x.rule);
         if (!r) return;
-        const over = r.basis === "single_or_annual" ? (x.max > r.single || x.amt > r.limit) : r.basis === "monthly" ? Object.values(x.months).some(m => m > r.limit) : x.amt > r.limit;
+        const over = r.basis === "single_or_annual" ? (x.max > r.single || x.amt > r.limit) : r.basis === "single" ? x.max >= r.single : r.basis === "always" ? x.amt > 0 : r.basis === "never" ? false : r.basis === "monthly" ? Object.values(x.months).some(m => m > r.limit) : x.amt > r.limit;
         if (!over) return;
         const pan = (S.books.pans || {})[x.party] || "", rate = /^[A-Z]{3}[PH]/.test(pan) ? r.rateInd : r.rateOth;
         const tds = r2(x.amt * rate / 100);

@@ -762,6 +762,9 @@ function txnOpenDoc(key, path, name){
 function setFilter(id, key, val, typed){ S[id] = Object.assign({}, S[id], {[key]: val}); if (typed){ FinComReact.redraw(); later(id + "q", render, 250); } else render(); }
 function clearFilter(id){ S[id] = {}; render(); }
 // 2B reconciliation (app/src/screens/gst/TwoB.jsx): its tab, span, filters, and what the user settles about a document
+// 27Q: a non-resident deductee's details for the file; 27EQ: a TCS ledger's collection code
+function tdsNrSet(party, k, v){ const b = S.books; b.nrInfo = Object.assign({}, b.nrInfo); b.nrInfo[party] = Object.assign({}, b.nrInfo[party], {[k]: typeof v === "string" ? v.trim() : v}); saveBooks(); render(); }
+function tdsTcsCode(ledger, code){ const b = S.books; b.tcsCodes = Object.assign({}, b.tcsCodes, {[ledger]: code}); saveBooks(); render(); }
 function r2TabGo(id){ S.r2Tab = id; render(); }
 function r2ScopeGo(mode){ S.r2Scope = mode; render(); }
 function r2Filter(key, val, typed){ const tab = S.r2Tab || "suppliers"; S.r2F = Object.assign({}, S.r2F, {[tab]: Object.assign({}, (S.r2F || {})[tab], {[key]: val})}); if (typed){ FinComReact.redraw(); later("r2f", render, 250); } else render(); }
@@ -1386,31 +1389,31 @@ function doAct(act, t){
     case "salaryClear": askConfirm({title: "Remove the salary sheet?", ok: "Remove", body: '<p class="note">The challans and everything else stay.</p>'}).then(ok => {
       if (!ok) return; S.books.salary = []; saveBooks(); toast("Removed."); render(); }); break;
     case "q24Excel": TDS24Q.toExcel(S.tdsFy || "", S.tdsQ || "Q4").then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break;
-    case "tdsTxt": { if (!ledgersReady("tds")) break; LedMaster.snap(S.books, "26Q " + (S.tdsQ || "") + " " + (S.tdsFy || "")); saveBooks();
+    case "tdsTxt": { if (!ledgersReady("tds")) break; LedMaster.snap(S.books, (S.tdsForm || "26Q") + " " + (S.tdsQ || "") + " " + (S.tdsFy || "")); saveBooks();
       const q = S.tdsQ || "", fy = S.tdsFy || "";
       if (!q || !fy){ toast("Choose the year and the quarter first."); break; }
-      const r = TDS26Q.build(fy, q, TDS26Q.firmDetails());
+      const r = TDS26Q.build(fy, q, TDS26Q.firmDetails(), S.tdsForm);
       if (r.error){ toast(r.error); break; }
       saveFile(r.name, new Blob([r.text], {type: "text/plain"}));
-      toast(r.rows + " deductions under " + r.challans + " challan" + (r.challans === 1 ? "" : "s") + ". Check it with the FVU before filing.");
+      toast(r.rows + (r.form === "27EQ" ? " collections" : " deductions") + " under " + r.challans + " challan" + (r.challans === 1 ? "" : "s") + (r.remarks ? ", " + r.remarks + " with a remark (certificate or higher rate)" : "") + ". Check it with the FVU before filing.");
       break;
     }
     case "tdsFvu": { if (!ledgersReady("tds")) break;
       const q = S.tdsQ || "", fy = S.tdsFy || "";
       if (!q || !fy){ toast("Choose the year and the quarter first."); break; }
-      const r = TDS26Q.build(fy, q, TDS26Q.firmDetails());
+      const r = TDS26Q.build(fy, q, TDS26Q.firmDetails(), S.tdsForm);
       if (r.error){ toast(r.error); break; }
       const co = CO();
       toast("Running the FVU on the Tally computer\u2026");
       Bridge.call("/fvu", {text: r.text, name: r.name, fvuJar: (co.fvuJar || ""), csi: (co.csiFile || ""), outDir: (co.fvuOut || "")}, 200000).then(res => {
         res = Object.assign({}, res, {ok: res.accepted != null ? !!res.accepted : !!res.ok});
-        S.fvuResult = Object.assign({at: new Date().toISOString(), q, fy}, res);
+        S.fvuResult = Object.assign({at: new Date().toISOString(), q, fy, form: r.form}, res);
         toast(res.ok ? "The FVU accepted it. The .fvu file is on the Tally computer." : "The FVU found problems. They are listed below.");
         render();
       }, e => { const msg = (e && e.message) || "the bridge did not answer"; S.fvuResult = {at: new Date().toISOString(), ok: false, errors: /Unknown address/.test(msg) ? "This needs Tally Bridge 1.10. Download it under Settings \u2192 Tally Bridge and run the setup on the Tally computer." : msg}; toast("Could not run the FVU: " + msg); render(); });
       break;
     }
-    case "tdsExcel": TDS.toExcel(S.tdsFy || "", S.tdsQ || "").then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break;
+    case "tdsExcel": TDS.toExcel(S.tdsFy || "", S.tdsQ || "", S.tdsForm).then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break;
     case "gstJson": if (!ledgersReady("gst")) break;
       // a month already filed: its return is not made again from the books as they are now
       { const ym = S.gstYm || "", reg = S.gstReg || "", pr = reg && ym ? GSTAmend.proof(ym, reg) : null;

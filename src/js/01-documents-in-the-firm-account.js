@@ -961,13 +961,22 @@ function compute(e, cid){
   const why = [], flags = [];
   let applicable = false, tdsBase = 0, catchUp = 0, meter = null;
 
-  let rate = 0, rateNote = "";
+  let rate = 0, rateNote = "", cert = null, normalRate = 0;
+  const inoperative = panOk && panInoperative(party);
   if (rule.basis !== "never"){
-    if (!panOk){ rate = rule.id === "goods" ? 5 : 20; rateNote = "No PAN: higher rate"; }
-    else { rate = indHuf ? num(rule.rateInd) : num(rule.rateOth); rateNote = rule.rateInd !== rule.rateOth ? (indHuf ? "Individual / HUF rate" : "Rate for others") : "Standard rate"; }
-    if (party && party.ldcRate !== undefined && party.ldcRate !== "" && party.ldcValidTo && x.invoiceDate && x.invoiceDate <= party.ldcValidTo){
-      rate = num(party.ldcRate); rateNote = "Lower deduction certificate (valid to " + fmtDate(party.ldcValidTo) + ")";
-      flags.push({lvl:"info", t:"Lower deduction certificate rate of " + rate + "% applied. Check the certificate limit has not been used up."});
+    normalRate = indHuf ? num(rule.rateInd) : num(rule.rateOth);
+    // a non-resident with a tax residency certificate and Form 10F: the treaty rate when it is lower
+    if (rule.nonResident && party && party.trc && party.dtaaRate !== undefined && party.dtaaRate !== "" && num(party.dtaaRate) < normalRate){
+      normalRate = num(party.dtaaRate); rateNote = "Treaty (DTAA) rate, tax residency certificate on file";
+    }
+    if (!panOk || inoperative){ rate = noPanRate(rule, normalRate); rateNote = inoperative ? "PAN inoperative: higher rate" : "No PAN: higher rate"; }
+    else { rate = normalRate; if (!rateNote) rateNote = rule.rateInd !== rule.rateOth ? (indHuf ? "Individual / HUF rate" : "Rate for others") : "Standard rate"; }
+    // a lower deduction certificate (old section 197) for this deductee, payment type and date; it needs a valid PAN
+    cert = panOk && !inoperative ? ldcFor(party, rule.id, x.invoiceDate) : null;
+    if (cert){
+      rate = num(cert.rate);
+      rateNote = "Lower deduction certificate" + (cert.no ? " " + cert.no : "") + (cert.to ? " (valid to " + fmtDate(cert.to) + ")" : "");
+      if (cert.old) flags.push({lvl:"info", t:"Lower deduction certificate rate of " + rate + "% applied. Add the certificate's number and amount under Deductees so its limit is tracked."});
     }
   }
 
@@ -1008,9 +1017,14 @@ function compute(e, cid){
       if (months > 1) flags.push({lvl:"", t:"This invoice covers " + months + " months. The monthly test used " + money0(perMonth) + " a month; confirm the period."});
       break;
     }
+    case "single":
+      // one payment of the limit or more (property: the consideration or the stamp duty value, ₹50 lakh)
+      if (base >= num(rule.single)){ applicable = true; tdsBase = base; why.push("The amount of " + money0(base) + " is " + money0(rule.single) + " or more."); }
+      else why.push("The amount of " + money0(base) + " is below " + money0(rule.single) + ".");
+      break;
     case "excess":
-      meter = {used:ytd.credited, add:base, limit:num(rule.limit), label:"Purchases from this seller this year vs limit"};
-      if (!co.turnover10cr){
+      meter = {used:ytd.credited, add:base, limit:num(rule.limit), label:(rule.turnoverTest ? "Purchases from this seller" : "Paid") + " this year vs limit"};
+      if (rule.turnoverTest && !co.turnover10cr){
         why.push("Not applied: this client's previous-year turnover is set as ₹10 crore or less (Client setup → TDS).");
       } else if (after > num(rule.limit)){
         applicable = true;
@@ -1030,13 +1044,25 @@ function compute(e, cid){
     flags.push({lvl:"", t:"Earlier bills worth " + money0(catchUp) + " this year had no TDS. " + (e.includeCatchUp ? "Their TDS is included in this entry." : "Their TDS is not included; tick the box to add it.")});
     if (e.includeCatchUp) tdsBase = r2(tdsBase + catchUp);
   }
-  const tdsWould = applicable ? Math.round(tdsBase * rate / 100) : 0;
+  // a certificate covers only its amount: what goes above it is at the normal rate
+  let certBase = 0;
+  if (cert && applicable){
+    const lim = num(cert.limit), used = lim ? ldcUsed(party, cert, cid, e) : 0;
+    certBase = lim ? r2(Math.max(0, Math.min(tdsBase, lim - used))) : tdsBase;
+    if (lim && certBase < tdsBase)
+      flags.push({lvl:"hi", t:"The lower deduction certificate" + (cert.no ? " " + cert.no : "") + " covers " + money0(lim) + "; " + money0(used) + " is used. " + money0(r2(tdsBase - certBase)) + " of this bill is above it, at the normal rate of " + normalRate + "%."});
+    else if (lim) flags.push({lvl:"info", t:"Certificate" + (cert.no ? " " + cert.no : "") + ": " + money0(r2(used + certBase)) + " of " + money0(lim) + " used after this bill."});
+  }
+  const tdsWould = !applicable ? 0 : cert ? Math.round(certBase * num(cert.rate) / 100 + r2(tdsBase - certBase) * normalRate / 100) : Math.round(tdsBase * rate / 100);
+  if (applicable && rule.payer) flags.push({lvl:"info", t:"This applies when the payer is " + rule.payer + "."});
+  if (applicable && rule.form && rule.form !== "26Q") flags.push({lvl:"info", t:"This deduction is reported in Form " + rule.form + ", not 26Q."});
   const skip = tdsWould > 0 ? tdsSkipOf(e, co, party) : null;
   const tds = skip ? 0 : tdsWould;
   if (skip) flags.push({lvl:"info", t:"TDS of " + money(tdsWould) + " applies but is not booked in this entry: " + skipText(skip) + ". The party is credited with the full amount."});
 
   try { itemChecks(e.x).forEach(c => flags.push({lvl: c.lvl === "warn" ? "" : "info", t: c.text})); } catch (err){}
   if (rule.basis !== "never" && !panOk) flags.push({lvl:"hi", t:"No valid PAN or GSTIN found, so the higher rate of " + rate + "% is used. Get the deductee's PAN."});
+  if (rule.basis !== "never" && inoperative) flags.push({lvl:"hi", t:"The deductee's PAN is marked inoperative (not linked with Aadhaar), so the higher rate of " + rate + "% is used. Clear the mark under Deductees once the PAN is operative again."});
   const g = String(x.vendorGstin || "").toUpperCase(), pp = String(x.vendorPan || "").toUpperCase();
   if (g && !gstinValid(g)) flags.push({lvl:"hi", t:"The supplier GSTIN " + g + " fails its check digit, so at least one character is wrong. Compare it with the bill."});
   if (x.buyerGstin && !gstinValid(x.buyerGstin)) flags.push({lvl:"", t:"The billed-to GSTIN " + x.buyerGstin + " fails its check digit. Compare it with the bill."});
@@ -1132,7 +1158,7 @@ function compute(e, cid){
     notIn.forEach(n => missing.push("\u201c" + n + "\u201d is not a ledger in Tally: pick one or create it"));
   } else if (e.status === "draft") flags.push({lvl:"", t:"The ledgers are not checked against Tally: this client's ledger list has not been read from Tally yet. Read it (Tally ledgers) so each line can be matched before approval."});
 
-  return {rule, party, base, total, gstTotal, fy, ytd, pan, panOk, indHuf, applicable, rate, rateNote, tdsBase, catchUp, tds, tdsWould, skip, anyway, gd, rcmTax, blocked, itc, why, flags, meter, lines, dr, cr, missing, tdsLedger, dup};
+  return {rule, party, base, total, gstTotal, fy, ytd, pan, panOk, indHuf, inoperative, cert, certBase, normalRate, applicable, rate, rateNote, tdsBase, catchUp, tds, tdsWould, skip, anyway, gd, rcmTax, blocked, itc, why, flags, meter, lines, dr, cr, missing, tdsLedger, dup};
 }
 
 /* ------------------------------------------------------------------ */
@@ -3405,7 +3431,7 @@ function approve(e){
   const k = invKey(e.x), co = CO(cid);
   if (k){ co.keys = co.keys || {}; co.keys[k] = e.approvedAt.slice(0, 10); pruneIndex(co.keys, 3000); Store.saveCompany(co); }
   e.applied = {partyId:party.id, fy:c.fy, natureId:c.rule.id, credited:c.base, tdsBase:addBase};
-  e.snapshot = {lines:c.lines, tds:c.tds, tdsWould:c.tdsWould, skip:c.skip, rcm:c.rcmTax ? Object.assign({cat:e.rcm.cat}, c.rcmTax) : null, blocked:c.gd.block ? c.gd.block.cat : null, noItc:c.itc && !c.itc.ok ? c.itc.why : null, rate:c.rate, tdsBase:c.tdsBase, base:c.base, total:c.total, pan:c.pan, ref:c.rule.ref, old:c.rule.old, label:c.rule.label,
+  e.snapshot = {lines:c.lines, tds:c.tds, tdsWould:c.tdsWould, skip:c.skip, rcm:c.rcmTax ? Object.assign({cat:e.rcm.cat}, c.rcmTax) : null, blocked:c.gd.block ? c.gd.block.cat : null, noItc:c.itc && !c.itc.ok ? c.itc.why : null, rate:c.rate, tdsBase:c.tdsBase, base:c.base, total:c.total, pan:c.pan, ref:c.rule.ref, old:c.rule.old, label:c.rule.label, cert:c.cert && c.applicable ? (c.cert.no || "-") : "", certBase:c.cert && c.applicable ? c.certBase : 0, certRate:c.cert ? num(c.cert.rate) : null, normalRate:c.normalRate, inoperative:!!c.inoperative, form:c.rule.form || "26Q",
     applicable:c.applicable, catchUp:e.includeCatchUp ? c.catchUp : 0, why:c.why, meter:c.meter, fy:c.fy, rateNote:c.rateNote, indHuf:c.indHuf, never:c.rule.basis === "never"};
   Store.saveParty(cid, party);
   Store.saveEntry(cid, e);
