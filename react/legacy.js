@@ -35,7 +35,10 @@ const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
 const APP_VERSION = "TEST · 30 Sep 2026 · build 199 (posting queue: post from any computer, the Tally computer posts when Tally is free; posted entries go to the cloud without reading Tally again; bridge 1.14.6)";
 // the Tally Bridge setup file's fingerprint, put in by build.py: a new setup file is never served from an old cache
-const BRIDGE_SETUP_SHA = "22f7d1ed37e77dee";
+const BRIDGE_SETUP_SHA = "708c175910ab9d56";
+// the bridge Setup handed out: assets/bridge-setup.txt on the live site; the testing builds (build.py to_test) hand out
+// assets/bridge-setup-test.txt, so a new bridge is tried on staging without changing what live users download
+const BRIDGE_SETUP_ID = "bridge-setup-test";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;
@@ -231,10 +234,11 @@ const CloudDocs = {
       try {
         const small = await this.shrink(job.file);
         const path = this.path(job.cid, job.id, small.name);
+        await Cloud.fresh().catch(() => {});
         const c = Cloud.cfg(), s = Cloud.sess();
         const url = c.url.replace(/\/+$/, "") + "/storage/v1/object/client-docs/" + path.split("/").map(encodeURIComponent).join("/");
         let r = await fetch(url, {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "x-upsert": "true", "Content-Type": small.type || "application/octet-stream"}, body: small});
-        if (r.status === 401){ await Cloud.refreshToken(); r = await fetch(url, {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + Cloud.sess().access_token, "x-upsert": "true", "Content-Type": small.type || "application/octet-stream"}, body: small}); }
+        if (r.status === 401){ await Cloud.refreshToken(s.access_token); r = await fetch(url, {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + Cloud.sess().access_token, "x-upsert": "true", "Content-Type": small.type || "application/octet-stream"}, body: small}); }
         if (!r.ok) throw new Error("upload " + r.status);
         this.note(job, path, small.size);
         this.queue.shift();
@@ -270,10 +274,11 @@ const CloudDocs = {
     }
   },
   async fetchFile(path, name){
+    await Cloud.fresh().catch(() => {});
     const c = Cloud.cfg(), s = Cloud.sess();
     const url = c.url.replace(/\/+$/, "") + "/storage/v1/object/client-docs/" + path.split("/").map(encodeURIComponent).join("/");
     let r = await fetch(url, {headers: {apikey: c.key, Authorization: "Bearer " + s.access_token}});
-    if (r.status === 401){ await Cloud.refreshToken(); r = await fetch(url, {headers: {apikey: c.key, Authorization: "Bearer " + Cloud.sess().access_token}}); }
+    if (r.status === 401){ await Cloud.refreshToken(s.access_token); r = await fetch(url, {headers: {apikey: c.key, Authorization: "Bearer " + Cloud.sess().access_token}}); }
     if (!r.ok) throw {code: "doc_missing", message: "the document could not be fetched (" + r.status + ")"};
     const blob = await r.blob();
     return new File([blob], name || path.split("-").slice(1).join("-") || "document", {type: blob.type || "application/octet-stream"});
@@ -545,7 +550,21 @@ function fyOf(d){
   return s + "-" + String((s + 1) % 100).padStart(2, "0");
 }
 S.partyFy = fyOf(null);
-function fmtDate(d){ if (!d) return "—"; const dt = new Date(String(d).slice(0, 10) + "T00:00:00"); return isNaN(dt) ? String(d).replace(/[^\w \-\/.:]/g, "") : dt.toLocaleDateString("en-IN", {day:"2-digit", month:"short", year:"numeric"}); }
+// One date format everywhere (review item 31): 19-Sep-2026, and 19-Sep-2026 09:32 with the time (24-hour, this computer's time)
+const MONTHS3 = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function toDateObj(d){
+  if (d instanceof Date) return d;
+  if (typeof d === "number") return new Date(d);
+  const t = String(d);
+  return /^\d{4}-\d{2}-\d{2}$/.test(t.slice(0, 10)) && t.length <= 10 ? new Date(t + "T00:00:00") : new Date(t);
+}
+function fmtDate(d){
+  if (!d && d !== 0) return "—";
+  const dt = toDateObj(d);
+  return isNaN(dt) ? String(d).replace(/[^\w \-\/.:]/g, "") : String(dt.getDate()).padStart(2, "0") + "-" + MONTHS3[dt.getMonth()] + "-" + dt.getFullYear();
+}
+function fmtTime(d){ if (!d && d !== 0) return ""; const dt = toDateObj(d); return isNaN(dt) ? "" : String(dt.getHours()).padStart(2, "0") + ":" + String(dt.getMinutes()).padStart(2, "0"); }
+function fmtDateTime(d){ if (!d && d !== 0) return "—"; const dt = toDateObj(d); return isNaN(dt) ? "—" : fmtDate(dt) + " " + fmtTime(dt); }
 function effectivePan(x){
   const pan = String(x.vendorPan || "").toUpperCase().trim();
   if (PAN_RE.test(pan)) return pan;
@@ -1284,7 +1303,7 @@ function compute(e, cid){
   const missing = [];
   if (e.docKind && !e.docOverride) missing.push("your confirmation that this really is a purchase bill");
   if (x.buyerGstin && co.gstin && String(x.buyerGstin).toUpperCase() !== co.gstin && !e.buyerOverride) missing.push("your confirmation that this bill belongs to " + co.name);
-  if (!x.vendorName) missing.push("deductee name");
+  if (!x.vendorName) missing.push("supplier name");
   if (!x.invoiceDate) missing.push("invoice date");
   if (!(base > 0)) missing.push("taxable value");
   if (!e.partyLedger) missing.push("party ledger");
@@ -1485,7 +1504,7 @@ function blockText(id){
   const el = document.getElementById(id);
   if (el) return Promise.resolve(el.textContent);
   if (!window.TDS_ASSETS) return Promise.resolve(null);
-  if (!blockCache[id]) blockCache[id] = fetch(window.TDS_ASSETS + id + ".txt?b=" + ((String(typeof APP_VERSION === "string" ? APP_VERSION : "").match(/build (\d+)/) || [])[1] || "") + (id === "bridge-setup" ? "&s=" + BRIDGE_SETUP_SHA : ""), {cache: "force-cache"}).then(r => {
+  if (!blockCache[id]) blockCache[id] = fetch(window.TDS_ASSETS + id + ".txt?b=" + ((String(typeof APP_VERSION === "string" ? APP_VERSION : "").match(/build (\d+)/) || [])[1] || "") + (id === BRIDGE_SETUP_ID ? "&s=" + BRIDGE_SETUP_SHA : ""), {cache: "force-cache"}).then(r => {
     if (!r.ok) throw {code: "asset_missing", message: id + " could not be fetched (" + r.status + ")"};
     return r.text();
   }).catch(e => { delete blockCache[id]; throw e; });
@@ -3044,7 +3063,7 @@ async function fileHash(file){
   hashCache.set(file, h);
   return h;
 }
-function statusLabel(st){ return ({draft:"to review", approved:"approved", rejected:"marked no entry", duplicate:"held as duplicate"})[st] || st; }
+function statusLabel(st){ return ({draft:"to review", approved:"approved", rejected:"marked no entry", duplicate:"held as duplicate", deleted:"deleted"})[st] || st; }
 function findHash(h){
   if (S.pendingHashes[h]) return {msg:"The same file is already in this upload."};
   for (const c of Object.values(S.companies)){
@@ -3105,7 +3124,7 @@ function findDuplicate(e, cid){
   const k = invKey(e.x);
   if (k){
     for (const o of Object.values(D(cid).entries)){
-      if (o.id === e.id || o.status === "duplicate" || o.notDuplicate) continue;
+      if (o.id === e.id || o.status === "duplicate" || o.status === "deleted" || o.notDuplicate) continue;
       if (invKey(o.x) === k) return {entryId:o.id, strong:true,
         msg:"Same supplier and bill number as " + (o.x.vendorName || o.fileName) + " bill " + o.x.invoiceNo + " dated " + fmtDate(o.x.invoiceDate) + " (" + statusLabel(o.status) + ")."};
     }
@@ -3809,7 +3828,7 @@ function perRender(o, key, fn){
 function memoScope(fn){ if (!IN_RENDER) RENDER_GEN++; IN_RENDER++; try { return fn(); } finally { IN_RENDER--; } }
 function render(){
   RENDER_GEN++; IN_RENDER++;
-  try { return renderNow(); } finally { IN_RENDER--; }
+  try { return renderNow(); } finally { IN_RENDER--; if (!IN_RENDER && typeof Route === "object") Route.sync(); }
 }
 // render(): what the screen of the moment needs loaded, before React draws the page (app/src/Main.jsx); and what the
 // page needs once drawn (afterRender, called by app/src/store.js after React has drawn)
@@ -3913,7 +3932,7 @@ function tallyStateOf(e){
 }
 function txnRowsBills(){
   const co = CO(), d = D();
-  return Object.values(d.entries).map(e => {
+  return Object.values(d.entries).filter(e => e.status !== "deleted").map(e => {
     const x = e.x || {}, gst = num(x.cgst) + num(x.sgst) + num(x.igst) + num(x.cess);
     const [cls, label] = tallyStateOf(e);
     return {id: e.id, kind: "bill", date: x.invoiceDate || "", up: (e.createdAt || "").slice(0, 10), vch: vchTypeOf(e, co), no: x.invoiceNo || "",
@@ -3970,6 +3989,24 @@ function txnFiltered(rows){
 }
 // the register: React (app/src/screens/Txn.jsx)
 function viewTransactions(){ return '<div data-react="Txn"></div>'; }
+// the register as an Excel file (review item 30), the same rows and columns as the CSV, amounts as numbers
+function txnTable(){
+  const tab = txnTab();
+  const rows = txnFiltered(tab === "bills" ? txnRowsBills() : tab === "sales" ? txnRowsSales() : txnRowsBank());
+  const head = ["S. no.", "Date", "Uploaded", "Voucher", tab === "bank" ? "Reference" : "Invoice no.", tab === "sales" ? "Customer" : "Party",
+    tab === "bank" ? "Withdrawal (₹)" : "Taxable (₹)", tab === "bank" ? "Deposit (₹)" : "GST (₹)", tab === "bank" ? "Amount (₹)" : "Invoice value (₹)", "In Tally", "Document"];
+  const body = rows.map((r, i) => [i + 1, r.date ? fmtDate(r.date) : "", r.up ? fmtDate(r.up) : "", r.vch, r.no, r.party,
+    num(tab === "bank" ? r.dr : r.taxable) || "", num(tab === "bank" ? r.cr : r.gst) || "", num(r.total) || "", r.label, r.file]);
+  return {tab, head, body};
+}
+function txnExcel(){
+  const t = txnTable();
+  FC.excel("transactions-" + t.tab + "-" + new Date().toISOString().slice(0, 10), [[{bills: "Purchase", sales: "Sales", bank: "Bank"}[t.tab] || t.tab, [t.head].concat(t.body)]]);
+}
+// columns that can be hidden (the chooser on the Transactions page)
+const TXN_COLS = [["date", "Date"], ["vch", "Voucher"], ["no", "Invoice no. / Reference"], ["party", "Party"], ["amts", "Taxable and GST / Withdrawal and deposit"], ["val", "Invoice value / Amount"], ["status", "In Tally"], ["doc", "Document"]];
+function txnColShown(k){ return !(S.txnHide && S.txnHide[k]); }
+function txnColToggle(k){ S.txnHide = Object.assign({}, S.txnHide, {[k]: txnColShown(k)}); render(); }
 function txnCsv(){
   const tab = txnTab(), co = CO();
   const rows = txnFiltered(tab === "bills" ? txnRowsBills() : tab === "sales" ? txnRowsSales() : txnRowsBank());
@@ -4050,6 +4087,16 @@ const Books = {
       .replace(/&#(\d+);/g, (m, n) => { const c = num(n); return c >= 32 && c < 127 ? String.fromCharCode(c) : " "; })
       .replace(/&amp;/g, "&").trim();
   },
+  // each pay head of a payroll voucher, summed over its employees: [[pay head, amount]] (Tally's sign: debit negative)
+  payheads(s){
+    if (s.indexOf("<PAYHEADALLOCATIONS.LIST>") < 0) return [];
+    const by = new Map();
+    s.split("<PAYHEADALLOCATIONS.LIST>").slice(1).forEach(p => {
+      const q = p.split("</PAYHEADALLOCATIONS.LIST>")[0], n = this.one(q, "PAYHEADNAME"), a = this.amt(this.one(q, "AMOUNT"));
+      if (n && a) by.set(n, Math.round(((by.get(n) || 0) + a) * 100) / 100);
+    });
+    return Array.from(by.entries()).filter(([, a]) => Math.abs(a) >= 0.005);
+  },
   takeVoucher(s, out, meta){
     const type = (s.match(/VCHTYPE="([^"]*)"/) || [])[1] || "";
     const v = {
@@ -4107,7 +4154,9 @@ const Books = {
         if (e.indexOf("<BILLALLOCATIONS.LIST>") >= 0){
           const bl = e.split("<BILLALLOCATIONS.LIST>").slice(1).map(p2 => {
             const q = p2.split("</BILLALLOCATIONS.LIST>")[0];
-            return [this.one(q, "NAME"), this.one(q, "BILLTYPE"), this.amt(this.one(q, "AMOUNT"))];
+            // review of 01-Oct-2026: Tally's credit period on a New Ref ("30 Days"), so ageing can run from the due date
+            const cp = (q.match(/<BILLCREDITPERIOD\b[^>]*>([^<]*)<\/BILLCREDITPERIOD>/) || [])[1] || "", dm = cp.match(/^\s*(\d{1,4})\s*Days?\s*$/i);
+            return dm ? [this.one(q, "NAME"), this.one(q, "BILLTYPE"), this.amt(this.one(q, "AMOUNT")), Number(dm[1])] : [this.one(q, "NAME"), this.one(q, "BILLTYPE"), this.amt(this.one(q, "AMOUNT"))];
           }).filter(z => z[1] && z[2]);
           if (bl.length) x.b = bl;
         }
@@ -4123,6 +4172,16 @@ const Books = {
         v.ent.push(x);
       });
     });
+    // review of 01-Oct-2026: a payroll voucher (Tally's PaySlip view) has no ledger lines; its pay heads sit in each
+    // employee's allocations. A pay head is a ledger in Tally: earnings are debits, deductions (PF, advance) credits, and
+    // the party ledger (Salary Payable) takes the net. A pay head already among the ledger lines is not counted again
+    const pays = this.payheads(s);
+    if (pays.length){
+      const have = new Set(v.ent.map(e => e.l)); let tot = 0;
+      pays.forEach(([l, a]) => { tot = Math.round((tot + a) * 100) / 100; if (!have.has(l)) v.ent.push({l, a, r: null}); });
+      const party = this.one(s, "PARTYLEDGERNAME");
+      if (party && !have.has(party) && Math.abs(tot) >= 0.005) v.ent.push({l: party, a: Math.round(-tot * 100) / 100, r: null});
+    }
     // the rate on an item line, when the tax ledgers do not carry one
     if (!v.ent.some(e => e.r)){
       const rate = this.one(s, "GSTRATE");
@@ -4326,6 +4385,24 @@ const Books = {
     if (/PUR|PURCHASE/i.test(v.type) || /DEBIT NOTE/i.test(v.type)) return true;
     if (/SALE|SALES|CREDIT NOTE|EXPORT/i.test(v.type)) return false;
     return this.byContent(v, /^purchase accounts$/i, true);
+  },
+  // review of 01-Oct-2026: the supplier's invoice number of a purchase or expense entry, for 2B reconciliation and the
+  // inward register. Many clients keep it in the voucher number, or write it in the narration, not in Tally's Reference
+  // field. Client setup > Tally says where (co.supInvFrom: "ref", "vno" or "narr"); whichever is chosen, an empty field
+  // gives way to the next: Reference, the voucher number, then an invoice number found in the narration
+  SUPINV: {ref: "Reference", vno: "Voucher no.", narr: "Narration"},
+  invInNarr(t){
+    const s = String(t || "");
+    const m = s.match(/\b(?:inv(?:oice)?|bill)\s*(?:no\.?|number|num|#)?\s*[:.\-#]?\s*([A-Z0-9][A-Z0-9\/\-_.]{0,29}\d[A-Z0-9\/\-_.]*)/i)
+      || s.match(/\b([A-Z]{1,8}[\/\-][A-Z0-9\/\-]{1,25}\d)\b/i);
+    return m ? m[1].replace(/[.\-\/]+$/, "") : "";
+  },
+  supInv(v, how){
+    how = how || ((typeof CO === "function" && CO()) || {}).supInvFrom || "ref";
+    const ref = String(v.ref || "").trim(), no = String(v.no || "").trim(), nr = () => this.invInNarr(v.narr);
+    if (how === "vno") return no || ref || nr();
+    if (how === "narr") return nr() || ref || no;
+    return ref || no || nr();
   },
   isSale(v){
     if (this.NONACC.test(v.type)) return false;
@@ -5202,16 +5279,22 @@ const MIS = {
       v.ent.forEach(e => {
         if (!want(e.l)) return;
         const alloc = e.b && e.b.length ? e.b : [["", "On Account", e.a]];
-        alloc.forEach(([name, type, amt]) => {
+        alloc.forEach(([name, type, amt, days]) => {
           const k = e.l + "|" + (type === "On Account" || !name ? "\u0000" : name);
           const x = ref[k] = ref[k] || {party: e.l, ref: type === "On Account" || !name ? "" : name, date: "", amt: 0, first: v.date, no: ""};
           const signed = side === "r" ? -amt : amt;            // what is owed to us (r) or by us (p)
-          if ((type === "New Ref" || type === "Advance") && !x.date){ x.date = v.date; x.no = v.no; x.hasNew = true; }
+          if ((type === "New Ref" || type === "Advance") && !x.date){ x.date = v.date; x.no = v.no; x.hasNew = true; if (type === "New Ref" && days > 0) x.days = days; }
           x.amt = r2(x.amt + signed);
         });
       });
     });
-    return Object.values(ref).filter(x => Math.abs(x.amt) >= 0.5).map(x => Object.assign(x, {date: x.date || x.first, age: Audit.days(x.date || x.first, asOn)}));
+    // age: days since the bill (MSME's 45 days, reminders and Look up count from here). od (review of 01-Oct-2026): what
+    // the ageing goes by, the days overdue from the due date (bill date + Tally's credit days; nought while not yet due),
+    // or the age when the bill has no credit period
+    return Object.values(ref).filter(x => Math.abs(x.amt) >= 0.5).map(x => {
+      const date = x.date || x.first, due = x.days ? this.shift(date, 0, x.days) : "", age = Audit.days(date, asOn);
+      return Object.assign(x, {date, due, age, od: due ? Math.max(0, Audit.days(due, asOn)) : age});
+    });
   },
   BUCKETS: [[30, "0\u201330"], [60, "31\u201360"], [90, "61\u201390"], [180, "91\u2013180"], [1e9, "over 180"]],
   ageing(asOn, side, bal){
@@ -5221,7 +5304,7 @@ const MIS = {
       if (!x.ref){ p.unalloc = r2(p.unalloc + x.amt); }
       else if (!x.hasNew){ p.pre = r2(p.pre + x.amt); }                // a bill from before the books read here
       else if (x.amt < 0){ p.adv = r2(p.adv + x.amt); }
-      else { const i = this.BUCKETS.findIndex(([d]) => x.age <= d); p.b[i] = r2(p.b[i] + x.amt); p.oldest = Math.max(p.oldest, x.age); }
+      else { const a = x.od != null ? x.od : x.age, i = this.BUCKETS.findIndex(([d]) => a <= d); p.b[i] = r2(p.b[i] + x.amt); p.oldest = Math.max(p.oldest, a); }
       p.total = r2(p.total + x.amt); p.bills.push(x);
     });
     const rows = Object.values(by);
@@ -5231,6 +5314,20 @@ const MIS = {
     rows.sort((a, c) => c.total - a.total || a.party.localeCompare(c.party));
     const sum = rows.reduce((s, p) => ({total: r2(s.total + p.total), b: s.b.map((v, i) => r2(v + p.b[i])), adv: r2(s.adv + p.adv), unalloc: r2(s.unalloc + p.unalloc), pre: r2(s.pre + p.pre), tally: p.tally != null ? r2((s.tally || 0) + p.tally) : s.tally}), {total: 0, b: [0, 0, 0, 0, 0], adv: 0, unalloc: 0, pre: 0, tally: null});
     sum.open = r2(sum.b.reduce((a, v) => a + v, 0));
+    // review of 01-Oct-2026: what each party owes on balance (Tally's balance when known, else its bills), aged so the
+    // ages add up to it: payments on account, advances, older settlements and any difference to Tally are set against
+    // the oldest bills first; an amount owed that no bill dates is "not dated". A party whose balance runs the other
+    // way (a supplier with a debit balance) owes nothing here: it is an advance, shown on its own, as a positive figure
+    rows.forEach(p => {
+      const net = r2(p.tally != null ? p.tally : p.total), nb = p.b.slice();
+      let extra = r2(net - nb.reduce((a, v) => a + v, 0));
+      for (let i = nb.length - 1; i >= 0 && extra < 0; i--){ const take = Math.min(nb[i], -extra); nb[i] = r2(nb[i] - take); extra = r2(extra + take); }
+      p.net = net; p.nb = net > 0 ? nb : nb.map(() => 0); p.und = net > 0 && extra > 0 ? extra : 0; p.advance = net < 0 ? r2(-net) : 0;
+    });
+    sum.owe = r2(rows.reduce((a, p) => a + Math.max(0, p.net), 0));
+    sum.advance = r2(rows.reduce((a, p) => a + p.advance, 0));
+    sum.nb = MIS.BUCKETS.map((_, i) => r2(rows.reduce((a, p) => a + p.nb[i], 0)));
+    sum.und = r2(rows.reduce((a, p) => a + p.und, 0));
     return {rows, sum};
   },
   msme(){
@@ -5241,17 +5338,32 @@ const MIS = {
   },
   sales(from, to){
     const by = {}, months = this.monthsOf(from, to), byState = {}, byReg = {};
+    // review of 01-Oct-2026: with the masters read, sales are the Sales Accounts ledgers themselves (credit positive, a
+    // credit note's debit taking off), as Tally's profit and loss shows them: the taxable value of a sale entry counted a
+    // customer's own line in some entries (1,49,860 too much on one client's year). Direct and indirect incomes are
+    // kept apart, as other income. Without the masters, the taxable value of the sale entries, as before
+    const masters = Audit.mastersIn(), A = Audit;
+    let other = 0;
     (S.books.vouchers || []).forEach(v => {
-      if (v.date < from || v.date > to || !Books.isSale(v) || v.opt || v.cancel) return;
-      const L = Books.lines(v), sign = /CREDIT NOTE/i.test(v.type) ? -1 : 1, amt = r2(L.taxable * sign), ym = this.ym(v.date);
-      const p = by[v.party] = by[v.party] || {party: v.party, t: 0, m: {}, n: 0}; p.t = r2(p.t + amt); p.m[ym] = r2((p.m[ym] || 0) + amt); p.n++;
+      if (v.date < from || v.date > to || v.opt || v.cancel) return;
+      if (masters){
+        v.ent.forEach(e => { if (A.under(e.l, /^(direct|indirect) incomes$/i)) other = r2(other + e.a); });
+        const sa = v.ent.filter(e => A.under(e.l, /^sales accounts$/i));
+        if (!sa.length) return;
+      } else if (!Books.isSale(v)) return;
+      const L = masters ? null : Books.lines(v), sign = /CREDIT NOTE/i.test(v.type) ? -1 : 1;
+      const amt = masters ? r2(v.ent.filter(e => A.under(e.l, /^sales accounts$/i)).reduce((t, e) => t + e.a, 0)) : r2(L.taxable * sign), ym = this.ym(v.date);
+      if (!amt) return;
+      // an entry with no party name: the customer is its debtor line (or the line taking the other side)
+      const who = v.party || (v.ent.find(e => Audit.isDebtor(e.l)) || v.ent.find(e => (e.a < 0) !== (amt < 0) && !Audit.under(e.l, /^sales accounts$/i)) || {}).l || "\u2014";
+      const p = by[who] = by[who] || {party: who, t: 0, m: {}, n: 0}; p.t = r2(p.t + amt); p.m[ym] = r2((p.m[ym] || 0) + amt); p.n++;
       const st = v.pos || "\u2014"; byState[st] = r2((byState[st] || 0) + amt);
       const rg = GSTR.regOf(v) || "\u2014"; byReg[rg] = r2((byReg[rg] || 0) + amt);
     });
     const rows = Object.values(by).sort((a, c) => c.t - a.t || a.party.localeCompare(c.party));
     const total = r2(rows.reduce((s, x) => s + x.t, 0));
     const before = new Set((S.books.vouchers || []).filter(v => v.date < from && Books.isSale(v)).map(v => v.party));
-    return {rows, total, months, byState: Object.entries(byState).sort((a, c) => c[1] - a[1]), byReg: Object.entries(byReg).sort((a, c) => a[0].localeCompare(c[0])),
+    return {rows, total, other, months, byState: Object.entries(byState).sort((a, c) => c[1] - a[1]), byReg: Object.entries(byReg).sort((a, c) => a[0].localeCompare(c[0])),
       top5: rows.slice(0, 5).reduce((s, x) => s + x.t, 0), fresh: this.covered(this.shift(from, -1)) ? rows.filter(x => !before.has(x.party)).length : null};
   },
   purchases(from, to){
@@ -5330,8 +5442,9 @@ const MIS = {
       mtd: this.covered(mFrom) ? this.sales(mFrom, to).total : null, ytd: this.covered(fyFrom) ? this.sales(fyFrom, to).total : null,
       cash: this.cashflow(from, to), recv: this.ageing(to, "r", balTo), pay: this.ageing(to, "p", balTo), comp: this.compliance(from, to), dues: this.dues(to),
       balances: bal.ok ? {src: bal.src, cash: Object.keys(balTo).filter(l => Audit.isCash(l)).sort().map(l => [l, r2(-balTo[l])]), bank: Object.keys(balTo).filter(l => Audit.isBankL(l)).sort().map(l => [l, r2(-balTo[l])])} : {why: bal.why}};
-    r.dso = r.recv.sum.total && s.total ? Math.round(r.recv.sum.total / (s.total / days)) : null;
-    r.dpo = r.pay.sum.total && pr.total ? Math.round(r.pay.sum.total / (pr.total / days)) : null;
+    // days of sales or purchases owed: from what is owed on balance; never below nought (an advance is not "negative days")
+    r.dso = r.recv.sum.owe > 0 && s.total > 0 ? Math.round(r.recv.sum.owe / (s.total / days)) : null;
+    r.dpo = r.pay.sum.owe > 0 && pr.total > 0 ? Math.round(r.pay.sum.owe / (pr.total / days)) : null;
     r.p2 = this.phase2(r, balTo, bal.ok ? r2(r.balances.cash.concat(r.balances.bank).reduce((s2, x) => s2 + x[1], 0)) : null);
     const md = this.cfg(b).msmeDays, msme = this.msme();
     r.msme = r.pay.rows.filter(p => /micro|small/i.test(msme[p.party] || "")).map(p => ({party: p.party, type: msme[p.party], bills: p.bills.filter(x => x.ref && x.amt > 0 && x.age > md)})).filter(x => x.bills.length)
@@ -6253,7 +6366,7 @@ const GST2B = {
       // tax alone, with no supplier's GSTIN and no value beside it: a rounding or reversal entry
       if (!taxable && !gstin){ this.skipped.taxOnly++; return; }
       if (!reg) reg = String(v.cmp || "").slice(0, 2) || (regs.length === 1 ? regs[0] : "");
-      const no = v.ref || v.no || "";
+      const no = Books.supInv(v);
       out.push({id: v.id, voucher: v.no || "", type: v.type, party: party || "", gstin, no: String(no), noN: this.normNo(no), core: this.coreNo(no),
         date: v.refDate || v.date, bookDate: v.date, ym: String(v.date).slice(0, 6), reg,
         taxable, igst: tax.IGST, cgst: tax.CGST, sgst: tax.SGST, cess: tax.CESS,
@@ -6275,7 +6388,7 @@ const GST2B = {
   // match every 2B document against every book document, strongest evidence first
   run(reg){
     const b = S.books, st = this.state(), tol = num(this.settings().tol) || 1;
-    const key = [reg, b.vouchers && b.vouchers.length, b.mapV || 0, Object.keys(b.gstins || {}).length, Object.keys(b.twoBs || {}).join(","), JSON.stringify(st.confirm), JSON.stringify(st.link), tol, S.coId].join("|");
+    const key = [reg, b.vouchers && b.vouchers.length, b.mapV || 0, Object.keys(b.gstins || {}).length, Object.keys(b.twoBs || {}).join(","), JSON.stringify(st.confirm), JSON.stringify(st.link), tol, S.coId, (CO() || {}).supInvFrom || "ref"].join("|");
     if (this._memo && this._memo.key === key && this._memo.v === b.vouchers) return this._memo.res;
     const portal = [], rejRows = [];
     this.all2b(reg).forEach(t => t.rows.forEach(r => (r.rej ? rejRows : portal).push(r)));
@@ -6571,7 +6684,7 @@ const GSTR = {
         parts = [{rate: rt, hsn: parts[0] ? parts[0].hsn : "", supply: v.supply || "", taxable, igst: L.tax.IGST, cgst: L.tax.CGST, sgst: L.tax.SGST, cess: L.tax.CESS, guessed}];
       }
       if (!taxable && !tax) return;
-      out.push({id: v.id, date: v.date, no: v.ref || v.no || "", voucher: v.no || "", type: v.type, party, gstin, refDate: v.refDate || "",
+      out.push({id: v.id, date: v.date, no: Books.supInv(v), voucher: v.no || "", type: v.type, party, gstin, refDate: v.refDate || "",
         taxable, cgst: L.tax.CGST, sgst: L.tax.SGST, igst: L.tax.IGST, cess: L.tax.CESS, parts, valueGuessed: guessed, bill: purch,
         cls: Books.supplyClass(v), rcm, import: Books.isImport(v), supply: v.supply || (parts[0] && parts[0].supply) || "",
         blocked: !!v.ineligibleFlag, hsn: (parts[0] && parts[0].hsn) || (v.hsn || [])[0] || "",
@@ -7836,9 +7949,44 @@ const TallyRead = {
   },
   balances(b, j, from, to){
     const led = {};
-    [].concat(j.ledgers || []).forEach(l => { led[l.name] = {open: Books.amt(l.open), close: Books.amt(l.close), parent: l.parent || ""}; });
+    // a ledger whose name in Tally ends in a line break is named without it, as the day book's entries name it
+    // (Books.unesc), so its balance and group meet its entries; two such names are one ledger (review of 01-Oct-2026)
+    const nm = n => String(n || "").replace(/(&#13;|&#10;|\r|\n)+/g, " ").trim();
+    [].concat(j.ledgers || []).forEach(l => {
+      const k = nm(l.name), had = led[k];
+      led[k] = {open: r2((had ? had.open : 0) + Books.amt(l.open)), close: r2((had ? had.close : 0) + Books.amt(l.close)), parent: (had && had.parent) || l.parent || ""};
+    });
     b.tb = {from, to, at: new Date().toISOString(), led};
     Object.entries(led).forEach(([n, x]) => { if (x.parent) (b.under = b.under || {})[n] = (b.under[n] || x.parent); });
+    this.yearOpen(b);
+  },
+  // review of 01-Oct-2026 (owner's go-ahead): at the start of a financial year, income and expense ledgers open at nil
+  // and their total goes to Profit & Loss A/c, as Tally does. Balances taken as on 31 March (a trial balance file, the
+  // cloud copy before its groups came) still carry last year's income and expenses. Needs the groups; what was read is
+  // kept as openSent, so this can be done again whenever the groups or the balances change. The cloud copy does the same
+  // (tally_year_openings, migration-8)
+  NOMINAL: ["Sales Accounts", "Purchase Accounts", "Direct Incomes", "Direct Expenses", "Indirect Incomes", "Indirect Expenses"],
+  primaryOf(b, n){
+    const under = b.under || {}, groups = b.groups || {}, prim = s => !s || /^\W*Primary$/i.test(s);
+    let p = under[n], last = "";
+    for (let i = 0; !prim(p) && i < 30; i++){ last = p; p = groups[p]; }
+    return last;
+  },
+  yearOpen(b){
+    const tb = b && b.tb, led = tb && tb.led;
+    if (!led || !Object.keys(b.groups || {}).length) return false;
+    Object.values(led).forEach(x => { if (x.openSent == null) x.openSent = x.open; x.open = x.openSent; });
+    if (!/0401$/.test(String(tb.from || ""))) return false;
+    const PL = "Profit & Loss A/c", nominal = new Set(this.NOMINAL);
+    let moved = 0, n = 0;
+    Object.entries(led).forEach(([name, x]) => {
+      if (name === PL || !nominal.has(this.primaryOf(b, name)) || !num(x.openSent)) return;
+      moved = r2(moved + num(x.openSent)); x.open = 0; n++;
+    });
+    if (!n) return false;
+    const pl = led[PL] = led[PL] || {open: 0, openSent: 0, close: 0, parent: ""};
+    pl.open = r2(num(pl.openSent) + moved);
+    return true;
   },
   // after the books changed (read from Tally, changes brought in from the kept copy or the cloud, a day book file):
   // every section follows. Screens work from the entries as they are; audit and MIS are worked out again for the
@@ -10229,7 +10377,9 @@ function runRules(rows, opts){
   let hit = 0;
   (rows || b.rows).forEach(r => {
     if (r.state === "sent" || r.state === "intally") return;
-    if (r.userSet && !(opts && opts.force)) return;          // never overwrite a person's choice
+    // never overwrite a person's choice, whatever runs the rules: "Apply to this statement", a rule made, changed,
+    // paused or moved (review of 01-Oct-2026: opts.force used to re-apply over lines set by hand)
+    if (r.userSet) return;
     const rule = matchRule(r, co, acc);
     if (!rule) return;
     applyRule(rule, r, co, acc);
@@ -10595,9 +10745,10 @@ function bulkAction(kind, ledger){
   else {
     rows.forEach(r => {
       if (r.state === "sent"){ skipped++; return; }
-      if (kind === "accept"){ if (r.ledger){ r.state = "ready"; n++; } else skipped++; }
-      if (kind === "ignore"){ if (r.state !== "ignored"){ r.prevState = r.state; r.state = "ignored"; n++; } }
-      if (kind === "restore"){ if (r.state === "ignored" || r.state === "intally"){ r.state = r.ledger ? "ready" : "attention"; delete r.tallyIdx; n++; } }
+      // accepted, set aside or brought back by hand: a person's choice, which no rule changes afterwards
+      if (kind === "accept"){ if (r.ledger){ r.state = "ready"; r.userSet = true; n++; } else skipped++; }
+      if (kind === "ignore"){ if (r.state !== "ignored"){ r.prevState = r.state; r.state = "ignored"; r.userSet = true; n++; } }
+      if (kind === "restore"){ if (r.state === "ignored" || r.state === "intally"){ r.state = r.ledger ? "ready" : "attention"; r.userSet = true; delete r.tallyIdx; n++; } }
       b.sticky.add(r.id);
     });
     b.undo = {what: kind, label: entries(rows.length), n, others: 0, snaps, ruleKeys: [], oldRules: []};
@@ -11471,10 +11622,10 @@ function bankRowAct(a, id){
     if (a === "accept"){
       const l = exactLedger(r.ledger);
       if (!l){ b.undo = null; toast("Choose a Tally ledger first."); return true; }
-      r.ledger = l; r.state = "ready"; b.undo.histPrev = learnRows([r], "accepted");
+      r.ledger = l; r.state = "ready"; r.userSet = true; b.undo.histPrev = learnRows([r], "accepted");
     }
-    if (a === "ignore"){ r.prevState = r.state; r.state = "ignored"; b.undo.histPrev = unlearnRows([r]); }
-    if (a === "restore"){ r.state = exactLedger(r.ledger) ? "ready" : "attention"; delete r.tallyIdx; }
+    if (a === "ignore"){ r.prevState = r.state; r.state = "ignored"; r.userSet = true; b.undo.histPrev = unlearnRows([r]); }
+    if (a === "restore"){ r.state = exactLedger(r.ledger) ? "ready" : "attention"; r.userSet = true; delete r.tallyIdx; }
     if (a === "unready"){ r.state = r.ledger ? "suggested" : "attention"; r.userSet = false; b.undo.histPrev = unlearnRows([r]); }
     saveBank({rows: true}); render(); return true;
   }
@@ -11853,9 +12004,18 @@ async function bringDayBookFile(f, from0, to0, opts){
           catch (e){ part.bridge = "not taken: " + ((e && e.message) || e); }
         } else part.bridge = "not connected on this computer";
         if (TCloudUp.on()){
-          // quietly, in the background: nothing on the screen unless it fails
-          try { const r = await TCloudUp.days(await f.text(), {from, to}, null, who); part.cloud = r && r.days != null ? "in the cloud (" + r.days + " days)" : (r && r.skipped) || ""; }
+          // review of 01-Oct-2026: on the screen while it goes (a year takes minutes), the page warns before it is left
+          // half sent, and says when every day is in the cloud. Before, it went quietly and a reload lost the rest
+          const stay = ev => { ev.preventDefault(); ev.returnValue = "The day book is still going to FinCom’s cloud."; return ev.returnValue; };
+          window.addEventListener("beforeunload", stay);
+          part.cloud = "going to the cloud…";
+          try {
+            const r = await TCloudUp.days(await f.text(), {from, to}, step, who);
+            part.cloud = r && r.days != null ? "in the cloud (" + r.days + " days)" : (r && r.skipped) || "";
+            if (r && r.days != null) toast(f.name + ": all " + r.days + " days, " + fmtDate(tallyDate(from)) + " to " + fmtDate(tallyDate(to)) + ", are in FinCom’s cloud.");
+          }
           catch (e){ part.cloud = "not sent: " + ((e && e.message) || e); toast("Saved here, but it could not be shared with the firm just now (" + ((e && e.message) || e) + "). Choose the file again later."); }
+          finally { window.removeEventListener("beforeunload", stay); }
         } else part.cloud = "sign in to the firm account to share it";
         b.busy = ""; await saveBooks(null, b); render();          // these books, even if another client is open by now
       })();
@@ -11920,7 +12080,7 @@ function booksChange(t){
     if (!g.ok){ b.busy = ""; render(); return; }
     if (fc && (fc.name || fc.guid) && !b.tallyCo) b.tallyCo = {name: fc.name, guid: fc.guid};
     Books.importMasters(f, m => { b.busy = m; softRender(); }).then(async res => {
-      b.pans = res.pans; b.gstins = res.gstins; b.under = res.under; b.states = res.states; b.groups = res.groups; b.groupInfo = res.groupInfo; b.busy = "";
+      b.pans = res.pans; b.gstins = res.gstins; b.under = res.under; b.states = res.states; b.groups = res.groups; b.groupInfo = res.groupInfo; b.busy = ""; TallyRead.yearOpen(b);
       b.ledInfo = res.info; b.ledInfoAt = new Date().toISOString(); LedMaster.refresh(b);
       await saveBooks();
       const rows = TDS.rows(), withPan = rows.filter(r => r.pan).length;
@@ -13262,7 +13422,7 @@ function bridgePin(port){
 }
 async function saveBridgeSetup(){
   let t = null;
-  try { t = await blockText("bridge-setup"); } catch (e){ t = null; }
+  try { t = await blockText(BRIDGE_SETUP_ID); } catch (e){ t = null; }
   if (!t || !t.trim()){ toast("This copy of the app does not carry the setup file. Use the downloaded app (TDS-Desk-standalone.html)."); return; }
   const raw = atob(t.trim());
   const bytes = new Uint8Array(raw.length);
@@ -14622,28 +14782,63 @@ const Cloud = {
     if (!r.ok) throw new Error(j.error_description || j.msg || j.message || ("Sign-in failed (" + r.status + ")"));
     return j;
   },
+  // through the sign-in function, which counts wrong passwords and locks the account after 5 (review item 21);
+  // straight at Supabase Auth where that function is not deployed (the lock is then kept by the token hook alone)
+  async signInCall(email, password){
+    const c = this.cfg();
+    let r;
+    try { r = await fetch(c.url.replace(/\/+$/, "") + "/functions/v1/signin", {method: "POST", headers: {apikey: c.key, "Content-Type": "application/json"}, body: JSON.stringify({email, password})}); }
+    catch (e){ r = null; }
+    if (!r || r.status === 404) return this.authCall("token?grant_type=password", {email, password});
+    const j = await r.json().catch(() => null);
+    // an answer that is not the sign-in function's own (the gateway's "function not found", a proxy page): sign in as before
+    if (!j || (!r.ok && !("ok" in j)) || (r.ok && !j.access_token)) return this.authCall("token?grant_type=password", {email, password});
+    if (!r.ok) throw new Error(j.error || ("Sign-in failed (" + r.status + ")"));
+    return j;
+  },
   async signIn(email, password){
-    const j = await this.authCall("token?grant_type=password", {email: String(email).trim(), password});
+    const j = await this.signInCall(String(email).trim(), password);
     this.setSess({access_token: j.access_token, refresh_token: j.refresh_token, at: Date.now(), expires_in: j.expires_in || 3600, email: (j.user && j.user.email) || email, user_id: j.user && j.user.id});
     this.setCfg({email: String(email).trim()});
     if (await this.checkMfa()) return true;      // the code is asked for before anything of the firm is shown
     await this.whoAmI();
     return true;
   },
-  async refreshToken(){
+  // A new access token from the refresh token. One refresh at a time: requests that fail together (opening a bill
+  // fetches its document while the sync runs) share it, and a token another tab has refreshed meanwhile is used as
+  // it is. Two refreshes with the same refresh token can make Supabase end the session (review: signed out after
+  // the page was left idle). used: the token a failed request carried; skipped when the session already has a newer one.
+  refreshToken(used){
+    const s0 = this.sess();
+    if (used && s0 && s0.access_token && s0.access_token !== used) return Promise.resolve();
+    if (this._refreshing) return this._refreshing;
+    this._refreshing = (async () => {
+      const s = this.sess();
+      if (!s || !s.refresh_token) throw new Error("Signed out");
+      const j = await this.authCall("token?grant_type=refresh_token", {refresh_token: s.refresh_token});
+      const now = this.sess();
+      if (!now || now.refresh_token !== s.refresh_token) return;      // signed out, or another tab got there first
+      this.setSess(Object.assign({}, s, {access_token: j.access_token, refresh_token: j.refresh_token || s.refresh_token, at: Date.now(), expires_in: j.expires_in || 3600}));
+    })().finally(() => { this._refreshing = null; });
+    return this._refreshing;
+  },
+  // before a request: a token that has run out, or will within two minutes, is refreshed first (a page left idle for
+  // an hour no longer sends an expired token and depends on the 401 to recover)
+  async fresh(){
     const s = this.sess();
-    if (!s || !s.refresh_token) throw new Error("Signed out");
-    const j = await this.authCall("token?grant_type=refresh_token", {refresh_token: s.refresh_token});
-    this.setSess(Object.assign({}, s, {access_token: j.access_token, refresh_token: j.refresh_token || s.refresh_token, at: Date.now(), expires_in: j.expires_in || 3600}));
+    if (!s || !s.refresh_token) return;
+    const until = num(s.at) + (num(s.expires_in) || 3600) * 1000;
+    if (Date.now() > until - 120000) await this.refreshToken();
   },
   signOut(){ this.setSess(null); this.st = {state: "off", email: "", role: "", firm: "", lastSync: 0, pending: 0, error: "", busy: "", members: []}; },
   async api(path, opts, retry){
+    if (!retry) await this.fresh().catch(() => {});
     const c = this.cfg(), s = this.sess();
     if (!s) throw new Error("Signed out");
     opts = opts || {};
     const headers = Object.assign({apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": "application/json"}, opts.headers || {});
     const r = await fetch(c.url.replace(/\/+$/, "") + "/rest/v1/" + path, {method: opts.method || "GET", headers, body: opts.body ? JSON.stringify(opts.body) : undefined});
-    if (r.status === 401 && !retry){ await this.refreshToken(); return this.api(path, opts, true); }
+    if (r.status === 401 && !retry){ await this.refreshToken(s.access_token); return this.api(path, opts, true); }
     const text = await r.text();
     let j = null;
     try { j = text ? JSON.parse(text) : null; } catch (e){ j = null; }
@@ -14931,17 +15126,23 @@ function cloudChip(){
   if (st.state === "signedout") return '<button class="tchip bad" data-act="openSettings">Sign in again</button>';
   if (st.error) return '<button class="tchip warn" data-act="openSettings" title="' + esc(st.error) + '">Sync problem</button>';
   const mins = st.lastSync ? Math.round((Date.now() - st.lastSync) / 60000) : null;
-  return '<span class="tchip ok" title="' + esc(st.email) + (st.lastSync ? " \u00b7 last sync " + new Date(st.lastSync).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}) : "") + '">\u2601 Shared' + (mins > 5 ? " \u00b7 " + mins + "m" : "") + "</span>";
+  return '<span class="tchip ok" title="' + esc(st.email) + (st.lastSync ? " \u00b7 last sync " + fmtTime(st.lastSync) : "") + '">\u2601 Shared' + (mins > 5 ? " \u00b7 " + mins + "m" : "") + "</span>";
 }
 
 /* ---------- plan, balance and charging ---------- */
 const MODULE_ICON = {bills: "\u{1F9FE}", bank: "\u{1F3E6}", sales: "\u{1F4C4}", claude: "\u2728", vision: "\u{1F441}", tally: "\u{1F4D2}", cloud: "\u2601", clients: "\u{1F465}"};
 Cloud.rpc = async function(name, args){ return this.api("rpc/" + name, {method: "POST", body: args || {}}); };
-Cloud.fn = async function(name, body){
+Cloud.fn = async function(name, body, retry){
+  if (!retry) await this.fresh().catch(() => {});
   const c = this.cfg(), s = this.sess();
   if (!s) throw new Error("Sign in to the firm account first.");
-  const r = await fetch(c.url.replace(/\/+$/, "") + "/functions/v1/" + name, {
-    method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": "application/json"}, body: JSON.stringify(body || {})});
+  let r;
+  // a request the browser stopped before the server answered (no connection, or this site not allowed by the
+  // function): said in words, not the browser's "Load failed" / "Failed to fetch"
+  try { r = await fetch(c.url.replace(/\/+$/, "") + "/functions/v1/" + name, {
+    method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": "application/json"}, body: JSON.stringify(body || {})}); }
+  catch (e){ throw new Error("FinCom\u2019s server could not be reached from this page (" + ((e && e.message) || "no answer") + "). Check the connection and try again; if it keeps happening, tell support which page you were on."); }
+  if (r.status === 401 && !retry){ await this.refreshToken(s.access_token); return this.fn(name, body, true); }
   const j = await r.json().catch(() => ({}));
   if (!r.ok || j.ok === false) throw Object.assign(new Error(j.error || ("Request failed (" + r.status + ")")), {reason: j.reason, balance: j.balance});
   return j;
@@ -14995,9 +15196,43 @@ async function loadAdminOverview(quiet){
   } catch (e){ if (!quiet) toast("Could not read the platform data: " + e.message); }
 }
 
+// where a link in an email should bring the person back: this page, without its #…
+function appUrl(){ return location.origin + location.pathname; }
+// An invite or reset link lands here with the session in the address (#access_token=…&type=invite|recovery):
+// the person is signed in and asked to choose their password before anything else (review item 21)
+function takeAuthLink(){
+  const h = String(location.hash || "");
+  if (!/access_token=/.test(h) || !/type=(invite|recovery|signup|magiclink)/.test(h)) return false;
+  const q = new URLSearchParams(h.replace(/^#/, ""));
+  try { history.replaceState(null, "", location.pathname + location.search); } catch (e){}
+  Cloud.setSess({access_token: q.get("access_token"), refresh_token: q.get("refresh_token"), at: Date.now(), expires_in: num(q.get("expires_in")) || 3600, email: "", user_id: ""});
+  S.setPassword = {type: q.get("type")};
+  return true;
+}
+async function setPasswordGo(){
+  const a = (document.getElementById("spw1") || {}).value || "", b = (document.getElementById("spw2") || {}).value || "";
+  const f = S.setPassword || (S.setPassword = {});
+  if (a.length < 10 || !/[A-Za-z]/.test(a) || !/\d/.test(a)){ f.error = "Use 10 characters or more, with letters and digits."; render(); return; }
+  if (a !== b){ f.error = "The two passwords are not the same."; render(); return; }
+  const c = Cloud.cfg(), s = Cloud.sess();
+  Cloud.st.busy = "saving"; render();
+  try {
+    const r = await fetch(c.url.replace(/\/+$/, "") + "/auth/v1/user", {method: "PUT", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": "application/json"}, body: JSON.stringify({password: a})});
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.msg || j.error_description || j.message || "The password could not be saved.");
+    Cloud.setSess(Object.assign({}, s, {email: j.email || "", user_id: j.id || ""}));
+    Cloud.setCfg({email: j.email || ""});
+    S.setPassword = null; Cloud.st.busy = "";
+    auditEvent("password_set", f.type || "");
+    if (!(await Cloud.checkMfa())) await Cloud.whoAmI();
+    render();
+  } catch (e){ Cloud.st.busy = ""; f.error = e.message; render(); }
+}
+
 /* ---------- nothing is shown until someone signs in: the page is React (app/src/screens/SignIn.jsx) ---------- */
 function signInNeeded(){
   if (window.claude) return false;                 // inside claude.ai, for trying things out
+  if (S.setPassword) return true;                  // arrived from an invite or reset link: the password comes first
   if (Cloud.on()) return !!Cloud.st.mfa;           // signed in (works offline once signed in), unless the code is still due
   return Cloud.cfg().gate !== false;
 }
@@ -15183,23 +15418,67 @@ function goClient(to){
   };
   if (S.view !== "company" || S.coId !== cid) openCompany(cid).then(go); else go();
 }
+// a section of the firm's Settings (the firm menu in the sidebar, and page links)
+function goSettings(sec){ closeSwitcher(); S.firmMenu = false; S.tallyPanel = false; S.view = "home"; S.homeTab = "rules"; S.settingsTab = sec || null; S.step = null; S.arm = null; render(); window.scrollTo(0, 0); }
 function navHome(tab){ if (tab === "help" && typeof SUP === "object" && !(S.view === "home" && S.homeTab === "help")) S.helpCtx = SUP.context(); closeSwitcher(); S.firmMenu = false; S.tallyPanel = false; S.view = "home"; S.homeTab = tab; S.step = null; S.addingCo = false; S.arm = null; if (tab === "rules") S.settingsTab = null; render(); window.scrollTo(0, 0); }
 function goTab(tab){ S.tab = tab; S.step = null; S.arm = null; render(); }
 function toggleSetup(){ S.step = null; S.tab = isSetupTab(S.tab) ? "invoices" : "settings"; render(); }
 // a control drawn by React answers its own events; these handlers take the old screens, and the old pieces a React
 // screen still shows inside it (marked data-legacy)
 // delete a bill (asks first); not one already in Tally
+// Delete is a soft delete (review item 24): only the firm's owner, with a reason; the bill is kept under "Deleted"
+// with its document and can be restored. Working offline (no firm account) there is no owner to ask for.
+function canDeleteBills(){
+  if (!Cloud.on() || !S.account) return true;
+  return S.account.superadmin === true || ((S.account.me || {}).role === "owner");
+}
 function billDelete(id){
   const e = D().entries[id];
   if (!e) return;
   if (e.exportedAt){ toast("This bill is in Tally. Take it back from Tally first (Posted \u2192 Take it back), then delete it."); return; }
-  askConfirm({title: "Delete this bill?", ok: "Delete", body: '<p class="note">' + esc(e.x.vendorName || e.fileName || "") + (e.x.invoiceNo ? " \u00b7 " + esc(e.x.invoiceNo) : "") + ". The file can be uploaded again later.</p>"}).then(ok => {
-    if (!ok) return;
+  if (!canDeleteBills()){ toast("Only the firm\u2019s owner can delete a bill. Mark it \u201cNo entry\u201d instead, or ask the owner."); return; }
+  askConfirm({title: "Delete this bill?", ok: "Delete", danger: true,
+    body: '<p class="note">' + esc(e.x.vendorName || e.fileName || "") + (e.x.invoiceNo ? " \u00b7 " + esc(e.x.invoiceNo) : "") + ". It moves to \u201cDeleted\u201d with its document, and can be restored from there.</p>" +
+      '<label class="f" style="margin-top:8px"><span>Why is it deleted?</span><input type="text" id="delWhy" maxlength="200" placeholder="For example: uploaded twice, not this client\u2019s bill"></label>',
+    read: () => ((document.getElementById("delWhy") || {}).value || "").trim(),
+    validate: why => why.length < 3 ? "Write why the bill is deleted." : ""}).then(r => {
+    if (!r) return;
     if (e.status === "approved") unapply(e, S.coId);
     if (S.revSel) S.revSel.delete(e.id);
     if (S.drawerOpen && S.selected === e.id) S.drawerOpen = false;
-    removeEntry(e); refreshStats(S.coId); toast("Deleted."); render();
+    softDeleteEntry(e, r.data); refreshStats(S.coId); toast("Deleted. It is under \u201cDeleted\u201d, where it can be restored."); render();
   });
+}
+function softDeleteEntry(e, why){
+  e.deleted = {at: new Date().toISOString(), by: whoAmI(), reason: String(why || "").slice(0, 200), status: e.status};
+  e.status = "deleted";
+  unregisterHash(S.coId, e.fileHash);            // the same file can be uploaded again
+  if (S.selected === e.id) S.selected = null;
+  Store.saveEntry(S.coId, e);
+  auditEvent("bill_delete", (e.x.vendorName || e.fileName || "") + " " + (e.x.invoiceNo || e.id) + ": " + e.deleted.reason, S.coId);
+}
+// back to To review (an approved bill was taken off its supplier's totals when deleted, so it is approved again)
+function billRestore(id){
+  const e = D().entries[id];
+  if (!e || e.status !== "deleted") return;
+  if (!canDeleteBills()){ toast("Only the firm\u2019s owner can restore a deleted bill."); return; }
+  e.restored = {at: new Date().toISOString(), by: whoAmI(), was: e.deleted};
+  e.status = "draft"; e.deleted = null;
+  if (e.fileHash) registerHash(S.coId, e.fileHash, e.id);
+  Store.saveEntry(S.coId, e);
+  auditEvent("bill_restore", (e.x.vendorName || e.fileName || "") + " " + (e.x.invoiceNo || e.id), S.coId);
+  S.filter = "draft"; S.selected = e.id; refreshStats(S.coId); toast("Restored to To review."); render();
+}
+// the bills in the list as shown (Invoices.jsx orders them the same way), and a step to the next or previous one
+function billList(){
+  const all = Object.values(D().entries || {}), f = S.filter || "draft";
+  return all.filter(e => e.status === f).sort((a, b) => (f === "draft" ? byDate(a, b) : byDate(b, a)));
+}
+function billStep(dir){
+  const list = billList(); if (!list.length) return;
+  const i = list.findIndex(e => e.id === S.selected);
+  const next = list[Math.min(list.length - 1, Math.max(0, i < 0 ? 0 : i + dir))];
+  if (next && next.id !== S.selected){ S.selected = next.id; render(); }
 }
 // an approved bill, not yet in Tally, back to To review (staying on the page it was sent back from)
 function billBack(id){ const e = D().entries[id]; if (e){ const keep = S.tab; undoApproval(e); S.tab = keep; render(); } }
@@ -15323,8 +15602,15 @@ function revTds(id, on){
 }
 // the firm account in Settings (app/src/screens/Account.jsx): a person's password, two-step or switching on and off; a
 // backup downloaded; a drop key switched off; the platform page's buttons (they read its boxes by id) and a firm's plan
+// the firm account's admin service not yet updated (Phase 2 waits for the database): it does not know the new actions
+function adminNotYet(e){ return /unknown action/i.test(String((e && e.message) || "")); }
 function acctPerson(what, email){
-  if (what === "reset") Cloud.fn("admin", {action: "reset_password", email}).then(r => { S.newPerson = {email: r.email, password: r.password}; toast("New password made."); render(); }, e => toast(e.message));
+  // a reset link by email: they choose the new password; "makepw" is the fallback where email is not set up
+  if (what === "reset") Cloud.fn("admin", {action: "send_reset", email, redirect: appUrl()}).then(r => { S.newPerson = null; toast(r.note || "Reset link sent."); render(); },
+    e => toast(adminNotYet(e) ? "Reset links by email start once the firm account\u2019s update is done. For now, use \u201cMake a password\u201d." : e.message));
+  else if (what === "makepw") Cloud.fn("admin", {action: "reset_password", email}).then(r => { S.newPerson = {email: r.email, password: r.password}; toast("New password made."); render(); }, e => toast(e.message));
+  else if (what === "unlock") Cloud.fn("admin", {action: "unlock", email}).then(r => toast(r.note || "Unlocked."),
+    e => toast(adminNotYet(e) ? "The lockout starts once the firm account\u2019s update is done: nobody is locked out until then." : e.message));
   else if (what === "mfa") askConfirm({title: "Reset two-step sign-in for " + email + "?", ok: "Reset", body: '<p class="note">Their authenticator entry is removed. At the next sign-in they set it up again with their phone. Do this only when you are sure it is them asking.</p>'})
     .then(a => { if (a) Cloud.fn("admin", {action: "reset_two_step", email}).then(() => toast("Two-step sign-in reset for " + email + "."), e => toast(e.message)); });
   else Cloud.fn("admin", {action: "set_person", email, active: what === "on"}).then(() => { toast(what === "on" ? "Switched on." : "Switched off."); loadAccount(); }, e => toast(e.message));
@@ -15525,12 +15811,13 @@ function doAct(act, t){
       else { if (box){ box.focus(); box.select(); } toast("Select the report and copy it (Ctrl+C)."); }
       break;
     }
+    case "setPasswordGo": setPasswordGo(); break;
     case "cloudSignIn": {
       const em = document.querySelector('[data-cloud="email"]'), pw = document.querySelector('[data-cloud="password"]');
       const email = em ? em.value.trim() : "", pass = pw ? pw.value : "";
       if (!email || !pass){ toast("Enter your email and password."); break; }
       Cloud.st.busy = "Signing in\u2026"; Cloud.st.error = ""; render();
-      Cloud.signIn(email, pass).then(() => { Cloud.st.busy = ""; S.cloudForm = null; toast("Signed in as " + email + "."); setTimeout(() => { auditEvent("signin", navigator.userAgent.slice(0, 160)); setTimeout(loadLastSignIn, 1500); }, 3000); startCloudSync(); loadAccount(true).then(() => render()); render(); },
+      Cloud.signIn(email, pass).then(() => { Cloud.st.busy = ""; S.cloudForm = null; S.signedOutWhy = ""; toast("Signed in as " + email + "."); setTimeout(() => { auditEvent("signin", navigator.userAgent.slice(0, 160)); setTimeout(loadLastSignIn, 1500); }, 3000); startCloudSync(); loadAccount(true).then(() => render()); render(); },
         err => { Cloud.st.busy = ""; Cloud.st.error = err.message; render(); });
       break;
     }
@@ -15579,7 +15866,7 @@ function doAct(act, t){
       Cloud.st.busy = "Making the account\u2026"; Cloud.st.error = ""; render();
       Cloud.signUp({firm: f.firm, name: f.name || "", email: f.email, password: f.password})
         .then(() => Cloud.signIn(f.email, f.password))
-        .then(() => { Cloud.st.busy = ""; S.cloudForm = null; S.signUpOpen = false; toast("Welcome. Your firm is ready."); startCloudSync(); loadAccount(true).then(() => render()); render(); },
+        .then(() => { Cloud.st.busy = ""; S.cloudForm = null; S.signUpOpen = false; if (!S.firm.firmName){ S.firm.firmName = f.firm; Store.saveFirm(); } toast("Welcome. Your firm is ready."); startCloudSync(); loadAccount(true).then(() => render()); render(); },
               err => { Cloud.st.busy = ""; Cloud.st.error = err.message; render(); });
       break;
     }
@@ -15601,6 +15888,25 @@ function doAct(act, t){
       S.walletOpen = !S.walletOpen;
       if (S.walletOpen) Cloud.api("wallet_entries?select=at,kind,code,qty,amount,balance_after,note&order=at.desc&limit=50").then(r => { S.wallet = r || []; render(); }, e => toast(e.message));
       render(); break;
+    }
+    case "invitePerson": {
+      // an email with a link to set their own password (review item 21)
+      const g = id => (document.getElementById(id) || {}).value || "";
+      const email = g("npEmail").trim();
+      if (!email){ toast("An email address is needed."); break; }
+      const who = {email, name: g("npName"), role: g("npRole")};
+      Cloud.fn("admin", Object.assign({action: "invite_person", redirect: appUrl()}, who)).then(r => {
+        S.newPerson = null; toast(r.note || ("Invited " + r.email + ".")); loadAccount();
+      }, e => {
+        if (!adminNotYet(e)){ toast(e.message); return; }
+        // until the update is done: added as before, with a password made for them and shown once
+        Cloud.fn("admin", Object.assign({action: "add_person"}, who)).then(r => {
+          S.newPerson = r.password ? {email: r.email, password: r.password} : null;
+          toast("Email invites start once the firm account\u2019s update is done, so a password was made instead." + (r.password ? "" : " " + (r.note || "")));
+          render(); loadAccount();
+        }, e2 => toast(e2.message));
+      });
+      break;
     }
     case "addPerson": {
       const g = id => (document.getElementById(id) || {}).value || "";
@@ -15795,7 +16101,7 @@ function doAct(act, t){
           if (l.pan) (b.pans = b.pans || {})[l.name] = String(l.pan).toUpperCase();
           if (l.group) (b.under = b.under || {})[l.name] = l.group; });
         [].concat(j.groups || []).forEach(g => { if (g && g.name) groups[g.name] = g.parent || ""; });
-        b.ledInfo = info; b.ledInfoAt = new Date().toISOString(); if (Object.keys(groups).length) b.groups = groups;
+        b.ledInfo = info; b.ledInfoAt = new Date().toISOString(); if (Object.keys(groups).length){ b.groups = groups; TallyRead.yearOpen(b); }
         LedMaster.refresh(b); b.busy = ""; b.reco = null; await saveBooks();
         toast(Object.keys(info).length + " ledgers read from Tally. " + LedMaster.pending(b).length + " GST or TDS ledgers to confirm."); render();
       }, e => { b.busy = ""; toast("Could not read Tally: " + (e && e.message || e)); render(); });
@@ -15985,7 +16291,7 @@ function doAct(act, t){
     case "reject": if (e){ if (e.docPath){ CloudDocs.remove(e.docPath); delete e.docPath; } setStatus(e, "rejected", "Marked as no entry needed."); } break;
     case "restore": if (e) setStatus(e, "draft"); break;
     case "undo": if (e) undoApproval(e); break;
-    case "delete": if (e) removeEntry(e); break;
+    case "delete": if (e) billDelete(e.id); break;
     case "addParty": { const id = "p-new-" + Date.now().toString(36); D().parties[id] = {id, name:"New supplier", pan:"", gstin:"", ledgerName:"", natureDefault:"", expenseLedger:"", ldcRate:"", ldcValidTo:"", ytd:{}}; S.partySel = id; Store.saveParty(S.coId, D().parties[id]); render(); break; }
     case "closeParty": S.partySel = null; render(); break;
     case "resetRules": S.firm.rules = {}; Store.saveFirm(); toast("Default rates and limits restored."); render(); break;
@@ -16036,10 +16342,20 @@ document.addEventListener("keydown", ev => {
   if (k === "F3" || (ctrl && k.toLowerCase() === "k")){ ev.preventDefault(); openSwitcher(); return; }
   const tag = (document.activeElement && document.activeElement.tagName) || "";
   const inField = /INPUT|SELECT|TEXTAREA/.test(tag);
-  if (ctrl && k.toLowerCase() === "a" && !inField && S.view === "company" && S.tab === "invoices"){
+  // Ctrl+Enter approves the bill on screen (review item 33: Ctrl+A is the browser's Select All, left alone now);
+  // from inside a box too: the box is left first, so what was typed counts
+  if (ctrl && k === "Enter" && S.view === "company" && S.tab === "invoices"){
     const e = curEntry();
-    if (e && e.status === "draft" && !S.reading[e.id]){ ev.preventDefault(); approve(e); }
+    if (e && e.status === "draft" && !S.reading[e.id]){
+      ev.preventDefault();
+      if (inField && document.activeElement.blur) document.activeElement.blur();
+      setTimeout(() => { const e2 = curEntry(); if (e2 && e2.status === "draft") { approve(e2); render(); } }, 60);
+    }
     return;
+  }
+  // J / K: the next or previous bill in the list shown
+  if (!ctrl && !ev.altKey && !inField && (k === "j" || k === "k") && S.view === "company" && S.tab === "invoices" && !S.reviewTable){
+    ev.preventDefault(); billStep(k === "j" ? 1 : -1); return;
   }
   if (k === "Escape" && !inField && S.view === "company"){ goHome(); return; }
   if ((k === "Enter" || k === " ") && ev.target.id === "drop"){ ev.preventDefault(); pickFiles("company"); }
@@ -16115,6 +16431,39 @@ function coSetTallyName(name){ const co = CO(); if (co && name){ co.tallyName = 
 function coSetRuleLedger(kind, ruleId, v){ const co = CO(); (kind === "tds" ? co.tdsLedgers : co.expenseLedgers)[ruleId] = v; later("c" + co.id, () => Store.saveCompany(co), 600); }
 function coSetBlockRule(catId, v){ const co = CO(); co.gstBlock = co.gstBlock || {}; co.gstBlock[catId] = v; Store.saveCompany(co); render(); }
 // the firm's own name, shown in the top bar and on reports
+// First sign-in of an owner with no firm name yet (review item 32): the name (from sign-up where given), address and
+// logo are asked for once; "Later" puts it off until the next sign-in
+function firmSetupDue(){
+  // "Later" holds for the rest of the day on this computer (review recheck: it came back on every refresh)
+  const later = S.firmSetupLater || lsGet("tdsdesk-test:firmSetupLater") === fmtDate(new Date());
+  return !!(S.firm && !S.firm.firmName && !later && typeof Cloud === "object" && Cloud.on() && S.account && ((S.account.me || {}).role === "owner"));
+}
+function firmSetupLater(){ S.firmSetupLater = true; lsSet("tdsdesk-test:firmSetupLater", fmtDate(new Date())); render(); }
+function firmSetupSave(d){
+  const name = String(d.name || "").trim();
+  if (!name){ toast("The firm\u2019s name is needed."); return false; }
+  S.firm.firmName = name.slice(0, 120);
+  S.firm.firmAddress = String(d.address || "").trim().slice(0, 400);
+  if (d.logo !== undefined) S.firm.firmLogo = d.logo || "";
+  Store.saveFirm(); toast("Saved."); render();
+  return true;
+}
+// a logo picked from the computer, kept small (a data URL of at most about 150 KB)
+function firmLogoRead(file){
+  return new Promise((ok, no) => {
+    if (!file || !/^image\//.test(file.type)){ no(new Error("Choose a picture (PNG or JPG).")); return; }
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      const k = Math.min(1, 320 / Math.max(img.width, img.height)), c = document.createElement("canvas");
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+      const out = c.toDataURL("image/png");
+      out.length > 200000 ? no(new Error("The logo is too large; use a smaller picture.")) : ok(out);
+    };
+    img.onerror = () => no(new Error("That picture could not be read."));
+    img.src = url;
+  });
+}
 function firmSetName(v){ S.firm.firmName = v; later("firm", () => Store.saveFirm(), 600); const el = document.getElementById("firmLine"); if (el) el.textContent = v; }
 function setPath(o, path, v){ const k = path.split("."); if (k.length === 2) o[k[0]][k[1]] = v; else o[k[0]] = v; }
 
@@ -16217,6 +16566,7 @@ function applyEntryHash(){
 }
 window.addEventListener("hashchange", () => { applyEntryHash(); render(); });
 (async function start(){
+  takeAuthLink();
   applyEntryHash();
   S.splitPdf = lsGet("tdsdesk-test:splitPdf") === "1";
   S.freeFirst = lsGet("tdsdesk-test:freeFirst") !== "0";
@@ -16228,8 +16578,12 @@ window.addEventListener("hashchange", () => { applyEntryHash(); render(); });
   catch (e){ S.firm = S.firm || Object.assign({}, DEFAULT_FIRM); toast("Saved data could not be loaded. Reload the page to try again."); }
   Object.keys(S.data).forEach(refreshStats);
   render();
+  // a page link (#/…) opens that page; otherwise the client open last time
+  if (/^#\//.test(location.hash) && typeof Route === "object" && signInNeeded()) Route.pending = location.hash;
+  const linked = /^#\//.test(location.hash) && typeof Route === "object" && !signInNeeded() ? await Route.apply(location.hash) : false;
   const last = lsGet("tdsdesk-test:last") || recentIds()[0];
-  if (last && S.companies[last]) openCompany(last);
+  if (!linked && last && S.companies[last]) openCompany(last);
+  if (typeof Route === "object"){ Route.ready = true; Route.replaceNext = true; }
   S.sample = await samplePromise;
   if (S.sample){
     try { const lim = await S.sample.limits(); S.imgMax = lim && lim.images ? Math.min(6, lim.images.maxCount) : 0; } catch(e){ S.imgMax = 0; }
@@ -16886,7 +17240,19 @@ const Help = {
     "tds:24Q:annex2": {t: "24Q \u2014 Annexure II", what: "The whole year\u2019s salary details per employee, filed with Q4.", steps: ["Check gross salary, exemptions, deductions and tax for each employee.", "Tie the TDS to what was deducted over the year."], from: "The salary sheet for the year.", watch: []},
     "tds:24Q:checks": {t: "24Q \u2014 Checks", what: "What to fix before filing: missing PANs, TDS that differs from the books, and the like.", steps: ["Fix each item listed, in the sheet or in Tally."], from: "The salary sheet and the books.", watch: []}
   },
+  // review item 37: every screen's "?" opens its own topic. GST and TDS tabs have theirs above; the other screens of a
+  // client use the guide's articles (GUIDE.A in src/js/40), as "page:<article>"
+  PAGES: {reports: "reports", lookup: "lookup", letters: "letters", mis: "mis", audit: "audit"},
+  topic(k){ return this.T[k] || (String(k).startsWith("page:") && typeof GUIDE === "object" ? GUIDE.A[k.slice(5)] : null) || null; },
   key(){
+    if (S.view === "company" && S.tab !== "books"){
+      if (S.tab === "clientInbox") return "page:inbox";
+      if (S.tab === "bank") return "page:" + (typeof bankTab === "function" && S.bank && bankTab() === "rules" ? "bankrules" : "bank");
+      if (S.tab === "sales") return "page:sales";
+      if (["invoices", "review", "export", "done", "collect"].includes(S.tab) && typeof docType === "function" && docType() === "bills") return "page:bills";
+      return "";
+    }
+    if (S.view === "company" && S.tab === "books" && typeof booksTab === "function" && this.PAGES[booksTab()]) return "page:" + this.PAGES[booksTab()];
     if (S.view !== "company" || S.tab !== "books" || !S.books || S.books.loading) return "";
     const t = typeof booksTab === "function" ? booksTab() : "";
     if (t === "gst") return "gst:" + (S.gstPart || "r1");
@@ -16894,7 +17260,7 @@ const Help = {
     return "";
   },
   html(k){
-    const x = this.T[k]; if (!x) return "";
+    const x = this.topic(k); if (!x) return "";
     return '<div class="help-head"><b>How this tab works: ' + esc(x.t) + '</b><button class="linkbtn" data-help="close" aria-label="Close">\u2715</button></div>' +
       "<h4>What it is for</h4><p>" + esc(x.what) + "</p>" +
       (x.steps && x.steps.length ? "<h4>What to do</h4><ol>" + x.steps.map(s => "<li>" + esc(s) + "</li>").join("") + "</ol>" : "") +
@@ -16903,7 +17269,7 @@ const Help = {
   },
   // after every render: a button beside the tab bar, and the panel kept in step with the tab shown
   after(){
-    const k = this.key(), has = !!this.T[k];
+    const k = this.key(), has = !!this.topic(k);
     let p = document.getElementById("helpPanel");
     if (has){
       // on the row of month and downloads under the GST tabs, where there is room; on TDS, the line of years and quarters
@@ -17603,9 +17969,10 @@ const GSTAPI = {
   on(){ return typeof Cloud === "object" && Cloud.on() && !!S.account; },
   url(){ return String(Cloud.cfg().url || "").replace(/\/+$/, "") + "/functions/v1/gst-taxpro"; },
   async call(body, retry){
+    if (!retry) await Cloud.fresh().catch(() => {});
     const c = Cloud.cfg(), s = Cloud.sess();
     const r = await fetch(this.url(), {method: "POST", headers: {"Content-Type": "application/json", apikey: c.key, Authorization: "Bearer " + (s && s.access_token)}, body: JSON.stringify(body)});
-    if (r.status === 401 && !retry){ await Cloud.refreshToken(); return this.call(body, true); }
+    if (r.status === 401 && !retry){ await Cloud.refreshToken(s && s.access_token); return this.call(body, true); }
     let j = null; try { j = await r.json(); } catch (e){}
     if (!j) throw new Error("The GST API answered HTTP " + r.status + ".");
     if (!j.ok) throw new Error(j.error || "The GST API refused the request.");
@@ -17694,7 +18061,7 @@ const SUP = {
     return "track";
   },
   ago(iso){ const m = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60000)); return m < 60 ? m + "m" : m < 48 * 60 ? Math.round(m / 60) + "h" : Math.round(m / 1440) + "d"; },
-  when(iso){ if (!iso) return "—"; const d = new Date(iso); return d.toLocaleDateString("en-IN", {day: "2-digit", month: "short", year: "numeric"}) + " " + d.toLocaleTimeString("en-IN", {hour: "2-digit", minute: "2-digit"}); },
+  when(iso){ return fmtDateTime(iso); },
   async load(quiet){
     const s = this.st();
     if (!this.on()) return;
@@ -17715,6 +18082,7 @@ const SUP = {
       const safe = String(f.name || "file").replace(/[^A-Za-z0-9._-]+/g, "_").slice(0, 80), path = firm + "/" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7) + "-" + safe;
       const url = c.url.replace(/\/+$/, "") + "/storage/v1/object/support-files/" + path.split("/").map(encodeURIComponent).join("/");
       const put = () => fetch(url, {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + Cloud.sess().access_token, "Content-Type": f.type || "application/octet-stream"}, body: f});
+      await Cloud.fresh().catch(() => {});
       let r = await put(); if (r.status === 401){ await Cloud.refreshToken(); r = await put(); }
       if (!r.ok) throw new Error("Could not upload " + f.name + " (" + r.status + ").");
       out.push({path, name: f.name, size: f.size, type: f.type || ""});
@@ -17724,6 +18092,7 @@ const SUP = {
   async download(path, name){
     const c = Cloud.cfg(), url = c.url.replace(/\/+$/, "") + "/storage/v1/object/support-files/" + path.split("/").map(encodeURIComponent).join("/");
     const get = () => fetch(url, {headers: {apikey: c.key, Authorization: "Bearer " + Cloud.sess().access_token}});
+    await Cloud.fresh().catch(() => {});
     let r = await get(); if (r.status === 401){ await Cloud.refreshToken(); r = await get(); }
     if (!r.ok) throw new Error("The file could not be fetched (" + r.status + ").");
     const blob = await r.blob(), a = document.createElement("a");
@@ -17776,22 +18145,54 @@ const GUIDE = {
       steps: ["Add each GSTIN; its PAN must be the client's PAN.", "Choose the GSTIN in the list to see its settings.", "When a setting changes, choose whether it is for this GSTIN only, for all, or for the ones you tick."]},
     "account": {area: "Firm account", t: "Firm account, people and credit", what: "Signing in to the firm account keeps the work in the cloud, shares it with the firm's people, and uses the firm's credit for reading documents.",
       steps: ["Sign in at the top right.", "Owners add people under Settings → People, with what each may do.", "Credit and plan are shown on the firm button; ask the administrator to top up before it runs out."]},
+    // review item 37: a topic for every screen on the left (Reports, MIS, Audit, Look up, Letters, Bank rules) and for 27Q and TCS
+    "bankrules": {area: "Documents", t: "Bank rules", what: "A written rule gives bank lines their ledger (or sets them aside) from what the line says, so lines that come every month need no work.",
+      steps: ["Bank → Rules → New rule, or the Rule button on a line (“Make a rule from this line”).", "Say what to look for: words in the description (contains, starts with, is exactly, does not contain), money going out or coming in, an amount range, the way of payment (UPI, NEFT, CHQ…), the bank account.", "Say what to do: use this ledger (it must exist in Tally, or pick a standard ledger), or set the line aside. Optionally a split, a narration for Tally and a voucher type.", "Tick “Mark matching lines ready to post” to skip checking; untick it to see the lines first.", "Apply to this statement, or let it work on the next statement read. “Look for rules in what we have done before” proposes rules from your earlier choices."],
+      watch: ["Rules are read from the top down and the first one that fits wins; the client’s own rules come before the firm-wide ones. Use ↑ and ↓ to order them.", "Lines already in Tally are never changed by a rule. “Apply to this statement”, and changing or moving a rule, apply the rules again to the open statement, also over lines you set by hand.", "Deleting a rule leaves lines already set as they are."]},
+    "tds27q": {area: "TDS", t: "27Q (TDS on payments to non-residents)", what: "FinCom does not prepare 27Q yet. It prepares 26Q (payments to residents) and 24Q (salary).",
+      steps: ["Keep TDS on payments to non-residents on a TDS ledger of its own whose name says so (for example “TDS on Non Resident Payments”); FinCom reads such a ledger as section 195. Before filing 26Q, check that none of these deductions is in it.", "Prepare 27Q, and Form 15CA/15CB where they apply, in the return preparation utility or your usual software."],
+      watch: ["The Audit screen flags parties that look foreign (Inc, LLC, GmbH, no GSTIN) as possibly section 195 or the equalisation levy, so they are not missed.", "Rates for non-residents depend on the Act and the tax treaty; FinCom does not work them out."]},
+    "tcs": {area: "TDS", t: "TCS (tax collected at source)", what: "FinCom does not prepare 27EQ (the TCS return) yet. It recognises TCS ledgers in the books and shows them in MIS and the compliance calendar.",
+      steps: ["Under TDS & GST → Tally ledgers → TDS and TCS, check that each TCS ledger is marked TCS payable or TCS receivable, with its section.", "File 27EQ in the return preparation utility or your usual software.", "TCS deducted by an e-commerce operator on your sales (GST, section 52) is shown in GSTR-1 table 14 and claimed from the cash ledger."],
+      watch: ["MIS lists TDS and TCS ledgers together, and the compliance calendar shows “TDS and TCS deposit” by the 7th.", "Interest on late TDS or TCS is not allowed as an expense; MIS points it out."]},
+    "reports": {area: "Reports", t: "Reports", what: "Every report for the client in one place, in six areas: how the business is doing, customers and suppliers, bank and cash, GST, TDS, and audit and accounts.",
+      steps: ["Open Reports on the left and choose the year.", "Click a figure or a report name to open it (each opens its own screen: MIS, GST, TDS, Audit, Look up or Letters).", "Type in “Find a report” (ageing, 3B, cash, ratios…) to go straight to one.", "Refresh books (the button at the top) reads the latest from Tally first."],
+      from: "The books read from Tally.", watch: ["Without the books read from Tally the page asks you to read them first.", "A name not found as a report: try Look up for a ledger or an entry."]},
+    "mis": {area: "MIS", t: "MIS (management reports)", what: "Management reports from the books: summary, profit and loss, receivables, payables, sales, purchases and expenses, cash flow, ratios, registrations, cost centres, budget and compliance.",
+      steps: ["Choose the dates, or This month, Last month, This quarter, Year to date, Last year, then Run now.", "Set “Run on its own”: on the 1st for the month just ended (the default), every week, every day, or only when you run it.", "Download the MIS pack (PDF) from the print view, or Excel."],
+      from: "The books read from Tally; each run says whether the figures agree with Tally’s balances ledger by ledger.",
+      watch: ["“Run on its own” runs when the client is opened, not on a timer.", "MSME suppliers unpaid after 45 days are shown under Payables."]},
+    "audit": {area: "Audit", t: "Audit of the books", what: "Checks over every voucher, the way an auditor would: cash and loans, TDS, GST, the books and audit trail, and balances. Also related parties and a Form 3CD draft.",
+      steps: ["Open Audit and press Run now (it also runs on its own: every day, week or month, or only when you run it).", "Go through Findings: each has the problem, the amount, a suggestion and the entry to pass where one is needed.", "Mark each one: Explained, Entry to pass, Entry passed or Not an issue.", "Download the Tally file of entries to pass, the report (PDF) or the Excel with annexures; Finalise this report locks it."],
+      from: "The vouchers read from Tally, from the start of the year to the last date in the books.", watch: ["Findings are observations to confirm against documents, not conclusions."]},
+    "lookup": {area: "Look up", t: "Look up", what: "Any ledger, group, trial balance, month-by-month figure, a party’s open bills, or entries, for any dates.",
+      steps: ["Press / anywhere in a client, or open Look up on the left.", "Ask in words: “HDFC bank for August”, “Raj Fabrics open bills”, “trial balance as on 31/03/2026”; or choose the kind and the period and press Show.", "Click a name in the result to go further; Print or PDF, or Excel."],
+      from: "Totals come from FinCom’s copy of the books. One ledger can be read live from Tally when the Tally Bridge is on (“From: Tally, live”).",
+      watch: ["Without the books or the bridge, read the books from Tally first."]},
+    "letters": {area: "Letters", t: "Confirmations and reminders", what: "Balance confirmation letters to customers, suppliers and loan parties, and reminders of dues, from the client’s books.",
+      steps: ["Balance confirmations: choose the date, who to write to and the smallest balance; tick the parties.", "Print or save the letters as PDF, or open each in your own email or WhatsApp.", "Record each reply and the party’s figure; differences are listed.", "Dues reminders: choose the date, the credit allowed and the tone (friendly, firm, final)."],
+      from: "Balances and bill-wise dues in Tally.", watch: ["Nothing is sent from FinCom; letters go from your own email or WhatsApp.", "For a micro or small enterprise client, reminders can mention MSMED Act interest (set the Udyam number under Letter settings)."]},
     "tickets": {area: "Help", t: "Raising a ticket", what: "When the guide does not answer it, raise a ticket to FinCom support. It carries the screen you were on, the client, the build and the last messages shown, so there is less back and forth.",
       steps: ["Open Help from the screen where the problem is.", "Help → My tickets → New ticket: a subject, the module, how urgent, and what happened.", "Attach screenshots or the file that was being read.", "Replies appear on the ticket (and by email when email is set up). Reply on the ticket, or mark it resolved."],
       watch: ["Response targets: urgent 2 hours, high 4, medium 8, low 24; resolution: urgent 8 hours, high 1 day, medium 3 days, low 5 days."]}
   },
+  // the sections in the order of the menu on the left; Help last (review item 37)
+  AREAS: ["Getting started", "Documents", "TDS", "GST", "Reports", "MIS", "Audit", "Look up", "Letters", "Tally", "Firm account", "Help"],
   // the guide's articles and every tab guide, in one list
   all(){
     const out = Object.entries(this.A).map(([k, x]) => Object.assign({k, area: x.area}, x));
     if (typeof Help === "object") Object.entries(Help.T).forEach(([k, x]) => out.push(Object.assign({k: "tab:" + k, area: k.startsWith("gst") ? "GST" : "TDS"}, x)));
-    return out;
+    const at = a => { const i = this.AREAS.indexOf(a); return i < 0 ? this.AREAS.length - 1 : i; };
+    return out.map((x, i) => [x, i]).sort((a, b) => at(a[0].area) - at(b[0].area) || a[1] - b[1]).map(r => r[0]);
   },
   text(x){ return [x.t, x.what, (x.steps || []).join(" "), x.from || "", (x.watch || []).join(" ")].join(" ").toLowerCase(); },
   search(q){
     const words = String(q || "").toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length > 1);
     if (!words.length) return [];
+    // a word is matched where a word starts ("port" finds "port 9000", not "Reports")
+    const at = w => new RegExp("(^|[^a-z0-9])" + w.replace(/[^a-z0-9]/g, ""), "g");
     return this.all().map(x => { const t = x.t.toLowerCase(), all = this.text(x); let s = 0;
-      words.forEach(w => { if (t.includes(w)) s += 5; const m = all.split(w).length - 1; s += Math.min(m, 4); }); return {x, s}; })
+      words.forEach(w => { const re = at(w); if (re.test(t)) s += 5; const m = (all.match(at(w)) || []).length; s += Math.min(m, 4); }); return {x, s}; })
       .filter(r => r.s > 0).sort((a, b) => b.s - a.s).map(r => r.x);
   }
 
@@ -18240,10 +18641,12 @@ Cloud.aal = function(){
   const s = this.sess();
   try { return JSON.parse(atob(String(s.access_token).split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).aal || "aal1"; } catch (e){ return "aal1"; }
 };
-Cloud.authApi = async function(path, method, body){
+Cloud.authApi = async function(path, method, body, retry){
+  if (!retry) await this.fresh().catch(() => {});
   const c = this.cfg(), s = this.sess();
   const r = await fetch(c.url.replace(/\/+$/, "") + "/auth/v1/" + path, {method: method || "GET",
     headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": "application/json"}, body: body ? JSON.stringify(body) : undefined});
+  if (r.status === 401 && !retry){ await this.refreshToken(s.access_token); return this.authApi(path, method, body, true); }
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.msg || j.message || j.error_description || ("Request failed (" + r.status + ")"));
   return j;
@@ -18350,7 +18753,13 @@ let idleLast = Date.now();
 setInterval(() => {
   if (!Cloud.on() || window.claude) return;
   const mins = num(lsGet("tdsdesk-test:idlemin")) || IDLE_MIN_DEFAULT;
-  if (Date.now() - idleLast > mins * 60000){ idleLast = Date.now(); signOutHere("Signed out after " + mins + " minutes without use. Sign in again to carry on."); }
+  if (Date.now() - idleLast > mins * 60000){
+    idleLast = Date.now();
+    // the page open now comes back after signing in again; the sign-in page says why (it is not an error)
+    if (typeof Route === "object" && !signInNeeded()) Route.pending = Route.of();
+    S.signedOutWhy = "Signed out after " + mins + " minutes without use, as set in Settings \u2192 Sign-in and people. Sign in again to carry on where you were.";
+    signOutHere("Signed out after " + mins + " minutes without use. Sign in again to carry on.");
+  }
 }, 30000);
 // Settings, how long before signing out (app/src/screens/Account.jsx)
 function idleMin(){ return num(lsGet("tdsdesk-test:idlemin")) || IDLE_MIN_DEFAULT; }
@@ -18370,7 +18779,7 @@ async function loadLastSignIn(){
     const rows = await Cloud.api("activity?select=at,detail&user_id=eq." + encodeURIComponent(s.user_id) + "&what=eq.signin&order=at.desc&limit=2");
     const prev = (rows || [])[1];
     S.lastSignIn = prev ? {at: prev.at, device: deviceName(prev.detail)} : null;
-    if (prev) toast("Your last sign-in: " + new Date(prev.at).toLocaleString("en-IN", {day: "numeric", month: "short", hour: "numeric", minute: "2-digit"}) + ", " + S.lastSignIn.device + ". Not you? Change your password in Settings.");
+    if (prev) toast("Your last sign-in: " + fmtDateTime(prev.at) + ", " + S.lastSignIn.device + ". Not you? Change your password in Settings.");
   } catch (e){}
 }
 /* ================================================================== */
@@ -18663,9 +19072,11 @@ const LK = {
     }).sort((a, c) => a.date.localeCompare(c.date)).map(v => {
       const big = v.ent.reduce((m, e) => Math.abs(e.a) > Math.abs(m) ? e.a : m, 0);
       const tot = r2(v.ent.filter(e => e.a > 0).reduce((x, e) => x + e.a, 0));
-      return {id: v.id, date: v.date, type: v.type, no: v.no, party: v.party || (v.ent.find(e => e.a < 0) || {}).l || "", narr: v.narr || "", amt: tot || Math.abs(big), ent: v.ent.map(e => ({l: e.l, a: e.a}))};
+      return {id: v.id, date: v.date, type: v.type, no: v.no, party: v.party || (v.ent.find(e => e.a < 0) || {}).l || "", narr: v.narr || "", amt: tot || Math.abs(big), ent: v.ent.map(e => ({l: e.l, a: e.a})), opt: !!v.opt};
     });
-    return {kind: "find", src: "books", q, from, to, typ, rows, total: r2(rows.reduce((x, r) => x + r.amt, 0))};
+    // review of 01-Oct-2026: an Optional entry (not in Tally's books, e.g. a payroll kept as Optional) is listed and
+    // marked, and left out of the total, as Tally leaves it out of every balance
+    return {kind: "find", src: "books", q, from, to, typ, rows, total: r2(rows.filter(r => !r.opt).reduce((x, r) => x + r.amt, 0)), opt: rows.filter(r => r.opt).length};
   },
   types(){ return Array.from(new Set((S.books.vouchers || []).map(v => v.type).filter(Boolean))).sort(); },
   // ---------- run what the page asks for
@@ -19396,7 +19807,10 @@ const ONB = {
     const b = S.books && S.books.cid === co.id ? S.books : null, ts = typeof tallyStatus === "function" ? tallyStatus(co) : {state: "none"};
     const bridge = !["none", "offline"].includes(ts.state);
     // linked: a Tally company is this client's, in the cloud or open through the bridge here (review item 6)
-    const linked = bridge && ts.state !== "unlinked" && (((typeof TLight === "object" && TLight.st.cos) || []).some(r => r.client_id === co.id) || (typeof Bridge === "object" && Bridge.on() && Bridge.up() && !!Bridge.openFor(co)));
+    // review of 01-Oct-2026: a company linked in the cloud is linked whether or not the Tally computer is on now (it was
+    // shown not done for a client linked in "Books in the cloud" while that computer was off)
+    const cloudLinked = ((typeof TLight === "object" && TLight.st.cos) || []).some(r => r.client_id === co.id) || (typeof TCloud === "object" && TCloud.has(co.id));
+    const linked = cloudLinked || (bridge && ts.state !== "unlinked" && typeof Bridge === "object" && Bridge.on() && Bridge.up() && !!Bridge.openFor(co));
     return [
       {id: "tally", done: !!co.tallyName, t: "Name the company as it is in Tally", d: "So entries go to the right company.", btn: ["Client setup", {act: "setup"}]},
       {id: "bridge", done: !!bridge, t: "Connect the Tally Bridge", d: "A small program on the computer where Tally is open.", btn: ["Connect", {act: "tallyGuide"}]},
@@ -19413,7 +19827,8 @@ const KEYS = [
   ["/", "Look up any ledger, anywhere in a client"],
   ["?", "This list"],
   ["F3 or Ctrl+K", "Switch client"],
-  ["Ctrl+A", "Approve the bill on screen"],
+  ["Ctrl+Enter", "Approve the bill on screen"],
+  ["J or K", "Next or previous bill in the list"],
   ["Esc", "Close a panel, or go back"],
   ["Enter", "In Look up: show the answer"]
 ];
@@ -19545,11 +19960,12 @@ const TCloud = {
   async find(cid, q, from, to, typ, had){
     const j = await this.rpc("tally_find", {p_client: cid, p_q: q || "", p_from: this.iso(from), p_to: this.iso(to), p_type: typ || null, p_limit: this.FIND_PAGE, p_offset: had ? had.rows.length : 0});
     if (!j || j.none) throw new Error("The cloud has no copy of these books yet.");
-    const rows = [].concat(j.rows || []).map(([d, type, no, party, narr, amt, guid, ent]) => {
+    const rows = [].concat(j.rows || []).map(([d, type, no, party, narr, amt, guid, ent, opt]) => {
       const e = [].concat(ent || []).map(([l, a]) => ({l, a: num(a)}));
-      return {id: guid, date: d, type, no, party: party || (e.find(x => x.a < 0) || {}).l || "", narr: narr || "", amt: r2(num(amt)), ent: e};
+      return {id: guid, date: d, type, no, party: party || (e.find(x => x.a < 0) || {}).l || "", narr: narr || "", amt: r2(num(amt)), ent: e, opt: opt === true};
     });
-    return {kind: "find", src: "cloud", q, from, to, typ, rows: (had ? had.rows : []).concat(rows), n: num(j.n), total: r2(num(j.total))};
+    // migration-10: an Optional entry comes marked and is not in the total
+    return {kind: "find", src: "cloud", q, from, to, typ, rows: (had ? had.rows : []).concat(rows), n: num(j.n), total: r2(num(j.total)), opt: num(j.opt)};
   },
   age(bk){
     if (!bk) return "";
@@ -19560,15 +19976,26 @@ const TCloud = {
   async day(bk, d, at){
     const k = "tcday:" + bk + ":" + d;
     try { const c = await IDBStore.get(k); if (c && c.at === at) return c.text; } catch (e){}
+    await Cloud.fresh().catch(() => {});
     const c = Cloud.cfg(), s = Cloud.sess();
     const url = c.url.replace(/\/+$/, "") + "/storage/v1/object/authenticated/tally-days/" + Cloud.st.firm + "/" + bk + "/" + d.slice(0, 6) + "/" + d + ".xml.gz";
     let r = await fetch(url, {headers: {apikey: c.key, Authorization: "Bearer " + s.access_token}, cache: "no-store"});
-    if (r.status === 401 || r.status === 400){ await Cloud.refreshToken(); r = await fetch(url, {headers: {apikey: c.key, Authorization: "Bearer " + Cloud.sess().access_token}, cache: "no-store"}); }
+    if (r.status === 401 || r.status === 400){ await Cloud.refreshToken(s.access_token); r = await fetch(url, {headers: {apikey: c.key, Authorization: "Bearer " + Cloud.sess().access_token}, cache: "no-store"}); }
     if (r.status === 404) return "";
     if (!r.ok) throw new Error("Could not fetch " + d + " from the cloud (" + r.status + ").");
     const text = await new Response(r.body.pipeThrough(new DecompressionStream("gzip"))).text();
     try { await IDBStore.write([[k, {at, text}]]); } catch (e){}
     return text;
+  },
+  // Tally's groups, sent by the bridge from 1.14.7 (review of 01-Oct-2026): each group's parent, so a ledger's chain up
+  // to its primary group is known (expenses, incomes, debtors...). A copy sent before has none: the names decide, as before
+  async groupsInto(b, book){
+    let g = [];
+    try { g = await this.restAll("tally_groups?select=name,parent&book_id=eq." + book); } catch (e){ g = []; }
+    if (!g.length) return;
+    b.groups = Object.assign({}, b.groups || {});
+    g.forEach(x => { b.groups[x.name] = x.parent || ""; });
+    TallyRead.yearOpen(b);
   },
   // ---------- bring the cloud's copy into FinCom: only the months with a day that changed
   async load(force){
@@ -19582,8 +20009,9 @@ const TCloud = {
       // answered from the cloud's totals, not loaded here; only the ledgers and their groups, for choosing and grouping
       const m0 = b.meta = b.meta || {};
       if (!(m0.cloud && m0.cloud.book === bk.book && m0.cloud.big && m0.cloud.ledgersAt === bk.ledgersAt)){
-        const led = await this.restAll("tally_ledgers?select=name,parent,open&order=name&book_id=eq." + bk.book);
+        const led = await this.restAll("tally_ledgers?select=name,parent,open&merged_into=is.null&order=name&book_id=eq." + bk.book);
         b.vouchers = []; TallyRead.balances(b, {ledgers: led.map(l => ({name: l.name, parent: l.parent, open: String(l.open), close: ""}))}, this.d8(bk.from), Audit.today());
+        await this.groupsInto(b, bk.book);
         m0.cloud = {book: bk.book, company: bk.company, ledgersAt: bk.ledgersAt, big: true, at: new Date().toISOString()};
         LK.cache = {}; render();
       }
@@ -19603,8 +20031,9 @@ const TCloud = {
     try {
       if (!same){ b.vouchers = []; b.tb = null; }
       if (ledNew){
-        const led = await this.restAll("tally_ledgers?select=name,parent,open&order=name&book_id=eq." + bk.book);
+        const led = await this.restAll("tally_ledgers?select=name,parent,open&merged_into=is.null&order=name&book_id=eq." + bk.book);
         TallyRead.balances(b, {ledgers: led.map(l => ({name: l.name, parent: l.parent, open: String(l.open), close: ""}))}, from, to);
+        await this.groupsInto(b, bk.book);
       }
       const days = {};
       for (const ym of todo){
@@ -19709,6 +20138,7 @@ const TCloudUp = {
   // who: the client and Tally company, fixed when the upload starts (build 195: the upload for several clients moves on
   // to the next client while an earlier upload is still going; the earlier one must not follow it)
   async post(body, who){
+    await Cloud.fresh().catch(() => {});
     const c = Cloud.cfg(), s = Cloud.sess();
     if (!s) throw new Error("Sign in to the firm account first.");
     const r = await fetch(TCloud.ingestUrl(), {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": "application/json"}, body: JSON.stringify(Object.assign(who || {client: S.coId, company: BridgeSeed.company()}, body))});
@@ -19743,6 +20173,67 @@ const TCloudUp = {
 
 // The light on the clients list (build 189): for each client with Tally, whether its Tally computer is on, Tally open and
 // the books up to date, from the bridge's heartbeat (every 5 minutes; the bridge asks Tally nothing for it)
+// review of 01-Oct-2026: on TCloud (its pane, status, rpc and restAll); the call to FinCom's cloud goes through TCloudUp.post
+Object.assign(TCloud, {
+  // review of 01-Oct-2026: the day books kept in the cloud, read again by FinCom's cloud with today's reading (the party's
+  // GSTIN, the place of supply, HSN and rate on lines were not kept before). One month a call; owners only. Nothing is
+  // asked of the computer with Tally
+  async reparse(cid){
+    // review of 01-Oct-2026: what happened stays on the screen (p.rp), not only in a toast. "Read again" is said only
+    // when FinCom's cloud answered for each month with the days it read; an answer of another shape, no months kept, or
+    // no day read at all is an error on the screen. The line names the cloud asked, so a wrong address shows
+    const co = S.companies[cid] || {name: "This client"};
+    const p = this.pane; p.rp = p.rp || {};
+    let host = ""; try { host = new URL(this.ingestUrl()).host.split(".")[0]; } catch (e){}
+    if (p.rp[cid] && p.rp[cid].busy){ toast("Already reading " + co.name + "’s kept day books again."); return; }
+    let month = null, n = 0, bad = 0, total = 0, calls = 0;
+    const seen = new Set();
+    try {
+      do {
+        p.busy = "Reading " + co.name + "’s kept day books again" + (month ? " (" + FC.monthLabel(month) + ")" : "") + "…"; p.rp[cid] = {busy: true, n, months: calls, host}; render();
+        const j = await TCloudUp.post({kind: "reparse", month}, {client: cid});
+        calls++;
+        if (!j || j.ok !== true || !Array.isArray(j.done) || !("next" in j)) throw new Error("FinCom's cloud (" + host + ") gave an answer that is not a re-read; nothing was read. Its function may be out of date.");
+        if (!j.months) throw new Error("FinCom's cloud (" + host + ") keeps no day books for this client; nothing was read.");
+        if (j.month){ if (seen.has(j.month)) throw new Error("FinCom's cloud answered " + j.month + " twice; stopped."); seen.add(j.month); }
+        n += j.done.length; bad += (j.bad || []).length; total = j.months || total; month = j.next;
+        if (calls > 240) throw new Error("More than 240 months; stopped.");
+      } while (month);
+      if (!n) throw new Error("No day was read (" + total + " months kept" + (bad ? ", " + bad + " days could not be read" : "") + ").");
+      p.busy = ""; p.rp[cid] = {n, bad, months: total, at: new Date().toISOString(), host};
+      toast(co.name + ": " + n + " days of " + total + " months read again" + (bad ? ", " + bad + " could not be read" : "") + ". Open the client again to see them.");
+      const s = this.st[cid]; if (s) s.at = 0;
+    } catch (e){ p.busy = ""; p.rp[cid] = {err: (e && e.message) || String(e), n, host}; toast("Could not read the kept day books again: " + ((e && e.message) || e)); }
+    render();
+  },
+  // review of 01-Oct-2026: "Send ledgers and groups now": the Tally computer reads every ledger and group and sends
+  // them (bridge 1.14.8), asked the way Update now is: through the bridge here, or through the cloud's heartbeat
+  async sendLedgers(cid){
+    const here = typeof Bridge === "object" && Bridge.on() && Bridge.up();
+    try {
+      // review of 01-Oct-2026: asked through the cloud too, always: the bridge here may keep another company, or this
+      // may not be the computer that keeps this client's books
+      if (here){ try { await LK.keepSet({now: true}, "Asked the bridge here to read every ledger and group from Tally and send them."); } catch (e){} }
+      const j = await this.rpc("tally_want_update", {p_client: cid});
+      toast(j && j.ok ? "The Tally computer is asked to send every ledger and group; it starts within a minute (Tally must be open there). Press What is in the cloud? after two minutes." : here ? "Asked the bridge here. No other Tally computer is linked to this client." : "No Tally computer is linked to this client yet.");
+    } catch (e){ toast("Could not ask the Tally computer: " + ((e && e.message) || e)); }
+    setTimeout(() => this.groupStatus(cid), 1500);
+  },
+  // what of the client's ledgers is in the cloud: groups, and ledgers with a group
+  async groupStatus(cid){
+    const p = this.pane; p.gs = p.gs || {};
+    try {
+      const bk = (await this.status(cid, true) || []).find(b => b.from); if (!bk){ p.gs[cid] = {none: true}; render(); return; }
+      // a twin kept from a trial balance file (merged_into, migration-9) is not a ledger of its own; Profit & Loss A/c has
+      // no group in Tally either
+      const [g, led] = await Promise.all([this.restAll("tally_groups?select=name&book_id=eq." + bk.book).catch(() => []), this.restAll("tally_ledgers?select=name,parent&merged_into=is.null&book_id=eq." + bk.book).catch(() => [])]);
+      const own = led.filter(l => l.name !== "Profit & Loss A/c");
+      p.gs[cid] = {groups: g.length, ledgers: own.length, grouped: own.filter(l => l.parent).length, pl: own.length < led.length, at: new Date().toISOString()};
+    } catch (e){ p.gs[cid] = {err: (e && e.message) || String(e)}; }
+    render();
+  }
+});
+
 const TLight = {
   st: {at: 0, busy: false, by: {}},
   refresh(){
@@ -19760,7 +20251,7 @@ const TLight = {
   work(cos, devs, now){
     const by = {}, dev = {};
     devs.filter(d => !d.revoked).forEach(d => { dev[d.id] = d; });
-    const when = t => new Date(t).toLocaleString("en-IN", {day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit"});
+    const when = t => fmtDateTime(t);
     const rank = {bad: 3, warn: 2, ok: 1};
     cos.forEach(c => {
       const d = dev[c.device_id]; if (!d) return;
@@ -19823,7 +20314,7 @@ function tallyStatus(co){
   const seenOf = d => Date.parse((((d.info || {}).beat) || {}).at || d.last_seen || 0) || 0;
   const heard = devs.reduce((a, d) => Math.max(a, seenOf(d)), 0);
   const fresh = devs.some(d => Date.now() - seenOf(d) <= 15 * 60000);
-  const when = t => fmtDate(new Date(t).toISOString().slice(0, 10)) + " " + new Date(t).toLocaleTimeString("en-IN", {hour: "2-digit", minute: "2-digit"});
+  const when = t => fmtDateTime(t);
   if (!local && !devs.length) return {state: "none", level: "bad", label: "Not set up", say: "No Tally Bridge on this computer, and no computer of the firm sends from Tally. Set up the Tally Bridge on the computer with TallyPrime."};
   if (!local && !fresh) return {state: "offline", level: "bad", label: "Offline since " + (heard ? when(heard) : "—"), say: "No word from the firm's Tally computer" + (heard ? " since " + when(heard) : "") + ": the computer, the FinCom Connector or the bridge is off."};
   const cos = co ? [co] : Object.values(S.companies || {}).filter(c => !c.deleted);
@@ -20226,4 +20717,121 @@ async function aihNote(how, id){
   if (how === "redo"){ n.figures = AIH.noticeFigures(n); AIH.draft(n); return; }
   if (how === "copy"){ try { await navigator.clipboard.writeText(n.reply || ""); toast("Copied."); } catch (x){ toast("Could not copy; select the text and copy it."); } return; }
   if (how === "dl") saveFile("Reply " + String((n.fields || {}).form || "notice").replace(/[^\w.-]+/g, "_") + ".txt", new Blob([n.reply || ""], {type: "text/plain"}));
+}
+/* ================================================================== */
+/* Page links (review item 25): every page has its own address, so    */
+/* Back, Forward and Refresh work and a bill can be sent as a link.    */
+/* ================================================================== */
+// The address is kept after the # (#/c/<client>/bill/<id>): the site is plain files, so a path like /c/… would not be
+// found on refresh. The page state (S) stays the only truth: the address is written from it after each drawing, and
+// read into it when the address changes (Back, Forward, a link opened, Refresh).
+//   #/clients  #/today  #/inbox  #/tally  #/help  #/settings[/<section>]
+//   #/c/<client>/dash | inbox | upload | txn/<kind> | books/<tab> | purchase/review | purchase/<filter> | bill/<id>
+//                | bank | sales | post/<kind> | done/<kind> | setup/<section>
+const Route = {
+  applying: false,
+  of(){
+    if (S.view !== "company" || !S.coId || !CO()){
+      if (S.homeTab === "rules") return "#/settings" + (S.settingsTab ? "/" + encodeURIComponent(S.settingsTab) : "");
+      return "#/" + (["clients", "today", "inbox", "tally", "help"].includes(S.homeTab) ? S.homeTab : "clients");
+    }
+    const c = "#/c/" + encodeURIComponent(S.coId) + "/";
+    if (S.step === "collect") return c + "upload";
+    if (S.tab === "dash") return c + "dash";
+    if (S.tab === "clientInbox") return c + "inbox";
+    if (S.tab === "txn") return c + "txn/" + txnTab();
+    if (S.tab === "books") return c + "books/" + booksTab();
+    if (isSetupTab(S.tab)) return c + "setup/" + S.tab;
+    if (S.tab === "bank") return c + "bank";
+    if (S.tab === "sales") return c + "sales";
+    if (S.tab === "export") return c + "post/" + (S.postFocus || "bills");
+    if (S.tab === "done") return c + "done/" + (S.postFocus || "bills");
+    if (S.tab === "invoices"){
+      // one at a time, or opened in the drawer over the review table: either way the bill has its own address
+      if (S.selected && (!S.reviewTable || S.drawerOpen)) return c + "bill/" + encodeURIComponent(S.selected);
+      return c + "purchase/" + (S.reviewTable ? "review" : (S.filter || "draft"));
+    }
+    return c + "dash";
+  },
+  // after each drawing: the address follows the page; a new page is a new step in the browser's history
+  pending: null,                    // a link opened before signing in: applied once signed in
+  ready: false,                     // set once the page has started: until then the address is the one opened, not ours
+  sync(){
+    if (!this.ready || this.applying || typeof history === "undefined" || signInNeeded() || !S.firm) return;
+    if (this.pending){ const p = this.pending; this.pending = null; this.apply(p); return; }
+    const h = this.of();
+    if (h === location.hash){ this.replaceNext = false; return; }
+    try {
+      if (!/^#\//.test(location.hash) || this.replaceNext) history.replaceState(null, "", location.pathname + location.search + h);
+      else history.pushState(null, "", location.pathname + location.search + h);
+    } catch (e){}
+    this.replaceNext = false;
+  },
+  // the address into the page: from Back/Forward, a link, or a refresh
+  async apply(h){
+    const p = String(h || "").replace(/^#\/?/, "").split("/").map(x => { try { return decodeURIComponent(x); } catch (e){ return x; } });
+    if (!p[0]) return false;
+    this.applying = true;
+    try {
+      if (p[0] === "c" && p[1]){
+        if (!S.companies[p[1]]){ toast("That client is not in this firm’s list."); return false; }
+        await openCompany(p[1]);
+        const what = p[2] || "dash", arg = p[3] || "";
+        S.step = null; S.drawerOpen = false; S.colPop = null;
+        if (what === "upload"){ S.tab = S.tab === "dash" ? "invoices" : S.tab; S.step = "collect"; }
+        else if (what === "dash") S.tab = "dash";
+        else if (what === "inbox") S.tab = "clientInbox";
+        else if (what === "txn"){ S.tab = "txn"; if (arg) S.txnTab = arg; }
+        else if (what === "books"){ S.tab = "books"; if (arg) S.booksTab = arg; }
+        else if (what === "setup" && isSetupTab(arg)) S.tab = arg;
+        else if (what === "bank"){ S.tab = "bank"; if (!S.bank || S.bank.cid !== S.coId) loadBank(S.coId).then(() => render()); }
+        else if (what === "sales") S.tab = "sales";
+        else if (what === "post" || what === "done"){ S.tab = what === "post" ? "export" : "done"; S.postFocus = arg || "bills"; if (!S.bank || S.bank.cid !== S.coId) loadBank(S.coId).then(() => render()); }
+        else if (what === "purchase"){ S.tab = "invoices"; S.selected = null; S.drawerOpen = false; S.reviewTable = arg === "review"; if (arg && arg !== "review") S.filter = arg; }
+        else if (what === "bill"){
+          const e = D().entries[arg];
+          S.tab = "invoices";
+          // over the review table when that is where it was opened (Back closes it), else one at a time
+          if (e){ if (S.reviewTable && e.status === "draft") S.drawerOpen = true; else S.reviewTable = false; S.filter = e.status; S.selected = e.id; } else toast("That bill is not in this client’s list (deleted, or not yet sent to this computer).");
+        }
+      } else if (p[0] === "settings"){ S.view = "home"; S.homeTab = "rules"; S.settingsTab = p[1] || null; }
+      else if (["clients", "today", "inbox", "tally", "help"].includes(p[0])){ S.view = "home"; S.homeTab = p[0]; S.step = null; }
+      else return false;
+      return true;
+    } finally {
+      this.applying = false;
+      this.replaceNext = true;       // the address already says where we are
+      render();
+    }
+  }
+};
+if (typeof window !== "undefined"){
+  window.addEventListener("popstate", () => { if (/^#\//.test(location.hash)) Route.apply(location.hash); });
+  window.addEventListener("hashchange", () => { if (/^#\//.test(location.hash) && location.hash !== Route.of()) Route.apply(location.hash); });
+}
+/* ================================================================== */
+/* Phone (review item 38): at 600 px and less every table on the page */
+/* is shown as cards, one card a row, each value with its column's    */
+/* name beside it. The look is in app.css; this only names the cells. */
+/* ================================================================== */
+const PHONE = typeof matchMedia === "function" ? matchMedia("(max-width:600px)") : null;
+// each cell gets data-label from its column's header (colspan counted); a table opts out with class "nocards"
+function cardLabels(root){
+  if (!PHONE || !PHONE.matches || typeof document === "undefined") return;
+  (root || document.getElementById("app") || document).querySelectorAll("table").forEach(t => {
+    if (t.classList.contains("nocards") || !t.tHead || !t.tHead.rows.length) return;
+    const heads = []; [...t.tHead.rows[t.tHead.rows.length - 1].cells].forEach(c => { const n = c.colSpan || 1, txt = (c.getAttribute("aria-label") || c.textContent || "").replace(/[▲▼⇅↑↓]/g, "").trim(); for (let i = 0; i < n; i++) heads.push(txt); });
+    [...t.tBodies].forEach(b => [...b.rows].forEach(r => { let i = 0; [...r.cells].forEach(c => { const want = c.colSpan > 1 ? "" : (heads[i] || ""); if (c.getAttribute("data-label") !== want) c.setAttribute("data-label", want); i += c.colSpan || 1; }); }));
+    if (!t.classList.contains("cards")) t.classList.add("cards");
+  });
+}
+function cardsOff(){ if (typeof document !== "undefined") document.querySelectorAll("#app table.cards").forEach(t => t.classList.remove("cards")); }
+if (typeof document !== "undefined" && PHONE && typeof MutationObserver === "function"){
+  let queued = false;
+  const run = () => { queued = false; cardLabels(); };
+  const watch = () => { const app = document.getElementById("app"); if (!app) return setTimeout(watch, 300);
+    new MutationObserver(() => { if (PHONE.matches && !queued){ queued = true; requestAnimationFrame(run); } }).observe(app, {childList: true, subtree: true}); run(); };
+  watch();
+  const flip = () => { if (PHONE.matches) cardLabels(); else cardsOff(); };
+  if (PHONE.addEventListener) PHONE.addEventListener("change", flip); else if (PHONE.addListener) PHONE.addListener(flip);
 }
