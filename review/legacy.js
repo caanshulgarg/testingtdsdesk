@@ -11962,9 +11962,18 @@ async function bringDayBookFile(f, from0, to0, opts){
           catch (e){ part.bridge = "not taken: " + ((e && e.message) || e); }
         } else part.bridge = "not connected on this computer";
         if (TCloudUp.on()){
-          // quietly, in the background: nothing on the screen unless it fails
-          try { const r = await TCloudUp.days(await f.text(), {from, to}, null, who); part.cloud = r && r.days != null ? "in the cloud (" + r.days + " days)" : (r && r.skipped) || ""; }
+          // review of 01-Oct-2026: on the screen while it goes (a year takes minutes), the page warns before it is left
+          // half sent, and says when every day is in the cloud. Before, it went quietly and a reload lost the rest
+          const stay = ev => { ev.preventDefault(); ev.returnValue = "The day book is still going to FinCom’s cloud."; return ev.returnValue; };
+          window.addEventListener("beforeunload", stay);
+          part.cloud = "going to the cloud…";
+          try {
+            const r = await TCloudUp.days(await f.text(), {from, to}, step, who);
+            part.cloud = r && r.days != null ? "in the cloud (" + r.days + " days)" : (r && r.skipped) || "";
+            if (r && r.days != null) toast(f.name + ": all " + r.days + " days, " + fmtDate(tallyDate(from)) + " to " + fmtDate(tallyDate(to)) + ", are in FinCom’s cloud.");
+          }
           catch (e){ part.cloud = "not sent: " + ((e && e.message) || e); toast("Saved here, but it could not be shared with the firm just now (" + ((e && e.message) || e) + "). Choose the file again later."); }
+          finally { window.removeEventListener("beforeunload", stay); }
         } else part.cloud = "sign in to the firm account to share it";
         b.busy = ""; await saveBooks(null, b); render();          // these books, even if another client is open by now
       })();
@@ -20125,20 +20134,31 @@ Object.assign(TCloud, {
   // GSTIN, the place of supply, HSN and rate on lines were not kept before). One month a call; owners only. Nothing is
   // asked of the computer with Tally
   async reparse(cid){
-    // review of 01-Oct-2026: what happened stays on the screen (p.rp), not only in a toast, so "finished" means days read
+    // review of 01-Oct-2026: what happened stays on the screen (p.rp), not only in a toast. "Read again" is said only
+    // when FinCom's cloud answered for each month with the days it read; an answer of another shape, no months kept, or
+    // no day read at all is an error on the screen. The line names the cloud asked, so a wrong address shows
     const co = S.companies[cid] || {name: "This client"};
-    const p = this.pane; let month = null, n = 0, bad = 0, total = 0, months = 0;
-    p.rp = p.rp || {};
+    const p = this.pane; p.rp = p.rp || {};
+    let host = ""; try { host = new URL(this.ingestUrl()).host.split(".")[0]; } catch (e){}
+    if (p.rp[cid] && p.rp[cid].busy){ toast("Already reading " + co.name + "’s kept day books again."); return; }
+    let month = null, n = 0, bad = 0, total = 0, calls = 0;
+    const seen = new Set();
     try {
       do {
-        p.busy = "Reading " + co.name + "’s kept day books again" + (month ? " (" + FC.monthLabel(month) + ")" : "") + "…"; p.rp[cid] = {busy: true, n, months}; render();
+        p.busy = "Reading " + co.name + "’s kept day books again" + (month ? " (" + FC.monthLabel(month) + ")" : "") + "…"; p.rp[cid] = {busy: true, n, months: calls, host}; render();
         const j = await TCloudUp.post({kind: "reparse", month}, {client: cid});
-        n += (j.done || []).length; bad += (j.bad || []).length; total = j.months || total; month = j.next; months++;
+        calls++;
+        if (!j || j.ok !== true || !Array.isArray(j.done) || !("next" in j)) throw new Error("FinCom's cloud (" + host + ") gave an answer that is not a re-read; nothing was read. Its function may be out of date.");
+        if (!j.months) throw new Error("FinCom's cloud (" + host + ") keeps no day books for this client; nothing was read.");
+        if (j.month){ if (seen.has(j.month)) throw new Error("FinCom's cloud answered " + j.month + " twice; stopped."); seen.add(j.month); }
+        n += j.done.length; bad += (j.bad || []).length; total = j.months || total; month = j.next;
+        if (calls > 240) throw new Error("More than 240 months; stopped.");
       } while (month);
-      p.busy = ""; p.rp[cid] = {n, bad, months: total, at: new Date().toISOString()};
+      if (!n) throw new Error("No day was read (" + total + " months kept" + (bad ? ", " + bad + " days could not be read" : "") + ").");
+      p.busy = ""; p.rp[cid] = {n, bad, months: total, at: new Date().toISOString(), host};
       toast(co.name + ": " + n + " days of " + total + " months read again" + (bad ? ", " + bad + " could not be read" : "") + ". Open the client again to see them.");
       const s = this.st[cid]; if (s) s.at = 0;
-    } catch (e){ p.busy = ""; p.rp[cid] = {err: (e && e.message) || String(e), n}; toast("Could not read the kept day books again: " + ((e && e.message) || e)); }
+    } catch (e){ p.busy = ""; p.rp[cid] = {err: (e && e.message) || String(e), n, host}; toast("Could not read the kept day books again: " + ((e && e.message) || e)); }
     render();
   },
   // review of 01-Oct-2026: "Send ledgers and groups now": the Tally computer reads every ledger and group and sends
