@@ -4,7 +4,7 @@
 -- 2. gst_returns: GSTR-2B, filed GSTR-1 and filed GSTR-3B fetched through TaxPro, kept on the server per GSTIN and month.
 -- 3. E-invoice (IRN) and e-way bill: the IRP / EWB login per GSTIN (password and tokens in Vault) and every IRN and
 --    e-way bill made from FinCom.
--- 4. A daily run (07:00 IST): 2B from the 14th, filed GSTR-1 / 3B not yet kept, reminders.
+-- 4. A daily run (07:00-11:00 IST, hourly until done): 2B from the 14th, filed GSTR-1 / 3B not yet kept, reminders.
 -- TaxPro's keys go in Vault too, by you, in the dashboard (never in this file):
 --   select vault.create_secret('<ASP id>', 'gsp:taxpro:aspid', 'TaxPro ASP id');
 --   select vault.create_secret('<ASP password>', 'gsp:taxpro:password', 'TaxPro ASP password');
@@ -93,9 +93,9 @@ do $$ begin if not exists (select 1 from pg_policies where tablename = 'gst_einv
 revoke all on public.gst_einvoices from anon, authenticated;
 grant select on public.gst_einvoices to authenticated;
 
--- ---------- 4. the daily run: 07:00 IST (01:30 UTC) ----------
+-- ---------- 4. the daily run: hourly 07:00-11:00 IST (01:30-05:30 UTC), each run picking up what the last left ----------
 select cron.unschedule('gst-daily') where exists (select 1 from cron.job where jobname = 'gst-daily');
-select cron.schedule('gst-daily', '30 1 * * *', $$
+select cron.schedule('gst-daily', '30 1-5 * * *', $$
   select net.http_post(
     url := 'https://qbocskaiewaxqcvaunzc.supabase.co/functions/v1/gst-taxpro',
     headers := jsonb_build_object('Content-Type', 'application/json',

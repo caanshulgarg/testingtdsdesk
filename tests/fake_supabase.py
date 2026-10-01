@@ -13,6 +13,9 @@ DAYS = []             # (book, day, n) of each tally_ingest_day
 FAIL = {}             # day -> times tally_ingest_day fails for it before it works
 WORK_KEY = "work-key-" + "c" * 32
 CALLS = []
+SECRETS = {}          # Vault: name -> value (gsp_secret_put / gsp_secret_get, migration-16)
+CRON_KEY = "cron-key-" + "d" * 32
+PK = {"gst_sessions": ["firm_id", "gstin"], "gst_returns": ["firm_id", "gstin", "form", "period"], "gst_einv_accounts": ["firm_id", "gstin"], "gst_einvoices": ["firm_id", "gstin", "doc_key"]}
 ids = itertools.count(1)
 def now(): return time.time()
 def match(row, q):
@@ -25,6 +28,8 @@ def match(row, q):
         if op == "eq" and cs != val: return False
         if op == "neq" and cs == val: return False
         if op == "lt" and not cs < val: return False
+        if op == "gt" and not cs > val: return False
+        if op == "is" and val == "null" and cell is not None: return False
         if op == "in" and cs not in val.strip("()").split(","): return False
     return True
 def rpc(fn, a):
@@ -53,6 +58,11 @@ def rpc(fn, a):
                 if a.get("p_failed"): j["message"] = a["p_failed"][:300]
         return None
     if fn == "tally_work_key_ok": return a.get("p_key") == WORK_KEY
+    if fn == "gsp_secret_put":
+        if not a["p_name"].startswith("gsp:"): raise RuntimeError("not a GST secret")
+        SECRETS[a["p_name"]] = a["p_value"]; return "sec-" + a["p_name"]
+    if fn == "gsp_secret_get": return SECRETS.get(a["p_name"]) if a["p_name"].startswith("gsp:") else None
+    if fn == "gst_cron_ok": return a.get("k") == CRON_KEY
     if fn == "tally_post_take":
         for j in T["tally_post_jobs"]:
             if j["device_id"] == a["p_device"] and j["status"] == "waiting": j["status"] = "taken"; return [j]
@@ -83,13 +93,16 @@ class H(http.server.BaseHTTPRequestHandler):
             t = path.rsplit("/", 1)[1]; rows = T.setdefault(t, []); single = "vnd.pgrst.object" in (self.headers.get("Accept") or "")
             if method in ("GET", "HEAD"):
                 hit = [r for r in rows if match(r, q)]
+                sel = (q.get("select") or ["*"])[0]
+                if t.startswith("gst_") and sel != "*" and "(" not in sel:      # the columns asked for (gst-taxpro's tests)
+                    cols = [c.strip() for c in sel.split(",")]; hit = [{c: r.get(c) for c in cols} for r in hit]
                 if method == "HEAD" or "count=exact" in (self.headers.get("Prefer") or ""):
                     return self.send(200, None if method == "HEAD" else hit, {"Content-Range": "*/%d" % len(hit)})
                 if single: return self.send(200, hit[0]) if len(hit) == 1 else self.send(406, {"message": "not one row"})
                 return self.send(200, hit)
             if method == "POST":
                 data = json.loads(raw); data = data if isinstance(data, list) else [data]; out = []
-                keys = (q.get("on_conflict") or [""])[0].split(",") if q.get("on_conflict") else None
+                keys = (q.get("on_conflict") or [""])[0].split(",") if q.get("on_conflict") else PK.get(t)
                 for d in data:
                     d = dict(d)
                     if t == "tally_jobs":
