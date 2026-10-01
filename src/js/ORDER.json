@@ -51,5 +51,6 @@
  "51-tally-queue.js",
  "50-ai-help.js",
  "52-routes.js",
- "53-phone.js"
+ "53-phone.js",
+ "54-live-sync.js"
 ]

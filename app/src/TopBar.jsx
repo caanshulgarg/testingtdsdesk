@@ -55,13 +55,17 @@ function ClientHeader() {
 
 function CloudChip() {
   if (!Cloud.on()) return null;
-  const st = Cloud.st;
+  const st = Cloud.st, sv = Live.sv;
+  // live sync (54-live-sync.js): Saving…, Saved 14:05, or offline; "live" while changes by others come in at once
+  if (st.state !== "signedout" && sv.state === "offline") return <span className="tchip warn" data-save="offline" title="Changes are kept on this computer and sent when it is back online">Offline · changes kept here</span>;
+  if (sv.state === "saving") return <span className="tchip off" data-save="saving">Saving…</span>;
   if (st.busy) return <span className="tchip off">Syncing…</span>;
   if (st.state === "signedout") return <button className="tchip bad" onClick={() => doAct("openSettings")}>Sign in again</button>;
   if (st.error) return <button className="tchip warn" onClick={() => doAct("openSettings")} title={st.error}>Sync problem</button>;
   const mins = st.lastSync ? Math.round((Date.now() - st.lastSync) / 60000) : null;
   const title = st.email + (st.lastSync ? " · last sync " + fmtTime(st.lastSync) : "");
-  return <span className="tchip ok" title={title}>{"☁ Shared" + (mins > 5 ? " · " + mins + "m" : "")}</span>;
+  return <span className="tchip ok" title={title + (Live.st === "live" ? " · changes by others appear at once" : "")} data-save={sv.at ? "saved" : ""} data-live={Live.st}>
+    {"☁ " + (sv.at ? "Saved " + fmtTime(sv.at) : "Shared" + (mins > 5 ? " · " + mins + "m" : "")) + (Live.st === "live" ? " · live" : "")}</span>;
 }
 
 function TopRight() {

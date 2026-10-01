@@ -369,7 +369,7 @@ const LK = {
     if (!force && Date.now() - (f.cat || 0) < 60000) return;
     f.cat = Date.now();
     const at = ((S.books || {}).meta || {}).at;
-    try { await TCloud.status(S.coId, force); if (TCloud.has(S.coId)) await TCloud.load(force); } catch (e){}
+    try { await TCloud.status(S.coId, force); if (TCloud.has(S.coId) && await TCloud.load(force) === "new") TCloud.rework(S.books); } catch (e){}
     if (!quiet || at !== ((S.books || {}).meta || {}).at) render();
   },
   // quiet: the once-a-minute look from any screen; the page is drawn again only when the books changed

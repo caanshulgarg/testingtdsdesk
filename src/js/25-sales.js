@@ -78,6 +78,7 @@ let salesSaveTimer = null;
 function saveSales(what){
   const s = SL(); if (!s) return;
   const cid = s.cid, list = s.list;
+  if (typeof cloudSoon === "function") cloudSoon();
   clearTimeout(salesSaveTimer);
   if (S.bank && S.bank.cid === cid) S.bank.salesRef = list;
   salesSaveTimer = setTimeout(() => { salesSaveTimer = null; BankDB.set("sales:" + cid, list); }, 500);

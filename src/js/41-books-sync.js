@@ -74,16 +74,19 @@ const BookSync = {
     return rows && rows[0] ? rows[0] : null;
   },
   // put what came back into the open books (and this browser's copy)
+  // server-books: what Tally's masters give (the ledgers' groups, GSTINs, states...) is filled by the cloud copy too; a work
+  // part without them must not wipe what the cloud copy just brought in (another computer then showed MIS with no groups)
+  MASTERS: ["under", "groups", "gstins", "states", "groupInfo", "ledInfo", "ledInfoAt", "tallyCo"],
   async apply(cid, data){
-    const keys = this.keys();
+    const keys = this.keys(), drop = k => data[k] === undefined && this.MASTERS.indexOf(k) < 0;
     if (S.books && S.books.cid === cid){
-      keys.forEach(k => { if (data[k] === undefined) delete S.books[k]; else S.books[k] = clone(data[k]); });
+      keys.forEach(k => { if (drop(k)) delete S.books[k]; else if (data[k] !== undefined) S.books[k] = clone(data[k]); });
       if (S.books.vouchers && S.books.vouchers.length) try { LedMaster.refresh(S.books); } catch (e){}
       await saveBooks({fromCloud: true});
       render();
     } else {
       const saved = (await Books.load(cid)) || {cid};
-      keys.forEach(k => { if (data[k] === undefined) delete saved[k]; else saved[k] = data[k]; });
+      keys.forEach(k => { if (drop(k)) delete saved[k]; else if (data[k] !== undefined) saved[k] = data[k]; });
       await Books.save(cid, saved);
     }
   },
@@ -102,6 +105,7 @@ const BookSync = {
   /* ---------- sending ---------- */
   schedule(cid){
     if (!this.on() || !cid) return;
+    if (typeof BookItems === "object" && BookItems.on()){ BookItems.schedule(cid); return; }     // live sync: item by item, at once (54-live-sync.js)
     const s = this.of(cid);
     clearTimeout(s.timer);
     s.timer = setTimeout(() => this.push(cid), this.wait);
@@ -139,6 +143,7 @@ const BookSync = {
   /* ---------- receiving ---------- */
   async pull(cid){
     if (!this.on() || !cid) return;
+    if (typeof BookItems === "object" && BookItems.on()){ try { if (await BookItems.pull(cid) !== "off") return; } catch (e){ this.of(cid).error = e.message; return; } }
     const s = this.of(cid);
     if (s.busy) return;
     s.busy = true;
@@ -169,6 +174,7 @@ const BookSync = {
   // called with every firm sync: send what is waiting, bring in what others saved for the client that is open
   async tick(){
     if (!this.on()) return;
+    if (typeof BookItems === "object" && BookItems.on()){ await BookItems.flush(); const o = S.books && S.books.cid && !S.books.loading ? S.books.cid : null; if (o) await BookItems.pull(o).catch(() => {}); return; }
     const open = S.books && S.books.cid && !S.books.loading ? S.books.cid : null;
     for (const cid of Object.keys(this.st)){ if (cid !== open && this.st[cid].timer && !this.st[cid].busy) await this.push(cid); }
     if (open) await this.pull(open);
@@ -177,4 +183,4 @@ const BookSync = {
   // information on the From Tally tab only; warnings (look-only, not saved) on every tab
 
 };
-if (typeof window === "object") window.addEventListener("beforeunload", () => { try { Object.keys(BookSync.st).forEach(cid => { if (BookSync.st[cid].timer){ clearTimeout(BookSync.st[cid].timer); BookSync.push(cid); } }); } catch (e){} });
+if (typeof window === "object") window.addEventListener("beforeunload", () => { try { if (typeof BookItems === "object") Object.keys(BookItems.st).forEach(cid => { if (BookItems.st[cid].timer){ clearTimeout(BookItems.st[cid].timer); BookItems.push(cid); } }); } catch (e){} try { Object.keys(BookSync.st).forEach(cid => { if (BookSync.st[cid].timer){ clearTimeout(BookSync.st[cid].timer); BookSync.push(cid); } }); } catch (e){} });

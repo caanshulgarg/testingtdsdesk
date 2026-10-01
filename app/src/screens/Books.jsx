@@ -153,6 +153,7 @@ function FreshLine({ b }) {
   const last = lastEntryDate(b), checked = String(m.to || "");
   return <p className="note" style={{ margin: "0 0 10px" }}>Books up to <b>{fmtDate(tallyDate(last || checked))}</b>{last ? " (the last entry)" : ""}
     {last && checked > last ? " · checked with Tally to " + fmtDate(tallyDate(checked)) : ""}{at ? " · brought in " + at : ""}.
+    {b.openMs != null && <span className="nr" data-opentime>{" Opened in " + (b.openMs / 1000).toFixed(1) + " s" + (b.readyMs != null ? ", every entry in " + (b.readyMs / 1000).toFixed(1) + " s" : "") + "."}</span>}
     {can && <> <button className="linkbtn" onClick={() => doAct("keepNow")}>Update now</button></>}</p>;
 }
 
@@ -174,6 +175,8 @@ function EmptyTab({ tab }) {
 export default function Books() {
   const co = CO();
   if (!S.books || S.books.cid !== co.id) { openBooks(co.id); return <p className="note">Opening the books…</p>; }
+  // live sync: the server's latest first; this computer's copy is not shown in place of a newer one
+  if (S.books.loading) return <p className="note" data-opening>Getting the latest from the server…</p>;
   const b = S.books, tab = booksTab(), n = (b.vouchers || []).length;
   const busy = b.busy && <BusyCard title="Reading the books…" detail={b.busy} />;
   if (tab === "reports" || tab === "lookup" || tab === "letters")
@@ -184,7 +187,7 @@ export default function Books() {
     return <>
       {n > 0 && <FreshLine b={b} />}
       {busy}
-      {!n ? <EmptyTab tab={tab} /> : tab === "mis" ? <MisTab b={b} /> : tab === "audit" ? <AuditTab b={b} /> : <Accounts b={b} />}
+      {!n ? (b.busy ? null : <EmptyTab tab={tab} />) : tab === "mis" ? <MisTab b={b} /> : tab === "audit" ? <AuditTab b={b} /> : <Accounts b={b} />}
     </>;
   }
   const pending = n ? LedMaster.pending(b).length : 0;
@@ -194,7 +197,7 @@ export default function Books() {
   if (tab === "import") body = <FromTally b={b} />;
   else if (!n && tab === "gst") body = <Gst />;
   else if (!n && tab === "tds") body = <Tds b={b} />;
-  else if (!n) body = <EmptyTab tab={tab} />;
+  else if (!n) body = b.busy ? null : <EmptyTab tab={tab} />;
   else if (tab === "tds") body = <Tds b={b} />;
   else if (tab === "gst" || !["ledgers", "audit", "mis", "fs"].includes(tab)) body = <Gst />;
   else if (tab === "ledgers") body = <Ledgers b={b} />;

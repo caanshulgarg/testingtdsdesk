@@ -164,7 +164,10 @@ const TCloud = {
     const todo = Object.keys(byMonth).sort().filter(ym => byMonth[ym].some(x => known[x.day] !== x.at));
     const ledNew = !same || meta.cloud.ledgersAt !== bk.ledgersAt;
     if (!todo.length && !ledNew) return true;
-    f.busy = "Bringing in " + (todo.length === 1 ? FC.monthLabel(todo[0]) : todo.length + " months") + " from the copy in FinCom's cloud…"; render();
+    // server-books: the progress shows on every Books screen (TDS, GST, MIS, Reports...), not only on Look up
+    const say = t => { f.busy = b.busy = t; render(); };
+    say("Bringing in " + (todo.length === 1 ? FC.monthLabel(todo[0]) : todo.length + " months") + " from the copy in FinCom's cloud…");
+    let changed = false;
     try {
       if (!same){ b.vouchers = []; b.tb = null; }
       if (ledNew){
@@ -172,10 +175,15 @@ const TCloud = {
         TallyRead.balances(b, {ledgers: led.map(l => ({name: l.name, parent: l.parent, open: String(l.open), close: ""}))}, from, to);
         await this.groupsInto(b, bk.book);
       }
-      const days = {};
+      // the days, sixteen at a time (one by one, a year of 365 files took minutes on a new computer; the server answers
+      // many at once over one connection)
+      const days = {}, want = [].concat(...todo.map(ym => byMonth[ym])), text = {};
+      let got = 0, next = 0;
+      const one = async () => { while (next < want.length){ const x = want[next++]; text[x.day] = await this.day(bk.book, x.day, x.at); days[x.day] = x.at; got++;
+        if (got % 10 === 0 || got === want.length) say("Bringing in the books from FinCom's cloud: " + got + " of " + want.length + " days…"); } };
+      await Promise.all(Array.from({length: Math.min(16, want.length)}, one));
       for (const ym of todo){
-        const parts = [];
-        for (const x of byMonth[ym]){ parts.push(await this.day(bk.book, x.day, x.at)); days[x.day] = x.at; }
+        const parts = byMonth[ym].map(x => text[x.day] || "");
         const res = await Books.importDayBook(new Blob(["<ENVELOPE>" + parts.join("") + "</ENVELOPE>"], {type: "text/xml"}));
         const bad = notThisClient((res.meta || {}).gstins);
         if (bad.length) throw new Error(panRefusal("The company in the cloud copy", bad));
@@ -187,10 +195,37 @@ const TCloud = {
       meta.cloud = {book: bk.book, company: bk.company, ledgersAt: bk.ledgersAt, days: Object.assign({}, known, days), at: new Date().toISOString()};
       meta.at = meta.cloud.at; meta.keep = true; meta.file = "the copy in FinCom's cloud"; meta.from = meta.from && meta.from < from ? meta.from : from;
       TallyRead.after(b, "after changes came from the cloud copy");
-      LK.cache = {}; await saveBooks();
+      LK.cache = {}; changed = true; await saveBooks();
     } catch (e){ toast("Could not bring in the cloud copy: " + ((e && e.message) || e)); }
-    f.busy = ""; render();
-    return true;
+    f.busy = b.busy = ""; render();
+    return changed ? "new" : true;
+  },
+  // server-books: opening a client on any computer brings its books in from the cloud copy, with no button and no upload
+  // (this browser keeps a copy of each day, so only the days that changed are fetched). Then MIS and the audit are
+  // worked out again from what came in.
+  async openLoad(cid){
+    if (!this.on() || S.coId !== cid) return false;
+    const f = LK.fr();
+    if (f.busy) return false;
+    f.cat = Date.now();
+    let r = false;
+    const b = S.books, empty = b && b.cid === cid && !(b.vouchers || []).length;
+    if (empty){ f.busy = b.busy = "Looking for the books in FinCom's cloud…"; render(); }
+    // a day book chosen on this computer that has not reached the cloud yet goes first
+    try { if (await TCloudUp.retry(cid, t => { if (S.books && S.books.cid === cid){ f.busy = S.books.busy = t; render(); } })) this.st[cid] = {}; } catch (e){}
+    try { await this.status(cid, true); if (this.has(cid) && S.books && S.books.cid === cid){ if (empty) f.busy = ""; r = await this.load(true); } } catch (e){}
+    if (S.books && S.books.cid === cid && /FinCom.s cloud/.test(S.books.busy || "")){ f.busy = S.books.busy = ""; render(); }
+    if (r === "new" && S.books && S.books.cid === cid) this.rework(S.books);
+    // how long until every entry was in (said on the books' first line, with the time to open)
+    if (S.books && S.books.cid === cid && S.books.openAt){ S.books.readyMs = Date.now() - S.books.openAt; render(); }
+    return r;
+  },
+  rework(b){
+    try {
+      const last = b.mis && b.mis.last;
+      if (last && last.from && last.to) MIS.run(last.from, last.to, "after the books came in from the cloud copy"); else MIS.maybeRun();
+      Audit.maybeRun(); saveBooks(); render();
+    } catch (e){}
   },
   // ---------- Settings: computers and companies
   async refreshPane(){
@@ -300,6 +335,31 @@ const TCloudUp = {
     }
     await flush();
     return {days: sent};
+  },
+  // server-books: a day book file waiting to go to the cloud ("tcup:<client>:<from>-<to>" in this browser's store)
+  async hold(cid, file, range, who){
+    const k = "tcup:" + cid + ":" + range.from + "-" + range.to;
+    this.live.add(k);
+    try { await IDBStore.write([[k, {blob: file, name: file.name, from: range.from, to: range.to, who: Object.assign({}, who), at: new Date().toISOString()}]]); } catch (e){}
+    return k;
+  },
+  live: new Set(),          // the files this page is sending now (not to be sent twice)
+  async drop(k){ this.live.delete(k); try { await IDBStore.write([[k, null]]); } catch (e){} },
+  async waiting(cid){ try { return await IDBStore.prefix("tcup:" + cid + ":"); } catch (e){ return []; } },
+  // sent again on opening the client; true when something went
+  async retry(cid, onStep){
+    if (!this.on() || this.retrying) return false;
+    const list = (await this.waiting(cid)).filter(([k]) => !this.live.has(k));
+    if (!list.length) return false;
+    this.retrying = true; let sent = 0;
+    try {
+      for (const [k, x] of list){
+        try { const r = await this.days(await x.blob.text(), {from: x.from, to: x.to}, onStep, x.who); if (r && r.days != null){ await this.drop(k); sent++; } }
+        catch (e){ toast("A day book (" + (x.name || "file") + ") is still waiting to go to FinCom’s cloud: " + ((e && e.message) || e)); }
+      }
+    } finally { this.retrying = false; }
+    if (sent) toast(sent + " day book file" + (sent === 1 ? " that was waiting is" : "s that were waiting are") + " now in FinCom’s cloud.");
+    return sent > 0;
   },
   async opening(from, asOn, led, who){
     if (!this.on()) return {skipped: "not signed in to the firm account"};

@@ -674,8 +674,14 @@ Object.assign(LedMaster, {
   },
   // what the firm has confirmed for other clients, by ledger name
   tplKey(name){ return String(name || "").toUpperCase().replace(/^\s*\d{2}\s+/, "").replace(/\s+/g, " ").trim(); },
-  tplAll(){ try { return JSON.parse(lsGet("tdsdesk:ledtpl") || "{}"); } catch (e){ return {}; } },
-  tplSave(t){ try { lsSet("tdsdesk:ledtpl", JSON.stringify(t)); } catch (e){} },
+  // server-books: kept with the firm's settings (in the firm account, for every computer), not in this browser; what an
+  // earlier build kept here is brought in once (the browser's copy is left as it was)
+  tplAll(){
+    const f = S.firm || {};
+    if (!f.ledTpl){ let old = {}; try { old = JSON.parse(lsGet("tdsdesk:ledtpl") || "{}"); } catch (e){} if (Object.keys(old).length && S.firm){ S.firm.ledTpl = old; try { Store.saveFirm(); } catch (e){} } return old; }
+    return f.ledTpl;
+  },
+  tplSave(t){ if (!S.firm) return; S.firm.ledTpl = t; try { Store.saveFirm(); } catch (e){} },
   tplLearn(b, names){
     const t = this.tplAll(), cid = b.cid || "";
     names.forEach(n => {

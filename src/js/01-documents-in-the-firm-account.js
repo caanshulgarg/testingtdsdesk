@@ -111,9 +111,10 @@ const CloudDocs = {
     });
     return out;
   },
-  async sendPending(cid){
+  // quiet: on opening a client (server-books), the documents kept only on this computer go up on their own
+  async sendPending(cid, quiet){
     const list = await this.pending(cid);
-    if (!list.length){ toast("Every document for this client is already in the firm account."); return; }
+    if (!list.length){ if (quiet) return; toast("Every document for this client is already in the firm account."); return; }
     for (const it of list){
       const f = await FileStore.get(cid, it.id);
       if (f) this.add(cid, it.id, f, it.kind);
@@ -309,6 +310,8 @@ const Store = {
       clearTimeout(this.lsTimer);
       this.lsTimer = setTimeout(() => this.saveLocal(), 300);
     }
+    // live sync: to the firm's server at once, not on the 45-second round (54-live-sync.js)
+    if (typeof cloudSoon === "function") cloudSoon();
   },
   saveLocal(){
     try {

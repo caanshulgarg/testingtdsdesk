@@ -70,7 +70,7 @@ const Cloud = {
     const until = num(s.at) + (num(s.expires_in) || 3600) * 1000;
     if (Date.now() > until - 120000) await this.refreshToken();
   },
-  signOut(){ this.setSess(null); this.st = {state: "off", email: "", role: "", firm: "", lastSync: 0, pending: 0, error: "", busy: "", members: []}; },
+  signOut(){ try { Live.stop(); } catch (e){} this.setSess(null); this.st = {state: "off", email: "", role: "", firm: "", lastSync: 0, pending: 0, error: "", busy: "", members: []}; },
   async api(path, opts, retry){
     if (!retry) await this.fresh().catch(() => {});
     const c = this.cfg(), s = this.sess();
@@ -229,6 +229,10 @@ function cleanIds(v, depth){
 }
 function cloudRowOk(r){ return r && SAFE_ID.test(String(r.id || "")) && (!r.client_id || SAFE_ID.test(String(r.client_id))); }
 async function cloudApply(rows){
+  const was = Live.applying; Live.applying = true;          // what comes from the server is not sent back
+  try { await cloudApplyNow(rows); } finally { Live.applying = was; }
+}
+async function cloudApplyNow(rows){
   const marks = Cloud.marks();
   rows = [].concat(rows || []).filter(cloudRowOk);
   rows.forEach(r => { if (r.data) cleanIds(r.data, 0); });
@@ -347,7 +351,7 @@ function startCloudSync(){
 }
 function startCloudSync2(){
   loadAccount(true);
-  cloudSync(false);
+  cloudSync(false).then(() => { try { Live.start(); } catch (e){} });
   cloudTimer = setInterval(() => { if (document.visibilityState === "visible" && Cloud.cfg().auto !== false) cloudSync(false); }, 45000);
 }
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && Cloud.on() && Cloud.cfg().auto !== false) cloudSync(false); });
@@ -362,11 +366,14 @@ function whoChipInner(){
 function cloudChip(){
   if (!Cloud.on()) return "";
   const st = Cloud.st;
+  const sv = Live.sv;
+  if (st.state !== "signedout" && sv.state === "offline") return '<span class="tchip warn" title="Changes are kept on this computer and sent when it is back online">Offline \u00b7 changes kept here</span>';
+  if (sv.state === "saving") return '<span class="tchip off">Saving\u2026</span>';
   if (st.busy) return '<span class="tchip off">Syncing\u2026</span>';
   if (st.state === "signedout") return '<button class="tchip bad" data-act="openSettings">Sign in again</button>';
   if (st.error) return '<button class="tchip warn" data-act="openSettings" title="' + esc(st.error) + '">Sync problem</button>';
   const mins = st.lastSync ? Math.round((Date.now() - st.lastSync) / 60000) : null;
-  return '<span class="tchip ok" title="' + esc(st.email) + (st.lastSync ? " \u00b7 last sync " + fmtTime(st.lastSync) : "") + '">\u2601 Shared' + (mins > 5 ? " \u00b7 " + mins + "m" : "") + "</span>";
+  return '<span class="tchip ok" title="' + esc(st.email) + (st.lastSync ? " \u00b7 last sync " + fmtTime(st.lastSync) : "") + '">\u2601 ' + (sv.at ? "Saved " + fmtTime(sv.at) : "Shared") + (Live.st === "live" ? " \u00b7 live" : "") + "</span>";
 }
 
 /* ---------- plan, balance and charging ---------- */
