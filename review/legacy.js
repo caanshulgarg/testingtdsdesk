@@ -35,7 +35,7 @@ const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
 const APP_VERSION = "TEST · 30 Sep 2026 · build 199 (posting queue: post from any computer, the Tally computer posts when Tally is free; posted entries go to the cloud without reading Tally again; bridge 1.14.6)";
 // the Tally Bridge setup file's fingerprint, put in by build.py: a new setup file is never served from an old cache
-const BRIDGE_SETUP_SHA = "531e3cb40ba6b3b2";
+const BRIDGE_SETUP_SHA = "5ba22f31108af87d";
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function gstinCheckChar(g){
   let sum = 0;
@@ -4141,7 +4141,9 @@ const Books = {
         if (e.indexOf("<BILLALLOCATIONS.LIST>") >= 0){
           const bl = e.split("<BILLALLOCATIONS.LIST>").slice(1).map(p2 => {
             const q = p2.split("</BILLALLOCATIONS.LIST>")[0];
-            return [this.one(q, "NAME"), this.one(q, "BILLTYPE"), this.amt(this.one(q, "AMOUNT"))];
+            // review of 01-Oct-2026: Tally's credit period on a New Ref ("30 Days"), so ageing can run from the due date
+            const cp = (q.match(/<BILLCREDITPERIOD\b[^>]*>([^<]*)<\/BILLCREDITPERIOD>/) || [])[1] || "", dm = cp.match(/^\s*(\d{1,4})\s*Days?\s*$/i);
+            return dm ? [this.one(q, "NAME"), this.one(q, "BILLTYPE"), this.amt(this.one(q, "AMOUNT")), Number(dm[1])] : [this.one(q, "NAME"), this.one(q, "BILLTYPE"), this.amt(this.one(q, "AMOUNT"))];
           }).filter(z => z[1] && z[2]);
           if (bl.length) x.b = bl;
         }
@@ -5236,16 +5238,22 @@ const MIS = {
       v.ent.forEach(e => {
         if (!want(e.l)) return;
         const alloc = e.b && e.b.length ? e.b : [["", "On Account", e.a]];
-        alloc.forEach(([name, type, amt]) => {
+        alloc.forEach(([name, type, amt, days]) => {
           const k = e.l + "|" + (type === "On Account" || !name ? "\u0000" : name);
           const x = ref[k] = ref[k] || {party: e.l, ref: type === "On Account" || !name ? "" : name, date: "", amt: 0, first: v.date, no: ""};
           const signed = side === "r" ? -amt : amt;            // what is owed to us (r) or by us (p)
-          if ((type === "New Ref" || type === "Advance") && !x.date){ x.date = v.date; x.no = v.no; x.hasNew = true; }
+          if ((type === "New Ref" || type === "Advance") && !x.date){ x.date = v.date; x.no = v.no; x.hasNew = true; if (type === "New Ref" && days > 0) x.days = days; }
           x.amt = r2(x.amt + signed);
         });
       });
     });
-    return Object.values(ref).filter(x => Math.abs(x.amt) >= 0.5).map(x => Object.assign(x, {date: x.date || x.first, age: Audit.days(x.date || x.first, asOn)}));
+    // age: days since the bill (MSME's 45 days, reminders and Look up count from here). od (review of 01-Oct-2026): what
+    // the ageing goes by, the days overdue from the due date (bill date + Tally's credit days; nought while not yet due),
+    // or the age when the bill has no credit period
+    return Object.values(ref).filter(x => Math.abs(x.amt) >= 0.5).map(x => {
+      const date = x.date || x.first, due = x.days ? this.shift(date, 0, x.days) : "", age = Audit.days(date, asOn);
+      return Object.assign(x, {date, due, age, od: due ? Math.max(0, Audit.days(due, asOn)) : age});
+    });
   },
   BUCKETS: [[30, "0\u201330"], [60, "31\u201360"], [90, "61\u201390"], [180, "91\u2013180"], [1e9, "over 180"]],
   ageing(asOn, side, bal){
@@ -5255,7 +5263,7 @@ const MIS = {
       if (!x.ref){ p.unalloc = r2(p.unalloc + x.amt); }
       else if (!x.hasNew){ p.pre = r2(p.pre + x.amt); }                // a bill from before the books read here
       else if (x.amt < 0){ p.adv = r2(p.adv + x.amt); }
-      else { const i = this.BUCKETS.findIndex(([d]) => x.age <= d); p.b[i] = r2(p.b[i] + x.amt); p.oldest = Math.max(p.oldest, x.age); }
+      else { const a = x.od != null ? x.od : x.age, i = this.BUCKETS.findIndex(([d]) => a <= d); p.b[i] = r2(p.b[i] + x.amt); p.oldest = Math.max(p.oldest, a); }
       p.total = r2(p.total + x.amt); p.bills.push(x);
     });
     const rows = Object.values(by);
@@ -20034,23 +20042,6 @@ const TCloudUp = {
     if (!r.ok || j.ok === false) throw new Error(j.error || ("FinCom's cloud answered with error " + r.status));
     return j;
   },
-  // review of 01-Oct-2026: the day books kept in the cloud, read again by FinCom's cloud with today's reading (the party's
-  // GSTIN, the place of supply, HSN and rate on lines were not kept before). One month a call; owners only. Nothing is
-  // asked of the computer with Tally
-  async reparse(cid){
-    const co = S.companies[cid]; if (!co) return;
-    const p = this.pane; let month = null, n = 0, bad = 0, total = 0;
-    try {
-      do {
-        p.busy = "Reading " + co.name + "’s kept day books again" + (month ? " (" + FC.monthLabel(month) + ")" : "") + "…"; render();
-        const j = await this.post({kind: "reparse", month}, {client: cid});
-        n += (j.done || []).length; bad += (j.bad || []).length; total = j.months || total; month = j.next;
-      } while (month);
-      p.busy = ""; toast(co.name + ": " + n + " days read again" + (bad ? ", " + bad + " could not be read" : "") + ". Open the client again to see them.");
-      const s = this.st[cid]; if (s) s.at = 0;
-    } catch (e){ p.busy = ""; toast("Could not read the kept day books again: " + ((e && e.message) || e)); }
-    render();
-  },
   async days(text, range, onStep, who){
     if (!this.on()) return {skipped: "not signed in to the firm account"};
     who = who || {client: S.coId, company: BridgeSeed.company()};
@@ -20078,6 +20069,51 @@ const TCloudUp = {
 
 // The light on the clients list (build 189): for each client with Tally, whether its Tally computer is on, Tally open and
 // the books up to date, from the bridge's heartbeat (every 5 minutes; the bridge asks Tally nothing for it)
+// review of 01-Oct-2026: on TCloud (its pane, status, rpc and restAll); the call to FinCom's cloud goes through TCloudUp.post
+Object.assign(TCloud, {
+  // review of 01-Oct-2026: the day books kept in the cloud, read again by FinCom's cloud with today's reading (the party's
+  // GSTIN, the place of supply, HSN and rate on lines were not kept before). One month a call; owners only. Nothing is
+  // asked of the computer with Tally
+  async reparse(cid){
+    const co = S.companies[cid]; if (!co) return;
+    const p = this.pane; let month = null, n = 0, bad = 0, total = 0;
+    try {
+      do {
+        p.busy = "Reading " + co.name + "’s kept day books again" + (month ? " (" + FC.monthLabel(month) + ")" : "") + "…"; render();
+        const j = await TCloudUp.post({kind: "reparse", month}, {client: cid});
+        n += (j.done || []).length; bad += (j.bad || []).length; total = j.months || total; month = j.next;
+      } while (month);
+      p.busy = ""; toast(co.name + ": " + n + " days read again" + (bad ? ", " + bad + " could not be read" : "") + ". Open the client again to see them.");
+      const s = this.st[cid]; if (s) s.at = 0;
+    } catch (e){ p.busy = ""; toast("Could not read the kept day books again: " + ((e && e.message) || e)); }
+    render();
+  },
+  // review of 01-Oct-2026: "Send ledgers and groups now": the Tally computer reads every ledger and group and sends
+  // them (bridge 1.14.8), asked the way Update now is: through the bridge here, or through the cloud's heartbeat
+  async sendLedgers(cid){
+    const co = S.companies[cid]; if (!co) return;
+    const here = typeof Bridge === "object" && Bridge.on() && Bridge.up();
+    try {
+      if (here){ await LK.keepSet({now: true}, "Asked the bridge here to read every ledger and group from Tally and send them."); }
+      else {
+        const j = await this.rpc("tally_want_update", {p_client: cid});
+        toast(j && j.ok ? "The Tally computer is asked to send every ledger and group; it starts within a minute (Tally must be open there)." : "No Tally computer is linked to this client yet.");
+      }
+    } catch (e){ toast("Could not ask the Tally computer: " + ((e && e.message) || e)); }
+    setTimeout(() => this.groupStatus(cid), 1500);
+  },
+  // what of the client's ledgers is in the cloud: groups, and ledgers with a group
+  async groupStatus(cid){
+    const p = this.pane; p.gs = p.gs || {};
+    try {
+      const bk = (await this.status(cid, true) || []).find(b => b.from); if (!bk){ p.gs[cid] = {none: true}; render(); return; }
+      const [g, led] = await Promise.all([this.restAll("tally_groups?select=name&book_id=eq." + bk.book).catch(() => []), this.restAll("tally_ledgers?select=parent&book_id=eq." + bk.book).catch(() => [])]);
+      p.gs[cid] = {groups: g.length, ledgers: led.length, grouped: led.filter(l => l.parent).length, at: new Date().toISOString()};
+    } catch (e){ p.gs[cid] = {err: (e && e.message) || String(e)}; }
+    render();
+  }
+});
+
 const TLight = {
   st: {at: 0, busy: false, by: {}},
   refresh(){
