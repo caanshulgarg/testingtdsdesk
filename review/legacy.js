@@ -611,6 +611,15 @@ function toDateObj(d){
   const t = String(d);
   return /^\d{4}-\d{2}-\d{2}$/.test(t.slice(0, 10)) && t.length <= 10 ? new Date(t + "T00:00:00") : new Date(t);
 }
+// a large sum in a few characters, as said in India: ₹49.99 Cr, ₹3.20 L, ₹45,000 (review of 01-Oct-2026: header chips)
+function moneyShort(v){
+  const n = num(v), a = Math.abs(n), sg = n < 0 ? "-" : "";
+  // rounded down, so a balance never reads as more than it is (₹49,99,99,912 is ₹49.99 Cr, not ₹50.00 Cr)
+  const down = (x) => (Math.floor(x * 100 + 1e-9) / 100).toFixed(2);
+  if (a >= 1e7) return sg + "\u20b9" + down(a / 1e7) + " Cr";
+  if (a >= 1e5) return sg + "\u20b9" + down(a / 1e5) + " L";
+  return sg + "\u20b9" + Math.round(a).toLocaleString("en-IN");
+}
 function fmtDate(d){
   if (!d && d !== 0) return "—";
   const dt = toDateObj(d);
@@ -3866,8 +3875,9 @@ async function exportCsv(){
 function clearSent(){
   const cutoff = new Date(Date.now() - 90 * 864e5).toISOString();
   const old = Object.values(D().entries).filter(e => e.exportedAt && e.exportedAt < cutoff);
-  old.forEach(e => { delete D().entries[e.id]; Store.deleteEntry(S.coId, e.id); });
-  toast(old.length ? old.length + " old sent invoices cleared. Deductee year totals are kept." : "No sent invoices older than 90 days.");
+  // a soft delete (review of 01-Oct-2026): each goes to "Deleted", where it can be restored; deductee year totals are kept
+  old.filter(e => e.status !== "deleted").forEach(e => softDeleteEntry(e, "Cleared: sent to Tally more than 90 days ago"));
+  toast(old.length ? old.length + " old sent invoices cleared. They are under \u201cDeleted\u201d, where they can be restored; deductee year totals are kept." : "No sent invoices older than 90 days.");
   refreshStats(S.coId); render();
 }
 
@@ -4004,7 +4014,7 @@ function vchTypeOf(e, co){
 function tallyStateOf(e){
   if (e.exportedAt) return e.postUnverified ? ["sent", "In Tally, not confirmed"] : ["ok", "In Tally"];
   if (e.postError) return ["bad", "Tally refused: " + e.postError];
-  if (e.status === "approved") return ["warn", "Ready to post"];
+  if (e.status === "approved") return ["warn", "Post to Tally"];
   if (e.status === "rejected") return ["no", "No entry needed"];
   if (e.status === "duplicate") return ["warn", "Held as duplicate"];
   return ["no", "To review"];
@@ -4025,7 +4035,7 @@ function txnRowsSales(){
   return s.list.map(v => {
     const x = v.x || {}, gst = num(x.cgst) + num(x.sgst) + num(x.igst) + num(x.cess);
     const cls = v.status === "posted" ? "ok" : v.status === "ready" ? "warn" : v.status === "ignored" ? "no" : "no";
-    const label = v.status === "posted" ? "In Tally" : v.status === "ready" ? "Ready to post" : v.status === "ignored" ? "Set aside" : "To review";
+    const label = v.status === "posted" ? "In Tally" : v.status === "ready" ? "Post to Tally" : v.status === "ignored" ? "Set aside" : "To review";
     return {id: v.id, kind: "sale", date: x.date || "", up: (v.addedAt || "").slice(0, 10), vch: x.noteKind === "credit" ? "Credit Note" : x.noteKind === "debit" ? "Debit Note" : (s.cfg.voucherType || "Sales"),
       no: x.number || "", party: x.customerName || "", taxable: num(x.taxable), gst, total: num(x.total), cls, label, file: v.fileName || "", docPath: v.docPath || "", hasFile: !!(S.files["sv:" + v.id] || v.docPath || (S.fileIndex && S.fileIndex.has("sv:" + v.id))), v};
   }).sort((a, b) => String(b.date).localeCompare(String(a.date)));
@@ -4038,7 +4048,7 @@ function txnRowsBank(){
   return b.rows.map(r => {
     const st = stName[(r.id || "").split("-")[0]] || curStmt() || {};
     const cls = r.state === "sent" ? "ok" : r.state === "intally" ? "ok" : r.state === "ready" ? "warn" : r.state === "ignored" ? "no" : "no";
-    const label = r.state === "sent" ? "In Tally" : r.state === "intally" ? "Already in Tally" : r.state === "ready" ? "Ready to post" : r.state === "ignored" ? "Left out" : "To review";
+    const label = r.state === "sent" ? "In Tally" : r.state === "intally" ? "Already in Tally" : r.state === "ready" ? "Post to Tally" : r.state === "ignored" ? "Left out" : "To review";
     return {id: r.id, kind: "bank", date: r.date, up: (st.uploadedAt || "").slice(0, 10), vch: r.credit ? (CO().receiptType || "Receipt") : (CO().paymentType || "Payment"),
       no: (r.dec && (r.dec.utr || r.dec.chq)) || "", party: (r.dec && r.dec.name) || r.narr.slice(0, 40), taxable: 0, gst: 0,
       total: num(r.debit) || num(r.credit), dr: num(r.debit), cr: num(r.credit), cls, label, file: st.fileName || "", docPath: st.docPath || "", hasFile: !!(S.files["st:" + st.id] || st.docPath || (S.fileIndex && S.fileIndex.has("st:" + st.id))), stId: st.id, r};
@@ -6727,7 +6737,11 @@ const GSTR = {
   months(){
     const b = S.books;
     if (!b) return [];
-    const m = Array.from(new Set((b.vouchers || []).map(v => this.ym(v.date)).filter(x => x.length === 6))).sort();
+    const seen = Array.from(new Set((b.vouchers || []).map(v => this.ym(v.date)).filter(x => x.length === 6))).sort();
+    // every month from the books' first to their last, with or without entries (review of 01-Oct-2026: Apr-Jun 2026 were
+    // missing because no entry fell in them)
+    const m = [];
+    if (seen.length){ let x = seen[0]; while (x <= seen[seen.length - 1] && m.length < 240){ m.push(x); x = this.nextYm(x); } }
     if (m.length || !this.gstins(b).length) return m;
     const d = new Date(), y = d.getFullYear(), mo = d.getMonth() + 1, fy = mo >= 4 ? y : y - 1, out = [];
     let x = (fy - 1) + "04"; const last = (mo === 1 ? (y - 1) + "12" : y + String(mo - 1).padStart(2, "0"));
@@ -6746,7 +6760,8 @@ const GSTR = {
   pEnd(per){ const p = String(per); return p.length > 6 ? p.slice(7, 13) : p; },
   expand(per){ const out = []; let m = this.pStart(per); const e = this.pEnd(per); while (m <= e){ out.push(m); m = this.nextYm(m); } return out; },
   nextYm(ym){ const y = +ym.slice(0, 4), m = +ym.slice(4, 6); return m === 12 ? (y + 1) + "01" : y + String(m + 1).padStart(2, "0"); },
-  label(ym){ return fmtDate(ym.slice(0, 4) + "-" + ym.slice(4, 6) + "-01").replace(/^\d+\s/, ""); },
+  // a month as "Apr-2025" (the date format of the rest of FinCom, without the day)
+  label(ym){ return fmtDate(ym.slice(0, 4) + "-" + ym.slice(4, 6) + "-01").replace(/^\d+[-\s]/, ""); },
   regOf(v){
     let r = "";
     for (const e of v.ent){ const m = Books.ledgerOf(e.l); if ((m.kind === "gst" || m.kind === "gst_common" || m.kind === "ineligible") && m.reg){ if (r && r !== m.reg){ r = ""; break; } r = m.reg; } }
@@ -8191,7 +8206,7 @@ async function openBooks(cid){
   render();
 }
 // everything kept with a client's books, in this browser and (the TDS and GST work) in the firm's database
-const BOOKS_KEYS = ["vouchers", "map", "meta", "challans", "alloc", "pans", "twoB", "gstins", "under", "states", "groups", "salary", "certs", "advFix", "assets", "rev", "filed", "amendFix", "twoBs", "reco2b", "ledInfo", "ledInfoAt", "audit", "auditCfg", "auditRel", "ledSnaps", "gst9c", "groupInfo", "fs", "tb", "mis", "misCfg", "msme", "budget", "gst3b", "gst9", "gstOpen", "itcBasis", "itcTrack", "outRej", "gstFiled", "gstAato", "filed1a", "rule37On", "gstCashLedger", "gstSet", "gstContacts", "gstApi", "gstEst", "gstVault", "gstRegs", "letters", "ai", "tallyCo", "tbCheck", "nrInfo", "tcsCodes", "panInoperative", "filed3b", "apiTaken"];
+const BOOKS_KEYS = ["vouchers", "map", "meta", "challans", "alloc", "pans", "twoB", "gstins", "under", "states", "groups", "salary", "certs", "advFix", "assets", "rev", "filed", "amendFix", "twoBs", "reco2b", "ledInfo", "ledInfoAt", "audit", "auditCfg", "auditRel", "ledSnaps", "gst9c", "groupInfo", "fs", "tb", "mis", "misCfg", "msme", "budget", "gst3b", "gst9", "gstOpen", "itcBasis", "itcTrack", "outRej", "gstFiled", "gstAato", "filed1a", "rule37On", "gstCashLedger", "gstSet", "gstContacts", "gstApi", "gstEst", "gstVault", "gstRegs", "letters", "ai", "tallyCo", "tbCheck", "nrInfo", "tcsCodes", "panInoperative", "filed3b", "apiTaken", "trashLog"];
 async function saveBooks(opts, bb){
   const b = bb || S.books; if (!b || !b.cid) return;
   const keep = {cid: b.cid}; BOOKS_KEYS.forEach(k => { keep[k] = b[k]; });
@@ -8380,7 +8395,8 @@ function tallyDate(s){ return s && String(s).length === 8 ? String(s).slice(0, 4
 function ledgersReady(which){
   const p = LedMaster.pending(S.books).filter(([, m]) => which === "gst" ? !LedMaster.isTds(m.what) : !LedMaster.isGst(m.what));
   if (!p.length) return true;
-  toast(p.length + " ledger" + (p.length === 1 ? " is" : "s are") + " still to be confirmed. Confirm them first, so the file is right.");
+  const all = LedMaster.pending(S.books).length;
+  toast(all + " ledger" + (all === 1 ? " is" : "s are") + " still to be confirmed, " + (p.length === all ? "and this file uses them" : p.length + " of them used by this file") + ". Confirm them first, so the file is right.");
   S.booksTab = "ledgers"; S.lmView = "pending"; render();
   return false;
 }
@@ -11285,7 +11301,8 @@ function exportBankCsv(){
 /* ---------- screen ---------- */
 /* ---------- the bank screen ---------- */
 const BANK_TABS_EXTRA = [["rules", "Rules"]];
-const BANK_TABS = [["review", "1 \u00b7 To review"], ["ready", "2 \u00b7 Ready to post"], ["done", "3 \u00b7 In Tally"]];
+// the same three steps on Purchase, Bank and Sales (review of 01-Oct-2026): To review · Post to Tally · In Tally
+const BANK_TABS = [["review", "To review"], ["ready", "Post to Tally"], ["done", "In Tally"]];
 function tabStates(tab){ return tab === "ready" ? ["ready"] : tab === "done" ? ["sent", "intally", "ignored"] : tab === "all" ? null : ["attention", "suggested"]; }
 function bankTab(){ const b = B(); return ["review", "ready", "done", "all", "rules"].includes(b.filter) ? b.filter : "review"; }
 function tabCounts(rows){
@@ -11294,11 +11311,8 @@ function tabCounts(rows){
 }
 function plural(n, word){ return n + " " + word + (n === 1 ? "" : word.endsWith("y") ? "" : "s"); }
 function entries(n){ return n + (n === 1 ? " entry" : " entries"); }
-function shortDate(iso){
-  if (!iso) return "";
-  const d = new Date(iso + "T00:00:00");
-  return String(d.getDate()).padStart(2, "0") + " " + ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()];
-}
+// one date format everywhere, DD-MMM-YYYY (review of 01-Oct-2026: lists showed "05 Aug" with no year)
+function shortDate(iso){ return iso ? fmtDate(String(iso).slice(0, 10)) : ""; }
 function bkAmt(n){ return n ? INR.format(r2(n)) : ""; }
 function accountFor(st){ const co = CO(B().cid); return (co.bankAccounts || []).find(a => a.id === st.acctId) || {}; }
 function stmtLabel(st){
@@ -11758,6 +11772,29 @@ document.addEventListener("mousedown", ev => {
 window.addEventListener("resize", () => { if (AC.fk) acDraw(acInput()); });
 document.addEventListener("scroll", () => { if (AC.fk) acDraw(acInput()); }, true);
 /* ---------- confirmation box (browser pop-ups can be blocked inside claude.ai) ---------- */
+// a removal goes ahead only when the client's name is typed (review of 01-Oct-2026); resolves true or false
+function confirmTyped(o){
+  const name = String((CO() || {}).name || "").trim();
+  return askConfirm(Object.assign({danger: true}, o, {
+    body: o.body + '<label class="f" style="margin-top:12px"><span>To go ahead, type the client\u2019s name: <b>' + esc(name) + '</b></span><input type="text" id="cbxName" autocomplete="off" aria-label="Type the client\u2019s name"></label>',
+    read: () => ((document.getElementById("cbxName") || {}).value || "").trim(),
+    validate: v => v.toLowerCase().replace(/\s+/g, " ") === name.toLowerCase().replace(/\s+/g, " ") ? "" : "Type the client\u2019s name exactly as shown: " + name + "."
+  })).then(r => !!r);
+}
+// what was removed, kept in this browser so it can be put back (review of 01-Oct-2026: every removal is a soft delete).
+// The books' own record (b.trashLog) says what was removed, when and by whom, on every computer
+const Trash = {
+  async put(cid, kind, label, data){
+    const id = "trash:" + cid + ":" + Date.now();
+    await IDBStore.write([[id, {id, cid, kind, label, at: new Date().toISOString(), by: whoAmI(), data}]]);
+    return id;
+  },
+  async list(cid, kind){
+    let all = []; try { all = (await IDBStore.prefix("trash:" + cid + ":")).map(x => x[1]); } catch (e){}
+    return all.filter(x => x && (!kind || x.kind === kind) && !x.restoredAt).sort((a, c) => String(c.at).localeCompare(String(a.at)));
+  },
+  async restored(x){ x.restoredAt = new Date().toISOString(); x.restoredBy = whoAmI(); await IDBStore.write([[x.id, x]]); }
+};
 function askConfirm(o){
   return new Promise(done => {
     let box = document.getElementById("confirmBox");
@@ -11788,18 +11825,31 @@ async function deleteStatement(sid){
   const rows = sid === b.cur ? b.rows : ((await BankDB.get("stmt:" + b.cid + ":" + sid)) || []);
   const sent = rows.filter(r => r.state === "sent").length;
   const acc = (CO(b.cid).bankAccounts || []).find(a => a.id === st.acctId) || {};
-  const ans = await askConfirm({title: "Delete this statement?", danger: true, ok: "Delete statement",
+  const ans = await confirmTyped({title: "Delete this statement?", ok: "Delete statement",
     body: "<b>" + esc(acc.ledger || st.bank) + "</b>, " + fmtDate(st.from) + " to " + fmtDate(st.to) + " (" + esc(st.fileName) + ", " + st.n + " rows).<br>" +
-      "All ledger choices made on its rows are removed. Saved rules and new ledgers stay. You can upload the file again afterwards." +
+      "It leaves the list with the ledger choices made on its rows; they are kept, and <b>More \u2192 Restore a deleted statement</b> puts it back. Saved rules and new ledgers stay." +
       (sent ? "<br><br><b>" + sent + " entries from it were already sent to Tally.</b> Tally is not changed: if you upload it again, those rows could be sent twice. Match with the Tally bank book first." : "")});
   if (!ans) return;
-  Object.keys(b.keys).forEach(k => { if (b.keys[k] === sid) delete b.keys[k]; });
+  // a soft delete: the statement leaves the list, its rows stay kept, and More \u2192 Restore puts it back
+  const keys = Object.keys(b.keys).filter(k => b.keys[k] === sid);
+  keys.forEach(k => { delete b.keys[k]; });
   b.stmts = b.stmts.filter(x => x.id !== sid);
-  await BankDB.del("stmt:" + b.cid + ":" + sid);
+  const trash = ((await BankDB.get("stmtsTrash:" + b.cid)) || []).concat([{st, keys, at: new Date().toISOString(), by: whoAmI()}]);
+  await BankDB.set("stmtsTrash:" + b.cid, trash); b.stmtsTrash = trash;
   saveBank({stmts: true, keys: true});
   if (b.cur === sid){ clearTimeout(bankSaveTimer); bankSaveTimer = null; b.cur = null; b.rows = []; b.sel.clear(); b.sticky.clear(); b.undo = null; }
-  toast("Statement deleted.");
+  toast("Statement deleted. More \u2192 Restore a deleted statement puts it back.");
   if (!b.cur && b.stmts.length) await openStatement(b.stmts[b.stmts.length - 1].id); else render();
+}
+// a deleted statement back in the list, as it was
+async function restoreStatement(i){
+  const b = B(), trash = (await BankDB.get("stmtsTrash:" + b.cid)) || [], x = trash[i];
+  if (!x) return;
+  if (!b.stmts.some(s => s.id === x.st.id)) b.stmts.push(x.st);
+  (x.keys || []).forEach(k => { if (!b.keys[k]) b.keys[k] = x.st.id; });
+  trash.splice(i, 1); await BankDB.set("stmtsTrash:" + b.cid, trash); b.stmtsTrash = trash;
+  saveBank({stmts: true, keys: true});
+  toast("Statement restored."); await openStatement(x.st.id);
 }
 async function clearStatement(){
   const b = B(), st = curStmt();
@@ -12127,6 +12177,7 @@ function bankClick(t){
     case "bankBulkRestore": bulkAction("restore"); return true;
     case "bankBulkLedger": { const inp = document.querySelector("[data-bulkled]"); bulkLedgerFrom(inp); return true; }
     case "bankDelStmt": closeMenus(); if (b.cur) deleteStatement(b.cur); return true;
+    case "bankRestoreStmt": closeMenus(); restoreStatement(0); return true;
     case "bankClearStmt": closeMenus(); clearStatement(); return true;
     case "bankDelAll": deleteAllStatements(); return true;
     case "bankClearRules": clearRules(); return true;
@@ -13131,7 +13182,7 @@ function goneBack(){
   b.gone = null; b.focus = null; b.filter = "ready"; b.tallyLook = null;
   lsDel(wideCheckKey());
   saveBank({rows: true, posted: true});
-  toast(n + " line" + (n === 1 ? " is" : "s are") + " back in Ready to post. Press Post to send " + (n === 1 ? "it" : "them") + " to Tally again.");
+  toast(n + " line" + (n === 1 ? " is" : "s are") + " back in Post to Tally. Press Post to send " + (n === 1 ? "it" : "them") + " to Tally again.");
   render();
 }
 /* ---------- finding double entries, and entries Tally holds under the wrong date ---------- */
@@ -14607,7 +14658,7 @@ function printInvoiceHtml(html, number){
   toast("The invoice was downloaded. Open it and choose Print \u2192 Save as PDF.");
 }
 /* ---------- the Sales screen ---------- */
-const SALES_TABS = [["review", "To review"], ["ready", "Ready"], ["done", "Done"]];
+const SALES_TABS = [["review", "To review"], ["ready", "Post to Tally"], ["done", "In Tally"]];
 function salesTabStates(t){ return t === "ready" ? ["ready"] : t === "done" ? ["posted", "intally", "ignored"] : ["review"]; }
 function salesCounts(){ const c = {review: 0, ready: 0, done: 0}; SL().list.forEach(v => { if (v.status === "review") c.review++; else if (v.status === "ready") c.ready++; else c.done++; }); return c; }
 function salesColPass(v){
@@ -15773,7 +15824,8 @@ function billRestore(id){
   if (!e || e.status !== "deleted") return;
   if (!canDeleteBills()){ toast("Only the firm\u2019s owner can restore a deleted bill."); return; }
   e.restored = {at: new Date().toISOString(), by: whoAmI(), was: e.deleted};
-  e.status = "draft"; e.deleted = null;
+  // a bill already in Tally (cleared after 90 days) goes back to where it was, not to be posted again
+  e.status = e.exportedAt && e.deleted && e.deleted.status ? e.deleted.status : "draft"; e.deleted = null;
   if (e.fileHash) registerHash(S.coId, e.fileHash, e.id);
   Store.saveEntry(S.coId, e);
   auditEvent("bill_restore", (e.x.vendorName || e.fileName || "") + " " + (e.x.invoiceNo || e.id), S.coId);
@@ -16315,7 +16367,7 @@ function doAct(act, t){
         e => toast("The bridge could not set it: " + (e && e.message || e)));
       break;
     }
-    case "fsRun": { const y = S.fsFy || fsYears()[0], c = FS.cfg(S.books); S.fsRun = {fy: y, kind: c.kind, d: FS.build(y)}; render(); break; }
+    case "fsRun": { const y = fsYearNow(), c = FS.cfg(S.books); S.fsRun = {fy: y, kind: c.kind, d: FS.build(y)}; render(); break; }
     case "fsPdf": { const d = S.fsRun && S.fsRun.d; if (d && !d.error) printView(CO().name + " financial statements " + d.fy, "<style>@page{size:A4 portrait;margin:14mm}h2{font-size:14px;margin:14px 0 6px;border-bottom:1px solid #D7DEDA}</style>" + FS.html(d)); break; }
     case "fsExcel": { const d = S.fsRun && S.fsRun.d; if (d && !d.error) fsExcel(d).then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break; }
     case "misRun": {
@@ -16421,16 +16473,31 @@ function doAct(act, t){
       break;
     }
     case "assetAdd": { const b = S.books; b.assets = (b.assets || []).concat([{id: uid("as"), name: "", date: "", igst: 0, cgst: 0, sgst: 0, cess: 0, use: "common", reg: S.gstReg || "", sold: ""}]); saveBooks(); render(); break; }
-    case "booksClear": askConfirm({title: "Remove the books read from Tally?", ok: "Remove", body: '<p class="note">Challans and what you corrected stay. The day book can be brought in again.</p>'}).then(ok => {
-      if (!ok) return; S.books.vouchers = []; S.books.meta = null; S.books.reco = null; saveBooks(); toast("Removed."); render(); }); break;
+    case "booksClear": confirmTyped({title: "Remove the books read from Tally?", ok: "Remove", body: '<p class="note">Challans and what you corrected stay. Nothing in Tally or in FinCom\u2019s cloud copy is touched, and a copy is kept: <b>More \u2192 Restore</b> puts the books back.</p>'}).then(async ok => {
+      if (!ok) return; const b = S.books, cid = S.coId;
+      await Trash.put(cid, "books", "The books read from Tally (" + (b.vouchers || []).length + " entries)", {vouchers: b.vouchers, meta: b.meta, reco: b.reco});
+      b.trashLog = (b.trashLog || []).concat([{kind: "books", at: new Date().toISOString(), by: whoAmI()}]);
+      b.vouchers = []; b.meta = null; b.reco = null; saveBooks(); toast("Removed. More \u2192 Restore puts them back."); render(); }); break;
+    case "trashRestore": {
+      const cid = S.coId;
+      Trash.list(cid).then(async list => {
+        const x = list[0]; if (!x){ toast("Nothing removed here to restore."); return; }
+        Object.assign(S.books, x.data); await Trash.restored(x);
+        S.books.trashLog = (S.books.trashLog || []).concat([{kind: "restore:" + x.kind, at: new Date().toISOString(), by: whoAmI()}]);
+        GST2B._memo = null; GSTR._carry = null; await saveBooks(); toast("Restored: " + x.label + "."); render();
+      }); break;
+    }
     case "booksWipe": {
       const b = S.books; if (!b) break;
-      askConfirm({title: "Remove Tally data and all GST work?", ok: "Remove", danger: true, wide: true,
+      confirmTyped({title: "Remove Tally data and all GST work?", ok: "Remove", wide: true,
         body: '<p class="note"><b>Removed for ' + esc(CO().name) + ":</b> the day book and ledger masters read from Tally, Tally\u2019s balances, the audit, MIS and trial balance worked from them; every 2B, filed GSTR-1 and GSTR-1A copy; GST settings and contacts; 3B and GSTR-9 figures typed; filing dates and portal figures; ITC follow-up and IMS decisions; advances, reversal and amendment choices; and the returns-filed PDFs.</p>" +
-          '<p class="note"><b>Kept:</b> TDS challans, certificates and the salary sheet; bills, bank and sales; the client\u2019s own settings. It cannot be undone; the day book can be brought in again.</p>'}).then(async ok => {
+          '<p class="note"><b>Kept:</b> TDS challans, certificates and the salary sheet; bills, bank and sales; the client\u2019s own settings; the returns-filed PDF files themselves. A copy of what is removed is kept: <b>More \u2192 Restore</b> puts it back.</p>'}).then(async ok => {
         if (!ok) return;
-        const co = CO(), vault = (b.gstVault || []).slice();
-        for (const x of vault){ try { await FileStore.drop(co.id, x.id); } catch (e){} if (x.docPath && typeof CloudDocs === "object") CloudDocs.remove(x.docPath); }
+        const co = CO(), snap = {};
+        // a soft delete: everything removed is kept as it was (the PDFs stay where they are), and can be put back
+        BOOKS_WIPE.forEach(k => { if (b[k] !== undefined) snap[k] = b[k]; });
+        await Trash.put(co.id, "wipe", "Tally data and all GST work", snap);
+        b.trashLog = (b.trashLog || []).concat([{kind: "wipe", at: new Date().toISOString(), by: whoAmI()}]);
         booksWipe(b); GST2B._memo = null; GSTR._carry = null; if (typeof GSTAPI === "object") GSTAPI.sess = {};
         await saveBooks(); toast("Tally data and all GST work removed for " + co.name + "."); render();
       }); break;
@@ -16616,8 +16683,8 @@ function doAct(act, t){
         Store.deleteCompany(cid).then(() => { toast(name + " deleted from the desk."); render(); }); render(); }
       break;
     case "clearSent":
-      if (S.arm !== "clearSent"){ S.arm = "clearSent"; render(); break; }
-      S.arm = null; clearSent(); break;
+      confirmTyped({title: "Clear sent invoices older than 90 days?", ok: "Clear them", body: '<p class="note">Invoices sent to Tally more than 90 days ago move to \u201cDeleted\u201d, where each can be restored. Nothing in Tally changes, and deductee year totals are kept. Download the register first if you need it.</p>'})
+        .then(ok => { if (ok) clearSent(); }); break;
     case "xml": { const m = document.getElementById("markSent"); exportXml(m ? m.checked : true); break; }
     case "csv": exportCsv(); break;
   }
@@ -17101,6 +17168,15 @@ const FS = {
 
 /* ---------- the Accounts tab: the financial statements, and where each ledger goes ---------- */
 function fsYears(){ const ms = GSTR.months(); return Array.from(new Set(ms.map(m => Audit.fyStart(m + "01").slice(0, 4)))).sort().reverse(); }
+// the last year the books cover to its end, 31 March (review of 01-Oct-2026: Accounts opens on it and runs by itself);
+// the latest year when none is complete yet
+function fsLastFull(){
+  const ys = fsYears(), vs = ((S.books || {}).vouchers || []);
+  let end = String(((S.books || {}).meta || {}).to || "");
+  vs.forEach(v => { if (String(v.date) > end) end = String(v.date); });
+  return ys.find(y => end >= String(num(y) + 1) + "0331") || ys[0] || "";
+}
+function fsYearNow(){ const ys = fsYears(); return S.fsFy && ys.includes(S.fsFy) ? S.fsFy : fsLastFull(); }
 async function fsExcel(d){
   await ensureXlsx();
   const wb = XLSX.utils.book_new(), add = (n, rows) => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), n.slice(0, 31));
@@ -19635,7 +19711,7 @@ const LK = {
       return;
     }
     if ((!meta.copyAt || m.at > meta.copyAt) && (!meta.to || m.to >= meta.to || !meta.copyAt)){
-      f.busy = "Bringing in last night\u2019s copy of the books (made " + String(m.at).replace("T", " ").slice(0, 16) + "); Tally is not asked anything\u2026"; render();
+      f.busy = "Bringing in last night\u2019s copy of the books (made " + fmtDateTime(m.at) + "); Tally is not asked anything\u2026"; render();
       try { await TallyRead.read(m.from, m.to, "copy"); b.meta.copyAt = m.at; b.meta.copyTo = m.to; await saveBooks(); toast("The books are up to " + FC.when(m.to) + ", from last night\u2019s copy."); }
       catch (e){ toast("Could not bring in last night\u2019s copy: " + ((e && e.message) || e)); }
       f.busy = "";
@@ -19899,8 +19975,15 @@ const RPT = {
     const out = []; for (let y = num(Audit.fyStart(t).slice(0, 4)); y >= num(Audit.fyStart(f).slice(0, 4)); y--) out.push(String(y));
     return out;
   },
+  // the entries of a year, and its sales entries (review of 01-Oct-2026: 2026-27 held one journal and no sales, and the
+  // page opened on it showing sales of nil): the page opens on the latest year that has sales
+  yearCount(fy){
+    const from = fy + "0401", to = (num(fy) + 1) + "0331", vs = ((S.books || {}).vouchers || []).filter(v => !v.cancel && String(v.date) >= from && String(v.date) <= to);
+    return {n: vs.length, sales: vs.filter(v => typeof Books === "object" && Books.isSale(v)).length};
+  },
   range(){
-    const ys = this.fys(), fy = S.rptFy && ys.includes(S.rptFy) ? S.rptFy : ys[0];
+    const ys = this.fys(), withSales = ys.find(y => this.yearCount(y).sales > 0);
+    const fy = S.rptFy && ys.includes(S.rptFy) ? S.rptFy : (withSales || ys[0]);
     if (!fy) return null;
     const to = (num(fy) + 1) + "0331", end = String((S.books.meta || {}).to || "");
     return {fy, from: fy + "0401", to: end && end < to ? end : to, fyEnd: to};
@@ -20460,7 +20543,7 @@ const TCloud = {
   age(bk){
     if (!bk) return "";
     const st = bk.state || {}, at = String(st.seen || bk.stateAt || bk.daysAt || "");
-    return at ? "in step with Tally as of " + at.replace("T", " ").slice(0, 16) : "not updated yet";
+    return at ? "in step with Tally as of " + fmtDateTime(at) : "not updated yet";
   },
   // ---------- one day's day book, from this browser's store or the cloud
   async day(bk, d, at){
@@ -20921,6 +21004,27 @@ function linkByGstin(cos){
 // One Tally status for every screen (review item 5): the bridge on this computer and the heartbeat of the firm's
 // Tally computers (tally_devices), for a client or for the firm.
 // state: none | offline | unlinked | waiting | ok;  level: ok | warn | bad (the pill's colour)
+// how fresh the books are, in one sentence used on every page (review of 01-Oct-2026: "Books up to …", "checked with
+// Tally to …" and "N days not read yet" were said differently in different places): the last entry, how far FinCom's copy
+// has been checked against Tally and when, and the days the bridge has not been able to read yet
+function booksFresh(b, cid){
+  b = b || S.books || {}; cid = cid || S.coId;
+  const meta = b.meta || {}, bk = typeof TCloud === "object" && cid ? TCloud.book(cid) : null, st = (bk && bk.state) || {};
+  const man = typeof LK === "object" && LK.fr ? ((LK.fr() || {}).man || {}) : {};
+  let last = "";
+  (b.vouchers || []).forEach(v => { if (!v.cancel && String(v.date) > last) last = String(v.date); });
+  const d8 = x => String(x || "").replace(/-/g, "").slice(0, 8);
+  if (!last && bk) last = d8(bk.to);
+  const checked = [d8(meta.to), d8(st.doneTo), d8(man.doneTo)].filter(Boolean).sort().pop() || "";
+  const at = [String(st.seen || ""), String(man.seen || ""), String(meta.at || "")].filter(Boolean).sort().pop() || "";
+  const skipped = Array.from(new Set([].concat(st.skipped || [], man.skipped || []).filter(Boolean))).sort();
+  const day = x => fmtDate(tallyDate(x));
+  const parts = [last ? "last entry " + day(last) : "no entries yet"];
+  if (checked && checked > last) parts.push("checked with Tally to " + day(checked));
+  const text = "Books: " + parts.join(", ") + (at ? " (as of " + fmtDateTime(at) + ")" : "") +
+    (skipped.length ? "; " + skipped.length + (skipped.length === 1 ? " day" : " days") + " not read from Tally yet (" + skipped.slice(0, 3).map(day).join(", ") + (skipped.length > 3 ? " and " + (skipped.length - 3) + " more" : "") + ")" : "") + ".";
+  return {last, checked, at, skipped, text};
+}
 function tallyStatus(co){
   if (typeof TLight === "object") TLight.refresh();
   const local = typeof Bridge === "object" && Bridge.on() && Bridge.up();
@@ -20945,7 +21049,12 @@ function tallyStatus(co){
     company = cloudRow || (local && !!Bridge.openFor(co)) ? "linked" : "unlinked";
   }
   const parts = {bridge, tally, company, busySince};
-  const out = o => Object.assign(o, {parts});
+  // the short words for the header chip (review of 01-Oct-2026: the long label pushed the tabs off the row); the full
+  // label and sentence go in its tooltip
+  const hhmm = t => { const d = new Date(t), today = new Date(); return d.toDateString() === today.toDateString() ? fmtTime(t) : fmtDate(d); };
+  const SHORT = {none: "Tally not set up", offline: "Tally offline" + (heard ? " \u00b7 " + hhmm(heard) : ""), reconnecting: "Tally reconnecting\u2026",
+    unlinked: "Tally: not linked", busy: "Tally busy", ok: "Tally in sync"};
+  const out = o => Object.assign(o, {parts, short: o.state === "waiting" ? o.label.replace(/ waiting$/, "") + " for Tally" : SHORT[o.state] || o.label});
   if (!local && !devs.length) return out({state: "none", level: "bad", label: "Not set up", say: "No Tally Bridge on this computer, and no computer of the firm sends from Tally. Set up the Tally Bridge on the computer with TallyPrime."});
   if (bridge === "offline" || bridge === "none") return out({state: "offline", level: "bad", label: "Offline since " + (heard ? when(heard) : "\u2014"), say: "No word from the firm's Tally computer" + (heard ? " since " + when(heard) : "") + " (three heartbeats missed): the computer or its bridge is off, or it has no internet."});
   if (bridge === "reconnecting") return out({state: "reconnecting", level: "warn", label: "Reconnecting\u2026", say: "The bridge's last heartbeat is late. FinCom keeps listening; it shows Offline only after three missed heartbeats (about two minutes)."});
