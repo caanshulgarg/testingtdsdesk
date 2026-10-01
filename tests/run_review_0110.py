@@ -92,6 +92,13 @@ with sync_playwright() as p:
     ok(pg.evaluate("window.__months") == ["first", "202505", "202506"], "Read the kept day books again: month after month until the last (%s)" % pg.evaluate("window.__months"))
     rp = pg.evaluate("(document.querySelector('[data-rp]') || {}).textContent || ''")
     ok("6 days of 3 months read again" in rp, "and what was done stays on the screen (%s)" % rp.strip())
+    # it must never say "read again" when nothing was read
+    for ans, why in [("{ok: true}", "an answer that is not a re-read"), ("{ok: true, done: [], bad: [], next: null, months: 0}", "no months kept"),
+                     ("{ok: true, month: '202504', done: [], bad: [], next: null, months: 1}", "months kept but no day read")]:
+        pg.evaluate("() => { TCloudUp.post = async () => (%s); }" % ans)
+        pg.evaluate("[...document.querySelectorAll('button')].find(b => /kept day books/.test(b.textContent)).click()"); pg.wait_for_timeout(800)
+        rp = pg.evaluate("(document.querySelector('[data-rp]') || {}).textContent || ''")
+        ok("Could not read again" in rp and "read again 0" not in rp, "nothing read (%s): an error on the screen (%s)" % (why, rp.strip()[:110]))
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
     br.close()
 srv.shutdown()
