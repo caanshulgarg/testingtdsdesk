@@ -40,7 +40,7 @@ with sync_playwright() as p:
     owe_tile = re.search(r"You owe\n([^\n]+)\n([^\n]*)", text); recv_tile = re.search(r"Owed to you\n([^\n]+)\n([^\n]*)", text)
     ok(owe_tile and amt(owe_tile.group(1)) >= 0 and "-" not in owe_tile.group(1), "3c. You owe is never negative: " + (owe_tile.group(1) if owe_tile else "no tile"))
     ok(owe_tile and not re.search(r"-\d+ days", owe_tile.group(2)) and (r["dpo"] is None or r["dpo"] >= 0), "3c. no negative days of purchases (%s)" % r["dpo"])
-    ok((r["pay"]["adv"] < 1) or ("advance to suppliers ₹" in owe_tile.group(2) and "-" not in re.search(r"advance to suppliers ₹[^ ·]+", owe_tile.group(2)).group(0)),
+    ok((r["pay"]["adv"] < 1) or (bool(re.search(r"advance to suppliers ₹?\d", owe_tile.group(2))) and "-" not in re.search(r"advance to suppliers ₹?[^ ·]+", owe_tile.group(2)).group(0)),
        "3c. suppliers with a debit balance show as an advance to suppliers, a positive figure (%s)" % ("₹{:,.2f}".format(r["pay"]["adv"])))
     if not r["pay"]["parties"] and not r["recv"]["parties"]:
         print("    note: these books carry no bill-wise details (the cloud tables keep none), so nothing is aged here; run_review_0110.py ages made-up bills")

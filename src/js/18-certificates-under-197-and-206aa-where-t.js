@@ -149,7 +149,13 @@ const TallyRead = {
   },
   balances(b, j, from, to){
     const led = {};
-    [].concat(j.ledgers || []).forEach(l => { led[l.name] = {open: Books.amt(l.open), close: Books.amt(l.close), parent: l.parent || ""}; });
+    // a ledger whose name in Tally ends in a line break is named without it, as the day book's entries name it
+    // (Books.unesc), so its balance and group meet its entries; two such names are one ledger (review of 01-Oct-2026)
+    const nm = n => String(n || "").replace(/(&#13;|&#10;|\r|\n)+/g, " ").trim();
+    [].concat(j.ledgers || []).forEach(l => {
+      const k = nm(l.name), had = led[k];
+      led[k] = {open: r2((had ? had.open : 0) + Books.amt(l.open)), close: r2((had ? had.close : 0) + Books.amt(l.close)), parent: (had && had.parent) || l.parent || ""};
+    });
     b.tb = {from, to, at: new Date().toISOString(), led};
     Object.entries(led).forEach(([n, x]) => { if (x.parent) (b.under = b.under || {})[n] = (b.under[n] || x.parent); });
     this.yearOpen(b);

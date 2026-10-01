@@ -137,9 +137,22 @@ const MIS = {
   },
   sales(from, to){
     const by = {}, months = this.monthsOf(from, to), byState = {}, byReg = {};
+    // review of 01-Oct-2026: with the masters read, sales are the Sales Accounts ledgers themselves (credit positive, a
+    // credit note's debit taking off), as Tally's profit and loss shows them: the taxable value of a sale entry counted a
+    // customer's own line in some entries (1,49,860 too much on one client's year). Direct and indirect incomes are
+    // kept apart, as other income. Without the masters, the taxable value of the sale entries, as before
+    const masters = Audit.mastersIn(), A = Audit;
+    let other = 0;
     (S.books.vouchers || []).forEach(v => {
-      if (v.date < from || v.date > to || !Books.isSale(v) || v.opt || v.cancel) return;
-      const L = Books.lines(v), sign = /CREDIT NOTE/i.test(v.type) ? -1 : 1, amt = r2(L.taxable * sign), ym = this.ym(v.date);
+      if (v.date < from || v.date > to || v.opt || v.cancel) return;
+      if (masters){
+        v.ent.forEach(e => { if (A.under(e.l, /^(direct|indirect) incomes$/i)) other = r2(other + e.a); });
+        const sa = v.ent.filter(e => A.under(e.l, /^sales accounts$/i));
+        if (!sa.length) return;
+      } else if (!Books.isSale(v)) return;
+      const L = masters ? null : Books.lines(v), sign = /CREDIT NOTE/i.test(v.type) ? -1 : 1;
+      const amt = masters ? r2(v.ent.filter(e => A.under(e.l, /^sales accounts$/i)).reduce((t, e) => t + e.a, 0)) : r2(L.taxable * sign), ym = this.ym(v.date);
+      if (!amt) return;
       const p = by[v.party] = by[v.party] || {party: v.party, t: 0, m: {}, n: 0}; p.t = r2(p.t + amt); p.m[ym] = r2((p.m[ym] || 0) + amt); p.n++;
       const st = v.pos || "\u2014"; byState[st] = r2((byState[st] || 0) + amt);
       const rg = GSTR.regOf(v) || "\u2014"; byReg[rg] = r2((byReg[rg] || 0) + amt);
@@ -147,7 +160,7 @@ const MIS = {
     const rows = Object.values(by).sort((a, c) => c.t - a.t || a.party.localeCompare(c.party));
     const total = r2(rows.reduce((s, x) => s + x.t, 0));
     const before = new Set((S.books.vouchers || []).filter(v => v.date < from && Books.isSale(v)).map(v => v.party));
-    return {rows, total, months, byState: Object.entries(byState).sort((a, c) => c[1] - a[1]), byReg: Object.entries(byReg).sort((a, c) => a[0].localeCompare(c[0])),
+    return {rows, total, other, months, byState: Object.entries(byState).sort((a, c) => c[1] - a[1]), byReg: Object.entries(byReg).sort((a, c) => a[0].localeCompare(c[0])),
       top5: rows.slice(0, 5).reduce((s, x) => s + x.t, 0), fresh: this.covered(this.shift(from, -1)) ? rows.filter(x => !before.has(x.party)).length : null};
   },
   purchases(from, to){
