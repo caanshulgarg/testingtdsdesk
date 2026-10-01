@@ -47,6 +47,11 @@ def live_checks(html):
     if not re.search(r'const APP_VERSION = "[^"]+";', html): sys.exit("APP_VERSION not found")
 
 def to_test(html):
+    # the testing builds hand out the staging bridge Setup (assets/bridge-setup-test.txt); live keeps assets/bridge-setup.txt
+    live_sha, test_sha = read("assets/bridge-setup.sha256").split()[0][:16], read("assets/bridge-setup-test.sha256").split()[0][:16]
+    for a, b in [('const BRIDGE_SETUP_ID = "bridge-setup";', 'const BRIDGE_SETUP_ID = "bridge-setup-test";'), ('const BRIDGE_SETUP_SHA = "' + live_sha + '";', 'const BRIDGE_SETUP_SHA = "' + test_sha + '";')]:
+        if html.count(a) != 1: sys.exit("to_test: expected once: " + a)
+        html = html.replace(a, b)
     t = html.replace("tdsdesk:", "tdsdesk-test:").replace('"tdsdesk-bank"', '"tdsdesk-bank-test"').replace('"tdsdesk-work"', '"tdsdesk-work-test"')
     if "tdsdesk-bank-test" not in t or "tdsdesk-work-test" not in t:
         t = re.sub(r"tdsdesk-(bank|work)(?!-test)", r"tdsdesk-\1-test", t)
