@@ -18,16 +18,37 @@ const RULE_DEFAULTS = [
    hint:"hire or rent of plant, machinery or equipment without operator"},
   {id:"interest", label:"Interest (non-bank)", ref:"393(1) Sl. 5(iii)", old:"194A", rateInd:10, rateOth:10, single:0, limit:10000, basis:"annual",
    hint:"interest on loans or deposits payable to a non-bank party, other than interest on securities"},
-  {id:"goods", label:"Purchase of goods", ref:"393(1) Sl. 8(ii)", old:"194Q", rateInd:0.1, rateOth:0.1, single:0, limit:5000000, basis:"excess",
+  {id:"goods", label:"Purchase of goods", ref:"393(1) Sl. 8(ii)", old:"194Q", rateInd:0.1, rateOth:0.1, single:0, limit:5000000, basis:"excess", turnoverTest:true, noPanRate:5,
    hint:"purchase of goods, raw material, stock-in-trade, capital goods (supply of goods rather than a service)"},
+  // tax-accuracy (stage 5): the other payments a client may make. form: the return or challan-cum-statement it goes in
+  {id:"rent_individual", label:"Rent paid by an individual / HUF (not audited)", ref:"393(1) Sl. 2(i)", old:"194-IB", rateInd:2, rateOth:2, single:0, limit:50000, basis:"monthly", form:"26QC",
+   payer:"an individual or HUF not liable to tax audit", hint:"rent of land, building or furniture paid by an individual or HUF that is not liable to tax audit (Form 26QC, no TAN needed)"},
+  {id:"property", label:"Purchase of immovable property", ref:"393(1) Sl. 3(i)", old:"194-IA", rateInd:1, rateOth:1, single:5000000, limit:0, basis:"single", form:"26QB",
+   hint:"buying land (other than agricultural land) or a building from a resident for ₹50 lakh or more (Form 26QB, no TAN needed)"},
+  {id:"contract_individual", label:"Contract / professional fees paid by an individual / HUF (not audited)", ref:"393(1) Sl. 6(ii)", old:"194M", rateInd:2, rateOth:2, single:0, limit:5000000, basis:"annual", form:"26QD",
+   payer:"an individual or HUF not liable to tax audit", hint:"contract work, commission or professional fees paid by an individual or HUF not liable to tax audit, above ₹50 lakh in the year (Form 26QD)"},
+  {id:"perquisite", label:"Benefit or perquisite of a business", ref:"393(1) Sl. 8(iv)", old:"194R", rateInd:10, rateOth:10, single:0, limit:20000, basis:"annual",
+   hint:"a benefit or perquisite given to a resident from a business or profession: free goods, sponsored trips, gifts to dealers or doctors"},
+  {id:"ecommerce", label:"E-commerce operator to a seller", ref:"393(1) Sl. 8(v)", old:"194-O", rateInd:0.1, rateOth:0.1, single:0, limit:500000, basis:"annual", noPanRate:5,
+   payer:"an e-commerce operator", hint:"gross sales of goods or services of a seller made through the client's e-commerce platform (the ₹5 lakh limit is only for an individual or HUF seller with a PAN)"},
+  {id:"cash_withdrawal", label:"Cash withdrawal (bank, co-operative, post office)", ref:"393(3)", old:"194N", rateInd:2, rateOth:2, single:0, limit:10000000, basis:"excess",
+   payer:"a bank, co-operative bank or post office", hint:"cash paid out to an account holder above ₹1 crore in the year (₹3 crore for a co-operative society); TDS on the amount above the limit"},
+  {id:"partner", label:"Partner's salary, commission, bonus or interest", ref:"393(3)", old:"194T", rateInd:10, rateOth:10, single:0, limit:20000, basis:"annual",
+   payer:"a partnership firm or LLP", hint:"salary, remuneration, commission, bonus or interest a firm or LLP pays or credits to a partner (not drawings or capital)"},
+  {id:"nonresident", label:"Payment to a non-resident", ref:"393(2)", old:"195", rateInd:20.8, rateOth:20.8, single:0, limit:0, basis:"always", form:"27Q", nonResident:true,
+   hint:"interest, royalty, fees for technical services or other sums chargeable to tax paid to a non-resident or foreign company; 20% + 4% cess unless a lower treaty (DTAA) rate is set on the deductee with a tax residency certificate"},
   {id:"none", label:"Not covered by TDS", ref:"—", old:"—", rateInd:0, rateOth:0, single:0, limit:0, basis:"never",
    hint:"payments with no TDS: utilities, government fees, bank charges, insurance premium, reimbursements, travel tickets, and similar"}
 ];
 const EXPENSE_DEFAULTS = {contractor:"Contract Charges", professional:"Professional Fees", technical:"Technical Service Charges", director:"Director Sitting Fees",
-  commission:"Commission Paid", rent_building:"Rent", rent_machinery:"Machinery Hire Charges", interest:"Interest Paid", goods:"Purchases", none:"General Expenses"};
+  commission:"Commission Paid", rent_building:"Rent", rent_machinery:"Machinery Hire Charges", interest:"Interest Paid", goods:"Purchases", none:"General Expenses",
+  rent_individual:"Rent", property:"Land and Building", contract_individual:"Contract Charges", perquisite:"Business Promotion", ecommerce:"Payable to Sellers",
+  cash_withdrawal:"Cash Withdrawals", partner:"Partners' Remuneration", nonresident:"Foreign Services"};
 const TDS_LEDGER_DEFAULTS = {contractor:"TDS Payable - Contractor", professional:"TDS Payable - Professional", technical:"TDS Payable - Technical",
   director:"TDS Payable - Director", commission:"TDS Payable - Commission", rent_building:"TDS Payable - Rent", rent_machinery:"TDS Payable - Rent",
-  interest:"TDS Payable - Interest", goods:"TDS Payable - Purchase of Goods", none:""};
+  interest:"TDS Payable - Interest", goods:"TDS Payable - Purchase of Goods", none:"",
+  rent_individual:"TDS Payable - Rent", property:"TDS Payable - Property", contract_individual:"TDS Payable - Contract", perquisite:"TDS Payable - Perquisite",
+  ecommerce:"TDS Payable - E-commerce", cash_withdrawal:"TDS Payable - Cash Withdrawal", partner:"TDS Payable - Partners", nonresident:"TDS Payable - Non-resident"};
 const GST_DEFAULTS = {cgst:"Input CGST", sgst:"Input SGST", igst:"Input IGST"};
 const DEFAULT_FIRM = {firmName:"", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
@@ -114,6 +135,35 @@ function fixCompany(c){
   c.hashes = c.hashes || {};
   c.keys = c.keys || {};
   return c;
+}
+/* ---------- the rate a deduction is made at: shared by bills (compute) and the check of the books (Certs) ---------- */
+// No PAN, or a PAN made inoperative (not linked with Aadhaar): the higher of the rate and 20% (old section 206AA); 5% for
+// purchase of goods and e-commerce (the section's own proviso). Section 206AB (non-filers) is gone from 1 April 2025.
+const NO_PAN_RATE = 20;
+function noPanRate(rule, rate){ return rule && rule.noPanRate != null && rule.noPanRate !== "" ? num(rule.noPanRate) : Math.max(num(rate), NO_PAN_RATE); }
+function panInoperative(party){ return !!(party && party.panInoperative); }
+// a deductee's lower deduction certificates (old section 197): [{no, rule, rate, from, to, limit}]; the older single rate
+// and valid-to date kept on a deductee count as one certificate for every payment type, with no amount limit
+function ldcList(party){
+  if (!party) return [];
+  const out = (Array.isArray(party.ldc) ? party.ldc : []).filter(c => c && c.rate !== "" && c.rate != null && !c.deleted);
+  if (party.ldcRate !== undefined && party.ldcRate !== "" && party.ldcValidTo) out.push({no: "", rule: "", rate: party.ldcRate, from: "", to: party.ldcValidTo, limit: 0, old: true});
+  return out;
+}
+function ldcFor(party, ruleId, date){
+  const d = String(date || "").slice(0, 10);
+  return ldcList(party).find(c => (!c.rule || c.rule === ruleId) && (!c.from || !d || d >= c.from) && (!c.to || !d || d <= c.to)) || null;
+}
+// how much of a certificate's amount approved bills have used
+function ldcUsed(party, cert, cid, skip){
+  if (!party || !cert || !num(cert.limit)) return 0;
+  let used = 0;
+  Object.values(D(cid).entries || {}).forEach(e => {
+    if (e === skip || e.status !== "approved" || !e.snapshot || !e.snapshot.cert) return;
+    if (e.snapshot.cert !== (cert.no || "-") || !e.applied || e.applied.partyId !== party.id) return;
+    used = r2(used + num(e.snapshot.certBase));
+  });
+  return used;
 }
 function rules(){ return RULE_DEFAULTS.map(r => Object.assign({}, r, (S.firm.rules || {})[r.id] || {})); }
 function ruleOf(id){ return rules().find(r => r.id === id) || rules().find(r => r.id === "none"); }
@@ -1154,13 +1204,22 @@ function compute(e, cid){
   const why = [], flags = [];
   let applicable = false, tdsBase = 0, catchUp = 0, meter = null;
 
-  let rate = 0, rateNote = "";
+  let rate = 0, rateNote = "", cert = null, normalRate = 0;
+  const inoperative = panOk && panInoperative(party);
   if (rule.basis !== "never"){
-    if (!panOk){ rate = rule.id === "goods" ? 5 : 20; rateNote = "No PAN: higher rate"; }
-    else { rate = indHuf ? num(rule.rateInd) : num(rule.rateOth); rateNote = rule.rateInd !== rule.rateOth ? (indHuf ? "Individual / HUF rate" : "Rate for others") : "Standard rate"; }
-    if (party && party.ldcRate !== undefined && party.ldcRate !== "" && party.ldcValidTo && x.invoiceDate && x.invoiceDate <= party.ldcValidTo){
-      rate = num(party.ldcRate); rateNote = "Lower deduction certificate (valid to " + fmtDate(party.ldcValidTo) + ")";
-      flags.push({lvl:"info", t:"Lower deduction certificate rate of " + rate + "% applied. Check the certificate limit has not been used up."});
+    normalRate = indHuf ? num(rule.rateInd) : num(rule.rateOth);
+    // a non-resident with a tax residency certificate and Form 10F: the treaty rate when it is lower
+    if (rule.nonResident && party && party.trc && party.dtaaRate !== undefined && party.dtaaRate !== "" && num(party.dtaaRate) < normalRate){
+      normalRate = num(party.dtaaRate); rateNote = "Treaty (DTAA) rate, tax residency certificate on file";
+    }
+    if (!panOk || inoperative){ rate = noPanRate(rule, normalRate); rateNote = inoperative ? "PAN inoperative: higher rate" : "No PAN: higher rate"; }
+    else { rate = normalRate; if (!rateNote) rateNote = rule.rateInd !== rule.rateOth ? (indHuf ? "Individual / HUF rate" : "Rate for others") : "Standard rate"; }
+    // a lower deduction certificate (old section 197) for this deductee, payment type and date; it needs a valid PAN
+    cert = panOk && !inoperative ? ldcFor(party, rule.id, x.invoiceDate) : null;
+    if (cert){
+      rate = num(cert.rate);
+      rateNote = "Lower deduction certificate" + (cert.no ? " " + cert.no : "") + (cert.to ? " (valid to " + fmtDate(cert.to) + ")" : "");
+      if (cert.old) flags.push({lvl:"info", t:"Lower deduction certificate rate of " + rate + "% applied. Add the certificate's number and amount under Deductees so its limit is tracked."});
     }
   }
 
@@ -1201,9 +1260,14 @@ function compute(e, cid){
       if (months > 1) flags.push({lvl:"", t:"This invoice covers " + months + " months. The monthly test used " + money0(perMonth) + " a month; confirm the period."});
       break;
     }
+    case "single":
+      // one payment of the limit or more (property: the consideration or the stamp duty value, ₹50 lakh)
+      if (base >= num(rule.single)){ applicable = true; tdsBase = base; why.push("The amount of " + money0(base) + " is " + money0(rule.single) + " or more."); }
+      else why.push("The amount of " + money0(base) + " is below " + money0(rule.single) + ".");
+      break;
     case "excess":
-      meter = {used:ytd.credited, add:base, limit:num(rule.limit), label:"Purchases from this seller this year vs limit"};
-      if (!co.turnover10cr){
+      meter = {used:ytd.credited, add:base, limit:num(rule.limit), label:(rule.turnoverTest ? "Purchases from this seller" : "Paid") + " this year vs limit"};
+      if (rule.turnoverTest && !co.turnover10cr){
         why.push("Not applied: this client's previous-year turnover is set as ₹10 crore or less (Client setup → TDS).");
       } else if (after > num(rule.limit)){
         applicable = true;
@@ -1223,13 +1287,25 @@ function compute(e, cid){
     flags.push({lvl:"", t:"Earlier bills worth " + money0(catchUp) + " this year had no TDS. " + (e.includeCatchUp ? "Their TDS is included in this entry." : "Their TDS is not included; tick the box to add it.")});
     if (e.includeCatchUp) tdsBase = r2(tdsBase + catchUp);
   }
-  const tdsWould = applicable ? Math.round(tdsBase * rate / 100) : 0;
+  // a certificate covers only its amount: what goes above it is at the normal rate
+  let certBase = 0;
+  if (cert && applicable){
+    const lim = num(cert.limit), used = lim ? ldcUsed(party, cert, cid, e) : 0;
+    certBase = lim ? r2(Math.max(0, Math.min(tdsBase, lim - used))) : tdsBase;
+    if (lim && certBase < tdsBase)
+      flags.push({lvl:"hi", t:"The lower deduction certificate" + (cert.no ? " " + cert.no : "") + " covers " + money0(lim) + "; " + money0(used) + " is used. " + money0(r2(tdsBase - certBase)) + " of this bill is above it, at the normal rate of " + normalRate + "%."});
+    else if (lim) flags.push({lvl:"info", t:"Certificate" + (cert.no ? " " + cert.no : "") + ": " + money0(r2(used + certBase)) + " of " + money0(lim) + " used after this bill."});
+  }
+  const tdsWould = !applicable ? 0 : cert ? Math.round(certBase * num(cert.rate) / 100 + r2(tdsBase - certBase) * normalRate / 100) : Math.round(tdsBase * rate / 100);
+  if (applicable && rule.payer) flags.push({lvl:"info", t:"This applies when the payer is " + rule.payer + "."});
+  if (applicable && rule.form && rule.form !== "26Q") flags.push({lvl:"info", t:"This deduction is reported in Form " + rule.form + ", not 26Q."});
   const skip = tdsWould > 0 ? tdsSkipOf(e, co, party) : null;
   const tds = skip ? 0 : tdsWould;
   if (skip) flags.push({lvl:"info", t:"TDS of " + money(tdsWould) + " applies but is not booked in this entry: " + skipText(skip) + ". The party is credited with the full amount."});
 
   try { itemChecks(e.x).forEach(c => flags.push({lvl: c.lvl === "warn" ? "" : "info", t: c.text})); } catch (err){}
   if (rule.basis !== "never" && !panOk) flags.push({lvl:"hi", t:"No valid PAN or GSTIN found, so the higher rate of " + rate + "% is used. Get the deductee's PAN."});
+  if (rule.basis !== "never" && inoperative) flags.push({lvl:"hi", t:"The deductee's PAN is marked inoperative (not linked with Aadhaar), so the higher rate of " + rate + "% is used. Clear the mark under Deductees once the PAN is operative again."});
   const g = String(x.vendorGstin || "").toUpperCase(), pp = String(x.vendorPan || "").toUpperCase();
   if (g && !gstinValid(g)) flags.push({lvl:"hi", t:"The supplier GSTIN " + g + " fails its check digit, so at least one character is wrong. Compare it with the bill."});
   if (x.buyerGstin && !gstinValid(x.buyerGstin)) flags.push({lvl:"", t:"The billed-to GSTIN " + x.buyerGstin + " fails its check digit. Compare it with the bill."});
@@ -1325,7 +1401,7 @@ function compute(e, cid){
     notIn.forEach(n => missing.push("\u201c" + n + "\u201d is not a ledger in Tally: pick one or create it"));
   } else if (e.status === "draft") flags.push({lvl:"", t:"The ledgers are not checked against Tally: this client's ledger list has not been read from Tally yet. Read it (Tally ledgers) so each line can be matched before approval."});
 
-  return {rule, party, base, total, gstTotal, fy, ytd, pan, panOk, indHuf, applicable, rate, rateNote, tdsBase, catchUp, tds, tdsWould, skip, anyway, gd, rcmTax, blocked, itc, why, flags, meter, lines, dr, cr, missing, tdsLedger, dup};
+  return {rule, party, base, total, gstTotal, fy, ytd, pan, panOk, indHuf, inoperative, cert, certBase, normalRate, applicable, rate, rateNote, tdsBase, catchUp, tds, tdsWould, skip, anyway, gd, rcmTax, blocked, itc, why, flags, meter, lines, dr, cr, missing, tdsLedger, dup};
 }
 
 /* ------------------------------------------------------------------ */
@@ -3598,7 +3674,7 @@ function approve(e){
   const k = invKey(e.x), co = CO(cid);
   if (k){ co.keys = co.keys || {}; co.keys[k] = e.approvedAt.slice(0, 10); pruneIndex(co.keys, 3000); Store.saveCompany(co); }
   e.applied = {partyId:party.id, fy:c.fy, natureId:c.rule.id, credited:c.base, tdsBase:addBase};
-  e.snapshot = {lines:c.lines, tds:c.tds, tdsWould:c.tdsWould, skip:c.skip, rcm:c.rcmTax ? Object.assign({cat:e.rcm.cat}, c.rcmTax) : null, blocked:c.gd.block ? c.gd.block.cat : null, noItc:c.itc && !c.itc.ok ? c.itc.why : null, rate:c.rate, tdsBase:c.tdsBase, base:c.base, total:c.total, pan:c.pan, ref:c.rule.ref, old:c.rule.old, label:c.rule.label,
+  e.snapshot = {lines:c.lines, tds:c.tds, tdsWould:c.tdsWould, skip:c.skip, rcm:c.rcmTax ? Object.assign({cat:e.rcm.cat}, c.rcmTax) : null, blocked:c.gd.block ? c.gd.block.cat : null, noItc:c.itc && !c.itc.ok ? c.itc.why : null, rate:c.rate, tdsBase:c.tdsBase, base:c.base, total:c.total, pan:c.pan, ref:c.rule.ref, old:c.rule.old, label:c.rule.label, cert:c.cert && c.applicable ? (c.cert.no || "-") : "", certBase:c.cert && c.applicable ? c.certBase : 0, certRate:c.cert ? num(c.cert.rate) : null, normalRate:c.normalRate, inoperative:!!c.inoperative, form:c.rule.form || "26Q",
     applicable:c.applicable, catchUp:e.includeCatchUp ? c.catchUp : 0, why:c.why, meter:c.meter, fy:c.fy, rateNote:c.rateNote, indHuf:c.indHuf, never:c.rule.basis === "never"};
   Store.saveParty(cid, party);
   Store.saveEntry(cid, e);
@@ -4287,7 +4363,7 @@ const Books = {
     return r;
   },
   linesNow(v){
-    const out = {taxable: 0, tax: {CGST: 0, SGST: 0, IGST: 0, CESS: 0}, tds: [], tdsPaid: [], party: 0, rates: {}, roundoff: 0}, vals = [];
+    const out = {taxable: 0, tax: {CGST: 0, SGST: 0, IGST: 0, CESS: 0}, tds: [], tdsPaid: [], tcs: [], tcsPaid: [], party: 0, rates: {}, roundoff: 0}, vals = [];
     v.ent.forEach(e => {
       const m = Books.ledgerOf(e.l), amt = Math.abs(e.a), sign = e.a < 0 ? -1 : 1;
       if (m.kind === "ineligible"){ out.ineligible = r2((out.ineligible || 0) + amt); out.taxable = r2(out.taxable + amt); return; }
@@ -4311,7 +4387,13 @@ const Books = {
         return;
       }
       if (m.kind === "roundoff"){ out.roundoff = r2(out.roundoff + e.a); return; }
-      if (m.kind === "tax_other" || m.kind === "tcs_payable" || m.kind === "tcs_receivable") return;
+      // TCS collected on a sale (credited), or paid over from the bank (debited): for 27EQ; neither is part of the sale's value
+      if (m.kind === "tcs_payable"){
+        if (e.a > 0) out.tcs.push({ledger: e.l, section: m.section, rate: m.rate, amount: amt});
+        else if (v.ent.some(z => Books.ledgerOf(z.l).kind === "bank")) out.tcsPaid.push({ledger: e.l, section: m.section, amount: amt});
+        return;
+      }
+      if (m.kind === "tax_other" || m.kind === "tcs_receivable") return;
       if (e.l === v.party){ out.party = amt; return; }
       if (m.kind === "bank" || m.kind === "tds_receivable") return;
       out.taxable = r2(out.taxable + amt);
@@ -4777,7 +4859,7 @@ const Audit = {
       Object.values(agg).forEach(x => {
         const r = RULE_DEFAULTS.find(z => z.id === x.rule);
         if (!r) return;
-        const over = r.basis === "single_or_annual" ? (x.max > r.single || x.amt > r.limit) : r.basis === "monthly" ? Object.values(x.months).some(m => m > r.limit) : x.amt > r.limit;
+        const over = r.basis === "single_or_annual" ? (x.max > r.single || x.amt > r.limit) : r.basis === "single" ? x.max >= r.single : r.basis === "always" ? x.amt > 0 : r.basis === "never" ? false : r.basis === "monthly" ? Object.values(x.months).some(m => m > r.limit) : x.amt > r.limit;
         if (!over) return;
         const pan = (S.books.pans || {})[x.party] || "", rate = /^[A-Z]{3}[PH]/.test(pan) ? r.rateInd : r.rateOth;
         const tds = r2(x.amt * rate / 100);
@@ -6115,14 +6197,45 @@ const GST9C = {
 /* TDS: deductions from the books, challans, and what is paid by what */
 /* ================================================================== */
 const TDS = {
-  STD: {"192B": [], "194A": [10], "194C": [1, 2], "194D": [5, 10], "194H": [2, 5], "194I": [2, 10], "194IA": [1], "194IB": [5], "194J": [2, 10], "194Q": [0.1], "194M": [2], "194N": [2, 5], "206C": [0.1, 1]},
+  // the usual rates, tax year 2026-27 (tax-accuracy: 194H 2%, 194D 2% for others than companies, 194-IB 2%, 194-O 0.1%
+  // since the Finance (No. 2) Act, 2024; 194T from April 2025); non-resident rates with and without the 4% cess
+  STD: {"192B": [], "193": [10], "194": [10], "194A": [10], "194B": [30], "194BB": [30], "194C": [1, 2], "194D": [2, 10], "194DA": [2], "194G": [2], "194H": [2],
+    "194I": [2, 10], "194IA": [1], "194IB": [2], "194IC": [10], "194J": [2, 10], "194K": [10], "194LA": [10], "194M": [2], "194N": [2, 5], "194O": [0.1], "194Q": [0.1],
+    "194R": [10], "194S": [1], "194T": [10], "195": [20, 20.8, 10, 10.4, 15, 15.6, 30, 31.2], "206C": [0.1, 1, 2, 5]},
+  // the form a quarter's return is filed on: up to tax year 2025-26 the old forms (late returns and corrections too); from
+  // 1 April 2026, under the Income-tax Act, 2025, Form 138 (was 24Q), 140 (was 26Q), 144 (was 27Q) and 143 (was 27EQ);
+  // Form 130 replaces Form 16. kind is the old name, which FinCom keeps as the return's key
+  NEW_FORM: {"24Q": "138", "26Q": "140", "27Q": "144", "27EQ": "143"},
+  NEW_FROM: "2026-27",
+  isNew(fy){ return String(fy || "") >= this.NEW_FROM; },
+  formNo(kind, fy){ return this.isNew(fy) && this.NEW_FORM[kind] ? this.NEW_FORM[kind] : kind; },
+  formName(kind, fy){ return this.isNew(fy) && this.NEW_FORM[kind] ? "Form " + this.NEW_FORM[kind] : kind; },
+  formNameLong(kind, fy){ return this.isNew(fy) && this.NEW_FORM[kind] ? "Form " + this.NEW_FORM[kind] + " (was " + kind + ")" : kind; },
+  certName(fy){ return this.isNew(fy) ? "Form 130" : "Form 16"; },
+  // TCS rates by date (old section 206C; section 394 of the Act of 2025 from 1 April 2026): [from, code, rate %]. The latest
+  // row on or before the collection's date applies. From 1 April 2026: scrap and minerals 2%, overseas tour packages 2% flat
+  TCS_RATES: [
+    ["2016-06-01", "6CA", 1], ["2016-06-01", "6CB", 5], ["2016-06-01", "6CC", 2.5], ["2016-06-01", "6CD", 2.5], ["2016-06-01", "6CE", 2.5],
+    ["2016-06-01", "6CF", 1], ["2016-06-01", "6CG", 2], ["2016-06-01", "6CH", 2], ["2016-06-01", "6CI", 2], ["2016-06-01", "6CJ", 1], ["2016-06-01", "6CL", 1],
+    ["2020-10-01", "6CO", 5],
+    ["2026-04-01", "6CF", 2], ["2026-04-01", "6CJ", 2], ["2026-04-01", "6CO", 2]
+  ],
+  tcsRate(code, date){
+    const d = this.ymd(date), iso = d.length === 8 ? d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6, 8) : "";
+    let hit = null;
+    this.TCS_RATES.forEach(([from, c, rate]) => { if (c === code && (!iso || from <= iso) && (!hit || from >= hit.from)) hit = {from, rate}; });
+    return hit ? hit.rate : null;
+  },
+  // a deduction from a non-resident goes in 27Q, not 26Q
+  NR: /^(195|194E|194LB|194LBA|194LC|194LD|196[A-D])/,
+  sec(s){ return String(s || "").replace(/\s.*$/, "").replace(/-/g, "").toUpperCase(); },
   // what was paid or credited: from the ledger's own rate, else from the section's usual rates, else the voucher's expense
   baseFor(t, L, v){
     if (t.rate) return {paid: r2(t.amount / (t.rate / 100)), rate: t.rate, how: "ledger"};
     const cand = [];
     if (L.taxable) cand.push(L.taxable);
     v.ent.forEach(e => { const m = Books.ledgerOf(e.l); if (!m.kind && Math.abs(e.a) > 0) cand.push(Math.abs(e.a)); });
-    const std = this.STD[String(t.section).replace(/\s.*$/, "")] || [];
+    const std = this.STD[this.sec(t.section)] || [];
     for (const rate of std){
       const want = r2(t.amount / (rate / 100));
       const hit = cand.find(c => Math.abs(c - want) <= Math.max(2, want * 0.005));
@@ -6150,8 +6263,30 @@ const TDS = {
   ymd(d){ const t = String(d || "").replace(/[^0-9]/g, ""); return t.length >= 6 ? t : ""; },
   qOf(d){ const m = num(this.ymd(d).slice(4, 6)); return m >= 4 && m <= 6 ? "Q1" : m >= 7 && m <= 9 ? "Q2" : m >= 10 && m <= 12 ? "Q3" : "Q4"; },
   fyOf(d){ const t = this.ymd(d), y = num(t.slice(0, 4)), m = num(t.slice(4, 6)); return (m >= 4 ? y : y - 1) + "-" + String((m >= 4 ? y + 1 : y)).slice(2); },
-  // 26Q: every deduction other than salary
-  rows(){ return this.allRows().filter(r => !/^192/.test(String(r.section || ""))); },
+  // 26Q: every deduction from a resident other than salary
+  rows(){ return this.allRows().filter(r => !/^192/.test(String(r.section || "")) && !this.NR.test(this.sec(r.section))); },
+  // 27Q: deductions from non-residents
+  nrRows(){ return this.allRows().filter(r => this.NR.test(this.sec(r.section))); },
+  // 27EQ: tax collected at source on sales, one row per voucher and TCS ledger
+  tcsRows(){ return typeof perRender === "function" ? perRender(this, "tcsRows", () => this.tcsRowsNow()) : this.tcsRowsNow(); },
+  tcsRowsNow(){
+    const b = S.books;
+    if (!b || !b.vouchers) return [];
+    const out = [];
+    b.vouchers.forEach(v => {
+      const L = Books.lines(v);
+      if (!L.tcs || !L.tcs.length) return;
+      const tcsAll = r2(L.tcs.reduce((a, t) => a + t.amount, 0));
+      L.tcs.forEach(t => {
+        // the amount received or debited to the buyer, without the TCS itself
+        const recd = r2(L.tcs.length === 1 && L.party ? L.party - tcsAll : (t.rate ? t.amount / (t.rate / 100) : L.total));
+        out.push({id: v.id + "|" + t.ledger, date: v.date, q: this.qOf(v.date), fy: this.fyOf(v.date), party: v.party, pan: TDS.panOf(v.party),
+          section: t.section || "206C", code: TCS27EQ.codeOf(t.ledger, t.section), ledger: t.ledger, paid: recd, tds: r2(t.amount),
+          rate: recd ? r2(t.amount / recd * 100) : null, voucher: v.no || v.ref || "", type: v.type, challan: (b.alloc || {})[v.id + "|" + t.ledger] || ""});
+      });
+    });
+    return out.sort((a, c) => String(a.date).localeCompare(String(c.date)));
+  },
   // salary TDS the books carry under section 192; 24Q takes the detail from the salary sheet
   salaryRows(){ return this.allRows().filter(r => /^192/.test(String(r.section || ""))); },
   // every voucher that carries a TDS ledger becomes one deduction row
@@ -6238,25 +6373,26 @@ const TDS = {
   challans(){ return ((S.books || {}).challans || []).slice().sort((a, b) => String(a.date).localeCompare(String(b.date))); },
   // a challan pays several deductions; what is left of it matters
   challanUse(){
-    const rows = this.rows(), used = {};
+    const rows = this.rows().concat(this.nrRows(), this.tcsRows()), used = {};
     rows.forEach(r => { if (r.challan) used[r.challan] = r2((used[r.challan] || 0) + r.tds); });
     return used;
   },
   // put deductions against challans of the same quarter and section, as a person would
   autoAllocate(){
-    const b = S.books, rows = this.rows().filter(r => !r.challan), use = this.challanUse();
+    const b = S.books, rows = this.rows().concat(this.nrRows(), this.tcsRows()).filter(r => !r.challan), use = this.challanUse();
     const ch = this.challans();
     b.alloc = b.alloc || {};
     let n = 0;
     rows.forEach(r => {
       const fit = ch.find(c => this.qOf(c.date) === r.q && this.fyOf(c.date) === r.fy &&
-        (!c.section || c.section === r.section) && r2(num(c.tax) - (use[c.id] || 0)) >= r.tds - 0.01);
+        (!c.section || c.section === r.section) && /^206C/.test(String(c.section || "")) === /^206C/.test(String(r.section || "")) &&
+        r2(num(c.tax) - (use[c.id] || 0)) >= r.tds - 0.01);
       if (fit){ b.alloc[r.id] = fit.id; use[fit.id] = r2((use[fit.id] || 0) + r.tds); n++; }
     });
     return n;
   },
-  summary(fy, q){
-    const rows = this.rows().filter(r => (!fy || r.fy === fy) && (!q || r.q === q));
+  summary(fy, q, form){
+    const rows = (typeof TDS_FORMS === "object" && TDS_FORMS[form] ? TDS_FORMS[form].rows() : this.rows()).filter(r => (!fy || r.fy === fy) && (!q || r.q === q));
     const bySec = {};
     rows.forEach(r => {
       const s = bySec[r.section] = bySec[r.section] || {section: r.section, count: 0, paid: 0, tds: 0, unallocated: 0, noPan: 0};
@@ -6267,9 +6403,10 @@ const TDS = {
     return Object.values(bySec).sort((a, b) => a.section.localeCompare(b.section));
   },
   // the working file: challan table and the deductee annexure under each challan, as in Form 26Q
-  async toExcel(fy, q){
+  async toExcel(fy, q, form){
     await ensureXlsx();
-    const rows = this.rows().filter(r => (!fy || r.fy === fy) && (!q || r.q === q));
+    form = typeof TDS_FORMS === "object" && TDS_FORMS[form] ? form : "26Q";
+    const rows = TDS_FORMS[form].rows().filter(r => (!fy || r.fy === fy) && (!q || r.q === q));
     const ch = this.challans().filter(c => (!fy || this.fyOf(c.date) === fy) && (!q || this.qOf(c.date) === q));
     const use = this.challanUse();
     const d = s => s ? String(s).slice(6, 8) + "/" + String(s).slice(4, 6) + "/" + String(s).slice(0, 4) : "";
@@ -6281,15 +6418,15 @@ const TDS = {
       "TDS", "Total tax deducted", "Date of deduction", "Rate", "Voucher", "Challan BSR", "Challan serial", "Challan date"];
     const body = rows.map((r, i) => {
       const c = ch.find(x => x.id === r.challan) || {};
-      return [i + 1, /^[A-Z]{3}C/.test(r.pan || "") ? "01" : "02", r.pan || "PANNOTAVBL", r.party, "9" + String(r.section).replace(/^19/, ""),
+      return [i + 1, /^[A-Z]{3}C/.test(r.pan || "") ? "01" : "02", r.pan || "PANNOTAVBL", r.party, form === "27EQ" ? r.code : TDS26Q.code(r.section),
         d(r.date), r.paid, r.tds, r.tds, d(r.date), r.rate, r.voucher, c.bsr || "", c.serial || "", d(c.date || "")];
     });
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([head].concat(body)), "Deductees");
     const sum = [["Section", "Deductions", "Amount paid", "TDS", "Not against a challan", "Without PAN"]]
-      .concat(this.summary(fy, q).map(s => [s.section, s.count, s.paid, s.tds, s.unallocated, s.noPan]));
+      .concat(this.summary(fy, q, form).map(s => [s.section, s.count, s.paid, s.tds, s.unallocated, s.noPan]));
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sum), "Summary");
     const out = XLSX.write(wb, {bookType: "xlsx", type: "array"});
-    saveFile(CO().name.replace(/[^A-Za-z0-9]+/g, "-") + "-26Q-" + (q || "all") + "-" + (fy || "") + ".xlsx", new Blob([out], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
+    saveFile(CO().name.replace(/[^A-Za-z0-9]+/g, "-") + "-" + form + "-" + (q || "all") + "-" + (fy || "") + ".xlsx", new Blob([out], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
   }
 };
 
@@ -7633,15 +7770,33 @@ const GSTRev = {
 /* ================================================================== */
 /* The 26Q text file, as the FVU expects it, and its validation       */
 /* ================================================================== */
+// tax-accuracy: one builder for 26Q (residents), 27Q (non-residents, old section 195) and 27EQ (TCS, old section 206C).
+// The records and their order are 26Q's as FinCom has made them; 27Q and 27EQ add their own fields at the end of each
+// deduction (DD) record. Remarks: A = lower deduction / collection certificate (old 197 / 206C(9)), C = higher rate,
+// no PAN or PAN inoperative (old 206AA / 206CC). Check every file with the FVU before filing.
+const TDS_FORMS = {
+  "26Q": {rows: () => TDS.rows(), title: "26Q, other than salary"},
+  "27Q": {rows: () => TDS.nrRows(), title: "27Q, payments to non-residents"},
+  "27EQ": {rows: () => TDS.tcsRows(), title: "27EQ, tax collected at source", tcs: true}
+};
+// The forms of the Income-tax Act, 2025 (periods from 1 April 2026): Form 140 (was 26Q), 144 (was 27Q), 143 (was 27EQ),
+// 138 (was 24Q). Their deductions carry a numeric payment code in place of the old section code. The codes and the layout
+// are to be matched field by field to Protean's file-format documents and run through their FVU; until that is done
+// (NEW_FORMS_VALIDATED), a new-form file is a draft: named so, and not sent to the FVU from FinCom.
+const NEW_FORMS_VALIDATED = false;
+// payment code by old section (TDS) or 27EQ collection code (TCS): to be filled from Protean's documents
+const PAY_CODES = {};
 const TDS26Q = {
   // the file is caret-delimited ASCII; each line is one record
-  build(fy, q, firm){
-    const rows = TDS.rows().filter(r => r.fy === fy && r.q === q && r.challan);
+  build(fy, q, firm, form){
+    form = TDS_FORMS[form] ? form : "26Q";
+    const isNew = TDS.isNew(fy), fno = TDS.formNo(form, fy), missing = new Set();
+    const rows = TDS_FORMS[form].rows().filter(r => r.fy === fy && r.q === q && r.challan);
     const chs = TDS.challans().filter(c => TDS.fyOf(c.date) === fy && TDS.qOf(c.date) === q);
     const used = {};
     rows.forEach(r => { (used[r.challan] = used[r.challan] || []).push(r); });
     const live = chs.filter(c => (used[c.id] || []).length);
-    if (!live.length) return {error: "No challan for " + q + " " + fy + " has deductions against it yet."};
+    if (!live.length) return {error: "No challan for " + q + " " + fy + " has " + (form === "27EQ" ? "collections" : "deductions") + " in " + form + " against it yet."};
     const d = s => String(s || "").replace(/-/g, "");                 // ddmmyyyy
     const dmy = s => s ? String(s).slice(6, 8) + String(s).slice(4, 6) + String(s).slice(0, 4) : "";
     const today = new Date(), fileDate = String(today.getDate()).padStart(2, "0") + String(today.getMonth() + 1).padStart(2, "0") + today.getFullYear();
@@ -7656,7 +7811,7 @@ const TDS26Q = {
     // FH: file header
     put(["FH", "NS1", "R", fileDate, "1", "D", firm.tan, "1", "FinCom", "", "", "", "", "", "", "", ""]);
     // BH: batch header, one batch for this form and quarter
-    put(["BH", "1", String(live.length), "26Q", firm.tan, firm.pan || "PANNOTREQD", fy.replace("-", ""), ay.replace("-", ""),
+    put(["BH", "1", String(live.length), fno, firm.tan, firm.pan || "PANNOTREQD", fy.replace("-", ""), ay.replace("-", ""),
       txt(firm.name), txt(firm.branch), txt(firm.flat), txt(firm.premises), txt(firm.road), txt(firm.area), txt(firm.town),
       txt(firm.state), txt(firm.pin), txt(firm.email), txt(firm.phone), firm.deductorType || "F",
       txt(firm.person), txt(firm.personDesignation), firm.personFlat || "", firm.personPremises || "", firm.personRoad || "",
@@ -7669,14 +7824,57 @@ const TDS26Q = {
       put(["CD", "1", String(ci + 1), String(mine.length), "", money(tax), "0.00", "0.00", money(c.interest), "0.00",
         money(num(c.tax) + num(c.interest)), "", c.bsr, dmy(c.date), c.serial, "C", "200", "N", "", "", money(tax), "0.00", "0.00", "0.00", "0.00", "0.00"]);
       mine.forEach((r, di) => {
-        const code = "9" + String(r.section).replace(/^19/, "").toUpperCase();
+        const m = this.remark(r, form);
+        const old = form === "27EQ" ? r.code || "" : this.code(r.section);
+        const code = isNew ? this.payCode(r, form) : old;
+        if (isNew && !code) missing.add(form === "27EQ" ? r.code || r.ledger : TDS.sec(r.section));
+        const tail = form === "27Q" ? this.nrTail(r) : form === "27EQ" ? this.tcsTail(r) : [];
         put(["DD", "1", String(ci + 1), String(di + 1), "", r.pan && /^[A-Z]{5}\d{4}[A-Z]$/.test(r.pan) ? (/^[A-Z]{3}C/.test(r.pan) ? "01" : "02") : "02",
-          r.pan || "PANNOTAVBL", txt(r.party), "", money(r.paid), money(r.tds), "0.00", "0.00", money(r.tds), "0.00", money(r.tds),
-          dmy(r.date), dmy(r.date), (r.rate == null ? "" : r2(r.rate).toFixed(4)), code, "", "", "", "", "", "", "", "", ""]);
+          r.pan && Certs.validPan(r.pan) ? r.pan : "PANNOTAVBL", txt(r.party), "", money(r.paid), money(r.tds), "0.00", "0.00", money(r.tds), "0.00", money(r.tds),
+          dmy(r.date), dmy(r.date), (r.rate == null ? "" : r2(r.rate).toFixed(4)), code, m.remark, m.certNo, "", "", "", "", "", "", ""].concat(tail));
       });
     });
     return {text: lines.join("\r\n") + "\r\n", rows: rows.length, challans: live.length,
-      name: (firm.tan || "TAN") + "_26Q_" + q + "_" + fy.replace("-", "") + ".txt"};
+      name: (firm.tan || "TAN") + "_" + (isNew ? "Form" + fno : form) + "_" + q + "_" + fy.replace("-", "") + (isNew && !NEW_FORMS_VALIDATED ? "_DRAFT" : "") + ".txt", form,
+      formNo: fno, isNew, draft: isNew && !NEW_FORMS_VALIDATED, missingCodes: Array.from(missing),
+      remarks: rows.filter(r => this.remark(r, form).remark).length};
+  },
+  // the payment code of the Act of 2025 for a deduction or collection (new forms); "" until the table has it
+  payCode(r, form){ return String(PAY_CODES[form === "27EQ" ? r.code : TDS.sec(r.section)] || ""); },
+  // the section code as the 26Q file has carried it: 194C is 94C; 195 stays 195
+  code(section){ const s = TDS.sec(section); return /^19[5-6]/.test(s) ? s : "9" + s.replace(/^19/, ""); },
+  // A: a certificate covers the payment (its number goes beside); C: the higher rate, with no PAN or an inoperative one
+  remark(r, form){
+    const cert = form === "27EQ" ? TCS27EQ.certFor(r) : Certs.forRow(r);
+    if (cert) return {remark: "A", certNo: String(cert.certNo || "").toUpperCase().slice(0, 10)};
+    if (!Certs.validPan(r.pan) || Certs.inoperative(r.pan)) return {remark: "C", certNo: ""};
+    return {remark: "", certNo: ""};
+  },
+  // 27Q: the deductee's details a non-resident return asks for, kept per party in S.books.nrInfo
+  nrInfo(party){ return ((S.books || {}).nrInfo || {})[party] || {}; },
+  nrTail(r){
+    const i = this.nrInfo(r.party), t = v => String(v == null ? "" : v).replace(/[\^\r\n]/g, " ").replace(/[^\x20-\x7E]/g, "").trim();
+    // rate under the Act (A) or the treaty (B); the nature of the remittance; the Form 15CA acknowledgement; the country;
+    // e-mail, phone, address and tax identification number in the country of residence
+    return [i.dtaa ? "B" : "A", t(i.nature).slice(0, 2), t(i.ack15ca).slice(0, 15), t(i.country).slice(0, 3), t(i.email).slice(0, 75),
+      t(i.phone).slice(0, 15), t(i.address).slice(0, 150), t(i.tin).slice(0, 25)];
+  },
+  // 27EQ: the collectee's PAN status and whether the buyer is a non-resident
+  tcsTail(r){ return [r.nonResident ? "Y" : "N", ""]; },
+  // what is missing before a 27Q can be filed
+  nrChecks(fy, q){
+    const out = [];
+    const seen = new Set();
+    TDS.nrRows().filter(r => r.fy === fy && r.q === q).forEach(r => {
+      if (seen.has(r.party)) return; seen.add(r.party);
+      const i = this.nrInfo(r.party), miss = [];
+      if (!i.country) miss.push("country");
+      if (!i.nature) miss.push("nature of remittance");
+      if (!Certs.validPan(r.pan) && !(i.tin && i.address && i.email)) miss.push("PAN, or the tax identification number, address and e-mail (rule 37BC)");
+      if (i.dtaa && !i.trc) miss.push("tax residency certificate and Form 10F for the treaty rate");
+      if (miss.length) out.push({party: r.party, missing: miss});
+    });
+    return out;
   },
   firmDetails(){
     const co = CO(), f = (co.tds26q || {});
@@ -7684,6 +7882,49 @@ const TDS26Q = {
   }
 };
 
+/* ---------- 27EQ: tax collected at source (old section 206C; section 394 of the Income-tax Act, 2025) ---------- */
+const TCS27EQ = {
+  // the collection code of the 27EQ file, from the words in the TCS ledger's name; a ledger the words do not place is left
+  // for a person to choose (S.books.tcsCodes[ledger])
+  CODES: [
+    ["6CA", "Alcoholic liquor for human consumption", /LIQUOR|ALCOHOL/],
+    ["6CB", "Tendu leaves", /TENDU/],
+    ["6CC", "Timber obtained under a forest lease", /TIMBER.*LEASE|FOREST\s*LEASE/],
+    ["6CD", "Timber obtained other than under a forest lease", /TIMBER/],
+    ["6CE", "Any other forest produce", /FOREST/],
+    ["6CF", "Scrap", /SCRAP/],
+    ["6CG", "Parking lot (lease or licence)", /PARKING/],
+    ["6CH", "Toll plaza (lease or licence)", /TOLL/],
+    ["6CI", "Mining and quarrying (lease or licence)", /MINING|QUARR/],
+    ["6CJ", "Minerals: coal, lignite or iron ore", /COAL|LIGNITE|IRON\s*ORE|MINERAL/],
+    ["6CL", "Motor vehicle above ₹10 lakh", /MOTOR|VEHICLE|CAR\b/],
+    ["6CO", "Overseas tour programme package", /OVERSEAS|TOUR\s*PACKAGE|FOREIGN\s*TOUR/]
+  ],
+  codeOf(ledger, section){
+    const set = ((S.books || {}).tcsCodes || {})[ledger];
+    if (set) return set;
+    const up = String(ledger || "").toUpperCase();
+    const hit = this.CODES.find(([, , re]) => re.test(up));
+    return hit ? hit[0] : "";
+  },
+  // a lower collection certificate (old section 206C(9)) for this buyer, kept with the other certificates as section 206C
+  certFor(r){
+    return Certs.all().find(c => /^206C/.test(String(c.section || "")) && normName(c.party) === normName(r.party) &&
+      (!c.from || TDS.ymd(r.date) >= TDS.ymd(c.from)) && (!c.to || TDS.ymd(r.date) <= TDS.ymd(c.to))) || null;
+  },
+  // what is missing before a 27EQ can be filed
+  checks(fy, q){
+    const out = [];
+    TDS.tcsRows().filter(r => r.fy === fy && r.q === q).forEach(r => {
+      if (!r.code){ out.push({row: r, why: "No collection code for the ledger " + r.ledger + ". Choose one."}); return; }
+      // the rate that applies on the collection's date (overseas tours before April 2026: 5%, or 20% above ₹10 lakh)
+      const want = TDS.tcsRate(r.code, r.date), alt = r.code === "6CO" && TDS.ymd(r.date) < "20260401" ? [5, 20] : [want];
+      if (want != null && r.rate != null && !alt.some(a => Math.abs(a - r.rate) < 0.05))
+        out.push({row: r, why: r.party + " (" + fmtDate(tallyDate(r.date)) + "): TCS at " + r.rate + "%, but " + alt.join("% or ") + "% applies to " + r.code + " on that date."});
+    });
+    return out;
+  }
+};
 /* ================================================================== */
 /* 24Q: salary, employee by employee                                  */
 /* ================================================================== */
@@ -7822,14 +8063,26 @@ const Certs = {
       (!c.from || TDS.ymd(r.date) >= TDS.ymd(c.from)) && (!c.to || TDS.ymd(r.date) <= TDS.ymd(c.to)));
   },
   validPan(p){ return /^[A-Z]{5}\d{4}[A-Z]$/.test(String(p || "").toUpperCase()); },
+  // PANs marked inoperative (not linked with Aadhaar) for this client's books: S.books.panInoperative = {PAN: date checked}
+  inoperative(p){
+    const P = String(p || "").toUpperCase();
+    if (!P) return false;
+    if (((S.books || {}).panInoperative || {})[P]) return true;
+    return Object.values(D().parties || {}).some(x => x && x.panInoperative && String(x.pan || "").toUpperCase() === P);
+  },
   // what the rate should have been, and why
   expected(r){
     const cert = this.forRow(r);
     if (cert) return {rate: num(cert.rate), why: "certificate " + (cert.certNo || "under 197"), cert};
-    if (!this.validPan(r.pan)) return {rate: 20, why: "no valid PAN, section 206AA"};
-    const std = (TDS.STD[String(r.section).replace(/\s.*$/, "")] || []);
-    if (!std.length) return {rate: null, why: ""};
-    const near = std.slice().sort((a, b) => Math.abs(a - (r.rate || 0)) - Math.abs(b - (r.rate || 0)))[0];
+    const std = (TDS.STD[TDS.sec(r.section)] || []);
+    const near = std.length ? std.slice().sort((a, b) => Math.abs(a - (r.rate || 0)) - Math.abs(b - (r.rate || 0)))[0] : null;
+    // no PAN (or one marked inoperative under Deductees): the higher of the usual rate and 20%; 5% for 194Q and 194-O
+    const noPan = !this.validPan(r.pan) ? "no valid PAN" : this.inoperative(r.pan) ? "PAN inoperative" : "";
+    if (noPan){
+      const sec = TDS.sec(r.section), rule = sec === "194Q" || sec === "194O" ? {noPanRate: 5} : null;
+      return {rate: noPanRate(rule, near == null ? 0 : near), why: noPan + ", section 206AA (higher rate)", noPan: true};
+    }
+    if (near == null) return {rate: null, why: ""};
     return {rate: near, why: "usual rate for " + r.section};
   },
   // where the books deducted at a different rate from the one that applies
@@ -7858,8 +8111,14 @@ const TDSYear = {
         challans: mine.length, challanTax: r2(mine.reduce((a, c) => a + num(c.tax), 0)),
         used: r2(mine.reduce((a, c) => a + (use[c.id] || 0), 0)),
         salaryEmployees: sal.length, salaryPaid: r2(sal.reduce((a, e) => a + e.paid, 0)), salaryTds: r2(sal.reduce((a, e) => a + e.tds, 0)),
-        issues: Certs.issues(fy, q).length};
+        issues: Certs.issues(fy, q).length, nr: this.other(TDS.nrRows(), fy, q), tcs: this.other(TDS.tcsRows(), fy, q)};
     });
+  },
+  // a quarter of 27Q or 27EQ in the year's table
+  other(all, fy, q){
+    const rows = all.filter(r => r.fy === fy && r.q === q);
+    return {n: rows.length, tds: r2(rows.reduce((a, r) => a + r.tds, 0)), unallocated: r2(rows.filter(r => !r.challan).reduce((a, r) => a + r.tds, 0)),
+      noPan: rows.filter(r => !Certs.validPan(r.pan)).length};
   },
   async toExcel(fy, which){
     await ensureXlsx();
@@ -7932,7 +8191,7 @@ async function openBooks(cid){
   render();
 }
 // everything kept with a client's books, in this browser and (the TDS and GST work) in the firm's database
-const BOOKS_KEYS = ["vouchers", "map", "meta", "challans", "alloc", "pans", "twoB", "gstins", "under", "states", "groups", "salary", "certs", "advFix", "assets", "rev", "filed", "amendFix", "twoBs", "reco2b", "ledInfo", "ledInfoAt", "audit", "auditCfg", "auditRel", "ledSnaps", "gst9c", "groupInfo", "fs", "tb", "mis", "misCfg", "msme", "budget", "gst3b", "gst9", "gstOpen", "itcBasis", "itcTrack", "outRej", "gstFiled", "gstAato", "filed1a", "rule37On", "gstCashLedger", "gstSet", "gstContacts", "gstApi", "gstEst", "gstVault", "gstRegs", "letters", "ai", "tallyCo", "tbCheck"];
+const BOOKS_KEYS = ["vouchers", "map", "meta", "challans", "alloc", "pans", "twoB", "gstins", "under", "states", "groups", "salary", "certs", "advFix", "assets", "rev", "filed", "amendFix", "twoBs", "reco2b", "ledInfo", "ledInfoAt", "audit", "auditCfg", "auditRel", "ledSnaps", "gst9c", "groupInfo", "fs", "tb", "mis", "misCfg", "msme", "budget", "gst3b", "gst9", "gstOpen", "itcBasis", "itcTrack", "outRej", "gstFiled", "gstAato", "filed1a", "rule37On", "gstCashLedger", "gstSet", "gstContacts", "gstApi", "gstEst", "gstVault", "gstRegs", "letters", "ai", "tallyCo", "tbCheck", "nrInfo", "tcsCodes", "panInoperative", "filed3b", "apiTaken"];
 async function saveBooks(opts, bb){
   const b = bb || S.books; if (!b || !b.cid) return;
   const keep = {cid: b.cid}; BOOKS_KEYS.forEach(k => { keep[k] = b[k]; });
@@ -8310,6 +8569,8 @@ function gstParts(b){
   const parts = ftype === "comp" ? [["cmp08", "CMP-08"], ["gstr4", "GSTR-4"], ["inreg", "Purchases"], ["r2b", "2B reconciliation"]]
     : (ftype === "qrmp" ? [["qtr", "This quarter"], ["r1", "GSTR-1 working"], ["r3b", "GSTR-3B working"]] : [["r1", "GSTR-1"], ["r3b", "GSTR-3B"]])
       .concat([["inreg", "Input register"], ["r2b", "2B reconciliation"], ["follow", "ITC follow-up"], ["adv", "Advances"], ["rev", "Reversal"], ["amend", "Amendments"], ["g9", "GSTR-9"], ["g9c", "GSTR-9C"]]);
+  // tax-accuracy: the filed GSTR-1 and 3B (fetched from the portal) against FinCom's working, month by month
+  if (ftype !== "comp") parts.push(["filedcmp", "Filed vs FinCom"]);
   parts.push(["vault", "Returns filed"]);
   if (AIH.enabled("notices")) parts.push(["notices", "Notices"]);
   // without the day book only what does not come from it: 2B (from the portal or its JSON) and the returns filed
@@ -12305,22 +12566,17 @@ const Bridge = {
       const clash = !pin && Object.keys(names).filter(n => names[n] > 1 && !(open.filter(o => o.name === n && o.mine === true).length === 1));
       this.st = {state: "ok", sessions: j.sessions || [], open: open.filter(o => !(clash && clash.includes(o.name)) || o.mine === true), clash: clash || [], at: Date.now(), error: "",
         version: j.version, allowImport: j.allowImport !== false, mode: j.mode || "", user: j.user || "", mySession: j.mySession, jobs: [].concat(j.jobs || []),
-        stuck: j.tallyStuck || null, tallyUp: usable.length > 0, pinMissing: !!pin && !(j.sessions || []).some(s => s.port === pin && s.ok && !s.skipped),
-        // go-bridge: Tally open / busy / closed (a busy Tally is open, only slow); bridge 1.15.0: busy when it says Tally is stuck
-        tallyState: (j.tally && j.tally.state) || (usable.length ? (j.tallyStuck ? "busy" : "open") : "closed"), busySince: (j.tally && j.tally.since) || (j.tallyStuck && j.tallyStuck.since) || "",
-        beat: j.beat || null};
+        stuck: j.tallyStuck || null, tallyUp: usable.length > 0, pinMissing: !!pin && !(j.sessions || []).some(s => s.port === pin && s.ok && !s.skipped)};
       if (!this.st.tallyUp || this.st.pinMissing){ if (!this.diag || Date.now() - this.diag.at > 30000) await this.diagnose(); }
       else this.diag = null;
-      this.misses = 0; this.okAt = Date.now();
+      this.misses = 0;
     } catch (e){
-      // a bridge busy with Tally (1.15.0 answers one request at a time) is not a lost bridge: it stays connected,
-      // "reconnecting", and is asked again every 15 s; offline only when it has not answered for two minutes (about
-      // three missed heartbeats), or never while this tab is posting through it
+      // one missed answer (or any while this tab is posting) is not a lost bridge: keep what was known and ask again soon
       this.misses = (this.misses || 0) + 1;
-      const was = this.st && this.st.state === "ok" && Date.now() - (this.okAt || this.st.at || 0) < 120000;
-      if (e.code !== "bridge_key" && this.st && this.st.state === "ok" && (was || this.posting)){
+      const was = this.st && this.st.state === "ok" && Date.now() - (this.st.at || 0) < 5 * 60000;
+      if (e.code !== "bridge_key" && was && (this.misses < 3 || this.posting)){
         this.st = Object.assign({}, this.st, {shaky: true, error: e.message});
-        clearTimeout(this.again); this.again = setTimeout(() => { if (typeof bridgeTick === "function") bridgeTick(false); }, this.misses === 1 ? 8000 : 15000);
+        clearTimeout(this.again); this.again = setTimeout(() => { if (typeof bridgeTick === "function") bridgeTick(false); }, 8000);
       } else this.st = {state: e.code === "bridge_key" ? "key" : "down", sessions: [], open: [], at: Date.now(), error: e.message};
     }
     if (this.st.state === "ok" && !this.misses) this.st.shaky = false;
@@ -12568,10 +12824,8 @@ function bridgeChip(co){
   const run = (st.jobs || []).find(j => ["queued", "waiting", "running"].includes(j.status));
   if (run) return '<span class="tchip ok" title="' + esc((run.company || "") + ": " + (run.message || "")) + '">\u25CF Posting to Tally: ' + num(run.done) + " of " + num(run.total) + "</span>";
   // build 194: Tally stopped answering (a message box open in Tally, or a long report): said plainly, with since when
-  // go-bridge: a slow Tally is busy, never "disconnected" (it is open; the bridge asks again by itself)
-  const busyAt = (st.stuck && st.stuck.since) || (st.tallyState === "busy" && st.busySince) || "";
-  if (busyAt || st.tallyState === "busy") return '<span class="tchip warn" title="Tally is open but answering slowly' + (busyAt ? " since " + esc(String(busyAt).slice(11, 16)) : "") + '. A message box (a pop-up) in Tally, or a report still working, holds it up: close it, and FinCom carries on by itself. Nothing is lost meanwhile.">\u25D0 Tally busy' + (busyAt ? " since " + esc(String(busyAt).slice(11, 16)) : "") + "</span>";
-  if (st.shaky) return '<span class="tchip warn" title="' + esc(st.error || "") + '">Tally Bridge: reconnecting\u2026</span>';
+  if (st.stuck && st.stuck.since) return '<span class="tchip bad" title="Tally has not answered since ' + esc(String(st.stuck.since).slice(11, 16)) + '. Look at the Tally computer: a message box (a pop-up) in Tally, or a report still working, stops Tally answering anyone. Close it, and FinCom carries on by itself.">\u26A0 Tally not responding since ' + esc(String(st.stuck.since).slice(11, 16)) + " \u2014 check for a pop-up in Tally</span>";
+  if (st.shaky) return '<span class="tchip warn" title="' + esc(st.error || "") + '">Tally Bridge: checking again\u2026</span>';
   const why = Bridge.diag && (Bridge.diag.findings || []).find(f => f.level !== "ok");
   if (st.pinMissing) return '<button class="tchip warn" data-act="openSettings" title="' + esc(why ? why.text : "The Tally chosen in Settings is not running") + '">Your Tally is not connected \u2014 check</button>';
   if (!st.tallyUp) return '<button class="tchip warn" data-act="openSettings" title="' + esc(why ? why.text : "No TallyPrime is answering in your Windows session") + '">Tally not connected \u2014 check</button>';
@@ -14301,7 +14555,12 @@ function invoiceHtml(x, co, cfg){
     "th{background:#f0f0f0;font-size:10px}.n{text-align:right;white-space:nowrap}.muted{color:#555}.w50{width:50%}.tot td{font-weight:bold}.sign{height:70px}" +
     "@media print{.noprint{display:none}}</style></head><body>" +
     '<p class="noprint" style="text-align:center"><button onclick="window.print()">Print / Save as PDF</button></p>' +
-    '<div class="inv"><div class="cell b" style="text-align:center"><h2>TAX INVOICE</h2>' + (x.irn ? '<div class="muted">IRN: ' + e(x.irn) + "</div>" : "") + "</div>" +
+    '<div class="inv"><div class="cell b" style="text-align:center"><h2>TAX INVOICE</h2>' + (x.irn ? '<div class="muted">IRN: ' + e(x.irn) + "</div>" : "") +
+      (x.ackNo ? '<div class="muted">Ack. No.: ' + e(x.ackNo) + (x.ackDt ? " · Ack. Date: " + e(fmtDateTime(x.ackDt)) : "") + "</div>" : "") +
+      (x.irnStatus === "cancelled" ? '<div><b>IRN CANCELLED</b></div>' : "") +
+      // the signed QR code of the e-invoice (rule 48(4)), drawn in the printed page from the IRP's signed text
+      (x.signedQr && x.irnStatus !== "cancelled" ? '<div id="einvqr" style="display:inline-block;margin-top:6px"></div><scr' + 'ipt src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></scr' + 'ipt>' +
+        "<scr" + "ipt>try{new QRCode(document.getElementById('einvqr'),{text:" + JSON.stringify(String(x.signedQr)).replace(/</g, "\\u003c") + ",width:150,height:150,correctLevel:QRCode.CorrectLevel.L})}catch(e){}</scr" + "ipt>" : "") + "</div>" +
     '<div class="row b"><div class="cell r w50"><h1>' + e(co.name) + "</h1>" + (cfg.address ? "<div>" + e(cfg.address).replace(/\n/g, "<br>") + "</div>" : "") +
       (co.gstin ? "<div><b>GSTIN:</b> " + e(co.gstin) + "</div>" : "") + (co.pan || co.gstin ? "<div><b>PAN:</b> " + e(co.pan || String(co.gstin).slice(2, 12)) + "</div>" : "") +
       (home ? "<div><b>State:</b> " + e(GST_STATES[home] || "") + " (" + home + ")</div>" : "") + (cfg.phone ? "<div>Phone: " + e(cfg.phone) + "</div>" : "") + (cfg.email ? "<div>Email: " + e(cfg.email) + "</div>" : "") + "</div>" +
@@ -15559,6 +15818,9 @@ function txnOpenDoc(key, path, name){
 function setFilter(id, key, val, typed){ S[id] = Object.assign({}, S[id], {[key]: val}); if (typed){ FinComReact.redraw(); later(id + "q", render, 250); } else render(); }
 function clearFilter(id){ S[id] = {}; render(); }
 // 2B reconciliation (app/src/screens/gst/TwoB.jsx): its tab, span, filters, and what the user settles about a document
+// 27Q: a non-resident deductee's details for the file; 27EQ: a TCS ledger's collection code
+function tdsNrSet(party, k, v){ const b = S.books; b.nrInfo = Object.assign({}, b.nrInfo); b.nrInfo[party] = Object.assign({}, b.nrInfo[party], {[k]: typeof v === "string" ? v.trim() : v}); saveBooks(); render(); }
+function tdsTcsCode(ledger, code){ const b = S.books; b.tcsCodes = Object.assign({}, b.tcsCodes, {[ledger]: code}); saveBooks(); render(); }
 function r2TabGo(id){ S.r2Tab = id; render(); }
 function r2ScopeGo(mode){ S.r2Scope = mode; render(); }
 function r2Filter(key, val, typed){ const tab = S.r2Tab || "suppliers"; S.r2F = Object.assign({}, S.r2F, {[tab]: Object.assign({}, (S.r2F || {})[tab], {[key]: val})}); if (typed){ FinComReact.redraw(); later("r2f", render, 250); } else render(); }
@@ -16183,31 +16445,33 @@ function doAct(act, t){
     case "salaryClear": askConfirm({title: "Remove the salary sheet?", ok: "Remove", body: '<p class="note">The challans and everything else stay.</p>'}).then(ok => {
       if (!ok) return; S.books.salary = []; saveBooks(); toast("Removed."); render(); }); break;
     case "q24Excel": TDS24Q.toExcel(S.tdsFy || "", S.tdsQ || "Q4").then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break;
-    case "tdsTxt": { if (!ledgersReady("tds")) break; LedMaster.snap(S.books, "26Q " + (S.tdsQ || "") + " " + (S.tdsFy || "")); saveBooks();
+    case "tdsTxt": { if (!ledgersReady("tds")) break; LedMaster.snap(S.books, (S.tdsForm || "26Q") + " " + (S.tdsQ || "") + " " + (S.tdsFy || "")); saveBooks();
       const q = S.tdsQ || "", fy = S.tdsFy || "";
       if (!q || !fy){ toast("Choose the year and the quarter first."); break; }
-      const r = TDS26Q.build(fy, q, TDS26Q.firmDetails());
+      const r = TDS26Q.build(fy, q, TDS26Q.firmDetails(), S.tdsForm);
       if (r.error){ toast(r.error); break; }
       saveFile(r.name, new Blob([r.text], {type: "text/plain"}));
-      toast(r.rows + " deductions under " + r.challans + " challan" + (r.challans === 1 ? "" : "s") + ". Check it with the FVU before filing.");
+      toast((r.draft ? "Form " + r.formNo + ", draft – not yet validated: " : "") + r.rows + (r.form === "27EQ" ? " collections" : " deductions") + " under " + r.challans + " challan" + (r.challans === 1 ? "" : "s") + (r.remarks ? ", " + r.remarks + " with a remark (certificate or higher rate)" : "") +
+        (r.missingCodes && r.missingCodes.length ? ". No payment code yet for " + r.missingCodes.join(", ") : "") + (r.draft ? ". Do not file it." : ". Check it with the FVU before filing."));
       break;
     }
     case "tdsFvu": { if (!ledgersReady("tds")) break;
       const q = S.tdsQ || "", fy = S.tdsFy || "";
       if (!q || !fy){ toast("Choose the year and the quarter first."); break; }
-      const r = TDS26Q.build(fy, q, TDS26Q.firmDetails());
+      const r = TDS26Q.build(fy, q, TDS26Q.firmDetails(), S.tdsForm);
       if (r.error){ toast(r.error); break; }
+      if (r.draft){ toast("Form " + r.formNo + " is a draft – not yet validated against Protean’s file format, so it is not sent to the FVU yet."); break; }
       const co = CO();
       toast("Running the FVU on the Tally computer\u2026");
       Bridge.call("/fvu", {text: r.text, name: r.name, fvuJar: (co.fvuJar || ""), csi: (co.csiFile || ""), outDir: (co.fvuOut || "")}, 200000).then(res => {
         res = Object.assign({}, res, {ok: res.accepted != null ? !!res.accepted : !!res.ok});
-        S.fvuResult = Object.assign({at: new Date().toISOString(), q, fy}, res);
+        S.fvuResult = Object.assign({at: new Date().toISOString(), q, fy, form: r.form}, res);
         toast(res.ok ? "The FVU accepted it. The .fvu file is on the Tally computer." : "The FVU found problems. They are listed below.");
         render();
       }, e => { const msg = (e && e.message) || "the bridge did not answer"; S.fvuResult = {at: new Date().toISOString(), ok: false, errors: /Unknown address/.test(msg) ? "This needs Tally Bridge 1.10. Download it under Settings \u2192 Tally Bridge and run the setup on the Tally computer." : msg}; toast("Could not run the FVU: " + msg); render(); });
       break;
     }
-    case "tdsExcel": TDS.toExcel(S.tdsFy || "", S.tdsQ || "").then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break;
+    case "tdsExcel": TDS.toExcel(S.tdsFy || "", S.tdsQ || "", S.tdsForm).then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break;
     case "gstJson": if (!ledgersReady("gst")) break;
       // a month already filed: its return is not made again from the books as they are now
       { const ym = S.gstYm || "", reg = S.gstReg || "", pr = reg && ym ? GSTAmend.proof(ym, reg) : null;
@@ -18025,12 +18289,23 @@ const GSTAPI = {
   ready(ym){ const nx = GSTR.nextYm(ym), t = GSTF.today(); return t.slice(0, 7).replace("-", "") > nx || (t.slice(0, 7).replace("-", "") === nx && +t.slice(8, 10) >= 14); },
   gstinOf(reg){ return ((GSTR.gstins(S.books)) || []).find(g => g.slice(0, 2) === reg) || ""; },
   user(reg){ return (typeof GSTSet === "object" ? GSTSet.peek(reg).portalUser : "") || ""; },
-  live(gstin){ const x = this.sess[gstin]; return x && x.connectedAt && !x.error && x.until > Date.now() ? x : null; },
+  live(gstin){ const x = this.sess[gstin]; return x && x.connectedAt && !x.error && !x.endedAt && x.until > Date.now() ? x : null; },
+  // the taxpayer's API access period: when it ends, and the days left (tax-accuracy: shown, and reminded 3 days before)
+  accessLeft(gstin){ const x = this.sess[gstin]; if (!x || !x.accessUntil) return null; const ms = Date.parse(x.accessUntil) - Date.now(); return {until: x.accessUntil, days: Math.max(0, Math.ceil(ms / 86400000)), soon: ms < 3 * 86400000, over: ms <= 0}; },
   // what the server keeps for this GSTIN: asked again at most every 10 minutes (the server renews in the background)
   async status(gstin){
     this.seen[gstin] = Date.now();
     const j = await this.call({action: "status", gstins: [gstin]}), x = (j.sessions || [])[0];
-    this.sess[gstin] = x ? Object.assign(this.sess[gstin] || {}, {until: Date.parse(x.until), connectedAt: x.connectedAt, error: x.error || ""}) : (this.sess[gstin] && this.sess[gstin].sentAt ? {sentAt: this.sess[gstin].sentAt} : undefined);
+    this.sess[gstin] = x ? Object.assign(this.sess[gstin] || {}, this.sessOf(x)) : (this.sess[gstin] && this.sess[gstin].sentAt ? {sentAt: this.sess[gstin].sentAt} : undefined);
+  },
+  sessOf(x){ return {until: Date.parse(x.until), connectedAt: x.connectedAt, error: x.error || "", accessUntil: x.accessUntil || "", accessDays: x.accessDays || 0, endedAt: x.endedAt || "", refreshedAt: x.refreshedAt || ""}; },
+  // every client's GSTIN at once (Settings → GST API): sessions, the returns kept on the server, the e-invoice users
+  async firmStatus(gstins){
+    const list = Array.from(new Set(gstins.filter(g => /^\d{2}[A-Z0-9]{13}$/.test(g))));
+    if (!list.length) return {sessions: [], returns: [], accounts: []};
+    const [a, b, c] = await Promise.all([this.call({action: "status", gstins: list}), this.call({action: "returns", gstins: list}), this.call({action: "einv-status", gstins: list}).catch(() => ({accounts: []}))]);
+    (a.sessions || []).forEach(x => { this.sess[x.gstin] = Object.assign(this.sess[x.gstin] || {}, this.sessOf(x)); this.seen[x.gstin] = Date.now(); });
+    return {sessions: a.sessions || [], returns: b.returns || [], accounts: c.accounts || [], host: c.host || ""};
   },
   stale(gstin){ return !this.seen[gstin] || Date.now() - this.seen[gstin] > 10 * 60000; },
   async otp(reg){
@@ -18039,11 +18314,11 @@ const GSTAPI = {
     this.sess[gstin] = {sentAt: Date.now()};
     return j;
   },
-  async auth(reg, otp){
+  async auth(reg, otp, days){
     const gstin = this.gstinOf(reg), username = this.user(reg);
     if (!this.sess[gstin]) throw new Error("Send the OTP first.");
-    const j = await this.call({action: "auth", gstin, username, otp});
-    this.sess[gstin] = {until: Date.parse(j.until), connectedAt: new Date().toISOString(), error: ""}; this.seen[gstin] = Date.now();
+    const j = await this.call({action: "auth", gstin, username, otp, days: days || 30});
+    this.sess[gstin] = {until: Date.parse(j.until), connectedAt: new Date().toISOString(), error: "", accessUntil: j.accessUntil || "", accessDays: j.accessDays || 0, endedAt: ""}; this.seen[gstin] = Date.now();
     return this.sess[gstin];
   },
   // 2B for a month (YYYYMM), in the same place as a 2B file brought in
@@ -18058,6 +18333,107 @@ const GSTAPI = {
     return t;
   }
 };
+// returns fetched on the server (Fetch now, or the daily run) are brought into the client's books: 2B with the 2B files,
+// filed GSTR-1 with the filed copies (as a copy from the portal), filed 3B beside FinCom's own 3B
+Object.assign(GSTAPI, {
+  formOf: {"2B": "2B", "R1": "GSTR-1", "3B": "GSTR-3B"},
+  async fetch(gstin, form, ym){
+    const j = await this.call({action: "fetch", gstin, form, period: ym.slice(4, 6) + ym.slice(0, 4)});
+    if (j.status === "none") return {none: true, error: j.error};
+    const k = await this.call({action: "return", gstin, form, period: ym.slice(4, 6) + ym.slice(0, 4)});
+    if (k.ret && k.ret.status === "ok") this.take(k.ret);
+    return {ok: true, ret: k.ret};
+  },
+  // put one kept return into the books
+  take(r){
+    const b = S.books; if (!b || !r || !r.data) return;
+    const ym = r.period.slice(2, 6) + r.period.slice(0, 2), at = r.fetched_at || new Date().toISOString();
+    if (r.form === "2B"){
+      const t = GST2B.fromJson({data: r.data});
+      if (!t.gstin || !t.ym) return;
+      b.twoBs = b.twoBs || {}; b.twoBs[t.gstin + "|" + t.period] = Object.assign(t, {source: "api", fetchedAt: at});
+      delete b.twoB; GST2B._memo = null; GSTR._carry = null;
+    } else if (r.form === "R1"){
+      GSTAmend.keep(Object.assign({}, r.data, {gstin: r.gstin, fp: r.period}), "portal", {via: "api", fetchedAt: at});
+    } else if (r.form === "3B"){
+      b.filed3b = Object.assign({}, b.filed3b, {[r.gstin + "|" + ym]: {gstin: r.gstin, ym, json: r.data, fetchedAt: at}});
+    }
+    b.apiTaken = Object.assign({}, b.apiTaken, {[r.gstin + "|" + r.form + "|" + r.period]: at});
+  },
+  // what the server has for this client's GSTINs and the books do not yet: brought in (at most every 10 minutes)
+  async syncKept(){
+    const b = S.books; if (!b || !this.on()) return 0;
+    const gstins = GSTR.gstins(b) || []; if (!gstins.length) return 0;
+    const key = gstins.join(","); if (this._sync && this._sync.key === key && Date.now() - this._sync.at < 10 * 60000) return 0;
+    this._sync = {key, at: Date.now()};
+    const j = await this.call({action: "returns", gstins});
+    this.kept = j.returns || [];
+    let n = 0;
+    for (const r of this.kept){
+      if (r.status !== "ok") continue;
+      const had = (b.apiTaken || {})[r.gstin + "|" + r.form + "|" + r.period];
+      if (had && had >= r.fetched_at) continue;
+      const k = await this.call({action: "return", gstin: r.gstin, form: r.form, period: r.period});
+      if (k.ret && k.ret.status === "ok"){ this.take(k.ret); n++; }
+    }
+    if (n) saveBooks();
+    return n;
+  },
+  keptFor(gstin, form, ym){ if (!ym) return null; return (this.kept || []).find(r => r.gstin === gstin && r.form === form && r.period === ym.slice(4, 6) + ym.slice(0, 4)) || null; }
+});
+
+/* ---------- filed returns against FinCom's working, month by month ---------- */
+const GSTCMP = {
+  H: ["taxable", "igst", "cgst", "sgst", "cess"],
+  z(){ return {taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0}; },
+  add(t, d, sg){ t.taxable = r2(t.taxable + sg * num(d.txval)); t.igst = r2(t.igst + sg * num(d.iamt)); t.cgst = r2(t.cgst + sg * num(d.camt)); t.sgst = r2(t.sgst + sg * num(d.samt)); t.cess = r2(t.cess + sg * num(d.csamt)); },
+  // the filed GSTR-1's tables, added up: B2B, B2C large, B2C small, notes (credit notes take off), exports
+  r1Filed(json){
+    const out = {b2b: this.z(), b2cl: this.z(), b2cs: this.z(), cdnr: this.z(), exp: this.z()};
+    const items = (inv, t, sg) => (inv.itms || []).forEach(it => this.add(t, it.itm_det || it, sg));
+    (json.b2b || []).forEach(c => (c.inv || []).forEach(i => items(i, out.b2b, 1)));
+    (json.b2cl || []).forEach(c => (c.inv || []).forEach(i => items(i, out.b2cl, 1)));
+    (json.b2cs || []).forEach(x => this.add(out.b2cs, x, 1));
+    (json.cdnr || []).forEach(c => (c.nt || []).forEach(n => items(n, out.cdnr, String(n.ntty || "C").toUpperCase() === "D" ? 1 : -1)));
+    (json.cdnur || []).forEach(n => items(n, out.cdnr, String(n.ntty || "C").toUpperCase() === "D" ? 1 : -1));
+    (json.exp || []).forEach(e => (e.inv || []).forEach(i => items(i, out.exp, 1)));
+    return out;
+  },
+  r1Work(ym, reg){
+    const g = GSTR.one(ym, reg), t = rows => { const s = GSTR.sum(rows); return {taxable: s.taxable, igst: s.igst, cgst: s.cgst, sgst: s.sgst, cess: s.cess}; };
+    const notes = this.z(); g.cdnr.forEach(r => this.add(notes, {txval: r.taxable, iamt: r.igst, camt: r.cgst, samt: r.sgst, csamt: r.cess}, r.note === "debit" ? 1 : -1));
+    return {b2b: t(g.b2b), b2cl: t(g.b2cl), b2cs: t(g.b2c), cdnr: notes, exp: t(g.exp)};
+  },
+  // 3B's tables as rows: [label, {taxable, igst, cgst, sgst, cess}]
+  r3bRows(j){
+    const s = j.sup_details || {}, e = j.itc_elg || {}, rowOf = d => ({taxable: r2(num((d || {}).txval)), igst: r2(num((d || {}).iamt)), cgst: r2(num((d || {}).camt)), sgst: r2(num((d || {}).samt)), cess: r2(num((d || {}).csamt))});
+    const ty = (list, t) => rowOf((list || []).find(x => x.ty === t));
+    return [["3.1(a) Outward taxable supplies", rowOf(s.osup_det)], ["3.1(b) Zero rated", rowOf(s.osup_zero)], ["3.1(c) Nil rated, exempt", rowOf(s.osup_nil_exmp)],
+      ["3.1(d) Inward, reverse charge", rowOf(s.isup_rev)], ["3.1(e) Non-GST", rowOf(s.osup_nongst)],
+      ["4(A)(1) Import of goods", ty(e.itc_avl, "IMPG")], ["4(A)(2) Import of services", ty(e.itc_avl, "IMPS")], ["4(A)(3) Reverse charge", ty(e.itc_avl, "ISRC")],
+      ["4(A)(4) ISD", ty(e.itc_avl, "ISD")], ["4(A)(5) All other ITC", ty(e.itc_avl, "OTH")], ["4(B)(1) Reversed, rules 38, 42, 43, 17(5)", ty(e.itc_rev, "RUL")],
+      ["4(B)(2) Reversed, others", ty(e.itc_rev, "OTH")], ["4(C) Net ITC", rowOf(e.itc_net)]];
+  },
+  diff(a, b){ const d = {}; let any = false; this.H.forEach(h => { d[h] = r2(num(a[h]) - num(b[h])); if (Math.abs(d[h]) >= 1) any = true; }); return {d, any}; },
+  // one month: GSTR-1 table by table and 3B row by row, filed (from the portal) against FinCom's working now
+  month(ym, reg){
+    const b = S.books, gstin = GSTAPI.gstinOf(reg), fp = ym.slice(4, 6) + ym.slice(0, 4);
+    const f1 = ((b.filed || {})[gstin + "|" + fp] || null), f3 = ((b.filed3b || {})[gstin + "|" + ym] || null);
+    const out = {ym, gstin, r1: null, r3b: null};
+    if (f1 && f1.json && f1.source === "portal"){
+      const F = this.r1Filed(f1.json), W = this.r1Work(ym, reg);
+      const rows = [["B2B", "b2b"], ["B2C large", "b2cl"], ["B2C small", "b2cs"], ["Credit and debit notes", "cdnr"], ["Exports", "exp"]].map(([l, k]) => ({label: l, filed: F[k], work: W[k], ...this.diff(W[k], F[k])}));
+      out.r1 = {rows, any: rows.some(r => r.any), via: f1.via || "file", at: f1.fetchedAt || f1.at};
+    }
+    if (f3 && f3.json){
+      const F = this.r3bRows(f3.json), W = this.r3bRows(GSTR.threeBJson(ym, reg));
+      const rows = F.map(([l, f], i) => ({label: l, filed: f, work: W[i][1], ...this.diff(W[i][1], f)}));
+      out.r3b = {rows, any: rows.some(r => r.any), at: f3.fetchedAt};
+    }
+    return out;
+  }
+};
+
 // the card is drawn by React (app/src/screens/GstApiCard.jsx) in this place
 function viewGstApiCard(b){ return GSTAPI.gstinOf(S.gstReg || ((GSTR.gstins(b) || [])[0] || "").slice(0, 2)) ? '<div data-react="GstApiCard"></div>' : ""; }
 /* ================================================================== */
@@ -20434,32 +20810,10 @@ Object.assign(TCloud, {
   }
 });
 
-// go-bridge (review of 01-Oct-2026: the status went between connected and disconnected while the bridge was busy with
-// Tally): a Tally computer's state from its heartbeats, in three parts.
-//   bridge: online | reconnecting (a beat late) | offline (three beats missed: about 2 minutes at 30 s a beat; 1.15.0
-//           beats every 60 s) | none. Timed on this computer's clock from when each new beat was seen, so a clock
-//           that is not right here does not make a computer look offline
-//   tally:  open | busy (open, slow to answer: never shown as disconnected) | closed
-const BeatSeen = {};
-function beatEvery(beat){ return Math.max(10, Math.min(600, num((beat || {}).every) || 60)); }
-function devState(d, now){
-  now = now || Date.now();
-  const beat = ((d && d.info) || {}).beat || null;
-  if (!beat || !beat.at) return {bridge: "none", tally: "closed", age: Infinity, every: 60};
-  const every = beatEvery(beat), k = BeatSeen[d.id];
-  let seen;
-  if (k && k.at === beat.at) seen = k.seen;
-  else { seen = Math.min(now, Date.parse(beat.at) || now); if (k) seen = now; BeatSeen[d.id] = {at: beat.at, seen}; }
-  const age = Math.max(0, now - seen), poll = 30000;
-  const bridge = age <= (every + 15) * 1000 + poll ? "online" : age <= (3 * every + 30) * 1000 ? "reconnecting" : "offline";
-  const tally = ["open", "busy", "closed"].includes(beat.tallyState) ? beat.tallyState : (beat.tally ? "open" : "closed");
-  return {bridge, tally, age, every, busySince: beat.busySince || "", at: seen};
-}
 const TLight = {
   st: {at: 0, busy: false, by: {}},
   refresh(){
-    // every 30 s (a small database call; nothing is asked of Tally): a beat comes every 30 s, and "offline" is three missed
-    if (!TCloud.on() || this.st.busy || Date.now() - this.st.at < 30000) return;
+    if (!TCloud.on() || this.st.busy || Date.now() - this.st.at < 120000) return;
     this.st.busy = true;
     Promise.all([TCloud.restAll("tally_companies?select=company,client_id,device_id,gstin,linked_at&order=company.asc"), Cloud.api("tally_devices?select=id,name,last_seen,info,revoked")])
       .then(([cos, devs]) => {
@@ -20467,14 +20821,7 @@ const TLight = {
         this.st.by = this.work((cos || []).filter(c => c.client_id), devs || [], Date.now());
         linkByGstin(this.st.cos);
       }, () => {})
-      .then(() => {
-        this.st.at = Date.now(); this.st.busy = false;
-        // the top bar follows a change of state at once; nothing else is redrawn while someone types
-        const sig = JSON.stringify(tallyStatus(typeof CO === "function" && S.view === "company" ? CO() : null).parts || {});
-        const typing = document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
-        if (S.view === "home" || (sig !== this.sig && !typing)) render();
-        this.sig = sig;
-      });
+      .then(() => { this.st.at = Date.now(); this.st.busy = false; if (S.view === "home") render(); });
   },
   // client id -> {level: ok | warn | bad, short, say}
   work(cos, devs, now){
@@ -20484,14 +20831,12 @@ const TLight = {
     const rank = {bad: 3, warn: 2, ok: 1};
     cos.forEach(c => {
       const d = dev[c.device_id]; if (!d) return;
-      const beat = (d.info || {}).beat || null, seen = Date.parse((beat && beat.at) || d.last_seen || 0) || 0, ds = devState(d, now);
+      const beat = (d.info || {}).beat || null, seen = Date.parse((beat && beat.at) || d.last_seen || 0) || 0;
       let x;
-      if (!beat || ds.bridge === "offline") x = {level: "bad", short: "computer off", say: "No word from " + d.name + (seen ? " since " + when(seen) : "") + ": the computer or its bridge is off, or it has no internet."};
+      if (!beat || now - seen > 15 * 60000) x = {level: "bad", short: "computer off", say: "No word from " + d.name + (seen ? " since " + when(seen) : "") + ": the computer, the FinCom Connector or the bridge is off."};
       else {
         const co = (beat.companies || []).find(k => k.name === c.company), at = co && Date.parse(co.at);
-        if (ds.bridge === "reconnecting") x = {level: "warn", short: "reconnecting\u2026", say: d.name + "'s heartbeat is late (last " + when(seen) + "); it shows as offline only after three missed beats."};
-        else if (ds.tally === "busy") x = {level: "warn", short: "Tally busy", say: "Tally on " + d.name + " is open but answering slowly (a long report or a message box?); the bridge asks again by itself."};
-        else if (ds.tally === "closed") x = {level: "warn", short: "Tally closed", say: "Tally is not open on " + d.name + "."};
+        if (!beat.tally) x = {level: "warn", short: "Tally closed", say: "Tally is not open on " + d.name + "."};
         else if (!co) x = {level: "warn", short: "not updated yet", say: c.company + " has no copy on " + d.name + " yet: it comes with the next update (" + (beat.dailyAt || "20:00") + ")."};
         else if (co.waiting) x = {level: "warn", short: co.waiting + " day" + (co.waiting === 1 ? "" : "s") + " to send", say: co.waiting + " day(s) of " + c.company + " wait on " + d.name + " to go to FinCom (the internet or FinCom's cloud was not reachable)."};
         else if (!at || now - at > 36 * 3600000) x = {level: "warn", short: at ? "updated " + when(at) : "not updated yet", say: c.company + " was last updated from Tally " + (at ? "on " + when(at) : "never") + ". Books \u2192 From Tally \u2192 Update now."};
@@ -20541,49 +20886,25 @@ function linkByGstin(cos){
 function tallyStatus(co){
   if (typeof TLight === "object") TLight.refresh();
   const local = typeof Bridge === "object" && Bridge.on() && Bridge.up();
-  const lst = typeof Bridge === "object" ? Bridge.st : {};
   const devs = (typeof TLight === "object" && TLight.st.devs) || [];
-  const now = Date.now(), dss = devs.map(d => Object.assign({d}, devState(d, now)));
   const seenOf = d => Date.parse((((d.info || {}).beat) || {}).at || d.last_seen || 0) || 0;
   const heard = devs.reduce((a, d) => Math.max(a, seenOf(d)), 0);
+  const fresh = devs.some(d => Date.now() - seenOf(d) <= 15 * 60000);
   const when = t => fmtDateTime(t);
-  const rankB = {online: 3, reconnecting: 2, offline: 1, none: 0}, rankT = {open: 3, busy: 2, closed: 1};
-  // the three parts: the bridge (this computer's, else the best of the firm's computers), Tally, the company
-  let bridge = local ? (lst.shaky ? "reconnecting" : "online") : "none";
-  dss.forEach(x => { if (rankB[x.bridge] > rankB[bridge]) bridge = x.bridge; });
-  let tally = "closed", busySince = "";
-  if (local) { tally = lst.tallyState || (lst.tallyUp ? "open" : "closed"); busySince = lst.busySince || ""; }
-  dss.filter(x => x.bridge !== "offline" && x.bridge !== "none").forEach(x => { if (rankT[x.tally] > rankT[tally]) { tally = x.tally; busySince = x.busySince; } });
-  let company = "";
+  if (!local && !devs.length) return {state: "none", level: "bad", label: "Not set up", say: "No Tally Bridge on this computer, and no computer of the firm sends from Tally. Set up the Tally Bridge on the computer with TallyPrime."};
+  if (!local && !fresh) return {state: "offline", level: "bad", label: "Offline since " + (heard ? when(heard) : "—"), say: "No word from the firm's Tally computer" + (heard ? " since " + when(heard) : "") + ": the computer, the FinCom Connector or the bridge is off."};
+  const cos = co ? [co] : Object.values(S.companies || {}).filter(c => !c.deleted);
+  const waiting = cos.reduce((a, c) => a + num((c.stats || {}).waiting), 0);
   if (co){
     const cloudRow = ((typeof TLight === "object" && TLight.st.cos) || []).some(r => r.client_id === co.id);
     // linked means a Tally company is this client's (in the cloud, or open in Tally through the bridge here);
     // a "Tally name" typed in Client setup alone does not link anything (review recheck: Mastercad)
-    company = cloudRow || (local && !!Bridge.openFor(co)) ? "linked" : "unlinked";
+    const linked = cloudRow || (local && !!Bridge.openFor(co));
+    if (!linked) return {state: "unlinked", level: "warn", label: "Connected – company not linked", say: "Tally is connected, but no Tally company is linked to " + co.name + ". Link it in Client setup → Tally, or in Settings → Books in the cloud."};
   }
-  const parts = {bridge, tally, company, busySince};
-  const out = o => Object.assign(o, {parts});
-  if (!local && !devs.length) return out({state: "none", level: "bad", label: "Not set up", say: "No Tally Bridge on this computer, and no computer of the firm sends from Tally. Set up the Tally Bridge on the computer with TallyPrime."});
-  if (bridge === "offline" || bridge === "none") return out({state: "offline", level: "bad", label: "Offline since " + (heard ? when(heard) : "\u2014"), say: "No word from the firm's Tally computer" + (heard ? " since " + when(heard) : "") + " (three heartbeats missed): the computer or its bridge is off, or it has no internet."});
-  if (bridge === "reconnecting") return out({state: "reconnecting", level: "warn", label: "Reconnecting\u2026", say: "The bridge's last heartbeat is late. FinCom keeps listening; it shows Offline only after three missed heartbeats (about two minutes)."});
-  const cos = co ? [co] : Object.values(S.companies || {}).filter(c => !c.deleted);
-  const waiting = cos.reduce((a, c) => a + num((c.stats || {}).waiting), 0);
-  if (co && company === "unlinked") return out({state: "unlinked", level: "warn", label: "Connected \u2013 company not linked", say: "Tally is connected, but no Tally company is linked to " + co.name + ". Link it in Client setup \u2192 Tally, or in Settings \u2192 Books in the cloud."});
-  if (waiting > 0) return out({state: "waiting", level: "warn", label: waiting + " entr" + (waiting === 1 ? "y" : "ies") + " waiting", say: waiting + " approved entr" + (waiting === 1 ? "y is" : "ies are") + " not yet in Tally" + (co ? "" : " (all clients)") + "."});
-  if (tally === "busy") return out({state: "busy", level: "warn", label: "Connected \u2013 Tally busy", say: "The bridge is connected. Tally is open but answering slowly" + (busySince ? " since " + fmtDateTime(Date.parse(busySince)) : "") + " (a long report, or a message box in Tally); the bridge asks again by itself and nothing is lost."});
+  if (waiting > 0) return {state: "waiting", level: "warn", label: waiting + " entr" + (waiting === 1 ? "y" : "ies") + " waiting", say: waiting + " approved entr" + (waiting === 1 ? "y is" : "ies are") + " not yet in Tally" + (co ? "" : " (all clients)") + "."};
   const light = co && typeof TLight === "object" ? TLight.st.by[co.id] : null;
-  return out({state: "ok", level: "ok", label: "Connected & in sync", say: "Tally is connected" + (local ? " on this computer" : " (" + devs.length + " computer" + (devs.length === 1 ? "" : "s") + " sending)") + " and nothing waits to be sent." + (light ? " " + light.say : "")});
-}
-// the computers' connection history for the last 24 hours (tally_devices.info.history, kept by tally-ingest from the
-// heartbeats), newest first, with a gap going on now shown as "offline since"
-function tallyHistory(){
-  const devs = (typeof TLight === "object" && TLight.st.devs) || [], now = Date.now(), day = 24 * 3600000, rows = [];
-  devs.forEach(d => {
-    [].concat(((d.info || {}).history) || []).forEach(e => { if (e && Date.parse(e.to || e.at) > now - day) rows.push(Object.assign({device: d.name}, e)); });
-    const ds = devState(d, now);
-    if (ds.bridge === "offline" && d.info && d.info.beat) rows.push({device: d.name, kind: "bridge", state: "offline", at: d.info.beat.at, now: true});
-  });
-  return rows.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  return {state: "ok", level: "ok", label: "Connected & in sync", say: "Tally is connected" + (local ? " on this computer" : " (" + devs.length + " computer" + (devs.length === 1 ? "" : "s") + " sending)") + " and nothing waits to be sent." + (light ? " " + light.say : "")};
 }
 /* ================================================================== */
 /* Posting from any computer: the queue in FinCom's cloud (build 199)  */
@@ -21452,3 +21773,84 @@ if (typeof window === "object"){
   // a safety net: anything not sent (offline, an error) is tried again every 20 seconds
   setInterval(() => { try { if (Live.sv.state === "offline" || Live.sv.state === "error"){ cloudSoon(); BookItems.flush(); } } catch (e){} }, 20000);
 }
+/* ================================================================== */
+/* E-invoice (IRN) and e-way bill from a sales invoice, through the   */
+/* firm's gst-taxpro function (TaxPro's e-invoice API)                */
+/* ================================================================== */
+// The invoice is put in the IRP's schema (INV-01, version 1.1) here; the function signs in with the client's e-invoice API
+// user (kept in Vault), asks for the IRN and keeps what comes back (gst_einvoices). The IRN, acknowledgement and signed
+// QR are also kept on the invoice (v.x.irn, ackNo, ackDt, signedQr; ewayNo), for the printed invoice and the Tally voucher.
+const EINV = {
+  // FinCom's units to the GST unit codes (UQC)
+  UQC: {Nos: "NOS", Pcs: "PCS", Kg: "KGS", Gm: "GMS", Ltr: "LTR", Mtr: "MTR", "Sq Ft": "SQF", Box: "BOX", Set: "SET", Hrs: "OTH", Days: "OTH", Month: "OTH", Job: "OTH"},
+  pin(s){ const m = String(s || "").match(/\b([1-9]\d{5})\b/); return m ? m[1] : ""; },
+  // the line of an address before its PIN code, for the place (Loc)
+  loc(s){
+    const segs = String(s || "").split(/\n|,/).map(x => x.trim()).filter(Boolean), i = segs.findIndex(l => this.pin(l));
+    const here = i >= 0 ? segs[i].replace(/\b[1-9]\d{5}\b/, "").replace(/[-–:]\s*$/, "").trim() : "";
+    return (here || (i > 0 ? segs[i - 1] : segs[segs.length - 1] || "")).slice(0, 50);
+  },
+  addr1(s){ return String(s || "").split(/\n/)[0].replace(/\s+/g, " ").trim().slice(0, 100); },
+  dmy(d){ const t = String(d || "").slice(0, 10); return /^\d{4}-\d{2}-\d{2}$/.test(t) ? t.slice(8, 10) + "/" + t.slice(5, 7) + "/" + t.slice(0, 4) : ""; },
+  // what stops the invoice from being e-invoiced, in words
+  problems(v, co, cfg){
+    const x = v.x, out = [], seller = String(co.gstin || "").toUpperCase(), buyer = String(x.customerGstin || "").toUpperCase();
+    if (!GSTIN_RE.test(seller)) out.push("The client's GSTIN is not set (Client setup).");
+    if (!GSTIN_RE.test(buyer)) out.push("The customer has no GSTIN: an invoice to an unregistered person is not e-invoiced.");
+    if (!x.number || String(x.number).length > 16) out.push("The invoice number must be 1 to 16 characters.");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(x.date || ""))) out.push("The invoice date is missing.");
+    if (!this.pin(cfg.address)) out.push("The client's address in Sales settings needs its PIN code.");
+    if (!this.pin(x.address)) out.push("The customer's address needs its PIN code.");
+    if (!(x.items || []).length) out.push("The invoice needs its items (description, HSN, quantity, rate).");
+    (x.items || []).forEach((it, i) => { if (!/^\d{4,8}$/.test(String(it.hsn || "").trim())) out.push("Item " + (i + 1) + " needs an HSN or SAC code of 4 to 8 digits."); });
+    return out;
+  },
+  // the invoice in the IRP's schema
+  build(v, co, cfg){
+    const x = v.x, seller = String(co.gstin || "").toUpperCase(), buyer = String(x.customerGstin || "").toUpperCase();
+    const inter = !!(x.pos && seller.slice(0, 2) !== String(x.pos));
+    let ass = 0, cg = 0, sg = 0, ig = 0, ces = 0, tot = 0;
+    const items = (x.items || []).map((it, i) => {
+      const qty = num(it.qty) || 1, gross = r2(qty * num(it.rate)), taxable = r2(num(it.taxable) || gross), rate = num(it.gstRate), disc = r2(Math.max(0, gross - taxable));
+      const tax = r2(taxable * rate / 100), igst = inter ? tax : 0, cgst = inter ? 0 : r2(tax / 2), sgst = inter ? 0 : r2(tax - r2(tax / 2)), cess = r2(num(it.cess));
+      const val = r2(taxable + igst + cgst + sgst + cess);
+      ass = r2(ass + taxable); cg = r2(cg + cgst); sg = r2(sg + sgst); ig = r2(ig + igst); ces = r2(ces + cess); tot = r2(tot + val);
+      const hsn = String(it.hsn || "").trim();
+      return {SlNo: String(i + 1), PrdDesc: String(it.desc || "").slice(0, 300), IsServc: /^99/.test(hsn) ? "Y" : "N", HsnCd: hsn, Qty: qty, Unit: this.UQC[it.unit] || "OTH",
+        UnitPrice: r2(num(it.rate)), TotAmt: gross || taxable, Discount: disc, AssAmt: taxable, GstRt: rate, IgstAmt: igst, CgstAmt: cgst, SgstAmt: sgst, CesAmt: cess, TotItemVal: val};
+    });
+    const total = r2(num(x.total) || tot), round = r2(total - tot);
+    return {
+      Version: "1.1",
+      TranDtls: {TaxSch: "GST", SupTyp: "B2B", RegRev: "N", IgstOnIntra: "N"},
+      DocDtls: {Typ: x.noteKind === "credit" ? "CRN" : x.noteKind === "debit" ? "DBN" : "INV", No: String(x.number || ""), Dt: this.dmy(x.date)},
+      SellerDtls: {Gstin: seller, LglNm: String(co.tallyName || co.name || "").slice(0, 100), Addr1: this.addr1(cfg.address), Loc: this.loc(cfg.address), Pin: num(this.pin(cfg.address)), Stcd: seller.slice(0, 2)},
+      BuyerDtls: {Gstin: buyer, LglNm: String(x.customerName || "").slice(0, 100), Pos: String(x.pos || buyer.slice(0, 2)), Addr1: this.addr1(x.address), Loc: this.loc(x.address), Pin: num(this.pin(x.address)), Stcd: buyer.slice(0, 2)},
+      ItemList: items,
+      ValDtls: {AssVal: ass, CgstVal: cg, SgstVal: sg, IgstVal: ig, CesVal: ces, RndOffAmt: Math.abs(round) < 10 ? round : 0, TotInvVal: Math.abs(round) < 10 ? total : tot}
+    };
+  },
+  accounts: {}, asked: {},
+  // the client's e-invoice user, asked of the server once a session (and after a sign-in); never the password
+  need(gstin){ if (!this.asked[gstin]){ this.asked[gstin] = Date.now(); this.status(gstin).then(() => render(), () => {}); } return this.accounts[gstin]; },
+  async status(gstin){ this.asked[gstin] = Date.now(); const j = await GSTAPI.call({action: "einv-status", gstins: [gstin]}); this.host = j.host; this.accounts[gstin] = (j.accounts || [])[0] || null; return this.accounts[gstin]; },
+  async login(gstin, username, password){ const j = await GSTAPI.call({action: "einv-login", gstin, username, password}); this.host = j.host; return this.status(gstin); },
+  async irn(v){
+    const s = SL(), co = CO(s.cid), probs = this.problems(v, co, s.cfg);
+    if (probs.length) throw new Error(probs[0]);
+    const j = await GSTAPI.call({action: "irn", gstin: String(co.gstin).toUpperCase(), docKey: v.id, clientId: co.id, inv: this.build(v, co, s.cfg)});
+    Object.assign(v.x, {irn: j.irn, ackNo: j.ackNo, ackDt: j.ackDt, signedQr: j.signedQr || "", irnStatus: "active"});
+    if (j.ewbNo) v.x.ewayNo = j.ewbNo;
+    saveSales(); return j;
+  },
+  async cancel(v, reason, remark){
+    const s = SL(), co = CO(s.cid);
+    await GSTAPI.call({action: "irn-cancel", gstin: String(co.gstin).toUpperCase(), docKey: v.id, reason, remark});
+    v.x.irnStatus = "cancelled"; v.x.irnCancelledAt = new Date().toISOString(); saveSales();
+  },
+  async ewb(v, trans){
+    const s = SL(), co = CO(s.cid);
+    const j = await GSTAPI.call({action: "ewb", gstin: String(co.gstin).toUpperCase(), docKey: v.id, trans});
+    Object.assign(v.x, {ewayNo: j.ewbNo, ewayDate: j.ewbDate, ewayValidTill: j.validTill}); saveSales(); return j;
+  }
+};
