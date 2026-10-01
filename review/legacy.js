@@ -19030,9 +19030,11 @@ const LK = {
     }).sort((a, c) => a.date.localeCompare(c.date)).map(v => {
       const big = v.ent.reduce((m, e) => Math.abs(e.a) > Math.abs(m) ? e.a : m, 0);
       const tot = r2(v.ent.filter(e => e.a > 0).reduce((x, e) => x + e.a, 0));
-      return {id: v.id, date: v.date, type: v.type, no: v.no, party: v.party || (v.ent.find(e => e.a < 0) || {}).l || "", narr: v.narr || "", amt: tot || Math.abs(big), ent: v.ent.map(e => ({l: e.l, a: e.a}))};
+      return {id: v.id, date: v.date, type: v.type, no: v.no, party: v.party || (v.ent.find(e => e.a < 0) || {}).l || "", narr: v.narr || "", amt: tot || Math.abs(big), ent: v.ent.map(e => ({l: e.l, a: e.a})), opt: !!v.opt};
     });
-    return {kind: "find", src: "books", q, from, to, typ, rows, total: r2(rows.reduce((x, r) => x + r.amt, 0))};
+    // review of 01-Oct-2026: an Optional entry (not in Tally's books, e.g. a payroll kept as Optional) is listed and
+    // marked, and left out of the total, as Tally leaves it out of every balance
+    return {kind: "find", src: "books", q, from, to, typ, rows, total: r2(rows.filter(r => !r.opt).reduce((x, r) => x + r.amt, 0)), opt: rows.filter(r => r.opt).length};
   },
   types(){ return Array.from(new Set((S.books.vouchers || []).map(v => v.type).filter(Boolean))).sort(); },
   // ---------- run what the page asks for
@@ -19916,11 +19918,12 @@ const TCloud = {
   async find(cid, q, from, to, typ, had){
     const j = await this.rpc("tally_find", {p_client: cid, p_q: q || "", p_from: this.iso(from), p_to: this.iso(to), p_type: typ || null, p_limit: this.FIND_PAGE, p_offset: had ? had.rows.length : 0});
     if (!j || j.none) throw new Error("The cloud has no copy of these books yet.");
-    const rows = [].concat(j.rows || []).map(([d, type, no, party, narr, amt, guid, ent]) => {
+    const rows = [].concat(j.rows || []).map(([d, type, no, party, narr, amt, guid, ent, opt]) => {
       const e = [].concat(ent || []).map(([l, a]) => ({l, a: num(a)}));
-      return {id: guid, date: d, type, no, party: party || (e.find(x => x.a < 0) || {}).l || "", narr: narr || "", amt: r2(num(amt)), ent: e};
+      return {id: guid, date: d, type, no, party: party || (e.find(x => x.a < 0) || {}).l || "", narr: narr || "", amt: r2(num(amt)), ent: e, opt: opt === true};
     });
-    return {kind: "find", src: "cloud", q, from, to, typ, rows: (had ? had.rows : []).concat(rows), n: num(j.n), total: r2(num(j.total))};
+    // migration-10: an Optional entry comes marked and is not in the total
+    return {kind: "find", src: "cloud", q, from, to, typ, rows: (had ? had.rows : []).concat(rows), n: num(j.n), total: r2(num(j.total)), opt: num(j.opt)};
   },
   age(bk){
     if (!bk) return "";
