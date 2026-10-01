@@ -27,7 +27,7 @@ trap {
   try { Stop-Transcript | Out-Null } catch { }
   break
 }
-$BridgeVersion = '1.14.6'
+$BridgeVersion = '1.14.7'
 
 # ------------------------------------------------------------------ settings
 function New-BridgeKey {
@@ -2299,6 +2299,23 @@ function Get-KeepLedgers([string]$Company, [int]$Port, [long]$After) {
   }
   return , $out
 }
+# 1.14.7 (review of 01-Oct-2026): Tally's groups, name and parent, for the cloud copy: each ledger's chain of groups up
+# to its primary group. A few hundred rows at most, asked with the ledgers
+function Get-KeepGroups([string]$Company, [int]$Port) {
+  $req = '<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TDSDeskKeepGrp</ID></HEADER>' +
+    '<BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + (Esc $Company) + '</SVCURRENTCOMPANY></STATICVARIABLES><TDL><TDLMESSAGE>' +
+    '<COLLECTION NAME="TDSDeskKeepGrp" ISMODIFY="No"><TYPE>Group</TYPE><FETCH>NAME,PARENT</FETCH></COLLECTION>' +
+    '</TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>'
+  $doc = Get-XmlDoc (Invoke-Tally -TallyPort $Port -Xml $req -TimeoutSec 60)
+  $out = New-Object System.Collections.ArrayList
+  foreach ($g in $doc.SelectNodes('//GROUP')) {
+    $n = $g.GetAttribute('NAME'); if (-not $n) { $n = Get-NodeText $g 'NAME' }
+    # a primary group's parent is empty (Tally may write it as "Primary", with a control character in front)
+    $p = (Get-NodeText $g 'PARENT') -replace '^\W*Primary$', ''
+    if ($n) { $null = $out.Add(@($n, $p)) }
+  }
+  return , $out
+}
 function Read-KeepJson([string]$f) { if (-not (Test-Path -LiteralPath $f)) { return $null }; try { return (Get-Content -Raw -LiteralPath $f -Encoding UTF8 | ConvertFrom-Json) } catch { return $null } }
 # a ledger renamed in Tally: the copy's entries carry the new name (Tally's own entries do); nothing is asked of Tally for it
 function Rename-KeepLedger([string]$Dir, $St, [string]$Old, [string]$New) {
@@ -2353,6 +2370,25 @@ function Update-KeepLedgers([string]$Company, [int]$Port, [string]$Dir, $St, [bo
   }
   $o = [ordered]@{}; foreach ($g in $known.Keys) { $o[$g] = $known[$g] }
   Save-KeepFile $lf ($o | ConvertTo-Json -Depth 4 -Compress)
+  # 1.14.7: the groups with every full look at the ledgers (and the first time), and the cloud sent the ledgers again
+  # whenever a name or a group differs from what it last got: every ledger, with its group, not only those with a balance
+  $gf = Join-Path $Dir 'groups.json'
+  if ($Full -or $first -or -not (Test-Path -LiteralPath $gf)) {
+    try {
+      $grp = Get-KeepGroups $Company $Port
+      if (@($grp).Count) { Save-KeepFile $gf (ConvertTo-Json -InputObject @($grp | ForEach-Object { , @([string]$_[0], [string]$_[1]) }) -Depth 4 -Compress) }
+    } catch { Write-Log ('Keeping ' + $Company + ': the groups could not be read this time (' + $_.Exception.Message + ')') }
+  }
+  $sig = ''
+  try {
+    $parts = @($known.Values | ForEach-Object { [string]$_[0] + '>' + [string]$_[1] } | Sort-Object)
+    if (Test-Path -LiteralPath $gf) { $parts += [IO.File]::ReadAllText($gf) }
+    $sha = [Security.Cryptography.SHA256]::Create()
+    $sig = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes(($parts -join "`n")))).Replace('-', '')
+  } catch { }
+  $sf = Join-Path $Dir 'cloud-ledgers.sig'
+  $was = ''; if (Test-Path -LiteralPath $sf) { $was = ([IO.File]::ReadAllText($sf)).Trim() }
+  if ($sig -and $sig -ne $was) { Set-CloudLedgers $Dir; Save-KeepFile $sf $sig }
 }
 # one month of the copy compared with Tally's list of entries, and the dates that differ read again. Also notices when
 # Tally's change numbers have gone back (a backup restored, the data rewritten): then every month is checked again.
@@ -2620,6 +2656,8 @@ function Step-Keep([string]$Company, [int]$Port, [string]$BooksFrom) {
   if ($st.phase -eq 'live' -and ($quiet -or -not @($ch).Count) -and (-not $script:KeepOnce -or ([string]$st.roundFrom -eq $today -and [string]$st.roundAt -eq $today))) { $script:KeepCaughtUp = $true }
   # ledger masters changed since the last look
   if ($st.phase -eq 'live' -and $sw.Elapsed.TotalSeconds -lt $budget -and -not ($cn.ok -and $null -ne $st.cm -and [long]$st.cm -eq $cn.m)) { Update-KeepLedgers $Company $Port $dir $st $false }
+  # 1.14.7: a copy kept by an older bridge has no groups yet: the ledgers and groups read once, and sent to the cloud
+  elseif ($st.phase -eq 'live' -and $sw.Elapsed.TotalSeconds -lt $budget -and -not (Test-Path -LiteralPath (Join-Path $dir 'groups.json'))) { Update-KeepLedgers $Company $Port $dir $st $true }
   if ($cn.ok) { $st.cv = $cn.v; $st.cm = $cn.m }
   # 1.14.4: the light check stops here: the month checks and the retries wait for the daily update
   if ($script:KeepLight) { $st.trouble = $null; & $save; $script:KeepCaughtUp = $true; return }
@@ -2970,8 +3008,23 @@ function Push-CloudCompany([string]$Company, [string]$Dir, [double]$BudgetSec) {
   if ((Test-Path -LiteralPath $lf) -and (Test-Path -LiteralPath $bf)) {
     $bal = Read-KeepJson $bf
     if ($bal -and $bal.from -and $bal.openAsOn) {
-      $led = @(@($bal.ledgers) | ForEach-Object { , @([string]$_.name, [string]$_.parent, [string]$_.open) })
-      $r = Invoke-Cloud @{ kind = 'ledgers'; company = $Company; from = [string]$bal.from; openAsOn = [string]$bal.openAsOn; ledgers = $led } 120
+      # 1.14.7 (review of 01-Oct-2026): every ledger in Tally goes, with its group. The opening balances may come from a
+      # trial balance file, which lists only ledgers with a balance and no groups: names and groups come from the
+      # ledger list read from Tally (ledgers.json), the opening from the balances (0 when a ledger has none)
+      $rows = [ordered]@{}
+      foreach ($l in @($bal.ledgers)) { $n = [string]$l.name; if ($n) { $rows[$n] = @($n, [string]$l.parent, [string]$l.open) } }
+      $kj = Read-KeepJson (Join-Path $Dir 'ledgers.json')
+      if ($kj) {
+        foreach ($p in $kj.PSObject.Properties) {
+          $v = @($p.Value); $n = [string]$v[0]; $par = [string]$v[1]
+          if (-not $n) { continue }
+          if ($rows.Contains($n)) { if (-not $rows[$n][1]) { $rows[$n][1] = $par } } else { $rows[$n] = @($n, $par, '0') }
+        }
+      }
+      $led = @($rows.Values | ForEach-Object { , @([string]$_[0], [string]$_[1], [string]$_[2]) })
+      $grp = @(); $gj = Read-KeepJson (Join-Path $Dir 'groups.json')
+      if ($gj) { $grp = @(@($gj) | ForEach-Object { , @([string]$_[0], [string]$_[1]) }) }
+      $r = Invoke-Cloud @{ kind = 'ledgers'; company = $Company; from = [string]$bal.from; openAsOn = [string]$bal.openAsOn; ledgers = $led; groups = $grp } 120
       if ($r.code -eq 409) { $script:CloudLinks[$Company] = $false; return }
       if ($r.code -ne 200) { throw ('the ledgers did not go: ' + $r.error) }
       Remove-Item -LiteralPath $lf -Force -ErrorAction SilentlyContinue
