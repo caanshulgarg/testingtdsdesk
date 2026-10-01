@@ -36,7 +36,12 @@ function takeVoucher(s){
     opt: one(s, "ISOPTIONAL") === "Yes",
     // review of 01-Oct-2026: the party's GSTIN and the place of supply, kept in the cloud copy too
     gstin: one(s, "PARTYGSTIN").toUpperCase().slice(0, 15),
-    pos: one(s, "PLACEOFSUPPLY").slice(0, 60)
+    pos: one(s, "PLACEOFSUPPLY").slice(0, 60),
+    // the reference number and date (on a purchase, the supplier's invoice, which 2B reconciliation pairs on) and the
+    // company GSTIN the entry is under (a client with more than one GSTIN files a GSTR-1 for each), as FinCom reads them
+    ref: one(s, "REFERENCE").slice(0, 60),
+    refDate: (one(s, "REFERENCEDATE").match(/^\d{8}$/) || [""])[0],
+    cmp: one(s, "CMPGSTIN").toUpperCase().slice(0, 15)
   };
   // each item's HSN and rate, for the accounting allocation inside it (an item invoice keeps the sales or purchase
   // ledger there), as FinCom reads them in the browser

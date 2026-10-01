@@ -125,6 +125,10 @@ try:
     ok(len(new_refs) == 20 and all(b[0].startswith("A/") and b[2] < 0 and b[3] == 30 for b in new_refs), "bill-wise: each sale's New Ref with its bill name, amount and 30 credit days (%d)" % len(new_refs))
     ok(len(agst) == 2 and all(b[0] == "A/1" and b[2] == 5000 and b[3] is None for b in agst), "bill-wise: a receipt against bill A/1 (%d)" % len(agst))
     ok(all(not (l[5] or []) for l in ls if l[1] in ("Consultancy Income", "Output IGST", "Cab Hire")), "a line with no bill-wise details carries none")
+    purch = [v for v in vs if v["type"] == "Purchase"]
+    ok(len(purch) == 20 and all(v["ref"] == "GS/%d" % int(v["date"][6:]) and v["refDate"] == v["date"] for v in purch), "a purchase's supplier invoice number and date are read (%d)" % len(purch))
+    ok(all(v["ref"] == "" and v["refDate"] == "" for v in vs if v["type"] != "Purchase"), "an entry with no reference carries none")
+    ok(vs and all(v["cmp"] == make_fake_books.CMP for v in vs), "every entry carries the company GSTIN it is under (%s)" % make_fake_books.CMP)
 finally:
     br.kill()
 print("\nall passed" if not fails else "\nFAILED: %d" % len(fails)); raise SystemExit(1 if fails else 0)

@@ -130,7 +130,7 @@ async function ingestDays(firm: string, book: string, daysIn: unknown) {
     const up = await db.storage.from("tally-days").upload(path, gz, { upsert: true, contentType: "application/gzip" });
     if (up.error) throw new Error("storage: " + up.error.message);
     const { error } = await db.rpc("tally_ingest_day", { p_book: book, p_day: iso(d.day),
-      p_vouchers: r.vouchers.map((v: any) => ({ guid: v.guid, alter: v.alter, type: v.type, no: v.no, party: v.party, narr: v.narr, cancel: v.cancel, opt: v.opt, gstin: v.gstin, pos: v.pos })),
+      p_vouchers: r.vouchers.map((v: any) => ({ guid: v.guid, alter: v.alter, type: v.type, no: v.no, party: v.party, narr: v.narr, cancel: v.cancel, opt: v.opt, gstin: v.gstin, pos: v.pos, ref: v.ref, refDate: v.refDate, cmp: v.cmp })),
       p_lines: r.lines, p_n: r.n, p_alter: r.alterMax, p_bytes: gz.length });
     if (error) throw new Error(error.message);
     done.push(d.day);
@@ -160,7 +160,7 @@ async function reparseMonth(firm: string, book: string, monthIn: unknown) {
     const r = parseDay(z.text);
     if (r.dates.some((x: string) => x !== day)) { bad.push({ day, error: "entries of other dates" }); continue; }
     const { error } = await db.rpc("tally_ingest_day", { p_book: book, p_day: iso(day),
-      p_vouchers: r.vouchers.map((v: any) => ({ guid: v.guid, alter: v.alter, type: v.type, no: v.no, party: v.party, narr: v.narr, cancel: v.cancel, opt: v.opt, gstin: v.gstin, pos: v.pos })),
+      p_vouchers: r.vouchers.map((v: any) => ({ guid: v.guid, alter: v.alter, type: v.type, no: v.no, party: v.party, narr: v.narr, cancel: v.cancel, opt: v.opt, gstin: v.gstin, pos: v.pos, ref: v.ref, refDate: v.refDate, cmp: v.cmp })),
       p_lines: r.lines, p_n: r.n, p_alter: r.alterMax, p_bytes: gz.length });
     if (error) throw new Error(error.message);
     done.push(day);

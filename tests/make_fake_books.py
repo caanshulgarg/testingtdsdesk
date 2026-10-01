@@ -28,11 +28,13 @@ def bill(name, kind, amt, days=None):
 def line(led, amt, hsn="", rate=None, bills=()):
     return ("<ALLLEDGERENTRIES.LIST><LEDGERNAME>%s</LEDGERNAME><ISDEEMEDPOSITIVE>%s</ISDEEMEDPOSITIVE>%s%s<AMOUNT>%.2f</AMOUNT>%s</ALLLEDGERENTRIES.LIST>"
             % (esc(led), "Yes" if amt < 0 else "No", ("<GSTHSNNAME>%s</GSTHSNNAME>" % hsn) if hsn else "", rate_block(rate), amt, "".join(bills)))
-def voucher(n, day, vtype, party, gstin, pos, lines, alter):
+CMP = "09ZZZZZ0000Z1Z5"   # the made-up company's own GSTIN (CMPGSTIN on each entry)
+def voucher(n, day, vtype, party, gstin, pos, lines, alter, ref=""):
     return ('<TALLYMESSAGE xmlns:UDF="TallyUDF"><VOUCHER REMOTEID="zz-%d" VCHTYPE="%s" ACTION="Create" OBJVIEW="Accounting Voucher View"><DATE>%s</DATE>'
-            "<GUID>zz-guid-%04d</GUID><ALTERID> %d</ALTERID><VOUCHERTYPENAME>%s</VOUCHERTYPENAME><VOUCHERNUMBER>%d</VOUCHERNUMBER>"
-            "<PARTYLEDGERNAME>%s</PARTYLEDGERNAME>%s%s<NARRATION>made-up entry %d</NARRATION><ISCANCELLED>No</ISCANCELLED><ISOPTIONAL>No</ISOPTIONAL>%s</VOUCHER></TALLYMESSAGE>"
-            % (n, vtype, day, n, alter, vtype, n, esc(party), ("<PARTYGSTIN>%s</PARTYGSTIN>" % gstin) if gstin else "", ("<PLACEOFSUPPLY>%s</PLACEOFSUPPLY>" % pos) if pos else "", n, "".join(lines)))
+            "<GUID>zz-guid-%04d</GUID><ALTERID> %d</ALTERID><VOUCHERTYPENAME>%s</VOUCHERTYPENAME><VOUCHERNUMBER>%d</VOUCHERNUMBER>%s"
+            "<PARTYLEDGERNAME>%s</PARTYLEDGERNAME>%s%s<CMPGSTIN>%s</CMPGSTIN><NARRATION>made-up entry %d</NARRATION><ISCANCELLED>No</ISCANCELLED><ISOPTIONAL>No</ISOPTIONAL>%s</VOUCHER></TALLYMESSAGE>"
+            % (n, vtype, day, n, alter, vtype, n, ("<REFERENCEDATE>%s</REFERENCEDATE><REFERENCE>%s</REFERENCE>" % (day, esc(ref))) if ref else "",
+               esc(party), ("<PARTYGSTIN>%s</PARTYGSTIN>" % gstin) if gstin else "", ("<PLACEOFSUPPLY>%s</PLACEOFSUPPLY>" % pos) if pos else "", CMP, n, "".join(lines)))
 def entries():
     out, n = [], 0
     for d in range(1, 21):
@@ -48,7 +50,7 @@ def entries():
         n += 1   # an expense from a registered supplier, under a group two steps below its primary group
         t = 1500 + 10 * d; tax = round(t * 0.05, 2)
         out.append((day, voucher(n, day, "Purchase", "ZZ Gamma Suppliers", "09AAACZ9999C1Z1", "Uttar Pradesh",
-            [line("Cab Hire", -t, "996601", 5), line("Input IGST", -tax), line("ZZ Gamma Suppliers", t + tax)], n)))
+            [line("Cab Hire", -t, "996601", 5), line("Input IGST", -tax), line("ZZ Gamma Suppliers", t + tax)], n, ref="GS/%d" % d)))
         if d % 10 == 0:
             n += 1   # ZZ Alpha pays the first bill of the month in part, against that bill
             out.append((day, voucher(n, day, "Receipt", "ZZ Alpha Customers", "", "", [line("ZZ Bank", -5000), line("ZZ Alpha Customers", 5000, bills=[bill("A/1", "Agst Ref", 5000)])], n)))
