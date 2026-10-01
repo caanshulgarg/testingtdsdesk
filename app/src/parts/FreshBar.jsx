@@ -2,7 +2,7 @@
 // or the cloud's copy; with the buttons to switch keeping in step on, bring in today's entries or check against Tally,
 // and the result of that check. Was LK.freshBar (src/js/44); the work is LK (keepOn, bringToday, keepCheck).
 
-const hhmm = (s2) => { const d = new Date(s2); return isNaN(d) ? "" : d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }); };
+const hhmm = (s2) => fmtTime(s2);
 const Btn = ({ onClick, className = "btn small", children }) => <button className={className} onClick={onClick}>{children}</button>;
 
 function Check({ c }) {

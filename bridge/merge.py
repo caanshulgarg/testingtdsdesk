@@ -6,7 +6,7 @@ def R(a, b):
     assert base.count(a) == 1, ('anchor', a[:60], base.count(a))
     base = base.replace(a, b)
 import re
-base = re.sub(r"\$BridgeVersion = '[0-9.]+'", "$BridgeVersion = '1.14.6'", base, 1)
+base = re.sub(r"\$BridgeVersion = '[0-9.]+'", "$BridgeVersion = '1.14.9'", base, 1)
 # 1.12.7 (security): the log never holds keys, codes or passwords, and is rotated at 5 MB keeping 5 old copies
 R(r"""function Write-Log([string]$msg) {
   $line = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + '  ' + $msg
@@ -45,6 +45,7 @@ R("# ------------------------------------------------------------------ start\n"
 R("      '/vouchers' {", """      '/seed' { if ($method -ne 'POST') { throw 'Send the day book with POST.' }; $result = Import-KeepSeed $qs['company'] $qs['from'] $qs['to'] $body }
       '/keepmode' { if ($method -ne 'POST') { throw 'POST only.' }; $o = $body | ConvertFrom-Json; $result = Set-KeepMode ([string]$o.company) ([string]$o.mode) }
       '/seedbal' { if ($method -ne 'POST') { throw 'Send the balances with POST.' }; $result = Import-KeepOpening $qs['company'] $body }
+      '/logtail' { $n = [int]('0' + $qs['n']); if ($n -le 0) { $n = 200 }; $n = [Math]::Min(2000, $n); $lines = @(); try { $lines = @(Get-Content -LiteralPath $Cfg.LogFile -Tail $n -Encoding UTF8) } catch { }; $result = [ordered]@{ ok = $true; file = [string]$Cfg.LogFile; lines = $lines } }
       '/daybook' { Set-FinComReading; $xml = Get-DayBookXml $qs['company'] $qs['from'] $qs['to'] ([int]('0' + $qs['port'])); Send-Raw $stream 200 $xml $origin; return }
       '/balances' { Set-FinComReading; $result = Get-Balances $qs['company'] $qs['from'] $qs['to'] ([int]('0' + $qs['port'])) ($qs['open'] -eq '1') }
       '/synced' {

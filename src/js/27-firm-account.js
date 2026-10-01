@@ -22,28 +22,63 @@ const Cloud = {
     if (!r.ok) throw new Error(j.error_description || j.msg || j.message || ("Sign-in failed (" + r.status + ")"));
     return j;
   },
+  // through the sign-in function, which counts wrong passwords and locks the account after 5 (review item 21);
+  // straight at Supabase Auth where that function is not deployed (the lock is then kept by the token hook alone)
+  async signInCall(email, password){
+    const c = this.cfg();
+    let r;
+    try { r = await fetch(c.url.replace(/\/+$/, "") + "/functions/v1/signin", {method: "POST", headers: {apikey: c.key, "Content-Type": "application/json"}, body: JSON.stringify({email, password})}); }
+    catch (e){ r = null; }
+    if (!r || r.status === 404) return this.authCall("token?grant_type=password", {email, password});
+    const j = await r.json().catch(() => null);
+    // an answer that is not the sign-in function's own (the gateway's "function not found", a proxy page): sign in as before
+    if (!j || (!r.ok && !("ok" in j)) || (r.ok && !j.access_token)) return this.authCall("token?grant_type=password", {email, password});
+    if (!r.ok) throw new Error(j.error || ("Sign-in failed (" + r.status + ")"));
+    return j;
+  },
   async signIn(email, password){
-    const j = await this.authCall("token?grant_type=password", {email: String(email).trim(), password});
+    const j = await this.signInCall(String(email).trim(), password);
     this.setSess({access_token: j.access_token, refresh_token: j.refresh_token, at: Date.now(), expires_in: j.expires_in || 3600, email: (j.user && j.user.email) || email, user_id: j.user && j.user.id});
     this.setCfg({email: String(email).trim()});
     if (await this.checkMfa()) return true;      // the code is asked for before anything of the firm is shown
     await this.whoAmI();
     return true;
   },
-  async refreshToken(){
+  // A new access token from the refresh token. One refresh at a time: requests that fail together (opening a bill
+  // fetches its document while the sync runs) share it, and a token another tab has refreshed meanwhile is used as
+  // it is. Two refreshes with the same refresh token can make Supabase end the session (review: signed out after
+  // the page was left idle). used: the token a failed request carried; skipped when the session already has a newer one.
+  refreshToken(used){
+    const s0 = this.sess();
+    if (used && s0 && s0.access_token && s0.access_token !== used) return Promise.resolve();
+    if (this._refreshing) return this._refreshing;
+    this._refreshing = (async () => {
+      const s = this.sess();
+      if (!s || !s.refresh_token) throw new Error("Signed out");
+      const j = await this.authCall("token?grant_type=refresh_token", {refresh_token: s.refresh_token});
+      const now = this.sess();
+      if (!now || now.refresh_token !== s.refresh_token) return;      // signed out, or another tab got there first
+      this.setSess(Object.assign({}, s, {access_token: j.access_token, refresh_token: j.refresh_token || s.refresh_token, at: Date.now(), expires_in: j.expires_in || 3600}));
+    })().finally(() => { this._refreshing = null; });
+    return this._refreshing;
+  },
+  // before a request: a token that has run out, or will within two minutes, is refreshed first (a page left idle for
+  // an hour no longer sends an expired token and depends on the 401 to recover)
+  async fresh(){
     const s = this.sess();
-    if (!s || !s.refresh_token) throw new Error("Signed out");
-    const j = await this.authCall("token?grant_type=refresh_token", {refresh_token: s.refresh_token});
-    this.setSess(Object.assign({}, s, {access_token: j.access_token, refresh_token: j.refresh_token || s.refresh_token, at: Date.now(), expires_in: j.expires_in || 3600}));
+    if (!s || !s.refresh_token) return;
+    const until = num(s.at) + (num(s.expires_in) || 3600) * 1000;
+    if (Date.now() > until - 120000) await this.refreshToken();
   },
   signOut(){ this.setSess(null); this.st = {state: "off", email: "", role: "", firm: "", lastSync: 0, pending: 0, error: "", busy: "", members: []}; },
   async api(path, opts, retry){
+    if (!retry) await this.fresh().catch(() => {});
     const c = this.cfg(), s = this.sess();
     if (!s) throw new Error("Signed out");
     opts = opts || {};
     const headers = Object.assign({apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": "application/json"}, opts.headers || {});
     const r = await fetch(c.url.replace(/\/+$/, "") + "/rest/v1/" + path, {method: opts.method || "GET", headers, body: opts.body ? JSON.stringify(opts.body) : undefined});
-    if (r.status === 401 && !retry){ await this.refreshToken(); return this.api(path, opts, true); }
+    if (r.status === 401 && !retry){ await this.refreshToken(s.access_token); return this.api(path, opts, true); }
     const text = await r.text();
     let j = null;
     try { j = text ? JSON.parse(text) : null; } catch (e){ j = null; }
@@ -331,17 +366,23 @@ function cloudChip(){
   if (st.state === "signedout") return '<button class="tchip bad" data-act="openSettings">Sign in again</button>';
   if (st.error) return '<button class="tchip warn" data-act="openSettings" title="' + esc(st.error) + '">Sync problem</button>';
   const mins = st.lastSync ? Math.round((Date.now() - st.lastSync) / 60000) : null;
-  return '<span class="tchip ok" title="' + esc(st.email) + (st.lastSync ? " \u00b7 last sync " + new Date(st.lastSync).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}) : "") + '">\u2601 Shared' + (mins > 5 ? " \u00b7 " + mins + "m" : "") + "</span>";
+  return '<span class="tchip ok" title="' + esc(st.email) + (st.lastSync ? " \u00b7 last sync " + fmtTime(st.lastSync) : "") + '">\u2601 Shared' + (mins > 5 ? " \u00b7 " + mins + "m" : "") + "</span>";
 }
 
 /* ---------- plan, balance and charging ---------- */
 const MODULE_ICON = {bills: "\u{1F9FE}", bank: "\u{1F3E6}", sales: "\u{1F4C4}", claude: "\u2728", vision: "\u{1F441}", tally: "\u{1F4D2}", cloud: "\u2601", clients: "\u{1F465}"};
 Cloud.rpc = async function(name, args){ return this.api("rpc/" + name, {method: "POST", body: args || {}}); };
-Cloud.fn = async function(name, body){
+Cloud.fn = async function(name, body, retry){
+  if (!retry) await this.fresh().catch(() => {});
   const c = this.cfg(), s = this.sess();
   if (!s) throw new Error("Sign in to the firm account first.");
-  const r = await fetch(c.url.replace(/\/+$/, "") + "/functions/v1/" + name, {
-    method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": "application/json"}, body: JSON.stringify(body || {})});
+  let r;
+  // a request the browser stopped before the server answered (no connection, or this site not allowed by the
+  // function): said in words, not the browser's "Load failed" / "Failed to fetch"
+  try { r = await fetch(c.url.replace(/\/+$/, "") + "/functions/v1/" + name, {
+    method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": "application/json"}, body: JSON.stringify(body || {})}); }
+  catch (e){ throw new Error("FinCom\u2019s server could not be reached from this page (" + ((e && e.message) || "no answer") + "). Check the connection and try again; if it keeps happening, tell support which page you were on."); }
+  if (r.status === 401 && !retry){ await this.refreshToken(s.access_token); return this.fn(name, body, true); }
   const j = await r.json().catch(() => ({}));
   if (!r.ok || j.ok === false) throw Object.assign(new Error(j.error || ("Request failed (" + r.status + ")")), {reason: j.reason, balance: j.balance});
   return j;
@@ -395,9 +436,43 @@ async function loadAdminOverview(quiet){
   } catch (e){ if (!quiet) toast("Could not read the platform data: " + e.message); }
 }
 
+// where a link in an email should bring the person back: this page, without its #…
+function appUrl(){ return location.origin + location.pathname; }
+// An invite or reset link lands here with the session in the address (#access_token=…&type=invite|recovery):
+// the person is signed in and asked to choose their password before anything else (review item 21)
+function takeAuthLink(){
+  const h = String(location.hash || "");
+  if (!/access_token=/.test(h) || !/type=(invite|recovery|signup|magiclink)/.test(h)) return false;
+  const q = new URLSearchParams(h.replace(/^#/, ""));
+  try { history.replaceState(null, "", location.pathname + location.search); } catch (e){}
+  Cloud.setSess({access_token: q.get("access_token"), refresh_token: q.get("refresh_token"), at: Date.now(), expires_in: num(q.get("expires_in")) || 3600, email: "", user_id: ""});
+  S.setPassword = {type: q.get("type")};
+  return true;
+}
+async function setPasswordGo(){
+  const a = (document.getElementById("spw1") || {}).value || "", b = (document.getElementById("spw2") || {}).value || "";
+  const f = S.setPassword || (S.setPassword = {});
+  if (a.length < 10 || !/[A-Za-z]/.test(a) || !/\d/.test(a)){ f.error = "Use 10 characters or more, with letters and digits."; render(); return; }
+  if (a !== b){ f.error = "The two passwords are not the same."; render(); return; }
+  const c = Cloud.cfg(), s = Cloud.sess();
+  Cloud.st.busy = "saving"; render();
+  try {
+    const r = await fetch(c.url.replace(/\/+$/, "") + "/auth/v1/user", {method: "PUT", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": "application/json"}, body: JSON.stringify({password: a})});
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.msg || j.error_description || j.message || "The password could not be saved.");
+    Cloud.setSess(Object.assign({}, s, {email: j.email || "", user_id: j.id || ""}));
+    Cloud.setCfg({email: j.email || ""});
+    S.setPassword = null; Cloud.st.busy = "";
+    auditEvent("password_set", f.type || "");
+    if (!(await Cloud.checkMfa())) await Cloud.whoAmI();
+    render();
+  } catch (e){ Cloud.st.busy = ""; f.error = e.message; render(); }
+}
+
 /* ---------- nothing is shown until someone signs in: the page is React (app/src/screens/SignIn.jsx) ---------- */
 function signInNeeded(){
   if (window.claude) return false;                 // inside claude.ai, for trying things out
+  if (S.setPassword) return true;                  // arrived from an invite or reset link: the password comes first
   if (Cloud.on()) return !!Cloud.st.mfa;           // signed in (works offline once signed in), unless the code is still due
   return Cloud.cfg().gate !== false;
 }
@@ -583,23 +658,67 @@ function goClient(to){
   };
   if (S.view !== "company" || S.coId !== cid) openCompany(cid).then(go); else go();
 }
+// a section of the firm's Settings (the firm menu in the sidebar, and page links)
+function goSettings(sec){ closeSwitcher(); S.firmMenu = false; S.tallyPanel = false; S.view = "home"; S.homeTab = "rules"; S.settingsTab = sec || null; S.step = null; S.arm = null; render(); window.scrollTo(0, 0); }
 function navHome(tab){ if (tab === "help" && typeof SUP === "object" && !(S.view === "home" && S.homeTab === "help")) S.helpCtx = SUP.context(); closeSwitcher(); S.firmMenu = false; S.tallyPanel = false; S.view = "home"; S.homeTab = tab; S.step = null; S.addingCo = false; S.arm = null; if (tab === "rules") S.settingsTab = null; render(); window.scrollTo(0, 0); }
 function goTab(tab){ S.tab = tab; S.step = null; S.arm = null; render(); }
 function toggleSetup(){ S.step = null; S.tab = isSetupTab(S.tab) ? "invoices" : "settings"; render(); }
 // a control drawn by React answers its own events; these handlers take the old screens, and the old pieces a React
 // screen still shows inside it (marked data-legacy)
 // delete a bill (asks first); not one already in Tally
+// Delete is a soft delete (review item 24): only the firm's owner, with a reason; the bill is kept under "Deleted"
+// with its document and can be restored. Working offline (no firm account) there is no owner to ask for.
+function canDeleteBills(){
+  if (!Cloud.on() || !S.account) return true;
+  return S.account.superadmin === true || ((S.account.me || {}).role === "owner");
+}
 function billDelete(id){
   const e = D().entries[id];
   if (!e) return;
   if (e.exportedAt){ toast("This bill is in Tally. Take it back from Tally first (Posted \u2192 Take it back), then delete it."); return; }
-  askConfirm({title: "Delete this bill?", ok: "Delete", body: '<p class="note">' + esc(e.x.vendorName || e.fileName || "") + (e.x.invoiceNo ? " \u00b7 " + esc(e.x.invoiceNo) : "") + ". The file can be uploaded again later.</p>"}).then(ok => {
-    if (!ok) return;
+  if (!canDeleteBills()){ toast("Only the firm\u2019s owner can delete a bill. Mark it \u201cNo entry\u201d instead, or ask the owner."); return; }
+  askConfirm({title: "Delete this bill?", ok: "Delete", danger: true,
+    body: '<p class="note">' + esc(e.x.vendorName || e.fileName || "") + (e.x.invoiceNo ? " \u00b7 " + esc(e.x.invoiceNo) : "") + ". It moves to \u201cDeleted\u201d with its document, and can be restored from there.</p>" +
+      '<label class="f" style="margin-top:8px"><span>Why is it deleted?</span><input type="text" id="delWhy" maxlength="200" placeholder="For example: uploaded twice, not this client\u2019s bill"></label>',
+    read: () => ((document.getElementById("delWhy") || {}).value || "").trim(),
+    validate: why => why.length < 3 ? "Write why the bill is deleted." : ""}).then(r => {
+    if (!r) return;
     if (e.status === "approved") unapply(e, S.coId);
     if (S.revSel) S.revSel.delete(e.id);
     if (S.drawerOpen && S.selected === e.id) S.drawerOpen = false;
-    removeEntry(e); refreshStats(S.coId); toast("Deleted."); render();
+    softDeleteEntry(e, r.data); refreshStats(S.coId); toast("Deleted. It is under \u201cDeleted\u201d, where it can be restored."); render();
   });
+}
+function softDeleteEntry(e, why){
+  e.deleted = {at: new Date().toISOString(), by: whoAmI(), reason: String(why || "").slice(0, 200), status: e.status};
+  e.status = "deleted";
+  unregisterHash(S.coId, e.fileHash);            // the same file can be uploaded again
+  if (S.selected === e.id) S.selected = null;
+  Store.saveEntry(S.coId, e);
+  auditEvent("bill_delete", (e.x.vendorName || e.fileName || "") + " " + (e.x.invoiceNo || e.id) + ": " + e.deleted.reason, S.coId);
+}
+// back to To review (an approved bill was taken off its supplier's totals when deleted, so it is approved again)
+function billRestore(id){
+  const e = D().entries[id];
+  if (!e || e.status !== "deleted") return;
+  if (!canDeleteBills()){ toast("Only the firm\u2019s owner can restore a deleted bill."); return; }
+  e.restored = {at: new Date().toISOString(), by: whoAmI(), was: e.deleted};
+  e.status = "draft"; e.deleted = null;
+  if (e.fileHash) registerHash(S.coId, e.fileHash, e.id);
+  Store.saveEntry(S.coId, e);
+  auditEvent("bill_restore", (e.x.vendorName || e.fileName || "") + " " + (e.x.invoiceNo || e.id), S.coId);
+  S.filter = "draft"; S.selected = e.id; refreshStats(S.coId); toast("Restored to To review."); render();
+}
+// the bills in the list as shown (Invoices.jsx orders them the same way), and a step to the next or previous one
+function billList(){
+  const all = Object.values(D().entries || {}), f = S.filter || "draft";
+  return all.filter(e => e.status === f).sort((a, b) => (f === "draft" ? byDate(a, b) : byDate(b, a)));
+}
+function billStep(dir){
+  const list = billList(); if (!list.length) return;
+  const i = list.findIndex(e => e.id === S.selected);
+  const next = list[Math.min(list.length - 1, Math.max(0, i < 0 ? 0 : i + dir))];
+  if (next && next.id !== S.selected){ S.selected = next.id; render(); }
 }
 // an approved bill, not yet in Tally, back to To review (staying on the page it was sent back from)
 function billBack(id){ const e = D().entries[id]; if (e){ const keep = S.tab; undoApproval(e); S.tab = keep; render(); } }
@@ -723,8 +842,15 @@ function revTds(id, on){
 }
 // the firm account in Settings (app/src/screens/Account.jsx): a person's password, two-step or switching on and off; a
 // backup downloaded; a drop key switched off; the platform page's buttons (they read its boxes by id) and a firm's plan
+// the firm account's admin service not yet updated (Phase 2 waits for the database): it does not know the new actions
+function adminNotYet(e){ return /unknown action/i.test(String((e && e.message) || "")); }
 function acctPerson(what, email){
-  if (what === "reset") Cloud.fn("admin", {action: "reset_password", email}).then(r => { S.newPerson = {email: r.email, password: r.password}; toast("New password made."); render(); }, e => toast(e.message));
+  // a reset link by email: they choose the new password; "makepw" is the fallback where email is not set up
+  if (what === "reset") Cloud.fn("admin", {action: "send_reset", email, redirect: appUrl()}).then(r => { S.newPerson = null; toast(r.note || "Reset link sent."); render(); },
+    e => toast(adminNotYet(e) ? "Reset links by email start once the firm account\u2019s update is done. For now, use \u201cMake a password\u201d." : e.message));
+  else if (what === "makepw") Cloud.fn("admin", {action: "reset_password", email}).then(r => { S.newPerson = {email: r.email, password: r.password}; toast("New password made."); render(); }, e => toast(e.message));
+  else if (what === "unlock") Cloud.fn("admin", {action: "unlock", email}).then(r => toast(r.note || "Unlocked."),
+    e => toast(adminNotYet(e) ? "The lockout starts once the firm account\u2019s update is done: nobody is locked out until then." : e.message));
   else if (what === "mfa") askConfirm({title: "Reset two-step sign-in for " + email + "?", ok: "Reset", body: '<p class="note">Their authenticator entry is removed. At the next sign-in they set it up again with their phone. Do this only when you are sure it is them asking.</p>'})
     .then(a => { if (a) Cloud.fn("admin", {action: "reset_two_step", email}).then(() => toast("Two-step sign-in reset for " + email + "."), e => toast(e.message)); });
   else Cloud.fn("admin", {action: "set_person", email, active: what === "on"}).then(() => { toast(what === "on" ? "Switched on." : "Switched off."); loadAccount(); }, e => toast(e.message));
@@ -925,12 +1051,13 @@ function doAct(act, t){
       else { if (box){ box.focus(); box.select(); } toast("Select the report and copy it (Ctrl+C)."); }
       break;
     }
+    case "setPasswordGo": setPasswordGo(); break;
     case "cloudSignIn": {
       const em = document.querySelector('[data-cloud="email"]'), pw = document.querySelector('[data-cloud="password"]');
       const email = em ? em.value.trim() : "", pass = pw ? pw.value : "";
       if (!email || !pass){ toast("Enter your email and password."); break; }
       Cloud.st.busy = "Signing in\u2026"; Cloud.st.error = ""; render();
-      Cloud.signIn(email, pass).then(() => { Cloud.st.busy = ""; S.cloudForm = null; toast("Signed in as " + email + "."); setTimeout(() => { auditEvent("signin", navigator.userAgent.slice(0, 160)); setTimeout(loadLastSignIn, 1500); }, 3000); startCloudSync(); loadAccount(true).then(() => render()); render(); },
+      Cloud.signIn(email, pass).then(() => { Cloud.st.busy = ""; S.cloudForm = null; S.signedOutWhy = ""; toast("Signed in as " + email + "."); setTimeout(() => { auditEvent("signin", navigator.userAgent.slice(0, 160)); setTimeout(loadLastSignIn, 1500); }, 3000); startCloudSync(); loadAccount(true).then(() => render()); render(); },
         err => { Cloud.st.busy = ""; Cloud.st.error = err.message; render(); });
       break;
     }
@@ -979,7 +1106,7 @@ function doAct(act, t){
       Cloud.st.busy = "Making the account\u2026"; Cloud.st.error = ""; render();
       Cloud.signUp({firm: f.firm, name: f.name || "", email: f.email, password: f.password})
         .then(() => Cloud.signIn(f.email, f.password))
-        .then(() => { Cloud.st.busy = ""; S.cloudForm = null; S.signUpOpen = false; toast("Welcome. Your firm is ready."); startCloudSync(); loadAccount(true).then(() => render()); render(); },
+        .then(() => { Cloud.st.busy = ""; S.cloudForm = null; S.signUpOpen = false; if (!S.firm.firmName){ S.firm.firmName = f.firm; Store.saveFirm(); } toast("Welcome. Your firm is ready."); startCloudSync(); loadAccount(true).then(() => render()); render(); },
               err => { Cloud.st.busy = ""; Cloud.st.error = err.message; render(); });
       break;
     }
@@ -1001,6 +1128,25 @@ function doAct(act, t){
       S.walletOpen = !S.walletOpen;
       if (S.walletOpen) Cloud.api("wallet_entries?select=at,kind,code,qty,amount,balance_after,note&order=at.desc&limit=50").then(r => { S.wallet = r || []; render(); }, e => toast(e.message));
       render(); break;
+    }
+    case "invitePerson": {
+      // an email with a link to set their own password (review item 21)
+      const g = id => (document.getElementById(id) || {}).value || "";
+      const email = g("npEmail").trim();
+      if (!email){ toast("An email address is needed."); break; }
+      const who = {email, name: g("npName"), role: g("npRole")};
+      Cloud.fn("admin", Object.assign({action: "invite_person", redirect: appUrl()}, who)).then(r => {
+        S.newPerson = null; toast(r.note || ("Invited " + r.email + ".")); loadAccount();
+      }, e => {
+        if (!adminNotYet(e)){ toast(e.message); return; }
+        // until the update is done: added as before, with a password made for them and shown once
+        Cloud.fn("admin", Object.assign({action: "add_person"}, who)).then(r => {
+          S.newPerson = r.password ? {email: r.email, password: r.password} : null;
+          toast("Email invites start once the firm account\u2019s update is done, so a password was made instead." + (r.password ? "" : " " + (r.note || "")));
+          render(); loadAccount();
+        }, e2 => toast(e2.message));
+      });
+      break;
     }
     case "addPerson": {
       const g = id => (document.getElementById(id) || {}).value || "";
@@ -1195,7 +1341,7 @@ function doAct(act, t){
           if (l.pan) (b.pans = b.pans || {})[l.name] = String(l.pan).toUpperCase();
           if (l.group) (b.under = b.under || {})[l.name] = l.group; });
         [].concat(j.groups || []).forEach(g => { if (g && g.name) groups[g.name] = g.parent || ""; });
-        b.ledInfo = info; b.ledInfoAt = new Date().toISOString(); if (Object.keys(groups).length) b.groups = groups;
+        b.ledInfo = info; b.ledInfoAt = new Date().toISOString(); if (Object.keys(groups).length){ b.groups = groups; TallyRead.yearOpen(b); }
         LedMaster.refresh(b); b.busy = ""; b.reco = null; await saveBooks();
         toast(Object.keys(info).length + " ledgers read from Tally. " + LedMaster.pending(b).length + " GST or TDS ledgers to confirm."); render();
       }, e => { b.busy = ""; toast("Could not read Tally: " + (e && e.message || e)); render(); });
@@ -1385,7 +1531,7 @@ function doAct(act, t){
     case "reject": if (e){ if (e.docPath){ CloudDocs.remove(e.docPath); delete e.docPath; } setStatus(e, "rejected", "Marked as no entry needed."); } break;
     case "restore": if (e) setStatus(e, "draft"); break;
     case "undo": if (e) undoApproval(e); break;
-    case "delete": if (e) removeEntry(e); break;
+    case "delete": if (e) billDelete(e.id); break;
     case "addParty": { const id = "p-new-" + Date.now().toString(36); D().parties[id] = {id, name:"New supplier", pan:"", gstin:"", ledgerName:"", natureDefault:"", expenseLedger:"", ldcRate:"", ldcValidTo:"", ytd:{}}; S.partySel = id; Store.saveParty(S.coId, D().parties[id]); render(); break; }
     case "closeParty": S.partySel = null; render(); break;
     case "resetRules": S.firm.rules = {}; Store.saveFirm(); toast("Default rates and limits restored."); render(); break;
@@ -1436,10 +1582,20 @@ document.addEventListener("keydown", ev => {
   if (k === "F3" || (ctrl && k.toLowerCase() === "k")){ ev.preventDefault(); openSwitcher(); return; }
   const tag = (document.activeElement && document.activeElement.tagName) || "";
   const inField = /INPUT|SELECT|TEXTAREA/.test(tag);
-  if (ctrl && k.toLowerCase() === "a" && !inField && S.view === "company" && S.tab === "invoices"){
+  // Ctrl+Enter approves the bill on screen (review item 33: Ctrl+A is the browser's Select All, left alone now);
+  // from inside a box too: the box is left first, so what was typed counts
+  if (ctrl && k === "Enter" && S.view === "company" && S.tab === "invoices"){
     const e = curEntry();
-    if (e && e.status === "draft" && !S.reading[e.id]){ ev.preventDefault(); approve(e); }
+    if (e && e.status === "draft" && !S.reading[e.id]){
+      ev.preventDefault();
+      if (inField && document.activeElement.blur) document.activeElement.blur();
+      setTimeout(() => { const e2 = curEntry(); if (e2 && e2.status === "draft") { approve(e2); render(); } }, 60);
+    }
     return;
+  }
+  // J / K: the next or previous bill in the list shown
+  if (!ctrl && !ev.altKey && !inField && (k === "j" || k === "k") && S.view === "company" && S.tab === "invoices" && !S.reviewTable){
+    ev.preventDefault(); billStep(k === "j" ? 1 : -1); return;
   }
   if (k === "Escape" && !inField && S.view === "company"){ goHome(); return; }
   if ((k === "Enter" || k === " ") && ev.target.id === "drop"){ ev.preventDefault(); pickFiles("company"); }
@@ -1515,6 +1671,39 @@ function coSetTallyName(name){ const co = CO(); if (co && name){ co.tallyName = 
 function coSetRuleLedger(kind, ruleId, v){ const co = CO(); (kind === "tds" ? co.tdsLedgers : co.expenseLedgers)[ruleId] = v; later("c" + co.id, () => Store.saveCompany(co), 600); }
 function coSetBlockRule(catId, v){ const co = CO(); co.gstBlock = co.gstBlock || {}; co.gstBlock[catId] = v; Store.saveCompany(co); render(); }
 // the firm's own name, shown in the top bar and on reports
+// First sign-in of an owner with no firm name yet (review item 32): the name (from sign-up where given), address and
+// logo are asked for once; "Later" puts it off until the next sign-in
+function firmSetupDue(){
+  // "Later" holds for the rest of the day on this computer (review recheck: it came back on every refresh)
+  const later = S.firmSetupLater || lsGet("tdsdesk:firmSetupLater") === fmtDate(new Date());
+  return !!(S.firm && !S.firm.firmName && !later && typeof Cloud === "object" && Cloud.on() && S.account && ((S.account.me || {}).role === "owner"));
+}
+function firmSetupLater(){ S.firmSetupLater = true; lsSet("tdsdesk:firmSetupLater", fmtDate(new Date())); render(); }
+function firmSetupSave(d){
+  const name = String(d.name || "").trim();
+  if (!name){ toast("The firm\u2019s name is needed."); return false; }
+  S.firm.firmName = name.slice(0, 120);
+  S.firm.firmAddress = String(d.address || "").trim().slice(0, 400);
+  if (d.logo !== undefined) S.firm.firmLogo = d.logo || "";
+  Store.saveFirm(); toast("Saved."); render();
+  return true;
+}
+// a logo picked from the computer, kept small (a data URL of at most about 150 KB)
+function firmLogoRead(file){
+  return new Promise((ok, no) => {
+    if (!file || !/^image\//.test(file.type)){ no(new Error("Choose a picture (PNG or JPG).")); return; }
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      const k = Math.min(1, 320 / Math.max(img.width, img.height)), c = document.createElement("canvas");
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+      const out = c.toDataURL("image/png");
+      out.length > 200000 ? no(new Error("The logo is too large; use a smaller picture.")) : ok(out);
+    };
+    img.onerror = () => no(new Error("That picture could not be read."));
+    img.src = url;
+  });
+}
 function firmSetName(v){ S.firm.firmName = v; later("firm", () => Store.saveFirm(), 600); const el = document.getElementById("firmLine"); if (el) el.textContent = v; }
 function setPath(o, path, v){ const k = path.split("."); if (k.length === 2) o[k[0]][k[1]] = v; else o[k[0]] = v; }
 
@@ -1617,6 +1806,7 @@ function applyEntryHash(){
 }
 window.addEventListener("hashchange", () => { applyEntryHash(); render(); });
 (async function start(){
+  takeAuthLink();
   applyEntryHash();
   S.splitPdf = lsGet("tdsdesk:splitPdf") === "1";
   S.freeFirst = lsGet("tdsdesk:freeFirst") !== "0";
@@ -1628,8 +1818,12 @@ window.addEventListener("hashchange", () => { applyEntryHash(); render(); });
   catch (e){ S.firm = S.firm || Object.assign({}, DEFAULT_FIRM); toast("Saved data could not be loaded. Reload the page to try again."); }
   Object.keys(S.data).forEach(refreshStats);
   render();
+  // a page link (#/…) opens that page; otherwise the client open last time
+  if (/^#\//.test(location.hash) && typeof Route === "object" && signInNeeded()) Route.pending = location.hash;
+  const linked = /^#\//.test(location.hash) && typeof Route === "object" && !signInNeeded() ? await Route.apply(location.hash) : false;
   const last = lsGet("tdsdesk:last") || recentIds()[0];
-  if (last && S.companies[last]) openCompany(last);
+  if (!linked && last && S.companies[last]) openCompany(last);
+  if (typeof Route === "object"){ Route.ready = true; Route.replaceNext = true; }
   S.sample = await samplePromise;
   if (S.sample){
     try { const lim = await S.sample.limits(); S.imgMax = lim && lim.images ? Math.min(6, lim.images.maxCount) : 0; } catch(e){ S.imgMax = 0; }

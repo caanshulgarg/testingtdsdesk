@@ -78,7 +78,7 @@ const GST2B = {
       // tax alone, with no supplier's GSTIN and no value beside it: a rounding or reversal entry
       if (!taxable && !gstin){ this.skipped.taxOnly++; return; }
       if (!reg) reg = String(v.cmp || "").slice(0, 2) || (regs.length === 1 ? regs[0] : "");
-      const no = v.ref || v.no || "";
+      const no = Books.supInv(v);
       out.push({id: v.id, voucher: v.no || "", type: v.type, party: party || "", gstin, no: String(no), noN: this.normNo(no), core: this.coreNo(no),
         date: v.refDate || v.date, bookDate: v.date, ym: String(v.date).slice(0, 6), reg,
         taxable, igst: tax.IGST, cgst: tax.CGST, sgst: tax.SGST, cess: tax.CESS,
@@ -100,7 +100,7 @@ const GST2B = {
   // match every 2B document against every book document, strongest evidence first
   run(reg){
     const b = S.books, st = this.state(), tol = num(this.settings().tol) || 1;
-    const key = [reg, b.vouchers && b.vouchers.length, b.mapV || 0, Object.keys(b.gstins || {}).length, Object.keys(b.twoBs || {}).join(","), JSON.stringify(st.confirm), JSON.stringify(st.link), tol, S.coId].join("|");
+    const key = [reg, b.vouchers && b.vouchers.length, b.mapV || 0, Object.keys(b.gstins || {}).length, Object.keys(b.twoBs || {}).join(","), JSON.stringify(st.confirm), JSON.stringify(st.link), tol, S.coId, (CO() || {}).supInvFrom || "ref"].join("|");
     if (this._memo && this._memo.key === key && this._memo.v === b.vouchers) return this._memo.res;
     const portal = [], rejRows = [];
     this.all2b(reg).forEach(t => t.rows.forEach(r => (r.rej ? rejRows : portal).push(r)));

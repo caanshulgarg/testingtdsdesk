@@ -43,7 +43,7 @@ with sync_playwright() as p:
     ok(pg.evaluate("CO().name") == "ZZ Zeta Exports Pvt Ltd", "the client's name")
     nav("Tally"); pg.wait_for_timeout(300)
     ok(head() == "Tally" and "The company in Tally" in pg.inner_text("#app .setbody"), "Tally section")
-    pg.select_option('#app label:has-text("Voucher type") select', "Purchase"); pg.wait_for_timeout(300)
+    pg.check('#app label:has-text("Purchase voucher") input[type=radio]'); pg.wait_for_timeout(300)   # review item 36: a choice, not a list
     pg.click('#app label:has-text("Optional vouchers") input'); pg.wait_for_timeout(300)
     ok(pg.evaluate("CO().voucherType") == "Purchase" and pg.evaluate("CO().createOptional") is False, "voucher type and Optional vouchers")
     pg.fill('#app label:has-text("Round off") input', "Rounding Off"); pg.wait_for_timeout(700)
@@ -108,10 +108,14 @@ with sync_playwright() as p:
       Cloud.st = Object.assign(Cloud.st, {email: 'a@b.in', role: 'owner', mfa: null, mfaInfo: {}, members: []});
       S.account = {me: {role: 'owner'}, superadmin: true, firm: {id: 'f1', balance: 400, warn_at: 100, period_start: '2026-09-01'}, modules: [], people: [{name: 'Bina', email: 'b@b.in', role: 'staff', active: true}]};
       S.backups = [{id: 7, taken_at: '2026-09-29T20:00:00Z', clients: 3, records: 120, bytes: 20480}]; S.dropKeys = [{id: 3, label: 'Agent', hint: 'ab', created_at: '2026-01-01', active: true}];
-      S.view = 'home'; S.homeTab = 'rules'; S.settingsTab = 'account'; render(); }"""); pg.wait_for_timeout(400)
+      S.firmSetupLater = true; S.view = 'home'; S.homeTab = 'rules'; S.settingsTab = 'account'; render(); }"""); pg.wait_for_timeout(400)
     calls = lambda: pg.evaluate("window.__calls")
-    pg.click('tr[data-key="b@b.in"] button:text-is("New password")'); pg.wait_for_timeout(300)
-    ok(["admin", {"action": "reset_password", "email": "b@b.in"}] in calls() and "Pw-1" in pg.inner_text("#app"), "a new password for a person, shown once")
+    pg.click('tr[data-key="b@b.in"] button:text-is("Send reset link")'); pg.wait_for_timeout(300)
+    ok(any(c[0] == "admin" and c[1].get("action") == "send_reset" and c[1].get("email") == "b@b.in" and c[1].get("redirect") for c in calls()), "a reset link emailed to a person (review item 21)")
+    pg.click('tr[data-key="b@b.in"] button:text-is("Unlock")'); pg.wait_for_timeout(300)
+    ok(["admin", {"action": "unlock", "email": "b@b.in"}] in calls(), "a locked-out person unlocked")
+    pg.click('tr[data-key="b@b.in"] button:text-is("Make a password")'); pg.wait_for_timeout(300)
+    ok(["admin", {"action": "reset_password", "email": "b@b.in"}] in calls() and "Pw-1" in pg.inner_text("#app"), "where email is not set up: a new password for a person, shown once")
     pg.click('tr[data-key="b@b.in"] button:text-is("Switch off")'); pg.wait_for_timeout(300)
     ok(["admin", {"action": "set_person", "email": "b@b.in", "active": False}] in calls(), "a person switched off")
     pg.click('button:text-is("Download")'); pg.wait_for_timeout(300)
@@ -130,8 +134,10 @@ with sync_playwright() as p:
     pg.click('button:text-is("Turn it on")'); pg.wait_for_timeout(300)
     ok(pg.evaluate("Cloud.st.mfa && Cloud.st.mfa.need") == "enrol" and "Two-step sign-in" in pg.inner_text("#app"), "two-step sign-in: Turn it on opens its setup")
     pg.evaluate("() => { Cloud.st.mfa = null; render(); }"); pg.wait_for_timeout(300)
-    pg.fill("#npEmail", "c@b.in"); pg.fill("#npName", "Chetan"); pg.click('button:text-is("Add this person")'); pg.wait_for_timeout(300)
-    ok(["admin", {"action": "add_person", "email": "c@b.in", "name": "Chetan", "role": "staff"}] in calls(), "a person added from the boxes")
+    pg.fill("#npEmail", "c@b.in"); pg.fill("#npName", "Chetan"); pg.click('button:text-is("Invite by email")'); pg.wait_for_timeout(300)
+    ok(any(c[0] == "admin" and c[1].get("action") == "invite_person" and c[1].get("email") == "c@b.in" and c[1].get("name") == "Chetan" and c[1].get("role") == "staff" for c in calls()), "a person invited by email from the boxes")
+    pg.fill("#npEmail", "d@b.in"); pg.fill("#npName", "Divya"); pg.click('button:text-is("or make a password instead")'); pg.wait_for_timeout(300)
+    ok(["admin", {"action": "add_person", "email": "d@b.in", "name": "Divya", "role": "staff"}] in calls(), "or added with a made-up password")
     pg.evaluate("""() => { S.settingsTab = 'platform'; S.adminData = {month: 0, firms: [{id: 'f1', name: 'Firm A', active: true, plan_id: 'p1', balance: 40, people: 2, modules: [{code: 'read', price: 2, enabled: true}]}],
       plans: [{id: 'p1', name: 'Starter', includes: {}}, {id: 'p2', name: 'Pro', includes: {}}], modules: [{code: 'read', title: 'Reading bills', price: 2, unit: 'per page', billing: 'unit'}]}; render(); }"""); pg.wait_for_timeout(300)
     pg.select_option('select[aria-label="Plan of Firm A"]', "p2"); pg.wait_for_timeout(300)

@@ -30,7 +30,7 @@ function Row({ v, sel }) {
       <td className="dt" title={fmtDate(x.date)}>{x.date ? shortDate(x.date) : "—"}</td>
       <td className="pt"><div className="pn"><button className="linkbtn strong" onClick={() => salesOpen(v.id)}>{x.number || "(no number)"}</button></div><div className="nr">{v.source === "created" ? "Created here" : v.fileName || "Uploaded"}</div></td>
       <td className="pt"><div className="pn">{x.customerName || "—"}</div><div className="nr">{x.customerGstin || "Unregistered"}{x.pos ? " · " + (GST_STATES[x.pos] || x.pos) : ""}</div></td>
-      <td className="n">{INR.format(num(x.taxable))}</td><td className="n">{INR.format(gstOf(x))}</td><td className="n"><b>{INR.format(num(x.total))}</b></td>
+      <td className="n">{money(num(x.taxable))}</td><td className="n">{money(gstOf(x))}</td><td className="n"><b>{money(num(x.total))}</b></td>
       <td className="lg">{editable ? <>
         {v.postError && <span className="src bad" title={v.postError}>Tally: {v.postError}</span>}
         <LedgerBox className={"lgbox" + (v.status === "ready" ? " done" : v.customerLedger ? " sugg" : "")} value={v.customerLedger || ""} fk={"svcust:" + v.id} data-svcust={v.id}
@@ -96,7 +96,7 @@ function Detail({ v }) {
         </div>
         {(x.items || []).length > 0 && <div className="bk-tablewrap" style={{ marginTop: 10 }}><table className="bk-table">
           <thead><tr><th>Item</th><th>HSN</th><th className="n">Qty</th><th className="n">Rate</th><th className="n">Taxable</th><th className="n">GST %</th></tr></thead>
-          <tbody>{x.items.map((it, i) => <tr key={i}><td>{it.desc}</td><td>{it.hsn || ""}</td><td className="n">{it.qty} {it.unit || ""}</td><td className="n">{INR.format(num(it.rate))}</td><td className="n">{INR.format(num(it.taxable))}</td><td className="n">{num(it.gstRate)}%</td></tr>)}</tbody>
+          <tbody>{x.items.map((it, i) => <tr key={i}><td>{it.desc}</td><td>{it.hsn || ""}</td><td className="n">{it.qty} {it.unit || ""}</td><td className="n">{money(num(it.rate))}</td><td className="n">{money(num(it.taxable))}</td><td className="n">{num(it.gstRate)}%</td></tr>)}</tbody>
         </table></div>}
       </section>
       <section><h3>Sales voucher for Tally</h3>
@@ -106,7 +106,7 @@ function Detail({ v }) {
             <LedgerSelect selected={lines.find((l) => l.role === "sales" && l.rate === g.rate).ledger} prefer={/sales accounts?/i} disabled={ro} onPick={(val) => salesSetSalesLedger(g.rate, val)} /></label>)}
         </div>
         <div className="bk-tablewrap" style={{ marginTop: 10 }}><table className="bk-table">
-          <thead><tr><th>Ledger</th><th className="n">Debit</th><th className="n">Credit</th></tr></thead>
+          <thead><tr><th>Ledger</th><th className="n">Debit ₹</th><th className="n">Credit ₹</th></tr></thead>
           <tbody>
             {lines.map((l, i) => <tr key={i}><td>{l.ledger || <span className="src bad">not set</span>}{l.ledger && !exactLedger(l.ledger) && <> <span className="src bad">not in Tally</span></>}</td>
               <td className="n">{l.side === "Dr" ? INR.format(l.amt) : ""}</td><td className="n">{l.side === "Cr" ? INR.format(l.amt) : ""}</td></tr>)}
@@ -211,9 +211,9 @@ function Create() {
               <td><select value={it.unit} aria-label="Unit" onChange={set("unit")}>{SALES_UNITS.map((u) => <option key={u}>{u}</option>)}</select></td>
               <td className="n"><input type="number" step="any" min="0" className="w100 n" value={it.rate} aria-label="Rate" onChange={set("rate")} /></td>
               <td className="n"><input type="number" step="any" min="0" max="100" className="w60 n" value={it.disc || 0} aria-label="Discount %" onChange={set("disc")} /></td>
-              <td className="n">{INR.format(it.taxable)}</td>
+              <td className="n">{money(it.taxable)}</td>
               <td className="n"><select value={num(it.gstRate)} aria-label="GST rate" onChange={set("gstRate")}>{SALES_RATES.map((r) => <option key={r} value={r}>{r}%</option>)}</select></td>
-              <td className="n">{d.noState ? "—" : INR.format(r2((it.taxable * num(it.gstRate)) / 100))}</td>
+              <td className="n">{d.noState ? "—" : money(r2((it.taxable * num(it.gstRate)) / 100))}</td>
               <td className="n"><input type="number" step="any" min="0" className="w90 n" value={it.cess === undefined ? "" : it.cess} placeholder="—" aria-label="Cess" onChange={set("cess")} /></td>
               <td className="ac"><button className="icon" aria-label="Remove item" title="Remove item" onClick={() => draftItemRemove(i)}>✕</button></td>
             </tr>;
@@ -226,15 +226,15 @@ function Create() {
           <p className="note">Bank details, terms and signatory come from Sales settings.</p></section>
         <section className="si-card"><h3>Totals</h3>
           <dl className="si-tot">
-            <div><dt>Taxable value</dt><dd>{INR.format(x.taxable)}</dd></div>
+            <div><dt>Taxable value</dt><dd>{money(x.taxable)}</dd></div>
             {d.noState && <div><dt>GST</dt><dd className="note">shown once the client’s state is known</dd></div>}
             {!d.noState && groups.filter((g) => g.rate).map((g) => d.inter
-              ? <div key={g.rate}><dt>IGST @ {g.rate}%</dt><dd>{INR.format(r2((g.taxable * g.rate) / 100))}</dd></div>
+              ? <div key={g.rate}><dt>IGST @ {g.rate}%</dt><dd>{money(r2((g.taxable * g.rate) / 100))}</dd></div>
               : <span key={g.rate} style={{ display: "contents" }}>
-                <div><dt>CGST @ {g.rate / 2}%</dt><dd>{INR.format(r2((g.taxable * g.rate) / 200))}</dd></div>
-                <div><dt>SGST @ {g.rate / 2}%</dt><dd>{INR.format(r2((g.taxable * g.rate) / 100 - r2((g.taxable * g.rate) / 200)))}</dd></div></span>)}
-            {num(x.cess) ? <div><dt>Cess</dt><dd>{INR.format(x.cess)}</dd></div> : null}
-            {x.roundOff ? <div><dt>Round off</dt><dd>{INR.format(x.roundOff)}</dd></div> : null}
+                <div><dt>CGST @ {g.rate / 2}%</dt><dd>{money(r2((g.taxable * g.rate) / 200))}</dd></div>
+                <div><dt>SGST @ {g.rate / 2}%</dt><dd>{money(r2((g.taxable * g.rate) / 100 - r2((g.taxable * g.rate) / 200)))}</dd></div></span>)}
+            {num(x.cess) ? <div><dt>Cess</dt><dd>{money(x.cess)}</dd></div> : null}
+            {x.roundOff ? <div><dt>Round off</dt><dd>{money(x.roundOff)}</dd></div> : null}
             <div className="big"><dt>Invoice total</dt><dd>{money(x.total)}</dd></div>
           </dl>
           <p className="note">{rupeesInWords(x.total)}</p></section>
@@ -259,9 +259,9 @@ export default function Sales() {
     <div className="bk-head">
       <div className="bk-id"><h2 className="bk-title">Sales</h2><div className="bk-sub">{all.length} invoice{all.length === 1 ? "" : "s"}{all.length ? " · " + fmtDate(dates[0]) + " to " + fmtDate(dates[dates.length - 1]) : ""}</div></div>
       <dl className="bk-figs">
-        <div><dt>Taxable</dt><dd>{INR.format(sum("taxable"))}</dd></div>
-        <div><dt>GST</dt><dd>{INR.format(r2(sum("cgst") + sum("sgst") + sum("igst") + sum("cess")))}</dd></div>
-        <div><dt>Invoice value</dt><dd>{INR.format(sum("total"))}</dd></div>
+        <div><dt>Taxable</dt><dd>{money(sum("taxable"))}</dd></div>
+        <div><dt>GST</dt><dd>{money(r2(sum("cgst") + sum("sgst") + sum("igst") + sum("cess")))}</dd></div>
+        <div><dt>Invoice value</dt><dd>{money(sum("total"))}</dd></div>
       </dl>
       <div className="bk-actions">
         <button className="btn small" onClick={() => salesAct("salesPick")}>Upload invoices</button>
@@ -324,7 +324,7 @@ export function SalesBar() {
   let left, right;
   if (nsel) {
     const rows = s.list.filter((v) => s.sel.has(v.id));
-    left = <><b>{nsel} selected</b> <span className="muted">· {INR.format(r2(rows.reduce((a, v) => a + num(v.x.total), 0)))}</span> <button className="linkbtn" onClick={() => salesAct("salesSelNone")}>Clear</button></>;
+    left = <><b>{nsel} selected</b> <span className="muted">· {money(r2(rows.reduce((a, v) => a + num(v.x.total), 0)))}</span> <button className="linkbtn" onClick={() => salesAct("salesSelNone")}>Clear</button></>;
     right = <>
       {/* a ledger picked from the list, or Enter, applies it (src/js/23, 26) */}
       <input type="text" className="lgbox" data-svbulk="" data-fk="svbulk" data-ac="1" autoComplete="off" placeholder={"Customer ledger for the " + nsel + " selected"} aria-label="Customer ledger for the selected" />

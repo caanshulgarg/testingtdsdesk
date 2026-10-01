@@ -6,6 +6,7 @@
 //
 // Every change is saved as it is made: typed text a moment later (coSetText, firmSetName), a tick or choice at once
 // (coCommit). Sections not yet redrawn in React show the old screen's HTML through <Legacy>.
+import { useState } from "react";
 import Legacy from "../parts/Legacy.jsx";
 import { AiSettings } from "../parts/Ai.jsx";
 import { BridgeSettings, CloudBooks } from "./Tally.jsx";
@@ -57,9 +58,14 @@ const Card = ({ title, note, danger, children }) => (
 /* ---------------------------------------------------------------- for the firm */
 
 function FirmDetails() {
-  return <Card title="Firm name" note="Shown at the top of every page, and on reports, letters and MIS packs prepared for clients.">
+  const setAddr = (v) => { S.firm.firmAddress = v; later("firm", () => Store.saveFirm(), 600); FinComReact.redraw(); };
+  const pick = (ev) => { const f = ev.target.files && ev.target.files[0]; if (f) firmLogoRead(f).then((logo) => { S.firm.firmLogo = logo; Store.saveFirm(); render(); }, (e) => toast(e.message)); };
+  return <Card title="Firm details" note="Shown at the top of every page, and on reports, letters and MIS packs prepared for clients.">
     <div className="grid"><label className="f"><span>Firm name</span>
-      <input type="text" value={S.firm.firmName || ""} onChange={(ev) => { firmSetName(ev.target.value); FinComReact.redraw(); }} /></label></div>
+      <input type="text" value={S.firm.firmName || ""} onChange={(ev) => { firmSetName(ev.target.value); FinComReact.redraw(); }} /></label>
+      <label className="f wide"><span>Address</span><textarea rows={2} value={S.firm.firmAddress || ""} onChange={(ev) => setAddr(ev.target.value)} /></label>
+      <label className="f"><span>Logo</span><input type="file" accept="image/*" aria-label="Firm logo" onChange={pick} /></label>
+      {S.firm.firmLogo && <div><img src={S.firm.firmLogo} alt="Logo" style={{ maxHeight: 48 }} /> <button className="linkbtn" onClick={() => { S.firm.firmLogo = ""; Store.saveFirm(); render(); }}>Remove</button></div>}</div>
   </Card>;
 }
 
@@ -71,7 +77,7 @@ function firmGroups() {
       { id: "account", label: "Sign-in and people", about: "Who is signed in, the people in the firm and what each may do, and keeping work in step across computers.",
         status: Cloud.on() ? (a && a.me ? a.me.email : "signed in") : "not signed in" },
       { id: "plan", label: "Plan and credit", about: "What the firm pays, the credit left, and this month’s use.",
-        status: a && a.firm ? (a.firm.plan ? a.firm.plan.name : "no plan") + " · " + INR.format(num(a.firm.balance)) + " left" : "" },
+        status: a && a.firm ? (a.firm.plan ? a.firm.plan.name : "no plan") + " · " + money(num(a.firm.balance)) + " left" : "" },
     ] },
     { title: "Tally", items: [
       { id: "bridge", label: "Tally Bridge", about: "The small program that lets FinCom read from and post into TallyPrime on this computer: set it up and check it.",
@@ -129,6 +135,32 @@ function Company() {
   </Card>;
 }
 
+// review item 36: bills for services post as a Journal or as a Purchase voucher, as the client books them in Tally; a
+// client with its own voucher type (say "Purchase - Services", made under Purchase in Tally) types its name
+function VoucherType({ co }) {
+  const vt = co.voucherType || "Journal", known = vt === "Journal" || vt === "Purchase";
+  const [other, setOther] = useState(!known);
+  const pick = (v) => { setOther(v === null); if (v) coCommit("voucherType", v); };
+  return <fieldset className="f wide vtype" style={{ border: 0, padding: 0, margin: "0 0 12px" }}>
+    <legend style={{ fontWeight: 600, marginBottom: 6 }}>Post purchase bills (goods and services) as</legend>
+    <label className="chk"><input type="radio" name="vtype" checked={!other && vt === "Journal"} onChange={() => pick("Journal")} /> Journal voucher</label>
+    <label className="chk"><input type="radio" name="vtype" checked={!other && vt === "Purchase"} onChange={() => pick("Purchase")} /> Purchase voucher <span className="note">(many clients book services through Purchase in Tally)</span></label>
+    <label className="chk"><input type="radio" name="vtype" checked={other} onChange={() => pick(null)} /> Another voucher type in Tally</label>
+    {other && <div style={{ margin: "4px 0 0 24px", maxWidth: 320 }}><CoText label="Its name, exactly as in Tally" path="voucherType" placeholder="Purchase - Services" /></div>}
+    <p className="note" style={{ margin: "6px 0 0" }}>{"Bills now go to Tally as “" + vt + "” vouchers. The voucher type must exist in the client’s Tally company. Supplier credit notes still go as " + (co.debitNoteType || "Debit Note") + "."}</p>
+  </fieldset>;
+}
+
+// review of 01-Oct-2026: where the client keeps the supplier's invoice number, for matching purchases with GSTR-2B
+function SupInvFrom({ co }) {
+  const how = co.supInvFrom || "ref";
+  return <fieldset className="f wide supinv" style={{ border: 0, padding: 0, margin: "0 0 12px" }}>
+    <legend style={{ fontWeight: 600, marginBottom: 6 }}>Supplier invoice no. is in</legend>
+    {Object.entries(Books.SUPINV).map(([k, l]) => <label key={k} className="chk"><input type="radio" name="supinv" value={k} checked={how === k} onChange={() => coCommit("supInvFrom", k)} /> {l}</label>)}
+    <p className="note" style={{ margin: "6px 0 0" }}>{"2B reconciliation and the inward register match purchases on the number in the " + Books.SUPINV[how].toLowerCase() + (how === "narr" ? " (the first invoice or bill number written there)" : "") + ". When it is empty they use the Reference, then the voucher no., then an invoice number in the narration."}</p>
+  </fieldset>;
+}
+
 function TallySetup() {
   const co = CO(), open = Bridge.up() && Bridge.st.open.length ? Bridge.st.open : null, auto = co.vchNumbering === "tally";
   return <>
@@ -141,10 +173,8 @@ function TallySetup() {
       </div>
     </Card>
     <Card title="How purchase bills are entered">
-      <div className="grid" style={{ marginBottom: 12 }}>
-        <label className="f"><span>Voucher type</span>
-          <select value={co.voucherType || "Journal"} onChange={(ev) => coCommit("voucherType", ev.target.value)}>{["Journal", "Purchase"].map((v) => <option key={v}>{v}</option>)}</select></label>
-      </div>
+      <VoucherType co={co} />
+      <SupInvFrom co={co} />
       <div className="f wide vnum" style={{ marginBottom: 12 }}><span>Voucher numbering</span>
         {auto ? <div className="note"><span className="tag ok">Automatic in Tally</span> Tally gives every entry its own next number{co.vchAutoAt ? " (set " + fmtDate(String(co.vchAutoAt).slice(0, 10)) + ")" : ""}. FinCom sends no voucher numbers.{" "}
             <button className="linkbtn" onClick={() => doAct("vchUseBillNo")}>Use supplier bill numbers instead</button></div>

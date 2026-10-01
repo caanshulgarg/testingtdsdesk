@@ -68,6 +68,16 @@ const Books = {
       .replace(/&#(\d+);/g, (m, n) => { const c = num(n); return c >= 32 && c < 127 ? String.fromCharCode(c) : " "; })
       .replace(/&amp;/g, "&").trim();
   },
+  // each pay head of a payroll voucher, summed over its employees: [[pay head, amount]] (Tally's sign: debit negative)
+  payheads(s){
+    if (s.indexOf("<PAYHEADALLOCATIONS.LIST>") < 0) return [];
+    const by = new Map();
+    s.split("<PAYHEADALLOCATIONS.LIST>").slice(1).forEach(p => {
+      const q = p.split("</PAYHEADALLOCATIONS.LIST>")[0], n = this.one(q, "PAYHEADNAME"), a = this.amt(this.one(q, "AMOUNT"));
+      if (n && a) by.set(n, Math.round(((by.get(n) || 0) + a) * 100) / 100);
+    });
+    return Array.from(by.entries()).filter(([, a]) => Math.abs(a) >= 0.005);
+  },
   takeVoucher(s, out, meta){
     const type = (s.match(/VCHTYPE="([^"]*)"/) || [])[1] || "";
     const v = {
@@ -125,7 +135,9 @@ const Books = {
         if (e.indexOf("<BILLALLOCATIONS.LIST>") >= 0){
           const bl = e.split("<BILLALLOCATIONS.LIST>").slice(1).map(p2 => {
             const q = p2.split("</BILLALLOCATIONS.LIST>")[0];
-            return [this.one(q, "NAME"), this.one(q, "BILLTYPE"), this.amt(this.one(q, "AMOUNT"))];
+            // review of 01-Oct-2026: Tally's credit period on a New Ref ("30 Days"), so ageing can run from the due date
+            const cp = (q.match(/<BILLCREDITPERIOD\b[^>]*>([^<]*)<\/BILLCREDITPERIOD>/) || [])[1] || "", dm = cp.match(/^\s*(\d{1,4})\s*Days?\s*$/i);
+            return dm ? [this.one(q, "NAME"), this.one(q, "BILLTYPE"), this.amt(this.one(q, "AMOUNT")), Number(dm[1])] : [this.one(q, "NAME"), this.one(q, "BILLTYPE"), this.amt(this.one(q, "AMOUNT"))];
           }).filter(z => z[1] && z[2]);
           if (bl.length) x.b = bl;
         }
@@ -141,6 +153,16 @@ const Books = {
         v.ent.push(x);
       });
     });
+    // review of 01-Oct-2026: a payroll voucher (Tally's PaySlip view) has no ledger lines; its pay heads sit in each
+    // employee's allocations. A pay head is a ledger in Tally: earnings are debits, deductions (PF, advance) credits, and
+    // the party ledger (Salary Payable) takes the net. A pay head already among the ledger lines is not counted again
+    const pays = this.payheads(s);
+    if (pays.length){
+      const have = new Set(v.ent.map(e => e.l)); let tot = 0;
+      pays.forEach(([l, a]) => { tot = Math.round((tot + a) * 100) / 100; if (!have.has(l)) v.ent.push({l, a, r: null}); });
+      const party = this.one(s, "PARTYLEDGERNAME");
+      if (party && !have.has(party) && Math.abs(tot) >= 0.005) v.ent.push({l: party, a: Math.round(-tot * 100) / 100, r: null});
+    }
     // the rate on an item line, when the tax ledgers do not carry one
     if (!v.ent.some(e => e.r)){
       const rate = this.one(s, "GSTRATE");
@@ -344,6 +366,24 @@ const Books = {
     if (/PUR|PURCHASE/i.test(v.type) || /DEBIT NOTE/i.test(v.type)) return true;
     if (/SALE|SALES|CREDIT NOTE|EXPORT/i.test(v.type)) return false;
     return this.byContent(v, /^purchase accounts$/i, true);
+  },
+  // review of 01-Oct-2026: the supplier's invoice number of a purchase or expense entry, for 2B reconciliation and the
+  // inward register. Many clients keep it in the voucher number, or write it in the narration, not in Tally's Reference
+  // field. Client setup > Tally says where (co.supInvFrom: "ref", "vno" or "narr"); whichever is chosen, an empty field
+  // gives way to the next: Reference, the voucher number, then an invoice number found in the narration
+  SUPINV: {ref: "Reference", vno: "Voucher no.", narr: "Narration"},
+  invInNarr(t){
+    const s = String(t || "");
+    const m = s.match(/\b(?:inv(?:oice)?|bill)\s*(?:no\.?|number|num|#)?\s*[:.\-#]?\s*([A-Z0-9][A-Z0-9\/\-_.]{0,29}\d[A-Z0-9\/\-_.]*)/i)
+      || s.match(/\b([A-Z]{1,8}[\/\-][A-Z0-9\/\-]{1,25}\d)\b/i);
+    return m ? m[1].replace(/[.\-\/]+$/, "") : "";
+  },
+  supInv(v, how){
+    how = how || ((typeof CO === "function" && CO()) || {}).supInvFrom || "ref";
+    const ref = String(v.ref || "").trim(), no = String(v.no || "").trim(), nr = () => this.invInNarr(v.narr);
+    if (how === "vno") return no || ref || nr();
+    if (how === "narr") return nr() || ref || no;
+    return ref || no || nr();
   },
   isSale(v){
     if (this.NONACC.test(v.type)) return false;

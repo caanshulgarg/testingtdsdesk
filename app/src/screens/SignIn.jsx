@@ -18,7 +18,7 @@ function SignUp() {
   const st = Cloud.st;
   return <Box><h1>Create an account</h1><p className="note" style={{ margin: "8px 0 14px" }}>Your firm gets its own space. Nobody else can see your data.</p>
     <Field label="Firm name" k="firm" fk="sufirm" first /><Field label="Your name" k="name" fk="suname" /><Field label="Email" k="email" type="email" fk="cloudemail" auto="username" />
-    <Field label="Password (8 characters or more)" k="password" type="password" fk="cloudpw" auto="new-password" />
+    <Field label="Password (10 characters or more, letters and digits)" k="password" type="password" fk="cloudpw" auto="new-password" />
     <div className="row" style={{ marginTop: 12 }}><Act act="cloudSignUp" disabled={!!st.busy}>{st.busy ? "Making the account…" : "Create the account"}</Act></div><Err />
     <p className="note" style={{ marginTop: 14 }}>Already have one? <Act act="showSignIn" className="linkbtn">Sign in</Act></p></Box>;
 }
@@ -41,17 +41,30 @@ function TwoStep() {
     <p className="note" style={{ marginTop: 14 }}>{!(m.required || (m.need === "code" && !m.forAdmin)) && <><button className="linkbtn" data-act="mfaCancel" onClick={() => mfaAction("mfaCancel")}>Not now</button> · </>}Lost your phone? Ask the platform administrator to reset your two-step sign-in. <button className="linkbtn" data-act="mfaSignOut" onClick={() => mfaAction("mfaSignOut")}>Sign out</button></p></Box>;
 }
 
+// arrived from an invite or a reset link (review item 21): the person chooses their password first (setPasswordGo, src/js/27)
+function SetPassword() {
+  const f = S.setPassword || {}, busy = Cloud.st.busy;
+  return <Box><h1>{f.type === "recovery" ? "Choose a new password" : "Welcome to FinCom"}</h1>
+    <p className="note" style={{ margin: "8px 0 14px" }}>{f.type === "recovery" ? "Choose the password you will sign in with from now on." : "You have been added to your firm’s account. Choose the password you will sign in with."}</p>
+    <label className="f"><span>New password (10 characters or more, letters and digits)</span><input type="password" id="spw1" aria-label="New password" autoComplete="new-password" autoFocus /></label>
+    <label className="f" style={{ marginTop: 8 }}><span>Repeat it</span><input type="password" id="spw2" aria-label="Repeat the new password" autoComplete="new-password" onKeyDown={(ev) => { if (ev.key === "Enter") { ev.preventDefault(); setPasswordGo(); } }} /></label>
+    <div className="row" style={{ marginTop: 12 }}><button className="btn primary" data-act="setPasswordGo" disabled={!!busy} onClick={() => setPasswordGo()}>{busy ? "Saving…" : "Save and continue"}</button></div>
+    {f.error && <p className="bk-warn" style={{ marginTop: 10 }}>{f.error}</p>}</Box>;
+}
+
 export default function SignIn() {
   const st = Cloud.st;
+  if (S.setPassword) return <SetPassword />;
   if (Cloud.on() && st.mfa) return <TwoStep />;
   if (S.signUpOpen) return <SignUp />;
   return <Box><h1>FinCom</h1>
     <p className="note">{S.firm && S.firm.firmName ? S.firm.firmName : "Finance and compliance, in one place"}</p>
     <p className="note" style={{ margin: "2px 0 0" }}><a href="welcome/">What is FinCom?</a></p>
-    <p className="note" style={{ margin: "10px 0 14px" }}>Sign in to see your firm’s work. Nothing is shown before that.</p>
+    {S.signedOutWhy ? <p className="bk-alert" style={{ margin: "10px 0 14px" }}>{S.signedOutWhy}</p>
+      : <p className="note" style={{ margin: "10px 0 14px" }}>Sign in to see your firm’s work. Nothing is shown before that.</p>}
     <Field label="Email" k="email" type="email" fk="cloudemail" auto="username" first /><Field label="Password" k="password" type="password" fk="cloudpw" auto="current-password" />
     <div className="row" style={{ marginTop: 12 }}><Act act="cloudSignIn" disabled={!!st.busy}>{st.busy ? "Signing in…" : "Sign in"}</Act></div><Err />
-    <p className="note" style={{ marginTop: 14 }}>Forgotten the password? Ask the person who runs your firm’s account to make a new one.</p>
+    <p className="note" style={{ marginTop: 14 }}>Forgotten the password? Ask the person who runs your firm’s account to send you a reset link. After 5 wrong passwords the account is locked for 15 minutes.</p>
     <p className="note" style={{ marginTop: 10 }}>No internet on this computer? <Act act="useOffline" className="linkbtn">Use it here without an account</Act> — the work stays on this computer only.</p>
     {S.signupInfo && S.signupInfo.open !== false && <p className="note" style={{ marginTop: 6 }}>New here? <Act act="showSignUp" className="linkbtn">Create an account</Act>{num(S.signupInfo.trial_credit) ? " · starts with " + INR.format(num(S.signupInfo.trial_credit)) + " of credit" : ""}</p>}</Box>;
 }

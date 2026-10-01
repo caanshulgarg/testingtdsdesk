@@ -97,11 +97,12 @@ const TCloud = {
   async find(cid, q, from, to, typ, had){
     const j = await this.rpc("tally_find", {p_client: cid, p_q: q || "", p_from: this.iso(from), p_to: this.iso(to), p_type: typ || null, p_limit: this.FIND_PAGE, p_offset: had ? had.rows.length : 0});
     if (!j || j.none) throw new Error("The cloud has no copy of these books yet.");
-    const rows = [].concat(j.rows || []).map(([d, type, no, party, narr, amt, guid, ent]) => {
+    const rows = [].concat(j.rows || []).map(([d, type, no, party, narr, amt, guid, ent, opt]) => {
       const e = [].concat(ent || []).map(([l, a]) => ({l, a: num(a)}));
-      return {id: guid, date: d, type, no, party: party || (e.find(x => x.a < 0) || {}).l || "", narr: narr || "", amt: r2(num(amt)), ent: e};
+      return {id: guid, date: d, type, no, party: party || (e.find(x => x.a < 0) || {}).l || "", narr: narr || "", amt: r2(num(amt)), ent: e, opt: opt === true};
     });
-    return {kind: "find", src: "cloud", q, from, to, typ, rows: (had ? had.rows : []).concat(rows), n: num(j.n), total: r2(num(j.total))};
+    // migration-10: an Optional entry comes marked and is not in the total
+    return {kind: "find", src: "cloud", q, from, to, typ, rows: (had ? had.rows : []).concat(rows), n: num(j.n), total: r2(num(j.total)), opt: num(j.opt)};
   },
   age(bk){
     if (!bk) return "";
@@ -112,15 +113,26 @@ const TCloud = {
   async day(bk, d, at){
     const k = "tcday:" + bk + ":" + d;
     try { const c = await IDBStore.get(k); if (c && c.at === at) return c.text; } catch (e){}
+    await Cloud.fresh().catch(() => {});
     const c = Cloud.cfg(), s = Cloud.sess();
     const url = c.url.replace(/\/+$/, "") + "/storage/v1/object/authenticated/tally-days/" + Cloud.st.firm + "/" + bk + "/" + d.slice(0, 6) + "/" + d + ".xml.gz";
     let r = await fetch(url, {headers: {apikey: c.key, Authorization: "Bearer " + s.access_token}, cache: "no-store"});
-    if (r.status === 401 || r.status === 400){ await Cloud.refreshToken(); r = await fetch(url, {headers: {apikey: c.key, Authorization: "Bearer " + Cloud.sess().access_token}, cache: "no-store"}); }
+    if (r.status === 401 || r.status === 400){ await Cloud.refreshToken(s.access_token); r = await fetch(url, {headers: {apikey: c.key, Authorization: "Bearer " + Cloud.sess().access_token}, cache: "no-store"}); }
     if (r.status === 404) return "";
     if (!r.ok) throw new Error("Could not fetch " + d + " from the cloud (" + r.status + ").");
     const text = await new Response(r.body.pipeThrough(new DecompressionStream("gzip"))).text();
     try { await IDBStore.write([[k, {at, text}]]); } catch (e){}
     return text;
+  },
+  // Tally's groups, sent by the bridge from 1.14.7 (review of 01-Oct-2026): each group's parent, so a ledger's chain up
+  // to its primary group is known (expenses, incomes, debtors...). A copy sent before has none: the names decide, as before
+  async groupsInto(b, book){
+    let g = [];
+    try { g = await this.restAll("tally_groups?select=name,parent&book_id=eq." + book); } catch (e){ g = []; }
+    if (!g.length) return;
+    b.groups = Object.assign({}, b.groups || {});
+    g.forEach(x => { b.groups[x.name] = x.parent || ""; });
+    TallyRead.yearOpen(b);
   },
   // ---------- bring the cloud's copy into FinCom: only the months with a day that changed
   async load(force){
@@ -134,8 +146,9 @@ const TCloud = {
       // answered from the cloud's totals, not loaded here; only the ledgers and their groups, for choosing and grouping
       const m0 = b.meta = b.meta || {};
       if (!(m0.cloud && m0.cloud.book === bk.book && m0.cloud.big && m0.cloud.ledgersAt === bk.ledgersAt)){
-        const led = await this.restAll("tally_ledgers?select=name,parent,open&order=name&book_id=eq." + bk.book);
+        const led = await this.restAll("tally_ledgers?select=name,parent,open&merged_into=is.null&order=name&book_id=eq." + bk.book);
         b.vouchers = []; TallyRead.balances(b, {ledgers: led.map(l => ({name: l.name, parent: l.parent, open: String(l.open), close: ""}))}, this.d8(bk.from), Audit.today());
+        await this.groupsInto(b, bk.book);
         m0.cloud = {book: bk.book, company: bk.company, ledgersAt: bk.ledgersAt, big: true, at: new Date().toISOString()};
         LK.cache = {}; render();
       }
@@ -155,8 +168,9 @@ const TCloud = {
     try {
       if (!same){ b.vouchers = []; b.tb = null; }
       if (ledNew){
-        const led = await this.restAll("tally_ledgers?select=name,parent,open&order=name&book_id=eq." + bk.book);
+        const led = await this.restAll("tally_ledgers?select=name,parent,open&merged_into=is.null&order=name&book_id=eq." + bk.book);
         TallyRead.balances(b, {ledgers: led.map(l => ({name: l.name, parent: l.parent, open: String(l.open), close: ""}))}, from, to);
+        await this.groupsInto(b, bk.book);
       }
       const days = {};
       for (const ym of todo){
@@ -261,6 +275,7 @@ const TCloudUp = {
   // who: the client and Tally company, fixed when the upload starts (build 195: the upload for several clients moves on
   // to the next client while an earlier upload is still going; the earlier one must not follow it)
   async post(body, who){
+    await Cloud.fresh().catch(() => {});
     const c = Cloud.cfg(), s = Cloud.sess();
     if (!s) throw new Error("Sign in to the firm account first.");
     const r = await fetch(TCloud.ingestUrl(), {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": "application/json"}, body: JSON.stringify(Object.assign(who || {client: S.coId, company: BridgeSeed.company()}, body))});
@@ -295,6 +310,67 @@ const TCloudUp = {
 
 // The light on the clients list (build 189): for each client with Tally, whether its Tally computer is on, Tally open and
 // the books up to date, from the bridge's heartbeat (every 5 minutes; the bridge asks Tally nothing for it)
+// review of 01-Oct-2026: on TCloud (its pane, status, rpc and restAll); the call to FinCom's cloud goes through TCloudUp.post
+Object.assign(TCloud, {
+  // review of 01-Oct-2026: the day books kept in the cloud, read again by FinCom's cloud with today's reading (the party's
+  // GSTIN, the place of supply, HSN and rate on lines were not kept before). One month a call; owners only. Nothing is
+  // asked of the computer with Tally
+  async reparse(cid){
+    // review of 01-Oct-2026: what happened stays on the screen (p.rp), not only in a toast. "Read again" is said only
+    // when FinCom's cloud answered for each month with the days it read; an answer of another shape, no months kept, or
+    // no day read at all is an error on the screen. The line names the cloud asked, so a wrong address shows
+    const co = S.companies[cid] || {name: "This client"};
+    const p = this.pane; p.rp = p.rp || {};
+    let host = ""; try { host = new URL(this.ingestUrl()).host.split(".")[0]; } catch (e){}
+    if (p.rp[cid] && p.rp[cid].busy){ toast("Already reading " + co.name + "’s kept day books again."); return; }
+    let month = null, n = 0, bad = 0, total = 0, calls = 0;
+    const seen = new Set();
+    try {
+      do {
+        p.busy = "Reading " + co.name + "’s kept day books again" + (month ? " (" + FC.monthLabel(month) + ")" : "") + "…"; p.rp[cid] = {busy: true, n, months: calls, host}; render();
+        const j = await TCloudUp.post({kind: "reparse", month}, {client: cid});
+        calls++;
+        if (!j || j.ok !== true || !Array.isArray(j.done) || !("next" in j)) throw new Error("FinCom's cloud (" + host + ") gave an answer that is not a re-read; nothing was read. Its function may be out of date.");
+        if (!j.months) throw new Error("FinCom's cloud (" + host + ") keeps no day books for this client; nothing was read.");
+        if (j.month){ if (seen.has(j.month)) throw new Error("FinCom's cloud answered " + j.month + " twice; stopped."); seen.add(j.month); }
+        n += j.done.length; bad += (j.bad || []).length; total = j.months || total; month = j.next;
+        if (calls > 240) throw new Error("More than 240 months; stopped.");
+      } while (month);
+      if (!n) throw new Error("No day was read (" + total + " months kept" + (bad ? ", " + bad + " days could not be read" : "") + ").");
+      p.busy = ""; p.rp[cid] = {n, bad, months: total, at: new Date().toISOString(), host};
+      toast(co.name + ": " + n + " days of " + total + " months read again" + (bad ? ", " + bad + " could not be read" : "") + ". Open the client again to see them.");
+      const s = this.st[cid]; if (s) s.at = 0;
+    } catch (e){ p.busy = ""; p.rp[cid] = {err: (e && e.message) || String(e), n, host}; toast("Could not read the kept day books again: " + ((e && e.message) || e)); }
+    render();
+  },
+  // review of 01-Oct-2026: "Send ledgers and groups now": the Tally computer reads every ledger and group and sends
+  // them (bridge 1.14.8), asked the way Update now is: through the bridge here, or through the cloud's heartbeat
+  async sendLedgers(cid){
+    const here = typeof Bridge === "object" && Bridge.on() && Bridge.up();
+    try {
+      // review of 01-Oct-2026: asked through the cloud too, always: the bridge here may keep another company, or this
+      // may not be the computer that keeps this client's books
+      if (here){ try { await LK.keepSet({now: true}, "Asked the bridge here to read every ledger and group from Tally and send them."); } catch (e){} }
+      const j = await this.rpc("tally_want_update", {p_client: cid});
+      toast(j && j.ok ? "The Tally computer is asked to send every ledger and group; it starts within a minute (Tally must be open there). Press What is in the cloud? after two minutes." : here ? "Asked the bridge here. No other Tally computer is linked to this client." : "No Tally computer is linked to this client yet.");
+    } catch (e){ toast("Could not ask the Tally computer: " + ((e && e.message) || e)); }
+    setTimeout(() => this.groupStatus(cid), 1500);
+  },
+  // what of the client's ledgers is in the cloud: groups, and ledgers with a group
+  async groupStatus(cid){
+    const p = this.pane; p.gs = p.gs || {};
+    try {
+      const bk = (await this.status(cid, true) || []).find(b => b.from); if (!bk){ p.gs[cid] = {none: true}; render(); return; }
+      // a twin kept from a trial balance file (merged_into, migration-9) is not a ledger of its own; Profit & Loss A/c has
+      // no group in Tally either
+      const [g, led] = await Promise.all([this.restAll("tally_groups?select=name&book_id=eq." + bk.book).catch(() => []), this.restAll("tally_ledgers?select=name,parent&merged_into=is.null&book_id=eq." + bk.book).catch(() => [])]);
+      const own = led.filter(l => l.name !== "Profit & Loss A/c");
+      p.gs[cid] = {groups: g.length, ledgers: own.length, grouped: own.filter(l => l.parent).length, pl: own.length < led.length, at: new Date().toISOString()};
+    } catch (e){ p.gs[cid] = {err: (e && e.message) || String(e)}; }
+    render();
+  }
+});
+
 const TLight = {
   st: {at: 0, busy: false, by: {}},
   refresh(){
@@ -312,7 +388,7 @@ const TLight = {
   work(cos, devs, now){
     const by = {}, dev = {};
     devs.filter(d => !d.revoked).forEach(d => { dev[d.id] = d; });
-    const when = t => new Date(t).toLocaleString("en-IN", {day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit"});
+    const when = t => fmtDateTime(t);
     const rank = {bad: 3, warn: 2, ok: 1};
     cos.forEach(c => {
       const d = dev[c.device_id]; if (!d) return;
@@ -375,7 +451,7 @@ function tallyStatus(co){
   const seenOf = d => Date.parse((((d.info || {}).beat) || {}).at || d.last_seen || 0) || 0;
   const heard = devs.reduce((a, d) => Math.max(a, seenOf(d)), 0);
   const fresh = devs.some(d => Date.now() - seenOf(d) <= 15 * 60000);
-  const when = t => fmtDate(new Date(t).toISOString().slice(0, 10)) + " " + new Date(t).toLocaleTimeString("en-IN", {hour: "2-digit", minute: "2-digit"});
+  const when = t => fmtDateTime(t);
   if (!local && !devs.length) return {state: "none", level: "bad", label: "Not set up", say: "No Tally Bridge on this computer, and no computer of the firm sends from Tally. Set up the Tally Bridge on the computer with TallyPrime."};
   if (!local && !fresh) return {state: "offline", level: "bad", label: "Offline since " + (heard ? when(heard) : "—"), say: "No word from the firm's Tally computer" + (heard ? " since " + when(heard) : "") + ": the computer, the FinCom Connector or the bridge is off."};
   const cos = co ? [co] : Object.values(S.companies || {}).filter(c => !c.deleted);

@@ -68,7 +68,7 @@ function Desk() {
   const avgRsp = firstRsp.length ? firstRsp.reduce((a, b) => a + b, 0) / firstRsp.length : null;
   // opened and closed, week by week, for eight weeks
   const wk = []; for (let i = 7; i >= 0; i--) { const a = now - (i + 1) * 7 * 864e5, b = now - i * 7 * 864e5;
-    wk.push({ lab: new Date(a).toLocaleDateString("en-IN", { day: "2-digit", month: "short" }), o: l.filter((t) => { const c = Date.parse(t.created_at); return c > a && c <= b; }).length, c: l.filter((t) => { const c = Date.parse(t.resolved_at || ""); return c > a && c <= b; }).length }); }
+    wk.push({ lab: fmtDate(a).slice(0, 6), o: l.filter((t) => { const c = Date.parse(t.created_at); return c > a && c <= b; }).length, c: l.filter((t) => { const c = Date.parse(t.resolved_at || ""); return c > a && c <= b; }).length }); }
   const top = Math.max(1, ...wk.map((w) => Math.max(w.o, w.c)));
   const pipe = ["new", "open", "waiting"].map((k) => [k, open.filter((t) => t.status === k).length]).filter((x) => x[1]);
   const byFirm = {}; open.forEach((t) => { byFirm[t.firm_name || "?"] = (byFirm[t.firm_name || "?"] || 0) + 1; });

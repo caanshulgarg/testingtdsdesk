@@ -5,9 +5,11 @@ _DATA = os.environ.get("TDSDESK_DATA", os.path.join(os.path.dirname(os.path.absp
 DAYBOOK = os.path.join(_DATA, "DayBook.xml")
 MASTER = os.path.join(os.environ.get("TDSDESK_DATA", os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")), "Master.xml")
 COMPANY = "VMS EVENTS PRIVATE LIMITED (2024-25)"
-cache = os.path.join(os.path.dirname(os.path.abspath(__file__)), "out", "fake-tally.pkl")
+# one cache per data folder (the made-up books of make_fake_books.py and a real export are kept apart)
+cache = os.path.join(os.path.dirname(os.path.abspath(__file__)), "out", "fake-tally-%08x.pkl" % (__import__("zlib").crc32(os.path.abspath(_DATA).encode()) & 0xffffffff))
+os.makedirs(os.path.dirname(cache), exist_ok=True)
 if os.path.exists(cache):
-    V, L = pickle.load(open(cache, "rb"))
+    V, L, G = pickle.load(open(cache, "rb"))
 else:
     V = []  # (date, xml of one voucher)
     f = open(DAYBOOK, encoding="utf-16"); buf = ""
@@ -25,8 +27,11 @@ else:
     for x in re.finditer(r'<LEDGER NAME="([^"]*)"(.*?)</LEDGER>', m, re.S):
         p = re.search(r"<PARENT>([^<]*)</PARENT>", x.group(2)); ob = re.search(r"<OPENINGBALANCE>([^<]*)</OPENINGBALANCE>", x.group(2))
         L.append((x.group(1), p.group(1) if p else "", float((ob.group(1) if ob else "0").replace(",", "") or 0)))
+    # the groups in the masters, name and parent; a master with none: each ledger's group, as a primary group
+    G = [(x.group(1), ((re.search(r"<PARENT>([^<]*)</PARENT>", x.group(2)) or [0, ""])[1])) for x in re.finditer(r'<GROUP NAME="([^"]*)"(.*?)</GROUP>', m, re.S)]
+    if not G: G = [(g, "") for g in sorted(set(p for _, p, _ in L if p))]
     V.sort(key=lambda z: z[0])
-    pickle.dump((V, L), open(cache, "wb"))
+    pickle.dump((V, L, G), open(cache, "wb"))
 dates = [d for d, _ in V]
 def amounts_until(asOn):
     bal = {}
@@ -50,7 +55,7 @@ INFLIGHT = [0, 0]     # [now, most at once]
 _cnt = __import__("threading").Lock()
 LOG = []             # (kind, from, to) of every request, for the tests to see how much was asked at a time            # how many requests of each kind this Tally was asked (the tests check nothing heavy is asked)
 def _kind(body):
-    for k in ("TDSDeskKeepList", "TDSDeskKeepLed", "TDSDeskKeepCo", "TDSDeskKeepBal", "TDSDeskLedVch", "TDSDeskOneLed", "TDSDeskVchHeads", "TDSDeskBalances", "TDSDeskGroupNames", "TDSDeskNames", "TDSDeskTB", "TDSDeskLedgers", "TDSDeskCompanies"):
+    for k in ("TDSDeskKeepList", "TDSDeskKeepLed", "TDSDeskKeepCo", "TDSDeskKeepBal", "TDSDeskLedVch", "TDSDeskOneLed", "TDSDeskVchHeads", "TDSDeskBalances", "TDSDeskGroupNames", "TDSDeskKeepGrp", "TDSDeskNames", "TDSDeskTB", "TDSDeskLedgers", "TDSDeskCompanies"):
         if k in body: return k
     if "<REPORTNAME>Day Book</REPORTNAME>" in body: return "DayBook"
     if "Import Data" in body: return "Import"
@@ -193,6 +198,9 @@ class H(http.server.BaseHTTPRequestHandler):
             asOn = g("SVTODATE"); mv = amounts_until(asOn)
             rows = [(n, p, ob + mv.get(n.replace("&amp;", "&"), mv.get(n, 0))) for n, p, ob in L]
             out = "<ENVELOPE><BODY><DATA><COLLECTION>" + "".join('<LEDGER NAME="%s"><PARENT>%s</PARENT><CLOSINGBALANCE>%.2f</CLOSINGBALANCE></LEDGER>' % (n, p, b) for n, p, b in rows if abs(b) >= 0.005) + "</COLLECTION></DATA></BODY></ENVELOPE>"
+        elif "TDSDeskKeepGrp" in body:
+            # Tally's groups as the bridge (1.14.7) asks for them; a primary group's parent is written as Tally does
+            out = "<ENVELOPE><BODY><DATA><COLLECTION>" + "".join('<GROUP NAME="%s"><NAME>%s</NAME><PARENT>%s</PARENT></GROUP>' % (gn, gn, gp or "&#4; Primary") for gn, gp in G) + "</COLLECTION></DATA></BODY></ENVELOPE>"
         elif "TDSDeskGroupNames" in body:
             gs = sorted(set(p for _, p, _ in L if p))
             out = "<ENVELOPE><BODY><DATA><COLLECTION>" + "".join('<GROUP NAME="%s"><PARENT></PARENT></GROUP>' % gname for gname in gs) + "</COLLECTION></DATA></BODY></ENVELOPE>"

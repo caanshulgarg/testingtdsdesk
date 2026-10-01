@@ -236,11 +236,12 @@ function Test-TallyPortOpen([int]$Port) {
   try { $ar = $c.BeginConnect('127.0.0.1', $Port, $null, $null); if (-not $ar.AsyncWaitHandle.WaitOne(500)) { return $false }; $c.EndConnect($ar); return $true } catch { return $false } finally { try { $c.Close() } catch { } }
 }
 $script:EmptyAskAt = [DateTime]::MinValue
+$script:KeepLedSent = @{}
 function Get-OpenCompaniesCached {
   $shared = Join-Path (Get-SyncDir) 'open-companies.json'
   $list = $null
   try { if (Test-Path -LiteralPath $shared) { $list = @(Get-Content -Raw -LiteralPath $shared | ConvertFrom-Json | ForEach-Object { $h = [ordered]@{}; foreach ($p in $_.PSObject.Properties) { $h[$p.Name] = $p.Value }; $h.companies = @($h.companies | Where-Object { $_ } | ForEach-Object { $c = [ordered]@{}; foreach ($q in $_.PSObject.Properties) { $c[$q.Name] = $q.Value }; $c }); $h }) } } catch { $list = $null }
-  $stale = $false
+  $stale = $false; $newPort = $false
   if ($list) {
     foreach ($e in $list) {
       if ($e.skipped) { continue }
@@ -248,9 +249,20 @@ function Get-OpenCompaniesCached {
       if ($open -and (-not $e.ok -or -not @($e.companies).Count)) { $stale = $true }     # Tally opened since it was last asked
       $e.ok = $open; if (-not $open) { $e.companies = @() }
     }
+    # 1.14.8 (review of 01-Oct-2026): Tally reopened on another port (9002 where the list still had 9001): a port of
+    # this session that takes connections and is not in the list makes it stale, so the heartbeat does not say "Tally
+    # not open" while it is
+    try {
+      foreach ($pp in @((Get-PortPlan).ports)) {
+        if ($Cfg.OnlyMySession -and $pp.mine -eq $false) { continue }
+        if (-not @($list | Where-Object { [int]$_.port -eq [int]$pp.port }).Count -and (Test-TallyPortOpen ([int]$pp.port))) { $stale = $true; $newPort = $true }
+      }
+    } catch { }
   }
-  # nothing known yet, or Tally has been opened since: asked once, and not again for ten minutes
-  if ((-not $list -or $stale) -and ((Get-Date) - $script:EmptyAskAt).TotalMinutes -ge 10 -and -not (Get-KeepUserInTally)) {
+  # nothing known yet, or Tally has been opened since: asked once, and not again for ten minutes. 1.14.9 (review of
+  # 01-Oct-2026): a Tally on a port not in the list is asked even while someone works in Tally (only the list of open
+  # companies, a moment's question): otherwise, with the person busy in Tally all day, the bridge never learnt of it
+  if ((-not $list -or $stale) -and ((Get-Date) - $script:EmptyAskAt).TotalMinutes -ge 10 -and ($newPort -or -not $list -or -not (Get-KeepUserInTally))) {
     $script:EmptyAskAt = Get-Date
     return @(Get-OpenCompanies)
   }
@@ -608,6 +620,23 @@ function Get-KeepLedgers([string]$Company, [int]$Port, [long]$After) {
   }
   return , $out
 }
+# 1.14.7 (review of 01-Oct-2026): Tally's groups, name and parent, for the cloud copy: each ledger's chain of groups up
+# to its primary group. A few hundred rows at most, asked with the ledgers
+function Get-KeepGroups([string]$Company, [int]$Port) {
+  $req = '<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TDSDeskKeepGrp</ID></HEADER>' +
+    '<BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + (Esc $Company) + '</SVCURRENTCOMPANY></STATICVARIABLES><TDL><TDLMESSAGE>' +
+    '<COLLECTION NAME="TDSDeskKeepGrp" ISMODIFY="No"><TYPE>Group</TYPE><FETCH>NAME,PARENT</FETCH></COLLECTION>' +
+    '</TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>'
+  $doc = Get-XmlDoc (Invoke-Tally -TallyPort $Port -Xml $req -TimeoutSec 60)
+  $out = New-Object System.Collections.ArrayList
+  foreach ($g in $doc.SelectNodes('//GROUP')) {
+    $n = $g.GetAttribute('NAME'); if (-not $n) { $n = Get-NodeText $g 'NAME' }
+    # a primary group's parent is empty (Tally may write it as "Primary", with a control character in front)
+    $p = (Get-NodeText $g 'PARENT') -replace '^\W*Primary$', ''
+    if ($n) { $null = $out.Add(@($n, $p)) }
+  }
+  return , $out
+}
 function Read-KeepJson([string]$f) { if (-not (Test-Path -LiteralPath $f)) { return $null }; try { return (Get-Content -Raw -LiteralPath $f -Encoding UTF8 | ConvertFrom-Json) } catch { return $null } }
 # a ledger renamed in Tally: the copy's entries carry the new name (Tally's own entries do); nothing is asked of Tally for it
 function Rename-KeepLedger([string]$Dir, $St, [string]$Old, [string]$New) {
@@ -662,6 +691,25 @@ function Update-KeepLedgers([string]$Company, [int]$Port, [string]$Dir, $St, [bo
   }
   $o = [ordered]@{}; foreach ($g in $known.Keys) { $o[$g] = $known[$g] }
   Save-KeepFile $lf ($o | ConvertTo-Json -Depth 4 -Compress)
+  # 1.14.7: the groups with every full look at the ledgers (and the first time), and the cloud sent the ledgers again
+  # whenever a name or a group differs from what it last got: every ledger, with its group, not only those with a balance
+  $gf = Join-Path $Dir 'groups.json'
+  if ($Full -or $first -or -not (Test-Path -LiteralPath $gf)) {
+    try {
+      $grp = Get-KeepGroups $Company $Port
+      if (@($grp).Count) { Save-KeepFile $gf (ConvertTo-Json -InputObject @($grp | ForEach-Object { , @([string]$_[0], [string]$_[1]) }) -Depth 4 -Compress) }
+    } catch { Write-Log ('Keeping ' + $Company + ': the groups could not be read this time (' + $_.Exception.Message + ')') }
+  }
+  $sig = ''
+  try {
+    $parts = @($known.Values | ForEach-Object { [string]$_[0] + '>' + [string]$_[1] } | Sort-Object)
+    if (Test-Path -LiteralPath $gf) { $parts += [IO.File]::ReadAllText($gf) }
+    $sha = [Security.Cryptography.SHA256]::Create()
+    $sig = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes(($parts -join "`n")))).Replace('-', '')
+  } catch { }
+  $sf = Join-Path $Dir 'cloud-ledgers.sig'
+  $was = ''; if (Test-Path -LiteralPath $sf) { $was = ([IO.File]::ReadAllText($sf)).Trim() }
+  if ($sig -and $sig -ne $was) { Set-CloudLedgers $Dir; Save-KeepFile $sf $sig }
 }
 # one month of the copy compared with Tally's list of entries, and the dates that differ read again. Also notices when
 # Tally's change numbers have gone back (a backup restored, the data rewritten): then every month is checked again.
@@ -929,6 +977,18 @@ function Step-Keep([string]$Company, [int]$Port, [string]$BooksFrom) {
   if ($st.phase -eq 'live' -and ($quiet -or -not @($ch).Count) -and (-not $script:KeepOnce -or ([string]$st.roundFrom -eq $today -and [string]$st.roundAt -eq $today))) { $script:KeepCaughtUp = $true }
   # ledger masters changed since the last look
   if ($st.phase -eq 'live' -and $sw.Elapsed.TotalSeconds -lt $budget -and -not ($cn.ok -and $null -ne $st.cm -and [long]$st.cm -eq $cn.m)) { Update-KeepLedgers $Company $Port $dir $st $false }
+  # 1.14.7: a copy kept by an older bridge has no groups yet: the ledgers and groups read once, and sent to the cloud
+  elseif ($st.phase -eq 'live' -and $sw.Elapsed.TotalSeconds -lt $budget -and -not (Test-Path -LiteralPath (Join-Path $dir 'groups.json'))) { Update-KeepLedgers $Company $Port $dir $st $true }
+  # 1.14.8: a run someone asked for (Update now, Send ledgers and groups now) reads every ledger and group once and
+  # sends them to the cloud, whatever changed, so nobody waits for a timer
+  $nowAsk = ''; try { $nowAsk = ([IO.File]::ReadAllText((Join-Path (Get-SyncDir) 'keep-now.txt'))).Trim() } catch { }
+  if ($st.phase -eq 'live' -and $nowAsk -and [string]$script:KeepLedSent[$Company] -ne $nowAsk -and $sw.Elapsed.TotalSeconds -lt $budget) {
+    $script:KeepLedSent[$Company] = $nowAsk          # once for each time it is asked, also when a copier was already running
+    Update-KeepLedgers $Company $Port $dir $st $true
+    Remove-Item -LiteralPath (Join-Path $dir 'cloud-ledgers.sig') -Force -ErrorAction SilentlyContinue
+    Set-CloudLedgers $dir
+    Write-Log ('Keeping ' + $Company + ': every ledger and group read from Tally, to go to the cloud')
+  }
   if ($cn.ok) { $st.cv = $cn.v; $st.cm = $cn.m }
   # 1.14.4: the light check stops here: the month checks and the retries wait for the daily update
   if ($script:KeepLight) { $st.trouble = $null; & $save; $script:KeepCaughtUp = $true; return }

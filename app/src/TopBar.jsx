@@ -2,11 +2,12 @@
 // firm account chip and the firm button, with the Tally panel and firm menu they open.
 // Was renderTop, clientHeader, topRight, tallyPanelHtml, firmMenuHtml (src/js/02 and 18); actions are doAct(...).
 import TallyPill from "./parts/TallyPill.jsx";
+import HelpButton from "./parts/HelpButton.jsx";
 import { useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 
 const HOME_TITLES = { clients: "Clients", today: "Today", inbox: "Inbox", tally: "Tally", rules: "Settings", help: "Help" };
-const BOOKS_TITLES = { reports: "Reports", lookup: "Look up", letters: "Confirmations and reminders" };
+const BOOKS_TITLES = { reports: "Reports", lookup: "Look up", letters: "Confirmations and reminders", mis: "MIS", fs: "Accounts", audit: "Audit" };
 const DOC_NAMES = { bills: "Purchase bills", bank: "Bank", sales: "Sales invoices" };
 
 function Title({ title, sub, children }) {
@@ -18,16 +19,26 @@ function Title({ title, sub, children }) {
   );
 }
 
+// the one main button of each page (review item 27): what the page is for; uploading from anywhere else is the
+// "+ Upload" in the top bar
+function MainAction() {
+  const t = docType(), bt = S.tab === "books" ? booksTab() : "";
+  if (["invoices", "export", "done"].includes(S.tab) && t === "bills") return <button className="btn primary small" onClick={() => doAct("uploadHere")}>Upload bills</button>;
+  if (S.tab === "bank") return <button className="btn primary small" onClick={() => doAct("uploadHere")}>Upload statement</button>;
+  if (bt === "letters") return <button className="btn primary small" onClick={() => ltrMode("confirm")}>New confirmation</button>;
+  if (bt === "reports") return <button className="btn primary small" onClick={() => doAct("keepNow")}>Refresh books</button>;
+  return null;
+}
+
 function ClientHeader() {
   const co = CO(), setup = isSetupTab(S.tab), t = docType(), inbox = docqCount(S.coId);
   const title = S.tab === "dash" ? "Dashboard" : S.tab === "clientInbox" ? "Inbox" : S.tab === "txn" ? "Transactions"
-    : S.tab === "books" ? BOOKS_TITLES[booksTab()] || "TDS & GST from the books" : setup ? "Client setup" : DOC_NAMES[t];
+    : S.tab === "books" ? BOOKS_TITLES[booksTab()] || "TDS & GST" : setup ? "Client setup" : DOC_NAMES[t];
   const head = (
     <Title title={title} sub={co.name}>
       <div className="tbar-actions">
         {inbox > 0 && !setup && S.tab !== "clientInbox" && <button className="btn small" onClick={() => goStep("collect")}>{"\u{1F4E5} " + inbox + " in inbox"}</button>}
-        {setup ? <button className="btn small" onClick={() => toggleSetup()}>Back to the work</button>
-          : t !== "sales" && <button className="btn primary small" onClick={() => doAct("uploadHere")}>{t === "bank" ? "Upload statement" : "Upload bills"}</button>}
+        {setup ? <button className="btn small" onClick={() => toggleSetup()}>Back to the work</button> : <MainAction />}
       </div>
     </Title>
   );
@@ -49,22 +60,25 @@ function CloudChip() {
   if (st.state === "signedout") return <button className="tchip bad" onClick={() => doAct("openSettings")}>Sign in again</button>;
   if (st.error) return <button className="tchip warn" onClick={() => doAct("openSettings")} title={st.error}>Sync problem</button>;
   const mins = st.lastSync ? Math.round((Date.now() - st.lastSync) / 60000) : null;
-  const title = st.email + (st.lastSync ? " · last sync " + new Date(st.lastSync).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "");
+  const title = st.email + (st.lastSync ? " · last sync " + fmtTime(st.lastSync) : "");
   return <span className="tchip ok" title={title}>{"☁ Shared" + (mins > 5 ? " · " + mins + "m" : "")}</span>;
 }
 
 function TopRight() {
   const bal = accountBalance(), plan = S.account && S.account.firm ? planName(S.account.firm.plan) : "";
   const t = tallyStatus(S.view === "company" ? CO() : null);
+  const inCo = S.view === "company" && CO();
   return (
     <div className="topright">
+      {inCo && <HelpButton page />}
+      {inCo && <button className="btn small" title="Upload bills, statements or sales invoices for this client" onClick={() => goStep("collect")}>+ Upload</button>}
       <button className={"tallychip" + (t.level === "ok" ? " live" : t.level === "warn" ? " off" : " none")} onClick={() => doAct("tallyPanel")} title={t.say} data-tally={t.state}>
         <span className="dotled" />{"Tally: " + t.label}
       </button>
       <CloudChip />
       <button className="firmbtn" onClick={() => doAct("firmMenu")}>
         <b>{(S.firm.firmName || "Firm").slice(0, 26)}</b>
-        {(plan || bal != null) && <small>{plan + (bal != null ? (plan ? " · " : "") + "credit " + INR.format(bal) : "")}</small>}
+        {(plan || bal != null) && <small>{plan + (bal != null ? (plan ? " · " : "") + "credit " + money(bal) : "")}</small>}
       </button>
     </div>
   );
@@ -99,7 +113,7 @@ function FirmMenu() {
     <button className="menu-scrim" onClick={() => doAct("firmMenuClose")} aria-label="Close" />
     <div className="firmmenu" role="menu">
       <div className="fm-head"><b>{S.firm.firmName || "Firm"}</b>{a && a.me && <span className="note">{(a.me.email || "") + " · " + (a.me.role || "")}</span>}</div>
-      {a && a.firm && <div className="fm-plan"><span>{planName(a.firm.plan) || "Plan"}</span>{bal != null && <b>credit {INR.format(bal)}</b>}</div>}
+      {a && a.firm && <div className="fm-plan"><span>{planName(a.firm.plan) || "Plan"}</span>{bal != null && <b>credit {money(bal)}</b>}</div>}
       <button className="fm-item" onClick={() => doAct("openSettings")}>Settings</button>
       <button className="fm-item" onClick={() => navHome("tally")}>Tally <TallyPill prefix="" /></button>
       <button className="fm-item" onClick={() => navHome("inbox")}>Inbox for all clients</button>

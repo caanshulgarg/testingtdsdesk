@@ -44,7 +44,7 @@ function RowLedger({ r }) {
     {/* the rule's name opens it in the old rule editor */}
     {rule && <span className="src" data-legacy=""><button className="linkbtn" data-redit={r.ruleId}>rule: {ruleLabel(rule)}</button></span>}
     {r.tdsAtPay > 0 && <span className="src">TDS {money(r.tdsAtPay)} deducted at payment</span>}
-    {(r.splits || []).length > 0 && <span className="src">split: {r.splits.map((sp) => sp.ledger + " " + INR.format(sp.amt)).join(", ")}</span>}
+    {(r.splits || []).length > 0 && <span className="src">split: {r.splits.map((sp) => sp.ledger + " " + money(sp.amt)).join(", ")}</span>}
   </>;
 }
 
@@ -219,11 +219,11 @@ export default function Bank() {
 
   const acc = accountFor(st), accLedger = exactLedger(acc.ledger), tc = tabCounts(bankRangeRows()), tab = bankTab();
   const repaired = b.rows.filter((r) => r.repaired).length, book = b.books[st.acctId];
-  const sum = (k) => INR.format(st[k === "debit" ? "totDr" : "totCr"] || b.rows.reduce((a, r) => a + num(r[k]), 0));
+  const sum = (k) => money(st[k === "debit" ? "totDr" : "totCr"] || b.rows.reduce((a, r) => a + num(r[k]), 0));
   let range = null;
   if (bankRangeOn()) {
     const inR = bankRangeRows();
-    range = <ChipBar t="bank" shown={inR.length} total={b.rows.length + " lines"} extra={"out " + INR.format(r2(inR.reduce((a, r) => a + num(r.debit), 0))) + " · in " + INR.format(r2(inR.reduce((a, r) => a + num(r.credit), 0)))} />;
+    range = <ChipBar t="bank" shown={inR.length} total={b.rows.length + " lines"} extra={"out " + money(r2(inR.reduce((a, r) => a + num(r.debit), 0))) + " · in " + money(r2(inR.reduce((a, r) => a + num(r.credit), 0)))} />;
   }
   return <>
     <div className="bk">
@@ -237,9 +237,9 @@ export default function Bank() {
           <div className="bk-sub">{st.bank}{st.acct ? " · A/c " + st.acct : ""} · {fmtDate(st.from)} to {fmtDate(st.to)} · {b.rows.length} entries</div>
         </div>
         <dl className="bk-figs">
-          <div><dt>Opening</dt><dd>{st.opening !== undefined ? INR.format(st.opening) : "—"}</dd></div>
+          <div><dt>Opening</dt><dd>{st.opening !== undefined ? money(st.opening) : "—"}</dd></div>
           <div><dt>Withdrawals</dt><dd>{sum("debit")}</dd></div><div><dt>Deposits</dt><dd>{sum("credit")}</dd></div>
-          <div><dt>Closing</dt><dd>{st.closing !== undefined ? INR.format(st.closing) : "—"}</dd></div>
+          <div><dt>Closing</dt><dd>{st.closing !== undefined ? money(st.closing) : "—"}</dd></div>
         </dl>
         <div className="bk-actions"><button className="btn small" onClick={() => bankAct("bankSettings")}>Settings</button><MoreMenu tc={tc} /></div>
       </div>
@@ -248,7 +248,7 @@ export default function Bank() {
           : <span className="ok">✔ The statement adds up: every line agrees with its running balance{st.summaryOk ? ", and opening + deposits − withdrawals = closing" : ""}</span>}
         {repaired > 0 && <> <span className="warn">· {repaired} amounts were read from the balance change (marked ≈)</span></>}
         {st.dupRows > 0 && <> <span className="muted">· {st.dupRows} entries skipped (already uploaded)</span></>}
-        {book && <> <span className="muted">· {book.live ? "Checked against Tally " + new Date(book.importedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Matched with the Tally bank book"}</span></>}
+        {book && <> <span className="muted">· {book.live ? "Checked against Tally " + fmtDateTime(book.importedAt) : "Matched with the Tally bank book"}</span></>}
       </div>
       {accLedger && (Bridge.on() || st.tallyBal) && <BankBalance st={st} />}
       <Recon />
@@ -286,7 +286,7 @@ export function BankBar() {
   let left, right;
   if (nsel) {
     const rows = bankSelected(), ready = rows.filter((r) => r.state === "ready").length;
-    left = <><b>{nsel} selected</b> <span className="muted">· {INR.format(r2(rows.reduce((a, r) => a + (r.debit || r.credit), 0)))}</span> <button className="linkbtn" onClick={() => bankAct("bankSelNone")}>Clear</button></>;
+    left = <><b>{nsel} selected</b> <span className="muted">· {money(r2(rows.reduce((a, r) => a + (r.debit || r.credit), 0)))}</span> <button className="linkbtn" onClick={() => bankAct("bankSelNone")}>Clear</button></>;
     right = <>
       {/* Enter in this box, or a ledger picked from its list, applies it (src/js/23) */}
       <input type="text" className="lgbox" data-bulkled="" data-fk="bulkled" data-ac="1" autoComplete="off" placeholder={"Ledger for the " + nsel + " selected"} aria-label="Ledger for the selected" />

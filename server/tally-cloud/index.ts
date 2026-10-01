@@ -11,9 +11,13 @@
 //                                                       client's Tally name, with no GSTIN clash, is linked by itself
 //   {kind:"days", company, days:[{day, gz}]}         -> each day's day book (gzip, base64): kept in the bucket
 //                                                       tally-days, read into entries and lines, totals made ready
-//   {kind:"ledgers", company, from, openAsOn, ledgers:[[name, parent, open]]}
+//   {kind:"ledgers", company, from, openAsOn, ledgers:[[name, parent, open]], groups?:[[name, parent]]}
+//                                                       (groups from bridge 1.14.7: each ledger's chain of groups up to
+//                                                       the primary group is worked out from them and kept)
+//   {kind:"groups", company, ledgers:[[name, parent]], groups:[[name, parent]]} -> (bridge 1.14.9) every ledger's group
+//                                                       and Tally's groups, without openings: openings and entries stay
 //   {kind:"state", company, state}
-//   {kind:"beat", tally, open, companies:[{name, open, at, phase, waiting}], updating, dailyAt, lastRun} -> {updateNow}
+//   {kind:"beat", tally, open, ports?, companies:[{name, open, at, phase, waiting}], updating, dailyAt, lastRun} -> {updateNow}
 //   {kind:"support", note, zip}                      -> the Connector's log and details for FinCom support
 //   {kind:"posts_take"}                              -> {job: {id, company, payload} | null}: the next posting queued in
 //                                                       FinCom for this computer (build 199); the beat says how many wait
@@ -21,7 +25,11 @@
 // Or a person signed in to FinCom (Authorization: Bearer, two-step done, a member of the firm), for one of the firm's
 // clients, giving the books from files exported from Tally:
 //   {kind:"upload_days", client, company?, days:[{day, gz}]}
-//   {kind:"upload_ledgers", client, company?, from, openAsOn, ledgers:[[name, parent, open]]}
+//   {kind:"upload_ledgers", client, company?, from, openAsOn, ledgers:[[name, parent, open]], groups?}
+//   {kind:"reparse", client, month?}               -> the day books kept in the bucket read again into entries and
+//                                                       lines (review of 01-Oct-2026: GSTIN, place of supply, HSN and
+//                                                       rate were not kept before); one month a call, owners only;
+//                                                       answers {done, next} until next is null
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { parseDay, amt } from "./parse.js";
 
@@ -122,18 +130,89 @@ async function ingestDays(firm: string, book: string, daysIn: unknown) {
     const up = await db.storage.from("tally-days").upload(path, gz, { upsert: true, contentType: "application/gzip" });
     if (up.error) throw new Error("storage: " + up.error.message);
     const { error } = await db.rpc("tally_ingest_day", { p_book: book, p_day: iso(d.day),
-      p_vouchers: r.vouchers.map((v: any) => ({ guid: v.guid, alter: v.alter, type: v.type, no: v.no, party: v.party, narr: v.narr, cancel: v.cancel, opt: v.opt })),
+      p_vouchers: r.vouchers.map((v: any) => ({ guid: v.guid, alter: v.alter, type: v.type, no: v.no, party: v.party, narr: v.narr, cancel: v.cancel, opt: v.opt, gstin: v.gstin, pos: v.pos, ref: v.ref, refDate: v.refDate, cmp: v.cmp })),
       p_lines: r.lines, p_n: r.n, p_alter: r.alterMax, p_bytes: gz.length });
     if (error) throw new Error(error.message);
     done.push(d.day);
   }
   return reply(200, { ok: true, done, bad });
 }
-async function ingestLedgers(book: string, body: any) {
+// the day books already kept in the bucket, read again with today's parser: one month a call (a year is 12 calls), so
+// no call runs long. Nothing is asked of the computer with Tally; the files are the ones it sent
+async function reparseMonth(firm: string, book: string, monthIn: unknown) {
+  const base = `${firm}/${book}`;
+  const { data: months, error: e1 } = await db.storage.from("tally-days").list(base, { limit: 1000, sortBy: { column: "name", order: "asc" } });
+  if (e1) throw new Error("storage: " + e1.message);
+  const all = (months || []).map((m: any) => String(m.name)).filter((m: string) => /^\d{6}$/.test(m)).sort();
+  const month = /^\d{6}$/.test(String(monthIn || "")) ? String(monthIn) : all[0];
+  if (!month) return reply(200, { ok: true, done: [], next: null, months: 0 });
+  const { data: files, error: e2 } = await db.storage.from("tally-days").list(`${base}/${month}`, { limit: 100, sortBy: { column: "name", order: "asc" } });
+  if (e2) throw new Error("storage: " + e2.message);
+  const done: string[] = [], bad: { day: string; error: string }[] = [];
+  for (const f of files || []) {
+    const day = String(f.name).slice(0, 8);
+    if (!isDay(day) || !/\.xml\.gz$/.test(f.name)) continue;
+    const { data: blob, error: e3 } = await db.storage.from("tally-days").download(`${base}/${month}/${f.name}`);
+    if (e3 || !blob) { bad.push({ day, error: "could not read the kept file" }); continue; }
+    const gz = new Uint8Array(await blob.arrayBuffer());
+    let z: { text: string; size: number };
+    try { z = await gunzip(gz, MAX_DAY); } catch (e) { bad.push({ day, error: String((e as Error)?.message || e).slice(0, 200) }); continue; }
+    const r = parseDay(z.text);
+    if (r.dates.some((x: string) => x !== day)) { bad.push({ day, error: "entries of other dates" }); continue; }
+    const { error } = await db.rpc("tally_ingest_day", { p_book: book, p_day: iso(day),
+      p_vouchers: r.vouchers.map((v: any) => ({ guid: v.guid, alter: v.alter, type: v.type, no: v.no, party: v.party, narr: v.narr, cancel: v.cancel, opt: v.opt, gstin: v.gstin, pos: v.pos, ref: v.ref, refDate: v.refDate, cmp: v.cmp })),
+      p_lines: r.lines, p_n: r.n, p_alter: r.alterMax, p_bytes: gz.length });
+    if (error) throw new Error(error.message);
+    done.push(day);
+  }
+  const next = all.find((m: string) => m > month) || null;
+  return reply(200, { ok: true, month, done, bad, next, months: all.length });
+}
+// review of 01-Oct-2026: each ledger's group and Tally's groups, kept without touching openings or entries; each ledger's
+// chain up to its primary group is worked out here. A ledger not in the copy yet is added with a nil opening
+async function applyGroups(firm: string, book: string, ledIn: unknown, grpIn: unknown) {
+  const groups = (Array.isArray(grpIn) ? grpIn : []).slice(0, 20000)
+    .map((g: any) => [String(g?.[0] || "").slice(0, 300), String(g?.[1] || "").replace(/^\W*Primary$/i, "").slice(0, 300)]).filter((g: any) => g[0]);
+  const leds = (Array.isArray(ledIn) ? ledIn : []).slice(0, 100000)
+    .map((l: any) => [String(l?.[0] || "").slice(0, 300), String(l?.[1] || "").replace(/^\W*Primary$/i, "").slice(0, 300)]).filter((l: any) => l[0]);
+  for (let i = 0; i < groups.length; i += 1000) {
+    const { error } = await db.from("tally_groups").upsert(groups.slice(i, i + 1000).map((g: any) => ({ book_id: book, firm_id: firm, name: g[0], parent: g[1] })), { onConflict: "book_id,name" });
+    if (error) throw new Error(error.message);
+  }
+  const { data: allG, error: eg } = await db.from("tally_groups").select("name, parent").eq("book_id", book);
+  if (eg) throw new Error(eg.message);
+  const up = new Map((allG || []).map((g: any) => [g.name, g.parent || ""]));
+  const chain = (p: string) => { const out: string[] = []; while (p && out.length < 30 && !out.includes(p)) { out.push(p); p = up.get(p) || ""; } return out; };
+  for (let i = 0; i < leds.length; i += 1000) {
+    const rows = leds.slice(i, i + 1000).map((l: any) => { const c = chain(l[1]); return { book_id: book, firm_id: firm, name: l[0], parent: l[1], chain: c, primary_group: c.length ? c[c.length - 1] : "" }; });
+    const { error } = await db.from("tally_ledgers").upsert(rows, { onConflict: "book_id,name" });
+    if (error) throw new Error(error.message);
+  }
+  const { error: eo } = await db.rpc("tally_year_openings", { p_book: book });
+  if (eo) throw new Error(eo.message);
+  return { ledgers: leds.length, groups: groups.length };
+}
+async function ingestLedgers(book: string, body: any, firm?: string) {
   if (!isDay(body.from) || !isDay(body.openAsOn)) return reply(400, { ok: false, error: "from and openAsOn are dates (yyyymmdd)" });
+  // review of 01-Oct-2026: a copy that starts later than the book's own (the bridge keeping 2026-27 where the year 2025-26
+  // came from files) must not move the book's start: that would take away the earlier entries. The groups are kept;
+  // the openings and entries stay as they are
+  const { data: bk } = await db.from("tally_books").select("from_date, firm_id").eq("book_id", book).maybeSingle();
+  if (bk && bk.from_date && iso(body.from) > String(bk.from_date)) {
+    const { count } = await db.from("tally_vouchers").select("guid", { count: "exact", head: true }).eq("book_id", book).lt("day", iso(body.from));
+    if ((count || 0) > 0) {
+      const g = await applyGroups(String(firm || bk.firm_id), book, (Array.isArray(body.ledgers) ? body.ledgers : []).map((l: any) => [l?.[0], l?.[1]]), body.groups);
+      console.log("tally-ingest ledgers kept", book, body.from, "book from", bk.from_date, count);
+      return reply(200, { ok: true, ...g, kept: "the copy in the cloud starts on " + bk.from_date + " and has " + count + " entries before " + iso(body.from) + ": its openings and entries are kept; the groups are taken" });
+    }
+  }
   const led = (Array.isArray(body.ledgers) ? body.ledgers : []).slice(0, 100000)
     .map((l: any) => [String(l?.[0] || "").slice(0, 300), String(l?.[1] || "").slice(0, 300), String(Math.round(amt(l?.[2]) * 100) / 100)]).filter((l: any) => l[0]);
-  const { data, error } = await db.rpc("tally_ingest_ledgers", { p_book: book, p_from: iso(body.from), p_open_as_on: iso(body.openAsOn), p_ledgers: led });
+  // the groups (bridge 1.14.7 on): [[name, parent]]; a primary group's parent is empty. Without them the groups kept
+  // before stay as they are
+  const groups = (Array.isArray(body.groups) ? body.groups : []).slice(0, 20000)
+    .map((g: any) => [String(g?.[0] || "").slice(0, 300), String(g?.[1] || "").replace(/^\W*Primary$/i, "").slice(0, 300)]).filter((g: any) => g[0]);
+  const { data, error } = await db.rpc("tally_ingest_ledgers_g", { p_book: book, p_from: iso(body.from), p_open_as_on: iso(body.openAsOn), p_ledgers: led, p_groups: groups });
   if (error) throw new Error(error.message);
   return reply(200, { ok: true, ...data });
 }
@@ -157,6 +236,7 @@ async function userUpload(req: Request, auth: string) {
   // the client's Tally company in the cloud: the one linked to it, or one made for it now, named as in Tally
   const { data: tcs } = await db.from("tally_companies").select("company, last_seen").eq("firm_id", firm).eq("client_id", clientId);
   let company = ((tcs || []).sort((a: any, b: any) => String(b.last_seen || "").localeCompare(String(a.last_seen || "")))[0] || {} as any).company as string | undefined;
+  if (!company && body.kind === "reparse") return reply(404, { ok: false, error: "This client has no Tally company in the cloud yet." });
   if (!company) {
     company = String(body.company || cl.tally_name || cl.name || "").trim().slice(0, 200);
     if (!company) return reply(400, { ok: false, error: "Give the client's company name as in Tally (Client setup)." });
@@ -170,6 +250,11 @@ async function userUpload(req: Request, auth: string) {
   try {
     if (body.kind === "upload_days") return await ingestDays(firm, book, body.days);
     if (body.kind === "upload_ledgers") return await ingestLedgers(book, body);
+    if (body.kind === "reparse") {
+      const { data: me } = await db.from("members").select("role").eq("user_id", user.id).eq("firm_id", firm).maybeSingle();
+      if (!me || me.role !== "owner") return reply(403, { ok: false, error: "Only the firm's owner can read the kept day books again." });
+      return await reparseMonth(firm, book, body.month);
+    }
     return reply(400, { ok: false, error: "unknown kind" });
   } catch (e) {
     console.error("tally-ingest upload", body?.kind, (e as Error).message);
@@ -214,6 +299,9 @@ Deno.serve(async (req) => {
         const s = (v: unknown, n = 80) => typeof v === "string" ? v.slice(0, n) : "";
         const beat = { at: new Date().toISOString(), tally: !!b.tally, updating: !!b.updating, dailyAt: s(b.dailyAt, 5), lastRun: s(b.lastRun, 8),
           open: (Array.isArray(b.open) ? b.open : []).slice(0, 50).map((x: unknown) => s(x, 200)),
+          // bridge 1.14.9: each Tally port as the bridge sees it (open, another user's, how many companies, the error)
+          ports: (Array.isArray(b.ports) ? b.ports : []).slice(0, 20).map((p: any) => ({ port: Math.max(0, Math.min(65535, Math.floor(Number(p?.port) || 0))), ok: !!p?.ok, skipped: !!p?.skipped,
+            n: Math.max(0, Math.min(1000, Math.floor(Number(p?.n) || 0))), error: s(p?.error, 120) })),
           companies: (Array.isArray(b.companies) ? b.companies : []).slice(0, 200).map((c: any) => ({ name: s(c?.name, 200), open: !!c?.open, at: s(c?.at, 30), phase: s(c?.phase, 12),
             waiting: Math.max(0, Math.min(1e6, Math.floor(Number(c?.waiting) || 0))) })) };
         const info = { ...(((dev as any).info && typeof (dev as any).info === "object") ? (dev as any).info : {}), beat };
@@ -271,7 +359,12 @@ Deno.serve(async (req) => {
       case "ledgers": {
         const book = await bookFor(firm, String(body.company || ""));
         if (!book) return reply(409, { ok: false, notLinked: true, error: "This Tally company is not linked to a FinCom client yet." });
-        return await ingestLedgers(book, body);
+        return await ingestLedgers(book, body, firm);
+      }
+      case "groups": {
+        const book = await bookFor(firm, String(body.company || ""));
+        if (!book) return reply(409, { ok: false, notLinked: true, error: "This Tally company is not linked to a FinCom client yet." });
+        return reply(200, { ok: true, ...(await applyGroups(firm, book, body.ledgers, body.groups)) });
       }
       case "state": {
         const book = await bookFor(firm, String(body.company || ""));

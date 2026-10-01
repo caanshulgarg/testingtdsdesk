@@ -6,6 +6,7 @@
 import TallyPill from "../parts/TallyPill.jsx";
 import { PostLog } from "./Done.jsx";
 import CommitBox from "../parts/CommitBox.jsx";
+import { useState } from "react";
 
 const Act = ({ act, className = "btn small", children, disabled }) => <button className={className} disabled={disabled} onClick={() => doAct(act)}>{children}</button>;
 
@@ -74,6 +75,24 @@ function Sessions({ c, st }) {
     })}</tbody></table>;
 }
 
+// review of 01-Oct-2026: the last lines of the bridge's own log (tds-bridge.log), to read here or copy for support,
+// without looking for the file on the Tally computer. Needs bridge 1.14.9 (its /logtail)
+function BridgeLog() {
+  const [lg, setLg] = useState(null);
+  const load = () => { setLg({ busy: true }); Bridge.call("/logtail?n=200", null, 20000).then((j) => setLg({ file: j.file || "", lines: j.lines || [] }),
+    (e) => setLg({ error: /unknown|not found|404/i.test(String((e && e.message) || "")) ? "This bridge cannot show its log yet: install bridge 1.14.9 or later (Download the bridge setup)." : ((e && e.message) || String(e)) })); };
+  const text = lg && lg.lines ? lg.lines.join("\n") : "";
+  const copy = () => (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(() => toast("Log copied."), () => toast("Could not copy; select the text and copy it."));
+  return <div className="bridge-log" style={{ marginTop: 10 }}>
+    <div className="row" style={{ gap: 8, alignItems: "center" }}><button className="linkbtn" data-act="bridgeLog" onClick={load} disabled={!!(lg && lg.busy)}>{lg && lg.lines ? "Show bridge log again" : "Show bridge log"}</button>
+      {lg && lg.lines && <><button className="btn small" onClick={copy}>Copy</button><button className="linkbtn" onClick={() => setLg(null)}>Hide</button></>}</div>
+    {lg && lg.busy && <p className="note">Reading the log…</p>}
+    {lg && lg.error && <p className="bk-warn">{lg.error}</p>}
+    {lg && lg.lines && <><p className="note" style={{ margin: "6px 0 4px" }}>{"The last " + lg.lines.length + " lines of " + (lg.file || "tds-bridge.log") + ", newest at the bottom."}</p>
+      <pre className="bridge-log-text" style={{ maxHeight: 320, overflow: "auto", fontSize: 12, whiteSpace: "pre-wrap", wordBreak: "break-word", background: "var(--bg-soft, rgba(127,127,127,.08))", padding: 8, borderRadius: 6, margin: 0 }}>{text || "(the log is empty)"}</pre></>}
+  </div>;
+}
+
 export function BridgeSettings() {
   const c = Bridge.cfg(), st = Bridge.st;
   if (Bridge.blocked()) return <div className="pane"><h2>Tally Bridge</h2><p className="note" style={{ margin: 0 }}>Pages opened on claude.ai cannot reach programs on your computer. To connect to Tally, use the downloaded app (<b>Download standalone app</b>) on the computer where TallyPrime runs.</p></div>;
@@ -91,19 +110,20 @@ export function BridgeSettings() {
       <div className="row" style={{ marginTop: 10 }}><Act act="bridgeTest" className="btn small primary">{c.key ? "Check connection" : "Connect"}</Act>{c.key && <Act act="bridgeOff">Disconnect</Act>}<Act act="bridgeSetupFile">Download the bridge setup</Act></div>
       {!(Bridge.on() && Bridge.up()) && <SetupSteps />}
       {c.key && <div style={{ marginTop: 12 }}>{st.state === "ok" ? <>
-        <p className="note" style={{ margin: "0 0 6px" }}>{"Bridge " + (st.version || "") + " connected" + (st.allowImport === false ? " (posting switched off in the bridge)" : "") + ". Checked " + new Date(st.at).toLocaleTimeString() + "."}</p>
+        <p className="note" style={{ margin: "0 0 6px" }}>{"Bridge " + (st.version || "") + " connected" + (st.allowImport === false ? " (posting switched off in the bridge)" : "") + ". Checked " + fmtTime(st.at) + "."}</p>
         <p className="note" style={{ margin: "0 0 6px" }}>{MODE[st.mode] || ""}</p>
         {(st.clash || []).length > 0 && <p className="bk-warn">{st.clash.join(", ") + " is open in more than one Tally. Choose yours with "}<b>Use this Tally</b>; until then nothing is read or posted for it.</p>}
         <Sessions c={c} st={st} />
         {num(c.port) && !st.sessions.some((se) => se.port === num(c.port)) ? <p className="bk-warn">{"The chosen Tally (port " + num(c.port) + ") is not running. "}<button className="linkbtn" onClick={() => bridgePin(0)}>Go back to automatic</button></p> : null}
         <Diagnosis />
+        <BridgeLog />
         {st.tallyUp || (Bridge.diag && (Bridge.diag.findings || []).length) ? null : <p className="bk-warn">TallyPrime is not answering. In TallyPrime: F1 Help → Settings → Connectivity → set “TallyPrime acts as” to Both, port 9000.</p>}
       </> : <><p className="bk-warn">{st.error || "Not checked yet."}</p>{st.state === "down" && <DownHelp c={c} />}</>}</div>}
     </div>
   </>;
 }
 
-const when = (s) => s ? new Date(s).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "never";
+const when = (s) => s ? fmtDateTime(s) : "never";
 
 // the books in FinCom's cloud: the computers that send, and which client each Tally company is
 export function CloudBooks() {
@@ -130,7 +150,16 @@ export function CloudBooks() {
             <select aria-label={"Client for " + c.company} value={cid} onChange={(ev) => TCloud.link(c.company, ev.target.value)}><option value="">— not linked —</option>
               {cid && !linked && <option value={cid}>a client not on this computer</option>}
               {cos.map((k) => <option key={k.id} value={String(k.id)}>{k.name}</option>)}</select>
-            {cid ? <div className="nr">{linked ? <>✓ Linked to <b>{linked.name}</b>{gstinMatch(c) && String(gstinMatch(c).id) === cid ? " (same GSTIN)" : ""}</> : "Linked to a client that is not on this computer."}</div>
+            {cid ? <div className="nr">{linked ? <>✓ Linked to <b>{linked.name}</b>{gstinMatch(c) && String(gstinMatch(c).id) === cid ? " (same GSTIN)" : ""}
+                {S.account && S.account.me && S.account.me.role === "owner" && <> · <button className="linkbtn" data-act="reparse" title="FinCom's cloud reads the day books it keeps again: the party's GSTIN, place of supply, HSN, rate and bill-wise details"
+                  onClick={() => TCloud.reparse(cid)}>Read the kept day books again</button>
+                  {(() => { const r = (p.rp || {})[cid]; return r ? <span className={"note" + (r.err ? " bad" : "")} data-rp={cid}>{" · " + (r.err ? "Could not read again: " + r.err + (r.n ? " (" + r.n + " days done)" : "") : r.busy ? "reading again… " + r.n + " days so far" : r.n + " days of " + r.months + " months read again " + fmtTime(r.at) + (r.bad ? ", " + r.bad + " could not be read" : "") + (r.host ? " (cloud " + r.host + ")" : ""))}</span> : null; })()}</>}
+                <div className="row" style={{ gap: 8, marginTop: 6, flexWrap: "wrap", alignItems: "center" }}>
+                  <button className="btn small" onClick={() => TCloud.sendLedgers(cid)} title="The Tally computer reads every ledger and group now and sends them (bridge 1.14.8 or later; Tally open there)">Send ledgers and groups now</button>
+                  {(() => { const g = (p.gs || {})[cid]; return g ? (g.err ? <span className="note bad">{g.err}</span> : g.none ? <span className="note">No books in the cloud yet.</span>
+                    : <span className="note">{"In the cloud: " + g.groups + " groups · " + g.grouped + " of " + g.ledgers + " ledgers with a group" + (g.pl ? " (and Profit & Loss A/c, which has no group in Tally)" : "")} <button className="linkbtn" onClick={() => TCloud.groupStatus(cid)}>check again</button></span>)
+                    : <button className="linkbtn" onClick={() => TCloud.groupStatus(cid)}>What is in the cloud?</button>; })()}
+                </div></> : "Linked to a client that is not on this computer."}</div>
               : m ? <div className="nr">Same GSTIN as <b>{m.name}</b> <button className="btn small" onClick={() => TCloud.link(c.company, m.id)}>Link to {m.name}</button></div> : null}</td><td>{when(c.last_seen)}</td></tr>;
         })}</tbody></table></div>
         : <p className="note">No Tally companies have been seen yet. They appear here once a connected computer has a company open in Tally.</p>}</div>

@@ -41,10 +41,11 @@ const CloudDocs = {
       try {
         const small = await this.shrink(job.file);
         const path = this.path(job.cid, job.id, small.name);
+        await Cloud.fresh().catch(() => {});
         const c = Cloud.cfg(), s = Cloud.sess();
         const url = c.url.replace(/\/+$/, "") + "/storage/v1/object/client-docs/" + path.split("/").map(encodeURIComponent).join("/");
         let r = await fetch(url, {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "x-upsert": "true", "Content-Type": small.type || "application/octet-stream"}, body: small});
-        if (r.status === 401){ await Cloud.refreshToken(); r = await fetch(url, {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + Cloud.sess().access_token, "x-upsert": "true", "Content-Type": small.type || "application/octet-stream"}, body: small}); }
+        if (r.status === 401){ await Cloud.refreshToken(s.access_token); r = await fetch(url, {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + Cloud.sess().access_token, "x-upsert": "true", "Content-Type": small.type || "application/octet-stream"}, body: small}); }
         if (!r.ok) throw new Error("upload " + r.status);
         this.note(job, path, small.size);
         this.queue.shift();
@@ -80,10 +81,11 @@ const CloudDocs = {
     }
   },
   async fetchFile(path, name){
+    await Cloud.fresh().catch(() => {});
     const c = Cloud.cfg(), s = Cloud.sess();
     const url = c.url.replace(/\/+$/, "") + "/storage/v1/object/client-docs/" + path.split("/").map(encodeURIComponent).join("/");
     let r = await fetch(url, {headers: {apikey: c.key, Authorization: "Bearer " + s.access_token}});
-    if (r.status === 401){ await Cloud.refreshToken(); r = await fetch(url, {headers: {apikey: c.key, Authorization: "Bearer " + Cloud.sess().access_token}}); }
+    if (r.status === 401){ await Cloud.refreshToken(s.access_token); r = await fetch(url, {headers: {apikey: c.key, Authorization: "Bearer " + Cloud.sess().access_token}}); }
     if (!r.ok) throw {code: "doc_missing", message: "the document could not be fetched (" + r.status + ")"};
     const blob = await r.blob();
     return new File([blob], name || path.split("-").slice(1).join("-") || "document", {type: blob.type || "application/octet-stream"});
@@ -355,7 +357,21 @@ function fyOf(d){
   return s + "-" + String((s + 1) % 100).padStart(2, "0");
 }
 S.partyFy = fyOf(null);
-function fmtDate(d){ if (!d) return "—"; const dt = new Date(String(d).slice(0, 10) + "T00:00:00"); return isNaN(dt) ? String(d).replace(/[^\w \-\/.:]/g, "") : dt.toLocaleDateString("en-IN", {day:"2-digit", month:"short", year:"numeric"}); }
+// One date format everywhere (review item 31): 19-Sep-2026, and 19-Sep-2026 09:32 with the time (24-hour, this computer's time)
+const MONTHS3 = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function toDateObj(d){
+  if (d instanceof Date) return d;
+  if (typeof d === "number") return new Date(d);
+  const t = String(d);
+  return /^\d{4}-\d{2}-\d{2}$/.test(t.slice(0, 10)) && t.length <= 10 ? new Date(t + "T00:00:00") : new Date(t);
+}
+function fmtDate(d){
+  if (!d && d !== 0) return "—";
+  const dt = toDateObj(d);
+  return isNaN(dt) ? String(d).replace(/[^\w \-\/.:]/g, "") : String(dt.getDate()).padStart(2, "0") + "-" + MONTHS3[dt.getMonth()] + "-" + dt.getFullYear();
+}
+function fmtTime(d){ if (!d && d !== 0) return ""; const dt = toDateObj(d); return isNaN(dt) ? "" : String(dt.getHours()).padStart(2, "0") + ":" + String(dt.getMinutes()).padStart(2, "0"); }
+function fmtDateTime(d){ if (!d && d !== 0) return "—"; const dt = toDateObj(d); return isNaN(dt) ? "—" : fmtDate(dt) + " " + fmtTime(dt); }
 function effectivePan(x){
   const pan = String(x.vendorPan || "").toUpperCase().trim();
   if (PAN_RE.test(pan)) return pan;
@@ -1094,7 +1110,7 @@ function compute(e, cid){
   const missing = [];
   if (e.docKind && !e.docOverride) missing.push("your confirmation that this really is a purchase bill");
   if (x.buyerGstin && co.gstin && String(x.buyerGstin).toUpperCase() !== co.gstin && !e.buyerOverride) missing.push("your confirmation that this bill belongs to " + co.name);
-  if (!x.vendorName) missing.push("deductee name");
+  if (!x.vendorName) missing.push("supplier name");
   if (!x.invoiceDate) missing.push("invoice date");
   if (!(base > 0)) missing.push("taxable value");
   if (!e.partyLedger) missing.push("party ledger");
@@ -1295,7 +1311,7 @@ function blockText(id){
   const el = document.getElementById(id);
   if (el) return Promise.resolve(el.textContent);
   if (!window.TDS_ASSETS) return Promise.resolve(null);
-  if (!blockCache[id]) blockCache[id] = fetch(window.TDS_ASSETS + id + ".txt?b=" + ((String(typeof APP_VERSION === "string" ? APP_VERSION : "").match(/build (\d+)/) || [])[1] || "") + (id === "bridge-setup" ? "&s=" + BRIDGE_SETUP_SHA : ""), {cache: "force-cache"}).then(r => {
+  if (!blockCache[id]) blockCache[id] = fetch(window.TDS_ASSETS + id + ".txt?b=" + ((String(typeof APP_VERSION === "string" ? APP_VERSION : "").match(/build (\d+)/) || [])[1] || "") + (id === BRIDGE_SETUP_ID ? "&s=" + BRIDGE_SETUP_SHA : ""), {cache: "force-cache"}).then(r => {
     if (!r.ok) throw {code: "asset_missing", message: id + " could not be fetched (" + r.status + ")"};
     return r.text();
   }).catch(e => { delete blockCache[id]; throw e; });
@@ -2854,7 +2870,7 @@ async function fileHash(file){
   hashCache.set(file, h);
   return h;
 }
-function statusLabel(st){ return ({draft:"to review", approved:"approved", rejected:"marked no entry", duplicate:"held as duplicate"})[st] || st; }
+function statusLabel(st){ return ({draft:"to review", approved:"approved", rejected:"marked no entry", duplicate:"held as duplicate", deleted:"deleted"})[st] || st; }
 function findHash(h){
   if (S.pendingHashes[h]) return {msg:"The same file is already in this upload."};
   for (const c of Object.values(S.companies)){
@@ -2915,7 +2931,7 @@ function findDuplicate(e, cid){
   const k = invKey(e.x);
   if (k){
     for (const o of Object.values(D(cid).entries)){
-      if (o.id === e.id || o.status === "duplicate" || o.notDuplicate) continue;
+      if (o.id === e.id || o.status === "duplicate" || o.status === "deleted" || o.notDuplicate) continue;
       if (invKey(o.x) === k) return {entryId:o.id, strong:true,
         msg:"Same supplier and bill number as " + (o.x.vendorName || o.fileName) + " bill " + o.x.invoiceNo + " dated " + fmtDate(o.x.invoiceDate) + " (" + statusLabel(o.status) + ")."};
     }
@@ -3619,7 +3635,7 @@ function perRender(o, key, fn){
 function memoScope(fn){ if (!IN_RENDER) RENDER_GEN++; IN_RENDER++; try { return fn(); } finally { IN_RENDER--; } }
 function render(){
   RENDER_GEN++; IN_RENDER++;
-  try { return renderNow(); } finally { IN_RENDER--; }
+  try { return renderNow(); } finally { IN_RENDER--; if (!IN_RENDER && typeof Route === "object") Route.sync(); }
 }
 // render(): what the screen of the moment needs loaded, before React draws the page (app/src/Main.jsx); and what the
 // page needs once drawn (afterRender, called by app/src/store.js after React has drawn)

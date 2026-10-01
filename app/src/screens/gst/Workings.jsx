@@ -5,7 +5,7 @@
 import CommitBox from "../../parts/CommitBox.jsx";
 import { Gstr1a } from "./Filing.jsx";
 
-const money = (v) => INR.format(r2(v || 0));
+const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => fmtDate(tallyDate(d));
 const Card = ({ title, children, style }) => <section className="dash-card" style={{ marginTop: 12, ...style }}>{title && <h3>{title}</h3>}{children}</section>;
 const Tile = ({ label, value, small, warn }) => <div className={"dtile" + (warn ? " warn" : "")}><span>{label}</span><b>{value}</b>{[].concat(small || []).map((s, i) => <small key={i}>{s}</small>)}</div>;

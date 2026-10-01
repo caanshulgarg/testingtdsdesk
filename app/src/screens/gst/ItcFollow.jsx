@@ -5,7 +5,7 @@
 // State: S.itctShow ("open" or "all"), S.itctCat (a kind of line, from the chips).
 import CommitBox from "../../parts/CommitBox.jsx";
 
-const money = (v) => INR.format(r2(v || 0));
+const money = (v) => "₹" + INR.format(r2(v || 0));
 const dmy = (d) => GSTAmend.dmy(d);
 const WIDTHS = [11, 16, 12, 11, 8, 9, 8, 14, 11];
 const COLS = ["What", "Supplier · GSTIN", "Bill no. · date", "In Tally", "In 2B", "Tax", "Last date", "What to do", "Note"];

@@ -3,7 +3,7 @@
 // inregRows() (src/js/18); the Excel is inregExcel().
 //
 // State: S.inregScope ("month" or "year"), S.inregF (a kind or a 2B status), S.inregQ (the find box).
-const money = (v) => INR.format(r2(v || 0));
+const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => fmtDate(tallyDate(d));
 const KINDS = ["Eligible", "Credit reduced", "Reverse charge", "Import of goods", "Import of services", "Not to be taken"];
 const STATUSES = ["In 2B", "In 2B, differs", "In 2B? confirm", "Not in 2B", "Rejected in IMS", "Booked and reversed", "2B not brought in", "not expected in 2B"];

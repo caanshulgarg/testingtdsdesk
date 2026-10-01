@@ -20,12 +20,21 @@ const ICONS = {
 
 function Item({ icon, label, on, count, onClick, title }) {
   return (
-    <button className="side-link" aria-current={on ? "page" : undefined} onClick={onClick} title={title}>
+    // a name a screen reader reads out (review item 34): the label, what it is for, and the count beside it
+    <button className="side-link" aria-current={on ? "page" : undefined} onClick={onClick} title={title || label}
+      aria-label={label + (title ? ": " + title : "") + (count ? ", " + count + " waiting" : "")}>
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">{ICONS[icon]}</svg>
       <span>{label}</span>
       {count ? <span className="side-count">{count}</span> : null}
     </button>
   );
+}
+
+// the build's date from APP_VERSION ("TEST · 30 Sep 2026 · build …") in the app's one format: 30-Sep-2026 (review item 31)
+function buildDate(v) {
+  const part = String(v).split("·").map((x) => x.trim()).find((x) => /\d{1,2} [A-Za-z]{3,4} \d{4}/.test(x)) || String(v).split("·")[1] || v;
+  const m = String(part).match(/(\d{1,2}) ([A-Za-z]{3})[a-z]* (\d{4})/);
+  return m ? m[1].padStart(2, "0") + "-" + m[2] + "-" + m[3] : part;
 }
 
 export default function Side() {
@@ -41,13 +50,23 @@ export default function Side() {
     <>
       <div className="side-brand">FinCom</div>
       {open && (
-        <>
           <div className="side-client">
             <span className="side-label">Client</span>
-            <button className="side-co" onClick={() => openSwitcher()} title="Change client (F3)">
+            <button className="side-co" onClick={() => openSwitcher()} title="Change client (F3)" aria-label={"Client: " + open.name + ". Change client (F3)"}>
               <b>{open.name}</b><small>{(open.gstin || "No GSTIN") + " · change"}</small>
             </button>
-          </div>
+          </div>)}
+      {/* on the firm's own pages, the firm's menu instead of a client's (review item 29) */}
+      {home && <>
+        <div className="side-firm-label">Firm</div>
+        <Item icon="clients" label="Clients" on={["clients", "today", "inbox"].includes(S.homeTab)} onClick={() => navHome("clients")} />
+        <Item icon="clients" label="People" on={S.homeTab === "rules" && S.settingsTab === "account"} onClick={() => goSettings("account")} />
+        <Item icon="reports" label="Plan and credit" on={S.homeTab === "rules" && S.settingsTab === "plan"} onClick={() => goSettings("plan")} />
+        <Item icon="books" label="Tally" on={S.homeTab === "tally"} onClick={() => navHome("tally")} />
+        <Item icon="setup" label="Settings" on={S.homeTab === "rules" && !["account", "plan"].includes(S.settingsTab)} onClick={() => goSettings(null)} />
+      </>}
+      {open && !home && (
+        <>
           <Item icon="dash" label="Dashboard" on={onDash} onClick={() => goClient("dash")} />
           <Item icon="bills" label="Purchase" count={st.drafts || 0} onClick={() => goClient("bills")}
             on={inCo && mod === "bills" && !onDash && !isSetupTab(S.tab) && !["clientInbox", "txn", "books"].includes(S.tab)} />
@@ -67,10 +86,10 @@ export default function Side() {
         </>
       )}
       <div className="side-sep" />
-      <Item icon="clients" label="All clients" on={home && !["rules", "help"].includes(S.homeTab)} onClick={() => navHome("clients")} />
+      {!home && <Item icon="clients" label="All clients" on={false} onClick={() => navHome("clients")} />}
       <Item icon="help" label="Help" on={home && S.homeTab === "help"} count={typeof SUP === "object" ? SUP.counts() : 0} onClick={() => navHome("help")} />
       <div className="side-grow" />
-      <div className="side-ver">{APP_VERSION.split("·")[1] || APP_VERSION}<br />{__REACT_BUILD__}</div>
+      <div className="side-ver">{buildDate(APP_VERSION)}<br />{__REACT_BUILD__}</div>
     </>
   );
 }

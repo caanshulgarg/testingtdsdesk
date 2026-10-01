@@ -38,7 +38,7 @@ with sync_playwright() as p:
     pg.select_option('#app select[aria-label="Status"]', "ok"); pg.wait_for_timeout(400)
     ok(rows().count() == 1, "status In Tally: one")
     pg.select_option('#app select[aria-label="Status"]', ""); pg.wait_for_timeout(300)
-    with pg.expect_download() as dl: pg.click('#app button:has-text("Download as CSV")')
+    with pg.expect_download() as dl: pg.click('#app button:text-is("CSV")')
     ok(dl.value.suggested_filename.endswith(".csv"), "CSV download")
     pg.click('#app table.txntbl tr:has-text("Kappa Labs") button:has-text("Open")'); pg.wait_for_timeout(600)
     ok(pg.evaluate("S.tab") == "invoices" and pg.evaluate("D().entries[S.selected].x.vendorName") == "Kappa Labs", "Open: the bill, where it is worked on")

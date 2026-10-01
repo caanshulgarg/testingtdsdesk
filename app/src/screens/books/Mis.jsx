@@ -52,19 +52,25 @@ function Search({ tab, ph }) {
 const pct = (a, c2) => c2 ? (Math.round((a - c2) / Math.abs(c2) * 1000) / 10) + "%" : "—";
 
 function Summary({ b, r }) {
-  const owed = (A) => A.sum.tally != null ? A.sum.tally : A.sum.open;
+  // what is owed on balance, aged so that the ages add up to it; a balance the other way is an advance (review of 01-Oct-2026)
+  const owed = (A) => A.sum.owe != null ? A.sum.owe : (A.sum.tally != null ? A.sum.tally : A.sum.open);
+  const over90 = (A) => A.sum.nb ? A.sum.nb[3] + A.sum.nb[4] : A.sum.b[3] + A.sum.b[4];
+  const adv = (A, who) => A.sum.advance >= 1 ? " · advance " + who + " " + m(A.sum.advance) : "";
   const owedNote = (A) => A.sum.tally != null ? "as in Tally" : "bills raised in these books still open" + (Math.abs(A.sum.pre) >= 1 ? "; " + m(Math.abs(A.sum.pre)) + " settled against older bills not in these books" : "");
   const cb = (r.balances.cash || []).concat(r.balances.bank || []);
+  // review of 01-Oct-2026: without Tally's ledger groups the profit and loss cannot tell an expense from anything else
+  const noGroups = !Audit.mastersIn();
   return <>
+    {noGroups && <p className="bk-alert" role="status" style={{ margin: "0 0 10px" }}>The ledgers’ groups are not in these books yet, so the profit and loss counts only ledgers named as sales or purchases: expenses are left out and the profit shown is too high. They come with the ledgers from Tally (FinCom Tally Bridge 1.14.7 or later).</p>}
     <div className="dash-tiles">
-      <Tile l="Sales, the period" v={m(r.sales.total)} sub={(r.prev ? "previous period " + m(r.prev.sales) + " (" + pct(r.sales.total, r.prev.sales) + ")" : "") + (r.ly ? " · last year " + m(r.ly.sales) + " (" + pct(r.sales.total, r.ly.sales) + ")" : "")} />
-      <Tile l="Profit before tax" v={m(r.pl.pbt.t)} sub={"gross profit " + m(r.pl.gross.t) + (r.pl.heads.rev ? " (" + (Math.round(r.pl.gross.t / r.pl.heads.rev.t * 1000) / 10) + "% of revenue)" : "")} />
+      <Tile l="Sales, the period" v={m(r.sales.total)} sub={(r.sales.other ? "other income " + m(r.sales.other) + " · " : "") + (r.prev ? "previous period " + m(r.prev.sales) + " (" + pct(r.sales.total, r.prev.sales) + ")" : "") + (r.ly ? " · last year " + m(r.ly.sales) + " (" + pct(r.sales.total, r.ly.sales) + ")" : "")} />
+      <Tile l="Profit before tax" v={noGroups ? "—" : m(r.pl.pbt.t)} sub={"gross profit " + m(r.pl.gross.t) + (r.pl.heads.rev ? " (" + (Math.round(r.pl.gross.t / r.pl.heads.rev.t * 1000) / 10) + "% of revenue)" : "")} />
       <Tile l="Month to date · year to date" v={r.mtd != null ? m(r.mtd) : "—"} sub={r.ytd != null ? "year to date " + m(r.ytd) : ""} />
       <Tile l="Received · paid" v={m(r.cash.rec)} sub={"paid out " + m(r.cash.pay) + ", net " + m(r.cash.rec - r.cash.pay)} />
     </div>
     <div className="dash-tiles">
-      <Tile l="Owed to you" v={m(owed(r.recv))} sub={owedNote(r.recv) + " · over 90 days " + m(r.recv.sum.b[3] + r.recv.sum.b[4]) + (r.dso != null ? " · " + r.dso + " days of sales" : "")} />
-      <Tile l="You owe" v={m(owed(r.pay))} sub={owedNote(r.pay) + " · over 90 days " + m(r.pay.sum.b[3] + r.pay.sum.b[4]) + (r.dpo != null ? " · " + r.dpo + " days of purchases" : "")} />
+      <Tile l="Owed to you" v={m(owed(r.recv))} sub={owedNote(r.recv) + " · over 90 days " + m(over90(r.recv)) + adv(r.recv, "from customers") + (r.dso != null ? " · " + r.dso + " days of sales" : "")} />
+      <Tile l="You owe" v={m(owed(r.pay))} sub={owedNote(r.pay) + " · over 90 days " + m(over90(r.pay)) + adv(r.pay, "to suppliers") + (r.dpo != null ? " · " + r.dpo + " days of purchases" : "")} />
       <Tile l={"MSME suppliers past " + MIS.cfg(b).msmeDays + " days"} v={m(r.msme.reduce((s, x) => s + x.amt, 0))} sub={r.msme.length + " suppliers · section 43B(h)"} />
       <Tile l="GST payable, last month" v={m((r.comp.gst[r.comp.gst.length - 1] || {}).pay)} sub="after credit, as per 3B" />
     </div>
@@ -130,6 +136,7 @@ function Ageing({ b, r, tab }) {
             {p.bills.map((z, i) => <tr key={i}><td>{z.ref || "on account"}{z.no && <div className="nr">{"vch " + z.no}</div>}</td><td>{d(z.date)}</td><td className="n">{z.age}</td><td className="n">{m(z.amt)}</td></tr>)}</tbody></table></td></tr>}</Fragment>; })}
       <tr><td><b>Total</b></td>{A.sum.b.map((v, i) => <td key={i} className="n"><b>{m(v)}</b></td>)}<td className="n">{m(A.sum.pre)}</td><td className="n">{m(A.sum.adv)}</td><td className="n">{m(A.sum.unalloc)}</td><td className="n"><b>{m(A.sum.total)}</b></td></tr>
     </Table>
+    <p className="note" style={{ margin: "6px 0 0" }}>Ages run from each bill’s due date where Tally has a credit period on it (the days it is overdue), else from the bill’s date.</p>
     {Math.abs(A.sum.pre) >= 1 && A.sum.tally == null && <p className="bk-alert" style={{ marginTop: 8 }}>{m(Math.abs(A.sum.pre)) + " was " + (tab === "recv" ? "received" : "paid") + " against bills raised before the day book read here, so the total is not the balance. Read the books through the bridge (its balances fix the total), or a day book from when those bills were raised."}</p>}
     <p className="note">{"Age is counted from the bill date to " + d(r.to) + ". “Before these books” are payments or receipts against bills older than the day book read here." + (tab === "pay" ? " MSME comes from the Udyam details in Tally; mark others here." : "")}</p>
     {tab === "pay" && r.msme.length > 0 && <Card top title={"MSME suppliers unpaid past " + MIS.cfg(b).msmeDays + " days"}><p className="note">Under section 43B(h), what is owed to a micro or small enterprise and unpaid beyond the agreed period (at most 45 days) is allowed only when paid.</p>

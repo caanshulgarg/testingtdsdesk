@@ -8,7 +8,7 @@
 import { useRef } from "react";
 import CommitBox from "../../parts/CommitBox.jsx";
 
-const money = (v) => INR.format(r2(v || 0));
+const money = (v) => "₹" + INR.format(r2(v || 0));
 const H4 = ({ children, top = 12 }) => <h4 style={{ margin: top + "px 0 4px" }}>{children}</h4>;
 const Row = ({ children, gap = 8 }) => <div style={{ display: "flex", gap, flexWrap: "wrap", alignItems: "center" }}>{children}</div>;
 const latestYm = () => { const ms = GSTR.months(); return ms[ms.length - 1] || GSTF.today().slice(0, 7).replace("-", ""); };

@@ -20,7 +20,7 @@ import HelpButton from "../parts/HelpButton.jsx";
 import { Notices } from "../parts/Ai.jsx";
 import { LedgerBanner, GstDriftNote, SyncNote } from "../parts/Notes.jsx";
 
-const money = (v) => INR.format(r2(v || 0));
+const money = (v) => "₹" + INR.format(r2(v || 0));
 const Q_MONTHS = { Q1: "Apr to Jun", Q2: "Jul to Sep", Q3: "Oct to Dec", Q4: "Jan to Mar" };
 const Q_DUE = { Q1: "31 Jul", Q2: "31 Oct", Q3: "31 Jan", Q4: "31 May" };
 
@@ -132,14 +132,27 @@ function Tds({ b }) {
   </>;
 }
 
+// the date of the books' last entry (yyyymmdd), worked out once for each set of entries
+const lastMemo = new WeakMap();
+function lastEntryDate(b) {
+  const vs = b.vouchers || [];
+  if (lastMemo.has(vs)) return lastMemo.get(vs);
+  let d = ""; for (const v of vs) if (v.date > d && !v.cancel) d = v.date;
+  lastMemo.set(vs, d); return d;
+}
+
 // how up to date the books are, on every tab but From Tally, and Update now (a job for the bridge: nobody waits on Tally)
 function FreshLine({ b }) {
   const m = b.meta || {};
   if (!(b.vouchers || []).length || !m.to) return null;
-  const at = m.at ? new Date(m.at).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
+  const at = m.at ? fmtDateTime(m.at) : "";
   // build 197: from any computer: on the Tally computer through its bridge, elsewhere through the cloud
   const can = (typeof Bridge === "object" && Bridge.on() && Bridge.up()) || (typeof TCloud === "object" && S.coId && TCloud.has(S.coId));
-  return <p className="note" style={{ margin: "0 0 10px" }}>Books up to <b>{fmtDate(tallyDate(m.to))}</b>{at ? ", brought in " + at : ""}.
+  // review of 01-Oct-2026: the books' last entry, not how far the copy was checked (a copy kept to 30-Sep-2026 of a
+  // year whose last entry is 31-Mar-2026 said "Books up to 30-Sep-2026")
+  const last = lastEntryDate(b), checked = String(m.to || "");
+  return <p className="note" style={{ margin: "0 0 10px" }}>Books up to <b>{fmtDate(tallyDate(last || checked))}</b>{last ? " (the last entry)" : ""}
+    {last && checked > last ? " · checked with Tally to " + fmtDate(tallyDate(checked)) : ""}{at ? " · brought in " + at : ""}.
     {can && <> <button className="linkbtn" onClick={() => doAct("keepNow")}>Update now</button></>}</p>;
 }
 
@@ -167,9 +180,8 @@ export default function Books() {
     return <>{busy}{tab === "reports" ? <Reports b={b} /> : tab === "lookup" ? <Lookup b={b} /> : <Letters b={b} />}</>;
   // MIS, Accounts and Audit: pages of their own in the sidebar (review item 7)
   if (tab === "mis" || tab === "fs" || tab === "audit") {
-    const title = { mis: "MIS", fs: "Accounts", audit: "Audit" }[tab];
+    // the page's title is in the top bar
     return <>
-      <h2 className="bk-title" style={{ margin: "0 0 10px" }}>{title}</h2>
       {n > 0 && <FreshLine b={b} />}
       {busy}
       {!n ? <EmptyTab tab={tab} /> : tab === "mis" ? <MisTab b={b} /> : tab === "audit" ? <AuditTab b={b} /> : <Accounts b={b} />}

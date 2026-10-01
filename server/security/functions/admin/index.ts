@@ -13,6 +13,27 @@ const URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
 const ROLES = ["owner", "staff", "readonly"];
+// email (review item 21): an invite or a reset link goes through Resend when it is set up (the same secrets as the
+// support mail), otherwise through Supabase Auth's own mailer
+const RESEND = Deno.env.get("RESEND_API_KEY") || "";
+// invites and reset links come from no-reply@fincom.live (the domain must be verified in Resend); INVITE_MAIL_FROM overrides
+const FROM = Deno.env.get("INVITE_MAIL_FROM") || "FinCom <no-reply@fincom.live>";
+const APP = Deno.env.get("APP_URL") || "https://staging.fincom.live/";
+// a link may only send people back to FinCom's own pages
+const safeRedirect = (u: unknown) => {
+  const s = String(u || "");
+  const ok = ["https://staging.fincom.live/", "https://app.fincom.live/", "https://caanshulgarg.github.io/", APP].some((p) => s.startsWith(p));
+  return ok ? s : APP;
+};
+async function sendMail(to: string, subject: string, html: string): Promise<boolean> {
+  if (!RESEND) return false;
+  const r = await fetch("https://api.resend.com/emails", {
+    method: "POST", headers: { Authorization: "Bearer " + RESEND, "Content-Type": "application/json" },
+    body: JSON.stringify({ from: FROM, to: [to], subject, html }),
+  });
+  return r.ok;
+}
+const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
 
 function madeUpPassword(): string {
   // 16 characters from a 56-letter alphabet (no look-alikes), from the system's secure random source: about 93 bits
@@ -106,6 +127,71 @@ Deno.serve(async (req) => {
       return reply(200, password
         ? { ok: true, email, password, role, note: "Give this password to the person; they can change it in the app." }
         : { ok: true, email, role, note: "This person already had a login: they sign in with their own password." });
+    }
+
+    // a new person gets an email with a link to set their own password (no password is made or shown)
+    if (action === "invite_person") {
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return reply(400, { ok: false, error: "A proper email address is needed." });
+      const role = ROLES.includes(String(body.role)) ? String(body.role) : "staff";
+      const redirectTo = safeRedirect(body.redirect);
+      let target = await findUser(email);
+      if (target) {
+        const { data: theirs } = await admin.from("members").select("firm_id").eq("user_id", target.id).maybeSingle();
+        if (theirs && theirs.firm_id !== firmId) return reply(409, { ok: false, error: "This email already belongs to another firm's login. Ask them to use a different email." });
+        if (!superadmin && await isPlatformAdmin(target.id)) return reply(403, { ok: false, error: "That login cannot be added here." });
+      }
+      let sent = "";
+      if (!target) {
+        if (RESEND) {
+          const { data, error } = await admin.auth.admin.generateLink({ type: "invite", email, options: { redirectTo, data: { name: body.name || "" } } });
+          if (error) return reply(400, { ok: false, error: error.message });
+          target = data.user;
+          const link = data.properties?.action_link || "";
+          const ok = await sendMail(email, "You are invited to FinCom",
+            "<p>" + esc(String(body.name || "Hello")) + ",</p><p>You have been added to your firm's FinCom account. Choose your password here (the link works once, for 24 hours):</p><p><a href=\"" + link + "\">Set my password</a></p>");
+          if (!ok) return reply(502, { ok: false, error: "The invitation could not be emailed. Try again, or use “Make a password instead”." });
+          sent = "resend";
+        } else {
+          const { data, error } = await admin.auth.admin.inviteUserByEmail(email, { redirectTo, data: { name: body.name || "" } });
+          if (error) return reply(400, { ok: false, error: error.message + " (Supabase's own mailer: set up RESEND_API_KEY to send to anyone)" });
+          target = data.user;
+          sent = "supabase";
+        }
+      }
+      const { error: mErr } = await admin.from("members").upsert({
+        user_id: target!.id, firm_id: firmId, name: String(body.name || "").slice(0, 120), email, role, active: true,
+      });
+      if (mErr) return reply(400, { ok: false, error: mErr.message });
+      await audit("admin.invite_person", email + " as " + role + (sent ? " (invited by email)" : " (already had a login)"));
+      return reply(200, { ok: true, email, role, invited: !!sent,
+        note: sent ? "An email has gone to " + email + " with a link to set their password." : "This person already had a login: they sign in with their own password." });
+    }
+
+    // a reset link by email: the person chooses the new password themselves
+    if (action === "send_reset") {
+      const r = await targetInScope(email); if (r.err) return r.err;
+      const redirectTo = safeRedirect(body.redirect);
+      if (RESEND) {
+        const { data, error } = await admin.auth.admin.generateLink({ type: "recovery", email, options: { redirectTo } });
+        if (error) return reply(400, { ok: false, error: error.message });
+        const ok = await sendMail(email, "Set a new FinCom password",
+          "<p>A new password was asked for your FinCom login. Choose it here (the link works once, for an hour):</p><p><a href=\"" + (data.properties?.action_link || "") + "\">Set a new password</a></p><p>If you did not expect this, tell your firm's owner.</p>");
+        if (!ok) return reply(502, { ok: false, error: "The reset link could not be emailed." });
+      } else {
+        const anon = createClient(URL, ANON);
+        const { error } = await anon.auth.resetPasswordForEmail(email, { redirectTo });
+        if (error) return reply(400, { ok: false, error: error.message });
+      }
+      await audit("admin.send_reset", email, r.theirs?.firm_id || firmId);
+      return reply(200, { ok: true, email, note: "A link to set a new password has gone to " + email + "." });
+    }
+
+    // lift a lockout after too many wrong passwords (the lock also ends by itself after 15 minutes)
+    if (action === "unlock") {
+      const r = await targetInScope(email); if (r.err) return r.err;
+      await admin.rpc("auth_lockout_clear", { p_email: email, p_by: user.id });
+      await audit("admin.unlock", email, r.theirs?.firm_id || firmId);
+      return reply(200, { ok: true, email, note: email + " can sign in again." });
     }
 
     if (action === "reset_password") {

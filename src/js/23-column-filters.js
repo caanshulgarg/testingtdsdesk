@@ -589,10 +589,10 @@ function bankRowAct(a, id){
     if (a === "accept"){
       const l = exactLedger(r.ledger);
       if (!l){ b.undo = null; toast("Choose a Tally ledger first."); return true; }
-      r.ledger = l; r.state = "ready"; b.undo.histPrev = learnRows([r], "accepted");
+      r.ledger = l; r.state = "ready"; r.userSet = true; b.undo.histPrev = learnRows([r], "accepted");
     }
-    if (a === "ignore"){ r.prevState = r.state; r.state = "ignored"; b.undo.histPrev = unlearnRows([r]); }
-    if (a === "restore"){ r.state = exactLedger(r.ledger) ? "ready" : "attention"; delete r.tallyIdx; }
+    if (a === "ignore"){ r.prevState = r.state; r.state = "ignored"; r.userSet = true; b.undo.histPrev = unlearnRows([r]); }
+    if (a === "restore"){ r.state = exactLedger(r.ledger) ? "ready" : "attention"; r.userSet = true; delete r.tallyIdx; }
     if (a === "unready"){ r.state = r.ledger ? "suggested" : "attention"; r.userSet = false; b.undo.histPrev = unlearnRows([r]); }
     saveBank({rows: true}); render(); return true;
   }
@@ -971,9 +971,18 @@ async function bringDayBookFile(f, from0, to0, opts){
           catch (e){ part.bridge = "not taken: " + ((e && e.message) || e); }
         } else part.bridge = "not connected on this computer";
         if (TCloudUp.on()){
-          // quietly, in the background: nothing on the screen unless it fails
-          try { const r = await TCloudUp.days(await f.text(), {from, to}, null, who); part.cloud = r && r.days != null ? "in the cloud (" + r.days + " days)" : (r && r.skipped) || ""; }
+          // review of 01-Oct-2026: on the screen while it goes (a year takes minutes), the page warns before it is left
+          // half sent, and says when every day is in the cloud. Before, it went quietly and a reload lost the rest
+          const stay = ev => { ev.preventDefault(); ev.returnValue = "The day book is still going to FinCom’s cloud."; return ev.returnValue; };
+          window.addEventListener("beforeunload", stay);
+          part.cloud = "going to the cloud…";
+          try {
+            const r = await TCloudUp.days(await f.text(), {from, to}, step, who);
+            part.cloud = r && r.days != null ? "in the cloud (" + r.days + " days)" : (r && r.skipped) || "";
+            if (r && r.days != null) toast(f.name + ": all " + r.days + " days, " + fmtDate(tallyDate(from)) + " to " + fmtDate(tallyDate(to)) + ", are in FinCom’s cloud.");
+          }
           catch (e){ part.cloud = "not sent: " + ((e && e.message) || e); toast("Saved here, but it could not be shared with the firm just now (" + ((e && e.message) || e) + "). Choose the file again later."); }
+          finally { window.removeEventListener("beforeunload", stay); }
         } else part.cloud = "sign in to the firm account to share it";
         b.busy = ""; await saveBooks(null, b); render();          // these books, even if another client is open by now
       })();
@@ -1038,7 +1047,7 @@ function booksChange(t){
     if (!g.ok){ b.busy = ""; render(); return; }
     if (fc && (fc.name || fc.guid) && !b.tallyCo) b.tallyCo = {name: fc.name, guid: fc.guid};
     Books.importMasters(f, m => { b.busy = m; softRender(); }).then(async res => {
-      b.pans = res.pans; b.gstins = res.gstins; b.under = res.under; b.states = res.states; b.groups = res.groups; b.groupInfo = res.groupInfo; b.busy = "";
+      b.pans = res.pans; b.gstins = res.gstins; b.under = res.under; b.states = res.states; b.groups = res.groups; b.groupInfo = res.groupInfo; b.busy = ""; TallyRead.yearOpen(b);
       b.ledInfo = res.info; b.ledInfoAt = new Date().toISOString(); LedMaster.refresh(b);
       await saveBooks();
       const rows = TDS.rows(), withPan = rows.filter(r => r.pan).length;

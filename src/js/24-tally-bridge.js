@@ -1194,7 +1194,7 @@ function bridgePin(port){
 }
 async function saveBridgeSetup(){
   let t = null;
-  try { t = await blockText("bridge-setup"); } catch (e){ t = null; }
+  try { t = await blockText(BRIDGE_SETUP_ID); } catch (e){ t = null; }
   if (!t || !t.trim()){ toast("This copy of the app does not carry the setup file. Use the downloaded app (TDS-Desk-standalone.html)."); return; }
   const raw = atob(t.trim());
   const bytes = new Uint8Array(raw.length);

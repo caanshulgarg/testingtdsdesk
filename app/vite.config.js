@@ -5,6 +5,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import fs from "node:fs";
 import { execSync } from "node:child_process";
+import crypto from "node:crypto";
 
 const CSP = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
   "font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; " +
@@ -24,6 +25,9 @@ function legacy(mode) {
     },
     generateBundle() { this.emitFile({ type: "asset", fileName: "legacy.js", source: read() }); },
     transformIndexHtml(html) {
+      // review of 01-Oct-2026: legacy.js has no hash in its name, so a browser kept an older copy after a new build (the
+      // Pages cache, or a tab left open) and ran old code under the new screens. Its address now changes with its content
+      if (fs.existsSync(file)) html = html.replace('src="./legacy.js"', 'src="./legacy.js?v=' + crypto.createHash("sha256").update(read()).digest("hex").slice(0, 12) + '"');
       html = html.replace("</head>", '<meta http-equiv="Content-Security-Policy" content="' + CSP + '">\n</head>');
       if (test) html = html.replace("</head>", fs.readFileSync(new URL("./legacy/test-style.html", import.meta.url), "utf8") + "</head>").replace("<body>", '<body class="is-test">');
       // a named preview (publish-preview.sh review "REVIEW BUILD – Phase 1"): its own words on the strip and under the logo
@@ -37,7 +41,10 @@ function legacy(mode) {
 // which React build is open: the time it was built (India time) and the commit, shown at the foot of the sidebar
 const stamp = () => {
   let sha = ""; try { sha = execSync("git rev-parse --short HEAD").toString().trim(); } catch (e) {}
-  return "React · " + new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) + (sha ? " · " + sha : "");
+  // the app's one date format (review item 31): 01-Oct-2026 00:04, India time
+  const p = Object.fromEntries(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })
+    .formatToParts(new Date()).map((x) => [x.type, x.value]));
+  return "React · " + p.day + "-" + p.month.slice(0, 3) + "-" + p.year + " " + p.hour + ":" + p.minute + (sha ? " · " + sha : "");
 };
 
 export default defineConfig(({ mode }) => ({

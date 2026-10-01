@@ -12,7 +12,7 @@ const Btn = ({ act, className = "btn small", children, disabled }) => <button cl
 function Panel() {
   const b = B(), co = CO(), std = Object.keys(BANK_LEDGER_DEFAULTS), pendingNew = b.newLed.filter((l) => !l.sent).length, nh = Object.keys(b.hist.rows).length;
   return <div className="bk-panel" role="dialog" aria-modal="true" aria-labelledby="bkSetT"><div className="bk-panel-head"><h2 id="bkSetT">{"Bank settings — " + co.name}</h2><button className="icon" aria-label="Close" onClick={() => bankSettingsShow(false)}>✕</button></div>
-    <section><h3>Tally ledger list</h3>{bridgeLive(co) ? <><p className="note">{"Live from Tally (" + Bridge.openFor(co).name + "): " + b.ledgers.list.length + " ledgers, updated " + (b.ledgers.importedAt ? new Date(b.ledgers.importedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—") + "."}</p><Btn act="bankSync">Refresh from Tally</Btn></>
+    <section><h3>Tally ledger list</h3>{bridgeLive(co) ? <><p className="note">{"Live from Tally (" + Bridge.openFor(co).name + "): " + b.ledgers.list.length + " ledgers, updated " + (b.ledgers.importedAt ? fmtDateTime(b.ledgers.importedAt) : "—") + "."}</p><Btn act="bankSync">Refresh from Tally</Btn></>
       : <>{hasLedgerList() ? <p className="note">{b.ledgers.list.length + " ledgers, imported " + fmtDate(b.ledgers.importedAt.slice(0, 10)) + " from " + (b.ledgers.file || "Tally") + "." + (Date.now() - new Date(b.ledgers.importedAt) > 30 * 864e5 ? " Over 30 days old: update it." : "")}</p>
         : <p className="note">Not imported yet. In Tally: Display More Reports → List of Accounts → Export (Excel or XML).</p>}
         <Btn act="ledPick">{hasLedgerList() ? "Update ledger list" : "Import ledger list"}</Btn>

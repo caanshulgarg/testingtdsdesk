@@ -8,14 +8,14 @@
 
 const Act = ({ act, className = "btn small", children, disabled, title }) => <button className={className} disabled={disabled} title={title} onClick={() => doAct(act)}>{children}</button>;
 const H3 = ({ children, top = 16 }) => <h3 style={{ margin: top + "px 0 " + (top === 14 ? 4 : 6) + "px", fontSize: 15 }}>{children}</h3>;
-const at = (s) => new Date(s).toLocaleString([], { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+const at = (s) => fmtDateTime(s);
 
 function Wallet() {
   const rows = S.wallet || [];
   if (!rows.length) return <p className="note" style={{ marginTop: 8 }}>No entries yet.</p>;
   return <div className="tblwrap" style={{ marginTop: 8 }}><table className="data"><thead><tr><th>When</th><th>What</th><th className="n">Amount</th><th className="n">Left</th><th>Note</th></tr></thead><tbody>
     {rows.map((w, i) => <tr key={i}><td>{at(w.at)}</td><td>{w.kind === "credit" ? "Credit added" : w.kind === "fee" ? "Monthly charge" : w.kind === "refund" ? "Refund" : (w.code || "use")}</td>
-      <td className="n" style={num(w.amount) < 0 ? undefined : { color: "var(--ledger)" }}>{INR.format(num(w.amount))}</td><td className="n">{INR.format(num(w.balance_after))}</td><td>{w.note || ""}</td></tr>)}</tbody></table></div>;
+      <td className="n" style={num(w.amount) < 0 ? undefined : { color: "var(--ledger)" }}>{money(num(w.amount))}</td><td className="n">{money(num(w.balance_after))}</td><td>{w.note || ""}</td></tr>)}</tbody></table></div>;
 }
 
 // Plan and credit: what is left, the plan, and what each module charges and has used this month
@@ -25,13 +25,13 @@ export function PlanCredit() {
   if (!a || !a.firm) return <div className="pane"><h2>Plan and credit</h2><p className="note">Reading the account…</p></div>;
   const f = a.firm, plan = f.plan || { name: "No plan set", monthly_fee: 0, includes: {} }, used = (a.usage || []).reduce((m, u) => (m[u.code] = u, m), {});
   return <div className="pane"><h2>Plan and credit</h2>
-    <div className="bk-figs" style={{ margin: "0 0 10px" }}><div><dt>Credit left</dt><dd style={num(f.balance) <= num(f.warn_at) ? { color: "var(--stop)" } : undefined}>{INR.format(num(f.balance))}</dd></div>
-      <div><dt>Plan</dt><dd>{plan.name}</dd></div><div><dt>Monthly</dt><dd>{num(plan.monthly_fee) ? INR.format(num(plan.monthly_fee)) : "—"}</dd></div><div><dt>Since</dt><dd>{fmtDate(f.period_start)}</dd></div></div>
+    <div className="bk-figs" style={{ margin: "0 0 10px" }}><div><dt>Credit left</dt><dd style={num(f.balance) <= num(f.warn_at) ? { color: "var(--stop)" } : undefined}>{money(num(f.balance))}</dd></div>
+      <div><dt>Plan</dt><dd>{plan.name}</dd></div><div><dt>Monthly</dt><dd>{num(plan.monthly_fee) ? money(num(plan.monthly_fee)) : "—"}</dd></div><div><dt>Since</dt><dd>{fmtDate(f.period_start)}</dd></div></div>
     <div className="tblwrap"><table className="data"><thead><tr><th>What</th><th>How it is charged</th><th className="n">This month</th><th className="n">Spent</th></tr></thead><tbody>
       {(a.modules || []).map((m) => { const inc = moduleIncluded(m.code), u = used[m.code];
         return <tr key={m.code}><td>{(MODULE_ICON[m.code] || "") + " " + m.title}{!m.enabled && <> <span className="tag no">off</span></>}</td>
-          <td>{m.billing === "free" ? "included" : inc ? <span className="tag ok">in the plan</span> : INR.format(num(m.price)) + " " + m.unit}</td>
-          <td className="n">{u ? num(u.qty) : 0}</td><td className="n">{u && num(u.spent) ? INR.format(num(u.spent)) : "—"}</td></tr>; })}</tbody></table></div>
+          <td>{m.billing === "free" ? "included" : inc ? <span className="tag ok">in the plan</span> : money(num(m.price)) + " " + m.unit}</td>
+          <td className="n">{u ? num(u.qty) : 0}</td><td className="n">{u && num(u.spent) ? money(num(u.spent)) : "—"}</td></tr>; })}</tbody></table></div>
     <div className="row" style={{ marginTop: 10 }}><Act act="acctRefresh">Refresh</Act><Act act="acctHistory">{(S.walletOpen ? "Hide" : "Show") + " credit history"}</Act></div>
     {S.walletOpen && <Wallet />}</div>;
 }
@@ -47,7 +47,7 @@ export function FirmAccount() {
     {st.error && <p className="bk-warn" style={{ marginTop: 10 }}>{st.error}</p>}</div>;
   const pending = st.pending, aal2 = Cloud.aal() === "aal2", idle = idleMin(), mi = st.mfaInfo || {};
   return <div className="pane"><h2>Firm account (shared data)</h2>
-    <p className="note" style={{ margin: "0 0 8px" }}>Signed in as <b>{st.email}</b>{(st.role ? " (" + st.role + ")" : "") + (st.lastSync ? " · last sync " + new Date(st.lastSync).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "") + (pending ? " · " + pending + " change" + (pending > 1 ? "s" : "") + " waiting to be sent" : " · everything is sent")}</p>
+    <p className="note" style={{ margin: "0 0 8px" }}>Signed in as <b>{st.email}</b>{(st.role ? " (" + st.role + ")" : "") + (st.lastSync ? " · last sync " + fmtTime(st.lastSync) : "") + (pending ? " · " + pending + " change" + (pending > 1 ? "s" : "") + " waiting to be sent" : " · everything is sent")}</p>
     {st.error && <p className="bk-warn">{st.error}</p>}
     <label className="chk"><input type="checkbox" checked={c.auto !== false} onChange={(ev) => cloudAuto(ev.target.checked)} /> Keep in sync automatically (every 45 seconds)</label>
     <div className="row" style={{ marginTop: 10 }}><Act act="cloudSync" className="btn small primary" disabled={!!st.busy}>{st.busy ? "Syncing…" : "Sync now"}</Act><Act act="cloudSignOut">Sign out</Act></div>
@@ -56,7 +56,7 @@ export function FirmAccount() {
     <div className="row" style={{ marginTop: 8 }}><Act act="cloudPassword">Change password</Act></div>
     <H3 top={14}>Two-step sign-in (optional)</H3><p className="note" style={{ margin: "0 0 6px" }}>{aal2 ? <><span className="tag ok">On</span> This sign-in used a code from your authenticator app.</> : mi.enrolled ? "On for this account." : <>Off. For extra safety you can add a code from an authenticator app on your phone. <button className="btn small" onClick={() => mfaAction("mfaOptIn")}>Turn it on</button></>}</p>
     {mi.admin && !aal2 && <p className="bk-warn" style={{ margin: "6px 0" }}>Platform administration is locked until you give the code from your phone. <button className="btn small primary" onClick={() => mfaAction("mfaAdmin")}>Unlock administration</button></p>}
-    {S.lastSignIn && <p className="note" style={{ margin: "0 0 6px" }}>{"Your last sign-in: " + new Date(S.lastSignIn.at).toLocaleString("en-IN") + ", " + S.lastSignIn.device + "."}</p>}
+    {S.lastSignIn && <p className="note" style={{ margin: "0 0 6px" }}>{"Your last sign-in: " + fmtDateTime(S.lastSignIn.at) + ", " + S.lastSignIn.device + "."}</p>}
     <label className="f" style={{ maxWidth: 320 }}><span>Sign out after this many minutes without use</span><select aria-label="Sign out after" value={idle} onChange={(ev) => idleSet(ev.target.value)}>{[10, 15, 30, 60, 120].map((n) => <option key={n} value={n}>{n + " minutes"}</option>)}</select></label>
     {/* the people table with its actions (New password, Reset two-step, Switch off) is drawn below by PeopleEtc; this plain list only stands in until that loads */}
     {!S.account && (st.members || []).length > 0 && <><H3 top={14}>People in the firm</H3><table className="data"><thead><tr><th>Name</th><th>Email</th><th>Role</th></tr></thead><tbody>
@@ -69,12 +69,16 @@ function People({ canManage }) {
   return <>
     <H3>People in the firm</H3><div className="tblwrap"><table className="data"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th></th></tr></thead><tbody>
       {(a.people || []).map((p) => <tr key={p.email} data-key={p.email}><td>{p.name || "—"}</td><td>{p.email}</td><td>{p.role + (p.active ? "" : " (off)")}</td>
-        <td style={{ whiteSpace: "nowrap" }}>{canManage && <><button className="linkbtn" onClick={() => acctPerson("reset", p.email)}>New password</button>{" "}
+        <td style={{ whiteSpace: "nowrap" }}>{canManage && <><button className="linkbtn" title="Emails a link to choose a new password" onClick={() => acctPerson("reset", p.email)}>Send reset link</button>{" "}
+          <button className="linkbtn" title="Where email is not set up: a password is made and shown once" onClick={() => acctPerson("makepw", p.email)}>Make a password</button>{" "}
+          <button className="linkbtn" title="After 5 wrong passwords the login is locked for 15 minutes" onClick={() => acctPerson("unlock", p.email)}>Unlock</button>{" "}
           <button className="linkbtn" title="For a lost phone: they set up two-step sign-in again" onClick={() => acctPerson("mfa", p.email)}>Reset two-step</button>{" "}
           <button className="linkbtn" onClick={() => acctPerson(p.active ? "off" : "on", p.email)}>{p.active ? "Switch off" : "Switch on"}</button></>}</td></tr>)}</tbody></table></div>
     {canManage && <><div className="bk-form three" style={{ marginTop: 8 }}><label><span>Name</span><input type="text" id="npName" aria-label="Name" /></label><label><span>Email</span><input type="email" id="npEmail" aria-label="Email of the person" /></label>
       <label><span>Can do</span><select id="npRole" aria-label="Can do"><option value="staff">Everything except billing</option><option value="readonly">Look only</option><option value="owner">Everything, including people</option></select></label></div>
-      <div className="row" style={{ marginTop: 6 }}><Act act="addPerson" className="btn small primary">Add this person</Act><span className="note">A password is made for them; they can change it after signing in.</span></div></>}
+      <div className="row" style={{ marginTop: 6 }}><Act act="invitePerson" className="btn small primary">Invite by email</Act><span className="note">They get an email with a link to choose their own password.</span>
+        <Act act="addPerson" className="linkbtn">or make a password instead</Act></div>
+</>}
     {S.newPerson && <p className="bk-alert" style={{ marginTop: 8 }}><b>{S.newPerson.email}</b> can sign in with the password <b>{S.newPerson.password}</b>. Write it down: it is shown only now.</p>}
   </>;
 }
@@ -149,15 +153,15 @@ export function Platform() {
   const pe = S.planEdit && (plans.find((x) => x.id === S.planEdit) || { name: "", monthly_fee: 0, includes: {}, note: "" });
   const su = d.signup || { open: false };
   return <div className="pane"><h2>Platform (administrator only)</h2>
-    <div className="bk-figs" style={{ margin: "0 0 10px" }}><div><dt>Firms</dt><dd>{firms.length}</dd></div><div><dt>Credit held</dt><dd>{INR.format(firms.reduce((s, f) => s + num(f.balance), 0))}</dd></div><div><dt>Charged this month</dt><dd>{INR.format(num(d.month))}</dd></div></div>
+    <div className="bk-figs" style={{ margin: "0 0 10px" }}><div><dt>Firms</dt><dd>{firms.length}</dd></div><div><dt>Credit held</dt><dd>{money(firms.reduce((s, f) => s + num(f.balance), 0))}</dd></div><div><dt>Charged this month</dt><dd>{money(num(d.month))}</dd></div></div>
     <div className="tblwrap"><table className="data"><thead><tr><th>Firm</th><th>Plan</th><th className="n">Credit</th><th className="n">Used this period</th><th className="n">People</th><th></th></tr></thead><tbody>
       {firms.map((f) => <tr key={f.id}><td><b>{f.name}</b>{!f.active && <> <span className="tag no">off</span></>}{f.note && <div className="nr">{f.note}</div>}</td>
-        <td><select aria-label={"Plan of " + f.name} value={f.plan_id || ""} onChange={(ev) => adminPlan(f.id, ev.target.value)}>{plans.map((p) => <option key={p.id} value={p.id}>{p.name + (num(p.monthly_fee) ? " (" + INR.format(num(p.monthly_fee)) + "/m)" : "")}</option>)}</select></td>
-        <td className="n" style={num(f.balance) <= 0 ? { color: "var(--stop)" } : undefined}>{INR.format(num(f.balance))}</td><td className="n">{INR.format(num(f.used_this_period))}</td><td className="n">{f.people}</td>
+        <td><select aria-label={"Plan of " + f.name} value={f.plan_id || ""} onChange={(ev) => adminPlan(f.id, ev.target.value)}>{plans.map((p) => <option key={p.id} value={p.id}>{p.name + (num(p.monthly_fee) ? " (" + money(num(p.monthly_fee)) + "/m)" : "")}</option>)}</select></td>
+        <td className="n" style={num(f.balance) <= 0 ? { color: "var(--stop)" } : undefined}>{money(num(f.balance))}</td><td className="n">{money(num(f.used_this_period))}</td><td className="n">{f.people}</td>
         <td style={{ whiteSpace: "nowrap" }}><Admin act="credit" firm={f.id} name={f.name}>Add credit</Admin>{" "}<Admin act="prices" firm={f.id} name={f.name} className="linkbtn">Prices</Admin>{" "}<Admin act={f.active ? "off" : "on"} firm={f.id} className="linkbtn">{f.active ? "Switch off" : "Switch on"}</Admin></td></tr>)}</tbody></table></div>
     {pf && <div className="bdiag" style={{ marginTop: 10 }}><b>{"Prices for " + pf.name}</b> — blank means the standard price.
       <table className="data" style={{ marginTop: 6 }}><tbody>{(pf.modules || []).map((m) => { const std = (d.modules || []).find((x) => x.code === m.code) || {};
-        return <tr key={m.code}><td>{(MODULE_ICON[m.code] || "") + " " + (std.title || m.code)}<div className="nr">{(std.unit || "") + " · standard " + INR.format(num(std.price))}</div></td>
+        return <tr key={m.code}><td>{(MODULE_ICON[m.code] || "") + " " + (std.title || m.code)}<div className="nr">{(std.unit || "") + " · standard " + money(num(std.price))}</div></td>
           <td style={{ width: 130 }}><input type="number" step="0.01" min="0" id={"pr_" + m.code} aria-label={"Price of " + (std.title || m.code)} defaultValue={num(m.price) === num(std.price) ? "" : num(m.price)} placeholder={num(std.price)} /></td>
           <td><label className="chk"><input type="checkbox" id={"en_" + m.code} defaultChecked={!!m.enabled} /> on</label></td></tr>; })}</tbody></table>
       <div className="row" style={{ marginTop: 8 }}><Admin act="savePrices" firm={pf.id} className="btn small primary">Save prices</Admin><Admin act="closePrices">Close</Admin></div></div>}
@@ -168,7 +172,7 @@ export function Platform() {
     <div className="row" style={{ marginTop: 6 }}><Admin act="createFirm" className="btn small primary">Create the firm</Admin></div>
     {S.newFirm && <p className="bk-alert" style={{ marginTop: 8 }}>Firm made. <b>{S.newFirm.email}</b> signs in with the password <b>{S.newFirm.password}</b>. Shown only now.</p>}
     <H3>Plans</H3><div className="tblwrap"><table className="data"><thead><tr><th>Plan</th><th className="n">Monthly</th><th>Included</th><th></th></tr></thead><tbody>
-      {plans.map((p) => <tr key={p.id}><td>{p.name}{p.note && <div className="nr">{p.note}</div>}</td><td className="n">{num(p.monthly_fee) ? INR.format(num(p.monthly_fee)) : "—"}</td>
+      {plans.map((p) => <tr key={p.id}><td>{p.name}{p.note && <div className="nr">{p.note}</div>}</td><td className="n">{num(p.monthly_fee) ? money(num(p.monthly_fee)) : "—"}</td>
         <td>{Object.keys(p.includes || {}).length ? Object.entries(p.includes).map(([k, v]) => k + (v && v.cap ? " (" + v.cap + ")" : "")).join(", ") : "nothing — pay per use"}</td>
         <td><Admin act="editPlan" plan={p.id} className="linkbtn">Change</Admin></td></tr>)}</tbody></table></div>
     {pe && <div className="bdiag" style={{ marginTop: 10 }} key={S.planEdit}><b>{pe.id ? "Change this plan" : "New plan"}</b>
@@ -187,7 +191,7 @@ export function Platform() {
     <div className="row" style={{ marginTop: 6 }}><Admin act="saveSignup">Save</Admin></div>
     <H3>Keys (only you)</H3><p className="note" style={{ margin: "0 0 6px" }}>These stay on the server. Firms use Claude and Google through us and never see a key. A key cannot be read back here — only replaced.</p>
     <div className="tblwrap"><table className="data"><tbody>{[["claude_api_key", "Claude API key"], ["google_vision_key", "Google Cloud Vision key"]].map(([k, label]) => { const s = (d.secrets || []).find((x) => x.name === k);
-      return <tr key={k}><td>{label}</td><td>{s ? <><span className="tag ok">set</span>{" …" + (s.tail || "") + " · " + new Date(s.updated_at).toLocaleDateString()}</> : <span className="tag no">not set</span>}</td>
+      return <tr key={k}><td>{label}</td><td>{s ? <><span className="tag ok">set</span>{" …" + (s.tail || "") + " · " + fmtDate(s.updated_at)}</> : <span className="tag no">not set</span>}</td>
         <td><input type="password" id={"sec_" + k} aria-label={"New " + label} placeholder="paste a new key" /></td><td><Admin act="saveSecret" name={k}>Save</Admin></td></tr>; })}</tbody></table></div>
   </div>;
 }
