@@ -43,7 +43,7 @@ with sync_playwright() as p:
     ok(pg.evaluate("CO().name") == "ZZ Zeta Exports Pvt Ltd", "the client's name")
     nav("Tally"); pg.wait_for_timeout(300)
     ok(head() == "Tally" and "The company in Tally" in pg.inner_text("#app .setbody"), "Tally section")
-    pg.select_option('#app label:has-text("Voucher type") select', "Purchase"); pg.wait_for_timeout(300)
+    pg.check('#app label:has-text("Purchase voucher") input[type=radio]'); pg.wait_for_timeout(300)   # review item 36: a choice, not a list
     pg.click('#app label:has-text("Optional vouchers") input'); pg.wait_for_timeout(300)
     ok(pg.evaluate("CO().voucherType") == "Purchase" and pg.evaluate("CO().createOptional") is False, "voucher type and Optional vouchers")
     pg.fill('#app label:has-text("Round off") input', "Rounding Off"); pg.wait_for_timeout(700)
