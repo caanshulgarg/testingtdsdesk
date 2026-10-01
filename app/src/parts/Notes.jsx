@@ -65,3 +65,14 @@ export function MultiUpload() {
           : (((S.companies || {})[r.cid] || {}).name || "—")}</td><td className={r.ok ? "" : /not taken/.test(r.status) ? "bad" : ""}>{r.status}</td></tr>)}</tbody></table></div>
     <div className="row" style={{ gap: 8, marginTop: 8 }}>{m.busy ? <span className="note">Bringing them in, one at a time…</span> : <><button className="btn primary" onClick={() => MultiUp.start()}>Bring them in</button>{pick("Choose other files", "btn small")}<button className="btn small" onClick={() => doAct("multiClose")}>Close</button></>}</div></div>;
 }
+
+// fast-sync: what FinCom's server is doing for this client (a day book being read in, the kept day books read again),
+// live; it carries on when this page is closed (TCloud.jobs, migration-13)
+export function JobsNote({ cid }) {
+  if (typeof TCloud !== "object" || !TCloud.on()) return null;
+  if (TCloud.jobs[cid] === undefined && TCloud.jobsOk !== false) { TCloud.jobs[cid] = []; setTimeout(() => TCloud.jobsLoad(cid), 0); }
+  const day = Date.now() - 86400000;
+  const list = (TCloud.jobs[cid] || []).filter((j) => j.status === "queued" || j.status === "running" || Date.parse(j.updated_at) > day).slice(0, 3);
+  if (!list.length) return null;
+  return <div data-jobs>{list.map((j) => <p key={j.id} className={"note" + (j.status === "failed" ? " bad" : "")} style={{ margin: "4px 0" }} data-job={j.status}>{TCloud.jobLine(j)}</p>)}</div>;
+}

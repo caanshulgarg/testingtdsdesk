@@ -19,7 +19,7 @@ import Letters from "./books/Letters.jsx";
 import AuditTab from "./books/Audit.jsx";
 import HelpButton from "../parts/HelpButton.jsx";
 import { Notices } from "../parts/Ai.jsx";
-import { LedgerBanner, GstDriftNote, SyncNote } from "../parts/Notes.jsx";
+import { LedgerBanner, GstDriftNote, SyncNote, JobsNote } from "../parts/Notes.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const Q_MONTHS = { Q1: "Apr to Jun", Q2: "Jul to Sep", Q3: "Oct to Dec", Q4: "Jan to Mar" };
@@ -189,6 +189,7 @@ export default function Books() {
     // the page's title is in the top bar
     return <>
       {n > 0 && <FreshLine b={b} />}
+      <JobsNote cid={co.id} />
       {busy}
       {tab === "mis" && srv ? <ServerMis b={b} /> : !n ? (b.busy ? null : <EmptyTab tab={tab} />) : tab === "mis" ? <MisTab b={b} /> : tab === "audit" ? <AuditTab b={b} /> : <Accounts b={b} />}
     </>;
@@ -212,7 +213,7 @@ export default function Books() {
   return <>
     <nav className="sbar" aria-label="Books">{tabs.map(([id, label, c]) =>
       <button key={id} aria-selected={tab === id} onClick={() => booksTabGo(id)}>{label}{c != null && <> <span className="sbar-n">{c}</span></>}</button>)}</nav>
-    <SyncNote cid={co.id} tab={tab} /><GstDriftNote b={b} />
+    <SyncNote cid={co.id} tab={tab} /><JobsNote cid={co.id} /><GstDriftNote b={b} />
     {tab !== "import" && <FreshLine b={b} />}
     {busy}
     {body}

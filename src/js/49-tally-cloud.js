@@ -117,6 +117,45 @@ const TCloud = {
       .finally(() => { x.busy = false; x.at = Date.now(); render(); });
     return x;
   },
+  // fast-sync (migration-13): the server's jobs for a client (a day book handed over, the kept day books read again),
+  // the latest five; changes come live (Live.joinJobs), else every few seconds while one is going
+  jobs: {}, jobsOk: null,
+  async jobsLoad(cid){
+    if (!this.on() || !cid) return;
+    try {
+      this.jobs[cid] = await Cloud.api("tally_jobs?select=id,client_id,kind,status,total,done,sealed,bad,message,created_at,updated_at&client_id=eq." + encodeURIComponent(cid) + "&order=created_at.desc&limit=5") || [];
+      this.jobsOk = true;
+      this.jobs[cid].forEach(j => { if (!this.done[j.id]) this.done[j.id] = j.status; });      // so a change to done is noticed
+    } catch (e){ this.jobsOk = false; return; }
+    render(); this.jobsPoll(cid);
+  },
+  jobsPoll(cid){
+    clearTimeout(this.jobsT);
+    if ((this.jobs[cid] || []).some(j => j.status === "queued" || j.status === "running") && !(typeof Live === "object" && Live.jobsLive)) this.jobsT = setTimeout(() => this.jobsLoad(cid).then(() => this.jobsSeen(cid)), 5000);
+  },
+  jobsSeen(cid){ (this.jobs[cid] || []).forEach(j => this.jobRow(j, true)); },
+  done: {},            // job id -> its status when last seen here
+  jobRow(r, quiet){
+    if (!r || !r.client_id) return;
+    const list = this.jobs[r.client_id] = this.jobs[r.client_id] || [], i = list.findIndex(x => x.id === r.id);
+    if (i >= 0) list[i] = Object.assign({}, list[i], r); else list.unshift(r);
+    const was = this.done[r.id]; this.done[r.id] = r.status;
+    if (was && was !== r.status && (r.status === "done" || r.status === "failed")){
+      const co = S.companies[r.client_id] || {name: "The client"}, what = r.kind === "reparse" ? "reading the kept day books again" : "reading the day book" + (r.message && r.status === "done" ? " " + r.message : "");
+      toast(co.name + ": the server " + (r.status === "done" ? "has finished " + what + "." : "stopped " + what + ": " + (r.message || "")));
+      // what the server read comes in here
+      if (r.status === "done" && S.books && S.books.cid === r.client_id){ this.st[r.client_id] = {}; this.openLoad(r.client_id).catch(() => {}); }
+    }
+    if (!quiet) render();
+    this.jobsPoll(r.client_id);
+  },
+  jobLine(j){
+    const unit = j.kind === "reparse" ? "month" : "day", n = j.total, pl = x => x + " " + unit + (x === 1 ? "" : "s");
+    const what = j.kind === "reparse" ? "Reading the kept day books again" : "Reading the day book" + (j.message && j.status !== "failed" ? " " + j.message : "");
+    if (j.status === "done") return what + ": done, " + pl(j.done) + (j.bad && j.bad.length ? " (" + j.bad.length + " could not be read)" : "") + ", " + fmtTime(Date.parse(j.updated_at)) + ".";
+    if (j.status === "failed") return what + ": stopped. " + (j.message || "");
+    return what + " on FinCom’s server: " + j.done + " of " + pl(n) + (j.sealed ? "" : " handed over so far") + ". It carries on if this page is closed.";
+  },
   // the period a client's cloud copy covers: the financial year of its last entry
   fyOf(cid){
     const bk = this.book(cid) || {}, last = this.d8(bk.to || "") || Audit.today(), y = num(last.slice(0, 4)) - (num(last.slice(4, 6)) < 4 ? 1 : 0);
@@ -372,12 +411,40 @@ const TCloudUp = {
     this.retrying = true; let sent = 0;
     try {
       for (const [k, x] of list){
-        try { const r = await this.days(await x.blob.text(), {from: x.from, to: x.to}, onStep, x.who); if (r && r.days != null){ await this.drop(k); sent++; } }
+        try { const r = await this.handOver(await x.blob.text(), {from: x.from, to: x.to}, onStep, x.who, x.name); if (r && r.days != null){ await this.drop(k); sent++; } }
         catch (e){ toast("A day book (" + (x.name || "file") + ") is still waiting to go to FinCom’s cloud: " + ((e && e.message) || e)); }
       }
     } finally { this.retrying = false; }
     if (sent) toast(sent + " day book file" + (sent === 1 ? " that was waiting is" : "s that were waiting are") + " now in FinCom’s cloud.");
     return sent > 0;
+  },
+  // fast-sync (migration-13): the day book handed over to the server's queue, a part at a time; the server reads it into
+  // the cloud copy even if this page is closed afterwards. A cloud without the queue: days() as before
+  split(text, range){
+    const re = /<VOUCHER\b[\s\S]*?<\/VOUCHER>/g, byDay = new Map(); let m;
+    while ((m = re.exec(text))){ const d = (m[0].match(/<DATE>(\d{8})<\/DATE>/) || [])[1]; if (!d || d < range.from || d > range.to) continue; if (!byDay.has(d)) byDay.set(d, []); byDay.get(d).push(m[0]); }
+    const all = []; for (let d = range.from; d <= range.to; d = BridgeSeed.add(d, 1)) all.push(d);
+    return {all, byDay};
+  },
+  async handOver(text, range, onStep, who, name){
+    if (!this.on()) return {skipped: "not signed in to the firm account"};
+    who = who || {client: S.coId, company: BridgeSeed.company()};
+    const {all, byDay} = this.split(text, range);
+    let job;
+    try { job = (await this.post({kind: "job_new", total: all.length, name: String(name || "").slice(0, 120)}, who)).job; }
+    catch (e){ if (/unknown kind|404/i.test(String(e && e.message))) return this.days(text, range, onStep, who); throw e; }
+    if (!job) return this.days(text, range, onStep, who);
+    let batch = [], size = 0, done = 0;
+    const flush = async last => { if (onStep) onStep("Handing the day book to FinCom’s server (" + Math.round(done * 100 / all.length) + "%)…"); await this.post({kind: "stage_days", job, days: batch, last: !!last}, who); batch = []; size = 0; };
+    for (const d of all){
+      const xml = "<ENVELOPE><BODY><DATA>" + (byDay.get(d) || []).map(v => "<TALLYMESSAGE>" + v + "</TALLYMESSAGE>").join("") + "</DATA></BODY></ENVELOPE>";
+      const gz = await this.gz(xml);
+      if (batch.length && (size + gz.length > 4e6 || batch.length >= 31)) await flush(false);
+      batch.push({day: d, gz}); size += gz.length; done++;
+    }
+    await flush(true);
+    try { TCloud.jobsLoad(who.client); } catch (e){}
+    return {days: all.length, job};
   },
   async opening(from, asOn, led, who){
     if (!this.on()) return {skipped: "not signed in to the firm account"};
@@ -401,6 +468,11 @@ Object.assign(TCloud, {
     const p = this.pane; p.rp = p.rp || {};
     let host = ""; try { host = new URL(this.ingestUrl()).host.split(".")[0]; } catch (e){}
     if (p.rp[cid] && p.rp[cid].busy){ toast("Already reading " + co.name + "’s kept day books again."); return; }
+    // fast-sync: handed to the server's queue (a month a piece); it carries on if this page is closed
+    try {
+      const j = await TCloudUp.post({kind: "reparse_queue"}, {client: cid});
+      if (j && j.job){ p.rp[cid] = {job: j.job, months: j.months, host, at: new Date().toISOString()}; this.done[j.job] = "queued"; await this.jobsLoad(cid); toast(co.name + ": the server reads the " + j.months + " months of kept day books again; it carries on if this page is closed."); render(); return; }
+    } catch (e){ if (!/unknown kind|404/i.test(String(e && e.message))){ p.rp[cid] = {err: (e && e.message) || String(e), n: 0, host}; render(); return; } }
     let month = null, n = 0, bad = 0, total = 0, calls = 0;
     const seen = new Set();
     try {

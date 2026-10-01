@@ -103,6 +103,10 @@ async function bookFor(firm: string, company: string) {
 
 // a few days of the day book (each gzipped), into a book: stored, and read into entries, lines and ready totals
 async function ingestDays(firm: string, book: string, daysIn: unknown) {
+  const r = await ingestDaysRaw(firm, book, daysIn);
+  return r.error ? reply(400, { ok: false, error: r.error }) : reply(200, { ok: true, done: r.done, bad: r.bad });
+}
+async function ingestDaysRaw(firm: string, book: string, daysIn: unknown): Promise<{ done: string[]; bad: { day: string; error: string }[]; error?: string }> {
   const days = (Array.isArray(daysIn) ? daysIn : []).slice(0, 62);
   const done: string[] = [];
   let unzipped = 0;
@@ -125,7 +129,7 @@ async function ingestDays(firm: string, book: string, daysIn: unknown) {
     unzipped += z.size;
     const r = parseDay(z.text);
     // every entry of a day is dated that day; anything else means the file is not what it says
-    if (r.dates.some((x: string) => x !== d.day)) return reply(400, { ok: false, error: "The day book for " + d.day + " has entries of other dates (" + r.dates.filter((x: string) => x !== d.day).slice(0, 3).join(", ") + ")." });
+    if (r.dates.some((x: string) => x !== d.day)) return { done, bad, error: "The day book for " + d.day + " has entries of other dates (" + r.dates.filter((x: string) => x !== d.day).slice(0, 3).join(", ") + ")." };
     const path = `${firm}/${book}/${d.day.slice(0, 6)}/${d.day}.xml.gz`;
     const up = await db.storage.from("tally-days").upload(path, gz, { upsert: true, contentType: "application/gzip" });
     if (up.error) throw new Error("storage: " + up.error.message);
@@ -135,17 +139,25 @@ async function ingestDays(firm: string, book: string, daysIn: unknown) {
     if (error) throw new Error(error.message);
     done.push(d.day);
   }
-  return reply(200, { ok: true, done, bad });
+  return { done, bad };
 }
 // the day books already kept in the bucket, read again with today's parser: one month a call (a year is 12 calls), so
 // no call runs long. Nothing is asked of the computer with Tally; the files are the ones it sent
 async function reparseMonth(firm: string, book: string, monthIn: unknown) {
+  return reply(200, { ok: true, ...(await reparseMonthRaw(firm, book, monthIn)) });
+}
+async function keptMonths(firm: string, book: string) {
+  const { data: months, error } = await db.storage.from("tally-days").list(`${firm}/${book}`, { limit: 1000, sortBy: { column: "name", order: "asc" } });
+  if (error) throw new Error("storage: " + error.message);
+  return (months || []).map((m: any) => String(m.name)).filter((m: string) => /^\d{6}$/.test(m)).sort();
+}
+async function reparseMonthRaw(firm: string, book: string, monthIn: unknown) {
   const base = `${firm}/${book}`;
   const { data: months, error: e1 } = await db.storage.from("tally-days").list(base, { limit: 1000, sortBy: { column: "name", order: "asc" } });
   if (e1) throw new Error("storage: " + e1.message);
   const all = (months || []).map((m: any) => String(m.name)).filter((m: string) => /^\d{6}$/.test(m)).sort();
   const month = /^\d{6}$/.test(String(monthIn || "")) ? String(monthIn) : all[0];
-  if (!month) return reply(200, { ok: true, done: [], next: null, months: 0 });
+  if (!month) return { done: [] as string[], bad: [] as { day: string; error: string }[], next: null, months: 0 };
   const { data: files, error: e2 } = await db.storage.from("tally-days").list(`${base}/${month}`, { limit: 100, sortBy: { column: "name", order: "asc" } });
   if (e2) throw new Error("storage: " + e2.message);
   const done: string[] = [], bad: { day: string; error: string }[] = [];
@@ -166,7 +178,7 @@ async function reparseMonth(firm: string, book: string, monthIn: unknown) {
     done.push(day);
   }
   const next = all.find((m: string) => m > month) || null;
-  return reply(200, { ok: true, month, done, bad, next, months: all.length });
+  return { month, done, bad, next, months: all.length };
 }
 // review of 01-Oct-2026: each ledger's group and Tally's groups, kept without touching openings or entries; each ledger's
 // chain up to its primary group is worked out here. A ledger not in the copy yet is added with a nil opening
@@ -216,6 +228,78 @@ async function ingestLedgers(book: string, body: any, firm?: string) {
   if (error) throw new Error(error.message);
   return reply(200, { ok: true, ...data });
 }
+// ---------- fast-sync (migration-13): the work done by the server, from a queue (pgmq tally_work), so it finishes even
+// when the browser that handed it over is closed. A piece is {job, firm, book, days:[{day, gz}]} (a part of a day book)
+// or {job, firm, book, month} (a month of the kept day books read again). A piece that fails is seen again after its
+// time is up (VT seconds) and tried up to 5 times; then the job says what failed. Done pieces are archived (kept).
+// Run by: the hand-over itself (in the background, after answering) and the database's timer every 30 seconds.
+const VT = Number(Deno.env.get("TALLY_WORK_VT") || 240), TRIES = 5;      // seconds a piece is hidden while worked on (tests: shorter)
+// deno-lint-ignore no-explicit-any
+const later = (p: Promise<unknown>) => { const er = (globalThis as any).EdgeRuntime; if (er && typeof er.waitUntil === "function") er.waitUntil(p); else p.catch(() => {}); };
+async function jobStep(job: string, units: number, bad: unknown[], failed?: string) {
+  const { error } = await db.rpc("tally_job_step", { p_job: job, p_done: units, p_bad: bad || [], p_failed: failed || null });
+  if (error) console.error("tally-ingest job step", job, error.message);
+}
+async function workPiece(m: any) {
+  const job = String(m?.job || ""), firm = String(m?.firm || ""), book = String(m?.book || "");
+  if (!job || !firm || !book) return;
+  if (Array.isArray(m.days)) {
+    const r = await ingestDaysRaw(firm, book, m.days);
+    if (r.error) throw new Error(r.error);
+    await jobStep(job, r.done.length + r.bad.length, r.bad);
+  } else if (/^\d{6}$/.test(String(m.month || ""))) {
+    const r = await reparseMonthRaw(firm, book, m.month);
+    await jobStep(job, 1, r.bad || []);
+  }
+}
+async function work(budgetMs: number) {
+  const until = Date.now() + budgetMs; let n = 0;
+  while (Date.now() < until) {
+    const { data, error } = await db.rpc("tally_work_read", { p_vt: VT, p_n: 1 });
+    if (error) throw new Error(error.message);
+    const x = (data || [])[0];
+    if (!x) break;
+    try { await workPiece(x.message); await db.rpc("tally_work_done", { p_msg: x.msg_id }); n++; }
+    catch (e) {
+      const why = String((e as Error)?.message || e).slice(0, 300);
+      console.error("tally-ingest work", x.msg_id, x.read_ct, why);
+      if (x.read_ct >= TRIES) { await db.rpc("tally_work_done", { p_msg: x.msg_id }); if (x.message?.job) await jobStep(String(x.message.job), 0, [{ error: why }], "Stopped after " + TRIES + " tries: " + why); }
+    }
+  }
+  return n;
+}
+// a person hands over work: a day book (its days, a part at a time) or the kept day books to be read again
+async function queueJob(firm: string, client: string, book: string, user: string, body: any, isOwner: () => Promise<boolean>) {
+  if (body.kind === "job_new") {
+    const total = Math.max(0, Math.min(5000, Math.floor(Number(body.total) || 0)));
+    const { data, error } = await db.from("tally_jobs").insert({ firm_id: firm, client_id: client, book_id: book, kind: "daybook", total, created_by: user, message: String(body.name || "").slice(0, 200) }).select("id").single();
+    if (error) throw new Error(error.message);
+    return reply(200, { ok: true, job: data.id });
+  }
+  if (body.kind === "stage_days") {
+    const { data: j } = await db.from("tally_jobs").select("id, firm_id, client_id, kind, status").eq("id", String(body.job || "")).maybeSingle();
+    if (!j || j.firm_id !== firm || j.client_id !== client || j.kind !== "daybook") return reply(404, { ok: false, error: "No such job for this client." });
+    const days = (Array.isArray(body.days) ? body.days : []).filter((d: any) => isDay(d?.day) && typeof d?.gz === "string").slice(0, 62).map((d: any) => ({ day: d.day, gz: d.gz }));
+    if (days.length) { const { error } = await db.rpc("tally_work_send", { p_msg: { job: j.id, firm, book, days } }); if (error) throw new Error(error.message); }
+    if (body.last) {
+      const { data: cur } = await db.from("tally_jobs").select("done, total").eq("id", j.id).single();
+      await db.from("tally_jobs").update({ sealed: true, updated_at: new Date().toISOString(), ...(cur && cur.done >= cur.total ? { status: "done" } : {}) }).eq("id", j.id);
+    }
+    later(work(110000));
+    return reply(200, { ok: true, queued: days.length });
+  }
+  if (body.kind === "reparse_queue") {
+    if (!(await isOwner())) return reply(403, { ok: false, error: "Only the firm's owner can read the kept day books again." });
+    const months = await keptMonths(firm, book);
+    const { data, error } = await db.from("tally_jobs").insert({ firm_id: firm, client_id: client, book_id: book, kind: "reparse", total: months.length, sealed: true, created_by: user, status: months.length ? "queued" : "done" }).select("id").single();
+    if (error) throw new Error(error.message);
+    for (const month of months) { const { error: e2 } = await db.rpc("tally_work_send", { p_msg: { job: data.id, firm, book, month } }); if (e2) throw new Error(e2.message); }
+    later(work(110000));
+    return reply(200, { ok: true, job: data.id, months: months.length });
+  }
+  return null;
+}
+
 // a person signed in to FinCom giving the books from files exported from Tally (the day book part by part, the trial
 // balance): the same cloud copy a connected computer sends, so everyone in the firm works on the same books
 async function userUpload(req: Request, auth: string) {
@@ -236,7 +320,7 @@ async function userUpload(req: Request, auth: string) {
   // the client's Tally company in the cloud: the one linked to it, or one made for it now, named as in Tally
   const { data: tcs } = await db.from("tally_companies").select("company, last_seen").eq("firm_id", firm).eq("client_id", clientId);
   let company = ((tcs || []).sort((a: any, b: any) => String(b.last_seen || "").localeCompare(String(a.last_seen || "")))[0] || {} as any).company as string | undefined;
-  if (!company && body.kind === "reparse") return reply(404, { ok: false, error: "This client has no Tally company in the cloud yet." });
+  if (!company && (body.kind === "reparse" || body.kind === "reparse_queue" || body.kind === "stage_days")) return reply(404, { ok: false, error: "This client has no Tally company in the cloud yet." });
   if (!company) {
     company = String(body.company || cl.tally_name || cl.name || "").trim().slice(0, 200);
     if (!company) return reply(400, { ok: false, error: "Give the client's company name as in Tally (Client setup)." });
@@ -248,6 +332,11 @@ async function userUpload(req: Request, auth: string) {
   const book = await bookFor(firm, company);
   if (!book) return reply(409, { ok: false, error: "The Tally company " + company + " cannot take this client's books (its GSTIN is another PAN's)." });
   try {
+    const q = await queueJob(firm, clientId, book, user.id, body, async () => {
+      const { data: me } = await db.from("members").select("role").eq("user_id", user.id).eq("firm_id", firm).maybeSingle();
+      return !!me && me.role === "owner";
+    });
+    if (q) return q;
     if (body.kind === "upload_days") return await ingestDays(firm, book, body.days);
     if (body.kind === "upload_ledgers") return await ingestLedgers(book, body);
     if (body.kind === "reparse") {
@@ -265,6 +354,13 @@ async function userUpload(req: Request, auth: string) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return reply(405, { ok: false, error: "POST only" });
+  // the database's timer: the queue's pieces (migration-13); its key is kept in the vault
+  const workKey = (req.headers.get("x-fincom-work") || "").trim();
+  if (workKey) {
+    const { data: okKey } = await db.rpc("tally_work_key_ok", { p_key: workKey });
+    if (okKey !== true) return reply(401, { ok: false, error: "not allowed" });
+    try { return reply(200, { ok: true, done: await work(100000) }); } catch (e) { console.error("tally-ingest work", (e as Error).message); return reply(500, { ok: false, error: (e as Error).message }); }
+  }
   const key = (req.headers.get("x-fincom-device") || "").trim();
   const auth = req.headers.get("authorization") || "";
   if (!key && /^Bearer\s+\S+/.test(auth)) {
@@ -274,7 +370,8 @@ Deno.serve(async (req) => {
   if (!/^fcd_[0-9a-f]{48}$/.test(key)) return reply(401, { ok: false, error: "This computer is not connected to FinCom. Connect it from FinCom: Settings, Tally connection." });
   const len = Number(req.headers.get("content-length") || 0);
   if (len > MAX_BODY) return reply(413, { ok: false, error: "Too much in one go; send fewer days at a time." });
-  const { data: dev } = await db.from("tally_devices").select("id, firm_id, name, revoked, info, want_update_at, want_sent_at").eq("key_hash", await sha256(key)).maybeSingle();
+  // every column: wake_token is there from migration-13 on, and the heartbeat works without it
+  const { data: dev } = await db.from("tally_devices").select("*").eq("key_hash", await sha256(key)).maybeSingle();
   if (!dev || dev.revoked) return reply(401, { ok: false, error: "This computer's key is not valid any more. Connect it again from FinCom." });
   let body: any;
   try { body = JSON.parse(await readBody(req)); } catch (e) { return (e as Error).message === "too large" ? reply(413, { ok: false, error: "Too much in one go; send fewer days at a time." }) : reply(400, { ok: false, error: "Bad request" }); }
@@ -310,7 +407,11 @@ Deno.serve(async (req) => {
         const updateNow = !!want && (!sent || Date.parse(want) > Date.parse(sent));
         await db.from("tally_devices").update(updateNow ? { info, want_sent_at: want } : { info }).eq("id", dev.id);
         const { count: posts } = await db.from("tally_post_jobs").select("id", { count: "exact", head: true }).eq("device_id", dev.id).eq("status", "waiting");
-        return reply(200, { ok: true, updateNow, posts: posts || 0 });
+        // fast-sync (bridge 1.15.0): the computer's own Realtime channel, where the database wakes it the moment a
+        // posting is queued or an update asked for (migration-13); the heartbeat stays the fallback
+        const tok = (dev as any).wake_token;
+        const wake = tok ? { url: URL.replace(/^http/, "ws").replace(/\/+$/, "") + "/realtime/v1/websocket", key: ANON, topic: "tb-" + tok } : null;
+        return reply(200, { ok: true, updateNow, posts: posts || 0, wake });
       }
       case "posts_take": {
         const { data, error } = await db.rpc("tally_post_take", { p_device: dev.id });
