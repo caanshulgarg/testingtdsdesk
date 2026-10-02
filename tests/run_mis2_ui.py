@@ -2,10 +2,12 @@
 import json, os, sys, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from books_data import DATA, CACHE, FIXTURE, GSTIN, GSTIN09, COMPANY
 H = functools.partial(http.server.SimpleHTTPRequestHandler, directory=os.environ.get("TDSDESK_SITE", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "site-test"))); H.log_message = lambda *a: None
 srv = http.server.ThreadingHTTPServer(("localhost", 8131), H); threading.Thread(target=srv.serve_forever, daemon=True).start()
 OUT = os.environ.get("TDSDESK_OUT", os.path.join(os.path.dirname(os.path.abspath(__file__)), "out"))
-books = json.load(open(os.environ.get("TDSDESK_CACHE", os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "books-cache.json"))))
+books = json.load(open(CACHE))
 fails, errors = [], []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
@@ -15,10 +17,10 @@ with sync_playwright() as p:
     pg.on("pageerror", lambda e: errors.append(str(e)))
     pg.goto("http://localhost:8131/"); pg.wait_for_timeout(2500)
     pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1500)
-    pg.evaluate("""(bk) => { const c = newCompany({name: "ZZ TEST (VMS books)", gstin: "07AADCV3366N1ZU"}); S.companies[c.id] = c; S.coId = c.id; S.view = "company"; S.tab = "books"; S.loadingCo = false;
-      S.books = Object.assign({loading: false, challans: [], alloc: {}}, bk, {cid: c.id, misCfg: {freq: "off"}, auditCfg: {freq: "off"}}); S.books.map = Books.mapLedgers(bk.vouchers, {}); window.__bk = S.books; S.booksTab = "import"; render(); }""", books)
+    pg.evaluate("""(bk) => { const c = newCompany({name: "ZZ TEST (VMS books)", gstin: "@GSTIN@", tallyName: "@CO@"}); S.companies[c.id] = c; S.coId = c.id; S.view = "company"; S.tab = "books"; S.loadingCo = false;
+      S.books = Object.assign({loading: false, challans: [], alloc: {}}, bk, {cid: c.id, misCfg: {freq: "off"}, auditCfg: {freq: "off"}}); S.books.map = Books.mapLedgers(bk.vouchers, {}); window.__bk = S.books; S.booksTab = "import"; render(); }""".replace("@GSTIN@", GSTIN).replace("@CO@", COMPANY), books)
     pg.wait_for_timeout(1200); pg.evaluate("S.books = window.__bk; render();"); pg.wait_for_timeout(600)
-    pg.set_input_files("#mastersIn", os.path.join(os.environ.get("TDSDESK_DATA", os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")), "Master.xml")); pg.wait_for_timeout(12000)
+    pg.set_input_files("#mastersIn", os.path.join(DATA, "Master.xml")); pg.wait_for_timeout(12000)
     pg.evaluate("S.booksTab = 'mis'; render();"); pg.wait_for_timeout(400)
     pg.click('button:text-is("Last year")'); pg.click('section:has(> h3:text-is("MIS")) button:text-is("Run now")'); pg.wait_for_timeout(4000)
     pg.click('nav[aria-label="MIS"] button:text-is("Cash flow")'); pg.wait_for_timeout(500)
@@ -32,7 +34,7 @@ with sync_playwright() as p:
     pg.click('nav[aria-label="MIS"] button:text-is("Ratios")'); pg.wait_for_timeout(400)
     ok("Gross margin" in pg.inner_text("#app") and "Margins month by month" in pg.inner_text("#app"), "ratios")
     pg.click('nav[aria-label="MIS"] button:text-is("Registrations")'); pg.wait_for_timeout(400)
-    ok("07AADCV3366N1ZU" in pg.inner_text("#app") and "09AADCV3366N1ZQ" in pg.inner_text("#app"), "both registrations")
+    ok(GSTIN in pg.inner_text("#app") and GSTIN09 in pg.inner_text("#app"), "both registrations")
     pg.click('nav[aria-label="MIS"] button:text-is("Cost centres")'); pg.wait_for_timeout(500)
     t = pg.inner_text("#app")
     ok("HP SALE" in t and "Income allocated" in t, "profit by cost centre")

@@ -2,11 +2,13 @@
 import json, os, sys, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from books_data import DATA, CACHE, FIXTURE, GSTIN, GSTIN09, COMPANY
 HERE = os.path.dirname(os.path.abspath(__file__)); SITE = os.environ.get("TDSDESK_SITE", os.path.join(HERE, "..", "site-test"))
-DATA = os.environ.get("TDSDESK_DATA", os.path.join(HERE, "data")); OUT = os.environ.get("TDSDESK_OUT", os.path.join(HERE, "out")); os.makedirs(OUT, exist_ok=True)
+OUT = os.environ.get("TDSDESK_OUT", os.path.join(HERE, "out")); os.makedirs(OUT, exist_ok=True)
 H = functools.partial(http.server.SimpleHTTPRequestHandler, directory=SITE); H.log_message = lambda *a: None
 srv = http.server.ThreadingHTTPServer(("localhost", 8136), H); threading.Thread(target=srv.serve_forever, daemon=True).start()
-books = json.load(open(os.environ.get("TDSDESK_CACHE", os.path.join(HERE, "data", "books-cache.json")))); fails, errors = [], []
+books = json.load(open(CACHE)); fails, errors = [], []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
     if not c: fails.append(w)
@@ -14,8 +16,8 @@ with sync_playwright() as p:
     br = p.chromium.launch(); ctx = br.new_context(viewport={"width": 1400, "height": 1000}); pg = ctx.new_page()
     pg.on("pageerror", lambda e: errors.append(str(e)))
     pg.goto("http://localhost:8136/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1500)
-    pg.evaluate("""(bk) => { const c = newCompany({name: "ZZ TEST (VMS books)", gstin: "07AADCV3366N1ZU"}); S.companies[c.id] = c; S.coId = c.id; S.view = "company"; S.tab = "books"; S.loadingCo = false;
-      S.books = Object.assign({loading: false, challans: [], alloc: {}}, bk, {cid: c.id, misCfg: {freq: "off"}, auditCfg: {freq: "off"}}); S.books.map = Books.mapLedgers(bk.vouchers, {}); window.__bk = S.books; S.booksTab = "import"; render(); }""", books)
+    pg.evaluate("""(bk) => { const c = newCompany({name: "ZZ TEST (VMS books)", gstin: "@GSTIN@", tallyName: "@CO@"}); S.companies[c.id] = c; S.coId = c.id; S.view = "company"; S.tab = "books"; S.loadingCo = false;
+      S.books = Object.assign({loading: false, challans: [], alloc: {}}, bk, {cid: c.id, misCfg: {freq: "off"}, auditCfg: {freq: "off"}}); S.books.map = Books.mapLedgers(bk.vouchers, {}); window.__bk = S.books; S.booksTab = "import"; render(); }""".replace("@GSTIN@", GSTIN).replace("@CO@", COMPANY), books)
     pg.wait_for_timeout(1200); pg.evaluate("S.books = window.__bk; render();"); pg.wait_for_timeout(500)
     pg.set_input_files("#mastersIn", os.path.join(DATA, "Master.xml")); pg.wait_for_timeout(12000)
     pg.evaluate("""() => { const led = {}; Object.entries(S.books.ledInfo).forEach(([n, i]) => { led[n] = {open: i.ob || 0, close: 0, parent: i.group}; }); S.books.tb = {from: "20250401", to: "20260331", at: new Date().toISOString(), led}; S.booksTab = "fs"; render(); }""")

@@ -494,10 +494,23 @@ Cloud.fn = async function(name, body, retry){
   // function): said in words, not the browser's "Load failed" / "Failed to fetch"
   try { r = await fetch(c.url.replace(/\/+$/, "") + "/functions/v1/" + name, {
     method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": "application/json"}, body: JSON.stringify(body || {})}); }
-  catch (e){ throw new Error("FinCom\u2019s server could not be reached from this page (" + ((e && e.message) || "no answer") + "). Check the connection and try again; if it keeps happening, tell support which page you were on."); }
+  // kind "blocked" (review of 02-Oct-2026: the gateway did not allow staging.fincom.live, the browser stopped the call
+  // and the bill only said "The Claude API refused the request")
+  catch (e){
+    const why = (e && e.message) || "no answer";
+    throw Object.assign(new Error(name === "gateway" ? "Your browser could not reach FinCom\u2019s reading service (blocked or offline)."
+      : "FinCom\u2019s server could not be reached from this page (" + why + "). Check the connection and try again; if it keeps happening, tell support which page you were on."),
+      {kind: "blocked", status: 0, browserError: why});
+  }
   if (r.status === 401 && !retry){ await this.refreshToken(s.access_token); return this.fn(name, body, true); }
   const j = await r.json().catch(() => ({}));
-  if (!r.ok || j.ok === false) throw Object.assign(new Error(j.error || ("Request failed (" + r.status + ")")), {reason: j.reason, balance: j.balance});
+  // the gateway's kind, status, wait and its own words travel with the error (src/js/01 errCopy says them plainly)
+  if (!r.ok || j.ok === false){
+    const ra = j.retry_after != null ? j.retry_after : r.headers.get("Retry-After");
+    throw Object.assign(new Error(j.error || ("Request failed (" + r.status + ")")), {reason: j.reason, balance: j.balance, kind: j.kind || "other",
+      status: j.status != null ? j.status : r.status, retryAfter: ra != null && isFinite(Number(ra)) ? Number(ra) : null, serverError: j.error || "",
+      detail: j.detail || "", model: j.model || "", category: j.category || ""});
+  }
   return j;
 };
 async function loadAccount(quiet){
