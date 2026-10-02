@@ -84,6 +84,10 @@ jobs:
     needs: app
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    env:
+      # the tests default to /opt/pw-browsers (the cloud sessions' copy) when this is not set; here Chromium is
+      # installed into, and found in, the runner's own folder
+      PLAYWRIGHT_BROWSERS_PATH: /home/runner/pw-browsers
     strategy:
       fail-fast: false
       matrix:
