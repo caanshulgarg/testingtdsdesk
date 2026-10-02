@@ -74,7 +74,7 @@ func getLedgers(company string, pref int) (M, error) {
 			groups = append(groups, M{"name": n, "parent": nt(g, "PARENT")})
 		}
 	}
-	return M{"ok": true, "company": company, "port": port, "ledgers": ledgers, "groups": groups}, nil
+	return M{"ok": true, "company": company, "port": port, "ledgers": ledgers, "groups": groups, "skipped": skippedLedgers(company)}, nil
 }
 
 func voucherType(v *Node) string {
@@ -287,14 +287,23 @@ func ledgerChunks(tc *TC, company string, port int, build func(string, int64, in
 		}
 		bound = companyAlterM(company)
 	}
+	// a ledger found to hang Tally (ledgers.go) is never asked for: the chunks stop short of it
+	st := readKeepState(syncFolder(company))
 	size := int64(ledChunkDefault())
 	var out []*Node
 	seen := map[string]bool{}
-	for after := int64(0); ; after += size {
+	for after := int64(0); ; {
 		upto := after + size
 		last := upto >= bound // the last chunk takes whatever is past the bound too
 		if last {
 			upto = 0
+		}
+		if p := nextPoison(st, after); p > 0 && (upto == 0 || p <= upto) {
+			if p == after+1 {
+				after = p
+				continue
+			}
+			upto, last = p-1, false
 		}
 		raw, err := invokeTally(tc, port, build(company, after, upto), 0)
 		if err != nil {
@@ -311,7 +320,17 @@ func ledgerChunks(tc *TC, company string, port int, build func(string, int64, in
 		if last {
 			return out, nil
 		}
+		after = upto
 	}
+}
+
+// the ledgers skipped because they hang Tally, for FinCom's answer: [[MasterID, name, why]]
+func skippedLedgers(company string) []any {
+	sk := arr(readKeepState(syncFolder(company))["ledPoison"])
+	if sk == nil {
+		return []any{}
+	}
+	return sk
 }
 func groupNamesRequest(company string) string {
 	return collectionRequest("TDSDeskGroupNames", "Group", "NAME,PARENT", company, "")
@@ -346,7 +365,7 @@ func getLedgerNames(tc *TC, company string, pref int) (M, error) {
 			grp = append(grp, []any{n, nt(g, "PARENT")})
 		}
 	}
-	return M{"ok": true, "company": company, "port": port, "ledgers": led, "groups": grp}, nil
+	return M{"ok": true, "company": company, "port": port, "ledgers": led, "groups": grp, "skipped": skippedLedgers(company)}, nil
 }
 
 // the port to read from: a background read uses the Tally its run found at its start (it asks no company list of its

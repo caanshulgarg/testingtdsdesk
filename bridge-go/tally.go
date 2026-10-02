@@ -617,9 +617,16 @@ func invokeTally(tc *TC, port int, x string, timeoutSec int) (string, error) {
 	// until a tiny company-level request (the company's name and GUID) has answered; that check goes at most once a
 	// minute (TallyProbeEverySec, 60) and is the only request until it answers
 	if needProbe(port) {
-		if perr := freeProbe(ctx, port, html.UnescapeString(group(`<SVCURRENTCOMPANY>([^<]*)</SVCURRENTCOMPANY>`, x, 1))); perr != nil {
+		co := html.UnescapeString(group(`<SVCURRENTCOMPANY>([^<]*)</SVCURRENTCOMPANY>`, x, 1))
+		praw, perr := freeProbe(ctx, port, co)
+		if perr != nil {
 			unlock()
 			return "", perr
+		}
+		if x == companyCheckRequest(co) {
+			// the request was the small check itself: its answer is the check's, not sent twice
+			unlock()
+			return praw, nil
 		}
 	}
 	t0 := time.Now()
@@ -870,12 +877,12 @@ func companyCheckRequest(company string) string {
 	return fcCollection("FinComCompany", company, "", "Company", "NAME, GUID, ALTVCHID, ALTMSTID", `$Name = "`+strings.ReplaceAll(company, `"`, "")+`"`)
 }
 
-func freeProbe(ctx context.Context, port int, company string) error {
+func freeProbe(ctx context.Context, port int, company string) (string, error) {
 	probeMu.Lock()
 	if p := probes[port]; p != nil {
 		if nowFn().Before(p.last.Add(probeEvery())) {
 			probeMu.Unlock()
-			return fmt.Errorf("Tally (port %d) is busy: it did not answer a request; nothing is sent until it answers a small check", port)
+			return "", fmt.Errorf("Tally (port %d) is busy: it did not answer a request; nothing is sent until it answers a small check", port)
 		}
 		p.last = nowFn()
 	}
@@ -889,12 +896,12 @@ func freeProbe(ctx context.Context, port int, company string) error {
 			noteCompanyAlts(company, raw)
 		}
 		writeLog(fmt.Sprintf("Tally %d answered the small check; requests go again", port))
-		return nil
+		return raw, nil
 	}
 	if errors.Is(err, errPreempted) {
-		return errPreempted
+		return "", errPreempted
 	}
-	return fmt.Errorf("Tally (port %d) is busy: it is still working on an earlier request and did not answer the small check; nothing else was sent (asked again in a minute)", port)
+	return "", fmt.Errorf("Tally (port %d) is busy: it is still working on an earlier request and did not answer the small check; nothing else was sent (asked again in a minute)", port)
 }
 
 // a posting (an import) or the reads that belong to it (the duplicate check, the look for a FinCom id): these go

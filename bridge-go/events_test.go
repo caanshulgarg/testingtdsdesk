@@ -158,6 +158,8 @@ func bridgeFor(t *testing.T, s *standIn, extra string) string {
 	wantAt = time.Time{}
 	wantMu.Unlock()
 	pausedB, tallyStandInClosed, turnFirst, nightAt = false, false, true, time.Time{}
+	resetSilence()
+	resetSelfWatch()
 	forgetTallyOpen()
 	return dir
 }

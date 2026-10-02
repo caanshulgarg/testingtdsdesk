@@ -370,6 +370,9 @@ func standBridge(t *testing.T, f *standTally, extra string) string {
 	measureMu.Lock()
 	measureLast = nil
 	measureMu.Unlock()
+	altMu.Lock()
+	companyAlts, companyAltsM = map[string]int64{}, map[string]int64{}
+	altMu.Unlock()
 	return dir
 }
 

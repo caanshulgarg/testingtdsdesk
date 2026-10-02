@@ -39,9 +39,12 @@ func TestPoisonNotMarkedWhenRefused(t *testing.T) {
 		}
 	}
 	// (a) reading stopped in the middle of the list
-	var n atomic.Int32
+	var n, late atomic.Int32
 	f.mu.Lock()
 	f.behave = func(w http.ResponseWriter, r *http.Request, id, body string) bool {
+		if id == ledListID && readStopped() {
+			late.Add(1)
+		}
 		if id == ledListID && n.Add(1) == 3 {
 			setReadStop("self", "test: stopped in the middle of the ledger list")
 		}
@@ -53,8 +56,8 @@ func TestPoisonNotMarkedWhenRefused(t *testing.T) {
 		_ = ledRound(t, k, f.port)
 	}
 	sizeOK("reading stopped")
-	if got := n.Load(); got != 3 {
-		t.Fatalf("%d chunk requests went (want 3: none after reading stopped)", got)
+	if n.Load() < 3 || late.Load() != 0 {
+		t.Fatalf("%d chunk requests, %d of them after reading stopped (want none after)", n.Load(), late.Load())
 	}
 	clearReadStop("tray")
 	// (b) Tally did not answer a moment ago: requests are held (nothing sent) until the small check may go

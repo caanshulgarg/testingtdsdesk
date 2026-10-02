@@ -87,6 +87,26 @@ func loadHeld(company string) (*heldCopy, error) {
 	return h, nil
 }
 
+// one ledger line of a voucher as FinCom counts it: the ledger lines, and the accounting allocations of items (an item
+// invoice's sales or purchase ledger), wherever they sit in the voucher
+type vLine struct{ ledger, amount, body string }
+
+func voucherLines(v string) []vLine {
+	var out []vLine
+	for _, tag := range []string{"ALLLEDGERENTRIES.LIST", "LEDGERENTRIES.LIST", "ACCOUNTINGALLOCATIONS.LIST"} {
+		parts := strings.Split(v, "<"+tag+">")
+		for _, p := range parts[1:] {
+			e := strings.Split(p, "</"+tag+">")[0]
+			n := html.UnescapeString(strings.TrimSpace(group(`<LEDGERNAME>([^<]*)</LEDGERNAME>`, e, 1)))
+			if n == "" {
+				continue
+			}
+			out = append(out, vLine{n, group(`<AMOUNT>([^<]*)</AMOUNT>`, e, 1), e})
+		}
+	}
+	return out
+}
+
 // each ledger's movement from a to b (inclusive), from the copy's day files, as FinCom counts it (not Optional, not
 // cancelled; ledger lines, accounting allocations of items)
 func (h *heldCopy) moves(a, b string) map[string]float64 {
@@ -103,16 +123,8 @@ func (h *heldCopy) moves(a, b string) map[string]float64 {
 			if strings.EqualFold(group(`<ISOPTIONAL>([^<]*)<`, v, 1), "Yes") || strings.EqualFold(group(`<ISCANCELLED>([^<]*)<`, v, 1), "Yes") {
 				continue
 			}
-			for _, tag := range []string{"ALLLEDGERENTRIES.LIST", "LEDGERENTRIES.LIST", "ACCOUNTINGALLOCATIONS.LIST"} {
-				parts := strings.Split(v, "<"+tag+">")
-				for _, p := range parts[1:] {
-					e := strings.Split(p, "</"+tag+">")[0]
-					n := html.UnescapeString(strings.TrimSpace(group(`<LEDGERNAME>([^<]*)</LEDGERNAME>`, e, 1)))
-					if n == "" {
-						continue
-					}
-					out[n] += num(amtText(group(`<AMOUNT>([^<]*)</AMOUNT>`, e, 1)))
-				}
+			for _, l := range voucherLines(v) {
+				out[l.ledger] += num(amtText(l.amount))
 			}
 		}
 	}
@@ -263,25 +275,25 @@ func heldLedgerVouchers(company, ledger, from, to string) ([]M, error) {
 		if d < from || d > to {
 			continue
 		}
-		for _, v := range xmlDoc(readText(f)).All("VOUCHER") {
+		for _, vx := range reVchBlock.FindAllString(readText(f), -1) {
 			entries := []any{}
 			touches := false
-			for _, e := range v.Sel("ALLLEDGERENTRIES.LIST | LEDGERENTRIES.LIST") {
-				ln := nt(e, "LEDGERNAME")
-				if foldName(ln) == want {
+			for _, l := range voucherLines(vx) {
+				if foldName(l.ledger) == want {
 					touches = true
 				}
 				bills := []any{}
-				for _, b := range e.Sel("BILLALLOCATIONS.LIST") {
-					if bn := nt(b, "NAME"); bn != "" {
+				for _, m := range re(`<BILLALLOCATIONS\.LIST>[\s\S]*?<NAME>([^<]*)</NAME>`).FindAllStringSubmatch(l.body, -1) {
+					if bn := html.UnescapeString(strings.TrimSpace(m[1])); bn != "" {
 						bills = append(bills, bn)
 					}
 				}
-				entries = append(entries, M{"ledger": ln, "amount": nt(e, "AMOUNT"), "instrument": nt(e.One("BANKALLOCATIONS.LIST"), "INSTRUMENTNUMBER"), "bills": bills})
+				entries = append(entries, M{"ledger": l.ledger, "amount": strings.TrimSpace(l.amount), "instrument": strings.TrimSpace(group(`<INSTRUMENTNUMBER>([^<]*)</INSTRUMENTNUMBER>`, l.body, 1)), "bills": bills})
 			}
 			if !touches {
 				continue
 			}
+			v := xmlDoc(vx).One("VOUCHER")
 			vd := nt(v, "DATE")
 			if vd == "" {
 				vd = d
