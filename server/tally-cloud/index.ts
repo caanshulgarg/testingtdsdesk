@@ -30,7 +30,9 @@
 //    (kept in info.beat and its info.bridges entry), and the answer carries readStop:{by:"fincom", reason, at}|null
 //    (Stop reading from FinCom, for this computer or all of the firm's), readResume:true once after a Resume, and
 //    release:{version, allowed} (the version this computer may install; none without a release row). Without
-//    migration-35 none of the three is said. Older bridges ignore them.
+//    migration-35 none of the three is said. Older bridges ignore them. Round 2 (migration-34): the beat also carries
+//    allowlist:{measured, hash} (every Tally request on the bridge's allow-list timed, and which list); kept with the
+//    beat and, for the pilot computer, as evidence on the release (approval waits for measured)
 //   {kind:"support", note, zip}                      -> the Connector's log and details for FinCom support
 //   FinCom Bridge 2.1.4 as rebuilt on 02-Oct-2026 (migration-32-sync-safety; without it these answer as before, no lease):
 //   {kind:"lease_take", company, ttl}                -> {held:false, lease:{until}} | {held:true, holder:{bridge, computer, until}}:
@@ -38,10 +40,16 @@
 //                                                       it again); {noLease:true} when the cloud keeps none
 //   {kind:"lease_release", company}                  -> the lease given back by its holder
 //   {kind:"ledger_list", company, ledgers:[[guid, masterId, alterId, name, group, storedOpening, gstin, pan, openingChanged]],
-//    renamed?:[[guid, from, to]], deleted?:[[guid, name]], groups?:[[name, parent]], last}
-//                                                    -> {added, renamed, deleted, deletesSkipped, notes}: 2.1.4, the plain ledger
-//                                                       list (applyLedgerList): rows added or brought up to date, renamed
-//                                                       (old name kept), deleted ones marked (deleted_at), never removed
+//    renamed?:[[guid, from, to]], deleted?:[[guid, name]], groups?:[[name, parent]], last, round?, complete?, rowsRead?}
+//                                                    -> {added, renamed, deleted, deletesHeld, deletesSkipped, notes}: 2.1.4, the
+//                                                       plain ledger list (applyLedgerList): rows added or brought up to date,
+//                                                       renamed (old name kept), deleted ones marked (deleted_at), never removed.
+//                                                       2.1.5 (migration-34): each call is one batch of a read (round); the
+//                                                       batch is recorded (tally_ledger_round_batch), renames go through
+//                                                       tally_ledger_rename, and deleted is applied only by
+//                                                       tally_ledgers_mark_gone (complete round, the bridge's count of ledgers
+//                                                       with a GUID agreeing with the copy's, the bulk limit, the guard).
+//                                                       Without migration-34, or without a round id, nothing is marked
 //   {kind:"read_guard", company, guid, alter, count} -> {state: ok | needs_baseline, why}: the company's Tally GUID, highest
 //                                                       AlterID and the entries read, kept at each read (tally_sync_reads)
 //   companies:[{name, gstin, guid}]                  -> the company's Tally GUID kept with its book (tally_sync_cursor)
@@ -148,8 +156,13 @@ function bridgeOf(dev: any, body: any, shadow: boolean) {
     mode: shadow ? "test" : "main", runMode: ["user", "service", "window"].includes(b?.runMode) ? b.runMode : "",
     tally: !!body?.tally, tallyState: ["open", "busy", "closed"].includes(body?.tallyState) ? body.tallyState : (body?.tally ? "open" : "closed"),
     open: (Array.isArray(body?.open) ? body.open : []).slice(0, 50).map((x: unknown) => s(x, 200)),
-    // 2.1.5: its request timings and whether it stopped reading
-    reqs: cleanReqs(body?.reqs), readStopped: cleanReadStopped(body?.readStopped) } };
+    // 2.1.5: its request timings, whether it stopped reading, and (round 2) its allow-list state
+    reqs: cleanReqs(body?.reqs), readStopped: cleanReadStopped(body?.readStopped), allowlist: cleanAllowlist(body?.allowlist) } };
+}
+// round 2 (migration-34): allowlist:{measured, hash} in the beat; anything else is not kept
+function cleanAllowlist(x: any) {
+  if (!x || typeof x !== "object" || Array.isArray(x)) return null;
+  return { measured: x.measured === true, hash: typeof x.hash === "string" ? x.hash.slice(0, 80) : "" };
 }
 // the bridges heard from, with this one brought up to date: at most 12, none silent for more than 60 days
 function bridgesWith(info: any, id: string, entry: any) {
@@ -226,7 +239,19 @@ async function bridgeControl(dev: any, firm: string, me: { id: string; entry: an
         const self = me.entry?.readStopped;
         const since = Date.parse(self?.at || "");
         if (self?.by === "self" && !pr.pilot_self_stop && (isNaN(since) || since >= Date.parse(pr.pilot_started_at))) upd.pilot_self_stop = { reason: self.reason, at: self.at || at };
-        if (Object.keys(upd).length) await db.from("tally_bridge_releases").update(upd).eq("firm_id", firm).eq("version", v).eq("pilot_device", dev.id).is("approved_at", null);
+        // round 2 (migration-34): the pilot's allow-list state, whenever it changes (approval waits for measured)
+        const al = me.entry?.allowlist;
+        if (al && (pr.pilot_allowlist_measured !== al.measured || String(pr.pilot_allowlist_hash || "") !== al.hash)) { upd.pilot_allowlist_measured = al.measured; upd.pilot_allowlist_hash = al.hash; }
+        if (Object.keys(upd).length) {
+          const write = () => db.from("tally_bridge_releases").update(upd).eq("firm_id", firm).eq("version", v).eq("pilot_device", dev.id).is("approved_at", null);
+          let { error } = await write();
+          // a cloud with migration-35 but not 34 (no pilot_allowlist_* columns): the other evidence still written
+          if (error && "pilot_allowlist_measured" in upd && /pilot_allowlist/i.test(error.message)) {
+            delete upd.pilot_allowlist_measured; delete upd.pilot_allowlist_hash;
+            if (Object.keys(upd).length) ({ error } = await write());
+          }
+          if (error) console.error("tally-ingest pilot evidence", error.message);
+        }
       }
     }
   } catch (e) { console.error("tally-ingest bridge control", (e as Error).message); }
@@ -414,15 +439,37 @@ async function selectIn(cols: string, book: string, field: string, vals: string[
   }
   return out;
 }
-async function applyLedgerList(firm: string, book: string, body: any) {
+async function applyLedgerList(firm: string, book: string, body: any, dev?: any, me?: { id: string; entry: any }) {
   const s = (v: unknown, n: number) => String(v ?? "").slice(0, n);
   const m32 = await hasCols("tally_ledgers", "tally_guid, alter_id, deleted_at");
   const m31 = await hasCols("tally_ledgers", "before_clean");
   const m28 = await hasCols("tally_ledgers", "gstin, pan");
   const notes: string[] = [];
-  const out = { ok: true, ledgers: 0, added: 0, renamed: 0, deleted: 0, deletesSkipped: 0, groups: 0, notes };
+  const out = { ok: true, ledgers: 0, added: 0, renamed: 0, deleted: 0, deletesHeld: 0, deletesSkipped: 0, groups: 0, round: "", notes };
   const now = new Date().toISOString();
   const cols = "name, parent" + (m32 ? ", tally_guid, deleted_at" : "") + (m31 ? ", before_clean" : "");
+  // the rows: one per clean name
+  const seen = new Set<string>();
+  const rows = (Array.isArray(body.ledgers) ? body.ledgers : []).slice(0, 5000).map((l: any) => ({
+    guid: s(l?.[0], 100).trim(), alter: Math.max(0, Math.floor(Number(l?.[2]) || 0)), name: cleanName(s(l?.[3], 300)),
+    parent: cleanName(s(l?.[4], 300)).replace(/^\W*Primary$/i, ""), open: Math.round(amt(l?.[5]) * 100) / 100,
+    gstin: s(l?.[6], 15).trim().toUpperCase(), pan: s(l?.[7], 10).trim().toUpperCase(), oc: !!Number(l?.[8]) }))
+    .filter((r: any) => r.name && !seen.has(r.name) && seen.add(r.name));
+  out.ledgers = rows.length;
+  // 0. migration-34: this call is one batch of a read of the whole list (round); the bridge says whether the read is
+  // complete and how many ledgers with a GUID it holds (rowsRead). The batch is recorded first; the answer tells
+  // whether migration-34 is there (m34): then renames and deletions go through its functions, never direct updates
+  const round = s(body.round, 80).trim();
+  const complete = body.complete === true;
+  const rowsRead = body.rowsRead === null || body.rowsRead === undefined || body.rowsRead === "" || !Number.isFinite(Number(body.rowsRead)) ? null : Math.max(0, Math.floor(Number(body.rowsRead)));
+  let m34: boolean | null = null;
+  const missing34 = (e: any) => !!e && /could not find|does not exist|schema cache|tally_ledger_round_batch|tally_ledgers_mark_gone|tally_ledger_rename/i.test(String(e.message || ""));
+  if (round) {
+    const { error } = await db.rpc("tally_ledger_round_batch", { p_book: book, p_round: round, p_rows: rows.length, p_rows_read: rowsRead, p_complete: complete, p_device: dev?.id ?? null, p_bridge: me?.id ?? null });
+    if (error && missing34(error)) { m34 = false; notes.push("round not recorded: migration-34 (tally_ledger_rounds) is not applied"); }
+    else if (error) throw new Error(error.message);
+    else { m34 = true; out.round = round; }
+  }
   // 1. groups (added or changed; none removed), and every group's parent for the chains
   const grpIn = cleanPairs(body.groups, 20000);
   for (let i = 0; i < grpIn.length; i += 1000) {
@@ -441,6 +488,19 @@ async function applyLedgerList(firm: string, book: string, body: any) {
     return { ...b, renamed: [...(Array.isArray(b.renamed) ? b.renamed : []), entry].slice(-20) };
   };
   const rename = async (guid: string, from: string, to: string) => {
+    // migration-34: by GUID in SQL (refused with a note when the new name is another GUID's; merged when it is a row
+    // with no GUID, the guard keeping a row with entries); the old way only on a cloud without it
+    if (m34 !== false) {
+      const { data, error } = await db.rpc("tally_ledger_rename", { p_book: book, p_guid: guid || null, p_from: from, p_to: to });
+      if (!error) {
+        m34 = true;
+        if (data?.renamed || data?.merged) out.renamed++;
+        if (data?.refused || data?.merged) notes.push(String(data.note || "").slice(0, 300));
+        return;
+      }
+      if (!missing34(error)) throw new Error(error.message);
+      m34 = false;
+    }
     let row: any = null;
     if (m32 && guid) row = (await selectIn(cols, book, "tally_guid", [guid]))[0] || null;
     if (!row && from) row = (await selectIn(cols, book, "name", [from])).find((r: any) => !m32 || !r.tally_guid || r.tally_guid === guid) || null;
@@ -464,14 +524,7 @@ async function applyLedgerList(firm: string, book: string, body: any) {
   const ren = (Array.isArray(body.renamed) ? body.renamed : []).slice(0, 5000)
     .map((x: any) => ({ guid: s(x?.[0], 100).trim(), from: cleanName(s(x?.[1], 300)), to: cleanName(s(x?.[2], 300)) })).filter((r: any) => r.from && r.to && r.from !== r.to);
   for (const r of ren) await rename(r.guid, r.from, r.to);
-  // 3. the rows: one per clean name
-  const seen = new Set<string>();
-  const rows = (Array.isArray(body.ledgers) ? body.ledgers : []).slice(0, 5000).map((l: any) => ({
-    guid: s(l?.[0], 100).trim(), alter: Math.max(0, Math.floor(Number(l?.[2]) || 0)), name: cleanName(s(l?.[3], 300)),
-    parent: cleanName(s(l?.[4], 300)).replace(/^\W*Primary$/i, ""), open: Math.round(amt(l?.[5]) * 100) / 100,
-    gstin: s(l?.[6], 15).trim().toUpperCase(), pan: s(l?.[7], 10).trim().toUpperCase(), oc: !!Number(l?.[8]) }))
-    .filter((r: any) => r.name && !seen.has(r.name) && seen.add(r.name));
-  out.ledgers = rows.length;
+  // 3. the rows (made above)
   if (m32) {
     // a GUID the copy holds under another name: a rename the bridge did not send (its first list, or an older copy)
     const byGuid = await selectIn(cols, book, "tally_guid", rows.map((r: any) => r.guid).filter(Boolean));
@@ -498,26 +551,26 @@ async function applyLedgerList(firm: string, book: string, body: any) {
     }
   }
   out.added = fresh.length;
-  // 4. deletions: marked, never removed
+  // 4. deletions: marked, never removed, and (migration-34) only by tally_ledgers_mark_gone, by GUID, on a complete
+  // round whose count agrees, within the bulk limit, each row past the guard. Without migration-34, or with no round
+  // id (a bridge before 2.1.5), nothing is marked: the bridge sends them again on its next complete read
   const del = (Array.isArray(body.deleted) ? body.deleted : []).slice(0, 50000)
     .map((x: any) => ({ guid: s(x?.[0], 100).trim(), name: cleanName(s(x?.[1], 300)) })).filter((d: any) => d.guid || d.name);
-  if (del.length && !m32) {
+  const skip = (why: string) => {
     out.deletesSkipped = del.length;
-    notes.push("deletions skipped: migration-32 (tally_ledgers.deleted_at) is not applied");
-    console.log("tally-ingest ledger_list: migration-32 not applied, deletions skipped", book, del.length);
-  } else if (del.length) {
-    const guids = del.map((d: any) => d.guid).filter(Boolean);
-    for (let i = 0; i < guids.length; i += 150) {
-      const { data, error } = await db.from("tally_ledgers").update({ deleted_at: now }).eq("book_id", book).in("tally_guid", guids.slice(i, i + 150)).is("deleted_at", null).select("name");
-      if (error) throw new Error(error.message);
-      out.deleted += (data || []).length;
-    }
-    // a row the copy holds without a GUID yet (from Master.xml): by its name, unless that name is listed in this call
-    const names = del.map((d: any) => d.name).filter((n: string) => n && !seen.has(n));
-    for (let i = 0; i < names.length; i += 150) {
-      const { data, error } = await db.from("tally_ledgers").update({ deleted_at: now }).eq("book_id", book).in("name", names.slice(i, i + 150)).is("tally_guid", null).is("deleted_at", null).select("name");
-      if (error) throw new Error(error.message);
-      out.deleted += (data || []).length;
+    notes.push("deletions skipped: " + why + "; nothing marked");
+    console.log("tally-ingest ledger_list: deletions skipped", book, del.length, why);
+  };
+  if (del.length && m34 === false) skip("migration-34 not applied (tally_ledgers_mark_gone)");
+  else if (del.length && !round) skip("the bridge sent no round id (bridge before 2.1.5)");
+  else if (del.length) {
+    const { data, error } = await db.rpc("tally_ledgers_mark_gone", { p_book: book, p_round: round, p_gone: del.map((d: any) => [d.guid, d.name]) });
+    if (error && missing34(error)) { m34 = false; skip("migration-34 not applied (tally_ledgers_mark_gone)"); }
+    else if (error) throw new Error(error.message);
+    else {
+      out.deleted = Math.max(0, Math.floor(Number(data?.marked) || 0));
+      out.deletesHeld = Math.max(0, Math.floor(Number(data?.held) || 0));
+      if (data?.note) notes.push("deletions: " + String(data.note).slice(0, 300));
     }
   }
   // 5. the year's openings worked out again (a ledger added, an opening or a group changed)
@@ -631,7 +684,9 @@ async function applyGroups(firm: string, book: string, ledIn: unknown, grpIn: un
 // who sent a full list (migration-33 keeps it with each ledger the list marks deleted): the bridge's computer, or the
 // person who uploaded the file
 type ListFrom = { source: string; by?: string; device?: string; bridge?: string; computer?: string; user?: string; file?: string };
-async function ingestLedgers(book: string, body: any, firm?: string, from?: ListFrom) {
+// declare (migration-34): the sender says the list is complete and how many ledgers it holds; only then may the list mark
+// the ledgers missing from it. The bridge's trial-balance list ("ledgers") never declares it
+async function ingestLedgers(book: string, body: any, firm?: string, from?: ListFrom, declare?: { complete: boolean; count: number | null }) {
   if (!isDay(body.from) || !isDay(body.openAsOn)) return reply(400, { ok: false, error: "from and openAsOn are dates (yyyymmdd)" });
   // review of 01-Oct-2026: a copy that starts later than the book's own (the bridge keeping 2026-27 where the year 2025-26
   // came from files) must not move the book's start: that would take away the earlier entries. The groups are kept;
@@ -658,7 +713,10 @@ async function ingestLedgers(book: string, body: any, firm?: string, from?: List
   // a cloud without migration-33 takes the call without p_list
   const args = { p_book: book, p_from: iso(body.from), p_open_as_on: iso(body.openAsOn), p_ledgers: led, p_groups: groups };
   const list = { source: "full list", ...(from || {}), file: from?.file || (typeof body.file === "string" ? body.file.slice(0, 200) : undefined) };
-  let { data, error } = await db.rpc("tally_ingest_ledgers_g", { ...args, p_list: list });
+  // migration-34: a list declared complete goes with p_complete and p_count (a cloud without 34 takes it undeclared: nothing marked)
+  let data: any = null, error: any = null;
+  if (declare?.complete) ({ data, error } = await db.rpc("tally_ingest_ledgers_g", { ...args, p_list: list, p_complete: true, p_count: declare.count }));
+  if (!declare?.complete || (error && /p_complete|p_count|tally_ingest_ledgers_g|could not find|does not exist|schema cache/i.test(error.message))) ({ data, error } = await db.rpc("tally_ingest_ledgers_g", { ...args, p_list: list }));
   if (error && /p_list|tally_ingest_ledgers_g|could not find|does not exist|schema cache/i.test(error.message)) ({ data, error } = await db.rpc("tally_ingest_ledgers_g", args));
   if (error) throw new Error(error.message);
   // FinCom Bridge 2.1.2 on: each ledger's GSTIN and PAN ([name, group, opening, gstin, pan]), for matching a bill's supplier
@@ -852,7 +910,10 @@ async function userUpload(req: Request, auth: string) {
     });
     if (q) return q;
     if (body.kind === "upload_days") return await ingestDays(firm, book, body.days);
-    if (body.kind === "upload_ledgers") return await ingestLedgers(book, body, undefined, { source: "upload_ledgers", by: user.id });
+    // migration-34: a person's list marks missing ledgers only when the app declares it complete with the count it parsed
+    // (a Master.xml; the app's trial-balance upload never declares it)
+    if (body.kind === "upload_ledgers") return await ingestLedgers(book, body, undefined, { source: "upload_ledgers", by: user.id },
+      body.complete === true ? { complete: true, count: Number.isInteger(body.count) ? body.count : null } : undefined);
     if (body.kind === "reparse") {
       const { data: me } = await db.from("members").select("role").eq("user_id", user.id).eq("firm_id", firm).maybeSingle();
       if (!me || me.role !== "owner") return reply(403, { ok: false, error: "Only the firm's owner can read the kept day books again." });
@@ -927,8 +988,9 @@ Deno.serve(async (req) => {
           // FinCom Bridge 2.1.3: background reading paused in its tray, since when Tally has not answered, the hour of the
           // nightly catch-up, the last read from Tally, and that it reads Tally only after an event
           paused: !!b.paused, notAnsweringSince: s(b.notAnsweringSince, 30), nightlyAt: s(b.nightlyAt, 5), lastRead: s(b.lastRead, 30), events: !!b.events,
-          // FinCom Bridge 2.1.5 (migration-35): its request timings, and whether it stopped reading (by itself, or from FinCom)
-          reqs: cleanReqs(b.reqs), readStopped: cleanReadStopped(b.readStopped) };
+          // FinCom Bridge 2.1.5 (migration-35): its request timings, and whether it stopped reading (by itself, or from FinCom);
+          // round 2 (migration-34): its allow-list state
+          reqs: cleanReqs(b.reqs), readStopped: cleanReadStopped(b.readStopped), allowlist: cleanAllowlist(b.allowlist) };
         const prevInfo = ((dev as any).info && typeof (dev as any).info === "object") ? (dev as any).info : {};
         const me = bridgeOf(dev, body, false);
         // migration-35: Stop reading from FinCom, Resume, the version it may install (and the pilot's evidence)
@@ -1051,7 +1113,7 @@ Deno.serve(async (req) => {
       case "ledger_list": {
         const book = await bookFor(firm, String(body.company || ""));
         if (!book) return reply(409, { ok: false, notLinked: true, error: "This Tally company is not linked to a FinCom client yet." });
-        return await applyLedgerList(firm, book, body);
+        return await applyLedgerList(firm, book, body, dev, bridgeOf(dev, body, false));
       }
       case "groups": {
         const book = await bookFor(firm, String(body.company || ""));

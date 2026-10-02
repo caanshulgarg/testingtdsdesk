@@ -28,7 +28,7 @@ dev1, dev2, dev3 = device(D1, FIRM, "NWS144", K1, "2.1.5"), device(D2, FIRM, "OF
 F.T["tally_read_stops"], F.T["tally_bridge_releases"] = [], []
 
 # the firm's broadcasts (Realtime's broadcast API), caught; and a cloud without migration-35 (its tables unknown)
-SENT, NO35 = [], {"on": False}
+SENT, NO35, NO34 = [], {"on": False}, {"on": False}
 _post, _get, _patch = F.H.do_POST, F.H.do_GET, F.H.do_PATCH
 def do_POST(self):
     if self.path.startswith("/realtime/v1/api/broadcast"):
@@ -42,7 +42,18 @@ def no35(self):
 def do_GET(self):
     if not no35(self): _get(self)
 def do_PATCH(self):
-    if not no35(self): _patch(self)
+    if no35(self): return
+    # a cloud with migration-35 but not 34: tally_bridge_releases has no pilot_allowlist_* columns
+    t = self.path.split("?")[0].rsplit("/", 1)[-1]
+    if NO34["on"] and t == "tally_bridge_releases":
+        raw = self.body()
+        if b"pilot_allowlist" in raw: return self.send(400, {"code": "42703", "message": "column tally_bridge_releases.pilot_allowlist_measured does not exist"})
+        from urllib.parse import urlparse, parse_qs
+        qq = parse_qs(urlparse(self.path).query, keep_blank_values=True)
+        for r in F.T.setdefault(t, []):
+            if F.match(r, qq): r.update(json.loads(raw))
+        return self.send(204)
+    _patch(self)
 F.H.do_POST, F.H.do_GET, F.H.do_PATCH = do_POST, do_GET, do_PATCH
 F.start()
 env = dict(os.environ, SUPABASE_URL="http://127.0.0.1:%d" % F.PORT, SUPABASE_SERVICE_ROLE_KEY=F.SERVICE, SUPABASE_ANON_KEY="anon-key")
@@ -191,6 +202,29 @@ try:
     n = rel["pilot_beats"]; rel["pilot_last_seen_at"] = iso(-3600)
     beat(K1, GO16)
     ok(rel["pilot_beats"] == n, "after approval the pilot's beats are no longer written")
+    # 6. migration-34 (round 2): the beat's allow-list state (measured, hash) kept in info.beat and the bridge's entry,
+    # and as the pilot's evidence (pilot_allowlist_measured / _hash, on which approval waits); without the columns
+    # (migration-35 but not 34) the other evidence is still written
+    F.T["tally_bridge_releases"].append({"firm_id": FIRM, "version": "2.1.7", "pilot_device": D1, "pilot_started_at": iso(-3600), "pilot_by": "u-1", "pilot_seen_at": None, "pilot_last_seen_at": None,
+                                         "pilot_beats": 0, "pilot_self_stop": None, "approved_at": None, "approved_by": None, "note": ""})
+    rel17 = F.T["tally_bridge_releases"][-1]; GO17 = dict(GO1, version="2.1.7")
+    c, r = beat(K1, GO17, allowlist={"measured": False, "hash": "h" * 200, "junk": 1})
+    al = dev1["info"]["beat"].get("allowlist")
+    ok(c == 200 and al == {"measured": False, "hash": "h" * 80}, "the allow-list state kept in info.beat, cleaned (known fields, the hash cut to 80) (%s)" % al)
+    ok(dev1["info"]["bridges"][GO1["id"]].get("allowlist") == al, "and on the bridge's entry")
+    ok(rel17.get("pilot_allowlist_measured") is False and rel17.get("pilot_allowlist_hash") == "h" * 80 and rel17.get("pilot_beats") == 1, "the pilot's beat: allow-list unmeasured kept as evidence (%s)" % {k: rel17.get(k) for k in ("pilot_allowlist_measured", "pilot_allowlist_hash", "pilot_beats")})
+    beat(K1, GO17, allowlist={"measured": True, "hash": "abc"})
+    ok(rel17.get("pilot_allowlist_measured") is True and rel17.get("pilot_allowlist_hash") == "abc" and rel17["pilot_beats"] == 1, "measured now: the evidence changed at once (not only every 5 minutes) (%s)" % rel17.get("pilot_allowlist_measured"))
+    beat(K1, GO17)
+    ok(rel17.get("pilot_allowlist_measured") is True and dev1["info"]["beat"].get("allowlist") is None, "a beat without it: the evidence stands, info.beat says none")
+    beat(K1, GO17, allowlist="yes")
+    ok(dev1["info"]["beat"].get("allowlist") is None and rel17.get("pilot_allowlist_measured") is True, "not an object: not kept")
+    beat(K2, dict(GO2, version="2.1.7"), allowlist={"measured": False, "hash": "x"})
+    ok(rel17.get("pilot_allowlist_measured") is True, "another computer's allow-list is no evidence for the pilot")
+    NO34["on"] = True; rel17["pilot_last_seen_at"] = iso(-600)
+    c, r = beat(K1, GO17, allowlist={"measured": False, "hash": "h2"})
+    ok(c == 200 and rel17["pilot_beats"] == 2 and rel17.get("pilot_allowlist_hash") == "abc", "a cloud with migration-35 but not 34: the beat still counts, the allow-list columns left alone (%s)" % rel17["pilot_beats"])
+    NO34["on"] = False
     # the rest of the answer as before
     c, r = beat(K1, GO1)
     ok(all(k in r for k in ("updateNow", "posts", "wake", "opened", "ledgers", "activityAt")), "the rest of the answer unchanged (%s)" % sorted(r))

@@ -608,9 +608,13 @@ const TCloudUp = {
     try { TCloud.jobsLoad(who.client); } catch (e){}
     return {days: all.length, job};
   },
+  // migration-34 (round 2): the ledgers here come from a trial balance file (TBFile.read, Books → From Tally), which may
+  // leave out ledgers with a nil balance; so the list is never declared complete (complete:false, no count) and the cloud
+  // marks nothing missing from it: it adds, brings up to date and un-marks only. Only a list parsed from a Master.xml
+  // could say complete:true with the count parsed; FinCom has no such upload today
   async opening(from, asOn, led, who){
     if (!this.on()) return {skipped: "not signed in to the firm account"};
-    return this.post({kind: "upload_ledgers", from, openAsOn: asOn, ledgers: Object.entries(led).map(([n, x]) => [n, x.parent || "", String(x.open)])}, who);
+    return this.post({kind: "upload_ledgers", from, openAsOn: asOn, complete: false, ledgers: Object.entries(led).map(([n, x]) => [n, x.parent || "", String(x.open)])}, who);
   }
 };
 
