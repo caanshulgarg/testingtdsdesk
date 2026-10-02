@@ -71,27 +71,43 @@ function CheckResult({ bc }) {
   );
 }
 
-// review of 02-Oct-2026: the postings in FinCom's cloud for this client that are waiting for the Tally computer, being
-// posted, or failed (job aebb6c15 failed at 01:53 and was not shown), from the server, with what to do
+// review of 02-Oct-2026: the postings in FinCom's cloud for this client, from the server, with what to do. Request of
+// 02-Oct-2026: a failed posting no longer stays for ever (Dismiss; dismissed by FinCom when a later posting put every
+// entry in, "Posted later at 07:51"); finished postings of the last 7 days, the rest under "Show older and dismissed";
+// Retry only while something is left to send; the list changes by itself (no Refresh)
 const ITEM_STATE = { waiting: ["Waiting", "warn"], sending: ["Sending", "warn"], sent: ["Sent, being checked", "warn"], in_tally: ["In Tally (verified)", "ok"], failed: ["Failed", "bad"] };
-const JOB_STATE = { waiting: ["Waiting for the Tally computer", "warn"], taken: ["Taken by the Tally computer", "warn"], running: ["Sending to Tally", "warn"], failed: ["Failed", "bad"] };
+const JOB_STATE = { waiting: ["Waiting for the Tally computer", "warn"], taken: ["Taken by the Tally computer", "warn"], running: ["Sending to Tally", "warn"], done: ["Posted", "ok"], failed: ["Failed", "bad"], cancelled: ["Cancelled", "bad"] };
 function QueueJobs() {
+  const [all, setAll] = useState(false);
   CloudJobs.load();
-  const jobs = CloudJobs.open(S.coId);
-  if (!jobs.length) return null;
+  const jobs = CloudJobs.view(S.coId, all), every = CloudJobs.forClient(S.coId);
+  if (!every.length) return null;
+  const hidden = every.length - CloudJobs.view(S.coId, false).length;
   return <div className="bk-alert" data-post-jobs="" style={{ margin: "10px 0 0" }}>
     <b>Postings in FinCom’s cloud</b>
+    {!jobs.length ? <p className="nr" style={{ margin: "6px 0 0" }}>Nothing in the last 7 days needs you.</p> :
     <table className="data" style={{ marginTop: 6 }}><thead><tr><th>Queued</th><th>Into</th><th>Entries</th><th>State</th><th>What happened</th></tr></thead><tbody>
-      {jobs.map((j) => { const [label, cls] = JOB_STATE[j.status] || [j.status, ""]; const ok = [].concat(j.results || []).filter((r) => r && r.ok).length;
-        return <tr key={j.id} data-job={j.id}><td>{fmtDateTime(j.created_at)}</td><td>{j.company}</td><td className="n">{ok + " of " + (j.n || 0)}</td>
-          <td><span className={"tag " + cls}>{label}</span><div className="nr">{fmtDateTime(j.updated_at || j.created_at)}</div></td>
+      {jobs.map((j) => { const ok = [].concat(j.results || []).filter((r) => r && r.ok).length;
+        const stopped = j.status === "failed" || j.status === "cancelled", later = stopped ? CloudJobs.postedLater(j) : null, left = stopped ? CloudJobs.leftToSend(j) : null;
+        const auto = stopped && (later || (j.dismissed_at && j.dismiss_auto)), byHand = stopped && j.dismissed_at && !j.dismiss_auto;
+        let [label, cls] = JOB_STATE[j.status] || [j.status, ""];
+        if (auto) [label, cls] = [j.dismiss_note && j.dismiss_auto ? j.dismiss_note : "Posted later at " + fmtTime(later), "ok"];
+        else if (stopped && left === 0) [label, cls] = [label + " · nothing left to send", "ok"];
+        return <tr key={j.id} data-job={j.id} data-job-state={auto ? "later" : byHand ? "dismissed" : j.status} style={byHand ? { opacity: 0.65 } : undefined}><td>{fmtDateTime(j.created_at)}</td><td>{j.company}</td><td className="n">{ok + " of " + (j.n || 0)}</td>
+          <td><span className={"tag " + cls}>{label}</span><div className="nr">{fmtDateTime(j.updated_at || j.created_at)}</div>
+            {byHand && <div className="nr" data-dismissed="">{"Dismissed by " + memberName(j.dismissed_by) + " · " + fmtDateTime(j.dismissed_at)}</div>}</td>
           <td>{j.message || "—"}
             {[].concat(j.items || []).length > 0 && <ul className="nr" style={{ margin: "4px 0 0 16px", padding: 0 }}>{j.items.map((it) => { const e = D().entries[it.id];
               return <li key={it.id}>{(e ? e.x.invoiceNo + " · " + e.x.vendorName : it.id) + ": "}<span className={"tag " + (ITEM_STATE[it.state] || ["", ""])[1]}>{(ITEM_STATE[it.state] || [it.state])[0]}</span>{it.reason ? " " + it.reason : ""}</li>; })}</ul>}
-            {j.status === "failed" && <div className="row" style={{ marginTop: 4, gap: 8 }}><button className="btn small primary" onClick={() => CloudJobs.retry(j)}>Retry</button>
-              <span className="nr">Entries already in Tally are not sent twice.</span></div>}</td></tr>; })}
-    </tbody></table>
-    <div className="row" style={{ marginTop: 6 }}><button className="btn small" onClick={() => CloudJobs.load(true)}>Refresh</button></div>
+            {stopped && !auto && <div className="row" style={{ marginTop: 4, gap: 8, alignItems: "center" }}>
+              {left === 0 ? <span className="nr" data-nothing-left="">Nothing left to send: every entry is in Tally.</span>
+                : <><button className="btn small primary" data-retry="" onClick={() => CloudJobs.retry(j)}>Retry</button>
+                  <span className="nr">{left ? left + " of " + (CloudJobs.idsOf(j) || []).length + " still to send. " : ""}Entries already in Tally are not sent twice.</span></>}
+              {byHand ? <button className="btn small" data-undismiss="" onClick={() => CloudJobs.undismiss(j)}>Show in the list again</button>
+                : CloudJobs.dismissOk && <button className="btn small" data-dismiss="" onClick={() => CloudJobs.dismiss(j)}>Dismiss</button>}
+            </div>}</td></tr>; })}
+    </tbody></table>}
+    {(all || hidden > 0) && <div className="row" style={{ marginTop: 6 }}><a href="#" data-jobs-all="" onClick={(ev) => { ev.preventDefault(); setAll(!all); }}>{all ? "Show only the last 7 days" : "Show older and dismissed (" + hidden + ")"}</a></div>}
   </div>;
 }
 

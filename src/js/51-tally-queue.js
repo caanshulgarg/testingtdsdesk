@@ -113,21 +113,32 @@ setTimeout(() => { try { cloudPostLeftover(); } catch (e){} }, 9000);
 // to Tally" showed 0 although job b3785b05 had posted FA/ELEC/013, and job aebb6c15, failed at 01:53, was nowhere): the
 // list of what went to Tally is made from them, with this browser's own log only for postings made here without the queue.
 const CloudJobs = {
-  list: null, at: 0, busy: false, err: "",
+  list: null, at: 0, busy: false, err: "", tried: {}, dismissOk: true,
   async load(force){
-    // read at most once a minute, also after a failure (the page draws again after each try)
+    // read at most once a minute, also after a failure (the page draws again after each try); the list changes by itself
+    // when FinCom's cloud says a posting changed (Live, migration-26)
     if (typeof TCloud !== "object" || !TCloud.on() || this.busy || (!force && Date.now() - this.at < 60000)) return;
     this.busy = true;
     try {
       const cols = "id,client_id,company,status,done,n,message,results,created_by,created_at,updated_at,attempts";
-      // each entry's state (items) from migration-24 on
-      this.list = await TCloud.restAll("tally_post_jobs?select=" + cols + ",items&order=created_at.desc").catch(e => {
-        if (/items/.test(String(e && e.message))) return TCloud.restAll("tally_post_jobs?select=" + cols + "&order=created_at.desc");
-        throw e; });
+      // each entry's state (items) from migration-24 on; the entries' ids and dismissing from migration-26 on
+      const more = [",items,entry_ids,dismissed_at,dismissed_by,dismiss_note,dismiss_auto", ",items", ""];
+      for (let i = 0; ; i++){
+        try { this.list = await TCloud.restAll("tally_post_jobs?select=" + cols + more[i] + "&order=created_at.desc"); this.dismissOk = i === 0; break; }
+        catch (e){ if (i < more.length - 1 && /items|entry_ids|dismiss|column/i.test(String(e && e.message))) continue; throw e; }
+      }
       this.err = ""; this.at = Date.now();
     } catch (e){ this.err = (e && e.message) || String(e); this.at = Date.now(); }
-    this.busy = false; render();
+    this.busy = false;
+    this.autoDismiss();
+    // without the live connection, a posting still going is looked at again soon
+    clearTimeout(this.soonT);
+    if ((this.list || []).some(j => ["waiting", "taken", "running"].includes(j.status) || j.checking) && !(typeof Live === "object" && Live.postsLive))
+      this.soonT = setTimeout(() => this.load(true), 15000);
+    render();
   },
+  // a change to a posting, from the live connection: read again (a burst of changes is read once)
+  changed(){ clearTimeout(this.chT); this.chT = setTimeout(() => this.load(true), 800); },
   // Retry: the same posting again under its id; entries already in Tally are found by FinCom's tag, not posted twice
   async retry(j){
     try {
@@ -137,9 +148,74 @@ const CloudJobs = {
     } catch (e){ toast((e && e.message) || String(e)); }
     await this.load(true);
   },
+  // Dismiss (request of 02-Oct-2026): a failed or cancelled posting off the list; kept on the server with who and when
+  async dismiss(j, auto){
+    try {
+      const r = await TCloud.rpc("tally_post_dismiss", {p_id: j.id, p_auto: !!auto});
+      if (!r || !r.ok) throw new Error((r && r.error) || "It could not be dismissed.");
+      if (!auto) toast("Dismissed. It stays under “Show older and dismissed”.");
+    } catch (e){ if (!auto) toast((e && e.message) || String(e)); }
+    await this.load(true);
+  },
+  async undismiss(j){
+    try { await TCloud.rpc("tally_post_undismiss", {p_id: j.id}); } catch (e){ toast((e && e.message) || String(e)); }
+    await this.load(true);
+  },
+  // a failed or cancelled posting whose every entry a later posting put in: dismissed by FinCom (the server checks it again)
+  autoDismiss(){
+    if (!this.dismissOk) return;
+    (this.list || []).forEach(j => {
+      if (!["failed", "cancelled"].includes(j.status) || j.dismissed_at || this.tried[j.id] || !this.postedLater(j)) return;
+      this.tried[j.id] = true; this.dismiss(j, true);
+    });
+  },
   forClient(cid){ return (this.list || []).filter(j => !cid || j.client_id === cid); },
+  idsOf(j){ return Array.isArray(j.entry_ids) ? j.entry_ids.map(String) : null; },
+  okIn(j){ return new Set([].concat(j.results || []).filter(r => r && r.ok).map(r => String(r.id))); },
+  // when every entry of a posting went in through a later posting of the same client; null when one has not
+  postedLater(j){
+    const ids = this.idsOf(j);
+    if (!ids || !ids.length) return null;
+    const later = (this.list || []).filter(k => k.id !== j.id && k.client_id === j.client_id && k.created_at > j.created_at);
+    let at = "";
+    for (const id of ids){
+      const k = later.filter(x => this.okIn(x).has(id)).sort((a, b) => String(a.updated_at).localeCompare(String(b.updated_at)))[0];
+      if (!k) return null;
+      if (String(k.updated_at || "") > at) at = k.updated_at;
+    }
+    return at || null;
+  },
+  // an entry of a posting already in Tally: put in by this posting or a later one, or known to be in Tally here (a bill,
+  // or a bank line of the statement open)
+  inTally(j, id){
+    if (this.okIn(j).has(id)) return true;
+    if ((this.list || []).some(k => k.client_id === j.client_id && k.id !== j.id && this.okIn(k).has(id))) return true;
+    const d = S.data[j.client_id], e = d && d.entries && d.entries[id];
+    if (e) return typeof billInTally === "function" && billInTally(e);
+    const b = S.bank && S.bank.cid === j.client_id ? S.bank : null, r = b && (b.rows || []).find(x => x.id === id);
+    return !!(r && (r.state === "sent" || r.state === "intally") && !r.goneFromTally);
+  },
+  // how many entries are still to be sent (null: not known, as before migration-26)
+  leftToSend(j){
+    const ids = this.idsOf(j);
+    if (!ids) return null;
+    return ids.filter(id => !this.inTally(j, id)).length;
+  },
   // the queue's postings still going or stopped: waiting for the Tally computer, being posted, or failed
   open(cid){ return this.forClient(cid).filter(j => ["waiting", "taken", "running", "failed"].includes(j.status)); },
+  // the list on Post to Tally: postings still going, failed or cancelled ones not dismissed with something left to send,
+  // and the last 7 days of finished ones (all: everything, the dismissed and older ones too)
+  view(cid, all){
+    const week = Date.now() - 7 * 86400000;
+    return this.forClient(cid).filter(j => {
+      if (all) return true;
+      if (["waiting", "taken", "running"].includes(j.status) || j.checking) return true;
+      const stopped = ["failed", "cancelled"].includes(j.status);
+      if (stopped && j.dismissed_at && !j.dismiss_auto) return false;
+      if (stopped && !j.dismissed_at && !this.postedLater(j) && this.leftToSend(j) !== 0) return true;
+      return (Date.parse(j.updated_at || j.created_at) || 0) >= week;
+    });
+  },
   // one line a posted entry: what it was (the bill, bank line or sale named by its id), the voucher Tally made
   rows(cid){
     const out = [];
