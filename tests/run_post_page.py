@@ -154,6 +154,9 @@ with sync_playwright() as p:
     num = lambda t: int(([x for x in __import__("re").findall(r"\d+", t or "")] or ["-1"])[0])
     chip = E("(() => { const t = tallyStatus(CO()); return t.state + '|' + t.short; })()")
     tab = E("(() => { const b = Array.from(document.querySelectorAll('nav.sbar button')).find(x => /Post to Tally/.test(x.textContent)); return b ? b.textContent : ''; })()")
+    # three tabs (plan item 1b): with the Tally file needing attention, Errors opens by itself; the Post button is under To post
+    ok(pg.get_attribute('#app [data-post-tab][aria-selected="true"]', "data-post-tab") == "errors", "1b. something needs attention: the Errors tab opens by itself")
+    pg.click('#app [data-post-tab="topost"]'); pg.wait_for_timeout(300)
     page = pg.inner_text("#app [data-post-main]") if pg.locator("#app [data-post-main]").count() else ""
     attn = E("(() => { const b = document.querySelector('nav.sbar [data-attn-n]'); return b ? b.textContent : ''; })()")
     tab = E("(() => { const b = document.querySelector('nav.sbar [data-step=post] [data-step-n]'); return b ? b.textContent : ''; })()")
@@ -166,6 +169,7 @@ with sync_playwright() as p:
        "8. one count: header chip, tab badge, Post button and dashboard tile all say %d (%s | %s | %s | %s)" % (want, chip, tab, page, dash))
     ok(attn == "1" and E("postAttentionFor(S.coId)") == 1, "8. the Tally file not confirmed has its own badge on the tab: %r" % attn)
     E("() => { goStep('post', 'bills'); }"); pg.wait_for_timeout(400)
+    ok(pg.get_attribute('#app [data-post-tab][aria-selected="true"]', "data-post-tab") == "topost", "1b. the tab chosen (To post) is kept for the client")
     # item 9: the import steps stack, also at phone width
     pg.set_viewport_size({"width": 375, "height": 800}); pg.wait_for_timeout(300)
     E("document.querySelector(\"#app details[data-more='post']\").open = true"); pg.click('#app [data-more="post"] button:has-text("How to import the file into Tally")'); pg.wait_for_timeout(300)

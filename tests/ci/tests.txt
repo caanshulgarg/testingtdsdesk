@@ -76,6 +76,7 @@ run_post_jobs_dismiss.py              120
 run_post_page.py                      120
 run_post_page2.py                     120
 run_post_preview.py                   120
+run_post_tabs.py                      120
 run_post_queue.py                     180
 run_post_record_server.py             120
 run_priority.py                       990
@@ -107,6 +108,7 @@ run_staging_ui.py                     120
 run_status_light.py                   180
 run_supinv.py                         120
 run_support_ui.py                     120  TDSDESK_SITE=../app/dist-test
+run_tally_computers.py                120
 run_tally_events.py                   120
 run_tally_states.py                   120
 run_tcloud_ui.py                      120  TDSDESK_SITE=../app/dist-test

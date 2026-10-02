@@ -50,8 +50,16 @@ with sync_playwright() as p:
     cid = pg.evaluate(SETUP); pg.wait_for_timeout(1500)
     E = lambda js, *a: pg.evaluate(js, *a)
     att = "#app [data-post-attention]"
-    st = lambda jid: E("(id) => { const r = document.querySelector('#app [data-post-attention] [data-job=\"' + id + '\"]'); return r ? r.innerText.replace(/\\s+/g, ' ') : ''; }", jid)
-    hs = lambda jid: E("(id) => { const r = document.querySelector('#app [data-post-history] [data-job=\"' + id + '\"]'); return r ? r.getAttribute('data-hist-state') + ' | ' + r.textContent.replace(/\\s+/g, ' ') : ''; }", jid)
+    # the page in three tabs (plan item 1b): Needs your attention is under Errors, History is the Posted tab
+    def go_tab(name):
+        pg.click('#app [data-post-tabs] [data-post-tab="%s"]' % name); pg.wait_for_timeout(250)
+    def st(jid):
+        go_tab("errors"); return _st(jid)
+    def hs(jid):
+        go_tab("posted"); return _hs(jid)
+    _st = lambda jid: E("(id) => { const r = document.querySelector('#app [data-post-attention] [data-job=\"' + id + '\"]'); return r ? r.innerText.replace(/\\s+/g, ' ') : ''; }", jid)
+    _hs = lambda jid: E("(id) => { const r = document.querySelector('#app [data-post-history] [data-job=\"' + id + '\"]'); return r ? r.getAttribute('data-hist-state') + ' | ' + r.textContent.replace(/\\s+/g, ' ') : ''; }", jid)
+    ok(pg.get_attribute('#app [data-post-tab][aria-selected="true"]', "data-post-tab") == "errors", "postings still failed: the Errors tab opens by itself")
     ok("entry_ids" in E("window.__url") and "dismissed_at" in E("window.__url"), "the list reads the entries' ids and the dismissing (migration-26)")
     # only the postings still failed, with something left to send, need attention: Retry and Dismiss each
     rows = E("Array.from(document.querySelectorAll('#app [data-post-attention] [data-job]')).map(r => r.getAttribute('data-job'))")
@@ -60,9 +68,10 @@ with sync_playwright() as p:
     ok("cancelled" in l1 and "1 of 2 still to send" in l1 and pg.locator('#app [data-post-attention] [data-job="j-left"] [data-retry]').count() == 1 and pg.locator('#app [data-post-attention] [data-job="j-left"] [data-dismiss]').count() == 1,
        "a cancelled posting with one of two entries still to send: Retry and Dismiss (%s)" % l1[:120])
     ok("Old failure, never dealt with" in st("j-oldfail"), "an older failure never dealt with stays until someone decides")
-    # History, hidden by default
-    sm = pg.locator("#app [data-post-history] summary")
-    ok(sm.count() == 1 and sm.inner_text() == "History (4)" and not E("document.querySelector('#app [data-post-history]').open"), "History (4), closed by default (%s)" % (sm.inner_text() if sm.count() else "-"))
+    # History: the Posted tab, with its count (no longer folded away)
+    go_tab("posted")
+    sm = pg.locator('#app [data-post-tab="posted"] [data-tab-n]')
+    ok(sm.inner_text() == "4" and pg.locator("#app [data-post-history] [data-job]").count() == 4, "Posted (4): the four listed (%s)" % sm.inner_text())
     late = E("tallyHm(window.__jobs[0].updated_at)")
     h1 = hs("j-late")
     ok(h1.startswith("posted |") and ("Posted " + late + " (second try)") in h1 and "Tally did not answer" not in pg.inner_text("#app [data-post-history]") and hs("j-fail1") == "",
@@ -71,15 +80,17 @@ with sync_playwright() as p:
        "and FinCom dismisses it by itself (only that one; the server checks every entry again)")
     ok(hs("j-nothing").startswith("nothing |") and "put in Tally another way" in hs("j-nothing"), "a failed posting whose entries are all in Tally another way: History, nothing to do (%s)" % hs("j-nothing")[:100])
     ok(hs("j-old").startswith("posted |") and hs("j-hid").startswith("failed |") and "dismissed by Anshul" in hs("j-hid"), "older postings and one dismissed by hand (who) are in History")
+    go_tab("posted")
     ok(pg.locator("#app [data-post-history] [data-dismiss]").count() == 0 and pg.locator('#app [data-job="j-late"] [data-dismiss]').count() == 0, "a successful posting never has Dismiss, and nothing in History does")
     ok(pg.locator('#app button:has-text("Refresh")').count() == 0, "no Refresh button")
     # Retry and Dismiss
+    go_tab("errors")
     pg.click('#app [data-post-attention] [data-job="j-left"] [data-retry]'); pg.wait_for_timeout(500)
     ok(any(r[0] == "tally_post_enqueue" and r[1]["p_id"] == "j-left" for r in E("window.__rpc")), "Retry queues the same posting again under its id")
     pg.click('#app [data-post-attention] [data-job="j-left"] [data-dismiss]'); pg.wait_for_timeout(800)
-    ok(["tally_post_dismiss", {"p_id": "j-left", "p_auto": False}] in E("window.__rpc") and st("j-left") == "" and pg.inner_text("#app [data-post-history] summary") == "History (5)",
+    ok(["tally_post_dismiss", {"p_id": "j-left", "p_auto": False}] in E("window.__rpc") and st("j-left") == "" and pg.inner_text('#app [data-post-tab="posted"] [data-tab-n]') == "5" and hs("j-left") != "",
        "Dismiss asks the server to dismiss it; it leaves Needs your attention for History (5)")
-    E("document.querySelector('#app [data-post-history]').open = true"); pg.wait_for_timeout(200)
+    go_tab("posted")
     pg.click('#app [data-post-history] [data-job="j-hid"] [data-undismiss]'); pg.wait_for_timeout(500)
     ok(["tally_post_undismiss", {"p_id": "j-hid"}] in E("window.__rpc"), "a dismissed posting can be put back under Needs your attention")
     # live: a change to a posting reads the list again by itself

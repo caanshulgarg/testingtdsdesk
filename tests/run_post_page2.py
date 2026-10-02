@@ -92,6 +92,10 @@ with sync_playwright() as p:
     cid = E(SETUP); pg.wait_for_timeout(1200)
     txt = lambda sel: pg.inner_text(sel).replace("\n", " ").strip() if pg.locator(sel).count() else ""
     hm = lambda iso: E("(x) => tallyHm(x)", iso)
+    # the page in three tabs (plan item 1b): To post / Posted / Errors
+    def go_tab(name):
+        pg.click('#app [data-post-tabs] [data-post-tab="%s"]' % name); pg.wait_for_timeout(250)
+    on = lambda: pg.get_attribute('#app [data-post-tab][aria-selected="true"]', "data-post-tab")
     # ---- 1. the status line, and the read time after an event-driven read
     line = txt("#app [data-post-line]")
     ok(line == "Posting into GARG SHEKHAR & COMPANY · Tally open on NWS144 · read %s · Update now" % hm(E("window.__read0")) and pg.locator("#app [data-post-problem]").count() == 0,
@@ -110,6 +114,8 @@ with sync_playwright() as p:
       beat: {updating: false, lastRead: window.__read2, companies: [{name: 'GARG SHEKHAR & COMPANY', open: true, lastRead: window.__read2}]}}}}); }""")
     pg.wait_for_timeout(300)
     ok(("read " + hm(E("window.__read2"))) in txt("#app [data-post-line]") and "Reading now" not in txt("#app [data-post-line]"), "7. and the new read time as soon as it is passed on (%s)" % txt("#app [data-post-line]"))
+    ok(on() == "errors", "1b. a posting still failed (jD): the Errors tab opens by itself (%s)" % on())
+    go_tab("topost")
     E("document.querySelector(\"#app details[data-more='post']\").open = true")
     ok(txt("#app [data-post-bridge]") == "FinCom Bridge 2.1.3 · Ready", "1. the bridge's version and Ready are under More (%s)" % txt("#app [data-post-bridge]"))
     E("document.querySelector(\"#app details[data-more='post']\").open = false")
@@ -134,9 +140,14 @@ with sync_playwright() as p:
     ok(attn == "4" and E("postAttentionFor(S.coId)") == 4 and E("getComputedStyle(document.querySelector('nav.sbar [data-attn-n]')).backgroundColor") != E("getComputedStyle(document.querySelector('nav.sbar [data-step=post] [data-step-n]')).backgroundColor"),
        "4. what needs attention is a second badge of its own colour: %r (FA/ELEC/013, FA/ELEC/020, T/1, the failed posting)" % attn)
     # ---- 3. each bill once
-    ids = E("Array.from(document.querySelectorAll('#app [data-post-page] [data-bill-row]')).map(r => r.getAttribute('data-bill-row'))")
-    ok(sorted(ids) == ["fa", "fb", "r1", "r2", "tf"] and len(ids) == len(set(ids)), "3. each bill in exactly one section, once (%s); the one in Tally not at all" % ids)
+    rows_of = lambda: E("Array.from(document.querySelectorAll('#app [data-post-page] [data-bill-row]')).map(r => r.getAttribute('data-bill-row'))")
+    ids = []
+    for t in ("topost", "posted", "errors"):
+        go_tab(t); ids += rows_of()
+    ok(sorted(ids) == ["fa", "fb", "r1", "r2", "tf"] and len(ids) == len(set(ids)), "3. each bill in exactly one tab and section, once (%s); the one in Tally not at all" % ids)
+    go_tab("topost")
     ok(E("Array.from(document.querySelectorAll('#app [data-post-ready] [data-bill-row]')).map(r => r.getAttribute('data-bill-row')).sort().join()") == "r1,r2", "2. Ready to post: approved bills never sent only")
+    go_tab("errors")
     ok(pg.locator("#app [data-post-attention] li").evaluate_all("ls => ls.every(l => l.querySelectorAll('button').length <= 2)"), "3. at most two buttons a row")
     for gone in ("Check them in Tally", "Post the ones no longer in Tally again", "deleted there?"):
         ok(gone not in pg.inner_text("#app [data-post-page]"), "6. no %r on the page" % gone)
@@ -180,14 +191,16 @@ with sync_playwright() as p:
     ok(note.startswith("Already in Tally (voucher no. FA/ELEC/013, 01-Jul-2026)") and E("window.__bp.length") == 0 and not any(r[0] == "tally_post_enqueue" for r in E("window.__rpc")),
        "3. Post again: the live check found it: 'Already in Tally (voucher no. …, date)', nothing posted (%s)" % note)
     ok(fa == [True, "g-new-66d1", "FA/ELEC/013", False] and pg.locator('#app [data-bill-row="fa"]').count() == 0, "3. and the bill counts as in Tally, with that voucher; off the page (%s)" % fa)
-    # ---- 5. History
+    # ---- 5. History: the Posted tab (plan item 1b: shown, not folded away)
+    go_tab("posted")
     hs = pg.locator("#app [data-post-history]")
-    ok(hs.count() == 1 and txt("#app [data-post-history] summary") == "History (2)" and not E("document.querySelector('#app [data-post-history]').open"), "5. History (2), hidden by default")
-    E("document.querySelector('#app [data-post-history]').open = true"); pg.wait_for_timeout(200)
+    ok(hs.count() == 1 and txt('#app [data-post-tab="posted"] [data-tab-n]') == "2" and pg.locator("#app [data-post-history] [data-job]").count() == 2 and pg.locator("#app [data-post-panel='posted'] details").count() == 0,
+       "5. Posted (2): both postings listed, not folded away")
     jb = txt('#app [data-post-history] [data-job="jB"]'); at = E("tallyHm(window.__jobs[0].updated_at)")
     ok(jb.startswith("Posted %s (second try)" % at) and "timed out" not in txt("#app [data-post-history]") and pg.locator('#app [data-job="jA"]').count() == 0,
        "5. failed then succeeded: one line 'Posted %s (second try)', without the old error (%s)" % (at, jb))
     ok(pg.locator("#app [data-post-history] [data-dismiss]").count() == 0 and pg.locator('#app [data-job="jC"] [data-dismiss]').count() == 0, "5. a posting that worked never has Dismiss")
+    go_tab("errors")
     jd = pg.locator('#app [data-post-attention] [data-job="jD"]')
     ok(jd.count() == 1 and jd.locator("[data-retry]").count() == 1 and jd.locator("[data-dismiss]").count() == 1 and "does not exist" in jd.inner_text(), "5. the posting still failed needs attention: Retry and Dismiss")
     # ---- 6. FinCom Bridge 2.1.4: already in Tally (a second tab with stale data), and a check that could not be made
@@ -197,6 +210,7 @@ with sync_playwright() as p:
     E("""() => { window.__answer = (pl) => ({ok: true, company: pl.company, results: pl.vouchers.map(v => v.id === "r2"
         ? {id: v.id, ok: false, already: true, guid: "g-k7", vchNo: "K/7", vchNumber: "K/7", vchType: "Journal", vchDate: "20260701", message: "Already in Tally (voucher no. K/7, 01-07-2026)"}
         : {id: v.id, ok: false, checkFailed: true, message: "Could not check Tally, not posted. Try again."})}); }""")
+    go_tab("topost")
     pg.click("#app [data-post-main]"); pg.wait_for_timeout(600)
     ok(pg.locator("#confirmBox [data-post-preview]").count() == 1, "6. Post 2 to Tally: each bill shown first")
     pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(1500)
@@ -204,9 +218,11 @@ with sync_playwright() as p:
     sent = E("window.__bp.map(p => p.vouchers.map(v => v.id).join(','))")
     ok(k7 == ["approved", True, "g-k7", "K/7", "Already in Tally"] and sent == ["r1,r2"], "6. a stale tab cannot post a duplicate: K/7 already in Tally is marked in Tally with its voucher, not failed (%s; sent %s)" % (k7, sent))
     a1 = E("(() => { const e = D().entries.r1; return [e.status, !!e.exportedAt, billInTally(e), !!e.postCheckFailed, e.postError || '']; })()")
+    in_ready = pg.locator('#app [data-post-ready] [data-bill-row="r1"]').count()
+    go_tab("errors")
     row = txt('#app [data-post-attention] [data-bill-row="r1"]')
     ok(a1 == ["approved", False, False, True, ""] and "Could not check Tally, not posted. Try again." in row and pg.locator('#app [data-bill-row="r1"] [data-retry-bill]').count() == 1
-       and pg.locator('#app [data-post-ready] [data-bill-row="r1"]').count() == 0, "6. Tally could not be checked: nothing posted, A/1 waits with that one line and Retry (%s | %s)" % (a1, row[:120]))
+       and in_ready == 0, "6. Tally could not be checked: nothing posted, A/1 waits with that one line and Retry (%s | %s)" % (a1, row[:120]))
     ok("1 already in Tally (not posted again)" in txt("#app [data-post-result]") and "1 not posted: Tally could not be checked first" in txt("#app [data-post-result]"), "6. the run says so in one line (%s)" % txt("#app [data-post-result]"))
     # the cloud's results, from an older tally-ingest that drops the flags: read from the message
     ok(E("[postAlready({ok: false, message: 'Already in Tally (voucher no. X/1, 01-07-2026)'}), postCheckFail({ok: false, message: 'Could not check Tally, not posted. Try again.'}), postCheckFail({ok: false, message: 'Waiting for Tally: Tally is busy'}), postAlready({ok: true, alreadyThere: true}), postAlready({ok: false, message: 'Ledger X does not exist'})]") == [True, True, True, True, False],
@@ -216,6 +232,7 @@ with sync_playwright() as p:
     pg.click('#app [data-bill-row="r1"] [data-retry-bill]'); pg.wait_for_timeout(500); pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(1200)
     ok(E("billInTally(D().entries.r1)") and not E("!!D().entries.r1.postCheckFailed"), "6. Retry: posted, in Tally")
     # ---- 2. nothing waiting
+    go_tab("topost")
     ok(pg.locator("#app [data-post-table]").count() == 0 and pg.locator("#app [data-post-main]").count() == 0 and txt("#app [data-post-empty]") == "Nothing waiting to post" and "Post 0" not in pg.inner_text("#app"),
        "2. nothing ready: 'Nothing waiting to post', no table, no 'Post 0 to Tally'")
     chip, tab, attn, btn, dash = counts()

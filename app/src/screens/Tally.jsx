@@ -79,25 +79,74 @@ function lineState(r, latest, owner) {
   if (!r.go || r.old) return { text: "Needs FinCom Bridge", cls: "bad", act: "Install FinCom Bridge below on " + r.computer + ": it replaces this one by itself." };
   if (!r.online) return { text: "Offline" + (r.at ? " since " + fmtDateTime(r.at) : ""), cls: "bad", act: "On " + r.computer + ", sign in to Windows as " + (r.user || "the Tally user") + ": FinCom Bridge starts by itself. Its icon near the clock: right-click → Test connection." };
   if (!r.main) return { text: "Online · reads only", cls: "warn", act: owner ? "Another bridge posts on this computer." : "Another bridge posts on this computer; an owner of the firm can make this the main bridge.", makeMain: owner };
-  if (latest && vnum(latest) > vnum(r.version)) return { text: "Online · update ready", cls: "warn", act: "Download FinCom Bridge " + latest + " under Details and run it on " + r.computer + "." };
+  // with staged releases (migration-35) a new version goes to a computer only once an owner tries it there or approves it
+  if (latest && vnum(latest) > vnum(r.version)) return { text: "Online · update ready", cls: "warn", act: TCloud.pane.releases && !TCloud.pane.noControl
+    ? (owner ? "Try version " + latest + " on one computer, then approve it for all." : "An owner of the firm tries version " + latest + " on one computer, then approves it for all.")
+    : "Download FinCom Bridge " + latest + " under Details and run it on " + r.computer + "." };
   if (r.tally === "busy") return { text: "Online · Tally busy", cls: "warn", act: "It carries on when Tally is free." };
   if (r.tally !== "open") return { text: "Online · Tally not open", cls: "warn", act: "Open TallyPrime and the company on " + r.computer + "." };
   return { text: "Online · Tally open", cls: "ok", act: r.open.length ? r.open.join(", ") : "" };
 }
+// plan item 14 (All clients → Tally): with each computer, its reading state (Reading / Paused / Stopped by itself: why /
+// Stopped from FinCom: why / Offline since …), its last request to Tally and its longest today (the heartbeat's reqs),
+// and for an owner: Stop reading on this computer / on all computers, Resume reading, and the staged release (Try
+// version X on this computer, Approve version X for all computers; X: this site's setup). The cloud checks every one
+// again (migration-35); its refusal is shown as it says it.
+const RS_CLS = { reading: "ok", paused: "warn", selfstop: "bad", fincomstop: "bad", offline: "bad" };
+function Reqs({ r }) {
+  const q = r.reqs || {}, today = !q.day || q.day === new Date().toISOString().slice(0, 10);
+  const last = TCloud.reqSay(q.last), long = today ? TCloud.reqSay(q.longest) : "";
+  if (!last && !long) return null;
+  return <span className="note" data-reqs="">{[last && "Last request: " + last, long && "Longest today: " + long, today && q.over20 ? q.over20 + " over 20 s" : ""].filter(Boolean).join(" · ")}</span>;
+}
+function Release({ rows, latest, owner }) {
+  if (!latest || !TCloud.on()) return null;
+  const rel = (TCloud.pane.releases || []).find((x) => x.version === latest);
+  const behind = rows.some((r) => r.go && !r.old && vnum(r.version) < vnum(latest));
+  if (!rel && !behind) return null;
+  const pilot = rel && rel.pilot_started_at && !rel.approved_at ? rows.find((r) => r.device.id === rel.pilot_device) : null;
+  return <div className="row" data-release="" style={{ alignItems: "center", gap: 8, flexWrap: "wrap", margin: "6px 0 2px" }}>
+    {rel && rel.approved_at ? <span className="note">{"Version " + latest + " is approved for all computers (" + fmtDateTime(rel.approved_at) + ")."}</span>
+      : rel && rel.pilot_started_at ? <span className="note">{"Version " + latest + " on trial on " + (pilot ? pilot.computer : "the pilot computer") + " since " + fmtDateTime(rel.pilot_started_at) + "."}</span>
+      : <span className="note">{"Version " + latest + " is ready: try it on one computer first."}</span>}
+    {owner && !(rel && rel.approved_at) && <button className="btn small" data-release-approve="" onClick={() => TCloud.releaseApprove(latest)}>{"Approve version " + latest + " for all computers"}</button>}
+  </div>;
+}
 function BridgeLines({ rows, latest }) {
   const [open, setOpen] = useState(false);
   const owner = S.account && S.account.me && S.account.me.role === "owner";
+  const p = TCloud.pane, ctl = p.ctl || {}, allStopped = TCloud.stoppedAll && TCloud.stoppedAll();
+  const rel = latest ? (p.releases || []).find((x) => x.version === latest) : null, piloting = !!(rel && (rel.approved_at || rel.pilot_started_at));
   // the computer's main bridge, else its newest
   const byDev = new Map();
   rows.forEach((r) => { const k = r.device.id, h = byDev.get(k); if (!h || (r.main && r.go && !(h.main && h.go)) || (r.go && !h.go)) byDev.set(k, r); });
-  return <div className="pane" data-bridge-lines="">
-    {[...byDev.values()].map((r) => { const st = lineState(r, latest, owner);
-      return <div key={r.device.id} className="row" data-bridge-line={r.id || "old"} style={{ alignItems: "center", gap: 8, flexWrap: "wrap", margin: "2px 0" }}>
-        <b>{r.computer}</b><span className="note">·</span><span>{r.user || "—"}</span><span className="note">·</span><span>{r.go && !r.old ? "FinCom Bridge " + (r.version || "") : "Older bridge"}</span><span className="note">·</span>
-        <span className={"tag " + st.cls} data-bridge-state="">{st.text}</span>
-        {st.act && <span className="note" data-bridge-act="">{st.act}</span>}
-        {st.makeMain && <button className="btn small primary" data-make-main={r.id} onClick={() => TCloud.makeMain(r)}>Make this the main bridge</button>}
+  return <div className="pane" data-bridge-lines="" data-computers="">
+    {[...byDev.values()].map((r) => { const st = lineState(r, latest, owner), rd = r.read || { state: r.online ? "reading" : "offline", text: "" };
+      const stopped = !!(TCloud.stopFor && TCloud.stopFor(r.device.id)) || !!(r.readStopped && r.readStopped.by);
+      const live = r.go && !r.old;
+      return <div key={r.device.id} data-computer={r.device.id} data-read-state={live ? rd.state : "old"} style={{ margin: "4px 0" }}>
+        <div className="row" data-bridge-line={r.id || "old"} style={{ alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <b>{r.computer}</b><span className="note">·</span><span>{r.user || "—"}</span><span className="note">·</span><span>{live ? "FinCom Bridge " + (r.version || "") : "Older bridge"}</span><span className="note">·</span>
+          <span className={"tag " + st.cls} data-bridge-state="">{st.text}</span>
+          {live && r.online && <span className={"tag " + (RS_CLS[rd.state] || "warn")} data-read-text="">{rd.text}</span>}
+          {st.act && <span className="note" data-bridge-act="">{st.act}</span>}
+          {st.makeMain && <button className="btn small primary" data-make-main={r.id} onClick={() => TCloud.makeMain(r)}>Make this the main bridge</button>}
+        </div>
+        {live && <div className="row" style={{ alignItems: "center", gap: 8, flexWrap: "wrap", marginLeft: 16 }}>
+          <Reqs r={r} />
+          {owner && !allStopped && (stopped
+            ? <button className="btn small primary" data-read-resume={r.device.id} onClick={() => TCloud.readResume(r)}>Resume reading</button>
+            : <button className="btn small" data-read-stop={r.device.id} onClick={() => TCloud.readStop(r)}>Stop reading on this computer</button>)}
+          {owner && latest && !piloting && vnum(latest) > vnum(r.version) && <button className="btn small" data-release-pilot={r.device.id} onClick={() => TCloud.releasePilot(latest, r)}>{"Try version " + latest + " on this computer"}</button>}
+        </div>}
       </div>; })}
+    <Release rows={rows} latest={latest} owner={owner} />
+    {owner && TCloud.on() && <div className="row" style={{ gap: 8, margin: "6px 0 2px" }}>
+      {allStopped ? <button className="btn small primary" data-read-resume-all="" onClick={() => TCloud.readResume(null)}>Resume reading on all computers</button>
+        : <button className="btn small" data-read-stop-all="" onClick={() => TCloud.readStop(null)}>Stop reading on all computers</button>}
+    </div>}
+    {ctl.err && <p className="bk-alert bad" data-control-err="" style={{ margin: "6px 0" }}>{ctl.err}</p>}
+    {ctl.ok && <p className="note" data-control-ok="" style={{ margin: "6px 0" }}>{ctl.ok}</p>}
     <a href="#" className="note" data-bridge-details="" onClick={(ev) => { ev.preventDefault(); setOpen(!open); }}>{open ? "Hide details" : "Details"}</a>
     {open && <div data-bridge-more="" style={{ marginTop: 10 }}><BridgesHeard /><BridgeSettings /></div>}
   </div>;

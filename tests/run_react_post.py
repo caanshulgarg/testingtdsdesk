@@ -38,7 +38,7 @@ with sync_playwright() as p:
     # Tally's ledger), and is not in Ready to post
     led = pg.locator('#app [data-post-attention] li[data-attn-kind="ledger"]')
     ok(led.count() == 2 and "Ledger “Professional Charges” is not in Tally" in led.first.inner_text() and pg.locator('#app select[aria-label="Tally ledger for Professional Charges"]').count() == 2
-       and pg.locator(T).count() == 0 and pg.locator("#app [data-post-main]").count() == 0, "a ledger not in Tally: its bills need attention, with a choice of Tally's ledgers, and are not ready")
+       and pg.locator(T).count() == 0 and pg.locator("#app [data-post-main]").count() == 0 and pg.inner_text('#app [data-post-tab="topost"] [data-tab-n]') == "0", "a ledger not in Tally: its bills need attention, with a choice of Tally's ledgers, and are not ready")
     led.first.locator("select").select_option("Legal and Professional Charges"); pg.wait_for_timeout(200)
     led.first.locator('button:has-text("Replace")').click(); pg.wait_for_timeout(500)
     # the bills' TDS ledger is not in Tally either: said next, on the same lines
@@ -57,7 +57,10 @@ with sync_playwright() as p:
     # review of 02-Oct-2026: a Tally file is not "in Tally" until Tally confirms it; the bills stay listed, marked so, and
     # are not posted again from here (one count everywhere: 2 for Tally)
     # second pass of 02-Oct-2026: they need attention (once each), Ready to post says so, no "Post 0 to Tally"
+    # three tabs (plan item 1b): the two need attention, so Errors is open; To post says nothing is waiting
+    ok(pg.get_attribute('#app [data-post-tab][aria-selected="true"]', "data-post-tab") == "errors" and pg.inner_text('#app [data-post-tab="errors"] [data-tab-n]') == "2", "1b. the Errors tab is open, with 2")
     rows = pg.inner_text("#app [data-post-attention]") if pg.locator("#app [data-post-attention]").count() else ""
+    pg.click('#app [data-post-tab="topost"]'); pg.wait_for_timeout(300)
     ok(pg.evaluate("Object.values(D().entries).filter(e => e.exportedAt).length") == 2 and rows.count("In a Tally file") == 2 and pg.locator("#app [data-post-main]").count() == 0
        and pg.inner_text("#app [data-post-empty]") == "Nothing waiting to post" and pg.evaluate("postCounts(S.coId)") == {"ready": 0, "attention": 2}, "marked as sent: listed as in a Tally file, needing attention; nothing ready to post")
     # Done: what went to Tally

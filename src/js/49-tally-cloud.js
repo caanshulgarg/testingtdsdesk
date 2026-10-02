@@ -325,6 +325,12 @@ const TCloud = {
         if (/main_bridge/.test(String(e && e.message))) { p.noMain = true; return Cloud.api("tally_devices?select=" + cols + "&order=created_at.desc"); }
         throw e; });
       p.companies = await this.restAll("tally_companies?select=company,client_id,gstin,last_seen,linked_at&order=company.asc");
+      // migration-35: the stops from FinCom still standing, and the bridge versions on trial or approved (members may read
+      // both); without the migration, none (the lines still show what each computer's heartbeat says)
+      try { p.stops = [].concat(await Cloud.api("tally_read_stops?select=id,device_id,action,reason,stopped_at,cleared_at&action=eq.stop&cleared_at=is.null&order=id.desc") || []); p.noControl = false; }
+      catch (e){ p.stops = []; p.noControl = true; }
+      try { p.releases = [].concat(await Cloud.api("tally_bridge_releases?select=version,pilot_device,pilot_started_at,pilot_seen_at,pilot_self_stop,approved_at&order=pilot_started_at.desc") || []); }
+      catch (e){ p.releases = []; }
       p.err = ""; p.at = Date.now();
       linkByGstin(p.companies);
     } catch (e){ p.err = /tally_devices|does not exist|schema cache/i.test(String(e && e.message)) ? "The cloud copy is not set up in this database yet." : (e && e.message) || String(e); }
@@ -337,16 +343,87 @@ const TCloud = {
     const now = Date.now(), rows = [];
     (this.pane.devices || []).filter(d => !d.revoked).forEach(d => {
       const info = d.info || {}, br = info.bridges || {}, main = d.main_bridge || "";
-      Object.keys(br).forEach(id => { const b = br[id] || {};
+      const beat = info.beat || {};
+      Object.keys(br).forEach(id => { const b = br[id] || {}, isMain = main ? id === main : b.mode === "main";
+        // 2.1.5: its requests to Tally (last, longest today, over 20 s) and whether it stopped reading: its own entry,
+        // else the computer's beat when it is the main bridge
+        const mine = (k) => b[k] !== undefined ? b[k] : isMain ? beat[k] : undefined;
         rows.push({device: d, id, computer: b.computer || info.computer || d.name, user: b.user || "", version: b.version || "", runMode: b.runMode || "",
-          main: main ? id === main : b.mode === "main", at: b.at, tally: b.tallyState || (b.tally ? "open" : "closed"), open: b.open || [], go: id !== "v1"}); });
+          main: isMain, at: b.at, tally: b.tallyState || (b.tally ? "open" : "closed"), open: b.open || [], go: id !== "v1",
+          reqs: mine("reqs") || null, readStopped: mine("readStopped") || null, paused: !!mine("paused"), readStop: info.readStop || null}); });
       if (!br.v1 && info.beat) rows.push({device: d, id: "v1", computer: info.computer || d.name, user: info.user || "", version: info.beat.version || d.version || "",
         main: !main, at: info.beat.at, tally: info.beat.tallyState || (info.beat.tally ? "open" : "closed"), open: info.beat.open || [], go: false});
       if (info.shadow && !Object.keys(br).some(id => id !== "v1")) rows.push({device: d, id: "", computer: info.computer || d.name, user: info.user || "", version: info.shadow.version || "",
         main: false, at: info.shadow.at, tally: info.shadow.tally ? "open" : "closed", open: info.shadow.open || [], go: true, old: true});
     });
-    rows.forEach(r => { r.online = !!r.at && now - Date.parse(r.at) < 3 * 60000; });
+    rows.forEach(r => { r.online = !!r.at && now - Date.parse(r.at) < 3 * 60000; r.read = this.readState(r); });
     return rows.sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")));
+  },
+  // the reading state of a bridge's computer (plan item 14): {state: reading | paused | selfstop | fincomstop | offline,
+  // text, reason}. A stop from FinCom still standing (tally_read_stops, for this computer or for all of them, or the
+  // computer's info.readStop) wins over what the bridge last said, then a stop by itself, then paused.
+  readState(r){
+    if (!r.online) return {state: "offline", text: "Offline" + (r.at ? " since " + fmtDateTime(r.at) : "")};
+    const st = this.stopFor(r.device.id), rs = r.readStopped || {};
+    if (st) return {state: "fincomstop", text: "Stopped from FinCom: " + (st.reason || "no reason given"), reason: st.reason || ""};
+    if (rs.by === "fincom") return {state: "fincomstop", text: "Stopped from FinCom: " + (rs.reason || "no reason given"), reason: rs.reason || ""};
+    if (rs.by === "self") return {state: "selfstop", text: "Stopped by itself: " + (rs.reason || "no reason given"), reason: rs.reason || ""};
+    if (r.paused) return {state: "paused", text: "Paused"};
+    return {state: "reading", text: "Reading"};
+  },
+  // the stop from FinCom standing for a computer: the one for all computers ({device_id: null}), else its own; with no
+  // list (before migration-35, or not read yet) the computer's info.readStop
+  stopFor(devId){
+    const list = this.pane.stops;
+    if (Array.isArray(list) && !this.pane.noControl){
+      const all = list.find(s => !s.device_id && !s.cleared_at), own = list.find(s => s.device_id === devId && !s.cleared_at);
+      return all || own || null;
+    }
+    const d = (this.pane.devices || []).find(x => x.id === devId), rs = d && d.info && d.info.readStop;
+    return rs ? {device_id: devId, reason: rs.reason || ""} : null;
+  },
+  stoppedAll(){ return Array.isArray(this.pane.stops) && !this.pane.noControl && this.pane.stops.some(s => !s.device_id && !s.cleared_at); },
+  // a request's line: "vouchers 1.2 s at 15:34"
+  reqSay(q){ if (!q || !q.kind) return ""; const ms = Number(q.ms) || 0; return q.kind + " " + (ms < 1000 ? ms + " ms" : (ms / 1000).toFixed(1) + " s") + (q.at ? " at " + tallyHm(q.at) : ""); },
+  // Stop reading / Resume reading / a pilot / approval (owners; the cloud checks it again): migration-35's RPCs. What
+  // was done, or the refusal in plain words, is kept for the page (pane.ctl)
+  async control(fn, args, done){
+    const p = this.pane; p.ctl = {busy: true}; render();
+    try {
+      const r = await this.rpc(fn, args);
+      if (r && r.ok === false) throw new Error(r.error || "It was not done.");
+      p.ctl = {ok: done};
+      toast(done);
+    } catch (e){
+      const m = String((e && e.message) || e);
+      p.ctl = {err: /PGRST202|Could not find the function|schema cache|does not exist|\b404\b/i.test(m) ? "FinCom\u2019s cloud is not ready for this yet (migration 35 is not applied)."
+        : m.replace(/^ERROR:\s*/i, "").replace(/^./, c => c.toUpperCase())};
+    }
+    await this.refreshPane();
+  },
+  async readStop(r){
+    const all = !r, where = all ? "every computer" : r.computer;
+    const a = await askConfirm({title: all ? "Stop reading Tally on all computers?" : "Stop reading Tally on " + r.computer + "?", ok: "Stop reading",
+      body: "<p>FinCom Bridge on " + esc(where) + " stops reading Tally at its next heartbeat (within 30 seconds). Posting to Tally goes on. Reading starts again only when an owner presses Resume reading.</p>" +
+        '<div class="bk-form one"><label><span>Why (shown on the Tally page and by the bridge)</span><input id="readStopWhy" maxlength="300" placeholder="Stopped from FinCom"></label></div>',
+      read: () => ({why: ((document.getElementById("readStopWhy") || {}).value || "").trim()})});
+    if (!a || !a.ok) return;
+    await this.control("tally_read_stop", {p_device: all ? null : r.device.id, p_reason: (a.data && a.data.why) || ""}, "Reading stopped on " + where + "; it stops within 30 seconds.");
+  },
+  async readResume(r){
+    await this.control("tally_read_resume", {p_device: r ? r.device.id : null}, "Reading resumes on " + (r ? r.computer : "every computer") + " within 30 seconds.");
+  },
+  async releasePilot(v, r){
+    const a = await askConfirm({title: "Try version " + v + " on " + r.computer + "?", ok: "Try it there",
+      body: "<p>FinCom Bridge " + esc(v) + " installs itself on <b>" + esc(r.computer) + "</b> only. Every other computer keeps its version until you approve " + esc(v) + " for all, after a working day on " + esc(r.computer) + ".</p>"});
+    if (!a || !a.ok) return;
+    await this.control("tally_release_pilot", {p_version: v, p_device: r.device.id}, "Version " + v + " goes to " + r.computer + " at its next heartbeat.");
+  },
+  async releaseApprove(v){
+    const a = await askConfirm({title: "Approve version " + v + " for all computers?", ok: "Approve",
+      body: "<p>Every computer of the firm installs FinCom Bridge " + esc(v) + " at its next check. FinCom\u2019s cloud allows it only after a working day on the pilot computer with no stop by itself.</p>"});
+    if (!a || !a.ok) return;
+    await this.control("tally_release_approve", {p_version: v}, "Version " + v + " is approved for all computers.");
   },
   // "Make this the main bridge": an owner, asked first; tally-ingest gives postings only to it from then on, tells the
   // bridge (its next heartbeat) to switch itself over, which stops bridge 1.15.0 on that computer
@@ -744,6 +821,15 @@ Object.assign(TLight, {
     [].concat(this.st.devs || [], (TCloud.pane && TCloud.pane.devices) || []).forEach(d => {
       if (!d || d.id !== m.device) return;
       d.info = Object.assign({}, d.info || {}); d.info.beat = Object.assign({}, d.info.beat || {}, m.beat); hit = true;
+      // 2.1.5 (migration-35): the bridge's own entry follows too (its requests, a stop by itself, paused, when heard
+      // from), and the stop from FinCom standing for this computer
+      const bid = m.beat.bridge;
+      if (bid && d.info.bridges && d.info.bridges[bid]){
+        const b = Object.assign({}, d.info.bridges[bid]);
+        ["reqs", "readStopped", "paused", "at", "tallyState", "open"].forEach(k => { if (m.beat[k] !== undefined) b[k] = m.beat[k]; });
+        d.info.bridges = Object.assign({}, d.info.bridges, {[bid]: b});
+      }
+      if (m.beat.readStop !== undefined) d.info.readStop = m.beat.readStop;
     });
     if (hit) render();
     else { this.st.at = 0; this.refresh(); }
