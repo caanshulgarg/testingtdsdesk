@@ -4,23 +4,33 @@
 -- as the owner ran it (its functions searching 'public') and on top of the revised 35 (public, pg_temp). To be shown to
 -- the owner before it runs.
 --
---   A. the guard         a ledger with any entry (tally_ledger_day) or a non-zero opening is never marked deleted,
---                        whoever tries (a full list, the bridge's ledger list, a hand update): the mark is undone on
---                        the row and logged 'held' in tally_ledger_marks with the reason ('has entries' /
---                        'non-zero opening'). Trigger tally_ledgers_a_guard, which runs before tally_ledgers_mark_log
+--   A. the guard         a ledger with any entry (tally_ledger_day, under its name or an old name of its), a non-zero
+--                        opening, or renamed in the last 30 days (its days may still be under the old name) is never
+--                        marked deleted, whoever tries (a full list, the bridge's ledger list, a hand update): the mark
+--                        is undone on the row and logged 'held' in tally_ledger_marks with the reason ('has entries' /
+--                        'has entries under an old name' / 'non-zero opening' / 'renamed recently'). Trigger
+--                        tally_ledgers_a_guard, which runs before tally_ledgers_mark_log; the reason worked out by
+--                        tally_ledger_hold_reason, which the rename below asks too
 --   B. rounds            FinCom Bridge 2.1.5 reads the ledger list in batches of 2,000 and sends each batch with the id
---                        of its read (round), whether the read is complete and how many ledgers with a GUID it read
---                        (rowsRead). tally_ledger_rounds keeps one row per read; tally_ledger_round_batch records a
---                        batch; tally_ledgers_mark_gone marks the ledgers the bridge says are gone (by their Tally GUID
---                        only, never by name) only when the round is complete, the bridge read ledgers, and the live
---                        ledgers with a GUID left in the copy after marking would equal the bridge's count (else all
---                        held, 'count mismatch: cloud N, bridge M'); more than greatest(25, 5%) gone at once are held
---                        and marked only when the next round misses them too; the guard still keeps each row with
---                        entries or an opening. Every mark and hold logged, the outcome noted on the round
+--                        of its read (round), whether the read is complete, how many GUIDs it read in the whole round
+--                        (rowsRead, poison ledgers included) and the GUIDs read (seen, split over the batches). The
+--                        cloud sends nothing back to re-send: tally_ledger_round_batch records the batch and stamps the
+--                        rows seen (seen_round, seen_at); tally_ledgers_mark_gone(book, round), called once on the last
+--                        batch, marks the live ledgers with a GUID the round did not see, by GUID only, never by name,
+--                        and only when the round is complete, the bridge read ledgers (rowsRead > 0) and every batch
+--                        arrived (the GUIDs seen add up to rowsRead); else all held with the note. More than
+--                        greatest(25, 5% of the live ledgers) missing at once: only those the book's previous complete
+--                        round missed too are marked (missing twice), the rest held; the next complete round decides
+--                        by itself. The guard still keeps each row with entries, an opening or a recent rename. A twin
+--                        (merged_into) or a row with no GUID is never counted. A rogue key cannot bloat the tables: at
+--                        most 50 new rounds a day per book (54000), no per-ledger marks for an unknown round, and one
+--                        'held' mark per round and ledger while a round is incomplete; the outcome noted on the round
 --   C. renames by GUID   tally_ledger_rename: the row found by GUID (else by the old name, which then takes the GUID);
 --                        the new name held by another GUID: refused with a note; held by a row with no GUID (or the
---                        same): the old row marked merged (deleted_at, its GUID moved to the other row), unless the guard
---                        keeps it live; the old name kept in before_clean.renamed once that column exists (migration-31)
+--                        same): the old row marked merged (deleted_at, its GUID moved to the other row) - but when the
+--                        guard would keep the old row (entries, an opening, renamed recently) the merge is refused with
+--                        a note and nothing changes (no GUID moved or nulled); a plain rename stamps renamed_at; the old
+--                        name kept in before_clean.renamed once that column exists (migration-31)
 --   D. full lists        tally_ingest_ledgers_list / tally_ingest_ledgers_g gain p_complete and p_count: a full list
 --                        (the bridge's trial-balance list, a person's upload) marks nothing unless its sender declares
 --                        it complete with a count equal to the names listed. The older signatures keep working and
@@ -34,13 +44,32 @@
 begin;
 
 -- ---------------------------------------------------------------- A. the guard
+alter table public.tally_ledgers add column if not exists renamed_at timestamptz;   -- the last rename (tally_ledger_rename)
+alter table public.tally_ledgers add column if not exists seen_round text;          -- the last ledger-list round that read the row's GUID
+alter table public.tally_ledgers add column if not exists seen_at timestamptz;
+
+-- why a row may not be marked deleted (null: it may): entries under its name, entries under an old name of its
+-- (before_clean.renamed, once migration-31 adds the column: read from the row's json, so it works without it), a
+-- non-zero opening, or a rename in the last 30 days
+create or replace function public.tally_ledger_hold_reason(l public.tally_ledgers) returns text language plpgsql stable security definer set search_path = public, pg_temp as $function$
+declare olds text[];
+begin
+  if exists (select 1 from tally_ledger_day d where d.book_id = l.book_id and d.ledger = l.name) then return 'has entries'; end if;
+  begin
+    select coalesce(array_agg(x->>'from'), '{}') into olds from jsonb_array_elements(coalesce(to_jsonb(l)->'before_clean'->'renamed', '[]'::jsonb)) x where x->>'from' is not null;
+  exception when others then olds := '{}'; end;
+  if coalesce(array_length(olds, 1), 0) > 0 and exists (select 1 from tally_ledger_day d where d.book_id = l.book_id and d.ledger = any(olds)) then return 'has entries under an old name'; end if;
+  if coalesce(l.open_sent, l.open, 0) <> 0 then return 'non-zero opening'; end if;
+  if l.renamed_at is not null and l.renamed_at > now() - interval '30 days' then return 'renamed recently'; end if;
+  return null;
+end $function$;
+
 create or replace function public.tally_ledgers_a_guard() returns trigger language plpgsql security definer set search_path = public, pg_temp as $function$
 declare why text; ctx jsonb; lst jsonb; uid uuid; dev uuid;
 begin
   if old.deleted_at is not null or new.deleted_at is null then return new; end if;
-  if exists (select 1 from tally_ledger_day d where d.book_id = new.book_id and d.ledger = new.name) then why := 'has entries';
-  elsif coalesce(new.open_sent, new.open, 0) <> 0 then why := 'non-zero opening';
-  else return new; end if;
+  why := public.tally_ledger_hold_reason(new);
+  if why is null then return new; end if;
   -- the mark undone; the row stays as it was
   new.deleted_at := null; new.deleted_reason := old.deleted_reason; new.deleted_by_list := old.deleted_by_list;
   begin ctx := nullif(current_setting('fincom.ledger_list', true), '')::jsonb; exception when others then ctx := null; end;
@@ -92,95 +121,128 @@ do $$ begin
   end if;
 end $$;
 
--- a batch of a round: the row made or brought up to date (batches, rows, and the bridge's complete / rowsRead when sent)
-create or replace function public.tally_ledger_round_batch(p_book uuid, p_round text, p_rows integer, p_rows_read integer, p_complete boolean, p_device uuid, p_bridge text)
+alter table public.tally_ledger_rounds add column if not exists seen_n integer not null default 0;   -- GUIDs seen, summed over the batches
+
+-- a batch of a round: the row made or brought up to date (batches, rows, seen, and the bridge's complete / rowsRead when
+-- sent); the rows whose GUID the batch saw stamped with the round. A new round is refused (54000) when the book has
+-- had more than 50 in the last 24 hours (a rogue key cannot bloat the rounds, which are never deleted)
+create or replace function public.tally_ledger_round_batch(p_book uuid, p_round text, p_rows integer, p_rows_read integer, p_complete boolean, p_device uuid, p_bridge text, p_seen jsonb)
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
-declare f uuid; rid text := left(btrim(coalesce(p_round, '')), 80); r tally_ledger_rounds%rowtype;
+declare f uuid; rid text := left(btrim(coalesce(p_round, '')), 80); r tally_ledger_rounds%rowtype; seen text[] := '{}'; n_seen int := 0; n_day int;
 begin
   if auth.role() <> 'service_role' then raise exception 'not allowed' using errcode = '42501'; end if;
   select firm_id into f from tally_books where book_id = p_book;
   if f is null then raise exception 'no such book'; end if;
   if rid = '' then raise exception 'a round id is needed' using errcode = '22023'; end if;
   perform pg_advisory_xact_lock(hashtext(p_book::text));
-  insert into tally_ledger_rounds (book_id, round_id, firm_id, batches, rows_received, rows_read, complete, device_id, bridge)
-  values (p_book, rid, f, 1, greatest(0, coalesce(p_rows, 0)), p_rows_read, p_complete, p_device, left(nullif(p_bridge, ''), 40))
+  if not exists (select 1 from tally_ledger_rounds where book_id = p_book and round_id = rid) then
+    select count(*) into n_day from tally_ledger_rounds where book_id = p_book and started_at > now() - interval '24 hours';
+    if n_day > 50 then raise exception 'this book has had % ledger-list rounds in the last 24 hours; no new round until tomorrow', n_day using errcode = '54000'; end if;
+  end if;
+  if jsonb_typeof(p_seen) = 'array' then
+    n_seen := jsonb_array_length(p_seen);
+    select coalesce(array_agg(distinct g), '{}') into seen from (select nullif(btrim(x #>> '{}'), '') as g from jsonb_array_elements(p_seen) x) s where g is not null;
+  end if;
+  insert into tally_ledger_rounds (book_id, round_id, firm_id, batches, rows_received, rows_read, complete, device_id, bridge, seen_n)
+  values (p_book, rid, f, 1, greatest(0, coalesce(p_rows, 0)), p_rows_read, p_complete, p_device, left(nullif(p_bridge, ''), 40), n_seen)
   on conflict (book_id, round_id) do update set last_seen_at = now(), batches = tally_ledger_rounds.batches + 1,
-     rows_received = tally_ledger_rounds.rows_received + greatest(0, coalesce(p_rows, 0)),
+     rows_received = tally_ledger_rounds.rows_received + greatest(0, coalesce(p_rows, 0)), seen_n = tally_ledger_rounds.seen_n + excluded.seen_n,
      rows_read = coalesce(excluded.rows_read, tally_ledger_rounds.rows_read), complete = coalesce(excluded.complete, tally_ledger_rounds.complete),
      device_id = coalesce(excluded.device_id, tally_ledger_rounds.device_id), bridge = coalesce(excluded.bridge, tally_ledger_rounds.bridge)
   returning * into r;
-  return jsonb_build_object('ok', true, 'round', r.round_id, 'batches', r.batches, 'rows', r.rows_received, 'rowsRead', r.rows_read, 'complete', r.complete);
+  if array_length(seen, 1) > 0 then
+    update tally_ledgers set seen_round = rid, seen_at = now() where book_id = p_book and tally_guid = any(seen) and seen_round is distinct from rid;
+  end if;
+  return jsonb_build_object('ok', true, 'round', r.round_id, 'batches', r.batches, 'rows', r.rows_received, 'rowsRead', r.rows_read, 'complete', r.complete, 'seen', r.seen_n);
+end $function$;
+-- the 7-argument call (no seen): kept for safety; such a round sees nothing and so marks nothing
+create or replace function public.tally_ledger_round_batch(p_book uuid, p_round text, p_rows integer, p_rows_read integer, p_complete boolean, p_device uuid, p_bridge text)
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
+begin
+  return public.tally_ledger_round_batch(p_book, p_round, p_rows, p_rows_read, p_complete, p_device, p_bridge, null::jsonb);
 end $function$;
 
--- the ledgers a complete round says are gone (p_gone: [[guid, name]]): marked by GUID when the round is complete, the
--- bridge read ledgers, and the live ledgers with a GUID left after marking would equal what the bridge read; the bulk
--- limit greatest(25, 5% of the live ledgers) with the second read (held in the round before, still gone: marked); the
--- guard keeps each row with entries or an opening. A row without a GUID is never marked here
-create or replace function public.tally_ledgers_mark_gone(p_book uuid, p_round text, p_gone jsonb)
+-- the ledgers a round did not see: the live rows with a GUID (deleted_at null, merged_into null) whose seen_round is
+-- not this round, marked by GUID only when the round is complete, the bridge read ledgers and every batch arrived
+-- (seen_n = rows_read); else all held with the note (one 'held' mark per round and ledger; none at all for a round
+-- never recorded). Over the bulk limit greatest(25, 5% of the live ledgers): only the rows the book's previous
+-- complete round did not see either are marked (missing twice), the rest held. The guard keeps each row with
+-- entries, an opening or a recent rename. The bridge re-sends nothing: the next complete round decides again
+create or replace function public.tally_ledgers_mark_gone(p_book uuid, p_round text)
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
-declare f uuid; rid text := left(btrim(coalesce(p_round, '')), 80); r tally_ledger_rounds%rowtype; guids text[]; names text[]; would int; n_unknown int;
-  live int; live_guid int; lim int; outcome text; to_mark text[] := '{}'; to_hold text[] := '{}'; pend text[]; prev text; n_marked int := 0; n_held int := 0; lst jsonb;
+declare f uuid; rid text := left(btrim(coalesce(p_round, '')), 80); r tally_ledger_rounds%rowtype; names text[]; n_gone int; live int; lim int; outcome text;
+  to_mark text[] := '{}'; to_hold text[] := '{}'; prev text; n_marked int := 0; n_held int := 0; lst jsonb; done boolean := false; n_logged int := 0;
 begin
   if auth.role() <> 'service_role' then raise exception 'not allowed' using errcode = '42501'; end if;
   select firm_id into f from tally_books where book_id = p_book;
   if f is null then raise exception 'no such book'; end if;
   perform pg_advisory_xact_lock(hashtext(p_book::text));
   select * into r from tally_ledger_rounds where book_id = p_book and round_id = rid;
-  select coalesce(array_agg(distinct g), '{}') into guids
-    from (select nullif(btrim(x->>0), '') as g from jsonb_array_elements(coalesce(p_gone, '[]'::jsonb)) x) s where g is not null;
-  -- the live rows holding one of the GUIDs (a name sent without a GUID, or a GUID the copy does not hold: nothing)
-  select coalesce(array_agg(name order by name), '{}') into names from tally_ledgers where book_id = p_book and deleted_at is null and tally_guid = any(guids);
-  would := coalesce(array_length(names, 1), 0);
-  n_unknown := coalesce(array_length(guids, 1), 0) - would;
-  select count(*), count(*) filter (where tally_guid is not null) into live, live_guid from tally_ledgers where book_id = p_book and deleted_at is null;
+  select coalesce(array_agg(name order by name), '{}') into names from tally_ledgers
+   where book_id = p_book and deleted_at is null and merged_into is null and tally_guid is not null and seen_round is distinct from rid;
+  n_gone := coalesce(array_length(names, 1), 0);
+  select count(*) into live from tally_ledgers where book_id = p_book and deleted_at is null and merged_into is null;
   lst := jsonb_strip_nulls(jsonb_build_object('source', 'bridge ledger_list', 'round', rid, 'at', now(), 'device', r.device_id, 'bridge', r.bridge));
-  if would = 0 then
-    outcome := 'nothing to mark';
-  elsif r.book_id is null then
-    outcome := 'no such round: nothing marked'; to_hold := names;
+  if r.book_id is null then
+    outcome := 'no such round: nothing marked';
+    return jsonb_build_object('ok', true, 'marked', 0, 'held', 0, 'gone', n_gone, 'note', outcome);
+  end if;
+  done := r.complete is true and coalesce(r.rows_read, 0) > 0 and r.seen_n = r.rows_read;
+  if n_gone = 0 then
+    outcome := 'nothing to mark: the round saw every live ledger with a GUID';
   elsif r.complete is distinct from true then
-    outcome := 'round not complete: nothing marked'; to_hold := names;
+    outcome := format('round not complete: nothing marked (%s not seen, held)', n_gone); to_hold := names;
   elsif coalesce(r.rows_read, 0) <= 0 then
-    outcome := 'the bridge read no ledgers (rowsRead 0): nothing marked'; to_hold := names;
-  elsif live_guid - would <> r.rows_read then
-    outcome := format('count mismatch: cloud %s, bridge %s', live_guid - would, r.rows_read); to_hold := names;
+    outcome := format('the bridge read no ledgers (rowsRead 0): nothing marked (%s not seen, held)', n_gone); to_hold := names;
+  elsif not done then
+    outcome := format('%s of %s GUIDs seen (a batch missing): nothing marked (%s not seen, held)', r.seen_n, r.rows_read, n_gone); to_hold := names;
   else
     lim := greatest(25, live / 20);
-    if would > lim then
-      -- too many at once: marked only those the round before held too (the second read); the rest held
-      select round_id into prev from tally_ledger_rounds where book_id = p_book and round_id <> rid and started_at < r.started_at order by started_at desc limit 1;
-      select coalesce(array_agg(distinct ledger), '{}') into pend from tally_ledger_marks
-       where book_id = p_book and action = 'held' and list->>'round' = prev and reason like '%second read%';
-      select coalesce(array_agg(g), '{}') into to_mark from unnest(names) g where g = any(pend);
-      select coalesce(array_agg(g), '{}') into to_hold from unnest(names) g where not (g = any(pend));
-      outcome := format('%s gone, more than %s at once: held for a second read', would, lim)
-              || case when array_length(to_mark, 1) > 0 then format('; %s gone in the round before too, marked', array_length(to_mark, 1)) else '' end;
+    if n_gone > lim then
+      -- too many at once: marked only those the previous complete round did not see either; the rest held
+      select round_id into prev from tally_ledger_rounds where book_id = p_book and round_id <> rid and started_at < r.started_at
+        and complete is true and coalesce(rows_read, 0) > 0 and seen_n = rows_read order by started_at desc limit 1;
+      if prev is not null then
+        select coalesce(array_agg(l.name order by l.name), '{}') into to_mark from tally_ledgers l where l.book_id = p_book and l.name = any(names) and l.seen_round is distinct from prev;
+      end if;
+      select coalesce(array_agg(g), '{}') into to_hold from unnest(names) g where not (g = any(to_mark));
+      outcome := format('%s not seen, more than %s at once: held for a second read (the next complete round)', n_gone, lim)
+              || case when array_length(to_mark, 1) > 0 then format('; %s not seen by the round before (%s) either, marked', array_length(to_mark, 1), prev) else '' end;
     else
       to_mark := names;
     end if;
   end if;
   if array_length(to_mark, 1) > 0 then
-    perform set_config('fincom.ledger_list', jsonb_build_object('reason', 'deleted in Tally (FinCom Bridge ledger list, round ' || rid || ')', 'list', lst)::text, true);
-    update tally_ledgers set deleted_at = now() where book_id = p_book and name = any(to_mark) and tally_guid = any(guids) and deleted_at is null;
+    perform set_config('fincom.ledger_list', jsonb_build_object('reason', 'not seen in Tally''s ledger list (FinCom Bridge, round ' || rid || ')', 'list', lst)::text, true);
+    update tally_ledgers set deleted_at = now() where book_id = p_book and name = any(to_mark) and deleted_at is null;
     perform set_config('fincom.ledger_list', '', true);
     -- the guard may have kept some (logged 'held' by it)
     select count(*) into n_marked from tally_ledgers where book_id = p_book and name = any(to_mark) and deleted_at is not null;
     n_held := array_length(to_mark, 1) - n_marked;
-    if n_held > 0 then outcome := coalesce(outcome || '; ', '') || format('%s kept by the guard (entries or an opening)', n_held); end if;
+    if n_held > 0 then outcome := coalesce(outcome || '; ', '') || format('%s kept by the guard (entries, an opening or a recent rename)', n_held); end if;
   end if;
+  -- the held ones logged once per round and ledger (a round asked again writes nothing more)
   insert into tally_ledger_marks (book_id, firm_id, ledger, action, reason, source, device_id, bridge, list, parent, open_sent)
   select p_book, f, l.name, 'held', coalesce(outcome, 'held'), 'bridge ledger_list', r.device_id, r.bridge, lst, l.parent, coalesce(l.open_sent, l.open)
-    from tally_ledgers l where l.book_id = p_book and l.name = any(to_hold);
+    from tally_ledgers l where l.book_id = p_book and l.name = any(to_hold)
+     and not exists (select 1 from tally_ledger_marks m where m.book_id = p_book and m.ledger = l.name and m.action = 'held' and m.list->>'round' = rid);
+  get diagnostics n_logged = row_count;
   n_held := n_held + coalesce(array_length(to_hold, 1), 0);
-  if r.book_id is not null then update tally_ledger_rounds set note = left(outcome, 300), last_seen_at = now() where book_id = p_book and round_id = rid; end if;
-  return jsonb_build_object('ok', true, 'marked', n_marked, 'held', n_held, 'unknown', n_unknown, 'note', outcome);
+  update tally_ledger_rounds set note = left(outcome, 300), last_seen_at = now() where book_id = p_book and round_id = rid;
+  return jsonb_build_object('ok', true, 'marked', n_marked, 'held', n_held, 'gone', n_gone, 'logged', n_logged, 'note', outcome);
+end $function$;
+-- the 3-argument call of the first draft (a 'deleted' list from the bridge): the list is ignored, the round's seen GUIDs decide
+create or replace function public.tally_ledgers_mark_gone(p_book uuid, p_round text, p_gone jsonb)
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
+begin
+  return public.tally_ledgers_mark_gone(p_book, p_round) || jsonb_build_object('ignored', jsonb_array_length(coalesce(p_gone, '[]'::jsonb)));
 end $function$;
 
 -- ---------------------------------------------------------------- C. renames by GUID
 create or replace function public.tally_ledger_rename(p_book uuid, p_guid text, p_from text, p_to text)
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
 declare f uuid; g text := nullif(left(btrim(coalesce(p_guid, '')), 100), ''); frm text := left(btrim(coalesce(p_from, '')), 300); dst text := left(btrim(coalesce(p_to, '')), 300);
-  row_name text; row_guid text; other_name text; other_guid text; hist boolean; kept boolean;
+  row_name text; row_guid text; other_name text; other_guid text; hist boolean; kept boolean; why text;
 begin
   if auth.role() <> 'service_role' then raise exception 'not allowed' using errcode = '42501'; end if;
   select firm_id into f from tally_books where book_id = p_book;
@@ -203,21 +265,33 @@ begin
       return jsonb_build_object('ok', true, 'renamed', false, 'refused', true, 'from', row_name, 'to', dst,
         'note', format('rename %s -> %s: that name is another ledger''s (GUID %s); left', row_name, dst, other_guid));
     end if;
-    -- the old row merged into the one with the new name: marked (unless the guard keeps it), its GUID moved over
+    -- the old row merged into the one with the new name: marked, its GUID moved over. When the guard would keep the
+    -- old row (entries, an opening, renamed recently) the merge is refused and nothing changes
+    select public.tally_ledger_hold_reason(l) into why from tally_ledgers l where l.book_id = p_book and l.name = row_name;
+    if why is not null then
+      return jsonb_build_object('ok', true, 'renamed', false, 'refused', true, 'from', row_name, 'to', dst,
+        'note', format('rename %s -> %s: that name is a row of its own and %s %s; the merge refused, nothing changed', row_name, dst, row_name, why));
+    end if;
     perform set_config('fincom.ledger_list', jsonb_build_object('reason', format('renamed in Tally to %s (merged into the row with that name)', dst),
       'list', jsonb_build_object('source', 'bridge ledger_list', 'at', now(), 'renamed', jsonb_build_object('from', row_name, 'to', dst, 'guid', g)))::text, true);
-    update tally_ledgers set tally_guid = null, deleted_at = now() where book_id = p_book and name = row_name;
+    update tally_ledgers set deleted_at = now() where book_id = p_book and name = row_name;
     perform set_config('fincom.ledger_list', '', true);
+    select deleted_at is null into kept from tally_ledgers where book_id = p_book and name = row_name;
+    if kept then
+      -- the guard kept it after all: the GUID stays where it is
+      return jsonb_build_object('ok', true, 'renamed', false, 'refused', true, 'from', row_name, 'to', dst,
+        'note', format('rename %s -> %s: the old row kept live by the guard; the merge refused, nothing changed', row_name, dst));
+    end if;
+    update tally_ledgers set tally_guid = null where book_id = p_book and name = row_name;
     if g is not null and other_guid is null then update tally_ledgers set tally_guid = g where book_id = p_book and name = dst; end if;
     if hist then
       execute 'update tally_ledgers set before_clean = coalesce(before_clean, ''{}''::jsonb) || jsonb_build_object(''renamed'', coalesce(before_clean->''renamed'', ''[]''::jsonb) || $1) where book_id = $2 and name = $3'
         using jsonb_build_object('from', row_name, 'to', dst, 'at', now(), 'merged', true, 'guid', g), p_book, row_name;
     end if;
-    select deleted_at is null into kept from tally_ledgers where book_id = p_book and name = row_name;
     return jsonb_build_object('ok', true, 'renamed', false, 'merged', true, 'from', row_name, 'to', dst,
-      'note', format('%s -> %s: the row with the new name takes the GUID', row_name, dst) || case when kept then '; the old row kept live by the guard (entries or an opening)' else '; the old row marked merged' end);
+      'note', format('%s -> %s: the old row marked merged, the row with the new name takes the GUID', row_name, dst));
   end if;
-  update tally_ledgers set name = dst, tally_guid = coalesce(tally_guid, g) where book_id = p_book and name = row_name;
+  update tally_ledgers set name = dst, tally_guid = coalesce(tally_guid, g), renamed_at = now() where book_id = p_book and name = row_name;
   if hist then
     execute 'update tally_ledgers set before_clean = coalesce(before_clean, ''{}''::jsonb) || jsonb_build_object(''renamed'', coalesce(before_clean->''renamed'', ''[]''::jsonb) || $1) where book_id = $2 and name = $3'
       using jsonb_build_object('from', row_name, 'at', now()), p_book, dst;
@@ -434,10 +508,12 @@ end $function$;
 -- ---------------------------------------------------------------- F. who may call
 -- the service role only (tally-ingest) for the ingest functions, as migration-33; owners' functions for signed-in people, as migration-35
 revoke all on function public.tally_ledger_round_batch(uuid, text, integer, integer, boolean, uuid, text), public.tally_ledgers_mark_gone(uuid, text, jsonb),
+  public.tally_ledger_round_batch(uuid, text, integer, integer, boolean, uuid, text, jsonb), public.tally_ledgers_mark_gone(uuid, text), public.tally_ledger_hold_reason(public.tally_ledgers),
   public.tally_ledger_rename(uuid, text, text, text), public.tally_ingest_ledgers_list(uuid, date, date, jsonb, jsonb, boolean, integer),
   public.tally_ingest_ledgers_g(uuid, date, date, jsonb, jsonb, jsonb, boolean, integer), public.tally_ingest_ledgers_list(uuid, date, date, jsonb, jsonb),
   public.tally_ingest_ledgers_g(uuid, date, date, jsonb, jsonb, jsonb), public.tally_ledgers_a_guard() from public, anon, authenticated;
 grant execute on function public.tally_ledger_round_batch(uuid, text, integer, integer, boolean, uuid, text), public.tally_ledgers_mark_gone(uuid, text, jsonb),
+  public.tally_ledger_round_batch(uuid, text, integer, integer, boolean, uuid, text, jsonb), public.tally_ledgers_mark_gone(uuid, text),
   public.tally_ledger_rename(uuid, text, text, text), public.tally_ingest_ledgers_list(uuid, date, date, jsonb, jsonb, boolean, integer),
   public.tally_ingest_ledgers_g(uuid, date, date, jsonb, jsonb, jsonb, boolean, integer), public.tally_ingest_ledgers_list(uuid, date, date, jsonb, jsonb),
   public.tally_ingest_ledgers_g(uuid, date, date, jsonb, jsonb, jsonb) to service_role;

@@ -40,16 +40,18 @@
 //                                                       it again); {noLease:true} when the cloud keeps none
 //   {kind:"lease_release", company}                  -> the lease given back by its holder
 //   {kind:"ledger_list", company, ledgers:[[guid, masterId, alterId, name, group, storedOpening, gstin, pan, openingChanged]],
-//    renamed?:[[guid, from, to]], deleted?:[[guid, name]], groups?:[[name, parent]], last, round?, complete?, rowsRead?}
-//                                                    -> {added, renamed, deleted, deletesHeld, deletesSkipped, notes}: 2.1.4, the
+//    renamed?:[[guid, from, to]], deleted?:[[guid, name]], groups?:[[name, parent]], last, round?, complete?, rowsRead?, seen?:[guid]}
+//                                                    -> {added, renamed, deleted, deletesHeld, deletedIgnored, notes}: 2.1.4, the
 //                                                       plain ledger list (applyLedgerList): rows added or brought up to date,
-//                                                       renamed (old name kept), deleted ones marked (deleted_at), never removed.
-//                                                       2.1.5 (migration-34): each call is one batch of a read (round); the
-//                                                       batch is recorded (tally_ledger_round_batch), renames go through
-//                                                       tally_ledger_rename, and deleted is applied only by
-//                                                       tally_ledgers_mark_gone (complete round, the bridge's count of ledgers
-//                                                       with a GUID agreeing with the copy's, the bulk limit, the guard).
-//                                                       Without migration-34, or without a round id, nothing is marked
+//                                                       renamed (old name kept), never removed. 2.1.5 (migration-34): each call
+//                                                       is one batch of a read (round) carrying the GUIDs it read (seen); the
+//                                                       batch is recorded with them (tally_ledger_round_batch), renames go
+//                                                       through tally_ledger_rename, and on the last batch
+//                                                       tally_ledgers_mark_gone(book, round) marks what the round did not see
+//                                                       (complete round, every batch arrived, the bulk limit, the guard). The
+//                                                       bridge's deleted list is ignored for marking (deletedIgnored). Without
+//                                                       migration-34, or without a round id, nothing is marked. At most 60
+//                                                       calls a minute from one computer (429)
 //   {kind:"read_guard", company, guid, alter, count} -> {state: ok | needs_baseline, why}: the company's Tally GUID, highest
 //                                                       AlterID and the entries read, kept at each read (tally_sync_reads)
 //   companies:[{name, gstin, guid}]                  -> the company's Tally GUID kept with its book (tally_sync_cursor)
@@ -417,10 +419,19 @@ async function bridgeSafety(dev: any, firm: string, body: any) {
 //   renamed [guid, from, to]: the row renamed (found by GUID, else by the old name), the old name kept in before_clean
 //     (migration-31: {renamed: [{from, at}]}); the row's entries take the new name when the bridge sends their days
 //     again. A row with the new name already there: the old row is marked deleted, the other takes the GUID
-//   deleted [guid, name]: deleted_at set (migration-32), never removed; a ledger listed again is undeleted
+//   seen [guid]: the GUIDs the bridge read in this batch (migration-34): stamped on the rows; on the last batch the
+//     cloud marks the live rows with a GUID the round did not see (tally_ledgers_mark_gone), never removed
+//   deleted [guid, name]: ignored for marking (counted in deletedIgnored; a bridge before the seen contract)
 //   groups [name, parent]: upserted (none removed)
-// Without migration-32 (no tally_guid / deleted_at): renames by name, no deletions (counted in deletesSkipped and
-// logged; the bridge sends them again later), nothing fails. Without migration-31: renames without the history.
+// Without migration-32 (no tally_guid / deleted_at): renames by name, nothing fails. Without migration-34: nothing
+// is marked, said in the notes. Without migration-31: renames without the history.
+const ledgerListAt = new Map<string, number[]>();
+function ledgerListAllowed(devId: string) {
+  const now = Date.now(), had = (ledgerListAt.get(devId) || []).filter((t) => now - t < 60000);
+  if (had.length >= 60) { ledgerListAt.set(devId, had); return false; }
+  had.push(now); ledgerListAt.set(devId, had);
+  return true;
+}
 const colCache = new Map<string, { ok: boolean; at: number }>();
 async function hasCols(table: string, cols: string) {
   const k = table + ":" + cols, c = colCache.get(k);
@@ -445,7 +456,7 @@ async function applyLedgerList(firm: string, book: string, body: any, dev?: any,
   const m31 = await hasCols("tally_ledgers", "before_clean");
   const m28 = await hasCols("tally_ledgers", "gstin, pan");
   const notes: string[] = [];
-  const out = { ok: true, ledgers: 0, added: 0, renamed: 0, deleted: 0, deletesHeld: 0, deletesSkipped: 0, groups: 0, round: "", notes };
+  const out = { ok: true, ledgers: 0, added: 0, renamed: 0, deleted: 0, deletesHeld: 0, deletedIgnored: 0, groups: 0, round: "", notes };
   const now = new Date().toISOString();
   const cols = "name, parent" + (m32 ? ", tally_guid, deleted_at" : "") + (m31 ? ", before_clean" : "");
   // the rows: one per clean name
@@ -457,15 +468,17 @@ async function applyLedgerList(firm: string, book: string, body: any, dev?: any,
     .filter((r: any) => r.name && !seen.has(r.name) && seen.add(r.name));
   out.ledgers = rows.length;
   // 0. migration-34: this call is one batch of a read of the whole list (round); the bridge says whether the read is
-  // complete and how many ledgers with a GUID it holds (rowsRead). The batch is recorded first; the answer tells
-  // whether migration-34 is there (m34): then renames and deletions go through its functions, never direct updates
+  // complete, how many GUIDs it read in the round (rowsRead) and which it read in this batch (seen, passed as sent:
+  // the cloud adds the batches up against rowsRead). The batch is recorded first; the answer tells whether
+  // migration-34 is there (m34): then renames go through its function, never direct updates
   const round = s(body.round, 80).trim();
   const complete = body.complete === true;
   const rowsRead = body.rowsRead === null || body.rowsRead === undefined || body.rowsRead === "" || !Number.isFinite(Number(body.rowsRead)) ? null : Math.max(0, Math.floor(Number(body.rowsRead)));
+  const seenIn = (Array.isArray(body.seen) ? body.seen : []).slice(0, 50000).map((g: any) => s(g, 100).trim());
   let m34: boolean | null = null;
   const missing34 = (e: any) => !!e && /could not find|does not exist|schema cache|tally_ledger_round_batch|tally_ledgers_mark_gone|tally_ledger_rename/i.test(String(e.message || ""));
   if (round) {
-    const { error } = await db.rpc("tally_ledger_round_batch", { p_book: book, p_round: round, p_rows: rows.length, p_rows_read: rowsRead, p_complete: complete, p_device: dev?.id ?? null, p_bridge: me?.id ?? null });
+    const { error } = await db.rpc("tally_ledger_round_batch", { p_book: book, p_round: round, p_rows: rows.length, p_rows_read: rowsRead, p_complete: complete, p_device: dev?.id ?? null, p_bridge: me?.id ?? null, p_seen: seenIn });
     if (error && missing34(error)) { m34 = false; notes.push("round not recorded: migration-34 (tally_ledger_rounds) is not applied"); }
     else if (error) throw new Error(error.message);
     else { m34 = true; out.round = round; }
@@ -551,26 +564,28 @@ async function applyLedgerList(firm: string, book: string, body: any, dev?: any,
     }
   }
   out.added = fresh.length;
-  // 4. deletions: marked, never removed, and (migration-34) only by tally_ledgers_mark_gone, by GUID, on a complete
-  // round whose count agrees, within the bulk limit, each row past the guard. Without migration-34, or with no round
-  // id (a bridge before 2.1.5), nothing is marked: the bridge sends them again on its next complete read
-  const del = (Array.isArray(body.deleted) ? body.deleted : []).slice(0, 50000)
-    .map((x: any) => ({ guid: s(x?.[0], 100).trim(), name: cleanName(s(x?.[1], 300)) })).filter((d: any) => d.guid || d.name);
-  const skip = (why: string) => {
-    out.deletesSkipped = del.length;
-    notes.push("deletions skipped: " + why + "; nothing marked");
-    console.log("tally-ingest ledger_list: deletions skipped", book, del.length, why);
-  };
-  if (del.length && m34 === false) skip("migration-34 not applied (tally_ledgers_mark_gone)");
-  else if (del.length && !round) skip("the bridge sent no round id (bridge before 2.1.5)");
-  else if (del.length) {
-    const { data, error } = await db.rpc("tally_ledgers_mark_gone", { p_book: book, p_round: round, p_gone: del.map((d: any) => [d.guid, d.name]) });
-    if (error && missing34(error)) { m34 = false; skip("migration-34 not applied (tally_ledgers_mark_gone)"); }
+  // 4. deletions: marked, never removed, and only by tally_ledgers_mark_gone(book, round) on the last batch of a round
+  // (migration-34): the cloud marks the live ledgers with a GUID the round did not see, when the round is complete and
+  // every batch arrived, within the bulk limit, each row past the guard. The bridge's deleted list is ignored for
+  // marking (an older bridge, or sent alongside): counted and said. Without migration-34, or with no round id (a
+  // bridge before 2.1.5), nothing is marked; the next complete round decides by itself
+  const del = (Array.isArray(body.deleted) ? body.deleted : []).slice(0, 50000);
+  if (del.length) {
+    out.deletedIgnored = del.length;
+    notes.push("the deleted list (" + del.length + ") is ignored: marking goes by the GUIDs the round saw");
+    console.log("tally-ingest ledger_list: deleted list ignored", book, del.length);
+  }
+  const noMark = (why: string) => { notes.push("nothing marked: " + why); console.log("tally-ingest ledger_list: nothing marked", book, why); };
+  if (m34 === false) noMark("migration-34 not applied (tally_ledgers_mark_gone)");
+  else if (!round) noMark("the bridge sent no round id (bridge before 2.1.5)");
+  else if (body.last === true) {
+    const { data, error } = await db.rpc("tally_ledgers_mark_gone", { p_book: book, p_round: round });
+    if (error && missing34(error)) { m34 = false; noMark("migration-34 not applied (tally_ledgers_mark_gone)"); }
     else if (error) throw new Error(error.message);
     else {
       out.deleted = Math.max(0, Math.floor(Number(data?.marked) || 0));
       out.deletesHeld = Math.max(0, Math.floor(Number(data?.held) || 0));
-      if (data?.note) notes.push("deletions: " + String(data.note).slice(0, 300));
+      if (data?.note) notes.push("round " + round + ": " + String(data.note).slice(0, 300));
     }
   }
   // 5. the year's openings worked out again (a ledger added, an opening or a group changed)
@@ -1111,6 +1126,8 @@ Deno.serve(async (req) => {
         return await ingestLedgers(book, body, firm, { source: "bridge ledgers", device: dev.id, bridge: me.id, computer: me.entry.computer, user: me.entry.user });
       }
       case "ledger_list": {
+        // at most 60 ledger_list calls a minute from one computer (a rogue key cannot bloat the rounds)
+        if (!ledgerListAllowed(String(dev.id))) return reply(429, { ok: false, error: "This computer has sent sixty ledger lists in the last minute; try again in a minute." });
         const book = await bookFor(firm, String(body.company || ""));
         if (!book) return reply(409, { ok: false, notLinked: true, error: "This Tally company is not linked to a FinCom client yet." });
         return await applyLedgerList(firm, book, body, dev, bridgeOf(dev, body, false));

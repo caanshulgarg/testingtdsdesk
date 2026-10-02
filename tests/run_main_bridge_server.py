@@ -107,47 +107,59 @@ try:
     c, r = web({"kind": "install_log", "text": " "})
     ok(c == 413, "an empty one is refused")
 
-    # migration-34 (02-Oct-2026, round 2): the bridge's ledger_list carries round, complete and rowsRead; tally-ingest
-    # records each batch (tally_ledger_round_batch), renames through tally_ledger_rename and marks deletions only through
-    # tally_ledgers_mark_gone (never a direct update); without migration-34 it marks nothing and says so
+    # migration-34 (02-Oct-2026, round 3): the bridge's ledger_list carries round, complete, rowsRead and seen (the GUIDs it
+    # read, split over the batches); tally-ingest records each batch with its seen (tally_ledger_round_batch), renames
+    # through tally_ledger_rename, and on the last batch calls tally_ledgers_mark_gone(book, round) once: the cloud marks
+    # by what the round saw. A 'deleted' list is ignored for marking (counted deletedIgnored). Without migration-34 it
+    # marks nothing and says so. At most 60 ledger_list calls a minute from one computer
     NO34 = {"on": False}; real_rpc = F.rpc
     def rpc34(fn, a):
         if fn in ("tally_ledger_round_batch", "tally_ledgers_mark_gone", "tally_ledger_rename"):
             F.ARGS.setdefault(fn, []).append(a)
             if NO34["on"]: raise RuntimeError("Could not find the function public.%s(...) in the schema cache" % fn)
-            if fn == "tally_ledger_round_batch": return {"ok": True, "round": a["p_round"], "batches": 1, "rows": a["p_rows"]}
-            if fn == "tally_ledgers_mark_gone": return {"ok": True, "marked": len(a["p_gone"]) - 1, "held": 1, "unknown": 0, "note": "1 held by the guard"}
+            if fn == "tally_ledger_round_batch": return {"ok": True, "round": a["p_round"], "batches": 1, "rows": a["p_rows"], "seen": len(a.get("p_seen") or [])}
+            if fn == "tally_ledgers_mark_gone": return {"ok": True, "marked": 2, "held": 1, "gone": 3, "note": "1 kept by the guard (entries or an opening)"}
             return {"ok": True, "renamed": True, "from": a["p_from"], "to": a["p_to"]}
         return real_rpc(fn, a)
     F.rpc = rpc34
     patched = lambda: [c for c in F.CALLS if c[0] == "PATCH" and c[1].endswith("/tally_ledgers")]
     row = lambda g, n: [g, 1, 1, n, "Sundry Debtors", "0", "", "", 0]
-    n0 = len(patched())
-    c, r = call({"kind": "ledger_list", "version": "2.1.5", "bridge": main, "company": "ZZ CO", "round": "r-1", "complete": False, "rowsRead": None, "last": False,
-                 "ledgers": [row("g1", "Alpha"), row("g2", "Beta")], "renamed": [["g2", "Old Beta", "Beta"]], "groups": [["Sundry Debtors", "Current Assets"]]})
+    n0 = len(patched()); sent = {"ok": 0}
+    def lst(body):
+        c, r = call(dict({"kind": "ledger_list", "version": "2.1.5", "bridge": main, "company": "ZZ CO"}, **body))
+        if c == 200: sent["ok"] += 1
+        return c, r
+    c, r = lst({"round": "r-1", "complete": False, "rowsRead": None, "last": False, "seen": ["g1", "g2", " g9 "],
+                "ledgers": [row("g1", "Alpha"), row("g2", "Beta")], "renamed": [["g2", "Old Beta", "Beta"]], "groups": [["Sundry Debtors", "Current Assets"]]})
     a = (F.ARGS.get("tally_ledger_round_batch") or [{}])[-1]
-    ok(c == 200 and r.get("ok") and a == {"p_book": BOOK, "p_round": "r-1", "p_rows": 2, "p_rows_read": None, "p_complete": False, "p_device": "d-1", "p_bridge": GO["id"]},
-       "a ledger_list batch is recorded on its round: book, round, rows, rowsRead, complete, computer, bridge (%s %s)" % (c, a))
+    ok(c == 200 and r.get("ok") and a == {"p_book": BOOK, "p_round": "r-1", "p_rows": 2, "p_rows_read": None, "p_complete": False, "p_device": "d-1", "p_bridge": GO["id"], "p_seen": ["g1", "g2", "g9"]},
+       "a ledger_list batch is recorded on its round with the GUIDs it saw: book, round, rows, rowsRead, complete, computer, bridge, seen (%s %s)" % (c, a))
     a = (F.ARGS.get("tally_ledger_rename") or [{}])[-1]
     ok(a == {"p_book": BOOK, "p_guid": "g2", "p_from": "Old Beta", "p_to": "Beta"} and r.get("renamed") == 1, "a rename goes through tally_ledger_rename (%s)" % a)
-    ok("tally_ledgers_mark_gone" not in F.ARGS and r.get("deleted") == 0, "no deletions on this batch: tally_ledgers_mark_gone not called")
-    c, r = call({"kind": "ledger_list", "version": "2.1.5", "bridge": main, "company": "ZZ CO", "round": "r-1", "complete": True, "rowsRead": 2, "last": True,
-                 "ledgers": [], "deleted": [["g7", "Gone One"], ["g8", "Gone Two"]]})
+    ok("tally_ledgers_mark_gone" not in F.ARGS and r.get("deleted") == 0, "not the last batch: tally_ledgers_mark_gone not called")
+    c, r = lst({"round": "r-1", "complete": True, "rowsRead": 3, "last": True, "seen": ["g3"], "ledgers": [], "deleted": [["g7", "Gone One"], ["g8", "Gone Two"]]})
     a = (F.ARGS.get("tally_ledger_round_batch") or [{}])[-1]
-    ok(c == 200 and a.get("p_round") == "r-1" and a.get("p_complete") is True and a.get("p_rows_read") == 2 and a.get("p_rows") == 0, "the last batch: complete and rowsRead recorded (%s)" % a)
-    a = (F.ARGS.get("tally_ledgers_mark_gone") or [{}])[-1]
-    ok(a == {"p_book": BOOK, "p_round": "r-1", "p_gone": [["g7", "Gone One"], ["g8", "Gone Two"]]} and r.get("deleted") == 1 and r.get("deletesHeld") == 1 and any("guard" in n for n in r.get("notes", [])),
-       "deletions go through tally_ledgers_mark_gone; its marked / held / note answered (%s %s)" % (a, {k: r.get(k) for k in ("deleted", "deletesHeld", "notes")}))
+    ok(c == 200 and a.get("p_round") == "r-1" and a.get("p_complete") is True and a.get("p_rows_read") == 3 and a.get("p_rows") == 0 and a.get("p_seen") == ["g3"], "the last batch: complete, rowsRead and its seen recorded (%s)" % a)
+    a = F.ARGS.get("tally_ledgers_mark_gone") or []
+    ok(len(a) == 1 and a[0] == {"p_book": BOOK, "p_round": "r-1"} and r.get("deleted") == 2 and r.get("deletesHeld") == 1 and any("guard" in n for n in r.get("notes", [])),
+       "on the last batch tally_ledgers_mark_gone(book, round) is called once; its marked / held / note answered (%s %s)" % (a, {k: r.get(k) for k in ("deleted", "deletesHeld", "notes")}))
+    ok(r.get("deletedIgnored") == 2 and any("ignored" in n for n in r.get("notes", [])), "the bridge's deleted list is ignored for marking and said (%s)" % r.get("notes"))
     ok(len(patched()) == n0, "tally_ledgers never updated directly (no PATCH) on the migration-34 path")
     c, r = call({"kind": "ledger_list", "version": "2.1.4", "bridge": main, "company": "ZZ CO", "last": True, "ledgers": [row("g1", "Alpha")], "deleted": [["g7", "Gone One"]]})
-    ok(c == 200 and r.get("deleted") == 0 and r.get("deletesSkipped") == 1 and any("round" in n for n in r.get("notes", [])) and len(F.ARGS["tally_ledgers_mark_gone"]) == 1 and len(F.ARGS["tally_ledger_round_batch"]) == 2,
-       "a bridge sending no round (2.1.4): no round recorded, deletions skipped and said (%s)" % r.get("notes"))
+    sent["ok"] += c == 200
+    ok(c == 200 and r.get("deleted") == 0 and r.get("deletedIgnored") == 1 and any("round" in n for n in r.get("notes", [])) and len(F.ARGS["tally_ledgers_mark_gone"]) == 1 and len(F.ARGS["tally_ledger_round_batch"]) == 2,
+       "a bridge sending no round (2.1.4): no round recorded, nothing marked and said (%s)" % r.get("notes"))
     NO34["on"] = True
-    c, r = call({"kind": "ledger_list", "version": "2.1.5", "bridge": main, "company": "ZZ CO", "round": "r-2", "complete": True, "rowsRead": 1, "last": True,
-                 "ledgers": [row("g1", "Alpha")], "deleted": [["g7", "Gone One"], ["g8", "Gone Two"]]})
-    ok(c == 200 and r.get("ok") and r.get("deleted") == 0 and r.get("deletesSkipped") == 2 and any("migration-34" in n for n in r.get("notes", [])) and len(patched()) == n0,
+    c, r = lst({"round": "r-2", "complete": True, "rowsRead": 1, "last": True, "seen": ["g1"], "ledgers": [row("g1", "Alpha")], "deleted": [["g7", "Gone One"], ["g8", "Gone Two"]]})
+    ok(c == 200 and r.get("ok") and r.get("deleted") == 0 and r.get("deletedIgnored") == 2 and any("migration-34" in n for n in r.get("notes", [])) and len(patched()) == n0 and len(F.ARGS["tally_ledgers_mark_gone"]) == 1,
        "a cloud without migration-34: nothing marked, nothing updated directly, 'migration-34 not applied' said (%s)" % r.get("notes"))
     NO34["on"] = False
+    # at most 60 ledger_list calls a minute from one computer (a rogue key cannot bloat the rounds)
+    codes = [lst({"round": "r-3", "complete": False, "last": False, "seen": [], "ledgers": []})[0] for i in range(70)]
+    c, r = lst({"round": "r-3", "complete": False, "last": False, "seen": [], "ledgers": []})
+    ok(429 in codes and sent["ok"] == 60 and c == 429 and r.get("ok") is False and "minute" in str(r.get("error")), "the 61st ledger_list in a minute from one computer: 429 with a plain message (%s; %d accepted)" % (r.get("error"), sent["ok"]))
+    c, r = call({"kind": "beat", "version": "2.1.0", "bridge": main, "tally": True})
+    ok(c == 200, "the computer's other calls are not held up by it")
 finally:
     fn.kill()
     if fails: print("".join(log[-30:]))
