@@ -16,18 +16,26 @@ import json, os, re, sys
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 def read(p): return open(os.path.join(ROOT, p), encoding="utf-8").read()
+NAMES_JS = "server/_shared/names.js"
 
 def assemble():
     shell = read("src/shell.html")
     order = json.load(open(os.path.join(ROOT, "src/js/ORDER.json")))
     missing = sorted(set(f for f in os.listdir(os.path.join(ROOT, "src/js")) if f.endswith(".js")) - set(order))
     if missing: sys.exit("These program files are not in src/js/ORDER.json: " + ", ".join(missing))
-    js = "".join(read("src/js/" + f) for f in order)
+    # the one rule for Tally names (server/_shared/names.js), shared with the cloud reader: put first, without its
+    # export line, so src/js/00-core.js and the rest call the same functions the cloud's parse.js imports
+    names = read(NAMES_JS)
+    if len(re.findall(r"(?m)^export \{[^}]*\};\s*$", names)) != 1: sys.exit(NAMES_JS + " must end with one export { ... }; line")
+    names = re.sub(r"(?m)^export \{[^}]*\};\s*$", "", names)
+    if re.search(r"(?m)^\s*(import|export)\b", names): sys.exit(NAMES_JS + " must have no imports and only its one export line")
+    srcs = [(NAMES_JS, names)] + [("src/js/" + f, read("src/js/" + f)) for f in order]
+    js = "".join(t for _, t in srcs)
     # every file shares one scope: a second top-level function or const with the same name silently replaces the first
     # (two tallyDate()s once emptied every date sent to Tally), so a clash stops the build
     seen, clash = {}, []
-    for f in order:
-        for i, line in enumerate(read("src/js/" + f).split("\n"), 1):
+    for f, text in srcs:
+        for i, line in enumerate(text.split("\n"), 1):
             m = re.match(r"(?:async\s+)?function\s*\*?\s*([A-Za-z_$][\w$]*)\s*\(|(?:const|let|var|class)\s+([A-Za-z_$][\w$]*)\b", line)
             if not m: continue
             n = m.group(1) or m.group(2)

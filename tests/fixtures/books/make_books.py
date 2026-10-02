@@ -32,6 +32,9 @@ ORCHID = "Orchid Lane Hospitality Pvt Ltd&#13;&#10;(Noida)"
 QUILL, BRINDLE, VELL, MARI, ZIN = "Quillfeather Weddings LLP", "Brindle Corporate Travels", "Vellichor Learning Foundation", "Marigold Expo Services", "Zinnia Retreats Pvt Ltd"
 NIGHTJAR, PERE, JUNI, ASHV, KEST, SALT = "Nightjar Sound & Light Co", "Peregrine Tent Works", "Juniper Legal Associates", "Ashvattha Transport Co", "Kestrel Computers Pvt Ltd", "Saltmarsh Software Pvt Ltd"
 HEMANT, NIRMALA = "Hemant Zaverchand (Loan)", "Nirmala Quereshi (Loan)"
+# added on 02-Oct-2026: an unregistered landlord (godown rent under reverse charge), an advocate in Rajasthan (legal
+# services under reverse charge, IGST) and a customer with bill-wise off who buys at two rates
+LANDLORD, ADVOCATE, WIST = "Rukmini Sethuraman", "Keshav Rathore, Advocate", "Wisteria Banquets Pvt Ltd"
 
 # ---------------------------------------------------------------- groups: name, parent ("" = primary), revenue, gross profit, debit
 GROUPS = [
@@ -72,6 +75,7 @@ led(BRINDLE, "Sundry Debtors", -25000, state="Delhi", gst=gstin("07ABNPB7712K1Z"
 led(VELL, "Sundry Debtors", state="Delhi", gst=gstin("07AAATV5093D1Z"), billwise=True, regdetails=True)
 led(MARI, "Sundry Debtors", state="Uttar Pradesh", gst=gstin("09AAPFM2281C1Z"), billwise=True)
 led(ZIN, "Sundry Debtors", state="Delhi", gst=gstin("07AABCZ8840P1Z"), billwise=True)
+led(WIST, "Sundry Debtors", state="Delhi", gst=gstin("07AACCW5512Q1Z"), billwise=False)
 # suppliers
 led(NIGHTJAR, "Sundry Creditors", 30000, state="Delhi", gst=gstin("07AAKFN4416E1Z"), billwise=True, msme=("UDYAM-DL-07-0031416", "Micro"), obills=[("NSL/98", "20250320", 30000)])
 led(PERE, "Sundry Creditors", 7500, state="Uttar Pradesh", gst=gstin("09ACBPP3390L1Z"), billwise=True, regdetails=True, obills=[("PTW/OLD/17", "20230915", 7500)])
@@ -79,6 +83,8 @@ led(JUNI, "Sundry Creditors", state="Delhi", gst=gstin("07AAHFJ6012N1Z"), billwi
 led(ASHV, "Sundry Creditors", state="Delhi", pan="AGWPA1185G", regtype="Unregistered", billwise=True)
 led(KEST, "Sundry Creditors", state="Haryana", gst=gstin("06AAFCK2290B1Z"), billwise=True)
 led(SALT, "Sundry Creditors", state="Delhi", gst=gstin("07AAICS7751J1Z"), billwise=True)
+led(LANDLORD, "Sundry Creditors", state="Delhi", pan="BXRPS4471K", regtype="Unregistered", billwise=False)
+led(ADVOCATE, "Sundry Creditors", state="Rajasthan", pan="AYKPR6630D", regtype="Unregistered", billwise=False)
 # GST
 for reg in ("07", "09"):
     for h, head in (("CGST", "Central Tax"), ("SGST", "State Tax"), ("IGST", "Integrated Tax")):
@@ -87,6 +93,7 @@ for reg in ("07", "09"):
             led("%s %s %s" % (reg, h, side), "Duties & Taxes", taxtype="GST", duty=head)
 led("07 RCM CGST PAYABLE", "Duties & Taxes", taxtype="GST", duty="Central Tax")
 led("07 RCM SGST PAYABLE", "Duties & Taxes", taxtype="GST", duty="State Tax")
+led("07 RCM IGST PAYABLE", "Duties & Taxes", taxtype="GST", duty="Integrated Tax")
 led("07 IGST INPUT PROVISIONAL", "Duties & Taxes", taxtype="GST", duty="Integrated Tax")    # never used: a ledger to confirm
 # TDS
 led("TDS ON CONTRACT 194C", "Duties & Taxes", 1200, taxtype="TDS", nature="Payment to Contractors")
@@ -103,6 +110,7 @@ led("Freight Inward", "Direct Expenses")
 led("Staff Salaries", "Employee Benefit Expenses")
 led("Office Rent", "Office Costs")
 led("Printing and Stationery", "Office Costs")
+led("Godown Rent", "Office Costs")
 led("Legal and Professional Fees", "Indirect Expenses")
 led("Travelling Expenses", "Indirect Expenses")
 led("Interest on TDS", "Indirect Expenses")
@@ -110,6 +118,7 @@ led("GST Late Fee", "Indirect Expenses")
 led("Sundry Balances Written Off", "Indirect Expenses")
 led("Depreciation", "Indirect Expenses")
 led("Interest on Unsecured Loans", "Indirect Expenses")
+led("Loan Processing Fees", "Indirect Expenses")    # in credit for the year, more than the rest of finance costs
 
 # ---------------------------------------------------------------- vouchers
 # a line: (ledger, amount in Tally's sign: a debit negative, options); options: hsn, rate (the whole GST rate), bills
@@ -201,7 +210,7 @@ pay("20260228", [("Printing and Stationery", 2500, {})], "Printing, paid in cash
 pay("20260305", [("Office Rent", 30000, {})], "Rent for March 2026")
 pay("20260305", [(ASHV, 40000, {"bills": [b("ATC/56", "Agst Ref", -40000)]})], "Paid bill ATC/56")
 pay("20260318", [("GST Late Fee", 200, {})], "Late fee on GSTR-1 for February 2026")
-pay("20260320", [("07 RCM CGST PAYABLE", 1000, {}), ("07 RCM SGST PAYABLE", 1000, {})], "GST on reverse charge for February 2026")
+pay("20260320", [("07 RCM CGST PAYABLE", 2800, {}), ("07 RCM SGST PAYABLE", 2800, {})], "GST on reverse charge for February 2026 (freight and godown rent)")
 sale("20260320", "LFE/25-26/015", ORCHID, [("Event Management Services", 50000, o(EVENT, cc=[("Corporate", 50000)])), ("07 IGST OUTPUT", 9000, {})],
      bills=[b("LFE/25-26/015", "New Ref", -59000, 45)])
 pay("20260325", [(SALT, 25000, {"bills": [b("SS/ADV/3", "Advance", -25000)]})], "Advance for next year's licence")
@@ -210,6 +219,29 @@ pay("20260331", [("Staff Salaries", 45000, {})], "Salaries for January to March 
 jv("20260331", [("Interest on Unsecured Loans", -20000, {}), (HEMANT, 18000, {}), ("TDS ON INTEREST 194A", 2000, {})], "Interest on the loan for 2025-26, TDS at 10%", party=HEMANT)
 jv("20260331", [("Depreciation", -60000, {}), ("Laptops and Computers", 40000, {}), ("Event Software Licence", 20000, {})], "Depreciation for the year 2025-26")
 jv("20260331", [(PERE, -7500, {"bills": [b("PTW/OLD/17", "Agst Ref", -7500)]}), ("Sundry Balances Written Off", 7500, {})], "Old balance of 2023 written back", party=PERE)
+
+# added on 02-Oct-2026 (see EXPECTED.md, "What the books cover")
+# godown rent from an unregistered landlord: reverse charge on renting of property (CGST 9% + SGST 9%), journals at
+# each month's end; the January tax paid on 20-Feb, February's with the freight's on 20-Mar, March's open at year end
+RENT = {"hsn": "997212", "rate": 18}
+for d, mon in (("20260131", "January"), ("20260228", "February"), ("20260331", "March")):
+    vch(d, "Journal", [("Godown Rent", -20000, RENT), ("07 CGST INPUT", -1800, {}), ("07 SGST INPUT", -1800, {}),
+                       (LANDLORD, 20000, {}), ("07 RCM CGST PAYABLE", 1800, {}), ("07 RCM SGST PAYABLE", 1800, {})],
+        party=LANDLORD, rcm=True, narr="Godown rent for %s 2026, reverse charge (landlord not registered)" % mon)
+pay("20260220", [("07 RCM CGST PAYABLE", 1800, {}), ("07 RCM SGST PAYABLE", 1800, {})], "GST on reverse charge for January 2026 (godown rent)")
+pay("20260331", [(LANDLORD, 60000, {})], "Godown rent for January to March 2026")
+# legal services by an advocate in Rajasthan to the Delhi registration: reverse charge, IGST 18%; paid in March
+vch("20260312", "Journal", [("Legal and Professional Fees", -40000, {"hsn": "998212", "rate": 18}), ("07 IGST INPUT", -7200, {}),
+                            (ADVOCATE, 40000, {}), ("07 RCM IGST PAYABLE", 7200, {})],
+    party=ADVOCATE, rcm=True, narr="Legal opinion on the Jaipur venue contract, reverse charge (advocate)")
+pay("20260325", [(ADVOCATE, 40000, {})], "Paid Keshav Rathore for the legal opinion of 12 March")
+# a refund of a processing fee paid last year: Loan Processing Fees ends the year 25,000 in credit, more than the
+# 20,000 of interest, so finance costs end in credit
+rcpt("20260316", [("Loan Processing Fees", 25000, {})], "Processing fee of the term loan not taken (paid in 2024-25), refunded by the bank")
+# a sale at two rates (5% and 18%) to a customer with bill-wise off, paid in March
+sale("20260324", "LFE/25-26/016", WIST, [("Sale of Decor Goods", 100000, {"hsn": "6304", "rate": 5, "cc": [("Weddings", 100000)]}),
+                                         ("Event Management Services", 50000, o(EVENT, cc=[("Corporate", 50000)])), ("07 CGST OUTPUT", 7000, {}), ("07 SGST OUTPUT", 7000, {})], bills=[])
+rcpt("20260330", [(WIST, 164000, {})], "Received against LFE/25-26/016")
 
 # ---------------------------------------------------------------- writing
 def esc(s): return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;").replace("&amp;#", "&#")

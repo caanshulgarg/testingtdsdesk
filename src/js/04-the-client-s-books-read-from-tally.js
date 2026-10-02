@@ -63,13 +63,9 @@ const Books = {
   // the IGST rate in a block's rate details, which is the whole GST rate; null when not set
   igstRate(s){ const m = String(s || "").match(/<GSTRATEDUTYHEAD>IGST<\/GSTRATEDUTYHEAD>\s*<GSTRATEVALUATIONTYPE>[^<]*<\/GSTRATEVALUATIONTYPE>\s*<GSTRATE>\s*([\d.]+)\s*<\/GSTRATE>/); return m ? num(m[1]) : null; },
   one(s, tag){ const m = s.match(new RegExp("<" + tag + ">([^<]*)</" + tag + ">")); return m ? this.unesc(m[1]) : ""; },
-  unesc(v){
-    return String(v || "").replace(/[ \t]*(&#13;|&#10;)+[ \t]*/g, " ").replace(/&apos;/g, "'").replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">")
-      .replace(/&#(\d+);/g, (m, n) => { const c = num(n); return c >= 32 && c < 127 ? String.fromCharCode(c) : " "; })
-      .replace(/&amp;/g, "&")
-      // a line break escaped twice ("&amp;#13;&amp;#10;") is "&#13;&#10;" by now: it goes too (review of 02-Oct-2026)
-      .replace(/[ \t]*(&#13;|&#10;|\r|\n)+[ \t]*/g, " ").trim();
-  },
+  // every value read from Tally's XML, names first: entities decoded (also escaped twice, "&amp;#13;&amp;#10;"), line
+  // breaks one space, ends trimmed; the one rule the cloud reader uses too (server/_shared/names.js, namesClean)
+  unesc(v){ return namesClean(v); },
   // each pay head of a payroll voucher, summed over its employees: [[pay head, amount]] (Tally's sign: debit negative)
   payheads(s){
     if (s.indexOf("<PAYHEADALLOCATIONS.LIST>") < 0) return [];
@@ -160,10 +156,11 @@ const Books = {
     // the party ledger (Salary Payable) takes the net. A pay head already among the ledger lines is not counted again
     const pays = this.payheads(s);
     if (pays.length){
-      const have = new Set(v.ent.map(e => e.l)); let tot = 0;
-      pays.forEach(([l, a]) => { tot = Math.round((tot + a) * 100) / 100; if (!have.has(l)) v.ent.push({l, a, r: null}); });
+      // names met by their key (namesKey), as the cloud reader does (server/tally-cloud/parse.js)
+      const have = new Set(v.ent.map(e => namesKey(e.l))); let tot = 0;
+      pays.forEach(([l, a]) => { tot = Math.round((tot + a) * 100) / 100; if (!have.has(namesKey(l))) v.ent.push({l, a, r: null}); });
       const party = this.one(s, "PARTYLEDGERNAME");
-      if (party && !have.has(party) && Math.abs(tot) >= 0.005) v.ent.push({l: party, a: Math.round(-tot * 100) / 100, r: null});
+      if (party && !have.has(namesKey(party)) && Math.abs(tot) >= 0.005) v.ent.push({l: party, a: Math.round(-tot * 100) / 100, r: null});
     }
     // the rate on an item line, when the tax ledgers do not carry one
     if (!v.ent.some(e => e.r)){

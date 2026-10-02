@@ -19,7 +19,7 @@ Supabase deploys each function's files on their own. Send `server/_shared/cors.t
 | gateway | server/security/functions/gateway | index.ts, cors.ts, classify.ts, ../_shared/cors.ts | the list |
 | admin | server/security/functions/admin | index.ts, cors.ts, ../_shared/cors.ts | the list |
 | signin | server/security/functions/signin | index.ts, cors.ts, ../_shared/cors.ts | the list |
-| tally-ingest | server/tally-cloud | index.ts, parse.js, ../_shared/cors.ts | `*` |
+| tally-ingest | server/tally-cloud | index.ts, parse.js, ../_shared/cors.ts, ../_shared/names.js | `*` |
 | gst-api | server/gst-api | index.ts, gstcrypto.ts, ../_shared/cors.ts | `*` |
 | gst-taxpro | server/gst-taxpro | index.ts, ../_shared/cors.ts | `*` |
 | support-mail | server/support-mail | index.ts, ../_shared/cors.ts | `*` |
@@ -49,3 +49,12 @@ curl -s -o /dev/null -D - -X OPTIONS "$F/tally-ingest" -H "Origin: https://stagi
 ```
 
 Locally: `node tests/run_cors_preflight.js`.
+
+## names.js: one rule for Tally names
+
+`names.js` cleans a Tally ledger, group or party name (`namesClean`: entities decoded, line breaks one space, ends
+trimmed, inner spaces kept as Tally has them) and gives its matching key (`namesKey`: also white space collapsed and
+lower case). It is plain JavaScript with no imports. The cloud reader imports it (`server/tally-cloud/parse.js`, so
+tally-ingest must be deployed with `../_shared/names.js`); `build.py` puts it, without its export line, at the head of
+the app, where `ledClean` / `ledKey` / `ledNm` / `ledEnt` (src/js/00-core.js) and `Books.unesc` (src/js/04) call it.
+`node tests/run_names_shared.js` checks both give the same names and keys.

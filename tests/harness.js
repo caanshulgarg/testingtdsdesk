@@ -1,7 +1,7 @@
 // Loads named top-level declarations from the app's main script into a Node context, so the
 // real Books / GSTR / GSTAdv / GSTRev code runs against real Tally files.
 const fs = require("fs"), vm = require("vm");
-const CORE = ["ledNm", "ledEnt", "ledClean", "ledKey", "LED_IDX", "ledIdx", "ledLook", "ledUnder", "ledGroupPath", "toDateObj", "MONTHS3"];
+const CORE = ["namesDecode", "namesBreaks", "namesClean", "namesKey", "ledNm", "ledEnt", "ledClean", "ledKey", "LED_IDX", "ledIdx", "ledLook", "ledUnder", "ledGroupPath", "toDateObj", "MONTHS3"];
 function load(htmlPath, names){
   const s = fs.readFileSync(htmlPath, "utf8");
   const i = s.indexOf('<script id="app-main">') + '<script id="app-main">'.length, j = s.indexOf("</script>", i);

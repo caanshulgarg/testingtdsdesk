@@ -114,8 +114,9 @@ function ProfitLoss({ b, r }) {
   const pv = (k) => r.prev && r.prev.pl.heads[k] ? r.prev.pl.heads[k].t : (r.prev ? 0 : null), lv = (k) => r.ly && r.ly.pl.heads[k] ? r.ly.pl.heads[k].t : (r.ly ? 0 : null);
   const block = (keys) => keys.forEach((k) => { const H = r.pl.heads[k]; if (!H) return; const lab = MIS.HEADS.find((z) => z[0] === k)[1];
     row(lab, Object.assign({}, H, { p: pv(k), y: lv(k) }), true);
-    if (S.misOpenHead === k) H.led.forEach((x) => row(" " + x.l, x, false, x.l));
-    else rows.push(<tr key={rows.length}><td colSpan={span}><button className="linkbtn" onClick={toggle("misOpenHead", k)}>{"▸ " + H.led.length + " ledgers"}</button></td></tr>); });
+    // the set-off of an expense head in credit (MIS.plRule) is a line of its own, not a ledger to open
+    if (S.misOpenHead === k) H.led.forEach((x) => row(" " + x.l, x, false, x.so ? null : x.l));
+    else rows.push(<tr key={rows.length}><td colSpan={span}><button className="linkbtn" onClick={toggle("misOpenHead", k)}>{"▸ " + H.led.filter((x) => !x.so).length + " ledgers" + (H.led.some((x) => x.so) ? " and the set-off" : "")}</button></td></tr>); });
   const tot = (label, k) => row(label, Object.assign({}, r.pl[k], { p: r.prev ? r.prev.pl[k].t : null, y: r.ly ? r.ly.pl[k].t : null }), true);
   block(["rev", "oth"]); tot("Total income", "income");
   block(["pur", "dir"]); tot("Gross profit", "gross");
@@ -124,7 +125,7 @@ function ProfitLoss({ b, r }) {
   block(["tax"]); tot("Profit after tax", "pat");
   return <>
     <Table id="misPl" head={<><th></th><MonthHeads months={months} cols={cols} /><th className="n">Period</th>{r.prev && <th className="n">Previous period</th>}{r.ly && <th className="n">Last year</th>}</>}>{rows}</Table>
-    <p className="note">Opening and closing stock are not in the day book, so gross profit is before the change in stock. Ledgers are placed by their group in Tally.{r.ly ? "" : " Last year is shown once last year’s books are read."}</p>
+    <p className="note">Opening and closing stock are not in the day book, so gross profit is before the change in stock. Ledgers are placed by their group in Tally, as the Accounts tab places them. An expense ledger with a credit balance is set off in its own head; a head that ends in credit shows nil, and what is left is in Other income.{r.ly ? "" : " Last year is shown once last year’s books are read."}</p>
     {S.misLed && <LedgerEntries b={b} r={r} />}
   </>;
 }
@@ -269,7 +270,7 @@ function CostCentres({ p2 }) {
           {open && <tr><td colSpan={7} style={{ background: "var(--paper)", padding: 0 }}><table className="bk-table" style={{ margin: 0 }}><thead><tr><th>Ledger</th><th className="n">Amount</th></tr></thead><tbody>
             {Object.entries(x.led).sort((a, c) => Math.abs(c[1]) - Math.abs(a[1])).map(([l, v], j) => <tr key={l + ":" + j}><td>{l}</td><td className="n">{m(v)}</td></tr>)}</tbody></table></td></tr>}</Fragment>; })}
     </Table>
-    <p className="note">From the cost centre allocations in Tally, on income and expense ledgers. Anything not allocated is shown above, not spread over the cost centres.</p>
+    <p className="note">{"From the cost centre allocations in Tally, on income and expense ledgers, by the heads of the profit and loss. Anything not allocated is shown above, not spread over the cost centres" + (X.un.moved ? "; it includes the excess credit of an expense head moved to Other income (₹" + m(X.un.moved) + ") and the set-off that leaves that head nil" : "") + "."}</p>
   </>;
 }
 

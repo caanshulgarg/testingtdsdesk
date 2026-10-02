@@ -89,18 +89,21 @@ const FS = {
     const close = bal.at(to), open = bal.at(Audit.dayBefore(from)), lines = this.LINES[c.kind === "co" ? "co" : "nc"];
     const mv = MIS.moves(from, to), stock = c.stock || {}, integrated = Object.keys(close).some(l => this.nature(l).path.some(g => /^stock-in-hand$/i.test(g)) && Math.abs(close[l]) >= 1);
     const put = {}, det = {}, add = (k, l, v) => { put[k] = r2((put[k] || 0) + v); (det[k] = det[k] || []).push([l, r2(v)]); };
-    const plLine = {}, plDet = {};
+    // the year's income and expenses, by the one rule for expense ledgers in credit (MIS.plRule): each ledger in its head,
+    // a credit set off there; a head that ends in credit is nil, what is left in Other income. plDet: the ledgers (a credit
+    // negative, flagged); plSet: the set-off and the excess credit, line by line; plSum: each head's debits and credits
+    const plLine = {}, plDet = {}, plSet = {}, R = MIS.plRule(from, to, c);
+    R.rows.forEach(r => { plLine[r.s] = r2((plLine[r.s] || 0) + r.t); (plDet[r.s] = plDet[r.s] || []).push(r.flag ? [r.l, r.t, r.flag] : [r.l, r.t]); });
+    const setBy = {}; R.set.forEach(z => { setBy[z.s] = r2((setBy[z.s] || 0) + z.t); });
+    Object.entries(setBy).forEach(([k, t]) => { if (Math.abs(t) < 0.005) return; plLine[k] = r2((plLine[k] || 0) + t); (plSet[k] = plSet[k] || []).push(["Excess credit moved to Other income", t]); });
+    R.moved.forEach(z => { plLine.oth = r2((plLine.oth || 0) + z.t); (plSet.oth = plSet.oth || []).push([z.l, z.t, z.s]); });
     const all = Array.from(new Set(Object.keys(close).concat(Object.keys(mv)))).sort();
-    let revenueLedgersClose = 0;
     all.forEach(l => {
       const v = num(close[l]), n = this.nature(l);
       const where = (c.map || {})[l] || this.place(l, v, c.kind);
       if (n.rev){
-        // the year's movement goes to the statement of profit and loss
-        const m = num((mv[l] || {}).t), amt0 = !n.dr ? m : -m, k0 = where === "pur" && c.mfg ? "mat" : where;
-        const [k, amt, flag] = this.creditExpense(l, k0, amt0, c);
-        plLine[k] = r2((plLine[k] || 0) + amt); (plDet[k] = plDet[k] || []).push(flag ? [l, r2(amt), flag] : [l, r2(amt)]);
-        revenueLedgersClose += v;
+        // a revenue ledger with no entries in the year: listed at nil (the Mapping tab lists every ledger)
+        if (!R.rows.some(r => r.l === l)){ const k = (MIS.plHead(l, c) || {}).s || where; (plDet[k] = plDet[k] || []).push([l, 0]); }
         return;
       }
       if (Math.abs(v) < 0.005) return;
@@ -140,22 +143,15 @@ const FS = {
       (b.vouchers || []).forEach(v => { if (v.date < from || v.date > to || v.opt || v.cancel) return; v.ent.forEach(e => { if (e.l !== l) return; if (e.a < 0 && !/DEPRECIATION/i.test(v.narr || "")) addn += -e.a; else if (e.a > 0) del += e.a; }); });
       return {l, k, open: r2(o), add: r2(addn), del: r2(del), close: r2(cl)};
     }).filter(x => x.open || x.close || x.add || x.del);
-    return {fy, from, to, kind: c.kind, lines, put, det, py, pl: plLine, plDet, inc: r2(inc), exp: r2(exp), pbe, pbt, pat, pyPl, eqL, assets, diff: r2(eqL - assets), integrated, stock: {open: stOpen, close: stClose},
+    return {fy, from, to, kind: c.kind, lines, put, det, py, pl: plLine, plDet, plSet, plSum: R.sum, inc: r2(inc), exp: r2(exp), pbe, pbt, pat, pyPl, eqL, assets, diff: r2(eqL - assets), integrated, stock: {open: stOpen, close: stClose},
       src: bal.src, tp: {msme: r2(pays.rows.filter(p => /micro|small/i.test(msme[p.party] || "")).reduce((a, p) => a + Math.max(0, p.net != null ? p.net : p.total), 0)), all: r2(put.tp || 0), age: pays.sum, rows: pays.rows}, tr: {age: recv.sum, rows: recv.rows}, fa,
       eps: c.kind === "co" && num(c.shares) ? r2(pat / num(c.shares)) : null, cfg: c};
   },
-  // review of 02-Oct-2026: an expense ledger whose year ends in credit ("Written Off Expenses", 32,23,694.87 Cr, made
-  // Testing AAD's other expenses -5,43,549.56) is income for the year: it goes under Other income, flagged, unless it
-  // was placed by hand on the Mapping tab. Purchases, stock and tax stay where they are
-  CREDIT_EXP: "expense ledger with a credit balance",
-  creditExpense(l, k, amt, c){
-    if (amt < -0.004 && ["exp", "emp", "fin", "dep"].includes(k) && !((c && c.map) || {})[l]) return ["oth", r2(-amt), this.CREDIT_EXP];
-    return [k, amt, ""];
-  },
+  // last year's figures for the comparison column, by the same rule (MIS.plRule)
   plOnly(from, to, c){
-    const mv = MIS.moves(from, to), pl = {};
-    Object.keys(mv).forEach(l => { const n = this.nature(l); if (!n.rev) return; const m = num(mv[l].t), amt0 = !n.dr ? m : -m, w = (c.map || {})[l] || this.place(l, 0, c.kind), k0 = w === "pur" && c.mfg ? "mat" : w;
-      const [k, amt] = this.creditExpense(l, k0, amt0, c); pl[k] = r2((pl[k] || 0) + amt); });
+    const R = MIS.plRule(from, to, c), pl = {};
+    R.rows.concat(R.set).forEach(r => { pl[r.s] = r2((pl[r.s] || 0) + r.t); });
+    R.moved.forEach(z => { pl.oth = r2((pl.oth || 0) + z.t); });
     const inc = num(pl.rev) + num(pl.oth), exp = ["mat", "pur", "chg", "emp", "fin", "dep", "exp"].reduce((s2, k) => s2 + num(pl[k]), 0);
     return Object.assign(pl, {inc: r2(inc), exp: r2(exp), pbt: r2(inc - exp - num(pl.exc)), pat: r2(inc - exp - num(pl.exc) - num(pl.tax))});
   },
@@ -174,7 +170,8 @@ const FS = {
     bs += head("II. ASSETS");
     [["NCA", "Non-current assets"], ["CA", "Current assets"]].forEach(([s2, l], i) => { bs += head("(" + (i + 1) + ") " + l) + d.lines.filter(z => z[2] === s2).map(z => row(z)).join(""); });
     bs += '<tr><td><b>TOTAL</b></td><td></td><td class="n"><b>' + m(d.assets) + '</b></td><td class="n"><b>' + (py ? m(secPy("NCA") + secPy("CA")) : "") + "</b></td></tr></tbody></table>";
-    const plRow = (k, l, pv) => { const v = num(d.pl[k]); if (!v && !(d.pyPl && num(d.pyPl[k]))) return ""; return "<tr><td>\u2003" + esc(l) + '</td><td class="n">' + nOf("pl:" + k) + '</td><td class="n">' + m(v) + '</td><td class="n">' + (d.pyPl ? m(d.pyPl[k]) : "") + "</td></tr>"; };
+    // a head nil after an expense credit is set off (MIS.plRule) still shows, with its note
+    const plRow = (k, l, pv) => { const v = num(d.pl[k]), sm = (d.plSum || {})[k]; if (!v && !(d.pyPl && num(d.pyPl[k])) && !(sm && sm.cr >= 0.005)) return ""; return "<tr><td>\u2003" + esc(l) + '</td><td class="n">' + nOf("pl:" + k) + '</td><td class="n">' + m(v) + '</td><td class="n">' + (d.pyPl ? m(d.pyPl[k]) : "") + "</td></tr>"; };
     const L = Object.fromEntries(this.PL);
     let pl = '<table><thead><tr><th>Particulars</th><th class="n">Note</th><th class="n">Year to 31 March ' + (num(d.fy) + 1) + '</th><th class="n">' + (d.pyPl ? "Year to 31 March " + d.fy : "") + "</th></tr></thead><tbody>" +
       plRow("rev", "I. " + L.rev) + plRow("oth", "II. " + L.oth) + '<tr><td><b>III. Total income (I + II)</b></td><td></td><td class="n"><b>' + m(d.inc) + '</b></td><td class="n"><b>' + (d.pyPl ? m(d.pyPl.inc) : "") + "</b></td></tr>" +
@@ -201,7 +198,19 @@ const FS = {
       if (faK.length){ nt += '<table><thead><tr><th>Asset</th><th class="n">Opening</th><th class="n">Additions</th><th class="n">Deductions</th><th class="n">Closing</th></tr></thead><tbody>' +
         faK.map(x => "<tr><td>" + esc(x.l) + '</td><td class="n">' + m(x.open) + '</td><td class="n">' + m(x.add) + '</td><td class="n">' + m(x.del) + '</td><td class="n">' + m(x.close) + "</td></tr>").join("") +
         '<tr><td><b>Total</b></td><td class="n"><b>' + m(faK.reduce((a, x) => a + x.open, 0)) + '</b></td><td class="n"><b>' + m(faK.reduce((a, x) => a + x.add, 0)) + '</b></td><td class="n"><b>' + m(faK.reduce((a, x) => a + x.del, 0)) + '</b></td><td class="n"><b>' + m(faK.reduce((a, x) => a + x.close, 0)) + "</b></td></tr></tbody></table>"; return; }
-      nt += "<table><tbody>" + list.slice().sort((a, c2) => Math.abs(c2[1]) - Math.abs(a[1])).slice(0, 60).map(([l, v, flag]) => "<tr><td>" + esc(l) + (flag ? ' <span class="tag warn" data-fs-flag="">' + esc(flag) + "</span>" : "") + '</td><td class="n">' + m(v) + "</td></tr>").join("") +
+      const ledRow = ([l, v, flag]) => "<tr><td>" + esc(l) + (flag ? ' <span class="tag warn" data-fs-flag="">' + esc(flag) + "</span>" : "") + '</td><td class="n">' + m(v) + "</td></tr>";
+      if (k.startsWith("pl:")){
+        // review of 02-Oct-2026 (the owner's rule, MIS.plRule): every ledger of the head with its amount, a credit negative
+        // and flagged; then the set-off (the head's debits, the credits set off, any excess credit moved to Other income,
+        // or, in Other income, the head it came from); then the total
+        const pk = k.slice(3), sm = (d.plSum || {})[pk], set = (d.plSet || {})[pk] || [], sub = (l, v, attr) => '<tr' + (attr ? " " + attr : "") + '><td class="note">' + esc(l) + '</td><td class="n">' + m(v) + "</td></tr>";
+        nt += "<table><tbody>" + list.slice().sort((a, c2) => c2[1] - a[1] || a[0].localeCompare(c2[0])).map(ledRow).join("") +
+          (sm && sm.cr >= 0.005 ? sub("Debit balances", sm.dr) + sub("Less: credit balances set off in the head", -sm.cr, "data-fs-setoff") : "") +
+          set.map(([l, v, from]) => sub(l, v, from ? 'data-fs-excess="' + esc(from) + '"' : "data-fs-moved")).join("") +
+          '<tr><td><b>Total</b></td><td class="n"><b>' + m(d.pl[pk]) + "</b></td></tr></tbody></table>";
+        return;
+      }
+      nt += "<table><tbody>" + list.slice().sort((a, c2) => Math.abs(c2[1]) - Math.abs(a[1])).slice(0, 60).map(ledRow).join("") +
         (list.length > 60 ? '<tr><td class="note">and ' + (list.length - 60) + " more ledgers</td><td></td></tr>" : "") + "</tbody></table>";
     });
     const title = comp ? "Balance Sheet as at 31 March " + (num(d.fy) + 1) : "Balance Sheet as at 31 March " + (num(d.fy) + 1);

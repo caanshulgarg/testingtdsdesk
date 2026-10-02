@@ -1,14 +1,16 @@
 // One day's day book, as Tally exports it, read into entry heads and ledger lines for the cloud copy.
 // The rules are FinCom's own (src/js/04-the-client-s-books-read-from-tally.js, Books.takeVoucher), so the cloud's
 // totals are the same figures FinCom works out in the browser: tests/run_cloud_parse.js checks this on real books.
-// Plain JavaScript: used by the tally-ingest edge function (Deno) and by the tests (Node).
+// Plain JavaScript: used by the tally-ingest edge function (Deno) and by the tests (Node). Names are read with the one rule
+// FinCom uses in the browser, server/_shared/names.js (deploy it with the function, as ../_shared/names.js).
+import { namesClean, namesKey } from "../_shared/names.js";
 
 function num(v){ if (typeof v === "number") return isFinite(v) ? v : 0; const n = parseFloat(String(v == null ? "" : v).replace(/[^0-9.\-]/g, "")); return isFinite(n) ? n : 0; }
-function unesc(v){
-  return String(v || "").replace(/&apos;/g, "'").replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">")
-    .replace(/&#(\d+);/g, (m, n) => { const c = num(n); return c >= 32 && c < 127 ? String.fromCharCode(c) : " "; })
-    .replace(/&amp;/g, "&").trim();
-}
+// every value read from the day book, names first: the one rule FinCom uses in the browser (server/_shared/names.js):
+// entities decoded, each run of line breaks (CR LF, &#13; &#10;, also escaped twice) one space, ends trimmed. Before
+// 02-Oct-2026 this decoded &#13;&#10; to two spaces, so "Orchid Lane Hospitality Pvt Ltd&#13;&#10;(Noida)" was a second
+// ledger beside the master "Orchid Lane Hospitality Pvt Ltd (Noida)" (finding 4)
+function unesc(v){ return namesClean(v); }
 function one(s, tag){ const m = s.match(new RegExp("<" + tag + ">([^<]*)</" + tag + ">")); return m ? unesc(m[1]) : ""; }
 // "$17000.00 @ ₹ 86.40/$ = ₹ 1468800.00" is 1468800: the rupee value after the last "="
 function amt(v){ const t = String(v || ""), i = t.lastIndexOf("="); return num(i >= 0 ? t.slice(i + 1) : t); }
@@ -91,20 +93,20 @@ function takeVoucher(s){
       const q = p.split("</PAYHEADALLOCATIONS.LIST>")[0], n = one(q, "PAYHEADNAME"), a = amt(one(q, "AMOUNT"));
       if (n && a) by.set(n, Math.round(((by.get(n) || 0) + a) * 100) / 100);
     });
-    const have = new Set(lines.map(l => l[1])); let tot = 0;
-    by.forEach((a, n) => { if (Math.abs(a) < 0.005) return; tot = Math.round((tot + a) * 100) / 100; if (!have.has(n)) lines.push([id, n, a, "", null, []]); });
+    // names met by their key (namesKey), as FinCom does (Books.takeVoucher)
+    const have = new Set(lines.map(l => namesKey(l[1]))); let tot = 0;
+    by.forEach((a, n) => { if (Math.abs(a) < 0.005) return; tot = Math.round((tot + a) * 100) / 100; if (!have.has(namesKey(n))) lines.push([id, n, a, "", null, []]); });
     const party = one(s, "PARTYLEDGERNAME");
-    if (party && !have.has(party) && Math.abs(tot) >= 0.005) lines.push([id, party, Math.round(-tot * 100) / 100, "", null, []]);
+    if (party && !have.has(namesKey(party)) && Math.abs(tot) >= 0.005) lines.push([id, party, Math.round(-tot * 100) / 100, "", null, []]);
   }
   return {v, lines};
 }
 
-// a ledger, group or party name as kept in the cloud copy (02-Oct-2026, migration-23): Tally keeps some masters with line
-// breaks in the name ("MCS Project Pvt Ltd\r\n", "...&#13;&#10;"), while the day book names them without. Each run of
-// &#13; &#10; CR LF, with the spaces and tabs around it, becomes one space and the ends lose their spaces; other spaces
-// stay as they are (Tally keeps "Arktos  Control & Instruments" with two, and a posting uses Tally's exact name). The
-// rule of FinCom's ledNm (src/js/00-core.js) and of the database's tally_nm (btrim: spaces only), applied again there
-function cleanName(n){ return String(n == null ? "" : n).replace(/[ \t]*(&#13;|&#10;|\r|\n)+[ \t]*/g, " ").replace(/^ +| +$/g, ""); }
+// a ledger, group or party name as kept in the cloud copy (migration-23): the shared rule (namesClean); spaces inside a
+// name stay as they are (Tally keeps "Arktos  Control & Instruments" with two, and a posting uses Tally's exact name).
+// index.ts cleans every name it sends to the database with it, and the database's tally_nm applies its line-break part
+// again there
+function cleanName(n){ return namesClean(n); }
 
 // the whole text of one day (or several): entries, lines, and the highest change number
 function parseDay(text){
@@ -128,4 +130,4 @@ function parseDay(text){
   return {vouchers, lines, n: vouchers.length, alterMax, dates: Array.from(dates)};
 }
 
-export { parseDay, amt, one, unesc, igstRate, cleanName };
+export { parseDay, amt, one, unesc, igstRate, cleanName, namesKey };

@@ -1364,7 +1364,9 @@ const BridgeSeed = {
 const TBFile = {
   GROUPS: /^(capital account|reserves & surplus|loans \(liability\)|secured loans|unsecured loans|bank od a\/c|bank occ a\/c|current liabilities|duties & taxes|provisions|sundry creditors|fixed assets|investments|current assets|bank accounts|cash-in-hand|deposits \(asset\)|loans & advances \(asset\)|stock-in-hand|sundry debtors|branch \/ divisions|misc\. expenses \(asset\)|suspense a\/c|sales accounts|purchase accounts|direct incomes|direct expenses|indirect incomes|indirect expenses|grand total|total|opening stock|closing stock|difference in opening balances)$/i,
   read(text, b){
-    const unesc = t => String(t || "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").trim();
+    // a ledger's name as every reader takes it (server/_shared/names.js): "MCS Project Pvt Ltd&amp;#13;&amp;#10;" in a
+    // trial balance is the master "MCS Project Pvt Ltd", not a twin of it (migration-9)
+    const unesc = t => namesClean(t);
     const groups = new Set(Object.keys((b && b.groups) || {}).map(g => g.toLowerCase()));
     const known = new Set(Object.keys(Object.assign({}, (b && b.map) || {}, (b && b.under) || {}, (b && b.ledInfo) || {})));
     const names = [], re = /<DSPACCNAME>[\s\S]*?<DSPDISPNAME>([\s\S]*?)<\/DSPDISPNAME>[\s\S]*?<\/DSPACCNAME>\s*<DSPACCINFO>([\s\S]*?)<\/DSPACCINFO>/g;
