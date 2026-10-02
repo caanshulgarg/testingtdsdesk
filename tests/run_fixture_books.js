@@ -19,7 +19,7 @@ const same = (a, b, w) => ok(JSON.stringify(a) === JSON.stringify(b), w + ": " +
   x.LedMaster.refresh(b);
   const ORCHID = "Orchid Lane Hospitality Pvt Ltd (Noida)", QUILL = "Quillfeather Weddings LLP";
   console.log("reading the files");
-  ok(b.vouchers.length === 71 && b.meta.from === "20250401" && b.meta.to === "20260331", "71 entries, 01-Apr-2025 to 31-Mar-2026");
+  ok(b.vouchers.length === 73 && b.meta.from === "20250401" && b.meta.to === "20260331", "73 entries, 01-Apr-2025 to 31-Mar-2026");
   same(b.meta.gstins.slice().sort(), ["07AAGCL4827M1Z3", "09AAGCL4827M1ZZ"], "the company's two registrations, from CMPGSTIN");
   ok(ms.info[ORCHID] && b.vouchers.some(v => v.party === ORCHID) && !Object.keys(ms.info).some(n => /&#|\r|\n/.test(n)), "a name with a line break (&#13;&#10;) reads the same in the masters and the day book");
   ok(ms.info[ORCHID].gstin === "09AACCO6624H1ZC" && ms.info[ORCHID].pan === "" && ms.info[ORCHID].panFrom === "GSTIN", "a GSTIN in TallyPrime's dated registration details; the PAN taken from it");
@@ -88,9 +88,19 @@ const same = (a, b, w) => ok(JSON.stringify(a) === JSON.stringify(b), w + ": " +
   const line = l => (r.p2.cash.rows.find(z => z.lab === l) || {t: 0}).t;
   eq(line("GST"), -86600, "GST paid from the bank"); eq(line("Input GST paid with bills"), -3600, "input IGST paid from the bank, a line of its own");
   eq(line("Received from customers"), 1291800, "received from customers"); eq(line("Paid to suppliers"), -869400, "paid to suppliers");
-  // FINDING 5 (EXPECTED.md): MIS.flowHead puts the refund of Loan Processing Fees (an expense ledger) on "Loans", by the word
-  // LOAN in its name; by hand it is an expense refunded, 3,000 + 25,000. Until that is fixed this check fails
-  eq(line("Expenses refunded or recovered"), 28000, "FINDING 5: expenses refunded (the travel refund and the processing fee)");
+  // finding 5 (EXPECTED.md), fixed on 02-Oct-2026 by the owner's rule: the cash flow's line comes from the ledger's Tally
+  // group (MIS.flowGroup), never from words in its name. Loan Processing Fees and Staff Loan Processing Fee Refund are
+  // under Indirect Expenses: their refunds are expenses refunded, not "Loans" (nor "Salaries and staff")
+  eq(line("Expenses refunded or recovered"), 29500, "FINDING 5: expenses refunded (the travel refund 3,000, the processing fee 25,000, the staff loan fee 1,500)");
+  const onLine = (lab, l) => ((r.p2.cash.rows.find(z => z.lab === lab) || {led: {}}).led[l]);
+  ok(!r.p2.cash.rows.some(z => z.lab === "Loans") && !r.p2.cash.rows.some(z => z.sec === "fin"), "FINDING 5: no \"Loans\" line and nothing under financing: no loan was taken or repaid in cash");
+  ok(onLine("Expenses refunded or recovered", "Staff Loan Processing Fee Refund") === 1500 && onLine("Expenses paid", "Staff Loan Processing Fee Refund") === -1500 && !r.p2.cash.rows.some(z => z.lab !== "Expenses refunded or recovered" && z.lab !== "Expenses paid" && z.led["Staff Loan Processing Fee Refund"] != null),
+    "FINDING 5: Staff Loan Processing Fee Refund (Indirect Expenses): 1,500 refunded, 1,500 paid, on no other line");
+  ok(onLine("Expenses refunded or recovered", "Loan Processing Fees") === 25000, "FINDING 5: Loan Processing Fees' refund of 25,000 under expenses refunded");
+  ok(x.MIS.flowHead("Hemant Zaverchand (Loan)").join() === "fin,Loans" && x.MIS.flowHead("Laptops and Computers").join() === "inv,Fixed assets" && x.MIS.flowHead("Share Capital").join() === "fin,Capital and drawings" && x.MIS.flowHead("Security Deposit - Office Rent").join() === "op,Loans and advances (asset)",
+    "by group: Unsecured Loans on Loans, Fixed Assets on Fixed assets, Capital Account on Capital and drawings, Loans & Advances (Asset) under operating");
+  eq(line("Expenses paid"), -136450, "expenses paid (travel 12,000, rent 1,20,000, printing 2,500 in cash, the staff loan fee 1,500, interest on TDS 450)");
+  eq(line("TDS and TCS"), -11200, "TDS and TCS (1,200 + 10,000; interest on TDS, an expense ledger, is in expenses paid)");
   eq(r.p2.cash.net, 38050, "net change in cash and bank"); ok(r.p2.cash.ties, "opening + change = closing");
 
   console.log("GST by month");

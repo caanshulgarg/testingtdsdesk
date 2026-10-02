@@ -119,6 +119,9 @@ led("Sundry Balances Written Off", "Indirect Expenses")
 led("Depreciation", "Indirect Expenses")
 led("Interest on Unsecured Loans", "Indirect Expenses")
 led("Loan Processing Fees", "Indirect Expenses")    # in credit for the year, more than the rest of finance costs
+# finding 5 (02-Oct-2026): an expense ledger with "Loan" (and "Staff") in its name; its refund is an expense refunded on the
+# cash flow, never "Loans" (or "Salaries and staff"): the cash flow's line comes from the group, not the name
+led("Staff Loan Processing Fee Refund", "Indirect Expenses")
 
 # ---------------------------------------------------------------- vouchers
 # a line: (ledger, amount in Tally's sign: a debit negative, options); options: hsn, rate (the whole GST rate), bills
@@ -238,6 +241,10 @@ pay("20260325", [(ADVOCATE, 40000, {})], "Paid Keshav Rathore for the legal opin
 # a refund of a processing fee paid last year: Loan Processing Fees ends the year 25,000 in credit, more than the
 # 20,000 of interest, so finance costs end in credit
 rcpt("20260316", [("Loan Processing Fees", 25000, {})], "Processing fee of the term loan not taken (paid in 2024-25), refunded by the bank")
+# finding 5: a fee paid on 05-Mar and refunded on 20-Mar (a credit entry); the ledger nets to nil, so the profit and loss
+# does not move, and the cash flow shows 1,500 under "Expenses paid" and 1,500 under "Expenses refunded or recovered"
+pay("20260305", [("Staff Loan Processing Fee Refund", 1500, {})], "Processing fee for a staff member's loan application")
+rcpt("20260320", [("Staff Loan Processing Fee Refund", 1500, {})], "Processing fee of 05-Mar refunded: the staff loan application withdrawn")
 # a sale at two rates (5% and 18%) to a customer with bill-wise off, paid in March
 sale("20260324", "LFE/25-26/016", WIST, [("Sale of Decor Goods", 100000, {"hsn": "6304", "rate": 5, "cc": [("Weddings", 100000)]}),
                                          ("Event Management Services", 50000, o(EVENT, cc=[("Corporate", 50000)])), ("07 CGST OUTPUT", 7000, {}), ("07 SGST OUTPUT", 7000, {})], bills=[])

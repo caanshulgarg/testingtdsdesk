@@ -477,7 +477,7 @@ const MIS = {
   // working (V, raised whenever a figure is worked out differently). A saved run from other books or other working is
   // worked out again when MIS opens, and its figures are not shown meanwhile (review of 02-Oct-2026: MIS showed the run of
   // 01-Oct, result code 1FB42BF2, with figures since corrected)
-  V: 6,                                                       // 4: GST without cancelled entries, cash flow and ratios redone; 5: open bills net of amounts on account, GST paid and RCM, expense credits (review of 02-Oct-2026); 6: expense credits set off in their head (MIS.plRule), GST per GSTIN, March's TDS on 30 April
+  V: 7,                                                       // 4: GST without cancelled entries, cash flow and ratios redone; 5: open bills net of amounts on account, GST paid and RCM, expense credits (review of 02-Oct-2026); 6: expense credits set off in their head (MIS.plRule), GST per GSTIN, March's TDS on 30 April; 7: the cash flow's lines by Tally group, not ledger names (finding 5)
   basis(b){
     b = b || S.books || {};
     const vs = b.vouchers || [], alt = vs.reduce((a, v) => Math.max(a, num(v.alter || v.alterId || 0)), 0);
@@ -507,26 +507,48 @@ const MIS = {
 
 /* ---------- MIS, phase 2 ---------- */
 Object.assign(MIS, {
-  // what a ledger on the other side of a cash or bank line is, for the cash flow
+  // the cash flow's line for a ledger on the other side of a cash or bank line: from the ledger's Tally group, never from
+  // words in the ledger's name (finding 5, the owner's rule of 02-Oct-2026: "Loan Processing Fees", an expense ledger,
+  // was on "Loans" by the word LOAN; "Salary Ankit Garg", under Loans (Liability), was on "Salaries" by the word SALARY).
+  // The group path is walked up from the ledger to the first of Tally's reserved groups, which gives the section and the
+  // line; the company's own groups below it ("Salary & Wages", "TDS", "Finance Costs") name a line within it. The ledger
+  // map (Books.ledgerOf: the tax type from Tally's master, as the ledger check confirms it) names the GST and TDS lines.
+  // Group names are matched without regard to capital letters (Tally's "Cash-in-hand", a copy's "Cash-in-Hand")
+  FLOW_GROUPS: [[/^sundry debtors$/i, "debtor"], [/^sundry creditors$/i, "creditor"], [/^duties & taxes$/i, "tax"], [/^provisions$/i, "other"],
+    [/^fixed assets$/i, "fixed"], [/^(investments|deposits \(asset\))$/i, "invest"], [/^loans & advances \(asset\)$/i, "lent"],
+    [/^(loans \(liability\)|secured loans|unsecured loans)$/i, "loan"], [/^(capital account|reserves & surplus)$/i, "capital"],
+    [/^(sales accounts|direct incomes|indirect incomes)$/i, "income"], [/^(direct expenses|indirect expenses)$/i, "expense"],
+    [/^(purchase accounts|stock-in-hand|current assets|current liabilities|suspense a\/c|misc\. expenses \(asset\)|branch \/ divisions|bank accounts|bank od a\/c|bank occ a\/c|cash-in-hand)$/i, "other"]],
+  flowGroup(l){
+    const path = Audit.path(l);
+    for (let i = 0; i < path.length; i++){
+      const hit = this.FLOW_GROUPS.find(([re]) => re.test(String(path[i]).trim()));
+      if (hit) return {kind: hit[1], own: path.slice(0, i)};
+    }
+    // the company's own primary group (no reserved group above it): by Tally's flags for it
+    const top = path[path.length - 1], gi = top ? ledLook((S.books || {}).groupInfo, top) : null;
+    return {kind: gi && gi.rev ? (gi.dr ? "expense" : "income") : path.length ? "other" : "", own: path};
+  },
   flowHead(l){
-    const A = Audit, m = Books.ledgerOf(l);
-    if (A.isDebtor(l)) return ["op", "Received from customers"];
-    if (A.isCreditor(l)) return ["op", "Paid to suppliers"];
-    // GST paid to the government by the same rule as Compliance (MIS.gstPaidTo); other GST ledgers on a bank line (input
-    // tax paid with a bill, interest and late fees) on lines of their own
+    const m = Books.ledgerOf(l), g = this.flowGroup(l), own = g.own.join(" | ");
+    if (g.kind === "debtor") return ["op", "Received from customers"];
+    if (g.kind === "creditor") return ["op", "Paid to suppliers"];
+    if (g.kind === "fixed") return ["inv", "Fixed assets"];
+    if (g.kind === "invest") return ["inv", "Investments and deposits"];
+    if (g.kind === "loan") return ["fin", "Loans"];
+    if (g.kind === "capital") return ["fin", "Capital and drawings"];
+    // operating: GST paid to the government by the same rule as Compliance (MIS.gstPaidTo); other GST ledgers on a bank
+    // line (input tax paid with a bill, interest and late fees) on lines of their own
     if (this.gstPaidTo(l)) return ["op", "GST"];
-    if (m.what === "gst_interest" || (/GST/i.test(l) && /INTEREST|LATE FEE|PENALTY/i.test(l))) return ["op", "GST interest and late fees"];
-    if (/^(gst|gst_common|ineligible|gst_rcm|gst_import|gst_control)$/.test(m.what || "") || m.kind === "gst" || (A.isDuties(l) && /GST/i.test(l))) return ["op", "Input GST paid with bills"];
-    if (/^tds_|^tcs_/.test(m.kind || m.what || "") || /\bTDS\b|\bTCS\b/i.test(l)) return ["op", "TDS and TCS"];
-    if (/INCOME TAX|ADVANCE TAX|SELF ASSESSMENT/i.test(l)) return ["op", "Income tax"];
-    if (/SALAR|WAGES|BONUS|STAFF|IMPREST|EMPLOYEE|PROVIDENT|\bPF\b|\bESI|ESIC|GRATUITY/i.test(l)) return ["op", "Salaries and staff"];
-    if (A.isFixed(l)) return ["inv", "Fixed assets"];
-    if (A.under(l, /^(investments|deposits \(asset\))$/i) || /FIXED DEPOSIT|\bFDR?\b|MUTUAL FUND|\bSIP\b|\bFUND\b.*GROWTH/i.test(l)) return ["inv", "Investments and deposits"];
-    if (A.isLoan(l) || /\bLOAN\b/i.test(l) && !/INTEREST/i.test(l)) return ["fin", "Loans"];
-    if (A.isCapital(l) || A.under(l, /^reserves & surplus$/i)) return ["fin", "Capital and drawings"];
-    if (/INTEREST/i.test(l) && !A.isIncome(l)) return ["fin", "Interest paid"];
-    if (A.isIncome(l)) return ["op", "Other income received"];
-    if (A.isExpense(l)) return ["op", "Expenses paid"];
+    if (m.what === "gst_interest") return ["op", "GST interest and late fees"];
+    if (/^(gst|gst_common|ineligible|gst_rcm|gst_import|gst_control)$/.test(m.what || "") || m.kind === "gst" || m.kind === "gst_common") return ["op", "Input GST paid with bills"];
+    if (/^tds_|^tcs_/.test(m.kind || m.what || "") || /\bTDS\b|\bTCS\b/i.test(own)) return ["op", "TDS and TCS"];
+    if (/INCOME TAX|ADVANCE TAX|SELF ASSESSMENT/i.test(own)) return ["op", "Income tax"];
+    if (/SALAR|WAGES|BONUS|STAFF|IMPREST|EMPLOYEE|PROVIDENT|\bPF\b|\bESI|ESIC|GRATUITY/i.test(own)) return ["op", "Salaries and staff"];
+    if (g.kind === "expense" && /INTEREST|FINANCE COST|BORROWING COST/i.test(own)) return ["fin", "Interest paid"];
+    if (g.kind === "lent") return ["op", "Loans and advances (asset)"];
+    if (g.kind === "income") return ["op", "Other income received"];
+    if (g.kind === "expense") return ["op", "Expenses paid"];
     return ["op", "Other receipts and payments"];
   },
   // money in and out of cash and bank, month by month, by what it was for (the direct method)
