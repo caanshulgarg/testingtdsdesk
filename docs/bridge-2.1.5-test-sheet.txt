@@ -4,9 +4,10 @@ File:        FinComBridge-Setup-2.1.5.exe
 Fingerprint: <filled at build> (SHA-256)
 Link:        https://staging.fincom.live/review/assets/bridge-go/FinComBridge-Setup-2.1.5.exe
 (2.1.4 was built but never handed out; 2.1.5 is 2.1.4 with the last per-ledger read removed, see below.)
-Before step 8: tally-ingest deployed to staging with the "ledger_list" kind; for step 8's "marked deleted",
-migration-32 applied on staging (without it the rename and the new ledger still show; the deletion is skipped and
-logged, and sent again with the next list once the migration is there).
+Before step 8: tally-ingest deployed to staging with the "ledger_list" kind (the round 3 shape: every batch carries
+round, complete, rowsRead and seen), and migration-34 applied on staging: the bridge names no deletion; the cloud works
+out from "seen" (the GUIDs the bridge read) which ledgers Tally no longer lists, and marks them deleted only when the
+round is complete and the counts agree.
 
 What is new in 2.1.5 (over the 2.1.4 build that was never handed out)
   - Tally's per-ledger voucher list ("Vouchers : Ledger") is never asked: Tally builds that list ledger by ledger, the
@@ -78,7 +79,7 @@ Use ZZ TEST for every posting below, never GARG SHEKHAR & COMPANY.
    Do: in FinCom open ZZ TEST and press Update now. Watch Show log.
    You should see: first "Keeping ZZ TEST: ledger list MasterID 1-2000, N ledger(s) (x.xs); saved" (one line per 2,000
        MasterIDs, the last one "...-end"), then "Keeping ZZ TEST: the ledger list read (N ledgers, G groups, R request(s)):
-       ... new, ... changed, ... renamed, ... deleted". Then "Keeping ZZ TEST: day book 20260401-20260430, N entries (x.xs),
+       ... new, ... changed, ... renamed, ... gone". Then "Keeping ZZ TEST: day book 20260401-20260430, N entries (x.xs),
        M day(s) changed; saved", one line a month up to today, then "the day book from ... to ... read (N entries); M day(s) changed since the last read".
        No "KeepBal", "opening balances", "balance" or "trial balance" line anywhere in the log. Press Update now again:
        the same months, "0 day(s) changed".
@@ -132,10 +133,18 @@ Use ZZ TEST for every posting below, never GARG SHEKHAR & COMPANY.
    You should see: the log "Keeping ZZ TEST: ledger ZZ Ledger Test 1 is now ZZ Ledger Test 2 in Tally" and "... 1
        renamed ...". In FinCom only "ZZ Ledger Test 2" is listed (not both), with the same group and opening.
    Do: in TallyPrime delete "ZZ Ledger Test 2" (it has no entries, so Tally allows it). Press Update now again.
-   You should see: the log "ledger ZZ Ledger Test 2 is no longer in Tally; it is marked deleted in FinCom (never
-       removed)" and "... 1 deleted". On the cloud ZZ TEST's row for it is still there, with deleted_at set (FinCom's
-       pages show it as deleted, or leave it out of the chooser, once the app reads deleted_at). If the log says "not marked in FinCom yet (its cloud cannot mark
-       deletions until migration-32 is applied)", migration-32 is not on staging yet: note it, that is expected.
+   You should see: the log "ledger ZZ Ledger Test 2 is no longer in Tally's list; FinCom's cloud marks it deleted (never
+       removed) unless it has entries or an opening" and "... 1 gone", then "Cloud: ZZ TEST: the ledger list sent
+       (0 added, 0 renamed, 1 deleted)". On the cloud ZZ TEST's row for it is still there, with deleted_at set (FinCom's
+       pages show it as deleted, or leave it out of the chooser, once the app reads deleted_at).
+   Note (migration 34, the cloud's rules; the bridge only reports what Tally lists):
+       - the cloud marks a ledger deleted only from a complete read whose count agrees with its own;
+       - when MANY ledgers are missing at once (more than 25, or 5% of the list), they are marked deleted only after
+         TWO complete reads miss them: press Update now a second time before expecting deleted_at;
+       - a ledger that has entries in FinCom's copy, or an opening balance, is NEVER marked deleted, however many reads
+         miss it (the mark is undone and logged as held on the cloud). So a test ledger with an opening of 100 Cr, as
+         made above, is not marked deleted: to see the mark, make the ledger with no opening, or set its opening to 0
+         before deleting it, and run Update now once more so the 0 opening reaches the cloud first.
    Also: a posting from FinCom that makes a new ledger is followed, a few seconds after it finishes, by "Ledger list of
        ZZ TEST (after a posting with a new ledger)" and the new ledger is in the list without pressing Update now.
    If not: the log from "Update from Tally: asked for now", and what FinCom showed.

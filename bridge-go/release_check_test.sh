@@ -11,6 +11,8 @@
 #   green 2  a "not yet measured" row, and the line "allowed for 9.9.9 only" (this version) -> passes
 #   red 7    the same line naming another version (9.9.8)        -> fails "4 allow-list" (not yet measured)
 #   red 8    a "not yet measured" row and no "allowed for" line  -> fails "4 allow-list" (not yet measured)
+#   red 9    the allow-list table has a header but no row the check can parse (rows without the leading pipe)
+#                                                                 -> fails "4 allow-list" (no rows parsed)
 # Nothing outside the temp folder is touched. Run: bash bridge-go/release_check_test.sh
 # (RELEASE_CHECK_SCRIPT=<file> tests another copy of the script, e.g. one that always passes, to see this test fail.)
 set -u
@@ -95,6 +97,9 @@ expect "red 7: the exception names another version" 1 "not yet measured"
 
 setup; unmeasured "re-measured on 2026-10-02"
 expect "red 8: unmeasured row, no exception for this version" 1 "not yet measured"
+
+setup; printf '# Tally allow-list\n\nre-measured on 2026-10-02\n| id | purpose | worst case (s) | measured on |\n|---|---|---|---|\nledgers | ledger list | 4 | 2026-09-30\n' >"$R/docs/tally-allowlist.md"; g add -A; g commit -qm "no rows"
+expect "red 9: no row of the allow-list table can be parsed" 1 "no rows parsed"
 
 echo
 if [ "$FAILS" = 0 ]; then echo "release_check_test: all cases as expected"; else echo "release_check_test: $FAILS case(s) wrong"; exit 1; fi

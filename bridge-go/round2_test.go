@@ -1,8 +1,8 @@
 package main
 
-// Round 2 (02-Oct-2026, the owner's answers): the beat says whether the allow-list is measured; every ledger_list call
-// carries its round id, the rows read in that round and whether the round was complete (deletions only then); the
-// measuring tool runs the per-ledger items (696-699) only when asked.
+// Round 2 and 3 (02-Oct-2026, the owner's answers): the beat says whether the allow-list is measured; every ledger_list
+// call carries its round id, whether the round was complete, the count of GUIDs read and the GUIDs themselves (seen),
+// from which the cloud works deletions out; the measuring tool runs the per-ledger items (696-699) only when asked.
 
 import (
 	"fmt"
@@ -52,8 +52,9 @@ func TestBeatCarriesAllowListMeasured(t *testing.T) {
 	}
 }
 
-// --- every ledger_list call of a round: the same round id, rowsRead = the whole list, complete true; deleted only on
-// the last batch
+// --- every ledger_list call of a round: the same round id, complete true, rowsRead = the whole list, and seen: the
+// GUIDs read, split across the batches (at most 2,000 each, none twice), their union the whole list. No deleted field:
+// the cloud works deletions out from seen. A round with no changed rows still sends ceil(n/2000) batches of seen
 func TestLedgerListSendsRoundAndCount(t *testing.T) {
 	const n = 5000
 	c := newStandCloud(t)
@@ -77,25 +78,60 @@ func TestLedgerListSendsRoundAndCount(t *testing.T) {
 	if !regexp.MustCompile(`^[0-9a-f]{16,64}$`).MatchString(round) {
 		t.Fatalf("the round id: %q", round)
 	}
-	for i, b := range got {
-		if str(b["round"]) != round {
-			t.Fatalf("call %d has round %q, call 0 %q", i, b["round"], round)
+	all := map[string]bool{}
+	for i := 1; i <= n; i++ {
+		all[fmt.Sprintf("led-%d", i)] = true
+	}
+	checkRound := func(got []M, want map[string]bool) {
+		t.Helper()
+		union := map[string]bool{}
+		for i, b := range got {
+			if str(b["round"]) != str(got[0]["round"]) {
+				t.Fatalf("call %d has round %q, call 0 %q", i, b["round"], got[0]["round"])
+			}
+			if b["complete"] != true {
+				t.Fatalf("call %d: complete %v", i, b["complete"])
+			}
+			if toInt(b["rowsRead"]) != len(want) {
+				t.Fatalf("call %d: rowsRead %v, want %d (the whole list read, not the rows in this batch)", i, b["rowsRead"], len(want))
+			}
+			if _, has := b["deleted"]; has {
+				t.Fatalf("call %d carries deleted %v: the cloud works deletions out from seen", i, b["deleted"])
+			}
+			if (b["last"] == true) != (i == len(got)-1) {
+				t.Fatalf("call %d: last %v", i, b["last"])
+			}
+			seen := strs(b["seen"])
+			if len(seen) == 0 || len(seen) > 2000 {
+				t.Fatalf("call %d: %d seen (want 1 to 2,000)", i, len(seen))
+			}
+			for _, g := range seen {
+				if union[g] {
+					t.Fatalf("call %d: %s seen twice in the round", i, g)
+				}
+				if !want[g] {
+					t.Fatalf("call %d: %s seen but not in Tally's list", i, g)
+				}
+				union[g] = true
+			}
 		}
-		if b["complete"] != true {
-			t.Fatalf("call %d: complete %v", i, b["complete"])
-		}
-		if toInt(b["rowsRead"]) != n {
-			t.Fatalf("call %d: rowsRead %v, want %d (the whole list read, not the rows in this batch)", i, b["rowsRead"], n)
-		}
-		_, hasDel := b["deleted"]
-		if last := i == len(got)-1; hasDel != last || (b["last"] == true) != last {
-			t.Fatalf("call %d: deleted present %v, last %v", i, hasDel, b["last"])
+		if len(union) != len(want) {
+			t.Fatalf("%d GUIDs seen across the batches, want %d (every GUID read)", len(union), len(want))
 		}
 	}
-	// the next round: a new id, and a deletion goes with it
+	checkRound(got, all)
+	rows := 0
+	for _, b := range got {
+		rows += len(arr(b["ledgers"]))
+	}
+	if rows != n {
+		t.Fatalf("%d rows in the first round, want %d", rows, n)
+	}
+	// the next round: a new id; one ledger gone and nothing changed: three batches of seen with no rows, without it
 	f.mu.Lock()
 	f.led = f.led[1:]
 	f.mu.Unlock()
+	delete(all, "led-1")
 	nowFn = func() time.Time { return time.Now().Add(10 * time.Minute) }
 	defer func() { nowFn = time.Now }()
 	if r := wakeLedgers(zz, "test", false); r["started"] != true {
@@ -106,15 +142,21 @@ func TestLedgerListSendsRoundAndCount(t *testing.T) {
 	c.mu.Lock()
 	got = append([]M{}, c.ledList...)
 	c.mu.Unlock()
-	if len(got) != 1 || str(got[0]["round"]) == round || str(got[0]["round"]) == "" || got[0]["complete"] != true ||
-		toInt(got[0]["rowsRead"]) != n-1 || len(arr(got[0]["deleted"])) != 1 {
-		t.Fatalf("the second round: %d call(s) %v", len(got), got)
+	if len(got) != 3 || str(got[0]["round"]) == round || str(got[0]["round"]) == "" {
+		t.Fatalf("the second round: %d call(s) (want 3 of seen alone): %v", len(got), got)
+	}
+	checkRound(got, all)
+	for i, b := range got {
+		if len(arr(b["ledgers"])) != 0 {
+			t.Fatalf("call %d of the second round carries %d rows (nothing changed)", i, len(arr(b["ledgers"])))
+		}
 	}
 }
 
-// --- a round cut short (a chunk that does not answer): nothing goes to the cloud for it, so no call can carry deleted;
-// once the round completes (the ledger that hangs isolated and skipped) the list goes as complete, naming it
-func TestIncompleteRoundSendsNoDeletes(t *testing.T) {
+// --- a round cut short (a chunk that does not answer): nothing of it goes to the cloud (no batch, no seen); once the
+// round completes (the ledger that hangs isolated and skipped) the list goes as complete, naming it, with the gone
+// ledger missing from seen
+func TestIncompleteRoundSendsNothing(t *testing.T) {
 	const n, poison = 40, int64(13)
 	c := newStandCloud(t)
 	f := ledgerTally(t, n, `,"TallyMaxSec":1,"TallyProbeSec":1,"LedgerChunk":8,"LedgerChunkMin":4`+c.cfg())
@@ -160,20 +202,15 @@ func TestIncompleteRoundSendsNoDeletes(t *testing.T) {
 	if ls := obj(readKeepState(dir)["led"]); ls == nil || truthy(ls["done"]) {
 		t.Fatalf("the round is not in progress: %v", readKeepState(dir)["led"])
 	}
-	// the outbox names the skipped ledger, but the round is not complete: nothing goes, nothing carries deleted
+	// the outbox names the skipped ledger, but the round is not complete: nothing goes
 	push()
 	c.mu.Lock()
 	sent := append([]M{}, c.ledList...)
 	c.mu.Unlock()
-	for i, b := range sent {
-		if _, has := b["deleted"]; has || b["complete"] == true {
-			t.Fatalf("call %d went while the round was cut short: complete %v, deleted %v", i, b["complete"], b["deleted"])
-		}
-	}
 	if len(sent) != 0 {
 		t.Fatalf("%d ledger_list call(s) went for a round cut short (want none): %v", len(sent), sent)
 	}
-	// the round finishes: complete, the skipped ledger named, the gone ledger deleted, the read count without the skipped one
+	// the round finishes: complete, the skipped ledger named and in seen, the gone one not; rowsRead counts the skipped one
 	for i := 0; i < 30 && err != nil; i++ {
 		off += 2 * time.Minute
 		o := off
@@ -191,11 +228,83 @@ func TestIncompleteRoundSendsNoDeletes(t *testing.T) {
 		t.Fatalf("%d call(s) after the round completed", len(sent))
 	}
 	b := sent[0]
-	if b["complete"] != true || str(b["round"]) == "" || toInt(b["rowsRead"]) != n-2 || len(arr(b["skipped"])) != 1 || len(arr(b["deleted"])) != 1 {
-		t.Fatalf("the completed round: round %q complete %v rowsRead %v skipped %v deleted %v", b["round"], b["complete"], b["rowsRead"], b["skipped"], b["deleted"])
+	if _, has := b["deleted"]; has {
+		t.Fatalf("deleted sent: %v", b["deleted"])
 	}
-	if str(at(arr(at(arr(b["deleted"]), 0)), 1)) != fmt.Sprintf("Party %05d", n) {
-		t.Fatalf("deleted: %v", b["deleted"])
+	seen := map[string]bool{}
+	for _, g := range strs(b["seen"]) {
+		seen[g] = true
+	}
+	if b["complete"] != true || str(b["round"]) == "" || toInt(b["rowsRead"]) != n-1 || len(arr(b["skipped"])) != 1 || len(seen) != n-1 {
+		t.Fatalf("the completed round: round %q complete %v rowsRead %v skipped %v seen %d", b["round"], b["complete"], b["rowsRead"], b["skipped"], len(seen))
+	}
+	if !seen[fmt.Sprintf("led-%d", poison)] || seen[fmt.Sprintf("led-%d", n)] {
+		t.Fatalf("seen must hold the skipped ledger's GUID and not the gone one's: %v", b["seen"])
+	}
+}
+
+// --- a ledger that hangs Tally is skipped, not gone: its GUID (from the list held) is in seen and counted in rowsRead,
+// so the cloud never marks it deleted
+func TestPoisonGuidInSeen(t *testing.T) {
+	const n, poison = 40, int64(13)
+	c := newStandCloud(t)
+	f := ledgerTally(t, n, `,"TallyMaxSec":1,"TallyProbeSec":1,"LedgerChunk":8,"LedgerChunkMin":4`+c.cfg())
+	push := func() {
+		cloudMu.Lock()
+		cloudLinksAt = time.Time{}
+		cloudMu.Unlock()
+		invokeCloudPush()
+	}
+	runNow(t, "now")
+	push()
+	c.mu.Lock()
+	c.ledList = nil
+	c.mu.Unlock()
+	dir := syncFolder(zz)
+	f.mu.Lock()
+	f.behave = poisonLedger(poison)
+	f.mu.Unlock()
+	off := time.Duration(0)
+	k := newRun("now", "poison")
+	var err error
+	for i := 0; i < 30; i++ {
+		if err = k.step(zz, f.port, ""); err == nil {
+			break
+		}
+		off += 2 * time.Minute
+		o := off
+		nowFn = func() time.Time { return time.Now().Add(o) }
+	}
+	defer func() { nowFn = time.Now }()
+	if err != nil {
+		t.Fatalf("the round did not finish: %v", err)
+	}
+	if p := poisonMids(readKeepState(dir)); len(p) != 1 || p[0] != poison {
+		t.Fatalf("the ledger that hangs: %v", readKeepState(dir)["ledPoison"])
+	}
+	push()
+	c.mu.Lock()
+	sent := append([]M{}, c.ledList...)
+	c.mu.Unlock()
+	if len(sent) != 1 {
+		t.Fatalf("%d call(s) for the round with the skipped ledger", len(sent))
+	}
+	b := sent[0]
+	seen := strs(b["seen"])
+	found := false
+	for _, g := range seen {
+		if g == fmt.Sprintf("led-%d", poison) {
+			found = true
+		}
+	}
+	if !found || len(seen) != n || toInt(b["rowsRead"]) != n {
+		t.Fatalf("the skipped ledger's GUID must be in seen (%d seen, rowsRead %v, found %v)", len(seen), b["rowsRead"], found)
+	}
+	if _, has := b["deleted"]; has {
+		t.Fatalf("deleted sent: %v", b["deleted"])
+	}
+	if ls := loadLedList(dir); len(ls) != n {
+		t.Fatalf("%d ledgers held (the skipped one stays held)", len(ls))
 	}
 }
 

@@ -285,10 +285,9 @@ type standCloud struct {
 	held      bool
 	kinds     []string
 	guard     []M
-	ledList   []M  // the ledger lists sent (kind ledger_list)
-	noDel     bool // a cloud without migration-32: deletions skipped
-	lastBeat  M    // the last heartbeat
-	beatReply M    // added to the heartbeat's answer (readStop, readResume, release)
+	ledList   []M // the ledger lists sent (kind ledger_list)
+	lastBeat  M   // the last heartbeat
+	beatReply M   // added to the heartbeat's answer (readStop, readResume, release)
 }
 
 func newStandCloud(t *testing.T) *standCloud {
@@ -320,12 +319,7 @@ func newStandCloud(t *testing.T) *standCloud {
 			out["state"] = "ok"
 		case "ledger_list":
 			c.ledList = append(c.ledList, o)
-			out["added"], out["renamed"] = len(arr(o["ledgers"])), len(arr(o["renamed"]))
-			if c.noDel {
-				out["deletesSkipped"] = len(arr(o["deleted"]))
-			} else {
-				out["deleted"] = len(arr(o["deleted"]))
-			}
+			out["added"], out["renamed"], out["deleted"] = len(arr(o["ledgers"])), len(arr(o["renamed"])), 0
 		case "days":
 			done := []any{}
 			for _, x := range arr(o["days"]) {

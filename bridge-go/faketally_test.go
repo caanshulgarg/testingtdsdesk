@@ -412,7 +412,7 @@ func Test02OctPoisonLedger(t *testing.T) {
 				named = true
 			}
 		}
-		if len(arr(b["deleted"])) > 0 {
+		if _, has := b["deleted"]; has {
 			t.Fatalf("ledgers deleted in the cloud: %v", b["deleted"])
 		}
 	}

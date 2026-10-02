@@ -229,7 +229,7 @@ func TestPostingNewLedgerReadsListOnce(t *testing.T) {
 			found = true
 		}
 	}
-	if !found || logLines("1 new, 0 changed, 0 renamed, 0 deleted") != 1 {
+	if !found || logLines("1 new, 0 changed, 0 renamed, 0 gone") != 1 {
 		t.Fatal("the new ledger is not in the list held")
 	}
 	// a posting of entries only (no ledger master): no list read
@@ -311,9 +311,9 @@ func TestLedgersRefreshAndWakeDebounced(t *testing.T) {
 	f.noBalance(t)
 }
 
-// --- a ledger renamed and one deleted in Tally: found by GUID, sent to the cloud as a rename and a deletion; the copy's
-// entries carry the new name. Many gone at once: only after the next full read. A cloud without migration-32: the
-// deletions go again with the next list
+// --- a ledger renamed and one deleted in Tally: found by GUID; the rename goes to the cloud, the deletion as a GUID
+// missing from seen (the cloud works deletions out, and holds many gone at once until the next full read misses them
+// too: migration-34); the copy's entries carry the new name. Every complete round goes, changed rows or not
 func TestLedgerRenameAndDeleteSent(t *testing.T) {
 	f := newStandTally(t)
 	c := newStandCloud(t)
@@ -337,7 +337,7 @@ func TestLedgerRenameAndDeleteSent(t *testing.T) {
 	}
 	pushAll()
 	c.mu.Lock()
-	if len(c.ledList) != 1 || len(arr(c.ledList[0]["ledgers"])) != 60 {
+	if len(c.ledList) != 1 || len(arr(c.ledList[0]["ledgers"])) != 60 || len(strs(c.ledList[0]["seen"])) != 60 {
 		t.Fatalf("the first list sent: %d calls", len(c.ledList))
 	}
 	c.ledList = nil
@@ -367,12 +367,20 @@ func TestLedgerRenameAndDeleteSent(t *testing.T) {
 		t.Fatalf("%d ledger list calls", len(got))
 	}
 	b := got[0]
-	ren, del, rows := arr(b["renamed"]), arr(b["deleted"]), arr(b["ledgers"])
+	ren, rows, seen := arr(b["renamed"]), arr(b["ledgers"]), strs(b["seen"])
 	if len(ren) != 1 || jsonText(ren[0]) != `["led-1","Party 01","Party One"]` {
 		t.Fatalf("renamed: %v", ren)
 	}
-	if len(del) != 1 || jsonText(del[0]) != `["led-2","Party 02"]` {
-		t.Fatalf("deleted: %v", del)
+	if _, has := b["deleted"]; has {
+		t.Fatalf("deleted sent: %v (the cloud works deletions out from seen)", b["deleted"])
+	}
+	if len(seen) != 59 || toInt(b["rowsRead"]) != 59 {
+		t.Fatalf("seen %d, rowsRead %v: want 59 (Party 02 gone)", len(seen), b["rowsRead"])
+	}
+	for _, g := range seen {
+		if g == "led-2" {
+			t.Fatal("the gone ledger is in seen")
+		}
 	}
 	if len(rows) != 2 {
 		t.Fatalf("rows sent: %v (want the renamed one and the one whose opening changed)", rows)
@@ -386,6 +394,9 @@ func TestLedgerRenameAndDeleteSent(t *testing.T) {
 	if b["last"] != true {
 		t.Fatal("the call is not marked last")
 	}
+	if logLines("ledger Party 02 is no longer in Tally's list") != 1 {
+		t.Fatal("the gone ledger is not in the log")
+	}
 	day := readText(filepath.Join(dir, "days", td+".xml"))
 	if strings.Contains(day, ">Party 01<") || !strings.Contains(day, ">Party One<") {
 		t.Fatalf("the copy's entries keep the old name: %s", cut(day, 300))
@@ -393,7 +404,7 @@ func TestLedgerRenameAndDeleteSent(t *testing.T) {
 	if _, ok := loadLedList(dir)["led-2"]; ok {
 		t.Fatal("the deleted ledger is still held")
 	}
-	// many gone at once (30 of 59): held back until the next full read misses them too
+	// many gone at once (30 of 59): the bridge holds nothing back; seen names the 29 left, and the cloud decides
 	f.mu.Lock()
 	f.led = f.led[:29]
 	f.mu.Unlock()
@@ -402,49 +413,17 @@ func TestLedgerRenameAndDeleteSent(t *testing.T) {
 	waitIdle(t)
 	pushAll()
 	c.mu.Lock()
-	for _, b := range c.ledList {
-		if len(arr(b["deleted"])) > 0 {
-			t.Fatalf("deleted at the first read that missed many: %v", arr(b["deleted"]))
-		}
-	}
+	got = c.ledList
 	c.ledList = nil
-	c.noDel = true // and the cloud has no migration-32 yet
 	c.mu.Unlock()
-	if logLines("taken as deleted only if the next full read misses them too") != 1 {
-		t.Fatal("the hold is not in the log")
+	if len(got) != 1 || len(strs(got[0]["seen"])) != 29 || toInt(got[0]["rowsRead"]) != 29 || len(arr(got[0]["ledgers"])) != 0 {
+		t.Fatalf("the round that missed 30: %v", got)
 	}
-	nowFn = func() time.Time { return time.Now().Add(30 * time.Minute) }
-	wakeLedgers(zz, "test", false)
-	waitIdle(t)
-	pushAll()
-	c.mu.Lock()
-	n := 0
-	for _, b := range c.ledList {
-		n += len(arr(b["deleted"]))
+	if len(loadLedList(dir)) != 29 {
+		t.Fatalf("%d ledgers held after 30 went (the list held is what Tally listed)", len(loadLedList(dir)))
 	}
-	c.ledList = nil
-	c.noDel = false
-	c.mu.Unlock()
-	if n != 30 {
-		t.Fatalf("the second read: %d deletions sent, want 30", n)
-	}
-	if !exists(ledLaterFile(dir)) || logLines("not marked in FinCom yet") != 1 {
-		t.Fatal("deletions a cloud without migration-32 skipped are not kept for later")
-	}
-	// the next list carries them again
-	f.addLed("Party New", "Sundry Debtors", "0.00")
-	nowFn = func() time.Time { return time.Now().Add(40 * time.Minute) }
-	wakeLedgers(zz, "test", false)
-	waitIdle(t)
-	pushAll()
-	c.mu.Lock()
-	n = 0
-	for _, b := range c.ledList {
-		n += len(arr(b["deleted"]))
-	}
-	c.mu.Unlock()
-	if n != 30 || exists(ledLaterFile(dir)) {
-		t.Fatalf("the skipped deletions with the next list: %d", n)
+	if exists(ledOutFile(dir)) {
+		t.Fatal("the outbox was not emptied")
 	}
 	noComputedFields(t, f)
 	f.noBalance(t)
@@ -517,13 +496,13 @@ func TestLedgerListGivesWayToPosting(t *testing.T) {
 	f.noBalance(t)
 }
 
-// --- the comparison itself: new, changed, renamed, deleted; many gone at once held back
+// --- the comparison itself: new, changed, renamed, gone (gone is for the log alone: the cloud works deletions out)
 func TestDiffLedgers(t *testing.T) {
 	row := func(g, n, o string) ledRow { return ledRow{guid: g, mid: 1, alter: 1, name: n, parent: "P", open: o} }
 	held := map[string]ledRow{"a": row("a", "A", "0.00"), "b": row("b", "B", "0.00"), "c": row("c", "C", "1.00")}
 	read := map[string]ledRow{"a": row("a", "A2", "0.00"), "c": row("c", "C", "2.00"), "d": row("d", "D", "0.00")}
-	d := diffLedgers(held, read, nil)
-	if d.added != 1 || len(d.rows) != 3 || len(d.renamed) != 1 || d.renamed[0] != (ledRen{"a", "A", "A2"}) || len(d.deleted) != 1 || d.deleted[0].guid != "b" || !d.openChg["c"] {
+	d := diffLedgers(held, read)
+	if d.added != 1 || len(d.rows) != 3 || len(d.renamed) != 1 || d.renamed[0] != (ledRen{"a", "A", "A2"}) || len(d.gone) != 1 || d.gone[0].guid != "b" || !d.openChg["c"] {
 		t.Fatalf("%+v", d)
 	}
 	big := map[string]ledRow{}
@@ -531,12 +510,7 @@ func TestDiffLedgers(t *testing.T) {
 		g := fmt.Sprint(i)
 		big[g] = row(g, g, "0")
 	}
-	d = diffLedgers(big, map[string]ledRow{}, nil)
-	if len(d.deleted) != 0 || len(d.deferred) != 100 {
-		t.Fatal("an empty answer deleted the list")
-	}
-	d = diffLedgers(big, map[string]ledRow{}, map[string]bool{"5": true})
-	if len(d.deleted) != 1 || len(d.deferred) != 99 {
-		t.Fatal("the second look")
+	if d = diffLedgers(big, map[string]ledRow{}); len(d.gone) != 100 || len(d.rows) != 0 {
+		t.Fatalf("an empty read: %d gone, %d rows", len(d.gone), len(d.rows))
 	}
 }

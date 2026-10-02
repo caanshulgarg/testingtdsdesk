@@ -17,8 +17,9 @@
 #   2 tests       go vet (Linux, Windows); the required tests exist (a missing one fails as "missing test X");
 #                 go test ./... ; the size test and the allow-list tests each run and print "--- PASS" by name.
 #   3 go.mod      go mod tidy -diff shows nothing (it changes no file).
-#   4 allow-list  every row of the table in docs/tally-allowlist.md has a worst case > 0 ("not yet measured" fails),
-#                 unless the file carries the line "not yet measured; allowed for <v> only" naming THIS BridgeVersion
+#   4 allow-list  the table in docs/tally-allowlist.md parses (a header naming the worst-case column and at least one
+#                 row, each starting with '|'; "no rows parsed" fails) and every row has a worst case > 0 ("not yet
+#                 measured" fails), unless the file carries the line "not yet measured; allowed for <v> only" naming THIS BridgeVersion
 #                 (the first build's exception: accepted for that one version, never for another); and sha256 of the
 #                 file equals the hash in the last release log row of docs/RELEASE-CHECKLIST.md; if it differs (or
 #                 there is no earlier hash) the file must carry a line "re-measured on YYYY-MM-DD" dated on or after
@@ -122,14 +123,25 @@ pass "3 go.mod and go.sum as go mod tidy leaves them"
 
 # --- 4. allow-list ----------------------------------------------------------------------------------------------------
 [ -f "$ALLOWLIST" ] || fail "4 allow-list" "docs/tally-allowlist.md is missing (the measured table of Tally requests)"
-# the table's rows: the "worst case" column (found from the header row) must be a number above 0 in every row
-unmeasured="$(awk -F'|' '
+# the table's rows: the "worst case" column (found from the header row) must be a number above 0 in every row. The
+# table is the standard form only: a header line "| id | ... | worst ... |", a separator, then rows each starting with
+# a pipe. A table the parser cannot read (no such header, or no row after it) fails: a check that found no rows
+# would otherwise pass on nothing
+parsed="$(awk -F'|' '
   /^\|/ {
-    if (c == 0) { for (i = 2; i <= NF; i++) if (tolower($i) ~ /worst/) c = i; if (c == 0) print "(no worst-case column in the table header)"; next }
+    if (c == 0) { for (i = 2; i <= NF; i++) if (tolower($i) ~ /worst/) c = i; if (c == 0) { print "(no worst-case column in the table header)"; exit }; next }
     if ($2 ~ /^[ \t]*:?-+:?[ \t]*$/) next
+    rows++
     v = $c; gsub(/^[ \t]+|[ \t]+$/, "", v); id = $2; gsub(/^[ \t]+|[ \t]+$/, "", id)
     if (v !~ /^[0-9]+(\.[0-9]+)?$/ || v + 0 <= 0) print id ": " v
-  }' "$ALLOWLIST")"
+  }
+  END { if (c == 0) print "(no table header naming the worst-case column)"; else if (rows == 0) print "(no rows parsed)" }' "$ALLOWLIST")"
+case "$parsed" in
+  *"(no rows parsed)"*|*"(no worst-case column"*|*"(no table header"*)
+    fail "4 allow-list" "no rows parsed from the table in docs/tally-allowlist.md: $(echo "$parsed" | grep -oE '\([^)]*\)' | head -1)" \
+      "The table must be the standard form: a header line '| id | ... | worst case ... |', a separator line, then one row per request, each starting with '|'." ;;
+esac
+unmeasured="$parsed"
 EXC=""
 if [ -n "$unmeasured" ]; then
   exc="$(grep -oiE 'not yet measured[^|]*allowed for [0-9.]+ only' "$ALLOWLIST" | grep -oE 'allowed for [0-9.]+ only' | head -1)"
