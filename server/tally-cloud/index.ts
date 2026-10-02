@@ -25,6 +25,12 @@
 //                                                       {company: when} clients opened in FinCom lately, the fallback
 //                                                       for the wake-up channel; activityAt = when FinCom was last used
 //                                                       for this computer's clients, for the nightly catch-up)
+//    FinCom Bridge 2.1.5 (plan items 10-12, migration-35-bridge-control): the beat also carries its self-watch,
+//    reqs:{day, last:{kind, ms, at}, longest:{kind, ms, at}, over20, n} and readStopped:{by: self|fincom, reason, at}|null
+//    (kept in info.beat and its info.bridges entry), and the answer carries readStop:{by:"fincom", reason, at}|null
+//    (Stop reading from FinCom, for this computer or all of the firm's), readResume:true once after a Resume, and
+//    release:{version, allowed} (the version this computer may install; none without a release row). Without
+//    migration-35 none of the three is said. Older bridges ignore them.
 //   {kind:"support", note, zip}                      -> the Connector's log and details for FinCom support
 //   FinCom Bridge 2.1.4 as rebuilt on 02-Oct-2026 (migration-32-sync-safety; without it these answer as before, no lease):
 //   {kind:"lease_take", company, ttl}                -> {held:false, lease:{until}} | {held:true, holder:{bridge, computer, until}}:
@@ -141,7 +147,9 @@ function bridgeOf(dev: any, body: any, shadow: boolean) {
     computer: s(b?.computer, 60) || (id === "v1" ? s(hello.computer, 60) : ""), user: s(b?.user, 60) || (id === "v1" ? s(hello.user, 60) : ""),
     mode: shadow ? "test" : "main", runMode: ["user", "service", "window"].includes(b?.runMode) ? b.runMode : "",
     tally: !!body?.tally, tallyState: ["open", "busy", "closed"].includes(body?.tallyState) ? body.tallyState : (body?.tally ? "open" : "closed"),
-    open: (Array.isArray(body?.open) ? body.open : []).slice(0, 50).map((x: unknown) => s(x, 200)) } };
+    open: (Array.isArray(body?.open) ? body.open : []).slice(0, 50).map((x: unknown) => s(x, 200)),
+    // 2.1.5: its request timings and whether it stopped reading
+    reqs: cleanReqs(body?.reqs), readStopped: cleanReadStopped(body?.readStopped) } };
 }
 // the bridges heard from, with this one brought up to date: at most 12, none silent for more than 60 days
 function bridgesWith(info: any, id: string, entry: any) {
@@ -153,6 +161,77 @@ function bridgesWith(info: any, id: string, entry: any) {
 }
 // may this bridge post? Only the main one; with none chosen, any bridge not in test mode (as before)
 function mayPost(dev: any, id: string) { return !dev?.main_bridge || dev.main_bridge === id; }
+
+// FinCom Bridge 2.1.5's self-watch in its beat (plan item 10): the last request, the longest today (kind and
+// milliseconds), how many took over 20 s and how many there were; and whether it stopped reading (by itself, or told to
+// from FinCom). Known fields only, of the right kind, cut to length; anything else is not kept
+function cleanReqs(r: any) {
+  if (!r || typeof r !== "object" || Array.isArray(r)) return null;
+  const s = (v: unknown, n: number) => typeof v === "string" ? v.slice(0, n) : "";
+  const int = (v: unknown, max: number) => Math.max(0, Math.min(max, Math.floor(Number(v)) || 0));
+  const one = (x: any) => x && typeof x === "object" && !Array.isArray(x) ? { kind: s(x.kind, 40), ms: int(x.ms, 3600000), at: s(x.at, 30) } : null;
+  return { day: s(r.day, 10), last: one(r.last), longest: one(r.longest), over20: int(r.over20, 1e6), n: int(r.n, 1e9) };
+}
+function cleanReadStopped(x: any) {
+  if (!x || typeof x !== "object" || !["self", "fincom"].includes(x.by)) return null;
+  return { by: x.by as string, reason: typeof x.reason === "string" ? x.reason.slice(0, 300) : "", at: typeof x.at === "string" ? x.at.slice(0, 30) : "" };
+}
+const VERSION = /^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}$/;
+const newer = (a: string, b: string) => { const x = a.split(".").map(Number), y = b.split(".").map(Number); for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] - y[i]; return 0; };
+// migration-35: what the beat tells this bridge about Stop reading / Resume (tally_read_stops) and the staged release
+// (tally_bridge_releases), and the evidence of a pilot it records. out: added to the answer; info: added to the
+// device's info (readStop for the app, readResumeSeen: the last resume passed to each bridge). Without the migration
+// (its tables unknown), or if they cannot be read, nothing is said: the bridge keeps what it had
+async function bridgeControl(dev: any, firm: string, me: { id: string; entry: any }, prevInfo: any) {
+  const out: Record<string, unknown> = {}, info: Record<string, unknown> = {};
+  try {
+    const now = Date.now(), at = new Date(now).toISOString();
+    const [st, rs, rl] = await Promise.all([
+      db.from("tally_read_stops").select("id, device_id, reason, stopped_at").eq("firm_id", firm).eq("action", "stop").is("cleared_at", null),
+      // a resume is passed on for a week (a computer off for longer reads again when it comes back only if it was not stopped)
+      db.from("tally_read_stops").select("id, device_id, stopped_at").eq("firm_id", firm).eq("action", "resume").gt("stopped_at", new Date(now - 7 * 86400000).toISOString()),
+      db.from("tally_bridge_releases").select("*").eq("firm_id", firm)]);
+    const mine = (r: any) => !r?.device_id || r.device_id === dev.id;
+    if (!st.error && !rs.error) {
+      // the newest stop for this computer or for all of the firm's
+      const live = (st.data || []).filter(mine).sort((a: any, b: any) => Number(b.id) - Number(a.id))[0];
+      const readStop = live ? { by: "fincom", reason: String(live.reason || "").slice(0, 300), at: String(live.stopped_at || "") } : null;
+      out.readStop = readStop; info.readStop = readStop;
+      // Resume pressed since this bridge last heard: readResume once (each bridge on the computer once)
+      const seenAll = prevInfo?.readResumeSeen && typeof prevInfo.readResumeSeen === "object" ? prevInfo.readResumeSeen : {};
+      const top = Math.max(0, ...(rs.data || []).filter(mine).map((r: any) => Number(r.id) || 0));
+      if (top > (Number(seenAll[me.id]) || 0)) {
+        if (!readStop) out.readResume = true;       // stopped again since: the stop stands
+        const keep = Object.entries({ ...seenAll, [me.id]: top }).sort((a: any, b: any) => b[1] - a[1]).slice(0, 20);
+        info.readResumeSeen = Object.fromEntries(keep);
+      }
+    }
+    const rows = rl.error ? [] : (rl.data || []).filter((r: any) => VERSION.test(String(r?.version || "")));
+    if (rows.length) {
+      // the newest version this computer may install: approved for all, or this computer is its pilot (started);
+      // none allowed: the newest there is, not allowed
+      const may = rows.filter((r: any) => r.approved_at || (r.pilot_device === dev.id && r.pilot_started_at));
+      const pick = (may.length ? may : rows).slice().sort((a: any, b: any) => newer(b.version, a.version))[0];
+      out.release = { version: pick.version, allowed: may.length > 0 };
+      // the pilot computer beating on the version during its pilot: evidence for approval (at most one write each
+      // 5 minutes), and a stop by itself on it (approval is then refused)
+      const v = String(me.entry?.version || "");
+      const pr = rows.find((r: any) => r.version === v && r.pilot_device === dev.id && r.pilot_started_at && !r.approved_at);
+      if (pr) {
+        const upd: Record<string, unknown> = {};
+        if (!pr.pilot_seen_at || now - (Date.parse(pr.pilot_last_seen_at || "") || 0) >= 300000) {
+          upd.pilot_last_seen_at = at; upd.pilot_beats = (Number(pr.pilot_beats) || 0) + 1;
+          if (!pr.pilot_seen_at) upd.pilot_seen_at = at;
+        }
+        const self = me.entry?.readStopped;
+        const since = Date.parse(self?.at || "");
+        if (self?.by === "self" && !pr.pilot_self_stop && (isNaN(since) || since >= Date.parse(pr.pilot_started_at))) upd.pilot_self_stop = { reason: self.reason, at: self.at || at };
+        if (Object.keys(upd).length) await db.from("tally_bridge_releases").update(upd).eq("firm_id", firm).eq("version", v).eq("pilot_device", dev.id).is("approved_at", null);
+      }
+    }
+  } catch (e) { console.error("tally-ingest bridge control", (e as Error).message); }
+  return { out, info };
+}
 // a support pack (the bridge's log, or its install log) for FinCom support; readable only by the platform's admins
 async function supportPack(firm: string, dev: any, body: any) {
   const zip = typeof body.zip === "string" ? b64bytes(body.zip) : new Uint8Array();
@@ -199,13 +278,15 @@ async function shadowCall(dev: any, firm: string, body: any) {
     const { data: cur } = await db.from("tally_devices").select("info").eq("id", dev.id).maybeSingle();
     const prev = (cur?.info && typeof cur.info === "object") ? cur.info : {};
     const me = bridgeOf(dev, body, true);
+    // migration-35: Stop reading / Resume / release apply to a bridge in test mode too
+    const ctl = await bridgeControl(dev, firm, me, prev);
     // a bridge 2.0.0 in test mode sends no name of its own: it is kept in info.shadow only, never in bridge 1.15.0's place
-    const info = me.id === "v1" ? { ...prev, shadow } : { ...prev, shadow, bridges: bridgesWith(prev, me.id, me.entry) };
+    const info = me.id === "v1" ? { ...prev, ...ctl.info, shadow } : { ...prev, ...ctl.info, shadow, bridges: bridgesWith(prev, me.id, me.entry) };
     await db.from("tally_devices").update({ info }).eq("id", dev.id);
     const tok = dev.wake_token;
     const wake = tok ? { url: URL.replace(/^http/, "ws").replace(/\/+$/, "") + "/realtime/v1/websocket", key: ANON, topic: "tb-" + tok } : null;
     // made the main bridge on FinCom's Tally page: the bridge switches itself over (and 1.15.0 is refused postings already)
-    return reply(200, { ok: true, updateNow: false, posts: 0, wake, shadow: true, makeMain: me.id !== "v1" && dev.main_bridge === me.id });
+    return reply(200, { ok: true, updateNow: false, posts: 0, wake, shadow: true, makeMain: me.id !== "v1" && dev.main_bridge === me.id, ...ctl.out });
   }
   if (kind === "companies") {
     const { data: have } = await db.from("tally_companies").select("company, client_id").eq("firm_id", firm);
@@ -845,10 +926,14 @@ Deno.serve(async (req) => {
           every: Math.max(10, Math.min(600, Math.floor(Number(b.every) || 60))), version: s(body.version, 40),
           // FinCom Bridge 2.1.3: background reading paused in its tray, since when Tally has not answered, the hour of the
           // nightly catch-up, the last read from Tally, and that it reads Tally only after an event
-          paused: !!b.paused, notAnsweringSince: s(b.notAnsweringSince, 30), nightlyAt: s(b.nightlyAt, 5), lastRead: s(b.lastRead, 30), events: !!b.events };
+          paused: !!b.paused, notAnsweringSince: s(b.notAnsweringSince, 30), nightlyAt: s(b.nightlyAt, 5), lastRead: s(b.lastRead, 30), events: !!b.events,
+          // FinCom Bridge 2.1.5 (migration-35): its request timings, and whether it stopped reading (by itself, or from FinCom)
+          reqs: cleanReqs(b.reqs), readStopped: cleanReadStopped(b.readStopped) };
         const prevInfo = ((dev as any).info && typeof (dev as any).info === "object") ? (dev as any).info : {};
         const me = bridgeOf(dev, body, false);
-        const info = { ...prevInfo, beat, history: beatHistory(prevInfo, beat), bridges: bridgesWith(prevInfo, me.id, me.entry) };
+        // migration-35: Stop reading from FinCom, Resume, the version it may install (and the pilot's evidence)
+        const ctl = await bridgeControl(dev, firm, me, prevInfo);
+        const info = { ...prevInfo, ...ctl.info, beat, history: beatHistory(prevInfo, beat), bridges: bridgesWith(prevInfo, me.id, me.entry) };
         // build 197: someone pressed Update now on another computer: the bridge is told in this answer, once
         const want = (dev as any).want_update_at, sent = (dev as any).want_sent_at;
         const updateNow = !!want && (!sent || Date.parse(want) > Date.parse(sent));
@@ -857,12 +942,13 @@ Deno.serve(async (req) => {
         // broadcast channel (FinCom's pages listen: Live.joinTally), so "read 17:43" / "Reading now…" changes at once
         // instead of when a page next looks at tally_devices. Only the times and states, nothing of the books or keys
         const pb = (prevInfo.beat && typeof prevInfo.beat === "object") ? prevInfo.beat : {};
-        const said = (x: any) => JSON.stringify([x.lastRead || "", !!x.updating, x.tallyState || "", !!x.paused, x.notAnsweringSince || "",
-          (Array.isArray(x.companies) ? x.companies : []).map((c: any) => [c.name, c.lastRead || "", c.at || ""])]);
-        if (said(pb) !== said(beat)) {
+        const said = (x: any, stop: unknown) => JSON.stringify([x.lastRead || "", !!x.updating, x.tallyState || "", !!x.paused, x.notAnsweringSince || "",
+          (Array.isArray(x.companies) ? x.companies : []).map((c: any) => [c.name, c.lastRead || "", c.at || ""]), x.reqs ?? null, x.readStopped ?? null, stop ?? null]);
+        if (said(pb, prevInfo.readStop) !== said(beat, (info as any).readStop)) {
           await broadcast("fincom-tally-" + firm, "beat", { device: dev.id, beat: { at: beat.at, every: beat.every, lastRead: beat.lastRead, updating: beat.updating, tallyState: beat.tallyState,
             tally: beat.tally, paused: beat.paused, notAnsweringSince: beat.notAnsweringSince, busySince: beat.busySince, open: beat.open,
-            companies: beat.companies.map((c: any) => ({ name: c.name, open: c.open, at: c.at, phase: c.phase, waiting: c.waiting, lastRead: c.lastRead })) } });
+            companies: beat.companies.map((c: any) => ({ name: c.name, open: c.open, at: c.at, phase: c.phase, waiting: c.waiting, lastRead: c.lastRead })),
+            bridge: me.id, reqs: beat.reqs, readStopped: beat.readStopped, readStop: (info as any).readStop ?? null } });
         }
         const { count: waiting } = await db.from("tally_post_jobs").select("id", { count: "exact", head: true }).eq("device_id", dev.id).eq("status", "waiting");
         const posts = mayPost(dev, me.id) ? waiting : 0;
@@ -880,7 +966,7 @@ Deno.serve(async (req) => {
         const { data: lastJob } = await db.from("tally_post_jobs").select("updated_at").eq("device_id", dev.id).order("updated_at", { ascending: false }).limit(1);
         const activityAt = [prevInfo.activityAt, want, lastJob && lastJob[0] && lastJob[0].updated_at].filter((x) => x && !isNaN(Date.parse(String(x))))
           .map((x) => new Date(String(x)).toISOString()).sort().pop() || "";
-        return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, ledgers, activityAt, ...(mayPost(dev, me.id) ? {} : { notMain: true }) });
+        return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, ledgers, activityAt, ...(mayPost(dev, me.id) ? {} : { notMain: true }), ...ctl.out });
       }
       case "make_main": return await makeMain(dev, bridgeOf(dev, body, false).id);
       case "posts_take": {

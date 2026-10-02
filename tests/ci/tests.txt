@@ -18,6 +18,7 @@ run_bankrules.py                      120
 run_beat_history.py                   120
 run_block17.js                        120
 run_booksync.js                       120
+run_bridge_control_server.py          120
 run_bridge_fast.py                    630
 run_bridgejobs.py                     240
 run_bridgejobs_ui.py                  120  TDSDESK_SITE=../app/dist-test
@@ -56,6 +57,7 @@ run_libs_ui.py                        120
 run_lock_beat.py                      570
 run_main_bridge_server.py             120
 run_migration31.py                    120
+run_migration35.py                    120
 run_mis.js                            120
 run_mis2.js                           120
 run_mis2_ui.py                        120  TDSDESK_SITE=../app/dist-test
