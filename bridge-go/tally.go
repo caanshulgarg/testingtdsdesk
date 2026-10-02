@@ -247,9 +247,9 @@ var (
 	errBackoff = errors.New("Tally is left alone for now after it did not answer; nothing was sent")
 )
 
-// 2.1.3: no single request may hold Tally longer than this (25 s): a background read is made of small requests instead
+// 2.1.3: no single request may hold Tally longer than this (2.1.5: 20 s, the acceptance limit): a background read is made of small requests instead
 // (a batch of ledgers, a few days), each saved as it comes, so a failure never throws the work away
-func tallyMaxSec() int { return keepNum("TallyMaxSec", 25) }
+func tallyMaxSec() int { return keepNum("TallyMaxSec", 20) }
 
 // every request actually sent to Tally (the tests count them; nothing is sent while the bridge is idle)
 var (
@@ -261,6 +261,9 @@ var (
 var nowFn = time.Now
 
 func tallyRaw(ctx context.Context, port int, x string, timeoutSec int) (string, error) {
+	if err := checkAllowed(x); err != nil {
+		return "", err
+	}
 	if timeoutSec <= 0 {
 		timeoutSec = toInt(cfg("TallyTimeoutSec"))
 		if timeoutSec <= 0 {
@@ -573,6 +576,11 @@ func isBusyErr(err error) bool {
 }
 
 func invokeTally(tc *TC, port int, x string, timeoutSec int) (string, error) {
+	// plan item 7: a request not on the allow-list is refused before anything is sent (allowlist.go)
+	if err := checkAllowed(x); err != nil {
+		writeLog(fmt.Sprintf("Tally %d: refused: %s", port, err.Error()))
+		return "", err
+	}
 	if tc.copier && !bgBackoffUntil(port).IsZero() {
 		return "", errBackoff
 	}
@@ -862,6 +870,7 @@ func freeProbe(ctx context.Context, port int, company string) error {
 		clearProbe(port)
 		if company != "" {
 			noteCompanyGUID(company, group(`<GUID[^>]*>([^<]*)</GUID>`, raw, 1))
+			noteCompanyAlts(company, raw)
 		}
 		writeLog(fmt.Sprintf("Tally %d answered the small check; requests go again", port))
 		return nil

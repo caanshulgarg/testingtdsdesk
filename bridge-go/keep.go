@@ -119,18 +119,21 @@ type kentry struct {
 	date  string
 }
 
-func keepList(tc *TC, company string, port int, from, to string, after int64) ([]kentry, error) {
+func keepListRequest(company, from, to string, after int64) string {
 	flt, sys := "", ""
 	if after > 0 {
 		flt = "<FILTERS>TDSDeskKeepNew</FILTERS>"
 		sys = fmt.Sprintf(`<SYSTEM TYPE="Formulae" NAME="TDSDeskKeepNew">$AlterID &gt; %d</SYSTEM>`, after)
 	}
-	x := "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TDSDeskKeepList</ID></HEADER>" +
+	return "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TDSDeskKeepList</ID></HEADER>" +
 		"<BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>" + esc(company) + "</SVCURRENTCOMPANY>" +
 		"<SVFROMDATE>" + from + "</SVFROMDATE><SVTODATE>" + to + "</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE>" +
 		`<COLLECTION NAME="TDSDeskKeepList" ISMODIFY="No"><TYPE>Voucher</TYPE><FETCH>GUID,ALTERID,DATE</FETCH>` + flt + "</COLLECTION>" + sys +
 		"</TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>"
-	raw, err := invokeTally(tc, port, x, 120)
+}
+
+func keepList(tc *TC, company string, port int, from, to string, after int64) ([]kentry, error) {
+	raw, err := invokeTally(tc, port, keepListRequest(company, from, to, after), 120)
 	if err != nil {
 		return nil, err
 	}

@@ -5,7 +5,7 @@
 //	FinComBridge.exe measure --company "<name>" --snapshot <label> [--month yyyymm]
 //	FinComBridge.exe measure --compare <label1> <label2>
 //
-// One request at a time, each with its own 25 s cap, through the bridge's own queue (a posting still goes first), with
+// One request at a time, each with its own cap (TallyMaxSec, 20 s), through the bridge's own queue (a posting still goes first), with
 // the "is Tally free?" rule after a request that does not answer. Nothing is written to Tally. The report is plain text
 // in the bridge's folder: times in ms, bytes, counts, errors.
 //
@@ -144,6 +144,8 @@ func runMeasure(o measureOpts) (M, error) {
 	if o.snapshot != "" {
 		return measureSnapshot(o)
 	}
+	measuring.Add(1)
+	defer measuring.Add(-1)
 	port, err := findCompanyPort(o.company, 0)
 	if err != nil {
 		return nil, err
@@ -159,7 +161,7 @@ func runMeasure(o measureOpts) (M, error) {
 		month = td[:6]
 	}
 	mA, mZ := month+"01", monthEnd(month)
-	writeLog("Measure Tally: " + company + " (for FinCom support): one request at a time, 25 s each at most")
+	writeLog(fmt.Sprintf("Measure Tally: %s (for FinCom support): one request at a time, %d s each at most", company, tallyMaxSec()))
 
 	// a. the company-level check
 	it, raw := measureOne(port, "a", "the company check: its GUID and highest AlterIDs (one tiny request)", companyCheckRequest(company), "COMPANY")
@@ -178,7 +180,7 @@ func runMeasure(o measureOpts) (M, error) {
 		after = 0
 	}
 	it, raw = measureOne(port, "b", fmt.Sprintf("entries with AlterID above %d over the year %s-%s (every field FinCom needs)", after, fyA, fyZ),
-		fcCollection("FinComMeasureB", company, "<SVFROMDATE>"+fyA+"</SVFROMDATE><SVTODATE>"+fyZ+"</SVTODATE>", "Voucher", measureVchFetch, fmt.Sprintf("$AlterID > %d", after)), "VOUCHER")
+		measureReqB(company, fyA, fyZ, after), "VOUCHER")
 	if it.n > 0 {
 		it.note = fmt.Sprintf("%d bytes an entry on average", it.bytes/it.n)
 	}
@@ -198,7 +200,7 @@ func runMeasure(o measureOpts) (M, error) {
 	// c. the same, one month: this month, and the busiest month of the year
 	cReq := func(key, a, z string) {
 		it, _ := measureOne(port, key, fmt.Sprintf("entries with AlterID above %d, %s-%s only", after, a, z),
-			fcCollection("FinComMeasureC", company, "<SVFROMDATE>"+a+"</SVFROMDATE><SVTODATE>"+z+"</SVTODATE>", "Voucher", measureVchFetch, fmt.Sprintf("$AlterID > %d", after)), "VOUCHER")
+			measureReqC(company, a, z, after), "VOUCHER")
 		add(it)
 	}
 	cReq("c1", td[:6]+"01", td)
@@ -218,7 +220,7 @@ func runMeasure(o measureOpts) (M, error) {
 	}
 	if busy == "" {
 		it, raw := measureOne(port, "c0", "the year's entries, dates only (to find the busiest month)",
-			fcCollection("FinComMeasureYear", company, "<SVFROMDATE>"+fyA+"</SVFROMDATE><SVTODATE>"+fyZ+"</SVTODATE>", "Voucher", "DATE", ""), "VOUCHER")
+			measureReqYear(company, fyA, fyZ), "VOUCHER")
 		by := map[string]int{}
 		for _, v := range xmlDoc(raw).All("VOUCHER") {
 			if d := nt(v, "DATE"); isTallyDate(d) {
@@ -251,7 +253,7 @@ func runMeasure(o measureOpts) (M, error) {
 
 	// d. the GUID list only, one month
 	it, _ = measureOne(port, "d", "the list of GUIDs only, "+mA+"-"+mZ,
-		fcCollection("FinComMeasureD", company, "<SVFROMDATE>"+mA+"</SVFROMDATE><SVTODATE>"+mZ+"</SVTODATE>", "Voucher", "GUID", ""), "VOUCHER")
+		measureReqD(company, mA, mZ), "VOUCHER")
 	add(it)
 	if !freeOrStop() {
 		return measureReport(o, company, port, items, started)
@@ -259,7 +261,7 @@ func runMeasure(o measureOpts) (M, error) {
 
 	// e. one entry with every field
 	it, raw = measureOne(port, "e", fmt.Sprintf("one entry (AlterID %d) with every field FinCom needs", altV),
-		fcCollection("FinComMeasureE", company, "<SVFROMDATE>"+fyA+"</SVFROMDATE><SVTODATE>"+addDays(td, 366)+"</SVTODATE>", "Voucher", measureVchFetch, fmt.Sprintf("$AlterID = %d", altV)), "VOUCHER")
+		measureReqE(company, fyA, addDays(td, 366), altV), "VOUCHER")
 	if vs := reVchBlock.FindAllString(raw, -1); len(vs) > 0 {
 		v := vs[0]
 		it.note = fmt.Sprintf("%d bytes for the entry", len(v))
@@ -289,7 +291,7 @@ func runMeasure(o measureOpts) (M, error) {
 
 	// f. the hanging-ledger check
 	a, b := measureLedgerRange(o.ledgers)
-	it, raw = measureOne(port, "f0", "every ledger's name (to number them in name order)", collectionRequest("FinComMeasureNames", "Ledger", "NAME", company, ""), "LEDGER")
+	it, raw = measureOne(port, "f0", "every ledger's name (to number them in name order)", measureReqNames(company), "LEDGER")
 	var names []string
 	for _, l := range xmlDoc(raw).All("LEDGER") {
 		if n := nameOf(l); n != "" {
@@ -302,7 +304,6 @@ func runMeasure(o measureOpts) (M, error) {
 	hangs := 0
 	for i := a; i <= b && i <= len(names) && hangs < 2; i++ {
 		n := names[i-1]
-		flt := `$Name = "` + strings.ReplaceAll(n, `"`, "") + `"`
 		if !freeOrStop() {
 			break
 		}
@@ -310,7 +311,7 @@ func runMeasure(o measureOpts) (M, error) {
 		pi, _ := measureOne(port, fmt.Sprintf("f%d-check", i), "the company check", companyCheckRequest(company), "COMPANY")
 		add(pi)
 		fi, fraw := measureOne(port, fmt.Sprintf("f%d-fields", i), fmt.Sprintf("ledger %d %q: its master's fields (no opening)", i, n),
-			fcCollection("FinComMeasureLedF", company, "", "Ledger", "NAME, PARENT, GUID, MASTERID, ALTERID, ISREVENUE, AFFECTSSTOCK, ISBILLWISEON, ISCOSTCENTRESON, ISDEEMEDPOSITIVE, RESERVEDNAME", flt), "LEDGER")
+			measureReqLedF(company, n), "LEDGER")
 		for _, l := range xmlDoc(fraw).All("LEDGER") {
 			fi.note = fmt.Sprintf("parent %q, is revenue %s, affects stock %s, bill-wise %s, cost centres %s, deemed positive %s, reserved name %q, GUID %s",
 				nt(l, "PARENT"), or(nt(l, "ISREVENUE"), "-"), or(nt(l, "AFFECTSSTOCK"), "-"), or(nt(l, "ISBILLWISEON"), "-"), or(nt(l, "ISCOSTCENTRESON"), "-"),
@@ -326,7 +327,7 @@ func runMeasure(o measureOpts) (M, error) {
 			break
 		}
 		oi, oraw := measureOne(port, fmt.Sprintf("f%d-opening", i), fmt.Sprintf("ledger %d %q: the opening its master stores (the field only, no period)", i, n),
-			fcCollection("FinComMeasureLedO", company, "", "Ledger", "NAME, OPENINGBALANCE", flt), "LEDGER")
+			measureReqLedO(company, n), "LEDGER")
 		for _, l := range xmlDoc(oraw).All("LEDGER") {
 			oi.note = "stored opening " + or(nt(l, "OPENINGBALANCE"), "(empty)")
 		}
@@ -354,7 +355,7 @@ func measureReport(o measureOpts, company string, port int, items []*mItem, star
 	var b strings.Builder
 	fmt.Fprintf(&b, "FinCom Bridge %s - Tally measured for FinCom support\nCompany: %s   Tally port: %d   Computer: %s\nStarted %s, took %s\n",
 		BridgeVersion, company, port, computerName(), started.Format("2006-01-02 15:04:05"), time.Since(started).Round(time.Second))
-	fmt.Fprintf(&b, "Each request on its own, 25 s at most; after a request that did not answer, nothing until the company check answered.\n\n")
+	fmt.Fprintf(&b, "Each request on its own, %d s at most; after a request that did not answer, nothing until the company check answered.\n\n", tallyMaxSec())
 	fmt.Fprintf(&b, "%-10s %8s %10s %7s  %s\n", "item", "ms", "bytes", "count", "what / result")
 	rows := []any{}
 	for _, it := range items {
@@ -391,6 +392,8 @@ func snapFile(label string) string {
 }
 
 func measureSnapshot(o measureOpts) (M, error) {
+	measuring.Add(1)
+	defer measuring.Add(-1)
 	port, err := findCompanyPort(o.company, 0)
 	if err != nil {
 		return nil, err
@@ -411,8 +414,7 @@ func measureSnapshot(o measureOpts) (M, error) {
 			guid, alt = nt(c, "GUID"), toI64(re(`\D`).ReplaceAllString(nt(c, "ALTVCHID"), ""))
 		}
 	}
-	raw, err = invokeTally(fin, port, fcCollection("FinComSnapshot", o.company, "<SVFROMDATE>"+a+"</SVFROMDATE><SVTODATE>"+z+"</SVTODATE>", "Voucher",
-		"GUID, MASTERID, ALTERID, DATE, VOUCHERTYPENAME, VOUCHERNUMBER", ""), tallyMaxSec())
+	raw, err = invokeTally(fin, port, snapshotRequest(o.company, a, z), tallyMaxSec())
 	if err != nil {
 		return nil, err
 	}
@@ -641,4 +643,39 @@ func bridgeCall(method, path string, body any, timeout time.Duration) M {
 	defer r.Body.Close()
 	b, _ := io.ReadAll(r.Body)
 	return parseObj(string(b))
+}
+
+// the measuring tool's requests (measure-only on the allow-list)
+func measurePeriod(a, z string) string {
+	return "<SVFROMDATE>" + a + "</SVFROMDATE><SVTODATE>" + z + "</SVTODATE>"
+}
+func measureReqB(company, a, z string, after int64) string {
+	return fcCollection("FinComMeasureB", company, measurePeriod(a, z), "Voucher", measureVchFetch, fmt.Sprintf("$AlterID > %d", after))
+}
+func measureReqC(company, a, z string, after int64) string {
+	return fcCollection("FinComMeasureC", company, measurePeriod(a, z), "Voucher", measureVchFetch, fmt.Sprintf("$AlterID > %d", after))
+}
+func measureReqYear(company, a, z string) string {
+	return fcCollection("FinComMeasureYear", company, measurePeriod(a, z), "Voucher", "DATE", "")
+}
+func measureReqD(company, a, z string) string {
+	return fcCollection("FinComMeasureD", company, measurePeriod(a, z), "Voucher", "GUID", "")
+}
+func measureReqE(company, a, z string, alt int64) string {
+	return fcCollection("FinComMeasureE", company, measurePeriod(a, z), "Voucher", measureVchFetch, fmt.Sprintf("$AlterID = %d", alt))
+}
+func measureReqNames(company string) string {
+	return collectionRequest("FinComMeasureNames", "Ledger", "NAME", company, "")
+}
+func measureLedFilter(name string) string {
+	return `$Name = "` + strings.ReplaceAll(name, `"`, "") + `"`
+}
+func measureReqLedF(company, name string) string {
+	return fcCollection("FinComMeasureLedF", company, "", "Ledger", "NAME, PARENT, GUID, MASTERID, ALTERID, ISREVENUE, AFFECTSSTOCK, ISBILLWISEON, ISCOSTCENTRESON, ISDEEMEDPOSITIVE, RESERVEDNAME", measureLedFilter(name))
+}
+func measureReqLedO(company, name string) string {
+	return fcCollection("FinComMeasureLedO", company, "", "Ledger", "NAME, OPENINGBALANCE", measureLedFilter(name))
+}
+func snapshotRequest(company, a, z string) string {
+	return fcCollection("FinComSnapshot", company, measurePeriod(a, z), "Voucher", "GUID, MASTERID, ALTERID, DATE, VOUCHERTYPENAME, VOUCHERNUMBER", "")
 }

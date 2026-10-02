@@ -316,8 +316,7 @@ func getCoInfo(tc *TC, name string, port int) M {
 		}
 	}
 	g, pan := "", ""
-	extra := `<FILTERS>TDSDeskThisCo</FILTERS></COLLECTION><SYSTEM TYPE="Formulae" NAME="TDSDeskThisCo">$Name = "` + esc(strings.ReplaceAll(name, `"`, "")) + `"</SYSTEM><COLLECTION NAME="TDSDeskUnused" ISMODIFY="No"><TYPE>Company</TYPE>`
-	if raw, err := invokeTally(tc, port, collectionRequest("TDSDeskCompanyInfo", "Company", "NAME,GSTREGISTRATIONNUMBER,INCOMETAXNUMBER,GSTREGISTRATIONDETAILS.LIST,GUID", name, extra), 15); err == nil {
+	if raw, err := invokeTally(tc, port, coInfoRequest(name), 15); err == nil {
 		if c := xmlDoc(raw).All("COMPANY"); len(c) > 0 {
 			g = nt(c[0], "GSTREGISTRATIONNUMBER")
 			if g == "" {
@@ -391,7 +390,7 @@ func openCompaniesWith(tc *TC, fresh bool) []M {
 			sessions = append(sessions, e)
 			continue
 		}
-		raw, err := invokeTally(tc, toInt(pp["port"]), collectionRequest("TDSDeskCompanies", "Company", "NAME,STARTINGFROM,ENDINGAT,GUID", "", ""), 8)
+		raw, err := invokeTally(tc, toInt(pp["port"]), companiesRequest(), 8)
 		if err != nil && (errors.Is(err, errPreempted) || errors.Is(err, errBackoff)) && prevCompanies(toInt(pp["port"])) != nil {
 			// a background read stopped or held back: the companies named last time stand, nothing new is known
 			e["ok"], e["companies"], e["tallyState"] = true, prevCompanies(toInt(pp["port"])), "open"
@@ -700,4 +699,15 @@ func containsInt(a []int, x int) bool {
 		}
 	}
 	return false
+}
+
+// the list of companies loaded in Tally (name, books' period, GUID)
+func companiesRequest() string {
+	return collectionRequest("TDSDeskCompanies", "Company", "NAME,STARTINGFROM,ENDINGAT,GUID", "", "")
+}
+
+// one company's GSTIN and PAN (the company's own master fields)
+func coInfoRequest(name string) string {
+	extra := `<FILTERS>TDSDeskThisCo</FILTERS></COLLECTION><SYSTEM TYPE="Formulae" NAME="TDSDeskThisCo">$Name = "` + esc(strings.ReplaceAll(name, `"`, "")) + `"</SYSTEM><COLLECTION NAME="TDSDeskUnused" ISMODIFY="No"><TYPE>Company</TYPE>`
+	return collectionRequest("TDSDeskCompanyInfo", "Company", "NAME,GSTREGISTRATIONNUMBER,INCOMETAXNUMBER,GSTREGISTRATIONDETAILS.LIST,GUID", name, extra)
 }

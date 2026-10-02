@@ -41,11 +41,7 @@ func ledChunkSec() int     { return keepNum("LedgerChunkSec", 20) }
 
 // the requests
 func ledgerChunkRequest(company string, after, upto int64) string {
-	f := fmt.Sprintf("$MasterID > %d", after)
-	if upto > 0 {
-		f += fmt.Sprintf(" AND $MasterID <= %d", upto)
-	}
-	return fcCollection(ledListID, company, "", "Ledger", ledFetch, f)
+	return fcCollection(ledListID, company, "", "Ledger", ledFetch, masterRange(after, upto))
 }
 func groupListRequest(company string) string {
 	return fcCollection(grpListID, company, "", "Group", grpFetch, "")
@@ -284,7 +280,7 @@ func mergeLedOut(dir string, d ledDiff, groups [][2]string) {
 		}
 		o["groups"] = gl
 	}
-	if len(rows)+len(ren)+len(del) == 0 && o["groups"] == nil {
+	if len(rows)+len(ren)+len(del) == 0 && o["groups"] == nil && o["skipped"] == nil {
 		return
 	}
 	_ = saveFile(ledOutFile(dir), jsonText(o))
@@ -336,6 +332,15 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 		if tail {
 			upto = 0
 		}
+		// a ledger that hangs Tally (found before, by halving): never asked again; the chunks stop short of it
+		if p := nextPoison(st, after); p > 0 && (tail || p <= upto) {
+			if p == after+1 {
+				ls["after"] = p
+				save()
+				continue
+			}
+			upto, tail = p-1, false
+		}
 		t1 := time.Now()
 		rows, top, err := readLedgerChunk(k.tc, company, port, after, upto)
 		if err != nil {
@@ -343,18 +348,42 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 				return false, err // the same chunk again when Tally is free
 			}
 			span := fmt.Sprintf("%d-%d", after+1, upto)
-			if tail {
+			switch {
+			case tail:
 				// the last request (no upper end) did not answer: the rest is read in chunks again
 				ls["bound"] = after + int64(4*size)
 				span = fmt.Sprintf("from %d", after+1)
-			} else if size > ledChunkMin() {
+			case size > ledChunkMin():
 				ls["size"] = maxI(ledChunkMin(), size/2)
+			case upto-after > 1:
+				// still not answering at the smallest chunk: halved on, down to one MasterID, to find the ledger that hangs
+				ls["size"] = maxI(1, int(upto-after)/2)
+				ls["iso"] = true
+			default:
+				// one MasterID that does not answer: that ledger hangs Tally. It is skipped from now on and named to FinCom
+				name := ""
+				for _, h := range loadLedList(dir) {
+					if h.mid == upto {
+						name = h.name
+					}
+				}
+				addPoison(dir, st, upto, name)
+				ls["after"] = upto
+				writeLog(fmt.Sprintf("Keeping %s: the ledger with MasterID %d (%s) does not answer and holds Tally; it is skipped from now on and named to FinCom", company, upto, or(name, "name not known")))
 			}
 			st["ledSize"] = ls["size"]
 			save()
 			return false, fmt.Errorf("Tally did not give the ledger list (MasterID %s: %s); the next try reads %d from MasterID %d", span, err.Error(), toInt(ls["size"]), after+1)
 		}
 		sec := time.Since(t1).Seconds()
+		if truthy(ls["iso"]) {
+			// past the ledger that hangs: back up towards the smallest chunk
+			if size*2 >= ledChunkMin() {
+				ls["size"], ls["iso"] = ledChunkMin(), false
+			} else {
+				ls["size"] = size * 2
+			}
+		}
 		appendLedRead(dir, rows)
 		ls["n"], ls["reqs"] = toInt(ls["n"])+len(rows), toInt(ls["reqs"])+1
 		if tail {
@@ -381,6 +410,16 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 	pend := map[string]bool{}
 	for _, g := range strs(st["ledGone"]) {
 		pend[g] = true
+	}
+	// a ledger skipped because it hangs Tally is not gone: it stays as held
+	for _, p := range poisonMids(st) {
+		for g, h := range held {
+			if h.mid == p {
+				if _, ok := read[g]; !ok {
+					read[g] = h
+				}
+			}
+		}
 	}
 	d := diffLedgers(held, read, pend)
 	var groups [][2]string
@@ -491,6 +530,9 @@ func pushLedgerList(company, dir string) error {
 			if o["groups"] != nil {
 				body["groups"] = o["groups"]
 			}
+			if sk := arr(o["skipped"]); len(sk) > 0 {
+				body["skipped"] = sk // the ledgers that hang Tally: [MasterID, name, why]
+			}
 		}
 		if last {
 			dl := []any{}
@@ -515,7 +557,7 @@ func pushLedgerList(company, dir string) error {
 		}
 		gs = gs[n:]
 		if first {
-			o["renamed"], o["groups"], ren = M{}, nil, M{}
+			o["renamed"], o["groups"], o["skipped"], ren = M{}, nil, nil, M{}
 			first = false
 		}
 		if last {
@@ -541,4 +583,38 @@ func ledSentNote(j M) string {
 		return "taken"
 	}
 	return fmt.Sprintf("%d added, %d renamed, %d deleted", toInt(j["added"]), toInt(j["renamed"]), toInt(j["deleted"]))
+}
+
+// --- a ledger that hangs Tally (02-Oct-2026: one of 696-699): found by halving the chunk down to its one MasterID,
+// then skipped in every later read (st["ledPoison"]), and named to FinCom's cloud with the next ledger list
+func poisonMids(st M) []int64 {
+	var o []int64
+	for _, x := range arr(st["ledPoison"]) {
+		o = append(o, toI64(at(arr(x), 0)))
+	}
+	return o
+}
+func nextPoison(st M, after int64) int64 {
+	var best int64
+	for _, p := range poisonMids(st) {
+		if p > after && (best == 0 || p < best) {
+			best = p
+		}
+	}
+	return best
+}
+func addPoison(dir string, st M, mid int64, name string) {
+	for _, p := range poisonMids(st) {
+		if p == mid {
+			return
+		}
+	}
+	why := "this ledger does not answer and holds Tally (found " + nowS() + "); the bridge skips it"
+	st["ledPoison"] = append(arr(st["ledPoison"]), []any{mid, name, why})
+	o := readObjFile(ledOutFile(dir))
+	if o == nil {
+		o = M{}
+	}
+	o["skipped"] = append(arr(o["skipped"]), []any{mid, name, why})
+	_ = saveFile(ledOutFile(dir), jsonText(o))
 }

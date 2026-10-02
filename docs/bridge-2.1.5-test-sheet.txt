@@ -15,12 +15,19 @@ What is new in 2.1.5 (over the 2.1.4 build that was never handed out)
     (FinComTag: one date's entries, heads and narration only, one request per date).
   - FinCom's "a ledger's entries" (/ledgervouchers, /ledgerlines) is answered from the copy kept on this computer; for
     a period the copy does not cover it says the entries are shown from FinCom's copy. Tally is not asked.
+  - No request may hold Tally longer than 20 s (was 25 s). No request asks for more than one month of entries or more
+    than 2,000 ledgers (FinCom's ledger lists are read 2,000 MasterIDs a request too).
+  - Only the requests on the allow-list (docs/tally-allowlist.md) are sent to Tally; any other is refused before
+    anything is sent, with a "refused: The request ... is not on the bridge's allow-list" line in the log.
+  - A ledger that hangs Tally: the ledger-list chunk holding it is halved down to its one MasterID; that ledger is then
+    skipped in every later read, named in the log ("the ledger with MasterID N (name) does not answer and holds Tally;
+    it is skipped from now on and named to FinCom") and sent to FinCom with the ledger list; the rest of the list arrives.
 
 What is new in 2.1.4 (since 2.1.3)
   - Tally is never asked for a balance: no opening balances read a batch at a time (TDSDeskKeepBal), no trial balance,
     no ledger balance, no Ledger Vouchers report. FinCom works balances out from its copy of the books.
   - Until the change read is measured, Tally is read only by Update now and the nightly run: the day book of the year,
-    a month a request (a month that does not answer in 25 s is read again in halves, down to a day), each month saved as
+    a month a request (a month that does not answer in 20 s is read again in halves, down to a day), each month saved as
     it comes. Opening a client in FinCom, or a posting, reads nothing from Tally.
   - The plain ledger and group lists come back (02-Oct-2026): Update now (and the nightly run) also reads every
     ledger's name, group, stored opening (the master's own field, not a balance), GSTIN, PAN, GUID, MasterID and AlterID,
@@ -83,7 +90,7 @@ Use ZZ TEST for every posting below, never GARG SHEKHAR & COMPANY.
    Do: in TallyPrime press Alt+F4 so the "Quit?" box shows; leave it. In FinCom post another approved ZZ TEST bill.
    You should see: either "Could not check Tally, not posted. Try again." (the check was not answered; nothing sent), or,
        if the bill had already been sent when Tally stopped answering, "Checking whether it reached Tally" on the Post page
-       (the entry's state "unknown"). The log: "Tally 9000 is busy (no answer in 25s); nothing more is sent to it until it
+       (the entry's state "unknown"). The log: "Tally 9000 is busy (no answer in 20s); nothing more is sent to it until it
        answers a small check" and then at most one "FinComCompany" check a minute.
    Then: close the box with No. Within a minute or two: "Tally 9000 answered the small check"; the bill becomes
        "In Tally (verified)" (it had arrived: "Created (Tally answered late)") or is sent once more and verified. In
@@ -99,7 +106,7 @@ Use ZZ TEST for every posting below, never GARG SHEKHAR & COMPANY.
 7. MEASURE TALLY
    Do: icon > Measure Tally (for FinCom support) with GARG SHEKHAR & COMPANY open; wait (a few minutes).
    You should see: a report opens (measure-...txt in the bridge's folder) with lines a, b, c1, c2, d, e (and its fields),
-       f0 and the ledgers 696-699, each with ms, bytes and count; a ledger that does not answer in 25 s says HANGS, and
+       f0 and the ledgers 696-699, each with ms, bytes and count; a ledger that does not answer in 20 s says HANGS, and
        the bridge waits for the small check before the next one.
    Then: follow docs/tally-measure-sheet.txt (parts A and B) and send the report and the filled tables.
 

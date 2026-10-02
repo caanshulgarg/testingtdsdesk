@@ -41,8 +41,10 @@ type standTally struct {
 	maxFlight int
 	alter     int64
 	slow      func(id, body string) time.Duration
-	importAt  func(id, body string) (create bool, delay time.Duration) // a posting: made or not, and how late it answers
-	led       []*tLed                                                  // the ledger masters (the ledger list; ledgers_test.go)
+	importAt  func(id, body string) (create bool, delay time.Duration)           // a posting: made or not, and how late it answers
+	led       []*tLed                                                            // the ledger masters (the ledger list; ledgers_test.go)
+	behave    func(w http.ResponseWriter, r *http.Request, id, body string) bool // a failure (faketally_test.go): true when it answered (or never will)
+	coName    string                                                             // the company's name as this Tally gives it ("" : ZZ TEST)
 	grp       [][2]string
 	mid       int64 // the last MasterID given
 }
@@ -171,6 +173,15 @@ func newStandTally(t *testing.T) *standTally {
 				return
 			}
 		}
+		f.mu.Lock()
+		behave, coName := f.behave, f.coName
+		f.mu.Unlock()
+		if behave != nil && behave(w, r, id, body) {
+			return
+		}
+		if coName == "" {
+			coName = zz
+		}
 		from, to := group(`<SVFROMDATE>(\d{8})</SVFROMDATE>`, body, 1), group(`<SVTODATE>(\d{8})</SVTODATE>`, body, 1)
 		inDates := func(v *tVch) bool { return from == "" || (v.date >= from && v.date <= to) }
 		var o strings.Builder
@@ -178,7 +189,7 @@ func newStandTally(t *testing.T) *standTally {
 		f.mu.Lock()
 		switch id {
 		case "TDSDeskCompanies", "FinComFree", "FinComCompany":
-			fmt.Fprintf(&o, `<COMPANY NAME="%s"><NAME>%s</NAME><GUID>%s</GUID><STARTINGFROM>20260401</STARTINGFROM><ALTVCHID>%d</ALTVCHID><ALTMSTID>%d</ALTMSTID></COMPANY>`, zz, zz, f.guid, f.alter, f.altMst())
+			fmt.Fprintf(&o, `<COMPANY NAME="%s"><NAME>%s</NAME><GUID>%s</GUID><STARTINGFROM>20260401</STARTINGFROM><ALTVCHID>%d</ALTVCHID><ALTMSTID>%d</ALTMSTID></COMPANY>`, coName, coName, f.guid, f.alter, f.altMst())
 		case "FinComLedgers":
 			var after, upto int64 = 0, -1
 			if m := reMidRange.FindStringSubmatch(body); m != nil {

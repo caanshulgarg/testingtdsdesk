@@ -143,13 +143,28 @@ func companyCheck(tc *TC, company string, port int) (string, error) {
 		if n := nameOf(c); n != "" && !sameCompany(n, company) {
 			continue
 		}
-		altMu.Lock()
-		companyAlts[companyKey(company)] = toI64(re(`\D`).ReplaceAllString(nt(c, "ALTVCHID"), ""))
-		companyAltsM[companyKey(company)] = toI64(re(`\D`).ReplaceAllString(nt(c, "ALTMSTID"), ""))
-		altMu.Unlock()
+		setCompanyAlts(company, c)
 		return strings.TrimSpace(nt(c, "GUID")), nil
 	}
 	return "", nil
+}
+
+func setCompanyAlts(company string, c *Node) {
+	altMu.Lock()
+	companyAlts[companyKey(company)] = toI64(re(`\D`).ReplaceAllString(nt(c, "ALTVCHID"), ""))
+	companyAltsM[companyKey(company)] = toI64(re(`\D`).ReplaceAllString(nt(c, "ALTMSTID"), ""))
+	altMu.Unlock()
+}
+
+// the company check's answer to the small check after a timeout: its highest AlterIDs are noted too
+func noteCompanyAlts(company, raw string) {
+	for _, c := range xmlDoc(raw).All("COMPANY") {
+		if n := nameOf(c); n != "" && !sameCompany(n, company) {
+			continue
+		}
+		setCompanyAlts(company, c)
+		return
+	}
 }
 
 // --- the FinCom id in the narration

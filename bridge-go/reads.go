@@ -6,22 +6,30 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 )
+
+func ledgersFullRequest(company string, after, upto int64) string {
+	fetch := "NAME,PARENT,INCOMETAXNUMBER,PARTYGSTIN,GSTREGISTRATIONTYPE,LEDSTATENAME,ISBILLWISEON,GUID,ALTERID,LEDGSTREGDETAILS.LIST,PAYMENTDETAILS.LIST,TAXTYPE,GSTDUTYHEAD,RATEOFTAXCALCULATION,TDSNATUREOFPAYMENT,NATUREOFPAYMENT,TDSDEDUCTEETYPE,TDSAPPLICABLE,EMAIL,LEDGERPHONE,LEDGERMOBILE,ADDRESS.LIST,LEDMAILINGDETAILS.LIST"
+	return fcCollection("TDSDeskLedgers", company, "", "Ledger", fetch, masterRange(after, upto))
+}
+func groupsFullRequest(company string) string {
+	return collectionRequest("TDSDeskGroups", "Group", "NAME,PARENT,GUID", company, "")
+}
 
 func getLedgers(company string, pref int) (M, error) {
 	port, err := findCompanyPort(company, pref)
 	if err != nil {
 		return nil, err
 	}
-	fetch := "NAME,PARENT,INCOMETAXNUMBER,PARTYGSTIN,GSTREGISTRATIONTYPE,LEDSTATENAME,ISBILLWISEON,GUID,ALTERID,LEDGSTREGDETAILS.LIST,PAYMENTDETAILS.LIST,TAXTYPE,GSTDUTYHEAD,RATEOFTAXCALCULATION,TDSNATUREOFPAYMENT,NATUREOFPAYMENT,TDSDEDUCTEETYPE,TDSAPPLICABLE,EMAIL,LEDGERPHONE,LEDGERMOBILE,ADDRESS.LIST,LEDMAILINGDETAILS.LIST"
-	raw, err := invokeTally(fin, port, collectionRequest("TDSDeskLedgers", "Ledger", fetch, company, ""), 0)
+	nodes, err := ledgerChunks(fin, company, port, ledgersFullRequest)
 	if err != nil {
 		return nil, err
 	}
 	ledgers := []any{}
-	for _, l := range xmlDoc(raw).All("LEDGER") {
+	for _, l := range nodes {
 		name := nameOf(l)
 		if name == "" {
 			continue
@@ -53,7 +61,7 @@ func getLedgers(company string, pref int) (M, error) {
 			"acNo": nt(l, "PAYMENTDETAILS.LIST/ACCOUNTNUMBER"), "ifsc": nt(l, "PAYMENTDETAILS.LIST/IFSCODE"),
 			"taxType": nt(l, "TAXTYPE"), "dutyHead": nt(l, "GSTDUTYHEAD"), "tdsNature": nature, "rate": nt(l, "RATEOFTAXCALCULATION")})
 	}
-	graw, err := invokeTally(fin, port, collectionRequest("TDSDeskGroups", "Group", "NAME,PARENT,GUID", company, ""), 0)
+	graw, err := invokeTally(fin, port, groupsFullRequest(company), 0)
 	if err != nil {
 		return nil, err
 	}
@@ -160,13 +168,19 @@ func getVouchers(company, from, to, ledger, types string, pref int) (M, error) {
 }
 
 // the vouchers of a period, heads only (Optional ones too)
-func voucherHeads(tc *TC, port int, company, from, to string) ([]M, error) {
-	x := "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TDSDeskVchHeads</ID></HEADER>" +
+func vchHeadsRequest(company, from, to string) string {
+	return "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TDSDeskVchHeads</ID></HEADER>" +
 		"<BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>" + esc(company) + "</SVCURRENTCOMPANY>" +
 		"<SVFROMDATE>" + from + "</SVFROMDATE><SVTODATE>" + to + "</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE>" +
 		`<COLLECTION NAME="TDSDeskVchHeads" ISMODIFY="No"><TYPE>Voucher</TYPE><FETCH>DATE,VOUCHERTYPENAME,VOUCHERNUMBER,REFERENCE,PARTYLEDGERNAME,NARRATION,MASTERID,GUID,ALTERID,ISOPTIONAL,ISCANCELLED</FETCH></COLLECTION>` +
 		"</TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>"
-	raw, err := invokeTally(tc, port, x, 0)
+}
+
+func voucherHeads(tc *TC, port int, company, from, to string) ([]M, error) {
+	if err := withinMonth(from, to); err != nil {
+		return nil, err
+	}
+	raw, err := invokeTally(tc, port, vchHeadsRequest(company, from, to), 0)
 	if err != nil {
 		return nil, err
 	}
@@ -185,6 +199,9 @@ func voucherHeads(tc *TC, port int, company, from, to string) ([]M, error) {
 
 // the Day Book report for a date range (regular vouchers only), as voucher heads
 func dayBookHeads(tc *TC, port int, company, from, to string) ([]M, error) {
+	if err := withinMonth(from, to); err != nil {
+		return nil, err
+	}
 	raw, err := invokeTally(tc, port, dayBookRequest(company, from, to), 0)
 	if err != nil {
 		return nil, err
@@ -204,7 +221,7 @@ func readTest(company string, pref int) (M, error) {
 		return nil, err
 	}
 	to := time.Now()
-	f, t := tallyDate(to.AddDate(0, 0, -90)), tallyDate(to)
+	f, t := tallyDate(to.AddDate(0, 0, -30)), tallyDate(to)
 	tests := []any{}
 	probe := func(name string, run func() ([]M, error)) {
 		t0 := time.Now()
@@ -232,9 +249,63 @@ func readTest(company string, pref int) (M, error) {
 		}
 		return o, nil
 	})
-	probe("Day Book, last 90 days", func() ([]M, error) { return dayBookHeads(fin, port, company, f, t) })
-	probe("Voucher list, last 90 days (includes Optional)", func() ([]M, error) { return voucherHeads(fin, port, company, f, t) })
+	probe("Day Book, last 30 days", func() ([]M, error) { return dayBookHeads(fin, port, company, f, t) })
+	probe("Voucher list, last 30 days (includes Optional)", func() ([]M, error) { return voucherHeads(fin, port, company, f, t) })
 	return M{"ok": true, "company": company, "port": port, "from": f, "to": t, "tests": tests}, nil
+}
+
+func namesRequest(company string, after, upto int64) string {
+	return fcCollection("TDSDeskNames", company, "", "Ledger", "NAME,PARENT", masterRange(after, upto))
+}
+
+// the MasterID range of a ledger request, (after, upto] (upto 0: no upper end)
+func masterRange(after, upto int64) string {
+	f := fmt.Sprintf("$MasterID > %d", after)
+	if upto > 0 {
+		f += fmt.Sprintf(" AND $MasterID <= %d", upto)
+	}
+	return f
+}
+
+// every ledger, read 2,000 MasterIDs a request (LedgerChunk) so no request holds Tally for long on a company with
+// 50,000 ledgers: up to the company's highest master AlterID (its company check); the chunk that reaches it has no upper
+// end, so whatever is past it comes too. A ledger seen twice (a Tally that ignores the range) counts once
+func ledgerChunks(tc *TC, company string, port int, build func(string, int64, int64) string) ([]*Node, error) {
+	bound := companyAlterM(company)
+	if bound <= 0 {
+		if _, err := companyCheck(tc, company, port); err != nil {
+			return nil, err
+		}
+		bound = companyAlterM(company)
+	}
+	size := int64(ledChunkDefault())
+	var out []*Node
+	seen := map[string]bool{}
+	for after := int64(0); ; after += size {
+		upto := after + size
+		last := upto >= bound // the last chunk takes whatever is past the bound too
+		if last {
+			upto = 0
+		}
+		raw, err := invokeTally(tc, port, build(company, after, upto), 0)
+		if err != nil {
+			return nil, err
+		}
+		for _, l := range xmlDoc(raw).All("LEDGER") {
+			k := nameOf(l)
+			if k == "" || seen[k] {
+				continue
+			}
+			seen[k] = true
+			out = append(out, l)
+		}
+		if last {
+			return out, nil
+		}
+	}
+}
+func groupNamesRequest(company string) string {
+	return collectionRequest("TDSDeskGroupNames", "Group", "NAME,PARENT", company, "")
 }
 
 // every ledger's name and group, and every group's parent: no balances, so Tally answers at once
@@ -243,17 +314,17 @@ func getLedgerNames(tc *TC, company string, pref int) (M, error) {
 	if err != nil {
 		return nil, err
 	}
-	raw, err := invokeTally(tc, port, collectionRequest("TDSDeskNames", "Ledger", "NAME,PARENT", company, ""), 0)
+	nodes, err := ledgerChunks(tc, company, port, namesRequest)
 	if err != nil {
 		return nil, err
 	}
 	led := []any{}
-	for _, l := range xmlDoc(raw).All("LEDGER") {
+	for _, l := range nodes {
 		if n := nameOf(l); n != "" {
 			led = append(led, []any{n, nt(l, "PARENT")})
 		}
 	}
-	graw, err := invokeTally(tc, port, collectionRequest("TDSDeskGroupNames", "Group", "NAME,PARENT", company, ""), 0)
+	graw, err := invokeTally(tc, port, groupNamesRequest(company), 0)
 	if err != nil {
 		return nil, err
 	}
@@ -286,8 +357,8 @@ func getDayBookXML(tc *TC, company, from, to string, pref int) (string, error) {
 	if from > to {
 		return "", errors.New("The period ends before it starts.")
 	}
-	if fromTallyDate(to).Sub(fromTallyDate(from)).Hours()/24 > 92 {
-		return "", errors.New("Ask for three months at most at a time, so Tally is not held up.")
+	if err := withinMonth(from, to); err != nil {
+		return "", err
 	}
 	port, err := readerPort(tc, company, pref)
 	if err != nil {
@@ -357,4 +428,15 @@ func getLedgerLines(co, ledger, from, to string, pin int) (M, error) {
 	}
 	r0["via"] = "daybook"
 	return r0, nil
+}
+
+// no request asks Tally for more than a month of entries (31 days from the first to the last), so none holds it long
+func withinMonth(from, to string) error {
+	if !isTallyDate(from) || !isTallyDate(to) {
+		return errors.New("Dates are to be given as yyyymmdd.")
+	}
+	if fromTallyDate(to).Sub(fromTallyDate(from)).Hours()/24 > 31 {
+		return errors.New("Ask for one month at most at a time, so Tally is not held up.")
+	}
+	return nil
 }
