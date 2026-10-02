@@ -1,7 +1,7 @@
 FINCOM BRIDGE 2.1.5 - TEST SHEET (NWS144, staging)
 
 File:        FinComBridge-Setup-2.1.5.exe
-Fingerprint: <filled at build> (SHA-256)
+Fingerprint: f75dbcae652677592a8d657004399c14195c660c00c27af3003262135bb5fba3 (SHA-256)
 Link:        https://staging.fincom.live/review/assets/bridge-go/FinComBridge-Setup-2.1.5.exe
 (2.1.4 was built but never handed out; 2.1.5 is 2.1.4 with the last per-ledger read removed, see below.)
 Before step 8: tally-ingest deployed to staging with the "ledger_list" kind (the round 3 shape: every batch carries

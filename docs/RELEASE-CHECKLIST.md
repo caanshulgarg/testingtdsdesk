@@ -71,3 +71,4 @@ is compared with.
 
 | Version | Date | Allow-list hash | Review notes | Pilot start | Approved (by, date) |
 |---|---|---|---|---|---|
+| 2.1.5 | 2026-10-02 | aef526b9297155888057da9fb06cd9ef8e043d8a586999a02d39249a426d8d1e | docs/reviews/bridge-2.1.5-{code,security}-review.md (f21b29f..be5542f), built at e6e070b; allow-list not yet measured (first-build exception) | | |
