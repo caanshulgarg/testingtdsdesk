@@ -53,7 +53,7 @@ const TCloud = {
   big(cid){ const b = this.book(cid); return !!(b && b.entries > this.BIG); },
   // ---------- answers from the cloud's ready totals
   async tb(cid, asOn){
-    const raw = await this.rpcAll("tally_tb", {p_client: cid, p_as_on: this.iso(asOn)});
+    const raw = await this.balRows(cid, asOn);
     const bk = this.book(cid) || {};
     // a ledger whose name in Tally ends in a line break ("MCS Project Pvt Ltd\r\n") is the ledger its entries name
     // without it: one row, its master's group and opening with its entries (review of 02-Oct-2026: the two showed as
@@ -64,7 +64,7 @@ const TCloud = {
       else { x.closing = r2(x.closing + num(r.closing)); if (r.parent){ x.parent = x.parent || r.parent; x.master = true; } } });
     const rows = Array.from(by.values());
     const out = rows.filter(r => Math.abs(num(r.closing)) >= 0.005).map(r => ({l: r.ledger, top: this.top(r.ledger, rows), sub: r.parent || "", bal: -r2(num(r.closing)), noMaster: !r.master && !/^profit & loss a\/c$/i.test(r.ledger)}));
-    return LK.tbShape({kind: "tb", src: "cloud", asOn, rows: out, note: "From the copy in FinCom's cloud (" + (bk.company || "") + "), " + this.age(bk) + "."});
+    return LK.tbShape({kind: "tb", src: "cloud", asOn, rows: out, line: copyLine(cid), note: "From the copy in FinCom's cloud (" + (bk.company || "") + "), " + this.age(bk) + "."});
   },
   // the top group of a ledger, from the groups FinCom knows, else the ledger's own group
   top(l, rows){ try { const t = FC.top(l); if (t) return t; } catch (e){} const r = rows.find(x => x.ledger === l); return (r && r.parent) || "Other"; },
@@ -79,7 +79,7 @@ const TCloud = {
       return {id: guid, date: d, type, no, part: party && party !== led ? party : "", narr: narr || "", dr: dd, cr: c, run};
     });
     const ends = j.to && this.d8(j.to) < to ? " This copy (" + (j.company || "") + ") has entries up to " + FC.when(this.d8(j.to)) + "; a later year kept as another company in Tally is asked separately." : "";
-    return {kind: "ledger", src: "cloud", led, from, to, open, close: run, dr, cr, rows, note: "From the books (" + (j.company || "") + "), " + this.age(this.book(cid)) + "." + ends};
+    return {kind: "ledger", src: "cloud", led, from, to, open, close: run, dr, cr, rows, line: copyLine(cid), note: "From the books (" + (j.company || "") + "), " + this.age(this.book(cid)) + "." + ends};
   },
   // build 192: a group, month by month, and any entry: worked out by the cloud, not from books loaded here
   inG(l, parent, grp){ try { if (FC.inGroup(l, grp)) return true; } catch (e){} return String(parent || "").toLowerCase() === String(grp || "").toLowerCase(); },
@@ -89,7 +89,7 @@ const TCloud = {
     const rows = all.filter(r => this.inG(r.ledger, r.parent, grp)).map(r => { const op = -r2(num(r.open)), dr = r2(num(r.dr)), cr = r2(num(r.cr)); return {l: r.ledger, sub: r.parent || "", open: op, dr, cr, close: r2(op + dr - cr)}; })
       .filter(r => r.dr || r.cr || (r.open && Math.abs(r.open) >= 0.5)).sort((a, c) => Math.abs(c.close) - Math.abs(a.close) || a.l.localeCompare(c.l));
     const sum = k => r2(rows.reduce((t, r) => t + (r[k] || 0), 0));
-    return {kind: "group", src: "cloud", grp, from, to, rows, open: sum("open"), dr: sum("dr"), cr: sum("cr"), close: sum("close"), note: "From the books (" + (bk.company || "") + "), " + this.age(bk) + "."};
+    return {kind: "group", src: "cloud", grp, from, to, rows, open: sum("open"), dr: sum("dr"), cr: sum("cr"), close: sum("close"), line: copyLine(cid), note: "From the books (" + (bk.company || "") + "), " + this.age(bk) + "."};
   },
   async monthly(cid, led, grp, from, to){
     const [per, mon] = await Promise.all([this.period(cid, from, to), this.rpcAll("tally_monthly", {p_client: cid, p_from: this.iso(from), p_to: this.iso(to)})]);
@@ -100,7 +100,7 @@ const TCloud = {
     let run = -r2(per.filter(r => set.has(r.ledger)).reduce((t, r) => t + num(r.open), 0));
     const open = run, bk = this.book(cid) || {};
     const rows = months.map(k => { const x = m[k]; run = r2(run + x.dr - x.cr); return {ym: k, dr: x.dr, cr: x.cr, net: r2(x.dr - x.cr), close: run}; });
-    return {kind: "monthly", src: "cloud", led, grp, from, to, open, rows, dr: r2(rows.reduce((t, r) => t + r.dr, 0)), cr: r2(rows.reduce((t, r) => t + r.cr, 0)), note: "From the books (" + (bk.company || "") + "), " + this.age(bk) + "."};
+    return {kind: "monthly", src: "cloud", led, grp, from, to, open, rows, dr: r2(rows.reduce((t, r) => t + r.dr, 0)), cr: r2(rows.reduce((t, r) => t + r.cr, 0)), line: copyLine(cid), note: "From the books (" + (bk.company || "") + "), " + this.age(bk) + "."};
   },
   FIND_PAGE: 500,
   async find(cid, q, from, to, typ, had){
@@ -749,6 +749,78 @@ function booksAsOf(cid){
   if (!at) return null;
   return {at, text: "Books as of " + tallyHm(at),
     say: "Tally cannot send its changes by itself: entries made in Tally after " + tallyHm(at) + " come in at the next update (opening this client, Update now, or the nightly catch-up)."};
+}
+// FinCom Bridge 2.1.4 asks Tally for no balance (its /balances, /tb and /ledgerbalance answer only from its own copy, and
+// on most companies with an error). The owner's decision of 02-Oct-2026: every balance FinCom shows (Look up, the books'
+// opening balances, the bank check after a posting) is worked out from FinCom's cloud copy, openings plus entries, and
+// is shown with this line, never with an error: "Balance from FinCom's copy · books as of 15:34"
+function copyLine(cid){ const a = booksAsOf(cid); return "Balance from FinCom's copy \u00b7 books as of " + (a ? tallyHm(a.at) : "the last update"); }
+Object.assign(TCloud, {
+  // the view tally_balances (migration-32): each ledger's opening, its entries from the book's start, and the closing.
+  // null: not asked yet; false: not on this cloud (then the trial balance function, tally_tb, as before)
+  hasView: null,
+  async viewRows(bk){
+    if (this.hasView === false || !bk || !bk.book) return null;
+    try {
+      const rows = await this.restAll("tally_balances?select=ledger,parent,open,closing,last_day&book_id=eq." + encodeURIComponent(bk.book));
+      this.hasView = true;
+      return rows;
+    } catch (e){
+      if (/tally_balances|does not exist|PGRST2\d\d|schema cache|404/i.test(String((e && e.message) || e))) this.hasView = false;
+      return null;
+    }
+  },
+  // every ledger's opening, movement and closing on a date (Tally's signs: a debit is negative): from the view when the
+  // date is on or after the last day the copy holds (its closing is then the balance on the date), else tally_tb
+  async balRows(cid, asOn){
+    const bk = this.book(cid), last = bk ? this.d8(bk.to || "") : "";
+    if (bk && last && String(asOn) >= last && this.d8(bk.from) <= String(asOn)){
+      const v = await this.viewRows(bk);
+      if (v) return v.map(r => ({ledger: r.ledger, parent: r.parent || "", open: r.open, movement: num(r.closing) - num(r.open), closing: r.closing}));
+    }
+    return await this.rpcAll("tally_tb", {p_client: cid, p_as_on: this.iso(asOn)}) || [];
+  },
+  // one ledger's balance at the end of a day, a debit positive: the opening of the next day (tally_ledger), or the view
+  async ledgerAt(cid, led, asOn){
+    asOn = Audit.ymd(asOn);
+    if (!this.on()) throw new Error("not signed in to the firm account");
+    if (!this.has(cid)) await this.status(cid);
+    const bk = this.book(cid);
+    if (!bk) throw new Error("FinCom's copy of these books is not in the cloud yet");
+    const last = this.d8(bk.to || ""), k = ledNm(led);
+    if (last && String(asOn) >= last){
+      const v = await this.viewRows(bk);
+      if (v){ const hit = v.filter(r => ledNm(r.ledger) === k); if (hit.length) return -r2(hit.reduce((t, r) => t + num(r.closing), 0)); }
+    }
+    const next = Audit.ymd(addDays(Audit.iso(asOn), 1));
+    const j = await this.rpc("tally_ledger", {p_client: cid, p_ledger: led, p_from: this.iso(next), p_to: this.iso(next)});
+    if (!j || j.none) throw new Error("FinCom's copy of these books does not reach " + FC.when(asOn) + " yet");
+    return -r2(num(j.open));
+  },
+  // the opening balances on the first day of the books, as TallyRead.balances takes them: the view's openings on the
+  // book's first day, else the balances on the day before (tally_tb); else the ledger masters' openings
+  async openings(cid, from){
+    if (!this.has(cid)) await this.status(cid);
+    const bk = this.book(cid);
+    if (!bk) return null;
+    let rows = null;
+    if (this.d8(bk.from) === String(from)){
+      const v = await this.viewRows(bk);
+      if (v) rows = v.map(r => ({name: r.ledger, parent: r.parent || "", open: String(r.open), close: ""}));
+      if (!rows){ const led = await this.restAll("tally_ledgers?select=name,parent,open&merged_into=is.null&order=name&book_id=eq." + encodeURIComponent(bk.book)); rows = led.map(l => ({name: l.name, parent: l.parent, open: String(l.open), close: ""})); }
+    } else {
+      const t = await this.rpcAll("tally_tb", {p_client: cid, p_as_on: this.iso(Audit.dayBefore(from))}) || [];
+      rows = t.map(r => ({name: r.ledger, parent: r.parent || "", open: String(r.closing), close: ""}));
+    }
+    return {ledgers: rows, from, openOnly: true, company: bk.company, line: copyLine(cid)};
+  }
+});
+// The bank check after a posting counts only once each entry FinCom posted to the statement is read back: confirmed in
+// Tally (read back after posting) and in FinCom's copy (the copy read after it was posted). The lines still waiting
+function bankNotReadBack(rows, cid){
+  const a = booksAsOf(cid), at = a ? Date.parse(a.at) : 0;
+  return (rows || []).filter(r => r.state === "sent" && !r.postedOptional &&
+    (r.checking || (r.postedVia === "bridge" && r.postVerified !== true) || (r.sentAt && (!at || Date.parse(r.sentAt) > at))));
 }
 // Update now for a client: the bridge here when it has the company open, else the client's Tally computer through
 // FinCom's cloud (the bridge reads at once, also while its background reading is paused)
