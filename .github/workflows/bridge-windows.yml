@@ -195,12 +195,14 @@ jobs:
           $un = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\FinComConnector'
           New-Item -Force $un | Out-Null
           Set-ItemProperty $un 'DisplayName' 'FinCom Connector'
-          # bridge 1.15.0 running, as its starter runs it
-          Start-Process powershell.exe -ArgumentList '-NoLogo', '-NoProfile', '-WindowStyle', 'Hidden', '-ExecutionPolicy', 'Bypass', '-File', ('"' + "$home2\TDSBridge.ps1" + '"')
-          Start-Sleep -Seconds 3
           '@ | Set-Content C:\fcsetup\old115.ps1
           $code = Invoke-AsTest 'powershell.exe' @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'C:\fcsetup\old115.ps1')
           Check ($code -eq 0) "the older bridges were set up for fctest (code $code)"
+          # bridge 1.15.0 running as fctest, as its starter runs it (started here, not from the script above: a process a
+          # script started for another user ends with that script)
+          $standIn = Join-Path (Get-TestLocalAppData) 'TDS Desk Bridge\TDSBridge.ps1'
+          $env:TEMP = 'C:\fcsetup\tmp'; $env:TMP = 'C:\fcsetup\tmp'
+          $null = Start-Process powershell.exe -ArgumentList '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ('"' + $standIn + '"') -Credential (Get-TestCred) -LoadUserProfile -WorkingDirectory 'C:\fcsetup' -WindowStyle Hidden -PassThru
           $old = { @(Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" | Where-Object { $_.CommandLine -like '*TDSBridge.ps1*' }) }
           Check (Wait-Until { (& $old).Count -ge 1 } 20) 'bridge 1.15.0 (stand-in) runs as fctest'
 
