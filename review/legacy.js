@@ -13020,7 +13020,8 @@ function lmSet(name, key, val){
   LedMaster.tplLearn(b, [name]); try { LedMaster.applyPosting(b, CO(), "empty"); } catch (e){}
   b.mapV = (b.mapV || 0) + 1; b.reco = null; saveBooks(); render();
 }
-function lmConfirmToggle(name){ const m = S.books.map[name]; if (m){ LedMaster.confirm(S.books, [name], !m.ok); S.books.reco = null; saveBooks(); render(); } }
+// a confirm button is its own confirm step (review 18): saved at once, not kept as a draft (src/js/60 Drafts.direct)
+function lmConfirmToggle(name){ const m = S.books.map[name]; if (m) Drafts.direct(() => { LedMaster.confirm(S.books, [name], !m.ok); S.books.reco = null; saveBooks(); render(); }, {bypass: true}); }
 function lmViewGo(v){ S.lmView = v; S.booksTab = "ledgers"; render(); }
 function lmPost(k){ LedMaster.applyPosting(S.books, CO(), k); render(); }
 // the Audit tab (app/src/screens/books/Audit.jsx): the period, how often it runs by itself, and a finding's status
@@ -17499,7 +17500,8 @@ function doAct(act, t){
       const pool = view === "gst" ? Object.entries(b.map).filter(([nm, m]) => LedMaster.isGst(m.what) && LedMaster.taxLike(nm, m, info[nm])) :
         view === "tds" ? Object.entries(b.map).filter(([nm, m]) => LedMaster.isTds(m.what) && LedMaster.taxLike(nm, m, info[nm])) : LedMaster.pending(b);
       const names = pool.filter(([nm, m]) => !m.ok && (!q || nm.toLowerCase().includes(q) || String(m.section || "").toLowerCase().includes(q) || String((info[nm] || {}).group || "").toLowerCase().includes(q))).map(x => x[0]);
-      LedMaster.confirm(b, names, true); b.reco = null; saveBooks(); toast(names.length + " ledger" + (names.length === 1 ? "" : "s") + " confirmed."); render(); break;
+      // a confirm button is its own confirm step: saved at once, not a draft (src/js/60)
+      Drafts.direct(() => { LedMaster.confirm(b, names, true); b.reco = null; saveBooks(); }, {bypass: true}); toast(names.length + " ledger" + (names.length === 1 ? "" : "s") + " confirmed."); render(); break;
     }
     // ledgers with entries but no master: the masters read again (through the bridge here, else the firm's Tally
     // computer is asked to update the cloud copy, masters included)
@@ -17543,7 +17545,7 @@ function doAct(act, t){
     case "lcRun": { const b = S.books; if (!b) break; const c = LedCheck.run(b); const high = c.names.filter(n => c.items[n].s.conf === "high").length; toast(c.names.length + " tax-like ledgers checked: " + high + " settled by Tally’s masters or the day book, " + (c.names.length - high) + " to look at."); saveBooks(); render(); break; }
     case "lcConfirm": { const b = S.books, c = b && b.ledCheck; if (!c) break;
       const names = (c.names || []).filter(n => !((b.map || {})[n] || {}).ok && LedCheck.ticked(c.items[n]));
-      const n = LedCheck.confirm(b, names); GSTR._carry = null; GST2B._memo = null; saveBooks(); toast(n + " ledger" + (n === 1 ? "" : "s") + " confirmed. Only confirmed ledgers count in the returns now."); render(); break; }
+      const n = Drafts.direct(() => { const k = LedCheck.confirm(b, names); saveBooks(); return k; }, {bypass: true}); GSTR._carry = null; GST2B._memo = null; toast(n + " ledger" + (n === 1 ? "" : "s") + " confirmed. Only confirmed ledgers count in the returns now."); render(); break; }
     case "lcAi": { const b = S.books; if (!b || !b.ledCheck) break; b.busy = "Asking AI about the unclear ledgers…"; render();
       LedCheck.askAi(b).then(n => { b.busy = ""; if (n){ toast("AI answered for " + n + " ledger" + (n === 1 ? "" : "s") + ". Its answers are not ticked: check each."); saveBooks(); } render(); }, e => { b.busy = ""; toast("AI could not be asked: " + ((e && e.message) || e)); render(); }); break; }
     case "trashRestore": {
@@ -23091,8 +23093,9 @@ function aihAct(a){
   else if (a === "auditReview"){ S.booksTab = "ledgers"; S.lmView = "ai"; render(); AIH.reviewLedgers(false); }
   else if (a === "pair2b") AIH.pair2b();
 }
-async function aihAccept(l, yes){ AIH.accept(l, yes ? "yes" : "no"); await saveBooks(); render(); }
-async function aihPay(n, yes){ if (yes) AIH.acceptPay(n); else { delete AIH.st().tdsPay[n]; AIH.log("rejected", n + ": TDS ledger section"); } await saveBooks(); render(); }
+// Accept / Reject is its own confirm step (review 18): saved at once, not kept as a draft of the page (src/js/60)
+async function aihAccept(l, yes){ await Drafts.direct(() => { AIH.accept(l, yes ? "yes" : "no"); return saveBooks(); }, {bypass: true}); render(); }
+async function aihPay(n, yes){ await Drafts.direct(() => { if (yes) AIH.acceptPay(n); else { delete AIH.st().tdsPay[n]; AIH.log("rejected", n + ": TDS ledger section"); } return saveBooks(); }, {bypass: true}); render(); }
 async function aihPair(key, yes){
   const a = AIH.st(), s = a.pairs[key]; if (!s) return;
   if (yes){ const st = GST2B.state(); st.link[key] = [s.id]; delete st.confirm[key]; s.okBy = AIH.who(); s.okAt = new Date().toISOString(); AIH.log("accepted 2B pair", s.label); }
@@ -25294,7 +25297,7 @@ function choicePathSet(o, path, v){
   if (v === undefined) delete x[k]; else x[k] = clone(v);
 }
 // (an empty value and a missing one are the same: a box emptied, a choice put back to "none")
-function choiceSame(a, b){ if (a === undefined || a === null) a = ""; if (b === undefined || b === null) b = ""; return a === b || stableStr(a) === stableStr(b); }
+function choiceSame(a, b){ const e = v => v === undefined || v === null || (typeof v === "object" && !Object.keys(v).length); if (e(a)) a = ""; if (e(b)) b = ""; return a === b || stableStr(a) === stableStr(b); }
 // the paths where two copies differ (objects compared key by key, to a depth of 6; arrays and values whole)
 function choicePathDiff(a, b, pre, out, depth){
   const isO = v => !!v && typeof v === "object" && !Array.isArray(v);
