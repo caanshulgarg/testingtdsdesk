@@ -13,6 +13,7 @@ DAYS = []             # (book, day, n) of each tally_ingest_day
 FAIL = {}             # day -> times tally_ingest_day fails for it before it works
 WORK_KEY = "work-key-" + "c" * 32
 CALLS = []
+ARGS = {}             # function -> the arguments of each call (the names sent to the ingest functions, migration-23)
 SECRETS = {}          # Vault: name -> value (gsp_secret_put / gsp_secret_get, migration-16)
 CRON_KEY = "cron-key-" + "d" * 32
 PK = {"gst_sessions": ["firm_id", "gstin"], "gst_returns": ["firm_id", "gstin", "form", "period"], "gst_einv_accounts": ["firm_id", "gstin"], "gst_einvoices": ["firm_id", "gstin", "doc_key"]}
@@ -33,7 +34,10 @@ def match(row, q):
         if op == "in" and cs not in val.strip("()").split(","): return False
     return True
 def rpc(fn, a):
+    ARGS.setdefault(fn, []).append(a)
     if fn == "mfa_ok": return True
+    if fn == "tally_ingest_ledgers_g": return {"ok": True, "ledgers": len(a.get("p_ledgers") or []), "groups": len(a.get("p_groups") or [])}
+    if fn == "tally_year_openings": return {"ok": True, "moved": 0, "ledgers": 0, "twins": 0}
     if fn == "tally_book_for": return next((c["book_id"] for c in T["tally_companies"] if c["firm_id"] == a["p_firm"] and c["company"] == a["p_company"]), None)
     if fn == "tally_ingest_day":
         d = a["p_day"].replace("-", "")

@@ -385,6 +385,9 @@ func (t *tray) statusText() string {
 	}
 	w := obj(st["wake"])
 	fmt.Fprintf(&b, "Wake-up channel: %s\n", map[bool]string{true: "connected", false: "not connected (the heartbeat carries on)"}[truthy(w["joined"])])
+	if l := str(st["posting"]); l != "" {
+		b.WriteString("Posting: " + l + "\n")
+	}
 	if truthy(st["updating"]) {
 		b.WriteString("Update from Tally: running now\n")
 	}

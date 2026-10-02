@@ -4,6 +4,7 @@ import DocqPanel from "../parts/Docq.jsx";
 import DropZone from "../parts/DropZone.jsx";
 import ReadBadge from "../parts/ReadBadge.jsx";
 import BillDetail from "./Bill.jsx";
+import UploadResult from "../parts/UploadResult.jsx";
 
 function Tag({ e }) {
   if (S.reading[e.id]) return <span className="tag no">Reading…</span>;
@@ -30,6 +31,7 @@ export default function Invoices() {
   const filter = (id, label) => <button aria-pressed={S.filter === id} onClick={() => { S.filter = id; S.selected = null; render(); }}>{label} ({cnt(id)})</button>;
   return <>
     <DocqPanel cid={S.coId} />
+    <UploadResult />
     <div className="desk">
       <div>
         {drafts > 1 && <div className="row" style={{ margin: "8px 0 0" }}><button className="btn small" onClick={() => doAct("revTable")}>Review all {drafts} in a table</button></div>}
@@ -38,8 +40,7 @@ export default function Invoices() {
         </div>
         <div className="filters">
           {filter("draft", "To review")}{filter("approved", "Approved")}{filter("rejected", "No entry")}
-          {(cnt("duplicate") > 0 || S.filter === "duplicate") && filter("duplicate", "Duplicates")}
-          {(cnt("deleted") > 0 || S.filter === "deleted") && filter("deleted", "Deleted")}
+          {filter("duplicate", "Duplicates")}{filter("deleted", "Deleted")}
         </div>
         {shown.length ? (
           <ul className="queue">

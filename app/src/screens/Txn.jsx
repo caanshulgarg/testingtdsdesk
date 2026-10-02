@@ -6,7 +6,7 @@ import ColHead from "../parts/ColHead.jsx";
 import { ChipBar, NoMatch } from "../parts/ChipBar.jsx";
 
 const amt = (v) => (v ? money(r2(v)) : "—");
-const STATUS = [["", "Any status"], ["ok", "In Tally"], ["warn", "Ready or held"], ["no", "Not posted"], ["bad", "Refused by Tally"]];
+const STATUS = [["", "Any status"], ["ok", "In Tally"], ["warn", "Ready or held"], ["no", "Not posted"], ["bad", "Refused by Tally"], ["dup", "Duplicates"], ["del", "Deleted"]];
 
 function Doc({ r }) {
   if (!r.file) return "—";
@@ -29,15 +29,15 @@ export default function Txn() {
   }
   if (!S.fileIndex || S.fileIndexCid !== co.id) { S.fileIndexCid = co.id; FileStore.index(co.id).then(() => render()); }
   const rows = txnFiltered(all), bank = tab === "bank", c = txnColShown;
-  const kinds = [["bills", "Purchase", txnRowsBills().length], ["sales", "Sales", S.sales && S.sales.cid === co.id ? S.sales.list.length : null], ["bank", "Bank", S.bank && S.bank.cid === co.id ? S.bank.rows.length : null]];
+  const kinds = [["bills", "Purchase", txnRowsBills().filter((r) => r.e.status !== "deleted").length], ["sales", "Sales", S.sales && S.sales.cid === co.id ? S.sales.list.length : null], ["bank", "Bank", S.bank && S.bank.cid === co.id ? S.bank.rows.length : null]];
   return <>
     <nav className="sbar" aria-label="Kind">{kinds.map(([id, label, n]) =>
       <button key={id} aria-selected={tab === id} onClick={() => txnTabGo(id)}>{label}{n != null && <> <span className="sbar-n">{n}</span></>}</button>)}</nav>
     <div className="revfilter">
       <input type="search" value={S.txnQ || ""} placeholder="Find by invoice no., party, file or amount" aria-label="Find a transaction"
         onChange={(ev) => { S.txnQ = ev.target.value; FinComReact.redraw(); later("txnq", render, 250); }} />
-      <select aria-label="Status" value={S.txnStatus || ""} onChange={(ev) => { S.txnStatus = ev.target.value; render(); }}>{STATUS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
-      <span className="note">{rows.length} of {all.length}</span>
+      <select aria-label="Status" value={S.txnStatus || ""} onChange={(ev) => { S.txnStatus = ev.target.value; render(); }}>{STATUS.filter(([v]) => tab === "bills" || (v !== "dup" && v !== "del")).map(([v, l]) => <option key={v} value={v}>{l + (v === "dup" || v === "del" ? " (" + all.filter((r) => r.e && r.e.status === (v === "dup" ? "duplicate" : "deleted")).length + ")" : "")}</option>)}</select>
+      <span className="note">{rows.length} of {all.filter((r) => !(r.e && r.e.status === "deleted")).length}</span>
       <button className="btn small primary" onClick={() => txnExcel()}>Excel</button>
       <button className="btn small" onClick={() => txnCsv()}>CSV</button>
       <details className="colpick"><summary className="btn small">Columns</summary>

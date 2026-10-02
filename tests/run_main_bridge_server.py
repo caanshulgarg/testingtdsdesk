@@ -82,6 +82,18 @@ try:
     ok(c == 400 and dev.get("main_bridge") == "go-aaaaaaaaaaaa", "1.15.0 cannot make itself the main bridge")
     c, r = call({"kind": "beat", "version": "2.1.0", "bridge": main, "tally": True})
     ok(r.get("notMain") is True and r.get("posts") == 0, "and the first 2.1.0 is then told it is not the main one")
+    # posting updates (02-Oct-2026): each entry's state kept; a cancelled or vanished posting is told to the bridge
+    dev["main_bridge"] = None
+    c, r = call({"kind": "posts_update", "version": "2.1.0", "bridge": main, "id": "p-1", "status": "taken", "done": 0, "message": "Waiting for Tally: ZZ CO is not open",
+                 "items": [{"id": "v1", "kind": "voucher", "state": "waiting", "reason": ""}, {"id": "v2", "state": "bogus"}]})
+    job = F.T["tally_post_jobs"][0]
+    ok(c == 200 and job.get("items") == [{"id": "v1", "kind": "voucher", "state": "waiting", "reason": ""}, {"id": "v2", "kind": "", "state": "waiting", "reason": ""}], "each entry's state is kept (an unknown state is read as waiting)")
+    job["status"] = "cancelled"
+    c, r = call({"kind": "posts_update", "version": "2.1.0", "bridge": main, "id": "p-1", "status": "taken", "message": "x"})
+    ok(c == 200 and r.get("cancelled") is True and job["status"] == "cancelled", "a posting cancelled in FinCom: the bridge is told (cancelled), nothing changes")
+    c, r = call({"kind": "posts_update", "version": "2.1.0", "bridge": main, "id": "no-such", "status": "taken"})
+    ok(c == 200 and r.get("gone") is True, "a posting no longer there: the bridge is told (gone)")
+    dev["main_bridge"] = "go-aaaaaaaaaaaa"
     # install logs
     import zipfile, io
     zb = io.BytesIO(); zipfile.ZipFile(zb, "w").writestr("install.log", "2026-10-02 10:00:00  Install: test"); zb = base64.b64encode(zb.getvalue()).decode()

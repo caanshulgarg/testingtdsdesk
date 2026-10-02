@@ -48,7 +48,7 @@ function stepCounts(){
     const n = S.sales && S.sales.cid === S.coId ? S.sales.list.length : 0;
     return {collect: "upload or create", review: n + " invoices", post: "from the list", done: ""};
   }
-  return {collect: inbox ? inbox + " in inbox" : "upload bills", review: (st.drafts || 0) + " to review", post: (st.waiting || 0) + " approved", done: (st.invoicesFy || 0) + " this year"};
+  return {collect: inbox ? inbox + " in inbox" : "upload bills", review: (st.drafts || 0) + " to review", post: (st.waiting || 0) + " approved", done: (st.inTally || 0) + " in Tally this year"};
 }
 // the firm's plan comes as {name, includes, …} from the firm account; older copies kept only its name
 function planName(p){ return p && typeof p === "object" ? String(p.name || "") : String(p || ""); }

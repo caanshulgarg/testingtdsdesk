@@ -14,7 +14,7 @@ def ok(c, w):
     if not c: fails.append(w)
 SETUP = """(bk) => {
   S.storeKind = "db";
-  const c = newCompany({name: "Aarohi Textiles Pvt Ltd", gstin: "09AAHCA7732L1Z4"}); c.id = "c_demo"; c.tallyName = "Aarohi Textiles Pvt Ltd"; S.companies[c.id] = c;
+  const c = newCompany({name: "Aarohi Textiles Pvt Ltd", gstin: "09AAHCA7732L1Z4"}); c.id = "c_demo"; c.tallyName = "Aarohi Textiles Pvt Ltd"; c.postTo = "Aarohi Textiles Pvt Ltd"; S.companies[c.id] = c;
   S.data[c.id] = {parties: {}, entries: {}, loaded: true};
   S.coId = c.id; S.view = "company"; S.tab = "dash"; S.loadingCo = false;
   S.books = Object.assign({loading: false, challans: [], alloc: {}}, bk, {cid: c.id});

@@ -109,3 +109,84 @@ async function cloudPostLeftover(){
   } catch (e){}
 }
 setTimeout(() => { try { cloudPostLeftover(); } catch (e){} }, 9000);
+// The postings queued in FinCom's cloud (tally_post_jobs), read from the server (review of 02-Oct-2026: "Everything sent
+// to Tally" showed 0 although job b3785b05 had posted FA/ELEC/013, and job aebb6c15, failed at 01:53, was nowhere): the
+// list of what went to Tally is made from them, with this browser's own log only for postings made here without the queue.
+const CloudJobs = {
+  list: null, at: 0, busy: false, err: "",
+  async load(force){
+    // read at most once a minute, also after a failure (the page draws again after each try)
+    if (typeof TCloud !== "object" || !TCloud.on() || this.busy || (!force && Date.now() - this.at < 60000)) return;
+    this.busy = true;
+    try {
+      const cols = "id,client_id,company,status,done,n,message,results,created_by,created_at,updated_at,attempts";
+      // each entry's state (items) from migration-24 on
+      this.list = await TCloud.restAll("tally_post_jobs?select=" + cols + ",items&order=created_at.desc").catch(e => {
+        if (/items/.test(String(e && e.message))) return TCloud.restAll("tally_post_jobs?select=" + cols + "&order=created_at.desc");
+        throw e; });
+      this.err = ""; this.at = Date.now();
+    } catch (e){ this.err = (e && e.message) || String(e); this.at = Date.now(); }
+    this.busy = false; render();
+  },
+  // Retry: the same posting again under its id; entries already in Tally are found by FinCom's tag, not posted twice
+  async retry(j){
+    try {
+      const r = await TCloud.rpc("tally_post_enqueue", {p_id: j.id, p_client: j.client_id, p_payload: {}});
+      if (!r || !r.ok) throw new Error((r && r.error) || "It could not be queued again.");
+      toast("Queued again for the Tally computer.");
+    } catch (e){ toast((e && e.message) || String(e)); }
+    await this.load(true);
+  },
+  forClient(cid){ return (this.list || []).filter(j => !cid || j.client_id === cid); },
+  // the queue's postings still going or stopped: waiting for the Tally computer, being posted, or failed
+  open(cid){ return this.forClient(cid).filter(j => ["waiting", "taken", "running", "failed"].includes(j.status)); },
+  // one line a posted entry: what it was (the bill, bank line or sale named by its id), the voucher Tally made
+  rows(cid){
+    const out = [];
+    this.forClient(cid).forEach(j => {
+      [].concat(j.results || []).filter(r => r && r.ok && r.kind !== "master").forEach(r => {
+        const e = (S.data[j.client_id] && S.data[j.client_id].entries[r.id]) || null;
+        out.push({at: j.updated_at || j.created_at, job: j.id, co: j.client_id, what: e ? "bill" : r.kind === "voucher" ? "entry" : r.kind || "entry",
+          ref: r.vchNumber || (e && e.x.invoiceNo) || "", party: e ? e.x.vendorName : "", amount: e ? num(e.x.total) : 0, verified: r.verified === true, already: !!r.alreadyThere,
+          tally: {vchType: r.vchType || "", masterId: r.masterId || "", guid: r.guid || "", company: j.company, vchDate: r.vchDate || ""}, by: j.created_by || "", fromQueue: true});
+      });
+    });
+    return out;
+  }
+};
+// who queued a posting: the firm member's name or e-mail (the queue keeps their user id)
+function memberName(uid){
+  const m = ((typeof Cloud === "object" && Cloud.st && Cloud.st.members) || []).find(x => x.user_id === uid);
+  return m ? (m.name || m.email || "—") : uid ? "a member of the firm" : "—";
+}
+// Bills marked as in Tally, checked against Tally's own entries in FinCom's cloud copy (review of 02-Oct-2026:
+// FA/ELEC/013, posted on 29-Sep as voucher …66b4, was deleted in Tally afterwards and still counted as in Tally). A bill
+// is taken as gone from Tally only when the cloud copy has read its date again after it was posted (the day is not among
+// those still to be read) and its voucher is not there; found again, it counts again.
+const TallyProof = {
+  at: {},
+  async check(cid, force){
+    if (typeof TCloud !== "object" || !TCloud.on() || !TCloud.has(cid)) return 0;
+    if (!force && Date.now() - (this.at[cid] || 0) < 5 * 60000) return 0;
+    this.at[cid] = Date.now();
+    const bk = TCloud.book(cid), st = (bk && bk.state) || {}, d = S.data[cid];
+    if (!bk || !d || !d.loaded) return 0;
+    const readAt = Date.parse(bk.daysAt || 0) || 0, doneTo = String(st.doneTo || ""), skipped = new Set([].concat(st.skipped || []));
+    const list = Object.values(d.entries).filter(e => e.exportedAt && e.tally && e.tally.guid && (billInTally(e) || e.goneFromTally));
+    if (!list.length) return 0;
+    let found = new Set();
+    for (let i = 0; i < list.length; i += 80){
+      const g = list.slice(i, i + 80).map(e => '"' + String(e.tally.guid).replace(/"/g, "") + '"').join(",");
+      const rows = await Cloud.api("tally_vouchers?select=guid,cancelled&book_id=eq." + encodeURIComponent(bk.book) + "&guid=in.(" + encodeURIComponent(g) + ")");
+      (rows || []).forEach(r => { if (!r.cancelled) found.add(r.guid); });
+    }
+    let n = 0;
+    list.forEach(e => {
+      const day = String(e.tally.vchDate || "").replace(/-/g, ""), read = day && doneTo >= day && !skipped.has(day) && readAt > (Date.parse(e.tally.at || e.exportedAt) || 0);
+      const gone = !found.has(e.tally.guid) && !!read;
+      if (gone !== !!e.goneFromTally){ e.goneFromTally = gone ? new Date().toISOString() : null; if (!gone) delete e.goneFromTally; Store.saveEntry(cid, e); n++; }
+    });
+    if (n){ refreshStats(cid); render(); }
+    return n;
+  }
+};

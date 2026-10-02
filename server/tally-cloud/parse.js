@@ -99,6 +99,13 @@ function takeVoucher(s){
   return {v, lines};
 }
 
+// a ledger, group or party name as kept in the cloud copy (02-Oct-2026, migration-23): Tally keeps some masters with line
+// breaks in the name ("MCS Project Pvt Ltd\r\n", "...&#13;&#10;"), while the day book names them without. Each run of
+// &#13; &#10; CR LF, with the spaces and tabs around it, becomes one space and the ends lose their spaces; other spaces
+// stay as they are (Tally keeps "Arktos  Control & Instruments" with two, and a posting uses Tally's exact name). The
+// rule of FinCom's ledNm (src/js/00-core.js) and of the database's tally_nm (btrim: spaces only), applied again there
+function cleanName(n){ return String(n == null ? "" : n).replace(/[ \t]*(&#13;|&#10;|\r|\n)+[ \t]*/g, " ").replace(/^ +| +$/g, ""); }
+
 // the whole text of one day (or several): entries, lines, and the highest change number
 function parseDay(text){
   const byId = new Map();
@@ -121,4 +128,4 @@ function parseDay(text){
   return {vouchers, lines, n: vouchers.length, alterMax, dates: Array.from(dates)};
 }
 
-export { parseDay, amt, one, unesc, igstRate };
+export { parseDay, amt, one, unesc, igstRate, cleanName };

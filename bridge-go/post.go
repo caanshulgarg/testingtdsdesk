@@ -68,6 +68,14 @@ func invokeImport(p M) (M, error) {
 		return nil, err
 	}
 	results := []M{}
+	// the job follows each entry as Tally answers it (FinCom shows it live)
+	onItem, _ := p["onItem"].(func(M))
+	add := func(r M) {
+		results = append(results, r)
+		if onItem != nil {
+			onItem(r)
+		}
+	}
 	var pending []M
 	groups := []struct {
 		kind, report string
@@ -96,16 +104,16 @@ func invokeImport(p M) (M, error) {
 			}
 			// a voucher without a proper date never reaches Tally (Tally answers "Voucher date is missing" but may still make it)
 			if re(`^\s*<VOUCHER\b`).MatchString(x) && !re(`<DATE>(19|20)\d\d(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])</DATE>`).MatchString(x) {
-				results = append(results, M{"id": id, "kind": g.kind, "ok": false, "message": "The entry has no valid date, so it was not sent to Tally."})
+				add(M{"id": id, "kind": g.kind, "ok": false, "message": "The entry has no valid date, so it was not sent to Tally."})
 				continue
 			}
 			if !re(`^\s*<(VOUCHER|LEDGER|GROUP)\b`).MatchString(x) && !vtOnly {
-				results = append(results, M{"id": id, "kind": g.kind, "ok": false, "message": "Only VOUCHER, LEDGER or GROUP objects can be posted, or a voucher type's numbering changed."})
+				add(M{"id": id, "kind": g.kind, "ok": false, "message": "Only VOUCHER, LEDGER or GROUP objects can be posted, or a voucher type's numbering changed."})
 				continue
 			}
 			raw, err := invokeTally(fin, port, importEnvelope(g.report, company, `<TALLYMESSAGE xmlns:UDF="TallyUDF">`+x+"</TALLYMESSAGE>"), 0)
 			if err != nil {
-				results = append(results, M{"id": id, "kind": g.kind, "ok": false, "message": "Tally did not answer: " + err.Error()})
+				add(M{"id": id, "kind": g.kind, "ok": false, "message": "Tally did not answer: " + err.Error()})
 				continue
 			}
 			r := readImportResult(raw)
@@ -118,7 +126,7 @@ func invokeImport(p M) (M, error) {
 				r["xmlSent"] = x
 				pending = append(pending, r)
 			}
-			results = append(results, r)
+			add(r)
 			st := "FAILED " + str(r["message"])
 			if r["ok"] == true {
 				st = "created (not read back)"
@@ -205,7 +213,7 @@ func invokeImport(p M) (M, error) {
 						}
 						for _, cx := range sessCompanies(sx) {
 							cn := str(cx["name"])
-							if cn == "" || cn == company {
+							if cn == "" || sameCompany(cn, company) {
 								continue
 							}
 							if other, e := voucherHeads(fin, port, cn, from, to); e == nil {

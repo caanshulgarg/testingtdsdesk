@@ -71,11 +71,37 @@ function CheckResult({ bc }) {
   );
 }
 
+// review of 02-Oct-2026: the postings in FinCom's cloud for this client that are waiting for the Tally computer, being
+// posted, or failed (job aebb6c15 failed at 01:53 and was not shown), from the server, with what to do
+const ITEM_STATE = { waiting: ["Waiting", "warn"], sending: ["Sending", "warn"], sent: ["Sent, being checked", "warn"], in_tally: ["In Tally (verified)", "ok"], failed: ["Failed", "bad"] };
+const JOB_STATE = { waiting: ["Waiting for the Tally computer", "warn"], taken: ["Taken by the Tally computer", "warn"], running: ["Sending to Tally", "warn"], failed: ["Failed", "bad"] };
+function QueueJobs() {
+  CloudJobs.load();
+  const jobs = CloudJobs.open(S.coId);
+  if (!jobs.length) return null;
+  return <div className="bk-alert" data-post-jobs="" style={{ margin: "10px 0 0" }}>
+    <b>Postings in FinCom’s cloud</b>
+    <table className="data" style={{ marginTop: 6 }}><thead><tr><th>Queued</th><th>Into</th><th>Entries</th><th>State</th><th>What happened</th></tr></thead><tbody>
+      {jobs.map((j) => { const [label, cls] = JOB_STATE[j.status] || [j.status, ""]; const ok = [].concat(j.results || []).filter((r) => r && r.ok).length;
+        return <tr key={j.id} data-job={j.id}><td>{fmtDateTime(j.created_at)}</td><td>{j.company}</td><td className="n">{ok + " of " + (j.n || 0)}</td>
+          <td><span className={"tag " + cls}>{label}</span><div className="nr">{fmtDateTime(j.updated_at || j.created_at)}</div></td>
+          <td>{j.message || "—"}
+            {[].concat(j.items || []).length > 0 && <ul className="nr" style={{ margin: "4px 0 0 16px", padding: 0 }}>{j.items.map((it) => { const e = D().entries[it.id];
+              return <li key={it.id}>{(e ? e.x.invoiceNo + " · " + e.x.vendorName : it.id) + ": "}<span className={"tag " + (ITEM_STATE[it.state] || ["", ""])[1]}>{(ITEM_STATE[it.state] || [it.state])[0]}</span>{it.reason ? " " + it.reason : ""}</li>; })}</ul>}
+            {j.status === "failed" && <div className="row" style={{ marginTop: 4, gap: 8 }}><button className="btn small primary" onClick={() => CloudJobs.retry(j)}>Retry</button>
+              <span className="nr">Entries already in Tally are not sent twice.</span></div>}</td></tr>; })}
+    </tbody></table>
+    <div className="row" style={{ marginTop: 6 }}><button className="btn small" onClick={() => CloudJobs.load(true)}>Refresh</button></div>
+  </div>;
+}
+
 // the approved bills waiting, and the ways to get them into Tally
 export function Export() {
   const co = CO(), v = Object.values(D().entries);
   const waiting = v.filter((e) => e.status === "approved" && !e.exportedAt).sort(byDate);
-  const sent = v.filter((e) => e.exportedAt).length;
+  // in Tally only when confirmed there (review of 02-Oct-2026); a Tally file made, or a posting not confirmed, is listed apart
+  setTimeout(() => TallyProof.check(co.id).catch(() => {}), 0);
+  const sent = v.filter(billInTally).length, unsure = v.filter((e) => e.status === "approved" && e.exportedAt && !billInTally(e));
   const totTds = waiting.reduce((a, e) => a + (e.snapshot ? e.snapshot.tds : 0), 0);
   const ledgers = [...new Set(waiting.flatMap((e) => (e.snapshot ? e.snapshot.lines : []).map((l) => l.ledger)))].filter(Boolean);
   // with Tally's ledger list at hand, names are put in Tally's spelling and the ones Tally lacks are listed
@@ -115,6 +141,12 @@ export function Export() {
             <tbody>{issues.map((x) => <LedgerFix key={x.role + x.name} x={x} />)}</tbody>
           </table>
         </div>}
+        {unsure.length > 0 && <div className="bk-alert bad" data-post-unsure="" style={{ margin: "10px 0 0" }}>
+          <b>{plural(unsure.length, "bill is", "bills are")} not counted as in Tally:</b>
+          <ul>{unsure.map((e) => <li key={e.id}>{e.x.invoiceNo} · {e.x.vendorName} · {tallyStateOf(e)[1]}</li>)}</ul>
+          <div className="row" style={{ gap: 8 }}>{canPost && <button className="btn small" disabled={!!bc.busy} onClick={() => doAct("billCheck")}>Check them in Tally</button>}
+            {unsure.some((e) => e.goneFromTally) && <button className="btn small primary" onClick={() => doAct("billRepostGone")}>Post the ones no longer in Tally again</button>}</div></div>}
+        <QueueJobs />
         <PostResult bp={S.billPost || {}} waiting={waiting} />
         {canPost && undoable > 0 && <div className="row" style={{ marginTop: 10 }}><button className="btn small" onClick={() => doAct("billUnpost")}>Take an entry back out of Tally</button><span className="note">{undoable} posted bills can be removed from Tally from here.</span></div>}
         {canPost && sent > 0 && <div className="row" style={{ marginTop: 10 }}><button className="btn small" disabled={!!bc.busy} onClick={() => doAct("billCheck")}>{bc.busy ? "Checking Tally…" : "Check sent bills in Tally"}</button><span className="note">Confirms that every bill marked as sent is really in Tally.</span></div>}

@@ -108,6 +108,9 @@ const Bridge = {
     if (!payload.masters.length && !payload.vouchers.length) return {ok: true, company: payload.company, results: refused};
     // build 199: Tally on another computer: through the queue in the cloud
     const coP = (payload.client && S.companies[payload.client]) || (typeof CO === "function" ? CO() : null);
+    // 02-Oct-2026: only into the Tally company chosen for this client (Client setup → Tally); the cloud refuses the same
+    const notAllowed = postToProblem(coP, payload.company);
+    if (notAllowed) return {ok: true, company: payload.company, notAllowed: true, results: [].concat(payload.masters || [], payload.vouchers || []).map(x => ({id: x.id, ok: false, message: notAllowed})).concat(refused)};
     if (coP && typeof tallyVia === "function" && tallyVia(coP) === "cloud"){
       const outC = await CloudPost.run(coP.id, payload, onProgress, onChecked);
       outC.results = [].concat(outC.results || []).concat(refused);
@@ -1332,3 +1335,12 @@ const TBCheck = {
     return Object.assign(base, {ok: !list.length, n: list.length, list: list.slice(0, 200), ledgers: all.size});
   }
 };
+// the one Tally company a client may post to (co.postTo, Client setup → Tally; review of 02-Oct-2026: Testing AAD's bill
+// FA/ELEC/013 went into GARG SHEKHAR & COMPANY): "" when this company is allowed, else what to do
+function postToProblem(co, company){
+  if (!co) return "";
+  const to = String(co.postTo || "").trim(), nm = x => ledNm(x).toLowerCase();
+  if (!to) return "Choose the Tally company " + co.name + " may post to (Client setup \u2192 Tally). Nothing was posted.";
+  if (company && nm(to) !== nm(company)) return co.name + " may post only to " + to + ", but " + company + " was about to receive it. Nothing was posted.";
+  return "";
+}

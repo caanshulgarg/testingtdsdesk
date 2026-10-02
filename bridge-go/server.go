@@ -221,7 +221,7 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 		coMu.Unlock()
 		return M{"ok": true, "version": BridgeVersion, "computer": computerName(), "user": ownerName(), "mySession": mySession(), "mode": pm, "onlyMySession": cfgB("OnlyMySession"), "time": nowS(),
 			"sessions": sessions, "allowImport": cfgB("AllowImport") && why == "", "readOnly": why, "impl": "go", "testMode": testMode(), "paused": paused(),
-			"tallyStuck": getTallyStuck(), "wake": wakeStatus(), "jobs": jobsNow, "tally": tallyStatus(sessions), "beat": beatStatus()}, nil
+			"tallyStuck": getTallyStuck(), "wake": wakeStatus(), "jobs": jobsNow, "posting": postingNow(), "tally": tallyStatus(sessions), "beat": beatStatus()}, nil
 	case "/companies":
 		list := []any{}
 		for _, s := range openCompanies(false) {
@@ -393,6 +393,16 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 			return v, nil
 		}
 		return M{"ok": true, "jobs": activeJobs()}, nil
+	case "/jobs/cancel":
+		// FinCom cancels a posting (one waiting for Tally, or between batches): nothing more of it is sent
+		if err := needPost(r, "Use POST."); err != nil {
+			return nil, err
+		}
+		o, err := bodyObj(body)
+		if err != nil {
+			return nil, err
+		}
+		return cancelJob(str(o["id"]), "asked by FinCom on this computer")
 	case "/jobs/resume":
 		if err := needPost(r, "Use POST."); err != nil {
 			return nil, err

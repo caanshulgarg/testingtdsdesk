@@ -23,6 +23,7 @@ func TestTrayTip(t *testing.T) {
 		{M{"version": v, "testMode": true, "paused": true}, "FinCom Bridge " + v + " - Test mode: reading only, not posting - Paused"},
 		{M{"version": v, "cloudConnected": true, "online": true}, "FinCom Bridge " + v + " - Main bridge: reading and posting - Tally not open"},
 		{M{"version": v, "tallyOpen": true}, "FinCom Bridge " + v + " - Main bridge: reading and posting - not connected to FinCom"},
+		{M{"version": v, "tallyOpen": true, "cloudConnected": true, "online": true, "posting": "Sending 2 of 5 to Tally"}, "FinCom Bridge " + v + " - Main bridge: reading and posting - Sending 2 of 5 to Tally"},
 		{M{"version": v, "readOnly": "Bridge 1.15.0 is still here", "tallyOpen": true, "cloudConnected": true, "online": true}, "FinCom Bridge " + v + " - Main bridge: reading only, not posting (see Status)"},
 	}
 	for _, c := range cases {

@@ -6,6 +6,7 @@ import { useRef } from "react";
 import ColHead from "../parts/ColHead.jsx";
 import BillDetail from "./Bill.jsx";
 import { ChipBar } from "../parts/ChipBar.jsx";
+import UploadResult from "../parts/UploadResult.jsx";
 
 const needsLook = (r) => (r.c.missing || []).length || r.c.flags.some((f) => f.lvl === "hi") || r.e.confirmType;
 const RuleOptions = () => rules().map((r) => <option key={r.id} value={r.id}>{r.label}</option>);
@@ -46,6 +47,16 @@ function Row({ e, c, sel }) {
   );
 }
 
+// To review, Duplicates and Deleted, with their counts, on the table too (review of 02-Oct-2026)
+export function StatusFilters() {
+  const all = Object.values(D().entries), cnt = (st) => all.filter((e) => e.status === st).length;
+  const go = (st) => { S.filter = st; S.selected = null; render(); };
+  return <nav className="sbar" aria-label="Bills" data-bill-filters="" style={{ margin: "0 0 10px" }}>
+    {[["draft", "To review"], ["duplicate", "Duplicates"], ["deleted", "Deleted"]].map(([id, label]) =>
+      <button key={id} aria-selected={S.filter === id} onClick={() => go(id)}>{label} <span className="sbar-n">{cnt(id)}</span></button>)}
+  </nav>;
+}
+
 export function ReviewTable() {
   const co = CO(), all = draftRows(), rows = revFiltered();
   const sel = S.revSel = S.revSel || new Set();
@@ -58,6 +69,8 @@ export function ReviewTable() {
         <dl className="bk-figs"><div><dt>Bills</dt><dd>{rows.length}</dd></div><div><dt>Value</dt><dd>{sum((r) => r.e.x.total)}</dd></div><div><dt>TDS</dt><dd>{sum((r) => r.c.tds)}</dd></div></dl>
         <div className="bk-actions"><button className="btn small" onClick={() => doAct("revList")}>One at a time</button></div>
       </div>
+      <UploadResult />
+      <StatusFilters />
       {!rows.length && !all.length ? <div className="bk-none" style={{ background: "var(--sheet)", border: "1px solid var(--rule)", borderRadius: 10 }}>Nothing waiting. Upload bills above.</div> : <>
         <div className="revfilter">
           <input type="search" value={S.revQuery || ""} placeholder="Filter by supplier, bill no., GSTIN, ledger, payment type or amount" aria-label="Filter the bills"
@@ -134,9 +147,9 @@ function BillBar({ e }) {
   } else if (e.status === "duplicate") {
     left = <><span className="tag warn">Held as duplicate</span> <span className="note">{(e.dupOf && e.dupOf.msg) || ""}</span></>;
     right = <>
-      <button className="btn danger" onClick={() => doAct("delete")}>Delete this copy</button>
-      {e.dupOf && e.dupOf.entryId && D().entries[e.dupOf.entryId] && <button className="btn" onClick={() => doAct("openOriginal")}>Open the earlier bill</button>}
-      <button className="btn" onClick={() => doAct("notDup")}>It is a different bill</button>{next}
+      <button className="btn danger" onClick={() => doAct("delete")}>Delete this one</button>
+      {e.dupOf && e.dupOf.entryId && D().entries[e.dupOf.entryId] && <button className="btn" onClick={() => doAct("openOriginal")}>Open the original</button>}
+      <button className="btn" onClick={() => doAct("notDup")}>Keep both</button>{next}
     </>;
   } else if (e.status === "approved") {
     left = <><span className="tag ok">Approved</span> <span className="note">{e.exportedAt ? "Sent to Tally" : "Waiting in Send to Tally"}</span></>;

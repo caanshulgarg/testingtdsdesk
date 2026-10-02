@@ -2911,17 +2911,21 @@ async function fileHash(file){
   return h;
 }
 function statusLabel(st){ return ({draft:"to review", approved:"approved", rejected:"marked no entry", duplicate:"held as duplicate", deleted:"deleted"})[st] || st; }
-function findHash(h){
-  if (S.pendingHashes[h]) return {msg:"The same file is already in this upload."};
+// a one-page PDF is fingerprinted with "p1" when it is read page by page and without it when read whole (review of
+// 02-Oct-2026: FA/ELEC/013 came in again as 928bbb30530e37ef4ab8p1 and was not taken for 928bbb30530e37ef4ab8)
+function hashForms(h){ h = String(h || ""); return /p1$/.test(h) ? [h, h.slice(0, -2)] : [h, h + "p1"]; }
+function findHash(h0){
+  for (const h of hashForms(h0)) if (S.pendingHashes[h]) return {msg:"The same file is already in this upload."};
   for (const c of Object.values(S.companies)){
-    const rec = c.hashes && c.hashes[h];
+    const h = hashForms(h0).find(x => c.hashes && c.hashes[x]);
+    const rec = h && c.hashes[h];
     if (!rec) continue;
     const e = S.data[c.id] && S.data[c.id].entries[rec.e];
     if (S.data[c.id] && S.data[c.id].loaded && !e) continue;   // entry was deleted
     return {cid:c.id, entryId:rec.e,
       msg:"Already uploaded to " + c.name + (e ? " as " + (e.x.vendorName || e.fileName) + (e.x.invoiceNo ? " bill " + e.x.invoiceNo : "") + " (" + statusLabel(e.status) + ")" : " on " + fmtDate(rec.d)) + "."};
   }
-  const inb = Object.values(S.inbox).find(i => i.hash === h);
+  const inb = Object.values(S.inbox).find(i => hashForms(h0).includes(i.hash));
   if (inb) return {msg:"Already waiting in Unsorted uploads."};
   return null;
 }
@@ -2967,16 +2971,31 @@ function invKey(x){
   if (!inv || !who) return "";
   return who + "|" + inv + "|" + fyOf(x.invoiceDate);
 }
+// the same bill: the same bill number in the same year, from the same supplier (by PAN, or by name when either has no
+// PAN: review of 02-Oct-2026, a copy read with the PAN was not matched to its original read without one)
+function sameBill(a, b){
+  if (!normInv(a.invoiceNo) || normInv(a.invoiceNo) !== normInv(b.invoiceNo) || fyOf(a.invoiceDate) !== fyOf(b.invoiceDate)) return false;
+  const pa = effectivePan(a), pb = effectivePan(b);
+  return pa && pb ? pa === pb : !!norm(a.vendorName) && norm(a.vendorName) === norm(b.vendorName);
+}
+function dupMsg(o){
+  const st = o.status === "approved" ? "approved on " + fmtDate((o.approvedAt || "").slice(0, 10)) + (billInTally(o) ? " (in Tally)" : o.exportedAt ? " (in a Tally file)" : "") : statusLabel(o.status);
+  return "Duplicate of " + (o.x.vendorName || o.fileName) + " bill " + o.x.invoiceNo + " dated " + fmtDate(o.x.invoiceDate) + ", " + st + ".";
+}
 function findDuplicate(e, cid){
   const k = invKey(e.x);
-  if (k){
+  if (k || normInv(e.x.invoiceNo)){
     for (const o of Object.values(D(cid).entries)){
       if (o.id === e.id || o.status === "duplicate" || o.status === "deleted" || o.notDuplicate) continue;
-      if (invKey(o.x) === k) return {entryId:o.id, strong:true,
-        msg:"Same supplier and bill number as " + (o.x.vendorName || o.fileName) + " bill " + o.x.invoiceNo + " dated " + fmtDate(o.x.invoiceDate) + " (" + statusLabel(o.status) + ")."};
+      if ((k && invKey(o.x) === k) || sameBill(e.x, o.x)) return {entryId:o.id, strong:true, msg:dupMsg(o)};
     }
-    const sent = (CO(cid).keys || {})[k];
-    if (sent) return {strong:true, msg:"Same supplier and bill number as a bill approved on " + fmtDate(sent) + " (since cleared from the desk)."};
+    const sent = k && (CO(cid).keys || {})[k];
+    if (sent){
+      // the bill approved before is named by its id (kept with the date since 02-Oct-2026)
+      const id = typeof sent === "object" ? sent.e : null, o = id && D(cid).entries[id];
+      if (o) return {entryId:o.id, strong:true, msg:dupMsg(o)};
+      return {entryId:id || null, strong:true, msg:"Same supplier and bill number as a bill approved on " + fmtDate(typeof sent === "object" ? sent.d : sent) + "."};
+    }
   }
   // weaker: same supplier, same date and same total
   const who = effectivePan(e.x) || norm(e.x.vendorName), tot = num(e.x.total);
@@ -3070,17 +3089,53 @@ async function enqueueFiles(files, target){
   pump(); softRender();
 }
 // a batch read from Collect lands you on Review, with the first new bill open
+// what happened to each file of the last upload, kept for the client's pages (review of 02-Oct-2026: FA/ELEC/013 uploaded
+// again left the page on "Nothing waiting" with no word): read / duplicate of which bill (open it) / could not be read (why)
+function uploadLines(jobs){
+  return jobs.filter(j => !j.said).map(j => {
+    j.said = true;
+    const cid = j.cid || (j.dupRef && j.dupRef.cid) || j.target || S.coId, d = S.data[cid], e = d && j.entryId ? d.entries[j.entryId] : null;
+    if (j.status === "duplicate"){
+      const o = j.dupRef && j.dupRef.entryId && S.data[j.dupRef.cid] ? S.data[j.dupRef.cid].entries[j.dupRef.entryId] : null;
+      return {kind: "dup", name: j.name, cid: j.dupRef && j.dupRef.cid, open: o ? o.id : null, text: o ? dupMsg(o).replace(/^Duplicate of /, "duplicate of ").replace(/\.$/, "") + "; not uploaded again" : (j.msg || "the same file was uploaded before")};
+    }
+    if (j.status === "held" && e){
+      const o = e.dupOf && e.dupOf.entryId && d.entries[e.dupOf.entryId];
+      return {kind: "dup", name: j.name, cid, open: e.id, orig: o ? o.id : null, text: (o ? dupMsg(o).replace(/^Duplicate of /, "duplicate of ").replace(/\.$/, "") : (e.dupOf && e.dupOf.msg) || "a duplicate") + "; held under Duplicates"};
+    }
+    if (j.status === "failed") return {kind: "bad", name: j.name, text: "could not be read: " + (j.msg || "no reason given")};
+    if (j.status === "unsorted") return {kind: "info", name: j.name, text: "filed under Sales"};
+    if (["done", "partial", "typed"].includes(j.status)) return {kind: "ok", name: j.name, cid, open: j.entryId, text: (j.status === "partial" ? "partly read" : "read") + (e && e.x.invoiceNo ? ": " + (e.x.vendorName || "") + " bill " + e.x.invoiceNo : "")};
+    return null;
+  }).filter(Boolean);
+}
+function uploadSummary(lines){
+  const n = k => lines.filter(l => l.kind === k).length;
+  return [n("ok") ? n("ok") + (n("ok") === 1 ? " bill read" : " bills read") : "", n("dup") ? n("dup") + (n("dup") === 1 ? " duplicate" : " duplicates") : "",
+    n("bad") ? n("bad") + " could not be read" : "", n("info") ? n("info") + " filed under Sales" : ""].filter(Boolean).join(" \u00b7 ");
+}
 function afterBatch(){
-  if (S.view !== "company" || !(S.step === "collect" || S.advanceAfterRead || ["invoices", "export", "done"].includes(S.tab))) return;
+  // every finished upload is reported on the page, whichever page is open (the toast alone went unseen)
+  const done = S.jobs.filter(j => ["done", "partial", "held", "duplicate", "failed", "unsorted"].includes(j.status) && !j.said);
+  const lines = uploadLines(done);
+  if (lines.length){
+    S.lastUpload = S.lastUpload || {};
+    const by = {};
+    lines.forEach(l => { const c = l.cid || S.coId; (by[c] = by[c] || []).push(l); });
+    Object.keys(by).forEach(c => { S.lastUpload[c] = {at: Date.now(), lines: by[c], text: uploadSummary(by[c])}; });
+  }
+  if (S.view !== "company" || !(S.step === "collect" || S.advanceAfterRead || ["invoices", "export", "done"].includes(S.tab))){ if (lines.length) render(); return; }
   S.advanceAfterRead = false;
   const mine = S.jobs.filter(j => !j.advanced && (j.cid === S.coId || j.target === S.coId));
-  const fresh = mine.filter(j => ["done", "partial", "held"].includes(j.status));
-  const dups = mine.filter(j => j.status === "duplicate"), toSales = mine.filter(j => j.status === "unsorted"), bad = mine.filter(j => j.status === "failed");
+  const fresh = mine.filter(j => ["done", "partial"].includes(j.status)), held = mine.filter(j => j.status === "held");
   mine.forEach(j => { j.advanced = true; });
   if (!mine.length) return;
-  const said = [fresh.length ? fresh.length + " read" : "", dups.length ? dups.length + " already uploaded (skipped)" : "", toSales.length ? toSales.length + " filed under Sales" : "", bad.length ? bad.length + " could not be read" : ""].filter(Boolean).join(" \u00b7 ");
-  if (!fresh.length){ toast(said + "."); render(); return; }
-  const first = fresh.map(j => D().entries[j.entryId]).find(e => e && e.status === "draft");
+  const said = (S.lastUpload && S.lastUpload[S.coId] && S.lastUpload[S.coId].text) || "Upload finished";
+  if (!fresh.length){
+    // only duplicates held: the Duplicates list opens on the copy, with its original beside it
+    if (held.length){ S.tab = "invoices"; S.filter = "duplicate"; S.selected = held[0].entryId; S.reviewTable = false; }
+    toast(said + "."); render(); return;
+  }
   goStep("review", "bills");
   toast(said + ". Review " + (fresh.length === 1 ? "it" : "them") + " below.");
 }
@@ -3440,7 +3495,8 @@ function approve(e){
   e.status = "approved";
   e.approvedAt = new Date().toISOString();
   const k = invKey(e.x), co = CO(cid);
-  if (k){ co.keys = co.keys || {}; co.keys[k] = e.approvedAt.slice(0, 10); pruneIndex(co.keys, 3000); Store.saveCompany(co); }
+  // the bill's id is kept with the date (02-Oct-2026), so a later copy can name and open this one
+  if (k){ co.keys = co.keys || {}; co.keys[k] = {d: e.approvedAt.slice(0, 10), e: e.id}; pruneIndex(co.keys, 3000); Store.saveCompany(co); }
   e.applied = {partyId:party.id, fy:c.fy, natureId:c.rule.id, credited:c.base, tdsBase:addBase};
   e.snapshot = {lines:c.lines, tds:c.tds, tdsWould:c.tdsWould, skip:c.skip, rcm:c.rcmTax ? Object.assign({cat:e.rcm.cat}, c.rcmTax) : null, blocked:c.gd.block ? c.gd.block.cat : null, noItc:c.itc && !c.itc.ok ? c.itc.why : null, rate:c.rate, tdsBase:c.tdsBase, base:c.base, total:c.total, pan:c.pan, ref:c.rule.ref, old:c.rule.old, label:c.rule.label, cert:c.cert && c.applicable ? (c.cert.no || "-") : "", certBase:c.cert && c.applicable ? c.certBase : 0, certRate:c.cert ? num(c.cert.rate) : null, normalRate:c.normalRate, inoperative:!!c.inoperative, form:c.rule.form || "26Q",
     applicable:c.applicable, catchUp:e.includeCatchUp ? c.catchUp : 0, why:c.why, meter:c.meter, fy:c.fy, rateNote:c.rateNote, indHuf:c.indHuf, never:c.rule.basis === "never"};
@@ -3504,22 +3560,41 @@ function removeEntry(e){
   if (e.docPath) CloudDocs.remove(e.docPath); delete D().entries[e.id]; Store.deleteEntry(S.coId, e.id); unregisterHash(S.coId, e.fileHash); delete S.files[e.id]; if (S.selected === e.id) S.selected = null; toast("Invoice deleted."); refreshStats(S.coId); render(); }
 
 /* Summary kept on each client so the client list needs no extra loading */
+// a duplicate held without its original (it was not on this computer when the copy came in, review of 02-Oct-2026:
+// emuqaocqrvj2xr said "since cleared from the desk" while emum250ulhfbl8 was there): linked once the bills are loaded
+function linkDuplicates(cid){
+  const d = S.data[cid];
+  if (!d || !d.loaded) return 0;
+  const v = Object.values(d.entries);
+  let n = 0;
+  v.filter(e => e.dupOf && !(e.dupOf.entryId && d.entries[e.dupOf.entryId])).forEach(e => {
+    const o = v.find(o => o.id !== e.id && !["duplicate", "deleted"].includes(o.status) && !o.notDuplicate && sameBill(e.x, o.x));
+    if (!o) return;
+    e.dupOf = {entryId: o.id, msg: dupMsg(o)};
+    Store.saveEntry(cid, e); n++;
+  });
+  return n;
+}
 function refreshStats(cid){
   const co = CO(cid), d = S.data[cid];
   if (!co || !d || !d.loaded) return;
+  linkDuplicates(cid);
   const v = Object.values(d.entries), fy = fyOf(null);
   const drafts = v.filter(e => e.status === "draft");
   const st = {
     drafts: drafts.length,
     check: drafts.filter(e => !S.reading[e.id] && (() => { const c = compute(e, cid); return c.missing.length || c.flags.some(f => f.lvl !== "info"); })()).length,
-    waiting: v.filter(e => e.status === "approved" && !e.exportedAt).length,
+    // waiting: approved and not confirmed in Tally; inTally: confirmed there (review of 02-Oct-2026: the badge "In Tally"
+    // counted every bill approved this year)
+    waiting: v.filter(e => e.status === "approved" && !billInTally(e)).length,
+    inTally: v.filter(e => billInTally(e) && (e.snapshot ? e.snapshot.fy : fyOf(e.x.invoiceDate)) === fy).length,
     tdsFy: v.filter(e => e.status === "approved" && e.snapshot && e.snapshot.fy === fy).reduce((a, e) => a + num(e.snapshot.tds), 0),
     invoicesFy: v.filter(e => e.status === "approved" && e.snapshot && e.snapshot.fy === fy).length,
     records: v.length + Object.keys(d.parties).length + 1,
     dups: v.filter(e => e.status === "duplicate").length
   };
   const old = co.stats || {};
-  if (["drafts","check","waiting","tdsFy","invoicesFy","records","dups"].some(k => old[k] !== st[k])){
+  if (["drafts","check","waiting","inTally","tdsFy","invoicesFy","records","dups"].some(k => old[k] !== st[k])){
     co.stats = Object.assign(st, {fy, updatedAt: new Date().toISOString()});
     Store.saveCompany(co);
   }

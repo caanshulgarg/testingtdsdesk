@@ -175,7 +175,7 @@ func trayStatus() M {
 	return M{"ok": true, "version": BridgeVersion, "runMode": runMode, "testMode": testMode(), "readOnly": readOnlyWhy(), "paused": paused(), "tallyOpen": tallyOpen, "companies": cos,
 		"cloudConnected": cloud, "online": online, "reconnecting": reconnecting, "tallyState": tstate, "busySince": tsince, "needKey": cfgS("CloudUrl") != "" && cloudKey() == "", "lastBeat": fmtTime(bOK), "beatFailed": fmtTime(bFail), "wake": wakeStatus(), "updating": keepRunning(),
 		"port": toInt(cfg("Port")), "fincomUrl": fincomURL(), "log": logFile(), "shadow": shadowStats, "update": updateInfo(), "owner": ownerName(),
-		"switching": switching.Load(), "bridgeId": "go-" + instanceID()}
+		"switching": switching.Load(), "bridgeId": "go-" + instanceID(), "posting": postingNow()}
 }
 
 // the way it runs, in words for the log and the tray

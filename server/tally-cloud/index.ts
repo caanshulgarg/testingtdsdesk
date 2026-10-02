@@ -36,7 +36,7 @@
 //                                                       rate were not kept before); one month a call, owners only;
 //                                                       answers {done, next} until next is null
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { parseDay, amt } from "./parse.js";
+import { parseDay, amt, cleanName } from "./parse.js";
 
 const URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -232,6 +232,22 @@ async function bookFor(firm: string, company: string) {
   return data as string | null;
 }
 
+// a day's entries and lines as tally_ingest_day takes them. Ledger and party names are cleaned (migration-23: no line
+// breaks; other spaces kept as Tally has them), as the masters are, so an entry meets its ledger's opening in every report
+const dayVouchers = (r: any) => r.vouchers.map((v: any) => ({ guid: v.guid, alter: v.alter, type: v.type, no: v.no, party: cleanName(v.party), narr: v.narr, cancel: v.cancel, opt: v.opt, gstin: v.gstin, pos: v.pos, ref: v.ref, refDate: v.refDate, cmp: v.cmp }));
+const dayLines = (r: any) => r.lines.map((l: any[]) => [l[0], cleanName(l[1]), ...l.slice(2)]);
+// a list of [name, parent] (ledgers or groups) with the names cleaned (migration-23); "Primary" as a parent is none. Two
+// that are one once cleaned are kept once: the one with a parent, else the one already clean
+function cleanPairs(list: unknown, max: number) {
+  const by = new Map<string, { n: string; p: string; clean: boolean }>();
+  for (const x of (Array.isArray(list) ? list : []).slice(0, max) as any[]) {
+    const raw = String(x?.[0] || "").slice(0, 300), n = cleanName(raw), p = cleanName(String(x?.[1] || "").slice(0, 300)).replace(/^\W*Primary$/i, "");
+    if (!n) continue;
+    const had = by.get(n), clean = raw === n;
+    if (!had || (!had.p && p) || (!!had.p === !!p && clean && !had.clean)) by.set(n, { n, p, clean });
+  }
+  return Array.from(by.values()).map((x) => [x.n, x.p]);
+}
 // a few days of the day book (each gzipped), into a book: stored, and read into entries, lines and ready totals
 async function ingestDays(firm: string, book: string, daysIn: unknown) {
   const r = await ingestDaysRaw(firm, book, daysIn);
@@ -265,8 +281,7 @@ async function ingestDaysRaw(firm: string, book: string, daysIn: unknown): Promi
     const up = await db.storage.from("tally-days").upload(path, gz, { upsert: true, contentType: "application/gzip" });
     if (up.error) throw new Error("storage: " + up.error.message);
     const { error } = await db.rpc("tally_ingest_day", { p_book: book, p_day: iso(d.day),
-      p_vouchers: r.vouchers.map((v: any) => ({ guid: v.guid, alter: v.alter, type: v.type, no: v.no, party: v.party, narr: v.narr, cancel: v.cancel, opt: v.opt, gstin: v.gstin, pos: v.pos, ref: v.ref, refDate: v.refDate, cmp: v.cmp })),
-      p_lines: r.lines, p_n: r.n, p_alter: r.alterMax, p_bytes: gz.length });
+      p_vouchers: dayVouchers(r), p_lines: dayLines(r), p_n: r.n, p_alter: r.alterMax, p_bytes: gz.length });
     if (error) throw new Error(error.message);
     done.push(d.day);
   }
@@ -303,8 +318,7 @@ async function reparseMonthRaw(firm: string, book: string, monthIn: unknown) {
     const r = parseDay(z.text);
     if (r.dates.some((x: string) => x !== day)) { bad.push({ day, error: "entries of other dates" }); continue; }
     const { error } = await db.rpc("tally_ingest_day", { p_book: book, p_day: iso(day),
-      p_vouchers: r.vouchers.map((v: any) => ({ guid: v.guid, alter: v.alter, type: v.type, no: v.no, party: v.party, narr: v.narr, cancel: v.cancel, opt: v.opt, gstin: v.gstin, pos: v.pos, ref: v.ref, refDate: v.refDate, cmp: v.cmp })),
-      p_lines: r.lines, p_n: r.n, p_alter: r.alterMax, p_bytes: gz.length });
+      p_vouchers: dayVouchers(r), p_lines: dayLines(r), p_n: r.n, p_alter: r.alterMax, p_bytes: gz.length });
     if (error) throw new Error(error.message);
     done.push(day);
   }
@@ -314,10 +328,7 @@ async function reparseMonthRaw(firm: string, book: string, monthIn: unknown) {
 // review of 01-Oct-2026: each ledger's group and Tally's groups, kept without touching openings or entries; each ledger's
 // chain up to its primary group is worked out here. A ledger not in the copy yet is added with a nil opening
 async function applyGroups(firm: string, book: string, ledIn: unknown, grpIn: unknown) {
-  const groups = (Array.isArray(grpIn) ? grpIn : []).slice(0, 20000)
-    .map((g: any) => [String(g?.[0] || "").slice(0, 300), String(g?.[1] || "").replace(/^\W*Primary$/i, "").slice(0, 300)]).filter((g: any) => g[0]);
-  const leds = (Array.isArray(ledIn) ? ledIn : []).slice(0, 100000)
-    .map((l: any) => [String(l?.[0] || "").slice(0, 300), String(l?.[1] || "").replace(/^\W*Primary$/i, "").slice(0, 300)]).filter((l: any) => l[0]);
+  const groups = cleanPairs(grpIn, 20000), leds = cleanPairs(ledIn, 100000);
   for (let i = 0; i < groups.length; i += 1000) {
     const { error } = await db.from("tally_groups").upsert(groups.slice(i, i + 1000).map((g: any) => ({ book_id: book, firm_id: firm, name: g[0], parent: g[1] })), { onConflict: "book_id,name" });
     if (error) throw new Error(error.message);
@@ -349,12 +360,15 @@ async function ingestLedgers(book: string, body: any, firm?: string) {
       return reply(200, { ok: true, ...g, kept: "the copy in the cloud starts on " + bk.from_date + " and has " + count + " entries before " + iso(body.from) + ": its openings and entries are kept; the groups are taken" });
     }
   }
+  // the names cleaned (migration-23); the same name sent twice is taken once. Two masters that are one once cleaned both go
+  // (tally_ingest_ledgers adds their openings into one ledger)
+  const seen = new Set<string>();
   const led = (Array.isArray(body.ledgers) ? body.ledgers : []).slice(0, 100000)
-    .map((l: any) => [String(l?.[0] || "").slice(0, 300), String(l?.[1] || "").slice(0, 300), String(Math.round(amt(l?.[2]) * 100) / 100)]).filter((l: any) => l[0]);
+    .map((l: any) => [String(l?.[0] || "").slice(0, 300), String(l?.[1] || "").slice(0, 300), String(Math.round(amt(l?.[2]) * 100) / 100)])
+    .filter((l: any) => l[0] && !seen.has(l[0]) && seen.add(l[0])).map((l: any) => [cleanName(l[0]), cleanName(l[1]), l[2]]).filter((l: any) => l[0]);
   // the groups (bridge 1.14.7 on): [[name, parent]]; a primary group's parent is empty. Without them the groups kept
   // before stay as they are
-  const groups = (Array.isArray(body.groups) ? body.groups : []).slice(0, 20000)
-    .map((g: any) => [String(g?.[0] || "").slice(0, 300), String(g?.[1] || "").replace(/^\W*Primary$/i, "").slice(0, 300)]).filter((g: any) => g[0]);
+  const groups = cleanPairs(body.groups, 20000);
   const { data, error } = await db.rpc("tally_ingest_ledgers_g", { p_book: book, p_from: iso(body.from), p_open_as_on: iso(body.openAsOn), p_ledgers: led, p_groups: groups });
   if (error) throw new Error(error.message);
   return reply(200, { ok: true, ...data });
@@ -583,9 +597,21 @@ Deno.serve(async (req) => {
         const s = (v: unknown, n: number) => typeof v === "string" ? v.slice(0, n) : "";
         const results = (Array.isArray(body.results) ? body.results : []).slice(0, 5000).map((r: any) => ({ id: s(r?.id, 200), ok: !!r?.ok, verified: r?.verified === true ? true : r?.verified === false ? false : null,
           message: s(r?.message, 1000), vchNumber: s(r?.vchNumber, 60), vchType: s(r?.vchType, 100), guid: s(r?.guid, 100), masterId: s(r?.masterId, 30), vchDate: s(r?.vchDate, 8),
-          optional: !!r?.optional, alreadyThere: !!r?.alreadyThere, kind: s(r?.kind, 10) }));
-        const { error } = await db.from("tally_post_jobs").update({ status: st, done: Math.max(0, Math.floor(Number(body.done) || 0)), message: s(body.message, 500), results, checking: !!body.checking, updated_at: new Date().toISOString() })
-          .eq("id", String(body.id || "")).eq("device_id", dev.id).neq("status", "cancelled");
+          optional: !!r?.optional, alreadyThere: !!r?.alreadyThere, kind: s(r?.kind, 10), state: s(r?.state, 12), reason: s(r?.reason, 500) }));
+        // 02-Oct-2026: each entry's state as the bridge sees it (waiting / sending / sent / in_tally / failed, with why)
+        const STATES = ["waiting", "sending", "sent", "in_tally", "failed"];
+        const items = Array.isArray(body.items) ? body.items.slice(0, 5000).map((x: any) => ({ id: s(x?.id, 200), kind: s(x?.kind, 10),
+          state: STATES.includes(x?.state) ? x.state : "waiting", reason: s(x?.reason, 500) })) : null;
+        // a posting cancelled in FinCom, or gone: the bridge is told, and stops waiting for Tally
+        const id = String(body.id || "");
+        const { data: cur } = await db.from("tally_post_jobs").select("status").eq("id", id).eq("device_id", dev.id).maybeSingle();
+        if (!cur) return reply(200, { ok: false, gone: true, error: "This posting is no longer in FinCom." });
+        if (cur.status === "cancelled") return reply(200, { ok: false, cancelled: true, error: "This posting was cancelled in FinCom." });
+        const row: Record<string, unknown> = { status: st, done: Math.max(0, Math.floor(Number(body.done) || 0)), message: s(body.message, 500), results, checking: !!body.checking, updated_at: new Date().toISOString() };
+        if (items) row.items = items;
+        let { error } = await db.from("tally_post_jobs").update(row).eq("id", id).eq("device_id", dev.id).neq("status", "cancelled");
+        // before migration-24 there is no items column: the rest is kept as before
+        if (error && items && /items/.test(error.message)) { delete row.items; ({ error } = await db.from("tally_post_jobs").update(row).eq("id", id).eq("device_id", dev.id).neq("status", "cancelled")); }
         if (error) throw new Error(error.message);
         return reply(200, { ok: true });
       }

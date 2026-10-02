@@ -60,8 +60,12 @@ function AreaDash({ id, d }) {
   if (id === "tds") {
     const t = d.comp.tds || [], ded = t.reduce((a, x) => a + x.ded, 0), dep = t.reduce((a, x) => a + x.dep, 0);
     const ch = t.reduce((a, x) => a + num(x.challans), 0);
-    return <><Tiles><T l="Deducted" v={m(ded)} sub={yearSub + ", TDS ledgers credited"} rid="tds-q" /><T l="Paid" v={m(dep)} sub="TDS ledgers paid from the bank" rid="tds-q" />
-      <T l="Deducted less paid" v={m(ded - dep)} sub={"in the year only; opening balances not counted · challans here " + m(ch)} rid="tds-checks" />
+    // opening payable + deducted - paid = closing payable (review of 02-Oct-2026), checked against the books' balance
+    const rl = d.comp.tdsRoll;
+    return <><Tiles>{rl && <T l="TDS payable at the start" v={m(rl.open)} sub={"owed on " + FC.when(d.R.from) + ", TDS ledgers"} rid="tds-q" />}
+      <T l="Deducted" v={m(ded)} sub={yearSub + ", TDS ledgers credited"} rid="tds-q" /><T l="Paid" v={m(dep)} sub="TDS ledgers paid from the bank" rid="tds-q" />
+      {rl ? <T l="TDS payable at the end" v={m(rl.close)} sub={m(rl.open) + " + " + m(ded) + " − " + m(dep) + (rl.ties ? " · agrees with the books" : " · the books show " + m(rl.books))} rid="tds-checks" cls={rl.ties ? "" : "warn"} />
+        : <T l="Deducted less paid" v={m(ded - dep)} sub={"in the year only · challans here " + m(ch)} rid="tds-checks" />}
       <T l="Deductees" v={String(d.tdsDeductees)} sub="with TDS this year" rid="tds-q" /></Tiles>
       {t.length > 0 && <Bars labels={t.map((x) => FC.shortMonth(x.ym))} series={[{ name: "Deducted", cls: "c5", values: t.map((x) => x.ded) }, { name: "Deposited", cls: "c2", values: t.map((x) => x.dep) }]} label="TDS by month" />}</>;
   }

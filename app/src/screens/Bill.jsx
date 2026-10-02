@@ -245,6 +245,24 @@ function Slip({ e, c, ro, snap }) {
   );
 }
 
+// a duplicate with its original beside it, and the two choices (review of 02-Oct-2026)
+function DupBeside({ e }) {
+  const o = e.dupOf && e.dupOf.entryId ? D().entries[e.dupOf.entryId] : null;
+  const rows = [["Supplier", (x) => x.x.vendorName || "—"], ["GSTIN / PAN", (x) => x.x.vendorGstin || x.x.vendorPan || "—"], ["Bill no.", (x) => x.x.invoiceNo || "—"],
+    ["Date", (x) => x.x.invoiceDate ? fmtDate(x.x.invoiceDate) : "—"], ["Value", (x) => money(num(x.x.total))], ["File", (x) => x.fileName || "—"],
+    ["Uploaded", (x) => x.createdAt ? fmtDateTime(x.createdAt) : "—"], ["Where it is", (x) => x.status === "duplicate" ? "held as duplicate" : x.status === "approved" ? "approved" + (x.approvedAt ? " on " + fmtDate(x.approvedAt.slice(0, 10)) : "") + " · " + tallyStateOf(x)[1] : statusLabel(x.status)]];
+  return <section data-dup-beside=""><h3>Duplicate</h3>
+    <p className="note" style={{ margin: "0 0 8px" }}>{(e.dupOf && e.dupOf.msg) || "Held as a duplicate."} It does not count towards limits and cannot be approved.</p>
+    {o ? <table className="data"><thead><tr><th></th><th>This copy</th><th>The original</th></tr></thead><tbody>
+      {rows.map(([label, f]) => { const a = f(e), b = f(o); return <tr key={label}><td>{label}</td><td>{a}</td><td className={a !== b ? "bad" : undefined}>{b}</td></tr>; })}
+    </tbody></table> : <p className="note">The original is not on this computer.</p>}
+    <div className="row" style={{ gap: 8, marginTop: 8 }}>
+      <button className="btn danger" onClick={() => doAct("delete")}>Delete this one</button>
+      <button className="btn" onClick={() => doAct("notDup")}>Keep both</button>
+      {o && <button className="btn" onClick={() => doAct("openOriginal")}>Open the original</button>}
+    </div></section>;
+}
+
 export default function BillDetail({ id }) {
   const e = D().entries[id];
   if (!e) return null;
@@ -312,7 +330,7 @@ export default function BillDetail({ id }) {
       <Slip e={e} c={c} ro={ro} snap={snap} />
       {e.status === "deleted" && <section><p className="banner" style={{ margin: 0 }}>Deleted {fmtDateTime(e.deleted && e.deleted.at)} by {(e.deleted && e.deleted.by) || "—"}: {(e.deleted && e.deleted.reason) || "no reason given"}.{" "}
         {canDeleteBills() && <button className="btn small" onClick={() => billRestore(e.id)}>Restore</button>}</p></section>}
-      {e.status === "duplicate" && <section><p className="banner" style={{ margin: 0 }}>Held as a duplicate. {(e.dupOf && e.dupOf.msg) || ""} It does not count towards limits and cannot be approved.</p></section>}
+      {e.status === "duplicate" && <DupBeside e={e} />}
     </div>
   );
 }

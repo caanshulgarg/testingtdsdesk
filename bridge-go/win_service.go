@@ -479,6 +479,7 @@ func setOwner(c *Ordered, o ownerInfo, fincom string) {
 	}
 }
 func writeOrdered(path string, c *Ordered) error {
+	guardPorts(c)
 	b, err := c.MarshalJSON()
 	if err != nil {
 		return err

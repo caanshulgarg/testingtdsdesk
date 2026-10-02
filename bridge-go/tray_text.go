@@ -36,6 +36,8 @@ func trayTip(st M) string {
 		parts = append(parts, "switching to the main bridge")
 	case truthy(st["paused"]):
 		parts = append(parts, "Paused")
+	case str(st["posting"]) != "":
+		parts = append(parts, str(st["posting"])) // a posting going on: its one line ("Waiting for Tally: ...")
 	case !truthy(st["tallyOpen"]):
 		parts = append(parts, "Tally not open")
 	case !truthy(st["cloudConnected"]):

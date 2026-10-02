@@ -170,6 +170,12 @@ func loadConfig() {
 		d.Set("Key", newBridgeKey())
 		need = true
 	}
+	// never a port 0 in the settings (0 means "find it"; an old file or a hand edit may hold one)
+	before, _ := d.MarshalJSON()
+	guardPorts(d)
+	if after, _ := d.MarshalJSON(); string(after) != string(before) {
+		need = true
+	}
 	// this install's id for FinCom (body.bridge.id): made once, then kept
 	if !validInstanceID(str(d.Get("InstanceId"))) {
 		d.Set("InstanceId", newInstanceID())
@@ -192,6 +198,7 @@ func loadConfigRO() {
 			d.Set(k, o.Get(k))
 		}
 	}
+	guardPorts(d)
 	cfgMu.Lock()
 	Cfg = d
 	cfgMu.Unlock()
@@ -201,6 +208,7 @@ var cfgStamp time.Time
 
 func saveConfig() {
 	cfgMu.Lock()
+	guardPorts(Cfg)
 	b, err := json.Marshal(Cfg)
 	cfgMu.Unlock()
 	if err != nil {
@@ -227,6 +235,7 @@ func syncConfig() {
 	if err := o.UnmarshalText(readText(ConfigPath)); err != nil {
 		return
 	}
+	guardPorts(o)
 	cfgMu.Lock()
 	for _, k := range o.keys {
 		Cfg.Set(k, o.Get(k))

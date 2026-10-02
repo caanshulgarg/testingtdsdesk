@@ -796,12 +796,25 @@ func cloudPostTake() {
 	}
 }
 
-// postings taken from the queue are followed and reported every few seconds while they run
+// the job's status as FinCom's queue knows it (taken, running, done, failed): a posting waiting for Tally is "taken",
+// with its "Waiting for Tally: ..." message
+func cloudPostStatus(st string) string {
+	switch st {
+	case "done", "failed":
+		return st
+	case "waiting", "queued", "interrupted":
+		return "taken"
+	}
+	return "running"
+}
+
+// postings taken from the queue are followed and reported every few seconds while they run, and at once when they change
 func syncCloudPosts() {
 	cpMu.Lock()
 	defer cpMu.Unlock()
 	cp := getCloudPosts()
-	if len(cp) == 0 || time.Since(cloudPostAt).Seconds() < float64(keepNum("CloudPostSyncSec", 3)) {
+	dirty := postsDirty.Swap(false) // a job changed (an entry finished, a wait began): reported now
+	if len(cp) == 0 || (!dirty && time.Since(cloudPostAt).Seconds() < float64(keepNum("CloudPostSyncSec", 3))) {
 		return
 	}
 	cloudPostAt = time.Now()
@@ -823,11 +836,13 @@ func syncCloudPosts() {
 				v = r
 			}
 		}
-		st := str(v["status"])
-		if st != "done" && st != "failed" {
-			st = "running"
+		if str(v["status"]) == "cancelled" {
+			delete(cp, id)
+			saveCloudPosts()
+			continue
 		}
-		sig := fmt.Sprint(st, "|", v["done"], "|", v["message"], "|", v["checking"])
+		st := cloudPostStatus(str(v["status"]))
+		sig := fmt.Sprint(st, "|", v["done"], "|", v["message"], "|", v["checking"], "|", jsonText(v["items"]))
 		if sig == last {
 			continue
 		}
@@ -838,9 +853,18 @@ func syncCloudPosts() {
 				continue
 			}
 			res = append(res, M{"id": str(r["id"]), "kind": str(r["kind"]), "ok": r["ok"] == true, "verified": r["verified"], "message": str(r["message"]), "vchNumber": str(r["vchNumber"]), "vchType": str(r["vchType"]),
-				"guid": str(r["guid"]), "masterId": str(r["masterId"]), "vchDate": str(r["vchDate"]), "optional": truthy(r["optional"]), "alreadyThere": truthy(r["alreadyThere"])})
+				"guid": str(r["guid"]), "masterId": str(r["masterId"]), "vchDate": str(r["vchDate"]), "optional": truthy(r["optional"]), "alreadyThere": truthy(r["alreadyThere"]),
+				"state": itemState(r, false), "reason": map[bool]string{true: "", false: failedLine(str(r["message"]))}[r["ok"] == true]})
 		}
-		r := invokeCloud(M{"kind": "posts_update", "id": id, "status": st, "done": toInt(v["done"]), "message": str(v["message"]), "results": res, "checking": v["checking"] == true}, 30)
+		// items: every entry's state (waiting, sending, sent, in_tally, failed with its reason), for FinCom to show live
+		r := invokeCloud(M{"kind": "posts_update", "id": id, "status": st, "done": toInt(v["done"]), "message": str(v["message"]), "results": res, "items": arr(v["items"]), "checking": v["checking"] == true}, 30)
+		if r.json != nil && (truthy(r.json["cancelled"]) || truthy(r.json["gone"])) {
+			// cancelled in FinCom (or no longer there): it stops, also while it waits for Tally
+			_, _ = cancelJob(id, "cancelled in FinCom")
+			delete(cp, id)
+			saveCloudPosts()
+			continue
+		}
 		if r.code == 403 && r.json != nil && truthy(r.json["notMain"]) {
 			// FinCom no longer takes this bridge's reports: another bridge is the main one now
 			noteNotMain(r.err, false)

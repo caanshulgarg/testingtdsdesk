@@ -263,19 +263,26 @@ func diagnosis() M {
 
 // the ports to try: from the settings, else your own Tally's (auto), else the usual ones (fallback)
 func portPlan() (string, []M) {
-	tp := cfg("TallyPorts")
-	if _, isStr := tp.(string); tp != nil && !isStr {
+	// ports set in the settings are tried first, then any other Tally of yours found now (it may have moved to another
+	// port since): a port is never only remembered. A 0 or an empty list means "find it"
+	if ports, auto := cleanPorts(cfg("TallyPorts")); !auto {
 		var l []M
-		for _, p := range arr(tp) {
-			l = append(l, M{"port": toInt(p), "pid": nil, "session": nil, "mine": nil, "program": ""})
+		for _, p := range ports {
+			l = append(l, M{"port": p, "pid": nil, "session": nil, "mine": nil, "program": ""})
+		}
+		for _, f := range tallyListeners() {
+			if !containsInt(ports, toInt(f["port"])) && f["mine"] == true {
+				l = append(l, f)
+			}
 		}
 		return "config", l
 	}
 	found := tallyListeners()
 	if found == nil {
 		var l []M
-		for _, p := range arr(cfg("FallbackPorts")) {
-			l = append(l, M{"port": toInt(p), "pid": nil, "session": nil, "mine": nil, "program": ""})
+		ports, _ := cleanPorts(cfg("FallbackPorts"))
+		for _, p := range ports {
+			l = append(l, M{"port": p, "pid": nil, "session": nil, "mine": nil, "program": ""})
 		}
 		return "fallback", l
 	}
@@ -529,73 +536,103 @@ func openCompaniesCached() []M {
 	return list
 }
 
-// the Tally to use for a company: a port chosen in FinCom wins; otherwise the company must be open in exactly one Tally
-// (your own session first) - the bridge never guesses between two
-func findCompanyPort(company string, preferred int) (int, error) {
-	for _, fresh := range []bool{false, true} {
-		sessions := openCompanies(fresh)
+// findCompany: the Tally (port) where the company is open, and its name as Tally writes it, found now: the cached list
+// first, then Tally asked afresh. The company is the exact one asked for (spaces, line breaks and capitals aside), never
+// another that happens to be open. preferred (the Tally chosen in FinCom, or where it was found last) is only a hint:
+// Tally may have been started again on another port. The error says why it cannot be posted to now (*tallyWait).
+func findCompany(company string, preferred int) (int, string, error) {
+	return findCompanyIn(company, preferred, []bool{false, true})
+}
+
+// for a posting: Tally asked now, every time (a list even 30 seconds old may name a company closed since)
+func findCompanyNow(company string, preferred int) (int, string, error) {
+	return findCompanyIn(company, preferred, []bool{true})
+}
+
+func findCompanyIn(company string, preferred int, passes []bool) (int, string, error) {
+	var last error
+	for _, fresh := range passes {
+		last = nil
 		var usable []M
-		for _, s := range sessions {
-			if s["skipped"] != true && s["ok"] == true {
+		answered, busy := false, false
+		for _, s := range openCompanies(fresh) {
+			if s["skipped"] == true {
+				continue
+			}
+			if s["ok"] == true {
 				usable = append(usable, s)
+				answered = true
+				if s["busy"] == true {
+					busy = true
+				}
+			} else if re(`(?i)timed out|timeout|busy`).MatchString(str(s["error"])) {
+				busy = true
 			}
 		}
-		has := func(s M) bool {
-			for _, c := range sessCompanies(s) {
-				if str(c["name"]) == company {
-					return true
-				}
+		type hit struct {
+			port int
+			name string
+			mine bool
+		}
+		var hits []hit
+		for _, u := range usable {
+			var names []string
+			for _, c := range sessCompanies(u) {
+				names = append(names, str(c["name"]))
 			}
-			return false
+			name, n := matchCompany(company, names)
+			if n > 1 {
+				last = &tallyWait{"many", fmt.Sprintf("Tally on port %d has more than one company named like '%s'; it is not known which one is meant.", toInt(u["port"]), company)}
+				continue
+			}
+			if n == 1 {
+				hits = append(hits, hit{toInt(u["port"]), name, u["mine"] == true})
+			}
 		}
 		if preferred > 0 {
-			var s M
-			for _, u := range usable {
-				if toInt(u["port"]) == preferred {
-					s = u
-					break
+			for _, h := range hits {
+				if h.port == preferred {
+					return h.port, h.name, nil
 				}
 			}
-			if s != nil && has(s) {
-				return preferred, nil
-			}
-			if fresh {
-				if s == nil {
-					return 0, fmt.Errorf("The Tally chosen in FinCom (port %d) is not running in your Windows session. Start it, or choose another Tally in FinCom > Settings > Tally Bridge.", preferred)
-				}
-				return 0, fmt.Errorf("Company '%s' is not open in the Tally chosen in FinCom (port %d). Open it there.", company, preferred)
-			}
-			continue
 		}
-		var with []M
-		for _, u := range usable {
-			if has(u) {
-				with = append(with, u)
-			}
+		if len(hits) == 1 {
+			return hits[0].port, hits[0].name, nil
 		}
-		if len(with) == 1 {
-			return toInt(with[0]["port"]), nil
-		}
-		if len(with) > 1 {
-			var mine []M
-			for _, w := range with {
-				if w["mine"] == true {
-					mine = append(mine, w)
+		if len(hits) > 1 {
+			var mine []hit
+			for _, h := range hits {
+				if h.mine {
+					mine = append(mine, h)
 				}
 			}
 			if len(mine) == 1 {
-				return toInt(mine[0]["port"]), nil
+				return mine[0].port, mine[0].name, nil
 			}
-			if fresh {
-				var p []string
-				for _, w := range with {
-					p = append(p, fmt.Sprint(w["port"]))
-				}
-				return 0, fmt.Errorf("Company '%s' is open in more than one Tally (ports %s). Choose your Tally in FinCom > Settings > Tally Bridge.", company, strings.Join(p, ", "))
+			var p []string
+			for _, h := range hits {
+				p = append(p, fmt.Sprint(h.port))
 			}
+			last = &tallyWait{"many", fmt.Sprintf("Company '%s' is open in more than one Tally (ports %s). Choose your Tally in FinCom > Settings > Tally Bridge.", company, strings.Join(p, ", "))}
+			continue
+		}
+		switch {
+		case last != nil:
+		case busy && !answered:
+			last = &tallyWait{"busy", "Tally is busy and did not answer in time."}
+		case !answered:
+			last = &tallyWait{"closed", "TallyPrime is not running in your Windows login, or does not accept connections (F1 Help > Settings > Connectivity: TallyPrime acts as Both)."}
+		default:
+			last = &tallyWait{"notopen", fmt.Sprintf("Company '%s' is not open in Tally. Open it in TallyPrime on this computer and try again.", company)}
 		}
 	}
-	return 0, fmt.Errorf("Company '%s' is not open in Tally. Open it in TallyPrime on this computer and try again.", company)
+	return 0, "", last
+}
+
+// the port only (the readers): see findCompany
+func findCompanyPort(company string, preferred int) (int, error) {
+	p, _, err := findCompany(company, preferred)
+	return p, err
 }
 
 // --- the person at the computer (Tally comes first: the copier does not read while someone works in Tally)
@@ -616,4 +653,13 @@ func keepUserInTally() bool {
 		return false
 	}
 	return platFrontIsTally()
+}
+
+func containsInt(a []int, x int) bool {
+	for _, v := range a {
+		if v == x {
+			return true
+		}
+	}
+	return false
 }

@@ -7,17 +7,24 @@ function vchTypeOf(e, co){
   if (e.noteKind === "debit") return "Purchase";
   return co.voucherType || "Journal";
 }
+// in Tally: posted and confirmed there (or found there already), and not since missing from Tally's own entries in
+// FinCom's cloud copy (review of 02-Oct-2026: FA/ELEC/013 posted on 29-Sep was deleted in Tally and still counted).
+// A bill in a Tally file that no one has confirmed is not counted.
+function billInTally(e){ return !!(e && e.exportedAt && (e.postVerified === true || e.postNote === "Already in Tally") && !e.goneFromTally); }
 function tallyStateOf(e){
-  if (e.exportedAt) return e.postUnverified ? ["sent", "In Tally, not confirmed"] : ["ok", "In Tally"];
+  if (e.goneFromTally) return ["bad", "Not in Tally any more (deleted there?)"];
+  if (e.exportedAt) return billInTally(e) ? ["ok", "In Tally"] : ["sent", e.postedVia === "bridge" ? "In Tally, not confirmed" : "In a Tally file, not confirmed"];
   if (e.postError) return ["bad", "Tally refused: " + e.postError];
   if (e.status === "approved") return ["warn", "Post to Tally"];
   if (e.status === "rejected") return ["no", "No entry needed"];
   if (e.status === "duplicate") return ["warn", "Held as duplicate"];
+  if (e.status === "deleted") return ["no", "Deleted"];
   return ["no", "To review"];
 }
 function txnRowsBills(){
   const co = CO(), d = D();
-  return Object.values(d.entries).filter(e => e.status !== "deleted").map(e => {
+  // deleted bills are listed too, shown only under the "Deleted" filter (review of 02-Oct-2026)
+  return Object.values(d.entries).map(e => {
     const x = e.x || {}, gst = num(x.cgst) + num(x.sgst) + num(x.igst) + num(x.cess);
     const [cls, label] = tallyStateOf(e);
     return {id: e.id, kind: "bill", date: x.invoiceDate || "", up: (e.createdAt || "").slice(0, 10), vch: vchTypeOf(e, co), no: x.invoiceNo || "",
@@ -70,7 +77,9 @@ function txnColOn(){ const f = txnF(); return Object.keys(f).some(k => Array.isA
 function txnFiltered(rows){
   const q = String(S.txnQ || "").trim().toLowerCase();
   const st = S.txnStatus || "";
-  return rows.filter(r => txnColPass(r) && (!q || [r.no, r.party, r.file, r.vch, String(r.total)].join(" ").toLowerCase().includes(q)) && (!st || r.cls === st));
+  const stOf = r => r.e && r.e.status === "deleted" ? "del" : r.e && r.e.status === "duplicate" ? "dup" : "";
+  return rows.filter(r => txnColPass(r) && (!q || [r.no, r.party, r.file, r.vch, String(r.total)].join(" ").toLowerCase().includes(q))
+    && (st === "dup" || st === "del" ? stOf(r) === st : stOf(r) !== "del" && (!st || r.cls === st)));
 }
 // the register: React (app/src/screens/Txn.jsx)
 function viewTransactions(){ return '<div data-react="Txn"></div>'; }

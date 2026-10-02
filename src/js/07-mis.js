@@ -247,6 +247,17 @@ const MIS = {
     });
     return m;
   },
+  // TDS payable over the period (review of 02-Oct-2026: "Deducted less paid" left out what was owed at the start):
+  // opening + deducted - paid = closing, with the closing as the TDS ledgers' balance in the books to check it
+  tdsPayable(from, to){
+    const tdsL = l => ["tds_payable", "tds_clearing"].includes(Books.ledgerOf(l).kind);
+    // the opening is the balances on the day before the period (with the books' opening balances), from the same source
+    let B = null; try { B = Audit.balances(from, to); } catch (e){}
+    const owed = d => { if (!B || !B.ok) return null; const at = B.at(d); return r2(Object.keys(at).filter(tdsL).reduce((a, l) => a + num(at[l]), 0)); };   // a credit (owed) is positive here
+    const p = this.booksPaid(from, to), ded = r2(Object.values(p).reduce((a, x) => a + x.tdsDed, 0)), paid = r2(Object.values(p).reduce((a, x) => a + x.tdsPaid, 0));
+    const open = owed(Audit.dayBefore(from)) || 0, close = r2(open + ded - paid), books = owed(to);
+    return {open, ded, paid, close, books, ties: books == null || Math.abs(books - close) < 1};
+  },
   compliance(from, to){
     const months = this.monthsOf(from, to), paid = this.booksPaid(from, to);
     const gst = months.map(m => { const pd = (paid[m] || {}).gst || 0; try { const t = GSTR.threeB(m, ""); const out = r2(t.net.igst + t.net.cgst + t.net.sgst + t.net.cess), itc = r2(t.netItc.igst + t.netItc.cgst + t.netItc.sgst + t.netItc.cess);
@@ -257,7 +268,8 @@ const MIS = {
       return {ym: m, ded: p.tdsDed || 0, dep: p.tdsPaid || 0, challans};
     });
     const au = (S.books.audit || {}).last;
-    return {gst, tds, audit: au ? {at: au.at, open: au.findings.filter(f => Audit.status(f.id).s === "open").length, high: au.findings.filter(f => f.sev === "high").length, solved: (au.solved || []).reduce((s, x) => s + x.n, 0)} : null};
+    let tdsRoll = null; try { tdsRoll = this.tdsPayable(from, to); } catch (e){}
+    return {gst, tds, tdsRoll, audit: au ? {at: au.at, open: au.findings.filter(f => Audit.status(f.id).s === "open").length, high: au.findings.filter(f => f.sev === "high").length, solved: (au.solved || []).reduce((s, x) => s + x.n, 0)} : null};
   },
   // what falls due in the next six weeks, from today (review of 02-Oct-2026: it counted from the end of the report's
   // period, and gave TDS for March as due on 7 April). TDS: the 7th of the next month, but 30 April for March; returns on

@@ -17,7 +17,7 @@ export default function Dash() {
   const bank = S.bank && S.bank.cid === co.id ? S.bank : null, bc = bank ? tabCounts(bank.rows) : null, stmt = bank ? curStmt() : null;
   const sales = S.sales && S.sales.cid === co.id ? S.sales.list : null;
   const tds = v.filter((e) => e.status !== "rejected" && e.snapshot).reduce((a, e) => a + num(e.snapshot.tds), 0);
-  const recent = v.filter((e) => e.exportedAt).sort((a, b) => String(b.exportedAt).localeCompare(String(a.exportedAt))).slice(0, 5);
+  const recent = v.filter(billInTally).sort((a, b) => String(b.exportedAt).localeCompare(String(a.exportedAt))).slice(0, 5);
   const off = bank ? bank.rows.filter((r) => r.balOk === false).length : 0;
   return (
     <section className="dash">

@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -124,7 +125,26 @@ func newPostJob(pl M) (M, error) {
 		return nil, err
 	}
 	if exists(filepath.Join(dir, "progress.json")) {
-		return jobView(dir), nil
+		v := jobView(dir)
+		// Retry (the same job sent again after it failed or was cancelled): the entries not in Tally go again; whatever
+		// reached Tally is found by its tag first and never sent twice
+		if st := str(v["status"]); (st == "failed" || st == "cancelled") && !jobAlive(id) {
+			var kept []any
+			for _, r := range arr(v["results"]) {
+				if confirmedResult(obj(r)) {
+					kept = append(kept, r)
+				}
+			}
+			if kept == nil {
+				kept = []any{}
+			}
+			_ = os.Remove(filepath.Join(dir, "cancel"))
+			v["results"], v["done"], v["resumed"], v["status"], v["message"], v["finishedAt"] = kept, len(kept), true, "queued", "Retrying", ""
+			startJob(id, dir, v)
+			writeLog(fmt.Sprintf("Posting job %s: retried (%d already in Tally kept)", id, len(kept)))
+			return jobView(dir), nil
+		}
+		return v, nil
 	}
 	if str(pl["company"]) == "" {
 		return nil, errors.New("No company given.")
@@ -141,8 +161,13 @@ func newPostJob(pl M) (M, error) {
 			items = append(items, M{"id": str(o["id"]), "kind": "voucher", "xml": str(o["xml"])})
 		}
 	}
-	_ = saveFile(filepath.Join(dir, "payload.json"), jsonText(M{"company": str(pl["company"]), "port": toInt(pl["port"]), "ledger": str(pl["ledger"]), "checkFirst": truthy(pl["checkFirst"]), "items": items}))
-	p := M{"ok": true, "id": id, "status": "queued", "company": str(pl["company"]), "port": 0, "total": len(items), "done": 0, "results": []any{}, "message": "Starting", "pid": os.Getpid(), "resumed": false,
+	// the port FinCom chose is kept only as a hint, and never as 0 (0 means "find it", which happens on every try anyway)
+	payload := M{"company": str(pl["company"]), "ledger": str(pl["ledger"]), "checkFirst": truthy(pl["checkFirst"]), "items": items}
+	if pt := toInt(pl["port"]); pt > 0 {
+		payload["port"] = pt
+	}
+	_ = saveFile(filepath.Join(dir, "payload.json"), jsonText(payload))
+	p := M{"ok": true, "id": id, "status": "queued", "company": str(pl["company"]), "total": len(items), "done": 0, "results": []any{}, "message": "Starting", "pid": os.Getpid(), "resumed": false,
 		"startedAt": time.Now().Format(time.RFC3339Nano), "updatedAt": "", "finishedAt": "", "checking": false, "checkFailed": false}
 	startJob(id, dir, p)
 	writeLog(fmt.Sprintf("Posting job %s: %d item(s) for %s", id, len(items), p["company"]))
@@ -188,83 +213,185 @@ func resumePostJob(id string) (M, error) {
 	return p, nil
 }
 
-// keep the computer awake while posting
+// the pause before asking Tally again while a posting waits: 15 s, growing to 60 s; no deadline
+func waitPause(round int) time.Duration {
+	steps := []int{15, 15, 30, 45, 60}
+	if round >= len(steps) {
+		round = len(steps) - 1
+	}
+	return time.Duration(steps[round]) * time.Second
+}
+
+// a job cancelled in FinCom (or by POST /jobs/cancel): a mark in its folder, seen while it waits and between batches
+func jobCancelled(dir string) bool { return exists(filepath.Join(dir, "cancel")) }
+func cancelJob(id, why string) (M, error) {
+	dir, err := jobDir(id)
+	if err != nil {
+		return nil, err
+	}
+	if !exists(filepath.Join(dir, "progress.json")) {
+		return nil, errors.New("No such job.")
+	}
+	_ = saveFile(filepath.Join(dir, "cancel"), why)
+	p := jobView(dir)
+	if p != nil && !jobAlive(id) && str(p["status"]) != "done" {
+		// not running now (stopped part-way, or failed): marked cancelled here
+		p["status"], p["message"], p["finishedAt"] = "cancelled", "Cancelled in FinCom; nothing more is sent to Tally", time.Now().Format(time.RFC3339Nano)
+		writeProgress(dir, p)
+	}
+	writeLog("Posting job " + id + " cancelled (" + why + ")")
+	return jobView(dir), nil
+}
+
+// the posting going on now, in its one line (the tray, /status); "" when none
+func postingNow() string {
+	for _, j := range activeJobs() {
+		o := obj(j)
+		if st := str(o["status"]); st == "waiting" || st == "running" || st == "queued" {
+			return str(o["message"])
+		}
+	}
+	return ""
+}
+
+// a job changed: FinCom's queue hears it at once, not at the next few-second turn
+var postsDirty atomic.Bool
+
+// The worker. A posting never fails because Tally is closed, busy or the company is not open: it waits ("Waiting for
+// Tally: ..."), asking again every 15 s up to every 60 s, with no deadline, until it can post or is cancelled. Only
+// Tally's refusal of an entry (a ledger missing, a date outside the books) fails it, at once, with the reason for that
+// entry; the others go on. Nothing is posted twice: whatever has a result is never sent again (the results are kept in
+// progress.json across restarts), and before sending anything again after a stop or a lost answer, Tally is read for
+// the entries' FinCom tags. The port is found again on every try (never only remembered).
 func jobWorker(dir string) {
 	p := readProgress(dir)
 	pl := readObjFile(filepath.Join(dir, "payload.json"))
 	if p == nil || pl == nil {
 		return
 	}
-	company, ledger := str(pl["company"]), str(pl["ledger"])
-	p["pid"], p["status"], p["message"] = os.Getpid(), "waiting", "Finding the company in Tally"
+	asked, ledger := str(pl["company"]), str(pl["ledger"])
+	hint := toInt(pl["port"])
+	if pp := toInt(p["port"]); pp > 0 {
+		hint = pp
+	}
+	p["pid"] = os.Getpid()
 	var results []M
 	for _, r := range arr(p["results"]) {
 		if o := obj(r); o != nil {
 			results = append(results, o)
 		}
 	}
-	doneIDs := map[string]bool{}
-	for _, r := range results {
-		doneIDs[str(r["id"])] = true
+	var all []M
+	for _, x := range arr(pl["items"]) {
+		if o := obj(x); o != nil {
+			all = append(all, o)
+		}
 	}
+	sending := map[string]bool{}
 	setRes := func() {
 		a := make([]any, len(results))
+		byID := map[string]M{}
 		for i, r := range results {
 			a[i] = r
+			byID[str(r["id"])] = r
 		}
 		p["results"] = a
 		p["done"] = len(results)
+		items := make([]any, 0, len(all))
+		for _, it := range all {
+			k := str(it["id"])
+			r := byID[k]
+			e := M{"id": k, "kind": str(it["kind"]), "state": itemState(r, sending[k])}
+			if r != nil && r["ok"] != true {
+				e["reason"] = failedLine(str(r["message"]))
+			}
+			items = append(items, e)
+		}
+		p["items"] = items
+	}
+	save := func() {
+		setRes()
+		writeProgress(dir, p)
+		postsDirty.Store(true)
+	}
+	setStatus := func(st, msg string) {
+		changed := str(p["status"]) != st || str(p["message"]) != msg
+		p["status"], p["message"] = st, msg
+		if changed {
+			save()
+			if st == "waiting" {
+				writeLog("Posting job " + str(p["id"]) + ": " + msg)
+			}
+		}
+	}
+	finish := func(st, msg string) {
+		p["status"], p["message"], p["finishedAt"] = st, msg, time.Now().Format(time.RFC3339Nano)
+		save()
+		writeLog("Posting job " + str(p["id"]) + " " + st + ": " + msg)
+	}
+	cancelled := func() bool {
+		if jobCancelled(dir) {
+			finish("cancelled", "Cancelled in FinCom; nothing more is sent to Tally")
+			return true
+		}
+		return false
+	}
+	// sleeps, seeing a cancel or the bridge stopping within a second; false: stop here
+	pause := func(d time.Duration) bool {
+		for t := time.Duration(0); t < d; t += time.Second {
+			if jobCancelled(dir) || stopping() {
+				return false
+			}
+			time.Sleep(time.Second)
+		}
+		return true
+	}
+	// Tally with the company open, found now: its port and the company's name in Tally; false when the job is to stop
+	// (cancelled, or the bridge stops: it is resumed after the restart). why: a reason to wait already known
+	round := 0
+	var port int
+	var company string
+	waitTally := func(why error) bool {
+		for {
+			if cancelled() || stopping() {
+				return false
+			}
+			if why == nil {
+				pt, name, err := findCompanyNow(asked, hint)
+				if err == nil {
+					port, company, hint = pt, name, pt
+					p["port"], p["tallyCompany"] = pt, name
+					return true
+				}
+				why = err
+			}
+			setStatus("waiting", waitingLine(asked, why))
+			if !pause(waitPause(round)) {
+				cancelled()
+				return false
+			}
+			round++
+			why = nil
+		}
 	}
 	setRes()
-	writeProgress(dir, p)
-	port := 0
-	for t := 0; t < 20; t++ {
-		pt, err := findCompanyPort(company, toInt(pl["port"]))
-		if err == nil {
-			port = pt
-			break
-		}
-		p["message"] = "Waiting for Tally: " + tallyTrouble(err.Error())
-		writeProgress(dir, p)
-		time.Sleep(6 * time.Second)
-	}
-	if port == 0 {
-		p["status"], p["message"], p["finishedAt"] = "failed", "Tally did not show "+company+" for two minutes. Open it in TallyPrime and post again.", time.Now().Format(time.RFC3339Nano)
-		writeProgress(dir, p)
+	if err := postingAllowed(); err != nil {
+		finish("failed", "Failed: "+err.Error())
 		return
 	}
-	p["port"] = port
+	if !waitTally(nil) {
+		return
+	}
 	// one writer per Tally: wait for another posting to the same Tally to finish
 	lk, _ := tallyWriter.LoadOrStore(port, &sync.Mutex{})
 	wl := lk.(*sync.Mutex)
 	if !wl.TryLock() {
-		p["message"] = "Waiting for another posting to this Tally to finish"
-		writeProgress(dir, p)
+		setStatus("waiting", "Waiting for Tally: another posting to this Tally is going on — this one follows by itself")
 		wl.Lock()
 	}
 	defer wl.Unlock()
 	keepAwake(true)
 	defer keepAwake(false)
-	fail := func(err error) {
-		p["status"], p["message"], p["finishedAt"] = "failed", tallyTrouble(err.Error()), time.Now().Format(time.RFC3339Nano)
-		setRes()
-		writeProgress(dir, p)
-		writeLog("Posting job " + str(p["id"]) + " failed: " + str(p["message"]))
-	}
-	if err := postingAllowed(); err != nil {
-		fail(err)
-		return
-	}
-	p["status"] = "running"
-	var all, todo []M
-	for _, x := range arr(pl["items"]) {
-		if o := obj(x); o != nil {
-			all = append(all, o)
-			if !doneIDs[str(o["id"])] {
-				todo = append(todo, o)
-			}
-		}
-	}
 	vouchersOf := func(a []M) []M {
 		var o []M
 		for _, x := range a {
@@ -274,26 +401,27 @@ func jobWorker(dir string) {
 		}
 		return o
 	}
-	// resuming (or a posting queued in FinCom's cloud): whatever reached Tally before is counted, not sent again
+	todo := itemsToSend(all, results)
+	// resuming (or a posting queued in FinCom's cloud, or Retry): whatever reached Tally before is counted, not sent again.
+	// Tally not answering this read is waited for, never guessed
 	if len(results) > 0 || p["resumed"] == true || truthy(pl["checkFirst"]) {
 		var there map[string]M
-		for a := 0; there == nil && a < 6; a++ {
+		for there == nil {
 			there = findPostedTags(port, company, vouchersOf(todo), ledger)
 			if there == nil {
-				p["message"] = "Checking Tally for entries sent before the stop"
-				writeProgress(dir, p)
-				time.Sleep(time.Duration(5*(a+1)) * time.Second)
+				setStatus("waiting", waitingLine(asked, &tallyWait{"busy", "Tally did not answer the check for entries sent before"}))
+				if !pause(waitPause(round)) || !waitTally(nil) {
+					cancelled()
+					return
+				}
+				round++
 			}
-		}
-		if there == nil {
-			fail(errors.New("Tally did not answer, so it cannot be told which entries arrived before the stop. Open Tally and resume again."))
-			return
 		}
 		var left []M
 		for _, it := range todo {
 			if h, ok := there[str(it["id"])]; ok {
 				results = append(results, M{"id": it["id"], "kind": "voucher", "ok": true, "verified": true, "alreadyThere": true, "vchNumber": str(h["number"]), "vchType": str(h["type"]),
-					"masterId": str(h["masterId"]), "guid": str(h["guid"]), "vchDate": str(h["date"]), "message": "Already in Tally (sent before the stop)"})
+					"masterId": str(h["masterId"]), "guid": str(h["guid"]), "vchDate": str(h["date"]), "message": "Already in Tally (sent before)"})
 			} else {
 				left = append(left, it)
 			}
@@ -301,11 +429,9 @@ func jobWorker(dir string) {
 		todo = left
 	}
 	p["resumed"] = true
-	setRes()
-	p["message"] = "Posting"
-	writeProgress(dir, p)
+	round = 0
+	save()
 	queue := append([]M{}, todo...)
-	tries := map[string]int{}
 	// entries created before a stop but not yet read back are confirmed with the next read
 	var toConfirm []string
 	for _, r := range results {
@@ -316,22 +442,55 @@ func jobWorker(dir string) {
 	isFast := func(x string) bool {
 		return reTag.MatchString(x) && !re(`<ISOPTIONAL>\s*Yes`).MatchString(x) && re(`^\s*<VOUCHER\b`).MatchString(x) && re(`<DATE>\d{8}</DATE>`).MatchString(x)
 	}
+	lostRounds := 0
 	for len(queue) > 0 {
+		if cancelled() || stopping() {
+			return
+		}
+		if err := postingAllowed(); err != nil {
+			finish("failed", "Failed: "+err.Error())
+			return
+		}
+		// the port found again on every try; Tally gone meanwhile: waited for
+		if !waitTally(nil) {
+			return
+		}
+		if lostRounds > 0 {
+			// Tally lost answers last time: a pause first, so a busy Tally is not pressed
+			setStatus("waiting", waitingLine(asked, &tallyWait{"busy", "Tally did not answer"}))
+			if !pause(waitPause(lostRounds - 1)) {
+				cancelled()
+				return
+			}
+		}
 		n := minI(jobChunk, len(queue))
 		chunk := queue[:n]
 		queue = append([]M{}, queue[n:]...)
 		var masters, vouchers, fast []M
 		for _, it := range chunk {
+			sending[str(it["id"])] = true
 			if str(it["kind"]) == "master" {
 				masters = append(masters, it)
 			} else {
 				vouchers = append(vouchers, it)
 			}
 		}
-		done := toInt(p["done"])
-		p["message"] = fmt.Sprintf("Posting %d to %d of %d", done+1, done+len(chunk), toInt(p["total"]))
-		writeProgress(dir, p)
+		setStatus("running", sendingLine(len(results)+1, toInt(p["total"])))
+		save()
 		var res []M
+		resIDs := map[string]bool{}
+		live := func(r M) {
+			// each entry as Tally answers it: FinCom sees it at once (a lost answer stays "sending" until checked)
+			k := str(r["id"])
+			if strings.HasPrefix(str(r["message"]), "Tally did not answer") || resIDs[k] {
+				return
+			}
+			resIDs[k] = true
+			delete(sending, k)
+			results = append(results, r)
+			p["message"] = sendingLine(minI(len(results)+1, toInt(p["total"])), toInt(p["total"]))
+			save()
+		}
 		// the fast way: the batch's vouchers in one request, then each found in Tally by its tag
 		for _, v := range vouchers {
 			if isFast(str(v["xml"])) {
@@ -393,6 +552,9 @@ func jobWorker(dir string) {
 					}
 				}
 			}
+			for _, r := range res {
+				live(r)
+			}
 		}
 		if len(masters)+len(vouchers) > 0 {
 			ms, vs := []any{}, []any{}
@@ -402,12 +564,18 @@ func jobWorker(dir string) {
 			for _, v := range vouchers {
 				vs = append(vs, M{"id": v["id"], "xml": v["xml"]})
 			}
-			r, err := invokeImport(M{"company": company, "port": port, "masters": ms, "vouchers": vs})
+			r, err := invokeImport(M{"company": company, "port": port, "masters": ms, "vouchers": vs, "onItem": func(x M) {
+				// "created" is shown at once; its read-back follows for the whole batch
+				if x["ok"] != true {
+					live(x)
+				}
+			}})
 			if err != nil {
 				msg := tallyTrouble(err.Error())
-				res = nil
-				for _, it := range chunk {
-					res = append(res, M{"id": it["id"], "kind": it["kind"], "ok": false, "message": "Tally did not answer: " + msg})
+				for _, it := range append(append([]M{}, masters...), vouchers...) {
+					if !resIDs[str(it["id"])] {
+						res = append(res, M{"id": it["id"], "kind": it["kind"], "ok": false, "message": "Tally did not answer: " + msg})
+					}
 				}
 			} else {
 				for _, x := range arr(r["results"]) {
@@ -415,7 +583,8 @@ func jobWorker(dir string) {
 				}
 			}
 		}
-		// no answer from Tally: look for it in Tally before sending it again, then try again (three times, waiting longer)
+		// no answer from Tally: it is looked for in Tally (by its tag) before it is sent again; until Tally answers that
+		// read, the posting waits. Nothing is sent again on a guess
 		var lostItems []M
 		lostIDs := map[string]bool{}
 		for _, r := range res {
@@ -428,96 +597,105 @@ func jobWorker(dir string) {
 				lostItems = append(lostItems, it)
 			}
 		}
+		var retry []M
 		if len(lostItems) > 0 {
+			lostRounds++
 			var there map[string]M
-			waits := []int{3, 10, 20, 30, 45}
-			for a := 0; there == nil && a < 5; a++ {
+			for there == nil {
+				if !waitTally(nil) {
+					return
+				}
 				there = findPostedTags(port, company, vouchersOf(lostItems), ledger)
 				if there == nil {
-					p["message"] = "Tally is busy: waiting to check what arrived"
-					writeProgress(dir, p)
-					time.Sleep(time.Duration(waits[a]) * time.Second)
-				}
-			}
-			unsure := there == nil
-			if unsure {
-				there = map[string]M{}
-			}
-			var retry []M
-			without := func(k string) {
-				var o []M
-				for _, r := range res {
-					if str(r["id"]) != k {
-						o = append(o, r)
+					setStatus("waiting", waitingLine(asked, &tallyWait{"busy", "Tally did not answer the check for entries just sent"}))
+					if !pause(waitPause(round)) {
+						cancelled()
+						return
 					}
+					round++
 				}
-				res = o
 			}
+			var keep []M
+			for _, r := range res {
+				if !lostIDs[str(r["id"])] {
+					keep = append(keep, r)
+				}
+			}
+			res = keep
 			for _, it := range lostItems {
 				k := str(it["id"])
-				if h, ok := there[k]; ok {
-					without(k)
+				h, found := there[k]
+				again, why := resendLost(it, true, found)
+				switch {
+				case found:
 					res = append(res, M{"id": k, "kind": "voucher", "ok": true, "verified": true, "vchNumber": str(h["number"]), "vchType": str(h["type"]), "masterId": str(h["masterId"]), "guid": str(h["guid"]), "vchDate": str(h["date"]), "message": "Created (Tally answered late)"})
-				} else if unsure && str(it["kind"]) == "voucher" {
-					for _, r := range res {
-						if str(r["id"]) == k {
-							r["message"] = "Tally did not answer, and did not answer a check either, so it is not known whether this entry arrived. It was not sent again: look in Tally before posting it again."
-							r["unsure"] = true
-						}
-					}
-				} else if tries[k] < 3 {
-					tries[k]++
-					without(k)
+				case again:
 					retry = append(retry, it)
-				} else {
-					for _, r := range res {
-						if str(r["id"]) == k {
-							r["message"] = str(r["message"]) + " (tried 4 times)"
-						}
-					}
+				default:
+					res = append(res, M{"id": k, "kind": str(it["kind"]), "ok": false, "unsure": true, "message": why})
 				}
 			}
-			if len(retry) > 0 {
-				w := []int{3, 10, 30}[minI(2, tries[str(retry[0]["id"])]-1)]
-				p["message"] = fmt.Sprintf("Tally is busy: trying %d again in %d seconds", len(retry), w)
-				writeProgress(dir, p)
-				time.Sleep(time.Duration(w) * time.Second)
-				queue = append(retry, queue...)
-			}
+			queue = append(retry, queue...)
+		} else {
+			lostRounds, round = 0, 0
+		}
+		for _, it := range retry {
+			delete(sending, str(it["id"]))
 		}
 		for _, r := range res {
 			delete(r, "replySnip")
+			k := str(r["id"])
+			delete(sending, k)
+			if resIDs[k] {
+				// shown live already: brought up to date (read back since)
+				for i, x := range results {
+					if str(x["id"]) == k {
+						results[i] = r
+					}
+				}
+				continue
+			}
+			resIDs[k] = true
 			results = append(results, r)
 		}
-		setRes()
-		writeProgress(dir, p)
+		save()
 	}
-	// sending is finished: FinCom shows it at once; the read-back runs after, in one read
-	okN := func() int {
-		n := 0
+	okN, failN, first := 0, 0, ""
+	count := func() {
+		okN, failN, first = 0, 0, ""
 		for _, r := range results {
 			if r["ok"] == true {
-				n++
+				okN++
+			} else {
+				failN++
+				if first == "" {
+					first = str(r["message"])
+				}
 			}
 		}
-		return n
 	}
-	p["status"], p["checking"] = "done", len(toConfirm) > 0
-	p["message"] = fmt.Sprintf("%d of %d sent to Tally", okN(), toInt(p["total"]))
-	p["finishedAt"] = time.Now().Format(time.RFC3339Nano)
-	setRes()
-	writeProgress(dir, p)
+	count()
+	total := toInt(p["total"])
+	// sending is finished: FinCom shows it at once; the read-back runs after, in one read
+	p["checking"] = len(toConfirm) > 0
+	if failN > 0 {
+		finish("failed", jobFailedLine(failN, total, first))
+	} else {
+		finish("done", postedLine(okN, total, len(toConfirm) > 0))
+	}
 	if len(toConfirm) > 0 {
 		confirmPosted(port, company, toConfirm, results, all, ledger)
 		for _, r := range results {
 			delete(r, "pendingCheck")
 		}
 		p["checking"] = false
-		p["message"] = fmt.Sprintf("%d of %d in Tally", okN(), toInt(p["total"]))
-		setRes()
-		writeProgress(dir, p)
+		count()
+		if failN > 0 {
+			finish("failed", jobFailedLine(failN, total, first))
+		} else {
+			finish("done", postedLine(okN, total, false))
+		}
 	}
-	writeLog("Posting job " + str(p["id"]) + " finished: " + str(p["message"]))
 }
 
 // entries Tally said it created are read back together: found -> confirmed with Tally's voucher number; not found ->

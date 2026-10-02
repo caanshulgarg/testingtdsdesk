@@ -2,12 +2,14 @@
 -- ("MCS Project Pvt Ltd\r\n", "RAKVIK TECHNOLOGIES PRIVATE LIMITED\r\n\r\n") while the day book names them without. The
 -- trial balance showed each as two ledgers: the master with its group and opening, and its entries with no master
 -- (out by Rs 38,200 against Tally's). Now both meet on the name without line breaks. Replaces two functions; adds one.
--- Nothing is dropped or deleted; the masters keep their names as Tally sends them.
+-- Nothing is dropped or deleted; the masters keep their names as Tally sends them. tally_nm takes out line breaks only: each
+-- run of them (&#13; &#10; CR LF, with the spaces around it) becomes one space, and the ends are trimmed; other spaces stay
+-- as they are (Tally keeps names like "Arktos  Control & Instruments" with two spaces, and postings use Tally's exact name).
 
 begin;
 
 create or replace function public.tally_nm(p text) returns text language sql immutable as $$
-  select btrim(regexp_replace(regexp_replace(coalesce(p, ''), '(&#13;|&#10;|\r|\n)+', ' ', 'g'), '\s+', ' ', 'g'))
+  select btrim(regexp_replace(coalesce(p, ''), '[ \t]*(&#13;|&#10;|\r|\n)+[ \t]*', ' ', 'g'))
 $$;
 
 create or replace function public.tally_tb(p_client text, p_as_on date)

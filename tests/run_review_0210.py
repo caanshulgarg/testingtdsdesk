@@ -124,6 +124,9 @@ with sync_playwright() as p:
     ok(m == ["Garg Shekhar& Company", "1 Road", "data:x", '{"a":1}'], "17. an empty firm record from a sync keeps the address, logo and rules; the name is the firm account's (%s)" % m)
 
     # 18, 19. the Tally page: per-user install, the direct link and the PowerShell command
+    # (a build ships the bridge only with FINCOM_SHIP_BRIDGE=1: its update list is served here)
+    pg.route("**/assets/bridge-go/latest.json", lambda r: r.fulfill(status=200, content_type="application/json",
+        body=json.dumps({"setup": {"version": "2.1.0", "url": "https://x/assets/bridge-go/FinComBridge-Setup-2.1.0.exe", "sha256": "ab" * 32}})))
     E("() => { navHome('tally'); }"); pg.wait_for_timeout(1500)
     t = pg.inner_text("#app")
     ok("Just for me" in t and pg.locator("#app [data-bridge-link]").count() == 1 and "Invoke-WebRequest" in pg.inner_text("#app [data-bridge-ps]") and "Tls12" in pg.inner_text("#app [data-bridge-ps]"),

@@ -1584,9 +1584,11 @@ function doAct(act, t){
       Bridge.call("/readtest?company=" + encodeURIComponent(name) + Bridge.pinQ(), null, 180000).then(j => { S.readTest = Object.assign({at: Date.now()}, j, {tests: [].concat(j.tests || [])}); render(); }, err => { S.readTest = {error: err.message}; render(); });
       break;
     }
+    case "billRepostGone":
     case "billRepost": {
-      const ids = (S.billCheck && S.billCheck.missing) || [];
-      ids.forEach(id => { const e = D().entries[id]; if (e){ e.exportedAt = null; e.postNote = ""; e.postVerified = false; e.tallyCheck = null; e.postUnconfirmed = null; e.postError = ""; Store.saveEntry(S.coId, e); } });
+      // billRepostGone: the bills whose voucher is no longer in Tally's entries in the cloud copy (TallyProof)
+      const ids = act === "billRepostGone" ? Object.values(D().entries).filter(e => e.goneFromTally).map(e => e.id) : (S.billCheck && S.billCheck.missing) || [];
+      ids.forEach(id => { const e = D().entries[id]; if (e){ e.exportedAt = null; e.postNote = ""; e.postVerified = false; e.tallyCheck = null; e.postUnconfirmed = null; e.postError = ""; delete e.goneFromTally; Store.saveEntry(S.coId, e); } });
       S.billCheck = null; refreshStats(S.coId); toast(ids.length + " bills are waiting to be posted again."); render(); break;
     }
     case "bridgeDiag": Bridge.diagnose().then(() => Bridge.refresh()).then(() => render()); break;
