@@ -1,0 +1,94 @@
+# Tests NOT run by CI (tests/ci/tests.txt), and why. Found by running every tests/run_* once in a copy of the tree with
+# no tests/data on 02-Oct-2026 (Node 22, Python 3.11, Playwright Chromium, PostgreSQL 16, Deno 2, PowerShell 7).
+# Run these by hand (with a client's books in tests/data where said). When one passes without tests/data, move it to
+# tests.txt. "in progress (2026-10-02)": failing on work other agents were changing that day; look again once it lands.
+#
+# test                         reason
+
+## needs tests/data: reads tests/data/books-cache.json directly (not books_data.CACHE, so no fall-back to the made-up books)
+run_2b_ui.py                   needs tests/data (books-cache.json)
+run_ai_ui.py                   needs tests/data (books-cache.json)
+run_amend_ui.py                needs tests/data (books-cache.json)
+run_bill_auto_ledgers.py       needs tests/data (books-cache.json)
+run_confirm_choices.py         needs tests/data (books-cache.json)
+run_gridf_ui.py                needs tests/data (books-cache.json)
+run_gst9_ui.py                 needs tests/data (books-cache.json)
+run_gst_recon.py               needs tests/data (books-cache.json)
+run_gstfiling_ui.py            needs tests/data (books-cache.json)
+run_gstq_ui.py                 needs tests/data (books-cache.json)
+run_gstvault_ui.py             needs tests/data (books-cache.json)
+run_help_ui.py                 needs tests/data (books-cache.json)
+run_ledger_check.py            needs tests/data (books-cache.json)
+run_mis_accounts_0210.py       needs tests/data (books-cache.json)
+run_mis_staging.py             needs tests/data (books-cache.json)
+run_panguard_ui.py             needs tests/data (books-cache.json)
+run_qrmp_quarter.py            needs tests/data (books-cache.json)
+run_react_booktabs.py          needs tests/data (books-cache.json)
+run_react_gst.py               needs tests/data (books-cache.json)
+run_react_tds.py               needs tests/data (books-cache.json)
+run_review_0210.py             needs tests/data (books-cache.json)
+run_review_f9b.py              needs tests/data (books-cache.json)
+run_tds_ui.py                  needs tests/data (books-cache.json)
+run_ui.py                      needs tests/data (books-cache.json)
+run_ui_review_0110b.py         needs tests/data (books-cache.json)
+
+## needs tests/data: written for the real client's books (VMS Events: its vouchers, ledgers, GSTINs, figures, 2B/R1
+## portal JSON); on the made-up books they crash or check figures that are not there. They also fail locally today,
+## since tests/data now holds only books-cache.json and parts/, not the DayBook.xml/Master.xml/2B files they read.
+run_2b.js                      needs tests/data (returns_R2B_09AASCA7501M2Z4_*.json)
+run_adv.js                     needs tests/data (15 checks on the real books' advances, bills, forex)
+run_adv_11b.js                 needs tests/data (receipt 13, LEADS INSURANCE BROKERS)
+run_amend.js                   needs tests/data (June GSTR-1 of the real books)
+run_audit.js                   needs tests/data (entries after 31 Mar 2026, books from 1 Apr 2024)
+run_clearing.js                needs tests/data (crashes on the made-up books)
+run_custims.js                 needs tests/data (registered-customer invoices of the real books)
+run_drift.js                   needs tests/data (crashes on the made-up books)
+run_gst138.js                  needs tests/data (221 GSTINs held in Tally registration details)
+run_gstfiling.js               needs tests/data (portal files for 09AASCA7501M2Z4)
+run_gstr1a.js                  needs tests/data (crashes on the made-up books)
+run_gstvault.js                needs tests/data (VMS file names)
+run_led.js                     needs tests/data (crashes on the made-up books)
+run_r1layout.js                needs tests/data (TDSDESK_R1 portal GSTR-1 JSON)
+run_keep_light.py              needs tests/data (a voucher dated 10-Mar-2026 the made-up books lack)
+run_keep_round.py              needs tests/data (a voucher dated 10-Mar-2026 the made-up books lack)
+
+## needs tests/data: pass without it only by skipping every check (nothing tested in CI)
+run_fresh_browser.py           needs tests/data (skips: no books-cache.json)
+run_open_timing.py             needs tests/data (skips: no books-cache.json)
+run_gstapi_ui.py               needs tests/data (skips: VMS 2B file not here)
+run_ims.js                     needs tests/data (skips: VMS 2B files not here)
+run_itct_ui.py                 needs tests/data (skips: VMS 2B files not here)
+run_vms2b.js                   needs tests/data (skips: VMS 2B files not here)
+run_vms2b_ui.py                needs tests/data (skips: VMS 2B files not here)
+
+## needs Windows
+run_connector.py               needs Windows tools: builds the FinCom Connector with mcs (Mono/.NET); the Connector is retired
+
+## in progress (2026-10-02): the test calls app code that is gone or renamed, or expects the older page or bridge
+run_ai.js                      in progress (2026-10-02): A.pairCell is not a function
+run_cloudup.js                 in progress (2026-10-02): TCloud is not defined
+run_tlight.js                  in progress (2026-10-02): devState is not defined
+run_stuck.js                   in progress (2026-10-02): booksFreshLine not found in src/js
+run_update_btn.py              in progress (2026-10-02): booksFreshLine is not defined
+run_gstapi_session.py          in progress (2026-10-02): FinComReact is not defined on the page it opens
+run_twostep_ui.py              in progress (2026-10-02): the legacy sign-in form it fills moved to React (53a7ccf)
+run_gridf.py                   in progress (2026-10-02): the Day Book file input #booksIn is not on the page (site-test or dist-test)
+run_bridge.py                  in progress (2026-10-02): expects bridge 1.14.6 ("bridge 1.14.6 answers"; KeyError 'folder')
+run_keep_e2e.py                in progress (2026-10-02): expects bridge 1.14.6 running; then the copy is not brought in
+run_lookup_tally_e2e.py        in progress (2026-10-02): expects bridge 1.14.6 running; the copy holds 1 entry
+run_tally_ui.py                in progress (2026-10-02): June and July read 0 vouchers (Tally has 13)
+run_tcloud_ui.py               in progress (2026-10-02): books not brought in from the stand-in cloud (0 of 18), also with dist-test
+run_cloud_post_ui.py           in progress (2026-10-02): entries not queued in the cloud (also with dist-test)
+run_reports_ui.py              in progress (2026-10-02): closed-period posting prompt changed (2 checks, with dist-test)
+run_led_ui.py                  in progress (2026-10-02): "masters read: what Tally says about each ledger is kept" (with dist-test)
+run_fixture_books.js           in progress (2026-10-02): FINDING 5 expenses refunded 3000, by hand 28000 (money rules being changed)
+run_gst134_ui.py               in progress (2026-10-02): FINDING 6 3B for Mar-2026 reverse charge (test being edited)
+run_gst_taxpro_server.py       in progress (2026-10-02): IRN cancelled within 24 hours; e-invoices list (2 checks)
+run_gobridge.py                in progress (2026-10-02): Go bridge 2.1.4 shadow check and compare differ; ran past 10 minutes
+run_gobridge_beat.py           in progress (2026-10-02): /status busy/open, log repeats; HTTP 502 from the stand-in
+run_gobridge_diff.py           in progress (2026-10-02): Go and PowerShell bridges answer differently (.ledgers[0].rate, .dailyAt)
+run_migration32.py             in progress (2026-10-02): server/tally-cloud/migration-32-alterid-sync.sql not written yet
+
+## flaky timing / slow stand-ins
+run_cloud_e2e.py               flaky timing: 1 check ("an entry changed in Tally: its day goes to the cloud again"), 4.5 min
+run_live_sync.py               flaky timing: two browsers in step; 4 checks waited the full 99 s

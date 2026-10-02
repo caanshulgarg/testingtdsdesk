@@ -3,8 +3,9 @@
 # exits non-zero when any test fails. Used by .github/workflows/ci.yml; runs the same on a developer's machine.
 #
 #   tests/ci/run_ci.sh                       # every test in tests/ci/tests.txt
-#   tests/ci/run_ci.sh --shard 2/4           # the 2nd of 4 equal shares of the list (CI runs the shares in parallel)
+#   tests/ci/run_ci.sh --shard 2/6           # the 2nd of 6 shares of about equal length (CI runs them in parallel)
 #   tests/ci/run_ci.sh --list other.txt run_x.py ...   # another list, or tests named on the command line
+#   tests/ci/run_ci.sh --shard 2/6 --dry-run # only print what would run (test, limit, settings)
 #
 # A line of the list: the test's file name in tests/, then optionally its time limit in seconds (default
 # CI_TIMEOUT, 300; '-' for the default), then optionally VAR=value settings for that test only (paths relative to
@@ -17,12 +18,14 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TESTS="$(cd "$HERE/.." && pwd)"
 LIST="$HERE/tests.txt"
 SHARD=""
+DRY=""
 NAMES=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --shard) SHARD="$2"; shift 2 ;;
     --list) LIST="$2"; shift 2 ;;
-    -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
+    --dry-run) DRY=1; shift ;;
+    -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
     *) NAMES+=("$1"); shift ;;
   esac
 done
@@ -43,13 +46,18 @@ else
 fi
 if [ -n "$SHARD" ]; then
   k="${SHARD%/*}"; n="${SHARD#*/}"
+  # the longest first (by time limit), dealt out back and forth (1..n, n..1, ...) so the shares take about as long
   declare -a T2 L2 E2
-  for i in "${!T[@]}"; do
-    if [ $(( i % n )) -eq $(( k - 1 )) ]; then T2+=("${T[$i]}"); L2+=("${L[$i]}"); E2+=("${E[$i]}"); fi
+  j=0
+  for i in $(for i in "${!T[@]}"; do echo "${L[$i]} $i"; done | sort -s -k1,1nr | awk '{print $2}'); do
+    r=$(( j / n )); p=$(( j % n )); [ $(( r % 2 )) -eq 1 ] && p=$(( n - 1 - p ))
+    if [ $p -eq $(( k - 1 )) ]; then T2+=("${T[$i]}"); L2+=("${L[$i]}"); E2+=("${E[$i]}"); fi
+    j=$(( j + 1 ))
   done
   T=("${T2[@]}"); L=("${L2[@]}"); E=("${E2[@]}")
 fi
 [ ${#T[@]} -gt 0 ] || { echo "no tests to run"; exit 1; }
+if [ -n "$DRY" ]; then for i in "${!T[@]}"; do echo "${T[$i]} ${L[$i]} ${E[$i]}"; done; exit 0; fi
 
 # the made-up books' cache, made once here rather than by several tests at the same moment
 if [ ! -e "$TESTS/data/Master.xml" ] && [ -z "${TDSDESK_DATA:-}" ]; then
