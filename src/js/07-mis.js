@@ -296,13 +296,9 @@ const MIS = {
     // cover + reverse charge); adding rcmCash again counted it twice (Apr-2025: 4,860 = 2 x 2,430, the reverse charge on
     // Jitin & Co.'s bill 5063 of 30-Apr-2025). Each row now adds up: output - credit + reverse charge + credit
     // carried over (credit brought in from the month before, less credit left for the next) = worked out to pay
-    // review of 02-Oct-2026 (the made-up books in tests/fixtures/books): with two registrations, one working for both set
-    // Delhi's credit against Uttar Pradesh's tax (Jun-2025: nothing to pay, where UP owed 5,400), which the law does not
-    // allow (credit stays with its GSTIN); each registration is worked out on its own and the figures added
-    const gst = months.map(m => { const pd = (paid[m] || {}).gst || 0; try { const ts = this.gst3b(m), add = f => r2(ts.reduce((a, t) => a + f(t), 0));
-      const out = add(t => sum4(t.net)), itc = add(t => sum4(t.netItc));
-      const rcm = add(t => t.pay && t.pay.rcmCash ? sum4(t.pay.rcmCash) : 0);
-      const due = add(t => t.pay && t.pay.cash ? sum4(t.pay.cash) : r2(Math.max(0, sum4(t.net) - sum4(t.netItc)) + (t.pay && t.pay.rcmCash ? sum4(t.pay.rcmCash) : 0)));
+    const gst = months.map(m => { const pd = (paid[m] || {}).gst || 0; try { const t = GSTR.threeB(m, ""); const out = sum4(t.net), itc = sum4(t.netItc);
+      const rcm = t.pay && t.pay.rcmCash ? sum4(t.pay.rcmCash) : 0;
+      const due = t.pay && t.pay.cash ? sum4(t.pay.cash) : r2(Math.max(0, out - itc) + rcm);
       return {ym: m, out, itc, rcm, carry: r2(due - (out - itc + rcm)), due, pay: pd}; } catch (e){ return {ym: m, out: 0, itc: 0, rcm: 0, carry: 0, due: 0, pay: pd}; } });
     const tds = months.map(m => {
       const p = paid[m] || {};
@@ -313,12 +309,6 @@ const MIS = {
     let tdsRoll = null; try { tdsRoll = this.tdsPayable(from, to); } catch (e){}
     // an audit run that no longer fits the books is not counted (review of 02-Oct-2026)
     return {gst, tds, tdsRoll, audit: au && !Audit.stale(au) ? {at: au.at, open: au.findings.filter(f => Audit.status(f.id).s === "open").length, high: au.findings.filter(f => f.sev === "high").length, solved: (au.solved || []).reduce((s, x) => s + x.n, 0)} : null};
-  },
-  // the 3B workings of a month: one for the client's only registration, else one per registration (credit cannot be set
-  // off across registrations)
-  gst3b(m){
-    const regs = Array.from(new Set((GSTR.gstins(S.books) || []).map(g => String(g).slice(0, 2))));
-    return regs.length > 1 ? regs.map(rg => GSTR.threeBm(m, rg)) : [GSTR.threeB(m, "")];
   },
   // what falls due in the next six weeks, from today (review of 02-Oct-2026: it counted from the end of the report's
   // period, and gave TDS for March as due on 7 April). TDS: the 7th of the next month, but 30 April for March; returns on
@@ -552,16 +542,14 @@ Object.assign(MIS, {
     });
     // tax on fixed dates: GST on the 20th, TDS on the 7th, from the last months in the books
     const lastM = this.monthsOf(this.shift(to, 0, -89), to).slice(-3);
-    const gst = lastM.map(mm => { try { return r2(this.gst3b(mm).reduce((a, t) => a + Math.max(0, t.net.igst + t.net.cgst + t.net.sgst + t.net.cess - (t.netItc.igst + t.netItc.cgst + t.netItc.sgst + t.netItc.cess)), 0)); } catch (e){ return 0; } });
+    const gst = lastM.map(mm => { try { const t = GSTR.threeB(mm, ""); return Math.max(0, t.net.igst + t.net.cgst + t.net.sgst + t.net.cess - (t.netItc.igst + t.netItc.cgst + t.netItc.sgst + t.netItc.cess)); } catch (e){ return 0; } });
     const tds = lastM.map(mm => TDS.rows().filter(r => this.ym(r.date) === mm).reduce((s2, r) => s2 + r.tds, 0) + TDS.salaryRows().filter(r => this.ym(r.date) === mm).reduce((s2, r) => s2 + r.tds, 0));
     for (let k = 0; k < 4; k++){
       const d = new Date(Audit.iso(start) + "T00:00:00"); d.setDate(1); d.setMonth(d.getMonth() + k);
       const ym2 = d.getFullYear() + String(d.getMonth() + 1).padStart(2, "0");
       const g = k === 0 && gst.length ? gst[gst.length - 1] : this.median(gst) || 0, t2 = k === 0 && tds.length ? tds[tds.length - 1] : this.median(tds) || 0;
       if (g) put(ym2 + "20", -r2(g), "GST", "GSTR-3B", k === 0 ? "last month's tax payable in cash" : "the usual month");
-      // TDS deducted in March is due on 30 April, not 7 April (rule 30(2); as MIS.dues has it): review of 02-Oct-2026, the
-      // fixture books' March TDS of 2,000 sat in week 1 of a forecast from 1 April
-      if (t2) put(ym2 + (ym2.slice(4) === "04" ? "30" : "07"), -r2(t2), "TDS", "TDS deposit", k === 0 ? "last month's deductions" : "the usual month");
+      if (t2) put(ym2 + "07", -r2(t2), "TDS", "TDS deposit", k === 0 ? "last month's deductions" : "the usual month");
     }
     let run = bal != null ? bal : null;
     weeks.forEach(w => { w.net = r2(w.inn - w.out); if (run != null){ w.open = run; run = r2(run + w.net); w.close = run; } w.items.sort((a, c) => a.d.localeCompare(c.d) || a.what.localeCompare(c.what) || String(a.who).localeCompare(String(c.who))); });
