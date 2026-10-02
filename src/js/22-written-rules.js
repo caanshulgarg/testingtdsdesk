@@ -950,17 +950,19 @@ function tabStates(tab){ return tab === "ready" ? ["ready"] : tab === "done" ? [
 // Tally gave back the voucher (review of 02-Oct-2026: 184 lines showed "In Tally" after a Tally file was only made, with
 // no bank ledger linked and no bank entries in Tally for the year). A line sent in a file and never seen in Tally stays
 // under Post to Tally, marked so, and is not posted again by "Post all"
-function bankMatched(r){ return r.state === "intally" || (r.state === "sent" && !!(r.tally && (r.tally.guid || r.tally.masterId || r.tally.number)) && !r.checking); }
+// A line whose voucher is no longer among Tally's entries in FinCom's cloud copy (TallyProof.checkBank: 182 HDFC lines
+// posted on 27-Sep were deleted in Tally afterwards) is not in Tally either: it goes back under Post to Tally, marked so
+function bankMatched(r){ return !r.goneFromTally && (r.state === "intally" || (r.state === "sent" && !!(r.tally && (r.tally.guid || r.tally.masterId || r.tally.number)) && !r.checking)); }
 function bankTabOf(r){
   if (r.state === "attention" || r.state === "suggested") return "review";
-  if (r.state === "ready" || (r.state === "sent" && !bankMatched(r))) return "ready";
+  if (r.state === "ready" || ((r.state === "sent" || r.state === "intally") && !bankMatched(r))) return "ready";
   return "done";
 }
 function bankTab(){ const b = B(); return ["review", "ready", "done", "all", "rules"].includes(b.filter) ? b.filter : "review"; }
 function tabCounts(rows){
   const c = countStates(rows);
   const t = {review: 0, ready: 0, done: 0}; (rows || []).forEach(r => { t[bankTabOf(r)]++; });
-  return {review: t.review, ready: t.ready, done: t.done, post: c.ready || 0, inTally: (rows || []).filter(bankMatched).length, filed: (rows || []).filter(r => r.state === "sent" && !bankMatched(r)).length, attention: c.attention || 0, suggested: c.suggested || 0};
+  return {review: t.review, ready: t.ready, done: t.done, post: c.ready || 0, inTally: (rows || []).filter(bankMatched).length, filed: (rows || []).filter(r => r.state === "sent" && !bankMatched(r) && !r.goneFromTally).length, gone: (rows || []).filter(r => r.goneFromTally).length, attention: c.attention || 0, suggested: c.suggested || 0};
 }
 function plural(n, word){ return n + " " + word + (n === 1 ? "" : word.endsWith("y") ? "" : "s"); }
 function entries(n){ return n + (n === 1 ? " entry" : " entries"); }

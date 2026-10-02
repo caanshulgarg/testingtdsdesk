@@ -483,7 +483,7 @@ const Audit = {
     });
     const solvedBy = {};
     Object.values(au.items).filter(it => it.solved).forEach(it => { (solvedBy[it.f] = solvedBy[it.f] || []).push(it); });
-    const run = {at, from, to, how: how || "run now", findings, errors, vouchers: V.length, balances: ctx.bal.ok ? ctx.bal.src : "",
+    const run = {at, from, to, how: how || "run now", basis: MIS.basis(), findings, errors, vouchers: V.length, balances: ctx.bal.ok ? ctx.bal.src : "",
       notes: [ctx.bal.ok ? "" : "Balance checks were not run: " + ctx.bal.why + ".", this.mastersIn() ? "" : "The ledger masters are not read, so ledgers are recognised by name only."].filter(Boolean),
       solved: Object.entries(solvedBy).map(([fid, list]) => ({id: fid, title: list[0].title || fid, area: list[0].area, sev: list[0].sev, n: list.length, amount: r2(list.reduce((s2, it) => s2 + num(it.row && it.row.amount), 0)),
         items: list.sort((a, c) => String(a.solved).localeCompare(String(c.solved)) || String((a.row || {}).date).localeCompare(String((c.row || {}).date))).slice(-300)}))};
@@ -524,7 +524,16 @@ const Audit = {
     return {from: fy + "0401", to: fyEnd < last ? fyEnd : last};
   },
   // a run kept from before that no longer matches the books for its period (another computer's books, or books read again)
-  stale(run){ if (!run || !run.from) return null; const n = this.vouchers(run.from, run.to).length; return n !== run.vouchers ? {was: run.vouchers, now: n} : null; },
+  // a kept run that no longer fits: the books hold a different number of entries for its period, or the books or
+  // FinCom's working changed since (MIS.basis); its findings and figures are then not shown, only "Run again"
+  stale(run){
+    if (!run || !run.from) return null;
+    const n = this.vouchers(run.from, run.to).length;
+    if (n !== run.vouchers) return {was: run.vouchers, now: n};
+    if (!run.basis || run.basis !== MIS.basis()) return {was: run.vouchers, now: n, changed: true};
+    return null;
+  },
+  howLabel(run){ return !run || !run.how || run.how === "run now" ? "run by hand" : run.how; },
   maybeRun(){
     const b = S.books;
     if (!b || !b.vouchers || !this.due(b)) return;

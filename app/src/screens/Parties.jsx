@@ -90,9 +90,9 @@ function PendingSuppliers() {
   const list = pendingSuppliers();
   if (!list.length) return null;
   return <div className="tblwrap" style={{ marginTop: 14 }}><table className="data">
-    <thead><tr><th>New supplier, not yet approved</th><th>PAN</th><th>Payment type on the bill</th><th className="n">Bills waiting</th><th className="n">Total</th><th></th></tr></thead>
+    <thead><tr><th>Supplier not yet in FinCom’s list</th><th>PAN</th><th>Payment type on the bill</th><th className="n">Bills waiting</th><th className="n">Total</th><th></th></tr></thead>
     <tbody>{list.map((k) => <tr key={k.key}>
-      <td>{k.name} <span className="tag warn">new</span></td><td>{k.pan || "—"}</td><td>{k.natureId && k.natureId !== "none" ? ruleOf(k.natureId).label : "—"}</td>
+      <td>{k.name} {k.tally ? <span className="tag ok" title="Tally already has this supplier’s ledger">in Tally as {k.tally}</span> : <span className="tag warn">new</span>}</td><td>{k.pan || "—"}</td><td>{k.natureId && k.natureId !== "none" ? ruleOf(k.natureId).label : "—"}</td>
       <td className="n">{k.bills}</td><td className="n">{money0(k.total)}</td>
       <td><button className="linkbtn" onClick={() => { const p = addPendingSupplier(k.key); if (p) { S.partySel = p.id; render(); } }}>Save and fill in</button></td></tr>)}</tbody>
   </table></div>;

@@ -188,5 +188,47 @@ const TallyProof = {
     });
     if (n){ refreshStats(cid); render(); }
     return n;
+  },
+  // the same for bank lines: a line posted (its voucher's id) or found when reconciling (no id: a line of the account's
+  // ledger on that day for that amount) that the cloud copy, having read the day again, no longer has
+  bankAt: {},
+  async checkBank(cid, force){
+    const b = S.bank;
+    if (!b || b.cid !== cid || typeof TCloud !== "object" || !TCloud.on() || !TCloud.has(cid)) return 0;
+    if (!force && Date.now() - (this.bankAt[cid] || 0) < 5 * 60000) return 0;
+    this.bankAt[cid] = Date.now();
+    const bk = TCloud.book(cid), st = (bk && bk.state) || {}, readAt = Date.parse(bk.daysAt || 0) || 0, doneTo = String(st.doneTo || ""), skipped = new Set([].concat(st.skipped || []));
+    const d8 = x => String(x || "").replace(/-/g, "").slice(0, 8);
+    const read = (r, at) => { const day = d8(r.date); return day && doneTo >= day && !skipped.has(day) && readAt > (Date.parse(at || 0) || 0); };
+    const rows = b.rows.filter(r => r.state === "sent" || r.state === "intally");
+    if (!rows.length) return 0;
+    const withId = rows.filter(r => r.tally && r.tally.guid), found = new Set();
+    for (let i = 0; i < withId.length; i += 80){
+      const g = withId.slice(i, i + 80).map(r => '"' + String(r.tally.guid).replace(/"/g, "") + '"').join(",");
+      const got = await Cloud.api("tally_vouchers?select=guid,cancelled&book_id=eq." + encodeURIComponent(bk.book) + "&guid=in.(" + encodeURIComponent(g) + ")");
+      (got || []).forEach(x => { if (!x.cancelled) found.add(x.guid); });
+    }
+    // no voucher id: the account's ledger on that day, for that amount
+    const noId = rows.filter(r => !(r.tally && r.tally.guid)), lines = {};
+    for (const day of Array.from(new Set(noId.map(r => d8(r.date)))).filter(Boolean)){
+      lines[day] = await Cloud.api("tally_lines?select=ledger,amount&book_id=eq." + encodeURIComponent(bk.book) + "&day=eq." + Audit.iso(day)) || [];
+    }
+    const ledOf = r => { const s2 = (b.stmts || []).find(x => x.id === String(r.id || "").split("-")[0]) || {}; return ledNm(accountFor(s2).ledger || "").toLowerCase(); };
+    let n = 0;
+    rows.forEach(r => {
+      let gone;
+      if (r.tally && r.tally.guid) gone = !found.has(r.tally.guid) && read(r, r.tally.at || r.sentAt);
+      else { const amt = r2(num(r.debit) || num(r.credit)), l = ledOf(r);
+        gone = read(r, 0) && !(lines[d8(r.date)] || []).some(x => Math.abs(Math.abs(num(x.amount)) - amt) < 0.01 && (!l || ledNm(x.ledger).toLowerCase() === l)); }
+      if (!!gone !== !!r.goneFromTally){ if (gone) r.goneFromTally = new Date().toISOString(); else delete r.goneFromTally; n++; }
+    });
+    if (n){ saveBank({rows: true}); render(); }
+    return n;
   }
 };
+// the bank lines no longer in Tally: back to "ready", to be posted again (Tally is checked for FinCom's tag first)
+function bankRepostGone(){
+  const b = B(), gone = b.rows.filter(r => r.goneFromTally);
+  gone.forEach(r => { r.state = "ready"; r.tally = null; r.postVerified = false; r.postedVia = ""; r.sentAt = ""; r.tallyRef = ""; r.tallyHow = ""; delete r.goneFromTally; });
+  saveBank({rows: true}); toast(gone.length + " line" + (gone.length === 1 ? " is" : "s are") + " ready to post again."); render();
+}

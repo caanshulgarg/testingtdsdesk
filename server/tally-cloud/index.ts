@@ -171,7 +171,8 @@ async function shadowCall(dev: any, firm: string, body: any) {
     const { data: cur } = await db.from("tally_devices").select("info").eq("id", dev.id).maybeSingle();
     const prev = (cur?.info && typeof cur.info === "object") ? cur.info : {};
     const me = bridgeOf(dev, body, true);
-    const info = { ...prev, shadow, bridges: bridgesWith(prev, me.id, me.entry) };
+    // a bridge 2.0.0 in test mode sends no name of its own: it is kept in info.shadow only, never in bridge 1.15.0's place
+    const info = me.id === "v1" ? { ...prev, shadow } : { ...prev, shadow, bridges: bridgesWith(prev, me.id, me.entry) };
     await db.from("tally_devices").update({ info }).eq("id", dev.id);
     const tok = dev.wake_token;
     const wake = tok ? { url: URL.replace(/^http/, "ws").replace(/\/+$/, "") + "/realtime/v1/websocket", key: ANON, topic: "tb-" + tok } : null;

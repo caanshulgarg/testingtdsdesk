@@ -283,7 +283,7 @@ function Compliance({ r }) {
       {C.tds.map((x) => <tr key={x.ym}><td>{GSTR.label(x.ym)}</td><td className="n">{m(x.ded)}</td><td className="n">{m(x.dep)}</td><td className="n">{m(x.challans)}</td></tr>)}</Table>
       <p className="note">From the books: deducted is what the TDS ledgers were credited with, paid what they were debited with from the bank. A month's TDS is paid the next month, and last year's TDS is paid in April, so the two do not match month by month.</p></Card>
     <Card top title="Audit">{C.audit ? <><div className="dash-row"><span>Findings open</span><b>{C.audit.open}</b></div><div className="dash-row"><span>Serious</span><b>{C.audit.high}</b></div><div className="dash-row"><span>Put right</span><b>{C.audit.solved}</b></div></>
-      : <p className="note">Not run yet.</p>}</Card>
+      : <p className="note">{(S.books.audit || {}).last ? "The last run no longer fits the books: run it again in Audit." : "Not run yet."}</p>}</Card>
   </>;
 }
 
@@ -291,7 +291,11 @@ export default function Mis({ b }) {
   // Tally changed since the last run: the tab says so while it is worked out again (TallyRead.catchUp, src/js/18)
   const catchUp = TallyRead.catchUp(b, "mis");
   if (catchUp) return <CatchUp text={catchUp} />;
-  const r = (b.mis || {}).last;
+  const r0 = (b.mis || {}).last, stale = MIS.stale(b);
+  // a saved run from other books or older working: worked out again now, its figures not shown meanwhile
+  if (stale && !MIS._again) { MIS._again = true; setTimeout(() => { try { MIS.run(r0.from, r0.to, "worked out again (the books or FinCom changed since " + fmtDate(r0.at.slice(0, 10)) + ")"); saveBooks(); } finally { MIS._again = false; render(); } }, 0); }
+  if (stale) return <div className="bk-none" data-mis-again="" style={{ marginTop: 12 }}>{"Working out again: the books or FinCom’s working changed since the run of " + fmtDate(r0.at.slice(0, 10)) + " (result code " + r0.code + ")."}</div>;
+  const r = r0;
   const rg = S.misRange || (r ? { from: Audit.iso(r.from), to: Audit.iso(r.to) } : ((x) => ({ from: Audit.iso(x.from), to: Audit.iso(x.to) }))(misRangeQuick("ytd", b)));
   const tab = S.misTab || "summary";
   // the tabs first, at the top of the page (review of 01-Oct-2026), then the period

@@ -25,7 +25,8 @@ function RowLedger({ r }) {
   const b = B(), tip = r.why || undefined;
   if (!["attention", "suggested", "ready"].includes(r.state)) {
     const canUndo = r.state === "sent" && r.tally && r.tally.guid && live();
-    const status = r.state === "sent" && !bankMatched(r) ? (r.postedVia === "bridge" ? "Sent to Tally " : "In a Tally file ") + (r.sentAt ? shortDate(r.sentAt.slice(0, 10)) : "") + (r.checking ? " · checking in Tally…" : " · not found in Tally yet")
+    const status = r.goneFromTally ? "Not in Tally any more (deleted there?) · " + (r.state === "intally" ? "was found when reconciling" : "posted " + (r.sentAt ? shortDate(r.sentAt.slice(0, 10)) : ""))
+      : r.state === "sent" && !bankMatched(r) ? (r.postedVia === "bridge" ? "Sent to Tally " : "In a Tally file ") + (r.sentAt ? shortDate(r.sentAt.slice(0, 10)) : "") + (r.checking ? " · checking in Tally…" : " · not found in Tally yet")
       : r.state === "sent" ? "In Tally · posted " + (r.sentAt ? shortDate(r.sentAt.slice(0, 10)) : "") + (r.tally && r.tally.number ? " · voucher " + r.tally.number : "")
       : r.state === "intally" ? "Already in Tally" + (r.tallyRef ? ": " + r.tallyRef : "") + (r.tallyHow ? " (" + r.tallyHow + ")" : "") : "Ignored";
     return <><span className="lgtext">{r.ledger || "—"}</span><span className="src muted">{status}
@@ -217,6 +218,7 @@ export default function Bank() {
   const b = B(), co = CO();
   if (!b || b.cid !== co.id) { loadBank(co.id); return <p className="note">Opening bank statements…</p>; }
   if (b.loading) return <p className="note">Opening bank statements…</p>;
+  setTimeout(() => TallyProof.checkBank(co.id).catch(() => {}), 0);
   ensureFileInputs();
   const st = curStmt();
   const top = <>
@@ -324,7 +326,8 @@ export function BankBar() {
       {live() && ready > 0 && <button className="btn primary" onClick={() => bankAct("bankBulkPost")}>Post {ready} to Tally</button>}
     </>;
   } else {
-    left = <><span className="bk-stat"><b>{tc.review}</b> to review</span><span className="bk-stat"><b>{tc.post}</b> ready to post</span>{tc.filed > 0 && <span className="bk-stat"><b>{tc.filed}</b> in a Tally file, not found in Tally</span>}</>;
+    left = <><span className="bk-stat"><b>{tc.review}</b> to review</span><span className="bk-stat"><b>{tc.post}</b> ready to post</span>{tc.filed > 0 && <span className="bk-stat"><b>{tc.filed}</b> in a Tally file, not found in Tally</span>}
+      {tc.gone > 0 && <span className="bk-stat" data-bank-gone=""><b>{tc.gone}</b> no longer in Tally <button className="linkbtn" onClick={() => bankRepostGone()}>post them again</button></span>}</>;
     right = <>
       {tc.suggested > 0 && <button className="btn" onClick={() => bankAct("bankAcceptAll")}>Confirm all suggestions ({tc.suggested})</button>}
       {canPostTally(CO()) ? <button className="btn primary" disabled={!tc.post} onClick={() => bankAct("bankPost")}>Post to Tally ({tc.post})</button>

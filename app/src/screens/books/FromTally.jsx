@@ -111,7 +111,8 @@ function Files({ b }) {
       </div>
       {other.length > 0 && <p className="bk-warn">The books here are for {other.join(", ")}, not this client’s PAN ({clientPan()}). Remove them with More → “Remove Tally data and all GST work”.</p>}
       {n ? <>
-        <div className="dash-row"><span>Vouchers</span><b>{n}</b></div>
+        <div className="dash-row"><span>Entries</span><b title={entryCount(m.from, m.to).text}>{entryCount(m.from, m.to).n.toLocaleString("en-IN")}</b></div>
+        {(entryCount(m.from, m.to).opt + entryCount(m.from, m.to).cancel) > 0 && <div className="note">{entryCount(m.from, m.to).text}</div>}
         <div className="dash-row"><span>Period</span><b>{d(m.from) + " to " + d(m.to)}</b></div>
         <div className="dash-row"><span>Registrations in the file</span><b>{(m.gstins || []).join(", ") || "—"}</b></div>
         <div className="dash-row"><span>Read on</span><b>{m.at ? fmtDate(String(m.at).slice(0, 10)) : "—"}</b></div>

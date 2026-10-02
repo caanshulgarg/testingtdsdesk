@@ -688,13 +688,28 @@ function findParty(x, cid){
 // Suppliers on bills still waiting for review, not yet in the supplier list (review item 8): shown in Client setup as
 // "new, not yet approved" so PAN, payment type and amounts credited earlier can be filled before the first approval
 // (which is what makes the yearly limit right on that first bill).
+// the supplier's ledger in Tally, by GSTIN, then PAN, then name (review of 02-Oct-2026: a supplier with a Tally ledger
+// was called "New supplier"); "" when Tally has none
+function supplierInTally(x){
+  if (!x) return "";
+  const b = S.books || {}, info = b.ledInfo || {}, gst = String(x.vendorGstin || "").toUpperCase(), pan = typeof effectivePan === "function" ? effectivePan(x) : "";
+  if (gst){ const hit = Object.entries(b.gstins || {}).find(([, g]) => String(g).toUpperCase() === gst) || Object.entries(info).find(([, m]) => String(m.gstin || "").toUpperCase() === gst); if (hit) return hit[0]; }
+  if (pan){ const hit = Object.entries(info).find(([, m]) => String(m.pan || "").toUpperCase() === pan); if (hit) return hit[0]; }
+  const nm = String(x.vendorName || "").trim();
+  if (!nm) return "";
+  const ex = typeof exactLedger === "function" ? exactLedger(nm) : null;
+  if (ex) return ex;
+  const k = typeof ledgerKey === "function" ? ledgerKey(nm) : nm.toLowerCase();
+  const names = new Set([].concat(Object.keys(info), Object.keys(b.gstins || {}), Object.keys(b.map || {}), Object.keys((b.tb || {}).led || {})));
+  return Array.from(names).find(l => (typeof ledgerKey === "function" ? ledgerKey(l) : l.toLowerCase()) === k) || "";
+}
 function pendingSuppliers(cid){
   cid = cid || S.coId;
   const out = new Map();
   Object.values(D(cid).entries || {}).forEach(e => {
     if (e.status !== "draft" || !e.x || !String(e.x.vendorName || "").trim() || findParty(e.x, cid)) return;
     const pan = effectivePan(e.x), key = pan ? "pan:" + pan : "name:" + norm(e.x.vendorName);
-    const k = out.get(key) || {key, name: e.x.vendorName, pan: pan || "", gstin: e.x.vendorGstin || "", natureId: e.natureId || "", ledgerName: e.partyLedger || "", bills: 0, total: 0};
+    const k = out.get(key) || {key, name: e.x.vendorName, pan: pan || "", gstin: e.x.vendorGstin || "", natureId: e.natureId || "", ledgerName: e.partyLedger || "", tally: supplierInTally(e.x), bills: 0, total: 0};
     k.bills++; k.total = r2(k.total + num(e.x.total));
     out.set(key, k);
   });
@@ -2569,7 +2584,8 @@ async function extract(file, careful, page, cidHint, force){
         const askClaude = S.askClaudeNewSupplier && S.engine && !fp.known && (kind === "pdf_text" || conf >= 75);
         if (!askClaude){
           // accepted free: for a new supplier the name and payment type are for you to confirm
-          const note = fp.known ? "" : "New supplier: check the name and confirm the payment type before approving.";
+          const inTally = !fp.known && supplierInTally(fp.j);
+          const note = fp.known ? "" : inTally ? "In Tally as " + inTally + ", not yet in FinCom's list: confirm the payment type before approving." : "New supplier: check the name and confirm the payment type before approving.";
           if (!fp.known) step("Supplier name and payment type", true, "left for you to confirm (no Claude call)");
           return {j: fp.j, kind, preview, method: source, checks: fp.checks, trace, note, confirmType: !fp.known};
         }

@@ -49,6 +49,9 @@ try:
     c, r = call({"kind": "beat", "version": "1.15.0", "tally": False, "open": []})
     c, r = call({"kind": "hello", "version": "1.15.0", "info": {"computer": "NWS144", "user": "anshul"}})
     ok("beat" in dev["info"] and dev["info"].get("computer") == "NWS144", "a hello keeps the heartbeat beside the computer's name (it used to replace it)")
+    c, r = call({"kind": "beat", "shadow": True, "version": "2.0.0", "tally": True})
+    ok(set(dev["info"].get("bridges", {})) == {"v1"} and dev["info"]["bridges"]["v1"]["mode"] == "main" and dev["info"]["shadow"]["version"] == "2.0.0",
+       "a bridge 2.0.0 in test mode (no name of its own) is kept apart, never in 1.15.0's place")
     c, r = call({"kind": "beat", "shadow": True, "version": "2.1.0", "bridge": GO, "tally": True, "tallyState": "open", "open": ["ZZ CO"]})
     b = dev["info"].get("bridges", {})
     ok(c == 200 and r.get("makeMain") is False and set(b) == {"v1", GO["id"]}, "both bridges listed: 1.15.0 (v1) and 2.1.0 (%s)" % sorted(b))

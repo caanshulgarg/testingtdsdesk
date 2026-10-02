@@ -1945,3 +1945,22 @@ window.addEventListener("hashchange", () => { applyEntryHash(); render(); });
 })();
 window.addEventListener("beforeunload", () => { if (S.coId) lsSet("tdsdesk:last", S.coId); });
 
+// an owner clears a client's wrong GSTIN or PAN, with a reason (review of 02-Oct-2026): on the server through
+// client_clear_ids (migration-25; a sync alone can never empty them), then here
+async function coClearIds(what){
+  const co = CO(), label = what.map(w => w === "gstin" ? "GSTIN " + (co.gstin || "") : "PAN " + (co.pan || "")).join(" and ");
+  const ok = await askConfirm({title: "Clear the " + label + "?", ok: "Clear it", danger: true,
+    body: "<p>" + esc(co.name) + " will have no " + what.map(w => w.toUpperCase()).join(" or ") + " in FinCom until one is typed again. Returns and checks that need it will say so.</p>" +
+      '<label class="f" style="margin-top:12px"><span>Reason (kept with the change)</span><input type="text" id="cbxWhy" autocomplete="off" aria-label="Reason"></label>',
+    read: () => ({reason: ((document.getElementById("cbxWhy") || {}).value || "").trim()}),
+    validate: v => v.reason ? "" : "Give the reason."});
+  if (!ok) return;
+  const reason = (ok.data && ok.data.reason) || "";
+  if (Cloud.on() && Cloud.st.state !== "off"){
+    try { await Cloud.rpc("client_clear_ids", {p_client: co.id, p_what: what, p_reason: reason}); }
+    catch (e){ const m = String((e && e.message) || e); toast(/client_clear_ids|does not exist|schema cache/i.test(m) ? "FinCom's cloud is not ready for this yet (migration-25)." : m); return; }
+  }
+  what.forEach(w => { co[w] = ""; });
+  co.idsCleared = (co.idsCleared || []).concat([{what, reason, at: new Date().toISOString(), by: (Cloud.st && Cloud.st.email) || ""}]).slice(-20);
+  Store.saveCompany(co); toast("Cleared. Type the right " + what.map(w => w.toUpperCase()).join(" and ") + " when you have it."); render();
+}

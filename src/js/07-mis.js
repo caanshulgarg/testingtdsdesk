@@ -260,8 +260,12 @@ const MIS = {
   },
   compliance(from, to){
     const months = this.monthsOf(from, to), paid = this.booksPaid(from, to);
-    const gst = months.map(m => { const pd = (paid[m] || {}).gst || 0; try { const t = GSTR.threeB(m, ""); const out = r2(t.net.igst + t.net.cgst + t.net.sgst + t.net.cess), itc = r2(t.netItc.igst + t.netItc.cgst + t.netItc.sgst + t.netItc.cess);
-      return {ym: m, out, itc, due: r2(Math.max(0, out - itc)), pay: pd}; } catch (e){ return {ym: m, out: 0, itc: 0, due: 0, pay: pd}; } });
+    // worked out to pay: the 3B working's cash (after the set-off by head and credit carried forward) and reverse charge
+    // paid in cash; paid: the bank payments to the GST ledgers (review of 02-Oct-2026)
+    const sum4 = x => r2(["igst", "cgst", "sgst", "cess"].reduce((a, k) => a + num((x || {})[k]), 0));
+    const gst = months.map(m => { const pd = (paid[m] || {}).gst || 0; try { const t = GSTR.threeB(m, ""); const out = sum4(t.net), itc = sum4(t.netItc);
+      const due = t.pay && t.pay.cash ? r2(sum4(t.pay.cash) + sum4(t.pay.rcmCash)) : r2(Math.max(0, out - itc));
+      return {ym: m, out, itc, due, pay: pd}; } catch (e){ return {ym: m, out: 0, itc: 0, due: 0, pay: pd}; } });
     const tds = months.map(m => {
       const p = paid[m] || {};
       const challans = r2(TDS.challans().filter(c => this.ym(TDS.ymd(c.date)) === m).reduce((s, c) => s + num(c.tax), 0));
@@ -269,7 +273,8 @@ const MIS = {
     });
     const au = (S.books.audit || {}).last;
     let tdsRoll = null; try { tdsRoll = this.tdsPayable(from, to); } catch (e){}
-    return {gst, tds, tdsRoll, audit: au ? {at: au.at, open: au.findings.filter(f => Audit.status(f.id).s === "open").length, high: au.findings.filter(f => f.sev === "high").length, solved: (au.solved || []).reduce((s, x) => s + x.n, 0)} : null};
+    // an audit run that no longer fits the books is not counted (review of 02-Oct-2026)
+    return {gst, tds, tdsRoll, audit: au && !Audit.stale(au) ? {at: au.at, open: au.findings.filter(f => Audit.status(f.id).s === "open").length, high: au.findings.filter(f => f.sev === "high").length, solved: (au.solved || []).reduce((s, x) => s + x.n, 0)} : null};
   },
   // what falls due in the next six weeks, from today (review of 02-Oct-2026: it counted from the end of the report's
   // period, and gave TDS for March as due on 7 April). TDS: the 7th of the next month, but 30 April for March; returns on
@@ -338,11 +343,23 @@ const MIS = {
       Object.entries(b.tb.led).forEach(([l, x]) => { const d = r2((num(x.close) - num(x.open)) - ((mv[l] || {}).t || 0)); if (Math.abs(d) >= 1){ n++; amt = r2(amt + Math.abs(d)); list.push([l, d]); } });
       r.control = {ok: n === 0, n, amt, list: list.slice(0, 50)};
     } else r.control = null;
+    r.basis = this.basis(b);
     r.code = Audit.hash(JSON.stringify([s.total, pr.total, pl.pat.t, r.recv.sum, r.pay.sum, s.rows.slice(0, 50).map(x => [x.party, x.t]), r.p2.cash.net, r.p2.fc.weeks.map(w => w.net), r.p2.cc.rows.map(x => [x.name, x.profit])]));
     const m = b.mis = b.mis || {};
     m.last = r; m.history = [{at: r.at, from, to, how: r.how, sales: s.total, pat: pl.pat.t, code: r.code}].concat(m.history || []).slice(0, 24);
     return r;
   },
+  // what a run was worked out from: the books (entries, Tally's balances, the ledger map, how far read) and FinCom's own
+  // working (V, raised whenever a figure is worked out differently). A saved run from other books or other working is
+  // worked out again when MIS opens, and its figures are not shown meanwhile (review of 02-Oct-2026: MIS showed the run of
+  // 01-Oct, result code 1FB42BF2, with figures since corrected)
+  V: 3,
+  basis(b){
+    b = b || S.books || {};
+    const vs = b.vouchers || [], alt = vs.reduce((a, v) => Math.max(a, num(v.alter || v.alterId || 0)), 0);
+    return Audit.hash(JSON.stringify([this.V, vs.length, alt, (b.tb || {}).at || "", b.mapV || 0, (b.meta || {}).to || "", (b.meta || {}).at || "", Object.keys(b.ledInfo || {}).length]));
+  },
+  stale(b){ const r = b && b.mis && b.mis.last; return !!r && r.basis !== this.basis(b); },
   due(b){
     const c = this.cfg(b), last = b.mis && b.mis.last ? String(b.mis.last.at).slice(0, 10).replace(/-/g, "") : "", t = Audit.today();
     if (c.freq === "off" || !(b.vouchers || []).length) return false;

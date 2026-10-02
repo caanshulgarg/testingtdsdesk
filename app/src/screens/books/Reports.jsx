@@ -24,7 +24,7 @@ function AreaDash({ id, d }) {
   if (id === "overview") {
     const rev = (d.pl.heads.rev || { t: 0 }).t;
     const yc = RPT.yearCount(d.R.fy);
-    const salesSub = yc.sales ? yearSub : "no sales entries in " + FC.fyLabel(d.R.fy) + " yet (" + yc.n + " entr" + (yc.n === 1 ? "y" : "ies") + " in the books this year)";
+    const salesSub = yc.sales ? yearSub : "no sales entries in " + FC.fyLabel(d.R.fy) + " yet (" + yc.text + " in the books this year)";
     return <><Tiles><T l="Sales" v={m(rev)} sub={salesSub} rid="mis-sales" /><T l="Gross profit" v={m(d.pl.gross.t)} sub={pct(d.pl.gross.t, rev) + " of sales"} rid="mis-pl" />
       <T l="Profit before tax" v={m(d.pl.pbt.t)} sub={pct(d.pl.pbt.t, rev) + " of sales"} rid="mis-pl" cls={d.pl.pbt.t < 0 ? "warn" : ""} />
       <T l="Cash and bank" v={d.cashBank == null ? "—" : m(d.cashBank)} sub={d.cashBank == null ? "balances not read yet" : "on " + FC.when(d.R.to)} rid="lk-group-bank" /></Tiles>
@@ -71,6 +71,8 @@ function AreaDash({ id, d }) {
   }
   if (id === "audit") {
     if (!d.au) return <div className="fc-empty small"><p className="note">The audit has not been run for this client yet.</p><button className="btn small primary" onClick={() => RPT.open("au-find")}>Run the audit</button></div>;
+    // a kept run that no longer fits the books: none of its figures, only Run again (review of 02-Oct-2026)
+    if (Audit.stale(d.au)) return <div className="fc-empty small" data-rpt-audit-stale=""><p className="note">{"The last audit run (" + FC.span(d.au.from, d.au.to) + ") no longer fits the books, so its findings are not shown."}</p><button className="btn small primary" onClick={() => RPT.open("au-find")}>Run again</button></div>;
     const high = d.open.filter((f) => f.sev === "high");
     return <><Tiles><T l="Serious, still open" v={String(high.length)} sub={m(high.reduce((s, f) => s + num(f.amount), 0)) + " involved"} rid="au-find" cls={high.length ? "warn" : ""} /><T l="All open" v={String(d.open.length)} sub="findings" rid="au-find" />
       <T l="Put right" v={String((d.au.solved || []).reduce((s, x) => s + x.n, 0))} sub="since earlier runs" rid="au-find" /><T l="Last run" v={FC.when(String(d.au.at).slice(0, 10).replace(/-/g, ""))} sub={FC.span(d.au.from, d.au.to)} rid="au-find" /></Tiles>

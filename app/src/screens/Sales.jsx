@@ -286,7 +286,10 @@ export default function Sales() {
   ensureFileInputs();
   const tc = salesCounts(), all = s.list.filter((v) => v.status !== "ignored"), dates = all.map((v) => v.x.date).filter(Boolean).sort();
   const sum = (k) => r2(all.reduce((a, v) => a + num(v.x[k]), 0));
+  // the three steps at the top, as on Purchase and Bank, also before the first invoice (review of 02-Oct-2026)
+  const tabs = <div className="bk-tabs" role="tablist" data-sales-tabs="" style={{ marginBottom: 10 }}>{SALES_TABS.map(([k, t]) => <button key={k} role="tab" aria-selected={s.filter === k} onClick={() => salesTabGo(k)}>{t} <span className="cnt">{tc[k]}</span></button>)}</div>;
   const head = <>
+    {tabs}
     {s.busy && <BusyCard title="Working on sales…" detail={s.busy} />}
     {!hasLedgerList() && (bridgeLive(co) ? <div className="bk-setup"><div><b>Loading ledgers from Tally…</b></div></div>
       : (B() && B().ledgersLoading) || (typeof TCloud === "object" && TCloud.on() && TCloud.has(co.id)) ? <div className="bk-setup"><div><b>Loading ledgers from FinCom’s cloud copy of the books…</b></div></div>
@@ -325,7 +328,6 @@ export default function Sales() {
   return <>
     <div className="bk sl">{head}
       <div className="bk-bar">
-        <div className="bk-tabs" role="tablist">{SALES_TABS.map(([k, t]) => <button key={k} role="tab" aria-selected={s.filter === k} onClick={() => salesTabGo(k)}>{t} <span className="cnt">{tc[k]}</span></button>)}</div>
         <input type="search" className="bk-search" autoComplete="off" placeholder="Search invoice, customer, GSTIN" aria-label="Search the invoices" value={s.q} onChange={(ev) => salesSearch(ev.target.value)} />
       </div>
       <ChipBar t="sales" shown={list.length} total={s.list.length + " invoices"} />

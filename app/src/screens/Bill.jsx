@@ -69,7 +69,7 @@ function ReadBits({ e, ro }) {
       {!ro && S.files[e.id] && S.engine && <button className="btn small" onClick={() => doAct("reread")}>Read again carefully</button>}
       {e.readMode && <span className="note">Read by {e.readMode}</span>}
     </div>
-    {e.readNote && <p className="note" style={{ margin: "6px 0 0" }}>{e.readNote}</p>}
+    {e.readNote && <p className="note" style={{ margin: "6px 0 0" }}>{/^New supplier/.test(e.readNote) && supplierInTally(e.x) ? "In Tally as " + supplierInTally(e.x) + ", not yet in FinCom’s list: confirm the payment type before approving." : e.readNote}</p>}
     {e.readTrace && e.readTrace.length > 0 && <details className="trace" open={e.status === "draft"}>
       <summary>How this bill was read</summary>
       <ol>{e.readTrace.map((t, i) => <li key={i} className={t.ok ? "tok" : "tno"}><b>{(t.ok ? "✓ " : "✗ ") + t.step}</b>{t.note ? ": " + t.note : ""}</li>)}</ol>
@@ -164,7 +164,7 @@ function Tds({ e, c, v, ro }) {
         <select value={e.natureId} disabled={ro} onChange={(ev) => billSetChoice(e, "natureId", ev.target.value)}>
           {rules().map((r) => <option key={r.id} value={r.id}>{r.label + (r.old !== "—" ? " (old " + r.old + ")" : "")}</option>)}
         </select></label>
-      {newType && <div className="row" style={{ margin: "-4px 0 10px" }}><button className="btn small" onClick={() => doAct("confirmType")}>Confirm payment type</button><span className="note">New supplier: the payment type decides the TDS section.</span></div>}
+      {newType && <div className="row" style={{ margin: "-4px 0 10px" }}><button className="btn small" onClick={() => doAct("confirmType")}>Confirm payment type</button><span className="note">{supplierInTally(e.x) ? "In Tally as " + supplierInTally(e.x) + ", not yet in FinCom’s list" : "New supplier"}: the payment type decides the TDS section.</span></div>}
       {e.ai && e.ai.reason && <p className="note" style={{ margin: "-4px 0 10px" }}>{/Claude/.test(e.readMode || "") || !e.readMode ? "Claude: " + e.ai.reason : "Guessed from the bill: " + e.ai.reason.replace(/^Free reading:\s*/, "")}</p>}
       <p className={"verdict " + (v.applicable ? "yes" : "nope")}>{v.applicable ? (v.skip ? "TDS applies: " + money_(v.tdsWould) + ", not booked" : "TDS applies: " + money_(v.tds)) : "No TDS on this invoice"}</p>
       {(v.tdsWould > 0 || e.tdsSkip || !v.never) && !ro ? (

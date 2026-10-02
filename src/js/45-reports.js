@@ -61,8 +61,8 @@ const RPT = {
   // the entries of a year, and its sales entries (review of 01-Oct-2026: 2026-27 held one journal and no sales, and the
   // page opened on it showing sales of nil): the page opens on the latest year that has sales
   yearCount(fy){
-    const from = fy + "0401", to = (num(fy) + 1) + "0331", vs = ((S.books || {}).vouchers || []).filter(v => !v.cancel && String(v.date) >= from && String(v.date) <= to);
-    return {n: vs.length, sales: vs.filter(v => typeof Books === "object" && Books.isSale(v)).length};
+    const from = fy + "0401", to = (num(fy) + 1) + "0331", c = entryCount(from, to);
+    return {n: c.n, text: c.text, sales: c.list.filter(v => typeof Books === "object" && Books.isSale(v)).length};
   },
   range(){
     const ys = this.fys(), withSales = ys.find(y => this.yearCount(y).sales > 0);
@@ -129,3 +129,13 @@ const RPT = {
   }
 };
 // the page itself is app/src/screens/books/Reports.jsx
+// One count of the entries everywhere (review of 02-Oct-2026: 2,755, 2,675 and 2,754 on different pages): the regular
+// entries of the period, as every report and check counts them, and a note of what is left out (Optional and cancelled
+// vouchers, which Tally keeps but which are not in the books)
+function entryCount(from, to){
+  const vs = ((S.books || {}).vouchers || []).filter(v => (!from || String(v.date) >= from) && (!to || String(v.date) <= to));
+  const list = vs.filter(v => !v.opt && !v.cancel), opt = vs.filter(v => v.opt && !v.cancel).length, cancel = vs.filter(v => v.cancel).length;
+  const out = [opt ? num(opt).toLocaleString("en-IN") + " Optional" : "", cancel ? num(cancel).toLocaleString("en-IN") + " cancelled" : ""].filter(Boolean);
+  const text = list.length.toLocaleString("en-IN") + (list.length === 1 ? " entry" : " entries") + (out.length ? " (" + out.join(" and ") + " not counted)" : "");
+  return {n: list.length, opt, cancel, all: vs.length, list, text};
+}
