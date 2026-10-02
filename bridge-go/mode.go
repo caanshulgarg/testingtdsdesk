@@ -357,7 +357,10 @@ func runBridge(console bool) int {
 			}
 		}
 	}()
-	showDiagnosis()
+	// 02-Oct-2026: after the install Tally did not answer for 7 minutes (10:44-10:51, "TDSDeskCompanies took 8.2s and
+	// failed: timed out"): the check-up and the keeping in step (which reads the day book) waited for nothing. Now the
+	// first contact is the light company list only; the heavier work starts once Tally has answered it promptly twice in
+	// a row and at least 90 seconds after the start (a bridge stopped by the setup may have left Tally busy with a long read)
 	coMu.Lock()
 	if planMode == "fallback" {
 		writeLog("Windows did not say which Tally belongs to you; ports from the settings are used. Choose your Tally in FinCom.")
@@ -373,7 +376,8 @@ func runBridge(console bool) int {
 	}
 	go updateLoop()
 	go beatLoop()
-	last := time.Now()
+	started := time.Now()
+	last := time.Now().Add(-time.Duration(keepNum("KeepStartSec", 60)) * time.Second)
 	lastPush := time.Now()
 	for !stopping() {
 		loopAt.Store(time.Now().Unix())
@@ -383,8 +387,10 @@ func runBridge(console bool) int {
 		if time.Since(last).Seconds() >= float64(keepNum("KeepStartSec", 60)) {
 			last = time.Now()
 			syncConfig()
-			safe("Check", showDiagnosis)
-			safe("Could not start keeping copies in step", startKeepIfNeeded)
+			if warmedUp(started) {
+				safe("Check", showDiagnosis)
+				safe("Could not start keeping copies in step", startKeepIfNeeded)
+			}
 		}
 		// the outbox goes on without the copier too (days kept while offline go as soon as FinCom can be reached)
 		if !keepRunning() && time.Since(lastPush) >= 60*time.Second {
@@ -394,4 +400,40 @@ func runBridge(console bool) int {
 	}
 	time.Sleep(300 * time.Millisecond)
 	return stopCode
+}
+
+// --- warming up: the heavier work (check-up, keeping in step) only once Tally answers the light request promptly
+var (
+	warmMu   sync.Mutex
+	warmGood int
+	warmDone bool
+	warmTold bool
+)
+
+func warmedUp(started time.Time) bool {
+	warmMu.Lock()
+	defer warmMu.Unlock()
+	if warmDone {
+		return true
+	}
+	ok := false
+	for _, s := range openCompanies(true) {
+		if s["ok"] == true && s["busy"] != true && s["skipped"] != true {
+			ok = true
+		}
+	}
+	if ok {
+		warmGood++
+	} else {
+		warmGood = 0
+		if !warmTold {
+			warmTold = true
+			writeLog("Waiting for Tally to answer promptly before reading the day book (Tally busy, closed, or finishing an earlier request)")
+		}
+	}
+	if warmGood >= 2 && time.Since(started) >= 90*time.Second {
+		warmDone = true
+		writeLog("Tally answers promptly: keeping copies in step starts")
+	}
+	return warmDone
 }

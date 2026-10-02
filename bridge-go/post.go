@@ -127,9 +127,22 @@ func invokeImport(p M) (M, error) {
 				pending = append(pending, r)
 			}
 			add(r)
+			// one clear word for what Tally did (02-Oct-2026: "created (not read back)" was followed by "verified in Tally",
+			// and a ledger that existed already was logged as created though Tally answered ALTERED)
 			st := "FAILED " + str(r["message"])
 			if r["ok"] == true {
-				st = "created (not read back)"
+				switch {
+				case toInt(r["altered"]) > 0 && toInt(r["created"]) == 0:
+					st = "altered in Tally (it existed already)"
+					r["altered1"] = true
+					if g.kind != "voucher" {
+						r["message"] = "Altered in Tally: it existed already"
+					}
+				case g.kind == "voucher":
+					st = "sent to Tally; reading it back"
+				default:
+					st = "created in Tally"
+				}
 			}
 			writeLog("  " + g.kind + " " + str(id) + ": " + st)
 		}
