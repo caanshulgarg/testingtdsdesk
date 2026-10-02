@@ -15,7 +15,7 @@ Every local route but /ping and /pair needs X-Bridge-Key; foreign origins get 40
 
 Not verified: Windows ACLs on the install folders; my_firm() from an earlier migration (assumed to return the caller's firm).
 
-## Round 2 (a6bd835..0215ea4) reviewed 02-Oct-2026, read-only
+## Round 2 (a6bd835 to 0215ea4) reviewed 02-Oct-2026, read-only
 - Medium (fixed in 0aaaf23): a misused bridge key could grow the never-deleted tables tally_ledger_rounds / tally_ledger_marks without bound (a fresh round id per call, one held mark per ledger per call). Fixed: at most 50 new rounds per book in 24 h, no per-ledger marks for an unknown round, one held mark per (book, round, ledger), 60 ledger_list calls a minute per computer (429).
 - Low (fixed in 0aaaf23): the rename merge branch could move a GUID off a row the guard kept live; now refused.
 - Found safe: book ids always come from the device's own firm (tally_book_for); new RPCs service-role only, owner functions check the owner; search_path = public, pg_temp on every definer; RLS select-only by firm on tally_ledger_rounds; a bridge faking allowlist.measured can at most let a FinCom-signed build go out early (release-check blocks unmeasured builds at source).
