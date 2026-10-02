@@ -287,5 +287,59 @@ try:
     ok(len(rows) > 30 and {"marked", "unmarked", "held"} <= {x["action"] for x in rows}, "the owner's query runs (%d rows)" % len(rows))
 finally:
     db.stop()
+
+# 10. tally-ingest (server/tally-cloud/index.ts under Deno, against fake_supabase.py): a full list from the bridge goes
+# with who sent it (p_list), and to a cloud without migration-33 without it
+import shutil, hashlib, time, threading, urllib.request
+DENO = os.environ.get("DENO") or shutil.which("deno") or ("/opt/deno/deno" if os.path.exists("/opt/deno/deno") else None)
+if not DENO:
+    print("  (tally-ingest part skipped: no deno)")
+else:
+    import fake_supabase as FS
+    KEY = "fcd_" + "a" * 48
+    FS.T["clients"].append({"id": "c-1", "firm_id": "f-1", "name": "ZZ", "tally_name": "ZZ CO", "gstin": "", "deleted": False})
+    FS.T["tally_companies"].append({"firm_id": "f-1", "company": "ZZ CO", "client_id": "c-1", "book_id": "b-1", "last_seen": "2026-10-01T00:00:00Z"})
+    FS.T["tally_books"].append({"book_id": "b-1", "firm_id": "f-1", "client_id": "c-1", "company": "ZZ CO", "from_date": None})
+    FS.T["tally_devices"].append({"id": DEV, "firm_id": "f-1", "name": "OFFICE-PC", "key_hash": hashlib.sha256(KEY.encode()).hexdigest(), "revoked": False, "info": {}, "wake_token": "w" * 64,
+                                  "version": "2.1.4", "want_update_at": None, "want_sent_at": None})
+    old33 = {"on": False}
+    real = FS.rpc
+    def rpc(fn, a):
+        if old33["on"] and fn == "tally_ingest_ledgers_g" and "p_list" in a:
+            FS.ARGS.setdefault("refused", []).append(a)
+            raise RuntimeError("Could not find the function public.tally_ingest_ledgers_g(p_book, p_from, p_groups, p_ledgers, p_list, p_open_as_on) in the schema cache")
+        return real(fn, a)
+    FS.rpc = rpc
+    FS.start()
+    env = dict(os.environ, SUPABASE_URL="http://127.0.0.1:%d" % FS.PORT, SUPABASE_SERVICE_ROLE_KEY=FS.SERVICE, SUPABASE_ANON_KEY="anon-key")
+    fn = subprocess.Popen([DENO, "run", "--allow-net", "--allow-env", "--allow-read", os.path.join(HERE, "..", "server", "tally-cloud", "index.ts")], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    log = []
+    threading.Thread(target=lambda: [log.append(l) for l in fn.stdout], daemon=True).start()
+    def call(body):
+        rq = urllib.request.Request("http://127.0.0.1:8000/", data=json.dumps(body).encode(), headers={"Content-Type": "application/json", "x-fincom-device": KEY})
+        try: r = urllib.request.urlopen(rq, timeout=60); return r.status, json.loads(r.read())
+        except urllib.error.HTTPError as e: return e.code, json.loads(e.read() or b"{}")
+    try:
+        for i in range(60):
+            try: urllib.request.urlopen("http://127.0.0.1:8000/", timeout=1)
+            except urllib.error.HTTPError: break
+            except Exception: time.sleep(0.5)
+        body = {"kind": "ledgers", "company": "ZZ CO", "from": "20260401", "openAsOn": "20260331", "ledgers": [["Cash", "Cash-in-Hand", "-10"]], "groups": [["Cash-in-hand", "Current Assets"]],
+                "bridge": {"id": "go-abc123", "computer": "OFFICE-PC", "user": "accounts", "version": "2.1.4"}}
+        c, r = call(body)
+        a = (FS.ARGS.get("tally_ingest_ledgers_g") or [{}])[-1]
+        ok(c == 200 and a.get("p_list") == {"source": "bridge ledgers", "device": DEV, "bridge": "go-abc123", "computer": "OFFICE-PC", "user": "accounts"},
+           "tally-ingest sends the bridge's full list with who sent it (%s %s)" % (c, a.get("p_list")))
+        old33["on"] = True
+        n = len(FS.ARGS.get("tally_ingest_ledgers_g") or [])
+        c, r = call(body)
+        a = (FS.ARGS.get("tally_ingest_ledgers_g") or [{}])[-1]
+        ok(c == 200 and len(FS.ARGS.get("refused") or []) == 1 and len(FS.ARGS["tally_ingest_ledgers_g"]) == n + 1 and "p_list" not in a and a.get("p_ledgers") == [["Cash", "Cash-in-Hand", "-10"]],
+           "a cloud without migration-33: the call made again without p_list (%s)" % c)
+    finally:
+        fn.terminate()
+        try: fn.wait(timeout=5)
+        except Exception: fn.kill()
+    if fails: print("".join(log[-30:]))
 print("\n%d failure(s)" % len(fails) if fails else "\nall checks passed")
 sys.exit(1 if fails else 0)
