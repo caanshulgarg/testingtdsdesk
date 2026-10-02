@@ -252,7 +252,8 @@ const Ledgers = {
     const parents = Object.assign({}, (bk && bk.groups) || {}, (S.bank && S.bank.cid === cid && S.bank.ledgers && S.bank.ledgers.parents) || {}, (s && s.parents) || {});
     let g = (l && l.group) || (bk && ((bk.ledInfo || {})[name] || {}).group) || (bk && (bk.under || {})[name]) || "";
     const out = [];
-    for (let i = 0; i < 12 && g; i++){ out.push(g); const p = parents[g]; if (!p || p === g || /^primary$/i.test(p)) break; g = p; }
+    // a group's parent looked up whatever its capitals (Tally's "Cash-in-hand" against a list's "Cash-in-Hand")
+    for (let i = 0; i < 12 && g; i++){ out.push(g); const p = ledLook(parents, g); if (!p || ledKey(p) === ledKey(g) || /^\W*primary$/i.test(p)) break; g = p; }
     return out;
   },
   // what a ledger is for: party (Sundry Creditors / Debtors), expense (Direct / Indirect Expenses, Purchase

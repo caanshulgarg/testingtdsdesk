@@ -114,12 +114,13 @@ const LedMaster = {
   // "BANK CHARGES" is an expense and "ICICI BANK (CREDITORS)" a supplier, whatever the name says
   bankByGroup(name, info){
     const b = S.books || {}, groups = b.groups || {};
-    let g = String((info && info.group) || (b.under || {})[name] || "");
+    let g = String((info && info.group) || ledUnder(b, name) || "");
     if (!g) return /\bBANK\b|\bCASH\b/i.test(name) && !/CHARGE|COMMISSION|INTEREST|CREDITOR|DEBTOR|LOAN|FEE/i.test(name);
     for (let i = 0; i < 12 && g; i++){
       if (/^(bank accounts|bank od a\/c|bank occ a\/c|cash-in-hand|bank overdraft)$/i.test(g.trim())) return true;
-      if (!groups[g] || groups[g] === g || /^primary$/i.test(groups[g])) break;
-      g = groups[g];
+      const up = ledLook(groups, g);
+      if (!up || ledKey(up) === ledKey(g) || /^\W*primary$/i.test(up)) break;
+      g = up;
     }
     return /^(bank accounts|bank od a\/c|bank occ a\/c|cash-in-hand)$/i.test(g.trim());
   },

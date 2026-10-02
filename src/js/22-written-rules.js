@@ -495,7 +495,8 @@ async function importLedgerList(file){
         const q = sel => { const n = l.querySelector(sel); return n ? n.textContent.trim() : ""; };
         if (name.trim()) list.push({name: name.trim(), group: q("PARENT"), pan: q("INCOMETAXNUMBER"), gstin: q("PARTYGSTIN") || q("GSTREGISTRATIONNUMBER")});
       });
-      doc.querySelectorAll("GROUP").forEach(g => { const n = g.getAttribute("NAME"); if (n && TALLY_GROUPS.indexOf(n) < 0) TALLY_GROUPS.push(n); });
+      // a group already listed in other capitals takes Tally's own spelling ("Cash-in-hand" for "Cash-in-Hand")
+      doc.querySelectorAll("GROUP").forEach(g => { const n = g.getAttribute("NAME"); if (!n) return; const k = TALLY_GROUPS.findIndex(x => x.toLowerCase() === n.toLowerCase()); if (k < 0) TALLY_GROUPS.push(n); else TALLY_GROUPS[k] = n; });
     } else {
       const grids = await gridsFromSheet(file);
       grids.forEach(grid => {

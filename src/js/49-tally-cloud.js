@@ -779,19 +779,22 @@ function booksAsOf(cid){
 function copyLine(cid){ const a = booksAsOf(cid); return "Balance from FinCom's copy \u00b7 books as of " + (a ? tallyHm(a.at) : "the last update"); }
 Object.assign(TCloud, {
   // the view tally_balances (migration-32): each ledger's opening, its entries from the book's start, and the closing.
-  // null: not asked yet; false: not on this cloud (then the trial balance function, tally_tb, as before)
+  // The source of every balance from FinCom's copy. null: not asked yet; false: not on this cloud (an older environment
+  // without migration-32: then, and only then, tally_tb / tally_ledger / the ledger masters, as before). Any other error
+  // reading the view is shown as an error, never answered from the older functions
   hasView: null,
   async viewRows(bk){
     if (this.hasView === false || !bk || !bk.book) return null;
     try {
       const rows = await this.restAll("tally_balances?select=ledger,parent,open,closing,last_day&book_id=eq." + encodeURIComponent(bk.book));
       this.hasView = true;
-      // the view does not leave out the ledgers deleted in Tally (deleted_at): left out here (one with a figure all the
-      // same is kept, so the total stays whole)
+      // migration-32's view keeps the ledgers deleted in Tally (deleted_at); migration-33's leaves them out itself. Left
+      // out here too, for a cloud with migration-32 only (one with a figure all the same is kept, so the total stays whole)
       const del = await this.deletedNames(bk);
       return del.size ? rows.filter(r => !(del.has(ledNm(r.ledger)) && !num(r.open) && !num(r.closing))) : rows;
     } catch (e){
-      if (/tally_balances|does not exist|PGRST2\d\d|schema cache|404/i.test(String((e && e.message) || e))) this.hasView = false;
+      if (!/tally_balances|does not exist|PGRST2\d\d|schema cache|404/i.test(String((e && e.message) || e))) throw e;
+      this.hasView = false;
       return null;
     }
   },

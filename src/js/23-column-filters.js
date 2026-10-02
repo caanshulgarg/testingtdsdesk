@@ -277,9 +277,10 @@ function applyGroup(key, ledger){
 async function openCreateLedger(name, rowId, targetFk, opts){
   opts = opts || {};
   const b = B();
-  const groups = Array.from(new Set((b.ledgers.groups || []).concat(TALLY_GROUPS))).filter(Boolean);
+  // one entry for each group whatever its capitals, in Tally's own spelling where Tally's list has it ("Cash-in-hand")
+  const seenG = new Set(), groups = (b.ledgers.groups || []).concat(TALLY_GROUPS).filter(g => g && !seenG.has(String(g).toLowerCase()) && seenG.add(String(g).toLowerCase()));
   const row = rowId ? bankRow(rowId) : null;
-  const guess = opts.group || (row ? (row.debit ? "Sundry Creditors" : "Sundry Debtors") : "Sundry Creditors");
+  const guess0 = opts.group || (row ? (row.debit ? "Sundry Creditors" : "Sundry Debtors") : "Sundry Creditors"), guess = groups.find(g => g.toLowerCase() === guess0.toLowerCase()) || guess0;
   const acNo = row ? ((row.narr.match(/\b(\d{9,18})\b/) || [])[1] || "") : "";
   const ifsc = row ? ((row.narr.toUpperCase().match(/\b([A-Z]{4}0[A-Z0-9]{6})\b/) || [])[1] || "") : "";
   const near = Array.from(knownLedgers().values()).map(l => ({l, s: nameSim(l.name, name)})).filter(x => x.s >= 0.7).sort((a, c) => c.s - a.s).slice(0, 3);

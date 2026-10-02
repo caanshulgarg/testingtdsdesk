@@ -32,9 +32,11 @@ run_contrast.py                       120
 run_cors_preflight.js                 120
 run_dates.js                          120
 run_dups_posted.py                    120
+run_fixture_books.js                  120
 run_fs.js                             120
 run_fs_ui.py                          120  TDSDESK_SITE=../app/dist-test
 run_gateway_errors.js                 120
+run_group_case.js                     120
 run_gst9.js                           120
 run_gst_api_ui.py                     120
 run_gstq.js                           120

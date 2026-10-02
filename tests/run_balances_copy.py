@@ -1,7 +1,8 @@
 """python3 run_balances_copy.py - balances from FinCom's copy (owner's decision of 02-Oct-2026). FinCom Bridge 2.1.4 asks
 Tally for no balance (its /balances, /tb and /ledgerbalance answer only from its own copy, and on most companies with an
 error), so every balance FinCom shows is worked out from FinCom's cloud copy (openings plus entries): the view
-tally_balances (migration-32) when the cloud has it, else the cloud's trial balance and ledger functions (tally_tb,
+tally_balances (migration-32) is the source (on a date inside the copy, its openings plus tally_period's entries to the
+date); only a cloud without the view (an older environment) uses the trial balance and ledger functions (tally_tb,
 tally_ledger). Checked here, offline, with the cloud's functions stubbed and the bridge answering nothing:
   - Look up (the trial balance, a ledger, a group): from the copy, with "Balance from FinCom's copy · books as of <time>",
     the source called "FinCom's copy" (no "from Tally", no "Tally, live"), and never an error, also when the copy has no
@@ -89,6 +90,13 @@ with sync_playwright() as p:
     t = app()
     ok(LINE in t and pg.locator("#app [data-copy-line]").count() >= 1, "1. the answer carries \"%s …\"" % LINE)
     ok("from FinCom's copy" in t and "from Tally" not in t and "Tally, live" not in t and "Read again" not in t, "1. the source is called FinCom's copy; no \"from Tally\" or \"Tally, live\"")
+    # a date inside the copy (before its last day): the view's openings plus the entries to the date (tally_period from the
+    # book's first day); tally_tb is not asked while the view is there
+    E("async () => { window.__rpc = []; window.__rest = []; const x = LK.st(); Object.assign(x, {kind: 'tb', asOn: '20260215', src: ''}); x.res = null; await LK.run('auto'); }"); pg.wait_for_timeout(500)
+    r = E("({src: S.lk.res.src, n: S.lk.res.rows.length, dr: S.lk.res.dr, cr: S.lk.res.cr, rpc: window.__rpc.map(z => z[0]), per: (window.__rpc.find(z => z[0] === 'tally_period') || [0, {}])[1]})")
+    ok(r["src"] == "cloud" and r["n"] == 4 and r["dr"] == r["cr"] == 995762.65 and "tally_tb" not in r["rpc"] and r["per"].get("p_from") == "2025-04-01" and r["per"].get("p_to") == "2026-02-15" and any(u.startswith("tally_balances") for u in E("window.__rest")),
+       "1. a date inside the copy (15-Feb-2026): the view's openings plus tally_period from 01-Apr-2025, never tally_tb (%s)" % r)
+    E("() => { LK.st().asOn = '20260331'; }")
     # no view on this cloud (migration-32 not applied): the trial balance function
     E("async () => { window.__view = false; TCloud.hasView = null; window.__rpc = []; S.lk.res = null; await LK.run('auto'); }"); pg.wait_for_timeout(400)
     ok(E("TCloud.hasView") is False and any(f == "tally_tb" for f, _ in E("window.__rpc")) and E("S.lk.res.src") == "cloud" and E("S.lk.res.dr") == 995762.65,

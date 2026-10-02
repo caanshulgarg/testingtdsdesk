@@ -20,7 +20,7 @@ const LedCheck = {
   },
   secLabel(s){ return s ? s.replace(/^(19\d)([A-Z]+)$/, "$1-$2") : ""; },
   // the group chain of a ledger, from Tally's groups
-  chain(b, l){ const out = []; let g = ((b.ledInfo || {})[l] || {}).group || ledUnder(b, l) || ""; for (let i = 0; i < 12 && g; i++){ out.push(g); const p = (b.groups || {})[g]; if (!p || p === g || /^primary$/i.test(p)) break; g = p; } return out; },
+  chain(b, l){ const out = []; let g = ((b.ledInfo || {})[l] || {}).group || ledUnder(b, l) || ""; for (let i = 0; i < 12 && g; i++){ out.push(g); const p = ledLook(b.groups || {}, g); if (!p || ledKey(p) === ledKey(g) || /^\W*primary$/i.test(p)) break; g = p; } return out; },
   inGroup(b, l, re){ return this.chain(b, l).some(g => re.test(g)); },
   nominal(b, l){ return this.inGroup(b, l, /^(sales accounts|direct incomes|indirect incomes|purchase accounts|direct expenses|indirect expenses|fixed assets)$/i) ? (this.inGroup(b, l, /incomes|^sales accounts$/i) ? "inc" : "exp") : ""; },
   taxGroup(b, l){ return this.inGroup(b, l, /^duties\s*(&|and)\s*taxes$/i) || this.inGroup(b, l, /^(gst|tds|tcs)$/i); },

@@ -194,7 +194,8 @@ const LK = {
     const ORDER = ["Capital Account", "Loans (Liability)", "Current Liabilities", "Fixed Assets", "Investments", "Current Assets", "Sales Accounts", "Purchase Accounts", "Direct Incomes", "Direct Expenses", "Indirect Incomes", "Indirect Expenses", "Suspense A/c", "Branch / Divisions", "Misc. Expenses (ASSET)"];
     const by = {};
     r.rows.forEach(x => { (by[x.top] = by[x.top] || []).push(x); });
-    r.groups = Object.keys(by).sort((a, c) => (ORDER.indexOf(a) < 0 ? 99 : ORDER.indexOf(a)) - (ORDER.indexOf(c) < 0 ? 99 : ORDER.indexOf(c)) || a.localeCompare(c))
+    const at = g => { const k = ORDER.findIndex(o => o.toLowerCase() === String(g).trim().toLowerCase()); return k < 0 ? 99 : k; };   // Tally's group names in any capitals
+    r.groups = Object.keys(by).sort((a, c) => at(a) - at(c) || a.localeCompare(c))
       .map(g => ({g, rows: by[g].sort((a, c) => a.l.localeCompare(c.l)), dr: r2(by[g].filter(x => x.bal > 0).reduce((s, x) => s + x.bal, 0)), cr: r2(by[g].filter(x => x.bal < 0).reduce((s, x) => s - x.bal, 0))}));
     r.dr = r2(r.groups.reduce((s, g) => s + g.dr, 0)); r.cr = r2(r.groups.reduce((s, g) => s + g.cr, 0));
     // ledgers with entries but no master in the copy (their group and opening are not known), and whether the trial

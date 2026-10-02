@@ -51,7 +51,7 @@ const MIS = {
         const h = s === "mat" || s === "pur" || s === "chg" ? "pur" : s === "exp" ? (n.gp ? "dir" : "exp") : s === "exc" ? "exp" : s;
         return this.HEADS.some(z => z[0] === h) ? {s, h} : null;
       }
-      if ((S.books || {}).groupInfo && S.books.groupInfo[n.top]) return null;
+      if ((S.books || {}).groupInfo && ledLook(S.books.groupInfo, n.top)) return null;
     }
     const h = this.headByGroup(l);
     return h ? {s: h === "dir" ? "exp" : h, h} : null;
@@ -77,7 +77,7 @@ const MIS = {
     if (p.length && typeof FS !== "undefined"){
       const n = FS.nature(l);
       if (n.rev){ const w = FS.place(l, 0, "co"); return w === "mat" ? "pur" : w === "exc" ? "exp" : w; }
-      if ((S.books || {}).groupInfo && S.books.groupInfo[n.top]) return "";
+      if ((S.books || {}).groupInfo && ledLook(S.books.groupInfo, n.top)) return "";
     }
     if (!p.length){
       const k = Books.ledgerOf(l).kind;

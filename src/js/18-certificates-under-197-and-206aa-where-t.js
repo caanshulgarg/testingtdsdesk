@@ -245,7 +245,7 @@ const TallyRead = {
   primaryOf(b, n){
     const under = b.under || {}, groups = b.groups || {}, prim = s => !s || /^\W*Primary$/i.test(s);
     let p = ledUnder(b, n), last = "";
-    for (let i = 0; !prim(p) && i < 30; i++){ last = p; p = groups[p]; }
+    for (let i = 0; !prim(p) && i < 30; i++){ last = p; p = ledLook(groups, p); }
     return last;
   },
   yearOpen(b){
@@ -253,10 +253,10 @@ const TallyRead = {
     if (!led || !Object.keys(b.groups || {}).length) return false;
     Object.values(led).forEach(x => { if (x.openSent == null) x.openSent = x.open; x.open = x.openSent; });
     if (!/0401$/.test(String(tb.from || ""))) return false;
-    const PL = "Profit & Loss A/c", nominal = new Set(this.NOMINAL);
+    const PL = "Profit & Loss A/c", nominal = new Set(this.NOMINAL.map(g => g.toLowerCase()));   // Tally's group names in any capitals
     let moved = 0, n = 0;
     Object.entries(led).forEach(([name, x]) => {
-      if (name === PL || !nominal.has(this.primaryOf(b, name)) || !num(x.openSent)) return;
+      if (name === PL || !nominal.has(String(this.primaryOf(b, name) || "").trim().toLowerCase()) || !num(x.openSent)) return;
       moved = r2(moved + num(x.openSent)); x.open = 0; n++;
     });
     if (!n) return false;

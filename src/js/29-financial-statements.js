@@ -7,7 +7,7 @@ const FS = {
   // what a group is, from Tally's own flags when the masters are read, else from the reserved names
   nature(l){
     const b = S.books || {}, info = b.groupInfo || {}, path = Books.groupPath(l), top = path[path.length - 1] || "";
-    const x = info[top] || info[path[0]];
+    const x = ledLook(info, top) || ledLook(info, path[0]);     // the group in any capitals ("Cash-in-hand", "Cash-in-Hand")
     if (x) return {rev: x.rev, gp: x.gp, dr: x.dr, path, top};
     const t = top.toLowerCase();
     const R = {"sales accounts": [1, 1, 0], "direct incomes": [1, 1, 0], "indirect incomes": [1, 0, 0], "purchase accounts": [1, 1, 1], "direct expenses": [1, 1, 1], "indirect expenses": [1, 0, 1]};
