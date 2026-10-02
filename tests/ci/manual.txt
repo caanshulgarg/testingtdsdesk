@@ -77,7 +77,6 @@ run_bridge.py                  in progress (2026-10-02): expects bridge 1.14.6 (
 run_keep_e2e.py                in progress (2026-10-02): expects bridge 1.14.6 running; then the copy is not brought in
 run_lookup_tally_e2e.py        in progress (2026-10-02): expects bridge 1.14.6 running; the copy holds 1 entry
 run_tally_ui.py                in progress (2026-10-02): June and July read 0 vouchers (Tally has 13)
-run_tcloud_ui.py               in progress (2026-10-02): books not brought in from the stand-in cloud (0 of 18), also with dist-test
 run_cloud_post_ui.py           in progress (2026-10-02): entries not queued in the cloud (also with dist-test)
 run_reports_ui.py              in progress (2026-10-02): closed-period posting prompt changed (2 checks, with dist-test)
 run_led_ui.py                  in progress (2026-10-02): "masters read: what Tally says about each ledger is kept" (with dist-test)
