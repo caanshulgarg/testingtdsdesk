@@ -337,8 +337,21 @@ def check():
             if opt.get("cc"): assert abs(sum(x[1] for x in opt["cc"]) - a) < 0.005, (v["date"], l)
     assert abs(sum(ob for _, _, ob, _ in L)) < 0.005, sum(ob for _, _, ob, _ in L)
 
+def two_b():
+    """GSTR-2B for Delhi, February and March 2026, as the portal's JSON (only run_gstq.js reads them): February has
+    Juniper's bill JLA/388; March has Nightjar's NSL/140 of January, filed late"""
+    import json
+    def doc(party, no, date, taxable, half):
+        d = date[6:8] + "-" + date[4:6] + "-" + date[:4]
+        return {"ctin": INFO[party]["gst"], "trdnm": party.upper(), "supfildt": "", "supprd": date[4:6] + date[:4],
+                "inv": [{"inum": no, "dt": d, "val": taxable + 2 * half, "txval": taxable, "igst": 0, "cgst": half, "sgst": half, "cess": 0, "pos": "07", "rev": "N", "itcavl": "Y", "typ": "R"}]}
+    for per, docs in (("022026", [doc(JUNI, "JLA/388", "20260225", 30000, 2700)]), ("032026", [doc(NIGHTJAR, "NSL/140", "20260115", 150000, 13500)])):
+        j = {"chksum": "", "data": {"gstin": G07, "rtnprd": per, "version": "1.0", "gendt": "14-" + per[:2] + "-" + per[2:], "docdata": {"b2b": docs}}}
+        open(os.path.join(HERE, "returns_R2B_%s_%s.json" % (G07, per)), "w").write(json.dumps(j, indent=1) + "\n")
+
 def main():
     check()
+    two_b()
     V.sort(key=lambda v: v["date"])        # stable: the order above within a day
     body = "".join(voucher(i + 1, v) for i, v in enumerate(V))
     open(os.path.join(HERE, "DayBook.xml"), "w", encoding="utf-16", newline="").write(envelope("Vouchers", body))

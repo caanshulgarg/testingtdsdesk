@@ -1,12 +1,14 @@
 // node run_regress.js  - the same day book through build 116 and the new source; everything outside
 // advances and reversal must come out the same (the one expected change: foreign-currency amounts)
-const {load, openBlob} = require("./harness"), {HTML, DATA, CACHE, OUT} = require("./harness");
+const {load, openBlob} = require("./harness"), {HTML, DATA, CACHE, OUT, FIXTURE} = require("./harness");
 const NAMES = ["num", "r2", "MONTHS", "fmtDate", "STATE_CODES", "Books", "GSTR", "INR"];
 let fails = 0;
 const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 (async () => {
-  const old = load(process.env.TDSDESK_OLD_HTML || HTML, NAMES);
-  const neu = load(HTML, NAMES.concat(["GSTAdv", "GSTRev"]));
+  // the new source needs more of the app than build 116 did; with no old build given, the new source is compared with itself
+  const NEW_NAMES = NAMES.concat(["GSTAdv", "GSTRev", "GSTSet", "GSTF", "GSTQ", "GST2B", "Audit", "TDS"]);
+  const old = load(process.env.TDSDESK_OLD_HTML || HTML, process.env.TDSDESK_OLD_HTML ? NAMES : NEW_NAMES);
+  const neu = load(HTML, NEW_NAMES);
   for (const h of [old, neu]){
     const db = await h.x.Books.importDayBook(await openBlob(DATA + "/DayBook.xml"));
     h.ctx.S.books = {cid: "t", vouchers: db.vouchers, meta: db.meta};
@@ -32,10 +34,10 @@ const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fai
     const ta = old.x.GSTR.threeB(m, reg), tc = neu.x.GSTR.threeB(m, reg);
     ["igst", "cgst", "sgst"].forEach(hd => {
       // build 131: a supplier's credit note (input tax credited) reduces credit instead of adding to it, so ITC falls by twice its tax
-      const back = neu.x.GSTR.inward(m, reg).filter(r => r.dir < 0 && !r.import).reduce((a, r) => a + r[hd], 0) * 2;
+      const back = process.env.TDSDESK_OLD_HTML ? neu.x.GSTR.inward(m, reg).filter(r => r.dir < 0 && !r.import).reduce((a, r) => a + r[hd], 0) * 2 : 0;
       if (Math.abs(ta.itc[hd] - tc.itc[hd] - back) > 0.02){ diffs++; console.log("  itc diff " + m + " " + reg + " " + hd, ta.itc[hd], tc.itc[hd], back); }
       if (Math.abs(ta.netItc[hd] - tc.netItc[hd] - back) > 0.02){ diffs++; console.log("  net itc diff " + m + " " + reg + " " + hd, ta.netItc[hd], tc.netItc[hd], back); }
-      const advTax = tc.adv[hd];
+      const advTax = process.env.TDSDESK_OLD_HTML ? tc.adv[hd] : 0;   // build 116 had no advances; the new source compared with itself has them on both sides
       if (Math.abs((tc.net[hd] - advTax) - ta.net[hd]) > 0.01){ diffs++; console.log("  3.1(a) diff beyond advances " + m + " " + reg + " " + hd, ta.net[hd], tc.net[hd], advTax); }
     });
     const za = ta.zero.taxable, zc = tc.zero.taxable;
@@ -48,24 +50,28 @@ const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fai
   // exports: build 116 read "$29500.00 @ 87.75/$ = -Rs 2588625.00" as 29500.0087; now it is 25,88,625
   const exOld = old.x.GSTR.sum(old.x.GSTR.outward("", "").filter(r => r.cls === "export")), exNew = neu.x.GSTR.sum(neu.x.GSTR.outward("", "").filter(r => r.cls === "export"));
   console.log("  exports for the year: build 116 " + exOld.taxable + ", now " + exNew.taxable);
-  ok(exNew.taxable > exOld.taxable * 10, "exports in foreign currency now carry their rupee value");
+  if (FIXTURE){   // the fixture has no exports: the reading of a foreign-currency amount is checked on its own
+    ok(exNew.taxable === 0 && neu.x.Books.amt("-$17000.00 @ \u20b9 86.40/$ = -\u20b9 1468800.00") === -1468800 && neu.x.Books.amt("$29500.00 @ 87.75/$ = 2588625.00") === 2588625, "an amount in foreign currency carries its rupee value");
+  } else ok(exNew.taxable > exOld.taxable * 10, "exports in foreign currency now carry their rupee value");
   // a month with exempt turnover, and one with none (rule 42(1)(h))
   const S = neu.ctx.S, G = neu.x.GSTR, R = neu.x.GSTRev;
-  const jun = S.books.vouchers.filter(v => G.ym(v.date) === "202506" && neu.x.Books.isSale(v) && G.regOf(v) === "07");
+  // a month with sales and IGST credit on 07: June 2025 in the real books, September 2025 in the fixture; and the month after it
+  const RM = FIXTURE ? "202509" : "202506", RN = FIXTURE ? "202510" : "202507";
+  const jun = S.books.vouchers.filter(v => G.ym(v.date) === RM && neu.x.Books.isSale(v) && G.regOf(v) === "07");
   jun.slice(0, 5).forEach(v => { v.taxability = "Exempt"; });
   const inName = Object.entries(S.books.map).find(([n, m]) => m.kind === "gst" && m.side === "input" && m.tax === "IGST" && m.reg === "07")[0];
   S.books.map[inName].kind = "gst_common"; S.books.mapV = 9;
-  const t = R.turnover("202506", "07"), r = R.rule42("202506", "07");
-  console.log("  Jun 2025 with 5 invoices made exempt: E " + t.exempt + " F " + t.total + " E/F " + (r.share * 100).toFixed(4) + "% C2 " + r.C2.igst + " D1 " + r.D1.igst + " D2 " + r.D2.igst);
+  const t = R.turnover(RM, "07"), r = R.rule42(RM, "07");
+  console.log("  " + RM + " with up to 5 invoices made exempt: E " + t.exempt + " F " + t.total + " E/F " + (r.share * 100).toFixed(4) + "% C2 " + r.C2.igst + " D1 " + r.D1.igst + " D2 " + r.D2.igst);
   ok(t.exempt > 0 && Math.abs(r.D1.igst - Math.round(r.C2.igst * t.exempt / t.total * 100) / 100) < 0.011 && r.D1.igst > 0, "D1 on real common credit and exempt turnover");
-  const oTot = neu.x.GSTR.threeB("202506", "07");
+  const oTot = neu.x.GSTR.threeB(RM, "07");
   ok(Math.abs(oTot.rules.igst - r.reverse.igst) < 0.011, "3B 4(B)(1) carries D1 + D2");
   // a month with no turnover takes the last month that had some
   const realOut = G.outward;
-  G.outward = (ym, reg) => ym === "202507" ? [] : realOut.call(G, ym, reg);
-  const q = R.ratio("202507", "07");
+  G.outward = (ym, reg) => ym === RN ? [] : realOut.call(G, ym, reg);
+  const q = R.ratio(RN, "07");
   G.outward = realOut;
-  ok(q.from === "202506" && q.E === t.exempt, "no turnover in July: E and F of June are used");
+  ok(q.from === RM && q.E === t.exempt, "no turnover in " + RN + ": E and F of " + RM + " are used");
   console.log("\n" + (fails ? fails + " FAILED" : "all passed"));
   process.exit(fails ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(2); });

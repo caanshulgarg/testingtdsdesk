@@ -1,5 +1,5 @@
 // node run_fs.js - financial statements on the VMS books (opening balances from the masters, as at the start of the year)
-const {load, openBlob, HTML, DATA, CACHE} = require("./harness"), fs = require("fs");
+const {load, openBlob, HTML, DATA, CACHE, FIXTURE} = require("./harness"), fs = require("fs");
 const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "Audit", "MIS", "FS", "TDS", "Certs", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "INR"];
 const {ctx, x} = load(HTML, NAMES);
 let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
@@ -8,11 +8,14 @@ const M = v => x.INR.format(Math.round(v || 0));
   const b = JSON.parse(fs.readFileSync(CACHE, "utf8"));
   const ms = await x.Books.importMasters(await openBlob(DATA + "/Master.xml"));
   Object.assign(b, {ledInfo: ms.info, under: ms.under, groups: ms.groups, groupInfo: ms.groupInfo, gstins: ms.gstins, pans: ms.pans, challans: [], alloc: {}});
-  b.map = x.Books.mapLedgers(b.vouchers, {}); ctx.S.books = b; ctx.CO = () => ({name: "VMS EVENTS PRIVATE LIMITED"}); x.LedMaster.refresh(b);
-  ok(ms.groupInfo["EMPLOYEE BENEFIT EXPENSES"] && ms.groupInfo["EMPLOYEE BENEFIT EXPENSES"].rev && ms.groupInfo["EMPLOYEE BENEFIT EXPENSES"].dr, "the company's own primary group EMPLOYEE BENEFIT EXPENSES is read as an expense");
+  b.map = x.Books.mapLedgers(b.vouchers, {}); ctx.S.books = b; ctx.CO = () => ({name: FIXTURE ? "Larkspur Fixture Events Private Limited" : "VMS EVENTS PRIVATE LIMITED"}); x.LedMaster.refresh(b);
+  // the company's own primary group of expenses: the real client's, or the fixture's (tests/fixtures/books/EXPECTED.md)
+  const EMP = FIXTURE ? "Employee Benefit Expenses" : "EMPLOYEE BENEFIT EXPENSES";
+  ok(ms.groupInfo[EMP] && ms.groupInfo[EMP].rev && ms.groupInfo[EMP].dr, "the company's own primary group " + EMP + " is read as an expense");
   const pl = x.MIS.pl("20250401", "20260331");
   console.log("  MIS employee costs " + M((pl.heads.emp || {t: 0}).t) + ", finance costs " + M((pl.heads.fin || {t: 0}).t));
-  ok((pl.heads.emp || {t: 0}).t > 1000000, "MIS now counts the ledgers in the company's own primary groups");
+  if (FIXTURE) ok((pl.heads.emp || {t: 0}).t === 180000, "MIS counts the ledgers in the company's own primary group: employee costs 1,80,000, as worked out by hand");
+  else ok((pl.heads.emp || {t: 0}).t > 1000000, "MIS now counts the ledgers in the company's own primary groups");
   // Tally's balances, as the bridge would give them, taking the masters' opening balances as at 1 April 2025
   const led = {}; Object.entries(b.ledInfo).forEach(([n, i]) => { led[n] = {open: i.ob || 0, close: 0, parent: i.group}; });
   b.tb = {from: "20250401", to: "20260331", at: new Date().toISOString(), led};
@@ -22,6 +25,7 @@ const M = v => x.INR.format(Math.round(v || 0));
   d.lines.forEach(z => { if (d.put[z[0]]) console.log("   " + z[2].padEnd(4) + z[1].padEnd(34) + M(d.put[z[0]]).padStart(16) + "   last year " + M((d.py || {})[z[0]])); });
   x.FS.PL.forEach(([k, l]) => { if (d.pl[k]) console.log("   P&L " + l.padEnd(38) + M(d.pl[k]).padStart(16)); });
   ok(Math.abs(d.diff) < 1, "the balance sheet tallies");
+  if (FIXTURE) ok(d.eqL === 1403550 && d.assets === 1403550 && d.pat === 319550 && d.put.tr === 718200 && d.put.reserves === -480450, "fixture: totals 14,03,550 each side, profit 3,19,550, receivables 7,18,200, reserves -4,80,450 (EXPECTED.md)");
   ok(Math.abs(d.pbt - x.MIS.pl("20250401", "20260331").pbt.t) < 1, "profit before tax agrees with the MIS");
   ok(d.put.tr > 0 && d.put.tp > 0 && d.put.cash > 0, "trade receivables, trade payables and cash placed");
   const pyEq = d.lines.filter(z => ["EQ", "NCL", "CL"].includes(z[2])).reduce((a, z) => a + (d.py[z[0]] || 0), 0), pyAs = d.lines.filter(z => ["NCA", "CA"].includes(z[2])).reduce((a, z) => a + (d.py[z[0]] || 0), 0);

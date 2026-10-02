@@ -73,7 +73,8 @@ All amounts are in rupees. Dates are in 2025-26, and the books run from 01-Apr-2
 | Gross profit (revenue less purchases and direct expenses) | 7,90,000 |
 
 **Other income and other expenses.** Other income is 11,700. Other expenses are 2,22,150. The written-back 7,500 is income;
-it is not a negative expense.
+it is not a negative expense, on every screen: the profit and loss, the Accounts tab, and profit by cost centre (income
+14,11,700, expenses 10,92,150, allocated or not).
 
 In the Schedule III statement (the Accounts tab), direct expenses have no line of their own. They go in other expenses
 there: 6,10,000 + 2,22,150 = 8,32,150. The totals and the profit are the same as above.
@@ -246,6 +247,12 @@ marked "FINDING".
    TDS is put on the 7th of the next month, but TDS deducted in March is due on 30 April (rule 30(2)), as `MIS.dues`
    already says. Week 1 shows 3,54,400 out, where the right figure is 3,52,400. The proposed fix is for April's date
    to be the 30th.
-3. *A note, not a finding.* The customers' "usual days to pay" (`MIS.payDays`) also count an advance that a later
+3. **Profit by cost centre counts the written-back expense as an expense** (`src/js/07-mis.js`, `MIS.costCentres`). The
+   profit and loss (`MIS.pl`) moves an expense ledger that is in credit for the period to other income. The cost-centre
+   working uses the ledger's head without that rule. Its income plus what is not allocated comes to 14,04,200, against
+   14,11,700 in the profit and loss, and its expenses to 10,84,650, against 10,92,150. The 7,500 written back to Sundry
+   Balances Written Off sits on the wrong side. Profit is the same. The proposed fix is for the cost centres to use the
+   same rule.
+4. *A note, not a finding.* The customers' "usual days to pay" (`MIS.payDays`) also count an advance that a later
    invoice used up. Vellichor's advance to its invoice gave 35 days, and Orchid Lane's gave 19 days, as if they were times
    to pay. Week 1 does not change. It only moves when Orchid Lane's March bill is expected (08-Apr rather than later).

@@ -1,14 +1,14 @@
 // node run_mis2.js - MIS phase 2 on the VMS books
-const fs = require("fs"), {load, openBlob} = require("./harness"), {HTML, DATA, CACHE, OUT} = require("./harness");
-const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "Audit", "MIS", "TDS", "Certs", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim"];
+const fs = require("fs"), {load, openBlob} = require("./harness"), {HTML, DATA, CACHE, OUT, FIXTURE} = require("./harness");
+const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "Audit", "MIS", "TDS", "Certs", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "Parties", "FS", "GSTSet", "GSTF", "GSTQ"];
 const {ctx, x} = load(HTML, NAMES);
 let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 const M = v => x.INR.format(Math.round(v || 0));
 (async () => {
   const b = JSON.parse(fs.readFileSync(CACHE, "utf8"));
   const ms = await x.Books.importMasters(await openBlob(DATA + "/Master.xml"));
-  Object.assign(b, {ledInfo: ms.info, under: ms.under, groups: ms.groups, gstins: ms.gstins, pans: ms.pans, challans: [], alloc: {}});
-  b.map = x.Books.mapLedgers(b.vouchers, {}); ctx.S.books = b; ctx.CO = () => ({name: "VMS EVENTS PRIVATE LIMITED"}); ctx.S.coId = "t";
+  Object.assign(b, {ledInfo: ms.info, under: ms.under, groups: ms.groups, groupInfo: ms.groupInfo, states: ms.states, gstins: ms.gstins, pans: ms.pans, challans: [], alloc: {}});   // as the masters upload keeps them
+  b.map = x.Books.mapLedgers(b.vouchers, {}); ctx.S.books = b; ctx.CO = () => ({name: FIXTURE ? "Larkspur Fixture Events Private Limited" : "VMS EVENTS PRIVATE LIMITED"}); ctx.S.coId = "t";
   x.LedMaster.refresh(b);
   const r = x.MIS.run("20250401", "20260331", "test"), p = r.p2;
   // cash flow: the net equals every movement of cash and bank, contra left out
@@ -29,7 +29,9 @@ const M = v => x.INR.format(Math.round(v || 0));
   ok(F.weeks.some(w => w.items.some(z => z.what === "GST" && z.d.slice(6) === "20")) && F.weeks.some(w => w.items.some(z => z.what === "TDS" && z.d.slice(6) === "07")), "GST on the 20th, TDS on the 7th");
   // ratios
   p.ratios.list.forEach(([l, v, u]) => console.log("   " + l.padEnd(52) + (v == null ? "-" : v + " " + u)));
-  ok(p.ratios.list[0][1] != null && !p.ratios.bs, "flow ratios always; balance-sheet ratios wait for Tally's balances");
+  // balance-sheet ratios once the balances are known: Tally's, or the masters' opening balances with a day book from the
+  // start of the books (review of 02-Oct-2026, MIS.ratios); not before
+  ok(p.ratios.list[0][1] != null && p.ratios.bs === !!(r.balances && r.balances.src), "flow ratios always; balance-sheet ratios once the balances are known (" + ((r.balances || {}).src || "not known") + ")");
   // registrations
   console.log("registrations: " + p.regs.map(g => g.gstin + " sales " + M(g.sales) + " purchases " + M(g.purch)).join(" | "));
   ok(p.regs.length === 2 && Math.abs(p.regs.reduce((s, g) => s + g.sales, 0) - r.sales.total) < 1, "sales of the two registrations add up to the total");
@@ -39,7 +41,9 @@ const M = v => x.INR.format(Math.round(v || 0));
   C.rows.slice(0, 8).forEach(z => console.log("   " + z.name.padEnd(28) + " income " + M(z.inc).padStart(14) + " costs " + M(z.exp).padStart(14) + " profit " + M(z.profit).padStart(14) + "  " + z.margin + "%"));
   const inc = C.rows.reduce((s, z) => s + z.inc, 0) + C.un.inc, exp = C.rows.reduce((s, z) => s + z.exp, 0) + C.un.exp;
   const plInc = r.pl.heads.rev.t + (r.pl.heads.oth || {t: 0}).t, plExp = ["pur", "dir", "emp", "exp", "fin", "dep", "tax"].reduce((s, k) => s + (r.pl.heads[k] || {t: 0}).t, 0);
-  ok(Math.abs(inc - plInc) < 2 && Math.abs(exp - plExp) < 2, "cost centres plus what is not allocated equal the profit and loss: income " + M(inc) + " / " + M(plInc));
+  // FINDING 3 (tests/fixtures/books/EXPECTED.md): MIS.costCentres keeps an expense ledger in credit for the period (written
+  // back) among the expenses, where MIS.pl moves it to other income; with the fixture both sides differ by 7,500
+  ok(Math.abs(inc - plInc) < 2 && Math.abs(exp - plExp) < 2, (FIXTURE ? "FINDING 3: " : "") + "cost centres plus what is not allocated equal the profit and loss: income " + M(inc) + " / " + M(plInc) + ", expenses " + M(exp) + " / " + M(plExp));
   // budget
   b.budget = {"2025": {rev: {}, dir: {}}}; x.GSTRev.fyMonths("202504").forEach(mm => { b.budget["2025"].rev[mm] = 50000000; b.budget["2025"].dir[mm] = 38000000; });
   const V = x.MIS.budgetVs(r);

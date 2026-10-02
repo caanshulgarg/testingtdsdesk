@@ -4,6 +4,10 @@ os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from books_data import DATA, CACHE, FIXTURE, GSTIN, GSTIN09, COMPANY
+# the ledgers these steps use: the real client's, or the fixture's (tests/fixtures/books)
+GM = "202507" if FIXTURE else "202506"   # a month with invoices to registered customers (the fixture's June has none on 07)
+CTRL, CLEAR, PLAIN, TDS194C = (("07 IGST INPUT PROVISIONAL", "TDS Payable - Month End", "Sundry Balances Written Off", "TDS ON CONTRACT 194C") if FIXTURE else
+                               ("CONTROL A/C 07 IGST INPUT", "TDS PAYABLE CURRENT", "SHORT AND EXCESS", "TDS ON CONTRACT 194C 2%"))
 H = functools.partial(http.server.SimpleHTTPRequestHandler, directory=os.environ.get("TDSDESK_SITE", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "site-test"))); H.log_message = lambda *a: None
 srv = http.server.ThreadingHTTPServer(("localhost", 8133), H); threading.Thread(target=srv.serve_forever, daemon=True).start()
 OUT = os.environ.get("TDSDESK_OUT", os.path.join(os.path.dirname(os.path.abspath(__file__)), "out")); books = json.load(open(CACHE)); fails, errors = [], []
@@ -23,11 +27,11 @@ with sync_playwright() as p:
     pg.evaluate("S.booksTab = 'ledgers'; S.lmView = 'post'; render();"); pg.wait_for_timeout(500)
     ok("none confirmed" in pg.inner_text("#app"), "before confirming: nothing from the master")
     pg.evaluate("S.lmView = 'pending'; render();"); pg.wait_for_timeout(300)
-    pg.click('button:has-text("Confirm the")'); pg.wait_for_timeout(800)
+    pg.click('button:has-text("Confirm the"):has-text("shown")'); pg.wait_for_timeout(800)
     co = pg.evaluate("JSON.stringify({gst: CO().gst, tds: CO().tdsLedgers, ro: CO().roundOff})")
     print("   posting after confirming: " + co[:300])
     ok('"cgst":"07 CGST INPUT"' in co and '"igst":"07 IGST INPUT"' in co, "empty posting ledgers filled from the confirmed master (Delhi input ledgers)")
-    ok('"contractor":"TDS ON CONTRACT 194C 2%"' in co, "contractor TDS: the 194C ledger at the rule's rate, the most used")
+    ok('"contractor":%s' % json.dumps(TDS194C) in co, "contractor TDS: the 194C ledger at the rule's rate, the most used")
     pg.evaluate("S.lmView = 'post'; render();"); pg.wait_for_timeout(400)
     ok("What FinCom posts bills to" in pg.inner_text("#app") and "same" in pg.inner_text("#app"), "the posting view shows each slot and where it comes from")
     pg.screenshot(path=OUT + "/led-post.png", full_page=False)
@@ -36,18 +40,18 @@ with sync_playwright() as p:
     pg.click('tr[data-key="gst.sgst"] button:text-is("Use it")'); pg.wait_for_timeout(300)
     ok(pg.evaluate("CO().gst.sgst") == "07 SGST INPUT", "a slot set by hand is kept until 'Use it'")
     # a return made, then a ledger changed: the banner names the return
-    pg.evaluate("() => { window.__saved = []; window.saveFile = (n) => window.__saved.push(n); S.booksTab = 'gst'; S.gstPart = 'r1'; S.gstYm = '202506'; S.gstReg = '07'; render(); }")
+    pg.evaluate("() => { window.__saved = []; window.saveFile = (n) => window.__saved.push(n); S.booksTab = 'gst'; S.gstPart = 'r1'; S.gstYm = '" + GM + "'; S.gstReg = '07'; render(); }")
     pg.click('button:has-text("Download GSTR-1 JSON")'); pg.wait_for_timeout(800)
     ok(pg.evaluate("(S.books.ledSnaps || []).length") == 1, "a copy of the master kept with the GSTR-1 JSON")
-    pg.evaluate("S.booksTab = 'ledgers'; S.lmView = 'gst'; S.ledQ = 'CONTROL A/C 07 IGST'; render();"); pg.wait_for_timeout(500)
-    pg.select_option('select[aria-label="What CONTROL A/C 07 IGST INPUT is"]', "gst"); pg.wait_for_timeout(500)
+    pg.evaluate("S.booksTab = 'ledgers'; S.lmView = 'gst'; S.ledQ = %s; render();" % json.dumps(CTRL[:-6])); pg.wait_for_timeout(500)
+    pg.select_option('select[aria-label="What %s is"]' % CTRL, "gst"); pg.wait_for_timeout(500)
     t = pg.inner_text("#app")
-    ok("changed after returns were made from them" in t and "GSTR-1 Jun 2025 07" in t, "changing a ledger after filing names the return made before")
+    ok("changed after returns were made from them" in t and ("GSTR-1 " + pg.evaluate("GSTR.label(%s)" % json.dumps(GM)) + " 07") in t, "changing a ledger after filing names the return made before")
     pg.screenshot(path=OUT + "/led-changed.png", full_page=False)
     # a second client: the first client's confirmations are the guesses
     open_client(pg, "ZZ TEST B (same books)", books)
     pg.evaluate("S.booksTab = 'ledgers'; S.lmView = 'pending'; S.ledQ = ''; render();"); pg.wait_for_timeout(500)
-    why = pg.evaluate("S.books.map['TDS PAYABLE CURRENT'].why + ' | ' + S.books.map['CONTROL A/C 07 IGST INPUT'].what + ' | ' + S.books.map['CONTROL A/C 07 IGST INPUT'].why")
+    why = pg.evaluate("S.books.map[%s].why + ' | ' + S.books.map[%s].what + ' | ' + S.books.map[%s].why" % (json.dumps(CLEAR), json.dumps(CTRL), json.dumps(CTRL)))
     ok("confirmed this way for 1 other client" in why and "| gst |" in why, "second client: guessed as the first client confirmed, still to confirm: " + why[:120])
     ok(pg.evaluate("LedMaster.pending(S.books).length") > 0, "nothing counts as confirmed for the second client until it is confirmed there")
     br.close()

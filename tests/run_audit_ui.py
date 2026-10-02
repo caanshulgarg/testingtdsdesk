@@ -31,7 +31,11 @@ with sync_playwright() as p:
     pg.click('button:text-is("Run now")'); pg.wait_for_timeout(4000)
     t = pg.inner_text("#app")
     ok("Serious" in t and "Expenses where TDS was due but not deducted" in t, "run now: findings listed")
-    ok("the books begin on" in t, "why the balance checks did not run is said")
+    if FIXTURE:   # the fixture's day book starts where its books begin, so the balance checks run (MSME, cash below zero)
+        ok("the books begin on" not in t and not any("Balance checks were not run" in n for n in pg.evaluate("S.books.audit.last.notes || []")), "the balance checks run: the day book starts where the books begin")
+        ok("Micro and small suppliers unpaid beyond 45 days" in t, "fixture: the MSME supplier unpaid beyond 45 days is found")
+    else:
+        ok("the books begin on" in t, "why the balance checks did not run is said")
     pg.screenshot(path=OUT + "/audit.png", full_page=False)
     # open the duplicate bills finding, mark it, add a note
     fid = "duplicates:dupRef"

@@ -37,6 +37,10 @@ const same = (a, b, w) => ok(JSON.stringify(a) === JSON.stringify(b), w + ": " +
   eq(H("exp"), 222150, "other expenses"); eq(H("fin"), 20000, "finance costs"); eq(H("dep"), 60000, "depreciation"); eq(r.pl.gross.t, 790000, "gross profit"); eq(r.pl.pbt.t, 319550, "profit before tax");
   ok((r.pl.heads.oth.led.find(z => z.l === "Sundry Balances Written Off") || {}).flag === "expense ledger with a credit balance", "the expense ledger in credit is under other income, flagged");
 
+  // FINDING 3 (EXPECTED.md, findings): MIS.costCentres keeps the 7,500 written back among the expenses
+  const C = r.p2.cc, ccInc = C.rows.reduce((a, z) => a + z.inc, 0) + C.un.inc, ccExp = C.rows.reduce((a, z) => a + z.exp, 0) + C.un.exp;
+  eq(ccInc, 1411700, "FINDING 3: profit by cost centre, income allocated or not"); eq(ccExp, 1092150, "FINDING 3: profit by cost centre, expenses allocated or not");
+
   console.log("balance sheet (Accounts)");
   const d = x.FS.build("2025"), P = k => d.put[k] || 0;
   ok(!d.error, "the statements are built from the masters' opening balances" + (d.error ? ": " + d.error : ""));
