@@ -2810,8 +2810,9 @@ function checksPass(j){
   const tot = num(j.totalAmount), tx = num(j.taxableValue), gst = num(j.cgst) + num(j.sgst) + num(j.igst);
   return !!(j.vendorName && j.invoiceDate && tot > 0 && tx > 0 && Math.abs(tx + gst - tot) <= 1.5);
 }
-async function claudeRead(prompt, images, careful){
-  if (S.engine === "api") return apiJson(prompt, images, careful);
+// fileName: the bill's name, sent to the gateway so a failure in its log can be traced to the bill (never its contents)
+async function claudeRead(prompt, images, careful, fileName){
+  if (S.engine === "api") return apiJson(prompt, images, careful, fileName);
   if (S.engine !== "claude") throw {code:"no_engine"};
   if (S.readBlocked) throw {code:S.readBlocked};
   const opts = {modelTier: careful ? "complex" : "default"};
@@ -2948,7 +2949,7 @@ async function extract(file, careful, page, cidHint, force){
         }
         // figures are checked; ask Claude (text only) just for the supplier's name and the payment type
         try {
-          const jt = await claudeRead(buildPrompt(ftext, file.name, 0, "pdf_text"), [], false);
+          const jt = await claudeRead(buildPrompt(ftext, file.name, 0, "pdf_text"), [], false, file.name);
           const m = Object.assign({}, fp.j, {
             vendorName: jt.vendorName || fp.j.vendorName, vendorPan: jt.vendorPan || null, buyerName: jt.buyerName || null,
             description: jt.description || fp.j.description, natureId: jt.natureId || fp.j.natureId,
@@ -2972,7 +2973,7 @@ async function extract(file, careful, page, cidHint, force){
 
   // 2. text PDFs: Claude with the text only
   if (kind === "pdf_text" && !careful){
-    const j = await claudeRead(buildPrompt(text, file.name, 0, "pdf_text"), [], false);
+    const j = await claudeRead(buildPrompt(text, file.name, 0, "pdf_text"), [], false, file.name);
     const ok = checksPass(j);
     step("Claude (text only)", ok || !S.imgMax, ok ? "read the whole bill from the PDF's text" : "its figures did not add up; trying the page image");
     if (ok || !S.imgMax) return {j, kind, preview, method:"claude-text", freeWhy, trace};
@@ -2988,7 +2989,7 @@ async function extract(file, careful, page, cidHint, force){
     images = await buildImageSet(canvases, careful);
     if (!images.length) throw {code:"unreadable", trace};
   }
-  const j = await claudeRead(buildPrompt(text, file.name, images.length, kind), images, careful);
+  const j = await claudeRead(buildPrompt(text, file.name, images.length, kind), images, careful, file.name);
   step(careful ? "Claude (careful re-read)" : "Claude (images)", true, "read from " + images.length + " image" + (images.length === 1 ? "" : "s"));
   return {j, kind, preview, method: careful ? "claude-careful" : "claude-images", freeWhy, trace};
 }
@@ -3037,7 +3038,7 @@ function parseJsonReply(text){
   if (a >= 0 && b > a){ try { return JSON.parse(t.slice(a, b + 1)); } catch (e){} }
   throw {code:"invalid_json"};
 }
-async function apiJson(prompt, images, careful){
+async function apiJson(prompt, images, careful, fileName){
   const cfg = apiSettings();
   const content = [];
   for (const b of images || []) content.push({type:"image", source:{type:"base64", media_type:"image/jpeg", data: await blobToBase64(b)}});
@@ -3046,11 +3047,15 @@ async function apiJson(prompt, images, careful){
   if (Cloud.on() && S.account && !cfg.key){
     let j;
     try {
-      j = await Cloud.fn("gateway", {what: "claude", qty: 1, ref: "read",
+      j = await Cloud.fn("gateway", {what: "claude", qty: 1, ref: "read", file: String(fileName || "").slice(0, 200),
         payload: {model: careful ? (cfg.carefulModel || "claude-sonnet-4-6") : (cfg.model || "claude-sonnet-4-6"), max_tokens: 16000, messages: [{role: "user", content}]}});
     } catch (e){
       if (e.reason === "low_balance"){ S.creditStop = {at: Date.now(), balance: e.balance, code: "claude"}; render(); }
-      throw {code: e.reason === "low_balance" ? "no_credit" : "api_error", message: e.message};
+      // one kind for every failure (the gateway's, or "blocked" when the browser stopped the call): errCopy and
+      // readFail say it in plain words; code stays for the older callers (other kinds: api_error)
+      const kind = e.reason === "low_balance" ? "no_credit" : (e.kind || "other");
+      throw {code: READ_KINDS.includes(kind) ? kind : "api_error", kind, message: e.message, status: e.status, retryAfter: e.retryAfter,
+        model: e.model || "", category: e.category || "", serverError: e.serverError || e.message || ""};
     }
     const text = ((j.data && j.data.content) || []).filter(x => x.type === "text").map(x => x.text).join("\n");
     return parseJsonReply(text);
@@ -3092,8 +3097,40 @@ function pickEngine(){
 function claudeReady(){ return !!S.engine && !S.readBlocked; }
 function googleReady(){ return !!(googleSettings().key || (Cloud.on() && S.account)); }
 
-function errCopy(code){
+function errCopy(code, err){
+  if (err && READ_KINDS.includes(code)) return readReason(err).replace(/^./, (c) => c.toUpperCase()) + " (" + code + ")";
   return errText(code) + (code ? " (" + code + ")" : "");
+}
+// Bill reading through FinCom's reading service: one kind for each way it fails (review of 02-Oct-2026: a bill on
+// staging only said "The Claude API refused the request"). The gateway sets the kind (server/.../gateway/classify.ts);
+// "blocked" is the browser stopping the call.
+const READ_KINDS = ["no_credit", "rate_limit", "overloaded", "too_large", "pdf_password", "unsupported_type", "timed_out", "declined", "bad_key", "bad_model", "not_reached", "blocked", "other"];
+const READ_RETRY_KINDS = ["rate_limit", "overloaded", "timed_out"];
+// the reason in plain words, as the end of "<file>: not read, ..."
+function readReason(err){
+  const k = (err && err.kind) || "other";
+  return ({
+    no_credit: "out of credit on the reading service. Ask the administrator to add credit.",
+    rate_limit: "too many bills were sent at once (the reading service's rate limit).",
+    overloaded: "the reading service is busy (overloaded).",
+    too_large: "the file is too large for the reading service (the limit is 25 MB a file, about 5 MB a page). Upload only the invoice pages, or a smaller scan.",
+    pdf_password: "the PDF is password-protected. Remove the password and upload it again.",
+    unsupported_type: "this type of file cannot be read. Use PDF, JPG or PNG.",
+    timed_out: "the reading service took too long to answer (timed out).",
+    declined: "the model declined to read this file" + (err && err.category ? " (" + err.category + ")" : "") + ". Type it in.",
+    bad_key: "the reading service's key is not working. Ask the administrator.",
+    bad_model: "the model name \u201c" + ((err && err.model) || "") + "\u201d is not accepted by the reading service. Ask the administrator.",
+    not_reached: "FinCom's server could not reach the reading service. Press Retry in a few minutes.",
+    blocked: "your browser could not reach FinCom's reading service (blocked or offline). Check the connection, then press Retry."
+  })[k] || "the reading service refused the request" + (err && err.serverError ? ": " + String(err.serverError).slice(0, 200) : "") + ".";
+}
+// "<file>: not read, <reason>"; again: true while the one automatic retry is waiting, "failed" when it also failed
+function readFail(name, err, again){
+  const k = err && err.kind;
+  if (!READ_KINDS.includes(k)) return name + ": not read, " + errCopy(err && err.code).replace(/^./, (c) => c.toLowerCase());
+  const tail = again === true ? " Trying again by itself." : again === "failed" ? " Tried again by itself, still not read: press Retry." : "";
+  const r = readReason(err);
+  return name + ": not read, " + (again ? r.replace(/ Check the connection, then press Retry\.| Press Retry in a few minutes\./, "") : r) + tail;
 }
 function errText(code){
   return ({
@@ -3112,10 +3149,20 @@ function errText(code){
     free_failed:"Free reading could not read this bill, and Claude reading is not set up here. Use Type it in, or set up Claude reading in Settings.",
     not_ready:"Still connecting to Claude. Wait a few seconds and press Retry.",
     no_key:"Add your Claude API key in Settings, Reading bills.",
-    bad_key:"The Claude API key was rejected. Check it in Settings, Reading bills.",
+    bad_key:"The reading service's key is not working. Ask the administrator.",
     key_forbidden:"This API key is not allowed to use that model or feature. Check your Claude Console account.",
-    bad_model:"The model name in Settings was not found. Use claude-sonnet-5 or claude-opus-5.",
-    api_error:"The Claude API refused the request.",
+    bad_model:"The model name is not accepted by the reading service. Ask the administrator.",
+    api_error:"The reading service refused the request.",
+    rate_limit:"Too many bills at once (the reading service's rate limit). Wait a minute, then press Retry.",
+    overloaded:"The reading service is busy (overloaded). Press Retry in a minute.",
+    too_large:"The file is too large for the reading service (the limit is 25 MB a file). Upload only the invoice pages.",
+    pdf_password:"The PDF is password-protected. Remove the password and upload it again.",
+    unsupported_type:"This type of file cannot be read. Use PDF, JPG or PNG.",
+    timed_out:"The reading service took too long to answer (timed out). Press Retry.",
+    declined:"The model declined to read this file. Type it in.",
+    not_reached:"FinCom's server could not reach the reading service. Press Retry in a few minutes.",
+    blocked:"Your browser could not reach FinCom's reading service (blocked or offline).",
+    other:"The reading service refused the request.",
     api_blocked:"This copy of the app cannot reach the Claude API. Use the downloaded file, opened in a browser or from your own website.",
     pdf_broken:"This PDF could not be opened. It may be password-protected or damaged.",
     no_sample:"Automatic reading is not available in this view. Use Type it in.",
@@ -3676,6 +3723,7 @@ function uploadLines(jobs){
       return {kind: "dup", name: j.name, cid, open: e.id, orig: o ? o.id : null, text: (o ? dupMsg(o).replace(/^Duplicate of /, "duplicate of ").replace(/\.$/, "") : (e.dupOf && e.dupOf.msg) || "a duplicate") + "; held under Duplicates"};
     }
     if (j.status === "failed") return {kind: "bad", name: j.name, text: "could not be read: " + (j.msg || "no reason given")};
+    if (j.status === "notread") return {kind: "bad", name: j.name, cid, open: j.entryId, text: "not read yet, kept in To review with Retry: " + String(j.msg || "").replace(/^.*?: not read, /, "")};
     if (j.status === "unsorted") return {kind: "info", name: j.name, text: "filed under Sales"};
     if (["done", "partial", "typed"].includes(j.status)) return {kind: "ok", name: j.name, cid, open: j.entryId, text: (j.status === "partial" ? "partly read" : "read") + (e && e.x.invoiceNo ? ": " + (e.x.vendorName || "") + " bill " + e.x.invoiceNo : "")};
     return null;
@@ -3688,7 +3736,7 @@ function uploadSummary(lines){
 }
 function afterBatch(){
   // every finished upload is reported on the page, whichever page is open (the toast alone went unseen)
-  const done = S.jobs.filter(j => ["done", "partial", "held", "duplicate", "failed", "unsorted"].includes(j.status) && !j.said);
+  const done = S.jobs.filter(j => ["done", "partial", "held", "duplicate", "failed", "unsorted", "notread"].includes(j.status) && !j.said);
   const lines = uploadLines(done);
   if (lines.length){
     S.lastUpload = S.lastUpload || {};
@@ -3699,7 +3747,7 @@ function afterBatch(){
   if (S.view !== "company" || !(S.step === "collect" || S.advanceAfterRead || ["invoices", "export", "done"].includes(S.tab))){ if (lines.length) render(); return; }
   S.advanceAfterRead = false;
   const mine = S.jobs.filter(j => !j.advanced && (j.cid === S.coId || j.target === S.coId));
-  const fresh = mine.filter(j => ["done", "partial"].includes(j.status)), held = mine.filter(j => j.status === "held");
+  const fresh = mine.filter(j => ["done", "partial", "notread"].includes(j.status)), held = mine.filter(j => j.status === "held");
   mine.forEach(j => { j.advanced = true; });
   if (!mine.length) return;
   const said = (S.lastUpload && S.lastUpload[S.coId] && S.lastUpload[S.coId].text) || "Upload finished";
@@ -3727,7 +3775,7 @@ function pump(){
     if (!j) break;
     activeJobs++;
     j.status = "checking"; j.startedAt = Date.now();
-    runJob(j).catch(err => { j.status = "failed"; j.msg = errCopy(err && err.code); })
+    runJob(j).catch(err => { j.status = "failed"; j.msg = READ_KINDS.includes(err && err.kind) ? readFail(j.name, err) : errCopy(err && err.code); })
       .finally(() => {
         activeJobs--;
         try { if (j.file && j.file.__docq) docqFinish(j); } catch (e){}
@@ -3753,13 +3801,67 @@ function reserveFile(j){
   reserveChain = p.catch(() => {});
   return p;
 }
+// Reading with one automatic retry when the reading service is rate-limited, busy or timed out (waits its Retry-After,
+// at most 30 s, else 5 s). onWait(err) is told before the wait. The error of the second try carries retried: true.
+async function readWithRetry(file, onCareful, page, cidHint, force, onWait){
+  try { return await extractBest(file, onCareful, page, cidHint, force); }
+  catch (err){
+    if (!(err && READ_RETRY_KINDS.includes(err.kind))) throw err;
+    if (onWait) onWait(err);
+    const ra = Number(err.retryAfter);
+    await new Promise(res => setTimeout(res, ra > 0 ? Math.min(30, ra) * 1000 : 5000));
+    try { return await extractBest(file, onCareful, page, cidHint, force); }
+    catch (err2){ if (err2 && typeof err2 === "object") err2.retried = true; throw err2; }
+  }
+}
+// A bill the reading service could not read: kept in To review as a draft with its file, "Not read yet" and why, a
+// Retry (retryNotRead) and Type it in. Never approved until read or typed in (notReadYet). Like a partly read bill.
+function addNotRead(j, cid, err, msg){
+  const e = newEntry(j.name);
+  e.notRead = {kind: err.kind, reason: msg.replace(/^.*?: not read, /, ""), at: new Date().toISOString()};
+  e.readTrace = err.trace || [];
+  e.fileHash = j.hash;
+  S.files[e.id] = j.file; if (j.page) S.filePages[e.id] = [].concat(j.page)[0]; const dcid = j.cid || j.target || S.coId; FileStore.put(dcid, e.id, j.file); CloudDocs.add(dcid, e.id, j.file, "bill"); FileStore.put(cid, e.id, j.file);
+  if (isImage(j.file)) S.previews[e.id] = URL.createObjectURL(j.file);
+  finishNewEntry(e, cid, j);
+  if (j.status === "done") j.status = "notread";
+  j.msg = msg;
+}
+// not read and not typed in yet: the supplier, date and total are still empty
+function notReadYet(e){ return !!(e && e.notRead && !(e.x.vendorName && e.x.invoiceDate && num(e.x.total) > 0)); }
+// Retry on a "Not read yet" bill: read its file again (with the same one automatic retry); the bill is filled in place
+async function retryNotRead(id){
+  const cid = S.coId, e = D(cid).entries[id];
+  if (!e || S.reading[id]) return;
+  const file = await FileStore.get(cid, e.id, e.docPath || "", e.fileName);
+  if (!file){ toast("The file for this bill is not on this computer or in the firm account any more. Upload it again, or type it in."); return; }
+  S.readBlocked = null;
+  S.reading[id] = "Reading again"; render();
+  try {
+    const r = await readWithRetry(file, null, S.filePages[id], cid, null, (err) => { S.reading[id] = "Waiting to try again"; toast(readFail(e.fileName, err, true)); render(); });
+    applyExtraction(e, r.j, cid);
+    e.readMode = readLabel(r); e.readTrace = r.trace || [];
+    if (r.confirmType) e.confirmType = true;
+    if (r.checks) e.checks = r.checks;
+    if (r.note) e.readNote = r.note;
+    delete e.notRead; e.readError = "";
+    setPreview(e.id, r.preview);
+    toast(e.fileName + ": read. Check the fields.");
+  } catch (err){
+    const msg = READ_KINDS.includes(err && err.kind) ? readFail(e.fileName, err, err.retried ? "failed" : false) : e.fileName + ": not read, " + errCopy(err && err.code).replace(/^./, (c) => c.toLowerCase());
+    e.notRead = {kind: (err && (err.kind || err.code)) || "other", reason: msg.replace(/^.*?: not read, /, ""), at: new Date().toISOString()};
+    toast(msg);
+  }
+  delete S.reading[id];
+  Store.saveEntry(cid, e); refreshStats(cid); render();
+}
 async function runJob(j){
   const seen = await reserveFile(j);
   if (seen && !(j.file && j.file.__force)){ j.status = "duplicate"; j.msg = seen.msg; j.dupRef = seen; return; }
   if (!(await charge("bills", 1, j.name, "Bill read"))){ j.status = "failed"; j.msg = "Credit finished. Ask the administrator to add credit."; softRender(); return; }
   j.status = "reading"; j.msg = ""; softRender();
   let r;
-  try { r = await extractBest(j.file, () => { j.msg = "Hard to read, reading again carefully"; softRender(); }, j.page, j.target === "auto" ? null : j.target, j.force); }
+  try { r = await readWithRetry(j.file, () => { j.msg = "Hard to read, reading again carefully"; softRender(); }, j.page, j.target === "auto" ? null : j.target, j.force, (err) => { j.msg = readFail(j.name, err, true); softRender(); }); }
   catch (err){
     if (err && err.partial && j.target !== "auto"){
       const cid = j.target, e = newEntry(j.name), pr = err.partial;
@@ -3776,6 +3878,13 @@ async function runJob(j){
       finishNewEntry(e, cid, j);
       if (j.status === "done"){ j.status = "partial"; j.msg = "Partly read: fill in " + pr.missing.length + " field" + (pr.missing.length === 1 ? "" : "s") + "."; }
       return;
+    }
+    // the reading service failed (after its one retry): the bill is kept in To review, "Not read yet", with its file
+    if (err && READ_KINDS.includes(err.kind)){
+      j.trace = err.trace;
+      const msg = readFail(j.name, err, err.retried ? "failed" : false);
+      if (j.target !== "auto"){ addNotRead(j, j.target, err, msg); return; }
+      j.status = "failed"; j.msg = msg; return;
     }
     j.status = "failed"; j.trace = err && err.trace; j.msg = errCopy(err && err.code) + (err && err.detail ? " Free reading: " + err.detail + "." : ""); return;
   }
@@ -4043,6 +4152,7 @@ async function assignInbox(id, cid){
 /* Approve / undo / reject (current client)                            */
 /* ------------------------------------------------------------------ */
 function approve(e){
+  if (notReadYet(e)){ toast(e.fileName + " is not read yet (" + e.notRead.reason.replace(/\.$/, "") + "). Press Retry, or type in the supplier, date and total, before approving."); return; }
   const cid = S.coId, c = compute(e, cid);
   if (c.missing.length){ toast("Fill in " + c.missing.join(", ") + " before approving."); return; }
   const parties = D(cid).parties;
@@ -4065,7 +4175,7 @@ function approve(e){
   cur.credited = r2(num(cur.credited) + c.base);
   cur.tdsBase = r2(num(cur.tdsBase) + addBase);
   party.ytd[c.fy][c.rule.id] = cur;
-  e.status = "approved";
+  e.status = "approved"; delete e.notRead;
   e.approvedAt = new Date().toISOString();
   const k = invKey(e.x), co = CO(cid);
   // the bill's id is kept with the date (02-Oct-2026), so a later copy can name and open this one
@@ -16524,10 +16634,23 @@ Cloud.fn = async function(name, body, retry){
   // function): said in words, not the browser's "Load failed" / "Failed to fetch"
   try { r = await fetch(c.url.replace(/\/+$/, "") + "/functions/v1/" + name, {
     method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": "application/json"}, body: JSON.stringify(body || {})}); }
-  catch (e){ throw new Error("FinCom\u2019s server could not be reached from this page (" + ((e && e.message) || "no answer") + "). Check the connection and try again; if it keeps happening, tell support which page you were on."); }
+  // kind "blocked" (review of 02-Oct-2026: the gateway did not allow staging.fincom.live, the browser stopped the call
+  // and the bill only said "The Claude API refused the request")
+  catch (e){
+    const why = (e && e.message) || "no answer";
+    throw Object.assign(new Error(name === "gateway" ? "Your browser could not reach FinCom\u2019s reading service (blocked or offline)."
+      : "FinCom\u2019s server could not be reached from this page (" + why + "). Check the connection and try again; if it keeps happening, tell support which page you were on."),
+      {kind: "blocked", status: 0, browserError: why});
+  }
   if (r.status === 401 && !retry){ await this.refreshToken(s.access_token); return this.fn(name, body, true); }
   const j = await r.json().catch(() => ({}));
-  if (!r.ok || j.ok === false) throw Object.assign(new Error(j.error || ("Request failed (" + r.status + ")")), {reason: j.reason, balance: j.balance});
+  // the gateway's kind, status, wait and its own words travel with the error (src/js/01 errCopy says them plainly)
+  if (!r.ok || j.ok === false){
+    const ra = j.retry_after != null ? j.retry_after : r.headers.get("Retry-After");
+    throw Object.assign(new Error(j.error || ("Request failed (" + r.status + ")")), {reason: j.reason, balance: j.balance, kind: j.kind || "other",
+      status: j.status != null ? j.status : r.status, retryAfter: ra != null && isFinite(Number(ra)) ? Number(ra) : null, serverError: j.error || "",
+      detail: j.detail || "", model: j.model || "", category: j.category || ""});
+  }
   return j;
 };
 async function loadAccount(quiet){
@@ -17183,7 +17306,7 @@ function doAct(act, t){
     case "revApprove": case "revApproveAll": {
       const rows = draftRows().filter(r => act === "revApprove" ? S.revSel.has(r.e.id) : (!(r.c.missing || []).length && !r.c.flags.some(f => f.lvl === "hi") && !r.e.confirmType));
       let ok = 0, held = 0;
-      rows.forEach(r => { const c = compute(r.e); if ((c.missing || []).length){ held++; return; } approve(r.e); ok++; });
+      rows.forEach(r => { const c = compute(r.e); if ((c.missing || []).length || notReadYet(r.e)){ held++; return; } approve(r.e); ok++; });
       S.revSel = new Set();
       toast(ok + " approved" + (held ? ", " + held + " still need details" : "") + ".");
       refreshStats(S.coId); render(); break;
@@ -25063,8 +25186,8 @@ const Ledgers = {
 //    the code that reads them. Auto-matching only fills an empty or guessed slot (choiceGuess), never a confirmed one;
 //    a sync never puts back an older or guessed value over a confirmed one (choiceMigrate, from fixCompany). Posting
 //    uses confirmed choices only (choiceUsable): postToProblem, bankLedgerReady, billGuessedWhy.
-//    Old values without a record: a value a person set (postToBy an email, gstPin, a bank account's ledger, a sales
-//    setting) counts as confirmed; postToBy "auto" and the auto-mapped GST / TDS / expense defaults as guessed.
+//    Old values without a record (the Tally company, GST, TDS and default ledgers, a bank account's ledger) are
+//    suggestions: shown pre-selected and confirmed by one press of Confirm. Sales settings count as confirmed.
 //
 // 2. The drafts of the settings pages (Drafts). A section's edits are made where they always were (so every check on
 //    leaving a box still runs), but they are not saved, nor sent to the cloud, until Save: the section notes which
@@ -25101,11 +25224,9 @@ function choiceLegacySet(co, key, rec){
 function choiceDerive(co, key){
   const [k, sub] = choiceSplit(key), v = choiceLegacy(co, key);
   if (!v) return null;
-  if (k === "postTo") return {value: v, state: co.postToBy === "auto" ? "guessed" : "confirmed", by: co.postToBy === "auto" ? "FinCom" : co.postToBy || "", at: co.postToAt || "", old: true};
-  if (k === "gst") return {value: v, state: co.gstPin && co.gstPin[sub] ? "confirmed" : "guessed", by: "", at: "", old: true};
-  if (k === "tds" || k === "exp") return {value: v, state: "guessed", by: "", at: "", old: true};
-  // a bank account's ledger was chosen on the bank page before this change
-  if (k === "bank") return {value: v, state: "confirmed", by: "", at: "", old: true};
+  // An old saved value is a suggestion until a person confirms it (decision of 02-Oct-2026): it shows pre-selected,
+  // marked "saved before, confirm", and posting waits for one Confirm. Only a Confirm press makes a choice confirmed.
+  if (k === "postTo" || k === "gst" || k === "tds" || k === "exp" || k === "bank") return {value: v, state: "guessed", by: "", at: co.postToAt && k === "postTo" ? co.postToAt : "", old: true};
   return null;
 }
 function choiceRec(co, key){ return co && co.choices && co.choices[key] || null; }
