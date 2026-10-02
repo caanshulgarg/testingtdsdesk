@@ -45,7 +45,9 @@ function GoBridgeCard() {
   const [m, setM] = useState(null);
   useEffect(() => { fetch("assets/bridge-go/latest.json", { cache: "no-store" }).then((r) => r.ok ? r.json() : null).then(setM).catch(() => setM(null)); }, []);
   const set = m && m.setup;
-  if (!set) return null;
+  // 02-Oct-2026: no download is handed out until a build has been tried on real Windows computers
+  if (!set) return <div className="pane cn-card" data-bridge-testing=""><h2>FinCom Bridge for Windows</h2>
+    <p className="note" style={{ margin: 0 }}>New bridge 2.1.0 is being tested; keep using bridge 1.15.0 for now.</p></div>;
   const file = set.url.split("/").pop();
   const dl = new URL("assets/bridge-go/" + file, location.href).href.replace(/[?#].*$/, "");
   const ps = "[Net.ServicePointManager]::SecurityProtocol = 'Tls12'; Invoke-WebRequest -Uri \"" + dl + "\" -OutFile \"$env:USERPROFILE\\Downloads\\" + file + "\"";

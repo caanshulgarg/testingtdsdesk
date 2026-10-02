@@ -28,7 +28,9 @@ function legacy(mode) {
       // go-bridge: FinCom Bridge 2.0 (Go) is handed out by the testing site only (assets-test/bridge-go); a live build
       // never carries it, so what live users download stays as it is
       const goDir = new URL("../assets-test/bridge-go/", import.meta.url);
-      if (test && fs.existsSync(goDir)) for (const f of fs.readdirSync(goDir)) this.emitFile({ type: "asset", fileName: "assets/bridge-go/" + f, source: fs.readFileSync(new URL(f, goDir)) });
+      // 02-Oct-2026: and only when asked for (FINCOM_SHIP_BRIDGE=1), once a build has been tried on real Windows computers;
+      // without it the Tally page says the new bridge is being tested
+      if (test && process.env.FINCOM_SHIP_BRIDGE === "1" && fs.existsSync(goDir)) for (const f of fs.readdirSync(goDir)) this.emitFile({ type: "asset", fileName: "assets/bridge-go/" + f, source: fs.readFileSync(new URL(f, goDir)) });
     },
     transformIndexHtml(html) {
       // review of 01-Oct-2026: legacy.js has no hash in its name, so a browser kept an older copy after a new build (the

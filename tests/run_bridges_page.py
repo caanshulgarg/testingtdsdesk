@@ -35,8 +35,17 @@ SETUP = """() => {
 }"""
 with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1440, "height": 950}); pg.on("pageerror", lambda e: errors.append(str(e)))
+    # a build that ships no bridge (the default): the Tally page says 2.1.0 is being tested
     pg.goto("http://localhost:8203/"); pg.wait_for_timeout(2500)
     pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+    pg.evaluate(SETUP); pg.wait_for_timeout(1500)
+    ok("New bridge 2.1.0 is being tested; keep using bridge 1.15.0 for now." in pg.inner_text("#app [data-bridge-testing]") and pg.locator("#app a[download^=FinComBridge]").count() == 0,
+       "no bridge download: 'New bridge 2.1.0 is being tested; keep using bridge 1.15.0 for now.'")
+    # a build that ships one (FINCOM_SHIP_BRIDGE=1): its download, and the help when Windows blocks it
+    pg.route("**/assets/bridge-go/latest.json", lambda r: r.fulfill(status=200, content_type="application/json",
+        body=json.dumps({"setup": {"version": "2.1.0", "url": "https://x/assets/bridge-go/FinComBridge-Setup-2.1.0.exe", "sha256": "ab" * 32}})))
+    pg.goto("http://localhost:8203/"); pg.wait_for_timeout(2500)
+    if pg.locator('button[data-act="useOffline"]').count(): pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
     pg.evaluate(SETUP); pg.wait_for_timeout(1500)
     rows = pg.locator("#app [data-bridges] tbody tr")
     ok(rows.count() == 4, "four bridges listed: 2.1.0 and 1.15.0 on NWS144, 1.15.0 and the old 2.0.0 on TALLYSRV (%d)" % rows.count())
