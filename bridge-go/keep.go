@@ -1,13 +1,11 @@
-// Keeping FinCom's copy of each company in step with Tally (keep.ps1 of bridge 1.15.0), as a worker inside the service
-// instead of a second program. For each open company it reads the opening balances once, copies the year's day book a
-// few days at a time (or takes it from the day book files chosen in FinCom), then asks only what changed: entries with
-// a change number (ALTERID) above the last one seen, and one month at a time compares the list of entries with
-// Tally's, which also finds deleted ones. The copy is kept in the same files as before (sync\<company>\days\*.xml...).
+// Keeping FinCom's copy of each company in step with Tally, as a worker inside the service. 2.1.5 (the owner's rule of
+// 02-Oct-2026): each company's baseline is read once (the masters with their stored openings and the day book, a month a
+// request, or taken from FinCom's cloud when it holds the books already), then only what changed, by Tally's AlterID
+// (changes.go). Tally is never asked for a balance. The copy is kept in the same files as before
+// (sync\<company>\days\*.xml...).
 package main
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"math"
@@ -167,37 +165,6 @@ func keepList(tc *TC, company string, port int, from, to string, after int64) ([
 	return out, nil
 }
 
-// opening balances for a group of ledgers (all when none named), on one date: [name, parent, balance]
-func keepBalances(tc *TC, company string, port int, names []string, asOn string) ([][3]string, error) {
-	var parts []string
-	for _, n := range names {
-		parts = append(parts, `$Name = "`+strings.ReplaceAll(n, `"`, "")+`"`)
-	}
-	// 2.1.3: never every ledger in one request (02-Oct-2026: TDSDeskKeepBal ran 900 s and failed): a batch at a time
-	if len(names) == 0 {
-		return nil, errors.New("no ledgers named: opening balances are read a batch of ledgers at a time")
-	}
-	flt := "<FILTERS>TDSDeskKeepThese</FILTERS>"
-	sys := `<SYSTEM TYPE="Formulae" NAME="TDSDeskKeepThese">` + esc(strings.Join(parts, " OR ")) + "</SYSTEM>"
-	t := tallyMaxSec()
-	x := "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TDSDeskKeepBal</ID></HEADER>" +
-		"<BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>" + esc(company) + "</SVCURRENTCOMPANY>" +
-		"<SVFROMDATE>" + asOn + "</SVFROMDATE><SVTODATE>" + asOn + "</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE>" +
-		`<COLLECTION NAME="TDSDeskKeepBal" ISMODIFY="No"><TYPE>Ledger</TYPE>` + flt + "<FETCH>NAME,PARENT,CLOSINGBALANCE</FETCH></COLLECTION>" + sys +
-		"</TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>"
-	raw, err := invokeTally(tc, port, x, t)
-	if err != nil {
-		return nil, err
-	}
-	var out [][3]string
-	for _, l := range xmlDoc(raw).All("LEDGER") {
-		if n := nameOf(l); n != "" {
-			out = append(out, [3]string{n, nt(l, "PARENT"), nt(l, "CLOSINGBALANCE")})
-		}
-	}
-	return out, nil
-}
-
 // one stretch of the day book, kept as one file a day: returns the seconds it took and the entries
 func copyKeepDays(tc *TC, company string, port int, dir, from, to string) (float64, int, error) {
 	t0 := time.Now()
@@ -309,7 +276,7 @@ func importKeepOpening(company, body string) (M, error) {
 	bal := M{"ok": true, "company": company, "from": st["from"], "to": today(), "openAsOn": want, "ledgers": led, "keep": true, "source": "trial balance file"}
 	_ = saveFile(filepath.Join(dir, "balances.json"), jsonText(bal))
 	setCloudLedgers(dir)
-	st["openPending"], st["balAt"], st["lastM"] = false, nowS(), 0
+	st["balAt"], st["localDays"] = nowS(), true
 	saveKeepState(dir, st)
 	writeKeepManifest(dir, st, today())
 	writeLog(fmt.Sprintf("Keeping %s: opening balances of %d ledgers taken from the trial balance file", company, len(led)))
@@ -330,30 +297,28 @@ func importKeepSeed(company, from, to, x string) (M, error) {
 	dir := syncFolder(company)
 	_ = os.MkdirAll(dir, 0o755)
 	st := readKeepState(dir)
-	if st != nil && !truthy(st["seeded"]) && (str(st["phase"]) == "check" || str(st["phase"]) == "live") {
+	if st != nil && !truthy(st["seeded"]) && str(st["phase"]) == "live" {
 		return M{"ok": true, "skipped": "This company is already kept in step; its copy was made before."}, nil
 	}
 	if st == nil || !truthy(st["seeded"]) {
-		st = M{"company": company, "from": from, "next": from, "slice": 1, "phase": "check", "openIdx": 0, "last": 0, "lastM": 0, "checkYm": from[:6], "months": M{}, "cycle": 0,
-			"skipped": []any{}, "dayFail": 0, "balMode": "whole", "openPending": true, "seeded": true}
+		// 2.1.5: the day book given in FinCom is the baseline; from here only changes by AlterID (the masters read once,
+		// with their stored openings; never a balance)
+		st = M{"company": company, "from": from, "next": addDays(today(), 1), "slice": 1, "phase": "live", "lastV": 0, "lastM": 0, "mL": 0, "mG": 0,
+			"months": M{}, "skipped": []any{}, "seeded": true, "localDays": exists(filepath.Join(dir, "balances.json"))}
 		writeLog("Keeping " + company + " in step: the copy starts from the day book file chosen in FinCom")
 	}
 	n := saveKeepDays(dir, from, to, x)
-	mx := toI64(st["last"])
+	mx := toI64(st["lastV"])
 	for _, m := range re(`<ALTERID>\s*(\d+)`).FindAllStringSubmatch(x, -1) {
 		if v := toI64(m[1]); v > mx {
 			mx = v
 		}
 	}
-	st["last"] = mx
+	st["lastV"] = mx
 	if from < str(st["from"]) {
-		st["from"], st["checkYm"], st["openPending"], st["balMode"] = from, from[:6], true, "whole"
+		st["from"] = from
 	}
-	d, td := str(st["from"]), today()
-	for d <= td && exists(filepath.Join(dir, "days", d+".xml")) {
-		d = addDays(d, 1)
-	}
-	st["next"], st["phase"] = d, "check"
+	td := today()
 	for ym := from[:6]; ym <= to[:6]; ym = nextYm(ym) {
 		writeKeepMonth(dir, ym, st)
 	}
@@ -527,6 +492,8 @@ type keepRun struct {
 	once     bool
 	allDone  bool
 	told     map[string]bool
+	id       string       // this run (the deletion check resumes within it)
+	views    map[string]M // the cloud's view of each company, once a run
 }
 type keepBack struct {
 	n     int
@@ -602,53 +569,6 @@ type kled struct {
 	gstin, pan   string // 02-Oct-2026: for matching a bill's supplier to its ledger by GSTIN or PAN in FinCom
 }
 
-func keepLedgers(tc *TC, company string, port int, after int64) ([]kled, error) {
-	flt, sys := "", ""
-	if after > 0 {
-		flt = "<FILTERS>TDSDeskKeepLedNew</FILTERS>"
-		sys = fmt.Sprintf(`<SYSTEM TYPE="Formulae" NAME="TDSDeskKeepLedNew">$AlterID &gt; %d</SYSTEM>`, after)
-	}
-	x := "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TDSDeskKeepLed</ID></HEADER>" +
-		"<BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>" + esc(company) + "</SVCURRENTCOMPANY></STATICVARIABLES><TDL><TDLMESSAGE>" +
-		`<COLLECTION NAME="TDSDeskKeepLed" ISMODIFY="No"><TYPE>Ledger</TYPE><FETCH>GUID,ALTERID,NAME,PARENT,PARTYGSTIN,INCOMETAXNUMBER,LEDGSTREGDETAILS.LIST</FETCH>` + flt + "</COLLECTION>" + sys +
-		"</TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>"
-	raw, err := invokeTally(tc, port, x, 120)
-	if err != nil {
-		return nil, err
-	}
-	var out []kled
-	for _, l := range xmlDoc(raw).All("LEDGER") {
-		n, g := nameOf(l), strings.TrimSpace(nt(l, "GUID"))
-		if n != "" && g != "" {
-			gstin := strings.ToUpper(strings.TrimSpace(nt(l, "PARTYGSTIN")))
-			if gstin == "" {
-				gstin = strings.ToUpper(strings.TrimSpace(nt(l, "LEDGSTREGDETAILS.LIST/GSTIN")))
-			}
-			out = append(out, kled{g, toI64(re(`\D`).ReplaceAllString(nt(l, "ALTERID"), "")), n, nt(l, "PARENT"), gstin, strings.ToUpper(strings.TrimSpace(nt(l, "INCOMETAXNUMBER")))})
-		}
-	}
-	return out, nil
-}
-
-// Tally's groups, name and parent (a primary group's parent is empty)
-func keepGroups(tc *TC, company string, port int) ([][2]string, error) {
-	x := "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TDSDeskKeepGrp</ID></HEADER>" +
-		"<BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>" + esc(company) + "</SVCURRENTCOMPANY></STATICVARIABLES><TDL><TDLMESSAGE>" +
-		`<COLLECTION NAME="TDSDeskKeepGrp" ISMODIFY="No"><TYPE>Group</TYPE><FETCH>NAME,PARENT</FETCH></COLLECTION>` +
-		"</TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>"
-	raw, err := invokeTally(tc, port, x, 60)
-	if err != nil {
-		return nil, err
-	}
-	var out [][2]string
-	for _, g := range xmlDoc(raw).All("GROUP") {
-		if n := nameOf(g); n != "" {
-			out = append(out, [2]string{n, re(`^\W*Primary$`).ReplaceAllString(nt(g, "PARENT"), "")})
-		}
-	}
-	return out, nil
-}
-
 // a ledger renamed in Tally: the copy's entries carry the new name; nothing is asked of Tally for it
 func renameKeepLedger(dir string, st M, old, nw string) int {
 	ampx := func(s string) string { return strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;").Replace(s) }
@@ -676,455 +596,11 @@ func renameKeepLedger(dir string, st M, old, nw string) int {
 	return len(touched)
 }
 
-// ledger masters changed in Tally (new, renamed, opening or group changed): names put right, their opening read again
-func (k *keepRun) updateLedgers(company string, port int, dir string, st M, full bool) error {
-	lf := filepath.Join(dir, "ledgers.json")
-	known := map[string][]any{}
-	var order []string
-	for g, v := range obj(readJSONFile(lf)) {
-		known[g] = arr(v)
-		order = append(order, g)
-	}
-	first := len(known) == 0 || !(toI64(st["lastM"]) > 0)
-	after := toI64(st["lastM"])
-	// a copy made before 2.1.2 has no GSTIN or PAN with its ledgers: read every ledger once to fill them in (a light read)
-	ids := !first && !truthy(st["ledIds"])
-	if full || first || ids {
-		after = 0
-	}
-	ch, err := keepLedgers(k.tc, company, port, after)
-	if err != nil {
-		return err
-	}
-	type again struct{ name, was string }
-	var redo []again
-	idsChanged := false
-	seen := map[string]bool{}
-	for _, c := range ch {
-		seen[c.guid] = true
-		if c.alter > toI64(st["lastM"]) {
-			st["lastM"] = c.alter
-		}
-		kv, had := known[c.guid]
-		if first {
-			known[c.guid] = []any{c.name, c.parent, c.alter, c.gstin, c.pan}
-			continue
-		}
-		if had && toI64(kv[2]) == c.alter && str(kv[0]) == c.name {
-			if len(kv) < 5 || str(at(kv, 3)) != c.gstin || str(at(kv, 4)) != c.pan {
-				known[c.guid] = []any{c.name, c.parent, c.alter, c.gstin, c.pan}
-				idsChanged = true
-			}
-			continue
-		}
-		if had && str(kv[0]) != c.name {
-			renameKeepLedger(dir, st, str(kv[0]), c.name)
-			writeLog("Keeping " + company + ": ledger " + str(kv[0]) + " is now " + c.name)
-		}
-		known[c.guid] = []any{c.name, c.parent, c.alter, c.gstin, c.pan}
-		w := ""
-		if had {
-			w = str(kv[0])
-		}
-		redo = append(redo, again{c.name, w})
-	}
-	var gone []string
-	if full && !first {
-		for g, v := range known {
-			if !seen[g] {
-				gone = append(gone, str(v[0]))
-				delete(known, g)
-			}
-		}
-	}
-	if !first && (len(redo) > 0 || len(gone) > 0) {
-		bf := filepath.Join(dir, "balances.json")
-		if bal := readObjFile(bf); bal != nil {
-			rows := map[string]M{}
-			var rorder []string
-			for _, x := range arr(bal["ledgers"]) {
-				l := obj(x)
-				n := str(l["name"])
-				if _, ok := rows[n]; !ok {
-					rorder = append(rorder, n)
-				}
-				rows[n] = M{"name": n, "parent": str(l["parent"]), "open": str(l["open"]), "close": ""}
-			}
-			for _, x := range redo {
-				if x.was != "" && x.was != x.name {
-					delete(rows, x.was)
-				}
-			}
-			for _, n := range gone {
-				delete(rows, n)
-			}
-			var names []string
-			for _, x := range redo {
-				names = append(names, x.name)
-			}
-			// 2.1.3: only the ledgers changed in Tally have their opening read again, a batch at a time (02-Oct-2026: one
-			// changed ledger made 2.1.2 read every opening balance again in one request, 16:03)
-			size, min := keepBalSize(st), keepNum("KeepBalMin", 5)
-			for i := 0; i < len(names); {
-				chunk := names[i:minI(len(names), i+size)]
-				got, err := keepBalances(k.tc, company, port, chunk, str(bal["openAsOn"]))
-				if err != nil {
-					if !gaveWay(err) {
-						was := len(chunk)
-						size = maxI(min, was/2)
-						st["openSize"] = size
-						saveKeepState(dir, st)
-						return fmt.Errorf("the opening balances of %d changed ledger(s) did not come in a batch of %d ledgers (%s); the next try reads a batch of %d ledgers", len(names), was, err.Error(), size)
-					}
-					return err
-				}
-				for _, n := range chunk {
-					delete(rows, n)
-				}
-				for _, r := range got {
-					if _, ok := rows[r[0]]; !ok {
-						rorder = append(rorder, r[0])
-					}
-					rows[r[0]] = M{"name": r[0], "parent": r[1], "open": r[2], "close": ""}
-				}
-				i += len(chunk)
-			}
-			led := []any{}
-			done := map[string]bool{}
-			for _, n := range rorder {
-				if r, ok := rows[n]; ok && !done[n] {
-					led = append(led, r)
-					done[n] = true
-				}
-			}
-			bal["ledgers"] = led
-			_ = saveFile(bf, jsonText(bal))
-			setCloudLedgers(dir)
-			st["balAt"] = nowS()
-			msg := fmt.Sprintf("Keeping %s: %d ledger(s) changed in Tally", company, len(names))
-			if len(gone) > 0 {
-				msg += fmt.Sprintf(", %d no longer there", len(gone))
-			}
-			writeLog(msg + "; their opening read again")
-		}
-	}
-	o := M{}
-	for g, v := range known {
-		o[g] = v
-	}
-	_ = saveFile(lf, jsonText(o))
-	st["ledIds"] = true
-	if idsChanged {
-		setCloudLedgers(dir) // the ledgers go to FinCom's cloud again, now with their GSTIN and PAN
-		if ids {
-			writeLog("Keeping " + company + ": the ledgers' GSTIN and PAN read from Tally")
-		}
-	}
-	// the groups with every full look at the ledgers; the cloud sent the ledgers again whenever a name or a group differs
-	gf := filepath.Join(dir, "groups.json")
-	if full || first || !exists(gf) {
-		if grp, err := keepGroups(k.tc, company, port); err != nil {
-			if gaveWay(err) || isBusyErr(err) {
-				return err
-			}
-			writeLog("Keeping " + company + ": the groups could not be read this time (" + err.Error() + ")")
-		} else if len(grp) > 0 {
-			a := []any{}
-			for _, g := range grp {
-				a = append(a, []any{g[0], g[1]})
-			}
-			_ = saveFile(gf, jsonText(a))
-		}
-	}
-	var parts []string
-	for _, v := range known {
-		parts = append(parts, str(v[0])+">"+str(v[1]))
-	}
-	sort.Strings(parts)
-	if exists(gf) {
-		parts = append(parts, readText(gf))
-	}
-	h := sha256.Sum256([]byte(strings.Join(parts, "\n")))
-	sig := strings.ToUpper(hex.EncodeToString(h[:]))
-	sf := filepath.Join(dir, "cloud-ledgers.sig")
-	if sig != strings.TrimSpace(readText(sf)) {
-		setCloudLedgers(dir)
-		_ = saveFile(sf, sig)
-	}
-	return nil
-}
+// an entry FinCom posted and the read-back found: 2.1.5 brings it in with the change read that follows the posting (its
+// AlterID is above the last one held), so nothing is kept for it here any more
+func addPostedForCopy(company string, head M, xml string) {}
 
-// one month of the copy compared with Tally's list of entries, and the dates that differ read again; also notices when
-// Tally's change numbers have gone back (a backup restored): then the company is copied again
-func (k *keepRun) monthFix(company string, port int, dir string, st M, ym, td string) (int, error) {
-	mf := ym + "01"
-	if mf < str(st["from"]) {
-		mf = str(st["from"])
-	}
-	mt := monthEnd(ym)
-	if mt > td {
-		mt = td
-	}
-	if mf > mt {
-		return 0, nil
-	}
-	tl, err := keepList(k.tc, company, port, mf, mt, 0)
-	if err != nil {
-		return 0, err
-	}
-	h := keepHeld(dir, ym)
-	bad := map[string]bool{}
-	seen := map[string]bool{}
-	back := 0
-	var max int64
-	for _, e := range tl {
-		seen[e.guid] = true
-		if e.alter > max {
-			max = e.alter
-		}
-		x, ok := h[e.guid]
-		if !ok {
-			bad[e.date] = true
-		} else if x.alter != e.alter || x.date != e.date {
-			bad[e.date], bad[x.date] = true, true
-			if x.alter > e.alter {
-				back++
-			}
-		}
-	}
-	for g, x := range h {
-		if !seen[g] {
-			bad[x.date] = true
-		}
-	}
-	if back > 0 && str(st["phase"]) == "live" {
-		writeLog("Keeping " + company + ": Tally's change numbers have gone back (a backup restored or the data rewritten?); copying the company again, gently")
-		st["phase"], st["last"], st["next"], st["slice"], st["checkYm"] = "first", 0, st["from"], keepNum("KeepSliceDays", 1), str(st["from"])[:6]
-		st["openPending"], st["openIdx"], st["lastM"] = true, 0, 0 // the openings may differ too: read again, a batch at a time
-		return 0, nil
-	}
-	if max > toI64(st["last"]) && str(st["phase"]) != "live" {
-		st["last"] = max
-	}
-	if len(bad) > 0 {
-		var ds []string
-		for d := range bad {
-			ds = append(ds, d)
-		}
-		if _, err := k.updateDates(company, port, dir, st, ds); err != nil {
-			return len(bad), err
-		}
-		writeLog(fmt.Sprintf("Keeping %s: %s differed on %d date(s); read again", company, ym, len(bad)))
-	}
-	return len(bad), nil
-}
-
-// the opening balances, as FinCom reads them (balances.json), and on to the cloud
-func (k *keepRun) saveOpening(company string, port int, dir string, st M, rows [][3]string, asOn, td string) error {
-	led := []any{}
-	for _, r := range rows {
-		led = append(led, M{"name": r[0], "parent": r[1], "open": r[2], "close": ""})
-	}
-	bal := M{"ok": true, "company": company, "from": st["from"], "to": td, "openAsOn": asOn, "ledgers": led, "keep": true}
-	_ = saveFile(filepath.Join(dir, "balances.json"), jsonText(bal))
-	setCloudLedgers(dir)
-	st["balAt"] = nowS()
-	st["lastM"] = 0
-	err := k.updateLedgers(company, port, dir, st, false) // the ledgers' own numbers, to follow renames and changes
-	writeLog(fmt.Sprintf("Keeping %s: opening balances read (%d ledgers)", company, len(led)))
-	return err
-}
-
-// how many ledgers' opening balances one request asks for: KeepBalBatch (50) to start, halved after a failure down to
-// KeepBalMin (5), doubled while Tally answers quickly up to KeepBalMax (150); kept in the copy's state
-func keepBalSize(st M) int {
-	size := toInt(st["openSize"])
-	if size <= 0 {
-		size = keepNum("KeepBalBatch", 50)
-	}
-	return maxI(keepNum("KeepBalMin", 5), minI(size, keepNum("KeepBalMax", 150)))
-}
-
-// The opening balances (as on the day before the copy starts), a batch of ledgers at a time (2.1.3; 2.1.2 read every
-// one in one request that could hold Tally 15 minutes). Each batch is saved as it comes (open-part.json, openIdx), so a
-// failure, a posting that goes first, or a restart never throws the work away: the next try starts at the first ledger
-// not read yet. After a failure the next batch is half the size. true: every opening balance is in
-func (k *keepRun) readOpening(company string, port int, dir string, st M, td string, inBudget func() bool) (bool, error) {
-	asOn := addDays(str(st["from"]), -1)
-	nf, pf := filepath.Join(dir, "open-names.json"), filepath.Join(dir, "open-part.json")
-	var names []string
-	if toInt(st["openIdx"]) > 0 && exists(nf) {
-		names = strs(readJSONFile(nf))
-	}
-	if len(names) == 0 {
-		// the ledgers' names once (a light read: names and groups, no balances), kept for the batches that follow
-		ln, err := getLedgerNames(k.tc, company, port)
-		if err != nil {
-			return false, err
-		}
-		for _, x := range arr(ln["ledgers"]) {
-			if n := str(at(arr(x), 0)); n != "" {
-				names = append(names, n)
-			}
-		}
-		names = uniqSorted(names)
-		_ = saveFile(nf, jsonText(toAny(names)))
-		_ = os.Remove(pf)
-		st["openIdx"] = 0
-	}
-	var got [][3]string
-	if toInt(st["openIdx"]) > 0 {
-		for _, x := range arr(readJSONFile(pf)) {
-			if a := arr(x); len(a) >= 3 {
-				got = append(got, [3]string{str(a[0]), str(a[1]), str(a[2])})
-			}
-		}
-	}
-	size, min, max := keepBalSize(st), keepNum("KeepBalMin", 5), keepNum("KeepBalMax", 150)
-	for toInt(st["openIdx"]) < len(names) && inBudget() {
-		if keepHold() != "" {
-			return false, nil
-		}
-		i0 := toInt(st["openIdx"])
-		chunk := names[i0:minI(len(names), i0+size)]
-		writeLog(fmt.Sprintf("Keeping %s: opening balances, batch of %d ledgers (%d-%d of %d)", company, len(chunk), i0+1, i0+len(chunk), len(names)))
-		tt := time.Now()
-		rows, err := keepBalances(k.tc, company, port, chunk, asOn)
-		if err != nil {
-			if gaveWay(err) {
-				return false, err // the same batch again when Tally is free; nothing is lost
-			}
-			size = maxI(min, len(chunk)/2)
-			st["openSize"] = size
-			saveKeepState(dir, st)
-			return false, fmt.Errorf("the opening balances of a batch of %d ledgers did not come (%s); %d of %d are kept, and the next try reads a batch of %d ledgers from ledger %d", len(chunk), err.Error(), i0, len(names), size, i0+1)
-		}
-		got = append(got, rows...)
-		a := []any{}
-		for _, g := range got {
-			a = append(a, []any{g[0], g[1], g[2]})
-		}
-		_ = saveFile(pf, jsonText(a))
-		st["openIdx"] = i0 + len(chunk)
-		took, aim := time.Since(tt).Seconds(), keepTargetSec()
-		if took > aim {
-			size = maxI(min, size/2)
-		} else if took < aim/3 {
-			size = minI(max, size*2)
-		}
-		st["openSize"] = size
-		st["at"] = nowS()
-		saveKeepState(dir, st)
-		keepRest(time.Duration(math.Max(1000, took*1500)) * time.Millisecond)
-	}
-	if toInt(st["openIdx"]) < len(names) {
-		return false, nil
-	}
-	if err := k.saveOpening(company, port, dir, st, got, asOn, td); err != nil {
-		return false, err
-	}
-	st["openIdx"], st["openPending"], st["balMode"] = 0, false, "batch"
-	_ = os.Remove(pf)
-	_ = os.Remove(nf)
-	return true, nil
-}
-
-// an entry FinCom posted and the read-back found (with its GUID and change number): noted for the copier, which puts it
-// into the copy and sends its day to the cloud without reading the day from Tally
-func addPostedForCopy(company string, head M, xml string) {
-	g, a, d := str(head["guid"]), strings.TrimSpace(str(head["alter"])), str(head["date"])
-	if g == "" || !re(`^\d+$`).MatchString(a) || !isTallyDate(d) || xml == "" {
-		return
-	}
-	dir := syncFolder(company)
-	if !exists(filepath.Join(dir, "keep.json")) {
-		return
-	}
-	_ = appendText(filepath.Join(dir, "posted-in.jsonl"), jsonText(M{"guid": g, "alter": toI64(a), "date": d, "number": str(head["number"]), "type": str(head["type"]), "xml": xml})+"\n")
-}
-func useKeepPosted(dir string, st M) int {
-	f := filepath.Join(dir, "posted-in.jsonl")
-	if !exists(f) {
-		return 0
-	}
-	w := filepath.Join(dir, fmt.Sprintf("posted-in.%d.work", time.Now().UnixNano()))
-	if os.Rename(f, w) != nil {
-		return 0
-	}
-	days := filepath.Join(dir, "days")
-	_ = os.MkdirAll(days, 0o755)
-	where := keepWhere(dir)
-	touched := map[string]bool{}
-	n := 0
-	for _, ln := range strings.Split(readText(w), "\n") {
-		if strings.TrimSpace(ln) == "" {
-			continue
-		}
-		e := parseObj(ln)
-		if e == nil || str(e["date"]) < str(st["from"]) {
-			continue
-		}
-		x := strings.TrimSpace(str(e["xml"]))
-		open := re(`^<VOUCHER\b[^>]*>`).FindString(x)
-		if open == "" {
-			continue
-		}
-		if !strings.Contains(open, "VCHTYPE=") && str(e["type"]) != "" {
-			open = `<VOUCHER VCHTYPE="` + esc(str(e["type"])) + `"` + strings.TrimPrefix(open, "<VOUCHER")
-		}
-		rest := x[len(re(`^<VOUCHER\b[^>]*>`).FindString(x)):]
-		rest = re(`<GUID>[^<]*</GUID>`).ReplaceAllString(rest, "")
-		rest = re(`<ALTERID>[^<]*</ALTERID>`).ReplaceAllString(rest, "")
-		rest = re(`<VOUCHERNUMBER>[^<]*</VOUCHERNUMBER>`).ReplaceAllString(rest, "")
-		if loc := re(`<DATE>[^<]*</DATE>`).FindStringIndex(rest); loc != nil {
-			rest = rest[:loc[0]] + "<DATE>" + str(e["date"]) + "</DATE>" + rest[loc[1]:]
-		}
-		v := open + "<GUID>" + esc(str(e["guid"])) + "</GUID><ALTERID> " + fmt.Sprint(toI64(e["alter"])) + "</ALTERID>"
-		if str(e["number"]) != "" {
-			v += "<VOUCHERNUMBER>" + esc(str(e["number"])) + "</VOUCHERNUMBER>"
-		}
-		v += rest
-		tag := "<GUID>" + esc(str(e["guid"])) + "</GUID>"
-		for _, day := range uniqSorted([]string{str(e["date"]), whereGet(where, str(e["guid"]))}) {
-			df := filepath.Join(days, day+".xml")
-			t := readText(df)
-			var keep strings.Builder
-			for _, pc := range re(`<TALLYMESSAGE>[\s\S]*?</TALLYMESSAGE>`).FindAllString(t, -1) {
-				if !strings.Contains(pc, tag) {
-					keep.WriteString(pc)
-				}
-			}
-			if day == str(e["date"]) {
-				keep.WriteString("<TALLYMESSAGE>" + v + "</TALLYMESSAGE>")
-			}
-			t2 := keep.String()
-			_ = saveFile(df, t2)
-			_ = saveFile(strings.TrimSuffix(df, ".xml")+".idx", indexText(t2))
-			touched[day] = true
-		}
-		whereMu.Lock()
-		where[str(e["guid"])] = str(e["date"])
-		whereMu.Unlock()
-		st["verify"] = toAny(uniqSorted(append(strs(st["verify"]), str(e["date"]))))
-		n++
-	}
-	_ = os.Remove(w)
-	if len(touched) > 0 {
-		var ds []string
-		yms := map[string]bool{}
-		for d := range touched {
-			ds = append(ds, d)
-			yms[d[:6]] = true
-		}
-		addCloudDays(dir, ds)
-		for ym := range yms {
-			writeKeepMonth(dir, ym, st)
-		}
-	}
-	return n
-}
-
-// one turn for one open company: at most a few seconds of Tally's time, with pauses between reads
+// --- one turn for one open company: at most a few seconds of Tally's time, small requests, each saved as it comes
 func (k *keepRun) step(company string, port int, booksFrom string) error {
 	keepMu.Lock()
 	defer keepMu.Unlock()
@@ -1132,33 +608,7 @@ func (k *keepRun) step(company string, port int, booksFrom string) error {
 	_ = os.MkdirAll(dir, 0o755)
 	td := today()
 	st := readKeepState(dir)
-	if st == nil && keepMode(company) != "bridge" {
-		wf := filepath.Join(dir, "waiting.txt")
-		if !exists(wf) {
-			_ = saveFile(wf, nowS())
-			writeLog("Keeping " + company + " in step: waiting for the day book files from FinCom (Books, From Tally); Tally is not read for the year")
-		}
-		return nil
-	}
-	if st == nil {
-		from := tallyDate(fyStart(time.Now()))
-		if v := cfgS("KeepFrom"); re(`^\d{8}$`).MatchString(v) {
-			from = v
-		}
-		if re(`^\d{8}$`).MatchString(booksFrom) && booksFrom > from {
-			from = booksFrom
-		}
-		st = M{"company": company, "from": from, "next": from, "slice": keepNum("KeepSliceDays", 1), "phase": "open", "openIdx": 0, "last": 0, "lastM": 0, "checkYm": "", "months": M{}, "cycle": 0, "skipped": []any{}, "dayFail": 0}
-		writeLog("Keeping " + company + " in step with FinCom: first copy from " + from)
-	}
 	k.caughtUp = false
-	if k.light && str(st["phase"]) != "live" {
-		k.caughtUp = true // the first copy waits for the daily update
-		return nil
-	}
-	// 2.1.3: no "quiet time" is guessed any more (02-Oct-2026: one was "found" at 15:02 and 16:03 on a working day,
-	// from nobody touching this computer's keyboard): the first copy is made by the nightly catch-up or Update now
-	st["cycle"] = toInt(st["cycle"]) + 1
 	budget := time.Duration(keepNum("KeepBudgetSec", 20)) * time.Second
 	t0 := time.Now()
 	inBudget := func() bool { return time.Since(t0) < budget }
@@ -1167,336 +617,264 @@ func (k *keepRun) step(company string, port int, booksFrom string) error {
 		saveKeepState(dir, st)
 		writeKeepManifest(dir, st, td)
 	}
-	phase := func() string { return str(st["phase"]) }
-
-	if phase() == "open" {
-		// opening balances on the day before the copy starts, a batch of ledgers at a time
-		done, err := k.readOpening(company, port, dir, st, td, inBudget)
-		if err != nil {
-			return err
-		}
-		if done {
-			if str(st["next"]) > td {
-				st["phase"] = "check"
-			} else {
-				st["phase"] = "first"
-			}
-		}
-		save()
-		if phase() == "open" {
-			return nil
-		}
-	}
-	// a copy whose openings were left for "a quiet time" by 2.1.2 (balMode whole): read now, a batch at a time, and
-	// only these once: after that only the ledgers changed in Tally have their opening read again
-	if truthy(st["openPending"]) && !k.light {
-		done, err := k.readOpening(company, port, dir, st, td, inBudget)
-		if err != nil {
-			return err
-		}
-		save()
-		if !done {
-			return nil
-		}
-	}
-	if phase() == "first" {
-		// the year's day book, a few days at a time; smaller steps when Tally is slow, bigger when it is quick
-		for str(st["next"]) <= td && inBudget() && keepRoom(port) && keepHold() == "" {
-			f := str(st["next"])
-			t := addDays(f, toInt(st["slice"])-1)
-			if t > td {
-				t = td
-			}
-			sec, _, err := copyKeepDays(k.tc, company, port, dir, f, t)
-			if err != nil && gaveWay(err) {
-				return err // the same days again when Tally is free
-			}
-			if err != nil {
-				why := err.Error()
-				if toInt(st["slice"]) > 1 {
-					st["slice"] = maxI(1, toInt(st["slice"])/2)
-					save()
-					return fmt.Errorf("Tally did not give %s-%s (%s); next time a smaller step", f, t, why)
-				}
-				st["dayFail"] = toInt(st["dayFail"]) + 1
-				if toInt(st["dayFail"]) >= 3 {
-					addKeepSkipped(st, f)
-					st["next"], st["dayFail"] = addDays(f, 1), 0
-					save()
-					writeLog("Keeping " + company + ": Tally could not give " + f + " after 3 tries (" + why + "); going on, and trying that day again later")
-					return nil
-				}
-				save()
-				return fmt.Errorf("Tally did not give %s (%s); try %d of 3", f, why, toInt(st["dayFail"]))
-			}
-			st["dayFail"] = 0
-			aim := keepTargetSec()
-			if sec > aim && toInt(st["slice"]) > 1 {
-				st["slice"] = maxI(1, toInt(st["slice"])/2)
-			} else if sec < aim/3 && toInt(st["slice"]) < 31 {
-				st["slice"] = minI(31, toInt(st["slice"])*2)
-			}
-			writeKeepMonth(dir, f[:6], st)
-			if t[:6] != f[:6] {
-				writeKeepMonth(dir, t[:6], st)
-			}
-			st["next"] = addDays(t, 1)
-			save()
-			keepRest(time.Duration(math.Max(2000, sec*1500)) * time.Millisecond)
-		}
-		if str(st["next"]) > td {
-			st["phase"], st["checkYm"] = "check", str(st["from"])[:6]
-			writeLog("Keeping " + company + ": first copy done; checking it month by month")
-		}
-		st["trouble"] = nil
-		save()
+	cv := k.cloudView(company)
+	st = k.begin(company, dir, st, booksFrom, cv)
+	if st == nil {
+		k.caughtUp = true // waiting: nothing to read for it now
 		return nil
 	}
-	// entries just posted from FinCom: into the copy and on to the cloud, without reading Tally
-	if phase() == "live" {
-		if pn := useKeepPosted(dir, st); pn > 0 {
-			writeLog(fmt.Sprintf("Keeping %s: %d entries posted from FinCom put in the copy and sent to the cloud (Tally not read)", company, pn))
-			save()
-		}
+	_ = os.Remove(filepath.Join(dir, "posted-in.jsonl")) // 2.1.4's note of entries posted: the change read brings them
+	// the cloud holds a later AlterID (the day book given to FinCom from Tally's files after this copy was made): from there
+	if cv != nil && str(st["phase"]) == "live" && toI64(cv["lastV"]) > toI64(st["lastV"]) {
+		st["lastV"] = toI64(cv["lastV"])
 	}
-	// a new day: the days since the last turn
-	if str(st["next"]) <= td {
-		if _, err := k.updateDates(company, port, dir, st, dayRange(str(st["next"]), td)); err != nil {
-			return err
-		}
-		st["next"] = addDays(td, 1)
-	}
-	// Tally's own change counters first: when neither has moved, nothing changed in the company
-	cnOK, cv, cm := false, int64(0), int64(0)
-	if phase() == "live" {
-		ok, v, m, err := keepCounters(k.tc, company, port)
-		if err != nil && (gaveWay(err) || isBusyErr(err)) {
-			return err // Tally not answering even this tiny request: left alone, nothing more is asked
-		}
-		if err == nil {
-			cnOK, cv, cm = ok, v, m
-		}
-	}
-	hasCV := st["cv"] != nil
-	quiet := cnOK && hasCV && toI64(st["cv"]) == cv && toI64(st["cm"]) == cm
-	if cnOK && hasCV && cv < toI64(st["cv"]) {
-		writeLog("Keeping " + company + ": Tally's change numbers have gone back (a backup restored or the data rewritten?); copying the company again, gently")
-		st["phase"], st["last"], st["next"], st["slice"], st["checkYm"], st["cv"], st["cm"] = "first", 0, st["from"], keepNum("KeepSliceDays", 1), str(st["from"])[:6], nil, nil
-		st["openPending"], st["openIdx"], st["lastM"] = true, 0, 0 // the openings may differ too: read again, a batch at a time
-		save()
+	if k.light && str(st["phase"]) != "live" {
+		k.caughtUp = true // the baseline is read by Update now or the nightly run, never by a light update
 		return nil
 	}
-	st["counters"] = cnOK
-	// entries changed since the last change number seen: their dates now, and where the copy had them before
-	var ch []kentry
-	if phase() == "live" && toI64(st["last"]) > 0 && !quiet {
-		rf := time.Now().AddDate(0, -2, 0).Format("200601") + "01"
-		if rf < str(st["from"]) {
-			rf = str(st["from"])
-		}
-		var err error
-		if ch, err = keepList(k.tc, company, port, rf, td, toI64(st["last"])); err != nil {
-			return err
-		}
-		wide := false
-		if cnOK {
-			mx := toI64(st["last"])
-			for _, c := range ch {
-				if c.alter > mx {
-					mx = c.alter
-				}
-			}
-			wide = mx < cv && rf > str(st["from"])
-		} else if rf > str(st["from"]) && toInt(st["cycle"])%keepNum("KeepCheckEvery", 5) == 0 {
-			wide = true
-		}
-		if wide && keepRoom(port) {
-			if ch, err = keepList(k.tc, company, port, str(st["from"]), td, toI64(st["last"])); err != nil {
+	if str(st["phase"]) == "base" {
+		err := k.baseStep(company, port, dir, st, td, inBudget)
+		save()
+		return err
+	}
+	// "Re-read these", asked in FinCom after the night's check: those days from the day book, the masters again
+	if rr := obj(cv["reread"]); rr != nil && !k.light && !k.told["rr:"+company] {
+		k.told["rr:"+company] = true
+		days := uniqSorted(strs(rr["days"]))
+		if len(days) > 0 {
+			if _, err := k.updateDates(company, port, dir, st, days); err != nil {
 				return err
 			}
 		}
-		if len(ch) > 0 {
-			where := keepWhere(dir)
-			ix := map[string]map[string]int64{}
-			var need []kentry
-			for _, c := range ch {
-				o := whereGet(where, c.guid)
-				if o != "" && o == c.date {
-					if _, ok := ix[o]; !ok {
-						m := map[string]int64{}
-						if f := filepath.Join(dir, "days", o+".xml"); exists(f) {
-							for _, ln := range strings.Split(readKeepIndex(f), "\n") {
-								q := strings.Split(ln, "\t")
-								if q[0] != "" && len(q) > 1 {
-									m[q[0]] = toI64(q[1])
-								}
-							}
-						}
-						ix[o] = m
-					}
-					if a, ok := ix[o][c.guid]; ok && a == c.alter {
-						continue
-					}
-				}
-				need = append(need, c)
-			}
-			var dates []string
-			for _, c := range need {
-				dates = append(dates, c.date)
-				if o := whereGet(where, c.guid); o != "" && o != c.date {
-					dates = append(dates, o)
-				}
-			}
-			dates = uniqSorted(dates)
-			if len(dates) > 0 {
-				if _, err := k.updateDates(company, port, dir, st, dates); err != nil {
-					return err
-				}
-			}
-			var mx int64
-			for _, c := range ch {
-				if c.alter > mx {
-					mx = c.alter
-				}
-			}
-			st["last"] = mx
-			if len(dates) > 0 {
-				writeLog(fmt.Sprintf("Keeping %s: %d changed entries on %d dates brought in", company, len(ch), len(dates)))
-			} else {
-				writeLog(fmt.Sprintf("Keeping %s: %d changed entries, already in the copy", company, len(ch)))
-			}
+		if truthy(rr["masters"]) {
+			st["mL"], st["mG"] = 0, 0
 		}
-		// the counter moved but no entry has a newer change number: most likely an entry was deleted
-		if cnOK && len(ch) == 0 && cv != toI64(st["cv"]) && hasCV {
-			for _, ym := range []string{td[:6], time.Now().AddDate(0, -1, 0).Format("200601")} {
-				if ym >= str(st["from"])[:6] && keepRoom(port) {
-					if _, err := k.monthFix(company, port, dir, st, ym, td); err != nil {
-						return err
-					}
-				}
-			}
+		writeLog(fmt.Sprintf("Keeping %s: read again as asked in FinCom (Re-read these): %d day(s)%s", company, len(days), map[bool]string{true: " and the masters", false: ""}[truthy(rr["masters"])]))
+		queueCloudSync(dir, st, M{"rereadDone": str(rr["at"])})
+		save()
+	}
+	// Tally's own change counters: one tiny request; nothing more when neither moved
+	ok, tv, tm, err := keepCounters(k.tc, company, port)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		tv, tm = 0, 0 // a Tally that does not say them: one change read after the last held, without an upper end
+	}
+	if ok && (tv < toI64(st["lastV"]) || tm < toI64(st["lastM"])) {
+		writeLog(fmt.Sprintf("Keeping %s: Tally's change numbers have gone back (%d < %d; a backup restored?); reading from Tally's numbers on, and the days are checked against Tally's lists", company, tv, toI64(st["lastV"])))
+		st["lastV"], st["lastM"], st["dcRun"] = tv, tm, ""
+		delete(st, "mL")
+		delete(st, "mG")
+		queueCloudSync(dir, st, M{"reset": true})
+	}
+	// masters changed (or asked again)
+	if tm > toI64(st["lastM"]) || st["mL"] != nil || (!ok && k.kind != "light") {
+		upto := tm
+		if !ok {
+			upto = toI64(st["lastM"])
 		}
-	}
-	// nothing changed since the last look: up to date for today's run (the daily update also checks a whole round of months)
-	if phase() == "live" && (quiet || len(ch) == 0) && (!k.once || (str(st["roundFrom"]) == td && str(st["roundAt"]) == td)) {
-		k.caughtUp = true
-	}
-	// ledger masters changed since the last look
-	if phase() == "live" && inBudget() && !(cnOK && st["cm"] != nil && toI64(st["cm"]) == cm) {
-		if err := k.updateLedgers(company, port, dir, st, false); err != nil {
+		done, err := k.mstChanges(company, port, dir, st, upto, false, inBudget)
+		if err != nil {
 			return err
 		}
-	} else if phase() == "live" && inBudget() && !exists(filepath.Join(dir, "groups.json")) {
-		if err := k.updateLedgers(company, port, dir, st, true); err != nil {
-			return err
+		if !done {
+			save()
+			return nil
 		}
 	}
-	// a run someone asked for (Update now, Send ledgers and groups now) reads every ledger and group once
-	nowAsk := strings.TrimSpace(readText(sp("keep-now.txt")))
-	kwMu.Lock()
-	sent := ledSent[company]
-	kwMu.Unlock()
-	if phase() == "live" && nowAsk != "" && sent != nowAsk && inBudget() {
-		kwMu.Lock()
-		ledSent[company] = nowAsk
-		kwMu.Unlock()
-		if err := k.updateLedgers(company, port, dir, st, true); err != nil {
+	// entries changed: about 200 a request, on to Tally's own last number
+	if tv > toI64(st["lastV"]) || !ok {
+		done, err := k.vchChanges(company, port, dir, st, tv, inBudget)
+		if err != nil {
 			return err
 		}
-		_ = os.Remove(filepath.Join(dir, "cloud-ledgers.sig"))
-		setCloudLedgers(dir)
-		writeLog("Keeping " + company + ": every ledger and group read from Tally, to go to the cloud")
+		if !done {
+			save()
+			return nil
+		}
 	}
-	if cnOK {
-		st["cv"], st["cm"] = cv, cm
+	// days whose entries came without their lines: read again from the day book
+	if rd := strs(st["redo"]); len(rd) > 0 {
+		if _, err := k.updateDates(company, port, dir, st, rd); err != nil {
+			return err
+		}
+		st["redo"] = []any{}
 	}
-	// the light check stops here: the month checks and the retries wait for the daily update
+	st["next"] = addDays(td, 1)
 	if k.light {
 		st["trouble"] = nil
 		save()
 		k.caughtUp = true
 		return nil
 	}
-	// the days posted from FinCom read once from Tally, so the copy is exactly as Tally keeps them
-	if vd := strs(st["verify"]); len(vd) > 0 && inBudget() {
-		if _, err := k.updateDates(company, port, dir, st, vd); err != nil {
+	// Update now and the nightly run: deleted entries, by each day's ids and count against the cloud's
+	done, err := k.windowCheck(company, port, dir, st, inBudget)
+	if err != nil {
+		save()
+		return err
+	}
+	if !done {
+		save()
+		return nil
+	}
+	// the night's totals check, only when switched on (off by default: Tally works out every ledger for it)
+	if k.kind == "nightly" && cfgB("NightlyTotals") && !k.told["tot:"+company] {
+		k.told["tot:"+company] = true
+		if err := k.nightTotals(company, port, dir, st); err != nil {
+			save()
 			return err
-		}
-		st["verify"] = []any{}
-		writeLog(fmt.Sprintf("Keeping %s: %d day(s) posted from FinCom read as Tally keeps them", company, len(vd)))
-	}
-	// a month FinCom asked to be checked, now
-	rq := filepath.Join(dir, "recheck.txt")
-	if exists(rq) && inBudget() {
-		want := strings.TrimSpace(readText(rq))
-		_ = os.WriteFile(rq, nil, 0o644)
-		if re(`^\d{6}$`).MatchString(want) {
-			if _, err := k.monthFix(company, port, dir, st, want, td); err != nil {
-				return err
-			}
-		}
-	}
-	// deleted entries leave no change number, so months are compared with Tally's list: this month often, others in turn
-	every := keepNum("KeepCheckEvery", 5)
-	if phase() == "check" {
-		every = 1
-	}
-	nowEvery := keepNum("KeepNowEvery", 2)
-	if quiet {
-		every, nowEvery = every*3, nowEvery*3
-	}
-	if k.once {
-		every = 1
-	}
-	if inBudget() && keepRoom(port) {
-		if toInt(st["cycle"])%every == 0 {
-			ym := str(st["checkYm"])
-			if ym == "" {
-				ym = str(st["from"])[:6]
-			}
-			if ym == str(st["from"])[:6] {
-				st["roundFrom"] = td
-			}
-			if _, err := k.monthFix(company, port, dir, st, ym, td); err != nil {
-				return err
-			}
-			if str(st["checkYm"]) == ym {
-				nx := nextYm(ym)
-				if nx > td[:6] {
-					nx = str(st["from"])[:6]
-					if str(st["roundFrom"]) == td {
-						st["roundAt"] = td
-					}
-					if phase() == "check" {
-						st["phase"] = "live"
-						writeLog("Keeping " + company + ": in step with Tally")
-					}
-					if phase() == "live" && inBudget() {
-						if err := k.updateLedgers(company, port, dir, st, true); err != nil { // once a round: ledgers no longer in Tally
-							return err
-						}
-					}
-				}
-				st["checkYm"] = nx
-			}
-		} else if phase() == "live" && toInt(st["cycle"])%nowEvery == 0 {
-			if _, err := k.monthFix(company, port, dir, st, td[:6], td); err != nil {
-				return err
-			}
-		}
-	}
-	// days Tally could not give before: one more try now and then
-	if sk := strs(st["skipped"]); phase() == "live" && len(sk) > 0 && toInt(st["cycle"])%every == 1 && inBudget() {
-		d := sk[0]
-		if _, err := k.updateDates(company, port, dir, st, []string{d}); err != nil {
-			return err
-		}
-		if !contains(strs(st["skipped"]), d) {
-			writeLog("Keeping " + company + ": " + d + " read now")
 		}
 	}
 	st["trouble"] = nil
 	save()
+	k.caughtUp = true
+	return nil
+}
+
+// the copy's state at the start of a run: a 2.1.4 copy carried on, the cloud's baseline taken, or a baseline begun
+func (k *keepRun) begin(company, dir string, st M, booksFrom string, cv M) M {
+	if st != nil && str(st["phase"]) == "live" {
+		if st["lastV"] == nil { // a copy made by 2.1.4: its numbers carried on, its openings never read again
+			st["lastV"] = toI64(st["last"])
+			st["localDays"] = exists(filepath.Join(dir, "balances.json")) && !truthy(st["openPending"])
+			delete(st, "openPending")
+			delete(st, "openIdx")
+			delete(st, "openSize")
+			delete(st, "verify")
+			saveKeepState(dir, st)
+		}
+		return st
+	}
+	if st != nil && str(st["phase"]) == "base" {
+		return st
+	}
+	// FinCom's cloud holds the books already (given from Tally's files, or sent before): that is the baseline
+	if cloudHasBaseline(cv) {
+		n := M{"company": company, "from": str(cv["from"]), "next": addDays(today(), 1), "phase": "live", "lastV": toI64(cv["lastV"]), "lastM": 0,
+			"mL": 0, "mG": 0, "localDays": false, "months": M{}, "skipped": []any{}, "slice": 1, "fromCloud": true}
+		if cv["lastM"] != nil {
+			n["lastM"] = toI64(cv["lastM"])
+			delete(n, "mL")
+			delete(n, "mG")
+		}
+		saveKeepState(dir, n)
+		writeLog(fmt.Sprintf("Keeping %s in step: FinCom's cloud holds its books from %s (entries to AlterID %d); only what changed in Tally since is read", company, str(cv["from"]), toI64(cv["lastV"])))
+		return n
+	}
+	// a baseline: from the day the books begin in Tally (the ledger masters' stored openings are as on the day before)
+	from := ""
+	if isTallyDate(booksFrom) {
+		from = booksFrom
+	} else if v := cfgS("KeepFrom"); isTallyDate(v) {
+		from = v
+	} else {
+		from = tallyDate(fyStart(time.Now()))
+	}
+	if b := obj(cv["base"]); b != nil && str(b["phase"]) == "base" && str(b["from"]) == from && isTallyDate(str(b["next"])) {
+		// a baseline begun before (this computer's copy lost): its days are in the cloud up to where it stopped
+		n := M{"company": company, "from": from, "next": str(b["next"]), "phase": "base", "slice": 31, "lastV": 0, "lastM": 0, "localDays": false, "months": M{}, "skipped": []any{}}
+		saveKeepState(dir, n)
+		writeLog("Keeping " + company + " in step: the baseline goes on from " + str(b["next"]) + " (kept in FinCom's cloud)")
+		return n
+	}
+	n := M{"company": company, "from": from, "next": from, "phase": "base", "slice": 31, "lastV": 0, "lastM": 0, "localDays": true, "months": M{}, "skipped": []any{}, "dayFail": 0}
+	if st != nil && toInt(st["slice"]) > 0 && str(st["from"]) == from && isTallyDate(str(st["next"])) && str(st["phase"]) == "first" {
+		n["next"] = st["next"] // 2.1.4's first copy from the same day: its days are kept
+	}
+	saveKeepState(dir, n)
+	writeLog("Keeping " + company + " in step: baseline from " + from + " (the day the books begin in Tally): the masters with their stored openings, then the day book a month a request")
+	return n
+}
+
+// the baseline, a turn at a time: the counters noted at its start, the masters, then the day book a slice (a month,
+// smaller after a slice that did not answer) at a time, each saved; it goes on from the last slice saved
+func (k *keepRun) baseStep(company string, port int, dir string, st M, td string, inBudget func() bool) error {
+	if st["base0V"] == nil {
+		ok, cv, cm, err := keepCounters(k.tc, company, port)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			cv, cm = 0, 0
+		}
+		st["base0V"], st["base0M"] = cv, cm
+		saveKeepState(dir, st)
+	}
+	if !truthy(st["baseMasters"]) {
+		done, err := k.mstChanges(company, port, dir, st, toI64(st["base0M"]), true, inBudget)
+		if err != nil || !done {
+			return err
+		}
+		st["baseMasters"] = true
+		saveKeepState(dir, st)
+	}
+	maxSeen := toI64(st["baseMaxV"])
+	for str(st["next"]) <= td && inBudget() && keepHold() == "" {
+		f := str(st["next"])
+		sl := maxI(1, minI(31, toInt(st["slice"])))
+		t := addDays(f, sl-1)
+		if e := monthEnd(f[:6]); t > e {
+			t = e // a slice never crosses a month's end
+		}
+		if t > td {
+			t = td
+		}
+		t1 := time.Now()
+		x, err := getDayBookXML(k.tc, company, f, t, port)
+		if err != nil {
+			if gaveWay(err) {
+				return err
+			}
+			if sl > 1 {
+				st["slice"] = maxI(1, sl/2)
+				saveKeepState(dir, st)
+				return fmt.Errorf("Tally did not give %s-%s (%s); the next try reads %d day(s) from %s", f, t, err.Error(), toInt(st["slice"]), f)
+			}
+			st["dayFail"] = toInt(st["dayFail"]) + 1
+			if toInt(st["dayFail"]) >= 3 {
+				addKeepSkipped(st, f)
+				st["next"], st["dayFail"] = addDays(f, 1), 0
+				saveKeepState(dir, st)
+				return fmt.Errorf("Tally could not give %s after 3 tries (%s); going on from the next day, that day tried again later", f, err.Error())
+			}
+			saveKeepState(dir, st)
+			return fmt.Errorf("Tally did not give %s (%s); try %d of 3", f, err.Error(), toInt(st["dayFail"]))
+		}
+		sec := time.Since(t1).Seconds()
+		n := saveKeepDays(dir, f, t, x)
+		for _, m := range re(`<ALTERID>\s*(\d+)`).FindAllStringSubmatch(x, -1) {
+			if v := toI64(m[1]); v > maxSeen {
+				maxSeen = v
+			}
+		}
+		writeKeepMonth(dir, f[:6], st)
+		st["next"], st["dayFail"], st["baseMaxV"] = addDays(t, 1), 0, maxSeen
+		if aim := keepTargetSec(); sec < aim/3 && sl < 31 {
+			st["slice"] = minI(31, sl*2)
+		} else if sec > aim && sl > 1 {
+			st["slice"] = maxI(1, sl/2)
+		}
+		st["at"] = nowS()
+		saveKeepState(dir, st)
+		queueCloudSync(dir, st, M{"base": M{"phase": "base", "from": st["from"], "next": st["next"]}})
+		writeLog(fmt.Sprintf("Keeping %s: baseline %s-%s, %d entries (%.1fs); saved", company, f, t, n, sec))
+		keepRest(time.Duration(math.Max(1000, sec*1500)) * time.Millisecond)
+	}
+	if str(st["next"]) <= td {
+		return nil
+	}
+	// done: from here only changes. The entries changed while the baseline was read are read again by AlterID
+	lastV := toI64(st["base0V"])
+	if lastV <= 0 {
+		lastV = maxSeen
+	}
+	st["phase"], st["lastV"], st["lastM"] = "live", lastV, toI64(st["base0M"])
+	for _, f := range []string{"base0V", "base0M", "baseMasters", "baseMaxV", "dayFail"} {
+		delete(st, f)
+	}
+	queueCloudSync(dir, st, M{"base": M{"phase": "live", "from": st["from"], "next": st["next"]}})
+	writeLog(fmt.Sprintf("Keeping %s: baseline done (from %s); from now on only what changed in Tally (AlterID above %d)", company, str(st["from"]), lastV))
 	return nil
 }
 
@@ -1623,7 +1001,8 @@ func keepWorker(r runReq) {
 	pidf := sp("keep.pid")
 	_ = saveFile(pidf, fmt.Sprint(os.Getpid()))
 	_ = saveFile(sp("keep.ver"), BridgeVersion)
-	k := &keepRun{tc: &TC{copier: true, readSec: keepNum("KeepReadSec", 120)}, kind: r.kind, only: r.only, light: r.kind == "light", force: r.kind == "now", once: true, told: map[string]bool{}}
+	k := &keepRun{tc: &TC{copier: true, readSec: keepNum("KeepReadSec", 120)}, kind: r.kind, only: r.only, light: r.kind == "light", force: r.kind == "now", once: true, told: map[string]bool{},
+		id: fmt.Sprint(time.Now().UnixNano()), views: map[string]M{}}
 	kwMu.Lock()
 	kwRun = k
 	kwMu.Unlock()
@@ -1715,7 +1094,11 @@ func keepWorker(r runReq) {
 					if (len(want) > 0 && !contains(want, n)) || (len(r.only) > 0 && !contains(r.only, n)) {
 						continue
 					}
-					open = append(open, oc{n, toInt(s["port"]), str(c["from"])})
+					bf := str(c["booksFrom"])
+					if !isTallyDate(bf) {
+						bf = str(c["from"])
+					}
+					open = append(open, oc{n, toInt(s["port"]), bf})
 				}
 			}
 			if len(open) == 0 && (!anyBackoff().IsZero() || tallyWanted()) {
@@ -1734,7 +1117,8 @@ func keepWorker(r runReq) {
 			}
 		}
 		for _, o := range open {
-			if upToDate[o.name] || !bgBackoffUntil(o.port).IsZero() || !keepRoom(o.port) || userWaiting(o.port) {
+			// Update now (a person waiting) is not held to the background share of Tally's time
+			if upToDate[o.name] || !bgBackoffUntil(o.port).IsZero() || (r.kind != "now" && !keepRoom(o.port)) || userWaiting(o.port) {
 				continue
 			}
 			err := k.step(o.name, o.port, o.from)

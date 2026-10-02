@@ -391,7 +391,7 @@ func openCompaniesWith(tc *TC, fresh bool) []M {
 			sessions = append(sessions, e)
 			continue
 		}
-		raw, err := invokeTally(tc, toInt(pp["port"]), collectionRequest("TDSDeskCompanies", "Company", "NAME,STARTINGFROM,ENDINGAT,GUID", "", ""), 8)
+		raw, err := invokeTally(tc, toInt(pp["port"]), collectionRequest("TDSDeskCompanies", "Company", "NAME,STARTINGFROM,ENDINGAT,GUID,BOOKSFROM", "", ""), 8)
 		if err != nil && (errors.Is(err, errPreempted) || errors.Is(err, errBackoff)) && prevCompanies(toInt(pp["port"])) != nil {
 			// a background read stopped or held back: the companies named last time stand, nothing new is known
 			e["ok"], e["companies"], e["tallyState"] = true, prevCompanies(toInt(pp["port"])), "open"
@@ -408,7 +408,8 @@ func openCompaniesWith(tc *TC, fresh bool) []M {
 					continue
 				}
 				inf := getCoInfo(tc, name, toInt(pp["port"]))
-				list = append(list, M{"name": name, "from": nt(c, "STARTINGFROM"), "to": nt(c, "ENDINGAT"), "guid": nt(c, "GUID"), "gstin": str(inf["gstin"]), "pan": str(inf["pan"])})
+				// booksFrom (2.1.5): the day the books begin, the date of the ledger masters' stored openings
+				list = append(list, M{"name": name, "from": nt(c, "STARTINGFROM"), "to": nt(c, "ENDINGAT"), "booksFrom": nt(c, "BOOKSFROM"), "guid": nt(c, "GUID"), "gstin": str(inf["gstin"]), "pan": str(inf["pan"])})
 			}
 			e["ok"] = true
 			e["companies"] = list

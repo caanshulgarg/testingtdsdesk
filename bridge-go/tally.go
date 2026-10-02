@@ -573,17 +573,30 @@ func invokeTally(tc *TC, port int, x string, timeoutSec int) (string, error) {
 		unlock()
 		return "", errBackoff
 	}
+	// 2.1.5: a Tally that did not answer keeps working on that request: nothing heavy goes until a tiny "is it free?"
+	// request has answered (after a background read stopped for a posting, the next background read asks it too)
+	if why := probeNeeded(port); why != "" && (tc.copier || why == "timeout") {
+		if perr := freeProbe(ctx, port); perr != nil {
+			unlock()
+			if errors.Is(perr, errPreempted) {
+				return "", errPreempted
+			}
+			return "", perr
+		}
+	}
 	t0 := time.Now()
 	setInflight(port, true)
 	r, err := tallyRaw(ctx, port, x, timeoutSec)
 	setInflight(port, false)
 	fail := ""
 	if errors.Is(err, errPreempted) {
-		// stopped for FinCom's request: not Tally's fault, nothing to note
+		// stopped for FinCom's request: not Tally's fault, nothing to note; Tally may still be working on it
+		setProbe(port, "cancel")
 		unlock()
 		return "", errPreempted
 	}
 	if err == nil {
+		setProbe(port, "")
 		coolMu.Lock()
 		delete(tallyCool, port)
 		coolMu.Unlock()
@@ -610,6 +623,7 @@ func invokeTally(tc *TC, port int, x string, timeoutSec int) (string, error) {
 			coolMu.Lock()
 			tallyCool[port] = cool{n, time.Now().Add(time.Duration(w) * time.Second)}
 			coolMu.Unlock()
+			setProbe(port, "timeout")
 			setTallyStuck(port)
 			// said once a busy spell; the next tries are quiet
 			busyMu.Lock()
@@ -765,4 +779,50 @@ func tallyShare(port int) float64 {
 		return 1
 	}
 	return sum / 60
+}
+
+// --- 2.1.5: the "is Tally free?" probe. After a request that did not answer (Tally keeps working on it after the bridge
+// gives up), or a background read stopped for a posting, the next request is preceded by one tiny request (the
+// companies' names, FinComFree); only when that answers does anything else go. A posting is held back only after a
+// request that did not answer, never because a background read was stopped for it
+var (
+	probeMu   sync.Mutex
+	probeWhy  = map[int]string{}
+	probeSent atomic.Int64
+)
+
+func setProbe(port int, why string) {
+	probeMu.Lock()
+	defer probeMu.Unlock()
+	if why == "" {
+		delete(probeWhy, port)
+	} else if probeWhy[port] != "timeout" {
+		probeWhy[port] = why
+	}
+}
+func probeNeeded(port int) string {
+	probeMu.Lock()
+	defer probeMu.Unlock()
+	return probeWhy[port]
+}
+func freeProbe(ctx context.Context, port int) error {
+	probeSent.Add(1)
+	_, err := tallyRaw(ctx, port, probeRequest(), keepNum("TallyProbeSec", 8))
+	if err == nil {
+		setProbe(port, "")
+		return nil
+	}
+	if errors.Is(err, errPreempted) {
+		return errPreempted
+	}
+	n := 1
+	coolMu.Lock()
+	if c, had := tallyCool[port]; had {
+		n = c.n + 1
+	}
+	w := minI(120, 10*(1<<(n-1)))
+	tallyCool[port] = cool{n, time.Now().Add(time.Duration(w) * time.Second)}
+	coolMu.Unlock()
+	setProbe(port, "timeout")
+	return fmt.Errorf("Tally (port %d) is busy: it is still working on an earlier request and did not answer a small check; nothing else was sent", port)
 }

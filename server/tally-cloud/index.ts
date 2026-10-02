@@ -24,6 +24,19 @@
 //                                                       for the wake-up channel; activityAt = when FinCom was last used
 //                                                       for this computer's clients, for the nightly catch-up)
 //   {kind:"support", note, zip}                      -> the Connector's log and details for FinCom support
+//   FinCom Bridge 2.1.5 (migration-32: the baseline once, then only changes by Tally's AlterID; never a balance asked of Tally):
+//   {kind:"sync_get", company}                       -> {book: {from, openAsOn, ledgers, days, daysFrom, daysTo, lastV, lastM,
+//                                                       base, reread}}: where the cloud is, the last AlterIDs it holds, and a
+//                                                       "Re-read these" asked in FinCom
+//   {kind:"sync_set", company, lastV?, lastM?, reset?, base?, rereadDone?} -> the last AlterIDs kept in the cloud
+//   {kind:"masters", company, ledgers:[[name, parent, storedOpening, gstin, pan, guid, alterId, was]], groups:[[name, parent]],
+//    base?, from?, openAsOn?, lastM?}                -> changed masters (tally_ingest_masters): added, moved, renamed by GUID
+//   {kind:"vouchers", company, vouchers:[{day, xml}]} -> changed entries (Tally's change read): each put into its day's kept
+//                                                       day book (and taken off the day it was on), and those days read again
+//                                                       (tally_ingest_day), so the files FinCom loads stay whole
+//   {kind:"day_ids", company, from, to}              -> {days: [[yyyymmdd, n, md5]]}: the deletion check, no amounts
+//   {kind:"verify", company, asOn, groups}           -> the night's primary-group totals of Tally against the cloud's
+//   {kind:"verify_save", company, result}            -> the night's result kept (FinCom shows "N ledgers to check")
 //   {kind:"posts_take"}                              -> {job: {id, company, payload} | null}: the next posting queued in
 //                                                       FinCom for this computer (build 199); the beat says how many wait
 //   {kind:"posts_update", id, status, done, message, results, checking} -> how a posting taken by this computer is going
@@ -259,6 +272,103 @@ function cleanPairs(list: unknown, max: number) {
   }
   return Array.from(by.values()).map((x) => [x.n, x.p]);
 }
+// FinCom Bridge 2.1.5: one changed entry put into the day book kept for its day. The day's text stays as it was, with the
+// entries of these GUIDs taken out and the new ones put in (before the closing tags of a whole envelope, if it has them)
+const guidOf = (block: string) => ((block.match(/<GUID\b[^>]*>([^<]*)<\/GUID>/) || [])[1] || "").trim().replace(/[^\w\-.:]/g, "");
+function mergeDay(text: string, out: Set<string>, add: string[]) {
+  let t = String(text || "");
+  if (out.size) t = t.replace(/<VOUCHER\b[\s\S]*?<\/VOUCHER>/g, (b) => out.has(guidOf(b)) ? "" : b).replace(/<TALLYMESSAGE\b[^>]*>\s*<\/TALLYMESSAGE>/g, "");
+  if (!add.length) return t;
+  const ins = add.map((x) => "<TALLYMESSAGE>" + x + "</TALLYMESSAGE>").join("");
+  for (const end of ["</REQUESTDATA>", "</IMPORTDATA>", "</ENVELOPE>"]) { const i = t.lastIndexOf(end); if (i >= 0) return t.slice(0, i) + ins + t.slice(i); }
+  return t + ins;
+}
+async function keptDay(firm: string, book: string, day: string) {
+  const { data: blob } = await db.storage.from("tally-days").download(`${firm}/${book}/${day.slice(0, 6)}/${day}.xml.gz`);
+  if (!blob) return "";
+  return (await gunzip(new Uint8Array(await blob.arrayBuffer()), MAX_DAY)).text;
+}
+async function ingestVouchers(firm: string, book: string, list: unknown) {
+  const vs = (Array.isArray(list) ? list : []).slice(0, 500).filter((v: any) => isDay(v?.day) && typeof v?.xml === "string" && v.xml.length < MAX_DAY)
+    .map((v: any) => ({ day: String(v.day), xml: String(v.xml), guid: guidOf(String(v.xml)) })).filter((v) => v.guid);
+  if (!vs.length) return reply(200, { ok: true, done: 0, days: [] });
+  const guids = [...new Set(vs.map((v) => v.guid))];
+  // where the cloud has these entries now (an entry moved to another date leaves its old day)
+  const { data: was, error } = await db.from("tally_vouchers").select("guid, day").eq("book_id", book).in("guid", guids);
+  if (error) throw new Error(error.message);
+  const target = new Map<string, string[]>();
+  const last = new Map<string, { day: string; xml: string }>();
+  for (const v of vs) last.set(v.guid, v);   // the same entry twice: the later one
+  for (const v of last.values()) { if (!target.has(v.day)) target.set(v.day, []); target.get(v.day)!.push(v.xml); }
+  const old = new Set<string>();
+  for (const w of was || []) { const d = String(w.day).replace(/-/g, ""); if (!target.has(d)) old.add(d); }
+  const out = new Set(guids);
+  const days: { day: string; text: string }[] = [];
+  // the days the entries go to first, then the days they left (so an entry moved is never marked deleted)
+  for (const d of [...[...target.keys()].sort(), ...[...old].sort()]) {
+    const text = mergeDay(await keptDay(firm, book, d), out, target.get(d) || []);
+    days.push({ day: d, text });
+  }
+  const r = await ingestDaysRaw(firm, book, days);
+  if (r.error) return reply(400, { ok: false, error: r.error });
+  return reply(200, { ok: true, done: last.size, days: r.done, bad: r.bad });
+}
+async function bridgeSync(firm: string, book: string, body: any) {
+  const s = (v: unknown) => /^\d{8}$/.test(String(v || "")) ? iso(String(v)) : null;
+  const n = (v: unknown) => v == null || v === "" || isNaN(Number(v)) ? null : Math.floor(Number(v));
+  switch (body.kind) {
+    case "sync_get": {
+      const { data, error } = await db.rpc("tally_sync_get", { p_book: book });
+      if (error) return reply(409, { ok: false, error: /tally_sync_get|does not exist|schema cache/i.test(error.message) ? "FinCom's cloud is not ready for FinCom Bridge 2.1.5 yet (migration-32)." : error.message });
+      return reply(200, { ok: true, book: data });
+    }
+    case "sync_set": {
+      const p: Record<string, unknown> = {};
+      if (n(body.lastV) != null) p.lastV = n(body.lastV);
+      if (n(body.lastM) != null) p.lastM = n(body.lastM);
+      if (body.reset === true) p.reset = true;
+      if (body.base && typeof body.base === "object") p.base = { phase: String(body.base.phase || "").slice(0, 12), from: String(body.base.from || "").slice(0, 8), next: String(body.base.next || "").slice(0, 8) };
+      if (typeof body.rereadDone === "string") p.rereadDone = body.rereadDone.slice(0, 40);
+      const { data, error } = await db.rpc("tally_sync_set", { p_book: book, p });
+      if (error) throw new Error(error.message);
+      return reply(200, { ok: true, sync: data });
+    }
+    case "masters": {
+      const t = (v: unknown, k = 300) => String(v ?? "").slice(0, k);
+      const leds = (Array.isArray(body.ledgers) ? body.ledgers : []).slice(0, 100000).filter((l: any) => Array.isArray(l) && l[0])
+        .map((l: any) => [cleanName(t(l[0])), cleanName(t(l[1])), String(Math.round(amt(l[2]) * 100) / 100), t(l[3], 15).toUpperCase(), t(l[4], 10).toUpperCase(), t(l[5], 100), n(l[6]), cleanName(t(l[7]))])
+        .filter((l: any) => l[0]);
+      const { data, error } = await db.rpc("tally_ingest_masters", { p_book: book, p_ledgers: leds, p_groups: cleanPairs(body.groups, 20000), p_base: body.base === true,
+        p_from: s(body.from), p_open_as_on: s(body.openAsOn), p_last: n(body.lastM) });
+      if (error) throw new Error(error.message);
+      return reply(200, { ok: true, ...data });
+    }
+    case "vouchers": return await ingestVouchers(firm, book, body.vouchers);
+    case "day_ids": {
+      if (!s(body.from) || !s(body.to)) return reply(400, { ok: false, error: "from and to are dates (yyyymmdd)" });
+      const { data, error } = await db.rpc("tally_day_ids", { p_book: book, p_from: s(body.from), p_to: s(body.to) });
+      if (error) throw new Error(error.message);
+      return reply(200, { ok: true, days: data });
+    }
+    case "verify": {
+      if (!s(body.asOn)) return reply(400, { ok: false, error: "asOn is a date (yyyymmdd)" });
+      const groups = (Array.isArray(body.groups) ? body.groups : []).slice(0, 500).map((g: any) => [cleanName(String(g?.[0] ?? "").slice(0, 300)), String(Math.round(amt(g?.[1]) * 100) / 100)]);
+      const { data, error } = await db.rpc("tally_verify", { p_book: book, p_as_on: s(body.asOn), p_groups: groups });
+      if (error) throw new Error(error.message);
+      return reply(200, { ok: true, verify: data });
+    }
+    case "verify_save": {
+      const r = body.result && typeof body.result === "object" ? body.result : {};
+      const p = { asOn: String(r.asOn || "").slice(0, 8), totals: !!r.totals, differ: Math.max(0, Math.min(1000, n(r.differ) || 0)),
+        groups: (Array.isArray(r.groups) ? r.groups : []).slice(0, 200), days: (Array.isArray(r.days) ? r.days : []).filter(isDay).slice(0, 2000),
+        masters: (Array.isArray(r.masters) ? r.masters : []).slice(0, 2000).map((x: unknown) => cleanName(String(x).slice(0, 300))), note: String(r.note || "").slice(0, 300) };
+      const { data, error } = await db.rpc("tally_verify_save", { p_book: book, p });
+      if (error) throw new Error(error.message);
+      return reply(200, { ok: true, verify: data });
+    }
+  }
+  return null;
+}
 // a few days of the day book (each gzipped), into a book: stored, and read into entries, lines and ready totals
 async function ingestDays(firm: string, book: string, daysIn: unknown) {
   const r = await ingestDaysRaw(firm, book, daysIn);
@@ -270,12 +380,13 @@ async function ingestDaysRaw(firm: string, book: string, daysIn: unknown): Promi
   let unzipped = 0;
   const bad: { day: string; error: string }[] = [];
   for (const d of days as any[]) {
-    if (!isDay(d?.day) || (typeof d?.gz !== "string" && typeof d?.b64 !== "string")) continue;
+    if (!isDay(d?.day) || (typeof d?.gz !== "string" && typeof d?.b64 !== "string" && typeof d?.text !== "string")) continue;
     // a day sent as text (b64, the bridge from 1.14.0) is packed here; one sent packed (gz) is opened to be read
     let gz: Uint8Array, z: { text: string; size: number };
     try {
-      if (typeof d.b64 === "string") {
-        const raw = b64bytes(d.b64);
+      if (typeof d.b64 === "string" || typeof d.text === "string") {
+        // (2.1.5) a day put together here from the kept day and the changed entries comes as text
+        const raw = typeof d.text === "string" ? new TextEncoder().encode(d.text) : b64bytes(d.b64);
         if (raw.length > Math.min(MAX_DAY, MAX_UNZIP - unzipped)) throw new Error("A day's day book is larger than FinCom takes in one go.");
         z = { text: new TextDecoder("utf-8").decode(raw), size: raw.length };
         gz = await gzipBytes(raw);
@@ -747,6 +858,11 @@ Deno.serve(async (req) => {
         return reply(200, { ok: true });
       }
       case "support": return await supportPack(firm, dev, body);
+      case "sync_get": case "sync_set": case "masters": case "vouchers": case "day_ids": case "verify": case "verify_save": {
+        const book = await bookFor(firm, String(body.company || ""));
+        if (!book) return reply(409, { ok: false, notLinked: true, error: "This Tally company is not linked to a FinCom client yet." });
+        return (await bridgeSync(firm, book, body))!;
+      }
       default:
         return reply(400, { ok: false, error: "unknown kind" });
     }

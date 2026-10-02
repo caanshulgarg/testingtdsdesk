@@ -1,10 +1,11 @@
-// Reading from Tally for FinCom: ledgers, entries, the day book, balances. The same requests as bridge 1.15.0, and the
-// same answers.
+// Reading from Tally for FinCom: ledgers, entries, the day book. 2.1.5: never a balance. Tally's balance reports (a
+// ledger's closing on a date, the trial balance, every ledger's balance, the Ledger Vouchers report with its running
+// balance) are gone: /balances, /tb and /ledgerbalance are answered from the copy kept here (changes.go), and FinCom
+// works every other balance out in its cloud.
 package main
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 )
@@ -158,54 +159,6 @@ func getVouchers(company, from, to, ledger, types string, pref int) (M, error) {
 	return M{"ok": true, "company": company, "port": port, "count": len(out), "vouchers": out}, nil
 }
 
-// one ledger's vouchers, filtered by Tally itself (the Ledger Vouchers report)
-func getLedgerVouchers(company, ledger, from, to string, pin int) (M, error) {
-	port, err := findCompanyPort(company, pin)
-	if err != nil {
-		return nil, err
-	}
-	x := "<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>Ledger Vouchers</REPORTNAME>" +
-		"<STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>" + esc(company) + "</SVCURRENTCOMPANY>" +
-		"<SVFROMDATE>" + from + "</SVFROMDATE><SVTODATE>" + to + "</SVTODATE><LEDGERNAME>" + esc(ledger) + "</LEDGERNAME>" +
-		"</STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>"
-	raw, err := invokeTally(fin, port, x, 0)
-	if err != nil {
-		return nil, err
-	}
-	rows := []any{}
-	var cur M
-	for _, n := range xmlDoc(raw).All("*") {
-		t := strings.TrimSpace(n.InnerText())
-		switch n.Name {
-		case "DSPVCHDATE":
-			if cur != nil {
-				rows = append(rows, cur)
-			}
-			cur = M{"date": t, "other": "", "type": "", "dr": "", "cr": ""}
-		case "DSPVCHLEDACCOUNT":
-			if cur != nil && cur["other"] == "" {
-				cur["other"] = t
-			}
-		case "DSPVCHTYPE":
-			if cur != nil {
-				cur["type"] = t
-			}
-		case "DSPVCHDRAMT":
-			if cur != nil {
-				cur["dr"] = t
-			}
-		case "DSPVCHCRAMT":
-			if cur != nil {
-				cur["cr"] = t
-			}
-		}
-	}
-	if cur != nil {
-		rows = append(rows, cur)
-	}
-	return M{"ok": true, "company": company, "port": port, "ledger": ledger, "count": len(rows), "rows": rows}, nil
-}
-
 // the vouchers of a period, heads only (Optional ones too)
 func voucherHeads(tc *TC, port int, company, from, to string) ([]M, error) {
 	x := "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TDSDeskVchHeads</ID></HEADER>" +
@@ -321,27 +274,6 @@ func ledgerVoucherList(tc *TC, port int, company, ledger, from, to string) ([]M,
 	return list, nil
 }
 
-// one ledger's balance as on a date (Tally: a debit balance is negative); "", false when not found this way
-func oneLedgerBalance(port int, company, ledger, asOn string) (string, bool, error) {
-	f := strings.ReplaceAll(ledger, `"`, "")
-	x := "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TDSDeskOneLed</ID></HEADER>" +
-		"<BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>" + esc(company) + "</SVCURRENTCOMPANY>" +
-		"<SVFROMDATE>" + asOn + "</SVFROMDATE><SVTODATE>" + asOn + "</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE>" +
-		`<COLLECTION NAME="TDSDeskOneLed" ISMODIFY="No"><TYPE>Ledger</TYPE><FILTERS>TDSDeskThisLed</FILTERS><FETCH>NAME,CLOSINGBALANCE</FETCH></COLLECTION>` +
-		`<SYSTEM TYPE="Formulae" NAME="TDSDeskThisLed">$Name = "` + esc(f) + `"</SYSTEM>` +
-		"</TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>"
-	raw, err := invokeTally(fin, port, x, 0)
-	if err != nil {
-		return "", false, err
-	}
-	for _, l := range xmlDoc(raw).All("LEDGER") {
-		if nameOf(l) == ledger {
-			return nt(l, "CLOSINGBALANCE"), true, nil
-		}
-	}
-	return "", false, nil
-}
-
 // every ledger's name and group, and every group's parent: no balances, so Tally answers at once
 func getLedgerNames(tc *TC, company string, pref int) (M, error) {
 	port, err := readerPort(tc, company, pref)
@@ -369,38 +301,6 @@ func getLedgerNames(tc *TC, company string, pref int) (M, error) {
 		}
 	}
 	return M{"ok": true, "company": company, "port": port, "ledgers": led, "groups": grp}, nil
-}
-
-// the trial balance on one date: one read, only ledgers with a balance
-func getTrialBalance(company, asOn string, pref int) (M, error) {
-	if !isTallyDate(asOn) {
-		return nil, errors.New("The date is to be given as yyyymmdd.")
-	}
-	port, err := findCompanyPort(company, pref)
-	if err != nil {
-		return nil, err
-	}
-	x := "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TDSDeskTB</ID></HEADER>" +
-		"<BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>" + esc(company) + "</SVCURRENTCOMPANY>" +
-		"<SVFROMDATE>" + asOn + "</SVFROMDATE><SVTODATE>" + asOn + "</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE>" +
-		`<COLLECTION NAME="TDSDeskTB" ISMODIFY="No"><TYPE>Ledger</TYPE><FETCH>NAME,PARENT,CLOSINGBALANCE</FETCH><FILTERS>TDSDeskHasBal</FILTERS></COLLECTION>` +
-		`<SYSTEM TYPE="Formulae" NAME="TDSDeskHasBal">NOT $$IsEmpty:$ClosingBalance</SYSTEM>` +
-		"</TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>"
-	t0 := time.Now()
-	raw, err := invokeTally(fin, port, x, 0)
-	if err != nil {
-		return nil, err
-	}
-	list := []any{}
-	for _, l := range xmlDoc(raw).All("LEDGER") {
-		n, b := nameOf(l), nt(l, "CLOSINGBALANCE")
-		if n != "" && b != "" {
-			list = append(list, []any{n, nt(l, "PARENT"), b})
-		}
-	}
-	ms := int(time.Since(t0).Milliseconds())
-	writeLog(fmt.Sprintf("Trial balance of %s on %s: %d ledgers in %d ms", company, asOn, len(list), ms))
-	return M{"ok": true, "company": company, "port": port, "asOn": asOn, "ms": ms, "ledgers": list}, nil
 }
 
 // the port to read from: a background read uses the Tally its run found at its start (it asks no company list of its
@@ -441,67 +341,38 @@ func getDayBookXML(tc *TC, company, from, to string, pref int) (string, error) {
 	return cleanXML(raw), nil
 }
 
-// every ledger's balance as Tally works it out: at the end of the day before the period, and at its end
-func getBalances(company, from, to string, pref int, openOnly bool) (M, error) {
-	if !isTallyDate(from) || !isTallyDate(to) {
-		return nil, errors.New("Dates are to be given as yyyymmdd.")
-	}
-	port, err := findCompanyPort(company, pref)
+// one ledger's entries (FinCom's /ledgervouchers): 2.1.5 from the list of its vouchers (no running balance asked of
+// Tally; the Ledger Vouchers report worked one out), in the rows the report gave: date, the other ledger, type, Dr, Cr
+func getLedgerVouchers(company, ledger, from, to string, pin int) (M, error) {
+	port, err := findCompanyPort(company, pin)
 	if err != nil {
 		return nil, err
 	}
-	before := addDays(from, -1)
-	read := func(asOn string) (map[string][2]string, error) {
-		x := "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TDSDeskBalances</ID></HEADER>" +
-			"<BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>" + esc(company) + "</SVCURRENTCOMPANY>" +
-			"<SVFROMDATE>" + asOn + "</SVFROMDATE><SVTODATE>" + asOn + "</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE>" +
-			`<COLLECTION NAME="TDSDeskBalances" ISMODIFY="No"><TYPE>Ledger</TYPE><FETCH>NAME,PARENT,CLOSINGBALANCE</FETCH></COLLECTION>` +
-			"</TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>"
-		raw, err := invokeTally(fin, port, x, 0)
-		if err != nil {
-			return nil, err
+	lv, err := ledgerVoucherList(fin, port, company, ledger, from, to)
+	if err != nil {
+		return nil, err
+	}
+	rows := []any{}
+	for _, v := range lv {
+		if strings.EqualFold(str(v["cancelled"]), "yes") || strings.EqualFold(str(v["optional"]), "yes") {
+			continue
 		}
-		h := map[string][2]string{}
-		for _, l := range xmlDoc(raw).All("LEDGER") {
-			if n := nameOf(l); n != "" {
-				h[n] = [2]string{nt(l, "PARENT"), nt(l, "CLOSINGBALANCE")}
+		a, other := 0.0, ""
+		for _, e := range arr(v["entries"]) {
+			m := obj(e)
+			if str(m["ledger"]) == ledger {
+				a += num(amtText(str(m["amount"])))
+			} else if other == "" {
+				other = str(m["ledger"])
 			}
 		}
-		return h, nil
-	}
-	open, err := read(before)
-	if err != nil {
-		return nil, err
-	}
-	close := map[string][2]string{}
-	if !openOnly {
-		if close, err = read(to); err != nil {
-			return nil, err
+		dr, cr := "", ""
+		if a < 0 {
+			dr = r2s(-a)
+		} else if a > 0 {
+			cr = r2s(a)
 		}
+		rows = append(rows, M{"date": str(v["date"]), "other": other, "type": str(v["type"]), "dr": dr, "cr": cr})
 	}
-	var names []string
-	for n := range open {
-		names = append(names, n)
-	}
-	for n := range close {
-		names = append(names, n)
-	}
-	list := []any{}
-	for _, n := range uniqSorted(names) {
-		o, ho := open[n]
-		c, hc := close[n]
-		parent := o[0]
-		if hc {
-			parent = c[0]
-		}
-		ob, cb := "", ""
-		if ho {
-			ob = o[1]
-		}
-		if hc {
-			cb = c[1]
-		}
-		list = append(list, M{"name": n, "parent": parent, "open": ob, "close": cb})
-	}
-	return M{"ok": true, "company": company, "port": port, "from": from, "to": to, "openAsOn": before, "openOnly": openOnly, "ledgers": list}, nil
+	return M{"ok": true, "company": company, "port": port, "ledger": ledger, "count": len(rows), "rows": rows}, nil
 }

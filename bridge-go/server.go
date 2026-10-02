@@ -327,8 +327,8 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 		writeResp(w, 200, x, origin, "text/xml; charset=utf-8", false)
 		return nil, errSent
 	case "/balances":
-		setFinComReading()
-		return getBalances(co, qs.Get("from"), qs.Get("to"), qint(qs, "port"), qs.Get("open") == "1")
+		// 2.1.5: worked out from the copy kept here; Tally is not asked for a balance
+		return heldBalances(co, qs.Get("from"), qs.Get("to"), qs.Get("open") == "1")
 	case "/synced":
 		mf := filepath.Join(syncFolder(co), "manifest.json")
 		if exists(mf) {
@@ -437,29 +437,8 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 		r0["via"] = "daybook"
 		return r0, nil
 	case "/ledgerbalance":
-		port, err := findCompanyPort(co, qint(qs, "port"))
-		if err != nil {
-			return nil, err
-		}
-		led := qs.Get("ledger")
-		if !isTallyDate(qs.Get("from")) {
-			return nil, errors.New("Dates are to be given as yyyymmdd.")
-		}
-		before := addDays(qs.Get("from"), -1)
-		o := ""
-		if qs.Get("only") != "close" {
-			if o, _, err = oneLedgerBalance(port, co, led, before); err != nil {
-				return nil, err
-			}
-		}
-		c, found, err := oneLedgerBalance(port, co, led, qs.Get("to"))
-		if err != nil {
-			return nil, err
-		}
-		if !found {
-			return nil, errors.New("Ledger " + led + " was not found in " + co + ".")
-		}
-		return M{"ok": true, "port": port, "ledger": led, "openAsOn": before, "open": o, "close": c}, nil
+		// 2.1.5: from the copy kept here (opening the day before from, closing on to); Tally is not asked for a balance
+		return heldLedgerBalance(co, qs.Get("ledger"), qs.Get("from"), qs.Get("to"), qs.Get("only") == "close")
 	case "/tags":
 		port, err := findCompanyPort(co, qint(qs, "port"))
 		if err != nil {
@@ -479,7 +458,7 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 	case "/ledgernames":
 		return getLedgerNames(fin, co, qint(qs, "port"))
 	case "/tb":
-		return getTrialBalance(co, qs.Get("to"), qint(qs, "port"))
+		return heldTB(co, qs.Get("to"))
 	case "/paircode":
 		// the tray (or the FinCom Connector), which holds the key, opens a fresh connect code for FinCom on this computer
 		if r.Method == "POST" {

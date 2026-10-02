@@ -7,7 +7,8 @@
 #   tests/ci/run_ci.sh --list other.txt run_x.py ...   # another list, or tests named on the command line
 #
 # A line of the list: the test's file name in tests/, then optionally its time limit in seconds (default
-# CI_TIMEOUT, 300). '#' starts a comment. .js/.mjs run with node, .py with python3, from inside tests/.
+# CI_TIMEOUT, 300; '-' for the default), then optionally VAR=value settings for that test only (paths relative to
+# tests/). '#' starts a comment. .js/.mjs run with node, .py with python3, from inside tests/.
 # Needs: site-test/ (python3 build.py) and app/dist-test/ (cd app && npm ci && npm run legacy && npm run build:test).
 # A test that uses pg_stand.py (a throwaway PostgreSQL 16) runs as root (via sudo when this script is not root).
 # Each test's output goes to tests/out/ci-logs/<test>.log; the last lines of a failing test's output are printed.
@@ -21,7 +22,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --shard) SHARD="$2"; shift 2 ;;
     --list) LIST="$2"; shift 2 ;;
-    -h|--help) sed -n '2,13p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
     *) NAMES+=("$1"); shift ;;
   esac
 done
@@ -30,22 +31,23 @@ LOGS="${TDSDESK_OUT:-$TESTS/out}/ci-logs"
 mkdir -p "$LOGS"
 
 # the tests and their time limits
-declare -a T L
+declare -a T L E
 if [ ${#NAMES[@]} -gt 0 ]; then
-  for n in "${NAMES[@]}"; do T+=("$(basename "$n")"); L+=("$DEFAULT_TIMEOUT"); done
+  for n in "${NAMES[@]}"; do T+=("$(basename "$n")"); L+=("$DEFAULT_TIMEOUT"); E+=(""); done
 else
-  while read -r name limit _; do
+  while read -r name limit envs; do
     case "$name" in ''|'#'*) continue ;; esac
-    T+=("$name"); L+=("${limit:-$DEFAULT_TIMEOUT}")
+    envs="${envs%%#*}"; [ "$limit" = "-" ] && limit=""
+    T+=("$name"); L+=("${limit:-$DEFAULT_TIMEOUT}"); E+=("$envs")
   done < "$LIST"
 fi
 if [ -n "$SHARD" ]; then
   k="${SHARD%/*}"; n="${SHARD#*/}"
-  declare -a T2 L2
+  declare -a T2 L2 E2
   for i in "${!T[@]}"; do
-    if [ $(( i % n )) -eq $(( k - 1 )) ]; then T2+=("${T[$i]}"); L2+=("${L[$i]}"); fi
+    if [ $(( i % n )) -eq $(( k - 1 )) ]; then T2+=("${T[$i]}"); L2+=("${L[$i]}"); E2+=("${E[$i]}"); fi
   done
-  T=("${T2[@]}"); L=("${L2[@]}")
+  T=("${T2[@]}"); L=("${L2[@]}"); E=("${E2[@]}")
 fi
 [ ${#T[@]} -gt 0 ] || { echo "no tests to run"; exit 1; }
 
@@ -74,7 +76,8 @@ for i in "${!T[@]}"; do
   grep -q "pg_stand" "$t" && pre=("${SUDO[@]}")
   echo "::group::$t"
   s0=$(date +%s)
-  "${pre[@]}" timeout -k 10 "$lim" "${cmd[@]}" >"$log" 2>&1 </dev/null
+  read -r -a envs <<<"${E[$i]}"
+  "${pre[@]}" env "${envs[@]}" timeout -k 10 "$lim" "${cmd[@]}" >"$log" 2>&1 </dev/null
   rc=$?
   # files a test run as root left behind are handed back, so the next tests can write over them
   [ ${#pre[@]} -gt 0 ] && sudo chown -R "$(id -u):$(id -g)" "${TDSDESK_OUT:-$TESTS/out}" "$TESTS" 2>/dev/null
