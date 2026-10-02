@@ -43,13 +43,17 @@ with sync_playwright() as p:
     with pg.expect_download() as dl: pg.click('#app [data-more="post"] button:has-text("Download Tally file")')
     ok(dl.value.suggested_filename.endswith((".zip", ".xml")), "Download Tally file: " + dl.value.suggested_filename)
     pg.wait_for_timeout(800)
-    ok(pg.evaluate("Object.values(D().entries).filter(e => e.exportedAt).length") == 2 and "Nothing is waiting to be posted" in app(), "marked as sent: nothing left waiting")
+    # review of 02-Oct-2026: a Tally file is not "in Tally" until Tally confirms it; the bills stay listed, marked so, and
+    # are not posted again from here (one count everywhere: 2 for Tally)
+    rows = pg.inner_text("#app [data-post-table]") if pg.locator("#app [data-post-table]").count() else ""
+    ok(pg.evaluate("Object.values(D().entries).filter(e => e.exportedAt).length") == 2 and rows.count("In a Tally file, not confirmed") == 2 and pg.inner_text("#app [data-post-main]") == "Post 0 to Tally"
+       and "2 bills for Tally" in pg.inner_text("#app [data-post-count]"), "marked as sent: listed as in a Tally file, not confirmed; nothing left to post")
     # Done: what went to Tally
     pg.evaluate("""() => { S.firm.postLog = (S.firm.postLog || []).concat([
       {at: '2026-09-20T10:00:00Z', what: 'bill', co: S.coId, ref: 'A/1', amount: 100000, tally: {vchType: 'Purchase', masterId: '77', company: 'Zeta Exports'}, by: 'a@b.c'},
       {at: '2026-09-21T10:00:00Z', what: 'bank', co: 'other-client', ref: 'NEFT 1', amount: 500, tally: {vchType: 'Payment', masterId: '78'}, by: 'a@b.c'}]); goStep('done', 'bills'); }""")
     pg.wait_for_timeout(600)
-    ok("Bills posted\n2" in pg.inner_text("#app .post-sum"), "Done: two bills posted")
+    ok("Bills posted\n0" in pg.inner_text("#app .post-sum") and "2 approved in all" in pg.inner_text("#app .post-sum"), "Done: a Tally file is not counted as posted until Tally confirms it (0 posted, 2 approved)")
     ok("1 entry for ZZ Zeta Exports" in app() and "Purchase 77" in app() and "NEFT 1" not in app(), "the record of what went to Tally, this client only")
     pg.click('#app button:has-text("All clients")'); pg.wait_for_timeout(400)
     ok("2 entries across every client" in app() and "NEFT 1" in app(), "All clients: both")

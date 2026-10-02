@@ -27,7 +27,9 @@ function txnRowsBills(){
   return Object.values(d.entries).map(e => {
     const x = e.x || {}, gst = num(x.cgst) + num(x.sgst) + num(x.igst) + num(x.cess);
     const [cls, label] = tallyStateOf(e);
-    return {id: e.id, kind: "bill", date: x.invoiceDate || "", up: (e.createdAt || "").slice(0, 10), vch: vchTypeOf(e, co), no: x.invoiceNo || "",
+    // a purchase bill is posted as the voucher type chosen in Client setup (Testing AAD: Journal); said so beside it
+    // (review of 02-Oct-2026: "Journal" on purchase bills looked like a mistake)
+    return {id: e.id, kind: "bill", date: x.invoiceDate || "", up: (e.createdAt || "").slice(0, 10), vch: vchTypeOf(e, co), vchNote: e.noteKind ? "" : "the voucher type chosen for purchase bills in Client setup → Tally", no: x.invoiceNo || "",
       party: x.vendorName || e.fileName || "", taxable: num(x.taxable), gst, total: num(x.total), cls, label,
       file: e.fileName || "", docPath: e.docPath || "", hasFile: !!(S.files[e.id] || e.docPath || (S.fileIndex && S.fileIndex.has(e.id))), e};
   }).sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(b.up).localeCompare(String(a.up)));

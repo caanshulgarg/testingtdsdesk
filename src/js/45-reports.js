@@ -78,7 +78,7 @@ const RPT = {
     const months = MIS.monthsOf(R.from, R.to), pl = MIS.pl(R.from, R.to);
     const bal = Audit.balances(R.from, R.to), balTo = bal.ok ? bal.at(R.to) : null;
     const recv = MIS.ageing(R.to, "r", balTo), pay = MIS.ageing(R.to, "p", balTo), msme = MIS.msme(), md = MIS.cfg(b).msmeDays;
-    const msmeDue = r2(pay.rows.filter(p => /micro|small/i.test(msme[p.party] || "")).reduce((s, p) => s + p.bills.filter(x => x.ref && x.amt > 0 && x.age > md).reduce((a, x) => a + x.amt, 0), 0));
+    const msmeDue = r2(pay.rows.filter(p => /micro|small/i.test(msme[p.party] || "")).reduce((s, p) => s + (p.open || []).filter(x => x.age > md).reduce((a, x) => a + x.left, 0), 0));
     const inM = {}, outM = {}, sales = {}, purch = {};
     months.forEach(m => { inM[m] = 0; outM[m] = 0; });
     (b.vouchers || []).forEach(v => {

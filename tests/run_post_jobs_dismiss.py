@@ -54,8 +54,11 @@ with sync_playwright() as p:
     st = lambda jid: E("(id) => { const r = document.querySelector('#app [data-job=\"' + id + '\"]'); return r ? r.getAttribute('data-job-state') + ' | ' + r.innerText.replace(/\\s+/g, ' ') : ''; }", jid)
     # 2. posted later
     f1 = st("j-fail1"); late = E("fmtTime(window.__jobs[0].updated_at)")
-    ok(f1.startswith("later") and ("Posted later at " + late) in f1 and "Retry" not in f1 and "Failed" not in f1 and "Dismiss" not in f1,
+    ok(f1.startswith("later") and ("Posted later at " + late) in f1 and "Retry" not in f1 and "Failed" not in f1,
        "2. a failed posting whose bill went in later reads 'Posted later at %s', not 'Failed · Retry' (%s)" % (late, f1[:110]))
+    # request of 02-Oct-2026 (item 10): every finished posting can be dismissed, the 'Posted later' one and a done one too
+    ok(pg.locator('#app [data-job="j-fail1"] [data-dismiss]').count() == 1 and pg.locator('#app [data-job="j-late"] [data-dismiss]').count() == 1,
+       "10. Dismiss on the 'Posted later' posting and on a done one, as on a failed one")
     ok(["tally_post_dismiss", {"p_id": "j-fail1", "p_auto": True}] in E("window.__rpc") and not any(r[1].get("p_id") != "j-fail1" and r[1].get("p_auto") for r in E("window.__rpc")),
        "2. and FinCom dismisses it by itself (only that one; the server checks every entry again)")
     # 4. nothing left to send

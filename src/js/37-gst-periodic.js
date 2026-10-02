@@ -127,10 +127,12 @@ const GSTQ = {
     const b2csTax = (j.b2cs || []).reduce((a, x) => a + num(x.iamt) + num(x.camt) + num(x.samt) + num(x.csamt), 0);
     // advances received and not yet invoiced (table 11A) less those adjusted against invoices (11B): in 3.1(a) too
     const advOf = k => (j[k] || []).reduce((a, g) => a + (g.itms || []).reduce((b, it) => b + num(it.ad_amt), 0), 0);
+    // advances marked as adjusted with no invoice to the customer in the quarter: not in 11B (GSTAdv.month), listed apart
+    let um = []; try { um = GSTAdv.ready() ? GSTAdv.month(qs + "-" + qEnd, reg).unmatched : []; } catch (e){ um = []; }
     const st3 = GSTF.peek(qEnd, reg), fig3 = fx("r1", qEnd);
     const m3 = {m: qEnd, kind: "r1", label: "GSTR-1 " + GSTSet.qLabel(qEnd), due: GSTF.due(qEnd, "r1", reg), state: {s: st3.r1 ? "filed" : GSTF.today() > GSTF.due(qEnd, "r1", reg) ? "missed" : "open", on: st3.r1 || "", arn: st3.r1Arn || ""},
       n: cnt("b2b"), notes: cnt("cdnr"), b2b: r2(tx("b2b")), cdnr: r2(tx("cdnr")), b2cs: r2(b2cs), b2cl: r2(b2cl), exp: r2(exp), b2c: r2(b2cs + b2cl),
-      adv: r2(advOf("at") - advOf("txpd")),
+      adv: r2(advOf("at") - advOf("txpd")), advAt: r2(advOf("at")), advTxpd: r2(advOf("txpd")), advUnmatched: um,
       taxable: r2(tx("b2b") + tx("cdnr") + b2cs + b2cl + exp + advOf("at") - advOf("txpd")), tax: r2(tax("b2b") + tax("cdnr") + tax("b2cl") + b2csTax), skipped: r1.skipped,
       filed: fig3 && fig3.tl ? fig3.tl.taxable : null, filedSrc: fig3 ? fig3.source : "", file: "GSTR1_" + (j.gstin || "") + "_" + j.fp + ".json"};
     // FinCom's total: the IFFs that carry their documents and the GSTR-1; 3B 3.1(a) worked out for the quarter

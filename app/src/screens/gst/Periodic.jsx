@@ -91,7 +91,8 @@ function FileBox({ q, c, reg }) {
     </ul> : <ul style={{ margin: "6px 0 0 18px", padding: 0 }}>
       <li>{"B2B: " + pl(c.n, "invoice") + " " + m(c.b2b) + (c.notes ? "; notes " + pl(c.notes, "note") + " " + m(c.cdnr) : "") + (c.skipped.length ? ". Left out: what the filed IFFs of " + c.skipped.map((x) => GSTR.label(x)).join(" and ") + " carried." : ". No IFF filed in this quarter, so all three months are here.")}</li>
       <li>{"B2C small " + m(c.b2cs) + " (notes to buyers with no GSTIN netted in)" + (c.b2cl ? ", B2C large " + m(c.b2cl) : "") + (c.exp ? ", exports " + m(c.exp) : "") + ": all three months."}</li>
-      {c.adv ? <li>{"Advances received, not yet invoiced (table 11A less 11B): " + m(c.adv) + "."}</li> : null}
+      {c.adv ? <li>{"Advances: received, not yet invoiced (table 11A) " + m(c.advAt) + "; adjusted against this quarter’s invoices (table 11B) " + m(c.advTxpd) + "."}</li> : null}
+      {(c.advUnmatched || []).length > 0 && <li className="bad" data-adv-unmatched="">{"Not in table 11B: " + c.advUnmatched.map((x) => "receipt " + x.no + " of " + d(x.date) + " from " + x.party + ", " + m(x.taxable) + " (" + x.missing + ")").join("; ") + "."}</li>}
       <li>{"Taxable value " + m(c.taxable) + ", tax " + m(c.tax) + "."}</li>
     </ul>}
     <p style={{ margin: "8px 0 0" }}><b>Check against 3B 3.1(a):</b>{" " + q.cols.filter((x) => x.inFile).map((x) => x.label + " " + m(x.taxable)).concat([q.m3.label + " " + m(q.m3.taxable)]).join(" + ") + " = " + m(q.total) + "; 3B 3.1(a) for " + q.label + " " + m(q.r3a) + " "}{agree(q.diff)}</p>
@@ -119,7 +120,7 @@ export function Qrmp() {
   return <section className="dash-card gq" data-qrmp={qEnd}>
     <div className="row" style={{ justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
       <h3 style={{ margin: 0 }}>{q.label} <span className="tag">Quarterly (QRMP)</span></h3>
-      <label className="note">This quarter is filed{" "}
+      <label className="note">Filing frequency:{" "}
         <select aria-label="Filing type for this quarter" data-qtype="" style={{ width: "auto" }} value="qrmp" onChange={(ev) => gqQuarterType(ev.target.value)}>
           <option value="qrmp">quarterly (QRMP)</option><option value="monthly">monthly</option></select></label></div>
     <div className="bk-tablewrap" style={{ marginTop: 8 }}><table className="bk-table compact gf-off" data-qtable="">
@@ -129,7 +130,8 @@ export function Qrmp() {
         {row("B2B invoices", (c) => c.n, q.cols.filter((c) => c.inFile).reduce((a, c) => a + c.n, 0) + q.m3.n)}
         {row("Credit / debit notes", (c) => c.notes, q.cols.filter((c) => c.inFile).reduce((a, c) => a + c.notes, 0) + q.m3.notes)}
         {row("B2C (all three months)", (c) => c.kind === "iff" ? "—" : m(c.b2c), m(q.m3.b2c))}
-        {q.m3.adv ? row("Advances (11A less 11B)", (c) => c.kind === "iff" ? "—" : m(c.adv), m(q.m3.adv)) : null}
+        {q.m3.advAt ? row("Advances received (11A)", (c) => c.kind === "iff" ? "—" : m(c.advAt), m(q.m3.advAt)) : null}
+        {q.m3.advTxpd ? row("Advances adjusted against invoices (11B)", (c) => c.kind === "iff" ? "—" : m(-c.advTxpd), m(-q.m3.advTxpd)) : null}
         {row("Taxable value, net of notes", (c) => <span data-qtaxable={c.m} style={c.toQuarter ? { textDecoration: "line-through" } : undefined}>{m(c.taxable)}</span>, <span data-qtotal="">{m(q.total)}</span>)}
         {row("Tax", (c) => m(c.tax), m(r2(q.cols.filter((c) => c.inFile).reduce((a, c) => a + c.tax, 0) + q.m3.tax)))}
         {row("As filed", (c) => c.filed == null ? <span className="note">—</span> : <span data-qfiled={c.m}>{m(c.filed)}</span>, <span data-qfiled-total="">{q.filedTotal == null ? "—" : m(q.filedTotal)}</span>)}
@@ -137,6 +139,7 @@ export function Qrmp() {
         {row("Status", (c) => <Status c={c} />, q.r3bOn ? <><span className="tag ok">3B filed</span><div className="nr">{d(q.r3bOn)}</div></> : <span className="tag warn">3B not filed yet</span>)}
         {row("PMT-06", (c) => c.kind === "iff" ? (c.pmt.known ? m(c.pmt.total) + (c.pmt.paidTotal ? " · paid " + m(c.pmt.paidTotal) : "") : "—") : "—", m(GSTQ.H.reduce((a, k) => a + num(q.pmtPaid[k]), 0)) + " paid")}
       </tbody></table></div>
+    {(q.m3.advUnmatched || []).length > 0 && <p className="bk-alert" data-adv-unmatched-q="" style={{ margin: "8px 0 0" }}>{"An advance adjustment with no invoice, left out of GSTR-1 table 11B and 3B: " + q.m3.advUnmatched.map((x) => "receipt " + x.no + " of " + d(x.date) + " from " + x.party + ", advance " + m(x.taxable) + " (received " + m(x.received) + ") marked as adjusted in " + GSTR.label(x.adjDate.slice(0, 6)) + " — " + x.missing).join("; ") + ". Change it under GST → Workings → Advances."}</p>}
     <div className="row" style={{ gap: 16, flexWrap: "wrap", marginTop: 8 }} data-q3a="">
       <span>{"3B 3.1(a), FinCom: " + m(q.r3a) + " "}{agree(q.diff)}</span>
       {q.r3aFiled != null && <span>{"As filed: GSTR-1 + IFF " + (q.filedTotal == null ? "—" : m(q.filedTotal)) + " · 3B 3.1(a) " + m(q.r3aFiled) + " "}{agree(q.filedDiff)}</span>}

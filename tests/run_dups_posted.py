@@ -67,11 +67,13 @@ with sync_playwright() as p:
     t = pg.inner_text("#app [data-dup-beside]")
     ok("The original" in t and "FA/ELEC/013" in t and "Keep both" in t and "Delete this one" in t, "2. the duplicate shows the original beside it, with Keep both and Delete this one")
     # 2. filters with counts: the list, the table, Transactions
-    fl = pg.inner_text("#app .filters")
-    ok("Duplicates (2)" in fl and "Deleted (1)" in fl, "2. Duplicates and Deleted with counts in the list (%s)" % fl.replace("\n", " "))
+    # review of 02-Oct-2026: one row of tabs for purchase bills (the step bar), with Duplicates and Deleted in it
+    fl = pg.inner_text("nav.sbar[aria-label=Status][data-bill-filters]").replace("\n", " ")
+    ok("Duplicates 2" in fl and "Deleted 1" in fl and fl.count("To review") == 1, "2. Duplicates and Deleted with counts in the one row of tabs (%s)" % fl)
     E("() => { S.filter = 'draft'; S.reviewTable = true; S.tab = 'invoices'; render(); }"); pg.wait_for_timeout(400)
-    tb = pg.inner_text("#app [data-bill-filters]")
-    ok("Duplicates 2" in tb.replace("\n", " ") and "Deleted 1" in tb.replace("\n", " "), "2. and on the table view (%s)" % tb.replace("\n", " "))
+    tb = pg.inner_text("nav.sbar[aria-label=Status][data-bill-filters]").replace("\n", " ")
+    rows = pg.locator("nav.sbar").count() + pg.locator("#app .filters").count()
+    ok("Duplicates 2" in tb and "Deleted 1" in tb and pg.locator("#app [data-bill-filters]").count() == 0 and rows == 1, "2. and on the table view, in the same single row (%s; %d rows of tabs)" % (tb, rows))
     E("() => { S.tab = 'txn'; S.txnTab = 'bills'; S.txnStatus = 'dup'; render(); }"); pg.wait_for_timeout(500)
     n_dup = pg.locator("#app table.txntbl tbody tr").count()
     E("() => { S.txnStatus = 'del'; render(); }"); pg.wait_for_timeout(300)

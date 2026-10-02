@@ -156,7 +156,7 @@ const CloudJobs = {
   async dismiss(j, auto){
     try {
       const r = await TCloud.rpc("tally_post_dismiss", {p_id: j.id, p_auto: !!auto});
-      if (!r || !r.ok) throw new Error((r && r.error) || "It could not be dismissed.");
+      if (!r || !r.ok) throw new Error(r && /Only a failed or cancelled/.test(r.error || "") ? "FinCom’s cloud can dismiss only failed postings until migration-27 is applied." : (r && r.error) || "It could not be dismissed.");
       if (!auto) toast("Dismissed. It stays under “Show older and dismissed”.");
     } catch (e){ if (!auto) toast((e && e.message) || String(e)); }
     await this.load(true);
@@ -215,7 +215,8 @@ const CloudJobs = {
       if (all) return true;
       if (["waiting", "taken", "running"].includes(j.status) || j.checking) return true;
       const stopped = ["failed", "cancelled"].includes(j.status);
-      if (stopped && j.dismissed_at && !j.dismiss_auto) return false;
+      // dismissed by a person: off the list, whatever its state (request of 02-Oct-2026: finished postings too)
+      if (j.dismissed_at && !j.dismiss_auto) return false;
       if (stopped && !j.dismissed_at && !this.postedLater(j) && this.leftToSend(j) !== 0) return true;
       return (Date.parse(j.updated_at || j.created_at) || 0) >= week;
     });
@@ -299,7 +300,8 @@ const TallyProof = {
       let gone;
       if (r.tally && r.tally.guid) gone = !found.has(r.tally.guid) && read(r, r.tally.at || r.sentAt);
       else { const amt = r2(num(r.debit) || num(r.credit)), l = ledOf(r);
-        gone = read(r, 0) && !(lines[d8(r.date)] || []).some(x => Math.abs(Math.abs(num(x.amount)) - amt) < 0.01 && (!l || ledNm(x.ledger).toLowerCase() === l)); }
+        // without the account's Tally ledger chosen there is nothing to look for: not called gone (review of 02-Oct-2026)
+        gone = !!l && read(r, 0) && !(lines[d8(r.date)] || []).some(x => Math.abs(Math.abs(num(x.amount)) - amt) < 0.01 && ledNm(x.ledger).toLowerCase() === l); }
       if (!!gone !== !!r.goneFromTally){ if (gone) r.goneFromTally = new Date().toISOString(); else delete r.goneFromTally; n++; }
     });
     if (n){ saveBank({rows: true}); render(); }

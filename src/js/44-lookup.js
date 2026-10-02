@@ -53,7 +53,7 @@ const FC = {
   },
   path(l){
     const T = this.tn();
-    if (T && T.under[l] != null){ const out = []; let p = T.under[l]; for (let i = 0; p && i < 15; i++){ out.push(p); p = T.groups[p]; } return out; }
+    if (T && ledUnder(T, l) != null) return ledGroupPath(T, l);
     return Audit.path(l);
   },
   inGroup(l, g){ const G = String(g || "").toLowerCase(); return this.path(l).some(x => x.toLowerCase() === G); },

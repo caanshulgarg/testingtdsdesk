@@ -64,9 +64,11 @@ const Books = {
   igstRate(s){ const m = String(s || "").match(/<GSTRATEDUTYHEAD>IGST<\/GSTRATEDUTYHEAD>\s*<GSTRATEVALUATIONTYPE>[^<]*<\/GSTRATEVALUATIONTYPE>\s*<GSTRATE>\s*([\d.]+)\s*<\/GSTRATE>/); return m ? num(m[1]) : null; },
   one(s, tag){ const m = s.match(new RegExp("<" + tag + ">([^<]*)</" + tag + ">")); return m ? this.unesc(m[1]) : ""; },
   unesc(v){
-    return String(v || "").replace(/&apos;/g, "'").replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    return String(v || "").replace(/[ \t]*(&#13;|&#10;)+[ \t]*/g, " ").replace(/&apos;/g, "'").replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">")
       .replace(/&#(\d+);/g, (m, n) => { const c = num(n); return c >= 32 && c < 127 ? String.fromCharCode(c) : " "; })
-      .replace(/&amp;/g, "&").trim();
+      .replace(/&amp;/g, "&")
+      // a line break escaped twice ("&amp;#13;&amp;#10;") is "&#13;&#10;" by now: it goes too (review of 02-Oct-2026)
+      .replace(/[ \t]*(&#13;|&#10;|\r|\n)+[ \t]*/g, " ").trim();
   },
   // each pay head of a payroll voucher, summed over its employees: [[pay head, amount]] (Tally's sign: debit negative)
   payheads(s){
@@ -367,7 +369,7 @@ const Books = {
   isImport(v){ const c = String(v.country || "").toLowerCase(); return !!c && c !== "india"; },
   // orders and stock movements carry no accounts; they are never purchases or sales
   NONACC: /ORDER|DELIVERY NOTE|RECEIPT NOTE|REJECTION|STOCK JOURNAL|PHYSICAL STOCK|MATERIAL (IN|OUT)|MEMO/i,
-  groupPath(l){ const b = S.books || {}, under = b.under || {}, groups = b.groups || {}, out = []; let p = under[l]; for (let i = 0; p && i < 15; i++){ out.push(p); p = groups[p]; } return out; },
+  groupPath(l){ return ledGroupPath(S.books || {}, l); },
   // a voucher type with its own name ("GST INWARD", "LOCAL", "IMPORT") is known by what it does:
   // it debits a ledger under Purchase Accounts, or credits one under Sales Accounts
   byContent(v, re, debit){

@@ -48,9 +48,16 @@ function ClientHeader() {
   // sales and the bank page have their own tabs
   if ((t === "sales" && S.tab === "sales") || (t === "bank" && S.tab === "bank")) return head;
   const now = curStep(), c = stepCounts(), n = (x) => (String(x || "").match(/\d+/) || [""])[0];
-  return <>{head}<nav className="sbar" aria-label="Status">
+  // purchase bills: one row of tabs (review of 02-Oct-2026: a second row under it repeated "To review"): the three steps,
+  // then the bills held as duplicates, deleted, or needing no entry
+  const bills = t === "bills", ents = bills && typeof D === "function" && D() ? Object.values(D().entries || {}) : [], cnt = (st) => ents.filter((e) => e.status === st).length;
+  const side = bills ? [["duplicate", "Duplicates"], ["deleted", "Deleted"]].concat(cnt("rejected") ? [["rejected", "No entry"]] : []) : [];
+  const onSide = bills && S.tab === "invoices" && side.some(([id]) => id === S.filter);
+  const goSide = (id) => { S.step = null; S.tab = "invoices"; S.filter = id; S.selected = null; S.drawerOpen = false; S.reviewTable = false; render(); window.scrollTo(0, 0); };
+  return <>{head}<nav className="sbar" aria-label="Status" data-bill-filters={bills ? "" : undefined}>
     {[["review", "To review", n(c.review)], ["post", "Post to Tally", n(c.post)], ["done", "In Tally", n(c.done)]].map(([id, label, k]) =>
-      <button key={id} aria-selected={now === id} onClick={() => goStep(id)}>{label}{k !== "" && <> <span className="sbar-n">{k}</span></>}</button>)}
+      <button key={id} aria-selected={now === id && !onSide} onClick={() => goStep(id)}>{label}{k !== "" && <> <span className="sbar-n">{k}</span></>}</button>)}
+    {side.map(([id, label]) => <button key={id} aria-selected={onSide && S.filter === id} onClick={() => goSide(id)}>{label} <span className="sbar-n">{cnt(id)}</span></button>)}
   </nav></>;
 }
 

@@ -8,7 +8,7 @@
 // doAct("billPost") and friends; bank buttons through bankAct(). What a posting run reports back lives in
 // S.billPost (bills) and S.bank.postReport (bank); S.billCheck is the last "Check sent bills in Tally".
 import { useState } from "react";
-import { PostReport } from "../parts/BankChecks.jsx";
+import { PostReport, notAllowedRest } from "../parts/BankChecks.jsx";
 
 const plural = (n, one, many) => n + " " + (n === 1 ? one : many);
 const ROLE = { party: "Supplier", expense: "Expense", gst: "Input GST", tds: "TDS payable", roundoff: "Round off", "rcm-in": "RCM input", "rcm-out": "RCM payable" };
@@ -94,7 +94,9 @@ function QueueJobs() {
     <table className="data" style={{ marginTop: 6 }}><thead><tr><th>Queued</th><th>Into</th><th>Entries</th><th>State</th><th>What happened</th></tr></thead><tbody>
       {jobs.map((j) => { const ok = [].concat(j.results || []).filter((r) => r && r.ok).length;
         const stopped = j.status === "failed" || j.status === "cancelled", later = stopped ? CloudJobs.postedLater(j) : null, left = stopped ? CloudJobs.leftToSend(j) : null;
-        const auto = stopped && (later || (j.dismissed_at && j.dismiss_auto)), byHand = stopped && j.dismissed_at && !j.dismiss_auto;
+        // request of 02-Oct-2026: every finished posting can be dismissed (done, failed, cancelled, posted later)
+        const finished = ["done", "failed", "cancelled"].includes(j.status) && !j.checking;
+        const auto = stopped && (later || (j.dismissed_at && j.dismiss_auto)), byHand = finished && j.dismissed_at && !j.dismiss_auto;
         let [label, cls] = JOB_STATE[j.status] || [j.status, ""];
         if (auto) [label, cls] = [j.dismiss_note && j.dismiss_auto ? j.dismiss_note : "Posted later at " + fmtTime(later), "ok"];
         else if (stopped && left === 0) [label, cls] = [label + " · nothing left to send", "ok"];
@@ -104,10 +106,10 @@ function QueueJobs() {
           <td>{j.message || "—"}
             {[].concat(j.items || []).length > 0 && <ul className="nr" style={{ margin: "4px 0 0 16px", padding: 0 }}>{j.items.map((it) => { const e = D().entries[it.id];
               return <li key={it.id}>{(e ? e.x.invoiceNo + " · " + e.x.vendorName : it.id) + ": "}<span className={"tag " + (ITEM_STATE[it.state] || ["", ""])[1]}>{(ITEM_STATE[it.state] || [it.state])[0] + (it.state === "failed" && it.reason ? ":" : "")}</span>{it.reason ? " " + it.reason : ""}</li>; })}</ul>}
-            {stopped && !auto && <div className="row" style={{ marginTop: 4, gap: 8, alignItems: "center" }}>
-              {left === 0 ? <span className="nr" data-nothing-left="">Nothing left to send: every entry is in Tally.</span>
+            {finished && <div className="row" style={{ marginTop: 4, gap: 8, alignItems: "center" }}>
+              {stopped && !auto && (left === 0 ? <span className="nr" data-nothing-left="">Nothing left to send: every entry is in Tally.</span>
                 : <><button className="btn small primary" data-retry="" onClick={() => CloudJobs.retry(j)}>Retry</button>
-                  <span className="nr">{left ? left + " of " + (CloudJobs.idsOf(j) || []).length + " still to send. " : ""}Entries already in Tally are not sent twice.</span></>}
+                  <span className="nr">{left ? left + " of " + (CloudJobs.idsOf(j) || []).length + " still to send. " : ""}Entries already in Tally are not sent twice.</span></>)}
               {byHand ? <button className="btn small" data-undismiss="" onClick={() => CloudJobs.undismiss(j)}>Show in the list again</button>
                 : CloudJobs.dismissOk && <button className="btn small" data-dismiss="" onClick={() => CloudJobs.dismiss(j)}>Dismiss</button>}
             </div>}</td></tr>; })}
@@ -132,7 +134,7 @@ function NotAllowed({ co }) {
   const st = S.postStop && S.postStop.cid === co.id ? S.postStop : null;
   if (!st) return null;
   return <div className="bk-alert bad" data-not-allowed="" style={{ margin: "0 0 12px" }}>
-    <b>Not sent to Tally: choose the Tally company.</b> {st.msg} The entries are still waiting here.
+    <b>Not sent to Tally: choose the Tally company.</b> {notAllowedRest(st.msg)} The entries are still waiting here.
     <div className="row" style={{ gap: 8, marginTop: 6 }}><button className="btn small primary" data-choose-company="" onClick={() => goChooseTallyCompany()}>Choose the Tally company</button>
       <button className="linkbtn" onClick={() => { S.postStop = null; render(); }}>Dismiss</button></div>
   </div>;

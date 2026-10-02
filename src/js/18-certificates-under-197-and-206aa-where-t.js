@@ -130,6 +130,8 @@ async function openBooks(cid){
     if (late || Live.sv.state === "offline"){ S.books.offline = true; toast("The server could not be reached: this is this computer’s copy of the books, as last saved here. It is brought up to date as soon as the server answers."); pull.then(() => { if (S.books && S.books.cid === cid){ S.books.offline = false; render(); } }); }
   }
   S.books.loading = false; S.books.openMs = Date.now() - t0; S.books.openAt = t0;
+  // names kept with line breaks or entities (a copy from before they were cleaned) cleaned once (TallyRead.cleanNames)
+  try { if (TallyRead.cleanNames(S.books)) saveBooks(); } catch (e){}
   if (S.books.vouchers && S.books.vouchers.length) try { LedMaster.refresh(S.books); } catch (e){}
   // server-books: the cloud copy is where the books are; this browser's copy is only a cache of it
   if (typeof TCloud === "object" && TCloud.on()) setTimeout(() => { TCloud.openLoad(cid).catch(() => {}); }, 0);
@@ -193,14 +195,45 @@ const TallyRead = {
     const led = {};
     // a ledger whose name in Tally ends in a line break is named without it, as the day book's entries name it
     // (Books.unesc), so its balance and group meet its entries; two such names are one ledger (review of 01-Oct-2026)
-    const nm = n => String(n || "").replace(/(&#13;|&#10;|\r|\n)+/g, " ").trim();
+    const nm = n => ledClean(n);
     [].concat(j.ledgers || []).forEach(l => {
       const k = nm(l.name), had = led[k];
       led[k] = {open: r2((had ? had.open : 0) + Books.amt(l.open)), close: r2((had ? had.close : 0) + Books.amt(l.close)), parent: (had && had.parent) || l.parent || ""};
     });
     b.tb = {from, to, at: new Date().toISOString(), led};
-    Object.entries(led).forEach(([n, x]) => { if (x.parent) (b.under = b.under || {})[n] = (b.under[n] || x.parent); });
+    Object.entries(led).forEach(([n, x]) => { if (x.parent) (b.under = b.under || {})[n] = (b.under[n] || ledClean(x.parent)); });
     this.yearOpen(b);
+  },
+  // review of 02-Oct-2026 (trade receivables 11,550 short): a copy of the books kept from before the names were cleaned
+  // (here, and in the cloud by migration-23) still names "MCS Project Pvt Ltd&#13;&#10;" (6,000 Cr) and "RAKVIK
+  // TECHNOLOGIES PRIVATE LIMITED&#13;&#10;&#13;&#10;" (17,550 Dr) in its balances, with no group: not debtors, so in other
+  // current liabilities and assets. Every name kept with the books is cleaned once (ledClean, src/js/00), and two names
+  // that become one are one ledger (balances added). Returns how many names changed
+  cleanNames(b){
+    if (!b) return 0;
+    const bad = s => typeof s === "string" && /&|\r|\n|^\s|\s$/.test(s) && ledClean(s) !== s;
+    let n = 0;
+    const keys = (o, merge, val) => {
+      if (!o || typeof o !== "object") return;
+      Object.keys(o).forEach(k => {
+        if (val && bad(o[k])){ o[k] = ledClean(o[k]); n++; }
+        if (!bad(k)) return;
+        const c = ledClean(k), v = o[k]; delete o[k]; n++;
+        o[c] = o[c] == null ? v : merge ? merge(o[c], v) : (o[c] || v);
+      });
+    };
+    const sum = (a, c) => { const out = Object.assign({}, a); ["open", "close", "openSent"].forEach(f => { if (a[f] != null || c[f] != null) out[f] = r2(num(a[f]) + num(c[f])); }); out.parent = a.parent || c.parent || ""; return out; };
+    if (b.tb && b.tb.led){ keys(b.tb.led, sum); Object.values(b.tb.led).forEach(x => { if (x && bad(x.parent)){ x.parent = ledClean(x.parent); n++; } }); }
+    keys(b.under, null, true); keys(b.groups, null, true);
+    ["ledInfo", "map", "gstins", "states", "msme"].forEach(k => keys(b[k]));
+    if (b.map) Object.entries(b.map).forEach(([k, m]) => { if (m && typeof m === "object" && m.n != null && m.n !== k && bad(m.n)) m.n = k; });
+    if (b.fs && b.fs.map) keys(b.fs.map);
+    (b.vouchers || []).forEach(v => {
+      if (bad(v.party)){ v.party = ledClean(v.party); n++; }
+      (v.ent || []).forEach(e => { if (bad(e.l)){ e.l = ledClean(e.l); n++; } });
+    });
+    if (n){ b.mapV = (b.mapV || 0) + 1; if (typeof LK === "object") LK.cache = {}; }
+    return n;
   },
   // review of 01-Oct-2026 (owner's go-ahead): at the start of a financial year, income and expense ledgers open at nil
   // and their total goes to Profit & Loss A/c, as Tally does. Balances taken as on 31 March (a trial balance file, the
@@ -210,7 +243,7 @@ const TallyRead = {
   NOMINAL: ["Sales Accounts", "Purchase Accounts", "Direct Incomes", "Direct Expenses", "Indirect Incomes", "Indirect Expenses"],
   primaryOf(b, n){
     const under = b.under || {}, groups = b.groups || {}, prim = s => !s || /^\W*Primary$/i.test(s);
-    let p = under[n], last = "";
+    let p = ledUnder(b, n), last = "";
     for (let i = 0; !prim(p) && i < 30; i++){ last = p; p = groups[p]; }
     return last;
   },
@@ -236,6 +269,7 @@ const TallyRead = {
   // names the return (and its ARN) and the return the changes go in as amendments
   after(b, why, range){
     b.reco = null; if (typeof GSTR === "object") GSTR._carry = null;
+    try { this.cleanNames(b); } catch (e){}
     if (!(b.vouchers || []).length) return;              // a very large company answered from the cloud's totals: nothing to work on here
     // audit and MIS take seconds on a big company, and the page waits meanwhile: they are not worked out here on every
     // change, only marked out of date; each is worked out again when its tab is opened (Audit, MIS)
@@ -417,20 +451,21 @@ function misPackHtml(r){
   const m = v => INR.format(r2(v || 0)), co = CO();
   const pl = [["Revenue from operations", (r.pl.heads.rev || {t: 0}).t], ["Other income", (r.pl.heads.oth || {t: 0}).t], ["Purchases and direct expenses", ((r.pl.heads.pur || {t: 0}).t + (r.pl.heads.dir || {t: 0}).t)], ["Gross profit", r.pl.gross.t, 1],
     ["Employee costs", (r.pl.heads.emp || {t: 0}).t], ["Other expenses", (r.pl.heads.exp || {t: 0}).t], ["Finance costs", (r.pl.heads.fin || {t: 0}).t], ["Depreciation", (r.pl.heads.dep || {t: 0}).t], ["Profit before tax", r.pl.pbt.t, 1]];
-  const owed = A => A.sum.tally != null ? A.sum.tally : A.sum.open;
+  const owed = A => A.sum.owe != null ? A.sum.owe : A.sum.tally != null ? A.sum.tally : A.sum.open;
   let h = '<div style="border-bottom:2px solid #15201B;padding-bottom:8px;margin-bottom:12px"><div style="font-size:12px;color:#5A6B63">MIS</div><h1 style="font-size:22px;margin:4px 0">' + esc(co.name) + "</h1>" +
     '<div>' + fmtDate(tallyDate(r.from)) + " to " + fmtDate(tallyDate(r.to)) + " \u00b7 prepared " + fmtDate(r.at.slice(0, 10)) + " \u00b7 result code " + esc(r.code) + (r.control ? (r.control.ok ? " \u00b7 agrees with Tally\u2019s balances" : " \u00b7 " + r.control.n + " ledgers differ from Tally") : "") + "</div></div>";
   h += "<h2>At a glance</h2><table><tbody>" + [["Sales", m(r.sales.total) + (r.prev ? " (previous period " + m(r.prev.sales) + ")" : "") + (r.ly ? " (last year " + m(r.ly.sales) + ")" : "")], ["Profit before tax", m(r.pl.pbt.t)],
-    ["Received / paid", m(r.cash.rec) + " / " + m(r.cash.pay)], ["Owed to you", m(owed(r.recv)) + " (over 90 days " + m(r.recv.sum.b[3] + r.recv.sum.b[4]) + ")"], ["You owe", m(owed(r.pay)) + " (MSME past " + MIS.cfg(S.books).msmeDays + " days " + m(r.msme.reduce((s, x) => s + x.amt, 0)) + ")"]]
+    ["Received / paid", m(r.cash.rec) + " / " + m(r.cash.pay)], ["Owed to you", m(owed(r.recv)) + " (over 90 days " + m((r.recv.sum.nb || r.recv.sum.b)[3] + (r.recv.sum.nb || r.recv.sum.b)[4]) + ")"], ["You owe", m(owed(r.pay)) + " (MSME past " + MIS.cfg(S.books).msmeDays + " days " + m(r.msme.reduce((s, x) => s + x.amt, 0)) + ")"]]
     .map(([a, c]) => "<tr><td>" + a + "</td><td>" + c + "</td></tr>").join("") + "</tbody></table>";
   h += "<h2>Profit and loss</h2><table><tbody>" + pl.map(([a, v, bold]) => "<tr><td>" + (bold ? "<b>" + a + "</b>" : a) + '</td><td class="n">' + (bold ? "<b>" + m(v) + "</b>" : m(v)) + "</td></tr>").join("") + "</tbody></table>" +
     '<p class="note">Before the change in stock.</p>';
   if (r.balances.cash) h += "<h2>Cash and bank</h2><table><tbody>" + r.balances.cash.concat(r.balances.bank).filter(x => Math.abs(x[1]) >= 1).map(([l, v]) => "<tr><td>" + esc(l) + '</td><td class="n">' + m(v) + "</td></tr>").join("") + "</tbody></table>";
   // open bills by age: the parties with the most outstanding
-  const age = (t, A) => { const open = p => p.b.reduce((a, v) => a + v, 0), rows = A.rows.filter(p => open(p) > 0).sort((a, c) => open(c) - open(a) || a.party.localeCompare(c.party));
-    return "<h2>" + t + "</h2><table><thead><tr><th>Party</th>" + MIS.BUCKETS.map(z => '<th class="n">' + z[1] + "</th>").join("") + '<th class="n">Open bills</th></tr></thead><tbody>' +
-    rows.slice(0, 15).map(p => "<tr><td>" + esc(p.party) + "</td>" + p.b.map(v => '<td class="n">' + (v ? m(v) : "") + "</td>").join("") + '<td class="n">' + m(open(p)) + "</td></tr>").join("") +
-    "<tr><td><b>All</b></td>" + A.sum.b.map(v => '<td class="n"><b>' + m(v) + "</b></td>").join("") + '<td class="n"><b>' + m(A.sum.open) + "</b></td></tr></tbody></table>" +
+  // the ages of what is owed on balance (MIS.netOpen), and what no bill dates, as on the MIS page (review of 02-Oct-2026)
+  const age = (t, A) => { const nb = p => p.nb || p.b, open = p => nb(p).reduce((a, v) => a + v, 0) + num(p.und), rows = A.rows.filter(p => open(p) > 0).sort((a, c) => open(c) - open(a) || a.party.localeCompare(c.party));
+    return "<h2>" + t + "</h2><table><thead><tr><th>Party</th>" + MIS.BUCKETS.map(z => '<th class="n">' + z[1] + "</th>").join("") + '<th class="n">Not bill-wise</th><th class="n">Owed</th></tr></thead><tbody>' +
+    rows.slice(0, 15).map(p => "<tr><td>" + esc(p.party) + "</td>" + nb(p).map(v => '<td class="n">' + (v ? m(v) : "") + "</td>").join("") + '<td class="n">' + (num(p.und) ? m(p.und) : "") + '</td><td class="n">' + m(open(p)) + "</td></tr>").join("") +
+    "<tr><td><b>All</b></td>" + (A.sum.nb || A.sum.b).map(v => '<td class="n"><b>' + m(v) + "</b></td>").join("") + '<td class="n"><b>' + m(A.sum.und) + '</b></td><td class="n"><b>' + m(A.sum.owe != null ? A.sum.owe : A.sum.open) + "</b></td></tr></tbody></table>" +
     (Math.abs(A.sum.pre) >= 1 && A.sum.tally == null ? '<p class="note">' + m(Math.abs(A.sum.pre)) + " was settled against bills from before the books read here; they are not in these figures.</p>" : ""); };
   h += age("Receivables, largest 15", r.recv) + age("Payables, largest 15", r.pay);
   h += "<h2>Top customers</h2><table><tbody>" + r.sales.rows.slice(0, 10).map(x => "<tr><td>" + esc(x.party) + '</td><td class="n">' + m(x.t) + '</td><td class="n">' + (r.sales.total ? Math.round(x.t / r.sales.total * 1000) / 10 + "%" : "") + "</td></tr>").join("") + "</tbody></table>";
@@ -460,7 +495,7 @@ async function misExcel(r){
   MIS.HEADS.forEach(([k, l]) => { const H = r.pl.heads[k]; if (!H) return; pl.push([l, ""].concat(months.map(mm => H.m[mm] || 0)).concat([H.t])); H.led.forEach(x => pl.push(["", x.l].concat(months.map(mm => x.m[mm] || 0)).concat([x.t]))); });
   [["Gross profit", r.pl.gross], ["Profit before tax", r.pl.pbt], ["Profit after tax", r.pl.pat]].forEach(([l, x]) => pl.push([l, ""].concat(months.map(mm => x.m[mm] || 0)).concat([x.t])));
   add("Profit and loss", pl);
-  const age = A => [["Party"].concat(MIS.BUCKETS.map(z => z[1] + " days")).concat(["Before these books", "Advances", "On account", "Total", "Tally balance"])].concat(A.rows.map(p => [p.party].concat(p.b).concat([p.pre, p.adv, p.unalloc, p.total, p.tally == null ? "" : p.tally])));
+  const age = A => [["Party"].concat(MIS.BUCKETS.map(z => z[1] + " days")).concat(["Not bill-wise", "Owed", "Advance", "Tally balance", "Bills as raised: before these books", "advances", "on account", "total"])].concat(A.rows.map(p => [p.party].concat(p.nb || p.b).concat([p.und || 0, Math.max(0, p.net != null ? p.net : p.total), p.advance || 0, p.tally == null ? "" : p.tally, p.pre, p.adv, p.unalloc, p.total])));
   add("Receivables", age(r.recv)); add("Payables", age(r.pay));
   add("Bills owed to you", [["Customer", "Bill", "Date", "Days", "Outstanding"]].concat(r.recv.rows.flatMap(p => p.bills.map(z => [p.party, z.ref || "on account", Audit.iso(z.date), z.age, z.amt]))));
   add("Bills you owe", [["Supplier", "Bill", "Date", "Days", "Outstanding", "MSME"]].concat(r.pay.rows.flatMap(p => p.bills.map(z => [p.party, z.ref || "on account", Audit.iso(z.date), z.age, z.amt, p.msme || ""]))));

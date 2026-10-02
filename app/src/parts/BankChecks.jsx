@@ -9,6 +9,8 @@ const inr = (v) => money(v || 0), abs = (v) => money(Math.abs(v || 0));
 const plural2 = (n, one, many) => n + (n === 1 ? one : many);
 
 // show only some lines of the statement, with what they are
+// the cloud's refusal starts "Choose the Tally company …", which the banner's heading already says: said once
+export function notAllowedRest(msg){ return String(msg || "").replace(/^\s*choose the tally company.*?may post to[^.]*\.\s*/i, ""); }
 export function FocusBtn({ title, ids, label, note }) {
   if (!ids || !ids.length) return null;
   return <button className="linkbtn" onClick={() => bankFocusGo(title, ids, note)}>{label || "Show " + (ids.length === 1 ? "this line" : "these " + ids.length + " lines")}</button>;
@@ -147,7 +149,7 @@ export function FixBanner() {
 export function PostReport({ rep }) {
   if (!rep) return null;
   // one clear word for each (review of 02-Oct-2026): In Tally (verified) / In Tally, not yet read back / Failed
-  if (rep.notAllowed) return <div className="bk-alert bad" data-not-allowed=""><b>Not sent to Tally: choose the Tally company.</b>{" " + rep.notAllowed + " "}
+  if (rep.notAllowed) return <div className="bk-alert bad" data-not-allowed=""><b>Not sent to Tally: choose the Tally company.</b>{" " + notAllowedRest(rep.notAllowed) + " "}
     <button className="btn small primary" onClick={() => goChooseTallyCompany()}>Choose the Tally company</button>{" "}<Btn act={rep.dismiss} className="linkbtn">Dismiss</Btn></div>;
   const verified = rep.checking ? 0 : (rep.posted || 0) - (rep.unread || 0);
   const bits = [rep.checking ? (rep.posted || 0) + " in Tally" + (rep.company ? " (" + rep.company + ")" : "") + ", not yet read back: FinCom reads them back by itself…" : verified + " in Tally (verified)" + (rep.company ? " · " + rep.company : "")];

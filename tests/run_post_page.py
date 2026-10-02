@@ -5,6 +5,8 @@
   - one main button "Post N to Tally"; the rest under More; the finished postings below;
   - a posting stopped by the company check (the cloud's notAllowed): "Not sent to Tally: choose the Tally company" with a
     button to Client setup → Tally, never "Tally's reason"; the bills stay waiting;
+  - one count of what is for Tally: the header chip, the tab badge, the page and the dashboard tile agree (item 8);
+  - the import steps stack one under the other, also at 375 px (item 9);
   - the company is set by itself (postToBy auto) when exactly one Tally company is linked and its GSTIN is the client's;
   - every posting goes through FinCom's cloud queue when the client is linked there, also with the bridge on this
     computer; straight to the bridge otherwise, and then recorded (tally_post_record; an older cloud without it: no error).
@@ -132,6 +134,29 @@ with sync_playwright() as p:
     pg.wait_for_timeout(1200)
     r3 = E("window.__r3")
     ok(r3 and not r3.get("err") and r3["results"][0]["ok"] and E("PostRecord.missing") is True, "B11. an older cloud without tally_post_record: the posting still works, nothing breaks")
+    # item 8: one count everywhere (a bill sent in a Tally file and not confirmed counts until Tally confirms it)
+    E("""() => { const a = Object.values(D().entries).find(x => x.status === "approved"), e = JSON.parse(JSON.stringify(a)); e.id = "tfile1"; e.x.invoiceNo = "T/1"; e.x.vendorName = "Tally File Co";
+      S.data[S.coId].entries[e.id] = e; e.exportedAt = new Date().toISOString();
+      refreshStats(S.coId); goStep("post", "bills"); }""")
+    pg.wait_for_timeout(600)
+    num = lambda t: int(([x for x in __import__("re").findall(r"\d+", t or "")] or ["-1"])[0])
+    chip = E("(() => { const t = tallyStatus(CO()); return t.state + '|' + t.short; })()")
+    tab = E("(() => { const b = Array.from(document.querySelectorAll('nav.sbar button')).find(x => /Post to Tally/.test(x.textContent)); return b ? b.textContent : ''; })()")
+    page = pg.inner_text("#app [data-post-count]") if pg.locator("#app [data-post-count]").count() else ""
+    E("() => { S.tab = 'dash'; render(); }"); pg.wait_for_timeout(600)
+    dash = E("(() => { const t = Array.from(document.querySelectorAll('#app .dtile')).find(x => /Post to Tally/.test(x.textContent)); return t ? t.querySelector('b').textContent : ''; })()")
+    want = E("postCountFor(S.coId)"); sentRows = E("postRows(CO()).filter(r => r.sent).map(r => r.no + ':' + r.state[0]).join()")
+    got = [num(chip.split("|")[1]), num(tab), num(page), num(dash)]
+    ok(chip.startswith("waiting") and want > 0 and got == [want] * 4 and "T/1" in sentRows,
+       "8. one count: header chip, tab badge, Post page and dashboard tile all say %d (%s | %s | %s | %s)" % (want, chip, tab, page, dash))
+    E("() => { goStep('post', 'bills'); }"); pg.wait_for_timeout(400)
+    # item 9: the import steps stack, also at phone width
+    pg.set_viewport_size({"width": 375, "height": 800}); pg.wait_for_timeout(300)
+    E("document.querySelector(\"#app details[data-more='post']\").open = true"); pg.click('#app [data-more="post"] button:has-text("How to import the file into Tally")'); pg.wait_for_timeout(300)
+    lay = E("""(() => { const li = Array.from(document.querySelectorAll('#app [data-import-steps] li')).map(x => x.getBoundingClientRect());
+      return {n: li.length, stacked: li.every((r, i) => i === 0 || r.top >= li[i - 1].bottom - 1), scroll: document.documentElement.scrollWidth - innerWidth}; })()""")
+    ok(lay["n"] == 5 and lay["stacked"] and lay["scroll"] <= 1, "9. the import steps stack one under the other at 375 px, no sideways scroll (%s)" % lay)
+    pg.set_viewport_size({"width": 1440, "height": 950})
     # B14: postTo by itself, only when clear
     t = E("""async () => { const mk = (g) => { const c = newCompany({name: "ZZ " + g, gstin: g}); S.companies[c.id] = c; return c; };
       Bridge.up = () => false;

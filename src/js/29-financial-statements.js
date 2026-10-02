@@ -97,8 +97,9 @@ const FS = {
       const where = (c.map || {})[l] || this.place(l, v, c.kind);
       if (n.rev){
         // the year's movement goes to the statement of profit and loss
-        const m = num((mv[l] || {}).t), amt = !n.dr ? m : -m, k = where === "pur" && c.mfg ? "mat" : where;
-        plLine[k] = r2((plLine[k] || 0) + amt); (plDet[k] = plDet[k] || []).push([l, r2(amt)]);
+        const m = num((mv[l] || {}).t), amt0 = !n.dr ? m : -m, k0 = where === "pur" && c.mfg ? "mat" : where;
+        const [k, amt, flag] = this.creditExpense(l, k0, amt0, c);
+        plLine[k] = r2((plLine[k] || 0) + amt); (plDet[k] = plDet[k] || []).push(flag ? [l, r2(amt), flag] : [l, r2(amt)]);
         revenueLedgersClose += v;
         return;
       }
@@ -132,18 +133,29 @@ const FS = {
     const pyPl = lyCovered ? this.plOnly(MIS.shift(from, -1), MIS.shift(to, -1), c) : null;
     // the notes a reader needs: trade payables and receivables by age, MSME, and the fixed assets
     const pays = MIS.ageing(to, "p", close), recv = MIS.ageing(to, "r", close), msme = MIS.msme();
+    // each asset with its line (review of 02-Oct-2026: CRM Software and Tally Software were in the PPE table and under
+    // intangible assets too): the PPE note lists the PPE, the intangible assets' note the intangibles
     const fa = all.filter(l => ["ppe", "intang", "cwip"].includes((c.map || {})[l] || this.place(l, num(close[l]), c.kind)) && !this.nature(l).rev).map(l => {
-      const o = -num(open[l]), cl = -num(close[l]); let addn = 0, del = 0;
+      const o = -num(open[l]), cl = -num(close[l]), k = (c.map || {})[l] || this.place(l, num(close[l]), c.kind); let addn = 0, del = 0;
       (b.vouchers || []).forEach(v => { if (v.date < from || v.date > to || v.opt || v.cancel) return; v.ent.forEach(e => { if (e.l !== l) return; if (e.a < 0 && !/DEPRECIATION/i.test(v.narr || "")) addn += -e.a; else if (e.a > 0) del += e.a; }); });
-      return {l, open: r2(o), add: r2(addn), del: r2(del), close: r2(cl)};
+      return {l, k, open: r2(o), add: r2(addn), del: r2(del), close: r2(cl)};
     }).filter(x => x.open || x.close || x.add || x.del);
     return {fy, from, to, kind: c.kind, lines, put, det, py, pl: plLine, plDet, inc: r2(inc), exp: r2(exp), pbe, pbt, pat, pyPl, eqL, assets, diff: r2(eqL - assets), integrated, stock: {open: stOpen, close: stClose},
-      src: bal.src, tp: {msme: r2(pays.rows.filter(p => /micro|small/i.test(msme[p.party] || "")).reduce((a, p) => a + p.total, 0)), all: r2(put.tp || 0), age: pays.sum, rows: pays.rows}, tr: {age: recv.sum, rows: recv.rows}, fa,
+      src: bal.src, tp: {msme: r2(pays.rows.filter(p => /micro|small/i.test(msme[p.party] || "")).reduce((a, p) => a + Math.max(0, p.net != null ? p.net : p.total), 0)), all: r2(put.tp || 0), age: pays.sum, rows: pays.rows}, tr: {age: recv.sum, rows: recv.rows}, fa,
       eps: c.kind === "co" && num(c.shares) ? r2(pat / num(c.shares)) : null, cfg: c};
+  },
+  // review of 02-Oct-2026: an expense ledger whose year ends in credit ("Written Off Expenses", 32,23,694.87 Cr, made
+  // Testing AAD's other expenses -5,43,549.56) is income for the year: it goes under Other income, flagged, unless it
+  // was placed by hand on the Mapping tab. Purchases, stock and tax stay where they are
+  CREDIT_EXP: "expense ledger with a credit balance",
+  creditExpense(l, k, amt, c){
+    if (amt < -0.004 && ["exp", "emp", "fin", "dep"].includes(k) && !((c && c.map) || {})[l]) return ["oth", r2(-amt), this.CREDIT_EXP];
+    return [k, amt, ""];
   },
   plOnly(from, to, c){
     const mv = MIS.moves(from, to), pl = {};
-    Object.keys(mv).forEach(l => { const n = this.nature(l); if (!n.rev) return; const m = num(mv[l].t), amt = !n.dr ? m : -m, w = (c.map || {})[l] || this.place(l, 0, c.kind), k = w === "pur" && c.mfg ? "mat" : w; pl[k] = r2((pl[k] || 0) + amt); });
+    Object.keys(mv).forEach(l => { const n = this.nature(l); if (!n.rev) return; const m = num(mv[l].t), amt0 = !n.dr ? m : -m, w = (c.map || {})[l] || this.place(l, 0, c.kind), k0 = w === "pur" && c.mfg ? "mat" : w;
+      const [k, amt] = this.creditExpense(l, k0, amt0, c); pl[k] = r2((pl[k] || 0) + amt); });
     const inc = num(pl.rev) + num(pl.oth), exp = ["mat", "pur", "chg", "emp", "fin", "dep", "exp"].reduce((s2, k) => s2 + num(pl[k]), 0);
     return Object.assign(pl, {inc: r2(inc), exp: r2(exp), pbt: r2(inc - exp - num(pl.exc)), pat: r2(inc - exp - num(pl.exc) - num(pl.tax))});
   },
@@ -178,11 +190,18 @@ const FS = {
     notes.forEach(k => {
       const list = k.startsWith("pl:") ? (d.plDet[k.slice(3)] || []) : (d.det[k] || []);
       nt += '<h3 style="font-size:13px;margin:12px 0 4px">Note ' + noteOf[k] + ". " + esc(lab(k)) + "</h3>";
-      if (k === "tp") nt += '<p class="note">Micro and small enterprises: ' + m(d.tp.msme) + "; others: " + m(d.tp.all - d.tp.msme) + ". Outstanding by age from the bill date: " + MIS.BUCKETS.map((z, i) => z[1] + " days " + m(d.tp.age.b[i])).join("; ") + ".</p>";
-      if (k === "tr") nt += '<p class="note">Outstanding by age from the bill date: ' + MIS.BUCKETS.map((z, i) => z[1] + " days " + m(d.tr.age.b[i])).join("; ") + ". Undisputed, considered good unless shown otherwise.</p>";
-      if (k === "ppe" && d.fa.length) nt += '<table><thead><tr><th>Asset</th><th class="n">Opening</th><th class="n">Additions</th><th class="n">Deductions</th><th class="n">Closing</th></tr></thead><tbody>' +
-        d.fa.map(x => "<tr><td>" + esc(x.l) + '</td><td class="n">' + m(x.open) + '</td><td class="n">' + m(x.add) + '</td><td class="n">' + m(x.del) + '</td><td class="n">' + m(x.close) + "</td></tr>").join("") + "</tbody></table>";
-      nt += "<table><tbody>" + list.slice().sort((a, c2) => Math.abs(c2[1]) - Math.abs(a[1])).slice(0, 60).map(([l, v]) => "<tr><td>" + esc(l) + '</td><td class="n">' + m(v) + "</td></tr>").join("") +
+      // review of 02-Oct-2026: the ages of what is owed on balance (MIS.netOpen: amounts on account and advances set
+      // against the oldest bills), with what no bill dates as one line, so the ages add up to the ledger balances
+      const ages = A => MIS.BUCKETS.map((z, i) => z[1] + " days " + m((A.nb || A.b)[i])).join("; ") + (num(A.und) >= 0.005 ? "; not bill-wise " + m(A.und) : "") + " (total " + m(A.owe != null ? A.owe : A.open) + ")";
+      if (k === "tp") nt += '<p class="note">Micro and small enterprises: ' + m(d.tp.msme) + "; others: " + m(d.tp.all - d.tp.msme) + ". Outstanding by age from the bill date: " + ages(d.tp.age) + ".</p>";
+      if (k === "tr") nt += '<p class="note">Outstanding by age from the bill date: ' + ages(d.tr.age) + ". Undisputed, considered good unless shown otherwise.</p>";
+      // the fixed assets of this line, each once, with opening, additions, deductions and closing; the table is the list
+      // of the note's ledgers (it was printed again below it)
+      const faK = ["ppe", "intang", "cwip"].includes(k) ? d.fa.filter(x => (x.k || "ppe") === k) : [];
+      if (faK.length){ nt += '<table><thead><tr><th>Asset</th><th class="n">Opening</th><th class="n">Additions</th><th class="n">Deductions</th><th class="n">Closing</th></tr></thead><tbody>' +
+        faK.map(x => "<tr><td>" + esc(x.l) + '</td><td class="n">' + m(x.open) + '</td><td class="n">' + m(x.add) + '</td><td class="n">' + m(x.del) + '</td><td class="n">' + m(x.close) + "</td></tr>").join("") +
+        '<tr><td><b>Total</b></td><td class="n"><b>' + m(faK.reduce((a, x) => a + x.open, 0)) + '</b></td><td class="n"><b>' + m(faK.reduce((a, x) => a + x.add, 0)) + '</b></td><td class="n"><b>' + m(faK.reduce((a, x) => a + x.del, 0)) + '</b></td><td class="n"><b>' + m(faK.reduce((a, x) => a + x.close, 0)) + "</b></td></tr></tbody></table>"; return; }
+      nt += "<table><tbody>" + list.slice().sort((a, c2) => Math.abs(c2[1]) - Math.abs(a[1])).slice(0, 60).map(([l, v, flag]) => "<tr><td>" + esc(l) + (flag ? ' <span class="tag warn" data-fs-flag="">' + esc(flag) + "</span>" : "") + '</td><td class="n">' + m(v) + "</td></tr>").join("") +
         (list.length > 60 ? '<tr><td class="note">and ' + (list.length - 60) + " more ledgers</td><td></td></tr>" : "") + "</tbody></table>";
     });
     const title = comp ? "Balance Sheet as at 31 March " + (num(d.fy) + 1) : "Balance Sheet as at 31 March " + (num(d.fy) + 1);

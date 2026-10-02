@@ -28,7 +28,6 @@ export default function Invoices() {
     S.selected = id; render();
     if (window.innerWidth < 860) { const el = document.querySelector(".detail"); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }
   };
-  const filter = (id, label) => <button aria-pressed={S.filter === id} onClick={() => { S.filter = id; S.selected = null; render(); }}>{label} ({cnt(id)})</button>;
   return <>
     <DocqPanel cid={S.coId} />
     <UploadResult />
@@ -38,10 +37,7 @@ export default function Invoices() {
         <div className="row" style={{ margin: "8px 0 0", justifyContent: "flex-end" }}>
           <button className="btn small" onClick={() => vrOpen()} title="Match a vendor’s ledger with the party’s ledger in Tally">Reconcile a vendor ledger</button>
         </div>
-        <div className="filters">
-          {filter("draft", "To review")}{filter("approved", "Approved")}{filter("rejected", "No entry")}
-          {filter("duplicate", "Duplicates")}{filter("deleted", "Deleted")}
-        </div>
+        {/* which bills: the one row of tabs at the top (To review · Post to Tally · In Tally · Duplicates · Deleted) */}
         {shown.length ? (
           <ul className="queue">
             {shown.map((e) => (

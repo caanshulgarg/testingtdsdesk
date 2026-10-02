@@ -95,6 +95,19 @@ try:
         db.sql("set role authenticated; set fincom.uid = '%s'; delete from client_settings_history;" % U); ok(False, "29: nobody deletes history")
     except RuntimeError as e: ok("permission denied" in str(e), "29: a signed-in user cannot change or delete the history")
 
+    # ---- migration-27's postTo block, with these triggers in place (migration-19 guard, 29 history, 30 keys kept)
+    m27 = open(os.path.join(ROOT, "tally-cloud/migration-27-post-record.sql")).read()
+    block = m27[m27.rindex("\nbegin;"):]
+    db.sql("""create table if not exists tally_companies (firm_id uuid, company text, client_id text, gstin text);
+      insert into tally_companies values ('%s', 'GARG SHEKHAR & COMPANY', 'cmufksrrqjub2g', '09AANFG3202D1ZR');
+      update clients set data = data - 'postTo' where id = 'cmufksrrqjub2g';""" % F)
+    ok(db.one("select data ? 'postTo' from clients where id = 'cmufksrrqjub2g'") == "t", "30: removing postTo by leaving it out is refused (kept)")
+    db.sql("update clients set data = data || '{\"postTo\": \"\"}' where id = 'cmufksrrqjub2g';")
+    db.sql(block); db.sql(block)
+    d = json.loads(db.one("select data::text from clients where id = 'cmufksrrqjub2g'"))
+    ok(d["postTo"] == "GARG SHEKHAR & COMPANY" and d["postToBy"] == "auto" and d["gst"]["cgst"] == "INPUT CGST", "27: the postTo block sets Testing AAD to GARG SHEKHAR & COMPANY with the triggers in place, nothing else changed; twice is harmless")
+    ok(db.one("select count(*) from client_settings_history where client_id = 'cmufksrrqjub2g' and setting = 'data.postTo' and new_value = '\"GARG SHEKHAR & COMPANY\"' and by_name is null") == "1", "29: the block's change is in the history (by FinCom)")
+
     # ---- 29: the backup
     db.sql("update records set deleted = true where id = 'e2';")
     db.one("select take_backup('%s')::text" % F)

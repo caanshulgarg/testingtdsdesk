@@ -5,6 +5,8 @@
 --   tally_post_record(id, client, company, status, results, entry_ids, message)
 --       a posting already made: inserted (or brought up to date, same id) as done or failed, with device_id null, so no
 --       bridge ever takes it; the payload holds only the voucher ids (entry_ids is generated from it, migration-26)
+--   tally_post_dismiss(id, auto)  replaced: a person may dismiss any finished posting (done, failed, cancelled, posted
+--       later); FinCom's own dismissing as before (migration-26)
 -- Adds and replaces only; nothing is dropped or deleted. Safe to run again.
 
 begin;
@@ -38,6 +40,40 @@ begin
             left(coalesce(p_message, ''), 500), p_results, false, auth.uid(), now(), now());
   return jsonb_build_object('ok', true, 'id', p_id);
 end $function$;
+
+-- Dismiss, request of 02-Oct-2026: every finished posting can be taken off the list by a person, not only a failed or
+-- cancelled one (a done posting, and one FinCom marked "Posted later", as failed job aebb6c15 of Testing AAD); FinCom's own
+-- dismissing (auto) stays only for a failed or cancelled posting whose entries a later posting put in (migration-26).
+-- A posting still waiting or being posted is never dismissed. The row is kept, with who and when.
+create or replace function public.tally_post_dismiss(p_id uuid, p_auto boolean)
+returns jsonb language plpgsql security definer set search_path to 'public' as $function$
+declare f uuid := my_firm(); j record; later timestamptz;
+begin
+  if f is null or not can_write() then raise exception 'not allowed' using errcode = '42501'; end if;
+  select * into j from tally_post_jobs where id = p_id and firm_id = f for update;
+  if not found then raise exception 'no such posting in this firm'; end if;
+  if coalesce(p_auto, false) then
+    if j.status not in ('failed', 'cancelled') then return jsonb_build_object('ok', false, 'error', 'Only a failed or cancelled posting can be dismissed.'); end if;
+    if j.dismissed_at is not null then return jsonb_build_object('ok', true, 'already', true); end if;
+    later := tally_post_later(p_id);
+    if later is null then return jsonb_build_object('ok', false, 'error', 'Not every entry of this posting was posted later.'); end if;
+    update tally_post_jobs set dismissed_at = now(), dismissed_by = null, dismiss_auto = true,
+           dismiss_note = 'Posted later at ' || to_char(later at time zone 'Asia/Kolkata', 'HH24:MI') ||
+                          case when (later at time zone 'Asia/Kolkata')::date <> (j.created_at at time zone 'Asia/Kolkata')::date
+                               then ' on ' || to_char(later at time zone 'Asia/Kolkata', 'DD-Mon-YYYY') else '' end
+     where id = p_id;
+    return jsonb_build_object('ok', true);
+  end if;
+  if j.status not in ('done', 'failed', 'cancelled') or j.checking then return jsonb_build_object('ok', false, 'error', 'A posting still going on cannot be dismissed.'); end if;
+  if j.dismissed_at is not null and not j.dismiss_auto then return jsonb_build_object('ok', true, 'already', true); end if;
+  -- by a person; one FinCom dismissed ("Posted later") keeps its note
+  update tally_post_jobs set dismissed_at = now(), dismissed_by = auth.uid(), dismiss_auto = false,
+         dismiss_note = case when j.dismiss_auto and j.dismiss_note is not null then j.dismiss_note || '; dismissed' else 'Dismissed' end
+   where id = p_id;
+  return jsonb_build_object('ok', true);
+end $function$;
+revoke all on function public.tally_post_dismiss(uuid, boolean) from public, anon;
+grant execute on function public.tally_post_dismiss(uuid, boolean) to authenticated;
 
 revoke all on function public.tally_post_record(uuid, text, text, text, jsonb, jsonb, text) from public, anon;
 grant execute on function public.tally_post_record(uuid, text, text, text, jsonb, jsonb, text) to authenticated;

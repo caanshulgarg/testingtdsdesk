@@ -13,12 +13,8 @@ const Audit = {
   today(){ const d = new Date(); return d.getFullYear() + String(d.getMonth() + 1).padStart(2, "0") + String(d.getDate()).padStart(2, "0"); },
   fyStart(d){ d = this.ymd(d); const y = num(d.slice(0, 4)), m = num(d.slice(4, 6)); return String(m >= 4 ? y : y - 1) + "0401"; },
   // the group a ledger sits under, up to the top
-  path(l){
-    const b = S.books, under = b.under || {}, groups = b.groups || {}, out = [];
-    let p = under[l];
-    for (let i = 0; p && i < 15; i++){ out.push(p); p = groups[p]; }
-    return out;
-  },
+  // (ledGroupPath, src/js/00: a name with line breaks or entities still finds its group)
+  path(l){ return ledGroupPath(S.books, l); },
   under(l, re){ return this.path(l).some(g => re.test(g)); },
   isCash(l){ const m = Books.ledgerOf(l); return this.under(l, /^cash-in-hand$/i) || (!this.path(l).length && m.kind === "bank" && /\bCASH\b/i.test(l)); },
   isBankL(l){ return this.under(l, /^bank (accounts|od a\/c|occ a\/c)$/i) || (Books.ledgerOf(l).kind === "bank" && !this.isCash(l)); },

@@ -47,7 +47,8 @@ function Row({ e, c, sel }) {
   );
 }
 
-// To review, Duplicates and Deleted, with their counts, on the table too (review of 02-Oct-2026)
+// To review, Duplicates and Deleted, with their counts: now in the one row of tabs at the top (TopBar.jsx; review of
+// 02-Oct-2026: two rows of tabs, both with "To review"); kept for any page that has no tab row of its own
 export function StatusFilters() {
   const all = Object.values(D().entries), cnt = (st) => all.filter((e) => e.status === st).length;
   const go = (st) => { S.filter = st; S.selected = null; render(); };
@@ -70,7 +71,6 @@ export function ReviewTable() {
         <div className="bk-actions"><button className="btn small" onClick={() => doAct("revList")}>One at a time</button></div>
       </div>
       <UploadResult />
-      <StatusFilters />
       {!rows.length && !all.length ? <div className="bk-none" style={{ background: "var(--sheet)", border: "1px solid var(--rule)", borderRadius: 10 }}>Nothing waiting. Upload bills above.</div> : <>
         <div className="revfilter">
           <input type="search" value={S.revQuery || ""} placeholder="Filter by supplier, bill no., GSTIN, ledger, payment type or amount" aria-label="Filter the bills"

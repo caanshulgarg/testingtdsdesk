@@ -26,11 +26,7 @@ function Head({ b, run }) {
   const c = Audit.cfg(b), dr = Audit.defaultRange(b), range = S.auditRange || { from: Audit.iso(dr.from), to: Audit.iso(dr.to) };
   const lyFrom = MIS.shift(Audit.ymd(range.from), -1), lyTo = MIS.shift(Audit.ymd(range.to), -1), lyHere = MIS.covered(lyFrom);
   const fin = run && Audit.finalFor(run.from, run.to);
-  const st = Audit.stale(run);
   return <section className="dash-card" data-audit-head="">
-    {st && <div className="bk-alert" data-audit-stale="">{st.changed ? "The last run (" + d(run.from) + " to " + d(run.to) + ", " + st.was + " entries) was worked out before the books or FinCom’s checks changed."
-        : "The last run was worked out on " + st.was + " entries from " + d(run.from) + " to " + d(run.to) + "; the books now hold " + st.now + " for that period."}
-      {" Its findings are not shown until it is run again. "}<button className="btn small primary" onClick={() => doAct("auditRun")}>Run again</button></div>}
     <div className="row" style={{ gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
       <label className="f" style={{ minWidth: 150 }}><span>From</span><input type="date" aria-label="Audit from" key={"f" + range.from} defaultValue={range.from} onChange={(ev) => auditRangeSet("from", ev.target.value)} /></label>
       <label className="f" style={{ minWidth: 150 }}><span>To</span><input type="date" aria-label="Audit to" key={"t" + range.to} defaultValue={range.to} onChange={(ev) => auditRangeSet("to", ev.target.value)} /></label>
@@ -108,8 +104,13 @@ function Finding({ f }) {
 function Findings({ b }) {
   const au = b.audit || {}, run = au.last;
   if (!run) return <><Head b={b} run={run} /><div className="bk-none" style={{ marginTop: 12 }}>Not run yet. Choose the period and press Run now.</div></>;
-  // a run that no longer fits the books: only the head, with Run again (review of 02-Oct-2026)
-  if (Audit.stale(run)) return <Head b={b} run={run} />;
+  // a run that no longer fits the books (other entries for its period, or the books or FinCom's checks changed) is worked
+  // out again by itself for the same period, as MIS is; its old findings are not shown meanwhile (review of 02-Oct-2026:
+  // "worked out on 1231 entries… the books now hold 4" asked the user to press Run again)
+  if (Audit.stale(run)) {
+    if (!Audit._again) { Audit._again = true; setTimeout(() => { try { Audit.run(run.from, run.to, "worked out again (the books changed since the run of " + fmtDate(String(run.at || "").slice(0, 10)) + ")"); saveBooks(); } catch (e) {} finally { Audit._again = false; render(); } }, 0); }
+    return <><Head b={b} run={null} /><div className="bk-none" data-audit-again="" style={{ marginTop: 12 }}>{"Working out again for " + d(run.from) + " to " + d(run.to) + ": the books changed since the last run."}</div></>;
+  }
   const f0 = run.findings, sev = (s) => f0.filter((f) => f.sev === s), sum = (l) => l.reduce((s, f) => s + f.amount, 0);
   const open = f0.filter((f) => Audit.status(f.id).s === "open").length, fresh = f0.filter((f) => f.isNew).length;
   const area = S.auditArea || "", fs = S.auditSt || "", list = f0.filter((f) => (!area || f.area === area) && (!fs || Audit.status(f.id).s === fs));

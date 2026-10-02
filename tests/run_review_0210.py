@@ -63,7 +63,9 @@ with sync_playwright() as p:
     st = E("(() => { S.books.audit = {st: {}, last: {at: '2026-10-01T00:00:00Z', from: '20260401', to: '20260930', vouchers: 1231, findings: []}}; return Audit.stale(S.books.audit.last); })()")
     ok(st == {"was": 1231, "now": 0}, "7. a run kept for Apr-Sep 2026 on 1,231 entries is out of date: the books hold %s there" % (st or {}).get("now"))
     E("() => { S.view = 'company'; S.tab = 'books'; S.booksTab = 'audit'; render(); }"); pg.wait_for_timeout(700)
-    ok(pg.locator("#app [data-audit-stale]").count() == 1 and "1231" in pg.inner_text("#app [data-audit-stale]"), "7. the audit page says the findings were on 1231 entries and asks to run again")
+    pg.wait_for_timeout(1500)
+    rerun = E("[(S.books.audit.last || {}).vouchers, (S.books.audit.last || {}).from, !!Audit.stale(S.books.audit.last)]")
+    ok(pg.locator("#app [data-audit-stale]").count() == 0 and rerun == [0, "20260401", False], "7. the audit page works the stale run out again by itself for its period, with no message to run again (%s)" % rerun)
     ok(pg.locator("#app select[aria-label='Audit year']").count() == 1, "7. the audit has a year to choose")
 
     # 9, 10. TDS and GST paid, from the books; book figures not called 3B

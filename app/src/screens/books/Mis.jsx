@@ -71,7 +71,8 @@ function Summary({ b, r }) {
     <div className="dash-tiles">
       <Tile l="Sales, the period" v={m(r.sales.total)} sub={(r.sales.other ? "other income " + m(r.sales.other) + " · " : "") + (r.prev ? "previous period " + m(r.prev.sales) + " (" + pct(r.sales.total, r.prev.sales) + ")" : "") + (r.ly ? " · last year " + m(r.ly.sales) + " (" + pct(r.sales.total, r.ly.sales) + ")" : "")} />
       <Tile l="Profit before tax" v={noGroups ? "—" : m(r.pl.pbt.t)} sub={"gross profit " + m(r.pl.gross.t) + (r.pl.heads.rev ? " (" + (Math.round(r.pl.gross.t / r.pl.heads.rev.t * 1000) / 10) + "% of revenue)" : "")} />
-      <Tile l="Month to date · year to date" v={r.mtd != null ? m(r.mtd) : "—"} sub={r.ytd != null ? "year to date " + m(r.ytd) : ""} />
+      {/* review of 02-Oct-2026: the tile is sales, of the period's last month up to its last day, and of the year so far */}
+      <Tile l={"Sales, " + GSTR.label(String(r.to).slice(0, 6)) + (MIS.shift(r.to, 0, 1).slice(6) === "01" ? "" : " to " + d(r.to))} v={r.mtd != null ? m(r.mtd) : "—"} sub={r.ytd != null ? "year to date (from " + d(Audit.fyStart(r.to)) + ") " + m(r.ytd) : ""} />
       <Tile l="Received · paid" v={m(r.cash.rec)} sub={"paid out " + m(r.cash.pay) + ", net " + m(r.cash.rec - r.cash.pay)} />
     </div>
     <div className="dash-tiles">
@@ -104,7 +105,7 @@ function LedgerEntries({ b, r }) {
 function ProfitLoss({ b, r }) {
   const months = r.pl.months, cols = months.length <= 12, span = 2 + (cols ? months.length : 0) + (r.prev ? 1 : 0) + (r.ly ? 1 : 0);
   const rows = [];
-  const row = (label, x, bold, key) => rows.push(<tr key={rows.length}><td>{bold ? <b>{label}</b> : key ? <button className="linkbtn" onClick={() => setAndShow("misLed", key)}>{label}</button> : label}</td>
+  const row = (label, x, bold, key) => rows.push(<tr key={rows.length}><td>{bold ? <b>{label}</b> : key ? <button className="linkbtn" onClick={() => setAndShow("misLed", key)}>{label}</button> : label}{x.flag && <>{" "}<span className="tag warn" data-pl-flag="">{x.flag}</span></>}</td>
     {cols && months.map((mm) => <td key={mm} className="n">{m((x.m || {})[mm])}</td>)}<td className="n">{bold ? <b>{m(x.t)}</b> : m(x.t)}</td>
     {r.prev && <td className="n">{x.p != null ? m(x.p) : ""}</td>}{r.ly && <td className="n">{x.y != null ? m(x.y) : ""}</td>}</tr>);
   const pv = (k) => r.prev && r.prev.pl.heads[k] ? r.prev.pl.heads[k].t : (r.prev ? 0 : null), lv = (k) => r.ly && r.ly.pl.heads[k] ? r.ly.pl.heads[k].t : (r.ly ? 0 : null);
@@ -127,7 +128,7 @@ function ProfitLoss({ b, r }) {
 
 function Ageing({ b, r, tab }) {
   const A = tab === "recv" ? r.recv : r.pay, q = String(S.misQ || "").toLowerCase(), hasTally = A.rows.some((p) => p.tally != null);
-  const list = A.rows.filter((p) => (!q || p.party.toLowerCase().includes(q)) && (S.misF !== "90" || p.b[3] + p.b[4] > 0) && (S.misF !== "msme" || /micro|small/i.test(p.msme)));
+  const list = A.rows.filter((p) => (!q || p.party.toLowerCase().includes(q)) && (S.misF !== "90" || (p.nb || p.b)[3] + (p.nb || p.b)[4] > 0) && (S.misF !== "msme" || /micro|small/i.test(p.msme)));
   // review of 02-Oct-2026: what is owed is the ledger balances; the ages split it, and what no bill explains is not
   // bill-wise. A party whose ledger balance and bills differ is listed at the top, and in the Difference column
   const owedL = r.owed ? (tab === "recv" ? r.owed.r : r.owed.p) : A.sum.owe, dif = A.sum.differ || [];
@@ -135,21 +136,25 @@ function Ageing({ b, r, tab }) {
     <p className="note" data-mis-owed="" style={{ margin: "0 0 8px" }}><b>{(tab === "recv" ? "Owed to you" : "You owe") + " on " + d(r.to) + ": ₹" + m(owedL)}</b>{" (ledger balances) · by age: " + MIS.BUCKETS.map((z, i) => z[1] + " days " + m((A.sum.nb || [])[i])).join(", ") + " · not bill-wise " + m(A.sum.und) + (A.sum.advance >= 1 ? " · advances " + (tab === "recv" ? "from customers " : "to suppliers ") + m(A.sum.advance) + ", not in the figure" : "")}</p>
     {dif.length > 0 && <p className="bk-alert" data-mis-differ="" style={{ margin: "0 0 8px" }}>{dif.length + (dif.length === 1 ? " party's ledger balance does not agree" : " parties' ledger balances do not agree") + " with the bills: " + dif.slice(0, 5).map((x) => x.party + " " + m(x.bills) + " in bills against " + m(x.ledger) + " in the ledger").join("; ") + (dif.length > 5 ? "; and " + (dif.length - 5) + " more (the Difference column)" : "") + ". What the bills do not explain is not bill-wise: set the bills against it in Tally (bill-wise details) to age it."}</p>}
     <Search tab={tab} ph={"Find a " + (tab === "recv" ? "customer" : "supplier")} />
+    {/* review of 02-Oct-2026: the ages are of what is owed on balance (MIS.netOpen): receipts on account, advances and
+        settlements of older bills are set against the oldest bills first, so a row's ages and its not bill-wise amount
+        add up to its ledger balance; the bills as raised are listed when the row is opened */}
     <Table id="misAge" head={<><th>{tab === "recv" ? "Customer" : "Supplier"}</th>{MIS.BUCKETS.map((z) => <th key={z[1]} className="n">{z[1] + " days"}</th>)}
-      <th className="n">Before these books</th><th className="n">Advances</th><th className="n">On account</th><th className="n">Total</th>{hasTally && <><th className="n">Ledger balance</th><th className="n">Difference</th></>}{tab === "pay" && <th>MSME</th>}</>}>
-      {list.slice(0, gfN(400)).map((p, pi) => { const open = S.misOpen === p.party;
+      <th className="n">Not bill-wise</th><th className="n" title="what is owed on balance: the ages plus not bill-wise">Owed</th><th className="n" title={tab === "recv" ? "a customer in credit: an advance received" : "a supplier in debit: an advance paid"}>Advance</th>{hasTally && <><th className="n">Ledger balance</th><th className="n">Difference</th></>}{tab === "pay" && <th>MSME</th>}</>}>
+      {list.slice(0, gfN(400)).map((p, pi) => { const open = S.misOpen === p.party, nb = p.nb || p.b;
         return <Fragment key={p.party + ":" + pi}><tr data-key={p.party}><td><Opener open={open} onClick={toggle("misOpen", p.party)}>{p.party}</Opener></td>
-          {p.b.map((v, i) => <td key={i} className={"n" + (i >= 3 && v > 0 ? " bad" : "")}>{v ? m(v) : ""}</td>)}
-          <td className="n">{p.pre ? m(p.pre) : ""}</td><td className="n">{p.adv ? m(p.adv) : ""}</td><td className="n">{p.unalloc ? m(p.unalloc) : ""}</td><td className="n"><b>{m(p.total)}</b></td>
+          {nb.map((v, i) => <td key={i} className={"n" + (i >= 3 && v > 0 ? " bad" : "")}>{v ? m(v) : ""}</td>)}
+          <td className="n" data-und="">{p.und ? m(p.und) : ""}</td><td className="n"><b>{m(Math.max(0, p.net != null ? p.net : p.total))}</b></td><td className="n">{p.advance ? m(p.advance) : ""}</td>
           {hasTally && <><td className="n">{p.tally != null ? m(p.tally) : ""}</td><td className={"n" + (p.diff && Math.abs(p.diff) >= 1 ? " bad" : "")} data-diff="" title="the ledger balance less the bills' total">{p.diff && Math.abs(p.diff) >= 0.005 ? m(p.diff) : ""}</td></>}
           {tab === "pay" && <td><select aria-label={"MSME: " + p.party} style={{ width: "auto" }} value={p.msme || ""} onChange={(ev) => misMsmeSet(p.party, ev.target.value)}><option value="">{"—"}</option>{["Micro", "Small", "Medium"].map((t) => <option key={t}>{t}</option>)}</select></td>}</tr>
-          {open && <tr><td colSpan={14} style={{ background: "var(--paper)", padding: 0 }}><table className="bk-table" style={{ margin: 0 }}><thead><tr><th>Bill</th><th className="dt">Date</th><th className="n">Days</th><th className="n">Outstanding</th></tr></thead><tbody>
-            {p.bills.map((z, i) => <tr key={i}><td>{z.ref || "on account"}{z.no && <div className="nr">{"vch " + z.no}</div>}</td><td>{d(z.date)}</td><td className="n">{z.age}</td><td className="n">{m(z.amt)}</td></tr>)}</tbody></table></td></tr>}</Fragment>; })}
-      <tr><td><b>Total</b></td>{A.sum.b.map((v, i) => <td key={i} className="n"><b>{m(v)}</b></td>)}<td className="n">{m(A.sum.pre)}</td><td className="n">{m(A.sum.adv)}</td><td className="n">{m(A.sum.unalloc)}</td><td className="n"><b>{m(A.sum.total)}</b></td>{hasTally && <><td className="n"><b>{m(A.sum.tally)}</b></td><td className="n"><b>{m(A.sum.diff)}</b></td></>}</tr>
+          {open && <tr><td colSpan={14} style={{ background: "var(--paper)", padding: 0 }}><table className="bk-table" style={{ margin: 0 }}><thead><tr><th>Bill</th><th className="dt">Date</th><th className="n">Days</th><th className="n">As in the books</th><th className="n">Left after amounts on account</th></tr></thead><tbody>
+            {p.bills.map((z, i) => { const o = (p.open || []).find((y) => y.ref === z.ref && y.date === z.date && y.ref);
+              return <tr key={i}><td>{z.ref ? z.ref : "on account"}{z.ref && !z.hasNew ? <div className="nr">a bill from before these books</div> : null}{z.no && <div className="nr">{"vch " + z.no}</div>}</td><td>{d(z.date)}</td><td className="n">{z.age}</td><td className="n">{m(z.amt)}</td><td className="n">{o ? m(o.left) : ""}</td></tr>; })}</tbody></table></td></tr>}</Fragment>; })}
+      <tr><td><b>Total</b></td>{(A.sum.nb || A.sum.b).map((v, i) => <td key={i} className="n"><b>{m(v)}</b></td>)}<td className="n"><b>{m(A.sum.und)}</b></td><td className="n"><b>{m(A.sum.owe != null ? A.sum.owe : A.sum.total)}</b></td><td className="n"><b>{m(A.sum.advance)}</b></td>{hasTally && <><td className="n"><b>{m(A.sum.tally)}</b></td><td className="n"><b>{m(A.sum.diff)}</b></td></>}</tr>
     </Table>
-    <p className="note" style={{ margin: "6px 0 0" }}>Ages run from each bill’s due date where Tally has a credit period on it (the days it is overdue), else from the bill’s date.</p>
+    <p className="note" style={{ margin: "6px 0 0" }}>Ages run from each bill’s due date where Tally has a credit period on it (the days it is overdue), else from the bill’s date. Receipts on account, advances and settlements of bills older than these books are set against the oldest bills first, so the ages and “not bill-wise” add up to what is owed on balance.</p>
     {Math.abs(A.sum.pre) >= 1 && A.sum.tally == null && <p className="bk-alert" style={{ marginTop: 8 }}>{m(Math.abs(A.sum.pre)) + " was " + (tab === "recv" ? "received" : "paid") + " against bills raised before the day book read here, so the total is not the balance. Read the books through the bridge (its balances fix the total), or a day book from when those bills were raised."}</p>}
-    <p className="note">{"Age is counted from the bill date to " + d(r.to) + ". “Before these books” are payments or receipts against bills older than the day book read here." + (tab === "pay" ? " MSME comes from the Udyam details in Tally; mark others here." : "")}</p>
+    <p className="note">{"Age is counted from the bill date to " + d(r.to) + ". A bill “from before these books” was raised before the day book read here; what was received or paid against it is set against the oldest bills." + (tab === "pay" ? " MSME comes from the Udyam details in Tally; mark others here." : "")}</p>
     {tab === "pay" && r.msme.length > 0 && <Card top title={"MSME suppliers unpaid past " + MIS.cfg(b).msmeDays + " days"}><p className="note">Under section 43B(h), what is owed to a micro or small enterprise and unpaid beyond the agreed period (at most 45 days) is allowed only when paid.</p>
       <Table head={<><th>Supplier</th><th>Type</th><th className="n">Bills</th><th className="n">Amount</th><th className="n">Oldest, days</th></>}>
         {r.msme.map((x, i) => <tr key={x.party + ":" + i}><td>{x.party}</td><td>{x.type}</td><td className="n">{x.bills.length}</td><td className="n">{m(x.amt)}</td><td className="n">{Math.max.apply(null, x.bills.map((z) => z.age))}</td></tr>)}</Table></Card>}
@@ -287,9 +292,9 @@ function Budget({ r }) {
 function Compliance({ r }) {
   const C = r.comp;
   return <>
-    <Card title="GST by month"><Table head={<><th>Month</th><th className="n">Output tax</th><th className="n">Credit</th><th className="n">Worked out to pay</th><th className="n">Paid from the bank</th></>}>
-      {C.gst.map((x) => <tr key={x.ym}><td>{GSTR.label(x.ym)}</td><td className="n">{m(x.out)}</td><td className="n">{m(x.itc)}</td><td className="n">{m(x.due)}</td><td className="n">{m(x.pay)}</td></tr>)}</Table>
-      <p className="note">Output tax, credit and the amount to pay are FinCom's working from the books, not the 3B filed. Paid is what the books show paid from the bank to GST payable or the cash ledger, in the month it was paid.</p></Card>
+    <Card title="GST by month"><Table head={<><th>Month</th><th className="n">Output tax</th><th className="n">Less: credit</th><th className="n" title="reverse charge, paid in cash">Add: reverse charge</th><th className="n" title="credit brought in from the month before and not needed now (−), or credit this month left for the next (+)">Credit carried</th><th className="n">Worked out to pay</th><th className="n">Paid from the bank</th></>}>
+      {C.gst.map((x) => <tr key={x.ym} data-gst-row={x.ym}><td>{GSTR.label(x.ym)}</td><td className="n">{m(x.out)}</td><td className="n">{m(x.itc)}</td><td className="n" data-rcm="">{x.rcm ? m(x.rcm) : ""}</td><td className="n" data-carry="">{x.carry ? m(x.carry) : ""}</td><td className="n">{m(x.due)}</td><td className="n">{m(x.pay)}</td></tr>)}</Table>
+      <p className="note">Output tax, credit and the amount to pay are FinCom's working from the books, not the 3B filed: output tax less credit, plus reverse charge (always paid in cash), plus or minus credit carried between months, is what is worked out to pay. Paid is what the books show paid from the bank to GST payable, the cash ledger or an output or reverse-charge tax ledger, in the month it was paid; the cash flow’s GST line uses the same rule.</p></Card>
     <Card top title="TDS by month"><Table head={<><th>Month</th><th className="n">Deducted (TDS ledgers)</th><th className="n">Paid from the bank</th><th className="n">Challans here</th></>}>
       {C.tds.map((x) => <tr key={x.ym}><td>{GSTR.label(x.ym)}</td><td className="n">{m(x.ded)}</td><td className="n">{m(x.dep)}</td><td className="n">{m(x.challans)}</td></tr>)}</Table>
       <p className="note">From the books: deducted is what the TDS ledgers were credited with, paid what they were debited with from the bank. A month's TDS is paid the next month, and last year's TDS is paid in April, so the two do not match month by month.</p></Card>

@@ -57,7 +57,7 @@ export default function Txn() {
           <tr key={r.kind + r.id}>
             <td className="n stick1">{i + 1}</td>
             {c("date") && <td className="stick2">{r.date ? fmtDate(r.date) : "—"}{r.up && <div className="nr">up {fmtDate(r.up)}</div>}</td>}
-            {c("vch") && <td>{r.vch}</td>}{c("no") && <td>{r.no || "—"}</td>}{c("party") && <td>{r.party}</td>}
+            {c("vch") && <td title={r.vchNote ? r.vch + ": " + r.vchNote : undefined} data-vch-note={r.vchNote ? "" : undefined}>{r.vch}{r.vchNote && <div className="nr">(client setting)</div>}</td>}{c("no") && <td>{r.no || "—"}</td>}{c("party") && <td>{r.party}</td>}
             {c("amts") && (bank ? <><td className="n">{amt(r.dr)}</td><td className="n">{amt(r.cr)}</td></> : <><td className="n">{amt(r.taxable)}</td><td className="n">{amt(r.gst)}</td></>)}
             {c("val") && <td className="n">{amt(r.total)}</td>}{c("status") && <td><span className={"tag " + r.cls}>{r.label}</span></td>}
             {c("doc") && <td><Doc r={r} /></td>}

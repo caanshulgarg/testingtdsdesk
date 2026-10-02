@@ -2,7 +2,9 @@
 tally_post_record keeps a posting made straight to a bridge in tally_post_jobs as done or failed, with no device (no
 bridge ever takes it), the voucher ids only in the payload (entry_ids from them); the same id again brings it up to
 date; only a writer of the firm, only for the firm's own client, never over a queued posting; the block that sets
-data.postTo for clients linked to exactly one Tally company with the same GSTIN, only when none is chosen."""
+data.postTo for clients linked to exactly one Tally company with the same GSTIN, only when none is chosen;
+tally_post_dismiss (replaced): a person may dismiss any finished posting (done, failed, cancelled, posted later), never
+one still going; FinCom's own dismissing as in migration-26."""
 import os, sys, json
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import pg_stand
@@ -39,6 +41,8 @@ insert into tally_post_jobs (id, firm_id, client_id, company, device_id, payload
 db = pg_stand.start(int(os.environ.get("PG_PORT", "55437")))
 try:
     db.sql(SETUP)
+    db.sql("do $$ begin if not exists (select 1 from pg_publication where pubname = 'supabase_realtime') then create publication supabase_realtime; end if; end $$;")
+    db.sql(open(os.path.join(HERE, "..", "server", "tally-cloud", "migration-26-post-dismiss.sql")).read())
     path = os.path.join(HERE, "..", "server", "tally-cloud", "migration-27-post-record.sql")
     sql = open(path).read()
     ok(sql.count("begin;") == 2 and sql.count("commit;") == 2 and "drop " not in sql.lower() and "delete " not in sql.lower(), "migration-27: begin/commit blocks, nothing dropped or deleted")
@@ -74,6 +78,25 @@ try:
     db.sql("update clients set data = data || '{\"postToAt\": \"x\"}' where id = 'cmufksrrqjub2g'")
     db.sql(sql)
     ok(db.one("select data->>'postToAt' from clients where id = 'cmufksrrqjub2g'") == "x", "running it again changes nothing")
+    # Dismiss: any finished posting, by a person; never one still going
+    D1, D2, D3 = "00000000-0000-0000-0000-0000000d0001", "00000000-0000-0000-0000-0000000d0002", "00000000-0000-0000-0000-0000000d0003"
+    db.sql("""insert into tally_post_jobs (id, firm_id, client_id, company, device_id, payload, n, status, results, created_at, updated_at) values
+      ('%(D1)s', '%(F)s', 'cmufksrrqjub2g', 'GARG SHEKHAR & COMPANY', null, '{"vouchers": [{"id": "e1"}]}', 1, 'failed', null, now() - interval '3 hours', now() - interval '3 hours'),
+      ('%(D2)s', '%(F)s', 'cmufksrrqjub2g', 'GARG SHEKHAR & COMPANY', null, '{"vouchers": [{"id": "e1"}]}', 1, 'done', '[{"id": "e1", "ok": true}]', now() - interval '2 hours', now() - interval '2 hours'),
+      ('%(D3)s', '%(F)s', 'cmufksrrqjub2g', 'GARG SHEKHAR & COMPANY', null, '{"vouchers": [{"id": "e3"}]}', 1, 'running', null, now(), now());""" % dict(D1=D1, D2=D2, D3=D3, F=F))
+    dis = lambda jid, auto, uid=U: json.loads(db.one("select tally_post_dismiss('%s', %s)::text" % (jid, "true" if auto else "false"), uid))
+    r = dis(D1, True); row = db.rows("select dismiss_auto, dismiss_note, dismissed_by from tally_post_jobs where id = '%s'" % D1)[0]
+    ok(r.get("ok") and row["dismiss_auto"] == "t" and row["dismiss_note"].startswith("Posted later at") and not row["dismissed_by"], "FinCom dismisses a failed posting whose entry went in later (as migration-26)")
+    ok(dis(D2, True).get("ok") is False, "FinCom never dismisses a done posting by itself")
+    r = dis(D1, False); row = db.rows("select dismiss_auto, dismiss_note, dismissed_by from tally_post_jobs where id = '%s'" % D1)[0]
+    ok(r.get("ok") and row["dismiss_auto"] == "f" and row["dismissed_by"] == U and "Posted later at" in row["dismiss_note"], "a person dismisses the 'Posted later' one: by whom kept, the note kept (%s)" % row["dismiss_note"])
+    r = dis(D2, False); row = db.rows("select dismissed_at is not null d, dismissed_by from tally_post_jobs where id = '%s'" % D2)[0]
+    ok(r.get("ok") and row["d"] == "t" and row["dismissed_by"] == U, "a person dismisses a done posting")
+    r = dis(D3, False)
+    ok(r.get("ok") is False and db.one("select dismissed_at is null from tally_post_jobs where id = '%s'" % D3) == "t", "a posting still going is never dismissed")
+    ok(refused(lambda: dis(D2, False, R)), "a viewer cannot dismiss")
+    db.sql("select tally_post_undismiss('%s')" % D2, U)
+    ok(db.one("select dismissed_at is null from tally_post_jobs where id = '%s'" % D2) == "t", "and it can be put back in the list")
 finally:
     db.stop()
 print("\nall passed" if not fails else "\nFAILED: %d" % len(fails)); sys.exit(1 if fails else 0)

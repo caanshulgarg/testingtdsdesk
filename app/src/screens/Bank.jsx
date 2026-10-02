@@ -25,7 +25,10 @@ function RowLedger({ r }) {
   const b = B(), tip = r.why || undefined;
   if (!["attention", "suggested", "ready"].includes(r.state)) {
     const canUndo = r.state === "sent" && r.tally && r.tally.guid && live();
-    const status = r.goneFromTally ? "Not in Tally any more (deleted there?) · " + (r.state === "intally" ? "was found when reconciling" : "posted " + (r.sentAt ? shortDate(r.sentAt.slice(0, 10)) : ""))
+    // with no Tally ledger chosen for the account, a line is not said to be gone from Tally (review of 02-Oct-2026)
+    const noLed = !exactLedger(accountFor(curStmt() || {}).ledger);
+    const status = r.goneFromTally && noLed ? "Not found in Tally · choose this account’s Tally ledger to check and post"
+      : r.goneFromTally ? "Not in Tally any more (deleted there?) · " + (r.state === "intally" ? "was found when reconciling" : "posted " + (r.sentAt ? shortDate(r.sentAt.slice(0, 10)) : ""))
       : r.state === "sent" && !bankMatched(r) ? (r.postedVia === "bridge" ? "Sent to Tally " : "In a Tally file ") + (r.sentAt ? shortDate(r.sentAt.slice(0, 10)) : "") + (r.checking ? " · checking in Tally…" : " · not found in Tally yet")
       : r.state === "sent" ? "In Tally · posted " + (r.sentAt ? shortDate(r.sentAt.slice(0, 10)) : "") + (r.tally && r.tally.number ? " · voucher " + r.tally.number : "")
       : r.state === "intally" ? "Already in Tally" + (r.tallyRef ? ": " + r.tallyRef : "") + (r.tallyHow ? " (" + r.tallyHow + ")" : "") : "Ignored";
@@ -312,6 +315,11 @@ export function BankBar() {
   const b = B();
   if (!b || b.loading || !curStmt()) return null;
   const tc = tabCounts(bankRangeRows()), nsel = b.sel.size;
+  // review of 02-Oct-2026: with no Tally ledger chosen for this bank account nothing can be posted, and nothing can be
+  // said about which lines are in Tally ("184 no longer in Tally · post them again" was shown for lines of an account
+  // with no ledger): posting waits, said in one line with the way to choose it
+  const noLed = !exactLedger(accountFor(curStmt()).ledger);
+  const chooseLed = () => { const el = document.querySelector('select[aria-label="Tally ledger for this bank account"]'); if (el) { el.scrollIntoView({ block: "center" }); el.focus(); } else bankAct("bankSettings"); };
   let left, right;
   if (nsel) {
     const rows = bankSelected(), ready = rows.filter((r) => r.state === "ready").length;
@@ -323,15 +331,16 @@ export function BankBar() {
       {rows.some((r) => r.state === "suggested") && <button className="btn primary" onClick={() => bankAct("bankBulkAccept")}>Confirm</button>}
       {rows.some((r) => ["attention", "suggested", "ready"].includes(r.state)) && <button className="btn" onClick={() => bankAct("bankBulkIgnore")}>Ignore</button>}
       {rows.some((r) => r.state === "ignored" || r.state === "intally") && <button className="btn" onClick={() => bankAct("bankBulkRestore")}>Restore</button>}
-      {live() && ready > 0 && <button className="btn primary" onClick={() => bankAct("bankBulkPost")}>Post {ready} to Tally</button>}
+      {live() && ready > 0 && <button className="btn primary" disabled={noLed} title={noLed ? "Choose this bank account’s Tally ledger first" : undefined} onClick={() => bankAct("bankBulkPost")}>Post {ready} to Tally</button>}
     </>;
   } else {
     left = <><span className="bk-stat"><b>{tc.review}</b> to review</span><span className="bk-stat"><b>{tc.post}</b> ready to post</span>{tc.filed > 0 && <span className="bk-stat"><b>{tc.filed}</b> in a Tally file, not found in Tally</span>}
-      {tc.gone > 0 && <span className="bk-stat" data-bank-gone=""><b>{tc.gone}</b> no longer in Tally <button className="linkbtn" onClick={() => bankRepostGone()}>post them again</button></span>}</>;
+      {tc.gone > 0 && !noLed && <span className="bk-stat" data-bank-gone=""><b>{tc.gone}</b> no longer in Tally <button className="linkbtn" onClick={() => bankRepostGone()}>post them again</button></span>}
+      {noLed && <span className="bk-stat bad" data-bank-noledger="">{"Posting waits: this bank account’s Tally ledger is not chosen. "}<button className="linkbtn" onClick={chooseLed}>Choose the ledger</button></span>}</>;
     right = <>
       {tc.suggested > 0 && <button className="btn" onClick={() => bankAct("bankAcceptAll")}>Confirm all suggestions ({tc.suggested})</button>}
-      {canPostTally(CO()) ? <button className="btn primary" disabled={!tc.post} onClick={() => bankAct("bankPost")}>Post to Tally ({tc.post})</button>
-        : <button className="btn primary" disabled={!tc.post} onClick={() => bankAct("bankXml")}>Create Tally file ({tc.post})</button>}
+      {canPostTally(CO()) ? <button className="btn primary" disabled={!tc.post || noLed} title={noLed ? "Choose this bank account’s Tally ledger first" : undefined} onClick={() => bankAct("bankPost")}>Post to Tally ({tc.post})</button>
+        : <button className="btn primary" disabled={!tc.post || noLed} title={noLed ? "Choose this bank account’s Tally ledger first" : undefined} onClick={() => bankAct("bankXml")}>Create Tally file ({tc.post})</button>}
     </>;
   }
   const u = !nsel && b.undo;

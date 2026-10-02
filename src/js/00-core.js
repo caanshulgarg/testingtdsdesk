@@ -117,6 +117,43 @@ const S = {
 // only the line breaks go (Tally keeps names such as "Arktos  Control & Instruments" with two spaces, and a posting must
 // use Tally's exact name); the same rule as tally_nm on the server
 function ledNm(n){ return String(n == null ? "" : n).replace(/[ \t]*(&#13;|&#10;|\r|\n)+[ \t]*/g, " ").trim(); }
+// review of 02-Oct-2026 (trade receivables 11,550 short): Tally's XML can carry a name's line breaks escaped twice
+// ("MCS Project Pvt Ltd&amp;#13;&amp;#10;"), which comes out of the reader as "MCS Project Pvt Ltd&#13;&#10;"; a copy
+// of the books read before the cloud cleaned its names (migration-23) keeps such names in its balances and groups.
+// ledClean: the name as it is kept: entities decoded, line breaks gone (ledNm); other spaces stay, as Tally has them.
+// ledKey: the name for matching only: also every run of spaces as one, so "A  B" and "A B&#13;&#10;" meet
+function ledEnt(s){
+  return String(s == null ? "" : s).replace(/&(amp;)?#(x[0-9a-f]+|\d+);/gi, (m0, a, n) => { const c = /^x/i.test(n) ? parseInt(n.slice(1), 16) : parseInt(n, 10); return c === 13 || c === 10 ? "\n" : c === 9 || c === 160 ? " " : c >= 32 && c < 0x110000 ? String.fromCodePoint(c) : " "; })
+    .replace(/&(amp;)?(amp|lt|gt|quot|apos|nbsp);/gi, (m0, a, n) => ({amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " "})[n.toLowerCase()]);
+}
+function ledClean(n){ const s = String(n == null ? "" : n); return /&|\r|\n/.test(s) ? ledNm(ledEnt(s)) : ledNm(s); }
+function ledKey(n){ return ledClean(n).replace(/\s+/g, " ").trim().toLowerCase(); }
+// the group a ledger sits under, and the groups above it: the one place every report looks it up (MIS, Reports, the
+// accounts, Audit, Parties). The name is looked up as kept, else by its clean key, so a name with line breaks or
+// entities still finds its group (and a group's parent the same way)
+const LED_IDX = new WeakMap();
+function ledIdx(o){
+  if (!o) return null;
+  const n = Object.keys(o).length, x = LED_IDX.get(o);
+  if (x && x.n === n) return x.m;
+  const m = new Map(); Object.keys(o).forEach(k => { const kk = ledKey(k); if (kk && (!m.has(kk) || o[k])) m.set(kk, o[k]); });
+  LED_IDX.set(o, {n, m});
+  return m;
+}
+function ledUnder(b, l){
+  const u = (b && b.under) || null;
+  if (!u || l == null) return undefined;
+  if (u[l] != null) return u[l];
+  const m = ledIdx(u), p = m && m.get(ledKey(l));
+  return p == null ? undefined : p;
+}
+function ledGroupPath(b, l){
+  const groups = (b && b.groups) || {}, out = [];
+  const up = g => { if (groups[g] != null) return groups[g]; const m = ledIdx(groups), p = m && m.get(ledKey(g)); return p == null ? "" : p; };
+  let p = ledUnder(b, l);
+  for (let i = 0; p && i < 15; i++){ p = ledClean(p); out.push(p); p = up(p); }
+  return out;
+}
 function newCompany(f){
   f = f || {};
   const gstin = String(f.gstin || "").toUpperCase().trim();
