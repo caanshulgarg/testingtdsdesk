@@ -86,7 +86,7 @@ func wakeOpen(company, source string) bool {
 	if paused() {
 		return false // background reading paused in the tray: a client opened in FinCom does not read Tally
 	}
-	st := readKeepState(syncFolder(company))
+	st := keepStateOf(company)
 	if st == nil || str(st["phase"]) != "live" {
 		return false // not kept in step here yet: its first copy comes with the nightly catch-up or Update now
 	}
@@ -203,7 +203,7 @@ func wakeLedgers(company, source string, afterPost bool) M {
 	evMu.Lock()
 	last := ledSeen[company]
 	evMu.Unlock()
-	if st := readKeepState(syncFolder(company)); st != nil {
+	if st := keepStateOf(company); st != nil {
 		out["listAt"] = str(st["ledAt"])
 	}
 	if !last.IsZero() {
@@ -216,7 +216,7 @@ func wakeLedgers(company, source string, afterPost bool) M {
 		out["why"] = "keeping the books in step is off on this computer"
 	case paused():
 		out["why"] = "background reading is paused in the tray (Update now still reads the ledger list)"
-	case readKeepState(syncFolder(company)) == nil:
+	case keepStateOf(company) == nil:
 		out["why"] = "this company is not kept in step on this computer"
 	case !anyBackoff().IsZero():
 		out["why"] = "Tally is left alone for now after it did not answer"

@@ -194,6 +194,18 @@ try:
     for fn in ["tally_read_stop(uuid, text)", "tally_read_resume(uuid)", "tally_release_pilot(text, uuid)", "tally_release_approve(text)"]:
         ok(db.one("select has_function_privilege('authenticated', %s, 'execute')" % q("public." + fn)) == "t" and db.one("select has_function_privilege('anon', %s, 'execute')" % q("public." + fn)) == "f",
            "%s: authenticated yes, anon no" % fn)
+    # 6b. every security definer function of the file pins search_path to public, pg_temp (pg_temp last: no temp-table shadowing)
+    names = sorted(set(re.findall(r"function\s+public\.(\w+)\s*\(", open(SQL).read())))
+    definers = 0
+    for fn in names:
+        row = db.one("select string_agg(case when prosecdef then 'definer' else 'invoker' end || '|' || coalesce(array_to_string(proconfig, ','), ''), ';') "
+                     "from pg_proc where proname = %s and pronamespace = 'public'::regnamespace" % q(fn))
+        for one in (row or "").split(";"):
+            kind, conf = (one.split("|", 1) + [""])[:2]
+            if kind == "definer":
+                definers += 1
+                ok(conf.replace(" ", "") == "search_path=public,pg_temp", "%s: security definer with search_path = public, pg_temp (has %r)" % (fn, conf))
+    ok(definers >= 4, "the security definer functions checked: %d" % definers)
     # 7. run once more over the rows: nothing lost
     n = {t: db.one("select count(*) from %s" % t) for t in ["tally_read_stops", "tally_bridge_releases"]}
     r = psql_file(SQL)

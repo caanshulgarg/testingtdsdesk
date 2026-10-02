@@ -181,14 +181,19 @@ func setReadStopAt(by, reason, at string) {
 	saveConfig()
 	rsMu.Unlock()
 	who := map[string]string{"self": "by the bridge itself", "fincom": "from FinCom"}[by]
-	writeLog("Reading from Tally stopped on this computer " + who + ": " + reason + ". Postings still go; reading starts again only from the tray icon (Resume reading) or from FinCom")
+	again := "from the tray icon (Resume reading) or from FinCom"
+	if by == "fincom" {
+		again = "from FinCom"
+	}
+	writeLog("Reading from Tally stopped on this computer " + who + ": " + reason + ". Postings still go; reading starts again only " + again)
 }
 
-// clear the stop: how = "tray" (any stop), "fincom-resume" (any stop), "fincom-lifted" (FinCom's own stop only)
+// clear the stop: how = "tray" (the bridge's own stop only: a stop made from FinCom is lifted in FinCom),
+// "fincom-resume" (any stop), "fincom-lifted" (FinCom's own stop only)
 func clearReadStop(how string) bool {
 	rsMu.Lock()
 	cur := readStop()
-	if cur == nil || (how == "fincom-lifted" && str(cur["by"]) != "fincom") {
+	if cur == nil || (how == "fincom-lifted" && str(cur["by"]) != "fincom") || (how == "tray" && str(cur["by"]) != "self") {
 		rsMu.Unlock()
 		return false
 	}
@@ -204,9 +209,12 @@ func clearReadStop(how string) bool {
 	return true
 }
 
-// the tray's "Resume reading"
+// the tray's "Resume reading": a stop by the bridge itself only; a stop made from FinCom stays until FinCom lifts it
 func trayResumeReading() (M, error) {
 	if !clearReadStop("tray") {
+		if st := readStop(); st != nil && str(st["by"]) == "fincom" {
+			return M{"ok": true, "resumed": false, "byFinCom": true}, nil
+		}
 		return M{"ok": true, "resumed": false}, nil
 	}
 	return M{"ok": true, "resumed": true}, nil
@@ -229,12 +237,12 @@ func readStopRefuses(x string) error {
 	if st == nil || readStopExempt(tallyRequestID(x)) {
 		return nil
 	}
-	who := "by the bridge itself"
+	who, again := "by the bridge itself", "the tray icon (Resume reading) or FinCom"
 	if str(st["by"]) == "fincom" {
-		who = "from FinCom"
+		who, again = "from FinCom", "FinCom (Resume reading for this computer)"
 	}
-	return fmt.Errorf("%w on this computer %s (%s, %s); nothing was sent to Tally. Postings still go. Resume from the tray icon (Resume reading) or from FinCom",
-		errReadStopped, who, str(st["reason"]), strings.Replace(str(st["at"]), "T", " ", 1))
+	return fmt.Errorf("%w on this computer %s (%s, %s); nothing was sent to Tally. Postings still go. Resume from %s",
+		errReadStopped, who, str(st["reason"]), strings.Replace(str(st["at"]), "T", " ", 1), again)
 }
 
 // a read asked of this bridge (FinCom's, or the measuring tool's): refused at once while reading is stopped, before even

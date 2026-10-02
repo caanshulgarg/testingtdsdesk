@@ -212,7 +212,11 @@ func runMeasure(o measureOpts) (M, error) {
 		return measureReport(o, company, port, items, started)
 	}
 	busy, how := "", ""
-	if man := readObjFile(filepath.Join(syncFolder(company), "manifest.json")); man != nil {
+	var man M
+	if dir, err := companyDir(company); err == nil {
+		man = readObjFile(filepath.Join(dir, "manifest.json"))
+	}
+	if man != nil {
 		best := -1
 		for _, x := range arr(man["months"]) {
 			m := obj(x)
@@ -385,7 +389,11 @@ func measureReport(o measureOpts, company string, port int, items []*mItem, star
 	}
 	out := o.out
 	if out == "" {
-		out = filepath.Join(Home, "measure-"+safeName(strings.ReplaceAll(company, " ", "_"))+"-"+time.Now().Format("20060102-150405")+".txt")
+		n, err := safeName(strings.ReplaceAll(company, " ", "_"))
+		if err != nil {
+			n = "company"
+		}
+		out = filepath.Join(Home, "measure-"+n+"-"+time.Now().Format("20060102-150405")+".txt")
 	}
 	if err := saveFile(out, b.String()); err != nil {
 		return nil, err

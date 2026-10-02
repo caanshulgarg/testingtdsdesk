@@ -89,7 +89,7 @@ revoke insert, update, delete, truncate on public.tally_read_stops, public.tally
 
 -- ---------------------------------------------------------------- the owner's functions
 create or replace function public.tally_read_stop(p_device uuid, p_reason text)
-returns jsonb language plpgsql security definer set search_path to 'public' as $function$
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
 declare f uuid := my_firm(); why text := left(btrim(coalesce(p_reason, '')), 300); had bigint; nid bigint;
 begin
   if f is null or not exists (select 1 from members m where m.user_id = auth.uid() and m.firm_id = f and m.role = 'owner' and coalesce(m.active, true))
@@ -105,7 +105,7 @@ begin
 end $function$;
 
 create or replace function public.tally_read_resume(p_device uuid)
-returns jsonb language plpgsql security definer set search_path to 'public' as $function$
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
 declare f uuid := my_firm(); n int := 0; nid bigint;
 begin
   if f is null or not exists (select 1 from members m where m.user_id = auth.uid() and m.firm_id = f and m.role = 'owner' and coalesce(m.active, true))
@@ -125,7 +125,7 @@ begin
 end $function$;
 
 create or replace function public.tally_release_pilot(p_version text, p_device uuid)
-returns jsonb language plpgsql security definer set search_path to 'public' as $function$
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
 declare f uuid := my_firm(); v text := btrim(coalesce(p_version, '')); r tally_bridge_releases%rowtype;
 begin
   if f is null or not exists (select 1 from members m where m.user_id = auth.uid() and m.firm_id = f and m.role = 'owner' and coalesce(m.active, true))
@@ -146,7 +146,7 @@ begin
 end $function$;
 
 create or replace function public.tally_release_approve(p_version text)
-returns jsonb language plpgsql security definer set search_path to 'public' as $function$
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
 declare f uuid := my_firm(); v text := btrim(coalesce(p_version, '')); r tally_bridge_releases%rowtype; pc text;
 begin
   if f is null or not exists (select 1 from members m where m.user_id = auth.uid() and m.firm_id = f and m.role = 'owner' and coalesce(m.active, true))

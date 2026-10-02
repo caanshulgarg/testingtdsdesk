@@ -202,7 +202,10 @@ func updateCloudLinks() {
 	// a company linked just now: everything kept for it goes
 	for k, on := range cloudLinks {
 		if on && !was[k] {
-			dir := syncFolder(k)
+			dir, err := companyDir(k)
+			if err != nil {
+				continue
+			}
 			mark := filepath.Join(dir, "cloud-all.done")
 			if exists(dir) && !exists(mark) {
 				var days []string

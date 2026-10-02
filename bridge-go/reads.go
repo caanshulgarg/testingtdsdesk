@@ -288,7 +288,7 @@ func ledgerChunks(tc *TC, company string, port int, build func(string, int64, in
 		bound = companyAlterM(company)
 	}
 	// a ledger found to hang Tally (ledgers.go) is never asked for: the chunks stop short of it
-	st := readKeepState(syncFolder(company))
+	st := keepStateOf(company)
 	size := int64(ledChunkDefault())
 	var out []*Node
 	seen := map[string]bool{}
@@ -326,7 +326,7 @@ func ledgerChunks(tc *TC, company string, port int, build func(string, int64, in
 
 // the ledgers skipped because they hang Tally, for FinCom's answer: [[MasterID, name, why]]
 func skippedLedgers(company string) []any {
-	sk := arr(readKeepState(syncFolder(company))["ledPoison"])
+	sk := arr(keepStateOf(company)["ledPoison"])
 	if sk == nil {
 		return []any{}
 	}

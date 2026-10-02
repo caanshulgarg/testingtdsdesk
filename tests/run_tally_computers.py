@@ -146,6 +146,15 @@ with sync_playwright() as p:
       reqs: {day: new Date().toISOString().slice(0, 10), last: {kind: 'probe', ms: 120000, at: new Date().toISOString()}, longest: {kind: 'probe', ms: 120000, at: new Date().toISOString()}, over20: 1, n: 5}}})""" % (D2, D2))
     pg.wait_for_timeout(400)
     ok("Stopped by itself: Tally did not answer for 2 minutes" in line(D2), "a beat passed on at once: the line follows (%s)" % line(D2))
+    # ---- device-sent text (the stop's reason, a request's kind) is shown as text, never as HTML (security review, 2.1.5)
+    dialogs = []; pg.on("dialog", lambda d: (dialogs.append(d.message), d.dismiss()))
+    XR, XK = "<img src=x onerror=alert(1)>", "<img src=y onerror=alert(2)>"
+    E("""([d, xr, xk]) => TLight.beatIn({device: d, beat: {at: new Date().toISOString(), bridge: 'go-' + d, paused: false, readStopped: {by: 'self', reason: xr, at: new Date().toISOString()},
+      reqs: {day: new Date().toISOString().slice(0, 10), last: {kind: xk, ms: 1500, at: new Date().toISOString()}, longest: {kind: xk, ms: 1500, at: new Date().toISOString()}, over20: 0, n: 2}}})""", [D2, XR, XK])
+    pg.wait_for_timeout(600)
+    l2 = line(D2)
+    ok(("Stopped by itself: " + XR) in l2 and ("Last request: " + XK) in l2 and pg.locator('#app [data-computer="%s"] img' % D2).count() == 0 and not dialogs,
+       "a reason and a request kind with HTML in them are shown as text (%s; dialogs %s)" % (l2, dialogs))
     ok(not errors, "no page errors %s" % errors[:2])
     br.close()
 print("\nall passed" if not fails else "\nFAILED: %d" % len(fails)); raise SystemExit(1 if fails else 0)

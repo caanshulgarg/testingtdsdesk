@@ -62,9 +62,12 @@ const tallyPerRowMs = 0.5
 // the measuring tool is running (measure-only ids may go)
 var measuring atomic.Int32
 
+// an Import Data request as importEnvelope makes it: its fixed header at the start (anchored)
+func isImportRequest(x string) bool { return strings.HasPrefix(x, importHead) }
+
 // a request's id: "Import" for every Import Data request; else the collection's ID; else the report's name
 func tallyRequestID(x string) string {
-	if re(`<TALLYREQUEST>\s*Import`).MatchString(x) {
+	if isImportRequest(x) {
 		return "Import"
 	}
 	if id := strings.TrimSpace(group(`<ID>([^<]+)</ID>`, x, 1)); id != "" {

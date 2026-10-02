@@ -115,6 +115,13 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		sendJSON(w, 403, M{"ok": false, "error": "This bridge answers FinCom only."}, origin)
 		return
 	}
+	if strings.HasPrefix(path, "/tray/") && (sentOrigin != "" || r.Header.Get("Sec-Fetch-Site") != "" || r.Header.Get("Sec-Fetch-Mode") != "") {
+		// the tray's own addresses are for the tray icon (a program on this computer, which sends no Origin), never for
+		// a web page, FinCom's own included: pausing, resuming, restarting, quitting are done in the tray
+		writeLog("Refused a tray request from a web page (" + path + ", " + sentOrigin + ").")
+		sendJSON(w, 403, M{"ok": false, "error": "This is for the FinCom Bridge tray icon only."}, origin)
+		return
+	}
 	if path == "/pair" {
 		code := qs.Get("code")
 		pairMu.Lock()
@@ -330,7 +337,11 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 		// 2.1.5: worked out from the copy kept here; Tally is not asked for a balance
 		return heldBalances(co, qs.Get("from"), qs.Get("to"), qs.Get("open") == "1")
 	case "/synced":
-		mf := filepath.Join(syncFolder(co), "manifest.json")
+		dir, err := companyDir(co)
+		if err != nil {
+			return nil, &httpErr{400, M{"ok": false, "error": err.Error()}}
+		}
+		mf := filepath.Join(dir, "manifest.json")
 		if exists(mf) {
 			writeResp(w, 200, readText(mf), origin, "application/json; charset=utf-8", false)
 			return nil, errSent
@@ -341,7 +352,11 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 		if !re(`^(daybook-\d{6}\.xml|balances\.json|ledgers\.json)$`).MatchString(name) {
 			return nil, errors.New("Not a file of the nightly copy.")
 		}
-		fp := filepath.Join(syncFolder(co), name)
+		dir, err := companyDir(co)
+		if err != nil {
+			return nil, &httpErr{400, M{"ok": false, "error": err.Error()}}
+		}
+		fp := filepath.Join(dir, name)
 		if !exists(fp) {
 			return nil, errors.New("That is not in the nightly copy.")
 		}
@@ -566,14 +581,17 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 		setPaused(truthy(o["on"]))
 		return trayStatus(), nil
 	case "/tray/resume-reading":
-		// the tray's "Resume reading": clears a stop of reading (by the bridge itself or from FinCom)
+		// the tray's "Resume reading": clears a stop the bridge made itself; a stop made from FinCom is lifted in FinCom
 		if err := needPost(r, "Use POST."); err != nil {
 			return nil, err
 		}
-		if _, err := trayResumeReading(); err != nil {
+		res, err := trayResumeReading()
+		if err != nil {
 			return nil, err
 		}
-		return trayStatus(), nil
+		st := trayStatus()
+		st["resumed"], st["byFinCom"] = res["resumed"], truthy(res["byFinCom"])
+		return st, nil
 	case "/tray/restart":
 		if err := needPost(r, "Use POST."); err != nil {
 			return nil, err

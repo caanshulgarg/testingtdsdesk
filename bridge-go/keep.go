@@ -23,8 +23,25 @@ func syncDir() string {
 	}
 	return filepath.Join(Home, "sync")
 }
-func syncFolder(company string) string { return filepath.Join(syncDir(), safeName(company)) }
-func sp(name string) string            { return filepath.Join(syncDir(), name) }
+
+// the folder of a company's copy, inside the sync folder; an error for a name that cannot be a folder there (safeName)
+func companyDir(company string) (string, error) {
+	n, err := safeName(company)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(syncDir(), n), nil
+}
+
+// a company's kept state; nil when there is none, or when its name cannot be a folder here
+func keepStateOf(company string) M {
+	dir, err := companyDir(company)
+	if err != nil {
+		return nil
+	}
+	return readKeepState(dir)
+}
+func sp(name string) string { return filepath.Join(syncDir(), name) }
 
 // --- when the copier reads Tally (2.1.3): only after an event (events.go). There is no timer: no light check every 30
 // minutes, no watching of Tally's change counters every minute, no "quiet time" guessed from the keyboard
@@ -257,7 +274,10 @@ func importKeepOpening(company, body string) (M, error) {
 	}
 	keepMu.Lock()
 	defer keepMu.Unlock()
-	dir := syncFolder(company)
+	dir, err := companyDir(company)
+	if err != nil {
+		return nil, err
+	}
 	st := readKeepState(dir)
 	if st == nil {
 		return M{"ok": true, "skipped": "The bridge has no copy of this company yet: give it the day book first, then the trial balance."}, nil
@@ -292,7 +312,10 @@ func importKeepSeed(company, from, to, x string) (M, error) {
 	setFinComReading()
 	keepMu.Lock()
 	defer keepMu.Unlock()
-	dir := syncFolder(company)
+	dir, err := companyDir(company)
+	if err != nil {
+		return nil, err
+	}
 	_ = os.MkdirAll(dir, 0o755)
 	st := readKeepState(dir)
 	if st != nil && !truthy(st["seeded"]) && str(st["phase"]) == "live" {
@@ -542,8 +565,8 @@ func addPostedForCopy(company string, head M, xml string) {
 	if g == "" || !re(`^\d+$`).MatchString(a) || !isTallyDate(d) || xml == "" {
 		return
 	}
-	dir := syncFolder(company)
-	if !exists(filepath.Join(dir, "keep.json")) {
+	dir, err := companyDir(company)
+	if err != nil || !exists(filepath.Join(dir, "keep.json")) {
 		return
 	}
 	_ = appendText(filepath.Join(dir, "posted-in.jsonl"), jsonText(M{"guid": g, "alter": toI64(a), "date": d, "number": str(head["number"]), "type": str(head["type"]), "xml": xml})+"\n")
@@ -638,7 +661,10 @@ func useKeepPosted(dir string, st M) int {
 func (k *keepRun) step(company string, port int, booksFrom string) error {
 	keepMu.Lock()
 	defer keepMu.Unlock()
-	dir := syncFolder(company)
+	dir, err := companyDir(company)
+	if err != nil {
+		return err
+	}
 	_ = os.MkdirAll(dir, 0o755)
 	td := today()
 	st := readKeepState(dir)
@@ -808,7 +834,10 @@ func (k *keepRun) step(company string, port int, booksFrom string) error {
 
 // a turn that went wrong: noted for FinCom to show
 func setKeepTrouble(company, why string) {
-	dir := syncFolder(company)
+	dir, err := companyDir(company)
+	if err != nil {
+		return
+	}
 	if st := readKeepState(dir); st != nil {
 		st["trouble"] = M{"at": nowS(), "why": why}
 		saveKeepState(dir, st)
@@ -918,7 +947,10 @@ func minDur(a, b time.Duration) time.Duration {
 
 // the time of the last read from Tally that came in, for FinCom's "last read 15:34" and "Books as of 15:34"
 func markRead(company string) {
-	dir := syncFolder(company)
+	dir, err := companyDir(company)
+	if err != nil {
+		return
+	}
 	if st := readKeepState(dir); st != nil {
 		st["readAt"] = nowS()
 		saveKeepState(dir, st)
@@ -1015,7 +1047,7 @@ func keepWorker(r runReq) {
 		if !asked && k.light {
 			// a light update asks Tally nothing (not even which companies are open): only the copy is brought up to date
 			for _, c := range r.only {
-				if readKeepState(syncFolder(c)) != nil {
+				if keepStateOf(c) != nil {
 					open = append(open, oc{c, 0, ""})
 				}
 			}
@@ -1180,7 +1212,7 @@ func keepRunning() bool {
 func keepStatus(company string) M {
 	var st M
 	if company != "" {
-		st = readKeepState(syncFolder(company))
+		st = keepStateOf(company)
 	}
 	g := func(k string) any {
 		if st == nil {
@@ -1208,7 +1240,10 @@ func testKeepMonth(company, ym string, pref int) (M, error) {
 	if err != nil {
 		return nil, err
 	}
-	dir := syncFolder(company)
+	dir, err := companyDir(company)
+	if err != nil {
+		return nil, err
+	}
 	td := today()
 	mf := ym + "01"
 	mt := monthEnd(ym)

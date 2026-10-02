@@ -72,7 +72,10 @@ type heldCopy struct {
 }
 
 func loadHeld(company string) (*heldCopy, error) {
-	dir := syncFolder(company)
+	dir, err := companyDir(company)
+	if err != nil {
+		return nil, err
+	}
 	st := readKeepState(dir)
 	bal := readObjFile(filepath.Join(dir, "balances.json"))
 	if st == nil || bal == nil || !isTallyDate(str(bal["openAsOn"])) || !isTallyDate(str(st["from"])) {
@@ -259,7 +262,10 @@ func heldLedgerVouchers(company, ledger, from, to string) ([]M, error) {
 	if !isTallyDate(from) || !isTallyDate(to) {
 		return nil, errors.New("Dates are to be given as yyyymmdd.")
 	}
-	dir := syncFolder(company)
+	dir, err := companyDir(company)
+	if err != nil {
+		return nil, err
+	}
 	st := readKeepState(dir)
 	start := str(st["from"])
 	if st == nil || !isTallyDate(start) {

@@ -37,8 +37,12 @@ func readImportResult(text string) M {
 	return M{"ok": ok, "created": created, "altered": altered, "errors": errors_, "exceptions": exceptions, "ignored": ignored, "message": msg, "lastVchId": group(`<LASTVCHID>\s*(\d+)\s*</LASTVCHID>`, text, 1)}
 }
 
+// the fixed start of every Import Data request (importEnvelope): the allow-list's Import fast path matches only this,
+// at the very start of the request, never '<TALLYREQUEST>Import' somewhere inside another request
+const importHead = "<ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>"
+
 func importEnvelope(report, company, body string) string {
-	return "<ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>" + report + "</REPORTNAME>" +
+	return importHead + report + "</REPORTNAME>" +
 		"<STATICVARIABLES><SVCURRENTCOMPANY>" + esc(company) + "</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><REQUESTDATA>" + body + "</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>"
 }
 

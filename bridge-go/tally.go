@@ -650,7 +650,7 @@ func invokeTally(tc *TC, port int, x string, timeoutSec int) (string, error) {
 		}
 		clearTallyStuck(port)
 		// something was posted to Tally: the posted entries go into the copy (and the cloud) once the posting is done
-		if !tc.copier && re(`<TALLYREQUEST>\s*Import`).MatchString(x) {
+		if !tc.copier && isImportRequest(x) {
 			afterPosting(html.UnescapeString(group(`<SVCURRENTCOMPANY>([^<]*)</SVCURRENTCOMPANY>`, x, 1)))
 			// a ledger master posted (a new ledger): its list is read once the posting is done (events.go)
 			if re(`<LEDGER\b`).MatchString(x) {
@@ -907,7 +907,7 @@ func freeProbe(ctx context.Context, port int, company string) (string, error) {
 // a posting (an import) or the reads that belong to it (the duplicate check, the look for a FinCom id): these go
 // before any other request waiting for the same Tally
 func isPostingRequest(x string) bool {
-	if re(`<TALLYREQUEST>\s*Import`).MatchString(x) {
+	if isImportRequest(x) {
 		return true
 	}
 	id := group(`<ID>([^<]+)</ID>`, x, 1)
