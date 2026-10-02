@@ -17100,10 +17100,14 @@ function saveNewCompany(v){
     {name, gstin, tallyName:String(v.tallyName || "").trim() || name, turnover10cr:!!v.turnover10cr}));
   S.companies[co.id] = co; S.data[co.id] = {parties:{}, entries:{}, loaded:true};
   co.stats = {drafts:0, check:0, waiting:0, tdsFy:0, invoicesFy:0, records:1, fy:fyOf(null)};
+  // 02-Oct-2026: the Tally company chosen here, and (ticked) the one company its entries may be posted to
+  const tco = String(v.tallyCompany || "").trim();
+  if (tco && v.postOnly){ co.postTo = tco; co.postToAt = new Date().toISOString(); co.postToBy = (Cloud.st && Cloud.st.email) || ""; }
   Store.saveCompany(co);
   S.addingCo = false;
-  toast(name + " added.");
+  toast(name + " added." + (co.postTo ? " Entries go only into " + co.postTo + "." : ""));
   openCompany(co.id);
+  if (tco) linkNewClient(co, tco).catch(() => {});
   return true;
 }
 let pickMode = "company";
@@ -21658,6 +21662,29 @@ function tallyHistory(){
     if (ds.bridge === "offline" && d.info && d.info.beat) rows.push({device: d.name, kind: "bridge", state: "offline", at: d.info.beat.at, now: true});
   });
   return rows.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+}
+// The Tally companies a new client can be linked to (02-Oct-2026: "Add client" links to a company the bridge sees open,
+// and sets the one company the client may post to, in one step): the ones open in Tally through the bridge on this
+// computer, and the ones the firm's Tally computers have reported (tally_companies, and what their heartbeats say is
+// open). Each: {name, gstin, client (linked to), open (seen open now), where, reported (the cloud can link it)}
+function tallyCompaniesSeen(){
+  const by = new Map(), put = (name, x) => { const n = ledNm(name); if (!n) return; by.set(n, Object.assign(by.get(n) || {name: n, gstin: "", client: "", open: false, where: "", reported: false}, x)); };
+  if (typeof Bridge === "object" && Bridge.up()) (Bridge.st.open || []).forEach(o => put(o.name, {open: true, where: "open in Tally on this computer"}));
+  const p = typeof TCloud === "object" ? TCloud.pane : null;
+  ((p && p.devices) || []).filter(d => !d.revoked).forEach(d => {
+    const info = d.info || {}, comp = info.computer || d.name;
+    [].concat((info.beat || {}).open || []).concat(...Object.values(info.bridges || {}).map(b => b.open || [])).forEach(n => put(n, Object.assign({open: true}, (by.get(ledNm(n)) || {}).where ? {} : {where: "open in Tally on " + comp})));
+  });
+  ((p && p.companies) || []).forEach(c => put(c.company, Object.assign({reported: true, gstin: c.gstin || "", client: c.client_id || ""}, by.has(ledNm(c.company)) ? {} : {where: "seen by the firm's Tally computer"})));
+  return Array.from(by.values()).sort((a, b) => (a.client ? 1 : 0) - (b.client ? 1 : 0) || (b.open ? 1 : 0) - (a.open ? 1 : 0) || a.name.localeCompare(b.name));
+}
+// a new client linked to its Tally company in the cloud: the client is sent to the server first, then linked
+async function linkNewClient(co, company){
+  if (typeof TCloud !== "object" || !TCloud.on()) return;
+  const seen = tallyCompaniesSeen().find(x => x.name === ledNm(company));
+  if (!seen || !seen.reported){ toast(co.name + " is set to " + company + ". It is linked once the Tally computer reports that company (keep it open in Tally)."); return; }
+  try { if (typeof cloudPushNow === "function") await cloudPushNow(); } catch (e){}
+  await TCloud.link(company, co.id);
 }
 /* ================================================================== */
 /* Posting from any computer: the queue in FinCom's cloud (build 199)  */
