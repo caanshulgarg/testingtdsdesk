@@ -46,7 +46,8 @@ SETUP = """async () => {
     {id: "jC", client_id: c.id, company: "GARG SHEKHAR & COMPANY", status: "done", done: 1, n: 1, message: "1 of 1 sent to Tally", created_at: t(300), updated_at: t(299), entry_ids: ["old2"], results: [{id: "old2", ok: true, verified: true}]},
     {id: "jD", client_id: c.id, company: "GARG SHEKHAR & COMPANY", status: "failed", done: 0, n: 1, message: "Ledger 'Professional Fees' does not exist", created_at: t(120), updated_at: t(119), entry_ids: ["old3"], results: []}];
   TCloud.restAll = async (u) => /tally_post_jobs/.test(u) ? JSON.parse(JSON.stringify(window.__jobs)) : [];
-  TCloud.rpc = async (fn, a) => { window.__rpc.push([fn, JSON.parse(JSON.stringify(a || {}))]); if (fn === "tally_status") return TCloud.st[a.p_client].books; return {ok: true}; };
+  TCloud.rpc = async (fn, a) => { window.__rpc.push([fn, JSON.parse(JSON.stringify(a || {}))]); if (fn === "tally_status") return TCloud.st[a.p_client].books;
+    return /^tally_(want_update|post_enqueue|post_dismiss|post_undismiss|post_record)$/.test(fn) ? {ok: true} : null; };
   Cloud.api = async (path) => { window.__calls.push(path); if (/tally_vouchers\\?/.test(path)) return []; return []; };
   CloudJobs.list = null; CloudJobs.at = 0; CloudJobs.tried = {};
   // the Tally computer, as FinCom keeps its heartbeat (tally_devices / tally_companies): no database here
@@ -145,10 +146,11 @@ with sync_playwright() as p:
        "3. the fresh read failed: 'Not checked yet' (why), Check now, no Post again (%s)" % fa[:200])
     ok(any(r[0] == "tally_want_update" and r[1].get("p_client") == cid for r in E("window.__rpc")), "3. the Tally computer was asked to read afresh first")
     # FA/ELEC/020 posted ten minutes ago; the Tally computer reads, but its read is from before the posting
-    E("""() => { delete PostCheck.fresh[S.coId]; const b = window.__dev.info.beat; window.__readOld = window.__ago(20);
+    E("""() => { delete PostCheck.fresh[S.coId]; const b = window.__dev.info.beat, r30 = window.__ago(30); window.__readOld = window.__ago(20);
+      b.lastRead = r30; b.companies[0].lastRead = r30;
       setTimeout(() => { b.lastRead = window.__readOld; b.companies[0].lastRead = window.__readOld; }, 600);
       PostCheck.run(CO(), D().entries.fb, true); }""")
-    pg.wait_for_timeout(2500)
+    pg.wait_for_timeout(2000)
     fb = txt('#app [data-post-attention] [data-bill-row="fb"]')
     ok("Not checked yet: the last read (%s) is older than the posting" % hm(E("window.__readOld")) in fb and pg.locator('#app [data-bill-row="fb"] [data-post-again]').count() == 0,
        "3. a read older than the posting: 'Not checked yet', no Post again (%s)" % fb[:200])
@@ -189,6 +191,9 @@ with sync_playwright() as p:
     jd = pg.locator('#app [data-post-attention] [data-job="jD"]')
     ok(jd.count() == 1 and jd.locator("[data-retry]").count() == 1 and jd.locator("[data-dismiss]").count() == 1 and "does not exist" in jd.inner_text(), "5. the posting still failed needs attention: Retry and Dismiss")
     # ---- 6. FinCom Bridge 2.1.4: already in Tally (a second tab with stale data), and a check that could not be made
+    E("""() => { S.bank.ledgers = Object.assign({}, S.bank.ledgers, {importedAt: new Date().toISOString(), live: true, list: ["Alpha Consultants", "Kashi IT Solutions", "Professional Charges",
+      "TDS Payable - Professional", "Round Off"].map(n => ({name: n, group: ""}))}); render(); }""")
+    pg.wait_for_timeout(300)
     E("""() => { window.__answer = (pl) => ({ok: true, company: pl.company, results: pl.vouchers.map(v => v.id === "r2"
         ? {id: v.id, ok: false, already: true, guid: "g-k7", vchNo: "K/7", vchNumber: "K/7", vchType: "Journal", vchDate: "20260701", message: "Already in Tally (voucher no. K/7, 01-07-2026)"}
         : {id: v.id, ok: false, checkFailed: true, message: "Could not check Tally, not posted. Try again."})}); }""")
@@ -214,7 +219,7 @@ with sync_playwright() as p:
     ok(pg.locator("#app [data-post-table]").count() == 0 and pg.locator("#app [data-post-main]").count() == 0 and txt("#app [data-post-empty]") == "Nothing waiting to post" and "Post 0" not in pg.inner_text("#app"),
        "2. nothing ready: 'Nothing waiting to post', no table, no 'Post 0 to Tally'")
     chip, tab, attn, btn, dash = counts()
-    ok([num(chip) if chip[0].isdigit() else 0, num(tab), num(dash)] == [0, 0, 0] and btn == "", "4. and every count says 0 (%r, %r, %r)" % (chip, tab, dash))
+    ok("for Tally" not in chip and num(tab) == 0 and num(dash) == 0 and btn == "" and chip == attn + " to check in Tally", "4. and every count of what is ready says 0; the chip says what needs attention instead of 'in sync' (%r, %r, %r)" % (chip, tab, dash))
     ok(not errors, "no page errors %s" % errors[:2])
     br.close()
 print("\nall passed" if not fails else "\nFAILED: %d" % len(fails)); raise SystemExit(1 if fails else 0)
