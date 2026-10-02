@@ -213,7 +213,7 @@ const TCloud = {
       const m0 = b.meta = b.meta || {};
       if (!(m0.cloud && m0.cloud.book === bk.book && m0.cloud.big && m0.cloud.ledgersAt === bk.ledgersAt)){
         const led = await this.restAll("tally_ledgers?select=name,parent,open&merged_into=is.null&order=name&book_id=eq." + bk.book);
-        b.vouchers = []; TallyRead.balances(b, {ledgers: led.map(l => ({name: l.name, parent: l.parent, open: String(l.open), close: ""}))}, this.d8(bk.from), Audit.today());
+        b.vouchers = []; TallyRead.balances(b, {ledgers: led.map(l => ({name: l.name, parent: l.parent, open: String(l.open), close: ""}))}, this.d8(bk.from), Audit.today()); b.tb.src = "copy";
         await this.groupsInto(b, bk.book);
         m0.cloud = {book: bk.book, company: bk.company, ledgersAt: bk.ledgersAt, big: true, at: new Date().toISOString()};
         LK.cache = {}; render();
@@ -238,7 +238,7 @@ const TCloud = {
       if (!same){ b.vouchers = []; b.tb = null; }
       if (ledNew){
         const led = await this.restAll("tally_ledgers?select=name,parent,open&merged_into=is.null&order=name&book_id=eq." + bk.book);
-        TallyRead.balances(b, {ledgers: led.map(l => ({name: l.name, parent: l.parent, open: String(l.open), close: ""}))}, from, to);
+        TallyRead.balances(b, {ledgers: led.map(l => ({name: l.name, parent: l.parent, open: String(l.open), close: ""}))}, from, to); b.tb.src = "copy";
         await this.groupsInto(b, bk.book);
       }
       // the days, sixteen at a time (one by one, a year of 365 files took minutes on a new computer; the server answers

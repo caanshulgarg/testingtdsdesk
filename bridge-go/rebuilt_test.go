@@ -8,6 +8,7 @@ package main
 
 import (
 	"fmt"
+	"html"
 	"io"
 	"net"
 	"net/http"
@@ -41,6 +42,37 @@ type standTally struct {
 	alter     int64
 	slow      func(id, body string) time.Duration
 	importAt  func(id, body string) (create bool, delay time.Duration) // a posting: made or not, and how late it answers
+	led       []*tLed                                                  // the ledger masters (the ledger list; ledgers_test.go)
+	grp       [][2]string
+	mid       int64 // the last MasterID given
+}
+
+// a ledger master of the stand-in Tally (its stored fields only)
+type tLed struct {
+	guid, name, parent, open, gstin, pan string
+	mid, alter                           int64
+}
+
+var reMidRange = regexp.MustCompile(`\$MasterID &gt; (\d+)(?: AND \$MasterID &lt;= (\d+))?`)
+
+// a ledger made in the stand-in Tally (under its lock)
+func (f *standTally) addLedLocked(name, parent, open string) *tLed {
+	f.mid++
+	f.alter++
+	l := &tLed{guid: fmt.Sprintf("led-%d", f.mid), name: name, parent: parent, open: open, mid: f.mid, alter: f.alter}
+	f.led = append(f.led, l)
+	return l
+}
+func (f *standTally) addLed(name, parent, open string) *tLed {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.addLedLocked(name, parent, open)
+}
+func (f *standTally) altMst() int64 {
+	if f.mid > 0 {
+		return f.alter
+	}
+	return 3
 }
 
 var (
@@ -146,7 +178,25 @@ func newStandTally(t *testing.T) *standTally {
 		f.mu.Lock()
 		switch id {
 		case "TDSDeskCompanies", "FinComFree", "FinComCompany":
-			fmt.Fprintf(&o, `<COMPANY NAME="%s"><NAME>%s</NAME><GUID>%s</GUID><STARTINGFROM>20260401</STARTINGFROM><ALTVCHID>%d</ALTVCHID><ALTMSTID>3</ALTMSTID></COMPANY>`, zz, zz, f.guid, f.alter)
+			fmt.Fprintf(&o, `<COMPANY NAME="%s"><NAME>%s</NAME><GUID>%s</GUID><STARTINGFROM>20260401</STARTINGFROM><ALTVCHID>%d</ALTVCHID><ALTMSTID>%d</ALTMSTID></COMPANY>`, zz, zz, f.guid, f.alter, f.altMst())
+		case "FinComLedgers":
+			var after, upto int64 = 0, -1
+			if m := reMidRange.FindStringSubmatch(body); m != nil {
+				after = toI64(m[1])
+				if m[2] != "" {
+					upto = toI64(m[2])
+				}
+			}
+			for _, l := range f.led {
+				if l.mid > after && (upto < 0 || l.mid <= upto) {
+					fmt.Fprintf(&o, `<LEDGER NAME="%s" RESERVEDNAME=""><GUID>%s</GUID><MASTERID> %d</MASTERID><ALTERID> %d</ALTERID><PARENT>%s</PARENT><OPENINGBALANCE>%s</OPENINGBALANCE>`+
+						`<PARTYGSTIN>%s</PARTYGSTIN><INCOMETAXNUMBER>%s</INCOMETAXNUMBER></LEDGER>`, esc(l.name), l.guid, l.mid, l.alter, esc(l.parent), l.open, l.gstin, l.pan)
+				}
+			}
+		case "FinComGroups":
+			for _, g := range f.grp {
+				fmt.Fprintf(&o, `<GROUP NAME="%s"><PARENT>%s</PARENT></GROUP>`, esc(g[0]), esc(g[1]))
+			}
 		case "Day Book":
 			o.Reset()
 			o.WriteString("<ENVELOPE><BODY><IMPORTDATA><REQUESTDATA>")
@@ -190,6 +240,10 @@ func newStandTally(t *testing.T) *standTally {
 			}
 			made := 0
 			if create {
+				for _, m := range regexp.MustCompile(`<LEDGER NAME="([^"]+)"[^>]*>[\s\S]*?<PARENT>([^<]*)</PARENT>`).FindAllStringSubmatch(body, -1) {
+					f.addLedLocked(html.UnescapeString(m[1]), html.UnescapeString(m[2]), "0.00")
+					made++
+				}
 				for _, x := range regexp.MustCompile(`<VOUCHER\b[\s\S]*?</VOUCHER>`).FindAllString(body, -1) {
 					v := f.add(group(`<DATE>(\d{8})</DATE>`, x, 1), group(`<PARTYLEDGERNAME>([^<]*)</PARTYLEDGERNAME>`, x, 1), group(`<VOUCHERNUMBER>([^<]*)</VOUCHERNUMBER>`, x, 1),
 						group(`<NARRATION>([^<]*)</NARRATION>`, x, 1), "-1.00")
@@ -215,11 +269,13 @@ func newStandTally(t *testing.T) *standTally {
 
 // a stand-in FinCom cloud: the lease (held by another bridge while held is set), the days sent
 type standCloud struct {
-	srv   *httptest.Server
-	mu    sync.Mutex
-	held  bool
-	kinds []string
-	guard []M
+	srv     *httptest.Server
+	mu      sync.Mutex
+	held    bool
+	kinds   []string
+	guard   []M
+	ledList []M  // the ledger lists sent (kind ledger_list)
+	noDel   bool // a cloud without migration-32: deletions skipped
 }
 
 func newStandCloud(t *testing.T) *standCloud {
@@ -244,6 +300,14 @@ func newStandCloud(t *testing.T) *standCloud {
 		case "read_guard":
 			c.guard = append(c.guard, o)
 			out["state"] = "ok"
+		case "ledger_list":
+			c.ledList = append(c.ledList, o)
+			out["added"], out["renamed"] = len(arr(o["ledgers"])), len(arr(o["renamed"]))
+			if c.noDel {
+				out["deletesSkipped"] = len(arr(o["deleted"]))
+			} else {
+				out["deleted"] = len(arr(o["deleted"]))
+			}
 		case "days":
 			done := []any{}
 			for _, x := range arr(o["days"]) {
@@ -319,7 +383,7 @@ func TestUpdateNowReadsMonthSlicesOnly(t *testing.T) {
 				t.Errorf("a slice crosses a month: %s-%s", a, z)
 			}
 			slices = append(slices, a+"-"+z)
-		case "FinComCompany", "TDSDeskCompanies", "TDSDeskCompanyInfo":
+		case "FinComCompany", "TDSDeskCompanies", "TDSDeskCompanyInfo", ledListID, grpListID: // 2.1.4: the plain ledger and group lists too
 		default:
 			t.Errorf("Update now sent %q", id)
 		}

@@ -7,6 +7,9 @@
 //	   one light update per company every few minutes (OpenDebounceMin, 5)
 //	b. Update now pressed in FinCom: read now
 //	c. a posting approved and queued: posted now (cloud.go)
+//	e. (2.1.4) a bill's ledger chooser opened in FinCom with a list older than the last posting (POST /ledgers/refresh,
+//	   or the cloud's wake-up "ledgers"), or a posting with a new ledger: the ledger list read (ledgers.go), at most
+//	   once per company every few minutes (LedgersDebounceMin, 3)
 //	d. once a night at the hour set (KeepDailyAt, 02:00; shown in the tray): the full catch-up, only when Tally is open
 //	   and nobody has used FinCom or posted for 15 minutes (FinCom's cloud says when it was last used; without that, the
 //	   last request to this bridge)
@@ -29,6 +32,9 @@ var (
 	cloudUseAt   time.Time                // FinCom last used (for this computer's clients), as the cloud says
 	ownUseAt     time.Time                // the last request to this bridge from FinCom, or the last posting
 	postedFor    = map[string]time.Time{} // companies posted to: their light update follows the posting
+	ledPosted    = map[string]time.Time{} // companies a ledger master was posted to: their ledger list follows the posting
+	ledSeen      = map[string]time.Time{} // company -> when its last ledger list was started or read (debounce)
+	ledFromBeat  = map[string]string{}    // company -> the time of the last "ledgers" the heartbeat's answer carried
 	nightTold    string                   // the night (and reason) already said in the log
 )
 
@@ -128,7 +134,7 @@ func afterPosting(company string) {
 }
 func postedDue() {
 	evMu.Lock()
-	if len(postedFor) == 0 {
+	if len(postedFor) == 0 && len(ledPosted) == 0 {
 		evMu.Unlock()
 		return
 	}
@@ -150,6 +156,99 @@ func postedDue() {
 		delete(openSeen, c) // a posting is not held back by the opening debounce
 		evMu.Unlock()
 		wakeOpen(c, "after a posting")
+	}
+	// a posting that carried a ledger master (a new ledger): one read of the ledger list, once the posting is done
+	evMu.Lock()
+	var leds []string
+	for c, t := range ledPosted {
+		if nowFn().Sub(t) >= 3*time.Second {
+			leds = append(leds, c)
+			delete(ledPosted, c)
+		}
+	}
+	evMu.Unlock()
+	for _, c := range leds {
+		wakeLedgers(c, "after a posting with a new ledger", true)
+	}
+}
+
+// a ledger master went into Tally with a posting
+func afterPostingLedger(company string) {
+	if company == "" {
+		return
+	}
+	evMu.Lock()
+	ledPosted[company] = nowFn()
+	evMu.Unlock()
+}
+
+// the ledger list of a company was read in full (by any run): the debounce counts from it
+func noteLedgersRead(company string) {
+	evMu.Lock()
+	ledSeen[company] = nowFn()
+	evMu.Unlock()
+}
+func ledDebounce() time.Duration {
+	return time.Duration(keepNum("LedgersDebounceMin", 3)) * time.Minute
+}
+
+// the ledger list of one company, read now (the "ledgers" run: the plain ledger and group lists, nothing else). Asked
+// by FinCom when a bill's ledger chooser is opened and the list is older than the last posting (POST /ledgers/refresh
+// on this computer, or the cloud's wake-up "ledgers"), at most once per company every LedgersDebounceMin (3) minutes;
+// after a posting with a new ledger (afterPost: not held back by the debounce). Not while background reading is paused
+// in the tray (Update now still reads the list)
+func wakeLedgers(company, source string, afterPost bool) M {
+	company = strings.TrimSpace(company)
+	out := M{"ok": true, "company": company, "started": false, "paused": paused(), "debounceMin": int(ledDebounce().Minutes())}
+	evMu.Lock()
+	last := ledSeen[company]
+	evMu.Unlock()
+	if st := readKeepState(syncFolder(company)); st != nil {
+		out["listAt"] = str(st["ledAt"])
+	}
+	if !last.IsZero() {
+		out["nextAt"] = last.Add(ledDebounce()).Format("2006-01-02T15:04:05")
+	}
+	switch {
+	case company == "":
+		out["ok"], out["why"] = false, "Say which company."
+	case !keepOn():
+		out["why"] = "keeping the books in step is off on this computer"
+	case paused():
+		out["why"] = "background reading is paused in the tray (Update now still reads the ledger list)"
+	case readKeepState(syncFolder(company)) == nil:
+		out["why"] = "this company is not kept in step on this computer"
+	case !anyBackoff().IsZero():
+		out["why"] = "Tally is left alone for now after it did not answer"
+	case !afterPost && !last.IsZero() && nowFn().Sub(last) < ledDebounce():
+		out["why"], out["debounced"] = "the ledger list was read or asked for a moment ago", true
+	case tallyOpenNow() == 0:
+		out["why"] = "Tally is not open"
+	default:
+		evMu.Lock()
+		ledSeen[company] = nowFn()
+		evMu.Unlock()
+		out["started"] = startKeepRun(runReq{kind: "ledgers", only: []string{company}, why: source})
+	}
+	return out
+}
+
+// "ledgers" from the heartbeat's answer (company -> when), the fallback for the wake-up channel
+func ledgersFromBeat(m M) {
+	for co, v := range m {
+		at := str(v)
+		evMu.Lock()
+		seen := ledFromBeat[co]
+		if at != "" && at > seen {
+			ledFromBeat[co] = at
+		}
+		evMu.Unlock()
+		if at != "" && at > seen {
+			if t, err := time.Parse(time.RFC3339Nano, at); err == nil && nowFn().Sub(t) > 10*time.Minute {
+				continue
+			}
+			wakeLedgers(co, "the ledger chooser opened in FinCom", false)
+		}
 	}
 }
 

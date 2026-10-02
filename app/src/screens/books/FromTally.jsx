@@ -60,7 +60,7 @@ function Setup({ b }) {
         {parts.length ? <>{"from files, " + cov}{gaps.length > 0 && <>; <span className="bad">missing {gaps.join(", ")}</span></>}. The days after it come in with the update from Tally.</>
           : m.from ? "read from Tally (" + d(m.from) + " to " + d(m.to) + ")" : "Choose the dates and the day book XML below, part by part."}</Step>
       <Step ok={tbOk ? true : b.tb ? "wait" : false} title="2. Opening balances">
-        {tbOk ? Object.keys(b.tb.led || {}).length + " ledgers, as on " + d(b.tb.openAsOn) : b.tb ? "read from Tally" : "Choose the trial balance XML as on " + (firstFrom ? d(BridgeSeed.add(firstFrom, -1)) : "the day before the first date") + " below."}</Step>
+        {tbOk ? Object.keys(b.tb.led || {}).length + " ledgers, as on " + d(b.tb.openAsOn) : b.tb ? <>{Object.keys(b.tb.led || {}).length + " ledgers, from FinCom's copy"}<span className="note" data-copy-line="" style={{ display: "block" }}>{copyLine(S.coId)}</span></> : "Choose the trial balance XML as on " + (firstFrom ? d(BridgeSeed.add(firstFrom, -1)) : "the day before the first date") + " below."}</Step>
       <Step ok={!!b.ledInfoAt} title="3. Ledger masters">
         {b.ledInfoAt ? Object.keys(b.ledInfo || {}).length + " ledgers (groups, PAN, GSTIN), " + d(String(b.ledInfoAt).slice(0, 10).replace(/-/g, "")) : "Choose the ledger masters XML below (List of Accounts)."}</Step>
       <Step ok={bok ? true : Bridge.on() && k && k.on ? "wait" : false} title="4. FinCom Bridge">{bs}{bact && <> {bact}</>}</Step>

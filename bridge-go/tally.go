@@ -622,6 +622,10 @@ func invokeTally(tc *TC, port int, x string, timeoutSec int) (string, error) {
 		// something was posted to Tally: the posted entries go into the copy (and the cloud) once the posting is done
 		if !tc.copier && re(`<TALLYREQUEST>\s*Import`).MatchString(x) {
 			afterPosting(html.UnescapeString(group(`<SVCURRENTCOMPANY>([^<]*)</SVCURRENTCOMPANY>`, x, 1)))
+			// a ledger master posted (a new ledger): its list is read once the posting is done (events.go)
+			if re(`<LEDGER\b`).MatchString(x) {
+				afterPostingLedger(html.UnescapeString(group(`<SVCURRENTCOMPANY>([^<]*)</SVCURRENTCOMPANY>`, x, 1)))
+			}
 		}
 	} else {
 		fail = err.Error()

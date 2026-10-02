@@ -149,7 +149,7 @@ const GUIDE = {
       from: "The vouchers read from Tally, from the start of the year to the last date in the books.", watch: ["Findings are observations to confirm against documents, not conclusions."]},
     "lookup": {area: "Look up", t: "Look up", what: "Any ledger, group, trial balance, month-by-month figure, a party’s open bills, or entries, for any dates.",
       steps: ["Press / anywhere in a client, or open Look up on the left.", "Ask in words: “HDFC bank for August”, “Raj Fabrics open bills”, “trial balance as on 31/03/2026”; or choose the kind and the period and press Show.", "Click a name in the result to go further; Print or PDF, or Excel."],
-      from: "Totals come from FinCom’s copy of the books. One ledger can be read live from Tally when FinCom Bridge is on (“From: Tally, live”).",
+      from: "Totals come from FinCom’s copy of the books. Tally is never asked for a balance: each figure says “Balance from FinCom's copy · books as of” the time the copy last read Tally.",
       watch: ["Without the books or the bridge, read the books from Tally first."]},
     "letters": {area: "Letters", t: "Confirmations and reminders", what: "Balance confirmation letters to customers, suppliers and loan parties, and reminders of dues, from the client’s books.",
       steps: ["Balance confirmations: choose the date, who to write to and the smallest balance; tick the parties.", "Print or save the letters as PDF, or open each in your own email or WhatsApp.", "Record each reply and the party’s figure; differences are listed.", "Dues reminders: choose the date, the credit allowed and the tone (friendly, firm, final)."],

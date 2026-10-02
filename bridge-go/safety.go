@@ -125,6 +125,13 @@ func companyAlter(company string) int64 {
 	return companyAlts[companyKey(company)]
 }
 
+// the company's highest master AlterID, as its last check said (0: not known)
+func companyAlterM(company string) int64 {
+	altMu.Lock()
+	defer altMu.Unlock()
+	return companyAltsM[companyKey(company)]
+}
+
 // the company-level check: its GUID (and its highest AlterIDs), one tiny request naming the company. "" when Tally
 // does not list it that way (nothing to compare)
 func companyCheck(tc *TC, company string, port int) (string, error) {

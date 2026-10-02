@@ -804,35 +804,23 @@ async function bankAfterCheck(cid, sid, chk, tname){
   } else BankDB.set("stmt:" + cid + ":" + sid, rows);
 }
 
-/* ---------- the bank ledger's balance in Tally on a date ---------- */
-// Some Tally setups give a ledger's closing balance for their whole current period whatever date is asked, so an entry
-// dated after the statement (say 31-03-2027) would be counted. So the balance on the statement's last day is checked:
-// read on that day and far later, and compared with the entries in between. If Tally kept to the date, its figure is
-// used; if not, the balance is worked back from its latest figure less the later entries.
-async function tallyBankBalance(tname, ledger, to){
-  const one = bridgeVer(Bridge.st.version) >= bridgeVer("1.12.3");
-  const bankBal = v => r2(-(parseFloat(String(v == null || v === "" ? "0" : v).replace(/,/g, "")) || 0));
-  const far = addDays(to, 800), next = addDays(to, 1);
-  const j = await Bridge.call((one ? "/ledgerbalance" : "/balances") + "?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(next) + "&to=" + isoToTally(far) + (one ? "&ledger=" + encodeURIComponent(ledger) : "") + Bridge.pinQ(), null, 180000);
-  const L = one ? {open: j.open, close: j.close} : [].concat(j.ledgers || []).find(l => norm(l.name) === norm(ledger));
-  if (!L) throw {message: "\u201c" + ledger + "\u201d is not among Tally's ledgers in " + tname + "."};
-  const atTo = bankBal(L.open), atFar = bankBal(L.close);
-  const lv = await Bridge.call(ledgerLinesUrl(tname, ledger, next, far), null, 600000);
-  let later = 0, laterN = 0;
-  [].concat(lv.vouchers || []).filter(v => !/^yes$/i.test(v.cancelled || "")).forEach(v => {
-    const d = tallyToIso(v.date); if (d <= to || d > far) return;
-    const be = [].concat(v.entries || []).find(e => norm(e.ledger) === norm(ledger)); if (!be) return;
-    later += -(parseFloat(String(be.amount).replace(/,/g, "")) || 0); laterN++;
-  });
-  later = r2(later);
-  if (Math.abs(atFar - (atTo + later)) < 0.01) return {close: atTo, how: "tally", later, laterN};
-  return {close: r2(atFar - later), how: "worked back", later, laterN};
+/* ---------- the bank ledger's balance on a date, from FinCom's copy ---------- */
+// FinCom Bridge 2.1.4 asks Tally for no balance (owner's decision of 02-Oct-2026): the balance on the statement's last
+// day is the copy's opening of the ledger plus its entries up to that day (TCloud.ledgerAt: tally_balances, else
+// tally_ledger), shown with "Balance from FinCom's copy · books as of 15:34". Neither the bridge nor Tally is asked.
+// tname is kept for the callers; cid is the client (the open one when not given)
+async function tallyBankBalance(tname, ledger, to, cid){
+  cid = cid || S.coId;
+  const close = await TCloud.ledgerAt(cid, ledger, to);
+  return {close, how: "copy", later: 0, laterN: 0, line: copyLine(cid), asOf: (booksAsOf(cid) || {}).at || ""};
 }
 
-/* ---------- does Tally agree with the bank? ---------- */
-// Tally's balance of the bank ledger at the start and end of the statement, against the statement's own opening and closing.
-// When they differ, the difference is taken apart: the opening, the statement lines not in Tally yet, the lines left out,
-// and the entries in Tally for these dates that are not on the statement. Whatever is left is shown as unexplained.
+/* ---------- does the bank ledger agree with the bank? ---------- */
+// The bank ledger's balance in FinCom's copy at the end of the statement, against the statement's own closing. Only once
+// every entry FinCom posted to the statement is read back (in Tally, and in FinCom's copy): until then "Posted · balance
+// not yet checked". Never an error: when the copy cannot answer yet, "balance not yet checked" with the reason.
+// When they differ, the difference is taken apart: the statement lines not posted yet, the lines left out, and (with the
+// bridge here) the entries for these dates that are not on the statement. Whatever is left is shown as unexplained.
 function bankEffect(r){ return r2(num(r.credit) - num(r.debit)); }
 async function checkBankBalance(opts){
   opts = opts || {};
@@ -841,17 +829,21 @@ async function checkBankBalance(opts){
   const acc = (co.bankAccounts || []).find(a => a.id === st.acctId);
   const ledger = acc && exactLedger(acc.ledger);
   if (!ledger){ if (!opts.quiet) toast("Choose the Tally ledger for this bank account first."); return null; }
-  const tname = opts.tname || await ensureTallyCompany(co);
-  if (!tname) return null;
+  const cid = b.cid, tname = opts.tname || co.tallyName || (TCloud.book(cid) || {}).company || co.name;
   const sid = st.id;
-  b.balBusy = true; if (!opts.quiet){ b.busy = "Reading " + ledger + "'s balance from Tally…"; } render();
+  b.balBusy = true; if (!opts.quiet){ b.busy = "Working out " + ledger + "'s balance from FinCom's copy…"; } render();
   let res;
+  const base = () => ({at: Date.now(), ledger, company: tname, from: st.from, to: st.to, line: copyLine(cid)});
   try {
-    const tb = await tallyBankBalance(tname, ledger, st.to);
+    // the copy's state (when it last read Tally) before deciding whether the entries posted are read back
+    try { if (TCloud.on()) await TCloud.status(cid, true); } catch (e){}
+    const wait = bankNotReadBack(b.rows, cid);
+    if (wait.length) throw {pending: wait.length};
+    const tb = await tallyBankBalance(tname, ledger, st.to, cid);
     const all = b.rows.reduce((a, r) => a + bankEffect(r), 0);
     const sOpen = st.opening !== undefined && st.opening !== null && st.opening !== "" ? r2(num(st.opening)) : (st.closing !== undefined ? r2(num(st.closing) - all) : null);
     const sClose = st.closing !== undefined && st.closing !== null && st.closing !== "" ? r2(num(st.closing)) : (sOpen !== null ? r2(sOpen + all) : null);
-    res = {at: Date.now(), ledger, company: tname, from: st.from, to: st.to, openAsOn: addDays(st.from, -1), tOpen: null, tClose: tb.close, how: tb.how, later: tb.laterN, sOpen, sClose};
+    res = Object.assign(base(), {openAsOn: addDays(st.from, -1), tOpen: null, tClose: tb.close, how: tb.how, later: tb.laterN, sOpen, sClose, line: tb.line, asOf: tb.asOf});
     res.diffOpen = sOpen === null || res.tOpen === null ? null : r2(sOpen - res.tOpen);
     res.diff = sClose === null ? null : r2(sClose - res.tClose);
     const notIn = b.rows.filter(r => !["sent", "intally", "ignored"].includes(r.state));
@@ -859,7 +851,7 @@ async function checkBankBalance(opts){
     res.notIn = notIn.map(r => r.id); res.notInEffect = r2(notIn.reduce((a, r) => a + bankEffect(r), 0));
     res.left = left.map(r => r.id); res.leftEffect = r2(left.reduce((a, r) => a + bankEffect(r), 0));
     res.extra = null;
-    if (res.diff !== null && Math.abs(res.diff) >= 0.01 && opts.explain){
+    if (res.diff !== null && Math.abs(res.diff) >= 0.01 && opts.explain && typeof bridgeLive === "function" && bridgeLive(co)) try {
       // which entries does Tally have for these dates that the statement does not?
       if (!opts.quiet) { b.busy = "The balance differs: reading " + ledger + " for " + fmtDate(st.from) + " to " + fmtDate(st.to) + " to find out why…"; render(); }
       const jv = await Bridge.call(ledgerLinesUrl(tname, ledger, st.from, st.to), null, 600000);
@@ -885,8 +877,11 @@ async function checkBankBalance(opts){
       res.missingEffect = r2(b.rows.filter(r => res.missing.includes(r.id)).reduce((a, r) => a + bankEffect(r), 0));
       res.extra = extra; res.extraEffect = r2(extra.reduce((a, x) => a + x.eff, 0));
       res.unexplained = r2(res.diff - (res.diffOpen || 0) - res.notInEffect - res.leftEffect - res.missingEffect + res.extraEffect);
-    }
-  } catch (e){ res = {at: Date.now(), error: e.message || String(e)}; }
+    } catch (e){ res.extra = null; }
+  } catch (e){
+    // not an error on the screen: posted and not read back yet, or the copy cannot answer yet (it says why)
+    res = Object.assign(base(), e && e.pending ? {pending: e.pending} : {notYet: (e && e.message) || String(e)});
+  }
   const st2 = b.stmts.find(x => x.id === sid);
   if (st2){ st2.tallyBal = res; saveBank({stmts: true}); }
   b.balBusy = false; if (!opts.quiet) b.busy = "";

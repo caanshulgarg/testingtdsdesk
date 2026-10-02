@@ -154,7 +154,7 @@ async function saveBooks(opts, bb){
 // the books of a client (TDS & GST, MIS, Accounts, Audit, …): React (app/src/screens/Books.jsx)
 function viewBooks(){ return '<div data-react="Books"></div>'; }
 
-/* ---------- straight from Tally through the bridge: the day book month by month, and Tally's own balances ---------- */
+/* ---------- the day book through the bridge, month by month; the opening balances from FinCom's copy ---------- */
 const TallyRead = {
   months(from, to){
     const out = []; let y = num(from.slice(0, 4)), m = num(from.slice(4, 6));
@@ -264,6 +264,20 @@ const TallyRead = {
     pl.open = r2(num(pl.openSent) + moved);
     return true;
   },
+  // the opening balances on the books' first day, from FinCom's copy in the cloud (TCloud.openings: the view
+  // tally_balances, else the ledger masters' openings or the cloud's trial balance on the day before), with each ledger's
+  // closing worked out from the entries here. Without a copy in the cloud, the openings already here stay as they are.
+  // Never an error: b.tb.line says "Balance from FinCom's copy · books as of 15:34"
+  async openings(b, cid, from, to){
+    let j = null;
+    try { if (typeof TCloud === "object" && TCloud.on()){ b.busy = "Opening balances from FinCom\u2019s copy\u2026"; render(); j = await TCloud.openings(cid, from); } } catch (e){ j = null; }
+    if (j && (j.ledgers || []).length){
+      this.balances(b, j, from, to);
+      if (typeof MIS === "object"){ const mv = MIS.moves(b.tb.from, b.tb.to); Object.entries(b.tb.led).forEach(([l, x]) => { x.close = r2(num(x.open) + ((mv[l] || {}).t || 0)); }); }
+    }
+    if (b.tb){ b.tb.src = "copy"; b.tb.line = copyLine(cid); }
+    return j;
+  },
   // after the books changed (read from Tally, changes brought in from the kept copy or the cloud, a day book file):
   // every section follows. Screens work from the entries as they are; audit and MIS are worked out again for the
   // period they last covered. A filed GST return is never changed: when its documents changed in Tally, a warning
@@ -338,23 +352,13 @@ const TallyRead = {
         await new Promise(r => setTimeout(r, Math.min(3000, 300 + sec * 500)));
       }
     }
-    // opening balances only: Tally works every ledger's balance out for the date asked, which is slow on a big
-    // company; the closing figures follow from the opening and the entries just read
-    // the bridge's copy may already hold them for this date (read at a quiet time): then Tally is not asked at all
-    let j = null;
-    if (how !== "copy"){
-      try { const k = JSON.parse(await this.raw("/syncfile" + q + "&file=balances.json", 60000)); if (k && k.openAsOn === (t => t.getFullYear() + String(t.getMonth() + 1).padStart(2, "0") + String(t.getDate()).padStart(2, "0"))(new Date(+from.slice(0, 4), +from.slice(4, 6) - 1, +from.slice(6, 8) - 1)) && (k.ledgers || []).length) j = Object.assign({}, k, {from, to, openOnly: true}); } catch (e){}
-    }
-    if (!j){
-      b.busy = "Reading the opening balances from Tally (one read; Tally may be busy for a moment)\u2026"; render();
-      j = how === "copy" ? JSON.parse(await this.raw("/syncfile" + q + "&file=balances.json")) : await Bridge.call("/balances" + q + "&from=" + from + "&to=" + to + "&open=1", null, 600000);
-    }
-    this.balances(b, j, j.from || from, j.to || to);
-    if (how !== "copy" && typeof MIS === "object"){ const mv = MIS.moves(b.tb.from, b.tb.to); Object.entries(b.tb.led).forEach(([l, x]) => { if (j.openOnly || x.close === "" || isNaN(x.close)) x.close = r2(num(x.open) + ((mv[l] || {}).t || 0)); }); }
+    // the opening balances: from FinCom's copy (FinCom Bridge 2.1.4 asks Tally for no balance, and the bridge is not
+    // asked for its own copy's either; owner's decision of 02-Oct-2026); the closing figures follow from the entries
+    const j = await this.openings(b, co.id, from, to);
     b.map = Books.mapLedgers(b.vouchers, b.map); LedMaster.refresh(b);
     b.meta.at = new Date().toISOString(); b.meta.file = how === "copy" ? "last night's copy from Tally" : "read from Tally";
     b.busy = "";
-    this.after(b, how === "copy" ? "after last night's copy was read" : "after reading from Tally", {from: j.from || from, to: j.to || to});
+    this.after(b, how === "copy" ? "after last night's copy was read" : "after reading from Tally", {from: (j && j.from) || from, to: (j && j.to) || to});
     await saveBooks();
     return b.vouchers.length;
   }

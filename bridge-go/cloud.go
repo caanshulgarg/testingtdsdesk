@@ -322,6 +322,10 @@ func pushCloudCompany(company, dir string, budget time.Duration) error {
 			_ = os.Remove(lf)
 		}
 	}
+	// 2.1.4: the ledger list (new, changed, renamed and deleted ledgers, and the groups), before the days
+	if err := pushLedgerList(company, dir); err != nil {
+		return err
+	}
 	q := cloudQueue(dir)
 	pf := filepath.Join(dir, "cloud-plain.txt")
 	var plain []string
@@ -729,6 +733,9 @@ func beatOnce() {
 		if o := obj(r.json["opened"]); len(o) > 0 {
 			go openedFromBeat(o)
 		}
+		if o := obj(r.json["ledgers"]); len(o) > 0 {
+			go ledgersFromBeat(o)
+		}
 		// Update now pressed in FinCom on another computer; postings waiting: started, never waited for here. Neither is
 		// stopped by "Pause background reading"
 		if truthy(r.json["updateNow"]) {
@@ -1064,32 +1071,49 @@ func wakeSession(u, key, topic string) error {
 		if str(m["event"]) != "broadcast" || obj(m["payload"]) == nil {
 			continue
 		}
-		inner := obj(obj(m["payload"])["payload"])
-		switch str(obj(m["payload"])["event"]) {
-		case "post":
-			writeLog("Woken by FinCom: a posting is waiting")
-			noteUse()
-			if why := readOnlyWhy(); why != "" {
-				writeLog("Not taken here: " + why)
-			} else if cfgB("AllowImport") && postTaking.CompareAndSwap(false, true) {
-				go func() { defer postTaking.Store(false); cloudPostTake() }()
-			}
-		case "update":
-			writeLog("Woken by FinCom: Update now")
-			go wakeUpdate(str(inner["company"]))
-		case "open":
-			// a client opened in FinCom: one light update of its company (at most one every few minutes), then idle
-			co := str(inner["company"])
-			if a := str(inner["at"]); a != "" {
-				noteCloudUse(a)
-			} else {
-				noteUse()
-			}
-			go wakeOpen(co, "opened in FinCom")
-		case "active":
-			if a := str(inner["at"]); a != "" {
-				noteCloudUse(a)
-			}
+		wakeEvent(str(obj(m["payload"])["event"]), obj(obj(m["payload"])["payload"]))
+	}
+}
+
+// one wake-up from FinCom's cloud: a posting waiting, Update now, a client opened, FinCom in use, or (2.1.4) the ledger
+// list wanted ("ledgers", {company, at}: a bill's ledger chooser opened with a list older than the last posting)
+func wakeEvent(ev string, inner M) {
+	switch ev {
+	case "post":
+		writeLog("Woken by FinCom: a posting is waiting")
+		noteUse()
+		if why := readOnlyWhy(); why != "" {
+			writeLog("Not taken here: " + why)
+		} else if cfgB("AllowImport") && postTaking.CompareAndSwap(false, true) {
+			go func() { defer postTaking.Store(false); cloudPostTake() }()
 		}
+	case "update":
+		writeLog("Woken by FinCom: Update now")
+		go wakeUpdate(str(inner["company"]))
+	case "open":
+		// a client opened in FinCom: one light update of its company (at most one every few minutes), then idle
+		co := str(inner["company"])
+		if a := str(inner["at"]); a != "" {
+			noteCloudUse(a)
+		} else {
+			noteUse()
+		}
+		go wakeOpen(co, "opened in FinCom")
+	case "active":
+		if a := str(inner["at"]); a != "" {
+			noteCloudUse(a)
+		}
+	case "ledgers":
+		co := str(inner["company"])
+		writeLog("Woken by FinCom: the ledger list of " + co + " wanted (the ledger chooser)")
+		if a := str(inner["at"]); a != "" {
+			noteCloudUse(a)
+			evMu.Lock()
+			if a > ledFromBeat[co] {
+				ledFromBeat[co] = a // the heartbeat's copy of the same wake-up is not taken again
+			}
+			evMu.Unlock()
+		}
+		go wakeLedgers(co, "the ledger chooser opened in FinCom", false)
 	}
 }

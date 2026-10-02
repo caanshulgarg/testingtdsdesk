@@ -467,7 +467,7 @@ func toAny(a []string) []any {
 // --- the copier itself: one run at a time, started by an event (events.go), with its own state
 type keepRun struct {
 	tc       *TC
-	kind     string   // light (a client opened in FinCom, or after a posting), now (Update now), nightly
+	kind     string   // light (a client opened in FinCom, or after a posting), now (Update now), nightly, ledgers (the ledger list only)
 	only     []string // these companies only (none: every company open in Tally)
 	caughtUp bool
 	light    bool
@@ -656,6 +656,18 @@ func (k *keepRun) step(company string, port int, booksFrom string) error {
 		k.caughtUp = true
 		return nil
 	}
+	if k.kind == "ledgers" {
+		// the ledger list only (after a posting with a ledger master, or the ledger chooser in FinCom): a company not kept
+		// here has nothing to compare with; the entries just posted go into the copy first (Tally not read for them)
+		if st == nil {
+			k.caughtUp = true
+			return nil
+		}
+		if pn := useKeepPosted(dir, st); pn > 0 {
+			writeLog(fmt.Sprintf("Keeping %s: %d entries posted from FinCom put in the copy and sent to the cloud (Tally not read)", company, pn))
+			save()
+		}
+	}
 	if st == nil {
 		from := tallyDate(fyStart(time.Now()))
 		if v := cfgS("KeepFrom"); isTallyDate(v) {
@@ -701,6 +713,19 @@ func (k *keepRun) step(company string, port int, booksFrom string) error {
 		k.told["guid:"+company] = true
 		st["guid"] = g
 		k.alter[company] = toI64(companyAlter(company))
+	}
+	// 2.1.4 (02-Oct-2026): the plain ledger and group lists (ledgers.go), in chunks, before the day book
+	done, err := k.ledgerList(company, port, dir, st, inBudget, save)
+	if err != nil {
+		return err
+	}
+	if !done {
+		save()
+		return nil // the time of this turn is up: the next turn goes on from the last chunk saved
+	}
+	if k.kind == "ledgers" {
+		k.caughtUp = true
+		return nil
 	}
 	// a round of the copy's period, a slice at a time; a new round each run, resumed within the run
 	if str(st["round"]) != k.id {
@@ -807,12 +832,14 @@ func writeKeepLoad() {
 // --- a run of the copier, asked for by an event (events.go): light (a client opened in FinCom, or the entries just
 // posted), now (Update now), nightly (the nightly catch-up)
 type runReq struct {
-	kind string   // light | now | nightly
+	kind string   // light | now | nightly | ledgers
 	only []string // these companies only; none: every company open in Tally
 	why  string   // for the log
 }
 
-func runRank(kind string) int { return map[string]int{"light": 1, "nightly": 2, "now": 3}[kind] }
+func runRank(kind string) int {
+	return map[string]int{"light": 1, "ledgers": 2, "nightly": 3, "now": 4}[kind]
+}
 
 // a run starts now, or (one is going) follows it; a light update of a company a fuller run is reading anyway is dropped
 func startKeepRun(r runReq) bool {
@@ -822,7 +849,7 @@ func startKeepRun(r runReq) bool {
 	kwMu.Lock()
 	defer kwMu.Unlock()
 	if kwRunning {
-		if cur := kwRun; r.kind == "light" && cur != nil && cur.kind != "light" {
+		if cur := kwRun; r.kind == "light" && cur != nil && (cur.kind == "now" || cur.kind == "nightly") {
 			if len(cur.only) == 0 {
 				return false
 			}
@@ -918,8 +945,10 @@ func keepWorker(r runReq) {
 			startKeepRun(*next)
 		}
 	}()
-	what := map[string]string{"light": "Light update", "now": "Update from Tally", "nightly": "Nightly catch-up"}[r.kind]
+	what := map[string]string{"light": "Light update", "now": "Update from Tally", "nightly": "Nightly catch-up", "ledgers": "Ledger list"}[r.kind]
 	switch r.kind {
+	case "ledgers":
+		writeLog("Ledger list of " + strings.Join(r.only, ", ") + " (" + r.why + "): the plain ledger and group lists read from Tally, nothing else")
 	case "light":
 		writeLog("Light update of " + strings.Join(r.only, ", ") + " (" + r.why + "): the entries just posted into the copy; Tally is not read (Update now reads it)")
 	case "now":
@@ -1104,6 +1133,13 @@ func keepWorker(r runReq) {
 		writeLog("Light update: done" + reqs() + "; the bridge is idle again")
 	case k.light:
 		writeLog("Light update: not done (" + why + ")" + reqs() + "; the next event tries again")
+	case r.kind == "ledgers" && k.allDone:
+		writeLog("Ledger list: done" + reqs() + "; the bridge is idle again")
+	case r.kind == "ledgers":
+		if why == "" {
+			why = "Tally or the company not open"
+		}
+		writeLog("Ledger list: not finished (" + why + ")" + reqs() + "; the next event tries again")
 	case !k.allDone:
 		_ = saveFile(sp("keep-tried.txt"), nowS())
 		if r.kind == "now" {
@@ -1141,7 +1177,7 @@ func keepStatus(company string) M {
 	}
 	return M{"ok": true, "on": keepOn(), "running": keepRunning(), "load": readJSONFile(sp("keep-load.json")), "cloud": cloudLinkStatus(), "phase": g("phase"), "next": g("next"), "from": g("from"), "at": g("at"),
 		"schedule": keepSchedule(), "dailyAt": keepDailyAt(), "lastRun": keepLastRun(), "lightAt": strings.TrimSpace(readText(lightFile())), "now": exists(sp("keep-now.txt")),
-		"readAt": g("readAt"), "paused": paused(), "events": true,
+		"readAt": g("readAt"), "paused": paused(), "events": true, "ledgersAt": g("ledAt"),
 		"mode": func() string {
 			if company != "" {
 				return keepMode(company)

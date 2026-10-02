@@ -118,33 +118,13 @@ const LK = {
       return {id: v.id, date: v.date, type: v.type, no: v.no, part, narr: v.narr || "", dr: d, cr: c, run, ent: v.ent.map(e => ({l: e.l, a: e.a}))};
     });
     return {kind: "ledger", src: "books", led, from, to, open, close: open == null ? null : run, dr, cr, rows,
-      note: (B.ok ? "Opening from " + B.src + "." : "Opening balance not known: " + (B.why || "") + ".") + (cv.full ? "" : " The books read here cover " + (cv.f ? FC.span(cv.f, cv.t) : "no dates") + "; entries outside that are not shown. Fetch from Tally for the whole period.")};
+      note: (B.ok ? "Opening from " + B.src + "." : "Opening balance not known: " + (B.why || "") + ".") + (cv.full ? "" : " The books read here cover " + (cv.f ? FC.span(cv.f, cv.t) : "no dates") + "; entries outside that are not shown. Choose FinCom\u2019s copy for the whole period.")};
   },
-  // ---------- the same, straight from Tally
-  async ledgerTally(led, from, to, force){
-    const ck = S.coId + "|led|" + led + "|" + from + "|" + to, hit = this.cached(ck, force); if (hit) return hit;
-    const co = CO(), o = Bridge.openFor(co);
-    if (!o) throw new Error("Open " + (co.tallyName || co.name) + " in Tally first.");
-    if (bridgeVer(Bridge.st.version) < bridgeVer("1.12.3")) throw new Error("This needs FinCom Bridge 2.1. Install FinCom Bridge from the Tally page.");
-    const q = "?company=" + encodeURIComponent(o.name) + "&from=" + from + "&to=" + to + "&ledger=" + encodeURIComponent(led) + Bridge.pinQ();
-    const bal = await Bridge.call("/ledgerbalance" + q, null, 180000);
-    const lv = await Bridge.call(ledgerLinesUrl(o.name, led, FC.iso(from), FC.iso(to)), null, 600000);
-    const open = -r2(num(bal.open)), close = -r2(num(bal.close));
-    let run = open, dr = 0, cr = 0;
-    const rows = [].concat(lv.vouchers || []).filter(v => !/^yes$/i.test(v.cancelled || "") && !/^yes$/i.test(v.optional || "")).map(v => {
-      const d8 = String(v.date || "").replace(/\D/g, "").slice(0, 8), ents = [].concat(v.entries || []).map(e => ({l: e.ledger, a: r2(num(e.amount))}));
-      const a = r2(ents.filter(e => norm(e.l) === norm(led)).reduce((s, e) => s + e.a, 0));
-      return {v, d8, ents, a};
-    }).filter(x => x.d8 >= from && x.d8 <= to && x.a).sort((x, y) => x.d8.localeCompare(y.d8)).map(({v, d8, ents, a}) => {
-      const d = a < 0 ? -a : 0, c = a > 0 ? a : 0;
-      dr = r2(dr + d); cr = r2(cr + c); run = r2(run + d - c);
-      const other = ents.filter(e => norm(e.l) !== norm(led) && Math.sign(e.a) !== Math.sign(a) && e.a).sort((x, y) => Math.abs(y.a) - Math.abs(x.a));
-      return {id: v.guid || v.masterId || d8 + v.number, date: d8, type: v.type, no: v.number, part: other.length ? other[0].l + (other.length > 1 ? " and " + (other.length - 1) + " more" : "") : (v.party || ""), narr: v.narration || "", dr: d, cr: c, run, ent: ents};
-    });
-    const diff = r2(close - run);
-    return this.keep(ck, {kind: "ledger", src: "tally", led, from, to, open, close, dr, cr, rows, at: Date.now(),
-      note: "Read from Tally (" + o.name + ")." + (Math.abs(diff) >= 0.5 ? " Tally's closing balance differs from the entries by " + INR.format(Math.abs(diff)) + ": an entry may be optional or post-dated." : "")});
-  },
+  // ---------- the same, from FinCom's copy. FinCom Bridge 2.1.4 asks Tally for no balance (owner's decision of
+  // 02-Oct-2026): what was read "from Tally" is worked out from FinCom's cloud copy, openings plus entries, and shown with
+  // "Balance from FinCom's copy · books as of 15:34". The bridge and Tally are not asked
+  copyAns(r){ r.src = "cloud"; r.at = r.at || Date.now(); r.line = copyLine(S.coId); return r; },
+  async ledgerTally(led, from, to){ return this.copyAns(await TCloud.ledger(S.coId, led, from, to)); },
   // ---------- a group: each ledger's opening, debits, credits and closing
   group(grp, from, to){
     const B = this.bal(from, to), led = FC.ledgers().filter(l => FC.inGroup(l, grp));
@@ -205,45 +185,11 @@ const LK = {
   },
   cached(key, force){ const c = this.cache[key]; return !force && c && Date.now() - c.at < this.TTL ? c.v : null; },
   keep(key, v){ this.cache[key] = {at: Date.now(), v}; return v; },
-  // every ledger's balance on a date, debit positive: one read of the ledgers that have a balance
-  async tbRaw(asOn, force){
-    const key = S.coId + "|tb|" + asOn, hit = this.cached(key, force); if (hit) return hit;
-    const name = this.tname(), bal = {}, par = {};
-    if (this.light()){
-      const j = await Bridge.call("/tb?company=" + encodeURIComponent(name) + "&to=" + asOn + Bridge.pinQ(), null, 300000);
-      [].concat(j.ledgers || []).forEach(([n, p, b]) => { bal[n] = -r2(Books.amt(b)); par[n] = p || ""; });
-    } else {
-      const j = await Bridge.call("/balances?company=" + encodeURIComponent(name) + "&from=" + asOn + "&to=" + asOn + Bridge.pinQ(), null, 600000);
-      [].concat(j.ledgers || []).forEach(l => { const b = -r2(Books.amt(l.close)); if (Math.abs(b) >= 0.005){ bal[l.name] = b; par[l.name] = l.parent || ""; } });
-    }
-    if (this.names && this.names.cid === S.coId) Object.entries(par).forEach(([n, p]) => { if (this.names.under[n] == null){ this.names.under[n] = p; this.names.leds.push(n); } });
-    return this.keep(key, {bal, par, at: Date.now(), company: name});
-  },
-  async tbTally(asOn, force){
-    const t = await this.tbRaw(asOn, force), sub = l => (FC.tn() ? FC.tn().under[l] : null) || t.par[l] || (S.books.under || {})[l] || "";
-    const rows = Object.keys(t.bal).filter(l => Math.abs(t.bal[l]) >= 0.005).map(l => ({l, bal: t.bal[l], sub: sub(l), top: FC.path(l).length ? FC.top(l) : (sub(l) || "Not in a group")}));
-    return this.tbShape({kind: "tb", src: "tally", asOn, rows, at: t.at, note: "Read from Tally (" + t.company + ")" + (this.light() ? "" : ". This bridge reads every ledger twice; install FinCom Bridge from the Tally page for a faster, lighter read") + "."});
-  },
-  // a group straight from Tally: each ledger's opening and closing (two light reads), and the change between
-  async groupTally(grp, from, to, force){
-    const A = await this.tbRaw(Audit.dayBefore(from), force), Z = await this.tbRaw(to, force);
-    const inG = l => FC.inGroup(l, grp) || String(A.par[l] || Z.par[l] || "").toLowerCase() === String(grp).toLowerCase();
-    const led = Array.from(new Set(Object.keys(A.bal).concat(Object.keys(Z.bal)))).filter(inG);
-    const rows = led.map(l => { const o = r2(A.bal[l] || 0), c = r2(Z.bal[l] || 0), n = r2(c - o); return {l, sub: Z.par[l] || A.par[l] || "", open: o, dr: n > 0 ? n : 0, cr: n < 0 ? -n : 0, close: c}; })
-      .sort((a, c) => Math.abs(c.close) - Math.abs(a.close) || a.l.localeCompare(c.l));
-    const sum = k => r2(rows.reduce((s2, r) => s2 + (r[k] || 0), 0));
-    return {kind: "group", src: "tally", grp, from, to, rows, open: sum("open"), dr: sum("dr"), cr: sum("cr"), close: sum("close"), at: Z.at, net: true,
-      note: "Opening and closing read from Tally (" + Z.company + "); the debit and credit columns are each ledger\u2019s net change. Open a ledger for its entries."};
-  },
-  // a ledger month by month, from its entries in Tally
-  async monthlyTally(led, from, to, force){
-    const r = await this.ledgerTally(led, from, to, force), months = MIS.monthsOf(from, to), m = {};
-    months.forEach(k => { m[k] = {dr: 0, cr: 0}; });
-    r.rows.forEach(v => { const x = m[v.date.slice(0, 6)]; if (x){ x.dr = r2(x.dr + v.dr); x.cr = r2(x.cr + v.cr); } });
-    let run = r.open;
-    const rows = months.map(k => { const x = m[k]; run = r2(run + x.dr - x.cr); return {ym: k, dr: x.dr, cr: x.cr, net: r2(x.dr - x.cr), close: run}; });
-    return {kind: "monthly", src: "tally", led, grp: "", from, to, open: r.open, rows, dr: r.dr, cr: r.cr, at: r.at, note: "From " + led + "\u2019s entries in Tally."};
-  },
+  // every ledger's balance on a date, a group, a ledger month by month: from FinCom's copy (TCloud: tally_balances when
+  // the cloud has it, else its trial balance and ledger functions)
+  async tbTally(asOn){ return this.copyAns(await TCloud.tb(S.coId, asOn)); },
+  async groupTally(grp, from, to){ return this.copyAns(await TCloud.group(S.coId, grp, from, to)); },
+  async monthlyTally(led, from, to){ return this.copyAns(await TCloud.monthly(S.coId, led, "", from, to)); },
   tbShape(r){
     const ORDER = ["Capital Account", "Loans (Liability)", "Current Liabilities", "Fixed Assets", "Investments", "Current Assets", "Sales Accounts", "Purchase Accounts", "Direct Incomes", "Direct Expenses", "Indirect Incomes", "Indirect Expenses", "Suspense A/c", "Branch / Divisions", "Misc. Expenses (ASSET)"];
     const by = {};
@@ -302,59 +248,57 @@ const LK = {
   },
   types(){ return Array.from(new Set((S.books.vouchers || []).map(v => v.type).filter(Boolean))).sort(); },
   // ---------- run what the page asks for
-  // Tally is never asked to work out balances during the day: that holds Tally up for everyone using it. Totals (the trial
-  // balance, a group, month by month) always come from FinCom's copy of the books, which the bridge refreshes every night
-  // and which "Bring in today's entries" tops up with just the days since. Only one ledger at a time is ever read live,
-  // and only when the copy does not reach the dates asked for (or when asked for); that read is small.
-  canTally(x){ return this.live() && (x.kind === "ledger" || (x.kind === "monthly" && !!x.led)); },
-  covers(from, to){ const m = (S.books || {}).meta || {}; return (S.books.vouchers || []).length > 0 && !!m.from && m.from <= from && String(m.to || "") >= to; },
+  // Tally is never asked for a balance (FinCom Bridge 2.1.4; owner's decision of 02-Oct-2026). Every answer comes from
+  // FinCom's copy of the books in the cloud (worked out there in a moment, on any computer), or, when there is no copy in
+  // the cloud or "The books read into FinCom" is chosen, from the books loaded in this browser; open bills always from
+  // these. An answer from the copy carries "Balance from FinCom's copy · books as of 15:34", and is never an error.
+  COPY: ["tb", "ledger", "group", "monthly", "find"],
+  // FinCom's copy can be chosen for this question (the choice between it and the books read here)
+  canTally(x){ return typeof TCloud === "object" && TCloud.on() && TCloud.has(S.coId) && this.COPY.includes(x.kind); },
   useTally(x, how){
     if (how === "books" || !this.canTally(x)) return false;
     if (how === "tally" || how === "fresh") return true;
-    if (x.src) return x.src === "tally";
-    return !this.covers(x.from, x.to);
+    return x.src !== "books";
+  },
+  covers(from, to){ const m = (S.books || {}).meta || {}; return (S.books.vouchers || []).length > 0 && !!m.from && m.from <= from && String(m.to || "") >= to; },
+  // an answer with nothing in it yet, from FinCom's copy: said, not an error
+  copyNone(x, why){
+    return {kind: x.kind, src: "cloud", none: why, empty: true, led: x.led, grp: x.grp, from: x.from, to: x.to, asOn: x.asOn, rows: [], groups: [], dr: 0, cr: 0, at: Date.now(), line: copyLine(S.coId)};
   },
   async run(how){
     const x = this.st();
     if (x.busy) return;
-    const tally = this.useTally(x, how), have = (S.books.vouchers || []).length > 0;
-    // build 192: whenever the client's books are in the cloud, the answer is worked out there (under a second, on any
-    // computer); the books loaded in this browser are used only without the cloud (offline), and for open bills
-    if (!tally && TCloud.on() && !(TCloud.st[S.coId] || {}).books){ try { await TCloud.status(S.coId); } catch (e){} }
-    const cloud = !tally && how !== "books" && ["tb", "ledger", "group", "monthly", "find"].includes(x.kind) && TCloud.has(S.coId);
+    const have = (S.books.vouchers || []).length > 0;
+    if (how !== "books" && typeof TCloud === "object" && TCloud.on() && !(TCloud.st[S.coId] || {}).books){ try { await TCloud.status(S.coId); } catch (e){} }
+    const cloud = this.useTally(x, how);
     const need = (c, m) => { if (!c){ toast(m); throw null; } };
     try {
       if (x.kind === "ledger") need(x.led, "Choose a ledger.");
-      if (["ledger", "bills"].includes(x.kind) && x.led) need(FC.ledgers().includes(x.led) || tally || cloud, "\u201c" + x.led + "\u201d is not a ledger " + (FC.tn() ? "in Tally" : "in these books") + ". Pick one from the list.");
+      if (["ledger", "bills"].includes(x.kind) && x.led) need(FC.ledgers().includes(x.led) || cloud, "\u201c" + x.led + "\u201d is not a ledger in these books. Pick one from the list.");
       if (x.kind === "group") need(x.grp, "Choose a group.");
       if (x.kind === "monthly") need(x.led || x.grp, "Choose a ledger or a group.");
       if (["ledger", "group", "monthly", "find"].includes(x.kind)) need(x.from && x.to && x.from <= x.to, "The dates are the wrong way round.");
-      if (!tally && !cloud) need(have, this.live() ? "This needs the books read into FinCom. Choose \u201cTally\u201d as the source, or read the books first." : "Read the books from Tally first, or connect FinCom Bridge.");
     } catch (e){ if (e) throw e; return; }
     x.open = {};
     if (cloud){
-      x.busy = "Working it out\u2026"; render();
+      x.busy = "Working it out from FinCom\u2019s copy\u2026"; render();
       try {
-        x.res = x.kind === "tb" ? await TCloud.tb(S.coId, x.asOn) : x.kind === "ledger" ? await TCloud.ledger(S.coId, x.led, x.from, x.to)
-          : x.kind === "group" ? await TCloud.group(S.coId, x.grp, x.from, x.to) : x.kind === "monthly" ? await TCloud.monthly(S.coId, x.led, x.grp, x.from, x.to)
-          : await TCloud.find(S.coId, x.q, x.from, x.to, x.typ);
+        x.res = x.kind === "tb" ? await this.tbTally(x.asOn) : x.kind === "ledger" ? await this.ledgerTally(x.led, x.from, x.to)
+          : x.kind === "group" ? await this.groupTally(x.grp, x.from, x.to) : x.kind === "monthly" ? (x.led ? await this.monthlyTally(x.led, x.from, x.to) : this.copyAns(await TCloud.monthly(S.coId, "", x.grp, x.from, x.to)))
+          : this.copyAns(await TCloud.find(S.coId, x.q, x.from, x.to, x.typ));
       }
       catch (e){
         x.busy = "";
-        // no copy in the cloud for these dates (or no internet): the books here, when there are any
+        // the copy cannot answer just now (no internet, or not for these dates): the books here, when there are any;
+        // else said on the answer, not as an error
         if (have){ x.res = null; return this.run("books"); }
-        toast("Could not ask the cloud: " + ((e && e.message) || e)); render(); return;
+        x.res = this.copyNone(x, "FinCom\u2019s copy has no answer for this yet (" + ((e && e.message) || e) + "); it comes with the next update from Tally");
       }
       x.busy = "";
-    } else if (tally){
-      const force = how === "fresh";
-      x.busy = x.kind === "tb" ? "Reading the trial balance from Tally\u2026" : x.kind === "group" ? "Reading " + x.grp + " from Tally\u2026" : "Reading " + x.led + " from Tally\u2026"; render();
-      try {
-        x.res = x.kind === "tb" ? await this.tbTally(x.asOn, force) : x.kind === "group" ? await this.groupTally(x.grp, x.from, x.to, force)
-          : x.kind === "monthly" ? await this.monthlyTally(x.led, x.from, x.to, force) : await this.ledgerTally(x.led, x.from, x.to, force);
-      }
-      catch (e){ x.busy = ""; toast("Could not read Tally: " + ((e && e.message) || e)); render(); return; }
-      x.busy = "";
+    } else if (!have && this.COPY.includes(x.kind)){
+      x.res = this.copyNone(x, "FinCom\u2019s copy of these books is not in the cloud yet; it comes with the next update from Tally");
+    } else if (!have){
+      toast("Read the books first (Books \u2192 From Tally), or wait for FinCom\u2019s copy to come in."); return;
     } else {
       x.res = x.kind === "ledger" ? this.ledgerBooks(x.led, x.from, x.to) : x.kind === "group" ? this.group(x.grp, x.from, x.to) : x.kind === "tb" ? this.tbBooks(x.asOn)
         : x.kind === "monthly" ? this.monthly(x.led, x.grp, x.from, x.to) : x.kind === "bills" ? this.bills(x.led, x.asOn) : this.find(x.q, x.from, x.to, x.typ);
@@ -403,7 +347,8 @@ const LK = {
         try {
           const nm = this.tname(), qq = "?company=" + encodeURIComponent(nm) + Bridge.pinQ();
           b.meta = b.meta || {};
-          if (balNew){ const j = JSON.parse(await TallyRead.raw("/syncfile" + qq + "&file=balances.json", 120000)); TallyRead.balances(b, j, j.from || m.from, m.to); b.meta.balAt = m.balancesAt; }
+          // the balances: from FinCom's copy, not the bridge's (FinCom Bridge 2.1.4 asks Tally for no balance)
+          if (balNew){ await TallyRead.openings(b, co.id, m.from, m.to); b.meta.balAt = m.balancesAt; }
           for (const x of todo){
             const text = await TallyRead.raw("/syncfile" + qq + "&file=daybook-" + x.ym + ".xml", 300000);
             const res = await Books.importDayBook(new Blob([text], {type: "text/xml"}));
@@ -585,7 +530,7 @@ const LK = {
   printIt(){
     const r = this.st().res; if (!r) return;
     const rows = this.sheet(r), co = CO();
-    const html = "<h1>" + esc(co.name) + "</h1><p class=\"note\">" + esc(r.title) + " · " + (r.src === "tally" ? "read from Tally" : "from the books in FinCom") + " · printed " + fmtDate(new Date().toISOString().slice(0, 10)) + "</p>" +
+    const html = "<h1>" + esc(co.name) + "</h1><p class=\"note\">" + esc(r.title) + " · " + (r.src === "cloud" ? esc(r.line || "from FinCom's copy") : "from the books in FinCom") + " · printed " + fmtDate(new Date().toISOString().slice(0, 10)) + "</p>" +
       "<table><thead><tr>" + rows[0].map(c => "<th>" + esc(c) + "</th>").join("") + "</tr></thead><tbody>" +
       rows.slice(1).map(rw => "<tr>" + rw.map(c => typeof c === "number" ? '<td class="n">' + INR.format(c) + "</td>" : "<td>" + esc(c) + "</td>").join("") + "</tr>").join("") + "</tbody></table>";
     printView(co.name + " " + r.title, "<style>@page{size:A4 portrait;margin:12mm}</style>" + html);

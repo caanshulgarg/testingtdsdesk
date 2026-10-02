@@ -149,6 +149,7 @@ func bridgeFor(t *testing.T, s *standIn, extra string) string {
 	bgMu.Unlock()
 	evMu.Lock()
 	openSeen, openFromBeat, postedFor, cloudUseAt, ownUseAt = map[string]time.Time{}, map[string]string{}, map[string]time.Time{}, time.Time{}, time.Time{}
+	ledSeen, ledPosted, ledFromBeat = map[string]time.Time{}, map[string]time.Time{}, map[string]string{}
 	evMu.Unlock()
 	useMu.Lock()
 	tallyUse = map[int][]use{}

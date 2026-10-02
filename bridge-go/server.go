@@ -527,6 +527,22 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 			started = wakeOpen(str(o["company"]), "opened in FinCom on this computer")
 		}
 		return M{"ok": true, "started": started, "paused": paused()}, nil
+	case "/ledgers/refresh":
+		// 2.1.4: FinCom's bill screen opened its ledger chooser and the list it has is older than the last posting: the
+		// ledger list of the company read now (at most once per company every few minutes). {company} -> {started,
+		// debounced, paused, why, listAt, nextAt}
+		if err := needPost(r, "Use POST."); err != nil {
+			return nil, err
+		}
+		o, err := bodyObj(body)
+		if err != nil {
+			return nil, err
+		}
+		c := str(o["company"])
+		if c == "" {
+			c = co
+		}
+		return wakeLedgers(c, "the ledger chooser opened in FinCom on this computer", false), nil
 	case "/measure", "/tray/measure":
 		// "Measure Tally (for FinCom support)": POST starts it (one request at a time, through the queue), GET says how far
 		if r.Method == "POST" {

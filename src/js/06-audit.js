@@ -46,10 +46,11 @@ const Audit = {
     };
     if (tb && tb.from <= from && tb.to >= to){
       const open = {}; Object.entries(tb.led || {}).forEach(([n, x]) => { open[n] = num(x.open); });
-      return {ok: true, src: "Tally's balances read on " + fmtDate(String(tb.at).slice(0, 10)), at: d => move(open, tb.from, d)};
+      // the openings from FinCom's copy (FinCom Bridge 2.1.4 asks Tally for no balance), or a trial balance file
+      return {ok: true, src: (tb.src === "copy" ? "the opening balances in FinCom's copy, read on " : "Tally's balances read on ") + fmtDate(String(tb.at).slice(0, 10)), at: d => move(open, tb.from, d)};
     }
     const info = b.ledInfo || {}, starts = Object.values(info).map(x => x.from).filter(Boolean).sort();
-    if (!Object.values(info).some(x => x.ob != null)) return {ok: false, why: "the ledger balances are not read yet; read the day book and balances from Tally through the bridge, or bring in the ledger masters"};
+    if (!Object.values(info).some(x => x.ob != null)) return {ok: false, why: "the ledger balances are not read yet; they come with FinCom's copy of the books, or bring in the ledger masters"};
     const begin = starts[0] || "", first = String((b.meta || {}).from || "");
     if (begin && first && first > begin) return {ok: false, why: "the books begin on " + fmtDate(tallyDate(begin)) + " but the day book starts on " + fmtDate(tallyDate(first)) + "; read the day book and balances from Tally through the bridge, or a day book from " + fmtDate(tallyDate(begin))};
     const ob = {}; Object.entries(info).forEach(([n, x]) => { if (x.ob) ob[n] = num(x.ob); });

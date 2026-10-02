@@ -21,10 +21,10 @@ const LTR = {
     const b = S.books, own = (this.store().contacts || {})[party] || {}, g = String((b.gstins || {})[party] || "").toUpperCase(), gc = ((b.gstContacts || {})[g]) || {}, i = (b.ledInfo || {})[party] || {};
     return {email: own.email != null ? own.email : (gc.email || i.email || ""), phone: own.phone != null ? own.phone : (gc.phone || i.phone || i.mobile || ""), addr: own.addr != null ? own.addr : (i.addr || "")};
   },
-  // ---------- balances on a date: from the books, or read from Tally
+  // ---------- balances on a date: from the books, or from FinCom's copy (Tally is never asked for a balance)
   balances(asOn){
     const x = this.st();
-    if (x.tally && x.tally.asOn === asOn) return {ok: true, src: (x.tally.cloud ? "the books in the cloud, " : "Tally, read ") + fmtDate(x.tally.at.slice(0, 10)), bal: x.tally.bal};
+    if (x.tally && x.tally.asOn === asOn) return {ok: true, src: x.tally.line || "FinCom's copy", bal: x.tally.bal};
     const B = LK.bal(Audit.fyStart(asOn), asOn);
     if (!B.ok) return {ok: false, why: B.why};
     const at = B.at(asOn), bal = {};
@@ -33,11 +33,10 @@ const LTR = {
   },
   async readTally(asOn){
     const x = this.st();
-    // build 194: from the books in the cloud when there are any (worked out there in a moment); Tally only without them
-    const cloud = typeof TCloud === "object" && TCloud.on() && TCloud.has(S.coId);
-    x.busy = cloud ? "Working out every ledger\u2019s balance\u2026" : "Reading every ledger\u2019s balance from Tally\u2026"; render();
-    try { const r = cloud ? await TCloud.tb(S.coId, asOn) : (await LK.loadNames(), await LK.tbTally(asOn)); const bal = {}; r.rows.forEach(z => { bal[z.l] = z.bal; }); x.tally = {asOn, at: new Date().toISOString(), bal, cloud}; }
-    catch (e){ toast("Could not read Tally: " + ((e && e.message) || e)); }
+    // from FinCom's copy in the cloud (worked out there in a moment); FinCom Bridge 2.1.4 asks Tally for no balance
+    x.busy = "Working out every ledger\u2019s balance from FinCom\u2019s copy\u2026"; render();
+    try { const r = await TCloud.tb(S.coId, asOn); const bal = {}; r.rows.forEach(z => { bal[z.l] = z.bal; }); x.tally = {asOn, at: new Date().toISOString(), bal, cloud: true, line: copyLine(S.coId)}; }
+    catch (e){ toast("FinCom\u2019s copy has no balances for " + fmtDate(Audit.iso(asOn)) + " yet; the books read here are used."); }
     x.busy = ""; render();
   },
   // which side a party is on, from Tally's groups when they have been read, else the books'

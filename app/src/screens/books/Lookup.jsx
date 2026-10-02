@@ -1,5 +1,6 @@
 // Look up: a question in plain words, or a ledger, a group, the trial balance on a date, month by month, a party's open
-// bills, or any entry, from FinCom's copy of the books or one ledger straight from Tally. Was LK.view, LK.result and
+// bills, or any entry, from FinCom's copy of the books (Tally is never asked for a balance; each answer from the copy
+// carries "Balance from FinCom's copy · books as of 15:34") or the books read here. Was LK.view, LK.result and
 // LK.voucherRow (src/js/44); the answers are LK.run. Buttons go through lkAsk, lkAct, lkKind, lkPer, lkRec, lkLed,
 // lkMonth, lkOpen, lkSrc, and typing through lkType (src/js/44).
 //
@@ -96,11 +97,12 @@ function Body({ r, x }) {
 
 function Result({ r, x }) {
   return <section className="dash-card lk-res" style={{ marginTop: 12 }}>
-    <div className="lk-head"><h3>{(r.title || "") + " "}{r.src === "tally" ? <span className="tag stamp">from Tally</span> : <span className="tag ok">from the books</span>}{" "}
-      {r.src === "tally" && r.at && <><span className="note">{"read at " + fmtTime(r.at)}</span> <button className="linkbtn" onClick={() => lkAct("fresh")}>Read again</button></>}</h3>
+    <div className="lk-head"><h3>{(r.title || "") + " "}{r.src === "cloud" ? <span className="tag stamp" data-src="copy">from FinCom's copy</span> : <span className="tag ok">from the books</span>}{" "}
+      {r.src === "cloud" && <button className="linkbtn" onClick={() => lkAct("fresh")}>Work it out again</button>}</h3>
       <div className="row" style={{ gap: 6 }}><button className="btn small" onClick={() => lkAct("print")}>Print or PDF</button><button className="btn small" onClick={() => lkAct("excel")}>Excel</button><button className="btn small" onClick={() => lkAct("clear")}>Close</button></div></div>
-    {r.note && <p className="note">{r.note}</p>}
-    <Body r={r} x={x} />
+    {r.line && <p className="note" data-copy-line="">{r.line}</p>}
+    {r.empty ? <div className="bk-none" data-copy-none="">{r.none + "."}</div> : <>{r.note && <p className="note">{r.note}</p>}
+    <Body r={r} x={x} /></>}
   </section>;
 }
 
@@ -130,7 +132,7 @@ export default function Lookup({ b }) {
   const can = LK.canTally(x), fromTally = can && LK.useTally(x, "auto"), rec = LK.recent();
   return <>
     <section className="dash-card lk-ask"><h3>Look up</h3>
-      <p className="note" style={{ margin: "0 0 10px" }}>Ask in plain words, or choose below. Answers come at once from FinCom’s copy of the books; one ledger can also be read straight from Tally.</p>
+      <p className="note" style={{ margin: "0 0 10px" }}>Ask in plain words, or choose below. Answers come at once from FinCom’s copy of the books; Tally is never asked for a balance.</p>
       <div className="lk-askrow"><input type="search" id="lkAsk" data-fk="lkAsk" value={x.ask || ""} placeholder="Try: HDFC bank for August · Raj Fabrics open bills · sales month by month this year · trial balance as on 31/03/2026" aria-label="Ask a question about the books"
         onChange={(ev) => lkType("ask", ev.target.value)} onKeyDown={enter((ev) => lkAsk(ev.target.value))} />
         <button className="btn primary" onClick={() => lkAsk(x.ask || "")}>Look up</button></div>
@@ -139,16 +141,16 @@ export default function Lookup({ b }) {
       <FreshBar b={b} />
       <div className="lk-form"><Form x={x} /></div>
       {["ledger", "group", "monthly", "find"].includes(x.kind) && <div className="lk-presets">{FC.PRESETS.map(([k, l]) => <button key={k} className="btn small" onClick={() => lkPer(k)}>{l}</button>)}</div>}
-      {can && <div className="lk-src" role="radiogroup" aria-label="Where from"><span className="note">From</span><button role="radio" aria-checked={fromTally} onClick={() => lkSrc("tally")}>Tally, live</button>
+      {can && <div className="lk-src" role="radiogroup" aria-label="Where from"><span className="note">From</span><button role="radio" aria-checked={fromTally} onClick={() => lkSrc("tally")}>FinCom's copy</button>
         {have && <button role="radio" aria-checked={!fromTally} onClick={() => lkSrc("books")}>{"The books read into FinCom" + (LK.booksAge() ? " on " + LK.booksAge() : "")}</button>}</div>}
-      <div className="row" style={{ gap: 8, marginTop: 10, alignItems: "center" }}><button className="btn primary" disabled={!!x.busy} onClick={() => LK.run("auto")}>{x.busy ? "Reading Tally…" : "Show"}</button>
+      <div className="row" style={{ gap: 8, marginTop: 10, alignItems: "center" }}><button className="btn primary" disabled={!!x.busy} onClick={() => LK.run("auto")}>{x.busy ? "Working it out…" : "Show"}</button>
         {(T || live) && <p className="note lk-names">{T ? <>{"Ledger names: " + T.leds.length + (T.src === "cloud" ? " (the books in the cloud)" : " (from Tally)") + " · "}<button className="linkbtn" onClick={() => lkAct("names")}>refresh</button></>
           : LK._namesBusy ? "Bringing the ledger names…" : live ? <button className="linkbtn" onClick={() => lkAct("names")}>Bring the ledger names from Tally</button> : null}</p>}</div>
       <datalist id="lkLeds">{leds.slice(0, 5000).map((l) => <option key={l} value={l} />)}</datalist><datalist id="lkGrps">{grps.map((g) => <option key={g} value={g} />)}</datalist>
     </section>
     {rec.length > 0 && !x.res && <section className="dash-card" style={{ marginTop: 12 }}><h3>Looked up lately</h3><div className="lk-recent">{rec.map((r, i) => <button key={i} className="btn small" onClick={() => lkRec(i)}>{r.label}</button>)}</div></section>}
-    {!have && !live && <NoBooks what="Look up" />}
-    {x.busy && <BusyCard title="Reading Tally…" detail={x.busy} done={0} total={0} />}
+    {!have && !live && !(typeof TCloud === "object" && TCloud.has(S.coId)) && <NoBooks what="Look up" />}
+    {x.busy && <BusyCard title="Working it out…" detail={x.busy} done={0} total={0} />}
     {LK.fr().busy && <BusyCard title="Bringing the books up to date…" detail={LK.fr().busy} done={0} total={0} />}
     {x.res && <Result r={x.res} x={x} />}
   </>;
