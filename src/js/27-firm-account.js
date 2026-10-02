@@ -144,6 +144,7 @@ function cloudChanges(){
     const k = cloudKey(r), h = fpHash(JSON.stringify(r.data));
     seen[k] = h;
     if (marks[k] !== h) now.push(Object.assign({}, r, {hash: h}));
+    else if (r.kind === "client") ClientBase.seed(r.id, r.data);   // in step with the server: that copy is its base
   });
   // Nothing is ever deleted because it is missing here: a reload with empty storage, a client not loaded yet or a bank
   // not open all look like absence. A record is sent as deleted only when the user removed it (Cloud.delete), and the
@@ -187,13 +188,10 @@ async function cloudPush(){
     await cloudMarkDeleted("clients?firm_id=eq." + Cloud.st.firm + "&id=eq." + encodeURIComponent(r.id), r.why);
     marks[cloudKey(r)] = r.hash; Cloud.setMarks(marks); cloudDelsSent([r]);
   }
-  for (let i = 0; i < clients.length; i += 20){
-    // a deletion sends only the flag: name, GSTIN and data are left as they are (the server keeps them too)
-    const rows = clients.slice(i, i + 20).map(r => r.deleted ? {firm_id: Cloud.st.firm, id: r.id, deleted: true}
-      : {firm_id: Cloud.st.firm, id: r.id, name: r.data.name || "", gstin: r.data.gstin || "", pan: r.data.pan || "", tally_name: r.data.tallyName || "", data: r.data, deleted: false});
-    await sendBatch("clients", rows);
-    clients.slice(i, i + 20).forEach(r => { marks[cloudKey(r)] = r.hash; });
-    Cloud.setMarks(marks); cloudDelsSent(clients.slice(i, i + 20));
+  // Client setup is merged into the server's copy, one client at a time, never sent whole (cloudPushClient)
+  for (const r of clients){
+    marks[cloudKey(r)] = await cloudPushClient(r, sendBatch);
+    Cloud.setMarks(marks); cloudDelsSent([r]);
   }
   for (let i = 0; i < rest.length; i += 20){
     const part = rest.slice(i, i + 20);
@@ -205,6 +203,78 @@ async function cloudPush(){
     Cloud.setMarks(marks); cloudDelsSent(part);
   }
   return changes.length;
+}
+// Client setup merged, never replaced (review of 02-Oct-2026: Testing AAD's "posting allowed to company", set at about
+// 05:30 UTC, was wiped at 06:02 when a browser holding an older copy of the client sent its whole settings, which the
+// server took as they were). Each computer keeps the last copy of a client it saw on the server (its base, in BankDB
+// "cbase:<id>"). A save reads the server's copy, lays over it only what this computer changed since its base, and writes
+// it on condition that the server's copy has not changed in between (else it reads and merges again). A value changed
+// here and on the server since the base: this save's value. No base yet (the first save after this change): the
+// server's values stand and this computer only adds what the server lacks.
+const NOBASE = {};
+function plainObj(v){ return !!v && typeof v === "object" && !Array.isArray(v); }
+function sameVal(a, b){ return a === b || (a !== undefined && b !== undefined && stableStr(a) === stableStr(b)); }
+function merge3(base, mine, theirs){
+  if (base === NOBASE){
+    if (plainObj(mine) && plainObj(theirs)){
+      const out = Object.assign({}, theirs);
+      Object.keys(mine).forEach(k => { if (mine[k] !== undefined) out[k] = k in theirs ? merge3(NOBASE, mine[k], theirs[k]) : mine[k]; });
+      return out;
+    }
+    return theirs === undefined ? mine : theirs;
+  }
+  if (sameVal(mine, base)) return theirs;                        // not changed here: the server's value
+  if (sameVal(theirs, base) || sameVal(mine, theirs)) return mine;  // changed here only
+  if (plainObj(mine) && plainObj(theirs)){                       // changed in both places: setting by setting
+    const b = plainObj(base) ? base : {}, out = {};
+    new Set([...Object.keys(theirs), ...Object.keys(mine)]).forEach(k => { const v = merge3(b[k], mine[k], theirs[k]); if (v !== undefined) out[k] = v; });
+    return out;
+  }
+  return mine;
+}
+const ClientBase = {
+  async get(id){ try { const v = await BankDB.get("cbase:" + id); return v === undefined || v === null ? NOBASE : v; } catch (e){ return NOBASE; } },
+  async set(id, data){ this.seeded.add(id); try { await BankDB.set("cbase:" + id, clone(data)); } catch (e){} },
+  // a client in step with the server and with no base kept yet (the first sync after this change): its copy here is it
+  seeded: new Set(),
+  seed(id, data){
+    if (this.seeded.has(id)) return;
+    this.seeded.add(id);
+    const copy = clone(data);
+    this.get(id).then(b => { if (b === NOBASE) return BankDB.set("cbase:" + id, copy); }).catch(() => {});
+  }
+};
+// the merged copy, kept on this computer too; returns the mark (fingerprint) of what is now here
+function takeClientHere(id, data){
+  const was = Live.applying; Live.applying = true;
+  try { S.companies[id] = fixCompany(clone(data)); Store.saveCompany(S.companies[id]); } finally { Live.applying = was; }
+  return fpHash(JSON.stringify(S.companies[id]));
+}
+async function cloudPushClient(r, sendBatch){
+  const q = "clients?firm_id=eq." + Cloud.st.firm + "&id=eq." + encodeURIComponent(r.id);
+  for (let tries = 0; tries < 5; tries++){
+    const cur = ((await Cloud.api(q + "&select=data,updated_at,deleted")) || [])[0];
+    const row = d => ({name: d.name || "", gstin: d.gstin || "", pan: d.pan || "", tally_name: d.tallyName || "", data: d, deleted: false});
+    if (!cur){                                                    // a new client: sent as it is
+      await sendBatch("clients", [Object.assign({firm_id: Cloud.st.firm, id: r.id}, row(r.data))]);
+      await ClientBase.set(r.id, r.data);
+      return r.hash;
+    }
+    if (cur.deleted){                                             // removed on another computer: not brought back by a save here
+      const was = Live.applying; Live.applying = true;
+      try { delete S.companies[r.id]; Store.put("companies/" + r.id, null); } finally { Live.applying = was; }
+      return "gone";
+    }
+    const theirs = plainObj(cur.data) ? cur.data : {};
+    const data = Object.keys(theirs).length ? merge3(await ClientBase.get(r.id), r.data, theirs) : r.data;
+    if (sameVal(data, theirs)){ await ClientBase.set(r.id, theirs); return sameVal(data, r.data) ? r.hash : takeClientHere(r.id, theirs); }
+    const out = await Cloud.api(q + "&updated_at=eq." + encodeURIComponent(cur.updated_at), {method: "PATCH", headers: {Prefer: "return=representation"}, body: row(data)});
+    if (!out || !out.length) continue;                            // changed on the server in between: read and merge again
+    const saved = plainObj(out[0].data) ? out[0].data : data;
+    await ClientBase.set(r.id, saved);
+    return sameVal(saved, r.data) ? r.hash : takeClientHere(r.id, saved);
+  }
+  throw new Error("The setup of " + ((r.data && r.data.name) || "a client") + " kept changing on another computer while it was being saved; it is saved at the next try.");
 }
 async function cloudPull(){
   const cfg = Cloud.cfg();
@@ -261,13 +331,25 @@ async function cloudApplyNow(rows){
   const mine = new Map(); try { cloudSnapshot().forEach(r => mine.set(cloudKey(r), stableStr(r.data))); } catch (e){}
   for (const r of rows){
     const k = cloudKey(r);
-    if (!r.deleted && mine.has(k) && mine.get(k) === stableStr(r.data)){ marks[k] = fpHash(JSON.stringify(r.data)); continue; }   // this computer's own save coming back
+    if (!r.deleted && mine.has(k) && mine.get(k) === stableStr(r.data)){   // this computer's own save coming back
+      marks[k] = fpHash(JSON.stringify(r.data));
+      if (r.kind === "client") await ClientBase.set(r.id, r.data);
+      continue;
+    }
+    const markWas = marks[k];
     if (r.kind !== "inbox") marks[k] = r.deleted ? "gone" : fpHash(JSON.stringify(r.data));   // inbox records are office automation's, never tracked for deletion
     const cid = r.client_id;
     if (r.kind === "firm"){ if (!r.deleted){ S.firm = firmMerge(S.firm, r.data); Store.saveFirm(); } }
     else if (r.kind === "client"){
       if (r.deleted){ delete S.companies[r.id]; Store.put("companies/" + r.id, null); }
-      else { S.companies[r.id] = fixCompany(clone(r.data)); Store.saveCompany(S.companies[r.id]); }
+      else {
+        // a change made here and not yet sent is kept, laid over the server's copy (merge3); it is sent at the next save
+        const here = S.companies[r.id], pending = here && markWas && markWas !== "gone" && markWas !== fpHash(JSON.stringify(here));
+        const data = pending && plainObj(r.data) ? merge3(await ClientBase.get(r.id), here, r.data) : r.data;
+        S.companies[r.id] = fixCompany(clone(data)); Store.saveCompany(S.companies[r.id]);
+        await ClientBase.set(r.id, r.data);
+        if (pending) marks[k] = markWas;
+      }
     }
     else if (r.kind === "entry" || r.kind === "party"){
       if (!S.data[cid] || !S.data[cid].loaded){ try { await Store.loadCompany(cid); } catch (e){} }
