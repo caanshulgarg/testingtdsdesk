@@ -344,8 +344,10 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 		t1 := time.Now()
 		rows, top, err := readLedgerChunk(k.tc, company, port, after, upto)
 		if err != nil {
-			if gaveWay(err) {
-				return false, err // the same chunk again when Tally is free
+			if gaveWay(err) || !tallyNoAnswer(err) {
+				// not sent (refused, held, reading stopped), stopped for FinCom, or an answer that could not be read:
+				// not Tally hanging on this chunk. The same chunk again later, nothing halved or marked
+				return false, err
 			}
 			span := fmt.Sprintf("%d-%d", after+1, upto)
 			switch {

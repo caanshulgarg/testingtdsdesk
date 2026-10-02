@@ -149,6 +149,7 @@ func runMeasure(o measureOpts) (M, error) {
 	}
 	measuring.Add(1)
 	defer measuring.Add(-1)
+	measureOver.Store(0)
 	port, err := findCompanyPort(o.company, 0)
 	if err != nil {
 		return nil, err
@@ -358,7 +359,11 @@ func measureReport(o measureOpts, company string, port int, items []*mItem, star
 	var b strings.Builder
 	fmt.Fprintf(&b, "FinCom Bridge %s - Tally measured for FinCom support\nCompany: %s   Tally port: %d   Computer: %s\nStarted %s, took %s\n",
 		BridgeVersion, company, port, computerName(), started.Format("2006-01-02 15:04:05"), time.Since(started).Round(time.Second))
-	fmt.Fprintf(&b, "Each request on its own, %d s at most; after a request that did not answer, nothing until the company check answered.\n\n", tallyMaxSec())
+	fmt.Fprintf(&b, "Each request on its own, %d s at most; after a request that did not answer, nothing until the company check answered.\n", tallyMaxSec())
+	if n := measureOver.Load(); n > 0 {
+		fmt.Fprintf(&b, "%d request(s) took more than %d s (the limit that stops reading on this computer); reading was not stopped, as the measuring tool was running.\n", n, selfStopSec())
+	}
+	b.WriteString("\n")
 	fmt.Fprintf(&b, "%-10s %8s %10s %7s  %s\n", "item", "ms", "bytes", "count", "what / result")
 	rows := []any{}
 	for _, it := range items {

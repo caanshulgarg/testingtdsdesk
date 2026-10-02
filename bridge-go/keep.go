@@ -86,6 +86,9 @@ func setFinComReading() { _ = saveFile(sp("fincom-reading.txt"), nowS()) }
 
 // why Tally is to be left alone right now (” when it is free)
 func keepHold() string {
+	if st := readStop(); st != nil {
+		return "reading from Tally is stopped on this computer (" + str(st["reason"]) + ")"
+	}
 	for _, d := range []string{syncDir(), psSyncDir()} {
 		if d == "" {
 			continue

@@ -5,7 +5,9 @@ package main
 // postings go on; the tray's "Resume reading" clears it.
 
 import (
+	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -64,26 +66,39 @@ func TestSelfStopOnSlowRequest(t *testing.T) {
 
 func TestSelfStopOnSilence(t *testing.T) {
 	f := newStandTally(t)
-	standBridge(t, f, "")
+	var silent atomic.Bool
+	silent.Store(true)
+	f.behave = func(w http.ResponseWriter, r *http.Request, id, body string) bool {
+		if silent.Load() {
+			return silentFor(func(string, string) bool { return true }, nil)(w, r, id, body)
+		}
+		return false
+	}
+	standBridge(t, f, `,"TallyMaxSec":1,"TallyProbeSec":1`)
 	liveFrom(today())
-	// Tally has not answered for 90 s: not yet
-	setTallyStuck(f.port)
-	o := readObjFile(stuckFile())
-	o["since"] = time.Now().Add(-90 * time.Second).Format("2006-01-02T15:04:05")
-	_ = saveFile(stuckFile(), jsonText(o))
+	resetSilence()
+	start := time.Now()
+	at := func(sec int) { nowFn = func() time.Time { return start.Add(time.Duration(sec) * time.Second) } }
+	at(0)
+	_, _ = getLedgerNames(fin, zz, f.port) // not answered
+	// the small check once a minute, not answered either: 61 s, still under 2 minutes
+	at(61)
+	_, _ = getLedgerNames(fin, zz, f.port)
 	selfWatchTick()
 	if readStop() != nil {
-		t.Fatal("stopped after 90 s")
+		t.Fatal("stopped after a minute")
 	}
-	// for over 2 minutes
-	o["since"] = time.Now().Add(-150 * time.Second).Format("2006-01-02T15:04:05")
-	_ = saveFile(stuckFile(), jsonText(o))
+	// 122 s: Tally has answered nothing for over 2 minutes while being asked
+	at(122)
+	_, _ = getLedgerNames(fin, zz, f.port)
 	selfWatchTick()
 	st := readStop()
 	if st == nil || str(st["by"]) != "self" || !strings.Contains(str(st["reason"]), "has not answered") {
 		t.Fatalf("not stopped after Tally was silent for over 2 minutes: %v", st)
 	}
-	clearTallyStuck(f.port)
+	silent.Store(false)
+	nowFn = time.Now
+	clearProbe(f.port)
 	readsRefused(t, f)
 }
 

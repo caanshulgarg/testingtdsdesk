@@ -245,7 +245,13 @@ var (
 	errPreempted = errors.New("stopped at once so that FinCom's request goes first; it resumes from where it was")
 	// a background read while Tally is left alone after a failure: nothing is sent
 	errBackoff = errors.New("Tally is left alone for now after it did not answer; nothing was sent")
+	// the connection closed before Tally's whole answer came (a message box mid-save, Tally closing)
+	errClosed = errors.New("The underlying connection was closed: An unexpected error occurred on a receive.")
 )
+
+// Tally took this very request and did not answer it (timed out, or the answer stopped part way): only this counts as
+// Tally hanging on a request. A request refused or held here (nothing sent), or stopped for FinCom's, does not
+func tallyNoAnswer(err error) bool { return errors.Is(err, errTimeout) || errors.Is(err, errClosed) }
 
 // 2.1.3: no single request may hold Tally longer than this (2.1.5: 20 s, the acceptance limit): a background read is made of small requests instead
 // (a batch of ledgers, a few days), each saved as it comes, so a failure never throws the work away
@@ -294,7 +300,9 @@ func tallyRaw(ctx context.Context, port int, x string, timeoutSec int) (string, 
 		if errors.Is(ctx.Err(), context.Canceled) {
 			return "", errPreempted
 		}
-		return "", plainNetErr(err)
+		e := plainNetErr(err)
+		noteSilence(e)
+		return "", e
 	}
 	defer resp.Body.Close()
 	b, err := io.ReadAll(resp.Body)
@@ -302,8 +310,11 @@ func tallyRaw(ctx context.Context, port int, x string, timeoutSec int) (string, 
 		if errors.Is(ctx.Err(), context.Canceled) {
 			return "", errPreempted
 		}
-		return "", plainNetErr(err)
+		e := plainNetErr(err)
+		noteSilence(e)
+		return "", e
 	}
+	noteSilence(nil)
 	return textFromBytes(b), nil
 }
 
@@ -317,7 +328,7 @@ func plainNetErr(err error) error {
 	case strings.Contains(s, "refused"):
 		return errors.New("No connection could be made because the target machine actively refused it")
 	case strings.Contains(s, "EOF"), strings.Contains(s, "reset"), strings.Contains(s, "closed"), strings.Contains(s, "broken pipe"):
-		return errors.New("The underlying connection was closed: An unexpected error occurred on a receive.")
+		return errClosed
 	}
 	return err
 }

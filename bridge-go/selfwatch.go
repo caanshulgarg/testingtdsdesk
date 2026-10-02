@@ -15,11 +15,15 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
 func selfStopSec() int        { return keepNum("SelfStopSec", 20) }
 func selfStopSilenceSec() int { return keepNum("SelfStopSilenceSec", 120) }
+
+// requests of the measuring tool over the limit (they do not stop reading; the report says so)
+var measureOver atomic.Int32
 
 // --- today's requests
 type reqNote struct {
@@ -63,27 +67,63 @@ func noteRequest(x string, d time.Duration, fail string) {
 		swOver++
 	}
 	swMu.Unlock()
-	if over {
+	if over && measuring.Load() > 0 {
+		// the measuring tool hits the limit on purpose (a ledger that hangs Tally): said in its report, reading goes on
+		measureOver.Add(1)
+		writeLog(fmt.Sprintf("Measure Tally: a request (%s) took %.1f s, more than %d s; reading was not stopped (the measuring tool is running)", kind, d.Seconds(), selfStopSec()))
+	} else if over {
 		setReadStop("self", fmt.Sprintf("a request to Tally (%s) took %.1f s, more than %d s", kind, d.Seconds(), selfStopSec()))
 	}
-	if fail != "" {
+}
+
+// --- silence: Tally took requests and answered none of them (the small check included) for over two minutes while they
+// were being sent. Kept in memory from this bridge's own requests (an old "not answering" file left from before is not
+// silence), and measured between the first request not answered and the latest one: one failure followed by idle time
+// is not silence
+var (
+	silMu    sync.Mutex
+	silFirst time.Time // the first request not answered since Tally last answered
+	silLast  time.Time // the latest request not answered
+)
+
+func resetSilence() {
+	silMu.Lock()
+	silFirst, silLast = time.Time{}, time.Time{}
+	silMu.Unlock()
+}
+
+// a request sent to Tally: answered (err nil), or not (a timeout, an answer cut off); other errors say nothing
+func noteSilence(err error) {
+	if err != nil && !tallyNoAnswer(err) {
+		return
+	}
+	silMu.Lock()
+	if err == nil {
+		silFirst, silLast = time.Time{}, time.Time{}
+	} else {
+		if silFirst.IsZero() {
+			silFirst = nowFn()
+		}
+		silLast = nowFn()
+	}
+	silMu.Unlock()
+	if err != nil {
 		selfWatchTick()
 	}
 }
 
-// Tally not answering for over two minutes: reading stops (called from the heartbeat loop, and after a failure)
+// Tally silent for over SelfStopSilenceSec while being asked: reading stops (also called from the heartbeat loop)
 func selfWatchTick() {
-	since := notAnsweringSince()
-	if since == "" {
+	silMu.Lock()
+	first, last := silFirst, silLast
+	silMu.Unlock()
+	if first.IsZero() || last.Sub(first) <= time.Duration(selfStopSilenceSec())*time.Second {
 		return
 	}
-	t, ok := parseTime(since)
-	if !ok {
-		return
+	if measuring.Load() > 0 {
+		return // the measuring tool waits for Tally on purpose (measure.go); its report says what happened
 	}
-	if el := time.Since(t); el > time.Duration(selfStopSilenceSec())*time.Second {
-		setReadStop("self", fmt.Sprintf("Tally has not answered since %s (over %d minutes)", hhmm(since), selfStopSilenceSec()/60))
-	}
+	setReadStop("self", fmt.Sprintf("Tally has not answered since %s (over %d minutes of requests not answered)", first.Format("15:04"), selfStopSilenceSec()/60))
 }
 
 // the heartbeat's reqs: {day, last: {kind, ms, at}, longest: {kind, ms, at}, over20, n}
