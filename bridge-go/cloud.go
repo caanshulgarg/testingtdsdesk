@@ -54,13 +54,15 @@ type cloudResp struct {
 var cloudHTTP = &http.Client{Transport: &http.Transport{Proxy: http.ProxyFromEnvironment, MaxIdleConns: 4, IdleConnTimeout: 60 * time.Second}}
 
 // test mode: nothing but the heartbeat goes until FinCom's cloud has answered that it keeps a test bridge's calls apart
-// (an older cloud would take them as bridge 1.15.0's): shadowOK, set by the heartbeat
-// one call to the cloud
+// (an older cloud would take them as bridge 1.15.0's): shadowOK, set by the heartbeat; hello, make_main and support carry
+// no books and go at once
+// one call to the cloud; every call says which bridge it is (body.bridge): FinCom tells the bridges on one key apart by it
 func invokeCloud(body M, timeoutSec int) cloudResp {
 	body["version"] = BridgeVersion
+	body["bridge"] = bridgeIdentity()
 	if testMode() {
 		body["shadow"] = true
-		if k := str(body["kind"]); !shadowOK.Load() && k != "beat" {
+		if k := str(body["kind"]); !shadowOK.Load() && k != "beat" && k != "hello" && k != "make_main" && k != "support" {
 			return cloudResp{0, nil, "FinCom's cloud has not confirmed test mode yet; nothing is sent"}
 		}
 	}
@@ -688,6 +690,21 @@ func beatOnce() {
 			return
 		}
 		shadowOK.Store(true)
+		// made the main bridge on FinCom's Tally page: this test bridge switches itself to main, once
+		if testMode() && truthy(r.json["makeMain"]) && makeMainSeen.CompareAndSwap(false, true) {
+			writeLog("FinCom made this the main bridge")
+			if err := switchToMain(false); err != nil {
+				writeLog("Switching to the main bridge: " + err.Error())
+			}
+		}
+		// another bridge is the main one on this computer: this one reads only (said once in the log)
+		if !testMode() {
+			if truthy(r.json["notMain"]) {
+				noteNotMain(str(r.json["error"]), true)
+			} else {
+				clearNotMainByBeat()
+			}
+		}
 		beatMu.Lock()
 		was := beatFailAt
 		beatOK, beatFailAt = time.Now(), time.Time{}
@@ -758,6 +775,10 @@ func cloudPostTake() {
 	cp := getCloudPosts()
 	for i := 0; i < 5; i++ {
 		r := invokeCloud(M{"kind": "posts_take"}, 30)
+		if r.code == 403 && r.json != nil && truthy(r.json["notMain"]) {
+			noteNotMain(r.err, false)
+			return
+		}
 		if r.code != 200 || r.json == nil || obj(r.json["job"]) == nil {
 			return
 		}
@@ -820,6 +841,13 @@ func syncCloudPosts() {
 				"guid": str(r["guid"]), "masterId": str(r["masterId"]), "vchDate": str(r["vchDate"]), "optional": truthy(r["optional"]), "alreadyThere": truthy(r["alreadyThere"])})
 		}
 		r := invokeCloud(M{"kind": "posts_update", "id": id, "status": st, "done": toInt(v["done"]), "message": str(v["message"]), "results": res, "checking": v["checking"] == true}, 30)
+		if r.code == 403 && r.json != nil && truthy(r.json["notMain"]) {
+			// FinCom no longer takes this bridge's reports: another bridge is the main one now
+			noteNotMain(r.err, false)
+			delete(cp, id)
+			saveCloudPosts()
+			continue
+		}
 		if r.code == 200 {
 			cp[id] = sig
 			if (st == "done" || st == "failed") && v["checking"] != true {

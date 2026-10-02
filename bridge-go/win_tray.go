@@ -1,8 +1,10 @@
 //go:build windows
 
 // The tray icon, in the signed-in owner's session (the service starts it; installed just for one user, its supervisor
-// does): green when the bridge reaches Tally and FinCom, red when not. Its menu: Open FinCom, Pause, Restart, Show log,
-// Check for updates, Connect FinCom, Quit; and Windows notifications for "Bridge offline" and "Tally not open". It
+// does): green when the bridge reaches Tally and FinCom, red when not; its tooltip says the mode first ("Test mode: reading
+// only, not posting" or "Main bridge: reading and posting"). Its menu: Open FinCom, Test connection, Show log, Switch to
+// main bridge (test mode), Status, Connect FinCom, Pause, Restart, Check for updates, Send install log, Quit; and Windows
+// notifications for "Bridge offline" and "Tally not open". On Windows 11 it keeps itself shown next to the clock. It
 // also tells the service how long the keyboard and mouse have been idle and whether Tally is in front (a service cannot
 // see that), and hands over bridge 1.15.0's computer key, which only this Windows user can open.
 package main
@@ -22,6 +24,7 @@ import (
 	"unsafe"
 
 	"golang.org/x/sys/windows"
+	"golang.org/x/sys/windows/registry"
 )
 
 //go:embed icons/green.ico
@@ -246,9 +249,14 @@ func (t *tray) poll() {
 		t.st, t.reachable = st, st != nil
 		t.mu.Unlock()
 		if st == nil {
-			t.setIcon(false, "FinCom Bridge: not running")
+			t.setIcon(false, trayTip(nil))
 			t.warnIf(time.Since(t.started) > 30*time.Second, "down", 30*time.Second, "FinCom Bridge is not running",
 				"The bridge on this computer has stopped. "+restartsBy()+"; if this stays, choose Restart from this icon.")
+			// switched to main (or installed again): the install's record names other settings, on another port; the icon
+			// starts again from them
+			if c := installedConfig(); !trayConfigGiven && c != "" && exists(c) && !strings.EqualFold(c, ConfigPath) {
+				restartTray()
+			}
 		} else {
 			t.warnIf(false, "down", 0, "", "")
 			if str(st["version"]) != BridgeVersion && !truthy(obj(st["update"])["applying"]) {
@@ -258,31 +266,7 @@ func (t *tray) poll() {
 			if tally {
 				t.tallySeen = true
 			}
-			var tip []string
-			tip = append(tip, "FinCom Bridge "+str(st["version"]))
-			if str(st["runMode"]) == "user" {
-				tip = append(tip, "(just for you)")
-			}
-			if truthy(st["testMode"]) {
-				tip = append(tip, "(test, never posts)")
-			}
-			switch {
-			case pausedNow:
-				tip = append(tip, "- paused")
-			case !tally:
-				tip = append(tip, "- Tally not open")
-			case !cloud:
-				tip = append(tip, "- not connected to FinCom")
-			case !online:
-				tip = append(tip, "- offline")
-			case truthy(st["reconnecting"]):
-				tip = append(tip, "- reconnecting to FinCom")
-			case str(st["tallyState"]) == "busy":
-				tip = append(tip, "- Tally busy (answers slowly; asked again quietly)")
-			default:
-				tip = append(tip, "- working: "+strings.Join(strs(st["companies"]), ", "))
-			}
-			t.setIcon(tally && online && !pausedNow, cut(strings.Join(tip, " "), 120))
+			t.setIcon(tally && online && !pausedNow, trayTip(st))
 			t.warnIf(cloud && !online && !pausedNow, "offline", 2*time.Minute, "Bridge offline",
 				"This computer cannot reach FinCom. Changes from Tally wait here and go as soon as FinCom can be reached.")
 			t.warnIf(!tally && !pausedNow && time.Since(t.started) > 2*time.Minute && (t.tallySeen || officeHours()), "tally", 3*time.Minute, "Tally not open",
@@ -339,6 +323,23 @@ func msgBox(title, text string, icon uintptr) {
 	pMessageBox.Call(0, uintptr(unsafe.Pointer(u16(text))), uintptr(unsafe.Pointer(u16(title))), icon|0x00040000) // MB_TOPMOST
 }
 
+// a Yes/No question; true for Yes
+func yesNo(title, text string) bool {
+	r, _, _ := pMessageBox.Call(0, uintptr(unsafe.Pointer(u16(text))), uintptr(unsafe.Pointer(u16(title))), 0x4|0x20|0x100|0x00040000) // MB_YESNO, MB_ICONQUESTION, MB_DEFBUTTON2, MB_TOPMOST
+	return r == 6                                                                                                                      // IDYES
+}
+
+// for commands run outside the tray (sendlog): a message box, a web page, the folder with a file selected
+func showMessage(title, text string, warn bool) {
+	icon := uintptr(mbIconInfo)
+	if warn {
+		icon = mbIconWarning
+	}
+	msgBox(title, text, icon)
+}
+func openURL(u string)      { shellOpen(u, "") }
+func showInFolder(f string) { shellOpen("explorer.exe", `/select,"`+f+`"`) }
+
 func (t *tray) statusText() string {
 	t.mu.Lock()
 	st := t.st
@@ -351,6 +352,7 @@ func (t *tray) statusText() string {
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "FinCom Bridge %s, working for %s\n", str(st["version"]), str(st["owner"]))
+	b.WriteString(modeWords(st) + "; FinCom knows this bridge as " + str(st["bridgeId"]) + ".\n")
 	switch str(st["runMode"]) {
 	case "user":
 		b.WriteString("Runs just for you (installed without an administrator): starts when you sign in, runs while you are signed in.\n")
@@ -404,37 +406,33 @@ func (t *tray) menu() {
 	add := func(id int, text string, flags uintptr) {
 		pAppendMenu.Call(m, flags, uintptr(id), uintptr(unsafe.Pointer(u16(text))))
 	}
-	head := "FinCom Bridge " + BridgeVersion
-	if st == nil {
-		head += ": not running"
-	} else {
-		switch str(st["runMode"]) {
-		case "user":
-			head += " - just for you"
-		case "service":
-			head += " - service"
-		}
-		if truthy(st["testMode"]) {
-			head += " (test mode)"
-		}
-	}
-	add(1, head, mfGrayed)
+	add(1, trayTip(st), mfGrayed)
 	pAppendMenu.Call(m, mfSeparator, 0, 0)
 	add(2, "Open FinCom", mfString)
+	add(11, "Test connection", mfString)
+	add(5, "Show log", mfString)
+	switch {
+	case st != nil && truthy(st["testMode"]) && truthy(st["switching"]):
+		add(13, "Switching to the main bridge...", mfGrayed)
+	case st != nil && truthy(st["testMode"]):
+		add(12, "Switch to main bridge...", mfString)
+	case st != nil:
+		add(13, "Main bridge: reading and posting", mfGrayed)
+	}
+	pAppendMenu.Call(m, mfSeparator, 0, 0)
 	add(10, "Status...", mfString)
 	add(7, "Connect FinCom on this computer...", mfString)
-	pAppendMenu.Call(m, mfSeparator, 0, 0)
 	if st != nil && truthy(st["paused"]) {
 		add(3, "Resume", mfString)
 	} else {
 		add(3, "Pause", mfString)
 	}
 	add(4, "Restart", mfString)
-	add(5, "Show log", mfString)
 	add(6, "Check for updates", mfString)
 	if st != nil && truthy(st["testMode"]) {
 		add(8, "Compare with bridge 1.15.0", mfString)
 	}
+	add(14, "Send install log to FinCom", mfString)
 	pAppendMenu.Call(m, mfSeparator, 0, 0)
 	add(9, "Quit (hide this icon)", mfString)
 	var pt struct{ x, y int32 }
@@ -514,6 +512,42 @@ func (t *tray) command(id int, st M) {
 	case 8:
 		exe, _ := os.Executable()
 		shellOpen("cmd.exe", `/k ""`+exe+`" compare"`)
+	case 11:
+		t.balloon("FinCom Bridge", "Testing the connection: the bridge, Tally and FinCom (up to half a minute)...", false)
+		loadConfigRO()
+		port := toInt(cfg("Port"))
+		ping := pingLocal(port, 10*time.Second)
+		var chk M
+		if ping != nil {
+			chk = trayCall("POST", "/tray/check", M{})
+		}
+		rep := connectionReport(port, ping, chk)
+		icon := uintptr(mbIconInfo)
+		if strings.Contains(rep, "NOT ") || strings.Contains(rep, "not checked") || strings.Contains(rep, "refused") || strings.Contains(rep, "not connected") {
+			icon = mbIconWarning
+		}
+		msgBox("FinCom Bridge - Test connection", rep, icon)
+	case 12:
+		if !yesNo("FinCom Bridge", "Make FinCom Bridge "+BridgeVersion+" the main bridge on this computer? Bridge 1.15.0 is stopped and no longer starts; FinCom Bridge then reads and posts. Its pairing, settings and copy are kept.") {
+			return
+		}
+		r := trayCall("POST", "/tray/makemain", M{})
+		switch {
+		case r == nil:
+			msgBox("FinCom Bridge", "The bridge is not answering, so it could not be made the main bridge. Choose Restart, then try again.", mbIconWarning)
+		case r["ok"] != true:
+			msgBox("FinCom Bridge", str(r["error"]), mbIconWarning)
+		default:
+			t.balloon("FinCom Bridge", "Becoming the main bridge: bridge 1.15.0 is stopped and FinCom Bridge starts again on its own. The icon is back in about a minute.", false)
+		}
+	case 14:
+		// sendlog shows its own message (sent, with the reference; or what to do)
+		exe, _ := os.Executable()
+		c := exec.Command(exe, "sendlog")
+		hideWindow(c)
+		if err := c.Start(); err != nil {
+			msgBox("FinCom Bridge", "The install log could not be sent: "+err.Error(), mbIconWarning)
+		}
 	case 9:
 		trayCall("POST", "/tray/quit", M{"session": ownSession()})
 		if trayQuitEv != 0 {
@@ -555,12 +589,51 @@ func wndProc(hwnd, msg, wp, lp uintptr) uintptr {
 }
 
 var (
-	trayMutex  windows.Handle
-	trayQuitEv windows.Handle // installed just for one user: Quit tells the supervisor so
+	trayMutex       windows.Handle
+	trayQuitEv      windows.Handle // installed just for one user: Quit tells the supervisor so
+	trayConfigGiven bool           // started with --config (by the per-user supervisor): it names the settings
 )
+
+// Always visible next to the clock: Windows 11 hides new tray icons behind the ^ arrow. Its setting for each icon is
+// HKCU\Control Panel\NotifyIconSettings\<id> (ExecutablePath, IsPromoted); the key appears once the icon was added, so
+// it is looked for a few times. Best effort, said once in the log. Windows 10 keeps it in one binary value (TrayNotify)
+// that cannot be changed safely: left alone there; the setup's last page says where the icon is.
+func keepPromoted() {
+	exe, _ := os.Executable()
+	for _, wait := range []time.Duration{3 * time.Second, 15 * time.Second, time.Minute, 5 * time.Minute} {
+		time.Sleep(wait)
+		k, err := registry.OpenKey(registry.CURRENT_USER, `Control Panel\NotifyIconSettings`, registry.ENUMERATE_SUB_KEYS)
+		if err != nil {
+			return // not Windows 11
+		}
+		names, _ := k.ReadSubKeyNames(0)
+		k.Close()
+		for _, n := range names {
+			sk, err := registry.OpenKey(registry.CURRENT_USER, `Control Panel\NotifyIconSettings\`+n, registry.QUERY_VALUE|registry.SET_VALUE)
+			if err != nil {
+				continue
+			}
+			p, _, _ := sk.GetStringValue("ExecutablePath")
+			if sameProgramPath(p, exe, os.Getenv) {
+				v, _, err := sk.GetIntegerValue("IsPromoted")
+				if err != nil || v != 1 {
+					if err := sk.SetDWordValue("IsPromoted", 1); err == nil {
+						writeLog("Tray icon: set to show next to the clock always (Windows 11)")
+					} else {
+						writeLog("Tray icon: Windows 11 did not let it show always next to the clock: " + err.Error())
+					}
+				}
+				sk.Close()
+				return
+			}
+			sk.Close()
+		}
+	}
+}
 
 func runTray(args []string) int {
 	runtime.LockOSThread()
+	trayConfigGiven = flagValue(args, "config") != ""
 	setPaths(flagValue(args, "config"), flagValue(args, "home"))
 	loadConfigRO()
 	if o := cfgS("Owner"); o != "" && !sameUser(o, currentUser()) {
@@ -601,6 +674,7 @@ func runTray(args []string) int {
 	copyU16(tr.nid.SzTip[:], "FinCom Bridge: starting")
 	pShellNotifyIcon.Call(nimAdd, uintptr(unsafe.Pointer(&tr.nid)))
 	go tr.poll()
+	go keepPromoted()
 	var m msgT
 	for {
 		r, _, _ := pGetMessage.Call(uintptr(unsafe.Pointer(&m)), 0, 0, 0)

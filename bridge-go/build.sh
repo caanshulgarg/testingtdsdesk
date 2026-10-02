@@ -6,10 +6,16 @@
 # Code signing, later: set SIGN_CMD to a command that signs the file given as its last word, e.g.
 #   SIGN_CMD='osslsigncode sign -pkcs12 fincom.pfx -readpass pass.txt -t http://timestamp.digicert.com -in' (the
 #   script adds the input and output names); both the program and the installer are then signed.
+# A version already published (its setup in assets-test/bridge-go) is not built again: raise BridgeVersion in util.go
+# first, so a computer never holds two different programs under one version. FORCE_REBUILD=1 builds it anyway (tests).
 set -e
 cd "$(dirname "$0")"
 VERSION=$(grep -oP 'var BridgeVersion = "\K[0-9.]+' util.go)
 FINCOM="${FINCOM:-https://staging.fincom.live/review/}"
+if [ -e "../assets-test/bridge-go/FinComBridge-Setup-$VERSION.exe" ] && [ "$FORCE_REBUILD" != "1" ]; then
+  echo "Version $VERSION is already published; raise BridgeVersion in util.go" >&2
+  exit 1
+fi
 mkdir -p dist
 python3 icons/make_icons.py >/dev/null
 GOOS=windows GOARCH=amd64 CGO_ENABLED=0 GOTOOLCHAIN=local go build -trimpath -ldflags "-s -w -H windowsgui" -o dist/FinComBridge.exe .

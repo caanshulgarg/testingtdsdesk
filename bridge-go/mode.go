@@ -5,6 +5,9 @@
 //     never kept), and NEVER posts to Tally: posting stays with bridge 1.15.0.
 //   - Sole mode (the default): the one bridge on this computer, on port 9100, with the copy, pairing and settings bridge
 //     1.15.0 left. It still refuses to post while bridge 1.15.0 is found on the computer: only one bridge may ever post.
+//     It is the "main" bridge for FinCom, which may still answer that another bridge is the main one (it then reads only).
+//   - A test bridge becomes the main one from its tray menu (Switch to main bridge) or from FinCom's Tally page: see
+//     identity.go.
 package main
 
 import (
@@ -72,6 +75,9 @@ var (
 func readOnlyWhy() string {
 	if testMode() {
 		return "This FinCom Bridge is the test install beside bridge 1.15.0: it reads Tally but never posts. Postings go through bridge 1.15.0."
+	}
+	if why := notMainNow(); why != "" {
+		return why
 	}
 	oldMu.Lock()
 	defer oldMu.Unlock()
@@ -168,7 +174,8 @@ func trayStatus() M {
 	tstate, tsince := tallyOverall(openCompaniesCached())
 	return M{"ok": true, "version": BridgeVersion, "runMode": runMode, "testMode": testMode(), "readOnly": readOnlyWhy(), "paused": paused(), "tallyOpen": tallyOpen, "companies": cos,
 		"cloudConnected": cloud, "online": online, "reconnecting": reconnecting, "tallyState": tstate, "busySince": tsince, "needKey": cfgS("CloudUrl") != "" && cloudKey() == "", "lastBeat": fmtTime(bOK), "beatFailed": fmtTime(bFail), "wake": wakeStatus(), "updating": keepRunning(),
-		"port": toInt(cfg("Port")), "fincomUrl": fincomURL(), "log": logFile(), "shadow": shadowStats, "update": updateInfo(), "owner": ownerName()}
+		"port": toInt(cfg("Port")), "fincomUrl": fincomURL(), "log": logFile(), "shadow": shadowStats, "update": updateInfo(), "owner": ownerName(),
+		"switching": switching.Load(), "bridgeId": "go-" + instanceID()}
 }
 
 // the way it runs, in words for the log and the tray

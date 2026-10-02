@@ -560,6 +560,22 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 		trayQuitSession(toInt(o["session"]))
 		writeLog("The tray icon was closed (Quit); the bridge keeps running")
 		return M{"ok": true}, nil
+	case "/tray/check":
+		// "Test connection" in the tray: Tally asked now, and a hello to FinCom's cloud with this computer's key
+		if err := needPost(r, "Use POST."); err != nil {
+			return nil, err
+		}
+		return trayCheck(), nil
+	case "/tray/makemain":
+		// "Switch to main bridge..." in the tray (the person said Yes): FinCom is told, then the bridge installs itself again
+		if err := needPost(r, "Use POST."); err != nil {
+			return nil, err
+		}
+		if err := switchToMain(true); err != nil {
+			return nil, &httpErr{409, M{"ok": false, "error": err.Error()}}
+		}
+		writeLog("Switch to main bridge: asked from the tray icon")
+		return M{"ok": true, "switching": true}, nil
 	case "/tray/cloudkey":
 		// the tray hands over bridge 1.15.0's key (protected for the Windows user, which the service cannot open)
 		if err := needPost(r, "Use POST."); err != nil {
@@ -572,6 +588,53 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 		return adoptCloudKey(str(o["key"]))
 	}
 	return nil, &httpErr{404, M{"ok": false, "error": "Unknown address " + path}}
+}
+
+// for "Test connection": which Tallys answer and with which companies; whether FinCom's cloud answers this computer's key
+func trayCheck() M {
+	t := M{"ok": false, "ports": []any{}, "companies": []any{}, "error": ""}
+	var errs []string
+	for _, s := range openCompanies(true) {
+		if s["skipped"] == true {
+			continue
+		}
+		if s["ok"] == true {
+			t["ok"] = true
+			t["ports"] = append(arr(t["ports"]), fmt.Sprint(toInt(s["port"])))
+			for _, c := range sessCompanies(s) {
+				t["companies"] = append(arr(t["companies"]), str(c["name"]))
+			}
+		} else if e := str(s["error"]); e != "" {
+			errs = append(errs, fmt.Sprintf("port %d: %s", toInt(s["port"]), cut(e, 120)))
+		}
+	}
+	if t["ok"] != true {
+		t["error"] = strings.Join(errs, "; ")
+	}
+	c := M{"url": cfgS("CloudUrl") != "", "key": cloudKey() != "", "code": 0, "error": "", "firm": ""}
+	if cloudOn() {
+		r := invokeCloud(M{"kind": "hello", "info": M{"computer": computerName(), "user": ownerName()}}, 20)
+		c["code"], c["error"] = r.code, r.err
+		if r.json != nil {
+			c["firm"] = str(r.json["firm"])
+		}
+	}
+	return M{"ok": true, "tally": t, "cloud": c}
+}
+
+// this computer's bridge on a port: its /ping (no key needed), or nil when nothing answers there as a FinCom Bridge
+func pingLocal(port int, timeout time.Duration) M {
+	c := &http.Client{Timeout: timeout, Transport: &http.Transport{Proxy: nil}}
+	r, err := c.Get(fmt.Sprintf("http://127.0.0.1:%d/ping", port))
+	if err != nil {
+		return nil
+	}
+	defer r.Body.Close()
+	b, _ := io.ReadAll(io.LimitReader(r.Body, 1<<16))
+	if o := parseObj(string(b)); o != nil && str(o["impl"]) == "go" {
+		return o
+	}
+	return nil
 }
 
 // the web server, on this computer only

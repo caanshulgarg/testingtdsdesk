@@ -15,9 +15,12 @@ import (
 // it keeps the bridge (its worker) and the tray icon running, one of each per user
 // FinComBridge.exe worker (or --worker)  the bridge itself, started by "user" (not by hand)
 // FinComBridge.exe install --mode test|sole [--per-user]   (the installer runs this) the service, its owner, the
-// settings; with --per-user the start at sign-in instead of the service
-// FinComBridge.exe uninstall [--per-user]  (the uninstaller runs this)
+// settings; with --per-user the start at sign-in instead of the service. It writes install-result.txt for the setup
+// (%LOCALAPPDATA%\FinCom Bridge) and ends with 4 when the bridge did not answer within 30 seconds
 // FinComBridge.exe stop [--per-user]     (the installer runs this) stops the service, or this user's bridge
+// FinComBridge.exe uninstall [--per-user] [--keep-pairing]  (the uninstaller runs this) the service or the start at
+// sign-in, and the bridge's own files (its pairing with FinCom kept if asked)
+// FinComBridge.exe sendlog [--fincom U]  the install log (and the bridge's log, settings without keys) to FinCom support
 // FinComBridge.exe compare               this bridge's copy against bridge 1.15.0's, day by day
 // FinComBridge.exe sync                  the nightly copy (scheduled task)
 // FinComBridge.exe version
@@ -54,6 +57,7 @@ func main() {
 	_ = fs.Bool("show", false, "")
 	userFlag := fs.Bool("user", false, "run just for this Windows user: the bridge and the tray icon, kept running")
 	workerFlag := fs.Bool("worker", false, "the bridge under --user")
+	_ = fs.Bool("keep-pairing", false, "uninstall: keep this computer's pairing with FinCom")
 	_ = fs.Bool("per-user", false, "install, uninstall, stop: the install just for this Windows user")
 	_ = fs.String("parent", "", "worker: the supervisor's process (the worker ends with it)")
 	_ = fs.Parse(rest)
@@ -85,6 +89,8 @@ func main() {
 	}
 	setPaths(*config, *home)
 	switch cmd {
+	case "sendlog":
+		os.Exit(sendLogCmd(rest))
 	case "log":
 		loadConfigRO()
 		openFile(logFile())
@@ -129,6 +135,10 @@ func main() {
 func setPaths(config, home string) {
 	if config == "" {
 		config = os.Getenv("FINCOM_BRIDGE_CONFIG")
+	}
+	// the install's record names its settings (in test mode go-bridge.config.json; switched to main, bridge 1.15.0's)
+	if c := installedConfig(); config == "" && c != "" && exists(c) {
+		config = c
 	}
 	if config == "" {
 		if h := defaultHome(); h != "" {

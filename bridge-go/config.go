@@ -170,6 +170,11 @@ func loadConfig() {
 		d.Set("Key", newBridgeKey())
 		need = true
 	}
+	// this install's id for FinCom (body.bridge.id): made once, then kept
+	if !validInstanceID(str(d.Get("InstanceId"))) {
+		d.Set("InstanceId", newInstanceID())
+		need = true
+	}
 	cfgMu.Lock()
 	Cfg = d
 	cfgMu.Unlock()

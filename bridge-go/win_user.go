@@ -375,7 +375,7 @@ func currentOwner() (ownerInfo, error) {
 	if o.profile == "" {
 		o.profile = u.HomeDir
 	}
-	la := os.Getenv("LOCALAPPDATA")
+	la := localAppData()
 	if la == "" {
 		la = filepath.Join(o.profile, `AppData\Local`)
 	}
@@ -393,10 +393,10 @@ func installUserCmd(args []string) int {
 		mode = "test"
 	}
 	fincom := flagValue(args, "fincom")
+	installStarted()
 	o, err := currentOwner()
 	if err != nil {
-		installLog("Install (just for this user): " + err.Error())
-		return 2
+		return installFailed(2, "This Windows user's folders could not be found ("+err.Error()+").", "Sign in to Windows as the person who uses Tally and run the setup again.")
 	}
 	installLog(fmt.Sprintf("Install (just for this user, no service): FinCom Bridge %s for %s (%s), %s mode, folder %s", BridgeVersion, o.name, o.sid, mode, o.home))
 	_ = os.MkdirAll(o.home, 0o755)
@@ -408,8 +408,7 @@ func installUserCmd(args []string) int {
 	exe, _ := os.Executable()
 	k, _, err := registry.CreateKey(registry.CURRENT_USER, regKey, registry.ALL_ACCESS)
 	if err != nil {
-		installLog("Install: the install could not be recorded: " + err.Error())
-		return 6
+		return installFailed(6, "The install could not be recorded in the registry (HKCU\\"+regKey+": "+err.Error()+").", "Run the setup again; if it fails again, send the install log to FinCom.")
 	}
 	_ = k.SetStringValue("Home", o.home)
 	_ = k.SetStringValue("Config", cfgPath)
@@ -422,39 +421,28 @@ func installUserCmd(args []string) int {
 	k.Close()
 	// started when this user signs in (HKCU Run needs no administrator, and runs in the user's own session with the tray)
 	rk, _, err := registry.CreateKey(registry.CURRENT_USER, runKey, registry.SET_VALUE)
-	if err != nil {
-		installLog("Install: the start at sign-in could not be set: " + err.Error())
-		return 4
+	if err == nil {
+		err = rk.SetStringValue(runValue, `"`+exe+`" user`)
+		rk.Close()
 	}
-	err = rk.SetStringValue(runValue, `"`+exe+`" user`)
-	rk.Close()
 	if err != nil {
-		installLog("Install: the start at sign-in could not be set: " + err.Error())
-		return 4
+		return installFailed(7, "The start at sign-in could not be set (HKCU\\"+runKey+": "+err.Error()+"); a policy of this computer may forbid it.", "Ask the administrator to allow programs to start at sign-in, or to install FinCom Bridge for all users.")
 	}
 	installLog("Install: starts when " + o.name + " signs in to Windows (HKCU Run)")
 	c := exec.Command(exe, "user", "--config", cfgPath)
 	if err := c.Start(); err != nil {
-		installLog("Install: the bridge did not start: " + err.Error())
-		return 5
+		return installFailed(5, "FinCom Bridge did not start ("+err.Error()+"); an antivirus may have blocked "+exe+".", "Allow FinCom Bridge in the antivirus, or sign out and in again; if it stays, send the install log to FinCom.")
 	}
 	_ = c.Process.Release()
 	port := 9100
 	if mode == "test" {
 		port = 9101
 	}
-	for i := 0; i < 30; i++ {
-		if tallyPortOpenAt(port) {
-			installLog(fmt.Sprintf("Install: done; the bridge answers on 127.0.0.1:%d", port))
-			return 0
-		}
-		time.Sleep(time.Second)
-	}
-	installLog("Install: the bridge runs but did not answer yet; see the bridge's log")
-	return 0
+	return waitAnswer(port, "it starts when you sign in")
 }
 
-// uninstall --per-user: the start at sign-in and the record go, the bridge stops; its folder (settings, copy, log) stays
+// uninstall --per-user: the start at sign-in and the record go, the bridge stops, and its own files (uninstall.go); bridge
+// 1.15.0's files in the same folder stay
 func uninstallUserCmd(args []string) int {
 	perUserSetup = true
 	stopUser()
@@ -464,12 +452,17 @@ func uninstallUserCmd(args []string) int {
 		mode, _, _ = k.GetStringValue("Mode")
 		k.Close()
 	}
+	installLog("Uninstall (just for this user): this user's FinCom Bridge (supervisor, bridge, tray icon) was stopped")
 	if rk, err := registry.OpenKey(registry.CURRENT_USER, runKey, registry.SET_VALUE); err == nil {
-		_ = rk.DeleteValue(runValue)
+		if rk.DeleteValue(runValue) == nil {
+			installLog("Uninstall: removed the start at sign-in (HKCU\\" + runKey + ", " + runValue + ")")
+		}
 		rk.Close()
 	}
+	removeOwnTask()
 	putBackOldBridge(mode, home)
+	removeOwnFilesLogged(home, mode, contains(args, "--keep-pairing"))
 	_ = registry.DeleteKey(registry.CURRENT_USER, regKey)
-	installLog("Uninstall (just for this user): FinCom Bridge removed; its folder " + home + " (settings, copy, log) is kept")
+	installLog("Uninstall (just for this user): FinCom Bridge removed (its record in HKCU\\" + regKey + " too); bridge 1.15.0's files in " + home + " are kept")
 	return 0
 }

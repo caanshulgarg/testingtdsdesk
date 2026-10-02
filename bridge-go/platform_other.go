@@ -5,8 +5,11 @@
 package main
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 )
 
@@ -49,14 +52,24 @@ func applyUpdate(exe string, b []byte) error {
 	return os.WriteFile(exe+".new", b, 0o755)
 }
 
-func defaultHome() string               { return "" }
-func checkCodeSignature(b []byte) error { return errNoCodeSign }
-func trayAlive(session int)             {}
-func trayQuitSession(session int)       {}
-func openFile(f string)                 { println(f) }
-func attachConsole()                    {}
-func stopCmd(args []string) int         { return 0 }
-func runUser(args []string) int         { return runBridge(true) }
-func runWorker(args []string) int       { return runBridge(true) }
-func perUserInstall() bool              { return false }
-func restartServiceCmd() int            { return 0 }
+func defaultHome() string                       { return "" }
+func checkCodeSignature(b []byte) error         { return errNoCodeSign }
+func trayAlive(session int)                     {}
+func trayQuitSession(session int)               {}
+func openFile(f string)                         { println(f) }
+func attachConsole()                            {}
+func stopCmd(args []string) int                 { return 0 }
+func runUser(args []string) int                 { return runBridge(true) }
+func runWorker(args []string) int               { return runBridge(true) }
+func perUserInstall() bool                      { return false }
+func restartServiceCmd() int                    { return 0 }
+func installedConfig() string                   { return "" }
+func windowsVersion() string                    { return runtime.GOOS }
+func openURL(u string)                          { println(u) }
+func showInFolder(f string)                     { println(f) }
+func showMessage(title, text string, warn bool) {}
+func platSwitchToMain(fincom string) error {
+	return errors.New(fmt.Sprint("switching to the main bridge is for Windows (", fincom, ")"))
+}
+func removeOwnTask()       {}
+func localAppData() string { return os.Getenv("LOCALAPPDATA") }

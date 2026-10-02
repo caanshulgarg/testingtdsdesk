@@ -407,12 +407,44 @@ func regString(name string) string {
 	return v
 }
 
+// this Windows user's %LOCALAPPDATA%, from the process's own user (Windows' known folder): a program started for another
+// user (runas, Start-Process -Credential) may carry the caller's environment, so the variable comes last
+func localAppData() string {
+	if p, err := windows.KnownFolderPath(windows.FOLDERID_LocalAppData, 0); err == nil && p != "" {
+		return p
+	}
+	return os.Getenv("LOCALAPPDATA")
+}
+
+// the installed bridge's settings file (written by install)
+func installedConfig() string { return regString("Config") }
+
+// Windows' name and build, for the install log and support: "Windows 10 Pro 22H2 (build 19045)". Windows 11 still calls
+// itself "Windows 10" in ProductName: from build 22000 it is Windows 11
+func windowsVersion() string {
+	k, err := registry.OpenKey(registry.LOCAL_MACHINE, `SOFTWARE\Microsoft\Windows NT\CurrentVersion`, registry.QUERY_VALUE|registry.WOW64_64KEY)
+	if err != nil {
+		return runtime.GOOS
+	}
+	defer k.Close()
+	name, _, _ := k.GetStringValue("ProductName")
+	build, _, _ := k.GetStringValue("CurrentBuild")
+	disp, _, _ := k.GetStringValue("DisplayVersion")
+	if b, _ := strconv.Atoi(build); b >= 22000 {
+		name = strings.Replace(name, "Windows 10", "Windows 11", 1)
+	}
+	if disp != "" {
+		name += " " + disp
+	}
+	return name + " (build " + build + ")"
+}
+
 // the installed bridge's folder (written by the installer), else bridge 1.15.0's folder of this user
 func defaultHome() string {
 	if h := regString("Home"); h != "" {
 		return h
 	}
-	if la := os.Getenv("LOCALAPPDATA"); la != "" {
+	if la := localAppData(); la != "" {
 		return filepath.Join(la, "TDS Desk Bridge")
 	}
 	return ""

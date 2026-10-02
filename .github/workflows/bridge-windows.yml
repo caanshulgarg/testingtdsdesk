@@ -1,0 +1,244 @@
+# FinCom Bridge on real Windows: the setup, installed as a Windows user who is not an administrator ("Just for me", the
+# start at sign-in, no service) and as an administrator (for all users, the Windows service), then removed again.
+#   build: the tests and the program with its setup (bridge-go/build.sh), on Linux as the owner builds it
+#   test:  on Windows Server 2022 and 2025 (GitHub's own machines), every install.log kept as an artifact
+# Nothing here signs anything or publishes anything.
+name: FinCom Bridge on Windows
+
+on:
+  push:
+    paths:
+      - "bridge-go/**"
+      - ".github/workflows/bridge-windows.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: bridge-go
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: bridge-go/go.mod
+          cache-dependency-path: bridge-go/go.sum
+      - name: NSIS (makensis)
+        run: sudo apt-get update -q && sudo apt-get install -y -q nsis
+      - name: Tests
+        run: go test -count=1 ./...
+      - name: Program and setup
+        # FORCE_REBUILD: a version already published is built again here only to be tested, never published
+        run: FORCE_REBUILD=1 ./build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bridge-dist
+          path: bridge-go/dist/
+          if-no-files-found: error
+
+  test:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-2025]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: bridge-dist
+          path: dist
+
+      - name: A Windows user who is not an administrator (fctest), and the helpers
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # the setup where fctest can read it, and a temp folder fctest can write (a program started for another user
+          # keeps the caller's environment, TEMP included)
+          New-Item -ItemType Directory -Force C:\fcsetup\tmp | Out-Null
+          & icacls.exe C:\fcsetup /grant '*S-1-5-32-545:(OI)(CI)M' /T | Out-Null
+          $setup = Get-ChildItem dist -Filter 'FinComBridge-Setup-*.exe' | Select-Object -First 1
+          if (-not $setup) { throw 'No setup in the build' }
+          Copy-Item $setup.FullName C:\fcsetup\FinComBridge-Setup.exe
+          $version = [regex]::Match($setup.Name, 'Setup-([0-9.]+)\.exe').Groups[1].Value
+          "BRIDGE_VERSION=$version" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          # a random password that meets Windows' complexity rules (upper, lower, digit, sign; 24 characters)
+          $chars = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+          $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+          $bytes = New-Object byte[] 20
+          $rng.GetBytes($bytes)
+          $pw = (-join ($bytes | ForEach-Object { $chars[$_ % $chars.Length] })) + 'Aa1!'
+          Write-Host "::add-mask::$pw"
+          $sec = ConvertTo-SecureString $pw -AsPlainText -Force
+          New-LocalUser -Name fctest -Password $sec -PasswordNeverExpires -AccountNeverExpires -Description 'FinCom Bridge test (not an administrator)' | Out-Null
+          try { Add-LocalGroupMember -Group (Get-LocalGroup -SID 'S-1-5-32-545').Name -Member fctest } catch { Write-Host "Users: $_" }
+          $admins = Get-LocalGroupMember -Group (Get-LocalGroup -SID 'S-1-5-32-544').Name | ForEach-Object { $_.Name }
+          if ($admins -match '\\fctest$') { throw 'fctest must not be an administrator' }
+          # kept for the next steps, readable only by this runner's user (DPAPI)
+          $sec | ConvertFrom-SecureString | Set-Content "$env:RUNNER_TEMP\fctest.pw"
+          @'
+          $ErrorActionPreference = 'Stop'
+          $Setup = 'C:\fcsetup\FinComBridge-Setup.exe'
+          function Fail([string]$m) { Write-Host "::error::$m"; throw $m }
+          function Check($cond, [string]$m) { if ($cond) { Write-Host "ok    $m" } else { Fail $m } }
+          function Get-TestCred {
+            $sec = Get-Content "$env:RUNNER_TEMP\fctest.pw" | ConvertTo-SecureString
+            New-Object System.Management.Automation.PSCredential ('fctest', $sec)
+          }
+          # a program run as fctest, with its own profile and registry (HKCU) loaded; waits for that program only, not for
+          # the bridge it starts (Start-Process -Wait would wait for the bridge too), and returns its exit code
+          function Invoke-AsTest([string]$Exe, [string[]]$ArgList) {
+            $env:TEMP = 'C:\fcsetup\tmp'; $env:TMP = 'C:\fcsetup\tmp'
+            $p = Start-Process -FilePath $Exe -ArgumentList $ArgList -Credential (Get-TestCred) -LoadUserProfile -WorkingDirectory 'C:\fcsetup' -PassThru
+            $null = $p.Handle # so the exit code can be read afterwards
+            if (-not $p.WaitForExit(300000)) { Fail "$Exe did not end within 5 minutes" }
+            return $p.ExitCode
+          }
+          function Get-TestSid { (Get-LocalUser fctest).SID.Value }
+          function Get-TestProfile {
+            $k = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\$(Get-TestSid)"
+            if (Test-Path $k) { return (Get-ItemProperty $k).ProfileImagePath }
+            return 'C:\Users\fctest'
+          }
+          function Get-TestLocalAppData { Join-Path (Get-TestProfile) 'AppData\Local' }
+          # fctest's HKCU Run value "FinCom Bridge": from its registry while it is loaded (its programs run), else from its
+          # NTUSER.DAT, loaded here for the moment ($null when there is none)
+          function Get-TestRunValue {
+            $sid = Get-TestSid
+            for ($i = 0; $i -lt 15; $i++) {
+              if (Test-Path "Registry::HKEY_USERS\$sid") {
+                $k = Get-ItemProperty "Registry::HKEY_USERS\$sid\Software\Microsoft\Windows\CurrentVersion\Run" -ErrorAction SilentlyContinue
+                if ($k) { return $k.'FinCom Bridge' } else { return $null }
+              }
+              & reg.exe load 'HKU\fctest-hive' "$(Get-TestProfile)\NTUSER.DAT" 2>$null | Out-Null
+              if ($LASTEXITCODE -eq 0) {
+                try {
+                  $k = Get-ItemProperty 'Registry::HKEY_USERS\fctest-hive\Software\Microsoft\Windows\CurrentVersion\Run' -ErrorAction SilentlyContinue
+                  if ($k) { return $k.'FinCom Bridge' } else { return $null }
+                } finally {
+                  $k = $null; [gc]::Collect(); [gc]::WaitForPendingFinalizers()
+                  & reg.exe unload 'HKU\fctest-hive' 2>$null | Out-Null
+                }
+              }
+              Start-Sleep -Seconds 2 # the profile is being unloaded right now
+            }
+            Fail "fctest's registry could not be read"
+          }
+          function Get-BridgeProcs([string]$User) {
+            Get-CimInstance Win32_Process -Filter "Name='FinComBridge.exe'" | Where-Object { (Invoke-CimMethod -InputObject $_ -MethodName GetOwner).User -eq $User }
+          }
+          # the bridge's /ping (no key needed) on 127.0.0.1:9100 within the time given; $null when it does not answer
+          function Wait-Bridge([int]$Seconds) {
+            $until = (Get-Date).AddSeconds($Seconds)
+            while ((Get-Date) -lt $until) {
+              try { return Invoke-RestMethod -Uri 'http://127.0.0.1:9100/ping' -TimeoutSec 5 -UseBasicParsing } catch { Start-Sleep -Seconds 2 }
+            }
+            return $null
+          }
+          function Wait-Until([scriptblock]$Cond, [int]$Seconds) {
+            $until = (Get-Date).AddSeconds($Seconds)
+            while ((Get-Date) -lt $until) { if (& $Cond) { return $true }; Start-Sleep -Seconds 2 }
+            return [bool](& $Cond)
+          }
+          '@ | Set-Content "$env:RUNNER_TEMP\fc.ps1"
+
+      - name: As fctest, for all users (/ALLUSERS) is refused with 740, without a prompt
+        run: |
+          . "$env:RUNNER_TEMP\fc.ps1"
+          $code = Invoke-AsTest $Setup @('/S', '/ALLUSERS', '/MODE=sole')
+          Check ($code -eq 740) "the setup ended with 740 (it ended with $code)"
+          $log = Join-Path (Get-TestLocalAppData) 'FinCom Bridge\install.log'
+          Check (Test-Path $log) "fctest's install.log exists ($log)"
+          Check ((Get-Content $log -Raw) -match 'exit 740.*needs an administrator') 'install.log says why (needs an administrator)'
+          Check (-not (Get-Service FinComBridge -ErrorAction SilentlyContinue)) 'no service was made'
+
+      - name: As fctest, just for me (/CURRENTUSER /MODE=sole)
+        run: |
+          . "$env:RUNNER_TEMP\fc.ps1"
+          $code = Invoke-AsTest $Setup @('/S', '/CURRENTUSER', '/MODE=sole')
+          $dir = Join-Path (Get-TestLocalAppData) 'FinCom Bridge'
+          if ($code -ne 0) { Get-Content "$dir\install.log" -ErrorAction SilentlyContinue | Write-Host }
+          Check ($code -eq 0) "the setup ended with 0 (it ended with $code)"
+          Check (Test-Path "$dir\FinComBridge.exe") "the program is in fctest's folder ($dir)"
+          Check (Test-Path "$dir\install.log") 'install.log is there'
+          Check ((Get-Content "$dir\install-result.txt" -ErrorAction SilentlyContinue | Select-Object -First 1) -eq 'ok') 'install-result.txt says ok'
+          $run = Get-TestRunValue
+          Check ($run -like '*FinComBridge.exe" user') "fctest's HKCU Run value starts the bridge at sign-in ($run)"
+          $ping = Wait-Bridge 60
+          Check ($ping -ne $null) 'the bridge answers on 127.0.0.1:9100 within 60 s'
+          Check ($ping.version -eq $env:BRIDGE_VERSION -and $ping.runMode -eq 'user' -and -not $ping.testMode) "it is FinCom Bridge $env:BRIDGE_VERSION, just for the user, main ($($ping | ConvertTo-Json -Compress))"
+          Check (@(Get-BridgeProcs 'fctest').Count -ge 2) "its supervisor and bridge run as fctest"
+          Check (-not (Get-Service FinComBridge -ErrorAction SilentlyContinue)) 'no service was made'
+
+      - name: As fctest, uninstall (/S)
+        run: |
+          . "$env:RUNNER_TEMP\fc.ps1"
+          $dir = Join-Path (Get-TestLocalAppData) 'FinCom Bridge'
+          # the uninstaller copies itself to TEMP and runs from there: its first process ends at once, so the result is
+          # waited for
+          $code = Invoke-AsTest "$dir\Uninstall FinCom Bridge.exe" @('/S')
+          Check ($code -eq 0) "the uninstaller started (it ended with $code)"
+          Check (Wait-Until { -not (Test-Path "$dir\FinComBridge.exe") -and -not (Get-Process Au_ -ErrorAction SilentlyContinue) } 120) 'the program is removed'
+          Check (Wait-Until { @(Get-BridgeProcs 'fctest').Count -eq 0 } 30) "no FinCom Bridge runs as fctest any more"
+          Check ($null -eq (Get-TestRunValue)) "fctest's HKCU Run value is removed"
+          Check ($null -eq (Wait-Bridge 3)) 'nothing answers on 127.0.0.1:9100'
+          Check (Wait-Until { (Get-Content "$dir\install.log" -Raw) -match 'Removed the Apps entry' } 30) 'install.log says what was removed'
+
+      - name: As administrator, for all users (/ALLUSERS /MODE=sole), the Windows service
+        run: |
+          . "$env:RUNNER_TEMP\fc.ps1"
+          $p = Start-Process -FilePath $Setup -ArgumentList '/S', '/ALLUSERS', '/MODE=sole' -PassThru
+          $null = $p.Handle
+          if (-not $p.WaitForExit(300000)) { Fail 'the setup did not end within 5 minutes' }
+          if ($p.ExitCode -ne 0) { Get-Content "$env:LOCALAPPDATA\FinCom Bridge\install.log" -ErrorAction SilentlyContinue | Write-Host }
+          Check ($p.ExitCode -eq 0) "the setup ended with 0 (it ended with $($p.ExitCode))"
+          $svc = Get-Service FinComBridge -ErrorAction SilentlyContinue
+          Check ($svc -and $svc.Status -eq 'Running') 'the service FinComBridge runs'
+          Check (Test-Path "$env:ProgramData\FinCom Bridge\install.log") 'install.log is in ProgramData too'
+          $ping = Wait-Bridge 60
+          Check ($ping -ne $null) 'the bridge answers on 127.0.0.1:9100 within 60 s'
+          Check ($ping.version -eq $env:BRIDGE_VERSION -and $ping.runMode -eq 'service') "it is FinCom Bridge $env:BRIDGE_VERSION as a service ($($ping | ConvertTo-Json -Compress))"
+
+      - name: As administrator, uninstall (/S)
+        run: |
+          . "$env:RUNNER_TEMP\fc.ps1"
+          $dir = "$env:ProgramFiles\FinCom Bridge"
+          $p = Start-Process -FilePath "$dir\Uninstall FinCom Bridge.exe" -ArgumentList '/S' -PassThru
+          $null = $p.Handle
+          $p.WaitForExit(300000) | Out-Null
+          Check (Wait-Until { -not (Get-Service FinComBridge -ErrorAction SilentlyContinue) } 120) 'the service is removed'
+          Check (Wait-Until { -not (Test-Path "$dir\FinComBridge.exe") } 60) 'the program is removed'
+          Check (-not (Test-Path 'HKLM:\SOFTWARE\FinCom\Bridge')) 'its record in HKLM is removed'
+          Check ($null -eq (Wait-Bridge 3)) 'nothing answers on 127.0.0.1:9100'
+
+      - name: Every install.log
+        if: always()
+        run: |
+          $out = "$env:RUNNER_TEMP\logs"
+          New-Item -ItemType Directory -Force $out | Out-Null
+          $test = 'C:\Users\fctest'
+          try { $k = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\$((Get-LocalUser fctest).SID.Value)"; if (Test-Path $k) { $test = (Get-ItemProperty $k).ProfileImagePath } } catch {}
+          $from = @{
+            'fctest'      = "$test\AppData\Local\FinCom Bridge"
+            'fctest-home' = "$test\AppData\Local\TDS Desk Bridge"
+            'admin'       = "$env:LOCALAPPDATA\FinCom Bridge"
+            'admin-home'  = "$env:LOCALAPPDATA\TDS Desk Bridge"
+            'service'     = "$env:ProgramData\FinCom Bridge"
+          }
+          foreach ($n in $from.Keys) {
+            New-Item -ItemType Directory -Force "$out\$n" | Out-Null
+            Get-ChildItem $from[$n] -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '\.(log|txt)$|\.log\.\d$' } | Copy-Item -Destination "$out\$n" -ErrorAction SilentlyContinue
+          }
+          Get-ChildItem $out -Recurse -File | ForEach-Object { Write-Host $_.FullName }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: install-logs-${{ matrix.os }}
+          path: ${{ runner.temp }}/logs/
+          if-no-files-found: warn

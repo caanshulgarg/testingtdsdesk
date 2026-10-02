@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-var BridgeVersion = "2.0.0" // set at build time for test builds (-X main.BridgeVersion=...)
+var BridgeVersion = "2.1.0" // set at build time for test builds (-X main.BridgeVersion=...)
 
 // M is a JSON object, as PowerShell's [ordered]@{} was
 type M = map[string]any
@@ -341,4 +341,17 @@ func group(p, s string, i int) string {
 		return ""
 	}
 	return m[i]
+}
+
+// --name value or --name=value from a command's arguments
+func flagValue(args []string, name string) string {
+	for i, a := range args {
+		if a == "--"+name && i+1 < len(args) {
+			return args[i+1]
+		}
+		if strings.HasPrefix(a, "--"+name+"=") {
+			return strings.TrimPrefix(a, "--"+name+"=")
+		}
+	}
+	return ""
 }

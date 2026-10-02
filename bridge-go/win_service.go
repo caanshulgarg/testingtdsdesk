@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -208,6 +209,17 @@ func installingUser() (ownerInfo, error) {
 	name := wtsString(s, wtsUserName)
 	dom := wtsString(s, wtsDomainName)
 	if name == "" {
+		// no one signed in to this session (session 0: a remote or automated install): the user running the setup, unless
+		// that is Windows itself (LocalSystem)
+		if u, err := user.Current(); err == nil && u.Uid != "S-1-5-18" {
+			if i := strings.LastIndex(u.Username, `\`); i >= 0 {
+				dom, name = u.Username[:i], u.Username[i+1:]
+			} else {
+				name = u.Username
+			}
+		}
+	}
+	if name == "" {
 		return ownerInfo{}, errors.New("the signed-in Windows user could not be found")
 	}
 	full := name
@@ -227,36 +239,126 @@ func installingUser() (ownerInfo, error) {
 	return o, nil
 }
 
-func flagValue(args []string, name string) string {
-	for i, a := range args {
-		if a == "--"+name && i+1 < len(args) {
-			return args[i+1]
-		}
-		if strings.HasPrefix(a, "--"+name+"=") {
-			return strings.TrimPrefix(a, "--"+name+"=")
-		}
+// the setup's own log: always %LOCALAPPDATA%\FinCom Bridge\install.log of the Windows user running it (the setup writes
+// its own steps there too); for the service also %ProgramData%\FinCom Bridge\install.log, as before. Every line has its time
+func installLogFiles() []string {
+	var o []string
+	if d := userInstallDir(); d != "" {
+		o = append(o, filepath.Join(d, "install.log"))
 	}
-	return ""
-}
-
-// the setup's own log: in ProgramData for the service; for an install just for this user in the user's own folder
-// (%LOCALAPPDATA%\FinCom Bridge), since a user who is not an administrator may not be able to write in ProgramData
-func installLogFile() string {
-	if perUserSetup {
-		if la := os.Getenv("LOCALAPPDATA"); la != "" {
-			return filepath.Join(la, "FinCom Bridge", "install.log")
-		}
-		return ""
+	if p := os.Getenv("ProgramData"); p != "" && !perUserSetup {
+		o = append(o, filepath.Join(p, "FinCom Bridge", "install.log"))
 	}
-	if p := os.Getenv("ProgramData"); p != "" {
-		return filepath.Join(p, "FinCom Bridge", "install.log")
-	}
-	return ""
+	return o
 }
 func installLog(msg string) {
 	fmt.Println(msg)
-	if f := installLogFile(); f != "" {
-		_ = appendText(f, time.Now().Format("2006-01-02 15:04:05")+"  "+msg+"\r\n")
+	line := time.Now().Format("2006-01-02 15:04:05") + "  " + msg + "\r\n"
+	for _, f := range installLogFiles() {
+		_ = appendText(f, line)
+	}
+}
+
+// a failure: in the log, and in install-result.txt for the setup's last page (what went wrong, what to do); the exit code
+func installFailed(code int, reason, todo string) int {
+	installLog(fmt.Sprintf("Install: FAILED (code %d): %s %s", code, reason, todo))
+	writeInstallResult(reason, todo)
+	return code
+}
+
+// the start of install: until it ends, the setup's last page reads that it did not finish
+func installStarted() {
+	writeInstallResult("The setup of FinCom Bridge stopped before it finished.", "Run the setup again; if it stops again, send the install log to FinCom.")
+	installLog("Install: Windows " + windowsVersion() + ", program " + func() string { e, _ := os.Executable(); return e }())
+}
+
+// the bridge has to answer (this version, as a FinCom Bridge) within 30 seconds; else exit 4 ("installed but not running")
+func waitAnswer(port int, by string) int {
+	for i := 0; i < 30; i++ {
+		if p := pingLocal(port, 2*time.Second); p != nil && str(p["version"]) == BridgeVersion {
+			installLog(fmt.Sprintf("Install: done; the bridge answers on 127.0.0.1:%d", port))
+			writeInstallResult("", "")
+			return 0
+		}
+		time.Sleep(time.Second)
+	}
+	reason := fmt.Sprintf("FinCom Bridge was installed but did not answer on 127.0.0.1:%d within 30 seconds.", port)
+	todo := "Restart the computer (" + by + "); if the icon near the clock stays red, send the install log to FinCom."
+	if tallyPortOpenAt(port) {
+		reason += fmt.Sprintf(" Another program answers on port %d.", port)
+		todo = fmt.Sprintf("Close the program that uses port %d (often an older bridge), or restart the computer; then run the setup again.", port)
+	}
+	return installFailed(4, reason, todo)
+}
+
+// the owner recorded at the last install (for all users): the install run by the service itself (Switch to main bridge)
+// has no one signed in to its session, so the bridge keeps working for the same Windows user
+func recordedOwner() (ownerInfo, bool) {
+	k, err := registry.OpenKey(registry.LOCAL_MACHINE, regKey, registry.QUERY_VALUE|registry.WOW64_64KEY)
+	if err != nil {
+		return ownerInfo{}, false
+	}
+	defer k.Close()
+	o := ownerInfo{}
+	o.name, _, _ = k.GetStringValue("Owner")
+	o.sid, _, _ = k.GetStringValue("OwnerSid")
+	o.home, _, _ = k.GetStringValue("Home")
+	o.profile = profileOf(o.sid)
+	return o, o.name != "" && o.sid != "" && o.home != "" && o.profile != ""
+}
+
+// Switch to main bridge: the program's own install in sole mode, detached, exactly as the setup runs it (the service runs
+// as LocalSystem, so it may install the service again; installed just for this user, no administrator is needed). It
+// stops this bridge, so it must not end with it
+func platSwitchToMain(fincom string) error {
+	exe, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	var args []string
+	switch runMode {
+	case "user":
+		args = []string{"install", "--per-user", "--mode", "sole", "--fincom", fincom}
+	case "service":
+		args = []string{"install", "--mode", "sole", "--fincom", fincom}
+	default:
+		return errors.New("this bridge was started by hand (in a window); run the FinCom Bridge setup and choose \"Replace bridge 1.15.0\"")
+	}
+	for _, away := range []uint32{0x01000000, 0} { // CREATE_BREAKAWAY_FROM_JOB when allowed, else without
+		c := exec.Command(exe, args...)
+		hideWindow(c)
+		c.SysProcAttr.CreationFlags |= 0x00000200 | away // CREATE_NEW_PROCESS_GROUP
+		if err = c.Start(); err == nil {
+			writeLog(fmt.Sprintf("Switching to the main bridge: %s started (process %d)", strings.Join(args, " "), c.Process.Pid))
+			_ = c.Process.Release()
+			return nil
+		}
+	}
+	return err
+}
+
+// the nightly copy's scheduled task, when it runs this program (bridge 1.15.0's own task, of the same name, stays)
+func removeOwnTask() {
+	c := exec.Command("schtasks.exe", "/Query", "/TN", taskName, "/V", "/FO", "LIST")
+	hideWindow(c)
+	out, err := c.Output()
+	if err != nil || !strings.Contains(strings.ToLower(string(out)), "fincombridge.exe") {
+		return
+	}
+	d := exec.Command("schtasks.exe", "/Delete", "/TN", taskName, "/F")
+	hideWindow(d)
+	if d.Run() == nil {
+		installLog("Uninstall: removed the scheduled task " + taskName)
+	}
+}
+
+// the bridge's own files, after the program is stopped (uninstall, both ways)
+func removeOwnFilesLogged(home, mode string, keep bool) {
+	for _, g := range removeOwnFiles(home, mode, keep) {
+		installLog("Uninstall: removed " + g)
+	}
+	if keep {
+		installLog("Uninstall: this computer's pairing with FinCom is kept (a later install connects without a new code)")
 	}
 }
 
@@ -273,10 +375,16 @@ func installCmd(args []string) int {
 		mode = "test"
 	}
 	fincom := flagValue(args, "fincom")
+	installStarted()
 	o, err := installingUser()
 	if err != nil {
-		installLog("Install: " + err.Error())
-		return 2
+		// run by the service itself (Switch to main bridge): no one is signed in to its session; the recorded owner stays
+		if r, ok := recordedOwner(); ok {
+			o, err = r, nil
+		}
+	}
+	if err != nil {
+		return installFailed(2, "The Windows user signed in to this session could not be found ("+err.Error()+").", "Sign in to Windows as the person who uses Tally and run the setup again.")
 	}
 	installLog(fmt.Sprintf("Install: FinCom Bridge %s for %s (%s), %s mode, folder %s", BridgeVersion, o.name, o.sid, mode, o.home))
 	_ = os.MkdirAll(o.home, 0o755)
@@ -297,26 +405,16 @@ func installCmd(args []string) int {
 		k.Close()
 	}
 	if err := createService(exe, cfgPath); err != nil {
-		installLog("Install: the Windows service could not be made: " + err.Error())
-		return 4
+		return installFailed(7, "The Windows service could not be made ("+err.Error()+").", "Run the setup again as an administrator; if it fails again, send the install log to FinCom.")
 	}
 	if err := startService(); err != nil {
-		installLog("Install: the service did not start: " + err.Error())
-		return 5
+		return installFailed(5, "The Windows service FinCom Bridge did not start ("+err.Error()+").", "Restart the computer; if the icon near the clock stays red, send the install log to FinCom.")
 	}
 	port := 9100
 	if mode == "test" {
 		port = 9101
 	}
-	for i := 0; i < 30; i++ {
-		if tallyPortOpenAt(port) {
-			installLog(fmt.Sprintf("Install: done; the bridge answers on 127.0.0.1:%d", port))
-			return 0
-		}
-		time.Sleep(time.Second)
-	}
-	installLog("Install: the service runs but did not answer yet; see the bridge's log")
-	return 0
+	return waitAnswer(port, "Windows starts the service with it")
 }
 
 // the settings for the bridge's owner (the same for the service and for an install just for one user): test mode beside
@@ -339,6 +437,7 @@ func writeSettings(o ownerInfo, mode, fincom string) (string, int) {
 				}
 			}
 		}
+		carryInstanceID(c)
 		c.Set("Mode", "test")
 		c.Set("Port", float64(9101))
 		c.Set("PsHome", o.home)
@@ -347,8 +446,7 @@ func writeSettings(o ownerInfo, mode, fincom string) (string, int) {
 		c.Set("LogFile", filepath.Join(o.home, "go-bridge.log"))
 		setOwner(c, o, fincom)
 		if err := writeOrdered(cfgPath, c); err != nil {
-			installLog("Install: the settings could not be written: " + err.Error())
-			return "", 3
+			return "", installFailed(3, "The settings could not be written ("+err.Error()+").", "Close any program that has "+cfgPath+" open, then run the setup again.")
 		}
 	} else {
 		cfgPath = psCfg
@@ -356,13 +454,14 @@ func writeSettings(o ownerInfo, mode, fincom string) (string, int) {
 		if exists(cfgPath) {
 			_ = c.UnmarshalText(readText(cfgPath))
 		}
+		// switched from test mode: the same bridge for FinCom (the id FinCom made the main one)
+		carryInstanceID(c, filepath.Join(o.home, "go-bridge.config.json"))
 		c.Set("Mode", "")
 		c.Set("Port", float64(9100))
 		c.Set("LogFile", filepath.Join(o.home, "tds-bridge.log"))
 		setOwner(c, o, fincom)
 		if err := writeOrdered(cfgPath, c); err != nil {
-			installLog("Install: the settings could not be written: " + err.Error())
-			return "", 3
+			return "", installFailed(3, "The settings could not be written ("+err.Error()+").", "Close any program that has "+cfgPath+" open, then run the setup again.")
 		}
 		removeOldBridge(o)
 	}
@@ -525,7 +624,8 @@ func stopService() {
 	}
 }
 
-// uninstall (run by the uninstaller): the service and the tray go; the bridge's folder (settings, copy, log) stays
+// uninstall (run by the uninstaller): the service and the tray go, and the bridge's own files (uninstall.go); bridge
+// 1.15.0's files in the same folder stay
 func uninstallCmd(args []string) int {
 	if contains(args, "--per-user") {
 		return uninstallUserCmd(args)
@@ -543,9 +643,12 @@ func uninstallCmd(args []string) int {
 	c := exec.Command("taskkill.exe", "/F", "/FI", "IMAGENAME eq FinComBridge.exe", "/FI", fmt.Sprintf("PID ne %d", os.Getpid()))
 	hideWindow(c)
 	_ = c.Run()
+	installLog("Uninstall: the FinCom Bridge service and its tray icons were stopped and the service removed")
+	removeOwnTask()
 	putBackOldBridge(mode, home)
+	removeOwnFilesLogged(home, mode, contains(args, "--keep-pairing"))
 	_ = registry.DeleteKey(registry.LOCAL_MACHINE, regKey)
-	installLog("Uninstall: FinCom Bridge removed; its folder " + home + " (settings, copy, log) is kept")
+	installLog("Uninstall: FinCom Bridge removed (its record in HKLM\\" + regKey + " too); bridge 1.15.0's files in " + home + " are kept")
 	return 0
 }
 
