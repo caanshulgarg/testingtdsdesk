@@ -123,15 +123,18 @@ with sync_playwright() as p:
 
     # 5. cash flow: receipts on their own lines; opening + net = closing
     cf = E("""(() => { const C = S.books.mis.last.p2.cash, f = l => C.rows.find(x => x.lab === l) || {m: {}};
-      return {refund: f('Refunds and receipts from suppliers').m['202602'], tax: f('Tax refunds').t, posPaid: C.rows.filter(x => x.lab === 'Paid to suppliers' || x.lab === 'Income tax').some(x => Object.values(x.m).some(v => v > 0)),
+      return {refund: f('Refunds and receipts from suppliers').m['202602'], tax: (f('Loans and advances (asset)').led || {})['Income Tax Refundable AY 2025-26'], taxElse: C.rows.filter(x => x.lab !== 'Loans and advances (asset)').some(x => x.led && x.led['Income Tax Refundable AY 2025-26'] != null), posPaid: C.rows.filter(x => x.lab === 'Paid to suppliers' || x.lab === 'Income tax').some(x => Object.values(x.m).some(v => v > 0)),
         net: f('Refunds and receipts from suppliers').m['202602'] + (f('Paid to suppliers').m['202602'] || 0), open: C.open, close: C.close, sum: C.net, ties: C.ties}; })()""")
     ok(round(cf["net"], 2) == 4850089 and cf["refund"] > 0, "5. Feb-2026: received from suppliers %s on Refunds and receipts from suppliers (with what was paid: the +48,50,089 shown before)" % cf["refund"])
-    ok(cf["tax"] == 928480, "5. Tax refunds 9,28,480 on its own line")
+    # finding 5 (owner's rule of 02-Oct-2026): the line from the ledger's Tally group, not its name. Income Tax Refundable AY
+    # 2025-26 is under Loans & Advances (Asset): the refund of 9,28,480 is on "Loans and advances (asset)" (it was on "Tax
+    # refunds", by the words INCOME TAX in its name)
+    ok(cf["tax"] == 928480 and not cf["taxElse"], "5. the income-tax refund 9,28,480 on Loans and advances (asset), by its group (Loans & Advances (Asset)); on no other line")
     ok(not cf["posPaid"], "5. no receipt left on Paid to suppliers or Income tax")
     ok(cf["open"] is not None and round(cf["open"] + cf["sum"], 2) == cf["close"] and cf["ties"], "5. cash and bank: opening %s + net %s = closing %s" % (cf["open"], cf["sum"], cf["close"]))
     E("() => { S.misTab = 'cash'; render(); }"); pg.wait_for_timeout(600)
     ok(pg.locator('#app tr[data-cf="open"]').count() == 1 and pg.locator('#app tr[data-cf="close"]').count() == 1 and pg.locator('#app [data-cf-ties="yes"]').count() == 1, "5. the Cash flow tab: opening and closing cash and bank, and the check that they tie")
-    ok("Refunds and receipts from suppliers" in app() and "Tax refunds" in app(), "5. and the two lines")
+    ok("Refunds and receipts from suppliers" in app() and "Loans and advances (asset)" in app(), "5. and the two lines")
 
     # 6. Accounts: the format from the entity type (the PAN's fourth letter), changeable in Client setup
     ok(E("[CO().pan, FS.entityOf().code, FS.cfg(S.books).kind]") == ["AANFG3202D", "F", "nc"], "6. PAN AANFG3202D: a firm, so the ICAI non-corporate format")
