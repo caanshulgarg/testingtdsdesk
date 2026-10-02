@@ -87,7 +87,7 @@ func newBookTally(t *testing.T) *bookTally {
 			n += strings.Count(body, "<LEDGER ")
 			b.mu.Unlock()
 			out = fmt.Sprintf("<ENVELOPE><BODY><DATA><IMPORTRESULT><CREATED>%d</CREATED><ALTERED>0</ALTERED><ERRORS>0</ERRORS><EXCEPTIONS>0</EXCEPTIONS></IMPORTRESULT></DATA></BODY></ENVELOPE>", n)
-		case dupCheckID, "TDSDeskVchHeads":
+		case dupCheckID, "TDSDeskVchHeads", tagCheckID:
 			from, to := group(`<SVFROMDATE>(\d+)</SVFROMDATE>`, body, 1), group(`<SVTODATE>(\d+)</SVTODATE>`, body, 1)
 			party := ""
 			if m := reTestParty.FindStringSubmatch(body); m != nil {
@@ -207,8 +207,9 @@ func TestDupSecondTabRefused(t *testing.T) {
 	if !strings.Contains(c, "<SVFROMDATE>20260701</SVFROMDATE><SVTODATE>20260701</SVTODATE>") || !strings.Contains(c, `$PartyLedgerName = "Fingate"`) {
 		t.Fatalf("the check was not for one date and the party: %s", c)
 	}
-	if logLines("NOT POSTED, already in Tally") != 2 {
-		t.Fatalf("the log: %d lines", logLines("NOT POSTED, already in Tally"))
+	// 2.1.5: the stand-in answers FinComTag too, so the same FinCom id is found by the exact check first
+	if n := logLines("NOT POSTED, already in Tally") + logLines("NOT POSTED, its FinCom id is in Tally already"); n != 2 {
+		t.Fatalf("the log: %d lines", n)
 	}
 }
 

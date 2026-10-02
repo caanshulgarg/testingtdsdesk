@@ -161,7 +161,10 @@ with sync_playwright() as p:
       j.results = [{id: "r2", ok: false, message: "Ledger 'Kashi IT Solutions' does not exist"}]; j.items = [{id: "r2", state: "failed", reason: "Ledger 'Kashi IT Solutions' does not exist"}]; CloudJobs.changed(); }""")
     pg.wait_for_timeout(1500)
     errs, tp = bills_in("errors"), bills_in("topost")
-    ok("r2" in errs and "r2" not in tp and "does not exist" in txt('#app [data-post-panel="errors"] [data-bill-row="r2"]'), "refused: K/7 is under Errors with Tally's words, not under To post (%s | %s)" % (errs, tp))
+    tab("errors"); r2t = txt('#app [data-post-panel="errors"] [data-bill-row="r2"]')
+    ok("r2" in errs and "r2" not in tp and "does not exist" in r2t and pg.locator('#app [data-post-panel="errors"] [data-job="jR"] [data-bill-row="r2"]').count() == 1,
+       "refused: K/7 is under Errors with Tally's words (inside its failed posting, with Retry), not under To post (%s | %s | %s)" % (errs, tp, r2t[:100]))
+    tab("topost")
     ok(txt("#app [data-post-empty]") == "Nothing waiting to post" and pg.locator("#app [data-post-main]").count() == 0, "To post: nothing waiting, no Post button")
     pc = E("postCounts(S.coId)")
     ok(badge("errors") == pc["attention"] and badge("topost") == pc["ready"] == 0, "the counts follow (%s)" % pc)

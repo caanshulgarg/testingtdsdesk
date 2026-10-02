@@ -1242,3 +1242,10 @@ ol.post-import li{display:list-item;margin:3px 0;overflow-wrap:anywhere}
 .post-attn .acts{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .post-hist summary{cursor:pointer;font-weight:600}
 .post-hist ul{margin:6px 0 0;padding:0 0 0 18px}
+/* Post to Tally in three tabs (To post / Posted / Errors) */
+.post-tabs{display:flex;gap:4px;margin:12px 0 0;border-bottom:1px solid var(--rule);flex-wrap:wrap}
+.post-tab{background:none;border:0;border-bottom:2px solid transparent;padding:8px 12px;margin-bottom:-1px;font:inherit;color:var(--muted);cursor:pointer}
+.post-tab.on{color:var(--ink);border-bottom-color:var(--ledger);font-weight:600}
+.post-tab.on .sbar-n{background:var(--ledger);color:var(--sheet)}
+.post-tab.bad .sbar-n{background:var(--warn-soft);color:var(--warn)}
+.post-attn-in{flex:1 1 100%;margin:4px 0 0 14px}

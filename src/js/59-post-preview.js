@@ -209,12 +209,42 @@ const PostRecord = {
 //              when it was posted (bridge 2.1.4), or a ledger Tally does not have: "Needs your attention", and the
 //              tab's second badge (with the failed postings of FinCom's cloud);
 //   sending    on its way to Tally now; intally: confirmed there. Neither is counted.
+//   unknown    sent when Tally stopped answering, being looked for by its FinCom id (bridge 2.1.4, item state "unknown"):
+//              "Checking whether it reached Tally" under Errors; counted with attention, never posted again from here;
+//   refused    Tally refused it in the newest posting of FinCom's cloud that has it (made after the bill was approved,
+//              not dismissed by a person): under Errors with Tally's words; counted with attention, except when it is
+//              shown inside a failed posting that needs a decision (that posting is counted instead);
+//   posted     put in Tally by the newest posting of the cloud that has it (also before this browser marked the bill):
+//              under Posted, not counted.
+// The three tabs of the page (plan piped-moseying-frost, item 1b): To post = ready (+ sending shown as on its way),
+// Posted = the cloud's history, Errors = attention + unknown + refused + the failed postings.
+// id -> {st: sending | unknown | refused | posted | "", job, reason}: the newest posting of the cloud naming the entry
+function postJobStates(cid){
+  const out = new Map();
+  if (typeof CloudJobs !== "object") return out;
+  const jobs = CloudJobs.forClient(cid).slice().sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
+  jobs.forEach(j => {
+    const items = [].concat(j.items || []).filter(Boolean), results = [].concat(j.results || []).filter(Boolean);
+    const ids = CloudJobs.idsOf(j) || [...new Set(items.map(x => String(x.id)).concat(results.map(x => String(x.id))))];
+    const live = CloudJobs.live(j), byPerson = !!(j.dismissed_at && !j.dismiss_auto);
+    ids.forEach(id => {
+      id = String(id);
+      if (out.has(id)) return;
+      const it = items.find(x => String(x.id) === id), r = results.find(x => String(x.id) === id);
+      let st = "", reason = "";
+      if ((r && (r.ok || postAlready(r))) || (it && it.state === "in_tally")) st = "posted";
+      else if ((it && it.state === "unknown") || (r && r.outcomeUnknown)) { st = "unknown"; reason = (it && it.reason) || "Checking whether it reached Tally"; }
+      else if (live && (!it || ["waiting", "sending", "sent"].includes(it.state))) st = "sending";
+      else if (byPerson || j.status === "cancelled") st = "";
+      else if ((it && it.state === "failed") || (r && !r.ok) || j.status === "failed") { st = "refused"; reason = (it && it.reason) || plainMsg(r && r.message) || plainMsg(j.message) || "Tally did not take it"; }
+      out.set(id, {st, job: j, reason});
+    });
+  });
+  return out;
+}
 function postSending(cid){
   const out = new Set();
-  if (typeof CloudJobs === "object") CloudJobs.forClient(cid).filter(j => ["waiting", "taken", "running"].includes(j.status) || j.checking).forEach(j => {
-    const done = new Set([].concat(j.items || []).filter(x => x && (x.state === "in_tally" || x.state === "failed")).map(x => x.id));
-    (CloudJobs.idsOf(j) || [].concat(j.items || []).map(x => x.id)).forEach(id => { if (!done.has(id)) out.add(String(id)); });
-  });
+  postJobStates(cid).forEach((v, id) => { if (v.st === "sending") out.add(id); });
   return out;
 }
 // the ledgers of a bill Tally does not have (only for the client open here, with Tally's ledger list at hand)
@@ -226,25 +256,35 @@ function postBucket(e, ctx){
   if (e.exportedAt) return "attention";
   if (e.postUnconfirmed) return e.postUnconfirmed.pending ? "sending" : "attention";
   if (e.postCheckFailed) return "attention";
-  if (ctx && ctx.sending && ctx.sending.has(e.id)) return "sending";
+  const js = ctx && ctx.jobs ? ctx.jobs.get(String(e.id)) : null;
+  // put in by the cloud's posting and not yet marked here (a bill once marked posted here and taken back out of Tally
+  // keeps postedVia, and is waiting again)
+  if (js && js.st === "posted" && !e.postedVia) return "intally";
+  if (js && js.st === "unknown") return "unknown";
+  if ((js && js.st === "sending") || (ctx && ctx.sending && ctx.sending.has(e.id))) return "sending";
+  // refused in a posting made after this approval (a bill sent back to review and approved again starts afresh)
+  if (js && js.st === "refused" && String(js.job.created_at || "") >= String(e.approvedAt || "")) return "refused";
   if (ctx && ctx.ledgers && postMissingLedgers(e).length) return "attention";
   return "ready";
 }
-// {ready: [bills], attention: [bills], sending: [bills], jobs: [failed postings of the cloud needing a decision]}, or
-// null when the client's bills are not loaded here
+// {ready, attention, sending, unknown, refused: [bills], jobs: [failed postings of the cloud needing a decision],
+// why: id -> {job, reason} for the unknown and refused ones}, or null when the client's bills are not loaded here
 function postBills(cid){
   const d = S.data[cid];
   if (!d || !d.loaded) return null;
-  const ctx = {sending: postSending(cid), ledgers: postLedgerList(cid)}, out = {ready: [], attention: [], sending: [], jobs: []};
-  Object.values(d.entries).forEach(e => { const b = postBucket(e, ctx); if (out[b]) out[b].push(e); });
-  ["ready", "attention", "sending"].forEach(k => out[k].sort(byDate));
+  const jobs = postJobStates(cid);
+  const ctx = {jobs, ledgers: postLedgerList(cid)}, out = {ready: [], attention: [], sending: [], unknown: [], refused: [], jobs: [], why: {}};
+  Object.values(d.entries).forEach(e => { const b = postBucket(e, ctx); if (out[b]){ out[b].push(e); if (b === "unknown" || b === "refused") out.why[e.id] = jobs.get(String(e.id)); } });
+  ["ready", "attention", "sending", "unknown", "refused"].forEach(k => out[k].sort(byDate));
   out.jobs = typeof CloudJobs === "object" ? CloudJobs.needing(cid) : [];
   return out;
 }
+// a refused bill inside a failed posting that needs a decision is shown (and counted) with that posting
+function postRefusedAlone(b){ const need = new Set(b.jobs.map(j => j.id)); return b.refused.filter(e => !(b.why[e.id] && need.has(b.why[e.id].job.id))); }
 // the counts: from the bills when they are here, else from the client's stats (kept by refreshStats with postBucket)
 function postCounts(cid){
   const b = postBills(cid);
-  if (b) return {ready: b.ready.length, attention: b.attention.length + b.jobs.length};
+  if (b) return {ready: b.ready.length, attention: b.attention.length + b.jobs.length + b.unknown.length + postRefusedAlone(b).length};
   const st = (S.companies[cid] || {}).stats || {};
   return {ready: num(st.ready != null ? st.ready : st.waiting), attention: num(st.attention)};
 }
@@ -252,6 +292,15 @@ function postCountFor(cid){ return postCounts(cid).ready; }
 function postAttentionFor(cid){ return postCounts(cid).attention; }
 // the bills ready to post (the dashboard's tile)
 function postBillsOpen(cid){ const b = postBills(cid); return b ? b.ready : null; }
+// the postings of the cloud under Posted: the history, less a finished posting that put nothing in (its entries are
+// under Errors, refused); the entries each one put in Tally
+function postPostedRows(cid){
+  if (typeof CloudJobs !== "object") return [];
+  return CloudJobs.history(cid).filter(x => !(x.state === "partly" && !x.ok));
+}
+// the three tab counts: To post and Errors are postCounts (the step bar's badges, the chip, the dashboard), Posted the
+// postings listed under it
+function postTabCounts(cid){ const c = postCounts(cid); return {topost: c.ready, posted: postPostedRows(cid).length, errors: c.attention}; }
 // a bill's ledgers on one line, the party first; a Round Off of nothing is left out
 function postLedgerLine(e){
   const ls = (e.snapshot ? e.snapshot.lines : []).filter(l => l.ledger && !((l.role === "roundoff" || /^round\s*(ed\s*)?off\b/i.test(l.ledger)) && Math.abs(num(l.amt)) < 0.005));
@@ -538,7 +587,7 @@ async function postAllToTally(only){
   if (!S.bank || S.bank.cid !== co.id) await loadBank(co.id);
   const b = postBills(co.id) || {ready: [], attention: []};
   let list = b.ready;
-  if (only){ const e = D(co.id).entries[only.id]; list = e && e.status === "approved" && !e.exportedAt && (b.ready.includes(e) || e.postCheckFailed) ? [e] : []; }
+  if (only){ const e = D(co.id).entries[only.id]; list = e && e.status === "approved" && !e.exportedAt && (b.ready.includes(e) || (b.refused || []).includes(e) || e.postCheckFailed) ? [e] : []; }
   const all = postRows(co), rows = list.map(e => all.find(r => r.kind === "bill" && r.id === e.id) || {kind: "bill", id: e.id, no: e.x.invoiceNo, party: e.x.vendorName, e});
   if (!rows.length){ toast("Nothing is waiting to be posted."); return; }
   S.postStop = null; S.postNote = null;

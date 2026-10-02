@@ -1,0 +1,161 @@
+FINCOM BRIDGE 2.1.5 - TEST SHEET (NWS144, staging)
+
+File:        FinComBridge-Setup-2.1.5.exe
+Fingerprint: <filled at build> (SHA-256)
+Link:        https://staging.fincom.live/review/assets/bridge-go/FinComBridge-Setup-2.1.5.exe
+(2.1.4 was built but never handed out; 2.1.5 is 2.1.4 with the last per-ledger read removed, see below.)
+Before step 8: tally-ingest deployed to staging with the "ledger_list" kind; for step 8's "marked deleted",
+migration-32 applied on staging (without it the rename and the new ledger still show; the deletion is skipped and
+logged, and sent again with the next list once the migration is there).
+
+What is new in 2.1.5 (over the 2.1.4 build that was never handed out)
+  - Tally's per-ledger voucher list ("Vouchers : Ledger") is never asked: Tally builds that list ledger by ledger, the
+    same shape of read that hung Tally on 02-Oct-2026 (ledgers 696-699).
+  - After a posting, and when a posting is resumed or retried, the entries are looked for by their FinCom id alone
+    (FinComTag: one date's entries, heads and narration only, one request per date).
+  - FinCom's "a ledger's entries" (/ledgervouchers, /ledgerlines) is answered from the copy kept on this computer; for
+    a period the copy does not cover it says the entries are shown from FinCom's copy. Tally is not asked.
+
+What is new in 2.1.4 (since 2.1.3)
+  - Tally is never asked for a balance: no opening balances read a batch at a time (TDSDeskKeepBal), no trial balance,
+    no ledger balance, no Ledger Vouchers report. FinCom works balances out from its copy of the books.
+  - Until the change read is measured, Tally is read only by Update now and the nightly run: the day book of the year,
+    a month a request (a month that does not answer in 25 s is read again in halves, down to a day), each month saved as
+    it comes. Opening a client in FinCom, or a posting, reads nothing from Tally.
+  - The plain ledger and group lists come back (02-Oct-2026): Update now (and the nightly run) also reads every
+    ledger's name, group, stored opening (the master's own field, not a balance), GSTIN, PAN, GUID, MasterID and AlterID,
+    2,000 ledgers a request by MasterID (a chunk that does not answer in 20 s is read again in halves, from where it
+    stopped), and the groups in one request. The list is also read once after a posting that made a new ledger, and when
+    FinCom's ledger chooser asks for it (at most once per company every 3 minutes). A ledger renamed in Tally is renamed
+    in FinCom (the old name kept); one deleted in Tally is marked deleted in FinCom, never removed.
+  - One request to Tally at a time; a posting goes before anything else waiting. After a request Tally did not answer,
+    nothing is sent except one small check (the company's name and GUID), at most once a minute, until Tally answers it.
+  - The company's GUID is held: a company of the same name with another GUID (restored, re-created) is neither read nor
+    posted to.
+  - Every voucher posted carries its FinCom id at the end of its narration ("TDSDesk:<id>"); before posting, Tally is
+    looked through for that id on the voucher's date first, then the party / bill / date / amount check of 2.1.4.
+  - A posting sent when Tally stopped answering shows "Checking whether it reached Tally" and is not sent again until
+    Tally answers and the id has been looked for: found -> In Tally; not found -> sent once more.
+  - Only one bridge reads or posts a company at a time (a lease in FinCom's cloud, once migration-32 is applied).
+  - Measure Tally (for FinCom support), in the tray and as a command: see docs/tally-measure-sheet.txt.
+
+Use ZZ TEST for every posting below, never GARG SHEKHAR & COMPANY.
+
+1. INSTALL OVER 2.1.3 (OR 2.1.4)
+   Do: TallyPrime open with ZZ TEST. Open the Link, then in PowerShell:
+       Get-FileHash $env:USERPROFILE\Downloads\FinComBridge-Setup-2.1.5.exe
+       Double-click the setup; "Windows protected your PC" > More info > Run anyway; "Just for me"; Next.
+   You should see: the Fingerprint above. "FinCom Bridge 2.1.5 is installed and running", "Main bridge: reading and
+       posting". You are not asked to pair again. Right-click the icon > Status shows version 2.1.5; the menu has
+       "Measure Tally (for FinCom support)".
+   If not: the page's title and reason; keep "Send install log to FinCom" ticked and click Finish.
+
+2. 30 IDLE MINUTES: NO REQUEST
+   Do: right after installing, note icon > Status "Requests sent to Tally since the bridge started: N". Leave Tally and
+       FinCom open, touch nothing for 30 minutes (opening a client in FinCom is fine).
+   You should see: the count of requests to Tally the same after 30 minutes. In Show log no "Tally 9000:" line and no
+       "Keeping ..." line in those minutes; opening a client logs "Light update ...: Tally is not read".
+   If not: the log of those minutes.
+
+3. UPDATE NOW READS THE LEDGER LIST AND THE DAY BOOK, NOTHING ELSE
+   Do: in FinCom open ZZ TEST and press Update now. Watch Show log.
+   You should see: first "Keeping ZZ TEST: ledger list MasterID 1-2000, N ledger(s) (x.xs); saved" (one line per 2,000
+       MasterIDs, the last one "...-end"), then "Keeping ZZ TEST: the ledger list read (N ledgers, G groups, R request(s)):
+       ... new, ... changed, ... renamed, ... deleted". Then "Keeping ZZ TEST: day book 20260401-20260430, N entries (x.xs),
+       M day(s) changed; saved", one line a month up to today, then "the day book from ... to ... read (N entries); M day(s) changed since the last read".
+       No "KeepBal", "opening balances", "balance" or "trial balance" line anywhere in the log. Press Update now again:
+       the same months, "0 day(s) changed".
+   If not: the log from "Update from Tally: asked for now".
+
+4. A POSTING DURING A READ GOES AT ONCE (TIMED IN SECONDS)
+   Do: press Update now on GARG SHEKHAR & COMPANY (a long read), and while its "day book ..." lines appear, post one
+       approved ZZ TEST bill from FinCom. Start a stopwatch (or note the clock to the second) the moment you press Post.
+       Stop it when FinCom shows the bill "In Tally (verified)".
+   Write down: the seconds from Post to "In Tally (verified)": ____ s. From Show log, the time of "Posting job ..." and
+       of "Posting job ... done" (to the second).
+   PASS if: the bill is "In Tally (verified)" within 10 seconds; the log says "a background read was stopped at once so
+       FinCom's request goes first", then the read goes on from the month it was on. In Show log no line between the
+       posting's start and "done" says "waited ...s for another FinCom request".
+   FAIL if: more than 10 seconds, or "busy with another FinCom request", or the read starts again from April.
+   If not: what FinCom showed, the seconds you timed, and the log of that minute.
+
+5. A POSTING WITH TALLY SHOWING A MESSAGE BOX
+   Do: in TallyPrime press Alt+F4 so the "Quit?" box shows; leave it. In FinCom post another approved ZZ TEST bill.
+   You should see: either "Could not check Tally, not posted. Try again." (the check was not answered; nothing sent), or,
+       if the bill had already been sent when Tally stopped answering, "Checking whether it reached Tally" on the Post page
+       (the entry's state "unknown"). The log: "Tally 9000 is busy (no answer in 25s); nothing more is sent to it until it
+       answers a small check" and then at most one "FinComCompany" check a minute.
+   Then: close the box with No. Within a minute or two: "Tally 9000 answered the small check"; the bill becomes
+       "In Tally (verified)" (it had arrived: "Created (Tally answered late)") or is sent once more and verified. In
+       TallyPrime's Day Book: the bill ONCE.
+   If not: what FinCom showed, the Day Book of that date, and the log of those minutes.
+
+6. THE SAME BILL AGAIN (THE FINCOM ID)
+   Do: after step 4, press Post again on the same bill in a second browser tab that still shows it as not posted.
+   You should see: "Already in Tally (voucher no. X, dd-mm-yyyy)"; the log: "duplicate check ...: NOT POSTED, its FinCom
+       id is in Tally already". In TallyPrime the voucher's narration ends with "TDSDesk:<id>". Still ONE voucher.
+   If not: a screenshot of both tabs, the Day Book of that date, and the log.
+
+7. MEASURE TALLY
+   Do: icon > Measure Tally (for FinCom support) with GARG SHEKHAR & COMPANY open; wait (a few minutes).
+   You should see: a report opens (measure-...txt in the bridge's folder) with lines a, b, c1, c2, d, e (and its fields),
+       f0 and the ledgers 696-699, each with ms, bytes and count; a ledger that does not answer in 25 s says HANGS, and
+       the bridge waits for the small check before the next one.
+   Then: follow docs/tally-measure-sheet.txt (parts A and B) and send the report and the filled tables.
+
+8. THE LEDGER LIST: A NEW, A RENAMED AND A DELETED LEDGER
+   Do: in TallyPrime (ZZ TEST) create a ledger "ZZ Ledger Test 1" under Sundry Creditors, with an opening of 100 Cr and,
+       if you like, a GSTIN. In FinCom press Update now on ZZ TEST.
+   You should see: the log "the ledger list read (...): 1 new, 0 changed, 0 renamed, 0 deleted" and "Cloud: ZZ TEST: the
+       ledger list sent (1 added, ...)". In FinCom, ZZ TEST's ledger chooser (a bill's ledger, or Look up) lists
+       "ZZ Ledger Test 1" under Sundry Creditors; its opening is 100 Cr.
+   Do: in TallyPrime rename it to "ZZ Ledger Test 2" (Alter the ledger, change the name). Press Update now again.
+   You should see: the log "Keeping ZZ TEST: ledger ZZ Ledger Test 1 is now ZZ Ledger Test 2 in Tally" and "... 1
+       renamed ...". In FinCom only "ZZ Ledger Test 2" is listed (not both), with the same group and opening.
+   Do: in TallyPrime delete "ZZ Ledger Test 2" (it has no entries, so Tally allows it). Press Update now again.
+   You should see: the log "ledger ZZ Ledger Test 2 is no longer in Tally; it is marked deleted in FinCom (never
+       removed)" and "... 1 deleted". On the cloud ZZ TEST's row for it is still there, with deleted_at set (FinCom's
+       pages show it as deleted, or leave it out of the chooser, once the app reads deleted_at). If the log says "not marked in FinCom yet (its cloud cannot mark
+       deletions until migration-32 is applied)", migration-32 is not on staging yet: note it, that is expected.
+   Also: a posting from FinCom that makes a new ledger is followed, a few seconds after it finishes, by "Ledger list of
+       ZZ TEST (after a posting with a new ledger)" and the new ledger is in the list without pressing Update now.
+   If not: the log from "Update from Tally: asked for now", and what FinCom showed.
+
+9. PAUSE BACKGROUND READING
+   Do: right-click the tray icon > Pause background reading. Right-click > Status.
+   You should see: Status says "Background reading paused: opening a client in FinCom, the ledger chooser's refresh, the
+       ledger list after a posting and the nightly catch-up do not read Tally. Postings and Update now (with the ledger
+       list) still work." While paused: open a client in FinCom, open a bill's ledger chooser: no "Keeping ..." line in
+       the log, the requests count in Status does not move. Post a ZZ TEST bill: it posts as usual. Press Update now: it
+       reads the ledger list and the day book as in step 3.
+   Then: right-click > Resume background reading (the item has that name while paused).
+   If not: Status (the text) and the log of those minutes.
+
+10. A FULL WORKING DAY (ACCEPTANCE)
+   Do: leave 2.1.5 running on NWS144 from the start to the end of a normal working day, with TallyPrime used as usual by
+       the office. During the day post at least three approved ZZ TEST bills from FinCom, at least one of them while
+       Update now is reading (as in step 4). At the end of the day: icon > Show log, and icon > Status.
+   PASS only if all four hold:
+       a) Tally stayed usable all day: no one in the office saw Tally freeze, "Not Responding", or a wait on saving that
+          they had to report; the log has no "Tally 9000 is busy (no answer in ...)" line caused by the bridge's own read.
+       b) Three postings, each "In Tally (verified)", each ONCE in TallyPrime's Day Book.
+       c) The posting during Update now confirmed within seconds (10 s at most, timed as in step 4).
+       d) The longest request of the day is 20 s or less: in Show log no "Tally 9000: ... took N.Ns" line with N above
+          20 (lines are written for every request of 3 s or more).
+   Write down: the start and end time of the day; the three postings' times; the seconds of the posting during Update
+       now; the longest "took" line of the day.
+   If not: which of a-d failed, the time, and the log of that hour. These go into docs/bridge-2.1.5-acceptance.md.
+
+11. CLEAN UP
+   Do: in TallyPrime delete the ZZ TEST vouchers made in steps 4-6 and 10 (or Remove from Tally in FinCom), and the test
+       ledger of step 8 if it is still there.
+
+IF SOMETHING FAILS, SEND ME
+   a) the step number and what you saw (a screenshot helps);
+   b) the install log (setup's last page with "Send install log to FinCom" ticked, or icon > Send install log);
+   c) icon > Show log, the part from the start;
+   d) icon > Status (the text).
+
+FALLBACK
+   2.1.3 is kept (not published) in assets-test/bridge-go-old. If 2.1.5 does not work: Settings > Apps > FinCom
+   Bridge (just for me) > Uninstall (keep the pairing ticked), then ask me for the 2.1.3 setup link.

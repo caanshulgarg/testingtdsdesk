@@ -11,6 +11,11 @@
 //   4. every count from postCounts (src/js/59): the tab badge, the header chip, the dashboard tile and the button;
 //   5. the postings of FinCom's cloud: one still failed is under "Needs your attention" (Retry, Dismiss); the rest is
 //      History, hidden behind "History (N)", a failed posting finished by a later one shown as one line.
+//   6. three tabs under the status line (plan piped-moseying-frost, item 1b): To post (Ready to post, the other entries
+//      ready), Posted (the cloud's postings that went through, newest first, not folded away) and Errors (Needs your
+//      attention, "Checking whether it reached Tally", the ones Tally refused). Each entry is in one tab only (postBucket),
+//      the counts are postCounts (postTabCounts), the tab with work opens by itself (Errors when any), and the tab chosen
+//      is kept for the client (S.postTabs).
 // Posting itself stays in the business logic (postAllToTally, postBillsToTally, …).
 import { useState } from "react";
 import { notAllowedRest } from "../parts/BankChecks.jsx";
@@ -114,18 +119,35 @@ function billItem(co, e, canPost) {
     acts: v.state === "checking" ? null : v.state === "notfound" ? <>{canPost && <button className="btn small primary" data-post-again="" onClick={() => PostCheck.repost(co, e)}>Post again</button>}{check}</> : check };
 }
 
-// 3. Needs your attention (only when it has rows)
+// a bill row of Errors: number, party, date, amount — why
+const BillWhy = ({ e, why }) => <span className="why"><b>{e.x.invoiceNo || "—"}</b>{" · " + e.x.vendorName + " · " + fmtDate(e.x.invoiceDate) + " · " + money(num(e.x.total)) + " — "}<span data-why="">{why}</span></span>;
+// 3. Needs your attention: the bills to look at, the ones sent when Tally stopped answering, the ones Tally refused, and
+// the failed postings of the cloud (a refused bill of such a posting is listed inside it)
 function Attention({ co, bills, canPost }) {
   const rows = bills.attention.map((e) => ({ e, ...billItem(co, e, canPost) }));
-  if (!rows.length && !bills.jobs.length) return null;
+  const unknown = bills.unknown || [], refused = bills.refused || [], why = bills.why || {};
+  const inJob = (j) => refused.filter((e) => why[e.id] && why[e.id].job.id === j.id);
+  const alone = typeof postRefusedAlone === "function" ? postRefusedAlone(bills) : refused;
+  const refusedRow = (e, nested) => <li key={e.id} data-attn-row="" data-bill-row={e.id} data-attn-kind="refused">
+    <BillWhy e={e} why={"Tally refused it" + (why[e.id] && why[e.id].job.created_at ? " (posting of " + tallyHm(why[e.id].job.created_at) + ")" : "") + ": " + ((why[e.id] && why[e.id].reason) || "Tally did not take it")} />
+    <span className="acts">
+      {!nested && canPost && <button className="btn small primary" data-post-again="" onClick={() => postAllToTally({ kind: "bill", id: e.id })}>Post again</button>}
+      <button className="btn small" data-back="" onClick={() => postBackToReview("bill", e.id)}>Back to review</button>
+    </span>
+  </li>;
+  if (!rows.length && !bills.jobs.length && !unknown.length && !refused.length) return <p className="note" data-post-noerrors="">Nothing needs your attention.</p>;
   return <section className="post-sec" data-post-attention="">
     <h3>Needs your attention</h3>
     <ul className="post-attn">
       {rows.map((r) => <li key={r.e.id} data-attn-row="" data-bill-row={r.e.id} data-attn-kind={r.kind} data-attn-state={r.state || ""}>
-        <span className="why"><b>{r.e.x.invoiceNo || "—"}</b>{" · " + r.e.x.vendorName + " · " + fmtDate(r.e.x.invoiceDate) + " · " + money(num(r.e.x.total)) + " — "}<span data-why="">{r.why}</span></span>
+        <BillWhy e={r.e} why={r.why} />
         {r.acts && <span className="acts">{r.acts}</span>}
       </li>)}
-      {bills.jobs.map((j) => { const left = CloudJobs.leftToSend(j), all = (CloudJobs.idsOf(j) || []).length;
+      {unknown.map((e) => <li key={e.id} data-attn-row="" data-bill-row={e.id} data-attn-kind="unknown">
+        <BillWhy e={e} why={"Sent when Tally stopped answering. " + ((why[e.id] && why[e.id].reason) || "Checking whether it reached Tally") + (/…$/.test((why[e.id] && why[e.id].reason) || "") ? "" : "…") + " It is not sent again until Tally answers."} />
+      </li>)}
+      {alone.map((e) => refusedRow(e, false))}
+      {bills.jobs.map((j) => { const left = CloudJobs.leftToSend(j), all = (CloudJobs.idsOf(j) || []).length, mine = inJob(j);
         return <li key={j.id} data-attn-row="" data-job={j.id} data-attn-kind="job">
           <span className="why"><b>{"Posting of " + fmtDateTime(j.created_at)}</b>{" · " + (j.status === "cancelled" ? "cancelled" : "failed") + ": "}<span data-why="">{plainMsg(j.message) || "Tally did not take it"}</span>
             {left ? <span className="nr">{" · " + left + " of " + all + " still to send"}</span> : null}</span>
@@ -133,28 +155,38 @@ function Attention({ co, bills, canPost }) {
             <button className="btn small primary" data-retry="" onClick={() => CloudJobs.retry(j)}>Retry</button>
             {CloudJobs.dismissOk && <button className="btn small" data-dismiss="" onClick={() => CloudJobs.dismiss(j)}>Dismiss</button>}
           </span>
+          {mine.length > 0 && <ul className="post-attn post-attn-in">{mine.map((e) => refusedRow(e, true))}</ul>}
         </li>; })}
     </ul>
   </section>;
 }
 
-// 5. History: the postings of FinCom's cloud that need nothing, hidden by default
+// 5. Posted: the postings of FinCom's cloud that need nothing, newest first (a failed posting finished by a later one is
+// one line with it); each names the entries it put in Tally (data-entries)
 const NTH = ["", "second try", "third try", "fourth try"];
 function History({ co }) {
-  const h = CloudJobs.history(co.id);
-  if (!h.length) return null;
-  return <details className="post-sec post-hist" data-post-history="">
-    <summary data-history-n={h.length}>{"History (" + h.length + ")"}</summary>
+  const h = typeof postPostedRows === "function" ? postPostedRows(co.id) : CloudJobs.history(co.id);
+  if (!h.length) return <p className="note" data-post-noposted="">{"Nothing posted through FinCom’s cloud yet for this client."}</p>;
+  return <section className="post-sec post-hist" data-post-history="" data-history-n={h.length}>
     <ul>{h.map((x) => { const j = x.job, tries = x.tries.length, at = tallyHm(x.at);
       const text = x.state === "posted" ? "Posted " + at + (tries ? " (" + (NTH[tries] || "after " + (tries + 1) + " tries") + ")" : "")
         : x.state === "partly" ? "Posted " + x.ok + " of " + x.n + " at " + at
         : x.state === "nothing" ? (j.status === "cancelled" ? "Cancelled" : "Failed") + " " + at + "; every entry was put in Tally another way"
         : (j.status === "cancelled" ? "Cancelled " : "Failed ") + at + (j.dismissed_at ? ", dismissed by " + memberName(j.dismissed_by) + " " + tallyHm(j.dismissed_at) : "");
-      return <li key={j.id} data-job={j.id} data-hist-state={x.state}>
+      return <li key={j.id} data-job={j.id} data-hist-state={x.state} data-entries={[...CloudJobs.okIn(j)].join(" ")}>
         <span data-hist-text="">{text}</span>{" · " + plural(Math.max(x.ok, x.state === "posted" ? x.n : 0) || x.n, "entry", "entries") + " · " + j.company}
-        {j.dismissed_at && !j.dismiss_auto && x.state !== "posted" && <>{" "}<button className="linkbtn" data-undismiss="" onClick={() => CloudJobs.undismiss(j)}>Show under Needs your attention</button></>}
+        {j.dismissed_at && !j.dismiss_auto && x.state !== "posted" && <>{" "}<button className="linkbtn" data-undismiss="" onClick={() => CloudJobs.undismiss(j)}>Show under Errors</button></>}
       </li>; })}</ul>
-  </details>;
+  </section>;
+}
+
+// the three tabs: [id, label, count]
+const TABS = [["topost", "To post"], ["posted", "Posted"], ["errors", "Errors"]];
+function PostTabs({ now, counts, pick }) {
+  return <div className="post-tabs" role="tablist" data-post-tabs="">
+    {TABS.map(([id, label]) => <button key={id} role="tab" aria-selected={now === id} data-post-tab={id} className={"post-tab" + (now === id ? " on" : "") + (id === "errors" && counts[id] ? " bad" : "")}
+      onClick={() => pick(id)}>{label}{" "}<span className="sbar-n" data-tab-n="">{counts[id] || 0}</span></button>)}
+  </div>;
 }
 
 function ImportSteps({ co, ledgers }) {
@@ -177,7 +209,7 @@ export function PostStep() {
   CloudJobs.load();
   // with Tally's ledger list at hand, names are put in Tally's spelling first (the ones Tally lacks need attention)
   if (postLedgerList(co.id)) canonicalizeBills(v.filter((e) => e.status === "approved" && !e.exportedAt));
-  const bills = postBills(co.id) || { ready: [], attention: [], sending: [], jobs: [] };
+  const bills = postBills(co.id) || { ready: [], attention: [], sending: [], unknown: [], refused: [], jobs: [], why: {} };
   const canPost = canPostTally(co), bc = S.billCheck || {};
   // a bill sent and not confirmed is read afresh before it is called missing (PostCheck, src/js/59); the cloud copy's
   // check (TallyProof) and the company found by itself as before
@@ -190,6 +222,11 @@ export function PostStep() {
   const ledgers = [...new Set(waiting.flatMap((e) => (e.snapshot ? e.snapshot.lines : []).map((l) => l.ledger)))].filter(Boolean);
   const others = postRows(co).filter((r) => r.kind !== "bill"), nb = others.filter((r) => r.kind === "bank").length, ns = others.length - nb;
   const status = postStatusFor(co);
+  // the tab: the one chosen for this client, else the one with work (Errors when there are any)
+  const counts = typeof postTabCounts === "function" ? postTabCounts(co.id) : { topost: waiting.length, posted: 0, errors: 0 };
+  S.postTabs = S.postTabs || {};
+  const tab = S.postTabs[co.id] || (counts.errors ? "errors" : "topost");
+  const pick = (id) => { S.postTabs[co.id] = id; render(); };
   const close = (fn) => (ev) => { const d = ev.currentTarget.closest("details"); if (d) d.open = false; fn(); };
   const more = <details className="bk-menu" data-more="post"><summary className="btn">More</summary><div className="bk-menu-list">
     {status.more && <div className="note" data-post-bridge="" style={{ padding: "6px 10px" }}>{status.more}</div>}
@@ -207,13 +244,16 @@ export function PostStep() {
     <section className="poststep" data-post-page="">
       <StatusLine co={co} />
       <RunLine co={co} />
-      <Ready co={co} bills={bills} canPost={canPost} more={more} />
-      {(nb > 0 || ns > 0) && <p className="note" data-post-others="" style={{ margin: "8px 0 0" }}>{"Also ready, posted from their own pages: "}
-        {nb > 0 && <button className="linkbtn" onClick={() => goStep("post", "bank")}>{plural(nb, "bank line", "bank lines")}</button>}{nb > 0 && ns > 0 && " · "}
-        {ns > 0 && <button className="linkbtn" onClick={() => goDocType("sales")}>{plural(ns, "sales invoice", "sales invoices")}</button>}</p>}
-      {steps && <ImportSteps co={co} ledgers={ledgers} />}
-      <Attention co={co} bills={bills} canPost={canPost} />
-      <History co={co} />
+      <PostTabs now={tab} counts={counts} pick={pick} />
+      {tab === "topost" && <div data-post-panel="topost" role="tabpanel">
+        <Ready co={co} bills={bills} canPost={canPost} more={more} />
+        {(nb > 0 || ns > 0) && <p className="note" data-post-others="" style={{ margin: "8px 0 0" }}>{"Also ready, posted from their own pages: "}
+          {nb > 0 && <button className="linkbtn" onClick={() => goStep("post", "bank")}>{plural(nb, "bank line", "bank lines")}</button>}{nb > 0 && ns > 0 && " · "}
+          {ns > 0 && <button className="linkbtn" onClick={() => goDocType("sales")}>{plural(ns, "sales invoice", "sales invoices")}</button>}</p>}
+        {steps && <ImportSteps co={co} ledgers={ledgers} />}
+      </div>}
+      {tab === "posted" && <div data-post-panel="posted" role="tabpanel"><History co={co} /></div>}
+      {tab === "errors" && <div data-post-panel="errors" role="tabpanel"><Attention co={co} bills={bills} canPost={canPost} /></div>}
     </section>
   );
 }
