@@ -9,6 +9,7 @@ on:
   push:
     paths:
       - "bridge-go/**"
+      - "assets-test/bridge-go/**"
       - ".github/workflows/bridge-windows.yml"
   workflow_dispatch:
 
