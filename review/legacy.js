@@ -54,8 +54,8 @@ const DEFAULT_FIRM = {firmName:"", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
 const DB_LIMIT = 5000;
-const APP_VERSION = "TEST · 30 Sep 2026 · build 199 (posting queue: post from any computer, the Tally computer posts when Tally is free; posted entries go to the cloud without reading Tally again; bridge 1.14.6)";
-// the Tally Bridge setup file's fingerprint, put in by build.py: a new setup file is never served from an old cache
+const APP_VERSION = "TEST · 30 Sep 2026 · build 199 (posting queue: post from any computer, the Tally computer posts when Tally is free; posted entries go to the cloud without reading Tally again)";
+// the bridge setup file's fingerprint, put in by build.py: a new setup file is never served from an old cache
 const BRIDGE_SETUP_SHA = "80b1c111b2273048";
 // the bridge Setup handed out: assets/bridge-setup.txt on the live site; the testing builds (build.py to_test) hand out
 // assets/bridge-setup-test.txt, so a new bridge is tried on staging without changing what live users download
@@ -12926,7 +12926,7 @@ const MultiUp = {
 
 };
 /* ================================================================== */
-/* Tally Bridge: live connection to TallyPrime on this computer        */
+/* FinCom Bridge: live connection to TallyPrime on this computer       */
 /* ================================================================== */
 const Bridge = {
   st: {state: "off", sessions: [], open: [], at: 0, error: ""},
@@ -12951,7 +12951,7 @@ const Bridge = {
     try {
       r = await fetch(c.url.replace(/\/+$/, "") + path, {method: body ? "POST" : "GET", headers: Object.assign({"X-Bridge-Key": c.key}, body ? {"Content-Type": "application/json"} : {}), body: body ? JSON.stringify(body) : undefined, signal: ctl.signal, cache: "no-store"});
     } catch (e){
-      throw {code: "bridge_down", message: e && e.name === "AbortError" ? "The Tally Bridge did not answer in time." : "The Tally Bridge is not running on this computer (" + c.url + ")."};
+      throw {code: "bridge_down", message: e && e.name === "AbortError" ? "FinCom Bridge did not answer in time. Check the FinCom Bridge icon near the clock (right-click \u2192 Test connection)." : "FinCom Bridge is not running on this computer (" + c.url + "). Check the FinCom Bridge icon near the clock (right-click \u2192 Test connection)."};
     } finally { clearTimeout(timer); }
     let j = null;
     try { j = await r.json(); } catch (e){ j = null; }
@@ -13107,13 +13107,13 @@ const Bridge = {
       return;
     }
   },
-  // ask the bridge on this computer for its key, with the 6-digit code shown in the bridge window
+  // ask the bridge on this computer for its key, with the 6-digit code FinCom Bridge shows (tray icon → Connect FinCom on this computer…)
   // (bridge 1.11: only for a few minutes after it starts, once, and never for another web page)
   async pair(code){
     const c = this.cfg();
     const base = c.url.replace(/\/+$/, "");
     const r = await fetch(base + "/pair?code=" + encodeURIComponent(String(code || "").trim()), {cache: "no-store"}).catch(() => null);
-    if (!r) throw {code: "bridge_down", message: "No bridge is running on this computer yet. Install it with the button below."};
+    if (!r) throw {code: "bridge_down", message: "FinCom Bridge is not running on this computer yet. Install FinCom Bridge from the Tally page."};
     const j = await r.json().catch(() => null);
     if (!j || !j.ok) throw {code: "pair", message: (j && j.error) || "The bridge would not hand over its key."};
     this.setCfg({key: j.key, url: base});
@@ -13190,7 +13190,7 @@ async function bridgeTick(first){
     if (first && Bridge.up() && !Bridge.posting) bridgeLeftover();
     if (first && Bridge.up() && Bridge.st.version && bridgeVer(Bridge.st.version) < bridgeVer("1.12.6") && !lsGet("tdsdesk-test:bridgenudge1126")){
       lsSet("tdsdesk-test:bridgenudge1126", "1");
-      toast("A new Tally Bridge (1.12.6) is ready: it reads bill references for the vendor reconciliation, deletes entries on more Tally setups, and posts fast, and it keeps posting even if this page or the connection drops. Download it under Settings \u2192 Tally Bridge and run the setup on the Tally computer.");
+      toast("A newer FinCom Bridge is ready: it reads bill references for the vendor reconciliation, deletes entries on more Tally setups, and posts fast, and it keeps posting even if this page or the connection drops. Install FinCom Bridge from the Tally page and run it on the Tally computer.");
     }
     const key = Bridge.st.open.map(o => o.name).sort().join("|");
     const changed = key !== Bridge.lastOpenKey;
@@ -13235,26 +13235,26 @@ document.addEventListener("visibilitychange", () => { if (document.visibilitySta
 function bridgeChip(co){
   if (!Bridge.on()) return "";
   const st = Bridge.st;
-  if (st.state === "down") return '<button class="tchip off" data-act="openSettings" title="' + esc(st.error) + '">Tally Bridge offline \u2014 check</button>';
-  if (st.state === "key") return '<span class="tchip bad" title="' + esc(st.error) + '">Tally Bridge: wrong key</span>';
-  if (st.state !== "ok") return '<span class="tchip off">Tally Bridge\u2026</span>';
+  if (st.state === "down") return '<button class="tchip off" data-act="openSettings" title="' + esc(st.error) + '">FinCom Bridge offline \u2014 check</button>';
+  if (st.state === "key") return '<span class="tchip bad" title="' + esc(st.error) + '">FinCom Bridge: wrong key</span>';
+  if (st.state !== "ok") return '<span class="tchip off">FinCom Bridge\u2026</span>';
   const run = (st.jobs || []).find(j => ["queued", "waiting", "running"].includes(j.status));
   if (run) return '<span class="tchip ok" title="' + esc((run.company || "") + ": " + (run.message || "")) + '">\u25CF Posting to Tally: ' + num(run.done) + " of " + num(run.total) + "</span>";
   // build 194: Tally stopped answering (a message box open in Tally, or a long report): said plainly, with since when
   // go-bridge: a slow Tally is busy, never "disconnected" (it is open; the bridge asks again by itself)
   const busyAt = (st.stuck && st.stuck.since) || (st.tallyState === "busy" && st.busySince) || "";
   if (busyAt || st.tallyState === "busy") return '<span class="tchip warn" title="Tally is open but answering slowly' + (busyAt ? " since " + esc(String(busyAt).slice(11, 16)) : "") + '. A message box (a pop-up) in Tally, or a report still working, holds it up: close it, and FinCom carries on by itself. Nothing is lost meanwhile.">\u25D0 Tally busy' + (busyAt ? " since " + esc(String(busyAt).slice(11, 16)) : "") + "</span>";
-  if (st.shaky) return '<span class="tchip warn" title="' + esc(st.error || "") + '">Tally Bridge: reconnecting\u2026</span>';
+  if (st.shaky) return '<span class="tchip warn" title="' + esc(st.error || "") + '">FinCom Bridge: reconnecting\u2026</span>';
   const why = Bridge.diag && (Bridge.diag.findings || []).find(f => f.level !== "ok");
   if (st.pinMissing) return '<button class="tchip warn" data-act="openSettings" title="' + esc(why ? why.text : "The Tally chosen in Settings is not running") + '">Your Tally is not connected \u2014 check</button>';
   if (!st.tallyUp) return '<button class="tchip warn" data-act="openSettings" title="' + esc(why ? why.text : "No TallyPrime is answering in your Windows session") + '">Tally not connected \u2014 check</button>';
   if (co){
     const o = Bridge.openFor(co);
     if (o) return '<span class="tchip ok" title="' + esc(o.name) + " is open in Tally (port " + o.port + ')">\u25CF Open in Tally</span>';
-    if ((st.clash || []).some(n => norm(n) === norm(Bridge.tallyName(co)))) return '<span class="tchip bad" title="This company is open in more than one Tally. Choose yours in Settings \u2192 Tally Bridge.">Choose your Tally</span>';
+    if ((st.clash || []).some(n => norm(n) === norm(Bridge.tallyName(co)))) return '<span class="tchip bad" title="This company is open in more than one Tally. Choose yours in Settings \u2192 FinCom Bridge.">Choose your Tally</span>';
     return '<span class="tchip warn" title="Open ' + esc(Bridge.tallyName(co)) + ' in TallyPrime to post and to load its ledgers">\u25CB Not open in Tally</span>';
   }
-  if ((st.clash || []).length) return '<span class="tchip bad" title="' + esc(st.clash.join(", ")) + ' is open in more than one Tally. Choose yours in Settings \u2192 Tally Bridge.">Choose your Tally</span>';
+  if ((st.clash || []).length) return '<span class="tchip bad" title="' + esc(st.clash.join(", ")) + ' is open in more than one Tally. Choose yours in Settings \u2192 FinCom Bridge.">Choose your Tally</span>';
   const n = st.open.length;
   return '<span class="tchip ok" title="' + esc(st.open.map(o => o.name).join(", ")) + '">\u25CF Tally: ' + (n === 1 ? esc(st.open[0].name) : n + " companies open") + "</span>";
 }
@@ -14120,8 +14120,8 @@ async function setAutoNumbering(){
       logPosting && logPosting({what: "setting", id: "vchauto", action: "automatic numbering", co: co.id, ref: done.join(", "), party: tname, amount: 0, tally: {company: tname}});
     }
     if (!done.length && bad.some(x => /Only VOUCHER, LEDGER or GROUP/.test(x.message || ""))){
-      await askConfirm({title: "The Tally Bridge on the Tally computer needs updating", ok: "Got it", body:
-        '<p>This needs bridge 1.8.1. Download it from Client setup \u2192 Company and Tally \u2192 Tally Bridge, and install it on the computer where Tally runs.</p>' +
+      await askConfirm({title: "FinCom Bridge on the Tally computer needs updating", ok: "Got it", body:
+        '<p>This needs FinCom Bridge 2.1. Install FinCom Bridge from the Tally page and run it on the computer where Tally runs.</p>' +
         '<p><b>Or set it in Tally yourself</b>, for each voucher type (Purchase, Journal, Payment, Receipt, Contra, Sales, Debit Note, Credit Note):</p>' +
         '<ol><li>Gateway of Tally \u2192 <b>Alter</b> \u2192 <b>Voucher Type</b>, and choose the type.</li><li>Set <b>Method of voucher numbering</b> to <b>Automatic</b>.</li><li>Press Ctrl + A to save.</li></ol>' +
         '<p class="note">Then come back here and press \u201cUse Tally\u2019s automatic numbers\u201d.</p>'});
@@ -14145,14 +14145,14 @@ function bridgePin(port){
 async function saveBridgeSetup(){
   let t = null;
   try { t = await blockText(BRIDGE_SETUP_ID); } catch (e){ t = null; }
-  if (!t || !t.trim()){ toast("This copy of the app does not carry the setup file. Use the downloaded app (TDS-Desk-standalone.html)."); return; }
+  if (!t || !t.trim()){ toast("This copy of the app does not carry the setup file. Install FinCom Bridge from the Tally page."); return; }
   const raw = atob(t.trim());
   const bytes = new Uint8Array(raw.length);
   for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
   saveFile("Setup-FinCom-Bridge.bat", new Blob([bytes], {type: "application/octet-stream"}));
   // its fingerprint, to compare with the one published in the FinCom repository (assets/bridge-setup.sha256)
   try { const h = await crypto.subtle.digest("SHA-256", bytes); S.bridgeSha = Array.from(new Uint8Array(h)).map(x => x.toString(16).padStart(2, "0")).join(""); } catch (e){ S.bridgeSha = ""; }
-  toast("Saved. On the computer where Tally runs, double-click Setup-FinCom-Bridge.bat and press I.");
+  toast("Saved. Run it on the computer where Tally runs; FinCom Bridge then shows its icon near the clock.");
   render();
 }
 // A day book exported from Tally and chosen in FinCom also becomes the bridge's copy of the company (1.13.7): sent in
@@ -14192,7 +14192,7 @@ const BridgeSeed = {
     return out;
   },
   async send(file, onStep, range, name0){
-    if (!Bridge.on()) return {skipped: "the Tally Bridge is not connected"};
+    if (!Bridge.on()) return {skipped: "FinCom Bridge is not connected"};
     const name = name0 || this.company();
     if (!name) return {skipped: "no Tally company name"};
     const pieces = this.pieces(await file.text(), range || {});
@@ -14209,7 +14209,7 @@ const BridgeSeed = {
   },
   // opening balances from a trial balance file, for the bridge's copy
   async opening(asOn, led){
-    if (!Bridge.on()) return {skipped: "the Tally Bridge is not connected"};
+    if (!Bridge.on()) return {skipped: "FinCom Bridge is not connected"};
     return this.post("/seedbal?company=" + encodeURIComponent(this.company()), JSON.stringify({openAsOn: asOn, ledgers: Object.entries(led).map(([name, x]) => ({name, parent: x.parent || "", open: String(x.open)}))}), "application/json");
   }
 };
@@ -15459,9 +15459,9 @@ function canonicalizeBills(list){
 async function ensureTallyCompany(co){
   // build 199: Tally on another computer, the client's books in the cloud: posted through the queue there
   if (!bridgeLive(co) && typeof TCloud === "object" && TCloud.on()){ await TCloud.status(co.id); if (tallyVia(co) === "cloud") return tallyCoName(co); }
-  if (!Bridge.on()){ toast("Connect the Tally Bridge first: Settings \u2192 Tally Bridge."); return null; }
+  if (!Bridge.on()){ toast("Connect FinCom Bridge first: Settings \u2192 FinCom Bridge."); return null; }
   if (!Bridge.up() || !Bridge.st.tallyUp) await Bridge.refresh();
-  if (!Bridge.up() || !Bridge.st.tallyUp){ toast("Tally is not connected. See Settings \u2192 Tally Bridge \u2192 Check my Tally."); return null; }
+  if (!Bridge.up() || !Bridge.st.tallyUp){ toast("Tally is not connected. See Settings \u2192 FinCom Bridge \u2192 Check my Tally."); return null; }
   let o = Bridge.openFor(co);
   if (o) return o.name;
   const open = Bridge.st.open;
@@ -16711,14 +16711,14 @@ function doAct(act, t){
     }
     case "bridgeTest": { const k = document.querySelector('[data-bridge="key"]'), u = document.querySelector('[data-bridge="url"]');
       Bridge.setCfg({key: k ? k.value.trim() : Bridge.cfg().key, url: u ? u.value.trim() || "http://127.0.0.1:9100" : Bridge.cfg().url});
-      Bridge.lastOpenKey = null; Bridge.refresh().then(() => { toast(Bridge.up() ? "Connected to the Tally Bridge." : Bridge.st.error); startBridgePolling(); render(); }); break; }
+      Bridge.lastOpenKey = null; Bridge.refresh().then(() => { toast(Bridge.up() ? "Connected to FinCom Bridge." : Bridge.st.error); startBridgePolling(); render(); }); break; }
     case "bridgeSetupFile": saveBridgeSetup(); break;
     case "adminCreditGo": break;
     case "bridgeConnect": {
-      askConfirm({title: "Connect to the Tally Bridge", ok: "Connect",
-        body: '<p class="note">Type the 6-digit code shown in the bridge window on this computer (the window titled FinCom - Tally Bridge). It works once, for 15 minutes after the bridge starts.</p><input type="text" id="bridgeCode" inputmode="numeric" maxlength="7" autocomplete="off" placeholder="6-digit code" style="width:160px;font-size:18px;letter-spacing:3px">',
+      askConfirm({title: "Connect to FinCom Bridge", ok: "Connect",
+        body: '<p class="note">Type the 6-digit code FinCom Bridge shows on this computer: right-click the FinCom icon near the clock \u2192 \u201cConnect FinCom on this computer\u2026\u201d. The code works once, for 15 minutes.</p><input type="text" id="bridgeCode" inputmode="numeric" maxlength="7" autocomplete="off" placeholder="6-digit code" style="width:160px;font-size:18px;letter-spacing:3px">',
         read: () => String((document.getElementById("bridgeCode") || {}).value || "").replace(/\D/g, ""),
-        validate: v => /^\d{6}$/.test(v) ? "" : "Type the 6 digits shown in the bridge window."}).then(a => {
+        validate: v => /^\d{6}$/.test(v) ? "" : "Type the 6 digits FinCom Bridge shows."}).then(a => {
       if (!a) return;
       toast("Connecting to the bridge on this computer\u2026");
       Bridge.pair(a.data).then(j => {
@@ -16740,7 +16740,7 @@ function doAct(act, t){
       break;
     case "setupModeBridge": case "setupModeFiles":
       Bridge.call("/keepmode" + (Bridge.pinQ() ? "?" + Bridge.pinQ().slice(1) : ""), {company: BridgeSeed.company(), mode: act === "setupModeBridge" ? "bridge" : "files"}, 20000)
-        .then(j => { (S.setupKeep = S.setupKeep || {})[S.coId] = {at: Date.now(), st: j}; toast(act === "setupModeBridge" ? "The bridge will copy the year from Tally in the evening, or when nobody is at the computer." : "The bridge waits for the day book files."); render(); }, e => toast("The bridge could not do it: " + ((e && e.message) || e) + (/Unknown|No such/i.test(String(e && e.message)) ? " (it needs Tally Bridge 1.13.9)" : "")));
+        .then(j => { (S.setupKeep = S.setupKeep || {})[S.coId] = {at: Date.now(), st: j}; toast(act === "setupModeBridge" ? "The bridge will copy the year from Tally in the evening, or when nobody is at the computer." : "The bridge waits for the day book files."); render(); }, e => toast("The bridge could not do it: " + ((e && e.message) || e) + (/Unknown|No such/i.test(String(e && e.message)) ? " (it needs FinCom Bridge 2.1: install it from the Tally page)" : "")));
       break;
     case "tbCheckPick": { const i = document.getElementById("tbCheckIn"); if (i){ i.value = ""; i.click(); } break; }
     case "multiPick": { const i = document.getElementById("multiBooksIn"); if (i){ i.value = ""; i.click(); } break; }
@@ -16762,7 +16762,7 @@ function doAct(act, t){
       const q = "?company=" + encodeURIComponent(Bridge.openFor(co).name) + Bridge.pinQ();
       Promise.all([Bridge.call("/synced" + q, null, 30000), Bridge.call("/schedule", null, 30000).catch(() => null)]).then(([c, sc]) => {
         S.tallyCopy = Object.assign({}, c, {schedule: sc, time: (S.tallyCopy || {}).time}); render();
-      }, e => { S.tallyCopy = {error: /Unknown address/.test(String(e && e.message)) ? "This needs Tally Bridge 1.10." : String(e && e.message || e)}; render(); });
+      }, e => { S.tallyCopy = {error: /Unknown address/.test(String(e && e.message)) ? "This needs FinCom Bridge 2.1. Install FinCom Bridge from the Tally page." : String(e && e.message || e)}; render(); });
       break;
     }
     case "tallyCopyUse": {
@@ -16877,13 +16877,13 @@ function doAct(act, t){
     }
     case "ledRead": {
       const co = CO(), b = S.books;
-      if (!bridgeLive(co)){ toast("Connect the Tally Bridge and open this company in Tally, or bring in the ledger masters XML under \u201cFrom Tally\u201d."); break; }
+      if (!bridgeLive(co)){ toast("Connect FinCom Bridge and open this company in Tally, or bring in the ledger masters XML under \u201cFrom Tally\u201d."); break; }
       b.busy = "Reading the ledgers from Tally\u2026"; render();
       Bridge.call("/ledgers?company=" + encodeURIComponent(Bridge.openFor(co).name) + Bridge.pinQ(), null, 180000).then(async j => {
         const info = {}, groups = {};
         [].concat(j.ledgers || []).forEach(l => { if (!l || !l.name) return;
           info[l.name] = {group: l.group || "", taxType: String(l.taxType || "").replace(/[^A-Za-z ]/g, "").trim(), dutyHead: l.dutyHead || "", tdsNature: l.tdsNature || "", rate: num(l.rate) || undefined, gstin: l.gstin || "", pan: l.pan || ""};
-          // contact details, from Tally Bridge 1.12.9: for letters to the party
+          // contact details, from bridge 1.12.9: for letters to the party
           if (l.email) info[l.name].email = String(l.email).trim(); if (l.phone) info[l.name].phone = String(l.phone).trim(); if (l.mobile) info[l.name].mobile = String(l.mobile).trim();
           if (l.address) info[l.name].addr = [].concat(l.address).filter(Boolean).join("\n");
           if (l.gstin) (b.gstins = b.gstins || {})[l.name] = String(l.gstin).toUpperCase();
@@ -16980,7 +16980,7 @@ function doAct(act, t){
         S.fvuResult = Object.assign({at: new Date().toISOString(), q, fy, form: r.form}, res);
         toast(res.ok ? "The FVU accepted it. The .fvu file is on the Tally computer." : "The FVU found problems. They are listed below.");
         render();
-      }, e => { const msg = (e && e.message) || "the bridge did not answer"; S.fvuResult = {at: new Date().toISOString(), ok: false, errors: /Unknown address/.test(msg) ? "This needs Tally Bridge 1.10. Download it under Settings \u2192 Tally Bridge and run the setup on the Tally computer." : msg}; toast("Could not run the FVU: " + msg); render(); });
+      }, e => { const msg = (e && e.message) || "the bridge did not answer"; S.fvuResult = {at: new Date().toISOString(), ok: false, errors: /Unknown address/.test(msg) ? "This needs FinCom Bridge 2.1. Install FinCom Bridge from the Tally page and run it on the Tally computer." : msg}; toast("Could not run the FVU: " + msg); render(); });
       break;
     }
     case "tdsExcel": TDS.toExcel(S.tdsFy || "", S.tdsQ || "", S.tdsForm).then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break;
@@ -19197,9 +19197,9 @@ const GUIDE = {
       steps: ["Bring in the invoices or the marketplace report.", "Check customers, rates and places of supply.", "Post to Tally."]},
     "inbox": {area: "Documents", t: "Inbox", what: "Each client has an address and a drop link; documents sent there wait in the Inbox until you sort them.",
       steps: ["Share the client's drop link or address.", "Open Inbox, check each document's client and kind, and send it on to Purchase, Bank or Sales."]},
-    "tally": {area: "Tally", t: "Connecting Tally", what: "FinCom talks to Tally on this computer through Tally's own port (9000 by default).",
-      steps: ["In Tally: F1 → Settings → Connectivity → TallyPrime acts as: Both, port 9000.", "Open the company in Tally.", "Click the Tally chip at the top of FinCom and check it says connected.", "Post a test entry to a ZZ TEST company first."],
-      watch: ["Tally must be open with the right company when posting.", "Everything sent to Tally is listed under Tally: everything sent."]},
+    "tally": {area: "Tally", t: "Connecting Tally", what: "FinCom talks to Tally through FinCom Bridge, a small Windows program on the computer with TallyPrime. It uses Tally's own port (9000 by default).",
+      steps: ["On the computer with TallyPrime, open FinCom's Tally page and press Download FinCom Bridge.", "Run the downloaded FinComBridge-Setup file. If Windows says “Windows protected your PC”, press More info → Run anyway. It installs just for you, without an administrator; it replaces any older bridge, keeps the pairing, and becomes the main bridge.", "The FinCom icon near the clock shows the bridge's status. Right-click it for Open FinCom, Test connection and Show log.", "In Tally: F1 → Settings → Connectivity → TallyPrime acts as: Both, port 9000.", "Open the company in Tally.", "Click the Tally chip at the top of FinCom and check it says connected.", "Post a test entry to a ZZ TEST company first."],
+      watch: ["Tally must be open with the right company when posting.", "If FinCom says the bridge is not answering, check the FinCom Bridge icon near the clock (right-click → Test connection).", "Everything sent to Tally is listed under Tally: everything sent."]},
     "gstapi": {area: "GST", t: "Fetching from the GST portal (GST API)", what: "With the firm account, 2B can be fetched straight from the GST portal after an OTP sent to the taxpayer.",
       steps: ["On gst.gov.in the taxpayer allows API access: My Profile → Manage API Access.", "Client setup → GST: type the GST portal username for the GSTIN.", "TDS & GST → GST → 2B: Send OTP, type the OTP, Connect, then Fetch 2B."],
       watch: ["The portal session lasts a few hours and is never saved.", "Until the API is available, bring in the 2B JSON downloaded from the portal; the reconciliation is the same."]},
@@ -19229,7 +19229,7 @@ const GUIDE = {
       from: "The vouchers read from Tally, from the start of the year to the last date in the books.", watch: ["Findings are observations to confirm against documents, not conclusions."]},
     "lookup": {area: "Look up", t: "Look up", what: "Any ledger, group, trial balance, month-by-month figure, a party’s open bills, or entries, for any dates.",
       steps: ["Press / anywhere in a client, or open Look up on the left.", "Ask in words: “HDFC bank for August”, “Raj Fabrics open bills”, “trial balance as on 31/03/2026”; or choose the kind and the period and press Show.", "Click a name in the result to go further; Print or PDF, or Excel."],
-      from: "Totals come from FinCom’s copy of the books. One ledger can be read live from Tally when the Tally Bridge is on (“From: Tally, live”).",
+      from: "Totals come from FinCom’s copy of the books. One ledger can be read live from Tally when FinCom Bridge is on (“From: Tally, live”).",
       watch: ["Without the books or the bridge, read the books from Tally first."]},
     "letters": {area: "Letters", t: "Confirmations and reminders", what: "Balance confirmation letters to customers, suppliers and loan parties, and reminders of dues, from the client’s books.",
       steps: ["Balance confirmations: choose the date, who to write to and the smallest balance; tick the parties.", "Print or save the letters as PDF, or open each in your own email or WhatsApp.", "Record each reply and the party’s figure; differences are listed.", "Dues reminders: choose the date, the credit allowed and the tone (friendly, firm, final)."],
@@ -19977,7 +19977,7 @@ const LK = {
     const ck = S.coId + "|led|" + led + "|" + from + "|" + to, hit = this.cached(ck, force); if (hit) return hit;
     const co = CO(), o = Bridge.openFor(co);
     if (!o) throw new Error("Open " + (co.tallyName || co.name) + " in Tally first.");
-    if (bridgeVer(Bridge.st.version) < bridgeVer("1.12.3")) throw new Error("This needs Tally Bridge 1.12.3 or later. Download the new setup from Settings, Tally Bridge.");
+    if (bridgeVer(Bridge.st.version) < bridgeVer("1.12.3")) throw new Error("This needs FinCom Bridge 2.1. Install FinCom Bridge from the Tally page.");
     const q = "?company=" + encodeURIComponent(o.name) + "&from=" + from + "&to=" + to + "&ledger=" + encodeURIComponent(led) + Bridge.pinQ();
     const bal = await Bridge.call("/ledgerbalance" + q, null, 180000);
     const lv = await Bridge.call(ledgerLinesUrl(o.name, led, FC.iso(from), FC.iso(to)), null, 600000);
@@ -20074,7 +20074,7 @@ const LK = {
   async tbTally(asOn, force){
     const t = await this.tbRaw(asOn, force), sub = l => (FC.tn() ? FC.tn().under[l] : null) || t.par[l] || (S.books.under || {})[l] || "";
     const rows = Object.keys(t.bal).filter(l => Math.abs(t.bal[l]) >= 0.005).map(l => ({l, bal: t.bal[l], sub: sub(l), top: FC.path(l).length ? FC.top(l) : (sub(l) || "Not in a group")}));
-    return this.tbShape({kind: "tb", src: "tally", asOn, rows, at: t.at, note: "Read from Tally (" + t.company + ")" + (this.light() ? "" : ". This bridge reads every ledger twice; install Tally Bridge 1.12.10 for a faster, lighter read") + "."});
+    return this.tbShape({kind: "tb", src: "tally", asOn, rows, at: t.at, note: "Read from Tally (" + t.company + ")" + (this.light() ? "" : ". This bridge reads every ledger twice; install FinCom Bridge from the Tally page for a faster, lighter read") + "."});
   },
   // a group straight from Tally: each ledger's opening and closing (two light reads), and the change between
   async groupTally(grp, from, to, force){
@@ -20181,7 +20181,7 @@ const LK = {
       if (x.kind === "group") need(x.grp, "Choose a group.");
       if (x.kind === "monthly") need(x.led || x.grp, "Choose a ledger or a group.");
       if (["ledger", "group", "monthly", "find"].includes(x.kind)) need(x.from && x.to && x.from <= x.to, "The dates are the wrong way round.");
-      if (!tally && !cloud) need(have, this.live() ? "This needs the books read into FinCom. Choose \u201cTally\u201d as the source, or read the books first." : "Read the books from Tally first, or connect the Tally Bridge.");
+      if (!tally && !cloud) need(have, this.live() ? "This needs the books read into FinCom. Choose \u201cTally\u201d as the source, or read the books first." : "Read the books from Tally first, or connect FinCom Bridge.");
     } catch (e){ if (e) throw e; return; }
     x.open = {};
     if (cloud){
@@ -20285,7 +20285,7 @@ const LK = {
   },
   async keepOn(on){
     try { const f = this.fr(); f.keep = await Bridge.call("/keep?company=" + encodeURIComponent(this.tname()) + Bridge.pinQ(), {on: !!on}, 30000); toast(on ? "The bridge will keep this company in step whenever it is open in Tally." : "Keeping in step switched off."); f.at = 0; setTimeout(() => this.autoFresh(true), 3000); render(); }
-    catch (e){ toast(/Unknown address|No such/i.test(String(e && e.message)) ? "This needs Tally Bridge 1.13.0. Download the new setup and install it." : "The bridge could not do it: " + ((e && e.message) || e)); }
+    catch (e){ toast(/Unknown address|No such/i.test(String(e && e.message)) ? "This needs FinCom Bridge 2.1. Install FinCom Bridge from the Tally page." : "The bridge could not do it: " + ((e && e.message) || e)); }
   },
   // the bridge's update from Tally: when it runs each day, or now (the bridge reads only changes, then stops)
   async keepSet(o, say){
@@ -20293,7 +20293,7 @@ const LK = {
       const j = await Bridge.call("/keep?company=" + encodeURIComponent(BridgeSeed.company()) + Bridge.pinQ(), o, 30000);
       (S.setupKeep = S.setupKeep || {})[S.coId] = {at: Date.now(), st: j}; toast(say);
       if (o.now){ [60, 180, 420].forEach(s => setTimeout(() => { try { this.autoFresh(true, true); (S.setupKeep || {})[S.coId] = null; render(); } catch (e){} }, s * 1000)); }
-    } catch (e){ toast(/Unknown address|No such/i.test(String(e && e.message)) ? "This needs Tally Bridge 1.14. It updates by itself within a few minutes." : "The bridge could not do it: " + ((e && e.message) || e)); }
+    } catch (e){ toast(/Unknown address|No such/i.test(String(e && e.message)) ? "This needs FinCom Bridge 2.1. Install FinCom Bridge from the Tally page." : "The bridge could not do it: " + ((e && e.message) || e)); }
     render();
   },
   async keepCheck(){
@@ -20308,7 +20308,7 @@ const LK = {
   // the days since the copy: one small day book read, merged in; balances follow from the entries
   async bringToday(){
     const f = this.fr(), b = S.books, meta = b.meta || {}, today = Audit.today();
-    if (!this.live()){ toast("Connect the Tally Bridge first."); return; }
+    if (!this.live()){ toast("Connect FinCom Bridge first."); return; }
     if (!(b.vouchers || []).length || !meta.to){ toast("Bring in the books first (last night\u2019s copy, or From Tally)."); return; }
     const from = Audit.ymd(Audit.iso(meta.to) && FC.d8(addDays(Audit.iso(meta.to), 1))), to = today;
     const start = String(meta.to) >= today ? today : from;
@@ -20912,7 +20912,7 @@ const ONB = {
     const tallyBank = b && typeof FC === "object" ? Object.keys(Object.assign({}, b.under, b.ledInfo)).filter(l => ["Bank Accounts", "Bank OD A/c", "Bank OCC A/c"].some(g => FC.inGroup(l, g))).length : 0;
     return [
       {id: "tally", done: !!co.tallyName, t: "Name the company as it is in Tally", d: "So entries go to the right company.", btn: ["Client setup", {act: "setup"}]},
-      {id: "bridge", done: bridgeSet, t: "Connect the Tally Bridge", d: "A small program on the computer where Tally is open.", btn: ["Connect", {act: "tallyGuide"}]},
+      {id: "bridge", done: bridgeSet, t: "Connect FinCom Bridge", d: "A small Windows program on the computer where Tally is open; install it from the Tally page.", btn: ["Connect", {act: "tallyGuide"}]},
       {id: "link", done: !!linked, t: "Link the Tally company", d: "The company in Tally with this client's books: linked by itself when its GSTIN is the client's.", btn: ["Link Tally company", {act: "goTcloud"}]},
       {id: "books", done: dayBook, t: "Read the books from Tally", d: "Unlocks MIS, audit review, reports, look up and letters.", btn: ["Read the books", {go: "books:import"}]},
       {id: "opening", done: opening, t: "Read the opening balances", d: "Tally's balances at the start of the books, so the trial balance, receivables and accounts are right.", btn: ["Read the books", {go: "books:import"}]},
@@ -21295,7 +21295,7 @@ const TCloud = {
     const ok = await askConfirm({title: "Make this the main bridge?", ok: "Make it the main bridge",
       body: "<p><b>FinCom Bridge " + esc(r.version) + "</b> on <b>" + esc(r.computer) + "</b>" + (r.user ? " (Windows user " + esc(r.user) + ")" : "") + " will read Tally <b>and post</b> to it.</p>" +
         (others.length ? "<p>" + others.map(x => "Bridge " + esc(x.version || "?") + (x.user ? " of " + esc(x.user) : "")).join(", ") + " on this computer stops posting at once: FinCom gives postings to the main bridge only. " +
-          "Within a minute the new bridge also stops bridge 1.15.0 for its Windows user and takes over its pairing, settings and copy of the books.</p>" : "") +
+          "Within a minute the new bridge also stops any older bridge for its Windows user and takes over its pairing, settings and copy of the books.</p>" : "") +
         "<p>Only one bridge may ever post to Tally.</p>"});
     if (!ok) return;
     try {
@@ -21360,7 +21360,7 @@ const TCloud = {
 
 };
 
-// FinCom opened by the FinCom Connector's "Connect FinCom on this computer": the page's address carries the bridge's
+// FinCom opened by FinCom Bridge's "Connect FinCom on this computer": the page's address carries the bridge's
 // one-time connect code (#pair=123456). It is taken off the address at once, and used to connect to the bridge.
 (function(){
   const take = () => {
@@ -21371,10 +21371,10 @@ const TCloud = {
     const go = async () => {
       try {
         const j = await Bridge.pair(code);
-        toast("Connected to the Tally Bridge on " + (j.computer || "this computer") + ".");
+        toast("Connected to FinCom Bridge on " + (j.computer || "this computer") + ".");
         try { await Bridge.refresh(); } catch (e){}
         render();
-      } catch (e){ toast("Could not connect to the bridge: " + ((e && e.message) || e) + " Press “Connect FinCom on this computer” in FinCom Connector again."); }
+      } catch (e){ toast("Could not connect to the bridge: " + ((e && e.message) || e) + " Right-click the FinCom Bridge icon near the clock and choose “Connect FinCom on this computer…” again."); }
     };
     // after the page has drawn itself
     setTimeout(go, 600);
@@ -21701,7 +21701,7 @@ function tallyStatus(co){
   const SHORT = {none: "Tally not set up", offline: "Tally offline" + (heard ? " \u00b7 " + hhmm(heard) : ""), reconnecting: "Tally reconnecting\u2026",
     unlinked: "Tally: not linked", busy: "Tally busy", ok: "Tally in sync"};
   const out = o => Object.assign(o, {parts, short: o.state === "waiting" ? o.label.replace(/ waiting$/, "") + " for Tally" : SHORT[o.state] || o.label});
-  if (!local && !devs.length) return out({state: "none", level: "bad", label: "Not set up", say: "No Tally Bridge on this computer, and no computer of the firm sends from Tally. Set up the Tally Bridge on the computer with TallyPrime."});
+  if (!local && !devs.length) return out({state: "none", level: "bad", label: "Not set up", say: "FinCom Bridge is not on this computer, and no computer of the firm sends from Tally. Install FinCom Bridge from the Tally page on the computer with TallyPrime."});
   if (bridge === "offline" || bridge === "none") return out({state: "offline", level: "bad", label: "Offline since " + (heard ? when(heard) : "\u2014"), say: "No word from the firm's Tally computer" + (heard ? " since " + when(heard) : "") + " (three heartbeats missed): the computer or its bridge is off, or it has no internet."});
   if (bridge === "reconnecting") return out({state: "reconnecting", level: "warn", label: "Reconnecting\u2026", say: "The bridge's last heartbeat is late. FinCom keeps listening; it shows Offline only after three missed heartbeats (about two minutes)."});
   const cos = co ? [co] : Object.values(S.companies || {}).filter(c => !c.deleted);
@@ -22343,7 +22343,7 @@ async function aihNote(how, id){
 // The address is kept after the # (#/c/<client>/bill/<id>): the site is plain files, so a path like /c/… would not be
 // found on refresh. The page state (S) stays the only truth: the address is written from it after each drawing, and
 // read into it when the address changes (Back, Forward, a link opened, Refresh).
-//   #/clients  #/today  #/inbox  #/tally  #/help  #/settings[/<section>]
+//   #/clients  #/today  #/inbox  #/tally[/bridge-1.15]  #/help  #/settings[/<section>]
 //   #/c/<client>/dash | inbox | upload | txn/<kind> | books/<tab> | purchase/review | purchase/<filter> | bill/<id>
 //                | bank | sales | post/<kind> | done/<kind> | setup/<section>
 const Route = {
@@ -22351,6 +22351,9 @@ const Route = {
   of(){
     if (S.view !== "company" || !S.coId || !CO()){
       if (S.homeTab === "rules") return "#/settings" + (S.settingsTab ? "/" + encodeURIComponent(S.settingsTab) : "");
+      // 02-Oct-2026: #/tally/bridge-1.15, the hidden way back to bridge 1.15.0's setup (linked from nowhere)
+      if (S.homeTab !== "tally") S.tallyOld = false;
+      else if (S.tallyOld) return "#/tally/bridge-1.15";
       return "#/" + (["clients", "today", "inbox", "tally", "help"].includes(S.homeTab) ? S.homeTab : "clients");
     }
     const c = "#/c/" + encodeURIComponent(S.coId) + "/";
@@ -22413,7 +22416,7 @@ const Route = {
           if (e){ if (S.reviewTable && e.status === "draft") S.drawerOpen = true; else S.reviewTable = false; S.filter = e.status; S.selected = e.id; } else toast("That bill is not in this client’s list (deleted, or not yet sent to this computer).");
         }
       } else if (p[0] === "settings"){ S.view = "home"; S.homeTab = "rules"; S.settingsTab = p[1] || null; }
-      else if (["clients", "today", "inbox", "tally", "help"].includes(p[0])){ S.view = "home"; S.homeTab = p[0]; S.step = null; }
+      else if (["clients", "today", "inbox", "tally", "help"].includes(p[0])){ S.view = "home"; S.homeTab = p[0]; S.step = null; S.tallyOld = p[0] === "tally" && p[1] === "bridge-1.15"; }
       else return false;
       return true;
     } finally {
