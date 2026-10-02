@@ -32,6 +32,7 @@ with sync_playwright() as p:
     pg.evaluate("S.tab = 'gstset'; render()"); pg.wait_for_timeout(2000)
     ok(pg.locator('input[aria-label="Show FinCom’s estimate"]').is_checked() is False, "the estimate setting is off by default")
     pg.check('input[aria-label="Show FinCom’s estimate"]'); pg.wait_for_timeout(1200)
+    pg.click('#app [data-confirm-foot="setup:gstset"] [data-cfm="save"]'); pg.wait_for_timeout(500)   # review 18 (02-Oct-2026): saved with Save
     pg.evaluate("S.tab = 'books'; render()"); pg.wait_for_timeout(4000); t = pg.inner_text("#app")
     ok("FinCom\u2019s estimate" in t and "Late fee, estimate" in t.replace("LATE FEE, ESTIMATE", "Late fee, estimate") and "estimate \u20b9" in t, "switched on: the estimate shows beside the portal's figures")
     pg.screenshot(path=OUT + "/gstfiling.png", full_page=True)

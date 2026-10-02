@@ -1470,7 +1470,8 @@ function doAct(act, t){
       const pool = view === "gst" ? Object.entries(b.map).filter(([nm, m]) => LedMaster.isGst(m.what) && LedMaster.taxLike(nm, m, info[nm])) :
         view === "tds" ? Object.entries(b.map).filter(([nm, m]) => LedMaster.isTds(m.what) && LedMaster.taxLike(nm, m, info[nm])) : LedMaster.pending(b);
       const names = pool.filter(([nm, m]) => !m.ok && (!q || nm.toLowerCase().includes(q) || String(m.section || "").toLowerCase().includes(q) || String((info[nm] || {}).group || "").toLowerCase().includes(q))).map(x => x[0]);
-      LedMaster.confirm(b, names, true); b.reco = null; saveBooks(); toast(names.length + " ledger" + (names.length === 1 ? "" : "s") + " confirmed."); render(); break;
+      // a confirm button is its own confirm step: saved at once, not a draft (src/js/60)
+      Drafts.direct(() => { LedMaster.confirm(b, names, true); b.reco = null; saveBooks(); }, {bypass: true}); toast(names.length + " ledger" + (names.length === 1 ? "" : "s") + " confirmed."); render(); break;
     }
     // ledgers with entries but no master: the masters read again (through the bridge here, else the firm's Tally
     // computer is asked to update the cloud copy, masters included)
@@ -1514,7 +1515,7 @@ function doAct(act, t){
     case "lcRun": { const b = S.books; if (!b) break; const c = LedCheck.run(b); const high = c.names.filter(n => c.items[n].s.conf === "high").length; toast(c.names.length + " tax-like ledgers checked: " + high + " settled by Tally’s masters or the day book, " + (c.names.length - high) + " to look at."); saveBooks(); render(); break; }
     case "lcConfirm": { const b = S.books, c = b && b.ledCheck; if (!c) break;
       const names = (c.names || []).filter(n => !((b.map || {})[n] || {}).ok && LedCheck.ticked(c.items[n]));
-      const n = LedCheck.confirm(b, names); GSTR._carry = null; GST2B._memo = null; saveBooks(); toast(n + " ledger" + (n === 1 ? "" : "s") + " confirmed. Only confirmed ledgers count in the returns now."); render(); break; }
+      const n = Drafts.direct(() => { const k = LedCheck.confirm(b, names); saveBooks(); return k; }, {bypass: true}); GSTR._carry = null; GST2B._memo = null; toast(n + " ledger" + (n === 1 ? "" : "s") + " confirmed. Only confirmed ledgers count in the returns now."); render(); break; }
     case "lcAi": { const b = S.books; if (!b || !b.ledCheck) break; b.busy = "Asking AI about the unclear ledgers…"; render();
       LedCheck.askAi(b).then(n => { b.busy = ""; if (n){ toast("AI answered for " + n + " ledger" + (n === 1 ? "" : "s") + ". Its answers are not ticked: check each."); saveBooks(); } render(); }, e => { b.busy = ""; toast("AI could not be asked: " + ((e && e.message) || e)); render(); }); break; }
     case "trashRestore": {

@@ -66,7 +66,10 @@ with sync_playwright() as p:
     pg.fill('section[data-greg="09"] input[aria-label="GST portal username"]', "gargup"); pg.press('section[data-greg="09"] input[aria-label="GST portal username"]', "Tab"); pg.wait_for_timeout(600)
     ok(pg.locator("#confirmBox .cbx").count() == 0 and pg.evaluate("[GSTSet.peek('09').portalUser, GSTSet.peek('07').portalUser || '']") == ["gargup", ""], "portal username: this GSTIN's own, no question")
     pg.screenshot(path=OUT + "/gstregs-settings.png", full_page=True)
-    kept = pg.evaluate("async () => { let got = null; const o = Books.save; Books.save = async (cid, x) => { got = x; }; await saveBooks(); Books.save = o; return (got.gstRegs || []).map(r => r.gstin); }")
+    # review 18 (02-Oct-2026): the section's changes are saved with Save at its foot (the books' save waits until then)
+    pg.evaluate("() => { window.__got = null; window.__bsave = Books.save; Books.save = async (cid, x) => { window.__got = x; }; }")
+    pg.click('#app [data-confirm-foot="setup:gstset"] [data-cfm="save"]'); pg.wait_for_timeout(600)
+    kept = pg.evaluate("() => { Books.save = window.__bsave; return ((window.__got || {}).gstRegs || []).map(r => r.gstin); }")
     ok(kept == [g07, g27], "the GSTINs added are saved with the books: %s" % kept)
     # the GST tab with no day book
     pg.evaluate("S.tab = 'books'; S.booksTab = 'gst'; S.gstReg = '09'; render()"); pg.wait_for_timeout(1500)

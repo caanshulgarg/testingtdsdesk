@@ -38,6 +38,9 @@ with sync_playwright() as p:
     box.fill(""); pg.click('nav[aria-label="Ledgers"] button:has-text("TDS and TCS")'); pg.wait_for_timeout(400)
     sec = pg.locator('input[aria-label="Section of %s"]' % other); sec.fill("194j"); sec.press("Tab"); pg.wait_for_timeout(400)
     ok(pg.evaluate("S.books.map[%s].section" % json.dumps(other)) == "194J", "its section typed, kept in capitals")
+    # review 18 (02-Oct-2026): what is chosen or typed on the page is saved with Save at its foot; Confirm buttons save at once
+    ok("Not saved yet" in pg.inner_text('#app [data-confirm-foot="books:ledgers"]'), "review 18: the ledger's kind and section are not saved until Save")
+    pg.click('#app [data-confirm-foot="books:ledgers"] [data-cfm="save"]'); pg.wait_for_timeout(400)
     pg.click('nav[aria-label="Ledgers"] button:has-text("To confirm")'); pg.wait_for_timeout(400)
     pg.click('button:has-text("Confirm the"):has-text("shown")'); pg.wait_for_timeout(600)
     ok(pend() == 0 and "Every GST and TDS ledger is confirmed." in pg.inner_text("#app"), "Confirm the shown: nothing left to confirm")
@@ -60,6 +63,7 @@ with sync_playwright() as p:
     pg.evaluate("document.querySelectorAll('#app details').forEach(d => d.open = true)")   # settings sit in a closed section
     pg.select_option('select[aria-label="Run on its own"]', "weekly"); pg.wait_for_timeout(300)
     ok(pg.evaluate("Audit.cfg(S.books).freq") == "weekly", "how often it runs by itself is kept")
+    pg.click('#app [data-confirm-foot="books:audit-settings"] [data-cfm="save"]'); pg.wait_for_timeout(300)   # review 18: saved with Save
     pg.click('nav[aria-label="Audit"] button:text-is("Related parties")'); pg.wait_for_timeout(400)
     led = pg.evaluate("Object.keys(S.books.map).sort()[0]")
     pg.fill("#relq", led); pg.click('.row:has(#relq) button:text-is("Add")'); pg.wait_for_timeout(400)
@@ -110,6 +114,7 @@ with sync_playwright() as p:
     pg.evaluate("document.querySelectorAll('#app details').forEach(d => d.open = true)")
     pg.select_option('select[aria-label="MIS runs on its own"]', "weekly"); pg.wait_for_timeout(300)
     ok(pg.evaluate("MIS.cfg(S.books).freq") == "weekly", "how often the MIS runs by itself is kept")
+    pg.click('#app [data-confirm-foot="books:mis-settings"] [data-cfm="save"]'); pg.wait_for_timeout(300)   # review 18: saved with Save
     # Reports: charts, the year, finding a report, a figure and a report opening their screens
     pg.evaluate("() => { S.booksTab = 'reports'; S.rptQ = ''; render(); }"); pg.wait_for_timeout(800)
     ok(pg.locator(".rpt-area .fc-chart svg rect").count() > 20 and pg.locator(".rpt-link").count() >= 30, "every area with its chart, every report listed")
@@ -207,6 +212,7 @@ with sync_playwright() as p:
     ok(pg.evaluate("AIH.cfg().on") is False and pg.locator('label:has-text("notices") input').first.is_disabled(), "AI help switched off, each kind greyed")
     pg.check('input[aria-label="AI off for ZZ TEST"]'); pg.wait_for_timeout(300)
     ok(pg.evaluate("S.companies[S.coId].aiOff") is True, "a client kept away from AI")
+    pg.click('#app [data-confirm-foot] [data-cfm="save"]'); pg.wait_for_timeout(300)   # review 18: the firm's AI settings saved with Save
     pg.evaluate("() => { S.firm.ai = {on: false}; S.companies[S.coId].aiOff = false; S.view = 'company'; S.tab = 'books'; render(); }"); pg.wait_for_timeout(300)
     # Accounts: run, the format, stock, a manufacturer, a ledger placed by hand and back, the search, Excel
     pg.evaluate("() => { const led = {}; Object.keys(S.books.map).forEach(n => { led[n] = {open: 0, close: 0}; }); S.books.tb = {from: '20250401', to: '20270331', at: '2026-01-01T00:00:00Z', led}; S.booksTab = 'fs'; S.fsRun = null; render(); }"); pg.wait_for_timeout(400)

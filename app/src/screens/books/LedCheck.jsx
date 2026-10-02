@@ -32,7 +32,8 @@ export default function LedCheckCard({ b }) {
   const showAll = S.lcAll, list = (showAll ? items : open).sort((a, x) => ({ high: 0, medium: 1, low: 2 }[LedCheck.pick(a[1]).conf] - { high: 0, medium: 1, low: 2 }[LedCheck.pick(x[1]).conf]) || a[0].localeCompare(x[0]));
   // review 18: the shared footer — a tick changed by the person is not saved until confirmed; leaving asks
   const changed = () => open.some(([, it]) => it.tick !== undefined);
-  const custom = { dirty: changed, save: () => { doAct("lcConfirm"); return true; }, discard: () => { open.forEach(([, it]) => { delete it.tick; }); } };
+  // dirty (leaving asks) only for a tick changed by hand; the button confirms FinCom's pre-ticked suggestions too
+  const custom = { dirty: changed, canSave: () => ticked.length > 0, save: () => { doAct("lcConfirm"); return true; }, discard: () => { open.forEach(([, it]) => { delete it.tick; }); } };
   return <Confirm id="books:ledcheck" label="GST and TDS ledger check" custom={custom} saveText={"Confirm the " + ticked.length + " ticked"} empty={c && c.savedAt ? undefined : "Nothing confirmed yet"}><section className="dash-card" style={{ marginBottom: 12 }} data-ledcheck="">
     <h3>GST and TDS ledger check</h3>
     <p className="note">Each tax-like ledger is read three ways: Tally’s master (tax type, duty head, rate, nature of payment) as fact where set; how the day book uses it; and AI only for what is still unclear. Confirm what is right. {c && c.strict ? "Only confirmed ledgers count in the returns." : "Once saved, only confirmed ledgers count in the returns."}</p>

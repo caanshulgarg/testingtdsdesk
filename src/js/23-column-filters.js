@@ -950,7 +950,8 @@ function lmSet(name, key, val){
   LedMaster.tplLearn(b, [name]); try { LedMaster.applyPosting(b, CO(), "empty"); } catch (e){}
   b.mapV = (b.mapV || 0) + 1; b.reco = null; saveBooks(); render();
 }
-function lmConfirmToggle(name){ const m = S.books.map[name]; if (m){ LedMaster.confirm(S.books, [name], !m.ok); S.books.reco = null; saveBooks(); render(); } }
+// a confirm button is its own confirm step (review 18): saved at once, not kept as a draft (src/js/60 Drafts.direct)
+function lmConfirmToggle(name){ const m = S.books.map[name]; if (m) Drafts.direct(() => { LedMaster.confirm(S.books, [name], !m.ok); S.books.reco = null; saveBooks(); render(); }, {bypass: true}); }
 function lmViewGo(v){ S.lmView = v; S.booksTab = "ledgers"; render(); }
 function lmPost(k){ LedMaster.applyPosting(S.books, CO(), k); render(); }
 // the Audit tab (app/src/screens/books/Audit.jsx): the period, how often it runs by itself, and a finding's status

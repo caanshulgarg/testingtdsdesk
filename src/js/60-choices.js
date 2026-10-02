@@ -248,7 +248,7 @@ function choicePathSet(o, path, v){
   if (v === undefined) delete x[k]; else x[k] = clone(v);
 }
 // (an empty value and a missing one are the same: a box emptied, a choice put back to "none")
-function choiceSame(a, b){ if (a === undefined || a === null) a = ""; if (b === undefined || b === null) b = ""; return a === b || stableStr(a) === stableStr(b); }
+function choiceSame(a, b){ const e = v => v === undefined || v === null || (typeof v === "object" && !Object.keys(v).length); if (e(a)) a = ""; if (e(b)) b = ""; return a === b || stableStr(a) === stableStr(b); }
 // the paths where two copies differ (objects compared key by key, to a depth of 6; arrays and values whole)
 function choicePathDiff(a, b, pre, out, depth){
   const isO = v => !!v && typeof v === "object" && !Array.isArray(v);

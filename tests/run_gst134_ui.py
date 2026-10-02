@@ -34,6 +34,7 @@ with sync_playwright() as p:
     after = pg.evaluate("GSTR.threeB('202504','09').pay.cash.igst + GSTR.threeB('202504','09').pay.cash.cgst")
     ok(pg.evaluate("S.books.gstOpen['09'].cgst") == 500000 and after < before, "an opening balance typed in settings reduces cash payable: %s to %s" % (before, after))
     pg.screenshot(path=OUT + "/gst-settings.png", full_page=False)
+    pg.click('#app [data-confirm-foot="setup:gstset"] [data-cfm="save"]'); pg.wait_for_timeout(500)   # review 18 (02-Oct-2026): saved with Save
     pg.evaluate("S.tab = 'books'; render()"); pg.wait_for_timeout(2000)
     pg.select_option('select[aria-label=Month]', "202603"); pg.wait_for_timeout(1500)
     pg.click('nav[aria-label="GST"] button[data-part="inreg"]'); pg.wait_for_timeout(3000); t = pg.inner_text("#app")

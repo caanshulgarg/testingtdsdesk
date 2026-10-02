@@ -31,12 +31,12 @@ export function SavedLine({ id, cid, dirty, empty }) {
 }
 
 export function ConfirmFooter({ id, cid, label, saveText = "Save", empty }) {
-  const dirty = Drafts.dirty(id);
+  const dirty = Drafts.dirty(id), s = Drafts.secs[id], ready = !!(s && s.custom && s.custom.canSave && s.custom.canSave());
   return <div className="cfm-foot" data-confirm-foot={id} aria-label={"Save " + (label || "")}>
     <SavedLine id={id} cid={cid} dirty={dirty} empty={empty} />
     <span className="cfm-btns">
       {dirty && <button type="button" className="btn small" data-cfm="discard" onClick={() => Drafts.discard(id)}>Don’t save</button>}
-      <button type="button" className="btn small primary" data-cfm="save" disabled={!dirty} onClick={() => { if (Drafts.save(id)) toast((label || "Settings") + ": saved."); }}>{saveText}</button>
+      <button type="button" className="btn small primary" data-cfm="save" disabled={!dirty && !ready} onClick={() => { if (Drafts.save(id)) toast((label || "Settings") + ": saved."); }}>{saveText}</button>
     </span>
   </div>;
 }
