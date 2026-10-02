@@ -654,6 +654,7 @@ type kled struct {
 	guid         string
 	alter        int64
 	name, parent string
+	gstin, pan   string // 02-Oct-2026: for matching a bill's supplier to its ledger by GSTIN or PAN in FinCom
 }
 
 func keepLedgers(tc *TC, company string, port int, after int64) ([]kled, error) {
@@ -664,7 +665,7 @@ func keepLedgers(tc *TC, company string, port int, after int64) ([]kled, error) 
 	}
 	x := "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TDSDeskKeepLed</ID></HEADER>" +
 		"<BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>" + esc(company) + "</SVCURRENTCOMPANY></STATICVARIABLES><TDL><TDLMESSAGE>" +
-		`<COLLECTION NAME="TDSDeskKeepLed" ISMODIFY="No"><TYPE>Ledger</TYPE><FETCH>GUID,ALTERID,NAME,PARENT</FETCH>` + flt + "</COLLECTION>" + sys +
+		`<COLLECTION NAME="TDSDeskKeepLed" ISMODIFY="No"><TYPE>Ledger</TYPE><FETCH>GUID,ALTERID,NAME,PARENT,PARTYGSTIN,INCOMETAXNUMBER,LEDGSTREGDETAILS.LIST</FETCH>` + flt + "</COLLECTION>" + sys +
 		"</TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>"
 	raw, err := invokeTally(tc, port, x, 120)
 	if err != nil {
@@ -674,7 +675,11 @@ func keepLedgers(tc *TC, company string, port int, after int64) ([]kled, error) 
 	for _, l := range xmlDoc(raw).All("LEDGER") {
 		n, g := nameOf(l), strings.TrimSpace(nt(l, "GUID"))
 		if n != "" && g != "" {
-			out = append(out, kled{g, toI64(re(`\D`).ReplaceAllString(nt(l, "ALTERID"), "")), n, nt(l, "PARENT")})
+			gstin := strings.ToUpper(strings.TrimSpace(nt(l, "PARTYGSTIN")))
+			if gstin == "" {
+				gstin = strings.ToUpper(strings.TrimSpace(nt(l, "LEDGSTREGDETAILS.LIST/GSTIN")))
+			}
+			out = append(out, kled{g, toI64(re(`\D`).ReplaceAllString(nt(l, "ALTERID"), "")), n, nt(l, "PARENT"), gstin, strings.ToUpper(strings.TrimSpace(nt(l, "INCOMETAXNUMBER")))})
 		}
 	}
 	return out, nil
@@ -737,7 +742,9 @@ func (k *keepRun) updateLedgers(company string, port int, dir string, st M, full
 	}
 	first := len(known) == 0 || !(toI64(st["lastM"]) > 0)
 	after := toI64(st["lastM"])
-	if full || first {
+	// a copy made before 2.1.2 has no GSTIN or PAN with its ledgers: read every ledger once to fill them in (a light read)
+	ids := !first && !truthy(st["ledIds"])
+	if full || first || ids {
 		after = 0
 	}
 	ch, err := keepLedgers(k.tc, company, port, after)
@@ -746,6 +753,7 @@ func (k *keepRun) updateLedgers(company string, port int, dir string, st M, full
 	}
 	type again struct{ name, was string }
 	var redo []again
+	idsChanged := false
 	seen := map[string]bool{}
 	for _, c := range ch {
 		seen[c.guid] = true
@@ -754,17 +762,21 @@ func (k *keepRun) updateLedgers(company string, port int, dir string, st M, full
 		}
 		kv, had := known[c.guid]
 		if first {
-			known[c.guid] = []any{c.name, c.parent, c.alter}
+			known[c.guid] = []any{c.name, c.parent, c.alter, c.gstin, c.pan}
 			continue
 		}
 		if had && toI64(kv[2]) == c.alter && str(kv[0]) == c.name {
+			if len(kv) < 5 || str(at(kv, 3)) != c.gstin || str(at(kv, 4)) != c.pan {
+				known[c.guid] = []any{c.name, c.parent, c.alter, c.gstin, c.pan}
+				idsChanged = true
+			}
 			continue
 		}
 		if had && str(kv[0]) != c.name {
 			renameKeepLedger(dir, st, str(kv[0]), c.name)
 			writeLog("Keeping " + company + ": ledger " + str(kv[0]) + " is now " + c.name)
 		}
-		known[c.guid] = []any{c.name, c.parent, c.alter}
+		known[c.guid] = []any{c.name, c.parent, c.alter, c.gstin, c.pan}
 		w := ""
 		if had {
 			w = str(kv[0])
@@ -849,6 +861,13 @@ func (k *keepRun) updateLedgers(company string, port int, dir string, st M, full
 		o[g] = v
 	}
 	_ = saveFile(lf, jsonText(o))
+	st["ledIds"] = true
+	if idsChanged {
+		setCloudLedgers(dir) // the ledgers go to FinCom's cloud again, now with their GSTIN and PAN
+		if ids {
+			writeLog("Keeping " + company + ": the ledgers' GSTIN and PAN read from Tally")
+		}
+	}
 	// the groups with every full look at the ledgers; the cloud sent the ledgers again whenever a name or a group differs
 	gf := filepath.Join(dir, "groups.json")
 	if full || first || !exists(gf) {

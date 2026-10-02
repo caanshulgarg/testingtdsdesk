@@ -261,7 +261,7 @@ func pushCloudCompany(company, dir string, budget time.Duration) error {
 		bal := readObjFile(bf)
 		if bal != nil && str(bal["from"]) != "" && str(bal["openAsOn"]) != "" {
 			// every ledger in Tally goes, with its group; the opening from the balances (0 when a ledger has none)
-			type row struct{ n, p, o string }
+			type row struct{ n, p, o, g, pan string }
 			rows := map[string]*row{}
 			var order []string
 			for _, x := range arr(bal["ledgers"]) {
@@ -270,7 +270,7 @@ func pushCloudCompany(company, dir string, budget time.Duration) error {
 					if rows[n] == nil {
 						order = append(order, n)
 					}
-					rows[n] = &row{n, str(l["parent"]), str(l["open"])}
+					rows[n] = &row{n, str(l["parent"]), str(l["open"]), "", ""}
 				}
 			}
 			if kj := readObjFile(filepath.Join(dir, "ledgers.json")); kj != nil {
@@ -289,8 +289,9 @@ func pushCloudCompany(company, dir string, budget time.Duration) error {
 						if r.p == "" {
 							r.p = par
 						}
+						r.g, r.pan = str(at(a, 3)), str(at(a, 4))
 					} else {
-						rows[n] = &row{n, par, "0"}
+						rows[n] = &row{n, par, "0", str(at(a, 3)), str(at(a, 4))}
 						order = append(order, n)
 					}
 				}
@@ -298,7 +299,12 @@ func pushCloudCompany(company, dir string, budget time.Duration) error {
 			led := []any{}
 			for _, n := range order {
 				r := rows[n]
-				led = append(led, []any{r.n, r.p, r.o})
+				// name, group, opening, and (2.1.2) the ledger's GSTIN and PAN when Tally has them
+				if r.g != "" || r.pan != "" {
+					led = append(led, []any{r.n, r.p, r.o, r.g, r.pan})
+				} else {
+					led = append(led, []any{r.n, r.p, r.o})
+				}
 			}
 			grp := rows2(readJSONFile(filepath.Join(dir, "groups.json")))
 			r := invokeCloud(M{"kind": "ledgers", "company": company, "from": str(bal["from"]), "openAsOn": str(bal["openAsOn"]), "ledgers": led, "groups": grp}, 120)

@@ -372,7 +372,17 @@ async function ingestLedgers(book: string, body: any, firm?: string) {
   const groups = cleanPairs(body.groups, 20000);
   const { data, error } = await db.rpc("tally_ingest_ledgers_g", { p_book: book, p_from: iso(body.from), p_open_as_on: iso(body.openAsOn), p_ledgers: led, p_groups: groups });
   if (error) throw new Error(error.message);
-  return reply(200, { ok: true, ...data });
+  // FinCom Bridge 2.1.2 on: each ledger's GSTIN and PAN ([name, group, opening, gstin, pan]), for matching a bill's supplier
+  // to its ledger (migration-28; an older cloud without it just leaves them out)
+  const ids = (Array.isArray(body.ledgers) ? body.ledgers : []).slice(0, 100000)
+    .filter((l: any) => Array.isArray(l) && l[0] && (l[3] || l[4]))
+    .map((l: any) => [cleanName(String(l[0]).slice(0, 300)), String(l[3] || "").toUpperCase().slice(0, 15), String(l[4] || "").toUpperCase().slice(0, 10)]);
+  let idsOut: any = null;
+  if (ids.length) {
+    const r = await db.rpc("tally_ingest_ledger_ids", { p_book: book, p_ids: ids });
+    idsOut = r.error ? { idsError: /tally_ingest_ledger_ids|does not exist|schema cache/i.test(r.error.message) ? "migration-28 not applied" : r.error.message } : { ids: r.data?.ids };
+  }
+  return reply(200, { ok: true, ...data, ...(idsOut || {}) });
 }
 // ---------- fast-sync (migration-13): the work done by the server, from a queue (pgmq tally_work), so it finishes even
 // when the browser that handed it over is closed. A piece is {job, firm, book, days:[{day, gz}]} (a part of a day book)
