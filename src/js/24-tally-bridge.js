@@ -1171,7 +1171,7 @@ async function postBillsToTally(opts){
       dup.forEach(e => { e.exportedAt = now; e.postNote = "Already in Tally"; Store.saveEntry(co.id, e); });
       todo = todo.filter(e => !dup.includes(e));
     }
-    let ok = 0, optionalN = 0, unverified = 0, altered = 0;
+    let ok = 0, optionalN = 0, unverified = 0, altered = 0, checkFailed = 0;
     const masterWords = [];
     if (todo.length){
       const used = new Set(todo.flatMap(e => e.snapshot.lines.map(l => String(l.ledger).toLowerCase())));
@@ -1192,7 +1192,7 @@ async function postBillsToTally(opts){
         if (x && x.ok && !x.existed) logPosting({what: "ledger", id: "led:" + l.name, action: postAltered(x) ? "altered" : "created", co: co.id, ref: l.name, party: l.group || "", amount: 0, tally: {company: x.company || tname}, by: (Cloud.st && Cloud.st.email) || ""}); });
       saveBank({newLed: true});
       // a voucher number another supplier already used: try once more with this supplier's initials added
-      const clash = todo.filter(e => { const x = byId.get(e.id); return x && !x.ok && /already\s+exists/i.test(x.message || "") && co.vchNumbering !== "tally"; });
+      const clash = todo.filter(e => { const x = byId.get(e.id); return x && !x.ok && !postAlready(x) && !postCheckFail(x) && /already\s+exists/i.test(x.message || "") && co.vchNumbering !== "tally"; });
       if (clash.length){
         clash.forEach(e => { e.vchNo = (e.x.invoiceNo || "B") + "/" + initialsOf(e.x.vendorName || e.partyLedger); });
         S.billPost = {busy: "Voucher numbers already used in Tally: trying " + clash.length + " again with the supplier’s initials…"}; render();
@@ -1203,7 +1203,11 @@ async function postBillsToTally(opts){
       }
       todo.forEach(e => {
         const x = byId.get(e.id);
-        if (x && x.ok && (x.verified === true || postAltered(x))){ ok++; if (postAltered(x)) altered++; billPosted(co.id, e, x, tname, now); if (x.optional) optionalN++; }
+        // bridge 2.1.4 found the same bill in Tally as it was about to post: in Tally, with that voucher, not failed
+        if (postAlready(x)){ billAlready(co.id, e, x, tname, now); dup.push(e); }
+        // bridge 2.1.4 could not check Tally first: nothing was posted; the bill stays waiting, with that one line
+        else if (postCheckFail(x)){ e.postCheckFailed = {at: now, message: plainMsg(x.message) || "Could not check Tally, not posted. Try again."}; e.postError = ""; checkFailed++; }
+        else if (x && x.ok && (x.verified === true || postAltered(x))){ ok++; if (postAltered(x)) altered++; billPosted(co.id, e, x, tname, now); if (x.optional) optionalN++; }
         else if (x && x.ok){ unverified++; e.postUnconfirmed = {at: now, company: x.company || tname, optional: /Optional/.test(x.verifyNote || ''), pending: !!x.pendingCheck};
           e.postError = (/Optional/.test(x.verifyNote || '') && x.message) ? plainMsg(x.message) : x.pendingCheck ? "In Tally, not yet read back: FinCom reads it back from Tally by itself in a moment." : "In Tally, not yet read back: Tally took it, but FinCom has not found it in Tally since, so it is not counted as posted. Look in Tally (Day Book, and Display More Reports → Exception Reports → Optional Vouchers). If it is not there, post it again." + (x.verifyNote ? " [" + x.verifyNote + "]" : "");
           failed.push({id: e.id, no: e.x.invoiceNo, party: e.x.vendorName, msg: "In Tally, not yet read back", unread: true}); }
@@ -1215,8 +1219,8 @@ async function postBillsToTally(opts){
         Store.saveEntry(co.id, e);
       });
     }
-    S.billPost = {done: true, ok, bad: failed.length, dup: dup.length, failed, optional: optionalN, unverified, altered, masters: masterWords, company: tname};
-    toast(ok + " posted to " + tname + (altered ? " (" + altered + " altered in Tally)" : "") + (optionalN ? " (" + optionalN + " as Optional vouchers)" : "") + (dup.length ? ", " + dup.length + " already there" : "") + (failed.length ? ", " + failed.length + " not posted" : "") + ".");
+    S.billPost = {done: true, ok, bad: failed.length, dup: dup.length, failed, optional: optionalN, unverified, altered, checkFailed, masters: masterWords, company: tname};
+    toast(ok + " posted to " + tname + (altered ? " (" + altered + " altered in Tally)" : "") + (optionalN ? " (" + optionalN + " as Optional vouchers)" : "") + (dup.length ? ", " + dup.length + " already there" : "") + (checkFailed ? ", " + checkFailed + " not posted: Tally could not be checked first" : "") + (failed.length ? ", " + failed.length + " not posted" : "") + ".");
   } catch (e){
     if (e && e.code === "cancelled"){ S.billPost = {cancelled: e.message}; toast(e.message); }
     else { S.billPost = {error: e.message, failed}; toast("Posting failed: " + e.message); }
@@ -1226,8 +1230,14 @@ async function postBillsToTally(opts){
 // a bill Tally has: marked as posted, with Tally's voucher
 function billPosted(cid, e, x, tname, now){
   logPosting({what: "bill", id: e.id, action: postAltered(x) ? "altered" : "posted", co: cid, ref: e.x.invoiceNo, party: e.x.vendorName, amount: num(e.x.total), tally: {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", company: x.company || tname}, by: (Cloud.st && Cloud.st.email) || ""});
-  e.exportedAt = now; e.postError = ""; e.postUnconfirmed = null; e.postedVia = "bridge"; e.postedInto = x.company || tname; e.postedOptional = !!x.optional; e.postVerified = x.verified === true; e.postAltered = postAltered(x); e.tallyVchNo = x.vchNumber || "";
+  e.exportedAt = now; e.postError = ""; e.postUnconfirmed = null; e.postCheckFailed = null; e.postedVia = "bridge"; e.postedInto = x.company || tname; e.postedOptional = !!x.optional; e.postVerified = x.verified === true; e.postAltered = postAltered(x); e.tallyVchNo = x.vchNumber || "";
   e.tally = {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", at: now, by: (Cloud.st && Cloud.st.email) || "", company: x.company || tname};
+}
+// already in Tally (bridge 2.1.4 checks Tally for the same party, bill no., date and amount at every posting): marked as
+// in Tally with Tally's voucher, as a verified posting is, and said "Already in Tally"
+function billAlready(cid, e, x, tname, now){
+  billPosted(cid, e, Object.assign({}, x, {ok: true, verified: true, vchNumber: x.vchNumber || x.vchNo || "", vchDate: x.vchDate || x.date || ""}), tname, now);
+  e.postNote = "Already in Tally"; e.postAlreadyMsg = plainMsg(x.message) || "";
 }
 // the bridge has read back the bills it put in Tally: the ones found count as posted now
 function billsAfterCheck(cid, chk, tname){
@@ -1238,7 +1248,8 @@ function billsAfterCheck(cid, chk, tname){
   [].concat((chk && chk.results) || []).forEach(x => {
     const e = d.entries[x.id];
     if (!e || e.exportedAt || !e.postUnconfirmed) return;
-    if (x.ok && (x.verified === true || postAltered(x))){ billPosted(cid, e, x, tname, now); n++; }
+    if (postAlready(x)){ billAlready(cid, e, x, tname, now); n++; }
+    else if (x.ok && (x.verified === true || postAltered(x))){ billPosted(cid, e, x, tname, now); n++; }
     else { e.postUnconfirmed = Object.assign({}, e.postUnconfirmed, {pending: false}); e.postError = x.ok ? "In Tally, not yet read back: Tally took it, but FinCom did not find it in Tally afterwards. Look in Tally before posting it again." : "Failed: " + (plainMsg(x.message) || "not found in Tally"); }
     Store.saveEntry(cid, e);
   });

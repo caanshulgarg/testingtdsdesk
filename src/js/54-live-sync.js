@@ -233,7 +233,7 @@ const Live = {
     this.ws = ws; this.st = "connecting";
     ws.onopen = () => { this.join(); clearInterval(this.hb); this.hb = setInterval(() => { this.send("phoenix", "heartbeat", {}); this.tokenTick(); }, 25000); };
     ws.onmessage = ev => { let m = null; try { m = JSON.parse(ev.data); } catch (e){} if (m) this.got(m); };
-    ws.onclose = () => { clearInterval(this.hb); if (this.ws === ws) this.ws = null; this.st = "off"; this.jobsTopic = ""; this.jobsLive = false; this.booksTopic = ""; this.booksLive = false; this.postsTopic = ""; this.postsLive = false; this.top(); if (!this.stopped) this.later(); };
+    ws.onclose = () => { clearInterval(this.hb); if (this.ws === ws) this.ws = null; this.st = "off"; this.jobsTopic = ""; this.jobsLive = false; this.booksTopic = ""; this.booksLive = false; this.postsTopic = ""; this.postsLive = false; this.tallyTopic = ""; this.top(); if (!this.stopped) this.later(); };
     ws.onerror = () => { try { ws.close(); } catch (e){} };
   },
   stop(){ this.stopped = true; clearTimeout(this.rt); clearInterval(this.hb); const w = this.ws; this.ws = null; this.st = "off"; try { if (w) w.close(); } catch (e){} },
@@ -272,6 +272,14 @@ const Live = {
     const f = Cloud.st.firm; this.postsTopic = "realtime:fincom-posts-" + f; this.postsRef = String(this.ref + 1);
     this.send(this.postsTopic, "phx_join", {config: {broadcast: {self: false, ack: false}, presence: {key: ""}, postgres_changes: [{event: "*", schema: "public", table: "tally_post_jobs", filter: "firm_id=eq." + f}], private: false}, access_token: this.token});
   },
+  // review of 02-Oct-2026 (item 7): a Tally computer's heartbeat with a new last read, a read going on, or Tally's state
+  // changed, passed on at once by tally-ingest on the firm's broadcast channel (no table, no SQL): the Post page's
+  // "read 17:43" / "Reading now…" changes without waiting for FinCom to look again
+  joinTally(){
+    if (typeof TCloud !== "object" || !TCloud.on() || this.tallyTopic) return;
+    const f = Cloud.st.firm; this.tallyTopic = "realtime:fincom-tally-" + f;
+    this.send(this.tallyTopic, "phx_join", {config: {broadcast: {self: false, ack: false}, presence: {key: ""}, private: false}, access_token: this.token});
+  },
   bookChanged(r){
     // the Tally computer sent the ledgers again: the client's one ledger list is read again (Ledgers)
     try { if (typeof Ledgers === "object") Ledgers.bookRow(r); } catch (e){}
@@ -284,6 +292,10 @@ const Live = {
     this.bookT = setTimeout(() => { try { if (TCloud.st[cid]) TCloud.st[cid].at = 0; const f = LK.fr(); f.cat = 0; LK.cloudFresh(true, true); } catch (e){} }, 1500);   // the day's last pieces settle first
   },
   got(m){
+    if (this.tallyTopic && m.topic === this.tallyTopic){
+      if (m.event === "broadcast" && m.payload && m.payload.event === "beat" && typeof TLight === "object") TLight.beatIn(m.payload.payload);
+      return;
+    }
     if (this.postsTopic && m.topic === this.postsTopic){
       if (m.event === "phx_reply" && m.ref === this.postsRef) this.postsLive = !!(m.payload && m.payload.status === "ok");
       else if (m.event === "system" && m.payload && m.payload.status === "error") this.postsLive = false;
@@ -301,7 +313,7 @@ const Live = {
       return;
     }
     if (m.event === "phx_reply" && m.ref === this.joinRef){
-      if (m.payload && m.payload.status === "ok"){ this.st = "live"; this.err = ""; this.wait = 1000; this.catchUp(); this.joinJobs(); this.joinBooks(); this.joinPosts(); }
+      if (m.payload && m.payload.status === "ok"){ this.st = "live"; this.err = ""; this.wait = 1000; this.catchUp(); this.joinJobs(); this.joinBooks(); this.joinPosts(); this.joinTally(); }
       else { this.st = "error"; this.err = JSON.stringify((m.payload || {}).response || {}).slice(0, 200); }
       this.top(); return;
     }

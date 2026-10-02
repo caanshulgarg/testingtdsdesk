@@ -76,7 +76,9 @@ try:
     n0 = len(fake_cloud.SENT)
     g = re.search(r"<GUID>([^<]*)</GUID>", [p for d, p in fake_tally.V if d == D1][0]).group(1)
     fake_tally.edit_amount(g, 2)
-    ok(until(lambda: (D1 in [d for c, d in fake_cloud.SENT[n0:]]) and "<GUID>%s</GUID>" % g in fake_cloud.DAYS[(CO, D1)] and fake_cloud.DAYS[(CO, D1)] == open(_os.path.join(sync_dir()[0], "days", "20260310.xml"), encoding="utf-8").read(), 120, 2),
+    # the day changed (D1) as kept on disk: "20260310.xml" was written here, the real client's D1, so on the made-up books
+    # (D1 = 20260318) the cloud's copy never matched and the step always ran out its 120 s (02-Oct-2026)
+    ok(until(lambda: (D1 in [d for c, d in fake_cloud.SENT[n0:]]) and "<GUID>%s</GUID>" % g in fake_cloud.DAYS[(CO, D1)] and fake_cloud.DAYS[(CO, D1)] == open(_os.path.join(sync_dir()[0], "days", D1 + ".xml"), encoding="utf-8").read(), 120, 2),
        "an entry changed in Tally: its day goes to the cloud again")
     ok(len(set(d for c, d in fake_cloud.SENT[n0:])) <= 3, "and only the days that changed: " + ", ".join(sorted(set(d for c, d in fake_cloud.SENT[n0:]))))
     # ---------- the cloud down: the day waits on disk, then goes

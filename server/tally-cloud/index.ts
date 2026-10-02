@@ -637,6 +637,17 @@ Deno.serve(async (req) => {
         const want = (dev as any).want_update_at, sent = (dev as any).want_sent_at;
         const updateNow = !!want && (!sent || Date.parse(want) > Date.parse(sent));
         await db.from("tally_devices").update(updateNow ? { info, want_sent_at: want } : { info }).eq("id", dev.id);
+        // 02-Oct-2026: a new last read, a read going on, or Tally's state changed: passed on at once on the firm's
+        // broadcast channel (FinCom's pages listen: Live.joinTally), so "read 17:43" / "Reading now…" changes at once
+        // instead of when a page next looks at tally_devices. Only the times and states, nothing of the books or keys
+        const pb = (prevInfo.beat && typeof prevInfo.beat === "object") ? prevInfo.beat : {};
+        const said = (x: any) => JSON.stringify([x.lastRead || "", !!x.updating, x.tallyState || "", !!x.paused, x.notAnsweringSince || "",
+          (Array.isArray(x.companies) ? x.companies : []).map((c: any) => [c.name, c.lastRead || "", c.at || ""])]);
+        if (said(pb) !== said(beat)) {
+          await broadcast("fincom-tally-" + firm, "beat", { device: dev.id, beat: { at: beat.at, every: beat.every, lastRead: beat.lastRead, updating: beat.updating, tallyState: beat.tallyState,
+            tally: beat.tally, paused: beat.paused, notAnsweringSince: beat.notAnsweringSince, busySince: beat.busySince, open: beat.open,
+            companies: beat.companies.map((c: any) => ({ name: c.name, open: c.open, at: c.at, phase: c.phase, waiting: c.waiting, lastRead: c.lastRead })) } });
+        }
         const { count: waiting } = await db.from("tally_post_jobs").select("id", { count: "exact", head: true }).eq("device_id", dev.id).eq("status", "waiting");
         const posts = mayPost(dev, me.id) ? waiting : 0;
         // fast-sync (bridge 1.15.0): the computer's own Realtime channel, where the database wakes it the moment a
@@ -666,7 +677,10 @@ Deno.serve(async (req) => {
         const s = (v: unknown, n: number) => typeof v === "string" ? v.slice(0, n) : "";
         const results = (Array.isArray(body.results) ? body.results : []).slice(0, 5000).map((r: any) => ({ id: s(r?.id, 200), ok: !!r?.ok, verified: r?.verified === true ? true : r?.verified === false ? false : null,
           message: s(r?.message, 1000), vchNumber: s(r?.vchNumber, 60), vchType: s(r?.vchType, 100), guid: s(r?.guid, 100), masterId: s(r?.masterId, 30), vchDate: s(r?.vchDate, 8),
-          optional: !!r?.optional, alreadyThere: !!r?.alreadyThere, kind: s(r?.kind, 10), state: s(r?.state, 12), reason: s(r?.reason, 500) }));
+          optional: !!r?.optional, alreadyThere: !!r?.alreadyThere, kind: s(r?.kind, 10), state: s(r?.state, 12), reason: s(r?.reason, 500),
+          // bridge 2.1.4: Tally checked for the same party, bill no., date and amount at the moment of posting: already
+          // there (with its voucher), or the check could not be made (nothing posted)
+          already: !!r?.already, checkFailed: !!r?.checkFailed, vchNo: s(r?.vchNo, 60) }));
         // 02-Oct-2026: each entry's state as the bridge sees it (waiting / sending / sent / in_tally / failed, with why)
         const STATES = ["waiting", "sending", "sent", "in_tally", "failed"];
         const items = Array.isArray(body.items) ? body.items.slice(0, 5000).map((x: any) => ({ id: s(x?.id, 200), kind: s(x?.kind, 10),

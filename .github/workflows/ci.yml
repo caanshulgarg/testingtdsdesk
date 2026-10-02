@@ -1,0 +1,137 @@
+# Checks on every push to tax-accuracy (and by hand from the Actions tab):
+#   bridge-linux: the Go bridge vetted for Linux and Windows, its tests, and go.mod/go.sum exactly as `go mod tidy` leaves them
+#   app:          the legacy program (build.py) and the React test build (app/dist-test), kept for the tests
+#   tests:        the tests in tests/ci/tests.txt (those that pass without a client's books in tests/data, which is never in
+#                 git; they read the made-up books in tests/fixtures/books), in parallel shares, by tests/ci/run_ci.sh
+# Tests left out, and why, are in tests/ci/manual.txt. Nothing here publishes anything.
+name: CI
+
+on:
+  push:
+    branches: [tax-accuracy]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bridge-linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: bridge-go
+    env:
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: bridge-go/go.mod
+          cache-dependency-path: bridge-go/go.sum
+      - name: go.mod and go.sum as `go mod tidy` leaves them
+        run: |
+          go mod verify
+          go mod tidy -diff || { echo "::error file=bridge-go/go.mod::go.mod/go.sum differ from what 'go mod tidy' makes (the diff above): run 'cd bridge-go && go mod tidy' and commit"; exit 1; }
+      - name: go vet (Linux)
+        run: go vet ./...
+      - name: go vet (Windows)
+        run: GOOS=windows go vet ./...
+      - name: go test
+        run: go test -count=1 ./...
+
+  app:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: npm ci
+        working-directory: app
+        run: npm ci
+      - name: Legacy program for the React app (build.py --react)
+        working-directory: app
+        run: npm run legacy
+      - name: React test build (app/dist-test)
+        working-directory: app
+        run: npm run build:test
+      - name: Single-page builds (site/, site-test/) the rule and older screen tests read
+        run: python3 build.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: builds
+          path: |
+            site/
+            site-test/
+            app/legacy/
+            app/public/assets/
+            app/dist-test/
+          if-no-files-found: error
+          retention-days: 3
+
+  tests:
+    needs: app
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    env:
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: builds
+          path: .
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: tests/requirements.txt
+      - uses: actions/setup-go@v5
+        # the Go bridge tests (run_gobridge*.py) build the bridge
+        with:
+          go-version-file: bridge-go/go.mod
+          cache-dependency-path: bridge-go/go.sum
+      - uses: denoland/setup-deno@v2
+        # the Supabase function tests (run_*_server.py, run_beat_history.py) run the functions under Deno
+        with:
+          deno-version: v2.x
+      - name: Python packages and Chromium
+        run: |
+          python -m pip install -r tests/requirements.txt
+          python -m playwright install --with-deps chromium
+      - name: PostgreSQL 16 binaries (tests/pg_stand.py starts its own throwaway server from /usr/lib/postgresql/16/bin)
+        run: |
+          if [ ! -x /usr/lib/postgresql/16/bin/initdb ]; then
+            sudo apt-get update -q && sudo apt-get install -y -q postgresql-16
+          fi
+          /usr/lib/postgresql/16/bin/postgres --version
+          id postgres
+      - name: Tests (share ${{ matrix.shard }} of 4)
+        run: |
+          export PWSH="$(command -v pwsh || echo /usr/bin/pwsh)"
+          tests/ci/run_ci.sh --shard ${{ matrix.shard }}/4
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: test-logs-${{ matrix.shard }}
+          path: tests/out/
+          if-no-files-found: ignore
+          retention-days: 7

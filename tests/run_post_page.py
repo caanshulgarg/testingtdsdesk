@@ -1,7 +1,8 @@
 """python3 run_post_page.py - review of 02-Oct-2026, C15-C18, B11, B14: the Post to Tally page and where postings go.
-  - one line: "Posting into: GARG SHEKHAR & COMPANY · FinCom Bridge 2.1.1 · Ready", or the action to take ("Tally not open
-    on NWS144", "Choose the Tally company", "Install FinCom Bridge");
-  - one table of the entries (date, party, bill no., amount, ledgers, state, Preview / Post / Back to review);
+  - one line: "Posting into GARG SHEKHAR & COMPANY · Tally open on NWS144 · Update now" (the bridge's version and "Ready"
+    under More, second pass of 02-Oct-2026), and a second line only for the action to take ("Tally not open on NWS144",
+    "Choose the Tally company", "Install FinCom Bridge");
+  - one table of the bills ready to post (date, party, bill no., amount, the ledgers on one line, Preview / Back to review);
   - one main button "Post N to Tally"; the rest under More; the finished postings below;
   - a posting stopped by the company check (the cloud's notAllowed): "Not sent to Tally: choose the Tally company" with a
     button to Client setup → Tally, never "Tally's reason"; the bills stay waiting;
@@ -62,24 +63,29 @@ with sync_playwright() as p:
     cid = pg.evaluate(SETUP); pg.wait_for_timeout(1200)
     E = lambda js, *a: pg.evaluate(js, *a)
     line = lambda: pg.inner_text("#app [data-post-line]").replace("\n", " ").strip() if pg.locator("#app [data-post-line]").count() else ""
+    # second pass of 02-Oct-2026: what to do is a second line, only when something is wrong
+    prob = lambda: pg.inner_text("#app [data-post-problem]").replace("\n", " ").strip() if pg.locator("#app [data-post-problem]").count() else ""
     # B14: the company set by itself on opening the client (one Tally company linked, same GSTIN)
     co = E("(() => { const c = CO(); return {postTo: c.postTo, by: c.postToBy, at: !!c.postToAt}; })()")
     ok(co == {"postTo": GARG, "by": "auto", "at": True} and any(x.get("postTo") == GARG for x in E("window.__saved")),
        "B14. opening the client: postTo set to GARG SHEKHAR & COMPANY by itself (auto) and saved (%s)" % co)
     # review 20-21 (02-Oct-2026): the company found by itself is a guess: posting waits until a person confirms it
-    ok(E("choiceState(CO(), 'postTo')") == "guessed" and line().endswith("Confirm the Tally company"), "review 20. the company found by itself is a guess to confirm: '%s'" % line())
+    ok(E("choiceState(CO(), 'postTo')") == "guessed" and "confirm the Tally company" in prob() and prob().endswith("Confirm the Tally company"), "review 20. the company found by itself is a guess to confirm: '%s'" % prob())
     ok(E("postToProblem(CO(), 'GARG SHEKHAR & COMPANY')").startswith("Confirm the Tally company"), "review 21c. and posting is refused until it is confirmed")
     E("() => { choiceConfirm(CO(), 'postTo', 'GARG SHEKHAR & COMPANY'); render(); }"); pg.wait_for_timeout(300)
     # C15: one line
-    ok(pg.locator("#app [data-post-line]").count() == 1 and line() == "Posting into: GARG SHEKHAR & COMPANY · FinCom Bridge 2.1.1 · Ready", "C15. one line: '%s'" % line())
+    ok(pg.locator("#app [data-post-line]").count() == 1 and line() == "Posting into GARG SHEKHAR & COMPANY · Tally open on NWS144 · Update now" and prob() == "", "C15. one line, nothing else: '%s'" % line())
+    E("document.querySelector(\"#app details[data-more='post']\").open = true")
+    ok(pg.inner_text("#app [data-post-bridge]") == "FinCom Bridge 2.1.1 · Ready", "C15. the bridge's version and Ready under More")
+    E("document.querySelector(\"#app details[data-more='post']\").open = false")
     # C16: one table
     ok(pg.locator("#app table[data-post-table]").count() == 1 and pg.locator("#app [data-post-row]").count() == 2, "C16. one table of the entries")
     hd = E("Array.from(document.querySelectorAll('#app [data-post-table] thead th')).map(t => t.textContent)")
-    ok(hd[:6] == ["Date", "Party", "Bill no.", "Amount", "Ledgers", "State"], "C16. columns: %s" % hd)
+    ok(hd[:5] == ["Date", "Party", "Bill no.", "Amount", "Ledgers"], "C16. columns: %s" % hd)
     r1 = pg.inner_text("#app [data-post-row]:first-child").replace("\n", " ")
-    ok("01-Jul-2026" in r1 and "Alpha Consultants" in r1 and "A/1" in r1 and "Party: Alpha Consultants" in r1 and "Expense: Professional Charges" in r1 and "TDS: TDS Payable - Professional" in r1 and "Waiting for Tally" in r1,
-       "C16. a row: date, party, bill no., amount, ledgers by role, Waiting for Tally (%s)" % r1[:160])
-    ok(all(pg.locator("#app [data-post-row]:first-child button:has-text('%s')" % t).count() == 1 for t in ("Preview", "Post", "Back to review")), "C16. Preview, Post, Back to review on each")
+    ok("01-Jul-2026" in r1 and "Alpha Consultants" in r1 and "A/1" in r1 and "Alpha Consultants · Professional Charges · TDS Payable - Professional" in r1,
+       "C16. a row: date, party, bill no., amount, the ledgers on one line (%s)" % r1[:160])
+    ok(all(pg.locator("#app [data-post-row]:first-child button:has-text('%s')" % t).count() == 1 for t in ("Preview", "Back to review")), "C16. Preview and Back to review on each (one Post button for the section)")
     # C17: one main button, the rest under More
     prim = E("Array.from(document.querySelectorAll('#app [data-post-page] .btn.primary')).filter(b => !b.closest('details') && b.offsetParent).map(b => b.textContent)")
     ok(prim == ["Post 2 to Tally"], "C17. one main button: %s" % prim)
@@ -94,12 +100,12 @@ with sync_playwright() as p:
     ok(E("(() => { const t = document.querySelector('#app [data-post-table]'), j = document.querySelector('#app [data-post-jobs]'); return !j || !!(t.compareDocumentPosition(j) & 4); })()"), "C18. the postings in FinCom's cloud come below the table")
     # C15: the action to take
     E("() => { TCloud.pane.devices[0].info.bridges['go-1'].tallyState = 'closed'; render(); }"); pg.wait_for_timeout(300)
-    ok(line() == "Posting into: GARG SHEKHAR & COMPANY · FinCom Bridge 2.1.1 · Tally not open on NWS144", "C15. Tally closed there: '%s'" % line())
+    ok(line() == "Posting into GARG SHEKHAR & COMPANY" and prob() == "Tally not open on NWS144.", "C15. Tally closed there: '%s' / '%s'" % (line(), prob()))
     E("() => { TCloud.pane.devices[0].info.bridges['go-1'].tallyState = 'open'; render(); }")
     E("() => { const c = CO(); window.__keep = c.postTo; c.postTo = ''; AutoPostTo.at[c.id] = Date.now(); render(); }"); pg.wait_for_timeout(300)
-    ok(line().endswith("Choose the Tally company") and pg.locator("#app [data-post-line] [data-post-action]").evaluate("b => b.tagName") == "BUTTON", "C15. no company chosen: 'Choose the Tally company' (%s)" % line())
+    ok(prob().endswith("Choose the Tally company") and pg.locator("#app [data-post-problem] [data-post-action]").evaluate("b => b.tagName") == "BUTTON", "C15. no company chosen: 'Choose the Tally company' (%s)" % prob())
     E("() => { const c = CO(); c.postTo = window.__keep; TCloud.pane.devices = []; TCloud.on = () => false; render(); }"); pg.wait_for_timeout(300)
-    ok(line().endswith("Install FinCom Bridge"), "C15. no bridge anywhere: 'Install FinCom Bridge' (%s)" % line())
+    ok(prob().startswith("Install FinCom Bridge"), "C15. no bridge anywhere: 'Install FinCom Bridge' (%s)" % prob())
     E("() => { TCloud.on = () => TCloud.__on !== false; TCloud.pane.devices = [{id: 'd-1', name: 'NWS144', main_bridge: 'go-1', revoked: false, info: {computer: 'NWS144', bridges: {'go-1': {computer: 'NWS144', version: '2.1.1', mode: 'main', at: new Date().toISOString(), tallyState: 'open'}}}}]; render(); }")
     pg.wait_for_timeout(300)
     # B14: the cloud's notAllowed: not Tally's reason, a button to Client setup → Tally, the bills stay waiting
@@ -111,7 +117,7 @@ with sync_playwright() as p:
     app = pg.inner_text("#app")
     ok("Not sent to Tally: choose the Tally company." in na and "reason" not in app.lower().replace("’", "'").split("not sent to tally")[1][:400], "B14. 'Not sent to Tally: choose the Tally company', not Tally's reason (%s)" % na.replace("\n", " ")[:140])
     st = E("Object.values(D().entries).map(e => [e.status, !!e.exportedAt, e.postError || '', !!e.postFailedAt])")
-    ok(all(x == ["approved", False, "", False] for x in st) and pg.locator("#app [data-post-row]").count() == 2 and "Waiting for Tally" in pg.inner_text("#app [data-post-table]"),
+    ok(all(x == ["approved", False, "", False] for x in st) and pg.locator("#app [data-post-row]").count() == 2 and pg.inner_text("#app [data-post-main]") == "Post 2 to Tally",
        "B14. the bills stay under Post to Tally, waiting, not failed nor sent (%s)" % st)
     ok(any(r[0] == "tally_post_enqueue" for r in E("window.__rpc")), "B11. the posting went to the cloud queue (the client is linked there)")
     pg.click("#app [data-not-allowed] [data-choose-company]"); pg.wait_for_timeout(500)
@@ -148,13 +154,17 @@ with sync_playwright() as p:
     num = lambda t: int(([x for x in __import__("re").findall(r"\d+", t or "")] or ["-1"])[0])
     chip = E("(() => { const t = tallyStatus(CO()); return t.state + '|' + t.short; })()")
     tab = E("(() => { const b = Array.from(document.querySelectorAll('nav.sbar button')).find(x => /Post to Tally/.test(x.textContent)); return b ? b.textContent : ''; })()")
-    page = pg.inner_text("#app [data-post-count]") if pg.locator("#app [data-post-count]").count() else ""
+    page = pg.inner_text("#app [data-post-main]") if pg.locator("#app [data-post-main]").count() else ""
+    attn = E("(() => { const b = document.querySelector('nav.sbar [data-attn-n]'); return b ? b.textContent : ''; })()")
+    tab = E("(() => { const b = document.querySelector('nav.sbar [data-step=post] [data-step-n]'); return b ? b.textContent : ''; })()")
     E("() => { S.tab = 'dash'; render(); }"); pg.wait_for_timeout(600)
     dash = E("(() => { const t = Array.from(document.querySelectorAll('#app .dtile')).find(x => /Post to Tally/.test(x.textContent)); return t ? t.querySelector('b').textContent : ''; })()")
-    want = E("postCountFor(S.coId)"); sentRows = E("postRows(CO()).filter(r => r.sent).map(r => r.no + ':' + r.state[0]).join()")
+    want = E("postCountFor(S.coId)")
     got = [num(chip.split("|")[1]), num(tab), num(page), num(dash)]
-    ok(chip.startswith("waiting") and want > 0 and got == [want] * 4 and "T/1" in sentRows,
-       "8. one count: header chip, tab badge, Post page and dashboard tile all say %d (%s | %s | %s | %s)" % (want, chip, tab, page, dash))
+    # second pass of 02-Oct-2026: the count is "Ready to post"; the Tally file not confirmed (T/1) needs attention, a badge apart
+    ok(chip.startswith("waiting") and want == 2 and got == [want] * 4,
+       "8. one count: header chip, tab badge, Post button and dashboard tile all say %d (%s | %s | %s | %s)" % (want, chip, tab, page, dash))
+    ok(attn == "1" and E("postAttentionFor(S.coId)") == 1, "8. the Tally file not confirmed has its own badge on the tab: %r" % attn)
     E("() => { goStep('post', 'bills'); }"); pg.wait_for_timeout(400)
     # item 9: the import steps stack, also at phone width
     pg.set_viewport_size({"width": 375, "height": 800}); pg.wait_for_timeout(300)

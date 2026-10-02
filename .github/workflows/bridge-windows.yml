@@ -5,19 +5,41 @@
 # Nothing here signs anything or publishes anything.
 name: FinCom Bridge on Windows
 
+# Every push to tax-accuracy; on any other branch, a push that changes the bridge (bridge-go/, assets-test/bridge-go/) or
+# this file, as before. (A push filter cannot say "this branch always, others by path", so the `changes` job decides.)
 on:
   push:
-    paths:
-      - "bridge-go/**"
-      - "assets-test/bridge-go/**"
-      - ".github/workflows/bridge-windows.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: decide
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          run=false
+          if [ "$GITHUB_EVENT_NAME" != push ] || [ "$GITHUB_REF" = refs/heads/tax-accuracy ]; then
+            run=true
+          elif [ -z "$BEFORE" ] || [ "$BEFORE" = 0000000000000000000000000000000000000000 ] || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            run=true   # a new branch, or history rewritten: nothing to compare with
+          elif git diff --name-only "$BEFORE" "$GITHUB_SHA" | grep -qE '^(bridge-go/|assets-test/bridge-go/|\.github/workflows/bridge-windows\.yml$)'; then
+            run=true
+          fi
+          echo "run=$run" | tee -a "$GITHUB_OUTPUT"
+
   build:
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:

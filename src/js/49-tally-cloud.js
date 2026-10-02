@@ -609,9 +609,9 @@ const TLight = {
   st: {at: 0, busy: false, by: {}},
   refresh(){
     // every 30 s (a small database call; nothing is asked of Tally): a beat comes every 30 s, and "offline" is three missed
-    if (!TCloud.on() || this.st.busy || Date.now() - this.st.at < 30000) return;
+    if (!TCloud.on() || this.st.busy || Date.now() - this.st.at < 30000) return this.st.p || Promise.resolve();
     this.st.busy = true;
-    Promise.all([TCloud.restAll("tally_companies?select=company,client_id,device_id,gstin,linked_at&order=company.asc"), Cloud.api("tally_devices?select=id,name,last_seen,info,revoked")])
+    return this.st.p = Promise.all([TCloud.restAll("tally_companies?select=company,client_id,device_id,gstin,linked_at&order=company.asc"), Cloud.api("tally_devices?select=id,name,last_seen,info,revoked")])
       .then(([cos, devs]) => {
         this.st.devs = (devs || []).filter(d => !d.revoked); this.st.cos = cos || [];
         this.st.by = this.work((cos || []).filter(c => c.client_id), devs || [], Date.now());
@@ -619,8 +619,11 @@ const TLight = {
       }, () => {})
       .then(() => {
         this.st.at = Date.now(); this.st.busy = false;
-        // the top bar follows a change of state at once; nothing else is redrawn while someone types
-        const sig = JSON.stringify(tallyStatus(typeof CO === "function" && S.view === "company" ? CO() : null).parts || {});
+        // the top bar follows a change of state at once; nothing else is redrawn while someone types. The open client's
+        // last read and "reading now" are part of it (review of 02-Oct-2026: the Post page said "last read 15:34" at
+        // 17:43 because a new read time alone never drew the page again)
+        const co = typeof CO === "function" && S.view === "company" ? CO() : null, l = co ? tallyLine(co) : null;
+        const sig = JSON.stringify([tallyStatus(co).parts || {}, l ? [l.state, l.read, l.reading] : null]);
         const typing = document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
         if (S.view === "home" || (sig !== this.sig && !typing)) render();
         this.sig = sig;
@@ -691,13 +694,49 @@ function tallyLine(co){
     comp = b.computer || "this computer"; tally = b.tallyState || (b.tallyUp ? "open" : "closed");
     since = (b.stuck && b.stuck.since) || ""; paused = !!b.paused; read = man.readAt || man.seen || "";
   } else return null;
-  const o = (state, level, text) => ({state, level, text, computer: comp, read});
+  // "Reading now…": the bridge says a read is going on (beat.updating), or Update now was asked here and no newer read
+  // has come in yet (for three minutes at most)
+  const ask = TallyAsk[co.id], updating = !!(beat && beat.updating);
+  const reading = updating || !!(ask && now - ask.at < 180000 && !((Date.parse(read || 0) || 0) > ask.before));
+  const o = (state, level, text) => ({state, level, text, computer: comp, read, reading});
   if (bridge === "offline" || bridge === "none") return o("offline", "bad", comp + " is offline");
   if (tally === "closed") return o("closed", "warn", "Tally is closed on " + comp);
   if (since) return o("notanswering", "bad", "Tally is not answering on " + comp + " since " + tallyHm(since));
   if (paused) return o("paused", "warn", "Background reading paused on " + comp);
   return o("open", "ok", "Tally open on " + comp + (read ? " \u00b7 last read " + tallyHm(read) : ""));
 }
+// Update now asked here, per client: {at, before (the last read then)}, for "Reading now…" until a newer read comes in
+const TallyAsk = {};
+function tallyAskedRead(cid){
+  const co = S.companies && S.companies[cid];
+  let before = 0; try { const l = co ? tallyLine(co) : null; before = Date.parse((l && l.read) || 0) || 0; } catch (e){}
+  TallyAsk[cid] = {at: Date.now(), before};
+  try { if (typeof TLight === "object") TLight.st.at = 0; } catch (e){}
+}
+// a heartbeat passed on at once by FinCom's cloud (tally-ingest broadcasts "beat" on the firm's channel when the last
+// read, a read going on, or Tally's state changed; Live in src/js/54): the computer's beat as FinCom keeps it, merged
+Object.assign(TLight, {
+  beatIn(m){
+    if (!m || !m.device || !m.beat || typeof m.beat !== "object") return false;
+    let hit = false;
+    [].concat(this.st.devs || [], (TCloud.pane && TCloud.pane.devices) || []).forEach(d => {
+      if (!d || d.id !== m.device) return;
+      d.info = Object.assign({}, d.info || {}); d.info.beat = Object.assign({}, d.info.beat || {}, m.beat); hit = true;
+    });
+    if (hit) render();
+    else { this.st.at = 0; this.refresh(); }
+    return hit;
+  },
+  // the Post page and the Tally panel look again every 30 s while they are open (a read may have come in), and every
+  // few seconds while a read asked for here is awaited
+  tick(){
+    if (typeof document !== "object" || document.visibilityState !== "visible" || !TCloud.on() || S.view !== "company") return;
+    const cid = S.coId, ask = TallyAsk[cid];
+    if (ask && Date.now() - ask.at < 180000 && Date.now() - this.st.at > 5000) this.st.at = 0;
+    this.refresh();
+  }
+});
+if (typeof setInterval === "function") setInterval(() => { try { TLight.tick(); } catch (e){} }, 5000);
 // when the client's books were last read from Tally ("Books as of 15:34"): the bridge's last read of its company, else
 // when FinCom's copy was last brought in. Never shown as "now": entries made in Tally since then come at the next event
 function booksAsOf(cid){
@@ -715,6 +754,7 @@ function booksAsOf(cid){
 // FinCom's cloud (the bridge reads at once, also while its background reading is paused)
 function tallyUpdateNow(cid){
   cid = cid || S.coId;
+  tallyAskedRead(cid); render();
   if (cid === S.coId) return doAct("keepNow");
   if (typeof TCloud !== "object" || !TCloud.on()) return toast("Sign in to the firm account to ask the Tally computer.");
   TCloud.rpc("tally_want_update", {p_client: cid}).then(j => toast(j && j.ok ? "The Tally computer is asked to update now; the books here follow in a few minutes." : "No Tally computer is linked to this client yet."),

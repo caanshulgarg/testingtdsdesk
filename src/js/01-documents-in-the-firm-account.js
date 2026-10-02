@@ -3977,6 +3977,10 @@ function refreshStats(cid){
     // waiting: approved and not confirmed in Tally; inTally: confirmed there (review of 02-Oct-2026: the badge "In Tally"
     // counted every bill approved this year)
     waiting: v.filter(e => e.status === "approved" && !billInTally(e)).length,
+    // the one count for Tally (review of 02-Oct-2026): ready to post, and needing attention (postBucket, src/js/59);
+    // kept for a client whose bills are not loaded on this computer
+    ready: typeof postBills === "function" ? (postBills(cid) || {ready: []}).ready.length : 0,
+    attention: typeof postBills === "function" ? (postBills(cid) || {attention: []}).attention.length : 0,
     inTally: v.filter(e => billInTally(e) && (e.snapshot ? e.snapshot.fy : fyOf(e.x.invoiceDate)) === fy).length,
     tdsFy: v.filter(e => e.status === "approved" && e.snapshot && e.snapshot.fy === fy).reduce((a, e) => a + num(e.snapshot.tds), 0),
     invoicesFy: v.filter(e => e.status === "approved" && e.snapshot && e.snapshot.fy === fy).length,
@@ -3984,7 +3988,7 @@ function refreshStats(cid){
     dups: v.filter(e => e.status === "duplicate").length
   };
   const old = co.stats || {};
-  if (["drafts","check","waiting","inTally","tdsFy","invoicesFy","records","dups"].some(k => old[k] !== st[k])){
+  if (["drafts","check","waiting","ready","attention","inTally","tdsFy","invoicesFy","records","dups"].some(k => old[k] !== st[k])){
     co.stats = Object.assign(st, {fy, updatedAt: new Date().toISOString()});
     Store.saveCompany(co);
   }

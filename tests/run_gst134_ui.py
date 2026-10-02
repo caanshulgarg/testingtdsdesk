@@ -56,6 +56,7 @@ with sync_playwright() as p:
     pg.screenshot(path=OUT + "/gst-settings.png", full_page=False)
     pg.click('#app [data-confirm-foot="setup:gstset"] [data-cfm="save"]'); pg.wait_for_timeout(500)   # review 18 (02-Oct-2026): saved with Save
     pg.evaluate("S.tab = 'books'; render()"); pg.wait_for_timeout(2000)
+    if FIXTURE: pg.click('nav[aria-label="GST"] button[data-part="inreg"]'); pg.wait_for_timeout(1500)   # March's 3B does not draw (FINDING 6): the register first
     pg.select_option('select[aria-label=Month]', "202603"); pg.wait_for_timeout(1500)
     pg.click('nav[aria-label="GST"] button[data-part="inreg"]'); pg.wait_for_timeout(3000); t = pg.inner_text("#app")
     ok("Input register, Mar-2026" in t and "they agree." in t, "input register for the month ties to 3B table 4")

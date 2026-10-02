@@ -1,8 +1,16 @@
 """python3 run_gstregs_ui.py - GSTINs added in GST settings (PAN-checked); each GSTIN's settings on their own, with the
-question "this GSTIN only, all, or those ticked"; the GST tab working with no Tally day book at all."""
-import json, os, threading, functools, http.server
+question "this GSTIN only, all, or those ticked"; the GST tab working with no Tally day book at all.
+With the made-up books (tests/fixtures/books, books_data.FIXTURE) it runs for the made-up company (PAN AAGCL4827M, its UP
+GSTIN 09AAGCL4827M1ZZ from Client setup) and then checks that the day book's two registrations are read from it
+(EXPECTED.md, "GST: the Delhi registration's returns")."""
+import json, os, sys, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from books_data import CACHE, FIXTURE, GSTIN, GSTIN09, COMPANY
+# the client: the firm (real), or the made-up company; OTHER is another business's GSTIN, which must be refused
+NAME, PAN, OWN = (COMPANY, "AAGCL4827M", GSTIN09) if FIXTURE else ("Garg Shekhar & Company", "AANFG3202D", "09AANFG3202D1ZR")
+OTHER = "07AAJFQ3158R1ZH" if FIXTURE else "07AADCV3366N1ZU"     # the fixture: its customer Quillfeather's (made up)
 H = functools.partial(http.server.SimpleHTTPRequestHandler, directory=os.environ.get("TDSDESK_SITE", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "site-test"))); H.log_message = lambda *a: None
 srv = http.server.ThreadingHTTPServer(("localhost", 8149), H); threading.Thread(target=srv.serve_forever, daemon=True).start()
 OUT = os.environ.get("TDSDESK_OUT", "out"); fails, errors = [], []
@@ -12,26 +20,28 @@ def ok(c, w):
 with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1400, "height": 900}); pg.on("pageerror", lambda e: errors.append(str(e)))
     pg.goto("http://localhost:8149/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1500)
-    pg.evaluate("""() => { const c = newCompany({name: "Garg Shekhar & Company", gstin: "09AANFG3202D1ZR", pan: "AANFG3202D"}); S.companies[c.id] = c; S.coId = c.id; S.view = "company"; S.loadingCo = false;
+    pg.evaluate("""() => { const c = newCompany({name: "@NAME@", gstin: "@OWN@", pan: "@PAN@"}); S.companies[c.id] = c; S.coId = c.id; S.view = "company"; S.loadingCo = false;
       S.books = {loading: false, cid: c.id, vouchers: [], map: {}, meta: null, alloc: {}, challans: [], misCfg: {freq: "off"}, auditCfg: {freq: "off"}}; window.__bk = S.books;
-      window.__t = []; window.toast = m => { window.__t.push(m); }; S.tab = "gstset"; render(); }""")
+      window.__t = []; window.toast = m => { window.__t.push(m); }; S.tab = "gstset"; render(); }""".replace("@NAME@", NAME).replace("@OWN@", OWN).replace("@PAN@", PAN))
     pg.wait_for_timeout(1500); pg.evaluate("S.books = window.__bk; render();"); pg.wait_for_timeout(1500)
     t = pg.inner_text("#app")
-    ok("GST registrations" in t and "09AANFG3202D1ZR" in t and "Uttar Pradesh" in t and "Client setup" in t, "no day book: GST settings open, the client's own GSTIN listed from Client setup")
-    ok("Settings of 09AANFG3202D1ZR" in t and pg.locator('section[data-greg="09"] select[aria-label="E-invoicing"]').count() == 1, "its settings are shown")
+    ok("GST registrations" in t and OWN in t and "Uttar Pradesh" in t and "Client setup" in t, "no day book: GST settings open, the client's own GSTIN listed from Client setup")
+    ok("Settings of " + OWN in t and pg.locator('section[data-greg="09"] select[aria-label="E-invoicing"]').count() == 1, "its settings are shown")
     last = lambda: (pg.evaluate("window.__t") or [""])[-1]
     def add(g):
         pg.fill('input[aria-label="New GSTIN"]', g); pg.click('button:text-is("Add GSTIN")'); pg.wait_for_timeout(700)
-    add("07AADCV3366N1ZU"); ok("PAN AADCV3366N" in last() and "AANFG3202D" in last() and "07AADCV3366N1ZU" not in pg.evaluate("GSTR.gstins(S.books)"), "another business's GSTIN is refused: " + last())
-    add("07AANFG3202D1ZA"); ok("check character" in last(), "a mistyped GSTIN is refused: " + last())
-    add("09AANFG3202D2Z" + pg.evaluate("gstinCheckChar('09AANFG3202D2Z0')")); ok("already has a GSTIN in Uttar Pradesh" in last(), "a second GSTIN in the same state: " + last())
-    g07 = "07AANFG3202D1Z" + pg.evaluate("gstinCheckChar('07AANFG3202D1Z0')"); g27 = "27AANFG3202D1Z" + pg.evaluate("gstinCheckChar('27AANFG3202D1Z0')")
+    add(OTHER); ok("PAN " + OTHER[2:12] in last() and PAN in last() and OTHER not in pg.evaluate("GSTR.gstins(S.books)"), "another business's GSTIN is refused: " + last())
+    bad = "07" + PAN + "1Z" + ("B" if pg.evaluate("gstinCheckChar('07%s1Z0')" % PAN) == "A" else "A")
+    add(bad); ok("check character" in last(), "a mistyped GSTIN is refused: " + last())
+    add("09" + PAN + "2Z" + pg.evaluate("gstinCheckChar('09%s2Z0')" % PAN)); ok("already has a GSTIN in Uttar Pradesh" in last(), "a second GSTIN in the same state: " + last())
+    g07 = "07" + PAN + "1Z" + pg.evaluate("gstinCheckChar('07%s1Z0')" % PAN); g27 = "27" + PAN + "1Z" + pg.evaluate("gstinCheckChar('27%s1Z0')" % PAN)
+    if FIXTURE: ok(g07 == GSTIN, "the Delhi GSTIN worked out for the PAN is the books' own, %s" % GSTIN)
     add(g07); ok(g07 in pg.evaluate("GSTR.gstins(S.books)") and "added" in last() and "Delhi" in last(), "the client's Delhi GSTIN is added: " + last())
     add(g27.lower()); ok(g27 in pg.evaluate("GSTR.gstins(S.books)"), "typed in small letters, taken as capitals")
     t = pg.inner_text("#app")
     ok("Settings of " + g27 in t and pg.locator('select[aria-label="Settings shown for"]').count() == 1 and pg.locator("section.dash-card h3:has-text('Settings of')").count() == 1, "one GSTIN's settings at a time, the one just added, with a chooser")
     pg.select_option('select[aria-label="Settings shown for"]', "09"); pg.wait_for_timeout(700)
-    ok("Settings of 09AANFG3202D1ZR" in pg.inner_text("#app"), "the chooser shows another GSTIN's settings")
+    ok("Settings of " + OWN in pg.inner_text("#app"), "the chooser shows another GSTIN's settings")
     # a change: asked, only this GSTIN by default
     pg.select_option('section[data-greg="09"] select[aria-label="E-invoicing"]', "no"); pg.wait_for_timeout(600)
     box = pg.inner_text("#confirmBox")
@@ -75,7 +85,7 @@ with sync_playwright() as p:
     # the GST tab with no day book
     pg.evaluate("S.tab = 'books'; S.booksTab = 'gst'; S.gstReg = '09'; render()"); pg.wait_for_timeout(1500)
     t = pg.inner_text("#app")
-    ok("09AANFG3202D1ZR" in t and "Quarterly (QRMP)" in t and "portal user gargup" in t, "GST tab: the GSTIN, its filing type and portal user are shown")
+    ok(OWN in t and "Quarterly (QRMP)" in t and "portal user gargup" in t, "GST tab: the GSTIN, its filing type and portal user are shown")
     ok(pg.locator('nav[aria-label="GST"] button').all_inner_texts() == ["2B", "Returns filed"] and "No Tally day book here yet" in t, "without a day book: 2B and Returns filed, and why the rest needs the day book")
     ok(pg.locator("#twoBIn").count() + pg.locator("text=Fetch 2B from the portal").count() >= 1, "2B can be brought in or fetched")
     ok(pg.locator("select[aria-label=Month] option").count() > 0 and pg.locator("select[aria-label=GSTIN] option").count() == 3, "months of the year and the three GSTINs to choose from")
@@ -83,12 +93,22 @@ with sync_playwright() as p:
     ok("Bring in" in pg.inner_text("#app") or "PDF" in pg.inner_text("#app"), "Returns filed opens")
     pg.screenshot(path=OUT + "/gstregs-gsttab.png", full_page=False)
     pg.click('.revfilter button.linkbtn:has-text("GST settings")'); pg.wait_for_timeout(1000)
-    ok(pg.evaluate("S.tab") == "gstset" and "Settings of 09AANFG3202D1ZR" in pg.inner_text("#app"), "the link goes to that GSTIN's settings")
+    ok(pg.evaluate("S.tab") == "gstset" and "Settings of " + OWN in pg.inner_text("#app"), "the link goes to that GSTIN's settings")
     # remove one added here
     pg.click('tr[data-key="%s"] button:text-is("remove")' % g27); pg.wait_for_timeout(500); pg.click('[data-cbx="yes"]'); pg.wait_for_timeout(700)
-    ok(g27 not in pg.evaluate("GSTR.gstins(S.books)") and pg.locator('tr[data-key="09AANFG3202D1ZR"] button:text-is("remove")').count() == 0, "an added GSTIN can be removed; the one from Client setup cannot")
+    ok(g27 not in pg.evaluate("GSTR.gstins(S.books)") and pg.locator('tr[data-key="%s"] button:text-is("remove")' % OWN).count() == 0, "an added GSTIN can be removed; the one from Client setup cannot")
+    if FIXTURE:
+        # the made-up day book: its two registrations come from the entries (CMPGSTIN), with nothing added by hand
+        # (EXPECTED.md: 07AAGCL4827M1Z3, Delhi, and 09AAGCL4827M1ZZ, Uttar Pradesh)
+        pg.evaluate("""(bk) => { const c = newCompany({name: "@NAME@", pan: "@PAN@"}); S.companies[c.id] = c; S.coId = c.id;
+          S.books = Object.assign({loading: false, challans: [], alloc: {}}, bk, {cid: c.id, misCfg: {freq: "off"}, auditCfg: {freq: "off"}}); S.books.map = Books.mapLedgers(bk.vouchers, {}); LedMaster.refresh(S.books); window.__bk = S.books;
+          S.tab = "gstset"; render(); }""".replace("@NAME@", NAME + " (books)").replace("@PAN@", PAN), json.load(open(CACHE)))
+        pg.wait_for_timeout(1200); pg.evaluate("S.books = window.__bk; render();"); pg.wait_for_timeout(1500)
+        t = pg.inner_text("#app")
+        ok(sorted(pg.evaluate("GSTR.gstins(S.books)")) == [GSTIN, GSTIN09] and GSTIN in t and GSTIN09 in t and "Delhi" in t and "Uttar Pradesh" in t, "fixture: the day book's two registrations listed, %s and %s" % (GSTIN, GSTIN09))
+        ok(pg.locator('tr[data-key="%s"] button:text-is("remove")' % GSTIN).count() == 0, "fixture: a registration read from the books cannot be removed")
     # a client with no GSTIN at all
-    pg.evaluate("""() => { const c = newCompany({name: "No GST Co", pan: "AANFG3202D"}); S.companies[c.id] = c; S.coId = c.id; S.books = {loading: false, cid: c.id, vouchers: [], map: {}, meta: null, alloc: {}, challans: []}; window.__bk = S.books; S.tab = 'books'; S.booksTab = 'gst'; render(); }""")
+    pg.evaluate("""() => { const c = newCompany({name: "No GST Co", pan: "@PAN@"}); S.companies[c.id] = c; S.coId = c.id; S.books = {loading: false, cid: c.id, vouchers: [], map: {}, meta: null, alloc: {}, challans: []}; window.__bk = S.books; S.tab = 'books'; S.booksTab = 'gst'; render(); }""".replace("@PAN@", PAN))
     pg.wait_for_timeout(800); pg.evaluate("S.books = window.__bk; render();"); pg.wait_for_timeout(800)
     ok("Add the client’s GSTIN in" in pg.inner_text("#app"), "no GSTIN: the GST tab says to add one in GST settings")
     br.close()

@@ -57,7 +57,8 @@ function ClientHeader() {
   const goSide = (id) => { S.step = null; S.tab = "invoices"; S.filter = id; S.selected = null; S.drawerOpen = false; S.reviewTable = false; render(); window.scrollTo(0, 0); };
   return <>{head}<nav className="sbar" aria-label="Status" data-bill-filters={bills ? "" : undefined}>
     {[["review", "To review", n(c.review)], ["post", "Post to Tally", n(c.post)], ["done", "In Tally", n(c.done)]].map(([id, label, k]) =>
-      <button key={id} aria-selected={now === id && !onSide} onClick={() => goStep(id)}>{label}{k !== "" && <> <span className="sbar-n">{k}</span></>}</button>)}
+      <button key={id} aria-selected={now === id && !onSide} onClick={() => goStep(id)} data-step={id}>{label}{k !== "" && <> <span className="sbar-n" data-step-n="">{k}</span></>}
+        {id === "post" && c.postAttention > 0 && <> <span className="sbar-n attn" data-attn-n="" title={c.postAttention + " need" + (c.postAttention === 1 ? "s" : "") + " your attention"}>{c.postAttention}</span></>}</button>)}
     {side.map(([id, label]) => <button key={id} aria-selected={onSide && S.filter === id} onClick={() => goSide(id)}>{label} <span className="sbar-n">{cnt(id)}</span></button>)}
   </nav></>;
 }

@@ -175,7 +175,8 @@ const CloudJobs = {
   },
   forClient(cid){ return (this.list || []).filter(j => !cid || j.client_id === cid); },
   idsOf(j){ return Array.isArray(j.entry_ids) ? j.entry_ids.map(String) : null; },
-  okIn(j){ return new Set([].concat(j.results || []).filter(r => r && r.ok).map(r => String(r.id))); },
+  // an entry this posting put in Tally, or found there already (bridge 2.1.4: "Already in Tally (voucher no. …)")
+  okIn(j){ return new Set([].concat(j.results || []).filter(r => r && (r.ok || postAlready(r))).map(r => String(r.id))); },
   // when every entry of a posting went in through a later posting of the same client; null when one has not
   postedLater(j){
     const ids = this.idsOf(j);
@@ -220,6 +221,40 @@ const CloudJobs = {
       if (stopped && !j.dismissed_at && !this.postedLater(j) && this.leftToSend(j) !== 0) return true;
       return (Date.parse(j.updated_at || j.created_at) || 0) >= week;
     });
+  },
+  // review of 02-Oct-2026 (item 5): the postings of a client as people think of them. A failed or cancelled posting
+  // whose every entry a later posting put in is one with that later posting ("Posted 07:51 (second try)", without the
+  // old error); one still failed, not dismissed, with something left to send, needs a decision (Retry, Dismiss);
+  // everything else is history, hidden behind "History (N)". Successful postings are never dismissed.
+  stopped(j){ return ["failed", "cancelled"].includes(j.status); },
+  live(j){ return ["waiting", "taken", "running"].includes(j.status) || !!j.checking; },
+  // the later posting that put in every entry of a stopped one (the one that finished it), or null
+  absorber(j){
+    const ids = this.idsOf(j);
+    if (!this.stopped(j) || !ids || !ids.length) return null;
+    const later = (this.list || []).filter(k => k.id !== j.id && k.client_id === j.client_id && k.created_at > j.created_at && !this.stopped(k));
+    let last = null;
+    for (const id of ids){
+      const k = later.filter(x => this.okIn(x).has(id)).sort((a, b) => String(a.updated_at || a.created_at).localeCompare(String(b.updated_at || b.created_at)))[0];
+      if (!k) return null;
+      if (!last || String(k.updated_at || k.created_at) > String(last.updated_at || last.created_at)) last = k;
+    }
+    return last;
+  },
+  needing(cid){
+    return this.forClient(cid).filter(j => this.stopped(j) && !j.dismissed_at && !this.absorber(j) && this.leftToSend(j) !== 0);
+  },
+  // [{job, tries: [the stopped postings it absorbed], state: posted | partly | failed | cancelled | nothing, at}]: newest first
+  history(cid){
+    const jobs = this.forClient(cid), need = new Set(this.needing(cid).map(j => j.id)), by = new Map(), out = [];
+    jobs.forEach(j => { const a = this.absorber(j); if (a){ if (!by.has(a.id)) by.set(a.id, []); by.get(a.id).push(j); } });
+    jobs.forEach(j => {
+      if (need.has(j.id) || this.live(j) || this.absorber(j)) return;
+      const ok = this.okIn(j).size, n = num(j.n) || (this.idsOf(j) || []).length;
+      const state = j.status === "done" ? (ok >= n || !n ? "posted" : "partly") : this.leftToSend(j) === 0 ? "nothing" : j.status;
+      out.push({job: j, tries: (by.get(j.id) || []).sort((a, b) => String(a.created_at).localeCompare(String(b.created_at))), state, ok, n, at: j.updated_at || j.created_at});
+    });
+    return out.sort((a, b) => String(b.at).localeCompare(String(a.at)));
   },
   // one line a posted entry: what it was (the bill, bank line or sale named by its id), the voucher Tally made
   rows(cid){

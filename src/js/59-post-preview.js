@@ -85,8 +85,17 @@ function postAltered(x){
   const m = String(x.message || "");
   return /\bALTERED\b/i.test(m) && !/\bCREATED\b\s*[:=]?\s*[1-9]/i.test(m);
 }
+// FinCom Bridge 2.1.4 checks Tally for the same party, bill no., date and amount at the moment of every posting (first
+// post, Retry, Post again) and answers per voucher: {ok: false, already: true, guid, vchNo, message: "Already in Tally
+// (voucher no. X, dd-mm-yyyy)"}: the entry is in Tally, not failed; or {ok: false, checkFailed: true, message: "Could not
+// check Tally, not posted. Try again."}: nothing was posted, the entry stays waiting. Read from the message too, for a
+// cloud that does not pass the two flags on yet (tally-ingest before 02-Oct-2026)
+function postAlready(x){ return !!x && (x.already === true || (!x.ok && /^Already in Tally \(voucher no\./i.test(String(x.message || "")))); }
+function postCheckFail(x){ return !!x && !x.ok && !postAlready(x) && (x.checkFailed === true || /^Could not check Tally\b/i.test(String(x.message || ""))); }
 function postWord(x){
   if (!x) return "Failed: Tally did not answer for this entry";
+  if (postAlready(x)) return plainMsg(x.message) || "Already in Tally (not sent again)";
+  if (postCheckFail(x)) return plainMsg(x.message) || "Could not check Tally, not posted. Try again.";
   if (!x.ok) return "Failed: " + (plainMsg(x.message) || "Tally did not confirm it");
   if (x.existed) return "Already in Tally (not sent again)";
   if (postAltered(x)) return "Altered in Tally";
@@ -164,14 +173,14 @@ function gstinKeyOf(g){ const k = String(g || "").toUpperCase().replace(/[^0-9A-
 // "Postings in FinCom's cloud" lists every posting (migration-27; an older cloud without it: nothing recorded, no error)
 const PostRecord = {
   missing: false,
-  clean(r){ const o = {}; ["id", "ok", "kind", "message", "verified", "vchNumber", "vchType", "guid", "masterId", "vchDate", "optional", "altered", "created", "existed", "pendingCheck"].forEach(k => { if (r[k] !== undefined) o[k] = r[k]; }); if (o.message) o.message = String(o.message).slice(0, 400); return o; },
+  clean(r){ const o = {}; ["id", "ok", "kind", "message", "verified", "vchNumber", "vchType", "guid", "masterId", "vchDate", "optional", "altered", "created", "existed", "pendingCheck", "already", "checkFailed", "vchNo"].forEach(k => { if (r[k] !== undefined) o[k] = r[k]; }); if (o.message) o.message = String(o.message).slice(0, 400); return o; },
   async save(co, payload, out){
     if (this.missing || !co || !out || typeof TCloud !== "object" || !TCloud.on()) return false;
     const uuidOk = s => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(s || ""));
     const id = out.recId || (out.job && uuidOk(out.job.id) ? out.job.id : CloudPost.uuid());
     out.recId = id;
     const vids = [].concat(payload.vouchers || []).map(v => v.id), res = [].concat(out.results || []).map(r => this.clean(r));
-    const vres = res.filter(r => vids.includes(r.id)), okN = vres.filter(r => r.ok).length, unread = vres.filter(r => r.ok && r.verified !== true && !postAltered(r)).length;
+    const vres = res.filter(r => vids.includes(r.id)), okN = vres.filter(r => r.ok || postAlready(r)).length, unread = vres.filter(r => r.ok && r.verified !== true && !postAltered(r)).length;
     const status = vres.length && okN === vids.length ? "done" : (!vids.length && res.every(r => r.ok) ? "done" : "failed");
     const how = "sent straight to FinCom Bridge" + (Bridge.st.version ? " " + Bridge.st.version : "") + (Bridge.st.computer ? " on " + Bridge.st.computer : " on this computer");
     const message = (vids.length ? okN + " of " + vids.length + " in Tally" + (unread ? " (" + unread + " not yet read back)" : "") : res.length + " ledger" + (res.length === 1 ? "" : "s")) + ", " + how;
@@ -187,11 +196,66 @@ const PostRecord = {
   }
 };
 
-// One count of what is for Tally, used everywhere (review of 02-Oct-2026: the header chip said 1, the tab 1, the page 0
-// and the dashboard 0): the bills approved and not confirmed in Tally, the same as the client's stats.waiting. A bill
-// sent in a Tally file, or posted and not yet read back, is counted (and listed on the page) until Tally confirms it.
-function postBillsOpen(cid){ const d = S.data[cid]; return d && d.loaded ? Object.values(d.entries).filter(e => e.status === "approved" && !billInTally(e)) : null; }
-function postCountFor(cid){ const l = postBillsOpen(cid); return l ? l.length : num(((S.companies[cid] || {}).stats || {}).waiting); }
+// One count of what is for Tally, from one place (review of 02-Oct-2026, Testing AAD at 17:43: the tab said "Post to
+// Tally 1", the header chip "1 entry for Tally", the button "Post 0 to Tally"). The tab, the chip and the dashboard
+// counted the bills approved and not confirmed in Tally, the button only those never sent; FA/ELEC/013 (posted on
+// 29-Sep, then not found in the cloud copy) was in the first count and not in the second. Now each approved bill is in
+// exactly one place (postBucket) and every number comes from postCounts:
+//   ready      approved, never sent, nothing in its way: "Ready to post", the tab badge, the header chip, the
+//              dashboard tile and "Post N to Tally";
+//   attention  sent and not confirmed in Tally, not found in Tally, posted and not read back, Tally could not be checked
+//              when it was posted (bridge 2.1.4), or a ledger Tally does not have: "Needs your attention", and the
+//              tab's second badge (with the failed postings of FinCom's cloud);
+//   sending    on its way to Tally now; intally: confirmed there. Neither is counted.
+function postSending(cid){
+  const out = new Set();
+  if (typeof CloudJobs === "object") CloudJobs.forClient(cid).filter(j => ["waiting", "taken", "running"].includes(j.status) || j.checking).forEach(j => {
+    const done = new Set([].concat(j.items || []).filter(x => x && (x.state === "in_tally" || x.state === "failed")).map(x => x.id));
+    (CloudJobs.idsOf(j) || [].concat(j.items || []).map(x => x.id)).forEach(id => { if (!done.has(id)) out.add(String(id)); });
+  });
+  return out;
+}
+// the ledgers of a bill Tally does not have (only for the client open here, with Tally's ledger list at hand)
+function postLedgerList(cid){ return !!(cid === S.coId && S.bank && S.bank.cid === cid && !S.bank.loading && typeof hasLedgerList === "function" && hasLedgerList()); }
+function postMissingLedgers(e){ return (e.snapshot ? e.snapshot.lines : []).filter(l => l.ledger && !exactLedger(l.ledger)); }
+function postBucket(e, ctx){
+  if (!e || e.status !== "approved") return "";
+  if (billInTally(e)) return "intally";
+  if (e.exportedAt) return "attention";
+  if (e.postUnconfirmed) return e.postUnconfirmed.pending ? "sending" : "attention";
+  if (e.postCheckFailed) return "attention";
+  if (ctx && ctx.sending && ctx.sending.has(e.id)) return "sending";
+  if (ctx && ctx.ledgers && postMissingLedgers(e).length) return "attention";
+  return "ready";
+}
+// {ready: [bills], attention: [bills], sending: [bills], jobs: [failed postings of the cloud needing a decision]}, or
+// null when the client's bills are not loaded here
+function postBills(cid){
+  const d = S.data[cid];
+  if (!d || !d.loaded) return null;
+  const ctx = {sending: postSending(cid), ledgers: postLedgerList(cid)}, out = {ready: [], attention: [], sending: [], jobs: []};
+  Object.values(d.entries).forEach(e => { const b = postBucket(e, ctx); if (out[b]) out[b].push(e); });
+  ["ready", "attention", "sending"].forEach(k => out[k].sort(byDate));
+  out.jobs = typeof CloudJobs === "object" ? CloudJobs.needing(cid) : [];
+  return out;
+}
+// the counts: from the bills when they are here, else from the client's stats (kept by refreshStats with postBucket)
+function postCounts(cid){
+  const b = postBills(cid);
+  if (b) return {ready: b.ready.length, attention: b.attention.length + b.jobs.length};
+  const st = (S.companies[cid] || {}).stats || {};
+  return {ready: num(st.ready != null ? st.ready : st.waiting), attention: num(st.attention)};
+}
+function postCountFor(cid){ return postCounts(cid).ready; }
+function postAttentionFor(cid){ return postCounts(cid).attention; }
+// the bills ready to post (the dashboard's tile)
+function postBillsOpen(cid){ const b = postBills(cid); return b ? b.ready : null; }
+// a bill's ledgers on one line, the party first; a Round Off of nothing is left out
+function postLedgerLine(e){
+  const ls = (e.snapshot ? e.snapshot.lines : []).filter(l => l.ledger && !((l.role === "roundoff" || /^round\s*(ed\s*)?off\b/i.test(l.ledger)) && Math.abs(num(l.amt)) < 0.005));
+  const order = {party: 0, expense: 1, gst: 2, "rcm-in": 2, "rcm-out": 2, tds: 3, roundoff: 4};
+  return [...new Set(ls.slice().sort((a, b) => (order[a.role] ?? 1) - (order[b.role] ?? 1)).map(l => l.ledger))].join(" · ");
+}
 
 // ---------- the Post to Tally page: one line, one table, one button (C15-C18)
 // what this client's entries go into, and through what: {company, bridge, state, action, go}
@@ -201,24 +265,194 @@ function postLineFor(co){
   let bk = null; try { bk = cloud ? TCloud.book(co.id) : null; } catch (e){}
   let company = co.postTo || (bk && bk.company) || "";
   if (!company){ try { company = tallyCoName(co); } catch (e){ company = co.tallyName || co.name; } }
-  let bridge = "", state = "Ready", action = "", go = "";
+  let bridge = "", state = "Ready", action = "", go = "", computer = "", tally = "";
   let heard = []; try { heard = cloud ? TCloud.bridgesHeard() : []; } catch (e){}
   const main = heard.find(r => r.main && r.go) || heard.find(r => r.main) || null;
   const local = Bridge.on() && Bridge.up();
   if (main){
-    bridge = "FinCom Bridge " + (main.version || "");
+    bridge = "FinCom Bridge " + (main.version || ""); computer = main.computer || ""; tally = main.online ? main.tally : "";
     if (!main.online){ state = ""; action = "FinCom Bridge on " + main.computer + " is not running"; go = "tally"; }
     else if (main.tally !== "open" && main.tally !== "busy" && !(local && bridgeLive(co))){ state = ""; action = "Tally not open on " + main.computer; }
   } else if (local){
-    bridge = "FinCom Bridge " + (Bridge.st.version || "");
+    bridge = "FinCom Bridge " + (Bridge.st.version || ""); computer = Bridge.st.computer || "this computer"; tally = bridgeLive(co) ? "open" : "";
     if (!bridgeLive(co)){ state = ""; action = Bridge.st.tallyUp ? "Open " + company + " in Tally" : "Tally not open on " + (Bridge.st.computer || "this computer"); }
   } else if (Bridge.on()){ bridge = "FinCom Bridge"; state = ""; action = "FinCom Bridge is not answering on this computer"; go = "tally"; }
   else { state = ""; action = "Install FinCom Bridge"; go = "tally"; }
   if (!co.postTo){ state = ""; action = "Choose the Tally company"; go = "cotally"; }
   else if (typeof choiceState === "function" && choiceState(co, "postTo") !== "confirmed"){ state = ""; action = "Confirm the Tally company"; go = "cotally"; }
-  return {company, bridge, state, action, go};
+  return {company, bridge, state, action, go, computer, tally};
 }
 const PostPage = {paneAt: 0};
+// ---------- the status line of Post to Tally (review of 02-Oct-2026, item 1): one line, "Posting into GARG SHEKHAR &
+// COMPANY · Tally open on NWS144 · read 17:43 · Update now"; a second line only when something is wrong, saying what to
+// do, with one button where it helps. The bridge's version and "Ready" are under More.
+// {company, where, read, reading, more, problem: {text, button, go, kind} | null}
+function postStatusFor(co){
+  const pl = postLineFor(co), l = typeof tallyLine === "function" ? tallyLine(co) : null;
+  const out = {company: pl.company, where: "", read: "", reading: false, more: [pl.bridge, pl.state].filter(Boolean).join(" · "), problem: null};
+  if (l && l.state === "open"){ out.where = l.text.replace(/ · last read .*$/, ""); out.read = l.read; out.reading = !!l.reading; }
+  else if (!l && (pl.tally === "open" || pl.tally === "busy") && pl.computer) out.where = "Tally open on " + pl.computer;
+  const p = (text, button, go, kind) => ({text, button: button || "", go: go || null, kind: kind || ""});
+  let st = S.postStop && S.postStop.cid === co.id ? S.postStop : null;
+  // a stop that no longer holds goes by itself: the company confirmed since, or no bill waits on a guessed ledger now
+  if (st && /^Confirm the Tally company/.test(st.msg) && typeof choiceState === "function" && choiceState(co, "postTo") === "confirmed"){ S.postStop = null; st = null; }
+  if (st && /^Posting waits/.test(st.msg)){ const b0 = postBills(co.id); if (b0 && !b0.ready.some(e => billGuessedWhy(e, co))){ S.postStop = null; st = null; } }
+  if (st){
+    const guess = /^Confirm the Tally company/.test(st.msg), led = /^Posting waits/.test(st.msg);
+    out.problem = p("Not sent to Tally: " + (guess ? "confirm the Tally company. " : led ? "a ledger is not confirmed. " : "choose the Tally company. ") + (guess || led ? st.msg + " " : "") + "The bills are still waiting here.",
+      guess ? "Confirm the Tally company" : led ? "Open Client setup" : "Choose the Tally company", guess || !led ? goChooseTallyCompany : () => goSetupFor(st.msg), "stop");
+    // the cloud's own words of what is allowed (Post.jsx puts them in: notAllowedRest)
+    if (!guess && !led) out.problem.msg = st.msg;
+    out.problem.dismiss = () => { S.postStop = null; render(); };
+    return out;
+  }
+  if (pl.go === "cotally") { out.problem = p(pl.action === "Confirm the Tally company" ? "Posting waits: confirm the Tally company (" + pl.company + " was found by FinCom, not chosen by a person)." : "Posting waits: choose the Tally company this client posts to.", pl.action, goChooseTallyCompany, "company"); return out; }
+  if (l && l.state !== "open"){
+    const T = {offline: [l.text + ": start that computer, or FinCom Bridge on it. Nothing can be posted or checked until then.", "", null],
+      closed: [l.text + ": open TallyPrime there, with " + pl.company + ".", "", null],
+      notanswering: [l.text + ": close any message box in Tally there; FinCom carries on by itself.", "", null],
+      paused: [l.text + ": resume it from the FinCom Bridge icon there. Update now still reads.", "Update now", () => tallyUpdateNow(co.id)]}[l.state] || [l.text, "", null];
+    out.problem = p(T[0], T[1], T[2], l.state); return out;
+  }
+  if (!pl.state && pl.action){ out.problem = p(pl.action + ".", pl.go === "tally" ? "Open the Tally page" : "", pl.go === "tally" ? goTallyPage : null, "bridge"); return out; }
+  const b = postBills(co.id), why = b && typeof billGuessedWhy === "function" ? b.ready.map(e => billGuessedWhy(e, co)).find(Boolean) : "";
+  if (why) out.problem = p(why + " Confirm it in Client setup.", "Open Client setup", () => goSetupFor(why), "ledger");
+  return out;
+}
+function goSetupFor(msg){ S.postStop = null; S.step = null; S.tab = /TDS/.test(msg) || /expense/.test(msg) ? "cotds" : "cotally"; render(); window.scrollTo(0, 0); }
+
+// ---------- a bill sent and not confirmed in Tally, checked with a fresh read of Tally (review of 02-Oct-2026, item 3)
+// FA/ELEC/013 (Fingate, 25,535.00, 01-Jul-2026) was offered to be posted again on the strength of a read of 15:34,
+// made while bridge 2.1.1 was timing out: a duplicate in real books. Now, before such a bill is shown, Tally is read
+// afresh for it: the bridge here asked directly when it has the company open; else the client's Tally computer asked to
+// read now (Update now) and its new read waited for. "Not found in Tally at the 17:43 read" only after such a read,
+// made after the posting; otherwise "Not checked yet" with why, and no Post again.
+const PostCheck = {
+  st: {},                  // entry id -> {busy, at, ok, found, vch, readAt, why, said}
+  fresh: {},               // client id -> {at, res} (the Tally computer's fresh read, shared by the client's bills)
+  reading: {},             // client id -> a promise while the Tally computer is asked to read
+  WAIT: 150000, POLL: 4000, KEEP: 10 * 60000,
+  sleep(ms){ return new Promise(r => setTimeout(r, ms)); },
+  postedAt(e){ return Date.parse((e.tally && e.tally.at) || e.exportedAt || (e.postUnconfirmed && e.postUnconfirmed.at) || 0) || 0; },
+  // the same bill in Tally's vouchers: FinCom's tag, else the bill no. and party, else the party, date and amount
+  match(e, vs){
+    const nm = x => norm(String(x || "")), party = nm(e.partyLedger || e.x.vendorName), d8 = isoToTally(e.x.invoiceDate), amt = r2(num(e.x.total));
+    const partyLine = ((e.snapshot && e.snapshot.lines) || []).find(l => l.role === "party"), pAmt = partyLine ? r2(num(partyLine.amt)) : 0;
+    const hasParty = v => nm(v.party) === party || [].concat(v.entries || []).some(en => nm(en.ledger) === party);
+    const amounts = v => [].concat(v.entries || []).map(en => r2(Math.abs(num(en.amount))));
+    return vs.find(v => String(v.narration || "").includes("TDSDesk:" + e.id))
+      || vs.find(v => e.x.invoiceNo && nm(v.reference) === nm(e.x.invoiceNo) && hasParty(v))
+      || vs.find(v => String(v.date || "") === d8 && hasParty(v) && amounts(v).some(a => Math.abs(a - amt) < 0.01 || (pAmt && Math.abs(a - pAmt) < 0.01)))
+      || null;
+  },
+  vouchersUrl(co, tname, e){
+    const vt = co.voucherType || "Journal";
+    return "/vouchers?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(addDays(e.x.invoiceDate, -5)) + "&to=" + isoToTally(addDays(e.x.invoiceDate, 5)) +
+      "&types=" + encodeURIComponent([...new Set([vt, "Purchase", "Journal", co.debitNoteType || "Debit Note"])].join(",")) + (typeof Bridge === "object" && Bridge.pinQ ? Bridge.pinQ() : "");
+  },
+  // the client's Tally computer reads Tally now; the answer: {ok, readAt} or {ok: false, why}
+  async remoteRead(co, force){
+    const f = this.fresh[co.id];
+    if (!force && f && Date.now() - f.at < 60000) return f.res;
+    if (this.reading[co.id]) return this.reading[co.id];
+    const run = (async () => {
+      const l0 = typeof tallyLine === "function" ? tallyLine(co) : null;
+      if (!l0) return {ok: false, why: "no Tally computer keeps " + postCompanyName(co) + " for this client"};
+      if (l0.state !== "open") return {ok: false, why: l0.text};
+      const before = Date.parse(l0.read || 0) || 0;
+      try { const j = await TCloud.rpc("tally_want_update", {p_client: co.id}); if (j && j.ok === false) return {ok: false, why: "the Tally computer could not be asked to read"}; }
+      catch (err){ return {ok: false, why: "the Tally computer could not be asked to read (" + ((err && err.message) || err) + ")"}; }
+      tallyAskedRead(co.id);
+      const end = Date.now() + this.WAIT;
+      while (Date.now() < end){
+        await this.sleep(this.POLL);
+        try { if (typeof TLight === "object"){ TLight.st.at = 0; await TLight.refresh(); } } catch (err){}
+        const l = tallyLine(co);
+        if (!l) return {ok: false, why: "no Tally computer keeps this client's company"};
+        if (l.state !== "open") return {ok: false, why: l.text};
+        const at = Date.parse(l.read || 0) || 0;
+        if (at > before) return {ok: true, readAt: l.read, via: "computer"};
+      }
+      return {ok: false, why: "the Tally computer has not read Tally since " + (l0.read ? tallyHm(l0.read) : "it was asked") + " (asked at " + fmtTime(Date.now() - this.WAIT) + ")"};
+    })();
+    this.reading[co.id] = run;
+    try { const res = await run; this.fresh[co.id] = {at: Date.now(), res}; return res; } finally { delete this.reading[co.id]; }
+  },
+  // a fresh look at Tally for one bill: {ok, found, vch, readAt} or {ok: false, why}
+  async live(co, e, force){
+    const tname = postCompanyName(co);
+    if (typeof tallyVia === "function" && tallyVia(co) === "bridge"){
+      try {
+        const j = await Bridge.call(this.vouchersUrl(co, tname, e), null, 120000);
+        const vs = [].concat((j && j.vouchers) || []).filter(v => !/^yes$/i.test(v.cancelled || ""));
+        return {ok: true, found: this.match(e, vs), readAt: new Date().toISOString(), via: "bridge"};
+      } catch (err){ return {ok: false, why: "FinCom Bridge did not answer (" + plainMsg((err && err.message) || String(err)) + ")"}; }
+    }
+    if (typeof TCloud !== "object" || !TCloud.on()) return {ok: false, why: Bridge.on() ? "FinCom Bridge here does not have " + tname + " open" : "FinCom Bridge is not running on this computer"};
+    const r = await this.remoteRead(co, force);
+    if (!r.ok) return r;
+    try {
+      const j = await CloudTally.call(co, this.vouchersUrl(co, tname, e));
+      const vs = [].concat((j && j.vouchers) || []).filter(v => !/^yes$/i.test(v.cancelled || ""));
+      return {ok: true, found: this.match(e, vs), readAt: r.readAt, via: "computer"};
+    } catch (err){ return {ok: false, why: "the read could not be looked at (" + plainMsg((err && err.message) || String(err)) + ")"}; }
+  },
+  vchSay(v){ return "voucher no. " + (v.number || v.vchNumber || "?") + ", " + fmtDate(tallyToIso(v.date) || v.date || ""); },
+  // found in Tally: the bill counts as in Tally, with Tally's voucher
+  markIn(co, e, v){
+    const now = new Date().toISOString();
+    e.exportedAt = e.exportedAt || now; e.postVerified = true; e.postUnconfirmed = null; e.postError = ""; e.postCheckFailed = null; delete e.goneFromTally;
+    e.tally = Object.assign({}, e.tally || {}, {guid: v.guid || (e.tally && e.tally.guid) || "", vchDate: v.date || (e.tally && e.tally.vchDate) || "", vchType: v.type || (e.tally && e.tally.vchType) || "", company: postCompanyName(co), at: (e.tally && e.tally.at) || now, checkedAt: now});
+    if (v.number) e.tallyVchNo = v.number;
+    Store.saveEntry(co.id, e);
+  },
+  // Check now (and on its own, once, before the bill is shown)
+  async run(co, e, force){
+    const s = this.st[e.id];
+    if (s && s.busy) return s;
+    this.st[e.id] = Object.assign({}, s || {}, {busy: true}); render();
+    let r; try { r = await this.live(co, e, force); } catch (err){ r = {ok: false, why: plainMsg((err && err.message) || String(err))}; }
+    const st = this.st[e.id] = {busy: false, at: Date.now(), ok: r.ok, found: r.ok ? r.found : null, readAt: r.readAt || "", why: r.why || "", via: r.via || ""};
+    if (r.ok && r.found){ this.markIn(co, e, r.found); st.said = e.x.invoiceNo + " is in Tally (" + this.vchSay(r.found) + ")."; postNote(co.id, st.said); }
+    refreshStats(co.id); render();
+    return st;
+  },
+  // what the page says of a bill sent and not confirmed: {state: checking | notchecked | notfound | unsure, text}
+  view(e){
+    const s = this.st[e.id], posted = this.postedAt(e);
+    if (s && s.busy) return {state: "checking", text: "Checking Tally now…"};
+    if (!s) return {state: "notchecked", text: "Not checked yet: Tally has not been read since this was sent"};
+    if (!s.ok) return {state: "notchecked", text: "Not checked yet: " + s.why};
+    const at = Date.parse(s.readAt || 0) || 0;
+    if (!at || at <= posted) return {state: "notchecked", text: "Not checked yet: the last read (" + tallyHm(s.readAt) + ") is older than the posting (" + tallyHm(posted) + ")"};
+    return {state: "notfound", text: "Not found in Tally at the " + tallyHm(s.readAt) + " read"};
+  },
+  // a bill to check by itself before it is shown: not checked in the last 10 minutes
+  due(e){ const s = this.st[e.id]; return !s || (!s.busy && Date.now() - (s.at || 0) > this.KEEP); },
+  // Post again: Tally read LIVE first, for the same party, bill no., date and amount; posted only when that read worked
+  // and found nothing
+  async repost(co, e){
+    const s = this.st[e.id] || {};
+    if (s.busy) return false;
+    this.st[e.id] = Object.assign({}, s, {busy: true}); render();
+    let r; try { r = await this.live(co, e, true); } catch (err){ r = {ok: false, why: plainMsg((err && err.message) || String(err))}; }
+    this.st[e.id] = {busy: false, at: Date.now(), ok: r.ok, found: r.ok ? r.found : null, readAt: r.readAt || "", why: r.why || "", via: r.via || ""};
+    if (!r.ok){ const t = "Not posted again: Tally could not be checked (" + r.why + ")."; postNote(co.id, t, "bad"); toast(t); render(); return false; }
+    if (r.found){
+      const t = "Already in Tally (" + this.vchSay(r.found) + "): " + e.x.invoiceNo + " was not posted again.";
+      this.markIn(co, e, r.found); postNote(co.id, t); toast(t); refreshStats(co.id); render(); return false;
+    }
+    if (Date.parse(r.readAt || 0) <= this.postedAt(e)){ const t = "Not posted again: the read of Tally (" + tallyHm(r.readAt) + ") is older than the posting."; postNote(co.id, t, "bad"); toast(t); render(); return false; }
+    // not in Tally at a read made just now: waiting again, and posted (the bridge checks Tally once more as it posts)
+    e.exportedAt = null; e.postNote = ""; e.postVerified = false; e.tallyCheck = null; e.postUnconfirmed = null; e.postError = ""; e.postCheckFailed = null; delete e.goneFromTally;
+    Store.saveEntry(co.id, e); refreshStats(co.id);
+    await postAllToTally({kind: "bill", id: e.id});
+    return true;
+  }
+};
+// one line on the page after a check or a posting ("Already in Tally (voucher no. …)"): S.postNote
+function postNote(cid, text, level){ S.postNote = {cid, text, level: level || "", at: Date.now()}; }
+
 function goChooseTallyCompany(){ S.step = null; S.arm = null; S.tab = "cotally"; render(); window.scrollTo(0, 0); }
 function goTallyPage(){ closeSwitcher(); S.view = "home"; S.homeTab = "tally"; S.arm = null; render(); window.scrollTo(0, 0); }
 // the role of a bill's ledger line, as the table groups them
@@ -291,22 +525,24 @@ async function postPreview(co, rows, opts){
   PostGate.approve(masters.map(m => m.name), company);
   return true;
 }
-// "Post N to Tally" (and Post on one row): the preview of all, then each kind posted as before
+// "Post N to Tally": the bills ready to post (review of 02-Oct-2026: "Ready to post" is approved bills only; bank lines
+// and sales are posted from their own pages), each shown first as it goes to Tally. only: one bill (Retry of one whose
+// check of Tally failed, Post again of one not found in Tally at a fresh read)
 async function postAllToTally(only){
   const co = CO();
   if (!co) return;
   if (!co.postTo) await autoPostTo(co);
   if (!co.postTo || postToProblem(co, "")){ postStopped(postToProblem(co, ""), co.id); render(); return; }
   if (!S.bank || S.bank.cid !== co.id) await loadBank(co.id);
-  let rows = postRows(co).filter(r => !r.sent && !/^(Sending|In Tally)/.test(r.state[0]));
-  if (only) rows = rows.filter(r => r.kind === only.kind && r.id === only.id);
+  const b = postBills(co.id) || {ready: [], attention: []};
+  let list = b.ready;
+  if (only){ const e = D(co.id).entries[only.id]; list = e && e.status === "approved" && !e.exportedAt && (b.ready.includes(e) || e.postCheckFailed) ? [e] : []; }
+  const all = postRows(co), rows = list.map(e => all.find(r => r.kind === "bill" && r.id === e.id) || {kind: "bill", id: e.id, no: e.x.invoiceNo, party: e.x.vendorName, e});
   if (!rows.length){ toast("Nothing is waiting to be posted."); return; }
-  S.postStop = null;
+  S.postStop = null; S.postNote = null;
   if (!(await postPreview(co, rows))) return;
-  const bills = rows.filter(r => r.kind === "bill").map(r => r.id), bank = rows.filter(r => r.kind === "bank").map(r => r.id), sales = rows.filter(r => r.kind === "sale");
-  if (bills.length) await postBillsToTally({ids: bills});
-  if (bank.length && !(S.postStop && S.postStop.cid === co.id)) await postBankToTally(bank);
-  if (sales.length && !(S.postStop && S.postStop.cid === co.id) && typeof postSalesToTally === "function") await postSalesToTally();
+  rows.forEach(r => { if (r.e.postCheckFailed){ r.e.postCheckFailed = null; Store.saveEntry(co.id, r.e); } });
+  await postBillsToTally({ids: rows.map(r => r.id)});
   render();
 }
 function postPreviewOne(kind, id){

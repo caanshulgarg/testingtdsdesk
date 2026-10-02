@@ -1227,3 +1227,18 @@ ol.post-import li{display:list-item;margin:3px 0;overflow-wrap:anywhere}
 .bk-acc{display:grid;gap:2px}
 .bk-acc .bk-setup{margin:0}
 #confirmBox [data-leave-ask] .row .btn{min-width:88px}
+/* Post to Tally (review of 02-Oct-2026, second pass): the status line, Ready to post, Needs your attention, History;
+   the tab's second badge (what needs attention), in the warning colour, apart from the count ready to post */
+.sbar-n.attn,.sbar button[aria-selected="true"] .sbar-n.attn{background:var(--warn-soft);color:var(--warn);margin-left:4px}
+.post-status{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;margin:0 0 6px;font-size:14px}
+.post-problem{margin:0 0 12px;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
+.post-sec{margin:14px 0 0}
+.post-sec h3{margin:0 0 8px;font-size:15px}
+.post-sec table.data td.led{color:var(--muted);font-size:13px;overflow-wrap:anywhere}
+.post-attn{list-style:none;margin:0;padding:0;border:1px solid var(--rule);border-radius:8px}
+.post-attn li{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;padding:8px 10px;border-top:1px solid var(--rule)}
+.post-attn li:first-child{border-top:0}
+.post-attn .why{flex:1 1 260px;min-width:0;overflow-wrap:anywhere}
+.post-attn .acts{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.post-hist summary{cursor:pointer;font-weight:600}
+.post-hist ul{margin:6px 0 0;padding:0 0 0 18px}
