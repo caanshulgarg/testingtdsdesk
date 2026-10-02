@@ -78,6 +78,7 @@ func (service) Execute(args []string, req <-chan svc.ChangeRequest, st chan<- sv
 
 func runService(args []string) int {
 	asService = true
+	runMode = "service"
 	logEcho = false
 	undoFailedUpdate()
 	if err := svc.Run(serviceName, service{}); err != nil {
@@ -238,10 +239,24 @@ func flagValue(args []string, name string) string {
 	return ""
 }
 
+// the setup's own log: in ProgramData for the service; for an install just for this user in the user's own folder
+// (%LOCALAPPDATA%\FinCom Bridge), since a user who is not an administrator may not be able to write in ProgramData
+func installLogFile() string {
+	if perUserSetup {
+		if la := os.Getenv("LOCALAPPDATA"); la != "" {
+			return filepath.Join(la, "FinCom Bridge", "install.log")
+		}
+		return ""
+	}
+	if p := os.Getenv("ProgramData"); p != "" {
+		return filepath.Join(p, "FinCom Bridge", "install.log")
+	}
+	return ""
+}
 func installLog(msg string) {
 	fmt.Println(msg)
-	if p := os.Getenv("ProgramData"); p != "" {
-		_ = appendText(filepath.Join(p, "FinCom Bridge", "install.log"), time.Now().Format("2006-01-02 15:04:05")+"  "+msg+"\r\n")
+	if f := installLogFile(); f != "" {
+		_ = appendText(f, time.Now().Format("2006-01-02 15:04:05")+"  "+msg+"\r\n")
 	}
 }
 
@@ -250,6 +265,9 @@ var carried = []string{"Key", "TallyHost", "TallyPorts", "OnlyMySession", "PairW
 	"KeepInStep", "CloudUrl", "CloudKey", "KeepSchedule", "KeepDailyAt", "KeepModes", "KeepCompanies", "KeepFrom", "KeepLightMin", "KeepWatchSec", "CloudWake", "SyncCompanies"}
 
 func installCmd(args []string) int {
+	if contains(args, "--per-user") {
+		return installUserCmd(args)
+	}
 	mode := strings.ToLower(flagValue(args, "mode"))
 	if mode != "test" && mode != "sole" {
 		mode = "test"
@@ -263,49 +281,9 @@ func installCmd(args []string) int {
 	installLog(fmt.Sprintf("Install: FinCom Bridge %s for %s (%s), %s mode, folder %s", BridgeVersion, o.name, o.sid, mode, o.home))
 	_ = os.MkdirAll(o.home, 0o755)
 	stopService()
-	psCfg := filepath.Join(o.home, "tds-bridge.config.json")
-	var cfgPath string
-	if mode == "test" {
-		cfgPath = filepath.Join(o.home, "go-bridge.config.json")
-		c := newOrdered()
-		if exists(cfgPath) {
-			_ = c.UnmarshalText(readText(cfgPath))
-		} else if exists(psCfg) {
-			pc := newOrdered()
-			if pc.UnmarshalText(readText(psCfg)) == nil {
-				for _, k := range carried {
-					if pc.Has(k) {
-						c.Set(k, pc.Get(k))
-					}
-				}
-			}
-		}
-		c.Set("Mode", "test")
-		c.Set("Port", float64(9101))
-		c.Set("PsHome", o.home)
-		c.Set("SyncDir", filepath.Join(o.home, "go-sync"))
-		c.Set("JobsDir", filepath.Join(o.home, "go-jobs"))
-		c.Set("LogFile", filepath.Join(o.home, "go-bridge.log"))
-		setOwner(c, o, fincom)
-		if err := writeOrdered(cfgPath, c); err != nil {
-			installLog("Install: the settings could not be written: " + err.Error())
-			return 3
-		}
-	} else {
-		cfgPath = psCfg
-		c := newOrdered()
-		if exists(cfgPath) {
-			_ = c.UnmarshalText(readText(cfgPath))
-		}
-		c.Set("Mode", "")
-		c.Set("Port", float64(9100))
-		c.Set("LogFile", filepath.Join(o.home, "tds-bridge.log"))
-		setOwner(c, o, fincom)
-		if err := writeOrdered(cfgPath, c); err != nil {
-			installLog("Install: the settings could not be written: " + err.Error())
-			return 3
-		}
-		removeOldBridge(o)
+	cfgPath, code := writeSettings(o, mode, fincom)
+	if code != 0 {
+		return code
 	}
 	exe, _ := os.Executable()
 	k, _, err := registry.CreateKey(registry.LOCAL_MACHINE, regKey, registry.ALL_ACCESS|registry.WOW64_64KEY)
@@ -339,6 +317,56 @@ func installCmd(args []string) int {
 	}
 	installLog("Install: the service runs but did not answer yet; see the bridge's log")
 	return 0
+}
+
+// the settings for the bridge's owner (the same for the service and for an install just for one user): test mode beside
+// bridge 1.15.0, with its own file and port; or sole, in bridge 1.15.0's own settings, which then is taken off
+func writeSettings(o ownerInfo, mode, fincom string) (string, int) {
+	psCfg := filepath.Join(o.home, "tds-bridge.config.json")
+	var cfgPath string
+	if mode == "test" {
+		cfgPath = filepath.Join(o.home, "go-bridge.config.json")
+		c := newOrdered()
+		if exists(cfgPath) {
+			_ = c.UnmarshalText(readText(cfgPath))
+		} else if exists(psCfg) {
+			pc := newOrdered()
+			if pc.UnmarshalText(readText(psCfg)) == nil {
+				for _, k := range carried {
+					if pc.Has(k) {
+						c.Set(k, pc.Get(k))
+					}
+				}
+			}
+		}
+		c.Set("Mode", "test")
+		c.Set("Port", float64(9101))
+		c.Set("PsHome", o.home)
+		c.Set("SyncDir", filepath.Join(o.home, "go-sync"))
+		c.Set("JobsDir", filepath.Join(o.home, "go-jobs"))
+		c.Set("LogFile", filepath.Join(o.home, "go-bridge.log"))
+		setOwner(c, o, fincom)
+		if err := writeOrdered(cfgPath, c); err != nil {
+			installLog("Install: the settings could not be written: " + err.Error())
+			return "", 3
+		}
+	} else {
+		cfgPath = psCfg
+		c := newOrdered()
+		if exists(cfgPath) {
+			_ = c.UnmarshalText(readText(cfgPath))
+		}
+		c.Set("Mode", "")
+		c.Set("Port", float64(9100))
+		c.Set("LogFile", filepath.Join(o.home, "tds-bridge.log"))
+		setOwner(c, o, fincom)
+		if err := writeOrdered(cfgPath, c); err != nil {
+			installLog("Install: the settings could not be written: " + err.Error())
+			return "", 3
+		}
+		removeOldBridge(o)
+	}
+	return cfgPath, 0
 }
 
 func setOwner(c *Ordered, o ownerInfo, fincom string) {
@@ -499,6 +527,9 @@ func stopService() {
 
 // uninstall (run by the uninstaller): the service and the tray go; the bridge's folder (settings, copy, log) stays
 func uninstallCmd(args []string) int {
+	if contains(args, "--per-user") {
+		return uninstallUserCmd(args)
+	}
 	stopService()
 	if m, err := mgr.Connect(); err == nil {
 		if s, err := m.OpenService(serviceName); err == nil {
@@ -512,6 +543,14 @@ func uninstallCmd(args []string) int {
 	c := exec.Command("taskkill.exe", "/F", "/FI", "IMAGENAME eq FinComBridge.exe", "/FI", fmt.Sprintf("PID ne %d", os.Getpid()))
 	hideWindow(c)
 	_ = c.Run()
+	putBackOldBridge(mode, home)
+	_ = registry.DeleteKey(registry.LOCAL_MACHINE, regKey)
+	installLog("Uninstall: FinCom Bridge removed; its folder " + home + " (settings, copy, log) is kept")
+	return 0
+}
+
+// on uninstall after "Replace bridge 1.15.0": bridge 1.15.0's program is put back (it starts again with its own setup)
+func putBackOldBridge(mode, home string) {
 	if mode == "sole" && home != "" {
 		old := filepath.Join(home, "TDSBridge.ps1")
 		if exists(old+".replaced-by-go") && !exists(old) {
@@ -519,9 +558,6 @@ func uninstallCmd(args []string) int {
 			installLog("Uninstall: bridge 1.15.0's program put back; run Setup-FinCom-Bridge.bat to start it again")
 		}
 	}
-	_ = registry.DeleteKey(registry.LOCAL_MACHINE, regKey)
-	installLog("Uninstall: FinCom Bridge removed; its folder " + home + " (settings, copy, log) is kept")
-	return 0
 }
 
 // FinComBridge.exe restart-service: waits until the service has stopped, then starts it (at most a minute)

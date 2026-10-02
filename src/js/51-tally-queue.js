@@ -26,8 +26,11 @@ const CloudTally = {
     const q = new URLSearchParams(url.split("?")[1] || ""), path = url.split("?")[0];
     if (path === "/ledgers"){
       const bk = TCloud.book(co.id);
-      const rows = bk ? await TCloud.restAll("tally_ledgers?select=name,parent&book_id=eq." + encodeURIComponent(bk.book) + "&order=name.asc") : [];
-      return {ok: true, via: "cloud", ledgers: rows.map(r => ({name: r.name, group: r.parent || ""})), groups: []};
+      // the client's ledgers as the cloud copy holds them: twins kept from a trial balance file are not ledgers of their
+      // own, and a name with line breaks is the name its entries use (one count everywhere: review of 02-Oct-2026)
+      const rows = bk ? await TCloud.restAll("tally_ledgers?select=name,parent&merged_into=is.null&book_id=eq." + encodeURIComponent(bk.book) + "&order=name.asc") : [];
+      const by = new Map(); rows.forEach(r => { const n = ledNm(r.name); if (n && !by.has(n)) by.set(n, {name: n, group: r.parent || ""}); });
+      return {ok: true, via: "cloud", ledgers: Array.from(by.values()), groups: []};
     }
     if (path === "/ledgerlines" || path === "/vouchers"){
       const types = (q.get("types") || "").split(",").map(s => s.trim()).filter(Boolean);

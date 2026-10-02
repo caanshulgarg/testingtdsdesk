@@ -75,7 +75,7 @@ const LedMaster = {
       if (rn){ p.gstRate = num(rn[1]); why.push("rate " + rn[1] + "% in the name"); }
     } else if (tt === "TDS" || tt === "TCS" || /\bTDS\b|\bTCS\b/.test(up) || /\b19[2-9][A-Z]{0,2}\b|\b206C/.test(up)){
       const tcs = tt === "TCS" || /\bTCS\b|206C/.test(up);
-      p.what = /INTEREST\s+(ON|FOR)\s+(LATE\s+)?(TDS|TCS)|LATE\s*FEE|PENALTY|234E|201\s*\(?1A/.test(up) ? "tds_interest" : tcs ? (/RECEIVABLE|ADVANCE|PAID/.test(up) ? "tcs_receivable" : "tcs_payable") : (/RECEIVABLE|ADVANCE|REFUND|\bA\.?\s*Y\b|\bT\.?\s*Y\b/.test(up) ? "tds_receivable" : "tds_payable");
+      p.what = /IN?TE?REST\s+(ON|FOR)\s+(LATE\s+)?(TDS|TCS)|LATE\s*FEE|PENALTY|234E|201\s*\(?1A/.test(up) ? "tds_interest" : tcs ? (/RECEIVABLE|ADVANCE|PAID/.test(up) ? "tcs_receivable" : "tcs_payable") : (/RECEIVABLE|ADVANCE|REFUND|\bA\.?\s*Y\b|\bT\.?\s*Y\b/.test(up) ? "tds_receivable" : "tds_payable");
       if (tt) why.push("Tally: tax type " + info.taxType);
       const sec = up.match(/\b(19[2-9][A-Z]{0,2}|206C[A-Z]{0,2})\b/);
       if (sec){ p.section = sec[1]; why.push("section " + sec[1] + " in the name"); }
@@ -89,6 +89,11 @@ const LedMaster = {
       else if (info.tdsNature){ p.section = (String(info.tdsNature).match(/19[2-9][A-Z]{0,2}|206C[A-Z]{0,2}/) || [""])[0]; if (p.section) why.push("Tally: nature " + info.tdsNature); }
       const rn = up.match(/(\d+(?:\.\d+)?)\s*%/);
       if (rn){ p.rate = num(rn[1]); why.push("rate " + rn[1] + "%"); }
+      // its group decides over its name (review of 02-Oct-2026: "TDS Magic Seva" and "TDS Pentagon" are kept under Loans &
+      // Advances, "Intrest On TDS" under Financial Expenses): an asset is TDS receivable, an expense is never TDS payable
+      const grp = String(info.group || ""), under = re => (typeof Audit === "object" && Audit.under(name, re)) || re.test(grp);
+      if (/payable/.test(p.what) && under(/^(loans\s*&\s*advances\s*\(asset\)|current assets|deposits\s*\(asset\)|sundry debtors)$/i)){ p.what = tcs ? "tcs_receivable" : "tds_receivable"; p.section = ""; why.push("kept under " + (grp || "an asset group") + ": tax deducted from the client"); }
+      else if (/payable/.test(p.what) && under(/^(indirect expenses|direct expenses|purchase accounts|financial expenses|indirect incomes|direct incomes|sales accounts)$/i)){ p.what = /INTEREST|INTREST|LATE\s*FEE|PENALTY|PANELTY/.test(up) ? "tds_interest" : "none"; p.section = ""; why.push("an expense or income ledger (" + (grp || "its group") + "), not a tax account"); }
       if (p.what === "tds_payable" && !p.section) why.push("no section: choose one, or mark it a general TDS account");
     } else if (/\bROUND\s*(ED)?\s*OFF\b/.test(up)){ p.what = "roundoff"; why.push("name"); }
     else if (!/GST|\bTDS\b|\bTCS\b/.test(up) && /\bRCM\b|REVERSE\s*CHARGE/.test(up) && /PAYABLE|LIABILITY|OUTPUT/.test(up)){

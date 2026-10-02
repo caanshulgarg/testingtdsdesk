@@ -76,6 +76,7 @@ async function loadBank(cid){
   if (S.bank.stmts.length) await openStatement(S.bank.stmts[S.bank.stmts.length - 1].id);
   render();
   if (bridgeLive(CO(cid))) bankAutoSync(false);
+  else ensureCloudLedgers(cid);
 }
 async function openStatement(sid){
   const b = B(); if (!b) return;

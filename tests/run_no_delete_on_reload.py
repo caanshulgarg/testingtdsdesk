@@ -65,8 +65,8 @@ with sync_playwright() as p:
     calls = pg.evaluate("window.__calls")
     cl = [c for c in calls if c["path"].startswith("clients?") and c["method"] == "PATCH"]
     en = [c for c in calls if c["path"].startswith("records?") and "kind=eq.entry" in c["path"] and c["method"] == "PATCH"]
-    ok(len(cl) == 1 and cl[0]["body"] == {"deleted": True}, "a client removed by the user: sent as the deleted flag only, no blank name or data (%s)" % [c["body"] for c in cl])
-    ok(len(en) == 1 and en[0]["body"] == {"deleted": True}, "its bill: the deleted flag only")
+    ok(len(cl) == 1 and set(cl[0]["body"]) <= {"deleted", "delete_reason"} and cl[0]["body"]["deleted"] is True, "a client removed by the user: sent as the deleted flag and its reason only, no blank name or data (%s)" % [c["body"] for c in cl])
+    ok(len(en) == 1 and set(en[0]["body"]) <= {"deleted", "delete_reason"} and en[0]["body"]["deleted"] is True, "its bill: the deleted flag only")
     ok(pg.evaluate("Object.keys(Cloud.dels()).length") == 0, "once sent, the removal list is empty")
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
     br.close()

@@ -33,7 +33,7 @@ with sync_playwright() as p:
     # a client
     pg.evaluate("""() => { const c = newCompany({name: "ZZ Zeta Exports", gstin: ""}); S.companies[c.id] = c; S.data[c.id] = {parties: {}, entries: {}, loaded: true}; c.stats = {}; return openCompany(c.id); }"""); pg.wait_for_timeout(800)
     pg.evaluate("toggleSetup()"); pg.wait_for_timeout(500)
-    ok(head() == "Company" and pg.locator("header nav.sbar").count() == 0 and pg.locator("#app .setnav button").count() == 9, "Client setup: nine sections on the left, no row of tabs at the top")
+    ok(head() == "Company" and pg.locator("header nav.sbar").count() == 0 and pg.locator("#app .setnav button").count() == 8, "Client setup: eight sections on the left, no row of tabs at the top (Remove this client is under More)")
     g = pg.locator('#app label:has-text("GSTIN") input'); g.fill("09aanfg3202d1zr"); g.blur(); pg.wait_for_timeout(500)
     ok(pg.evaluate("CO().gstin") == "09AANFG3202D1ZR" and pg.evaluate("CO().pan") == "AANFG3202D", "GSTIN kept in capitals; the PAN filled in from it")
     pg.fill('#app label:has-text("PAN") input', "AAAAA1111A"); pg.locator('#app label:has-text("PAN") input').blur(); pg.wait_for_timeout(400)
@@ -69,9 +69,11 @@ with sync_playwright() as p:
     nav("Closed periods"); pg.wait_for_timeout(300)
     ok("Books closed up to" in pg.inner_text("#app .setbody"), "Closed periods")
     pg.screenshot(path=OUT + "/react-setup.png")
-    nav("Remove this client"); pg.wait_for_timeout(300)
-    pg.click('#app .setcard button:has-text("Delete client")'); pg.wait_for_timeout(300)
-    ok("Click again to delete ZZ Zeta Exports Pvt Ltd" in pg.inner_text("#app .setcard"), "Delete client asks for a second click")
+    pg.click('#app details[data-more="client"] summary'); pg.click('#app details[data-more="client"] button:has-text("Remove this client")'); pg.wait_for_timeout(300)
+    ok("ZZ Zeta Exports Pvt Ltd" in pg.inner_text(".cbx") and pg.locator(".cbx #cbxName").count() == 1, "Remove this client (under More) asks for the client's name")
+    pg.fill(".cbx #cbxName", "ZZ Zeta"); pg.click('.cbx button[data-cbx="yes"]'); pg.wait_for_timeout(300)
+    ok(pg.locator(".cbx").count() == 1 and pg.evaluate("Object.keys(S.companies).length") == 1, "a wrong name does not remove it")
+    pg.click('.cbx button[data-cbx="no"]'); pg.wait_for_timeout(300)
     pg.click('button:has-text("Back to the work")'); pg.wait_for_timeout(400)
     ok(pg.evaluate("S.tab") == "invoices" and pg.evaluate("Object.keys(S.companies).length") == 1, "Back to the work, and the client is still there")
     # the Tally page: the bridge's key and following kept, a Tally chosen and back, a company linked to a client; the cloud's

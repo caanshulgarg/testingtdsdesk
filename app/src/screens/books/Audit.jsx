@@ -26,11 +26,15 @@ function Head({ b, run }) {
   const c = Audit.cfg(b), dr = Audit.defaultRange(b), range = S.auditRange || { from: Audit.iso(dr.from), to: Audit.iso(dr.to) };
   const lyFrom = MIS.shift(Audit.ymd(range.from), -1), lyTo = MIS.shift(Audit.ymd(range.to), -1), lyHere = MIS.covered(lyFrom);
   const fin = run && Audit.finalFor(run.from, run.to);
+  const st = Audit.stale(run);
   return <section className="dash-card" data-audit-head="">
+    {st && <div className="bk-alert" data-audit-stale="">The findings below were worked out on {st.was} entries from {d(run.from)} to {d(run.to)}; the books now hold {st.now} for that period. Run it again.</div>}
     <div className="row" style={{ gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
-      <label className="f" style={{ minWidth: 150 }}><span>From</span><input type="date" aria-label="Audit from" defaultValue={range.from} onChange={(ev) => auditRangeSet("from", ev.target.value)} /></label>
-      <label className="f" style={{ minWidth: 150 }}><span>To</span><input type="date" aria-label="Audit to" defaultValue={range.to} onChange={(ev) => auditRangeSet("to", ev.target.value)} /></label>
-      <span className="note" style={{ alignSelf: "center" }}>{fmtDate(range.from) + " to " + fmtDate(range.to)}</span>
+      <label className="f" style={{ minWidth: 150 }}><span>From</span><input type="date" aria-label="Audit from" key={"f" + range.from} defaultValue={range.from} onChange={(ev) => auditRangeSet("from", ev.target.value)} /></label>
+      <label className="f" style={{ minWidth: 150 }}><span>To</span><input type="date" aria-label="Audit to" key={"t" + range.to} defaultValue={range.to} onChange={(ev) => auditRangeSet("to", ev.target.value)} /></label>
+      <label className="f" style={{ minWidth: 120 }}><span>Year</span><select aria-label="Audit year" value={S.auditRange ? "" : (S.auditFy || fsLastFull())} onChange={(ev) => { S.auditFy = ev.target.value; S.auditRange = null; render(); }}>
+        {S.auditRange && <option value="">dates chosen</option>}{fsYears().map((y) => <option key={y} value={y}>{y + "-" + String(num(y) + 1).slice(2)}</option>)}</select></label>
+      <span className="note" style={{ alignSelf: "center" }} data-audit-period="">{fmtDate(range.from) + " to " + fmtDate(range.to) + " · " + Audit.vouchers(Audit.ymd(range.from), Audit.ymd(range.to)).length + " entries in the books"}</span>
       <Act act="auditRun" className="btn small primary">Run now</Act><AuditButton />
       {!lyHere && typeof bridgeLive === "function" && bridgeLive(CO()) && <Act act="auditReadLy" title={d(lyFrom) + " to " + d(lyTo)}>Read last year from Tally, to compare</Act>}
     </div>
@@ -112,8 +116,8 @@ function Findings({ b }) {
       {Audit.AREAS.map(([a, l]) => { const n = f0.filter((f) => f.area === a).length; return n ? <button key={a} aria-selected={area === a} onClick={() => setAndShow("auditArea", a)}>{l} <span className="sbar-n">{n}</span></button> : null; })}</nav>
     <Head b={b} run={run} />
     <p className="note" style={{ margin: "10px 0" }}>{"Last run " + run.how + " on " + fmtDate(run.at.slice(0, 10)) + " at " + run.at.slice(11, 16) + " for " + d(run.from) + " to " + d(run.to) + ", " + run.vouchers + " vouchers. Result code "}
-      <b>{run.code || ""}</b>{": the same books always give the same code." + (run.balances ? " Balances from " + run.balances + "." : "") + (run.notes.length ? " " + run.notes.join(" ") : "")}
-      {run.errors.length > 0 && <>{" "}<span className="bad">Some checks could not run: {run.errors.join("; ")}</span></>}</p>
+      <b>{run.code || ""}</b>{": the same books always give the same code." + (run.balances ? " Balances from " + run.balances + "." : "") + ((run.notes || []).length ? " " + run.notes.join(" ") : "")}
+      {(run.errors || []).length > 0 && <>{" "}<span className="bad">Some checks could not run: {run.errors.join("; ")}</span></>}</p>
     <div className="dash-tiles">
       <div className={"dtile" + (sev("high").length ? " warn" : "")}><span>Serious</span><b>{sev("high").length}</b><small>{m(sum(sev("high")))} involved</small></div>
       <div className="dtile"><span>To look at</span><b>{sev("medium").length}</b><small>{m(sum(sev("medium")))}</small></div>

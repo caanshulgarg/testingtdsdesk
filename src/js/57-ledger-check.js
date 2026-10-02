@@ -41,7 +41,7 @@ const LedCheck = {
     else if (/SERVICE\s*TAX|\bVAT\b|\bCST\b|EXCISE|KRISHI|SWACHH/.test(T)){ out.none = true; out.ev.push("tax type " + tt + ": a tax before GST, not GST"); }
     // tax type Others away from Duties & Taxes: not a tax ledger ("Fee GST" under Loans & Advances), except a TDS / TCS
     // account named so, which is tax deducted from the client and kept as an asset ("TDS Receivable FY 2025-26")
-    else if (T && !this.taxGroup(b, n) && !/\bTDS\b|\bTCS\b|^TDS[_\s]/i.test(n)){ out.none = true; out.ev.push("tax type " + tt + ", under " + grp + " (not Duties & Taxes)"); }
+    else if (T && !this.taxGroup(b, n) && !(/\bTDS\b|\bTCS\b|^TDS[_\s]/i.test(n) && !this.inGroup(b, n, /expenses|incomes|^purchase accounts$|^sales accounts$/i))){ out.none = true; out.ev.push("tax type " + tt + ", under " + grp + " (not Duties & Taxes)"); }
     else if (grp) out.ev.push("under " + grp + (T ? ", tax type " + tt : ""));
     return out;
   },

@@ -15,6 +15,9 @@ window.FinComReact.markup = (name, props) => {
   const html = el.innerHTML; root.unmount(); return html;
 };
 
-adopt();
-createRoot(document.getElementById("react-root")).render(<App />);
-watchFresh();
+// an old browser was told it is not supported (public/oldcheck.js): nothing more is started
+if (!window.__fincomOld) {
+  adopt();
+  createRoot(document.getElementById("react-root")).render(<App />);
+  watchFresh();
+}

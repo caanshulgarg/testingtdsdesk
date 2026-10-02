@@ -391,8 +391,14 @@ func ownerProfile() string {
 	h, _ := os.UserHomeDir()
 	return h
 }
+
+// the install's record: HKLM for the service; HKCU for an install just for this user (its program runs from there)
 func regString(name string) string {
-	k, err := registry.OpenKey(registry.LOCAL_MACHINE, regKey, registry.QUERY_VALUE|registry.WOW64_64KEY)
+	root := registry.LOCAL_MACHINE
+	if perUserInstall() {
+		root = registry.CURRENT_USER
+	}
+	k, err := registry.OpenKey(root, regKey, registry.QUERY_VALUE|registry.WOW64_64KEY)
 	if err != nil {
 		return ""
 	}
@@ -490,5 +496,12 @@ func attachConsole() {
 	}
 }
 
-// the installer stops the service before it replaces the program
-func stopCmd() int { stopService(); return 0 }
+// the installer stops the service (or, installed just for this user, the user's bridge) before it replaces the program
+func stopCmd(args []string) int {
+	if contains(args, "--per-user") || perUserInstall() {
+		stopUser()
+		return 0
+	}
+	stopService()
+	return 0
+}

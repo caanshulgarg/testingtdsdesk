@@ -15,10 +15,26 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
 func testMode() bool { return strings.EqualFold(cfgS("Mode"), "test") }
+
+// How this program was started, for the tray and the log: "service" (a Windows service for all users, started by
+// Windows), "user" (installed just for one Windows user: started at sign-in, watched by its own supervisor, no
+// administrator needed) or "window" (started by hand, for support and the tests).
+var runMode = "window"
+
+// the main loop's last turn (Unix seconds): the per-user supervisor restarts a bridge whose loop has stopped turning
+var loopAt atomic.Int64
+
+func loopSec() int64 {
+	if t := loopAt.Load(); t > 0 {
+		return time.Now().Unix() - t
+	}
+	return 0
+}
 
 // bridge 1.15.0's folder, beside which this one runs in test mode
 func psHome() string {
@@ -150,10 +166,22 @@ func trayStatus() M {
 	online := cloud && !bOK.IsZero() && (!missed || time.Since(bFail) < time.Duration(3*beatEvery()+30)*time.Second)
 	reconnecting := missed && online
 	tstate, tsince := tallyOverall(openCompaniesCached())
-	return M{"ok": true, "version": BridgeVersion, "testMode": testMode(), "readOnly": readOnlyWhy(), "paused": paused(), "tallyOpen": tallyOpen, "companies": cos,
+	return M{"ok": true, "version": BridgeVersion, "runMode": runMode, "testMode": testMode(), "readOnly": readOnlyWhy(), "paused": paused(), "tallyOpen": tallyOpen, "companies": cos,
 		"cloudConnected": cloud, "online": online, "reconnecting": reconnecting, "tallyState": tstate, "busySince": tsince, "needKey": cfgS("CloudUrl") != "" && cloudKey() == "", "lastBeat": fmtTime(bOK), "beatFailed": fmtTime(bFail), "wake": wakeStatus(), "updating": keepRunning(),
 		"port": toInt(cfg("Port")), "fincomUrl": fincomURL(), "log": logFile(), "shadow": shadowStats, "update": updateInfo(), "owner": ownerName()}
 }
+
+// the way it runs, in words for the log and the tray
+func runModeText() string {
+	switch runMode {
+	case "service":
+		return "as a Windows service for all users"
+	case "user":
+		return "just for this Windows user (starts at sign-in, no service)"
+	}
+	return "in a window"
+}
+
 func fmtTime(t time.Time) string {
 	if t.IsZero() {
 		return ""
@@ -295,7 +323,7 @@ func runBridge(console bool) int {
 	if testMode() {
 		mode = "TEST MODE beside bridge 1.15.0 (reads Tally, sends to FinCom as a shadow, never posts)"
 	}
-	writeLog(fmt.Sprintf("FinCom Bridge %s (Go) started on 127.0.0.1:%d: %s; working for %s, Windows session %d", BridgeVersion, toInt(cfg("Port")), mode, ownerName(), mySession()))
+	writeLog(fmt.Sprintf("FinCom Bridge %s (Go) started on 127.0.0.1:%d: %s; working for %s, Windows session %d; runs %s", BridgeVersion, toInt(cfg("Port")), mode, ownerName(), mySession(), runModeText()))
 	if why := readOnlyWhy(); why != "" && !testMode() {
 		writeLog(why)
 	}
@@ -341,6 +369,7 @@ func runBridge(console bool) int {
 	last := time.Now()
 	lastPush := time.Now()
 	for !stopping() {
+		loopAt.Store(time.Now().Unix())
 		sleepOrStop(100 * time.Millisecond)
 		safe("Posting queue", syncCloudPosts)
 		safe("Watching Tally", testKeepWatch)

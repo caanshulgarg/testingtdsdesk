@@ -1,6 +1,33 @@
 /* ================================================================== */
 /* MIS: the books summed up for the owner, for any period, by rules   */
 /* ================================================================== */
+// Receivables, payables and advances (review of 02-Oct-2026: MIS, Reports, Audit and Letters each worked them out their
+// own way and gave four different figures for the same balance). One place: each customer's and supplier's balance in
+// the books on the day; a customer in debit is owed to you, in credit an advance received; a supplier in credit is owed
+// by you, in debit an advance paid. MIS ages these, Reports and Letters show them, Audit flags them.
+const Parties = {
+  position(asOn){
+    const b = S.books || {}, tb = b.tb, fs = Audit.fyStart(asOn), base = tb && tb.from > fs && tb.from <= asOn ? tb.from : fs;
+    const key = [b.cid, asOn, base, (b.vouchers || []).length, (tb || {}).at || "", b.mapV || 0].join("|");
+    if (this._p && this._p.key === key && this._p.b === b) return this._p.r;
+    let B; try { B = Audit.balances(base, asOn); } catch (e){ B = {ok: false, why: e.message}; }
+    let r;
+    if (!B.ok) r = {ok: false, why: B.why};
+    else {
+      const at = B.at(asOn), rows = {r: [], p: []};
+      let owed = 0, custAdv = 0, youOwe = 0, supAdv = 0;
+      Object.keys(at).forEach(l => {
+        const d = r2(-num(at[l]));                               // a debit balance as a positive figure, to the paisa
+        if (Math.abs(d) < 0.005) return;
+        if (Audit.isDebtor(l)){ rows.r.push({l, dr: d}); if (d > 0) owed += d; else custAdv -= d; }
+        else if (Audit.isCreditor(l)){ rows.p.push({l, dr: d}); if (d < 0) youOwe -= d; else supAdv += d; }
+      });
+      r = {ok: true, asOn, src: B.src, at, rows, owed: r2(owed), custAdv: r2(custAdv), youOwe: r2(youOwe), supAdv: r2(supAdv)};
+    }
+    this._p = {key, b, r};
+    return r;
+  }
+};
 const MIS = {
   cfg(b){ return Object.assign({freq: "monthly", msmeDays: 45}, (b && b.misCfg) || {}); },
   ym(d){ return String(d).slice(0, 6); },
@@ -97,6 +124,8 @@ const MIS = {
   },
   BUCKETS: [[30, "0\u201330"], [60, "31\u201360"], [90, "61\u201390"], [180, "91\u2013180"], [1e9, "over 180"]],
   ageing(asOn, side, bal){
+    // the balances on the day, as everywhere else (Parties.position) when the caller has none
+    if (!bal){ const P = Parties.position(asOn); if (P.ok) bal = P.at; }
     const bills = this.bills(asOn, side), by = {}, msme = this.msme();
     bills.forEach(x => {
       const p = by[x.party] = by[x.party] || {party: x.party, total: 0, b: [0, 0, 0, 0, 0], adv: 0, unalloc: 0, pre: 0, oldest: 0, bills: [], msme: msme[x.party] || ""};
@@ -106,6 +135,10 @@ const MIS = {
       else { const a = x.od != null ? x.od : x.age, i = this.BUCKETS.findIndex(([d]) => a <= d); p.b[i] = r2(p.b[i] + x.amt); p.oldest = Math.max(p.oldest, a); }
       p.total = r2(p.total + x.amt); p.bills.push(x);
     });
+    // a party with a balance but no bill in the books read (an opening balance carried in) is owed too (review of
+    // 02-Oct-2026: MIS left these out, so its receivables were lower than the books'); all of it is "not dated"
+    if (bal) Object.keys(bal).forEach(l => { if (by[l] || Math.abs(num(bal[l])) < 0.005 || !(side === "r" ? Audit.isDebtor(l) : Audit.isCreditor(l))) return;
+      by[l] = {party: l, total: 0, b: [0, 0, 0, 0, 0], adv: 0, unalloc: 0, pre: 0, oldest: 0, bills: [], msme: msme[l] || "", noBills: true}; });
     const rows = Object.values(by);
     // the control: the party's balance in Tally against the bills
     if (bal) rows.forEach(p => { const tb = bal[p.party]; if (tb != null){ p.tally = r2(side === "r" ? -tb : tb); p.diff = r2(p.tally - p.total); } });
@@ -197,25 +230,61 @@ const MIS = {
     });
     return {rec, pay};
   },
+  // review of 02-Oct-2026: what was paid is what the books show paid, not a working. GST: worked out to pay (after credit,
+  // FinCom's working from the books, not the 3B filed) beside what was paid from the bank to the GST ledgers (GST payable
+  // or the electronic cash ledger). TDS: deducted is what the TDS ledgers were credited with; paid is what they were
+  // debited with from the bank; challans typed or brought in are counted on their own
+  booksPaid(from, to){
+    const m = {};
+    (S.books.vouchers || []).forEach(v => {
+      if (v.date < from || v.date > to || v.opt || v.cancel) return;
+      const k = this.ym(v.date), x = m[k] = m[k] || {gst: 0, tdsDed: 0, tdsPaid: 0};
+      const L = Books.lines(v);
+      L.tds.forEach(t => { x.tdsDed = r2(x.tdsDed + t.amount); }); L.tdsPaid.forEach(t => { x.tdsPaid = r2(x.tdsPaid + t.amount); });
+      if (!v.ent.some(e => e.a > 0 && Books.ledgerOf(e.l).kind === "bank")) return;
+      v.ent.forEach(e => { if (e.a >= 0) return; const w = Books.ledgerOf(e.l);
+        if (w.what === "gst_setoff" || ((w.kind === "gst" || w.kind === "gst_common") && w.side === "output")) x.gst = r2(x.gst - e.a); });
+    });
+    return m;
+  },
   compliance(from, to){
-    const months = this.monthsOf(from, to);
-    const gst = months.map(m => { try { const t = GSTR.threeB(m, ""); return {ym: m, out: r2(t.net.igst + t.net.cgst + t.net.sgst + t.net.cess), itc: r2(t.netItc.igst + t.netItc.cgst + t.netItc.sgst + t.netItc.cess), pay: r2(Math.max(0, t.net.igst + t.net.cgst + t.net.sgst + t.net.cess - (t.netItc.igst + t.netItc.cgst + t.netItc.sgst + t.netItc.cess)))}; } catch (e){ return {ym: m, out: 0, itc: 0, pay: 0}; } });
+    const months = this.monthsOf(from, to), paid = this.booksPaid(from, to);
+    const gst = months.map(m => { const pd = (paid[m] || {}).gst || 0; try { const t = GSTR.threeB(m, ""); const out = r2(t.net.igst + t.net.cgst + t.net.sgst + t.net.cess), itc = r2(t.netItc.igst + t.netItc.cgst + t.netItc.sgst + t.netItc.cess);
+      return {ym: m, out, itc, due: r2(Math.max(0, out - itc)), pay: pd}; } catch (e){ return {ym: m, out: 0, itc: 0, due: 0, pay: pd}; } });
     const tds = months.map(m => {
-      const ded = r2(TDS.rows().filter(r => this.ym(r.date) === m).reduce((s, r) => s + r.tds, 0));
-      const dep = r2(TDS.challans().filter(c => this.ym(TDS.ymd(c.date)) === m).reduce((s, c) => s + num(c.tax), 0));
-      return {ym: m, ded, dep};
+      const p = paid[m] || {};
+      const challans = r2(TDS.challans().filter(c => this.ym(TDS.ymd(c.date)) === m).reduce((s, c) => s + num(c.tax), 0));
+      return {ym: m, ded: p.tdsDed || 0, dep: p.tdsPaid || 0, challans};
     });
     const au = (S.books.audit || {}).last;
     return {gst, tds, audit: au ? {at: au.at, open: au.findings.filter(f => Audit.status(f.id).s === "open").length, high: au.findings.filter(f => f.sev === "high").length, solved: (au.solved || []).reduce((s, x) => s + x.n, 0)} : null};
   },
-  // the fixed dates of the month after the period
-  dues(to){
-    const t = new Date(Audit.iso(to) + "T00:00:00"), y = t.getFullYear(), m = t.getMonth(), nx = new Date(y, m + 1, 1), ny = nx.getFullYear(), nm = nx.getMonth();
-    const d = (dd, mm, yy) => yy + String(mm + 1).padStart(2, "0") + String(dd).padStart(2, "0");
-    const out = [[d(7, nm, ny), "TDS and TCS deposit for " + GSTR.label(this.ym(to))], [d(11, nm, ny), "GSTR-1 for " + GSTR.label(this.ym(to))], [d(20, nm, ny), "GSTR-3B and tax for " + GSTR.label(this.ym(to))]];
-    const q = {5: d(31, 6, y), 8: d(31, 9, y), 11: d(31, 0, y + 1), 2: d(31, 4, y)}[m];
-    if (q) out.push([q, "TDS returns for the quarter"]);
-    [y, y + 1].forEach(yy => [[5, 15], [8, 15], [11, 15], [2, 15]].forEach(([mm, dd]) => { const s2 = d(dd, mm, yy); if (s2 > to && Audit.days(to, s2) <= 45) out.push([s2, "Advance tax instalment"]); }));
+  // what falls due in the next six weeks, from today (review of 02-Oct-2026: it counted from the end of the report's
+  // period, and gave TDS for March as due on 7 April). TDS: the 7th of the next month, but 30 April for March; returns on
+  // 31 Jul, 31 Oct, 31 Jan and 31 May. GST by the client's filing type: monthly GSTR-1 on the 11th and 3B on the 20th;
+  // quarterly (QRMP) IFF on the 13th and PMT-06 on the 25th after the quarter's first two months, GSTR-1 on the 13th and
+  // 3B on the 22nd or 24th after the quarter. Advance tax on 15 Jun, 15 Sep, 15 Dec and 15 Mar.
+  dues(asOf){
+    const today = Audit.ymd(asOf || Audit.today()), until = this.shift(today, 0, 45), out = [];
+    const add = (d, l) => { d = String(d).replace(/-/g, ""); if (d >= today && d <= until) out.push([d, l]); };
+    const reg = String((GSTR.gstins(S.books) || [])[0] || (CO() || {}).gstin || "").slice(0, 2);
+    // the months whose dues can fall in the window: from three months back
+    let ym = this.shift(today, 0, -100).slice(0, 6);
+    for (let i = 0; i < 6; i++, ym = GSTR.nextYm(ym)){
+      const nx = GSTR.nextYm(ym), mo = +ym.slice(4, 6), lab = GSTR.label(ym);
+      add(mo === 3 ? nx.slice(0, 4) + "0430" : nx + "07", "TDS and TCS deposit for " + lab);
+      if ([6, 9, 12, 3].includes(mo)){ const q = {6: "Q1", 9: "Q2", 12: "Q3", 3: "Q4"}[mo], d = mo === 3 ? nx.slice(0, 4) + "0531" : mo === 12 ? nx.slice(0, 4) + "0131" : ym.slice(0, 4) + String(mo + 1).padStart(2, "0") + "31";
+        add(d, "TDS and TCS returns for " + q + " " + GSTF.fyOf(ym)); }
+      if (reg){
+        const t = typeof GSTSet === "object" ? GSTSet.typeOf(ym, reg) : "monthly";
+        if (t === "monthly"){ add(GSTF.due(ym, "r1", reg), "GSTR-1 for " + lab); add(GSTF.due(ym, "r3b", reg), "GSTR-3B and tax for " + lab); }
+        else if (t === "qrmp"){
+          if (GSTSet.isQEnd(ym)){ add(GSTF.due(ym, "r1", reg), "GSTR-1 for " + GSTSet.qLabel(ym)); add(GSTF.due(ym, "r3b", reg), "GSTR-3B and tax for " + GSTSet.qLabel(ym)); }
+          else { add(GSTF.due(ym, "iff", reg), "IFF for " + lab + " (optional)"); add(GSTF.due(ym, "pmt06", reg), "PMT-06 tax for " + lab); }
+        } else if (t === "comp" && GSTSet.isQEnd(ym)) add(GSTF.due(ym, "cmp08", reg), "CMP-08 for " + GSTSet.qLabel(ym));
+      }
+    }
+    [today.slice(0, 4), String(+today.slice(0, 4) + 1)].forEach(y => ["0615", "0915", "1215", "0315"].forEach(md => add(y + md, "Advance tax instalment")));
     return out.sort((a, c) => a[0].localeCompare(c[0]));
   },
   // one run: every table for the period, the same every time for the same books
@@ -239,11 +308,14 @@ const MIS = {
     const r = {at: new Date().toISOString(), how: how || "run now", from, to, company: (b.meta || {}).company || CO().name,
       sales: s, purchases: pr, pl, prev: cmp(pFrom, pTo), ly: cmp(lyFrom, lyTo), prevRange: [pFrom, pTo], lyRange: [lyFrom, lyTo],
       mtd: this.covered(mFrom) ? this.sales(mFrom, to).total : null, ytd: this.covered(fyFrom) ? this.sales(fyFrom, to).total : null,
-      cash: this.cashflow(from, to), recv: this.ageing(to, "r", balTo), pay: this.ageing(to, "p", balTo), comp: this.compliance(from, to), dues: this.dues(to),
+      cash: this.cashflow(from, to), recv: this.ageing(to, "r", balTo), pay: this.ageing(to, "p", balTo), comp: this.compliance(from, to), dues: this.dues(),
       balances: bal.ok ? {src: bal.src, cash: Object.keys(balTo).filter(l => Audit.isCash(l)).sort().map(l => [l, r2(-balTo[l])]), bank: Object.keys(balTo).filter(l => Audit.isBankL(l)).sort().map(l => [l, r2(-balTo[l])])} : {why: bal.why}};
     // days of sales or purchases owed: from what is owed on balance; never below nought (an advance is not "negative days")
     r.dso = r.recv.sum.owe > 0 && s.total > 0 ? Math.round(r.recv.sum.owe / (s.total / days)) : null;
-    r.dpo = r.pay.sum.owe > 0 && pr.total > 0 ? Math.round(r.pay.sum.owe / (pr.total / days)) : null;
+    // days of purchases only for a client that buys goods (Purchase Accounts used in the period): a service firm's bills
+    // are expenses, and "days of purchases" says nothing about them (review of 02-Oct-2026)
+    const goods = Object.entries(this.moves(from, to)).some(([l, x]) => Audit.under(l, /^purchase accounts$/i) && Math.abs(num(x.t)) >= 1);
+    r.dpo = goods && r.pay.sum.owe > 0 && pr.total > 0 ? Math.round(r.pay.sum.owe / (pr.total / days)) : null;
     r.p2 = this.phase2(r, balTo, bal.ok ? r2(r.balances.cash.concat(r.balances.bank).reduce((s2, x) => s2 + x[1], 0)) : null);
     const md = this.cfg(b).msmeDays, msme = this.msme();
     r.msme = r.pay.rows.filter(p => /micro|small/i.test(msme[p.party] || "")).map(p => ({party: p.party, type: msme[p.party], bills: p.bills.filter(x => x.ref && x.amt > 0 && x.age > md)})).filter(x => x.bills.length)

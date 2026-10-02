@@ -49,8 +49,16 @@ function Body({ r, x }) {
   </>;
   if (r.kind === "tb") {
     if (r.none) return <div className="bk-none">{"The balances on this date are not in FinCom’s copy of the books yet: " + r.none + ". Bring in last night’s copy or today’s entries above; the trial balance is then worked out here, without holding Tally up."}</div>;
-    const diff = r2(r.dr - r.cr), agrees = Math.abs(diff) < 0.5;
-    return <>
+    const diff = r2(r.dr - r.cr), agrees = Math.abs(diff) < 0.5, nm = r.noMaster || [];
+    const masters = nm.length > 0 && <div className="bk-alert" data-tb-nomaster="">
+      <b>{nm.length} ledger{nm.length === 1 ? " has" : "s have"} entries but no master in the books read:</b>{" "}
+      {nm.slice(0, 8).map((z) => z.l + " " + FC.drcr(z.bal)).join(", ")}{nm.length > 8 ? "…" : ""}. Their group and opening balance are not known.{" "}
+      <button className="btn small" onClick={() => doAct("tbMasters")}>Read the ledger masters again</button></div>;
+    // a trial balance that does not total zero is not shown as one: what is missing is said instead
+    if (r.refused) return <>{masters}<div className="bk-none" data-tb-refused="">
+      <b>Not shown: this trial balance does not total zero.</b> Debits {FC.amt(r.dr)}, credits {FC.amt(r.cr)}, out by {FC.amt(Math.abs(diff))}.
+      {nm.length ? " The ledgers above have entries but no master; once their masters are read, it is worked out again." : " Read the day book and balances again from Tally, or bring in last night’s copy."}</div></>;
+    return <>{masters}
       <div className="dash-tiles"><Tile l="Debit balances" v={FC.amt(r.dr)} /><Tile l="Credit balances" v={FC.amt(r.cr)} /><Tile l="Difference" v={agrees ? "agrees" : FC.amt(diff)} cls={agrees ? "" : "warn"} /><Tile l="Ledgers" v={String(r.rows.length)} /></div>
       <Wrap head={<><th>Ledger</th><th>Under</th><th className="n">Debit</th><th className="n">Credit</th></>}>
         {r.groups.map((g, gi) => <Fragment key={g.g + ":" + gi}><tr className="lk-grp"><td colSpan={2}><b>{g.g}</b></td><td className="n"><b>{FC.amt(g.dr)}</b></td><td className="n"><b>{FC.amt(g.cr)}</b></td></tr>

@@ -25,7 +25,8 @@ function RowLedger({ r }) {
   const b = B(), tip = r.why || undefined;
   if (!["attention", "suggested", "ready"].includes(r.state)) {
     const canUndo = r.state === "sent" && r.tally && r.tally.guid && live();
-    const status = r.state === "sent" ? "Posted " + (r.sentAt ? shortDate(r.sentAt.slice(0, 10)) : "") + (r.checking ? " · checking in Tally…" : r.tally && r.tally.number ? " · Tally voucher " + r.tally.number : "")
+    const status = r.state === "sent" && !bankMatched(r) ? (r.postedVia === "bridge" ? "Sent to Tally " : "In a Tally file ") + (r.sentAt ? shortDate(r.sentAt.slice(0, 10)) : "") + (r.checking ? " · checking in Tally…" : " · not found in Tally yet")
+      : r.state === "sent" ? "In Tally · posted " + (r.sentAt ? shortDate(r.sentAt.slice(0, 10)) : "") + (r.tally && r.tally.number ? " · voucher " + r.tally.number : "")
       : r.state === "intally" ? "Already in Tally" + (r.tallyRef ? ": " + r.tallyRef : "") + (r.tallyHow ? " (" + r.tallyHow + ")" : "") : "Ignored";
     return <><span className="lgtext">{r.ledger || "—"}</span><span className="src muted">{status}
       {canUndo && <> <button className="linkbtn" onClick={() => bankRowAct("unpost", r.id)}>Take it back</button></>}</span></>;
@@ -162,6 +163,7 @@ function LastFail({ f }) {
 // before the ledgers are known, suggestions cannot be made: how to get them
 function LedgerSetup({ co }) {
   if (hasLedgerList()) return null;
+  if (B().ledgersLoading || (typeof TCloud === "object" && TCloud.on() && TCloud.has(co.id))) return <div className="bk-setup"><div><b>Loading ledgers from FinCom’s cloud copy of the books…</b><div className="note">The ledgers of {(TCloud.book(co.id) || {}).company || co.name}, as the Tally computer last sent them.</div></div></div>;
   if (bridgeLive(co)) return <div className="bk-setup"><div><b>Loading ledgers from Tally…</b><div className="note">{Bridge.openFor(co).name} is open in Tally.</div></div></div>;
   if (live()) return <div className="bk-setup"><div><b>Open {Bridge.tallyName(co)} in TallyPrime</b><div className="note">Its ledgers load automatically once it is open. Or import the ledger list from a file.</div></div><button className="btn small" onClick={() => bankAct("ledPick")}>Import from file</button></div>;
   return <div className="bk-setup"><div><b>Import the Tally ledger list for {co.name}</b><div className="note">Suggestions only use ledgers that exist in Tally. In Tally: Display More Reports → List of Accounts → Export (Excel or XML). With the Tally Bridge this happens automatically.</div></div><button className="btn primary small" onClick={() => bankAct("ledPick")}>Import ledger list</button></div>;
@@ -251,7 +253,15 @@ export default function Bank() {
   }
   return <>
     <div className="bk">
-      {top}
+      {/* the steps at the top of the page (review of 02-Oct-2026: they were about 490 px down) */}
+      <div className="bk-bar">
+        <div className="bk-tabs" role="tablist">
+          {BANK_TABS.map(([k, t]) => <button key={k} role="tab" aria-selected={tab === k && !b.focus} onClick={() => bankTabGo(k)}>{t} <span className="cnt">{tc[k]}</span></button>)}
+          <button role="tab" aria-selected={tab === "rules"} onClick={() => bankTabGo("rules")}>Rules <span className="cnt">{allRules().length}</span></button>
+        </div>
+        {tab === "review" && <label className="bk-switch"><input type="checkbox" checked={!!b.grouped} onChange={(ev) => bankSetGrouped(ev.target.checked)} /> Group by party</label>}
+        <input type="search" className="bk-search" autoComplete="off" placeholder="Search the description, party or amount" aria-label="Search the statement" value={b.q} onChange={(ev) => bankSearch(ev.target.value)} />
+      </div>
       <div className="bk-head">
         <div className="bk-id">
           {b.stmts.length > 1
@@ -281,14 +291,7 @@ export default function Bank() {
         {hasLedgerList() ? <select aria-label="Tally ledger for this bank account" onChange={(ev) => bankSetAccLedger(acc.id, ev.target.value)} dangerouslySetInnerHTML={{ __html: ledgerOptions("", BANK_GROUPS) }} />
           : <span className="note">Import the ledger list first.</span>}
       </div>}
-      <div className="bk-bar">
-        <div className="bk-tabs" role="tablist">
-          {BANK_TABS.map(([k, t]) => <button key={k} role="tab" aria-selected={tab === k && !b.focus} onClick={() => bankTabGo(k)}>{t} <span className="cnt">{tc[k]}</span></button>)}
-          <button role="tab" aria-selected={tab === "rules"} onClick={() => bankTabGo("rules")}>Rules <span className="cnt">{allRules().length}</span></button>
-        </div>
-        {tab === "review" && <label className="bk-switch"><input type="checkbox" checked={!!b.grouped} onChange={(ev) => bankSetGrouped(ev.target.checked)} /> Group by party</label>}
-        <input type="search" className="bk-search" autoComplete="off" placeholder="Search the description, party or amount" aria-label="Search the statement" value={b.q} onChange={(ev) => bankSearch(ev.target.value)} />
-      </div>
+      {top}
       {range}
       <Gone /><DupFind /><BankFocus />
       {tab === "done" && !b.focus && live() && tc.done > 0 && <div className="bk-found"><span className="muted">Deleted some of these in Tally?</span> <button className="btn small" onClick={() => bankAct("goneCheck")}>Check they are still in Tally</button></div>}
@@ -321,11 +324,11 @@ export function BankBar() {
       {live() && ready > 0 && <button className="btn primary" onClick={() => bankAct("bankBulkPost")}>Post {ready} to Tally</button>}
     </>;
   } else {
-    left = <><span className="bk-stat"><b>{tc.review}</b> to review</span><span className="bk-stat"><b>{tc.ready}</b> ready to post</span></>;
+    left = <><span className="bk-stat"><b>{tc.review}</b> to review</span><span className="bk-stat"><b>{tc.post}</b> ready to post</span>{tc.filed > 0 && <span className="bk-stat"><b>{tc.filed}</b> in a Tally file, not found in Tally</span>}</>;
     right = <>
       {tc.suggested > 0 && <button className="btn" onClick={() => bankAct("bankAcceptAll")}>Confirm all suggestions ({tc.suggested})</button>}
-      {canPostTally(CO()) ? <button className="btn primary" disabled={!tc.ready} onClick={() => bankAct("bankPost")}>Post to Tally ({tc.ready})</button>
-        : <button className="btn primary" disabled={!tc.ready} onClick={() => bankAct("bankXml")}>Create Tally file ({tc.ready})</button>}
+      {canPostTally(CO()) ? <button className="btn primary" disabled={!tc.post} onClick={() => bankAct("bankPost")}>Post to Tally ({tc.post})</button>
+        : <button className="btn primary" disabled={!tc.post} onClick={() => bankAct("bankXml")}>Create Tally file ({tc.post})</button>}
     </>;
   }
   const u = !nsel && b.undo;

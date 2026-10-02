@@ -11,8 +11,13 @@ import (
 // FinComBridge.exe                       on Windows started by Windows as a service (or in a window, for support)
 // FinComBridge.exe run [--config F]      in this window (Ctrl+C stops it)
 // FinComBridge.exe tray                  the tray icon, in the signed-in user's session
-// FinComBridge.exe install --mode test|sole   (the installer runs this) the service, its owner, the settings
-// FinComBridge.exe uninstall             (the uninstaller runs this)
+// FinComBridge.exe user (or --user)      just for this Windows user (no administrator, no service), started at sign-in:
+// it keeps the bridge (its worker) and the tray icon running, one of each per user
+// FinComBridge.exe worker (or --worker)  the bridge itself, started by "user" (not by hand)
+// FinComBridge.exe install --mode test|sole [--per-user]   (the installer runs this) the service, its owner, the
+// settings; with --per-user the start at sign-in instead of the service
+// FinComBridge.exe uninstall [--per-user]  (the uninstaller runs this)
+// FinComBridge.exe stop [--per-user]     (the installer runs this) stops the service, or this user's bridge
 // FinComBridge.exe compare               this bridge's copy against bridge 1.15.0's, day by day
 // FinComBridge.exe sync                  the nightly copy (scheduled task)
 // FinComBridge.exe version
@@ -47,9 +52,19 @@ func main() {
 	_ = fs.String("fincom", "", "")
 	_ = fs.Bool("quiet", false, "")
 	_ = fs.Bool("show", false, "")
+	userFlag := fs.Bool("user", false, "run just for this Windows user: the bridge and the tray icon, kept running")
+	workerFlag := fs.Bool("worker", false, "the bridge under --user")
+	_ = fs.Bool("per-user", false, "install, uninstall, stop: the install just for this Windows user")
+	_ = fs.String("parent", "", "worker: the supervisor's process (the worker ends with it)")
 	_ = fs.Parse(rest)
+	if cmd == "" && *userFlag {
+		cmd = "user"
+	}
+	if cmd == "" && *workerFlag {
+		cmd = "worker"
+	}
 	switch cmd {
-	case "", "service", "tray", "install", "uninstall", "stop", "restart-service":
+	case "", "service", "tray", "install", "uninstall", "stop", "restart-service", "user", "worker":
 	default:
 		attachConsole() // the program is a windowed one (no console flashes for the tray): commands typed in a window print there
 	}
@@ -58,7 +73,7 @@ func main() {
 		fmt.Println(BridgeVersion)
 		return
 	case "stop":
-		os.Exit(stopCmd())
+		os.Exit(stopCmd(rest))
 	case "restart-service":
 		os.Exit(restartServiceCmd())
 	case "tray":
@@ -91,9 +106,17 @@ func main() {
 		os.Exit(runBridge(true))
 	case "service":
 		os.Exit(runService(rest)) // Windows starts it as "FinComBridge.exe service --config ..."
+	case "user":
+		os.Exit(runUser(rest)) // the start at sign-in: HKCU\...\Run runs "FinComBridge.exe user"
+	case "worker":
+		os.Exit(runWorker(rest))
 	case "":
 		if isWindowsService() {
 			os.Exit(runService(rest))
+		}
+		// installed just for this user: a double-click on the program starts it the same way as at sign-in
+		if perUserInstall() {
+			os.Exit(runUser(rest))
 		}
 		os.Exit(runBridge(true))
 	default:

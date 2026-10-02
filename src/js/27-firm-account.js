@@ -153,7 +153,7 @@ function cloudChanges(){
     if (k in seen){ delete dels[k]; return; }                      // it came back (restored): not deleted
     if (marks[k] === "gone") return;
     const bits = k.split("|");
-    gone.push({kind: bits[0], client_id: bits[1] || "", id: bits.slice(2).join("|"), data: {}, deleted: true, hash: "gone"});
+    gone.push({kind: bits[0], client_id: bits[1] || "", id: bits.slice(2).join("|"), data: {}, deleted: true, hash: "gone", why: (dels[k] || {}).why || ""});
   });
   // the open statement now has fewer rows than before: its chunks past the end are sent empty, not deleted
   const b = S.bank && !S.bank.loading ? S.bank : null;
@@ -164,6 +164,12 @@ function cloudChanges(){
     if (marks[k] !== h) now.push({kind, client_id: cid, id, data: {rows: []}, hash: h});
   });
   return {changes: now.concat(gone), seen};
+}
+// the deleted flag, with the reason where the server has the column (migration-19); nothing else of the row is sent
+async function cloudMarkDeleted(path, why){
+  const body = {deleted: true, delete_reason: String(why || "removed in the app").slice(0, 300)};
+  try { await Cloud.api(path, {method: "PATCH", headers: {Prefer: "return=minimal"}, body}); }
+  catch (e){ if (!/delete_reason|PGRST204|column/i.test(String(e && e.message || e))) throw e; await Cloud.api(path, {method: "PATCH", headers: {Prefer: "return=minimal"}, body: {deleted: true}}); }
 }
 function cloudDelsSent(rows){ const d = Cloud.dels(); let n = 0; rows.forEach(r => { if (r.deleted && d[cloudKey(r)]){ delete d[cloudKey(r)]; n++; } }); if (n) Cloud.setDels(d); }
 async function cloudPush(){
@@ -178,7 +184,7 @@ async function cloudPush(){
   };
   const cdel = clients.filter(r => r.deleted); clients.splice(0, clients.length, ...clients.filter(r => !r.deleted));
   for (const r of cdel){
-    await Cloud.api("clients?firm_id=eq." + Cloud.st.firm + "&id=eq." + encodeURIComponent(r.id), {method: "PATCH", headers: {Prefer: "return=minimal"}, body: {deleted: true}});
+    await cloudMarkDeleted("clients?firm_id=eq." + Cloud.st.firm + "&id=eq." + encodeURIComponent(r.id), r.why);
     marks[cloudKey(r)] = r.hash; Cloud.setMarks(marks); cloudDelsSent([r]);
   }
   for (let i = 0; i < clients.length; i += 20){
@@ -194,7 +200,7 @@ async function cloudPush(){
     // deletions go on their own, as the flag only (a merge upsert of a partial row would need every column)
     const del = part.filter(r => r.deleted), up = part.filter(r => !r.deleted);
     if (up.length) await sendBatch("records", up.map(r => ({firm_id: Cloud.st.firm, kind: r.kind, id: r.id, client_id: r.client_id || "", data: r.data, deleted: false})));
-    for (const r of del) await Cloud.api("records?firm_id=eq." + Cloud.st.firm + "&kind=eq." + encodeURIComponent(r.kind) + "&id=eq." + encodeURIComponent(r.id), {method: "PATCH", headers: {Prefer: "return=minimal"}, body: {deleted: true}});
+    for (const r of del) await cloudMarkDeleted("records?firm_id=eq." + Cloud.st.firm + "&kind=eq." + encodeURIComponent(r.kind) + "&id=eq." + encodeURIComponent(r.id), r.why);
     part.forEach(r => { marks[cloudKey(r)] = r.hash; });
     Cloud.setMarks(marks); cloudDelsSent(part);
   }
@@ -258,7 +264,7 @@ async function cloudApplyNow(rows){
     if (!r.deleted && mine.has(k) && mine.get(k) === stableStr(r.data)){ marks[k] = fpHash(JSON.stringify(r.data)); continue; }   // this computer's own save coming back
     if (r.kind !== "inbox") marks[k] = r.deleted ? "gone" : fpHash(JSON.stringify(r.data));   // inbox records are office automation's, never tracked for deletion
     const cid = r.client_id;
-    if (r.kind === "firm"){ if (!r.deleted){ S.firm = Object.assign(clone(DEFAULT_FIRM), r.data); Store.saveFirm(); } }
+    if (r.kind === "firm"){ if (!r.deleted){ S.firm = firmMerge(S.firm, r.data); Store.saveFirm(); } }
     else if (r.kind === "client"){
       if (r.deleted){ delete S.companies[r.id]; Store.put("companies/" + r.id, null); }
       else { S.companies[r.id] = fixCompany(clone(r.data)); Store.saveCompany(S.companies[r.id]); }
@@ -416,6 +422,9 @@ async function loadAccount(quiet){
   try {
     const a = await Cloud.rpc("my_account");
     S.account = a || null;
+    // the firm's name is the firm account's (firms.name): shown in the firm record, never asked for again when it is there
+    const fn = String(((a || {}).firm || {}).name || "").trim();
+    if (fn && S.firm && S.firm.firmName !== fn){ S.firm.firmName = fn; Store.saveFirm(); }
     try { pickEngine(); } catch (e){}      // the plan may provide Claude
     if (a && a.superadmin && !S.adminData) loadAdminOverview(true);
     if (typeof SUP === "object") SUP.load(true);          // the Help count: tickets awaiting an answer
@@ -1314,8 +1323,13 @@ function doAct(act, t){
     case "auditRun": {
       const b = S.books, dr = Audit.defaultRange(b), r = S.auditRange || {from: Audit.iso(dr.from), to: Audit.iso(dr.to)};
       if (!r.from || !r.to || r.from > r.to){ toast("Choose a period: from a date to a later one."); break; }
-      const run = Audit.run(r.from, r.to, "run now"); saveBooks();
-      toast(run.findings.length + " findings, " + run.findings.filter(f => f.sev === "high").length + " serious."); render(); break;
+      // the books in FinCom's cloud first (review of 02-Oct-2026: the audit ran on whatever this browser held)
+      (async () => {
+        if (typeof TCloud === "object" && TCloud.on()){ try { await TCloud.status(S.coId); if (TCloud.has(S.coId) && await TCloud.load() === "new") TCloud.rework(S.books); } catch (e){} }
+        const run = Audit.run(r.from, r.to, "run now"); saveBooks();
+        toast(run.vouchers + " entries from " + fmtDate(Audit.iso(run.from)) + " to " + fmtDate(Audit.iso(run.to)) + ": " + run.findings.length + " findings, " + run.findings.filter(f => f.sev === "high").length + " serious."); render();
+      })();
+      break;
     }
     case "auditReport": {
       const run = (S.books.audit || {}).last; if (!run) break;
@@ -1351,6 +1365,16 @@ function doAct(act, t){
         view === "tds" ? Object.entries(b.map).filter(([nm, m]) => LedMaster.isTds(m.what) && LedMaster.taxLike(nm, m, info[nm])) : LedMaster.pending(b);
       const names = pool.filter(([nm, m]) => !m.ok && (!q || nm.toLowerCase().includes(q) || String(m.section || "").toLowerCase().includes(q) || String((info[nm] || {}).group || "").toLowerCase().includes(q))).map(x => x[0]);
       LedMaster.confirm(b, names, true); b.reco = null; saveBooks(); toast(names.length + " ledger" + (names.length === 1 ? "" : "s") + " confirmed."); render(); break;
+    }
+    // ledgers with entries but no master: the masters read again (through the bridge here, else the firm's Tally
+    // computer is asked to update the cloud copy, masters included)
+    case "tbMasters": {
+      if (typeof bridgeLive === "function" && bridgeLive(CO())){ doAct("ledRead"); break; }
+      if (typeof TCloud === "object" && TCloud.on()) TCloud.rpc("tally_want_update", {p_client: S.coId}).then(j => {
+        toast(j && j.ok ? "The Tally computer will read the ledger masters with its next update (within a minute or two), then this is worked out again." : "No Tally computer is linked to this client yet: read the masters on the Tally computer (Tally ledgers → Read ledgers from Tally).");
+        LK.cache = {}; }, e => toast("Could not ask the Tally computer: " + ((e && e.message) || e)));
+      else toast("Read the ledger masters on the computer where Tally runs (Tally ledgers → Read ledgers from Tally).");
+      break;
     }
     case "ledRead": {
       const co = CO(), b = S.books;
@@ -1592,11 +1616,16 @@ function doAct(act, t){
     case "addParty": { const id = "p-new-" + Date.now().toString(36); D().parties[id] = {id, name:"New supplier", pan:"", gstin:"", ledgerName:"", natureDefault:"", expenseLedger:"", ldcRate:"", ldcValidTo:"", ytd:{}}; S.partySel = id; Store.saveParty(S.coId, D().parties[id]); render(); break; }
     case "closeParty": S.partySel = null; render(); break;
     case "resetRules": S.firm.rules = {}; Store.saveFirm(); toast("Default rates and limits restored."); render(); break;
-    case "delCo":
-      if (S.arm !== "delCo"){ S.arm = "delCo"; render(); break; }
-      { const name = CO().name, cid = S.coId; S.arm = null; S.coId = null; S.view = "home";
-        Store.deleteCompany(cid).then(() => { toast(name + " deleted from the desk."); render(); }); render(); }
+    case "delCo": {
+      closeMenus && closeMenus();
+      const name = CO().name, cid = S.coId;
+      confirmTyped({title: "Remove " + name + "?", ok: "Remove client", body: '<p class="note">It leaves the client list on every computer of the firm. The firm account keeps its details, bills, bank and books, marked removed, and they can be brought back. Nothing in Tally is touched.</p>'}).then(ok => {
+        if (!ok) return;
+        S.coId = null; S.view = "home";
+        Store.deleteCompany(cid, ok.reason).then(() => { toast(name + " removed. The firm account keeps its data."); render(); }); render();
+      });
       break;
+    }
     case "clearSent":
       confirmTyped({title: "Clear sent invoices older than 90 days?", ok: "Clear them", body: '<p class="note">Invoices sent to Tally more than 90 days ago move to \u201cDeleted\u201d, where each can be restored. Nothing in Tally changes, and deductee year totals are kept. Download the register first if you need it.</p>'})
         .then(ok => { if (ok) clearSent(ok.reason); }); break;
@@ -1730,16 +1759,25 @@ function coSetBlockRule(catId, v){ const co = CO(); co.gstBlock = co.gstBlock ||
 // the firm's own name, shown in the top bar and on reports
 // First sign-in of an owner with no firm name yet (review item 32): the name (from sign-up where given), address and
 // logo are asked for once; "Later" puts it off until the next sign-in
+// a firm record from elsewhere never empties a field filled here (name, address, logo, rules): the filled one is kept
+// (review of 02-Oct-2026: a sync replaced the firm's name, address and logo with an empty copy)
+function firmMerge(mine, theirs){
+  const out = Object.assign(clone(DEFAULT_FIRM), mine || {}), filled = v => v != null && v !== "" && !(typeof v === "object" && !Object.keys(v).length);
+  Object.entries(theirs || {}).forEach(([k, v]) => { if (filled(v) || !filled(out[k])) out[k] = v; });
+  const fn = String((((S.account || {}).firm) || {}).name || "").trim(); if (fn) out.firmName = fn;
+  return out;
+}
 function firmSetupDue(){
   // "Later" holds for the rest of the day on this computer (review recheck: it came back on every refresh)
   const later = S.firmSetupLater || lsGet("tdsdesk:firmSetupLater") === fmtDate(new Date());
-  return !!(S.firm && !S.firm.firmName && !later && typeof Cloud === "object" && Cloud.on() && S.account && ((S.account.me || {}).role === "owner"));
+  const fn = String((((S.account || {}).firm) || {}).name || "").trim();
+  return !!(S.firm && !S.firm.firmName && !fn && !later && typeof Cloud === "object" && Cloud.on() && S.account && ((S.account.me || {}).role === "owner"));
 }
 function firmSetupLater(){ S.firmSetupLater = true; lsSet("tdsdesk:firmSetupLater", fmtDate(new Date())); render(); }
 function firmSetupSave(d){
   const name = String(d.name || "").trim();
   if (!name){ toast("The firm\u2019s name is needed."); return false; }
-  S.firm.firmName = name.slice(0, 120);
+  S.firm.firmName = name.slice(0, 120); firmNameToAccount(S.firm.firmName);
   S.firm.firmAddress = String(d.address || "").trim().slice(0, 400);
   if (d.logo !== undefined) S.firm.firmLogo = d.logo || "";
   Store.saveFirm(); toast("Saved."); render();
@@ -1761,7 +1799,12 @@ function firmLogoRead(file){
     img.src = url;
   });
 }
-function firmSetName(v){ S.firm.firmName = v; later("firm", () => Store.saveFirm(), 600); const el = document.getElementById("firmLine"); if (el) el.textContent = v; }
+// the firm's name goes to the firm account (firms.name, owners only: migration-21) as well as the firm record
+function firmNameToAccount(v){
+  const n = String(v || "").trim(); if (!n || typeof Cloud !== "object" || !Cloud.on() || !S.account || ((S.account.me || {}).role !== "owner")) return;
+  Cloud.rpc("firm_name_set", {p_name: n}).then(() => { if (S.account.firm) S.account.firm.name = n; }, e => { if (!/firm_name_set|PGRST202|schema cache/i.test(String(e && e.message || e))) toast("The firm's name could not be saved to the firm account: " + ((e && e.message) || e)); });
+}
+function firmSetName(v){ S.firm.firmName = v; later("firm", () => { Store.saveFirm(); firmNameToAccount(v); }, 600); const el = document.getElementById("firmLine"); if (el) el.textContent = v; }
 function setPath(o, path, v){ const k = path.split("."); if (k.length === 2) o[k[0]][k[1]] = v; else o[k[0]] = v; }
 
 document.addEventListener("change", ev => {

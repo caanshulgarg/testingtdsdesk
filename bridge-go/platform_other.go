@@ -55,5 +55,8 @@ func trayAlive(session int)             {}
 func trayQuitSession(session int)       {}
 func openFile(f string)                 { println(f) }
 func attachConsole()                    {}
-func stopCmd() int                      { return 0 }
+func stopCmd(args []string) int         { return 0 }
+func runUser(args []string) int         { return runBridge(true) }
+func runWorker(args []string) int       { return runBridge(true) }
+func perUserInstall() bool              { return false }
 func restartServiceCmd() int            { return 0 }

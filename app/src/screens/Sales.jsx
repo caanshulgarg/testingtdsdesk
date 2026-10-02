@@ -289,6 +289,7 @@ export default function Sales() {
   const head = <>
     {s.busy && <BusyCard title="Working on sales…" detail={s.busy} />}
     {!hasLedgerList() && (bridgeLive(co) ? <div className="bk-setup"><div><b>Loading ledgers from Tally…</b></div></div>
+      : (B() && B().ledgersLoading) || (typeof TCloud === "object" && TCloud.on() && TCloud.has(co.id)) ? <div className="bk-setup"><div><b>Loading ledgers from FinCom’s cloud copy of the books…</b></div></div>
       : <div className="bk-setup"><div><b>Tally ledgers are needed for Sales vouchers</b><div className="note">{Bridge.on() ? "Open " + Bridge.tallyName(co) + " in TallyPrime, or import the ledger list." : "Import the ledger list (Tally: Display More Reports → List of Accounts → Export), or connect the Tally Bridge."}</div></div>
         <button className="btn small" onClick={() => salesAct("ledPick")}>Import ledger list</button></div>)}
     <div className="bk-head">

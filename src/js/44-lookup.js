@@ -183,8 +183,8 @@ const LK = {
     if (bk && bk.book){
       this._namesBusy = true;
       try {
-        const rows = await TCloud.restAll("tally_ledgers?select=name,parent&book_id=eq." + encodeURIComponent(bk.book) + "&order=name.asc");
-        const under = {}; rows.forEach(r => { under[r.name] = r.parent || ""; });
+        const rows = await TCloud.restAll("tally_ledgers?select=name,parent&merged_into=is.null&book_id=eq." + encodeURIComponent(bk.book) + "&order=name.asc");
+        const under = {}; rows.forEach(r => { const n = ledNm(r.name); if (!(n in under) || r.parent) under[n] = r.parent || under[n] || ""; });
         this.names = {cid, at: Date.now(), leds: Object.keys(under), under, groups: {}, src: "cloud"};
       } catch (e){ if (force) toast("Could not bring the ledger names: " + ((e && e.message) || e)); }
       this._namesBusy = false;
@@ -251,6 +251,12 @@ const LK = {
     r.groups = Object.keys(by).sort((a, c) => (ORDER.indexOf(a) < 0 ? 99 : ORDER.indexOf(a)) - (ORDER.indexOf(c) < 0 ? 99 : ORDER.indexOf(c)) || a.localeCompare(c))
       .map(g => ({g, rows: by[g].sort((a, c) => a.l.localeCompare(c.l)), dr: r2(by[g].filter(x => x.bal > 0).reduce((s, x) => s + x.bal, 0)), cr: r2(by[g].filter(x => x.bal < 0).reduce((s, x) => s - x.bal, 0))}));
     r.dr = r2(r.groups.reduce((s, g) => s + g.dr, 0)); r.cr = r2(r.groups.reduce((s, g) => s + g.cr, 0));
+    // ledgers with entries but no master in the copy (their group and opening are not known), and whether the trial
+    // balance totals zero: one that does not is not shown as a trial balance (review of 02-Oct-2026)
+    const groups = (S.books || {}).groups || {}, under = (S.books || {}).under || {};
+    r.noMaster = r.rows.filter(x => x.noMaster || (r.src === "books" && !under[x.l] && !/^profit & loss a\/c$/i.test(x.l) && !groups[x.l]));
+    r.off = r2(r.dr - r.cr);
+    r.refused = Math.abs(r.off) >= 1;
     return r;
   },
   // ---------- a ledger or a group, month by month

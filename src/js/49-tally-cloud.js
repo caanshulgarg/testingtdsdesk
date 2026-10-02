@@ -52,9 +52,17 @@ const TCloud = {
   big(cid){ const b = this.book(cid); return !!(b && b.entries > this.BIG); },
   // ---------- answers from the cloud's ready totals
   async tb(cid, asOn){
-    const rows = await this.rpcAll("tally_tb", {p_client: cid, p_as_on: this.iso(asOn)});
+    const raw = await this.rpcAll("tally_tb", {p_client: cid, p_as_on: this.iso(asOn)});
     const bk = this.book(cid) || {};
-    const out = rows.filter(r => Math.abs(num(r.closing)) >= 0.005).map(r => ({l: r.ledger, top: this.top(r.ledger, rows), sub: r.parent || "", bal: -r2(num(r.closing))}));
+    // a ledger whose name in Tally ends in a line break ("MCS Project Pvt Ltd\r\n") is the ledger its entries name
+    // without it: one row, its master's group and opening with its entries (review of 02-Oct-2026: the two showed as
+    // separate ledgers, one of them with no master, and the trial balance was out by Rs 38,200)
+    const by = new Map();
+    raw.forEach(r => { const k = ledNm(r.ledger), x = by.get(k);
+      if (!x) by.set(k, {ledger: k, parent: r.parent || "", closing: num(r.closing), master: !!r.parent});
+      else { x.closing = r2(x.closing + num(r.closing)); if (r.parent){ x.parent = x.parent || r.parent; x.master = true; } } });
+    const rows = Array.from(by.values());
+    const out = rows.filter(r => Math.abs(num(r.closing)) >= 0.005).map(r => ({l: r.ledger, top: this.top(r.ledger, rows), sub: r.parent || "", bal: -r2(num(r.closing)), noMaster: !r.master && !/^profit & loss a\/c$/i.test(r.ledger)}));
     return LK.tbShape({kind: "tb", src: "cloud", asOn, rows: out, note: "From the copy in FinCom's cloud (" + (bk.company || "") + "), " + this.age(bk) + "."});
   },
   // the top group of a ledger, from the groups FinCom knows, else the ledger's own group

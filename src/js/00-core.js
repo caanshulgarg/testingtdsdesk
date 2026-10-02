@@ -112,6 +112,9 @@ const S = {
   engine: null, samplePerm: null, perms: null, testResult: null, apiKeyShown: false
 };
 
+// a Tally ledger's name as its entries name it: a name ending in (or holding) line breaks, as Tally sometimes keeps it in
+// the master, is the same ledger without them
+function ledNm(n){ return String(n == null ? "" : n).replace(/(&#13;|&#10;|\r|\n)+/g, " ").replace(/\s+/g, " ").trim(); }
 function newCompany(f){
   f = f || {};
   const gstin = String(f.gstin || "").toUpperCase().trim();

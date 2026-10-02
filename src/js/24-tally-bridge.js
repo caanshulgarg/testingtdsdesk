@@ -330,6 +330,19 @@ function bridgeChip(co){
 }
 
 /* ---------- ledgers and bank entries straight from Tally ---------- */
+// Bank and Sales take the client's ledgers from FinCom's cloud copy when the Tally computer is not here (review of
+// 02-Oct-2026: they asked for the ledger list to be imported although the cloud copy had all 1,110 ledgers)
+async function ensureCloudLedgers(cid){
+  const b = B(), co = CO(cid);
+  if (!b || b.cid !== cid || !co || bridgeLive(co) || typeof TCloud !== "object" || !TCloud.on()) return false;
+  try { await TCloud.status(cid); } catch (e){ return false; }
+  if (tallyVia(co) !== "cloud") return false;
+  const age = Date.now() - new Date((b.ledgers || {}).importedAt || 0).getTime();
+  if ((b.ledgers.list || []).length && b.ledgers.live && age < 6 * 3600000) return true;
+  b.ledgersLoading = true; render();
+  try { await syncLedgersFromTally(true); } finally { b.ledgersLoading = false; render(); }
+  return true;
+}
 async function syncLedgersFromTally(silent){
   const b = B(), co = CO(b.cid);
   if (!tallyVia(co)) return false;

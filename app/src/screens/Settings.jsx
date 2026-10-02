@@ -260,7 +260,7 @@ function GstSetup() {
 function Remove() {
   const co = CO();
   return <Card title="Remove this client" danger note="Deletes this client from FinCom, with all its bills, bank statements and suppliers. Nothing in Tally is touched.">
-    <button className="btn danger" onClick={() => doAct("delCo")}>{S.arm === "delCo" ? "Click again to delete " + co.name : "Delete client"}</button>
+    <button className="btn danger" onClick={() => doAct("delCo")}>Remove {co.name}…</button>
   </Card>;
 }
 
@@ -296,7 +296,6 @@ function clientGroups() {
     ] },
     { title: "Books", items: [
       it("coclosed", "Periods already closed or filed: FinCom warns before posting an entry dated in one.", ""),
-      it("coremove", "Delete this client from FinCom.", "", true),
     ] },
   ];
 }
@@ -314,5 +313,13 @@ export function ClientSetup() {
     coclosed: () => <ClosedPeriods co={co} />,
     coremove: () => <Remove />,
   }[tab] || (() => <Company />);
-  return <Layout label="Client setup" groups={clientGroups()} current={isSetupTab(tab) ? tab : "settings"} pick={(id) => { goTab(id); window.scrollTo(0, 0); }}>{body()}</Layout>;
+  // removing the client is out of the way, in More, behind the client's name (review of 02-Oct-2026)
+  return <>
+    <div className="row" style={{ justifyContent: "flex-end", marginBottom: 8 }}>
+      <details className="bk-menu" data-more="client"><summary className="btn small">More</summary><div className="bk-menu-list">
+        <button className="danger" onClick={() => doAct("delCo")}>Remove this client<small>Asks for the client’s name. The firm account keeps its data, marked removed.</small></button>
+      </div></details>
+    </div>
+    <Layout label="Client setup" groups={clientGroups()} current={isSetupTab(tab) && tab !== "coremove" ? tab : "settings"} pick={(id) => { goTab(id); window.scrollTo(0, 0); }}>{body()}</Layout>
+  </>;
 }

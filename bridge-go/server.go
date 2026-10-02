@@ -106,7 +106,8 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if path == "/ping" {
-		sendJSON(w, 200, M{"ok": true, "bridge": "FinCom Tally Bridge", "version": BridgeVersion, "impl": "go", "testMode": testMode()}, origin)
+		// pid and loopSec: the per-user supervisor checks that its own worker answers and that its main loop still turns
+		sendJSON(w, 200, M{"ok": true, "bridge": "FinCom Tally Bridge", "version": BridgeVersion, "impl": "go", "testMode": testMode(), "runMode": runMode, "pid": os.Getpid(), "loopSec": loopSec()}, origin)
 		return
 	}
 	if sentOrigin != "" && !originOK {

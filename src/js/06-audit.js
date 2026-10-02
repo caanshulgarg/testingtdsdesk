@@ -413,14 +413,16 @@ const Audit = {
     },
     balances(A, V, ctx){
       if (!ctx.bal.ok) return null;
-      const bal = ctx.bal.at(ctx.to), out = [];
-      const cr = Object.entries(bal).filter(([l, v]) => A.isCreditor(l) && v < -10000), dr = Object.entries(bal).filter(([l, v]) => A.isDebtor(l) && v > 10000);
+      const bal = ctx.bal.at(ctx.to), out = [], P = Parties.position(ctx.to);
+      // every supplier in debit and customer in credit, as Parties.position counts them (review of 02-Oct-2026: only those
+      // above Rs 10,000 were counted, so the audit's totals differed from MIS and Reports)
+      const cr = Object.entries(bal).filter(([l, v]) => A.isCreditor(l) && v < -0.5), dr = Object.entries(bal).filter(([l, v]) => A.isDebtor(l) && v > 0.5);
       if (cr.length) out.push({key: "crDr", area: "bal", sev: "low", clause: "Schedule III", title: "Suppliers with a debit balance", problem: cr.length + " suppliers owe you money.",
-        impact: "In the balance sheet these are advances to suppliers, not a reduction of trade payables.", amount: cr.reduce((s, [, v]) => s - v, 0),
+        impact: "In the balance sheet these are advances to suppliers, not a reduction of trade payables.", amount: P.ok ? P.supAdv : cr.reduce((s, [, v]) => s - v, 0),
         suggestion: "Confirm the balances; show them under short-term loans and advances.", je: [{date: ctx.to, narr: "Suppliers with debit balances shown as advances", lines: [{l: "ADVANCE TO SUPPLIERS", dr: r2(cr.reduce((s, [, v]) => s - v, 0))}].concat(cr.map(([l, v]) => ({l, cr: r2(-v)})))}],
         rows: cr.map(([l, v]) => ({vid: "", date: ctx.to, no: "", type: "", party: l, amount: -v, note: "debit balance"}))});
       if (dr.length) out.push({key: "drCr", area: "bal", sev: "low", clause: "Schedule III", title: "Customers with a credit balance", problem: dr.length + " customers have paid more than billed.",
-        impact: "These are advances from customers \u2014 a liability, and possibly tax on advances for services.", amount: dr.reduce((s, [, v]) => s + v, 0),
+        impact: "These are advances from customers \u2014 a liability, and possibly tax on advances for services.", amount: P.ok ? P.custAdv : dr.reduce((s, [, v]) => s + v, 0),
         suggestion: "Confirm the balances; show them as advances from customers, and see GST \u2192 Advances.", je: [{date: ctx.to, narr: "Customers with credit balances shown as advances", lines: dr.map(([l, v]) => ({l, dr: r2(v)})).concat([{l: "ADVANCE FROM CUSTOMERS", cr: r2(dr.reduce((s, [, v]) => s + v, 0))}])}],
         rows: dr.map(([l, v]) => ({vid: "", date: ctx.to, no: "", type: "", party: l, amount: v, note: "credit balance"}))});
       const sus = Object.entries(bal).filter(([l, v]) => (A.under(l, /^suspense a\/c$/i) || /SUSPENSE/i.test(l)) && Math.abs(v) >= 1);
@@ -512,11 +514,17 @@ const Audit = {
     if (c.freq === "monthly") return last.slice(0, 6) < t.slice(0, 6);
     return false;
   },
+  // the year chosen, else the last full year of the books (as Accounts): never a year the books hardly reach (review of
+  // 02-Oct-2026: the books end on 01-Jul-2026, and the audit ran on Apr-Sep 2026, which holds one entry)
   defaultRange(b){
-    const to = String((b.meta || {}).to || this.today()), t = this.today();
-    const end = to < t ? to : t;
-    return {from: this.fyStart(end), to: end};
+    const fy = typeof fsLastFull === "function" ? (S.auditFy || fsLastFull()) : "";
+    const end = String((b.meta || {}).to || this.today()), t = this.today(), last = end < t ? end : t;
+    if (!fy) return {from: this.fyStart(last), to: last};
+    const fyEnd = (num(fy) + 1) + "0331";
+    return {from: fy + "0401", to: fyEnd < last ? fyEnd : last};
   },
+  // a run kept from before that no longer matches the books for its period (another computer's books, or books read again)
+  stale(run){ if (!run || !run.from) return null; const n = this.vouchers(run.from, run.to).length; return n !== run.vouchers ? {was: run.vouchers, now: n} : null; },
   maybeRun(){
     const b = S.books;
     if (!b || !b.vouchers || !this.due(b)) return;

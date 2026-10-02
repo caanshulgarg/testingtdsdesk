@@ -77,7 +77,7 @@ function Summary({ b, r }) {
       <Tile l="Owed to you" v={m(owed(r.recv))} sub={owedNote(r.recv) + " · over 90 days " + m(over90(r.recv)) + adv(r.recv, "from customers") + (r.dso != null ? " · " + r.dso + " days of sales" : "")} />
       <Tile l="You owe" v={m(owed(r.pay))} sub={owedNote(r.pay) + " · over 90 days " + m(over90(r.pay)) + adv(r.pay, "to suppliers") + (r.dpo != null ? " · " + r.dpo + " days of purchases" : "")} />
       <Tile l={"MSME suppliers past " + MIS.cfg(b).msmeDays + " days"} v={m(r.msme.reduce((s, x) => s + x.amt, 0))} sub={r.msme.length + " suppliers · section 43B(h)"} />
-      <Tile l="GST payable, last month" v={m((r.comp.gst[r.comp.gst.length - 1] || {}).pay)} sub="after credit, as per 3B" />
+      <Tile l="GST worked out, last month" v={m((r.comp.gst[r.comp.gst.length - 1] || {}).due)} sub={"after credit, FinCom's working from the books · paid from the bank " + m((r.comp.gst[r.comp.gst.length - 1] || {}).pay)} />
     </div>
     {r.balances.cash || r.balances.bank ? <Card top title={"Cash and bank on " + d(r.to)}>
       <Table>{cb.filter((x) => Math.abs(x[1]) >= 1).map(([l, v], i) => <tr key={l + ":" + i}><td>{l}</td><td className={"n" + (v < 0 ? " bad" : "")}>{m(v)}</td></tr>)}
@@ -276,10 +276,12 @@ function Budget({ r }) {
 function Compliance({ r }) {
   const C = r.comp;
   return <>
-    <Card title="GST by month"><Table head={<><th>Month</th><th className="n">Output tax</th><th className="n">Credit</th><th className="n">Payable in cash</th></>}>
-      {C.gst.map((x) => <tr key={x.ym}><td>{GSTR.label(x.ym)}</td><td className="n">{m(x.out)}</td><td className="n">{m(x.itc)}</td><td className="n">{m(x.pay)}</td></tr>)}</Table></Card>
-    <Card top title="TDS by month"><Table head={<><th>Month</th><th className="n">Deducted</th><th className="n">Deposited (challans here)</th><th className="n">Difference</th></>}>
-      {C.tds.map((x) => <tr key={x.ym}><td>{GSTR.label(x.ym)}</td><td className="n">{m(x.ded)}</td><td className="n">{m(x.dep)}</td><td className={"n" + (Math.abs(x.ded - x.dep) >= 1 ? " bad" : "")}>{m(x.ded - x.dep)}</td></tr>)}</Table></Card>
+    <Card title="GST by month"><Table head={<><th>Month</th><th className="n">Output tax</th><th className="n">Credit</th><th className="n">Worked out to pay</th><th className="n">Paid from the bank</th></>}>
+      {C.gst.map((x) => <tr key={x.ym}><td>{GSTR.label(x.ym)}</td><td className="n">{m(x.out)}</td><td className="n">{m(x.itc)}</td><td className="n">{m(x.due)}</td><td className="n">{m(x.pay)}</td></tr>)}</Table>
+      <p className="note">Output tax, credit and the amount to pay are FinCom's working from the books, not the 3B filed. Paid is what the books show paid from the bank to GST payable or the cash ledger, in the month it was paid.</p></Card>
+    <Card top title="TDS by month"><Table head={<><th>Month</th><th className="n">Deducted (TDS ledgers)</th><th className="n">Paid from the bank</th><th className="n">Challans here</th></>}>
+      {C.tds.map((x) => <tr key={x.ym}><td>{GSTR.label(x.ym)}</td><td className="n">{m(x.ded)}</td><td className="n">{m(x.dep)}</td><td className="n">{m(x.challans)}</td></tr>)}</Table>
+      <p className="note">From the books: deducted is what the TDS ledgers were credited with, paid what they were debited with from the bank. A month's TDS is paid the next month, and last year's TDS is paid in April, so the two do not match month by month.</p></Card>
     <Card top title="Audit">{C.audit ? <><div className="dash-row"><span>Findings open</span><b>{C.audit.open}</b></div><div className="dash-row"><span>Serious</span><b>{C.audit.high}</b></div><div className="dash-row"><span>Put right</span><b>{C.audit.solved}</b></div></>
       : <p className="note">Not run yet.</p>}</Card>
   </>;

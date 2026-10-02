@@ -47,11 +47,19 @@ function GoBridgeCard() {
   const set = m && m.setup;
   if (!set) return null;
   const file = set.url.split("/").pop();
+  const dl = new URL("assets/bridge-go/" + file, location.href).href.replace(/[?#].*$/, "");
+  const ps = "[Net.ServicePointManager]::SecurityProtocol = 'Tls12'; Invoke-WebRequest -Uri \"" + dl + "\" -OutFile \"$env:USERPROFILE\\Downloads\\" + file + "\"";
   return <div className="pane cn-card"><h2>FinCom Bridge {set.version} for Windows <span className="tag warn">test build · staging only</span></h2>
     <p className="note" style={{ margin: "0 0 10px" }}>The new bridge: one program that runs as a Windows service (starts with Windows, starts again by itself), with an icon near the clock (green or red, with Open FinCom, Pause, Restart, Show log, Check for updates). Setup asks how to run it: <b>Test beside bridge 1.15.0</b> (reads Tally and sends to FinCom only to be compared; never posts) or <b>Replace bridge 1.15.0</b> (keeps its pairing, settings and copy of the books). Needs an administrator's password once, to install the service.</p>
     <div className="row"><a className="btn primary" href={"assets/bridge-go/" + file + "?v=" + set.sha256.slice(0, 12)} download={file}>Download FinCom Bridge {set.version}</a>
       <span className="note" style={{ alignSelf: "center" }}>Not signed yet: Windows may say “Windows protected your PC”: press More info, then Run anyway.</span></div>
-    <p className="note" style={{ fontSize: 12, margin: "8px 0 0" }}>Fingerprint (SHA-256): <code style={{ userSelect: "all", wordBreak: "break-all" }}>{set.sha256}</code></p></div>;
+    <p className="note" style={{ fontSize: 12, margin: "8px 0 0" }}>Fingerprint (SHA-256): <code style={{ userSelect: "all", wordBreak: "break-all" }}>{set.sha256}</code></p>
+    <p className="note" style={{ margin: "10px 0 0" }}><b>No administrator rights on the Tally server?</b> The setup offers <b>Just for me</b>: it installs into your own folder, starts when you sign in, and keeps itself running. <b>For all users</b> (a Windows service) needs an administrator.</p>
+    {/* review of 02-Oct-2026: a Tally cloud server often has only Internet Explorer: the file's own address, and a command */}
+    <p className="note" style={{ margin: "10px 0 4px" }}>Direct link to the setup file: <a href={dl} data-bridge-link="">{dl}</a></p>
+    <p className="note" style={{ margin: "0 0 4px" }}>On a server without a modern browser, paste this into Windows PowerShell; the setup lands in your Downloads folder:</p>
+    <pre className="cmd" data-bridge-ps="" style={{ whiteSpace: "pre-wrap", wordBreak: "break-all", userSelect: "all", fontSize: 12, background: "var(--sheet-2, #F4F6F5)", padding: 10, borderRadius: 6, margin: 0 }}>{ps}</pre>
+    <div className="row" style={{ marginTop: 6 }}><button className="btn small" onClick={() => { try { navigator.clipboard.writeText(ps); toast("Copied."); } catch (e) { toast("Select the command and copy it."); } }}>Copy the command</button></div></div>;
 }
 
 function DownHelp({ c }) {
