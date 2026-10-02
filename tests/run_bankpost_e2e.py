@@ -70,9 +70,9 @@ try:
         d = pg.evaluate("S.dupFind && {w: S.dupFind.wrongDate.length, e: S.dupFind.extra.length, when: S.dupFind.wrongDate[0] && S.dupFind.wrongDate[0].date}")
         ok(d and d["w"] == 1 and d["when"] == "20260927" and len(fake_tally.POSTED) == 1, "Post first looks through Tally beyond the statement's dates: the wrong-date entry is found and nothing is posted (%s)" % d)
         ok("under the wrong date" in pg.inner_text("#app") and "Remove the 1 wrong-date entry" in pg.inner_text("#app"), "the wrong-date entry is shown with its right date and a button to remove it")
-        pg.click("[data-bfocus='dup-wrong']"); pg.wait_for_timeout(300)
+        pg.click('.bigwarn button.linkbtn:text-is("Show their statement lines")'); pg.wait_for_timeout(300)
         ok(pg.evaluate("bankVisibleRows().map(r => r.id)") == ["r0"] and "Showing 1 line: in Tally under the wrong date" in pg.inner_text(".bk-focus"), "'Show their statement lines' shows exactly the line concerned")
-        pg.click("[data-act='bankFocusOff']"); pg.wait_for_timeout(200)
+        pg.click('.bk-focus button:text-is("Show all lines")'); pg.wait_for_timeout(200)
         ok(pg.locator(".bk-focus").count() == 0 and len(pg.evaluate("bankVisibleRows()")) > 0, "'Show all lines' goes back to the tab")
         pg.evaluate("() => { B().rows[0].state = 'intally'; B().postedTags[fpHash('fp-e2e-0')] = 'tally:x'; }")
         pg.evaluate("() => { window._rm = removeTallyDuplicates('wrong'); }"); pg.wait_for_timeout(400)
@@ -115,7 +115,7 @@ try:
         fake_tally.POSTED[:] = [x for x in fake_tally.POSTED if "TDSDesk:" not in x[1]]
         g = pg.evaluate("checkMarkedInTally()")
         ok(g and len(g["ids"]) == 4 and "4 lines are marked as posted, but are no longer in Tally" in pg.inner_text("#app"), "entries deleted in Tally are noticed: 4 lines marked as posted are no longer there, and it says so")
-        pg.click("[data-act='goneBack']"); pg.wait_for_timeout(300)
+        pg.click('button:has-text("back in Post to Tal")'); pg.wait_for_timeout(300)
         ok(pg.evaluate("B().rows.filter(r => r.state === 'ready').length") == 4 and pg.evaluate("B().filter") == "ready", "'Put them back in Ready to post': all 4 ready again")
         pg.evaluate("postBankToTally()")
         for i in range(60):
@@ -124,7 +124,7 @@ try:
         tags = [t for t in fake_tally.posted_tags()]
         ok(len(tags) == 4 and len(set(tags)) == 4 and pg.evaluate("B().rows.every(r => r.state === 'sent')"), "and Post sends them to Tally again, each once")
         pg.evaluate("checkMarkedInTally()")
-        ok(not pg.evaluate("B().gone") and pg.locator("[data-act='goneBack']").count() == 0, "checked again: all are in Tally, nothing offered")
+        ok(not pg.evaluate("B().gone") and pg.locator('button:has-text("back in Post to Tal")').count() == 0, "checked again: all are in Tally, nothing offered")
         # reconciliation: one line deleted in Tally, one posted twice, one with another amount, and one typed in Tally (the 999 above)
         tg = pg.evaluate("[0,1,2,3].map(i => fpHash('fp-e2e-' + i))")
         P = fake_tally.POSTED
@@ -137,7 +137,7 @@ try:
         t = pg.inner_text(".recon")
         ok("Balance in Tally on" in t and "Balance as per the bank statement" in t and "typed in Tally" in t and "second copy" in t, "the reconciliation statement and the lists are shown")
         ok(R["pick"] == 1, "the copy is ticked for deletion; the entry typed in Tally is not, until you tick it")
-        pg.click("[data-reconpick]:not(:checked)"); pg.wait_for_timeout(200)
+        pg.click('.recon input[type=checkbox][aria-label^="Delete "]:not(:checked)'); pg.wait_for_timeout(200)
         # a Tally that refuses to delete: nothing is claimed, and Tally's own words are shown
         fake_tally.CTRL["delete_mode"] = "refuse"; nd = len(fake_tally.DELETED)
         pg.evaluate("() => { window._rd = reconDelete('delete'); }"); pg.wait_for_timeout(300); pg.click('[data-cbx="yes"]'); pg.evaluate("window._rd")
@@ -161,7 +161,7 @@ try:
         ok(len(e3) == 1 and "47000.00" in e3[0][3], "'Replace them': the entry with the wrong amount is replaced by the statement's amount")
         R = pg.evaluate("reconcileBank().then(R => R && {missing: R.missing.length, extra: R.extra.length, differ: R.differ.length, t: R.tClose, s: R.sClose})")
         ok(R and R["missing"] == R["extra"] == R["differ"] == 0 and abs(R["t"] - R["s"]) < 0.01 and "Reconciled" in pg.inner_text(".recon"), "reconciled: every line in Tally once, and the balances agree (%s)" % R)
-        with pg.expect_download() as dl: pg.click("[data-act='reconExcel']")
+        with pg.expect_download() as dl: pg.click('.recon button:text-is("Download Excel")')
         ok(dl.value.suggested_filename.endswith(".xlsx") and os.path.getsize(dl.value.path()) > 2000, "the bank reconciliation downloads as Excel (%s)" % dl.value.suggested_filename)
         # an entry dated long after the statement, in a Tally that gives its latest balance whatever date is asked
         fake_tally.POSTED.append(("20270331", "year end entry", "990", '<VOUCHER VCHTYPE="Receipt" ACTION="Create"><DATE>20270331</DATE><VOUCHERTYPENAME>Receipt</VOUCHERTYPENAME><NARRATION>year end entry</NARRATION><ALLLEDGERENTRIES.LIST><LEDGERNAME>%s</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>5000.00</AMOUNT></ALLLEDGERENTRIES.LIST><ALLLEDGERENTRIES.LIST><LEDGERNAME>%s</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-5000.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>' % (PARTY, BANK)))
