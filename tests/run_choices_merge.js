@@ -106,10 +106,11 @@ const GARG = "GARG SHEKHAR & COMPANY";
   // 5. auto-matching fills only an empty or guessed slot, never a confirmed one; old values count sensibly
   const c5 = x.fixCompany({id: "c5", name: "X", postTo: "AUTO CO", postToBy: "auto", gst: {cgst: "Typed CGST", sgst: "Auto SGST"}, gstPin: {cgst: true}, tdsLedgers: {professional: "TDS 94J"},
     bankAccounts: [{id: "b1", ledger: "SBI"}]});
-  ok(x.choiceState(c5, "postTo") === "guessed" && x.choiceState(c5, "gst:cgst") === "confirmed" && x.choiceState(c5, "gst:sgst") === "guessed" && x.choiceState(c5, "tds:professional") === "guessed" && x.choiceState(c5, "bank:b1") === "confirmed",
-    "5. old values: postToBy auto and auto-mapped ledgers are guesses; gstPin and a bank account's ledger count as confirmed");
-  ok(x.choiceUsable(c5, "postTo") === "" && x.choiceUsable(c5, "tds:professional") === "" && x.choiceUsable(c5, "gst:cgst") === "Typed CGST", "5. posting uses confirmed choices only");
-  ok(x.choiceGuess(c5, "gst:cgst", "OTHER CGST") === false && c5.gst.cgst === "Typed CGST", "5. a guess never replaces a confirmed choice");
+  ok(["postTo", "gst:cgst", "gst:sgst", "tds:professional", "bank:b1"].every(k => x.choiceState(c5, k) === "guessed") && x.choiceGet(c5, "gst:cgst").value === "Typed CGST" && x.choiceGet(c5, "bank:b1").value === "SBI",
+    "5. old saved values (even gstPin, even a bank account's ledger) are suggestions, kept pre-selected, until confirmed");
+  ok(["postTo", "tds:professional", "gst:cgst", "bank:b1"].every(k => x.choiceUsable(c5, k) === ""), "5. posting uses confirmed choices only: none of the old values");
+  x.choiceConfirm(c5, "gst:cgst", "Typed CGST");
+  ok(x.choiceUsable(c5, "gst:cgst") === "Typed CGST" && x.choiceGuess(c5, "gst:cgst", "OTHER CGST") === false && c5.gst.cgst === "Typed CGST", "5. one Confirm makes it usable; a guess never replaces it");
   ok(x.choiceGuess(c5, "gst:sgst", "INPUT SGST", "test") === true && c5.gst.sgst === "INPUT SGST" && x.choiceState(c5, "gst:sgst") === "guessed", "5. a guess may replace a guess (kept as guessed)");
   x.choiceConfirm(c5, "tds:professional", "TDS 94J");
   ok(x.choiceUsable(c5, "tds:professional") === "TDS 94J" && x.choiceGet(c5, "tds:professional").by === "a@firm.in", "5. confirmed: usable, with who");

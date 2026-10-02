@@ -24,6 +24,7 @@ SETUP = """async () => {
   S.companies[c.id] = c; S.data[c.id] = {parties: {}, entries: {}, loaded: true}; c.stats = {};
   // review 21c (02-Oct-2026): posting uses confirmed choices only; this client's TDS ledger for professional fees is confirmed
   choiceConfirm(c, "tds:professional", "TDS Payable - Professional");
+  choiceConfirm(c, "postTo", "ZZ CO");
   await openCompany(c.id);
   const mk = (n, gstin, no, amt, exp) => { const e = newEntry("Manual entry"); Object.assign(e.x, {vendorName: n, vendorGstin: gstin, invoiceNo: no, invoiceDate: "2026-07-01", taxable: amt, total: amt});
     e.natureId = "professional"; e.partyLedger = n; e.expenseLedger = exp; S.data[c.id].entries[e.id] = e; approve(e); return e; };

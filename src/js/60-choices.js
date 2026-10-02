@@ -14,8 +14,8 @@
 //    the code that reads them. Auto-matching only fills an empty or guessed slot (choiceGuess), never a confirmed one;
 //    a sync never puts back an older or guessed value over a confirmed one (choiceMigrate, from fixCompany). Posting
 //    uses confirmed choices only (choiceUsable): postToProblem, bankLedgerReady, billGuessedWhy.
-//    Old values without a record: a value a person set (postToBy an email, gstPin, a bank account's ledger, a sales
-//    setting) counts as confirmed; postToBy "auto" and the auto-mapped GST / TDS / expense defaults as guessed.
+//    Old values without a record (the Tally company, GST, TDS and default ledgers, a bank account's ledger) are
+//    suggestions: shown pre-selected and confirmed by one press of Confirm. Sales settings count as confirmed.
 //
 // 2. The drafts of the settings pages (Drafts). A section's edits are made where they always were (so every check on
 //    leaving a box still runs), but they are not saved, nor sent to the cloud, until Save: the section notes which
@@ -52,11 +52,9 @@ function choiceLegacySet(co, key, rec){
 function choiceDerive(co, key){
   const [k, sub] = choiceSplit(key), v = choiceLegacy(co, key);
   if (!v) return null;
-  if (k === "postTo") return {value: v, state: co.postToBy === "auto" ? "guessed" : "confirmed", by: co.postToBy === "auto" ? "FinCom" : co.postToBy || "", at: co.postToAt || "", old: true};
-  if (k === "gst") return {value: v, state: co.gstPin && co.gstPin[sub] ? "confirmed" : "guessed", by: "", at: "", old: true};
-  if (k === "tds" || k === "exp") return {value: v, state: "guessed", by: "", at: "", old: true};
-  // a bank account's ledger was chosen on the bank page before this change
-  if (k === "bank") return {value: v, state: "confirmed", by: "", at: "", old: true};
+  // An old saved value is a suggestion until a person confirms it (decision of 02-Oct-2026): it shows pre-selected,
+  // marked "saved before, confirm", and posting waits for one Confirm. Only a Confirm press makes a choice confirmed.
+  if (k === "postTo" || k === "gst" || k === "tds" || k === "exp" || k === "bank") return {value: v, state: "guessed", by: "", at: co.postToAt && k === "postTo" ? co.postToAt : "", old: true};
   return null;
 }
 function choiceRec(co, key){ return co && co.choices && co.choices[key] || null; }

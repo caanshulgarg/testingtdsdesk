@@ -59,7 +59,7 @@ export function ChoiceTag({ co, k, value }) {
   const by = c.by ? " by " + c.by : "", at = c.at ? " on " + fmtDateTime(c.at) : "";
   if (c.state === "confirmed") return <span className="cfm-ok" data-choice={k} data-choice-state="confirmed" title={"Confirmed" + by + at}>✔ confirmed</span>;
   return <span className="cfm-guess" data-choice={k} data-choice-state="guessed">
-    <span className="tag warn" title={c.why ? "FinCom’s guess: " + c.why : "FinCom’s guess"}>guessed, confirm</span>{" "}
+    <span className="tag warn" title={c.old ? "Saved before: a suggestion until confirmed" : c.why ? "FinCom’s guess: " + c.why : "FinCom’s guess"}>{c.old ? "saved before, confirm" : "guessed, confirm"}</span>{" "}
     <button type="button" className="linkbtn" data-choice-confirm={k} onClick={() => { choiceConfirm(co, k, value || c.value); toast("Confirmed: " + c.value + "."); render(); }}>Confirm</button>
   </span>;
 }
@@ -85,7 +85,7 @@ export function BankLedger({ co, acc, compact }) {
   const confirm = () => { const v = sel; if (!v) { toast("Choose the Tally ledger first."); return; } delete Drafts.picks[pid]; delete Drafts.secs[pid]; if (bankConfirmAccLedger(acc.id, v)) setChanging(false); };
   return <div className="bk-setup" data-bank-ledger={acc.id} data-state={c.gone ? "gone" : c.value ? c.state : "none"}>
     <div><b>{c.gone ? c.value + " is no longer in Tally. Choose again." : "Which Tally ledger is this bank account?"}</b>
-      <div className="note">{where}{c.value && c.state === "guessed" && !c.gone ? " · FinCom’s guess: " + c.value + (c.why ? " (" + c.why + ")" : "") + ". Confirm it, or choose another." : ""}</div></div>
+      <div className="note">{where}{c.value && c.state === "guessed" && !c.gone ? (c.old ? " · Saved before: " + c.value + ". Confirm it, or choose another." : " · FinCom’s guess: " + c.value + (c.why ? " (" + c.why + ")" : "") + ". Confirm it, or choose another.") : ""}</div></div>
     {listed ? <span className="row" style={{ gap: 8, alignItems: "center" }}>
       <select aria-label="Tally ledger for this bank account" key={sel} onChange={(ev) => choose(ev.target.value)} dangerouslySetInnerHTML={{ __html: ledgerOptions(sel, BANK_GROUPS) }} />
       <button type="button" className="btn small primary" data-bank-ledger-confirm="" disabled={!sel} onClick={confirm}>Confirm</button>
