@@ -103,7 +103,6 @@ with sync_playwright() as p:
     pg.wait_for_timeout(300)
     r1 = hm(E("window.__read1"))
     ok(txt("#app [data-post-line]") == "Posting into GARG SHEKHAR & COMPANY · Tally open on NWS144 · read %s · Update now" % r1, "7. right after the read: 'read %s' (%s)" % (r1, txt("#app [data-post-line]")))
-    E("() => { tallyUpdateNow = window.tallyUpdateNow; }")
     pg.click("#app [data-post-line] [data-update-now]"); pg.wait_for_timeout(300)
     ok("· Reading now…" in txt("#app [data-post-line]") and any(r[0] == "tally_want_update" for r in E("window.__rpc")), "7. Update now: asked, and 'Reading now…' until a newer read comes in")
     E("""() => { window.__read2 = window.__ago(0); Live.got({topic: Live.tallyTopic, event: 'broadcast', payload: {type: 'broadcast', event: 'beat', payload: {device: 'd-1',
