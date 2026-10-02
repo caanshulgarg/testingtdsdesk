@@ -60,7 +60,8 @@ with sync_playwright() as p:
     ok(pg.locator("#app .billdoc, #app .prevbox").count() >= 1, "12. the bill's document panel sits beside the fields")
     # 8. suppliers on waiting bills
     pg.evaluate("() => { S.tab = 'deductees'; render(); }"); pg.wait_for_timeout(600)
-    ok("New supplier, not yet approved" in app() and "Shree Nandik Technologies" in app(), "8. Client setup lists the supplier of a waiting bill as new")
+    # 2c58741 (review of 02-Oct-2026): the list is "Supplier not yet in FinCom's list", each marked new or with its Tally ledger
+    ok("Supplier not yet in FinCom\u2019s list" in app() and "Shree Nandik Technologies" in app(), "8. Client setup lists the supplier of a waiting bill as new")
     pg.click('#app button:has-text("Save and fill in")'); pg.wait_for_timeout(500)
     ok(pg.evaluate("Object.values(D().parties).some(p => p.name === 'Shree Nandik Technologies')"), "8. Save and fill in: the supplier is in the list")
     # 5. one Tally status

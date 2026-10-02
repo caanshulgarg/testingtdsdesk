@@ -34,11 +34,12 @@ with sync_playwright() as p:
         ok("7,18,200.00" in t and "99,400.00 not bill-wise" in t and "3,19,550.00" in t and "2,90,000.00" in t, "fixture: owed to you 7,18,200 (99,400 not bill-wise), profit 3,19,550, MSME 2,90,000, as worked out by hand")
     # review of 02-Oct-2026: with the ledger balances known, what no bill explains is "not bill-wise"; without them, what was
     # settled against older bills is said
-    ok("settled against older bills" in t or "not bill-wise" in t, "says plainly that receivables miss bills from before the books")
+    known = pg.evaluate("S.books.mis.last.recv.sum.tally != null")
+    ok(("not bill-wise" if known else "settled against older bills") in t, "says plainly that receivables miss bills from before the books")
     pg.screenshot(path=OUT + "/mis-summary.png", full_page=True)
     pg.click('nav[aria-label="MIS"] button:text-is("Profit and loss")'); pg.wait_for_timeout(500)
     t = pg.inner_text("#app")
-    ok("Gross profit" in t and "Profit before tax" in t and ("Apr-2025" in t or "Apr 2025" in t) and ("Mar-2026" in t or "Mar 2026" in t), "profit and loss, month by month")
+    ok("Gross profit" in t and "Profit before tax" in t and "Apr-2025" in t and "Mar-2026" in t, "profit and loss, month by month")
     pg.click('#misPl button:text-is("\u25b8 %d ledgers")' % pg.evaluate("S.books.mis.last.pl.heads.exp.led.length")); pg.wait_for_timeout(400)
     led = pg.evaluate("S.books.mis.last.pl.heads.exp.led[0].l")
     pg.locator("#misPl button.linkbtn").filter(has_text=led).first.click(); pg.wait_for_timeout(500)

@@ -39,7 +39,7 @@ with sync_playwright() as p:
     part("2025-04-01", "2025-09-30")
     ok(pg.evaluate("S.books.vouchers.length") == n2, "the first part again: it replaces its own dates, nothing doubled (%d)" % pg.evaluate("S.books.vouchers.length"))
     t = pg.inner_text("#app")
-    ok("01-Apr-2025 to 30-Sep-2025" in t or "01 Apr 2025 to 30 Sept 2025" in t.replace("Sep ", "Sept ") or "Apr 2025 to 30 Sep" in t, "the parts brought in are listed")
+    ok("01-Apr-2025 to 30-Sep-2025" in t, "the parts brought in are listed")   # one date format (review of 01-Oct-2026)
     ok(pg.evaluate("S.books.meta.parts.length") == 2, "two parts kept (the repeat replaced the first)")
     ok("Setting up ZZ TEST" in t and "1. Day book" in t and "2. Opening balances" in t and "4. FinCom Bridge" in t and "5. FinCom" not in t and "cloud" not in t.split("Setting up")[1].split("Or bring in")[0].lower(), "the setup list shows each step and what is missing, and says nothing of the cloud")
     # opening balances from a trial balance exported from Tally (ledgers shown), as on 31 March 2025
