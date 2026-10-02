@@ -566,16 +566,18 @@ const Store = {
   saveCompany(c){ this.put("companies/" + c.id, c); },
   saveParty(cid, p){ this.put("companies/" + cid + "/parties/" + p.id, p); },
   saveEntry(cid, e){ this.put("companies/" + cid + "/entries/" + e.id, e); },
-  deleteEntry(cid, id){ this.put("companies/" + cid + "/entries/" + id, null); },
-  deleteParty(cid, id){ this.put("companies/" + cid + "/parties/" + id, null); },
+  // removals the user asked for: the only ones the firm account ever sends as deleted (Cloud.delete)
+  deleteEntry(cid, id){ this.put("companies/" + cid + "/entries/" + id, null); if (typeof Cloud === "object") Cloud.delete("entry", cid, id, "removed by the user"); },
+  deleteParty(cid, id){ this.put("companies/" + cid + "/parties/" + id, null); if (typeof Cloud === "object") Cloud.delete("party", cid, id, "removed by the user"); },
   saveInbox(i){ this.put("inbox/" + i.id, i); },
-  deleteInbox(id){ this.put("inbox/" + id, null); },
+  deleteInbox(id){ this.put("inbox/" + id, null); if (typeof Cloud === "object") Cloud.delete("unsorted", "", id, "moved to a client"); },
   async deleteCompany(cid){
     await this.loadCompany(cid);
     const d = S.data[cid];
     Object.keys(d.parties).forEach(id => this.deleteParty(cid, id));
     Object.keys(d.entries).forEach(id => this.deleteEntry(cid, id));
     this.put("companies/" + cid, null);
+    if (typeof Cloud === "object") Cloud.delete("client", cid, cid, "client removed by the user");
     delete S.data[cid]; delete S.companies[cid];
     if (S.storeKind === "local") this.saveLocal();
   }
@@ -11896,6 +11898,7 @@ async function deleteStatement(sid){
   await Trash.put(b.cid, "statement", (acc.ledger || st.bank) + " " + fmtDate(st.from) + " to " + fmtDate(st.to) + " (" + st.n + " rows)", {st, keys, rows}, ans.reason);
   keys.forEach(k => { delete b.keys[k]; });
   b.stmts = b.stmts.filter(x => x.id !== sid);
+  if (typeof Cloud === "object") Cloud.delete("bank_stmt", b.cid, b.cid + ":" + sid, ans.reason || "statement deleted");
   b.stmtsTrash = null;
   saveBank({stmts: true, keys: true});
   if (b.cur === sid){ clearTimeout(bankSaveTimer); bankSaveTimer = null; b.cur = null; b.rows = []; b.sel.clear(); b.sticky.clear(); b.undo = null; }
@@ -14878,6 +14881,7 @@ function salesBulk(kind, ledger){
     if (kind === "ignore" && v.status !== "ignored"){ v.status = "ignored"; n++; }
   });
   if (kind === "delete"){
+    s.list.filter(v => s.sel.has(v.id) && v.status !== "posted").forEach(v => { if (typeof Cloud === "object") Cloud.delete("sales", s.cid, s.cid + ":" + v.id, "invoice deleted"); });
     s.list = s.list.filter(v => !(s.sel.has(v.id) && v.status !== "posted")); n = rows.length;
   }
   salesSetUndo(n + " invoice" + (n === 1 ? " " : "s ") + ({ledger: "set to <b>" + esc(ledger) + "</b>", confirm: "confirmed", ignore: "ignored", delete: "deleted"}[kind]), before);
@@ -14905,6 +14909,7 @@ function salesRowAct(a, id, force){
     if (a === "delete"){
       askConfirm({title: "Delete invoice " + (v.x.number || "") + "?", danger: true, ok: "Delete", body: "It is removed from FinCom. Tally is not changed."}).then(ans => {
         if (!ans) return;
+        if (typeof Cloud === "object") Cloud.delete("sales", s.cid, s.cid + ":" + v.id, "invoice deleted");
         s.list = s.list.filter(o => o.id !== v.id); s.openId = null; salesSetUndo("Invoice " + esc(v.x.number) + " deleted", before); saveSales(); render();
       });
       return true;
@@ -15196,6 +15201,11 @@ const Cloud = {
   setSess(s){ if (s) lsSet("tdsdesk-test:cloudsess", JSON.stringify(s)); else lsDel("tdsdesk-test:cloudsess"); },
   on(){ return !!(this.sess() && this.sess().access_token); },
   marks(){ let m = {}; try { m = JSON.parse(lsGet("tdsdesk-test:cloudmarks") || "{}"); } catch (e){} return m; },
+  // removals the user asked for (review of 02-Oct-2026: a client missing from this browser after a reload was sent as
+  // deleted, and blanked all three clients of a firm). Only what is on this list is ever sent as deleted.
+  dels(){ let m = {}; try { m = JSON.parse(lsGet("tdsdesk-test:clouddels") || "{}"); } catch (e){} return m; },
+  setDels(m){ lsSet("tdsdesk-test:clouddels", JSON.stringify(m)); },
+  delete(kind, cid, id, why){ if (typeof Live === "object" && Live.applying) return; const d = this.dels(); d[kind + "|" + (cid || "") + "|" + id] = {at: new Date().toISOString(), why: String(why || "").slice(0, 200)}; this.setDels(d); },
   setMarks(m){ lsSet("tdsdesk-test:cloudmarks", JSON.stringify(m)); },
   async authCall(path, body){
     const c = this.cfg();
@@ -15289,7 +15299,9 @@ const Cloud = {
 function cloudSnapshot(){
   const out = [];
   const add = (kind, id, client_id, data) => out.push({kind, id, client_id: client_id || "", data});
-  add("firm", "firm", "", S.firm);
+  // an empty firm record (a reload with nothing kept here) is never sent: it would replace the firm's name and rules
+  const f = S.firm || {}, filled = Object.keys(f).some(k => { const v = f[k]; return v != null && v !== "" && !(typeof v === "object" && !Object.keys(v).length); });
+  if (filled && String(f.firmName || "").trim()) add("firm", "firm", "", S.firm);
   Object.values(S.companies).forEach(c => add("client", c.id, c.id, c));
   Object.entries(S.data || {}).forEach(([cid, d]) => {
     Object.values((d && d.entries) || {}).forEach(e => add("entry", e.id, cid, e));
@@ -15320,29 +15332,27 @@ function cloudChanges(){
     seen[k] = h;
     if (marks[k] !== h) now.push(Object.assign({}, r, {hash: h}));
   });
-  const owned = new Set(snap.map(r => r.kind).concat(["firm", "client", "entry", "party", "unsorted", "bank_meta", "bank_stmt", "bank_rows", "sales", "sales_cfg"]));
-  owned.delete("inbox");
-  // something counts as deleted only if what holds it is open here and it is really gone:
-  // a client's bills when that client is loaded, its bank data when its bank is open, its sales when its sales are open
-  const b = S.bank && !S.bank.loading ? S.bank : null, sl = S.sales && !S.sales.loading ? S.sales : null;
-  const judgeable = k => {
-    const [kind, cid, ...rest] = k.split("|"), id = rest.join("|");
-    if (kind === "entry" || kind === "party") return !!(S.data[cid] && S.data[cid].loaded);
-    if (kind === "bank_meta" || kind === "bank_stmt") return !!(b && b.cid === cid);
-    if (kind === "bank_rows"){
-      if (!b || b.cid !== cid) return false;
-      const sid = id.split(":")[1];
-      return sid === b.cur || !b.stmts.some(st => st.id === sid);   // the open statement, or one that was deleted
-    }
-    if (kind === "sales" || kind === "sales_cfg") return !!(sl && sl.cid === cid);
-    return true;
-  };
-  const gone = Object.keys(marks).filter(k => !(k in seen) && marks[k] !== "gone" && owned.has(k.split("|")[0]) && judgeable(k)).map(k => {
+  // Nothing is ever deleted because it is missing here: a reload with empty storage, a client not loaded yet or a bank
+  // not open all look like absence. A record is sent as deleted only when the user removed it (Cloud.delete), and the
+  // server keeps its last data even then (migration-19).
+  const dels = Cloud.dels(), gone = [];
+  Object.keys(dels).forEach(k => {
+    if (k in seen){ delete dels[k]; return; }                      // it came back (restored): not deleted
+    if (marks[k] === "gone") return;
     const bits = k.split("|");
-    return {kind: bits[0], client_id: bits[1] || "", id: bits.slice(2).join("|"), data: {}, deleted: true, hash: "gone"};
+    gone.push({kind: bits[0], client_id: bits[1] || "", id: bits.slice(2).join("|"), data: {}, deleted: true, hash: "gone"});
+  });
+  // the open statement now has fewer rows than before: its chunks past the end are sent empty, not deleted
+  const b = S.bank && !S.bank.loading ? S.bank : null;
+  if (b && b.cur && b.rows.length) Object.keys(marks).forEach(k => {
+    const [kind, cid, ...rest] = k.split("|"), id = rest.join("|");
+    if (kind !== "bank_rows" || cid !== b.cid || k in seen || marks[k] === "gone" || id.split(":")[1] !== b.cur) return;
+    const h = fpHash(JSON.stringify({rows: []}));
+    if (marks[k] !== h) now.push({kind, client_id: cid, id, data: {rows: []}, hash: h});
   });
   return {changes: now.concat(gone), seen};
 }
+function cloudDelsSent(rows){ const d = Cloud.dels(); let n = 0; rows.forEach(r => { if (r.deleted && d[cloudKey(r)]){ delete d[cloudKey(r)]; n++; } }); if (n) Cloud.setDels(d); }
 async function cloudPush(){
   const {changes} = cloudChanges();
   if (!changes.length) return 0;
@@ -15353,17 +15363,27 @@ async function cloudPush(){
     await Cloud.api(table + "?on_conflict=" + (table === "clients" ? "firm_id,id" : "firm_id,kind,id"), {
       method: "POST", headers: {Prefer: "resolution=merge-duplicates,return=minimal"}, body: rows});
   };
+  const cdel = clients.filter(r => r.deleted); clients.splice(0, clients.length, ...clients.filter(r => !r.deleted));
+  for (const r of cdel){
+    await Cloud.api("clients?firm_id=eq." + Cloud.st.firm + "&id=eq." + encodeURIComponent(r.id), {method: "PATCH", headers: {Prefer: "return=minimal"}, body: {deleted: true}});
+    marks[cloudKey(r)] = r.hash; Cloud.setMarks(marks); cloudDelsSent([r]);
+  }
   for (let i = 0; i < clients.length; i += 20){
-    const rows = clients.slice(i, i + 20).map(r => ({firm_id: Cloud.st.firm, id: r.id, name: r.data.name || "", gstin: r.data.gstin || "", pan: r.data.pan || "", tally_name: r.data.tallyName || "", data: r.data, deleted: !!r.deleted}));
+    // a deletion sends only the flag: name, GSTIN and data are left as they are (the server keeps them too)
+    const rows = clients.slice(i, i + 20).map(r => r.deleted ? {firm_id: Cloud.st.firm, id: r.id, deleted: true}
+      : {firm_id: Cloud.st.firm, id: r.id, name: r.data.name || "", gstin: r.data.gstin || "", pan: r.data.pan || "", tally_name: r.data.tallyName || "", data: r.data, deleted: false});
     await sendBatch("clients", rows);
     clients.slice(i, i + 20).forEach(r => { marks[cloudKey(r)] = r.hash; });
-    Cloud.setMarks(marks);
+    Cloud.setMarks(marks); cloudDelsSent(clients.slice(i, i + 20));
   }
   for (let i = 0; i < rest.length; i += 20){
     const part = rest.slice(i, i + 20);
-    await sendBatch("records", part.map(r => ({firm_id: Cloud.st.firm, kind: r.kind, id: r.id, client_id: r.client_id || "", data: r.data, deleted: !!r.deleted})));
+    // deletions go on their own, as the flag only (a merge upsert of a partial row would need every column)
+    const del = part.filter(r => r.deleted), up = part.filter(r => !r.deleted);
+    if (up.length) await sendBatch("records", up.map(r => ({firm_id: Cloud.st.firm, kind: r.kind, id: r.id, client_id: r.client_id || "", data: r.data, deleted: false})));
+    for (const r of del) await Cloud.api("records?firm_id=eq." + Cloud.st.firm + "&kind=eq." + encodeURIComponent(r.kind) + "&id=eq." + encodeURIComponent(r.id), {method: "PATCH", headers: {Prefer: "return=minimal"}, body: {deleted: true}});
     part.forEach(r => { marks[cloudKey(r)] = r.hash; });
-    Cloud.setMarks(marks);
+    Cloud.setMarks(marks); cloudDelsSent(part);
   }
   return changes.length;
 }
@@ -16545,6 +16565,7 @@ function doAct(act, t){
       if (!ok) return; const b = S.books, cid = S.coId;
       const kept = await Trash.put(cid, "books", "The books read from Tally (" + (b.vouchers || []).length + " entries)", {vouchers: b.vouchers, meta: b.meta, reco: b.reco}, ok.reason);
       b.trashLog = (b.trashLog || []).concat([{kind: "books", id: kept.id, server: kept.server, reason: ok.reason, at: new Date().toISOString(), by: whoAmI()}]);
+      BookItems.allowMass = Object.assign({}, BookItems.allowMass, {[cid + "|vouchers"]: 1, [cid + "|meta"]: 1, [cid + "|reco"]: 1});
       b.vouchers = []; b.meta = null; b.reco = null; saveBooks(); toast("Removed. More \u2192 Restore puts them back."); render(); }); break;
     // the GST and TDS ledger check (src/js/57, request of 02-Oct-2026)
     case "lcRun": { const b = S.books; if (!b) break; const c = LedCheck.run(b); const high = c.names.filter(n => c.items[n].s.conf === "high").length; toast(c.names.length + " tax-like ledgers checked: " + high + " settled by Tally’s masters or the day book, " + (c.names.length - high) + " to look at."); saveBooks(); render(); break; }
@@ -16578,6 +16599,7 @@ function doAct(act, t){
         BOOKS_WIPE.forEach(k => { if (b[k] !== undefined) snap[k] = b[k]; });
         const kept = await Trash.put(co.id, "wipe", "Tally data and all GST work", snap, ok.reason);
         b.trashLog = (b.trashLog || []).concat([{kind: "wipe", id: kept.id, server: kept.server, reason: ok.reason, at: new Date().toISOString(), by: whoAmI()}]);
+        BookItems.allowMass = Object.assign({}, BookItems.allowMass, Object.fromEntries(BOOKS_WIPE.map(k => [co.id + "|" + k, 1])));
         booksWipe(b); GST2B._memo = null; GSTR._carry = null; if (typeof GSTAPI === "object") GSTAPI.sess = {};
         await saveBooks(); toast("Tally data and all GST work removed for " + co.name + "."); render();
       }); break;
@@ -21889,11 +21911,20 @@ const BookItems = {
     if (!work) return 0;
     const mine = this.split(work), send = [], present = new Set(Object.keys(work));
     mine.forEach((x, key) => { const hh = this.h(x.d, x.o); if (s.base[key] !== hh) send.push([key, hh, {k: x.k, i: x.i, o: x.o, d: x.d}]); });
-    Object.keys(s.base).forEach(key => {
-      if (s.base[key] === "gone" || mine.has(key)) return;
-      const [k, i] = key.split("\u0001");
-      if (!present.has(k) && BookSync.MASTERS.indexOf(k) >= 0) return;         // filled from Tally; not here yet is not removed
-      send.push([key, "gone", {k, i, del: true}]);
+    // an item is removed on the server only when its part of the books is here and the item was taken out of it; a part
+    // missing here (storage cleared, not loaded yet) is never sent as removed, and neither is most of a part at once
+    // (review of 02-Oct-2026: never infer a removal from absence)
+    const out = {}, had = {};
+    Object.keys(s.base).forEach(key => { if (s.base[key] === "gone") return; const k = key.split("\u0001")[0]; had[k] = (had[k] || 0) + 1; if (!mine.has(key)) (out[k] = out[k] || []).push(key); });
+    Object.entries(out).forEach(([k, keys]) => {
+      if (!present.has(k)) return;
+      const left = had[k] - keys.length;
+      if (keys.length > 3 && keys.length > had[k] * 0.25 && !(this.allowMass && this.allowMass[cid + "|" + k])){
+        s.held = Object.assign({}, s.held, {[k]: {n: keys.length, of: had[k], at: new Date().toISOString()}});
+        console.warn("FinCom: " + keys.length + " of " + had[k] + " items of " + k + " missing here; not removed on the server" + (left ? "" : " (none left)"));
+        return;
+      }
+      keys.forEach(key => send.push([key, "gone", {k, i: key.split("\u0001")[1], del: true}]));
     });
     if (!send.length){ Live.saved(); return 0; }
     Live.saving();
