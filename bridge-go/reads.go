@@ -237,43 +237,6 @@ func readTest(company string, pref int) (M, error) {
 	return M{"ok": true, "company": company, "port": port, "from": f, "to": t, "tests": tests}, nil
 }
 
-// the vouchers of one ledger for a period, with every ledger line; nil when this Tally will not give them this way
-func ledgerVoucherList(tc *TC, port int, company, ledger, from, to string) ([]M, error) {
-	x := "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TDSDeskLedVch</ID></HEADER>" +
-		"<BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>" + esc(company) + "</SVCURRENTCOMPANY>" +
-		"<SVFROMDATE>" + from + "</SVFROMDATE><SVTODATE>" + to + "</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE>" +
-		`<COLLECTION NAME="TDSDeskLedVch" ISMODIFY="No"><TYPE>Vouchers : Ledger</TYPE><CHILDOF>` + esc(ledger) + "</CHILDOF>" +
-		"<FETCH>DATE,VOUCHERTYPENAME,VOUCHERNUMBER,REFERENCE,PARTYLEDGERNAME,NARRATION,MASTERID,GUID,ALTERID,ISOPTIONAL,ISCANCELLED,ALLLEDGERENTRIES.LIST</FETCH></COLLECTION>" +
-		"</TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>"
-	raw, err := invokeTally(tc, port, x, 0)
-	if err != nil {
-		return nil, err
-	}
-	if re(`<LINEERROR>|Could not find|Unknown Request`).MatchString(raw) {
-		return nil, nil
-	}
-	list := []M{}
-	for _, v := range xmlDoc(raw).All("VOUCHER") {
-		d := nt(v, "DATE")
-		if d != "" && (d < from || d > to) {
-			continue
-		}
-		entries := []any{}
-		for _, e := range v.Sel("ALLLEDGERENTRIES.LIST | LEDGERENTRIES.LIST") {
-			bills := []any{}
-			for _, b := range e.Sel("BILLALLOCATIONS.LIST") {
-				if bn := nt(b, "NAME"); bn != "" {
-					bills = append(bills, bn)
-				}
-			}
-			entries = append(entries, M{"ledger": nt(e, "LEDGERNAME"), "amount": nt(e, "AMOUNT"), "instrument": nt(e.One("BANKALLOCATIONS.LIST"), "INSTRUMENTNUMBER"), "bills": bills})
-		}
-		list = append(list, M{"guid": nt(v, "GUID"), "masterId": nt(v, "MASTERID"), "alter": nt(v, "ALTERID"), "date": d, "type": voucherType(v), "number": nt(v, "VOUCHERNUMBER"), "reference": nt(v, "REFERENCE"),
-			"party": nt(v, "PARTYLEDGERNAME"), "narration": nt(v, "NARRATION"), "optional": nt(v, "ISOPTIONAL"), "cancelled": nt(v, "ISCANCELLED"), "entries": entries})
-	}
-	return list, nil
-}
-
 // every ledger's name and group, and every group's parent: no balances, so Tally answers at once
 func getLedgerNames(tc *TC, company string, pref int) (M, error) {
 	port, err := readerPort(tc, company, pref)
@@ -341,14 +304,11 @@ func getDayBookXML(tc *TC, company, from, to string, pref int) (string, error) {
 	return cleanXML(raw), nil
 }
 
-// one ledger's entries (FinCom's /ledgervouchers): 2.1.5 from the list of its vouchers (no running balance asked of
-// Tally; the Ledger Vouchers report worked one out), in the rows the report gave: date, the other ledger, type, Dr, Cr
+// one ledger's entries (FinCom's /ledgervouchers): 2.1.5 from the copy kept here (held.go), in the rows the Ledger
+// Vouchers report gave: date, the other ledger, type, Dr, Cr. Tally is never asked: its per-ledger voucher list ("Vouchers
+// : Ledger") is built ledger by ledger, the shape of read that hung Tally on 02-Oct-2026
 func getLedgerVouchers(company, ledger, from, to string, pin int) (M, error) {
-	port, err := findCompanyPort(company, pin)
-	if err != nil {
-		return nil, err
-	}
-	lv, err := ledgerVoucherList(fin, port, company, ledger, from, to)
+	lv, err := heldLedgerVouchers(company, ledger, from, to)
 	if err != nil {
 		return nil, err
 	}
@@ -374,5 +334,27 @@ func getLedgerVouchers(company, ledger, from, to string, pin int) (M, error) {
 		}
 		rows = append(rows, M{"date": str(v["date"]), "other": other, "type": str(v["type"]), "dr": dr, "cr": cr})
 	}
-	return M{"ok": true, "company": company, "port": port, "ledger": ledger, "count": len(rows), "rows": rows}, nil
+	return M{"ok": true, "company": company, "ledger": ledger, "count": len(rows), "rows": rows, "source": "copy"}, nil
+}
+
+// one ledger's vouchers for a period (FinCom's /ledgerlines): from the copy kept here; when the copy does not cover the
+// period, the Day Book a month at a time (never Tally's per-ledger list)
+func getLedgerLines(co, ledger, from, to string, pin int) (M, error) {
+	if lv, err := heldLedgerVouchers(co, ledger, from, to); err == nil {
+		a := make([]any, len(lv))
+		for i, x := range lv {
+			a[i] = x
+		}
+		return M{"ok": true, "via": "copy", "vouchers": a}, nil
+	}
+	port, err := findCompanyPort(co, pin)
+	if err != nil {
+		return nil, err
+	}
+	r0, err := getVouchers(co, from, to, ledger, "", port)
+	if err != nil {
+		return nil, err
+	}
+	r0["via"] = "daybook"
+	return r0, nil
 }

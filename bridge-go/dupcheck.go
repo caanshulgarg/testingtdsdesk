@@ -54,6 +54,7 @@ type vchKey struct {
 	ledger map[string]bool
 	// the existing voucher in Tally (for the answer)
 	guid, masterID, number, vtype, rawDate string
+	narration                              string
 	optional, cancelled                    bool
 }
 
@@ -94,7 +95,7 @@ func normDate(s string) string {
 func keyOfVoucher(v *Node) vchKey {
 	k := vchKey{party: foldName(nt(v, "PARTYLEDGERNAME")), date: normDate(nt(v, "DATE")), amount: -1, total: -1,
 		tag: reTag.FindString(nt(v, "NARRATION")), guid: nt(v, "GUID"), masterID: nt(v, "MASTERID"), number: nt(v, "VOUCHERNUMBER"),
-		vtype: voucherType(v), rawDate: nt(v, "DATE"), ledger: map[string]bool{}, optional: strings.EqualFold(nt(v, "ISOPTIONAL"), "Yes"), cancelled: strings.EqualFold(nt(v, "ISCANCELLED"), "Yes")}
+		vtype: voucherType(v), rawDate: nt(v, "DATE"), narration: nt(v, "NARRATION"), ledger: map[string]bool{}, optional: strings.EqualFold(nt(v, "ISOPTIONAL"), "Yes"), cancelled: strings.EqualFold(nt(v, "ISCANCELLED"), "Yes")}
 	seen := map[string]bool{}
 	addID := func(s string) {
 		if f := foldName(s); f != "" && !seen[f] {

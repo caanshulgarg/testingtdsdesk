@@ -204,28 +204,14 @@ func invokeImport(p M) (M, error) {
 		from, to := "", ""
 		if len(dates) > 0 {
 			from, to = dates[0], dates[len(dates)-1]
-			for _, try := range []string{"list", "daybook"} {
-				var h []M
-				var e error
-				if try == "list" {
-					h, e = voucherHeads(fin, port, company, from, to)
-				} else {
-					h, e = dayBookHeads(fin, port, company, from, to)
-				}
-				if e != nil {
-					h = nil
-				}
+			// 2.1.5: read back by FinComTag alone (each date's entries, heads and narration)
+			if h, e := tagHeadsOn(port, company, dates); e == nil {
 				heads = h
-				if len(h) > 0 {
-					if try == "list" {
-						for _, x := range h {
-							if strings.EqualFold(str(x["optional"]), "yes") {
-								listSeesOptional = true
-								break
-							}
-						}
+				for _, x := range h {
+					if strings.EqualFold(str(x["optional"]), "yes") {
+						listSeesOptional = true
+						break
 					}
-					break
 				}
 			}
 			writeLog(fmt.Sprintf("  read-back for the batch: %d vouchers listed for %s to %s", len(heads), from, to))
@@ -272,7 +258,7 @@ func invokeImport(p M) (M, error) {
 							if cn == "" || sameCompany(cn, company) {
 								continue
 							}
-							if other, e := voucherHeads(fin, port, cn, from, to); e == nil {
+							if other, e := tagHeadsOn(port, cn, dates); e == nil {
 								for _, h := range other {
 									if strings.Contains(str(h["narration"]), tag) {
 										elsewhere = cn
@@ -362,9 +348,11 @@ func removeTallyVoucher(port int, company, guid, masterID, vtype, vdate, vnum st
 	return M{"ok": false, "message": why}, nil
 }
 
-// the FinCom tags of these items already in Tally (found by reading the dates they carry); nil when Tally did not answer
-// a read, so nothing is sent again on a guess
+// the FinCom tags of these items already in Tally, found by FinComTag alone: one request per date the items carry, that
+// date's entries (heads and narration) only. nil when Tally did not answer a read, so nothing is sent again on a guess.
+// The ledger is no longer used: Tally's per-ledger list ("Vouchers : Ledger") is not asked (2.1.5)
 func findPostedTags(port int, company string, items []M, ledger string) map[string]M {
+	_ = ledger
 	found := map[string]M{}
 	var dates []string
 	for _, it := range items {
@@ -372,29 +360,8 @@ func findPostedTags(port int, company string, items []M, ledger string) map[stri
 			dates = append(dates, d)
 		}
 	}
-	dates = uniqSorted(dates)
-	if len(dates) == 0 {
-		return found
-	}
-	a, b := dates[0], dates[len(dates)-1]
-	var heads []M
-	read := false
-	if ledger != "" {
-		if lv, err := ledgerVoucherList(fin, port, company, ledger, a, b); err == nil && lv != nil {
-			heads, read = lv, true
-		}
-	}
-	if !read {
-		if h, err := voucherHeads(fin, port, company, a, b); err == nil {
-			heads, read = h, true
-		}
-	}
-	if len(heads) == 0 {
-		if h, err := dayBookHeads(fin, port, company, a, b); err == nil {
-			heads, read = h, true
-		}
-	}
-	if !read {
+	heads, err := tagHeadsOn(port, company, uniqSorted(dates))
+	if err != nil {
 		return nil
 	}
 	for _, it := range items {
@@ -410,6 +377,32 @@ func findPostedTags(port int, company string, items []M, ledger string) map[stri
 		}
 	}
 	return found
+}
+
+// the entries on these dates, as heads (FinComTag, one request per date)
+func tagHeadsOn(port int, company string, dates []string) ([]M, error) {
+	var heads []M
+	for _, d := range dates {
+		ks, err := tagsOnDate(port, company, d)
+		if err != nil {
+			return nil, err
+		}
+		for _, k := range ks {
+			heads = append(heads, headOfKey(k))
+		}
+	}
+	return heads, nil
+}
+
+func headOfKey(k vchKey) M {
+	yn := func(b bool) string {
+		if b {
+			return "Yes"
+		}
+		return "No"
+	}
+	return M{"guid": k.guid, "masterId": k.masterID, "date": k.rawDate, "type": k.vtype, "number": k.number, "narration": k.narration,
+		"optional": yn(k.optional), "cancelled": yn(k.cancelled)}
 }
 
 // a failure in words

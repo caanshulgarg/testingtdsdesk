@@ -240,3 +240,55 @@ func heldLedgerBalance(company, ledger, from, to string, closeOnly bool) (M, err
 	}
 	return M{"ok": true, "ledger": ledger, "openAsOn": before, "open": o, "close": r2s(c[ledger]), "source": "copy"}, nil
 }
+
+// one ledger's vouchers for a period, from the copy kept here (its day files), with every ledger line; an error saying
+// so when the copy does not cover the period (FinCom then shows them from its own copy). Tally is not asked
+func heldLedgerVouchers(company, ledger, from, to string) ([]M, error) {
+	if !isTallyDate(from) || !isTallyDate(to) {
+		return nil, errors.New("Dates are to be given as yyyymmdd.")
+	}
+	dir := syncFolder(company)
+	st := readKeepState(dir)
+	start := str(st["from"])
+	if st == nil || !isTallyDate(start) {
+		return nil, errors.New("A ledger's entries are shown from FinCom's copy of the books; the bridge does not ask Tally for them, and it keeps no copy of " + company + " here")
+	}
+	if from < start {
+		return nil, errors.New("A ledger's entries before " + start + " are shown from FinCom's copy of the books; the copy here starts on " + start + ", and the bridge does not ask Tally for them")
+	}
+	want := foldName(ledger)
+	list := []M{}
+	for _, f := range dayFiles(dir, "") {
+		d := strings.TrimSuffix(filepath.Base(f), ".xml")
+		if d < from || d > to {
+			continue
+		}
+		for _, v := range xmlDoc(readText(f)).All("VOUCHER") {
+			entries := []any{}
+			touches := false
+			for _, e := range v.Sel("ALLLEDGERENTRIES.LIST | LEDGERENTRIES.LIST") {
+				ln := nt(e, "LEDGERNAME")
+				if foldName(ln) == want {
+					touches = true
+				}
+				bills := []any{}
+				for _, b := range e.Sel("BILLALLOCATIONS.LIST") {
+					if bn := nt(b, "NAME"); bn != "" {
+						bills = append(bills, bn)
+					}
+				}
+				entries = append(entries, M{"ledger": ln, "amount": nt(e, "AMOUNT"), "instrument": nt(e.One("BANKALLOCATIONS.LIST"), "INSTRUMENTNUMBER"), "bills": bills})
+			}
+			if !touches {
+				continue
+			}
+			vd := nt(v, "DATE")
+			if vd == "" {
+				vd = d
+			}
+			list = append(list, M{"guid": nt(v, "GUID"), "masterId": nt(v, "MASTERID"), "alter": nt(v, "ALTERID"), "date": vd, "type": voucherType(v), "number": nt(v, "VOUCHERNUMBER"), "reference": nt(v, "REFERENCE"),
+				"party": nt(v, "PARTYLEDGERNAME"), "narration": nt(v, "NARRATION"), "optional": nt(v, "ISOPTIONAL"), "cancelled": nt(v, "ISCANCELLED"), "entries": entries})
+		}
+	}
+	return list, nil
+}

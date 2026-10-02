@@ -418,24 +418,7 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 		}
 		return resumePostJob(str(o["id"]))
 	case "/ledgerlines":
-		// one ledger's vouchers for a period (light); the Day Book month by month only if this Tally will not answer that way
-		port, err := findCompanyPort(co, qint(qs, "port"))
-		if err != nil {
-			return nil, err
-		}
-		if lv, err := ledgerVoucherList(fin, port, co, qs.Get("ledger"), qs.Get("from"), qs.Get("to")); err == nil && lv != nil {
-			a := make([]any, len(lv))
-			for i, x := range lv {
-				a[i] = x
-			}
-			return M{"ok": true, "port": port, "via": "ledger", "vouchers": a}, nil
-		}
-		r0, err := getVouchers(co, qs.Get("from"), qs.Get("to"), qs.Get("ledger"), "", port)
-		if err != nil {
-			return nil, err
-		}
-		r0["via"] = "daybook"
-		return r0, nil
+		return getLedgerLines(co, qs.Get("ledger"), qs.Get("from"), qs.Get("to"), qint(qs, "port"))
 	case "/ledgerbalance":
 		// 2.1.5: from the copy kept here (opening the day before from, closing on to); Tally is not asked for a balance
 		return heldLedgerBalance(co, qs.Get("ledger"), qs.Get("from"), qs.Get("to"), qs.Get("only") == "close")

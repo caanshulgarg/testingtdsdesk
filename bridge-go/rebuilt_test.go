@@ -828,3 +828,103 @@ func runNow(t *testing.T, kind string) {
 	time.Sleep(50 * time.Millisecond)
 	waitIdle(t)
 }
+
+// --- 2.1.5 (plan 1a): "Vouchers : Ledger" is never asked of Tally (Tally builds that list ledger by ledger, the same
+// shape of read that hung on 696-699), nor anything CHILDOF a ledger
+var reLedgerCollection = regexp.MustCompile(`(?i)vouchers\s*:\s*ledger|childof`)
+
+func (f *standTally) noLedgerCollection(t *testing.T) {
+	t.Helper()
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for i, b := range f.bodies {
+		if m := reLedgerCollection.FindString(b); m != "" {
+			t.Fatalf("request %d (%s) asks Tally for a ledger's own list (%q): %s", i, f.reqs[i], m, cut(b, 300))
+		}
+	}
+}
+
+func TestNoLedgerCollectionAsked(t *testing.T) {
+	td := today()
+	f := newStandTally(t)
+	f.add(td, fgParty, "S-0", "sale | TDSDesk:old1", "-12.00")
+	standBridge(t, f, "")
+	liveFrom(td)
+	runNow(t, "now") // the copy here holds today's entries
+	// a posting naming its ledger, checked first (a resumed or queued posting): what reached Tally is looked for
+	j, err := newPostJob(M{"jobId": "job-ledcoll-1", "company": zz, "ledger": fgParty, "checkFirst": true,
+		"vouchers": []any{M{"id": "lc1", "xml": finVoucher("lc1", fgParty, "LC-1", td, "8.00")}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p := waitJob(t, str(j["id"])); str(p["status"]) != "done" {
+		t.Fatalf("the posting: %v", p["message"])
+	}
+	// FinCom's /ledgervouchers and /ledgerlines: from the copy here, Tally not asked
+	n0 := f.n("")
+	lv, err := getLedgerVouchers(zz, fgParty, td, td, f.port)
+	if err != nil {
+		t.Fatalf("/ledgervouchers: %v", err)
+	}
+	if toInt(lv["count"]) < 1 || str(lv["source"]) != "copy" {
+		t.Fatalf("/ledgervouchers did not answer from the copy: %v", lv)
+	}
+	ll, err := getLedgerLines(zz, fgParty, td, td, f.port)
+	if err != nil || len(arr(ll["vouchers"])) < 1 || str(ll["via"]) != "copy" {
+		t.Fatalf("/ledgerlines: %v %v", ll, err)
+	}
+	if f.n("") != n0 {
+		t.Fatalf("a ledger's entries were asked of Tally: %v", f.ids()[n0:])
+	}
+	// before the copy starts: said plainly, Tally not asked
+	if _, err := getLedgerVouchers(zz, fgParty, addDays(td, -400), td, f.port); err == nil || !strings.Contains(err.Error(), "FinCom's copy") {
+		t.Fatalf("before the copy: %v", err)
+	}
+	if f.n("") != n0 {
+		t.Fatalf("Tally was asked: %v", f.ids()[n0:])
+	}
+	f.noLedgerCollection(t)
+	f.noBalance(t)
+}
+
+// --- a posting is confirmed by its FinCom id through FinComTag alone: one request per date, that date only
+func TestPostedTagFoundByDate(t *testing.T) {
+	d1, d2 := "20260701", "20260705"
+	f := newStandTally(t)
+	f.add(d1, fgParty, "T-1", "Electricity | TDSDesk:t1", "-5.00")
+	f.add(d2, fgParty, "T-2", "Electricity | TDSDesk:t2", "-6.00")
+	f.add("20260703", fgParty, "T-X", "other | TDSDesk:tx", "-7.00")
+	standBridge(t, f, "")
+	items := []M{{"id": "t1", "xml": finVoucher("t1", fgParty, "T-1", d1, "5.00")}, {"id": "t2", "xml": finVoucher("t2", fgParty, "T-2", d2, "6.00")},
+		{"id": "t3", "xml": finVoucher("t3", fgParty, "T-3", d2, "9.00")}}
+	n0 := f.n("")
+	there := findPostedTags(f.port, zz, items, fgParty)
+	if there == nil || str(there["t1"]["guid"]) == "" || str(there["t2"]["date"]) != d2 || there["t3"] != nil || len(there) != 2 {
+		t.Fatalf("found: %v", there)
+	}
+	f.mu.Lock()
+	sent, bodies := append([]string{}, f.reqs[n0:]...), append([]string{}, f.bodies[n0:]...)
+	f.mu.Unlock()
+	if strings.Join(sent, ",") != "FinComTag,FinComTag" {
+		t.Fatalf("asked %v (want FinComTag once per date)", sent)
+	}
+	for i, d := range []string{d1, d2} {
+		if !strings.Contains(bodies[i], "<SVFROMDATE>"+d+"</SVFROMDATE><SVTODATE>"+d+"</SVTODATE>") {
+			t.Fatalf("request %d is not for %s alone: %s", i, d, cut(bodies[i], 400))
+		}
+	}
+	// a posting: read back by FinComTag alone too
+	n1 := f.n("")
+	if r := postOne(t, "t4", finVoucher("t4", fgParty, "T-4", d1, "4.00")); r["ok"] != true || r["verified"] != true {
+		t.Fatalf("posting: %v", r)
+	}
+	for _, id := range f.ids()[n1:] {
+		switch id {
+		case "FinComCompany", "TDSDeskCompanies", "TDSDeskCompanyInfo", dupCheckID, "FinComTag", "Import":
+		default:
+			t.Fatalf("the posting asked %q (%v)", id, f.ids()[n1:])
+		}
+	}
+	f.noLedgerCollection(t)
+	f.noBalance(t)
+}
