@@ -3,7 +3,8 @@
 --   tally_vouchers_gone            an entry that was in the cloud copy and is no longer in Tally's day book when its day is
 --                                  read again: kept with its lines, the day FinCom saw it gone, and back_at if it comes back
 --                                  (an entry moved to another date comes back when that date is read). Never deleted.
---   tally_ingest_day               as migration-11, and before a day is replaced, every entry of that day that Tally no longer
+--   tally_ingest_day               as migration-23 (names cleaned with tally_nm: apply 18 after 23, as on staging
+--                                  02-Oct-2026), and before a day is replaced, every entry of that day that Tally no longer
 --                                  sends is kept in tally_vouchers_gone; an entry Tally sends again is marked back
 --   tally_vouchers_gone_list(client)   the client's entries deleted in Tally (not back), newest first, with their lines
 --   tally_gst_summary              as migration-14, and input tax is also counted on an entry with no expense or purchase line
@@ -68,15 +69,15 @@ begin
   delete from tally_vouchers v where v.book_id = p_book and (v.day = p_day or v.guid in (select x->>'guid' from jsonb_array_elements(p_vouchers) x));
   insert into tally_vouchers (book_id, firm_id, guid, day, alter_id, vtype, vno, party, narration, cancelled, optional, gstin, pos, ref, ref_date, cmp_gstin)
   select distinct on (x->>'guid') p_book, f, x->>'guid', p_day, coalesce((x->>'alter')::bigint, 0), coalesce(x->>'type', ''), coalesce(x->>'no', ''),
-         coalesce(x->>'party', ''), left(coalesce(x->>'narr', ''), 300), coalesce((x->>'cancel')::boolean, false), coalesce((x->>'opt')::boolean, false),
+         tally_nm(x->>'party'), left(coalesce(x->>'narr', ''), 300), coalesce((x->>'cancel')::boolean, false), coalesce((x->>'opt')::boolean, false),
          left(upper(coalesce(x->>'gstin', '')), 15), left(coalesce(x->>'pos', ''), 60),
          left(coalesce(x->>'ref', ''), 60), tally_d8(x->>'refDate'), left(upper(coalesce(x->>'cmp', '')), 15)
     from jsonb_array_elements(p_vouchers) x
    order by x->>'guid', coalesce((x->>'alter')::bigint, 0) desc;
   insert into tally_lines (book_id, firm_id, guid, day, ledger, amount, hsn, rate)
-  select p_book, f, x->>0, p_day, x->>1, (x->>2)::numeric, left(coalesce(x->>3, ''), 20), nullif(x->>4, '')::numeric from jsonb_array_elements(p_lines) x;
+  select p_book, f, x->>0, p_day, tally_nm(x->>1), (x->>2)::numeric, left(coalesce(x->>3, ''), 20), nullif(x->>4, '')::numeric from jsonb_array_elements(p_lines) x;
   insert into tally_bills (book_id, firm_id, guid, day, ledger, name, type, amount, bill_date, credit_days, due)
-  select p_book, f, x->>0, p_day, x->>1, left(coalesce(b->>0, ''), 200), left(coalesce(b->>1, ''), 20), (b->>2)::numeric,
+  select p_book, f, x->>0, p_day, tally_nm(x->>1), left(coalesce(b->>0, ''), 200), left(coalesce(b->>1, ''), 20), (b->>2)::numeric,
          case when b->>1 in ('New Ref', 'Advance') then p_day end,
          nullif(b->>3, '')::integer,
          case when b->>1 = 'New Ref' and nullif(b->>3, '') is not null then p_day + (b->>3)::integer end

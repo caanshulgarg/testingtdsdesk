@@ -1646,10 +1646,14 @@ function saveNewCompany(v){
     {name, gstin, tallyName:String(v.tallyName || "").trim() || name, turnover10cr:!!v.turnover10cr}));
   S.companies[co.id] = co; S.data[co.id] = {parties:{}, entries:{}, loaded:true};
   co.stats = {drafts:0, check:0, waiting:0, tdsFy:0, invoicesFy:0, records:1, fy:fyOf(null)};
+  // 02-Oct-2026: the Tally company chosen here, and (ticked) the one company its entries may be posted to
+  const tco = String(v.tallyCompany || "").trim();
+  if (tco && v.postOnly){ co.postTo = tco; co.postToAt = new Date().toISOString(); co.postToBy = (Cloud.st && Cloud.st.email) || ""; }
   Store.saveCompany(co);
   S.addingCo = false;
-  toast(name + " added.");
+  toast(name + " added." + (co.postTo ? " Entries go only into " + co.postTo + "." : ""));
   openCompany(co.id);
+  if (tco) linkNewClient(co, tco).catch(() => {});
   return true;
 }
 let pickMode = "company";
