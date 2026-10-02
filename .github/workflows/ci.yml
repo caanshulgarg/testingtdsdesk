@@ -43,6 +43,20 @@ jobs:
         run: GOOS=windows go vet ./...
       - name: go test
         run: go test -count=1 ./...
+      - name: Size and allow-list tests, by name (docs/RELEASE-CHECKLIST.md)
+        # Until size_test.go is in git this step only says so: the tests are being written, and a vacuous "ok" (no test
+        # matched) must not pass for them. Once it is there, the size test (and, with allowlist_test.go, the allow-list
+        # tests) must each print "--- PASS"; a missing or skipped one fails the job.
+        run: |
+          if [ ! -f size_test.go ]; then echo "::notice::bridge-go/size_test.go not in git yet: size and allow-list tests not required"; exit 0; fi
+          go test -count=1 -run 'Size|AllowList|NoComputedFigure|EveryRequestOnList|UnknownRequest|02Oct' -v ./... 2>&1 | tee /tmp/named.log
+          [ "${PIPESTATUS[0]}" = 0 ] || exit 1
+          grep -qE '^ok ' /tmp/named.log || { echo "::error::no 'ok' from go test"; exit 1; }
+          need="TestSize"
+          [ -f allowlist_test.go ] && need="$need TestAllowList TestNoComputedFigure TestEveryRequestOnList TestUnknownRequest"
+          for t in $need; do grep -qE "^--- PASS: $t" /tmp/named.log || { echo "::error::missing test $t (no '--- PASS: $t')"; exit 1; }; done
+      - name: release-check.sh self-test
+        run: bash release_check_test.sh
 
   app:
     runs-on: ubuntu-24.04
