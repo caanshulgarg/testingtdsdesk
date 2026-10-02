@@ -95,10 +95,17 @@ try:
         rep = pg.evaluate("B().postReport")
         ok(rep["posted"] == 4 and not rep["failed"], "the report: 4 posted, none failed")
         fake_tally.CTRL["read_delay_after_import"] = 0
-        heavy = {k: v for k, v in fake_tally.REQS.items() if k in ("DayBook", "TDSDeskVchHeads", "TDSDeskBalances")}
-        ok(not heavy and fake_tally.REQS.get("TDSDeskLedVch") and fake_tally.REQS.get("TDSDeskOneLed") == 2, "posting and the balance check ask Tally for the bank ledger only: nothing company-wide (%s)" % dict(fake_tally.REQS))
+        heavy = {k: v for k, v in fake_tally.REQS.items() if k in ("DayBook", "TDSDeskVchHeads", "TDSDeskBalances", "TDSDeskOneLed")}
+        ok(not heavy and fake_tally.REQS.get("TDSDeskLedVch"), "posting asks Tally for the bank ledger's entries only, and no balance at all (%s)" % dict(fake_tally.REQS))
+        # 02-Oct-2026 (owner's decision; FinCom Bridge 2.1.4 asks Tally for no balance): the balance comes from FinCom's copy,
+        # and only once the entries posted are read back there too. Without the copy here: "Posted · balance not yet checked"
         tb = pg.evaluate("curStmt().tallyBal")
-        ok(tb and tb.get("diff") == 0 and "Tally agrees with the bank" in pg.inner_text(".bk-balbox"), "after posting, the balance is checked by itself: Tally agrees with the statement's closing (%s)" % (tb and {k: tb.get(k) for k in ("tClose", "sClose", "diff", "error")}))
+        ok(tb and tb.get("pending") == 4 and "Posted \u00b7 balance not yet checked" in pg.inner_text(".bk-balbox"), "after posting: \"Posted \u00b7 balance not yet checked\" until the copy has read them back (%s)" % (tb and {k: tb.get(k) for k in ("pending", "diff", "error")}))
+        # FinCom's copy, stood in by Tally's own figure (read here through the stand-in bridge, as the copy would hold it), read after the posting
+        pg.evaluate("""() => { TCloud.on = () => true; TCloud.status = async () => []; window.booksAsOf = () => ({at: new Date(Date.now() + 60000).toISOString(), text: ""});
+          TCloud.ledgerAt = async (cid, led, to) => { const nx = isoToTally(addDays(to, 1)); const j = await Bridge.call('/ledgerbalance?company=' + encodeURIComponent(B().cid && CO(B().cid).name) + '&from=' + nx + '&to=' + nx + '&ledger=' + encodeURIComponent(led) + Bridge.pinQ(), null, 60000); return -r2(num(j.open)); }; }""")
+        tb = pg.evaluate("checkBankBalance()")
+        ok(tb and tb.get("diff") == 0 and tb.get("how") == "copy" and "The books agree with the bank" in pg.inner_text(".bk-balbox") and "Balance from FinCom's copy" in pg.inner_text(".bk-balbox"), "read back: the balance from FinCom's copy agrees with the statement's closing (%s)" % (tb and {k: tb.get(k) for k in ("tClose", "sClose", "diff", "error")}))
         # someone enters a payment in Tally by hand that is not on the statement
         fake_tally.POSTED.append(("20250604", "cash typed in Tally", "777", '<VOUCHER VCHTYPE="Payment" ACTION="Create"><DATE>20250604</DATE><VOUCHERTYPENAME>Payment</VOUCHERTYPENAME><NARRATION>cash typed in Tally</NARRATION><ALLLEDGERENTRIES.LIST><LEDGERNAME>%s</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-999.00</AMOUNT></ALLLEDGERENTRIES.LIST><ALLLEDGERENTRIES.LIST><LEDGERNAME>%s</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>999.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>' % (PARTY, BANK)))
         tb = pg.evaluate("checkBankBalance()")
@@ -106,7 +113,7 @@ try:
         tb = pg.evaluate("checkBankBalance({explain: true})")
         ok(tb and tb["diff"] == 999 and len(tb["extra"]) == 1 and tb["extra"][0]["eff"] == -999 and tb["unexplained"] == 0, "a payment typed in Tally by hand: the balance is 999 apart, and that entry is named as the whole reason (%s)" % (tb and {k: tb.get(k) for k in ("diff", "extraEffect", "unexplained")}))
         t = pg.inner_text(".bk-balbox")
-        ok("Tally does not agree" in t and PARTY in t and "make up the whole difference" in t, "and it says so on the page: " + t[:140].replace("\n", " "))
+        ok("The books do not agree" in t and PARTY in t and "make up the whole difference" in t, "and it says so on the page: " + t[:140].replace("\n", " "))
         pg.evaluate("() => { B().rows.forEach(r => { r.state = 'ready'; }); B().postedTags = {}; }")
         pg.evaluate("postBankToTally()")
         ok(len(fake_tally.POSTED) == 5, "posting the same lines again (this browser's memory wiped): Tally is checked, nothing goes in twice")
@@ -165,12 +172,12 @@ try:
         ok(dl.value.suggested_filename.endswith(".xlsx") and os.path.getsize(dl.value.path()) > 2000, "the bank reconciliation downloads as Excel (%s)" % dl.value.suggested_filename)
         # an entry dated long after the statement, in a Tally that gives its latest balance whatever date is asked
         fake_tally.POSTED.append(("20270331", "year end entry", "990", '<VOUCHER VCHTYPE="Receipt" ACTION="Create"><DATE>20270331</DATE><VOUCHERTYPENAME>Receipt</VOUCHERTYPENAME><NARRATION>year end entry</NARRATION><ALLLEDGERENTRIES.LIST><LEDGERNAME>%s</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>5000.00</AMOUNT></ALLLEDGERENTRIES.LIST><ALLLEDGERENTRIES.LIST><LEDGERNAME>%s</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-5000.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>' % (PARTY, BANK)))
-        fake_tally.CTRL["ignore_balance_dates"] = True
+        # 02-Oct-2026: Tally is not asked for the balance at all (FinCom Bridge 2.1.4); FinCom's copy works it out on the
+        # statement's last day from the openings and the entries up to it (stood in here by Tally's balance on that day)
         R = pg.evaluate("reconcileBank().then(R => R && {missing: R.missing.length, extra: R.extra.length, t: R.tClose, s: R.sClose, how: R.how})")
         tb = pg.evaluate("checkBankBalance().then(t => ({diff: t.diff, how: t.how}))")
-        fake_tally.CTRL["ignore_balance_dates"] = False
-        ok(R and R["missing"] == R["extra"] == 0 and abs(R["t"] - R["s"]) < 0.01 and R["how"] == "worked back" and tb["diff"] == 0, "an entry of 31-03-2027 in a Tally that ignores the date asked: not counted in the statement's balance, still reconciled (%s, %s)" % (R, tb))
-        ok("worked back" in pg.inner_text(".bk-balbox"), "and the balance box says the balance was worked back")
+        ok(R and R["missing"] == R["extra"] == 0 and abs(R["t"] - R["s"]) < 0.01 and tb["how"] == "copy" and tb["diff"] == 0, "an entry of 31-03-2027: not counted in the statement's balance (FinCom's copy, on the statement's last day), still reconciled (%s, %s)" % (R, tb))
+        ok("Balance from FinCom's copy" in pg.inner_text(".bk-balbox"), "and the balance box says the balance is from FinCom's copy")
         pg.click(".bk-balbox .bk-x"); pg.wait_for_timeout(200)
         ok(pg.locator(".bk-balbox").count() == 0, "the balance box closes with its ×")
         pg.evaluate("checkBankBalance()"); pg.wait_for_timeout(200)
