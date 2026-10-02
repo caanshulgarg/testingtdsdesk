@@ -135,10 +135,20 @@ const CoCheck = ({ path, on, children }) => (
   <label className="chk"><input type="checkbox" checked={on} onChange={(ev) => coCommit(path, ev.target.checked)} /> {children}</label>
 );
 
+// the kind of entity (review of 02-Oct-2026): from the PAN's fourth letter unless chosen here; Accounts picks its
+// format from it (Schedule III for a company, the ICAI format for the others)
+function EntityType({ co }) {
+  const e = FS.entityOf(Object.assign({}, co, { entity: "" })), fromPan = FS.ENTITY[e.code];
+  return <label className="f"><span>Entity type</span>
+    <select aria-label="Entity type" value={co.entity || ""} onChange={(ev) => coCommit("entity", ev.target.value)}>
+      <option value="">{fromPan ? "From the PAN: " + fromPan : "From the PAN (none yet)"}</option>
+      {Object.entries(FS.ENTITY).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></label>;
+}
+
 function Company() {
   const co = CO(), owner = S.account && S.account.me ? S.account.me.role === "owner" : true;
   return <Card title="The client" note="As on the client’s GST registration. The PAN is filled in from the GSTIN when left empty.">
-    <div className="grid"><CoText label="Client name" path="name" /><CoText label="GSTIN" path="gstin" /><CoText label="PAN" path="pan" /></div>
+    <div className="grid"><CoText label="Client name" path="name" /><CoText label="GSTIN" path="gstin" /><CoText label="PAN" path="pan" /><EntityType co={co} /></div>
     {/* review of 02-Oct-2026: a GSTIN or PAN cannot be emptied by a sync (the server keeps it); an owner clears a wrong one
         here, with a reason that is kept */}
     {owner && (co.gstin || co.pan) && <div className="row" data-clear-ids="" style={{ gap: 8, marginTop: 8 }}>

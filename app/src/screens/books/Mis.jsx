@@ -58,10 +58,11 @@ const pct = (a, c2) => c2 ? (Math.round((a - c2) / Math.abs(c2) * 1000) / 10) + 
 
 function Summary({ b, r }) {
   // what is owed on balance, aged so that the ages add up to it; a balance the other way is an advance (review of 01-Oct-2026)
-  const owed = (A) => A.sum.owe != null ? A.sum.owe : (A.sum.tally != null ? A.sum.tally : A.sum.open);
+  // review of 02-Oct-2026: the headline is the ledger balances (Parties.position, as Reports and Letters show it); the ages split it
+  const owed = (A) => r.owed ? (A === r.recv ? r.owed.r : r.owed.p) : A.sum.owe != null ? A.sum.owe : (A.sum.tally != null ? A.sum.tally : A.sum.open);
   const over90 = (A) => A.sum.nb ? A.sum.nb[3] + A.sum.nb[4] : A.sum.b[3] + A.sum.b[4];
   const adv = (A, who) => A.sum.advance >= 1 ? " · advance " + who + " " + m(A.sum.advance) : "";
-  const owedNote = (A) => A.sum.tally != null ? "as in Tally" : "bills raised in these books still open" + (Math.abs(A.sum.pre) >= 1 ? "; " + m(Math.abs(A.sum.pre)) + " settled against older bills not in these books" : "");
+  const owedNote = (A) => A.sum.tally != null ? "ledger balances" + (A.sum.und >= 1 ? ", " + m(A.sum.und) + " not bill-wise" : "") : "bills raised in these books still open" + (Math.abs(A.sum.pre) >= 1 ? "; " + m(Math.abs(A.sum.pre)) + " settled against older bills not in these books" : "");
   const cb = (r.balances.cash || []).concat(r.balances.bank || []);
   // review of 01-Oct-2026: without Tally's ledger groups the profit and loss cannot tell an expense from anything else
   const noGroups = !Audit.mastersIn();
@@ -127,19 +128,24 @@ function ProfitLoss({ b, r }) {
 function Ageing({ b, r, tab }) {
   const A = tab === "recv" ? r.recv : r.pay, q = String(S.misQ || "").toLowerCase(), hasTally = A.rows.some((p) => p.tally != null);
   const list = A.rows.filter((p) => (!q || p.party.toLowerCase().includes(q)) && (S.misF !== "90" || p.b[3] + p.b[4] > 0) && (S.misF !== "msme" || /micro|small/i.test(p.msme)));
+  // review of 02-Oct-2026: what is owed is the ledger balances; the ages split it, and what no bill explains is not
+  // bill-wise. A party whose ledger balance and bills differ is listed at the top, and in the Difference column
+  const owedL = r.owed ? (tab === "recv" ? r.owed.r : r.owed.p) : A.sum.owe, dif = A.sum.differ || [];
   return <>
+    <p className="note" data-mis-owed="" style={{ margin: "0 0 8px" }}><b>{(tab === "recv" ? "Owed to you" : "You owe") + " on " + d(r.to) + ": ₹" + m(owedL)}</b>{" (ledger balances) · by age: " + MIS.BUCKETS.map((z, i) => z[1] + " days " + m((A.sum.nb || [])[i])).join(", ") + " · not bill-wise " + m(A.sum.und) + (A.sum.advance >= 1 ? " · advances " + (tab === "recv" ? "from customers " : "to suppliers ") + m(A.sum.advance) + ", not in the figure" : "")}</p>
+    {dif.length > 0 && <p className="bk-alert" data-mis-differ="" style={{ margin: "0 0 8px" }}>{dif.length + (dif.length === 1 ? " party's ledger balance does not agree" : " parties' ledger balances do not agree") + " with the bills: " + dif.slice(0, 5).map((x) => x.party + " " + m(x.bills) + " in bills against " + m(x.ledger) + " in the ledger").join("; ") + (dif.length > 5 ? "; and " + (dif.length - 5) + " more (the Difference column)" : "") + ". What the bills do not explain is not bill-wise: set the bills against it in Tally (bill-wise details) to age it."}</p>}
     <Search tab={tab} ph={"Find a " + (tab === "recv" ? "customer" : "supplier")} />
     <Table id="misAge" head={<><th>{tab === "recv" ? "Customer" : "Supplier"}</th>{MIS.BUCKETS.map((z) => <th key={z[1]} className="n">{z[1] + " days"}</th>)}
-      <th className="n">Before these books</th><th className="n">Advances</th><th className="n">On account</th><th className="n">Total</th>{hasTally && <th className="n">Tally balance</th>}{tab === "pay" && <th>MSME</th>}</>}>
+      <th className="n">Before these books</th><th className="n">Advances</th><th className="n">On account</th><th className="n">Total</th>{hasTally && <><th className="n">Ledger balance</th><th className="n">Difference</th></>}{tab === "pay" && <th>MSME</th>}</>}>
       {list.slice(0, gfN(400)).map((p, pi) => { const open = S.misOpen === p.party;
         return <Fragment key={p.party + ":" + pi}><tr data-key={p.party}><td><Opener open={open} onClick={toggle("misOpen", p.party)}>{p.party}</Opener></td>
           {p.b.map((v, i) => <td key={i} className={"n" + (i >= 3 && v > 0 ? " bad" : "")}>{v ? m(v) : ""}</td>)}
           <td className="n">{p.pre ? m(p.pre) : ""}</td><td className="n">{p.adv ? m(p.adv) : ""}</td><td className="n">{p.unalloc ? m(p.unalloc) : ""}</td><td className="n"><b>{m(p.total)}</b></td>
-          {hasTally && <td className={"n" + (p.diff && Math.abs(p.diff) >= 1 ? " bad" : "")} title={p.diff ? "differs from the bills by " + m(p.diff) : ""}>{p.tally != null ? m(p.tally) : ""}</td>}
+          {hasTally && <><td className="n">{p.tally != null ? m(p.tally) : ""}</td><td className={"n" + (p.diff && Math.abs(p.diff) >= 1 ? " bad" : "")} data-diff="" title="the ledger balance less the bills' total">{p.diff && Math.abs(p.diff) >= 0.005 ? m(p.diff) : ""}</td></>}
           {tab === "pay" && <td><select aria-label={"MSME: " + p.party} style={{ width: "auto" }} value={p.msme || ""} onChange={(ev) => misMsmeSet(p.party, ev.target.value)}><option value="">{"—"}</option>{["Micro", "Small", "Medium"].map((t) => <option key={t}>{t}</option>)}</select></td>}</tr>
-          {open && <tr><td colSpan={12} style={{ background: "var(--paper)", padding: 0 }}><table className="bk-table" style={{ margin: 0 }}><thead><tr><th>Bill</th><th className="dt">Date</th><th className="n">Days</th><th className="n">Outstanding</th></tr></thead><tbody>
+          {open && <tr><td colSpan={14} style={{ background: "var(--paper)", padding: 0 }}><table className="bk-table" style={{ margin: 0 }}><thead><tr><th>Bill</th><th className="dt">Date</th><th className="n">Days</th><th className="n">Outstanding</th></tr></thead><tbody>
             {p.bills.map((z, i) => <tr key={i}><td>{z.ref || "on account"}{z.no && <div className="nr">{"vch " + z.no}</div>}</td><td>{d(z.date)}</td><td className="n">{z.age}</td><td className="n">{m(z.amt)}</td></tr>)}</tbody></table></td></tr>}</Fragment>; })}
-      <tr><td><b>Total</b></td>{A.sum.b.map((v, i) => <td key={i} className="n"><b>{m(v)}</b></td>)}<td className="n">{m(A.sum.pre)}</td><td className="n">{m(A.sum.adv)}</td><td className="n">{m(A.sum.unalloc)}</td><td className="n"><b>{m(A.sum.total)}</b></td></tr>
+      <tr><td><b>Total</b></td>{A.sum.b.map((v, i) => <td key={i} className="n"><b>{m(v)}</b></td>)}<td className="n">{m(A.sum.pre)}</td><td className="n">{m(A.sum.adv)}</td><td className="n">{m(A.sum.unalloc)}</td><td className="n"><b>{m(A.sum.total)}</b></td>{hasTally && <><td className="n"><b>{m(A.sum.tally)}</b></td><td className="n"><b>{m(A.sum.diff)}</b></td></>}</tr>
     </Table>
     <p className="note" style={{ margin: "6px 0 0" }}>Ages run from each bill’s due date where Tally has a credit period on it (the days it is overdue), else from the bill’s date.</p>
     {Math.abs(A.sum.pre) >= 1 && A.sum.tally == null && <p className="bk-alert" style={{ marginTop: 8 }}>{m(Math.abs(A.sum.pre)) + " was " + (tab === "recv" ? "received" : "paid") + " against bills raised before the day book read here, so the total is not the balance. Read the books through the bridge (its balances fix the total), or a day book from when those bills were raised."}</p>}
@@ -173,7 +179,7 @@ function Parties({ r, tab }) {
   </>;
 }
 
-function CashFlow({ b, p2 }) {
+function CashFlow({ b, r, p2 }) {
   const C = p2.cash, F = p2.fc, months = C.months, cols = months.length <= 12;
   const secName = { op: "From operations", inv: "From investing", fin: "From financing" };
   const rows = [];
@@ -187,7 +193,12 @@ function CashFlow({ b, p2 }) {
   return <>
     <Card title="Cash and bank: what came in and went out">
       <Table head={<><th></th><MonthHeads months={months} cols={cols} /><th className="n">Period</th></>}>{rows}
-        <tr><td><b>Net change in cash and bank</b></td>{cols && months.map((mm) => <td key={mm} className="n"><b>{m(C.op.m[mm] + C.inv.m[mm] + C.fin.m[mm])}</b></td>)}<td className="n"><b>{m(C.net)}</b></td></tr></Table>
+        <tr><td><b>Net change in cash and bank</b></td>{cols && months.map((mm) => <td key={mm} className="n"><b>{m(C.op.m[mm] + C.inv.m[mm] + C.fin.m[mm])}</b></td>)}<td className="n"><b>{m(C.net)}</b></td></tr>
+        {C.open != null && <><tr data-cf="open"><td>{"Cash and bank at the start, " + d(r.from)}</td>{cols && months.map((mm) => <td key={mm}></td>)}<td className="n">{m(C.open)}</td></tr>
+          <tr data-cf="close"><td><b>{"Cash and bank at the end, " + d(r.to)}</b></td>{cols && months.map((mm) => <td key={mm}></td>)}<td className="n"><b>{m(C.close)}</b></td></tr></>}</Table>
+      {/* review of 02-Oct-2026: opening + net change = closing, checked against the cash and bank ledgers */}
+      {C.open != null && (C.ties ? <p className="note" data-cf-ties="yes">{"Opening " + m(C.open) + " + net change " + m(C.net) + " = closing " + m(C.close) + ": agrees with the cash and bank ledgers."}</p>
+        : <p className="bk-alert" data-cf-ties="no">{"Opening " + m(C.open) + " + net change " + m(C.net) + " = " + m(C.open + C.net) + ", but the cash and bank ledgers close at " + m(C.close) + " (" + m(C.diff) + " not explained): an entry moved cash or bank with no line on the other side."}</p>)}
       <p className="note">Each receipt or payment is placed by the ledger on the other side of it: customers, suppliers, taxes, staff, fixed assets, loans or capital. Moves between cash and bank are left out.</p></Card>
     <Card top title={"The next 13 weeks, from " + d(F.start)}>
       {F.opening != null ? <p className="note">{"Starting with cash and bank of ₹" + m(F.opening) + (F.low ? "; the lowest point is ₹" + m(F.low.close) + " in the week of " + d(F.low.from) + "." : ".")}</p>
@@ -204,7 +215,7 @@ function CashFlow({ b, p2 }) {
 }
 
 function Ratios({ p2 }) {
-  const R = p2.ratios, fmt = (v, u) => v == null ? "—" : u === "₹" ? "₹" + m(v) : v + (u === "%" ? "%" : " " + u);
+  const R = p2.ratios, fmt = (v, u) => v == null ? "—" : typeof v === "string" ? v : u === "₹" ? "₹" + m(v) : v + (u === "%" ? "%" : " " + u);
   return <>
     <Card title="Ratios for the period">
       <Table>{R.list.map(([l, v, u, how], i) => <tr key={l + ":" + i}><td>{l}{how && <div className="nr">{how}</div>}</td><td className="n"><b>{fmt(v, u)}</b></td></tr>)}</Table>
@@ -309,7 +320,7 @@ export default function Mis({ b }) {
   else if (tab === "sales" || tab === "purch") body = <Parties r={r} tab={tab} />;
   else if (tab === "comp") body = <Compliance r={r} />;
   else if (!p2) body = <p className="note">Run again to see this.</p>;
-  else body = tab === "cash" ? <CashFlow b={b} p2={p2} /> : tab === "ratios" ? <Ratios p2={p2} /> : tab === "regs" ? <Regs r={r} p2={p2} /> : tab === "cc" ? <CostCentres p2={p2} /> : <Budget r={r} />;
+  else body = tab === "cash" ? <CashFlow b={b} r={r} p2={p2} /> : tab === "ratios" ? <Ratios p2={p2} /> : tab === "regs" ? <Regs r={r} p2={p2} /> : tab === "cc" ? <CostCentres p2={p2} /> : <Budget r={r} />;
   return <>
     {tabs}
     <Head b={b} r={r} rg={rg} /><RunLine r={r} />

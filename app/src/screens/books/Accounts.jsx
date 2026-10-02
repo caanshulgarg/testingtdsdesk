@@ -3,7 +3,8 @@
 // figures are FS (src/js/29); the statements themselves are FS.html, the same pages as the PDF, shown as an old piece.
 // Changes go through fsKindSet, fsFyGo, fsStockSet, fsSet, fsMapSet, fsUnmap (src/js/23) and doAct (fsRun, fsPdf, fsExcel).
 //
-// State: S.fsFy (the year), S.fsRun (the statements worked out), S.fsTab (st, map), S.fsQ (the ledger search).
+// State: S.fsFy (the year), S.fsRun (the statements worked out), S.fsTab (st, map), S.fsQ (the ledger search), S.fsPage
+// (the page of the Mapping tab).
 import { useEffect } from "react";
 import Legacy from "../../parts/Legacy.jsx";
 import CommitBox from "../../parts/CommitBox.jsx";
@@ -12,12 +13,17 @@ const m = (v) => INR.format(r2(v || 0));
 const Act = ({ act, className = "btn small", children }) => <button className={className} onClick={() => doAct(act)}>{children}</button>;
 
 function Head({ c, years, fy, d }) {
+  // the format follows the entity type (Client setup, else the PAN's fourth letter) unless chosen here (review of 02-Oct-2026)
+  const e = FS.entityOf(), eName = FS.ENTITY[e.code];
+  const follow = () => { const b = S.books; b.fs = Object.assign({}, b.fs || {}, { kindSet: false }); S.fsRun = null; saveBooks(); render(); };
   return <section className="dash-card" data-fs-head="">
     <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
       <select aria-label="Format" style={{ width: "auto" }} value={c.kind === "co" ? "co" : "nc"} onChange={(ev) => fsKindSet(ev.target.value)}>
         <option value="co">Company: Schedule III (Division I)</option><option value="nc">Firm, LLP, proprietor, trust: ICAI format for non-corporate entities</option></select>
       <select aria-label="Year" style={{ width: "auto" }} value={fy} onChange={(ev) => fsFyGo(ev.target.value)}>{years.map((y) => <option key={y} value={y}>{y + "-" + String(num(y) + 1).slice(2)}</option>)}</select>
       <Act act="fsRun" className="btn small primary">Run now</Act>{d && !d.error && <><Act act="fsPdf">Download (PDF)</Act><Act act="fsExcel">Excel</Act></>}</div>
+    <p className="note" data-fs-entity={e.code} style={{ margin: "6px 0 0" }}>{eName ? "Entity type: " + eName + (e.by === "pan" ? " (from the PAN)" : " (as set in Client setup)") + (c.kindSet ? "; the format was chosen here. " : "; the format follows it. ") : "Entity type not known (no PAN in Client setup); choose the format here. "}
+      {c.kindSet && eName && <button className="linkbtn" onClick={follow}>Follow the entity type</button>}</p>
     <details style={{ marginTop: 8 }}><summary className="note" style={{ cursor: "pointer" }}>Settings: stock, manufacturer, shares</summary>
     <div className="row" style={{ gap: 12, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
       <label className="note">Opening stock <CommitBox type="number" step="0.01" aria-label="Opening stock" value={c.stock.open || ""} style={{ width: 130 }} onCommit={(v) => fsStockSet("open", v)} /></label>
@@ -36,14 +42,24 @@ function Mapping({ c, d }) {
   Object.entries(d.det).forEach(([k, list]) => list.forEach(([l, v]) => rows.push([l, k, v])));
   Object.entries(d.plDet).forEach(([k, list]) => list.forEach(([l, v]) => rows.push([l, k, v])));
   const shown = rows.filter((r) => !/^(Surplus|Closing stock|Opening stock|Less: closing)/.test(r[0]) && (!q || r[0].toLowerCase().includes(q))).sort((a, c2) => a[1].localeCompare(c2[1]) || Math.abs(c2[2]) - Math.abs(a[2]));
+  // review of 02-Oct-2026: 335 ledgers, each with a drop-down of every line, were drawn at once; now a page of 50 at a
+  // time, or the ledgers a search finds
+  const PER = 50, pages = Math.max(1, Math.ceil(shown.length / PER)), pg = Math.min(Math.max(0, num(S.fsPage) || 0), pages - 1), page = shown.slice(pg * PER, pg * PER + PER);
+  const go = (n) => setAndShow("fsPage", n);
+  const pager = pages > 1 && <div className="row" data-fs-pager="" style={{ gap: 8, alignItems: "center", margin: "8px 0" }}>
+    <button className="btn small" disabled={pg === 0} onClick={() => go(pg - 1)}>Previous</button>
+    <span className="note">{"Ledgers " + (pg * PER + 1) + "–" + Math.min(shown.length, pg * PER + PER) + " of " + shown.length + " · page " + (pg + 1) + " of " + pages}</span>
+    <button className="btn small" disabled={pg >= pages - 1} onClick={() => go(pg + 1)}>Next</button></div>;
   return <>
-    <div className="revfilter"><input type="search" id="fsq" aria-label="Find a ledger" data-fk="fsq" value={S.fsQ || ""} placeholder="Find a ledger" style={{ width: 260 }} onChange={(ev) => setAndShow("fsQ", ev.target.value, true)} />
+    <div className="revfilter"><input type="search" id="fsq" aria-label="Find a ledger" data-fk="fsq" value={S.fsQ || ""} placeholder="Find a ledger" style={{ width: 260 }} onChange={(ev) => { S.fsPage = 0; setAndShow("fsQ", ev.target.value, true); }} />
       <span className="note">{shown.length + " ledgers · "}<b>{Object.keys(c.map || {}).length}</b> placed by hand</span></div>
+    {pager}
     <div className="bk-tablewrap"><table className="bk-table"><thead><tr><th>Ledger</th><th>Tally group</th><th className="n">Amount</th><th>Goes to</th></tr></thead><tbody>
-      {shown.slice(0, 500).map(([l, k, v], i) => <tr key={l + ":" + i} data-key={l}><td>{l}{c.map[l] && <>{" "}<span className="tag">by hand</span></>}</td><td className="note">{FS.nature(l).path.join(" ← ")}</td><td className="n">{m(v)}</td>
+      {page.map(([l, k, v], i) => <tr key={l + ":" + i} data-key={l}><td>{l}{c.map[l] && <>{" "}<span className="tag">by hand</span></>}</td><td className="note">{FS.nature(l).path.join(" ← ")}</td><td className="n">{m(v)}</td>
         <td><select aria-label={"Goes to: " + l} style={{ width: "auto" }} value={k} onChange={(ev) => fsMapSet(l, ev.target.value)}>{lines.map((z) => <option key={z[0]} value={z[0]}>{z[1]}</option>)}</select>
           {c.map[l] && <>{" "}<button className="linkbtn" onClick={() => fsUnmap(l)}>by rule</button></>}</td></tr>)}
     </tbody></table></div>
+    {pager}
   </>;
 }
 
@@ -53,7 +69,10 @@ export default function Accounts({ b }) {
   // run by itself for the year shown (the last full year, unless another is chosen), once per year and format
   useEffect(() => {
     const key = fy + "|" + c.kind + "|" + (S.coId || "");
-    if (fy && !d && !(S.fsAuto || {})[key]) { S.fsAuto = Object.assign({}, S.fsAuto, { [key]: 1 }); doAct("fsRun"); }
+    // once shown, the next time the statements are wanted again (the format chosen back, the entity type changed in
+    // Client setup) they run by themselves again (review of 02-Oct-2026: they stayed on "Working out…")
+    if (d) { if (S.fsAuto && Object.keys(S.fsAuto).length) S.fsAuto = {}; }
+    else if (fy && !(S.fsAuto || {})[key]) { S.fsAuto = Object.assign({}, S.fsAuto, { [key]: 1 }); doAct("fsRun"); }
   });
   if (!fy) return <div className="bk-none">Bring in the day book first.</div>;
   let body;

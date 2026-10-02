@@ -160,6 +160,11 @@ const MIS = {
     sum.advance = r2(rows.reduce((a, p) => a + p.advance, 0));
     sum.nb = MIS.BUCKETS.map((_, i) => r2(rows.reduce((a, p) => a + p.nb[i], 0)));
     sum.und = r2(rows.reduce((a, p) => a + p.und, 0));
+    // review of 02-Oct-2026: the parties whose ledger balance and bills do not agree (the difference is the ledger balance
+    // less the bills' total), largest first, for the line at the top of Receivables and Payables
+    sum.differ = rows.filter(p => p.diff != null && Math.abs(p.diff) >= 1).sort((a, c) => Math.abs(c.diff) - Math.abs(a.diff) || a.party.localeCompare(c.party))
+      .map(p => ({party: p.party, bills: p.total, ledger: p.tally, diff: p.diff}));
+    sum.diff = r2(rows.reduce((a, p) => a + (p.diff || 0), 0));
     return {rows, sum};
   },
   msme(){
@@ -328,10 +333,15 @@ const MIS = {
       cash: this.cashflow(from, to), recv: this.ageing(to, "r", balTo), pay: this.ageing(to, "p", balTo), comp: this.compliance(from, to), dues: this.dues(),
       balances: bal.ok ? {src: bal.src, cash: Object.keys(balTo).filter(l => Audit.isCash(l)).sort().map(l => [l, r2(-balTo[l])]), bank: Object.keys(balTo).filter(l => Audit.isBankL(l)).sort().map(l => [l, r2(-balTo[l])])} : {why: bal.why}};
     // days of sales or purchases owed: from what is owed on balance; never below nought (an advance is not "negative days")
+    // the headline owed to you and by you is the ledger balances (Parties.position), the same figure as Reports and
+    // Letters; the ageing only splits it, any part no bill explains shown as not bill-wise (review of 02-Oct-2026)
+    const P = Parties.position(to);
+    r.owed = P.ok ? {r: P.owed, p: P.youOwe, custAdv: P.custAdv, supAdv: P.supAdv} : null;
     r.dso = r.recv.sum.owe > 0 && s.total > 0 ? Math.round(r.recv.sum.owe / (s.total / days)) : null;
     // days of purchases only for a client that buys goods (Purchase Accounts used in the period): a service firm's bills
     // are expenses, and "days of purchases" says nothing about them (review of 02-Oct-2026)
     const goods = Object.entries(this.moves(from, to)).some(([l, x]) => Audit.under(l, /^purchase accounts$/i) && Math.abs(num(x.t)) >= 1);
+    r.goods = goods;
     r.dpo = goods && r.pay.sum.owe > 0 && pr.total > 0 ? Math.round(r.pay.sum.owe / (pr.total / days)) : null;
     r.p2 = this.phase2(r, balTo, bal.ok ? r2(r.balances.cash.concat(r.balances.bank).reduce((s2, x) => s2 + x[1], 0)) : null);
     const md = this.cfg(b).msmeDays, msme = this.msme();
@@ -353,7 +363,7 @@ const MIS = {
   // working (V, raised whenever a figure is worked out differently). A saved run from other books or other working is
   // worked out again when MIS opens, and its figures are not shown meanwhile (review of 02-Oct-2026: MIS showed the run of
   // 01-Oct, result code 1FB42BF2, with figures since corrected)
-  V: 3,
+  V: 4,                                                       // 4: GST without cancelled entries, cash flow and ratios redone (review of 02-Oct-2026)
   basis(b){
     b = b || S.books || {};
     const vs = b.vouchers || [], alt = vs.reduce((a, v) => Math.max(a, num(v.alter || v.alterId || 0)), 0);
@@ -413,13 +423,27 @@ Object.assign(MIS, {
       if (!tot || Math.abs(net) < 0.01) return;
       opp.forEach(e => {
         const share = r2(-net * Math.abs(e.a) / tot);
-        const [sec, lab] = this.flowHead(e.l), k = sec + "|" + lab, x = rows[k] = rows[k] || {sec, lab, t: 0, m: {}, led: {}};
+        // money that came in on a line named for paying (or went out on one named for receiving) has its own line (review
+        // of 02-Oct-2026: 48,50,089 received back from suppliers in Feb-2026 sat as "+" under Paid to suppliers, and an
+        // income-tax refund of 9,28,480 under Income tax)
+        let [sec, lab] = this.flowHead(e.l);
+        if (share > 0 && lab === "Paid to suppliers") lab = "Refunds and receipts from suppliers";
+        else if (share > 0 && lab === "Income tax") lab = "Tax refunds";
+        else if (share < 0 && lab === "Received from customers") lab = "Refunds and payments to customers";
+        const k = sec + "|" + lab, x = rows[k] = rows[k] || {sec, lab, t: 0, m: {}, led: {}};
         x.t = r2(x.t + share); x.m[ym] = r2((x.m[ym] || 0) + share); x.led[e.l] = r2((x.led[e.l] || 0) + share);
       });
     });
     const list = Object.values(rows).sort((a, c) => ["op", "inv", "fin"].indexOf(a.sec) - ["op", "inv", "fin"].indexOf(c.sec) || c.t - a.t);
     const sec = s2 => ({t: r2(list.filter(x => x.sec === s2).reduce((a, x) => a + x.t, 0)), m: Object.fromEntries(months.map(mm => [mm, r2(list.filter(x => x.sec === s2).reduce((a, x) => a + (x.m[mm] || 0), 0))]))});
-    return {months, rows: list, op: sec("op"), inv: sec("inv"), fin: sec("fin"), net: r2(list.reduce((a, x) => a + x.t, 0))};
+    const net = r2(list.reduce((a, x) => a + x.t, 0));
+    // cash and bank at the start and the end, from the balances (review of 02-Oct-2026): opening + net change = closing,
+    // checked; a difference is an entry that moved cash or bank without a line on the other side
+    let open = null, close = null;
+    try { const B = Audit.balances(from, to); if (B.ok){ const cb = at => r2(Object.keys(at).filter(l => Audit.isCash(l) || Audit.isBankL(l)).reduce((a, l) => a - num(at[l]), 0));
+      open = cb(B.at(Audit.dayBefore(from))); close = cb(B.at(to)); } } catch (e){}
+    const diff = open == null ? null : r2(close - open - net);
+    return {months, rows: list, op: sec("op"), inv: sec("inv"), fin: sec("fin"), net, open, close, diff, ties: diff == null || Math.abs(diff) < 1};
   },
   median(a){ if (!a.length) return null; const s2 = a.slice().sort((x, y) => x - y), k = Math.floor(s2.length / 2); return s2.length % 2 ? s2[k] : Math.round((s2[k - 1] + s2[k]) / 2); },
   // how long each party takes to settle a bill, from the bills settled in the books
@@ -497,17 +521,32 @@ Object.assign(MIS, {
     const rev = (r.pl.heads.rev || {t: 0}).t, pc = (a, c) => c ? Math.round(a / c * 1000) / 10 : null;
     const out = [["Gross margin", pc(r.pl.gross.t, rev), "%", "gross profit \u00f7 revenue"], ["Operating margin (before interest and depreciation)", pc(r.pl.ebitda.t, rev), "%", ""], ["Net margin (before tax)", pc(r.pl.pbt.t, rev), "%", ""],
       ["Employee costs to revenue", pc((r.pl.heads.emp || {t: 0}).t, rev), "%", ""], ["Other expenses to revenue", pc((r.pl.heads.exp || {t: 0}).t, rev), "%", ""],
-      ["Days of sales owed to you", r.dso, "days", "receivables \u00f7 sales a day"], ["Days of purchases you owe", r.dpo, "days", "payables \u00f7 purchases a day"],
+      ["Days of sales owed to you", r.dso, "days", "receivables \u00f7 sales a day"]].concat(
+      // no purchases (a service firm's bills are expenses), no "days of purchases" (review of 02-Oct-2026)
+      r.goods === false || (r.goods == null && !r.purchases.total) ? [] : [["Days of purchases you owe", r.dpo, "days", "payables \u00f7 purchases a day"]]).concat([
       ["Sales growth on the previous period", r.prev && r.prev.sales ? pc(r.sales.total - r.prev.sales, r.prev.sales) : null, "%", ""],
-      ["Sales growth on last year", r.ly && r.ly.sales ? pc(r.sales.total - r.ly.sales, r.ly.sales) : null, "%", ""]];
+      ["Sales growth on last year", r.ly && r.ly.sales ? pc(r.sales.total - r.ly.sales, r.ly.sales) : null, "%", ""]]);
     if (balTo){
-      const A = Audit, g = re => Object.entries(balTo).filter(([l]) => A.under(l, re)).reduce((s2, [, v]) => s2 + v, 0);
-      const ca = -g(/^(current assets|sundry debtors|cash-in-hand|bank accounts|stock-in-hand|loans & advances \(asset\)|deposits \(asset\))$/i);
-      const cl = g(/^(current liabilities|sundry creditors|duties & taxes|provisions|bank od a\/c|bank occ a\/c)$/i);
-      const debt = g(/^(loans \(liability\)|secured loans|unsecured loans|bank od a\/c|bank occ a\/c)$/i), eq = g(/^(capital account|reserves & surplus)$/i) + r.pl.pat.t;
-      const liquid = ca + g(/^stock-in-hand$/i);
-      out.push(["Current ratio", cl ? Math.round(ca / cl * 100) / 100 : null, "times", "current assets \u00f7 current liabilities"], ["Quick ratio", cl ? Math.round(liquid / cl * 100) / 100 : null, "times", "without stock"],
-        ["Debt to equity", eq ? Math.round(debt / eq * 100) / 100 : null, "times", "borrowings \u00f7 capital and reserves"],
+      // review of 02-Oct-2026: the current ratio showed -11.17 times beside working capital of +1,55,35,238.49, the
+      // liabilities' groups netting to a debit (tax paid in advance, suppliers paid ahead). Each ledger is placed as the
+      // Accounts tab places it (FS.place: a debit balance under liabilities is an asset, a credit under assets a
+      // liability), and assets and liabilities are taken as positive amounts; a ratio that still comes out negative or
+      // with nothing to divide by is "not meaningful", never a negative number
+      const A = Audit, CA = {}, CL = {}, at = {ca: 0, cl: 0, stock: 0, debt: 0, eq: 0};
+      ["ci", "inv", "tr", "cash", "stla", "oca"].forEach(k => { CA[k] = 1; }); ["stb", "tp", "ocl", "stp"].forEach(k => { CL[k] = 1; });
+      Object.entries(balTo).forEach(([l, v]) => {
+        v = num(v); if (Math.abs(v) < 0.005) return;
+        if (typeof FS === "undefined" || FS.nature(l).rev) return;
+        const k = FS.place(l, v, "co");
+        if (CA[k]){ at.ca += -v; if (k === "inv") at.stock += -v; }
+        else if (CL[k]) at.cl += v;
+        if (k === "ltb" || k === "stb") at.debt += v;
+        if (k === "share" || k === "reserves" || k === "capital") at.eq += v;
+      });
+      const ca = r2(at.ca), cl = r2(at.cl), liquid = r2(at.ca - at.stock), debt = r2(at.debt), eq = r2(at.eq + r.pl.pat.t);
+      const NM = "not meaningful", times = (a, c) => !(c > 0) || a < 0 ? NM : Math.round(a / c * 100) / 100;
+      out.push(["Current ratio", times(ca, cl), "times", "current assets " + INR.format(ca) + " \u00f7 current liabilities " + INR.format(cl)], ["Quick ratio", times(liquid, cl), "times", "without stock"],
+        ["Debt to equity", !(eq > 0) || debt < 0 ? NM : Math.round(debt / eq * 100) / 100, "times", "borrowings \u00f7 capital and reserves"],
         ["Interest cover", (r.pl.heads.fin || {t: 0}).t ? Math.round(r.pl.ebitda.t / r.pl.heads.fin.t * 10) / 10 : null, "times", "operating profit \u00f7 finance costs"],
         ["Working capital", r2(ca - cl), "\u20b9", "current assets less current liabilities"]);
     }

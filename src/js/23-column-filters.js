@@ -958,7 +958,8 @@ function lmPost(k){ LedMaster.applyPosting(S.books, CO(), k); render(); }
 // or note (kept with the books)
 // Accounts (app/src/screens/books/Accounts.jsx): the format, the year, stock, a manufacturer, shares, a ledger placed by
 // hand (the statements are worked out again) or given back to the rule
-function fsKindSet(v){ const b = S.books; b.fs = Object.assign({}, FS.cfg(b), {kind: v}); S.fsRun = null; saveBooks(); render(); }
+// a format chosen by hand stays chosen; otherwise it follows the client's entity type (FS.cfg)
+function fsKindSet(v){ const b = S.books; b.fs = Object.assign({}, FS.cfg(b), {kind: v, kindSet: true}); S.fsRun = null; saveBooks(); render(); }
 function fsFyGo(v){ S.fsFy = v; S.fsRun = null; render(); }
 function fsStockSet(which, v){ const b = S.books, c = FS.cfg(b); c.stock = Object.assign({}, c.stock, {[which]: v === "" ? "" : num(v)}); b.fs = c; saveBooks(); }
 function fsSet(key, v){ const b = S.books; b.fs = Object.assign({}, FS.cfg(b), {[key]: v}); saveBooks(); }

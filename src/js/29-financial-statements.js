@@ -28,7 +28,22 @@ const FS = {
   PL: [["rev", "Revenue from operations"], ["oth", "Other income"], ["mat", "Cost of materials consumed"], ["pur", "Purchases of stock-in-trade"], ["chg", "Changes in inventories"], ["emp", "Employee benefits expense"],
     ["fin", "Finance costs"], ["dep", "Depreciation and amortisation expense"], ["exp", "Other expenses"], ["exc", "Exceptional items"], ["tax", "Tax expense"]],
   SECTIONS: {EQ: "Shareholders' funds", NCL: "Non-current liabilities", CL: "Current liabilities", NCA: "Non-current assets", CA: "Current assets"},
-  cfg(b){ return Object.assign({kind: "co", mfg: false, map: {}, stock: {}, shares: "", face: ""}, (b && b.fs) || {}); },
+  // the kind of entity, from the fourth letter of the PAN unless chosen in Client setup (review of 02-Oct-2026: a
+  // partnership opened in Schedule III, the companies' format)
+  ENTITY: {F: "Firm or LLP", C: "Company", P: "Individual or proprietor", H: "Hindu undivided family", A: "Association of persons", B: "Body of individuals",
+    T: "Trust", L: "Local authority", J: "Artificial juridical person", G: "Government"},
+  entityOf(co){
+    co = co || (typeof CO === "function" ? CO() : null) || {};
+    const set = String(co.entity || "").toUpperCase(), pan = String(co.pan || String(co.gstin || "").slice(2, 12)).toUpperCase().trim(), p4 = /^[A-Z]{5}\d{4}[A-Z]$/.test(pan) ? pan[3] : "";
+    return this.ENTITY[set] ? {code: set, by: "set"} : this.ENTITY[p4] ? {code: p4, by: "pan"} : {code: "", by: ""};
+  },
+  // the format: Schedule III for a company, the ICAI format for every other entity; a format chosen on the Accounts tab
+  // stays chosen (kindSet), else it follows the entity type
+  cfg(b){
+    const c = Object.assign({kind: "co", mfg: false, map: {}, stock: {}, shares: "", face: ""}, (b && b.fs) || {});
+    if (!c.kindSet){ const e = this.entityOf(b && b.cid && typeof S === "object" && S.companies ? S.companies[b.cid] : null).code; if (e) c.kind = e === "C" ? "co" : "nc"; }
+    return c;
+  },
   // where a ledger goes by rule, before any choice by hand; bal is Tally's sign (a debit is negative)
   place(l, bal, kind){
     const n = this.nature(l), p = n.path.map(g => g.toLowerCase()), has = g => p.includes(g), up = l.toUpperCase();
