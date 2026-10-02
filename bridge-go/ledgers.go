@@ -15,9 +15,17 @@
 // renamed (the same GUID, another name: the copy's entries carry the new name, and FinCom's cloud renames its row,
 // keeping the old name), and one gone (a GUID no longer in Tally: soft deleted in the cloud, never removed). What is to
 // go to the cloud waits in ledger-out.json until FinCom's cloud has taken it (tally-ingest "ledger_list").
+//
+// Round 2 (02-Oct-2026, the contract with the cloud): each round has a round id (random hex, kept in the run state);
+// every ledger_list call carries that round, complete (true: the round read the whole list, a ledger that hangs Tally
+// isolated and skipped counts as read) and rowsRead (the GUIDs read from Tally in that round: the whole list, not the
+// rows changed). Nothing of a round goes until it is complete, so deleted only ever travels with complete:true (on the
+// last batch). The cloud marks ledgers deleted only for a complete round whose count agrees.
 package main
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -26,6 +34,13 @@ import (
 	"strings"
 	"time"
 )
+
+// a round's id: 16 random bytes as hex
+func newLedRound() string {
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
+}
 
 const (
 	ledListID = "FinComLedgers"
@@ -230,8 +245,9 @@ func diffLedgers(held, read map[string]ledRow, pendingGone map[string]bool) ledD
 }
 
 // --- the outbox: {rows: {guid: [mid, alter, name, parent, open, gstin, pan, openChanged]}, renamed: {guid: [from, to]},
-// deleted: {guid: name}, groups: [[name, parent]]}
-func mergeLedOut(dir string, d ledDiff, groups [][2]string) {
+// deleted: {guid: name}, groups: [[name, parent]], round, rowsRead, complete: true}. Only a complete round merges here
+// (a ledger that hangs Tally is named in it mid-round by addPoison, with complete unset: sent once the round completes)
+func mergeLedOut(dir string, d ledDiff, groups [][2]string, round string, rowsRead int) {
 	o := readObjFile(ledOutFile(dir))
 	if o == nil {
 		o = M{}
@@ -273,6 +289,7 @@ func mergeLedOut(dir string, d ledDiff, groups [][2]string) {
 		delete(ren, h.guid)
 	}
 	o["rows"], o["renamed"], o["deleted"] = rows, ren, del
+	o["round"], o["rowsRead"], o["complete"] = round, rowsRead, true
 	if groups != nil {
 		gl := []any{}
 		for _, g := range groups {
@@ -299,7 +316,7 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 		if size < ledChunkMin() || size > ledChunkDefault() {
 			size = ledChunkDefault()
 		}
-		ls = M{"started": nowS(), "after": 0, "size": size, "empty": 0, "groups": false, "n": 0, "reqs": 0}
+		ls = M{"started": nowS(), "after": 0, "size": size, "empty": 0, "groups": false, "n": 0, "reqs": 0, "round": newLedRound()}
 		_ = os.Remove(ledReadFile(dir))
 		st["led"] = ls
 		save()
@@ -406,8 +423,14 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 		writeLog(fmt.Sprintf("Keeping %s: ledger list MasterID %d-%s, %d ledger(s) (%.1fs); saved", company, after+1, map[bool]string{true: "end", false: fmt.Sprint(upto)}[tail], len(rows), sec))
 		keepRest(time.Duration(maxI(200, int(sec*500))) * time.Millisecond)
 	}
-	// the full list: compared with the one held, by GUID
+	// the full list: compared with the one held, by GUID. rowsRead: the GUIDs Tally gave in this round (a skipped ledger
+	// is not among them)
 	read := loadLedRead(dir)
+	rowsRead := len(read)
+	if str(ls["round"]) == "" {
+		ls["round"] = newLedRound() // a round begun by 2.1.4
+	}
+	round := str(ls["round"])
 	held := loadLedList(dir)
 	pend := map[string]bool{}
 	for _, g := range strs(st["ledGone"]) {
@@ -457,7 +480,7 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 	} else {
 		st["ledGone"] = gone
 	}
-	mergeLedOut(dir, d, groups)
+	mergeLedOut(dir, d, groups, round, rowsRead)
 	_ = os.Remove(ledReadFile(dir))
 	writeLog(fmt.Sprintf("Keeping %s: the ledger list read (%d ledgers, %d groups, %d request(s)): %d new, %d changed, %d renamed, %d deleted",
 		company, len(read), len(groups), toInt(ls["reqs"]), d.added, len(d.rows)-d.added, len(d.renamed), len(d.deleted)))
@@ -487,8 +510,9 @@ func renameHeldOpening(dir, old, nw string) {
 }
 
 // --- to FinCom's cloud (from pushCloudCompany): the rows a batch at a time (LedgerSendBatch, 2000), the renames and
-// the groups with the first, the deletions with the last. A cloud that cannot take it now (an older tally-ingest,
-// offline) holds back neither the days nor anything else: it is tried again later
+// the groups with the first, the deletions with the last; every batch names the round, its rowsRead and complete.
+// A cloud that cannot take it now (an older tally-ingest, offline) holds back neither the days nor anything else: it is
+// tried again later. An outbox of a round not complete (only a skipped ledger named so far) sends nothing
 var ledPushAfter = map[string]time.Time{} // under cloudMu
 
 func pushLedgerList(company, dir string) error {
@@ -499,6 +523,9 @@ func pushLedgerList(company, dir string) error {
 	if o == nil {
 		_ = os.Remove(ledOutFile(dir))
 		return nil
+	}
+	if !truthy(o["complete"]) || str(o["round"]) == "" {
+		return nil // the round is not complete: nothing of it goes (and so no deletion can)
 	}
 	rows, ren, del := obj(o["rows"]), obj(o["renamed"]), obj(o["deleted"])
 	var gs []string
@@ -521,7 +548,8 @@ func pushLedgerList(company, dir string) error {
 			}
 			led = append(led, []any{g, toI64(at(a, 0)), toI64(at(a, 1)), str(at(a, 2)), str(at(a, 3)), str(at(a, 4)), str(at(a, 5)), str(at(a, 6)), oc})
 		}
-		body := M{"kind": "ledger_list", "company": company, "ledgers": led, "last": last}
+		body := M{"kind": "ledger_list", "company": company, "ledgers": led, "last": last,
+			"round": str(o["round"]), "complete": true, "rowsRead": toInt(o["rowsRead"])}
 		if first {
 			rl := []any{}
 			for g, v := range ren {

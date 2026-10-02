@@ -3,14 +3,14 @@ MEASURING TALLY FOR FINCOM (FinCom Bridge 2.1.4) - STEP BY STEP
 Why: nobody can measure Tally from FinCom's side. Before FinCom reads only what changed in Tally (by Tally's change
 number, the AlterID), the owner wants measured numbers: how long each kind of request takes on a real Tally, how big it
 is, which ledger hangs Tally, and what moves the AlterID. The bridge does the measuring itself, one request at a time,
-each stopped after 25 s, and nothing is written to Tally.
+each stopped after 20 s, and nothing is written to Tally.
 
 Where the numbers go: a plain text report in the bridge's folder (for "Just for me" installs:
 %LOCALAPPDATA%\FinCom Bridge), named measure-<company>-<date-time>.txt. Snapshots are measure-snap-<label>.json there.
 
 Commands (in a Command Prompt, in the bridge's folder; "FinComBridge.exe" is the installed program):
-   FinComBridge.exe measure --company "ZZ TEST"
-   FinComBridge.exe measure --company "ZZ TEST" --ledgers 696-699          (the default range)
+   FinComBridge.exe measure --company "ZZ TEST"                          (items a to e and f0; no single ledger)
+   FinComBridge.exe measure --company "ZZ TEST" --ledgers 696             (ONE ledger: part A3, after working hours only)
    FinComBridge.exe measure --company "ZZ TEST" --snapshot before [--month 202610]
    FinComBridge.exe measure --compare before after
 The running bridge does the requests (through its queue: a posting still goes first). From the tray: right-click the
@@ -28,12 +28,27 @@ A1. ON GARG SHEKHAR & COMPANY (NWS144) AND ON ZZ TEST
        c1  the same, this month only;  c2  the same, the busiest month only (c0: the year's dates, to find it)
        d   the GUID list only, this month
        e   one entry with every field: its size, and for each field "present", "present, empty" or "absent"
-       f0  every ledger's name; f696..f699: for each of the ledgers numbered 696-699 in name order, the company check,
-           then its master's fields (parent, is revenue, affects stock, bill-wise, cost centres), then the opening its
-           master stores. A request that does not answer in 25 s says HANGS; the bridge then sends nothing but the small
-           company check (once a minute) until Tally answers, and stops after two hangs.
-   Write down: the ms, bytes and count of every line, and which ledger (if any) says HANGS, with its fields.
+       f0  every ledger's name (the count); the line "f696.." says the single ledgers are not run by default: they
+           are part A3, after working hours only.
+   Write down: the ms, bytes and count of every line.
    If not: send the report file and icon > Show log.
+
+A3. THE LEDGERS 696-699 - AFTER WORKING HOURS ONLY, OPTIONAL, ONE LEDGER AT A TIME
+   These four ledgers (numbered 696-699 in name order) are the ones that hung Tally on 02-Oct-2026. Do this part only
+   after working hours, with nobody working in Tally on any computer, and only if you want to. Never during the day.
+   One ledger per run; close and reopen TallyPrime between runs if you like (allowed, not required):
+       FinComBridge.exe measure --company "GARG SHEKHAR & COMPANY" --ledgers 696
+       (wait for the report; then, when you are ready)
+       FinComBridge.exe measure --company "GARG SHEKHAR & COMPANY" --ledgers 697
+       FinComBridge.exe measure --company "GARG SHEKHAR & COMPANY" --ledgers 698
+       FinComBridge.exe measure --company "GARG SHEKHAR & COMPANY" --ledgers 699
+   You should see, per run: f<N>-check (the company check), f<N>-fields (that ledger's master fields: parent, is
+       revenue, affects stock, bill-wise, cost centres), f<N>-opening (the opening its master stores). A request that
+       does not answer in 20 s says HANGS; the bridge then sends nothing but the small company check (once a minute)
+       until Tally answers. If Tally does not come back within a few minutes, close and reopen it before the next run.
+   Write down: for each of the four, the ms, bytes and count of its lines, and which (if any) says HANGS, with its
+       fields.
+   If not: send the report files and icon > Show log.
 
 A2. THE MADE-UP BIG COMPANY (200,000 entries) - items a to d at scale
    Do, once, on a computer with Python 3:
@@ -47,7 +62,8 @@ A2. THE MADE-UP BIG COMPANY (200,000 entries) - items a to d at scale
        3. Gateway of Tally > Import > Transactions > big-vouchers-01.xml; then -02 ... -10, in order. Each takes
           minutes. Tally's import log (tally.imp) shows any line it refused: send it if there are errors.
        4. Check: Day Book of 31-Mar-2026 has entries; Balance Sheet shows no "Difference in opening balances".
-   Then run A1 on ZZ BIG TEST (and once more with Tally busy on a report in another window, if you like).
+   Then run A1 on ZZ BIG TEST (and once more with Tally busy on a report in another window, if you like); A3 is not
+   needed on it.
    Write down: the same numbers as A1. Of interest most: b, c1, c2 and d at 200,000 entries.
 
 
@@ -98,6 +114,6 @@ Company | Entries in the year | a ms | b ms / bytes / count | c1 ms / count | c2
 --------|---------------------|------|----------------------|---------------|-----------------------|--------------|------------------------|------------------------------
 GARG SHEKHAR & COMPANY |  |  |  |  |  |  |  |
 ZZ TEST                |  |  |  |  |  |  |  |
-ZZ BIG TEST            | 200,000 |  |  |  |  |  |  |
+ZZ BIG TEST            | 200,000 |  |  |  |  |  |  | (A3 not run)
 
 SEND: the report files (measure-*.txt), the comparison output of each B test, and icon > Show log.

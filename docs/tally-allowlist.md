@@ -10,6 +10,12 @@ only while the measuring tool (Measure Tally, for FinCom support) is running.
 - **worst case (s)**: the longest time measured on ZZ BIG TEST (`tests/fixtures/big/make_big_company.py`) on NWS144,
   with **measured on** its date. "not yet measured" until the phase 1 measurement (`docs/tally-measure-sheet.txt`) fills it.
 
+The line above the table ("First table: not yet measured; allowed for <version> only; re-measured on <date>") is the
+first build's exception: `release-check.sh` (check 4) accepts "not yet measured" rows only for the one version that line
+names; any other version needs a worst case above 0 in every row. The bridge tells FinCom's cloud in every heartbeat
+whether its table is measured (`allowlist: {measured, hash}`), and the cloud refuses to approve a version whose pilot
+bridge reports it unmeasured, so an unmeasured build never leaves the pilot computer.
+
 `TestAllowListUnchanged` (in `bridge-go/allowlist_test.go`, run on every build and by `release-check.sh`) fails when
 this table and the Go table differ. A new or changed request is therefore measured on ZZ BIG TEST again, its time and
 date put in `allowlist.go`, and this table replaced with the one the failing test prints.
@@ -21,6 +27,8 @@ without a period) is a stored field, not a computed one.
 
 The size test (`bridge-go/size_test.go`) uses a cost per row returned (`tallyPerRowMs` in `allowlist.go`): a
 conservative guess until the phase 1 measurement replaces it.
+
+First table: not yet measured; allowed for 2.1.5 only; re-measured on 2026-10-02 (no times)
 
 <!-- allowlist:begin -->
 | id | purpose | shape | worst case (s) | measured on | used by |

@@ -22,10 +22,15 @@ may be built until it passes. Its self-test is `bash bridge-go/release_check_tes
    - an unknown request is refused;
    - no request asks Tally to compute a figure;
    - the list matches `docs/tally-allowlist.md`.
-5. **The allow-list is unchanged, or it has been re-measured.** The script compares the SHA-256 of
-   `docs/tally-allowlist.md` with the hash in the last row of the release log. If the file changed, measure the
-   changed requests on ZZ BIG TEST first. Then add a line `re-measured on YYYY-MM-DD` to the file, dated on or after
-   the last release.
+5. **The allow-list is measured, and unchanged or re-measured.** Every row of the table in `docs/tally-allowlist.md`
+   must have a worst case above 0; a "not yet measured" row fails the check. The one exception is the first build:
+   the line `First table: not yet measured; allowed for <version> only; re-measured on YYYY-MM-DD` above the table
+   is accepted only when `<version>` is the `BridgeVersion` being built (2.1.5); the next version needs real times in
+   every row. The bridge reports in every heartbeat whether its table is measured, and FinCom refuses to approve a
+   version whose pilot bridge says it is not, so an unmeasured build stays on the pilot computer.
+   The script also compares the SHA-256 of `docs/tally-allowlist.md` with the hash in the last row of the release
+   log. If the file changed, measure the changed requests on ZZ BIG TEST first. Then add a line
+   `re-measured on YYYY-MM-DD` to the file, dated on or after the last release.
 6. **Code review done.** Put the note at `docs/reviews/bridge-<version>-code-review.md`. It must name the git range
    reviewed, as `Range: <from>..<to>`, and `<to>` must be the commit being built: either HEAD, or a commit after which
    only `docs/` changed. Commit everything outside `docs/` before the review. Uncommitted changes fail the check.

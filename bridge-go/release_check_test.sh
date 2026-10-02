@@ -8,6 +8,9 @@
 #   red 4    the review range ends before a bridge-go/ change     -> fails "files outside docs/ changed after it"
 #   red 5    the allow-list changed with no "re-measured on" line -> fails "4 allow-list"
 #   red 6    the version already has a setup in assets-test       -> fails "1 version"
+#   green 2  a "not yet measured" row, and the line "allowed for 9.9.9 only" (this version) -> passes
+#   red 7    the same line naming another version (9.9.8)        -> fails "4 allow-list" (not yet measured)
+#   red 8    a "not yet measured" row and no "allowed for" line  -> fails "4 allow-list" (not yet measured)
 # Nothing outside the temp folder is touched. Run: bash bridge-go/release_check_test.sh
 # (RELEASE_CHECK_SCRIPT=<file> tests another copy of the script, e.g. one that always passes, to see this test fail.)
 set -u
@@ -49,6 +52,11 @@ E
   for k in code security; do printf '# %s review\n\nRange: %s..%s\n' "$k" "$BASE" "$BASE" >"$R/docs/reviews/bridge-9.9.9-$k-review.md"; done
   g add -A; g commit -qm "review notes (docs only after the range)"
 }
+# the allow-list with one row not yet measured, and the line given above the table ("" for none)
+unmeasured() {
+  printf '# Tally allow-list\n\n%s\n| id | purpose | worst case (s) | measured on |\n|---|---|---|---|\n| ledgers | ledger list | 4 | 2026-09-30 |\n| daybook | the day book | not yet measured | - |\n' "$1" >"$R/docs/tally-allowlist.md"
+  g add -A; g commit -qm "allow-list unmeasured"
+}
 run() { (cd "$R/bridge-go" && ./release-check.sh) >"$R.out" 2>&1; echo $?; }
 expect() { # $1 name, $2 expected exit (0 or 1), $3 text the output must contain
   local code; code="$(run)"
@@ -73,11 +81,20 @@ expect "red 3: size test skipped" 1 "2 size test"
 setup; printf '\n// changed after review\n' >>"$R/bridge-go/util.go"; g add -A; g commit -qm "unreviewed change"
 expect "red 4: code changed after the reviewed range" 1 "files outside docs/ changed after it"
 
-setup; printf '| extra | new request | ? | - |\n' >>"$R/docs/tally-allowlist.md"; g add -A; g commit -qm "allow-list change"
+setup; printf '| extra | new request | 3 | 2026-10-01 |\n' >>"$R/docs/tally-allowlist.md"; g add -A; g commit -qm "allow-list change"
 expect "red 5: allow-list changed, not re-measured" 1 "has no 're-measured on YYYY-MM-DD' line"
 
 setup; : >"$R/assets-test/bridge-go/FinComBridge-Setup-9.9.9.exe"; g add -A; g commit -qm "setup exists"
 expect "red 6: version already has a setup" 1 "BridgeVersion 9.9.9 is not new"
+
+setup; unmeasured "First table: not yet measured; allowed for 9.9.9 only; re-measured on 2026-10-02 (no times)"
+expect "green 2: unmeasured row allowed for this version" 0 "allowed for 9.9.9"
+
+setup; unmeasured "First table: not yet measured; allowed for 9.9.8 only; re-measured on 2026-10-02 (no times)"
+expect "red 7: the exception names another version" 1 "not yet measured"
+
+setup; unmeasured "re-measured on 2026-10-02"
+expect "red 8: unmeasured row, no exception for this version" 1 "not yet measured"
 
 echo
 if [ "$FAILS" = 0 ]; then echo "release_check_test: all cases as expected"; else echo "release_check_test: $FAILS case(s) wrong"; exit 1; fi

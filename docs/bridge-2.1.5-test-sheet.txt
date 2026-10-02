@@ -48,7 +48,17 @@ What is new in 2.1.4 (since 2.1.3)
 
 Use ZZ TEST for every posting below, never GARG SHEKHAR & COMPANY.
 
-1. INSTALL OVER 2.1.3 (OR 2.1.4)
+0. START THE PILOT IN FINCOM (before downloading anything)
+   Do: in FinCom (staging), as the owner, open All clients > Tally. Find NWS144's line and press "Try version 2.1.5 on
+       this computer" (only the owner sees the button).
+   You should see: the line now says "on trial on NWS144 since <date, time>". From then on the setup below is the one
+       FinCom names for NWS144 alone; every other computer stays on its version until step 10 passes and you approve
+       2.1.5 in FinCom.
+   If the button says the cloud is not ready: migration 35 is not on staging yet; tell me and stop here (nothing to
+       download until it is).
+   If not: a screenshot of the Tally page.
+
+1. DOWNLOAD AND INSTALL OVER 2.1.3 (OR 2.1.4)
    Do: TallyPrime open with ZZ TEST. Open the Link, then in PowerShell:
        Get-FileHash $env:USERPROFILE\Downloads\FinComBridge-Setup-2.1.5.exe
        Double-click the setup; "Windows protected your PC" > More info > Run anyway; "Just for me"; Next.
@@ -105,10 +115,12 @@ Use ZZ TEST for every posting below, never GARG SHEKHAR & COMPANY.
 
 7. MEASURE TALLY
    Do: icon > Measure Tally (for FinCom support) with GARG SHEKHAR & COMPANY open; wait (a few minutes).
-   You should see: a report opens (measure-...txt in the bridge's folder) with lines a, b, c1, c2, d, e (and its fields),
-       f0 and the ledgers 696-699, each with ms, bytes and count; a ledger that does not answer in 20 s says HANGS, and
-       the bridge waits for the small check before the next one.
-   Then: follow docs/tally-measure-sheet.txt (parts A and B) and send the report and the filled tables.
+   You should see: a report opens (measure-...txt in the bridge's folder) with lines a, b, c1, c2, d, e (and its fields)
+       and f0, each with ms, bytes and count, and a line "f696.." saying the single ledgers are not run by default. No
+       f696-f699 lines: those four ledgers (the ones that hung Tally on 02-Oct) are measured only after working hours,
+       one ledger per run, with "--ledgers 696" and so on (part A3 of the measure sheet), and only if you want to.
+   Then: follow docs/tally-measure-sheet.txt (parts A1, A2 and B; A3 after hours, optional) and send the reports and
+       the filled tables.
 
 8. THE LEDGER LIST: A NEW, A RENAMED AND A DELETED LEDGER
    Do: in TallyPrime (ZZ TEST) create a ledger "ZZ Ledger Test 1" under Sundry Creditors, with an opening of 100 Cr and,
@@ -150,8 +162,9 @@ Use ZZ TEST for every posting below, never GARG SHEKHAR & COMPANY.
        d) The longest request of the day is 20 s or less: in Show log no "Tally 9000: ... took N.Ns" line with N above
           20 (lines are written for every request of 3 s or more).
    Write down: the start and end time of the day; the three postings' times; the seconds of the posting during Update
-       now; the longest "took" line of the day.
-   If not: which of a-d failed, the time, and the log of that hour. These go into docs/bridge-2.1.5-acceptance.md.
+       now; the longest "took" line of the day. All of it goes into docs/bridge-2.1.5-acceptance.md (the acceptance
+       record: its four conditions are a-d above; sign it, and only then approve 2.1.5 in FinCom for other computers).
+   If not: which of a-d failed, the time, and the log of that hour. These go into docs/bridge-2.1.5-acceptance.md too.
 
 11. CLEAN UP
    Do: in TallyPrime delete the ZZ TEST vouchers made in steps 4-6 and 10 (or Remove from Tally in FinCom), and the test

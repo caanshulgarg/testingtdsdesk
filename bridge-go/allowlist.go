@@ -187,3 +187,19 @@ func allowListHash(rows string) string {
 	h := sha256.Sum256([]byte(rows))
 	return hex.EncodeToString(h[:])
 }
+
+// the table is measured when every row the bridge sends (measure-only rows aside) has a worst case and its date
+func allowListMeasured() bool {
+	for _, a := range tallyAllowList {
+		if !a.measureOnly && (a.maxSec <= 0 || a.measuredOn == "") {
+			return false
+		}
+	}
+	return true
+}
+
+// in every beat (cloud.go): FinCom's cloud keeps it in the pilot's evidence and refuses to approve a version whose
+// bridge reports an unmeasured table (round 2, 02-Oct-2026: 2.1.5 is allowed on the pilot unmeasured, nowhere else)
+func allowListBeat() M {
+	return M{"measured": allowListMeasured(), "hash": allowListHash(allowListRows())}
+}

@@ -17,9 +17,12 @@
 #   2 tests       go vet (Linux, Windows); the required tests exist (a missing one fails as "missing test X");
 #                 go test ./... ; the size test and the allow-list tests each run and print "--- PASS" by name.
 #   3 go.mod      go mod tidy -diff shows nothing (it changes no file).
-#   4 allow-list  sha256 of docs/tally-allowlist.md equals the hash in the last release log row of
-#                 docs/RELEASE-CHECKLIST.md; if it differs (or there is no earlier hash) the file must carry a line
-#                 "re-measured on YYYY-MM-DD" dated on or after that last release.
+#   4 allow-list  every row of the table in docs/tally-allowlist.md has a worst case > 0 ("not yet measured" fails),
+#                 unless the file carries the line "not yet measured; allowed for <v> only" naming THIS BridgeVersion
+#                 (the first build's exception: accepted for that one version, never for another); and sha256 of the
+#                 file equals the hash in the last release log row of docs/RELEASE-CHECKLIST.md; if it differs (or
+#                 there is no earlier hash) the file must carry a line "re-measured on YYYY-MM-DD" dated on or after
+#                 that last release.
 #   5 reviews     docs/reviews/bridge-<v>-code-review.md and -security-review.md exist and each names the git range
 #                 reviewed (Range: <from>..<to>); <to> is HEAD, or an ancestor of HEAD with only docs/ changed since;
 #                 and nothing outside docs/ is changed but not committed.
@@ -119,11 +122,32 @@ pass "3 go.mod and go.sum as go mod tidy leaves them"
 
 # --- 4. allow-list ----------------------------------------------------------------------------------------------------
 [ -f "$ALLOWLIST" ] || fail "4 allow-list" "docs/tally-allowlist.md is missing (the measured table of Tally requests)"
+# the table's rows: the "worst case" column (found from the header row) must be a number above 0 in every row
+unmeasured="$(awk -F'|' '
+  /^\|/ {
+    if (c == 0) { for (i = 2; i <= NF; i++) if (tolower($i) ~ /worst/) c = i; if (c == 0) print "(no worst-case column in the table header)"; next }
+    if ($2 ~ /^[ \t]*:?-+:?[ \t]*$/) next
+    v = $c; gsub(/^[ \t]+|[ \t]+$/, "", v); id = $2; gsub(/^[ \t]+|[ \t]+$/, "", id)
+    if (v !~ /^[0-9]+(\.[0-9]+)?$/ || v + 0 <= 0) print id ": " v
+  }' "$ALLOWLIST")"
+EXC=""
+if [ -n "$unmeasured" ]; then
+  exc="$(grep -oiE 'not yet measured[^|]*allowed for [0-9.]+ only' "$ALLOWLIST" | grep -oE 'allowed for [0-9.]+ only' | head -1)"
+  if [ "$exc" = "allowed for $V only" ]; then
+    EXC=" (not yet measured: $exc, the first build's exception)"
+  else
+    why="No exception line names $V (the line 'not yet measured; allowed for $V only' would accept it for this version alone)."
+    [ -n "$exc" ] && why="The exception line says '$exc', not $V: it holds for that version only."
+    fail "4 allow-list" "docs/tally-allowlist.md has rows not yet measured (no worst case above 0):" \
+      "$(echo "$unmeasured" | tr '\n' ';' | sed 's/;$//; s/;/; /g')" "$why" \
+      "Measure every request on ZZ BIG TEST (docs/tally-measure-sheet.txt) and put the times and dates in allowlist.go and the table."
+  fi
+fi
 HASH="$(sha256sum "$ALLOWLIST" | cut -d' ' -f1)"
 last="$(log_rows | tail -1)"
 lastv="$(echo "$last" | cell 1)"; lastdate="$(echo "$last" | cell 2)"; lasthash="$(echo "$last" | cell 3)"
 if [ -n "$lasthash" ] && echo "$lasthash" | grep -qE '^[0-9a-f]{12,64}$' && [ "${HASH#"$lasthash"}" != "$HASH" ]; then
-  pass "4 allow-list unchanged since $lastv (sha256 ${HASH:0:16})"
+  pass "4 allow-list unchanged since $lastv (sha256 ${HASH:0:16})$EXC"
 else
   m="$(grep -oiE 're-measured on [0-9]{4}-[0-9]{2}-[0-9]{2}' "$ALLOWLIST" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' | sort | tail -1)"
   [ -n "$m" ] || fail "4 allow-list" "docs/tally-allowlist.md changed since the last release (${lastv:-none}: ${lasthash:-no hash}; now ${HASH:0:16})" \
@@ -131,7 +155,7 @@ else
   if echo "$lastdate" | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' && [[ "$m" < "$lastdate" ]]; then
     fail "4 allow-list" "docs/tally-allowlist.md changed, but its newest 're-measured on' ($m) is before the last release ($lastv, $lastdate)"
   fi
-  pass "4 allow-list changed (sha256 ${HASH:0:16}) and re-measured on $m"
+  pass "4 allow-list changed (sha256 ${HASH:0:16}) and re-measured on $m$EXC"
 fi
 
 # --- 5. reviews -------------------------------------------------------------------------------------------------------

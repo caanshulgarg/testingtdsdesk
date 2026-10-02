@@ -1,7 +1,7 @@
 // Measuring Tally for FinCom support (02-Oct-2026: nobody can measure Tally from FinCom's side). Run from the tray
 // ("Measure Tally (for FinCom support)") or as
 //
-//	FinComBridge.exe measure --company "<name>" [--out file] [--ledgers 696-699]
+//	FinComBridge.exe measure --company "<name>" [--out file] [--ledgers 696 | --ledgers 696-699]
 //	FinComBridge.exe measure --company "<name>" --snapshot <label> [--month yyyymm]
 //	FinComBridge.exe measure --compare <label1> <label2>
 //
@@ -16,7 +16,8 @@
 //	e. one entry with every field FinCom needs; its size, and which fields came back
 //	f. the hanging-ledger check: the opening each ledger master stores (the master's field, no period, never a balance
 //	   worked out) of the ledgers numbered 696-699 in name order, one at a time, the company check between them; their
-//	   other master fields first, on their own, so a hang shows which part hangs; it stops after two hangs
+//	   other master fields first, on their own, so a hang shows which part hangs; it stops after two hangs. Only with
+//	   --ledgers (after working hours, one ledger a run: --ledgers 696, then 697...); the default run measures f0 only
 //	g. snapshots (each entry's GUID, MasterID and AlterID for a month, the company's GUID and highest AlterID) and their
 //	   comparison, for the owner's manual tests (docs/tally-measure-sheet.txt)
 package main
@@ -73,11 +74,21 @@ var (
 	measureLast M
 )
 
-// the bridge's own ledger list in name order (the order 2.1.3 numbered them in its batches: "ledgers 691-695")
+// the bridge's own ledger list in name order (the order 2.1.3 numbered them in its batches: "ledgers 691-695").
+// Round 2 (02-Oct-2026): the per-ledger items run only when asked (--ledgers 696, or a range 696-699); with no
+// --ledgers none runs (0, 0), as the ledgers 696-699 are measured after working hours only, one at a time
 func measureLedgerRange(spec string) (int, int) {
-	a, b := 696, 699
-	if m := re(`^(\d+)\s*-\s*(\d+)$`).FindStringSubmatch(strings.TrimSpace(spec)); m != nil {
+	spec = strings.TrimSpace(spec)
+	if spec == "" {
+		return 0, 0
+	}
+	a, b := 0, 0
+	if m := re(`^(\d+)\s*-\s*(\d+)$`).FindStringSubmatch(spec); m != nil {
 		a, b = toInt(m[1]), toInt(m[2])
+	} else if m := re(`^(\d+)$`).FindStringSubmatch(spec); m != nil {
+		a, b = toInt(m[1]), toInt(m[1])
+	} else {
+		return 0, 0
 	}
 	if a < 1 {
 		a = 1
@@ -310,7 +321,11 @@ func runMeasure(o measureOpts) (M, error) {
 	it.note = fmt.Sprintf("%d ledgers", len(names))
 	add(it)
 	hangs := 0
-	for i := a; i <= b && i <= len(names) && hangs < 2; i++ {
+	if a == 0 {
+		add(&mItem{key: "f696..", what: "the per-ledger items (ledgers 696-699: fields, then the stored opening) are not run by default",
+			note: `after working hours only, one ledger at a time: FinComBridge.exe measure --company "<name>" --ledgers 696, then --ledgers 697, 698, 699, each on its own`})
+	}
+	for i := a; a > 0 && i <= b && i <= len(names) && hangs < 2; i++ {
 		n := names[i-1]
 		if !freeOrStop() {
 			break
