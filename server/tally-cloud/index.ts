@@ -13,7 +13,9 @@
 //                                                       tally-days, read into entries and lines, totals made ready
 //   {kind:"ledgers", company, from, openAsOn, ledgers:[[name, parent, open]], groups?:[[name, parent]]}
 //                                                       (groups from bridge 1.14.7: each ledger's chain of groups up to
-//                                                       the primary group is worked out from them and kept)
+//                                                       the primary group is worked out from them and kept; migration-33:
+//                                                       add-only, a ledger missing from the list marked deleted, never
+//                                                       removed, with the list it was missing from; upload_ledgers the same)
 //   {kind:"groups", company, ledgers:[[name, parent]], groups:[[name, parent]]} -> (bridge 1.14.9) every ledger's group
 //                                                       and Tally's groups, without openings: openings and entries stay
 //   {kind:"state", company, state}
@@ -349,8 +351,9 @@ async function applyLedgerList(firm: string, book: string, body: any) {
   out.groups = grpIn.length;
   const { data: allG, error: eg } = await db.from("tally_groups").select("name, parent").eq("book_id", book);
   if (eg) throw new Error(eg.message);
-  const up = new Map((allG || []).map((g: any) => [g.name, g.parent || ""]));
-  const chain = (p: string) => { const c: string[] = []; while (p && c.length < 30 && !c.includes(p)) { c.push(p); p = up.get(p) || ""; } return c; };
+  // group names met whatever their capitals (Tally names the group "Cash-in-hand"; migration-33)
+  const up = new Map((allG || []).map((g: any) => [String(g.name).toLowerCase(), g.parent || ""]));
+  const chain = (p: string) => { const c: string[] = []; while (p && c.length < 30 && !c.some((x) => x.toLowerCase() === p.toLowerCase())) { c.push(p); p = up.get(p.toLowerCase()) || ""; } return c; };
   // a row renamed (or, the new name being taken by another row, marked deleted and its GUID left to that row)
   const history = (row: any, entry: Record<string, unknown>) => {
     const b = row?.before_clean && typeof row.before_clean === "object" ? row.before_clean : {};
@@ -532,8 +535,9 @@ async function applyGroups(firm: string, book: string, ledIn: unknown, grpIn: un
   }
   const { data: allG, error: eg } = await db.from("tally_groups").select("name, parent").eq("book_id", book);
   if (eg) throw new Error(eg.message);
-  const up = new Map((allG || []).map((g: any) => [g.name, g.parent || ""]));
-  const chain = (p: string) => { const out: string[] = []; while (p && out.length < 30 && !out.includes(p)) { out.push(p); p = up.get(p) || ""; } return out; };
+  // group names met whatever their capitals (migration-33)
+  const up = new Map((allG || []).map((g: any) => [String(g.name).toLowerCase(), g.parent || ""]));
+  const chain = (p: string) => { const out: string[] = []; while (p && out.length < 30 && !out.some((x) => x.toLowerCase() === p.toLowerCase())) { out.push(p); p = up.get(p.toLowerCase()) || ""; } return out; };
   for (let i = 0; i < leds.length; i += 1000) {
     const rows = leds.slice(i, i + 1000).map((l: any) => { const c = chain(l[1]); return { book_id: book, firm_id: firm, name: l[0], parent: l[1], chain: c, primary_group: c.length ? c[c.length - 1] : "" }; });
     const { error } = await db.from("tally_ledgers").upsert(rows, { onConflict: "book_id,name" });
@@ -543,7 +547,10 @@ async function applyGroups(firm: string, book: string, ledIn: unknown, grpIn: un
   if (eo) throw new Error(eo.message);
   return { ledgers: leds.length, groups: groups.length };
 }
-async function ingestLedgers(book: string, body: any, firm?: string) {
+// who sent a full list (migration-33 keeps it with each ledger the list marks deleted): the bridge's computer, or the
+// person who uploaded the file
+type ListFrom = { source: string; by?: string; device?: string; bridge?: string; computer?: string; user?: string; file?: string };
+async function ingestLedgers(book: string, body: any, firm?: string, from?: ListFrom) {
   if (!isDay(body.from) || !isDay(body.openAsOn)) return reply(400, { ok: false, error: "from and openAsOn are dates (yyyymmdd)" });
   // review of 01-Oct-2026: a copy that starts later than the book's own (the bridge keeping 2026-27 where the year 2025-26
   // came from files) must not move the book's start: that would take away the earlier entries. The groups are kept;
@@ -566,7 +573,12 @@ async function ingestLedgers(book: string, body: any, firm?: string) {
   // the groups (bridge 1.14.7 on): [[name, parent]]; a primary group's parent is empty. Without them the groups kept
   // before stay as they are
   const groups = cleanPairs(body.groups, 20000);
-  const { data, error } = await db.rpc("tally_ingest_ledgers_g", { p_book: book, p_from: iso(body.from), p_open_as_on: iso(body.openAsOn), p_ledgers: led, p_groups: groups });
+  // migration-33: the list is add-only (a ledger missing from it marked deleted, never removed) and kept with who sent it;
+  // a cloud without migration-33 takes the call without p_list
+  const args = { p_book: book, p_from: iso(body.from), p_open_as_on: iso(body.openAsOn), p_ledgers: led, p_groups: groups };
+  const list = { source: "full list", ...(from || {}), file: from?.file || (typeof body.file === "string" ? body.file.slice(0, 200) : undefined) };
+  let { data, error } = await db.rpc("tally_ingest_ledgers_g", { ...args, p_list: list });
+  if (error && /p_list|tally_ingest_ledgers_g|could not find|does not exist|schema cache/i.test(error.message)) ({ data, error } = await db.rpc("tally_ingest_ledgers_g", args));
   if (error) throw new Error(error.message);
   // FinCom Bridge 2.1.2 on: each ledger's GSTIN and PAN ([name, group, opening, gstin, pan]), for matching a bill's supplier
   // to its ledger (migration-28; an older cloud without it just leaves them out)
@@ -759,7 +771,7 @@ async function userUpload(req: Request, auth: string) {
     });
     if (q) return q;
     if (body.kind === "upload_days") return await ingestDays(firm, book, body.days);
-    if (body.kind === "upload_ledgers") return await ingestLedgers(book, body);
+    if (body.kind === "upload_ledgers") return await ingestLedgers(book, body, undefined, { source: "upload_ledgers", by: user.id });
     if (body.kind === "reparse") {
       const { data: me } = await db.from("members").select("role").eq("user_id", user.id).eq("firm_id", firm).maybeSingle();
       if (!me || me.role !== "owner") return reply(403, { ok: false, error: "Only the firm's owner can read the kept day books again." });
@@ -947,7 +959,8 @@ Deno.serve(async (req) => {
       case "ledgers": {
         const book = await bookFor(firm, String(body.company || ""));
         if (!book) return reply(409, { ok: false, notLinked: true, error: "This Tally company is not linked to a FinCom client yet." });
-        return await ingestLedgers(book, body, firm);
+        const me = bridgeOf(dev, body, false);
+        return await ingestLedgers(book, body, firm, { source: "bridge ledgers", device: dev.id, bridge: me.id, computer: me.entry.computer, user: me.entry.user });
       }
       case "ledger_list": {
         const book = await bookFor(firm, String(body.company || ""));

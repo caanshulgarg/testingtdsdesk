@@ -24,6 +24,7 @@ All amounts are in rupees. Dates are in 2025-26, and the books run from 01-Apr-2
 | GST paid from the bank, including reverse-charge GST and the UP registration's GST | 20-May, 20-Jul, 20-Mar |
 | Input IGST paid straight from the bank (this is credit taken, not tax paid) | 18-Sep |
 | An expense refund received into the bank | Travelling Expenses, 14-Jun |
+| An expense ledger with "Loan" (and "Staff") in its name: a fee paid and refunded in the same month, nil for the year (finding 5) | Staff Loan Processing Fee Refund, Indirect Expenses, paid 05-Mar, refunded 20-Mar, 1,500 each |
 | Fixed assets: one tangible and one intangible, an addition to each, and depreciation | Laptops and Computers; Event Software Licence |
 | TDS deducted under 194C, 194J and 194A, a month-end clearing account, and a late payment with interest | the TDS ledgers |
 | An advance for services (11A) adjusted by an invoice in a later month (11B) | Vellichor: received in Jun, invoiced in Jul |
@@ -225,22 +226,26 @@ which is week 5, not week 1 (finding 2, fixed on 02-Oct-2026).
 | | |
 |---|---:|
 | Received from customers (11,27,800 + Wisteria's 1,64,000) | 12,91,800 |
-| Expenses refunded or recovered (the travel refund 3,000; the processing fee refunded 25,000) | 28,000 |
+| Expenses refunded or recovered (the travel refund 3,000; the processing fee refunded 25,000; the staff loan fee refunded 1,500) | 29,500 |
 | Other income received | 4,200 |
 | Paid to suppliers (7,69,400 + the landlord 60,000 + the advocate 40,000) | -8,69,400 |
 | **GST** (paid from the bank to the GST ledgers: 72,000 on 20-May + 5,400 on 20-Jul (UP) + 3,600 reverse charge on 20-Feb + 5,600 reverse charge on 20-Mar) | **-86,600** |
 | **Input GST paid with bills** (the bank payment of input IGST on 18-Sep; credit taken, not tax paid) | **-3,600** |
 | GST interest and late fees | -200 |
-| TDS and TCS (1,200 + 10,000, and 450 interest on TDS, which goes on this line by its name) | -11,650 |
+| TDS and TCS (1,200 + 10,000) | -11,200 |
 | Salaries and staff | -1,80,000 |
-| Expenses paid (travel 12,000, rent 1,20,000, printing 2,500 in cash) | -1,34,500 |
+| Expenses paid (travel 12,000, rent 1,20,000, printing 2,500 in cash, the staff loan fee 1,500, interest on TDS 450: an Indirect Expenses ledger) | -1,36,450 |
 | **Net change in cash and bank** | **38,050** |
 
 Cash and bank go from 1,93,700 to 2,31,750, a change of 38,050, which agrees. The payments for the laptops (94,400) and
 the licence (1,41,600) went through the suppliers' ledgers, so they are in "Paid to suppliers", not under investing.
 That is how a direct-method flow built from the ledger opposite the bank line works. It is a limit of the method, not
-an arithmetic error. The refunded processing fee is a receipt against an expense ledger, the same as the travel refund.
-The app puts it on a line "Loans" (finding 5).
+an arithmetic error. The refunded processing fees are receipts against expense ledgers, the same as the travel refund.
+Each line comes from the ledger's Tally group, never from words in its name (finding 5): Loan Processing Fees and Staff
+Loan Processing Fee Refund are under Indirect Expenses, so neither is on "Loans" (nor "Salaries and staff"), and Interest
+on TDS, also under Indirect Expenses, is in "Expenses paid". Staff Salaries is on "Salaries and staff" by its group,
+Employee Benefit Expenses. No loan was taken or repaid through cash or bank, so there is nothing under financing.
+GST Late Fee is on "GST interest and late fees" by the ledger map (a GST interest or late fee ledger), not its group.
 
 ## GST by month (output, credit, reverse charge, worked out to pay)
 
@@ -350,16 +355,13 @@ is nil.
 4. *A note, not a finding.* The customers' "usual days to pay" (`MIS.payDays`) also count an advance that a later
    invoice used up. Vellichor's advance to its invoice gave 35 days, and Orchid Lane's gave 19 days, as if they were times
    to pay. Week 1 does not change. It only moves when Orchid Lane's March bill is expected (08-Apr rather than later).
-5. **The refunded processing fee is on the cash flow's "Loans" line** (`src/js/07-mis.js`, `MIS.flowHead`). The ledger
-   opposite the bank is Loan Processing Fees, an expense ledger. The rule for loans is tested by the ledger's name
-   (`/\bLOAN\b/`) before the rule for expenses. So the 25,000 is on "Loans", under financing, and "Expenses refunded or
-   recovered" is 3,000 where by hand it is 28,000. The net change, 38,050, is the same. The proposed fix tests the name
-   only for a ledger that is not income or expense:
-
-   ```diff
-   -    if (A.isLoan(l) || /\bLOAN\b/i.test(l) && !/INTEREST/i.test(l)) return ["fin", "Loans"];
-   +    if (A.isLoan(l) || /\bLOAN\b/i.test(l) && !/INTEREST/i.test(l) && !A.isExpense(l) && !A.isIncome(l)) return ["fin", "Loans"];
-   ```
+5. *Fixed on 02-Oct-2026, by the owner's rule.* **The refunded processing fee was on the cash flow's "Loans" line**
+   (`src/js/07-mis.js`, `MIS.flowHead`). The rule for loans tested the ledger's name (`/\bLOAN\b/`) before the rule for
+   expenses, so the 25,000 refunded on Loan Processing Fees, an expense ledger, was under financing. The cash flow's line
+   now comes from the ledger's Tally group (`MIS.flowGroup`: the path walked up to the first of Tally's reserved groups;
+   the company's own groups below it name a line within it), never from words in the ledger name. "Expenses refunded or
+   recovered" is 29,500 (with the staff loan fee added to the books for this finding), TDS and TCS -11,200 and Expenses
+   paid -1,36,450. The net change, 38,050, is the same.
 6. *Fixed on 02-Oct-2026.* The ledger finder now asks once with no head and then lists the ledger as missing; `propose`
    tests reverse charge before "GST PAYABLE" (not for an electronic, interest or control ledger). The 3B figures did not move.
    **The GSTR-3B screen cannot be drawn for a month with reverse charge paid in cash** (`src/js/35-gst-filing.js`,

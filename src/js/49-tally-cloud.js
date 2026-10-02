@@ -795,38 +795,66 @@ Object.assign(TCloud, {
       return null;
     }
   },
-  // every ledger's opening, movement and closing on a date (Tally's signs: a debit is negative): from the view when the
-  // date is on or after the last day the copy holds (its closing is then the balance on the date), else tally_tb
+  // every ledger's opening, movement and closing on a date (Tally's signs: a debit is negative), from the view
+  // tally_balances (migration-32, applied on staging 02-Oct-2026; migration-33 also leaves out deleted ledgers):
+  //   - a date on or after the last day the copy holds: the view's closing;
+  //   - a date inside the copy: the view's opening plus the entries from the book's first day to the date
+  //     (tally_period over the same day totals the view sums, tally_ledger_day; amount = credit - debit).
+  // Only where the view is missing (an older cloud without migration-32), or for a date before this book begins (an
+  // earlier year, another book), the trial balance function tally_tb, as before
   async balRows(cid, asOn){
-    const bk = this.book(cid), last = bk ? this.d8(bk.to || "") : "";
-    if (bk && last && String(asOn) >= last && this.d8(bk.from) <= String(asOn)){
+    const bk = this.book(cid), from = bk ? this.d8(bk.from || "") : "", last = bk ? this.d8(bk.to || "") : "";
+    asOn = String(asOn);
+    if (bk && from && asOn >= from){
       const v = await this.viewRows(bk);
-      if (v) return v.map(r => ({ledger: r.ledger, parent: r.parent || "", open: r.open, movement: num(r.closing) - num(r.open), closing: r.closing}));
+      if (v){
+        if (last && asOn >= last) return v.map(r => ({ledger: r.ledger, parent: r.parent || "", open: r.open, movement: r2(num(r.closing) - num(r.open)), closing: r.closing}));
+        return this.viewAt(v, await this.period(cid, from, asOn), bk);
+      }
     }
     const rows = await this.rpcAll("tally_tb", {p_client: cid, p_as_on: this.iso(asOn)}) || [];
     const del = bk ? await this.deletedNames(bk) : new Set();
     // a ledger deleted in Tally has no entries left; one with a figure all the same is kept, so the total stays whole
     return del.size ? rows.filter(r => !(del.has(ledNm(r.ledger)) && !num(r.movement) && !num(r.closing))) : rows;
   },
-  // one ledger's balance at the end of a day, a debit positive: the opening of the next day (tally_ledger), or the view
+  // the view's rows on a date inside the copy: each ledger's opening plus its entries to the date (per: tally_period from
+  // the book's first day). Entries on a ledger with no row in the view (no master, or deleted in Tally with entries left)
+  // are kept as rows of their own, so the trial balance stays whole
+  viewAt(v, per, bk){
+    const mv = new Map(), par = new Map();
+    (per || []).forEach(r => { mv.set(r.ledger, r2((mv.get(r.ledger) || 0) + num(r.cr) - num(r.dr))); if (r.parent) par.set(r.ledger, r.parent); });
+    const seen = new Set(), out = v.map(r => { const m = mv.get(r.ledger) || 0; seen.add(r.ledger); return {ledger: r.ledger, parent: r.parent || "", open: r.open, movement: m, closing: r2(num(r.open) + m)}; });
+    mv.forEach((m, l) => { if (!seen.has(l) && Math.abs(m) >= 0.005) out.push({ledger: l, parent: par.get(l) || "", open: 0, movement: m, closing: m}); });
+    return out;
+  },
+  // one ledger's balance at the end of a day, a debit positive: from the view (its closing, or its opening plus the
+  // ledger's entries to the day, tally_ledger); only without the view, the opening of the next day (tally_ledger)
   async ledgerAt(cid, led, asOn){
     asOn = Audit.ymd(asOn);
     if (!this.on()) throw new Error("not signed in to the firm account");
     if (!this.has(cid)) await this.status(cid);
     const bk = this.book(cid);
     if (!bk) throw new Error("FinCom's copy of these books is not in the cloud yet");
-    const last = this.d8(bk.to || ""), k = ledNm(led);
-    if (last && String(asOn) >= last){
+    const from = this.d8(bk.from || ""), last = this.d8(bk.to || ""), k = ledNm(led);
+    if (from && String(asOn) >= from){
       const v = await this.viewRows(bk);
-      if (v){ const hit = v.filter(r => ledNm(r.ledger) === k); if (hit.length) return -r2(hit.reduce((t, r) => t + num(r.closing), 0)); }
+      if (v){
+        const hit = v.filter(r => ledNm(r.ledger) === k);
+        if (last && String(asOn) >= last) return -r2(hit.reduce((t, r) => t + num(r.closing), 0));
+        const j = await this.rpc("tally_ledger", {p_client: cid, p_ledger: led, p_from: this.iso(from), p_to: this.iso(asOn)});
+        if (!j || j.none) throw new Error("FinCom's copy of these books does not reach " + FC.when(asOn) + " yet");
+        const moved = [].concat(j.lines || []).reduce((t, x) => t + num(x[5]), 0);
+        return -r2(hit.reduce((t, r) => t + num(r.open), 0) + moved);
+      }
     }
     const next = Audit.ymd(addDays(Audit.iso(asOn), 1));
     const j = await this.rpc("tally_ledger", {p_client: cid, p_ledger: led, p_from: this.iso(next), p_to: this.iso(next)});
     if (!j || j.none) throw new Error("FinCom's copy of these books does not reach " + FC.when(asOn) + " yet");
     return -r2(num(j.open));
   },
-  // the opening balances on the first day of the books, as TallyRead.balances takes them: the view's openings on the
-  // book's first day, else the balances on the day before (tally_tb); else the ledger masters' openings
+  // the opening balances on a day, as TallyRead.balances takes them: from the view (its openings on the book's first day,
+  // else its balances on the day before, TCloud.balRows); only without the view, the ledger masters' openings (on the
+  // first day) or the cloud's trial balance on the day before (tally_tb)
   async openings(cid, from){
     if (!this.has(cid)) await this.status(cid);
     const bk = this.book(cid);
@@ -837,7 +865,7 @@ Object.assign(TCloud, {
       if (v) rows = v.map(r => ({name: r.ledger, parent: r.parent || "", open: String(r.open), close: ""}));
       if (!rows){ const led = await this.restAll("tally_ledgers?select=name,parent,open&merged_into=is.null&order=name&book_id=eq." + encodeURIComponent(bk.book)); rows = led.map(l => ({name: l.name, parent: l.parent, open: String(l.open), close: ""})); }
     } else {
-      const t = await this.rpcAll("tally_tb", {p_client: cid, p_as_on: this.iso(Audit.dayBefore(from))}) || [];
+      const t = await this.balRows(cid, Audit.dayBefore(from)) || [];
       rows = t.map(r => ({name: r.ledger, parent: r.parent || "", open: String(r.closing), close: ""}));
     }
     return {ledgers: rows, from, openOnly: true, company: bk.company, line: copyLine(cid)};

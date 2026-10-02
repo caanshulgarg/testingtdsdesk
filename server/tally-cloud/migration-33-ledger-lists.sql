@@ -296,8 +296,8 @@ begin
 end $function$;
 
 -- the new functions: the service role only (tally-ingest), as the ones they stand beside
-revoke all on function public.tally_ingest_ledgers_list(uuid, date, date, jsonb, jsonb), public.tally_ingest_ledgers_g(uuid, date, date, jsonb, jsonb, jsonb),
-  public.tally_ledgers_mark_log(), public.tally_ledger_marks_frozen() from public, anon, authenticated;
+revoke all on function public.tally_ingest_ledgers_list(uuid, date, date, jsonb, jsonb), public.tally_ingest_ledgers_g(uuid, date, date, jsonb, jsonb, jsonb)
+  from public, anon, authenticated;
 grant execute on function public.tally_ingest_ledgers_list(uuid, date, date, jsonb, jsonb), public.tally_ingest_ledgers_g(uuid, date, date, jsonb, jsonb, jsonb) to service_role;
 
 commit;
