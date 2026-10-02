@@ -12,6 +12,7 @@ run_audit2.js                         120
 run_audit2_ui.py                      120  TDSDESK_SITE=../app/dist-test
 run_audit_ui.py                       120  TDSDESK_SITE=../app/dist-test
 run_backup_history_server.py          120
+run_balances_copy.py                  120  TDSDESK_SITE=../app/dist-test
 run_bankpost_e2e.py                   300  TDSDESK_SITE=../app/dist-test
 run_bankrules.py                      120
 run_beat_history.py                   120

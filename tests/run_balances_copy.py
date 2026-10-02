@@ -41,9 +41,16 @@ SETUP = """async () => {
              {ledger: "Cash", parent: "Cash-in-hand", open: -14873.75, closing: -34873.75},
              {ledger: "AAR ESS EXIM PRIVATE LIMITED", parent: "Sundry Debtors", open: -45081.54, closing: -684421.54},
              {ledger: "Capital Account", parent: "Capital Account", open: 410414.21, closing: 995762.65}];
-  TCloud.restAll = async (u) => { window.__rest.push(u);
-    if (/^tally_balances/.test(u)){ if (!window.__view) throw {message: "relation \\"public.tally_balances\\" does not exist (42P01) 404"}; return V.map(r => Object.assign({last_day: "2026-03-31"}, r)); }
-    if (/^tally_ledgers/.test(u)) return V.map(r => ({name: r.ledger, parent: r.parent, open: r.open}));
+  // a ledger deleted in Tally: kept in the cloud with deleted_at (migration-32), nil figures, still in the view
+  const DEL = {ledger: "Old Deleted Ledger", parent: "Sundry Creditors", open: 0, closing: 0};
+  window.__noDel = false;
+  TCloud.restPages = async (u) => { window.__rest.push(u);
+    if (/^tally_balances/.test(u)){ if (!window.__view) throw {message: "relation \\"public.tally_balances\\" does not exist (42P01) 404"}; return V.concat([DEL]).map(r => Object.assign({last_day: "2026-03-31"}, r)); }
+    if (/^tally_ledgers/.test(u)){
+      if (/deleted_at/.test(u) && window.__noDel) throw new Error("column tally_ledgers.deleted_at does not exist");
+      if (/deleted_at=not\.is\.null/.test(u)) return [{name: DEL.ledger}];
+      const all = V.concat(/deleted_at=is\.null/.test(u) ? [] : [DEL]);
+      return all.map(r => ({name: r.ledger, parent: r.parent, open: r.open})); }
     return []; };
   TCloud.rpc = async (fn, a) => { window.__rpc.push([fn, JSON.parse(JSON.stringify(a || {}))]);
     if (fn === "tally_status") return book();
@@ -154,6 +161,45 @@ with sync_playwright() as p:
     box = pg.inner_text(".bk-balbox")
     ok("could not be read" not in box and "Tally closed" not in box and "Balance not yet checked" in box, "3. an old check with Tally's error: \"Balance not yet checked\"")
     ok("Check again" in box or "Check with FinCom's copy" in box, "3. the button checks with FinCom's copy (no \"Check with Tally\")")
+
+    # 5. ledgers deleted in Tally (tally_ledgers.deleted_at, migration-32) are left out of every read of the cloud's list
+    d = E("""async () => { TCloud.hasDel = null; TCloud._del = null; TCloud.hasView = null; window.__view = true; window.__rest = [];
+      const names = (await TCloud.restAll('tally_ledgers?select=name,parent&merged_into=is.null&book_id=eq.bk1')).map(r => r.name);
+      const view = (await TCloud.viewRows(TCloud.book(S.coId))).map(r => r.ledger);
+      const lc = (await Ledgers.readCloud(S.coId, TCloud.book(S.coId))).list.map(l => l.name);
+      return {names, view, lc, asked: window.__rest.slice(0, 1)}; }""")
+    ok("Old Deleted Ledger" not in d["names"] and "Old Deleted Ledger" not in d["view"] and "Old Deleted Ledger" not in d["lc"] and len(d["lc"]) == 4 and "deleted_at=is.null" in d["asked"][0],
+       "5. a ledger deleted in Tally is not in the cloud's ledger list, the ledger chooser's list or the balances (%s)" % d["asked"])
+    d = E("""async () => { window.__noDel = true; TCloud.hasDel = null; TCloud._del = null; TCloud.hasView = null;
+      const names = (await TCloud.restAll('tally_ledgers?select=name,parent&merged_into=is.null&book_id=eq.bk1')).map(r => r.name);
+      const view = (await TCloud.viewRows(TCloud.book(S.coId))).length; window.__noDel = false; return {n: names.length, hasDel: TCloud.hasDel, view}; }""")
+    ok(d["n"] == 5 and d["hasDel"] is False and d["view"] == 5, "5. a cloud without the column (migration-32 not applied): read as before, no error (%s)" % d)
+
+    # 6. a bill's ledger chooser opened with a list older than the last posting: the list is asked for again, once per opening
+    E("""() => { window.__wake = []; const old = new Date(Date.now() - 3600000).toISOString();
+      TCloudUp.post = async (body, who) => { window.__wake.push(JSON.parse(JSON.stringify(body))); return {ok: true, woken: 1, debounced: false}; };
+      Ledgers.st[S.coId] = {list: [{name: "ICICI Bank", group: "Bank Accounts"}], at: old, srcAt: old, src: "cloud", book: "bk1", cloudAt: old};
+      S.bank.ledgers.importedAt = old; S.bank.ledgers.srcAt = old; S.bank.rows.forEach(r => { r.state = 'ready'; });
+      const e = newEntry("Manual entry"); e.exportedAt = new Date(Date.now() - 60000).toISOString(); S.data[S.coId].entries[e.id] = e;
+      const mk = (fk) => { const i = document.createElement('input'); i.type = 'text'; i.dataset.e = 'partyLedger'; i.dataset.fk = fk; i.dataset.ac = '1'; i.id = fk; document.body.appendChild(i); return i; };
+      mk('e:partyLedgerT1'); const o = document.createElement('button'); o.id = 'outside'; document.body.appendChild(o); }""")
+    pg.focus("#e\\:partyLedgerT1"); pg.wait_for_timeout(300)
+    pg.keyboard.type("ICI"); pg.wait_for_timeout(300)
+    w = E("window.__wake")
+    ok(w == [{"kind": "wake", "what": "ledgers", "client": cid}], "6. the chooser opened, list older than the last posting: FinCom's cloud wakes the Tally computer for the ledgers, once while typing (%s)" % w)
+    pg.focus("#outside"); pg.wait_for_timeout(200); pg.focus("#e\\:partyLedgerT1"); pg.wait_for_timeout(300)
+    ok(len(E("window.__wake")) == 2, "6. opened again: asked again (once per opening)")
+    # with the bridge here serving the company: the bridge's own route
+    E("""() => { window.__wake = []; window.__bridge = []; window.bridgeLive = () => true; Bridge.openFor = () => ({name: 'GARG SHEKHAR & COMPANY'});
+      Bridge.call = async (p, body) => { window.__bridge.push([String(p), body]); return {ok: true, started: true}; }; }""")
+    pg.focus("#outside"); pg.wait_for_timeout(200); pg.focus("#e\\:partyLedgerT1"); pg.wait_for_timeout(300)
+    b = E("window.__bridge")
+    ok(b and b[0][0] == "/ledgers/refresh" and b[0][1].get("company") == "GARG SHEKHAR & COMPANY" and not E("window.__wake"), "6. with the bridge here: POST /ledgers/refresh for the company (%s)" % b)
+    # a list read after the last posting: not asked
+    E("() => { window.__bridge = []; const now = new Date().toISOString(); Ledgers.st[S.coId].srcAt = now; Ledgers.st[S.coId].at = now; S.bank.ledgers.srcAt = now; S.bank.ledgers.importedAt = now; }")
+    pg.focus("#outside"); pg.wait_for_timeout(200); pg.focus("#e\\:partyLedgerT1"); pg.wait_for_timeout(300)
+    ok(E("window.__bridge") == [], "6. a list read since the last posting: nothing asked")
+    E("() => { window.__bridge = []; }")
 
     # 4. the bridge was never asked for a balance
     asked = E("window.__bridge")

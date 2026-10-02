@@ -67,6 +67,10 @@ try:
           const c = newCompany({name: "@CO@", gstin: "@GSTIN@"}); S.companies[c.id] = c; S.coId = c.id; S.view = "company"; S.tab = "invoices"; render(); }""".replace("@CO@", fake_tally.COMPANY).replace("@GSTIN@", fake_tally._bd.GSTIN), key)
         pg.evaluate("Bridge.refresh()"); pg.wait_for_timeout(1500)
         pg.evaluate("syncLedgersFromTally(true)"); pg.evaluate("render()"); pg.wait_for_timeout(300)
+        # 02-Oct-2026 (FinCom Bridge 2.1.4 asks Tally for no balance): the ledger's balance comes from FinCom's copy, stood
+        # in here by the stand-in Tally's balance on the day, as the copy would hold it
+        pg.evaluate("""() => { TCloud.ledgerAt = async (cid, led, to) => { const nx = isoToTally(addDays(Audit.iso(to), 1));
+          const j = await Bridge.call('/ledgerbalance?company=' + encodeURIComponent(CO().name) + '&from=' + nx + '&to=' + nx + '&ledger=' + encodeURIComponent(led) + Bridge.pinQ(), null, 60000); return -r2(num(j.open)); }; }""")
         ok(pg.locator('button[title^="Match a vendor"]').count() == 1, "the purchase page has 'Reconcile a vendor ledger'")
         pg.click('button[title^="Match a vendor"]'); pg.wait_for_timeout(300)
         opts = pg.evaluate("Array.from(document.querySelectorAll('#vrLedgers option')).map(o => o.value)")

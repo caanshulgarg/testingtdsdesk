@@ -200,6 +200,36 @@ const Ledgers = {
     const h = this.cur(cid);
     return {n: this.list(cid).length, at: h ? h.at || h.importedAt : "", src: h ? h.src : "", busy: !!this.busy[cid], err: this.err[cid] || ""};
   },
+  // FinCom Bridge 2.1.4 (owner's request of 02-Oct-2026): a bill's ledger chooser opened with a list older than the
+  // client's last posting asks for the list to be read again: the bridge here when it serves the company (POST
+  // /ledgers/refresh), else the client's Tally computer through FinCom's cloud (tally-ingest wake, what "ledgers").
+  // Asked once per opening of the chooser (acOpen); the new list comes in when the cloud's ledger time changes (watch)
+  lastPost(cid){
+    const t = x => Date.parse(x || "") || 0;
+    let at = 0;
+    Object.values(((S.data || {})[cid] || {}).entries || {}).forEach(e => { if (e && e.exportedAt) at = Math.max(at, t((e.tally && e.tally.at) || e.exportedAt)); });
+    if (S.bank && S.bank.cid === cid) (S.bank.rows || []).forEach(r => { if (r.state === "sent" && r.sentAt) at = Math.max(at, t(r.sentAt)); });
+    return at;
+  },
+  listAt(cid){
+    const h = this.cur(cid), bk = typeof TCloud === "object" && TCloud.on() ? TCloud.book(cid) : null;
+    return Math.max(h ? Date.parse(h.srcAt || h.at || h.importedAt || "") || 0 : 0, bk ? Date.parse(bk.ledgersAt || "") || 0 : 0);
+  },
+  async staleAsk(cid){
+    cid = cid || this.cid();
+    const co = CO(cid), post = this.lastPost(cid), at = this.listAt(cid);
+    if (!co || !post || at >= post) return null;
+    const here = typeof bridgeLive === "function" && bridgeLive(co) && !!Bridge.openFor(co);
+    const r = {cid, at: Date.now(), post, listAt: at, via: here ? "bridge" : "cloud"};
+    try {
+      if (here) r.ans = await Bridge.call("/ledgers/refresh", {company: tallyCoName(co)}, 30000);
+      else if (typeof TCloud === "object" && TCloud.on()) r.ans = await TCloudUp.post({kind: "wake", what: "ledgers", client: cid}, {client: cid});
+      else r.via = "";
+    } catch (e){ r.err = (e && e.message) || String(e); }
+    this.asked = r;
+    if (r.ans && !r.err) setTimeout(() => { this.seen[cid] = 0; this.watch(cid); }, 60000);
+    return r;
+  },
   // "1,110 ledgers from Tally · 02-Oct 10:56"
   when(at){ if (!at) return ""; const d = new Date(at); return isNaN(d) ? "" : String(d.getDate()).padStart(2, "0") + "-" + MONTHS3[d.getMonth()] + " " + fmtTime(d); },
 

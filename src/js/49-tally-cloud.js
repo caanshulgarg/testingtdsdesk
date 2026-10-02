@@ -28,7 +28,29 @@ const TCloud = {
       off += 1000;
     }
   },
+  // migration-32: a ledger deleted in Tally stays in the cloud, marked (tally_ledgers.deleted_at). Every read of the
+  // cloud's ledger list leaves those out; a cloud without the column (migration-32 not applied) is read as before.
+  // hasDel: null not known yet, true the column is there, false it is not
+  hasDel: null,
   async restAll(path){
+    if (/^tally_ledgers\?/.test(path) && !/deleted_at/.test(path) && this.hasDel !== false){
+      try { const r = await this.restPages(path + "&deleted_at=is.null"); this.hasDel = true; return r; }
+      catch (e){ if (!/deleted_at|42703/i.test(String((e && e.message) || e))) throw e; this.hasDel = false; }
+    }
+    return this.restPages(path);
+  },
+  // the names of the ledgers deleted in Tally (none on a cloud without the column), kept per book and ledger time
+  async deletedNames(bk){
+    if (!bk || !bk.book || this.hasDel === false) return new Set();
+    const k = bk.book + "|" + (bk.ledgersAt || ""), c = this._del;
+    if (c && c.k === k) return c.set;
+    let set = new Set();
+    try { set = new Set((await this.restPages("tally_ledgers?select=name&deleted_at=not.is.null&book_id=eq." + encodeURIComponent(bk.book))).map(r => ledNm(r.name))); this.hasDel = true; }
+    catch (e){ if (/deleted_at|42703/i.test(String((e && e.message) || e))) this.hasDel = false; }
+    this._del = {k, set};
+    return set;
+  },
+  async restPages(path){
     let out = [], off = 0;
     for (;;){
       const page = await Cloud.api(path + "&limit=1000&offset=" + off) || [];
@@ -764,7 +786,10 @@ Object.assign(TCloud, {
     try {
       const rows = await this.restAll("tally_balances?select=ledger,parent,open,closing,last_day&book_id=eq." + encodeURIComponent(bk.book));
       this.hasView = true;
-      return rows;
+      // the view does not leave out the ledgers deleted in Tally (deleted_at): left out here (one with a figure all the
+      // same is kept, so the total stays whole)
+      const del = await this.deletedNames(bk);
+      return del.size ? rows.filter(r => !(del.has(ledNm(r.ledger)) && !num(r.open) && !num(r.closing))) : rows;
     } catch (e){
       if (/tally_balances|does not exist|PGRST2\d\d|schema cache|404/i.test(String((e && e.message) || e))) this.hasView = false;
       return null;
@@ -778,7 +803,10 @@ Object.assign(TCloud, {
       const v = await this.viewRows(bk);
       if (v) return v.map(r => ({ledger: r.ledger, parent: r.parent || "", open: r.open, movement: num(r.closing) - num(r.open), closing: r.closing}));
     }
-    return await this.rpcAll("tally_tb", {p_client: cid, p_as_on: this.iso(asOn)}) || [];
+    const rows = await this.rpcAll("tally_tb", {p_client: cid, p_as_on: this.iso(asOn)}) || [];
+    const del = bk ? await this.deletedNames(bk) : new Set();
+    // a ledger deleted in Tally has no entries left; one with a figure all the same is kept, so the total stays whole
+    return del.size ? rows.filter(r => !(del.has(ledNm(r.ledger)) && !num(r.movement) && !num(r.closing))) : rows;
   },
   // one ledger's balance at the end of a day, a debit positive: the opening of the next day (tally_ledger), or the view
   async ledgerAt(cid, led, asOn){

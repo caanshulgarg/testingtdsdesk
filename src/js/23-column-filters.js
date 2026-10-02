@@ -331,6 +331,8 @@ function acOpen(input){
   if (!B() && !knownLedgers().size) return;
   // just picked: the redraw that follows puts focus back in the box, which must not open the list again
   if (AC.picked && AC.picked.fk === input.dataset.fk && Date.now() - AC.picked.at < 800 && input.value === AC.picked.value) return;
+  // a bill's ledger chooser just opened (not each key typed): the list read again when older than the last posting
+  if (AC.fk !== input.dataset.fk && (input.dataset.e !== undefined || input.dataset.tl !== undefined) && typeof Ledgers === "object") Ledgers.staleAsk(Ledgers.cid()).catch(() => {});
   AC.fk = input.dataset.fk;
   AC.q = input.value;
   const role = input.dataset.acrole || "";
