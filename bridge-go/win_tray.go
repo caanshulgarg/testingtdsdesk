@@ -366,9 +366,9 @@ func (t *tray) statusText() string {
 	}
 	b.WriteString("\n")
 	if truthy(st["paused"]) {
-		b.WriteString("Background reading paused: opening a client in FinCom and the nightly catch-up do not read Tally. Postings and Update now still work.\n")
+		b.WriteString("Background reading paused: opening a client in FinCom, the ledger chooser's refresh, the ledger list after a posting and the nightly catch-up do not read Tally. Postings and Update now (with the ledger list) still work.\n")
 	}
-	fmt.Fprintf(&b, "Reads Tally only when needed: a client opened in FinCom, Update now, a posting, and the nightly catch-up at %s (only when Tally is open and nobody has used FinCom for 15 minutes; KeepDailyAt in the settings).\n", str(st["nightlyAt"]))
+	fmt.Fprintf(&b, "Reads Tally only when needed: a client opened in FinCom, Update now, a posting, the ledger list (a new ledger posted, or FinCom's ledger chooser), and the nightly catch-up at %s (only when Tally is open and nobody has used FinCom for 15 minutes; KeepDailyAt in the settings).\n", str(st["nightlyAt"]))
 	if l := str(st["lastRead"]); l != "" {
 		fmt.Fprintf(&b, "Last read from Tally: %s\n", strings.Replace(l, "T", " ", 1))
 	}

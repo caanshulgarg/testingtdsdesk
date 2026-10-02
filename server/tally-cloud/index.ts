@@ -29,6 +29,11 @@
 //                                                       only one bridge reads or posts a company at a time (renewed by taking
 //                                                       it again); {noLease:true} when the cloud keeps none
 //   {kind:"lease_release", company}                  -> the lease given back by its holder
+//   {kind:"ledger_list", company, ledgers:[[guid, masterId, alterId, name, group, storedOpening, gstin, pan, openingChanged]],
+//    renamed?:[[guid, from, to]], deleted?:[[guid, name]], groups?:[[name, parent]], last}
+//                                                    -> {added, renamed, deleted, deletesSkipped, notes}: 2.1.4, the plain ledger
+//                                                       list (applyLedgerList): rows added or brought up to date, renamed
+//                                                       (old name kept), deleted ones marked (deleted_at), never removed
 //   {kind:"read_guard", company, guid, alter, count} -> {state: ok | needs_baseline, why}: the company's Tally GUID, highest
 //                                                       AlterID and the entries read, kept at each read (tally_sync_reads)
 //   companies:[{name, gstin, guid}]                  -> the company's Tally GUID kept with its book (tally_sync_cursor)
@@ -45,6 +50,9 @@
 //   {kind:"wake", what:"open", client}             -> (2.1.3) a client opened in FinCom: its Tally computer is woken on its
 //                                                       own channel ("open", {company}) for one light update
 //   {kind:"wake", what:"active"}                   -> (2.1.3) FinCom in use: the nightly catch-up waits 15 quiet minutes
+//   {kind:"wake", what:"ledgers", client}          -> (2.1.4) a bill's ledger chooser opened with a list older than the last
+//                                                       posting: the Tally computer is woken ("ledgers", {company, at}) to
+//                                                       read the ledger list; at most one a minute per company ({debounced})
 //   {kind:"upload_days", client, company?, days:[{day, gz}]}
 //   {kind:"upload_ledgers", client, company?, from, openAsOn, ledgers:[[name, parent, open]], groups?}
 //   {kind:"reparse", client, month?}               -> the day books kept in the bucket read again into entries and
@@ -293,6 +301,150 @@ async function bridgeSafety(dev: any, firm: string, body: any) {
   if (error) return notReady(error.message) ? reply(200, { ok: true, state: "ok", noGuard: true }) : reply(500, { ok: false, error: error.message });
   return reply(200, data);
 }
+// FinCom Bridge 2.1.4 (02-Oct-2026): the plain ledger list read by Update now (and after a posting with a new ledger,
+// and when a bill's ledger chooser asks for it). Applied without removing anything and without touching entries:
+//   rows [guid, masterId, alterId, name, group, storedOpening, gstin, pan, openingChanged]: a ledger not in the copy is
+//     added with its stored opening; one there (by its Tally GUID, else by name) takes its group, GSTIN, PAN, GUID and
+//     AlterID; its opening only when Tally's stored opening changed since the bridge last read it (openingChanged)
+//   renamed [guid, from, to]: the row renamed (found by GUID, else by the old name), the old name kept in before_clean
+//     (migration-31: {renamed: [{from, at}]}); the row's entries take the new name when the bridge sends their days
+//     again. A row with the new name already there: the old row is marked deleted, the other takes the GUID
+//   deleted [guid, name]: deleted_at set (migration-32), never removed; a ledger listed again is undeleted
+//   groups [name, parent]: upserted (none removed)
+// Without migration-32 (no tally_guid / deleted_at): renames by name, no deletions (counted in deletesSkipped and
+// logged; the bridge sends them again later), nothing fails. Without migration-31: renames without the history.
+const colCache = new Map<string, { ok: boolean; at: number }>();
+async function hasCols(table: string, cols: string) {
+  const k = table + ":" + cols, c = colCache.get(k);
+  if (c && Date.now() - c.at < 300000) return c.ok;
+  const { error } = await db.from(table).select(cols).limit(1);
+  const ok = !error;
+  colCache.set(k, { ok, at: Date.now() });
+  return ok;
+}
+async function selectIn(cols: string, book: string, field: string, vals: string[]) {
+  const out: any[] = [];
+  for (let i = 0; i < vals.length; i += 150) {
+    const { data, error } = await db.from("tally_ledgers").select(cols).eq("book_id", book).in(field, vals.slice(i, i + 150));
+    if (error) throw new Error(error.message);
+    out.push(...(data || []));
+  }
+  return out;
+}
+async function applyLedgerList(firm: string, book: string, body: any) {
+  const s = (v: unknown, n: number) => String(v ?? "").slice(0, n);
+  const m32 = await hasCols("tally_ledgers", "tally_guid, alter_id, deleted_at");
+  const m31 = await hasCols("tally_ledgers", "before_clean");
+  const m28 = await hasCols("tally_ledgers", "gstin, pan");
+  const notes: string[] = [];
+  const out = { ok: true, ledgers: 0, added: 0, renamed: 0, deleted: 0, deletesSkipped: 0, groups: 0, notes };
+  const now = new Date().toISOString();
+  const cols = "name, parent" + (m32 ? ", tally_guid, deleted_at" : "") + (m31 ? ", before_clean" : "");
+  // 1. groups (added or changed; none removed), and every group's parent for the chains
+  const grpIn = cleanPairs(body.groups, 20000);
+  for (let i = 0; i < grpIn.length; i += 1000) {
+    const { error } = await db.from("tally_groups").upsert(grpIn.slice(i, i + 1000).map((g: any) => ({ book_id: book, firm_id: firm, name: g[0], parent: g[1] })), { onConflict: "book_id,name" });
+    if (error) throw new Error(error.message);
+  }
+  out.groups = grpIn.length;
+  const { data: allG, error: eg } = await db.from("tally_groups").select("name, parent").eq("book_id", book);
+  if (eg) throw new Error(eg.message);
+  const up = new Map((allG || []).map((g: any) => [g.name, g.parent || ""]));
+  const chain = (p: string) => { const c: string[] = []; while (p && c.length < 30 && !c.includes(p)) { c.push(p); p = up.get(p) || ""; } return c; };
+  // a row renamed (or, the new name being taken by another row, marked deleted and its GUID left to that row)
+  const history = (row: any, entry: Record<string, unknown>) => {
+    const b = row?.before_clean && typeof row.before_clean === "object" ? row.before_clean : {};
+    return { ...b, renamed: [...(Array.isArray(b.renamed) ? b.renamed : []), entry].slice(-20) };
+  };
+  const rename = async (guid: string, from: string, to: string) => {
+    let row: any = null;
+    if (m32 && guid) row = (await selectIn(cols, book, "tally_guid", [guid]))[0] || null;
+    if (!row && from) row = (await selectIn(cols, book, "name", [from])).find((r: any) => !m32 || !r.tally_guid || r.tally_guid === guid) || null;
+    if (!row || row.name === to) return;
+    const other = (await selectIn(cols, book, "name", [to]))[0];
+    if (other) {
+      if (!m32 || (other.tally_guid && other.tally_guid !== guid)) { notes.push("rename " + row.name + " -> " + to + ": that name is another ledger's; left"); return; }
+      const upd: Record<string, unknown> = { deleted_at: now, tally_guid: null };
+      if (m31) upd.before_clean = history(row, { from: row.name, to, at: now, merged: true, guid });
+      const { error } = await db.from("tally_ledgers").update(upd).eq("book_id", book).eq("name", row.name);
+      if (error) throw new Error(error.message);
+    } else {
+      const upd: Record<string, unknown> = { name: to };
+      if (m31) upd.before_clean = history(row, { from: row.name, at: now });
+      const { error } = await db.from("tally_ledgers").update(upd).eq("book_id", book).eq("name", row.name);
+      if (error) throw new Error(error.message);
+    }
+    out.renamed++;
+  };
+  // 2. renames first, so the rows below meet their ledger under its new name
+  const ren = (Array.isArray(body.renamed) ? body.renamed : []).slice(0, 5000)
+    .map((x: any) => ({ guid: s(x?.[0], 100).trim(), from: cleanName(s(x?.[1], 300)), to: cleanName(s(x?.[2], 300)) })).filter((r: any) => r.from && r.to && r.from !== r.to);
+  for (const r of ren) await rename(r.guid, r.from, r.to);
+  // 3. the rows: one per clean name
+  const seen = new Set<string>();
+  const rows = (Array.isArray(body.ledgers) ? body.ledgers : []).slice(0, 5000).map((l: any) => ({
+    guid: s(l?.[0], 100).trim(), alter: Math.max(0, Math.floor(Number(l?.[2]) || 0)), name: cleanName(s(l?.[3], 300)),
+    parent: cleanName(s(l?.[4], 300)).replace(/^\W*Primary$/i, ""), open: Math.round(amt(l?.[5]) * 100) / 100,
+    gstin: s(l?.[6], 15).trim().toUpperCase(), pan: s(l?.[7], 10).trim().toUpperCase(), oc: !!Number(l?.[8]) }))
+    .filter((r: any) => r.name && !seen.has(r.name) && seen.add(r.name));
+  out.ledgers = rows.length;
+  if (m32) {
+    // a GUID the copy holds under another name: a rename the bridge did not send (its first list, or an older copy)
+    const byGuid = await selectIn(cols, book, "tally_guid", rows.map((r: any) => r.guid).filter(Boolean));
+    const want = new Map(rows.map((r: any) => [r.guid, r.name]));
+    for (const g of byGuid) if (want.get(g.tally_guid) && want.get(g.tally_guid) !== g.name) await rename(g.tally_guid, g.name, want.get(g.tally_guid) as string);
+  }
+  // a GUID still held by another row (a rename that could not be made): not given to a second row
+  const owner = new Map<string, string>(m32 ? (await selectIn(cols, book, "tally_guid", rows.map((r: any) => r.guid).filter(Boolean))).map((g: any) => [g.tally_guid, g.name]) : []);
+  const have = new Map((await selectIn(cols, book, "name", rows.map((r: any) => r.name))).map((r: any) => [r.name, r]));
+  const base = (r: any) => {
+    const c = chain(r.parent);
+    const o: Record<string, unknown> = { book_id: book, firm_id: firm, name: r.name, parent: r.parent, chain: c, primary_group: c.length ? c[c.length - 1] : "" };
+    if (m28) { o.gstin = r.gstin || null; o.pan = r.pan || null; }
+    if (m32) { o.tally_guid = r.guid && (!owner.has(r.guid) || owner.get(r.guid) === r.name) ? r.guid : null; o.alter_id = r.alter; o.deleted_at = null; }
+    return o;
+  };
+  const fresh = rows.filter((r: any) => !have.has(r.name)).map((r: any) => ({ ...base(r), open: r.open, open_sent: r.open }));
+  const opened = rows.filter((r: any) => have.has(r.name) && r.oc).map((r: any) => ({ ...base(r), open: r.open, open_sent: r.open }));
+  const plain = rows.filter((r: any) => have.has(r.name) && !r.oc).map(base);
+  for (const set of [fresh, opened, plain]) {
+    for (let i = 0; i < set.length; i += 1000) {
+      const { error } = await db.from("tally_ledgers").upsert(set.slice(i, i + 1000), { onConflict: "book_id,name" });
+      if (error) throw new Error(error.message);
+    }
+  }
+  out.added = fresh.length;
+  // 4. deletions: marked, never removed
+  const del = (Array.isArray(body.deleted) ? body.deleted : []).slice(0, 50000)
+    .map((x: any) => ({ guid: s(x?.[0], 100).trim(), name: cleanName(s(x?.[1], 300)) })).filter((d: any) => d.guid || d.name);
+  if (del.length && !m32) {
+    out.deletesSkipped = del.length;
+    notes.push("deletions skipped: migration-32 (tally_ledgers.deleted_at) is not applied");
+    console.log("tally-ingest ledger_list: migration-32 not applied, deletions skipped", book, del.length);
+  } else if (del.length) {
+    const guids = del.map((d: any) => d.guid).filter(Boolean);
+    for (let i = 0; i < guids.length; i += 150) {
+      const { data, error } = await db.from("tally_ledgers").update({ deleted_at: now }).eq("book_id", book).in("tally_guid", guids.slice(i, i + 150)).is("deleted_at", null).select("name");
+      if (error) throw new Error(error.message);
+      out.deleted += (data || []).length;
+    }
+    // a row the copy holds without a GUID yet (from Master.xml): by its name, unless that name is listed in this call
+    const names = del.map((d: any) => d.name).filter((n: string) => n && !seen.has(n));
+    for (let i = 0; i < names.length; i += 150) {
+      const { data, error } = await db.from("tally_ledgers").update({ deleted_at: now }).eq("book_id", book).in("name", names.slice(i, i + 150)).is("tally_guid", null).is("deleted_at", null).select("name");
+      if (error) throw new Error(error.message);
+      out.deleted += (data || []).length;
+    }
+  }
+  // 5. the year's openings worked out again (a ledger added, an opening or a group changed)
+  if (fresh.length || opened.length || body.last) {
+    const { error } = await db.rpc("tally_year_openings", { p_book: book });
+    if (error) notes.push("year openings: " + error.message);
+  }
+  if (!m31 && out.renamed) notes.push("renamed without the old name kept: migration-31 (before_clean) is not applied");
+  console.log("tally-ingest ledger_list", book, JSON.stringify({ ...out, notes: notes.slice(0, 5) }));
+  return reply(200, out);
+}
 // a few days of the day book (each gzipped), into a book: stored, and read into entries, lines and ready totals
 async function ingestDays(firm: string, book: string, daysIn: unknown) {
   const r = await ingestDaysRaw(firm, book, daysIn);
@@ -507,19 +659,37 @@ async function queueJob(firm: string, client: string, book: string, user: string
 // time is also kept in tally_devices.info (opened, activityAt) for the heartbeat's answer, the fallback when the channel
 // is down. "active": FinCom in use (a page says so every few minutes at most), so the nightly catch-up waits.
 async function wakeFor(firm: string, body: any) {
-  const what = body.what === "open" ? "open" : body.what === "active" ? "active" : "";
-  if (!what) return reply(400, { ok: false, error: "Say what: open or active." });
+  const what = body.what === "open" ? "open" : body.what === "active" ? "active" : body.what === "ledgers" ? "ledgers" : "";
+  if (!what) return reply(400, { ok: false, error: "Say what: open, active or ledgers." });
   const at = new Date().toISOString();
   let links: { company: string; device_id: string }[] = [];
-  if (what === "open") {
+  if (what === "open" || what === "ledgers") {
     const { data } = await db.from("tally_companies").select("company, device_id").eq("firm_id", firm).eq("client_id", String(body.client || ""));
     links = (data || []).filter((r: any) => r.device_id) as any;
     if (!links.length) return reply(200, { ok: true, woken: 0 });
   }
   let q = db.from("tally_devices").select("*").eq("firm_id", firm);
-  if (what === "open") q = q.in("id", [...new Set(links.map((r) => r.device_id))]);
+  if (what === "open" || what === "ledgers") q = q.in("id", [...new Set(links.map((r) => r.device_id))]);
   const { data: devs } = await q;
   let woken = 0;
+  // 2.1.4: a bill's ledger chooser opened with a list older than the last posting: the computer reads the ledger list
+  // ("ledgers", {company, at}); the time kept in info.ledgers for the heartbeat's answer. At most one a minute per
+  // company here; the bridge itself reads at most once every few minutes
+  if (what === "ledgers") {
+    let debounced = 0;
+    for (const d of (devs || []).filter((x: any) => !x.revoked)) {
+      const prev = (d.info && typeof d.info === "object") ? d.info : {};
+      const led: Record<string, string> = {};
+      for (const [k, v] of Object.entries((prev.ledgers && typeof prev.ledgers === "object") ? prev.ledgers : {})) if (Date.parse(String(v)) > Date.now() - 3600000) led[k] = String(v);
+      const cos = links.filter((r) => r.device_id === d.id).map((r) => r.company).filter((c) => !(led[c] && Date.parse(led[c]) > Date.now() - 60000));
+      debounced += links.filter((r) => r.device_id === d.id).length - cos.length;
+      if (!cos.length) continue;
+      cos.forEach((c) => { led[c] = at; });
+      await db.from("tally_devices").update({ info: { ...prev, ledgers: led, activityAt: at } }).eq("id", d.id);
+      if (d.wake_token) for (const c of cos) if (await broadcast("tb-" + d.wake_token, "ledgers", { company: c, at })) woken++;
+    }
+    return reply(200, { ok: true, woken, debounced });
+  }
   for (const d of (devs || []).filter((x: any) => !x.revoked)) {
     const prev = (d.info && typeof d.info === "object") ? d.info : {};
     const opened: Record<string, string> = {};
@@ -692,10 +862,13 @@ Deno.serve(async (req) => {
         // and when FinCom was last used for this computer: a client opened, Update now, a posting
         const opened: Record<string, string> = {};
         for (const [k, v] of Object.entries((prevInfo.opened && typeof prevInfo.opened === "object") ? prevInfo.opened : {})) if (Date.parse(String(v)) > Date.now() - 600000) opened[k] = String(v);
+        // 2.1.4: ledger lists asked for in the last 10 minutes (the ledger chooser), the fallback for the wake-up channel
+        const ledgers: Record<string, string> = {};
+        for (const [k, v] of Object.entries((prevInfo.ledgers && typeof prevInfo.ledgers === "object") ? prevInfo.ledgers : {})) if (Date.parse(String(v)) > Date.now() - 600000) ledgers[k] = String(v);
         const { data: lastJob } = await db.from("tally_post_jobs").select("updated_at").eq("device_id", dev.id).order("updated_at", { ascending: false }).limit(1);
         const activityAt = [prevInfo.activityAt, want, lastJob && lastJob[0] && lastJob[0].updated_at].filter((x) => x && !isNaN(Date.parse(String(x))))
           .map((x) => new Date(String(x)).toISOString()).sort().pop() || "";
-        return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, activityAt, ...(mayPost(dev, me.id) ? {} : { notMain: true }) });
+        return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, ledgers, activityAt, ...(mayPost(dev, me.id) ? {} : { notMain: true }) });
       }
       case "make_main": return await makeMain(dev, bridgeOf(dev, body, false).id);
       case "posts_take": {
@@ -775,6 +948,11 @@ Deno.serve(async (req) => {
         const book = await bookFor(firm, String(body.company || ""));
         if (!book) return reply(409, { ok: false, notLinked: true, error: "This Tally company is not linked to a FinCom client yet." });
         return await ingestLedgers(book, body, firm);
+      }
+      case "ledger_list": {
+        const book = await bookFor(firm, String(body.company || ""));
+        if (!book) return reply(409, { ok: false, notLinked: true, error: "This Tally company is not linked to a FinCom client yet." });
+        return await applyLedgerList(firm, book, body);
       }
       case "groups": {
         const book = await bookFor(firm, String(body.company || ""));
