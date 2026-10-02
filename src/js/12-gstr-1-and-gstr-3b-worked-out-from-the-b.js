@@ -383,6 +383,14 @@ const GSTR = {
       const x = b2csMap[key] = b2csMap[key] || {sply_ty: r.igst ? "INTER" : "INTRA", pos, typ: "OE", rt: q.rate, txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0};
       x.txval = r2(x.txval + q.taxable); x.iamt = r2(x.iamt + q.igst); x.camt = r2(x.camt + q.cgst); x.samt = r2(x.samt + q.sgst); x.csamt = r2(x.csamt + q.cess);
     });
+    // a credit or debit note to a buyer with no GSTIN (request of 02-Oct-2026: Puresens Exports LLP's credit note 12 of
+    // 31-Mar-2026, 1,500, was left out of the GSTR-1 file, so GSTR-1 and 3.1(a) differed): it adjusts B2C small (table 7)
+    // by place of supply and rate, as the portal takes it
+    this.partsOf(g.cdnr.filter(r => !r.gstin)).forEach(q => { const r = q.row, sg = r.note === "credit" ? -1 : 1;
+      const pos = posOf(r), key = pos + "|" + q.rate + "|" + (r.igst ? "INTER" : "INTRA");
+      const x = b2csMap[key] = b2csMap[key] || {sply_ty: r.igst ? "INTER" : "INTRA", pos, typ: "OE", rt: q.rate, txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0};
+      x.txval = r2(x.txval + sg * Math.abs(q.taxable)); x.iamt = r2(x.iamt + sg * Math.abs(q.igst)); x.camt = r2(x.camt + sg * Math.abs(q.cgst)); x.samt = r2(x.samt + sg * Math.abs(q.sgst)); x.csamt = r2(x.csamt + sg * Math.abs(q.cess));
+    });
     const nilSum = g.nil.reduce((a, r) => ({expt_amt: r2(a.expt_amt + (r.cls === "exempt" ? r.taxable : 0)),
       nil_amt: r2(a.nil_amt + (r.cls === "nil" ? r.taxable : 0)), ngsup_amt: r2(a.ngsup_amt + (r.cls === "nongst" ? r.taxable : 0))}),
       {expt_amt: 0, nil_amt: 0, ngsup_amt: 0});

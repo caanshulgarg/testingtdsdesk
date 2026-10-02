@@ -67,15 +67,95 @@ function QuarterReturns({ qEnd, reg }) {
   </>;
 }
 
+// the quarter on one page (request of 02-Oct-2026): M1 IFF, M2 IFF, M3 (the quarter's GSTR-1) and the quarter, with
+// counts, value, the file, the status and PMT-06; the column chosen says what goes in its file; the quarter's total is
+// checked against 3B 3.1(a), FinCom's and as filed
+const ST = { filed: ["Filed", "ok"], late: ["Filed after the 13th: counts as not filed", "bad"], skipped: ["IFF not filed", "warn"], missed: ["Not filed", "bad"], open: ["Not filed yet", "warn"] };
+const agree = (v) => v == null ? null : Math.abs(v) < 1 ? <span className="tag ok">agrees</span> : <span className="tag bad">{"differs by " + m(v)}</span>;
+
+function Status({ c }) {
+  const [l, cls] = ST[c.state.s] || [c.state.s, ""];
+  return <><span className={"tag " + cls}>{l}</span>
+    {(c.state.on || c.state.arn) && <div className="nr">{(c.state.on ? d(c.state.on) : "") + (c.state.arn ? " · ARN " + c.state.arn : "")}</div>}</>;
+}
+
+function FileBox({ q, c, reg }) {
+  const iff = c.kind === "iff";
+  return <div className="bk-alert" data-qfile={c.m} style={{ margin: "12px 0 0" }}>
+    <b>What goes in this file: {c.label}</b>
+    {iff ? <ul style={{ margin: "6px 0 0 18px", padding: 0 }}>
+      <li>{pl(c.n, "invoice") + " to registered customers (table 4A)" + (c.notes ? " and " + pl(c.notes, "credit or debit note") + " (table 9B)" : "") + ", dated in " + GSTR.label(c.m) + "."}</li>
+      <li>{"Taxable value " + m(c.taxable) + " net of notes, tax " + m(c.tax) + ". Sales to unregistered buyers (B2C) never go in an IFF: they go in the quarter’s GSTR-1."}</li>
+      {c.over && <li className="bad">{"Above ₹50 lakh: the portal may refuse an IFF this large. If it does, choose “IFF not filed” and these go in the quarter’s GSTR-1."}</li>}
+      {c.toQuarter && <li>{"This IFF was not filed, so its documents go in the quarter’s GSTR-1 instead."}</li>}
+    </ul> : <ul style={{ margin: "6px 0 0 18px", padding: 0 }}>
+      <li>{"B2B: " + pl(c.n, "invoice") + " " + m(c.b2b) + (c.notes ? "; notes " + pl(c.notes, "note") + " " + m(c.cdnr) : "") + (c.skipped.length ? ". Left out: what the filed IFFs of " + c.skipped.map((x) => GSTR.label(x)).join(" and ") + " carried." : ". No IFF filed in this quarter, so all three months are here.")}</li>
+      <li>{"B2C small " + m(c.b2cs) + " (notes to buyers with no GSTIN netted in)" + (c.b2cl ? ", B2C large " + m(c.b2cl) : "") + (c.exp ? ", exports " + m(c.exp) : "") + ": all three months."}</li>
+      {c.adv ? <li>{"Advances received, not yet invoiced (table 11A less 11B): " + m(c.adv) + "."}</li> : null}
+      <li>{"Taxable value " + m(c.taxable) + ", tax " + m(c.tax) + "."}</li>
+    </ul>}
+    <p style={{ margin: "8px 0 0" }}><b>Check against 3B 3.1(a):</b>{" " + q.cols.filter((x) => x.inFile).map((x) => x.label + " " + m(x.taxable)).concat([q.m3.label + " " + m(q.m3.taxable)]).join(" + ") + " = " + m(q.total) + "; 3B 3.1(a) for " + q.label + " " + m(q.r3a) + " "}{agree(q.diff)}</p>
+    <p className="note" style={{ margin: "6px 0 0" }}>{"File name: "}<code>{c.file}</code>{". On the portal: Returns → " + (iff ? "GSTR-1/IFF → " + GSTR.label(c.m) + " → Prepare offline → Upload" : "GSTR-1 → " + q.label + " → Prepare offline → Upload") + "; wait for “Processed”, check the summary, then file with DSC or EVC."}</p>
+  </div>;
+}
+
+function Changes({ c }) {
+  const x = c.changes;
+  if (!x || (!x.n && !x.added.length)) return null;
+  return <div className="bk-alert bad" data-iff-changed={c.m} style={{ margin: "8px 0 0" }}>
+    <b>{"Changed after the " + c.label + " was filed"}</b>
+    {x.n > 0 && <><span>{": " + pl(x.n, "document") + " — needs an amendment (table 9A for an invoice, 9C for a note) in a later GSTR-1."}</span>
+      <ul style={{ margin: "4px 0 0 18px", padding: 0 }}>{x.changed.map((y) => <li key={y.key}>{y.num + ": taxable " + m(y.was.txval) + " → " + m(y.txval)}</li>)}
+        {x.gone.map((y) => <li key={y.key}>{y.num + ": no longer in the books (was " + m(y.txval) + ")"}</li>)}</ul></>}
+    {x.added.length > 0 && <p className="note" style={{ margin: "4px 0 0" }}>{pl(x.added.length, "document") + " dated in " + GSTR.label(c.m) + " came in after the IFF: they go in the quarter’s GSTR-1 as new documents."}</p>}
+  </div>;
+}
+
 export function Qrmp() {
-  const ym = S.gstYm || "", reg = S.gstReg || "", qEnd = GSTSet.qEnd(ym), first = !GSTSet.isQEnd(ym), rec = GSTF.peek(ym, reg), q = GSTSet.qLabel(ym);
-  return <section className="dash-card gq"><h3>{q + " · " + GSTR.label(ym)} <span className="tag">Quarterly (QRMP)</span></h3>
-    {first ? <>
-      <p className="note">This month has no GSTR-1 or 3B. Two things only:</p>
-      <Iff ym={ym} reg={reg} rec={rec} />
-      <Pmt06 ym={ym} reg={reg} />
-      <p className="note">GSTR-1 and GSTR-3B for {q} are due {d(GSTF.due(qEnd, "r1", reg))} and {d(GSTF.due(qEnd, "r3b", reg))}.</p>
-    </> : <QuarterReturns qEnd={qEnd} reg={reg} />}
+  const ym = S.gstYm || "", reg = S.gstReg || "", qEnd = GSTSet.qEnd(ym), q = GSTQ.quarter(qEnd, reg), sel = S.gqCol || (GSTSet.isQEnd(ym) ? qEnd : ym);
+  const cols = q.cols.concat([q.m3]), pick = cols.find((c) => c.m === sel) || q.m3;
+  const head = (c) => <th key={c.m} className={"n" + (c.m === pick.m ? " on" : "")}><button className="linkbtn" data-gqcol={c.m} onClick={() => { S.gqCol = c.m; render(); }}>{c.label}</button></th>;
+  const row = (label, f, total, key) => <tr key={key || label}><td>{label}</td>{cols.map((c) => <td key={c.m} className="n">{f(c)}</td>)}<td className="n"><b>{total}</b></td></tr>;
+  return <section className="dash-card gq" data-qrmp={qEnd}>
+    <div className="row" style={{ justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+      <h3 style={{ margin: 0 }}>{q.label} <span className="tag">Quarterly (QRMP)</span></h3>
+      <label className="note">This quarter is filed{" "}
+        <select aria-label="Filing type for this quarter" data-qtype="" style={{ width: "auto" }} value="qrmp" onChange={(ev) => gqQuarterType(ev.target.value)}>
+          <option value="qrmp">quarterly (QRMP)</option><option value="monthly">monthly</option></select></label></div>
+    <div className="bk-tablewrap" style={{ marginTop: 8 }}><table className="bk-table compact gf-off" data-qtable="">
+      <thead><tr><th></th>{cols.map(head)}<th className="n">Quarter</th></tr></thead>
+      <tbody>
+        {row("Due", (c) => d(c.due), d(q.due3b) + " (3B)")}
+        {row("B2B invoices", (c) => c.n, q.cols.filter((c) => c.inFile).reduce((a, c) => a + c.n, 0) + q.m3.n)}
+        {row("Credit / debit notes", (c) => c.notes, q.cols.filter((c) => c.inFile).reduce((a, c) => a + c.notes, 0) + q.m3.notes)}
+        {row("B2C (all three months)", (c) => c.kind === "iff" ? "—" : m(c.b2c), m(q.m3.b2c))}
+        {q.m3.adv ? row("Advances (11A less 11B)", (c) => c.kind === "iff" ? "—" : m(c.adv), m(q.m3.adv)) : null}
+        {row("Taxable value, net of notes", (c) => <span data-qtaxable={c.m} style={c.toQuarter ? { textDecoration: "line-through" } : undefined}>{m(c.taxable)}</span>, <span data-qtotal="">{m(q.total)}</span>)}
+        {row("Tax", (c) => m(c.tax), m(r2(q.cols.filter((c) => c.inFile).reduce((a, c) => a + c.tax, 0) + q.m3.tax)))}
+        {row("As filed", (c) => c.filed == null ? <span className="note">—</span> : <span data-qfiled={c.m}>{m(c.filed)}</span>, <span data-qfiled-total="">{q.filedTotal == null ? "—" : m(q.filedTotal)}</span>)}
+        {row("Books less filed", (c) => c.filed == null ? "—" : <span data-qdiff={c.m}>{m(r2(c.taxable - c.filed))}</span>, q.filedTotal == null ? "—" : m(r2(q.total - q.filedTotal)))}
+        {row("Status", (c) => <Status c={c} />, q.r3bOn ? <><span className="tag ok">3B filed</span><div className="nr">{d(q.r3bOn)}</div></> : <span className="tag warn">3B not filed yet</span>)}
+        {row("PMT-06", (c) => c.kind === "iff" ? (c.pmt.known ? m(c.pmt.total) + (c.pmt.paidTotal ? " · paid " + m(c.pmt.paidTotal) : "") : "—") : "—", m(GSTQ.H.reduce((a, k) => a + num(q.pmtPaid[k]), 0)) + " paid")}
+      </tbody></table></div>
+    <div className="row" style={{ gap: 16, flexWrap: "wrap", marginTop: 8 }} data-q3a="">
+      <span>{"3B 3.1(a), FinCom: " + m(q.r3a) + " "}{agree(q.diff)}</span>
+      {q.r3aFiled != null && <span>{"As filed: GSTR-1 + IFF " + (q.filedTotal == null ? "—" : m(q.filedTotal)) + " · 3B 3.1(a) " + m(q.r3aFiled) + " "}{agree(q.filedDiff)}</span>}
+    </div>
+    <FileBox q={q} c={pick} reg={reg} />
+    {pick.kind === "iff" ? <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
+      <button className="btn small primary" data-iffjson="" disabled={pick.state.s === "skipped"} onClick={() => { S.gstYm = pick.m; gqIffJson(); }}>Download IFF JSON</button>
+      <span className="note">Filed on</span><CommitBox type="date" aria-label={"IFF filed on " + pick.m} value={GSTF.peek(pick.m, reg).iff || ""} style={{ width: "auto" }} onCommit={(x) => gqIffFiled(pick.m, "iff", x)} />
+      <span className="note">ARN</span><CommitBox aria-label={"IFF ARN " + pick.m} value={GSTF.peek(pick.m, reg).iffArn || ""} style={{ width: 170 }} onCommit={(x) => gqIffFiled(pick.m, "iffArn", x.trim())} />
+      {pick.state.s === "skipped" ? <button className="btn small" data-iffskip="undo" onClick={() => gqIffSkip(pick.m, false)}>It was filed after all</button>
+        : <button className="btn small" data-iffskip="" onClick={() => gqIffSkip(pick.m, true)}>IFF not filed</button>}
+    </div> : <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
+      <button className="btn small primary" onClick={() => { S.gstYm = qEnd; doAct("gstJson"); }}>Download GSTR-1 JSON for the quarter</button>
+      <span className="note">Filed on</span><CommitBox type="date" aria-label="GSTR-1 filed on" value={GSTF.peek(qEnd, reg).r1 || ""} style={{ width: "auto" }} onCommit={(x) => { S.gstYm = qEnd; gstfSet("r1", x); }} />
+      <button className="btn small" onClick={() => { S.gstYm = qEnd; doAct("gst3bJson"); }}>Download GSTR-3B JSON for the quarter</button>
+      <span className="note"><code>{q.file3b}</code>: tables 3.1, 3.2, 4 and 5; PMT-06 paid ({m(GSTQ.H.reduce((a, k) => a + num(q.pmtPaid[k]), 0))}) is in the cash ledger and used first, still to pay {m(q.payable)}.</span>
+    </div>}
+    {q.cols.map((c) => <Changes key={c.m} c={c} />)}
+    {pick.kind === "iff" && <Pmt06 ym={pick.m} reg={reg} />}
   </section>;
 }
 
