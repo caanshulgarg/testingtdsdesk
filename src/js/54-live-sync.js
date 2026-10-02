@@ -163,11 +163,20 @@ const BookItems = {
     if (!work) return 0;
     const mine = this.split(work), send = [], present = new Set(Object.keys(work));
     mine.forEach((x, key) => { const hh = this.h(x.d, x.o); if (s.base[key] !== hh) send.push([key, hh, {k: x.k, i: x.i, o: x.o, d: x.d}]); });
-    Object.keys(s.base).forEach(key => {
-      if (s.base[key] === "gone" || mine.has(key)) return;
-      const [k, i] = key.split("\u0001");
-      if (!present.has(k) && BookSync.MASTERS.indexOf(k) >= 0) return;         // filled from Tally; not here yet is not removed
-      send.push([key, "gone", {k, i, del: true}]);
+    // an item is removed on the server only when its part of the books is here and the item was taken out of it; a part
+    // missing here (storage cleared, not loaded yet) is never sent as removed, and neither is most of a part at once
+    // (review of 02-Oct-2026: never infer a removal from absence)
+    const out = {}, had = {};
+    Object.keys(s.base).forEach(key => { if (s.base[key] === "gone") return; const k = key.split("\u0001")[0]; had[k] = (had[k] || 0) + 1; if (!mine.has(key)) (out[k] = out[k] || []).push(key); });
+    Object.entries(out).forEach(([k, keys]) => {
+      if (!present.has(k)) return;
+      const left = had[k] - keys.length;
+      if (keys.length > 3 && keys.length > had[k] * 0.25 && !(this.allowMass && this.allowMass[cid + "|" + k])){
+        s.held = Object.assign({}, s.held, {[k]: {n: keys.length, of: had[k], at: new Date().toISOString()}});
+        console.warn("FinCom: " + keys.length + " of " + had[k] + " items of " + k + " missing here; not removed on the server" + (left ? "" : " (none left)"));
+        return;
+      }
+      keys.forEach(key => send.push([key, "gone", {k, i: key.split("\u0001")[1], del: true}]));
     });
     if (!send.length){ Live.saved(); return 0; }
     Live.saving();

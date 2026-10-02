@@ -323,16 +323,18 @@ const Store = {
   saveCompany(c){ this.put("companies/" + c.id, c); },
   saveParty(cid, p){ this.put("companies/" + cid + "/parties/" + p.id, p); },
   saveEntry(cid, e){ this.put("companies/" + cid + "/entries/" + e.id, e); },
-  deleteEntry(cid, id){ this.put("companies/" + cid + "/entries/" + id, null); },
-  deleteParty(cid, id){ this.put("companies/" + cid + "/parties/" + id, null); },
+  // removals the user asked for: the only ones the firm account ever sends as deleted (Cloud.delete)
+  deleteEntry(cid, id){ this.put("companies/" + cid + "/entries/" + id, null); if (typeof Cloud === "object") Cloud.delete("entry", cid, id, "removed by the user"); },
+  deleteParty(cid, id){ this.put("companies/" + cid + "/parties/" + id, null); if (typeof Cloud === "object") Cloud.delete("party", cid, id, "removed by the user"); },
   saveInbox(i){ this.put("inbox/" + i.id, i); },
-  deleteInbox(id){ this.put("inbox/" + id, null); },
+  deleteInbox(id){ this.put("inbox/" + id, null); if (typeof Cloud === "object") Cloud.delete("unsorted", "", id, "moved to a client"); },
   async deleteCompany(cid){
     await this.loadCompany(cid);
     const d = S.data[cid];
     Object.keys(d.parties).forEach(id => this.deleteParty(cid, id));
     Object.keys(d.entries).forEach(id => this.deleteEntry(cid, id));
     this.put("companies/" + cid, null);
+    if (typeof Cloud === "object") Cloud.delete("client", cid, cid, "client removed by the user");
     delete S.data[cid]; delete S.companies[cid];
     if (S.storeKind === "local") this.saveLocal();
   }

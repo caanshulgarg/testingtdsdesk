@@ -534,6 +534,7 @@ function salesBulk(kind, ledger){
     if (kind === "ignore" && v.status !== "ignored"){ v.status = "ignored"; n++; }
   });
   if (kind === "delete"){
+    s.list.filter(v => s.sel.has(v.id) && v.status !== "posted").forEach(v => { if (typeof Cloud === "object") Cloud.delete("sales", s.cid, s.cid + ":" + v.id, "invoice deleted"); });
     s.list = s.list.filter(v => !(s.sel.has(v.id) && v.status !== "posted")); n = rows.length;
   }
   salesSetUndo(n + " invoice" + (n === 1 ? " " : "s ") + ({ledger: "set to <b>" + esc(ledger) + "</b>", confirm: "confirmed", ignore: "ignored", delete: "deleted"}[kind]), before);
@@ -561,6 +562,7 @@ function salesRowAct(a, id, force){
     if (a === "delete"){
       askConfirm({title: "Delete invoice " + (v.x.number || "") + "?", danger: true, ok: "Delete", body: "It is removed from FinCom. Tally is not changed."}).then(ans => {
         if (!ans) return;
+        if (typeof Cloud === "object") Cloud.delete("sales", s.cid, s.cid + ":" + v.id, "invoice deleted");
         s.list = s.list.filter(o => o.id !== v.id); s.openId = null; salesSetUndo("Invoice " + esc(v.x.number) + " deleted", before); saveSales(); render();
       });
       return true;
