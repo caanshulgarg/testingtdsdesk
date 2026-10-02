@@ -15,7 +15,9 @@ def ok(c, w):
 with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(); errs = []; pg.on("pageerror", lambda e: errs.append(str(e)))
     pg.goto("http://localhost:8151/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
-    pg.evaluate("""() => { const c = newCompany({name: "ZZ QUEUE"}); c.postTo = "ZZ QUEUE LTD"; S.companies[c.id] = c; S.coId = c.id;
+    pg.evaluate("""() => { const c = newCompany({name: "ZZ QUEUE"}); S.companies[c.id] = c; S.coId = c.id;
+      // review 21c (02-Oct-2026): posting uses the confirmed choice of the Tally company only
+      choiceConfirm(c, "postTo", "ZZ QUEUE LTD");
       window.__calls = []; window.__row = {status: "waiting", done: 0, n: 2, message: "", results: null, checking: false, company: "ZZ QUEUE LTD"};
       Bridge.on = () => false; Bridge.up = () => false;
       TCloud.on = () => true; TCloud.st[c.id] = {at: Date.now(), books: [{from: "2025-04-01", book: "bk1", company: "ZZ QUEUE LTD"}]};
@@ -49,9 +51,9 @@ with sync_playwright() as p:
     ok(not errs, "no page errors " + " ".join(errs[:2]))
     # 02-Oct-2026: only into the company chosen for the client; nothing posted when none or another is chosen
     g = pg.evaluate("""async () => { const c = CO(), keep = c.postTo; window.__calls = [];
-      c.postTo = ""; const a = await Bridge.post({company: "ZZ QUEUE LTD", client: c.id, masters: [], vouchers: [{id: "g1", xml: "<VOUCHER VCHTYPE=\\"Payment\\"><DATE>20250601</DATE></VOUCHER>"}]});
-      c.postTo = "GARG SHEKHAR & COMPANY"; const b = await Bridge.post({company: "ZZ QUEUE LTD", client: c.id, masters: [], vouchers: [{id: "g2", xml: "<VOUCHER VCHTYPE=\\"Payment\\"><DATE>20250601</DATE></VOUCHER>"}]});
-      c.postTo = keep; return {a: a.results[0].message, b: b.results[0].message, queued: window.__calls.filter(x => x[0] === "tally_post_enqueue").length}; }""")
+      c.postTo = ""; if (c.choices) delete c.choices.postTo; const a = await Bridge.post({company: "ZZ QUEUE LTD", client: c.id, masters: [], vouchers: [{id: "g1", xml: "<VOUCHER VCHTYPE=\\"Payment\\"><DATE>20250601</DATE></VOUCHER>"}]});
+      choiceConfirm(c, "postTo", "GARG SHEKHAR & COMPANY"); const b = await Bridge.post({company: "ZZ QUEUE LTD", client: c.id, masters: [], vouchers: [{id: "g2", xml: "<VOUCHER VCHTYPE=\\"Payment\\"><DATE>20250601</DATE></VOUCHER>"}]});
+      choiceConfirm(c, "postTo", keep); return {a: a.results[0].message, b: b.results[0].message, queued: window.__calls.filter(x => x[0] === "tally_post_enqueue").length}; }""")
     ok("Choose the Tally company" in g["a"] and "may post only to GARG SHEKHAR & COMPANY" in g["b"] and g["queued"] == 0, "posting only into the client's chosen company: none chosen or another company, nothing queued (%s)" % g)
     br.close()
 print("all passed" if not fails else str(len(fails)) + " FAILED"); sys.exit(1 if fails else 0)

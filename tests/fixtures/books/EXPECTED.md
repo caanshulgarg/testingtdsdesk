@@ -360,7 +360,9 @@ is nil.
    -    if (A.isLoan(l) || /\bLOAN\b/i.test(l) && !/INTEREST/i.test(l)) return ["fin", "Loans"];
    +    if (A.isLoan(l) || /\bLOAN\b/i.test(l) && !/INTEREST/i.test(l) && !A.isExpense(l) && !A.isIncome(l)) return ["fin", "Loans"];
    ```
-6. **The GSTR-3B screen cannot be drawn for a month with reverse charge paid in cash** (`src/js/35-gst-filing.js`,
+6. *Fixed on 02-Oct-2026.* The ledger finder now asks once with no head and then lists the ledger as missing; `propose`
+   tests reverse charge before "GST PAYABLE" (not for an electronic, interest or control ledger). The 3B figures did not move.
+   **The GSTR-3B screen cannot be drawn for a month with reverse charge paid in cash** (`src/js/35-gst-filing.js`,
    `GSTF.journal`, and `src/js/05-tally-ledger-master.js`, `LedMaster.propose`). This affects Jan, Feb and Mar 2026 here.
    The screen shows "Maximum call stack size exceeded", which has two causes:
    - The set-off journal's ledger finder, `led(kind, head, side, rcm)`, calls itself as `led(kind, "", side, true)` when it

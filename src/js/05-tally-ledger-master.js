@@ -50,7 +50,10 @@ const LedMaster = {
     if (tt === "GST" || /\bGST\b|\bCESS\b|\b(C|S|I|UT)\s*\.?\s*GST/.test(up)){
       p.what = "gst";
       if (tt === "GST") why.push("Tally: tax type GST");
-      if (/ELECTRONIC|CASH\s*LEDGER|CREDIT\s*LEDGER|CURRENT\s*GST\s*PAYABLE|GST\s*PAYABLE|SET\s*OFF/.test(up)) p.what = "gst_setoff";
+      // reverse charge before "GST PAYABLE": "07 RCM CGST PAYABLE" is the tax owed on reverse charge, not a set-off ledger.
+      // An electronic ledger, interest or a control account named for reverse charge is still read by the tests below
+      if (/\bRCM\b|REVERSE/.test(up) && !/ELECTRONIC|CASH\s*LEDGER|CREDIT\s*LEDGER|SET\s*OFF|INTEREST|LATE\s*FEE|PENALTY|CONTROL|PROVISIONAL|PENDING|SUSPENSE|UNCLAIMED/.test(up)) p.what = "gst_rcm";
+      else if (/ELECTRONIC|CASH\s*LEDGER|CREDIT\s*LEDGER|CURRENT\s*GST\s*PAYABLE|GST\s*PAYABLE|SET\s*OFF/.test(up)) p.what = "gst_setoff";
       else if (/INTEREST|LATE\s*FEE|PENALTY/.test(up)) p.what = "gst_interest";
       else if (/CONTROL|PROVISIONAL|PENDING|SUSPENSE|UNCLAIMED/.test(up)) p.what = "gst_control";
       else if (/\bRCM\b|REVERSE/.test(up)) p.what = "gst_rcm";

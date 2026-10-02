@@ -88,7 +88,10 @@ with sync_playwright() as p:
     ok(st == [False, True, True, False, 1, 2], "8. In Tally: 1 (081, confirmed and still there); FA/ELEC/013 gone from Tally and the unconfirmed Tally file not counted; 2 to post (%s)" % st)
     E("() => { S.tab = 'invoices'; S.filter = 'draft'; S.reviewTable = false; render(); }"); pg.wait_for_timeout(300)
     bar = pg.inner_text("header nav.sbar") if pg.locator("header nav.sbar").count() else pg.inner_text("nav.sbar[aria-label=Status]")
-    ok("In Tally 1" in bar.replace("\n", " ") and "Post to Tally 2" in bar.replace("\n", " "), "8. the step bar: Post to Tally 2 · In Tally 1 (%s)" % bar.replace("\n", " "))
+    # second pass of 02-Oct-2026: the tab counts what is ready to post (none); the two bills not confirmed in Tally are a
+    # badge of their own (what needs attention)
+    tabn = E("[document.querySelector('nav.sbar [data-step=post] [data-step-n]').textContent, (document.querySelector('nav.sbar [data-step=post] [data-attn-n]') || {}).textContent || '']")
+    ok("In Tally 1" in bar.replace("\n", " ") and tabn == ["0", "2"], "8. the step bar: Post to Tally 0, needing attention 2 · In Tally 1 (%s; %s)" % (bar.replace("\n", " "), tabn))
     # 9, 10. the server's queue: what went to Tally, and a failed posting on the Post page
     E("""() => { TCloud.restAll = async () => [
         {id: 'e9bd8ae0', client_id: S.coId, company: 'GARG SHEKHAR & COMPANY', status: 'done', done: 1, n: 1, message: '1 of 1 sent to Tally', created_at: '2026-10-02T02:21:12Z', updated_at: '2026-10-02T02:21:30Z', created_by: 'u-1',
@@ -103,17 +106,24 @@ with sync_playwright() as p:
     ok("FA/ELEC/013" in log and "FA/2026-27/081" in log and "2 entries for" in log and "from the cloud queue" in log and "Anshul" in log,
        "9. Everything sent to Tally lists the queue's postings (FA/ELEC/013 on 01-Oct, FA/2026-27/081), by whom")
     E("() => { S.view = 'company'; S.tab = 'export'; render(); }"); pg.wait_for_timeout(1000)
-    if not pg.locator("#app [data-post-jobs]").count():
+    if not pg.locator("#app [data-post-attention]").count():
         E("() => { goStep('post'); }"); pg.wait_for_timeout(1000)
-    j = pg.inner_text("#app [data-post-jobs]") if pg.locator("#app [data-post-jobs]").count() else ""
-    ok("Failed" in j and "two minutes" in j and "e9bd8ae0" not in j, "10. the failed posting (aebb6c15) is shown on Post to Tally, with what happened (%s)" % j[:120].replace("\n", " "))
-    ok("FA/2026-27/090" in j and "Failed" in j and "Professional Fees" in j, "3 (posting fixes). each entry's state and reason in the failed posting")
+    j = pg.inner_text('#app [data-post-attention] [data-job="aebb6c15"]') if pg.locator('#app [data-post-attention] [data-job="aebb6c15"]').count() else ""
+    ok("failed" in j and "two minutes" in j and pg.locator('#app [data-post-attention] [data-job="e9bd8ae0"]').count() == 0, "10. the failed posting (aebb6c15) needs attention on Post to Tally, with what happened (%s)" % j[:120].replace("\n", " "))
+    # second pass of 02-Oct-2026: one line a posting (its entries are not listed again: a bill appears once on the page)
+    ok(E("Array.from(document.querySelectorAll('#app [data-post-page] [data-bill-row]')).map(r => r.getAttribute('data-bill-row')).sort().join()") == "orig,p90",
+       "3 (posting fixes). each bill not confirmed in Tally once, as a row of its own")
     E("() => { window.__rpc = []; TCloud.rpc = async (fn, a) => { window.__rpc.push([fn, a]); return {ok: true, id: a.p_id, retry: true}; }; }")
     pg.click('#app [data-job="aebb6c15"] button:has-text("Retry")'); pg.wait_for_timeout(600)
     ok(E("window.__rpc") == [["tally_post_enqueue", {"p_id": "aebb6c15", "p_client": cid, "p_payload": {}}]], "Retry queues the same posting again under its id")
-    un = pg.inner_text("#app [data-post-unsure]") if pg.locator("#app [data-post-unsure]").count() else ""
-    ok("FA/ELEC/013" in un and "Not in Tally any more" in un and "In a Tally file, not confirmed" in un and "Post the ones no longer in Tally again" in un,
-       "8. the bills not counted as in Tally are listed apart, with a way to post again the one deleted in Tally")
+    # second pass of 02-Oct-2026 (item 3): FA/ELEC/013 is not offered to be posted again on the cloud copy's word: Tally is
+    # read afresh first, and here there is no Tally to read (no bridge, no Tally computer heard from)
+    pg.wait_for_timeout(600)
+    o = pg.inner_text('#app [data-post-attention] [data-bill-row="orig"]') if pg.locator('#app [data-post-attention] [data-bill-row="orig"]').count() else ""
+    p9 = pg.inner_text('#app [data-post-attention] [data-bill-row="p90"]') if pg.locator('#app [data-post-attention] [data-bill-row="p90"]').count() else ""
+    ok("FA/ELEC/013" in o and "Not checked yet" in o and pg.locator('#app [data-bill-row="orig"] [data-post-again]').count() == 0 and pg.locator('#app [data-bill-row="orig"] [data-check-now]').count() == 1
+       and "In a Tally file" in p9 and pg.locator('#app [data-post-unsure]').count() == 0,
+       "8. the bills not counted as in Tally need attention, each once; the one not found in the cloud copy says 'Not checked yet' with Check now, no Post again (%s)" % o.replace("\n", " ")[:160])
     ok(not errors, "no page errors %s" % errors[:2])
     br.close()
 print("\nall passed" if not fails else "\nFAILED: %d" % len(fails))
