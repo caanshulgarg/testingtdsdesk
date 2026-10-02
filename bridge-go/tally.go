@@ -800,7 +800,9 @@ var (
 	probeSent atomic.Int64
 )
 
-func probeEvery() time.Duration { return time.Duration(keepNum("TallyProbeEverySec", 60)) * time.Second }
+func probeEvery() time.Duration {
+	return time.Duration(keepNum("TallyProbeEverySec", 60)) * time.Second
+}
 func setProbeAfterTimeout(port int) {
 	probeMu.Lock()
 	probes[port] = &probeState{true, nowFn()}

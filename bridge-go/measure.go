@@ -273,7 +273,7 @@ func runMeasure(o measureOpts) (M, error) {
 						st = "present"
 						break
 					}
-				} else if re(`<` + re(`\.`).ReplaceAllString(tg, `\.`) + `\s*/>`).MatchString(v) && st == "absent" {
+				} else if re(`<`+re(`\.`).ReplaceAllString(tg, `\.`)+`\s*/>`).MatchString(v) && st == "absent" {
 					st = "present, empty"
 				}
 			}
@@ -319,7 +319,7 @@ func runMeasure(o measureOpts) (M, error) {
 		add(fi)
 		if fi.timedOut {
 			hangs++
-			fi.note = "HANGS (no answer in 25 s) " + fi.note
+			fi.note = fmt.Sprintf("HANGS (no answer in %d s) ", tallyMaxSec()) + fi.note
 			continue
 		}
 		if !freeOrStop() {
@@ -332,7 +332,7 @@ func runMeasure(o measureOpts) (M, error) {
 		}
 		if oi.timedOut {
 			hangs++
-			oi.note = "HANGS (no answer in 25 s)"
+			oi.note = fmt.Sprintf("HANGS (no answer in %d s)", tallyMaxSec())
 		}
 		add(oi)
 	}

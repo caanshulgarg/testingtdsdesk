@@ -1,0 +1,103 @@
+MEASURING TALLY FOR FINCOM (FinCom Bridge 2.1.4) - STEP BY STEP
+
+Why: nobody can measure Tally from FinCom's side. Before FinCom reads only what changed in Tally (by Tally's change
+number, the AlterID), the owner wants measured numbers: how long each kind of request takes on a real Tally, how big it
+is, which ledger hangs Tally, and what moves the AlterID. The bridge does the measuring itself, one request at a time,
+each stopped after 25 s, and nothing is written to Tally.
+
+Where the numbers go: a plain text report in the bridge's folder (for "Just for me" installs:
+%LOCALAPPDATA%\FinCom Bridge), named measure-<company>-<date-time>.txt. Snapshots are measure-snap-<label>.json there.
+
+Commands (in a Command Prompt, in the bridge's folder; "FinComBridge.exe" is the installed program):
+   FinComBridge.exe measure --company "ZZ TEST"
+   FinComBridge.exe measure --company "ZZ TEST" --ledgers 696-699          (the default range)
+   FinComBridge.exe measure --company "ZZ TEST" --snapshot before [--month 202610]
+   FinComBridge.exe measure --compare before after
+The running bridge does the requests (through its queue: a posting still goes first). From the tray: right-click the
+icon > Measure Tally (for FinCom support) measures the company open in Tally and opens the report when it is done.
+
+
+PART A. THE REPORT (items a to f)
+
+A1. ON GARG SHEKHAR & COMPANY (NWS144) AND ON ZZ TEST
+   Do: TallyPrime open with the company, nobody else working in it. Close FinCom on other computers for these minutes.
+       Right-click the bridge icon > Measure Tally (for FinCom support). Wait (a few minutes; up to 10 if a ledger hangs).
+   You should see: the report opens. Its lines:
+       a   the company check: the company's GUID and highest AlterIDs
+       b   about 500 entries (AlterID above highest - 500) over the whole year, every field FinCom needs
+       c1  the same, this month only;  c2  the same, the busiest month only (c0: the year's dates, to find it)
+       d   the GUID list only, this month
+       e   one entry with every field: its size, and for each field "present", "present, empty" or "absent"
+       f0  every ledger's name; f696..f699: for each of the ledgers numbered 696-699 in name order, the company check,
+           then its master's fields (parent, is revenue, affects stock, bill-wise, cost centres), then the opening its
+           master stores. A request that does not answer in 25 s says HANGS; the bridge then sends nothing but the small
+           company check (once a minute) until Tally answers, and stops after two hangs.
+   Write down: the ms, bytes and count of every line, and which ledger (if any) says HANGS, with its fields.
+   If not: send the report file and icon > Show log.
+
+A2. THE MADE-UP BIG COMPANY (200,000 entries) - items a to d at scale
+   Do, once, on a computer with Python 3:
+       python3 tests/fixtures/big/make_big_company.py
+       (writes tests/out/big: big-masters.xml and big-vouchers-01.xml ... -10.xml, 20,000 entries each, ~240 MB;
+       never commit them). Options: --vouchers 200000 --chunk 20000 --fy 2025 --seed 7.
+   Then in TallyPrime:
+       1. Create a company "ZZ BIG TEST", books and financial year from 1-Apr-2025. F11: enable GST (state Delhi),
+          TDS, and "Maintain cost centres". Do not use a real client's data path.
+       2. Gateway of Tally > Import > Masters > big-masters.xml (Behaviour: Combine / Ignore duplicates).
+       3. Gateway of Tally > Import > Transactions > big-vouchers-01.xml; then -02 ... -10, in order. Each takes
+          minutes. Tally's import log (tally.imp) shows any line it refused: send it if there are errors.
+       4. Check: Day Book of 31-Mar-2026 has entries; Balance Sheet shows no "Difference in opening balances".
+   Then run A1 on ZZ BIG TEST (and once more with Tally busy on a report in another window, if you like).
+   Write down: the same numbers as A1. Of interest most: b, c1, c2 and d at 200,000 entries.
+
+
+PART B. WHAT MOVES THE ALTERID (snapshots)
+
+For each test below:
+   1. FinComBridge.exe measure --company "ZZ TEST" --snapshot b<N>-before      (N = the test's number)
+   2. do the change in TallyPrime, exactly as written
+   3. FinComBridge.exe measure --company "ZZ TEST" --snapshot b<N>-after
+   4. FinComBridge.exe measure --compare b<N>-before b<N>-after
+   5. write the comparison's lines into the table at the end
+   Use an entry of the current month (snapshots cover one month; --month yyyymm for another month, the same in both).
+
+B1. BANK RECONCILIATION: set the bank date of one payment in Banking > Bank Reconciliation; save.
+B2. BILL SETTLEMENT: make a receipt against an existing sales bill (Agst Ref) of this month.
+B3. DATE CHANGE: alter one entry and change only its date (stay in the same month).
+B4. DELETE AND RE-ENTER: delete one entry (Alt+D), then enter it again by hand, the same in every field.
+B5. ALTER WITHOUT CHANGE: open one entry, press Ctrl+A to save it without changing anything.
+B6. A MASTER: rename one ledger used by an entry of this month (snapshots show whether the entries' AlterIDs move).
+B7. RESTORE: back the company up (Data > Backup), make one entry, restore the backup over the company, then snapshot.
+B8. REPAIR: Data > Repair the company, then snapshot.
+B9. SPLIT: split a copy of the company at 1 April (Data > Split), open the new part, snapshot it (compare with the
+    snapshot of the original).
+B10. IMPORT: export one entry (Day Book > Export > XML), delete it, import the file back, snapshot.
+
+The comparison prints: whether the company's GUID is the same, the highest AlterID before and after, and each entry
+"changed" (AlterID, MasterID, date or number), "added" or "gone" (an entry deleted and entered again shows as one gone
+and one added: a new GUID).
+
+TABLE (fill in)
+
+Test | Company GUID same? | Highest AlterID before -> after | Entries changed / added / gone | AlterID of the entry touched: moved? | MasterID or GUID changed? | Notes
+-----|--------------------|---------------------------------|---------------------------------|--------------------------------------|---------------------------|------
+B1 bank reconciliation |  |  |  |  |  |
+B2 bill settlement     |  |  |  |  |  |
+B3 date change         |  |  |  |  |  |
+B4 delete / re-enter   |  |  |  |  |  |
+B5 save unchanged      |  |  |  |  |  |
+B6 ledger rename       |  |  |  |  |  |
+B7 restore             |  |  |  |  |  |
+B8 repair              |  |  |  |  |  |
+B9 split               |  |  |  |  |  |
+B10 import             |  |  |  |  |  |
+
+REPORT TABLE (fill in from A1 / A2)
+
+Company | Entries in the year | a ms | b ms / bytes / count | c1 ms / count | c2 ms / count (month) | d ms / count | e bytes, fields absent | f: ledger that HANGS (fields)
+--------|---------------------|------|----------------------|---------------|-----------------------|--------------|------------------------|------------------------------
+GARG SHEKHAR & COMPANY |  |  |  |  |  |  |  |
+ZZ TEST                |  |  |  |  |  |  |  |
+ZZ BIG TEST            | 200,000 |  |  |  |  |  |  |
+
+SEND: the report files (measure-*.txt), the comparison output of each B test, and icon > Show log.

@@ -1,68 +1,86 @@
-FINCOM BRIDGE 2.1.4 - TEST SHEET (NWS144, staging)
+FINCOM BRIDGE 2.1.4 (rebuilt 02-Oct-2026) - TEST SHEET (NWS144, staging)
 
 File:        FinComBridge-Setup-2.1.4.exe
-Fingerprint: 1416c5e96b2208a4def6f75fee621d5fc5cf6c8e855a5d81519d06f115ae9bf5 (SHA-256)
+Fingerprint: 0afc0284b22eb60f43048cafbb34e17f91a69da5535f0a2d0f50d0fbe9db7b2a (SHA-256)
 Link:        https://staging.fincom.live/review/assets/bridge-go/FinComBridge-Setup-2.1.4.exe
+(The earlier 2.1.4 build was never handed out; this one replaces it under the same number.)
 
 What is new since 2.1.3
-  Immediately before each voucher goes to Tally (first post, Retry, Post again; from this browser, another tab,
-  another computer, or FinCom's cloud queue), the bridge reads Tally live for that one date and party. A voucher
-  already there with the same party ledger, the same bill / reference number, the same date and the same amount is
-  NOT posted again: "Already in Tally (voucher no. X, dd-mm-yyyy)".
-  If Tally does not answer that check (busy, a message box, closed, too slow, a bad answer), nothing is posted:
-  "Could not check Tally, not posted. Try again."
-  Ledgers (masters) are not checked this way; they keep "Altered in Tally: it existed already".
+  - Tally is never asked for a balance: no opening balances read a batch at a time (TDSDeskKeepBal), no trial balance,
+    no ledger balance, no Ledger Vouchers report. FinCom works balances out from its copy of the books.
+  - Until the change read is measured, Tally is read only by Update now and the nightly run: the day book of the year,
+    a month a request (a month that does not answer in 25 s is read again in halves, down to a day), each month saved as
+    it comes. Opening a client in FinCom, or a posting, reads nothing from Tally.
+  - One request to Tally at a time; a posting goes before anything else waiting. After a request Tally did not answer,
+    nothing is sent except one small check (the company's name and GUID), at most once a minute, until Tally answers it.
+  - The company's GUID is held: a company of the same name with another GUID (restored, re-created) is neither read nor
+    posted to.
+  - Every voucher posted carries its FinCom id at the end of its narration ("TDSDesk:<id>"); before posting, Tally is
+    looked through for that id on the voucher's date first, then the party / bill / date / amount check of 2.1.4.
+  - A posting sent when Tally stopped answering shows "Checking whether it reached Tally" and is not sent again until
+    Tally answers and the id has been looked for: found -> In Tally; not found -> sent once more.
+  - Only one bridge reads or posts a company at a time (a lease in FinCom's cloud, once migration-32 is applied).
+  - Measure Tally (for FinCom support), in the tray and as a command: see docs/tally-measure-sheet.txt.
 
-Use ZZ TEST only for every posting below, never GARG SHEKHAR & COMPANY.
+Use ZZ TEST for every posting below, never GARG SHEKHAR & COMPANY.
 
 1. INSTALL OVER 2.1.3
    Do: TallyPrime open with ZZ TEST. Open the Link, then in PowerShell:
        Get-FileHash $env:USERPROFILE\Downloads\FinComBridge-Setup-2.1.4.exe
        Double-click the setup; "Windows protected your PC" > More info > Run anyway; "Just for me"; Next.
    You should see: the Fingerprint above. "FinCom Bridge 2.1.4 is installed and running", "Main bridge: reading and
-       posting". You are not asked to pair again. Right-click the icon > Status shows version 2.1.4.
+       posting". You are not asked to pair again. Right-click the icon > Status shows version 2.1.4; the menu has
+       "Measure Tally (for FinCom support)".
    If not: the page's title and reason; keep "Send install log to FinCom" ticked and click Finish.
 
-2. POSTING ONE ZZ TEST BILL
-   Do: in FinCom (staging), open ZZ TEST > Post to Tally. Pick one approved bill (write down its party, bill number,
-       date and amount) and press Post 1 to Tally.
-   You should see: "In Tally (verified)" with Tally's voucher number. In TallyPrime, Day Book of that date: the
-       voucher once. Show log: "voucher ...: sent to Tally; reading it back" and "Import into 'ZZ TEST': 1 of 1
-       created". No "NOT POSTED" line.
-   If not: what FinCom showed and the log lines of that minute.
+2. 30 IDLE MINUTES: NO REQUEST
+   Do: right after installing, note icon > Status "Requests sent to Tally since the bridge started: N". Leave Tally and
+       FinCom open, touch nothing for 30 minutes (opening a client in FinCom is fine).
+   You should see: the count of requests to Tally the same after 30 minutes. In Show log no "Tally 9000:" line and no
+       "Keeping ..." line in those minutes; opening a client logs "Light update ...: Tally is not read".
+   If not: the log of those minutes.
 
-3. THE SAME BILL AGAIN FROM A SECOND BROWSER TAB (stale data)
-   Do: BEFORE step 2, open ZZ TEST > Post to Tally in a second tab and leave it alone. After step 2, go to that
-       second tab (do not reload it): the same bill still shows as not posted. Press Post 1 to Tally there.
-   You should see: the bill is refused: "Already in Tally (voucher no. X, dd-mm-yyyy)", X being the number from
-       step 2. In TallyPrime, Day Book of that date: still ONE voucher. Show log, one line:
-       "duplicate check TDSDesk:... (party, bill, date, amount): NOT POSTED, already in Tally as Journal no. X of
-       dd-mm-yyyy (GUID ...)". No "Import into 'ZZ TEST': 1 of 1 created" for it.
-   Then: in the first tab, press Post again (or Retry) on the same bill: refused the same way.
-   If not: a screenshot of both tabs, the Day Book of that date, and the log of those minutes.
+3. UPDATE NOW READS THE DAY BOOK A MONTH AT A TIME, NOTHING ELSE
+   Do: in FinCom open ZZ TEST and press Update now. Watch Show log.
+   You should see: "Keeping ZZ TEST: day book 20260401-20260430, N entries (x.xs), M day(s) changed; saved", one line a
+       month up to today, then "the day book from ... to ... read (N entries); M day(s) changed since the last read".
+       No "KeepBal", "opening balances", "balance" or "trial balance" line anywhere in the log. Press Update now again:
+       the same months, "0 day(s) changed".
+   If not: the log from "Update from Tally: asked for now".
 
-4. POSTING WHILE TALLY SHOWS A MESSAGE BOX
-   Do: in TallyPrime press Alt+F4 so the "Quit?" box shows, and leave it open. In FinCom, post another approved ZZ
-       TEST bill (one not in Tally yet). Wait 1 minute.
-   You should see one of these, and never "In Tally":
-       "Could not check Tally, not posted. Try again." (the check was not answered within 25 s), or
-       "Waiting for Tally: Tally is busy ..." (Tally did not answer before the check was reached; nothing sent).
-       Show log: "duplicate check ...: NOT POSTED, could not check Tally: Tally is busy and did not answer in time
-       ..." (or the waiting line). In TallyPrime, after closing the box with No: the bill is NOT in the Day Book
-       (unless it was "Waiting" and went in by itself after you closed the box: then once only).
-   Then: close the box (No). Press Try again / Retry in FinCom: it posts, "In Tally (verified)", once.
+4. A POSTING DURING A READ GOES AT ONCE
+   Do: press Update now on GARG SHEKHAR & COMPANY (a long read), and while its "day book ..." lines appear, post one
+       approved ZZ TEST bill from FinCom.
+   You should see: the bill "In Tally (verified)" within seconds; the log says "a background read was stopped at once so
+       FinCom's request goes first", then the read goes on from the month it was on.
+   If not: what FinCom showed and the log of that minute.
+
+5. A POSTING WITH TALLY SHOWING A MESSAGE BOX
+   Do: in TallyPrime press Alt+F4 so the "Quit?" box shows; leave it. In FinCom post another approved ZZ TEST bill.
+   You should see: either "Could not check Tally, not posted. Try again." (the check was not answered; nothing sent), or,
+       if the bill had already been sent when Tally stopped answering, "Checking whether it reached Tally" on the Post page
+       (the entry's state "unknown"). The log: "Tally 9000 is busy (no answer in 25s); nothing more is sent to it until it
+       answers a small check" and then at most one "FinComCompany" check a minute.
+   Then: close the box with No. Within a minute or two: "Tally 9000 answered the small check"; the bill becomes
+       "In Tally (verified)" (it had arrived: "Created (Tally answered late)") or is sent once more and verified. In
+       TallyPrime's Day Book: the bill ONCE.
    If not: what FinCom showed, the Day Book of that date, and the log of those minutes.
 
-5. NORMAL POSTING STILL WORKS
-   Do: post two more approved ZZ TEST bills together (Post 2 to Tally), one of them for the same party and date as
-       step 2 but a different bill number.
-   You should see: both "In Tally (verified)", each once in the Day Book. No "NOT POSTED" line in the log. The
-       posting takes about as long as it did on 2.1.3 (a second or two more at most).
-   If not: what FinCom showed and the log of those minutes.
+6. THE SAME BILL AGAIN (THE FINCOM ID)
+   Do: after step 4, press Post again on the same bill in a second browser tab that still shows it as not posted.
+   You should see: "Already in Tally (voucher no. X, dd-mm-yyyy)"; the log: "duplicate check ...: NOT POSTED, its FinCom
+       id is in Tally already". In TallyPrime the voucher's narration ends with "TDSDesk:<id>". Still ONE voucher.
+   If not: a screenshot of both tabs, the Day Book of that date, and the log.
 
-6. CLEAN UP
-   Do: in TallyPrime delete the ZZ TEST vouchers made in steps 2, 4 and 5 (or use Remove from Tally in FinCom).
-   Then (optional): post the bill of step 2 again. It goes in (it was removed, so the check does not find it).
+7. MEASURE TALLY
+   Do: icon > Measure Tally (for FinCom support) with GARG SHEKHAR & COMPANY open; wait (a few minutes).
+   You should see: a report opens (measure-...txt in the bridge's folder) with lines a, b, c1, c2, d, e (and its fields),
+       f0 and the ledgers 696-699, each with ms, bytes and count; a ledger that does not answer in 25 s says HANGS, and
+       the bridge waits for the small check before the next one.
+   Then: follow docs/tally-measure-sheet.txt (parts A and B) and send the report and the filled tables.
+
+8. CLEAN UP
+   Do: in TallyPrime delete the ZZ TEST vouchers made in steps 4-6 (or Remove from Tally in FinCom).
 
 IF SOMETHING FAILS, SEND ME
    a) the step number and what you saw (a screenshot helps);

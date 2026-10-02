@@ -377,7 +377,10 @@ func TestOneAtATimePostingsFirst(t *testing.T) {
 	standBridge(t, f, "")
 	var wg sync.WaitGroup
 	wg.Add(3)
-	go func() { defer wg.Done(); _, _ = invokeTally(fin, f.port, collectionRequest("TDSDeskNames", "Ledger", "NAME", zz, ""), 0) }()
+	go func() {
+		defer wg.Done()
+		_, _ = invokeTally(fin, f.port, collectionRequest("TDSDeskNames", "Ledger", "NAME", zz, ""), 0)
+	}()
 	time.Sleep(300 * time.Millisecond)
 	go func() {
 		defer wg.Done()
@@ -679,6 +682,7 @@ func TestMeasureTool(t *testing.T) {
 		t.Fatal(err)
 	}
 	rep := str(r["report"])
+	t.Log("\n" + rep)
 	for _, want := range []string{"\na ", "\nb ", "\nc1 ", "\nc2 ", "\nd ", "\ne ", "\nf0 ", "f8-fields", "f8-opening", "f9-fields", "f9-opening",
 		"company GUID co-guid-1", "ledger entries", "bill-wise allocations", "bank reconciliation date", "HANGS", "waiting for Tally to answer the company check", "is revenue Yes"} {
 		if !strings.Contains(rep, want) {

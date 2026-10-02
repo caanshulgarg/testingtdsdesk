@@ -24,7 +24,9 @@ import (
 // FinComBridge.exe compare               this bridge's copy against bridge 1.15.0's, day by day
 // FinComBridge.exe sync                  (retired: the old nightly copy task; it now only removes that task)
 // FinComBridge.exe measure --company C [--out F] [--ledgers 696-699] | --snapshot L [--month yyyymm] | --compare L1 L2
-//                                        Tally measured for FinCom support (measure.go)
+//
+//	Tally measured for FinCom support (measure.go)
+//
 // FinComBridge.exe version
 // The PowerShell bridge's own arguments work too (-ConfigPath F, -Sync), so its tests run this bridge unchanged.
 func main() {
