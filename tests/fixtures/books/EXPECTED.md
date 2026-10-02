@@ -37,6 +37,7 @@ All amounts are in rupees. Dates are in 2025-26, and the books run from 01-Apr-2
 | A company's own primary group of expenses, and a group two levels below a primary group | Employee Benefit Expenses; Office Costs |
 | Profit & Loss A/c with a debit opening (losses of earlier years), under `&#4; Primary` | Master |
 | Loans from people (for the related-party checks) | Hemant Zaverchand (Loan), Nirmala Quereshi (Loan) |
+| A second bank account with no entries and a nil balance (the bank-posting tests post to it) | Kaveri Bank - CA 0815 |
 
 ## Opening balances (01-Apr-2025)
 
