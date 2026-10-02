@@ -29,6 +29,9 @@ def until(fn, secs=180, step=1.0):
         time.sleep(step)
     return None
 CO = fake_tally.COMPANY
+# days in March 2026 with entries, to change one and see only its day go again: the real client's, or the fixture's
+D1, D2 = ("20260318", "20260320") if fake_tally._bd.FIXTURE else ("20260310", "20260312")
+NLED = len(fake_tally.L) if fake_tally._bd.FIXTURE else 501   # every ledger of the fixture; more than 500 of the real client's
 def sync_dir(): return [d for d in glob.glob(_os.path.join(BRUN, "sync", "*")) if _os.path.isdir(d)]
 def man():
     d = sync_dir()
@@ -60,7 +63,7 @@ try:
     fake_cloud.LINKS[CO] = "client-1"
     want = day_files()
     ok(until(lambda: all((CO, d) in fake_cloud.DAYS for d in want), 240, 2), "once linked, every day kept goes to the cloud: %d of %d" % (sum(1 for d in want if (CO, d) in fake_cloud.DAYS), len(want)))
-    ok(CO in fake_cloud.LEDGERS and len(fake_cloud.LEDGERS[CO]["ledgers"]) > 500 and fake_cloud.LEDGERS[CO]["from"] == FROM, "the ledgers and opening balances go too (%d)" % len((fake_cloud.LEDGERS.get(CO) or {}).get("ledgers", [])))
+    ok(CO in fake_cloud.LEDGERS and len(fake_cloud.LEDGERS[CO]["ledgers"]) >= NLED and fake_cloud.LEDGERS[CO]["from"] == FROM, "the ledgers and opening balances go too (%d)" % len((fake_cloud.LEDGERS.get(CO) or {}).get("ledgers", [])))
     same = all(fake_cloud.DAYS[(CO, d)] == open(_os.path.join(sync_dir()[0], "days", d + ".xml"), encoding="utf-8").read() for d in want)
     ok(same, "each day arrives exactly as kept")
     mar = sum(len(re.findall(r"<VOUCHER\b", t)) for (c, d), t in fake_cloud.DAYS.items() if d.startswith("202603"))
@@ -71,22 +74,22 @@ try:
     ok(until(lambda: (fake_cloud.STATE.get(CO) or {}).get("phase") == "live", 60), "the copy's state goes too: " + json.dumps(fake_cloud.STATE.get(CO))[:120])
     # ---------- a change in Tally: only that day goes again
     n0 = len(fake_cloud.SENT)
-    g = re.search(r"<GUID>([^<]*)</GUID>", [p for d, p in fake_tally.V if d == "20260310"][0]).group(1)
+    g = re.search(r"<GUID>([^<]*)</GUID>", [p for d, p in fake_tally.V if d == D1][0]).group(1)
     fake_tally.edit_amount(g, 2)
-    ok(until(lambda: ("20260310" in [d for c, d in fake_cloud.SENT[n0:]]) and "<GUID>%s</GUID>" % g in fake_cloud.DAYS[(CO, "20260310")] and fake_cloud.DAYS[(CO, "20260310")] == open(_os.path.join(sync_dir()[0], "days", "20260310.xml"), encoding="utf-8").read(), 120, 2),
+    ok(until(lambda: (D1 in [d for c, d in fake_cloud.SENT[n0:]]) and "<GUID>%s</GUID>" % g in fake_cloud.DAYS[(CO, D1)] and fake_cloud.DAYS[(CO, D1)] == open(_os.path.join(sync_dir()[0], "days", "20260310.xml"), encoding="utf-8").read(), 120, 2),
        "an entry changed in Tally: its day goes to the cloud again")
     ok(len(set(d for c, d in fake_cloud.SENT[n0:])) <= 3, "and only the days that changed: " + ", ".join(sorted(set(d for c, d in fake_cloud.SENT[n0:]))))
     # ---------- the cloud down: the day waits on disk, then goes
     fake_cloud.CTRL["down"] = True
     n1 = len(fake_cloud.SENT)
-    g2 = re.search(r"<GUID>([^<]*)</GUID>", [p for d, p in fake_tally.V if d == "20260312"][0]).group(1)
+    g2 = re.search(r"<GUID>([^<]*)</GUID>", [p for d, p in fake_tally.V if d == D2][0]).group(1)
     fake_tally.edit_amount(g2, 3)
     qf = _os.path.join(sync_dir()[0], "cloud-out.txt")
-    ok(until(lambda: "20260312" in open(qf).read(), 120, 2), "with the cloud down, the changed day waits in the queue on disk")
+    ok(until(lambda: D2 in open(qf).read(), 120, 2), "with the cloud down, the changed day waits in the queue on disk")
     ok(until(lambda: "nothing is lost" in log(), 60), "the log says the cloud did not answer and nothing is lost")
     fake_cloud.CTRL["down"] = False
-    ok(until(lambda: ("20260312" in [d for c, d in fake_cloud.SENT[n1:]]), 200, 2), "when the cloud is back, the day goes")
-    ok(until(lambda: "20260312" not in open(qf).read(), 60), "and leaves the queue")
+    ok(until(lambda: (D2 in [d for c, d in fake_cloud.SENT[n1:]]), 200, 2), "when the cloud is back, the day goes")
+    ok(until(lambda: D2 not in open(qf).read(), 60), "and leaves the queue")
     st = call("/keep?company=" + urllib.parse.quote(CO))
     ok(st.get("cloud", {}).get("connected") and "status" in st.get("cloud", {}), "the bridge's status tells FinCom about the cloud: " + json.dumps(st.get("cloud"))[:160])
     # ---------- the key revoked in FinCom
