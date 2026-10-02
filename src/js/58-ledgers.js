@@ -22,7 +22,8 @@ const Ledgers = {
   hist: {},           // cid -> {ledger -> vouchers} (the supplier's entries, from the cloud copy)
   histBusy: {},
   gstinMap: {},       // cid -> {GSTIN -> ledger} (from the cloud copy's entries)
-  cid(){ const b = typeof B === "function" ? B() : null; return (b && b.cid) || S.coId; },
+  // the client on screen; outside a client's pages, the one whose bank data is loaded
+  cid(){ if (S.view === "company" && S.coId) return S.coId; const b = typeof B === "function" ? B() : null; return (b && b.cid) || S.coId; },
   bankList(cid){ const b = S.bank; return b && b.cid === cid && b.ledgers && b.ledgers.list || []; },
   // the list for a client: the one held, or the bank's copy when that is longer (set by a file import or a test)
   list(cid){
@@ -82,11 +83,12 @@ const Ledgers = {
   // and from the client's books (ledger masters read from Tally)
   enrich(cid, list, held){
     const by = new Map(((held && held.list) || []).map(l => [l.name.toLowerCase(), l]));
-    const bk = S.books && S.books.cid === cid ? S.books : null, info = (bk && bk.ledInfo) || {}, gst = (bk && bk.gstins) || {}, pans = (bk && bk.pans) || {};
+    const bk = S.books && S.books.cid === cid ? S.books : null, info = (bk && bk.ledInfo) || {};
     const keys = ["gstin", "pan", "taxType", "dutyHead", "tdsNature", "acNo", "ifsc"];
     return list.map(l => {
       const o = by.get(l.name.toLowerCase()), i = info[l.name] || {}, x = Object.assign({}, l);
-      keys.forEach(k => { if (!x[k]) x[k] = (o && o[k]) || i[k] || (k === "gstin" ? gst[l.name] : k === "pan" ? pans[l.name] : "") || ""; });
+      // GSTIN and PAN as Tally gave them (the cloud's columns, a bridge read); the books copy is read apart (bookIds)
+      keys.forEach(k => { if (!x[k]) x[k] = (o && o[k]) || (k === "gstin" || k === "pan" ? "" : i[k]) || ""; });
       if (!x.group) x.group = (o && o.group) || i.group || (bk && bk.under && bk.under[l.name]) || "";
       return x;
     });
@@ -201,6 +203,16 @@ const Ledgers = {
   // "1,110 ledgers from Tally · 02-Oct 10:56"
   when(at){ if (!at) return ""; const d = new Date(at); return isNaN(d) ? "" : String(d.getDate()).padStart(2, "0") + "-" + MONTHS3[d.getMonth()] + " " + fmtTime(d); },
 
+  // a ledger's GSTIN and PAN: as Tally has them now (the cloud's ledger list from migration 28, or a bridge read), and
+  // as the books copy has them (ledger masters read with the books: ledInfo, gstins, pans; staging client_book_items)
+  ids(cid, name){
+    const l = (cid === this.cid() && typeof knownLedgers === "function" ? knownLedgers().get(String(name).toLowerCase()) : null) || {};
+    const bk = S.books && S.books.cid === cid ? S.books : null, i = (bk && (bk.ledInfo || {})[name]) || {};
+    const up = v => String(v || "").toUpperCase().trim();
+    const tg = up(l.gstin), tp = up(l.pan) || (GSTIN_RE.test(tg) ? tg.slice(2, 12) : "");
+    const bg = up(i.gstin) || up(bk && (bk.gstins || {})[name]), bp = up(i.pan) || up(bk && (bk.pans || {})[name]) || (GSTIN_RE.test(bg) ? bg.slice(2, 12) : "");
+    return {gstin: tg || bg, pan: tp || bp, tallyGstin: tg, bookGstin: bg, tallyPan: tp, bookPan: bp};
+  },
   // ---------- groups ----------
   // the group chain of a ledger, from the list held, the cloud's groups, and the client's books
   chain(cid, name){
@@ -372,10 +384,9 @@ const Ledgers = {
       if (v.cancel || v.opt) return;
       const base = (v.ent || []).filter(e => ["expense", "asset"].includes(cl(e.l)) && e.a < 0).reduce((a, e) => a + Math.abs(e.a), 0);
       (v.ent || []).forEach(e => {
-        const c = cl(e.l);
-        if (c === "expense" || c === "income" || c === "party" || c === "bank" || c === "asset") return;
-        const x = u[e.l] = u[e.l] || {n: 0, rates: {}};
+        const c = cl(e.l), x = u[e.l] = u[e.l] || {n: 0, rates: {}};
         x.n++;
+        if (c === "expense" || c === "income" || c === "party" || c === "bank" || c === "asset") return;
         if (base > 0){ const r = this.snapRate(Math.abs(e.a) / base * 100); if (r) x.rates[r] = (x.rates[r] || 0) + 1; }
       });
     });

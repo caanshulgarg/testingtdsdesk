@@ -146,8 +146,12 @@ export function FixBanner() {
 // what the last posting to Tally did
 export function PostReport({ rep }) {
   if (!rep) return null;
-  const bits = [(rep.posted || 0) + (rep.checking ? " sent" + (rep.company ? " to " + rep.company : "") + " · checking them in Tally in the background…" : " posted" + (rep.company ? " into " + rep.company + (rep.unread ? "" : " and confirmed there") : ""))];
-  if (rep.unread) bits.push(rep.unread + " not read back yet (Tally did not answer the check; use ‘Mark lines already in Tally’ later)");
+  // one clear word for each (review of 02-Oct-2026): In Tally (verified) / In Tally, not yet read back / Failed
+  if (rep.notAllowed) return <div className="bk-alert bad" data-not-allowed=""><b>Not sent to Tally: choose the Tally company.</b>{" " + rep.notAllowed + " "}
+    <button className="btn small primary" onClick={() => goChooseTallyCompany()}>Choose the Tally company</button>{" "}<Btn act={rep.dismiss} className="linkbtn">Dismiss</Btn></div>;
+  const verified = rep.checking ? 0 : (rep.posted || 0) - (rep.unread || 0);
+  const bits = [rep.checking ? (rep.posted || 0) + " in Tally" + (rep.company ? " (" + rep.company + ")" : "") + ", not yet read back: FinCom reads them back by itself…" : verified + " in Tally (verified)" + (rep.company ? " · " + rep.company : "")];
+  if (rep.unread) bits.push(rep.unread + " in Tally, not yet read back (Tally did not answer the check; use ‘Mark lines already in Tally’ later)");
   if (rep.optional) bits.push(rep.optional + " as Optional vouchers (Tally: Display More Reports → Exception Reports → Optional Vouchers)");
   if (rep.skipped) bits.push(rep.skipped + " already in Tally (not posted again)");
   if (rep.failed && rep.failed.length) bits.push(rep.failed.length + " not posted");

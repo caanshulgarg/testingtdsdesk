@@ -194,35 +194,58 @@ function Tds({ e, c, v, ro }) {
   );
 }
 
-// a ledger on the draft entry: typed (with the Tally ledger list, data-ac), checked against Tally, fixable
+// "1,110 ledgers from Tally · 02-Oct 10:56 · Refresh": the client's one ledger list (Ledgers), under each ledger box
+function LedStatus() {
+  const st = Ledgers.status(S.coId);
+  return <div className="ledstat" data-led-status="">
+    {st.busy ? "Reading the ledgers… " : ""}{st.n ? st.n.toLocaleString("en-IN") + " ledgers from Tally" + (st.at ? " · " + Ledgers.when(st.at) : "") : "No ledger list from Tally yet"}
+    {" · "}<button className="linkbtn" disabled={st.busy} onClick={() => Ledgers.refresh(S.coId)}>Refresh</button>
+    {st.err && !st.busy ? <span className="bad"> · {st.err}</span> : null}</div>;
+}
+const TAX_ROLES = ["gst", "rcm-in", "rcm-out", "tds"];
+// a ledger on the draft entry: typed or searched (the client's Tally ledgers, data-ac), checked against Tally, with why
+// it was picked; GST and TDS lines too (a ledger of another tax head or section is refused)
 function LedgerCell({ e, l, ro, tallyCtx }) {
-  const edit = !ro && (l.role === "expense" || l.role === "party");
+  const tax = TAX_ROLES.includes(l.role);
+  const edit = !ro && (l.role === "expense" || l.role === "party" || (tax && !!l.key));
   const key = l.role === "expense" ? "expenseLedger" : "partyLedger";
   const h = e.partyHist, ex = l.ledger && tallyCtx && !e.exportedAt ? exactLedger(l.ledger) : null;
+  const val = tax ? (e.taxLed && e.taxLed[l.key] != null ? e.taxLed[l.key] : l.ledger || "") : e[key] || "";
+  const label = l.role === "expense" ? "Expense ledger" : l.role === "party" ? "Party ledger" : l.role === "tds" ? "TDS ledger" : (l.head || "GST") + " ledger";
+  const fix = (n) => tax ? billSetTaxLed(e, l.key, n) : billFixLedger(l.role, l.ledger, n);
   return <>
-    {edit ? <input type="text" data-e={key} data-fk={"e:" + key} data-ac="1" autoComplete="off" value={e[key] || ""}
-      aria-label={l.role === "expense" ? "Expense ledger" : "Party ledger"} placeholder={l.role === "expense" ? "Expense ledger" : "Party ledger"}
-      onChange={(ev) => billSetText(e, key, ev.target.value)} /> : l.ledger ? l.ledger : <span className="missing">Ledger not set</span>}
-    {edit && l.role === "party" && e.partyFromTally && <div className="note">From Tally: {e.partyFromTally}</div>}
+    {edit ? (tax
+      ? <input type="text" data-tl={l.key} data-fk={"tl:" + l.key} data-ac="1" data-acrole={l.role} autoComplete="off" value={val}
+          aria-label={label} placeholder={l.ask || label} onChange={(ev) => billSetTaxLed(e, l.key, ev.target.value)} />
+      : <input type="text" data-e={key} data-fk={"e:" + key} data-ac="1" data-acrole={l.role} autoComplete="off" value={val}
+          aria-label={label} placeholder={label} onChange={(ev) => billSetText(e, key, ev.target.value)} />)
+      : l.ledger ? l.ledger : <span className="missing">{l.ask || "Ledger not set"}</span>}
+    {edit && l.role === "party" && e.partyNote && e.partyFrom && <div className="note" data-led-note="party">{e.partyNote}</div>}
+    {edit && l.role === "party" && (e.partyFrom ? <div className="note" data-led-why="party">{e.partyFrom}</div>
+      : !e.partyLedger && tallyCtx ? <div className="bk-warn" data-led-why="party">No ledger found for this supplier: search or create</div> : null)}
+    {edit && tax && (l.bad ? <div className="bk-warn" data-led-why={l.key}>{l.bad}</div>
+      : !l.ledger ? <div className="bk-warn" data-led-why={l.key}>{l.ask}</div>
+      : l.why ? <div className="note" data-led-why={l.key}>{l.why}</div> : null)}
     {l.ledger && tallyCtx && !e.exportedAt && (ex
       ? <> <span className="lg-ok" title={"In Tally as “" + ex + "”"}>✔</span></>
       : <div className="lg-miss">Not in Tally
-          {suggestLedgers(l.ledger, l.role, 2).map((n) => <span key={n}> <button className="linkbtn" onClick={() => billFixLedger(l.role, l.ledger, n)}>Use “{n}”</button></span>)}
-          {" "}<button className="linkbtn" onClick={() => billFixLedger(l.role, l.ledger, null)}>Create in Tally</button></div>)}
+          {suggestLedgers(l.ledger, l.role, 2).map((n) => <span key={n}> <button className="linkbtn" onClick={() => fix(n)}>Use “{n}”</button></span>)}
+          {!tax && <>{" "}<button className="linkbtn" onClick={() => billFixLedger(l.role, l.ledger, null)}>Create in Tally</button></>}</div>)}
     {l.role === "expense" && <>
-      {e.expenseFrom && !e.expenseUserSet && <div className="nr" style={{ color: "var(--ledger)" }}>{e.expenseFrom}</div>}
+      {e.expenseFrom && !e.expenseUserSet && <div className="nr" style={{ color: "var(--ledger)" }} data-led-why="expense">{e.expenseFrom}</div>}
       {h && h.top && h.top.length > 0 && <div className="phist"><span className="muted">Booked before for this supplier:</span>{" "}
         {h.top.map((t) => ro ? <span key={t.ledger} className="chip">{t.ledger} <b>{t.n}×</b> </span>
           : <span key={t.ledger}><button className={"chip" + (norm(t.ledger) === norm(e.expenseLedger) ? " on" : "")} onClick={() => billUseExpense(e, t.ledger)}>{t.ledger} <b>{t.n}×</b></button> </span>)}
       </div>}
     </>}
+    {edit && <LedStatus />}
   </>;
 }
 
 function Slip({ e, c, ro, snap }) {
   const co = CO(), x = e.x, lines = snap ? snap.lines : c.lines;
   const tot = lines.reduce((a, l) => { a[l.side] += l.amt; return a; }, { Dr: 0, Cr: 0 });
-  const tallyCtx = !!(S.bank && S.bank.cid === S.coId && !S.bank.loading && hasLedgerList());
+  const tallyCtx = ledgerListFor(S.coId);
   return (
     <section><h3>Draft entry for Tally: {co.tallyName || co.name}</h3><div className="slip">
       <div className="sh"><b>{co.voucherType} voucher</b><span>{fmtDate(x.invoiceDate) + (x.invoiceNo ? ", ref " + x.invoiceNo : "")}</span></div>
@@ -235,7 +258,7 @@ function Slip({ e, c, ro, snap }) {
         <tfoot><tr><td></td><td>Total</td><td className="n">{INR.format(r2(tot.Dr))}</td><td className="n">{INR.format(r2(tot.Cr))}</td></tr></tfoot>
       </table>
       {!ro && !tallyCtx && <p className="note" style={{ margin: "8px 0 0" }}>The ledgers are not checked against Tally yet: this client's ledger list has not been read.{" "}
-        <button className="btn small" onClick={() => billReadLedgers()}>{bridgeLive(co) ? "Read the ledgers from Tally" : "Bring in the ledger list (from Tally)"}</button></p>}
+        <button className="btn small" onClick={() => billReadLedgers()}>{bridgeLive(co) || (typeof TCloud === "object" && TCloud.has(co.id)) ? "Read the ledgers from Tally" : "Bring in the ledger list (from Tally)"}</button></p>}
       {!ro && c.missing.some((m) => /ledger/i.test(m)) && <p className="bk-warn" style={{ margin: "8px 0 0" }}>Approve waits until every line has a Tally ledger: {c.missing.filter((m) => /ledger/i.test(m)).join("; ")}.</p>}
       {ro ? <div className="narr">{e.narration}</div>
         : <label className="f" style={{ marginTop: 10 }}><span>Narration</span><input type="text" data-fk="e:narration" value={e.narration || ""} onChange={(ev) => billSetText(e, "narration", ev.target.value)} /></label>}
@@ -272,6 +295,10 @@ export default function BillDetail({ id }) {
       {S.previews[e.id] && <section><img className="preview" src={S.previews[e.id]} alt="Invoice being read" /></section>}
     </div>
   );
+  // party, expense: filled by themselves from Tally's ledgers and books, unless a person chose (src/js/01 billAutoLedgers)
+  if (e.status === "draft") billAutoLedgers(e, S.coId);
+  // the client's books (its day book, and each ledger's GSTIN and PAN read with the masters) for those picks
+  if (e.status === "draft" && (!S.books || S.books.cid !== S.coId) && typeof openBooks === "function") setTimeout(() => { if (S.view === "company" && (!S.books || S.books.cid !== S.coId)) openBooks(S.coId); }, 0);
   const co = CO(), c = compute(e), ro = e.status !== "draft", x = e.x, snap = e.status === "approved" && e.snapshot;
   const v = snap ? { applicable: snap.applicable, tds: snap.tds, tdsWould: snap.tdsWould != null ? snap.tdsWould : snap.tds, skip: snap.skip || null, why: snap.why || [], meter: snap.meter || null,
       ref: snap.ref, old: snap.old, pan: snap.pan, indHuf: !!snap.indHuf, fy: snap.fy || fyOf(x.invoiceDate), base: snap.base, tdsBase: snap.tdsBase, rate: snap.rate, rateNote: snap.rateNote || "",

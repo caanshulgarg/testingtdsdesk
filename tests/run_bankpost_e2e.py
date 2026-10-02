@@ -81,7 +81,7 @@ try:
         fake_tally.CTRL["read_delay"] = 0
         fake_tally.CTRL["read_delay_after_import"] = 3; fake_tally.CTRL["_imported"] = False
         t0 = time.time(); pg.evaluate("postBankToTally()"); dt = time.time() - t0
-        ok(pg.evaluate("B().postReport.checking") is True and "checking them in Tally in the background" in pg.inner_text("#app"), "posting ends as soon as the entries are sent (%.1fs); the read-back runs in the background" % dt)
+        ok(pg.evaluate("B().postReport.checking") is True and "not yet read back" in pg.inner_text("#app"), "posting ends as soon as the entries are sent (%.1fs); the read-back runs in the background" % dt)
         for i in range(60):
             if pg.evaluate("!B().rows.some(r => r.checking) && !B().balBusy && !!curStmt().tallyBal"): break
             pg.wait_for_timeout(500)

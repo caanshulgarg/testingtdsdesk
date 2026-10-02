@@ -305,35 +305,36 @@ async function openCreateLedger(name, rowId, targetFk, opts){
 }
 /* ---------- ledger suggestions while typing (works the same in every browser) ---------- */
 const AC = {box: null, fk: null, items: [], idx: -1, q: ""};
-function acMatches(q){
-  const list = Array.from(knownLedgers().values());
+// the drop-down is a search box (review of 02-Oct-2026): case, dots, spaces and "&" / "and" do not matter ("kashi",
+// "kashi i.t" find "Kashi IT Solutions"); a party box lists Sundry Creditors and Debtors first; an expense box lists
+// expense, purchase and fixed-asset ledgers first and never an income ledger (Sales Accounts, Direct / Indirect Incomes)
+function acMatches(q, role){
+  const cid = Ledgers.cid();
+  const list = Array.from(knownLedgers().values()).filter(l => !role || Ledgers.allowed(role, l.pending ? "" : Ledgers.cls(cid, l.name)));
   const qq = q.trim().toLowerCase();
-  if (!qq) return list.slice().sort((a, b) => a.name.localeCompare(b.name)).slice(0, 12).map(l => ({l, sc: 1}));
-  const words = qq.split(/\s+/).filter(Boolean);
+  const rank = l => role ? Ledgers.roleRank(role, l.pending ? "" : Ledgers.cls(cid, l.name)) : 0;
+  if (!qq) return list.map(l => ({l, sc: 1, r: rank(l)})).sort((a, b) => a.r - b.r || a.l.name.localeCompare(b.l.name)).slice(0, 12);
   return list.map(l => {
-    const n = l.name.toLowerCase();
-    let sc = 0;
-    if (n === qq) sc = 100;
-    else if (n.startsWith(qq)) sc = 90;
-    else if (words.every(w => n.includes(w))) sc = 70 + (n.split(/[\s\-\/&.,()]+/).some(t => t.startsWith(words[0])) ? 10 : 0);
-    else if (qq.length >= 3){
+    let sc = Ledgers.match(q, l.name);
+    if (!sc && qq.length >= 3){
       // spelling mistakes: compare with the whole name, each word, and each pair of words
-      const toks = n.split(/[\s\-\/&.,()]+/).filter(Boolean);
+      const n = l.name.toLowerCase(), toks = n.split(/[\s\-\/&.,()]+/).filter(Boolean);
       let sim = nameSim(q, l.name);
       toks.forEach((t, i) => { sim = Math.max(sim, nameSim(qq, t), i + 1 < toks.length ? nameSim(qq, t + " " + toks[i + 1]) : 0); });
       if (sim >= 0.6) sc = sim * 60;
     }
-    return {l, sc};
-  }).filter(x => x.sc > 0).sort((a, b) => b.sc - a.sc || a.l.name.length - b.l.name.length).slice(0, 12);
+    return {l, sc, r: rank(l)};
+  }).filter(x => x.sc > 0).sort((a, b) => (b.sc >= 60) - (a.sc >= 60) || a.r - b.r || b.sc - a.sc || a.l.name.length - b.l.name.length).slice(0, 12);
 }
 function acInput(){ return AC.fk ? document.querySelector('[data-fk="' + AC.fk.replace(/"/g, '\\"') + '"]') : null; }
 function acOpen(input){
-  if (!B()) return;
+  if (!B() && !knownLedgers().size) return;
   // just picked: the redraw that follows puts focus back in the box, which must not open the list again
   if (AC.picked && AC.picked.fk === input.dataset.fk && Date.now() - AC.picked.at < 800 && input.value === AC.picked.value) return;
   AC.fk = input.dataset.fk;
   AC.q = input.value;
-  const m = acMatches(input.value);
+  const role = input.dataset.acrole || "";
+  const m = acMatches(input.value, role);
   const exact = m.some(x => x.l.name.toLowerCase() === input.value.trim().toLowerCase());
   AC.items = m.map(x => ({name: x.l.name, group: x.l.group || "", pending: !!x.l.pending}));
   // ledgers used before for this party come first
@@ -347,7 +348,7 @@ function acOpen(input){
     AC.items = past.concat(AC.items.filter(it => !past.some(p => p.name.toLowerCase() === it.name.toLowerCase())));
   }
   // "create" comes first, where it is seen; Enter still takes the best existing match below it
-  if (input.value.trim() && !exact && hasLedgerList()) AC.items.unshift({name: input.value.trim(), create: true});
+  if (input.value.trim() && !exact && hasLedgerList() && !/^(gst|tds|rcm-in|rcm-out)$/.test(role)) AC.items.unshift({name: input.value.trim(), create: true});
   AC.idx = !input.value.trim() || !AC.items.length ? -1 : AC.items[0].create && AC.items.length > 1 ? 1 : 0;
   if (!AC.box){ AC.box = document.createElement("div"); AC.box.id = "acBox"; AC.box.setAttribute("role", "listbox"); document.body.appendChild(AC.box); }
   acDraw(input);
@@ -386,7 +387,7 @@ function acPick(i){
     if (input.dataset.e === "partyLedger" || input.dataset.e === "expenseLedger"){
     const k = input.dataset.e, e0 = curEntry();
     input.value = e0 ? e0[k] || "" : "";
-    openCreateLedger(it.name, null, null, {group: k === "partyLedger" ? "Sundry Creditors" : "Indirect Expenses", gstin: k === "partyLedger" && e0 ? fixGstin(e0.x.vendorGstin).value : "", onCreated: name => { const e1 = curEntry(); if (e1){ e1[k] = name; Store.saveEntry(S.coId, e1); } render(); }});
+    openCreateLedger(it.name, null, null, {group: k === "partyLedger" ? "Sundry Creditors" : "Indirect Expenses", gstin: k === "partyLedger" && e0 ? fixGstin(e0.x.vendorGstin).value : "", onCreated: name => { const e1 = curEntry(); if (e1){ e1[k] = name; if (k === "partyLedger"){ e1.partyUserSet = true; e1.partyAuto = false; e1.partyFrom = ""; } else { e1.expenseUserSet = true; e1.expenseAuto = false; e1.expenseFrom = ""; } Store.saveEntry(S.coId, e1); } render(); }});
     return;
   }
   if (input.dataset.svcust || input.hasAttribute("data-sdcust") || input.hasAttribute("data-svbulk")){
@@ -411,7 +412,7 @@ function acPick(i){
   if (input.dataset.bled){ input.dispatchEvent(new Event("change", {bubbles: true})); AC.picked.at = Date.now(); setTimeout(() => { const el = acInput() || document.querySelector('[data-fk="' + AC.picked.fk.replace(/"/g, '\\"') + '"]'); if (el && document.activeElement === el) el.blur(); acClose(); }, 0); }
   else if (input.hasAttribute("data-bulkled")) bulkLedgerFrom(input);
   else if (input.dataset.svcust || input.hasAttribute("data-sdcust")) input.dispatchEvent(new Event("change", {bubbles: true}));
-  else if (input.dataset.e){ input.dispatchEvent(new Event("input", {bubbles: true})); input.dispatchEvent(new Event("change", {bubbles: true})); }
+  else if (input.dataset.e || input.dataset.tl){ input.dispatchEvent(new Event("input", {bubbles: true})); input.dispatchEvent(new Event("change", {bubbles: true})); }
   else if (input.hasAttribute("data-svbulk")){ const l = exactLedger(input.value); if (l) salesBulk("ledger", l); }
 }
 function acAfterRender(){

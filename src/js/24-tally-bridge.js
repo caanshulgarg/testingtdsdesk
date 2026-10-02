@@ -110,14 +110,33 @@ const Bridge = {
     const coP = (payload.client && S.companies[payload.client]) || (typeof CO === "function" ? CO() : null);
     // 02-Oct-2026: only into the Tally company chosen for this client (Client setup → Tally); the cloud refuses the same
     const notAllowed = postToProblem(coP, payload.company);
-    if (notAllowed) return {ok: true, company: payload.company, notAllowed: true, results: [].concat(payload.masters || [], payload.vouchers || []).map(x => ({id: x.id, ok: false, message: notAllowed})).concat(refused)};
-    if (coP && typeof tallyVia === "function" && tallyVia(coP) === "cloud"){
-      const outC = await CloudPost.run(coP.id, payload, onProgress, onChecked);
-      outC.results = [].concat(outC.results || []).concat(refused);
-      return outC;
+    if (notAllowed) return {ok: true, company: payload.company, notAllowed: true, results: [].concat(payload.masters || [], payload.vouchers || []).map(x => ({id: x.id, ok: false, notAllowed: true, message: notAllowed})).concat(refused)};
+    // review of 02-Oct-2026 (B9): a ledger Tally already has is never sent as a master; a new one is asked about first,
+    // and nothing is sent until it is confirmed
+    if (typeof PostGate === "object" && (payload.masters || []).length){
+      const g = await PostGate.masters(payload, coP);
+      if (g.cancelled) throw {code: "cancelled", message: "Nothing was sent to Tally: the new ledger" + ((payload.masters || []).length === 1 ? " was" : "s were") + " not confirmed."};
+      refused.push(...g.results);
+      payload = Object.assign({}, payload, {masters: g.masters});
+      if (!payload.masters.length && !payload.vouchers.length) return {ok: true, company: payload.company, results: refused};
     }
-    const out = await this.postChecked(payload, onProgress, onChecked);
+    const words = o => { [].concat(o.results || []).forEach(x => { if (x && x.ok && postAltered(x)) x.altered = Math.max(1, num(x.altered)); if (x) x.word = postWord(x); }); return o; };
+    // B11: every posting goes through the queue in FinCom's cloud when the client is linked there, also with the bridge
+    // on this computer (the main bridge takes it from the queue; the live connection wakes it), so every posting is in one
+    // list. Straight to the bridge only when the cloud is not there for this client; then recorded in the cloud afterwards
+    const cloudOn = !!coP && typeof TCloud === "object" && TCloud.on();
+    if (cloudOn && !(TCloud.st[coP.id] && TCloud.st[coP.id].books)){ try { await TCloud.status(coP.id); } catch (e){} }
+    if (cloudOn && TCloud.has(coP.id)){
+      const outC = await CloudPost.run(coP.id, payload, onProgress, onChecked ? chk => { words(chk); onChecked(chk); } : onChecked);
+      outC.results = [].concat(outC.results || []).concat(refused);
+      return words(outC);
+    }
+    let out = null;
+    const after = onChecked || cloudOn ? chk => { words(chk); if (out && cloudOn && typeof PostRecord === "object") PostRecord.save(coP, payload, {recId: out.recId, company: out.company, results: [].concat(chk.results || []).concat(refused)}); if (onChecked) onChecked(chk); } : onChecked;
+    out = await this.postChecked(payload, onProgress, after);
     out.results = [].concat(out.results || []).concat(refused);
+    words(out);
+    if (cloudOn && typeof PostRecord === "object") await PostRecord.save(coP, payload, out);
     return out;
   },
   async postChecked(payload, onProgress, onChecked){
@@ -333,42 +352,38 @@ function bridgeChip(co){
 }
 
 /* ---------- ledgers and bank entries straight from Tally ---------- */
-// Bank and Sales take the client's ledgers from FinCom's cloud copy when the Tally computer is not here (review of
-// 02-Oct-2026: they asked for the ledger list to be imported although the cloud copy had all 1,110 ledgers)
+// The client's ledgers are one list for the whole app (Ledgers, src/js/58-ledgers.js): read from FinCom's cloud copy
+// whenever the client is linked to it, else from the bridge (review of 02-Oct-2026: an older, shorter list kept in this
+// browser was never replaced while the bridge was live, as the ledgers were read again only when that list was empty,
+// and the cloud copy only when the bridge was not live). These two keep their names for their callers.
 async function ensureCloudLedgers(cid){
-  const b = B(), co = CO(cid);
-  if (!b || b.cid !== cid || !co || bridgeLive(co) || typeof TCloud !== "object" || !TCloud.on()) return false;
-  try { await TCloud.status(cid); } catch (e){ return false; }
-  if (tallyVia(co) !== "cloud") return false;
-  const age = Date.now() - new Date((b.ledgers || {}).importedAt || 0).getTime();
-  if ((b.ledgers.list || []).length && b.ledgers.live && age < 6 * 3600000) return true;
-  b.ledgersLoading = true; render();
-  try { await syncLedgersFromTally(true); } finally { b.ledgersLoading = false; render(); }
-  return true;
+  const r = await Ledgers.load(cid);
+  return !!(r && r.ok);
 }
 async function syncLedgersFromTally(silent){
-  const b = B(), co = CO(b.cid);
-  if (!tallyVia(co)) return false;
-  try {
-    const j = await tallyCall(co, "/ledgers?company=" + encodeURIComponent(tallyCoName(co)) + Bridge.pinQ());
-    const list = [].concat(j.ledgers || []).filter(l => l && l.name).map(l => ({name: l.name, group: l.group || "", pan: l.pan || "", gstin: l.gstin || "", acNo: l.acNo || "", ifsc: l.ifsc || "", taxType: l.taxType || "", tdsNature: l.tdsNature || "", dutyHead: l.dutyHead || ""}));
-    const groups = Array.from(new Set([].concat(j.groups || []).map(g => g.name).concat(list.map(l => l.group)).filter(Boolean))).sort();
-    b.ledgers = {list, groups, importedAt: new Date().toISOString(), file: j.via === "cloud" ? "Tally, from the copy in FinCom's cloud" : "Tally (live)", live: true};
-    const have = new Set(list.map(l => l.name.toLowerCase()));
-    b.newLed = b.newLed.filter(n => !have.has(n.name.toLowerCase()));
-    saveBank({ledgers: true, newLed: true});
+  const b = B(), co = CO(b && b.cid);
+  if (!co) return false;
+  const r = await Ledgers.load(co.id, {force: true});
+  if (!r.ok){ if (!silent) toast("Could not load ledgers from Tally: " + r.err); return false; }
+  if (!silent) toast(r.n + " ledgers loaded from Tally" + (r.kept ? " (a shorter list of " + r.kept + " was not taken)" : "") + ((r.mapped || []).length ? "; " + r.mapped.length + " default ledger names matched to Tally" : "") + ".");
+  return true;
+}
+// after the list held for a client changed: what depended on the old one is looked at again
+function ledgersChanged(cid){
+  const co = CO(cid), b = S.bank;
+  if (b && b.cid === cid){
     b.rows.forEach(r => { if (["ready", "suggested"].includes(r.state) && r.ledger && !exactLedger(r.ledger)){ r.userSet = false; r.state = "attention"; } });
     // bank accounts: link to their Tally ledger when it is clear
     (co.bankAccounts || []).forEach(a => { if (!exactLedger(a.ledger)){ const g = guessBankLedger(a); if (g){ a.ledger = g; Store.saveCompany(co); } } });
-    suggestAll(b.rows, true); saveBank({rows: true});
-    const mapped = autoMapCompanyLedgers(co);
-    if (!silent) toast(list.length + " ledgers loaded from Tally" + (mapped.length ? "; " + mapped.length + " default ledger names matched to Tally" : "") + ".");
-    return true;
-  } catch (e){ if (!silent) toast("Could not load ledgers from Tally: " + e.message); return false; }
+    if (b.rows.length){ suggestAll(b.rows, true); saveBank({rows: true}); }
+  }
+  const mapped = Ledgers.cid() === cid ? autoMapCompanyLedgers(co) : [];
+  if (typeof billAutoAll === "function" && Ledgers.cid() === cid) billAutoAll(cid);
+  return mapped;
 }
 function guessBankLedger(a){
   const b = B();
-  const bankLeds = (b.ledgers.list || []).filter(l => BANK_GROUPS.test(l.group || ""));
+  const bankLeds = Ledgers.list(b.cid).filter(l => BANK_GROUPS.test(l.group || ""));
   const byAc = bankLeds.filter(l => a.acct && l.acNo && l.acNo.replace(/\D/g, "").endsWith(String(a.acct).replace(/\D/g, "").slice(-6)));
   if (byAc.length === 1) return byAc[0].name;
   const by4 = bankLeds.filter(l => a.last4 && l.name.includes(a.last4));
@@ -424,9 +439,9 @@ async function bankAutoSync(force){
   bankSyncing = true;
   try {
     const before = (b.ledgers.list || []).length;
-    // build 190: by itself only when there is no ledger list at all; a fresh read of Tally's ledgers when someone asks
-    const stale = !(b.ledgers.list || []).length;
-    if (force || stale) await syncLedgersFromTally(true);
+    // the one ledger list (Ledgers): read again when someone asks, and by itself when the cloud's ledgers changed or
+    // nothing is held yet (not only when the list here is empty: review of 02-Oct-2026)
+    await Ledgers.load(b.cid, {force: !!force});
     const st = curStmt();
     if (st && force) await syncBankBookFromTally(true);   // only when asked: this reads the Day Book
     if (force || (b.ledgers.list || []).length !== before) render();
@@ -770,7 +785,7 @@ async function bankAfterCheck(cid, sid, chk, tname){
     } else if (x && !x.ok){
       // Tally said it made it, but it is not there: not counted as posted, and not sent again without a look
       r.state = "ready"; r.postVerified = false;
-      r.postError = "Tally replied 'created', but the entry cannot be found in Tally afterwards, so it is NOT marked as posted. Look in Tally before posting it again.";
+      r.postError = "Failed: not found in Tally when read back after posting, so it is not counted as posted. Look in Tally before posting it again.";
       if (here){ b.postedTags = b.postedTags || {}; b.postedTags[fpHash(r.fp || r.id)] = "unconfirmed:" + now; }
       notFound.push({id: r.id, what: fmtDate(r.date) + " " + (r.dec.name || "") + " " + INR.format(r.debit || r.credit), msg: "not found in Tally after posting \u2014 check Tally before posting again"});
     } else { unread++; r.postVerified = false; }
@@ -1040,17 +1055,23 @@ async function postBankToTally(ids){
       masters: masters.map(l => ({id: "led:" + l.name, xml: ledgerMasterXml(l)})),
       vouchers: rows.map(r => ({id: r.id, xml: bankVoucherXml(r, acc, co)}))}, pj => { b.busy = postingLine(pj, tname); refreshBusy(); },
       chk => bankAfterCheck(b.cid, st.id, chk, tname));
+    // B14: stopped by the check of the company this client may post to: nothing sent, the lines stay ready
+    if (j.notAllowed){
+      const why = ([].concat(j.results || []).find(x => x.notAllowed) || {}).message || postToProblem(co, tname);
+      postStopped(why, co.id); b.busy = ""; b.postReport = {at: Date.now(), posted: 0, skipped, movedBack, failed: [], notAllowed: plainMsg(why), dismiss: "bankReportOk"};
+      toast("Not sent to Tally: choose the Tally company " + co.name + " may post to."); render(); return;
+    }
     const byId = new Map([].concat(j.results || []).map(x => [x.id, x]));
     const now = new Date().toISOString();
-    masters.forEach(l => { const x = byId.get("led:" + l.name); if (x && x.ok){ l.sent = true; l.sentAt = now; } else if (x) failed.push({what: "New ledger " + l.name, msg: x.message}); });
+    masters.forEach(l => { const x = byId.get("led:" + l.name); if (x && x.ok){ l.sent = true; l.sentAt = now; if (!x.existed) logPosting({what: "ledger", id: "led:" + l.name, action: postAltered(x) ? "altered" : "created", co: b.cid, ref: l.name, party: l.group || "", amount: 0, tally: {company: tname}, by: (Cloud.st && Cloud.st.email) || ""}); } else if (x) failed.push({what: "New ledger " + l.name, msg: x.message}); });
     let ok = 0, optionalN = 0;
     const posted = [];
     rows.forEach(r => {
       const x = byId.get(r.id);
       if (x && x.ok && x.verified !== true && !x.pendingCheck){
         b.postedTags = b.postedTags || {}; b.postedTags[fpHash(r.fp || r.id)] = "unconfirmed:" + now;
-        r.postError = "Tally replied 'created', but FinCom could not find the entry in Tally afterwards, so it is NOT marked as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again." + (x.verifyNote ? " [" + x.verifyNote + "]" : "");
-        failed.push({id: r.id, what: fmtDate(r.date) + " " + (r.dec.name || "") + " " + INR.format(r.debit || r.credit), msg: "not confirmed in Tally \u2014 check Tally before posting again"});
+        r.postError = "In Tally, not yet read back: Tally took it, but FinCom has not found it in Tally since, so it is not counted as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again." + (x.verifyNote ? " [" + x.verifyNote + "]" : "");
+        failed.push({id: r.id, what: fmtDate(r.date) + " " + (r.dec.name || "") + " " + INR.format(r.debit || r.credit), msg: "In Tally, not yet read back \u2014 look in Tally before posting again"});
       } else if (x && x.ok){
         ok++; r.state = "sent"; r.sentAt = now; r.postedVia = "bridge"; r.postError = ""; r.postedOptional = !!x.optional; r.postVerified = x.verified === true; r.checking = !!x.pendingCheck; posted.push(r);
         b.postedTags = b.postedTags || {}; b.postedTags[fpHash(r.fp || r.id)] = now;
@@ -1071,7 +1092,10 @@ async function postBankToTally(ids){
     if (!failed.length && !b.rows.some(r => r.state === "ready")) b.filter = "done";
     b.afterPost = !j.checking && !j.viaCloud;
     b.tallyLook = null;          // Tally has changed: the next posting looks again
-  } catch (e){ toast("Posting failed: " + e.message); b.postReport = {at: Date.now(), posted: 0, skipped, movedBack, failed: failed.concat([{what: "Posting", msg: e.message}]), dismiss: "bankReportOk"}; }
+  } catch (e){
+    if (e && e.code === "cancelled") toast(e.message);
+    else { toast("Posting failed: " + e.message); b.postReport = {at: Date.now(), posted: 0, skipped, movedBack, failed: failed.concat([{what: "Posting", msg: e.message}]), dismiss: "bankReportOk"}; }
+  }
   b.busy = "";
   render();
   if (b.afterPost){ b.afterPost = false; try { await checkBankBalance({quiet: true, tname, closeOnly: true}); } catch (e){} }
@@ -1105,22 +1129,23 @@ async function checkBillsInTally(onlyUnconfirmed){
   } catch (err){ S.billCheck = {error: err.message}; }
   render();
 }
-async function postBillsToTally(){
+async function postBillsToTally(opts){
+  opts = opts || {};
   const co = CO();
   const tname = await ensureTallyCompany(co);
   if (!tname) return;
   if (!S.bank || S.bank.cid !== co.id) await loadBank(co.id);
-  S.billPost = {busy: "Loading ledgers from Tally\u2026"}; render();
+  S.billPost = {busy: "Loading ledgers from Tally…"}; render();
   await syncLedgersFromTally(true);
   autoMapCompanyLedgers(co);
-  let list = Object.values(D().entries).filter(e => e.status === "approved" && !e.exportedAt).sort(byDate);
+  let list = Object.values(D().entries).filter(e => e.status === "approved" && !e.exportedAt && (!opts.ids || opts.ids.includes(e.id))).sort(byDate);
   if (!list.length){ S.billPost = null; toast("No approved entries are waiting."); render(); return; }
   canonicalizeBills(list);
   const failed = [];
   const blocked = list.filter(e => e.snapshot.lines.some(l => !exactLedger(l.ledger)));
-  blocked.forEach(e => { const l = e.snapshot.lines.find(x => !exactLedger(x.ledger)); e.postError = "Ledger \u201c" + (l.ledger || "(none)") + "\u201d is not in Tally"; unapply(e, co.id); e.postFailedAt = new Date().toISOString(); Store.saveEntry(co.id, e); failed.push({id: e.id, no: e.x.invoiceNo, party: e.x.vendorName, msg: e.postError}); });
+  blocked.forEach(e => { const l = e.snapshot.lines.find(x => !exactLedger(x.ledger)); e.postError = "Ledger “" + (l.ledger || "(none)") + "” is not in Tally"; unapply(e, co.id); e.postFailedAt = new Date().toISOString(); Store.saveEntry(co.id, e); failed.push({id: e.id, no: e.x.invoiceNo, party: e.x.vendorName, msg: e.postError}); });
   let todo = list.filter(e => !blocked.includes(e));
-  S.billPost = {busy: "Checking Tally for bills already booked\u2026"}; render();
+  S.billPost = {busy: "Checking Tally for bills already booked…"}; render();
   try {
     const dates = todo.map(e => e.x.invoiceDate).filter(Boolean).sort();
     const now = new Date().toISOString();
@@ -1135,30 +1160,42 @@ async function postBillsToTally(){
       dup.forEach(e => { e.exportedAt = now; e.postNote = "Already in Tally"; Store.saveEntry(co.id, e); });
       todo = todo.filter(e => !dup.includes(e));
     }
-    let ok = 0, optionalN = 0, unverified = 0;
+    let ok = 0, optionalN = 0, unverified = 0, altered = 0;
+    const masterWords = [];
     if (todo.length){
       const used = new Set(todo.flatMap(e => e.snapshot.lines.map(l => String(l.ledger).toLowerCase())));
       const masters = B().newLed.filter(l => !l.sent && used.has(l.name.toLowerCase()));
-      S.billPost = {busy: "Posting " + entries(todo.length) + " to " + tname + "\u2026"}; render();
-      const j = await Bridge.post({company: tname, client: co.id, masters: masters.map(l => ({id: "led:" + l.name, xml: ledgerMasterXml(l)})), vouchers: todo.map(e => ({id: e.id, xml: voucherXml(e, co)}))}, pj => { S.billPost = {busy: postingLine(pj, tname)}; refreshBusy(); });
+      S.billPost = {busy: "Posting " + entries(todo.length) + " to " + tname + "…"}; render();
+      const j = await Bridge.post({company: tname, client: co.id, masters: masters.map(l => ({id: "led:" + l.name, xml: ledgerMasterXml(l)})), vouchers: todo.map(e => ({id: e.id, xml: voucherXml(e, co)}))},
+        pj => { S.billPost = {busy: postingLine(pj, tname)}; refreshBusy(); }, chk => billsAfterCheck(co.id, chk, tname));
+      // B14: stopped by the check of the company this client may post to: nothing was sent, not Tally's reason; the
+      // bills stay waiting under Post to Tally, as they were
+      if (j.notAllowed){
+        const why = ([].concat(j.results || []).find(x => x.notAllowed) || {}).message || postToProblem(co, tname);
+        postStopped(why, co.id); S.billPost = {notAllowed: plainMsg(why), company: tname};
+        toast("Not sent to Tally: choose the Tally company " + co.name + " may post to.");
+        refreshStats(co.id); render(); return;
+      }
       const byId = new Map([].concat(j.results || []).map(x => [x.id, x]));
-      masters.forEach(l => { const x = byId.get("led:" + l.name); if (x && x.ok){ l.sent = true; l.sentAt = now; } });
+      masters.forEach(l => { const x = byId.get("led:" + l.name); if (x && x.ok){ l.sent = true; l.sentAt = now; } if (x) masterWords.push({name: l.name, word: x.ok ? postWord(x) : "Failed: " + plainMsg(x.message)});
+        if (x && x.ok && !x.existed) logPosting({what: "ledger", id: "led:" + l.name, action: postAltered(x) ? "altered" : "created", co: co.id, ref: l.name, party: l.group || "", amount: 0, tally: {company: x.company || tname}, by: (Cloud.st && Cloud.st.email) || ""}); });
       saveBank({newLed: true});
       // a voucher number another supplier already used: try once more with this supplier's initials added
       const clash = todo.filter(e => { const x = byId.get(e.id); return x && !x.ok && /already\s+exists/i.test(x.message || "") && co.vchNumbering !== "tally"; });
       if (clash.length){
         clash.forEach(e => { e.vchNo = (e.x.invoiceNo || "B") + "/" + initialsOf(e.x.vendorName || e.partyLedger); });
-        S.billPost = {busy: "Voucher numbers already used in Tally: trying " + clash.length + " again with the supplier\u2019s initials\u2026"}; render();
+        S.billPost = {busy: "Voucher numbers already used in Tally: trying " + clash.length + " again with the supplier’s initials…"}; render();
         try {
-          const j2 = await Bridge.post({company: tname, client: co.id, masters: [], vouchers: clash.map(e => ({id: e.id, xml: voucherXml(e, co)}))});
+          const j2 = await Bridge.post({company: tname, client: co.id, masters: [], vouchers: clash.map(e => ({id: e.id, xml: voucherXml(e, co)}))}, null, chk => billsAfterCheck(co.id, chk, tname));
           [].concat(j2.results || []).forEach(x => byId.set(x.id, x));
         } catch (err){ /* reported below as refused */ }
       }
       todo.forEach(e => {
         const x = byId.get(e.id);
-        if (x && x.ok && x.verified === true){ ok++; logPosting({what: "bill", id: e.id, action: "posted", co: co.id, ref: e.x.invoiceNo, party: e.x.vendorName, amount: num(e.x.total), tally: {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", company: x.company || tname}, by: (Cloud.st && Cloud.st.email) || ""}); e.exportedAt = now; e.postError = ""; e.postUnconfirmed = null; e.postedVia = "bridge"; e.postedInto = x.company || tname; e.postedOptional = !!x.optional; e.postVerified = true; e.tallyVchNo = x.vchNumber || "";
-          e.tally = {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", at: now, by: (Cloud.st && Cloud.st.email) || "", company: x.company || tname}; if (x.optional) optionalN++; }
-        else if (x && x.ok){ unverified++; e.postUnconfirmed = {at: now, company: x.company || tname, optional: /Optional/.test(x.verifyNote || '')}; e.postError = (/Optional/.test(x.verifyNote || '') && x.message) ? plainMsg(x.message) : "Tally replied 'created', but FinCom could not find the entry in Tally afterwards, so it is NOT marked as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again." + (x.verifyNote ? " [" + x.verifyNote + "]" : ""); failed.push({no: e.x.invoiceNo, party: e.x.vendorName, msg: "not confirmed in Tally"}); }
+        if (x && x.ok && (x.verified === true || postAltered(x))){ ok++; if (postAltered(x)) altered++; billPosted(co.id, e, x, tname, now); if (x.optional) optionalN++; }
+        else if (x && x.ok){ unverified++; e.postUnconfirmed = {at: now, company: x.company || tname, optional: /Optional/.test(x.verifyNote || ''), pending: !!x.pendingCheck};
+          e.postError = (/Optional/.test(x.verifyNote || '') && x.message) ? plainMsg(x.message) : x.pendingCheck ? "In Tally, not yet read back: FinCom reads it back from Tally by itself in a moment." : "In Tally, not yet read back: Tally took it, but FinCom has not found it in Tally since, so it is not counted as posted. Look in Tally (Day Book, and Display More Reports → Exception Reports → Optional Vouchers). If it is not there, post it again." + (x.verifyNote ? " [" + x.verifyNote + "]" : "");
+          failed.push({id: e.id, no: e.x.invoiceNo, party: e.x.vendorName, msg: "In Tally, not yet read back", unread: true}); }
         else {
           e.postError = plainMsg(x && x.message) || "Tally did not confirm this entry.";
           failed.push({id: e.id, no: e.x.invoiceNo, party: e.x.vendorName, msg: e.postError});
@@ -1167,10 +1204,35 @@ async function postBillsToTally(){
         Store.saveEntry(co.id, e);
       });
     }
-    S.billPost = {done: true, ok, bad: failed.length, dup: dup.length, failed, optional: optionalN, unverified, company: tname};
-    toast(ok + " posted to " + tname + (optionalN ? " (" + optionalN + " as Optional vouchers)" : "") + (dup.length ? ", " + dup.length + " already there" : "") + (failed.length ? ", " + failed.length + " not posted" : "") + ".");
-  } catch (e){ S.billPost = {error: e.message, failed}; toast("Posting failed: " + e.message); }
+    S.billPost = {done: true, ok, bad: failed.length, dup: dup.length, failed, optional: optionalN, unverified, altered, masters: masterWords, company: tname};
+    toast(ok + " posted to " + tname + (altered ? " (" + altered + " altered in Tally)" : "") + (optionalN ? " (" + optionalN + " as Optional vouchers)" : "") + (dup.length ? ", " + dup.length + " already there" : "") + (failed.length ? ", " + failed.length + " not posted" : "") + ".");
+  } catch (e){
+    if (e && e.code === "cancelled"){ S.billPost = {cancelled: e.message}; toast(e.message); }
+    else { S.billPost = {error: e.message, failed}; toast("Posting failed: " + e.message); }
+  }
   refreshStats(co.id); render();
+}
+// a bill Tally has: marked as posted, with Tally's voucher
+function billPosted(cid, e, x, tname, now){
+  logPosting({what: "bill", id: e.id, action: postAltered(x) ? "altered" : "posted", co: cid, ref: e.x.invoiceNo, party: e.x.vendorName, amount: num(e.x.total), tally: {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", company: x.company || tname}, by: (Cloud.st && Cloud.st.email) || ""});
+  e.exportedAt = now; e.postError = ""; e.postUnconfirmed = null; e.postedVia = "bridge"; e.postedInto = x.company || tname; e.postedOptional = !!x.optional; e.postVerified = x.verified === true; e.postAltered = postAltered(x); e.tallyVchNo = x.vchNumber || "";
+  e.tally = {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", at: now, by: (Cloud.st && Cloud.st.email) || "", company: x.company || tname};
+}
+// the bridge has read back the bills it put in Tally: the ones found count as posted now
+function billsAfterCheck(cid, chk, tname){
+  const d = S.data[cid];
+  if (!d) return;
+  const now = new Date().toISOString();
+  let n = 0;
+  [].concat((chk && chk.results) || []).forEach(x => {
+    const e = d.entries[x.id];
+    if (!e || e.exportedAt || !e.postUnconfirmed) return;
+    if (x.ok && (x.verified === true || postAltered(x))){ billPosted(cid, e, x, tname, now); n++; }
+    else { e.postUnconfirmed = Object.assign({}, e.postUnconfirmed, {pending: false}); e.postError = x.ok ? "In Tally, not yet read back: Tally took it, but FinCom did not find it in Tally afterwards. Look in Tally before posting it again." : "Failed: " + (plainMsg(x.message) || "not found in Tally"); }
+    Store.saveEntry(cid, e);
+  });
+  if (S.billPost && S.billPost.done && n){ S.billPost.ok = (S.billPost.ok || 0) + n; S.billPost.unverified = Math.max(0, (S.billPost.unverified || 0) - n); S.billPost.failed = (S.billPost.failed || []).filter(f => !(f.unread && d.entries[f.id] && d.entries[f.id].exportedAt)); }
+  refreshStats(cid); render();
 }
 // Set the company's voucher types in Tally to number vouchers automatically, so a repeated number can never stop a posting
 const AUTO_TYPES = ["Purchase", "Journal", "Payment", "Receipt", "Contra", "Sales", "Debit Note", "Credit Note"];

@@ -54,6 +54,10 @@ const CloudPost = {
     const id = this.uuid(), sleep = ms => new Promise(r => setTimeout(r, ms));
     const ids = [].concat(payload.masters || [], payload.vouchers || []).map(x => x.id);
     const r = await TCloud.rpc("tally_post_enqueue", {p_id: id, p_client: cid, p_payload: {masters: payload.masters || [], vouchers: payload.vouchers || [], ledger: payload.ledger || ""}});
+    // 02-Oct-2026 (B14): the cloud's own check of the company the client may post to: nothing was queued, nothing sent,
+    // and it is not Tally's reason; the entries stay waiting
+    if (r && !r.ok && r.notAllowed) return {ok: true, company: r.company || payload.company, notAllowed: true, viaCloud: true,
+      results: ids.map(x => ({id: x, ok: false, notAllowed: true, message: r.error || "Choose the Tally company this client may post to (Client setup \u2192 Tally)."}))};
     if (!r || !r.ok) throw {code: "cloud_post", message: (r && r.error) || "The entries could not be queued."};
     try { lsSet("tdsdesk:cloudpost", JSON.stringify({id, cid, at: Date.now(), n: ids.length})); } catch (e){}
     const tell = j => { try { onProgress && onProgress(j); } catch (e){} };

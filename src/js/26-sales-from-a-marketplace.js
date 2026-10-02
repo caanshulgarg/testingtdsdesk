@@ -701,56 +701,78 @@ function tallyLedgerName(n){ return (S.bank && S.bank.ledgers && hasLedgerList()
 function fpHash(s){ let h = 5381; const t = String(s || ""); for (let i = 0; i < t.length; i++) h = ((h * 33) ^ t.charCodeAt(i)) >>> 0; return h.toString(36); }
 const ROLE_GROUPS = {party: /sundry|creditors|debtors|current liab|loans|capital/i, expense: /expense|purchase|direct|indirect|fixed assets/i, gst: /duties|taxes/i, tds: /duties|taxes|current liab|provisions/i, roundoff: /./, "rcm-in": /duties|taxes/i, "rcm-out": /duties|taxes/i, sales: /sales/i, tax: /duties|taxes/i};
 const ROLE_WORDS = {gst: /gst/i, tds: /tds/i, roundoff: /round/i, "rcm-in": /gst/i, "rcm-out": /gst/i, tax: /gst|cess/i};
-// Tally ledgers closest to a name that Tally does not have
+// Tally ledgers closest to a name that Tally does not have (from the client's one list; an expense line is never
+// offered an income ledger, a GST or TDS line only tax ledgers)
 function suggestLedgers(name, role, n){
   if (!hasLedgerList()) return [];
-  const g = ROLE_GROUPS[role] || /./, w = ROLE_WORDS[role];
-  return (B().ledgers.list || []).map(l => {
+  const g = ROLE_GROUPS[role] || /./, w = ROLE_WORDS[role], cid = Ledgers.cid();
+  return Ledgers.list(cid).filter(l => Ledgers.allowed(role, Ledgers.cls(cid, l.name))).map(l => {
     let sc = nameSim(name, l.name);
-    if (g.test(l.group || "")) sc += 0.15;
+    if (g.test(l.group || "") || Ledgers.roleRank(role, Ledgers.cls(cid, l.name)) === 0) sc += 0.15;
     if (w && w.test(l.name)) sc += 0.25;
     return {l, sc};
   }).filter(x => x.sc >= 0.35).sort((a, b) => b.sc - a.sc).slice(0, n || 3).map(x => x.l.name);
 }
-// Company default ledgers (input GST, TDS by payment type, round off) matched to this client's Tally ledgers
+// Company default ledgers (input GST, reverse charge, TDS by payment type, round off) matched to this client's Tally
+// ledgers. Review of 02-Oct-2026: a value Tally has was kept even when it was of another tax (sgst = "INPUT IGST"), and
+// TDS for goods (194Q), directors and interest pointed to "TDS 94H". Now a GST value must be of its own head and side,
+// a TDS value of its own section; one that is not is replaced by the ledger that fits (the most used), or emptied
 function autoMapCompanyLedgers(co){
-  if (!co || !S.bank || S.bank.cid !== co.id || !hasLedgerList()) return [];
-  const list = S.bank.ledgers.list, changes = [];
-  const taxes = list.filter(l => /duties|taxes|current liab|provisions/i.test(l.group || ""));
+  if (!co || Ledgers.cid() !== co.id || !hasLedgerList()) return [];
+  const cid = co.id, list = Ledgers.list(cid), changes = [];
   const one = arr => arr.length === 1 ? arr[0].name : "";
-  const fix = (cur, set, find, role) => {
-    if (cur && exactLedger(cur)){ if (exactLedger(cur) !== cur){ changes.push({from: cur, to: exactLedger(cur), role}); set(exactLedger(cur)); } return; }
-    const f = find();
-    if (f && f !== cur){ changes.push({from: cur, to: f, role}); set(f); }
+  const fix = (cur, set, valid, find, role) => {
+    const ok = cur ? valid(cur) : "";
+    if (ok){ if (ok !== cur){ changes.push({from: cur, to: ok, role}); set(ok); } return; }
+    const f = find() || "";
+    if (f !== (cur || "") && (f || (cur && hasLedgerList()))){ changes.push({from: cur || "", to: f, role}); set(f); }
   };
-  const input = re => one(taxes.filter(l => re.test(l.name) && !/output|payable|liab|rcm|reverse|cash\s*ledger|electronic/i.test(l.name)));
+  const usage = Ledgers.usage(cid) || {}, used = n => (usage[n] || {}).n || 0;
+  const best = arr => arr.sort((a, b) => used(b) - used(a) || a.length - b.length)[0] || "";
+  const names = list.map(l => l.name);
+  const gstFits = (n, head, kind) => { const c = gstLedgerCheck(cid, n, head, kind); return c.ok && !!c.info.rcm === (kind !== "gst") ? c.name : ""; };
+  const gstValid = (head, kind) => n => { const c = gstLedgerCheck(cid, n, head, kind); return c.ok ? c.name : ""; };
   co.gst = co.gst || {};
-  fix(co.gst.cgst, v => { co.gst.cgst = v; }, () => input(/(^|[^a-z])c\.?\s*gst|central\s*(gst|tax)/i), "gst");
-  fix(co.gst.sgst, v => { co.gst.sgst = v; }, () => one(taxes.filter(l => /(^|[^a-z])s\.?\s*gst|state\s*(gst|tax)|utgst/i.test(l.name) && !/cgst|igst|output|payable|rcm|reverse/i.test(l.name))), "gst");
-  fix(co.gst.igst, v => { co.gst.igst = v; }, () => input(/(^|[^a-z])i\.?\s*gst|integrated/i), "gst");
-  fix(co.roundOff, v => { co.roundOff = v; }, () => one(list.filter(l => /round(ed|ing)?\s*[- ]?off/i.test(l.name))), "roundoff");
-  const tdsL = list.filter(l => (/^tds$/i.test(l.taxType || "") || (/\btds\b|tax\s*deducted/i.test(l.name) && /duties|taxes|current liab|provisions/i.test(l.group || ""))) && !/receivable|recoverable|asset/i.test(l.name + " " + (l.group || "")));
-  const kw = {contractor: /194\s*-?\s*c\b|contract/i, professional: /194\s*-?\s*j|profession|fees?\s+for\s+prof/i, technical: /194\s*-?\s*j|technical/i, director: /director/i, commission: /194\s*h|commission|brokerage/i,
-    rent_building: /194\s*-?i\b|rent/i, rent_machinery: /194\s*-?i\b|rent|machin/i, interest: /194\s*a|interest/i, goods: /194\s*q|purchase|goods/i};
+  [["cgst", "CGST"], ["sgst", "SGST"], ["igst", "IGST"]].forEach(([k, head]) => {
+    const before = co.gst[k];
+    fix(co.gst[k], v => { co.gst[k] = v; }, gstValid(head, "gst"), () => best(names.map(n => gstFits(n, head, "gst")).filter(Boolean).filter(n => !Ledgers.gstInfo(cid, n).rate)) || best(names.map(n => gstFits(n, head, "gst")).filter(Boolean)), "gst");
+    if (co.gst[k] !== before && co.gstPin) delete co.gstPin[k];
+  });
+  fix(co.roundOff, v => { co.roundOff = v; }, n => exactLedger(n) || "", () => one(list.filter(l => /round(ed|ing)?\s*[- ]?off/i.test(l.name))), "roundoff");
   co.tdsLedgers = co.tdsLedgers || {};
-  const tdsPick = k => {
-    const scored = tdsL.map(l => ({l, sc: (l.tdsNature && kw[k].test(l.tdsNature) ? 3 : 0) + (kw[k].test(l.name) ? 2 : 0) + (/^tds$/i.test(l.taxType || "") ? 0.5 : 0)})).filter(x => x.sc >= 2).sort((a, b) => b.sc - a.sc);
-    if (scored.length && (scored.length === 1 || scored[0].sc > scored[1].sc)) return scored[0].l.name;
-    const generic = tdsL.filter(l => !l.tdsNature && !Object.values(kw).some(re => re.test(l.name)));
-    return tdsL.length === 1 ? tdsL[0].name : generic.length === 1 ? generic[0].name : "";
-  };
-  Object.keys(kw).forEach(k => fix(co.tdsLedgers[k], v => { co.tdsLedgers[k] = v; }, () => tdsPick(k), "tds"));
-  const exp = list.filter(l => ROLE_GROUPS.expense.test(l.group || ""));
+  rules().forEach(r => {
+    if (r.basis === "never") return;
+    const sec = Ledgers.sec(r.old);
+    if (!sec) return;
+    const tech = r.id === "technical", fit = n => sec !== "194J" || /technical/i.test(n) === tech ? 1 : 0;
+    const valid = n => { const c = tdsLedgerCheck(cid, n, sec); return c.ok ? c.name : ""; };
+    const find = () => { const c = names.filter(n => { const x = tdsLedgerCheck(cid, n, sec); return x.ok && x.sec === sec && Ledgers.isTds(cid, x.name); }); return c.sort((a, b) => fit(b) - fit(a) || used(b) - used(a) || a.length - b.length)[0] || ""; };
+    // a default not in Tally and no ledger of the section: left as it is (it shows as not in Tally on the bill)
+    const cur = co.tdsLedgers[r.id];
+    if (cur && !exactLedger(cur) && !find()) return;
+    fix(cur, v => { co.tdsLedgers[r.id] = v; }, valid, find, "tds");
+  });
   co.expenseLedgers = co.expenseLedgers || {};
-  Object.keys(co.expenseLedgers).forEach(k => fix(co.expenseLedgers[k], v => { co.expenseLedgers[k] = v; }, () => { const c = exp.map(l => ({l, s: nameSim(co.expenseLedgers[k], l.name)})).filter(x => x.s >= 0.85).sort((a, b) => b.s - a.s); return c.length && (c.length === 1 || c[0].s > c[1].s + 0.05) ? c[0].l.name : ""; }, "expense"));
+  const exp = list.filter(l => ["expense", "asset"].includes(Ledgers.cls(cid, l.name)) || (!Ledgers.cls(cid, l.name) && ROLE_GROUPS.expense.test(l.group || "")));
+  Object.keys(co.expenseLedgers).forEach(k => {
+    const cur = co.expenseLedgers[k], ex = cur && exactLedger(cur);
+    if (ex && Ledgers.cls(cid, ex) === "income"){ changes.push({from: cur, to: "", role: "expense"}); co.expenseLedgers[k] = ""; return; }
+    if (ex){ if (ex !== cur){ changes.push({from: cur, to: ex, role: "expense"}); co.expenseLedgers[k] = ex; } return; }
+    const c = exp.map(l => ({l, s: nameSim(cur, l.name)})).filter(x => x.s >= 0.85).sort((a, b) => b.s - a.s);
+    const f = c.length && (c.length === 1 || c[0].s > c[1].s + 0.05) ? c[0].l.name : "";
+    if (f){ changes.push({from: cur, to: f, role: "expense"}); co.expenseLedgers[k] = f; }
+  });
   ["rcmCgstIn", "rcmSgstIn", "rcmIgstIn", "rcmCgstOut", "rcmSgstOut", "rcmIgstOut"].forEach(k => {
-    const kind = /Cgst/.test(k) ? /cgst|central/i : /Sgst/.test(k) ? /sgst|state|utgst/i : /igst|integrated/i;
-    const side = /In$/.test(k) ? /input|itc|credit/i : /output|payable|liab/i;
-    fix(co.gst[k], v => { co.gst[k] = v; }, () => one(taxes.filter(l => /rcm|reverse/i.test(l.name) && kind.test(l.name) && side.test(l.name) && !(k.includes("Sgst") && /cgst|igst/i.test(l.name)))), /In$/.test(k) ? "rcm-in" : "rcm-out");
+    const head = /Cgst/.test(k) ? "CGST" : /Sgst/.test(k) ? "SGST" : "IGST", kind = /In$/.test(k) ? "rcm-in" : "rcm-out";
+    const cur = co.gst[k];
+    const cands = names.map(n => gstFits(n, head, kind)).filter(Boolean);
+    // the default name, not in Tally, and nothing that fits: left as it is
+    if (!cur && !cands.length) return;
+    fix(cur || "", v => { co.gst[k] = v; }, gstValid(head, kind), () => best(cands), kind);
   });
   if (changes.length){
     Store.saveCompany(co);
-    changes.forEach(ch => { if (ch.from) replaceLedgerInWaiting(co.id, ch.from, ch.to, ch.role, true); });
+    changes.forEach(ch => { if (ch.from && ch.to) replaceLedgerInWaiting(co.id, ch.from, ch.to, ch.role, true); });
   }
   return changes;
 }

@@ -553,6 +553,11 @@ async function openCompany(cid){
   pruneStaleHashes(cid);
   refreshStats(cid);
   render(); window.scrollTo(0, 0);
+  // 02-Oct-2026: the Tally company this client may post to, set by itself when it is clear (one linked, same GSTIN)
+  setTimeout(() => { try { if (typeof autoPostTo === "function") autoPostTo(S.companies[cid]).catch(() => {}); } catch (e){} }, 0);
+  // the client's ledger list, read on opening the client (from the cloud copy when linked, else the bridge); then the
+  // Client setup ledgers of the wrong tax head or section, or not in Tally, are set to the ones that fit (and saved)
+  if (typeof Ledgers === "object") Ledgers.load(cid).then(() => { if (S.coId === cid && Ledgers.cid() === cid && autoMapCompanyLedgers(CO(cid)).length) render(); }, () => {});
 }
 function goHome(){ closeSwitcher(); S.view = "home"; S.arm = null; render(); }
 
@@ -568,7 +573,8 @@ function curEntry(){ return S.view === "company" && S.selected ? D().entries[S.s
 function billSetX(e, key, value){
   if (!e || e.status !== "draft") return;
   const cid = S.coId;
-  if (key === "vendorName" && (!e.partyLedger || e.partyLedger === e.x.vendorName)) e.partyLedger = value;
+  // with the client's ledger list here, the party ledger is matched again by itself (billAutoLedgers); without it, the name
+  if (key === "vendorName" && !hasLedgerList() && (!e.partyLedger || e.partyLedger === e.x.vendorName)) e.partyLedger = value;
   e.x[key] = /vendorGstin|vendorPan|buyerGstin/.test(key) ? String(value).toUpperCase() : value;
   if (e.uncertain) e.uncertain = e.uncertain.filter(k => k !== key);
   if (key === "invoiceDate"){ Store.saveEntry(cid, e); render(); return; }
@@ -581,6 +587,19 @@ function billSetText(e, key, value){
   if (!e || e.status !== "draft") return;
   const cid = S.coId;
   e[key] = value;
+  // a ledger a person typed or picked is theirs: not changed by itself afterwards (empty: picked by itself again)
+  if (key === "partyLedger"){ e.partyUserSet = !!String(value).trim(); e.partyAuto = !e.partyUserSet; e.partyFrom = ""; }
+  if (key === "expenseLedger"){ e.expenseUserSet = !!String(value).trim(); e.expenseAuto = !e.expenseUserSet; e.expenseFrom = ""; }
+  later("e" + e.id, () => Store.saveEntry(cid, e), 600); later("r", render, 350);
+  if (window.FinComReact) FinComReact.redraw();
+}
+// a GST or TDS ledger chosen on the bill (key "gst:cgst", "rcm-in:sgst", "tds"): checked by compute against the line's
+// tax head or section (a ledger of another head is refused there); empty: picked by itself again
+function billSetTaxLed(e, key, value){
+  if (!e || e.status !== "draft") return;
+  const cid = S.coId;
+  e.taxLed = Object.assign({}, e.taxLed || {});
+  if (String(value || "").trim()) e.taxLed[key] = value; else delete e.taxLed[key];
   later("e" + e.id, () => Store.saveEntry(cid, e), 600); later("r", render, 350);
   if (window.FinComReact) FinComReact.redraw();
 }
@@ -591,7 +610,7 @@ function billSetChoice(e, key, value){
   e[key] = value;
   if (key === "natureId"){
     e.confirmType = false;
-    if (!e.expenseLedger || e.expenseLedger === CO().expenseLedgers[prev]) e.expenseLedger = CO().expenseLedgers[value] || e.expenseLedger;
+    if (!hasLedgerList() && (!e.expenseLedger || e.expenseLedger === CO().expenseLedgers[prev])) e.expenseLedger = CO().expenseLedgers[value] || e.expenseLedger;
   }
   if (key === "expenseLedger"){ e.expenseUserSet = true; e.expenseFrom = ""; }
   Store.saveEntry(cid, e); refreshStats(cid); render();
@@ -647,7 +666,7 @@ function billGst(e, k, v){
 async function billReadLedgers(){
   const cid = S.coId, co = CO(cid);
   if (!S.bank || S.bank.cid !== cid || S.bank.loading) await loadBank(cid);
-  if (bridgeLive(co)){ await syncLedgersFromTally(false); render(); return; }
+  if (bridgeLive(co) || (typeof TCloud === "object" && TCloud.on() && TCloud.has(cid))){ await Ledgers.refresh(cid); return; }
   const inp = document.createElement("input");
   inp.type = "file"; inp.accept = ".xlsx,.xls,.csv,.xml";
   inp.onchange = async () => { const f = inp.files && inp.files[0]; if (f && S.bank && S.bank.cid === cid){ await importLedgerList(f); render(); } };
@@ -661,8 +680,8 @@ function billFixLedger(role, old, to){
   const apply = name => {
     const e0 = curEntry();
     if (e0 && !e0.snapshot){
-      if (role === "party") e0.partyLedger = name;
-      else if (role === "expense") e0.expenseLedger = name;
+      if (role === "party"){ e0.partyLedger = name; e0.partyUserSet = true; e0.partyAuto = false; e0.partyFrom = ""; }
+      else if (role === "expense"){ e0.expenseLedger = name; e0.expenseUserSet = true; e0.expenseAuto = false; e0.expenseFrom = ""; }
       Store.saveEntry(cid, e0);
     }
     const n = replaceLedgerInWaiting(cid, old, name, role);
@@ -1231,6 +1250,8 @@ function doAct(act, t){
     }
     case "bridgeOff": Bridge.setCfg({key: ""}); clearInterval(bridgeTimer); Bridge.st = {state: "off", sessions: [], open: [], at: Date.now(), error: ""}; render(); break;
     case "billPost": postBillsToTally(); break;
+    case "postAll": postAllToTally(); break;
+    case "postToChoose": goChooseTallyCompany(); break;
     case "marketPick": { const i = document.getElementById("marketIn"); if (i){ i.value = ""; i.click(); } break; }
     case "booksPick": { const i = document.getElementById("booksIn"); if (i){ i.value = ""; i.click(); } break; }
     case "mastersPick": { const i = document.getElementById("mastersIn"); if (i){ i.value = ""; i.click(); } break; }
@@ -1736,8 +1757,11 @@ document.addEventListener("input", ev => {
   if (t.dataset.c && co && t.type === "text"){ coSetText(t.dataset.c, t.value); return; }
 });
 // a client's setting typed (saved a moment later); path is "name", "gst.cgst", ...
+// a GST or TDS ledger in Client setup, as it was before typing began: put back when what was typed is refused
+const SETUP_PREV = {};
 function coSetText(path, v){
   const co = CO(); if (!co) return;
+  if (/^gst\./.test(path) && !((co.id + path) in SETUP_PREV)) SETUP_PREV[co.id + path] = (co.gst || {})[path.slice(4)] || "";
   setPath(co, path, /^(gstin|pan)$/.test(path) ? String(v).toUpperCase().trim() : v);
   later("c" + co.id, () => Store.saveCompany(co), 600);
   if (path === "name") later("top", renderTop, 200);
@@ -1755,12 +1779,39 @@ function coCommit(path, v){
   } else if (path === "pan"){
     const p0 = String(co.pan || "").toUpperCase().trim(), g0 = String(co.gstin || "").toUpperCase();
     if (p0 && GSTIN_RE.test(g0) && g0.slice(2, 12) !== p0) toast("The client’s GSTIN " + g0 + " carries PAN " + g0.slice(2, 12) + ", not " + p0 + ". Correct one of them.");
+  } else if (/^gst\.(cgst|sgst|igst|rcm(Cgst|Sgst|Igst)(In|Out))$/.test(path)){
+    // review of 02-Oct-2026: an optional override, checked against the ledger list: a ledger of another tax head, or
+    // one Tally does not have, is refused (and what was there before is put back)
+    const k = path.slice(4), val = String((co.gst || {})[k] || "").trim(), prev = (co.id + path) in SETUP_PREV ? SETUP_PREV[co.id + path] : val;
+    delete SETUP_PREV[co.id + path];
+    const head = /cgst/i.test(k) ? "CGST" : /sgst/i.test(k) ? "SGST" : "IGST", kind = /In$/.test(k) ? "rcm-in" : /Out$/.test(k) ? "rcm-out" : "gst";
+    co.gstPin = co.gstPin || {};
+    if (!val){ delete co.gstPin[k]; co.gst[k] = ""; }
+    else {
+      const listed = Ledgers.cid() === co.id && hasLedgerList();
+      const c = listed || (S.books && S.books.cid === co.id) ? gstLedgerCheck(co.id, val, head, kind) : (() => { const nh = Ledgers.headOfName(val); return nh && nh !== head && kind !== "rcm-out" ? {ok: false, msg: "\u201c" + val + "\u201d is a" + (/^I/.test(nh) ? "n " : " ") + nh + " ledger, not " + head} : {ok: true, name: val}; })();
+      if (!c.ok){ co.gst[k] = prev; toast(c.msg + ". Not taken: " + (prev ? "\u201c" + prev + "\u201d kept." : "left empty.")); }
+      else { if (c.name !== prev) co.gstPin[k] = true; co.gst[k] = c.name; }
+    }
   }
   Store.saveCompany(co); refreshStats(co.id); render();
 }
 function coSetTallyName(name){ const co = CO(); if (co && name){ co.tallyName = name; Store.saveCompany(co); Bridge.lastOpenKey = null; render(); } }
 // per payment type: the TDS ledger (kind "tds") or the default expense ledger (kind "exp")
-function coSetRuleLedger(kind, ruleId, v){ const co = CO(); (kind === "tds" ? co.tdsLedgers : co.expenseLedgers)[ruleId] = v; later("c" + co.id, () => Store.saveCompany(co), 600); }
+function coSetRuleLedger(kind, ruleId, v){ const co = CO(); const m = kind === "tds" ? co.tdsLedgers : co.expenseLedgers; if (!((co.id + kind + ruleId) in SETUP_PREV)) SETUP_PREV[co.id + kind + ruleId] = m[ruleId] || ""; m[ruleId] = v; later("c" + co.id, () => Store.saveCompany(co), 600); }
+// a TDS ledger of another section, or an income ledger as the expense default, is refused when the box is left
+function coCommitRuleLedger(kind, ruleId){
+  const co = CO(); if (!co) return;
+  const m = kind === "tds" ? co.tdsLedgers : co.expenseLedgers, val = String(m[ruleId] || "").trim(), pk = co.id + kind + ruleId, prev = pk in SETUP_PREV ? SETUP_PREV[pk] : val;
+  delete SETUP_PREV[pk];
+  if (!val) return;
+  const r = ruleOf(ruleId), listed = Ledgers.cid() === co.id && hasLedgerList();
+  let msg = "";
+  if (kind === "tds"){ const c = tdsLedgerCheck(co.id, val, Ledgers.sec(r.old)); if (!c.ok && (listed || c.sec)) msg = c.msg; else if (c.ok) m[ruleId] = c.name; }
+  else if (listed){ const ex = exactLedger(val); if (ex && Ledgers.cls(co.id, ex) === "income") msg = "\u201c" + ex + "\u201d is an income ledger, not for purchase bills"; }
+  if (msg){ m[ruleId] = prev; toast(msg + ". Not taken: " + (prev ? "\u201c" + prev + "\u201d kept." : "left empty.")); }
+  Store.saveCompany(co); render();
+}
 function coSetBlockRule(catId, v){ const co = CO(); co.gstBlock = co.gstBlock || {}; co.gstBlock[catId] = v; Store.saveCompany(co); render(); }
 // the firm's own name, shown in the top bar and on reports
 // First sign-in of an owner with no firm name yet (review item 32): the name (from sign-up where given), address and

@@ -273,6 +273,8 @@ const Live = {
     this.send(this.postsTopic, "phx_join", {config: {broadcast: {self: false, ack: false}, presence: {key: ""}, postgres_changes: [{event: "*", schema: "public", table: "tally_post_jobs", filter: "firm_id=eq." + f}], private: false}, access_token: this.token});
   },
   bookChanged(r){
+    // the Tally computer sent the ledgers again: the client's one ledger list is read again (Ledgers)
+    try { if (typeof Ledgers === "object") Ledgers.bookRow(r); } catch (e){}
     if (!r || !r.client_id || !r.days_at || this.daysAt[r.book_id] === r.days_at) return;
     const first = !(r.book_id in this.daysAt); this.daysAt[r.book_id] = r.days_at;
     if (first && !S.books) return;

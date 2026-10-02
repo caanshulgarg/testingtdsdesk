@@ -508,7 +508,9 @@ async function importLedgerList(file){
   list = list.filter(l => { const k = l.name.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
   if (!list.length){ toast("No ledger names found in " + file.name + "."); return; }
   const groupSet = new Set(list.map(l => l.group).filter(Boolean));
-  b.ledgers = {list, groups: Array.from(groupSet).sort(), importedAt: new Date().toISOString(), file: file.name};
+  const now = new Date().toISOString();
+  Ledgers.take(b.cid, {list, parents: {}, at: now, srcAt: now, src: "file", file: file.name});
+  b.ledgers = Object.assign(b.ledgers || {}, {groups: Array.from(new Set((b.ledgers.groups || []).concat(Array.from(groupSet)))).sort()});
   // pending ledgers that now exist in Tally are no longer pending
   b.newLed = b.newLed.filter(n => !seen.has(n.name.toLowerCase()));
   saveBank({ledgers: true, newLed: true});

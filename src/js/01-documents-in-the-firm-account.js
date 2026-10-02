@@ -672,22 +672,58 @@ function zipOne(name, text){
 /* ------------------------------------------------------------------ */
 /* Parties (per client)                                                */
 /* ------------------------------------------------------------------ */
-// The supplier's ledger in the client's Tally ledger list (needs the bank/sales ledger list of that client to be loaded)
-function tallyPartyFor(x, cid){
-  if (!S.bank || S.bank.cid !== cid || !hasLedgerList()) return null;
-  const list = S.bank.ledgers.list || [];
+// The supplier's ledger in the client's Tally ledger list (review of 02-Oct-2026): the GSTIN on the ledger first, then
+// the GSTIN on its entries in Tally, then the PAN (inside the GSTIN, or read from the bill), then the name cleaned of
+// "Private Limited" and the like, then earlier bills of that supplier. null when none: the box is left empty, never the
+// first ledger of a list. {name, how}: how says why it was picked, under the box.
+function supplierKey(s){ return ledgerKey(String(s || "").replace(/\b(m\/s\.?|messrs\.?|private|pvt\.?|limited|ltd\.?|llp|the)(?=\W|$)/gi, " ")); }
+function sameSupplier(a, b){
+  const ga = fixGstin(a.vendorGstin).value, gb = fixGstin(b.vendorGstin).value, pa = effectivePan(a), pb = effectivePan(b);
+  if (ga && gb) return ga === gb;
+  if (pa && pb) return pa === pb;
+  return !!a.vendorName && supplierKey(a.vendorName) === supplierKey(b.vendorName);
+}
+function tallyPartyFor(x, cid, party){
+  cid = cid || S.coId;
+  if (Ledgers.cid() !== cid || !hasLedgerList()) return null;
+  const list = Ledgers.list(cid);
+  // a supplier's ledger is never an expense, income, tax or bank ledger
+  const ok = n => { const ex = n && exactLedger(n); if (!ex) return ""; return ["income", "expense", "tax", "bank", "asset"].includes(Ledgers.cls(cid, ex)) ? "" : ex; };
+  const one = arr => { const u = Array.from(new Set(arr.filter(Boolean))); return u.length === 1 ? u[0] : ""; };
   const g = fixGstin(x.vendorGstin).value, pan = effectivePan(x);
-  if (g){ const hit = list.filter(l => String(l.gstin || "").toUpperCase() === g); if (hit.length === 1) return {name: hit[0].name, how: "GSTIN on the Tally ledger"}; }
-  if (pan){ const hit = list.filter(l => String(l.pan || "").toUpperCase() === pan); if (hit.length === 1) return {name: hit[0].name, how: "PAN on the Tally ledger"}; }
-  if (x.vendorName){
-    const want = normName(x.vendorName).replace(/ /g, "");
-    const hit = list.filter(l => /sundry|creditors|current liabilities/i.test(l.group || "") && normName(l.name).replace(/ /g, "") === want);
-    if (hit.length === 1) return {name: hit[0].name, how: "name matches the Tally ledger"};
+  // each ledger's GSTIN and PAN: Tally's (the cloud list, a bridge read) wins over the books copy's when both are there
+  const bk = S.books && S.books.cid === cid ? S.books : null;
+  const names = Array.from(new Set(list.map(l => l.name).concat(bk ? Object.keys(bk.ledInfo || {}).concat(Object.keys(bk.gstins || {}), Object.keys(bk.pans || {})) : [])));
+  const ids = names.map(n => Object.assign({n}, Ledgers.ids(cid, n)));
+  const note = id => id.tallyGstin && id.bookGstin && id.tallyGstin !== id.bookGstin ? "Tally now has GSTIN " + id.tallyGstin + " for this ledger (books copy had " + id.bookGstin + ")" : "";
+  if (gstinValid(g)){
+    const hit = ids.filter(i => i.gstin === g && ok(i.n));
+    const h = one(hit.map(i => ok(i.n)));
+    if (h) return {name: h, how: "GSTIN " + g + " matches " + h + " in Tally", note: note(hit[0])};
+    const p = ok(Ledgers.gstinParty(cid, g));
+    if (p) return {name: p, how: "GSTIN " + g + " is on " + p + "'s entries in Tally"};
   }
+  if (pan){
+    const hit = ids.filter(i => i.pan === pan && ok(i.n));
+    const h = one(hit.map(i => ok(i.n)));
+    if (h) return {name: h, how: "PAN " + pan + " matches " + h + " in Tally", note: note(hit[0])};
+  }
+  if (x.vendorName){
+    const want = supplierKey(x.vendorName);
+    const hit = want ? list.filter(l => supplierKey(l.name) === want).map(l => ok(l.name)).filter(Boolean) : [];
+    const pty = hit.filter(n => Ledgers.cls(cid, n) === "party");
+    const h = one(pty.length ? pty : hit);
+    if (h) return {name: h, how: "The name matches " + h + " in Tally"};
+  }
+  const pl = party && ok(party.ledgerName);
+  if (pl) return {name: pl, how: "Used on this supplier's earlier bills"};
+  const prev = Object.values(D(cid).entries || {}).filter(o => o.status === "approved" && o.partyLedger && o.x && sameSupplier(o.x, x))
+    .sort((a, b) => String(b.approvedAt || "").localeCompare(String(a.approvedAt || ""))).map(o => ok(o.partyLedger)).find(Boolean);
+  if (prev) return {name: prev, how: "Used on this supplier's earlier bills"};
   return null;
 }
 function closestTallyLedger(name, groupRe){
-  const list = (S.bank.ledgers.list || []).filter(l => !groupRe || groupRe.test(l.group || ""));
+  const list = Ledgers.list().filter(l => !groupRe || groupRe.test(l.group || ""));
   let best = null;
   list.forEach(l => { const sc = nameSim(name, l.name); if (sc >= 0.85 && (!best || sc > best.sc)) best = {l, sc}; });
   return best ? best.l.name : null;
@@ -965,9 +1001,8 @@ function skipText(skip){
 }
 // is this client's Tally ledger list loaded (so a ledger can be checked against it)?
 function ledgerListFor(cid){
-  if (typeof hasLedgerList !== "function" || typeof B !== "function") return false;
-  const b = B();
-  return !!(b && b.cid === cid && !b.loading && hasLedgerList());
+  if (typeof hasLedgerList !== "function" || typeof Ledgers !== "object") return false;
+  return Ledgers.cid() === cid && hasLedgerList();
 }
 // Can this client take input credit of the GST on this bill? (review item 4)
 // No: the client has no GSTIN (unregistered), or the bill is billed to another GSTIN. The GST then goes to the cost.
@@ -990,7 +1025,7 @@ function compute(e, cid){
   cid = cid || S.coId;
   const co = CO(cid), x = e.x, party = findParty(x, cid), entries = D(cid).entries;
   const rule = ruleOf(e.natureId);
-  const gstTotal = num(x.cgst) + num(x.sgst) + num(x.igst);
+  const gstTotal = num(x.cgst) + num(x.sgst) + num(x.igst) + num(x.cess);
   const base = r2(num(x.taxable) || Math.max(0, num(x.total) - gstTotal));
   const total = r2(num(x.total) || base + gstTotal);
   const fy = fyOf(x.invoiceDate);
@@ -1137,8 +1172,10 @@ function compute(e, cid){
     if (others) flags.push({lvl:"info", t:others + " other draft" + (others > 1 ? "s" : "") + " for this deductee are waiting. Limits count only approved invoices, so approve in date order."});
   }
   if (!party && rule.basis !== "never" && e.status === "draft") flags.push({lvl:"info", t:"New deductee for this client. If bills were credited earlier this year outside this desk, enter them in Deductees so the limits are right."});
-  const tdsLedger = co.tdsLedgers[rule.id] || "";
-  if (tds > 0 && !tdsLedger) flags.push({lvl:"hi", t:"No TDS ledger is set for " + rule.label + ". Add it in Client setup → TDS."});
+  // the TDS ledger by section (review of 02-Oct-2026): never one of another section
+  const tdsPick = rule.basis === "never" ? {ledger: ""} : tdsLedgerFor(e, co, cid, rule);
+  const tdsLedger = tds > 0 && tdsPick.bad ? "" : tdsPick.ledger || "";
+  if (tds > 0 && !tdsLedger) flags.push({lvl:"hi", t:(tdsPick.bad ? tdsPick.bad + ". " : "") + (tdsPick.ask || "Choose the TDS ledger") + " (on the bill, or in Client setup \u2192 TDS)."});
 
   // GST: reverse charge and blocked credit (your choices; suggestions never block approval)
   const gd = gstDecision(e, co);
@@ -1154,25 +1191,21 @@ function compute(e, cid){
   const lines = [];
   const blockedGst = blocked ? r2(gstTotal + (rcmTax ? rcmTax.tax : 0)) : 0;
   lines.push({side:"Dr", ledger:e.expenseLedger || "", amt:r2(base + blockedGst), role:"expense"});
-  if (!blocked){
-    if (num(x.cgst)) lines.push({side:"Dr", ledger:co.gst.cgst, amt:r2(num(x.cgst)), role:"gst"});
-    if (num(x.sgst)) lines.push({side:"Dr", ledger:co.gst.sgst, amt:r2(num(x.sgst)), role:"gst"});
-    if (num(x.igst)) lines.push({side:"Dr", ledger:co.gst.igst, amt:r2(num(x.igst)), role:"gst"});
-  }
+  // each tax to the ledger of its own head, picked for this bill (gstLedgerFor): with the pick and why on the line
+  const taxLine = (side, k, amt, role, rate) => {
+    const head = k.toUpperCase(), p = gstLedgerFor(e, co, cid, head, role, rate);
+    lines.push({side, ledger: p.bad ? "" : p.ledger || "", amt, role, key: role + ":" + k, head, why: p.why || "", ask: p.ask || "", bad: p.bad || "", typed: p.bad ? p.ledger : ""});
+  };
+  const rateOf = v => base > 0 ? Ledgers.snapRate(num(v) / base * 100) : null;
+  if (!blocked) ["cgst", "sgst", "igst", "cess"].forEach(k => { if (num(x[k])) taxLine("Dr", k, r2(num(x[k])), "gst", rateOf(x[k])); });
   if (rcmTax){
-    if (!blocked){
-      if (rcmTax.cgst) lines.push({side:"Dr", ledger:rcmLedger(co, "rcmCgstIn"), amt:rcmTax.cgst, role:"rcm-in"});
-      if (rcmTax.sgst) lines.push({side:"Dr", ledger:rcmLedger(co, "rcmSgstIn"), amt:rcmTax.sgst, role:"rcm-in"});
-      if (rcmTax.igst) lines.push({side:"Dr", ledger:rcmLedger(co, "rcmIgstIn"), amt:rcmTax.igst, role:"rcm-in"});
-    }
-    if (rcmTax.cgst) lines.push({side:"Cr", ledger:rcmLedger(co, "rcmCgstOut"), amt:rcmTax.cgst, role:"rcm-out"});
-    if (rcmTax.sgst) lines.push({side:"Cr", ledger:rcmLedger(co, "rcmSgstOut"), amt:rcmTax.sgst, role:"rcm-out"});
-    if (rcmTax.igst) lines.push({side:"Cr", ledger:rcmLedger(co, "rcmIgstOut"), amt:rcmTax.igst, role:"rcm-out"});
+    if (!blocked) ["cgst", "sgst", "igst"].forEach(k => { if (rcmTax[k]) taxLine("Dr", k, rcmTax[k], "rcm-in", null); });
+    ["cgst", "sgst", "igst"].forEach(k => { if (rcmTax[k]) taxLine("Cr", k, rcmTax[k], "rcm-out", null); });
   }
   const ro = r2(total - (base + gstTotal));
   if (Math.abs(ro) >= 0.01) lines.push({side: ro > 0 ? "Dr" : "Cr", ledger:co.roundOff, amt:Math.abs(ro), role:"roundoff"});
   lines.push({side:"Cr", ledger:e.partyLedger || "", amt:r2(total - tds), role:"party"});
-  if (tds > 0) lines.push({side:"Cr", ledger:tdsLedger, amt:tds, role:"tds"});
+  if (tds > 0) lines.push({side:"Cr", ledger:tdsLedger, amt:tds, role:"tds", key:"tds", why: tdsPick.why || "", ask: tdsPick.ask || "", bad: tdsPick.bad || "", typed: tdsPick.bad ? tdsPick.ledger : ""});
   const dr = r2(lines.filter(l => l.side === "Dr").reduce((a, l) => a + l.amt, 0));
   const cr = r2(lines.filter(l => l.side === "Cr").reduce((a, l) => a + l.amt, 0));
 
@@ -1191,7 +1224,19 @@ function compute(e, cid){
   // every line of the Tally entry needs a Tally ledger (review item 2): a blank one always stops approval;
   // with the client's ledger list read from Tally, a ledger Tally does not have stops it too
   const ROLE_NAME = {gst:"GST", "rcm-in":"reverse charge input", "rcm-out":"reverse charge payable", roundoff:"round off", tds:"TDS"};
-  lines.forEach(l => { if (!l.ledger && ROLE_NAME[l.role]){ const w = "the " + ROLE_NAME[l.role] + " ledger (Client setup)"; if (!missing.includes(w) && !(l.role === "tds" && missing.includes("TDS ledger"))) missing.push(w); } });
+  lines.forEach(l => {
+    if (l.bad && !missing.includes(l.bad)) missing.push(l.bad);
+    if (!l.ledger && ROLE_NAME[l.role]){
+      const w = l.head ? "the " + l.head + (l.role === "rcm-in" ? " reverse charge input" : l.role === "rcm-out" ? " reverse charge payable" : "") + " ledger" : l.role === "tds" ? "TDS ledger" : "the " + ROLE_NAME[l.role] + " ledger (Client setup)";
+      if (!missing.includes(w) && !(l.role === "tds" && missing.includes("TDS ledger"))) missing.push(w);
+    }
+  });
+  // a purchase bill never goes to an income ledger (JITIN & CO. bill 6009 went to "Professional Fee", a Sales Accounts ledger)
+  const expL = e.expenseLedger && (ledgerListFor(cid) ? exactLedger(e.expenseLedger) : e.expenseLedger);
+  if (expL && ledgerListFor(cid) && Ledgers.cls(cid, expL) === "income"){
+    const w = "an expense ledger: \u201c" + expL + "\u201d is under " + (Ledgers.chain(cid, expL).slice(-1)[0] || "an income group") + ", an income ledger, not for a purchase bill";
+    missing.push(w); flags.push({lvl:"hi", t:"\u201c" + expL + "\u201d is an income ledger (" + (Ledgers.chain(cid, expL).slice(-1)[0] || "income") + "). A purchase bill goes to an expense, purchase or fixed-asset ledger."});
+  }
   const list = ledgerListFor(cid);
   if (list){
     const notIn = Array.from(new Set(lines.filter(l => l.ledger && !exactLedger(l.ledger)).map(l => l.ledger)));
@@ -2851,69 +2896,268 @@ function applyExtraction(e, j, cid){
 /* ---------- how this supplier has been booked before, in Tally ---------- */
 const NOT_EXPENSE = /(duties|taxes|bank|cash|sundry\s*creditors|sundry\s*debtors|current\s*liabilities|capital)/i;
 function isTaxLike(name){ return /\b(c|s|i|ut)gst\b|\bcess\b|\btds\b|\btcs\b|round\s*off|input\s*(c|s|i)gst/i.test(name || ""); }
-// the supplier's bills of the last twelve months and what the other side was, from the books FinCom already has (the
-// bridge's copy, the cloud, or the day book files). Build 190: never a live read of Tally while bills are processed (it
-// read each supplier's ledger from Tally, one after another, and made processing slow whenever Tally was connected)
+// the supplier's bills (two years back) and what the other side was, from the books FinCom already has: the books here,
+// or the cloud copy (read once in the background). Build 190: never a live read of Tally while bills are processed (it
+// read each supplier's ledger from Tally, one after another, and made processing slow whenever Tally was connected).
+// Only expense, purchase and fixed-asset ledgers count (review of 02-Oct-2026: never a Sales Accounts or income ledger).
 function partyExpensesFromTally(partyLedger, cid){
-  const b = S.books;
-  if (!partyLedger || !b || b.cid !== (cid || S.coId) || !(b.vouchers || []).length) return null;
-  const key = normName(partyLedger), t = new Date(Date.now() - 365 * 86400000);
-  const since = t.getFullYear() + String(t.getMonth() + 1).padStart(2, "0") + String(t.getDate()).padStart(2, "0");
-  const count = {}; let bills = 0;
-  b.vouchers.forEach(v => {
-    if (v.cancel || v.opt || String(v.date) < since) return;
+  cid = cid || S.coId;
+  const vs = partyLedger ? Ledgers.vouchers(cid, partyLedger) : null;
+  if (!vs) return null;
+  const key = normName(partyLedger), count = {}; let bills = 0;
+  vs.forEach(v => {
     const mine = (v.ent || []).filter(e => normName(e.l) === key);
     if (!mine.length || !(mine.reduce((x, e) => x + num(e.a), 0) > 0)) return;       // the supplier credited: a bill (Tally keeps a credit positive)
     bills++;
     const seen = new Set();
     (v.ent || []).forEach(e => {
       if (!(num(e.a) < 0) || normName(e.l) === key || isTaxLike(e.l) || seen.has(e.l)) return;
-      const info = ledgerInfo(e.l);
-      if (info && NOT_EXPENSE.test(info.group || "")) return;
+      const c = Ledgers.cls(cid, e.l);
+      if (c ? !["expense", "asset"].includes(c) : NOT_EXPENSE.test(((ledgerInfo(e.l) || {}).group) || "")) return;
       seen.add(e.l);
-      const c = count[e.l] || (count[e.l] = {ledger: e.l, n: 0, amount: 0});
-      c.n++; c.amount = r2(c.amount + Math.abs(num(e.a)));
+      const x = count[e.l] || (count[e.l] = {ledger: e.l, n: 0, amount: 0, amts: [], narr: []});
+      x.n++; x.amount = r2(x.amount + Math.abs(num(e.a))); x.amts.push(Math.abs(num(e.a))); if (v.narr && x.narr.length < 12) x.narr.push(v.narr);
     });
   });
-  const top = Object.values(count).sort((x, y) => y.n - x.n || y.amount - x.amount).slice(0, 4);
-  return {at: new Date().toISOString(), bills, top};
+  const all = Object.values(count).sort((x, y) => y.n - x.n || y.amount - x.amount);
+  return {at: new Date().toISOString(), bills, all, top: all.slice(0, 4).map(t => ({ledger: t.ledger, n: t.n, amount: t.amount}))};
 }
-// fill the expense ledger on drafts from what Tally shows, unless a person already chose one
-async function applyPartyHistory(entries, cid){
-  if (!S.books || S.books.cid !== cid || !(S.books.vouchers || []).length) return 0;       // the client's books are not open here
-  const byLedger = new Map();
-  entries.forEach(e => {
-    if (!e || e.status !== "draft" || !e.partyLedger || !exactLedger(e.partyLedger)) return;
-    (byLedger.get(e.partyLedger) || byLedger.set(e.partyLedger, []).get(e.partyLedger)).push(e);
-  });
-  let changed = 0;
-  for (const [led, list] of byLedger){
-    const h = partyExpensesFromTally(exactLedger(led), cid);
-    if (!h || !h.top.length) continue;
-    const best = h.top.find(t => exactLedger(t.ledger));
-    list.forEach(e => {
-      e.partyHist = {bills: h.bills, top: h.top};
-      if (!best || e.expenseUserSet) return;
-      const party = findParty(e.x, cid);
-      if (party && party.expenseLedger && party.expenseChosenByUser) return;      // the person's own choice for this supplier stands
-      if (e.expenseLedger !== exactLedger(best.ledger)){
-        e.expenseLedger = exactLedger(best.ledger);
-        e.expenseFrom = "Used for this supplier in Tally " + best.n + " of " + h.bills + " time" + (h.bills === 1 ? "" : "s") + " in the last year";
-        changed++;
-      }
-      Store.saveEntry(cid, e);
-    });
+// words of a bill or of a ledger that say what was bought (not dates, not the usual bill words)
+const EXP_STOP = new Set("bill bills invoice amount charge charges being month months year from with this that their them other total payment paid service services supply supplied against towards dated date period january february march april june july august september october november december sept expenses expense exps account accounts limited private advisory".split(" "));
+function textWords(s){ return Array.from(new Set(String(s || "").toLowerCase().replace(/[^a-z]+/g, " ").split(" ").filter(w => w.length >= 4 && !EXP_STOP.has(w)))); }
+// what a bill's words or HSN/SAC say, and the ledgers that fit
+const EXP_HINTS = [
+  [/electric|\belec\b|power|energy/, ["9969", "2716"], /electric|power/i],
+  [/\brent|lease/, ["9972"], /\brent/i],
+  [/repair|maint|laptop|computer|printer|cable|mouse|keyboard|charger|toner/, ["9987", "8471", "8443"], /repair|maint/i],
+  [/legal|profession|consult|audit|advocate/, ["9982"], /legal|profession|consult|audit/i],
+  [/internet|broadband|telephone|mobile|phone/, ["9984"], /internet|telephone|phone|mobile|communicat/i],
+  [/print|stationer/, ["4802", "4820", "4911", "9989"], /print|station/i],
+  [/travel|ticket|hotel|flight|taxi/, ["9964", "9963", "9966"], /travel|convey|tour/i],
+  [/advertis|marketing|promotion/, ["9983"], /advertis|marketing|promotion/i],
+  [/parking/, [], /parking/i],
+  [/courier|postage/, ["9968"], /courier|postage/i],
+  [/freight|transport|cartage/, ["9965", "9967"], /freight|transport|cartage/i],
+  [/insurance/, ["9971"], /insurance/i]
+];
+// the expense ledger for a bill: how this supplier was booked before in Tally (the one whose words or amounts fit
+// this bill when there are several: "electricity" or "rent"), then the bill's words and HSN/SAC, then the client's
+// default for the payment type. Only expense, purchase and fixed-asset ledgers. {name, how} or null
+function expenseFor(e, cid, partyLed, party){
+  const ok = n => { const ex = n && exactLedger(n); if (!ex || isTaxLike(ex)) return ""; const c = Ledgers.cls(cid, ex); return !c || c === "expense" || c === "asset" ? ex : ""; };
+  const x = e.x || {}, own = new Set(textWords([x.vendorName, partyLed].join(" ")));
+  const words = textWords([x.description].concat((x.items || []).map(i => i.desc), [x.invoiceNo, String(e.fileName || "").replace(/\.\w+$/, "")]).join(" ")).filter(w => !own.has(w));
+  const hit = (text) => { const t = textWords(text); return words.find(w => t.some(u => u.startsWith(w) || w.startsWith(u))) || ""; };
+  const gst = num(x.cgst) + num(x.sgst) + num(x.igst), base = r2(num(x.taxable) || Math.max(0, num(x.total) - gst));
+  const h = partyLed ? partyExpensesFromTally(partyLed, cid) : null;
+  if (h && h.all.length){
+    const sc = h.all.map(t => {
+      const l = ok(t.ledger); if (!l) return null;
+      const wn = hit(t.ledger), wr = wn ? "" : hit(t.narr.join(" ")), amt = base > 0 && t.amts.some(a => Math.abs(a - base) <= Math.max(1, base * 0.02));
+      return {l, t, w: wn || wr, s: t.n / Math.max(1, h.bills) + (wn ? 3 : wr ? 1.5 : 0) + (amt ? 1 : 0)};
+    }).filter(Boolean).sort((a, b) => b.s - a.s || b.t.n - a.t.n);
+    if (sc.length){ const b = sc[0]; return {name: b.l, how: "Booked to " + b.l + " for this supplier in Tally (" + b.t.n + " of " + h.bills + " bill" + (h.bills === 1 ? "" : "s") + ")" + (b.w ? "; the bill says “" + b.w + "”" : "")}; }
   }
+  if (party && party.expenseChosenByUser && ok(party.expenseLedger)) return {name: ok(party.expenseLedger), how: "Your choice for this supplier"};
+  const u = Ledgers.usage(cid) || {}, names = Ledgers.list(cid).map(l => l.name);
+  const best = arr => arr.sort((a, b) => ((u[b] || {}).n || 0) - ((u[a] || {}).n || 0) || a.length - b.length)[0];
+  const codes = billCodes(e), text = words.join(" ");
+  for (const [wre, sacs, lre] of EXP_HINTS){
+    const w = (text.match(wre) || [])[0], c = codes.find(k => sacs.some(p => k.startsWith(p)));
+    if (!w && !c) continue;
+    const cands = names.filter(n => lre.test(n) && ok(n) && Ledgers.cls(cid, n));
+    if (cands.length) return {name: best(cands), how: c ? "From HSN/SAC " + c + " on the bill" : "From the bill's words: “" + w + "”"};
+  }
+  for (const w of words.filter(w => w.length >= 5)){
+    const cands = names.filter(n => ok(n) && Ledgers.cls(cid, n) && textWords(n).some(t => t.startsWith(w) || (t.length >= 5 && w.startsWith(t))));
+    if (cands.length && cands.length <= 3) return {name: best(cands), how: "From the bill's words: “" + w + "”"};
+  }
+  const co = CO(cid), def = ok((co.expenseLedgers || {})[e.natureId]);
+  if (def) return {name: def, how: "Client setup: the default for " + ruleOf(e.natureId).label};
+  const pe = party && ok(party.expenseLedger);
+  if (pe) return {name: pe, how: "Used on this supplier's last approved bill"};
+  return null;
+}
+// party and expense ledgers on a draft, filled by themselves from Tally's ledgers and books (not over a person's
+// choice); run again when the ledger list, the books or the bill's supplier change. true when something changed
+const AUTO_SEEN = new WeakMap();
+function billAutoLedgers(e, cid){
+  cid = cid || S.coId;
+  if (!e || e.status !== "draft" || !e.x || typeof Ledgers !== "object" || Ledgers.cid() !== cid || !hasLedgerList()) return false;
+  const bk = S.books && S.books.cid === cid ? (S.books.vouchers || []).length + ":" + Object.keys(S.books.ledInfo || {}).length + ":" + Object.keys(S.books.gstins || {}).length : 0;
+  const stamp = () => [Ledgers.ver, bk, e.x.vendorGstin, e.x.vendorPan, e.x.vendorName, e.x.description, e.x.invoiceNo, e.natureId, e.partyLedger, e.expenseLedger, !!e.partyUserSet, !!e.expenseUserSet].join("|");
+  if (AUTO_SEEN.get(e) === stamp()) return false;
+  const party = findParty(e.x, cid), co = CO(cid);
+  let changed = false;
+  const pex = e.partyLedger && exactLedger(e.partyLedger), pcls = pex ? Ledgers.cls(cid, pex) : "";
+  if (!e.partyUserSet && (!e.partyLedger || e.partyAuto || !pex || ["income", "expense", "tax", "bank", "asset"].includes(pcls))){
+    const t = tallyPartyFor(e.x, cid, party), to = t ? t.name : "";
+    if (to !== (e.partyLedger || "") || (t ? t.how : "") !== (e.partyFrom || "") || ((t && t.note) || "") !== (e.partyNote || "")){ e.partyLedger = to; e.partyFrom = t ? t.how : ""; e.partyNote = (t && t.note) || ""; changed = true; }
+    if (!e.partyAuto){ e.partyAuto = true; changed = true; }
+    if (e.partyFromTally){ delete e.partyFromTally; changed = true; }
+  }
+  const pl = e.partyLedger && exactLedger(e.partyLedger);
+  const h = pl ? partyExpensesFromTally(pl, cid) : null;
+  if (h && h.top.length && JSON.stringify((e.partyHist || {}).top || []) !== JSON.stringify(h.top)){ e.partyHist = {bills: h.bills, top: h.top}; changed = true; }
+  const eex = e.expenseLedger && exactLedger(e.expenseLedger), ecls = eex ? Ledgers.cls(cid, eex) : "";
+  const oldAuto = e.expenseAuto || e.expenseFrom || !eex || ecls === "income" || (eex && (eex === exactLedger((co.expenseLedgers || {})[e.natureId] || "") || (party && eex === exactLedger(party.expenseLedger || ""))));
+  if (!e.expenseUserSet && (!e.expenseLedger || oldAuto)){
+    const p = expenseFor(e, cid, pl, party);
+    if (p && (p.name !== e.expenseLedger || p.how !== e.expenseFrom)){ e.expenseLedger = p.name; e.expenseFrom = p.how; e.expenseAuto = true; changed = true; }
+    else if (!p && eex && ecls === "income"){ e.expenseLedger = ""; e.expenseFrom = ""; changed = true; }
+  }
+  AUTO_SEEN.set(e, stamp());
+  if (changed && D(cid).entries[e.id]) Store.saveEntry(cid, e);
+  return changed;
+}
+// every draft of a client, when its ledger list or books have come in
+function billAutoAll(cid){
+  cid = cid || S.coId;
+  if (!S.data[cid] || !D(cid).loaded) return 0;
+  let n = 0;
+  Object.values(D(cid).entries || {}).forEach(e => { if (e.status === "draft" && billAutoLedgers(e, cid)) n++; });
+  if (n) refreshStats(cid);
+  return n;
+}
+// kept for the callers of before: fills the ledgers of drafts from what Tally shows, unless a person already chose
+async function applyPartyHistory(entries, cid){
+  let changed = 0;
+  entries.forEach(e => { if (billAutoLedgers(e, cid)) changed++; });
   return changed;
 }
 function fillLedgers(e, party, cid){
-  if (!e.partyLedger){
-    const t = tallyPartyFor(e.x, cid);
-    e.partyLedger = (party && party.ledgerName) || (t && t.name) || e.x.vendorName;
-    if (t && !(party && party.ledgerName)) e.partyFromTally = t.how;
+  if (typeof Ledgers === "object" && Ledgers.cid() === cid && hasLedgerList()){ billAutoLedgers(e, cid); return; }
+  // no ledger list of this client here yet: the supplier's ledger as known, else its name (matched when the list comes)
+  if (!e.partyLedger){ e.partyLedger = (party && party.ledgerName) || e.x.vendorName; e.partyAuto = true; }
+  if (!e.expenseLedger){ e.expenseLedger = (party && party.expenseChosenByUser && party.expenseLedger) || CO(cid).expenseLedgers[e.natureId] || ""; e.expenseAuto = true; }
+}
+
+/* ---------- the GST and TDS ledgers of each bill (review of 02-Oct-2026) ---------- */
+// Not the three fixed ledgers of Client setup: for each tax on the bill, the input ledger of that tax head (the GST
+// ledger check's confirmed map, Tally's duty head, or the name when neither says) that this supplier's earlier bills
+// used in Tally, else the one used most often for that head and rate. A ledger of another head is never taken. Client
+// setup is an override only when a person typed it there (co.gstPin), and a fallback otherwise.
+const RCM_KEYS = {"rcm-in": {CGST: "rcmCgstIn", SGST: "rcmSgstIn", IGST: "rcmIgstIn"}, "rcm-out": {CGST: "rcmCgstOut", SGST: "rcmSgstOut", IGST: "rcmIgstOut"}};
+function gstLedgerCheck(cid, name, head, kind){
+  const listed = Ledgers.cid() === cid && hasLedgerList(), q = "“" + name + "”";
+  const ex = listed ? exactLedger(name) : String(name || "").trim();
+  if (!ex) return {ok: false, msg: q + " is not a ledger in Tally"};
+  const qq = "“" + ex + "”", c = Ledgers.cls(cid, ex);
+  if (c && !["tax", "other"].includes(c)) return {ok: false, msg: qq + " is under " + (Ledgers.chain(cid, ex)[0] || "another group") + ", not a GST ledger"};
+  const i = Ledgers.gstInfo(cid, ex), side = kind === "rcm-out" ? "output" : "input";
+  if (!i.gst) return {ok: false, msg: qq + " is not a GST ledger"};
+  if (i.side && i.side !== side) return {ok: false, msg: qq + " is a GST " + i.side + " ledger, not " + side};
+  if (i.head && i.head !== head) return {ok: false, msg: qq + " is " + (i.confirmed ? "confirmed as" : "") + " a" + (/^I/.test(i.head) ? "n " : " ") + i.head + " ledger, not " + head + ": choose a" + (/^I/.test(head) ? "n " : " ") + head + " ledger"};
+  if (!i.head && kind !== "rcm-out") return {ok: false, msg: "Which tax " + qq + " is for is not known: confirm it in the GST ledger check, or choose another " + head + " ledger"};
+  return {ok: true, name: ex, info: i};
+}
+const TAXPICK = {m: new Map()};
+function taxPickMemo(key, fn){
+  if (TAXPICK.m.has(key)) return TAXPICK.m.get(key);
+  if (TAXPICK.m.size > 800) TAXPICK.m.clear();
+  const v = fn(); TAXPICK.m.set(key, v); return v;
+}
+function taxStamp(cid){ const bk = S.books && S.books.cid === cid ? S.books : null; return [cid, Ledgers.ver, Ledgers.list(cid).length, bk ? (bk.vouchers || []).length + ":" + (bk.mapV || 0) + ":" + Object.keys(bk.map || {}).length : 0].join("#"); }
+// the supplier's earlier bills in Tally, with a weight: 3 for those booked to the same expense ledger as this bill
+function supplierBills(e, cid){
+  const pl = e.partyLedger && (exactLedger(e.partyLedger) || e.partyLedger);
+  const vs = pl ? Ledgers.vouchers(cid, pl) : null;
+  if (!vs) return [];
+  const key = normName(pl), exp = e.expenseLedger ? normName(e.expenseLedger) : "";
+  return vs.filter(v => (v.ent || []).filter(x => normName(x.l) === key).reduce((a, x) => a + num(x.a), 0) > 0)
+    .map(v => ({v, w: exp && v.ent.some(x => normName(x.l) === exp) ? 3 : 1, key}));
+}
+function gstLedgerFor(e, co, cid, head, kind, rate){
+  const lk = kind + ":" + head.toLowerCase(), label = head + (kind === "rcm-in" ? " reverse charge input" : kind === "rcm-out" ? " reverse charge payable" : "");
+  const ask = "Choose the " + label + " ledger";
+  const own = e.taxLed && e.taxLed[lk];
+  if (own){ const c = gstLedgerCheck(cid, own, head, kind); return c.ok ? {ledger: c.name, why: "Chosen on this bill"} : {ledger: own, bad: c.msg}; }
+  const sk = kind === "gst" ? head.toLowerCase() : (RCM_KEYS[kind] || {})[head];
+  const setv = kind === "gst" ? (co.gst || {})[sk] || "" : sk ? rcmLedger(co, sk) : "";
+  const known = Ledgers.cid() === cid && hasLedgerList(), books = !!(S.books && S.books.cid === cid && (S.books.vouchers || []).length);
+  if (!known && !books){
+    // no ledger list or books here: Client setup, as before, unless its name says another tax
+    if (!setv) return {ledger: "", ask};
+    const nh = Ledgers.headOfName(setv);
+    if (nh && nh !== head && !(kind === "rcm-out")) return {ledger: "", ask, bad: "Client setup has “" + setv + "” for " + head + ", but it is a" + (/^I/.test(nh) ? "n " : " ") + nh + " ledger. " + ask};
+    return {ledger: setv, why: "Client setup"};
   }
-  if (!e.expenseLedger) e.expenseLedger = (party && party.expenseLedger) || CO(cid).expenseLedgers[e.natureId] || "";
-  if (e.expenseLedger && S.bank && S.bank.cid === cid && hasLedgerList() && !exactLedger(e.expenseLedger)){ const ex = closestTallyLedger(e.expenseLedger, /expense|purchase/i); if (ex) e.expenseLedger = ex; }
+  const pinned = !!(co.gstPin && co.gstPin[sk]);
+  return taxPickMemo([taxStamp(cid), "gst", lk, rate, e.partyLedger, e.expenseLedger, setv, pinned].join("|"), () => {
+    if (pinned && setv){ const c = gstLedgerCheck(cid, setv, head, kind); if (c.ok) return {ledger: c.name, why: "Client setup: used on every bill"}; }
+    const memo = new Map();
+    const auto = n => {
+      if (memo.has(n)) return memo.get(n);
+      const c = gstLedgerCheck(cid, n, head, kind);
+      const r = c.ok && !!c.info.rcm === (kind !== "gst") && !(rate && c.info.rate && c.info.rate !== rate) ? c.name : "";
+      memo.set(n, r); return r;
+    };
+    // 1. this supplier's earlier bills in Tally
+    const cnt = {};
+    supplierBills(e, cid).forEach(({v, w, key}) => v.ent.forEach(x => { if ((kind === "rcm-out" ? x.a > 0 : x.a < 0) && normName(x.l) !== key && !/^(expense|income|party|bank|asset)$/.test(Ledgers.cls(cid, x.l))){ const n = auto(x.l); if (n) cnt[n] = (cnt[n] || 0) + w; } }));
+    const top = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0];
+    if (top) return {ledger: top[0], why: "Used for " + head + " on this supplier's earlier bills in Tally"};
+    // 2. the ledger used most often for this tax and rate
+    const u = Ledgers.usage(cid) || {};
+    const names = Array.from(new Set(Object.keys(u).concat(known ? Ledgers.list(cid).map(l => l.name) : [])));
+    const cands = Array.from(new Set(names.filter(n => isTaxLike(n) || /gst|cess|rcm|tax/i.test(n) || (S.books && S.books.map && S.books.map[n] && /^gst/.test(S.books.map[n].what || ""))).map(auto).filter(Boolean)));
+    if (cands.length){
+      const sc = n => [rate && u[n] ? (u[n].rates[rate] || 0) : 0, (u[n] || {}).n || 0];
+      cands.sort((a, b) => sc(b)[0] - sc(a)[0] || sc(b)[1] - sc(a)[1] || a.length - b.length);
+      const s0 = sc(cands[0]);
+      if (s0[1] > 0) return {ledger: cands[0], why: "Used most often for " + head + (s0[0] && rate ? " at " + rate + "%" : "") + " in Tally (" + (s0[0] || s0[1]) + " times)"};
+      if (cands.length === 1) return {ledger: cands[0], why: "The only " + label + " ledger in Tally"};
+    }
+    // 3. Client setup, when it fits
+    if (setv){ const c = gstLedgerCheck(cid, setv, head, kind); if (c.ok) return {ledger: c.name, why: "Client setup"}; }
+    return {ledger: "", ask};
+  });
+}
+function secLabel(s){ return typeof LedCheck === "object" ? LedCheck.secLabel(s) : s; }
+function tdsLedgerCheck(cid, name, sec){
+  const listed = Ledgers.cid() === cid && hasLedgerList(), q = "“" + name + "”";
+  const ex = listed ? exactLedger(name) : String(name || "").trim();
+  if (!ex) return {ok: false, msg: q + " is not a ledger in Tally"};
+  const s = Ledgers.secOf(cid, ex), qq = "“" + ex + "”";
+  if (s && sec && s !== sec) return {ok: false, sec: s, msg: qq + " is a TDS ledger of section " + secLabel(s) + ", not " + secLabel(sec)};
+  if (listed && !Ledgers.isTds(cid, ex)) return {ok: false, msg: qq + " is not a TDS ledger"};
+  return {ok: true, name: ex, sec: s};
+}
+// TDS by section: 194-I to "TDS ON RENT 94I", 194J to "TDS on Professional Fee 94J", 194C to "TDS ON CONTRACT 94C";
+// never a ledger of another section
+function tdsLedgerFor(e, co, cid, rule){
+  const sec = Ledgers.sec(rule.old), set = (co.tdsLedgers || {})[rule.id] || "", label = "TDS" + (sec ? " (section " + secLabel(sec) + ")" : "");
+  const ask = "Choose the " + label + " ledger";
+  const own = e.taxLed && e.taxLed.tds;
+  if (own){ const c = tdsLedgerCheck(cid, own, sec); return c.ok ? {ledger: c.name, why: "Chosen on this bill"} : {ledger: own, bad: c.msg}; }
+  const known = Ledgers.cid() === cid && hasLedgerList(), books = !!(S.books && S.books.cid === cid && (S.books.vouchers || []).length);
+  if (!sec || (!known && !books)){
+    if (!set) return {ledger: "", ask};
+    const s = Ledgers.sec(set);
+    if (s && sec && s !== sec) return {ledger: "", ask, bad: "Client setup has “" + set + "” for " + rule.label + ", a TDS ledger of section " + secLabel(s) + ", not " + secLabel(sec) + ". " + ask};
+    return {ledger: set, why: "Client setup"};
+  }
+  return taxPickMemo([taxStamp(cid), "tds", rule.id, e.partyLedger, e.expenseLedger, set].join("|"), () => {
+    const tech = rule.id === "technical", fit = n => sec !== "194J" || /technical/i.test(n) === tech ? 1 : 0;
+    const memo = new Map();
+    const auto = n => { if (memo.has(n)) return memo.get(n); const c = tdsLedgerCheck(cid, n, sec); const r = c.ok && c.sec === sec && Ledgers.isTds(cid, c.name) ? c.name : ""; memo.set(n, r); return r; };
+    const cnt = {};
+    supplierBills(e, cid).forEach(({v, w, key}) => v.ent.forEach(x => { if (x.a > 0 && normName(x.l) !== key){ const n = auto(x.l); if (n) cnt[n] = (cnt[n] || 0) + w * (fit(n) ? 2 : 1); } }));
+    const top = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0];
+    if (top) return {ledger: top[0], why: "Used for section " + secLabel(sec) + " on this supplier's earlier bills in Tally"};
+    const cs = set ? tdsLedgerCheck(cid, set, sec) : null;
+    if (cs && cs.ok && cs.sec === sec) return {ledger: cs.name, why: "Client setup"};
+    const u = Ledgers.usage(cid) || {};
+    const names = Array.from(new Set(Object.keys(u).concat(known ? Ledgers.list(cid).map(l => l.name) : [])));
+    const cands = Array.from(new Set(names.filter(n => /tds|tax\s*deducted|9[2-9]\s*-?\s*[a-z]|19[2-9]/i.test(n) || (S.books && S.books.map && S.books.map[n] && S.books.map[n].what === "tds_payable")).map(auto).filter(Boolean)));
+    if (cands.length){
+      cands.sort((a, b) => fit(b) - fit(a) || ((u[b] || {}).n || 0) - ((u[a] || {}).n || 0) || a.length - b.length);
+      const n0 = (u[cands[0]] || {}).n || 0;
+      return {ledger: cands[0], why: n0 ? "Used most often for section " + secLabel(sec) + " in Tally (" + n0 + " times)" : "The " + secLabel(sec) + " TDS ledger in Tally"};
+    }
+    if (cs && cs.ok) return {ledger: cs.name, why: "Client setup"};
+    return {ledger: "", ask};
+  });
 }
 function narrationFor(e){
   const bits = ["Being invoice " + (e.x.invoiceNo || "") + " dated " + fmtDate(e.x.invoiceDate) + " from " + (e.x.vendorName || "supplier")];
@@ -3797,6 +4041,8 @@ function renderNow(){
 }
 function afterRender(){
   if (typeof acAfterRender === "function") acAfterRender();
+  // the client's ledger list: read once, and again when the cloud's ledgers changed (looked at every 30 seconds at most)
+  if (S.view === "company" && S.coId && !S.loadingCo && typeof Ledgers === "object") Ledgers.watch(S.coId);
   if (S.view === "company" && ["bank", "invoices", "export", "sales"].includes(S.tab) && typeof maybeLiveSync === "function") maybeLiveSync();
 }
 

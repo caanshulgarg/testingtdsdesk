@@ -606,6 +606,8 @@ ol.setup li div{color:var(--ink);font-weight:400;margin-top:2px}
 .lg-ok{color:var(--ok);font-weight:700}
 .lg-miss{color:var(--stop);font-size:12.5px;margin-top:3px}
 .lg-miss .linkbtn{font-size:12.5px}
+.ledstat{color:var(--muted,#64748b);font-size:12px;margin-top:2px}
+.ledstat .linkbtn{font-size:12px}
 .src.muted{color:var(--muted)}
 .icon{border:0;background:transparent;color:var(--muted);width:28px;height:28px;border-radius:14px;cursor:pointer;font-size:13px;vertical-align:middle;padding:0}
 .icon:hover,.icon:focus{background:var(--rule-soft);color:var(--ink)}

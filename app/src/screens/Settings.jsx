@@ -233,7 +233,7 @@ function TallySetup() {
         <CoCheck path="billwise" on={!!co.billwise}>Add the invoice number as a bill-wise reference on the party</CoCheck>
       </div>
     </Card>
-    <Card title="Ledgers used in every entry" note="Names as in Tally. Ledgers for TDS and expenses by payment type are under TDS.">
+    <Card title="Ledgers used in every entry" note="Names as in Tally. Each bill picks its own GST ledgers (how the supplier was booked before, else the ledger used most for that tax and rate); a GST ledger typed here is used on every bill instead, and one of another tax is refused. Ledgers for TDS and expenses by payment type are under TDS.">
       <div className="grid">
         <CoText label="Input CGST" path="gst.cgst" /><CoText label="Input SGST" path="gst.sgst" /><CoText label="Input IGST" path="gst.igst" /><CoText label="Round off" path="roundOff" />
       </div>
@@ -244,7 +244,7 @@ function TallySetup() {
 function RuleLedger({ kind, r }) {
   const co = CO(), v = (kind === "tds" ? co.tdsLedgers : co.expenseLedgers)[r.id] || "";
   return <input type="text" value={v} aria-label={(kind === "tds" ? "TDS ledger for " : "Expense ledger for ") + r.label}
-    onChange={(ev) => { coSetRuleLedger(kind, r.id, ev.target.value); FinComReact.redraw(); }} />;
+    onChange={(ev) => { coSetRuleLedger(kind, r.id, ev.target.value); FinComReact.redraw(); }} onBlur={() => coCommitRuleLedger(kind, r.id)} />;
 }
 
 function TdsSetup() {
