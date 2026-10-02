@@ -27,8 +27,8 @@ with sync_playwright() as p:
     t = pg.inner_text("#app")
     ok("The balance sheet tallies" in t and "Schedule III" in t and "Statement of Profit and Loss" in t, "Schedule III statements, tallied")
     ok("Negative on the balance sheet" in t, "a negative line is flagged")
-    if FIXTURE:   # EXPECTED.md: balance sheet totals 14,03,550 each side; profit 3,19,550; reserves -4,80,450
-        ok("14,03,550.00" in t and "3,19,550.00" in t and "Reserves and surplus -4,80,450.00" in t, "fixture: the totals worked out by hand (14,03,550; profit 3,19,550; reserves -4,80,450)")
+    if FIXTURE:   # EXPECTED.md: balance sheet totals 15,03,350 each side; profit 3,94,550; reserves -4,05,450
+        ok("15,03,350.00" in t and "3,94,550.00" in t and "Reserves and surplus -4,05,450.00" in t, "fixture: the totals worked out by hand (15,03,350; profit 3,94,550; reserves -4,05,450)")
     pg.screenshot(path=OUT + "/fs.png", full_page=False)
     pg.click('nav[aria-label="Accounts"] button:text-is("Mapping")'); pg.wait_for_timeout(600)
     sel = pg.locator('select[aria-label^="Goes to: "]').first; l = sel.get_attribute("aria-label")[9:]

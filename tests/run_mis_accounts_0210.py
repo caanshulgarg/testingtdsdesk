@@ -84,12 +84,31 @@ with sync_playwright() as p:
     cf = E("(() => { const c = MIS.cashActual('20250401', '20260331'), f = l => (c.rows.find(x => x.lab === l) || {t: null}).t; return [f('GST'), f('Input GST paid with bills'), Object.values((c.rows.find(x => x.lab === 'Expenses paid') || {m: {}}).m).some(v => v > 0), f('Expenses refunded or recovered')]; })()")
     ok(cf[0] == -1360166 and cf[1] == -10080 and not cf[2] and cf[3] == 15326.52, "5. cash flow: GST paid 13,60,166 as Compliance, input IGST 10,080 apart, no month of Expenses paid positive, refunds 15,326.52 on their own line (%s)" % cf)
 
-    # 7, 15 (review of 02-Oct-2026): an expense ledger in credit is other income, flagged; each fixed asset once, in its note
-    fsd = E("(() => { const d = FS.build('2025'), h = FS.html(d); return {exp: d.pl.exp, oth: d.pl.oth, wo: (d.plDet.oth || []).find(x => x[0] === 'Written Off Expenses'), crm: (h.match(/CRM Software/g) || []).length, tally: (h.match(/Tally Software/g) || []).length, comp: (h.match(/>Computer</g) || []).length}; })()")
-    ok(fsd["exp"] == 2680192.03 and fsd["wo"] == ["Written Off Expenses", 3223694.87, "expense ledger with a credit balance"], "7. other expenses 26,80,192.03 (not -5,43,549.56): Written Off Expenses 32,23,694.87 under other income, flagged (%s)" % fsd)
+    # 7, 15 (review of 02-Oct-2026): each fixed asset once, in its note. 7 was "an expense ledger in credit is other income,
+    # flagged" (other expenses 26,80,192.03 with Written Off Expenses 32,23,694.87 under other income); the owner's rule
+    # (MIS.plRule) replaced it: a credit is set off in its own head, and only a head that ends in credit sends the rest to
+    # other income, the head then nil. The owner's figures for FY 2025-26:
+    fsd = E("""(() => { const d = FS.build('2025'), h = FS.html(d); return {pl: d.pl, inc: d.inc, exp: d.exp, pbt: d.pbt, sum: d.plSum, set: d.plSet,
+      wo: (d.plDet.exp || []).find(x => x[0] === 'Written Off Expenses'), adv: (d.plDet.emp || []).find(x => x[0] === 'Advance'), woOth: (d.plDet.oth || []).some(x => x[0] === 'Written Off Expenses'),
+      note: /data-fs-excess="exp"><td class="note">Excess credit in Other expenses<\/td><td class="n">5,43,549.56</.test(h),
+      crm: (h.match(/CRM Software/g) || []).length, tally: (h.match(/Tally Software/g) || []).length, comp: (h.match(/>Computer</g) || []).length}; })()""")
+    P = fsd["pl"]
+    ok(P["emp"] == 7341847.08 and fsd["adv"] == ["Advance", -5000, "expense ledger with a credit balance"], "7. employee benefits 73,41,847.08: Advance -5,000 set off inside the head, flagged (%s, %s)" % (P["emp"], fsd["adv"]))
+    ok(P["fin"] == 178965.39, "7. finance costs 1,78,965.39 (%s)" % P["fin"])
+    ok(P["exp"] == 0 and fsd["sum"]["exp"]["dr"] == 2680192.03 and fsd["sum"]["exp"]["cr"] == 3223741.59 and fsd["sum"]["exp"]["moved"] == 543549.56 and fsd["wo"] == ["Written Off Expenses", -3223694.87, "expense ledger with a credit balance"] and not fsd["woOth"],
+       "7. other expenses nil: 26,80,192.03 less credits 32,23,741.59 (Written Off Expenses -32,23,694.87 flagged, in the head) (%s)" % fsd["sum"].get("exp"))
+    ok(P["oth"] == 543549.56 and fsd["set"]["oth"] == [["Excess credit in Other expenses", 543549.56, "exp"]] and fsd["note"], "7. other income 5,43,549.56, its note saying it is the excess credit in other expenses (%s)" % fsd["set"].get("oth"))
+    ok(fsd["inc"] == 18835005.76 and fsd["exp"] == 7520812.47 and fsd["pbt"] == 11314193.29, "7. total income 1,88,35,005.76, total expenses 75,20,812.47, profit 1,13,14,193.29 (%s, %s, %s)" % (fsd["inc"], fsd["exp"], fsd["pbt"]))
     ok(fsd["crm"] == 1 and fsd["tally"] == 1 and fsd["comp"] == 1, "15. CRM Software, Tally Software and Computer each once in the notes (%s)" % fsd)
-    misx = E("(() => { const H = S.books.mis.last.pl.heads; return [(H.oth.led.find(x => x.l === 'Written Off Expenses') || {}).flag, H.exp.led.some(x => x.l === 'Written Off Expenses')]; })()")
-    ok(misx == ["expense ledger with a credit balance", False], "7. MIS: the same ledger under other income, flagged (%s)" % misx)
+    misx = E("""(() => { const r = S.books.mis.last, H = r.pl.heads, f = (k, l) => ((H[k] || {led: []}).led.find(x => x.l === l) || {}), C = r.p2.cc;
+      return {t: Object.fromEntries(['emp', 'fin', 'exp', 'dir', 'oth'].map(k => [k, (H[k] || {t: 0}).t])), inc: r.pl.income.t, pbt: r.pl.pbt.t, wo: [f('exp', 'Written Off Expenses').t, f('exp', 'Written Off Expenses').flag], woOth: !!f('oth', 'Written Off Expenses').l,
+        ex: f('oth', 'Excess credit in Other expenses').t, cc: [Math.round((C.rows.reduce((a, z) => a + z.inc, 0) + C.un.inc) * 100) / 100, Math.round((C.rows.reduce((a, z) => a + z.exp, 0) + C.un.exp) * 100) / 100]}; })()""")
+    ok(misx["t"] == {"emp": 7341847.08, "fin": 178965.39, "exp": 0, "dir": 0, "oth": 543549.56} and misx["inc"] == 18835005.76 and misx["pbt"] == 11314193.29, "7. MIS the same: employee 73,41,847.08, finance 1,78,965.39, other and direct expenses nil, other income 5,43,549.56 (%s)" % misx["t"])
+    ok(misx["wo"] == [-3223694.87, "expense ledger with a credit balance"] and not misx["woOth"] and misx["ex"] == 543549.56, "7. MIS: Written Off Expenses flagged in other expenses, the excess 5,43,549.56 in other income (%s)" % misx)
+    ok(misx["cc"] == [18835005.76, 7520812.47], "7. cost centres, allocated or not, agree with the profit and loss: income 1,88,35,005.76, expenses 75,20,812.47 (%s)" % misx["cc"])
+    # the forecast: March's TDS 13,681.88 is due on 30 April (week 5), not 7 April (week 1)
+    fc = E("(() => { const W = S.books.mis.last.p2.fc.weeks; return [W[0].out, W[4].out, W.flatMap(w => w.items.filter(z => z.what === 'TDS').map(z => [z.d, z.amt]))[0]]; })()")
+    ok(fc == [21307.16, 16041.88, ["20260430", -13681.88]], "7. forecast: week 1 out 21,307.16 (was 34,989.04), March's TDS 13,681.88 on 30 April in week 5 (%s)" % fc)
 
     # 4. ratios: never negative; not meaningful where they cannot be worked out; no days of purchases without purchases
     rl = E("Object.fromEntries(S.books.mis.last.p2.ratios.list.map(x => [x[0], x[1]]))")

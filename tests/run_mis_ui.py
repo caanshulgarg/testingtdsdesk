@@ -29,9 +29,9 @@ with sync_playwright() as p:
     pg.click('section[data-mis-head] button:text-is("Run now")'); pg.wait_for_timeout(3000)
     t = pg.inner_text("#app")
     # the year's sales: the real client's, or the fixture's worked out by hand (tests/fixtures/books/EXPECTED.md)
-    ok("sales, the period" in t.lower() and ("14,00,000.00" if FIXTURE else "56,39,22,176.16") in t, "summary: sales for the year")
+    ok("sales, the period" in t.lower() and ("15,50,000.00" if FIXTURE else "56,39,22,176.16") in t, "summary: sales for the year")
     if FIXTURE:   # EXPECTED.md: receivables 7,18,200 on the ledger balances, 99,400 of it not bill-wise; MSME past 45 days 2,90,000
-        ok("7,18,200.00" in t and "99,400.00 not bill-wise" in t and "3,19,550.00" in t and "2,90,000.00" in t, "fixture: owed to you 7,18,200 (99,400 not bill-wise), profit 3,19,550, MSME 2,90,000, as worked out by hand")
+        ok("7,18,200.00" in t and "99,400.00 not bill-wise" in t and "3,94,550.00" in t and "2,90,000.00" in t, "fixture: owed to you 7,18,200 (99,400 not bill-wise), profit 3,94,550, MSME 2,90,000, as worked out by hand")
     # review of 02-Oct-2026: with the ledger balances known, what no bill explains is "not bill-wise"; without them, what was
     # settled against older bills is said
     known = pg.evaluate("S.books.mis.last.recv.sum.tally != null")
@@ -40,7 +40,8 @@ with sync_playwright() as p:
     pg.click('nav[aria-label="MIS"] button:text-is("Profit and loss")'); pg.wait_for_timeout(500)
     t = pg.inner_text("#app")
     ok("Gross profit" in t and "Profit before tax" in t and "Apr-2025" in t and "Mar-2026" in t, "profit and loss, month by month")
-    pg.click('#misPl button:text-is("\u25b8 %d ledgers")' % pg.evaluate("S.books.mis.last.pl.heads.exp.led.length")); pg.wait_for_timeout(400)
+    # the button counts the ledgers; a head with the set-off of an expense credit (MIS.plRule) says so
+    pg.click('#misPl button:text-is("%s")' % pg.evaluate("(() => { const L = S.books.mis.last.pl.heads.exp.led; return '\u25b8 ' + L.filter(x => !x.so).length + ' ledgers' + (L.some(x => x.so) ? ' and the set-off' : ''); })()")); pg.wait_for_timeout(400)
     led = pg.evaluate("S.books.mis.last.pl.heads.exp.led[0].l")
     pg.locator("#misPl button.linkbtn").filter(has_text=led).first.click(); pg.wait_for_timeout(500)
     ok(led in pg.inner_text("#app") and "Narration" in pg.inner_text("#app").title(), "a ledger opens to its vouchers: " + led)

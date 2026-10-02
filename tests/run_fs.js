@@ -25,7 +25,7 @@ const M = v => x.INR.format(Math.round(v || 0));
   d.lines.forEach(z => { if (d.put[z[0]]) console.log("   " + z[2].padEnd(4) + z[1].padEnd(34) + M(d.put[z[0]]).padStart(16) + "   last year " + M((d.py || {})[z[0]])); });
   x.FS.PL.forEach(([k, l]) => { if (d.pl[k]) console.log("   P&L " + l.padEnd(38) + M(d.pl[k]).padStart(16)); });
   ok(Math.abs(d.diff) < 1, "the balance sheet tallies");
-  if (FIXTURE) ok(d.eqL === 1403550 && d.assets === 1403550 && d.pat === 319550 && d.put.tr === 718200 && d.put.reserves === -480450, "fixture: totals 14,03,550 each side, profit 3,19,550, receivables 7,18,200, reserves -4,80,450 (EXPECTED.md)");
+  if (FIXTURE) ok(d.eqL === 1503350 && d.assets === 1503350 && d.pat === 394550 && d.put.tr === 718200 && d.put.reserves === -405450, "fixture: totals 15,03,350 each side, profit 3,94,550, receivables 7,18,200, reserves -4,05,450 (EXPECTED.md)");
   ok(Math.abs(d.pbt - x.MIS.pl("20250401", "20260331").pbt.t) < 1, "profit before tax agrees with the MIS");
   ok(d.put.tr > 0 && d.put.tp > 0 && d.put.cash > 0, "trade receivables, trade payables and cash placed");
   const pyEq = d.lines.filter(z => ["EQ", "NCL", "CL"].includes(z[2])).reduce((a, z) => a + (d.py[z[0]] || 0), 0), pyAs = d.lines.filter(z => ["NCA", "CA"].includes(z[2])).reduce((a, z) => a + (d.py[z[0]] || 0), 0);

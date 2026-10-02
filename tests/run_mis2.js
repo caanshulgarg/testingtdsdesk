@@ -41,9 +41,9 @@ const M = v => x.INR.format(Math.round(v || 0));
   C.rows.slice(0, 8).forEach(z => console.log("   " + z.name.padEnd(28) + " income " + M(z.inc).padStart(14) + " costs " + M(z.exp).padStart(14) + " profit " + M(z.profit).padStart(14) + "  " + z.margin + "%"));
   const inc = C.rows.reduce((s, z) => s + z.inc, 0) + C.un.inc, exp = C.rows.reduce((s, z) => s + z.exp, 0) + C.un.exp;
   const plInc = r.pl.heads.rev.t + (r.pl.heads.oth || {t: 0}).t, plExp = ["pur", "dir", "emp", "exp", "fin", "dep", "tax"].reduce((s, k) => s + (r.pl.heads[k] || {t: 0}).t, 0);
-  // FINDING 3 (tests/fixtures/books/EXPECTED.md): MIS.costCentres keeps an expense ledger in credit for the period (written
-  // back) among the expenses, where MIS.pl moves it to other income; with the fixture both sides differ by 7,500
-  ok(Math.abs(inc - plInc) < 2 && Math.abs(exp - plExp) < 2, (FIXTURE ? "FINDING 3: " : "") + "cost centres plus what is not allocated equal the profit and loss: income " + M(inc) + " / " + M(plInc) + ", expenses " + M(exp) + " / " + M(plExp));
+  // finding 3 of tests/fixtures/books/EXPECTED.md, fixed on 02-Oct-2026: the cost centres use the profit and loss's own rule
+  // for an expense ledger in credit (MIS.plRule), so allocated and not allocated add up to it
+  ok(Math.abs(inc - plInc) < 2 && Math.abs(exp - plExp) < 2, "cost centres plus what is not allocated equal the profit and loss: income " + M(inc) + " / " + M(plInc) + ", expenses " + M(exp) + " / " + M(plExp));
   // budget
   b.budget = {"2025": {rev: {}, dir: {}}}; x.GSTRev.fyMonths("202504").forEach(mm => { b.budget["2025"].rev[mm] = 50000000; b.budget["2025"].dir[mm] = 38000000; });
   const V = x.MIS.budgetVs(r);
