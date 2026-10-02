@@ -28,7 +28,7 @@ function StatusLine({ co }) {
       {s.reading ? <span data-post-read="" data-reading="">{"· Reading now…"}</span> : s.read ? <span data-post-read="">{"· read " + tallyHm(s.read)}</span> : null}
       {s.where && <span>{"· "}<button className="linkbtn" data-update-now="" onClick={() => tallyUpdateNow(co.id)}>Update now</button></span>}
     </div>
-    {p && <div className="bk-alert bad post-problem" data-post-problem={p.kind} data-not-allowed={p.kind === "stop" ? "" : undefined}>
+    {p && <div className="bk-alert bad post-problem" data-post-problem={p.kind} data-not-allowed={p.kind === "stop" ? "" : undefined} data-guessed={p.kind === "stop" && !p.msg ? "" : undefined}>
       <span>{p.msg ? <><b>Not sent to Tally: choose the Tally company.</b> {notAllowedRest(p.msg)} The bills are still waiting here.</> : p.text}</span>
       {p.button && p.go && <button className="btn small primary" data-post-action="" data-choose-company={p.kind === "stop" ? "" : undefined} onClick={p.go}>{p.button}</button>}
     </div>}
@@ -186,14 +186,14 @@ export function PostStep() {
     if (!co.postTo) autoPostTo(co).catch(() => {});
     bills.attention.filter((e) => (e.exportedAt || e.postUnconfirmed) && PostCheck.due(e)).forEach((e) => PostCheck.run(co, e).catch(() => {}));
   }, 0);
-  const waiting = bills.ready, sent = v.filter(billInTally).length, undoable = v.filter((e) => e.exportedAt && e.tally && e.tally.guid).length;
+  const waiting = bills.ready, unsent = v.filter((e) => e.status === "approved" && !e.exportedAt).length, sent = v.filter(billInTally).length, undoable = v.filter((e) => e.exportedAt && e.tally && e.tally.guid).length;
   const ledgers = [...new Set(waiting.flatMap((e) => (e.snapshot ? e.snapshot.lines : []).map((l) => l.ledger)))].filter(Boolean);
   const others = postRows(co).filter((r) => r.kind !== "bill"), nb = others.filter((r) => r.kind === "bank").length, ns = others.length - nb;
   const status = postStatusFor(co);
   const close = (fn) => (ev) => { const d = ev.currentTarget.closest("details"); if (d) d.open = false; fn(); };
   const more = <details className="bk-menu" data-more="post"><summary className="btn">More</summary><div className="bk-menu-list">
     {status.more && <div className="note" data-post-bridge="" style={{ padding: "6px 10px" }}>{status.more}</div>}
-    <button disabled={!waiting.length} onClick={close(() => doAct("xml"))}>Download Tally file<small>The bills ready to post, as a file to import in Tally</small></button>
+    <button disabled={!unsent} onClick={close(() => doAct("xml"))}>Download Tally file<small>The approved bills not sent yet, as a file to import in Tally</small></button>
     {/* read by doAct("xml") */}
     <label className="chk" style={{ padding: "4px 10px" }}><input type="checkbox" id="markSent" defaultChecked /> Mark these as sent after download</label>
     <button onClick={close(() => doAct("csv"))}>Download TDS register (Excel CSV)</button>
