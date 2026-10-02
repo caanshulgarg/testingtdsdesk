@@ -4,9 +4,11 @@
 // Was the tiles page (settingsTiles, viewRules in src/js/18) and viewCompanySettings (src/js/27), which put the
 // company, Tally, TDS and GST settings on one long page.
 //
-// Every change is saved as it is made: typed text a moment later (coSetText, firmSetName), a tick or choice at once
-// (coCommit). Sections not yet redrawn in React show the old screen's HTML through <Legacy>.
+// Each section is one draft (review 18: parts/Confirm.jsx, src/js/60): what is typed or picked is checked as before
+// (coSetText, coCommit, coCommitRuleLedger, …) but saved, and sent to the cloud, only when Save at its foot is pressed;
+// leaving with unsaved changes asks. Sections not yet redrawn in React show the old screen's HTML through <Legacy>.
 import { useState } from "react";
+import Confirm, { ChoiceTag } from "../parts/Confirm.jsx";
 import Legacy from "../parts/Legacy.jsx";
 import { AiSettings } from "../parts/Ai.jsx";
 import { BridgeSettings, CloudBooks } from "./Tally.jsx";
@@ -36,15 +38,21 @@ function SetNav({ label, groups, current, pick }) {
   );
 }
 
-function Layout({ label, groups, current, pick, children }) {
+// what each section changes (its draft: src/js/60, draftStore); a section with none has only buttons that act at once
+const GST_BOOK_KEYS = "books:gstSet,gstOpen,itcBasis,rule37On,gstCashLedger,gstAato,gstContacts,gstApi,gstEst,gstRegs,rev";
+const SEC_STORES = { settings: ["client"], cotally: ["client"], cotds: ["client"], deductees: ["parties"], gstset: ["client", GST_BOOK_KEYS], bankset: ["client"], coclosed: ["client"],
+  firm: ["firm"], rates: ["firm"], ai: ["firm"], reading: ["reading"] };
+const SEC_EMPTY = { bankrules: "Each rule is saved from its own box (New rule, Change); a rule deleted is asked first.", account: "Nothing to save here: each button acts at once.",
+  plan: "Nothing to save here.", bridge: "Nothing to save here: each button acts at once.", tcloud: "Nothing to save here: each button acts at once.", postlog: "Nothing to save here.", gstapi: "Nothing to save here.", platform: "Nothing to save here: each button acts at once." };
+
+function Layout({ label, groups, current, pick, children, scope, cid }) {
   const it = groups.flatMap((g) => g.items).find((x) => x.id === current);
   return (
     <div className="setwrap">
       <SetNav label={label} groups={groups} current={current} pick={pick} />
       <div className="setbody">
         <header className="sethead"><h2>{it.label}</h2><p>{it.about}</p></header>
-        <p className="setsaved">Changes are saved as you make them.</p>
-        {children}
+        <Confirm id={scope + ":" + current} label={it.label} stores={SEC_STORES[current] || []} cid={cid} empty={SEC_EMPTY[current]}>{children}</Confirm>
       </div>
     </div>
   );
@@ -119,15 +127,15 @@ export function FirmSettings() {
     ai: () => <AiSettings />,
     platform: () => <Platform />,
   }[cur];
-  return <Layout label="Settings" groups={groups} current={cur} pick={pick}>{body()}</Layout>;
+  return <Layout label="Settings" groups={groups} current={cur} pick={pick} scope="firm" cid="">{body()}</Layout>;
 }
 
 /* ---------------------------------------------------------------- for one client */
 
 // a text setting of the client: kept as typed, checked (GSTIN, PAN) when the box is left
-function CoText({ label, path, placeholder }) {
+function CoText({ label, path, placeholder, choice }) {
   const co = CO(), v = path.split(".").reduce((o, k) => (o || {})[k], co);
-  return <label className="f"><span>{label}</span>
+  return <label className="f"><span>{label}{choice && <> <ChoiceTag co={co} k={choice} /></>}</span>
     <input type="text" value={v || ""} placeholder={placeholder}
       onChange={(ev) => { coSetText(path, ev.target.value); FinComReact.redraw(); }} onBlur={() => coCommit(path)} /></label>;
 }
@@ -190,14 +198,17 @@ function PostTo({ co, open }) {
   const names = [...new Set([co.postTo, bk && bk.company, co.tallyName, ...(open || []).map((o) => o.name)].filter(Boolean))];
   const set = (v) => askConfirm({ title: v ? "Post " + co.name + "’s entries into " + v + "?" : "Stop posting for " + co.name + "?", ok: v ? "Allow" : "Stop posting",
     body: v ? "<p>FinCom and the bridge will post this client’s bills, bank lines and sales <b>only</b> into the Tally company <b>" + esc(v) + "</b>. A posting meant for any other company is refused.</p>"
-      : "<p>Nothing will be posted for this client until a company is chosen again.</p>" }).then((ok) => { if (!ok) return; co.postTo = v; co.postToAt = new Date().toISOString(); co.postToBy = (Cloud.st && Cloud.st.email) || ""; Store.saveCompany(co); toast(v ? "Posting allowed into " + v + "." : "Posting stopped."); render(); });
+      : "<p>Nothing will be posted for this client until a company is chosen again.</p>" }).then((ok) => { if (!ok) return; choiceConfirm(co, "postTo", v); if (S.postStop && S.postStop.cid === co.id) S.postStop = null; toast(v ? "Posting allowed into " + v + "." : "Posting stopped."); render(); });
+  const pc = choiceGet(co, "postTo");
   return <Card title="Posting allowed to company" note="Entries are posted only into this Tally company, from any computer. Nothing is posted until it is chosen.">
     <div className="row" data-post-to="" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-      {co.postTo ? <span className="tag ok">{co.postTo}</span> : <span className="tag bad">None chosen: posting is off</span>}
+      {co.postTo ? <span className={"tag " + (pc && pc.state === "confirmed" ? "ok" : "warn")}>{co.postTo}</span> : <span className="tag bad">None chosen: posting is off</span>}
+      {co.postTo && pc && pc.state !== "confirmed" && <span className="cfm-guess" data-choice="postTo" data-choice-state="guessed"><span className="note">Found by FinCom (the one Tally company linked, same GSTIN): not used for posting until confirmed.</span>{" "}
+        {owner ? <button type="button" className="btn small primary" data-choice-confirm="postTo" onClick={() => set(co.postTo)}>Confirm</button> : <span className="note">An owner of the firm confirms it.</span>}</span>}
       {owner ? <select aria-label="Posting allowed to company" value="" onChange={(ev) => ev.target.value && set(ev.target.value === "\u0000" ? "" : ev.target.value)}>
         <option value="">{co.postTo ? "Change…" : "Choose the company…"}</option>{names.map((n) => <option key={n} value={n}>{n}</option>)}{co.postTo && <option value={"\u0000"}>Stop posting</option>}</select>
         : <span className="note">An owner of the firm chooses it.</span>}
-      {co.postToAt && <span className="note">{"set " + fmtDateTime(co.postToAt) + (co.postToBy ? " by " + co.postToBy : "")}</span>}
+      {co.postToAt && pc && pc.state === "confirmed" && <span className="note">{"confirmed " + fmtDateTime(pc.at || co.postToAt) + (pc.by || co.postToBy ? " by " + (pc.by || co.postToBy) : "")}</span>}
     </div>
     {bk && bk.company && co.postTo && ledNm(bk.company).toLowerCase() !== ledNm(co.postTo).toLowerCase() && <p className="bk-warn" style={{ margin: "8px 0 0" }}>{"This client’s books in FinCom’s cloud come from " + bk.company + ", not " + co.postTo + ". Postings through the cloud are refused until the two agree."}</p>}
   </Card>;
@@ -235,7 +246,7 @@ function TallySetup() {
     </Card>
     <Card title="Ledgers used in every entry" note="Names as in Tally. Each bill picks its own GST ledgers (how the supplier was booked before, else the ledger used most for that tax and rate); a GST ledger typed here is used on every bill instead, and one of another tax is refused. Ledgers for TDS and expenses by payment type are under TDS.">
       <div className="grid">
-        <CoText label="Input CGST" path="gst.cgst" /><CoText label="Input SGST" path="gst.sgst" /><CoText label="Input IGST" path="gst.igst" /><CoText label="Round off" path="roundOff" />
+        <CoText label="Input CGST" path="gst.cgst" choice="gst:cgst" /><CoText label="Input SGST" path="gst.sgst" choice="gst:sgst" /><CoText label="Input IGST" path="gst.igst" choice="gst:igst" /><CoText label="Round off" path="roundOff" />
       </div>
     </Card>
   </>;
@@ -243,8 +254,9 @@ function TallySetup() {
 
 function RuleLedger({ kind, r }) {
   const co = CO(), v = (kind === "tds" ? co.tdsLedgers : co.expenseLedgers)[r.id] || "";
-  return <input type="text" value={v} aria-label={(kind === "tds" ? "TDS ledger for " : "Expense ledger for ") + r.label}
-    onChange={(ev) => { coSetRuleLedger(kind, r.id, ev.target.value); FinComReact.redraw(); }} onBlur={() => coCommitRuleLedger(kind, r.id)} />;
+  return <><input type="text" value={v} aria-label={(kind === "tds" ? "TDS ledger for " : "Expense ledger for ") + r.label}
+    onChange={(ev) => { coSetRuleLedger(kind, r.id, ev.target.value); FinComReact.redraw(); }} onBlur={() => coCommitRuleLedger(kind, r.id)} />
+    {v && <div><ChoiceTag co={co} k={(kind === "tds" ? "tds:" : "exp:") + r.id} value={v} /></div>}</>;
 }
 
 function TdsSetup() {
@@ -357,6 +369,6 @@ export function ClientSetup() {
         <button className="danger" onClick={() => doAct("delCo")}>Remove this client<small>Asks for the client’s name. The firm account keeps its data, marked removed.</small></button>
       </div></details>
     </div>
-    <Layout label="Client setup" groups={clientGroups()} current={isSetupTab(tab) && tab !== "coremove" ? tab : "settings"} pick={(id) => { goTab(id); window.scrollTo(0, 0); }}>{body()}</Layout>
+    <Layout label="Client setup" groups={clientGroups()} current={isSetupTab(tab) && tab !== "coremove" ? tab : "settings"} pick={(id) => { goTab(id); window.scrollTo(0, 0); }} scope="setup" cid={co.id}>{body()}</Layout>
   </>;
 }

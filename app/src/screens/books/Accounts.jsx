@@ -8,6 +8,7 @@
 import { useEffect } from "react";
 import Legacy from "../../parts/Legacy.jsx";
 import CommitBox from "../../parts/CommitBox.jsx";
+import Confirm from "../../parts/Confirm.jsx";
 
 const m = (v) => INR.format(r2(v || 0));
 const Act = ({ act, className = "btn small", children }) => <button className={className} onClick={() => doAct(act)}>{children}</button>;
@@ -25,13 +26,14 @@ function Head({ c, years, fy, d }) {
     <p className="note" data-fs-entity={e.code} style={{ margin: "6px 0 0" }}>{eName ? "Entity type: " + eName + (e.by === "pan" ? " (from the PAN)" : " (as set in Client setup)") + (c.kindSet ? "; the format was chosen here. " : "; the format follows it. ") : "Entity type not known (no PAN in Client setup); choose the format here. "}
       {c.kindSet && eName && <button className="linkbtn" onClick={follow}>Follow the entity type</button>}</p>
     <details style={{ marginTop: 8 }}><summary className="note" style={{ cursor: "pointer" }}>Settings: stock, manufacturer, shares</summary>
+    <Confirm id="books:fs-settings" label="Accounts settings" stores={["books:fs"]}>
     <div className="row" style={{ gap: 12, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
       <label className="note">Opening stock <CommitBox type="number" step="0.01" aria-label="Opening stock" value={c.stock.open || ""} style={{ width: 130 }} onCommit={(v) => fsStockSet("open", v)} /></label>
       <label className="note">Closing stock <CommitBox type="number" step="0.01" aria-label="Closing stock" value={c.stock.close || ""} style={{ width: 130 }} onCommit={(v) => fsStockSet("close", v)} /></label>
       <label className="note"><input type="checkbox" defaultChecked={!!c.mfg} key={"mfg" + !!c.mfg} onChange={(ev) => fsSet("mfg", !!ev.target.checked)} /> purchases are materials consumed (a manufacturer)</label>
       {c.kind === "co" && <label className="note">Equity shares <CommitBox type="number" aria-label="Equity shares" value={c.shares || ""} style={{ width: 110 }} onCommit={(v) => fsSet("shares", v)} /></label>}</div>
     <p className="note">Stock is taken from the stock ledgers when Tally keeps inventory in the accounts; otherwise type it here. Each ledger is placed by its group in Tally and by its balance (a customer in credit is an advance received, a bank in credit is an overdraft); change any on the Mapping tab.</p>
-    </details>
+    </Confirm></details>
   </section>;
 }
 
@@ -50,7 +52,7 @@ function Mapping({ c, d }) {
     <button className="btn small" disabled={pg === 0} onClick={() => go(pg - 1)}>Previous</button>
     <span className="note">{"Ledgers " + (pg * PER + 1) + "–" + Math.min(shown.length, pg * PER + PER) + " of " + shown.length + " · page " + (pg + 1) + " of " + pages}</span>
     <button className="btn small" disabled={pg >= pages - 1} onClick={() => go(pg + 1)}>Next</button></div>;
-  return <>
+  return <Confirm id="books:fs-map" label="Mapping" stores={["books:fs"]}>
     <div className="revfilter"><input type="search" id="fsq" aria-label="Find a ledger" data-fk="fsq" value={S.fsQ || ""} placeholder="Find a ledger" style={{ width: 260 }} onChange={(ev) => { S.fsPage = 0; setAndShow("fsQ", ev.target.value, true); }} />
       <span className="note">{shown.length + " ledgers · "}<b>{Object.keys(c.map || {}).length}</b> placed by hand</span></div>
     {pager}
@@ -60,7 +62,7 @@ function Mapping({ c, d }) {
           {c.map[l] && <>{" "}<button className="linkbtn" onClick={() => fsUnmap(l)}>by rule</button></>}</td></tr>)}
     </tbody></table></div>
     {pager}
-  </>;
+  </Confirm>;
 }
 
 export default function Accounts({ b }) {

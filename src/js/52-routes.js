@@ -40,6 +40,8 @@ const Route = {
   pending: null,                    // a link opened before signing in: applied once signed in
   ready: false,                     // set once the page has started: until then the address is the one opened, not ours
   sync(){
+    // leaving a page with unsaved changes: "Save your changes?" (src/js/60)
+    if (this.ready && S.firm && !signInNeeded() && typeof Drafts === "object"){ try { Drafts.onPage(this.of()); } catch (e){} }
     if (!this.ready || this.applying || typeof history === "undefined" || signInNeeded() || !S.firm) return;
     if (this.pending){ const p = this.pending; this.pending = null; this.apply(p); return; }
     const h = this.of();

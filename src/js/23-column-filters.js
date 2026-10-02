@@ -697,10 +697,8 @@ function bankSetLedger(id, v){
   return true;
 }
 // which Tally ledger a bank account is
-function bankSetAccLedger(accId, v){
-  const b = B(), co = CO(), a = (co.bankAccounts || []).find(x => x.id === accId);
-  if (a){ a.ledger = v; Store.saveCompany(co); suggestAll(b.rows, true); saveBank({rows: true}); render(); }
-}
+// (confirmed: the person picked it and pressed Confirm; kept in the client's choices, src/js/60)
+function bankSetAccLedger(accId, v){ return bankConfirmAccLedger(accId, v); }
 // tick a line; with Shift, every line between it and the one ticked before
 function bankToggleRow(id, on, shift){ bankToggle({dataset: {bsel: id}, checked: on}, shift); }
 function bankSelAll(on){ const b = B(); bankVisibleRows().filter(r => r.state !== "sent").forEach(r => { if (on) b.sel.add(r.id); else b.sel.delete(r.id); }); bankLightRefresh(); }
@@ -754,7 +752,7 @@ function bankClick(t){
     case "ledPick": document.getElementById("ledIn").click(); return true;
     case "bookPick": closeMenus(); document.getElementById("bookIn").click(); return true;
     case "bankSettings": b.showSettings = true; render(); return true;
-    case "bankSettingsClose": b.showSettings = false; render(); return true;
+    case "bankSettingsClose": Drafts.guard("bank:settings", () => { b.showSettings = false; render(); }); return true;
     case "bankMore": b.limit += 200; render(); return true;
     case "bankCsv": closeMenus(); exportBankCsv(); return true;
     case "bankDismissFail": b.lastFail = null; render(); return true;
@@ -1194,7 +1192,7 @@ document.addEventListener("keydown", ev => {
 });
 document.addEventListener("keydown", ev => {
   if (ev.key === "Escape" && S.view === "company" && S.tab === "bank" && B() && B().showSettings && !document.querySelector("#confirmBox[style*='flex']")){
-    ev.preventDefault(); ev.stopImmediatePropagation(); B().showSettings = false; render();
+    ev.preventDefault(); ev.stopImmediatePropagation(); Drafts.guard("bank:settings", () => { B().showSettings = false; render(); });     // unsaved changes: asked first (src/js/60)
   }
 }, true);
 function bankInput(t){

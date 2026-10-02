@@ -1,5 +1,6 @@
 """python3 run_react_settings.py - Settings (the firm) and Client setup in React: a list of sections on the left, one
-section at a time, and the settings in each saved as they are changed. Offline, a made-up client.
+section at a time. Review 18 (02-Oct-2026): the changes of a section are saved with Save at its foot (the shared footer,
+app/src/parts/Confirm.jsx), so this test presses Save before moving on. Offline, a made-up client.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_react_settings.py"""
 import json
 import os, threading, functools, http.server
@@ -17,11 +18,17 @@ with sync_playwright() as p:
     head = lambda: pg.inner_text("#app .sethead h2")
     nav = lambda label: pg.click('#app .setnav button:has(span:text-is("%s"))' % label)
     toasts = lambda: pg.evaluate("Array.from(document.querySelectorAll('.toast, #toast')).map(t => t.innerText).join(' | ')")
+    foot = lambda: pg.inner_text("#app [data-confirm-foot]") if pg.locator("#app [data-confirm-foot]").count() else ""
+    def save():
+        pg.wait_for_timeout(100); pg.click('#app [data-confirm-foot] [data-cfm="save"]'); pg.wait_for_timeout(300)
     # the firm
     pg.evaluate("navHome('rules')"); pg.wait_for_timeout(500)
     ok(head() == "Firm details" and pg.locator("#app .setnav .setgroup-t").count() == 4, "Settings opens on Firm details, sections in four groups (GST API added)")
     pg.fill('#app label:has-text("Firm name") input', "Garg Shekhar & Co (test)"); pg.wait_for_timeout(900)
     ok(pg.evaluate("S.firm.firmName") == "Garg Shekhar & Co (test)" and "Garg Shekhar & Co (test)" in pg.inner_text("#app .setnav"), "the firm's name: kept, and shown in the list")
+    ok("Not saved yet" in foot(), "review 18: the change is a draft until Save (%s)" % foot())
+    save()
+    ok("Saved ·" in foot() and "this computer" in foot(), "review 18: after Save, “Saved · <time> · this computer” (%s)" % foot())
     for label, text in [("Sign-in and people", "Sign-in and people"), ("Plan and credit", "Plan and credit"), ("FinCom Bridge", "Bridge address"), ("Books in the cloud", "Books in the cloud"),
                         ("Sent to Tally", "Everything sent to Tally"), ("TDS rates and limits", "Rates and limits for all clients"), ("Reading bills", "Reading bills"), ("AI help", "AI help")]:
         nav(label); pg.wait_for_timeout(350)
@@ -41,6 +48,7 @@ with sync_playwright() as p:
     pg.fill('#app label:has-text("PAN") input', "AANFG3202D"); pg.locator('#app label:has-text("PAN") input').blur()
     pg.fill('#app label:has-text("Client name") input', "ZZ Zeta Exports Pvt Ltd"); pg.wait_for_timeout(700)
     ok(pg.evaluate("CO().name") == "ZZ Zeta Exports Pvt Ltd", "the client's name")
+    save()
     nav("Tally"); pg.wait_for_timeout(300)
     ok(head() == "Tally" and "The company in Tally" in pg.inner_text("#app .setbody"), "Tally section")
     pg.check('#app label:has-text("Purchase voucher") input[type=radio]'); pg.wait_for_timeout(300)   # review item 36: a choice, not a list
@@ -48,6 +56,7 @@ with sync_playwright() as p:
     ok(pg.evaluate("CO().voucherType") == "Purchase" and pg.evaluate("CO().createOptional") is False, "voucher type and Optional vouchers")
     pg.fill('#app label:has-text("Round off") input', "Rounding Off"); pg.wait_for_timeout(700)
     ok(pg.evaluate("CO().roundOff") == "Rounding Off", "a ledger used in every entry")
+    save()
     nav("TDS"); pg.wait_for_timeout(300)
     pg.click('#app label:has-text("This client has to deduct TDS") input'); pg.wait_for_timeout(300)
     ok(pg.evaluate("CO().mustDeduct") is False and "does not deduct" in pg.inner_text("#app .setnav"), "“has to deduct TDS” off: kept, and the list says so")
@@ -55,11 +64,14 @@ with sync_playwright() as p:
     rid = pg.evaluate("rules().find(r => r.basis !== 'never').id"); lab = pg.evaluate("rules().find(r => r.basis !== 'never').label")
     pg.fill('#app input[aria-label="TDS ledger for %s"]' % lab, "TDS on Contracts"); pg.wait_for_timeout(700)
     ok(pg.evaluate("CO().tdsLedgers['%s']" % rid) == "TDS on Contracts", "a TDS ledger by payment type")
+    save()
+    ok(pg.evaluate("choiceState(CO(), 'tds:%s')" % rid) == "confirmed", "review 20: a TDS ledger saved by a person is a confirmed choice")
     nav("GST"); pg.wait_for_timeout(1200)
     ok("Blocked credit, section 17(5)" in pg.inner_text("#app .setbody") and "Reverse charge ledgers" in pg.inner_text("#app .setbody"), "GST: registrations, reverse charge ledgers and blocked credit in one place")
     cat = pg.evaluate("BLOCK_CATS[0]")
     pg.select_option('#app select[aria-label="Blocked credit: %s"]' % cat["label"], "allow"); pg.wait_for_timeout(300)
     ok(pg.evaluate("blockRule(CO(), '%s')" % cat["id"]) == "allow", "blocked credit: credit allowed for this client")
+    save()
     nav("Suppliers"); pg.wait_for_timeout(300)
     ok(head() == "Suppliers" and pg.locator('#app button:has-text("Add supplier")').count() == 1, "Suppliers")
     nav("Bank accounts"); pg.wait_for_timeout(800)

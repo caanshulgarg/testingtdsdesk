@@ -215,6 +215,7 @@ function postLineFor(co){
   } else if (Bridge.on()){ bridge = "FinCom Bridge"; state = ""; action = "FinCom Bridge is not answering on this computer"; go = "tally"; }
   else { state = ""; action = "Install FinCom Bridge"; go = "tally"; }
   if (!co.postTo){ state = ""; action = "Choose the Tally company"; go = "cotally"; }
+  else if (typeof choiceState === "function" && choiceState(co, "postTo") !== "confirmed"){ state = ""; action = "Confirm the Tally company"; go = "cotally"; }
   return {company, bridge, state, action, go};
 }
 const PostPage = {paneAt: 0};
@@ -295,7 +296,7 @@ async function postAllToTally(only){
   const co = CO();
   if (!co) return;
   if (!co.postTo) await autoPostTo(co);
-  if (!co.postTo){ postStopped(postToProblem(co, ""), co.id); render(); return; }
+  if (!co.postTo || postToProblem(co, "")){ postStopped(postToProblem(co, ""), co.id); render(); return; }
   if (!S.bank || S.bank.cid !== co.id) await loadBank(co.id);
   let rows = postRows(co).filter(r => !r.sent && !/^(Sending|In Tally)/.test(r.state[0]));
   if (only) rows = rows.filter(r => r.kind === only.kind && r.id === only.id);
@@ -325,7 +326,8 @@ function postBackToReview(kind, id){
 // the client's: that one, saved (it syncs), with postToBy "auto". For existing clients too, when one is opened.
 const AutoPostTo = {at: {}};
 async function autoPostTo(co, force){
-  if (!co || co.postTo || co.deleted) return false;
+  // only an empty slot is filled, and as a guess to confirm; never over a confirmed choice (src/js/60), even "stop posting"
+  if (!co || co.postTo || co.deleted || (typeof choiceGet === "function" && (choiceGet(co, "postTo") || {}).state === "confirmed")) return false;
   const mine = gstinKeyOf(co.gstin);
   if (!mine) return false;
   if (!force && Date.now() - (AutoPostTo.at[co.id] || 0) < 60000) return false;
@@ -342,10 +344,9 @@ async function autoPostTo(co, force){
   if (found.size !== 1) return false;
   const one = Array.from(found.values())[0];
   if (!one.gstins.has(mine) || one.gstins.size !== 1 || co.postTo) return false;
-  co.postTo = one.name; co.postToAt = new Date().toISOString(); co.postToBy = "auto";
+  choiceGuess(co, "postTo", one.name, "the one Tally company linked, same GSTIN " + mine);
   Store.saveCompany(co);
-  if (S.postStop && S.postStop.cid === co.id) S.postStop = null;
-  toast(co.name + ": entries are posted only into " + one.name + " (the one Tally company linked, same GSTIN " + mine + ").");
+  toast(co.name + ": " + one.name + " is the one Tally company linked (same GSTIN " + mine + "). Confirm it in Client setup \u2192 Tally before posting.");
   render();
   return true;
 }

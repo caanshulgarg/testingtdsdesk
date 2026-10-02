@@ -133,6 +133,13 @@ function PostLine({ co }) {
 function NotAllowed({ co }) {
   const st = S.postStop && S.postStop.cid === co.id ? S.postStop : null;
   if (!st) return null;
+  // review 21c: a choice only guessed (the company, or a ledger of Client setup) stops posting: one line saying which
+  const guess = /^Confirm the Tally company/.test(st.msg), led = /^Posting waits/.test(st.msg);
+  if (guess || led) return <div className="bk-alert bad" data-not-allowed="" data-guessed="" style={{ margin: "0 0 12px" }}>
+    <b>{"Not sent to Tally: " + (guess ? "confirm the Tally company." : "a ledger is not confirmed.")}</b> {st.msg} The entries are still waiting here.
+    <div className="row" style={{ gap: 8, marginTop: 6 }}><button className="btn small primary" data-choose-company="" onClick={() => { if (guess) goChooseTallyCompany(); else { S.step = null; S.tab = /TDS/.test(st.msg) || /expense/.test(st.msg) ? "cotds" : "cotally"; render(); window.scrollTo(0, 0); } }}>{guess ? "Confirm the Tally company" : "Open Client setup"}</button>
+      <button className="linkbtn" onClick={() => { S.postStop = null; render(); }}>Dismiss</button></div>
+  </div>;
   return <div className="bk-alert bad" data-not-allowed="" style={{ margin: "0 0 12px" }}>
     <b>Not sent to Tally: choose the Tally company.</b> {notAllowedRest(st.msg)} The entries are still waiting here.
     <div className="row" style={{ gap: 8, marginTop: 6 }}><button className="btn small primary" data-choose-company="" onClick={() => goChooseTallyCompany()}>Choose the Tally company</button>

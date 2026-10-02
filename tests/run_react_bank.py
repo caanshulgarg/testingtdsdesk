@@ -97,6 +97,9 @@ with sync_playwright() as p:
     ok(pg.evaluate("CO().bankAuto") is False, "an automation choice is kept")
     pg.select_option('#app .bk-panel select[aria-label="Bank charges"]', "ICICI Bank"); pg.wait_for_timeout(300)
     ok(pg.evaluate("CO().bankLedgerNames.charges") == "ICICI Bank", "the ledger for bank charges chosen")
+    # review 18 (02-Oct-2026): the panel's changes are saved with Save at its foot
+    ok("Not saved yet" in pg.inner_text('#app [data-confirm-foot="bank:settings"]'), "review 18: not saved until Save")
+    pg.click('#app [data-confirm-foot="bank:settings"] [data-cfm="save"]'); pg.wait_for_timeout(300)
     pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
     ok(pg.locator("#app .bk-panel").count() == 0, "Esc closes it")
     pg.click('#app .bk-actions button:has-text("Settings")'); pg.wait_for_timeout(300)
@@ -139,7 +142,9 @@ with sync_playwright() as p:
     ok("Which Tally ledger is this bank account?" in app(), "a new account: which Tally ledger it is, asked")
     pg.evaluate("B().ledgers.list.push({name: 'HDFC Bank', group: 'Bank Accounts'}); render()"); pg.wait_for_timeout(200)
     pg.select_option('#app select[aria-label="Tally ledger for this bank account"]', "HDFC Bank"); pg.wait_for_timeout(400)
-    ok(pg.evaluate("CO().bankAccounts.find(a => a.id === 'a2').ledger") == "HDFC Bank" and "Which Tally ledger" not in app(), "chosen: kept, and the question goes")
+    # review 19 (02-Oct-2026): picked, then confirmed with Confirm; then one line instead of the question
+    pg.click("#app [data-bank-ledger-confirm]"); pg.wait_for_timeout(400)
+    ok(pg.evaluate("CO().bankAccounts.find(a => a.id === 'a2').ledger") == "HDFC Bank" and "Which Tally ledger" not in app() and "Tally ledger: HDFC Bank" in app(), "chosen and confirmed: kept, and the question goes")
     # no statement yet
     pg.evaluate("B().stmts = []; B().cur = null; render()"); pg.wait_for_timeout(300)
     ok("Upload a bank statement" in app() and pg.locator("#bankDrop").count() == 1 and pg.locator("#app .actionbar").count() == 0, "no statement: the upload box, and no bar")

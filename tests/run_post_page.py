@@ -27,6 +27,8 @@ GARG = "GARG SHEKHAR & COMPANY"
 SETUP = """async () => {
   const c = newCompany({name: "Testing AAD", gstin: "09AANFG3202D1ZR"}); c.tallyName = "GARG SHEKHAR & COMPANY";
   S.companies[c.id] = c; S.data[c.id] = {parties: {}, entries: {}, loaded: true}; c.stats = {};
+  // review 21c (02-Oct-2026): posting uses confirmed choices only; this client's TDS ledger for professional fees is confirmed
+  choiceConfirm(c, "tds:professional", "TDS Payable - Professional");
   const now = new Date().toISOString();
   window.__rpc = []; window.__saved = []; window.__enqueue = {ok: true};
   const save0 = Store.saveCompany.bind(Store); Store.saveCompany = (co) => { window.__saved.push(JSON.parse(JSON.stringify({id: co.id, postTo: co.postTo, postToBy: co.postToBy}))); return save0(co); };
@@ -64,6 +66,10 @@ with sync_playwright() as p:
     co = E("(() => { const c = CO(); return {postTo: c.postTo, by: c.postToBy, at: !!c.postToAt}; })()")
     ok(co == {"postTo": GARG, "by": "auto", "at": True} and any(x.get("postTo") == GARG for x in E("window.__saved")),
        "B14. opening the client: postTo set to GARG SHEKHAR & COMPANY by itself (auto) and saved (%s)" % co)
+    # review 20-21 (02-Oct-2026): the company found by itself is a guess: posting waits until a person confirms it
+    ok(E("choiceState(CO(), 'postTo')") == "guessed" and line().endswith("Confirm the Tally company"), "review 20. the company found by itself is a guess to confirm: '%s'" % line())
+    ok(E("postToProblem(CO(), 'GARG SHEKHAR & COMPANY')").startswith("Confirm the Tally company"), "review 21c. and posting is refused until it is confirmed")
+    E("() => { choiceConfirm(CO(), 'postTo', 'GARG SHEKHAR & COMPANY'); render(); }"); pg.wait_for_timeout(300)
     # C15: one line
     ok(pg.locator("#app [data-post-line]").count() == 1 and line() == "Posting into: GARG SHEKHAR & COMPANY · FinCom Bridge 2.1.1 · Ready", "C15. one line: '%s'" % line())
     # C16: one table

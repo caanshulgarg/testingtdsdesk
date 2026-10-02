@@ -128,6 +128,8 @@ with sync_playwright() as p:
     pg.evaluate("S.tab = 'coclosed'; render();"); pg.wait_for_timeout(500)
     ok("Closed periods" in pg.inner_text("#app"), "Client setup has closed periods")
     pg.fill('input[aria-label="Books closed up to"]', "2025-06-30"); pg.wait_for_timeout(300)
+    # review 18 (02-Oct-2026): a section's changes are saved with Save at its foot
+    pg.click('#app [data-confirm-foot] [data-cfm="save"]'); pg.wait_for_timeout(300)
     pg.evaluate("S.books.gstFiled = {'09': {'202508': {r1: '2025-09-11', r3b: '2025-09-20'}}}; ClosedP.set(CO(), 'tdsFiled', {'2025-26|Q2': '2025-10-30'});")
     w = pg.evaluate("[ClosedP.note('2025-06-15'), ClosedP.note('2025-08-10'), ClosedP.note('2025-09-10', true), ClosedP.note('2025-09-10', false), ClosedP.note('2025-11-01')]")
     ok(w[0] and "closed up to" in w[0][0], "a date in closed books: " + str(w[0]))

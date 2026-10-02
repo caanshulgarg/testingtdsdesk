@@ -111,7 +111,9 @@ const Cloud = {
 /* ---------- what is kept in the cloud ---------- */
 function cloudSnapshot(){
   const out = [];
-  const add = (kind, id, client_id, data) => out.push({kind, id, client_id: client_id || "", data});
+  // a settings page with unsaved changes (Drafts, src/js/60): the cloud gets the saved values, not the draft
+  const view = (kind, id, client_id, data) => typeof Drafts === "object" ? Drafts.view(kind, id, data, client_id) : data;
+  const add = (kind, id, client_id, data) => out.push({kind, id, client_id: client_id || "", data: view(kind, id, client_id, data)});
   // an empty firm record (a reload with nothing kept here) is never sent: it would replace the firm's name and rules
   const f = S.firm || {}, filled = Object.keys(f).some(k => { const v = f[k]; return v != null && v !== "" && !(typeof v === "object" && !Object.keys(v).length); });
   if (filled && String(f.firmName || "").trim()) add("firm", "firm", "", S.firm);
@@ -356,7 +358,8 @@ async function cloudApplyNow(rows){
       if (!S.data[cid]) S.data[cid] = {parties: {}, entries: {}, loaded: true};
       const bag = r.kind === "entry" ? S.data[cid].entries : S.data[cid].parties;
       if (r.deleted){ if (r.kind === "entry" && bag[r.id] && bag[r.id].fileHash) unregisterHash(cid, bag[r.id].fileHash); delete bag[r.id]; Store.put("companies/" + cid + "/" + (r.kind === "entry" ? "entries/" : "parties/") + r.id, null); }
-      else { bag[r.id] = clone(r.data); if (r.kind === "entry") Store.saveEntry(cid, bag[r.id]); else Store.saveParty(cid, bag[r.id]); }
+      // a supplier's ledger confirmed here and newer is kept over an older or guessed one coming in (src/js/60)
+      else { bag[r.id] = r.kind === "party" && typeof partyKeepChoice === "function" ? partyKeepChoice(bag[r.id], clone(r.data)) : clone(r.data); if (r.kind === "entry") Store.saveEntry(cid, bag[r.id]); else Store.saveParty(cid, bag[r.id]); }
     }
     else if (r.kind === "unsorted"){ if (r.deleted) delete S.inbox[r.id]; else { S.inbox[r.id] = clone(r.data); Store.saveInbox(S.inbox[r.id]); } }
     else if (r.kind === "inbox"){ if (r.deleted) delete S.docq[r.id]; else S.docq[r.id] = Object.assign({}, r.data, {id: r.id, client_id: r.client_id || ""}); }
@@ -1751,7 +1754,8 @@ function saveNewCompany(v){
   co.stats = {drafts:0, check:0, waiting:0, tdsFy:0, invoicesFy:0, records:1, fy:fyOf(null)};
   // 02-Oct-2026: the Tally company chosen here, and (ticked) the one company its entries may be posted to
   const tco = String(v.tallyCompany || "").trim();
-  if (tco && v.postOnly){ co.postTo = tco; co.postToAt = new Date().toISOString(); co.postToBy = (Cloud.st && Cloud.st.email) || ""; }
+  // chosen by the person adding the client: confirmed (src/js/60)
+  if (tco && v.postOnly){ co.choices = Object.assign({}, co.choices, {postTo: {value: tco, state: "confirmed", by: whoAmI(), at: new Date().toISOString()}}); co.postTo = tco; co.postToAt = co.choices.postTo.at; co.postToBy = (Cloud.st && Cloud.st.email) || ""; }
   Store.saveCompany(co);
   S.addingCo = false;
   toast(name + " added." + (co.postTo ? " Entries go only into " + co.postTo + "." : ""));
@@ -1943,7 +1947,7 @@ function firmNameToAccount(v){
   const n = String(v || "").trim(); if (!n || typeof Cloud !== "object" || !Cloud.on() || !S.account || ((S.account.me || {}).role !== "owner")) return;
   Cloud.rpc("firm_name_set", {p_name: n}).then(() => { if (S.account.firm) S.account.firm.name = n; }, e => { if (!/firm_name_set|PGRST202|schema cache/i.test(String(e && e.message || e))) toast("The firm's name could not be saved to the firm account: " + ((e && e.message) || e)); });
 }
-function firmSetName(v){ S.firm.firmName = v; later("firm", () => { Store.saveFirm(); firmNameToAccount(v); }, 600); const el = document.getElementById("firmLine"); if (el) el.textContent = v; }
+function firmSetName(v){ S.firm.firmName = v; later("firm", () => { if (typeof Drafts === "object" && Drafts.hold("firm")) return; Store.saveFirm(); firmNameToAccount(v); }, 600); const el = document.getElementById("firmLine"); if (el) el.textContent = v; }
 function setPath(o, path, v){ const k = path.split("."); if (k.length === 2) o[k[0]][k[1]] = v; else o[k[0]] = v; }
 
 document.addEventListener("change", ev => {

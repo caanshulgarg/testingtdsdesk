@@ -8,6 +8,7 @@ import Legacy from "../../parts/Legacy.jsx";
 import CommitBox from "../../parts/CommitBox.jsx";
 import { AuditButton } from "../../parts/Ai.jsx";
 import { CatchUp } from "../../parts/Notes.jsx";
+import Confirm from "../../parts/Confirm.jsx";
 
 const m = (v) => INR.format(r2(v || 0));
 const d = (x) => fmtDate(tallyDate(x));
@@ -37,11 +38,13 @@ function Head({ b, run }) {
       {!lyHere && typeof bridgeLive === "function" && bridgeLive(CO()) && <Act act="auditReadLy" title={d(lyFrom) + " to " + d(lyTo)}>Read last year from Tally, to compare</Act>}
     </div>
     <details style={{ marginTop: 8 }}><summary className="note" style={{ cursor: "pointer" }}>Settings and how it works</summary>
+      <Confirm id="books:audit-settings" label="Audit settings" stores={["books:auditCfg"]}>
       <p className="note">Every check runs on the vouchers read from Tally. Each finding says what is wrong, what it costs, what to do, and the journal entry where one is needed. Mark each one, then download the report.</p>
       <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}><span className="note">Run on its own</span>
         <select aria-label="Run on its own" style={{ width: "auto" }} value={c.freq} onChange={(ev) => auditFreqSet(ev.target.value)}>
           {[["daily", "every day"], ["weekly", "every week"], ["monthly", "every month"], ["off", "only when I run it"]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>
       <p className="note" style={{ marginTop: 6 }}>On its own, it runs the first time this client is opened on a new {({ daily: "day", weekly: "week", monthly: "month" })[c.freq] || "day"}, and each time the day book is read. To run overnight with nobody here, the bridge on the Tally server will have to send the day book on a timer.</p>
+      </Confirm>
     </details>
     {run && <div className="row" style={{ gap: 8, flexWrap: "wrap", marginTop: 8 }}>
       <Act act="auditReport" className="btn small primary">Download the report (PDF)</Act><Act act="auditExcel">Excel with the annexures</Act>
@@ -144,7 +147,7 @@ function Findings({ b }) {
 
 function Related({ b }) {
   const rel = b.auditRel || [], guess = Audit.relatedGuess(), pans = b.pans || {};
-  return <>
+  return <Confirm id="books:audit-related" label="Related parties" stores={["books:auditRel"]}>
     <section className="dash-card"><h3>Related parties</h3>
       <p className="note">Directors, partners, their relatives, and the concerns they control. Transactions with them feed clause 23 (section 40A(2)(b)), clause 36A (deemed dividend), and the related-party note. The audit only uses the people listed here.</p>
       <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center", margin: "8px 0" }}>
@@ -159,7 +162,7 @@ function Related({ b }) {
     {guess.length > 0 && <section className="dash-card" style={{ marginTop: 12 }}><h3>Possibly related</h3><p className="note">Found in the ledgers by where they sit or what they are called. Add the ones that are related.</p>
       <div className="bk-tablewrap"><table className="bk-table"><tbody>{guess.map((g, i) => <tr key={g.name + ":" + i} data-key={g.name}><td>{g.name}<div className="nr">{g.why}</div></td><td>{pans[g.name] || ""}</td>
         <td className="ac"><button className="btn small" onClick={() => relAdd(g.name)}>Add</button></td></tr>)}</tbody></table></div></section>}
-  </>;
+  </Confirm>;
 }
 
 // the Form 3CD draft, filled from the last run: Audit.form3cdHtml is also the PDF's template, so it stays HTML

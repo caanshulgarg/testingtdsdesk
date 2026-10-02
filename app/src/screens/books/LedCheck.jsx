@@ -3,6 +3,7 @@
 // suggestions from Tally or the day book are ticked to start with; AI's never are. Nothing counts in a return until it is
 // confirmed. Later, only new ledgers, and confirmed ledgers whose use has changed (a warning), come back here.
 // The working is LedCheck (src/js/57-ledger-check.js).
+import Confirm from "../../parts/Confirm.jsx";
 const SRCC = { master: "ok", usage: "", firm: "", name: "", ai: "warn" };
 const what = (p) => {
   if (!p || !p.what) return "—";
@@ -29,7 +30,10 @@ export default function LedCheckCard({ b }) {
   const open = items.filter(([n]) => !((b.map || {})[n] || {}).ok), ticked = open.filter(([, it]) => LedCheck.ticked(it)).map(([n]) => n);
   const unclear = open.filter(([, it]) => it.s.conf === "low" && !it.ai).length;
   const showAll = S.lcAll, list = (showAll ? items : open).sort((a, x) => ({ high: 0, medium: 1, low: 2 }[LedCheck.pick(a[1]).conf] - { high: 0, medium: 1, low: 2 }[LedCheck.pick(x[1]).conf]) || a[0].localeCompare(x[0]));
-  return <section className="dash-card" style={{ marginBottom: 12 }} data-ledcheck="">
+  // review 18: the shared footer — a tick changed by the person is not saved until confirmed; leaving asks
+  const changed = () => open.some(([, it]) => it.tick !== undefined);
+  const custom = { dirty: changed, save: () => { doAct("lcConfirm"); return true; }, discard: () => { open.forEach(([, it]) => { delete it.tick; }); } };
+  return <Confirm id="books:ledcheck" label="GST and TDS ledger check" custom={custom} saveText={"Confirm the " + ticked.length + " ticked"} empty={c && c.savedAt ? undefined : "Nothing confirmed yet"}><section className="dash-card" style={{ marginBottom: 12 }} data-ledcheck="">
     <h3>GST and TDS ledger check</h3>
     <p className="note">Each tax-like ledger is read three ways: Tally’s master (tax type, duty head, rate, nature of payment) as fact where set; how the day book uses it; and AI only for what is still unclear. Confirm what is right. {c && c.strict ? "Only confirmed ledgers count in the returns." : "Once saved, only confirmed ledgers count in the returns."}</p>
     {(d.fresh.length > 0 || d.changed.length > 0) && <div className="bk-alert" data-ledcheck-warn="">
@@ -48,5 +52,5 @@ export default function LedCheckCard({ b }) {
       <tbody>{list.map(([n, it]) => <Row key={n} n={n} it={it} m={(b.map || {})[n]} />)}</tbody>
     </table></div>}
     {c && !list.length && <p className="note">Every tax-like ledger is confirmed.</p>}
-  </section>;
+  </section></Confirm>;
 }

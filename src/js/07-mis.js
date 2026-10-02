@@ -826,7 +826,13 @@ Object.assign(LedMaster, {
   POST_SLOTS: [["gst.cgst", "Input CGST"], ["gst.sgst", "Input SGST"], ["gst.igst", "Input IGST"], ["gst.rcmCgstIn", "Reverse charge CGST, credit"], ["gst.rcmSgstIn", "Reverse charge SGST, credit"], ["gst.rcmIgstIn", "Reverse charge IGST, credit"],
     ["gst.rcmCgstOut", "Reverse charge CGST, payable"], ["gst.rcmSgstOut", "Reverse charge SGST, payable"], ["gst.rcmIgstOut", "Reverse charge IGST, payable"], ["roundOff", "Round off"]],
   getSlot(co, k){ const [a, c] = k.split("."); return c ? ((co[a] || {})[c] || "") : (co[a] || ""); },
-  setSlot(co, k, v){ const [a, c] = k.split("."); if (c){ co[a] = co[a] || {}; co[a][c] = v; } else co[a] = v; },
+  // review 20: a slot that is a choice (GST, reverse charge, TDS ledgers) is filled by FinCom only as a guess, never over a
+  // confirmed one; "Use it" pressed by a person confirms it (src/js/60)
+  setSlot(co, k, v, person){
+    const [a, c] = k.split("."), ck = a === "gst" && c ? "gst:" + c : a === "tdsLedgers" && c ? "tds:" + c : "";
+    if (ck && typeof choiceGuess === "function"){ if (person) choiceConfirm(co, ck, v, {nosave: true}); else choiceGuess(co, ck, v, "confirmed in the ledger master"); return; }
+    if (c){ co[a] = co[a] || {}; co[a][c] = v; } else co[a] = v;
+  },
   posting(b, co){
     const regs = ((b.meta || {}).gstins || []).map(g => g.slice(0, 2)), reg = String(co.gstin || "").slice(0, 2) || regs[0] || "";
     const ok = Object.entries(b.map || {}).filter(([, m]) => m.ok);
@@ -848,7 +854,7 @@ Object.assign(LedMaster, {
   // "empty" also covers the standard names a new client starts with, when no such ledger is in its Tally
   applyPosting(b, co, only){
     let n = 0;
-    this.posting(b, co).forEach(x => { if (x.from && x.from !== x.now && (!only || only === x.k || (only === "empty" && (!x.now || !(b.ledInfo || {})[x.now] && !(b.map || {})[x.now])))){ this.setSlot(co, x.k, x.from); n++; } });
+    this.posting(b, co).forEach(x => { if (x.from && x.from !== x.now && (!only || only === x.k || (only === "empty" && (!x.now || !(b.ledInfo || {})[x.now] && !(b.map || {})[x.now])))){ this.setSlot(co, x.k, x.from, only !== "empty"); n++; } });
     if (n) Store.saveCompany(co);
     return n;
   },

@@ -319,9 +319,10 @@ const Store = {
         data:Object.fromEntries(Object.entries(S.data).map(([k, v]) => [k, {parties:v.parties, entries:v.entries}]))}));
     } catch(e){ toast("This browser's storage is full. Download the register and clear sent invoices."); }
   },
-  saveFirm(){ this.put("config/firm", S.firm); },
-  saveCompany(c){ this.put("companies/" + c.id, c); },
-  saveParty(cid, p){ this.put("companies/" + cid + "/parties/" + p.id, p); },
+  // a settings page with unsaved changes (Drafts, src/js/60): its store is saved when the person presses Save
+  saveFirm(){ if (typeof Drafts === "object" && Drafts.hold("firm")) return; this.put("config/firm", S.firm); },
+  saveCompany(c){ if (typeof Drafts === "object" && Drafts.hold("client:" + c.id)) return; this.put("companies/" + c.id, c); },
+  saveParty(cid, p){ if (typeof Drafts === "object" && Drafts.hold("parties:" + cid)) return; this.put("companies/" + cid + "/parties/" + p.id, p); },
   saveEntry(cid, e){ this.put("companies/" + cid + "/entries/" + e.id, e); },
   // removals the user asked for: the only ones the firm account ever sends as deleted (Cloud.delete)
   deleteEntry(cid, id){ this.put("companies/" + cid + "/entries/" + id, null); if (typeof Cloud === "object") Cloud.delete("entry", cid, id, "removed by the user"); },
@@ -772,6 +773,8 @@ function addPendingSupplier(key, cid){
   if (!k) return null;
   const id = k.pan ? "p-" + k.pan : "p-" + slug(k.name) + "-" + Date.now().toString(36);
   const party = {id, name: k.name, pan: k.pan, gstin: k.gstin, ledgerName: k.ledgerName, natureDefault: k.natureId && k.natureId !== "none" ? k.natureId : "", expenseLedger: "", ldcRate: "", ldcValidTo: "", ytd: {}};
+  // the ledger of a bill still waiting is FinCom's guess until a person confirms it (Suppliers) or approves a bill
+  if (k.ledgerName && typeof partyChoiceSet === "function") partyChoiceSet(party, k.ledgerName, "guessed");
   D(cid).parties[id] = party;
   Store.saveParty(cid, party);
   return party;
@@ -1194,7 +1197,9 @@ function compute(e, cid){
   // each tax to the ledger of its own head, picked for this bill (gstLedgerFor): with the pick and why on the line
   const taxLine = (side, k, amt, role, rate) => {
     const head = k.toUpperCase(), p = gstLedgerFor(e, co, cid, head, role, rate);
-    lines.push({side, ledger: p.bad ? "" : p.ledger || "", amt, role, key: role + ":" + k, head, why: p.why || "", ask: p.ask || "", bad: p.bad || "", typed: p.bad ? p.ledger : ""});
+    // a ledger taken from Client setup carries the key of that choice: posting needs it confirmed (src/js/60)
+    const sk = role === "gst" ? k : (RCM_KEYS[role] || {})[head], ck = sk && /^Client setup/.test(p.why || "") ? "gst:" + sk : "";
+    lines.push({side, ledger: p.bad ? "" : p.ledger || "", amt, role, key: role + ":" + k, head, why: p.why || "", ask: p.ask || "", bad: p.bad || "", typed: p.bad ? p.ledger : "", ck});
   };
   const rateOf = v => base > 0 ? Ledgers.snapRate(num(v) / base * 100) : null;
   if (!blocked) ["cgst", "sgst", "igst", "cess"].forEach(k => { if (num(x[k])) taxLine("Dr", k, r2(num(x[k])), "gst", rateOf(x[k])); });
@@ -1205,7 +1210,7 @@ function compute(e, cid){
   const ro = r2(total - (base + gstTotal));
   if (Math.abs(ro) >= 0.01) lines.push({side: ro > 0 ? "Dr" : "Cr", ledger:co.roundOff, amt:Math.abs(ro), role:"roundoff"});
   lines.push({side:"Cr", ledger:e.partyLedger || "", amt:r2(total - tds), role:"party"});
-  if (tds > 0) lines.push({side:"Cr", ledger:tdsLedger, amt:tds, role:"tds", key:"tds", why: tdsPick.why || "", ask: tdsPick.ask || "", bad: tdsPick.bad || "", typed: tdsPick.bad ? tdsPick.ledger : ""});
+  if (tds > 0) lines.push({side:"Cr", ledger:tdsLedger, amt:tds, role:"tds", key:"tds", why: tdsPick.why || "", ask: tdsPick.ask || "", bad: tdsPick.bad || "", typed: tdsPick.bad ? tdsPick.ledger : "", ck: /^Client setup/.test(tdsPick.why || "") ? "tds:" + rule.id : ""});
   const dr = r2(lines.filter(l => l.side === "Dr").reduce((a, l) => a + l.amt, 0));
   const cr = r2(lines.filter(l => l.side === "Cr").reduce((a, l) => a + l.amt, 0));
 
@@ -3755,7 +3760,8 @@ function approve(e){
     parties[id] = party;
   }
   if (!party.natureDefault) party.natureDefault = e.natureId;
-  party.ledgerName = e.partyLedger;
+  // a person approved the bill with this ledger: the supplier's matched ledger is confirmed (src/js/60)
+  if (typeof partyChoiceSet === "function") partyChoiceSet(party, e.partyLedger, "confirmed"); else party.ledgerName = e.partyLedger;
   party.expenseLedger = e.expenseLedger;
   if (!party.pan && c.pan) party.pan = c.pan;
   if (!party.gstin && e.x.vendorGstin) party.gstin = e.x.vendorGstin;

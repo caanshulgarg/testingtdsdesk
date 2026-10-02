@@ -205,6 +205,15 @@ function LedStatus() {
 const TAX_ROLES = ["gst", "rcm-in", "rcm-out", "tds"];
 // a ledger on the draft entry: typed or searched (the client's Tally ledgers, data-ac), checked against Tally, with why
 // it was picked; GST and TDS lines too (a ledger of another tax head or section is refused)
+// review 20-21: a ledger this bill takes from Client setup where FinCom only guessed it: shown, with Confirm (for every
+// bill); posting waits until it is confirmed (src/js/60 billGuessedWhy)
+function GuessedFromSetup({ e, l }) {
+  const co = CO();
+  const ck = l.ck || (l.role === "expense" && /^Client setup/.test(e.expenseFrom || "") && !e.expenseUserSet && e.natureId ? "exp:" + e.natureId : "");
+  if (!ck || !l.ledger || e.exportedAt || choiceState(co, ck) === "confirmed") return null;
+  return <div className="cfm-guess" data-led-guess={ck}><span className="tag warn">guessed, confirm</span> <span className="note">Client setup’s ledger, found by FinCom: not posted until confirmed.</span>{" "}
+    <button type="button" className="linkbtn" data-choice-confirm={ck} onClick={() => { choiceConfirm(co, ck, l.ledger); toast("Confirmed for every bill: " + l.ledger + "."); render(); }}>{"Confirm “" + l.ledger + "”"}</button></div>;
+}
 function LedgerCell({ e, l, ro, tallyCtx }) {
   const tax = TAX_ROLES.includes(l.role);
   const edit = !ro && (l.role === "expense" || l.role === "party" || (tax && !!l.key));
@@ -227,6 +236,7 @@ function LedgerCell({ e, l, ro, tallyCtx }) {
     {edit && tax && (l.bad ? <div className="bk-warn" data-led-why={l.key}>{l.bad}</div>
       : !l.ledger ? <div className="bk-warn" data-led-why={l.key}>{l.ask}</div>
       : l.why ? <div className="note" data-led-why={l.key}>{l.why}</div> : null)}
+    <GuessedFromSetup e={e} l={l} />
     {l.ledger && tallyCtx && !e.exportedAt && (ex
       ? <> <span className="lg-ok" title={"In Tally as “" + ex + "”"}>✔</span></>
       : <div className="lg-miss">Not in Tally

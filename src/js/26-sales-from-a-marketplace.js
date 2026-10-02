@@ -687,12 +687,12 @@ function applyDraftCustomer(ledgerName){
 function salesInput(t){ return false; }
 document.addEventListener("click", ev => {
   if (!(S.view === "company" && S.tab === "sales" && SL())) return;
-  if (ev.target.hasAttribute && ev.target.hasAttribute("data-svoverlay")){ const s = SL(); s.openId = null; s.showSettings = false; render(); }
+  if (ev.target.hasAttribute && ev.target.hasAttribute("data-svoverlay")){ const s = SL(); Drafts.guard("sales:settings", () => { s.openId = null; s.showSettings = false; render(); }); }
 });
 document.addEventListener("keydown", ev => {
   if (!(S.view === "company" && S.tab === "sales" && SL())) return;
   const s = SL();
-  if (ev.key === "Escape" && (s.openId || s.showSettings) && !document.querySelector("#confirmBox[style*='flex']") && !AC.fk){ ev.preventDefault(); ev.stopImmediatePropagation(); s.openId = null; s.showSettings = false; render(); }
+  if (ev.key === "Escape" && (s.openId || s.showSettings) && !document.querySelector("#confirmBox[style*='flex']") && !AC.fk){ ev.preventDefault(); ev.stopImmediatePropagation(); Drafts.guard("sales:settings", () => { s.openId = null; s.showSettings = false; render(); }); }
   if (ev.key === "Enter" && ev.target.hasAttribute && ev.target.hasAttribute("data-svbulk") && !(AC.fk && AC.idx >= 0)){ ev.preventDefault(); const l = exactLedger(ev.target.value); if (l){ acClose(); salesBulk("ledger", l); } else toast("Choose a Tally ledger."); }
 }, true);
 
@@ -721,11 +721,16 @@ function autoMapCompanyLedgers(co){
   if (!co || Ledgers.cid() !== co.id || !hasLedgerList()) return [];
   const cid = co.id, list = Ledgers.list(cid), changes = [];
   const one = arr => arr.length === 1 ? arr[0].name : "";
-  const fix = (cur, set, valid, find, role) => {
+  // review 20: a choice a person confirmed is never changed here; an empty or guessed one is filled as a guess, shown in
+  // Client setup to confirm (choiceGuess, src/js/60), and not used for posting until confirmed
+  const confirmed = key => key && choiceState(co, key) === "confirmed";
+  const fix = (cur, set, valid, find, role, key) => {
+    if (confirmed(key)) return;
+    const put = v => { if (key) choiceGuess(co, key, v, "matched in Tally's ledger list"); else set(v); };
     const ok = cur ? valid(cur) : "";
-    if (ok){ if (ok !== cur){ changes.push({from: cur, to: ok, role}); set(ok); } return; }
+    if (ok){ if (ok !== cur){ changes.push({from: cur, to: ok, role}); put(ok); } return; }
     const f = find() || "";
-    if (f !== (cur || "") && (f || (cur && hasLedgerList()))){ changes.push({from: cur || "", to: f, role}); set(f); }
+    if (f !== (cur || "") && (f || (cur && hasLedgerList()))){ changes.push({from: cur || "", to: f, role}); put(f); }
   };
   const usage = Ledgers.usage(cid) || {}, used = n => (usage[n] || {}).n || 0;
   const best = arr => arr.sort((a, b) => used(b) - used(a) || a.length - b.length)[0] || "";
@@ -735,8 +740,8 @@ function autoMapCompanyLedgers(co){
   co.gst = co.gst || {};
   [["cgst", "CGST"], ["sgst", "SGST"], ["igst", "IGST"]].forEach(([k, head]) => {
     const before = co.gst[k];
-    fix(co.gst[k], v => { co.gst[k] = v; }, gstValid(head, "gst"), () => best(names.map(n => gstFits(n, head, "gst")).filter(Boolean).filter(n => !Ledgers.gstInfo(cid, n).rate)) || best(names.map(n => gstFits(n, head, "gst")).filter(Boolean)), "gst");
-    if (co.gst[k] !== before && co.gstPin) delete co.gstPin[k];
+    fix(co.gst[k], v => { co.gst[k] = v; }, gstValid(head, "gst"), () => best(names.map(n => gstFits(n, head, "gst")).filter(Boolean).filter(n => !Ledgers.gstInfo(cid, n).rate)) || best(names.map(n => gstFits(n, head, "gst")).filter(Boolean)), "gst", "gst:" + k);
+    if (co.gst[k] !== before && co.gstPin && !confirmed("gst:" + k)) delete co.gstPin[k];
   });
   fix(co.roundOff, v => { co.roundOff = v; }, n => exactLedger(n) || "", () => one(list.filter(l => /round(ed|ing)?\s*[- ]?off/i.test(l.name))), "roundoff");
   co.tdsLedgers = co.tdsLedgers || {};
@@ -750,17 +755,18 @@ function autoMapCompanyLedgers(co){
     // a default not in Tally and no ledger of the section: left as it is (it shows as not in Tally on the bill)
     const cur = co.tdsLedgers[r.id];
     if (cur && !exactLedger(cur) && !find()) return;
-    fix(cur, v => { co.tdsLedgers[r.id] = v; }, valid, find, "tds");
+    fix(cur, v => { co.tdsLedgers[r.id] = v; }, valid, find, "tds", "tds:" + r.id);
   });
   co.expenseLedgers = co.expenseLedgers || {};
   const exp = list.filter(l => ["expense", "asset"].includes(Ledgers.cls(cid, l.name)) || (!Ledgers.cls(cid, l.name) && ROLE_GROUPS.expense.test(l.group || "")));
   Object.keys(co.expenseLedgers).forEach(k => {
-    const cur = co.expenseLedgers[k], ex = cur && exactLedger(cur);
-    if (ex && Ledgers.cls(cid, ex) === "income"){ changes.push({from: cur, to: "", role: "expense"}); co.expenseLedgers[k] = ""; return; }
-    if (ex){ if (ex !== cur){ changes.push({from: cur, to: ex, role: "expense"}); co.expenseLedgers[k] = ex; } return; }
+    if (confirmed("exp:" + k)) return;
+    const cur = co.expenseLedgers[k], ex = cur && exactLedger(cur), put = v => choiceGuess(co, "exp:" + k, v, "matched in Tally's ledger list");
+    if (ex && Ledgers.cls(cid, ex) === "income"){ changes.push({from: cur, to: "", role: "expense"}); put(""); return; }
+    if (ex){ if (ex !== cur){ changes.push({from: cur, to: ex, role: "expense"}); put(ex); } return; }
     const c = exp.map(l => ({l, s: nameSim(cur, l.name)})).filter(x => x.s >= 0.85).sort((a, b) => b.s - a.s);
     const f = c.length && (c.length === 1 || c[0].s > c[1].s + 0.05) ? c[0].l.name : "";
-    if (f){ changes.push({from: cur, to: f, role: "expense"}); co.expenseLedgers[k] = f; }
+    if (f){ changes.push({from: cur, to: f, role: "expense"}); put(f); }
   });
   ["rcmCgstIn", "rcmSgstIn", "rcmIgstIn", "rcmCgstOut", "rcmSgstOut", "rcmIgstOut"].forEach(k => {
     const head = /Cgst/.test(k) ? "CGST" : /Sgst/.test(k) ? "SGST" : "IGST", kind = /In$/.test(k) ? "rcm-in" : "rcm-out";
@@ -768,7 +774,7 @@ function autoMapCompanyLedgers(co){
     const cands = names.map(n => gstFits(n, head, kind)).filter(Boolean);
     // the default name, not in Tally, and nothing that fits: left as it is
     if (!cur && !cands.length) return;
-    fix(cur || "", v => { co.gst[k] = v; }, gstValid(head, kind), () => best(cands), kind);
+    fix(cur || "", v => { co.gst[k] = v; }, gstValid(head, kind), () => best(cands), kind, "gst:" + k);
   });
   if (changes.length){
     Store.saveCompany(co);

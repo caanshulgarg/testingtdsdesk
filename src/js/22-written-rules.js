@@ -381,6 +381,12 @@ async function uploadStatements(files, force){
       const last4 = meta.acct ? meta.acct.replace(/\D/g, "").slice(-4) : "";
       co.bankAccounts = co.bankAccounts || [];
       let acc = co.bankAccounts.find(a => (last4 && a.last4 === last4) && (!meta.ifsc || !a.ifsc || a.ifsc === meta.ifsc));
+      // review 19: a statement whose account number could not be read is the same account when it can only be that one
+      // (the one account of this bank, or the client's only account): it was a new account, with no ledger, each time
+      if (!acc && !last4){
+        const short = String(meta.bank || "").split(" ")[0].toLowerCase(), same = co.bankAccounts.filter(a => short && String(a.bank || "").toLowerCase().startsWith(short));
+        acc = same.length === 1 ? same[0] : co.bankAccounts.length === 1 ? co.bankAccounts[0] : null;
+      }
       let newAcc = false;
       if (!acc && last4){
         const owners = Object.values(S.companies).filter(c => c.id !== co.id && (c.bankAccounts || []).some(a => a.last4 === last4 && (!meta.ifsc || !a.ifsc || a.ifsc === meta.ifsc)));
@@ -394,8 +400,11 @@ async function uploadStatements(files, force){
         const bankLeds = (b.ledgers.list || []).filter(l => BANK_GROUPS.test(l.group || ""));
         const short = String(meta.bank || "").split(" ")[0].toLowerCase();
         const guess = bankLeds.filter(l => last4 && l.name.includes(last4)).concat(bankLeds.filter(l => short && l.name.toLowerCase().includes(short)));
-        acc = {id: uid("ba"), bank: meta.bank || "Bank", last4, acct: meta.acct || "", ifsc: meta.ifsc || "", ledger: guess.length === 1 || (guess.length && last4 && guess[0].name.includes(last4)) ? guess[0].name : ""};
-        co.bankAccounts.push(acc); newAcc = true; Store.saveCompany(co);
+        acc = {id: uid("ba"), bank: meta.bank || "Bank", last4, acct: meta.acct || "", ifsc: meta.ifsc || "", ledger: ""};
+        co.bankAccounts.push(acc); newAcc = true;
+        // a guess only, shown to confirm (src/js/60): not used for posting until a person confirms it
+        if (guess.length === 1 || (guess.length && last4 && guess[0].name.includes(last4))) choiceGuess(co, "bank:" + acc.id, guess[0].name, "its name in Tally fits the statement");
+        Store.saveCompany(co);
       }
       const other = Object.values(S.companies).find(c => c.id !== co.id && (c.bankAccounts || []).some(a => last4 && a.last4 === last4 && (!meta.ifsc || a.ifsc === meta.ifsc)));
       const sid = uid("st");
@@ -421,7 +430,7 @@ async function uploadStatements(files, force){
       await BankDB.set("stmt:" + b.cid + ":" + sid, rows);
       saveBank({stmts: true, keys: true});
       b.filter = "review";
-      toast(file.name + ": " + rows.length + " transactions" + (dupRows ? ", " + dupRows + " already uploaded" : "") + (chk.bad ? ", " + chk.bad + " failing the balance check" : "") + "." + (newAcc && !acc.ledger ? " Choose the Tally ledger for this bank account." : ""));
+      toast(file.name + ": " + rows.length + " transactions" + (dupRows ? ", " + dupRows + " already uploaded" : "") + (chk.bad ? ", " + chk.bad + " failing the balance check" : "") + "." + (newAcc ? (acc.ledger ? " Confirm the Tally ledger for this bank account." : " Choose the Tally ledger for this bank account.") : ""));
     } catch (err){
       toast(file.name + ": " + bankErr(err));
       b.lastFail = {file: file.name, report: bankReport(Object.assign({diag: {file: file.name, size: file.size}}, err)), msg: bankErr(err), at: new Date().toISOString()};
@@ -906,8 +915,8 @@ async function exportBankXml(){
   const acc = (co.bankAccounts || []).find(a => a.id === st.acctId);
   const rows = b.rows.filter(r => r.state === "ready");
   if (!rows.length){ toast("No rows are ready. Accept suggestions or set ledgers first."); return; }
-  if (!acc || !exactLedger(acc.ledger)){ toast("Choose the Tally ledger for this bank account first."); return; }
-  acc.ledger = exactLedger(acc.ledger);
+  if (!acc || !bankLedgerReady(co, acc)){ toast(bankLedgerWhy(co, acc) || "Choose the Tally ledger for this bank account first."); return; }
+  acc.ledger = bankLedgerReady(co, acc);
   const probs = bankExportProblems(rows);
   if (probs.length){ toast("Fix these first: " + probs.slice(0, 3).join("; ") + (probs.length > 3 ? " and " + (probs.length - 3) + " more" : "")); return; }
   const used = new Set(rows.map(r => r.ledger.toLowerCase()));
@@ -971,7 +980,8 @@ function entries(n){ return n + (n === 1 ? " entry" : " entries"); }
 // one date format everywhere, DD-MMM-YYYY (review of 01-Oct-2026: lists showed "05 Aug" with no year)
 function shortDate(iso){ return iso ? fmtDate(String(iso).slice(0, 10)) : ""; }
 function bkAmt(n){ return n ? INR.format(r2(n)) : ""; }
-function accountFor(st){ const co = CO(B().cid); return (co.bankAccounts || []).find(a => a.id === st.acctId) || {}; }
+// a statement's account; one missing from the client (lost in an older sync) comes back from the statement (src/js/60)
+function accountFor(st){ const co = CO(B().cid); return (co.bankAccounts || []).find(a => a.id === st.acctId) || (st && st.acctId ? bankAccountOf(co, st) : null) || {}; }
 function stmtLabel(st){
   const acc = accountFor(st);
   return (exactLedger(acc.ledger) || (st.bank + (acc.last4 ? " \u00b7\u00b7" + acc.last4 : ""))) + " \u2014 " + shortDate(st.from) + " to " + shortDate(st.to) + " " + String(st.to || "").slice(0, 4);

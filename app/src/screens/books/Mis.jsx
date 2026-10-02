@@ -9,6 +9,7 @@
 import { Fragment } from "react";
 import CommitBox from "../../parts/CommitBox.jsx";
 import { CatchUp } from "../../parts/Notes.jsx";
+import Confirm from "../../parts/Confirm.jsx";
 
 const m = (v) => INR.format(r2(v || 0));
 const d = (x) => fmtDate(tallyDate(x));
@@ -33,9 +34,11 @@ function Head({ b, r, rg }) {
       <Act act="misRun" className="btn small primary">Run now</Act>
       {r && <><Act act="misPack" className="btn small">Download the MIS pack (PDF)</Act><Act act="misExcel">Excel</Act></>}</div>
     <details style={{ marginTop: 8 }}><summary className="note" style={{ cursor: "pointer" }}>Settings: run on its own</summary>
+      <Confirm id="books:mis-settings" label="MIS settings" stores={["books:misCfg"]}>
       <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 6 }}><span className="note">Run on its own</span>
         <select aria-label="MIS runs on its own" style={{ width: "auto" }} value={c.freq} onChange={(ev) => misFreqSet(ev.target.value)}>
           {[["monthly", "on the 1st, for the month just ended"], ["weekly", "every week, the year so far"], ["daily", "every day, the year so far"], ["off", "only when I run it"]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>
+      </Confirm>
     </details>
   </section>;
 }

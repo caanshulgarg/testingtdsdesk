@@ -182,6 +182,8 @@ function fixCompany(c){
   c.stats = c.stats || {};
   c.hashes = c.hashes || {};
   c.keys = c.keys || {};
+  // the choices a person confirmed (src/js/60): a copy coming in never takes back a newer or confirmed one held here
+  if (typeof choiceMigrate === "function") choiceMigrate(c, typeof S === "object" && S.companies ? S.companies[c.id] : null);
   return c;
 }
 /* ---------- the rate a deduction is made at: shared by bills (compute) and the check of the books (Certs) ---------- */

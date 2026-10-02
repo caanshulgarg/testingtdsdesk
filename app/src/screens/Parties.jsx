@@ -3,6 +3,15 @@
 const save = (p, now) => { if (now) Store.saveParty(S.coId, p); else later("p" + p.id, () => Store.saveParty(S.coId, p), 600); };
 const set = (p, k, v, now) => { p[k] = /^(pan|gstin)$/.test(k) ? String(v).toUpperCase().trim() : v; save(p, now); render(); };
 
+// the supplier's matched ledger (review 20): FinCom's guess (from a bill waiting) until a person confirms it here, or
+// approves a bill of the supplier; a confirmed one is never replaced by a guess or an older copy (src/js/60)
+function PartyLedgerTag({ p }) {
+  const c = partyChoice(p);
+  if (!c || !c.value) return null;
+  if (c.state === "confirmed") return <div className="cfm-ok" data-choice="party" data-choice-state="confirmed">{"✔ confirmed" + (c.by ? " by " + c.by : "")}</div>;
+  return <div className="cfm-guess" data-choice="party" data-choice-state="guessed"><span className="tag warn">guessed, confirm</span>{" "}
+    <button type="button" className="linkbtn" data-choice-confirm="party" onClick={() => Drafts.direct(() => { partyChoiceSet(p, p.ledgerName, "confirmed"); Store.saveParty(S.coId, p); render(); }, { bypass: true })}>Confirm</button></div>;
+}
 function Pf({ p, label, k, type = "text" }) {
   return <label className="f"><span>{label}</span>
     <input type={type} value={p[k] == null ? "" : p[k]} {...(type === "number" ? { step: "0.01" } : {})} onChange={(ev) => set(p, k, ev.target.value)} /></label>;
@@ -44,7 +53,7 @@ function Party({ p, fy }) {
       <div className="row" style={{ justifyContent: "space-between" }}><h2>{p.name}</h2><button className="btn small" onClick={() => doAct("closeParty")}>Close</button></div>
       <div className="grid" style={{ marginTop: 10 }}>
         <Pf p={p} label="Name" k="name" /><Pf p={p} label="PAN" k="pan" /><Pf p={p} label="GSTIN" k="gstin" />
-        <Pf p={p} label="Ledger name in Tally" k="ledgerName" /><Pf p={p} label="Expense ledger" k="expenseLedger" />
+        <div><Pf p={p} label="Ledger name in Tally" k="ledgerName" /><PartyLedgerTag p={p} /></div><Pf p={p} label="Expense ledger" k="expenseLedger" />
         <label className="f"><span>Usual payment type</span>
           <select value={p.natureDefault || ""} onChange={(ev) => set(p, "natureDefault", ev.target.value, true)}>
             <option value="">Decide per invoice</option>{rules().map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}

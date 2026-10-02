@@ -1212,3 +1212,18 @@ ol.post-import{display:block;margin:6px 0 0;padding:0 0 0 20px;border:0;backgrou
 ol.post-import li{display:list-item;margin:3px 0;overflow-wrap:anywhere}
 [data-post-page] .tblwrap{max-width:100%;overflow-x:auto}
 [data-post-line]{overflow-wrap:anywhere}
+
+/* review 18-21: the shared confirm footer of a settings section, and a choice guessed or confirmed (app/src/parts/Confirm.jsx) */
+.cfm-sec{display:block}
+.cfm-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:14px 0 4px;padding:10px 12px;border-top:1px solid var(--rule);background:var(--sheet-2);border-radius:8px;position:sticky;bottom:0;z-index:2}
+.cfm-btns{display:flex;gap:8px;flex-wrap:wrap}
+.cfm-state{font-size:13px;color:var(--muted)}
+.cfm-state.unsaved{color:var(--warn);font-weight:600}
+.cfm-state.saved{color:var(--ok)}
+.cfm-guess{font-size:13px;display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap}
+.cfm-ok{font-size:12px;color:var(--ok);font-weight:500}
+.bk-ledline{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:8px 0;font-size:14px}
+.bk-accs{display:grid;gap:10px}
+.bk-acc{display:grid;gap:2px}
+.bk-acc .bk-setup{margin:0}
+#confirmBox [data-leave-ask] .row .btn{min-width:88px}

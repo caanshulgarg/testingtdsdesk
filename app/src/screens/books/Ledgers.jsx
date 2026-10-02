@@ -8,6 +8,7 @@ import { AiLedgers } from "../../parts/Ai.jsx";
 import CommitBox from "../../parts/CommitBox.jsx";
 
 import LedCheckCard from "./LedCheck.jsx";
+import Confirm from "../../parts/Confirm.jsx";
 const NR = ({ children, bad }) => <div className={"nr" + (bad ? " bad" : "")} style={{ whiteSpace: "normal" }}>{children}</div>;
 
 // ledgers changed after returns were made from them: those returns may need a revision
@@ -103,6 +104,8 @@ export default function Ledgers({ b }) {
   const unconfirmed = shown.filter(([, m]) => !m.ok).length;
   return <>
     <LedCheckCard b={b} />
+    {/* review 18: what is confirmed or changed below is saved with Save at the foot (the shared footer) */}
+    <Confirm id="books:ledgers" label="Tally ledgers" stores={["books:map"]}>
     <Changed b={b} />
     <section className="dash-card" style={{ marginBottom: 12 }}><h3>GST and TDS ledgers: confirm once for this client</h3>
       <p className="note">Each ledger is guessed from Tally — its tax type, duty head and group — and from how the day book uses it. Check the guess and confirm it. Returns count only confirmed ledgers; anything still to confirm is shown on the TDS and GST screens, and their files wait until it is done.</p>
@@ -127,5 +130,6 @@ export default function Ledgers({ b }) {
       <List b={b} view={view} shown={shown} />
       <p className="note">Add a ledger that was missed from “Other ledgers” by choosing what it is. Several ledgers for one head are fine — reverse-charge ledgers, or one ledger per rate. To take a ledger out, choose “Not a tax ledger”.</p>
     </>}
+    </Confirm>
   </>;
 }

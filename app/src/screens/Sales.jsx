@@ -12,6 +12,7 @@ import ColHead from "../parts/ColHead.jsx";
 import CommitBox from "../parts/CommitBox.jsx";
 import LedgerBox from "../parts/LedgerBox.jsx";
 import LedgerSelect from "../parts/LedgerSelect.jsx";
+import Confirm from "../parts/Confirm.jsx";
 import { BusyCard } from "../parts/Reading.jsx";
 import { ChipBar, NoMatch } from "../parts/ChipBar.jsx";
 
@@ -172,7 +173,9 @@ function SettingsPanel() {
   const s = SL(), c = s.cfg, co = CO(s.cid), home = stateOfGstin(co.gstin);
   const rates = Array.from(new Set(s.list.flatMap((v) => salesTotals(v.x).map((g) => g.rate)).concat([5, 18]))).sort((a, b) => a - b);
   return (
-    <Panel title={"Sales settings — " + co.name} close={() => salesAct("salesSettingsClose")}>
+    <Panel title={"Sales settings — " + co.name} close={() => Drafts.guard("sales:settings", () => salesAct("salesSettingsClose"))}>
+      {/* review 18: one section, saved with Save at its foot; the default ledgers are confirmed for every computer */}
+      <Confirm id="sales:settings" label="Sales settings" stores={["salescfg"]} cid={s.cid}>
       <section><h3>Invoice numbers</h3>
         <div className="bk-form"><CfgField c={c} label="Series ({FY} = financial year)" k="series" ph="INV/{FY}/" /><CfgField c={c} label="Next number" k="next" /><CfgField c={c} label="Digits" k="pad" /></div>
         <p className="note">Next invoice: <b>{nextInvoiceNumber(new Date().toISOString().slice(0, 10)).number}</b></p></section>
@@ -199,6 +202,7 @@ function SettingsPanel() {
       <section><h3>Clean up</h3><div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
         <button className="btn small" onClick={() => salesAct("salesForget")}>Forget customer memory</button>
         <button className="btn small danger" disabled={!s.list.length} onClick={() => salesAct("salesDelAll")}>Delete all sales invoices</button></div></section>
+      </Confirm>
     </Panel>
   );
 }

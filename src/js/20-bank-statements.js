@@ -75,6 +75,8 @@ async function loadBank(cid){
   // shorter copy here never replaces it (review of 02-Oct-2026)
   Object.assign(S.bank, {postedTags: postedTags || {}, stmts: stmts || [], rules: rules || [], wrules: wrules || [], ledgers: Ledgers.fromBrowser(cid, ledgers), newLed: newLed || [], keys: keys || {}, books: books || {}, hist: hist && hist.rows ? hist : {rows: {}}, loading: false});
   S.bank.histVer++;
+  // a statement whose bank account is missing from the client gets it back, with its confirmed ledger (src/js/60)
+  if (typeof bankHealAccounts === "function") bankHealAccounts(CO(cid), S.bank.stmts);
   if (S.bank.stmts.length) await openStatement(S.bank.stmts[S.bank.stmts.length - 1].id);
   render();
   if (bridgeLive(CO(cid))) bankAutoSync(false);

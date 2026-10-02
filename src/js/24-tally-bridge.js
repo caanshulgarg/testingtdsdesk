@@ -373,8 +373,9 @@ function ledgersChanged(cid){
   const co = CO(cid), b = S.bank;
   if (b && b.cid === cid){
     b.rows.forEach(r => { if (["ready", "suggested"].includes(r.state) && r.ledger && !exactLedger(r.ledger)){ r.userSet = false; r.state = "attention"; } });
-    // bank accounts: link to their Tally ledger when it is clear
-    (co.bankAccounts || []).forEach(a => { if (!exactLedger(a.ledger)){ const g = guessBankLedger(a); if (g){ a.ledger = g; Store.saveCompany(co); } } });
+    // bank accounts with no ledger yet: a guess when it is clear, shown to confirm (src/js/60); a ledger chosen is never
+    // replaced here (it was replaced by a guess whenever it was not in the list read, a short or older one included)
+    (co.bankAccounts || []).forEach(a => { if (!bankLedgerChoice(co, a).value){ const g = guessBankLedger(a); if (g && choiceGuess(co, "bank:" + a.id, g, "the one bank ledger in Tally that fits")) Store.saveCompany(co); } });
     if (b.rows.length){ suggestAll(b.rows, true); saveBank({rows: true}); }
   }
   const mapped = Ledgers.cid() === cid ? autoMapCompanyLedgers(co) : [];
@@ -942,8 +943,9 @@ async function postBankToTally(ids){
   const inTallyBefore = b.rows.filter(r => r.state === "intally").length;
   const ledgerAge = Date.now() - new Date((b.ledgers || {}).importedAt || 0).getTime();
   if (!b.ledgers.live || ledgerAge > 60 * 60000) await syncLedgersFromTally(true);
-  if (!acc || !exactLedger(acc.ledger)){ b.busy = ""; toast("Choose the Tally ledger for this bank account first (the set-up line at the top)."); render(); return; }
-  acc.ledger = exactLedger(acc.ledger);
+  // posting uses the confirmed ledger only (src/js/60): not chosen, guessed, or gone from Tally → nothing is posted
+  if (!acc || !bankLedgerReady(co, acc)){ b.busy = ""; toast(bankLedgerWhy(co, acc) || "Choose the Tally ledger for this bank account first (the set-up line at the top)."); render(); return; }
+  acc.ledger = bankLedgerReady(co, acc);
   if (heavy) await syncBankBookFromTally(true);
   // guard 1: this computer's own record of lines already posted, whatever happened to the statement since
   b.postedTags = b.postedTags || {};
@@ -1141,6 +1143,15 @@ async function postBillsToTally(opts){
   let list = Object.values(D().entries).filter(e => e.status === "approved" && !e.exportedAt && (!opts.ids || opts.ids.includes(e.id))).sort(byDate);
   if (!list.length){ S.billPost = null; toast("No approved entries are waiting."); render(); return; }
   canonicalizeBills(list);
+  // review 21c: a bill whose GST, TDS or expense ledger comes from a Client setup choice that is only guessed waits,
+  // with the one-line reason; nothing of it is sent (src/js/60 billGuessedWhy)
+  const guessed = list.map(e => [e, billGuessedWhy(e, co)]).filter(x => x[1]);
+  if (guessed.length){
+    const why = guessed[0][1] + (guessed.length > 1 ? " (" + guessed.length + " bills)" : "") + " Confirm it in Client setup.";
+    list = list.filter(e => !guessed.some(x => x[0] === e));
+    postStopped(why, co.id);
+    if (!list.length){ S.billPost = {notAllowed: plainMsg(why), company: ""}; toast(why); refreshStats(co.id); render(); return; }
+  }
   const failed = [];
   const blocked = list.filter(e => e.snapshot.lines.some(l => !exactLedger(l.ledger)));
   blocked.forEach(e => { const l = e.snapshot.lines.find(x => !exactLedger(x.ledger)); e.postError = "Ledger “" + (l.ledger || "(none)") + "” is not in Tally"; unapply(e, co.id); e.postFailedAt = new Date().toISOString(); Store.saveEntry(co.id, e); failed.push({id: e.id, no: e.x.invoiceNo, party: e.x.vendorName, msg: e.postError}); });
@@ -1401,8 +1412,11 @@ const TBCheck = {
 // FA/ELEC/013 went into GARG SHEKHAR & COMPANY): "" when this company is allowed, else what to do
 function postToProblem(co, company){
   if (!co) return "";
-  const to = String(co.postTo || "").trim(), nm = x => ledNm(x).toLowerCase();
+  // posting uses the confirmed choice only (src/js/60): a company found by FinCom (postToBy "auto") is confirmed first
+  const ch = typeof choiceGet === "function" ? choiceGet(co, "postTo") : {value: co.postTo, state: "confirmed"};
+  const to = String((ch && ch.value) || "").trim(), nm = x => ledNm(x).toLowerCase();
   if (!to) return "Choose the Tally company " + co.name + " may post to (Client setup \u2192 Tally). Nothing was posted.";
+  if (ch.state !== "confirmed") return "Confirm the Tally company " + co.name + " posts to: " + to + " was found by FinCom and is not confirmed yet (Client setup \u2192 Tally). Nothing was posted.";
   if (company && nm(to) !== nm(company)) return co.name + " may post only to " + to + ", but " + company + " was about to receive it. Nothing was posted.";
   return "";
 }
