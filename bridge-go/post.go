@@ -8,6 +8,7 @@ import (
 	"html"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -111,7 +112,23 @@ func invokeImport(p M) (M, error) {
 				add(M{"id": id, "kind": g.kind, "ok": false, "message": "Only VOUCHER, LEDGER or GROUP objects can be posted, or a voucher type's numbering changed."})
 				continue
 			}
+			// 2.1.4: every voucher is looked for in Tally immediately before it is sent (one posting at a time per Tally
+			// from the check to the end of its import); found, or Tally not answering the check: not sent
+			isVch := g.kind == "voucher" && re(`^\s*<VOUCHER\b`).MatchString(x)
+			var gate *sync.Mutex
+			if isVch {
+				gate = postGate(port)
+				gate.Lock()
+				if r := dupCheck(port, company, id, x); r != nil {
+					gate.Unlock()
+					add(r)
+					continue
+				}
+			}
 			raw, err := invokeTally(fin, port, importEnvelope(g.report, company, `<TALLYMESSAGE xmlns:UDF="TallyUDF">`+x+"</TALLYMESSAGE>"), 0)
+			if gate != nil {
+				gate.Unlock()
+			}
 			if err != nil {
 				add(M{"id": id, "kind": g.kind, "ok": false, "message": "Tally did not answer: " + err.Error()})
 				continue

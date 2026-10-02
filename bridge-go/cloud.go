@@ -877,6 +877,7 @@ func syncCloudPosts() {
 			}
 			res = append(res, M{"id": str(r["id"]), "kind": str(r["kind"]), "ok": r["ok"] == true, "verified": r["verified"], "message": str(r["message"]), "vchNumber": str(r["vchNumber"]), "vchType": str(r["vchType"]),
 				"guid": str(r["guid"]), "masterId": str(r["masterId"]), "vchDate": str(r["vchDate"]), "optional": truthy(r["optional"]), "alreadyThere": truthy(r["alreadyThere"]),
+				"already": truthy(r["already"]), "checkFailed": truthy(r["checkFailed"]), "vchNo": str(r["vchNo"]),
 				"state": itemState(r, false), "reason": map[bool]string{true: "", false: failedLine(str(r["message"]))}[r["ok"] == true]})
 		}
 		// items: every entry's state (waiting, sending, sent, in_tally, failed with its reason), for FinCom to show live

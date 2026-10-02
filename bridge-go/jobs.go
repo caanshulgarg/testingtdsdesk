@@ -304,6 +304,13 @@ func jobWorker(dir string) {
 			e := M{"id": k, "kind": str(it["kind"]), "state": itemState(r, sending[k])}
 			if r != nil && r["ok"] != true {
 				e["reason"] = failedLine(str(r["message"]))
+				// 2.1.4: not posted by the duplicate check (FinCom marks the bill as in Tally, or offers Try again)
+				if r["already"] == true {
+					e["already"], e["guid"], e["vchNo"], e["vchDate"] = true, str(r["guid"]), str(r["vchNo"]), str(r["vchDate"])
+				}
+				if r["checkFailed"] == true {
+					e["checkFailed"] = true
+				}
 			}
 			items = append(items, e)
 		}
@@ -509,19 +516,54 @@ func jobWorker(dir string) {
 				}
 			}
 			vouchers = rest
+			// 2.1.4: each voucher looked for in Tally immediately before the batch is sent, under one gate per Tally
+			// until the batch's import is answered; found, or the check not answered: not sent. The same voucher twice
+			// in the batch: the second goes the one-by-one way after it, so it is checked once the first is in Tally
+			gate := postGate(port)
+			gate.Lock()
+			var checked []M
+			var keys []vchKey
+			reads := map[string]dupRead{}
+			for _, v := range fast {
+				if d := dupCheckWith(port, company, str(v["id"]), str(v["xml"]), reads); d != nil {
+					res = append(res, d)
+					continue
+				}
+				if vs := xmlDoc(str(v["xml"])).All("VOUCHER"); len(vs) > 0 {
+					kv := keyOfVoucher(vs[0])
+					twin := false
+					for _, o := range keys {
+						if sameVoucher(kv, o) {
+							twin = true
+						}
+					}
+					if twin {
+						vouchers = append(vouchers, v)
+						continue
+					}
+					keys = append(keys, kv)
+				}
+				checked = append(checked, v)
+			}
+			fast = checked
 			var b strings.Builder
 			for _, v := range fast {
 				b.WriteString(`<TALLYMESSAGE xmlns:UDF="TallyUDF">` + str(v["xml"]) + "</TALLYMESSAGE>")
 			}
 			var rr M
 			why := ""
-			if raw, err := invokeTally(fin, port, importEnvelope("Vouchers", company, b.String()), 0); err == nil {
-				rr = readImportResult(raw)
-			} else {
-				why = tallyTrouble(err.Error())
+			if len(fast) > 0 {
+				if raw, err := invokeTally(fin, port, importEnvelope("Vouchers", company, b.String()), 0); err == nil {
+					rr = readImportResult(raw)
+				} else {
+					why = tallyTrouble(err.Error())
+				}
 			}
+			gate.Unlock()
 			var there map[string]M
-			if rr != nil && toInt(rr["created"]) == len(fast) && toInt(rr["errors"]) == 0 && toInt(rr["exceptions"]) == 0 {
+			if len(fast) == 0 {
+				// nothing left to send in the batch
+			} else if rr != nil && toInt(rr["created"]) == len(fast) && toInt(rr["errors"]) == 0 && toInt(rr["exceptions"]) == 0 {
 				// Tally made every one: counted now, read back with the next batch check
 				for _, v := range fast {
 					res = append(res, M{"id": str(v["id"]), "kind": "voucher", "ok": true, "verified": nil, "pendingCheck": true, "created": 1, "company": company, "port": port, "vchNumber": "", "vchType": "", "masterId": "", "guid": "", "vchDate": "", "message": ""})

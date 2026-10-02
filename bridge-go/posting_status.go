@@ -101,6 +101,10 @@ func postedLine(ok, total int, checking bool) string {
 func failedLine(tallySaid string) string {
 	m := strings.TrimSpace(tallySaid)
 	const retry = ", then press Retry in FinCom"
+	// 2.1.4: the duplicate check before posting said so itself
+	if strings.HasPrefix(m, "Already in Tally (") || m == dupCheckFailedMsg {
+		return m
+	}
 	if g := group(`(?i)ledger\s*'([^']+)'\s*does\s*not\s*exist`, m, 1); g != "" {
 		return "Failed: ledger '" + g + "' is not in Tally — create it" + retry
 	}

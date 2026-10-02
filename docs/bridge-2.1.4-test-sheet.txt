@@ -1,0 +1,75 @@
+FINCOM BRIDGE 2.1.4 - TEST SHEET (NWS144, staging)
+
+File:        FinComBridge-Setup-2.1.4.exe
+Fingerprint: 1416c5e96b2208a4def6f75fee621d5fc5cf6c8e855a5d81519d06f115ae9bf5 (SHA-256)
+Link:        https://staging.fincom.live/review/assets/bridge-go/FinComBridge-Setup-2.1.4.exe
+
+What is new since 2.1.3
+  Immediately before each voucher goes to Tally (first post, Retry, Post again; from this browser, another tab,
+  another computer, or FinCom's cloud queue), the bridge reads Tally live for that one date and party. A voucher
+  already there with the same party ledger, the same bill / reference number, the same date and the same amount is
+  NOT posted again: "Already in Tally (voucher no. X, dd-mm-yyyy)".
+  If Tally does not answer that check (busy, a message box, closed, too slow, a bad answer), nothing is posted:
+  "Could not check Tally, not posted. Try again."
+  Ledgers (masters) are not checked this way; they keep "Altered in Tally: it existed already".
+
+Use ZZ TEST only for every posting below, never GARG SHEKHAR & COMPANY.
+
+1. INSTALL OVER 2.1.3
+   Do: TallyPrime open with ZZ TEST. Open the Link, then in PowerShell:
+       Get-FileHash $env:USERPROFILE\Downloads\FinComBridge-Setup-2.1.4.exe
+       Double-click the setup; "Windows protected your PC" > More info > Run anyway; "Just for me"; Next.
+   You should see: the Fingerprint above. "FinCom Bridge 2.1.4 is installed and running", "Main bridge: reading and
+       posting". You are not asked to pair again. Right-click the icon > Status shows version 2.1.4.
+   If not: the page's title and reason; keep "Send install log to FinCom" ticked and click Finish.
+
+2. POSTING ONE ZZ TEST BILL
+   Do: in FinCom (staging), open ZZ TEST > Post to Tally. Pick one approved bill (write down its party, bill number,
+       date and amount) and press Post 1 to Tally.
+   You should see: "In Tally (verified)" with Tally's voucher number. In TallyPrime, Day Book of that date: the
+       voucher once. Show log: "voucher ...: sent to Tally; reading it back" and "Import into 'ZZ TEST': 1 of 1
+       created". No "NOT POSTED" line.
+   If not: what FinCom showed and the log lines of that minute.
+
+3. THE SAME BILL AGAIN FROM A SECOND BROWSER TAB (stale data)
+   Do: BEFORE step 2, open ZZ TEST > Post to Tally in a second tab and leave it alone. After step 2, go to that
+       second tab (do not reload it): the same bill still shows as not posted. Press Post 1 to Tally there.
+   You should see: the bill is refused: "Already in Tally (voucher no. X, dd-mm-yyyy)", X being the number from
+       step 2. In TallyPrime, Day Book of that date: still ONE voucher. Show log, one line:
+       "duplicate check TDSDesk:... (party, bill, date, amount): NOT POSTED, already in Tally as Journal no. X of
+       dd-mm-yyyy (GUID ...)". No "Import into 'ZZ TEST': 1 of 1 created" for it.
+   Then: in the first tab, press Post again (or Retry) on the same bill: refused the same way.
+   If not: a screenshot of both tabs, the Day Book of that date, and the log of those minutes.
+
+4. POSTING WHILE TALLY SHOWS A MESSAGE BOX
+   Do: in TallyPrime press Alt+F4 so the "Quit?" box shows, and leave it open. In FinCom, post another approved ZZ
+       TEST bill (one not in Tally yet). Wait 1 minute.
+   You should see one of these, and never "In Tally":
+       "Could not check Tally, not posted. Try again." (the check was not answered within 25 s), or
+       "Waiting for Tally: Tally is busy ..." (Tally did not answer before the check was reached; nothing sent).
+       Show log: "duplicate check ...: NOT POSTED, could not check Tally: Tally is busy and did not answer in time
+       ..." (or the waiting line). In TallyPrime, after closing the box with No: the bill is NOT in the Day Book
+       (unless it was "Waiting" and went in by itself after you closed the box: then once only).
+   Then: close the box (No). Press Try again / Retry in FinCom: it posts, "In Tally (verified)", once.
+   If not: what FinCom showed, the Day Book of that date, and the log of those minutes.
+
+5. NORMAL POSTING STILL WORKS
+   Do: post two more approved ZZ TEST bills together (Post 2 to Tally), one of them for the same party and date as
+       step 2 but a different bill number.
+   You should see: both "In Tally (verified)", each once in the Day Book. No "NOT POSTED" line in the log. The
+       posting takes about as long as it did on 2.1.3 (a second or two more at most).
+   If not: what FinCom showed and the log of those minutes.
+
+6. CLEAN UP
+   Do: in TallyPrime delete the ZZ TEST vouchers made in steps 2, 4 and 5 (or use Remove from Tally in FinCom).
+   Then (optional): post the bill of step 2 again. It goes in (it was removed, so the check does not find it).
+
+IF SOMETHING FAILS, SEND ME
+   a) the step number and what you saw (a screenshot helps);
+   b) the install log (setup's last page with "Send install log to FinCom" ticked, or icon > Send install log);
+   c) icon > Show log, the part from the start;
+   d) icon > Status (the text).
+
+FALLBACK
+   2.1.3 is kept (not published) in assets-test/bridge-go-old. If 2.1.4 does not work: Settings > Apps > FinCom
+   Bridge (just for me) > Uninstall (keep the pairing ticked), then ask me for the 2.1.3 setup link.
