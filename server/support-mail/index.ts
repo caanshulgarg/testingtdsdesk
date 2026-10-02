@@ -7,6 +7,7 @@
 // verified in Resend), APP_URL. Until RESEND_API_KEY and SUPPORT_MAIL_TO are set it answers {sent:false} and
 // the ticket itself is unaffected.
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { corsFor } from "../_shared/cors.ts";   // the one list of headers for every function (server/_shared/cors.ts)
 
 const URL = Deno.env.get("SUPABASE_URL")!;
 const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -15,7 +16,8 @@ const TO = Deno.env.get("SUPPORT_MAIL_TO") || "";
 const FROM = Deno.env.get("SUPPORT_MAIL_FROM") || "TDS Desk Support <onboarding@resend.dev>";
 const APP = Deno.env.get("APP_URL") || "https://caanshulgarg.github.io/testingtdsdesk/";
 
-const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type", "Access-Control-Allow-Methods": "POST, OPTIONS" };
+// "*": every call carries the person's sign-in token, and the ticket is read as them
+const cors = corsFor(null, { any: true, methods: "POST, OPTIONS" });
 const reply = (code: number, body: unknown) => new Response(JSON.stringify(body), { status: code, headers: { ...cors, "Content-Type": "application/json" } });
 const PRI: Record<string, string> = { urgent: "Urgent", high: "High", medium: "Medium", low: "Low" };
 

@@ -8,7 +8,7 @@ import BillDetail from "./Bill.jsx";
 import { ChipBar } from "../parts/ChipBar.jsx";
 import UploadResult from "../parts/UploadResult.jsx";
 
-const needsLook = (r) => (r.c.missing || []).length || r.c.flags.some((f) => f.lvl === "hi") || r.e.confirmType;
+const needsLook = (r) => notReadYet(r.e) || (r.c.missing || []).length || r.c.flags.some((f) => f.lvl === "hi") || r.e.confirmType;
 const RuleOptions = () => rules().map((r) => <option key={r.id} value={r.id}>{r.label}</option>);
 
 
@@ -26,6 +26,8 @@ function Row({ e, c, sel }) {
         <div className="nr">{e.x.vendorGstin || e.x.vendorPan || "no GSTIN or PAN"}</div>
         <div className={"nr " + (ledOk ? "led-ok" : "led-bad")}>{led ? "→ " + led + (ledOk ? " ✓" : " · not in Tally") : "→ no ledger yet"}</div>
         {e.postFailedAt && e.postError && <div className="nr bad">Tally refused: {e.postError}</div>}
+        {/* the reading service could not read it (review of 02-Oct-2026): why, and Retry; Type it in is the bill itself */}
+        {notReadYet(e) && <div className="nr bad" data-notread="">{S.reading[e.id] ? "Reading again…" : <>Not read yet: {e.notRead.reason} <button className="linkbtn" onClick={() => retryNotRead(e.id)}>Retry</button></>}</div>}
         {e.noteKind && <div className="nr"><span className="tag">{e.noteKind === "credit" ? "Credit note → Debit Note in Tally" : "Debit note"}</span></div>}
       </td>
       <td>{e.x.invoiceNo || "—"}</td>

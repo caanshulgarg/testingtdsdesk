@@ -59,7 +59,9 @@ with sync_playwright() as p:
     rep.pdf(path=OUT + "/audit-report.pdf") if hasattr(rep, "pdf") else None
     rep.close()
     # schedule: weekly, and a run on its own when due
+    pg.evaluate("document.querySelectorAll('#app details').forEach(d => d.open = true)")   # settings sit in a closed section
     pg.select_option('select[aria-label="Run on its own"]', "weekly"); pg.wait_for_timeout(300)
+    pg.click('#app [data-confirm-foot="books:audit-settings"] [data-cfm="save"]'); pg.wait_for_timeout(300)   # saved with Save (review 18)
     ok(pg.evaluate("S.books.auditCfg.freq") == "weekly", "schedule saved")
     pg.evaluate("S.books.audit.last.at = '2026-09-01T09:00:00.000Z'; Audit.maybeRun(); render();"); pg.wait_for_timeout(3000)
     ok(pg.evaluate("S.books.audit.last.how").startswith("on its own"), "runs on its own when due: " + pg.evaluate("S.books.audit.last.how"))

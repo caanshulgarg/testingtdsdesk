@@ -167,7 +167,7 @@ bills, 25 days (15, 18, 21, 28, 30 and 40). Nightjar is micro, so its days are m
 Week 1 net: **2,07,400**.
 
 Orchid Lane's LFE/015 is expected after 08-Apr, so it is not in week 1. March's TDS of 2,000 falls due on 30 April,
-which is week 5, not week 1. The app put it on 7 April; this was fixed on 02-Oct-2026, see the findings below.
+which is week 5, not week 1. The app puts it on 7 April: see finding 2 below.
 
 ## Cash flow, 2025-26 (direct method)
 
@@ -229,17 +229,23 @@ To pay for the year is 2,61,000 - 1,60,400 + 2,000 = 1,02,600, since no credit i
 | Paid (1,200 on 07-Apr; 10,000 on 07-Feb through the month-end account) | 11,200 |
 | **Closing, the same as the TDS ledgers** | **10,000** |
 
-## Findings: where the app disagreed, and why the hand figure is right
+## Findings: where the app disagrees, and why the hand figure is right
 
-1. **GST by month pooled the two registrations** (`src/js/07-mis.js`, `MIS.compliance`, and the GST line of
-   `MIS.forecast`). One 3B working (`GSTR.threeB(m, "")`) was used for all registrations together, so Delhi's credit
-   was set against Uttar Pradesh's tax. The app showed 0 to pay for Jun-2025, where the right figure is 5,400 (UP), and
-   14,400 for Oct-2025, where the right figure is 9,000. The year's total was the same, but the months were wrong.
-   Credit cannot be set off across GSTINs. **Fixed on 02-Oct-2026**: with more than one registration, each is worked out
-   on its own (`MIS.gst3b`) and the figures are added. A single registration is worked out as before.
-2. **March's TDS was expected on 7 April in the 13-week forecast** (`src/js/07-mis.js`, `MIS.forecast`). Every month's
-   TDS was put on the 7th of the next month, but TDS deducted in March is due on 30 April (rule 30(2)), as `MIS.dues`
-   already said. Week 1 showed 3,54,400 out instead of 3,52,400. **Fixed on 02-Oct-2026**: April's date is the 30th.
-3. *Not changed, a note.* The customers' "usual days to pay" (`MIS.payDays`) also count an advance that a later invoice
-   used up. Vellichor's advance to its invoice gave 35 days, and Orchid Lane's gave 19 days, as if they were times to
-   pay. Week 1 does not change. It only moves when Orchid Lane's March bill is expected (08-Apr rather than later).
+These are not fixed in the app; they are left for review. Until they are, `run_fixture_books.js` fails on the checks
+marked "FINDING".
+
+1. **GST by month pools the two registrations** (`src/js/07-mis.js`, `MIS.compliance`, and the GST line of
+   `MIS.forecast`). One 3B working, `GSTR.threeB(m, "")`, is used for all registrations together, so Delhi's credit is
+   set against Uttar Pradesh's tax. Credit cannot be set off across GSTINs.
+   - Jun-2025: the app says 0 to pay; by hand it is 5,400 (UP).
+   - Oct-2025: the app says 14,400; by hand it is 9,000.
+
+   The year's total is the same, 1,02,600, but the months are wrong. The proposed fix is to work out each registration
+   on its own and add the figures. A client with one registration would be unchanged.
+2. **March's TDS is expected on 7 April in the 13-week forecast** (`src/js/07-mis.js`, `MIS.forecast`). Every month's
+   TDS is put on the 7th of the next month, but TDS deducted in March is due on 30 April (rule 30(2)), as `MIS.dues`
+   already says. Week 1 shows 3,54,400 out, where the right figure is 3,52,400. The proposed fix is for April's date
+   to be the 30th.
+3. *A note, not a finding.* The customers' "usual days to pay" (`MIS.payDays`) also count an advance that a later
+   invoice used up. Vellichor's advance to its invoice gave 35 days, and Orchid Lane's gave 19 days, as if they were times
+   to pay. Week 1 does not change. It only moves when Orchid Lane's March bill is expected (08-Apr rather than later).

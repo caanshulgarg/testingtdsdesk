@@ -336,6 +336,9 @@ export default function BillDetail({ id }) {
         <div className="actions">{e.status === "draft" && canDeleteBills() && <button className="linkbtn" onClick={() => billDelete(e.id)}>Delete…</button>}</div>
       </section>
       {e.readError && <section><p className="banner" style={{ margin: 0 }}>{e.readError}</p></section>}
+      {notReadYet(e) && e.status === "draft" && <section data-notread=""><p className="banner bad" style={{ margin: 0 }}>
+        <b>Not read yet:</b> {e.notRead.reason} <button className="btn small" onClick={() => retryNotRead(e.id)}>Retry</button>
+        <span className="note"> Or type in the supplier, date and amounts below. It cannot be approved until then.</span></p></section>}
       {!ro && e.readMode !== "free (partly read)" && (e.handwritten || (e.uncertain && e.uncertain.length > 0)) && <section><p className="banner" style={{ margin: 0 }}>
         {e.handwritten ? "Handwritten bill. " : ""}
         {e.uncertain && e.uncertain.length ? "Fields marked in amber need a quick look. Compare them with the image; to correct one, click in the box and type. When they are right, press “Fields look right” in the bar at the bottom." : "Check the figures against the image."}

@@ -22,11 +22,13 @@ with sync_playwright() as p:
     pg.set_input_files("#mastersIn", os.path.join(DATA, "Master.xml")); pg.wait_for_timeout(12000)
     pg.evaluate("""() => { const led = {}; Object.entries(S.books.ledInfo).forEach(([n, i]) => { led[n] = {open: i.ob || 0, close: 0, parent: i.group}; }); S.books.tb = {from: "20250401", to: "20260331", at: new Date().toISOString(), led}; S.booksTab = "fs"; render(); }""")
     pg.wait_for_timeout(500)
-    ok("Financial statements" in pg.inner_text("#app") and "Run now" in pg.inner_text("#app"), "Accounts tab with year and Run now")
-    pg.click('section:has(> h3:text-is("Financial statements")) button:text-is("Run now")'); pg.wait_for_timeout(3000)
+    ok(pg.locator('section[data-fs-head] select[aria-label="Year"]').count() == 1 and "Run now" in pg.inner_text("section[data-fs-head]"), "Accounts tab with year and Run now")
+    pg.click('section[data-fs-head] button:text-is("Run now")'); pg.wait_for_timeout(3000)
     t = pg.inner_text("#app")
     ok("The balance sheet tallies" in t and "Schedule III" in t and "Statement of Profit and Loss" in t, "Schedule III statements, tallied")
     ok("Negative on the balance sheet" in t, "a negative line is flagged")
+    if FIXTURE:   # EXPECTED.md: balance sheet totals 14,03,550 each side; profit 3,19,550; reserves -4,80,450
+        ok("14,03,550.00" in t and "3,19,550.00" in t and "Reserves and surplus -4,80,450.00" in t, "fixture: the totals worked out by hand (14,03,550; profit 3,19,550; reserves -4,80,450)")
     pg.screenshot(path=OUT + "/fs.png", full_page=False)
     pg.click('nav[aria-label="Accounts"] button:text-is("Mapping")'); pg.wait_for_timeout(600)
     sel = pg.locator('select[aria-label^="Goes to: "]').first; l = sel.get_attribute("aria-label")[9:]
@@ -35,13 +37,13 @@ with sync_playwright() as p:
     pg.click('tr[data-key=%s] button:text-is("by rule")' % json.dumps(l)); pg.wait_for_timeout(2500)
     ok(l not in pg.evaluate("Object.keys(S.books.fs.map)"), "and back to the rule")
     pg.click('nav[aria-label="Accounts"] button:text-is("Statements")'); pg.wait_for_timeout(400)
-    pg.select_option('select[aria-label="Format"]', "nc"); pg.wait_for_timeout(300); pg.click('section:has(> h3:text-is("Financial statements")) button:text-is("Run now")'); pg.wait_for_timeout(3000)
+    pg.select_option('select[aria-label="Format"]', "nc"); pg.wait_for_timeout(300); pg.click('section[data-fs-head] button:text-is("Run now")'); pg.wait_for_timeout(3000)
     ok("Owners' funds" in pg.inner_text("#app") and "Non-Corporate" in pg.inner_text("#app"), "the non-corporate format")
     with ctx.expect_page() as pop:
         pg.click('button:text-is("Download (PDF)")')
     rp = pop.value; rp.wait_for_timeout(700); ok("Balance Sheet" in rp.inner_text("body"), "as PDF"); rp.pdf(path=OUT + "/fs.pdf"); rp.close()
     pg.evaluate("() => { window.__saved = []; window.saveFile = (n) => window.__saved.push(n); }")
-    pg.click('section:has(> h3:text-is("Financial statements")) button:text-is("Excel")'); pg.wait_for_timeout(3000)
+    pg.click('section[data-fs-head] button:text-is("Excel")'); pg.wait_for_timeout(3000)
     ok(any("financial-statements" in n for n in pg.evaluate("window.__saved")), "as Excel")
     br.close()
 errs = [e for e in errors if "supabase" not in e and "Failed to load" not in e]

@@ -61,8 +61,11 @@ const same = (a, b, w) => ok(JSON.stringify(a) === JSON.stringify(b), w + ": " +
   console.log("13-week forecast, week 1 (01-Apr-2026 to 07-Apr-2026)");
   const w1 = r.p2.fc.weeks[0];
   ok(w1.from === "20260401" && w1.to === "20260407", "week 1 runs 01-Apr to 07-Apr");
-  eq(w1.inn, 559800, "week 1 in"); eq(w1.out, 352400, "week 1 out"); eq(w1.net, 207400, "week 1 net");
-  ok(!w1.items.some(z => z.what === "TDS") && r.p2.fc.weeks.some(w => w.items.some(z => z.what === "TDS" && z.d === "20260430")), "March's TDS is due on 30 April, not in week 1");
+  eq(w1.inn, 559800, "week 1 in");
+  // FINDING 2 (EXPECTED.md, findings): MIS.forecast puts March's TDS on 7 April; it is due on 30 April. Until that is
+  // fixed, week 1 out is 3,54,400 (2,000 too much) and these three checks fail
+  eq(w1.out, 352400, "FINDING 2: week 1 out"); eq(w1.net, 207400, "FINDING 2: week 1 net");
+  ok(!w1.items.some(z => z.what === "TDS") && r.p2.fc.weeks.some(w => w.items.some(z => z.what === "TDS" && z.d === "20260430")), "FINDING 2: March's TDS is due on 30 April, not in week 1");
 
   console.log("cash flow");
   const line = l => (r.p2.cash.rows.find(z => z.lab === l) || {t: 0}).t;
@@ -72,7 +75,9 @@ const same = (a, b, w) => ok(JSON.stringify(a) === JSON.stringify(b), w + ": " +
   console.log("GST by month");
   const want = {"202504": [72000, 0, 0, 72000, 0], "202505": [0, 36000, 0, 0, 72000], "202506": [27000, 3600, 0, 5400, 0], "202507": [18000, 14400, 0, 0, 5400], "202508": [9000, 21600, 0, 0, 0],
     "202509": [21600, 39600, 0, 0, 0], "202510": [54000, 0, 0, 9000, 0], "202511": [14400, 10800, 0, 3600, 0], "202512": [0, 0, 0, 0, 0], "202601": [36000, 27000, 0, 9000, 0], "202602": [0, 7400, 2000, 2000, 0], "202603": [9000, 0, 0, 1600, 2000]};
-  r.comp.gst.forEach(g => same([g.out, g.itc, g.rcm, g.due, g.pay], want[g.ym], g.ym + ": output, credit, RCM, to pay, paid"));
+  // FINDING 1 (EXPECTED.md, findings): MIS.compliance works out one 3B for both registrations together, setting Delhi's
+  // credit against UP's tax; until that is fixed Jun-2025 shows 0 to pay (by hand 5,400) and Oct-2025 14,400 (by hand 9,000)
+  r.comp.gst.forEach(g => same([g.out, g.itc, g.rcm, g.due, g.pay], want[g.ym], (["202506", "202510"].includes(g.ym) ? "FINDING 1: " : "") + g.ym + ": output, credit, RCM, to pay, paid"));
   eq(r.comp.gst.reduce((a, g) => a + g.due, 0), 102600, "worked out to pay for the year");
   const t09 = x.GSTR.threeB("202506", "09"), t07j = x.GSTR.threeB("202506", "07");
   ok(t09.pay.cash.cgst === 2700 && t09.pay.cash.sgst === 2700 && t07j.adv.cgst === 9000, "Jun-2025: UP pays 5,400; Delhi's 11A on the advance is 9,000 + 9,000");

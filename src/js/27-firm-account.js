@@ -1166,7 +1166,7 @@ function doAct(act, t){
     case "revApprove": case "revApproveAll": {
       const rows = draftRows().filter(r => act === "revApprove" ? S.revSel.has(r.e.id) : (!(r.c.missing || []).length && !r.c.flags.some(f => f.lvl === "hi") && !r.e.confirmType));
       let ok = 0, held = 0;
-      rows.forEach(r => { const c = compute(r.e); if ((c.missing || []).length){ held++; return; } approve(r.e); ok++; });
+      rows.forEach(r => { const c = compute(r.e); if ((c.missing || []).length || notReadYet(r.e)){ held++; return; } approve(r.e); ok++; });
       S.revSel = new Set();
       toast(ok + " approved" + (held ? ", " + held + " still need details" : "") + ".");
       refreshStats(S.coId); render(); break;

@@ -33,6 +33,7 @@
 //   {action:"einvoices", gstin?, docKeys?}
 // From the database's timer (x-cron-key): {action:"refresh-all"} every 20 minutes; {action:"daily"} 07:00-11:00 IST.
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { corsFor } from "../_shared/cors.ts";   // the one list of headers for every function (server/_shared/cors.ts)
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -42,11 +43,8 @@ const SANDBOX_URL = "https://gstsandbox.charteredinfo.com";
 const EINV = (Deno.env.get("TAXPRO_EINV_URL") || SANDBOX_URL).replace(/\/+$/, "");
 const admin = createClient(SB_URL, SERVICE);
 
-const cors = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-};
+// "*": the database's timer calls it too (x-cron-key), and every browser call needs a signed-in firm member
+const cors = corsFor(null, { any: true, methods: "GET, POST, OPTIONS" });
 const reply = (code: number, body: unknown) =>
   new Response(JSON.stringify(body), { status: code, headers: { ...cors, "Content-Type": "application/json" } });
 

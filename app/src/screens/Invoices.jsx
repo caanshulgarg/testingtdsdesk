@@ -11,6 +11,7 @@ function Tag({ e }) {
   if (e.status === "approved") return e.exportedAt ? <span className="tag stamp">Sent</span> : <span className="tag ok">TDS {money0(e.snapshot ? e.snapshot.tds : 0)}</span>;
   if (e.status === "rejected") return <span className="tag no">No entry</span>;
   if (e.status === "duplicate") return <span className="tag warn">Duplicate</span>;
+  if (notReadYet(e)) return <span className="tag bad" title={"Not read yet: " + e.notRead.reason} data-notread="">Not read yet</span>;
   const c = compute(e);
   if (c.flags.some((x) => x.lvl !== "info") || c.missing.length) return <span className="tag warn">Check</span>;
   return c.tds ? <span className="tag ok">TDS {money0(c.tds)}</span> : <span className="tag no">No TDS</span>;

@@ -37,6 +37,7 @@
 //                                                       answers {done, next} until next is null
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { parseDay, amt, cleanName } from "./parse.js";
+import { corsFor } from "../_shared/cors.ts";   // the one list of headers for every function (server/_shared/cors.ts)
 
 const URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -46,7 +47,8 @@ const MAX_DAY = 60 * 1024 * 1024;           // one day's day book, unzipped
 const MAX_UNZIP = 200 * 1024 * 1024;        // all the days of one request, unzipped
 
 const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
-const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "x-fincom-device, content-type, authorization, apikey, x-client-info", "Access-Control-Allow-Methods": "POST, OPTIONS" };
+// "*": the Tally bridge (no browser) and the app both call it, and every call carries a device key or a sign-in token
+const cors = corsFor(null, { any: true, methods: "POST, OPTIONS" });
 const reply = (code: number, body: unknown) => new Response(JSON.stringify(body), { status: code, headers: { ...cors, "Content-Type": "application/json" } });
 
 async function sha256(s: string) {
