@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -47,7 +46,9 @@ func noComputedFields(t *testing.T, f *standTally) int {
 				t.Fatalf("request %d (%s) asks for %q, not a stored field of the list", i, id, fld)
 			}
 		}
-		if c := computed.FindString(strings.ReplaceAll(b, "OPENINGBALANCE", "")); c != "" {
+		// the export format ($$SysName:XML) is the only Tally function any request names; the stored opening the only "balance"
+		plain := strings.NewReplacer("OPENINGBALANCE", "", "$$SysName:XML", "").Replace(b)
+		if c := computed.FindString(plain); c != "" {
 			t.Fatalf("request %d (%s) asks for something Tally computes (%q): %s", i, id, c, cut(b, 400))
 		}
 	}
@@ -177,9 +178,16 @@ func TestLedgerListChunksUnderCapAndResume(t *testing.T) {
 	if len(loadLedList(syncFolder(zz))) != n {
 		t.Fatal("the list held after the resumed round")
 	}
-	// the chunk grows back after quick answers
-	if toInt(readKeepState(syncFolder(zz))["ledSize"]) != 2000 {
-		t.Fatalf("the chunk size after quick answers: %v", readKeepState(syncFolder(zz))["ledSize"])
+	// the halved chunk stays so for the round; the next round starts back at 2,000
+	if toInt(readKeepState(syncFolder(zz))["ledSize"]) != 1000 {
+		t.Fatalf("the chunk size after the round: %v", readKeepState(syncFolder(zz))["ledSize"])
+	}
+	before = len(ledRanges(f))
+	if err := newRun("now", "r3").step(zz, f.port, ""); err != nil {
+		t.Fatal(err)
+	}
+	if rs = ledRanges(f)[before:]; rs[1] != "2000-4000" || len(rs) != n/2000+1 {
+		t.Fatalf("the round after: %v", rs[:3])
 	}
 	noComputedFields(t, f)
 	f.noBalance(t)
@@ -329,7 +337,7 @@ func TestLedgerRenameAndDeleteSent(t *testing.T) {
 	}
 	pushAll()
 	c.mu.Lock()
-	if len(c.ledList) != 1 || len(arr(c.ledList[0]["ledgers"])) != 60 || len(arr(c.ledList[0]["groups"])) != 0 && false {
+	if len(c.ledList) != 1 || len(arr(c.ledList[0]["ledgers"])) != 60 {
 		t.Fatalf("the first list sent: %d calls", len(c.ledList))
 	}
 	c.ledList = nil
@@ -531,5 +539,4 @@ func TestDiffLedgers(t *testing.T) {
 	if len(d.deleted) != 1 || len(d.deferred) != 99 {
 		t.Fatal("the second look")
 	}
-	_ = os.Remove("")
 }

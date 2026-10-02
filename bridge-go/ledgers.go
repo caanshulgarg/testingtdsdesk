@@ -6,8 +6,8 @@
 // changed. Nothing Tally computes (no closing balance, no on-account value, no period).
 //
 // The ledger list goes in chunks of MasterIDs (2,000 a request, LedgerChunk), so no request holds Tally for long on a
-// company with 50,000 ledgers; a chunk that does not answer is halved (down to LedgerChunkMin, 125) and the read
-// resumes from it; each chunk is saved as it comes (ledger-read.jsonl), so a stop resumes from the last chunk saved.
+// company with 50,000 ledgers; a chunk that does not answer is halved (down to LedgerChunkMin, 125) for the rest of
+// the round (the next round starts at twice that) and the read resumes from it; each chunk is saved as it comes (ledger-read.jsonl), so a stop resumes from the last chunk saved.
 // Every request goes through the one gate to Tally (postings first, the check after a timeout, the company's GUID, the
 // lease). Groups are few: one request.
 //
@@ -297,7 +297,9 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 	}
 	ls := obj(st["led"])
 	if t, ok := parseTime(str(ls["started"])); ls == nil || !ok || time.Since(t) > time.Duration(keepNum("LedgerResumeHours", 6))*time.Hour {
-		size := toInt(st["ledSize"])
+		// a chunk halved after a timeout stays so for the rest of its round; the next round starts at twice that, back
+		// towards the full chunk
+		size := toInt(st["ledSize"]) * 2
 		if size < ledChunkMin() || size > ledChunkDefault() {
 			size = ledChunkDefault()
 		}
@@ -366,10 +368,6 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 			}
 			if top > bound && bound > 0 {
 				ls["bound"] = top
-			}
-			// a chunk that answered quickly: back towards the full chunk
-			if sec < float64(ledChunkSec())/4 && size < ledChunkDefault() {
-				ls["size"] = minI(ledChunkDefault(), size*2)
 			}
 		}
 		st["ledSize"] = ls["size"]
