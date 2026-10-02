@@ -129,8 +129,8 @@ with sync_playwright() as p:
         body=json.dumps({"setup": {"version": "2.1.0", "url": "https://x/assets/bridge-go/FinComBridge-Setup-2.1.0.exe", "sha256": "ab" * 32}})))
     E("() => { navHome('tally'); }"); pg.wait_for_timeout(1500)
     t = pg.inner_text("#app")
-    ok("Just for me" in t and pg.locator("#app [data-bridge-link]").count() == 1 and "Invoke-WebRequest" in pg.inner_text("#app [data-bridge-ps]") and "Tls12" in pg.inner_text("#app [data-bridge-ps]"),
-       "18, 19. the Tally page: 'Just for me' without admin rights, the direct link and the PowerShell command")
+    ok("without an administrator" in t and pg.locator("#app [data-bridge-link]").count() == 1 and "Invoke-WebRequest" in pg.inner_text("#app [data-bridge-ps]") and "Tls12" in pg.inner_text("#app [data-bridge-ps]"),
+       "18, 19. the Tally page: installs without an administrator, the direct link and the PowerShell command")
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
     br.close()
 srv.shutdown()

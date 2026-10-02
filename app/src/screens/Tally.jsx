@@ -1,5 +1,6 @@
-// Tally: the FinCom Connector, the Tally Bridge (connect, the Tallys found, which client each company is, the check of
-// this server's Tally, the reading test) and the books in FinCom's cloud. Was viewTallyHome (src/js/18),
+// Tally: FinCom Bridge (02-Oct-2026, the owner's decision: the only bridge. One card with its download until a bridge is
+// heard from, then one line a computer, the rest under Details: connect, the Tallys found, which client each company is,
+// the check of this server's Tally, the reading test) and the books in FinCom's cloud. Was viewTallyHome (src/js/18),
 // viewBridgeSettings, bridgeSetupSteps, bridgeDownHelp, viewBridgeDiagnosis and viewReadTest (src/js/24), and TCloud.view
 // (src/js/49). The work is Bridge and TCloud; boxes and choices go through bridgeSet, bridgeLink, bridgePin, tcLink
 // (src/js/24, 49), buttons through doAct (bridgeTest, bridgeConnect, bridgeOff, bridgeSetupFile, bridgeDiag, bridgeReadTest).
@@ -39,30 +40,66 @@ function Diagnosis() {
   </div>;
 }
 
-// go-bridge (testing site only): FinCom Bridge 2.0, the bridge as one Windows program and service, to be tried beside
-// bridge 1.15.0 (test mode: reads Tally, never posts) or in its place. Its file and fingerprint come from latest.json
-function GoBridgeCard() {
-  const [m, setM] = useState(null);
+// FinCom Bridge's setup, from the test site's latest.json (assets/bridge-go): the one download, its fingerprint, its direct
+// address and a PowerShell command for a server without a modern browser (review of 02-Oct-2026)
+function useSetup() {
+  const [m, setM] = useState(undefined);
   useEffect(() => { fetch("assets/bridge-go/latest.json", { cache: "no-store" }).then((r) => r.ok ? r.json() : null).then(setM).catch(() => setM(null)); }, []);
+  return m;
+}
+function BridgeDownload({ m, again }) {
   const set = m && m.setup;
-  // 02-Oct-2026: no download is handed out until a build has been tried on real Windows computers
-  if (!set) return <div className="pane cn-card" data-bridge-testing=""><h2>FinCom Bridge for Windows</h2>
-    <p className="note" style={{ margin: 0 }}>New bridge 2.1.0 is being tested; keep using bridge 1.15.0 for now.</p></div>;
+  if (!set) return <div className="pane cn-card" data-bridge-card=""><h2>FinCom Bridge</h2>
+    <p className="note" style={{ margin: 0 }}>{m === undefined ? "Reading…" : "The FinCom Bridge setup is not on this site yet."}</p></div>;
   const file = set.url.split("/").pop();
   const dl = new URL("assets/bridge-go/" + file, location.href).href.replace(/[?#].*$/, "");
   const ps = "[Net.ServicePointManager]::SecurityProtocol = 'Tls12'; Invoke-WebRequest -Uri \"" + dl + "\" -OutFile \"$env:USERPROFILE\\Downloads\\" + file + "\"";
-  return <div className="pane cn-card"><h2>FinCom Bridge {set.version} for Windows <span className="tag warn">test build · staging only</span></h2>
-    <p className="note" style={{ margin: "0 0 10px" }}>The new bridge: one program with an icon near the clock that says in one line what it is doing (<b>Test mode: reading only, not posting</b> or <b>Main bridge: reading and posting</b>); right-click it for Open FinCom, Test connection, Show log and Switch to main bridge. It installs <b>just for you, without an administrator</b>, starts when you sign in and starts again by itself if it stops. Setup asks how to run it: <b>Test beside bridge 1.15.0</b> (reads only) or <b>Replace bridge 1.15.0</b> (keeps its pairing, settings and copy of the books). Its last page says whether it is installed and running.</p>
-    <div className="row"><a className="btn primary" href={"assets/bridge-go/" + file + "?v=" + set.sha256.slice(0, 12)} download={file}>Download FinCom Bridge {set.version}</a>
-      <span className="note" style={{ alignSelf: "center" }}>Not signed yet: Windows may say “Windows protected your PC”: press More info, then Run anyway.</span></div>
-    <p className="note" style={{ fontSize: 12, margin: "8px 0 0" }}>Fingerprint (SHA-256): <code style={{ userSelect: "all", wordBreak: "break-all" }}>{set.sha256}</code></p>
-    <p className="note" style={{ margin: "10px 0 0" }}><b>No administrator rights on the Tally server?</b> Nothing to do: <b>Just for me</b> is the default. Only <b>For all users</b> (a Windows service, running before anyone signs in) needs an administrator.</p>
-    {/* review of 02-Oct-2026: a Tally cloud server often has only Internet Explorer: the file's own address, and a command */}
-    <p className="note" style={{ margin: "10px 0 4px" }}>Direct link to the setup file: <a href={dl} data-bridge-link="">{dl}</a></p>
-    <p className="note" style={{ margin: "0 0 4px" }}>On a server without a modern browser, paste this into Windows PowerShell; the setup lands in your Downloads folder:</p>
+  return <div className="pane cn-card" data-bridge-card="">
+    <h2>{again ? "Install FinCom Bridge again or on another computer" : "FinCom Bridge"}</h2>
+    <p className="note" style={{ margin: "0 0 10px" }}>Install it on the computer where TallyPrime runs. It installs <b>just for you, without an administrator</b>, takes off any older bridge on that computer (keeping its pairing, settings and copy of the books), becomes the main bridge and runs in the background: only its icon shows, near the clock.</p>
+    <a className="btn primary" data-bridge-download="" href={"assets/bridge-go/" + file + "?v=" + set.sha256.slice(0, 12)} download={file}>Download FinCom Bridge {set.version}</a>
+    <p className="note" style={{ fontSize: 12, margin: "10px 0 0" }}>Fingerprint (SHA-256): <code data-bridge-sha="" style={{ userSelect: "all", wordBreak: "break-all" }}>{set.sha256}</code></p>
+    <p className="note" style={{ margin: "6px 0 0" }}>Direct link: <a href={dl} data-bridge-link="">{dl}</a></p>
+    <p className="note" style={{ margin: "6px 0 4px" }}>Or paste this into Windows PowerShell; the setup lands in your Downloads folder:</p>
     <pre className="cmd" data-bridge-ps="" style={{ whiteSpace: "pre-wrap", wordBreak: "break-all", userSelect: "all", fontSize: 12, background: "var(--sheet-2, #F4F6F5)", padding: 10, borderRadius: 6, margin: 0 }}>{ps}</pre>
-    <div className="row" style={{ marginTop: 6 }}><button className="btn small" onClick={() => { try { navigator.clipboard.writeText(ps); toast("Copied."); } catch (e) { toast("Select the command and copy it."); } }}>Copy the command</button></div>
-    <BlockedHelp /></div>;
+    <p className="note" style={{ margin: "8px 0 0" }}>Not signed yet: if Windows says “Windows protected your PC”, press <b>More info</b>, then <b>Run anyway</b>.</p>
+    <details style={{ marginTop: 8 }}><summary className="note" style={{ cursor: "pointer" }}>Windows blocked it, or the setup failed?</summary><BlockedHelp /></details>
+  </div>;
+}
+
+// the bridges heard from are read again after a minute (another computer may have started)
+function paneFresh() {
+  const p = TCloud.pane;
+  if (TCloud.on() && !p.busy && !p.err && (p.devices === null || Date.now() - (p.at || 0) > 60000)) { p.at = Date.now(); setTimeout(() => TCloud.refreshPane(), 0); }
+}
+// one line a computer (02-Oct-2026): the computer, the Windows user, the version, and the state with what to do
+const vnum = (v) => String(v || "0").split(".").map((x) => Number(x) || 0).reduce((a, x) => a * 1000 + x, 0);
+function lineState(r, latest, owner) {
+  if (!r.go || r.old) return { text: "Needs FinCom Bridge", cls: "bad", act: "Install FinCom Bridge below on " + r.computer + ": it replaces this one by itself." };
+  if (!r.online) return { text: "Offline" + (r.at ? " since " + fmtDateTime(r.at) : ""), cls: "bad", act: "On " + r.computer + ", sign in to Windows as " + (r.user || "the Tally user") + ": FinCom Bridge starts by itself. Its icon near the clock: right-click → Test connection." };
+  if (!r.main) return { text: "Online · reads only", cls: "warn", act: owner ? "Another bridge posts on this computer." : "Another bridge posts on this computer; an owner of the firm can make this the main bridge.", makeMain: owner };
+  if (latest && vnum(latest) > vnum(r.version)) return { text: "Online · update ready", cls: "warn", act: "Download FinCom Bridge " + latest + " under Details and run it on " + r.computer + "." };
+  if (r.tally === "busy") return { text: "Online · Tally busy", cls: "warn", act: "It carries on when Tally is free." };
+  if (r.tally !== "open") return { text: "Online · Tally not open", cls: "warn", act: "Open TallyPrime and the company on " + r.computer + "." };
+  return { text: "Online · Tally open", cls: "ok", act: r.open.length ? r.open.join(", ") : "" };
+}
+function BridgeLines({ rows, latest }) {
+  const [open, setOpen] = useState(false);
+  const owner = S.account && S.account.me && S.account.me.role === "owner";
+  // the computer's main bridge, else its newest
+  const byDev = new Map();
+  rows.forEach((r) => { const k = r.device.id, h = byDev.get(k); if (!h || (r.main && r.go && !(h.main && h.go)) || (r.go && !h.go)) byDev.set(k, r); });
+  return <div className="pane" data-bridge-lines="">
+    {[...byDev.values()].map((r) => { const st = lineState(r, latest, owner);
+      return <div key={r.device.id} className="row" data-bridge-line={r.id || "old"} style={{ alignItems: "center", gap: 8, flexWrap: "wrap", margin: "2px 0" }}>
+        <b>{r.computer}</b><span className="note">·</span><span>{r.user || "—"}</span><span className="note">·</span><span>{r.go && !r.old ? "FinCom Bridge " + (r.version || "") : "Older bridge"}</span><span className="note">·</span>
+        <span className={"tag " + st.cls} data-bridge-state="">{st.text}</span>
+        {st.act && <span className="note" data-bridge-act="">{st.act}</span>}
+        {st.makeMain && <button className="btn small primary" data-make-main={r.id} onClick={() => TCloud.makeMain(r)}>Make this the main bridge</button>}
+      </div>; })}
+    <a href="#" className="note" data-bridge-details="" onClick={(ev) => { ev.preventDefault(); setOpen(!open); }}>{open ? "Hide details" : "Details"}</a>
+    {open && <div data-bridge-more="" style={{ marginTop: 10 }}><BridgesHeard /><BridgeSettings /></div>}
+  </div>;
 }
 
 // review of 02-Oct-2026: every bridge FinCom has heard from (TCloud.bridgesHeard), which one is the main one, and a
@@ -72,10 +109,10 @@ const TSTATE = { open: "Tally open", busy: "Tally busy", closed: "Tally not seen
 export function BridgesHeard() {
   const p = TCloud.pane;
   if (!TCloud.on()) return null;
-  if (!p.busy && !p.err && (p.devices === null || Date.now() - (p.at || 0) > 60000)) { p.at = Date.now(); setTimeout(() => TCloud.refreshPane(), 0); }
+  paneFresh();
   const rows = TCloud.bridgesHeard(), owner = S.account && S.account.me && S.account.me.role === "owner";
   return <div className="pane" data-bridges="">
-    <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}><h2 style={{ margin: 0 }}>Bridges FinCom has heard from</h2>
+    <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}><h3 style={{ margin: 0 }}>Every bridge FinCom has heard from</h3>
       <button className="btn small" onClick={() => TCloud.refreshPane()}>Refresh</button></div>
     <p className="note" style={{ margin: "6px 0 10px" }}>Every bridge on the firm’s computers, from its last heartbeat. Only the <b>main</b> bridge posts to Tally; a bridge in <b>test mode</b> reads only.</p>
     {p.err && <p className="note bad">{p.err}</p>}
@@ -83,16 +120,16 @@ export function BridgesHeard() {
       {rows.map((r, i) => <tr key={r.device.id + ":" + (r.id || "old") + ":" + i} data-bridge-row={r.id || "old"}>
         <td>{r.computer}<div className="nr">{r.device.name}</div></td>
         <td>{r.user || "—"}</td>
-        <td>{(r.go ? "FinCom Bridge " : "Bridge ") + (r.version || "?")}{r.runMode && <div className="nr">{RUN[r.runMode] || r.runMode}</div>}</td>
+        <td>{r.go && !r.old ? "FinCom Bridge " + (r.version || "?") : "Older bridge"}{r.runMode && <div className="nr">{RUN[r.runMode] || r.runMode}</div>}</td>
         <td>{r.main ? <span className="tag ok">Main: reads and posts</span> : <span className="tag warn">Test: reads only</span>}</td>
         <td>{r.at ? fmtDateTime(r.at) : "—"}<div className="nr">{r.online ? <span className="ok">online</span> : <span className="bad">offline</span>}</div></td>
         <td>{TSTATE[r.tally] || r.tally}</td>
         <td>{r.open.length ? r.open.join(", ") : <span className="note">none</span>}</td>
-        <td>{!r.main && r.go && (r.old ? <span className="note">Update it to 2.1 or later to make it the main bridge</span>
+        <td>{!r.main && r.go && (r.old ? <span className="note">Install FinCom Bridge on this computer to replace it</span>
           : p.noMain ? <span className="note">Not available until FinCom’s cloud is updated (migration-22)</span>
           : owner ? <button className="btn small primary" data-make-main={r.id} onClick={() => TCloud.makeMain(r)}>Make this the main bridge</button>
           : <span className="note">An owner of the firm can make it the main bridge</span>)}</td></tr>)}
-    </tbody></table></div> : <p className="note">No bridge has been heard from yet. Install FinCom Bridge on the computer with TallyPrime (below) and connect it.</p>}
+    </tbody></table></div> : <p className="note">No bridge has been heard from yet. Install FinCom Bridge on the computer with TallyPrime.</p>}
   </div>;
 }
 
@@ -151,23 +188,35 @@ function BlockedHelp() {
 
 function DownHelp({ c }) {
   const url = c.url.replace(/\/+$/, "");
-  return <div className="bdiag"><b>FinCom cannot reach the bridge. Check, in this order:</b><ol style={{ margin: "8px 0 0 18px", padding: 0, lineHeight: 1.55 }}>
-    <li>On the computer where TallyPrime runs, is the window <b>FinCom - Tally Bridge</b> open and showing <b>READY</b>? If not, double-click <b>Start-TDS-Bridge.bat</b> in the bridge folder.</li>
-    <li>If that window shows <b>BRIDGE STOPPED</b> or <b>Could not start on port</b>, do what it says, or send the file <b>tds-bridge-console.txt</b> from the bridge folder.</li>
+  return <div className="bdiag"><b>FinCom cannot reach FinCom Bridge on this computer. Check, in this order:</b><ol style={{ margin: "8px 0 0 18px", padding: 0, lineHeight: 1.55 }}>
+    <li>Is the FinCom icon near the clock (or under the <b>^</b> arrow)? If not, open <b>FinCom Bridge</b> from the Start menu.</li>
+    <li>Right-click the icon → <b>Test connection</b>: it says what is wrong and what to do. <b>Show log</b> has the details for support.</li>
     <li>In this same browser, open <a href={url + "/ping"} target="_blank" rel="noopener">{url + "/ping"}</a>. If it shows <code>"ok":true</code>, press <b>Retry</b> below (and choose <b>Allow</b> if the browser asks about apps on this device).</li>
-    <li>If that page cannot be reached, FinCom and the bridge are on different computers: open FinCom (the downloaded file) inside the server session where TallyPrime runs.</li>
+    <li>If that page cannot be reached, FinCom and the bridge are on different computers: open FinCom inside the server session where TallyPrime runs.</li>
   </ol><div className="row" style={{ marginTop: 8 }}><Act act="bridgeTest" className="btn small primary">Retry</Act></div></div>;
 }
 
 function SetupSteps() {
   const st = Bridge.st, connected = Bridge.on() && Bridge.up();
   const Step = ({ n, done, title, children }) => <li className={done ? "done" : ""}><b>{(done ? "✔ " : n + ". ") + title}</b>{children && <div>{children}</div>}</li>;
-  return <div className="setupcard"><h3 style={{ margin: "0 0 6px" }}>Set up in three steps</h3><ol className="setup">
-    <Step n={1} done={connected} title="Put the bridge on the Tally computer">Press <Act act="bridgeSetupFile">Download the bridge setup</Act> and run the file there (double-click, press <b>I</b>). It installs itself, starts, and starts again at every sign-in. No admin rights needed.</Step>
-    {S.bridgeSha && <li className="note" style={{ listStyle: "none", fontSize: 12 }}>Fingerprint (SHA-256) of the file just saved: <code style={{ userSelect: "all", wordBreak: "break-all" }}>{S.bridgeSha}</code>. It must match the one published by FinCom before you run it.</li>}
+  return <div className="setupcard"><h3 style={{ margin: "0 0 6px" }}>Connect this browser to FinCom Bridge</h3><ol className="setup">
+    <Step n={1} done={connected} title="FinCom Bridge on the Tally computer">Download it from the card on this page and run it there. No admin rights needed.</Step>
     <Step n={2} done={connected && st.tallyUp} title="Open TallyPrime and your company">In TallyPrime: F1 Help → Settings → Connectivity → <b>TallyPrime acts as: Both</b>. Each user's Tally needs its own port (9000, 9001, …).</Step>
-    <Step n={3} done={connected} title="Press Connect here">Press <Act act="bridgeConnect" className="btn small primary">Connect</Act> and type the 6-digit code shown in the bridge window. The code works once, for 15 minutes after the bridge starts; no other web page can connect.</Step>
+    <Step n={3} done={connected} title="Press Connect here">Press <Act act="bridgeConnect" className="btn small primary">Connect</Act> and type the 6-digit code: right-click the FinCom icon near the clock → <b>Connect FinCom on this computer…</b>. No other web page can connect.</Step>
   </ol></div>;
+}
+
+// the hidden way back to bridge 1.15.0 (#/tally/bridge-1.15, linked from nowhere; 02-Oct-2026, should FinCom Bridge fail
+// on a computer): its setup file and the steps it needs, as before
+function OldBridge() {
+  return <div className="pane" data-old-bridge=""><h2>Bridge 1.15.0 (fallback)</h2>
+    <p className="note">Only if FinCom Bridge does not work on a computer. Uninstall FinCom Bridge there first (Settings → Apps → FinCom Bridge), then:</p>
+    <ol style={{ margin: "8px 0 0 18px", padding: 0, lineHeight: 1.6 }}>
+      <li>Press <Act act="bridgeSetupFile">Download the bridge 1.15.0 setup</Act> and run <b>Setup-FinCom-Bridge.bat</b> on the computer with TallyPrime (double-click, press <b>I</b>).</li>
+      {S.bridgeSha && <li style={{ listStyle: "none", fontSize: 12 }}>Fingerprint (SHA-256) of the file just saved: <code style={{ userSelect: "all", wordBreak: "break-all" }}>{S.bridgeSha}</code></li>}
+      <li>Open FinCom on that computer, Tally page → Details → Connect, and type the 6-digit code shown in the bridge window.</li>
+    </ol>
+    <p className="note" style={{ marginTop: 10 }}><a href="#/tally">Back to the Tally page</a></p></div>;
 }
 
 // the Tallys the bridge found: whose, the companies open, the client each is, and which one to use
@@ -187,11 +236,11 @@ function Sessions({ c, st }) {
 }
 
 // review of 01-Oct-2026: the last lines of the bridge's own log (tds-bridge.log), to read here or copy for support,
-// without looking for the file on the Tally computer. Needs bridge 1.14.9 (its /logtail)
+// without looking for the file on the Tally computer (its /logtail)
 function BridgeLog() {
   const [lg, setLg] = useState(null);
   const load = () => { setLg({ busy: true }); Bridge.call("/logtail?n=200", null, 20000).then((j) => setLg({ file: j.file || "", lines: j.lines || [] }),
-    (e) => setLg({ error: /unknown|not found|404/i.test(String((e && e.message) || "")) ? "This bridge cannot show its log yet: install bridge 1.14.9 or later (Download the bridge setup)." : ((e && e.message) || String(e)) })); };
+    (e) => setLg({ error: /unknown|not found|404/i.test(String((e && e.message) || "")) ? "This bridge cannot show its log here: install FinCom Bridge from the Tally page (or right-click its icon → Show log)." : ((e && e.message) || String(e)) })); };
   const text = lg && lg.lines ? lg.lines.join("\n") : "";
   const copy = () => (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(() => toast("Log copied."), () => toast("Could not copy; select the text and copy it."));
   return <div className="bridge-log" style={{ marginTop: 10 }}>
@@ -206,24 +255,18 @@ function BridgeLog() {
 
 export function BridgeSettings() {
   const c = Bridge.cfg(), st = Bridge.st;
-  if (Bridge.blocked()) return <div className="pane"><h2>Tally Bridge</h2><p className="note" style={{ margin: 0 }}>Pages opened on claude.ai cannot reach programs on your computer. To connect to Tally, use the downloaded app (<b>Download standalone app</b>) on the computer where TallyPrime runs.</p></div>;
+  if (Bridge.blocked()) return <div className="pane"><h2>FinCom Bridge on this computer</h2><p className="note" style={{ margin: 0 }}>Pages opened on claude.ai cannot reach programs on your computer. To connect to Tally, use the downloaded app (<b>Download standalone app</b>) on the computer where TallyPrime runs.</p></div>;
   const MODE = { auto: "The bridge finds the TallyPrime running in your Windows session" + (st.user ? " (" + st.user + ")" : "") + " and ignores other users’ Tally.", config: "The bridge uses the Tally ports listed in its settings file.", fallback: "Windows did not tell the bridge which Tally is yours: choose it below." };
   return <>
-    {document.body.classList.contains("is-test") && <GoBridgeCard />}
-    {/* the Windows app that keeps the bridge running, shows what it does, updates it and sends its log to support */}
-    <div className="pane cn-card"><h2>FinCom Connector for Windows <span className="tag">recommended</span></h2>
-      <p className="note" style={{ margin: "0 0 10px" }}>One program on the computer with Tally: it installs the bridge, starts with Windows, keeps the bridge running (and starts it again if it stops), shows Tally, the companies kept in step and the cloud copy, checks the computer and says what to do in plain words, updates itself, and sends its log to FinCom support in one click. No admin rights needed.</p>
-      <div className="row"><a className="btn primary" href={"assets/connector/FinComConnector.exe?v=" + Date.now()} download="FinComConnector.exe">Download FinCom Connector</a>
-        <span className="note" style={{ alignSelf: "center" }}>Windows 10 or 11. Until the program is signed, Windows may say “Windows protected your PC”: press More info, then Run anyway.</span></div></div>
-    <div className="pane"><h2>Tally Bridge</h2><p className="note" style={{ margin: "0 0 12px" }}>Connects FinCom to TallyPrime on this computer: the company open in Tally is followed, ledgers load straight from Tally, and entries are posted without files. Run <b>TDSBridge</b> on the computer where TallyPrime runs, then paste its key here.</p>
+    <div className="pane"><h3 style={{ marginTop: 0 }}>FinCom Bridge on this computer</h3><p className="note" style={{ margin: "0 0 12px" }}>This browser and FinCom Bridge on the same computer: the company open in Tally is followed, ledgers load straight from Tally, and entries are posted without files. Other computers post through FinCom’s cloud.</p>
       <div className="grid"><label className="f"><span>Bridge address</span><CommitBox data-bridge="url" aria-label="Bridge address" value={c.url} onCommit={(v) => bridgeSet("url", v)} /></label>
         <label className="f"><span>Bridge key (filled in by Connect)</span><CommitBox data-bridge="key" data-fk="bridgekey" aria-label="Bridge key" value={c.key} autoComplete="off" placeholder="press Connect below" onCommit={(v) => bridgeSet("key", v)} /></label></div>
       <label className="chk" style={{ marginTop: 8 }}><input type="checkbox" checked={!!c.follow} onChange={(ev) => bridgeSet("follow", ev.target.checked)} /> Follow the company open in Tally (switch FinCom to it automatically)</label>
-      <div className="row" style={{ marginTop: 10 }}><Act act="bridgeTest" className="btn small primary">{c.key ? "Check connection" : "Connect"}</Act>{c.key && <Act act="bridgeOff">Disconnect</Act>}<Act act="bridgeSetupFile">Download the bridge setup</Act></div>
+      <div className="row" style={{ marginTop: 10 }}><Act act="bridgeTest" className="btn small primary">{c.key ? "Check connection" : "Connect"}</Act>{c.key && <Act act="bridgeOff">Disconnect</Act>}</div>
       <div style={{ margin: "12px 0 0" }}><TallyStates co={S.coId ? CO() : null} /></div>
       {!(Bridge.on() && Bridge.up()) && <SetupSteps />}
       {c.key && <div style={{ marginTop: 12 }}>{st.state === "ok" ? <>
-        <p className="note" style={{ margin: "0 0 6px" }}>{"Bridge " + (st.version || "") + " connected" + (st.allowImport === false ? " (posting switched off in the bridge)" : "") + ". Checked " + fmtTime(st.at) + "."}</p>
+        <p className="note" style={{ margin: "0 0 6px" }}>{"FinCom Bridge " + (st.version || "") + " connected" + (st.allowImport === false ? " (posting switched off in the bridge)" : "") + ". Checked " + fmtTime(st.at) + "."}</p>
         <p className="note" style={{ margin: "0 0 6px" }}>{MODE[st.mode] || ""}</p>
         {(st.clash || []).length > 0 && <p className="bk-warn">{st.clash.join(", ") + " is open in more than one Tally. Choose yours with "}<b>Use this Tally</b>; until then nothing is read or posted for it.</p>}
         <Sessions c={c} st={st} />
@@ -272,7 +315,7 @@ export function CloudBooks() {
                     if (r && r.job) return <span className={"note" + (jb && jb.status === "failed" ? " bad" : "")} data-rp={cid}>{" · " + (jb ? TCloud.jobLine(jb) : "handed to FinCom’s server (" + r.months + " months)…")}</span>;
                     return r ? <span className={"note" + (r.err ? " bad" : "")} data-rp={cid}>{" · " + (r.err ? "Could not read again: " + r.err + (r.n ? " (" + r.n + " days done)" : "") : r.busy ? "reading again… " + r.n + " days so far" : "read again: " + Number(r.n || 0).toLocaleString("en-IN") + " day" + (Number(r.n) === 1 ? "" : "s") + " of " + Number(r.months || 0) + " month" + (Number(r.months) === 1 ? "" : "s") + ", " + fmtTime(r.at) + (r.bad ? ", " + r.bad + " could not be read" : "") + (r.host ? " (cloud " + r.host + ")" : ""))}</span> : null; })()}</>}
                 <div className="row" style={{ gap: 8, marginTop: 6, flexWrap: "wrap", alignItems: "center" }}>
-                  <button className="btn small" onClick={() => TCloud.sendLedgers(cid)} title="The Tally computer reads every ledger and group now and sends them (bridge 1.14.8 or later; Tally open there)">Send ledgers and groups now</button>
+                  <button className="btn small" onClick={() => TCloud.sendLedgers(cid)} title="The Tally computer reads every ledger and group now and sends them (FinCom Bridge on that computer; Tally open there)">Send ledgers and groups now</button>
                   {(() => { const g = (p.gs || {})[cid]; return g ? (g.err ? <span className="note bad">{g.err}</span> : g.none ? <span className="note">No books in the cloud yet.</span>
                     : <span className="note">{"In the cloud: " + g.groups + " groups · " + g.grouped + " of " + g.ledgers + " ledgers with a group" + (g.pl ? " (and Profit & Loss A/c, which has no group in Tally)" : "")} <button className="linkbtn" onClick={() => TCloud.groupStatus(cid)}>check again</button></span>)
                     : <button className="linkbtn" onClick={() => TCloud.groupStatus(cid)}>What is in the cloud?</button>; })()}
@@ -283,7 +326,25 @@ export function CloudBooks() {
   </>;
 }
 
-// the Tally page in the sidebar: the bridge, then everything sent to Tally
+// the Tally page in the sidebar (02-Oct-2026): FinCom Bridge's card until a bridge is heard from, then one line a
+// computer with Details; then everything sent to Tally. #/tally/bridge-1.15: the hidden fallback
 export default function TallyHome() {
-  return <><section className="today"><h2>Tally</h2></section><BridgesHeard /><BridgeSettings /><PostLog /></>;
+  const m = useSetup();
+  if (S.tallyOld) return <><section className="today"><h2>Tally</h2></section><OldBridge /></>;
+  paneFresh();
+  const rows = TCloud.on() ? TCloud.bridgesHeard() : [], latest = m && m.setup ? m.setup.version : "";
+  // the card while a computer has no FinCom Bridge (none heard from yet, or only an older bridge); else folded away
+  const devs = new Set(rows.map((r) => r.device.id)), withNew = new Set(rows.filter((r) => r.go && !r.old).map((r) => r.device.id));
+  const needCard = !devs.size || [...devs].some((d) => !withNew.has(d));
+  return <><section className="today"><h2>Tally</h2></section>
+    {rows.length > 0 && <BridgeLines rows={rows} latest={latest} />}
+    {needCard ? <BridgeDownload m={m} /> : <DetailsCard m={m} />}
+    {!TCloud.on() && <BridgeSettings />}
+    <PostLog /></>;
+}
+// the download again (another computer, or an update), folded away once FinCom Bridge runs
+function DetailsCard({ m }) {
+  const [open, setOpen] = useState(false);
+  return <div className="pane" style={{ padding: "8px 16px" }}><a href="#" className="note" data-bridge-download-again="" onClick={(ev) => { ev.preventDefault(); setOpen(!open); }}>{open ? "Hide the download" : "Download FinCom Bridge (another computer, or an update)"}</a>
+    {open && <div style={{ marginTop: 8 }}><BridgeDownload m={m} again /></div>}</div>;
 }
