@@ -1,0 +1,762 @@
+package main
+
+// FinCom Bridge 2.1.4 as rebuilt on 02-Oct-2026 (the owner's re-scope): no balance asked of Tally; one request at a time
+// with postings first; after a timeout only the company check until it answers; the company's GUID; the FinCom id in
+// every posted voucher and the exact-id check; a posting whose outcome is unknown; the lease; the measuring tool; Update
+// now reading month slices only. A stand-in Tally keeps made-up books and answers the bridge's requests; a stand-in
+// FinCom cloud keeps the lease.
+
+import (
+	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"regexp"
+	"sort"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+)
+
+type tVch struct {
+	guid, master, date, typ, no, narr, party string
+	alter                                    int64
+	lines                                    [][2]string
+}
+type standTally struct {
+	srv       *httptest.Server
+	port      int
+	mu        sync.Mutex
+	guid      string
+	vch       []*tVch
+	ledgers   []string
+	reqs      []string
+	bodies    []string
+	inflight  int
+	maxFlight int
+	alter     int64
+	slow      func(id, body string) time.Duration
+	importAt  func(id, body string) (create bool, delay time.Duration) // a posting: made or not, and how late it answers
+}
+
+var (
+	reBalance  = regexp.MustCompile(`(?i)closingbalance|trial balance|group summary|balance sheet|ledger vouchers|TDSDeskKeepBal|TDSDeskBalances|TDSDeskOneLed|TDSDeskTB|\$\$(Closing|Opening)Balance|OnAccountValue`)
+	reAltAbove = regexp.MustCompile(`\$AlterID (&gt;|=) (\d+)`)
+	reNameIs   = regexp.MustCompile(`\$Name = (?:&#34;|&quot;|")([^&"]+)`)
+)
+
+func (f *standTally) ids() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string{}, f.reqs...)
+}
+func (f *standTally) n(id string) int {
+	c := 0
+	for _, r := range f.ids() {
+		if id == "" || r == id {
+			c++
+		}
+	}
+	return c
+}
+
+// no request asks Tally for a balance; a ledger's stored opening only without a period
+func (f *standTally) noBalance(t *testing.T) {
+	t.Helper()
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for i, b := range f.bodies {
+		if m := reBalance.FindString(b); m != "" {
+			t.Fatalf("request %d (%s) asks Tally for a balance (%q): %s", i, f.reqs[i], m, cut(b, 300))
+		}
+		if strings.Contains(strings.ToUpper(b), "OPENINGBALANCE") && strings.Contains(b, "SVFROMDATE") {
+			t.Fatalf("request %d (%s) asks for an opening with a period", i, f.reqs[i])
+		}
+	}
+}
+
+func (v *tVch) xml() string {
+	var b strings.Builder
+	fmt.Fprintf(&b, `<VOUCHER REMOTEID="%s" VCHTYPE="%s"><DATE>%s</DATE><GUID>%s</GUID><MASTERID>%s</MASTERID><ALTERID> %d</ALTERID><VOUCHERTYPENAME>%s</VOUCHERTYPENAME>`+
+		`<VOUCHERNUMBER>%s</VOUCHERNUMBER><PARTYLEDGERNAME>%s</PARTYLEDGERNAME><NARRATION>%s</NARRATION><ISOPTIONAL>No</ISOPTIONAL><ISCANCELLED>No</ISCANCELLED>`,
+		v.guid, v.typ, v.date, v.guid, v.master, v.alter, v.typ, v.no, esc(v.party), esc(v.narr))
+	for _, l := range v.lines {
+		fmt.Fprintf(&b, `<ALLLEDGERENTRIES.LIST><LEDGERNAME>%s</LEDGERNAME><AMOUNT>%s</AMOUNT></ALLLEDGERENTRIES.LIST>`, esc(l[0]), l[1])
+	}
+	b.WriteString("</VOUCHER>")
+	return b.String()
+}
+
+func (f *standTally) add(date, party, no, narr, amt string) *tVch {
+	f.alter++
+	v := &tVch{guid: fmt.Sprintf("g-%d", f.alter), master: fmt.Sprint(f.alter), date: date, typ: "Journal", no: no, narr: narr, party: party, alter: f.alter,
+		lines: [][2]string{{party, amt}, {"Sales", strings.TrimPrefix("-"+amt, "--")}}}
+	f.vch = append(f.vch, v)
+	return v
+}
+
+func newStandTally(t *testing.T) *standTally {
+	f := &standTally{guid: "co-guid-1"}
+	for i := 1; i <= 8; i++ {
+		f.ledgers = append(f.ledgers, fmt.Sprintf("Ledger %02d", i))
+	}
+	f.ledgers = append(f.ledgers, "Profit & Loss A/c")
+	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		body := string(b)
+		id := group(`<ID>([^<]+)</ID>`, body, 1)
+		if id == "" {
+			id = group(`<REPORTNAME>([^<]+)</REPORTNAME>`, body, 1)
+		}
+		if strings.Contains(body, "Import Data") {
+			id = "Import"
+		}
+		f.mu.Lock()
+		f.reqs = append(f.reqs, id)
+		f.bodies = append(f.bodies, body)
+		f.inflight++
+		if f.inflight > f.maxFlight {
+			f.maxFlight = f.inflight
+		}
+		slow := f.slow
+		imp := f.importAt
+		f.mu.Unlock()
+		defer func() { f.mu.Lock(); f.inflight--; f.mu.Unlock() }()
+		wait := func(d time.Duration) bool {
+			select {
+			case <-time.After(d):
+				return true
+			case <-r.Context().Done():
+				return false
+			}
+		}
+		if slow != nil {
+			if d := slow(id, body); d > 0 && !wait(d) {
+				return
+			}
+		}
+		from, to := group(`<SVFROMDATE>(\d{8})</SVFROMDATE>`, body, 1), group(`<SVTODATE>(\d{8})</SVTODATE>`, body, 1)
+		inDates := func(v *tVch) bool { return from == "" || (v.date >= from && v.date <= to) }
+		var o strings.Builder
+		o.WriteString("<ENVELOPE><BODY><DATA><COLLECTION>")
+		f.mu.Lock()
+		switch id {
+		case "TDSDeskCompanies", "FinComFree", "FinComCompany":
+			fmt.Fprintf(&o, `<COMPANY NAME="%s"><NAME>%s</NAME><GUID>%s</GUID><STARTINGFROM>20260401</STARTINGFROM><ALTVCHID>%d</ALTVCHID><ALTMSTID>3</ALTMSTID></COMPANY>`, zz, zz, f.guid, f.alter)
+		case "Day Book":
+			o.Reset()
+			o.WriteString("<ENVELOPE><BODY><IMPORTDATA><REQUESTDATA>")
+			for _, v := range f.vch {
+				if inDates(v) {
+					o.WriteString("<TALLYMESSAGE>" + v.xml() + "</TALLYMESSAGE>")
+				}
+			}
+			o.WriteString("</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>")
+			f.mu.Unlock()
+			_, _ = w.Write([]byte(o.String()))
+			return
+		case "FinComTag", dupCheckID, "TDSDeskVchHeads", "FinComMeasureC", "FinComMeasureD", "FinComMeasureYear", "FinComSnapshot", "FinComMeasureB", "FinComMeasureE":
+			var above, eq int64 = -1, -1
+			if m := reAltAbove.FindStringSubmatch(body); m != nil {
+				if m[1] == "=" {
+					eq = toI64(m[2])
+				} else {
+					above = toI64(m[2])
+				}
+			}
+			for _, v := range f.vch {
+				if inDates(v) && (above < 0 || v.alter > above) && (eq < 0 || v.alter == eq) {
+					o.WriteString(v.xml())
+				}
+			}
+		case "FinComMeasureNames":
+			for _, n := range f.ledgers {
+				fmt.Fprintf(&o, `<LEDGER NAME="%s"><NAME>%s</NAME></LEDGER>`, esc(n), esc(n))
+			}
+		case "FinComMeasureLedF", "FinComMeasureLedO":
+			n := ""
+			if m := reNameIs.FindStringSubmatch(body); m != nil {
+				n = m[1]
+			}
+			fmt.Fprintf(&o, `<LEDGER NAME="%s"><PARENT>Indirect Expenses</PARENT><ISREVENUE>Yes</ISREVENUE><AFFECTSSTOCK>No</AFFECTSSTOCK><GUID>l-%s</GUID><OPENINGBALANCE>-10.00</OPENINGBALANCE></LEDGER>`, n, n)
+		case "Import":
+			create, delay := true, time.Duration(0)
+			if imp != nil {
+				create, delay = imp(id, body)
+			}
+			made := 0
+			if create {
+				for _, x := range regexp.MustCompile(`<VOUCHER\b[\s\S]*?</VOUCHER>`).FindAllString(body, -1) {
+					v := f.add(group(`<DATE>(\d{8})</DATE>`, x, 1), group(`<PARTYLEDGERNAME>([^<]*)</PARTYLEDGERNAME>`, x, 1), group(`<VOUCHERNUMBER>([^<]*)</VOUCHERNUMBER>`, x, 1),
+						group(`<NARRATION>([^<]*)</NARRATION>`, x, 1), "-1.00")
+					_ = v
+					made++
+				}
+			}
+			f.mu.Unlock()
+			if delay > 0 && !wait(delay) {
+				return
+			}
+			_, _ = w.Write([]byte(fmt.Sprintf("<ENVELOPE><BODY><DATA><IMPORTRESULT><CREATED>%d</CREATED><ALTERED>0</ALTERED><ERRORS>0</ERRORS><EXCEPTIONS>0</EXCEPTIONS></IMPORTRESULT></DATA></BODY></ENVELOPE>", made)))
+			return
+		}
+		f.mu.Unlock()
+		o.WriteString("</COLLECTION></DATA></BODY></ENVELOPE>")
+		_, _ = w.Write([]byte(o.String()))
+	}))
+	f.port = f.srv.Listener.Addr().(*net.TCPAddr).Port
+	t.Cleanup(f.srv.Close)
+	return f
+}
+
+// a stand-in FinCom cloud: the lease (held by another bridge while held is set), the days sent
+type standCloud struct {
+	srv   *httptest.Server
+	mu    sync.Mutex
+	held  bool
+	kinds []string
+	guard []M
+}
+
+func newStandCloud(t *testing.T) *standCloud {
+	c := &standCloud{}
+	c.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		o := parseObj(string(b))
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		k := str(o["kind"])
+		c.kinds = append(c.kinds, k)
+		out := M{"ok": true}
+		switch k {
+		case "companies":
+			out["links"] = M{zz: true}
+		case "lease_take":
+			if c.held {
+				out = M{"ok": true, "held": true, "holder": M{"computer": "PC-2", "bridge": "go-other", "until": "15:00"}}
+			} else {
+				out = M{"ok": true, "held": false, "lease": M{"until": time.Now().Add(2 * time.Minute).Format(time.RFC3339)}}
+			}
+		case "read_guard":
+			c.guard = append(c.guard, o)
+			out["state"] = "ok"
+		case "days":
+			done := []any{}
+			for _, x := range arr(o["days"]) {
+				done = append(done, obj(x)["day"])
+			}
+			out["done"] = done
+		}
+		_, _ = w.Write([]byte(jsonText(out)))
+	}))
+	t.Cleanup(c.srv.Close)
+	return c
+}
+func (c *standCloud) cfg() string {
+	return fmt.Sprintf(`,"CloudUrl":"%s/","CloudKeyGo":"plain:fcd_%s"`, c.srv.URL, strings.Repeat("0", 48))
+}
+func (c *standCloud) count(kind string) int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	n := 0
+	for _, k := range c.kinds {
+		if k == kind {
+			n++
+		}
+	}
+	return n
+}
+
+func standBridge(t *testing.T, f *standTally, extra string) string {
+	dir := bridgeFor(t, &standIn{port: f.port}, extra)
+	cloudMu.Lock()
+	cloudLinks, cloudLinksAt, cloudBack, cloudStateAt = map[string]bool{}, time.Time{}, map[string]keepBack{}, map[string]time.Time{}
+	cloudMu.Unlock()
+	probeMu.Lock()
+	probes = map[int]*probeState{}
+	probeMu.Unlock()
+	leaseMu.Lock()
+	leases = map[string]time.Time{}
+	leaseMu.Unlock()
+	whereMu.Lock()
+	whereMap = map[string]map[string]string{}
+	whereMu.Unlock()
+	measureMu.Lock()
+	measureLast = nil
+	measureMu.Unlock()
+	return dir
+}
+
+func liveFrom(from string) {
+	dir := syncFolder(zz)
+	_ = os.MkdirAll(filepath.Join(dir, "days"), 0o755)
+	saveKeepState(dir, M{"company": zz, "from": from, "next": from, "slice": 31, "phase": "live", "months": M{}, "skipped": []any{}})
+}
+
+// --- Update now reads month slices only (the company check aside): no balance, no list of changes; a second Update now
+// sends the cloud only the days that changed; a slice that does not answer is halved and the read goes on from it
+func TestUpdateNowReadsMonthSlicesOnly(t *testing.T) {
+	td := today()
+	from := fromTallyDate(td).AddDate(0, -2, 0).Format("200601") + "01"
+	f := newStandTally(t)
+	for d := from; d <= td; d = addDays(d, 3) {
+		f.add(d, "Party X", "", "sale", "-100.00")
+	}
+	standBridge(t, f, "")
+	liveFrom(from)
+	runNow(t, "now")
+	var slices []string
+	f.mu.Lock()
+	for i, id := range f.reqs {
+		switch id {
+		case "Day Book":
+			a, z := group(`<SVFROMDATE>(\d{8})`, f.bodies[i], 1), group(`<SVTODATE>(\d{8})`, f.bodies[i], 1)
+			if a[:6] != z[:6] {
+				t.Errorf("a slice crosses a month: %s-%s", a, z)
+			}
+			slices = append(slices, a+"-"+z)
+		case "FinComCompany", "TDSDeskCompanies", "TDSDeskCompanyInfo":
+		default:
+			t.Errorf("Update now sent %q", id)
+		}
+	}
+	f.mu.Unlock()
+	want := []string{from + "-" + monthEnd(from[:6]), nextYm(from[:6]) + "01-" + monthEnd(nextYm(from[:6])), td[:6] + "01-" + td}
+	if strings.Join(slices, " ") != strings.Join(want, " ") {
+		t.Fatalf("slices %v, want %v", slices, want)
+	}
+	st := readKeepState(syncFolder(zz))
+	if str(st["roundAt"]) == "" || logLines("day(s) changed since the last read") != 1 {
+		t.Fatalf("the round did not finish: %v", st)
+	}
+	// the same again: nothing changed, so no day goes to the cloud again
+	runNow(t, "now")
+	if toInt(readKeepState(syncFolder(zz))["roundDays"]) != 0 {
+		t.Fatal("days were taken as changed with nothing changed in Tally")
+	}
+	// a slice that does not answer: halved, and the next try starts from it (the slices before it are kept)
+	f.mu.Lock()
+	var once sync.Once
+	mid := nextYm(from[:6]) + "01"
+	f.slow = func(id, body string) time.Duration {
+		d := time.Duration(0)
+		if id == "Day Book" && strings.Contains(body, "<SVFROMDATE>"+mid+"</SVFROMDATE>") {
+			once.Do(func() { d = 3 * time.Second })
+		}
+		return d
+	}
+	f.mu.Unlock()
+	setCfg("TallyMaxSec", 1)
+	k := &keepRun{tc: &TC{copier: true}, kind: "now", told: map[string]bool{}, id: "r9", alter: map[string]int64{}}
+	var err error
+	for i := 0; i < 4 && err == nil; i++ {
+		err = k.step(zz, f.port, "")
+	}
+	if err == nil || !strings.Contains(err.Error(), "the next try reads 15 day(s) from "+mid) {
+		t.Fatalf("the slice that did not answer: %v", err)
+	}
+	if str(readKeepState(syncFolder(zz))["roundNext"]) != mid {
+		t.Fatal("the slice before was not kept")
+	}
+	f.noBalance(t)
+}
+
+// --- one request at a time; a posting waiting goes before another FinCom request that waits longer
+func TestOneAtATimePostingsFirst(t *testing.T) {
+	f := newStandTally(t)
+	f.slow = func(id, body string) time.Duration {
+		if id == "TDSDeskNames" {
+			return 1500 * time.Millisecond
+		}
+		return 0
+	}
+	standBridge(t, f, "")
+	var wg sync.WaitGroup
+	wg.Add(3)
+	go func() { defer wg.Done(); _, _ = invokeTally(fin, f.port, collectionRequest("TDSDeskNames", "Ledger", "NAME", zz, ""), 0) }()
+	time.Sleep(300 * time.Millisecond)
+	go func() {
+		defer wg.Done()
+		_, _ = invokeTally(fin, f.port, collectionRequest("TDSDeskGroups", "Group", "NAME", zz, ""), 0)
+	}()
+	time.Sleep(200 * time.Millisecond)
+	go func() {
+		defer wg.Done()
+		_, _ = invokeTally(fin, f.port, importEnvelope("Vouchers", zz, `<TALLYMESSAGE>`+finVoucher("p1", fgParty, fgBill, fgDate, fgAmt)+`</TALLYMESSAGE>`), 0)
+	}()
+	wg.Wait()
+	got := f.ids()
+	if strings.Join(got, ",") != "TDSDeskNames,Import,TDSDeskGroups" {
+		t.Fatalf("order %v: the posting did not go first", got)
+	}
+	f.mu.Lock()
+	mx := f.maxFlight
+	f.mu.Unlock()
+	if mx != 1 {
+		t.Fatalf("%d requests at Tally at once", mx)
+	}
+	f.noBalance(t)
+}
+
+// --- after a request that did not answer: nothing is sent until the company check may go (once a minute), and only it
+// until it answers; then the request
+func TestTimeoutOnlyProbeUntilItAnswers(t *testing.T) {
+	f := newStandTally(t)
+	busy := true
+	f.slow = func(id, body string) time.Duration {
+		if id == "TDSDeskNames" || (id == "FinComCompany" && busy) {
+			return 3 * time.Second
+		}
+		return 0
+	}
+	standBridge(t, f, `,"TallyMaxSec":1,"TallyProbeSec":1`)
+	start := time.Now()
+	nowFn = func() time.Time { return start }
+	if _, err := getLedgerNames(fin, zz, f.port); err == nil {
+		t.Fatal("the slow request answered")
+	}
+	f.mu.Lock()
+	f.slow = func(id, body string) time.Duration {
+		if id == "FinComCompany" && busy {
+			return 3 * time.Second
+		}
+		return 0
+	}
+	f.mu.Unlock()
+	n0 := f.n("")
+	// within the minute: refused at once, nothing sent (a posting too)
+	for _, sec := range []int{1, 30, 59} {
+		nowFn = func() time.Time { return start.Add(time.Duration(sec) * time.Second) }
+		if _, err := getLedgerNames(fin, zz, f.port); err == nil || !isBusyErr(err) {
+			t.Fatalf("at %ds: %v", sec, err)
+		}
+		r := postOne(t, fmt.Sprintf("q%d", sec), finVoucher(fmt.Sprintf("q%d", sec), fgParty, fgBill, fgDate, fgAmt))
+		if r["ok"] == true {
+			t.Fatal("posted to a Tally that did not answer")
+		}
+	}
+	if f.n("") != n0 {
+		t.Fatalf("within the minute %v went to Tally", f.ids()[n0:])
+	}
+	// after a minute: the check alone; Tally still busy, so nothing else
+	nowFn = func() time.Time { return start.Add(61 * time.Second) }
+	if _, err := getLedgerNames(fin, zz, f.port); err == nil {
+		t.Fatal("answered while busy")
+	}
+	if s := f.ids()[n0:]; len(s) != 1 || s[0] != "FinComCompany" {
+		t.Fatalf("after a minute: %v (want the check only)", s)
+	}
+	// and not again for a minute
+	nowFn = func() time.Time { return start.Add(90 * time.Second) }
+	_, _ = getLedgerNames(fin, zz, f.port)
+	if f.n("") != n0+1 {
+		t.Fatal("the check went again within the minute")
+	}
+	// Tally free: the check answers, then the request goes
+	busy = false
+	nowFn = func() time.Time { return start.Add(125 * time.Second) }
+	if _, err := getLedgerNames(fin, zz, f.port); err != nil {
+		t.Fatalf("Tally free: %v", err)
+	}
+	if s := f.ids()[n0+1:]; strings.Join(s, ",") != "FinComCompany,TDSDeskNames,TDSDeskGroupNames" {
+		t.Fatalf("Tally free: %v", s)
+	}
+	f.noBalance(t)
+}
+
+// --- the company's GUID: a company of the same name with another GUID is refused, nothing posted to it or read from it
+func TestCompanyGUIDDifferentRefused(t *testing.T) {
+	td := today()
+	f := newStandTally(t)
+	standBridge(t, f, "")
+	liveFrom(td)
+	if r := postOne(t, "g1", finVoucher("g1", fgParty, "B-1", td, "10.00")); r["ok"] != true {
+		t.Fatalf("the first posting: %v", r)
+	}
+	if heldGUID(zz) != "co-guid-1" {
+		t.Fatalf("the GUID held: %q", heldGUID(zz))
+	}
+	f.mu.Lock()
+	f.guid = "co-guid-2" // restored, or another company of the same name
+	f.mu.Unlock()
+	imports := f.n("Import")
+	r := postOne(t, "g2", finVoucher("g2", fgParty, "B-2", td, "20.00"))
+	if r["ok"] == true || r["guidMismatch"] != true || !strings.Contains(str(r["message"]), "co-guid-2") {
+		t.Fatalf("posted to another company: %v", r)
+	}
+	if f.n("Import") != imports {
+		t.Fatal("an import went to the other company")
+	}
+	// Update now reads nothing from it either
+	books := f.n("Day Book")
+	runNow(t, "now")
+	if f.n("Day Book") != books {
+		t.Fatal("the other company's day book was read")
+	}
+	// confirmed on this computer: the new GUID is held, and postings go again
+	if _, err := acceptCompanyGUID(zz); err != nil || heldGUID(zz) != "co-guid-2" {
+		t.Fatalf("confirm: %v %q", err, heldGUID(zz))
+	}
+	if r := postOne(t, "g3", finVoucher("g3", fgParty, "B-3", td, "30.00")); r["ok"] != true {
+		t.Fatalf("after confirming: %v", r)
+	}
+	f.noBalance(t)
+}
+
+// --- the FinCom id: stamped when FinCom did not write one; the same id in Tally already: not posted (the exact check)
+func TestFinComIDStampedAndExactDuplicateRefused(t *testing.T) {
+	td := today()
+	f := newStandTally(t)
+	standBridge(t, f, "")
+	x := strings.Replace(finVoucher("unused", fgParty, "S-1", td, "50.00"), "Electricity | TDSDesk:unused", "Electricity", 1)
+	if reTag.MatchString(x) {
+		t.Fatal("the test voucher has a tag")
+	}
+	r := postOne(t, "bill-77", x)
+	if r["ok"] != true {
+		t.Fatalf("posting: %v", r)
+	}
+	f.mu.Lock()
+	var imp string
+	for i, id := range f.reqs {
+		if id == "Import" {
+			imp = f.bodies[i]
+		}
+	}
+	f.mu.Unlock()
+	if !strings.Contains(imp, "<NARRATION>Electricity | TDSDesk:bill77</NARRATION>") {
+		t.Fatalf("the FinCom id was not stamped: %s", cut(imp, 600))
+	}
+	// the same FinCom id again, other details changed (another amount and number): refused on the id alone
+	again := strings.Replace(finVoucher("bill77", fgParty, "S-1-REV", td, "55.00"), "Electricity |", "Electricity revised |", 1)
+	imports := f.n("Import")
+	r = postOne(t, "bill-77", again)
+	if r["ok"] == true || r["already"] != true || r["sameId"] != true {
+		t.Fatalf("the same FinCom id was posted again: %v", r)
+	}
+	if f.n("Import") != imports {
+		t.Fatal("an import was sent for it")
+	}
+	// the exact check came before the party, bill, date and amount check
+	ids := f.ids()
+	last := ids[len(ids)-1]
+	if last != "FinComTag" {
+		t.Fatalf("the last request was %s (want the exact id check to decide)", last)
+	}
+	f.noBalance(t)
+}
+
+// --- a posting whose answer was lost: "Checking whether it reached Tally" (state unknown, outcomeUnknown) and never
+// sent again until Tally answers the check and the entry is looked for by its FinCom id; found: posted; not found: sent
+// again once
+func TestTimedOutPostingOutcomeUnknown(t *testing.T) {
+	for _, made := range []bool{true, false} {
+		t.Run(fmt.Sprintf("reached-%v", made), func(t *testing.T) {
+			td := today()
+			f := newStandTally(t)
+			var once sync.Once
+			f.importAt = func(id, body string) (bool, time.Duration) {
+				create, d := true, time.Duration(0)
+				once.Do(func() { create, d = made, 3*time.Second })
+				return create, d
+			}
+			standBridge(t, f, `,"TallyMaxSec":1,"TallyProbeEverySec":2,"PostWaitMs":200`)
+			j, err := newPostJob(M{"jobId": "job-unknown-" + fmt.Sprint(made), "company": zz, "vouchers": []any{M{"id": "u1", "xml": finVoucher("u1", fgParty, "U-1", td, "70.00")}}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			dir, _ := jobDir(str(j["id"]))
+			seen := false
+			for i := 0; i < 150 && !seen; i++ {
+				if p := readProgress(dir); p != nil {
+					for _, x := range arr(p["items"]) {
+						e := obj(x)
+						if str(e["state"]) == "unknown" && e["outcomeUnknown"] == true && str(e["reason"]) == "Checking whether it reached Tally" {
+							seen = true
+						}
+					}
+					for _, x := range arr(p["results"]) {
+						if r := obj(x); r["outcomeUnknown"] == true && str(r["state"]) == "unknown" {
+							imports := f.n("Import")
+							if imports != 1 {
+								t.Errorf("sent again while its outcome was unknown (%d imports)", imports)
+							}
+						}
+					}
+				}
+				time.Sleep(50 * time.Millisecond)
+			}
+			if !seen {
+				t.Fatal("the entry was never shown as Checking whether it reached Tally")
+			}
+			p := waitJob(t, str(j["id"]))
+			r := obj(arr(p["results"])[0])
+			if r["ok"] != true || r["outcomeUnknown"] == true {
+				t.Fatalf("not resolved: %v", r)
+			}
+			n := 0
+			f.mu.Lock()
+			for _, v := range f.vch {
+				if strings.Contains(v.narr, "TDSDesk:u1") {
+					n++
+				}
+			}
+			f.mu.Unlock()
+			if n != 1 {
+				t.Fatalf("%d copies in Tally", n)
+			}
+			if made && f.n("Import") != 1 {
+				t.Fatalf("found in Tally, yet sent again (%d imports)", f.n("Import"))
+			}
+			if !made && f.n("Import") != 2 {
+				t.Fatalf("not found: sent again once, got %d imports", f.n("Import"))
+			}
+			f.noBalance(t)
+		})
+	}
+}
+
+// --- the lease: while another bridge holds the company, this one neither reads nor posts it; when it is free, it does
+func TestLeaseHonoured(t *testing.T) {
+	td := today()
+	f := newStandTally(t)
+	f.add(td, "Party X", "", "sale", "-5.00")
+	c := newStandCloud(t)
+	c.held = true
+	standBridge(t, f, `,"PostWaitMs":200`+c.cfg())
+	liveFrom(td)
+	runNow(t, "now")
+	if f.n("Day Book") != 0 || f.n("FinComCompany") != 0 {
+		t.Fatalf("read while another bridge holds the lease: %v", f.ids())
+	}
+	if logLines("another FinCom Bridge (PC-2 go-other, until 15:00) is reading or posting this company now; this one gives way") != 1 {
+		t.Fatal("the log does not say it gave way")
+	}
+	j, err := newPostJob(M{"jobId": "job-lease-1", "company": zz, "vouchers": []any{M{"id": "l1", "xml": finVoucher("l1", fgParty, "L-1", td, "9.00")}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir, _ := jobDir(str(j["id"]))
+	time.Sleep(800 * time.Millisecond)
+	if p := readProgress(dir); str(p["status"]) != "waiting" || !strings.Contains(str(p["message"]), "another FinCom Bridge (PC-2 go-other") || f.n("Import") != 0 {
+		t.Fatalf("posting while another bridge holds the lease: %v %v", p["status"], p["message"])
+	}
+	c.mu.Lock()
+	c.held = false
+	c.mu.Unlock()
+	p := waitJob(t, str(j["id"]))
+	if str(p["status"]) != "done" || f.n("Import") != 1 {
+		t.Fatalf("after the lease was free: %v", p["message"])
+	}
+	if c.count("lease_release") < 1 {
+		t.Fatal("the lease was not given back")
+	}
+	f.noBalance(t)
+}
+
+// --- the measuring tool: each item, one request at a time; a ledger that hangs is reported, the check waited for;
+// snapshots and their comparison
+func TestMeasureTool(t *testing.T) {
+	td := today()
+	f := newStandTally(t)
+	for i := 0; i < 30; i++ {
+		f.add(td, "Party X", fmt.Sprint(i), "sale", "-1.00")
+	}
+	f.slow = func(id, body string) time.Duration {
+		if id == "FinComMeasureLedO" && strings.Contains(body, "Profit") {
+			return 3 * time.Second // the stored opening of Profit & Loss A/c hangs
+		}
+		return 0
+	}
+	dir := standBridge(t, f, `,"TallyMaxSec":1,"TallyProbeEverySec":1`)
+	sort.Strings(f.ledgers)
+	r, err := runMeasure(measureOpts{company: zz, ledgers: "8-9"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rep := str(r["report"])
+	for _, want := range []string{"\na ", "\nb ", "\nc1 ", "\nc2 ", "\nd ", "\ne ", "\nf0 ", "f8-fields", "f8-opening", "f9-fields", "f9-opening",
+		"company GUID co-guid-1", "ledger entries", "bill-wise allocations", "bank reconciliation date", "HANGS", "waiting for Tally to answer the company check", "is revenue Yes"} {
+		if !strings.Contains(rep, want) {
+			t.Errorf("the report lacks %q", want)
+		}
+	}
+	if !strings.HasPrefix(str(r["file"]), dir) || !exists(str(r["file"])) {
+		t.Fatalf("the report file: %v", r["file"])
+	}
+	f.mu.Lock()
+	mx := f.maxFlight
+	f.mu.Unlock()
+	if mx != 1 {
+		t.Fatal("more than one request at a time")
+	}
+	// snapshots: an entry altered, one deleted, one added
+	if _, err := measureSnapshot(measureOpts{company: zz, snapshot: "before"}); err != nil {
+		t.Fatal(err)
+	}
+	f.mu.Lock()
+	f.alter++
+	f.vch[0].alter = f.alter
+	f.vch = f.vch[:len(f.vch)-1]
+	f.mu.Unlock()
+	f.add(td, "Party Y", "new", "sale", "-2.00")
+	if _, err := measureSnapshot(measureOpts{company: zz, snapshot: "after"}); err != nil {
+		t.Fatal(err)
+	}
+	cmp, err := measureCompare("before", "after")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(cmp, "1 changed, 1 added, 1 gone") || !strings.Contains(cmp, "Company GUID: the same") {
+		t.Fatalf("the comparison:\n%s", cmp)
+	}
+	f.noBalance(t)
+}
+
+// --- no request of any kind asks Tally for a balance: Update now, a light update, the night, a posting, the measuring
+// tool; and the bridge's balance answers come from its copy without a request
+func TestNoBalanceAsked(t *testing.T) {
+	td := today()
+	f := newStandTally(t)
+	for i := 0; i < 5; i++ {
+		f.add(td, "Party X", fmt.Sprint(i), "sale", "-3.00")
+	}
+	standBridge(t, f, "")
+	liveFrom(td)
+	runNow(t, "now")
+	wakeOpen(zz, "opened")
+	waitIdle(t)
+	runNow(t, "nightly")
+	if r := postOne(t, "n1", finVoucher("n1", fgParty, "N-1", td, "4.00")); r["ok"] != true {
+		t.Fatalf("posting: %v", r)
+	}
+	if _, err := runMeasure(measureOpts{company: zz, ledgers: "1-2"}); err != nil {
+		t.Fatal(err)
+	}
+	_ = saveFile(filepath.Join(syncFolder(zz), "balances.json"), jsonText(M{"ok": true, "from": td, "openAsOn": addDays(td, -1), "ledgers": []any{M{"name": "Party X", "parent": "Sundry Debtors", "open": "-1.00"}}}))
+	n0 := f.n("")
+	b, err := heldLedgerBalance(zz, "Party X", td, td, false)
+	if err != nil || str(b["open"]) != "-1.00" || str(b["close"]) != "-16.00" {
+		t.Fatalf("a balance from the copy: %v %v", b, err)
+	}
+	if _, err := heldTB(zz, td); err != nil {
+		t.Fatal(err)
+	}
+	if f.n("") != n0 {
+		t.Fatal("a balance was asked of Tally")
+	}
+	f.noBalance(t)
+}
+
+func runNow(t *testing.T, kind string) {
+	t.Helper()
+	if !startKeepRun(runReq{kind: kind, why: "test"}) {
+		t.Fatal("no run started")
+	}
+	time.Sleep(50 * time.Millisecond)
+	waitIdle(t)
+}

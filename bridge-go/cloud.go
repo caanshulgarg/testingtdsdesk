@@ -170,7 +170,8 @@ func updateCloudLinks() {
 	for _, s := range openCompaniesCached() { // 2.1.3: what Tally named after the last event; Tally is not asked
 		if s["skipped"] != true && s["ok"] == true {
 			for _, c := range sessCompanies(s) {
-				cos = append(cos, M{"name": str(c["name"]), "gstin": str(c["gstin"])})
+				// rebuilt 2.1.4: the company's Tally GUID, as held here
+				cos = append(cos, M{"name": str(c["name"]), "gstin": str(c["gstin"]), "guid": heldGUID(str(c["name"]))})
 				names[str(c["name"])] = true
 			}
 		}
@@ -178,7 +179,7 @@ func updateCloudLinks() {
 	// companies kept here but not open now are asked about too
 	for _, d := range keptDirs() {
 		if st := readKeepState(d); st != nil && str(st["company"]) != "" && !names[str(st["company"])] {
-			cos = append(cos, M{"name": str(st["company"]), "gstin": ""})
+			cos = append(cos, M{"name": str(st["company"]), "gstin": "", "guid": heldGUID(str(st["company"]))})
 			names[str(st["company"])] = true
 		}
 	}
@@ -321,13 +322,6 @@ func pushCloudCompany(company, dir string, budget time.Duration) error {
 			_ = os.Remove(lf)
 		}
 	}
-	// 2.1.5: masters changed in Tally (their stored openings; renames by GUID), then entries changed, a batch at a time
-	if err := pushCloudMasters(company, dir); err != nil {
-		return err
-	}
-	if err := pushCloudVouchers(company, dir, t0, budget); err != nil {
-		return err
-	}
 	q := cloudQueue(dir)
 	pf := filepath.Join(dir, "cloud-plain.txt")
 	var plain []string
@@ -402,132 +396,6 @@ func pushCloudCompany(company, dir string, budget time.Duration) error {
 		if len(all) < len(batch) {
 			return fmt.Errorf("only %d of %d days were taken", len(all), len(batch))
 		}
-	}
-	// the last AlterIDs (and a baseline's progress, a re-read done), once what they cover is in the cloud
-	if len(cloudQueue(dir)) == 0 && !exists(vchOutFile(dir)) && !exists(vchOutFile(dir)+".sending") && !exists(mstOutFile(dir)) && exists(syncOutFile(dir)) {
-		o := readObjFile(syncOutFile(dir))
-		if o != nil {
-			b := M{"kind": "sync_set", "company": company}
-			for k, v := range o {
-				b[k] = v
-			}
-			r := invokeCloud(b, 30)
-			if r.code == 409 && r.json != nil && truthy(r.json["notLinked"]) {
-				cloudLinks[company] = false
-				return notLinked
-			}
-			if r.code != 200 {
-				return errors.New("the last change numbers did not go: " + r.err)
-			}
-			// a newer note written meanwhile stays for the next push
-			if cur := readObjFile(syncOutFile(dir)); jsonText(cur) == jsonText(o) {
-				_ = os.Remove(syncOutFile(dir))
-			}
-		}
-	}
-	return nil
-}
-
-// changed masters (cloud-masters.json): one call; the outbox is cleared only if nothing was added to it meanwhile
-func pushCloudMasters(company, dir string) error {
-	o := readObjFile(mstOutFile(dir))
-	if o == nil {
-		return nil
-	}
-	led := []any{}
-	for _, v := range obj(o["ledgers"]) {
-		led = append(led, v)
-	}
-	grp := []any{}
-	for n, p := range obj(o["groups"]) {
-		grp = append(grp, []any{n, str(p)})
-	}
-	b := M{"kind": "masters", "company": company, "ledgers": led, "groups": grp}
-	if truthy(o["base"]) {
-		b["base"], b["from"], b["openAsOn"] = true, o["from"], o["openAsOn"]
-	}
-	r := invokeCloud(b, 120)
-	if r.code == 409 && r.json != nil && truthy(r.json["notLinked"]) {
-		cloudLinks[company] = false
-		return errors.New("not linked")
-	}
-	if r.code != 200 {
-		return errors.New("the changed masters did not go: " + r.err)
-	}
-	if cur := readObjFile(mstOutFile(dir)); jsonText(cur) == jsonText(o) {
-		_ = os.Remove(mstOutFile(dir))
-	}
-	writeLog(fmt.Sprintf("Cloud: %s: %d changed ledger(s) and %d group(s) sent%s", company, len(led), len(grp), shadowNote(r)))
-	return nil
-}
-
-// changed entries (cloud-vch.jsonl), 200 at a time (the same entry twice: the later one); the cloud puts each into its
-// day's kept day book
-func pushCloudVouchers(company, dir string, t0 time.Time, budget time.Duration) error {
-	if !exists(vchOutFile(dir)) {
-		return nil
-	}
-	w := vchOutFile(dir) + ".sending"
-	outMu.Lock()
-	if !exists(w) {
-		if err := os.Rename(vchOutFile(dir), w); err != nil {
-			outMu.Unlock()
-			return nil
-		}
-	}
-	outMu.Unlock()
-	by := map[string]M{}
-	var order []string
-	for _, ln := range strings.Split(readText(w), "\n") {
-		e := parseObj(strings.TrimSpace(ln))
-		if e == nil || str(e["guid"]) == "" {
-			continue
-		}
-		g := str(e["guid"])
-		if old, ok := by[g]; !ok {
-			order = append(order, g)
-		} else if toI64(old["alter"]) > toI64(e["alter"]) {
-			continue
-		}
-		by[g] = e
-	}
-	for i := 0; i < len(order); {
-		if time.Since(t0) >= budget {
-			break
-		}
-		var batch []any
-		size := 0
-		for i < len(order) && len(batch) < 200 && size < keepNum("CloudBatchKB", 3000)*1024 {
-			e := by[order[i]]
-			batch = append(batch, M{"day": str(e["day"]), "xml": str(e["xml"])})
-			size += len(str(e["xml"]))
-			i++
-		}
-		r := invokeCloud(M{"kind": "vouchers", "company": company, "vouchers": batch}, 180)
-		if r.code == 409 && r.json != nil && truthy(r.json["notLinked"]) {
-			cloudLinks[company] = false
-			return errors.New("not linked")
-		}
-		if r.code != 200 {
-			// what is left goes next time
-			rest := ""
-			for _, g := range order[i-len(batch):] {
-				rest += jsonText(by[g]) + "\n"
-			}
-			_ = saveFile(w, rest)
-			return errors.New("changed entries did not go: " + r.err)
-		}
-		cloudLast["sentDays"] = toInt(cloudLast["sentDays"]) + len(arr(r.json["days"]))
-		if i >= len(order) {
-			_ = os.Remove(w)
-			writeLog(fmt.Sprintf("Cloud: %s: %d changed entr%s sent", company, len(order), map[bool]string{true: "y", false: "ies"}[len(order) == 1]))
-			return nil
-		}
-		rest := ""
-		for _, g := range order[i:] {
-			rest += jsonText(by[g]) + "\n"
-		}
-		_ = saveFile(w, rest)
 	}
 	return nil
 }
@@ -813,7 +681,8 @@ func beatOnce() {
 				isOpen = true
 			}
 		}
-		cos = append(cos, M{"name": str(st["company"]), "open": isOpen, "at": str(st["at"]), "phase": str(st["phase"]), "waiting": len(cloudQueue(d)), "lastRead": str(st["readAt"])})
+		cos = append(cos, M{"name": str(st["company"]), "open": isOpen, "at": str(st["at"]), "phase": str(st["phase"]), "waiting": len(cloudQueue(d)), "lastRead": str(st["readAt"]),
+			"guid": heldGUID(str(st["company"]))})
 	}
 	r := invokeCloud(beatBody(tally, tstate, tsince, open, ports, cos), 10)
 	if r.code == 200 && r.json != nil {
@@ -1011,6 +880,9 @@ func syncCloudPosts() {
 			res = append(res, M{"id": str(r["id"]), "kind": str(r["kind"]), "ok": r["ok"] == true, "verified": r["verified"], "message": str(r["message"]), "vchNumber": str(r["vchNumber"]), "vchType": str(r["vchType"]),
 				"guid": str(r["guid"]), "masterId": str(r["masterId"]), "vchDate": str(r["vchDate"]), "optional": truthy(r["optional"]), "alreadyThere": truthy(r["alreadyThere"]),
 				"already": truthy(r["already"]), "checkFailed": truthy(r["checkFailed"]), "vchNo": str(r["vchNo"]),
+				// rebuilt 2.1.4: sent when Tally stopped answering, being looked for by its FinCom id (state "unknown"); the
+				// FinCom id found in Tally already (sameId); the company's GUID not the one held (guidMismatch)
+				"outcomeUnknown": truthy(r["outcomeUnknown"]), "sameId": truthy(r["sameId"]), "guidMismatch": truthy(r["guidMismatch"]),
 				"state": itemState(r, false), "reason": map[bool]string{true: "", false: failedLine(str(r["message"]))}[r["ok"] == true]})
 		}
 		// items: every entry's state (waiting, sending, sent, in_tally, failed with its reason), for FinCom to show live

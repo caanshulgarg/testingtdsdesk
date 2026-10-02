@@ -69,6 +69,9 @@ func newStandIn(t *testing.T, ledgers int) *standIn {
 		}
 		body := string(b)
 		id := group(`<ID>([^<]+)</ID>`, body, 1)
+		if id == "" {
+			id = group(`<REPORTNAME>([^<]+)</REPORTNAME>`, body, 1)
+		}
 		if strings.Contains(body, "Import Data") {
 			id = "Import"
 		}
@@ -245,7 +248,8 @@ func TestIdleSendsNothing(t *testing.T) {
 	}
 }
 
-// (c) a client opened in FinCom: exactly one light update; opened again within the debounce: none
+// (c) a client opened in FinCom: one light update, which asks Tally nothing (rebuilt 2.1.4: until the change read is
+// measured, Tally is read only by Update now and the nightly run); opened again within the debounce: none started
 func TestOpenClientOneLightUpdate(t *testing.T) {
 	s := newStandIn(t, 0)
 	bridgeFor(t, s, "")
@@ -254,53 +258,39 @@ func TestOpenClientOneLightUpdate(t *testing.T) {
 		t.Fatal("the first opening started nothing")
 	}
 	waitIdle(t)
-	if n := s.count("TDSDeskKeepCo"); n != 1 {
-		t.Fatalf("one light update reads the change counters once, got %d (%v)", n, s.reqs)
+	if n := s.count(""); n != 0 {
+		t.Fatalf("a light update sent Tally %d request(s): %v", n, s.reqs)
 	}
-	before := s.count("")
 	if logLines("Light update: done") != 1 {
 		t.Fatal("the light update did not finish")
 	}
 	if wakeOpen(zz, "opened in FinCom") {
 		t.Fatal("opened again within the debounce: a second light update")
 	}
-	time.Sleep(300 * time.Millisecond)
-	waitIdle(t)
-	if n := s.count(""); n != before {
-		t.Fatalf("opened again within the debounce: %d more request(s)", n-before)
-	}
-	// a few minutes later it reads again
-	nowFn = func() time.Time { return time.Now().Add(6 * time.Minute) }
-	if !wakeOpen(zz, "opened in FinCom") {
-		t.Fatal("after the debounce: no light update")
-	}
-	waitIdle(t)
-	if s.count("TDSDeskKeepCo") != 2 {
-		t.Fatal("after the debounce: one more light update")
-	}
-	// paused in the tray: opening a client reads nothing
+	// paused in the tray: opening a client starts nothing
 	nowFn = func() time.Time { return time.Now().Add(20 * time.Minute) }
 	pausedB = true
 	if wakeOpen(zz, "opened in FinCom") {
 		t.Fatal("background reading paused, yet a light update started")
 	}
 	pausedB = false
+	if n := s.count(""); n != 0 {
+		t.Fatalf("%d request(s) went to Tally", n)
+	}
 }
 
 // (e) after a failure Tally is left alone: one line in the log, and nothing at all is sent during the back-off
 func TestBackoffSendsNothing(t *testing.T) {
 	s := newStandIn(t, 0)
 	s.slow = func(id, body string) time.Duration {
-		if id == "TDSDeskKeepCo" {
+		if id == "Day Book" {
 			return 3 * time.Second
 		}
 		return 0
 	}
 	bridgeFor(t, s, `,"TallyMaxSec":1,"KeepBackoffSec":300,"KeepRunMin":1`)
 	liveCopy(t)
-	if !wakeOpen(zz, "opened in FinCom") {
-		t.Fatal("no light update")
-	}
+	wakeUpdate("")
 	waitIdle(t)
 	if logLines("Leaving Tally alone until") != 1 {
 		t.Fatalf("the back-off: %d line(s)", logLines("Leaving Tally alone until"))
@@ -318,7 +308,7 @@ func TestBackoffSendsNothing(t *testing.T) {
 	waitIdle(t)
 	time.Sleep(500 * time.Millisecond)
 	if n := s.count(""); n != sent {
-		t.Fatalf("during the back-off %d request(s) went to Tally", n-sent)
+		t.Fatalf("during the back-off %d request(s) went to Tally: %v", n-sent, s.reqs[sent:])
 	}
 	if logLines("Leaving Tally alone until") != 1 {
 		t.Fatalf("during the back-off the log says it %d times", logLines("Leaving Tally alone until"))

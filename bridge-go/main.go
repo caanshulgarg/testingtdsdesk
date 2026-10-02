@@ -22,7 +22,9 @@ import (
 // sign-in, and the bridge's own files (its pairing with FinCom kept if asked)
 // FinComBridge.exe sendlog [--fincom U]  the install log (and the bridge's log, settings without keys) to FinCom support
 // FinComBridge.exe compare               this bridge's copy against bridge 1.15.0's, day by day
-// FinComBridge.exe sync                  the nightly copy (scheduled task)
+// FinComBridge.exe sync                  (retired: the old nightly copy task; it now only removes that task)
+// FinComBridge.exe measure --company C [--out F] [--ledgers 696-699] | --snapshot L [--month yyyymm] | --compare L1 L2
+//                                        Tally measured for FinCom support (measure.go)
 // FinComBridge.exe version
 // The PowerShell bridge's own arguments work too (-ConfigPath F, -Sync), so its tests run this bridge unchanged.
 func main() {
@@ -53,6 +55,9 @@ func main() {
 	_ = fs.Bool("service", false, "")
 	_ = fs.String("mode", "", "")
 	_ = fs.String("fincom", "", "")
+	for _, f := range []string{"company", "out", "ledgers", "snapshot", "month", "compare"} {
+		_ = fs.String(f, "", "measure") // FinComBridge.exe measure ... (read again by measureCmd)
+	}
 	_ = fs.Bool("quiet", false, "")
 	_ = fs.Bool("show", false, "")
 	userFlag := fs.Bool("user", false, "run just for this Windows user: the bridge and the tray icon, kept running")
@@ -103,6 +108,8 @@ func main() {
 			openFile(filepath.Join(Home, "compare-report.txt"))
 		}
 		os.Exit(code)
+	case "measure":
+		os.Exit(measureCmd(rest))
 	case "sync":
 		loadConfig()
 		r := nightlySync()

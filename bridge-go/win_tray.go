@@ -424,6 +424,7 @@ func (t *tray) menu() {
 	pAppendMenu.Call(m, mfSeparator, 0, 0)
 	add(2, "Open FinCom", mfString)
 	add(11, "Test connection", mfString)
+	add(16, "Measure Tally (for FinCom support)", mfString)
 	add(5, "Show log", mfString)
 	switch {
 	case st != nil && truthy(st["testMode"]) && truthy(st["switching"]):
@@ -544,6 +545,33 @@ func (t *tray) command(id int, st M) {
 			icon = mbIconWarning
 		}
 		msgBox("FinCom Bridge - Test connection", rep, icon)
+	case 16:
+		// one request at a time through the bridge's queue; the report opens when it is done
+		r := trayCall("POST", "/tray/measure", M{})
+		if r == nil || r["ok"] == false {
+			why := "The bridge is not answering."
+			if r != nil {
+				why = str(r["error"])
+			}
+			msgBox("FinCom Bridge - Measure Tally", why, mbIconWarning)
+			return
+		}
+		t.balloon("FinCom Bridge", "Measuring "+str(r["company"])+" for FinCom support: one request at a time, a few minutes. The report opens when it is done.", false)
+		for i := 0; i < 900; i++ {
+			time.Sleep(2 * time.Second)
+			s := trayCall("GET", "/tray/measure", nil)
+			if s == nil {
+				continue
+			}
+			if str(s["state"]) == "done" {
+				openFile(str(s["file"]))
+				return
+			}
+			if str(s["state"]) == "failed" {
+				msgBox("FinCom Bridge - Measure Tally", "Not measured: "+str(s["error"]), mbIconWarning)
+				return
+			}
+		}
 	case 12:
 		if !yesNo("FinCom Bridge", "Make FinCom Bridge "+BridgeVersion+" the main bridge on this computer? Bridge 1.15.0 is stopped and no longer starts; FinCom Bridge then reads and posts. Its pairing, settings and copy are kept.") {
 			return

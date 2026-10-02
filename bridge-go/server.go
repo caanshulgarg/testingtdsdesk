@@ -527,6 +527,33 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 			started = wakeOpen(str(o["company"]), "opened in FinCom on this computer")
 		}
 		return M{"ok": true, "started": started, "paused": paused()}, nil
+	case "/measure", "/tray/measure":
+		// "Measure Tally (for FinCom support)": POST starts it (one request at a time, through the queue), GET says how far
+		if r.Method == "POST" {
+			o, _ := bodyObj(body)
+			m := measureOpts{company: str(o["company"]), out: str(o["out"]), ledgers: str(o["ledgers"]), snapshot: str(o["snapshot"]), month: str(o["month"])}
+			if m.company == "" {
+				m.company = trayMeasureCompany()
+			}
+			if m.company == "" {
+				return M{"ok": false, "error": "No company is open in Tally: open the company to measure, then try again."}, nil
+			}
+			return startMeasure(m), nil
+		}
+		return measureStatus(), nil
+	case "/companyguid":
+		// a company whose Tally GUID changed (restored, re-created): confirmed on this computer, its new GUID is held
+		if err := needPost(r, "Use POST."); err != nil {
+			return nil, err
+		}
+		o, err := bodyObj(body)
+		if err != nil {
+			return nil, err
+		}
+		if !truthy(o["accept"]) {
+			return M{"ok": true, "company": str(o["company"]), "guid": heldGUID(str(o["company"]))}, nil
+		}
+		return acceptCompanyGUID(str(o["company"]))
 	case "/keepcheck":
 		return testKeepMonth(co, qs.Get("ym"), qint(qs, "port"))
 	// --- the tray icon's own questions

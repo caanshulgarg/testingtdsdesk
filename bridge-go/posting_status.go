@@ -143,6 +143,8 @@ func itemState(r M, sending bool) string {
 		return "sending"
 	case r == nil:
 		return "waiting"
+	case r["outcomeUnknown"] == true:
+		return "unknown" // sent when Tally stopped answering; being looked for by its FinCom id
 	case r["ok"] != true:
 		return "failed"
 	case r["verified"] == true:
@@ -159,7 +161,10 @@ func confirmedResult(r M) bool { return r != nil && r["ok"] == true }
 func itemsToSend(all []M, results []M) []M {
 	had := map[string]bool{}
 	for _, r := range results {
-		had[str(r["id"])] = true
+		// an entry whose outcome is unknown is not finished: it is looked for in Tally (by its FinCom id) first
+		if r["outcomeUnknown"] != true {
+			had[str(r["id"])] = true
+		}
 	}
 	var o []M
 	for _, it := range all {

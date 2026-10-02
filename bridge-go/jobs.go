@@ -158,7 +158,9 @@ func newPostJob(pl M) (M, error) {
 	}
 	for _, v := range arr(pl["vouchers"]) {
 		if o := obj(v); o != nil {
-			items = append(items, M{"id": str(o["id"]), "kind": "voucher", "xml": str(o["xml"])})
+			// every voucher carries its FinCom id ("TDSDesk:<id>" at the end of its narration): FinCom's, else the entry's id
+			x, _ := stampFinComID(str(o["xml"]), str(o["id"]))
+			items = append(items, M{"id": str(o["id"]), "kind": "voucher", "xml": x})
 		}
 	}
 	// the port FinCom chose is kept only as a hint, and never as 0 (0 means "find it", which happens on every try anyway)
@@ -215,6 +217,9 @@ func resumePostJob(id string) (M, error) {
 
 // the pause before asking Tally again while a posting waits: 15 s, growing to 60 s; no deadline
 func waitPause(round int) time.Duration {
+	if ms := keepNum("PostWaitMs", 0); ms > 0 {
+		return time.Duration(ms) * time.Millisecond
+	}
 	steps := []int{15, 15, 30, 45, 60}
 	if round >= len(steps) {
 		round = len(steps) - 1
@@ -302,7 +307,10 @@ func jobWorker(dir string) {
 			k := str(it["id"])
 			r := byID[k]
 			e := M{"id": k, "kind": str(it["kind"]), "state": itemState(r, sending[k])}
-			if r != nil && r["ok"] != true {
+			if r != nil && r["outcomeUnknown"] == true {
+				// sent when Tally stopped answering: looked for by its FinCom id before anything is sent again
+				e["outcomeUnknown"], e["reason"] = true, unknownLine
+			} else if r != nil && r["ok"] != true {
 				e["reason"] = failedLine(str(r["message"]))
 				// 2.1.4: not posted by the duplicate check (FinCom marks the bill as in Tally, or offers Try again)
 				if r["already"] == true {
@@ -389,6 +397,30 @@ func jobWorker(dir string) {
 	if !waitTally(nil) {
 		return
 	}
+	// only one bridge posts or reads a company at a time (the lease in FinCom's cloud)
+	defer leaseRelease(asked)
+	if !waitLease(asked, setStatus, pause) {
+		cancelled()
+		return
+	}
+	// the company's GUID: the one held for it, or nothing is posted (a restored, re-created or other company of the
+	// same name); Tally not answering the check is waited for
+	for {
+		g, err := companyCheck(fin, company, port)
+		if err == nil {
+			if gerr := guardCompanyGUID(company, g); gerr != nil {
+				for _, it := range itemsToSend(all, results) {
+					results = append(results, M{"id": it["id"], "kind": it["kind"], "ok": false, "guidMismatch": true, "message": "Not posted: " + gerr.Error()})
+				}
+				finish("failed", "Not posted: "+gerr.Error())
+				return
+			}
+			break
+		}
+		if !waitTally(err) {
+			return
+		}
+	}
 	// one writer per Tally: wait for another posting to the same Tally to finish
 	lk, _ := tallyWriter.LoadOrStore(port, &sync.Mutex{})
 	wl := lk.(*sync.Mutex)
@@ -460,6 +492,10 @@ func jobWorker(dir string) {
 		}
 		// the port found again on every try; Tally gone meanwhile: waited for
 		if !waitTally(nil) {
+			return
+		}
+		if !waitLease(asked, setStatus, pause) {
+			cancelled()
 			return
 		}
 		if lostRounds > 0 {
@@ -606,7 +642,7 @@ func jobWorker(dir string) {
 			for _, v := range vouchers {
 				vs = append(vs, M{"id": v["id"], "xml": v["xml"]})
 			}
-			r, err := invokeImport(M{"company": company, "port": port, "masters": ms, "vouchers": vs, "onItem": func(x M) {
+			r, err := invokeImport(M{"company": company, "port": port, "masters": ms, "vouchers": vs, "guidChecked": true, "onItem": func(x M) {
 				// "created" is shown at once; its read-back follows for the whole batch
 				if x["ok"] != true {
 					live(x)
@@ -642,6 +678,15 @@ func jobWorker(dir string) {
 		var retry []M
 		if len(lostItems) > 0 {
 			lostRounds++
+			// sent, but Tally did not answer: the outcome is unknown. Shown as "Checking whether it reached Tally" (state
+			// unknown, outcomeUnknown) and never sent again until Tally answers and the entry is looked for by its FinCom id
+			for _, it := range lostItems {
+				k := str(it["id"])
+				delete(sending, k)
+				results = append(results, M{"id": k, "kind": str(it["kind"]), "ok": false, "outcomeUnknown": true, "state": "unknown", "message": unknownLine})
+			}
+			save()
+			writeLog(fmt.Sprintf("Posting job %s: %d entr%s sent when Tally stopped answering; %s", str(p["id"]), len(lostItems), map[bool]string{true: "y", false: "ies"}[len(lostItems) == 1], strings.ToLower(unknownLine[:1])+unknownLine[1:]))
 			var there map[string]M
 			for there == nil {
 				if !waitTally(nil) {
@@ -649,7 +694,7 @@ func jobWorker(dir string) {
 				}
 				there = findPostedTags(port, company, vouchersOf(lostItems), ledger)
 				if there == nil {
-					setStatus("waiting", waitingLine(asked, &tallyWait{"busy", "Tally did not answer the check for entries just sent"}))
+					setStatus("waiting", unknownLine+": waiting for Tally to answer")
 					if !pause(waitPause(round)) {
 						cancelled()
 						return
@@ -657,6 +702,14 @@ func jobWorker(dir string) {
 					round++
 				}
 			}
+			// resolved: the provisional results go
+			var kept []M
+			for _, r := range results {
+				if !(r["outcomeUnknown"] == true && lostIDs[str(r["id"])]) {
+					kept = append(kept, r)
+				}
+			}
+			results = kept
 			var keep []M
 			for _, r := range res {
 				if !lostIDs[str(r["id"])] {
@@ -777,6 +830,24 @@ func confirmPosted(port int, company string, pending []string, results []M, item
 		} else {
 			r["ok"], r["verified"] = false, false
 			r["message"] = "Tally replied 'created', but the entry cannot be found in '" + company + "'. It was not sent again: look for it in Tally (another company open in Tally, or an Optional voucher)."
+		}
+	}
+}
+
+// a posting sent when Tally stopped answering: what FinCom shows until it is found in Tally or sent again
+const unknownLine = "Checking whether it reached Tally"
+
+// the lease on the company (FinCom's cloud): taken or renewed; while another bridge holds it the posting waits.
+// false: the job is to stop (cancelled, or the bridge stops)
+func waitLease(company string, setStatus func(string, string), pause func(time.Duration) bool) bool {
+	for r := 0; ; r++ {
+		ok, who := leaseTake(company)
+		if ok {
+			return true
+		}
+		setStatus("waiting", "Waiting: another FinCom Bridge ("+who+") is posting to or reading "+company+" now — this one follows by itself")
+		if !pause(waitPause(r)) {
+			return false
 		}
 	}
 }

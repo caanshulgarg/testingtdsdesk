@@ -261,6 +261,38 @@ func dupCheckWith(port int, company string, id any, x string, cache map[string]d
 	}
 	what := fmt.Sprintf("%s (%s, %s, %s, %.2f)", label, nt(vs[0], "PARTYLEDGERNAME"), strings.Join(p.ids, "/"), ddmmyyyy(p.date), float64(amt)/100)
 	party := nt(vs[0], "PARTYLEDGERNAME")
+	// first the FinCom id itself, exactly: the date's entries in Tally, looked through for "TDSDesk:<id>" (rebuilt 2.1.4)
+	if p.tag != "" && p.date != "" {
+		tk := "tag|" + p.date
+		rd, had := cache[tk]
+		if !had {
+			rd.there, rd.err = tagsOnDate(port, company, p.date)
+			if cache != nil {
+				cache[tk] = rd
+			}
+		}
+		if rd.err != nil {
+			writeLog("  duplicate check " + what + ": NOT POSTED, could not look for its FinCom id in Tally: " + tallyTrouble(rd.err.Error()))
+			return M{"id": id, "kind": "voucher", "ok": false, "checkFailed": true, "company": company, "port": port, "message": dupCheckFailedMsg, "detail": tallyTrouble(rd.err.Error())}
+		}
+		var hit *vchKey
+		for i := range rd.there {
+			if rd.there[i].tag == p.tag && !rd.there[i].cancelled {
+				hit = &rd.there[i]
+				break
+			}
+		}
+		if hit != nil {
+			e := *hit
+			msg := "Already in Tally (voucher no. " + e.number + ", " + ddmmyyyy(e.date) + ")"
+			if e.number == "" {
+				msg = "Already in Tally (voucher without a number, " + ddmmyyyy(e.date) + ")"
+			}
+			writeLog("  duplicate check " + what + ": NOT POSTED, its FinCom id is in Tally already: " + e.vtype + " no. " + e.number + " of " + ddmmyyyy(e.date) + " (GUID " + e.guid + ")")
+			return M{"id": id, "kind": "voucher", "ok": false, "already": true, "sameId": true, "company": company, "port": port, "message": msg,
+				"guid": e.guid, "vchNo": e.number, "vchNumber": e.number, "vchType": e.vtype, "masterId": e.masterID, "vchDate": e.date, "optional": e.optional}
+		}
+	}
 	ck := p.date + "|" + foldName(party)
 	rd, had := cache[ck]
 	if !had {

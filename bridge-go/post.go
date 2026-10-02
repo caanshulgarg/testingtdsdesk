@@ -68,6 +68,21 @@ func invokeImport(p M) (M, error) {
 	if err != nil {
 		return nil, err
 	}
+	// the company's GUID (a job checked it already): another company of the same name is never posted to; Tally not
+	// answering the check: nothing is posted (each entry says so, as the duplicate check does)
+	var stopAll M
+	if !truthy(p["guidChecked"]) {
+		g, err := companyCheck(fin, company, port)
+		switch {
+		case err != nil:
+			writeLog("  company check of " + company + ": NOT POSTED, could not check Tally: " + tallyTrouble(err.Error()))
+			stopAll = M{"ok": false, "checkFailed": true, "message": dupCheckFailedMsg, "detail": tallyTrouble(err.Error())}
+		case guardCompanyGUID(company, g) != nil:
+			gerr := guardCompanyGUID(company, g)
+			writeLog("  NOT POSTED: " + gerr.Error())
+			stopAll = M{"ok": false, "guidMismatch": true, "message": "Not posted: " + gerr.Error()}
+		}
+	}
 	results := []M{}
 	// the job follows each entry as Tally answers it (FinCom shows it live)
 	onItem, _ := p["onItem"].(func(M))
@@ -90,6 +105,17 @@ func invokeImport(p M) (M, error) {
 			}
 			x := str(it["xml"])
 			id := it["id"]
+			if stopAll != nil {
+				r := M{"id": id, "kind": g.kind, "company": company, "port": port}
+				for k, v := range stopAll {
+					r[k] = v
+				}
+				add(r)
+				continue
+			}
+			if g.kind == "voucher" {
+				x, _ = stampFinComID(x, id) // its FinCom id at the end of its narration, when FinCom did not write one
+			}
 			// a voucher type may only have its numbering changed: no other field, and only an Alter
 			vtOnly := false
 			if re(`^\s*<VOUCHERTYPE\b`).MatchString(x) {
