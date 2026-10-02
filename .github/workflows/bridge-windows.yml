@@ -182,7 +182,8 @@ jobs:
           Set-Content "$home2\FinComConnector.exe" 'stands in for the Connector'
           Set-Content "$home2\sync\TEST CO\keep.json" '{"days":1}'
           Set-Content "$home2\tds-bridge.config.json" '{"Key":"old-pairing-key-115","Port":9100,"KeepInStep":true}'
-          $startup = [Environment]::GetFolderPath('Startup'); $programs = [Environment]::GetFolderPath('Programs'); $desk = [Environment]::GetFolderPath('DesktopDirectory')
+          # the folders by their paths: a profile Explorer never opened has no shell folders yet
+          $programs = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs"; $startup = "$programs\Startup"; $desk = "$env:USERPROFILE\Desktop"
           New-Item -ItemType Directory -Force $startup, $programs, $desk | Out-Null
           Set-Content (Join-Path $startup 'TDS Desk Tally Bridge.vbs') 'rem 1.15.0 start at sign-in'
           Set-Content (Join-Path $programs 'FinCom Connector.lnk') 'x'
