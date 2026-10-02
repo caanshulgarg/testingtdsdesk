@@ -22,6 +22,9 @@
 //   {kind:"posts_take"}                              -> {job: {id, company, payload} | null}: the next posting queued in
 //                                                       FinCom for this computer (build 199); the beat says how many wait
 //   {kind:"posts_update", id, status, done, message, results, checking} -> how a posting taken by this computer is going
+//   {kind:"make_main", bridge}                        -> this bridge (FinCom Bridge 2.x, its menu) is the main one: only it posts
+//   every call of FinCom Bridge 2.x carries bridge:{id, computer, user, mode, runMode, version} (bridgeOf); the beat's
+//   answer says makeMain (made the main one on FinCom's Tally page) or notMain (another bridge posts on this computer)
 //   any of these with shadow:true (go-bridge: FinCom Bridge 2.0.0 in test mode, beside bridge 1.15.0): compared, never
 //                                                       kept, never a posting (shadowCall)
 // Or a person signed in to FinCom (Authorization: Bearer, two-step done, a member of the firm), for one of the firm's
@@ -97,6 +100,54 @@ const isDay = (d: unknown) => typeof d === "string" && /^(19|20)\d\d(0[1-9]|1[0-
 const iso = (d: string) => d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6, 8);
 const pan = (g: unknown) => String(g || "").toUpperCase().slice(2, 12);
 
+// 02-Oct-2026: every bridge FinCom hears from on a computer key, kept in info.bridges by its id: FinCom Bridge 2.x sends
+// bridge:{id "go-…", computer, user, mode test|main, runMode, version}; bridge 1.15.0 sends none and is kept as "v1", with
+// the computer and Windows user of its hello. The Tally page lists them; the one in tally_devices.main_bridge (set from
+// the Tally page or the bridge's menu, migration-22) is the only one given postings. Unset: the bridge not in test mode.
+function bridgeOf(dev: any, body: any, shadow: boolean) {
+  const s = (v: unknown, n = 80) => typeof v === "string" ? v.slice(0, n) : "";
+  const b = body?.bridge && typeof body.bridge === "object" ? body.bridge : null;
+  const id = b && /^go-[0-9a-f]{6,32}$/.test(String(b.id || "")) ? String(b.id) : "v1";
+  const hello = (dev?.info && typeof dev.info === "object") ? dev.info : {};
+  return { id, entry: { at: new Date().toISOString(), version: s(body?.version, 40) || s(b?.version, 40),
+    computer: s(b?.computer, 60) || (id === "v1" ? s(hello.computer, 60) : ""), user: s(b?.user, 60) || (id === "v1" ? s(hello.user, 60) : ""),
+    mode: shadow ? "test" : "main", runMode: ["user", "service", "window"].includes(b?.runMode) ? b.runMode : "",
+    tally: !!body?.tally, tallyState: ["open", "busy", "closed"].includes(body?.tallyState) ? body.tallyState : (body?.tally ? "open" : "closed"),
+    open: (Array.isArray(body?.open) ? body.open : []).slice(0, 50).map((x: unknown) => s(x, 200)) } };
+}
+// the bridges heard from, with this one brought up to date: at most 12, none silent for more than 60 days
+function bridgesWith(info: any, id: string, entry: any) {
+  const old = info?.bridges && typeof info.bridges === "object" ? info.bridges : {};
+  const cut = Date.now() - 60 * 86400000;
+  const kept = Object.entries({ ...old, [id]: entry }).filter(([, v]: any) => Date.parse(v?.at || "") > cut)
+    .sort((a: any, b: any) => String(b[1].at).localeCompare(String(a[1].at))).slice(0, 12);
+  return Object.fromEntries(kept);
+}
+// may this bridge post? Only the main one; with none chosen, any bridge not in test mode (as before)
+function mayPost(dev: any, id: string) { return !dev?.main_bridge || dev.main_bridge === id; }
+// a support pack (the bridge's log, or its install log) for FinCom support; readable only by the platform's admins
+async function supportPack(firm: string, dev: any, body: any) {
+  const zip = typeof body.zip === "string" ? b64bytes(body.zip) : new Uint8Array();
+  if (!zip.length || zip.length > 9 * 1024 * 1024) return reply(413, { ok: false, error: "The support pack is empty or too large." });
+  // at most five a day from one computer
+  const today = new Date().toISOString().slice(0, 10);
+  const { data: had } = await db.storage.from("tally-support").list(`${firm}/${dev.id}`, { limit: 100, search: today });
+  if ((had || []).length >= 5) return reply(429, { ok: false, error: "This computer has sent five support packs today already; FinCom support has them." });
+  const path = `${firm}/${dev.id}/${new Date().toISOString().replace(/[:.]/g, "-")}.zip`;
+  const up = await db.storage.from("tally-support").upload(path, zip, { contentType: "application/zip" });
+  if (up.error) throw new Error("storage: " + up.error.message);
+  console.log("tally-ingest support pack", path, String(body.note || "").slice(0, 200));
+  return reply(200, { ok: true, path });
+}
+// a bridge makes itself the main one (its menu: Switch to main bridge): from now on the others on this key do not post
+async function makeMain(dev: any, id: string) {
+  if (id === "v1") return reply(400, { ok: false, error: "Only FinCom Bridge 2.x can be made the main bridge from its menu." });
+  const { error } = await db.from("tally_devices").update({ main_bridge: id, main_set_at: new Date().toISOString(), main_set_by: null }).eq("id", dev.id);
+  if (error) return reply(409, { ok: false, error: /main_bridge/.test(error.message) ? "FinCom's cloud is not ready to choose a main bridge yet (migration-22)." : error.message });
+  console.log("tally-ingest: main bridge", dev.id, id);
+  return reply(200, { ok: true, main: id });
+}
+
 // go-bridge: a call from FinCom Bridge 2.0.0 in test mode ("shadow"). It runs beside bridge 1.15.0 with the same computer
 // key to be compared with it, so nothing it sends may change what 1.15.0 keeps:
 //   - postings: never handed to it (only one bridge may ever post);
@@ -106,6 +157,8 @@ const pan = (g: unknown) => String(g || "").toUpperCase().slice(2, 12);
 async function shadowCall(dev: any, firm: string, body: any) {
   const kind = String(body.kind || "");
   if (kind === "posts_take" || kind === "posts_update") return reply(403, { ok: false, error: "A bridge in test mode does not post." });
+  if (kind === "support") return await supportPack(firm, dev, body);
+  if (kind === "make_main") return await makeMain(dev, bridgeOf(dev, body, true).id);
   if (kind === "hello") {
     const { data: f } = await db.from("firms").select("name").eq("id", firm).maybeSingle();
     return reply(200, { ok: true, firm: f?.name || "", device: dev.name, shadow: true });
@@ -116,11 +169,14 @@ async function shadowCall(dev: any, firm: string, body: any) {
       open: (Array.isArray(body.open) ? body.open : []).slice(0, 50).map((x: unknown) => s(x, 200)) };
     // read and written together, so 1.15.0's own heartbeat in between is not lost
     const { data: cur } = await db.from("tally_devices").select("info").eq("id", dev.id).maybeSingle();
-    const info = { ...((cur?.info && typeof cur.info === "object") ? cur.info : {}), shadow };
+    const prev = (cur?.info && typeof cur.info === "object") ? cur.info : {};
+    const me = bridgeOf(dev, body, true);
+    const info = { ...prev, shadow, bridges: bridgesWith(prev, me.id, me.entry) };
     await db.from("tally_devices").update({ info }).eq("id", dev.id);
     const tok = dev.wake_token;
     const wake = tok ? { url: URL.replace(/^http/, "ws").replace(/\/+$/, "") + "/realtime/v1/websocket", key: ANON, topic: "tb-" + tok } : null;
-    return reply(200, { ok: true, updateNow: false, posts: 0, wake, shadow: true });
+    // made the main bridge on FinCom's Tally page: the bridge switches itself over (and 1.15.0 is refused postings already)
+    return reply(200, { ok: true, updateNow: false, posts: 0, wake, shadow: true, makeMain: me.id !== "v1" && dev.main_bridge === me.id });
   }
   if (kind === "companies") {
     const { data: have } = await db.from("tally_companies").select("company, client_id").eq("firm_id", firm);
@@ -389,6 +445,19 @@ async function userUpload(req: Request, auth: string) {
   const firm = m.firm_id as string;
   let body: any;
   try { body = JSON.parse(await readBody(req)); } catch (e) { return (e as Error).message === "too large" ? reply(413, { ok: false, error: "Too much in one go; send fewer days at a time." }) : reply(400, { ok: false, error: "Bad request" }); }
+  // an install log dropped on FinCom's Tally page (the bridge could not send it: not connected yet), for FinCom support
+  if (body.kind === "install_log") {
+    const text = typeof body.text === "string" ? body.text : "";
+    if (!text.trim() || text.length > 2 * 1024 * 1024) return reply(413, { ok: false, error: "The install log is empty or larger than 2 MB." });
+    const today = new Date().toISOString().slice(0, 10);
+    const { data: had } = await db.storage.from("tally-support").list(`${firm}/web`, { limit: 100, search: today });
+    if ((had || []).length >= 10) return reply(429, { ok: false, error: "Ten install logs were sent today already; FinCom support has them." });
+    const path = `${firm}/web/${new Date().toISOString().replace(/[:.]/g, "-")}-install.log`;
+    const up = await db.storage.from("tally-support").upload(path, new TextEncoder().encode(text), { contentType: "text/plain" });
+    if (up.error) return reply(500, { ok: false, error: "The install log could not be kept: " + up.error.message });
+    console.log("tally-ingest install log from the web", path, user.id, String(body.name || "").slice(0, 100));
+    return reply(200, { ok: true, path });
+  }
   const clientId = String(body.client || "");
   const { data: cl } = await db.from("clients").select("id, name, tally_name, gstin, deleted").eq("firm_id", firm).eq("id", clientId).maybeSingle();
   if (!cl || cl.deleted) return reply(404, { ok: false, error: "No such client in this firm." });
@@ -458,7 +527,9 @@ Deno.serve(async (req) => {
   const seen = { last_seen: new Date().toISOString() } as Record<string, unknown>;
   if (body.version) seen.version = String(body.version).slice(0, 40);
   if (body.kind === "hello" && body.info && typeof body.info === "object") {
-    const i = body.info; seen.info = { computer: String(i.computer || "").slice(0, 60), user: String(i.user || "").slice(0, 60) };
+    // kept beside the heartbeat and history (it used to replace them)
+    const i = body.info, prev = (dev.info && typeof dev.info === "object") ? dev.info : {};
+    seen.info = { ...prev, computer: String(i.computer || "").slice(0, 60), user: String(i.user || "").slice(0, 60) };
   }
   await db.from("tally_devices").update(seen).eq("id", dev.id);
 
@@ -484,25 +555,30 @@ Deno.serve(async (req) => {
           tallyState: ["open", "busy", "closed"].includes(b.tallyState) ? b.tallyState : (b.tally ? "open" : "closed"), busySince: s(b.busySince, 30),
           every: Math.max(10, Math.min(600, Math.floor(Number(b.every) || 60))), version: s(body.version, 40) };
         const prevInfo = ((dev as any).info && typeof (dev as any).info === "object") ? (dev as any).info : {};
-        const info = { ...prevInfo, beat, history: beatHistory(prevInfo, beat) };
+        const me = bridgeOf(dev, body, false);
+        const info = { ...prevInfo, beat, history: beatHistory(prevInfo, beat), bridges: bridgesWith(prevInfo, me.id, me.entry) };
         // build 197: someone pressed Update now on another computer: the bridge is told in this answer, once
         const want = (dev as any).want_update_at, sent = (dev as any).want_sent_at;
         const updateNow = !!want && (!sent || Date.parse(want) > Date.parse(sent));
         await db.from("tally_devices").update(updateNow ? { info, want_sent_at: want } : { info }).eq("id", dev.id);
-        const { count: posts } = await db.from("tally_post_jobs").select("id", { count: "exact", head: true }).eq("device_id", dev.id).eq("status", "waiting");
+        const { count: waiting } = await db.from("tally_post_jobs").select("id", { count: "exact", head: true }).eq("device_id", dev.id).eq("status", "waiting");
+        const posts = mayPost(dev, me.id) ? waiting : 0;
         // fast-sync (bridge 1.15.0): the computer's own Realtime channel, where the database wakes it the moment a
         // posting is queued or an update asked for (migration-13); the heartbeat stays the fallback
         const tok = (dev as any).wake_token;
         const wake = tok ? { url: URL.replace(/^http/, "ws").replace(/\/+$/, "") + "/realtime/v1/websocket", key: ANON, topic: "tb-" + tok } : null;
-        return reply(200, { ok: true, updateNow, posts: posts || 0, wake });
+        return reply(200, { ok: true, updateNow, posts: posts || 0, wake, ...(mayPost(dev, me.id) ? {} : { notMain: true }) });
       }
+      case "make_main": return await makeMain(dev, bridgeOf(dev, body, false).id);
       case "posts_take": {
+        if (!mayPost(dev, bridgeOf(dev, body, false).id)) return reply(403, { ok: false, notMain: true, error: "Another bridge is the main bridge on this computer now (chosen in FinCom); this one reads only and does not post." });
         const { data, error } = await db.rpc("tally_post_take", { p_device: dev.id });
         if (error) throw new Error(error.message);
         const j = (data || [])[0];
         return reply(200, { ok: true, job: j ? { id: j.id, company: j.company, payload: j.payload } : null });
       }
       case "posts_update": {
+        if (!mayPost(dev, bridgeOf(dev, body, false).id)) return reply(403, { ok: false, notMain: true, error: "Another bridge is the main bridge on this computer now (chosen in FinCom); this one reads only and does not post." });
         const st = ["taken", "running", "done", "failed"].includes(body.status) ? body.status : "running";
         const s = (v: unknown, n: number) => typeof v === "string" ? v.slice(0, n) : "";
         const results = (Array.isArray(body.results) ? body.results : []).slice(0, 5000).map((r: any) => ({ id: s(r?.id, 200), ok: !!r?.ok, verified: r?.verified === true ? true : r?.verified === false ? false : null,
@@ -558,20 +634,7 @@ Deno.serve(async (req) => {
         if (error) throw new Error(error.message);
         return reply(200, { ok: true });
       }
-      case "support": {
-        // the FinCom Connector's log and details (no keys), for FinCom support; readable only by the platform's admins
-        const zip = typeof body.zip === "string" ? b64bytes(body.zip) : new Uint8Array();
-        if (!zip.length || zip.length > 9 * 1024 * 1024) return reply(413, { ok: false, error: "The support pack is empty or too large." });
-        // at most five a day from one computer
-        const today = new Date().toISOString().slice(0, 10);
-        const { data: had } = await db.storage.from("tally-support").list(`${firm}/${dev.id}`, { limit: 100, search: today });
-        if ((had || []).length >= 5) return reply(429, { ok: false, error: "This computer has sent five support packs today already; FinCom support has them." });
-        const path = `${firm}/${dev.id}/${new Date().toISOString().replace(/[:.]/g, "-")}.zip`;
-        const up = await db.storage.from("tally-support").upload(path, zip, { contentType: "application/zip" });
-        if (up.error) throw new Error("storage: " + up.error.message);
-        console.log("tally-ingest support pack", path, String(body.note || "").slice(0, 200));
-        return reply(200, { ok: true, path });
-      }
+      case "support": return await supportPack(firm, dev, body);
       default:
         return reply(400, { ok: false, error: "unknown kind" });
     }

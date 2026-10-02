@@ -296,12 +296,66 @@ const TCloud = {
   async refreshPane(){
     const p = this.pane; p.busy = "Loading…"; render();
     try {
-      p.devices = await Cloud.api("tally_devices?select=id,name,created_at,last_seen,version,info,revoked&order=created_at.desc");
+      // main_bridge from migration-22 on; without it, the list as before
+      const cols = "id,name,created_at,last_seen,version,info,revoked";
+      p.devices = await Cloud.api("tally_devices?select=" + cols + ",main_bridge&order=created_at.desc").catch(e => {
+        if (/main_bridge/.test(String(e && e.message))) { p.noMain = true; return Cloud.api("tally_devices?select=" + cols + "&order=created_at.desc"); }
+        throw e; });
       p.companies = await this.restAll("tally_companies?select=company,client_id,gstin,last_seen,linked_at&order=company.asc");
       p.err = ""; p.at = Date.now();
       linkByGstin(p.companies);
     } catch (e){ p.err = /tally_devices|does not exist|schema cache/i.test(String(e && e.message)) ? "The cloud copy is not set up in this database yet." : (e && e.message) || String(e); }
     p.busy = ""; render();
+  },
+  // 02-Oct-2026: every bridge heard from on the firm's computers (tally_devices.info.bridges, kept by tally-ingest from
+  // each heartbeat): computer, Windows user, version, test or main, last seen, Tally and the companies open. A bridge
+  // 2.0.0 in test mode sent no name of its own: it is shown from info.shadow, to be updated before it can be made main.
+  bridgesHeard(){
+    const now = Date.now(), rows = [];
+    (this.pane.devices || []).filter(d => !d.revoked).forEach(d => {
+      const info = d.info || {}, br = info.bridges || {}, main = d.main_bridge || "";
+      Object.keys(br).forEach(id => { const b = br[id] || {};
+        rows.push({device: d, id, computer: b.computer || info.computer || d.name, user: b.user || "", version: b.version || "", runMode: b.runMode || "",
+          main: main ? id === main : b.mode === "main", at: b.at, tally: b.tallyState || (b.tally ? "open" : "closed"), open: b.open || [], go: id !== "v1"}); });
+      if (!br.v1 && info.beat) rows.push({device: d, id: "v1", computer: info.computer || d.name, user: info.user || "", version: info.beat.version || d.version || "",
+        main: !main, at: info.beat.at, tally: info.beat.tallyState || (info.beat.tally ? "open" : "closed"), open: info.beat.open || [], go: false});
+      if (info.shadow && !Object.keys(br).some(id => id !== "v1")) rows.push({device: d, id: "", computer: info.computer || d.name, user: info.user || "", version: info.shadow.version || "",
+        main: false, at: info.shadow.at, tally: info.shadow.tally ? "open" : "closed", open: info.shadow.open || [], go: true, old: true});
+    });
+    rows.forEach(r => { r.online = !!r.at && now - Date.parse(r.at) < 3 * 60000; });
+    return rows.sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")));
+  },
+  // "Make this the main bridge": an owner, asked first; tally-ingest gives postings only to it from then on, tells the
+  // bridge (its next heartbeat) to switch itself over, which stops bridge 1.15.0 on that computer
+  async makeMain(r){
+    const others = this.bridgesHeard().filter(x => x.device.id === r.device.id && x.id !== r.id);
+    const ok = await askConfirm({title: "Make this the main bridge?", ok: "Make it the main bridge",
+      body: "<p><b>FinCom Bridge " + esc(r.version) + "</b> on <b>" + esc(r.computer) + "</b>" + (r.user ? " (Windows user " + esc(r.user) + ")" : "") + " will read Tally <b>and post</b> to it.</p>" +
+        (others.length ? "<p>" + others.map(x => "Bridge " + esc(x.version || "?") + (x.user ? " of " + esc(x.user) : "")).join(", ") + " on this computer stops posting at once: FinCom gives postings to the main bridge only. " +
+          "Within a minute the new bridge also stops bridge 1.15.0 for its Windows user and takes over its pairing, settings and copy of the books.</p>" : "") +
+        "<p>Only one bridge may ever post to Tally.</p>"});
+    if (!ok) return;
+    try {
+      await Cloud.rpc("tally_bridge_make_main", {p_device: r.device.id, p_bridge: r.id});
+      toast("Done. FinCom Bridge " + r.version + " on " + r.computer + " is the main bridge; it switches over within a minute.");
+    } catch (e){
+      const m = String((e && e.message) || e);
+      toast(/tally_bridge_make_main|does not exist|schema cache/i.test(m) ? "FinCom's cloud is not ready for this yet (migration-22 is not applied)." : m);
+    }
+    await this.refreshPane();
+  },
+  // an install log dropped on the Tally page (a bridge not connected to FinCom yet cannot send its own), for FinCom support
+  async sendInstallLog(file){
+    const p = this.pane;
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024){ p.logSent = {err: "That file is larger than 2 MB; it is not an install log."}; render(); return; }
+    p.logSent = {busy: true}; render();
+    try {
+      const text = await file.text();
+      const j = await TCloudUp.post({kind: "install_log", name: file.name, text}, {});
+      p.logSent = {ok: true, ref: j.path || "", name: file.name};
+    } catch (e){ p.logSent = {err: (e && e.message) || String(e)}; }
+    render();
   },
   // The computer with Tally sends by itself: signed in to the firm, with the bridge running, this computer gets its
   // key (once) and the open client's Tally company is linked to that client. Nobody has to press anything.

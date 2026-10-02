@@ -50,16 +50,101 @@ function GoBridgeCard() {
   const dl = new URL("assets/bridge-go/" + file, location.href).href.replace(/[?#].*$/, "");
   const ps = "[Net.ServicePointManager]::SecurityProtocol = 'Tls12'; Invoke-WebRequest -Uri \"" + dl + "\" -OutFile \"$env:USERPROFILE\\Downloads\\" + file + "\"";
   return <div className="pane cn-card"><h2>FinCom Bridge {set.version} for Windows <span className="tag warn">test build · staging only</span></h2>
-    <p className="note" style={{ margin: "0 0 10px" }}>The new bridge: one program that runs as a Windows service (starts with Windows, starts again by itself), with an icon near the clock (green or red, with Open FinCom, Pause, Restart, Show log, Check for updates). Setup asks how to run it: <b>Test beside bridge 1.15.0</b> (reads Tally and sends to FinCom only to be compared; never posts) or <b>Replace bridge 1.15.0</b> (keeps its pairing, settings and copy of the books). Needs an administrator's password once, to install the service.</p>
+    <p className="note" style={{ margin: "0 0 10px" }}>The new bridge: one program with an icon near the clock that says in one line what it is doing (<b>Test mode: reading only, not posting</b> or <b>Main bridge: reading and posting</b>); right-click it for Open FinCom, Test connection, Show log and Switch to main bridge. It installs <b>just for you, without an administrator</b>, starts when you sign in and starts again by itself if it stops. Setup asks how to run it: <b>Test beside bridge 1.15.0</b> (reads only) or <b>Replace bridge 1.15.0</b> (keeps its pairing, settings and copy of the books). Its last page says whether it is installed and running.</p>
     <div className="row"><a className="btn primary" href={"assets/bridge-go/" + file + "?v=" + set.sha256.slice(0, 12)} download={file}>Download FinCom Bridge {set.version}</a>
       <span className="note" style={{ alignSelf: "center" }}>Not signed yet: Windows may say “Windows protected your PC”: press More info, then Run anyway.</span></div>
     <p className="note" style={{ fontSize: 12, margin: "8px 0 0" }}>Fingerprint (SHA-256): <code style={{ userSelect: "all", wordBreak: "break-all" }}>{set.sha256}</code></p>
-    <p className="note" style={{ margin: "10px 0 0" }}><b>No administrator rights on the Tally server?</b> The setup offers <b>Just for me</b>: it installs into your own folder, starts when you sign in, and keeps itself running. <b>For all users</b> (a Windows service) needs an administrator.</p>
+    <p className="note" style={{ margin: "10px 0 0" }}><b>No administrator rights on the Tally server?</b> Nothing to do: <b>Just for me</b> is the default. Only <b>For all users</b> (a Windows service, running before anyone signs in) needs an administrator.</p>
     {/* review of 02-Oct-2026: a Tally cloud server often has only Internet Explorer: the file's own address, and a command */}
     <p className="note" style={{ margin: "10px 0 4px" }}>Direct link to the setup file: <a href={dl} data-bridge-link="">{dl}</a></p>
     <p className="note" style={{ margin: "0 0 4px" }}>On a server without a modern browser, paste this into Windows PowerShell; the setup lands in your Downloads folder:</p>
     <pre className="cmd" data-bridge-ps="" style={{ whiteSpace: "pre-wrap", wordBreak: "break-all", userSelect: "all", fontSize: 12, background: "var(--sheet-2, #F4F6F5)", padding: 10, borderRadius: 6, margin: 0 }}>{ps}</pre>
-    <div className="row" style={{ marginTop: 6 }}><button className="btn small" onClick={() => { try { navigator.clipboard.writeText(ps); toast("Copied."); } catch (e) { toast("Select the command and copy it."); } }}>Copy the command</button></div></div>;
+    <div className="row" style={{ marginTop: 6 }}><button className="btn small" onClick={() => { try { navigator.clipboard.writeText(ps); toast("Copied."); } catch (e) { toast("Select the command and copy it."); } }}>Copy the command</button></div>
+    <BlockedHelp /></div>;
+}
+
+// review of 02-Oct-2026: every bridge FinCom has heard from (TCloud.bridgesHeard), which one is the main one, and a
+// button to make a bridge in test mode the main one (owners)
+const RUN = { user: "just for this user", service: "Windows service", window: "started by hand" };
+const TSTATE = { open: "Tally open", busy: "Tally busy", closed: "Tally not seen" };
+export function BridgesHeard() {
+  const p = TCloud.pane;
+  if (!TCloud.on()) return null;
+  if (!p.busy && !p.err && (p.devices === null || Date.now() - (p.at || 0) > 60000)) { p.at = Date.now(); setTimeout(() => TCloud.refreshPane(), 0); }
+  const rows = TCloud.bridgesHeard(), owner = S.account && S.account.me && S.account.me.role === "owner";
+  return <div className="pane" data-bridges="">
+    <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}><h2 style={{ margin: 0 }}>Bridges FinCom has heard from</h2>
+      <button className="btn small" onClick={() => TCloud.refreshPane()}>Refresh</button></div>
+    <p className="note" style={{ margin: "6px 0 10px" }}>Every bridge on the firm’s computers, from its last heartbeat. Only the <b>main</b> bridge posts to Tally; a bridge in <b>test mode</b> reads only.</p>
+    {p.err && <p className="note bad">{p.err}</p>}
+    {rows.length ? <div className="tblwrap"><table className="data"><thead><tr><th>Computer</th><th>Windows user</th><th>Bridge</th><th>Mode</th><th>Last seen</th><th>Tally</th><th>Companies open</th><th></th></tr></thead><tbody>
+      {rows.map((r, i) => <tr key={r.device.id + ":" + (r.id || "old") + ":" + i} data-bridge-row={r.id || "old"}>
+        <td>{r.computer}<div className="nr">{r.device.name}</div></td>
+        <td>{r.user || "—"}</td>
+        <td>{(r.go ? "FinCom Bridge " : "Bridge ") + (r.version || "?")}{r.runMode && <div className="nr">{RUN[r.runMode] || r.runMode}</div>}</td>
+        <td>{r.main ? <span className="tag ok">Main: reads and posts</span> : <span className="tag warn">Test: reads only</span>}</td>
+        <td>{r.at ? fmtDateTime(r.at) : "—"}<div className="nr">{r.online ? <span className="ok">online</span> : <span className="bad">offline</span>}</div></td>
+        <td>{TSTATE[r.tally] || r.tally}</td>
+        <td>{r.open.length ? r.open.join(", ") : <span className="note">none</span>}</td>
+        <td>{!r.main && r.go && (r.old ? <span className="note">Update it to 2.1 or later to make it the main bridge</span>
+          : p.noMain ? <span className="note">Not available until FinCom’s cloud is updated (migration-22)</span>
+          : owner ? <button className="btn small primary" data-make-main={r.id} onClick={() => TCloud.makeMain(r)}>Make this the main bridge</button>
+          : <span className="note">An owner of the firm can make it the main bridge</span>)}</td></tr>)}
+    </tbody></table></div> : <p className="note">No bridge has been heard from yet. Install FinCom Bridge on the computer with TallyPrime (below) and connect it.</p>}
+  </div>;
+}
+
+// review of 02-Oct-2026: when Windows blocks the download or the install, the exact steps, with pictures of what Windows
+// shows (drawn here, simplified), and a place to drop the install log when the bridge could not send it itself
+const Shot = ({ title, children, label }) => <figure style={{ margin: 0 }} aria-label={label}>
+  <svg viewBox="0 0 320 170" width="320" height="170" role="img" aria-label={label} style={{ maxWidth: "100%", height: "auto", border: "1px solid var(--rule-soft)", borderRadius: 6 }}>
+    <rect x="0" y="0" width="320" height="170" fill="#1C5FA8" />
+    <text x="16" y="34" fill="#fff" fontSize="17" fontFamily="Segoe UI, sans-serif">{title}</text>
+    {children}
+  </svg></figure>;
+function BlockedHelp() {
+  const p = TCloud.pane, ls = p.logSent;
+  return <div className="bdiag" data-install-help="" style={{ marginTop: 12 }}>
+    <h3 style={{ margin: "0 0 6px" }}>If Windows blocks the download or the setup</h3>
+    <ol style={{ margin: "0 0 0 18px", padding: 0, lineHeight: 1.55 }}>
+      <li><b>“Windows protected your PC”</b> (SmartScreen; the test build is not signed yet): press <b>More info</b>, then <b>Run anyway</b>.
+        <div className="row" style={{ gap: 12, margin: "8px 0", flexWrap: "wrap" }}>
+          <Shot label="Step 1: Windows protected your PC, press More info" title="Windows protected your PC">
+            <text x="16" y="62" fill="#fff" fontSize="11" fontFamily="Segoe UI, sans-serif">Microsoft Defender SmartScreen prevented an</text>
+            <text x="16" y="77" fill="#fff" fontSize="11" fontFamily="Segoe UI, sans-serif">unrecognised app from starting…</text>
+            <rect x="12" y="88" width="72" height="22" fill="none" stroke="#FFD24A" strokeWidth="3" rx="3" />
+            <text x="18" y="104" fill="#fff" fontSize="12" textDecoration="underline" fontFamily="Segoe UI, sans-serif">More info</text>
+            <rect x="222" y="130" width="84" height="26" fill="#fff" opacity=".85" /><text x="246" y="148" fill="#1C5FA8" fontSize="12" fontFamily="Segoe UI, sans-serif">Don’t run</text>
+            <text x="100" y="104" fill="#FFD24A" fontSize="12" fontFamily="Segoe UI, sans-serif">1. press this</text>
+          </Shot>
+          <Shot label="Step 2: press Run anyway" title="Windows protected your PC">
+            <text x="16" y="62" fill="#fff" fontSize="11" fontFamily="Segoe UI, sans-serif">App: FinComBridge-Setup-2.x.exe</text>
+            <text x="16" y="77" fill="#fff" fontSize="11" fontFamily="Segoe UI, sans-serif">Publisher: Unknown publisher</text>
+            <rect x="122" y="130" width="90" height="26" fill="#fff" opacity=".85" /><text x="138" y="148" fill="#1C5FA8" fontSize="12" fontFamily="Segoe UI, sans-serif">Run anyway</text>
+            <rect x="119" y="127" width="96" height="32" fill="none" stroke="#FFD24A" strokeWidth="3" rx="3" />
+            <rect x="222" y="130" width="84" height="26" fill="#fff" opacity=".85" /><text x="246" y="148" fill="#1C5FA8" fontSize="12" fontFamily="Segoe UI, sans-serif">Don’t run</text>
+            <text x="16" y="148" fill="#FFD24A" fontSize="12" fontFamily="Segoe UI, sans-serif">2. then this</text>
+          </Shot>
+        </div></li>
+      <li><b>The browser stops the download</b> (“isn’t commonly downloaded”, or Edge’s <b>Keep</b>): open the downloads list, press <b>…</b> next to the file, then <b>Keep</b> and <b>Keep anyway</b>. Or download it with the PowerShell command above instead: a file saved that way is not stopped by SmartScreen.</li>
+      <li><b>Windows asks for an administrator’s password</b> (User Account Control) and you have none: press <b>No</b>. Run the setup again and keep <b>Just for me</b> (the default): it needs no administrator. Only <b>For all users</b> (a Windows service) needs one, and the setup says so before Windows asks.
+        <div style={{ margin: "8px 0" }}><Shot label="User Account Control: press No when you have no administrator" title="User Account Control">
+          <text x="16" y="62" fill="#fff" fontSize="11" fontFamily="Segoe UI, sans-serif">Do you want to allow this app to make changes</text>
+          <text x="16" y="77" fill="#fff" fontSize="11" fontFamily="Segoe UI, sans-serif">to your device? (an administrator’s password)</text>
+          <rect x="40" y="130" width="110" height="26" fill="#fff" opacity=".6" /><text x="84" y="148" fill="#1C5FA8" fontSize="12" fontFamily="Segoe UI, sans-serif">Yes</text>
+          <rect x="170" y="130" width="110" height="26" fill="#fff" opacity=".85" /><text x="218" y="148" fill="#1C5FA8" fontSize="12" fontFamily="Segoe UI, sans-serif">No</text>
+          <rect x="167" y="127" width="116" height="32" fill="none" stroke="#FFD24A" strokeWidth="3" rx="3" />
+          <text x="16" y="112" fill="#FFD24A" fontSize="12" fontFamily="Segoe UI, sans-serif">No administrator? Press No, then choose Just for me</text>
+        </Shot></div></li>
+      <li><b>“This app has been blocked by your system administrator”</b> (a company policy): the setup cannot run on this computer as you. Ask the person who looks after the server to install it <b>For all users</b>, or to allow FinCom Bridge.</li>
+    </ol>
+    <h3 style={{ margin: "14px 0 6px" }}>The setup failed?</h3>
+    <p className="note" style={{ margin: "0 0 6px" }}>The setup keeps a log of every step at <code>%LOCALAPPDATA%\FinCom Bridge\install.log</code> (paste that into the Explorer address bar). Its last page has <b>Send install log to FinCom</b>; if this computer is not connected to FinCom yet, drop the file here instead and FinCom support sees exactly what went wrong.</p>
+    {TCloud.on() ? <label className="btn small" data-install-log="" style={{ cursor: "pointer" }}>Send an install log…
+      <input type="file" accept=".log,.txt,text/plain" style={{ display: "none" }} onChange={(ev) => { const f = ev.target.files && ev.target.files[0]; ev.target.value = ""; TCloud.sendInstallLog(f); }} /></label>
+      : <p className="note">Sign in to the firm account to send an install log.</p>}
+    {ls && (ls.busy ? <p className="note">Sending…</p> : ls.err ? <p className="bk-warn">{ls.err}</p> : <p className="note ok" data-install-log-sent="">{"Sent " + ls.name + " to FinCom support (reference " + ls.ref + ")."}</p>)}
+  </div>;
 }
 
 function DownHelp({ c }) {
@@ -198,5 +283,5 @@ export function CloudBooks() {
 
 // the Tally page in the sidebar: the bridge, then everything sent to Tally
 export default function TallyHome() {
-  return <><section className="today"><h2>Tally</h2></section><BridgeSettings /><PostLog /></>;
+  return <><section className="today"><h2>Tally</h2></section><BridgesHeard /><BridgeSettings /><PostLog /></>;
 }
