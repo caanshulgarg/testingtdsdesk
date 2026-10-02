@@ -41,6 +41,7 @@ with sync_playwright() as p:
        and pg.locator(T).count() == 0 and pg.locator("#app [data-post-main]").count() == 0, "a ledger not in Tally: its bills need attention, with a choice of Tally's ledgers, and are not ready")
     led.first.locator("select").select_option("Legal and Professional Charges"); pg.wait_for_timeout(200)
     led.first.locator('button:has-text("Replace")').click(); pg.wait_for_timeout(500)
+    print(pg.evaluate("Object.values(D().entries).filter(e => e.status === 'approved').map(e => e.snapshot.lines.map(l => l.ledger + '/' + l.role + '/' + !!exactLedger(l.ledger)).join(','))"), pg.inner_text('#app [data-post-page]')[:600])
     ok(pg.evaluate("Object.values(D().entries).filter(e => e.status === 'approved').every(e => e.snapshot.lines.some(l => l.ledger === 'Legal and Professional Charges'))") and pg.locator(T + " tbody tr").count() == 2,
        "Replace: the waiting bills use Tally's ledger, and are ready to post again")
     pg.screenshot(path=OUT + "/react-post.png", full_page=True)

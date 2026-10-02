@@ -90,8 +90,10 @@ function postAltered(x){
 // (voucher no. X, dd-mm-yyyy)"}: the entry is in Tally, not failed; or {ok: false, checkFailed: true, message: "Could not
 // check Tally, not posted. Try again."}: nothing was posted, the entry stays waiting. Read from the message too, for a
 // cloud that does not pass the two flags on yet (tally-ingest before 02-Oct-2026)
-function postAlready(x){ return !!x && (x.already === true || (!x.ok && /^Already in Tally \(voucher no\./i.test(String(x.message || "")))); }
-function postCheckFail(x){ return !!x && !x.ok && !postAlready(x) && (x.checkFailed === true || /^Could not check Tally\b/i.test(String(x.message || ""))); }
+// A posting the bridge found its own earlier one of in Tally (FinCom's tag; a resumed or queued job) answers ok with
+// alreadyThere: in Tally too. "Waiting for Tally: Tally is busy …" before the check could run: nothing was posted either
+function postAlready(x){ return !!x && (x.already === true || (x.ok === true && x.alreadyThere === true) || (!x.ok && /^Already in Tally \(voucher no\./i.test(String(x.message || "")))); }
+function postCheckFail(x){ return !!x && !x.ok && !postAlready(x) && (x.checkFailed === true || /^(Could not check Tally|Waiting for Tally)\b/i.test(String(x.message || ""))); }
 function postWord(x){
   if (!x) return "Failed: Tally did not answer for this entry";
   if (postAlready(x)) return plainMsg(x.message) || "Already in Tally (not sent again)";

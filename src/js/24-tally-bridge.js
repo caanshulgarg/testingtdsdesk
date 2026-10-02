@@ -1069,7 +1069,9 @@ async function postBankToTally(ids){
     let ok = 0, optionalN = 0;
     const posted = [];
     rows.forEach(r => {
-      const x = byId.get(r.id);
+      // bridge 2.1.4: the same voucher found in Tally just before posting: in Tally (with that voucher), not failed. A
+      // check that could not be made leaves the line ready, with the bridge's one line (below, as any refusal)
+      const x0 = byId.get(r.id), x = postAlready(x0) ? Object.assign({}, x0, {ok: true, verified: true, vchNumber: x0.vchNumber || x0.vchNo || ""}) : x0;
       if (x && x.ok && x.verified !== true && !x.pendingCheck){
         b.postedTags = b.postedTags || {}; b.postedTags[fpHash(r.fp || r.id)] = "unconfirmed:" + now;
         r.postError = "In Tally, not yet read back: Tally took it, but FinCom has not found it in Tally since, so it is not counted as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again." + (x.verifyNote ? " [" + x.verifyNote + "]" : "");

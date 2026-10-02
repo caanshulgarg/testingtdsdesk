@@ -684,7 +684,10 @@ Deno.serve(async (req) => {
         // 02-Oct-2026: each entry's state as the bridge sees it (waiting / sending / sent / in_tally / failed, with why)
         const STATES = ["waiting", "sending", "sent", "in_tally", "failed"];
         const items = Array.isArray(body.items) ? body.items.slice(0, 5000).map((x: any) => ({ id: s(x?.id, 200), kind: s(x?.kind, 10),
-          state: STATES.includes(x?.state) ? x.state : "waiting", reason: s(x?.reason, 500) })) : null;
+          state: STATES.includes(x?.state) ? x.state : "waiting", reason: s(x?.reason, 500),
+          // bridge 2.1.4: a failed item that was not posted because the same bill is in Tally (with its voucher), or
+          // because Tally could not be checked first
+          ...(x?.already ? { already: true, guid: s(x?.guid, 100), vchNo: s(x?.vchNo, 60), vchDate: s(x?.vchDate, 8) } : {}), ...(x?.checkFailed ? { checkFailed: true } : {}) })) : null;
         // a posting cancelled in FinCom, or gone: the bridge is told, and stops waiting for Tally
         const id = String(body.id || "");
         const { data: cur } = await db.from("tally_post_jobs").select("status").eq("id", id).eq("device_id", dev.id).maybeSingle();
