@@ -1205,3 +1205,10 @@ td.n,th.n,.n{text-align:right;font-variant-numeric:tabular-nums}
 .neg,td.n.neg,.dtile b.neg,.metric b.neg,.tile b.neg{color:var(--bad)}
 .signin{background:var(--paper)}
 .signin-box h1::before,.side-brand::before{content:none}
+
+/* Post to Tally: the import steps (More → How to import), one under the other at any width (review of 02-Oct-2026: the
+   generic .steps grid squeezed them into overlapping columns) */
+ol.post-import{display:block;margin:6px 0 0;padding:0 0 0 20px;border:0;background:none;font-size:14px;grid-template-columns:none}
+ol.post-import li{display:list-item;margin:3px 0;overflow-wrap:anywhere}
+[data-post-page] .tblwrap{max-width:100%;overflow-x:auto}
+[data-post-line]{overflow-wrap:anywhere}

@@ -187,6 +187,12 @@ const PostRecord = {
   }
 };
 
+// One count of what is for Tally, used everywhere (review of 02-Oct-2026: the header chip said 1, the tab 1, the page 0
+// and the dashboard 0): the bills approved and not confirmed in Tally, the same as the client's stats.waiting. A bill
+// sent in a Tally file, or posted and not yet read back, is counted (and listed on the page) until Tally confirms it.
+function postBillsOpen(cid){ const d = S.data[cid]; return d && d.loaded ? Object.values(d.entries).filter(e => e.status === "approved" && !billInTally(e)) : null; }
+function postCountFor(cid){ const l = postBillsOpen(cid); return l ? l.length : num(((S.companies[cid] || {}).stats || {}).waiting); }
+
 // ---------- the Post to Tally page: one line, one table, one button (C15-C18)
 // what this client's entries go into, and through what: {company, bridge, state, action, go}
 function postLineFor(co){
@@ -229,11 +235,13 @@ function postRows(co){
     return fallback;
   };
   const busyBills = !!(S.billPost && S.billPost.busy && /^Posting/.test(S.billPost.busy));
-  Object.values(d.entries).filter(e => e.status === "approved" && !e.exportedAt).sort(byDate).forEach(e => {
+  (postBillsOpen(co.id) || []).sort(byDate).forEach(e => {
     const led = {party: [], expense: [], gst: [], tds: []};
     (e.snapshot ? e.snapshot.lines : []).forEach(l => { const k = PV_ROLE[l.role] || "expense"; if (l.ledger && !led[k].includes(l.ledger)) led[k].push(l.ledger); });
-    out.push({kind: "bill", id: e.id, date: e.x.invoiceDate, party: e.x.vendorName, no: e.x.invoiceNo || "", amount: num(e.x.total), led, e,
-      state: stOf(e.id, e.postUnconfirmed ? ["In Tally, not yet read back", "warn"] : busyBills ? ["Sending", "warn"] : ["Waiting for Tally", ""])});
+    // sent (a Tally file, or posted and not confirmed): listed with where it stands, not posted again from here
+    const sent = !!e.exportedAt, ts = sent ? tallyStateOf(e) : null;
+    out.push({kind: "bill", id: e.id, date: e.x.invoiceDate, party: e.x.vendorName, no: e.x.invoiceNo || "", amount: num(e.x.total), led, e, sent,
+      state: sent ? [ts[1], ts[0] === "bad" ? "bad" : "warn"] : stOf(e.id, e.postUnconfirmed ? ["In Tally, not yet read back", "warn"] : busyBills ? ["Sending", "warn"] : ["Waiting for Tally", ""])});
   });
   const b = S.bank && S.bank.cid === co.id && !S.bank.loading ? S.bank : null, st = b ? curStmt() : null;
   if (b && st){
@@ -289,7 +297,7 @@ async function postAllToTally(only){
   if (!co.postTo) await autoPostTo(co);
   if (!co.postTo){ postStopped(postToProblem(co, ""), co.id); render(); return; }
   if (!S.bank || S.bank.cid !== co.id) await loadBank(co.id);
-  let rows = postRows(co).filter(r => !/^(Sending|In Tally)/.test(r.state[0]));
+  let rows = postRows(co).filter(r => !r.sent && !/^(Sending|In Tally)/.test(r.state[0]));
   if (only) rows = rows.filter(r => r.kind === only.kind && r.id === only.id);
   if (!rows.length){ toast("Nothing is waiting to be posted."); return; }
   S.postStop = null;

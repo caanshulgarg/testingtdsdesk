@@ -13,7 +13,7 @@ function Tile({ label, n, sub, go }) {
 
 export default function Dash() {
   const co = CO(), v = Object.values(D().entries), [q, setQ] = useState("");
-  const drafts = v.filter((e) => e.status === "draft"), approved = v.filter((e) => e.status === "approved" && !e.exportedAt);
+  const drafts = v.filter((e) => e.status === "draft"), approved = postBillsOpen(co.id) || [];   // the one count for Tally (src/js/59)
   const bank = S.bank && S.bank.cid === co.id ? S.bank : null, bc = bank ? tabCounts(bank.rows) : null, stmt = bank ? curStmt() : null;
   const sales = S.sales && S.sales.cid === co.id ? S.sales.list : null;
   const tds = v.filter((e) => e.status !== "rejected" && e.snapshot).reduce((a, e) => a + num(e.snapshot.tds), 0);

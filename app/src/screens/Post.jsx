@@ -154,9 +154,11 @@ function Entries({ rows, canPost }) {
         <td><span className={"tag " + r.state[1]} data-state="">{r.state[0]}</span></td>
         <td className="ac" style={{ whiteSpace: "nowrap" }}>
           <button className="btn small" data-preview="" onClick={() => postPreviewOne(r.kind, r.id)}>Preview</button>{" "}
-          {r.kind !== "sale" ? canPost && <button className="btn small" data-post-one="" disabled={busy} onClick={() => postOneToTally(r.kind, r.id)}>Post</button>
+          {r.sent ? (r.e.goneFromTally ? <button className="btn small" onClick={() => doAct("billRepostGone")}>Post again</button>
+              : canPost && <button className="btn small" onClick={() => doAct("billCheck")}>Check in Tally</button>)
+            : r.kind !== "sale" ? canPost && <button className="btn small" data-post-one="" disabled={busy} onClick={() => postOneToTally(r.kind, r.id)}>Post</button>
             : <button className="btn small" onClick={() => goDocType("sales")}>Open in Sales</button>}{" "}
-          <button className="btn small" data-back="" disabled={busy} onClick={() => postBackToReview(r.kind, r.id)}>Back to review</button>
+          {!r.sent && <button className="btn small" data-back="" disabled={busy} onClick={() => postBackToReview(r.kind, r.id)}>Back to review</button>}
         </td>
       </tr>; })}</tbody>
   </table></div>;
@@ -164,7 +166,7 @@ function Entries({ rows, canPost }) {
 
 function ImportSteps({ co, ledgers }) {
   return <div className="bk-alert" data-import-steps="" style={{ margin: "10px 0 0" }}><b>Import into Tally</b>
-    <ol className="steps">
+    <ol className="post-import">
       <li>More → Download Tally file, and unzip it to get the .xml file.</li>
       <li>Open <b>{co.tallyName || co.name}</b> in TallyPrime.</li>
       <li>Check these ledgers exist in it with the same names{ledgers.length ? ": " + ledgers.join(", ") : ""}.</li>
@@ -190,14 +192,17 @@ export function PostStep() {
   const issues = ctx ? billLedgerIssues(waiting) : [];
   const canPost = canPostTally(co), bc = S.billCheck || {};
   const undoable = v.filter((e) => e.exportedAt && e.tally && e.tally.guid).length;
-  const rows = postRows(co), toPost = rows.filter((r) => !/^(Sending|In Tally)/.test(r.state[0])).length;
+  const rows = postRows(co), toPost = rows.filter((r) => !r.sent && !/^(Sending|In Tally)/.test(r.state[0])).length;
+  // the one count for Tally (the header chip, the tab and the dashboard say the same: postCountFor, src/js/59)
+  const nBills = postCountFor(co.id), nOther = rows.filter((r) => r.kind !== "bill").length;
   const bankRep = S.bank && S.bank.cid === co.id ? S.bank.postReport : null;
   const more = (fn) => (ev) => { const d = ev.currentTarget.closest("details"); if (d) d.open = false; fn(); };
   return (
     <section className="poststep" data-post-page="">
       <PostLine co={co} />
       <NotAllowed co={co} />
-      {rows.length ? <Entries rows={rows} canPost={canPost} /> : <p className="note" data-post-empty="">Nothing is waiting to be posted. {sent} bills sent earlier.</p>}
+      <p className="note" data-post-count="" style={{ margin: "0 0 8px" }}><b>{plural(nBills, "bill", "bills")} for Tally</b>{nOther ? " · " + plural(nOther, "other entry", "other entries") + " (bank, sales)" : ""}{sent ? " · " + sent + " in Tally" : ""}</p>
+      {rows.length ? <Entries rows={rows} canPost={canPost} /> : <p className="note" data-post-empty="">Nothing is waiting to be posted.</p>}
       {issues.length > 0 && <div className="bk-alert bad" style={{ margin: "10px 0 0" }}>
         <b>{plural(issues.length, "ledger is", "ledgers are")} not in Tally.</b> Bills using them are not posted until you choose the right Tally ledger (or create it). Fixes are saved for future bills.
         <table className="data" style={{ marginTop: 8 }}>
