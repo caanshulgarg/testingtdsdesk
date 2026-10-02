@@ -5592,6 +5592,11 @@ const MIS = {
     sum.advance = r2(rows.reduce((a, p) => a + p.advance, 0));
     sum.nb = MIS.BUCKETS.map((_, i) => r2(rows.reduce((a, p) => a + p.nb[i], 0)));
     sum.und = r2(rows.reduce((a, p) => a + p.und, 0));
+    // review of 02-Oct-2026: the parties whose ledger balance and bills do not agree (the difference is the ledger balance
+    // less the bills' total), largest first, for the line at the top of Receivables and Payables
+    sum.differ = rows.filter(p => p.diff != null && Math.abs(p.diff) >= 1).sort((a, c) => Math.abs(c.diff) - Math.abs(a.diff) || a.party.localeCompare(c.party))
+      .map(p => ({party: p.party, bills: p.total, ledger: p.tally, diff: p.diff}));
+    sum.diff = r2(rows.reduce((a, p) => a + (p.diff || 0), 0));
     return {rows, sum};
   },
   msme(){
@@ -5760,10 +5765,15 @@ const MIS = {
       cash: this.cashflow(from, to), recv: this.ageing(to, "r", balTo), pay: this.ageing(to, "p", balTo), comp: this.compliance(from, to), dues: this.dues(),
       balances: bal.ok ? {src: bal.src, cash: Object.keys(balTo).filter(l => Audit.isCash(l)).sort().map(l => [l, r2(-balTo[l])]), bank: Object.keys(balTo).filter(l => Audit.isBankL(l)).sort().map(l => [l, r2(-balTo[l])])} : {why: bal.why}};
     // days of sales or purchases owed: from what is owed on balance; never below nought (an advance is not "negative days")
+    // the headline owed to you and by you is the ledger balances (Parties.position), the same figure as Reports and
+    // Letters; the ageing only splits it, any part no bill explains shown as not bill-wise (review of 02-Oct-2026)
+    const P = Parties.position(to);
+    r.owed = P.ok ? {r: P.owed, p: P.youOwe, custAdv: P.custAdv, supAdv: P.supAdv} : null;
     r.dso = r.recv.sum.owe > 0 && s.total > 0 ? Math.round(r.recv.sum.owe / (s.total / days)) : null;
     // days of purchases only for a client that buys goods (Purchase Accounts used in the period): a service firm's bills
     // are expenses, and "days of purchases" says nothing about them (review of 02-Oct-2026)
     const goods = Object.entries(this.moves(from, to)).some(([l, x]) => Audit.under(l, /^purchase accounts$/i) && Math.abs(num(x.t)) >= 1);
+    r.goods = goods;
     r.dpo = goods && r.pay.sum.owe > 0 && pr.total > 0 ? Math.round(r.pay.sum.owe / (pr.total / days)) : null;
     r.p2 = this.phase2(r, balTo, bal.ok ? r2(r.balances.cash.concat(r.balances.bank).reduce((s2, x) => s2 + x[1], 0)) : null);
     const md = this.cfg(b).msmeDays, msme = this.msme();
@@ -5785,7 +5795,7 @@ const MIS = {
   // working (V, raised whenever a figure is worked out differently). A saved run from other books or other working is
   // worked out again when MIS opens, and its figures are not shown meanwhile (review of 02-Oct-2026: MIS showed the run of
   // 01-Oct, result code 1FB42BF2, with figures since corrected)
-  V: 3,
+  V: 4,                                                       // 4: GST without cancelled entries, cash flow and ratios redone (review of 02-Oct-2026)
   basis(b){
     b = b || S.books || {};
     const vs = b.vouchers || [], alt = vs.reduce((a, v) => Math.max(a, num(v.alter || v.alterId || 0)), 0);
@@ -5845,13 +5855,27 @@ Object.assign(MIS, {
       if (!tot || Math.abs(net) < 0.01) return;
       opp.forEach(e => {
         const share = r2(-net * Math.abs(e.a) / tot);
-        const [sec, lab] = this.flowHead(e.l), k = sec + "|" + lab, x = rows[k] = rows[k] || {sec, lab, t: 0, m: {}, led: {}};
+        // money that came in on a line named for paying (or went out on one named for receiving) has its own line (review
+        // of 02-Oct-2026: 48,50,089 received back from suppliers in Feb-2026 sat as "+" under Paid to suppliers, and an
+        // income-tax refund of 9,28,480 under Income tax)
+        let [sec, lab] = this.flowHead(e.l);
+        if (share > 0 && lab === "Paid to suppliers") lab = "Refunds and receipts from suppliers";
+        else if (share > 0 && lab === "Income tax") lab = "Tax refunds";
+        else if (share < 0 && lab === "Received from customers") lab = "Refunds and payments to customers";
+        const k = sec + "|" + lab, x = rows[k] = rows[k] || {sec, lab, t: 0, m: {}, led: {}};
         x.t = r2(x.t + share); x.m[ym] = r2((x.m[ym] || 0) + share); x.led[e.l] = r2((x.led[e.l] || 0) + share);
       });
     });
     const list = Object.values(rows).sort((a, c) => ["op", "inv", "fin"].indexOf(a.sec) - ["op", "inv", "fin"].indexOf(c.sec) || c.t - a.t);
     const sec = s2 => ({t: r2(list.filter(x => x.sec === s2).reduce((a, x) => a + x.t, 0)), m: Object.fromEntries(months.map(mm => [mm, r2(list.filter(x => x.sec === s2).reduce((a, x) => a + (x.m[mm] || 0), 0))]))});
-    return {months, rows: list, op: sec("op"), inv: sec("inv"), fin: sec("fin"), net: r2(list.reduce((a, x) => a + x.t, 0))};
+    const net = r2(list.reduce((a, x) => a + x.t, 0));
+    // cash and bank at the start and the end, from the balances (review of 02-Oct-2026): opening + net change = closing,
+    // checked; a difference is an entry that moved cash or bank without a line on the other side
+    let open = null, close = null;
+    try { const B = Audit.balances(from, to); if (B.ok){ const cb = at => r2(Object.keys(at).filter(l => Audit.isCash(l) || Audit.isBankL(l)).reduce((a, l) => a - num(at[l]), 0));
+      open = cb(B.at(Audit.dayBefore(from))); close = cb(B.at(to)); } } catch (e){}
+    const diff = open == null ? null : r2(close - open - net);
+    return {months, rows: list, op: sec("op"), inv: sec("inv"), fin: sec("fin"), net, open, close, diff, ties: diff == null || Math.abs(diff) < 1};
   },
   median(a){ if (!a.length) return null; const s2 = a.slice().sort((x, y) => x - y), k = Math.floor(s2.length / 2); return s2.length % 2 ? s2[k] : Math.round((s2[k - 1] + s2[k]) / 2); },
   // how long each party takes to settle a bill, from the bills settled in the books
@@ -5929,17 +5953,32 @@ Object.assign(MIS, {
     const rev = (r.pl.heads.rev || {t: 0}).t, pc = (a, c) => c ? Math.round(a / c * 1000) / 10 : null;
     const out = [["Gross margin", pc(r.pl.gross.t, rev), "%", "gross profit \u00f7 revenue"], ["Operating margin (before interest and depreciation)", pc(r.pl.ebitda.t, rev), "%", ""], ["Net margin (before tax)", pc(r.pl.pbt.t, rev), "%", ""],
       ["Employee costs to revenue", pc((r.pl.heads.emp || {t: 0}).t, rev), "%", ""], ["Other expenses to revenue", pc((r.pl.heads.exp || {t: 0}).t, rev), "%", ""],
-      ["Days of sales owed to you", r.dso, "days", "receivables \u00f7 sales a day"], ["Days of purchases you owe", r.dpo, "days", "payables \u00f7 purchases a day"],
+      ["Days of sales owed to you", r.dso, "days", "receivables \u00f7 sales a day"]].concat(
+      // no purchases (a service firm's bills are expenses), no "days of purchases" (review of 02-Oct-2026)
+      r.goods === false || (r.goods == null && !r.purchases.total) ? [] : [["Days of purchases you owe", r.dpo, "days", "payables \u00f7 purchases a day"]]).concat([
       ["Sales growth on the previous period", r.prev && r.prev.sales ? pc(r.sales.total - r.prev.sales, r.prev.sales) : null, "%", ""],
-      ["Sales growth on last year", r.ly && r.ly.sales ? pc(r.sales.total - r.ly.sales, r.ly.sales) : null, "%", ""]];
+      ["Sales growth on last year", r.ly && r.ly.sales ? pc(r.sales.total - r.ly.sales, r.ly.sales) : null, "%", ""]]);
     if (balTo){
-      const A = Audit, g = re => Object.entries(balTo).filter(([l]) => A.under(l, re)).reduce((s2, [, v]) => s2 + v, 0);
-      const ca = -g(/^(current assets|sundry debtors|cash-in-hand|bank accounts|stock-in-hand|loans & advances \(asset\)|deposits \(asset\))$/i);
-      const cl = g(/^(current liabilities|sundry creditors|duties & taxes|provisions|bank od a\/c|bank occ a\/c)$/i);
-      const debt = g(/^(loans \(liability\)|secured loans|unsecured loans|bank od a\/c|bank occ a\/c)$/i), eq = g(/^(capital account|reserves & surplus)$/i) + r.pl.pat.t;
-      const liquid = ca + g(/^stock-in-hand$/i);
-      out.push(["Current ratio", cl ? Math.round(ca / cl * 100) / 100 : null, "times", "current assets \u00f7 current liabilities"], ["Quick ratio", cl ? Math.round(liquid / cl * 100) / 100 : null, "times", "without stock"],
-        ["Debt to equity", eq ? Math.round(debt / eq * 100) / 100 : null, "times", "borrowings \u00f7 capital and reserves"],
+      // review of 02-Oct-2026: the current ratio showed -11.17 times beside working capital of +1,55,35,238.49, the
+      // liabilities' groups netting to a debit (tax paid in advance, suppliers paid ahead). Each ledger is placed as the
+      // Accounts tab places it (FS.place: a debit balance under liabilities is an asset, a credit under assets a
+      // liability), and assets and liabilities are taken as positive amounts; a ratio that still comes out negative or
+      // with nothing to divide by is "not meaningful", never a negative number
+      const A = Audit, CA = {}, CL = {}, at = {ca: 0, cl: 0, stock: 0, debt: 0, eq: 0};
+      ["ci", "inv", "tr", "cash", "stla", "oca"].forEach(k => { CA[k] = 1; }); ["stb", "tp", "ocl", "stp"].forEach(k => { CL[k] = 1; });
+      Object.entries(balTo).forEach(([l, v]) => {
+        v = num(v); if (Math.abs(v) < 0.005) return;
+        if (typeof FS === "undefined" || FS.nature(l).rev) return;
+        const k = FS.place(l, v, "co");
+        if (CA[k]){ at.ca += -v; if (k === "inv") at.stock += -v; }
+        else if (CL[k]) at.cl += v;
+        if (k === "ltb" || k === "stb") at.debt += v;
+        if (k === "share" || k === "reserves" || k === "capital") at.eq += v;
+      });
+      const ca = r2(at.ca), cl = r2(at.cl), liquid = r2(at.ca - at.stock), debt = r2(at.debt), eq = r2(at.eq + r.pl.pat.t);
+      const NM = "not meaningful", times = (a, c) => !(c > 0) || a < 0 ? NM : Math.round(a / c * 100) / 100;
+      out.push(["Current ratio", times(ca, cl), "times", "current assets " + INR.format(ca) + " \u00f7 current liabilities " + INR.format(cl)], ["Quick ratio", times(liquid, cl), "times", "without stock"],
+        ["Debt to equity", !(eq > 0) || debt < 0 ? NM : Math.round(debt / eq * 100) / 100, "times", "borrowings \u00f7 capital and reserves"],
         ["Interest cover", (r.pl.heads.fin || {t: 0}).t ? Math.round(r.pl.ebitda.t / r.pl.heads.fin.t * 10) / 10 : null, "times", "operating profit \u00f7 finance costs"],
         ["Working capital", r2(ca - cl), "\u20b9", "current assets less current liabilities"]);
     }
@@ -7007,9 +7046,10 @@ const GSTR = {
   // the entries of one month (build 193): from an index made once per drawing or calculation, not the whole year each time
   // the entries GST is worked out from. Optional entries are memoranda in Tally, not in the books, and never in a return
   // (review of 01-Oct-2026: GSTR-1 counted 13 Optional sales of one client, each also entered as a regular invoice: their
-  // tax twice; the server's GST summary, which leaves them out, showed it)
+  // tax twice; the server's GST summary, which leaves them out, showed it). Cancelled entries are left out too (review of
+  // 02-Oct-2026: as the server's summary and MIS do); table 13 counts their numbers on its own
   vIn(ym){
-    const all = (S.books.vouchers || []).filter(v => !v.opt);
+    const all = (S.books.vouchers || []).filter(v => !v.opt && !v.cancel);
     if (typeof perRender !== "function" || !ym || String(ym).length !== 6) return all;
     return perRender(this, "byMonth", () => { const m = {}; all.forEach(v => { const k = String(v.date).slice(0, 6); (m[k] = m[k] || []).push(v); }); return m; })[ym] || [];
   },
@@ -8740,12 +8780,16 @@ function misPackHtml(r){
     (Math.abs(A.sum.pre) >= 1 && A.sum.tally == null ? '<p class="note">' + m(Math.abs(A.sum.pre)) + " was settled against bills from before the books read here; they are not in these figures.</p>" : ""); };
   h += age("Receivables, largest 15", r.recv) + age("Payables, largest 15", r.pay);
   h += "<h2>Top customers</h2><table><tbody>" + r.sales.rows.slice(0, 10).map(x => "<tr><td>" + esc(x.party) + '</td><td class="n">' + m(x.t) + '</td><td class="n">' + (r.sales.total ? Math.round(x.t / r.sales.total * 1000) / 10 + "%" : "") + "</td></tr>").join("") + "</tbody></table>";
-  h += "<h2>Compliance</h2><table><thead><tr><th>Month</th><th class=\"n\">GST payable in cash</th><th class=\"n\">TDS deducted</th><th class=\"n\">TDS deposited</th></tr></thead><tbody>" +
-    r.comp.gst.map((x, i) => "<tr><td>" + GSTR.label(x.ym) + '</td><td class="n">' + m(x.pay) + '</td><td class="n">' + m(r.comp.tds[i].ded) + '</td><td class="n">' + m(r.comp.tds[i].dep) + "</td></tr>").join("") + "</tbody></table>" +
+  // review of 02-Oct-2026: GST worked out to pay (the 3B working's cash) and what the books show paid from the bank, each
+  // under its own heading
+  h += "<h2>Compliance</h2><table><thead><tr><th>Month</th><th class=\"n\">GST worked out to pay</th><th class=\"n\">GST paid from the bank</th><th class=\"n\">TDS deducted</th><th class=\"n\">TDS deposited</th></tr></thead><tbody>" +
+    r.comp.gst.map((x, i) => "<tr><td>" + GSTR.label(x.ym) + '</td><td class="n">' + m(x.due) + '</td><td class="n">' + m(x.pay) + '</td><td class="n">' + m(r.comp.tds[i].ded) + '</td><td class="n">' + m(r.comp.tds[i].dep) + "</td></tr>").join("") + "</tbody></table>" +
     "<h2>Due in the coming weeks</h2><table><tbody>" + r.dues.map(([d, l]) => "<tr><td>" + fmtDate(tallyDate(d)) + "</td><td>" + esc(l) + "</td></tr>").join("") + "</tbody></table>";
   if (r.p2){
     const F = r.p2.fc, C = r.p2.cash;
-    h += "<h2>Cash flow</h2><table><tbody><tr><td>From operations</td><td class=\"n\">" + m(C.op.t) + "</td></tr><tr><td>From investing</td><td class=\"n\">" + m(C.inv.t) + "</td></tr><tr><td>From financing</td><td class=\"n\">" + m(C.fin.t) + "</td></tr><tr><td><b>Net change</b></td><td class=\"n\"><b>" + m(C.net) + "</b></td></tr></tbody></table>";
+    h += "<h2>Cash flow</h2><table><tbody><tr><td>From operations</td><td class=\"n\">" + m(C.op.t) + "</td></tr><tr><td>From investing</td><td class=\"n\">" + m(C.inv.t) + "</td></tr><tr><td>From financing</td><td class=\"n\">" + m(C.fin.t) + "</td></tr><tr><td><b>Net change</b></td><td class=\"n\"><b>" + m(C.net) + "</b></td></tr>" +
+      (C.open != null ? "<tr><td>Cash and bank at the start</td><td class=\"n\">" + m(C.open) + "</td></tr><tr><td><b>Cash and bank at the end</b></td><td class=\"n\"><b>" + m(C.close) + "</b></td></tr>" : "") + "</tbody></table>" +
+      (C.open != null && !C.ties ? '<p class="note">Opening plus the net change differs from the closing balance by ' + m(C.diff) + ".</p>" : "");
     h += "<h2>The next 13 weeks</h2><table><thead><tr><th>Week of</th><th class=\"n\">In</th><th class=\"n\">Out</th>" + (F.opening != null ? "<th class=\"n\">Cash at the end</th>" : "<th class=\"n\">Net</th>") + "</tr></thead><tbody>" +
       F.weeks.map(w => "<tr><td>" + fmtDate(tallyDate(w.from)) + '</td><td class="n">' + m(w.inn) + '</td><td class="n">' + m(w.out) + '</td><td class="n">' + m(F.opening != null ? w.close : w.net) + "</td></tr>").join("") + "</tbody></table>";
     const V = MIS.budgetVs(r);
@@ -8769,7 +8813,7 @@ async function misExcel(r){
   add("Sales by customer", [["Customer"].concat(r.sales.months.map(GSTR.label)).concat(["Total"])].concat(r.sales.rows.map(x => [x.party].concat(r.sales.months.map(mm => x.m[mm] || 0)).concat([x.t]))));
   add("Purchases by supplier", [["Supplier"].concat(r.purchases.months.map(GSTR.label)).concat(["Total"])].concat(r.purchases.rows.map(x => [x.party].concat(r.purchases.months.map(mm => x.m[mm] || 0)).concat([x.t]))));
   add("Expense heads", [["Ledger"].concat(r.purchases.months.map(GSTR.label)).concat(["Total", "Jumped in"])].concat(r.purchases.heads.map(x => [x.l].concat(r.purchases.months.map(mm => x.m[mm] || 0)).concat([x.t, x.jumps.map(GSTR.label).join(", ")]))));
-  add("Compliance", [["Month", "GST output", "GST credit", "GST payable in cash", "TDS deducted", "TDS deposited"]].concat(r.comp.gst.map((x, i) => [GSTR.label(x.ym), x.out, x.itc, x.pay, r.comp.tds[i].ded, r.comp.tds[i].dep])));
+  add("Compliance", [["Month", "GST output", "GST credit", "GST worked out to pay", "GST paid from the bank", "TDS deducted", "TDS deposited"]].concat(r.comp.gst.map((x, i) => [GSTR.label(x.ym), x.out, x.itc, x.due, x.pay, r.comp.tds[i].ded, r.comp.tds[i].dep])));
   if (r.p2){
     add("Cash flow", [["Section", "What"].concat(r.p2.cash.months.map(GSTR.label)).concat(["Period"])].concat(r.p2.cash.rows.map(x => [x.sec, x.lab].concat(r.p2.cash.months.map(mm => x.m[mm] || 0)).concat([x.t]))));
     add("13 weeks", [["Week of", "Date", "What", "Who", "Amount", "Why this date"]].concat(r.p2.fc.weeks.flatMap(w => w.items.map(z => [Audit.iso(w.from), Audit.iso(z.d), z.what, z.who, z.amt, z.why]))));
@@ -12557,7 +12601,8 @@ function lmPost(k){ LedMaster.applyPosting(S.books, CO(), k); render(); }
 // or note (kept with the books)
 // Accounts (app/src/screens/books/Accounts.jsx): the format, the year, stock, a manufacturer, shares, a ledger placed by
 // hand (the statements are worked out again) or given back to the rule
-function fsKindSet(v){ const b = S.books; b.fs = Object.assign({}, FS.cfg(b), {kind: v}); S.fsRun = null; saveBooks(); render(); }
+// a format chosen by hand stays chosen; otherwise it follows the client's entity type (FS.cfg)
+function fsKindSet(v){ const b = S.books; b.fs = Object.assign({}, FS.cfg(b), {kind: v, kindSet: true}); S.fsRun = null; saveBooks(); render(); }
 function fsFyGo(v){ S.fsFy = v; S.fsRun = null; render(); }
 function fsStockSet(which, v){ const b = S.books, c = FS.cfg(b); c.stock = Object.assign({}, c.stock, {[which]: v === "" ? "" : num(v)}); b.fs = c; saveBooks(); }
 function fsSet(key, v){ const b = S.books; b.fs = Object.assign({}, FS.cfg(b), {[key]: v}); saveBooks(); }
@@ -17452,7 +17497,22 @@ const FS = {
   PL: [["rev", "Revenue from operations"], ["oth", "Other income"], ["mat", "Cost of materials consumed"], ["pur", "Purchases of stock-in-trade"], ["chg", "Changes in inventories"], ["emp", "Employee benefits expense"],
     ["fin", "Finance costs"], ["dep", "Depreciation and amortisation expense"], ["exp", "Other expenses"], ["exc", "Exceptional items"], ["tax", "Tax expense"]],
   SECTIONS: {EQ: "Shareholders' funds", NCL: "Non-current liabilities", CL: "Current liabilities", NCA: "Non-current assets", CA: "Current assets"},
-  cfg(b){ return Object.assign({kind: "co", mfg: false, map: {}, stock: {}, shares: "", face: ""}, (b && b.fs) || {}); },
+  // the kind of entity, from the fourth letter of the PAN unless chosen in Client setup (review of 02-Oct-2026: a
+  // partnership opened in Schedule III, the companies' format)
+  ENTITY: {F: "Firm or LLP", C: "Company", P: "Individual or proprietor", H: "Hindu undivided family", A: "Association of persons", B: "Body of individuals",
+    T: "Trust", L: "Local authority", J: "Artificial juridical person", G: "Government"},
+  entityOf(co){
+    co = co || (typeof CO === "function" ? CO() : null) || {};
+    const set = String(co.entity || "").toUpperCase(), pan = String(co.pan || String(co.gstin || "").slice(2, 12)).toUpperCase().trim(), p4 = /^[A-Z]{5}\d{4}[A-Z]$/.test(pan) ? pan[3] : "";
+    return this.ENTITY[set] ? {code: set, by: "set"} : this.ENTITY[p4] ? {code: p4, by: "pan"} : {code: "", by: ""};
+  },
+  // the format: Schedule III for a company, the ICAI format for every other entity; a format chosen on the Accounts tab
+  // stays chosen (kindSet), else it follows the entity type
+  cfg(b){
+    const c = Object.assign({kind: "co", mfg: false, map: {}, stock: {}, shares: "", face: ""}, (b && b.fs) || {});
+    if (!c.kindSet){ const e = this.entityOf(b && b.cid && typeof S === "object" && S.companies ? S.companies[b.cid] : null).code; if (e) c.kind = e === "C" ? "co" : "nc"; }
+    return c;
+  },
   // where a ledger goes by rule, before any choice by hand; bal is Tally's sign (a debit is negative)
   place(l, bal, kind){
     const n = this.nature(l), p = n.path.map(g => g.toLowerCase()), has = g => p.includes(g), up = l.toUpperCase();
@@ -21801,21 +21861,32 @@ setTimeout(() => { try { cloudPostLeftover(); } catch (e){} }, 9000);
 // to Tally" showed 0 although job b3785b05 had posted FA/ELEC/013, and job aebb6c15, failed at 01:53, was nowhere): the
 // list of what went to Tally is made from them, with this browser's own log only for postings made here without the queue.
 const CloudJobs = {
-  list: null, at: 0, busy: false, err: "",
+  list: null, at: 0, busy: false, err: "", tried: {}, dismissOk: true,
   async load(force){
-    // read at most once a minute, also after a failure (the page draws again after each try)
+    // read at most once a minute, also after a failure (the page draws again after each try); the list changes by itself
+    // when FinCom's cloud says a posting changed (Live, migration-26)
     if (typeof TCloud !== "object" || !TCloud.on() || this.busy || (!force && Date.now() - this.at < 60000)) return;
     this.busy = true;
     try {
       const cols = "id,client_id,company,status,done,n,message,results,created_by,created_at,updated_at,attempts";
-      // each entry's state (items) from migration-24 on
-      this.list = await TCloud.restAll("tally_post_jobs?select=" + cols + ",items&order=created_at.desc").catch(e => {
-        if (/items/.test(String(e && e.message))) return TCloud.restAll("tally_post_jobs?select=" + cols + "&order=created_at.desc");
-        throw e; });
+      // each entry's state (items) from migration-24 on; the entries' ids and dismissing from migration-26 on
+      const more = [",items,entry_ids,dismissed_at,dismissed_by,dismiss_note,dismiss_auto", ",items", ""];
+      for (let i = 0; ; i++){
+        try { this.list = await TCloud.restAll("tally_post_jobs?select=" + cols + more[i] + "&order=created_at.desc"); this.dismissOk = i === 0; break; }
+        catch (e){ if (i < more.length - 1 && /items|entry_ids|dismiss|column/i.test(String(e && e.message))) continue; throw e; }
+      }
       this.err = ""; this.at = Date.now();
     } catch (e){ this.err = (e && e.message) || String(e); this.at = Date.now(); }
-    this.busy = false; render();
+    this.busy = false;
+    this.autoDismiss();
+    // without the live connection, a posting still going is looked at again soon
+    clearTimeout(this.soonT);
+    if ((this.list || []).some(j => ["waiting", "taken", "running"].includes(j.status) || j.checking) && !(typeof Live === "object" && Live.postsLive))
+      this.soonT = setTimeout(() => this.load(true), 15000);
+    render();
   },
+  // a change to a posting, from the live connection: read again (a burst of changes is read once)
+  changed(){ clearTimeout(this.chT); this.chT = setTimeout(() => this.load(true), 800); },
   // Retry: the same posting again under its id; entries already in Tally are found by FinCom's tag, not posted twice
   async retry(j){
     try {
@@ -21825,9 +21896,74 @@ const CloudJobs = {
     } catch (e){ toast((e && e.message) || String(e)); }
     await this.load(true);
   },
+  // Dismiss (request of 02-Oct-2026): a failed or cancelled posting off the list; kept on the server with who and when
+  async dismiss(j, auto){
+    try {
+      const r = await TCloud.rpc("tally_post_dismiss", {p_id: j.id, p_auto: !!auto});
+      if (!r || !r.ok) throw new Error((r && r.error) || "It could not be dismissed.");
+      if (!auto) toast("Dismissed. It stays under “Show older and dismissed”.");
+    } catch (e){ if (!auto) toast((e && e.message) || String(e)); }
+    await this.load(true);
+  },
+  async undismiss(j){
+    try { await TCloud.rpc("tally_post_undismiss", {p_id: j.id}); } catch (e){ toast((e && e.message) || String(e)); }
+    await this.load(true);
+  },
+  // a failed or cancelled posting whose every entry a later posting put in: dismissed by FinCom (the server checks it again)
+  autoDismiss(){
+    if (!this.dismissOk) return;
+    (this.list || []).forEach(j => {
+      if (!["failed", "cancelled"].includes(j.status) || j.dismissed_at || this.tried[j.id] || !this.postedLater(j)) return;
+      this.tried[j.id] = true; this.dismiss(j, true);
+    });
+  },
   forClient(cid){ return (this.list || []).filter(j => !cid || j.client_id === cid); },
+  idsOf(j){ return Array.isArray(j.entry_ids) ? j.entry_ids.map(String) : null; },
+  okIn(j){ return new Set([].concat(j.results || []).filter(r => r && r.ok).map(r => String(r.id))); },
+  // when every entry of a posting went in through a later posting of the same client; null when one has not
+  postedLater(j){
+    const ids = this.idsOf(j);
+    if (!ids || !ids.length) return null;
+    const later = (this.list || []).filter(k => k.id !== j.id && k.client_id === j.client_id && k.created_at > j.created_at);
+    let at = "";
+    for (const id of ids){
+      const k = later.filter(x => this.okIn(x).has(id)).sort((a, b) => String(a.updated_at).localeCompare(String(b.updated_at)))[0];
+      if (!k) return null;
+      if (String(k.updated_at || "") > at) at = k.updated_at;
+    }
+    return at || null;
+  },
+  // an entry of a posting already in Tally: put in by this posting or a later one, or known to be in Tally here (a bill,
+  // or a bank line of the statement open)
+  inTally(j, id){
+    if (this.okIn(j).has(id)) return true;
+    if ((this.list || []).some(k => k.client_id === j.client_id && k.id !== j.id && this.okIn(k).has(id))) return true;
+    const d = S.data[j.client_id], e = d && d.entries && d.entries[id];
+    if (e) return typeof billInTally === "function" && billInTally(e);
+    const b = S.bank && S.bank.cid === j.client_id ? S.bank : null, r = b && (b.rows || []).find(x => x.id === id);
+    return !!(r && (r.state === "sent" || r.state === "intally") && !r.goneFromTally);
+  },
+  // how many entries are still to be sent (null: not known, as before migration-26)
+  leftToSend(j){
+    const ids = this.idsOf(j);
+    if (!ids) return null;
+    return ids.filter(id => !this.inTally(j, id)).length;
+  },
   // the queue's postings still going or stopped: waiting for the Tally computer, being posted, or failed
   open(cid){ return this.forClient(cid).filter(j => ["waiting", "taken", "running", "failed"].includes(j.status)); },
+  // the list on Post to Tally: postings still going, failed or cancelled ones not dismissed with something left to send,
+  // and the last 7 days of finished ones (all: everything, the dismissed and older ones too)
+  view(cid, all){
+    const week = Date.now() - 7 * 86400000;
+    return this.forClient(cid).filter(j => {
+      if (all) return true;
+      if (["waiting", "taken", "running"].includes(j.status) || j.checking) return true;
+      const stopped = ["failed", "cancelled"].includes(j.status);
+      if (stopped && j.dismissed_at && !j.dismiss_auto) return false;
+      if (stopped && !j.dismissed_at && !this.postedLater(j) && this.leftToSend(j) !== 0) return true;
+      return (Date.parse(j.updated_at || j.created_at) || 0) >= week;
+    });
+  },
   // one line a posted entry: what it was (the bill, bank line or sale named by its id), the voucher Tally made
   rows(cid){
     const out = [];
@@ -22552,7 +22688,7 @@ const Live = {
     this.ws = ws; this.st = "connecting";
     ws.onopen = () => { this.join(); clearInterval(this.hb); this.hb = setInterval(() => { this.send("phoenix", "heartbeat", {}); this.tokenTick(); }, 25000); };
     ws.onmessage = ev => { let m = null; try { m = JSON.parse(ev.data); } catch (e){} if (m) this.got(m); };
-    ws.onclose = () => { clearInterval(this.hb); if (this.ws === ws) this.ws = null; this.st = "off"; this.jobsTopic = ""; this.jobsLive = false; this.booksTopic = ""; this.booksLive = false; this.top(); if (!this.stopped) this.later(); };
+    ws.onclose = () => { clearInterval(this.hb); if (this.ws === ws) this.ws = null; this.st = "off"; this.jobsTopic = ""; this.jobsLive = false; this.booksTopic = ""; this.booksLive = false; this.postsTopic = ""; this.postsLive = false; this.top(); if (!this.stopped) this.later(); };
     ws.onerror = () => { try { ws.close(); } catch (e){} };
   },
   stop(){ this.stopped = true; clearTimeout(this.rt); clearInterval(this.hb); const w = this.ws; this.ws = null; this.st = "off"; try { if (w) w.close(); } catch (e){} },
@@ -22567,7 +22703,7 @@ const Live = {
     this.send(this.topic, "phx_join", {config: {broadcast: {self: false, ack: false}, presence: {key: ""}, postgres_changes: pc, private: false}, access_token: this.token});
   },
   // a new access token (refreshed every hour) is given to the open connection
-  tokenTick(){ const t = (Cloud.sess() || {}).access_token; if (this.st === "live" && t && t !== this.token){ this.token = t; this.send(this.topic, "access_token", {access_token: t}); if (this.jobsTopic) this.send(this.jobsTopic, "access_token", {access_token: t}); if (this.booksTopic) this.send(this.booksTopic, "access_token", {access_token: t}); } },
+  tokenTick(){ const t = (Cloud.sess() || {}).access_token; if (this.st === "live" && t && t !== this.token){ this.token = t; this.send(this.topic, "access_token", {access_token: t}); if (this.jobsTopic) this.send(this.jobsTopic, "access_token", {access_token: t}); if (this.booksTopic) this.send(this.booksTopic, "access_token", {access_token: t}); if (this.postsTopic) this.send(this.postsTopic, "access_token", {access_token: t}); } },
   // fast-sync: the server's jobs (a day book being read, the kept day books read again) on a channel of their own, joined
   // only when the database has tally_jobs (migration-13): the live sync above never depends on it
   async joinJobs(){
@@ -22584,6 +22720,13 @@ const Live = {
     const f = Cloud.st.firm; this.booksTopic = "realtime:fincom-books-" + f; this.booksRef = String(this.ref + 1); this.daysAt = this.daysAt || {};
     this.send(this.booksTopic, "phx_join", {config: {broadcast: {self: false, ack: false}, presence: {key: ""}, postgres_changes: [{event: "UPDATE", schema: "public", table: "tally_books", filter: "firm_id=eq." + f}], private: false}, access_token: this.token});
   },
+  // the postings in FinCom's cloud (migration-26: tally_post_jobs in Realtime): the list on Post to Tally is read again when
+  // one changes, so it needs no Refresh. A channel of its own; without it the list is read again while a posting goes on
+  joinPosts(){
+    if (typeof TCloud !== "object" || !TCloud.on() || this.postsTopic) return;
+    const f = Cloud.st.firm; this.postsTopic = "realtime:fincom-posts-" + f; this.postsRef = String(this.ref + 1);
+    this.send(this.postsTopic, "phx_join", {config: {broadcast: {self: false, ack: false}, presence: {key: ""}, postgres_changes: [{event: "*", schema: "public", table: "tally_post_jobs", filter: "firm_id=eq." + f}], private: false}, access_token: this.token});
+  },
   bookChanged(r){
     if (!r || !r.client_id || !r.days_at || this.daysAt[r.book_id] === r.days_at) return;
     const first = !(r.book_id in this.daysAt); this.daysAt[r.book_id] = r.days_at;
@@ -22594,6 +22737,12 @@ const Live = {
     this.bookT = setTimeout(() => { try { if (TCloud.st[cid]) TCloud.st[cid].at = 0; const f = LK.fr(); f.cat = 0; LK.cloudFresh(true, true); } catch (e){} }, 1500);   // the day's last pieces settle first
   },
   got(m){
+    if (this.postsTopic && m.topic === this.postsTopic){
+      if (m.event === "phx_reply" && m.ref === this.postsRef) this.postsLive = !!(m.payload && m.payload.status === "ok");
+      else if (m.event === "system" && m.payload && m.payload.status === "error") this.postsLive = false;
+      else if (m.event === "postgres_changes" && typeof CloudJobs === "object") CloudJobs.changed();
+      return;
+    }
     if (this.booksTopic && m.topic === this.booksTopic){
       if (m.event === "phx_reply" && m.ref === this.booksRef) this.booksLive = !!(m.payload && m.payload.status === "ok");
       else if (m.event === "postgres_changes"){ const d = m.payload && m.payload.data; if (d && d.record) this.bookChanged(d.record); }
@@ -22605,7 +22754,7 @@ const Live = {
       return;
     }
     if (m.event === "phx_reply" && m.ref === this.joinRef){
-      if (m.payload && m.payload.status === "ok"){ this.st = "live"; this.err = ""; this.wait = 1000; this.catchUp(); this.joinJobs(); this.joinBooks(); }
+      if (m.payload && m.payload.status === "ok"){ this.st = "live"; this.err = ""; this.wait = 1000; this.catchUp(); this.joinJobs(); this.joinBooks(); this.joinPosts(); }
       else { this.st = "error"; this.err = JSON.stringify((m.payload || {}).response || {}).slice(0, 200); }
       this.top(); return;
     }
