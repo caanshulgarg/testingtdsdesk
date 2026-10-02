@@ -800,9 +800,9 @@ function canonicalizeBills(list){
 async function ensureTallyCompany(co){
   // build 199: Tally on another computer, the client's books in the cloud: posted through the queue there
   if (!bridgeLive(co) && typeof TCloud === "object" && TCloud.on()){ await TCloud.status(co.id); if (tallyVia(co) === "cloud") return tallyCoName(co); }
-  if (!Bridge.on()){ toast("Connect the Tally Bridge first: Settings \u2192 Tally Bridge."); return null; }
+  if (!Bridge.on()){ toast("Connect FinCom Bridge first: Settings \u2192 FinCom Bridge."); return null; }
   if (!Bridge.up() || !Bridge.st.tallyUp) await Bridge.refresh();
-  if (!Bridge.up() || !Bridge.st.tallyUp){ toast("Tally is not connected. See Settings \u2192 Tally Bridge \u2192 Check my Tally."); return null; }
+  if (!Bridge.up() || !Bridge.st.tallyUp){ toast("Tally is not connected. See Settings \u2192 FinCom Bridge \u2192 Check my Tally."); return null; }
   let o = Bridge.openFor(co);
   if (o) return o.name;
   const open = Bridge.st.open;

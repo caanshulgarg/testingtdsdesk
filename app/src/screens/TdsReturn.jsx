@@ -310,7 +310,7 @@ export function Return26({ b, allRows, form = "26Q" }) {
       <button className="btn small" onClick={() => doAct("tdsAuto")}>Put them against challans</button>
       <button className="btn small" onClick={() => doAct("tdsExcel")}>Download the {fname} working</button>
       <button className="btn small" onClick={() => doAct("tdsTxt")}>Download the {fname} text file{draft ? " (draft)" : ""}</button>
-      <button className="btn small primary" disabled={!Bridge.on() || draft} title={draft ? "A draft is not sent to the FVU" : Bridge.on() ? undefined : "Needs the Tally Bridge"} onClick={() => doAct("tdsFvu")}>Check it with the FVU</button>
+      <button className="btn small primary" disabled={!Bridge.on() || draft} title={draft ? "A draft is not sent to the FVU" : Bridge.on() ? undefined : "Needs FinCom Bridge"} onClick={() => doAct("tdsFvu")}>Check it with the FVU</button>
     </div>
     {draft && <section className="bk-alert" data-draft={TDS.formNo(form, fy)}><b>{fname} (was {form}): draft – not yet validated.</b> From 1 April 2026 the return is {fname} under the Income-tax Act, 2025, with new payment codes and file layout. FinCom’s file is not yet matched to Protean’s file format or run through their FVU: do not file it.</section>}
     <div className="dash-tiles">

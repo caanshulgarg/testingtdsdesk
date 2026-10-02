@@ -67,7 +67,7 @@ function Summary({ b, r }) {
   // review of 01-Oct-2026: without Tally's ledger groups the profit and loss cannot tell an expense from anything else
   const noGroups = !Audit.mastersIn();
   return <>
-    {noGroups && <p className="bk-alert" role="status" style={{ margin: "0 0 10px" }}>The ledgers’ groups are not in these books yet, so the profit and loss counts only ledgers named as sales or purchases: expenses are left out and the profit shown is too high. They come with the ledgers from Tally (FinCom Tally Bridge 1.14.7 or later).</p>}
+    {noGroups && <p className="bk-alert" role="status" style={{ margin: "0 0 10px" }}>The ledgers’ groups are not in these books yet, so the profit and loss counts only ledgers named as sales or purchases: expenses are left out and the profit shown is too high. They come with the ledgers from Tally (FinCom Bridge 2.1).</p>}
     <div className="dash-tiles">
       <Tile l="Sales, the period" v={m(r.sales.total)} sub={(r.sales.other ? "other income " + m(r.sales.other) + " · " : "") + (r.prev ? "previous period " + m(r.prev.sales) + " (" + pct(r.sales.total, r.prev.sales) + ")" : "") + (r.ly ? " · last year " + m(r.ly.sales) + " (" + pct(r.sales.total, r.ly.sales) + ")" : "")} />
       <Tile l="Profit before tax" v={noGroups ? "—" : m(r.pl.pbt.t)} sub={"gross profit " + m(r.pl.gross.t) + (r.pl.heads.rev ? " (" + (Math.round(r.pl.gross.t / r.pl.heads.rev.t * 1000) / 10) + "% of revenue)" : "")} />

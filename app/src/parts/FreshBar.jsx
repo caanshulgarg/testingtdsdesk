@@ -39,11 +39,11 @@ export default function FreshBar({ b }) {
   } else {
     upTo = have ? <span data-fresh="">{booksFresh(b, S.coId).text}</span> : "No books in FinCom yet.";
     if (live) {
-      btns = <>{kp.ok ? (kp.on ? null : <Btn className="btn small primary" onClick={() => LK.keepOn(true)}>Keep this company in step with Tally</Btn>) : <span className="note">Install Tally Bridge 1.13.0 to keep companies in step while they are open.</span>}
+      btns = <>{kp.ok ? (kp.on ? null : <Btn className="btn small primary" onClick={() => LK.keepOn(true)}>Keep this company in step with Tally</Btn>) : <span className="note">Install FinCom Bridge from the Tally page to keep companies in step while they are open.</span>}
         {have && String(meta.to) < today && <Btn onClick={() => LK.bringToday()}>Bring in today’s entries</Btn>}
         {sch.on && <span className="note">{"Nightly copy is on" + (sch.next ? ", next " + sch.next : "") + "."}</span>}</>;
       if (kp.on) upTo = <>{upTo} The bridge starts keeping it in step within a minute of the company being open in Tally.</>;
-    } else btns = <span className="note">Connect the Tally Bridge to keep this up to date.</span>;
+    } else btns = <span className="note">Connect FinCom Bridge to keep this up to date.</span>;
   }
   return <div className="lk-fresh"><span className="note">{upTo} Totals come from this copy, so Tally is never held up.</span>{btns}{chk}</div>;
 }

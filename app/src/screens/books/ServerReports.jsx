@@ -29,7 +29,7 @@ export function ServerMis({ b }) {
   const H = r.heads || {}, months = r.months || [], cols = months.length <= 12;
   return <div data-srv-mis>
     {head}
-    {!r.grouped && <p className="bk-alert" role="status" style={{ margin: "10px 0" }}>The ledgers’ groups are not in the cloud copy yet, so the profit and loss cannot be worked out. They come with the ledgers from Tally (FinCom Tally Bridge 1.14.7 or later).</p>}
+    {!r.grouped && <p className="bk-alert" role="status" style={{ margin: "10px 0" }}>The ledgers’ groups are not in the cloud copy yet, so the profit and loss cannot be worked out. They come with the ledgers from Tally (FinCom Bridge 2.1).</p>}
     <div className="dash-tiles" style={{ marginTop: 12 }}>
       <Tile l="Sales, the period" v={m(r.sales.total)} sub={r.sales.other ? "other income " + m(r.sales.other) : ""} />
       <Tile l="Profit before tax" v={r.grouped ? m(r.pbt.t) : "—"} sub={"gross profit " + m(r.gross.t) + (H.rev && H.rev.t ? " (" + (Math.round(r.gross.t / H.rev.t * 1000) / 10) + "% of revenue)" : "")} />

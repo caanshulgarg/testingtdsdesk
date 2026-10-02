@@ -22,7 +22,7 @@ with sync_playwright() as p:
     ok(head() == "Firm details" and pg.locator("#app .setnav .setgroup-t").count() == 4, "Settings opens on Firm details, sections in four groups (GST API added)")
     pg.fill('#app label:has-text("Firm name") input', "Garg Shekhar & Co (test)"); pg.wait_for_timeout(900)
     ok(pg.evaluate("S.firm.firmName") == "Garg Shekhar & Co (test)" and "Garg Shekhar & Co (test)" in pg.inner_text("#app .setnav"), "the firm's name: kept, and shown in the list")
-    for label, text in [("Sign-in and people", "Sign-in and people"), ("Plan and credit", "Plan and credit"), ("Tally Bridge", "Bridge address"), ("Books in the cloud", "Books in the cloud"),
+    for label, text in [("Sign-in and people", "Sign-in and people"), ("Plan and credit", "Plan and credit"), ("FinCom Bridge", "Bridge address"), ("Books in the cloud", "Books in the cloud"),
                         ("Sent to Tally", "Everything sent to Tally"), ("TDS rates and limits", "Rates and limits for all clients"), ("Reading bills", "Reading bills"), ("AI help", "AI help")]:
         nav(label); pg.wait_for_timeout(350)
         ok(head() == label and text in pg.inner_text("#app .setbody") and pg.get_attribute('#app .setnav button[aria-current="page"]', "aria-current") == "page", "Settings → " + label)
@@ -81,7 +81,7 @@ with sync_playwright() as p:
     pg.evaluate("""() => { Bridge.refresh = () => Promise.resolve(); window.startBridgePolling = () => {}; window.bridgeTick = () => {}; Bridge.setCfg({key: '', port: 0, follow: false});
       const cid = S.coId; Bridge.st = {state: 'ok', version: '1.14.3', at: Date.now(), mode: 'auto', tallyUp: true, sessions: [{port: 9000, ok: true, mine: true, companies: [{name: 'ACME LTD'}]}, {port: 9001, ok: true, mine: false, companies: []}], open: []};
       S.view = 'home'; S.homeTab = 'tally'; render(); }"""); pg.wait_for_timeout(400)
-    ok("Set up in three steps" in pg.inner_text("#app") and "Tally" in pg.inner_text("#app h2"), "the Tally page, with the three steps")
+    ok("Connect this browser to FinCom Bridge" in pg.inner_text("#app") and "Tally" in pg.inner_text("#app h2"), "the Tally page, with the steps to connect this browser")
     k = pg.locator('input[aria-label="Bridge key"]'); k.fill("abc123"); k.press("Tab"); pg.wait_for_timeout(300)
     ok(pg.evaluate("Bridge.cfg().key") == "abc123" and "Check connection" in pg.inner_text("#app"), "the key typed is kept")
     pg.check('label:has-text("Follow the company open in Tally") input'); pg.wait_for_timeout(200)

@@ -20,7 +20,7 @@ function BalanceInner({ st }) {
   const when = <>{t && t.at && <span className="muted">{" · checked " + fmtDateTime(t.at)}</span>}
     {t && t.how === "worked back" && <span className="muted">{" · Tally gave its latest balance whatever the date, so the balance on " + fmtDate(t.to) + " was worked back from it" + (t.later ? ", less " + t.later + " later entr" + (t.later === 1 ? "y" : "ies") : "")}</span>}</>;
   const Box = ({ cls, children }) => <div className={"bk-balbox bk-bal" + (cls ? " " + cls : "")}>{children}{btn}<button className="icon bk-x" title="Close" aria-label="Close" onClick={() => bankAct("balHide")}>×</button></div>;
-  if (!t) return <Box><div><b>Balance in Tally:</b> <span className="muted">{"not checked yet." + (live ? " FinCom checks it after every posting." : " Connect the Tally Bridge to check it.")}</span></div></Box>;
+  if (!t) return <Box><div><b>Balance in Tally:</b> <span className="muted">{"not checked yet." + (live ? " FinCom checks it after every posting." : " Connect FinCom Bridge to check it.")}</span></div></Box>;
   if (t.error) return <Box cls="bad"><div><b>Balance in Tally could not be read:</b> {t.error}{when}</div></Box>;
   const on = fmtDate(t.to);
   if (t.diff === null) return <Box><div><b>{t.ledger + " in Tally on " + on + ":"}</b> {inr(t.tClose)} <span className="muted">(the statement has no closing balance to compare with)</span>{when}</div></Box>;

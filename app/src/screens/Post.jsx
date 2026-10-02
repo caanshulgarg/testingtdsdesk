@@ -40,7 +40,7 @@ function PostResult({ bp, waiting }) {
     {bp.done && <div className={"bk-alert" + (bp.unverified || failed.length ? " bad" : "")} style={{ margin: "10px 0 0" }}>
       {bp.ok || 0} posted into <b>{bp.company || ""}</b> and confirmed there{bp.dup ? " · " + bp.dup + " already in Tally (not posted again)" : ""}{notPosted > 0 ? " · " + notPosted + " not posted" : ""}
       {bp.optional > 0 && <div style={{ marginTop: 4 }}><b>{bp.optional} went in as Optional vouchers.</b> {OPTIONAL_HELP}</div>}
-      {bp.unverified > 0 && <div style={{ marginTop: 4 }}><b>{bp.unverified} not confirmed:</b> Tally replied ‘created’ but the entry could not be found afterwards, so {bp.unverified > 1 ? "they stay" : "it stays"} in the waiting list. Look in Tally; if it is not there, post again. Use <b>Settings → Tally Bridge → Test reading entries</b> and send the result if this repeats.</div>}
+      {bp.unverified > 0 && <div style={{ marginTop: 4 }}><b>{bp.unverified} not confirmed:</b> Tally replied ‘created’ but the entry could not be found afterwards, so {bp.unverified > 1 ? "they stay" : "it stays"} in the waiting list. Look in Tally; if it is not there, post again. Use <b>Settings → FinCom Bridge → Test reading entries</b> and send the result if this repeats.</div>}
     </div>}
     {bp.done && failed.length > 0 && <div className="bk-alert bad" style={{ margin: "10px 0 0" }}>
       <b>{failed.length} not posted.</b> They are back in <b>To review</b> with Tally’s reason on each.

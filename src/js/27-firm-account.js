@@ -1212,14 +1212,14 @@ function doAct(act, t){
     }
     case "bridgeTest": { const k = document.querySelector('[data-bridge="key"]'), u = document.querySelector('[data-bridge="url"]');
       Bridge.setCfg({key: k ? k.value.trim() : Bridge.cfg().key, url: u ? u.value.trim() || "http://127.0.0.1:9100" : Bridge.cfg().url});
-      Bridge.lastOpenKey = null; Bridge.refresh().then(() => { toast(Bridge.up() ? "Connected to the Tally Bridge." : Bridge.st.error); startBridgePolling(); render(); }); break; }
+      Bridge.lastOpenKey = null; Bridge.refresh().then(() => { toast(Bridge.up() ? "Connected to FinCom Bridge." : Bridge.st.error); startBridgePolling(); render(); }); break; }
     case "bridgeSetupFile": saveBridgeSetup(); break;
     case "adminCreditGo": break;
     case "bridgeConnect": {
-      askConfirm({title: "Connect to the Tally Bridge", ok: "Connect",
-        body: '<p class="note">Type the 6-digit code shown in the bridge window on this computer (the window titled FinCom - Tally Bridge). It works once, for 15 minutes after the bridge starts.</p><input type="text" id="bridgeCode" inputmode="numeric" maxlength="7" autocomplete="off" placeholder="6-digit code" style="width:160px;font-size:18px;letter-spacing:3px">',
+      askConfirm({title: "Connect to FinCom Bridge", ok: "Connect",
+        body: '<p class="note">Type the 6-digit code FinCom Bridge shows on this computer: right-click the FinCom icon near the clock \u2192 \u201cConnect FinCom on this computer\u2026\u201d. The code works once, for 15 minutes.</p><input type="text" id="bridgeCode" inputmode="numeric" maxlength="7" autocomplete="off" placeholder="6-digit code" style="width:160px;font-size:18px;letter-spacing:3px">',
         read: () => String((document.getElementById("bridgeCode") || {}).value || "").replace(/\D/g, ""),
-        validate: v => /^\d{6}$/.test(v) ? "" : "Type the 6 digits shown in the bridge window."}).then(a => {
+        validate: v => /^\d{6}$/.test(v) ? "" : "Type the 6 digits FinCom Bridge shows."}).then(a => {
       if (!a) return;
       toast("Connecting to the bridge on this computer\u2026");
       Bridge.pair(a.data).then(j => {
@@ -1241,7 +1241,7 @@ function doAct(act, t){
       break;
     case "setupModeBridge": case "setupModeFiles":
       Bridge.call("/keepmode" + (Bridge.pinQ() ? "?" + Bridge.pinQ().slice(1) : ""), {company: BridgeSeed.company(), mode: act === "setupModeBridge" ? "bridge" : "files"}, 20000)
-        .then(j => { (S.setupKeep = S.setupKeep || {})[S.coId] = {at: Date.now(), st: j}; toast(act === "setupModeBridge" ? "The bridge will copy the year from Tally in the evening, or when nobody is at the computer." : "The bridge waits for the day book files."); render(); }, e => toast("The bridge could not do it: " + ((e && e.message) || e) + (/Unknown|No such/i.test(String(e && e.message)) ? " (it needs Tally Bridge 1.13.9)" : "")));
+        .then(j => { (S.setupKeep = S.setupKeep || {})[S.coId] = {at: Date.now(), st: j}; toast(act === "setupModeBridge" ? "The bridge will copy the year from Tally in the evening, or when nobody is at the computer." : "The bridge waits for the day book files."); render(); }, e => toast("The bridge could not do it: " + ((e && e.message) || e) + (/Unknown|No such/i.test(String(e && e.message)) ? " (it needs FinCom Bridge 2.1: install it from the Tally page)" : "")));
       break;
     case "tbCheckPick": { const i = document.getElementById("tbCheckIn"); if (i){ i.value = ""; i.click(); } break; }
     case "multiPick": { const i = document.getElementById("multiBooksIn"); if (i){ i.value = ""; i.click(); } break; }
@@ -1263,7 +1263,7 @@ function doAct(act, t){
       const q = "?company=" + encodeURIComponent(Bridge.openFor(co).name) + Bridge.pinQ();
       Promise.all([Bridge.call("/synced" + q, null, 30000), Bridge.call("/schedule", null, 30000).catch(() => null)]).then(([c, sc]) => {
         S.tallyCopy = Object.assign({}, c, {schedule: sc, time: (S.tallyCopy || {}).time}); render();
-      }, e => { S.tallyCopy = {error: /Unknown address/.test(String(e && e.message)) ? "This needs Tally Bridge 1.10." : String(e && e.message || e)}; render(); });
+      }, e => { S.tallyCopy = {error: /Unknown address/.test(String(e && e.message)) ? "This needs FinCom Bridge 2.1. Install FinCom Bridge from the Tally page." : String(e && e.message || e)}; render(); });
       break;
     }
     case "tallyCopyUse": {
@@ -1378,13 +1378,13 @@ function doAct(act, t){
     }
     case "ledRead": {
       const co = CO(), b = S.books;
-      if (!bridgeLive(co)){ toast("Connect the Tally Bridge and open this company in Tally, or bring in the ledger masters XML under \u201cFrom Tally\u201d."); break; }
+      if (!bridgeLive(co)){ toast("Connect FinCom Bridge and open this company in Tally, or bring in the ledger masters XML under \u201cFrom Tally\u201d."); break; }
       b.busy = "Reading the ledgers from Tally\u2026"; render();
       Bridge.call("/ledgers?company=" + encodeURIComponent(Bridge.openFor(co).name) + Bridge.pinQ(), null, 180000).then(async j => {
         const info = {}, groups = {};
         [].concat(j.ledgers || []).forEach(l => { if (!l || !l.name) return;
           info[l.name] = {group: l.group || "", taxType: String(l.taxType || "").replace(/[^A-Za-z ]/g, "").trim(), dutyHead: l.dutyHead || "", tdsNature: l.tdsNature || "", rate: num(l.rate) || undefined, gstin: l.gstin || "", pan: l.pan || ""};
-          // contact details, from Tally Bridge 1.12.9: for letters to the party
+          // contact details, from bridge 1.12.9: for letters to the party
           if (l.email) info[l.name].email = String(l.email).trim(); if (l.phone) info[l.name].phone = String(l.phone).trim(); if (l.mobile) info[l.name].mobile = String(l.mobile).trim();
           if (l.address) info[l.name].addr = [].concat(l.address).filter(Boolean).join("\n");
           if (l.gstin) (b.gstins = b.gstins || {})[l.name] = String(l.gstin).toUpperCase();
@@ -1481,7 +1481,7 @@ function doAct(act, t){
         S.fvuResult = Object.assign({at: new Date().toISOString(), q, fy, form: r.form}, res);
         toast(res.ok ? "The FVU accepted it. The .fvu file is on the Tally computer." : "The FVU found problems. They are listed below.");
         render();
-      }, e => { const msg = (e && e.message) || "the bridge did not answer"; S.fvuResult = {at: new Date().toISOString(), ok: false, errors: /Unknown address/.test(msg) ? "This needs Tally Bridge 1.10. Download it under Settings \u2192 Tally Bridge and run the setup on the Tally computer." : msg}; toast("Could not run the FVU: " + msg); render(); });
+      }, e => { const msg = (e && e.message) || "the bridge did not answer"; S.fvuResult = {at: new Date().toISOString(), ok: false, errors: /Unknown address/.test(msg) ? "This needs FinCom Bridge 2.1. Install FinCom Bridge from the Tally page and run it on the Tally computer." : msg}; toast("Could not run the FVU: " + msg); render(); });
       break;
     }
     case "tdsExcel": TDS.toExcel(S.tdsFy || "", S.tdsQ || "", S.tdsForm).then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break;

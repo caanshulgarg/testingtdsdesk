@@ -60,7 +60,7 @@ function Setup({ b }) {
         {tbOk ? Object.keys(b.tb.led || {}).length + " ledgers, as on " + d(b.tb.openAsOn) : b.tb ? "read from Tally" : "Choose the trial balance XML as on " + (firstFrom ? d(BridgeSeed.add(firstFrom, -1)) : "the day before the first date") + " below."}</Step>
       <Step ok={!!b.ledInfoAt} title="3. Ledger masters">
         {b.ledInfoAt ? Object.keys(b.ledInfo || {}).length + " ledgers (groups, PAN, GSTIN), " + d(String(b.ledInfoAt).slice(0, 10).replace(/-/g, "")) : "Choose the ledger masters XML below (List of Accounts)."}</Step>
-      <Step ok={bok ? true : Bridge.on() && k && k.on ? "wait" : false} title="4. Tally Bridge">{bs}{bact && <> {bact}</>}</Step>
+      <Step ok={bok ? true : Bridge.on() && k && k.on ? "wait" : false} title="4. FinCom Bridge">{bs}{bact && <> {bact}</>}</Step>
       <Check b={b} />
     </section>
   );

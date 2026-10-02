@@ -1,5 +1,5 @@
 /* ================================================================== */
-/* Tally Bridge: live connection to TallyPrime on this computer        */
+/* FinCom Bridge: live connection to TallyPrime on this computer       */
 /* ================================================================== */
 const Bridge = {
   st: {state: "off", sessions: [], open: [], at: 0, error: ""},
@@ -24,7 +24,7 @@ const Bridge = {
     try {
       r = await fetch(c.url.replace(/\/+$/, "") + path, {method: body ? "POST" : "GET", headers: Object.assign({"X-Bridge-Key": c.key}, body ? {"Content-Type": "application/json"} : {}), body: body ? JSON.stringify(body) : undefined, signal: ctl.signal, cache: "no-store"});
     } catch (e){
-      throw {code: "bridge_down", message: e && e.name === "AbortError" ? "The Tally Bridge did not answer in time." : "The Tally Bridge is not running on this computer (" + c.url + ")."};
+      throw {code: "bridge_down", message: e && e.name === "AbortError" ? "FinCom Bridge did not answer in time. Check the FinCom Bridge icon near the clock (right-click \u2192 Test connection)." : "FinCom Bridge is not running on this computer (" + c.url + "). Check the FinCom Bridge icon near the clock (right-click \u2192 Test connection)."};
     } finally { clearTimeout(timer); }
     let j = null;
     try { j = await r.json(); } catch (e){ j = null; }
@@ -180,13 +180,13 @@ const Bridge = {
       return;
     }
   },
-  // ask the bridge on this computer for its key, with the 6-digit code shown in the bridge window
+  // ask the bridge on this computer for its key, with the 6-digit code FinCom Bridge shows (tray icon → Connect FinCom on this computer…)
   // (bridge 1.11: only for a few minutes after it starts, once, and never for another web page)
   async pair(code){
     const c = this.cfg();
     const base = c.url.replace(/\/+$/, "");
     const r = await fetch(base + "/pair?code=" + encodeURIComponent(String(code || "").trim()), {cache: "no-store"}).catch(() => null);
-    if (!r) throw {code: "bridge_down", message: "No bridge is running on this computer yet. Install it with the button below."};
+    if (!r) throw {code: "bridge_down", message: "FinCom Bridge is not running on this computer yet. Install FinCom Bridge from the Tally page."};
     const j = await r.json().catch(() => null);
     if (!j || !j.ok) throw {code: "pair", message: (j && j.error) || "The bridge would not hand over its key."};
     this.setCfg({key: j.key, url: base});
@@ -263,7 +263,7 @@ async function bridgeTick(first){
     if (first && Bridge.up() && !Bridge.posting) bridgeLeftover();
     if (first && Bridge.up() && Bridge.st.version && bridgeVer(Bridge.st.version) < bridgeVer("1.12.6") && !lsGet("tdsdesk:bridgenudge1126")){
       lsSet("tdsdesk:bridgenudge1126", "1");
-      toast("A new Tally Bridge (1.12.6) is ready: it reads bill references for the vendor reconciliation, deletes entries on more Tally setups, and posts fast, and it keeps posting even if this page or the connection drops. Download it under Settings \u2192 Tally Bridge and run the setup on the Tally computer.");
+      toast("A newer FinCom Bridge is ready: it reads bill references for the vendor reconciliation, deletes entries on more Tally setups, and posts fast, and it keeps posting even if this page or the connection drops. Install FinCom Bridge from the Tally page and run it on the Tally computer.");
     }
     const key = Bridge.st.open.map(o => o.name).sort().join("|");
     const changed = key !== Bridge.lastOpenKey;
@@ -308,26 +308,26 @@ document.addEventListener("visibilitychange", () => { if (document.visibilitySta
 function bridgeChip(co){
   if (!Bridge.on()) return "";
   const st = Bridge.st;
-  if (st.state === "down") return '<button class="tchip off" data-act="openSettings" title="' + esc(st.error) + '">Tally Bridge offline \u2014 check</button>';
-  if (st.state === "key") return '<span class="tchip bad" title="' + esc(st.error) + '">Tally Bridge: wrong key</span>';
-  if (st.state !== "ok") return '<span class="tchip off">Tally Bridge\u2026</span>';
+  if (st.state === "down") return '<button class="tchip off" data-act="openSettings" title="' + esc(st.error) + '">FinCom Bridge offline \u2014 check</button>';
+  if (st.state === "key") return '<span class="tchip bad" title="' + esc(st.error) + '">FinCom Bridge: wrong key</span>';
+  if (st.state !== "ok") return '<span class="tchip off">FinCom Bridge\u2026</span>';
   const run = (st.jobs || []).find(j => ["queued", "waiting", "running"].includes(j.status));
   if (run) return '<span class="tchip ok" title="' + esc((run.company || "") + ": " + (run.message || "")) + '">\u25CF Posting to Tally: ' + num(run.done) + " of " + num(run.total) + "</span>";
   // build 194: Tally stopped answering (a message box open in Tally, or a long report): said plainly, with since when
   // go-bridge: a slow Tally is busy, never "disconnected" (it is open; the bridge asks again by itself)
   const busyAt = (st.stuck && st.stuck.since) || (st.tallyState === "busy" && st.busySince) || "";
   if (busyAt || st.tallyState === "busy") return '<span class="tchip warn" title="Tally is open but answering slowly' + (busyAt ? " since " + esc(String(busyAt).slice(11, 16)) : "") + '. A message box (a pop-up) in Tally, or a report still working, holds it up: close it, and FinCom carries on by itself. Nothing is lost meanwhile.">\u25D0 Tally busy' + (busyAt ? " since " + esc(String(busyAt).slice(11, 16)) : "") + "</span>";
-  if (st.shaky) return '<span class="tchip warn" title="' + esc(st.error || "") + '">Tally Bridge: reconnecting\u2026</span>';
+  if (st.shaky) return '<span class="tchip warn" title="' + esc(st.error || "") + '">FinCom Bridge: reconnecting\u2026</span>';
   const why = Bridge.diag && (Bridge.diag.findings || []).find(f => f.level !== "ok");
   if (st.pinMissing) return '<button class="tchip warn" data-act="openSettings" title="' + esc(why ? why.text : "The Tally chosen in Settings is not running") + '">Your Tally is not connected \u2014 check</button>';
   if (!st.tallyUp) return '<button class="tchip warn" data-act="openSettings" title="' + esc(why ? why.text : "No TallyPrime is answering in your Windows session") + '">Tally not connected \u2014 check</button>';
   if (co){
     const o = Bridge.openFor(co);
     if (o) return '<span class="tchip ok" title="' + esc(o.name) + " is open in Tally (port " + o.port + ')">\u25CF Open in Tally</span>';
-    if ((st.clash || []).some(n => norm(n) === norm(Bridge.tallyName(co)))) return '<span class="tchip bad" title="This company is open in more than one Tally. Choose yours in Settings \u2192 Tally Bridge.">Choose your Tally</span>';
+    if ((st.clash || []).some(n => norm(n) === norm(Bridge.tallyName(co)))) return '<span class="tchip bad" title="This company is open in more than one Tally. Choose yours in Settings \u2192 FinCom Bridge.">Choose your Tally</span>';
     return '<span class="tchip warn" title="Open ' + esc(Bridge.tallyName(co)) + ' in TallyPrime to post and to load its ledgers">\u25CB Not open in Tally</span>';
   }
-  if ((st.clash || []).length) return '<span class="tchip bad" title="' + esc(st.clash.join(", ")) + ' is open in more than one Tally. Choose yours in Settings \u2192 Tally Bridge.">Choose your Tally</span>';
+  if ((st.clash || []).length) return '<span class="tchip bad" title="' + esc(st.clash.join(", ")) + ' is open in more than one Tally. Choose yours in Settings \u2192 FinCom Bridge.">Choose your Tally</span>';
   const n = st.open.length;
   return '<span class="tchip ok" title="' + esc(st.open.map(o => o.name).join(", ")) + '">\u25CF Tally: ' + (n === 1 ? esc(st.open[0].name) : n + " companies open") + "</span>";
 }
@@ -1193,8 +1193,8 @@ async function setAutoNumbering(){
       logPosting && logPosting({what: "setting", id: "vchauto", action: "automatic numbering", co: co.id, ref: done.join(", "), party: tname, amount: 0, tally: {company: tname}});
     }
     if (!done.length && bad.some(x => /Only VOUCHER, LEDGER or GROUP/.test(x.message || ""))){
-      await askConfirm({title: "The Tally Bridge on the Tally computer needs updating", ok: "Got it", body:
-        '<p>This needs bridge 1.8.1. Download it from Client setup \u2192 Company and Tally \u2192 Tally Bridge, and install it on the computer where Tally runs.</p>' +
+      await askConfirm({title: "FinCom Bridge on the Tally computer needs updating", ok: "Got it", body:
+        '<p>This needs FinCom Bridge 2.1. Install FinCom Bridge from the Tally page and run it on the computer where Tally runs.</p>' +
         '<p><b>Or set it in Tally yourself</b>, for each voucher type (Purchase, Journal, Payment, Receipt, Contra, Sales, Debit Note, Credit Note):</p>' +
         '<ol><li>Gateway of Tally \u2192 <b>Alter</b> \u2192 <b>Voucher Type</b>, and choose the type.</li><li>Set <b>Method of voucher numbering</b> to <b>Automatic</b>.</li><li>Press Ctrl + A to save.</li></ol>' +
         '<p class="note">Then come back here and press \u201cUse Tally\u2019s automatic numbers\u201d.</p>'});
@@ -1218,14 +1218,14 @@ function bridgePin(port){
 async function saveBridgeSetup(){
   let t = null;
   try { t = await blockText(BRIDGE_SETUP_ID); } catch (e){ t = null; }
-  if (!t || !t.trim()){ toast("This copy of the app does not carry the setup file. Use the downloaded app (TDS-Desk-standalone.html)."); return; }
+  if (!t || !t.trim()){ toast("This copy of the app does not carry the setup file. Install FinCom Bridge from the Tally page."); return; }
   const raw = atob(t.trim());
   const bytes = new Uint8Array(raw.length);
   for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
   saveFile("Setup-FinCom-Bridge.bat", new Blob([bytes], {type: "application/octet-stream"}));
   // its fingerprint, to compare with the one published in the FinCom repository (assets/bridge-setup.sha256)
   try { const h = await crypto.subtle.digest("SHA-256", bytes); S.bridgeSha = Array.from(new Uint8Array(h)).map(x => x.toString(16).padStart(2, "0")).join(""); } catch (e){ S.bridgeSha = ""; }
-  toast("Saved. On the computer where Tally runs, double-click Setup-FinCom-Bridge.bat and press I.");
+  toast("Saved. Run it on the computer where Tally runs; FinCom Bridge then shows its icon near the clock.");
   render();
 }
 // A day book exported from Tally and chosen in FinCom also becomes the bridge's copy of the company (1.13.7): sent in
@@ -1265,7 +1265,7 @@ const BridgeSeed = {
     return out;
   },
   async send(file, onStep, range, name0){
-    if (!Bridge.on()) return {skipped: "the Tally Bridge is not connected"};
+    if (!Bridge.on()) return {skipped: "FinCom Bridge is not connected"};
     const name = name0 || this.company();
     if (!name) return {skipped: "no Tally company name"};
     const pieces = this.pieces(await file.text(), range || {});
@@ -1282,7 +1282,7 @@ const BridgeSeed = {
   },
   // opening balances from a trial balance file, for the bridge's copy
   async opening(asOn, led){
-    if (!Bridge.on()) return {skipped: "the Tally Bridge is not connected"};
+    if (!Bridge.on()) return {skipped: "FinCom Bridge is not connected"};
     return this.post("/seedbal?company=" + encodeURIComponent(this.company()), JSON.stringify({openAsOn: asOn, ledgers: Object.entries(led).map(([name, x]) => ({name, parent: x.parent || "", open: String(x.open)}))}), "application/json");
   }
 };

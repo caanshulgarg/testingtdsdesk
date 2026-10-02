@@ -107,7 +107,7 @@ export default function Ledgers({ b }) {
     <section className="dash-card" style={{ marginBottom: 12 }}><h3>GST and TDS ledgers: confirm once for this client</h3>
       <p className="note">Each ledger is guessed from Tally — its tax type, duty head and group — and from how the day book uses it. Check the guess and confirm it. Returns count only confirmed ledgers; anything still to confirm is shown on the TDS and GST screens, and their files wait until it is done.</p>
       <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-        <button className={"btn small" + (live ? " primary" : "")} title={live ? undefined : "Needs the Tally Bridge and this company open in Tally"} onClick={() => doAct("ledRead")}>Read ledgers from Tally</button>
+        <button className={"btn small" + (live ? " primary" : "")} title={live ? undefined : "Needs FinCom Bridge and this company open in Tally"} onClick={() => doAct("ledRead")}>Read ledgers from Tally</button>
         <span className="note">{fromTally ? fromTally + " ledgers read from Tally" + (b.ledInfoAt ? " on " + fmtDate(String(b.ledInfoAt).slice(0, 10)) : "") : live ? "not read yet" : "Tally is not connected; the ledger masters XML under “From Tally” does the same"}</span>
       </div>
       <div className="dash-tiles" style={{ marginTop: 10 }}>

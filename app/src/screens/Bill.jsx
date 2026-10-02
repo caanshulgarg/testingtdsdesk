@@ -151,7 +151,7 @@ function YtdSource({ e, c }) {
       {ours.credited ? <> + <b>{money0(ours.credited)}</b> from {ours.bills} bill{ours.bills === 1 ? "" : "s"} here not yet in Tally</> : null}
       {" · read " + fmtDateTime(t.at) + " "}{fetch(busy ? "Reading…" : "Check again")}</p>;
   }
-  if (!bridgeLive()) return <p className="note" style={{ margin: "4px 0 0" }}>This year’s total counts only the bills entered here. Connect the Tally Bridge to include what is already booked in Tally.</p>;
+  if (!bridgeLive()) return <p className="note" style={{ margin: "4px 0 0" }}>This year’s total counts only the bills entered here. Connect FinCom Bridge to include what is already booked in Tally.</p>;
   if (!led) return <p className="note" style={{ margin: "4px 0 0" }}>Choose the supplier’s Tally ledger below to check what was already credited to it this year.</p>;
   return <p className="note" style={{ margin: "4px 0 0" }}>This year’s total counts only the bills entered here. {fetch(busy ? "Reading from Tally…" : "Check " + led + " in Tally")}</p>;
 }

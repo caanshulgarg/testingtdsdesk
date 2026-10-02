@@ -24,7 +24,7 @@ function Form({ V0 }) {
         <input ref={file} type="file" hidden aria-label="Vendor’s ledger file" accept=".xlsx,.xls,.xlsm,.csv,.txt,.pdf,image/*" onChange={(ev) => vrFile(ev.target.files && ev.target.files[0])} /></label>
       <div style={{ alignSelf: "end" }}><button className="btn primary" disabled={!live || !!V0.busy} onClick={() => runVendorRecon()}>Reconcile</button></div>
     </div>
-    {!live && <p className="note">Connect the Tally Bridge and open the company in Tally to reconcile.</p>}
+    {!live && <p className="note">Connect FinCom Bridge and open the company in Tally to reconcile.</p>}
   </>;
 }
 

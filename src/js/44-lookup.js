@@ -125,7 +125,7 @@ const LK = {
     const ck = S.coId + "|led|" + led + "|" + from + "|" + to, hit = this.cached(ck, force); if (hit) return hit;
     const co = CO(), o = Bridge.openFor(co);
     if (!o) throw new Error("Open " + (co.tallyName || co.name) + " in Tally first.");
-    if (bridgeVer(Bridge.st.version) < bridgeVer("1.12.3")) throw new Error("This needs Tally Bridge 1.12.3 or later. Download the new setup from Settings, Tally Bridge.");
+    if (bridgeVer(Bridge.st.version) < bridgeVer("1.12.3")) throw new Error("This needs FinCom Bridge 2.1. Install FinCom Bridge from the Tally page.");
     const q = "?company=" + encodeURIComponent(o.name) + "&from=" + from + "&to=" + to + "&ledger=" + encodeURIComponent(led) + Bridge.pinQ();
     const bal = await Bridge.call("/ledgerbalance" + q, null, 180000);
     const lv = await Bridge.call(ledgerLinesUrl(o.name, led, FC.iso(from), FC.iso(to)), null, 600000);
@@ -222,7 +222,7 @@ const LK = {
   async tbTally(asOn, force){
     const t = await this.tbRaw(asOn, force), sub = l => (FC.tn() ? FC.tn().under[l] : null) || t.par[l] || (S.books.under || {})[l] || "";
     const rows = Object.keys(t.bal).filter(l => Math.abs(t.bal[l]) >= 0.005).map(l => ({l, bal: t.bal[l], sub: sub(l), top: FC.path(l).length ? FC.top(l) : (sub(l) || "Not in a group")}));
-    return this.tbShape({kind: "tb", src: "tally", asOn, rows, at: t.at, note: "Read from Tally (" + t.company + ")" + (this.light() ? "" : ". This bridge reads every ledger twice; install Tally Bridge 1.12.10 for a faster, lighter read") + "."});
+    return this.tbShape({kind: "tb", src: "tally", asOn, rows, at: t.at, note: "Read from Tally (" + t.company + ")" + (this.light() ? "" : ". This bridge reads every ledger twice; install FinCom Bridge from the Tally page for a faster, lighter read") + "."});
   },
   // a group straight from Tally: each ledger's opening and closing (two light reads), and the change between
   async groupTally(grp, from, to, force){
@@ -329,7 +329,7 @@ const LK = {
       if (x.kind === "group") need(x.grp, "Choose a group.");
       if (x.kind === "monthly") need(x.led || x.grp, "Choose a ledger or a group.");
       if (["ledger", "group", "monthly", "find"].includes(x.kind)) need(x.from && x.to && x.from <= x.to, "The dates are the wrong way round.");
-      if (!tally && !cloud) need(have, this.live() ? "This needs the books read into FinCom. Choose \u201cTally\u201d as the source, or read the books first." : "Read the books from Tally first, or connect the Tally Bridge.");
+      if (!tally && !cloud) need(have, this.live() ? "This needs the books read into FinCom. Choose \u201cTally\u201d as the source, or read the books first." : "Read the books from Tally first, or connect FinCom Bridge.");
     } catch (e){ if (e) throw e; return; }
     x.open = {};
     if (cloud){
@@ -433,7 +433,7 @@ const LK = {
   },
   async keepOn(on){
     try { const f = this.fr(); f.keep = await Bridge.call("/keep?company=" + encodeURIComponent(this.tname()) + Bridge.pinQ(), {on: !!on}, 30000); toast(on ? "The bridge will keep this company in step whenever it is open in Tally." : "Keeping in step switched off."); f.at = 0; setTimeout(() => this.autoFresh(true), 3000); render(); }
-    catch (e){ toast(/Unknown address|No such/i.test(String(e && e.message)) ? "This needs Tally Bridge 1.13.0. Download the new setup and install it." : "The bridge could not do it: " + ((e && e.message) || e)); }
+    catch (e){ toast(/Unknown address|No such/i.test(String(e && e.message)) ? "This needs FinCom Bridge 2.1. Install FinCom Bridge from the Tally page." : "The bridge could not do it: " + ((e && e.message) || e)); }
   },
   // the bridge's update from Tally: when it runs each day, or now (the bridge reads only changes, then stops)
   async keepSet(o, say){
@@ -441,7 +441,7 @@ const LK = {
       const j = await Bridge.call("/keep?company=" + encodeURIComponent(BridgeSeed.company()) + Bridge.pinQ(), o, 30000);
       (S.setupKeep = S.setupKeep || {})[S.coId] = {at: Date.now(), st: j}; toast(say);
       if (o.now){ [60, 180, 420].forEach(s => setTimeout(() => { try { this.autoFresh(true, true); (S.setupKeep || {})[S.coId] = null; render(); } catch (e){} }, s * 1000)); }
-    } catch (e){ toast(/Unknown address|No such/i.test(String(e && e.message)) ? "This needs Tally Bridge 1.14. It updates by itself within a few minutes." : "The bridge could not do it: " + ((e && e.message) || e)); }
+    } catch (e){ toast(/Unknown address|No such/i.test(String(e && e.message)) ? "This needs FinCom Bridge 2.1. Install FinCom Bridge from the Tally page." : "The bridge could not do it: " + ((e && e.message) || e)); }
     render();
   },
   async keepCheck(){
@@ -456,7 +456,7 @@ const LK = {
   // the days since the copy: one small day book read, merged in; balances follow from the entries
   async bringToday(){
     const f = this.fr(), b = S.books, meta = b.meta || {}, today = Audit.today();
-    if (!this.live()){ toast("Connect the Tally Bridge first."); return; }
+    if (!this.live()){ toast("Connect FinCom Bridge first."); return; }
     if (!(b.vouchers || []).length || !meta.to){ toast("Bring in the books first (last night\u2019s copy, or From Tally)."); return; }
     const from = Audit.ymd(Audit.iso(meta.to) && FC.d8(addDays(Audit.iso(meta.to), 1))), to = today;
     const start = String(meta.to) >= today ? today : from;
