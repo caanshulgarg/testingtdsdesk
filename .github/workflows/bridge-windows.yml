@@ -147,14 +147,17 @@ jobs:
                 $k = Get-ItemProperty "Registry::HKEY_USERS\$sid\Software\Microsoft\Windows\CurrentVersion\Run" -ErrorAction SilentlyContinue
                 if ($k) { return $k.'FinCom Bridge' } else { return $null }
               }
-              & reg.exe load 'HKU\fctest-hive' "$(Get-TestProfile)\NTUSER.DAT" 2>$null | Out-Null
+              # through cmd, so reg.exe's message goes to nul there: in Windows PowerShell 5.1 a native command's stderr
+              # redirected here (2>$null) stops the script ("being used by another process" while the profile unloads)
+              # instead of trying again below
+              & cmd.exe /c "reg.exe load HKU\fctest-hive `"$(Get-TestProfile)\NTUSER.DAT`" >nul 2>nul"
               if ($LASTEXITCODE -eq 0) {
                 try {
                   $k = Get-ItemProperty 'Registry::HKEY_USERS\fctest-hive\Software\Microsoft\Windows\CurrentVersion\Run' -ErrorAction SilentlyContinue
                   if ($k) { return $k.'FinCom Bridge' } else { return $null }
                 } finally {
                   $k = $null; [gc]::Collect(); [gc]::WaitForPendingFinalizers()
-                  & reg.exe unload 'HKU\fctest-hive' 2>$null | Out-Null
+                  & cmd.exe /c "reg.exe unload HKU\fctest-hive >nul 2>nul"
                 }
               }
               Start-Sleep -Seconds 2 # the profile is being unloaded right now
