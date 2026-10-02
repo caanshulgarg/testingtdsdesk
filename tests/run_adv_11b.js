@@ -5,7 +5,7 @@
 // return period; without one it is listed apart with what is missing, never as a negative in GSTR-1.
 // Uses tests/data/books-cache.json (client data, not in git).
 const fs = require("fs"), {load, HTML, CACHE} = require("./harness");
-const {ctx, x} = load(HTML, ["num", "r2", "INR", "STATE_CODES", "ledNm", "ledEnt", "ledClean", "ledKey", "LED_IDX", "ledIdx", "ledUnder", "ledGroupPath", "LedMaster", "Books", "GSTR", "GSTAdv"]);
+const {ctx, x} = load(HTML, ["num", "r2", "INR", "STATE_CODES", "ledNm", "ledEnt", "ledClean", "ledKey", "LED_IDX", "ledIdx", "ledLook", "ledUnder", "ledGroupPath", "LedMaster", "Books", "GSTR", "GSTAdv"]);
 let fails = 0;
 const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 ctx.fmtDate = d => String(d || "");

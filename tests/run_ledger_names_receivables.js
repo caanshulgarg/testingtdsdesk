@@ -6,7 +6,7 @@
 // (ledGroupPath, src/js/00) and the names kept with the books are cleaned once (TallyRead.cleanNames, src/js/18).
 // Runs the built app's own code (site-test/index.html) on made-up books; no client data.
 const {load, HTML} = require("./harness");
-const {ctx, x} = load(HTML, ["num", "r2", "INR", "esc", "ledNm", "ledEnt", "ledClean", "ledKey", "LED_IDX", "ledIdx", "ledUnder", "ledGroupPath", "LedMaster",
+const {ctx, x} = load(HTML, ["num", "r2", "INR", "esc", "ledNm", "ledEnt", "ledClean", "ledKey", "LED_IDX", "ledIdx", "ledLook", "ledUnder", "ledGroupPath", "LedMaster",
   "Audit", "Parties", "MIS", "FS", "TallyRead", "Books"]);
 let fails = 0;
 const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };

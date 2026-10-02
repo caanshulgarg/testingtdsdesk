@@ -134,24 +134,30 @@ function ledKey(n){ return ledClean(n).replace(/\s+/g, " ").trim().toLowerCase()
 const LED_IDX = new WeakMap();
 function ledIdx(o){
   if (!o) return null;
-  const n = Object.keys(o).length, x = LED_IDX.get(o);
-  if (x && x.n === n) return x.m;
+  // built again when the names changed (counted at most once a second: paths are asked for many times a run)
+  const x = LED_IDX.get(o), t = Date.now();
+  if (x && t - x.at < 1000) return x;
+  const n = Object.keys(o).length;
+  if (x && x.n === n){ x.at = t; return x; }
   const m = new Map(); Object.keys(o).forEach(k => { const kk = ledKey(k); if (kk && (!m.has(kk) || o[k])) m.set(kk, o[k]); });
-  LED_IDX.set(o, {n, m});
-  return m;
+  const y = {n, m, at: t, seen: new Map()};             // seen: a name already looked up by its key
+  LED_IDX.set(o, y);
+  return y;
 }
-function ledUnder(b, l){
-  const u = (b && b.under) || null;
-  if (!u || l == null) return undefined;
-  if (u[l] != null) return u[l];
-  const m = ledIdx(u), p = m && m.get(ledKey(l));
-  return p == null ? undefined : p;
+function ledLook(o, l){
+  if (!o || l == null) return undefined;
+  if (o[l] != null) return o[l];
+  const x = ledIdx(o);
+  if (x.seen.has(l)) return x.seen.get(l);
+  const p = x.m.get(ledKey(l)), v = p == null ? undefined : p;
+  x.seen.set(l, v);
+  return v;
 }
+function ledUnder(b, l){ return ledLook(b && b.under, l); }
 function ledGroupPath(b, l){
   const groups = (b && b.groups) || {}, out = [];
-  const up = g => { if (groups[g] != null) return groups[g]; const m = ledIdx(groups), p = m && m.get(ledKey(g)); return p == null ? "" : p; };
   let p = ledUnder(b, l);
-  for (let i = 0; p && i < 15; i++){ p = ledClean(p); out.push(p); p = up(p); }
+  for (let i = 0; p && i < 15; i++){ if (groups[p] == null && /&|\r|\n/.test(p)) p = ledClean(p); out.push(p); p = ledLook(groups, p) || ""; }
   return out;
 }
 function newCompany(f){

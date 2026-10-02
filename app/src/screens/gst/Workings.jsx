@@ -125,6 +125,7 @@ function Adjusted({ a }) {
         <td className="n">{money(r.received)}</td><td className="n">{r.rate}%</td><td>{r.pos}</td><TaxCells r={r} /></tr>)}
         <tr><td colSpan={4}><b>Total</b></td><td className="n"><b>{money(a.txpdSum.received)}</b></td><td></td><td></td><TaxCells r={a.txpdSum} /></tr></tbody>
     </table></div> : <p className="note">No earlier advance was adjusted this month.</p>}
+    {(a.unmatched || []).length > 0 && <p className="bk-alert" data-adv-unmatched="" style={{ marginTop: 8 }}>{"Not in 11B, no invoice in the period: " + a.unmatched.map((r) => r.party + ", received " + money(r.received) + " on " + day(r.date) + " (receipt " + r.no + "), marked as adjusted in " + GSTR.label(String(r.adjDate).slice(0, 6)) + " — " + r.missing).join("; ") + "."}</p>}
   </Card>;
 }
 

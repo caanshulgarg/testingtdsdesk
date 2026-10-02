@@ -71,9 +71,25 @@ with sync_playwright() as p:
     t = pg.locator("#app table >> nth=0")
     hd = t.locator("thead th").evaluate_all("hs => hs.map(h => h.textContent)")
     may = t.locator("tbody tr >> nth=1").locator("td").all_inner_texts()
-    ok(hd[3] == "Worked out to pay" and hd[4] == "Paid from the bank" and may[4].replace(".00", "") == "1,60,400", "3. the GST table: May-2025 paid 1,60,400 under Paid from the bank (%s)" % may)
+    ok(hd[5] == "Worked out to pay" and hd[6] == "Paid from the bank" and may[6].replace(".00", "") == "1,60,400", "3. the GST table: May-2025 paid 1,60,400 under Paid from the bank (%s)" % may)
     due_may = E("INR.format(S.books.mis.last.comp.gst[1].due)")
-    ok(may[3] == due_may and may[3] != may[4], "3. and the 3B working's cash payable %s under Worked out to pay" % may[3])
+    ok(may[5] == due_may and may[5] != may[6], "3. and the 3B working's cash payable %s under Worked out to pay" % may[5])
+    # review of 02-Oct-2026: reverse charge was counted twice in "worked out to pay" (Apr-2025: 3,06,818.25, 4,860 =
+    # 2 x 2,430 over output less credit); now each row adds up: output - credit + reverse charge + credit carried
+    apr = E("S.books.mis.last.comp.gst[0]")
+    rows_add = E("S.books.mis.last.comp.gst.every(x => Math.abs(x.out - x.itc + x.rcm + x.carry - x.due) < 0.01)")
+    ok(apr["due"] == 304388.25 and apr["rcm"] == 2430 and apr["carry"] == 0 and rows_add and "reverse charge" in hd[3].lower(),
+       "3. Apr-2025: 3,09,522.81 - 7,564.56 + reverse charge 2,430 = 3,04,388.25 worked out to pay; every month adds up (%s)" % apr)
+    # the cash flow's GST line by the same rule as "paid from the bank" (13,60,166), the 10,080 of input IGST on its own
+    cf = E("(() => { const c = MIS.cashActual('20250401', '20260331'), f = l => (c.rows.find(x => x.lab === l) || {t: null}).t; return [f('GST'), f('Input GST paid with bills'), Object.values((c.rows.find(x => x.lab === 'Expenses paid') || {m: {}}).m).some(v => v > 0), f('Expenses refunded or recovered')]; })()")
+    ok(cf[0] == -1360166 and cf[1] == -10080 and not cf[2] and cf[3] == 15326.52, "5. cash flow: GST paid 13,60,166 as Compliance, input IGST 10,080 apart, no month of Expenses paid positive, refunds 15,326.52 on their own line (%s)" % cf)
+
+    # 7, 15 (review of 02-Oct-2026): an expense ledger in credit is other income, flagged; each fixed asset once, in its note
+    fsd = E("(() => { const d = FS.build('2025'), h = FS.html(d); return {exp: d.pl.exp, oth: d.pl.oth, wo: (d.plDet.oth || []).find(x => x[0] === 'Written Off Expenses'), crm: (h.match(/CRM Software/g) || []).length, tally: (h.match(/Tally Software/g) || []).length, comp: (h.match(/>Computer</g) || []).length}; })()")
+    ok(fsd["exp"] == 2680192.03 and fsd["wo"] == ["Written Off Expenses", 3223694.87, "expense ledger with a credit balance"], "7. other expenses 26,80,192.03 (not -5,43,549.56): Written Off Expenses 32,23,694.87 under other income, flagged (%s)" % fsd)
+    ok(fsd["crm"] == 1 and fsd["tally"] == 1 and fsd["comp"] == 1, "15. CRM Software, Tally Software and Computer each once in the notes (%s)" % fsd)
+    misx = E("(() => { const H = S.books.mis.last.pl.heads; return [(H.oth.led.find(x => x.l === 'Written Off Expenses') || {}).flag, H.exp.led.some(x => x.l === 'Written Off Expenses')]; })()")
+    ok(misx == ["expense ledger with a credit balance", False], "7. MIS: the same ledger under other income, flagged (%s)" % misx)
 
     # 4. ratios: never negative; not meaningful where they cannot be worked out; no days of purchases without purchases
     rl = E("Object.fromEntries(S.books.mis.last.p2.ratios.list.map(x => [x[0], x[1]]))")

@@ -4,7 +4,7 @@
 // function for the ageing and the forecast), so a party's buckets and its "not bill-wise" amount add up to its ledger
 // balance, and what is expected from it never exceeds that balance. Runs the built app's code on made-up books.
 const {load, HTML} = require("./harness");
-const {ctx, x} = load(HTML, ["num", "r2", "INR", "esc", "ledNm", "ledEnt", "ledClean", "ledKey", "LED_IDX", "ledIdx", "ledUnder", "ledGroupPath", "LedMaster",
+const {ctx, x} = load(HTML, ["num", "r2", "INR", "esc", "ledNm", "ledEnt", "ledClean", "ledKey", "LED_IDX", "ledIdx", "ledLook", "ledUnder", "ledGroupPath", "LedMaster",
   "Audit", "Parties", "MIS", "FS", "TallyRead", "Books"]);
 let fails = 0;
 const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };

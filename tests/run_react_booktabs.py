@@ -81,7 +81,7 @@ with sync_playwright() as p:
     pg.click('nav[aria-label="MIS"] button:text-is("Receivables")'); pg.wait_for_timeout(400)
     party = pg.locator("#misAge tbody tr[data-key]").first.get_attribute("data-key")
     pg.click('#misAge tr[data-key=%s] button.linkbtn' % json.dumps(party)); pg.wait_for_timeout(300)
-    ok(pg.evaluate("S.misOpen") == party and pg.locator("#misAge th:text-is('Outstanding')").count() == 1, "a customer opens to its bills")
+    ok(pg.evaluate("S.misOpen") == party and pg.locator("#misAge th:text-is('Left after amounts on account')").count() == 1, "a customer opens to its bills")
     pg.fill("#misq", party[:5]); pg.wait_for_timeout(600)
     ok(all(party[:5].lower() in (x or "").lower() for x in pg.locator("#misAge tbody tr[data-key]").evaluate_all("rs => rs.map(r => r.dataset.key)")), "the search keeps only matching customers")
     ok(pg.evaluate("document.activeElement.id") == "misq", "the search box keeps the cursor")

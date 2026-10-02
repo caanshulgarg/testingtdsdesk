@@ -31,16 +31,19 @@ with sync_playwright() as p:
     pg.wait_for_timeout(2500)
     r = E("(() => { const r = S.books.mis.last; return {code: r.code, basis: r.basis === MIS.basis(), owe: r.recv.sum.owe, dpo: r.dpo, gst: r.comp.gst.slice(0, 2).map(x => [x.ym, x.due, x.pay])}; })()")
     ok(r["code"] != "1FB42BF2" and r["basis"] and r["owe"] == 11197404.38, "6. the saved run of 01-Oct (1FB42BF2) is worked out again on open: owed to you 1,11,97,404.38 (%s)" % r["owe"])
-    ok(r["gst"][0] == ["202504", 306818.25, 200000] and r["gst"][1][2] == 160400, "6. GST: worked out to pay from the 3B working (Apr 3,06,818.25), paid from the bank (Apr 2,00,000, May 1,60,400) (%s)" % r["gst"])
+    ok(r["gst"][0] == ["202504", 304388.25, 200000] and r["gst"][1][2] == 160400, "6. GST: worked out to pay from the 3B working (Apr 3,04,388.25: reverse charge 2,430 counted once, review of 02-Oct-2026), paid from the bank (Apr 2,00,000, May 1,60,400) (%s)" % r["gst"])
     ok(r["dpo"] is None and "days of purchases" not in pg.inner_text("#app"), "6. no 'days of purchases' (no purchases of goods)")
 
     # 11. audit: a run that no longer fits is not shown, on Audit or Reports; "Last run on … (run by hand)"
     E("""() => { S.books.audit = {st: {}, last: {at: '2026-10-01T00:00:00Z', how: 'run now', from: '20250401', to: '20260331', vouchers: 2675, findings: [{id: 'x', sev: 'high', title: 'Old finding', amount: 5, area: 'gst'}], notes: [], errors: []}}; S.booksTab = 'audit'; render(); }""")
     pg.wait_for_timeout(700)
     t = pg.inner_text("#app")
-    ok("Old finding" not in t and "Run again" in t and "worked out before the books or FinCom" in t, "11. an audit run from older working: its findings are not shown, Run again")
+    # review of 02-Oct-2026: such a run is worked out again by itself (as MIS), with no message to press Run again
+    pg.wait_for_timeout(2500); t = pg.inner_text("#app")
+    au = E("[(S.books.audit.last.findings || []).some(f => f.title === 'Old finding'), !!Audit.stale(S.books.audit.last)]")
+    ok("Old finding" not in t and au == [False, False] and pg.locator("#app [data-audit-stale]").count() == 0, "11. an audit run from older working: its findings are not shown; it is worked out again by itself (%s)" % au)
     E("() => { S.booksTab = 'reports'; S.rptOpen = null; render(); }"); pg.wait_for_timeout(900)
-    ok(pg.locator("#app [data-rpt-audit-stale]").count() >= 1 or "no longer fits the books" in pg.inner_text("#app"), "11. Reports does not show its figures either")
+    ok("Old finding" not in pg.inner_text("#app"), "11. Reports shows the run worked out again, not the old one")
     E("() => { Audit.run('20250401', '20260331'); S.booksTab = 'audit'; render(); }"); pg.wait_for_timeout(900)
     t = pg.inner_text("#app")
     ok("Last run on " in t and "(run by hand)" in t and "Last run run now" not in t, "11. 'Last run on … (run by hand)', not 'Last run run now on'")

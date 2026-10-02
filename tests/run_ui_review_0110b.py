@@ -82,7 +82,7 @@ with sync_playwright() as p:
     ok(pg.evaluate("[BANK_TABS.map(x => x[1]), SALES_TABS.map(x => x[1])]") == [["To review", "Post to Tally", "In Tally"]] * 2, "3. Bank and Sales: To review · Post to Tally · In Tally")
     go("S.tab = 'invoices'")
     hb = pg.evaluate("Array.from(document.querySelectorAll('#cobar nav.sbar button')).map(b => b.firstChild.textContent.trim())")
-    ok(hb == ["To review", "Post to Tally", "In Tally"], "3. Purchase: %s" % hb)
+    ok(hb[:3] == ["To review", "Post to Tally", "In Tally"] and hb[3:] in (["Duplicates", "Deleted"], ["Duplicates", "Deleted", "No entry"]) and hb.count("To review") == 1, "3. Purchase, one row of tabs (review of 02-Oct-2026): %s" % hb)
     # 1. chips short, full text on hover; tabs on their own row
     chip = pg.locator("#cobar .tallychip"); t = chip.inner_text().strip()
     ok(len(t) <= 26 and t.startswith("Tally") and "Tally:" in (chip.get_attribute("title") or ""), "1. Tally chip short (%s), the full words on hover" % t)
