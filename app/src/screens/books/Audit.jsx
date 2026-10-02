@@ -11,7 +11,7 @@ import { CatchUp } from "../../parts/Notes.jsx";
 
 const m = (v) => INR.format(r2(v || 0));
 const d = (x) => fmtDate(tallyDate(x));
-const SEV = { high: ["SERIOUS", "#B42318"], medium: ["TO LOOK AT", "#B9541B"], low: ["MINOR", "#5A6B63"] };
+const SEV = { high: ["SERIOUS", "var(--bad)"], medium: ["TO LOOK AT", "var(--warn)"], low: ["MINOR", "var(--muted)"] };
 const REL = ["Director", "Relative of a director", "Partner or proprietor", "Shareholder with 10% or more", "Company or firm they control", "Key manager", "Other"];
 const Act = ({ act, className = "btn small", children, title }) => <button className={className} title={title} onClick={() => doAct(act)}>{children}</button>;
 
@@ -80,9 +80,9 @@ function FindingBody({ f, st }) {
       {f.rows.length > 100 && <p className="note">The first 100 of {f.rows.length}; all are in the Excel.</p>}
     </>}
     {sv.n > 0 && <>
-      <p><b style={{ color: "#1F7A4D" }}>Put right</b> <span className="note">found earlier, gone when checked again</span></p>
+      <p><b style={{ color: "var(--ok)" }}>Put right</b> <span className="note">found earlier, gone when checked again</span></p>
       <Table head={<><th className="dt">Date</th><th>Voucher</th><th>Party or ledger</th><th className="n">Amount</th><th>Put right by</th></>}>
-        {sv.items.slice(-100).map((it, i) => { const r = it.row || {}; return <tr key={i} style={{ color: "#5A6B63" }}><td>{r.date ? d(r.date) : ""}</td><td><s>{r.no || ""}</s></td><td>{r.party || ""}</td><td className="n">{r.amount ? m(r.amount) : ""}</td><td>{fmtDate(String(it.solved).slice(0, 10))}</td></tr>; })}
+        {sv.items.slice(-100).map((it, i) => { const r = it.row || {}; return <tr key={i} style={{ color: "var(--muted)" }}><td>{r.date ? d(r.date) : ""}</td><td><s>{r.no || ""}</s></td><td>{r.party || ""}</td><td className="n">{r.amount ? m(r.amount) : ""}</td><td>{fmtDate(String(it.solved).slice(0, 10))}</td></tr>; })}
       </Table>
     </>}
   </div>;
@@ -96,7 +96,7 @@ function Finding({ f }) {
         <div className="nr" style={{ color: col, fontWeight: 700 }}>{word + " · " + ((Audit.AREAS.find((a) => a[0] === f.area) || [])[1] || "") + (f.clause ? " · " + f.clause : "")}
           {f.isNew ? <> <span className="tag warn">new</span></> : f.more > 0 ? <> <span className="tag warn">+{f.more}</span></> : null}</div>
         <button className="linkbtn" style={{ fontSize: 16, fontWeight: 600, textAlign: "left" }} onClick={() => tdsToggle("auditOpen", f.id)}>{(open ? "▾ " : "▸ ") + f.title}</button>
-        <div className="note">{f.problem + (f.amount ? " · ₹" + m(f.amount) : "")}{solved > 0 && <> · <span style={{ color: "#1F7A4D" }}>{solved} put right</span></>}</div>
+        <div className="note">{f.problem + (f.amount ? " · ₹" + m(f.amount) : "")}{solved > 0 && <> · <span style={{ color: "var(--ok)" }}>{solved} put right</span></>}</div>
       </div>
       <div><select aria-label={"Status of " + f.title} style={{ width: "auto" }} value={st.s} onChange={(ev) => auditFindingSet(f.id, "s", ev.target.value)}>{Audit.STATUS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
         {f.je && <div className="nr">{f.je.length + " suggested entr" + (f.je.length === 1 ? "y" : "ies")}</div>}</div>
@@ -132,7 +132,7 @@ function Findings({ b }) {
     <div className="revfilter"><select aria-label="Status" style={{ width: "auto" }} value={fs} onChange={(ev) => setAndShow("auditSt", ev.target.value)}><option value="">Every status</option>{Audit.STATUS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>
     {list.map((f, i) => <Finding key={f.id + ":" + i} f={f} />)}
     {!list.length && <div className="bk-none" style={{ marginTop: 10 }}>Nothing here.</div>}
-    {gone.length > 0 && <section className="dash-card" style={{ marginTop: 12, borderLeft: "4px solid #1F7A4D" }}><h3 style={{ color: "#1F7A4D" }}>Solved</h3><p className="note">Every item of these was put right in the books.</p>
+    {gone.length > 0 && <section className="dash-card" style={{ marginTop: 12, borderLeft: "4px solid var(--ok)" }}><h3 style={{ color: "var(--ok)" }}>Solved</h3><p className="note">Every item of these was put right in the books.</p>
       <Table head={<><th>Observation</th><th className="n">Items</th><th className="n">Amount</th><th>Last put right</th></>}>
         {gone.map((x, i) => <tr key={x.id + ":" + i}><td>{x.title}</td><td className="n">{x.n}</td><td className="n">{m(x.amount)}</td><td>{fmtDate(String(x.items[x.items.length - 1].solved).slice(0, 10))}</td></tr>)}</Table></section>}
     {(au.history || []).length > 1 && <section className="dash-card" style={{ marginTop: 12 }}><h3>Earlier runs</h3>

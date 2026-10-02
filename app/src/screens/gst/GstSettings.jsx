@@ -27,7 +27,7 @@ function Registrations({ b, regs }) {
             <td>{src.join(", ")}</td>
             <td>{S.gsetReg === reg ? <span className="note">settings below</span> : <button className="linkbtn" onClick={() => setAndShow("gsetReg", reg)}>settings</button>}
               {only && <> · <button className="linkbtn" onClick={() => gregRemove(g)}>remove</button></>}</td></tr>; })}</tbody>
-      </table></div> : <p className="note" style={{ color: "#B9541B" }}>No GSTIN yet. Add the client’s GSTIN below to use the GST tab.</p>}
+      </table></div> : <p className="note" style={{ color: "var(--warn)" }}>No GSTIN yet. Add the client’s GSTIN below to use the GST tab.</p>}
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 8 }}>
         <input ref={box} type="text" aria-label="New GSTIN" data-fk="gregnew" maxLength={15} placeholder="15-character GSTIN" style={{ width: 240, textTransform: "uppercase" }} autoComplete="off"
           onKeyDown={(ev) => { if (ev.key === "Enter") add(); }} />

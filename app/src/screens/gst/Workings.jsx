@@ -62,7 +62,7 @@ function ToReport({ p, ym }) {
     <Card title={"To report in " + GSTR.label(ym) + "’s GSTR-1"}>
       <p className="note">Earlier months’ documents that differ from what was filed. Each goes into this month’s JSON as chosen; an amendment already filed in an earlier month’s return is not repeated.</p>
       {p.periods.length > 0 && <p className="note">Compared: {p.periods.map(GSTR.label).join(", ")}.</p>}
-      {p.noCopy.length > 0 && <p className="note" style={{ color: "#B9541B" }}>No filed copy for {p.noCopy.map(GSTR.label).join(", ")}, so those months are not compared.</p>}
+      {p.noCopy.length > 0 && <p className="note" style={{ color: "var(--warn)" }}>No filed copy for {p.noCopy.map(GSTR.label).join(", ")}, so those months are not compared.</p>}
       {p.late.length > 0 && <p className="note">Past the time to amend (November after the year): {p.late.map(GSTR.label).join(", ")}.</p>}
       {p.rows.length ? <div className="bk-tablewrap"><table className="bk-table">
         <thead><tr><th>Month filed</th><th>Document</th><th>GSTIN</th><th>Number</th><th className="dt">Date</th><th className="n">Taxable now</th><th>What differs</th><th>Report it as</th></tr></thead>
@@ -97,7 +97,7 @@ const ADV_HEAD = ["Place of supply", "Advance, less tax", "IGST", "CGST", "SGST"
 function Rate({ r }) {
   return <>
     <select aria-label="Rate" title={"Rate: " + r.rateFrom} value={r.rate} onChange={(ev) => advFix(r.id, "rate", ev.target.value)}>{GSTAdv.RATES.filter((x) => x > 0).map((x) => <option key={x} value={x}>{x}%</option>)}</select>
-    {r.rateFrom !== "set" && <><br /><small className="note" style={r.rateFrom === "assumed" ? { color: "#B9541B" } : undefined}>{r.rateFrom === "assumed" ? "assumed, no invoice" : "from the " + r.rateFrom}</small></>}
+    {r.rateFrom !== "set" && <><br /><small className="note" style={r.rateFrom === "assumed" ? { color: "var(--warn)" } : undefined}>{r.rateFrom === "assumed" ? "assumed, no invoice" : "from the " + r.rateFrom}</small></>}
   </>;
 }
 
@@ -250,7 +250,7 @@ export function Reversal({ b }) {
     </div>
     <Turnover t={q.t} q={q} />
     <Card title="Rule 42: common inputs and input services">
-      {!commonLeds && <p className="note" style={{ color: "#B9541B" }}>No ledger is marked “GST, common credit” yet. On the Ledgers tab, mark the input tax ledgers that carry credit used for both taxable and exempt (or non-business) supplies.</p>}
+      {!commonLeds && <p className="note" style={{ color: "var(--warn)" }}>No ledger is marked “GST, common credit” yet. On the Ledgers tab, mark the input tax ledgers that carry credit used for both taxable and exempt (or non-business) supplies.</p>}
       <HeadTable rows={[["C2 Common credit (" + r42.n + " voucher" + (r42.n === 1 ? "" : "s") + ")", r42.C2], ["D1 For exempt supplies: C2 × E ÷ F", r42.D1], ["D2 For non-business use: 5% of C2", r42.D2],
         ["Reversed: D1 + D2", r42.reverse, true], ["C3 Credit kept", r42.C3]]} />
       <p className="note" style={{ marginTop: 8 }}>D2 (5% for non-business use): <b>{set.d2 ? "applies" : "does not apply"}</b> · <button className="linkbtn" onClick={() => goGstSettings()}>change in GST settings</button></p>

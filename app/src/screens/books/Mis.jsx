@@ -43,7 +43,7 @@ function Head({ b, r, rg }) {
 // the line under the head: the period run, how, when, its result code, and whether it agrees with Tally
 function RunLine({ r }) {
   return <p className="note" style={{ margin: "10px 0" }}>{d(r.from) + " to " + d(r.to) + " · " + r.how + " on " + fmtDate(r.at.slice(0, 10)) + " at " + r.at.slice(11, 16) + " · result code "}<b>{r.code}</b>
-    {r.control ? (r.control.ok ? <>{" · "}<span style={{ color: "#1F7A4D" }}>agrees with Tally’s balances, ledger by ledger</span></> : <>{" · "}<span className="bad">{r.control.n + " ledgers differ from Tally by ₹" + m(r.control.amt)}</span></>)
+    {r.control ? (r.control.ok ? <>{" · "}<span style={{ color: "var(--ok)" }}>agrees with Tally’s balances, ledger by ledger</span></> : <>{" · "}<span className="bad">{r.control.n + " ledgers differ from Tally by ₹" + m(r.control.amt)}</span></>)
       : " · read the period from Tally through the bridge to check it against Tally’s balances"}</p>;
 }
 

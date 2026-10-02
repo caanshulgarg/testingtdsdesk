@@ -30,7 +30,7 @@ function Empty({ b, apiCard }) {
     <section className="dash-card" style={{ maxWidth: 760 }}><h3>GSTR-2B reconciliation</h3>
       <p className="note">On the portal: Returns Dashboard → the month → GSTR-2B → View → Download → <b>Generate JSON</b>. Bring in one month, a quarter, or the whole year at once — select all the files together.</p>
       <p className="note">Every document in Tally that takes input tax is compared: purchases, and expenses booked in journals or payments. Invoices are matched on the supplier’s GSTIN and invoice number, then on the number written differently, then on the amount; anything less than certain is put to you to confirm.</p>
-      {b.twoB && <p className="note" style={{ color: "#B9541B" }}>A 2B brought in before this build was read the old way. Bring it in again.</p>}
+      {b.twoB && <p className="note" style={{ color: "var(--warn)" }}>A 2B brought in before this build was read the old way. Bring it in again.</p>}
       <button className="btn small primary" onClick={() => doAct("twoBPick")}>Bring in 2B JSON</button>
     </section>
   </>;
@@ -210,7 +210,7 @@ export default function TwoB({ b }) {
         <span className="note">2B here for {regs.length > 1 ? reg + ": " : ""}</span>
         {fyM.map((m) => <span key={m} className={"tag" + (have.has(m) ? "" : " warn")} title={have.has(m) ? "brought in" : "not brought in yet"}>{GSTR.label(m).replace(/[-\s]\d{4}$/, "")}</span>)}
       </div>
-      {wrong.length > 0 && <p className="note" style={{ color: "#B9541B" }}>{wrong.length + " 2B file" + (wrong.length === 1 ? " is" : "s are") + " for " + Array.from(new Set(wrong.map((t) => t.gstin))).join(", ") + ", not this client’s registration."}</p>}
+      {wrong.length > 0 && <p className="note" style={{ color: "var(--warn)" }}>{wrong.length + " 2B file" + (wrong.length === 1 ? " is" : "s are") + " for " + Array.from(new Set(wrong.map((t) => t.gstin))).join(", ") + ", not this client’s registration."}</p>}
       <div className="row" style={{ gap: 6, marginTop: 8, alignItems: "center", flexWrap: "wrap" }}>
         <span className="note">Reconcile</span>
         {[["month", GSTR.label(S.gstYm || "") || "this month"], ["year", "the year"], ["all", "everything here"]].map(([k, l]) =>

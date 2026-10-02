@@ -79,7 +79,7 @@ export default function Accounts({ b }) {
   if (!d) body = <div className="bk-none">Working out the statements for {fy + "-" + String(num(fy) + 1).slice(2)}…</div>;
   else if (d.error) body = <div className="bk-alert">The balances are needed: {d.error}.</div>;
   else if (tab === "map") body = <Mapping c={c} d={d} />;
-  else body = <section className="dash-card fs-doc" style={{ marginTop: 10 }}>{Math.abs(d.diff) >= 1 ? null : <p className="note" style={{ color: "#1F7A4D" }}>The balance sheet tallies.</p>}
+  else body = <section className="dash-card fs-doc" style={{ marginTop: 10 }}>{Math.abs(d.diff) >= 1 ? null : <p className="note" style={{ color: "var(--ok)" }}>The balance sheet tallies.</p>}
     <Legacy html={FS.html(d).replace(/<table>/g, '<div class="bk-tablewrap"><table class="bk-table">').replace(/<\/table>/g, "</table></div>")} /></section>;
   return <>
     <nav className="sbar" aria-label="Accounts" style={{ marginBottom: 10 }}>{[["st", "Statements"], ["map", "Mapping"]].map(([id, l]) => <button key={id} aria-selected={tab === id} onClick={() => setAndShow("fsTab", id)}>{l}</button>)}</nav>

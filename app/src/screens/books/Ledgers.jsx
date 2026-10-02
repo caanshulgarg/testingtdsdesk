@@ -80,7 +80,7 @@ function Posting({ b }) {
       <tbody>{rows.map((x, i) => <tr key={x.k + ":" + i} data-key={x.k}>
         <td>{x.label}</td>
         <td>{x.now ? <>{x.now}{!((b.ledInfo || {})[x.now] || (b.map || {})[x.now]) && <> <span className="tag warn">not in Tally</span></>}</> : <span className="note">—</span>}</td>
-        <td>{x.from ? (x.from === x.now ? <span style={{ color: "#1F7A4D" }}>✓ same</span> : <b>{x.from}</b>) : <span className="note">none confirmed</span>}</td>
+        <td>{x.from ? (x.from === x.now ? <span style={{ color: "var(--ok)" }}>✓ same</span> : <b>{x.from}</b>) : <span className="note">none confirmed</span>}</td>
         <td><NR>{x.why}</NR></td>
         <td className="ac">{x.from && x.from !== x.now && <button className="btn small" onClick={() => lmPost(x.k)}>Use it</button>}</td>
       </tr>)}</tbody></table></div>

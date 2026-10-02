@@ -350,8 +350,22 @@ function num(v){ if (typeof v === "number") return isFinite(v) ? v : 0; const n 
 function r2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
 const INR = new Intl.NumberFormat("en-IN", {minimumFractionDigits:2, maximumFractionDigits:2});
 const INR0 = new Intl.NumberFormat("en-IN", {maximumFractionDigits:0});
-function money(n){ return "₹" + INR.format(num(n)); }
-function money0(n){ return "₹" + INR0.format(num(n)); }
+// a negative amount reads "-₹1,234.00" (the minus before the rupee sign; colour scheme of 02-Oct-2026), shown in red by negAmounts
+function money(n){ const v = num(n); return (v < 0 ? "-₹" : "₹") + INR.format(Math.abs(v)); }
+function money0(n){ const v = num(n), t = INR0.format(Math.abs(v)); return (v < 0 && t !== "0" ? "-₹" : "₹") + t; }
+// every amount on screen that is negative is shown in red (a figure cell, a tile's number): after each change to the page
+const negAmounts = {
+  re: /^\s*[-−]\s*₹/,
+  sel: "td.n, th.n, .n, .dtile b, .metric b, .tile b, .tile .tv",
+  run(root){ try { (root || document).querySelectorAll(this.sel).forEach(el => { const neg = this.re.test(el.textContent || ""); if (neg !== el.classList.contains("neg")) el.classList.toggle("neg", neg); }); } catch (e){} },
+  start(){
+    if (typeof MutationObserver !== "function" || typeof document === "undefined") return;
+    let t = 0; const go = () => { t = 0; this.run(); };
+    new MutationObserver(() => { if (!t) t = setTimeout(go, 60); }).observe(document.body, {childList: true, subtree: true, characterData: true});
+    this.run();
+  }
+};
+if (typeof document !== "undefined") { if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => negAmounts.start()); else setTimeout(() => negAmounts.start(), 0); }
 function uid(p){ return p + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 function norm(s){ return String(s || "").toLowerCase().replace(/\b(m\/s|messrs|pvt|private|ltd|limited|llp|the)\b/g, "").replace(/[^a-z0-9]/g, ""); }
 function slug(s){ return String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "client"; }
