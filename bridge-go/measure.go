@@ -144,6 +144,9 @@ func runMeasure(o measureOpts) (M, error) {
 	if o.snapshot != "" {
 		return measureSnapshot(o)
 	}
+	if err := readsAllowed(); err != nil {
+		return nil, err
+	}
 	measuring.Add(1)
 	defer measuring.Add(-1)
 	port, err := findCompanyPort(o.company, 0)
@@ -392,6 +395,9 @@ func snapFile(label string) string {
 }
 
 func measureSnapshot(o measureOpts) (M, error) {
+	if err := readsAllowed(); err != nil {
+		return nil, err
+	}
 	measuring.Add(1)
 	defer measuring.Add(-1)
 	port, err := findCompanyPort(o.company, 0)

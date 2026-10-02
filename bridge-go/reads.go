@@ -20,6 +20,9 @@ func groupsFullRequest(company string) string {
 }
 
 func getLedgers(company string, pref int) (M, error) {
+	if err := readsAllowed(); err != nil {
+		return nil, err
+	}
 	port, err := findCompanyPort(company, pref)
 	if err != nil {
 		return nil, err
@@ -89,6 +92,9 @@ func dayBookRequest(company, from, to string) string {
 
 // vouchers from the Day Book, a month at a time; optionally only those touching one ledger
 func getVouchers(company, from, to, ledger, types string, pref int) (M, error) {
+	if err := readsAllowed(); err != nil {
+		return nil, err
+	}
 	port, err := findCompanyPort(company, pref)
 	if err != nil {
 		return nil, err
@@ -216,6 +222,9 @@ func dayBookHeads(tc *TC, port int, company, from, to string) ([]M, error) {
 
 // what reading works on this Tally (nothing is written)
 func readTest(company string, pref int) (M, error) {
+	if err := readsAllowed(); err != nil {
+		return nil, err
+	}
 	port, err := findCompanyPort(company, pref)
 	if err != nil {
 		return nil, err
@@ -310,6 +319,9 @@ func groupNamesRequest(company string) string {
 
 // every ledger's name and group, and every group's parent: no balances, so Tally answers at once
 func getLedgerNames(tc *TC, company string, pref int) (M, error) {
+	if err := readsAllowed(); err != nil {
+		return nil, err
+	}
 	port, err := readerPort(tc, company, pref)
 	if err != nil {
 		return nil, err
@@ -348,6 +360,9 @@ func readerPort(tc *TC, company string, pref int) (int, error) {
 
 // the Day Book of one company for a period, as Tally exports it (every voucher, every line, bill-wise details)
 func getDayBookXML(tc *TC, company, from, to string, pref int) (string, error) {
+	if err := readsAllowed(); err != nil {
+		return "", err
+	}
 	if company == "" {
 		return "", errors.New("Say which company.")
 	}

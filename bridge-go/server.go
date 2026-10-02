@@ -565,6 +565,15 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 		o, _ := bodyObj(body)
 		setPaused(truthy(o["on"]))
 		return trayStatus(), nil
+	case "/tray/resume-reading":
+		// the tray's "Resume reading": clears a stop of reading (by the bridge itself or from FinCom)
+		if err := needPost(r, "Use POST."); err != nil {
+			return nil, err
+		}
+		if _, err := trayResumeReading(); err != nil {
+			return nil, err
+		}
+		return trayStatus(), nil
 	case "/tray/restart":
 		if err := needPost(r, "Use POST."); err != nil {
 			return nil, err

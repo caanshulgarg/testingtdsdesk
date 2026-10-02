@@ -365,6 +365,13 @@ func (t *tray) statusText() string {
 		b.WriteString(r + "\n")
 	}
 	b.WriteString("\n")
+	if rs := obj(st["readStopped"]); rs != nil {
+		who := "by the bridge itself"
+		if str(rs["by"]) == "fincom" {
+			who = "from FinCom"
+		}
+		b.WriteString("READING STOPPED " + strings.ToUpper(who[:1]) + who[1:] + " at " + strings.Replace(str(rs["at"]), "T", " ", 1) + ": " + str(rs["reason"]) + ". Nothing is read from Tally (no background reading, no Update now, no ledger lists); postings still work. Choose Resume reading when Tally is free again.\n")
+	}
 	if truthy(st["paused"]) {
 		b.WriteString("Background reading paused: opening a client in FinCom, the ledger chooser's refresh, the ledger list after a posting and the nightly catch-up do not read Tally. Postings and Update now (with the ledger list) still work.\n")
 	}
@@ -437,6 +444,9 @@ func (t *tray) menu() {
 	pAppendMenu.Call(m, mfSeparator, 0, 0)
 	add(10, "Status...", mfString)
 	add(7, "Connect FinCom on this computer...", mfString)
+	if st != nil && obj(st["readStopped"]) != nil {
+		add(17, "Resume reading (stopped: "+cutRunes(str(obj(st["readStopped"])["reason"]), 60)+")", mfString)
+	}
 	if st != nil && truthy(st["paused"]) {
 		add(3, "Resume background reading", mfString)
 	} else {
@@ -496,6 +506,12 @@ func (t *tray) command(id int, st M) {
 		} else {
 			t.balloon("FinCom Bridge", "Background reading resumed.", false)
 		}
+	case 17:
+		if trayCall("POST", "/tray/resume-reading", M{}) == nil {
+			msgBox("FinCom Bridge", "The bridge is not answering, so reading could not be resumed.", mbIconWarning)
+			return
+		}
+		t.balloon("FinCom Bridge", "Reading from Tally resumed.", false)
 	case 4:
 		if trayCall("POST", "/tray/restart", M{}) == nil {
 			if perUserInstall() {

@@ -1,4 +1,5 @@
-// Updates from FinCom. The list of updates (latest.json) is signed by FinCom with the same key as the FinCom Connector's
+// Updates from FinCom. 2.1.5: an update is installed only when FinCom's heartbeat answer allows that version on this
+// computer (release: {version, allowed}; see setRelease below). The list of updates (latest.json) is signed by FinCom with the same key as the FinCom Connector's
 // (RSA, SHA-256; latest.json.sig): a list without a good signature is refused. The new program must match the SHA-256
 // in the list, and, when the list asks for it (requireSignature) or the settings do (RequireSignedUpdates), carry a valid
 // Windows code signature: ready for when the program is signed. The service puts the new program in place and starts
@@ -133,6 +134,12 @@ func checkForUpdate(now bool) M {
 		setUpd("message", "This is the newest FinCom Bridge ("+BridgeVersion+").")
 		return updateInfo()
 	}
+	// only the version FinCom allowed this computer (nothing is downloaded otherwise)
+	if why := releaseRefuses(ver); why != "" {
+		setUpd("message", "Version "+ver+" is available but not approved for this computer yet ("+why+"); nothing was changed.")
+		writeLog("Update " + ver + ": FinCom has not approved it for this computer yet (" + why + "); nothing changed")
+		return updateInfo()
+	}
 	if !strings.HasPrefix(u, "https://") && !(os.Getenv("FINCOM_TEST") == "1") {
 		setUpd("message", "The update's address is not secure, so it was not used.")
 		return updateInfo()
@@ -157,16 +164,22 @@ func checkForUpdate(now bool) M {
 	}
 	exe, _ := os.Executable()
 	writeLog("Update: putting FinCom Bridge " + ver + " in place of " + BridgeVersion)
-	if err := applyUpdate(exe, exeB); err != nil {
+	if err := applyUpdateFn(exe, exeB); err != nil {
 		setUpd("message", "The update could not be put in place: "+err.Error())
 		writeLog("Update " + ver + " could not be put in place: " + err.Error())
 		return updateInfo()
 	}
 	setUpd("applying", true)
 	setUpd("message", "Updating to "+ver+"; the bridge starts again in a few seconds.")
-	go func() { time.Sleep(time.Second); requestStop(3) }()
+	go restartAfterUpdate()
 	return updateInfo()
 }
+
+// putting the new program in place and starting again (the tests put their own)
+var (
+	applyUpdateFn      = applyUpdate
+	restartAfterUpdate = func() { time.Sleep(time.Second); requestStop(3) }
+)
 
 func updateLoop() {
 	sleepOrStop(2 * time.Minute)
@@ -179,4 +192,46 @@ func updateLoop() {
 		}
 		sleepOrStop(time.Duration(keepNum("UpdateCheckHours", 6)) * time.Hour)
 	}
+}
+
+// --- the staged release (plan item 12): no update installs by itself. FinCom's heartbeat answer names the version this
+// computer may take, release: {version, allowed}: the pilot computer is allowed a new version first, every other one
+// only after the owner approves it. Without a release in the last answer (none named, an older cloud, or no answer
+// yet) nothing is installed
+var (
+	relMu   sync.Mutex
+	relNow  M // {version, allowed} from the last heartbeat answer; nil: none
+	relSeen bool
+)
+
+func setRelease(rel M, seen bool) {
+	relMu.Lock()
+	relNow, relSeen = rel, seen
+	relMu.Unlock()
+}
+
+// from the heartbeat's answer: its release, or none
+func applyRelease(j M) {
+	if j == nil {
+		return
+	}
+	setRelease(obj(j["release"]), true)
+}
+
+// "" when version may be installed on this computer; else why not
+func releaseRefuses(version string) string {
+	relMu.Lock()
+	rel, seen := relNow, relSeen
+	relMu.Unlock()
+	switch {
+	case !seen:
+		return "FinCom has not answered this computer yet"
+	case rel == nil:
+		return "FinCom names no release for this computer"
+	case str(rel["version"]) != version:
+		return "FinCom names version " + str(rel["version"]) + " for this computer, not " + version
+	case !truthy(rel["allowed"]):
+		return "FinCom has not allowed it on this computer yet (the pilot computer takes a new version first; the others after the owner approves it)"
+	}
+	return ""
 }

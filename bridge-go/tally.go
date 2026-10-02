@@ -581,6 +581,10 @@ func invokeTally(tc *TC, port int, x string, timeoutSec int) (string, error) {
 		writeLog(fmt.Sprintf("Tally %d: refused: %s", port, err.Error()))
 		return "", err
 	}
+	// plan items 10-11: while reading is stopped on this computer only what a posting needs goes (selfwatch.go)
+	if err := readStopRefuses(x); err != nil {
+		return "", err
+	}
 	if tc.copier && !bgBackoffUntil(port).IsZero() {
 		return "", errBackoff
 	}
@@ -656,6 +660,7 @@ func invokeTally(tc *TC, port int, x string, timeoutSec int) (string, error) {
 		setWant()
 	}
 	unlock()
+	noteRequest(x, time.Since(t0), fail)
 	sec := time.Since(t0).Seconds()
 	addTallyUse(tc, port, sec, x, fail)
 	return r, err

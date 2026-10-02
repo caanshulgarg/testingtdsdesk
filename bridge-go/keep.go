@@ -849,6 +849,9 @@ func startKeepRun(r runReq) bool {
 	if !keepOn() {
 		return false
 	}
+	if readStopped() {
+		return false // reading is stopped on this computer (selfwatch.go): no run starts
+	}
 	kwMu.Lock()
 	defer kwMu.Unlock()
 	if kwRunning {
@@ -978,6 +981,10 @@ func keepWorker(r runReq) {
 		}
 		if paused() && r.kind != "now" {
 			why = "background reading is paused (tray icon)"
+			break
+		}
+		if st := readStop(); st != nil {
+			why = "reading from Tally is stopped on this computer (" + str(st["reason"]) + ")"
 			break
 		}
 		if time.Now().After(runEnd) {
@@ -1191,6 +1198,9 @@ func keepStatus(company string) M {
 
 // the check: one month of the copy against Tally's own list of entries
 func testKeepMonth(company, ym string, pref int) (M, error) {
+	if err := readsAllowed(); err != nil {
+		return nil, err
+	}
 	port, err := findCompanyPort(company, pref)
 	if err != nil {
 		return nil, err

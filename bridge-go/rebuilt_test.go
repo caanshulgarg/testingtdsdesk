@@ -280,13 +280,15 @@ func newStandTally(t *testing.T) *standTally {
 
 // a stand-in FinCom cloud: the lease (held by another bridge while held is set), the days sent
 type standCloud struct {
-	srv     *httptest.Server
-	mu      sync.Mutex
-	held    bool
-	kinds   []string
-	guard   []M
-	ledList []M  // the ledger lists sent (kind ledger_list)
-	noDel   bool // a cloud without migration-32: deletions skipped
+	srv       *httptest.Server
+	mu        sync.Mutex
+	held      bool
+	kinds     []string
+	guard     []M
+	ledList   []M  // the ledger lists sent (kind ledger_list)
+	noDel     bool // a cloud without migration-32: deletions skipped
+	lastBeat  M    // the last heartbeat
+	beatReply M    // added to the heartbeat's answer (readStop, readResume, release)
 }
 
 func newStandCloud(t *testing.T) *standCloud {
@@ -307,6 +309,11 @@ func newStandCloud(t *testing.T) *standCloud {
 				out = M{"ok": true, "held": true, "holder": M{"computer": "PC-2", "bridge": "go-other", "until": "15:00"}}
 			} else {
 				out = M{"ok": true, "held": false, "lease": M{"until": time.Now().Add(2 * time.Minute).Format(time.RFC3339)}}
+			}
+		case "beat":
+			c.lastBeat = o
+			for k, v := range c.beatReply {
+				out[k] = v
 			}
 		case "read_guard":
 			c.guard = append(c.guard, o)

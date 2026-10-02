@@ -642,6 +642,7 @@ func beatLoop() {
 					writeLog(fmt.Sprint("Heartbeat: ", r))
 				}
 			}()
+			selfWatchTick()
 			if cloudOn() {
 				beatOnce()
 				claimMainOnce()
@@ -702,6 +703,8 @@ func beatOnce() {
 			return
 		}
 		shadowOK.Store(true)
+		applyReadControl(r.json) // FinCom's stop or resume of reading on this computer
+		applyRelease(r.json)     // the version this computer may take (update.go)
 		// made the main bridge on FinCom's Tally page: this test bridge switches itself to main, once
 		if testMode() && truthy(r.json["makeMain"]) && makeMainSeen.CompareAndSwap(false, true) {
 			writeLog("FinCom made this the main bridge")
@@ -761,7 +764,7 @@ func beatMissedSince() time.Time { _, f := beatTimes(); return f }
 // the heartbeat (2.1.3): also whether background reading is paused, since when Tally has not answered, the hour of the
 // nightly catch-up, the last read of each company, and that this bridge reads Tally only after an event
 func beatBody(tally bool, tstate, tsince string, open, ports, cos []any) M {
-	return M{"kind": "beat", "tally": tally, "tallyState": tstate, "busySince": tsince, "every": beatEvery(), "open": open, "ports": ports, "companies": cos,
+	return M{"reqs": beatReqs(), "readStopped": readStopAny(), "kind": "beat", "tally": tally, "tallyState": tstate, "busySince": tsince, "every": beatEvery(), "open": open, "ports": ports, "companies": cos,
 		"updating": keepRunning(), "dailyAt": keepDailyAt(), "nightlyAt": keepDailyAt(), "lastRun": keepLastRun(), "paused": paused(), "notAnsweringSince": notAnsweringSince(),
 		"lastRead": lastReadAt(), "events": true, "computer": computerName()}
 }
