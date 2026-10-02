@@ -47,7 +47,8 @@ const TCloud = {
     s.at = Date.now();
     return s.books;
   },
-  book(cid){ const s = this.st[cid]; return s && s.books && s.books.find(b => b.from) || null; },
+  // (an answer that is not a list, from an older cloud or a stand-in, is no book)
+  book(cid){ const s = this.st[cid]; return s && Array.isArray(s.books) && s.books.find(b => b && b.from) || null; },
   has(cid){ return !!this.book(cid); },
   big(cid){ const b = this.book(cid); return !!(b && b.entries > this.BIG); },
   // ---------- answers from the cloud's ready totals
