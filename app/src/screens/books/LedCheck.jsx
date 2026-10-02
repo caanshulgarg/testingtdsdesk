@@ -42,7 +42,6 @@ export default function LedCheckCard({ b }) {
     </div>}
     <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
       <button className="btn small primary" onClick={() => doAct("lcRun")}>{c ? "Check again" : "Run the ledger check"}</button>
-      {c && ticked.length > 0 && <button className="btn small primary" data-lc-confirm="" onClick={() => doAct("lcConfirm")}>Confirm the {ticked.length} ticked</button>}
       {c && unclear > 0 && AIH.enabled("tds") && <button className="btn small" onClick={() => doAct("lcAi")}>Ask AI about the {unclear} unclear</button>}
       {c && <label className="chk"><input type="checkbox" checked={!!showAll} onChange={(ev) => setAndShow("lcAll", ev.target.checked)} /> show confirmed too</label>}
       {c && <span className="note">{open.length} to confirm · checked {fmtDateTime(c.ranAt)}{c.savedAt ? " · saved " + fmtDateTime(c.savedAt) + (c.savedBy ? " by " + c.savedBy : "") : ""}</span>}

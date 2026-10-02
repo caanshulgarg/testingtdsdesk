@@ -64,7 +64,7 @@ with sync_playwright() as p:
     else:
         ok(True, "17. nothing left unclear for AI")
     # 18. confirm the ticked: into the ledger master, with the source; nothing unconfirmed counts any more
-    pg.click("#app [data-lc-confirm]"); pg.wait_for_timeout(1200)
+    pg.click("#app button[data-cfm=save]:has-text(\"ticked\")"); pg.wait_for_timeout(1200)
     m = E("(names) => Object.fromEntries(names.map(n => [n, [!!(S.books.map[n] || {}).ok, (S.books.map[n] || {}).what, (S.books.map[n] || {}).side || '', (S.books.map[n] || {}).tax || '', (S.books.map[n] || {}).section || '', ((S.books.map[n] || {}).src || []).join()]]))", tk)
     ok(m["CGST 9 %"][:4] == [True, "gst", "output", "CGST"] and "master" in m["CGST 9 %"][5] and m["TDS ON RENT 94I"][:2] == [True, "tds_payable"] and m["TDS ON RENT 94I"][4] == "194I",
        "18. confirmed into the ledger master with the source of each answer (%s; %s)" % (m["CGST 9 %"], m["TDS ON RENT 94I"]))

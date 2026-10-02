@@ -39,7 +39,7 @@ with sync_playwright() as p:
     sec = pg.locator('input[aria-label="Section of %s"]' % other); sec.fill("194j"); sec.press("Tab"); pg.wait_for_timeout(400)
     ok(pg.evaluate("S.books.map[%s].section" % json.dumps(other)) == "194J", "its section typed, kept in capitals")
     pg.click('nav[aria-label="Ledgers"] button:has-text("To confirm")'); pg.wait_for_timeout(400)
-    pg.click('button:has-text("Confirm the")'); pg.wait_for_timeout(600)
+    pg.click('button:has-text("Confirm the"):has-text("shown")'); pg.wait_for_timeout(600)
     ok(pend() == 0 and "Every GST and TDS ledger is confirmed." in pg.inner_text("#app"), "Confirm the shown: nothing left to confirm")
     pg.click('nav[aria-label="Ledgers"] button:has-text("What FinCom posts to")'); pg.wait_for_timeout(400)
     ok("What FinCom posts bills to" in pg.inner_text("#app"), "What FinCom posts to: the posting ledgers")
