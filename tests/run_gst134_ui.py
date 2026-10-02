@@ -91,6 +91,6 @@ with sync_playwright() as p:
         pg.evaluate("S.gstPart = 'r3b'; S.gstYm = '202603'; S.gstReg = '07'; render();"); pg.wait_for_timeout(3000); t = pg.inner_text("#app")
         ok("could not be shown" not in t and "6.1 PAYMENT OF TAX" in t.upper(), "FINDING 6: the 3B for Mar-2026 (reverse charge 10,800 paid in cash) draws")
     br.close()
-errs = [e for e in errors if "supabase" not in e and "Failed to load" not in e and not (FIXTURE and "Maximum call stack" in e)]
+errs = [e for e in errors if "supabase" not in e and "Failed to load" not in e]
 ok(not errs, "no page errors" + ("" if not errs else ": " + " | ".join(errs[:4])))
 print("\n" + ("%d FAILED" % len(fails) if fails else "all passed")); sys.exit(1 if fails else 0)
