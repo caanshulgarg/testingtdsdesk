@@ -63,6 +63,7 @@ led("Laptops and Computers", "Fixed Assets", -150000)
 led("Event Software Licence", "Fixed Assets")
 led(BANK, "Bank Accounts", -178700)
 led(CASH, "Cash-in-Hand", -15000)
+led("Kaveri Bank - CA 0815", "Bank Accounts")     # a second bank account with no entries, nil balance (the bank-posting tests post to it)
 led("Security Deposit - Office Rent", "Loans & Advances (Asset)", -60000)
 # customers
 led(QUILL, "Sundry Debtors", -40000, state="Delhi", gst=gstin("07AAJFQ3158R1Z"), billwise=True, obills=[("QW/24-25/88", "20250210", -40000)])

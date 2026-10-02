@@ -651,6 +651,8 @@ async function openCompany(cid){
   pruneStaleHashes(cid);
   refreshStats(cid);
   render(); window.scrollTo(0, 0);
+  // FinCom Bridge 2.1.3: the client's Tally computer brings in what changed in Tally since its last read (one light update)
+  try { if (typeof TWake === "object") TWake.open(cid); } catch (e){}
   // 02-Oct-2026: the Tally company this client may post to, set by itself when it is clear (one linked, same GSTIN)
   setTimeout(() => { try { if (typeof autoPostTo === "function") autoPostTo(S.companies[cid]).catch(() => {}); } catch (e){} }, 0);
   // the client's ledger list, read on opening the client (from the cloud copy when linked, else the bridge); then the

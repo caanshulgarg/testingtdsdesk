@@ -194,6 +194,29 @@ func platNetState() (bool, []proc, []listener) {
 	return ok1 && ok2, ps, ls
 }
 
+// the Tally program (tally.exe) running: in one of the owner's sessions when only the owner's Tally is used; with the
+// test file, its list of programs. No request is sent to Tally for this
+func platTallyRunning() bool {
+	if f := fakeData(); f != nil {
+		for _, x := range arr(f["processes"]) {
+			if reTally.MatchString(str(obj(x)["name"])) {
+				return true
+			}
+		}
+		return false
+	}
+	ps, ok := processes()
+	if !ok {
+		return true // Windows did not say: the port decides
+	}
+	for _, p := range ps {
+		if reTally.MatchString(p.Name) && (!cfgB("OnlyMySession") || isMine(p.Session)) {
+			return true
+		}
+	}
+	return false
+}
+
 // Tally opened a moment ago in one of the owner's sessions: it is still loading the company
 func platTallyYoung(min float64) bool {
 	ps, _ := processes()

@@ -128,9 +128,9 @@ func setPaused(on bool) {
 	setCfg("Paused", on)
 	saveConfig()
 	if on {
-		writeLog("Paused from the tray icon: Tally is not read and nothing is posted until Resume")
+		writeLog("Background reading paused from the tray icon: opening a client in FinCom and the nightly catch-up do not read Tally; postings and Update now still work")
 	} else {
-		writeLog("Resumed from the tray icon")
+		writeLog("Background reading resumed from the tray icon")
 	}
 }
 
@@ -173,6 +173,7 @@ func trayStatus() M {
 	reconnecting := missed && online
 	tstate, tsince := tallyOverall(openCompaniesCached())
 	return M{"ok": true, "version": BridgeVersion, "runMode": runMode, "testMode": testMode(), "readOnly": readOnlyWhy(), "paused": paused(), "tallyOpen": tallyOpen, "companies": cos,
+		"nightlyAt": keepDailyAt(), "lastRead": lastReadAt(), "notAnsweringSince": notAnsweringSince(), "tallyRequests": tallySent.Load(), "tallyLastRequest": unixText(tallySentAt.Load()),
 		"cloudConnected": cloud, "online": online, "reconnecting": reconnecting, "tallyState": tstate, "busySince": tsince, "needKey": cfgS("CloudUrl") != "" && cloudKey() == "", "lastBeat": fmtTime(bOK), "beatFailed": fmtTime(bFail), "wake": wakeStatus(), "updating": keepRunning(),
 		"port": toInt(cfg("Port")), "fincomUrl": fincomURL(), "log": logFile(), "shadow": shadowStats, "update": updateInfo(), "owner": ownerName(),
 		"switching": switching.Load(), "bridgeId": "go-" + instanceID(), "posting": postingNow()}
@@ -339,29 +340,14 @@ func runBridge(console bool) int {
 		fmt.Printf("\n  FinCom - Tally Bridge %s\n  Address : http://127.0.0.1:%d\n  To connect FinCom: press Connect there and type the code  %s  (until %s).\n\n", BridgeVersion, toInt(cfg("Port")), pairCode, pairUntil.Format("15:04"))
 		pairMu.Unlock()
 	}
-	func() {
-		defer func() { recover() }()
-		for _, s := range openCompanies(true) {
-			if s["skipped"] == true {
-				writeLog(fmt.Sprintf("Tally on port %d: another user's session, not used", toInt(s["port"])))
-			} else if s["ok"] == true {
-				var n []string
-				for _, c := range sessCompanies(s) {
-					n = append(n, str(c["name"]))
-				}
-				mine := ""
-				if s["mine"] == true {
-					mine = " (yours)"
-				}
-				writeLog(fmt.Sprintf("Tally on port %d%s: %s", toInt(s["port"]), mine, strings.Join(n, ", ")))
-			}
-		}
-	}()
-	// 02-Oct-2026: after the install Tally did not answer for 7 minutes (10:44-10:51, "TDSDeskCompanies took 8.2s and
-	// failed: timed out"): the check-up and the keeping in step (which reads the day book) waited for nothing. Now the
-	// first contact is the light company list only; the heavier work starts once Tally has answered it promptly twice in
-	// a row and at least 90 seconds after the start (a bridge stopped by the setup may have left Tally busy with a long read)
+	// 2.1.3: Tally is asked nothing at the start (no company list, no warm-up): only whether it is open
+	if p := tallyOpenNow(); p > 0 {
+		writeLog(fmt.Sprintf("Tally is open on port %d; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at %s)", p, keepDailyAt()))
+	} else {
+		writeLog("Tally is not open; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at " + keepDailyAt() + ")")
+	}
 	coMu.Lock()
+	planMode, _ = portPlan()
 	if planMode == "fallback" {
 		writeLog("Windows did not say which Tally belongs to you; ports from the settings are used. Choose your Tally in FinCom.")
 	}
@@ -376,64 +362,18 @@ func runBridge(console bool) int {
 	}
 	go updateLoop()
 	go beatLoop()
-	started := time.Now()
-	last := time.Now().Add(-time.Duration(keepNum("KeepStartSec", 60)) * time.Second)
-	lastPush := time.Now()
 	for !stopping() {
 		loopAt.Store(time.Now().Unix())
 		sleepOrStop(100 * time.Millisecond)
-		safe("Posting queue", syncCloudPosts)
-		safe("Watching Tally", testKeepWatch)
-		if time.Since(last).Seconds() >= float64(keepNum("KeepStartSec", 60)) {
-			last = time.Now()
-			syncConfig()
-			if warmedUp(started) {
-				safe("Check", showDiagnosis)
-				safe("Could not start keeping copies in step", startKeepIfNeeded)
-			}
-		}
-		// the outbox goes on without the copier too (days kept while offline go as soon as FinCom can be reached)
-		if !keepRunning() && time.Since(lastPush) >= 60*time.Second {
-			lastPush = time.Now()
-			go safe("Cloud", func() { invokeCloudPush() })
-		}
+		bridgeTurn(safe)
 	}
 	time.Sleep(300 * time.Millisecond)
 	return stopCode
 }
 
-// --- warming up: the heavier work (check-up, keeping in step) only once Tally answers the light request promptly
-var (
-	warmMu   sync.Mutex
-	warmGood int
-	warmDone bool
-	warmTold bool
-)
-
-func warmedUp(started time.Time) bool {
-	warmMu.Lock()
-	defer warmMu.Unlock()
-	if warmDone {
-		return true
+func unixText(u int64) string {
+	if u <= 0 {
+		return ""
 	}
-	ok := false
-	for _, s := range openCompanies(true) {
-		if s["ok"] == true && s["busy"] != true && s["skipped"] != true {
-			ok = true
-		}
-	}
-	if ok {
-		warmGood++
-	} else {
-		warmGood = 0
-		if !warmTold {
-			warmTold = true
-			writeLog("Waiting for Tally to answer promptly before reading the day book (Tally busy, closed, or finishing an earlier request)")
-		}
-	}
-	if warmGood >= 2 && time.Since(started) >= 90*time.Second {
-		warmDone = true
-		writeLog("Tally answers promptly: keeping copies in step starts")
-	}
-	return warmDone
+	return time.Unix(u, 0).Format("2006-01-02T15:04:05")
 }

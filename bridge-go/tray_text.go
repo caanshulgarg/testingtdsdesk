@@ -34,10 +34,10 @@ func trayTip(st M) string {
 	switch {
 	case truthy(st["switching"]):
 		parts = append(parts, "switching to the main bridge")
-	case truthy(st["paused"]):
-		parts = append(parts, "Paused")
 	case str(st["posting"]) != "":
-		parts = append(parts, str(st["posting"])) // a posting going on: its one line ("Waiting for Tally: ...")
+		parts = append(parts, str(st["posting"])) // a posting going on: its one line ("Waiting for Tally: ..."); also while paused
+	case truthy(st["paused"]):
+		parts = append(parts, "Background reading paused")
 	case !truthy(st["tallyOpen"]):
 		parts = append(parts, "Tally not open")
 	case !truthy(st["cloudConnected"]):
@@ -46,10 +46,20 @@ func trayTip(st M) string {
 		parts = append(parts, "offline")
 	case truthy(st["reconnecting"]):
 		parts = append(parts, "reconnecting to FinCom")
+	case str(st["notAnsweringSince"]) != "":
+		parts = append(parts, "Tally not answering since "+hhmm(str(st["notAnsweringSince"])))
 	case str(st["tallyState"]) == "busy":
 		parts = append(parts, "Tally busy (answers slowly)")
 	}
 	return cutRunes(strings.Join(parts, " - "), 127)
+}
+
+// "2026-10-02T12:28:05" -> "12:28"
+func hhmm(t string) string {
+	if len(t) >= 16 {
+		return t[11:16]
+	}
+	return t
 }
 
 func cutRunes(s string, n int) string {

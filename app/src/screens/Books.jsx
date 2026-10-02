@@ -20,6 +20,7 @@ import AuditTab from "./books/Audit.jsx";
 import HelpButton from "../parts/HelpButton.jsx";
 import { Notices } from "../parts/Ai.jsx";
 import { LedgerBanner, GstDriftNote, SyncNote, JobsNote } from "../parts/Notes.jsx";
+import { BooksAsOf } from "../parts/TallyLine.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const Q_MONTHS = { Q1: "Apr to Jun", Q2: "Jul to Sep", Q3: "Oct to Dec", Q4: "Jan to Mar" };
@@ -163,10 +164,13 @@ function FreshLine({ b }) {
   // build 197: from any computer: on the Tally computer through its bridge, elsewhere through the cloud
   const can = (typeof Bridge === "object" && Bridge.on() && Bridge.up()) || (typeof TCloud === "object" && S.coId && TCloud.has(S.coId));
   // one sentence on every page (booksFresh, src/js/49): the last entry, how far it was checked with Tally, days not read
-  const f = booksFresh(b, S.coId);
-  return <p className="note" style={{ margin: "0 0 10px" }} data-fresh="">{f.text}
+  const f = booksFresh(b, S.coId), asOf = typeof booksAsOf === "function" && booksAsOf(S.coId);
+  // 2.1.3: "Books as of 15:34 · Update now" first: Tally cannot send its changes, so old figures are never shown as now
+  return <>
+    {asOf && <p className="note" style={{ margin: "0 0 4px" }} data-books-asof-line=""><BooksAsOf cid={S.coId} /></p>}
+    <p className="note" style={{ margin: "0 0 10px" }} data-fresh="">{f.text}
     {b.openMs != null && <span className="nr" data-opentime>{" Opened in " + (b.openMs / 1000).toFixed(1) + " s" + (b.readyMs != null ? ", every entry in " + (b.readyMs / 1000).toFixed(1) + " s" : "") + "."}</span>}
-    {can && <> <button className="linkbtn" onClick={() => doAct("keepNow")}>Update now</button></>}</p>;
+    {can && !asOf && <> <button className="linkbtn" onClick={() => doAct("keepNow")}>Update now</button></>}</p></>;
 }
 
 // what a tab needs before it can show anything, and the button that brings it (review item 7)
@@ -199,7 +203,7 @@ export default function Books() {
   if (tab === "mis" || tab === "fs" || tab === "audit") {
     // the page's title is in the top bar
     return <>
-      {n > 0 && <FreshLine b={b} />}
+      {n > 0 ? <FreshLine b={b} /> : <p className="note" style={{ margin: "0 0 10px" }} data-books-asof-line=""><BooksAsOf cid={co.id} /></p>}
       <JobsNote cid={co.id} />
       {busy}
       {tab === "mis" && srv ? <ServerMis b={b} /> : !n ? (b.busy ? null : <EmptyTab tab={tab} />) : tab === "mis" ? <MisTab b={b} /> : tab === "audit" ? <AuditTab b={b} /> : <Accounts b={b} />}

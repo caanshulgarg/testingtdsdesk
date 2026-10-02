@@ -43,10 +43,13 @@ function Setup({ b }) {
   else if (!k.on) { bs = "Updates from Tally are off."; bact = <Act act="setupKeepOn" className="btn small primary">Switch them on</Act>; }
   else if (!k.phase && k.mode !== "bridge") { bs = "Waiting for the day book files (step 1). Tally is not read for the year."; bact = <Act act="setupModeBridge" className="linkbtn">or let the bridge copy the year from Tally, at the daily update</Act>; }
   else {
-    // once a day at a time the user sets (or every minute), and Update now
+    // FinCom Bridge 2.1.3: only after an event (a client opened here, Update now, a posting) and the nightly catch-up at
+    // the hour set (02:00), when Tally is open and nobody has used FinCom for 15 minutes; an older bridge: once a day
     bok = k.phase === "live";
-    const at = k.dailyAt || "20:00", last = k.lastRun ? d(k.lastRun) : "not yet", busy = k.running || k.now;
-    bs = <>{busy && <><b>Updating from Tally now…</b>{" "}</>}{k.schedule === "continuous" ? "Reads Tally’s changes every minute. "
+    const at = k.dailyAt || (k.events ? "02:00" : "20:00"), last = k.lastRun ? d(k.lastRun) : "not yet", busy = k.running || k.now;
+    bs = <>{busy && <><b>Updating from Tally now…</b>{" "}</>}{k.events
+      ? <>Reads Tally when this client is opened, on Update now and after a posting, and catches up each night at <input type="time" aria-label="Nightly catch-up at" defaultValue={at} key={at} style={{ width: 104 }} onChange={(ev) => keepAtSet(ev.target.value)} /> when nobody is using FinCom (last: {last}){k.paused ? "; background reading is paused in the bridge’s tray icon" : ""}. Otherwise Tally is not asked anything. </>
+      : k.schedule === "continuous" ? "Reads Tally’s changes every minute. "
       : <>Updates from Tally once a day at <input type="time" aria-label="Daily update at" defaultValue={at} key={at} style={{ width: 104 }} onChange={(ev) => keepAtSet(ev.target.value)} /> (last: {last}). Nothing is asked of Tally during the day. </>}
       {!k.phase ? "The year is copied from Tally at the update." : k.phase === "live" ? "" : "It checks the files against Tally at the update" + (k.openPending ? ", with the opening balances" : "") + "."}</>;
     bact = busy ? null : <Act act="keepNow">Update now</Act>;

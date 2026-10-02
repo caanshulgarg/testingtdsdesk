@@ -9,6 +9,7 @@
 // S.billPost (bills) and S.bank.postReport (bank); S.billCheck is the last "Check sent bills in Tally".
 import { useState } from "react";
 import { PostReport, notAllowedRest } from "../parts/BankChecks.jsx";
+import TallyLine from "../parts/TallyLine.jsx";
 
 const plural = (n, one, many) => n + " " + (n === 1 ? one : many);
 const ROLE = { party: "Supplier", expense: "Expense", gst: "Input GST", tds: "TDS payable", roundoff: "Round off", "rcm-in": "RCM input", "rcm-out": "RCM payable" };
@@ -209,6 +210,7 @@ export function PostStep() {
   return (
     <section className="poststep" data-post-page="">
       <PostLine co={co} />
+      {typeof tallyLine === "function" && tallyLine(co) && <p className="note" data-post-tally="" style={{ margin: "-6px 0 10px" }}><TallyLine co={co} /></p>}
       <NotAllowed co={co} />
       <p className="note" data-post-count="" style={{ margin: "0 0 8px" }}><b>{plural(nBills, "bill", "bills")} for Tally</b>{nOther ? " · " + plural(nOther, "other entry", "other entries") + " (bank, sales)" : ""}{sent ? " · " + sent + " in Tally" : ""}</p>
       {rows.length ? <Entries rows={rows} canPost={canPost} /> : <p className="note" data-post-empty="">Nothing is waiting to be posted.</p>}

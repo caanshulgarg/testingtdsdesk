@@ -661,6 +661,92 @@ const TLight = {
 };
 
 
+// FinCom Bridge 2.1.3 reads Tally only after an event (a client opened here, Update now, a posting, the nightly catch-up):
+// Tally cannot send changes by itself, so FinCom says in one line a client how its Tally stands, from the bridge's
+// heartbeat, with one button, Update now:
+//   "Tally open on NWS144 · last read 15:34" | "Tally is closed on NWS144" | "NWS144 is offline" |
+//   "Tally is not answering on NWS144 since 12:28" | "Background reading paused on NWS144"
+// {state: open | closed | offline | notanswering | paused, level, text, computer, read}; null when no Tally computer
+// keeps this client's company (and the bridge here does not have it open)
+function tallyHm(t){
+  const ms = typeof t === "number" ? t : Date.parse(String(t || ""));
+  if (!ms) return "";
+  return new Date(ms).toDateString() === new Date().toDateString() ? fmtTime(ms) : fmtDateTime(ms);
+}
+function tallyLine(co){
+  if (!co) return null;
+  const st = (typeof TLight === "object" && TLight.st) || {}, now = Date.now();
+  const link = (st.cos || []).find(c => c.client_id === co.id && c.device_id);
+  const dev = link && (st.devs || []).find(d => d.id === link.device_id && !d.revoked);
+  let comp = "", beat = null, bridge = "online", tally = "closed", since = "", paused = false, read = "";
+  if (dev){
+    const info = dev.info || {}, ds = devState(dev, now);
+    beat = info.beat || {}; comp = info.computer || dev.name || "the Tally computer";
+    bridge = ds.bridge; tally = ds.tally; since = beat.notAnsweringSince || ""; paused = !!beat.paused;
+    const cb = (beat.companies || []).find(k => k.name === link.company) || {};
+    read = cb.lastRead || beat.lastRead || cb.at || "";
+  } else if (typeof Bridge === "object" && Bridge.on() && Bridge.up() && Bridge.openFor(co) && Bridge.openFor(co).name){
+    // no word from the cloud for it: the bridge on this computer
+    const b = Bridge.st || {}, man = (typeof LK === "object" && LK.fr ? (LK.fr() || {}).man : null) || {};
+    comp = b.computer || "this computer"; tally = b.tallyState || (b.tallyUp ? "open" : "closed");
+    since = (b.stuck && b.stuck.since) || ""; paused = !!b.paused; read = man.readAt || man.seen || "";
+  } else return null;
+  const o = (state, level, text) => ({state, level, text, computer: comp, read});
+  if (bridge === "offline" || bridge === "none") return o("offline", "bad", comp + " is offline");
+  if (tally === "closed") return o("closed", "warn", "Tally is closed on " + comp);
+  if (since) return o("notanswering", "bad", "Tally is not answering on " + comp + " since " + tallyHm(since));
+  if (paused) return o("paused", "warn", "Background reading paused on " + comp);
+  return o("open", "ok", "Tally open on " + comp + (read ? " \u00b7 last read " + tallyHm(read) : ""));
+}
+// when the client's books were last read from Tally ("Books as of 15:34"): the bridge's last read of its company, else
+// when FinCom's copy was last brought in. Never shown as "now": entries made in Tally since then come at the next event
+function booksAsOf(cid){
+  cid = cid || S.coId;
+  const co = S.companies && S.companies[cid];
+  const l = co ? tallyLine(co) : null, bk = typeof TCloud === "object" ? TCloud.book(cid) : null, st = (bk && bk.state) || {};
+  const man = typeof LK === "object" && LK.fr && cid === S.coId ? ((LK.fr() || {}).man || {}) : {};
+  const at = [l && l.read, st.readAt, man.readAt, st.seen, man.seen].filter(x => x && Date.parse(x)).sort((a, b) => Date.parse(b) - Date.parse(a))[0]
+    || (S.books && S.books.cid === cid ? booksFresh(S.books, cid).at : "");
+  if (!at) return null;
+  return {at, text: "Books as of " + tallyHm(at),
+    say: "Tally cannot send its changes by itself: entries made in Tally after " + tallyHm(at) + " come in at the next update (opening this client, Update now, or the nightly catch-up)."};
+}
+// Update now for a client: the bridge here when it has the company open, else the client's Tally computer through
+// FinCom's cloud (the bridge reads at once, also while its background reading is paused)
+function tallyUpdateNow(cid){
+  cid = cid || S.coId;
+  if (cid === S.coId) return doAct("keepNow");
+  if (typeof TCloud !== "object" || !TCloud.on()) return toast("Sign in to the firm account to ask the Tally computer.");
+  TCloud.rpc("tally_want_update", {p_client: cid}).then(j => toast(j && j.ok ? "The Tally computer is asked to update now; the books here follow in a few minutes." : "No Tally computer is linked to this client yet."),
+    e => toast("Could not ask the Tally computer: " + ((e && e.message) || e)));
+}
+// a client opened in FinCom wakes the computer that keeps its Tally company for one light update (only what changed in
+// Tally since the last read): through FinCom's cloud (tally-ingest, kind "wake"; the bridge's own channel), and the
+// bridge here when the company is open on this computer. At most once every 5 minutes a client from this page; the
+// bridge holds back a second one within its own few minutes too. "active": FinCom in use, so the nightly catch-up waits
+const TWake = {
+  at: {}, activeAt: 0, EVERY: 5 * 60000,
+  open(cid){
+    if (!cid || Date.now() - (this.at[cid] || 0) < this.EVERY) return false;
+    this.at[cid] = Date.now();
+    const co = S.companies && S.companies[cid];
+    try {
+      const here = typeof Bridge === "object" && Bridge.on() && Bridge.up() && co && Bridge.openFor(co);
+      if (here && here.name) Bridge.call("/wake", {what: "open", company: here.name}, 10000).catch(() => {});
+    } catch (e){}
+    if (typeof TCloud === "object" && TCloud.on()) this.send({kind: "wake", what: "open", client: cid});
+    return true;
+  },
+  active(){
+    if (typeof TCloud !== "object" || !TCloud.on() || Date.now() - this.activeAt < 10 * 60000) return;
+    this.activeAt = Date.now();
+    this.send({kind: "wake", what: "active"});
+  },
+  // a cloud without the wake kind yet (tally-ingest before 2.1.3) answers an error: nothing else depends on it
+  send(body){ try { return TCloudUp.post(body, {}).catch(() => null); } catch (e){ return Promise.resolve(null); } }
+};
+if (typeof document === "object") document.addEventListener("pointerdown", () => { try { TWake.active(); } catch (e){} }, true);
+
 // A Tally company whose GSTIN is exactly one client's GSTIN is linked to that client by itself (review item 6).
 // Not when a person unlinked it by hand (linked_at set, no client), and not when two clients share the GSTIN:
 // those are offered in Books in the cloud with one click (gstinMatch). The server's link checks the PAN part again.

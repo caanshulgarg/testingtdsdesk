@@ -4,6 +4,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -291,18 +292,17 @@ func portPlan() (string, []M) {
 
 // --- which companies are open: shared through a file and kept 30 s, so status checks cost Tally nothing
 var (
-	coMu       sync.Mutex
-	coCache    []M
-	coCacheAt  time.Time
-	planMode   string
-	coInfo     M
-	emptyAskAt time.Time
+	coMu      sync.Mutex
+	coCache   []M
+	coCacheAt time.Time
+	planMode  string
+	coInfo    M
 )
 
 func coInfoFile() string { return filepath.Join(syncDir(), "company-info.json") }
 
 // a company's GSTIN and PAN: asked once, when it is first seen, and remembered
-func getCoInfo(name string, port int) M {
+func getCoInfo(tc *TC, name string, port int) M {
 	if coInfo == nil {
 		coInfo = readObjFile(coInfoFile())
 		if coInfo == nil {
@@ -317,7 +317,7 @@ func getCoInfo(name string, port int) M {
 	}
 	g, pan := "", ""
 	extra := `<FILTERS>TDSDeskThisCo</FILTERS></COLLECTION><SYSTEM TYPE="Formulae" NAME="TDSDeskThisCo">$Name = "` + esc(strings.ReplaceAll(name, `"`, "")) + `"</SYSTEM><COLLECTION NAME="TDSDeskUnused" ISMODIFY="No"><TYPE>Company</TYPE>`
-	if raw, err := invokeTally(fin, port, collectionRequest("TDSDeskCompanyInfo", "Company", "NAME,GSTREGISTRATIONNUMBER,INCOMETAXNUMBER,GSTREGISTRATIONDETAILS.LIST", "", extra), 15); err == nil {
+	if raw, err := invokeTally(tc, port, collectionRequest("TDSDeskCompanyInfo", "Company", "NAME,GSTREGISTRATIONNUMBER,INCOMETAXNUMBER,GSTREGISTRATIONDETAILS.LIST", "", extra), 15); err == nil {
 		if c := xmlDoc(raw).All("COMPANY"); len(c) > 0 {
 			g = nt(c[0], "GSTREGISTRATIONNUMBER")
 			if g == "" {
@@ -344,8 +344,11 @@ func copySessions(l []M) []M {
 	return o
 }
 
-// Get-OpenCompanies: asks each of your Tallys which companies are open (fresh: always asks)
-func openCompanies(fresh bool) []M {
+// Get-OpenCompanies: asks each of your Tallys which companies are open (fresh: always asks). Only after an event (a
+// posting, Update now, a client opened in FinCom, the nightly catch-up) or a person's request: never on a timer
+func openCompanies(fresh bool) []M { return openCompaniesWith(fin, fresh) }
+
+func openCompaniesWith(tc *TC, fresh bool) []M {
 	cacheSec := toInt(cfg("StatusCacheSec"))
 	if cacheSec < 30 {
 		cacheSec = 30
@@ -382,8 +385,17 @@ func openCompanies(fresh bool) []M {
 			sessions = append(sessions, e)
 			continue
 		}
-		raw, err := invokeTally(fin, toInt(pp["port"]), collectionRequest("TDSDeskCompanies", "Company", "NAME,STARTINGFROM,ENDINGAT,GUID", "", ""), 8)
-		if err != nil && isBusyErr(err) && tallyPortOpen(toInt(pp["port"])) && prevCompanies(toInt(pp["port"])) != nil {
+		if !tallyRunning() || !tallyPortOpen(toInt(pp["port"])) {
+			// closed: nothing is sent to it
+			e["error"], e["tallyState"] = "Tally is not open (nothing listens on this port)", "closed"
+			sessions = append(sessions, e)
+			continue
+		}
+		raw, err := invokeTally(tc, toInt(pp["port"]), collectionRequest("TDSDeskCompanies", "Company", "NAME,STARTINGFROM,ENDINGAT,GUID", "", ""), 8)
+		if err != nil && (errors.Is(err, errPreempted) || errors.Is(err, errBackoff)) && prevCompanies(toInt(pp["port"])) != nil {
+			// a background read stopped or held back: the companies named last time stand, nothing new is known
+			e["ok"], e["companies"], e["tallyState"] = true, prevCompanies(toInt(pp["port"])), "open"
+		} else if err != nil && isBusyErr(err) && tallyPortOpen(toInt(pp["port"])) && prevCompanies(toInt(pp["port"])) != nil {
 			// a busy Tally is still open: the companies it named last time stay, marked busy
 			e["ok"], e["companies"], e["busy"], e["tallyState"] = true, prevCompanies(toInt(pp["port"])), true, "busy"
 		} else if err != nil {
@@ -395,7 +407,7 @@ func openCompanies(fresh bool) []M {
 				if name == "" {
 					continue
 				}
-				inf := getCoInfo(name, toInt(pp["port"]))
+				inf := getCoInfo(tc, name, toInt(pp["port"]))
 				list = append(list, M{"name": name, "from": nt(c, "STARTINGFROM"), "to": nt(c, "ENDINGAT"), "guid": nt(c, "GUID"), "gstin": str(inf["gstin"]), "pan": str(inf["pan"])})
 			}
 			e["ok"] = true
@@ -461,77 +473,102 @@ func sessCompanies(s M) []M {
 	return o
 }
 
+// --- "Is Tally open?" (2.1.3), answered without sending Tally a request: the Tally program is running (Windows: its
+// process, tally.exe, in the list of programs) and its port takes a connection, which is closed at once. Kept a few
+// seconds, so the tray and the heartbeat asking often cost nothing
+var (
+	openMu    sync.Mutex
+	portSeen  = map[int][2]any{} // port -> {time, open}
+	runSeen   time.Time
+	runCached bool
+)
+
+// the tests: Tally's program "closed"
+var tallyStandInClosed bool
+
+func tallyRunning() bool {
+	openMu.Lock()
+	defer openMu.Unlock()
+	if time.Since(runSeen) < 5*time.Second {
+		return runCached
+	}
+	runCached, runSeen = platTallyRunning() && !tallyStandInClosed, time.Now()
+	return runCached
+}
+
 // a connection opened and closed; Tally is asked nothing
 func tallyPortOpen(port int) bool {
+	openMu.Lock()
+	if v, ok := portSeen[port]; ok && time.Since(v[0].(time.Time)) < 5*time.Second {
+		openMu.Unlock()
+		return v[1].(bool)
+	}
+	openMu.Unlock()
 	host := cfgS("TallyHost")
 	if host == "" {
 		host = "127.0.0.1"
 	}
-	c, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", host, port), 500*time.Millisecond)
-	if err != nil {
-		return false
+	open := false
+	if c, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", host, port), 500*time.Millisecond); err == nil {
+		c.Close()
+		open = true
 	}
-	c.Close()
-	return true
+	openMu.Lock()
+	portSeen[port] = [2]any{time.Now(), open}
+	openMu.Unlock()
+	return open
+}
+func forgetTallyOpen() {
+	openMu.Lock()
+	portSeen, runSeen = map[int][2]any{}, time.Time{}
+	openMu.Unlock()
 }
 
-// Get-OpenCompaniesCached (1.14.0): status checks never ask Tally; they get the companies Tally named the last time it
-// was asked, and whether Tally's port takes connections
+// Tally open on any of your ports (the program running, the port taking a connection): the port, or 0
+func tallyOpenNow() int {
+	if !tallyRunning() {
+		return 0
+	}
+	_, plan := portPlan()
+	for _, pp := range plan {
+		if cfgB("OnlyMySession") && pp["mine"] == false {
+			continue
+		}
+		if tallyPortOpen(toInt(pp["port"])) {
+			return toInt(pp["port"])
+		}
+	}
+	return 0
+}
+
+// Get-OpenCompaniesCached (1.14.0; 2.1.3 never asks Tally at all): the companies Tally named the last time it was asked
+// after an event, and whether Tally is open now (the program running and its port taking a connection)
 func openCompaniesCached() []M {
 	shared := filepath.Join(syncDir(), "open-companies.json")
 	list := sessionsFromFile(shared)
-	stale, newPort := false, false
-	if list != nil {
-		for _, e := range list {
-			if e["skipped"] == true {
-				continue
-			}
-			st := tallyState(toInt(e["port"]))
-			open := st != "closed"
-			if open && (e["ok"] != true || len(sessCompanies(e)) == 0) {
-				stale = true // Tally opened since it was last asked
-			}
-			e["ok"] = open
-			e["tallyState"], e["busy"] = st, st == "busy"
-			if !open {
-				e["companies"] = []any{}
-			}
-		}
-		// Tally reopened on another port of this session
+	if list == nil {
+		// nothing asked yet: each of your ports as it stands, without companies
+		list = []M{}
 		_, plan := portPlan()
 		for _, pp := range plan {
+			e := M{"port": toInt(pp["port"]), "ok": false, "companies": []any{}, "error": "", "mine": pp["mine"], "session": pp["session"], "program": pp["program"], "user": pp["user"], "skipped": false}
 			if cfgB("OnlyMySession") && pp["mine"] == false {
-				continue
+				e["skipped"] = true
 			}
-			in := false
-			for _, e := range list {
-				if toInt(e["port"]) == toInt(pp["port"]) {
-					in = true
-				}
-			}
-			if !in && tallyPortOpen(toInt(pp["port"])) {
-				stale, newPort = true, true
-			}
+			list = append(list, e)
 		}
 	}
-	coMu.Lock()
-	ask := (list == nil || stale) && time.Since(emptyAskAt).Minutes() >= 10
-	coMu.Unlock()
-	if ask && (newPort || list == nil || !keepUserInTally()) {
-		coMu.Lock()
-		emptyAskAt = time.Now()
-		coMu.Unlock()
-		if list == nil {
-			return openCompanies(false) // nothing known at all yet: asked now (the bridge's first minute)
+	for _, e := range list {
+		if e["skipped"] == true {
+			continue
 		}
-		// asked in the background: a status check or the heartbeat never waits for Tally
-		go func() {
-			defer func() { recover() }()
-			openCompanies(false)
-		}()
-	}
-	if list == nil {
-		return []M{}
+		st := tallyState(toInt(e["port"]))
+		open := st != "closed"
+		e["ok"] = open
+		e["tallyState"], e["busy"] = st, st == "busy"
+		if !open {
+			e["companies"] = []any{}
+		}
 	}
 	return list
 }

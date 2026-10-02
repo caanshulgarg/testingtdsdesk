@@ -66,8 +66,10 @@ with sync_playwright() as p:
     pg.fill("#delWhy", "not this client's bill"); pg.click('#confirmBox button[data-cbx="yes"]'); pg.wait_for_timeout(500)
     e = pg.evaluate("(b) => D().entries[b]", b)
     ok(e["status"] == "deleted" and e["deleted"]["reason"] == "not this client's bill" and e["deleted"]["by"], "24. the bill is kept as deleted, with who and why")
-    ok("Deleted (1)" in app(), "24. a Deleted filter lists it")
-    pg.click('#app button:has-text("Deleted (1)")'); pg.wait_for_timeout(300); pg.click("#app .queue li button"); pg.wait_for_timeout(400)
+    # review of 02-Oct-2026: one row of tabs; "Deleted" with its count beside it
+    DEL = 'nav[data-bill-filters] button:has-text("Deleted")'
+    ok(pg.locator(DEL).count() == 1 and pg.inner_text(DEL + " .sbar-n") == "1", "24. a Deleted filter lists it")
+    pg.click(DEL); pg.wait_for_timeout(300); pg.click("#app .queue li button"); pg.wait_for_timeout(400)
     ok("not this client's bill" in app() and pg.locator('#app button:text-is("Restore")').count() == 1, "24. opened under Deleted: the reason and a Restore button")
     pg.click('#app button:text-is("Restore")'); pg.wait_for_timeout(500)
     ok(pg.evaluate("(b) => D().entries[b].status", b) == "draft" and pg.evaluate("(b) => !!D().entries[b].restored", b), "24. Restore puts it back to To review")

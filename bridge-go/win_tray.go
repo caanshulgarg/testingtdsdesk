@@ -366,9 +366,20 @@ func (t *tray) statusText() string {
 	}
 	b.WriteString("\n")
 	if truthy(st["paused"]) {
-		b.WriteString("Paused: Tally is not read and nothing is posted.\n")
+		b.WriteString("Background reading paused: opening a client in FinCom and the nightly catch-up do not read Tally. Postings and Update now still work.\n")
 	}
-	if str(st["tallyState"]) == "busy" {
+	fmt.Fprintf(&b, "Reads Tally only when needed: a client opened in FinCom, Update now, a posting, and the nightly catch-up at %s (only when Tally is open and nobody has used FinCom for 15 minutes; KeepDailyAt in the settings).\n", str(st["nightlyAt"]))
+	if l := str(st["lastRead"]); l != "" {
+		fmt.Fprintf(&b, "Last read from Tally: %s\n", strings.Replace(l, "T", " ", 1))
+	}
+	fmt.Fprintf(&b, "Requests sent to Tally since the bridge started: %d", toInt(st["tallyRequests"]))
+	if l := str(st["tallyLastRequest"]); l != "" {
+		fmt.Fprintf(&b, " (the last at %s)", strings.Replace(l, "T", " ", 1))
+	}
+	b.WriteString("\n")
+	if na := str(st["notAnsweringSince"]); na != "" {
+		fmt.Fprintf(&b, "Tally: not answering since %s (open; nothing more is asked of it until a posting, Update now or another event)\n", strings.Replace(na, "T", " ", 1))
+	} else if str(st["tallyState"]) == "busy" {
 		fmt.Fprintf(&b, "Tally: busy since %s (open, answers slowly; asked again quietly) (%s)\n", str(st["busySince"]), strings.Join(strs(st["companies"]), ", "))
 	} else if truthy(st["tallyOpen"]) {
 		fmt.Fprintf(&b, "Tally: open (%s)\n", strings.Join(strs(st["companies"]), ", "))
@@ -426,9 +437,12 @@ func (t *tray) menu() {
 	add(10, "Status...", mfString)
 	add(7, "Connect FinCom on this computer...", mfString)
 	if st != nil && truthy(st["paused"]) {
-		add(3, "Resume", mfString)
+		add(3, "Resume background reading", mfString)
 	} else {
-		add(3, "Pause", mfString)
+		add(3, "Pause background reading", mfString)
+	}
+	if st != nil {
+		add(15, "Nightly catch-up at "+str(st["nightlyAt"]), mfGrayed)
 	}
 	add(4, "Restart", mfString)
 	add(6, "Check for updates", mfString)
@@ -477,9 +491,9 @@ func (t *tray) command(id int, st M) {
 		on := !(st != nil && truthy(st["paused"]))
 		trayCall("POST", "/tray/pause", M{"on": on})
 		if on {
-			t.balloon("FinCom Bridge paused", "Tally is not read and nothing is posted until you choose Resume.", false)
+			t.balloon("Background reading paused", "Opening a client in FinCom and the nightly catch-up do not read Tally until you choose Resume. Postings and Update now still work.", false)
 		} else {
-			t.balloon("FinCom Bridge", "Working again.", false)
+			t.balloon("FinCom Bridge", "Background reading resumed.", false)
 		}
 	case 4:
 		if trayCall("POST", "/tray/restart", M{}) == nil {

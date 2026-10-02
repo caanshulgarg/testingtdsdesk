@@ -17,7 +17,12 @@
 //   {kind:"groups", company, ledgers:[[name, parent]], groups:[[name, parent]]} -> (bridge 1.14.9) every ledger's group
 //                                                       and Tally's groups, without openings: openings and entries stay
 //   {kind:"state", company, state}
-//   {kind:"beat", tally, open, ports?, companies:[{name, open, at, phase, waiting}], updating, dailyAt, lastRun} -> {updateNow}
+//   {kind:"beat", tally, open, ports?, companies:[{name, open, at, phase, waiting, lastRead}], updating, dailyAt, lastRun,
+//    paused, notAnsweringSince, nightlyAt, lastRead, events} -> {updateNow, posts, wake, opened, activityAt}
+//                                                       (FinCom Bridge 2.1.3 reads Tally only after an event: opened =
+//                                                       {company: when} clients opened in FinCom lately, the fallback
+//                                                       for the wake-up channel; activityAt = when FinCom was last used
+//                                                       for this computer's clients, for the nightly catch-up)
 //   {kind:"support", note, zip}                      -> the Connector's log and details for FinCom support
 //   {kind:"posts_take"}                              -> {job: {id, company, payload} | null}: the next posting queued in
 //                                                       FinCom for this computer (build 199); the beat says how many wait
@@ -29,6 +34,9 @@
 //                                                       kept, never a posting (shadowCall)
 // Or a person signed in to FinCom (Authorization: Bearer, two-step done, a member of the firm), for one of the firm's
 // clients, giving the books from files exported from Tally:
+//   {kind:"wake", what:"open", client}             -> (2.1.3) a client opened in FinCom: its Tally computer is woken on its
+//                                                       own channel ("open", {company}) for one light update
+//   {kind:"wake", what:"active"}                   -> (2.1.3) FinCom in use: the nightly catch-up waits 15 quiet minutes
 //   {kind:"upload_days", client, company?, days:[{day, gz}]}
 //   {kind:"upload_ledgers", client, company?, from, openAsOn, ledgers:[[name, parent, open]], groups?}
 //   {kind:"reparse", client, month?}               -> the day books kept in the bucket read again into entries and
@@ -460,6 +468,43 @@ async function queueJob(firm: string, client: string, book: string, user: string
 
 // a person signed in to FinCom giving the books from files exported from Tally (the day book part by part, the trial
 // balance): the same cloud copy a connected computer sends, so everyone in the firm works on the same books
+// FinCom Bridge 2.1.3 reads Tally only after an event. A client opened in FinCom wakes the computer that keeps its Tally
+// company, on that computer's own Realtime channel (Realtime's broadcast API: no table, function or SQL is needed); the
+// time is also kept in tally_devices.info (opened, activityAt) for the heartbeat's answer, the fallback when the channel
+// is down. "active": FinCom in use (a page says so every few minutes at most), so the nightly catch-up waits.
+async function wakeFor(firm: string, body: any) {
+  const what = body.what === "open" ? "open" : body.what === "active" ? "active" : "";
+  if (!what) return reply(400, { ok: false, error: "Say what: open or active." });
+  const at = new Date().toISOString();
+  let links: { company: string; device_id: string }[] = [];
+  if (what === "open") {
+    const { data } = await db.from("tally_companies").select("company, device_id").eq("firm_id", firm).eq("client_id", String(body.client || ""));
+    links = (data || []).filter((r: any) => r.device_id) as any;
+    if (!links.length) return reply(200, { ok: true, woken: 0 });
+  }
+  let q = db.from("tally_devices").select("*").eq("firm_id", firm);
+  if (what === "open") q = q.in("id", [...new Set(links.map((r) => r.device_id))]);
+  const { data: devs } = await q;
+  let woken = 0;
+  for (const d of (devs || []).filter((x: any) => !x.revoked)) {
+    const prev = (d.info && typeof d.info === "object") ? d.info : {};
+    const opened: Record<string, string> = {};
+    for (const [k, v] of Object.entries((prev.opened && typeof prev.opened === "object") ? prev.opened : {})) if (Date.parse(String(v)) > Date.now() - 3600000) opened[k] = String(v);
+    const cos = links.filter((r) => r.device_id === d.id).map((r) => r.company);
+    cos.forEach((c) => { opened[c] = at; });
+    await db.from("tally_devices").update({ info: { ...prev, opened, activityAt: at } }).eq("id", d.id);
+    if (d.wake_token) for (const c of cos) if (await broadcast("tb-" + d.wake_token, "open", { company: c, at })) woken++;
+  }
+  return reply(200, { ok: true, woken });
+}
+async function broadcast(topic: string, event: string, payload: Record<string, unknown>) {
+  try {
+    const r = await fetch(URL.replace(/\/+$/, "") + "/realtime/v1/api/broadcast", { method: "POST", headers: { apikey: SERVICE, Authorization: "Bearer " + SERVICE, "Content-Type": "application/json" },
+      body: JSON.stringify({ messages: [{ topic, event, payload, private: false }] }) });
+    return r.ok;
+  } catch (_) { return false; }
+}
+
 async function userUpload(req: Request, auth: string) {
   const asUser = createClient(URL, ANON, { global: { headers: { Authorization: auth } }, auth: { persistSession: false } });
   const { data: who } = await asUser.auth.getUser();
@@ -485,6 +530,7 @@ async function userUpload(req: Request, auth: string) {
     console.log("tally-ingest install log from the web", path, user.id, String(body.name || "").slice(0, 100));
     return reply(200, { ok: true, path });
   }
+  if (body.kind === "wake") return await wakeFor(firm, body);
   const clientId = String(body.client || "");
   const { data: cl } = await db.from("clients").select("id, name, tally_name, gstin, deleted").eq("firm_id", firm).eq("id", clientId).maybeSingle();
   if (!cl || cl.deleted) return reply(404, { ok: false, error: "No such client in this firm." });
@@ -577,10 +623,13 @@ Deno.serve(async (req) => {
           ports: (Array.isArray(b.ports) ? b.ports : []).slice(0, 20).map((p: any) => ({ port: Math.max(0, Math.min(65535, Math.floor(Number(p?.port) || 0))), ok: !!p?.ok, skipped: !!p?.skipped,
             n: Math.max(0, Math.min(1000, Math.floor(Number(p?.n) || 0))), error: s(p?.error, 120) })),
           companies: (Array.isArray(b.companies) ? b.companies : []).slice(0, 200).map((c: any) => ({ name: s(c?.name, 200), open: !!c?.open, at: s(c?.at, 30), phase: s(c?.phase, 12),
-            waiting: Math.max(0, Math.min(1e6, Math.floor(Number(c?.waiting) || 0))) })),
+            waiting: Math.max(0, Math.min(1e6, Math.floor(Number(c?.waiting) || 0))), lastRead: s(c?.lastRead, 30) })),
           // go-bridge: Tally open / busy (open, slow to answer) / closed, and how often the beat comes (2.0: 30 s; 1.15.0: 60 s)
           tallyState: ["open", "busy", "closed"].includes(b.tallyState) ? b.tallyState : (b.tally ? "open" : "closed"), busySince: s(b.busySince, 30),
-          every: Math.max(10, Math.min(600, Math.floor(Number(b.every) || 60))), version: s(body.version, 40) };
+          every: Math.max(10, Math.min(600, Math.floor(Number(b.every) || 60))), version: s(body.version, 40),
+          // FinCom Bridge 2.1.3: background reading paused in its tray, since when Tally has not answered, the hour of the
+          // nightly catch-up, the last read from Tally, and that it reads Tally only after an event
+          paused: !!b.paused, notAnsweringSince: s(b.notAnsweringSince, 30), nightlyAt: s(b.nightlyAt, 5), lastRead: s(b.lastRead, 30), events: !!b.events };
         const prevInfo = ((dev as any).info && typeof (dev as any).info === "object") ? (dev as any).info : {};
         const me = bridgeOf(dev, body, false);
         const info = { ...prevInfo, beat, history: beatHistory(prevInfo, beat), bridges: bridgesWith(prevInfo, me.id, me.entry) };
@@ -594,7 +643,14 @@ Deno.serve(async (req) => {
         // posting is queued or an update asked for (migration-13); the heartbeat stays the fallback
         const tok = (dev as any).wake_token;
         const wake = tok ? { url: URL.replace(/^http/, "ws").replace(/\/+$/, "") + "/realtime/v1/websocket", key: ANON, topic: "tb-" + tok } : null;
-        return reply(200, { ok: true, updateNow, posts: posts || 0, wake, ...(mayPost(dev, me.id) ? {} : { notMain: true }) });
+        // 2.1.3: clients opened in FinCom in the last 10 minutes (the bridge reads each at most once every few minutes),
+        // and when FinCom was last used for this computer: a client opened, Update now, a posting
+        const opened: Record<string, string> = {};
+        for (const [k, v] of Object.entries((prevInfo.opened && typeof prevInfo.opened === "object") ? prevInfo.opened : {})) if (Date.parse(String(v)) > Date.now() - 600000) opened[k] = String(v);
+        const { data: lastJob } = await db.from("tally_post_jobs").select("updated_at").eq("device_id", dev.id).order("updated_at", { ascending: false }).limit(1);
+        const activityAt = [prevInfo.activityAt, want, lastJob && lastJob[0] && lastJob[0].updated_at].filter((x) => x && !isNaN(Date.parse(String(x))))
+          .map((x) => new Date(String(x)).toISOString()).sort().pop() || "";
+        return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, activityAt, ...(mayPost(dev, me.id) ? {} : { notMain: true }) });
       }
       case "make_main": return await makeMain(dev, bridgeOf(dev, body, false).id);
       case "posts_take": {

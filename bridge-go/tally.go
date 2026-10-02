@@ -3,16 +3,20 @@
 package main
 
 import (
+	"context"
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"html"
 	"io"
+	"math"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode/utf16"
 )
@@ -223,7 +227,9 @@ func collectionRequest(id, typ, fetch, company, extra string) string {
 		"</TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>"
 }
 
-// --- who asks: FinCom (a person waiting) or the copier (the routine copy, which gives way)
+// --- who asks: FinCom (a person waiting: a posting, Update now, a read FinCom asked for) or the copier (a background
+// read), which always gives way: 2.1.3 stops a background read at once (its request to Tally is closed) when FinCom's
+// request comes, and the read goes on from where it was afterwards
 type TC struct {
 	copier  bool
 	readSec int // the copier: no read of the day book may hold Tally longer than this
@@ -232,32 +238,67 @@ type TC struct {
 var fin = &TC{}
 
 // --- the request itself
-var errTimeout = errors.New("The operation has timed out")
+var (
+	errTimeout = errors.New("The operation has timed out")
+	// a background read stopped so that FinCom's request (a posting) goes first: not a failure, it resumes from its saved
+	// progress
+	errPreempted = errors.New("stopped at once so that FinCom's request goes first; it resumes from where it was")
+	// a background read while Tally is left alone after a failure: nothing is sent
+	errBackoff = errors.New("Tally is left alone for now after it did not answer; nothing was sent")
+)
 
-func tallyRaw(port int, x string, timeoutSec int) (string, error) {
+// 2.1.3: no single request may hold Tally longer than this (25 s): a background read is made of small requests instead
+// (a batch of ledgers, a few days), each saved as it comes, so a failure never throws the work away
+func tallyMaxSec() int { return keepNum("TallyMaxSec", 25) }
+
+// every request actually sent to Tally (the tests count them; nothing is sent while the bridge is idle)
+var (
+	tallySent   atomic.Int64
+	tallySentAt atomic.Int64 // Unix seconds of the last one
+)
+
+// now, as the bridge's timers see it (the tests move it on)
+var nowFn = time.Now
+
+func tallyRaw(ctx context.Context, port int, x string, timeoutSec int) (string, error) {
 	if timeoutSec <= 0 {
 		timeoutSec = toInt(cfg("TallyTimeoutSec"))
 		if timeoutSec <= 0 {
 			timeoutSec = 120
 		}
 	}
+	if m := tallyMaxSec(); timeoutSec > m {
+		timeoutSec = m
+	}
 	if ms := toInt(cfg("GentleMs")); ms > 0 {
-		time.Sleep(time.Duration(ms) * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			return "", errPreempted
+		case <-time.After(time.Duration(ms) * time.Millisecond):
+		}
 	}
 	host := cfgS("TallyHost")
 	if host == "" {
 		host = "127.0.0.1"
 	}
 	cl := &http.Client{Timeout: time.Duration(timeoutSec) * time.Second, Transport: &http.Transport{DisableKeepAlives: true, Proxy: nil}}
-	req, _ := http.NewRequest("POST", fmt.Sprintf("http://%s:%d", host, port), strings.NewReader(x))
+	req, _ := http.NewRequestWithContext(ctx, "POST", fmt.Sprintf("http://%s:%d", host, port), strings.NewReader(x))
 	req.Header.Set("Content-Type", "text/xml;charset=utf-8")
+	tallySent.Add(1)
+	tallySentAt.Store(time.Now().Unix())
 	resp, err := cl.Do(req)
 	if err != nil {
+		if errors.Is(ctx.Err(), context.Canceled) {
+			return "", errPreempted
+		}
 		return "", plainNetErr(err)
 	}
 	defer resp.Body.Close()
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
+		if errors.Is(ctx.Err(), context.Canceled) {
+			return "", errPreempted
+		}
 		return "", plainNetErr(err)
 	}
 	return textFromBytes(b), nil
@@ -278,23 +319,34 @@ func plainNetErr(err error) error {
 	return err
 }
 
-// --- one request at a time to each Tally; FinCom first
+// --- one request at a time to each Tally; FinCom first, always. 2.1.3: a FinCom request is never refused because the
+// bridge is reading in the background (02-Oct-2026 16:13: a posting was refused with "busy with another FinCom
+// request" while the bridge's own 900-second read of every opening balance held Tally): the background read is stopped
+// at once (its request closed), FinCom's request goes, and the read resumes from its saved progress afterwards
+type portGate struct {
+	ch      chan struct{}
+	mu      sync.Mutex
+	copier  bool               // the request at Tally now is a background read
+	cancel  context.CancelFunc // stops it
+	waiting int                // FinCom requests waiting for this Tally
+}
+
 var (
 	portLocksMu sync.Mutex
-	portLocks   = map[int]chan struct{}{}
+	portLocks   = map[int]*portGate{}
 	wantMu      sync.Mutex
 	wantAt      time.Time
 )
 
-func portLock(p int) chan struct{} {
+func portLock(p int) *portGate {
 	portLocksMu.Lock()
 	defer portLocksMu.Unlock()
-	c, ok := portLocks[p]
+	g, ok := portLocks[p]
 	if !ok {
-		c = make(chan struct{}, 1)
-		portLocks[p] = c
+		g = &portGate{ch: make(chan struct{}, 1)}
+		portLocks[p] = g
 	}
-	return c
+	return g
 }
 func setWant() {
 	wantMu.Lock()
@@ -319,27 +371,117 @@ func tallyWanted() bool {
 	return false
 }
 
-func enterTallyLock(tc *TC, port, waitSec int) (func(), error) {
+// a FinCom request waiting for this Tally, or just made: the background reads wait
+func userWaiting(port int) bool {
+	g := portLock(port)
+	g.mu.Lock()
+	w := g.waiting > 0
+	g.mu.Unlock()
+	return w || tallyWanted()
+}
+
+func enterTallyLock(tc *TC, port int, cancel context.CancelFunc) (func(), error) {
+	g := portLock(port)
 	if tc.copier {
-		t0 := time.Now()
-		for tallyWanted() && time.Since(t0) < 180*time.Second {
-			time.Sleep(500 * time.Millisecond)
+		// a background read waits while FinCom wants Tally (postings queue ahead of reads), however long that is
+		for userWaiting(port) {
+			if stopping() {
+				return nil, errPreempted
+			}
+			time.Sleep(200 * time.Millisecond)
+		}
+		for {
+			select {
+			case g.ch <- struct{}{}:
+			case <-stopCh:
+				return nil, errPreempted
+			case <-time.After(200 * time.Millisecond):
+				continue
+			}
+			if userWaiting(port) { // FinCom came meanwhile: it goes first
+				<-g.ch
+				return nil, errPreempted
+			}
+			break
 		}
 	} else {
 		setWant()
+		g.mu.Lock()
+		g.waiting++
+		g.mu.Unlock()
+		defer func() {
+			g.mu.Lock()
+			g.waiting--
+			g.mu.Unlock()
+		}()
+		t0, told := time.Now(), false
+		for got := false; !got; {
+			// a background read at Tally now: stopped at once, its request closed
+			g.mu.Lock()
+			if g.copier && g.cancel != nil {
+				g.cancel()
+				g.cancel = nil
+				if !told {
+					told = true
+					writeLog(fmt.Sprintf("Tally %d: a background read was stopped at once so FinCom's request goes first; it resumes afterwards from where it was", port))
+				}
+			}
+			g.mu.Unlock()
+			select {
+			case g.ch <- struct{}{}:
+				got = true
+			case <-stopCh:
+				return nil, errors.New("The bridge is stopping; try again in a moment")
+			case <-time.After(100 * time.Millisecond):
+			}
+		}
+		if time.Since(t0) >= 3*time.Second {
+			writeLog(fmt.Sprintf("Tally %d: waited %ds for another FinCom request to finish first", port, int(time.Since(t0).Seconds())))
+		}
 	}
-	c := portLock(port)
-	t0 := time.Now()
-	select {
-	case c <- struct{}{}:
-	case <-time.After(time.Duration(maxI(1, waitSec)) * time.Second):
-		return nil, fmt.Errorf("Tally (port %d) is busy with another FinCom request; try again in a moment", port)
-	}
-	if time.Since(t0) >= 3*time.Second {
-		writeLog(fmt.Sprintf("Tally %d: waited %ds for another FinCom request to finish first", port, int(time.Since(t0).Seconds())))
-	}
+	g.mu.Lock()
+	g.copier, g.cancel = tc.copier, cancel
+	g.mu.Unlock()
 	unlockOther := lockSharedMutex(port) // beside bridge 1.15.0 in the same Windows session: its own lock too
-	return func() { unlockOther(); <-c }, nil
+	return func() {
+		unlockOther()
+		g.mu.Lock()
+		g.copier, g.cancel = false, nil
+		g.mu.Unlock()
+		<-g.ch
+	}, nil
+}
+
+// --- after a background read failed, Tally is left alone by the background reads for a while (one line in the log,
+// nothing sent meanwhile): 1, 2, 4... minutes, at most 30. FinCom's own requests (a posting, Update now) are not held
+var (
+	bgMu   sync.Mutex
+	bgBack = map[int]keepBack{}
+)
+
+func bgBackoffUntil(port int) time.Time {
+	bgMu.Lock()
+	defer bgMu.Unlock()
+	if b, ok := bgBack[port]; ok && nowFn().Before(b.until) {
+		return b.until
+	}
+	return time.Time{}
+}
+
+// the next back-off for this Tally (one more failure): until when
+func setBgBackoff(port int) time.Time {
+	bgMu.Lock()
+	defer bgMu.Unlock()
+	n := bgBack[port].n + 1
+	w := math.Min(1800, float64(keepNum("KeepBackoffSec", 60))*math.Pow(2, float64(n-1)))
+	until := nowFn().Add(time.Duration(w) * time.Second)
+	bgBack[port] = keepBack{n, until}
+	return until
+}
+func clearBgBackoff(port int) {
+	bgMu.Lock()
+	delete(bgBack, port)
+	bgMu.Unlock()
 }
 
 // A Tally that did not answer in time is still working on that request, so it is not asked again for a while: 10 s,
@@ -396,11 +538,14 @@ func tallyBusy(port int) (bool, time.Time) {
 
 // one of open / busy / closed, for the heartbeat, FinCom's status and the tray
 func tallyState(port int) string {
-	if !tallyPortOpen(port) {
+	if !tallyRunning() || !tallyPortOpen(port) {
 		return "closed"
 	}
 	if b, _ := tallyBusy(port); b {
 		return "busy"
+	}
+	if o := readObjFile(stuckFile()); o != nil && toInt(o["port"]) == port {
+		return "busy" // its last requests were not answered, and none since
 	}
 	return "open"
 }
@@ -415,19 +560,29 @@ func invokeTally(tc *TC, port int, x string, timeoutSec int) (string, error) {
 	if had && time.Now().Before(c.until) {
 		return "", fmt.Errorf("Tally (port %d) is busy and did not answer the last request; not asked again until %s", port, c.until.Format("15:04:05"))
 	}
-	wait := 120
-	if timeoutSec > 0 {
-		wait = minI(300, timeoutSec)
+	if tc.copier && !bgBackoffUntil(port).IsZero() {
+		return "", errBackoff
 	}
-	unlock, err := enterTallyLock(tc, port, wait)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	unlock, err := enterTallyLock(tc, port, cancel)
 	if err != nil {
 		return "", err
 	}
+	if tc.copier && !bgBackoffUntil(port).IsZero() {
+		unlock()
+		return "", errBackoff
+	}
 	t0 := time.Now()
 	setInflight(port, true)
-	r, err := tallyRaw(port, x, timeoutSec)
+	r, err := tallyRaw(ctx, port, x, timeoutSec)
 	setInflight(port, false)
 	fail := ""
+	if errors.Is(err, errPreempted) {
+		// stopped for FinCom's request: not Tally's fault, nothing to note
+		unlock()
+		return "", errPreempted
+	}
 	if err == nil {
 		coolMu.Lock()
 		delete(tallyCool, port)
@@ -440,9 +595,9 @@ func invokeTally(tc *TC, port int, x string, timeoutSec int) (string, error) {
 			writeLog(fmt.Sprintf("Tally %d answers again (it was busy for %s)", port, time.Since(since).Round(time.Second)))
 		}
 		clearTallyStuck(port)
-		// something was posted to Tally: the changed days are brought in and sent to the cloud in a minute or so
+		// something was posted to Tally: the posted entries go into the copy (and the cloud) once the posting is done
 		if !tc.copier && re(`<TALLYREQUEST>\s*Import`).MatchString(x) {
-			requestKeepLight()
+			afterPosting(html.UnescapeString(group(`<SVCURRENTCOMPANY>([^<]*)</SVCURRENTCOMPANY>`, x, 1)))
 		}
 	} else {
 		fail = err.Error()
@@ -464,7 +619,7 @@ func invokeTally(tc *TC, port int, x string, timeoutSec int) (string, error) {
 			}
 			busyMu.Unlock()
 			if !was {
-				writeLog(fmt.Sprintf("Tally %d is busy (no answer in time); FinCom shows it as busy, and it is asked again quietly (first in %ds)", port, w))
+				writeLog(fmt.Sprintf("Tally %d is busy (no answer in %ds); FinCom shows it as not answering, and nothing is asked of it for %ds", port, int(time.Since(t0).Seconds()), w))
 			}
 		}
 	}
@@ -474,9 +629,6 @@ func invokeTally(tc *TC, port int, x string, timeoutSec int) (string, error) {
 	unlock()
 	sec := time.Since(t0).Seconds()
 	addTallyUse(tc, port, sec, x, fail)
-	if tc.copier {
-		keepSlowRead(sec)
-	}
 	return r, err
 }
 
@@ -485,12 +637,24 @@ func stuckFile() string { return filepath.Join(syncDir(), "tally-stuck.json") }
 func setTallyStuck(port int) {
 	o := readObjFile(stuckFile())
 	since := nowS()
-	if o != nil && toInt(o["port"]) == port {
-		if l, ok := parseTime(str(o["last"])); ok && time.Since(l) < 15*time.Minute {
-			since = str(o["since"])
-		}
+	// 2.1.3: the bridge asks Tally only after an event, so failures may be hours apart: "since" stays until Tally answers
+	if o != nil && toInt(o["port"]) == port && str(o["since"]) != "" {
+		since = str(o["since"])
 	}
 	_ = saveFile(stuckFile(), jsonText(M{"port": port, "since": since, "last": nowS()}))
+}
+
+// since when Tally has not answered (its last requests failed, none answered since), for the heartbeat and FinCom's
+// "Tally is not answering on NWS144 since 12:28"; "" when it answers, or when Tally is closed (that is said instead)
+func notAnsweringSince() string {
+	o := readObjFile(stuckFile())
+	if o == nil || str(o["since"]) == "" {
+		return ""
+	}
+	if !tallyRunning() || !tallyPortOpen(toInt(o["port"])) {
+		return ""
+	}
+	return str(o["since"])
 }
 func clearTallyStuck(port int) {
 	o := readObjFile(stuckFile())
@@ -566,7 +730,7 @@ func addTallyUse(tc *TC, port int, sec float64, x, fail string) {
 		useMu.Unlock()
 	}
 	quiet := false
-	if fail != "" && re(`is busy and did not answer the last request`).MatchString(fail) {
+	if fail != "" && (re(`is busy and did not answer the last request`).MatchString(fail) || fail == errBackoff.Error() || fail == errPreempted.Error()) {
 		quiet = true // a quiet retry while Tally is busy
 	}
 	if !quiet && (fail != "" || sec >= float64(keepNum("KeepSlowSec", 3))) {

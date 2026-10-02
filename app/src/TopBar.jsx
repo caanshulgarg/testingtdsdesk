@@ -2,6 +2,7 @@
 // firm account chip and the firm button, with the Tally panel and firm menu they open.
 // Was renderTop, clientHeader, topRight, tallyPanelHtml, firmMenuHtml (src/js/02 and 18); actions are doAct(...).
 import TallyPill from "./parts/TallyPill.jsx";
+import TallyLine from "./parts/TallyLine.jsx";
 import { TallyStates } from "./parts/TallyStates.jsx";
 import HelpButton from "./parts/HelpButton.jsx";
 import { useLayoutEffect } from "react";
@@ -84,7 +85,7 @@ function TopRight() {
     <div className="topright">
       {inCo && <HelpButton page />}
       {inCo && <button className="btn small" title="Upload bills, statements or sales invoices for this client" onClick={() => goStep("collect")}>+ Upload</button>}
-      <button className={"tallychip" + (t.level === "ok" ? " live" : t.level === "warn" ? " off" : " none")} onClick={() => doAct("tallyPanel")} title={"Tally: " + t.label + " \u2014 " + t.say} data-tally={t.state}>
+      <button className={"tallychip" + (t.level === "ok" ? " live" : t.level === "warn" ? " off" : " none")} onClick={() => doAct("tallyPanel")} title={(inCo && typeof tallyLine === "function" && tallyLine(CO()) ? tallyLine(CO()).text + " \u2014 " : "") + "Tally: " + t.label + " \u2014 " + t.say} data-tally={t.state}>
         <span className="dotled" />{t.short}
       </button>
       <CloudChip />
@@ -104,7 +105,7 @@ function TallyPanel() {
     <div className="tallypanel" role="dialog" aria-label="Tally connection">
       <div className="fm-head"><b>Tally connection</b><button className="icon" onClick={close} aria-label="Close">✕</button></div>
       <div className="tp-body">
-        <p><TallyPill co={co} /></p><p className="note">{tallyStatus(co).say}</p>
+        <p><TallyPill co={co} /></p>{co && typeof tallyLine === "function" && tallyLine(co) && <p data-panel-tally-line=""><TallyLine co={co} /></p>}<p className="note">{tallyStatus(co).say}</p>
         <TallyStates co={co} />
         {Bridge.on() ? <>
           <p><span className={"dotled " + (live ? "live" : "off")} /><b>{live ? (st.shaky ? "Reconnecting…" : "Connected") : "Not answering"}</b>{st.version && <span className="note"> · FinCom Bridge {st.version}</span>}</p>

@@ -158,6 +158,11 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	body := string(bodyB)
+	// FinCom in use on this computer (for the nightly catch-up, when the cloud has no signal): a person's request, not
+	// the status checks the page and the tray make every minute
+	if !strings.HasPrefix(path, "/tray/") && path != "/status" && path != "/logtail" && path != "/synced" && path != "/diagnose" && path != "/paircode" {
+		noteUse()
+	}
 	res, err := route(w, r, path, qs, body, origin)
 	if err == errSent {
 		return
@@ -521,15 +526,28 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 			}
 			saveConfig()
 			if truthy(o["now"]) {
+				// Update now pressed in FinCom on this computer (b): read now, also while background reading is paused
 				setCfg("KeepInStep", true)
 				saveConfig()
-				requestKeepNow()
-			}
-			if keepOn() {
-				startKeepIfNeeded()
+				wakeUpdate(str(o["company"]))
 			}
 		}
 		return keepStatus(co), nil
+	case "/wake":
+		// FinCom on this computer: a client was opened (a), the same as the cloud's wake-up; at most one light update
+		// of the company every few minutes
+		if err := needPost(r, "Use POST."); err != nil {
+			return nil, err
+		}
+		o, err := bodyObj(body)
+		if err != nil {
+			return nil, err
+		}
+		started := false
+		if str(o["what"]) == "open" {
+			started = wakeOpen(str(o["company"]), "opened in FinCom on this computer")
+		}
+		return M{"ok": true, "started": started, "paused": paused()}, nil
 	case "/keepcheck":
 		return testKeepMonth(co, qs.Get("ym"), qint(qs, "port"))
 	// --- the tray icon's own questions

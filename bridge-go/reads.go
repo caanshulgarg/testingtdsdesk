@@ -344,7 +344,7 @@ func oneLedgerBalance(port int, company, ledger, asOn string) (string, bool, err
 
 // every ledger's name and group, and every group's parent: no balances, so Tally answers at once
 func getLedgerNames(tc *TC, company string, pref int) (M, error) {
-	port, err := findCompanyPort(company, pref)
+	port, err := readerPort(tc, company, pref)
 	if err != nil {
 		return nil, err
 	}
@@ -403,6 +403,15 @@ func getTrialBalance(company, asOn string, pref int) (M, error) {
 	return M{"ok": true, "company": company, "port": port, "asOn": asOn, "ms": ms, "ledgers": list}, nil
 }
 
+// the port to read from: a background read uses the Tally its run found at its start (it asks no company list of its
+// own: that would be a request of FinCom's, not given way); FinCom's reads find the company now
+func readerPort(tc *TC, company string, pref int) (int, error) {
+	if tc.copier && pref > 0 {
+		return pref, nil
+	}
+	return findCompanyPort(company, pref)
+}
+
 // the Day Book of one company for a period, as Tally exports it (every voucher, every line, bill-wise details)
 func getDayBookXML(tc *TC, company, from, to string, pref int) (string, error) {
 	if company == "" {
@@ -417,7 +426,7 @@ func getDayBookXML(tc *TC, company, from, to string, pref int) (string, error) {
 	if fromTallyDate(to).Sub(fromTallyDate(from)).Hours()/24 > 92 {
 		return "", errors.New("Ask for three months at most at a time, so Tally is not held up.")
 	}
-	port, err := findCompanyPort(company, pref)
+	port, err := readerPort(tc, company, pref)
 	if err != nil {
 		return "", err
 	}

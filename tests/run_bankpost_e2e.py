@@ -24,10 +24,10 @@ def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
     if not c: fails.append(w)
 # the bank and a supplier in the stand-in Tally's books: the real client's, or the fixture's (tests/fixtures/books)
-BANK, PARTY = ("Tamarind Urban Bank - CA 0042", "Juniper Legal Associates") if fake_tally._bd.FIXTURE else ("HDFC BANK ACCOUNT", "2K Mart")
+BANK, PARTY = ("Kaveri Bank - CA 0815", "Juniper Legal Associates") if fake_tally._bd.FIXTURE else ("HDFC BANK ACCOUNT", "2K Mart")
 CO_NAME, CO_GSTIN = fake_tally.COMPANY, fake_tally._bd.GSTIN
 SETUP = """([k, bank, party]) => { Bridge.setCfg({url: "http://127.0.0.1:9100", key: k});
-  const c = newCompany({name: "@CO@", gstin: "@GSTIN@"}); c.bankAccounts = [{id: "a1", bank: "HDFC", acct: "123", ledger: bank}]; choiceConfirm(c, "bank:a1", bank);   // posting uses a confirmed bank ledger only (src/js/60)
+  const c = newCompany({name: "@CO@", gstin: "@GSTIN@"}); c.bankAccounts = [{id: "a1", bank: "HDFC", acct: "123", ledger: bank}]; choiceConfirm(c, "bank:a1", bank); choiceConfirm(c, "postTo", c.name);   // posting uses a confirmed bank ledger and Tally company only (src/js/60)
   S.companies[c.id] = c; S.coId = c.id; S.view = "company"; S.tab = "bank";
   const rows = [["2025-06-02", 1000], ["2025-06-03", 2500], ["2025-06-04", 330], ["2025-06-05", 47000]].map(([d, amt], i) => ({id: "r" + i, fp: "fp-e2e-" + i, date: d, debit: amt, credit: 0,
     narr: "NEFT to supplier " + i, dec: {name: party, mode: "NEFT"}, ledger: party, state: "ready", balOk: true, ref: "UTR" + i}));

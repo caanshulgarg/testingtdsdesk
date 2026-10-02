@@ -167,7 +167,7 @@ func keptDirs() []string {
 func updateCloudLinks() {
 	cos := []any{}
 	names := map[string]bool{}
-	for _, s := range openCompanies(false) {
+	for _, s := range openCompaniesCached() { // 2.1.3: what Tally named after the last event; Tally is not asked
 		if s["skipped"] != true && s["ok"] == true {
 			for _, c := range sessCompanies(s) {
 				cos = append(cos, M{"name": str(c["name"]), "gstin": str(c["gstin"])})
@@ -680,10 +680,9 @@ func beatOnce() {
 				isOpen = true
 			}
 		}
-		cos = append(cos, M{"name": str(st["company"]), "open": isOpen, "at": str(st["at"]), "phase": str(st["phase"]), "waiting": len(cloudQueue(d))})
+		cos = append(cos, M{"name": str(st["company"]), "open": isOpen, "at": str(st["at"]), "phase": str(st["phase"]), "waiting": len(cloudQueue(d)), "lastRead": str(st["readAt"])})
 	}
-	r := invokeCloud(M{"kind": "beat", "tally": tally, "tallyState": tstate, "busySince": tsince, "every": beatEvery(), "open": open, "ports": ports, "companies": cos,
-		"updating": keepRunning(), "dailyAt": keepDailyAt(), "lastRun": keepLastRun()}, 10)
+	r := invokeCloud(beatBody(tally, tstate, tsince, open, ports, cos), 10)
 	if r.code == 200 && r.json != nil {
 		if testMode() && !truthy(r.json["shadow"]) {
 			if shadowOK.Swap(false) || beatMissedSince().IsZero() {
@@ -720,11 +719,20 @@ func beatOnce() {
 			writeLog(fmt.Sprintf("Heartbeat: FinCom reached again (not reached for %s)", time.Since(was).Round(time.Second)))
 		}
 		setCloudWake(obj(r.json["wake"]))
-		// Update now pressed in FinCom on another computer; postings waiting: started, never waited for here
-		if truthy(r.json["updateNow"]) && !paused() {
-			go func() { requestKeepNow(); startKeepIfNeeded() }()
+		// FinCom's last-activity signal (for the nightly catch-up), and clients opened in FinCom (the fallback for the
+		// wake-up channel)
+		if a := str(r.json["activityAt"]); a != "" {
+			noteCloudUse(a)
 		}
-		if toInt(r.json["posts"]) > 0 && cfgB("AllowImport") && readOnlyWhy() == "" && !paused() && postTaking.CompareAndSwap(false, true) {
+		if o := obj(r.json["opened"]); len(o) > 0 {
+			go openedFromBeat(o)
+		}
+		// Update now pressed in FinCom on another computer; postings waiting: started, never waited for here. Neither is
+		// stopped by "Pause background reading"
+		if truthy(r.json["updateNow"]) {
+			go wakeUpdate("")
+		}
+		if toInt(r.json["posts"]) > 0 && cfgB("AllowImport") && readOnlyWhy() == "" && postTaking.CompareAndSwap(false, true) {
 			go func() { defer postTaking.Store(false); cloudPostTake() }()
 		}
 		return
@@ -740,6 +748,14 @@ func beatOnce() {
 	}
 }
 func beatMissedSince() time.Time { _, f := beatTimes(); return f }
+
+// the heartbeat (2.1.3): also whether background reading is paused, since when Tally has not answered, the hour of the
+// nightly catch-up, the last read of each company, and that this bridge reads Tally only after an event
+func beatBody(tally bool, tstate, tsince string, open, ports, cos []any) M {
+	return M{"kind": "beat", "tally": tally, "tallyState": tstate, "busySince": tsince, "every": beatEvery(), "open": open, "ports": ports, "companies": cos,
+		"updating": keepRunning(), "dailyAt": keepDailyAt(), "nightlyAt": keepDailyAt(), "lastRun": keepLastRun(), "paused": paused(), "notAnsweringSince": notAnsweringSince(),
+		"lastRead": lastReadAt(), "events": true, "computer": computerName()}
+}
 
 // --- the posting queue (build 199): postings queued in FinCom on any computer, taken one at a time
 var (
@@ -1042,9 +1058,11 @@ func wakeSession(u, key, topic string) error {
 		if str(m["event"]) != "broadcast" || obj(m["payload"]) == nil {
 			continue
 		}
+		inner := obj(obj(m["payload"])["payload"])
 		switch str(obj(m["payload"])["event"]) {
 		case "post":
 			writeLog("Woken by FinCom: a posting is waiting")
+			noteUse()
 			if why := readOnlyWhy(); why != "" {
 				writeLog("Not taken here: " + why)
 			} else if cfgB("AllowImport") && postTaking.CompareAndSwap(false, true) {
@@ -1052,9 +1070,19 @@ func wakeSession(u, key, topic string) error {
 			}
 		case "update":
 			writeLog("Woken by FinCom: Update now")
-			if !paused() {
-				requestKeepNow()
-				startKeepIfNeeded()
+			go wakeUpdate(str(inner["company"]))
+		case "open":
+			// a client opened in FinCom: one light update of its company (at most one every few minutes), then idle
+			co := str(inner["company"])
+			if a := str(inner["at"]); a != "" {
+				noteCloudUse(a)
+			} else {
+				noteUse()
+			}
+			go wakeOpen(co, "opened in FinCom")
+		case "active":
+			if a := str(inner["at"]); a != "" {
+				noteCloudUse(a)
 			}
 		}
 	}

@@ -5,6 +5,7 @@
 // (src/js/49). The work is Bridge and TCloud; boxes and choices go through bridgeSet, bridgeLink, bridgePin, tcLink
 // (src/js/24, 49), buttons through doAct (bridgeTest, bridgeConnect, bridgeOff, bridgeSetupFile, bridgeDiag, bridgeReadTest).
 import TallyPill from "../parts/TallyPill.jsx";
+import TallyLine from "../parts/TallyLine.jsx";
 import { TallyStates, TallyHistory } from "../parts/TallyStates.jsx";
 import { PostLog } from "./Done.jsx";
 import CommitBox from "../parts/CommitBox.jsx";
@@ -338,10 +339,27 @@ export default function TallyHome() {
   const needCard = !devs.size || [...devs].some((d) => !withNew.has(d));
   return <><section className="today"><h2>Tally</h2></section>
     {rows.length > 0 && <BridgeLines rows={rows} latest={latest} />}
+    <ClientLines />
     {needCard ? <BridgeDownload m={m} /> : <DetailsCard m={m} />}
     {!TCloud.on() && <BridgeSettings />}
     <PostLog /></>;
 }
+// FinCom Bridge 2.1.3 reads Tally only after an event: one line a client whose Tally company a computer keeps, from
+// that computer's heartbeat ("Tally open on NWS144 · last read 15:34", closed, offline, not answering, paused), each with
+// Update now; the open client first
+function ClientLines() {
+  if (typeof tallyLine !== "function") return null;
+  const cos = Object.values(S.companies || {}).filter((c) => !c.deleted).sort((a, c) => (c.id === S.coId) - (a.id === S.coId) || a.name.localeCompare(c.name));
+  const rows = cos.map((co) => [co, tallyLine(co)]).filter(([, l]) => l);
+  if (!rows.length) return null;
+  return <div className="pane" data-client-lines="">
+    <h3 style={{ marginTop: 0 }}>Clients’ Tally</h3>
+    <p className="note" style={{ margin: "0 0 8px" }}>The bridge reads Tally only when needed: when a client is opened here, on Update now, for a posting, and in its nightly catch-up. Entries made in Tally show here after the next of these.</p>
+    {rows.map(([co]) => <div key={co.id} className="row" data-client-line={co.id} style={{ alignItems: "center", gap: 8, flexWrap: "wrap", margin: "2px 0" }}>
+      <b>{co.name}</b><span className="note">·</span><TallyLine co={co} /></div>)}
+  </div>;
+}
+
 // the download again (another computer, or an update), folded away once FinCom Bridge runs
 function DetailsCard({ m }) {
   const [open, setOpen] = useState(false);

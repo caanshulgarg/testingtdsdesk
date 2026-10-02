@@ -19,10 +19,24 @@ func platMySessions() []int                    { return []int{0} }
 func platIdleSec() float64                     { return 99999 }
 func platFrontIsTally() bool                   { return false }
 func platTallyYoung(min float64) bool          { return false }
-func lockSharedMutex(port int) func()          { return func() {} }
-func keepAwake(on bool)                        {}
-func hideWindow(c *exec.Cmd)                   {}
-func oldBridgePresent() bool                   { return false }
+
+// the Tally program running (not Windows: a stand-in; with the test file, its list of programs)
+func platTallyRunning() bool {
+	if f := fakeData(); f != nil {
+		for _, x := range arr(f["processes"]) {
+			if reTally.MatchString(str(obj(x)["name"])) {
+				return true
+			}
+		}
+		return false
+	}
+	return true
+}
+
+func lockSharedMutex(port int) func() { return func() {} }
+func keepAwake(on bool)               {}
+func hideWindow(c *exec.Cmd)          {}
+func oldBridgePresent() bool          { return false }
 
 func protectKey(k string) (string, error) { return "plain:" + k, nil }
 func unprotectKey(v string) string {

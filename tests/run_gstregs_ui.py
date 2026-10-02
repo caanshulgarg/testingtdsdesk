@@ -56,7 +56,8 @@ with sync_playwright() as p:
     pg.evaluate("window.scrollTo(0, 0)"); pg.click('tr[data-key^="09"] td:nth-child(4) button'); pg.wait_for_timeout(800)
     ok(pg.evaluate("document.activeElement.getAttribute('aria-label')") == "GST portal username" and pg.evaluate("(document.activeElement.closest('[data-greg]') || {dataset: {}}).dataset.greg") == "09", "\"type it\" beside the GSTIN goes to its username box")
     pg.evaluate("S.account = {email: 'a@b.c', firm: {plan: {name: 'Starter', includes: []}, balance: 0}}; render()"); pg.wait_for_timeout(500)
-    ok("[object Object]" not in pg.inner_text("body") and "Starter" in pg.inner_text("body"), "the firm's plan shows by its name")
+    # review of 01-Oct-2026: the firm button shows the credit; the plan, by its name, is in its title and the firm menu
+    ok("[object Object]" not in pg.inner_text("body") and "plan Starter" in (pg.get_attribute("button.firmbtn", "title") or ""), "the firm's plan shows by its name")
     pg.evaluate("S.account = null; render()")
     # typing survives the screen being redrawn in the background (as when signed in to the firm account)
     pg.click('section[data-greg="09"] input[aria-label="GST portal username"]'); pg.keyboard.type("garg"); pg.evaluate("render()"); pg.keyboard.type("x"); pg.evaluate("render()")

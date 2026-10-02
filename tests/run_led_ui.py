@@ -28,7 +28,7 @@ with sync_playwright() as p:
       window.__bk = S.books; S.booksTab = "import"; render(); }""".replace("@GSTIN@", GSTIN).replace("@CO@", COMPANY), books)
     pg.wait_for_timeout(1200); pg.evaluate("S.books = window.__bk; render();"); pg.wait_for_timeout(600)
     pg.set_input_files("#mastersIn", os.path.join(DATA, "Master.xml")); pg.wait_for_timeout(12000)
-    ok(pg.evaluate("Object.keys(S.books.ledInfo || {}).length") == 54 if FIXTURE else pg.evaluate("Object.keys(S.books.ledInfo || {}).length") > 2000, "masters read: what Tally says about each ledger is kept")
+    ok(pg.evaluate("Object.keys(S.books.ledInfo || {}).length") == 55 if FIXTURE else pg.evaluate("Object.keys(S.books.ledInfo || {}).length") > 2000, "masters read: what Tally says about each ledger is kept")
     pg.evaluate("S.booksTab = 'ledgers'; S.lmView = ''; render();"); pg.wait_for_timeout(600)
     t = pg.inner_text("#app"); pend = pg.evaluate("LedMaster.pending(S.books).length")
     ok(pend > (10 if FIXTURE else 40) and "confirm once for this client" in t, "Tally ledgers tab opens on the %d to confirm" % pend)
