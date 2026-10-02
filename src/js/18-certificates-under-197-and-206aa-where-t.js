@@ -135,6 +135,8 @@ async function openBooks(cid){
   if (typeof TCloud === "object" && TCloud.on()) setTimeout(() => { TCloud.openLoad(cid).catch(() => {}); }, 0);
   setTimeout(() => { try { if (typeof CloudDocs === "object" && CloudDocs.on() && S.coId === cid) CloudDocs.sendPending(cid, true); } catch (e){} }, 3000);
   setTimeout(() => { try { if (S.books && S.books.cid === cid){ Audit.maybeRun(); MIS.maybeRun(); } } catch (e){} }, 400);
+  // the drafts' party and expense ledgers, now that the day book and the ledger masters' GSTINs are here
+  try { if (typeof billAutoAll === "function" && S.coId === cid) billAutoAll(cid); } catch (e){}
   render();
 }
 // everything kept with a client's books, in this browser and (the TDS and GST work) in the firm's database

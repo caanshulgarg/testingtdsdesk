@@ -212,7 +212,8 @@ function LedgerCell({ e, l, ro, tallyCtx }) {
   const h = e.partyHist, ex = l.ledger && tallyCtx && !e.exportedAt ? exactLedger(l.ledger) : null;
   const val = tax ? (e.taxLed && e.taxLed[l.key] != null ? e.taxLed[l.key] : l.ledger || "") : e[key] || "";
   const label = l.role === "expense" ? "Expense ledger" : l.role === "party" ? "Party ledger" : l.role === "tds" ? "TDS ledger" : (l.head || "GST") + " ledger";
-  const fix = (n) => tax ? billSetTaxLed(e, l.key, n) : billFixLedger(l.role, l.ledger, n);
+  // on a draft, a GST / TDS line's ledger is the bill's own choice; on an approved bill, the fix goes to every bill waiting
+  const fix = (n) => tax && edit ? billSetTaxLed(e, l.key, n) : billFixLedger(l.role, l.ledger, n);
   return <>
     {edit ? (tax
       ? <input type="text" data-tl={l.key} data-fk={"tl:" + l.key} data-ac="1" data-acrole={l.role} autoComplete="off" value={val}
@@ -230,7 +231,7 @@ function LedgerCell({ e, l, ro, tallyCtx }) {
       ? <> <span className="lg-ok" title={"In Tally as “" + ex + "”"}>✔</span></>
       : <div className="lg-miss">Not in Tally
           {suggestLedgers(l.ledger, l.role, 2).map((n) => <span key={n}> <button className="linkbtn" onClick={() => fix(n)}>Use “{n}”</button></span>)}
-          {!tax && <>{" "}<button className="linkbtn" onClick={() => billFixLedger(l.role, l.ledger, null)}>Create in Tally</button></>}</div>)}
+          {!(tax && edit) && <>{" "}<button className="linkbtn" onClick={() => billFixLedger(l.role, l.ledger, null)}>Create in Tally</button></>}</div>)}
     {l.role === "expense" && <>
       {e.expenseFrom && !e.expenseUserSet && <div className="nr" style={{ color: "var(--ledger)" }} data-led-why="expense">{e.expenseFrom}</div>}
       {h && h.top && h.top.length > 0 && <div className="phist"><span className="muted">Booked before for this supplier:</span>{" "}
