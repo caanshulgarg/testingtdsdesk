@@ -114,7 +114,9 @@ const S = {
 
 // a Tally ledger's name as its entries name it: a name ending in (or holding) line breaks, as Tally sometimes keeps it in
 // the master, is the same ledger without them
-function ledNm(n){ return String(n == null ? "" : n).replace(/(&#13;|&#10;|\r|\n)+/g, " ").replace(/\s+/g, " ").trim(); }
+// only the line breaks go (Tally keeps names such as "Arktos  Control & Instruments" with two spaces, and a posting must
+// use Tally's exact name); the same rule as tally_nm on the server
+function ledNm(n){ return String(n == null ? "" : n).replace(/[ \t]*(&#13;|&#10;|\r|\n)+[ \t]*/g, " ").trim(); }
 function newCompany(f){
   f = f || {};
   const gstin = String(f.gstin || "").toUpperCase().trim();
@@ -934,13 +936,28 @@ function findParty(x, cid){
 // Suppliers on bills still waiting for review, not yet in the supplier list (review item 8): shown in Client setup as
 // "new, not yet approved" so PAN, payment type and amounts credited earlier can be filled before the first approval
 // (which is what makes the yearly limit right on that first bill).
+// the supplier's ledger in Tally, by GSTIN, then PAN, then name (review of 02-Oct-2026: a supplier with a Tally ledger
+// was called "New supplier"); "" when Tally has none
+function supplierInTally(x){
+  if (!x) return "";
+  const b = S.books || {}, info = b.ledInfo || {}, gst = String(x.vendorGstin || "").toUpperCase(), pan = typeof effectivePan === "function" ? effectivePan(x) : "";
+  if (gst){ const hit = Object.entries(b.gstins || {}).find(([, g]) => String(g).toUpperCase() === gst) || Object.entries(info).find(([, m]) => String(m.gstin || "").toUpperCase() === gst); if (hit) return hit[0]; }
+  if (pan){ const hit = Object.entries(info).find(([, m]) => String(m.pan || "").toUpperCase() === pan); if (hit) return hit[0]; }
+  const nm = String(x.vendorName || "").trim();
+  if (!nm) return "";
+  const ex = typeof exactLedger === "function" ? exactLedger(nm) : null;
+  if (ex) return ex;
+  const k = typeof ledgerKey === "function" ? ledgerKey(nm) : nm.toLowerCase();
+  const names = new Set([].concat(Object.keys(info), Object.keys(b.gstins || {}), Object.keys(b.map || {}), Object.keys((b.tb || {}).led || {})));
+  return Array.from(names).find(l => (typeof ledgerKey === "function" ? ledgerKey(l) : l.toLowerCase()) === k) || "";
+}
 function pendingSuppliers(cid){
   cid = cid || S.coId;
   const out = new Map();
   Object.values(D(cid).entries || {}).forEach(e => {
     if (e.status !== "draft" || !e.x || !String(e.x.vendorName || "").trim() || findParty(e.x, cid)) return;
     const pan = effectivePan(e.x), key = pan ? "pan:" + pan : "name:" + norm(e.x.vendorName);
-    const k = out.get(key) || {key, name: e.x.vendorName, pan: pan || "", gstin: e.x.vendorGstin || "", natureId: e.natureId || "", ledgerName: e.partyLedger || "", bills: 0, total: 0};
+    const k = out.get(key) || {key, name: e.x.vendorName, pan: pan || "", gstin: e.x.vendorGstin || "", natureId: e.natureId || "", ledgerName: e.partyLedger || "", tally: supplierInTally(e.x), bills: 0, total: 0};
     k.bills++; k.total = r2(k.total + num(e.x.total));
     out.set(key, k);
   });
@@ -2815,7 +2832,8 @@ async function extract(file, careful, page, cidHint, force){
         const askClaude = S.askClaudeNewSupplier && S.engine && !fp.known && (kind === "pdf_text" || conf >= 75);
         if (!askClaude){
           // accepted free: for a new supplier the name and payment type are for you to confirm
-          const note = fp.known ? "" : "New supplier: check the name and confirm the payment type before approving.";
+          const inTally = !fp.known && supplierInTally(fp.j);
+          const note = fp.known ? "" : inTally ? "In Tally as " + inTally + ", not yet in FinCom's list: confirm the payment type before approving." : "New supplier: check the name and confirm the payment type before approving.";
           if (!fp.known) step("Supplier name and payment type", true, "left for you to confirm (no Claude call)");
           return {j: fp.j, kind, preview, method: source, checks: fp.checks, trace, note, confirmType: !fp.known};
         }
@@ -3157,17 +3175,21 @@ async function fileHash(file){
   return h;
 }
 function statusLabel(st){ return ({draft:"to review", approved:"approved", rejected:"marked no entry", duplicate:"held as duplicate", deleted:"deleted"})[st] || st; }
-function findHash(h){
-  if (S.pendingHashes[h]) return {msg:"The same file is already in this upload."};
+// a one-page PDF is fingerprinted with "p1" when it is read page by page and without it when read whole (review of
+// 02-Oct-2026: FA/ELEC/013 came in again as 928bbb30530e37ef4ab8p1 and was not taken for 928bbb30530e37ef4ab8)
+function hashForms(h){ h = String(h || ""); return /p1$/.test(h) ? [h, h.slice(0, -2)] : [h, h + "p1"]; }
+function findHash(h0){
+  for (const h of hashForms(h0)) if (S.pendingHashes[h]) return {msg:"The same file is already in this upload."};
   for (const c of Object.values(S.companies)){
-    const rec = c.hashes && c.hashes[h];
+    const h = hashForms(h0).find(x => c.hashes && c.hashes[x]);
+    const rec = h && c.hashes[h];
     if (!rec) continue;
     const e = S.data[c.id] && S.data[c.id].entries[rec.e];
     if (S.data[c.id] && S.data[c.id].loaded && !e) continue;   // entry was deleted
     return {cid:c.id, entryId:rec.e,
       msg:"Already uploaded to " + c.name + (e ? " as " + (e.x.vendorName || e.fileName) + (e.x.invoiceNo ? " bill " + e.x.invoiceNo : "") + " (" + statusLabel(e.status) + ")" : " on " + fmtDate(rec.d)) + "."};
   }
-  const inb = Object.values(S.inbox).find(i => i.hash === h);
+  const inb = Object.values(S.inbox).find(i => hashForms(h0).includes(i.hash));
   if (inb) return {msg:"Already waiting in Unsorted uploads."};
   return null;
 }
@@ -3213,16 +3235,31 @@ function invKey(x){
   if (!inv || !who) return "";
   return who + "|" + inv + "|" + fyOf(x.invoiceDate);
 }
+// the same bill: the same bill number in the same year, from the same supplier (by PAN, or by name when either has no
+// PAN: review of 02-Oct-2026, a copy read with the PAN was not matched to its original read without one)
+function sameBill(a, b){
+  if (!normInv(a.invoiceNo) || normInv(a.invoiceNo) !== normInv(b.invoiceNo) || fyOf(a.invoiceDate) !== fyOf(b.invoiceDate)) return false;
+  const pa = effectivePan(a), pb = effectivePan(b);
+  return pa && pb ? pa === pb : !!norm(a.vendorName) && norm(a.vendorName) === norm(b.vendorName);
+}
+function dupMsg(o){
+  const st = o.status === "approved" ? "approved on " + fmtDate((o.approvedAt || "").slice(0, 10)) + (billInTally(o) ? " (in Tally)" : o.exportedAt ? " (in a Tally file)" : "") : statusLabel(o.status);
+  return "Duplicate of " + (o.x.vendorName || o.fileName) + " bill " + o.x.invoiceNo + " dated " + fmtDate(o.x.invoiceDate) + ", " + st + ".";
+}
 function findDuplicate(e, cid){
   const k = invKey(e.x);
-  if (k){
+  if (k || normInv(e.x.invoiceNo)){
     for (const o of Object.values(D(cid).entries)){
       if (o.id === e.id || o.status === "duplicate" || o.status === "deleted" || o.notDuplicate) continue;
-      if (invKey(o.x) === k) return {entryId:o.id, strong:true,
-        msg:"Same supplier and bill number as " + (o.x.vendorName || o.fileName) + " bill " + o.x.invoiceNo + " dated " + fmtDate(o.x.invoiceDate) + " (" + statusLabel(o.status) + ")."};
+      if ((k && invKey(o.x) === k) || sameBill(e.x, o.x)) return {entryId:o.id, strong:true, msg:dupMsg(o)};
     }
-    const sent = (CO(cid).keys || {})[k];
-    if (sent) return {strong:true, msg:"Same supplier and bill number as a bill approved on " + fmtDate(sent) + " (since cleared from the desk)."};
+    const sent = k && (CO(cid).keys || {})[k];
+    if (sent){
+      // the bill approved before is named by its id (kept with the date since 02-Oct-2026)
+      const id = typeof sent === "object" ? sent.e : null, o = id && D(cid).entries[id];
+      if (o) return {entryId:o.id, strong:true, msg:dupMsg(o)};
+      return {entryId:id || null, strong:true, msg:"Same supplier and bill number as a bill approved on " + fmtDate(typeof sent === "object" ? sent.d : sent) + "."};
+    }
   }
   // weaker: same supplier, same date and same total
   const who = effectivePan(e.x) || norm(e.x.vendorName), tot = num(e.x.total);
@@ -3316,17 +3353,53 @@ async function enqueueFiles(files, target){
   pump(); softRender();
 }
 // a batch read from Collect lands you on Review, with the first new bill open
+// what happened to each file of the last upload, kept for the client's pages (review of 02-Oct-2026: FA/ELEC/013 uploaded
+// again left the page on "Nothing waiting" with no word): read / duplicate of which bill (open it) / could not be read (why)
+function uploadLines(jobs){
+  return jobs.filter(j => !j.said).map(j => {
+    j.said = true;
+    const cid = j.cid || (j.dupRef && j.dupRef.cid) || j.target || S.coId, d = S.data[cid], e = d && j.entryId ? d.entries[j.entryId] : null;
+    if (j.status === "duplicate"){
+      const o = j.dupRef && j.dupRef.entryId && S.data[j.dupRef.cid] ? S.data[j.dupRef.cid].entries[j.dupRef.entryId] : null;
+      return {kind: "dup", name: j.name, cid: j.dupRef && j.dupRef.cid, open: o ? o.id : null, text: o ? dupMsg(o).replace(/^Duplicate of /, "duplicate of ").replace(/\.$/, "") + "; not uploaded again" : (j.msg || "the same file was uploaded before")};
+    }
+    if (j.status === "held" && e){
+      const o = e.dupOf && e.dupOf.entryId && d.entries[e.dupOf.entryId];
+      return {kind: "dup", name: j.name, cid, open: e.id, orig: o ? o.id : null, text: (o ? dupMsg(o).replace(/^Duplicate of /, "duplicate of ").replace(/\.$/, "") : (e.dupOf && e.dupOf.msg) || "a duplicate") + "; held under Duplicates"};
+    }
+    if (j.status === "failed") return {kind: "bad", name: j.name, text: "could not be read: " + (j.msg || "no reason given")};
+    if (j.status === "unsorted") return {kind: "info", name: j.name, text: "filed under Sales"};
+    if (["done", "partial", "typed"].includes(j.status)) return {kind: "ok", name: j.name, cid, open: j.entryId, text: (j.status === "partial" ? "partly read" : "read") + (e && e.x.invoiceNo ? ": " + (e.x.vendorName || "") + " bill " + e.x.invoiceNo : "")};
+    return null;
+  }).filter(Boolean);
+}
+function uploadSummary(lines){
+  const n = k => lines.filter(l => l.kind === k).length;
+  return [n("ok") ? n("ok") + (n("ok") === 1 ? " bill read" : " bills read") : "", n("dup") ? n("dup") + (n("dup") === 1 ? " duplicate" : " duplicates") : "",
+    n("bad") ? n("bad") + " could not be read" : "", n("info") ? n("info") + " filed under Sales" : ""].filter(Boolean).join(" \u00b7 ");
+}
 function afterBatch(){
-  if (S.view !== "company" || !(S.step === "collect" || S.advanceAfterRead || ["invoices", "export", "done"].includes(S.tab))) return;
+  // every finished upload is reported on the page, whichever page is open (the toast alone went unseen)
+  const done = S.jobs.filter(j => ["done", "partial", "held", "duplicate", "failed", "unsorted"].includes(j.status) && !j.said);
+  const lines = uploadLines(done);
+  if (lines.length){
+    S.lastUpload = S.lastUpload || {};
+    const by = {};
+    lines.forEach(l => { const c = l.cid || S.coId; (by[c] = by[c] || []).push(l); });
+    Object.keys(by).forEach(c => { S.lastUpload[c] = {at: Date.now(), lines: by[c], text: uploadSummary(by[c])}; });
+  }
+  if (S.view !== "company" || !(S.step === "collect" || S.advanceAfterRead || ["invoices", "export", "done"].includes(S.tab))){ if (lines.length) render(); return; }
   S.advanceAfterRead = false;
   const mine = S.jobs.filter(j => !j.advanced && (j.cid === S.coId || j.target === S.coId));
-  const fresh = mine.filter(j => ["done", "partial", "held"].includes(j.status));
-  const dups = mine.filter(j => j.status === "duplicate"), toSales = mine.filter(j => j.status === "unsorted"), bad = mine.filter(j => j.status === "failed");
+  const fresh = mine.filter(j => ["done", "partial"].includes(j.status)), held = mine.filter(j => j.status === "held");
   mine.forEach(j => { j.advanced = true; });
   if (!mine.length) return;
-  const said = [fresh.length ? fresh.length + " read" : "", dups.length ? dups.length + " already uploaded (skipped)" : "", toSales.length ? toSales.length + " filed under Sales" : "", bad.length ? bad.length + " could not be read" : ""].filter(Boolean).join(" \u00b7 ");
-  if (!fresh.length){ toast(said + "."); render(); return; }
-  const first = fresh.map(j => D().entries[j.entryId]).find(e => e && e.status === "draft");
+  const said = (S.lastUpload && S.lastUpload[S.coId] && S.lastUpload[S.coId].text) || "Upload finished";
+  if (!fresh.length){
+    // only duplicates held: the Duplicates list opens on the copy, with its original beside it
+    if (held.length){ S.tab = "invoices"; S.filter = "duplicate"; S.selected = held[0].entryId; S.reviewTable = false; }
+    toast(said + "."); render(); return;
+  }
   goStep("review", "bills");
   toast(said + ". Review " + (fresh.length === 1 ? "it" : "them") + " below.");
 }
@@ -3686,7 +3759,8 @@ function approve(e){
   e.status = "approved";
   e.approvedAt = new Date().toISOString();
   const k = invKey(e.x), co = CO(cid);
-  if (k){ co.keys = co.keys || {}; co.keys[k] = e.approvedAt.slice(0, 10); pruneIndex(co.keys, 3000); Store.saveCompany(co); }
+  // the bill's id is kept with the date (02-Oct-2026), so a later copy can name and open this one
+  if (k){ co.keys = co.keys || {}; co.keys[k] = {d: e.approvedAt.slice(0, 10), e: e.id}; pruneIndex(co.keys, 3000); Store.saveCompany(co); }
   e.applied = {partyId:party.id, fy:c.fy, natureId:c.rule.id, credited:c.base, tdsBase:addBase};
   e.snapshot = {lines:c.lines, tds:c.tds, tdsWould:c.tdsWould, skip:c.skip, rcm:c.rcmTax ? Object.assign({cat:e.rcm.cat}, c.rcmTax) : null, blocked:c.gd.block ? c.gd.block.cat : null, noItc:c.itc && !c.itc.ok ? c.itc.why : null, rate:c.rate, tdsBase:c.tdsBase, base:c.base, total:c.total, pan:c.pan, ref:c.rule.ref, old:c.rule.old, label:c.rule.label, cert:c.cert && c.applicable ? (c.cert.no || "-") : "", certBase:c.cert && c.applicable ? c.certBase : 0, certRate:c.cert ? num(c.cert.rate) : null, normalRate:c.normalRate, inoperative:!!c.inoperative, form:c.rule.form || "26Q",
     applicable:c.applicable, catchUp:e.includeCatchUp ? c.catchUp : 0, why:c.why, meter:c.meter, fy:c.fy, rateNote:c.rateNote, indHuf:c.indHuf, never:c.rule.basis === "never"};
@@ -3750,22 +3824,41 @@ function removeEntry(e){
   if (e.docPath) CloudDocs.remove(e.docPath); delete D().entries[e.id]; Store.deleteEntry(S.coId, e.id); unregisterHash(S.coId, e.fileHash); delete S.files[e.id]; if (S.selected === e.id) S.selected = null; toast("Invoice deleted."); refreshStats(S.coId); render(); }
 
 /* Summary kept on each client so the client list needs no extra loading */
+// a duplicate held without its original (it was not on this computer when the copy came in, review of 02-Oct-2026:
+// emuqaocqrvj2xr said "since cleared from the desk" while emum250ulhfbl8 was there): linked once the bills are loaded
+function linkDuplicates(cid){
+  const d = S.data[cid];
+  if (!d || !d.loaded) return 0;
+  const v = Object.values(d.entries);
+  let n = 0;
+  v.filter(e => e.dupOf && !(e.dupOf.entryId && d.entries[e.dupOf.entryId])).forEach(e => {
+    const o = v.find(o => o.id !== e.id && !["duplicate", "deleted"].includes(o.status) && !o.notDuplicate && sameBill(e.x, o.x));
+    if (!o) return;
+    e.dupOf = {entryId: o.id, msg: dupMsg(o)};
+    Store.saveEntry(cid, e); n++;
+  });
+  return n;
+}
 function refreshStats(cid){
   const co = CO(cid), d = S.data[cid];
   if (!co || !d || !d.loaded) return;
+  linkDuplicates(cid);
   const v = Object.values(d.entries), fy = fyOf(null);
   const drafts = v.filter(e => e.status === "draft");
   const st = {
     drafts: drafts.length,
     check: drafts.filter(e => !S.reading[e.id] && (() => { const c = compute(e, cid); return c.missing.length || c.flags.some(f => f.lvl !== "info"); })()).length,
-    waiting: v.filter(e => e.status === "approved" && !e.exportedAt).length,
+    // waiting: approved and not confirmed in Tally; inTally: confirmed there (review of 02-Oct-2026: the badge "In Tally"
+    // counted every bill approved this year)
+    waiting: v.filter(e => e.status === "approved" && !billInTally(e)).length,
+    inTally: v.filter(e => billInTally(e) && (e.snapshot ? e.snapshot.fy : fyOf(e.x.invoiceDate)) === fy).length,
     tdsFy: v.filter(e => e.status === "approved" && e.snapshot && e.snapshot.fy === fy).reduce((a, e) => a + num(e.snapshot.tds), 0),
     invoicesFy: v.filter(e => e.status === "approved" && e.snapshot && e.snapshot.fy === fy).length,
     records: v.length + Object.keys(d.parties).length + 1,
     dups: v.filter(e => e.status === "duplicate").length
   };
   const old = co.stats || {};
-  if (["drafts","check","waiting","tdsFy","invoicesFy","records","dups"].some(k => old[k] !== st[k])){
+  if (["drafts","check","waiting","inTally","tdsFy","invoicesFy","records","dups"].some(k => old[k] !== st[k])){
     co.stats = Object.assign(st, {fy, updatedAt: new Date().toISOString()});
     Store.saveCompany(co);
   }
@@ -3991,7 +4084,7 @@ function stepCounts(){
     const n = S.sales && S.sales.cid === S.coId ? S.sales.list.length : 0;
     return {collect: "upload or create", review: n + " invoices", post: "from the list", done: ""};
   }
-  return {collect: inbox ? inbox + " in inbox" : "upload bills", review: (st.drafts || 0) + " to review", post: (st.waiting || 0) + " approved", done: (st.invoicesFy || 0) + " this year"};
+  return {collect: inbox ? inbox + " in inbox" : "upload bills", review: (st.drafts || 0) + " to review", post: (st.waiting || 0) + " approved", done: (st.inTally || 0) + " in Tally this year"};
 }
 // the firm's plan comes as {name, includes, …} from the firm account; older copies kept only its name
 function planName(p){ return p && typeof p === "object" ? String(p.name || "") : String(p || ""); }
@@ -4016,17 +4109,24 @@ function vchTypeOf(e, co){
   if (e.noteKind === "debit") return "Purchase";
   return co.voucherType || "Journal";
 }
+// in Tally: posted and confirmed there (or found there already), and not since missing from Tally's own entries in
+// FinCom's cloud copy (review of 02-Oct-2026: FA/ELEC/013 posted on 29-Sep was deleted in Tally and still counted).
+// A bill in a Tally file that no one has confirmed is not counted.
+function billInTally(e){ return !!(e && e.exportedAt && (e.postVerified === true || e.postNote === "Already in Tally") && !e.goneFromTally); }
 function tallyStateOf(e){
-  if (e.exportedAt) return e.postUnverified ? ["sent", "In Tally, not confirmed"] : ["ok", "In Tally"];
+  if (e.goneFromTally) return ["bad", "Not in Tally any more (deleted there?)"];
+  if (e.exportedAt) return billInTally(e) ? ["ok", "In Tally"] : ["sent", e.postedVia === "bridge" ? "In Tally, not confirmed" : "In a Tally file, not confirmed"];
   if (e.postError) return ["bad", "Tally refused: " + e.postError];
   if (e.status === "approved") return ["warn", "Post to Tally"];
   if (e.status === "rejected") return ["no", "No entry needed"];
   if (e.status === "duplicate") return ["warn", "Held as duplicate"];
+  if (e.status === "deleted") return ["no", "Deleted"];
   return ["no", "To review"];
 }
 function txnRowsBills(){
   const co = CO(), d = D();
-  return Object.values(d.entries).filter(e => e.status !== "deleted").map(e => {
+  // deleted bills are listed too, shown only under the "Deleted" filter (review of 02-Oct-2026)
+  return Object.values(d.entries).map(e => {
     const x = e.x || {}, gst = num(x.cgst) + num(x.sgst) + num(x.igst) + num(x.cess);
     const [cls, label] = tallyStateOf(e);
     return {id: e.id, kind: "bill", date: x.invoiceDate || "", up: (e.createdAt || "").slice(0, 10), vch: vchTypeOf(e, co), no: x.invoiceNo || "",
@@ -4079,7 +4179,9 @@ function txnColOn(){ const f = txnF(); return Object.keys(f).some(k => Array.isA
 function txnFiltered(rows){
   const q = String(S.txnQ || "").trim().toLowerCase();
   const st = S.txnStatus || "";
-  return rows.filter(r => txnColPass(r) && (!q || [r.no, r.party, r.file, r.vch, String(r.total)].join(" ").toLowerCase().includes(q)) && (!st || r.cls === st));
+  const stOf = r => r.e && r.e.status === "deleted" ? "del" : r.e && r.e.status === "duplicate" ? "dup" : "";
+  return rows.filter(r => txnColPass(r) && (!q || [r.no, r.party, r.file, r.vch, String(r.total)].join(" ").toLowerCase().includes(q))
+    && (st === "dup" || st === "del" ? stOf(r) === st : stOf(r) !== "del" && (!st || r.cls === st)));
 }
 // the register: React (app/src/screens/Txn.jsx)
 function viewTransactions(){ return '<div data-react="Txn"></div>'; }
@@ -5199,7 +5301,7 @@ const Audit = {
     });
     const solvedBy = {};
     Object.values(au.items).filter(it => it.solved).forEach(it => { (solvedBy[it.f] = solvedBy[it.f] || []).push(it); });
-    const run = {at, from, to, how: how || "run now", findings, errors, vouchers: V.length, balances: ctx.bal.ok ? ctx.bal.src : "",
+    const run = {at, from, to, how: how || "run now", basis: MIS.basis(), findings, errors, vouchers: V.length, balances: ctx.bal.ok ? ctx.bal.src : "",
       notes: [ctx.bal.ok ? "" : "Balance checks were not run: " + ctx.bal.why + ".", this.mastersIn() ? "" : "The ledger masters are not read, so ledgers are recognised by name only."].filter(Boolean),
       solved: Object.entries(solvedBy).map(([fid, list]) => ({id: fid, title: list[0].title || fid, area: list[0].area, sev: list[0].sev, n: list.length, amount: r2(list.reduce((s2, it) => s2 + num(it.row && it.row.amount), 0)),
         items: list.sort((a, c) => String(a.solved).localeCompare(String(c.solved)) || String((a.row || {}).date).localeCompare(String((c.row || {}).date))).slice(-300)}))};
@@ -5240,7 +5342,16 @@ const Audit = {
     return {from: fy + "0401", to: fyEnd < last ? fyEnd : last};
   },
   // a run kept from before that no longer matches the books for its period (another computer's books, or books read again)
-  stale(run){ if (!run || !run.from) return null; const n = this.vouchers(run.from, run.to).length; return n !== run.vouchers ? {was: run.vouchers, now: n} : null; },
+  // a kept run that no longer fits: the books hold a different number of entries for its period, or the books or
+  // FinCom's working changed since (MIS.basis); its findings and figures are then not shown, only "Run again"
+  stale(run){
+    if (!run || !run.from) return null;
+    const n = this.vouchers(run.from, run.to).length;
+    if (n !== run.vouchers) return {was: run.vouchers, now: n};
+    if (!run.basis || run.basis !== MIS.basis()) return {was: run.vouchers, now: n, changed: true};
+    return null;
+  },
+  howLabel(run){ return !run || !run.how || run.how === "run now" ? "run by hand" : run.how; },
   maybeRun(){
     const b = S.books;
     if (!b || !b.vouchers || !this.due(b)) return;
@@ -5568,17 +5679,34 @@ const MIS = {
     });
     return m;
   },
+  // TDS payable over the period (review of 02-Oct-2026: "Deducted less paid" left out what was owed at the start):
+  // opening + deducted - paid = closing, with the closing as the TDS ledgers' balance in the books to check it
+  tdsPayable(from, to){
+    const tdsL = l => ["tds_payable", "tds_clearing"].includes(Books.ledgerOf(l).kind);
+    // the opening is the balances on the day before the period (with the books' opening balances), from the same source
+    let B = null; try { B = Audit.balances(from, to); } catch (e){}
+    const owed = d => { if (!B || !B.ok) return null; const at = B.at(d); return r2(Object.keys(at).filter(tdsL).reduce((a, l) => a + num(at[l]), 0)); };   // a credit (owed) is positive here
+    const p = this.booksPaid(from, to), ded = r2(Object.values(p).reduce((a, x) => a + x.tdsDed, 0)), paid = r2(Object.values(p).reduce((a, x) => a + x.tdsPaid, 0));
+    const open = owed(Audit.dayBefore(from)) || 0, close = r2(open + ded - paid), books = owed(to);
+    return {open, ded, paid, close, books, ties: books == null || Math.abs(books - close) < 1};
+  },
   compliance(from, to){
     const months = this.monthsOf(from, to), paid = this.booksPaid(from, to);
-    const gst = months.map(m => { const pd = (paid[m] || {}).gst || 0; try { const t = GSTR.threeB(m, ""); const out = r2(t.net.igst + t.net.cgst + t.net.sgst + t.net.cess), itc = r2(t.netItc.igst + t.netItc.cgst + t.netItc.sgst + t.netItc.cess);
-      return {ym: m, out, itc, due: r2(Math.max(0, out - itc)), pay: pd}; } catch (e){ return {ym: m, out: 0, itc: 0, due: 0, pay: pd}; } });
+    // worked out to pay: the 3B working's cash (after the set-off by head and credit carried forward) and reverse charge
+    // paid in cash; paid: the bank payments to the GST ledgers (review of 02-Oct-2026)
+    const sum4 = x => r2(["igst", "cgst", "sgst", "cess"].reduce((a, k) => a + num((x || {})[k]), 0));
+    const gst = months.map(m => { const pd = (paid[m] || {}).gst || 0; try { const t = GSTR.threeB(m, ""); const out = sum4(t.net), itc = sum4(t.netItc);
+      const due = t.pay && t.pay.cash ? r2(sum4(t.pay.cash) + sum4(t.pay.rcmCash)) : r2(Math.max(0, out - itc));
+      return {ym: m, out, itc, due, pay: pd}; } catch (e){ return {ym: m, out: 0, itc: 0, due: 0, pay: pd}; } });
     const tds = months.map(m => {
       const p = paid[m] || {};
       const challans = r2(TDS.challans().filter(c => this.ym(TDS.ymd(c.date)) === m).reduce((s, c) => s + num(c.tax), 0));
       return {ym: m, ded: p.tdsDed || 0, dep: p.tdsPaid || 0, challans};
     });
     const au = (S.books.audit || {}).last;
-    return {gst, tds, audit: au ? {at: au.at, open: au.findings.filter(f => Audit.status(f.id).s === "open").length, high: au.findings.filter(f => f.sev === "high").length, solved: (au.solved || []).reduce((s, x) => s + x.n, 0)} : null};
+    let tdsRoll = null; try { tdsRoll = this.tdsPayable(from, to); } catch (e){}
+    // an audit run that no longer fits the books is not counted (review of 02-Oct-2026)
+    return {gst, tds, tdsRoll, audit: au && !Audit.stale(au) ? {at: au.at, open: au.findings.filter(f => Audit.status(f.id).s === "open").length, high: au.findings.filter(f => f.sev === "high").length, solved: (au.solved || []).reduce((s, x) => s + x.n, 0)} : null};
   },
   // what falls due in the next six weeks, from today (review of 02-Oct-2026: it counted from the end of the report's
   // period, and gave TDS for March as due on 7 April). TDS: the 7th of the next month, but 30 April for March; returns on
@@ -5647,11 +5775,23 @@ const MIS = {
       Object.entries(b.tb.led).forEach(([l, x]) => { const d = r2((num(x.close) - num(x.open)) - ((mv[l] || {}).t || 0)); if (Math.abs(d) >= 1){ n++; amt = r2(amt + Math.abs(d)); list.push([l, d]); } });
       r.control = {ok: n === 0, n, amt, list: list.slice(0, 50)};
     } else r.control = null;
+    r.basis = this.basis(b);
     r.code = Audit.hash(JSON.stringify([s.total, pr.total, pl.pat.t, r.recv.sum, r.pay.sum, s.rows.slice(0, 50).map(x => [x.party, x.t]), r.p2.cash.net, r.p2.fc.weeks.map(w => w.net), r.p2.cc.rows.map(x => [x.name, x.profit])]));
     const m = b.mis = b.mis || {};
     m.last = r; m.history = [{at: r.at, from, to, how: r.how, sales: s.total, pat: pl.pat.t, code: r.code}].concat(m.history || []).slice(0, 24);
     return r;
   },
+  // what a run was worked out from: the books (entries, Tally's balances, the ledger map, how far read) and FinCom's own
+  // working (V, raised whenever a figure is worked out differently). A saved run from other books or other working is
+  // worked out again when MIS opens, and its figures are not shown meanwhile (review of 02-Oct-2026: MIS showed the run of
+  // 01-Oct, result code 1FB42BF2, with figures since corrected)
+  V: 3,
+  basis(b){
+    b = b || S.books || {};
+    const vs = b.vouchers || [], alt = vs.reduce((a, v) => Math.max(a, num(v.alter || v.alterId || 0)), 0);
+    return Audit.hash(JSON.stringify([this.V, vs.length, alt, (b.tb || {}).at || "", b.mapV || 0, (b.meta || {}).to || "", (b.meta || {}).at || "", Object.keys(b.ledInfo || {}).length]));
+  },
+  stale(b){ const r = b && b.mis && b.mis.last; return !!r && r.basis !== this.basis(b); },
   due(b){
     const c = this.cfg(b), last = b.mis && b.mis.last ? String(b.mis.last.at).slice(0, 10).replace(/-/g, "") : "", t = Audit.today();
     if (c.freq === "off" || !(b.vouchers || []).length) return false;
@@ -11421,17 +11561,19 @@ function tabStates(tab){ return tab === "ready" ? ["ready"] : tab === "done" ? [
 // Tally gave back the voucher (review of 02-Oct-2026: 184 lines showed "In Tally" after a Tally file was only made, with
 // no bank ledger linked and no bank entries in Tally for the year). A line sent in a file and never seen in Tally stays
 // under Post to Tally, marked so, and is not posted again by "Post all"
-function bankMatched(r){ return r.state === "intally" || (r.state === "sent" && !!(r.tally && (r.tally.guid || r.tally.masterId || r.tally.number)) && !r.checking); }
+// A line whose voucher is no longer among Tally's entries in FinCom's cloud copy (TallyProof.checkBank: 182 HDFC lines
+// posted on 27-Sep were deleted in Tally afterwards) is not in Tally either: it goes back under Post to Tally, marked so
+function bankMatched(r){ return !r.goneFromTally && (r.state === "intally" || (r.state === "sent" && !!(r.tally && (r.tally.guid || r.tally.masterId || r.tally.number)) && !r.checking)); }
 function bankTabOf(r){
   if (r.state === "attention" || r.state === "suggested") return "review";
-  if (r.state === "ready" || (r.state === "sent" && !bankMatched(r))) return "ready";
+  if (r.state === "ready" || ((r.state === "sent" || r.state === "intally") && !bankMatched(r))) return "ready";
   return "done";
 }
 function bankTab(){ const b = B(); return ["review", "ready", "done", "all", "rules"].includes(b.filter) ? b.filter : "review"; }
 function tabCounts(rows){
   const c = countStates(rows);
   const t = {review: 0, ready: 0, done: 0}; (rows || []).forEach(r => { t[bankTabOf(r)]++; });
-  return {review: t.review, ready: t.ready, done: t.done, post: c.ready || 0, inTally: (rows || []).filter(bankMatched).length, filed: (rows || []).filter(r => r.state === "sent" && !bankMatched(r)).length, attention: c.attention || 0, suggested: c.suggested || 0};
+  return {review: t.review, ready: t.ready, done: t.done, post: c.ready || 0, inTally: (rows || []).filter(bankMatched).length, filed: (rows || []).filter(r => r.state === "sent" && !bankMatched(r) && !r.goneFromTally).length, gone: (rows || []).filter(r => r.goneFromTally).length, attention: c.attention || 0, suggested: c.suggested || 0};
 }
 function plural(n, word){ return n + " " + word + (n === 1 ? "" : word.endsWith("y") ? "" : "s"); }
 function entries(n){ return n + (n === 1 ? " entry" : " entries"); }
@@ -12848,6 +12990,9 @@ const Bridge = {
     if (!payload.masters.length && !payload.vouchers.length) return {ok: true, company: payload.company, results: refused};
     // build 199: Tally on another computer: through the queue in the cloud
     const coP = (payload.client && S.companies[payload.client]) || (typeof CO === "function" ? CO() : null);
+    // 02-Oct-2026: only into the Tally company chosen for this client (Client setup → Tally); the cloud refuses the same
+    const notAllowed = postToProblem(coP, payload.company);
+    if (notAllowed) return {ok: true, company: payload.company, notAllowed: true, results: [].concat(payload.masters || [], payload.vouchers || []).map(x => ({id: x.id, ok: false, message: notAllowed})).concat(refused)};
     if (coP && typeof tallyVia === "function" && tallyVia(coP) === "cloud"){
       const outC = await CloudPost.run(coP.id, payload, onProgress, onChecked);
       outC.results = [].concat(outC.results || []).concat(refused);
@@ -14072,6 +14217,15 @@ const TBCheck = {
     return Object.assign(base, {ok: !list.length, n: list.length, list: list.slice(0, 200), ledgers: all.size});
   }
 };
+// the one Tally company a client may post to (co.postTo, Client setup → Tally; review of 02-Oct-2026: Testing AAD's bill
+// FA/ELEC/013 went into GARG SHEKHAR & COMPANY): "" when this company is allowed, else what to do
+function postToProblem(co, company){
+  if (!co) return "";
+  const to = String(co.postTo || "").trim(), nm = x => ledNm(x).toLowerCase();
+  if (!to) return "Choose the Tally company " + co.name + " may post to (Client setup \u2192 Tally). Nothing was posted.";
+  if (company && nm(to) !== nm(company)) return co.name + " may post only to " + to + ", but " + company + " was about to receive it. Nothing was posted.";
+  return "";
+}
 /* ================================================================== */
 /* Sales: read sales invoices, create invoices, post Sales vouchers    */
 /* ================================================================== */
@@ -16884,9 +17038,11 @@ function doAct(act, t){
       Bridge.call("/readtest?company=" + encodeURIComponent(name) + Bridge.pinQ(), null, 180000).then(j => { S.readTest = Object.assign({at: Date.now()}, j, {tests: [].concat(j.tests || [])}); render(); }, err => { S.readTest = {error: err.message}; render(); });
       break;
     }
+    case "billRepostGone":
     case "billRepost": {
-      const ids = (S.billCheck && S.billCheck.missing) || [];
-      ids.forEach(id => { const e = D().entries[id]; if (e){ e.exportedAt = null; e.postNote = ""; e.postVerified = false; e.tallyCheck = null; e.postUnconfirmed = null; e.postError = ""; Store.saveEntry(S.coId, e); } });
+      // billRepostGone: the bills whose voucher is no longer in Tally's entries in the cloud copy (TallyProof)
+      const ids = act === "billRepostGone" ? Object.values(D().entries).filter(e => e.goneFromTally).map(e => e.id) : (S.billCheck && S.billCheck.missing) || [];
+      ids.forEach(id => { const e = D().entries[id]; if (e){ e.exportedAt = null; e.postNote = ""; e.postVerified = false; e.tallyCheck = null; e.postUnconfirmed = null; e.postError = ""; delete e.goneFromTally; Store.saveEntry(S.coId, e); } });
       S.billCheck = null; refreshStats(S.coId); toast(ids.length + " bills are waiting to be posted again."); render(); break;
     }
     case "bridgeDiag": Bridge.diagnose().then(() => Bridge.refresh()).then(() => render()); break;
@@ -17243,6 +17399,25 @@ window.addEventListener("hashchange", () => { applyEntryHash(); render(); });
 })();
 window.addEventListener("beforeunload", () => { if (S.coId) lsSet("tdsdesk-test:last", S.coId); });
 
+// an owner clears a client's wrong GSTIN or PAN, with a reason (review of 02-Oct-2026): on the server through
+// client_clear_ids (migration-25; a sync alone can never empty them), then here
+async function coClearIds(what){
+  const co = CO(), label = what.map(w => w === "gstin" ? "GSTIN " + (co.gstin || "") : "PAN " + (co.pan || "")).join(" and ");
+  const ok = await askConfirm({title: "Clear the " + label + "?", ok: "Clear it", danger: true,
+    body: "<p>" + esc(co.name) + " will have no " + what.map(w => w.toUpperCase()).join(" or ") + " in FinCom until one is typed again. Returns and checks that need it will say so.</p>" +
+      '<label class="f" style="margin-top:12px"><span>Reason (kept with the change)</span><input type="text" id="cbxWhy" autocomplete="off" aria-label="Reason"></label>',
+    read: () => ({reason: ((document.getElementById("cbxWhy") || {}).value || "").trim()}),
+    validate: v => v.reason ? "" : "Give the reason."});
+  if (!ok) return;
+  const reason = (ok.data && ok.data.reason) || "";
+  if (Cloud.on() && Cloud.st.state !== "off"){
+    try { await Cloud.rpc("client_clear_ids", {p_client: co.id, p_what: what, p_reason: reason}); }
+    catch (e){ const m = String((e && e.message) || e); toast(/client_clear_ids|does not exist|schema cache/i.test(m) ? "FinCom's cloud is not ready for this yet (migration-25)." : m); return; }
+  }
+  what.forEach(w => { co[w] = ""; });
+  co.idsCleared = (co.idsCleared || []).concat([{what, reason, at: new Date().toISOString(), by: (Cloud.st && Cloud.st.email) || ""}]).slice(-20);
+  Store.saveCompany(co); toast("Cleared. Type the right " + what.map(w => w.toUpperCase()).join(" and ") + " when you have it."); render();
+}
 
 /* ================================================================== */
 /* Financial statements: Schedule III (companies) and the ICAI format */
@@ -20304,8 +20479,8 @@ const RPT = {
   // the entries of a year, and its sales entries (review of 01-Oct-2026: 2026-27 held one journal and no sales, and the
   // page opened on it showing sales of nil): the page opens on the latest year that has sales
   yearCount(fy){
-    const from = fy + "0401", to = (num(fy) + 1) + "0331", vs = ((S.books || {}).vouchers || []).filter(v => !v.cancel && String(v.date) >= from && String(v.date) <= to);
-    return {n: vs.length, sales: vs.filter(v => typeof Books === "object" && Books.isSale(v)).length};
+    const from = fy + "0401", to = (num(fy) + 1) + "0331", c = entryCount(from, to);
+    return {n: c.n, text: c.text, sales: c.list.filter(v => typeof Books === "object" && Books.isSale(v)).length};
   },
   range(){
     const ys = this.fys(), withSales = ys.find(y => this.yearCount(y).sales > 0);
@@ -20372,6 +20547,16 @@ const RPT = {
   }
 };
 // the page itself is app/src/screens/books/Reports.jsx
+// One count of the entries everywhere (review of 02-Oct-2026: 2,755, 2,675 and 2,754 on different pages): the regular
+// entries of the period, as every report and check counts them, and a note of what is left out (Optional and cancelled
+// vouchers, which Tally keeps but which are not in the books)
+function entryCount(from, to){
+  const vs = ((S.books || {}).vouchers || []).filter(v => (!from || String(v.date) >= from) && (!to || String(v.date) <= to));
+  const list = vs.filter(v => !v.opt && !v.cancel), opt = vs.filter(v => v.opt && !v.cancel).length, cancel = vs.filter(v => v.cancel).length;
+  const out = [opt ? num(opt).toLocaleString("en-IN") + " Optional" : "", cancel ? num(cancel).toLocaleString("en-IN") + " cancelled" : ""].filter(Boolean);
+  const text = list.length.toLocaleString("en-IN") + (list.length === 1 ? " entry" : " entries") + (out.length ? " (" + out.join(" and ") + " not counted)" : "");
+  return {n: list.length, opt, cancel, all: vs.length, list, text};
+}
 /* ================================================================== */
 /* Letters: balance confirmations for the audit, and dues reminders    */
 /* to customers. Nothing is sent from here: letters are printed or     */
@@ -21585,6 +21770,129 @@ async function cloudPostLeftover(){
   } catch (e){}
 }
 setTimeout(() => { try { cloudPostLeftover(); } catch (e){} }, 9000);
+// The postings queued in FinCom's cloud (tally_post_jobs), read from the server (review of 02-Oct-2026: "Everything sent
+// to Tally" showed 0 although job b3785b05 had posted FA/ELEC/013, and job aebb6c15, failed at 01:53, was nowhere): the
+// list of what went to Tally is made from them, with this browser's own log only for postings made here without the queue.
+const CloudJobs = {
+  list: null, at: 0, busy: false, err: "",
+  async load(force){
+    // read at most once a minute, also after a failure (the page draws again after each try)
+    if (typeof TCloud !== "object" || !TCloud.on() || this.busy || (!force && Date.now() - this.at < 60000)) return;
+    this.busy = true;
+    try {
+      const cols = "id,client_id,company,status,done,n,message,results,created_by,created_at,updated_at,attempts";
+      // each entry's state (items) from migration-24 on
+      this.list = await TCloud.restAll("tally_post_jobs?select=" + cols + ",items&order=created_at.desc").catch(e => {
+        if (/items/.test(String(e && e.message))) return TCloud.restAll("tally_post_jobs?select=" + cols + "&order=created_at.desc");
+        throw e; });
+      this.err = ""; this.at = Date.now();
+    } catch (e){ this.err = (e && e.message) || String(e); this.at = Date.now(); }
+    this.busy = false; render();
+  },
+  // Retry: the same posting again under its id; entries already in Tally are found by FinCom's tag, not posted twice
+  async retry(j){
+    try {
+      const r = await TCloud.rpc("tally_post_enqueue", {p_id: j.id, p_client: j.client_id, p_payload: {}});
+      if (!r || !r.ok) throw new Error((r && r.error) || "It could not be queued again.");
+      toast("Queued again for the Tally computer.");
+    } catch (e){ toast((e && e.message) || String(e)); }
+    await this.load(true);
+  },
+  forClient(cid){ return (this.list || []).filter(j => !cid || j.client_id === cid); },
+  // the queue's postings still going or stopped: waiting for the Tally computer, being posted, or failed
+  open(cid){ return this.forClient(cid).filter(j => ["waiting", "taken", "running", "failed"].includes(j.status)); },
+  // one line a posted entry: what it was (the bill, bank line or sale named by its id), the voucher Tally made
+  rows(cid){
+    const out = [];
+    this.forClient(cid).forEach(j => {
+      [].concat(j.results || []).filter(r => r && r.ok && r.kind !== "master").forEach(r => {
+        const e = (S.data[j.client_id] && S.data[j.client_id].entries[r.id]) || null;
+        out.push({at: j.updated_at || j.created_at, job: j.id, co: j.client_id, what: e ? "bill" : r.kind === "voucher" ? "entry" : r.kind || "entry",
+          ref: r.vchNumber || (e && e.x.invoiceNo) || "", party: e ? e.x.vendorName : "", amount: e ? num(e.x.total) : 0, verified: r.verified === true, already: !!r.alreadyThere,
+          tally: {vchType: r.vchType || "", masterId: r.masterId || "", guid: r.guid || "", company: j.company, vchDate: r.vchDate || ""}, by: j.created_by || "", fromQueue: true});
+      });
+    });
+    return out;
+  }
+};
+// who queued a posting: the firm member's name or e-mail (the queue keeps their user id)
+function memberName(uid){
+  const m = ((typeof Cloud === "object" && Cloud.st && Cloud.st.members) || []).find(x => x.user_id === uid);
+  return m ? (m.name || m.email || "—") : uid ? "a member of the firm" : "—";
+}
+// Bills marked as in Tally, checked against Tally's own entries in FinCom's cloud copy (review of 02-Oct-2026:
+// FA/ELEC/013, posted on 29-Sep as voucher …66b4, was deleted in Tally afterwards and still counted as in Tally). A bill
+// is taken as gone from Tally only when the cloud copy has read its date again after it was posted (the day is not among
+// those still to be read) and its voucher is not there; found again, it counts again.
+const TallyProof = {
+  at: {},
+  async check(cid, force){
+    if (typeof TCloud !== "object" || !TCloud.on() || !TCloud.has(cid)) return 0;
+    if (!force && Date.now() - (this.at[cid] || 0) < 5 * 60000) return 0;
+    this.at[cid] = Date.now();
+    const bk = TCloud.book(cid), st = (bk && bk.state) || {}, d = S.data[cid];
+    if (!bk || !d || !d.loaded) return 0;
+    const readAt = Date.parse(bk.daysAt || 0) || 0, doneTo = String(st.doneTo || ""), skipped = new Set([].concat(st.skipped || []));
+    const list = Object.values(d.entries).filter(e => e.exportedAt && e.tally && e.tally.guid && (billInTally(e) || e.goneFromTally));
+    if (!list.length) return 0;
+    let found = new Set();
+    for (let i = 0; i < list.length; i += 80){
+      const g = list.slice(i, i + 80).map(e => '"' + String(e.tally.guid).replace(/"/g, "") + '"').join(",");
+      const rows = await Cloud.api("tally_vouchers?select=guid,cancelled&book_id=eq." + encodeURIComponent(bk.book) + "&guid=in.(" + encodeURIComponent(g) + ")");
+      (rows || []).forEach(r => { if (!r.cancelled) found.add(r.guid); });
+    }
+    let n = 0;
+    list.forEach(e => {
+      const day = String(e.tally.vchDate || "").replace(/-/g, ""), read = day && doneTo >= day && !skipped.has(day) && readAt > (Date.parse(e.tally.at || e.exportedAt) || 0);
+      const gone = !found.has(e.tally.guid) && !!read;
+      if (gone !== !!e.goneFromTally){ e.goneFromTally = gone ? new Date().toISOString() : null; if (!gone) delete e.goneFromTally; Store.saveEntry(cid, e); n++; }
+    });
+    if (n){ refreshStats(cid); render(); }
+    return n;
+  },
+  // the same for bank lines: a line posted (its voucher's id) or found when reconciling (no id: a line of the account's
+  // ledger on that day for that amount) that the cloud copy, having read the day again, no longer has
+  bankAt: {},
+  async checkBank(cid, force){
+    const b = S.bank;
+    if (!b || b.cid !== cid || typeof TCloud !== "object" || !TCloud.on() || !TCloud.has(cid)) return 0;
+    if (!force && Date.now() - (this.bankAt[cid] || 0) < 5 * 60000) return 0;
+    this.bankAt[cid] = Date.now();
+    const bk = TCloud.book(cid), st = (bk && bk.state) || {}, readAt = Date.parse(bk.daysAt || 0) || 0, doneTo = String(st.doneTo || ""), skipped = new Set([].concat(st.skipped || []));
+    const d8 = x => String(x || "").replace(/-/g, "").slice(0, 8);
+    const read = (r, at) => { const day = d8(r.date); return day && doneTo >= day && !skipped.has(day) && readAt > (Date.parse(at || 0) || 0); };
+    const rows = b.rows.filter(r => r.state === "sent" || r.state === "intally");
+    if (!rows.length) return 0;
+    const withId = rows.filter(r => r.tally && r.tally.guid), found = new Set();
+    for (let i = 0; i < withId.length; i += 80){
+      const g = withId.slice(i, i + 80).map(r => '"' + String(r.tally.guid).replace(/"/g, "") + '"').join(",");
+      const got = await Cloud.api("tally_vouchers?select=guid,cancelled&book_id=eq." + encodeURIComponent(bk.book) + "&guid=in.(" + encodeURIComponent(g) + ")");
+      (got || []).forEach(x => { if (!x.cancelled) found.add(x.guid); });
+    }
+    // no voucher id: the account's ledger on that day, for that amount
+    const noId = rows.filter(r => !(r.tally && r.tally.guid)), lines = {};
+    for (const day of Array.from(new Set(noId.map(r => d8(r.date)))).filter(Boolean)){
+      lines[day] = await Cloud.api("tally_lines?select=ledger,amount&book_id=eq." + encodeURIComponent(bk.book) + "&day=eq." + Audit.iso(day)) || [];
+    }
+    const ledOf = r => { const s2 = (b.stmts || []).find(x => x.id === String(r.id || "").split("-")[0]) || {}; return ledNm(accountFor(s2).ledger || "").toLowerCase(); };
+    let n = 0;
+    rows.forEach(r => {
+      let gone;
+      if (r.tally && r.tally.guid) gone = !found.has(r.tally.guid) && read(r, r.tally.at || r.sentAt);
+      else { const amt = r2(num(r.debit) || num(r.credit)), l = ledOf(r);
+        gone = read(r, 0) && !(lines[d8(r.date)] || []).some(x => Math.abs(Math.abs(num(x.amount)) - amt) < 0.01 && (!l || ledNm(x.ledger).toLowerCase() === l)); }
+      if (!!gone !== !!r.goneFromTally){ if (gone) r.goneFromTally = new Date().toISOString(); else delete r.goneFromTally; n++; }
+    });
+    if (n){ saveBank({rows: true}); render(); }
+    return n;
+  }
+};
+// the bank lines no longer in Tally: back to "ready", to be posted again (Tally is checked for FinCom's tag first)
+function bankRepostGone(){
+  const b = B(), gone = b.rows.filter(r => r.goneFromTally);
+  gone.forEach(r => { r.state = "ready"; r.tally = null; r.postVerified = false; r.postedVia = ""; r.sentAt = ""; r.tallyRef = ""; r.tallyHow = ""; delete r.goneFromTally; });
+  saveBank({rows: true}); toast(gone.length + " line" + (gone.length === 1 ? " is" : "s are") + " ready to post again."); render();
+}
 /* ================================================================== */
 /* AI help (Claude) in TDS and GST: it suggests, FinCom's rules and   */
 /* people decide. Off unless the firm switches it on (Settings, AI    */
