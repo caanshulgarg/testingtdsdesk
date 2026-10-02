@@ -371,8 +371,9 @@ func installCmd(args []string) int {
 		return installUserCmd(args)
 	}
 	mode := strings.ToLower(flagValue(args, "mode"))
-	if mode != "test" && mode != "sole" {
-		mode = "test"
+	// 02-Oct-2026: FinCom Bridge is the only bridge; test mode (beside an older bridge) only when asked for by name
+	if mode != "test" {
+		mode = "sole"
 	}
 	fincom := flagValue(args, "fincom")
 	installStarted()
@@ -458,6 +459,8 @@ func writeSettings(o ownerInfo, mode, fincom string) (string, int) {
 		carryInstanceID(c, filepath.Join(o.home, "go-bridge.config.json"))
 		c.Set("Mode", "")
 		c.Set("Port", float64(9100))
+		// the main bridge on this computer, with no click: told to FinCom on its first contact (claimMainOnce)
+		c.Set("ClaimMain", true)
 		c.Set("LogFile", filepath.Join(o.home, "tds-bridge.log"))
 		setOwner(c, o, fincom)
 		if err := writeOrdered(cfgPath, c); err != nil {
@@ -500,7 +503,9 @@ func removeOldBridge(o ownerInfo) {
 	for _, f := range []string{"TDS Desk Tally Bridge.vbs", "FinCom Connector.lnk"} {
 		p := filepath.Join(startup, f)
 		if exists(p) {
-			if err := os.Rename(p, filepath.Join(o.home, f+".replaced-by-go")); err != nil {
+			kept := filepath.Join(o.home, "replaced-by-FinCom-Bridge")
+			_ = os.MkdirAll(kept, 0o755)
+			if err := os.Rename(p, filepath.Join(kept, f)); err != nil {
 				_ = os.Remove(p)
 			}
 			installLog("Install: bridge 1.15.0 no longer starts at sign-in (" + f + ")")
@@ -544,6 +549,89 @@ func removeOldBridge(o ownerInfo) {
 		p := filepath.Join(o.home, f)
 		if exists(p) {
 			_ = os.Rename(p, p+".replaced-by-go")
+		}
+	}
+	retireOldShortcuts(o)
+}
+
+// 02-Oct-2026, the owner's decision: FinCom Bridge is the only bridge. What bridge 1.15.0's setup, the FinCom Connector
+// and a user put on the Desktop, in the Start menu and in the Startup folder to start or show the old bridges is moved
+// into <home>\replaced-by-FinCom-Bridge (kept, never deleted), with the bridge folder's own starters; the Connector's
+// entry in Settings > Apps goes (its values written to that folder first). FinCom Bridge's own shortcuts stay.
+const oldShortcutRe = `(?i)^(fincom connector|tds[ -]?desk.*bridge|.*tally bridge|start-tds-bridge|show bridge window|setup-fincom-bridge|run-hidden)\b.*\.(lnk|bat|vbs|cmd|url)$`
+
+func retireOldShortcuts(o ownerInfo) {
+	keep := filepath.Join(o.home, "replaced-by-FinCom-Bridge")
+	move := func(p, where string) {
+		if err := os.MkdirAll(keep, 0o755); err != nil {
+			return
+		}
+		to := filepath.Join(keep, filepath.Base(p))
+		if exists(to) {
+			to = filepath.Join(keep, time.Now().Format("20060102-150405")+" "+filepath.Base(p))
+		}
+		if err := os.Rename(p, to); err != nil {
+			installLog("Install: could not move " + p + " (" + err.Error() + ")")
+			return
+		}
+		installLog("Install: an old bridge's " + where + " entry " + filepath.Base(p) + " was moved to " + keep)
+	}
+	// the bridge folder's own starters of bridge 1.15.0
+	for _, f := range []string{"run-hidden.vbs", "Show bridge window.bat", "Start-TDS-Bridge.bat"} {
+		if p := filepath.Join(o.home, f); exists(p) {
+			move(p, "bridge folder")
+		}
+	}
+	dirs := map[string]string{
+		filepath.Join(o.profile, `Desktop`): "Desktop",
+		filepath.Join(o.profile, `AppData\Roaming\Microsoft\Windows\Start Menu\Programs`):         "Start menu",
+		filepath.Join(o.profile, `AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup`): "Startup",
+	}
+	// the Desktop where Windows really keeps it (OneDrive may hold it)
+	if k, err := registry.OpenKey(registry.USERS, o.sid+`\Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders`, registry.QUERY_VALUE); err == nil {
+		if d, _, err := k.GetStringValue("Desktop"); err == nil && d != "" {
+			dirs[d] = "Desktop"
+		}
+		k.Close()
+	}
+	for d, where := range dirs {
+		ents, _ := os.ReadDir(d)
+		for _, e := range ents {
+			n := e.Name()
+			if e.IsDir() {
+				// a Start menu folder of an old bridge ("TDS Desk Bridge", "FinCom Connector")
+				if where == "Start menu" && re(`(?i)^(fincom connector|tds desk bridge|tally bridge)$`).MatchString(n) {
+					move(filepath.Join(d, n), where)
+				}
+				continue
+			}
+			if re(oldShortcutRe).MatchString(n) && !re(`(?i)^fincom bridge`).MatchString(n) {
+				move(filepath.Join(d, n), where)
+			}
+		}
+	}
+	// the Connector's entry in Settings > Apps (this user's)
+	if k, err := registry.OpenKey(registry.USERS, o.sid+`\Software\Microsoft\Windows\CurrentVersion\Uninstall\FinComConnector`, registry.QUERY_VALUE); err == nil {
+		names, _ := k.ReadValueNames(0)
+		var b strings.Builder
+		for _, n := range names {
+			v, _, _ := k.GetStringValue(n)
+			fmt.Fprintf(&b, "%s=%s\r\n", n, v)
+		}
+		k.Close()
+		_ = os.MkdirAll(keep, 0o755)
+		_ = saveFile(filepath.Join(keep, "FinCom Connector (Settings - Apps entry).txt"), b.String())
+		if registry.DeleteKey(registry.USERS, o.sid+`\Software\Microsoft\Windows\CurrentVersion\Uninstall\FinComConnector`) == nil {
+			installLog("Install: the FinCom Connector's entry in Settings > Apps was removed (its values are kept in " + keep + ")")
+		}
+	}
+	// FinCom Bridge 2.0.x installed for all users (a Windows service) in test mode: only an administrator can take it off
+	if k, err := registry.OpenKey(registry.LOCAL_MACHINE, regKey, registry.QUERY_VALUE|registry.WOW64_64KEY); err == nil {
+		m, _, _ := k.GetStringValue("Mode")
+		v, _, _ := k.GetStringValue("Version")
+		k.Close()
+		if strings.EqualFold(m, "test") && !windows.GetCurrentProcessToken().IsElevated() {
+			installLog("Install: FinCom Bridge " + v + " is also installed for all users (a Windows service, test mode). It never posts; to remove it an administrator opens Settings > Apps > FinCom Bridge > Uninstall")
 		}
 	}
 }

@@ -85,7 +85,7 @@ func readOnlyWhy() string {
 		oldAt, oldFound = time.Now(), oldBridgePresent()
 	}
 	if oldFound {
-		return "Bridge 1.15.0 (PowerShell) is still on this computer, so this bridge does not post: only one bridge may post. Run the FinCom Bridge setup again and choose \"Replace bridge 1.15.0\"."
+		return "An older bridge is still on this computer, so FinCom Bridge does not post: only one bridge may post. Run the FinCom Bridge setup again: it takes the older bridge off."
 	}
 	return ""
 }

@@ -633,6 +633,7 @@ func beatLoop() {
 			}()
 			if cloudOn() {
 				beatOnce()
+				claimMainOnce()
 			}
 		}()
 		select {

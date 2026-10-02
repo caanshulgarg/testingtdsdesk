@@ -178,3 +178,29 @@ func writeInstallResult(reason, todo string) {
 		_ = saveFile(filepath.Join(d, "install-result.txt"), installResultText(reason, todo))
 	}
 }
+
+// --- the setup made this the only bridge (02-Oct-2026: FinCom Bridge is the only bridge): it tells FinCom on its first
+// contact that it is the main bridge on this computer, with no click; FinCom then gives postings to it alone. Once done
+// (or refused for good) the setting is cleared; while FinCom cannot be reached it is tried again at each heartbeat
+var claimLogged atomic.Bool
+
+func claimMainOnce() {
+	if testMode() || !cfgB("ClaimMain") {
+		return
+	}
+	r := invokeCloud(M{"kind": "make_main"}, 30)
+	switch {
+	case r.code == 200:
+		writeLog("FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts")
+	case r.code >= 400 && r.code < 500:
+		writeLog("FinCom could not make this the main bridge (" + r.err + "); with no main bridge chosen it posts anyway")
+	default:
+		if claimLogged.CompareAndSwap(false, true) {
+			writeLog("FinCom could not be told yet that this is the main bridge (" + r.err + "); tried again at each heartbeat")
+		}
+		return
+	}
+	setCfg("ClaimMain", false)
+	saveConfig()
+	clearNotMainByBeat()
+}

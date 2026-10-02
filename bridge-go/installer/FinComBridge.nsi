@@ -10,9 +10,9 @@
 ; the default unless FinCom Bridge is installed for all users already (or /ALLUSERS is given). "For all users" chosen
 ; without an administrator first says why one is needed, and only on Yes starts the setup again "as administrator"
 ; (Windows asks for the password); never a bare prompt. Silent (/S) /ALLUSERS without an administrator ends with 740.
-; Two ways (the page "How should it run?", or /MODE=test|sole on the command line):
-;   test - beside bridge 1.15.0: reads Tally, sends to FinCom as a shadow, never posts;
-;   sole - replaces bridge 1.15.0: 1.15.0 is stopped and taken off; its pairing, settings and copy are kept and used.
+; One way (02-Oct-2026): sole - FinCom Bridge replaces every older bridge of this user (bridge 1.15.0, the FinCom
+; Connector, a test install): they are stopped and no longer start, their shortcuts set aside; their pairing, settings
+; and copy are kept and used, and it becomes the main bridge. /MODE=test (beside 1.15.0, never posts) only for tests.
 ; Every step, and every failure with its reason, goes to %LOCALAPPDATA%\FinCom Bridge\install.log of the user running
 ; the setup (FinComBridge.exe install writes there too, and install-result.txt: "ok", or what went wrong and what to do).
 ; The last page says the outcome; on a failure it offers to send install.log to FinCom ("FinComBridge.exe sendlog").
@@ -56,8 +56,6 @@ VIAddVersionKey "LegalCopyright" "FinCom"
 
 Var Mode
 Var OldFound
-Var RadioTest
-Var RadioSole
 Var Scope       ; "all" (the Windows service) or "user" (just for me)
 Var IsAdmin     ; 1 when this setup runs as administrator
 Var ModeAsked   ; the /MODE= given on the command line
@@ -94,7 +92,6 @@ Var KeepBox
 
 !insertmacro MUI_PAGE_WELCOME
 Page custom ScopePage ScopeLeave
-Page custom ModePage ModeLeave
 !insertmacro MUI_PAGE_INSTFILES
 !define MUI_PAGE_CUSTOMFUNCTION_SHOW FinishShow
 !insertmacro MUI_PAGE_FINISH
@@ -253,19 +250,13 @@ Function ApplyScope
     SetShellVarContext current
     StrCpy $INSTDIR "$LOCALAPPDATA\FinCom Bridge"
   ${EndIf}
-  StrCpy $Mode $ModeAsked
-  ${If} $Mode == ""
-  ${AndIf} $Scope == "all"
-    ReadRegStr $Mode HKLM "${BRIDGEKEY}" "Mode"
-  ${ElseIf} $Mode == ""
-    ReadRegStr $Mode HKCU "${BRIDGEKEY}" "Mode"
-  ${EndIf}
-  ${If} $Mode == ""
-    ${If} $OldFound == "1"
-      StrCpy $Mode "test"
-    ${Else}
-      StrCpy $Mode "sole"
-    ${EndIf}
+  ; 02-Oct-2026, the owner's decision: FinCom Bridge is the only bridge. It always replaces bridge 1.15.0, the FinCom
+  ; Connector and a test install (2.0.x, 2.1.0), keeping their pairing, settings and copy, and becomes the main bridge.
+  ; Test mode only when asked for on the command line (/MODE=test, for FinCom's own tests)
+  ${If} $ModeAsked == "test"
+    StrCpy $Mode "test"
+  ${Else}
+    StrCpy $Mode "sole"
   ${EndIf}
 FunctionEnd
 
@@ -360,39 +351,6 @@ Function ScopeLeave
   Call ApplyScope
 FunctionEnd
 
-Function ModePage
-  !insertmacro MUI_HEADER_TEXT "How should it run?" "Only one bridge may ever post to Tally."
-  nsDialogs::Create 1018
-  Pop $0
-  ${If} $OldFound == "1"
-    ${NSD_CreateLabel} 0 0 100% 24u "Bridge 1.15.0 (PowerShell) is installed on this computer for you."
-  ${Else}
-    ${NSD_CreateLabel} 0 0 100% 24u "Bridge 1.15.0 (PowerShell) was not found for you on this computer."
-  ${EndIf}
-  Pop $0
-  ${NSD_CreateRadioButton} 0 28u 100% 12u "&Test beside bridge 1.15.0"
-  Pop $RadioTest
-  ${NSD_CreateLabel} 12u 41u 95% 30u "Reads Tally and sends to FinCom's staging site only to be compared with bridge 1.15.0. It never posts: postings keep going through bridge 1.15.0. Bridge 1.15.0 is not changed. Later, its icon's menu can make it the main bridge."
-  Pop $0
-  ${NSD_CreateRadioButton} 0 76u 100% 12u "&Replace bridge 1.15.0 (FinCom Bridge becomes the main bridge)"
-  Pop $RadioSole
-  ${NSD_CreateLabel} 12u 89u 95% 30u "Bridge 1.15.0 is stopped and no longer starts. Its pairing with FinCom, its settings and its copy of the books are kept and used by FinCom Bridge, which then also posts."
-  Pop $0
-  ${If} $Mode == "sole"
-    ${NSD_Check} $RadioSole
-  ${Else}
-    ${NSD_Check} $RadioTest
-  ${EndIf}
-  nsDialogs::Show
-FunctionEnd
-Function ModeLeave
-  ${NSD_GetState} $RadioSole $0
-  ${If} $0 == ${BST_CHECKED}
-    StrCpy $Mode "sole"
-  ${Else}
-    StrCpy $Mode "test"
-  ${EndIf}
-FunctionEnd
 
 ; --- the program's files into $INSTDIR. $Why: what went wrong ("" when they are there)
 Function PutFiles
@@ -702,7 +660,7 @@ Function un.KeepPage
   !insertmacro MUI_HEADER_TEXT "Remove FinCom Bridge" "The program, its start, its shortcuts and its own files are removed."
   nsDialogs::Create 1018
   Pop $0
-  ${NSD_CreateLabel} 0 0 100% 36u "FinCom Bridge, its service or start at sign-in, its shortcuts and its own files (its copy of the books, its log and settings) are removed. Bridge 1.15.0's files are not touched; if FinCom Bridge replaced it, bridge 1.15.0's program is put back."
+  ${NSD_CreateLabel} 0 0 100% 36u "FinCom Bridge, its service or start at sign-in, its shortcuts and its own files (its copy of the books, its log and settings) are removed. An older bridge it replaced is not started again; its files stay where they are."
   Pop $0
   ${NSD_CreateCheckbox} 0 44u 100% 24u "&Keep this computer's pairing with FinCom (so a later install connects without a new code)"
   Pop $KeepBox

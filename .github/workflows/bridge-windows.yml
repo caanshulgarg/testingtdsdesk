@@ -34,6 +34,14 @@ jobs:
       - name: Program and setup
         # FORCE_REBUILD: a version already published is built again here only to be tested, never published
         run: FORCE_REBUILD=1 ./build.sh
+      - name: The setup handed out by FinCom's test site, when there is one, is the one tested (the same bytes)
+        run: |
+          v=$(grep -oP 'var BridgeVersion = "\K[0-9.]+' util.go)
+          if [ -e "../assets-test/bridge-go/FinComBridge-Setup-$v.exe" ]; then
+            rm -f dist/FinComBridge-Setup-*.exe*
+            cp "../assets-test/bridge-go/FinComBridge-Setup-$v.exe" dist/
+            (cd dist && sha256sum "FinComBridge-Setup-$v.exe" | tee "FinComBridge-Setup-$v.exe.sha256")
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: bridge-dist
@@ -157,6 +165,88 @@ jobs:
           Check (Test-Path $log) "fctest's install.log exists ($log)"
           Check ((Get-Content $log -Raw) -match 'exit 740.*needs an administrator') 'install.log says why (needs an administrator)'
           Check (-not (Get-Service FinComBridge -ErrorAction SilentlyContinue)) 'no service was made'
+
+      - name: As fctest, bridge 1.15.0 and the FinCom Connector set up, then the setup with no choices replaces them
+        # 02-Oct-2026, the owner's decision: FinCom Bridge is the only bridge. A plain /S install (as a person clicking
+        # through) stops and takes off the older bridges, keeps their pairing, settings and copy, and runs as the main one
+        run: |
+          . "$env:RUNNER_TEMP\fc.ps1"
+          # what bridge 1.15.0's setup and the Connector leave for a user, made by fctest itself (its own HKCU and folders)
+          @'
+          $ErrorActionPreference = 'Stop'
+          $home2 = Join-Path $env:LOCALAPPDATA 'TDS Desk Bridge'
+          New-Item -ItemType Directory -Force "$home2\sync\TEST CO" | Out-Null
+          Set-Content "$home2\TDSBridge.ps1" 'while ($true) { Start-Sleep -Seconds 5 }  # stands in for bridge 1.15.0'
+          Set-Content "$home2\run-hidden.vbs" 'rem 1.15.0 starter'
+          Set-Content "$home2\Show bridge window.bat" 'rem 1.15.0 window'
+          Set-Content "$home2\FinComConnector.exe" 'stands in for the Connector'
+          Set-Content "$home2\sync\TEST CO\keep.json" '{"days":1}'
+          Set-Content "$home2\tds-bridge.config.json" '{"Key":"old-pairing-key-115","Port":9100,"KeepInStep":true}'
+          $startup = [Environment]::GetFolderPath('Startup'); $programs = [Environment]::GetFolderPath('Programs'); $desk = [Environment]::GetFolderPath('DesktopDirectory')
+          New-Item -ItemType Directory -Force $startup, $programs, $desk | Out-Null
+          Set-Content (Join-Path $startup 'TDS Desk Tally Bridge.vbs') 'rem 1.15.0 start at sign-in'
+          Set-Content (Join-Path $programs 'FinCom Connector.lnk') 'x'
+          Set-Content (Join-Path $desk 'FinCom Connector.lnk') 'x'
+          Set-Content (Join-Path $desk 'Start-TDS-Bridge.bat') 'rem old starter'
+          $run = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+          New-Item -Force $run -ErrorAction SilentlyContinue | Out-Null
+          Set-ItemProperty $run 'FinCom Connector' ('"' + "$home2\FinComConnector.exe" + '" --tray')
+          $un = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\FinComConnector'
+          New-Item -Force $un | Out-Null
+          Set-ItemProperty $un 'DisplayName' 'FinCom Connector'
+          # bridge 1.15.0 running, as its starter runs it
+          Start-Process powershell.exe -ArgumentList '-NoLogo', '-NoProfile', '-WindowStyle', 'Hidden', '-ExecutionPolicy', 'Bypass', '-File', "$home2\TDSBridge.ps1"
+          Start-Sleep -Seconds 3
+          '@ | Set-Content C:\fcsetup\old115.ps1
+          $code = Invoke-AsTest 'powershell.exe' @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'C:\fcsetup\old115.ps1')
+          Check ($code -eq 0) "the older bridges were set up for fctest (code $code)"
+          $old = { @(Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" | Where-Object { $_.CommandLine -like '*TDSBridge.ps1*' }) }
+          Check ((& $old).Count -ge 1) 'bridge 1.15.0 (stand-in) runs as fctest'
+
+          $code = Invoke-AsTest $Setup @('/S')
+          $la = Get-TestLocalAppData
+          $dir = Join-Path $la 'FinCom Bridge'; $home2 = Join-Path $la 'TDS Desk Bridge'
+          if ($code -ne 0) { Get-Content "$dir\install.log" -ErrorAction SilentlyContinue | Write-Host }
+          Check ($code -eq 0) "the setup with no choices ended with 0 (it ended with $code)"
+          $ping = Wait-Bridge 60
+          Check ($ping -ne $null) 'FinCom Bridge answers on 127.0.0.1:9100 (bridge 1.15.0''s port) within 60 s'
+          Check ($ping.version -eq $env:BRIDGE_VERSION -and $ping.runMode -eq 'user' -and -not $ping.testMode) "it is FinCom Bridge $env:BRIDGE_VERSION, just for the user, the main bridge ($($ping | ConvertTo-Json -Compress))"
+          Check (Wait-Until { (& $old).Count -eq 0 } 30) 'bridge 1.15.0 (stand-in) was stopped'
+          Check (-not (Test-Path "$home2\TDSBridge.ps1") -and (Test-Path "$home2\TDSBridge.ps1.replaced-by-go")) 'its program is set aside, not deleted'
+          Check (-not (Test-Path "$home2\FinComConnector.exe") -and (Test-Path "$home2\FinComConnector.exe.replaced-by-go")) 'the Connector is set aside, not deleted'
+          $kept = "$home2\replaced-by-FinCom-Bridge"
+          foreach ($f in 'run-hidden.vbs', 'Show bridge window.bat', 'TDS Desk Tally Bridge.vbs', 'FinCom Connector.lnk', 'Start-TDS-Bridge.bat') {
+            Check (@(Get-ChildItem $kept -Filter "*$f" -ErrorAction SilentlyContinue).Count -ge 1) "$f was moved to replaced-by-FinCom-Bridge"
+          }
+          $prof = Get-TestProfile
+          Check (-not (Test-Path "$prof\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\TDS Desk Tally Bridge.vbs")) 'bridge 1.15.0 no longer starts at sign-in'
+          Check (-not (Test-Path "$prof\Desktop\FinCom Connector.lnk") -and -not (Test-Path "$prof\Desktop\Start-TDS-Bridge.bat")) 'no old bridge on the Desktop'
+          Check (-not (Test-Path "$prof\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\FinCom Connector.lnk")) 'no Connector in the Start menu'
+          Check (Test-Path "$prof\Desktop\FinCom Bridge.lnk") 'FinCom Bridge''s own Desktop shortcut is there'
+          # fctest's registry, read by fctest
+          @'
+          $r = @{}
+          $run = Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -ErrorAction SilentlyContinue
+          $r.connectorRun = [bool]($run -and $run.'FinCom Connector')
+          $r.bridgeRun = if ($run) { [string]$run.'FinCom Bridge' } else { '' }
+          $r.connectorApps = Test-Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\FinComConnector'
+          $r | ConvertTo-Json | Set-Content C:\fcsetup\reg.json
+          '@ | Set-Content C:\fcsetup\reg.ps1
+          $null = Invoke-AsTest 'powershell.exe' @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'C:\fcsetup\reg.ps1')
+          $reg = Get-Content C:\fcsetup\reg.json -Raw | ConvertFrom-Json
+          Check (-not $reg.connectorRun) 'the Connector no longer starts at sign-in'
+          Check (-not $reg.connectorApps) 'the Connector is no longer in Settings > Apps'
+          Check ($reg.bridgeRun -like '*FinComBridge.exe" user') "FinCom Bridge starts at sign-in ($($reg.bridgeRun))"
+          $cfg = Get-Content "$home2\tds-bridge.config.json" -Raw | ConvertFrom-Json
+          Check ($cfg.Key -eq 'old-pairing-key-115') 'the pairing (bridge 1.15.0''s key) is kept'
+          Check ($cfg.KeepInStep -eq $true) 'its settings are kept'
+          Check ($cfg.ClaimMain -eq $true) 'it tells FinCom it is the main bridge on its first contact (no cloud here: still to do)'
+          Check (Test-Path "$home2\sync\TEST CO\keep.json") 'the copy of the books is kept'
+          # hidden: no window of its own; only the tray icon (a hidden window) and the supervisor and bridge in the background
+          $vis = @(Get-Process FinComBridge -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -ne '' })
+          Check ($vis.Count -eq 0) "no FinCom Bridge window is open ($(($vis | ForEach-Object { $_.MainWindowTitle }) -join ', '))"
+          Check (@(Get-Process conhost -IncludeUserName -ErrorAction SilentlyContinue | Where-Object { $_.UserName -like '*fctest' }).Count -eq 0) 'no console window runs as fctest'
+          Check ((Get-Content "$dir\install.log" -Raw) -match 'moved to') 'install.log says what was moved'
 
       - name: As fctest, just for me (/CURRENTUSER /MODE=sole)
         run: |

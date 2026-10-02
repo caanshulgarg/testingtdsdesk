@@ -389,8 +389,9 @@ func currentOwner() (ownerInfo, error) {
 func installUserCmd(args []string) int {
 	perUserSetup = true
 	mode := strings.ToLower(flagValue(args, "mode"))
-	if mode != "test" && mode != "sole" {
-		mode = "test"
+	// 02-Oct-2026: FinCom Bridge is the only bridge; test mode (beside an older bridge) only when asked for by name
+	if mode != "test" {
+		mode = "sole"
 	}
 	fincom := flagValue(args, "fincom")
 	installStarted()
