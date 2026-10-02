@@ -598,8 +598,22 @@ function num(v){ if (typeof v === "number") return isFinite(v) ? v : 0; const n 
 function r2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
 const INR = new Intl.NumberFormat("en-IN", {minimumFractionDigits:2, maximumFractionDigits:2});
 const INR0 = new Intl.NumberFormat("en-IN", {maximumFractionDigits:0});
-function money(n){ return "₹" + INR.format(num(n)); }
-function money0(n){ return "₹" + INR0.format(num(n)); }
+// a negative amount reads "-₹1,234.00" (the minus before the rupee sign; colour scheme of 02-Oct-2026), shown in red by negAmounts
+function money(n){ const v = num(n); return (v < 0 ? "-₹" : "₹") + INR.format(Math.abs(v)); }
+function money0(n){ const v = num(n), t = INR0.format(Math.abs(v)); return (v < 0 && t !== "0" ? "-₹" : "₹") + t; }
+// every amount on screen that is negative is shown in red (a figure cell, a tile's number): after each change to the page
+const negAmounts = {
+  re: /^\s*[-−]\s*₹/,
+  sel: "td.n, th.n, .n, .dtile b, .metric b, .tile b, .tile .tv",
+  run(root){ try { (root || document).querySelectorAll(this.sel).forEach(el => { const neg = this.re.test(el.textContent || ""); if (neg !== el.classList.contains("neg")) el.classList.toggle("neg", neg); }); } catch (e){} },
+  start(){
+    if (typeof MutationObserver !== "function" || typeof document === "undefined") return;
+    let t = 0; const go = () => { t = 0; this.run(); };
+    new MutationObserver(() => { if (!t) t = setTimeout(go, 60); }).observe(document.body, {childList: true, subtree: true, characterData: true});
+    this.run();
+  }
+};
+if (typeof document !== "undefined") { if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => negAmounts.start()); else setTimeout(() => negAmounts.start(), 0); }
 function uid(p){ return p + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 function norm(s){ return String(s || "").toLowerCase().replace(/\b(m\/s|messrs|pvt|private|ltd|limited|llp|the)\b/g, "").replace(/[^a-z0-9]/g, ""); }
 function slug(s){ return String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "client"; }
@@ -20745,7 +20759,7 @@ const LTR = {
       '<p class="sig">For ' + esc(this.whoWrites().name) + "<br><br><br>" + (this.whoWrites().signer ? esc(this.whoWrites().signer) + "<br>" : "") + "Authorised signatory</p></div>";
   },
   STYLE: "<style>@page{size:A4 portrait;margin:16mm}body{padding:0;font:12.5px/1.55 Georgia,'Times New Roman',serif;color:#111}.page{page-break-after:always;max-width:720px;margin:0 auto}.page:last-child{page-break-after:auto}" +
-    ".lh{border-bottom:2px solid #047857;padding-bottom:8px;margin-bottom:14px}.lhn{font-size:20px;font-weight:700;color:#064e3b}.lhs{font-size:11px;color:#444}.dt{text-align:right;margin-bottom:10px}.to{margin-bottom:14px}.sub{font-weight:700;text-decoration:underline}" +
+    ".lh{border-bottom:2px solid #4338CA;padding-bottom:8px;margin-bottom:14px}.lhn{font-size:20px;font-weight:700;color:#312E81}.lhs{font-size:11px;color:#444}.dt{text-align:right;margin-bottom:10px}.to{margin-bottom:14px}.sub{font-weight:700;text-decoration:underline}" +
     ".sig{margin-top:22px}.ann{margin-top:16px}.ann h3{font-size:13px;margin:0 0 6px}table{border-collapse:collapse;width:100%;font:11px/1.35 -apple-system,Segoe UI,Roboto,sans-serif;margin:8px 0}th,td{border:1px solid #cfd8d3;padding:3px 6px;text-align:left}th{background:#ecfdf5}td.n,th.n{text-align:right}" +
     ".slip{margin-top:26px;border:1px dashed #777;padding:10px 14px}.cut{text-align:center;font-size:10px;color:#666;margin:-4px 0 8px}.sg{display:flex;justify-content:space-between;margin-top:34px;font-size:11px;color:#444}.sg span{border-top:1px solid #999;padding-top:3px;width:30%}.small{font-size:11px;color:#444}</style>",
   print(kind, rows){
