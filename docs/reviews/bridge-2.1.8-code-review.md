@@ -244,4 +244,44 @@ What the fixes opened (new):
 1. F1: no request goes when the pre-send record (posted-ids.json, progress.json) could not be written.
 2. F2: /import forgets the pre-send notes on "Tally not reached" (the forget moved into sendImport).
 
-Range: 7162400..f15332f (bridge-go/, server/tally-cloud/index.ts, server/tally-cloud/migration-43-posting-reply.sql, tests/run_main_bridge_server.py)
+## Fixes reviewed (f15332f..e383608)
+Read: the diff f15332f..e383608 -- bridge-go (accepted.go noteSentMany / acceptedForgetMany, post.go errRecordNotWritten
+and the forget inside sendImport, jobs.go writeProgress / save returning errors, round15_test.go, round7_test.go). go vet
+green; the posting tests re-run with -count=1 on e383608 (green, 19 s).
+- F1 CLOSED. post.go sendImport: noteSentMany for the request's keys before invokeTally; an error returns
+  errRecordNotWritten (not tallyNoAnswer), so nothing is sent and the job takes the "not reached" path: it logs "not
+  sent: ... record not written; nothing sent; waiting for Tally", sets "waiting" and tries again after waitPause (15..60
+  s, no deadline, as a Tally wait), /import answers notSent with the words. jobs.go: the inflight save before the gate
+  returns its error and is treated the same (nothing sent). TestNoSendWhenRecordNotWritable (posted-ids.json replaced by
+  a directory: /import notSent with the words, the job waiting with 0 imports and the log line; the file writable again:
+  posted once, the record holds sent); TestPostedIdsWriteFailureHolds updated (waiting, 0 imports, cancelled while
+  waiting, still 0 imports).
+- F2 CLOSED. post.go sendImport's error branch forgets the request's notes when the error is not tallyNoAnswer, for both
+  callers; the copy in jobs.go removed. TestImportNotReachedForgetsNotes (a probe hold: /import notSent, acceptedInfo nil,
+  the retry after the probe posts and is not alreadySent).
+- noteSentMany keeps round 7's rules: the same note fields and first-send / resendOpen logic as noteSent, the held mark
+  cleared, verified never set true here; the write is acceptedWriteOrLog (temporary file renamed over the old one, loud log
+  on failure, the error returned); loading and the 180-day pruning of verified notes stay in acceptedAll, untouched; one
+  write per request instead of one per voucher (the performance note of the previous section is answered).
+
+What it opened (none must-fix):
+- A job waiting on an unwritable disk, visibility and cancel (LOW, later). When only posted-ids.json fails (the tests' case:
+  a directory in its place, a locked file) progress.json still carries "waiting" with the words, the cloud shows it as
+  taken with that message, the tray's line says it, the log says it, and Cancel in FinCom works (the cancel file is
+  written). When the whole folder is unwritable (disk full, permissions) progress.json cannot change either: the Tally
+  page keeps the last written line ("Sending 1 of N"), the cancel mark cannot be written (cancelJob ignores saveFile's
+  error, jobCancelled looks for the file), so the job cannot be cancelled from FinCom until the bridge is stopped or
+  restarted (after which it resumes and waits again); the log line (and the console echo) is the only sign, and after 30
+  minutes without an update the cloud's requeue re-hands the job (the running job's view is returned, nothing sent) and
+  after 5 tries marks it "did not finish after 5 tries" in the cloud. Nothing is sent in any of this, which is F1's point.
+  Fix later: an in-memory cancel set beside the file (jobsMu), and an in-memory mirror of the job's status for jobView
+  when the disk write failed. Test: TestUnwritableFolderJobCancellable.
+- A local path in a message (LOW, later). jobs.go wraps the progress.json error as fmt.Errorf("%w (progress.json: %v)",
+  errRecordNotWritten, err): the OS error carries the full path; waitingLine's default branch puts err.Error() into the
+  job's message, which reaches the cloud by posts_update once a later save succeeds (a transient lock). The
+  posted-ids.json variant (errRecordNotWritten alone) carries no path. Fix: keep the OS error in the log only and the
+  plain sentinel in the message. Test: TestRecordErrorMessageHasNoPath.
+- Wording (informational): the status reads "Waiting for Tally: the record ... could not be written" though Tally is not
+  the cause; a "Waiting: ..." line for this case would be truer. No safety effect.
+
+Range: 7162400..e383608 (bridge-go/, server/tally-cloud/index.ts, server/tally-cloud/migration-43-posting-reply.sql, tests/run_main_bridge_server.py)

@@ -101,4 +101,15 @@ both correctness). Security angles the coordinator asked about:
 - Bounds: the cloud's PostOnly list bounded in Go (20 x 200, TestBeatSettingsBounded); lineError 5 x 200 on both sides; the
   needs-review message capped. The beat and posts_update bodies are smaller than before the fixes.
 
-Range: 7162400..f15332f (bridge-go/, server/tally-cloud/index.ts, server/tally-cloud/migration-43-posting-reply.sql, tests/run_main_bridge_server.py)
+## Fixes reviewed (f15332f..e383608)
+F1 and F2 read with the code review's verdicts (both closed, no new must-fix). Security angles: nothing goes to Tally
+without the record on disk (fails closed: errRecordNotWritten is a "not reached" error on both routes; 0 imports in the
+tests); the notes of a request that never reached Tally are forgotten inside sendImport, so no false "already sent"
+refusal and no note without a send; noteSentMany writes posted-ids.json once per request through the same atomic
+temporary-file rename and the same fields as noteSent (round 7's write-through and pruning untouched). A job on a wholly
+unwritable disk waits with no deadline, is seen in the log and, after 30 minutes without an update, by the cloud's
+requeue, but cannot be cancelled from FinCom until the bridge is stopped (the cancel mark is a file); an OS error with a
+local path can reach the job's message when progress.json fails once and is written later. Both low, listed in the code
+review as later items; neither sends anything to Tally or anywhere but FinCom's own cloud.
+
+Range: 7162400..e383608 (bridge-go/, server/tally-cloud/index.ts, server/tally-cloud/migration-43-posting-reply.sql, tests/run_main_bridge_server.py)
