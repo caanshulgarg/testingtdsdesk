@@ -455,10 +455,18 @@ const TCloud = {
     return "";
   },
   postSettingsNames(text){ const seen = new Set(); return String(text || "").split(/[,\n;]/).map(x => x.trim()).filter(x => x && !seen.has(x.toUpperCase()) && seen.add(x.toUpperCase())).slice(0, 20); },
+  // v.only0 is the names box as the editor opened: left as it was, p_post_only goes as null (the row's list, and an
+  // installer-set PostOnly, stay); emptied from a named list, the owner is asked first (review of 2.1.8, must-fix)
   async postSettings(dev, v){
     const why = this.postSettingsCheck(v);
     if (why) return why;
-    await this.control("tally_device_post_settings", {p_device: dev.id, p_post_only: this.postSettingsNames(v.only), p_bills: Math.floor(num(v.bills)), p_bank: Math.floor(num(v.bank))},
+    const names = this.postSettingsNames(v.only), was = this.postSettingsNames(v.only0), touched = JSON.stringify(names) !== JSON.stringify(was);
+    if (touched && !names.length && was.length){
+      const a = await askConfirm({title: "Posting to any company from this computer?", ok: "Yes, any company", danger: true,
+        body: "<p>" + esc(dev.name || "This computer") + " now posts only to " + esc(was.join(", ")) + ". With the list empty, FinCom Bridge there posts into whichever Tally company a client is set to, and the list set by its installer goes.</p>"});
+      if (!a || !a.ok) return "Nothing sent: the list stays as it was.";
+    }
+    await this.control("tally_device_post_settings", {p_device: dev.id, p_post_only: touched ? names : null, p_bills: Math.floor(num(v.bills)), p_bank: Math.floor(num(v.bank))},
       "Saved for " + (dev.name || "the computer") + "; the bridge applies it within a minute.");
     return "";
   },

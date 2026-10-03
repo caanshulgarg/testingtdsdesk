@@ -431,9 +431,12 @@ with sync_playwright() as p:
       window.__mkSaid = []; const t0 = window.toast; window.toast = m => { window.__mkSaid.push(String(m)); return t0(m); };
       const mk = (id, n, no, amt) => { const e = newEntry("Manual entry"); e.id = id; Object.assign(e.x, {vendorName: n, vendorGstin: "", invoiceNo: no, invoiceDate: "2026-07-01", taxable: amt, total: amt});
         e.natureId = "professional"; e.partyLedger = n; e.expenseLedger = "Professional Charges"; e.notDuplicate = true; S.data[c].entries[e.id] = e; approve(e); e.approvedAt = t(400); return e; };
-      mk("pv1", "Voucher Co", "V/1", 1000); mk("pb1", "Batch Co", "B/1", 2000); mk("pb2", "Batch Co", "B/2", 3000); mk("pn1", "Review Co", "N/1", 4000); mk("pn2", "Review Co", "N/2", 5000);
+      mk("pv1", "Voucher Co", "V/1", 1000); mk("pb1", "Batch Co", "B/1", 2000); mk("pb2", "Batch Co", "B/2", 3000); mk("pn1", "Review Co", "N/1", 4000); mk("pn2", "Review Co", "N/2", 5000); mk("pa1", "Voucher Co", "V/2", 1500);
       const base = {client_id: c, company: G, status: "done", created_by: "u-2"};
       window.__jobs.unshift(
+        // the bridge's own record refused it (alreadySent): not Tally's word, and no Post again from here
+        Object.assign({id: "jPA", done: 0, n: 1, message: "0 of 1", created_at: t(1), updated_at: t(0.5), entry_ids: ["pa1"],
+          results: [{id: "pa1", ok: false, alreadySent: true, refused: true, message: "already sent from this computer on 03-10-2026 (Tally id 1230), job jPV"}], items: [{id: "pa1", state: "failed", reason: "already sent from this computer on 03-10-2026 (Tally id 1230), job jPV"}]}, base),
         Object.assign({id: "jPV", done: 1, n: 1, message: "1 of 1 sent to Tally", created_at: t(3), updated_at: t(2), entry_ids: ["pv1"],
           results: [{id: "pv1", ok: true, byReply: true, vchId: 1234, vchDate: "20260701", vchType: "Journal", company: G, sentAt: "2026-10-03T08:35:00Z", secondsReq: 1.2}], items: [{id: "pv1", state: "posted"}],
           timing: {reqs: [{n: 1, seconds: 1.2, created: 1, altered: 0, exceptions: 0, ignored: 0, lastVchId: 1234}], secondsTotal: 1.2}}, base),
@@ -447,6 +450,9 @@ with sync_playwright() as p:
       window.toast = t0; refreshStats(c); CloudJobs.changed(); }"""); pg.wait_for_timeout(1500)
     st5 = E("['pv1', 'pb1', 'pb2', 'pn1', 'pn2'].map(id => id + ':' + D().entries[id].status)")
     ok(all(x.endswith(":approved") for x in st5), "B. the five bills of this round are approved (%s; %s)" % (st5, E("window.__mkSaid")))
+    tab("errors"); PA = '#app [data-post-panel="errors"] [data-bill-row="pa1"]'
+    ok(pg.locator(PA).count() == 1 and "Not sent again" in txt(PA) and "already sent from this computer" in txt(PA) and pg.locator(PA + " [data-post-again], " + PA + " [data-retry-bill]").count() == 0 and pg.locator(PA + " [data-back]").count() == 1,
+       "LOW. a record refusal (alreadySent): 'Not sent again' with the bridge's words, no Post again, Back to review stays (%s)" % txt(PA)[-140:])
     tab("posted")
     JV, JB, JN = ['#app [data-post-panel="posted"] [data-job="%s"]' % j for j in ("jPV", "jPB", "jPN")]
     v1 = txt(JV + " [data-posted-entry='pv1']")

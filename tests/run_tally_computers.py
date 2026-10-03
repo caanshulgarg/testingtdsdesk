@@ -137,10 +137,21 @@ with sync_playwright() as p:
     pg.fill(PS(D1) + " input[data-ps-only]", "ZZ TEST, ABC LTD , ZZ TEST"); pg.fill(PS(D1) + " input[data-ps-bills]", "25"); pg.fill(PS(D1) + " input[data-ps-bank]", "100"); pg.click(PS(D1) + " [data-ps-save]"); pg.wait_for_timeout(600)
     calls = [c for c in E("window.__calls") if c[0] == "tally_device_post_settings"]
     ok(calls == [["tally_device_post_settings", {"p_device": D1, "p_post_only": ["ZZ TEST", "ABC LTD"], "p_bills": 25, "p_bank": 100}]], "F3. Save -> tally_device_post_settings(p_device, p_post_only [names, trimmed, no repeats], p_bills, p_bank) (%s)" % calls)
+    # review must-fix: a Save that did not touch the names box sends p_post_only null (the row's value, and an installer-set
+    # PostOnly, stay); clearing a named list asks first and sends [] (any company) only on yes
     E("() => { window.__calls = []; }")
-    pg.click(PS(D1) + " [data-ps-edit]"); pg.wait_for_timeout(300); pg.fill(PS(D1) + " input[data-ps-only]", ""); pg.click(PS(D1) + " [data-ps-save]"); pg.wait_for_timeout(600)
+    pg.click(PS(D1) + " [data-ps-edit]"); pg.wait_for_timeout(300); pg.fill(PS(D1) + " input[data-ps-bills]", "30"); pg.click(PS(D1) + " [data-ps-save]"); pg.wait_for_timeout(600)
     calls = [c for c in E("window.__calls") if c[0] == "tally_device_post_settings"]
-    ok(len(calls) == 1 and calls[0][1]["p_post_only"] == [] and calls[0][1]["p_device"] == D1, "F3. an empty 'Posts only to' is sent as [] (any company) (%s)" % calls)
+    ok(calls == [["tally_device_post_settings", {"p_device": D1, "p_post_only": None, "p_bills": 30, "p_bank": 50}]] and pg.locator("#confirmBox .cbx").count() == 0, "F3. a batch-size-only Save sends p_post_only null, no question (%s)" % calls)
+    E("() => { window.__calls = []; }")
+    pg.click(PS(D1) + " [data-ps-edit]"); pg.wait_for_timeout(300); pg.fill(PS(D1) + " input[data-ps-only]", ""); pg.click(PS(D1) + " [data-ps-save]"); pg.wait_for_timeout(400)
+    ok(pg.locator("#confirmBox .cbx").count() == 1 and "Posting to any company from this computer?" in pg.inner_text("#confirmBox") and not [c for c in E("window.__calls") if c[0] == "tally_device_post_settings"],
+       "F3. clearing a named list asks 'Posting to any company from this computer?' before anything is sent (%s)" % pg.inner_text("#confirmBox").replace(chr(10), " ")[:120])
+    pg.click('#confirmBox [data-cbx="no"]'); pg.wait_for_timeout(400)
+    ok(not [c for c in E("window.__calls") if c[0] == "tally_device_post_settings"] and pg.locator(PS(D1) + " input[data-ps-only]").count() == 1, "F3. No: nothing sent, the editor stays open")
+    pg.click(PS(D1) + " [data-ps-save]"); pg.wait_for_timeout(400); pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(600)
+    calls = [c for c in E("window.__calls") if c[0] == "tally_device_post_settings"]
+    ok(len(calls) == 1 and calls[0][1]["p_post_only"] == [] and calls[0][1]["p_device"] == D1, "F3. Yes: an empty 'Posts only to' is sent as [] (any company) (%s)" % calls)
     # the RPC missing (migration 43 not run): plain words, not an error code
     E("() => { window.__calls = []; window.__fail = 'Could not find the function public.tally_device_post_settings(p_bank, p_bills, p_device, p_post_only) in the schema cache (PGRST202)'; }")
     pg.click(PS(D1) + " [data-ps-edit]"); pg.wait_for_timeout(300); pg.click(PS(D1) + " [data-ps-save]"); pg.wait_for_timeout(600)

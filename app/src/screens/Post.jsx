@@ -205,7 +205,8 @@ function Attention({ co, bills, canPost }) {
   const refusedRow = (e, nested) => <li key={e.id} data-attn-row="" data-bill-row={e.id} data-attn-kind="refused">
     <BillWhy e={e} why={(why[e.id] && why[e.id].alreadySent ? "Not sent again" : "Tally refused it") + (why[e.id] && why[e.id].job.created_at ? " (posting of " + tallyHm(why[e.id].job.created_at) + ")" : "") + ": " + ((why[e.id] && why[e.id].reason) || "Tally did not take it")} />
     <span className="acts">
-      {!nested && canPost && (held(e.id, co.id) ? <Wait /> : <button className="btn small primary" data-post-again="" onClick={() => postAllToTally({ kind: "bill", id: e.id })}>Post again</button>)}
+      {/* alreadySent (bridge 2.1.8): the bridge's own record says it went from that computer; no Post again from here */}
+      {!nested && canPost && !(why[e.id] && why[e.id].alreadySent) && (held(e.id, co.id) ? <Wait /> : <button className="btn small primary" data-post-again="" onClick={() => postAllToTally({ kind: "bill", id: e.id })}>Post again</button>)}
       <button className="btn small" data-back="" onClick={() => postBackToReview("bill", e.id)}>Back to review</button>
     </span>
   </li>;

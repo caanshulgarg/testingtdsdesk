@@ -173,7 +173,8 @@ function PostSettings({ r, owner }) {
   const shown = { only: ap.only || saved.only || [], bills: num(ap.bills) || num(saved.bills) || 10, bank: num(ap.bank) || num(saved.bank) || 50 };
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   const waiting = !!d.post_settings_at && !(same(saved.only || [], ap.only || []) && (num(saved.bills) || 10) === (num(ap.bills) || 10) && (num(saved.bank) || 50) === (num(ap.bank) || 50));
-  const open = () => { setV({ only: (saved.only || ap.only || []).join(", "), bills: String(num(saved.bills) || shown.bills), bank: String(num(saved.bank) || shown.bank) }); setWhy(""); setEdit(true); };
+  // only0: the names as the box opened, so Save knows whether the owner touched them (p_post_only null when not)
+  const open = () => { const only = (saved.only || ap.only || []).join(", "); setV({ only, only0: only, bills: String(num(saved.bills) || shown.bills), bank: String(num(saved.bank) || shown.bank) }); setWhy(""); setEdit(true); };
   const save = async () => { const w = await TCloud.postSettings(d, v); setWhy(w); if (!w) setEdit(false); };
   return <span className="note" data-post-settings="" data-ps-waiting={waiting ? "" : undefined}>
     {"Posting settings: posts only to " + (shown.only.length ? shown.only.join(", ") : "any company") + " · " + shown.bills + " bills per request · " + shown.bank + " bank lines per request"}
