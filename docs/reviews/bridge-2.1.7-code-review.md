@@ -38,3 +38,5 @@ accepting a wrong version.
   version, or no words fail (release_check_test.sh: green 2/3, red 7/8/10/11).
 - migration 42: one function, same arguments and grants; the cap counts per book over 24 hours and never records a
   refused day; the 7-argument wrapper untouched; run_migration42.py and run_migration_order.py green.
+
+Range: 27aa360..81ce8da (bridge-go/, release-check.sh and its self-test, docs/tally-allowlist.md, server/tally-cloud/migration-42)

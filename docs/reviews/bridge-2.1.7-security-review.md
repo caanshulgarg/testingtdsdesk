@@ -41,3 +41,5 @@ read fault.
 - Tally's behaviour on NWS144 (why the Day Book export lists nothing): the read test exists to gather that evidence.
 - The Windows installer on a locked-down computer (no PowerShell, no Run): Windows CI installs the setup on
   windows-2022 and windows-2025 runners, not on a restricted account.
+
+Range: 27aa360..81ce8da (bridge-go/, release-check.sh and its self-test, docs/tally-allowlist.md, server/tally-cloud/migration-42)
