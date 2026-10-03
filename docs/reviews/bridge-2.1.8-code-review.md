@@ -334,4 +334,22 @@ Read: the diff e383608..4cb9789 -- app/src src/js (Post.jsx, Bill.jsx, Bank.jsx,
 1. Item 4: the posting-settings Save never sends p_post_only [] unless the owner cleared or changed the names box; a
    change from a named list to "any company" is confirmed.
 
-Range: 7162400..4cb9789 (bridge-go/, server/tally-cloud/index.ts, server/tally-cloud/migration-43-posting-reply.sql, tests/run_main_bridge_server.py, app/src, src/js)
+## App fix reviewed (4cb9789..6d1ba04)
+Read: src/js/49-tally-cloud.js postSettings, app/src/screens/Tally.jsx PostSettings.open, app/src/screens/Post.jsx
+refusedRow, and the test changes in tests/run_tally_computers.py and tests/run_post_tabs.py.
+- App item 4 CLOSED. Tally.jsx records the names box as it opened (v.only0, from the saved row else the applied beat);
+  postSettings compares postSettingsNames(v.only) with postSettingsNames(v.only0) and sends p_post_only only when they
+  differ (null otherwise: the SQL leaves the row's value, so an installer-set or hand-set PostOnly on the computer is not
+  touched by a batch-size Save); a change from a named list to an empty box asks "Posting to any company from this
+  computer?" (askConfirm, the same {ok} shape readStop reads) and sends [] only on Yes, else "Nothing sent: the list
+  stays as it was." and the editor stays open. Typing names and erasing them again counts as untouched (the comparison is
+  on the cleaned lists, not the text). run_tally_computers.py: a batch-size-only Save -> p_post_only null and no
+  question; clearing a named list -> the question, nothing sent; No -> nothing sent; Yes -> [] sent. Bounds 1..500 and the
+  20-name cut unchanged.
+- LOW item CLOSED. Post.jsx hides Post again (and Wait) on a refusal whose result says alreadySent, whatever the cloud's
+  id state; Back to review stays. run_post_tabs.py: a record refusal shows "Not sent again" with the bridge's words, no
+  Post again or Retry, Back to review present.
+- Nothing opened: no new path to Tally or the cloud; the RPC call keeps the same arguments and bounds; the question text
+  carries the computer's name and the list only.
+
+Range: 7162400..6d1ba04 (bridge-go/, server/tally-cloud/index.ts, server/tally-cloud/migration-43-posting-reply.sql, tests/run_main_bridge_server.py, app/src, src/js)

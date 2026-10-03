@@ -124,4 +124,10 @@ set PostOnly at its next beat: a widening the owner did not choose (code review,
 visible on an alreadySent refusal when the cloud's ids are unreadable (harmless: the bridge's record and the cloud's
 unique rule refuse the send).
 
-Range: 7162400..4cb9789 (bridge-go/, server/tally-cloud/index.ts, server/tally-cloud/migration-43-posting-reply.sql, tests/run_main_bridge_server.py, app/src, src/js)
+## App fix reviewed (4cb9789..6d1ba04)
+The widening path is closed: p_post_only goes as null unless the owner changed the names, and an emptying of a named
+list is confirmed in a dialog before [] is sent (tests: null on a batch-size Save, the question, No sends nothing, Yes
+sends []). Post again is no longer offered on an alreadySent refusal regardless of the cloud's id state. Nothing new
+reaches Tally or the cloud. No findings left open in this range.
+
+Range: 7162400..6d1ba04 (bridge-go/, server/tally-cloud/index.ts, server/tally-cloud/migration-43-posting-reply.sql, tests/run_main_bridge_server.py, app/src, src/js)
