@@ -145,6 +145,14 @@ function Baselines({ r, owner }) {
       : <><span className="tag ok">{company}</span><span className="note" data-baseline-cleared="">{"Cleared by " + who(cur.cleared_by) + " at " + tallyHm(cur.cleared_at) + ": " + (cur.cleared_note || "no note")}</span></>}
   </div>)}</div>;
 }
+// FinCom Bridge 2.1.6 posts only to the companies in its PostOnly setting (the pilot installer sets ["ZZ TEST"]); its
+// heartbeat carries postOnly ([] when unrestricted) and tally-ingest keeps it on the bridge entry (info.bridges[id].postOnly)
+// and on the device record (info.beat.postOnly). The bridge entry first, then the beat; empty or absent: nothing to say.
+function postOnlyOf(r) {
+  const info = (r.device && r.device.info) || {}, b = (info.bridges || {})[r.id] || {};
+  const list = Array.isArray(b.postOnly) ? b.postOnly : Array.isArray((info.beat || {}).postOnly) ? info.beat.postOnly : [];
+  return list.map((x) => String(x || "").trim()).filter(Boolean);
+}
 function BridgeLines({ rows, latest }) {
   const [open, setOpen] = useState(false);
   const owner = S.account && S.account.me && S.account.me.role === "owner";
@@ -164,7 +172,8 @@ function BridgeLines({ rows, latest }) {
           <span className={"tag " + st.cls} data-bridge-state="">{st.text}</span>
           {live && r.online && <span className={"tag " + (RS_CLS[rd.state] || "warn")} data-read-text="">{rd.text}</span>}
           {live && <ReadWho r={r} />}
-          {st.act && <span className="note" data-bridge-act="">{st.act}</span>}
+          {live && postOnlyOf(r).length > 0 && <span className="note" data-post-only="" title="FinCom Bridge posts only to these Tally companies (its PostOnly setting); it reads every company open">{"Posts only to: " + postOnlyOf(r).join(", ")}</span>}
+          {st.act &&<span className="note" data-bridge-act="">{st.act}</span>}
           {st.makeMain && <button className="btn small primary" data-make-main={r.id} onClick={() => TCloud.makeMain(r)}>Make this the main bridge</button>}
         </div>
         {live && <div className="row" style={{ alignItems: "center", gap: 8, flexWrap: "wrap", marginLeft: 16 }}>

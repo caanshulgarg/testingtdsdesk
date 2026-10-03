@@ -36,6 +36,11 @@ DEVS = [
         {"readStop": {"by": "fincom", "reason": "Tally hangs on the bank ledger", "at": "ago:40"}}),
     dev("d0000000-0000-4000-8000-000000000005", "LAPTOP", {}, None, at="ago:180", version="2.1.3")]
 D1, D2, D3, D4, D5 = [d["id"] for d in DEVS]
+# FinCom Bridge 2.1.6 posts only to the companies in its PostOnly setting; the heartbeat carries postOnly and tally-ingest
+# keeps it on the bridge entry (info.bridges[id].postOnly). NWS144: one company; ACCTS2: two; the others: none ([] or absent)
+DEVS[0]["info"]["bridges"]["go-" + D1]["postOnly"] = ["ZZ TEST"]
+DEVS[1]["info"]["bridges"]["go-" + D2]["postOnly"] = []
+DEVS[2]["info"]["bridges"]["go-" + D3]["postOnly"] = ["ZZ TEST", "ABC LTD"]
 STOPS = [{"id": 7, "device_id": D4, "action": "stop", "reason": "Tally hangs on the bank ledger", "stopped_at": "ago:40", "cleared_at": None}]
 SETUP = """([devs, stops, releases, role, extra]) => {
   extra = extra || {};
@@ -95,6 +100,10 @@ with sync_playwright() as p:
     ok("Stopped from FinCom: Tally hangs on the bank ledger" in l4 and pg.get_attribute('#app [data-computer="%s"]' % D4, "data-read-state") == "fincomstop", "Stopped from FinCom, with its reason (%s)" % l4)
     l5 = line(D5)
     ok("Offline since" in l5 and pg.get_attribute('#app [data-computer="%s"]' % D5, "data-read-state") == "offline" and "FinCom Bridge 2.1.3" in l5, "Offline since ... (%s)" % l5)
+    # ---- 2.1.6: the bridge posts only to the companies in its PostOnly setting (info.bridges[id].postOnly, else info.beat.postOnly)
+    ok("Posts only to: ZZ TEST" in l1 and "ABC LTD" not in l1, "PostOnly: a bridge restricted to ZZ TEST says Posts only to: ZZ TEST (%s)" % l1)
+    ok("Posts only to" not in l2 and "Posts only to" not in l4 and "Posts only to" not in l5, "PostOnly: an empty or absent list says nothing")
+    ok("Posts only to: ZZ TEST, ABC LTD" in l3, "PostOnly: two names, joined with a comma (%s)" % l3)
     # ---- the owner's buttons
     sel = lambda s: pg.locator("#app " + s)
     ok(sel('[data-read-stop="%s"]' % D1).count() == 1 and sel('[data-read-stop="%s"]' % D2).count() == 1 and sel('[data-read-resume="%s"]' % D3).count() == 1 and sel('[data-read-resume="%s"]' % D4).count() == 1
@@ -148,6 +157,7 @@ with sync_playwright() as p:
     E(SETUP, [DEVS, STOPS, [], "member"]); pg.wait_for_timeout(300)
     E("() => navHome('tally')"); pg.wait_for_timeout(1500)
     ok(pg.locator("#app [data-computer]").count() == 5 and "Stopped from FinCom: Tally hangs on the bank ledger" in line(D4), "a member sees the lines")
+    ok("Posts only to: ZZ TEST" in line(D1), "a member sees Posts only to: ZZ TEST too (information, not a control)")
     ok(sel("[data-read-stop], [data-read-stop-all], [data-read-resume], [data-read-resume-all], [data-release-pilot], [data-release-approve]").count() == 0, "a member sees none of the owner's buttons")
     # ---- live: a beat passed on by FinCom's cloud changes the line at once
     E("""() => TLight.beatIn({device: '%s', beat: {at: new Date().toISOString(), bridge: 'go-%s', paused: false, readStopped: {by: 'self', reason: 'Tally did not answer for 2 minutes', at: new Date().toISOString()},
