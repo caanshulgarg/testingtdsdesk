@@ -9,3 +9,6 @@ connector/FinComConnector.exe
 
 # the React build published on main for checking (staging.fincom.live/react/, app/publish-preview.sh)
 /react/
+
+# red/green test outputs kept by the agents while working (may carry client figures): never committed
+scratchpad/
