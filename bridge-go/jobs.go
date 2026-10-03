@@ -146,11 +146,25 @@ func newPostJob(pl M) (M, error) {
 			}
 		}
 		if ((st == "failed" || st == "cancelled") || (st == "done" && len(acceptedUnconfirmed(rs)) > 0)) && !jobAlive(id) {
+			byItem := map[string]string{}
+			if pay := readObjFile(filepath.Join(dir, "payload.json")); pay != nil {
+				for _, x := range arr(pay["items"]) {
+					if o := obj(x); o != nil {
+						byItem[str(o["id"])] = str(o["xml"])
+					}
+				}
+			}
 			var kept []any
 			for _, r := range rs {
-				if confirmedResult(r) {
-					kept = append(kept, r)
+				if !confirmedResult(r) {
+					continue
 				}
+				// round 8 (R5): a release the cloud handed with this job, not honoured yet, for an unconfirmed entry: the
+				// worker sees the entry again (and sends it once)
+				if k := str(r["id"]); r["verified"] != true && releaseFor(arr(pl["released"]), acceptedKey(k, byItem[k]), k, or2(acceptedInfo(acceptedKey(k, byItem[k])), M{})) != nil {
+					continue
+				}
+				kept = append(kept, r)
 			}
 			if kept == nil {
 				kept = []any{}
@@ -514,14 +528,24 @@ func jobWorker(dir string) {
 			}
 			lv := str(a["lastVchId"])
 			if rel := releaseFor(arr(pl["released"]), key, k, a); rel != nil {
-				// round 7 (F2): the owner released it ("Not in Tally") after Tally's acceptance: sent ONCE more, through the
-				// check before sending; the new acceptance or confirmation then writes a new note
+				// round 7 (F2) / round 8 (R5): the owner released it ("Not in Tally") and the cloud, the single judge, handed the
+				// release with the job: sent ONCE more per release, through the check before sending; the release is
+				// remembered in the note, and the new acceptance or confirmation replaces the note's acceptance
 				writeLog("  entry " + k + ": released by " + or(str(rel["by"]), "the owner") + " at " + str(rel["at"]) + " (" + str(rel["why"]) + "); sent once more")
-				acceptedForget(key)
+				acceptedHonour(key, rel)
 				left = append(left, it)
 				continue
 			}
-			r := M{"id": k, "kind": "voucher", "ok": false, "verified": nil, "outcomeUnknown": true, "accepted": true, "acceptedBefore": true, "state": "unknown", "lastVchId": lv, "company": company, "port": port, "acceptedAt": str(a["acceptedAt"]),
+			var r M
+			if a["held"] == true {
+				// round 8 (R4): held after a partial batch in an earlier job: Tally may have made it
+				r = M{"id": k, "kind": "voucher", "ok": false, "verified": nil, "outcomeUnknown": true, "held": true, "acceptedBefore": true, "state": "unknown", "company": company, "port": port, "acceptedAt": str(a["acceptedAt"]),
+					"message": "Tally may have made this entry in a batch on " + str(a["date"]) + " (job " + str(a["job"]) + ") and it is not confirmed yet; being checked, not sent again"}
+				writeLog("  voucher " + k + ": HELD BEFORE in job " + str(a["job"]) + " (a batch Tally made only partly on " + str(a["date"]) + "), not confirmed yet; not sent again, looked for again at the end of this job")
+				results = append(results, r)
+				continue
+			}
+			r = M{"id": k, "kind": "voucher", "ok": false, "verified": nil, "outcomeUnknown": true, "accepted": true, "acceptedBefore": true, "state": "unknown", "lastVchId": lv, "company": company, "port": port, "acceptedAt": str(a["acceptedAt"]),
 				"message": "Tally accepted this entry before (job " + str(a["job"]) + ", voucher id " + or(lv, "not given") + ") and it is not confirmed yet; being checked, not sent again"}
 			results = append(results, r)
 			_ = noteAccepted(key, company, str(p["id"]), lv)
@@ -701,6 +725,7 @@ func jobWorker(dir string) {
 							r := M{"id": k, "kind": "voucher", "ok": false, "verified": nil, "outcomeUnknown": true, "held": true, "state": "unknown", "company": company, "port": port,
 								"message": fmt.Sprintf("Tally made %d of %d entries sent together and this one was not found yet by its tag; held (not sent again) and checked later", toInt(rr["created"]), len(fast))}
 							writeLog(fmt.Sprintf("  voucher %s: HELD: Tally made %d of %d of the batch (errors %d) and this entry was not found by its tag on its date; not sent again, checked later", k, toInt(rr["created"]), len(fast), toInt(rr["errors"])))
+							_ = noteHeld(acceptedKey(k, str(v["xml"])), company, str(p["id"]), group(`<DATE>(\d{8})</DATE>`, str(v["xml"]), 1)) // on disk (round 8, R4)
 							res = append(res, r)
 						}
 					}

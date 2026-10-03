@@ -646,8 +646,8 @@ func measureCmd(args []string) int {
 // the console command's decision (C5, round 5): through the running bridge when one answers; one that refuses or is
 // busy ends the command with its reason (never measured here in parallel with that bridge's reads and postings, which
 // go through its one-at-a-time gate); only when no bridge answers at all is Tally measured from this process
-// the bridge on this computer: "up" (its /ping answers), "none" (nothing listens on its port), "busy" (a listener that
-// does not answer in time)
+// the bridge on this computer: "up" (its /ping answers as this program), "none" (nothing listens on its port), "busy" (a
+// listener that does not answer in time), "other" (a listener that is not this program: bridge 1.15.0)
 func bridgeState(port int) string {
 	c := &http.Client{Timeout: 3 * time.Second, Transport: &http.Transport{Proxy: nil}}
 	r, err := c.Get(fmt.Sprintf("http://127.0.0.1:%d/ping", port))
@@ -666,7 +666,7 @@ func bridgeState(port int) string {
 	if o := parseObj(string(b)); o != nil && str(o["impl"]) == "go" {
 		return "up"
 	}
-	return "busy"
+	return "other" // something answers on the port that is not this program (bridge 1.15.0, or another program)
 }
 
 var (
@@ -676,6 +676,10 @@ var (
 
 func consoleMeasure(o measureOpts, bridge string, post func() M, status func() M, local func() (M, error)) (int, string) {
 	var out strings.Builder
+	if bridge == "other" {
+		fmt.Fprintln(&out, "Not measured: another bridge program is on this port (bridge 1.15.0, or another program answering there), not FinCom Bridge "+BridgeVersion+". Make FinCom Bridge the main bridge (tray icon), or stop that program, then try again.")
+		return 1, out.String()
+	}
 	if bridge == "busy" {
 		fmt.Fprintln(&out, "Not measured: the bridge on this computer is busy (it listens on its port but did not answer in 3 s). Nothing is measured from this console while a bridge runs: its reads and postings go one at a time through that bridge. Try again in a minute.")
 		return 1, out.String()

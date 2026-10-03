@@ -124,10 +124,13 @@ func noteAccepted(key, company, jobID, lv string) error {
 	if e == nil {
 		e = M{"at": nowS(), "acceptedAt": time.Now().Format(time.RFC3339)}
 	}
-	if str(e["acceptedAt"]) == "" {
+	if str(e["acceptedAt"]) == "" || e["resendOpen"] == true {
+		// the first acceptance, or the new one after a release was honoured: it replaces the note's acceptance
 		e["acceptedAt"] = time.Now().Format(time.RFC3339)
+		delete(e, "resendOpen")
 	}
 	e["company"], e["job"] = company, or(jobID, str(e["job"]))
+	delete(e, "held")
 	if lv != "" {
 		e["lastVchId"] = lv
 	}
@@ -171,9 +174,11 @@ func acceptedForget(key string) {
 	}
 }
 
-// the release the cloud sent with the job for this entry (by its tag id or its raw id), when it is newer than the
-// acceptance held; nil otherwise. A note without an acceptance time (written before round 7) counts as older
+// the release the cloud sent with the job for this entry (by its tag id or its raw id) that this bridge has not honoured
+// yet; nil otherwise. The cloud is the single judge of whether a release is in force (round 8, R5: no clock comparison
+// here); the bridge resends once per release, remembered in the note as "honoured": [at|id, ...]
 func releaseFor(released []any, key, rawID string, note M) M {
+	done := strs(note["honoured"])
 	for _, x := range released {
 		r := obj(x)
 		if r == nil {
@@ -183,14 +188,54 @@ func releaseFor(released []any, key, rawID string, note M) M {
 		if rid != rawID && acceptedKey(rid, "") != key {
 			continue
 		}
-		at, ok := parseTime(str(r["at"]))
-		if !ok {
+		if str(r["at"]) == "" || contains(done, str(r["at"])+"|"+rid) {
 			continue
 		}
-		acc, had := parseTime(str(note["acceptedAt"]))
-		if !had || at.After(acc) {
-			return r
-		}
+		return r
 	}
 	return nil
+}
+
+// the release is honoured: remembered in the note (kept across the resend's new acceptance), and the entry may go once
+func acceptedHonour(key string, rel M) {
+	if key == "" || rel == nil {
+		return
+	}
+	acceptedMu.Lock()
+	defer acceptedMu.Unlock()
+	all := acceptedAll()
+	e := obj(all[key])
+	if e == nil {
+		e = M{"at": nowS()}
+	}
+	e["honoured"] = toAny(append(strs(e["honoured"]), str(rel["at"])+"|"+str(rel["id"])))
+	e["resendOpen"], e["releasedBy"], e["releasedAt"], e["releasedWhy"] = true, str(rel["by"]), str(rel["at"]), str(rel["why"])
+	all[key] = e
+	_ = acceptedWriteOrLog(key + " released")
+}
+
+// an entry of a batch Tally made only partly, not found by its tag (round 8, R4): noted as held, so no later job sends
+// it either; confirmed later by its tag (noteVerified)
+func noteHeld(key, company, jobID, date string) error {
+	if key == "" {
+		return errors.New("no key")
+	}
+	acceptedMu.Lock()
+	defer acceptedMu.Unlock()
+	all := acceptedAll()
+	e := obj(all[key])
+	if e == nil {
+		e = M{"at": nowS()}
+	}
+	if str(e["acceptedAt"]) == "" || e["resendOpen"] == true {
+		e["acceptedAt"] = time.Now().Format(time.RFC3339)
+		delete(e, "resendOpen")
+	}
+	e["company"], e["job"], e["held"], e["date"] = company, or(jobID, str(e["job"])), true, date
+	delete(e, "lastVchId")
+	if e["verified"] != true {
+		e["verified"] = false
+	}
+	all[key] = e
+	return acceptedWriteOrLog("Tally may have made " + key + " in a batch")
 }

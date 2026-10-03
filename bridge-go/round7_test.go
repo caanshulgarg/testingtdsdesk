@@ -13,7 +13,7 @@ import (
 )
 
 // --- F2. an owner's release ("Not in Tally — release") newer than the acceptance lets the entry go ONCE more (through
-// the sameId check); a release older than the acceptance does not. The release comes with the job from posts_take
+// the sameId check); the same release handed again does not (round 8: the cloud alone judges a release). It comes with the job from posts_take
 func TestReleasedEntrySentOnceMore(t *testing.T) {
 	hide := true
 	f := r6Tally(t, func() bool { return hide })
@@ -33,26 +33,21 @@ func TestReleasedEntrySentOnceMore(t *testing.T) {
 	if _, err := time.Parse(time.RFC3339, str(a["acceptedAt"])); err != nil {
 		t.Fatalf("acceptedAt %q is not RFC3339", a["acceptedAt"])
 	}
-	// a release OLDER than the acceptance (a stale one): not sent
-	older := time.Now().Add(-time.Hour).Format(time.RFC3339)
-	if _, err := newPostJob(M{"jobId": "job-rel-2", "company": zz, "vouchers": vch, "released": []any{M{"id": id, "at": older, "by": "Anshul", "why": "stale"}}}); err != nil {
-		t.Fatal(err)
-	}
-	p := r6Done(t, "job-rel-2")
-	if f.n("Import") != 1 || r6States(p)[id] != "unknown" {
-		t.Fatalf("a stale release sent the entry again: %d imports, %v", f.n("Import"), r6States(p))
-	}
-	// a release NEWER than the acceptance (the owner pressed it after Tally's acceptance), handed over by the cloud with
-	// the job (posts_take): sent once more
+	// round 8 (R5): the cloud is the single judge of a release; the bridge compares no clocks. A release handed with a
+	// job is honoured once, whatever its "at" against the acceptance (TestReleaseHonouredOncePerRelease)
+	// a release handed over by the cloud with the job (posts_take): sent once more
 	time.Sleep(1100 * time.Millisecond) // acceptance times are to the second
 	newer := time.Now().Format(time.RFC3339)
 	c.mu.Lock()
 	c.takeJobs = append(c.takeJobs, M{"id": "job-rel-3", "company": zz, "payload": M{"vouchers": vch}, "released": []any{M{"id": id, "at": newer, "by": "Anshul", "why": "not in Tally"}}})
 	c.mu.Unlock()
 	cloudPostTake()
-	p = r6Done(t, "job-rel-3")
+	p := r6Done(t, "job-rel-3")
 	if f.n("Import") != 2 {
 		t.Fatalf("the released entry was not sent once more (%d imports)", f.n("Import"))
+	}
+	if r6States(p)[id] != "unknown" {
+		t.Fatalf("after the resend: %v", r6States(p))
 	}
 	if logLines("entry "+id+": released by Anshul at "+newer+" (not in Tally); sent once more") < 1 {
 		t.Fatal("the release is not logged as required")
@@ -63,13 +58,13 @@ func TestReleasedEntrySentOnceMore(t *testing.T) {
 	if r6States(p)[id] != "unknown" {
 		t.Fatalf("after the second send: %v", r6States(p))
 	}
-	// the same release again (now older than the new acceptance): not sent a third time
+	// the same release again (honoured already): not sent a third time
 	if _, err := newPostJob(M{"jobId": "job-rel-4", "company": zz, "vouchers": vch, "released": []any{M{"id": id, "at": newer, "by": "Anshul", "why": "not in Tally"}}}); err != nil {
 		t.Fatal(err)
 	}
 	r6Done(t, "job-rel-4")
 	if f.n("Import") != 2 {
-		t.Fatalf("a release older than the new acceptance sent it again (%d imports)", f.n("Import"))
+		t.Fatalf("a release honoured already sent it again (%d imports)", f.n("Import"))
 	}
 	// the acceptance reported to the cloud carries acceptedAt
 	syncCloudPosts()

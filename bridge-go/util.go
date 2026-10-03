@@ -370,3 +370,11 @@ func flagValue(args []string, name string) string {
 	}
 	return ""
 }
+
+// the first map that is not nil
+func or2(a, b M) M {
+	if a != nil {
+		return a
+	}
+	return b
+}
