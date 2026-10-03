@@ -21,6 +21,23 @@ function Changed({ b }) {
   </section>;
 }
 
+// migration 39: a ledger renamed in Tally whose saved choices were carried (tally_ledgers.needs_confirm): one line under
+// its name until an owner confirms (tally_ledger_rename_confirm); staff see the words only. Nothing once confirmed.
+function RenameLine({ cid, name }) {
+  const l = Ledgers.renamedOf(cid, name);
+  if (!l) return null;
+  const busy = !!(Ledgers.confirming || {})[cid + "|" + l.name];
+  return <div className="nr" style={{ whiteSpace: "normal" }} data-renamed={l.name}>{Ledgers.renameLine(l.renamed)}
+    {Ledgers.canConfirmRename() && <>{" "}<button className="btn small" data-rename-confirm={l.name} disabled={busy} onClick={() => Ledgers.confirmRename(cid, l.name)}>{busy ? "Confirming…" : "Confirm"}</button></>}</div>;
+}
+function Renamed({ b }) {
+  const rows = Ledgers.renamed(b.cid);
+  if (!rows.length) return null;
+  return <section className="bk-alert" style={{ marginBottom: 12 }} data-renamed-list=""><b>{rows.length === 1 ? "A ledger was renamed in Tally." : rows.length + " ledgers were renamed in Tally."}</b> Their saved choices (GST, TDS, bank, flow) followed the new name; check and confirm each.
+    {rows.map((l) => <div key={l.name} style={{ marginTop: 4 }}><b>{l.name}</b><RenameLine cid={b.cid} name={l.name} /></div>)}
+  </section>;
+}
+
 // what the ledger is: a GST head, a TDS or TCS ledger, or something else
 function WhatSel({ n, m, other }) {
   const opts = (f) => LedMaster.WHAT.filter(f).map((w) => <option key={w[0]} value={w[0]}>{w[1]}</option>);
@@ -60,7 +77,7 @@ function List({ b, view, shown }) {
       const warn = LedMaster.checks(b, n, m), inf = info[n] || {};
       const tallyType = inf.taxType && !/^(others|not applicable)$/i.test(String(inf.taxType).replace(/[^A-Za-z ]/g, "").trim());
       return <tr key={n + ":" + i} data-key={n}>
-        <td>{n}{inf.group && <div className="nr">{inf.group + (tallyType ? " · Tally: " + inf.taxType + (inf.dutyHead ? " " + inf.dutyHead : "") : "")}</div>}</td>
+        <td>{n}{inf.group && <div className="nr">{inf.group + (tallyType ? " · Tally: " + inf.taxType + (inf.dutyHead ? " " + inf.dutyHead : "") : "")}</div>}<RenameLine cid={b.cid} name={n} /></td>
         <td><WhatSel n={n} m={m} other={view === "other"} /></td><td><Detail n={n} m={m} regs={regs} /></td><td className="n">{m.n || 0}</td>
         <td style={{ minWidth: 200 }}>{m.why && <NR>{m.why}</NR>}{warn.map((w, j) => <NR key={j} bad>{w}</NR>)}</td>
         <td className="ac">{view === "other" ? null : m.ok ? <button className="linkbtn" title="Undo" onClick={() => lmConfirmToggle(n)}>✓ confirmed</button> : <button className="btn small" onClick={() => lmConfirmToggle(n)}>Confirm</button>}</td>
@@ -88,7 +105,8 @@ function Posting({ b }) {
   </section>;
 }
 
-export default function Ledgers({ b }) {
+// named LedgersTab, not Ledgers: the global Ledgers (src/js/58, the client's ledger list) is used in this module
+export default function LedgersTab({ b }) {
   const info = b.ledInfo || {}, all = Object.entries(b.map || {});
   const isTax = ([n, m]) => LedMaster.taxLike(n, m, info[n]);
   const gst = all.filter(([n, m]) => LedMaster.isGst(m.what) && isTax([n, m])), tds = all.filter(([n, m]) => LedMaster.isTds(m.what) && isTax([n, m]));
@@ -107,6 +125,7 @@ export default function Ledgers({ b }) {
     {/* review 18: what is confirmed or changed below is saved with Save at the foot (the shared footer) */}
     <Confirm id="books:ledgers" label="Tally ledgers" stores={["books:map"]}>
     <Changed b={b} />
+    <Renamed b={b} />
     <section className="dash-card" style={{ marginBottom: 12 }}><h3>GST and TDS ledgers: confirm once for this client</h3>
       <p className="note">Each ledger is guessed from Tally — its tax type, duty head and group — and from how the day book uses it. Check the guess and confirm it. Returns count only confirmed ledgers; anything still to confirm is shown on the TDS and GST screens, and their files wait until it is done.</p>
       <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
