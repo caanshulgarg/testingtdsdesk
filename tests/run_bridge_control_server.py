@@ -72,7 +72,7 @@ def beat(key, br, **kw):
     b.update(kw); return call(key, b)
 REQS = {"day": "2026-10-02", "last": {"kind": "daybook", "ms": 812, "at": "2026-10-02T10:01:02Z"}, "longest": {"kind": "ledgers", "ms": 19350, "at": "2026-10-02T09:30:00Z"}, "over20": 0, "n": 214}
 try:
-    for i in range(60):
+    for i in range(240):   # up to 120 s: Deno may still be fetching the function's imports on a fresh machine
         try: urllib.request.urlopen("http://127.0.0.1:8000/", timeout=1)
         except urllib.error.HTTPError: break
         except Exception: time.sleep(0.5)

@@ -40,7 +40,7 @@ def web(body):
     try: r = urllib.request.urlopen(rq, timeout=60); return r.status, json.loads(r.read())
     except urllib.error.HTTPError as e: return e.code, json.loads(e.read() or b"{}")
 try:
-    for i in range(60):
+    for i in range(240):   # up to 120 s: Deno may still be fetching the function's imports on a fresh machine
         try: urllib.request.urlopen("http://127.0.0.1:8000/", timeout=1)
         except urllib.error.HTTPError: break
         except Exception: time.sleep(0.5)

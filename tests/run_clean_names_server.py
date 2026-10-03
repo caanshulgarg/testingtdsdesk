@@ -39,7 +39,7 @@ DAY = ("<ENVELOPE><TALLYMESSAGE><VOUCHER REMOTEID=\"g-1\" VCHTYPE=\"Sales\"><DAT
        "<BILLALLOCATIONS.LIST><NAME>1</NAME><BILLTYPE>New Ref</BILLTYPE><AMOUNT>-4720.00</AMOUNT></BILLALLOCATIONS.LIST></ALLLEDGERENTRIES.LIST>"
        "<ALLLEDGERENTRIES.LIST><LEDGERNAME>Professional Fee &#13;&#10; </LEDGERNAME><AMOUNT>4720.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER></TALLYMESSAGE></ENVELOPE>")
 try:
-    for i in range(60):
+    for i in range(240):   # up to 120 s: Deno may still be fetching the function's imports on a fresh machine
         try: urllib.request.urlopen("http://127.0.0.1:8000/", timeout=1)
         except urllib.error.HTTPError: break
         except Exception: time.sleep(0.5)

@@ -68,6 +68,14 @@ fi
 SUDO=()
 [ "$(id -u)" -eq 0 ] || SUDO=(sudo -E env "PATH=$PATH" "HOME=$HOME")
 
+# the cloud function's imports fetched and compiled once, before any server test starts Deno: on a fresh machine the
+# first `deno run` of index.ts spends its time downloading, and a test that waits 30 s for the function finds nothing
+# listening (CI shard 1, 03-Oct-2026: run_clean_names_server and run_queue_server, the shard's first Deno tests)
+DENO_BIN="${DENO:-$(command -v deno || true)}"
+if [ -n "$DENO_BIN" ] && [ -x "$DENO_BIN" ]; then
+  "$DENO_BIN" cache "$TESTS/../server/tally-cloud/index.ts" >"$LOGS/_deno_cache.log" 2>&1 || { echo "deno cache failed (tests go on):"; tail -5 "$LOGS/_deno_cache.log"; }
+fi
+
 declare -a R S
 fails=0
 start_all=$(date +%s)
