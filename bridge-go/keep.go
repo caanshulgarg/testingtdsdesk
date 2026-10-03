@@ -237,6 +237,43 @@ func saveKeepDaysChanged(dir, from, to, x string, full bool) (int, int) {
 
 func countVouchers(t string) int { return len(re(`<VOUCHER\b`).FindAllStringIndex(t, -1)) }
 
+// round 12 (03-Oct-2026): how many vouchers the copy holds for the days from..to (the day files, days/<d>.xml; the
+// posting read-back writes those too)
+func copyVouchers(dir, from, to string) int {
+	n := 0
+	for d := from; d <= to; d = addDays(d, 1) {
+		if df := filepath.Join(dir, "days", d+".xml"); exists(df) {
+			n += countVouchers(readText(df))
+		}
+	}
+	return n
+}
+
+// the same over every day file of the copy
+func copyVouchersAll(dir string) int {
+	n := 0
+	for _, df := range dayFiles(dir, "") {
+		n += countVouchers(readText(df))
+	}
+	return n
+}
+
+// the head of a Tally answer for the log: its first 200 characters with the tags only (attributes and every value
+// between tags dropped, so no figure or name is logged) and runs of white space collapsed to one space
+func answerHead(x string) string {
+	t := re(`<([/?!]?[\w.:-]*)[^>]*>`).ReplaceAllString(x, "<$1>")
+	t = re(`>[^<]*<`).ReplaceAllString(t, "><")
+	if i := strings.Index(t, "<"); i >= 0 {
+		t = t[i:]
+	} else {
+		return ""
+	}
+	if i := strings.LastIndex(t, ">"); i >= 0 {
+		t = t[:i+1]
+	}
+	return cut(strings.TrimSpace(flat(t)), 200)
+}
+
 // why a Day Book answer is not a complete one ("" when it is): Tally's whole envelope, opened and closed; no error
 // line; and every voucher the text shows is one the XML decoder read (a decoder stop would drop the rest)
 func dayBookIncomplete(x string) string {
@@ -814,6 +851,12 @@ func (k *keepRun) step(company string, port int, booksFrom string) error {
 			if why := dayBookIncomplete(x); why != "" {
 				writeLog(fmt.Sprintf("Keeping %s: day book %s-%s: the answer was not complete (%s); nothing of it is kept, it is read again", company, f, t, why))
 				err = errors.New("the answer was not complete: " + why)
+			} else if cn := copyVouchers(dir, f, t); countVouchers(x) == 0 && cn > 0 {
+				// round 12 (03-Oct-2026): a whole envelope that lists NO voucher for days whose copy holds some is not
+				// trusted (Tally answered the owner's Day Book request so for every month of a company of ~2,750
+				// entries): it fails like a timeout, nothing of it is kept, no day of it is marked full or sent as empty
+				writeLog(fmt.Sprintf("Keeping %s: day book %s-%s: Tally listed no entries but the copy holds %d for these days; the answer is not trusted (%s); nothing kept, it is read again", company, f, t, cn, answerHead(x)))
+				err = fmt.Errorf("Tally listed no entries but the copy holds %d for these days; the answer is not trusted", cn)
 			} else if st := readStop(); st != nil {
 				writeLog(fmt.Sprintf("Keeping %s: day book %s-%s: reading was stopped on this computer while it was read (%s); nothing of it is kept", company, f, t, str(st["reason"])))
 				err = errors.New("reading stopped: " + str(st["reason"]))
@@ -866,6 +909,18 @@ func (k *keepRun) step(company string, port int, booksFrom string) error {
 	st["next"], st["roundAt"], st["trouble"] = addDays(td, 1), nowS(), nil
 	save()
 	writeLog(fmt.Sprintf("Keeping %s: the day book from %s to %s read (%d entries); %d day(s) changed since the last read", company, str(st["from"]), td, toInt(st["roundN"]), toInt(st["roundDays"])))
+	// round 12 (03-Oct-2026): a round that read 0 entries while the copy holds some is a read fault, not a read: the
+	// read guard is not sent (a count of 0 would be recorded in the cloud as a real read) and the trouble is noted
+	if toInt(st["roundN"]) == 0 {
+		if cn := copyVouchersAll(dir); cn > 0 {
+			why := fmt.Sprintf("the round read 0 entries but the copy holds %d: a read fault; nothing was sent as empty and the read guard is not sent", cn)
+			writeLog("Keeping " + company + ": " + why)
+			st["trouble"] = M{"at": nowS(), "why": why}
+			save()
+			k.caughtUp = true
+			return nil
+		}
+	}
 	// the rewind guard: the company's GUID, its highest AlterID (the latest company check's, this round's or a later
 	// one's; null when none is known) and the entries read, to FinCom's cloud
 	sendReadGuard(company, str(st["guid"]), companyAlter(company), toInt(st["roundN"]))
