@@ -355,6 +355,17 @@ func pushCloudCompany(company, dir string, budget time.Duration) error {
 				g := gzipB64(t)
 				one, n = M{"day": d, "gz": g}, len(g)
 			}
+			// round 10: n = the vouchers read; empty:true ONLY for a day whose answer came in full and listed none (the
+			// cloud marks a day's entries deleted on empty === true alone); a day file with no mark of a full read goes
+			// as readFailed:true, empty:false (the cloud marks nothing)
+			one["n"] = countVouchers(t)
+			if t == "" {
+				if exists(dayFullMark(dir, d)) {
+					one["empty"] = true
+				} else {
+					one["empty"], one["readFailed"] = false, true
+				}
+			}
 			if len(batch) > 0 && size+n > maxB {
 				break
 			}

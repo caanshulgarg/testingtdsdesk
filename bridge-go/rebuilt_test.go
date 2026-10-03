@@ -333,6 +333,7 @@ type standCloud struct {
 	beatReply M        // added to the heartbeat's answer (readStop, readResume, release)
 	takeJobs  []M      // round 7: jobs posts_take hands out, one per call
 	posts     []M      // round 7: every posts_update body
+	dayPosts  []M      // round 10: every "days" body (per day: day, n, empty / readFailed)
 }
 
 func newStandCloud(t *testing.T) *standCloud {
@@ -374,6 +375,7 @@ func newStandCloud(t *testing.T) *standCloud {
 			c.ledList = append(c.ledList, o)
 			out["added"], out["renamed"], out["deleted"] = len(arr(o["ledgers"])), len(arr(o["renamed"])), 0
 		case "days":
+			c.dayPosts = append(c.dayPosts, o)
 			done := []any{}
 			for _, x := range arr(o["days"]) {
 				done = append(done, obj(x)["day"])

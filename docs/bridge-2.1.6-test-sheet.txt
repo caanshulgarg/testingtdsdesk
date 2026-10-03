@@ -52,6 +52,14 @@ What is new in 2.1.4 (since 2.1.3)
     the log says "entry <id>: released by <who> at <when> (<why>); sent once more". An entry held after a batch Tally
     made only partly is on disk too: no later job sends it ("Tally may have made this entry in a batch on <date> (job X)"). An entry of a batch Tally made only partly is
     held (unknown), never sent again one by one. The measure routes write the report under the bridge's folder only.
+  - (03-Oct, gap 2) A failed read is told apart from an empty day. Each day the bridge sends carries n (the vouchers
+    read) and empty:true only when all three hold: (1) Tally's answer for that day came in full, a whole envelope
+    opened and closed, with no error line, every voucher in it decoded (no timeout, no silence, no connection dropped
+    half-way, no decoder stop) and the self-watch did not stop reading during it; (2) the company's GUID was the one
+    held (a company of the same name with another GUID is not read at all); (3) the answer listed no voucher for that
+    day. A read that failed in any way keeps nothing: no day of it goes to FinCom (it is read again, the slice halved
+    down to a day), so FinCom never sees it as empty. Only an empty day the bridge read in full (empty:true) makes
+    FinCom mark that day's entries deleted; a day without the flag is a short read and marks nothing.
   - Every voucher posted carries its FinCom id in its narration ("TDSDesk:<id>"; since 2.1.6 it
     is written FIRST, "TDSDesk:<id> | <narration>", so a narration cut short can never lose it, and it is found wherever
     it stands); before posting, Tally is looked through for that id on the voucher's date first, then the party / bill /

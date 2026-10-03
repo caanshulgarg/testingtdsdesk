@@ -211,6 +211,9 @@ func saveKeepDaysChanged(dir, from, to, x string) (int, int) {
 			t = b.String()
 			n += countVouchers(t)
 		}
+		if m := dayFullMark(dir, d); !exists(m) {
+			_ = saveFile(m, nowS()) // this day's answer came in full (the caller threw away any other)
+		}
 		df := filepath.Join(days, d+".xml")
 		if exists(df) && readText(df) == t {
 			continue
@@ -232,6 +235,28 @@ func saveKeepDaysChanged(dir, from, to, x string) (int, int) {
 }
 
 func countVouchers(t string) int { return len(re(`<VOUCHER\b`).FindAllStringIndex(t, -1)) }
+
+// why a Day Book answer is not a complete one ("" when it is): Tally's whole envelope, opened and closed; no error
+// line; and every voucher the text shows is one the XML decoder read (a decoder stop would drop the rest)
+func dayBookIncomplete(x string) string {
+	t := strings.TrimSpace(x)
+	if !re(`(?i)<ENVELOPE[\s>]`).MatchString(t) {
+		return "not a Tally envelope"
+	}
+	if !re(`(?i)</ENVELOPE>\s*$`).MatchString(t) {
+		return "the envelope is not closed: the answer stopped part-way"
+	}
+	if re(`(?i)<LINEERROR>`).MatchString(t) {
+		return "Tally: " + cut(flat(group(`(?i)<LINEERROR>([\s\S]*?)</LINEERROR>`, t, 1)), 160)
+	}
+	if a, b := countVouchers(t), len(xmlDoc(t).All("VOUCHER")); a != b {
+		return fmt.Sprintf("the text shows %d vouchers but %d could be decoded", a, b)
+	}
+	return ""
+}
+
+// the mark of a day read in full (round 10): only with it may an empty day go to the cloud as empty:true
+func dayFullMark(dir, d string) string { return filepath.Join(dir, "days", d+".full") }
 
 // how a company's year comes in: 'files' (the day book files chosen in FinCom; the default) or 'bridge'
 func keepMode(company string) string {
@@ -780,6 +805,19 @@ func (k *keepRun) step(company string, port int, booksFrom string) error {
 		}
 		t1 := time.Now()
 		x, err := getDayBookXML(k.tc, company, f, t, port)
+		// round 10 (03-Oct-2026): a day counts as read only when its answer came in full. An answer that is not a whole
+		// Tally envelope (the connection dropped, the decoder stopped), or one taken while the self-watch stopped reading,
+		// is thrown away like a timeout: nothing of it is kept, no day of it goes to the cloud, the slice is read again.
+		// Only then can an empty day be told from a failed read (an empty day read in full goes as empty:true)
+		if err == nil {
+			if why := dayBookIncomplete(x); why != "" {
+				writeLog(fmt.Sprintf("Keeping %s: day book %s-%s: the answer was not complete (%s); nothing of it is kept, it is read again", company, f, t, why))
+				err = errors.New("the answer was not complete: " + why)
+			} else if st := readStop(); st != nil {
+				writeLog(fmt.Sprintf("Keeping %s: day book %s-%s: reading was stopped on this computer while it was read (%s); nothing of it is kept", company, f, t, str(st["reason"])))
+				err = errors.New("reading stopped: " + str(st["reason"]))
+			}
+		}
 		if err != nil {
 			if gaveWay(err) {
 				return err // the same slice again when Tally is free
