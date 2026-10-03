@@ -1,4 +1,4 @@
-# FinCom Bridge 2.1.5: acceptance record (NWS144 pilot)
+# FinCom Bridge 2.1.6: acceptance record (NWS144 pilot)
 
 Fill this in by hand during the pilot (docs/RELEASE-CHECKLIST.md, steps 12 and 13). Leave nothing blank. If a step
 does not apply, write "n/a" and give the reason.
@@ -7,13 +7,13 @@ does not apply, write "n/a" and give the reason.
 
 | | |
 |---|---|
-| Setup file | FinComBridge-Setup-2.1.5.exe |
-| SHA-256 (from the .sha256 file) | f75dbcae652677592a8d657004399c14195c660c00c27af3003262135bb5fba3 |
-| Git commit built | e6e070b (e6e070b review-notes fix; code at be5542f) |
+| Setup file | FinComBridge-Setup-2.1.6.exe |
+| SHA-256 (from the .sha256 file) | (filled in at the build) |
+| Git commit built | (filled in at the build) |
 | `release-check.sh` passed on (date, time) | |
-| Code review note | docs/reviews/bridge-2.1.5-code-review.md, range: |
-| Security review note | docs/reviews/bridge-2.1.5-security-review.md, range: |
-| Allow-list hash (sha256 of docs/tally-allowlist.md) | aef526b9297155888057da9fb06cd9ef8e043d8a586999a02d39249a426d8d1e |
+| Code review note | docs/reviews/bridge-2.1.6-code-review.md, range: |
+| Security review note | docs/reviews/bridge-2.1.6-security-review.md, range: |
+| Allow-list hash (sha256 of docs/tally-allowlist.md) | (filled in at the build) |
 
 ## Pilot on NWS144
 
@@ -23,7 +23,7 @@ does not apply, write "n/a" and give the reason.
 | Installed on NWS144 at | |
 | Version shown in the tray / FinCom | |
 | Pilot working day (date, from to) | |
-| Test sheet (docs/bridge-2.1.5-test-sheet.txt) worked through by | |
+| Test sheet (docs/bridge-2.1.6-test-sheet.txt) worked through by | |
 
 ## Results
 

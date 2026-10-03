@@ -1,15 +1,17 @@
-FINCOM BRIDGE 2.1.5 - TEST SHEET (NWS144, staging)
+FINCOM BRIDGE 2.1.6 - TEST SHEET (NWS144, staging)
 
-File:        FinComBridge-Setup-2.1.5.exe
-Fingerprint: f75dbcae652677592a8d657004399c14195c660c00c27af3003262135bb5fba3 (SHA-256)
-Link:        https://staging.fincom.live/review/assets/bridge-go/FinComBridge-Setup-2.1.5.exe
-(2.1.4 was built but never handed out; 2.1.5 is 2.1.4 with the last per-ledger read removed, see below.)
+File:        FinComBridge-Setup-2.1.6.exe
+Fingerprint: (filled in at the build; compare with the .sha256 file next to the setup) (SHA-256)
+Link:        https://staging.fincom.live/review/assets/bridge-go/FinComBridge-Setup-2.1.6.exe
+(2.1.4 was built but never handed out. 2.1.5 was published on 03-Oct-2026 at 01:30 UTC, installed on NWS144 and held back
+ the same morning after two faults on real books: an entry Tally had created was reported failed, then sent again. 2.1.6
+ replaces it: install 2.1.6 over 2.1.5 on NWS144 as step 1 below; the installer replaces the program and keeps the config.)
 Before step 8: tally-ingest deployed to staging with the "ledger_list" kind (the round 3 shape: every batch carries
 round, complete, rowsRead and seen), and migration-34 applied on staging: the bridge names no deletion; the cloud works
 out from "seen" (the GUIDs the bridge read) which ledgers Tally no longer lists, and marks them deleted only when the
 round is complete and the counts agree.
 
-What is new in 2.1.5 (over the 2.1.4 build that was never handed out)
+What is new in 2.1.6 (over the 2.1.4 build that was never handed out, and over the held-back 2.1.5)
   - Tally's per-ledger voucher list ("Vouchers : Ledger") is never asked: Tally builds that list ledger by ledger, the
     same shape of read that hung Tally on 02-Oct-2026 (ledgers 696-699).
   - After a posting, and when a posting is resumed or retried, the entries are looked for by their FinCom id alone
@@ -48,7 +50,7 @@ What is new in 2.1.4 (since 2.1.3)
     ("Not in Tally — release", with a reason) made AFTER Tally's acceptance lets the entry go once more; the log says
     "entry <id>: released by <who> at <when> (<why>); sent once more". An entry of a batch Tally made only partly is
     held (unknown), never sent again one by one. The measure routes write the report under the bridge's folder only.
-  - Every voucher posted carries its FinCom id in its narration ("TDSDesk:<id>"; since the 03-Oct rebuild of 2.1.5 it
+  - Every voucher posted carries its FinCom id in its narration ("TDSDesk:<id>"; since 2.1.6 it
     is written FIRST, "TDSDesk:<id> | <narration>", so a narration cut short can never lose it, and it is found wherever
     it stands); before posting, Tally is looked through for that id on the voucher's date first, then the party / bill /
     date / amount check of 2.1.4.
@@ -62,21 +64,21 @@ Use ZZ TEST for every posting below, never GARG SHEKHAR & COMPANY.
 0. START THE PILOT IN FINCOM (before downloading anything)
    The first postings on the pilot go to the ZZ TEST company only, never real books: steps 4, 5 and 6 post ZZ TEST bills
        and nothing else. GARG SHEKHAR & COMPANY is only read (Update now), never posted to, until step 10 passes.
-   Do: in FinCom (staging), as the owner, open All clients > Tally. Find NWS144's line and press "Try version 2.1.5 on
+   Do: in FinCom (staging), as the owner, open All clients > Tally. Find NWS144's line and press "Try version 2.1.6 on
        this computer" (only the owner sees the button).
    You should see: the line now says "on trial on NWS144 since <date, time>". From then on the setup below is the one
        FinCom names for NWS144 alone; every other computer stays on its version until step 10 passes and you approve
-       2.1.5 in FinCom.
+       2.1.6 in FinCom.
    If the button says the cloud is not ready: migration 35 is not on staging yet; tell me and stop here (nothing to
        download until it is).
    If not: a screenshot of the Tally page.
 
 1. DOWNLOAD AND INSTALL OVER 2.1.3 (OR 2.1.4)
    Do: TallyPrime open with ZZ TEST. Open the Link, then in PowerShell:
-       Get-FileHash $env:USERPROFILE\Downloads\FinComBridge-Setup-2.1.5.exe
+       Get-FileHash $env:USERPROFILE\Downloads\FinComBridge-Setup-2.1.6.exe
        Double-click the setup; "Windows protected your PC" > More info > Run anyway; "Just for me"; Next.
-   You should see: the Fingerprint above. "FinCom Bridge 2.1.5 is installed and running", "Main bridge: reading and
-       posting". You are not asked to pair again. Right-click the icon > Status shows version 2.1.5; the menu has
+   You should see: the Fingerprint above. "FinCom Bridge 2.1.6 is installed and running", "Main bridge: reading and
+       posting". You are not asked to pair again. Right-click the icon > Status shows version 2.1.6; the menu has
        "Measure Tally (for FinCom support)".
    If not: the page's title and reason; keep "Send install log to FinCom" ticked and click Finish.
 
@@ -178,7 +180,7 @@ Use ZZ TEST for every posting below, never GARG SHEKHAR & COMPANY.
    If not: Status (the text) and the log of those minutes.
 
 10. A FULL WORKING DAY (ACCEPTANCE)
-   Do: leave 2.1.5 running on NWS144 from the start to the end of a normal working day, with TallyPrime used as usual by
+   Do: leave 2.1.6 running on NWS144 from the start to the end of a normal working day, with TallyPrime used as usual by
        the office. During the day post at least three approved ZZ TEST bills from FinCom, at least one of them while
        Update now is reading (as in step 4). At the end of the day: icon > Show log, and icon > Status.
    PASS only if all four hold:
@@ -189,9 +191,9 @@ Use ZZ TEST for every posting below, never GARG SHEKHAR & COMPANY.
        d) The longest request of the day is 20 s or less: in Show log no "Tally 9000: ... took N.Ns" line with N above
           20 (lines are written for every request of 3 s or more).
    Write down: the start and end time of the day; the three postings' times; the seconds of the posting during Update
-       now; the longest "took" line of the day. All of it goes into docs/bridge-2.1.5-acceptance.md (the acceptance
-       record: its four conditions are a-d above; sign it, and only then approve 2.1.5 in FinCom for other computers).
-   If not: which of a-d failed, the time, and the log of that hour. These go into docs/bridge-2.1.5-acceptance.md too.
+       now; the longest "took" line of the day. All of it goes into docs/bridge-2.1.6-acceptance.md (the acceptance
+       record: its four conditions are a-d above; sign it, and only then approve 2.1.6 in FinCom for other computers).
+   If not: which of a-d failed, the time, and the log of that hour. These go into docs/bridge-2.1.6-acceptance.md too.
 
 11. CLEAN UP
    Do: in TallyPrime delete the ZZ TEST vouchers made in steps 4-6 and 10 (or Remove from Tally in FinCom), and the test
@@ -204,5 +206,5 @@ IF SOMETHING FAILS, SEND ME
    d) icon > Status (the text).
 
 FALLBACK
-   2.1.3 is kept (not published) in assets-test/bridge-go-old. If 2.1.5 does not work: Settings > Apps > FinCom
+   2.1.3 is kept (not published) in assets-test/bridge-go-old. If 2.1.6 does not work: Settings > Apps > FinCom
    Bridge (just for me) > Uninstall (keep the pairing ticked), then ask me for the 2.1.3 setup link.
