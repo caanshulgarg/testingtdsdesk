@@ -29,7 +29,7 @@ export function ServerMis({ b }) {
   const H = r.heads || {}, months = r.months || [], cols = months.length <= 12;
   return <div data-srv-mis>
     {head}
-    {!r.grouped && <p className="bk-alert" role="status" style={{ margin: "10px 0" }}>The ledgers’ groups are not in the cloud copy yet, so the profit and loss cannot be worked out. They come with the ledgers from Tally (FinCom Tally Bridge 1.14.7 or later).</p>}
+    {!r.grouped && <p className="bk-alert" role="status" style={{ margin: "10px 0" }}>The ledgers’ groups are not in the cloud copy yet, so the profit and loss cannot be worked out. They come with the ledgers from Tally (FinCom Bridge 2.1).</p>}
     <div className="dash-tiles" style={{ marginTop: 12 }}>
       <Tile l="Sales, the period" v={m(r.sales.total)} sub={r.sales.other ? "other income " + m(r.sales.other) : ""} />
       <Tile l="Profit before tax" v={r.grouped ? m(r.pbt.t) : "—"} sub={"gross profit " + m(r.gross.t) + (H.rev && H.rev.t ? " (" + (Math.round(r.gross.t / H.rev.t * 1000) / 10) + "% of revenue)" : "")} />
@@ -37,7 +37,7 @@ export function ServerMis({ b }) {
       <Tile l="You owe" v={m(r.pay.owe)} sub={"on " + fmtDate(tallyDate(r.to)) + (r.pay.advance >= 1 ? " · advance to suppliers " + m(r.pay.advance) : "")} />
     </div>
     <section className="dash-card" style={{ marginTop: 12 }}><h3>Profit and loss</h3>
-      <div className="bk-tablewrap"><table className="bk-table" id="srvPl"><thead><tr><th></th>{cols && months.map((mm) => <th key={mm} className="n">{GSTR.label(mm).replace(/ \d{4}$/, "")}</th>)}<th className="n">Total</th></tr></thead><tbody>
+      <div className="bk-tablewrap"><table className="bk-table" id="srvPl"><thead><tr><th></th>{cols && months.map((mm) => <th key={mm} className="n">{GSTR.label(mm).replace(/[-\s]\d{4}$/, "")}</th>)}<th className="n">Total</th></tr></thead><tbody>
         {HEADS.filter(([k]) => H[k]).map(([k, l]) => <tr key={k}><td>{l}</td>{cols && months.map((mm) => <td key={mm} className="n">{m((H[k].m || {})[mm])}</td>)}<td className="n">{m(H[k].t)}</td></tr>)}
         {[["gross", "Gross profit"], ["pbt", "Profit before tax"]].map(([k, l]) => <tr key={k}><td><b>{l}</b></td>{cols && months.map((mm) => <td key={mm} className="n"><b>{m((r[k].m || {})[mm])}</b></td>)}<td className="n"><b>{m(r[k].t)}</b></td></tr>)}
       </tbody></table></div></section>

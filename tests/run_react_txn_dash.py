@@ -15,10 +15,11 @@ with sync_playwright() as p:
     pg.evaluate("""() => { const c = newCompany({name: "ZZ Zeta Exports", gstin: "09AANFG3202D1ZR"}); S.companies[c.id] = c; S.data[c.id] = {parties: {}, entries: {}, loaded: true}; c.stats = {};
       [["Alpha Consultants", "A/1", 100000], ["Gamma Rentals", "G/3", 60000], ["Kappa Labs", "K/9", 20000]].forEach(([n, no, amt], i) => { const e = newEntry("Manual entry");
         Object.assign(e.x, {vendorName: n, vendorPan: "AAAPA1234A", invoiceNo: no, invoiceDate: "2026-09-0" + (i + 1), taxable: amt, total: amt}); e.natureId = "professional"; e.partyLedger = n; e.expenseLedger = "Professional Charges"; S.data[c.id].entries[e.id] = e; });
-      return openCompany(c.id).then(() => { const es = Object.values(D().entries); approve(es[0]); approve(es[1]); es[0].exportedAt = "2026-09-20T10:00:00Z"; refreshStats(c.id); goClient("dash"); }); }""")
+      // review of 02-Oct-2026: a bill is in Tally once its posting is confirmed there (billInTally: postVerified), not when sent
+      return openCompany(c.id).then(() => { const es = Object.values(D().entries); approve(es[0]); approve(es[1]); es[0].exportedAt = "2026-09-20T10:00:00Z"; es[0].postVerified = true; refreshStats(c.id); goClient("dash"); }); }""")
     pg.wait_for_timeout(1200)
     tile = lambda label: pg.locator('#app .dtile:has-text("%s") b' % label).inner_text()
-    ok(tile("Bills to review") == "1" and tile("Ready to post") == "1", "Dashboard: 1 bill to review, 1 ready to post")
+    ok(tile("Bills to review") == "1" and tile("Post to Tally") == "1", "Dashboard: 1 bill to review, 1 ready to post")
     ok("Alpha Consultants" in pg.inner_text("#app .dash-list"), "posted lately: the bill sent to Tally")
     tds = pg.evaluate("money0 ? INR.format(r2(Object.values(D().entries).filter(e => e.status !== 'rejected' && e.snapshot).reduce((a, e) => a + num(e.snapshot.tds), 0))) : ''")
     ok(tds in pg.inner_text("#app .dash-big"), "TDS this year: " + tds)
@@ -31,7 +32,7 @@ with sync_playwright() as p:
     pg.evaluate("goClient('txn')"); pg.wait_for_timeout(800)
     rows = lambda: pg.locator("#app table.txntbl tbody tr")
     ok(rows().count() == 3 and "3 of 3" in pg.inner_text("#app .revfilter"), "Transactions: the three bills")
-    ok("In Tally" in pg.inner_text("#app table.txntbl tr:has-text('Alpha Consultants')") and "Ready to post" in pg.inner_text("#app table.txntbl tr:has-text('Gamma Rentals')"), "where each stands in Tally")
+    ok("In Tally" in pg.inner_text("#app table.txntbl tr:has-text('Alpha Consultants')") and "Post to Tally" in pg.inner_text("#app table.txntbl tr:has-text('Gamma Rentals')"), "where each stands in Tally")
     pg.fill('#app input[aria-label="Find a transaction"]', "kappa"); pg.wait_for_timeout(500)
     ok(rows().count() == 1 and pg.evaluate("document.activeElement.getAttribute('aria-label')") == "Find a transaction", "find: one, the cursor stays")
     pg.fill('#app input[aria-label="Find a transaction"]', ""); pg.wait_for_timeout(400)

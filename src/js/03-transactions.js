@@ -7,20 +7,29 @@ function vchTypeOf(e, co){
   if (e.noteKind === "debit") return "Purchase";
   return co.voucherType || "Journal";
 }
+// in Tally: posted and confirmed there (or found there already), and not since missing from Tally's own entries in
+// FinCom's cloud copy (review of 02-Oct-2026: FA/ELEC/013 posted on 29-Sep was deleted in Tally and still counted).
+// A bill in a Tally file that no one has confirmed is not counted.
+function billInTally(e){ return !!(e && e.exportedAt && (e.postVerified === true || e.postNote === "Already in Tally") && !e.goneFromTally); }
 function tallyStateOf(e){
-  if (e.exportedAt) return e.postUnverified ? ["sent", "In Tally, not confirmed"] : ["ok", "In Tally"];
+  if (e.goneFromTally) return ["bad", "Not in Tally any more (deleted there?)"];
+  if (e.exportedAt) return billInTally(e) ? ["ok", "In Tally"] : ["sent", e.postedVia === "bridge" ? "In Tally, not confirmed" : "In a Tally file, not confirmed"];
   if (e.postError) return ["bad", "Tally refused: " + e.postError];
-  if (e.status === "approved") return ["warn", "Ready to post"];
+  if (e.status === "approved") return ["warn", "Post to Tally"];
   if (e.status === "rejected") return ["no", "No entry needed"];
   if (e.status === "duplicate") return ["warn", "Held as duplicate"];
+  if (e.status === "deleted") return ["no", "Deleted"];
   return ["no", "To review"];
 }
 function txnRowsBills(){
   const co = CO(), d = D();
-  return Object.values(d.entries).filter(e => e.status !== "deleted").map(e => {
+  // deleted bills are listed too, shown only under the "Deleted" filter (review of 02-Oct-2026)
+  return Object.values(d.entries).map(e => {
     const x = e.x || {}, gst = num(x.cgst) + num(x.sgst) + num(x.igst) + num(x.cess);
     const [cls, label] = tallyStateOf(e);
-    return {id: e.id, kind: "bill", date: x.invoiceDate || "", up: (e.createdAt || "").slice(0, 10), vch: vchTypeOf(e, co), no: x.invoiceNo || "",
+    // a purchase bill is posted as the voucher type chosen in Client setup (Testing AAD: Journal); said so beside it
+    // (review of 02-Oct-2026: "Journal" on purchase bills looked like a mistake)
+    return {id: e.id, kind: "bill", date: x.invoiceDate || "", up: (e.createdAt || "").slice(0, 10), vch: vchTypeOf(e, co), vchNote: e.noteKind ? "" : "the voucher type chosen for purchase bills in Client setup → Tally", no: x.invoiceNo || "",
       party: x.vendorName || e.fileName || "", taxable: num(x.taxable), gst, total: num(x.total), cls, label,
       file: e.fileName || "", docPath: e.docPath || "", hasFile: !!(S.files[e.id] || e.docPath || (S.fileIndex && S.fileIndex.has(e.id))), e};
   }).sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(b.up).localeCompare(String(a.up)));
@@ -31,7 +40,7 @@ function txnRowsSales(){
   return s.list.map(v => {
     const x = v.x || {}, gst = num(x.cgst) + num(x.sgst) + num(x.igst) + num(x.cess);
     const cls = v.status === "posted" ? "ok" : v.status === "ready" ? "warn" : v.status === "ignored" ? "no" : "no";
-    const label = v.status === "posted" ? "In Tally" : v.status === "ready" ? "Ready to post" : v.status === "ignored" ? "Set aside" : "To review";
+    const label = v.status === "posted" ? "In Tally" : v.status === "ready" ? "Post to Tally" : v.status === "ignored" ? "Set aside" : "To review";
     return {id: v.id, kind: "sale", date: x.date || "", up: (v.addedAt || "").slice(0, 10), vch: x.noteKind === "credit" ? "Credit Note" : x.noteKind === "debit" ? "Debit Note" : (s.cfg.voucherType || "Sales"),
       no: x.number || "", party: x.customerName || "", taxable: num(x.taxable), gst, total: num(x.total), cls, label, file: v.fileName || "", docPath: v.docPath || "", hasFile: !!(S.files["sv:" + v.id] || v.docPath || (S.fileIndex && S.fileIndex.has("sv:" + v.id))), v};
   }).sort((a, b) => String(b.date).localeCompare(String(a.date)));
@@ -44,7 +53,7 @@ function txnRowsBank(){
   return b.rows.map(r => {
     const st = stName[(r.id || "").split("-")[0]] || curStmt() || {};
     const cls = r.state === "sent" ? "ok" : r.state === "intally" ? "ok" : r.state === "ready" ? "warn" : r.state === "ignored" ? "no" : "no";
-    const label = r.state === "sent" ? "In Tally" : r.state === "intally" ? "Already in Tally" : r.state === "ready" ? "Ready to post" : r.state === "ignored" ? "Left out" : "To review";
+    const label = r.state === "sent" ? "In Tally" : r.state === "intally" ? "Already in Tally" : r.state === "ready" ? "Post to Tally" : r.state === "ignored" ? "Left out" : "To review";
     return {id: r.id, kind: "bank", date: r.date, up: (st.uploadedAt || "").slice(0, 10), vch: r.credit ? (CO().receiptType || "Receipt") : (CO().paymentType || "Payment"),
       no: (r.dec && (r.dec.utr || r.dec.chq)) || "", party: (r.dec && r.dec.name) || r.narr.slice(0, 40), taxable: 0, gst: 0,
       total: num(r.debit) || num(r.credit), dr: num(r.debit), cr: num(r.credit), cls, label, file: st.fileName || "", docPath: st.docPath || "", hasFile: !!(S.files["st:" + st.id] || st.docPath || (S.fileIndex && S.fileIndex.has("st:" + st.id))), stId: st.id, r};
@@ -70,7 +79,9 @@ function txnColOn(){ const f = txnF(); return Object.keys(f).some(k => Array.isA
 function txnFiltered(rows){
   const q = String(S.txnQ || "").trim().toLowerCase();
   const st = S.txnStatus || "";
-  return rows.filter(r => txnColPass(r) && (!q || [r.no, r.party, r.file, r.vch, String(r.total)].join(" ").toLowerCase().includes(q)) && (!st || r.cls === st));
+  const stOf = r => r.e && r.e.status === "deleted" ? "del" : r.e && r.e.status === "duplicate" ? "dup" : "";
+  return rows.filter(r => txnColPass(r) && (!q || [r.no, r.party, r.file, r.vch, String(r.total)].join(" ").toLowerCase().includes(q))
+    && (st === "dup" || st === "del" ? stOf(r) === st : stOf(r) !== "del" && (!st || r.cls === st)));
 }
 // the register: React (app/src/screens/Txn.jsx)
 function viewTransactions(){ return '<div data-react="Txn"></div>'; }

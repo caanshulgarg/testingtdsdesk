@@ -194,6 +194,29 @@ func platNetState() (bool, []proc, []listener) {
 	return ok1 && ok2, ps, ls
 }
 
+// the Tally program (tally.exe) running: in one of the owner's sessions when only the owner's Tally is used; with the
+// test file, its list of programs. No request is sent to Tally for this
+func platTallyRunning() bool {
+	if f := fakeData(); f != nil {
+		for _, x := range arr(f["processes"]) {
+			if reTally.MatchString(str(obj(x)["name"])) {
+				return true
+			}
+		}
+		return false
+	}
+	ps, ok := processes()
+	if !ok {
+		return true // Windows did not say: the port decides
+	}
+	for _, p := range ps {
+		if reTally.MatchString(p.Name) && (!cfgB("OnlyMySession") || isMine(p.Session)) {
+			return true
+		}
+	}
+	return false
+}
+
 // Tally opened a moment ago in one of the owner's sessions: it is still loading the company
 func platTallyYoung(min float64) bool {
 	ps, _ := processes()
@@ -391,8 +414,14 @@ func ownerProfile() string {
 	h, _ := os.UserHomeDir()
 	return h
 }
+
+// the install's record: HKLM for the service; HKCU for an install just for this user (its program runs from there)
 func regString(name string) string {
-	k, err := registry.OpenKey(registry.LOCAL_MACHINE, regKey, registry.QUERY_VALUE|registry.WOW64_64KEY)
+	root := registry.LOCAL_MACHINE
+	if perUserInstall() {
+		root = registry.CURRENT_USER
+	}
+	k, err := registry.OpenKey(root, regKey, registry.QUERY_VALUE|registry.WOW64_64KEY)
 	if err != nil {
 		return ""
 	}
@@ -401,12 +430,44 @@ func regString(name string) string {
 	return v
 }
 
+// this Windows user's %LOCALAPPDATA%, from the process's own user (Windows' known folder): a program started for another
+// user (runas, Start-Process -Credential) may carry the caller's environment, so the variable comes last
+func localAppData() string {
+	if p, err := windows.KnownFolderPath(windows.FOLDERID_LocalAppData, 0); err == nil && p != "" {
+		return p
+	}
+	return os.Getenv("LOCALAPPDATA")
+}
+
+// the installed bridge's settings file (written by install)
+func installedConfig() string { return regString("Config") }
+
+// Windows' name and build, for the install log and support: "Windows 10 Pro 22H2 (build 19045)". Windows 11 still calls
+// itself "Windows 10" in ProductName: from build 22000 it is Windows 11
+func windowsVersion() string {
+	k, err := registry.OpenKey(registry.LOCAL_MACHINE, `SOFTWARE\Microsoft\Windows NT\CurrentVersion`, registry.QUERY_VALUE|registry.WOW64_64KEY)
+	if err != nil {
+		return runtime.GOOS
+	}
+	defer k.Close()
+	name, _, _ := k.GetStringValue("ProductName")
+	build, _, _ := k.GetStringValue("CurrentBuild")
+	disp, _, _ := k.GetStringValue("DisplayVersion")
+	if b, _ := strconv.Atoi(build); b >= 22000 {
+		name = strings.Replace(name, "Windows 10", "Windows 11", 1)
+	}
+	if disp != "" {
+		name += " " + disp
+	}
+	return name + " (build " + build + ")"
+}
+
 // the installed bridge's folder (written by the installer), else bridge 1.15.0's folder of this user
 func defaultHome() string {
 	if h := regString("Home"); h != "" {
 		return h
 	}
-	if la := os.Getenv("LOCALAPPDATA"); la != "" {
+	if la := localAppData(); la != "" {
 		return filepath.Join(la, "TDS Desk Bridge")
 	}
 	return ""
@@ -490,5 +551,12 @@ func attachConsole() {
 	}
 }
 
-// the installer stops the service before it replaces the program
-func stopCmd() int { stopService(); return 0 }
+// the installer stops the service (or, installed just for this user, the user's bridge) before it replaces the program
+func stopCmd(args []string) int {
+	if contains(args, "--per-user") || perUserInstall() {
+		stopUser()
+		return 0
+	}
+	stopService()
+	return 0
+}

@@ -122,6 +122,6 @@ export function AiSettings() {
       {cos.map((co) => <tr key={co.id}><td>{co.name || co.id}</td><td><input type="checkbox" checked={!!co.aiOff} aria-label={"AI off for " + (co.name || "")} onChange={(ev) => aihCo(co.id, ev.target.checked)} /></td></tr>)}</tbody></table></div></section>
     {S.books && S.books.cid === S.coId && <CoverageCard />}
     {lg.length > 0 && <section className="dash-card" style={{ marginTop: 12 }}><h3>{"What AI did for " + ((CO() || {}).name || "this client")}</h3><div className="bk-tablewrap"><table className="bk-table compact"><thead><tr><th className="dt">When</th><th>Who</th><th>What</th><th>Detail</th></tr></thead><tbody>
-      {lg.slice(0, 40).map((x, i) => <tr key={i}><td className="dt">{String(x.at).replace("T", " ").slice(0, 16)}</td><td>{x.by}</td><td>{x.what}</td><td>{x.detail}</td></tr>)}</tbody></table></div></section>}
+      {lg.slice(0, 40).map((x, i) => <tr key={i}><td className="dt">{fmtDateTime(x.at)}</td><td>{x.by}</td><td>{x.what}</td><td>{x.detail}</td></tr>)}</tbody></table></div></section>}
   </>;
 }

@@ -1,33 +1,38 @@
 // node run_audit2.js - audit phase 2 on VMS
-const fs = require("fs"), {load, openBlob} = require("./harness"), {HTML, DATA, CACHE, OUT} = require("./harness");
-const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "Audit", "MIS", "TDS", "Certs", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "gfN"];
+const fs = require("fs"), {load, openBlob} = require("./harness"), {HTML, DATA, CACHE, OUT, FIXTURE} = require("./harness");
+const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "Audit", "MIS", "TDS", "Certs", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "gfN", "Parties", "FS", "GSTSet", "GSTF", "GSTQ", "D"];
 const {ctx, x} = load(HTML, NAMES);
 let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 const M = v => x.INR.format(Math.round(v || 0));
 (async () => {
   const b = JSON.parse(fs.readFileSync(CACHE, "utf8"));
   const ms = await x.Books.importMasters(await openBlob(DATA + "/Master.xml"));
-  Object.assign(b, {ledInfo: ms.info, under: ms.under, groups: ms.groups, gstins: ms.gstins, pans: ms.pans, challans: [], alloc: {}});
-  b.map = x.Books.mapLedgers(b.vouchers, {}); ctx.S.books = b; ctx.CO = () => ({name: "VMS EVENTS PRIVATE LIMITED"}); ctx.S.coId = "t";
+  Object.assign(b, {ledInfo: ms.info, under: ms.under, groups: ms.groups, groupInfo: ms.groupInfo, states: ms.states, gstins: ms.gstins, pans: ms.pans, challans: [], alloc: {}});   // as the masters upload keeps them
+  b.map = x.Books.mapLedgers(b.vouchers, {}); ctx.S.books = b; ctx.CO = () => ({name: FIXTURE ? "Larkspur Fixture Events Private Limited" : "VMS EVENTS PRIVATE LIMITED"}); ctx.S.coId = "t"; ctx.S.data = {};
   x.LedMaster.refresh(b);
   const g = x.Audit.relatedGuess();
   console.log("possibly related: " + g.map(z => z.name + " (" + z.why + ")").join("; "));
-  ok(g.some(z => /Pradeep Sharma/.test(z.name)) && !g.some(z => /BMW|BAJAJ|PNB/.test(z.name)), "suggests people's loans, not banks and finance companies");
-  b.auditRel = [{name: "Pradeep Sharma (Loan)", relation: "Director"}, {name: "Parth Gaur (Loan A/c)", relation: "Relative of a director"}, {name: "KARISHMA GAUR (Loan)", relation: "Relative of a director"}, {name: "BUZY BUG PVT LTD- LOAN", relation: "Company or firm they control"}];
+  // people's loans: the real client's, or the fixture's two (tests/fixtures/books); never a bank or finance company
+  if (FIXTURE) ok(["Hemant Zaverchand (Loan)", "Nirmala Quereshi (Loan)"].every(n => g.some(z => z.name === n)) && !g.some(z => /BANK/i.test(z.name)), "suggests the two people's loans, not the bank");
+  else ok(g.some(z => /Pradeep Sharma/.test(z.name)) && !g.some(z => /BMW|BAJAJ|PNB/.test(z.name)), "suggests people's loans, not banks and finance companies");
+  b.auditRel = FIXTURE ? [{name: "Hemant Zaverchand (Loan)", relation: "Director"}, {name: "Nirmala Quereshi (Loan)", relation: "Relative of a director"}]
+    : [{name: "Pradeep Sharma (Loan)", relation: "Director"}, {name: "Parth Gaur (Loan A/c)", relation: "Relative of a director"}, {name: "KARISHMA GAUR (Loan)", relation: "Relative of a director"}, {name: "BUZY BUG PVT LTD- LOAN", relation: "Company or firm they control"}];
   const run = x.Audit.run("20250401", "20260331", "test");
   const show = id => { const f = run.findings.find(z => z.id === id); console.log("\n== " + id + (f ? ": " + f.title + " | " + f.count + " | " + M(f.amount) + "\n   " + f.problem : ": none")); (f ? f.rows.slice(0, 5) : []).forEach(r => console.log("   \u00b7 " + [r.date, r.no, r.party, r.type, M(r.amount), r.note].join(" | "))); return f; };
   const fm = show("msme43Bh"), fp = show("penalties"), fr = show("related:all"), fl = show("related:loans"), f4 = show("related:40A2b"); show("lastYear");
   ok(fm && fm.rows.every(r => /micro|small/i.test(r.type)), "MSME: only micro and small suppliers");
-  ok(fp && fp.rows.some(r => /INTEREST ON TDS/.test(r.party) && /40\(a\)\(ii\)/.test(r.note)) && fp.rows.some(r => /INTEREST AND LATE FEE ON GST/.test(r.party) && /compensatory/.test(r.note)) && fp.rows.some(r => /PF/.test(r.party) && /penalty/.test(r.note)), "penalties and interest on TDS picked up, each with its rule");
+  if (FIXTURE) ok(fp && fp.rows.length === 2 && fp.rows.some(r => r.party === "Interest on TDS" && r.amount === 450 && /40\(a\)\(ii\)/.test(r.note)) && fp.rows.some(r => r.party === "GST Late Fee" && r.amount === 200 && /compensatory/.test(r.note)), "interest on TDS (450) and the GST late fee (200) picked up, each with its rule");
+  else ok(fp && fp.rows.some(r => /INTEREST ON TDS/.test(r.party) && /40\(a\)\(ii\)/.test(r.note)) && fp.rows.some(r => /INTEREST AND LATE FEE ON GST/.test(r.party) && /compensatory/.test(r.note)) && fp.rows.some(r => /PF/.test(r.party) && /penalty/.test(r.note)), "penalties and interest on TDS picked up, each with its rule");
   ok(fr && fr.count > 0, "related-party transactions listed for the note");
   ok(!run.findings.some(z => z.id === "lastYear") && !x.MIS.covered("20240401"), "last year not in these books: no comparison, and no false one");
   // last year: make one from this year's books, with one expense doubled, and check it is found
-  const ly = JSON.parse(JSON.stringify(b.vouchers.filter(v => v.date < "20250701"))).map(v => { v.id = "ly-" + v.id; v.date = String(num(v.date.slice(0, 4)) - 1) + v.date.slice(4); if (v.ent.some(e => e.l === "RENT")) v.ent.forEach(e => { e.a = e.a / 3; }); return v; });
+  const RENT = FIXTURE ? "Sound and Light Hire" : "RENT";   // a ledger with entries before July
+  const ly = JSON.parse(JSON.stringify(b.vouchers.filter(v => v.date < "20250701"))).map(v => { v.id = "ly-" + v.id; v.date = String(num(v.date.slice(0, 4)) - 1) + v.date.slice(4); if (v.ent.some(e => e.l === RENT)) v.ent.forEach(e => { e.a = e.a / 3; }); return v; });
   function num(s){ return Number(s); }
   b.vouchers = ly.concat(b.vouchers); b.meta.from = "20240401";
   const run2 = x.Audit.run("20250401", "20250630", "test"), fly = run2.findings.find(z => z.id === "lastYear");
   console.log("  last year made: " + ly.length + " vouchers; " + (fly ? fly.count + " ledgers moved; e.g. " + fly.rows.slice(0, 3).map(r => r.party + " " + r.note).join(" | ") : "none"));
-  ok(fly && fly.rows.some(r => r.party === "RENT" && /\+200%/.test(r.note)), "rent three times last year's: found (+200%)");
+  ok(fly && fly.rows.some(r => r.party === RENT && /\+200%/.test(r.note)), RENT + " three times last year's: found (+200%)");
   b.vouchers = b.vouchers.filter(v => !String(v.id).startsWith("ly-")); b.meta.from = "20250401";
   // the Form 3CD draft
   const d = x.Audit.form3cd(run);

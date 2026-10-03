@@ -5,6 +5,7 @@
 // keepNow, setup…); the daily time goes through keepAtSet.
 //
 // State: S.dbFrom / S.dbTo (a part's dates), S.tbOn (the trial balance date).
+import { useEffect, useState } from "react";
 import TallyPill from "../../parts/TallyPill.jsx";
 const d = (x) => fmtDate(tallyDate(x));
 const Act = ({ act, className = "btn small", children }) => <button className={className} onClick={() => doAct(act)}>{children}</button>;
@@ -42,10 +43,13 @@ function Setup({ b }) {
   else if (!k.on) { bs = "Updates from Tally are off."; bact = <Act act="setupKeepOn" className="btn small primary">Switch them on</Act>; }
   else if (!k.phase && k.mode !== "bridge") { bs = "Waiting for the day book files (step 1). Tally is not read for the year."; bact = <Act act="setupModeBridge" className="linkbtn">or let the bridge copy the year from Tally, at the daily update</Act>; }
   else {
-    // once a day at a time the user sets (or every minute), and Update now
+    // FinCom Bridge 2.1.3: only after an event (a client opened here, Update now, a posting) and the nightly catch-up at
+    // the hour set (02:00), when Tally is open and nobody has used FinCom for 15 minutes; an older bridge: once a day
     bok = k.phase === "live";
-    const at = k.dailyAt || "20:00", last = k.lastRun ? d(k.lastRun) : "not yet", busy = k.running || k.now;
-    bs = <>{busy && <><b>Updating from Tally now…</b>{" "}</>}{k.schedule === "continuous" ? "Reads Tally’s changes every minute. "
+    const at = k.dailyAt || (k.events ? "02:00" : "20:00"), last = k.lastRun ? d(k.lastRun) : "not yet", busy = k.running || k.now;
+    bs = <>{busy && <><b>Updating from Tally now…</b>{" "}</>}{k.events
+      ? <>Reads Tally when this client is opened, on Update now and after a posting, and catches up each night at <input type="time" aria-label="Nightly catch-up at" defaultValue={at} key={at} style={{ width: 104 }} onChange={(ev) => keepAtSet(ev.target.value)} /> when nobody is using FinCom (last: {last}){k.paused ? "; background reading is paused in the bridge’s tray icon" : ""}. Otherwise Tally is not asked anything. </>
+      : k.schedule === "continuous" ? "Reads Tally’s changes every minute. "
       : <>Updates from Tally once a day at <input type="time" aria-label="Daily update at" defaultValue={at} key={at} style={{ width: 104 }} onChange={(ev) => keepAtSet(ev.target.value)} /> (last: {last}). Nothing is asked of Tally during the day. </>}
       {!k.phase ? "The year is copied from Tally at the update." : k.phase === "live" ? "" : "It checks the files against Tally at the update" + (k.openPending ? ", with the opening balances" : "") + "."}</>;
     bact = busy ? null : <Act act="keepNow">Update now</Act>;
@@ -56,10 +60,10 @@ function Setup({ b }) {
         {parts.length ? <>{"from files, " + cov}{gaps.length > 0 && <>; <span className="bad">missing {gaps.join(", ")}</span></>}. The days after it come in with the update from Tally.</>
           : m.from ? "read from Tally (" + d(m.from) + " to " + d(m.to) + ")" : "Choose the dates and the day book XML below, part by part."}</Step>
       <Step ok={tbOk ? true : b.tb ? "wait" : false} title="2. Opening balances">
-        {tbOk ? Object.keys(b.tb.led || {}).length + " ledgers, as on " + d(b.tb.openAsOn) : b.tb ? "read from Tally" : "Choose the trial balance XML as on " + (firstFrom ? d(BridgeSeed.add(firstFrom, -1)) : "the day before the first date") + " below."}</Step>
+        {tbOk ? Object.keys(b.tb.led || {}).length + " ledgers, as on " + d(b.tb.openAsOn) : b.tb ? <>{Object.keys(b.tb.led || {}).length + " ledgers, from FinCom's copy"}<span className="note" data-copy-line="" style={{ display: "block" }}>{copyLine(S.coId)}</span></> : "Choose the trial balance XML as on " + (firstFrom ? d(BridgeSeed.add(firstFrom, -1)) : "the day before the first date") + " below."}</Step>
       <Step ok={!!b.ledInfoAt} title="3. Ledger masters">
         {b.ledInfoAt ? Object.keys(b.ledInfo || {}).length + " ledgers (groups, PAN, GSTIN), " + d(String(b.ledInfoAt).slice(0, 10).replace(/-/g, "")) : "Choose the ledger masters XML below (List of Accounts)."}</Step>
-      <Step ok={bok ? true : Bridge.on() && k && k.on ? "wait" : false} title="4. Tally Bridge">{bs}{bact && <> {bact}</>}</Step>
+      <Step ok={bok ? true : Bridge.on() && k && k.on ? "wait" : false} title="4. FinCom Bridge">{bs}{bact && <> {bact}</>}</Step>
       <Check b={b} />
     </section>
   );
@@ -106,12 +110,12 @@ function Files({ b }) {
       <p className="note" style={{ marginTop: 10 }}>For the deductees’ PAN and the ledger groups, also export <b>Display → List of Accounts</b> as XML.</p>
       <div className="row" style={{ gap: 8, margin: "10px 0" }}>
         <Act act="mastersPick" className="btn">Choose the ledger masters XML</Act>
-        {n > 0 && <Act act="booksClear">Remove what is here</Act>}
-        {booksHasAny(b) && <Act act="booksWipe">Remove Tally data and all GST work</Act>}
+        <MoreMenu b={b} n={n} />
       </div>
-      {other.length > 0 && <p className="bk-warn">The books here are for {other.join(", ")}, not this client’s PAN ({clientPan()}). Remove them with “Remove Tally data and all GST work”.</p>}
+      {other.length > 0 && <p className="bk-warn">The books here are for {other.join(", ")}, not this client’s PAN ({clientPan()}). Remove them with More → “Remove Tally data and all GST work”.</p>}
       {n ? <>
-        <div className="dash-row"><span>Vouchers</span><b>{n}</b></div>
+        <div className="dash-row"><span>Entries</span><b title={entryCount(m.from, m.to).text}>{entryCount(m.from, m.to).n.toLocaleString("en-IN")}</b></div>
+        {(entryCount(m.from, m.to).opt + entryCount(m.from, m.to).cancel) > 0 && <div className="note">{entryCount(m.from, m.to).text}</div>}
         <div className="dash-row"><span>Period</span><b>{d(m.from) + " to " + d(m.to)}</b></div>
         <div className="dash-row"><span>Registrations in the file</span><b>{(m.gstins || []).join(", ") || "—"}</b></div>
         <div className="dash-row"><span>Read on</span><b>{m.at ? fmtDate(String(m.at).slice(0, 10)) : "—"}</b></div>
@@ -119,6 +123,19 @@ function Files({ b }) {
       </> : <p className="note">Nothing here yet.</p>}
     </section>
   );
+}
+
+// the removals, out of the way in a More menu (review of 01-Oct-2026); each asks for the client's name and keeps a copy
+// that Restore puts back
+function MoreMenu({ b, n }) {
+  const [trash, setTrash] = useState(null);
+  useEffect(() => { let on = true; Trash.list(S.coId).then((l) => { if (on) setTrash(l.filter((x) => x.kind === "books" || x.kind === "wipe")); }, () => {}); return () => { on = false; }; }, [S.coId, (b.trashLog || []).length]);
+  if (!n && !booksHasAny(b) && !(trash && trash.length)) return null;
+  return <details className="bk-menu" data-more="books"><summary className="btn small">More</summary><div className="bk-menu-list">
+    {trash && trash.slice(0, 5).map((x, i) => <button key={x.id} data-i={i} data-restore="" onClick={(ev) => doAct("trashRestore", ev.currentTarget)}>Restore<small>{Trash.say(x)}</small></button>)}
+    {n > 0 && <button className="danger" onClick={() => doAct("booksClear")}>Remove what is here<small>The day book read from Tally, on this page only</small></button>}
+    {booksHasAny(b) && <button className="danger" onClick={() => doAct("booksWipe")}>Remove Tally data and all GST work<small>The day book, masters, balances and every piece of GST work here</small></button>}
+  </div></details>;
 }
 
 export default function FromTally({ b }) {

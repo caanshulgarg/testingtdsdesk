@@ -2,6 +2,7 @@
 // firm account chip and the firm button, with the Tally panel and firm menu they open.
 // Was renderTop, clientHeader, topRight, tallyPanelHtml, firmMenuHtml (src/js/02 and 18); actions are doAct(...).
 import TallyPill from "./parts/TallyPill.jsx";
+import TallyLine from "./parts/TallyLine.jsx";
 import { TallyStates } from "./parts/TallyStates.jsx";
 import HelpButton from "./parts/HelpButton.jsx";
 import { useLayoutEffect } from "react";
@@ -48,9 +49,17 @@ function ClientHeader() {
   // sales and the bank page have their own tabs
   if ((t === "sales" && S.tab === "sales") || (t === "bank" && S.tab === "bank")) return head;
   const now = curStep(), c = stepCounts(), n = (x) => (String(x || "").match(/\d+/) || [""])[0];
-  return <>{head}<nav className="sbar" aria-label="Status">
-    {[["review", "To review", n(c.review)], ["post", "Ready to post", n(c.post)], ["done", "Posted", n(c.done)]].map(([id, label, k]) =>
-      <button key={id} aria-selected={now === id} onClick={() => goStep(id)}>{label}{k !== "" && <> <span className="sbar-n">{k}</span></>}</button>)}
+  // purchase bills: one row of tabs (review of 02-Oct-2026: a second row under it repeated "To review"): the three steps,
+  // then the bills held as duplicates, deleted, or needing no entry
+  const bills = t === "bills", ents = bills && typeof D === "function" && D() ? Object.values(D().entries || {}) : [], cnt = (st) => ents.filter((e) => e.status === st).length;
+  const side = bills ? [["duplicate", "Duplicates"], ["deleted", "Deleted"]].concat(cnt("rejected") ? [["rejected", "No entry"]] : []) : [];
+  const onSide = bills && S.tab === "invoices" && side.some(([id]) => id === S.filter);
+  const goSide = (id) => { S.step = null; S.tab = "invoices"; S.filter = id; S.selected = null; S.drawerOpen = false; S.reviewTable = false; render(); window.scrollTo(0, 0); };
+  return <>{head}<nav className="sbar" aria-label="Status" data-bill-filters={bills ? "" : undefined}>
+    {[["review", "To review", n(c.review)], ["post", "Post to Tally", n(c.post)], ["done", "In Tally", n(c.done)]].map(([id, label, k]) =>
+      <button key={id} aria-selected={now === id && !onSide} onClick={() => goStep(id)} data-step={id}>{label}{k !== "" && <> <span className="sbar-n" data-step-n="">{k}</span></>}
+        {id === "post" && c.postAttention > 0 && <> <span className="sbar-n attn" data-attn-n="" title={c.postAttention + " need" + (c.postAttention === 1 ? "s" : "") + " your attention"}>{c.postAttention}</span></>}</button>)}
+    {side.map(([id, label]) => <button key={id} aria-selected={onSide && S.filter === id} onClick={() => goSide(id)}>{label} <span className="sbar-n">{cnt(id)}</span></button>)}
   </nav></>;
 }
 
@@ -77,13 +86,13 @@ function TopRight() {
     <div className="topright">
       {inCo && <HelpButton page />}
       {inCo && <button className="btn small" title="Upload bills, statements or sales invoices for this client" onClick={() => goStep("collect")}>+ Upload</button>}
-      <button className={"tallychip" + (t.level === "ok" ? " live" : t.level === "warn" ? " off" : " none")} onClick={() => doAct("tallyPanel")} title={t.say} data-tally={t.state}>
-        <span className="dotled" />{"Tally: " + t.label}
+      <button className={"tallychip" + (t.level === "ok" ? " live" : t.level === "warn" ? " off" : " none")} onClick={() => doAct("tallyPanel")} title={(inCo && typeof tallyLine === "function" && tallyLine(CO()) ? tallyLine(CO()).text + " \u2014 " : "") + "Tally: " + t.label + " \u2014 " + t.say} data-tally={t.state}>
+        <span className="dotled" />{t.short}
       </button>
       <CloudChip />
-      <button className="firmbtn" onClick={() => doAct("firmMenu")}>
+      <button className="firmbtn" onClick={() => doAct("firmMenu")} title={(S.firm.firmName || "Firm") + (plan ? " · plan " + plan : "") + (bal != null ? " · credit " + money(bal) : "")}>
         <b>{(S.firm.firmName || "Firm").slice(0, 26)}</b>
-        {(plan || bal != null) && <small>{plan + (bal != null ? (plan ? " · " : "") + "credit " + money(bal) : "")}</small>}
+        {bal != null ? <small data-credit="">{moneyShort(bal) + " credit"}</small> : plan ? <small>{plan}</small> : null}
       </button>
     </div>
   );
@@ -97,13 +106,13 @@ function TallyPanel() {
     <div className="tallypanel" role="dialog" aria-label="Tally connection">
       <div className="fm-head"><b>Tally connection</b><button className="icon" onClick={close} aria-label="Close">✕</button></div>
       <div className="tp-body">
-        <p><TallyPill co={co} /></p><p className="note">{tallyStatus(co).say}</p>
+        <p><TallyPill co={co} /></p>{co && typeof tallyLine === "function" && tallyLine(co) && <p data-panel-tally-line=""><TallyLine co={co} /></p>}<p className="note">{tallyStatus(co).say}</p>
         <TallyStates co={co} />
         {Bridge.on() ? <>
-          <p><span className={"dotled " + (live ? "live" : "off")} /><b>{live ? (st.shaky ? "Reconnecting…" : "Connected") : "Not answering"}</b>{st.version && <span className="note"> · bridge {st.version}</span>}</p>
+          <p><span className={"dotled " + (live ? "live" : "off")} /><b>{live ? (st.shaky ? "Reconnecting…" : "Connected") : "Not answering"}</b>{st.version && <span className="note"> · FinCom Bridge {st.version}</span>}</p>
           {co && <p className="note">{Bridge.openFor(co).name ? Bridge.openFor(co).name + " is open in Tally." : (co.tallyName || co.name) + " is not open in Tally."}</p>}
           {!live && <p className="note">Open TallyPrime on the computer where the bridge runs, and keep the company open.</p>}
-        </> : <p className="note">The Tally Bridge is not set up on this computer. Install it on the computer where TallyPrime runs, then come back here.</p>}
+        </> : <p className="note">FinCom Bridge is not set up on this computer. Install FinCom Bridge from the Tally page on the computer where TallyPrime runs, then come back here.</p>}
       </div>
       <div className="tp-foot">
         <button className="btn small" onClick={() => doAct("tallyGuide")}>Connection guide</button>

@@ -1,14 +1,16 @@
 // One day's day book, as Tally exports it, read into entry heads and ledger lines for the cloud copy.
 // The rules are FinCom's own (src/js/04-the-client-s-books-read-from-tally.js, Books.takeVoucher), so the cloud's
 // totals are the same figures FinCom works out in the browser: tests/run_cloud_parse.js checks this on real books.
-// Plain JavaScript: used by the tally-ingest edge function (Deno) and by the tests (Node).
+// Plain JavaScript: used by the tally-ingest edge function (Deno) and by the tests (Node). Names are read with the one rule
+// FinCom uses in the browser, server/_shared/names.js (deploy it with the function, as ../_shared/names.js).
+import { namesClean, namesKey } from "../_shared/names.js";
 
 function num(v){ if (typeof v === "number") return isFinite(v) ? v : 0; const n = parseFloat(String(v == null ? "" : v).replace(/[^0-9.\-]/g, "")); return isFinite(n) ? n : 0; }
-function unesc(v){
-  return String(v || "").replace(/&apos;/g, "'").replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">")
-    .replace(/&#(\d+);/g, (m, n) => { const c = num(n); return c >= 32 && c < 127 ? String.fromCharCode(c) : " "; })
-    .replace(/&amp;/g, "&").trim();
-}
+// every value read from the day book, names first: the one rule FinCom uses in the browser (server/_shared/names.js):
+// entities decoded, each run of line breaks (CR LF, &#13; &#10;, also escaped twice) one space, ends trimmed. Before
+// 02-Oct-2026 this decoded &#13;&#10; to two spaces, so "Orchid Lane Hospitality Pvt Ltd&#13;&#10;(Noida)" was a second
+// ledger beside the master "Orchid Lane Hospitality Pvt Ltd (Noida)" (finding 4)
+function unesc(v){ return namesClean(v); }
 function one(s, tag){ const m = s.match(new RegExp("<" + tag + ">([^<]*)</" + tag + ">")); return m ? unesc(m[1]) : ""; }
 // "$17000.00 @ ₹ 86.40/$ = ₹ 1468800.00" is 1468800: the rupee value after the last "="
 function amt(v){ const t = String(v || ""), i = t.lastIndexOf("="); return num(i >= 0 ? t.slice(i + 1) : t); }
@@ -22,8 +24,13 @@ function shortNarr(t){
   const m = t.match(/TDSDesk:[A-Za-z0-9._-]+\s*$/);
   return m ? t.slice(0, 300 - m[0].length - 3) + " | " + m[0] : t.slice(0, 300);
 }
+// FinCom's own mark on an entry it posted, "TDSDesk:<id>", read from the FULL narration (migration-37 item 14: the
+// cloud keeps it in tally_vouchers.fincom_id, so the checks before posting and the bridge's read-back do not depend on
+// where in a long narration the tag sits); null when there is none
+function fincomId(t){ const m = String(t || "").match(/TDSDesk:([A-Za-z0-9._-]+)/); return m ? m[1] : null; }
 function takeVoucher(s){
   const id = String(one(s, "GUID") || (s.match(/REMOTEID="([^"]*)"/) || [])[1] || "").replace(/[^\w\-.:]/g, "");
+  const narrFull = one(s, "NARRATION");
   const v = {
     guid: id,
     date: one(s, "DATE"),
@@ -31,7 +38,8 @@ function takeVoucher(s){
     type: (s.match(/VCHTYPE="([^"]*)"/) || [])[1] || one(s, "VOUCHERTYPENAME"),
     no: one(s, "VOUCHERNUMBER"),
     party: one(s, "PARTYNAME") || one(s, "PARTYLEDGERNAME"),
-    narr: shortNarr(one(s, "NARRATION")),
+    narr: shortNarr(narrFull),
+    fid: fincomId(narrFull),
     cancel: one(s, "ISCANCELLED") === "Yes",
     opt: one(s, "ISOPTIONAL") === "Yes",
     // review of 01-Oct-2026: the party's GSTIN and the place of supply, kept in the cloud copy too
@@ -91,13 +99,20 @@ function takeVoucher(s){
       const q = p.split("</PAYHEADALLOCATIONS.LIST>")[0], n = one(q, "PAYHEADNAME"), a = amt(one(q, "AMOUNT"));
       if (n && a) by.set(n, Math.round(((by.get(n) || 0) + a) * 100) / 100);
     });
-    const have = new Set(lines.map(l => l[1])); let tot = 0;
-    by.forEach((a, n) => { if (Math.abs(a) < 0.005) return; tot = Math.round((tot + a) * 100) / 100; if (!have.has(n)) lines.push([id, n, a, "", null, []]); });
+    // names met by their key (namesKey), as FinCom does (Books.takeVoucher)
+    const have = new Set(lines.map(l => namesKey(l[1]))); let tot = 0;
+    by.forEach((a, n) => { if (Math.abs(a) < 0.005) return; tot = Math.round((tot + a) * 100) / 100; if (!have.has(namesKey(n))) lines.push([id, n, a, "", null, []]); });
     const party = one(s, "PARTYLEDGERNAME");
-    if (party && !have.has(party) && Math.abs(tot) >= 0.005) lines.push([id, party, Math.round(-tot * 100) / 100, "", null, []]);
+    if (party && !have.has(namesKey(party)) && Math.abs(tot) >= 0.005) lines.push([id, party, Math.round(-tot * 100) / 100, "", null, []]);
   }
   return {v, lines};
 }
+
+// a ledger, group or party name as kept in the cloud copy (migration-23): the shared rule (namesClean); spaces inside a
+// name stay as they are (Tally keeps "Arktos  Control & Instruments" with two, and a posting uses Tally's exact name).
+// index.ts cleans every name it sends to the database with it, and the database's tally_nm applies its line-break part
+// again there
+function cleanName(n){ return namesClean(n); }
 
 // the whole text of one day (or several): entries, lines, and the highest change number
 function parseDay(text){
@@ -121,4 +136,4 @@ function parseDay(text){
   return {vouchers, lines, n: vouchers.length, alterMax, dates: Array.from(dates)};
 }
 
-export { parseDay, amt, one, unesc, igstRate };
+export { parseDay, amt, one, unesc, igstRate, cleanName, namesKey };

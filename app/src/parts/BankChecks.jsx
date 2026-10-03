@@ -1,32 +1,50 @@
-// The checks over a bank statement: the balance against Tally, the reconciliation with Tally (what to post, delete or
+// The checks over a bank statement: the balance from FinCom's copy, the reconciliation with Tally (what to post, delete or
 // replace), lines marked posted that Tally no longer has, entries in Tally twice or under the wrong date, the lines being
 // shown, a statement whose running balance breaks, and the report of the last posting. Was bankBalanceHtml,
 // bankBalanceInner, reconHtml, goneHtml, dupFindHtml, bankFocusHtml, focusBtn (src/js/24), fixBanner (src/js/21) and
 // postReportHtml (src/js/26). The work is in src/js; buttons go through bankAct, bankFocusGo, reconPick, reconExcelGo.
+
+import { useEffect } from "react";
 
 const Btn = ({ act, className = "btn small", children, disabled, title, ...rest }) => <button className={className} disabled={disabled} title={title} onClick={() => bankAct(act)} {...rest}>{children}</button>;
 const inr = (v) => money(v || 0), abs = (v) => money(Math.abs(v || 0));
 const plural2 = (n, one, many) => n + (n === 1 ? one : many);
 
 // show only some lines of the statement, with what they are
+// the cloud's refusal starts "Choose the Tally company …", which the banner's heading already says: said once
+export function notAllowedRest(msg){ return String(msg || "").replace(/^\s*choose the tally company.*?may post to[^.]*\.\s*/i, ""); }
 export function FocusBtn({ title, ids, label, note }) {
   if (!ids || !ids.length) return null;
   return <button className="linkbtn" onClick={() => bankFocusGo(title, ids, note)}>{label || "Show " + (ids.length === 1 ? "this line" : "these " + ids.length + " lines")}</button>;
 }
 
+// the bank ledger's balance from FinCom's copy (Tally is never asked for a balance: FinCom Bridge 2.1.4), with "Balance
+// from FinCom's copy · books as of 15:34". After a posting, only once the entries posted are read back (in Tally and in
+// the copy): until then "Posted · balance not yet checked", and checked by itself once they are. Never an error
 function BalanceInner({ st }) {
   const b = B(), t = st.tallyBal, live = Bridge.on() && Bridge.up();
-  const btn = live ? <Btn act="bankBalCheck" disabled={!!b.balBusy}>{b.balBusy ? "Checking…" : t ? "Check again" : "Check with Tally"}</Btn> : null;
-  const when = <>{t && t.at && <span className="muted">{" · checked " + fmtDateTime(t.at)}</span>}
-    {t && t.how === "worked back" && <span className="muted">{" · Tally gave its latest balance whatever the date, so the balance on " + fmtDate(t.to) + " was worked back from it" + (t.later ? ", less " + t.later + " later entr" + (t.later === 1 ? "y" : "ies") : "")}</span>}</>;
+  const copy = typeof TCloud === "object" && TCloud.on();
+  const waiting = typeof bankNotReadBack === "function" ? bankNotReadBack(b.rows, b.cid).length : 0;
+  // posted and waiting for the read-back: the copy's state looked at every half a minute; checked once read back
+  useEffect(() => {
+    if (!t || !t.pending || b.balBusy) return undefined;
+    if (!waiting) { const id = setTimeout(() => checkBankBalance({ quiet: true }), Math.max(0, 10000 - (Date.now() - (t.at || 0)))); return () => clearTimeout(id); }
+    const id = setInterval(() => { if (copy) TCloud.status(b.cid, true).then(() => render(), () => {}); }, 30000);
+    return () => clearInterval(id);
+  }, [t && t.at, t && t.pending, waiting, b.balBusy]);
+  const btn = copy || live ? <Btn act="bankBalCheck" disabled={!!b.balBusy}>{b.balBusy ? "Checking…" : t ? "Check again" : "Check with FinCom's copy"}</Btn> : null;
+  const line = t && (t.line || (typeof copyLine === "function" ? copyLine(b.cid) : ""));
+  const when = <>{line && <span className="muted" data-copy-line="" style={{ display: "block" }}>{line}</span>}{t && t.at && <span className="muted">{"checked " + fmtDateTime(t.at)}</span>}</>;
   const Box = ({ cls, children }) => <div className={"bk-balbox bk-bal" + (cls ? " " + cls : "")}>{children}{btn}<button className="icon bk-x" title="Close" aria-label="Close" onClick={() => bankAct("balHide")}>×</button></div>;
-  if (!t) return <Box><div><b>Balance in Tally:</b> <span className="muted">{"not checked yet." + (live ? " FinCom checks it after every posting." : " Connect the Tally Bridge to check it.")}</span></div></Box>;
-  if (t.error) return <Box cls="bad"><div><b>Balance in Tally could not be read:</b> {t.error}{when}</div></Box>;
-  const on = fmtDate(t.to);
-  if (t.diff === null) return <Box><div><b>{t.ledger + " in Tally on " + on + ":"}</b> {inr(t.tClose)} <span className="muted">(the statement has no closing balance to compare with)</span>{when}</div></Box>;
-  if (Math.abs(t.diff) < 0.01) return <Box cls="ok"><div>✔ <b>Tally agrees with the bank.</b> {t.ledger + " in Tally on " + on + " is " + inr(t.tClose) + ", the statement's closing balance."}{when}</div></Box>;
+  if (!t) return <Box><div><b>Balance in FinCom's copy:</b> <span className="muted">{"not checked yet." + (copy ? " FinCom checks it after every posting, once the entries posted are read back." : " Sign in to the firm account to check it.")}</span></div></Box>;
+  if (t.pending) return <Box><div data-bal-pending=""><b>Posted · balance not yet checked</b> <span className="muted">{"(" + plural2(t.pending, " entry", " entries") + " posted, not read back yet: the balance is checked once " + (t.pending === 1 ? "it is" : "they are") + " confirmed in Tally and in FinCom's copy)"}</span></div></Box>;
+  // not answered yet (or a check from before, with Tally's error): said, never as an error
+  if (t.notYet || t.error) return <Box><div data-bal-notyet=""><b>Balance not yet checked</b> <span className="muted">{"· " + (t.notYet || "FinCom's copy has not answered yet") + "."}</span>{when}</div></Box>;
+  const on = fmtDate(t.to), where = t.how === "copy" ? "" : " in Tally";
+  if (t.diff === null) return <Box><div><b>{t.ledger + where + " on " + on + ":"}</b> {inr(t.tClose)} <span className="muted">(the statement has no closing balance to compare with)</span>{when}</div></Box>;
+  if (Math.abs(t.diff) < 0.01) return <Box cls="ok"><div>✔ <b>The books agree with the bank.</b> {t.ledger + where + " on " + on + " is " + inr(t.tClose) + ", the statement's closing balance."}{when}</div></Box>;
   const li = [];
-  if (t.diffOpen && Math.abs(t.diffOpen) >= 0.01) li.push(<li key="o"><b>Opening balance:</b>{" Tally on " + fmtDate(t.openAsOn) + " is " + inr(t.tOpen) + ", the statement opens at " + inr(t.sOpen) + " (" + abs(t.diffOpen) + " apart). Entries before " + fmtDate(t.from) + " are missing or different in Tally: post the earlier statement first."}</li>);
+  if (t.diffOpen && Math.abs(t.diffOpen) >= 0.01) li.push(<li key="o"><b>Opening balance:</b>{" the books on " + fmtDate(t.openAsOn) + " are " + inr(t.tOpen) + ", the statement opens at " + inr(t.sOpen) + " (" + abs(t.diffOpen) + " apart). Entries before " + fmtDate(t.from) + " are missing or different in Tally: post the earlier statement first."}</li>);
   if (t.notIn.length) li.push(<li key="n"><b>{plural2(t.notIn.length, " line is", " lines are") + " not in Tally yet"}</b>{" (" + abs(t.notInEffect) + " " + (t.notInEffect >= 0 ? "net in" : "net out") + ") "}<FocusBtn title="not in Tally yet" ids={t.notIn} /></li>);
   if (t.left.length) li.push(<li key="l"><b>{plural2(t.left.length, " line was", " lines were") + " left out"}</b>{" (" + abs(t.leftEffect) + ") "}<FocusBtn title="left out, not posted" ids={t.left} /></li>);
   if (t.missing && t.missing.length) li.push(<li key="m"><b>{plural2(t.missing.length, " line is", " lines are") + " marked as in Tally, but Tally does not show " + (t.missing.length === 1 ? "it" : "them") + " for these dates"}</b>{" (" + abs(t.missingEffect) + "): deleted in Tally, or under another date. "}<FocusBtn title="marked in Tally, not found there" ids={t.missing} /></li>);
@@ -36,7 +54,7 @@ function BalanceInner({ st }) {
   if (!t.extra) li.push(<li key="r">{live && <><Btn act="reconRun" className="btn small primary">Reconcile with Tally</Btn>{" "}</>}<span className="muted">{"pairs every statement line with the entries of " + t.ledger + " in Tally, and lists what to post and what to delete to make them agree"}</span></li>);
   if (t.unexplained !== undefined && Math.abs(t.unexplained) >= 0.01) li.push(<li key="u"><b>{abs(t.unexplained) + " is not explained"}</b> by the lines above: check the amounts of the entries in Tally against the statement.</li>);
   else if (t.extra) li.push(<li key="t" className="muted">These together make up the whole difference.</li>);
-  return <Box cls="bad"><div style={{ flex: 1 }}><div>✖ <b>Tally does not agree with the bank.</b> {t.ledger + " in Tally on " + on + " is "}<b>{inr(t.tClose)}</b>; the statement closes at <b>{inr(t.sClose)}</b>. Difference <b>{abs(t.diff)}</b>{" (" + (t.diff > 0 ? "Tally is lower" : "Tally is higher") + ")."}{when}</div>
+  return <Box cls="bad"><div style={{ flex: 1 }}><div>✖ <b>The books do not agree with the bank.</b> {t.ledger + where + " on " + on + " is "}<b>{inr(t.tClose)}</b>; the statement closes at <b>{inr(t.sClose)}</b>. Difference <b>{abs(t.diff)}</b>{" (" + (t.diff > 0 ? "the books are lower" : "the books are higher") + ")."}{when}</div>
     {li.length > 0 && <ul className="bk-bal-why">{li}</ul>}</div></Box>;
 }
 
@@ -102,7 +120,7 @@ export function Gone() {
   if (!g || !st || g.sid !== st.id || !g.ids.length) return null;
   const n = g.ids.length, all = n === g.marked;
   return <div className="bk-bal bad"><div style={{ flex: 1 }}><b>{plural2(n, " line is", " lines are") + " marked as posted, but " + (n === 1 ? "is" : "are") + " no longer in Tally."}</b>{" " + (all ? "None of this statement’s posted lines are in " + g.ledger + " in " + g.company + " any more" + (g.bankLines ? "" : " (Tally shows no entries in this ledger for these dates)") + "." : "They were probably deleted in Tally, or moved to another company.")}
-    <div className="row" style={{ marginTop: 8, gap: 8 }}><Btn act="goneBack" className="btn small primary">{"Put " + (n === 1 ? "it" : "them") + " back in Ready to post"}</Btn><FocusBtn title="no longer in Tally" ids={g.ids} label={"Show " + (n === 1 ? "it" : "them")} /><Btn act="goneKeep" className="linkbtn">Leave them as posted</Btn></div></div></div>;
+    <div className="row" style={{ marginTop: 8, gap: 8 }}><Btn act="goneBack" className="btn small primary">{"Put " + (n === 1 ? "it" : "them") + " back in Post to Tally"}</Btn><FocusBtn title="no longer in Tally" ids={g.ids} label={"Show " + (n === 1 ? "it" : "them")} /><Btn act="goneKeep" className="linkbtn">Leave them as posted</Btn></div></div></div>;
 }
 
 // FinCom's entries found in Tally twice, or under the wrong date
@@ -146,8 +164,12 @@ export function FixBanner() {
 // what the last posting to Tally did
 export function PostReport({ rep }) {
   if (!rep) return null;
-  const bits = [(rep.posted || 0) + (rep.checking ? " sent" + (rep.company ? " to " + rep.company : "") + " · checking them in Tally in the background…" : " posted" + (rep.company ? " into " + rep.company + (rep.unread ? "" : " and confirmed there") : ""))];
-  if (rep.unread) bits.push(rep.unread + " not read back yet (Tally did not answer the check; use ‘Mark lines already in Tally’ later)");
+  // one clear word for each (review of 02-Oct-2026): In Tally (verified) / In Tally, not yet read back / Failed
+  if (rep.notAllowed) return <div className="bk-alert bad" data-not-allowed=""><b>Not sent to Tally: choose the Tally company.</b>{" " + notAllowedRest(rep.notAllowed) + " "}
+    <button className="btn small primary" onClick={() => goChooseTallyCompany()}>Choose the Tally company</button>{" "}<Btn act={rep.dismiss} className="linkbtn">Dismiss</Btn></div>;
+  const verified = rep.checking ? 0 : (rep.posted || 0) - (rep.unread || 0);
+  const bits = [rep.checking ? (rep.posted || 0) + " in Tally" + (rep.company ? " (" + rep.company + ")" : "") + ", not yet read back: FinCom reads them back by itself…" : verified + " in Tally (verified)" + (rep.company ? " · " + rep.company : "")];
+  if (rep.unread) bits.push(rep.unread + " in Tally, not yet read back (Tally did not answer the check; use ‘Mark lines already in Tally’ later)");
   if (rep.optional) bits.push(rep.optional + " as Optional vouchers (Tally: Display More Reports → Exception Reports → Optional Vouchers)");
   if (rep.skipped) bits.push(rep.skipped + " already in Tally (not posted again)");
   if (rep.failed && rep.failed.length) bits.push(rep.failed.length + " not posted");

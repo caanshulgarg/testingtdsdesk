@@ -13,6 +13,7 @@ import { BankSettings, RulesPanel } from "../parts/BankSettings.jsx";
 import { PostReport, FixBanner, BankBalance, Recon, Gone, DupFind, BankFocus } from "../parts/BankChecks.jsx";
 import ColHead from "../parts/ColHead.jsx";
 import LedgerBox from "../parts/LedgerBox.jsx";
+import { BankLedger } from "../parts/Confirm.jsx";
 import { BusyCard } from "../parts/Reading.jsx";
 import { ChipBar, NoMatch } from "../parts/ChipBar.jsx";
 
@@ -25,7 +26,12 @@ function RowLedger({ r }) {
   const b = B(), tip = r.why || undefined;
   if (!["attention", "suggested", "ready"].includes(r.state)) {
     const canUndo = r.state === "sent" && r.tally && r.tally.guid && live();
-    const status = r.state === "sent" ? "Posted " + (r.sentAt ? shortDate(r.sentAt.slice(0, 10)) : "") + (r.checking ? " · checking in Tally…" : r.tally && r.tally.number ? " · Tally voucher " + r.tally.number : "")
+    // with no Tally ledger chosen for the account, a line is not said to be gone from Tally (review of 02-Oct-2026)
+    const noLed = !bankLedgerReady(CO(), accountFor(curStmt() || {}));
+    const status = r.goneFromTally && noLed ? "Not found in Tally · choose this account’s Tally ledger to check and post"
+      : r.goneFromTally ? "Not in Tally any more (deleted there?) · " + (r.state === "intally" ? "was found when reconciling" : "posted " + (r.sentAt ? shortDate(r.sentAt.slice(0, 10)) : ""))
+      : r.state === "sent" && !bankMatched(r) ? (r.postedVia === "bridge" ? "Sent to Tally " : "In a Tally file ") + (r.sentAt ? shortDate(r.sentAt.slice(0, 10)) : "") + (r.checking ? " · checking in Tally…" : " · not found in Tally yet")
+      : r.state === "sent" ? "In Tally · posted " + (r.sentAt ? shortDate(r.sentAt.slice(0, 10)) : "") + (r.tally && r.tally.number ? " · voucher " + r.tally.number : "")
       : r.state === "intally" ? "Already in Tally" + (r.tallyRef ? ": " + r.tallyRef : "") + (r.tallyHow ? " (" + r.tallyHow + ")" : "") : "Ignored";
     return <><span className="lgtext">{r.ledger || "—"}</span><span className="src muted">{status}
       {canUndo && <> <button className="linkbtn" onClick={() => bankRowAct("unpost", r.id)}>Take it back</button></>}</span></>;
@@ -162,12 +168,36 @@ function LastFail({ f }) {
 // before the ledgers are known, suggestions cannot be made: how to get them
 function LedgerSetup({ co }) {
   if (hasLedgerList()) return null;
+  if (B().ledgersLoading || (typeof TCloud === "object" && TCloud.on() && TCloud.has(co.id))) return <div className="bk-setup"><div><b>Loading ledgers from FinCom’s cloud copy of the books…</b><div className="note">The ledgers of {(TCloud.book(co.id) || {}).company || co.name}, as the Tally computer last sent them.</div></div></div>;
   if (bridgeLive(co)) return <div className="bk-setup"><div><b>Loading ledgers from Tally…</b><div className="note">{Bridge.openFor(co).name} is open in Tally.</div></div></div>;
   if (live()) return <div className="bk-setup"><div><b>Open {Bridge.tallyName(co)} in TallyPrime</b><div className="note">Its ledgers load automatically once it is open. Or import the ledger list from a file.</div></div><button className="btn small" onClick={() => bankAct("ledPick")}>Import from file</button></div>;
-  return <div className="bk-setup"><div><b>Import the Tally ledger list for {co.name}</b><div className="note">Suggestions only use ledgers that exist in Tally. In Tally: Display More Reports → List of Accounts → Export (Excel or XML). With the Tally Bridge this happens automatically.</div></div><button className="btn primary small" onClick={() => bankAct("ledPick")}>Import ledger list</button></div>;
+  return <div className="bk-setup"><div><b>Import the Tally ledger list for {co.name}</b><div className="note">Suggestions only use ledgers that exist in Tally. In Tally: Display More Reports → List of Accounts → Export (Excel or XML). With FinCom Bridge this happens automatically.</div></div><button className="btn primary small" onClick={() => bankAct("ledPick")}>Import ledger list</button></div>;
+}
+
+// the deleted statements (soft deletes, kept on the server and in this browser), read once for the Restore item
+function trashOf(b) {
+  if (b && (b.stmtsTrash === undefined || b.stmtsTrash === null)) {
+    b.stmtsTrash = [];
+    Promise.all([Trash.list(b.cid, "statement"), BankDB.get("stmtsTrash:" + b.cid)]).then(([l, old]) => {
+      b.stmtsTrash = l.concat((old || []).map((x) => ({ label: x.st.bank + " " + fmtDate(x.st.from) + " to " + fmtDate(x.st.to), at: x.at, by: x.by, reason: "" })));
+      if (b.stmtsTrash.length) render();
+    }, () => {});
+  }
+  return b.stmtsTrash || [];
+}
+
+// with no statement open, a deleted one can still be put back
+function RestoreMenu() {
+  const t = trashOf(B());
+  if (!t.length) return null;
+  return <details className="bk-menu" data-more="bank-restore"><summary className="btn small">More</summary><div className="bk-menu-list">
+    <button onClick={() => bankAct("bankRestoreStmt")}>Restore a deleted statement<small>{Trash.say(t[0])}</small></button>
+  </div></details>;
 }
 
 function MoreMenu({ tc }) {
+  const b = B();
+  trashOf(b);
   const M = ({ act, title, children, danger }) => <button className={danger ? "danger" : undefined} onClick={() => bankAct(act)}>{title}{children && <small>{children}</small>}</button>;
   return (
     <details className="bk-menu"><summary className="btn small">More</summary><div className="bk-menu-list">
@@ -182,7 +212,8 @@ function MoreMenu({ tc }) {
       <M act="bankCsv" title="Download as Excel (CSV)" />
       {S.engine && tc.attention > 0 && <M act="bankClaude" title="Ask Claude for the remaining entries" />}
       <M act="bankClearStmt" title="Clear all decisions" />
-      <M act="bankDelStmt" title="Delete this statement" danger />
+      <M act="bankDelStmt" title="Delete this statement" danger>Asks for the client’s name; it can be restored</M>
+      {(b.stmtsTrash || []).length > 0 && <M act="bankRestoreStmt" title="Restore a deleted statement">{Trash.say(b.stmtsTrash[0])}</M>}
     </div></details>
   );
 }
@@ -191,6 +222,7 @@ export default function Bank() {
   const b = B(), co = CO();
   if (!b || b.cid !== co.id) { loadBank(co.id); return <p className="note">Opening bank statements…</p>; }
   if (b.loading) return <p className="note">Opening bank statements…</p>;
+  setTimeout(() => TallyProof.checkBank(co.id).catch(() => {}), 0);
   ensureFileInputs();
   const st = curStmt();
   const top = <>
@@ -212,12 +244,14 @@ export default function Bank() {
         <p className="note">Excel or CSV from net banking works best. E-statement PDFs, scanned PDFs and photos are also read. Every entry is checked against the running balance.</p>
         <span className="btn primary">Choose files</span>
       </div>
-      <div className="row" style={{ justifyContent: "flex-end", marginTop: 10 }}><button className="btn small" onClick={() => bankAct("bankSettings")}>Settings</button></div>
+      <div className="row" style={{ justifyContent: "flex-end", marginTop: 10, gap: 8 }}><button className="btn small" onClick={() => bankAct("bankSettings")}>Settings</button><RestoreMenu /></div>
     </div>
     {b.showSettings && <BankSettings />}
   </>;
 
-  const acc = accountFor(st), accLedger = exactLedger(acc.ledger), tc = tabCounts(bankRangeRows()), tab = bankTab();
+  // the account's Tally ledger as chosen (review 19): shown from what was confirmed, whether or not the ledger list has
+  // loaded yet; asked for only for a new account, a guess to confirm, or a ledger gone from a complete list
+  const acc = accountFor(st), accLedger = bankLedgerChoice(CO(), acc).value, tc = tabCounts(bankRangeRows()), tab = bankTab();
   const repaired = b.rows.filter((r) => r.repaired).length, book = b.books[st.acctId];
   const sum = (k) => money(st[k === "debit" ? "totDr" : "totCr"] || b.rows.reduce((a, r) => a + num(r[k]), 0));
   let range = null;
@@ -227,7 +261,15 @@ export default function Bank() {
   }
   return <>
     <div className="bk">
-      {top}
+      {/* the steps at the top of the page (review of 02-Oct-2026: they were about 490 px down) */}
+      <div className="bk-bar">
+        <div className="bk-tabs" role="tablist">
+          {BANK_TABS.map(([k, t]) => <button key={k} role="tab" aria-selected={tab === k && !b.focus} onClick={() => bankTabGo(k)}>{t} <span className="cnt">{tc[k]}</span></button>)}
+          <button role="tab" aria-selected={tab === "rules"} onClick={() => bankTabGo("rules")}>Rules <span className="cnt">{allRules().length}</span></button>
+        </div>
+        {tab === "review" && <label className="bk-switch"><input type="checkbox" checked={!!b.grouped} onChange={(ev) => bankSetGrouped(ev.target.checked)} /> Group by party</label>}
+        <input type="search" className="bk-search" autoComplete="off" placeholder="Search the description, party or amount" aria-label="Search the statement" value={b.q} onChange={(ev) => bankSearch(ev.target.value)} />
+      </div>
       <div className="bk-head">
         <div className="bk-id">
           {b.stmts.length > 1
@@ -252,19 +294,8 @@ export default function Bank() {
       </div>
       {accLedger && (Bridge.on() || st.tallyBal) && <BankBalance st={st} />}
       <Recon />
-      {!accLedger && <div className="bk-setup">
-        <div><b>Which Tally ledger is this bank account?</b><div className="note">{st.bank}{acc.last4 ? " ··" + acc.last4 : ""}{acc.ifsc ? " · " + acc.ifsc : ""}</div></div>
-        {hasLedgerList() ? <select aria-label="Tally ledger for this bank account" onChange={(ev) => bankSetAccLedger(acc.id, ev.target.value)} dangerouslySetInnerHTML={{ __html: ledgerOptions("", BANK_GROUPS) }} />
-          : <span className="note">Import the ledger list first.</span>}
-      </div>}
-      <div className="bk-bar">
-        <div className="bk-tabs" role="tablist">
-          {BANK_TABS.map(([k, t]) => <button key={k} role="tab" aria-selected={tab === k && !b.focus} onClick={() => bankTabGo(k)}>{t} <span className="cnt">{tc[k]}</span></button>)}
-          <button role="tab" aria-selected={tab === "rules"} onClick={() => bankTabGo("rules")}>Rules <span className="cnt">{allRules().length}</span></button>
-        </div>
-        {tab === "review" && <label className="bk-switch"><input type="checkbox" checked={!!b.grouped} onChange={(ev) => bankSetGrouped(ev.target.checked)} /> Group by party</label>}
-        <input type="search" className="bk-search" autoComplete="off" placeholder="Search the description, party or amount" aria-label="Search the statement" value={b.q} onChange={(ev) => bankSearch(ev.target.value)} />
-      </div>
+      <BankLedger co={CO()} acc={acc.id ? acc : Object.assign({ id: st.acctId, bank: st.bank }, acc)} />
+      {top}
       {range}
       <Gone /><DupFind /><BankFocus />
       {tab === "done" && !b.focus && live() && tc.done > 0 && <div className="bk-found"><span className="muted">Deleted some of these in Tally?</span> <button className="btn small" onClick={() => bankAct("goneCheck")}>Check they are still in Tally</button></div>}
@@ -283,6 +314,12 @@ export function BankBar() {
   const b = B();
   if (!b || b.loading || !curStmt()) return null;
   const tc = tabCounts(bankRangeRows()), nsel = b.sel.size;
+  // review of 02-Oct-2026: with no Tally ledger chosen for this bank account nothing can be posted, and nothing can be
+  // said about which lines are in Tally ("184 no longer in Tally · post them again" was shown for lines of an account
+  // with no ledger): posting waits, said in one line with the way to choose it
+  // posting waits until the account's ledger is confirmed (review 19, src/js/60 bankLedgerWhy): one line saying why
+  const accNow = accountFor(curStmt()), noLed = !bankLedgerReady(CO(), accNow), whyLed = noLed ? bankLedgerWhy(CO(), accNow) : "";
+  const chooseLed = () => { const el = document.querySelector('select[aria-label="Tally ledger for this bank account"]') || document.querySelector("[data-bank-ledger-confirm]"); if (el) { el.scrollIntoView({ block: "center" }); el.focus(); } else bankAct("bankSettings"); };
   let left, right;
   if (nsel) {
     const rows = bankSelected(), ready = rows.filter((r) => r.state === "ready").length;
@@ -294,14 +331,16 @@ export function BankBar() {
       {rows.some((r) => r.state === "suggested") && <button className="btn primary" onClick={() => bankAct("bankBulkAccept")}>Confirm</button>}
       {rows.some((r) => ["attention", "suggested", "ready"].includes(r.state)) && <button className="btn" onClick={() => bankAct("bankBulkIgnore")}>Ignore</button>}
       {rows.some((r) => r.state === "ignored" || r.state === "intally") && <button className="btn" onClick={() => bankAct("bankBulkRestore")}>Restore</button>}
-      {live() && ready > 0 && <button className="btn primary" onClick={() => bankAct("bankBulkPost")}>Post {ready} to Tally</button>}
+      {live() && ready > 0 && <button className="btn primary" disabled={noLed} title={noLed ? whyLed : undefined} onClick={() => bankAct("bankBulkPost")}>Post {ready} to Tally</button>}
     </>;
   } else {
-    left = <><span className="bk-stat"><b>{tc.review}</b> to review</span><span className="bk-stat"><b>{tc.ready}</b> ready to post</span></>;
+    left = <><span className="bk-stat"><b>{tc.review}</b> to review</span><span className="bk-stat"><b>{tc.post}</b> ready to post</span>{tc.filed > 0 && <span className="bk-stat"><b>{tc.filed}</b> in a Tally file, not found in Tally</span>}
+      {tc.gone > 0 && !noLed && <span className="bk-stat" data-bank-gone=""><b>{tc.gone}</b> no longer in Tally <button className="linkbtn" onClick={() => bankRepostGone()}>post them again</button></span>}
+      {noLed && <span className="bk-stat bad" data-bank-noledger="">{whyLed + " "}<button className="linkbtn" onClick={chooseLed}>{/guessed/.test(whyLed) ? "Confirm the ledger" : "Choose the ledger"}</button></span>}</>;
     right = <>
       {tc.suggested > 0 && <button className="btn" onClick={() => bankAct("bankAcceptAll")}>Confirm all suggestions ({tc.suggested})</button>}
-      {canPostTally(CO()) ? <button className="btn primary" disabled={!tc.ready} onClick={() => bankAct("bankPost")}>Post to Tally ({tc.ready})</button>
-        : <button className="btn primary" disabled={!tc.ready} onClick={() => bankAct("bankXml")}>Create Tally file ({tc.ready})</button>}
+      {canPostTally(CO()) ? <button className="btn primary" disabled={!tc.post || noLed} title={noLed ? whyLed : undefined} onClick={() => bankAct("bankPost")}>Post to Tally ({tc.post})</button>
+        : <button className="btn primary" disabled={!tc.post || noLed} title={noLed ? whyLed : undefined} onClick={() => bankAct("bankXml")}>Create Tally file ({tc.post})</button>}
     </>;
   }
   const u = !nsel && b.undo;

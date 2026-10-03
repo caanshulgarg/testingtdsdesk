@@ -14,10 +14,10 @@ export function Rates() {
   const none = <td className="n">—</td>;
   return <div className="pane"><h2>Rates and limits for all clients</h2><p className="note" style={{ margin: "0 0 12px" }}>Set for tax year 2026-27 under section 393 of the Income-tax Act, 2025. Check them against the Act and any Finance Act changes before relying on them. Ledger names are set per client in Client setup → TDS.</p>
     <div className="tblwrap"><table className="data"><thead><tr><th>Payment type</th><th>Section</th><th className="n">Rate: Ind/HUF %</th><th className="n">Rate: others %</th><th className="n">Single bill limit</th><th className="n">Limit</th></tr></thead><tbody>
-      {rules().map((r) => <tr key={r.id}><td>{r.label}</td><td>{r.ref}<div className="note">{r.old}</div></td>
+      {rules().map((r) => <tr key={r.id}><td>{r.label}</td><td>{r.ref}<div className="note">{r.old}{r.form && r.form !== "26Q" ? " · Form " + r.form : ""}</div></td>
         {r.basis === "never" ? <>{none}{none}</> : <>{box(r, "rateInd", "Rate individual", "0.01")}{box(r, "rateOth", "Rate others", "0.01")}</>}
-        {r.basis === "single_or_annual" ? box(r, "single", "Single bill limit") : none}
-        {r.basis === "never" || r.basis === "always" ? none : box(r, "limit", "Limit")}</tr>)}</tbody></table></div>
+        {r.basis === "single_or_annual" || r.basis === "single" ? box(r, "single", "Single bill limit") : none}
+        {r.basis === "never" || r.basis === "always" || r.basis === "single" ? none : box(r, "limit", "Limit")}</tr>)}</tbody></table></div>
     <div className="row" style={{ marginTop: 12 }}><Act act="resetRules">Restore default rates and limits</Act></div>
     <p className="note" style={{ margin: "10px 0 0" }}>Without a PAN the rate is 20%, or 5% for purchase of goods. TDS is worked on the value before GST where GST is shown separately.</p></div>;
 }

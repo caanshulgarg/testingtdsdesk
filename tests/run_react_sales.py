@@ -76,13 +76,18 @@ with sync_playwright() as p:
     # confirm one
     pg.click('#app tr:has-text("S/102") button:has-text("Confirm")'); pg.wait_for_timeout(400)
     ok(pg.evaluate("SL().list.find(v => v.x.number === 'S/102').status") == "ready", "Confirm: ready to post")
-    pg.click('#app .bk-tabs button:has-text("Ready")'); pg.wait_for_timeout(300)
+    pg.click('#app .bk-tabs button:has-text("Post to Tally")'); pg.wait_for_timeout(300)
     ok(rows().count() == pg.evaluate("SL().list.filter(v => v.status === 'ready').length"), "the Ready tab")
     # settings
     pg.click('#app .bk-actions button:has-text("Settings")'); pg.wait_for_timeout(400)
     ser = pg.locator('#app .bk-panel label:has-text("Series") input'); ser.fill("ZZ/{FY}/"); ser.press("Tab"); pg.wait_for_timeout(400)
     ok(pg.evaluate("SL().cfg.series") == "ZZ/{FY}/" and "ZZ/" in pg.inner_text("#app .bk-panel"), "Sales settings: the invoice series, and the next number shown")
     pg.screenshot(path=OUT + "/react-sales.png")
+    # review 18 (02-Oct-2026): closing with unsaved changes asks; saved with Save at the panel's foot, it closes at once
+    pg.click('#app .bk-panel button[aria-label="Close"]'); pg.wait_for_timeout(300)
+    ok(pg.locator("#confirmBox [data-leave-ask]").is_visible(), "review 18: closing with the series not saved asks first")
+    pg.click('#confirmBox [data-leave="stay"]'); pg.wait_for_timeout(300)
+    pg.click('#app [data-confirm-foot="sales:settings"] [data-cfm="save"]'); pg.wait_for_timeout(300)
     pg.click('#app .bk-panel button[aria-label="Close"]'); pg.wait_for_timeout(300)
     ok(pg.locator("#app .bk-panel").count() == 0, "closed")
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))

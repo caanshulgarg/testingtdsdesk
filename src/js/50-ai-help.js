@@ -259,8 +259,9 @@ function aihAct(a){
   else if (a === "auditReview"){ S.booksTab = "ledgers"; S.lmView = "ai"; render(); AIH.reviewLedgers(false); }
   else if (a === "pair2b") AIH.pair2b();
 }
-async function aihAccept(l, yes){ AIH.accept(l, yes ? "yes" : "no"); await saveBooks(); render(); }
-async function aihPay(n, yes){ if (yes) AIH.acceptPay(n); else { delete AIH.st().tdsPay[n]; AIH.log("rejected", n + ": TDS ledger section"); } await saveBooks(); render(); }
+// Accept / Reject is its own confirm step (review 18): saved at once, not kept as a draft of the page (src/js/60)
+async function aihAccept(l, yes){ await Drafts.direct(() => { AIH.accept(l, yes ? "yes" : "no"); return saveBooks(); }, {bypass: true}); render(); }
+async function aihPay(n, yes){ await Drafts.direct(() => { if (yes) AIH.acceptPay(n); else { delete AIH.st().tdsPay[n]; AIH.log("rejected", n + ": TDS ledger section"); } return saveBooks(); }, {bypass: true}); render(); }
 async function aihPair(key, yes){
   const a = AIH.st(), s = a.pairs[key]; if (!s) return;
   if (yes){ const st = GST2B.state(); st.link[key] = [s.id]; delete st.confirm[key]; s.okBy = AIH.who(); s.okAt = new Date().toISOString(); AIH.log("accepted 2B pair", s.label); }

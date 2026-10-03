@@ -54,13 +54,15 @@ type cloudResp struct {
 var cloudHTTP = &http.Client{Transport: &http.Transport{Proxy: http.ProxyFromEnvironment, MaxIdleConns: 4, IdleConnTimeout: 60 * time.Second}}
 
 // test mode: nothing but the heartbeat goes until FinCom's cloud has answered that it keeps a test bridge's calls apart
-// (an older cloud would take them as bridge 1.15.0's): shadowOK, set by the heartbeat
-// one call to the cloud
+// (an older cloud would take them as bridge 1.15.0's): shadowOK, set by the heartbeat; hello, make_main and support carry
+// no books and go at once
+// one call to the cloud; every call says which bridge it is (body.bridge): FinCom tells the bridges on one key apart by it
 func invokeCloud(body M, timeoutSec int) cloudResp {
 	body["version"] = BridgeVersion
+	body["bridge"] = bridgeIdentity()
 	if testMode() {
 		body["shadow"] = true
-		if k := str(body["kind"]); !shadowOK.Load() && k != "beat" {
+		if k := str(body["kind"]); !shadowOK.Load() && k != "beat" && k != "hello" && k != "make_main" && k != "support" {
 			return cloudResp{0, nil, "FinCom's cloud has not confirmed test mode yet; nothing is sent"}
 		}
 	}
@@ -165,10 +167,11 @@ func keptDirs() []string {
 func updateCloudLinks() {
 	cos := []any{}
 	names := map[string]bool{}
-	for _, s := range openCompanies(false) {
+	for _, s := range openCompaniesCached() { // 2.1.3: what Tally named after the last event; Tally is not asked
 		if s["skipped"] != true && s["ok"] == true {
 			for _, c := range sessCompanies(s) {
-				cos = append(cos, M{"name": str(c["name"]), "gstin": str(c["gstin"])})
+				// rebuilt 2.1.4: the company's Tally GUID, as held here
+				cos = append(cos, M{"name": str(c["name"]), "gstin": str(c["gstin"]), "guid": heldGUID(str(c["name"]))})
 				names[str(c["name"])] = true
 			}
 		}
@@ -176,7 +179,7 @@ func updateCloudLinks() {
 	// companies kept here but not open now are asked about too
 	for _, d := range keptDirs() {
 		if st := readKeepState(d); st != nil && str(st["company"]) != "" && !names[str(st["company"])] {
-			cos = append(cos, M{"name": str(st["company"]), "gstin": ""})
+			cos = append(cos, M{"name": str(st["company"]), "gstin": "", "guid": heldGUID(str(st["company"]))})
 			names[str(st["company"])] = true
 		}
 	}
@@ -199,7 +202,10 @@ func updateCloudLinks() {
 	// a company linked just now: everything kept for it goes
 	for k, on := range cloudLinks {
 		if on && !was[k] {
-			dir := syncFolder(k)
+			dir, err := companyDir(k)
+			if err != nil {
+				continue
+			}
 			mark := filepath.Join(dir, "cloud-all.done")
 			if exists(dir) && !exists(mark) {
 				var days []string
@@ -259,7 +265,7 @@ func pushCloudCompany(company, dir string, budget time.Duration) error {
 		bal := readObjFile(bf)
 		if bal != nil && str(bal["from"]) != "" && str(bal["openAsOn"]) != "" {
 			// every ledger in Tally goes, with its group; the opening from the balances (0 when a ledger has none)
-			type row struct{ n, p, o string }
+			type row struct{ n, p, o, g, pan string }
 			rows := map[string]*row{}
 			var order []string
 			for _, x := range arr(bal["ledgers"]) {
@@ -268,7 +274,7 @@ func pushCloudCompany(company, dir string, budget time.Duration) error {
 					if rows[n] == nil {
 						order = append(order, n)
 					}
-					rows[n] = &row{n, str(l["parent"]), str(l["open"])}
+					rows[n] = &row{n, str(l["parent"]), str(l["open"]), "", ""}
 				}
 			}
 			if kj := readObjFile(filepath.Join(dir, "ledgers.json")); kj != nil {
@@ -287,8 +293,9 @@ func pushCloudCompany(company, dir string, budget time.Duration) error {
 						if r.p == "" {
 							r.p = par
 						}
+						r.g, r.pan = str(at(a, 3)), str(at(a, 4))
 					} else {
-						rows[n] = &row{n, par, "0"}
+						rows[n] = &row{n, par, "0", str(at(a, 3)), str(at(a, 4))}
 						order = append(order, n)
 					}
 				}
@@ -296,7 +303,12 @@ func pushCloudCompany(company, dir string, budget time.Duration) error {
 			led := []any{}
 			for _, n := range order {
 				r := rows[n]
-				led = append(led, []any{r.n, r.p, r.o})
+				// name, group, opening, and (2.1.2) the ledger's GSTIN and PAN when Tally has them
+				if r.g != "" || r.pan != "" {
+					led = append(led, []any{r.n, r.p, r.o, r.g, r.pan})
+				} else {
+					led = append(led, []any{r.n, r.p, r.o})
+				}
 			}
 			grp := rows2(readJSONFile(filepath.Join(dir, "groups.json")))
 			r := invokeCloud(M{"kind": "ledgers", "company": company, "from": str(bal["from"]), "openAsOn": str(bal["openAsOn"]), "ledgers": led, "groups": grp}, 120)
@@ -312,6 +324,10 @@ func pushCloudCompany(company, dir string, budget time.Duration) error {
 			}
 			_ = os.Remove(lf)
 		}
+	}
+	// 2.1.4: the ledger list (new, changed, renamed and deleted ledgers, and the groups), before the days
+	if err := pushLedgerList(company, dir); err != nil {
+		return err
 	}
 	q := cloudQueue(dir)
 	pf := filepath.Join(dir, "cloud-plain.txt")
@@ -338,6 +354,17 @@ func pushCloudCompany(company, dir string, budget time.Duration) error {
 			} else {
 				g := gzipB64(t)
 				one, n = M{"day": d, "gz": g}, len(g)
+			}
+			// round 10: n = the vouchers read; empty:true ONLY for a day whose answer came in full and listed none (the
+			// cloud marks a day's entries deleted on empty === true alone); a day file with no mark of a full read goes
+			// as readFailed:true, empty:false (the cloud marks nothing)
+			one["n"] = countVouchers(t)
+			if t == "" {
+				if exists(dayFullMark(dir, d)) {
+					one["empty"] = true
+				} else {
+					one["empty"], one["readFailed"] = false, true
+				}
 			}
 			if len(batch) > 0 && size+n > maxB {
 				break
@@ -629,8 +656,10 @@ func beatLoop() {
 					writeLog(fmt.Sprint("Heartbeat: ", r))
 				}
 			}()
+			selfWatchTick()
 			if cloudOn() {
 				beatOnce()
+				claimMainOnce()
 			}
 		}()
 		select {
@@ -671,10 +700,10 @@ func beatOnce() {
 				isOpen = true
 			}
 		}
-		cos = append(cos, M{"name": str(st["company"]), "open": isOpen, "at": str(st["at"]), "phase": str(st["phase"]), "waiting": len(cloudQueue(d))})
+		cos = append(cos, M{"name": str(st["company"]), "open": isOpen, "at": str(st["at"]), "phase": str(st["phase"]), "waiting": len(cloudQueue(d)), "lastRead": str(st["readAt"]),
+			"guid": heldGUID(str(st["company"]))})
 	}
-	r := invokeCloud(M{"kind": "beat", "tally": tally, "tallyState": tstate, "busySince": tsince, "every": beatEvery(), "open": open, "ports": ports, "companies": cos,
-		"updating": keepRunning(), "dailyAt": keepDailyAt(), "lastRun": keepLastRun()}, 10)
+	r := invokeCloud(beatBody(tally, tstate, tsince, open, ports, cos), 10)
 	if r.code == 200 && r.json != nil {
 		if testMode() && !truthy(r.json["shadow"]) {
 			if shadowOK.Swap(false) || beatMissedSince().IsZero() {
@@ -688,6 +717,23 @@ func beatOnce() {
 			return
 		}
 		shadowOK.Store(true)
+		applyReadControl(r.json) // FinCom's stop or resume of reading on this computer
+		applyRelease(r.json)     // the version this computer may take (update.go)
+		// made the main bridge on FinCom's Tally page: this test bridge switches itself to main, once
+		if testMode() && truthy(r.json["makeMain"]) && makeMainSeen.CompareAndSwap(false, true) {
+			writeLog("FinCom made this the main bridge")
+			if err := switchToMain(false); err != nil {
+				writeLog("Switching to the main bridge: " + err.Error())
+			}
+		}
+		// another bridge is the main one on this computer: this one reads only (said once in the log)
+		if !testMode() {
+			if truthy(r.json["notMain"]) {
+				noteNotMain(str(r.json["error"]), true)
+			} else {
+				clearNotMainByBeat()
+			}
+		}
 		beatMu.Lock()
 		was := beatFailAt
 		beatOK, beatFailAt = time.Now(), time.Time{}
@@ -696,11 +742,23 @@ func beatOnce() {
 			writeLog(fmt.Sprintf("Heartbeat: FinCom reached again (not reached for %s)", time.Since(was).Round(time.Second)))
 		}
 		setCloudWake(obj(r.json["wake"]))
-		// Update now pressed in FinCom on another computer; postings waiting: started, never waited for here
-		if truthy(r.json["updateNow"]) && !paused() {
-			go func() { requestKeepNow(); startKeepIfNeeded() }()
+		// FinCom's last-activity signal (for the nightly catch-up), and clients opened in FinCom (the fallback for the
+		// wake-up channel)
+		if a := str(r.json["activityAt"]); a != "" {
+			noteCloudUse(a)
 		}
-		if toInt(r.json["posts"]) > 0 && cfgB("AllowImport") && readOnlyWhy() == "" && !paused() && postTaking.CompareAndSwap(false, true) {
+		if o := obj(r.json["opened"]); len(o) > 0 {
+			go openedFromBeat(o)
+		}
+		if o := obj(r.json["ledgers"]); len(o) > 0 {
+			go ledgersFromBeat(o)
+		}
+		// Update now pressed in FinCom on another computer; postings waiting: started, never waited for here. Neither is
+		// stopped by "Pause background reading"
+		if truthy(r.json["updateNow"]) {
+			go wakeUpdate("")
+		}
+		if toInt(r.json["posts"]) > 0 && cfgB("AllowImport") && readOnlyWhy() == "" && postTaking.CompareAndSwap(false, true) {
 			go func() { defer postTaking.Store(false); cloudPostTake() }()
 		}
 		return
@@ -716,6 +774,15 @@ func beatOnce() {
 	}
 }
 func beatMissedSince() time.Time { _, f := beatTimes(); return f }
+
+// the heartbeat (2.1.3): also whether background reading is paused, since when Tally has not answered, the hour of the
+// nightly catch-up, the last read of each company, and that this bridge reads Tally only after an event
+func beatBody(tally bool, tstate, tsince string, open, ports, cos []any) M {
+	return M{"reqs": beatReqs(), "readStopped": readStopAny(), "kind": "beat", "tally": tally, "tallyState": tstate, "busySince": tsince, "every": beatEvery(), "open": open, "ports": ports, "companies": cos,
+		"updating": keepRunning(), "dailyAt": keepDailyAt(), "nightlyAt": keepDailyAt(), "lastRun": keepLastRun(), "paused": paused(), "notAnsweringSince": notAnsweringSince(),
+		"lastRead": lastReadAt(), "events": true, "computer": computerName(), "allowlist": allowListBeat(),
+		"postOnly": toAny(postOnlyList())} // round 11: the companies this computer may post to (empty: any)
+}
 
 // --- the posting queue (build 199): postings queued in FinCom on any computer, taken one at a time
 var (
@@ -758,13 +825,18 @@ func cloudPostTake() {
 	cp := getCloudPosts()
 	for i := 0; i < 5; i++ {
 		r := invokeCloud(M{"kind": "posts_take"}, 30)
+		if r.code == 403 && r.json != nil && truthy(r.json["notMain"]) {
+			noteNotMain(r.err, false)
+			return
+		}
 		if r.code != 200 || r.json == nil || obj(r.json["job"]) == nil {
 			return
 		}
 		j := obj(r.json["job"])
 		pl := obj(j["payload"])
 		id := str(j["id"])
-		v, err := newPostJob(M{"jobId": id, "company": str(j["company"]), "masters": arr(pl["masters"]), "vouchers": arr(pl["vouchers"]), "ledger": str(pl["ledger"]), "checkFirst": true})
+		// round 7 (F2): the owner's releases ("Not in Tally — release") for the job's ids come with it
+		v, err := newPostJob(M{"jobId": id, "company": str(j["company"]), "masters": arr(pl["masters"]), "vouchers": arr(pl["vouchers"]), "ledger": str(pl["ledger"]), "checkFirst": true, "released": arr(j["released"])})
 		if err != nil {
 			invokeCloud(M{"kind": "posts_update", "id": id, "status": "failed", "done": 0, "message": "The Tally computer could not start this posting: " + err.Error(), "results": []any{}}, 30)
 			continue
@@ -775,12 +847,25 @@ func cloudPostTake() {
 	}
 }
 
-// postings taken from the queue are followed and reported every few seconds while they run
+// the job's status as FinCom's queue knows it (taken, running, done, failed): a posting waiting for Tally is "taken",
+// with its "Waiting for Tally: ..." message
+func cloudPostStatus(st string) string {
+	switch st {
+	case "done", "failed":
+		return st
+	case "waiting", "queued", "interrupted":
+		return "taken"
+	}
+	return "running"
+}
+
+// postings taken from the queue are followed and reported every few seconds while they run, and at once when they change
 func syncCloudPosts() {
 	cpMu.Lock()
 	defer cpMu.Unlock()
 	cp := getCloudPosts()
-	if len(cp) == 0 || time.Since(cloudPostAt).Seconds() < float64(keepNum("CloudPostSyncSec", 3)) {
+	dirty := postsDirty.Swap(false) // a job changed (an entry finished, a wait began): reported now
+	if len(cp) == 0 || (!dirty && time.Since(cloudPostAt).Seconds() < float64(keepNum("CloudPostSyncSec", 3))) {
 		return
 	}
 	cloudPostAt = time.Now()
@@ -802,11 +887,13 @@ func syncCloudPosts() {
 				v = r
 			}
 		}
-		st := str(v["status"])
-		if st != "done" && st != "failed" {
-			st = "running"
+		if str(v["status"]) == "cancelled" {
+			delete(cp, id)
+			saveCloudPosts()
+			continue
 		}
-		sig := fmt.Sprint(st, "|", v["done"], "|", v["message"], "|", v["checking"])
+		st := cloudPostStatus(str(v["status"]))
+		sig := fmt.Sprint(st, "|", v["done"], "|", v["message"], "|", v["checking"], "|", jsonText(v["items"]))
 		if sig == last {
 			continue
 		}
@@ -817,9 +904,34 @@ func syncCloudPosts() {
 				continue
 			}
 			res = append(res, M{"id": str(r["id"]), "kind": str(r["kind"]), "ok": r["ok"] == true, "verified": r["verified"], "message": str(r["message"]), "vchNumber": str(r["vchNumber"]), "vchType": str(r["vchType"]),
-				"guid": str(r["guid"]), "masterId": str(r["masterId"]), "vchDate": str(r["vchDate"]), "optional": truthy(r["optional"]), "alreadyThere": truthy(r["alreadyThere"])})
+				"guid": str(r["guid"]), "masterId": str(r["masterId"]), "vchDate": str(r["vchDate"]), "optional": truthy(r["optional"]), "alreadyThere": truthy(r["alreadyThere"]),
+				"already": truthy(r["already"]), "checkFailed": truthy(r["checkFailed"]), "vchNo": str(r["vchNo"]),
+				// rebuilt 2.1.4: sent when Tally stopped answering, being looked for by its FinCom id (state "unknown"); the
+				// FinCom id found in Tally already (sameId); the company's GUID not the one held (guidMismatch)
+				"outcomeUnknown": truthy(r["outcomeUnknown"]), "sameId": truthy(r["sameId"]), "guidMismatch": truthy(r["guidMismatch"]),
+				// fault 1: accepted by Tally (CREATED/ALTERED with a voucher id), not confirmed yet: never failed, never sent again
+				"accepted": truthy(r["accepted"]), "lastVchId": str(r["lastVchId"]), "acceptedAt": str(r["acceptedAt"]), "held": truthy(r["held"]),
+				"state": itemState(r, false), "reason": map[bool]string{true: "", false: failedLine(str(r["message"]))}[r["ok"] == true]})
 		}
-		r := invokeCloud(M{"kind": "posts_update", "id": id, "status": st, "done": toInt(v["done"]), "message": str(v["message"]), "results": res, "checking": v["checking"] == true}, 30)
+		// items: every entry's state (waiting, sending, sent, in_tally, failed with its reason), for FinCom to show live
+		// round 7 (F4): seq (per job, from progress.json, growing with every change) and updatedAt: the cloud ignores an
+		// update whose seq is lower than the one it holds
+		r := invokeCloud(M{"kind": "posts_update", "id": id, "status": st, "done": toInt(v["done"]), "message": str(v["message"]), "results": res, "items": arr(v["items"]), "checking": v["checking"] == true,
+			"seq": toInt(v["seq"]), "updatedAt": str(v["updatedAt"])}, 30)
+		if r.json != nil && (truthy(r.json["cancelled"]) || truthy(r.json["gone"])) {
+			// cancelled in FinCom (or no longer there): it stops, also while it waits for Tally
+			_, _ = cancelJob(id, "cancelled in FinCom")
+			delete(cp, id)
+			saveCloudPosts()
+			continue
+		}
+		if r.code == 403 && r.json != nil && truthy(r.json["notMain"]) {
+			// FinCom no longer takes this bridge's reports: another bridge is the main one now
+			noteNotMain(r.err, false)
+			delete(cp, id)
+			saveCloudPosts()
+			continue
+		}
 		if r.code == 200 {
 			cp[id] = sig
 			if (st == "done" || st == "failed") && v["checking"] != true {
@@ -983,20 +1095,49 @@ func wakeSession(u, key, topic string) error {
 		if str(m["event"]) != "broadcast" || obj(m["payload"]) == nil {
 			continue
 		}
-		switch str(obj(m["payload"])["event"]) {
-		case "post":
-			writeLog("Woken by FinCom: a posting is waiting")
-			if why := readOnlyWhy(); why != "" {
-				writeLog("Not taken here: " + why)
-			} else if cfgB("AllowImport") && postTaking.CompareAndSwap(false, true) {
-				go func() { defer postTaking.Store(false); cloudPostTake() }()
-			}
-		case "update":
-			writeLog("Woken by FinCom: Update now")
-			if !paused() {
-				requestKeepNow()
-				startKeepIfNeeded()
-			}
+		wakeEvent(str(obj(m["payload"])["event"]), obj(obj(m["payload"])["payload"]))
+	}
+}
+
+// one wake-up from FinCom's cloud: a posting waiting, Update now, a client opened, FinCom in use, or (2.1.4) the ledger
+// list wanted ("ledgers", {company, at}: a bill's ledger chooser opened with a list older than the last posting)
+func wakeEvent(ev string, inner M) {
+	switch ev {
+	case "post":
+		writeLog("Woken by FinCom: a posting is waiting")
+		noteUse()
+		if why := readOnlyWhy(); why != "" {
+			writeLog("Not taken here: " + why)
+		} else if cfgB("AllowImport") && postTaking.CompareAndSwap(false, true) {
+			go func() { defer postTaking.Store(false); cloudPostTake() }()
 		}
+	case "update":
+		writeLog("Woken by FinCom: Update now")
+		go wakeUpdate(str(inner["company"]))
+	case "open":
+		// a client opened in FinCom: one light update of its company (at most one every few minutes), then idle
+		co := str(inner["company"])
+		if a := str(inner["at"]); a != "" {
+			noteCloudUse(a)
+		} else {
+			noteUse()
+		}
+		go wakeOpen(co, "opened in FinCom")
+	case "active":
+		if a := str(inner["at"]); a != "" {
+			noteCloudUse(a)
+		}
+	case "ledgers":
+		co := str(inner["company"])
+		writeLog("Woken by FinCom: the ledger list of " + co + " wanted (the ledger chooser)")
+		if a := str(inner["at"]); a != "" {
+			noteCloudUse(a)
+			evMu.Lock()
+			if a > ledFromBeat[co] {
+				ledFromBeat[co] = a // the heartbeat's copy of the same wake-up is not taken again
+			}
+			evMu.Unlock()
+		}
+		go wakeLedgers(co, "the ledger chooser opened in FinCom", false)
 	}
 }

@@ -8,10 +8,11 @@ import Legacy from "../../parts/Legacy.jsx";
 import CommitBox from "../../parts/CommitBox.jsx";
 import { AuditButton } from "../../parts/Ai.jsx";
 import { CatchUp } from "../../parts/Notes.jsx";
+import Confirm from "../../parts/Confirm.jsx";
 
 const m = (v) => INR.format(r2(v || 0));
 const d = (x) => fmtDate(tallyDate(x));
-const SEV = { high: ["SERIOUS", "#B42318"], medium: ["TO LOOK AT", "#B9541B"], low: ["MINOR", "#5A6B63"] };
+const SEV = { high: ["SERIOUS", "var(--bad)"], medium: ["TO LOOK AT", "var(--warn)"], low: ["MINOR", "var(--muted)"] };
 const REL = ["Director", "Relative of a director", "Partner or proprietor", "Shareholder with 10% or more", "Company or firm they control", "Key manager", "Other"];
 const Act = ({ act, className = "btn small", children, title }) => <button className={className} title={title} onClick={() => doAct(act)}>{children}</button>;
 
@@ -26,18 +27,25 @@ function Head({ b, run }) {
   const c = Audit.cfg(b), dr = Audit.defaultRange(b), range = S.auditRange || { from: Audit.iso(dr.from), to: Audit.iso(dr.to) };
   const lyFrom = MIS.shift(Audit.ymd(range.from), -1), lyTo = MIS.shift(Audit.ymd(range.to), -1), lyHere = MIS.covered(lyFrom);
   const fin = run && Audit.finalFor(run.from, run.to);
-  return <section className="dash-card"><h3>Audit of the books</h3>
-    <p className="note">Every check runs on the vouchers read from Tally. Each finding says what is wrong, what it costs, what to do, and the journal entry where one is needed. Mark each one, then download the report.</p>
-    <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
-      <label className="note">From <input type="date" aria-label="Audit from" defaultValue={range.from} onChange={(ev) => auditRangeSet("from", ev.target.value)} /></label>
-      <label className="note">to <input type="date" aria-label="Audit to" defaultValue={range.to} onChange={(ev) => auditRangeSet("to", ev.target.value)} /></label>
+  return <section className="dash-card" data-audit-head="">
+    <div className="row" style={{ gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+      <label className="f" style={{ minWidth: 150 }}><span>From</span><input type="date" aria-label="Audit from" key={"f" + range.from} defaultValue={range.from} onChange={(ev) => auditRangeSet("from", ev.target.value)} /></label>
+      <label className="f" style={{ minWidth: 150 }}><span>To</span><input type="date" aria-label="Audit to" key={"t" + range.to} defaultValue={range.to} onChange={(ev) => auditRangeSet("to", ev.target.value)} /></label>
+      <label className="f" style={{ minWidth: 120 }}><span>Year</span><select aria-label="Audit year" value={S.auditRange ? "" : (S.auditFy || fsLastFull())} onChange={(ev) => { S.auditFy = ev.target.value; S.auditRange = null; render(); }}>
+        {S.auditRange && <option value="">dates chosen</option>}{fsYears().map((y) => <option key={y} value={y}>{y + "-" + String(num(y) + 1).slice(2)}</option>)}</select></label>
+      <span className="note" style={{ alignSelf: "center" }} data-audit-period="">{fmtDate(range.from) + " to " + fmtDate(range.to) + " · " + entryCount(Audit.ymd(range.from), Audit.ymd(range.to)).text + " in the books"}</span>
       <Act act="auditRun" className="btn small primary">Run now</Act><AuditButton />
       {!lyHere && typeof bridgeLive === "function" && bridgeLive(CO()) && <Act act="auditReadLy" title={d(lyFrom) + " to " + d(lyTo)}>Read last year from Tally, to compare</Act>}
-      <span className="note" style={{ marginLeft: 12 }}>Run on its own</span>
-      <select aria-label="Run on its own" style={{ width: "auto" }} value={c.freq} onChange={(ev) => auditFreqSet(ev.target.value)}>
-        {[["daily", "every day"], ["weekly", "every week"], ["monthly", "every month"], ["off", "only when I run it"]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
     </div>
-    <p className="note" style={{ marginTop: 6 }}>On its own, it runs the first time this client is opened on a new {({ daily: "day", weekly: "week", monthly: "month" })[c.freq] || "day"}, and each time the day book is read. To run overnight with nobody here, the bridge on the Tally server will have to send the day book on a timer.</p>
+    <details style={{ marginTop: 8 }}><summary className="note" style={{ cursor: "pointer" }}>Settings and how it works</summary>
+      <Confirm id="books:audit-settings" label="Audit settings" stores={["books:auditCfg"]}>
+      <p className="note">Every check runs on the vouchers read from Tally. Each finding says what is wrong, what it costs, what to do, and the journal entry where one is needed. Mark each one, then download the report.</p>
+      <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}><span className="note">Run on its own</span>
+        <select aria-label="Run on its own" style={{ width: "auto" }} value={c.freq} onChange={(ev) => auditFreqSet(ev.target.value)}>
+          {[["daily", "every day"], ["weekly", "every week"], ["monthly", "every month"], ["off", "only when I run it"]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>
+      <p className="note" style={{ marginTop: 6 }}>On its own, it runs the first time this client is opened on a new {({ daily: "day", weekly: "week", monthly: "month" })[c.freq] || "day"}, and each time the day book is read. To run overnight with nobody here, the bridge on the Tally server will have to send the day book on a timer.</p>
+      </Confirm>
+    </details>
     {run && <div className="row" style={{ gap: 8, flexWrap: "wrap", marginTop: 8 }}>
       <Act act="auditReport" className="btn small primary">Download the report (PDF)</Act><Act act="auditExcel">Excel with the annexures</Act>
       <Act act="auditJe">Tally file of entries to pass ({Audit.jesToPass(run).length})</Act><Act act="auditFinal">Finalise this report</Act></div>}
@@ -71,9 +79,9 @@ function FindingBody({ f, st }) {
       {f.rows.length > 100 && <p className="note">The first 100 of {f.rows.length}; all are in the Excel.</p>}
     </>}
     {sv.n > 0 && <>
-      <p><b style={{ color: "#1F7A4D" }}>Put right</b> <span className="note">found earlier, gone when checked again</span></p>
+      <p><b style={{ color: "var(--ok)" }}>Put right</b> <span className="note">found earlier, gone when checked again</span></p>
       <Table head={<><th className="dt">Date</th><th>Voucher</th><th>Party or ledger</th><th className="n">Amount</th><th>Put right by</th></>}>
-        {sv.items.slice(-100).map((it, i) => { const r = it.row || {}; return <tr key={i} style={{ color: "#5A6B63" }}><td>{r.date ? d(r.date) : ""}</td><td><s>{r.no || ""}</s></td><td>{r.party || ""}</td><td className="n">{r.amount ? m(r.amount) : ""}</td><td>{fmtDate(String(it.solved).slice(0, 10))}</td></tr>; })}
+        {sv.items.slice(-100).map((it, i) => { const r = it.row || {}; return <tr key={i} style={{ color: "var(--muted)" }}><td>{r.date ? d(r.date) : ""}</td><td><s>{r.no || ""}</s></td><td>{r.party || ""}</td><td className="n">{r.amount ? m(r.amount) : ""}</td><td>{fmtDate(String(it.solved).slice(0, 10))}</td></tr>; })}
       </Table>
     </>}
   </div>;
@@ -87,7 +95,7 @@ function Finding({ f }) {
         <div className="nr" style={{ color: col, fontWeight: 700 }}>{word + " · " + ((Audit.AREAS.find((a) => a[0] === f.area) || [])[1] || "") + (f.clause ? " · " + f.clause : "")}
           {f.isNew ? <> <span className="tag warn">new</span></> : f.more > 0 ? <> <span className="tag warn">+{f.more}</span></> : null}</div>
         <button className="linkbtn" style={{ fontSize: 16, fontWeight: 600, textAlign: "left" }} onClick={() => tdsToggle("auditOpen", f.id)}>{(open ? "▾ " : "▸ ") + f.title}</button>
-        <div className="note">{f.problem + (f.amount ? " · ₹" + m(f.amount) : "")}{solved > 0 && <> · <span style={{ color: "#1F7A4D" }}>{solved} put right</span></>}</div>
+        <div className="note">{f.problem + (f.amount ? " · ₹" + m(f.amount) : "")}{solved > 0 && <> · <span style={{ color: "var(--ok)" }}>{solved} put right</span></>}</div>
       </div>
       <div><select aria-label={"Status of " + f.title} style={{ width: "auto" }} value={st.s} onChange={(ev) => auditFindingSet(f.id, "s", ev.target.value)}>{Audit.STATUS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
         {f.je && <div className="nr">{f.je.length + " suggested entr" + (f.je.length === 1 ? "y" : "ies")}</div>}</div>
@@ -99,15 +107,25 @@ function Finding({ f }) {
 function Findings({ b }) {
   const au = b.audit || {}, run = au.last;
   if (!run) return <><Head b={b} run={run} /><div className="bk-none" style={{ marginTop: 12 }}>Not run yet. Choose the period and press Run now.</div></>;
+  // a run that no longer fits the books (other entries for its period, or the books or FinCom's checks changed) is worked
+  // out again by itself for the same period, as MIS is; its old findings are not shown meanwhile (review of 02-Oct-2026:
+  // "worked out on 1231 entries… the books now hold 4" asked the user to press Run again)
+  if (Audit.stale(run)) {
+    if (!Audit._again) { Audit._again = true; setTimeout(() => { try { Audit.run(run.from, run.to, "worked out again (the books changed since the run of " + fmtDate(String(run.at || "").slice(0, 10)) + ")"); saveBooks(); } catch (e) {} finally { Audit._again = false; render(); } }, 0); }
+    return <><Head b={b} run={null} /><div className="bk-none" data-audit-again="" style={{ marginTop: 12 }}>{"Working out again for " + d(run.from) + " to " + d(run.to) + ": the books changed since the last run."}</div></>;
+  }
   const f0 = run.findings, sev = (s) => f0.filter((f) => f.sev === s), sum = (l) => l.reduce((s, f) => s + f.amount, 0);
   const open = f0.filter((f) => Audit.status(f.id).s === "open").length, fresh = f0.filter((f) => f.isNew).length;
   const area = S.auditArea || "", fs = S.auditSt || "", list = f0.filter((f) => (!area || f.area === area) && (!fs || Audit.status(f.id).s === fs));
   const gone = (run.solved || []).filter((x) => x.n && !f0.some((f) => f.id === x.id) && (!area || x.area === area));
+  // the area tabs first, at the top (review of 01-Oct-2026), then the period, the last run and the tiles
   return <>
+    <nav className="sbar" aria-label="Areas"><button aria-selected={!area} onClick={() => setAndShow("auditArea", "")}>All <span className="sbar-n">{f0.length}</span></button>
+      {Audit.AREAS.map(([a, l]) => { const n = f0.filter((f) => f.area === a).length; return n ? <button key={a} aria-selected={area === a} onClick={() => setAndShow("auditArea", a)}>{l} <span className="sbar-n">{n}</span></button> : null; })}</nav>
     <Head b={b} run={run} />
-    <p className="note" style={{ margin: "10px 0" }}>{"Last run " + run.how + " on " + fmtDate(run.at.slice(0, 10)) + " at " + run.at.slice(11, 16) + " for " + d(run.from) + " to " + d(run.to) + ", " + run.vouchers + " vouchers. Result code "}
-      <b>{run.code || ""}</b>{": the same books always give the same code." + (run.balances ? " Balances from " + run.balances + "." : "") + (run.notes.length ? " " + run.notes.join(" ") : "")}
-      {run.errors.length > 0 && <>{" "}<span className="bad">Some checks could not run: {run.errors.join("; ")}</span></>}</p>
+    <p className="note" style={{ margin: "10px 0" }}>{"Last run on " + fmtDate(run.at.slice(0, 10)) + " at " + run.at.slice(11, 16) + " (" + Audit.howLabel(run) + ") for " + d(run.from) + " to " + d(run.to) + ", " + run.vouchers + " vouchers. Result code "}
+      <b>{run.code || ""}</b>{": the same books always give the same code." + (run.balances ? " Balances from " + run.balances + "." : "") + ((run.notes || []).length ? " " + run.notes.join(" ") : "")}
+      {(run.errors || []).length > 0 && <>{" "}<span className="bad">Some checks could not run: {run.errors.join("; ")}</span></>}</p>
     <div className="dash-tiles">
       <div className={"dtile" + (sev("high").length ? " warn" : "")}><span>Serious</span><b>{sev("high").length}</b><small>{m(sum(sev("high")))} involved</small></div>
       <div className="dtile"><span>To look at</span><b>{sev("medium").length}</b><small>{m(sum(sev("medium")))}</small></div>
@@ -115,12 +133,10 @@ function Findings({ b }) {
       <div className="dtile"><span>Still open</span><b>{open}</b><small>{"of " + f0.length + " findings" + (fresh ? ", " + fresh + " new since the last run" : "")}</small></div>
       <div className="dtile"><span>Put right</span><b>{(run.solved || []).reduce((s2, x) => s2 + x.n, 0)}</b><small>items found earlier and gone when checked again</small></div>
     </div>
-    <nav className="sbar" aria-label="Areas"><button aria-selected={!area} onClick={() => setAndShow("auditArea", "")}>All <span className="sbar-n">{f0.length}</span></button>
-      {Audit.AREAS.map(([a, l]) => { const n = f0.filter((f) => f.area === a).length; return n ? <button key={a} aria-selected={area === a} onClick={() => setAndShow("auditArea", a)}>{l} <span className="sbar-n">{n}</span></button> : null; })}</nav>
     <div className="revfilter"><select aria-label="Status" style={{ width: "auto" }} value={fs} onChange={(ev) => setAndShow("auditSt", ev.target.value)}><option value="">Every status</option>{Audit.STATUS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>
     {list.map((f, i) => <Finding key={f.id + ":" + i} f={f} />)}
     {!list.length && <div className="bk-none" style={{ marginTop: 10 }}>Nothing here.</div>}
-    {gone.length > 0 && <section className="dash-card" style={{ marginTop: 12, borderLeft: "4px solid #1F7A4D" }}><h3 style={{ color: "#1F7A4D" }}>Solved</h3><p className="note">Every item of these was put right in the books.</p>
+    {gone.length > 0 && <section className="dash-card" style={{ marginTop: 12, borderLeft: "4px solid var(--ok)" }}><h3 style={{ color: "var(--ok)" }}>Solved</h3><p className="note">Every item of these was put right in the books.</p>
       <Table head={<><th>Observation</th><th className="n">Items</th><th className="n">Amount</th><th>Last put right</th></>}>
         {gone.map((x, i) => <tr key={x.id + ":" + i}><td>{x.title}</td><td className="n">{x.n}</td><td className="n">{m(x.amount)}</td><td>{fmtDate(String(x.items[x.items.length - 1].solved).slice(0, 10))}</td></tr>)}</Table></section>}
     {(au.history || []).length > 1 && <section className="dash-card" style={{ marginTop: 12 }}><h3>Earlier runs</h3>
@@ -131,7 +147,7 @@ function Findings({ b }) {
 
 function Related({ b }) {
   const rel = b.auditRel || [], guess = Audit.relatedGuess(), pans = b.pans || {};
-  return <>
+  return <Confirm id="books:audit-related" label="Related parties" stores={["books:auditRel"]}>
     <section className="dash-card"><h3>Related parties</h3>
       <p className="note">Directors, partners, their relatives, and the concerns they control. Transactions with them feed clause 23 (section 40A(2)(b)), clause 36A (deemed dividend), and the related-party note. The audit only uses the people listed here.</p>
       <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center", margin: "8px 0" }}>
@@ -146,7 +162,7 @@ function Related({ b }) {
     {guess.length > 0 && <section className="dash-card" style={{ marginTop: 12 }}><h3>Possibly related</h3><p className="note">Found in the ledgers by where they sit or what they are called. Add the ones that are related.</p>
       <div className="bk-tablewrap"><table className="bk-table"><tbody>{guess.map((g, i) => <tr key={g.name + ":" + i} data-key={g.name}><td>{g.name}<div className="nr">{g.why}</div></td><td>{pans[g.name] || ""}</td>
         <td className="ac"><button className="btn small" onClick={() => relAdd(g.name)}>Add</button></td></tr>)}</tbody></table></div></section>}
-  </>;
+  </Confirm>;
 }
 
 // the Form 3CD draft, filled from the last run: Audit.form3cdHtml is also the PDF's template, so it stays HTML

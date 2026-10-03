@@ -1,0 +1,123 @@
+FINCOM BRIDGE 2.1.3 - TEST SHEET (NWS144, staging)
+
+File:        FinComBridge-Setup-2.1.3.exe
+Fingerprint: ac0d571c6e821ac4aa8f6c42711865f25fd033e615038fc8216eb2e1bb7bd9c5 (SHA-256)
+Link:        https://staging.fincom.live/review/assets/bridge-go/FinComBridge-Setup-2.1.3.exe
+
+What is new since 2.1.2
+  a) The bridge no longer polls Tally. It sends Tally nothing until one of: a client opened in FinCom, Update now,
+     a posting, or the nightly catch-up (02:00, only when Tally is open and nobody has used FinCom for 15 minutes).
+  b) A posting always wins: a background read is stopped at once, the posting goes, and the read resumes from where
+     it was. No more "Tally (port 9002) is busy with another FinCom request".
+  c) No request to Tally runs longer than 25 s. Opening balances are read in batches of ledgers, each batch saved.
+     After a failure the next batch is half the size, and Tally is left alone (one log line) for a while.
+  d) Tray: "Pause background reading" (postings and Update now still work) and "Nightly catch-up at 02:00".
+  e) FinCom shows each client's Tally in one line with Update now, and "Books as of 15:34 · Update now".
+     This needs the app and tally-ingest published on staging. Until then, steps 3, 9 and 10 only show what the
+     tray and the log say.
+
+Why by hand: 2.1.1/2.1.2 take an update only from a signed update list. The 2.1.3 list is not signed (that is yours).
+
+1. INSTALL OVER 2.1.1
+   Do: TallyPrime open with ZZ TEST and GARG SHEKHAR & COMPANY. Open the Link, then in PowerShell:
+       Get-FileHash $env:USERPROFILE\Downloads\FinComBridge-Setup-2.1.3.exe
+       Double-click the setup; "Windows protected your PC" > More info > Run anyway; "Just for me"; Next.
+   You should see: the Fingerprint above. "FinCom Bridge 2.1.3 is installed and running", "Main bridge: reading and
+       posting". You are not asked to pair again. Show log (right-click the icon) has:
+       "Tally is open on port 9002; the bridge reads it only after an event (...)".
+       There is no "Waiting for Tally to answer promptly" and no company list at the start.
+   If not: the page's title and reason; keep "Send install log to FinCom" ticked and click Finish.
+
+2. IDLE FOR 30 MINUTES: NOTHING SENT TO TALLY
+   Do: right-click the icon > Status. Write down "Requests sent to Tally since the bridge started: N".
+       Leave FinCom closed (or on the Home page, no client open) and do not post. Work in TallyPrime as usual for
+       30 minutes. Then open Status again, and Show log.
+   You should see: the same N. In Show log, no new lines in those 30 minutes except, at most, "Heartbeat" lines.
+       No TDSDeskCompanies, no "Light check", no "Keeping ... in step", no "reading every opening balance".
+       Tally answers at once the whole time.
+   If not: both Status texts and the log lines of those 30 minutes.
+
+3. OPENING A CLIENT: ONE LIGHT UPDATE
+   Do: in FinCom (staging), open the client ZZ TEST. Wait 1 minute. Then go Home and open ZZ TEST again, twice.
+   You should see in Show log, once only:
+       "Woken by FinCom ..." or nothing, then
+       "Light update of ZZ TEST (opened in FinCom): only what changed in Tally since the last read" and
+       "Light update: done (3 request(s) to Tally); the bridge is idle again" (a small number, not hundreds).
+       Opening it again within 5 minutes adds no line.
+   If not: the log lines from the first opening. (Before tally-ingest is published, this works only with FinCom
+       open on NWS144 itself.)
+
+4. UPDATE NOW
+   Do: ZZ TEST > Post to Tally (or the Tally page), press "Update now" next to the Tally line.
+   You should see in Show log: "Woken by FinCom: Update now" (from another computer) or "Update from Tally asked for
+       now", then "Update from Tally: asked for now" ... "Update from Tally: done (N request(s) to Tally); the
+       bridge is idle again (next: the nightly catch-up at 02:00, or Update now)".
+       In FinCom the line shows "last read" with the time of this update.
+   If not: the log from the press to 5 minutes later.
+
+5. A POSTING TO ZZ TEST DURING A READ (ZZ TEST only, never GARG SHEKHAR & COMPANY)
+   Do: press Update now (step 4) and, while Status says "Update from Tally: running now", post one approved bill of
+       ZZ TEST (Post to Tally > Post 1 to Tally).
+   You should see: the posting goes within a few seconds: "In Tally (verified)". Show log:
+       "Tally 9002: a background read was stopped at once so FinCom's request goes first; it resumes afterwards
+       from where it was", "Keeping ZZ TEST: paused for FinCom's request (a posting goes first); ...", the posting's
+       lines, then the update carries on and ends with "Update from Tally: done".
+       Never "busy with another FinCom request".
+   If not: the time you pressed Post, what FinCom showed, and the log of those minutes.
+
+6. PAUSE BACKGROUND READING
+   Do: right-click the icon > "Pause background reading". Open the client GARG SHEKHAR & COMPANY in FinCom. Then
+       press Update now for ZZ TEST.
+   You should see: the menu now says "Resume background reading"; the tooltip ends "Background reading paused".
+       Show log: "Background reading paused from the tray icon: ...". Opening the client adds no "Light update"
+       line. Update now still runs ("Update from Tally: asked for now" ... "done").
+       In FinCom: "Background reading paused on NWS144".
+   Then: right-click > "Resume background reading". Log: "Background reading resumed from the tray icon".
+   If not: the menu text you saw and the log lines.
+
+7. CLOSING TALLY: "Tally is closed"
+   Do: close TallyPrime. Wait 1 minute. Look at the tray tooltip, Status, and in FinCom ZZ TEST > Post to Tally.
+   You should see: tooltip "... - Tally not open"; Status "Tally: not open in your Windows session"; FinCom
+       "Tally is closed on NWS144". Show log has no failed request (the bridge looked only at the program and
+       its port). Open TallyPrime again: within 1 minute FinCom says "Tally open on NWS144 · last read ...".
+   If not: what each place said, and the log of those minutes.
+
+8. THE NIGHTLY CATCH-UP SETTING
+   Do: right-click the icon > the menu shows "Nightly catch-up at 02:00" (greyed). Status says "... the nightly
+       catch-up at 02:00 (only when Tally is open and nobody has used FinCom for 15 minutes; KeepDailyAt in the
+       settings)". To try it now: in %LOCALAPPDATA%\TDS Desk Bridge\tds-bridge.config.json set
+       "KeepDailyAt": "HH:MM" to 20 minutes from now and save; leave FinCom unused, Tally open, do not post.
+   You should see: the menu shows the new time within a minute. At that time (or 15 minutes after FinCom was last
+       used): "Nightly catch-up (HH:MM): Tally is open and nobody has used FinCom for 15 minutes" ... "Nightly
+       catch-up: done (...)". If FinCom was used meanwhile: "Nightly catch-up waits: FinCom was used at ..."
+       (said once). Set it back to "02:00" afterwards.
+   If not: the setting you saved and the log from that time.
+
+9. THE ONE-LINE STATES IN FINCOM (after the app and tally-ingest are published on staging)
+   Do: look at ZZ TEST > Post to Tally (the line under "Posting into"), the Tally chip in the top bar (click it),
+       and the Tally page ("Clients' Tally", one line a client), in each of these states:
+   You should see, with "Update now" next to it each time:
+       Tally open:              "Tally open on NWS144 · last read 15:34"
+       Tally closed (step 7):   "Tally is closed on NWS144"
+       paused (step 6):         "Background reading paused on NWS144"
+       NWS144 shut down or signed out for 3 minutes:   "NWS144 is offline"
+       Tally stuck (open a message box in Tally, e.g. Alt+F4 "Quit?", then press Update now and wait 1 minute):
+                                "Tally is not answering on NWS144 since HH:MM"; it clears at the next answer.
+   If not: a screenshot of each that differs.
+
+10. BOOKS AS OF
+   Do: ZZ TEST > MIS, and Reports.
+   You should see at the top: "Books as of 15:34 · Update now" (the time of the last read). Hovering it says that
+       entries made in Tally since then come in at the next update. Make an entry in Tally for ZZ TEST: it does
+       not appear until you press Update now (or open the client again after 5 minutes).
+   If not: a screenshot.
+
+IF SOMETHING FAILS, SEND ME
+   a) the step number and what you saw (a screenshot helps);
+   b) the install log (setup's last page with "Send install log to FinCom" ticked, or icon > Send install log);
+   c) icon > Show log, the part from the start;
+   d) icon > Status (the text).
+
+FALLBACK
+   2.1.1 and 2.1.2 are kept (not published) in assets-test/bridge-go-old. If 2.1.3 does not work: Settings > Apps >
+   FinCom Bridge (just for me) > Uninstall (keep the pairing ticked), then ask me for the 2.1.2 setup link.

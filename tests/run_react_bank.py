@@ -21,7 +21,7 @@ SETUP = """() => {
     bal += out ? -amt : amt;
     return {id: "r" + i, fp: "fp" + i, date: "2026-04-" + String(1 + i).padStart(2, "0"), debit: out ? r2(amt) : 0, credit: out ? 0 : r2(amt), bal: r2(bal),
       narr: (out ? "NEFT DR " : "NEFT CR ") + parties[i % 8] + " UTR" + (100000 + i), dec: {name: parties[i % 8], mode: "NEFT", utr: "UTR" + (100000 + i)},
-      ledger: states[i % 8] === "attention" ? "" : parties[i % 8], state: states[i % 8], balOk: true, why: states[i % 8] === "attention" ? ["No ledger found for this party."] : []}; });
+      ledger: states[i % 8] === "attention" ? "" : parties[i % 8], state: states[i % 8], tally: states[i % 8] === "sent" ? {guid: "g" + i} : undefined, balOk: true, why: states[i % 8] === "attention" ? ["No ledger found for this party."] : []}; });
   S.bank = {cid: c.id, loading: false, stmts: [{id: "s1", acctId: "a1", bank: "ICICI", acct: "0214", from: "2026-04-01", to: "2026-04-24", opening: 250000, closing: bal, totDr: 0, totCr: 0}], cur: "s1", rows, rules: [], wrules: [],
     ledgers: {list: parties.map(p => ({name: p, group: "Sundry Creditors"})).concat([{name: "ICICI Bank", group: "Bank Accounts"}]), importedAt: new Date().toISOString(), live: true}, newLed: [], keys: {}, books: {}, filter: "review", grouped: false, showSettings: false, q: "", limit: 100, pendingRule: null, busy: "",
     createFor: null, sel: new Set(), sticky: new Set(), undo: null, hist: {rows: {}}, histVer: 0, postedTags: {}, salesRef: []};
@@ -37,8 +37,8 @@ with sync_playwright() as p:
     ok(pg.inner_text("#app .bk-title") == "ICICI Bank" and "24 entries" in pg.inner_text("#app .bk-sub"), "the statement: its Tally ledger and 24 entries")
     ok("The statement adds up" in pg.inner_text("#app .bk-check"), "the running-balance check")
     ok(rows().count() == tc["review"] and ("%d to review" % tc["review"]) in bar().replace("\n", " "), "To review: %d lines, and the bar says so" % tc["review"])
-    pg.click('#app .bk-tabs button:has-text("Ready to post")'); pg.wait_for_timeout(400)
-    ok(rows().count() == tc["ready"] and pg.get_attribute('#app .bk-tabs button:has-text("Ready to post")', "aria-selected") == "true", "Ready to post: %d lines" % tc["ready"])
+    pg.click('#app .bk-tabs button:has-text("Post to Tally")'); pg.wait_for_timeout(400)
+    ok(rows().count() == tc["ready"] and pg.get_attribute('#app .bk-tabs button:has-text("Post to Tally")', "aria-selected") == "true", "Ready to post: %d lines" % tc["ready"])
     # ticking, with Shift for a run of lines
     pg.click('#app table.bk-table tbody tr >> nth=0 >> input[type=checkbox]')
     pg.click('#app table.bk-table tbody tr >> nth=3 >> input[type=checkbox]', modifiers=["Shift"]); pg.wait_for_timeout(400)
@@ -69,7 +69,7 @@ with sync_playwright() as p:
     pg.click('#app table.bk-table tr:has-text("Ignored") button:has-text("Restore")'); pg.wait_for_timeout(400)
     ok(pg.evaluate("B().rows.filter(r => r.state === 'ignored').length") == 0, "Restore")
     # search, and give every line found one ledger
-    pg.click('#app .bk-tabs button:has-text("Ready to post")'); pg.wait_for_timeout(300)
+    pg.click('#app .bk-tabs button:has-text("Post to Tally")'); pg.wait_for_timeout(300)
     pg.fill('#app input[aria-label="Search the statement"]', "DIPTI"); pg.wait_for_timeout(600)
     n = pg.evaluate("bankVisibleRows().length")
     ok(n >= 1 and rows().count() == n and ("%d entr" % n) in pg.inner_text('#app .bk-found:has-text("match")').replace("\n", " ") and pg.evaluate("document.activeElement.getAttribute('aria-label')") == "Search the statement", "search “DIPTI”: %d lines, the cursor stays in the box" % n)
@@ -97,6 +97,9 @@ with sync_playwright() as p:
     ok(pg.evaluate("CO().bankAuto") is False, "an automation choice is kept")
     pg.select_option('#app .bk-panel select[aria-label="Bank charges"]', "ICICI Bank"); pg.wait_for_timeout(300)
     ok(pg.evaluate("CO().bankLedgerNames.charges") == "ICICI Bank", "the ledger for bank charges chosen")
+    # review 18 (02-Oct-2026): the panel's changes are saved with Save at its foot
+    ok("Not saved yet" in pg.inner_text('#app [data-confirm-foot="bank:settings"]'), "review 18: not saved until Save")
+    pg.click('#app [data-confirm-foot="bank:settings"] [data-cfm="save"]'); pg.wait_for_timeout(300)
     pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
     ok(pg.locator("#app .bk-panel").count() == 0, "Esc closes it")
     pg.click('#app .bk-actions button:has-text("Settings")'); pg.wait_for_timeout(300)
@@ -139,7 +142,9 @@ with sync_playwright() as p:
     ok("Which Tally ledger is this bank account?" in app(), "a new account: which Tally ledger it is, asked")
     pg.evaluate("B().ledgers.list.push({name: 'HDFC Bank', group: 'Bank Accounts'}); render()"); pg.wait_for_timeout(200)
     pg.select_option('#app select[aria-label="Tally ledger for this bank account"]', "HDFC Bank"); pg.wait_for_timeout(400)
-    ok(pg.evaluate("CO().bankAccounts.find(a => a.id === 'a2').ledger") == "HDFC Bank" and "Which Tally ledger" not in app(), "chosen: kept, and the question goes")
+    # review 19 (02-Oct-2026): picked, then confirmed with Confirm; then one line instead of the question
+    pg.click("#app [data-bank-ledger-confirm]"); pg.wait_for_timeout(400)
+    ok(pg.evaluate("CO().bankAccounts.find(a => a.id === 'a2').ledger") == "HDFC Bank" and "Which Tally ledger" not in app() and "Tally ledger: HDFC Bank" in app(), "chosen and confirmed: kept, and the question goes")
     # no statement yet
     pg.evaluate("B().stmts = []; B().cur = null; render()"); pg.wait_for_timeout(300)
     ok("Upload a bank statement" in app() and pg.locator("#bankDrop").count() == 1 and pg.locator("#app .actionbar").count() == 0, "no statement: the upload box, and no bar")

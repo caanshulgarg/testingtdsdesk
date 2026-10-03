@@ -7,14 +7,24 @@ import { Jobs, ReadingCheck, UploadOptions } from "../parts/Reading.jsx";
 
 function AddClient() {
   const others = sortedCompanies();
-  const [v, setV] = useState({ name: "", gstin: "", tallyName: "", copyFrom: "", turnover10cr: false });
+  const [v, setV] = useState({ name: "", gstin: "", tallyName: "", copyFrom: "", turnover10cr: false, tallyCompany: "", postOnly: true });
   const set = (k) => (e) => setV({ ...v, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value });
+  // the Tally companies the bridge here sees open, and the ones the firm's Tally computers reported (02-Oct-2026)
+  if (typeof TCloud === "object" && TCloud.on() && TCloud.pane.devices === null && !TCloud.pane.busy) setTimeout(() => TCloud.refreshPane(), 0);
+  const seen = tallyCompaniesSeen(), pick = (name) => { const x = seen.find((c) => c.name === name);
+    setV({ ...v, tallyCompany: name, tallyName: name || v.tallyName, name: v.name || name, gstin: v.gstin || (x && x.gstin) || "" }); };
   const save = () => saveNewCompany(v);
   return <>
     <h2>Add client</h2>
     <div className="grid" style={{ marginTop: 10 }} onKeyDown={(e) => { if (e.key === "Enter" && e.target.tagName === "INPUT") save(); }}>
       <label className="f wide"><span>Client name</span><input type="text" id="ncName" autoFocus placeholder="e.g. Gupta Traders Pvt Ltd" value={v.name} onChange={set("name")} /></label>
       <label className="f"><span>GSTIN</span><input type="text" placeholder="09AAACG1111A1Z5" value={v.gstin} onChange={set("gstin")} /></label>
+      <label className="f wide"><span>Company in Tally</span>
+        <select aria-label="Company in Tally" data-add-tally="" value={v.tallyCompany} onChange={(e) => pick(e.target.value)}>
+          <option value="">{seen.length ? "Choose the company in Tally (optional)" : "No Tally company seen yet: open it in Tally on a connected computer"}</option>
+          {seen.map((c) => <option key={c.name} value={c.name} disabled={!!c.client}>{c.name + (c.client ? " — linked to " + ((CO(c.client) || {}).name || "another client") : " — " + (c.where || (c.open ? "open in Tally" : "seen")))}</option>)}
+        </select></label>
+      {v.tallyCompany && <label className="chk wide" data-add-postonly=""><input type="checkbox" checked={v.postOnly} onChange={set("postOnly")} /> Post this client’s entries only into <b>{v.tallyCompany}</b></label>}
       <label className="f"><span>Company name in Tally</span><input type="text" placeholder="Same as client name" value={v.tallyName} onChange={set("tallyName")} /></label>
       {others.length > 0 && <label className="f wide"><span>Copy ledger names from</span>
         <select value={v.copyFrom} onChange={set("copyFrom")}><option value="">Standard names</option>{others.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
@@ -41,7 +51,9 @@ function TallyLight({ cid }) {
   if (typeof TLight !== "object") return null;
   const co = CO(cid), t = tallyStatus(co), x = TLight.st.by[cid];
   // the one status (review item 5); the heartbeat's detail (updated when, Tally closed) stays in the tip
-  return <span className={"tag " + t.level} title={t.say + (x && t.state === "ok" ? "" : x ? " " + x.say : "")} data-tally={t.state}>{MARK[t.level] + t.label}</span>;
+  // 2.1.3: the client's one line ("Tally open on NWS144 · last read 15:34") leads the tip
+  const l = typeof tallyLine === "function" ? tallyLine(co) : null;
+  return <span className={"tag " + t.level} title={(l ? l.text + ". " : "") + t.say + (x && t.state === "ok" ? "" : x ? " " + x.say : "")} data-tally={t.state} data-tally-line-tip={l ? l.state : ""}>{MARK[t.level] + t.label}</span>;
 }
 
 export default function Clients() {

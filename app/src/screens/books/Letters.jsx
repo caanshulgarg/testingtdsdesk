@@ -99,7 +99,7 @@ export default function Letters({ b }) {
     <div className="lk-kinds" role="tablist" aria-label="Letters">{[["confirm", "Balance confirmations"], ["remind", "Dues reminders"], ["settings", "Letter settings"]].map(([k, l]) => <button key={k} role="tab" aria-selected={x.mode === k} onClick={() => ltrMode(k)}>{l}</button>)}</div></section>;
   if (!have && x.mode !== "settings") return <>{head}<NoBooks what="Letters" /></>;
   return <>{head}
-    {x.busy && <BusyCard title="Reading Tally…" detail={x.busy} done={0} total={0} />}
+    {x.busy && <BusyCard title="Working it out…" detail={x.busy} done={0} total={0} />}
     <AutoFresh />
     {LK.fr().busy && <BusyCard title="Bringing the books up to date…" detail={LK.fr().busy} done={0} total={0} />}
     {x.mode === "settings" ? <Settings /> : x.mode === "confirm" ? <Confirm /> : <Remind />}

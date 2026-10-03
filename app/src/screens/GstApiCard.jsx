@@ -24,11 +24,24 @@ async function fetchMonths(months) {
 
 const ACCESS = "the taxpayer must have allowed API access on the portal (My Profile → Manage API Access)";
 
+// tax-accuracy: what the server has fetched (Fetch now, or the daily run), and fetching one return now
+async function fetchNow(gstin, form, ym) {
+  const x = await GSTAPI.fetch(gstin, form, ym);
+  if (x.none) return GSTAPI.formOf[form] + " for " + GSTR.label(ym) + " is not there yet: " + (x.error || "not filed or not made") + ".";
+  saveBooks(); GSTAPI._sync = null;
+  return GSTAPI.formOf[form] + " for " + GSTR.label(ym) + " fetched and kept on the firm's server.";
+}
+const DAYS = [1, 2, 7, 15, 30];
+
 export default function GstApiCard() {
-  const [otp, setOtp] = useState("");
+  const [otp, setOtp] = useState(""), [days, setDays] = useState(30);
   const b = S.books, r = reg(), gstin = GSTAPI.gstinOf(r), signedIn = GSTAPI.on();
-  // the server keeps the portal session: ask it which GSTINs are connected (at most every 10 minutes)
-  useEffect(() => { if (gstin && signedIn && GSTAPI.stale(gstin)) GSTAPI.status(gstin).then(() => render(), () => {}); });
+  // the server keeps the portal session: ask it which GSTINs are connected (at most every 10 minutes), and bring in what
+  // the daily run has fetched since
+  useEffect(() => {
+    if (gstin && signedIn && GSTAPI.stale(gstin)) GSTAPI.status(gstin).then(() => render(), () => {});
+    if (gstin && signedIn) GSTAPI.syncKept().then((n) => { if (n) render(); }, () => {});
+  });
   if (!b || !gstin) return null;
 
   const msg = S.gstApiMsg ? <p className="note">{S.gstApiMsg}</p> : null, busy = !!S.gstApiBusy;
@@ -49,8 +62,10 @@ export default function GstApiCard() {
       {pend && <>
         <input type="text" inputMode="numeric" autoComplete="one-time-code" placeholder="6-digit OTP" style={{ width: 130 }} value={otp}
           onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))} aria-label="OTP" />
+        <label className="nr">API access allowed for <select value={days} aria-label="API access period" onChange={(e) => setDays(+e.target.value)} style={{ width: "auto" }}>
+          {DAYS.map((d) => <option key={d} value={d}>{d} day{d === 1 ? "" : "s"}</option>)}</select> (as chosen on the portal)</label>
         <button className="btn small primary" disabled={busy}
-          onClick={() => run("Connecting…", async () => { await GSTAPI.auth(r, otp.trim()); return "Connected."; })}>Connect</button>
+          onClick={() => run("Connecting…", async () => { await GSTAPI.auth(r, otp.trim(), days); return "Connected until " + fmtDate(GSTAPI.sess[gstin].accessUntil) + "."; })}>Connect</button>
       </>}
     </div>
     {msg}
@@ -59,17 +74,23 @@ export default function GstApiCard() {
   const have = new Set(GST2B.all2b(r).map((t) => t.ym).concat(Object.values(b.twoBs || {}).filter((t) => t.gstin === gstin).map((t) => t.ym)));
   // a month's 2B is made on the 14th of the next month
   const fy = S.gstYm ? GSTRev.fyMonths(S.gstYm) : [], missing = fy.filter(GSTAPI.ready).filter((m) => !have.has(m));
-  const pick = S.gstApiYm || S.gstYm, since = fmtDate(live.connectedAt);
+  const pick = S.gstApiYm || S.gstYm, since = fmtDate(live.connectedAt), left = GSTAPI.accessLeft(gstin);
+  const kept = (f) => GSTAPI.keptFor(gstin, f, pick);
+  const keptText = (f) => { const k = kept(f); return !k ? "not fetched" : k.status === "ok" ? "fetched " + fmtDateTime(k.fetched_at) + (k.fetched_by ? "" : " (daily run)") : k.status === "none" ? "not there yet (" + fmtDateTime(k.fetched_at) + ")" : "failed: " + (k.error || ""); };
   return card(<>
-    <p className="note">Connected to the portal for {gstin} since {since}. FinCom keeps it connected for the whole firm, with no new OTP, until the taxpayer’s API access period ends (up to 30 days, set on the portal under My Profile → Manage API Access).</p>
+    {left && left.soon && <div className="bk-alert" data-reminder={gstin}><b>API access for {gstin} ends {left.over ? "today" : "in " + left.days + " day" + (left.days === 1 ? "" : "s")} ({fmtDate(left.until)}).</b> Ask the taxpayer to allow API access again on the portal (My Profile → Manage API Access), then send a new OTP.</div>}
+    <p className="note" data-access={gstin}>Connected to the portal for {gstin} since {since}{left ? <>; API access ends <b>{fmtDate(left.until)}</b> ({left.days} day{left.days === 1 ? "" : "s"} left)</> : ""}. FinCom keeps it connected for the whole firm with no new OTP until then, fetches 2B after the 14th and the filed GSTR-1 and 3B each morning, and reminds you 3 days before the access ends.</p>
     <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
       <select style={{ width: "auto" }} value={pick} onChange={(e) => { S.gstApiYm = e.target.value; render(); }} aria-label="Month">
         {fy.map((m) => <option key={m} value={m}>{GSTR.label(m) + (have.has(m) ? " ✓" : "")}</option>)}
       </select>
       <button className="btn small primary" disabled={busy} onClick={() => run("Fetching 2B…", () => fetchMonths([pick]))}>Fetch 2B</button>
+      {pick && <><button className="btn small" disabled={busy} onClick={() => run("Fetching the filed GSTR-1…", () => fetchNow(gstin, "R1", pick))}>Fetch filed GSTR-1</button>
+      <button className="btn small" disabled={busy} onClick={() => run("Fetching the filed GSTR-3B…", () => fetchNow(gstin, "3B", pick))}>Fetch filed 3B</button></>}
       {missing.length > 0 && <button className="btn small" disabled={busy} onClick={() => run("Fetching 2B…", () => fetchMonths(missing))}>
         Fetch the {missing.length} month{missing.length === 1 ? "" : "s"} not here yet</button>}
     </div>
+    {pick && <p className="note" data-kept={pick}>{GSTR.label(pick)} on the firm's server: 2B {keptText("2B")} · GSTR-1 {keptText("R1")} · 3B {keptText("3B")}.</p>}
     {msg}
   </>);
 }

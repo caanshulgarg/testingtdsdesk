@@ -82,7 +82,7 @@ function saveSales(what){
   clearTimeout(salesSaveTimer);
   if (S.bank && S.bank.cid === cid) S.bank.salesRef = list;
   salesSaveTimer = setTimeout(() => { salesSaveTimer = null; BankDB.set("sales:" + cid, list); }, 500);
-  if (what && what.cfg) BankDB.set("salescfg:" + cid, s.cfg);
+  if (what && what.cfg && !(typeof Drafts === "object" && Drafts.hold("salescfg:" + cid))) BankDB.set("salescfg:" + cid, s.cfg);
   if (what && what.hist) BankDB.set("saleshist:" + cid, s.hist);
 }
 window.addEventListener("pagehide", () => { if (salesSaveTimer && S.sales){ clearTimeout(salesSaveTimer); BankDB.set("sales:" + S.sales.cid, S.sales.list); } });

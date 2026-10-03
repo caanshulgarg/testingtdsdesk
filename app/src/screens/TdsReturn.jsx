@@ -233,16 +233,58 @@ function Checks26({ fy, q, int1A, fee, issues }) {
   </>;
 }
 
-export function Return26({ b, allRows }) {
+// 27Q and 27EQ: what is missing before the file can be made, the non-resident's details, and the FVU's answer
+function NrInfo({ party }) {
+  const i = TDS26Q.nrInfo(party);
+  const f = (k, label, w = 140) => <label className="nr" style={{ display: "inline-flex", flexDirection: "column", marginRight: 8 }}>{label}
+    <input type="text" defaultValue={i[k] || ""} aria-label={label + ": " + party} style={{ width: w }} onBlur={(ev) => tdsNrSet(party, k, ev.target.value)} /></label>;
+  return <tr data-nr={party}><td>{party}</td><td colSpan={2}>
+    {f("country", "Country code", 60)}{f("nature", "Nature code", 60)}{f("ack15ca", "15CA acknowledgement")}{f("tin", "Tax ID in the country")}
+    {f("email", "E-mail", 180)}{f("phone", "Phone")}{f("address", "Address", 260)}
+    <label className="nr"><input type="checkbox" defaultChecked={!!i.dtaa} onChange={(ev) => tdsNrSet(party, "dtaa", ev.target.checked)} /> Treaty (DTAA) rate</label>{" "}
+    <label className="nr"><input type="checkbox" defaultChecked={!!i.trc} onChange={(ev) => tdsNrSet(party, "trc", ev.target.checked)} /> Tax residency certificate and Form 10F on file</label>
+  </td></tr>;
+}
+function ChecksOther({ fy, q, form, other, rows }) {
+  const fr = S.fvuResult, sum = TDS.summary(fy, q, form);
+  const parties = Array.from(new Set(rows.map((r) => r.party)));
+  return <>
+    {fr && fr.form === form && <section className={"bk-alert " + (fr.ok ? "" : "bad")}><b>{fr.ok ? "The FVU accepted the " + form + " file." : "The FVU found problems in the " + form + " file."}</b>
+      {fr.errors && <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, maxHeight: 220, overflow: "auto", margin: "8px 0 0" }}>{String(fr.errors).slice(0, 4000)}</pre>}
+      <div className="row" style={{ marginTop: 8 }}><button className="linkbtn" onClick={() => doAct("fvuClose")}>Hide this</button></div></section>}
+    <section className="dash-card" style={{ marginBottom: 12 }} data-checks={form}><h3>Before the file is made</h3>
+      {other.length ? <ul>{other.map((x, i) => <li key={i}>{x.party ? <><b>{x.party}</b>: missing {x.missing.join(", ")}</> : x.why}</li>)}</ul>
+        : <p className="note">Nothing is missing.</p>}
+    </section>
+    {form === "27Q" && <section className="dash-card" style={{ marginBottom: 12 }}><h3>Non-resident deductees</h3>
+      <p className="note">The 27Q file needs these for each deductee. The country and nature codes are the ones in the return's own lists.</p>
+      <div className="bk-tablewrap"><table className="bk-table"><thead><tr><th>Deductee</th><th colSpan={2}>Details</th></tr></thead>
+        <tbody>{parties.map((p) => <NrInfo key={p} party={p} />)}</tbody></table></div></section>}
+    {form === "27EQ" && <section className="dash-card" style={{ marginBottom: 12 }}><h3>Collection codes</h3>
+      <p className="note">Each TCS ledger needs the 27EQ collection code of what was sold.</p>
+      <div className="bk-tablewrap"><table className="bk-table"><thead><tr><th>TCS ledger</th><th>Collection code</th></tr></thead>
+        <tbody>{Array.from(new Set(rows.map((r) => r.ledger))).map((l) => <tr key={l}><td>{l}</td><td>
+          <select aria-label={"Collection code: " + l} value={TCS27EQ.codeOf(l)} onChange={(ev) => tdsTcsCode(l, ev.target.value)}>
+            <option value="">Choose…</option>{TCS27EQ.CODES.map(([c, t]) => <option key={c} value={c}>{c} · {t}</option>)}</select></td></tr>)}</tbody></table></div></section>}
+    <section className="dash-card"><h3>By section</h3><div className="bk-tablewrap"><table className="bk-table">
+      <thead><tr><th>Section</th><th className="n">{form === "27EQ" ? "Collections" : "Deductions"}</th><th className="n">Paid or received</th><th className="n">{form === "27EQ" ? "TCS" : "TDS"}</th><th className="n">Not against a challan</th></tr></thead>
+      <tbody>{sum.map((s) => <tr key={s.section}><td>{s.section}</td><td className="n">{s.count}</td><td className="n">{money(s.paid)}</td><td className="n">{money(s.tds)}</td><td className="n">{money(s.unallocated)}</td></tr>)}</tbody>
+    </table></div></section>
+  </>;
+}
+
+export function Return26({ b, allRows, form = "26Q" }) {
   const fy = S.tdsFy, q = S.tdsQ, rows = allRows.filter((r) => r.fy === fy && r.q === q);
   const ch = tdsQuarterChallans(fy, q, rows), use = TDS.challanUse(), allCh = TDS.challans();
-  const issues = Certs.issues(fy, q), issueOf = {};
+  const issues = form === "26Q" ? Certs.issues(fy, q) : [], issueOf = {};
   issues.forEach((x) => { issueOf[x.row.id] = x; });
   const deductees = new Set(rows.map((r) => (r.pan && Certs.validPan(r.pan) ? r.pan : normName(r.party)))).size;
   if (!["challans", "deductees", "deductions", "checks"].includes(S.tdsTab)) S.tdsTab = "challans";
   const tds = r2(rows.reduce((a, r) => a + r.tds, 0)), un = rows.filter((r) => !r.challan), chTax = r2(ch.reduce((a, c) => a + num(c.tax), 0));
-  const int1A = TDS.interest(fy, q), fee = TDS.lateFee(fy, q, (b.filedOn || {})[fy + q]), noPan = rows.filter((r) => !Certs.validPan(r.pan)).length;
-  const title = CO().name + " 26Q " + q + " " + fy;
+  const int1A = form === "26Q" ? TDS.interest(fy, q) : [], fee = form === "26Q" ? TDS.lateFee(fy, q, (b.filedOn || {})[fy + q]) : null, noPan = rows.filter((r) => !Certs.validPan(r.pan)).length;
+  const fname = TDS.formName(form, fy), draft = TDS.isNew(fy) && !NEW_FORMS_VALIDATED;
+  const title = CO().name + " " + fname + " " + q + " " + fy;
+  const other = form === "27Q" ? TDS26Q.nrChecks(fy, q) : form === "27EQ" ? TCS27EQ.checks(fy, q) : [];
   const chOpts = ch.concat(allCh.filter((c) => !ch.includes(c) && TDS.fyOf(c.date) === fy));
   const secs = Array.from(new Set(rows.map((r) => r.section))).sort();
   const common = [{ key: "section", label: "Section", options: [["", "Every section"]].concat(secs.map((x) => [x, x])) },
@@ -261,26 +303,27 @@ export function Return26({ b, allRows }) {
     if (f.rate === "ok" && issueOf[r.id]) return false;
     return true;
   };
-  const checksN = int1A.length || (fee && fee.days > 0) || issues.length ? int1A.length + issues.length + (fee && fee.days > 0 ? 1 : 0) : null;
+  const checksN = int1A.length || (fee && fee.days > 0) || issues.length || other.length ? int1A.length + issues.length + other.length + (fee && fee.days > 0 ? 1 : 0) : null;
   const common_ = { rows, issueOf, pass, common, chOpts, title };
   return <>
     <div className="revfilter">
       <button className="btn small" onClick={() => doAct("tdsAuto")}>Put them against challans</button>
-      <button className="btn small" onClick={() => doAct("tdsExcel")}>Download the 26Q working</button>
-      <button className="btn small" onClick={() => doAct("tdsTxt")}>Download the 26Q text file</button>
-      <button className="btn small primary" disabled={!Bridge.on()} title={Bridge.on() ? undefined : "Needs the Tally Bridge"} onClick={() => doAct("tdsFvu")}>Check it with the FVU</button>
+      <button className="btn small" onClick={() => doAct("tdsExcel")}>Download the {fname} working</button>
+      <button className="btn small" onClick={() => doAct("tdsTxt")}>Download the {fname} text file{draft ? " (draft)" : ""}</button>
+      <button className="btn small primary" disabled={!Bridge.on() || draft} title={draft ? "A draft is not sent to the FVU" : Bridge.on() ? undefined : "Needs FinCom Bridge"} onClick={() => doAct("tdsFvu")}>Check it with the FVU</button>
     </div>
+    {draft && <section className="bk-alert" data-draft={TDS.formNo(form, fy)}><b>{fname} (was {form}): draft – not yet validated.</b> From 1 April 2026 the return is {fname} under the Income-tax Act, 2025, with new payment codes and file layout. FinCom’s file is not yet matched to Protean’s file format or run through their FVU: do not file it.</section>}
     <div className="dash-tiles">
-      <Tile label="TDS deducted" value={money(tds)} sub={rows.length + " deductions, " + deductees + " deductees"} />
+      <Tile label={form === "27EQ" ? "TCS collected" : "TDS deducted"} value={money(tds)} sub={rows.length + (form === "27EQ" ? " collections, " + deductees + " buyers" : " deductions, " + deductees + " deductees")} />
       <Tile label="Challans" value={money(chTax)} sub={ch.length + " challan" + (ch.length === 1 ? "" : "s")} />
       <Tile label="Not against a challan" value={money(un.reduce((a, r) => a + r.tds, 0))} sub={un.length + " deductions"} warn={un.length > 0} />
-      <Tile label="To look at" value={issues.length + noPan} sub={noPan + " without PAN, " + issues.length + " rate questions"} warn={issues.length > 0 || noPan > 0} />
+      <Tile label="To look at" value={issues.length + noPan + other.length} sub={noPan + " without PAN, " + (form === "26Q" ? issues.length + " rate questions" : other.length + " details missing")} warn={issues.length > 0 || noPan > 0 || other.length > 0} />
     </div>
     <Tabs tabs={[["challans", "Challans", ch.length], ["deductees", "Deductees", deductees], ["deductions", "Deductions", rows.length], ["checks", "Interest, late fee and checks", checksN]]} />
     {S.tdsTab === "challans" ? <Challans fy={fy} q={q} ch={ch} allRows={allRows} allCh={allCh} use={use} title={title} />
       : S.tdsTab === "deductees" ? <Deductees deductees={deductees} {...common_} />
       : S.tdsTab === "deductions" ? <Deductions fy={fy} q={q} {...common_} />
-      : <Checks26 fy={fy} q={q} int1A={int1A} fee={fee} issues={issues} />}
+      : form === "26Q" ? <Checks26 fy={fy} q={q} int1A={int1A} fee={fee} issues={issues} /> : <ChecksOther fy={fy} q={q} form={form} other={other} rows={rows} />}
   </>;
 }
 

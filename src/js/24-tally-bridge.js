@@ -1,5 +1,5 @@
 /* ================================================================== */
-/* Tally Bridge: live connection to TallyPrime on this computer        */
+/* FinCom Bridge: live connection to TallyPrime on this computer       */
 /* ================================================================== */
 const Bridge = {
   st: {state: "off", sessions: [], open: [], at: 0, error: ""},
@@ -24,7 +24,7 @@ const Bridge = {
     try {
       r = await fetch(c.url.replace(/\/+$/, "") + path, {method: body ? "POST" : "GET", headers: Object.assign({"X-Bridge-Key": c.key}, body ? {"Content-Type": "application/json"} : {}), body: body ? JSON.stringify(body) : undefined, signal: ctl.signal, cache: "no-store"});
     } catch (e){
-      throw {code: "bridge_down", message: e && e.name === "AbortError" ? "The Tally Bridge did not answer in time." : "The Tally Bridge is not running on this computer (" + c.url + ")."};
+      throw {code: "bridge_down", message: e && e.name === "AbortError" ? "FinCom Bridge did not answer in time. Check the FinCom Bridge icon near the clock (right-click \u2192 Test connection)." : "FinCom Bridge is not running on this computer (" + c.url + "). Check the FinCom Bridge icon near the clock (right-click \u2192 Test connection)."};
     } finally { clearTimeout(timer); }
     let j = null;
     try { j = await r.json(); } catch (e){ j = null; }
@@ -51,7 +51,7 @@ const Bridge = {
         stuck: j.tallyStuck || null, tallyUp: usable.length > 0, pinMissing: !!pin && !(j.sessions || []).some(s => s.port === pin && s.ok && !s.skipped),
         // go-bridge: Tally open / busy / closed (a busy Tally is open, only slow); bridge 1.15.0: busy when it says Tally is stuck
         tallyState: (j.tally && j.tally.state) || (usable.length ? (j.tallyStuck ? "busy" : "open") : "closed"), busySince: (j.tally && j.tally.since) || (j.tallyStuck && j.tallyStuck.since) || "",
-        beat: j.beat || null};
+        beat: j.beat || null, computer: j.computer || "", paused: !!j.paused};
       if (!this.st.tallyUp || this.st.pinMissing){ if (!this.diag || Date.now() - this.diag.at > 30000) await this.diagnose(); }
       else this.diag = null;
       this.misses = 0; this.okAt = Date.now();
@@ -108,13 +108,35 @@ const Bridge = {
     if (!payload.masters.length && !payload.vouchers.length) return {ok: true, company: payload.company, results: refused};
     // build 199: Tally on another computer: through the queue in the cloud
     const coP = (payload.client && S.companies[payload.client]) || (typeof CO === "function" ? CO() : null);
-    if (coP && typeof tallyVia === "function" && tallyVia(coP) === "cloud"){
-      const outC = await CloudPost.run(coP.id, payload, onProgress, onChecked);
-      outC.results = [].concat(outC.results || []).concat(refused);
-      return outC;
+    // 02-Oct-2026: only into the Tally company chosen for this client (Client setup → Tally); the cloud refuses the same
+    const notAllowed = postToProblem(coP, payload.company);
+    if (notAllowed) return {ok: true, company: payload.company, notAllowed: true, results: [].concat(payload.masters || [], payload.vouchers || []).map(x => ({id: x.id, ok: false, notAllowed: true, message: notAllowed})).concat(refused)};
+    // review of 02-Oct-2026 (B9): a ledger Tally already has is never sent as a master; a new one is asked about first,
+    // and nothing is sent until it is confirmed
+    if (typeof PostGate === "object" && (payload.masters || []).length){
+      const g = await PostGate.masters(payload, coP);
+      if (g.cancelled) throw {code: "cancelled", message: "Nothing was sent to Tally: the new ledger" + ((payload.masters || []).length === 1 ? " was" : "s were") + " not confirmed."};
+      refused.push(...g.results);
+      payload = Object.assign({}, payload, {masters: g.masters});
+      if (!payload.masters.length && !payload.vouchers.length) return {ok: true, company: payload.company, results: refused};
     }
-    const out = await this.postChecked(payload, onProgress, onChecked);
+    const words = o => { [].concat(o.results || []).forEach(x => { if (x && x.ok && postAltered(x)) x.altered = Math.max(1, num(x.altered)); if (x) x.word = postWord(x); }); return o; };
+    // B11: every posting goes through the queue in FinCom's cloud when the client is linked there, also with the bridge
+    // on this computer (the main bridge takes it from the queue; the live connection wakes it), so every posting is in one
+    // list. Straight to the bridge only when the cloud is not there for this client; then recorded in the cloud afterwards
+    const cloudOn = !!coP && typeof TCloud === "object" && TCloud.on();
+    if (cloudOn && !(TCloud.st[coP.id] && TCloud.st[coP.id].books)){ try { await TCloud.status(coP.id); } catch (e){} }
+    if (cloudOn && TCloud.has(coP.id)){
+      const outC = await CloudPost.run(coP.id, payload, onProgress, onChecked ? chk => { words(chk); onChecked(chk); } : onChecked);
+      outC.results = [].concat(outC.results || []).concat(refused);
+      return words(outC);
+    }
+    let out = null;
+    const after = onChecked || cloudOn ? chk => { words(chk); if (out && cloudOn && typeof PostRecord === "object") PostRecord.save(coP, payload, {recId: out.recId, company: out.company, results: [].concat(chk.results || []).concat(refused)}); if (onChecked) onChecked(chk); } : onChecked;
+    out = await this.postChecked(payload, onProgress, after);
     out.results = [].concat(out.results || []).concat(refused);
+    words(out);
+    if (cloudOn && typeof PostRecord === "object") await PostRecord.save(coP, payload, out);
     return out;
   },
   async postChecked(payload, onProgress, onChecked){
@@ -177,13 +199,13 @@ const Bridge = {
       return;
     }
   },
-  // ask the bridge on this computer for its key, with the 6-digit code shown in the bridge window
+  // ask the bridge on this computer for its key, with the 6-digit code FinCom Bridge shows (tray icon → Connect FinCom on this computer…)
   // (bridge 1.11: only for a few minutes after it starts, once, and never for another web page)
   async pair(code){
     const c = this.cfg();
     const base = c.url.replace(/\/+$/, "");
     const r = await fetch(base + "/pair?code=" + encodeURIComponent(String(code || "").trim()), {cache: "no-store"}).catch(() => null);
-    if (!r) throw {code: "bridge_down", message: "No bridge is running on this computer yet. Install it with the button below."};
+    if (!r) throw {code: "bridge_down", message: "FinCom Bridge is not running on this computer yet. Install FinCom Bridge from the Tally page."};
     const j = await r.json().catch(() => null);
     if (!j || !j.ok) throw {code: "pair", message: (j && j.error) || "The bridge would not hand over its key."};
     this.setCfg({key: j.key, url: base});
@@ -260,7 +282,7 @@ async function bridgeTick(first){
     if (first && Bridge.up() && !Bridge.posting) bridgeLeftover();
     if (first && Bridge.up() && Bridge.st.version && bridgeVer(Bridge.st.version) < bridgeVer("1.12.6") && !lsGet("tdsdesk:bridgenudge1126")){
       lsSet("tdsdesk:bridgenudge1126", "1");
-      toast("A new Tally Bridge (1.12.6) is ready: it reads bill references for the vendor reconciliation, deletes entries on more Tally setups, and posts fast, and it keeps posting even if this page or the connection drops. Download it under Settings \u2192 Tally Bridge and run the setup on the Tally computer.");
+      toast("A newer FinCom Bridge is ready: it reads bill references for the vendor reconciliation, deletes entries on more Tally setups, and posts fast, and it keeps posting even if this page or the connection drops. Install FinCom Bridge from the Tally page and run it on the Tally computer.");
     }
     const key = Bridge.st.open.map(o => o.name).sort().join("|");
     const changed = key !== Bridge.lastOpenKey;
@@ -305,54 +327,64 @@ document.addEventListener("visibilitychange", () => { if (document.visibilitySta
 function bridgeChip(co){
   if (!Bridge.on()) return "";
   const st = Bridge.st;
-  if (st.state === "down") return '<button class="tchip off" data-act="openSettings" title="' + esc(st.error) + '">Tally Bridge offline \u2014 check</button>';
-  if (st.state === "key") return '<span class="tchip bad" title="' + esc(st.error) + '">Tally Bridge: wrong key</span>';
-  if (st.state !== "ok") return '<span class="tchip off">Tally Bridge\u2026</span>';
+  if (st.state === "down") return '<button class="tchip off" data-act="openSettings" title="' + esc(st.error) + '">FinCom Bridge offline \u2014 check</button>';
+  if (st.state === "key") return '<span class="tchip bad" title="' + esc(st.error) + '">FinCom Bridge: wrong key</span>';
+  if (st.state !== "ok") return '<span class="tchip off">FinCom Bridge\u2026</span>';
   const run = (st.jobs || []).find(j => ["queued", "waiting", "running"].includes(j.status));
   if (run) return '<span class="tchip ok" title="' + esc((run.company || "") + ": " + (run.message || "")) + '">\u25CF Posting to Tally: ' + num(run.done) + " of " + num(run.total) + "</span>";
   // build 194: Tally stopped answering (a message box open in Tally, or a long report): said plainly, with since when
   // go-bridge: a slow Tally is busy, never "disconnected" (it is open; the bridge asks again by itself)
   const busyAt = (st.stuck && st.stuck.since) || (st.tallyState === "busy" && st.busySince) || "";
   if (busyAt || st.tallyState === "busy") return '<span class="tchip warn" title="Tally is open but answering slowly' + (busyAt ? " since " + esc(String(busyAt).slice(11, 16)) : "") + '. A message box (a pop-up) in Tally, or a report still working, holds it up: close it, and FinCom carries on by itself. Nothing is lost meanwhile.">\u25D0 Tally busy' + (busyAt ? " since " + esc(String(busyAt).slice(11, 16)) : "") + "</span>";
-  if (st.shaky) return '<span class="tchip warn" title="' + esc(st.error || "") + '">Tally Bridge: reconnecting\u2026</span>';
+  if (st.shaky) return '<span class="tchip warn" title="' + esc(st.error || "") + '">FinCom Bridge: reconnecting\u2026</span>';
   const why = Bridge.diag && (Bridge.diag.findings || []).find(f => f.level !== "ok");
   if (st.pinMissing) return '<button class="tchip warn" data-act="openSettings" title="' + esc(why ? why.text : "The Tally chosen in Settings is not running") + '">Your Tally is not connected \u2014 check</button>';
   if (!st.tallyUp) return '<button class="tchip warn" data-act="openSettings" title="' + esc(why ? why.text : "No TallyPrime is answering in your Windows session") + '">Tally not connected \u2014 check</button>';
   if (co){
     const o = Bridge.openFor(co);
     if (o) return '<span class="tchip ok" title="' + esc(o.name) + " is open in Tally (port " + o.port + ')">\u25CF Open in Tally</span>';
-    if ((st.clash || []).some(n => norm(n) === norm(Bridge.tallyName(co)))) return '<span class="tchip bad" title="This company is open in more than one Tally. Choose yours in Settings \u2192 Tally Bridge.">Choose your Tally</span>';
+    if ((st.clash || []).some(n => norm(n) === norm(Bridge.tallyName(co)))) return '<span class="tchip bad" title="This company is open in more than one Tally. Choose yours in Settings \u2192 FinCom Bridge.">Choose your Tally</span>';
     return '<span class="tchip warn" title="Open ' + esc(Bridge.tallyName(co)) + ' in TallyPrime to post and to load its ledgers">\u25CB Not open in Tally</span>';
   }
-  if ((st.clash || []).length) return '<span class="tchip bad" title="' + esc(st.clash.join(", ")) + ' is open in more than one Tally. Choose yours in Settings \u2192 Tally Bridge.">Choose your Tally</span>';
+  if ((st.clash || []).length) return '<span class="tchip bad" title="' + esc(st.clash.join(", ")) + ' is open in more than one Tally. Choose yours in Settings \u2192 FinCom Bridge.">Choose your Tally</span>';
   const n = st.open.length;
   return '<span class="tchip ok" title="' + esc(st.open.map(o => o.name).join(", ")) + '">\u25CF Tally: ' + (n === 1 ? esc(st.open[0].name) : n + " companies open") + "</span>";
 }
 
 /* ---------- ledgers and bank entries straight from Tally ---------- */
+// The client's ledgers are one list for the whole app (Ledgers, src/js/58-ledgers.js): read from FinCom's cloud copy
+// whenever the client is linked to it, else from the bridge (review of 02-Oct-2026: an older, shorter list kept in this
+// browser was never replaced while the bridge was live, as the ledgers were read again only when that list was empty,
+// and the cloud copy only when the bridge was not live). These two keep their names for their callers.
+async function ensureCloudLedgers(cid){
+  const r = await Ledgers.load(cid);
+  return !!(r && r.ok);
+}
 async function syncLedgersFromTally(silent){
-  const b = B(), co = CO(b.cid);
-  if (!tallyVia(co)) return false;
-  try {
-    const j = await tallyCall(co, "/ledgers?company=" + encodeURIComponent(tallyCoName(co)) + Bridge.pinQ());
-    const list = [].concat(j.ledgers || []).filter(l => l && l.name).map(l => ({name: l.name, group: l.group || "", pan: l.pan || "", gstin: l.gstin || "", acNo: l.acNo || "", ifsc: l.ifsc || "", taxType: l.taxType || "", tdsNature: l.tdsNature || "", dutyHead: l.dutyHead || ""}));
-    const groups = Array.from(new Set([].concat(j.groups || []).map(g => g.name).concat(list.map(l => l.group)).filter(Boolean))).sort();
-    b.ledgers = {list, groups, importedAt: new Date().toISOString(), file: j.via === "cloud" ? "Tally, from the copy in FinCom's cloud" : "Tally (live)", live: true};
-    const have = new Set(list.map(l => l.name.toLowerCase()));
-    b.newLed = b.newLed.filter(n => !have.has(n.name.toLowerCase()));
-    saveBank({ledgers: true, newLed: true});
+  const b = B(), co = CO(b && b.cid);
+  if (!co) return false;
+  const r = await Ledgers.load(co.id, {force: true});
+  if (!r.ok){ if (!silent) toast("Could not load ledgers from Tally: " + r.err); return false; }
+  if (!silent) toast(r.n + " ledgers loaded from Tally" + (r.kept ? " (a shorter list of " + r.kept + " was not taken)" : "") + ((r.mapped || []).length ? "; " + r.mapped.length + " default ledger names matched to Tally" : "") + ".");
+  return true;
+}
+// after the list held for a client changed: what depended on the old one is looked at again
+function ledgersChanged(cid){
+  const co = CO(cid), b = S.bank;
+  if (b && b.cid === cid){
     b.rows.forEach(r => { if (["ready", "suggested"].includes(r.state) && r.ledger && !exactLedger(r.ledger)){ r.userSet = false; r.state = "attention"; } });
-    // bank accounts: link to their Tally ledger when it is clear
-    (co.bankAccounts || []).forEach(a => { if (!exactLedger(a.ledger)){ const g = guessBankLedger(a); if (g){ a.ledger = g; Store.saveCompany(co); } } });
-    suggestAll(b.rows, true); saveBank({rows: true});
-    const mapped = autoMapCompanyLedgers(co);
-    if (!silent) toast(list.length + " ledgers loaded from Tally" + (mapped.length ? "; " + mapped.length + " default ledger names matched to Tally" : "") + ".");
-    return true;
-  } catch (e){ if (!silent) toast("Could not load ledgers from Tally: " + e.message); return false; }
+    // bank accounts with no ledger yet: a guess when it is clear, shown to confirm (src/js/60); a ledger chosen is never
+    // replaced here (it was replaced by a guess whenever it was not in the list read, a short or older one included)
+    (co.bankAccounts || []).forEach(a => { if (!bankLedgerChoice(co, a).value){ const g = guessBankLedger(a); if (g && choiceGuess(co, "bank:" + a.id, g, "the one bank ledger in Tally that fits")) Store.saveCompany(co); } });
+    if (b.rows.length){ suggestAll(b.rows, true); saveBank({rows: true}); }
+  }
+  const mapped = Ledgers.cid() === cid ? autoMapCompanyLedgers(co) : [];
+  if (typeof billAutoAll === "function" && Ledgers.cid() === cid) billAutoAll(cid);
+  return mapped;
 }
 function guessBankLedger(a){
   const b = B();
-  const bankLeds = (b.ledgers.list || []).filter(l => BANK_GROUPS.test(l.group || ""));
+  const bankLeds = Ledgers.list(b.cid).filter(l => BANK_GROUPS.test(l.group || ""));
   const byAc = bankLeds.filter(l => a.acct && l.acNo && l.acNo.replace(/\D/g, "").endsWith(String(a.acct).replace(/\D/g, "").slice(-6)));
   if (byAc.length === 1) return byAc[0].name;
   const by4 = bankLeds.filter(l => a.last4 && l.name.includes(a.last4));
@@ -408,9 +440,9 @@ async function bankAutoSync(force){
   bankSyncing = true;
   try {
     const before = (b.ledgers.list || []).length;
-    // build 190: by itself only when there is no ledger list at all; a fresh read of Tally's ledgers when someone asks
-    const stale = !(b.ledgers.list || []).length;
-    if (force || stale) await syncLedgersFromTally(true);
+    // the one ledger list (Ledgers): read again when someone asks, and by itself when the cloud's ledgers changed or
+    // nothing is held yet (not only when the list here is empty: review of 02-Oct-2026)
+    await Ledgers.load(b.cid, {force: !!force});
     const st = curStmt();
     if (st && force) await syncBankBookFromTally(true);   // only when asked: this reads the Day Book
     if (force || (b.ledgers.list || []).length !== before) render();
@@ -613,7 +645,7 @@ function goneBack(){
   b.gone = null; b.focus = null; b.filter = "ready"; b.tallyLook = null;
   lsDel(wideCheckKey());
   saveBank({rows: true, posted: true});
-  toast(n + " line" + (n === 1 ? " is" : "s are") + " back in Ready to post. Press Post to send " + (n === 1 ? "it" : "them") + " to Tally again.");
+  toast(n + " line" + (n === 1 ? " is" : "s are") + " back in Post to Tally. Press Post to send " + (n === 1 ? "it" : "them") + " to Tally again.");
   render();
 }
 /* ---------- finding double entries, and entries Tally holds under the wrong date ---------- */
@@ -754,7 +786,7 @@ async function bankAfterCheck(cid, sid, chk, tname){
     } else if (x && !x.ok){
       // Tally said it made it, but it is not there: not counted as posted, and not sent again without a look
       r.state = "ready"; r.postVerified = false;
-      r.postError = "Tally replied 'created', but the entry cannot be found in Tally afterwards, so it is NOT marked as posted. Look in Tally before posting it again.";
+      r.postError = "Failed: not found in Tally when read back after posting, so it is not counted as posted. Look in Tally before posting it again.";
       if (here){ b.postedTags = b.postedTags || {}; b.postedTags[fpHash(r.fp || r.id)] = "unconfirmed:" + now; }
       notFound.push({id: r.id, what: fmtDate(r.date) + " " + (r.dec.name || "") + " " + INR.format(r.debit || r.credit), msg: "not found in Tally after posting \u2014 check Tally before posting again"});
     } else { unread++; r.postVerified = false; }
@@ -772,35 +804,23 @@ async function bankAfterCheck(cid, sid, chk, tname){
   } else BankDB.set("stmt:" + cid + ":" + sid, rows);
 }
 
-/* ---------- the bank ledger's balance in Tally on a date ---------- */
-// Some Tally setups give a ledger's closing balance for their whole current period whatever date is asked, so an entry
-// dated after the statement (say 31-03-2027) would be counted. So the balance on the statement's last day is checked:
-// read on that day and far later, and compared with the entries in between. If Tally kept to the date, its figure is
-// used; if not, the balance is worked back from its latest figure less the later entries.
-async function tallyBankBalance(tname, ledger, to){
-  const one = bridgeVer(Bridge.st.version) >= bridgeVer("1.12.3");
-  const bankBal = v => r2(-(parseFloat(String(v == null || v === "" ? "0" : v).replace(/,/g, "")) || 0));
-  const far = addDays(to, 800), next = addDays(to, 1);
-  const j = await Bridge.call((one ? "/ledgerbalance" : "/balances") + "?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(next) + "&to=" + isoToTally(far) + (one ? "&ledger=" + encodeURIComponent(ledger) : "") + Bridge.pinQ(), null, 180000);
-  const L = one ? {open: j.open, close: j.close} : [].concat(j.ledgers || []).find(l => norm(l.name) === norm(ledger));
-  if (!L) throw {message: "\u201c" + ledger + "\u201d is not among Tally's ledgers in " + tname + "."};
-  const atTo = bankBal(L.open), atFar = bankBal(L.close);
-  const lv = await Bridge.call(ledgerLinesUrl(tname, ledger, next, far), null, 600000);
-  let later = 0, laterN = 0;
-  [].concat(lv.vouchers || []).filter(v => !/^yes$/i.test(v.cancelled || "")).forEach(v => {
-    const d = tallyToIso(v.date); if (d <= to || d > far) return;
-    const be = [].concat(v.entries || []).find(e => norm(e.ledger) === norm(ledger)); if (!be) return;
-    later += -(parseFloat(String(be.amount).replace(/,/g, "")) || 0); laterN++;
-  });
-  later = r2(later);
-  if (Math.abs(atFar - (atTo + later)) < 0.01) return {close: atTo, how: "tally", later, laterN};
-  return {close: r2(atFar - later), how: "worked back", later, laterN};
+/* ---------- the bank ledger's balance on a date, from FinCom's copy ---------- */
+// FinCom Bridge 2.1.4 asks Tally for no balance (owner's decision of 02-Oct-2026): the balance on the statement's last
+// day is the copy's opening of the ledger plus its entries up to that day (TCloud.ledgerAt: tally_balances, else
+// tally_ledger), shown with "Balance from FinCom's copy · books as of 15:34". Neither the bridge nor Tally is asked.
+// tname is kept for the callers; cid is the client (the open one when not given)
+async function tallyBankBalance(tname, ledger, to, cid){
+  cid = cid || S.coId;
+  const close = await TCloud.ledgerAt(cid, ledger, to);
+  return {close, how: "copy", later: 0, laterN: 0, line: copyLine(cid), asOf: (booksAsOf(cid) || {}).at || ""};
 }
 
-/* ---------- does Tally agree with the bank? ---------- */
-// Tally's balance of the bank ledger at the start and end of the statement, against the statement's own opening and closing.
-// When they differ, the difference is taken apart: the opening, the statement lines not in Tally yet, the lines left out,
-// and the entries in Tally for these dates that are not on the statement. Whatever is left is shown as unexplained.
+/* ---------- does the bank ledger agree with the bank? ---------- */
+// The bank ledger's balance in FinCom's copy at the end of the statement, against the statement's own closing. Only once
+// every entry FinCom posted to the statement is read back (in Tally, and in FinCom's copy): until then "Posted · balance
+// not yet checked". Never an error: when the copy cannot answer yet, "balance not yet checked" with the reason.
+// When they differ, the difference is taken apart: the statement lines not posted yet, the lines left out, and (with the
+// bridge here) the entries for these dates that are not on the statement. Whatever is left is shown as unexplained.
 function bankEffect(r){ return r2(num(r.credit) - num(r.debit)); }
 async function checkBankBalance(opts){
   opts = opts || {};
@@ -809,17 +829,21 @@ async function checkBankBalance(opts){
   const acc = (co.bankAccounts || []).find(a => a.id === st.acctId);
   const ledger = acc && exactLedger(acc.ledger);
   if (!ledger){ if (!opts.quiet) toast("Choose the Tally ledger for this bank account first."); return null; }
-  const tname = opts.tname || await ensureTallyCompany(co);
-  if (!tname) return null;
+  const cid = b.cid, tname = opts.tname || co.tallyName || (TCloud.book(cid) || {}).company || co.name;
   const sid = st.id;
-  b.balBusy = true; if (!opts.quiet){ b.busy = "Reading " + ledger + "'s balance from Tally…"; } render();
+  b.balBusy = true; if (!opts.quiet){ b.busy = "Working out " + ledger + "'s balance from FinCom's copy…"; } render();
   let res;
+  const base = () => ({at: Date.now(), ledger, company: tname, from: st.from, to: st.to, line: copyLine(cid)});
   try {
-    const tb = await tallyBankBalance(tname, ledger, st.to);
+    // the copy's state (when it last read Tally) before deciding whether the entries posted are read back
+    try { if (TCloud.on()) await TCloud.status(cid, true); } catch (e){}
+    const wait = bankNotReadBack(b.rows, cid);
+    if (wait.length) throw {pending: wait.length};
+    const tb = await tallyBankBalance(tname, ledger, st.to, cid);
     const all = b.rows.reduce((a, r) => a + bankEffect(r), 0);
     const sOpen = st.opening !== undefined && st.opening !== null && st.opening !== "" ? r2(num(st.opening)) : (st.closing !== undefined ? r2(num(st.closing) - all) : null);
     const sClose = st.closing !== undefined && st.closing !== null && st.closing !== "" ? r2(num(st.closing)) : (sOpen !== null ? r2(sOpen + all) : null);
-    res = {at: Date.now(), ledger, company: tname, from: st.from, to: st.to, openAsOn: addDays(st.from, -1), tOpen: null, tClose: tb.close, how: tb.how, later: tb.laterN, sOpen, sClose};
+    res = Object.assign(base(), {openAsOn: addDays(st.from, -1), tOpen: null, tClose: tb.close, how: tb.how, later: tb.laterN, sOpen, sClose, line: tb.line, asOf: tb.asOf});
     res.diffOpen = sOpen === null || res.tOpen === null ? null : r2(sOpen - res.tOpen);
     res.diff = sClose === null ? null : r2(sClose - res.tClose);
     const notIn = b.rows.filter(r => !["sent", "intally", "ignored"].includes(r.state));
@@ -827,7 +851,7 @@ async function checkBankBalance(opts){
     res.notIn = notIn.map(r => r.id); res.notInEffect = r2(notIn.reduce((a, r) => a + bankEffect(r), 0));
     res.left = left.map(r => r.id); res.leftEffect = r2(left.reduce((a, r) => a + bankEffect(r), 0));
     res.extra = null;
-    if (res.diff !== null && Math.abs(res.diff) >= 0.01 && opts.explain){
+    if (res.diff !== null && Math.abs(res.diff) >= 0.01 && opts.explain && typeof bridgeLive === "function" && bridgeLive(co)) try {
       // which entries does Tally have for these dates that the statement does not?
       if (!opts.quiet) { b.busy = "The balance differs: reading " + ledger + " for " + fmtDate(st.from) + " to " + fmtDate(st.to) + " to find out why…"; render(); }
       const jv = await Bridge.call(ledgerLinesUrl(tname, ledger, st.from, st.to), null, 600000);
@@ -853,8 +877,11 @@ async function checkBankBalance(opts){
       res.missingEffect = r2(b.rows.filter(r => res.missing.includes(r.id)).reduce((a, r) => a + bankEffect(r), 0));
       res.extra = extra; res.extraEffect = r2(extra.reduce((a, x) => a + x.eff, 0));
       res.unexplained = r2(res.diff - (res.diffOpen || 0) - res.notInEffect - res.leftEffect - res.missingEffect + res.extraEffect);
-    }
-  } catch (e){ res = {at: Date.now(), error: e.message || String(e)}; }
+    } catch (e){ res.extra = null; }
+  } catch (e){
+    // not an error on the screen: posted and not read back yet, or the copy cannot answer yet (it says why)
+    res = Object.assign(base(), e && e.pending ? {pending: e.pending} : {notYet: (e && e.message) || String(e)});
+  }
   const st2 = b.stmts.find(x => x.id === sid);
   if (st2){ st2.tallyBal = res; saveBank({stmts: true}); }
   b.balBusy = false; if (!opts.quiet) b.busy = "";
@@ -911,8 +938,9 @@ async function postBankToTally(ids){
   const inTallyBefore = b.rows.filter(r => r.state === "intally").length;
   const ledgerAge = Date.now() - new Date((b.ledgers || {}).importedAt || 0).getTime();
   if (!b.ledgers.live || ledgerAge > 60 * 60000) await syncLedgersFromTally(true);
-  if (!acc || !exactLedger(acc.ledger)){ b.busy = ""; toast("Choose the Tally ledger for this bank account first (the set-up line at the top)."); render(); return; }
-  acc.ledger = exactLedger(acc.ledger);
+  // posting uses the confirmed ledger only (src/js/60): not chosen, guessed, or gone from Tally → nothing is posted
+  if (!acc || !bankLedgerReady(co, acc)){ b.busy = ""; toast(bankLedgerWhy(co, acc) || "Choose the Tally ledger for this bank account first (the set-up line at the top)."); render(); return; }
+  acc.ledger = bankLedgerReady(co, acc);
   if (heavy) await syncBankBookFromTally(true);
   // guard 1: this computer's own record of lines already posted, whatever happened to the statement since
   b.postedTags = b.postedTags || {};
@@ -1024,17 +1052,25 @@ async function postBankToTally(ids){
       masters: masters.map(l => ({id: "led:" + l.name, xml: ledgerMasterXml(l)})),
       vouchers: rows.map(r => ({id: r.id, xml: bankVoucherXml(r, acc, co)}))}, pj => { b.busy = postingLine(pj, tname); refreshBusy(); },
       chk => bankAfterCheck(b.cid, st.id, chk, tname));
+    // B14: stopped by the check of the company this client may post to: nothing sent, the lines stay ready
+    if (j.notAllowed){
+      const why = ([].concat(j.results || []).find(x => x.notAllowed) || {}).message || postToProblem(co, tname);
+      postStopped(why, co.id); b.busy = ""; b.postReport = {at: Date.now(), posted: 0, skipped, movedBack, failed: [], notAllowed: plainMsg(why), dismiss: "bankReportOk"};
+      toast("Not sent to Tally: choose the Tally company " + co.name + " may post to."); render(); return;
+    }
     const byId = new Map([].concat(j.results || []).map(x => [x.id, x]));
     const now = new Date().toISOString();
-    masters.forEach(l => { const x = byId.get("led:" + l.name); if (x && x.ok){ l.sent = true; l.sentAt = now; } else if (x) failed.push({what: "New ledger " + l.name, msg: x.message}); });
+    masters.forEach(l => { const x = byId.get("led:" + l.name); if (x && x.ok){ l.sent = true; l.sentAt = now; if (!x.existed) logPosting({what: "ledger", id: "led:" + l.name, action: postAltered(x) ? "altered" : "created", co: b.cid, ref: l.name, party: l.group || "", amount: 0, tally: {company: tname}, by: (Cloud.st && Cloud.st.email) || ""}); } else if (x) failed.push({what: "New ledger " + l.name, msg: x.message}); });
     let ok = 0, optionalN = 0;
     const posted = [];
     rows.forEach(r => {
-      const x = byId.get(r.id);
+      // bridge 2.1.4: the same voucher found in Tally just before posting: in Tally (with that voucher), not failed. A
+      // check that could not be made leaves the line ready, with the bridge's one line (below, as any refusal)
+      const x0 = byId.get(r.id), x = postAlready(x0) ? Object.assign({}, x0, {ok: true, verified: true, vchNumber: x0.vchNumber || x0.vchNo || ""}) : x0;
       if (x && x.ok && x.verified !== true && !x.pendingCheck){
         b.postedTags = b.postedTags || {}; b.postedTags[fpHash(r.fp || r.id)] = "unconfirmed:" + now;
-        r.postError = "Tally replied 'created', but FinCom could not find the entry in Tally afterwards, so it is NOT marked as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again." + (x.verifyNote ? " [" + x.verifyNote + "]" : "");
-        failed.push({id: r.id, what: fmtDate(r.date) + " " + (r.dec.name || "") + " " + INR.format(r.debit || r.credit), msg: "not confirmed in Tally \u2014 check Tally before posting again"});
+        r.postError = "In Tally, not yet read back: Tally took it, but FinCom has not found it in Tally since, so it is not counted as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again." + (x.verifyNote ? " [" + x.verifyNote + "]" : "");
+        failed.push({id: r.id, what: fmtDate(r.date) + " " + (r.dec.name || "") + " " + INR.format(r.debit || r.credit), msg: "In Tally, not yet read back \u2014 look in Tally before posting again"});
       } else if (x && x.ok){
         ok++; r.state = "sent"; r.sentAt = now; r.postedVia = "bridge"; r.postError = ""; r.postedOptional = !!x.optional; r.postVerified = x.verified === true; r.checking = !!x.pendingCheck; posted.push(r);
         b.postedTags = b.postedTags || {}; b.postedTags[fpHash(r.fp || r.id)] = now;
@@ -1055,7 +1091,10 @@ async function postBankToTally(ids){
     if (!failed.length && !b.rows.some(r => r.state === "ready")) b.filter = "done";
     b.afterPost = !j.checking && !j.viaCloud;
     b.tallyLook = null;          // Tally has changed: the next posting looks again
-  } catch (e){ toast("Posting failed: " + e.message); b.postReport = {at: Date.now(), posted: 0, skipped, movedBack, failed: failed.concat([{what: "Posting", msg: e.message}]), dismiss: "bankReportOk"}; }
+  } catch (e){
+    if (e && e.code === "cancelled") toast(e.message);
+    else { toast("Posting failed: " + e.message); b.postReport = {at: Date.now(), posted: 0, skipped, movedBack, failed: failed.concat([{what: "Posting", msg: e.message}]), dismiss: "bankReportOk"}; }
+  }
   b.busy = "";
   render();
   if (b.afterPost){ b.afterPost = false; try { await checkBankBalance({quiet: true, tname, closeOnly: true}); } catch (e){} }
@@ -1089,22 +1128,32 @@ async function checkBillsInTally(onlyUnconfirmed){
   } catch (err){ S.billCheck = {error: err.message}; }
   render();
 }
-async function postBillsToTally(){
+async function postBillsToTally(opts){
+  opts = opts || {};
   const co = CO();
   const tname = await ensureTallyCompany(co);
   if (!tname) return;
   if (!S.bank || S.bank.cid !== co.id) await loadBank(co.id);
-  S.billPost = {busy: "Loading ledgers from Tally\u2026"}; render();
+  S.billPost = {busy: "Loading ledgers from Tally…"}; render();
   await syncLedgersFromTally(true);
   autoMapCompanyLedgers(co);
-  let list = Object.values(D().entries).filter(e => e.status === "approved" && !e.exportedAt).sort(byDate);
+  let list = Object.values(D().entries).filter(e => e.status === "approved" && !e.exportedAt && (!opts.ids || opts.ids.includes(e.id))).sort(byDate);
   if (!list.length){ S.billPost = null; toast("No approved entries are waiting."); render(); return; }
   canonicalizeBills(list);
+  // review 21c: a bill whose GST, TDS or expense ledger comes from a Client setup choice that is only guessed waits,
+  // with the one-line reason; nothing of it is sent (src/js/60 billGuessedWhy)
+  const guessed = list.map(e => [e, billGuessedWhy(e, co)]).filter(x => x[1]);
+  if (guessed.length){
+    const why = guessed[0][1] + (guessed.length > 1 ? " (" + guessed.length + " bills)" : "") + " Confirm it in Client setup.";
+    list = list.filter(e => !guessed.some(x => x[0] === e));
+    postStopped(why, co.id);
+    if (!list.length){ S.billPost = {notAllowed: plainMsg(why), company: ""}; toast(why); refreshStats(co.id); render(); return; }
+  }
   const failed = [];
   const blocked = list.filter(e => e.snapshot.lines.some(l => !exactLedger(l.ledger)));
-  blocked.forEach(e => { const l = e.snapshot.lines.find(x => !exactLedger(x.ledger)); e.postError = "Ledger \u201c" + (l.ledger || "(none)") + "\u201d is not in Tally"; unapply(e, co.id); e.postFailedAt = new Date().toISOString(); Store.saveEntry(co.id, e); failed.push({id: e.id, no: e.x.invoiceNo, party: e.x.vendorName, msg: e.postError}); });
+  blocked.forEach(e => { const l = e.snapshot.lines.find(x => !exactLedger(x.ledger)); e.postError = "Ledger “" + (l.ledger || "(none)") + "” is not in Tally"; unapply(e, co.id); e.postFailedAt = new Date().toISOString(); Store.saveEntry(co.id, e); failed.push({id: e.id, no: e.x.invoiceNo, party: e.x.vendorName, msg: e.postError}); });
   let todo = list.filter(e => !blocked.includes(e));
-  S.billPost = {busy: "Checking Tally for bills already booked\u2026"}; render();
+  S.billPost = {busy: "Checking Tally for bills already booked…"}; render();
   try {
     const dates = todo.map(e => e.x.invoiceDate).filter(Boolean).sort();
     const now = new Date().toISOString();
@@ -1119,30 +1168,46 @@ async function postBillsToTally(){
       dup.forEach(e => { e.exportedAt = now; e.postNote = "Already in Tally"; Store.saveEntry(co.id, e); });
       todo = todo.filter(e => !dup.includes(e));
     }
-    let ok = 0, optionalN = 0, unverified = 0;
+    let ok = 0, optionalN = 0, unverified = 0, altered = 0, checkFailed = 0;
+    const masterWords = [];
     if (todo.length){
       const used = new Set(todo.flatMap(e => e.snapshot.lines.map(l => String(l.ledger).toLowerCase())));
       const masters = B().newLed.filter(l => !l.sent && used.has(l.name.toLowerCase()));
-      S.billPost = {busy: "Posting " + entries(todo.length) + " to " + tname + "\u2026"}; render();
-      const j = await Bridge.post({company: tname, client: co.id, masters: masters.map(l => ({id: "led:" + l.name, xml: ledgerMasterXml(l)})), vouchers: todo.map(e => ({id: e.id, xml: voucherXml(e, co)}))}, pj => { S.billPost = {busy: postingLine(pj, tname)}; refreshBusy(); });
+      S.billPost = {busy: "Posting " + entries(todo.length) + " to " + tname + "…"}; render();
+      const j = await Bridge.post({company: tname, client: co.id, masters: masters.map(l => ({id: "led:" + l.name, xml: ledgerMasterXml(l)})), vouchers: todo.map(e => ({id: e.id, xml: voucherXml(e, co)}))},
+        pj => { S.billPost = {busy: postingLine(pj, tname)}; refreshBusy(); }, chk => billsAfterCheck(co.id, chk, tname));
+      // B14: stopped by the check of the company this client may post to: nothing was sent, not Tally's reason; the
+      // bills stay waiting under Post to Tally, as they were
+      if (j.notAllowed){
+        const why = ([].concat(j.results || []).find(x => x.notAllowed) || {}).message || postToProblem(co, tname);
+        postStopped(why, co.id); S.billPost = {notAllowed: plainMsg(why), company: tname};
+        toast("Not sent to Tally: choose the Tally company " + co.name + " may post to.");
+        refreshStats(co.id); render(); return;
+      }
       const byId = new Map([].concat(j.results || []).map(x => [x.id, x]));
-      masters.forEach(l => { const x = byId.get("led:" + l.name); if (x && x.ok){ l.sent = true; l.sentAt = now; } });
+      masters.forEach(l => { const x = byId.get("led:" + l.name); if (x && x.ok){ l.sent = true; l.sentAt = now; } if (x) masterWords.push({name: l.name, word: x.ok ? postWord(x) : "Failed: " + plainMsg(x.message)});
+        if (x && x.ok && !x.existed) logPosting({what: "ledger", id: "led:" + l.name, action: postAltered(x) ? "altered" : "created", co: co.id, ref: l.name, party: l.group || "", amount: 0, tally: {company: x.company || tname}, by: (Cloud.st && Cloud.st.email) || ""}); });
       saveBank({newLed: true});
       // a voucher number another supplier already used: try once more with this supplier's initials added
-      const clash = todo.filter(e => { const x = byId.get(e.id); return x && !x.ok && /already\s+exists/i.test(x.message || "") && co.vchNumbering !== "tally"; });
+      const clash = todo.filter(e => { const x = byId.get(e.id); return x && !x.ok && !postAlready(x) && !postCheckFail(x) && /already\s+exists/i.test(x.message || "") && co.vchNumbering !== "tally"; });
       if (clash.length){
         clash.forEach(e => { e.vchNo = (e.x.invoiceNo || "B") + "/" + initialsOf(e.x.vendorName || e.partyLedger); });
-        S.billPost = {busy: "Voucher numbers already used in Tally: trying " + clash.length + " again with the supplier\u2019s initials\u2026"}; render();
+        S.billPost = {busy: "Voucher numbers already used in Tally: trying " + clash.length + " again with the supplier’s initials…"}; render();
         try {
-          const j2 = await Bridge.post({company: tname, client: co.id, masters: [], vouchers: clash.map(e => ({id: e.id, xml: voucherXml(e, co)}))});
+          const j2 = await Bridge.post({company: tname, client: co.id, masters: [], vouchers: clash.map(e => ({id: e.id, xml: voucherXml(e, co)}))}, null, chk => billsAfterCheck(co.id, chk, tname));
           [].concat(j2.results || []).forEach(x => byId.set(x.id, x));
         } catch (err){ /* reported below as refused */ }
       }
       todo.forEach(e => {
         const x = byId.get(e.id);
-        if (x && x.ok && x.verified === true){ ok++; logPosting({what: "bill", id: e.id, action: "posted", co: co.id, ref: e.x.invoiceNo, party: e.x.vendorName, amount: num(e.x.total), tally: {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", company: x.company || tname}, by: (Cloud.st && Cloud.st.email) || ""}); e.exportedAt = now; e.postError = ""; e.postUnconfirmed = null; e.postedVia = "bridge"; e.postedInto = x.company || tname; e.postedOptional = !!x.optional; e.postVerified = true; e.tallyVchNo = x.vchNumber || "";
-          e.tally = {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", at: now, by: (Cloud.st && Cloud.st.email) || "", company: x.company || tname}; if (x.optional) optionalN++; }
-        else if (x && x.ok){ unverified++; e.postUnconfirmed = {at: now, company: x.company || tname, optional: /Optional/.test(x.verifyNote || '')}; e.postError = (/Optional/.test(x.verifyNote || '') && x.message) ? plainMsg(x.message) : "Tally replied 'created', but FinCom could not find the entry in Tally afterwards, so it is NOT marked as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again." + (x.verifyNote ? " [" + x.verifyNote + "]" : ""); failed.push({no: e.x.invoiceNo, party: e.x.vendorName, msg: "not confirmed in Tally"}); }
+        // bridge 2.1.4 found the same bill in Tally as it was about to post: in Tally, with that voucher, not failed
+        if (postAlready(x)){ billAlready(co.id, e, x, tname, now); dup.push(e); }
+        // bridge 2.1.4 could not check Tally first: nothing was posted; the bill stays waiting, with that one line
+        else if (postCheckFail(x)){ e.postCheckFailed = {at: now, message: plainMsg(x.message) || "Could not check Tally, not posted. Try again."}; e.postError = ""; checkFailed++; }
+        else if (x && x.ok && (x.verified === true || postAltered(x))){ ok++; if (postAltered(x)) altered++; billPosted(co.id, e, x, tname, now); if (x.optional) optionalN++; }
+        else if (x && x.ok){ unverified++; e.postUnconfirmed = {at: now, company: x.company || tname, optional: /Optional/.test(x.verifyNote || ''), pending: !!x.pendingCheck};
+          e.postError = (/Optional/.test(x.verifyNote || '') && x.message) ? plainMsg(x.message) : x.pendingCheck ? "In Tally, not yet read back: FinCom reads it back from Tally by itself in a moment." : "In Tally, not yet read back: Tally took it, but FinCom has not found it in Tally since, so it is not counted as posted. Look in Tally (Day Book, and Display More Reports → Exception Reports → Optional Vouchers). If it is not there, post it again." + (x.verifyNote ? " [" + x.verifyNote + "]" : "");
+          failed.push({id: e.id, no: e.x.invoiceNo, party: e.x.vendorName, msg: "In Tally, not yet read back", unread: true}); }
         else {
           e.postError = plainMsg(x && x.message) || "Tally did not confirm this entry.";
           failed.push({id: e.id, no: e.x.invoiceNo, party: e.x.vendorName, msg: e.postError});
@@ -1151,10 +1216,42 @@ async function postBillsToTally(){
         Store.saveEntry(co.id, e);
       });
     }
-    S.billPost = {done: true, ok, bad: failed.length, dup: dup.length, failed, optional: optionalN, unverified, company: tname};
-    toast(ok + " posted to " + tname + (optionalN ? " (" + optionalN + " as Optional vouchers)" : "") + (dup.length ? ", " + dup.length + " already there" : "") + (failed.length ? ", " + failed.length + " not posted" : "") + ".");
-  } catch (e){ S.billPost = {error: e.message, failed}; toast("Posting failed: " + e.message); }
+    S.billPost = {done: true, ok, bad: failed.length, dup: dup.length, failed, optional: optionalN, unverified, altered, checkFailed, masters: masterWords, company: tname};
+    toast(ok + " posted to " + tname + (altered ? " (" + altered + " altered in Tally)" : "") + (optionalN ? " (" + optionalN + " as Optional vouchers)" : "") + (dup.length ? ", " + dup.length + " already there" : "") + (checkFailed ? ", " + checkFailed + " not posted: Tally could not be checked first" : "") + (failed.length ? ", " + failed.length + " not posted" : "") + ".");
+  } catch (e){
+    if (e && e.code === "cancelled"){ S.billPost = {cancelled: e.message}; toast(e.message); }
+    else { S.billPost = {error: e.message, failed}; toast("Posting failed: " + e.message); }
+  }
   refreshStats(co.id); render();
+}
+// a bill Tally has: marked as posted, with Tally's voucher
+function billPosted(cid, e, x, tname, now){
+  logPosting({what: "bill", id: e.id, action: postAltered(x) ? "altered" : "posted", co: cid, ref: e.x.invoiceNo, party: e.x.vendorName, amount: num(e.x.total), tally: {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", company: x.company || tname}, by: (Cloud.st && Cloud.st.email) || ""});
+  e.exportedAt = now; e.postError = ""; e.postUnconfirmed = null; e.postCheckFailed = null; e.postedVia = "bridge"; e.postedInto = x.company || tname; e.postedOptional = !!x.optional; e.postVerified = x.verified === true; e.postAltered = postAltered(x); e.tallyVchNo = x.vchNumber || "";
+  e.tally = {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", at: now, by: (Cloud.st && Cloud.st.email) || "", company: x.company || tname};
+}
+// already in Tally (bridge 2.1.4 checks Tally for the same party, bill no., date and amount at every posting): marked as
+// in Tally with Tally's voucher, as a verified posting is, and said "Already in Tally"
+function billAlready(cid, e, x, tname, now){
+  billPosted(cid, e, Object.assign({}, x, {ok: true, verified: true, vchNumber: x.vchNumber || x.vchNo || "", vchDate: x.vchDate || x.date || ""}), tname, now);
+  e.postNote = "Already in Tally"; e.postAlreadyMsg = plainMsg(x.message) || "";
+}
+// the bridge has read back the bills it put in Tally: the ones found count as posted now
+function billsAfterCheck(cid, chk, tname){
+  const d = S.data[cid];
+  if (!d) return;
+  const now = new Date().toISOString();
+  let n = 0;
+  [].concat((chk && chk.results) || []).forEach(x => {
+    const e = d.entries[x.id];
+    if (!e || e.exportedAt || !e.postUnconfirmed) return;
+    if (postAlready(x)){ billAlready(cid, e, x, tname, now); n++; }
+    else if (x.ok && (x.verified === true || postAltered(x))){ billPosted(cid, e, x, tname, now); n++; }
+    else { e.postUnconfirmed = Object.assign({}, e.postUnconfirmed, {pending: false}); e.postError = x.ok ? "In Tally, not yet read back: Tally took it, but FinCom did not find it in Tally afterwards. Look in Tally before posting it again." : "Failed: " + (plainMsg(x.message) || "not found in Tally"); }
+    Store.saveEntry(cid, e);
+  });
+  if (S.billPost && S.billPost.done && n){ S.billPost.ok = (S.billPost.ok || 0) + n; S.billPost.unverified = Math.max(0, (S.billPost.unverified || 0) - n); S.billPost.failed = (S.billPost.failed || []).filter(f => !(f.unread && d.entries[f.id] && d.entries[f.id].exportedAt)); }
+  refreshStats(cid); render();
 }
 // Set the company's voucher types in Tally to number vouchers automatically, so a repeated number can never stop a posting
 const AUTO_TYPES = ["Purchase", "Journal", "Payment", "Receipt", "Contra", "Sales", "Debit Note", "Credit Note"];
@@ -1177,8 +1274,8 @@ async function setAutoNumbering(){
       logPosting && logPosting({what: "setting", id: "vchauto", action: "automatic numbering", co: co.id, ref: done.join(", "), party: tname, amount: 0, tally: {company: tname}});
     }
     if (!done.length && bad.some(x => /Only VOUCHER, LEDGER or GROUP/.test(x.message || ""))){
-      await askConfirm({title: "The Tally Bridge on the Tally computer needs updating", ok: "Got it", body:
-        '<p>This needs bridge 1.8.1. Download it from Client setup \u2192 Company and Tally \u2192 Tally Bridge, and install it on the computer where Tally runs.</p>' +
+      await askConfirm({title: "FinCom Bridge on the Tally computer needs updating", ok: "Got it", body:
+        '<p>This needs FinCom Bridge 2.1. Install FinCom Bridge from the Tally page and run it on the computer where Tally runs.</p>' +
         '<p><b>Or set it in Tally yourself</b>, for each voucher type (Purchase, Journal, Payment, Receipt, Contra, Sales, Debit Note, Credit Note):</p>' +
         '<ol><li>Gateway of Tally \u2192 <b>Alter</b> \u2192 <b>Voucher Type</b>, and choose the type.</li><li>Set <b>Method of voucher numbering</b> to <b>Automatic</b>.</li><li>Press Ctrl + A to save.</li></ol>' +
         '<p class="note">Then come back here and press \u201cUse Tally\u2019s automatic numbers\u201d.</p>'});
@@ -1202,14 +1299,14 @@ function bridgePin(port){
 async function saveBridgeSetup(){
   let t = null;
   try { t = await blockText(BRIDGE_SETUP_ID); } catch (e){ t = null; }
-  if (!t || !t.trim()){ toast("This copy of the app does not carry the setup file. Use the downloaded app (TDS-Desk-standalone.html)."); return; }
+  if (!t || !t.trim()){ toast("This copy of the app does not carry the setup file. Install FinCom Bridge from the Tally page."); return; }
   const raw = atob(t.trim());
   const bytes = new Uint8Array(raw.length);
   for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
   saveFile("Setup-FinCom-Bridge.bat", new Blob([bytes], {type: "application/octet-stream"}));
   // its fingerprint, to compare with the one published in the FinCom repository (assets/bridge-setup.sha256)
   try { const h = await crypto.subtle.digest("SHA-256", bytes); S.bridgeSha = Array.from(new Uint8Array(h)).map(x => x.toString(16).padStart(2, "0")).join(""); } catch (e){ S.bridgeSha = ""; }
-  toast("Saved. On the computer where Tally runs, double-click Setup-FinCom-Bridge.bat and press I.");
+  toast("Saved. Run it on the computer where Tally runs; FinCom Bridge then shows its icon near the clock.");
   render();
 }
 // A day book exported from Tally and chosen in FinCom also becomes the bridge's copy of the company (1.13.7): sent in
@@ -1249,7 +1346,7 @@ const BridgeSeed = {
     return out;
   },
   async send(file, onStep, range, name0){
-    if (!Bridge.on()) return {skipped: "the Tally Bridge is not connected"};
+    if (!Bridge.on()) return {skipped: "FinCom Bridge is not connected"};
     const name = name0 || this.company();
     if (!name) return {skipped: "no Tally company name"};
     const pieces = this.pieces(await file.text(), range || {});
@@ -1266,7 +1363,7 @@ const BridgeSeed = {
   },
   // opening balances from a trial balance file, for the bridge's copy
   async opening(asOn, led){
-    if (!Bridge.on()) return {skipped: "the Tally Bridge is not connected"};
+    if (!Bridge.on()) return {skipped: "FinCom Bridge is not connected"};
     return this.post("/seedbal?company=" + encodeURIComponent(this.company()), JSON.stringify({openAsOn: asOn, ledgers: Object.entries(led).map(([name, x]) => ({name, parent: x.parent || "", open: String(x.open)}))}), "application/json");
   }
 };
@@ -1275,7 +1372,9 @@ const BridgeSeed = {
 const TBFile = {
   GROUPS: /^(capital account|reserves & surplus|loans \(liability\)|secured loans|unsecured loans|bank od a\/c|bank occ a\/c|current liabilities|duties & taxes|provisions|sundry creditors|fixed assets|investments|current assets|bank accounts|cash-in-hand|deposits \(asset\)|loans & advances \(asset\)|stock-in-hand|sundry debtors|branch \/ divisions|misc\. expenses \(asset\)|suspense a\/c|sales accounts|purchase accounts|direct incomes|direct expenses|indirect incomes|indirect expenses|grand total|total|opening stock|closing stock|difference in opening balances)$/i,
   read(text, b){
-    const unesc = t => String(t || "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").trim();
+    // a ledger's name as every reader takes it (server/_shared/names.js): "MCS Project Pvt Ltd&amp;#13;&amp;#10;" in a
+    // trial balance is the master "MCS Project Pvt Ltd", not a twin of it (migration-9)
+    const unesc = t => namesClean(t);
     const groups = new Set(Object.keys((b && b.groups) || {}).map(g => g.toLowerCase()));
     const known = new Set(Object.keys(Object.assign({}, (b && b.map) || {}, (b && b.under) || {}, (b && b.ledInfo) || {})));
     const names = [], re = /<DSPACCNAME>[\s\S]*?<DSPDISPNAME>([\s\S]*?)<\/DSPDISPNAME>[\s\S]*?<\/DSPACCNAME>\s*<DSPACCINFO>([\s\S]*?)<\/DSPACCINFO>/g;
@@ -1319,3 +1418,15 @@ const TBCheck = {
     return Object.assign(base, {ok: !list.length, n: list.length, list: list.slice(0, 200), ledgers: all.size});
   }
 };
+// the one Tally company a client may post to (co.postTo, Client setup → Tally; review of 02-Oct-2026: Testing AAD's bill
+// FA/ELEC/013 went into GARG SHEKHAR & COMPANY): "" when this company is allowed, else what to do
+function postToProblem(co, company){
+  if (!co) return "";
+  // posting uses the confirmed choice only (src/js/60): a company found by FinCom (postToBy "auto") is confirmed first
+  const ch = typeof choiceGet === "function" ? choiceGet(co, "postTo") : {value: co.postTo, state: "confirmed"};
+  const to = String((ch && ch.value) || "").trim(), nm = x => ledNm(x).toLowerCase();
+  if (!to) return "Choose the Tally company " + co.name + " may post to (Client setup \u2192 Tally). Nothing was posted.";
+  if (ch.state !== "confirmed") return "Confirm the Tally company " + co.name + " posts to: " + to + " was found by FinCom and is not confirmed yet (Client setup \u2192 Tally). Nothing was posted.";
+  if (company && nm(to) !== nm(company)) return co.name + " may post only to " + to + ", but " + company + " was about to receive it. Nothing was posted.";
+  return "";
+}

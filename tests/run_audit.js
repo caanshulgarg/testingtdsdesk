@@ -1,6 +1,6 @@
 // node run_audit.js - the audit on the VMS books for 2025-26
 const fs = require("fs"), {load, openBlob} = require("./harness"), {HTML, DATA, CACHE, OUT} = require("./harness");
-const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "Audit", "TDS", "Certs", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim"];
+const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "Audit", "TDS", "Certs", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "MIS", "Parties", "FS", "GSTSet", "GSTF", "GSTQ", "D"];
 let h; try { h = load(HTML, NAMES); } catch (e){ console.log(e.message); process.exit(2); }
 const {ctx, x} = h;
 let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
@@ -8,7 +8,7 @@ let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + 
   const b = JSON.parse(fs.readFileSync(CACHE, "utf8"));
   const ms = await x.Books.importMasters(await openBlob(DATA + "/Master.xml"));
   Object.assign(b, {ledInfo: ms.info, under: ms.under, groups: ms.groups, gstins: ms.gstins, pans: ms.pans, challans: [], alloc: {}});
-  b.map = x.Books.mapLedgers(b.vouchers, {}); ctx.S.books = b; ctx.CO = () => ({name: "VMS EVENTS PRIVATE LIMITED"}); ctx.S.coId = "t";
+  b.map = x.Books.mapLedgers(b.vouchers, {}); ctx.S.books = b; ctx.CO = () => ({name: "VMS EVENTS PRIVATE LIMITED"}); ctx.S.coId = "t"; ctx.S.data = {};
   x.LedMaster.refresh(b);
   const t0 = Date.now(), run = x.Audit.run("20250401", "20260331", "test");
   console.log("ran in " + (Date.now() - t0) + " ms, " + run.vouchers + " vouchers; notes: " + run.notes.join(" | ") + (run.errors.length ? "\nERRORS: " + run.errors.join(" | ") : ""));

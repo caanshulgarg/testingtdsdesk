@@ -319,20 +319,23 @@ const Store = {
         data:Object.fromEntries(Object.entries(S.data).map(([k, v]) => [k, {parties:v.parties, entries:v.entries}]))}));
     } catch(e){ toast("This browser's storage is full. Download the register and clear sent invoices."); }
   },
-  saveFirm(){ this.put("config/firm", S.firm); },
-  saveCompany(c){ this.put("companies/" + c.id, c); },
-  saveParty(cid, p){ this.put("companies/" + cid + "/parties/" + p.id, p); },
+  // a settings page with unsaved changes (Drafts, src/js/60): its store is saved when the person presses Save
+  saveFirm(){ if (typeof Drafts === "object" && Drafts.hold("firm")) return; this.put("config/firm", S.firm); },
+  saveCompany(c){ if (typeof Drafts === "object" && Drafts.hold("client:" + c.id)) return; this.put("companies/" + c.id, c); },
+  saveParty(cid, p){ if (typeof Drafts === "object" && Drafts.hold("parties:" + cid)) return; this.put("companies/" + cid + "/parties/" + p.id, p); },
   saveEntry(cid, e){ this.put("companies/" + cid + "/entries/" + e.id, e); },
-  deleteEntry(cid, id){ this.put("companies/" + cid + "/entries/" + id, null); },
-  deleteParty(cid, id){ this.put("companies/" + cid + "/parties/" + id, null); },
+  // removals the user asked for: the only ones the firm account ever sends as deleted (Cloud.delete)
+  deleteEntry(cid, id){ this.put("companies/" + cid + "/entries/" + id, null); if (typeof Cloud === "object") Cloud.delete("entry", cid, id, "removed by the user"); },
+  deleteParty(cid, id){ this.put("companies/" + cid + "/parties/" + id, null); if (typeof Cloud === "object") Cloud.delete("party", cid, id, "removed by the user"); },
   saveInbox(i){ this.put("inbox/" + i.id, i); },
-  deleteInbox(id){ this.put("inbox/" + id, null); },
-  async deleteCompany(cid){
+  deleteInbox(id){ this.put("inbox/" + id, null); if (typeof Cloud === "object") Cloud.delete("unsorted", "", id, "moved to a client"); },
+  async deleteCompany(cid, why){
     await this.loadCompany(cid);
     const d = S.data[cid];
     Object.keys(d.parties).forEach(id => this.deleteParty(cid, id));
     Object.keys(d.entries).forEach(id => this.deleteEntry(cid, id));
     this.put("companies/" + cid, null);
+    if (typeof Cloud === "object") Cloud.delete("client", cid, cid, why || "client removed by the user");
     delete S.data[cid]; delete S.companies[cid];
     if (S.storeKind === "local") this.saveLocal();
   }
@@ -348,8 +351,22 @@ function num(v){ if (typeof v === "number") return isFinite(v) ? v : 0; const n 
 function r2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
 const INR = new Intl.NumberFormat("en-IN", {minimumFractionDigits:2, maximumFractionDigits:2});
 const INR0 = new Intl.NumberFormat("en-IN", {maximumFractionDigits:0});
-function money(n){ return "₹" + INR.format(num(n)); }
-function money0(n){ return "₹" + INR0.format(num(n)); }
+// a negative amount reads "-₹1,234.00" (the minus before the rupee sign; colour scheme of 02-Oct-2026), shown in red by negAmounts
+function money(n){ const v = num(n); return (v < 0 ? "-₹" : "₹") + INR.format(Math.abs(v)); }
+function money0(n){ const v = num(n), t = INR0.format(Math.abs(v)); return (v < 0 && t !== "0" ? "-₹" : "₹") + t; }
+// every amount on screen that is negative is shown in red (a figure cell, a tile's number): after each change to the page
+const negAmounts = {
+  re: /^\s*[-−]\s*₹/,
+  sel: "td.n, th.n, .n, .dtile b, .metric b, .tile b, .tile .tv",
+  run(root){ try { (root || document).querySelectorAll(this.sel).forEach(el => { const neg = this.re.test(el.textContent || ""); if (neg !== el.classList.contains("neg")) el.classList.toggle("neg", neg); }); } catch (e){} },
+  start(){
+    if (typeof MutationObserver !== "function" || typeof document === "undefined") return;
+    let t = 0; const go = () => { t = 0; this.run(); };
+    new MutationObserver(() => { if (!t) t = setTimeout(go, 60); }).observe(document.body, {childList: true, subtree: true, characterData: true});
+    this.run();
+  }
+};
+if (typeof document !== "undefined") { if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => negAmounts.start()); else setTimeout(() => negAmounts.start(), 0); }
 function uid(p){ return p + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 function norm(s){ return String(s || "").toLowerCase().replace(/\b(m\/s|messrs|pvt|private|ltd|limited|llp|the)\b/g, "").replace(/[^a-z0-9]/g, ""); }
 function slug(s){ return String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "client"; }
@@ -367,6 +384,15 @@ function toDateObj(d){
   if (typeof d === "number") return new Date(d);
   const t = String(d);
   return /^\d{4}-\d{2}-\d{2}$/.test(t.slice(0, 10)) && t.length <= 10 ? new Date(t + "T00:00:00") : new Date(t);
+}
+// a large sum in a few characters, as said in India: ₹49.99 Cr, ₹3.20 L, ₹45,000 (review of 01-Oct-2026: header chips)
+function moneyShort(v){
+  const n = num(v), a = Math.abs(n), sg = n < 0 ? "-" : "";
+  // rounded down, so a balance never reads as more than it is (₹49,99,99,912 is ₹49.99 Cr, not ₹50.00 Cr)
+  const down = (x) => (Math.floor(x * 100 + 1e-9) / 100).toFixed(2);
+  if (a >= 1e7) return sg + "\u20b9" + down(a / 1e7) + " Cr";
+  if (a >= 1e5) return sg + "\u20b9" + down(a / 1e5) + " L";
+  return sg + "\u20b9" + Math.round(a).toLocaleString("en-IN");
 }
 function fmtDate(d){
   if (!d && d !== 0) return "—";
@@ -647,22 +673,58 @@ function zipOne(name, text){
 /* ------------------------------------------------------------------ */
 /* Parties (per client)                                                */
 /* ------------------------------------------------------------------ */
-// The supplier's ledger in the client's Tally ledger list (needs the bank/sales ledger list of that client to be loaded)
-function tallyPartyFor(x, cid){
-  if (!S.bank || S.bank.cid !== cid || !hasLedgerList()) return null;
-  const list = S.bank.ledgers.list || [];
+// The supplier's ledger in the client's Tally ledger list (review of 02-Oct-2026): the GSTIN on the ledger first, then
+// the GSTIN on its entries in Tally, then the PAN (inside the GSTIN, or read from the bill), then the name cleaned of
+// "Private Limited" and the like, then earlier bills of that supplier. null when none: the box is left empty, never the
+// first ledger of a list. {name, how}: how says why it was picked, under the box.
+function supplierKey(s){ return ledgerKey(String(s || "").replace(/\b(m\/s\.?|messrs\.?|private|pvt\.?|limited|ltd\.?|llp|the)(?=\W|$)/gi, " ")); }
+function sameSupplier(a, b){
+  const ga = fixGstin(a.vendorGstin).value, gb = fixGstin(b.vendorGstin).value, pa = effectivePan(a), pb = effectivePan(b);
+  if (ga && gb) return ga === gb;
+  if (pa && pb) return pa === pb;
+  return !!a.vendorName && supplierKey(a.vendorName) === supplierKey(b.vendorName);
+}
+function tallyPartyFor(x, cid, party){
+  cid = cid || S.coId;
+  if (Ledgers.cid() !== cid || !hasLedgerList()) return null;
+  const list = Ledgers.list(cid);
+  // a supplier's ledger is never an expense, income, tax or bank ledger
+  const ok = n => { const ex = n && exactLedger(n); if (!ex) return ""; return ["income", "expense", "tax", "bank", "asset"].includes(Ledgers.cls(cid, ex)) ? "" : ex; };
+  const one = arr => { const u = Array.from(new Set(arr.filter(Boolean))); return u.length === 1 ? u[0] : ""; };
   const g = fixGstin(x.vendorGstin).value, pan = effectivePan(x);
-  if (g){ const hit = list.filter(l => String(l.gstin || "").toUpperCase() === g); if (hit.length === 1) return {name: hit[0].name, how: "GSTIN on the Tally ledger"}; }
-  if (pan){ const hit = list.filter(l => String(l.pan || "").toUpperCase() === pan); if (hit.length === 1) return {name: hit[0].name, how: "PAN on the Tally ledger"}; }
-  if (x.vendorName){
-    const want = normName(x.vendorName).replace(/ /g, "");
-    const hit = list.filter(l => /sundry|creditors|current liabilities/i.test(l.group || "") && normName(l.name).replace(/ /g, "") === want);
-    if (hit.length === 1) return {name: hit[0].name, how: "name matches the Tally ledger"};
+  // each ledger's GSTIN and PAN: Tally's (the cloud list, a bridge read) wins over the books copy's when both are there
+  const bk = S.books && S.books.cid === cid ? S.books : null;
+  const names = Array.from(new Set(list.map(l => l.name).concat(bk ? Object.keys(bk.ledInfo || {}).concat(Object.keys(bk.gstins || {}), Object.keys(bk.pans || {})) : [])));
+  const ids = names.map(n => Object.assign({n}, Ledgers.ids(cid, n)));
+  const note = id => id.tallyGstin && id.bookGstin && id.tallyGstin !== id.bookGstin ? "Tally now has GSTIN " + id.tallyGstin + " for this ledger (books copy had " + id.bookGstin + ")" : "";
+  if (gstinValid(g)){
+    const hit = ids.filter(i => i.gstin === g && ok(i.n));
+    const h = one(hit.map(i => ok(i.n)));
+    if (h) return {name: h, how: "GSTIN " + g + " matches " + h + " in Tally", note: note(hit[0])};
+    const p = ok(Ledgers.gstinParty(cid, g));
+    if (p) return {name: p, how: "GSTIN " + g + " is on " + p + "'s entries in Tally"};
   }
+  if (pan){
+    const hit = ids.filter(i => i.pan === pan && ok(i.n));
+    const h = one(hit.map(i => ok(i.n)));
+    if (h) return {name: h, how: "PAN " + pan + " matches " + h + " in Tally", note: note(hit[0])};
+  }
+  if (x.vendorName){
+    const want = supplierKey(x.vendorName);
+    const hit = want ? list.filter(l => supplierKey(l.name) === want).map(l => ok(l.name)).filter(Boolean) : [];
+    const pty = hit.filter(n => Ledgers.cls(cid, n) === "party");
+    const h = one(pty.length ? pty : hit);
+    if (h) return {name: h, how: "The name matches " + h + " in Tally"};
+  }
+  const pl = party && ok(party.ledgerName);
+  if (pl) return {name: pl, how: "Used on this supplier's earlier bills"};
+  const prev = Object.values(D(cid).entries || {}).filter(o => o.status === "approved" && o.partyLedger && o.x && sameSupplier(o.x, x))
+    .sort((a, b) => String(b.approvedAt || "").localeCompare(String(a.approvedAt || ""))).map(o => ok(o.partyLedger)).find(Boolean);
+  if (prev) return {name: prev, how: "Used on this supplier's earlier bills"};
   return null;
 }
 function closestTallyLedger(name, groupRe){
-  const list = (S.bank.ledgers.list || []).filter(l => !groupRe || groupRe.test(l.group || ""));
+  const list = Ledgers.list().filter(l => !groupRe || groupRe.test(l.group || ""));
   let best = null;
   list.forEach(l => { const sc = nameSim(name, l.name); if (sc >= 0.85 && (!best || sc > best.sc)) best = {l, sc}; });
   return best ? best.l.name : null;
@@ -677,13 +739,28 @@ function findParty(x, cid){
 // Suppliers on bills still waiting for review, not yet in the supplier list (review item 8): shown in Client setup as
 // "new, not yet approved" so PAN, payment type and amounts credited earlier can be filled before the first approval
 // (which is what makes the yearly limit right on that first bill).
+// the supplier's ledger in Tally, by GSTIN, then PAN, then name (review of 02-Oct-2026: a supplier with a Tally ledger
+// was called "New supplier"); "" when Tally has none
+function supplierInTally(x){
+  if (!x) return "";
+  const b = S.books || {}, info = b.ledInfo || {}, gst = String(x.vendorGstin || "").toUpperCase(), pan = typeof effectivePan === "function" ? effectivePan(x) : "";
+  if (gst){ const hit = Object.entries(b.gstins || {}).find(([, g]) => String(g).toUpperCase() === gst) || Object.entries(info).find(([, m]) => String(m.gstin || "").toUpperCase() === gst); if (hit) return hit[0]; }
+  if (pan){ const hit = Object.entries(info).find(([, m]) => String(m.pan || "").toUpperCase() === pan); if (hit) return hit[0]; }
+  const nm = String(x.vendorName || "").trim();
+  if (!nm) return "";
+  const ex = typeof exactLedger === "function" ? exactLedger(nm) : null;
+  if (ex) return ex;
+  const k = typeof ledgerKey === "function" ? ledgerKey(nm) : nm.toLowerCase();
+  const names = new Set([].concat(Object.keys(info), Object.keys(b.gstins || {}), Object.keys(b.map || {}), Object.keys((b.tb || {}).led || {})));
+  return Array.from(names).find(l => (typeof ledgerKey === "function" ? ledgerKey(l) : l.toLowerCase()) === k) || "";
+}
 function pendingSuppliers(cid){
   cid = cid || S.coId;
   const out = new Map();
   Object.values(D(cid).entries || {}).forEach(e => {
     if (e.status !== "draft" || !e.x || !String(e.x.vendorName || "").trim() || findParty(e.x, cid)) return;
     const pan = effectivePan(e.x), key = pan ? "pan:" + pan : "name:" + norm(e.x.vendorName);
-    const k = out.get(key) || {key, name: e.x.vendorName, pan: pan || "", gstin: e.x.vendorGstin || "", natureId: e.natureId || "", ledgerName: e.partyLedger || "", bills: 0, total: 0};
+    const k = out.get(key) || {key, name: e.x.vendorName, pan: pan || "", gstin: e.x.vendorGstin || "", natureId: e.natureId || "", ledgerName: e.partyLedger || "", tally: supplierInTally(e.x), bills: 0, total: 0};
     k.bills++; k.total = r2(k.total + num(e.x.total));
     out.set(key, k);
   });
@@ -696,6 +773,8 @@ function addPendingSupplier(key, cid){
   if (!k) return null;
   const id = k.pan ? "p-" + k.pan : "p-" + slug(k.name) + "-" + Date.now().toString(36);
   const party = {id, name: k.name, pan: k.pan, gstin: k.gstin, ledgerName: k.ledgerName, natureDefault: k.natureId && k.natureId !== "none" ? k.natureId : "", expenseLedger: "", ldcRate: "", ldcValidTo: "", ytd: {}};
+  // the ledger of a bill still waiting is FinCom's guess until a person confirms it (Suppliers) or approves a bill
+  if (k.ledgerName && typeof partyChoiceSet === "function") partyChoiceSet(party, k.ledgerName, "guessed");
   D(cid).parties[id] = party;
   Store.saveParty(cid, party);
   return party;
@@ -925,9 +1004,8 @@ function skipText(skip){
 }
 // is this client's Tally ledger list loaded (so a ledger can be checked against it)?
 function ledgerListFor(cid){
-  if (typeof hasLedgerList !== "function" || typeof B !== "function") return false;
-  const b = B();
-  return !!(b && b.cid === cid && !b.loading && hasLedgerList());
+  if (typeof hasLedgerList !== "function" || typeof Ledgers !== "object") return false;
+  return Ledgers.cid() === cid && hasLedgerList();
 }
 // Can this client take input credit of the GST on this bill? (review item 4)
 // No: the client has no GSTIN (unregistered), or the bill is billed to another GSTIN. The GST then goes to the cost.
@@ -950,7 +1028,7 @@ function compute(e, cid){
   cid = cid || S.coId;
   const co = CO(cid), x = e.x, party = findParty(x, cid), entries = D(cid).entries;
   const rule = ruleOf(e.natureId);
-  const gstTotal = num(x.cgst) + num(x.sgst) + num(x.igst);
+  const gstTotal = num(x.cgst) + num(x.sgst) + num(x.igst) + num(x.cess);
   const base = r2(num(x.taxable) || Math.max(0, num(x.total) - gstTotal));
   const total = r2(num(x.total) || base + gstTotal);
   const fy = fyOf(x.invoiceDate);
@@ -961,13 +1039,22 @@ function compute(e, cid){
   const why = [], flags = [];
   let applicable = false, tdsBase = 0, catchUp = 0, meter = null;
 
-  let rate = 0, rateNote = "";
+  let rate = 0, rateNote = "", cert = null, normalRate = 0;
+  const inoperative = panOk && panInoperative(party);
   if (rule.basis !== "never"){
-    if (!panOk){ rate = rule.id === "goods" ? 5 : 20; rateNote = "No PAN: higher rate"; }
-    else { rate = indHuf ? num(rule.rateInd) : num(rule.rateOth); rateNote = rule.rateInd !== rule.rateOth ? (indHuf ? "Individual / HUF rate" : "Rate for others") : "Standard rate"; }
-    if (party && party.ldcRate !== undefined && party.ldcRate !== "" && party.ldcValidTo && x.invoiceDate && x.invoiceDate <= party.ldcValidTo){
-      rate = num(party.ldcRate); rateNote = "Lower deduction certificate (valid to " + fmtDate(party.ldcValidTo) + ")";
-      flags.push({lvl:"info", t:"Lower deduction certificate rate of " + rate + "% applied. Check the certificate limit has not been used up."});
+    normalRate = indHuf ? num(rule.rateInd) : num(rule.rateOth);
+    // a non-resident with a tax residency certificate and Form 10F: the treaty rate when it is lower
+    if (rule.nonResident && party && party.trc && party.dtaaRate !== undefined && party.dtaaRate !== "" && num(party.dtaaRate) < normalRate){
+      normalRate = num(party.dtaaRate); rateNote = "Treaty (DTAA) rate, tax residency certificate on file";
+    }
+    if (!panOk || inoperative){ rate = noPanRate(rule, normalRate); rateNote = inoperative ? "PAN inoperative: higher rate" : "No PAN: higher rate"; }
+    else { rate = normalRate; if (!rateNote) rateNote = rule.rateInd !== rule.rateOth ? (indHuf ? "Individual / HUF rate" : "Rate for others") : "Standard rate"; }
+    // a lower deduction certificate (old section 197) for this deductee, payment type and date; it needs a valid PAN
+    cert = panOk && !inoperative ? ldcFor(party, rule.id, x.invoiceDate) : null;
+    if (cert){
+      rate = num(cert.rate);
+      rateNote = "Lower deduction certificate" + (cert.no ? " " + cert.no : "") + (cert.to ? " (valid to " + fmtDate(cert.to) + ")" : "");
+      if (cert.old) flags.push({lvl:"info", t:"Lower deduction certificate rate of " + rate + "% applied. Add the certificate's number and amount under Deductees so its limit is tracked."});
     }
   }
 
@@ -1008,9 +1095,14 @@ function compute(e, cid){
       if (months > 1) flags.push({lvl:"", t:"This invoice covers " + months + " months. The monthly test used " + money0(perMonth) + " a month; confirm the period."});
       break;
     }
+    case "single":
+      // one payment of the limit or more (property: the consideration or the stamp duty value, ₹50 lakh)
+      if (base >= num(rule.single)){ applicable = true; tdsBase = base; why.push("The amount of " + money0(base) + " is " + money0(rule.single) + " or more."); }
+      else why.push("The amount of " + money0(base) + " is below " + money0(rule.single) + ".");
+      break;
     case "excess":
-      meter = {used:ytd.credited, add:base, limit:num(rule.limit), label:"Purchases from this seller this year vs limit"};
-      if (!co.turnover10cr){
+      meter = {used:ytd.credited, add:base, limit:num(rule.limit), label:(rule.turnoverTest ? "Purchases from this seller" : "Paid") + " this year vs limit"};
+      if (rule.turnoverTest && !co.turnover10cr){
         why.push("Not applied: this client's previous-year turnover is set as ₹10 crore or less (Client setup → TDS).");
       } else if (after > num(rule.limit)){
         applicable = true;
@@ -1030,13 +1122,25 @@ function compute(e, cid){
     flags.push({lvl:"", t:"Earlier bills worth " + money0(catchUp) + " this year had no TDS. " + (e.includeCatchUp ? "Their TDS is included in this entry." : "Their TDS is not included; tick the box to add it.")});
     if (e.includeCatchUp) tdsBase = r2(tdsBase + catchUp);
   }
-  const tdsWould = applicable ? Math.round(tdsBase * rate / 100) : 0;
+  // a certificate covers only its amount: what goes above it is at the normal rate
+  let certBase = 0;
+  if (cert && applicable){
+    const lim = num(cert.limit), used = lim ? ldcUsed(party, cert, cid, e) : 0;
+    certBase = lim ? r2(Math.max(0, Math.min(tdsBase, lim - used))) : tdsBase;
+    if (lim && certBase < tdsBase)
+      flags.push({lvl:"hi", t:"The lower deduction certificate" + (cert.no ? " " + cert.no : "") + " covers " + money0(lim) + "; " + money0(used) + " is used. " + money0(r2(tdsBase - certBase)) + " of this bill is above it, at the normal rate of " + normalRate + "%."});
+    else if (lim) flags.push({lvl:"info", t:"Certificate" + (cert.no ? " " + cert.no : "") + ": " + money0(r2(used + certBase)) + " of " + money0(lim) + " used after this bill."});
+  }
+  const tdsWould = !applicable ? 0 : cert ? Math.round(certBase * num(cert.rate) / 100 + r2(tdsBase - certBase) * normalRate / 100) : Math.round(tdsBase * rate / 100);
+  if (applicable && rule.payer) flags.push({lvl:"info", t:"This applies when the payer is " + rule.payer + "."});
+  if (applicable && rule.form && rule.form !== "26Q") flags.push({lvl:"info", t:"This deduction is reported in Form " + rule.form + ", not 26Q."});
   const skip = tdsWould > 0 ? tdsSkipOf(e, co, party) : null;
   const tds = skip ? 0 : tdsWould;
   if (skip) flags.push({lvl:"info", t:"TDS of " + money(tdsWould) + " applies but is not booked in this entry: " + skipText(skip) + ". The party is credited with the full amount."});
 
   try { itemChecks(e.x).forEach(c => flags.push({lvl: c.lvl === "warn" ? "" : "info", t: c.text})); } catch (err){}
   if (rule.basis !== "never" && !panOk) flags.push({lvl:"hi", t:"No valid PAN or GSTIN found, so the higher rate of " + rate + "% is used. Get the deductee's PAN."});
+  if (rule.basis !== "never" && inoperative) flags.push({lvl:"hi", t:"The deductee's PAN is marked inoperative (not linked with Aadhaar), so the higher rate of " + rate + "% is used. Clear the mark under Deductees once the PAN is operative again."});
   const g = String(x.vendorGstin || "").toUpperCase(), pp = String(x.vendorPan || "").toUpperCase();
   if (g && !gstinValid(g)) flags.push({lvl:"hi", t:"The supplier GSTIN " + g + " fails its check digit, so at least one character is wrong. Compare it with the bill."});
   if (x.buyerGstin && !gstinValid(x.buyerGstin)) flags.push({lvl:"", t:"The billed-to GSTIN " + x.buyerGstin + " fails its check digit. Compare it with the bill."});
@@ -1071,8 +1175,10 @@ function compute(e, cid){
     if (others) flags.push({lvl:"info", t:others + " other draft" + (others > 1 ? "s" : "") + " for this deductee are waiting. Limits count only approved invoices, so approve in date order."});
   }
   if (!party && rule.basis !== "never" && e.status === "draft") flags.push({lvl:"info", t:"New deductee for this client. If bills were credited earlier this year outside this desk, enter them in Deductees so the limits are right."});
-  const tdsLedger = co.tdsLedgers[rule.id] || "";
-  if (tds > 0 && !tdsLedger) flags.push({lvl:"hi", t:"No TDS ledger is set for " + rule.label + ". Add it in Client setup → TDS."});
+  // the TDS ledger by section (review of 02-Oct-2026): never one of another section
+  const tdsPick = rule.basis === "never" ? {ledger: ""} : tdsLedgerFor(e, co, cid, rule);
+  const tdsLedger = tds > 0 && tdsPick.bad ? "" : tdsPick.ledger || "";
+  if (tds > 0 && !tdsLedger) flags.push({lvl:"hi", t:(tdsPick.bad ? tdsPick.bad + ". " : "") + (tdsPick.ask || "Choose the TDS ledger") + " (on the bill, or in Client setup \u2192 TDS)."});
 
   // GST: reverse charge and blocked credit (your choices; suggestions never block approval)
   const gd = gstDecision(e, co);
@@ -1088,25 +1194,23 @@ function compute(e, cid){
   const lines = [];
   const blockedGst = blocked ? r2(gstTotal + (rcmTax ? rcmTax.tax : 0)) : 0;
   lines.push({side:"Dr", ledger:e.expenseLedger || "", amt:r2(base + blockedGst), role:"expense"});
-  if (!blocked){
-    if (num(x.cgst)) lines.push({side:"Dr", ledger:co.gst.cgst, amt:r2(num(x.cgst)), role:"gst"});
-    if (num(x.sgst)) lines.push({side:"Dr", ledger:co.gst.sgst, amt:r2(num(x.sgst)), role:"gst"});
-    if (num(x.igst)) lines.push({side:"Dr", ledger:co.gst.igst, amt:r2(num(x.igst)), role:"gst"});
-  }
+  // each tax to the ledger of its own head, picked for this bill (gstLedgerFor): with the pick and why on the line
+  const taxLine = (side, k, amt, role, rate) => {
+    const head = k.toUpperCase(), p = gstLedgerFor(e, co, cid, head, role, rate);
+    // a ledger taken from Client setup carries the key of that choice: posting needs it confirmed (src/js/60)
+    const sk = role === "gst" ? k : (RCM_KEYS[role] || {})[head], ck = sk && /^Client setup/.test(p.why || "") ? "gst:" + sk : "";
+    lines.push({side, ledger: p.bad ? "" : p.ledger || "", amt, role, key: role + ":" + k, head, why: p.why || "", ask: p.ask || "", bad: p.bad || "", typed: p.bad ? p.ledger : "", ck});
+  };
+  const rateOf = v => base > 0 ? Ledgers.snapRate(num(v) / base * 100) : null;
+  if (!blocked) ["cgst", "sgst", "igst", "cess"].forEach(k => { if (num(x[k])) taxLine("Dr", k, r2(num(x[k])), "gst", rateOf(x[k])); });
   if (rcmTax){
-    if (!blocked){
-      if (rcmTax.cgst) lines.push({side:"Dr", ledger:rcmLedger(co, "rcmCgstIn"), amt:rcmTax.cgst, role:"rcm-in"});
-      if (rcmTax.sgst) lines.push({side:"Dr", ledger:rcmLedger(co, "rcmSgstIn"), amt:rcmTax.sgst, role:"rcm-in"});
-      if (rcmTax.igst) lines.push({side:"Dr", ledger:rcmLedger(co, "rcmIgstIn"), amt:rcmTax.igst, role:"rcm-in"});
-    }
-    if (rcmTax.cgst) lines.push({side:"Cr", ledger:rcmLedger(co, "rcmCgstOut"), amt:rcmTax.cgst, role:"rcm-out"});
-    if (rcmTax.sgst) lines.push({side:"Cr", ledger:rcmLedger(co, "rcmSgstOut"), amt:rcmTax.sgst, role:"rcm-out"});
-    if (rcmTax.igst) lines.push({side:"Cr", ledger:rcmLedger(co, "rcmIgstOut"), amt:rcmTax.igst, role:"rcm-out"});
+    if (!blocked) ["cgst", "sgst", "igst"].forEach(k => { if (rcmTax[k]) taxLine("Dr", k, rcmTax[k], "rcm-in", null); });
+    ["cgst", "sgst", "igst"].forEach(k => { if (rcmTax[k]) taxLine("Cr", k, rcmTax[k], "rcm-out", null); });
   }
   const ro = r2(total - (base + gstTotal));
   if (Math.abs(ro) >= 0.01) lines.push({side: ro > 0 ? "Dr" : "Cr", ledger:co.roundOff, amt:Math.abs(ro), role:"roundoff"});
   lines.push({side:"Cr", ledger:e.partyLedger || "", amt:r2(total - tds), role:"party"});
-  if (tds > 0) lines.push({side:"Cr", ledger:tdsLedger, amt:tds, role:"tds"});
+  if (tds > 0) lines.push({side:"Cr", ledger:tdsLedger, amt:tds, role:"tds", key:"tds", why: tdsPick.why || "", ask: tdsPick.ask || "", bad: tdsPick.bad || "", typed: tdsPick.bad ? tdsPick.ledger : "", ck: /^Client setup/.test(tdsPick.why || "") ? "tds:" + rule.id : ""});
   const dr = r2(lines.filter(l => l.side === "Dr").reduce((a, l) => a + l.amt, 0));
   const cr = r2(lines.filter(l => l.side === "Cr").reduce((a, l) => a + l.amt, 0));
 
@@ -1125,14 +1229,26 @@ function compute(e, cid){
   // every line of the Tally entry needs a Tally ledger (review item 2): a blank one always stops approval;
   // with the client's ledger list read from Tally, a ledger Tally does not have stops it too
   const ROLE_NAME = {gst:"GST", "rcm-in":"reverse charge input", "rcm-out":"reverse charge payable", roundoff:"round off", tds:"TDS"};
-  lines.forEach(l => { if (!l.ledger && ROLE_NAME[l.role]){ const w = "the " + ROLE_NAME[l.role] + " ledger (Client setup)"; if (!missing.includes(w) && !(l.role === "tds" && missing.includes("TDS ledger"))) missing.push(w); } });
+  lines.forEach(l => {
+    if (l.bad && !missing.includes(l.bad)) missing.push(l.bad);
+    if (!l.ledger && ROLE_NAME[l.role]){
+      const w = l.head ? "the " + l.head + (l.role === "rcm-in" ? " reverse charge input" : l.role === "rcm-out" ? " reverse charge payable" : "") + " ledger" : l.role === "tds" ? "TDS ledger" : "the " + ROLE_NAME[l.role] + " ledger (Client setup)";
+      if (!missing.includes(w) && !(l.role === "tds" && missing.includes("TDS ledger"))) missing.push(w);
+    }
+  });
+  // a purchase bill never goes to an income ledger (JITIN & CO. bill 6009 went to "Professional Fee", a Sales Accounts ledger)
+  const expL = e.expenseLedger && (ledgerListFor(cid) ? exactLedger(e.expenseLedger) : e.expenseLedger);
+  if (expL && ledgerListFor(cid) && Ledgers.cls(cid, expL) === "income"){
+    const w = "an expense ledger: \u201c" + expL + "\u201d is under " + (Ledgers.chain(cid, expL).slice(-1)[0] || "an income group") + ", an income ledger, not for a purchase bill";
+    missing.push(w); flags.push({lvl:"hi", t:"\u201c" + expL + "\u201d is an income ledger (" + (Ledgers.chain(cid, expL).slice(-1)[0] || "income") + "). A purchase bill goes to an expense, purchase or fixed-asset ledger."});
+  }
   const list = ledgerListFor(cid);
   if (list){
     const notIn = Array.from(new Set(lines.filter(l => l.ledger && !exactLedger(l.ledger)).map(l => l.ledger)));
     notIn.forEach(n => missing.push("\u201c" + n + "\u201d is not a ledger in Tally: pick one or create it"));
   } else if (e.status === "draft") flags.push({lvl:"", t:"The ledgers are not checked against Tally: this client's ledger list has not been read from Tally yet. Read it (Tally ledgers) so each line can be matched before approval."});
 
-  return {rule, party, base, total, gstTotal, fy, ytd, pan, panOk, indHuf, applicable, rate, rateNote, tdsBase, catchUp, tds, tdsWould, skip, anyway, gd, rcmTax, blocked, itc, why, flags, meter, lines, dr, cr, missing, tdsLedger, dup};
+  return {rule, party, base, total, gstTotal, fy, ytd, pan, panOk, indHuf, inoperative, cert, certBase, normalRate, applicable, rate, rateNote, tdsBase, catchUp, tds, tdsWould, skip, anyway, gd, rcmTax, blocked, itc, why, flags, meter, lines, dr, cr, missing, tdsLedger, dup};
 }
 
 /* ------------------------------------------------------------------ */
@@ -2401,8 +2517,9 @@ function checksPass(j){
   const tot = num(j.totalAmount), tx = num(j.taxableValue), gst = num(j.cgst) + num(j.sgst) + num(j.igst);
   return !!(j.vendorName && j.invoiceDate && tot > 0 && tx > 0 && Math.abs(tx + gst - tot) <= 1.5);
 }
-async function claudeRead(prompt, images, careful){
-  if (S.engine === "api") return apiJson(prompt, images, careful);
+// fileName: the bill's name, sent to the gateway so a failure in its log can be traced to the bill (never its contents)
+async function claudeRead(prompt, images, careful, fileName){
+  if (S.engine === "api") return apiJson(prompt, images, careful, fileName);
   if (S.engine !== "claude") throw {code:"no_engine"};
   if (S.readBlocked) throw {code:S.readBlocked};
   const opts = {modelTier: careful ? "complex" : "default"};
@@ -2532,13 +2649,14 @@ async function extract(file, careful, page, cidHint, force){
         const askClaude = S.askClaudeNewSupplier && S.engine && !fp.known && (kind === "pdf_text" || conf >= 75);
         if (!askClaude){
           // accepted free: for a new supplier the name and payment type are for you to confirm
-          const note = fp.known ? "" : "New supplier: check the name and confirm the payment type before approving.";
+          const inTally = !fp.known && supplierInTally(fp.j);
+          const note = fp.known ? "" : inTally ? "In Tally as " + inTally + ", not yet in FinCom's list: confirm the payment type before approving." : "New supplier: check the name and confirm the payment type before approving.";
           if (!fp.known) step("Supplier name and payment type", true, "left for you to confirm (no Claude call)");
           return {j: fp.j, kind, preview, method: source, checks: fp.checks, trace, note, confirmType: !fp.known};
         }
         // figures are checked; ask Claude (text only) just for the supplier's name and the payment type
         try {
-          const jt = await claudeRead(buildPrompt(ftext, file.name, 0, "pdf_text"), [], false);
+          const jt = await claudeRead(buildPrompt(ftext, file.name, 0, "pdf_text"), [], false, file.name);
           const m = Object.assign({}, fp.j, {
             vendorName: jt.vendorName || fp.j.vendorName, vendorPan: jt.vendorPan || null, buyerName: jt.buyerName || null,
             description: jt.description || fp.j.description, natureId: jt.natureId || fp.j.natureId,
@@ -2562,7 +2680,7 @@ async function extract(file, careful, page, cidHint, force){
 
   // 2. text PDFs: Claude with the text only
   if (kind === "pdf_text" && !careful){
-    const j = await claudeRead(buildPrompt(text, file.name, 0, "pdf_text"), [], false);
+    const j = await claudeRead(buildPrompt(text, file.name, 0, "pdf_text"), [], false, file.name);
     const ok = checksPass(j);
     step("Claude (text only)", ok || !S.imgMax, ok ? "read the whole bill from the PDF's text" : "its figures did not add up; trying the page image");
     if (ok || !S.imgMax) return {j, kind, preview, method:"claude-text", freeWhy, trace};
@@ -2578,7 +2696,7 @@ async function extract(file, careful, page, cidHint, force){
     images = await buildImageSet(canvases, careful);
     if (!images.length) throw {code:"unreadable", trace};
   }
-  const j = await claudeRead(buildPrompt(text, file.name, images.length, kind), images, careful);
+  const j = await claudeRead(buildPrompt(text, file.name, images.length, kind), images, careful, file.name);
   step(careful ? "Claude (careful re-read)" : "Claude (images)", true, "read from " + images.length + " image" + (images.length === 1 ? "" : "s"));
   return {j, kind, preview, method: careful ? "claude-careful" : "claude-images", freeWhy, trace};
 }
@@ -2627,7 +2745,7 @@ function parseJsonReply(text){
   if (a >= 0 && b > a){ try { return JSON.parse(t.slice(a, b + 1)); } catch (e){} }
   throw {code:"invalid_json"};
 }
-async function apiJson(prompt, images, careful){
+async function apiJson(prompt, images, careful, fileName){
   const cfg = apiSettings();
   const content = [];
   for (const b of images || []) content.push({type:"image", source:{type:"base64", media_type:"image/jpeg", data: await blobToBase64(b)}});
@@ -2636,11 +2754,15 @@ async function apiJson(prompt, images, careful){
   if (Cloud.on() && S.account && !cfg.key){
     let j;
     try {
-      j = await Cloud.fn("gateway", {what: "claude", qty: 1, ref: "read",
+      j = await Cloud.fn("gateway", {what: "claude", qty: 1, ref: "read", file: String(fileName || "").slice(0, 200),
         payload: {model: careful ? (cfg.carefulModel || "claude-sonnet-4-6") : (cfg.model || "claude-sonnet-4-6"), max_tokens: 16000, messages: [{role: "user", content}]}});
     } catch (e){
       if (e.reason === "low_balance"){ S.creditStop = {at: Date.now(), balance: e.balance, code: "claude"}; render(); }
-      throw {code: e.reason === "low_balance" ? "no_credit" : "api_error", message: e.message};
+      // one kind for every failure (the gateway's, or "blocked" when the browser stopped the call): errCopy and
+      // readFail say it in plain words; code stays for the older callers (other kinds: api_error)
+      const kind = e.reason === "low_balance" ? "no_credit" : (e.kind || "other");
+      throw {code: READ_KINDS.includes(kind) ? kind : "api_error", kind, message: e.message, status: e.status, retryAfter: e.retryAfter,
+        model: e.model || "", category: e.category || "", serverError: e.serverError || e.message || ""};
     }
     const text = ((j.data && j.data.content) || []).filter(x => x.type === "text").map(x => x.text).join("\n");
     return parseJsonReply(text);
@@ -2682,8 +2804,40 @@ function pickEngine(){
 function claudeReady(){ return !!S.engine && !S.readBlocked; }
 function googleReady(){ return !!(googleSettings().key || (Cloud.on() && S.account)); }
 
-function errCopy(code){
+function errCopy(code, err){
+  if (err && READ_KINDS.includes(code)) return readReason(err).replace(/^./, (c) => c.toUpperCase()) + " (" + code + ")";
   return errText(code) + (code ? " (" + code + ")" : "");
+}
+// Bill reading through FinCom's reading service: one kind for each way it fails (review of 02-Oct-2026: a bill on
+// staging only said "The Claude API refused the request"). The gateway sets the kind (server/.../gateway/classify.ts);
+// "blocked" is the browser stopping the call.
+const READ_KINDS = ["no_credit", "rate_limit", "overloaded", "too_large", "pdf_password", "unsupported_type", "timed_out", "declined", "bad_key", "bad_model", "not_reached", "blocked", "other"];
+const READ_RETRY_KINDS = ["rate_limit", "overloaded", "timed_out"];
+// the reason in plain words, as the end of "<file>: not read, ..."
+function readReason(err){
+  const k = (err && err.kind) || "other";
+  return ({
+    no_credit: "out of credit on the reading service. Ask the administrator to add credit.",
+    rate_limit: "too many bills were sent at once (the reading service's rate limit).",
+    overloaded: "the reading service is busy (overloaded).",
+    too_large: "the file is too large for the reading service (the limit is 25 MB a file, about 5 MB a page). Upload only the invoice pages, or a smaller scan.",
+    pdf_password: "the PDF is password-protected. Remove the password and upload it again.",
+    unsupported_type: "this type of file cannot be read. Use PDF, JPG or PNG.",
+    timed_out: "the reading service took too long to answer (timed out).",
+    declined: "the model declined to read this file" + (err && err.category ? " (" + err.category + ")" : "") + ". Type it in.",
+    bad_key: "the reading service's key is not working. Ask the administrator.",
+    bad_model: "the model name \u201c" + ((err && err.model) || "") + "\u201d is not accepted by the reading service. Ask the administrator.",
+    not_reached: "FinCom's server could not reach the reading service. Press Retry in a few minutes.",
+    blocked: "your browser could not reach FinCom's reading service (blocked or offline). Check the connection, then press Retry."
+  })[k] || "the reading service refused the request" + (err && err.serverError ? ": " + String(err.serverError).slice(0, 200) : "") + ".";
+}
+// "<file>: not read, <reason>"; again: true while the one automatic retry is waiting, "failed" when it also failed
+function readFail(name, err, again){
+  const k = err && err.kind;
+  if (!READ_KINDS.includes(k)) return name + ": not read, " + errCopy(err && err.code).replace(/^./, (c) => c.toLowerCase());
+  const tail = again === true ? " Trying again by itself." : again === "failed" ? " Tried again by itself, still not read: press Retry." : "";
+  const r = readReason(err);
+  return name + ": not read, " + (again ? r.replace(/ Check the connection, then press Retry\.| Press Retry in a few minutes\./, "") : r) + tail;
 }
 function errText(code){
   return ({
@@ -2702,10 +2856,20 @@ function errText(code){
     free_failed:"Free reading could not read this bill, and Claude reading is not set up here. Use Type it in, or set up Claude reading in Settings.",
     not_ready:"Still connecting to Claude. Wait a few seconds and press Retry.",
     no_key:"Add your Claude API key in Settings, Reading bills.",
-    bad_key:"The Claude API key was rejected. Check it in Settings, Reading bills.",
+    bad_key:"The reading service's key is not working. Ask the administrator.",
     key_forbidden:"This API key is not allowed to use that model or feature. Check your Claude Console account.",
-    bad_model:"The model name in Settings was not found. Use claude-sonnet-5 or claude-opus-5.",
-    api_error:"The Claude API refused the request.",
+    bad_model:"The model name is not accepted by the reading service. Ask the administrator.",
+    api_error:"The reading service refused the request.",
+    rate_limit:"Too many bills at once (the reading service's rate limit). Wait a minute, then press Retry.",
+    overloaded:"The reading service is busy (overloaded). Press Retry in a minute.",
+    too_large:"The file is too large for the reading service (the limit is 25 MB a file). Upload only the invoice pages.",
+    pdf_password:"The PDF is password-protected. Remove the password and upload it again.",
+    unsupported_type:"This type of file cannot be read. Use PDF, JPG or PNG.",
+    timed_out:"The reading service took too long to answer (timed out). Press Retry.",
+    declined:"The model declined to read this file. Type it in.",
+    not_reached:"FinCom's server could not reach the reading service. Press Retry in a few minutes.",
+    blocked:"Your browser could not reach FinCom's reading service (blocked or offline).",
+    other:"The reading service refused the request.",
     api_blocked:"This copy of the app cannot reach the Claude API. Use the downloaded file, opened in a browser or from your own website.",
     pdf_broken:"This PDF could not be opened. It may be password-protected or damaged.",
     no_sample:"Automatic reading is not available in this view. Use Type it in.",
@@ -2784,69 +2948,268 @@ function applyExtraction(e, j, cid){
 /* ---------- how this supplier has been booked before, in Tally ---------- */
 const NOT_EXPENSE = /(duties|taxes|bank|cash|sundry\s*creditors|sundry\s*debtors|current\s*liabilities|capital)/i;
 function isTaxLike(name){ return /\b(c|s|i|ut)gst\b|\bcess\b|\btds\b|\btcs\b|round\s*off|input\s*(c|s|i)gst/i.test(name || ""); }
-// the supplier's bills of the last twelve months and what the other side was, from the books FinCom already has (the
-// bridge's copy, the cloud, or the day book files). Build 190: never a live read of Tally while bills are processed (it
-// read each supplier's ledger from Tally, one after another, and made processing slow whenever Tally was connected)
+// the supplier's bills (two years back) and what the other side was, from the books FinCom already has: the books here,
+// or the cloud copy (read once in the background). Build 190: never a live read of Tally while bills are processed (it
+// read each supplier's ledger from Tally, one after another, and made processing slow whenever Tally was connected).
+// Only expense, purchase and fixed-asset ledgers count (review of 02-Oct-2026: never a Sales Accounts or income ledger).
 function partyExpensesFromTally(partyLedger, cid){
-  const b = S.books;
-  if (!partyLedger || !b || b.cid !== (cid || S.coId) || !(b.vouchers || []).length) return null;
-  const key = normName(partyLedger), t = new Date(Date.now() - 365 * 86400000);
-  const since = t.getFullYear() + String(t.getMonth() + 1).padStart(2, "0") + String(t.getDate()).padStart(2, "0");
-  const count = {}; let bills = 0;
-  b.vouchers.forEach(v => {
-    if (v.cancel || v.opt || String(v.date) < since) return;
+  cid = cid || S.coId;
+  const vs = partyLedger ? Ledgers.vouchers(cid, partyLedger) : null;
+  if (!vs) return null;
+  const key = normName(partyLedger), count = {}; let bills = 0;
+  vs.forEach(v => {
     const mine = (v.ent || []).filter(e => normName(e.l) === key);
     if (!mine.length || !(mine.reduce((x, e) => x + num(e.a), 0) > 0)) return;       // the supplier credited: a bill (Tally keeps a credit positive)
     bills++;
     const seen = new Set();
     (v.ent || []).forEach(e => {
       if (!(num(e.a) < 0) || normName(e.l) === key || isTaxLike(e.l) || seen.has(e.l)) return;
-      const info = ledgerInfo(e.l);
-      if (info && NOT_EXPENSE.test(info.group || "")) return;
+      const c = Ledgers.cls(cid, e.l);
+      if (c ? !["expense", "asset"].includes(c) : NOT_EXPENSE.test(((ledgerInfo(e.l) || {}).group) || "")) return;
       seen.add(e.l);
-      const c = count[e.l] || (count[e.l] = {ledger: e.l, n: 0, amount: 0});
-      c.n++; c.amount = r2(c.amount + Math.abs(num(e.a)));
+      const x = count[e.l] || (count[e.l] = {ledger: e.l, n: 0, amount: 0, amts: [], narr: []});
+      x.n++; x.amount = r2(x.amount + Math.abs(num(e.a))); x.amts.push(Math.abs(num(e.a))); if (v.narr && x.narr.length < 12) x.narr.push(v.narr);
     });
   });
-  const top = Object.values(count).sort((x, y) => y.n - x.n || y.amount - x.amount).slice(0, 4);
-  return {at: new Date().toISOString(), bills, top};
+  const all = Object.values(count).sort((x, y) => y.n - x.n || y.amount - x.amount);
+  return {at: new Date().toISOString(), bills, all, top: all.slice(0, 4).map(t => ({ledger: t.ledger, n: t.n, amount: t.amount}))};
 }
-// fill the expense ledger on drafts from what Tally shows, unless a person already chose one
-async function applyPartyHistory(entries, cid){
-  if (!S.books || S.books.cid !== cid || !(S.books.vouchers || []).length) return 0;       // the client's books are not open here
-  const byLedger = new Map();
-  entries.forEach(e => {
-    if (!e || e.status !== "draft" || !e.partyLedger || !exactLedger(e.partyLedger)) return;
-    (byLedger.get(e.partyLedger) || byLedger.set(e.partyLedger, []).get(e.partyLedger)).push(e);
-  });
-  let changed = 0;
-  for (const [led, list] of byLedger){
-    const h = partyExpensesFromTally(exactLedger(led), cid);
-    if (!h || !h.top.length) continue;
-    const best = h.top.find(t => exactLedger(t.ledger));
-    list.forEach(e => {
-      e.partyHist = {bills: h.bills, top: h.top};
-      if (!best || e.expenseUserSet) return;
-      const party = findParty(e.x, cid);
-      if (party && party.expenseLedger && party.expenseChosenByUser) return;      // the person's own choice for this supplier stands
-      if (e.expenseLedger !== exactLedger(best.ledger)){
-        e.expenseLedger = exactLedger(best.ledger);
-        e.expenseFrom = "Used for this supplier in Tally " + best.n + " of " + h.bills + " time" + (h.bills === 1 ? "" : "s") + " in the last year";
-        changed++;
-      }
-      Store.saveEntry(cid, e);
-    });
+// words of a bill or of a ledger that say what was bought (not dates, not the usual bill words)
+const EXP_STOP = new Set("bill bills invoice amount charge charges being month months year from with this that their them other total payment paid service services supply supplied against towards dated date period january february march april june july august september october november december sept expenses expense exps account accounts limited private advisory".split(" "));
+function textWords(s){ return Array.from(new Set(String(s || "").toLowerCase().replace(/[^a-z]+/g, " ").split(" ").filter(w => w.length >= 4 && !EXP_STOP.has(w)))); }
+// what a bill's words or HSN/SAC say, and the ledgers that fit
+const EXP_HINTS = [
+  [/electric|\belec\b|power|energy/, ["9969", "2716"], /electric|power/i],
+  [/\brent|lease/, ["9972"], /\brent/i],
+  [/repair|maint|laptop|computer|printer|cable|mouse|keyboard|charger|toner/, ["9987", "8471", "8443"], /repair|maint/i],
+  [/legal|profession|consult|audit|advocate/, ["9982"], /legal|profession|consult|audit/i],
+  [/internet|broadband|telephone|mobile|phone/, ["9984"], /internet|telephone|phone|mobile|communicat/i],
+  [/print|stationer/, ["4802", "4820", "4911", "9989"], /print|station/i],
+  [/travel|ticket|hotel|flight|taxi/, ["9964", "9963", "9966"], /travel|convey|tour/i],
+  [/advertis|marketing|promotion/, ["9983"], /advertis|marketing|promotion/i],
+  [/parking/, [], /parking/i],
+  [/courier|postage/, ["9968"], /courier|postage/i],
+  [/freight|transport|cartage/, ["9965", "9967"], /freight|transport|cartage/i],
+  [/insurance/, ["9971"], /insurance/i]
+];
+// the expense ledger for a bill: how this supplier was booked before in Tally (the one whose words or amounts fit
+// this bill when there are several: "electricity" or "rent"), then the bill's words and HSN/SAC, then the client's
+// default for the payment type. Only expense, purchase and fixed-asset ledgers. {name, how} or null
+function expenseFor(e, cid, partyLed, party){
+  const ok = n => { const ex = n && exactLedger(n); if (!ex || isTaxLike(ex)) return ""; const c = Ledgers.cls(cid, ex); return !c || c === "expense" || c === "asset" ? ex : ""; };
+  const x = e.x || {}, own = new Set(textWords([x.vendorName, partyLed].join(" ")));
+  const words = textWords([x.description].concat((x.items || []).map(i => i.desc), [x.invoiceNo, String(e.fileName || "").replace(/\.\w+$/, "")]).join(" ")).filter(w => !own.has(w));
+  const hit = (text) => { const t = textWords(text); return words.find(w => t.some(u => u.startsWith(w) || w.startsWith(u))) || ""; };
+  const gst = num(x.cgst) + num(x.sgst) + num(x.igst), base = r2(num(x.taxable) || Math.max(0, num(x.total) - gst));
+  const h = partyLed ? partyExpensesFromTally(partyLed, cid) : null;
+  if (h && h.all.length){
+    const sc = h.all.map(t => {
+      const l = ok(t.ledger); if (!l) return null;
+      const wn = hit(t.ledger), wr = wn ? "" : hit(t.narr.join(" ")), amt = base > 0 && t.amts.some(a => Math.abs(a - base) <= Math.max(1, base * 0.02));
+      return {l, t, w: wn || wr, s: t.n / Math.max(1, h.bills) + (wn ? 3 : wr ? 1.5 : 0) + (amt ? 1 : 0)};
+    }).filter(Boolean).sort((a, b) => b.s - a.s || b.t.n - a.t.n);
+    if (sc.length){ const b = sc[0]; return {name: b.l, how: "Booked to " + b.l + " for this supplier in Tally (" + b.t.n + " of " + h.bills + " bill" + (h.bills === 1 ? "" : "s") + ")" + (b.w ? "; the bill says “" + b.w + "”" : "")}; }
   }
+  if (party && party.expenseChosenByUser && ok(party.expenseLedger)) return {name: ok(party.expenseLedger), how: "Your choice for this supplier"};
+  const u = Ledgers.usage(cid) || {}, names = Ledgers.list(cid).map(l => l.name);
+  const best = arr => arr.sort((a, b) => ((u[b] || {}).n || 0) - ((u[a] || {}).n || 0) || a.length - b.length)[0];
+  const codes = billCodes(e), text = words.join(" ");
+  for (const [wre, sacs, lre] of EXP_HINTS){
+    const w = (text.match(wre) || [])[0], c = codes.find(k => sacs.some(p => k.startsWith(p)));
+    if (!w && !c) continue;
+    const cands = names.filter(n => lre.test(n) && ok(n) && Ledgers.cls(cid, n));
+    if (cands.length) return {name: best(cands), how: c ? "From HSN/SAC " + c + " on the bill" : "From the bill's words: “" + w + "”"};
+  }
+  for (const w of words.filter(w => w.length >= 5)){
+    const cands = names.filter(n => ok(n) && Ledgers.cls(cid, n) && textWords(n).some(t => t.startsWith(w) || (t.length >= 5 && w.startsWith(t))));
+    if (cands.length && cands.length <= 3) return {name: best(cands), how: "From the bill's words: “" + w + "”"};
+  }
+  const co = CO(cid), def = ok((co.expenseLedgers || {})[e.natureId]);
+  if (def) return {name: def, how: "Client setup: the default for " + ruleOf(e.natureId).label};
+  const pe = party && ok(party.expenseLedger);
+  if (pe) return {name: pe, how: "Used on this supplier's last approved bill"};
+  return null;
+}
+// party and expense ledgers on a draft, filled by themselves from Tally's ledgers and books (not over a person's
+// choice); run again when the ledger list, the books or the bill's supplier change. true when something changed
+const AUTO_SEEN = new WeakMap();
+function billAutoLedgers(e, cid){
+  cid = cid || S.coId;
+  if (!e || e.status !== "draft" || !e.x || typeof Ledgers !== "object" || Ledgers.cid() !== cid || !hasLedgerList()) return false;
+  const bk = S.books && S.books.cid === cid ? (S.books.vouchers || []).length + ":" + Object.keys(S.books.ledInfo || {}).length + ":" + Object.keys(S.books.gstins || {}).length : 0;
+  const stamp = () => [Ledgers.ver, bk, e.x.vendorGstin, e.x.vendorPan, e.x.vendorName, e.x.description, e.x.invoiceNo, e.natureId, e.partyLedger, e.expenseLedger, !!e.partyUserSet, !!e.expenseUserSet].join("|");
+  if (AUTO_SEEN.get(e) === stamp()) return false;
+  const party = findParty(e.x, cid), co = CO(cid);
+  let changed = false;
+  const pex = e.partyLedger && exactLedger(e.partyLedger), pcls = pex ? Ledgers.cls(cid, pex) : "";
+  if (!e.partyUserSet && (!e.partyLedger || e.partyAuto || !pex || ["income", "expense", "tax", "bank", "asset"].includes(pcls))){
+    const t = tallyPartyFor(e.x, cid, party), to = t ? t.name : "";
+    if (to !== (e.partyLedger || "") || (t ? t.how : "") !== (e.partyFrom || "") || ((t && t.note) || "") !== (e.partyNote || "")){ e.partyLedger = to; e.partyFrom = t ? t.how : ""; e.partyNote = (t && t.note) || ""; changed = true; }
+    if (!e.partyAuto){ e.partyAuto = true; changed = true; }
+    if (e.partyFromTally){ delete e.partyFromTally; changed = true; }
+  }
+  const pl = e.partyLedger && exactLedger(e.partyLedger);
+  const h = pl ? partyExpensesFromTally(pl, cid) : null;
+  if (h && h.top.length && JSON.stringify((e.partyHist || {}).top || []) !== JSON.stringify(h.top)){ e.partyHist = {bills: h.bills, top: h.top}; changed = true; }
+  const eex = e.expenseLedger && exactLedger(e.expenseLedger), ecls = eex ? Ledgers.cls(cid, eex) : "";
+  const oldAuto = e.expenseAuto || e.expenseFrom || !eex || ecls === "income" || (eex && (eex === exactLedger((co.expenseLedgers || {})[e.natureId] || "") || (party && eex === exactLedger(party.expenseLedger || ""))));
+  if (!e.expenseUserSet && (!e.expenseLedger || oldAuto)){
+    const p = expenseFor(e, cid, pl, party);
+    if (p && (p.name !== e.expenseLedger || p.how !== e.expenseFrom)){ e.expenseLedger = p.name; e.expenseFrom = p.how; e.expenseAuto = true; changed = true; }
+    else if (!p && eex && ecls === "income"){ e.expenseLedger = ""; e.expenseFrom = ""; changed = true; }
+  }
+  AUTO_SEEN.set(e, stamp());
+  if (changed && D(cid).entries[e.id]) Store.saveEntry(cid, e);
+  return changed;
+}
+// every draft of a client, when its ledger list or books have come in
+function billAutoAll(cid){
+  cid = cid || S.coId;
+  if (!S.data[cid] || !D(cid).loaded) return 0;
+  let n = 0;
+  Object.values(D(cid).entries || {}).forEach(e => { if (e.status === "draft" && billAutoLedgers(e, cid)) n++; });
+  if (n) refreshStats(cid);
+  return n;
+}
+// kept for the callers of before: fills the ledgers of drafts from what Tally shows, unless a person already chose
+async function applyPartyHistory(entries, cid){
+  let changed = 0;
+  entries.forEach(e => { if (billAutoLedgers(e, cid)) changed++; });
   return changed;
 }
 function fillLedgers(e, party, cid){
-  if (!e.partyLedger){
-    const t = tallyPartyFor(e.x, cid);
-    e.partyLedger = (party && party.ledgerName) || (t && t.name) || e.x.vendorName;
-    if (t && !(party && party.ledgerName)) e.partyFromTally = t.how;
+  if (typeof Ledgers === "object" && Ledgers.cid() === cid && hasLedgerList()){ billAutoLedgers(e, cid); return; }
+  // no ledger list of this client here yet: the supplier's ledger as known, else its name (matched when the list comes)
+  if (!e.partyLedger){ e.partyLedger = (party && party.ledgerName) || e.x.vendorName; e.partyAuto = true; }
+  if (!e.expenseLedger){ e.expenseLedger = (party && party.expenseChosenByUser && party.expenseLedger) || CO(cid).expenseLedgers[e.natureId] || ""; e.expenseAuto = true; }
+}
+
+/* ---------- the GST and TDS ledgers of each bill (review of 02-Oct-2026) ---------- */
+// Not the three fixed ledgers of Client setup: for each tax on the bill, the input ledger of that tax head (the GST
+// ledger check's confirmed map, Tally's duty head, or the name when neither says) that this supplier's earlier bills
+// used in Tally, else the one used most often for that head and rate. A ledger of another head is never taken. Client
+// setup is an override only when a person typed it there (co.gstPin), and a fallback otherwise.
+const RCM_KEYS = {"rcm-in": {CGST: "rcmCgstIn", SGST: "rcmSgstIn", IGST: "rcmIgstIn"}, "rcm-out": {CGST: "rcmCgstOut", SGST: "rcmSgstOut", IGST: "rcmIgstOut"}};
+function gstLedgerCheck(cid, name, head, kind){
+  const listed = Ledgers.cid() === cid && hasLedgerList(), q = "“" + name + "”";
+  const ex = listed ? exactLedger(name) : String(name || "").trim();
+  if (!ex) return {ok: false, msg: q + " is not a ledger in Tally"};
+  const qq = "“" + ex + "”", c = Ledgers.cls(cid, ex);
+  if (c && !["tax", "other"].includes(c)) return {ok: false, msg: qq + " is under " + (Ledgers.chain(cid, ex)[0] || "another group") + ", not a GST ledger"};
+  const i = Ledgers.gstInfo(cid, ex), side = kind === "rcm-out" ? "output" : "input";
+  if (!i.gst) return {ok: false, msg: qq + " is not a GST ledger"};
+  if (i.side && i.side !== side) return {ok: false, msg: qq + " is a GST " + i.side + " ledger, not " + side};
+  if (i.head && i.head !== head) return {ok: false, msg: qq + " is " + (i.confirmed ? "confirmed as" : "") + " a" + (/^I/.test(i.head) ? "n " : " ") + i.head + " ledger, not " + head + ": choose a" + (/^I/.test(head) ? "n " : " ") + head + " ledger"};
+  if (!i.head && kind !== "rcm-out") return {ok: false, msg: "Which tax " + qq + " is for is not known: confirm it in the GST ledger check, or choose another " + head + " ledger"};
+  return {ok: true, name: ex, info: i};
+}
+const TAXPICK = {m: new Map()};
+function taxPickMemo(key, fn){
+  if (TAXPICK.m.has(key)) return TAXPICK.m.get(key);
+  if (TAXPICK.m.size > 800) TAXPICK.m.clear();
+  const v = fn(); TAXPICK.m.set(key, v); return v;
+}
+function taxStamp(cid){ const bk = S.books && S.books.cid === cid ? S.books : null; return [cid, Ledgers.ver, Ledgers.list(cid).length, bk ? (bk.vouchers || []).length + ":" + (bk.mapV || 0) + ":" + Object.keys(bk.map || {}).length : 0].join("#"); }
+// the supplier's earlier bills in Tally, with a weight: 3 for those booked to the same expense ledger as this bill
+function supplierBills(e, cid){
+  const pl = e.partyLedger && (exactLedger(e.partyLedger) || e.partyLedger);
+  const vs = pl ? Ledgers.vouchers(cid, pl) : null;
+  if (!vs) return [];
+  const key = normName(pl), exp = e.expenseLedger ? normName(e.expenseLedger) : "";
+  return vs.filter(v => (v.ent || []).filter(x => normName(x.l) === key).reduce((a, x) => a + num(x.a), 0) > 0)
+    .map(v => ({v, w: exp && v.ent.some(x => normName(x.l) === exp) ? 3 : 1, key}));
+}
+function gstLedgerFor(e, co, cid, head, kind, rate){
+  const lk = kind + ":" + head.toLowerCase(), label = head + (kind === "rcm-in" ? " reverse charge input" : kind === "rcm-out" ? " reverse charge payable" : "");
+  const ask = "Choose the " + label + " ledger";
+  const own = e.taxLed && e.taxLed[lk];
+  if (own){ const c = gstLedgerCheck(cid, own, head, kind); return c.ok ? {ledger: c.name, why: "Chosen on this bill"} : {ledger: own, bad: c.msg}; }
+  const sk = kind === "gst" ? head.toLowerCase() : (RCM_KEYS[kind] || {})[head];
+  const setv = kind === "gst" ? (co.gst || {})[sk] || "" : sk ? rcmLedger(co, sk) : "";
+  const known = Ledgers.cid() === cid && hasLedgerList(), books = !!(S.books && S.books.cid === cid && (S.books.vouchers || []).length);
+  if (!known && !books){
+    // no ledger list or books here: Client setup, as before, unless its name says another tax
+    if (!setv) return {ledger: "", ask};
+    const nh = Ledgers.headOfName(setv);
+    if (nh && nh !== head && !(kind === "rcm-out")) return {ledger: "", ask, bad: "Client setup has “" + setv + "” for " + head + ", but it is a" + (/^I/.test(nh) ? "n " : " ") + nh + " ledger. " + ask};
+    return {ledger: setv, why: "Client setup"};
   }
-  if (!e.expenseLedger) e.expenseLedger = (party && party.expenseLedger) || CO(cid).expenseLedgers[e.natureId] || "";
-  if (e.expenseLedger && S.bank && S.bank.cid === cid && hasLedgerList() && !exactLedger(e.expenseLedger)){ const ex = closestTallyLedger(e.expenseLedger, /expense|purchase/i); if (ex) e.expenseLedger = ex; }
+  const pinned = !!(co.gstPin && co.gstPin[sk]);
+  return taxPickMemo([taxStamp(cid), "gst", lk, rate, e.partyLedger, e.expenseLedger, setv, pinned].join("|"), () => {
+    if (pinned && setv){ const c = gstLedgerCheck(cid, setv, head, kind); if (c.ok) return {ledger: c.name, why: "Client setup: used on every bill"}; }
+    const memo = new Map();
+    const auto = n => {
+      if (memo.has(n)) return memo.get(n);
+      const c = gstLedgerCheck(cid, n, head, kind);
+      const r = c.ok && !!c.info.rcm === (kind !== "gst") && !(rate && c.info.rate && c.info.rate !== rate) ? c.name : "";
+      memo.set(n, r); return r;
+    };
+    // 1. this supplier's earlier bills in Tally
+    const cnt = {};
+    supplierBills(e, cid).forEach(({v, w, key}) => v.ent.forEach(x => { if ((kind === "rcm-out" ? x.a > 0 : x.a < 0) && normName(x.l) !== key && !/^(expense|income|party|bank|asset)$/.test(Ledgers.cls(cid, x.l))){ const n = auto(x.l); if (n) cnt[n] = (cnt[n] || 0) + w; } }));
+    const top = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0];
+    if (top) return {ledger: top[0], why: "Used for " + head + " on this supplier's earlier bills in Tally"};
+    // 2. the ledger used most often for this tax and rate
+    const u = Ledgers.usage(cid) || {};
+    const names = Array.from(new Set(Object.keys(u).concat(known ? Ledgers.list(cid).map(l => l.name) : [])));
+    const cands = Array.from(new Set(names.filter(n => isTaxLike(n) || /gst|cess|rcm|tax/i.test(n) || (S.books && S.books.map && S.books.map[n] && /^gst/.test(S.books.map[n].what || ""))).map(auto).filter(Boolean)));
+    if (cands.length){
+      const sc = n => [rate && u[n] ? (u[n].rates[rate] || 0) : 0, (u[n] || {}).n || 0];
+      cands.sort((a, b) => sc(b)[0] - sc(a)[0] || sc(b)[1] - sc(a)[1] || a.length - b.length);
+      const s0 = sc(cands[0]);
+      if (s0[1] > 0) return {ledger: cands[0], why: "Used most often for " + head + (s0[0] && rate ? " at " + rate + "%" : "") + " in Tally (" + (s0[0] || s0[1]) + " times)"};
+      if (cands.length === 1) return {ledger: cands[0], why: "The only " + label + " ledger in Tally"};
+    }
+    // 3. Client setup, when it fits
+    if (setv){ const c = gstLedgerCheck(cid, setv, head, kind); if (c.ok) return {ledger: c.name, why: "Client setup"}; }
+    return {ledger: "", ask};
+  });
+}
+function secLabel(s){ return typeof LedCheck === "object" ? LedCheck.secLabel(s) : s; }
+function tdsLedgerCheck(cid, name, sec){
+  const listed = Ledgers.cid() === cid && hasLedgerList(), q = "“" + name + "”";
+  const ex = listed ? exactLedger(name) : String(name || "").trim();
+  if (!ex) return {ok: false, msg: q + " is not a ledger in Tally"};
+  const s = Ledgers.secOf(cid, ex), qq = "“" + ex + "”";
+  if (s && sec && s !== sec) return {ok: false, sec: s, msg: qq + " is a TDS ledger of section " + secLabel(s) + ", not " + secLabel(sec)};
+  if (listed && !Ledgers.isTds(cid, ex)) return {ok: false, msg: qq + " is not a TDS ledger"};
+  return {ok: true, name: ex, sec: s};
+}
+// TDS by section: 194-I to "TDS ON RENT 94I", 194J to "TDS on Professional Fee 94J", 194C to "TDS ON CONTRACT 94C";
+// never a ledger of another section
+function tdsLedgerFor(e, co, cid, rule){
+  const sec = Ledgers.sec(rule.old), set = (co.tdsLedgers || {})[rule.id] || "", label = "TDS" + (sec ? " (section " + secLabel(sec) + ")" : "");
+  const ask = "Choose the " + label + " ledger";
+  const own = e.taxLed && e.taxLed.tds;
+  if (own){ const c = tdsLedgerCheck(cid, own, sec); return c.ok ? {ledger: c.name, why: "Chosen on this bill"} : {ledger: own, bad: c.msg}; }
+  const known = Ledgers.cid() === cid && hasLedgerList(), books = !!(S.books && S.books.cid === cid && (S.books.vouchers || []).length);
+  if (!sec || (!known && !books)){
+    if (!set) return {ledger: "", ask};
+    const s = Ledgers.sec(set);
+    if (s && sec && s !== sec) return {ledger: "", ask, bad: "Client setup has “" + set + "” for " + rule.label + ", a TDS ledger of section " + secLabel(s) + ", not " + secLabel(sec) + ". " + ask};
+    return {ledger: set, why: "Client setup"};
+  }
+  return taxPickMemo([taxStamp(cid), "tds", rule.id, e.partyLedger, e.expenseLedger, set].join("|"), () => {
+    const tech = rule.id === "technical", fit = n => sec !== "194J" || /technical/i.test(n) === tech ? 1 : 0;
+    const memo = new Map();
+    const auto = n => { if (memo.has(n)) return memo.get(n); const c = tdsLedgerCheck(cid, n, sec); const r = c.ok && c.sec === sec && Ledgers.isTds(cid, c.name) ? c.name : ""; memo.set(n, r); return r; };
+    const cnt = {};
+    supplierBills(e, cid).forEach(({v, w, key}) => v.ent.forEach(x => { if (x.a > 0 && normName(x.l) !== key){ const n = auto(x.l); if (n) cnt[n] = (cnt[n] || 0) + w * (fit(n) ? 2 : 1); } }));
+    const top = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0];
+    if (top) return {ledger: top[0], why: "Used for section " + secLabel(sec) + " on this supplier's earlier bills in Tally"};
+    const cs = set ? tdsLedgerCheck(cid, set, sec) : null;
+    if (cs && cs.ok && cs.sec === sec) return {ledger: cs.name, why: "Client setup"};
+    const u = Ledgers.usage(cid) || {};
+    const names = Array.from(new Set(Object.keys(u).concat(known ? Ledgers.list(cid).map(l => l.name) : [])));
+    const cands = Array.from(new Set(names.filter(n => /tds|tax\s*deducted|9[2-9]\s*-?\s*[a-z]|19[2-9]/i.test(n) || (S.books && S.books.map && S.books.map[n] && S.books.map[n].what === "tds_payable")).map(auto).filter(Boolean)));
+    if (cands.length){
+      cands.sort((a, b) => fit(b) - fit(a) || ((u[b] || {}).n || 0) - ((u[a] || {}).n || 0) || a.length - b.length);
+      const n0 = (u[cands[0]] || {}).n || 0;
+      return {ledger: cands[0], why: n0 ? "Used most often for section " + secLabel(sec) + " in Tally (" + n0 + " times)" : "The " + secLabel(sec) + " TDS ledger in Tally"};
+    }
+    if (cs && cs.ok) return {ledger: cs.name, why: "Client setup"};
+    return {ledger: "", ask};
+  });
 }
 function narrationFor(e){
   const bits = ["Being invoice " + (e.x.invoiceNo || "") + " dated " + fmtDate(e.x.invoiceDate) + " from " + (e.x.vendorName || "supplier")];
@@ -2874,17 +3237,21 @@ async function fileHash(file){
   return h;
 }
 function statusLabel(st){ return ({draft:"to review", approved:"approved", rejected:"marked no entry", duplicate:"held as duplicate", deleted:"deleted"})[st] || st; }
-function findHash(h){
-  if (S.pendingHashes[h]) return {msg:"The same file is already in this upload."};
+// a one-page PDF is fingerprinted with "p1" when it is read page by page and without it when read whole (review of
+// 02-Oct-2026: FA/ELEC/013 came in again as 928bbb30530e37ef4ab8p1 and was not taken for 928bbb30530e37ef4ab8)
+function hashForms(h){ h = String(h || ""); return /p1$/.test(h) ? [h, h.slice(0, -2)] : [h, h + "p1"]; }
+function findHash(h0){
+  for (const h of hashForms(h0)) if (S.pendingHashes[h]) return {msg:"The same file is already in this upload."};
   for (const c of Object.values(S.companies)){
-    const rec = c.hashes && c.hashes[h];
+    const h = hashForms(h0).find(x => c.hashes && c.hashes[x]);
+    const rec = h && c.hashes[h];
     if (!rec) continue;
     const e = S.data[c.id] && S.data[c.id].entries[rec.e];
     if (S.data[c.id] && S.data[c.id].loaded && !e) continue;   // entry was deleted
     return {cid:c.id, entryId:rec.e,
       msg:"Already uploaded to " + c.name + (e ? " as " + (e.x.vendorName || e.fileName) + (e.x.invoiceNo ? " bill " + e.x.invoiceNo : "") + " (" + statusLabel(e.status) + ")" : " on " + fmtDate(rec.d)) + "."};
   }
-  const inb = Object.values(S.inbox).find(i => i.hash === h);
+  const inb = Object.values(S.inbox).find(i => hashForms(h0).includes(i.hash));
   if (inb) return {msg:"Already waiting in Unsorted uploads."};
   return null;
 }
@@ -2930,16 +3297,31 @@ function invKey(x){
   if (!inv || !who) return "";
   return who + "|" + inv + "|" + fyOf(x.invoiceDate);
 }
+// the same bill: the same bill number in the same year, from the same supplier (by PAN, or by name when either has no
+// PAN: review of 02-Oct-2026, a copy read with the PAN was not matched to its original read without one)
+function sameBill(a, b){
+  if (!normInv(a.invoiceNo) || normInv(a.invoiceNo) !== normInv(b.invoiceNo) || fyOf(a.invoiceDate) !== fyOf(b.invoiceDate)) return false;
+  const pa = effectivePan(a), pb = effectivePan(b);
+  return pa && pb ? pa === pb : !!norm(a.vendorName) && norm(a.vendorName) === norm(b.vendorName);
+}
+function dupMsg(o){
+  const st = o.status === "approved" ? "approved on " + fmtDate((o.approvedAt || "").slice(0, 10)) + (billInTally(o) ? " (in Tally)" : o.exportedAt ? " (in a Tally file)" : "") : statusLabel(o.status);
+  return "Duplicate of " + (o.x.vendorName || o.fileName) + " bill " + o.x.invoiceNo + " dated " + fmtDate(o.x.invoiceDate) + ", " + st + ".";
+}
 function findDuplicate(e, cid){
   const k = invKey(e.x);
-  if (k){
+  if (k || normInv(e.x.invoiceNo)){
     for (const o of Object.values(D(cid).entries)){
       if (o.id === e.id || o.status === "duplicate" || o.status === "deleted" || o.notDuplicate) continue;
-      if (invKey(o.x) === k) return {entryId:o.id, strong:true,
-        msg:"Same supplier and bill number as " + (o.x.vendorName || o.fileName) + " bill " + o.x.invoiceNo + " dated " + fmtDate(o.x.invoiceDate) + " (" + statusLabel(o.status) + ")."};
+      if ((k && invKey(o.x) === k) || sameBill(e.x, o.x)) return {entryId:o.id, strong:true, msg:dupMsg(o)};
     }
-    const sent = (CO(cid).keys || {})[k];
-    if (sent) return {strong:true, msg:"Same supplier and bill number as a bill approved on " + fmtDate(sent) + " (since cleared from the desk)."};
+    const sent = k && (CO(cid).keys || {})[k];
+    if (sent){
+      // the bill approved before is named by its id (kept with the date since 02-Oct-2026)
+      const id = typeof sent === "object" ? sent.e : null, o = id && D(cid).entries[id];
+      if (o) return {entryId:o.id, strong:true, msg:dupMsg(o)};
+      return {entryId:id || null, strong:true, msg:"Same supplier and bill number as a bill approved on " + fmtDate(typeof sent === "object" ? sent.d : sent) + "."};
+    }
   }
   // weaker: same supplier, same date and same total
   const who = effectivePan(e.x) || norm(e.x.vendorName), tot = num(e.x.total);
@@ -3033,17 +3415,54 @@ async function enqueueFiles(files, target){
   pump(); softRender();
 }
 // a batch read from Collect lands you on Review, with the first new bill open
+// what happened to each file of the last upload, kept for the client's pages (review of 02-Oct-2026: FA/ELEC/013 uploaded
+// again left the page on "Nothing waiting" with no word): read / duplicate of which bill (open it) / could not be read (why)
+function uploadLines(jobs){
+  return jobs.filter(j => !j.said).map(j => {
+    j.said = true;
+    const cid = j.cid || (j.dupRef && j.dupRef.cid) || j.target || S.coId, d = S.data[cid], e = d && j.entryId ? d.entries[j.entryId] : null;
+    if (j.status === "duplicate"){
+      const o = j.dupRef && j.dupRef.entryId && S.data[j.dupRef.cid] ? S.data[j.dupRef.cid].entries[j.dupRef.entryId] : null;
+      return {kind: "dup", name: j.name, cid: j.dupRef && j.dupRef.cid, open: o ? o.id : null, text: o ? dupMsg(o).replace(/^Duplicate of /, "duplicate of ").replace(/\.$/, "") + "; not uploaded again" : (j.msg || "the same file was uploaded before")};
+    }
+    if (j.status === "held" && e){
+      const o = e.dupOf && e.dupOf.entryId && d.entries[e.dupOf.entryId];
+      return {kind: "dup", name: j.name, cid, open: e.id, orig: o ? o.id : null, text: (o ? dupMsg(o).replace(/^Duplicate of /, "duplicate of ").replace(/\.$/, "") : (e.dupOf && e.dupOf.msg) || "a duplicate") + "; held under Duplicates"};
+    }
+    if (j.status === "failed") return {kind: "bad", name: j.name, text: "could not be read: " + (j.msg || "no reason given")};
+    if (j.status === "notread") return {kind: "bad", name: j.name, cid, open: j.entryId, text: "not read yet, kept in To review with Retry: " + String(j.msg || "").replace(/^.*?: not read, /, "")};
+    if (j.status === "unsorted") return {kind: "info", name: j.name, text: "filed under Sales"};
+    if (["done", "partial", "typed"].includes(j.status)) return {kind: "ok", name: j.name, cid, open: j.entryId, text: (j.status === "partial" ? "partly read" : "read") + (e && e.x.invoiceNo ? ": " + (e.x.vendorName || "") + " bill " + e.x.invoiceNo : "")};
+    return null;
+  }).filter(Boolean);
+}
+function uploadSummary(lines){
+  const n = k => lines.filter(l => l.kind === k).length;
+  return [n("ok") ? n("ok") + (n("ok") === 1 ? " bill read" : " bills read") : "", n("dup") ? n("dup") + (n("dup") === 1 ? " duplicate" : " duplicates") : "",
+    n("bad") ? n("bad") + " could not be read" : "", n("info") ? n("info") + " filed under Sales" : ""].filter(Boolean).join(" \u00b7 ");
+}
 function afterBatch(){
-  if (S.view !== "company" || !(S.step === "collect" || S.advanceAfterRead || ["invoices", "export", "done"].includes(S.tab))) return;
+  // every finished upload is reported on the page, whichever page is open (the toast alone went unseen)
+  const done = S.jobs.filter(j => ["done", "partial", "held", "duplicate", "failed", "unsorted", "notread"].includes(j.status) && !j.said);
+  const lines = uploadLines(done);
+  if (lines.length){
+    S.lastUpload = S.lastUpload || {};
+    const by = {};
+    lines.forEach(l => { const c = l.cid || S.coId; (by[c] = by[c] || []).push(l); });
+    Object.keys(by).forEach(c => { S.lastUpload[c] = {at: Date.now(), lines: by[c], text: uploadSummary(by[c])}; });
+  }
+  if (S.view !== "company" || !(S.step === "collect" || S.advanceAfterRead || ["invoices", "export", "done"].includes(S.tab))){ if (lines.length) render(); return; }
   S.advanceAfterRead = false;
   const mine = S.jobs.filter(j => !j.advanced && (j.cid === S.coId || j.target === S.coId));
-  const fresh = mine.filter(j => ["done", "partial", "held"].includes(j.status));
-  const dups = mine.filter(j => j.status === "duplicate"), toSales = mine.filter(j => j.status === "unsorted"), bad = mine.filter(j => j.status === "failed");
+  const fresh = mine.filter(j => ["done", "partial", "notread"].includes(j.status)), held = mine.filter(j => j.status === "held");
   mine.forEach(j => { j.advanced = true; });
   if (!mine.length) return;
-  const said = [fresh.length ? fresh.length + " read" : "", dups.length ? dups.length + " already uploaded (skipped)" : "", toSales.length ? toSales.length + " filed under Sales" : "", bad.length ? bad.length + " could not be read" : ""].filter(Boolean).join(" \u00b7 ");
-  if (!fresh.length){ toast(said + "."); render(); return; }
-  const first = fresh.map(j => D().entries[j.entryId]).find(e => e && e.status === "draft");
+  const said = (S.lastUpload && S.lastUpload[S.coId] && S.lastUpload[S.coId].text) || "Upload finished";
+  if (!fresh.length){
+    // only duplicates held: the Duplicates list opens on the copy, with its original beside it
+    if (held.length){ S.tab = "invoices"; S.filter = "duplicate"; S.selected = held[0].entryId; S.reviewTable = false; }
+    toast(said + "."); render(); return;
+  }
   goStep("review", "bills");
   toast(said + ". Review " + (fresh.length === 1 ? "it" : "them") + " below.");
 }
@@ -3063,7 +3482,7 @@ function pump(){
     if (!j) break;
     activeJobs++;
     j.status = "checking"; j.startedAt = Date.now();
-    runJob(j).catch(err => { j.status = "failed"; j.msg = errCopy(err && err.code); })
+    runJob(j).catch(err => { j.status = "failed"; j.msg = READ_KINDS.includes(err && err.kind) ? readFail(j.name, err) : errCopy(err && err.code); })
       .finally(() => {
         activeJobs--;
         try { if (j.file && j.file.__docq) docqFinish(j); } catch (e){}
@@ -3089,13 +3508,67 @@ function reserveFile(j){
   reserveChain = p.catch(() => {});
   return p;
 }
+// Reading with one automatic retry when the reading service is rate-limited, busy or timed out (waits its Retry-After,
+// at most 30 s, else 5 s). onWait(err) is told before the wait. The error of the second try carries retried: true.
+async function readWithRetry(file, onCareful, page, cidHint, force, onWait){
+  try { return await extractBest(file, onCareful, page, cidHint, force); }
+  catch (err){
+    if (!(err && READ_RETRY_KINDS.includes(err.kind))) throw err;
+    if (onWait) onWait(err);
+    const ra = Number(err.retryAfter);
+    await new Promise(res => setTimeout(res, ra > 0 ? Math.min(30, ra) * 1000 : 5000));
+    try { return await extractBest(file, onCareful, page, cidHint, force); }
+    catch (err2){ if (err2 && typeof err2 === "object") err2.retried = true; throw err2; }
+  }
+}
+// A bill the reading service could not read: kept in To review as a draft with its file, "Not read yet" and why, a
+// Retry (retryNotRead) and Type it in. Never approved until read or typed in (notReadYet). Like a partly read bill.
+function addNotRead(j, cid, err, msg){
+  const e = newEntry(j.name);
+  e.notRead = {kind: err.kind, reason: msg.replace(/^.*?: not read, /, ""), at: new Date().toISOString()};
+  e.readTrace = err.trace || [];
+  e.fileHash = j.hash;
+  S.files[e.id] = j.file; if (j.page) S.filePages[e.id] = [].concat(j.page)[0]; const dcid = j.cid || j.target || S.coId; FileStore.put(dcid, e.id, j.file); CloudDocs.add(dcid, e.id, j.file, "bill"); FileStore.put(cid, e.id, j.file);
+  if (isImage(j.file)) S.previews[e.id] = URL.createObjectURL(j.file);
+  finishNewEntry(e, cid, j);
+  if (j.status === "done") j.status = "notread";
+  j.msg = msg;
+}
+// not read and not typed in yet: the supplier, date and total are still empty
+function notReadYet(e){ return !!(e && e.notRead && !(e.x.vendorName && e.x.invoiceDate && num(e.x.total) > 0)); }
+// Retry on a "Not read yet" bill: read its file again (with the same one automatic retry); the bill is filled in place
+async function retryNotRead(id){
+  const cid = S.coId, e = D(cid).entries[id];
+  if (!e || S.reading[id]) return;
+  const file = await FileStore.get(cid, e.id, e.docPath || "", e.fileName);
+  if (!file){ toast("The file for this bill is not on this computer or in the firm account any more. Upload it again, or type it in."); return; }
+  S.readBlocked = null;
+  S.reading[id] = "Reading again"; render();
+  try {
+    const r = await readWithRetry(file, null, S.filePages[id], cid, null, (err) => { S.reading[id] = "Waiting to try again"; toast(readFail(e.fileName, err, true)); render(); });
+    applyExtraction(e, r.j, cid);
+    e.readMode = readLabel(r); e.readTrace = r.trace || [];
+    if (r.confirmType) e.confirmType = true;
+    if (r.checks) e.checks = r.checks;
+    if (r.note) e.readNote = r.note;
+    delete e.notRead; e.readError = "";
+    setPreview(e.id, r.preview);
+    toast(e.fileName + ": read. Check the fields.");
+  } catch (err){
+    const msg = READ_KINDS.includes(err && err.kind) ? readFail(e.fileName, err, err.retried ? "failed" : false) : e.fileName + ": not read, " + errCopy(err && err.code).replace(/^./, (c) => c.toLowerCase());
+    e.notRead = {kind: (err && (err.kind || err.code)) || "other", reason: msg.replace(/^.*?: not read, /, ""), at: new Date().toISOString()};
+    toast(msg);
+  }
+  delete S.reading[id];
+  Store.saveEntry(cid, e); refreshStats(cid); render();
+}
 async function runJob(j){
   const seen = await reserveFile(j);
   if (seen && !(j.file && j.file.__force)){ j.status = "duplicate"; j.msg = seen.msg; j.dupRef = seen; return; }
   if (!(await charge("bills", 1, j.name, "Bill read"))){ j.status = "failed"; j.msg = "Credit finished. Ask the administrator to add credit."; softRender(); return; }
   j.status = "reading"; j.msg = ""; softRender();
   let r;
-  try { r = await extractBest(j.file, () => { j.msg = "Hard to read, reading again carefully"; softRender(); }, j.page, j.target === "auto" ? null : j.target, j.force); }
+  try { r = await readWithRetry(j.file, () => { j.msg = "Hard to read, reading again carefully"; softRender(); }, j.page, j.target === "auto" ? null : j.target, j.force, (err) => { j.msg = readFail(j.name, err, true); softRender(); }); }
   catch (err){
     if (err && err.partial && j.target !== "auto"){
       const cid = j.target, e = newEntry(j.name), pr = err.partial;
@@ -3112,6 +3585,13 @@ async function runJob(j){
       finishNewEntry(e, cid, j);
       if (j.status === "done"){ j.status = "partial"; j.msg = "Partly read: fill in " + pr.missing.length + " field" + (pr.missing.length === 1 ? "" : "s") + "."; }
       return;
+    }
+    // the reading service failed (after its one retry): the bill is kept in To review, "Not read yet", with its file
+    if (err && READ_KINDS.includes(err.kind)){
+      j.trace = err.trace;
+      const msg = readFail(j.name, err, err.retried ? "failed" : false);
+      if (j.target !== "auto"){ addNotRead(j, j.target, err, msg); return; }
+      j.status = "failed"; j.msg = msg; return;
     }
     j.status = "failed"; j.trace = err && err.trace; j.msg = errCopy(err && err.code) + (err && err.detail ? " Free reading: " + err.detail + "." : ""); return;
   }
@@ -3379,6 +3859,7 @@ async function assignInbox(id, cid){
 /* Approve / undo / reject (current client)                            */
 /* ------------------------------------------------------------------ */
 function approve(e){
+  if (notReadYet(e)){ toast(e.fileName + " is not read yet (" + e.notRead.reason.replace(/\.$/, "") + "). Press Retry, or type in the supplier, date and total, before approving."); return; }
   const cid = S.coId, c = compute(e, cid);
   if (c.missing.length){ toast("Fill in " + c.missing.join(", ") + " before approving."); return; }
   const parties = D(cid).parties;
@@ -3389,7 +3870,8 @@ function approve(e){
     parties[id] = party;
   }
   if (!party.natureDefault) party.natureDefault = e.natureId;
-  party.ledgerName = e.partyLedger;
+  // a person approved the bill with this ledger: the supplier's matched ledger is confirmed (src/js/60)
+  if (typeof partyChoiceSet === "function") partyChoiceSet(party, e.partyLedger, "confirmed"); else party.ledgerName = e.partyLedger;
   party.expenseLedger = e.expenseLedger;
   if (!party.pan && c.pan) party.pan = c.pan;
   if (!party.gstin && e.x.vendorGstin) party.gstin = e.x.vendorGstin;
@@ -3400,12 +3882,13 @@ function approve(e){
   cur.credited = r2(num(cur.credited) + c.base);
   cur.tdsBase = r2(num(cur.tdsBase) + addBase);
   party.ytd[c.fy][c.rule.id] = cur;
-  e.status = "approved";
+  e.status = "approved"; delete e.notRead;
   e.approvedAt = new Date().toISOString();
   const k = invKey(e.x), co = CO(cid);
-  if (k){ co.keys = co.keys || {}; co.keys[k] = e.approvedAt.slice(0, 10); pruneIndex(co.keys, 3000); Store.saveCompany(co); }
+  // the bill's id is kept with the date (02-Oct-2026), so a later copy can name and open this one
+  if (k){ co.keys = co.keys || {}; co.keys[k] = {d: e.approvedAt.slice(0, 10), e: e.id}; pruneIndex(co.keys, 3000); Store.saveCompany(co); }
   e.applied = {partyId:party.id, fy:c.fy, natureId:c.rule.id, credited:c.base, tdsBase:addBase};
-  e.snapshot = {lines:c.lines, tds:c.tds, tdsWould:c.tdsWould, skip:c.skip, rcm:c.rcmTax ? Object.assign({cat:e.rcm.cat}, c.rcmTax) : null, blocked:c.gd.block ? c.gd.block.cat : null, noItc:c.itc && !c.itc.ok ? c.itc.why : null, rate:c.rate, tdsBase:c.tdsBase, base:c.base, total:c.total, pan:c.pan, ref:c.rule.ref, old:c.rule.old, label:c.rule.label,
+  e.snapshot = {lines:c.lines, tds:c.tds, tdsWould:c.tdsWould, skip:c.skip, rcm:c.rcmTax ? Object.assign({cat:e.rcm.cat}, c.rcmTax) : null, blocked:c.gd.block ? c.gd.block.cat : null, noItc:c.itc && !c.itc.ok ? c.itc.why : null, rate:c.rate, tdsBase:c.tdsBase, base:c.base, total:c.total, pan:c.pan, ref:c.rule.ref, old:c.rule.old, label:c.rule.label, cert:c.cert && c.applicable ? (c.cert.no || "-") : "", certBase:c.cert && c.applicable ? c.certBase : 0, certRate:c.cert ? num(c.cert.rate) : null, normalRate:c.normalRate, inoperative:!!c.inoperative, form:c.rule.form || "26Q",
     applicable:c.applicable, catchUp:e.includeCatchUp ? c.catchUp : 0, why:c.why, meter:c.meter, fy:c.fy, rateNote:c.rateNote, indHuf:c.indHuf, never:c.rule.basis === "never"};
   Store.saveParty(cid, party);
   Store.saveEntry(cid, e);
@@ -3467,22 +3950,45 @@ function removeEntry(e){
   if (e.docPath) CloudDocs.remove(e.docPath); delete D().entries[e.id]; Store.deleteEntry(S.coId, e.id); unregisterHash(S.coId, e.fileHash); delete S.files[e.id]; if (S.selected === e.id) S.selected = null; toast("Invoice deleted."); refreshStats(S.coId); render(); }
 
 /* Summary kept on each client so the client list needs no extra loading */
+// a duplicate held without its original (it was not on this computer when the copy came in, review of 02-Oct-2026:
+// emuqaocqrvj2xr said "since cleared from the desk" while emum250ulhfbl8 was there): linked once the bills are loaded
+function linkDuplicates(cid){
+  const d = S.data[cid];
+  if (!d || !d.loaded) return 0;
+  const v = Object.values(d.entries);
+  let n = 0;
+  v.filter(e => e.dupOf && !(e.dupOf.entryId && d.entries[e.dupOf.entryId])).forEach(e => {
+    const o = v.find(o => o.id !== e.id && !["duplicate", "deleted"].includes(o.status) && !o.notDuplicate && sameBill(e.x, o.x));
+    if (!o) return;
+    e.dupOf = {entryId: o.id, msg: dupMsg(o)};
+    Store.saveEntry(cid, e); n++;
+  });
+  return n;
+}
 function refreshStats(cid){
   const co = CO(cid), d = S.data[cid];
   if (!co || !d || !d.loaded) return;
+  linkDuplicates(cid);
   const v = Object.values(d.entries), fy = fyOf(null);
   const drafts = v.filter(e => e.status === "draft");
   const st = {
     drafts: drafts.length,
     check: drafts.filter(e => !S.reading[e.id] && (() => { const c = compute(e, cid); return c.missing.length || c.flags.some(f => f.lvl !== "info"); })()).length,
-    waiting: v.filter(e => e.status === "approved" && !e.exportedAt).length,
+    // waiting: approved and not confirmed in Tally; inTally: confirmed there (review of 02-Oct-2026: the badge "In Tally"
+    // counted every bill approved this year)
+    waiting: v.filter(e => e.status === "approved" && !billInTally(e)).length,
+    // the one count for Tally (review of 02-Oct-2026): ready to post, and needing attention (postBucket, src/js/59);
+    // kept for a client whose bills are not loaded on this computer
+    ready: typeof postBills === "function" ? (postBills(cid) || {ready: []}).ready.length : 0,
+    attention: typeof postBills === "function" ? (postBills(cid) || {attention: []}).attention.length : 0,
+    inTally: v.filter(e => billInTally(e) && (e.snapshot ? e.snapshot.fy : fyOf(e.x.invoiceDate)) === fy).length,
     tdsFy: v.filter(e => e.status === "approved" && e.snapshot && e.snapshot.fy === fy).reduce((a, e) => a + num(e.snapshot.tds), 0),
     invoicesFy: v.filter(e => e.status === "approved" && e.snapshot && e.snapshot.fy === fy).length,
     records: v.length + Object.keys(d.parties).length + 1,
     dups: v.filter(e => e.status === "duplicate").length
   };
   const old = co.stats || {};
-  if (["drafts","check","waiting","tdsFy","invoicesFy","records","dups"].some(k => old[k] !== st[k])){
+  if (["drafts","check","waiting","ready","attention","inTally","tdsFy","invoicesFy","records","dups"].some(k => old[k] !== st[k])){
     co.stats = Object.assign(st, {fy, updatedAt: new Date().toISOString()});
     Store.saveCompany(co);
   }
@@ -3594,11 +4100,12 @@ async function exportCsv(){
   if (!list.length){ toast("Nothing approved yet for this client."); return; }
   await saveFile("tds-register-" + slug(co.name) + "-" + new Date().toISOString().slice(0, 10) + ".csv", registerCsv(list, co));
 }
-function clearSent(){
+function clearSent(why){
   const cutoff = new Date(Date.now() - 90 * 864e5).toISOString();
   const old = Object.values(D().entries).filter(e => e.exportedAt && e.exportedAt < cutoff);
-  old.forEach(e => { delete D().entries[e.id]; Store.deleteEntry(S.coId, e.id); });
-  toast(old.length ? old.length + " old sent invoices cleared. Deductee year totals are kept." : "No sent invoices older than 90 days.");
+  // a soft delete (review of 01-Oct-2026): each goes to "Deleted", where it can be restored; deductee year totals are kept
+  old.filter(e => e.status !== "deleted").forEach(e => softDeleteEntry(e, "Cleared: sent to Tally more than 90 days ago" + (why ? " \u00b7 " + why : "")));
+  toast(old.length ? old.length + " old sent invoices cleared. They are under \u201cDeleted\u201d, where they can be restored; deductee year totals are kept." : "No sent invoices older than 90 days.");
   refreshStats(S.coId); render();
 }
 
@@ -3654,6 +4161,8 @@ function renderNow(){
 }
 function afterRender(){
   if (typeof acAfterRender === "function") acAfterRender();
+  // the client's ledger list: read once, and again when the cloud's ledgers changed (looked at every 30 seconds at most)
+  if (S.view === "company" && S.coId && !S.loadingCo && typeof Ledgers === "object") Ledgers.watch(S.coId);
   if (S.view === "company" && ["bank", "invoices", "export", "sales"].includes(S.tab) && typeof maybeLiveSync === "function") maybeLiveSync();
 }
 

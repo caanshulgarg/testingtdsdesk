@@ -23,7 +23,7 @@ with sync_playwright() as p:
     ok(any("/pair?code=482913" in u for u in asked), "FinCom used the code from its address")
     ok(pg.evaluate("Bridge.cfg().key") == "k" * 24, "and keeps the bridge's key: connected")
     ok("pair=" not in pg.url, "the code is taken off the address at once: " + pg.url)
-    ok("Connected to the Tally Bridge on OFFICE-PC" in pg.inner_text("body"), "and says so")
+    ok("Connected to FinCom Bridge on OFFICE-PC" in pg.inner_text("body"), "and says so")
     pg2 = br.new_page(); pg2.on("pageerror", lambda e: errors.append(str(e))); pg2.route("http://127.0.0.1:9100/**", bridge)
     pg2.goto("http://localhost:8147/#pair=111111"); pg2.wait_for_timeout(3000)
     ok("Could not connect to the bridge" in pg2.inner_text("body") and not pg2.evaluate("Bridge.cfg().key"), "a wrong or old code does not connect, and says what to do")

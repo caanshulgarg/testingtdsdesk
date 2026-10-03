@@ -170,6 +170,17 @@ func loadConfig() {
 		d.Set("Key", newBridgeKey())
 		need = true
 	}
+	// never a port 0 in the settings (0 means "find it"; an old file or a hand edit may hold one)
+	before, _ := d.MarshalJSON()
+	guardPorts(d)
+	if after, _ := d.MarshalJSON(); string(after) != string(before) {
+		need = true
+	}
+	// this install's id for FinCom (body.bridge.id): made once, then kept
+	if !validInstanceID(str(d.Get("InstanceId"))) {
+		d.Set("InstanceId", newInstanceID())
+		need = true
+	}
 	cfgMu.Lock()
 	Cfg = d
 	cfgMu.Unlock()
@@ -187,6 +198,7 @@ func loadConfigRO() {
 			d.Set(k, o.Get(k))
 		}
 	}
+	guardPorts(d)
 	cfgMu.Lock()
 	Cfg = d
 	cfgMu.Unlock()
@@ -196,6 +208,7 @@ var cfgStamp time.Time
 
 func saveConfig() {
 	cfgMu.Lock()
+	guardPorts(Cfg)
 	b, err := json.Marshal(Cfg)
 	cfgMu.Unlock()
 	if err != nil {
@@ -222,6 +235,7 @@ func syncConfig() {
 	if err := o.UnmarshalText(readText(ConfigPath)); err != nil {
 		return
 	}
+	guardPorts(o)
 	cfgMu.Lock()
 	for _, k := range o.keys {
 		Cfg.Set(k, o.Get(k))
@@ -270,4 +284,75 @@ func writeLog(msg string) {
 		_ = os.Rename(f, f+".1")
 	}
 	_ = appendText(f, line+"\r\n")
+}
+
+// --- PostOnly (round 11, 03-Oct-2026): the companies this computer may post to. The setting is a JSON array of company
+// names ("PostOnly": ["ZZ TEST"]); missing or empty means no restriction. The names are compared folded (case and
+// spacing aside), as everywhere else
+
+// the list as set (trimmed, empties dropped); nil when there is no restriction
+func postOnlyList() []string {
+	var o []string
+	for _, n := range strs(cfg("PostOnly")) {
+		if n = strings.TrimSpace(n); n != "" {
+			o = append(o, n)
+		}
+	}
+	return o
+}
+
+// why a posting to this company is refused by PostOnly ("" when it may go)
+func postOnlyRefusal(company string) string {
+	list := postOnlyList()
+	if len(list) == 0 {
+		return ""
+	}
+	want := foldName(company)
+	for _, n := range list {
+		if foldName(n) == want {
+			return ""
+		}
+	}
+	return "This computer posts only to " + strings.Join(list, ", ") + " (PostOnly); posting to " + company + " refused"
+}
+
+// why removing an entry from this company (/unpost) is refused by PostOnly ("" when it may go)
+func postOnlyUnpostRefusal(company string) string {
+	if why := postOnlyRefusal(company); why != "" {
+		return strings.Replace(why, "; posting to "+company+" refused", "; removing from "+company+" refused", 1)
+	}
+	return ""
+}
+
+// the installer's -DPOSTONLY (one name, or names separated by ';'): written into the settings when given, never over a
+// PostOnly set by hand
+var installPostOnly string
+
+func setPostOnly(c *Ordered, v string) {
+	// round 12 (03-Oct-2026, the owner's decision): POSTONLY="any" clears an installer-set list (an empty list: any
+	// company) and marks it the owner's, so a later installer never puts a list back; a list set by hand, or one
+	// already marked the owner's, is left as it is
+	if strings.EqualFold(strings.TrimSpace(v), "any") {
+		if c.Has("PostOnly") && str(c.Get("PostOnlyBy")) != "installer" {
+			return
+		}
+		c.Set("PostOnly", []any{})
+		c.Set("PostOnlyBy", "owner")
+		return
+	}
+	var names []any
+	for _, n := range strings.Split(v, ";") {
+		if n = strings.TrimSpace(n); n != "" {
+			names = append(names, n)
+		}
+	}
+	if len(names) == 0 {
+		return
+	}
+	// a list set by hand (no PostOnlyBy, or one that is not "installer") is never replaced; an installer-set one is
+	if c.Has("PostOnly") && str(c.Get("PostOnlyBy")) != "installer" {
+		return
+	}
+	c.Set("PostOnly", names)
+	c.Set("PostOnlyBy", "installer")
 }

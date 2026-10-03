@@ -63,11 +63,9 @@ const Books = {
   // the IGST rate in a block's rate details, which is the whole GST rate; null when not set
   igstRate(s){ const m = String(s || "").match(/<GSTRATEDUTYHEAD>IGST<\/GSTRATEDUTYHEAD>\s*<GSTRATEVALUATIONTYPE>[^<]*<\/GSTRATEVALUATIONTYPE>\s*<GSTRATE>\s*([\d.]+)\s*<\/GSTRATE>/); return m ? num(m[1]) : null; },
   one(s, tag){ const m = s.match(new RegExp("<" + tag + ">([^<]*)</" + tag + ">")); return m ? this.unesc(m[1]) : ""; },
-  unesc(v){
-    return String(v || "").replace(/&apos;/g, "'").replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">")
-      .replace(/&#(\d+);/g, (m, n) => { const c = num(n); return c >= 32 && c < 127 ? String.fromCharCode(c) : " "; })
-      .replace(/&amp;/g, "&").trim();
-  },
+  // every value read from Tally's XML, names first: entities decoded (also escaped twice, "&amp;#13;&amp;#10;"), line
+  // breaks one space, ends trimmed; the one rule the cloud reader uses too (server/_shared/names.js, namesClean)
+  unesc(v){ return namesClean(v); },
   // each pay head of a payroll voucher, summed over its employees: [[pay head, amount]] (Tally's sign: debit negative)
   payheads(s){
     if (s.indexOf("<PAYHEADALLOCATIONS.LIST>") < 0) return [];
@@ -158,10 +156,11 @@ const Books = {
     // the party ledger (Salary Payable) takes the net. A pay head already among the ledger lines is not counted again
     const pays = this.payheads(s);
     if (pays.length){
-      const have = new Set(v.ent.map(e => e.l)); let tot = 0;
-      pays.forEach(([l, a]) => { tot = Math.round((tot + a) * 100) / 100; if (!have.has(l)) v.ent.push({l, a, r: null}); });
+      // names met by their key (namesKey), as the cloud reader does (server/tally-cloud/parse.js)
+      const have = new Set(v.ent.map(e => namesKey(e.l))); let tot = 0;
+      pays.forEach(([l, a]) => { tot = Math.round((tot + a) * 100) / 100; if (!have.has(namesKey(l))) v.ent.push({l, a, r: null}); });
       const party = this.one(s, "PARTYLEDGERNAME");
-      if (party && !have.has(party) && Math.abs(tot) >= 0.005) v.ent.push({l: party, a: Math.round(-tot * 100) / 100, r: null});
+      if (party && !have.has(namesKey(party)) && Math.abs(tot) >= 0.005) v.ent.push({l: party, a: Math.round(-tot * 100) / 100, r: null});
     }
     // the rate on an item line, when the tax ledgers do not carry one
     if (!v.ent.some(e => e.r)){
@@ -203,7 +202,7 @@ const Books = {
       if (gst) gstins[name] = gst;
       if (par) under[name] = par;
       const tt = this.one(piece, "TAXTYPE").replace(/[^A-Za-z ]/g, "").trim();
-      info[name] = {group: par, taxType: tt, dutyHead: this.one(piece, "GSTDUTYHEAD"), tdsNature: this.one(piece, "TDSNATUREOFPAYMENT") || this.one(piece, "NATUREOFPAYMENT"), gstin: gst, pan,
+      info[name] = {group: par, taxType: tt, dutyHead: this.one(piece, "GSTDUTYHEAD"), tdsNature: this.one(piece, "TDSNATUREOFPAYMENT") || this.one(piece, "NATUREOFPAYMENT"), rate: num(this.one(piece, "RATEOFTAXCALCULATION")) || undefined, gstin: gst, pan,
         ob: this.amt(this.one(piece, "OPENINGBALANCE")), from: this.one(piece, "STARTINGFROM"),
         msme: this.one(piece, "UDYAMREGNUMBER") ? (this.one(piece, "ENTERPRISETYPE") || "Micro") : "", regType: (lastReg && lastReg.type) || (regs.length ? regs[regs.length - 1].type : "") || this.one(piece, "GSTREGISTRATIONTYPE"),
         panFrom: pan ? "Tally" : panG ? "GSTIN" : "", email: this.one(piece, "EMAIL"), phone: this.one(piece, "LEDGERMOBILE") || this.one(piece, "LEDGERPHONE"), gstinHistory: regs.filter(x => x.gstin).length > 1 ? regs.filter(x => x.gstin).map(x => x.from + ":" + x.gstin) : undefined};
@@ -255,7 +254,12 @@ const Books = {
     if (/BANK|CASH\b/.test(u)) return {kind: "bank"};
     return {kind: ""};
   },
-  ledgerOf(name){ return (S.books && S.books.map && S.books.map[name]) || {}; },
+  ledgerOf(name){
+    const b = S.books, m = (b && b.map && b.map[name]) || {};
+    // once a client's ledger check is saved, a tax ledger not confirmed counts in no return (src/js/57)
+    if (b && b.ledCheck && b.ledCheck.strict && !m.ok && typeof LedCheck === "object"){ const h = LedCheck.held(b); if (h && h.has(name)) return LedCheck.PENDING; }
+    return m;
+  },
   // the purchase and sales side of a voucher, ready for GST and TDS
   // build 193: an entry's lines are worked out once per drawing or calculation (the same entry is asked many times)
   lines(v){
@@ -265,15 +269,17 @@ const Books = {
     return r;
   },
   linesNow(v){
-    const out = {taxable: 0, tax: {CGST: 0, SGST: 0, IGST: 0, CESS: 0}, tds: [], tdsPaid: [], party: 0, rates: {}, roundoff: 0}, vals = [];
+    const out = {taxable: 0, tax: {CGST: 0, SGST: 0, IGST: 0, CESS: 0}, tds: [], tdsPaid: [], tcs: [], tcsPaid: [], party: 0, rates: {}, roundoff: 0}, vals = [];
     v.ent.forEach(e => {
       const m = Books.ledgerOf(e.l), amt = Math.abs(e.a), sign = e.a < 0 ? -1 : 1;
       if (m.kind === "ineligible"){ out.ineligible = r2((out.ineligible || 0) + amt); out.taxable = r2(out.taxable + amt); return; }
       // the reverse-charge liability credited beside the input tax is what we owe, not tax on the bill
       if (m.kind === "gst" && m.rcm && m.side === "output"){ out.rcmOwed = r2((out.rcmOwed || 0) + amt); return; }
       if (m.kind === "gst" || m.kind === "gst_common"){
-        out.tax[m.tax] = r2(out.tax[m.tax] + amt);
-        if (m.kind === "gst_common"){ out.common = out.common || {CGST: 0, SGST: 0, IGST: 0, CESS: 0}; out.common[m.tax] = r2(out.common[m.tax] + amt); }
+        // one ledger for CGST and SGST together (a "RCM Payable" of both): half each
+        const heads = m.tax === "CGST+SGST" ? [["CGST", amt / 2], ["SGST", amt / 2]] : [[m.tax, amt]];
+        heads.forEach(([h, a]) => { out.tax[h] = r2((out.tax[h] || 0) + a); });
+        if (m.kind === "gst_common"){ out.common = out.common || {CGST: 0, SGST: 0, IGST: 0, CESS: 0}; heads.forEach(([h, a]) => { out.common[h] = r2((out.common[h] || 0) + a); }); }
         return;
       }
       if (m.kind === "tds_clearing"){
@@ -289,7 +295,13 @@ const Books = {
         return;
       }
       if (m.kind === "roundoff"){ out.roundoff = r2(out.roundoff + e.a); return; }
-      if (m.kind === "tax_other" || m.kind === "tcs_payable" || m.kind === "tcs_receivable") return;
+      // TCS collected on a sale (credited), or paid over from the bank (debited): for 27EQ; neither is part of the sale's value
+      if (m.kind === "tcs_payable"){
+        if (e.a > 0) out.tcs.push({ledger: e.l, section: m.section, rate: m.rate, amount: amt});
+        else if (v.ent.some(z => Books.ledgerOf(z.l).kind === "bank")) out.tcsPaid.push({ledger: e.l, section: m.section, amount: amt});
+        return;
+      }
+      if (m.kind === "tax_other" || m.kind === "tcs_receivable") return;
       if (e.l === v.party){ out.party = amt; return; }
       if (m.kind === "bank" || m.kind === "tds_receivable") return;
       out.taxable = r2(out.taxable + amt);
@@ -354,7 +366,7 @@ const Books = {
   isImport(v){ const c = String(v.country || "").toLowerCase(); return !!c && c !== "india"; },
   // orders and stock movements carry no accounts; they are never purchases or sales
   NONACC: /ORDER|DELIVERY NOTE|RECEIPT NOTE|REJECTION|STOCK JOURNAL|PHYSICAL STOCK|MATERIAL (IN|OUT)|MEMO/i,
-  groupPath(l){ const b = S.books || {}, under = b.under || {}, groups = b.groups || {}, out = []; let p = under[l]; for (let i = 0; p && i < 15; i++){ out.push(p); p = groups[p]; } return out; },
+  groupPath(l){ return ledGroupPath(S.books || {}, l); },
   // a voucher type with its own name ("GST INWARD", "LOCAL", "IMPORT") is known by what it does:
   // it debits a ledger under Purchase Accounts, or credits one under Sales Accounts
   byContent(v, re, debit){

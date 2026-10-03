@@ -106,12 +106,20 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if path == "/ping" {
-		sendJSON(w, 200, M{"ok": true, "bridge": "FinCom Tally Bridge", "version": BridgeVersion, "impl": "go", "testMode": testMode()}, origin)
+		// pid and loopSec: the per-user supervisor checks that its own worker answers and that its main loop still turns
+		sendJSON(w, 200, M{"ok": true, "bridge": "FinCom Tally Bridge", "version": BridgeVersion, "impl": "go", "testMode": testMode(), "runMode": runMode, "pid": os.Getpid(), "loopSec": loopSec()}, origin)
 		return
 	}
 	if sentOrigin != "" && !originOK {
 		writeLog("Refused a request from the web page " + sentOrigin + " (not FinCom).")
 		sendJSON(w, 403, M{"ok": false, "error": "This bridge answers FinCom only."}, origin)
+		return
+	}
+	if strings.HasPrefix(path, "/tray/") && (sentOrigin != "" || r.Header.Get("Sec-Fetch-Site") != "" || r.Header.Get("Sec-Fetch-Mode") != "") {
+		// the tray's own addresses are for the tray icon (a program on this computer, which sends no Origin), never for
+		// a web page, FinCom's own included: pausing, resuming, restarting, quitting are done in the tray
+		writeLog("Refused a tray request from a web page (" + path + ", " + sentOrigin + ").")
+		sendJSON(w, 403, M{"ok": false, "error": "This is for the FinCom Bridge tray icon only."}, origin)
 		return
 	}
 	if path == "/pair" {
@@ -157,6 +165,11 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	body := string(bodyB)
+	// FinCom in use on this computer (for the nightly catch-up, when the cloud has no signal): a person's request, not
+	// the status checks the page and the tray make every minute
+	if !strings.HasPrefix(path, "/tray/") && path != "/status" && path != "/logtail" && path != "/synced" && path != "/diagnose" && path != "/paircode" {
+		noteUse()
+	}
 	res, err := route(w, r, path, qs, body, origin)
 	if err == errSent {
 		return
@@ -220,7 +233,7 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 		coMu.Unlock()
 		return M{"ok": true, "version": BridgeVersion, "computer": computerName(), "user": ownerName(), "mySession": mySession(), "mode": pm, "onlyMySession": cfgB("OnlyMySession"), "time": nowS(),
 			"sessions": sessions, "allowImport": cfgB("AllowImport") && why == "", "readOnly": why, "impl": "go", "testMode": testMode(), "paused": paused(),
-			"tallyStuck": getTallyStuck(), "wake": wakeStatus(), "jobs": jobsNow, "tally": tallyStatus(sessions), "beat": beatStatus()}, nil
+			"tallyStuck": getTallyStuck(), "wake": wakeStatus(), "jobs": jobsNow, "posting": postingNow(), "tally": tallyStatus(sessions), "beat": beatStatus()}, nil
 	case "/companies":
 		list := []any{}
 		for _, s := range openCompanies(false) {
@@ -251,6 +264,10 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 			return nil, err
 		}
 		company := str(o["company"])
+		if why := postOnlyUnpostRefusal(company); why != "" { // security M1 (round 11): PostOnly covers removing too
+			writeLog("Unpost from '" + company + "': " + why)
+			return nil, errors.New(why)
+		}
 		port, err := findCompanyPort(company, qint(qs, "port"))
 		if err != nil {
 			return nil, err
@@ -321,10 +338,14 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 		writeResp(w, 200, x, origin, "text/xml; charset=utf-8", false)
 		return nil, errSent
 	case "/balances":
-		setFinComReading()
-		return getBalances(co, qs.Get("from"), qs.Get("to"), qint(qs, "port"), qs.Get("open") == "1")
+		// 2.1.5: worked out from the copy kept here; Tally is not asked for a balance
+		return heldBalances(co, qs.Get("from"), qs.Get("to"), qs.Get("open") == "1")
 	case "/synced":
-		mf := filepath.Join(syncFolder(co), "manifest.json")
+		dir, err := companyDir(co)
+		if err != nil {
+			return nil, &httpErr{400, M{"ok": false, "error": err.Error()}}
+		}
+		mf := filepath.Join(dir, "manifest.json")
 		if exists(mf) {
 			writeResp(w, 200, readText(mf), origin, "application/json; charset=utf-8", false)
 			return nil, errSent
@@ -335,7 +356,11 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 		if !re(`^(daybook-\d{6}\.xml|balances\.json|ledgers\.json)$`).MatchString(name) {
 			return nil, errors.New("Not a file of the nightly copy.")
 		}
-		fp := filepath.Join(syncFolder(co), name)
+		dir, err := companyDir(co)
+		if err != nil {
+			return nil, &httpErr{400, M{"ok": false, "error": err.Error()}}
+		}
+		fp := filepath.Join(dir, name)
 		if !exists(fp) {
 			return nil, errors.New("That is not in the nightly copy.")
 		}
@@ -392,6 +417,16 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 			return v, nil
 		}
 		return M{"ok": true, "jobs": activeJobs()}, nil
+	case "/jobs/cancel":
+		// FinCom cancels a posting (one waiting for Tally, or between batches): nothing more of it is sent
+		if err := needPost(r, "Use POST."); err != nil {
+			return nil, err
+		}
+		o, err := bodyObj(body)
+		if err != nil {
+			return nil, err
+		}
+		return cancelJob(str(o["id"]), "asked by FinCom on this computer")
 	case "/jobs/resume":
 		if err := needPost(r, "Use POST."); err != nil {
 			return nil, err
@@ -402,48 +437,10 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 		}
 		return resumePostJob(str(o["id"]))
 	case "/ledgerlines":
-		// one ledger's vouchers for a period (light); the Day Book month by month only if this Tally will not answer that way
-		port, err := findCompanyPort(co, qint(qs, "port"))
-		if err != nil {
-			return nil, err
-		}
-		if lv, err := ledgerVoucherList(fin, port, co, qs.Get("ledger"), qs.Get("from"), qs.Get("to")); err == nil && lv != nil {
-			a := make([]any, len(lv))
-			for i, x := range lv {
-				a[i] = x
-			}
-			return M{"ok": true, "port": port, "via": "ledger", "vouchers": a}, nil
-		}
-		r0, err := getVouchers(co, qs.Get("from"), qs.Get("to"), qs.Get("ledger"), "", port)
-		if err != nil {
-			return nil, err
-		}
-		r0["via"] = "daybook"
-		return r0, nil
+		return getLedgerLines(co, qs.Get("ledger"), qs.Get("from"), qs.Get("to"), qint(qs, "port"))
 	case "/ledgerbalance":
-		port, err := findCompanyPort(co, qint(qs, "port"))
-		if err != nil {
-			return nil, err
-		}
-		led := qs.Get("ledger")
-		if !isTallyDate(qs.Get("from")) {
-			return nil, errors.New("Dates are to be given as yyyymmdd.")
-		}
-		before := addDays(qs.Get("from"), -1)
-		o := ""
-		if qs.Get("only") != "close" {
-			if o, _, err = oneLedgerBalance(port, co, led, before); err != nil {
-				return nil, err
-			}
-		}
-		c, found, err := oneLedgerBalance(port, co, led, qs.Get("to"))
-		if err != nil {
-			return nil, err
-		}
-		if !found {
-			return nil, errors.New("Ledger " + led + " was not found in " + co + ".")
-		}
-		return M{"ok": true, "port": port, "ledger": led, "openAsOn": before, "open": o, "close": c}, nil
+		// 2.1.5: from the copy kept here (opening the day before from, closing on to); Tally is not asked for a balance
+		return heldLedgerBalance(co, qs.Get("ledger"), qs.Get("from"), qs.Get("to"), qs.Get("only") == "close")
 	case "/tags":
 		port, err := findCompanyPort(co, qint(qs, "port"))
 		if err != nil {
@@ -463,7 +460,7 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 	case "/ledgernames":
 		return getLedgerNames(fin, co, qint(qs, "port"))
 	case "/tb":
-		return getTrialBalance(co, qs.Get("to"), qint(qs, "port"))
+		return heldTB(co, qs.Get("to"))
 	case "/paircode":
 		// the tray (or the FinCom Connector), which holds the key, opens a fresh connect code for FinCom on this computer
 		if r.Method == "POST" {
@@ -510,15 +507,95 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 			}
 			saveConfig()
 			if truthy(o["now"]) {
+				// Update now pressed in FinCom on this computer (b): read now, also while background reading is paused
 				setCfg("KeepInStep", true)
 				saveConfig()
-				requestKeepNow()
-			}
-			if keepOn() {
-				startKeepIfNeeded()
+				wakeUpdate(str(o["company"]))
 			}
 		}
 		return keepStatus(co), nil
+	case "/wake":
+		// FinCom on this computer: a client was opened (a), the same as the cloud's wake-up; at most one light update
+		// of the company every few minutes
+		if err := needPost(r, "Use POST."); err != nil {
+			return nil, err
+		}
+		o, err := bodyObj(body)
+		if err != nil {
+			return nil, err
+		}
+		started := false
+		if str(o["what"]) == "open" {
+			started = wakeOpen(str(o["company"]), "opened in FinCom on this computer")
+		}
+		return M{"ok": true, "started": started, "paused": paused()}, nil
+	case "/ledgers/refresh":
+		// 2.1.4: FinCom's bill screen opened its ledger chooser and the list it has is older than the last posting: the
+		// ledger list of the company read now (at most once per company every few minutes). {company} -> {started,
+		// debounced, paused, why, listAt, nextAt}
+		if err := needPost(r, "Use POST."); err != nil {
+			return nil, err
+		}
+		o, err := bodyObj(body)
+		if err != nil {
+			return nil, err
+		}
+		c := str(o["company"])
+		if c == "" {
+			c = co
+		}
+		return wakeLedgers(c, "the ledger chooser opened in FinCom on this computer", false), nil
+	case "/measure", "/tray/measure":
+		// "Measure Tally (for FinCom support)": POST starts it (one request at a time, through the queue), GET says how far.
+		// Round 4 (03-Oct-2026): started by a person only. Both addresses are for the tray icon (/tray/measure) and the
+		// measure command typed in a console (/measure): programs on this computer, which send no Origin and no Sec-Fetch
+		// header. A web page, FinCom's own included, is refused. The run mode does not matter (round 5, C4): under the
+		// Windows service the tray is a program of its own calling this server, and the service itself never starts a
+		// measure (nothing in its loops calls runMeasure)
+		if r.Header.Get("Origin") != "" || r.Header.Get("Sec-Fetch-Site") != "" || r.Header.Get("Sec-Fetch-Mode") != "" || r.Header.Get("Sec-Fetch-Dest") != "" {
+			writeLog("Refused a measure request from a web page (" + path + ", " + r.Header.Get("Origin") + ").")
+			return nil, &httpErr{403, M{"ok": false, "error": "Measure Tally is started from the FinCom Bridge tray icon or the measure command only, never from a web page."}}
+		}
+		if r.Method == "POST" {
+			o, _ := bodyObj(body)
+			// M3 (round 7): no report path from a caller (the service would write it as SYSTEM): always Home, the safe name
+			m := measureOpts{company: str(o["company"]), ledgers: str(o["ledgers"]), snapshot: str(o["snapshot"]), month: str(o["month"])}
+			if m.company == "" {
+				m.company = trayMeasureCompany()
+			}
+			if m.company == "" {
+				return M{"ok": false, "error": "No company is open in Tally: open the company to measure, then try again."}, nil
+			}
+			return startMeasure(m), nil
+		}
+		return measureStatus(), nil
+	case "/tray/readtest":
+		// round 13 (03-Oct-2026): "Test reading from Tally": three requests for one day of the open company, their
+		// counts and heads logged (readtest.go). Started by a person only, as the measuring tool is: a web page, FinCom's
+		// own included, is refused; the tray icon (a program on this computer) sends no Origin and no Sec-Fetch header
+		if r.Header.Get("Origin") != "" || r.Header.Get("Sec-Fetch-Site") != "" || r.Header.Get("Sec-Fetch-Mode") != "" || r.Header.Get("Sec-Fetch-Dest") != "" {
+			writeLog("Refused a read test request from a web page (" + path + ", " + r.Header.Get("Origin") + ").")
+			return nil, &httpErr{403, M{"ok": false, "error": "Test reading from Tally is started from the FinCom Bridge tray icon only, never from a web page."}}
+		}
+		// 13b: as the measuring tool: POST starts it in the bridge and answers at once, GET says how far (the tray polls)
+		if r.Method == "POST" {
+			o, _ := bodyObj(body)
+			return startReadTest(str(o["company"])), nil
+		}
+		return readTestStatus(), nil
+	case "/companyguid":
+		// a company whose Tally GUID changed (restored, re-created): confirmed on this computer, its new GUID is held
+		if err := needPost(r, "Use POST."); err != nil {
+			return nil, err
+		}
+		o, err := bodyObj(body)
+		if err != nil {
+			return nil, err
+		}
+		if !truthy(o["accept"]) {
+			return M{"ok": true, "company": str(o["company"]), "guid": heldGUID(str(o["company"]))}, nil
+		}
+		return acceptCompanyGUID(str(o["company"]))
 	case "/keepcheck":
 		return testKeepMonth(co, qs.Get("ym"), qint(qs, "port"))
 	// --- the tray icon's own questions
@@ -531,6 +608,18 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 		o, _ := bodyObj(body)
 		setPaused(truthy(o["on"]))
 		return trayStatus(), nil
+	case "/tray/resume-reading":
+		// the tray's "Resume reading": clears a stop the bridge made itself; a stop made from FinCom is lifted in FinCom
+		if err := needPost(r, "Use POST."); err != nil {
+			return nil, err
+		}
+		res, err := trayResumeReading()
+		if err != nil {
+			return nil, err
+		}
+		st := trayStatus()
+		st["resumed"], st["byFinCom"] = res["resumed"], truthy(res["byFinCom"])
+		return st, nil
 	case "/tray/restart":
 		if err := needPost(r, "Use POST."); err != nil {
 			return nil, err
@@ -559,6 +648,22 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 		trayQuitSession(toInt(o["session"]))
 		writeLog("The tray icon was closed (Quit); the bridge keeps running")
 		return M{"ok": true}, nil
+	case "/tray/check":
+		// "Test connection" in the tray: Tally asked now, and a hello to FinCom's cloud with this computer's key
+		if err := needPost(r, "Use POST."); err != nil {
+			return nil, err
+		}
+		return trayCheck(), nil
+	case "/tray/makemain":
+		// "Switch to main bridge..." in the tray (the person said Yes): FinCom is told, then the bridge installs itself again
+		if err := needPost(r, "Use POST."); err != nil {
+			return nil, err
+		}
+		if err := switchToMain(true); err != nil {
+			return nil, &httpErr{409, M{"ok": false, "error": err.Error()}}
+		}
+		writeLog("Switch to main bridge: asked from the tray icon")
+		return M{"ok": true, "switching": true}, nil
 	case "/tray/cloudkey":
 		// the tray hands over bridge 1.15.0's key (protected for the Windows user, which the service cannot open)
 		if err := needPost(r, "Use POST."); err != nil {
@@ -571,6 +676,53 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 		return adoptCloudKey(str(o["key"]))
 	}
 	return nil, &httpErr{404, M{"ok": false, "error": "Unknown address " + path}}
+}
+
+// for "Test connection": which Tallys answer and with which companies; whether FinCom's cloud answers this computer's key
+func trayCheck() M {
+	t := M{"ok": false, "ports": []any{}, "companies": []any{}, "error": ""}
+	var errs []string
+	for _, s := range openCompanies(true) {
+		if s["skipped"] == true {
+			continue
+		}
+		if s["ok"] == true {
+			t["ok"] = true
+			t["ports"] = append(arr(t["ports"]), fmt.Sprint(toInt(s["port"])))
+			for _, c := range sessCompanies(s) {
+				t["companies"] = append(arr(t["companies"]), str(c["name"]))
+			}
+		} else if e := str(s["error"]); e != "" {
+			errs = append(errs, fmt.Sprintf("port %d: %s", toInt(s["port"]), cut(e, 120)))
+		}
+	}
+	if t["ok"] != true {
+		t["error"] = strings.Join(errs, "; ")
+	}
+	c := M{"url": cfgS("CloudUrl") != "", "key": cloudKey() != "", "code": 0, "error": "", "firm": ""}
+	if cloudOn() {
+		r := invokeCloud(M{"kind": "hello", "info": M{"computer": computerName(), "user": ownerName()}}, 20)
+		c["code"], c["error"] = r.code, r.err
+		if r.json != nil {
+			c["firm"] = str(r.json["firm"])
+		}
+	}
+	return M{"ok": true, "tally": t, "cloud": c}
+}
+
+// this computer's bridge on a port: its /ping (no key needed), or nil when nothing answers there as a FinCom Bridge
+func pingLocal(port int, timeout time.Duration) M {
+	c := &http.Client{Timeout: timeout, Transport: &http.Transport{Proxy: nil}}
+	r, err := c.Get(fmt.Sprintf("http://127.0.0.1:%d/ping", port))
+	if err != nil {
+		return nil
+	}
+	defer r.Body.Close()
+	b, _ := io.ReadAll(io.LimitReader(r.Body, 1<<16))
+	if o := parseObj(string(b)); o != nil && str(o["impl"]) == "go" {
+		return o
+	}
+	return nil
 }
 
 // the web server, on this computer only

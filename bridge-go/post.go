@@ -1,5 +1,5 @@
 // Posting to Tally: masters first, then entries, each with its own answer; every entry posted is read back by its
-// FinCom tag (TDSDesk:<id>) in the narration. As bridge 1.15.0 (Invoke-Import, Read-ImportResult, Remove-TallyVoucher).
+// FinCom tag (TDSDesk:<id>, first in the narration). As bridge 1.15.0 (Invoke-Import, Read-ImportResult, Remove-TallyVoucher).
 package main
 
 import (
@@ -8,6 +8,7 @@ import (
 	"html"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -36,8 +37,12 @@ func readImportResult(text string) M {
 	return M{"ok": ok, "created": created, "altered": altered, "errors": errors_, "exceptions": exceptions, "ignored": ignored, "message": msg, "lastVchId": group(`<LASTVCHID>\s*(\d+)\s*</LASTVCHID>`, text, 1)}
 }
 
+// the fixed start of every Import Data request (importEnvelope): the allow-list's Import fast path matches only this,
+// at the very start of the request, never '<TALLYREQUEST>Import' somewhere inside another request
+const importHead = "<ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>"
+
 func importEnvelope(report, company, body string) string {
-	return "<ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>" + report + "</REPORTNAME>" +
+	return importHead + report + "</REPORTNAME>" +
 		"<STATICVARIABLES><SVCURRENTCOMPANY>" + esc(company) + "</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><REQUESTDATA>" + body + "</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>"
 }
 
@@ -54,12 +59,24 @@ func postingAllowed() error {
 	return nil
 }
 
+// posting to this company: allowed at all, and the company within PostOnly (security M1, round 11: every import path,
+// the local /import route included, refuses here before anything is asked of Tally)
+func postingAllowedFor(company string) error {
+	if err := postingAllowed(); err != nil {
+		return err
+	}
+	if why := postOnlyRefusal(company); why != "" {
+		return errors.New(why)
+	}
+	return nil
+}
+
 // masters first, then vouchers, one request each so every item gets its own result
 func invokeImport(p M) (M, error) {
-	if err := postingAllowed(); err != nil {
+	company, job := str(p["company"]), str(p["job"])
+	if err := postingAllowedFor(company); err != nil {
 		return nil, err
 	}
-	company := str(p["company"])
 	if company == "" {
 		return nil, errors.New("No company given.")
 	}
@@ -67,7 +84,30 @@ func invokeImport(p M) (M, error) {
 	if err != nil {
 		return nil, err
 	}
+	// the company's GUID (a job checked it already): another company of the same name is never posted to; Tally not
+	// answering the check: nothing is posted (each entry says so, as the duplicate check does)
+	var stopAll M
+	if !truthy(p["guidChecked"]) {
+		g, err := companyCheck(fin, company, port)
+		switch {
+		case err != nil:
+			writeLog("  company check of " + company + ": NOT POSTED, could not check Tally: " + tallyTrouble(err.Error()))
+			stopAll = M{"ok": false, "checkFailed": true, "message": dupCheckFailedMsg, "detail": tallyTrouble(err.Error())}
+		case guardCompanyGUID(company, g) != nil:
+			gerr := guardCompanyGUID(company, g)
+			writeLog("  NOT POSTED: " + gerr.Error())
+			stopAll = M{"ok": false, "guidMismatch": true, "message": "Not posted: " + gerr.Error()}
+		}
+	}
 	results := []M{}
+	// the job follows each entry as Tally answers it (FinCom shows it live)
+	onItem, _ := p["onItem"].(func(M))
+	add := func(r M) {
+		results = append(results, r)
+		if onItem != nil {
+			onItem(r)
+		}
+	}
 	var pending []M
 	groups := []struct {
 		kind, report string
@@ -81,6 +121,17 @@ func invokeImport(p M) (M, error) {
 			}
 			x := str(it["xml"])
 			id := it["id"]
+			if stopAll != nil {
+				r := M{"id": id, "kind": g.kind, "company": company, "port": port}
+				for k, v := range stopAll {
+					r[k] = v
+				}
+				add(r)
+				continue
+			}
+			if g.kind == "voucher" {
+				x, _ = stampFinComID(x, id) // its FinCom id at the end of its narration, when FinCom did not write one
+			}
 			// a voucher type may only have its numbering changed: no other field, and only an Alter
 			vtOnly := false
 			if re(`^\s*<VOUCHERTYPE\b`).MatchString(x) {
@@ -96,16 +147,32 @@ func invokeImport(p M) (M, error) {
 			}
 			// a voucher without a proper date never reaches Tally (Tally answers "Voucher date is missing" but may still make it)
 			if re(`^\s*<VOUCHER\b`).MatchString(x) && !re(`<DATE>(19|20)\d\d(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])</DATE>`).MatchString(x) {
-				results = append(results, M{"id": id, "kind": g.kind, "ok": false, "message": "The entry has no valid date, so it was not sent to Tally."})
+				add(M{"id": id, "kind": g.kind, "ok": false, "message": "The entry has no valid date, so it was not sent to Tally."})
 				continue
 			}
 			if !re(`^\s*<(VOUCHER|LEDGER|GROUP)\b`).MatchString(x) && !vtOnly {
-				results = append(results, M{"id": id, "kind": g.kind, "ok": false, "message": "Only VOUCHER, LEDGER or GROUP objects can be posted, or a voucher type's numbering changed."})
+				add(M{"id": id, "kind": g.kind, "ok": false, "message": "Only VOUCHER, LEDGER or GROUP objects can be posted, or a voucher type's numbering changed."})
 				continue
 			}
+			// 2.1.4: every voucher is looked for in Tally immediately before it is sent (one posting at a time per Tally
+			// from the check to the end of its import); found, or Tally not answering the check: not sent
+			isVch := g.kind == "voucher" && re(`^\s*<VOUCHER\b`).MatchString(x)
+			var gate *sync.Mutex
+			if isVch {
+				gate = postGate(port)
+				gate.Lock()
+				if r := dupCheck(port, company, id, x); r != nil {
+					gate.Unlock()
+					add(r)
+					continue
+				}
+			}
 			raw, err := invokeTally(fin, port, importEnvelope(g.report, company, `<TALLYMESSAGE xmlns:UDF="TallyUDF">`+x+"</TALLYMESSAGE>"), 0)
+			if gate != nil {
+				gate.Unlock()
+			}
 			if err != nil {
-				results = append(results, M{"id": id, "kind": g.kind, "ok": false, "message": "Tally did not answer: " + err.Error()})
+				add(M{"id": id, "kind": g.kind, "ok": false, "message": "Tally did not answer: " + err.Error()})
 				continue
 			}
 			r := readImportResult(raw)
@@ -118,18 +185,63 @@ func invokeImport(p M) (M, error) {
 				r["xmlSent"] = x
 				pending = append(pending, r)
 			}
-			results = append(results, r)
+			add(r)
+			// one clear word for what Tally did (02-Oct-2026: "created (not read back)" was followed by "verified in Tally",
+			// and a ledger that existed already was logged as created though Tally answered ALTERED)
 			st := "FAILED " + str(r["message"])
 			if r["ok"] == true {
-				st = "created (not read back)"
+				switch {
+				case toInt(r["altered"]) > 0 && toInt(r["created"]) == 0:
+					st = "altered in Tally (it existed already)"
+					r["altered1"] = true
+					if g.kind != "voucher" {
+						r["message"] = "Altered in Tally: it existed already"
+					}
+				case g.kind == "voucher":
+					st = "sent to Tally; reading it back"
+				default:
+					st = "created in Tally"
+				}
 			}
 			writeLog("  " + g.kind + " " + str(id) + ": " + st)
 		}
 	}
-	// one read-back for everything just posted
+	// one read-back for everything just posted. Round 6 (03-Oct-2026): FIRST each entry by the voucher id Tally gave
+	// (LASTVCHID, looked up directly with FinComByMaster); the tag read-back (the day's entries) is the second check
+	byID := map[string]M{}            // id -> the head found by Tally's voucher id
+	lookedUpBy := map[string]string{} // id -> what the lookup said when it did not confirm
+	var unresolved []M
+	for _, r := range pending {
+		xs := str(r["xmlSent"])
+		tag, lv := reTag.FindString(xs), str(r["lastVchId"])
+		if lv == "" {
+			unresolved = append(unresolved, r)
+			continue
+		}
+		k, e := voucherByMaster(port, company, group(`<DATE>(\d{8})</DATE>`, xs, 1), lv)
+		switch {
+		case e != nil:
+			lookedUpBy[str(r["id"])] = "Tally did not answer (" + cut(e.Error(), 80) + ")"
+		case k == nil:
+			lookedUpBy[str(r["id"])] = "not found in its month"
+		case k.cancelled:
+			lookedUpBy[str(r["id"])] = "found, but cancelled"
+		case otherTag(k.narration, tag):
+			lookedUpBy[str(r["id"])] = "found, but it carries another entry's tag"
+		default:
+			byID[str(r["id"])] = headOfKey(*k)
+			if hasTag(k.narration, tag) {
+				writeLog("  voucher " + str(r["id"]) + ": confirmed by Tally's voucher id " + lv + " (looked up directly; its narration carries " + tag + ")")
+			} else {
+				writeLog("  voucher " + str(r["id"]) + ": confirmed by Tally's voucher id " + lv + " (looked up directly; its narration in Tally does not carry " + or(tag, "a tag") + ")")
+			}
+			continue
+		}
+		unresolved = append(unresolved, r)
+	}
 	if len(pending) > 0 {
 		var dates []string
-		for _, r := range pending {
+		for _, r := range unresolved {
 			if d := group(`<DATE>(\d{8})</DATE>`, str(r["xmlSent"]), 1); d != "" {
 				dates = append(dates, d)
 			}
@@ -140,55 +252,34 @@ func invokeImport(p M) (M, error) {
 		from, to := "", ""
 		if len(dates) > 0 {
 			from, to = dates[0], dates[len(dates)-1]
-			for _, try := range []string{"list", "daybook"} {
-				var h []M
-				var e error
-				if try == "list" {
-					h, e = voucherHeads(fin, port, company, from, to)
-				} else {
-					h, e = dayBookHeads(fin, port, company, from, to)
-				}
-				if e != nil {
-					h = nil
-				}
+			// 2.1.5: read back by FinComTag alone (each date's entries, heads and narration)
+			if h, e := tagHeadsOn(port, company, dates); e == nil {
 				heads = h
-				if len(h) > 0 {
-					if try == "list" {
-						for _, x := range h {
-							if strings.EqualFold(str(x["optional"]), "yes") {
-								listSeesOptional = true
-								break
-							}
-						}
+				for _, x := range h {
+					if strings.EqualFold(str(x["optional"]), "yes") {
+						listSeesOptional = true
+						break
 					}
-					break
 				}
 			}
 			writeLog(fmt.Sprintf("  read-back for the batch: %d vouchers listed for %s to %s", len(heads), from, to))
 		}
 		for _, r := range pending {
 			xs := str(r["xmlSent"])
-			tag := reTag.FindString(xs)
-			var hit M
-			if tag != "" {
-				for _, h := range heads {
-					if strings.Contains(str(h["narration"]), tag) {
-						hit = h
-						break
-					}
-				}
-			} else if lv := str(r["lastVchId"]); lv != "" {
-				// Tally's "last voucher id" can point at an older voucher, so it is trusted only for an entry without a tag
-				for _, h := range heads {
-					if str(h["masterId"]) == lv {
-						hit = h
-						break
-					}
+			tag, lv := reTag.FindString(xs), str(r["lastVchId"])
+			lookedUp := lookedUpBy[str(r["id"])]
+			// first the head Tally's voucher id gave; else the day's list: by the tag wherever it is in the narration, else
+			// by the voucher id among the heads (never one carrying another entry's tag)
+			hit, how := byID[str(r["id"])], "voucher id"
+			if hit == nil {
+				hit, how = matchHead(heads, tag, lv)
+				if hit != nil && how == "voucher id" {
+					writeLog("  voucher " + str(r["id"]) + ": confirmed by Tally's voucher id " + lv + " among the day's entries (its narration in Tally does not carry " + or(tag, "a tag") + ")")
 				}
 			}
 			switch {
 			case hit != nil:
-				addPostedForCopy(company, hit, xs)
+				confirmedInTally(company, hit, xs, how, str(r["id"]))
 				r["verified"], r["optional"] = true, strings.EqualFold(str(hit["optional"]), "yes")
 				r["vchNumber"], r["vchType"], r["guid"], r["masterId"], r["vchDate"] = str(hit["number"]), str(hit["type"]), str(hit["guid"]), str(hit["masterId"]), str(hit["date"])
 			case re(`<ISOPTIONAL>\s*Yes`).MatchString(xs) && !listSeesOptional:
@@ -205,12 +296,12 @@ func invokeImport(p M) (M, error) {
 						}
 						for _, cx := range sessCompanies(sx) {
 							cn := str(cx["name"])
-							if cn == "" || cn == company {
+							if cn == "" || sameCompany(cn, company) {
 								continue
 							}
-							if other, e := voucherHeads(fin, port, cn, from, to); e == nil {
+							if other, e := tagHeadsOn(port, cn, dates); e == nil {
 								for _, h := range other {
-									if strings.Contains(str(h["narration"]), tag) {
+									if hasTag(str(h["narration"]), tag) {
 										elsewhere = cn
 										break
 									}
@@ -229,9 +320,14 @@ func invokeImport(p M) (M, error) {
 					r["wrongCompany"] = elsewhere
 					r["message"] = "Tally put this entry into '" + elsewhere + "', not '" + company + "'. Delete it from '" + elsewhere + "' in Tally, close that company (or make '" + company + "' the active one), then post again."
 					writeLog("  WRONG COMPANY: " + tag + " went into '" + elsewhere + "' instead of '" + company + "'")
+				} else if acceptedByTally(r) {
+					// fault 1 (03-Oct-2026): Tally accepted it (CREATED with a voucher id): never failed, never sent again
+					markAccepted(r, company, job, lv, heads, lookedUp)
 				} else {
 					r["message"] = "Tally replied 'created', but the entry cannot be found in '" + company + "' or in any other company open in this Tally. It was not marked as posted. Tally's reply: " + str(r["replySnip"])
 				}
+			case acceptedByTally(r):
+				markAccepted(r, company, job, lv, heads, or(lookedUp, "Tally listed no vouchers for those dates"))
 			default:
 				r["verified"] = nil
 				r["verifyNote"] = "Tally listed no vouchers for those dates"
@@ -298,9 +394,11 @@ func removeTallyVoucher(port int, company, guid, masterID, vtype, vdate, vnum st
 	return M{"ok": false, "message": why}, nil
 }
 
-// the FinCom tags of these items already in Tally (found by reading the dates they carry); nil when Tally did not answer
-// a read, so nothing is sent again on a guess
+// the FinCom tags of these items already in Tally, found by FinComTag alone: one request per date the items carry, that
+// date's entries (heads and narration) only. nil when Tally did not answer a read, so nothing is sent again on a guess.
+// The ledger is no longer used: Tally's per-ledger list ("Vouchers : Ledger") is not asked (2.1.5)
 func findPostedTags(port int, company string, items []M, ledger string) map[string]M {
+	_ = ledger
 	found := map[string]M{}
 	var dates []string
 	for _, it := range items {
@@ -308,29 +406,8 @@ func findPostedTags(port int, company string, items []M, ledger string) map[stri
 			dates = append(dates, d)
 		}
 	}
-	dates = uniqSorted(dates)
-	if len(dates) == 0 {
-		return found
-	}
-	a, b := dates[0], dates[len(dates)-1]
-	var heads []M
-	read := false
-	if ledger != "" {
-		if lv, err := ledgerVoucherList(fin, port, company, ledger, a, b); err == nil && lv != nil {
-			heads, read = lv, true
-		}
-	}
-	if !read {
-		if h, err := voucherHeads(fin, port, company, a, b); err == nil {
-			heads, read = h, true
-		}
-	}
-	if len(heads) == 0 {
-		if h, err := dayBookHeads(fin, port, company, a, b); err == nil {
-			heads, read = h, true
-		}
-	}
-	if !read {
+	heads, err := tagHeadsOn(port, company, uniqSorted(dates))
+	if err != nil {
 		return nil
 	}
 	for _, it := range items {
@@ -339,13 +416,39 @@ func findPostedTags(port int, company string, items []M, ledger string) map[stri
 			continue
 		}
 		for _, h := range heads {
-			if strings.Contains(str(h["narration"]), tag) {
+			if hasTag(str(h["narration"]), tag) {
 				found[str(it["id"])] = h
 				break
 			}
 		}
 	}
 	return found
+}
+
+// the entries on these dates, as heads (FinComTag, one request per date)
+func tagHeadsOn(port int, company string, dates []string) ([]M, error) {
+	var heads []M
+	for _, d := range dates {
+		ks, err := tagsOnDate(port, company, d)
+		if err != nil {
+			return nil, err
+		}
+		for _, k := range ks {
+			heads = append(heads, headOfKey(k))
+		}
+	}
+	return heads, nil
+}
+
+func headOfKey(k vchKey) M {
+	yn := func(b bool) string {
+		if b {
+			return "Yes"
+		}
+		return "No"
+	}
+	return M{"guid": k.guid, "masterId": k.masterID, "alter": k.alter, "date": k.rawDate, "type": k.vtype, "number": k.number, "narration": k.narration, "party": k.party,
+		"optional": yn(k.optional), "cancelled": yn(k.cancelled)}
 }
 
 // a failure in words

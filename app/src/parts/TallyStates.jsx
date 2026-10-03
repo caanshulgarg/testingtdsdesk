@@ -6,7 +6,7 @@ const BRIDGE = { online: ["ok", "● Online"], reconnecting: ["warn", "◐ Recon
 const TALLY = { open: ["ok", "● Open"], busy: ["warn", "◐ Busy"], closed: ["bad", "○ Not open"] };
 const COMPANY = { linked: ["ok", "● Linked"], unlinked: ["warn", "○ Not linked"] };
 const SAY = {
-  bridge: { online: "The bridge answers: its heartbeat comes every 30 seconds (60 s from bridge 1.15.0).", reconnecting: "A heartbeat is late. Nothing is lost; FinCom shows Offline only after three missed heartbeats (about two minutes).", offline: "Three heartbeats missed: the Tally computer or its bridge is off, or it has no internet.", none: "No Tally Bridge is set up." },
+  bridge: { online: "FinCom Bridge answers: its heartbeat comes about every minute.", reconnecting: "A heartbeat is late. Nothing is lost; FinCom shows Offline only after three missed heartbeats (about two minutes).", offline: "Three heartbeats missed: the Tally computer or its bridge is off, or it has no internet.", none: "FinCom Bridge is not set up. Install FinCom Bridge from the Tally page." },
   tally: { open: "TallyPrime is open and answering.", busy: "TallyPrime is open but answering slowly (a long report, or a message box in Tally). The bridge asks again by itself; the connection is fine.", closed: "TallyPrime is not open on the Tally computer." },
   company: { linked: "A Tally company is linked to this client.", unlinked: "No Tally company is linked to this client yet (Client setup → Tally)." },
 };
@@ -34,7 +34,7 @@ function words(e) {
   return ["note", e.kind + " " + e.state];
 }
 
-// Settings → Tally Bridge: the last 24 hours of each Tally computer's connection
+// Settings → FinCom Bridge: the last 24 hours of each Tally computer's connection
 export function TallyHistory() {
   const rows = typeof tallyHistory === "function" ? tallyHistory() : [];
   const devs = (TLight.st.devs || []).length;

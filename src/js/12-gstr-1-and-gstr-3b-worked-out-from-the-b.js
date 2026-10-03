@@ -13,7 +13,11 @@ const GSTR = {
   months(){
     const b = S.books;
     if (!b) return [];
-    const m = Array.from(new Set((b.vouchers || []).map(v => this.ym(v.date)).filter(x => x.length === 6))).sort();
+    const seen = Array.from(new Set((b.vouchers || []).map(v => this.ym(v.date)).filter(x => x.length === 6))).sort();
+    // every month from the books' first to their last, with or without entries (review of 01-Oct-2026: Apr-Jun 2026 were
+    // missing because no entry fell in them)
+    const m = [];
+    if (seen.length){ let x = seen[0]; while (x <= seen[seen.length - 1] && m.length < 240){ m.push(x); x = this.nextYm(x); } }
     if (m.length || !this.gstins(b).length) return m;
     const d = new Date(), y = d.getFullYear(), mo = d.getMonth() + 1, fy = mo >= 4 ? y : y - 1, out = [];
     let x = (fy - 1) + "04"; const last = (mo === 1 ? (y - 1) + "12" : y + String(mo - 1).padStart(2, "0"));
@@ -32,7 +36,8 @@ const GSTR = {
   pEnd(per){ const p = String(per); return p.length > 6 ? p.slice(7, 13) : p; },
   expand(per){ const out = []; let m = this.pStart(per); const e = this.pEnd(per); while (m <= e){ out.push(m); m = this.nextYm(m); } return out; },
   nextYm(ym){ const y = +ym.slice(0, 4), m = +ym.slice(4, 6); return m === 12 ? (y + 1) + "01" : y + String(m + 1).padStart(2, "0"); },
-  label(ym){ return fmtDate(ym.slice(0, 4) + "-" + ym.slice(4, 6) + "-01").replace(/^\d+\s/, ""); },
+  // a month as "Apr-2025" (the date format of the rest of FinCom, without the day)
+  label(ym){ return fmtDate(ym.slice(0, 4) + "-" + ym.slice(4, 6) + "-01").replace(/^\d+[-\s]/, ""); },
   regOf(v){
     let r = "";
     for (const e of v.ent){ const m = Books.ledgerOf(e.l); if ((m.kind === "gst" || m.kind === "gst_common" || m.kind === "ineligible") && m.reg){ if (r && r !== m.reg){ r = ""; break; } r = m.reg; } }
@@ -41,9 +46,10 @@ const GSTR = {
   // the entries of one month (build 193): from an index made once per drawing or calculation, not the whole year each time
   // the entries GST is worked out from. Optional entries are memoranda in Tally, not in the books, and never in a return
   // (review of 01-Oct-2026: GSTR-1 counted 13 Optional sales of one client, each also entered as a regular invoice: their
-  // tax twice; the server's GST summary, which leaves them out, showed it)
+  // tax twice; the server's GST summary, which leaves them out, showed it). Cancelled entries are left out too (review of
+  // 02-Oct-2026: as the server's summary and MIS do); table 13 counts their numbers on its own
   vIn(ym){
-    const all = (S.books.vouchers || []).filter(v => !v.opt);
+    const all = (S.books.vouchers || []).filter(v => !v.opt && !v.cancel);
     if (typeof perRender !== "function" || !ym || String(ym).length !== 6) return all;
     return perRender(this, "byMonth", () => { const m = {}; all.forEach(v => { const k = String(v.date).slice(0, 6); (m[k] = m[k] || []).push(v); }); return m; })[ym] || [];
   },
@@ -107,13 +113,16 @@ const GSTR = {
       const L = Books.lines(v);
       const tax = r2(L.tax.CGST + L.tax.SGST + L.tax.IGST + L.tax.CESS);
       const rcm = Books.isRcm(v);
-      let party = v.party, gstin = String(v.gstin || gst[v.party] || "").toUpperCase(), taxable = L.taxable, parts = L.parts || [], guessed = false;
+      let party = v.party, gstin = String(v.gstin || gst[v.party] || "").toUpperCase(), taxable = L.taxable, parts = L.parts || [], guessed = false, taxOnly = false;
       if (!purch){
         // a journal or payment: the value is what sits on the same side as the tax
         if (!gstin){ const e = v.ent.find(x => gst[x.l]); if (e){ party = e.l; gstin = String(gst[e.l]).toUpperCase(); } }
         taxable = 0;
         v.ent.forEach(e => { if (e.l !== party && !Books.ledgerOf(e.l).kind && (e.a < 0) === (signed < 0)) taxable = r2(taxable + Math.abs(e.a)); });
-        if (!taxable && !gstin && !rcm) return;
+        // an entry with only an input-tax line and no supplier GSTIN (a bank payment with only IGST) still takes input tax
+        // (request of 02-Oct-2026: it was dropped here and in the server's summary); it is marked so the lists can say why
+        // it can never be in 2B
+        if (!taxable && !gstin && !rcm) taxOnly = true;
         if (!taxable && rcm){ const rt = num((String(v.narr || "").match(/@\s*(\d+(?:\.\d+)?)\s*%/) || [])[1]) || 18; taxable = r2((tax - L.tax.CESS) * 100 / rt); guessed = true; }
         const rt = taxable ? Books.snapRate(Math.round(r2(tax - L.tax.CESS) / taxable * 10000) / 100) : 0;
         parts = [{rate: rt, hsn: parts[0] ? parts[0].hsn : "", supply: v.supply || "", taxable, igst: L.tax.IGST, cgst: L.tax.CGST, sgst: L.tax.SGST, cess: L.tax.CESS, guessed}];
@@ -123,7 +132,7 @@ const GSTR = {
         taxable, cgst: L.tax.CGST, sgst: L.tax.SGST, igst: L.tax.IGST, cess: L.tax.CESS, parts, valueGuessed: guessed, bill: purch,
         cls: Books.supplyClass(v), rcm, import: Books.isImport(v), supply: v.supply || (parts[0] && parts[0].supply) || "",
         blocked: !!v.ineligibleFlag, hsn: (parts[0] && parts[0].hsn) || (v.hsn || [])[0] || "",
-        ineligible: L.ineligible || 0, common: L.common || null, dir: this.itcDir(v), note: this.itcDir(v) < 0 ? "debit" : "", narr: v.narr || ""});
+        ineligible: L.ineligible || 0, common: L.common || null, dir: this.itcDir(v), note: this.itcDir(v) < 0 ? "debit" : "", narr: v.narr || "", taxOnly});
     });
     return out;
   },
@@ -373,6 +382,14 @@ const GSTR = {
       const pos = posOf(r), key = pos + "|" + q.rate + "|" + (r.igst ? "INTER" : "INTRA");
       const x = b2csMap[key] = b2csMap[key] || {sply_ty: r.igst ? "INTER" : "INTRA", pos, typ: "OE", rt: q.rate, txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0};
       x.txval = r2(x.txval + q.taxable); x.iamt = r2(x.iamt + q.igst); x.camt = r2(x.camt + q.cgst); x.samt = r2(x.samt + q.sgst); x.csamt = r2(x.csamt + q.cess);
+    });
+    // a credit or debit note to a buyer with no GSTIN (request of 02-Oct-2026: Puresens Exports LLP's credit note 12 of
+    // 31-Mar-2026, 1,500, was left out of the GSTR-1 file, so GSTR-1 and 3.1(a) differed): it adjusts B2C small (table 7)
+    // by place of supply and rate, as the portal takes it
+    this.partsOf(g.cdnr.filter(r => !r.gstin)).forEach(q => { const r = q.row, sg = r.note === "credit" ? -1 : 1;
+      const pos = posOf(r), key = pos + "|" + q.rate + "|" + (r.igst ? "INTER" : "INTRA");
+      const x = b2csMap[key] = b2csMap[key] || {sply_ty: r.igst ? "INTER" : "INTRA", pos, typ: "OE", rt: q.rate, txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0};
+      x.txval = r2(x.txval + sg * Math.abs(q.taxable)); x.iamt = r2(x.iamt + sg * Math.abs(q.igst)); x.camt = r2(x.camt + sg * Math.abs(q.cgst)); x.samt = r2(x.samt + sg * Math.abs(q.sgst)); x.csamt = r2(x.csamt + sg * Math.abs(q.cess));
     });
     const nilSum = g.nil.reduce((a, r) => ({expt_amt: r2(a.expt_amt + (r.cls === "exempt" ? r.taxable : 0)),
       nil_amt: r2(a.nil_amt + (r.cls === "nil" ? r.taxable : 0)), ngsup_amt: r2(a.ngsup_amt + (r.cls === "nongst" ? r.taxable : 0))}),

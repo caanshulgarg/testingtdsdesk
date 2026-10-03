@@ -7,6 +7,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -17,7 +18,7 @@ import (
 	"time"
 )
 
-var BridgeVersion = "2.0.0" // set at build time for test builds (-X main.BridgeVersion=...)
+var BridgeVersion = "2.1.7" // set at build time for test builds (-X main.BridgeVersion=...)
 
 // M is a JSON object, as PowerShell's [ordered]@{} was
 type M = map[string]any
@@ -300,8 +301,22 @@ func esc(s string) string {
 	return r.Replace(s)
 }
 
-func safeName(s string) string {
-	return strings.TrimSpace(regexp.MustCompile(`[\\/:*?"<>|]`).ReplaceAllString(s, "_"))
+// a company's name as one folder name inside the sync folder: the characters Windows does not allow in a name (the path
+// separators among them) become "_" as always; a name that is empty, ".", "..", starts with a dot or carries a control
+// character is refused, so a company's folder never leaves the sync folder
+func safeName(s string) (string, error) {
+	n := strings.TrimSpace(regexp.MustCompile(`[\\/:*?"<>|]`).ReplaceAllString(s, "_"))
+	switch {
+	case n == "":
+		return "", errors.New("A company with no name has no folder of its own on this computer.")
+	case n == "." || n == ".." || strings.HasPrefix(n, "."):
+		return "", fmt.Errorf("The company name %q cannot be a folder name on this computer (it starts with a dot).", s)
+	case strings.IndexFunc(n, func(r rune) bool { return r < 0x20 || r == 0x7f }) >= 0:
+		return "", fmt.Errorf("The company name %q carries a control character and cannot be a folder name on this computer.", s)
+	case strings.ContainsAny(n, `/\`) || filepath.Base(n) != n:
+		return "", fmt.Errorf("The company name %q cannot be a folder name on this computer.", s)
+	}
+	return n, nil
 }
 
 func minI(a, b int) int {
@@ -341,4 +356,25 @@ func group(p, s string, i int) string {
 		return ""
 	}
 	return m[i]
+}
+
+// --name value or --name=value from a command's arguments
+func flagValue(args []string, name string) string {
+	for i, a := range args {
+		if a == "--"+name && i+1 < len(args) {
+			return args[i+1]
+		}
+		if strings.HasPrefix(a, "--"+name+"=") {
+			return strings.TrimPrefix(a, "--"+name+"=")
+		}
+	}
+	return ""
+}
+
+// the first map that is not nil
+func or2(a, b M) M {
+	if a != nil {
+		return a
+	}
+	return b
 }

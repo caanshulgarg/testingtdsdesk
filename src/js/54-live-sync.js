@@ -163,11 +163,20 @@ const BookItems = {
     if (!work) return 0;
     const mine = this.split(work), send = [], present = new Set(Object.keys(work));
     mine.forEach((x, key) => { const hh = this.h(x.d, x.o); if (s.base[key] !== hh) send.push([key, hh, {k: x.k, i: x.i, o: x.o, d: x.d}]); });
-    Object.keys(s.base).forEach(key => {
-      if (s.base[key] === "gone" || mine.has(key)) return;
-      const [k, i] = key.split("\u0001");
-      if (!present.has(k) && BookSync.MASTERS.indexOf(k) >= 0) return;         // filled from Tally; not here yet is not removed
-      send.push([key, "gone", {k, i, del: true}]);
+    // an item is removed on the server only when its part of the books is here and the item was taken out of it; a part
+    // missing here (storage cleared, not loaded yet) is never sent as removed, and neither is most of a part at once
+    // (review of 02-Oct-2026: never infer a removal from absence)
+    const out = {}, had = {};
+    Object.keys(s.base).forEach(key => { if (s.base[key] === "gone") return; const k = key.split("\u0001")[0]; had[k] = (had[k] || 0) + 1; if (!mine.has(key)) (out[k] = out[k] || []).push(key); });
+    Object.entries(out).forEach(([k, keys]) => {
+      if (!present.has(k)) return;
+      const left = had[k] - keys.length;
+      if (keys.length > 3 && keys.length > had[k] * 0.25 && !(this.allowMass && this.allowMass[cid + "|" + k])){
+        s.held = Object.assign({}, s.held, {[k]: {n: keys.length, of: had[k], at: new Date().toISOString()}});
+        console.warn("FinCom: " + keys.length + " of " + had[k] + " items of " + k + " missing here; not removed on the server" + (left ? "" : " (none left)"));
+        return;
+      }
+      keys.forEach(key => send.push([key, "gone", {k, i: key.split("\u0001")[1], del: true}]));
     });
     if (!send.length){ Live.saved(); return 0; }
     Live.saving();
@@ -224,7 +233,7 @@ const Live = {
     this.ws = ws; this.st = "connecting";
     ws.onopen = () => { this.join(); clearInterval(this.hb); this.hb = setInterval(() => { this.send("phoenix", "heartbeat", {}); this.tokenTick(); }, 25000); };
     ws.onmessage = ev => { let m = null; try { m = JSON.parse(ev.data); } catch (e){} if (m) this.got(m); };
-    ws.onclose = () => { clearInterval(this.hb); if (this.ws === ws) this.ws = null; this.st = "off"; this.jobsTopic = ""; this.jobsLive = false; this.booksTopic = ""; this.booksLive = false; this.top(); if (!this.stopped) this.later(); };
+    ws.onclose = () => { clearInterval(this.hb); if (this.ws === ws) this.ws = null; this.st = "off"; this.jobsTopic = ""; this.jobsLive = false; this.booksTopic = ""; this.booksLive = false; this.postsTopic = ""; this.postsLive = false; this.tallyTopic = ""; this.top(); if (!this.stopped) this.later(); };
     ws.onerror = () => { try { ws.close(); } catch (e){} };
   },
   stop(){ this.stopped = true; clearTimeout(this.rt); clearInterval(this.hb); const w = this.ws; this.ws = null; this.st = "off"; try { if (w) w.close(); } catch (e){} },
@@ -239,7 +248,7 @@ const Live = {
     this.send(this.topic, "phx_join", {config: {broadcast: {self: false, ack: false}, presence: {key: ""}, postgres_changes: pc, private: false}, access_token: this.token});
   },
   // a new access token (refreshed every hour) is given to the open connection
-  tokenTick(){ const t = (Cloud.sess() || {}).access_token; if (this.st === "live" && t && t !== this.token){ this.token = t; this.send(this.topic, "access_token", {access_token: t}); if (this.jobsTopic) this.send(this.jobsTopic, "access_token", {access_token: t}); if (this.booksTopic) this.send(this.booksTopic, "access_token", {access_token: t}); } },
+  tokenTick(){ const t = (Cloud.sess() || {}).access_token; if (this.st === "live" && t && t !== this.token){ this.token = t; this.send(this.topic, "access_token", {access_token: t}); if (this.jobsTopic) this.send(this.jobsTopic, "access_token", {access_token: t}); if (this.booksTopic) this.send(this.booksTopic, "access_token", {access_token: t}); if (this.postsTopic) this.send(this.postsTopic, "access_token", {access_token: t}); } },
   // fast-sync: the server's jobs (a day book being read, the kept day books read again) on a channel of their own, joined
   // only when the database has tally_jobs (migration-13): the live sync above never depends on it
   async joinJobs(){
@@ -256,7 +265,24 @@ const Live = {
     const f = Cloud.st.firm; this.booksTopic = "realtime:fincom-books-" + f; this.booksRef = String(this.ref + 1); this.daysAt = this.daysAt || {};
     this.send(this.booksTopic, "phx_join", {config: {broadcast: {self: false, ack: false}, presence: {key: ""}, postgres_changes: [{event: "UPDATE", schema: "public", table: "tally_books", filter: "firm_id=eq." + f}], private: false}, access_token: this.token});
   },
+  // the postings in FinCom's cloud (migration-26: tally_post_jobs in Realtime): the list on Post to Tally is read again when
+  // one changes, so it needs no Refresh. A channel of its own; without it the list is read again while a posting goes on
+  joinPosts(){
+    if (typeof TCloud !== "object" || !TCloud.on() || this.postsTopic) return;
+    const f = Cloud.st.firm; this.postsTopic = "realtime:fincom-posts-" + f; this.postsRef = String(this.ref + 1);
+    this.send(this.postsTopic, "phx_join", {config: {broadcast: {self: false, ack: false}, presence: {key: ""}, postgres_changes: [{event: "*", schema: "public", table: "tally_post_jobs", filter: "firm_id=eq." + f}], private: false}, access_token: this.token});
+  },
+  // review of 02-Oct-2026 (item 7): a Tally computer's heartbeat with a new last read, a read going on, or Tally's state
+  // changed, passed on at once by tally-ingest on the firm's broadcast channel (no table, no SQL): the Post page's
+  // "read 17:43" / "Reading now…" changes without waiting for FinCom to look again
+  joinTally(){
+    if (typeof TCloud !== "object" || !TCloud.on() || this.tallyTopic) return;
+    const f = Cloud.st.firm; this.tallyTopic = "realtime:fincom-tally-" + f;
+    this.send(this.tallyTopic, "phx_join", {config: {broadcast: {self: false, ack: false}, presence: {key: ""}, private: false}, access_token: this.token});
+  },
   bookChanged(r){
+    // the Tally computer sent the ledgers again: the client's one ledger list is read again (Ledgers)
+    try { if (typeof Ledgers === "object") Ledgers.bookRow(r); } catch (e){}
     if (!r || !r.client_id || !r.days_at || this.daysAt[r.book_id] === r.days_at) return;
     const first = !(r.book_id in this.daysAt); this.daysAt[r.book_id] = r.days_at;
     if (first && !S.books) return;
@@ -266,6 +292,16 @@ const Live = {
     this.bookT = setTimeout(() => { try { if (TCloud.st[cid]) TCloud.st[cid].at = 0; const f = LK.fr(); f.cat = 0; LK.cloudFresh(true, true); } catch (e){} }, 1500);   // the day's last pieces settle first
   },
   got(m){
+    if (this.tallyTopic && m.topic === this.tallyTopic){
+      if (m.event === "broadcast" && m.payload && m.payload.event === "beat" && typeof TLight === "object") TLight.beatIn(m.payload.payload);
+      return;
+    }
+    if (this.postsTopic && m.topic === this.postsTopic){
+      if (m.event === "phx_reply" && m.ref === this.postsRef) this.postsLive = !!(m.payload && m.payload.status === "ok");
+      else if (m.event === "system" && m.payload && m.payload.status === "error") this.postsLive = false;
+      else if (m.event === "postgres_changes" && typeof CloudJobs === "object") CloudJobs.changed();
+      return;
+    }
     if (this.booksTopic && m.topic === this.booksTopic){
       if (m.event === "phx_reply" && m.ref === this.booksRef) this.booksLive = !!(m.payload && m.payload.status === "ok");
       else if (m.event === "postgres_changes"){ const d = m.payload && m.payload.data; if (d && d.record) this.bookChanged(d.record); }
@@ -277,7 +313,7 @@ const Live = {
       return;
     }
     if (m.event === "phx_reply" && m.ref === this.joinRef){
-      if (m.payload && m.payload.status === "ok"){ this.st = "live"; this.err = ""; this.wait = 1000; this.catchUp(); this.joinJobs(); this.joinBooks(); }
+      if (m.payload && m.payload.status === "ok"){ this.st = "live"; this.err = ""; this.wait = 1000; this.catchUp(); this.joinJobs(); this.joinBooks(); this.joinPosts(); this.joinTally(); }
       else { this.st = "error"; this.err = JSON.stringify((m.payload || {}).response || {}).slice(0, 200); }
       this.top(); return;
     }

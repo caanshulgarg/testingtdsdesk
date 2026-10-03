@@ -2,14 +2,45 @@
 /* TDS: deductions from the books, challans, and what is paid by what */
 /* ================================================================== */
 const TDS = {
-  STD: {"192B": [], "194A": [10], "194C": [1, 2], "194D": [5, 10], "194H": [2, 5], "194I": [2, 10], "194IA": [1], "194IB": [5], "194J": [2, 10], "194Q": [0.1], "194M": [2], "194N": [2, 5], "206C": [0.1, 1]},
+  // the usual rates, tax year 2026-27 (tax-accuracy: 194H 2%, 194D 2% for others than companies, 194-IB 2%, 194-O 0.1%
+  // since the Finance (No. 2) Act, 2024; 194T from April 2025); non-resident rates with and without the 4% cess
+  STD: {"192B": [], "193": [10], "194": [10], "194A": [10], "194B": [30], "194BB": [30], "194C": [1, 2], "194D": [2, 10], "194DA": [2], "194G": [2], "194H": [2],
+    "194I": [2, 10], "194IA": [1], "194IB": [2], "194IC": [10], "194J": [2, 10], "194K": [10], "194LA": [10], "194M": [2], "194N": [2, 5], "194O": [0.1], "194Q": [0.1],
+    "194R": [10], "194S": [1], "194T": [10], "195": [20, 20.8, 10, 10.4, 15, 15.6, 30, 31.2], "206C": [0.1, 1, 2, 5]},
+  // the form a quarter's return is filed on: up to tax year 2025-26 the old forms (late returns and corrections too); from
+  // 1 April 2026, under the Income-tax Act, 2025, Form 138 (was 24Q), 140 (was 26Q), 144 (was 27Q) and 143 (was 27EQ);
+  // Form 130 replaces Form 16. kind is the old name, which FinCom keeps as the return's key
+  NEW_FORM: {"24Q": "138", "26Q": "140", "27Q": "144", "27EQ": "143"},
+  NEW_FROM: "2026-27",
+  isNew(fy){ return String(fy || "") >= this.NEW_FROM; },
+  formNo(kind, fy){ return this.isNew(fy) && this.NEW_FORM[kind] ? this.NEW_FORM[kind] : kind; },
+  formName(kind, fy){ return this.isNew(fy) && this.NEW_FORM[kind] ? "Form " + this.NEW_FORM[kind] : kind; },
+  formNameLong(kind, fy){ return this.isNew(fy) && this.NEW_FORM[kind] ? "Form " + this.NEW_FORM[kind] + " (was " + kind + ")" : kind; },
+  certName(fy){ return this.isNew(fy) ? "Form 130" : "Form 16"; },
+  // TCS rates by date (old section 206C; section 394 of the Act of 2025 from 1 April 2026): [from, code, rate %]. The latest
+  // row on or before the collection's date applies. From 1 April 2026: scrap and minerals 2%, overseas tour packages 2% flat
+  TCS_RATES: [
+    ["2016-06-01", "6CA", 1], ["2016-06-01", "6CB", 5], ["2016-06-01", "6CC", 2.5], ["2016-06-01", "6CD", 2.5], ["2016-06-01", "6CE", 2.5],
+    ["2016-06-01", "6CF", 1], ["2016-06-01", "6CG", 2], ["2016-06-01", "6CH", 2], ["2016-06-01", "6CI", 2], ["2016-06-01", "6CJ", 1], ["2016-06-01", "6CL", 1],
+    ["2020-10-01", "6CO", 5],
+    ["2026-04-01", "6CF", 2], ["2026-04-01", "6CJ", 2], ["2026-04-01", "6CO", 2]
+  ],
+  tcsRate(code, date){
+    const d = this.ymd(date), iso = d.length === 8 ? d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6, 8) : "";
+    let hit = null;
+    this.TCS_RATES.forEach(([from, c, rate]) => { if (c === code && (!iso || from <= iso) && (!hit || from >= hit.from)) hit = {from, rate}; });
+    return hit ? hit.rate : null;
+  },
+  // a deduction from a non-resident goes in 27Q, not 26Q
+  NR: /^(195|194E|194LB|194LBA|194LC|194LD|196[A-D])/,
+  sec(s){ return String(s || "").replace(/\s.*$/, "").replace(/-/g, "").toUpperCase(); },
   // what was paid or credited: from the ledger's own rate, else from the section's usual rates, else the voucher's expense
   baseFor(t, L, v){
     if (t.rate) return {paid: r2(t.amount / (t.rate / 100)), rate: t.rate, how: "ledger"};
     const cand = [];
     if (L.taxable) cand.push(L.taxable);
     v.ent.forEach(e => { const m = Books.ledgerOf(e.l); if (!m.kind && Math.abs(e.a) > 0) cand.push(Math.abs(e.a)); });
-    const std = this.STD[String(t.section).replace(/\s.*$/, "")] || [];
+    const std = this.STD[this.sec(t.section)] || [];
     for (const rate of std){
       const want = r2(t.amount / (rate / 100));
       const hit = cand.find(c => Math.abs(c - want) <= Math.max(2, want * 0.005));
@@ -37,8 +68,30 @@ const TDS = {
   ymd(d){ const t = String(d || "").replace(/[^0-9]/g, ""); return t.length >= 6 ? t : ""; },
   qOf(d){ const m = num(this.ymd(d).slice(4, 6)); return m >= 4 && m <= 6 ? "Q1" : m >= 7 && m <= 9 ? "Q2" : m >= 10 && m <= 12 ? "Q3" : "Q4"; },
   fyOf(d){ const t = this.ymd(d), y = num(t.slice(0, 4)), m = num(t.slice(4, 6)); return (m >= 4 ? y : y - 1) + "-" + String((m >= 4 ? y + 1 : y)).slice(2); },
-  // 26Q: every deduction other than salary
-  rows(){ return this.allRows().filter(r => !/^192/.test(String(r.section || ""))); },
+  // 26Q: every deduction from a resident other than salary
+  rows(){ return this.allRows().filter(r => !/^192/.test(String(r.section || "")) && !this.NR.test(this.sec(r.section))); },
+  // 27Q: deductions from non-residents
+  nrRows(){ return this.allRows().filter(r => this.NR.test(this.sec(r.section))); },
+  // 27EQ: tax collected at source on sales, one row per voucher and TCS ledger
+  tcsRows(){ return typeof perRender === "function" ? perRender(this, "tcsRows", () => this.tcsRowsNow()) : this.tcsRowsNow(); },
+  tcsRowsNow(){
+    const b = S.books;
+    if (!b || !b.vouchers) return [];
+    const out = [];
+    b.vouchers.forEach(v => {
+      const L = Books.lines(v);
+      if (!L.tcs || !L.tcs.length) return;
+      const tcsAll = r2(L.tcs.reduce((a, t) => a + t.amount, 0));
+      L.tcs.forEach(t => {
+        // the amount received or debited to the buyer, without the TCS itself
+        const recd = r2(L.tcs.length === 1 && L.party ? L.party - tcsAll : (t.rate ? t.amount / (t.rate / 100) : L.total));
+        out.push({id: v.id + "|" + t.ledger, date: v.date, q: this.qOf(v.date), fy: this.fyOf(v.date), party: v.party, pan: TDS.panOf(v.party),
+          section: t.section || "206C", code: TCS27EQ.codeOf(t.ledger, t.section), ledger: t.ledger, paid: recd, tds: r2(t.amount),
+          rate: recd ? r2(t.amount / recd * 100) : null, voucher: v.no || v.ref || "", type: v.type, challan: (b.alloc || {})[v.id + "|" + t.ledger] || ""});
+      });
+    });
+    return out.sort((a, c) => String(a.date).localeCompare(String(c.date)));
+  },
   // salary TDS the books carry under section 192; 24Q takes the detail from the salary sheet
   salaryRows(){ return this.allRows().filter(r => /^192/.test(String(r.section || ""))); },
   // every voucher that carries a TDS ledger becomes one deduction row
@@ -125,25 +178,26 @@ const TDS = {
   challans(){ return ((S.books || {}).challans || []).slice().sort((a, b) => String(a.date).localeCompare(String(b.date))); },
   // a challan pays several deductions; what is left of it matters
   challanUse(){
-    const rows = this.rows(), used = {};
+    const rows = this.rows().concat(this.nrRows(), this.tcsRows()), used = {};
     rows.forEach(r => { if (r.challan) used[r.challan] = r2((used[r.challan] || 0) + r.tds); });
     return used;
   },
   // put deductions against challans of the same quarter and section, as a person would
   autoAllocate(){
-    const b = S.books, rows = this.rows().filter(r => !r.challan), use = this.challanUse();
+    const b = S.books, rows = this.rows().concat(this.nrRows(), this.tcsRows()).filter(r => !r.challan), use = this.challanUse();
     const ch = this.challans();
     b.alloc = b.alloc || {};
     let n = 0;
     rows.forEach(r => {
       const fit = ch.find(c => this.qOf(c.date) === r.q && this.fyOf(c.date) === r.fy &&
-        (!c.section || c.section === r.section) && r2(num(c.tax) - (use[c.id] || 0)) >= r.tds - 0.01);
+        (!c.section || c.section === r.section) && /^206C/.test(String(c.section || "")) === /^206C/.test(String(r.section || "")) &&
+        r2(num(c.tax) - (use[c.id] || 0)) >= r.tds - 0.01);
       if (fit){ b.alloc[r.id] = fit.id; use[fit.id] = r2((use[fit.id] || 0) + r.tds); n++; }
     });
     return n;
   },
-  summary(fy, q){
-    const rows = this.rows().filter(r => (!fy || r.fy === fy) && (!q || r.q === q));
+  summary(fy, q, form){
+    const rows = (typeof TDS_FORMS === "object" && TDS_FORMS[form] ? TDS_FORMS[form].rows() : this.rows()).filter(r => (!fy || r.fy === fy) && (!q || r.q === q));
     const bySec = {};
     rows.forEach(r => {
       const s = bySec[r.section] = bySec[r.section] || {section: r.section, count: 0, paid: 0, tds: 0, unallocated: 0, noPan: 0};
@@ -154,9 +208,10 @@ const TDS = {
     return Object.values(bySec).sort((a, b) => a.section.localeCompare(b.section));
   },
   // the working file: challan table and the deductee annexure under each challan, as in Form 26Q
-  async toExcel(fy, q){
+  async toExcel(fy, q, form){
     await ensureXlsx();
-    const rows = this.rows().filter(r => (!fy || r.fy === fy) && (!q || r.q === q));
+    form = typeof TDS_FORMS === "object" && TDS_FORMS[form] ? form : "26Q";
+    const rows = TDS_FORMS[form].rows().filter(r => (!fy || r.fy === fy) && (!q || r.q === q));
     const ch = this.challans().filter(c => (!fy || this.fyOf(c.date) === fy) && (!q || this.qOf(c.date) === q));
     const use = this.challanUse();
     const d = s => s ? String(s).slice(6, 8) + "/" + String(s).slice(4, 6) + "/" + String(s).slice(0, 4) : "";
@@ -168,15 +223,15 @@ const TDS = {
       "TDS", "Total tax deducted", "Date of deduction", "Rate", "Voucher", "Challan BSR", "Challan serial", "Challan date"];
     const body = rows.map((r, i) => {
       const c = ch.find(x => x.id === r.challan) || {};
-      return [i + 1, /^[A-Z]{3}C/.test(r.pan || "") ? "01" : "02", r.pan || "PANNOTAVBL", r.party, "9" + String(r.section).replace(/^19/, ""),
+      return [i + 1, /^[A-Z]{3}C/.test(r.pan || "") ? "01" : "02", r.pan || "PANNOTAVBL", r.party, form === "27EQ" ? r.code : TDS26Q.code(r.section),
         d(r.date), r.paid, r.tds, r.tds, d(r.date), r.rate, r.voucher, c.bsr || "", c.serial || "", d(c.date || "")];
     });
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([head].concat(body)), "Deductees");
     const sum = [["Section", "Deductions", "Amount paid", "TDS", "Not against a challan", "Without PAN"]]
-      .concat(this.summary(fy, q).map(s => [s.section, s.count, s.paid, s.tds, s.unallocated, s.noPan]));
+      .concat(this.summary(fy, q, form).map(s => [s.section, s.count, s.paid, s.tds, s.unallocated, s.noPan]));
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sum), "Summary");
     const out = XLSX.write(wb, {bookType: "xlsx", type: "array"});
-    saveFile(CO().name.replace(/[^A-Za-z0-9]+/g, "-") + "-26Q-" + (q || "all") + "-" + (fy || "") + ".xlsx", new Blob([out], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
+    saveFile(CO().name.replace(/[^A-Za-z0-9]+/g, "-") + "-" + form + "-" + (q || "all") + "-" + (fy || "") + ".xlsx", new Blob([out], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
   }
 };
 

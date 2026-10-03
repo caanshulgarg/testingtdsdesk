@@ -2,10 +2,12 @@
 import json, os, sys, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from books_data import DATA, CACHE, FIXTURE, GSTIN, GSTIN09, COMPANY
 H = functools.partial(http.server.SimpleHTTPRequestHandler, directory=os.environ.get("TDSDESK_SITE", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "site-test"))); H.log_message = lambda *a: None
 srv = http.server.ThreadingHTTPServer(("localhost", 8130), H); threading.Thread(target=srv.serve_forever, daemon=True).start()
 OUT = os.environ.get("TDSDESK_OUT", os.path.join(os.path.dirname(os.path.abspath(__file__)), "out"))
-books = json.load(open(os.environ.get("TDSDESK_CACHE", os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "books-cache.json"))))
+books = json.load(open(CACHE))
 fails, errors = [], []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
@@ -15,24 +17,31 @@ with sync_playwright() as p:
     pg.on("pageerror", lambda e: errors.append(str(e)))
     pg.goto("http://localhost:8130/"); pg.wait_for_timeout(2500)
     pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1500)
-    pg.evaluate("""(bk) => { const c = newCompany({name: "ZZ TEST (VMS books)", gstin: "07AADCV3366N1ZU"}); S.companies[c.id] = c; S.coId = c.id; S.view = "company"; S.tab = "books"; S.loadingCo = false;
-      S.books = Object.assign({loading: false, challans: [], alloc: {}}, bk, {cid: c.id, misCfg: {freq: "off"}, auditCfg: {freq: "off"}}); S.books.map = Books.mapLedgers(bk.vouchers, {}); window.__bk = S.books; S.booksTab = "import"; render(); }""", books)
+    pg.evaluate("""(bk) => { const c = newCompany({name: "ZZ TEST (VMS books)", gstin: "@GSTIN@", tallyName: "@CO@"}); S.companies[c.id] = c; S.coId = c.id; S.view = "company"; S.tab = "books"; S.loadingCo = false;
+      S.books = Object.assign({loading: false, challans: [], alloc: {}}, bk, {cid: c.id, misCfg: {freq: "off"}, auditCfg: {freq: "off"}}); S.books.map = Books.mapLedgers(bk.vouchers, {}); window.__bk = S.books; S.booksTab = "import"; render(); }""".replace("@GSTIN@", GSTIN).replace("@CO@", COMPANY), books)
     pg.wait_for_timeout(1200); pg.evaluate("S.books = window.__bk; render();"); pg.wait_for_timeout(600)
-    pg.set_input_files("#mastersIn", os.path.join(os.environ.get("TDSDESK_DATA", os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")), "Master.xml")); pg.wait_for_timeout(12000)
+    pg.set_input_files("#mastersIn", os.path.join(DATA, "Master.xml")); pg.wait_for_timeout(12000)
     pg.evaluate("S.booksTab = 'mis'; render();"); pg.wait_for_timeout(500)
     t = pg.inner_text("#app")
     ok("Run now" in t and "Year to date" in t and "Last month" in t, "period picker, quick periods and Run now are always there")
     pg.click('button:text-is("Last year")'); pg.wait_for_timeout(300)
     ok(pg.evaluate("S.misRange.from") == "2025-04-01" and pg.evaluate("S.misRange.to") == "2026-03-31", "Last year sets 1 Apr 2025 to 31 Mar 2026")
-    pg.click('section:has(> h3:text-is("MIS")) button:text-is("Run now")'); pg.wait_for_timeout(3000)
+    pg.click('section[data-mis-head] button:text-is("Run now")'); pg.wait_for_timeout(3000)
     t = pg.inner_text("#app")
-    ok("sales, the period" in t.lower() and "56,39,22,176.16" in t, "summary: sales for the year")
-    ok("settled against older bills" in t, "says plainly that receivables miss bills from before the books")
+    # the year's sales: the real client's, or the fixture's worked out by hand (tests/fixtures/books/EXPECTED.md)
+    ok("sales, the period" in t.lower() and ("15,50,000.00" if FIXTURE else "56,39,22,176.16") in t, "summary: sales for the year")
+    if FIXTURE:   # EXPECTED.md: receivables 7,18,200 on the ledger balances, 99,400 of it not bill-wise; MSME past 45 days 2,90,000
+        ok("7,18,200.00" in t and "99,400.00 not bill-wise" in t and "3,94,550.00" in t and "2,90,000.00" in t, "fixture: owed to you 7,18,200 (99,400 not bill-wise), profit 3,94,550, MSME 2,90,000, as worked out by hand")
+    # review of 02-Oct-2026: with the ledger balances known, what no bill explains is "not bill-wise"; without them, what was
+    # settled against older bills is said
+    known = pg.evaluate("S.books.mis.last.recv.sum.tally != null")
+    ok(("not bill-wise" if known else "settled against older bills") in t, "says plainly that receivables miss bills from before the books")
     pg.screenshot(path=OUT + "/mis-summary.png", full_page=True)
     pg.click('nav[aria-label="MIS"] button:text-is("Profit and loss")'); pg.wait_for_timeout(500)
     t = pg.inner_text("#app")
-    ok("Gross profit" in t and "Profit before tax" in t and "Apr 2025" in t and "Mar 2026" in t, "profit and loss, month by month")
-    pg.click('#misPl button:text-is("\u25b8 " + str(pg.evaluate("S.books.mis.last.pl.heads.exp.led.length")) + " ledgers")'); pg.wait_for_timeout(400)
+    ok("Gross profit" in t and "Profit before tax" in t and "Apr-2025" in t and "Mar-2026" in t, "profit and loss, month by month")
+    # the button counts the ledgers; a head with the set-off of an expense credit (MIS.plRule) says so
+    pg.click('#misPl button:text-is("%s")' % pg.evaluate("(() => { const L = S.books.mis.last.pl.heads.exp.led; return '\u25b8 ' + L.filter(x => !x.so).length + ' ledgers' + (L.some(x => x.so) ? ' and the set-off' : ''); })()")); pg.wait_for_timeout(400)
     led = pg.evaluate("S.books.mis.last.pl.heads.exp.led[0].l")
     pg.locator("#misPl button.linkbtn").filter(has_text=led).first.click(); pg.wait_for_timeout(500)
     ok(led in pg.inner_text("#app") and "Narration" in pg.inner_text("#app").title(), "a ledger opens to its vouchers: " + led)
@@ -59,20 +68,24 @@ with sync_playwright() as p:
     pg.click('nav[aria-label="MIS"] button:text-is("Compliance")'); pg.wait_for_timeout(500)
     ok("GST by month" in pg.inner_text("#app") and "TDS by month" in pg.inner_text("#app"), "compliance")
     # a month, then the pack
-    pg.fill('input[aria-label="MIS from"]', "2025-06-01"); pg.dispatch_event('input[aria-label="MIS from"]', "change")
-    pg.fill('input[aria-label="MIS to"]', "2025-06-30"); pg.dispatch_event('input[aria-label="MIS to"]', "change")
-    pg.click('section:has(> h3:text-is("MIS")) button:text-is("Run now")'); pg.wait_for_timeout(2500)
-    ok(pg.evaluate("S.books.mis.last.from") == "20250601" and pg.evaluate("S.books.mis.last.prev.sales") > 0, "June, compared with May")
+    # a month compared with the one before: June with May (the real books), October with September (the fixture has no May sales)
+    MF, MT, PREV = ("2025-10-01", "2025-10-31", "September") if FIXTURE else ("2025-06-01", "2025-06-30", "May")
+    pg.fill('input[aria-label="MIS from"]', MF); pg.dispatch_event('input[aria-label="MIS from"]', "change")
+    pg.fill('input[aria-label="MIS to"]', MT); pg.dispatch_event('input[aria-label="MIS to"]', "change")
+    pg.click('section[data-mis-head] button:text-is("Run now")'); pg.wait_for_timeout(2500)
+    ok(pg.evaluate("S.books.mis.last.from") == MF.replace("-", "") and pg.evaluate("S.books.mis.last.prev.sales") > 0, "a month, compared with " + PREV)
     with ctx.expect_page() as pop:
-        pg.click('button[data-act="misPack"]')
+        pg.click('section[data-mis-head] button:text-is("Download the MIS pack (PDF)")')
     rp = pop.value; rp.wait_for_timeout(800); rt = rp.inner_text("body")
     ok("At a glance" in rt and "Profit and loss" in rt and "Receivables, largest 15" in rt and "Due in the coming weeks" in rt, "the MIS pack")
     rp.pdf(path=OUT + "/mis-pack.pdf"); rp.close()
     pg.evaluate("() => { window.__saved = []; window.saveFile = (n) => window.__saved.push(n); }")
-    pg.click('button[data-act="misExcel"]'); pg.wait_for_timeout(3000)
+    pg.click('section[data-mis-head] button:text-is("Excel")'); pg.wait_for_timeout(3000)
     ok(any("-MIS-" in n for n in pg.evaluate("window.__saved")), "Excel")
     # on its own, monthly: runs for the month just ended
+    pg.evaluate("document.querySelectorAll('#app details').forEach(d => d.open = true)")   # settings sit in a closed section
     pg.select_option('select[aria-label="MIS runs on its own"]', "monthly"); pg.wait_for_timeout(300)
+    pg.click('#app [data-confirm-foot="books:mis-settings"] [data-cfm="save"]'); pg.wait_for_timeout(300)   # saved with Save (review 18)
     pg.evaluate("S.books.mis.last.at = '2026-08-01T09:00:00.000Z'; MIS.maybeRun(); render();"); pg.wait_for_timeout(2500)
     ok(pg.evaluate("S.books.mis.last.how").startswith("on its own") and pg.evaluate("S.books.mis.last.from") == "20260301" and pg.evaluate("S.books.mis.last.to") == "20260331", "on its own, monthly: the month just ended, or the last month in the books: " + pg.evaluate("S.books.mis.last.from + '-' + S.books.mis.last.to"))
     bad = pg.evaluate("""() => { const bad = []; ['summary', 'pl', 'recv', 'pay', 'sales', 'purch', 'comp'].forEach(tb => { S.misTab = tb; try { render(); } catch (e) { bad.push(tb + ': ' + e.message); } }); return bad; }""")

@@ -1,0 +1,124 @@
+# The tests CI runs (tests/ci/run_ci.sh, from .github/workflows/ci.yml): those that pass in a clean checkout WITHOUT
+# tests/data (the client's books, never in git); they read the made-up books in tests/fixtures/books instead.
+# Found by running every tests/run_* (172) in a copy of the tree with no tests/data on 02-Oct-2026. Tests left out, and why,
+# are in tests/ci/manual.txt; when one of them passes without tests/data, move it here.
+#
+# test                              limit(s)  settings for this test only
+# The limit is about 2.5 times the time the test took here (at least 120 s); run_ci.sh also shares the tests out among
+# the CI jobs by it, the longest first. TDSDESK_SITE=../app/dist-test: an older screen test whose default (site-test/)
+# no longer shows the sign-in page's "Use it here without an account" since the sign-in page moved to React (53a7ccf).
+run_add_client_tally.py               120
+run_audit2.js                         120
+run_audit2_ui.py                      120  TDSDESK_SITE=../app/dist-test
+run_audit_ui.py                       120  TDSDESK_SITE=../app/dist-test
+run_backup_history_server.py          120
+run_balances_copy.py                  120  TDSDESK_SITE=../app/dist-test
+run_bankpost_e2e.py                   300  TDSDESK_SITE=../app/dist-test
+run_bankrules.py                      120
+run_beat_history.py                   120
+run_block17.js                        120
+run_booksync.js                       120
+run_bridge_control_server.py          120
+run_bridge_fast.py                    630
+run_bridgejobs.py                     240
+run_bridgejobs_ui.py                  120  TDSDESK_SITE=../app/dist-test
+run_bridgepair_ui.py                  120  TDSDESK_SITE=../app/dist-test
+run_bridges_page.py                   120
+run_choices_merge.js                  120
+run_clean_names_server.py             120
+run_client_merge.js                   120
+run_cloud_groups.py                   210
+run_cloud_parse.mjs                   120
+run_contrast.py                       120
+run_cors_preflight.js                 120
+run_dates.js                          120
+run_dups_posted.py                    120
+run_fixture_books.js                  120
+run_fs.js                             120
+run_fs_ui.py                          120  TDSDESK_SITE=../app/dist-test
+run_gateway_errors.js                 120
+run_group_case.js                     120
+run_gst9.js                           120
+run_gst_api_ui.py                     120
+run_gstq.js                           120
+run_gstregs_ui.py                     120  TDSDESK_SITE=../app/dist-test
+run_gstset.js                         120
+run_hostile_ui.py                     120
+run_itemvch.js                        120
+run_keep_daily.py                     420
+run_keep_hold.py                      240
+run_keep_posted.py                    480
+run_keep_share.py                     330
+run_keep_slowbal.py                   240
+run_led2_ui.py                        120  TDSDESK_SITE=../app/dist-test
+run_ledger_names_receivables.js       120
+run_ledgerpick_ui.py                  120  TDSDESK_SITE=../app/dist-test
+run_libs_ui.py                        120
+run_lock_beat.py                      570
+run_main_bridge_server.py             120
+run_migration31.py                    120
+run_migration34.py                    180
+run_migration35.py                    120
+run_migration36b.py                   120
+run_migration36.py                    240
+run_migration_order.py                180
+run_mis.js                            120
+run_mis2.js                           120
+run_mis2_ui.py                        120  TDSDESK_SITE=../app/dist-test
+run_mis_sales.py                      120
+run_mis_ui.py                         120  TDSDESK_SITE=../app/dist-test
+run_multi_ui.py                       120  TDSDESK_SITE=../app/dist-test
+run_names_shared.js                   120
+run_no_delete_on_reload.py            120
+run_pair_ui.py                        120
+run_parts_ui.py                       120  TDSDESK_SITE=../app/dist-test
+run_party_hist.js                     120
+run_payroll.py                        120
+run_phase2.py                         120
+run_phase2b.py                        120
+run_post_jobs_dismiss.py              120
+run_post_page.py                      120
+run_post_page2.py                     120
+run_post_preview.py                   120
+run_post_tabs.py                      120
+run_post_queue.py                     180
+run_post_record_server.py             120
+run_priority.py                       990
+run_queue_server.py                   120
+run_queue_ui.py                       120
+run_react_bank.py                     120
+run_react_bill.py                     120
+run_react_books.py                    120
+run_react_collect.py                  120
+run_react_frame.py                    120
+run_react_home.py                     120
+run_react_post.py                     120
+run_react_review.py                   120
+run_react_sales.py                    120
+run_react_settings.py                 120
+run_react_txn_dash.py                 120
+run_read_failures.py                  120
+run_receivable_buckets.js             120
+run_regress.js                        120
+run_review_0110.py                    120
+run_review_fixes.py                   120
+run_seed.js                           120
+run_seed.py                           420
+run_server_reports.py                 120
+run_session.py                        120
+run_setup_bat.py                      120
+run_shadow_server.py                  120
+run_staging_ui.py                     120
+run_status_light.py                   180
+run_supinv.py                         120
+run_support_ui.py                     120  TDSDESK_SITE=../app/dist-test
+run_tally_computers.py                120
+run_tally_events.py                   120
+run_tally_line_stop.py                120  TDSDESK_SITE=../app/dist-test
+run_tally_states.py                   120
+run_tcloud_ui.py                      120  TDSDESK_SITE=../app/dist-test
+run_tds_accuracy.py                   120
+run_trash_server.py                   120
+run_vendorrecon_e2e.py                120  TDSDESK_SITE=../app/dist-test
+run_migration37.py                    180
+run_parse_fincom_id.js                120

@@ -71,11 +71,16 @@ async function loadBank(cid){
     BankDB.get("stmts:" + cid), BankDB.get("rules:" + cid), BankDB.get("ledgers:" + cid), BankDB.get("newled:" + cid), BankDB.get("keys:" + cid), BankDB.get("wrules:" + cid), BankDB.get("books:" + cid), BankDB.get("hist:" + cid), BankDB.get("sales:" + cid), BankDB.get("posted:" + cid)]);
   if (S.bank && S.bank.cid === cid) S.bank.salesRef = salesRef || [];
   if (!S.bank || S.bank.cid !== cid) return;
-  Object.assign(S.bank, {postedTags: postedTags || {}, stmts: stmts || [], rules: rules || [], wrules: wrules || [], ledgers: ledgers || {list: [], importedAt: ""}, newLed: newLed || [], keys: keys || {}, books: books || {}, hist: hist && hist.rows ? hist : {rows: {}}, loading: false});
+  // the ledger list kept in this browser is only a copy: the client's one list (Ledgers) is what the bank uses, and a
+  // shorter copy here never replaces it (review of 02-Oct-2026)
+  Object.assign(S.bank, {postedTags: postedTags || {}, stmts: stmts || [], rules: rules || [], wrules: wrules || [], ledgers: Ledgers.fromBrowser(cid, ledgers), newLed: newLed || [], keys: keys || {}, books: books || {}, hist: hist && hist.rows ? hist : {rows: {}}, loading: false});
   S.bank.histVer++;
+  // a statement whose bank account is missing from the client gets it back, with its confirmed ledger (src/js/60)
+  if (typeof bankHealAccounts === "function") bankHealAccounts(CO(cid), S.bank.stmts);
   if (S.bank.stmts.length) await openStatement(S.bank.stmts[S.bank.stmts.length - 1].id);
   render();
   if (bridgeLive(CO(cid))) bankAutoSync(false);
+  else Ledgers.load(cid);
 }
 async function openStatement(sid){
   const b = B(); if (!b) return;

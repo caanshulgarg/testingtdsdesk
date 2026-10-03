@@ -277,9 +277,10 @@ function applyGroup(key, ledger){
 async function openCreateLedger(name, rowId, targetFk, opts){
   opts = opts || {};
   const b = B();
-  const groups = Array.from(new Set((b.ledgers.groups || []).concat(TALLY_GROUPS))).filter(Boolean);
+  // one entry for each group whatever its capitals, in Tally's own spelling where Tally's list has it ("Cash-in-hand")
+  const seenG = new Set(), groups = (b.ledgers.groups || []).concat(TALLY_GROUPS).filter(g => g && !seenG.has(String(g).toLowerCase()) && seenG.add(String(g).toLowerCase()));
   const row = rowId ? bankRow(rowId) : null;
-  const guess = opts.group || (row ? (row.debit ? "Sundry Creditors" : "Sundry Debtors") : "Sundry Creditors");
+  const guess0 = opts.group || (row ? (row.debit ? "Sundry Creditors" : "Sundry Debtors") : "Sundry Creditors"), guess = groups.find(g => g.toLowerCase() === guess0.toLowerCase()) || guess0;
   const acNo = row ? ((row.narr.match(/\b(\d{9,18})\b/) || [])[1] || "") : "";
   const ifsc = row ? ((row.narr.toUpperCase().match(/\b([A-Z]{4}0[A-Z0-9]{6})\b/) || [])[1] || "") : "";
   const near = Array.from(knownLedgers().values()).map(l => ({l, s: nameSim(l.name, name)})).filter(x => x.s >= 0.7).sort((a, c) => c.s - a.s).slice(0, 3);
@@ -305,35 +306,38 @@ async function openCreateLedger(name, rowId, targetFk, opts){
 }
 /* ---------- ledger suggestions while typing (works the same in every browser) ---------- */
 const AC = {box: null, fk: null, items: [], idx: -1, q: ""};
-function acMatches(q){
-  const list = Array.from(knownLedgers().values());
+// the drop-down is a search box (review of 02-Oct-2026): case, dots, spaces and "&" / "and" do not matter ("kashi",
+// "kashi i.t" find "Kashi IT Solutions"); a party box lists Sundry Creditors and Debtors first; an expense box lists
+// expense, purchase and fixed-asset ledgers first and never an income ledger (Sales Accounts, Direct / Indirect Incomes)
+function acMatches(q, role){
+  const cid = Ledgers.cid();
+  const list = Array.from(knownLedgers().values()).filter(l => !role || Ledgers.allowed(role, l.pending ? "" : Ledgers.cls(cid, l.name)));
   const qq = q.trim().toLowerCase();
-  if (!qq) return list.slice().sort((a, b) => a.name.localeCompare(b.name)).slice(0, 12).map(l => ({l, sc: 1}));
-  const words = qq.split(/\s+/).filter(Boolean);
+  const rank = l => role ? Ledgers.roleRank(role, l.pending ? "" : Ledgers.cls(cid, l.name)) : 0;
+  if (!qq) return list.map(l => ({l, sc: 1, r: rank(l)})).sort((a, b) => a.r - b.r || a.l.name.localeCompare(b.l.name)).slice(0, 12);
   return list.map(l => {
-    const n = l.name.toLowerCase();
-    let sc = 0;
-    if (n === qq) sc = 100;
-    else if (n.startsWith(qq)) sc = 90;
-    else if (words.every(w => n.includes(w))) sc = 70 + (n.split(/[\s\-\/&.,()]+/).some(t => t.startsWith(words[0])) ? 10 : 0);
-    else if (qq.length >= 3){
+    let sc = Ledgers.match(q, l.name);
+    if (!sc && qq.length >= 3){
       // spelling mistakes: compare with the whole name, each word, and each pair of words
-      const toks = n.split(/[\s\-\/&.,()]+/).filter(Boolean);
+      const n = l.name.toLowerCase(), toks = n.split(/[\s\-\/&.,()]+/).filter(Boolean);
       let sim = nameSim(q, l.name);
       toks.forEach((t, i) => { sim = Math.max(sim, nameSim(qq, t), i + 1 < toks.length ? nameSim(qq, t + " " + toks[i + 1]) : 0); });
       if (sim >= 0.6) sc = sim * 60;
     }
-    return {l, sc};
-  }).filter(x => x.sc > 0).sort((a, b) => b.sc - a.sc || a.l.name.length - b.l.name.length).slice(0, 12);
+    return {l, sc, r: rank(l)};
+  }).filter(x => x.sc > 0).sort((a, b) => (b.sc >= 60) - (a.sc >= 60) || a.r - b.r || b.sc - a.sc || a.l.name.length - b.l.name.length).slice(0, 12);
 }
 function acInput(){ return AC.fk ? document.querySelector('[data-fk="' + AC.fk.replace(/"/g, '\\"') + '"]') : null; }
 function acOpen(input){
-  if (!B()) return;
+  if (!B() && !knownLedgers().size) return;
   // just picked: the redraw that follows puts focus back in the box, which must not open the list again
   if (AC.picked && AC.picked.fk === input.dataset.fk && Date.now() - AC.picked.at < 800 && input.value === AC.picked.value) return;
+  // a bill's ledger chooser just opened (not each key typed): the list read again when older than the last posting
+  if (AC.fk !== input.dataset.fk && (input.dataset.e !== undefined || input.dataset.tl !== undefined) && typeof Ledgers === "object") Ledgers.staleAsk(Ledgers.cid()).catch(() => {});
   AC.fk = input.dataset.fk;
   AC.q = input.value;
-  const m = acMatches(input.value);
+  const role = input.dataset.acrole || "";
+  const m = acMatches(input.value, role);
   const exact = m.some(x => x.l.name.toLowerCase() === input.value.trim().toLowerCase());
   AC.items = m.map(x => ({name: x.l.name, group: x.l.group || "", pending: !!x.l.pending}));
   // ledgers used before for this party come first
@@ -347,7 +351,7 @@ function acOpen(input){
     AC.items = past.concat(AC.items.filter(it => !past.some(p => p.name.toLowerCase() === it.name.toLowerCase())));
   }
   // "create" comes first, where it is seen; Enter still takes the best existing match below it
-  if (input.value.trim() && !exact && hasLedgerList()) AC.items.unshift({name: input.value.trim(), create: true});
+  if (input.value.trim() && !exact && hasLedgerList() && !/^(gst|tds|rcm-in|rcm-out)$/.test(role)) AC.items.unshift({name: input.value.trim(), create: true});
   AC.idx = !input.value.trim() || !AC.items.length ? -1 : AC.items[0].create && AC.items.length > 1 ? 1 : 0;
   if (!AC.box){ AC.box = document.createElement("div"); AC.box.id = "acBox"; AC.box.setAttribute("role", "listbox"); document.body.appendChild(AC.box); }
   acDraw(input);
@@ -386,7 +390,7 @@ function acPick(i){
     if (input.dataset.e === "partyLedger" || input.dataset.e === "expenseLedger"){
     const k = input.dataset.e, e0 = curEntry();
     input.value = e0 ? e0[k] || "" : "";
-    openCreateLedger(it.name, null, null, {group: k === "partyLedger" ? "Sundry Creditors" : "Indirect Expenses", gstin: k === "partyLedger" && e0 ? fixGstin(e0.x.vendorGstin).value : "", onCreated: name => { const e1 = curEntry(); if (e1){ e1[k] = name; Store.saveEntry(S.coId, e1); } render(); }});
+    openCreateLedger(it.name, null, null, {group: k === "partyLedger" ? "Sundry Creditors" : "Indirect Expenses", gstin: k === "partyLedger" && e0 ? fixGstin(e0.x.vendorGstin).value : "", onCreated: name => { const e1 = curEntry(); if (e1){ e1[k] = name; if (k === "partyLedger"){ e1.partyUserSet = true; e1.partyAuto = false; e1.partyFrom = ""; } else { e1.expenseUserSet = true; e1.expenseAuto = false; e1.expenseFrom = ""; } Store.saveEntry(S.coId, e1); } render(); }});
     return;
   }
   if (input.dataset.svcust || input.hasAttribute("data-sdcust") || input.hasAttribute("data-svbulk")){
@@ -411,7 +415,7 @@ function acPick(i){
   if (input.dataset.bled){ input.dispatchEvent(new Event("change", {bubbles: true})); AC.picked.at = Date.now(); setTimeout(() => { const el = acInput() || document.querySelector('[data-fk="' + AC.picked.fk.replace(/"/g, '\\"') + '"]'); if (el && document.activeElement === el) el.blur(); acClose(); }, 0); }
   else if (input.hasAttribute("data-bulkled")) bulkLedgerFrom(input);
   else if (input.dataset.svcust || input.hasAttribute("data-sdcust")) input.dispatchEvent(new Event("change", {bubbles: true}));
-  else if (input.dataset.e){ input.dispatchEvent(new Event("input", {bubbles: true})); input.dispatchEvent(new Event("change", {bubbles: true})); }
+  else if (input.dataset.e || input.dataset.tl){ input.dispatchEvent(new Event("input", {bubbles: true})); input.dispatchEvent(new Event("change", {bubbles: true})); }
   else if (input.hasAttribute("data-svbulk")){ const l = exactLedger(input.value); if (l) salesBulk("ledger", l); }
 }
 function acAfterRender(){
@@ -439,6 +443,67 @@ document.addEventListener("mousedown", ev => {
 window.addEventListener("resize", () => { if (AC.fk) acDraw(acInput()); });
 document.addEventListener("scroll", () => { if (AC.fk) acDraw(acInput()); }, true);
 /* ---------- confirmation box (browser pop-ups can be blocked inside claude.ai) ---------- */
+// a removal goes ahead only when the client's name is typed (review of 01-Oct-2026), with a reason that is kept with it
+// (request of 02-Oct-2026); resolves {reason} or false
+function confirmTyped(o){
+  const name = String((CO() || {}).name || "").trim();
+  return askConfirm(Object.assign({danger: true}, o, {
+    body: o.body + '<label class="f" style="margin-top:12px"><span>Reason (kept with what is removed)</span><input type="text" id="cbxWhy" autocomplete="off" aria-label="Reason" placeholder="e.g. read again from Tally"></label>' +
+      '<label class="f" style="margin-top:10px"><span>To go ahead, type the client\u2019s name: <b>' + esc(name) + '</b></span><input type="text" id="cbxName" autocomplete="off" aria-label="Type the client\u2019s name"></label>',
+    read: () => ({name: ((document.getElementById("cbxName") || {}).value || "").trim(), reason: ((document.getElementById("cbxWhy") || {}).value || "").trim()}),
+    validate: v => v.name.toLowerCase().replace(/\s+/g, " ") === name.toLowerCase().replace(/\s+/g, " ") ? "" : "Type the client\u2019s name exactly as shown: " + name + "."
+  })).then(r => r ? {reason: (r.data && r.data.reason) || ""} : false);
+}
+// What is removed from a client, kept so it can be put back (every removal is a soft delete). Since 02-Oct-2026 it is
+// kept on the server (client_trash: who, when, why), so any computer of the firm can restore it; this browser keeps a
+// copy as an extra, and is the only copy while the server table is not there (or the firm works offline).
+const Trash = {
+  off: false,          // the database has no client_trash yet
+  missing(e){ return /client_trash|trash_put|trash_restore|PGRST202|PGRST205|schema cache|does not exist|404/i.test(String(e && e.message || e)); },
+  cloud(){ return typeof Cloud === "object" && Cloud.on && Cloud.on() && !this.off; },
+  // keeps a removal; resolves {id, server} where server says whether the server has it
+  async put(cid, kind, label, data, reason){
+    const at = new Date().toISOString(), rec = {cid, kind, label, reason: reason || "", at, by: whoAmI(), data};
+    let sid = null;
+    if (this.cloud()){
+      try { sid = await Cloud.api("rpc/trash_put", {method: "POST", body: {p_client: cid, p_kind: kind, p_label: label, p_reason: reason || "", p_data: data}}); }
+      catch (e){ if (this.missing(e)) this.off = true; else toast("Kept in this browser only: the server did not take it (" + ((e && e.message) || e) + ")."); }
+    }
+    const id = "trash:" + cid + ":" + Date.now();
+    try { await IDBStore.write([[id, Object.assign({id, sid}, rec)]]); } catch (e){ if (!sid) throw e; }
+    return {id: sid || id, server: !!sid};
+  },
+  // what can be put back for a client, newest first: the server's rows (from any computer) and this browser's own
+  // copies that the server does not have
+  async list(cid, kind){
+    let local = []; try { local = (await IDBStore.prefix("trash:" + cid + ":")).map(x => x[1]).filter(Boolean); } catch (e){}
+    let server = [];
+    if (this.cloud()){
+      try {
+        const rows = await Cloud.api("client_trash?select=id,kind,label,reason,deleted_at,deleted_by_email,restored_at&client_id=eq." + encodeURIComponent(cid) + "&restored_at=is.null&order=deleted_at.desc&limit=50") || [];
+        server = rows.map(r => ({id: r.id, sid: r.id, cid, kind: r.kind, label: r.label, reason: r.reason, at: r.deleted_at, by: r.deleted_by_email || "", server: true}));
+      } catch (e){ if (this.missing(e)) this.off = true; }
+    }
+    const onServer = new Set(server.map(x => x.sid));
+    const mine = local.filter(x => !x.restoredAt && !(x.sid && (onServer.has(x.sid) || this.cloud())));
+    return server.concat(mine).filter(x => !kind || x.kind === kind).sort((a, c) => String(c.at).localeCompare(String(a.at)));
+  },
+  // puts one back: from the server (marked restored there, with who and when) or from this browser; resolves its data
+  async take(x){
+    let data = x.data;
+    if (x.server){
+      const j = await Cloud.api("rpc/trash_restore", {method: "POST", body: {p_id: x.sid}});
+      data = j && j.data;
+    }
+    try {
+      const local = (await IDBStore.prefix("trash:" + x.cid + ":")).map(z => z[1]).filter(z => z && (z.id === x.id || (x.sid && z.sid === x.sid)));
+      for (const z of local){ if (data === undefined) data = z.data; z.restoredAt = new Date().toISOString(); z.restoredBy = whoAmI(); await IDBStore.write([[z.id, z]]); }
+    } catch (e){}
+    return data;
+  },
+  // the line under a Restore item: what, when, by whom, why
+  say(x){ return x.label + " \u00b7 removed " + fmtDateTime(x.at) + (x.by ? " by " + x.by : "") + (x.reason ? " \u00b7 " + x.reason : "") + (x.server ? "" : " \u00b7 kept in this browser only"); }
+};
 function askConfirm(o){
   return new Promise(done => {
     let box = document.getElementById("confirmBox");
@@ -469,18 +534,40 @@ async function deleteStatement(sid){
   const rows = sid === b.cur ? b.rows : ((await BankDB.get("stmt:" + b.cid + ":" + sid)) || []);
   const sent = rows.filter(r => r.state === "sent").length;
   const acc = (CO(b.cid).bankAccounts || []).find(a => a.id === st.acctId) || {};
-  const ans = await askConfirm({title: "Delete this statement?", danger: true, ok: "Delete statement",
+  const ans = await confirmTyped({title: "Delete this statement?", ok: "Delete statement",
     body: "<b>" + esc(acc.ledger || st.bank) + "</b>, " + fmtDate(st.from) + " to " + fmtDate(st.to) + " (" + esc(st.fileName) + ", " + st.n + " rows).<br>" +
-      "All ledger choices made on its rows are removed. Saved rules and new ledgers stay. You can upload the file again afterwards." +
+      "It leaves the list with the ledger choices made on its rows; they are kept, and <b>More \u2192 Restore a deleted statement</b> puts it back. Saved rules and new ledgers stay." +
       (sent ? "<br><br><b>" + sent + " entries from it were already sent to Tally.</b> Tally is not changed: if you upload it again, those rows could be sent twice. Match with the Tally bank book first." : "")});
   if (!ans) return;
-  Object.keys(b.keys).forEach(k => { if (b.keys[k] === sid) delete b.keys[k]; });
+  // a soft delete: the statement leaves the list, its rows stay kept here, and a copy of the statement with its rows is
+  // kept on the server so any computer can put it back (More \u2192 Restore)
+  const keys = Object.keys(b.keys).filter(k => b.keys[k] === sid);
+  await Trash.put(b.cid, "statement", (acc.ledger || st.bank) + " " + fmtDate(st.from) + " to " + fmtDate(st.to) + " (" + st.n + " rows)", {st, keys, rows}, ans.reason);
+  keys.forEach(k => { delete b.keys[k]; });
   b.stmts = b.stmts.filter(x => x.id !== sid);
-  await BankDB.del("stmt:" + b.cid + ":" + sid);
+  if (typeof Cloud === "object") Cloud.delete("bank_stmt", b.cid, b.cid + ":" + sid, ans.reason || "statement deleted");
+  b.stmtsTrash = null;
   saveBank({stmts: true, keys: true});
   if (b.cur === sid){ clearTimeout(bankSaveTimer); bankSaveTimer = null; b.cur = null; b.rows = []; b.sel.clear(); b.sticky.clear(); b.undo = null; }
-  toast("Statement deleted.");
+  toast("Statement deleted. More \u2192 Restore a deleted statement puts it back.");
   if (!b.cur && b.stmts.length) await openStatement(b.stmts[b.stmts.length - 1].id); else render();
+}
+// a deleted statement back in the list, as it was (from the server, so from any computer; or this browser's own copy)
+async function restoreStatement(i){
+  const b = B(), list = await Trash.list(b.cid, "statement");
+  // statements deleted before 02-Oct-2026 were kept only in this browser
+  const old = ((await BankDB.get("stmtsTrash:" + b.cid)) || []).map((x, j) => ({old: j, x}));
+  const pick = list[i || 0] || null;
+  let x = null;
+  if (pick) x = await Trash.take(pick);
+  else if (old.length){ const o = old[0]; x = o.x; const rest = (await BankDB.get("stmtsTrash:" + b.cid)) || []; rest.splice(o.old, 1); await BankDB.set("stmtsTrash:" + b.cid, rest); }
+  if (!x || !x.st) return toast("Nothing deleted here to restore.");
+  if (x.rows && x.rows.length && !(await BankDB.get("stmt:" + b.cid + ":" + x.st.id))) await BankDB.set("stmt:" + b.cid + ":" + x.st.id, x.rows);
+  if (!b.stmts.some(s => s.id === x.st.id)) b.stmts.push(x.st);
+  (x.keys || []).forEach(k => { if (!b.keys[k]) b.keys[k] = x.st.id; });
+  b.stmtsTrash = null;
+  saveBank({stmts: true, keys: true});
+  toast("Statement restored."); await openStatement(x.st.id);
 }
 async function clearStatement(){
   const b = B(), st = curStmt();
@@ -613,10 +700,8 @@ function bankSetLedger(id, v){
   return true;
 }
 // which Tally ledger a bank account is
-function bankSetAccLedger(accId, v){
-  const b = B(), co = CO(), a = (co.bankAccounts || []).find(x => x.id === accId);
-  if (a){ a.ledger = v; Store.saveCompany(co); suggestAll(b.rows, true); saveBank({rows: true}); render(); }
-}
+// (confirmed: the person picked it and pressed Confirm; kept in the client's choices, src/js/60)
+function bankSetAccLedger(accId, v){ return bankConfirmAccLedger(accId, v); }
 // tick a line; with Shift, every line between it and the one ticked before
 function bankToggleRow(id, on, shift){ bankToggle({dataset: {bsel: id}, checked: on}, shift); }
 function bankSelAll(on){ const b = B(); bankVisibleRows().filter(r => r.state !== "sent").forEach(r => { if (on) b.sel.add(r.id); else b.sel.delete(r.id); }); bankLightRefresh(); }
@@ -670,7 +755,7 @@ function bankClick(t){
     case "ledPick": document.getElementById("ledIn").click(); return true;
     case "bookPick": closeMenus(); document.getElementById("bookIn").click(); return true;
     case "bankSettings": b.showSettings = true; render(); return true;
-    case "bankSettingsClose": b.showSettings = false; render(); return true;
+    case "bankSettingsClose": Drafts.guard("bank:settings", () => { b.showSettings = false; render(); }); return true;
     case "bankMore": b.limit += 200; render(); return true;
     case "bankCsv": closeMenus(); exportBankCsv(); return true;
     case "bankDismissFail": b.lastFail = null; render(); return true;
@@ -808,6 +893,7 @@ function bankClick(t){
     case "bankBulkRestore": bulkAction("restore"); return true;
     case "bankBulkLedger": { const inp = document.querySelector("[data-bulkled]"); bulkLedgerFrom(inp); return true; }
     case "bankDelStmt": closeMenus(); if (b.cur) deleteStatement(b.cur); return true;
+    case "bankRestoreStmt": closeMenus(); restoreStatement(0); return true;
     case "bankClearStmt": closeMenus(); clearStatement(); return true;
     case "bankDelAll": deleteAllStatements(); return true;
     case "bankClearRules": clearRules(); return true;
@@ -867,14 +953,16 @@ function lmSet(name, key, val){
   LedMaster.tplLearn(b, [name]); try { LedMaster.applyPosting(b, CO(), "empty"); } catch (e){}
   b.mapV = (b.mapV || 0) + 1; b.reco = null; saveBooks(); render();
 }
-function lmConfirmToggle(name){ const m = S.books.map[name]; if (m){ LedMaster.confirm(S.books, [name], !m.ok); S.books.reco = null; saveBooks(); render(); } }
+// a confirm button is its own confirm step (review 18): saved at once, not kept as a draft (src/js/60 Drafts.direct)
+function lmConfirmToggle(name){ const m = S.books.map[name]; if (m) Drafts.direct(() => { LedMaster.confirm(S.books, [name], !m.ok); S.books.reco = null; saveBooks(); render(); }, {bypass: true}); }
 function lmViewGo(v){ S.lmView = v; S.booksTab = "ledgers"; render(); }
 function lmPost(k){ LedMaster.applyPosting(S.books, CO(), k); render(); }
 // the Audit tab (app/src/screens/books/Audit.jsx): the period, how often it runs by itself, and a finding's status
 // or note (kept with the books)
 // Accounts (app/src/screens/books/Accounts.jsx): the format, the year, stock, a manufacturer, shares, a ledger placed by
 // hand (the statements are worked out again) or given back to the rule
-function fsKindSet(v){ const b = S.books; b.fs = Object.assign({}, FS.cfg(b), {kind: v}); S.fsRun = null; saveBooks(); render(); }
+// a format chosen by hand stays chosen; otherwise it follows the client's entity type (FS.cfg)
+function fsKindSet(v){ const b = S.books; b.fs = Object.assign({}, FS.cfg(b), {kind: v, kindSet: true}); S.fsRun = null; saveBooks(); render(); }
 function fsFyGo(v){ S.fsFy = v; S.fsRun = null; render(); }
 function fsStockSet(which, v){ const b = S.books, c = FS.cfg(b); c.stock = Object.assign({}, c.stock, {[which]: v === "" ? "" : num(v)}); b.fs = c; saveBooks(); }
 function fsSet(key, v){ const b = S.books; b.fs = Object.assign({}, FS.cfg(b), {[key]: v}); saveBooks(); }
@@ -1108,7 +1196,7 @@ document.addEventListener("keydown", ev => {
 });
 document.addEventListener("keydown", ev => {
   if (ev.key === "Escape" && S.view === "company" && S.tab === "bank" && B() && B().showSettings && !document.querySelector("#confirmBox[style*='flex']")){
-    ev.preventDefault(); ev.stopImmediatePropagation(); B().showSettings = false; render();
+    ev.preventDefault(); ev.stopImmediatePropagation(); Drafts.guard("bank:settings", () => { B().showSettings = false; render(); });     // unsaved changes: asked first (src/js/60)
   }
 }, true);
 function bankInput(t){

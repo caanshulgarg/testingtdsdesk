@@ -7,15 +7,17 @@
 // status review → ready → posted, or intally / ignored), filter (the tab), q (search), sel (ticked), openId (the one
 // open in the panel), draft (an invoice being created), cfg (numbering, the firm's details, ledgers), undo.
 // The actions are in src/js/26: salesAct("salesPost"), salesRowAct("confirm", id), salesSetCust(id, name), …
+import { useState } from "react";
 import ColHead from "../parts/ColHead.jsx";
 import CommitBox from "../parts/CommitBox.jsx";
 import LedgerBox from "../parts/LedgerBox.jsx";
 import LedgerSelect from "../parts/LedgerSelect.jsx";
+import Confirm from "../parts/Confirm.jsx";
 import { BusyCard } from "../parts/Reading.jsx";
 import { ChipBar, NoMatch } from "../parts/ChipBar.jsx";
 
 const live = () => Bridge.on() && Bridge.up();
-const STATUS = { ready: ["ok", "Ready"], review: ["warn", "To review"], posted: ["ok", "Posted"], intally: ["no", "In Tally"], ignored: ["no", "Ignored"] };
+const STATUS = { ready: ["ok", "Post to Tally"], review: ["warn", "To review"], posted: ["ok", "Posted"], intally: ["no", "In Tally"], ignored: ["no", "Ignored"] };
 const EMPTY = { review: "Nothing to review.", ready: "No invoices are ready yet.", done: "Nothing posted or ignored yet." };
 const States = () => <><option value="">— Choose —</option>{gstStateList().map(([c, n]) => <option key={c} value={c}>{c} · {n}</option>)}</>;
 const gstOf = (x) => r2(num(x.cgst) + num(x.sgst) + num(x.igst) + num(x.cess));
@@ -78,6 +80,39 @@ function DraftText({ x, label, k, area, ...p }) {
     : <input type="text" value={x[k] || ""} onChange={(ev) => draftSet(k, ev.target.value)} {...p} />}</label>;
 }
 
+// tax-accuracy: the e-invoice (IRN) and e-way bill of this invoice, made through the firm's GST API
+function EinvPanel({ v }) {
+  const s = SL(), co = CO(s.cid), x = v.x, gstin = String(co.gstin || "").toUpperCase();
+  const [busy, setBusy] = useState(""), [msg, setMsg] = useState(""), [t, setT] = useState({ distance: "", vehicleNo: "", transporterId: "", mode: "1" });
+  if (!GSTAPI.on() || !GSTIN_RE.test(gstin) || !GSTIN_RE.test(String(x.customerGstin || "").toUpperCase())) return null;
+  const a = EINV.need(gstin), probs = EINV.problems(v, co, s.cfg);
+  const go = (label, f) => async () => { setBusy(label); setMsg(""); try { setMsg(await f()); } catch (e) { setMsg((e && e.message) || String(e)); } setBusy(""); render(); };
+  const active = x.irn && x.irnStatus !== "cancelled", canCancel = active && x.ackDt && Date.now() - Date.parse(x.ackDt) < 24 * 3600000;
+  return <section data-einv={v.id}><h3>E-invoice and e-way bill</h3>
+    {EINV.host === "sandbox" && <p className="note">The firm's server sends to the IRP's <b>sandbox</b> (test): an IRN made here is not a real one.</p>}
+    {active ? <div className="bk-alert"><b>IRN</b> {x.irn}<div className="note">Ack. no. {x.ackNo} · {fmtDateTime(x.ackDt)}{x.ewayNo ? " · E-way bill " + x.ewayNo + (x.ewayValidTill ? ", valid till " + fmtDateTime(x.ewayValidTill) : "") : ""}</div></div>
+      : x.irnStatus === "cancelled" ? <p className="note"><b>IRN cancelled</b> {x.irn}.</p> : null}
+    {!a ? <p className="note">Give the client's e-invoice API user in <button className="linkbtn" onClick={() => goGstSettings()}>GST settings</button> to make the IRN here.</p>
+      : !active ? <>
+        {probs.length > 0 && <div className="bk-alert bad">{probs.map((p, i) => <div key={i}>{p}</div>)}</div>}
+        <button className="btn small primary" disabled={!!busy || probs.length > 0} onClick={go("irn", async () => { const j = await EINV.irn(v); return "IRN made: " + j.irn; })}>{busy === "irn" ? "Making the IRN…" : "Make the IRN"}</button>
+      </> : <>
+        {!x.ewayNo && <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 6 }}>
+          <input type="number" min="0" placeholder="Distance (km)" aria-label="Distance in km" value={t.distance} style={{ width: 120 }} onChange={(ev) => setT({ ...t, distance: ev.target.value })} />
+          <select aria-label="Mode" value={t.mode} style={{ width: "auto" }} onChange={(ev) => setT({ ...t, mode: ev.target.value })}><option value="1">Road</option><option value="2">Rail</option><option value="3">Air</option><option value="4">Ship</option></select>
+          <input type="text" placeholder="Vehicle no." aria-label="Vehicle number" value={t.vehicleNo} style={{ width: 130 }} onChange={(ev) => setT({ ...t, vehicleNo: ev.target.value })} />
+          <input type="text" placeholder="Transporter GSTIN / ID" aria-label="Transporter ID" value={t.transporterId} style={{ width: 170 }} onChange={(ev) => setT({ ...t, transporterId: ev.target.value })} />
+          <button className="btn small" disabled={!!busy || !num(t.distance) || (!t.vehicleNo && !t.transporterId)} onClick={go("ewb", async () => { const j = await EINV.ewb(v, t); return "E-way bill " + j.ewbNo + " made."; })}>{busy === "ewb" ? "Making…" : "Make the e-way bill"}</button>
+        </div>}
+        {canCancel && <button className="linkbtn" style={{ marginTop: 6 }} disabled={!!busy} onClick={go("cancel", async () => {
+          const ok = await askConfirm({ title: "Cancel this IRN?", ok: "Cancel the IRN", body: '<p class="note">Within 24 hours of the IRN only. The invoice number cannot be used again for another invoice.</p>' });
+          if (!ok) return ""; await EINV.cancel(v, "2", "Cancelled from FinCom"); return "IRN cancelled.";
+        })}>Cancel the IRN</button>}
+      </>}
+    {msg && <p className="note">{msg}</p>}
+  </section>;
+}
+
 function Detail({ v }) {
   const s = SL(), x = v.x, co = CO(s.cid), ro = !["review", "ready"].includes(v.status);
   const lines = salesLines(v), tot = (side) => r2(lines.filter((l) => l.side === side).reduce((a, l) => a + l.amt, 0));
@@ -115,6 +150,7 @@ function Detail({ v }) {
         </table></div>
         <p className="note">Voucher type “{s.cfg.voucherType || "Sales"}” · bill-wise New Ref {x.number}{co.createOptional ? " · posted as Optional" : ""}</p>
       </section>
+      <EinvPanel v={v} />
       {(v.trace || []).length > 0 && <section><h3>How it was read</h3><ol className="note">{v.trace.map((t, i) => <li key={i}>{t.ok ? "✔ " : "✖ "}{t.step}: {t.note || ""}</li>)}</ol></section>}
       <section className="row" style={{ gap: 6, flexWrap: "wrap" }}>
         {v.source === "upload" && <><span className="note">Read again:</span>
@@ -137,7 +173,9 @@ function SettingsPanel() {
   const s = SL(), c = s.cfg, co = CO(s.cid), home = stateOfGstin(co.gstin);
   const rates = Array.from(new Set(s.list.flatMap((v) => salesTotals(v.x).map((g) => g.rate)).concat([5, 18]))).sort((a, b) => a - b);
   return (
-    <Panel title={"Sales settings — " + co.name} close={() => salesAct("salesSettingsClose")}>
+    <Panel title={"Sales settings — " + co.name} close={() => Drafts.guard("sales:settings", () => salesAct("salesSettingsClose"))}>
+      {/* review 18: one section, saved with Save at its foot; the default ledgers are confirmed for every computer */}
+      <Confirm id="sales:settings" label="Sales settings" stores={["salescfg"]} cid={s.cid}>
       <section><h3>Invoice numbers</h3>
         <div className="bk-form"><CfgField c={c} label="Series ({FY} = financial year)" k="series" ph="INV/{FY}/" /><CfgField c={c} label="Next number" k="next" /><CfgField c={c} label="Digits" k="pad" /></div>
         <p className="note">Next invoice: <b>{nextInvoiceNumber(new Date().toISOString().slice(0, 10)).number}</b></p></section>
@@ -164,6 +202,7 @@ function SettingsPanel() {
       <section><h3>Clean up</h3><div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
         <button className="btn small" onClick={() => salesAct("salesForget")}>Forget customer memory</button>
         <button className="btn small danger" disabled={!s.list.length} onClick={() => salesAct("salesDelAll")}>Delete all sales invoices</button></div></section>
+      </Confirm>
     </Panel>
   );
 }
@@ -251,10 +290,14 @@ export default function Sales() {
   ensureFileInputs();
   const tc = salesCounts(), all = s.list.filter((v) => v.status !== "ignored"), dates = all.map((v) => v.x.date).filter(Boolean).sort();
   const sum = (k) => r2(all.reduce((a, v) => a + num(v.x[k]), 0));
+  // the three steps at the top, as on Purchase and Bank, also before the first invoice (review of 02-Oct-2026)
+  const tabs = <div className="bk-tabs" role="tablist" data-sales-tabs="" style={{ marginBottom: 10 }}>{SALES_TABS.map(([k, t]) => <button key={k} role="tab" aria-selected={s.filter === k} onClick={() => salesTabGo(k)}>{t} <span className="cnt">{tc[k]}</span></button>)}</div>;
   const head = <>
+    {tabs}
     {s.busy && <BusyCard title="Working on sales…" detail={s.busy} />}
     {!hasLedgerList() && (bridgeLive(co) ? <div className="bk-setup"><div><b>Loading ledgers from Tally…</b></div></div>
-      : <div className="bk-setup"><div><b>Tally ledgers are needed for Sales vouchers</b><div className="note">{Bridge.on() ? "Open " + Bridge.tallyName(co) + " in TallyPrime, or import the ledger list." : "Import the ledger list (Tally: Display More Reports → List of Accounts → Export), or connect the Tally Bridge."}</div></div>
+      : (B() && B().ledgersLoading) || (typeof TCloud === "object" && TCloud.on() && TCloud.has(co.id)) ? <div className="bk-setup"><div><b>Loading ledgers from FinCom’s cloud copy of the books…</b></div></div>
+      : <div className="bk-setup"><div><b>Tally ledgers are needed for Sales vouchers</b><div className="note">{Bridge.on() ? "Open " + Bridge.tallyName(co) + " in TallyPrime, or import the ledger list." : "Import the ledger list (Tally: Display More Reports → List of Accounts → Export), or connect FinCom Bridge."}</div></div>
         <button className="btn small" onClick={() => salesAct("ledPick")}>Import ledger list</button></div>)}
     <div className="bk-head">
       <div className="bk-id"><h2 className="bk-title">Sales</h2><div className="bk-sub">{all.length} invoice{all.length === 1 ? "" : "s"}{all.length ? " · " + fmtDate(dates[0]) + " to " + fmtDate(dates[dates.length - 1]) : ""}</div></div>
@@ -289,7 +332,6 @@ export default function Sales() {
   return <>
     <div className="bk sl">{head}
       <div className="bk-bar">
-        <div className="bk-tabs" role="tablist">{SALES_TABS.map(([k, t]) => <button key={k} role="tab" aria-selected={s.filter === k} onClick={() => salesTabGo(k)}>{t} <span className="cnt">{tc[k]}</span></button>)}</div>
         <input type="search" className="bk-search" autoComplete="off" placeholder="Search invoice, customer, GSTIN" aria-label="Search the invoices" value={s.q} onChange={(ev) => salesSearch(ev.target.value)} />
       </div>
       <ChipBar t="sales" shown={list.length} total={s.list.length + " invoices"} />

@@ -105,6 +105,19 @@ function Typed({ b, grp }) {
     <CommitBox type="number" step="0.01" value={v[k] || ""} placeholder="0" aria-label={grp + " " + k.toUpperCase()} style={{ width: 100, textAlign: "right" }} onCommit={(val) => gst3bSet(grp + "." + k, val)} /></td>);
 }
 
+// credit available in 2B and not claimed in 3B (request of 02-Oct-2026), by head: 2B (Part A less Part B, where credit is
+// available) against the 3B filed (its PDF, the portal's copy, or typed), else against FinCom's working
+function Unclaimed({ reg, ym }) {
+  const per = GSTX.retOf(ym, reg), u = per ? GSTX.unclaimed(reg, per) : null;
+  if (!u) return null;
+  const lab = GSTSet.typeOf(per, reg) === "qrmp" ? GSTSet.qLabel(per) : GSTR.label(per);
+  return <div className="bk-tablewrap" style={{ marginTop: 12 }} data-unclaimed=""><table className="bk-table">
+    <thead><tr><th>Credit in 2B not claimed, {lab}<div className="nr">claimed: {u.source}</div></th><th className="n">In 2B</th><th className="n">Claimed in 3B</th><th className="n">Not claimed</th></tr></thead>
+    <tbody>{u.rows.filter((r) => r.avail || r.claimed).map((r) => <tr key={r.h} data-head={r.h}><td>{{ igst: "IGST", cgst: "CGST", sgst: "SGST", cess: "Cess" }[r.h]}</td><td className="n">{money(r.avail)}</td><td className="n">{money(r.claimed)}</td>
+      <td className="n">{r.not > 0.5 ? <b className="bad">{money(r.not)}</b> : r.not < -0.5 ? <span className="nr">{money(-r.not)} more than 2B</span> : "—"}</td></tr>)}</tbody>
+  </table></div>;
+}
+
 export function Gstr3b({ b }) {
   const t = GSTR.threeB(S.gstYm || "", S.gstReg || ""), choice = ((b.itcBasis || {})[S.gstReg || ""]) || "2b";
   const ft = typeof GSTSet === "object" ? GSTSet.typeOf(S.gstYm || "", S.gstReg || "") : "monthly";
@@ -156,6 +169,7 @@ export function Gstr3b({ b }) {
         {t.ineligible ? <tr><td className="nr">Tax charged to cost in the books</td><td className="n">{money(t.ineligible)}</td><td colSpan={3}></td></tr> : null}
       </tbody>
     </table></div>
+    <Unclaimed reg={S.gstReg || ""} ym={S.gstYm || ""} />
     <div className="bk-tablewrap" style={{ marginTop: 12 }}><table className="bk-table">
       <thead><tr><th>5 Exempt, nil and non-GST inward supplies</th><th className="n">Inter-state</th><th className="n">Intra-state</th></tr></thead>
       <tbody>

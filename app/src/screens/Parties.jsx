@@ -3,9 +3,43 @@
 const save = (p, now) => { if (now) Store.saveParty(S.coId, p); else later("p" + p.id, () => Store.saveParty(S.coId, p), 600); };
 const set = (p, k, v, now) => { p[k] = /^(pan|gstin)$/.test(k) ? String(v).toUpperCase().trim() : v; save(p, now); render(); };
 
+// the supplier's matched ledger (review 20): FinCom's guess (from a bill waiting) until a person confirms it here, or
+// approves a bill of the supplier; a confirmed one is never replaced by a guess or an older copy (src/js/60)
+function PartyLedgerTag({ p }) {
+  const c = partyChoice(p);
+  if (!c || !c.value) return null;
+  if (c.state === "confirmed") return <div className="cfm-ok" data-choice="party" data-choice-state="confirmed">{"✔ confirmed" + (c.by ? " by " + c.by : "")}</div>;
+  return <div className="cfm-guess" data-choice="party" data-choice-state="guessed"><span className="tag warn">guessed, confirm</span>{" "}
+    <button type="button" className="linkbtn" data-choice-confirm="party" onClick={() => Drafts.direct(() => { partyChoiceSet(p, p.ledgerName, "confirmed"); Store.saveParty(S.coId, p); render(); }, { bypass: true })}>Confirm</button></div>;
+}
 function Pf({ p, label, k, type = "text" }) {
   return <label className="f"><span>{label}</span>
     <input type={type} value={p[k] == null ? "" : p[k]} {...(type === "number" ? { step: "0.01" } : {})} onChange={(ev) => set(p, k, ev.target.value)} /></label>;
+}
+
+// lower deduction certificates (old section 197) for this deductee: one per section and period, with the amount it covers
+function Ldc({ p }) {
+  const list = (Array.isArray(p.ldc) ? p.ldc : []);
+  const upd = (i, k, v) => { p.ldc = list.map((c, j) => j === i ? Object.assign({}, c, { [k]: k === "no" ? String(v).toUpperCase().trim() : v }) : c); save(p); render(); };
+  const add = () => { p.ldc = list.concat([{ no: "", rule: p.natureDefault || "", rate: "", from: "", to: "", limit: "" }]); save(p, true); render(); };
+  const off = (i) => { p.ldc = list.map((c, j) => j === i ? Object.assign({}, c, { deleted: true, deletedAt: new Date().toISOString() }) : c); save(p, true); render(); };
+  return <div style={{ marginTop: 14 }} data-pane="ldc">
+    <h3 style={{ margin: "0 0 6px" }}>Lower deduction certificates</h3>
+    <p className="note" style={{ margin: "0 0 8px" }}>The rate applies to this deductee's bills of that payment type within the dates, up to the amount; above it, the normal rate. The certificate number goes into the return with remark A.</p>
+    {list.some((c) => !c.deleted) && <div className="tblwrap"><table className="data">
+      <thead><tr><th>Certificate no.</th><th>Payment type</th><th className="n">Rate %</th><th>From</th><th>To</th><th className="n">Amount covered</th><th className="n">Used</th><th></th></tr></thead>
+      <tbody>{list.map((c, i) => c.deleted ? null : <tr key={i}>
+        <td><input type="text" aria-label="Certificate number" value={c.no || ""} style={{ width: 120 }} onChange={(ev) => upd(i, "no", ev.target.value)} /></td>
+        <td><select aria-label="Payment type" value={c.rule || ""} onChange={(ev) => upd(i, "rule", ev.target.value)}><option value="">Any</option>
+          {rules().filter((r) => r.basis !== "never").map((r) => <option key={r.id} value={r.id}>{r.label} ({r.old})</option>)}</select></td>
+        <td className="n"><input type="number" step="0.01" aria-label="Rate" value={c.rate} style={{ width: 70 }} onChange={(ev) => upd(i, "rate", ev.target.value)} /></td>
+        <td><input type="date" aria-label="From" value={c.from || ""} onChange={(ev) => upd(i, "from", ev.target.value)} /></td>
+        <td><input type="date" aria-label="To" value={c.to || ""} onChange={(ev) => upd(i, "to", ev.target.value)} /></td>
+        <td className="n"><input type="number" step="1" aria-label="Amount covered" value={c.limit} style={{ width: 110 }} onChange={(ev) => upd(i, "limit", ev.target.value)} /></td>
+        <td className="n">{num(c.limit) ? "₹" + INR.format(ldcUsed(p, c, S.coId)) : "—"}</td>
+        <td><button className="linkbtn" onClick={() => off(i)}>Remove</button></td></tr>)}</tbody></table></div>}
+    <button className="btn small" style={{ marginTop: 6 }} onClick={add}>Add a certificate</button>
+  </div>;
 }
 
 function Party({ p, fy }) {
@@ -19,13 +53,21 @@ function Party({ p, fy }) {
       <div className="row" style={{ justifyContent: "space-between" }}><h2>{p.name}</h2><button className="btn small" onClick={() => doAct("closeParty")}>Close</button></div>
       <div className="grid" style={{ marginTop: 10 }}>
         <Pf p={p} label="Name" k="name" /><Pf p={p} label="PAN" k="pan" /><Pf p={p} label="GSTIN" k="gstin" />
-        <Pf p={p} label="Ledger name in Tally" k="ledgerName" /><Pf p={p} label="Expense ledger" k="expenseLedger" />
+        <div><Pf p={p} label="Ledger name in Tally" k="ledgerName" /><PartyLedgerTag p={p} /></div><Pf p={p} label="Expense ledger" k="expenseLedger" />
         <label className="f"><span>Usual payment type</span>
           <select value={p.natureDefault || ""} onChange={(ev) => set(p, "natureDefault", ev.target.value, true)}>
             <option value="">Decide per invoice</option>{rules().map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
           </select></label>
-        <Pf p={p} label="Lower deduction rate %" k="ldcRate" type="number" /><Pf p={p} label="Certificate valid to" k="ldcValidTo" type="date" />
+        {(p.ldcRate !== undefined && p.ldcRate !== "") || p.ldcValidTo ? <><Pf p={p} label="Lower deduction rate % (older entry)" k="ldcRate" type="number" /><Pf p={p} label="Certificate valid to" k="ldcValidTo" type="date" /></> : null}
       </div>
+      <div className="skipbox" style={{ marginTop: 12 }}>
+        <label className="chk"><input type="checkbox" checked={!!p.panInoperative} onChange={(ev) => { p.panInoperative = ev.target.checked; p.panCheckedOn = new Date().toISOString().slice(0, 10); save(p, true); render(); }} />
+          {" "}<b>PAN inoperative</b> (not linked with Aadhaar): TDS at the higher rate</label>
+        {p.panInoperative && p.panCheckedOn && <p className="note" style={{ margin: "4px 0 0" }}>Marked on {fmtDate(p.panCheckedOn)}. Clear it once the PAN is operative again.</p>}
+        <label className="chk" style={{ marginTop: 6 }}><input type="checkbox" checked={!!p.trc} onChange={(ev) => set(p, "trc", ev.target.checked, true)} /> Non-resident with a tax residency certificate and Form 10F on file</label>
+        {p.trc && <div className="grid" style={{ marginTop: 6 }}><Pf p={p} label="Treaty (DTAA) rate %" k="dtaaRate" type="number" /><Pf p={p} label="Country" k="country" /></div>}
+      </div>
+      <Ldc p={p} />
       <div className="skipbox" style={{ marginTop: 12 }}>
         <label className="chk"><input type="checkbox" checked={!!p.noTds} onChange={(ev) => {
           p.noTds = ev.target.checked; if (p.noTds && !p.noTdsReason) p.noTdsReason = "na"; save(p, true); refreshStats(S.coId); render();
@@ -57,9 +99,9 @@ function PendingSuppliers() {
   const list = pendingSuppliers();
   if (!list.length) return null;
   return <div className="tblwrap" style={{ marginTop: 14 }}><table className="data">
-    <thead><tr><th>New supplier, not yet approved</th><th>PAN</th><th>Payment type on the bill</th><th className="n">Bills waiting</th><th className="n">Total</th><th></th></tr></thead>
+    <thead><tr><th>Supplier not yet in FinCom’s list</th><th>PAN</th><th>Payment type on the bill</th><th className="n">Bills waiting</th><th className="n">Total</th><th></th></tr></thead>
     <tbody>{list.map((k) => <tr key={k.key}>
-      <td>{k.name} <span className="tag warn">new</span></td><td>{k.pan || "—"}</td><td>{k.natureId && k.natureId !== "none" ? ruleOf(k.natureId).label : "—"}</td>
+      <td>{k.name} {k.tally ? <span className="tag ok" title="Tally already has this supplier’s ledger">in Tally as {k.tally}</span> : <span className="tag warn">new</span>}</td><td>{k.pan || "—"}</td><td>{k.natureId && k.natureId !== "none" ? ruleOf(k.natureId).label : "—"}</td>
       <td className="n">{k.bills}</td><td className="n">{money0(k.total)}</td>
       <td><button className="linkbtn" onClick={() => { const p = addPendingSupplier(k.key); if (p) { S.partySel = p.id; render(); } }}>Save and fill in</button></td></tr>)}</tbody>
   </table></div>;

@@ -10,14 +10,26 @@ const Certs = {
       (!c.from || TDS.ymd(r.date) >= TDS.ymd(c.from)) && (!c.to || TDS.ymd(r.date) <= TDS.ymd(c.to)));
   },
   validPan(p){ return /^[A-Z]{5}\d{4}[A-Z]$/.test(String(p || "").toUpperCase()); },
+  // PANs marked inoperative (not linked with Aadhaar) for this client's books: S.books.panInoperative = {PAN: date checked}
+  inoperative(p){
+    const P = String(p || "").toUpperCase();
+    if (!P) return false;
+    if (((S.books || {}).panInoperative || {})[P]) return true;
+    return Object.values(D().parties || {}).some(x => x && x.panInoperative && String(x.pan || "").toUpperCase() === P);
+  },
   // what the rate should have been, and why
   expected(r){
     const cert = this.forRow(r);
     if (cert) return {rate: num(cert.rate), why: "certificate " + (cert.certNo || "under 197"), cert};
-    if (!this.validPan(r.pan)) return {rate: 20, why: "no valid PAN, section 206AA"};
-    const std = (TDS.STD[String(r.section).replace(/\s.*$/, "")] || []);
-    if (!std.length) return {rate: null, why: ""};
-    const near = std.slice().sort((a, b) => Math.abs(a - (r.rate || 0)) - Math.abs(b - (r.rate || 0)))[0];
+    const std = (TDS.STD[TDS.sec(r.section)] || []);
+    const near = std.length ? std.slice().sort((a, b) => Math.abs(a - (r.rate || 0)) - Math.abs(b - (r.rate || 0)))[0] : null;
+    // no PAN (or one marked inoperative under Deductees): the higher of the usual rate and 20%; 5% for 194Q and 194-O
+    const noPan = !this.validPan(r.pan) ? "no valid PAN" : this.inoperative(r.pan) ? "PAN inoperative" : "";
+    if (noPan){
+      const sec = TDS.sec(r.section), rule = sec === "194Q" || sec === "194O" ? {noPanRate: 5} : null;
+      return {rate: noPanRate(rule, near == null ? 0 : near), why: noPan + ", section 206AA (higher rate)", noPan: true};
+    }
+    if (near == null) return {rate: null, why: ""};
     return {rate: near, why: "usual rate for " + r.section};
   },
   // where the books deducted at a different rate from the one that applies
@@ -46,8 +58,14 @@ const TDSYear = {
         challans: mine.length, challanTax: r2(mine.reduce((a, c) => a + num(c.tax), 0)),
         used: r2(mine.reduce((a, c) => a + (use[c.id] || 0), 0)),
         salaryEmployees: sal.length, salaryPaid: r2(sal.reduce((a, e) => a + e.paid, 0)), salaryTds: r2(sal.reduce((a, e) => a + e.tds, 0)),
-        issues: Certs.issues(fy, q).length};
+        issues: Certs.issues(fy, q).length, nr: this.other(TDS.nrRows(), fy, q), tcs: this.other(TDS.tcsRows(), fy, q)};
     });
+  },
+  // a quarter of 27Q or 27EQ in the year's table
+  other(all, fy, q){
+    const rows = all.filter(r => r.fy === fy && r.q === q);
+    return {n: rows.length, tds: r2(rows.reduce((a, r) => a + r.tds, 0)), unallocated: r2(rows.filter(r => !r.challan).reduce((a, r) => a + r.tds, 0)),
+      noPan: rows.filter(r => !Certs.validPan(r.pan)).length};
   },
   async toExcel(fy, which){
     await ensureXlsx();
@@ -112,17 +130,22 @@ async function openBooks(cid){
     if (late || Live.sv.state === "offline"){ S.books.offline = true; toast("The server could not be reached: this is this computer’s copy of the books, as last saved here. It is brought up to date as soon as the server answers."); pull.then(() => { if (S.books && S.books.cid === cid){ S.books.offline = false; render(); } }); }
   }
   S.books.loading = false; S.books.openMs = Date.now() - t0; S.books.openAt = t0;
+  // names kept with line breaks or entities (a copy from before they were cleaned) cleaned once (TallyRead.cleanNames)
+  try { if (TallyRead.cleanNames(S.books)) saveBooks(); } catch (e){}
   if (S.books.vouchers && S.books.vouchers.length) try { LedMaster.refresh(S.books); } catch (e){}
   // server-books: the cloud copy is where the books are; this browser's copy is only a cache of it
   if (typeof TCloud === "object" && TCloud.on()) setTimeout(() => { TCloud.openLoad(cid).catch(() => {}); }, 0);
   setTimeout(() => { try { if (typeof CloudDocs === "object" && CloudDocs.on() && S.coId === cid) CloudDocs.sendPending(cid, true); } catch (e){} }, 3000);
   setTimeout(() => { try { if (S.books && S.books.cid === cid){ Audit.maybeRun(); MIS.maybeRun(); } } catch (e){} }, 400);
+  // the drafts' party and expense ledgers, now that the day book and the ledger masters' GSTINs are here
+  try { if (typeof billAutoAll === "function" && S.coId === cid) billAutoAll(cid); } catch (e){}
   render();
 }
 // everything kept with a client's books, in this browser and (the TDS and GST work) in the firm's database
-const BOOKS_KEYS = ["vouchers", "map", "meta", "challans", "alloc", "pans", "twoB", "gstins", "under", "states", "groups", "salary", "certs", "advFix", "assets", "rev", "filed", "amendFix", "twoBs", "reco2b", "ledInfo", "ledInfoAt", "audit", "auditCfg", "auditRel", "ledSnaps", "gst9c", "groupInfo", "fs", "tb", "mis", "misCfg", "msme", "budget", "gst3b", "gst9", "gstOpen", "itcBasis", "itcTrack", "outRej", "gstFiled", "gstAato", "filed1a", "rule37On", "gstCashLedger", "gstSet", "gstContacts", "gstApi", "gstEst", "gstVault", "gstRegs", "letters", "ai", "tallyCo", "tbCheck"];
+const BOOKS_KEYS = ["vouchers", "map", "meta", "challans", "alloc", "pans", "twoB", "gstins", "under", "states", "groups", "salary", "certs", "advFix", "assets", "rev", "filed", "amendFix", "twoBs", "reco2b", "ledInfo", "ledInfoAt", "audit", "auditCfg", "auditRel", "ledSnaps", "gst9c", "groupInfo", "fs", "tb", "mis", "misCfg", "msme", "budget", "gst3b", "gst9", "gstOpen", "itcBasis", "itcTrack", "outRej", "gstFiled", "gstAato", "filed1a", "rule37On", "gstCashLedger", "gstSet", "gstContacts", "gstApi", "gstEst", "gstVault", "gstRegs", "letters", "ai", "tallyCo", "tbCheck", "nrInfo", "tcsCodes", "panInoperative", "filed3b", "apiTaken", "trashLog", "gone", "filedDocs", "portalFiled", "gstNotes"];
 async function saveBooks(opts, bb){
   const b = bb || S.books; if (!b || !b.cid) return;
+  if (typeof Drafts === "object" && Drafts.hold("books:" + b.cid)) return;     // a settings section not saved yet (src/js/60)
   const keep = {cid: b.cid}; BOOKS_KEYS.forEach(k => { keep[k] = b[k]; });
   await Books.save(b.cid, keep);
   if (!(opts && opts.fromCloud) && typeof BookSync === "object") BookSync.schedule(b.cid);
@@ -131,7 +154,7 @@ async function saveBooks(opts, bb){
 // the books of a client (TDS & GST, MIS, Accounts, Audit, …): React (app/src/screens/Books.jsx)
 function viewBooks(){ return '<div data-react="Books"></div>'; }
 
-/* ---------- straight from Tally through the bridge: the day book month by month, and Tally's own balances ---------- */
+/* ---------- the day book through the bridge, month by month; the opening balances from FinCom's copy ---------- */
 const TallyRead = {
   months(from, to){
     const out = []; let y = num(from.slice(0, 4)), m = num(from.slice(4, 6));
@@ -153,7 +176,17 @@ const TallyRead = {
   },
   // put a month's vouchers in place of what was there for those dates
   merge(b, res, from, to){
+    const before = (b.vouchers || []).filter(v => v.date >= from && v.date <= to);
     b.vouchers = (b.vouchers || []).filter(v => v.date < from || v.date > to).concat(res.vouchers);
+    // an entry that Tally no longer sends for these dates, and that is not elsewhere in the books (moved to another date),
+    // was deleted in Tally: it is kept, marked with the day FinCom saw it gone (request of 02-Oct-2026), and is marked back
+    // (not removed) if Tally sends it again
+    if (before.length || b.gone){
+      const now = new Set(b.vouchers.map(v => v.id)), today = new Date().toISOString().slice(0, 10);
+      b.gone = b.gone || {};
+      before.forEach(v => { const g = b.gone[v.id]; if (v.id && !now.has(v.id) && !v.cancel && (!g || g.back)) b.gone[v.id] = {v, at: today, by: whoAmI()}; });
+      Object.keys(b.gone).forEach(id => { if (now.has(id) && !b.gone[id].back) b.gone[id].back = today; });
+    }
     const m = b.meta = b.meta || {};
     const g = new Set((m.gstins || []).concat(res.meta.gstins || []));
     m.gstins = Array.from(g).sort(); m.bills = 1; m.company = res.meta.company || m.company;
@@ -163,14 +196,45 @@ const TallyRead = {
     const led = {};
     // a ledger whose name in Tally ends in a line break is named without it, as the day book's entries name it
     // (Books.unesc), so its balance and group meet its entries; two such names are one ledger (review of 01-Oct-2026)
-    const nm = n => String(n || "").replace(/(&#13;|&#10;|\r|\n)+/g, " ").trim();
+    const nm = n => ledClean(n);
     [].concat(j.ledgers || []).forEach(l => {
       const k = nm(l.name), had = led[k];
       led[k] = {open: r2((had ? had.open : 0) + Books.amt(l.open)), close: r2((had ? had.close : 0) + Books.amt(l.close)), parent: (had && had.parent) || l.parent || ""};
     });
     b.tb = {from, to, at: new Date().toISOString(), led};
-    Object.entries(led).forEach(([n, x]) => { if (x.parent) (b.under = b.under || {})[n] = (b.under[n] || x.parent); });
+    Object.entries(led).forEach(([n, x]) => { if (x.parent) (b.under = b.under || {})[n] = (b.under[n] || ledClean(x.parent)); });
     this.yearOpen(b);
+  },
+  // review of 02-Oct-2026 (trade receivables 11,550 short): a copy of the books kept from before the names were cleaned
+  // (here, and in the cloud by migration-23) still names "MCS Project Pvt Ltd&#13;&#10;" (6,000 Cr) and "RAKVIK
+  // TECHNOLOGIES PRIVATE LIMITED&#13;&#10;&#13;&#10;" (17,550 Dr) in its balances, with no group: not debtors, so in other
+  // current liabilities and assets. Every name kept with the books is cleaned once (ledClean, src/js/00), and two names
+  // that become one are one ledger (balances added). Returns how many names changed
+  cleanNames(b){
+    if (!b) return 0;
+    const bad = s => typeof s === "string" && /&|\r|\n|^\s|\s$/.test(s) && ledClean(s) !== s;
+    let n = 0;
+    const keys = (o, merge, val) => {
+      if (!o || typeof o !== "object") return;
+      Object.keys(o).forEach(k => {
+        if (val && bad(o[k])){ o[k] = ledClean(o[k]); n++; }
+        if (!bad(k)) return;
+        const c = ledClean(k), v = o[k]; delete o[k]; n++;
+        o[c] = o[c] == null ? v : merge ? merge(o[c], v) : (o[c] || v);
+      });
+    };
+    const sum = (a, c) => { const out = Object.assign({}, a); ["open", "close", "openSent"].forEach(f => { if (a[f] != null || c[f] != null) out[f] = r2(num(a[f]) + num(c[f])); }); out.parent = a.parent || c.parent || ""; return out; };
+    if (b.tb && b.tb.led){ keys(b.tb.led, sum); Object.values(b.tb.led).forEach(x => { if (x && bad(x.parent)){ x.parent = ledClean(x.parent); n++; } }); }
+    keys(b.under, null, true); keys(b.groups, null, true);
+    ["ledInfo", "map", "gstins", "states", "msme"].forEach(k => keys(b[k]));
+    if (b.map) Object.entries(b.map).forEach(([k, m]) => { if (m && typeof m === "object" && m.n != null && m.n !== k && bad(m.n)) m.n = k; });
+    if (b.fs && b.fs.map) keys(b.fs.map);
+    (b.vouchers || []).forEach(v => {
+      if (bad(v.party)){ v.party = ledClean(v.party); n++; }
+      (v.ent || []).forEach(e => { if (bad(e.l)){ e.l = ledClean(e.l); n++; } });
+    });
+    if (n){ b.mapV = (b.mapV || 0) + 1; if (typeof LK === "object") LK.cache = {}; }
+    return n;
   },
   // review of 01-Oct-2026 (owner's go-ahead): at the start of a financial year, income and expense ledgers open at nil
   // and their total goes to Profit & Loss A/c, as Tally does. Balances taken as on 31 March (a trial balance file, the
@@ -180,8 +244,8 @@ const TallyRead = {
   NOMINAL: ["Sales Accounts", "Purchase Accounts", "Direct Incomes", "Direct Expenses", "Indirect Incomes", "Indirect Expenses"],
   primaryOf(b, n){
     const under = b.under || {}, groups = b.groups || {}, prim = s => !s || /^\W*Primary$/i.test(s);
-    let p = under[n], last = "";
-    for (let i = 0; !prim(p) && i < 30; i++){ last = p; p = groups[p]; }
+    let p = ledUnder(b, n), last = "";
+    for (let i = 0; !prim(p) && i < 30; i++){ last = p; p = ledLook(groups, p); }
     return last;
   },
   yearOpen(b){
@@ -189,10 +253,10 @@ const TallyRead = {
     if (!led || !Object.keys(b.groups || {}).length) return false;
     Object.values(led).forEach(x => { if (x.openSent == null) x.openSent = x.open; x.open = x.openSent; });
     if (!/0401$/.test(String(tb.from || ""))) return false;
-    const PL = "Profit & Loss A/c", nominal = new Set(this.NOMINAL);
+    const PL = "Profit & Loss A/c", nominal = new Set(this.NOMINAL.map(g => g.toLowerCase()));   // Tally's group names in any capitals
     let moved = 0, n = 0;
     Object.entries(led).forEach(([name, x]) => {
-      if (name === PL || !nominal.has(this.primaryOf(b, name)) || !num(x.openSent)) return;
+      if (name === PL || !nominal.has(String(this.primaryOf(b, name) || "").trim().toLowerCase()) || !num(x.openSent)) return;
       moved = r2(moved + num(x.openSent)); x.open = 0; n++;
     });
     if (!n) return false;
@@ -200,12 +264,27 @@ const TallyRead = {
     pl.open = r2(num(pl.openSent) + moved);
     return true;
   },
+  // the opening balances on the books' first day, from FinCom's copy in the cloud (TCloud.openings: the view
+  // tally_balances, else the ledger masters' openings or the cloud's trial balance on the day before), with each ledger's
+  // closing worked out from the entries here. Without a copy in the cloud, the openings already here stay as they are.
+  // Never an error: b.tb.line says "Balance from FinCom's copy · books as of 15:34"
+  async openings(b, cid, from, to){
+    let j = null;
+    try { if (typeof TCloud === "object" && TCloud.on()){ b.busy = "Opening balances from FinCom\u2019s copy\u2026"; render(); j = await TCloud.openings(cid, from); } } catch (e){ j = null; }
+    if (j && (j.ledgers || []).length){
+      this.balances(b, j, from, to);
+      if (typeof MIS === "object"){ const mv = MIS.moves(b.tb.from, b.tb.to); Object.entries(b.tb.led).forEach(([l, x]) => { x.close = r2(num(x.open) + ((mv[l] || {}).t || 0)); }); }
+    }
+    if (b.tb){ b.tb.src = "copy"; b.tb.line = copyLine(cid); }
+    return j;
+  },
   // after the books changed (read from Tally, changes brought in from the kept copy or the cloud, a day book file):
   // every section follows. Screens work from the entries as they are; audit and MIS are worked out again for the
   // period they last covered. A filed GST return is never changed: when its documents changed in Tally, a warning
   // names the return (and its ARN) and the return the changes go in as amendments
   after(b, why, range){
     b.reco = null; if (typeof GSTR === "object") GSTR._carry = null;
+    try { this.cleanNames(b); } catch (e){}
     if (!(b.vouchers || []).length) return;              // a very large company answered from the cloud's totals: nothing to work on here
     // audit and MIS take seconds on a big company, and the page waits meanwhile: they are not worked out here on every
     // change, only marked out of date; each is worked out again when its tab is opened (Audit, MIS)
@@ -273,23 +352,13 @@ const TallyRead = {
         await new Promise(r => setTimeout(r, Math.min(3000, 300 + sec * 500)));
       }
     }
-    // opening balances only: Tally works every ledger's balance out for the date asked, which is slow on a big
-    // company; the closing figures follow from the opening and the entries just read
-    // the bridge's copy may already hold them for this date (read at a quiet time): then Tally is not asked at all
-    let j = null;
-    if (how !== "copy"){
-      try { const k = JSON.parse(await this.raw("/syncfile" + q + "&file=balances.json", 60000)); if (k && k.openAsOn === (t => t.getFullYear() + String(t.getMonth() + 1).padStart(2, "0") + String(t.getDate()).padStart(2, "0"))(new Date(+from.slice(0, 4), +from.slice(4, 6) - 1, +from.slice(6, 8) - 1)) && (k.ledgers || []).length) j = Object.assign({}, k, {from, to, openOnly: true}); } catch (e){}
-    }
-    if (!j){
-      b.busy = "Reading the opening balances from Tally (one read; Tally may be busy for a moment)\u2026"; render();
-      j = how === "copy" ? JSON.parse(await this.raw("/syncfile" + q + "&file=balances.json")) : await Bridge.call("/balances" + q + "&from=" + from + "&to=" + to + "&open=1", null, 600000);
-    }
-    this.balances(b, j, j.from || from, j.to || to);
-    if (how !== "copy" && typeof MIS === "object"){ const mv = MIS.moves(b.tb.from, b.tb.to); Object.entries(b.tb.led).forEach(([l, x]) => { if (j.openOnly || x.close === "" || isNaN(x.close)) x.close = r2(num(x.open) + ((mv[l] || {}).t || 0)); }); }
+    // the opening balances: from FinCom's copy (FinCom Bridge 2.1.4 asks Tally for no balance, and the bridge is not
+    // asked for its own copy's either; owner's decision of 02-Oct-2026); the closing figures follow from the entries
+    const j = await this.openings(b, co.id, from, to);
     b.map = Books.mapLedgers(b.vouchers, b.map); LedMaster.refresh(b);
     b.meta.at = new Date().toISOString(); b.meta.file = how === "copy" ? "last night's copy from Tally" : "read from Tally";
     b.busy = "";
-    this.after(b, how === "copy" ? "after last night's copy was read" : "after reading from Tally", {from: j.from || from, to: j.to || to});
+    this.after(b, how === "copy" ? "after last night's copy was read" : "after reading from Tally", {from: (j && j.from) || from, to: (j && j.to) || to});
     await saveBooks();
     return b.vouchers.length;
   }
@@ -309,7 +378,8 @@ function tallyDate(s){ return s && String(s).length === 8 ? String(s).slice(0, 4
 function ledgersReady(which){
   const p = LedMaster.pending(S.books).filter(([, m]) => which === "gst" ? !LedMaster.isTds(m.what) : !LedMaster.isGst(m.what));
   if (!p.length) return true;
-  toast(p.length + " ledger" + (p.length === 1 ? " is" : "s are") + " still to be confirmed. Confirm them first, so the file is right.");
+  const all = LedMaster.pending(S.books).length;
+  toast(all + " ledger" + (all === 1 ? " is" : "s are") + " still to be confirmed, " + (p.length === all ? "and this file uses them" : p.length + " of them used by this file") + ". Confirm them first, so the file is right.");
   S.booksTab = "ledgers"; S.lmView = "pending"; render();
   return false;
 }
@@ -386,29 +456,34 @@ function misPackHtml(r){
   const m = v => INR.format(r2(v || 0)), co = CO();
   const pl = [["Revenue from operations", (r.pl.heads.rev || {t: 0}).t], ["Other income", (r.pl.heads.oth || {t: 0}).t], ["Purchases and direct expenses", ((r.pl.heads.pur || {t: 0}).t + (r.pl.heads.dir || {t: 0}).t)], ["Gross profit", r.pl.gross.t, 1],
     ["Employee costs", (r.pl.heads.emp || {t: 0}).t], ["Other expenses", (r.pl.heads.exp || {t: 0}).t], ["Finance costs", (r.pl.heads.fin || {t: 0}).t], ["Depreciation", (r.pl.heads.dep || {t: 0}).t], ["Profit before tax", r.pl.pbt.t, 1]];
-  const owed = A => A.sum.tally != null ? A.sum.tally : A.sum.open;
+  const owed = A => A.sum.owe != null ? A.sum.owe : A.sum.tally != null ? A.sum.tally : A.sum.open;
   let h = '<div style="border-bottom:2px solid #15201B;padding-bottom:8px;margin-bottom:12px"><div style="font-size:12px;color:#5A6B63">MIS</div><h1 style="font-size:22px;margin:4px 0">' + esc(co.name) + "</h1>" +
     '<div>' + fmtDate(tallyDate(r.from)) + " to " + fmtDate(tallyDate(r.to)) + " \u00b7 prepared " + fmtDate(r.at.slice(0, 10)) + " \u00b7 result code " + esc(r.code) + (r.control ? (r.control.ok ? " \u00b7 agrees with Tally\u2019s balances" : " \u00b7 " + r.control.n + " ledgers differ from Tally") : "") + "</div></div>";
   h += "<h2>At a glance</h2><table><tbody>" + [["Sales", m(r.sales.total) + (r.prev ? " (previous period " + m(r.prev.sales) + ")" : "") + (r.ly ? " (last year " + m(r.ly.sales) + ")" : "")], ["Profit before tax", m(r.pl.pbt.t)],
-    ["Received / paid", m(r.cash.rec) + " / " + m(r.cash.pay)], ["Owed to you", m(owed(r.recv)) + " (over 90 days " + m(r.recv.sum.b[3] + r.recv.sum.b[4]) + ")"], ["You owe", m(owed(r.pay)) + " (MSME past " + MIS.cfg(S.books).msmeDays + " days " + m(r.msme.reduce((s, x) => s + x.amt, 0)) + ")"]]
+    ["Received / paid", m(r.cash.rec) + " / " + m(r.cash.pay)], ["Owed to you", m(owed(r.recv)) + " (over 90 days " + m((r.recv.sum.nb || r.recv.sum.b)[3] + (r.recv.sum.nb || r.recv.sum.b)[4]) + ")"], ["You owe", m(owed(r.pay)) + " (MSME past " + MIS.cfg(S.books).msmeDays + " days " + m(r.msme.reduce((s, x) => s + x.amt, 0)) + ")"]]
     .map(([a, c]) => "<tr><td>" + a + "</td><td>" + c + "</td></tr>").join("") + "</tbody></table>";
   h += "<h2>Profit and loss</h2><table><tbody>" + pl.map(([a, v, bold]) => "<tr><td>" + (bold ? "<b>" + a + "</b>" : a) + '</td><td class="n">' + (bold ? "<b>" + m(v) + "</b>" : m(v)) + "</td></tr>").join("") + "</tbody></table>" +
     '<p class="note">Before the change in stock.</p>';
   if (r.balances.cash) h += "<h2>Cash and bank</h2><table><tbody>" + r.balances.cash.concat(r.balances.bank).filter(x => Math.abs(x[1]) >= 1).map(([l, v]) => "<tr><td>" + esc(l) + '</td><td class="n">' + m(v) + "</td></tr>").join("") + "</tbody></table>";
   // open bills by age: the parties with the most outstanding
-  const age = (t, A) => { const open = p => p.b.reduce((a, v) => a + v, 0), rows = A.rows.filter(p => open(p) > 0).sort((a, c) => open(c) - open(a) || a.party.localeCompare(c.party));
-    return "<h2>" + t + "</h2><table><thead><tr><th>Party</th>" + MIS.BUCKETS.map(z => '<th class="n">' + z[1] + "</th>").join("") + '<th class="n">Open bills</th></tr></thead><tbody>' +
-    rows.slice(0, 15).map(p => "<tr><td>" + esc(p.party) + "</td>" + p.b.map(v => '<td class="n">' + (v ? m(v) : "") + "</td>").join("") + '<td class="n">' + m(open(p)) + "</td></tr>").join("") +
-    "<tr><td><b>All</b></td>" + A.sum.b.map(v => '<td class="n"><b>' + m(v) + "</b></td>").join("") + '<td class="n"><b>' + m(A.sum.open) + "</b></td></tr></tbody></table>" +
+  // the ages of what is owed on balance (MIS.netOpen), and what no bill dates, as on the MIS page (review of 02-Oct-2026)
+  const age = (t, A) => { const nb = p => p.nb || p.b, open = p => nb(p).reduce((a, v) => a + v, 0) + num(p.und), rows = A.rows.filter(p => open(p) > 0).sort((a, c) => open(c) - open(a) || a.party.localeCompare(c.party));
+    return "<h2>" + t + "</h2><table><thead><tr><th>Party</th>" + MIS.BUCKETS.map(z => '<th class="n">' + z[1] + "</th>").join("") + '<th class="n">Not bill-wise</th><th class="n">Owed</th></tr></thead><tbody>' +
+    rows.slice(0, 15).map(p => "<tr><td>" + esc(p.party) + "</td>" + nb(p).map(v => '<td class="n">' + (v ? m(v) : "") + "</td>").join("") + '<td class="n">' + (num(p.und) ? m(p.und) : "") + '</td><td class="n">' + m(open(p)) + "</td></tr>").join("") +
+    "<tr><td><b>All</b></td>" + (A.sum.nb || A.sum.b).map(v => '<td class="n"><b>' + m(v) + "</b></td>").join("") + '<td class="n"><b>' + m(A.sum.und) + '</b></td><td class="n"><b>' + m(A.sum.owe != null ? A.sum.owe : A.sum.open) + "</b></td></tr></tbody></table>" +
     (Math.abs(A.sum.pre) >= 1 && A.sum.tally == null ? '<p class="note">' + m(Math.abs(A.sum.pre)) + " was settled against bills from before the books read here; they are not in these figures.</p>" : ""); };
   h += age("Receivables, largest 15", r.recv) + age("Payables, largest 15", r.pay);
   h += "<h2>Top customers</h2><table><tbody>" + r.sales.rows.slice(0, 10).map(x => "<tr><td>" + esc(x.party) + '</td><td class="n">' + m(x.t) + '</td><td class="n">' + (r.sales.total ? Math.round(x.t / r.sales.total * 1000) / 10 + "%" : "") + "</td></tr>").join("") + "</tbody></table>";
-  h += "<h2>Compliance</h2><table><thead><tr><th>Month</th><th class=\"n\">GST payable in cash</th><th class=\"n\">TDS deducted</th><th class=\"n\">TDS deposited</th></tr></thead><tbody>" +
-    r.comp.gst.map((x, i) => "<tr><td>" + GSTR.label(x.ym) + '</td><td class="n">' + m(x.pay) + '</td><td class="n">' + m(r.comp.tds[i].ded) + '</td><td class="n">' + m(r.comp.tds[i].dep) + "</td></tr>").join("") + "</tbody></table>" +
+  // review of 02-Oct-2026: GST worked out to pay (the 3B working's cash) and what the books show paid from the bank, each
+  // under its own heading
+  h += "<h2>Compliance</h2><table><thead><tr><th>Month</th><th class=\"n\">GST worked out to pay</th><th class=\"n\">GST paid from the bank</th><th class=\"n\">TDS deducted</th><th class=\"n\">TDS deposited</th></tr></thead><tbody>" +
+    r.comp.gst.map((x, i) => "<tr><td>" + GSTR.label(x.ym) + '</td><td class="n">' + m(x.due) + '</td><td class="n">' + m(x.pay) + '</td><td class="n">' + m(r.comp.tds[i].ded) + '</td><td class="n">' + m(r.comp.tds[i].dep) + "</td></tr>").join("") + "</tbody></table>" +
     "<h2>Due in the coming weeks</h2><table><tbody>" + r.dues.map(([d, l]) => "<tr><td>" + fmtDate(tallyDate(d)) + "</td><td>" + esc(l) + "</td></tr>").join("") + "</tbody></table>";
   if (r.p2){
     const F = r.p2.fc, C = r.p2.cash;
-    h += "<h2>Cash flow</h2><table><tbody><tr><td>From operations</td><td class=\"n\">" + m(C.op.t) + "</td></tr><tr><td>From investing</td><td class=\"n\">" + m(C.inv.t) + "</td></tr><tr><td>From financing</td><td class=\"n\">" + m(C.fin.t) + "</td></tr><tr><td><b>Net change</b></td><td class=\"n\"><b>" + m(C.net) + "</b></td></tr></tbody></table>";
+    h += "<h2>Cash flow</h2><table><tbody><tr><td>From operations</td><td class=\"n\">" + m(C.op.t) + "</td></tr><tr><td>From investing</td><td class=\"n\">" + m(C.inv.t) + "</td></tr><tr><td>From financing</td><td class=\"n\">" + m(C.fin.t) + "</td></tr><tr><td><b>Net change</b></td><td class=\"n\"><b>" + m(C.net) + "</b></td></tr>" +
+      (C.open != null ? "<tr><td>Cash and bank at the start</td><td class=\"n\">" + m(C.open) + "</td></tr><tr><td><b>Cash and bank at the end</b></td><td class=\"n\"><b>" + m(C.close) + "</b></td></tr>" : "") + "</tbody></table>" +
+      (C.open != null && !C.ties ? '<p class="note">Opening plus the net change differs from the closing balance by ' + m(C.diff) + ".</p>" : "");
     h += "<h2>The next 13 weeks</h2><table><thead><tr><th>Week of</th><th class=\"n\">In</th><th class=\"n\">Out</th>" + (F.opening != null ? "<th class=\"n\">Cash at the end</th>" : "<th class=\"n\">Net</th>") + "</tr></thead><tbody>" +
       F.weeks.map(w => "<tr><td>" + fmtDate(tallyDate(w.from)) + '</td><td class="n">' + m(w.inn) + '</td><td class="n">' + m(w.out) + '</td><td class="n">' + m(F.opening != null ? w.close : w.net) + "</td></tr>").join("") + "</tbody></table>";
     const V = MIS.budgetVs(r);
@@ -425,14 +500,14 @@ async function misExcel(r){
   MIS.HEADS.forEach(([k, l]) => { const H = r.pl.heads[k]; if (!H) return; pl.push([l, ""].concat(months.map(mm => H.m[mm] || 0)).concat([H.t])); H.led.forEach(x => pl.push(["", x.l].concat(months.map(mm => x.m[mm] || 0)).concat([x.t]))); });
   [["Gross profit", r.pl.gross], ["Profit before tax", r.pl.pbt], ["Profit after tax", r.pl.pat]].forEach(([l, x]) => pl.push([l, ""].concat(months.map(mm => x.m[mm] || 0)).concat([x.t])));
   add("Profit and loss", pl);
-  const age = A => [["Party"].concat(MIS.BUCKETS.map(z => z[1] + " days")).concat(["Before these books", "Advances", "On account", "Total", "Tally balance"])].concat(A.rows.map(p => [p.party].concat(p.b).concat([p.pre, p.adv, p.unalloc, p.total, p.tally == null ? "" : p.tally])));
+  const age = A => [["Party"].concat(MIS.BUCKETS.map(z => z[1] + " days")).concat(["Not bill-wise", "Owed", "Advance", "Tally balance", "Bills as raised: before these books", "advances", "on account", "total"])].concat(A.rows.map(p => [p.party].concat(p.nb || p.b).concat([p.und || 0, Math.max(0, p.net != null ? p.net : p.total), p.advance || 0, p.tally == null ? "" : p.tally, p.pre, p.adv, p.unalloc, p.total])));
   add("Receivables", age(r.recv)); add("Payables", age(r.pay));
   add("Bills owed to you", [["Customer", "Bill", "Date", "Days", "Outstanding"]].concat(r.recv.rows.flatMap(p => p.bills.map(z => [p.party, z.ref || "on account", Audit.iso(z.date), z.age, z.amt]))));
   add("Bills you owe", [["Supplier", "Bill", "Date", "Days", "Outstanding", "MSME"]].concat(r.pay.rows.flatMap(p => p.bills.map(z => [p.party, z.ref || "on account", Audit.iso(z.date), z.age, z.amt, p.msme || ""]))));
   add("Sales by customer", [["Customer"].concat(r.sales.months.map(GSTR.label)).concat(["Total"])].concat(r.sales.rows.map(x => [x.party].concat(r.sales.months.map(mm => x.m[mm] || 0)).concat([x.t]))));
   add("Purchases by supplier", [["Supplier"].concat(r.purchases.months.map(GSTR.label)).concat(["Total"])].concat(r.purchases.rows.map(x => [x.party].concat(r.purchases.months.map(mm => x.m[mm] || 0)).concat([x.t]))));
   add("Expense heads", [["Ledger"].concat(r.purchases.months.map(GSTR.label)).concat(["Total", "Jumped in"])].concat(r.purchases.heads.map(x => [x.l].concat(r.purchases.months.map(mm => x.m[mm] || 0)).concat([x.t, x.jumps.map(GSTR.label).join(", ")]))));
-  add("Compliance", [["Month", "GST output", "GST credit", "GST payable in cash", "TDS deducted", "TDS deposited"]].concat(r.comp.gst.map((x, i) => [GSTR.label(x.ym), x.out, x.itc, x.pay, r.comp.tds[i].ded, r.comp.tds[i].dep])));
+  add("Compliance", [["Month", "GST output", "GST credit", "GST worked out to pay", "GST paid from the bank", "TDS deducted", "TDS deposited"]].concat(r.comp.gst.map((x, i) => [GSTR.label(x.ym), x.out, x.itc, x.due, x.pay, r.comp.tds[i].ded, r.comp.tds[i].dep])));
   if (r.p2){
     add("Cash flow", [["Section", "What"].concat(r.p2.cash.months.map(GSTR.label)).concat(["Period"])].concat(r.p2.cash.rows.map(x => [x.sec, x.lab].concat(r.p2.cash.months.map(mm => x.m[mm] || 0)).concat([x.t]))));
     add("13 weeks", [["Week of", "Date", "What", "Who", "Amount", "Why this date"]].concat(r.p2.fc.weeks.flatMap(w => w.items.map(z => [Audit.iso(w.from), Audit.iso(z.d), z.what, z.who, z.amt, z.why]))));
@@ -498,6 +573,10 @@ function gstParts(b){
   const parts = ftype === "comp" ? [["cmp08", "CMP-08"], ["gstr4", "GSTR-4"], ["inreg", "Purchases"], ["r2b", "2B reconciliation"]]
     : (ftype === "qrmp" ? [["qtr", "This quarter"], ["r1", "GSTR-1 working"], ["r3b", "GSTR-3B working"]] : [["r1", "GSTR-1"], ["r3b", "GSTR-3B"]])
       .concat([["inreg", "Input register"], ["r2b", "2B reconciliation"], ["follow", "ITC follow-up"], ["adv", "Advances"], ["rev", "Reversal"], ["amend", "Amendments"], ["g9", "GSTR-9"], ["g9c", "GSTR-9C"]]);
+  // tax-accuracy: the filed GSTR-1 and 3B (fetched from the portal) against FinCom's working, month by month
+  if (ftype !== "comp") parts.push(["filedcmp", "Filed vs FinCom"]);
+  // request of 02-Oct-2026: the books invoice by invoice against the returns filed and 2B, for the year
+  if (ftype !== "comp") parts.push(["recon", "Filed vs books"]);
   parts.push(["vault", "Returns filed"]);
   if (AIH.enabled("notices")) parts.push(["notices", "Notices"]);
   // without the day book only what does not come from it: 2B (from the portal or its JSON) and the returns filed

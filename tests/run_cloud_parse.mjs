@@ -2,7 +2,7 @@
 // ledger's total the same, on the real books (day by day, as the bridge sends them)
 import { createRequire } from "module";
 import fs from "fs";
-import { parseDay } from "../server/tally-cloud/parse.js";
+import { parseDay, namesKey } from "../server/tally-cloud/parse.js";
 const require = createRequire(import.meta.url);
 const {load, openBlob, HTML, DATA} = require("./harness");
 let fails = 0;
@@ -34,6 +34,11 @@ ok(db.vouchers.every(v => cloudIds.has(v.id)), "every entry FinCom reads is in t
 const names = new Set(Object.keys(finTot).concat(Object.keys(cloudTot)));
 const bad = [...names].filter(n => Math.abs((finTot[n] || 0) - (cloudTot[n] || 0)) >= 0.01);
 ok(!bad.length, "every ledger's total is the same (" + names.size + " ledgers)" + (bad.length ? ": " + bad.slice(0, 5).map(n => n + " " + finTot[n] + " / " + cloudTot[n]).join("; ") : ""));
+// finding 4 (02-Oct-2026): no ledger under two names, in either reading ("...Pvt Ltd&#13;&#10;(Noida)" was read by the
+// cloud with two spaces, beside the master's one)
+const byKey = new Map(); [...names].forEach(n => byKey.set(namesKey(n), (byKey.get(namesKey(n)) || []).concat([n])));
+const twice = [...byKey.values()].filter(x => x.length > 1);
+ok(!twice.length, "no ledger under two names" + (twice.length ? ": " + twice.slice(0, 5).map(x => JSON.stringify(x)).join("; ") : ""));
 const t0 = Date.now(); parseDay(byDay[Object.keys(byDay).sort((a, b) => byDay[b].length - byDay[a].length)[0]].join("")); 
 ok(Date.now() - t0 < 1000, "the busiest day is read in " + (Date.now() - t0) + " ms");
 console.log(fails ? fails + " FAILED" : "all passed"); process.exit(fails ? 1 : 0);
