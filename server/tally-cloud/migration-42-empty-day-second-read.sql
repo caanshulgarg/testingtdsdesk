@@ -16,6 +16,15 @@
 --   0; the second read then marked because empty_at was set, not because of n. Here the count tested is the live
 --   entries in tally_vouchers, read at the moment of the call, and tally_days.n is NO LONGER overwritten by an empty
 --   file that marked nothing: a refused empty read and a short read keep the n the day had.)
+--   The cap (the owner's decision, 03-Oct night, after an Update now that listed 0 entries for a whole year): fewer than
+--   10 days of one book may be emptied by empty reads within 24 hours. pend = the book's days with an empty read
+--   recorded (empty_at) in the last 24 hours that had something to mark (pending or marked), this day's own record
+--   included. An empty read (first or second) is refused while pend >= 10, with 'N days of this book read empty within
+--   24 hours: a read fault; this day is not emptied and not recorded; nothing marked' (emptyCapped: true), and the
+--   day's record is left as it was. So a round that lists no entries for a book with entries records at most 10 days
+--   as pending and marks nothing, and repeated within 24 hours it refuses every day (the 10 pending ones included); a
+--   genuine emptying of up to 9 days still marks on the second read. The cap lifts by itself 24 hours after the last
+--   such read. Days with no live entries (nothing to mark) are outside the cap.
 --   What clears empty_at: only a file WITH entries for the day (n_in > 0: the day is un-marked and the record cleared,
 --   as in 41). A short read in between (an empty file without the flag, or fewer entries than the bridge counted)
 --   neither sets nor clears it: it says nothing about the day. So "consecutive" means: no file with entries between
@@ -26,7 +35,7 @@ begin;
 
 create or replace function public.tally_ingest_day(p_book uuid, p_day date, p_vouchers jsonb, p_lines jsonb, p_n integer, p_alter bigint, p_bytes integer, p_empty boolean)
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
-declare touched date[]; f uuid; sent text[]; marked int := 0; n_in int := case when jsonb_typeof(p_vouchers) = 'array' then jsonb_array_length(p_vouchers) else 0 end; short text; emptied boolean := false; live_n int; prev_empty timestamptz; d_empty timestamptz; d_note text;
+declare touched date[]; f uuid; sent text[]; marked int := 0; n_in int := case when jsonb_typeof(p_vouchers) = 'array' then jsonb_array_length(p_vouchers) else 0 end; short text; emptied boolean := false; live_n int; prev_empty timestamptz; d_empty timestamptz; d_note text; pend int; capped boolean := false;
 begin
   if auth.role() <> 'service_role' then raise exception 'not allowed' using errcode = '42501'; end if;
   perform pg_advisory_xact_lock(hashtext(p_book::text));
@@ -67,8 +76,13 @@ begin
     -- live entries is emptied only on the SECOND consecutive empty read (the first is recorded in tally_days.empty_at
     -- and refused); a day with no live entries has nothing to mark and is recorded as empty at once. Decided by
     -- empty_at and the live count alone, never by tally_days.n. A later file with entries un-marks them and clears the record
+    -- the cap: the book's days with an empty read recorded in the last 24 hours that had something to mark
+    select count(*) into pend from tally_days d where d.book_id = p_book and d.empty_at >= now() - interval '24 hours' and coalesce(d.note, '') <> 'empty day, nothing to mark';
     if live_n = 0 then
       emptied := true; d_empty := now(); d_note := 'empty day, nothing to mark';
+    elsif pend >= 10 then
+      short := format('%s days of this book read empty within 24 hours: a read fault; this day is not emptied and not recorded; nothing marked', pend);
+      capped := true;
     elsif prev_empty is null then
       short := format('empty day with %s live entries: confirm by a second empty read', live_n);
       d_empty := now(); d_note := short;
@@ -113,7 +127,7 @@ begin
      empty_at = case when n_in > 0 then null else coalesce(excluded.empty_at, tally_days.empty_at) end,
      note = case when n_in > 0 then null else coalesce(excluded.note, tally_days.note) end;
   update tally_books set days_at = now() where book_id = p_book;
-  return jsonb_build_object('ok', true, 'day', p_day, 'touched', to_jsonb(touched), 'marked', marked, 'sent', coalesce(array_length(sent, 1), 0)) || case when short is null then '{}'::jsonb else jsonb_build_object('refused', short) end || case when emptied then jsonb_build_object('empty', true) else '{}'::jsonb end || case when d_empty is not null and not emptied then jsonb_build_object('emptyPending', true) else '{}'::jsonb end;
+  return jsonb_build_object('ok', true, 'day', p_day, 'touched', to_jsonb(touched), 'marked', marked, 'sent', coalesce(array_length(sent, 1), 0)) || case when short is null then '{}'::jsonb else jsonb_build_object('refused', short) end || case when emptied then jsonb_build_object('empty', true) else '{}'::jsonb end || case when d_empty is not null and not emptied then jsonb_build_object('emptyPending', true) else '{}'::jsonb end || case when capped then jsonb_build_object('emptyCapped', true) else '{}'::jsonb end;
 end $function$;
 revoke all on function public.tally_ingest_day(uuid, date, jsonb, jsonb, integer, bigint, integer, boolean) from public, anon, authenticated;
 grant execute on function public.tally_ingest_day(uuid, date, jsonb, jsonb, integer, bigint, integer, boolean) to service_role;
