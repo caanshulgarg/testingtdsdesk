@@ -285,3 +285,50 @@ func writeLog(msg string) {
 	}
 	_ = appendText(f, line+"\r\n")
 }
+
+// --- PostOnly (round 11, 03-Oct-2026): the companies this computer may post to. The setting is a JSON array of company
+// names ("PostOnly": ["ZZ TEST"]); missing or empty means no restriction. The names are compared folded (case and
+// spacing aside), as everywhere else
+
+// the list as set (trimmed, empties dropped); nil when there is no restriction
+func postOnlyList() []string {
+	var o []string
+	for _, n := range strs(cfg("PostOnly")) {
+		if n = strings.TrimSpace(n); n != "" {
+			o = append(o, n)
+		}
+	}
+	return o
+}
+
+// why a posting to this company is refused by PostOnly ("" when it may go)
+func postOnlyRefusal(company string) string {
+	list := postOnlyList()
+	if len(list) == 0 {
+		return ""
+	}
+	want := foldName(company)
+	for _, n := range list {
+		if foldName(n) == want {
+			return ""
+		}
+	}
+	return "This computer posts only to " + strings.Join(list, ", ") + " (PostOnly); posting to " + company + " refused"
+}
+
+// the installer's -DPOSTONLY (one name, or names separated by ';'): written into the settings when given, never over a
+// PostOnly set by hand
+var installPostOnly string
+
+func setPostOnly(c *Ordered, v string) {
+	var names []any
+	for _, n := range strings.Split(v, ";") {
+		if n = strings.TrimSpace(n); n != "" {
+			names = append(names, n)
+		}
+	}
+	if len(names) == 0 || c.Has("PostOnly") {
+		return
+	}
+	c.Set("PostOnly", names)
+}

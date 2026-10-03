@@ -780,7 +780,8 @@ func beatMissedSince() time.Time { _, f := beatTimes(); return f }
 func beatBody(tally bool, tstate, tsince string, open, ports, cos []any) M {
 	return M{"reqs": beatReqs(), "readStopped": readStopAny(), "kind": "beat", "tally": tally, "tallyState": tstate, "busySince": tsince, "every": beatEvery(), "open": open, "ports": ports, "companies": cos,
 		"updating": keepRunning(), "dailyAt": keepDailyAt(), "nightlyAt": keepDailyAt(), "lastRun": keepLastRun(), "paused": paused(), "notAnsweringSince": notAnsweringSince(),
-		"lastRead": lastReadAt(), "events": true, "computer": computerName(), "allowlist": allowListBeat()}
+		"lastRead": lastReadAt(), "events": true, "computer": computerName(), "allowlist": allowListBeat(),
+		"postOnly": toAny(postOnlyList())} // round 11: the companies this computer may post to (empty: any)
 }
 
 // --- the posting queue (build 199): postings queued in FinCom on any computer, taken one at a time

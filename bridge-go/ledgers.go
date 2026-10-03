@@ -49,7 +49,7 @@ const (
 	ledListID = "FinComLedgers"
 	grpListID = "FinComGroups"
 	// stored fields only: nothing here is worked out by Tally
-	ledFetch = "GUID, MASTERID, ALTERID, NAME, PARENT, OPENINGBALANCE, PARTYGSTIN, INCOMETAXNUMBER, LEDGSTREGDETAILS.LIST"
+	ledFetch = "GUID, MASTERID, ALTERID, NAME, PARENT, OPENINGBALANCE, PARTYGSTIN, INCOMETAXNUMBER, LEDGSTREGDETAILS.LIST, LEDSTATENAME"
 	grpFetch = "GUID, MASTERID, ALTERID, NAME, PARENT"
 )
 
@@ -70,13 +70,14 @@ type ledRow struct {
 	guid                           string
 	mid, alter                     int64
 	name, parent, open, gstin, pan string
+	state                          string // LEDSTATENAME (round 11): index 8 in the rows held (7 is the opening-changed mark), last in the read file
 }
 
 func (r ledRow) arr() []any {
 	return []any{r.mid, r.alter, r.name, r.parent, r.open, r.gstin, r.pan}
 }
 func ledFromArr(g string, a []any) ledRow {
-	return ledRow{g, toI64(at(a, 0)), toI64(at(a, 1)), str(at(a, 2)), str(at(a, 3)), str(at(a, 4)), str(at(a, 5)), str(at(a, 6))}
+	return ledRow{g, toI64(at(a, 0)), toI64(at(a, 1)), str(at(a, 2)), str(at(a, 3)), str(at(a, 4)), str(at(a, 5)), str(at(a, 6)), str(at(a, 7))}
 }
 func digits(s string) int64 { return toI64(re(`\D`).ReplaceAllString(s, "")) }
 
@@ -109,7 +110,7 @@ func readLedgerChunk(tc *TC, company string, port int, after, upto int64) ([]led
 			}
 		}
 		r := ledRow{g, digits(nt(l, "MASTERID")), digits(nt(l, "ALTERID")), n, re(`^\W*Primary$`).ReplaceAllString(nt(l, "PARENT"), ""), open, gstin,
-			strings.ToUpper(strings.TrimSpace(nt(l, "INCOMETAXNUMBER")))}
+			strings.ToUpper(strings.TrimSpace(nt(l, "INCOMETAXNUMBER"))), strings.TrimSpace(nt(l, "LEDSTATENAME"))}
 		if r.mid > top {
 			top = r.mid
 		}
@@ -181,7 +182,7 @@ func appendLedRead(dir string, rows []ledRow) {
 	}
 	var b strings.Builder
 	for _, r := range rows {
-		b.WriteString(jsonText(append([]any{r.guid}, r.arr()...)) + "\n")
+		b.WriteString(jsonText(append(append([]any{r.guid}, r.arr()...), r.state)) + "\n")
 	}
 	_ = appendText(ledReadFile(dir), b.String())
 }
@@ -258,7 +259,7 @@ func mergeLedOut(dir string, d ledDiff, groups [][2]string, round string, seen [
 	}
 	for _, r := range d.rows {
 		oc := d.openChg[r.guid] || truthy(at(arr(rows[r.guid]), 7))
-		rows[r.guid] = append(r.arr(), oc)
+		rows[r.guid] = append(r.arr(), oc, r.state)
 	}
 	for _, x := range d.renamed {
 		from := x.from
@@ -523,7 +524,8 @@ func pushLedgerList(company, dir string) error {
 			if truthy(at(a, 7)) {
 				oc = 1
 			}
-			led = append(led, []any{g, toI64(at(a, 0)), toI64(at(a, 1)), str(at(a, 2)), str(at(a, 3)), str(at(a, 4)), str(at(a, 5)), str(at(a, 6)), oc})
+			// [guid, MasterID, AlterID, name, parent, opening, GSTIN, PAN, openingChanged, state] (round 11: the state last)
+			led = append(led, []any{g, toI64(at(a, 0)), toI64(at(a, 1)), str(at(a, 2)), str(at(a, 3)), str(at(a, 4)), str(at(a, 5)), str(at(a, 6)), oc, str(at(a, 8))})
 		}
 		body := M{"kind": "ledger_list", "company": company, "ledgers": led, "last": last,
 			"round": str(o["round"]), "complete": true, "rowsRead": toInt(o["rowsRead"]), "seen": toAny(sb)}

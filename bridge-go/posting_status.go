@@ -102,7 +102,7 @@ func failedLine(tallySaid string) string {
 	m := strings.TrimSpace(tallySaid)
 	const retry = ", then press Retry in FinCom"
 	// 2.1.4: the duplicate check before posting said so itself
-	if strings.HasPrefix(m, "Already in Tally (") || m == dupCheckFailedMsg {
+	if strings.HasPrefix(m, "Already in Tally (") || m == dupCheckFailedMsg || strings.HasPrefix(m, "This computer posts only to ") {
 		return m
 	}
 	if g := group(`(?i)ledger\s*'([^']+)'\s*does\s*not\s*exist`, m, 1); g != "" {

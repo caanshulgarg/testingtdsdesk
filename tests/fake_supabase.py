@@ -13,6 +13,7 @@ DAYS = []             # (book, day, n) of each tally_ingest_day
 FAIL = {}             # day -> times tally_ingest_day fails for it before it works
 WORK_KEY = "work-key-" + "c" * 32
 CALLS = []
+BCAST = []            # the Realtime broadcasts sent (POST /realtime/v1/api/broadcast), as JSON
 ARGS = {}             # function -> the arguments of each call (the names sent to the ingest functions, migration-23)
 SECRETS = {}          # Vault: name -> value (gsp_secret_put / gsp_secret_get, migration-16)
 CRON_KEY = "cron-key-" + "d" * 32
@@ -122,6 +123,10 @@ class H(http.server.BaseHTTPRequestHandler):
                 for r in rows:
                     if match(r, q): r.update(d)
                 return self.send(204)
+        if path == "/realtime/v1/api/broadcast":                      # the firm's broadcast channel (index.ts broadcast()): the messages kept for the tests
+            try: BCAST.append(json.loads(raw or b"{}"))
+            except Exception: BCAST.append({"raw": raw.decode("utf-8", "replace")})
+            return self.send(202)
         if path.startswith("/storage/v1/object/list/"):
             b = path.split("/")[-1]; a = json.loads(raw or b"{}"); pre = b + "/" + a.get("prefix", "").strip("/") + "/"
             names = sorted(set(k[len(pre):].split("/")[0] for k in FILES if k.startswith(pre)))

@@ -477,6 +477,7 @@ func setOwner(c *Ordered, o ownerInfo, fincom string) {
 	if fincom != "" {
 		c.Set("FinComUrl", fincom)
 	}
+	setPostOnly(c, installPostOnly) // round 11: the pilot posts to ZZ TEST only; a PostOnly set by hand is kept
 	if !c.Has("Key") || str(c.Get("Key")) == "" {
 		c.Set("Key", newBridgeKey())
 	}

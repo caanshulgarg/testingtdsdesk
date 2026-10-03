@@ -28,7 +28,9 @@ without a period) is a stored field, not a computed one.
 The size test (`bridge-go/size_test.go`) uses a cost per row returned (`tallyPerRowMs` in `allowlist.go`): a
 conservative guess until the phase 1 measurement replaces it.
 
-First table: not yet measured; allowed for 2.1.5 only; re-measured on 2026-10-02 (no times)
+First table: not yet measured; allowed for 2.1.6 only; pilot on NWS144 only; posting to ZZ TEST only until the owner says otherwise; A1 and A2 of docs/tally-measure-sheet.txt filled on 2.1.6 within the pilot week; this line is removed once the table carries times; no build after 2.1.6 gets an exception.
+
+(re-measured on 2026-10-02: no times yet; the table's rows and shapes as of this build)
 
 <!-- allowlist:begin -->
 | id | purpose | shape | worst case (s) | measured on | used by |
@@ -38,7 +40,7 @@ First table: not yet measured; allowed for 2.1.5 only; re-measured on 2026-10-02
 | FinComCompany | the company check: one company's name, GUID and highest AlterIDs (also the small check after a timeout) | 0aae177f8654 | not yet measured | - | bridge |
 | FinComFree | the small check after a timeout when no company is named: the companies' names and GUIDs | fc989c00dda9 | not yet measured | - | bridge |
 | FinComGroups | the group list, stored master fields only | 91fea7a2c04a | not yet measured | - | bridge |
-| FinComLedgers | the ledger list, 2,000 MasterIDs a request at most, stored master fields only | e10e54ab1772 | not yet measured | - | bridge |
+| FinComLedgers | the ledger list, 2,000 MasterIDs a request at most, stored master fields only | 9b990b2eb9b9 | not yet measured | - | bridge |
 | FinComMeasureB | measure: entries above an AlterID over the year | 7e0798aa39f7 | not yet measured | - | measure-only |
 | FinComMeasureC | measure: entries above an AlterID, one month | 4426a7f95daa | not yet measured | - | measure-only |
 | FinComMeasureD | measure: one month's GUIDs only | 09151f17e805 | not yet measured | - | measure-only |
@@ -61,4 +63,4 @@ First table: not yet measured; allowed for 2.1.5 only; re-measured on 2026-10-02
 | TDSDeskVchHeads | voucher heads (Optional ones too) of one company for one month at most, no ledger lines | 53fc675a1641 | not yet measured | - | bridge |
 <!-- allowlist:end -->
 
-Table hash (SHA-256): 4a004725c87a50b1b46e100a560affd60d7719d5a8053eb1d8a68f58ad5ef09a
+Table hash (SHA-256): b8dae6491978cebd405f98223cdff4d97451f4388c7bdf56089bb0e7941e643c

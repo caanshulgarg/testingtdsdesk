@@ -74,6 +74,21 @@ try:
     main = dict(GO, mode="main")
     c, r = call({"kind": "beat", "version": "2.1.0", "bridge": main, "tally": True})
     ok(c == 200 and r.get("posts") == 1 and not r.get("notMain") and dev["info"]["bridges"][GO["id"]]["mode"] == "main", "2.1.0 switched over (no longer shadow): given the posting, listed as main")
+    # round 11b (bridge 2.1.6): postOnly, the companies this computer posts to (an array of names; [] when none): kept in
+    # the beat record and the bridge's entry, and passed on in the firm's broadcast beat, so the Tally page can say
+    # "Posts only to: ZZ TEST"
+    n_b = len(F.BCAST)
+    c, r = call({"kind": "beat", "version": "2.1.6", "bridge": dict(main, version="2.1.6"), "tally": True, "postOnly": ["ZZ TEST", " Other Co ", 7, "x" * 300] + ["Co %d" % i for i in range(30)]})
+    po = dev["info"]["beat"].get("postOnly"); pb = dev["info"]["bridges"][GO["id"]].get("postOnly")
+    ok(c == 200 and isinstance(po, list) and po[:2] == ["ZZ TEST", "Other Co"] and len(po) <= 20 and all(isinstance(x, str) and len(x) <= 200 for x in po) and "" not in po,
+       "11b. info.beat.postOnly: an array of names, strings only, trimmed, each cut to 200, at most 20 (%s…)" % (po or [None])[:3])
+    ok(pb == po, "11b. info.bridges[<bridge id>].postOnly: the same list (%s)" % (pb or [None])[:2])
+    bc = [m for b in F.BCAST[n_b:] for m in (b.get("messages") or []) if m.get("event") == "beat" and m.get("topic") == "fincom-tally-" + FIRM]
+    ok(bc and (bc[-1].get("payload") or {}).get("beat", {}).get("postOnly") == po, "11b. the firm's broadcast beat (topic fincom-tally-<firm>, event beat) carries payload.beat.postOnly (%s)" % ((bc[-1].get("payload") or {}).get("beat", {}).get("postOnly") if bc else bc))
+    c, r = call({"kind": "beat", "version": "2.1.6", "bridge": dict(main, version="2.1.6"), "tally": True, "postOnly": []})
+    ok(dev["info"]["beat"].get("postOnly") == [] and dev["info"]["bridges"][GO["id"]].get("postOnly") == [], "11b. [] when the computer posts to any company")
+    c, r = call({"kind": "beat", "version": "2.1.5", "bridge": main, "tally": True})
+    ok(dev["info"]["beat"].get("postOnly") is None, "11b. an older bridge without the field: none kept (not an empty list)")
     c, r = call({"kind": "posts_take", "version": "2.1.0", "bridge": main})
     ok(c == 200, "and may take it (%s)" % c)
     # the bridge's menu: Switch to main bridge (a second Go install takes over)

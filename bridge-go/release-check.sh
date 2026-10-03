@@ -143,6 +143,18 @@ case "$parsed" in
 esac
 unmeasured="$parsed"
 EXC=""
+# round 11: the exception line ("not yet measured; allowed for <version> only") may name exactly one version, and it must
+# be this BridgeVersion; no build after 2.1.6 gets an exception of any kind
+excs="$(grep -oiE 'allowed for [0-9][0-9.]* only' "$ALLOWLIST" | grep -oE '[0-9][0-9.]*' | sort -u)"
+nexc="$(printf '%s\n' "$excs" | grep -c .)"
+newest="$(printf '%s\n2.1.6\n' "$V" | sort -V | tail -1)"
+if [ "$nexc" -gt 0 ] && [ "$newest" != "2.1.6" ]; then
+  fail "4 allow-list" "no build after 2.1.6 gets an exception: docs/tally-allowlist.md still carries an 'allowed for ... only' line and this is $V" \
+    "Measure every request on ZZ BIG TEST (docs/tally-measure-sheet.txt), put the times in allowlist.go and the table, and remove the exception line."
+fi
+if [ "$nexc" -gt 1 ]; then
+  fail "4 allow-list" "the exception line names more than one version ($(printf '%s' "$excs" | tr '\n' ' ')): it may name exactly one, this BridgeVersion ($V)"
+fi
 if [ -n "$unmeasured" ]; then
   exc="$(grep -oiE 'not yet measured[^|]*allowed for [0-9.]+ only' "$ALLOWLIST" | grep -oE 'allowed for [0-9.]+ only' | head -1)"
   if [ "$exc" = "allowed for $V only" ]; then

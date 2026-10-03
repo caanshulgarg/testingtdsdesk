@@ -161,7 +161,13 @@ function bridgeOf(dev: any, body: any, shadow: boolean) {
     tally: !!body?.tally, tallyState: ["open", "busy", "closed"].includes(body?.tallyState) ? body.tallyState : (body?.tally ? "open" : "closed"),
     open: (Array.isArray(body?.open) ? body.open : []).slice(0, 50).map((x: unknown) => s(x, 200)),
     // 2.1.5: its request timings, whether it stopped reading, and (round 2) its allow-list state
-    reqs: cleanReqs(body?.reqs), readStopped: cleanReadStopped(body?.readStopped), allowlist: cleanAllowlist(body?.allowlist) } };
+    reqs: cleanReqs(body?.reqs), readStopped: cleanReadStopped(body?.readStopped), allowlist: cleanAllowlist(body?.allowlist),
+    // 2.1.6 (round 11): the companies this bridge posts to (PostOnly); [] when any; absent on an older bridge
+    ...(Array.isArray(body?.postOnly) ? { postOnly: cleanPostOnly(body.postOnly) } : {}) } };
+}
+// postOnly: an array of company names, strings only, trimmed, each cut to 200, at most 20, blanks dropped
+function cleanPostOnly(x: unknown) {
+  return (Array.isArray(x) ? x : []).filter((v) => typeof v === "string").map((v) => v.trim().slice(0, 200)).filter(Boolean).slice(0, 20);
 }
 // round 2 (migration-34): allowlist:{measured, hash} in the beat; anything else is not kept
 function cleanAllowlist(x: any) {
@@ -1035,7 +1041,9 @@ Deno.serve(async (req) => {
           paused: !!b.paused, notAnsweringSince: s(b.notAnsweringSince, 30), nightlyAt: s(b.nightlyAt, 5), lastRead: s(b.lastRead, 30), events: !!b.events,
           // FinCom Bridge 2.1.5 (migration-35): its request timings, and whether it stopped reading (by itself, or from FinCom);
           // round 2 (migration-34): its allow-list state
-          reqs: cleanReqs(b.reqs), readStopped: cleanReadStopped(b.readStopped), allowlist: cleanAllowlist(b.allowlist) };
+          reqs: cleanReqs(b.reqs), readStopped: cleanReadStopped(b.readStopped), allowlist: cleanAllowlist(b.allowlist),
+          // FinCom Bridge 2.1.6 (round 11): the companies this computer posts to (PostOnly); [] when any; absent on an older bridge
+          ...(Array.isArray(b.postOnly) ? { postOnly: cleanPostOnly(b.postOnly) } : {}) };
         const prevInfo = ((dev as any).info && typeof (dev as any).info === "object") ? (dev as any).info : {};
         const me = bridgeOf(dev, body, false);
         // migration-35: Stop reading from FinCom, Resume, the version it may install (and the pilot's evidence)
@@ -1050,12 +1058,12 @@ Deno.serve(async (req) => {
         // instead of when a page next looks at tally_devices. Only the times and states, nothing of the books or keys
         const pb = (prevInfo.beat && typeof prevInfo.beat === "object") ? prevInfo.beat : {};
         const said = (x: any, stop: unknown) => JSON.stringify([x.lastRead || "", !!x.updating, x.tallyState || "", !!x.paused, x.notAnsweringSince || "",
-          (Array.isArray(x.companies) ? x.companies : []).map((c: any) => [c.name, c.lastRead || "", c.at || ""]), x.reqs ?? null, x.readStopped ?? null, stop ?? null]);
+          (Array.isArray(x.companies) ? x.companies : []).map((c: any) => [c.name, c.lastRead || "", c.at || ""]), x.reqs ?? null, x.readStopped ?? null, stop ?? null, x.postOnly ?? null]);
         if (said(pb, prevInfo.readStop) !== said(beat, (info as any).readStop)) {
           await broadcast("fincom-tally-" + firm, "beat", { device: dev.id, beat: { at: beat.at, every: beat.every, lastRead: beat.lastRead, updating: beat.updating, tallyState: beat.tallyState,
             tally: beat.tally, paused: beat.paused, notAnsweringSince: beat.notAnsweringSince, busySince: beat.busySince, open: beat.open,
             companies: beat.companies.map((c: any) => ({ name: c.name, open: c.open, at: c.at, phase: c.phase, waiting: c.waiting, lastRead: c.lastRead })),
-            bridge: me.id, reqs: beat.reqs, readStopped: beat.readStopped, readStop: (info as any).readStop ?? null } });
+            bridge: me.id, reqs: beat.reqs, readStopped: beat.readStopped, readStop: (info as any).readStop ?? null, postOnly: (beat as any).postOnly ?? null } });
         }
         const { count: waiting } = await db.from("tally_post_jobs").select("id", { count: "exact", head: true }).eq("device_id", dev.id).eq("status", "waiting");
         const posts = mayPost(dev, me.id) ? waiting : 0;

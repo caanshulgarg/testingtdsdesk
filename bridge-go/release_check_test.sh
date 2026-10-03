@@ -8,11 +8,14 @@
 #   red 4    the review range ends before a bridge-go/ change     -> fails "files outside docs/ changed after it"
 #   red 5    the allow-list changed with no "re-measured on" line -> fails "4 allow-list"
 #   red 6    the version already has a setup in assets-test       -> fails "1 version"
-#   green 2  a "not yet measured" row, and the line "allowed for 9.9.9 only" (this version) -> passes
-#   red 7    the same line naming another version (9.9.8)        -> fails "4 allow-list" (not yet measured)
+#   green 2  a "not yet measured" row, and the line "allowed for 2.1.6 only" (this version, 2.1.6) -> passes
+#   red 7    the same line naming another version (2.1.5)        -> fails "4 allow-list" (not yet measured)
 #   red 8    a "not yet measured" row and no "allowed for" line  -> fails "4 allow-list" (not yet measured)
 #   red 9    the allow-list table has a header but no row the check can parse (rows without the leading pipe)
 #                                                                 -> fails "4 allow-list" (no rows parsed)
+#   green 3  BridgeVersion 2.1.6 with the one exception line (round 11) -> passes check 4
+#   red 10   BridgeVersion 2.1.7 with an exception line               -> fails "no build after 2.1.6 gets an exception"
+#   red 11   an exception line naming two versions                    -> fails "names more than one version"
 # Nothing outside the temp folder is touched. Run: bash bridge-go/release_check_test.sh
 # (RELEASE_CHECK_SCRIPT=<file> tests another copy of the script, e.g. one that always passes, to see this test fail.)
 set -u
@@ -59,6 +62,16 @@ unmeasured() {
   printf '# Tally allow-list\n\n%s\n| id | purpose | worst case (s) | measured on |\n|---|---|---|---|\n| ledgers | ledger list | 4 | 2026-09-30 |\n| daybook | the day book | not yet measured | - |\n' "$1" >"$R/docs/tally-allowlist.md"
   g add -A; g commit -qm "allow-list unmeasured"
 }
+# the fixture under another BridgeVersion (its test sheet and review notes renamed with it)
+withver() {
+  sed -i "s/var BridgeVersion = \"9.9.9\"/var BridgeVersion = \"$1\"/" "$R/bridge-go/util.go"
+  printf 'FINCOM BRIDGE %s TEST SHEET\n' "$1" >"$R/docs/bridge-$1-test-sheet.txt"; rm -f "$R/docs/bridge-9.9.9-test-sheet.txt"
+  rm -f "$R/docs/reviews/bridge-9.9.9-code-review.md" "$R/docs/reviews/bridge-9.9.9-security-review.md"
+  g add -A; g commit -qm "version $1"
+  local h; h="$(git -C "$R" rev-parse --short HEAD)"
+  for k in code security; do printf '# %s review\n\nRange: %s..%s\n' "$k" "$h" "$h" >"$R/docs/reviews/bridge-$1-$k-review.md"; done
+  g add -A; g commit -qm "review notes for $1 (docs only after the range)"
+}
 run() { (cd "$R/bridge-go" && ./release-check.sh) >"$R.out" 2>&1; echo $?; }
 expect() { # $1 name, $2 expected exit (0 or 1), $3 text the output must contain
   local code; code="$(run)"
@@ -89,14 +102,27 @@ expect "red 5: allow-list changed, not re-measured" 1 "has no 're-measured on YY
 setup; : >"$R/assets-test/bridge-go/FinComBridge-Setup-9.9.9.exe"; g add -A; g commit -qm "setup exists"
 expect "red 6: version already has a setup" 1 "BridgeVersion 9.9.9 is not new"
 
-setup; unmeasured "First table: not yet measured; allowed for 9.9.9 only; re-measured on 2026-10-02 (no times)"
-expect "green 2: unmeasured row allowed for this version" 0 "allowed for 9.9.9"
+setup; withver 2.1.6; unmeasured "First table: not yet measured; allowed for 2.1.6 only; re-measured on 2026-10-02 (no times)"
+expect "green 2: unmeasured row allowed for this version" 0 "allowed for 2.1.6"
 
-setup; unmeasured "First table: not yet measured; allowed for 9.9.8 only; re-measured on 2026-10-02 (no times)"
+setup; withver 2.1.6; unmeasured "First table: not yet measured; allowed for 2.1.5 only; re-measured on 2026-10-02 (no times)"
 expect "red 7: the exception names another version" 1 "not yet measured"
 
 setup; unmeasured "re-measured on 2026-10-02"
 expect "red 8: unmeasured row, no exception for this version" 1 "not yet measured"
+
+# round 11: the exception may name exactly one version, this one; no build after 2.1.6 gets one
+LINE="First table: not yet measured; allowed for VER only; pilot on NWS144 only; posting to ZZ TEST only until the owner says otherwise; A1 and A2 of docs/tally-measure-sheet.txt filled on VER within the pilot week; this line is removed once the table carries times; no build after 2.1.6 gets an exception."
+setup; withver 2.1.6; unmeasured "$(echo "$LINE" | sed 's/VER/2.1.6/g')
+re-measured on 2026-10-02 (no times)"
+expect "green 3: 2.1.6 with the exception line passes check 4" 0 "allowed for 2.1.6"
+
+setup; withver 2.1.7; unmeasured "$(echo "$LINE" | sed 's/VER/2.1.7/g')
+re-measured on 2026-10-02 (no times)"
+expect "red 10: 2.1.7 with an exception line" 1 "no build after 2.1.6 gets an exception"
+
+setup; withver 2.1.6; unmeasured "First table: not yet measured; allowed for 2.1.6 only; allowed for 2.1.5 only; re-measured on 2026-10-02 (no times)"
+expect "red 11: an exception naming two versions" 1 "names more than one version"
 
 setup; printf '# Tally allow-list\n\nre-measured on 2026-10-02\n| id | purpose | worst case (s) | measured on |\n|---|---|---|---|\nledgers | ledger list | 4 | 2026-09-30\n' >"$R/docs/tally-allowlist.md"; g add -A; g commit -qm "no rows"
 expect "red 9: no row of the allow-list table can be parsed" 1 "no rows parsed"

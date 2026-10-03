@@ -28,6 +28,11 @@ Target amd64-unicode
 !ifndef OUTFILE
   !define OUTFILE "..\dist\FinComBridge-Setup.exe"
 !endif
+; the companies this computer may post to (round 11): -DPOSTONLY="ZZ TEST" writes PostOnly into the settings at install
+; (never over one set by hand); empty: no restriction
+!ifndef POSTONLY
+  !define POSTONLY ""
+!endif
 !define UNKEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\FinComBridge"
 !define RUNKEY "Software\Microsoft\Windows\CurrentVersion\Run"
 !define BRIDGEKEY "SOFTWARE\FinCom\Bridge"
@@ -505,7 +510,7 @@ Function InstallForAll
 
   ; the service, the user it works for, the settings (and, in the final install, bridge 1.15.0 taken off)
   DetailPrint "Setting up the FinCom Bridge service ($Mode)..."
-  Push '"$INSTDIR\FinComBridge.exe" install --mode $Mode --fincom "${FINCOM}"'
+  Push '"$INSTDIR\FinComBridge.exe" install --mode $Mode --fincom "${FINCOM}" --postonly "${POSTONLY}"'
   Call RunInstall
 FunctionEnd
 
@@ -555,7 +560,7 @@ Function InstallJustForMe
 
   ; the settings, the start at sign-in (HKCU Run) and the start now (and, in the final install, bridge 1.15.0 taken off)
   DetailPrint "Setting up FinCom Bridge just for you ($Mode)..."
-  Push '"$INSTDIR\FinComBridge.exe" install --per-user --mode $Mode --fincom "${FINCOM}"'
+  Push '"$INSTDIR\FinComBridge.exe" install --per-user --mode $Mode --fincom "${FINCOM}" --postonly "${POSTONLY}"'
   Call RunInstall
 FunctionEnd
 

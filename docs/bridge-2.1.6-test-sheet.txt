@@ -60,6 +60,12 @@ What is new in 2.1.4 (since 2.1.3)
     day. A read that failed in any way keeps nothing: no day of it goes to FinCom (it is read again, the slice halved
     down to a day), so FinCom never sees it as empty. Only an empty day the bridge read in full (empty:true) makes
     FinCom mark that day's entries deleted; a day without the flag is a short read and marks nothing.
+  - (03-Oct, owner-approved) PostOnly: the settings may name the companies this computer posts to ("PostOnly": ["ZZ
+    TEST"]); the pilot installer sets it to ZZ TEST. A posting aimed at any other company is refused before one request
+    goes to Tally, every entry failed with "This computer posts only to ZZ TEST (PostOnly); posting to <company>
+    refused"; the heartbeat carries the list (postOnly). The full-answer rule: a day counts as read only when Tally's
+    answer came in full (see the gap-2 item above); only an empty day read in full is sent as empty.
+  - The ledger list sent to FinCom carries each ledger's state (LEDSTATENAME) as its 10th column.
   - Every voucher posted carries its FinCom id in its narration ("TDSDesk:<id>"; since 2.1.6 it
     is written FIRST, "TDSDesk:<id> | <narration>", so a narration cut short can never lose it, and it is found wherever
     it stands); before posting, Tally is looked through for that id on the voucher's date first, then the party / bill /
@@ -74,6 +80,10 @@ Use ZZ TEST for every posting below, never GARG SHEKHAR & COMPANY.
 0. START THE PILOT IN FINCOM (before downloading anything)
    The first postings on the pilot go to the ZZ TEST company only, never real books: steps 4, 5 and 6 post ZZ TEST bills
        and nothing else. GARG SHEKHAR & COMPANY is only read (Update now), never posted to, until step 10 passes.
+   2.1.6 on NWS144 posts only to ZZ TEST (PostOnly set by the installer: "PostOnly": ["ZZ TEST"] in the settings); a
+       posting aimed at any other company is refused with the words "This computer posts only to ZZ TEST (PostOnly);
+       posting to <company> refused" before one request goes to Tally, and FinCom shows the posting failed with them.
+       The bridge's heartbeat tells FinCom the list (postOnly). Only the owner lifts it (the setting edited by hand).
    Do: in FinCom (staging), as the owner, open All clients > Tally. Find NWS144's line and press "Try version 2.1.6 on
        this computer" (only the owner sees the button).
    You should see: the line now says "on trial on NWS144 since <date, time>". From then on the setup below is the one
@@ -91,6 +101,27 @@ Use ZZ TEST for every posting below, never GARG SHEKHAR & COMPANY.
        posting". You are not asked to pair again. Right-click the icon > Status shows version 2.1.6; the menu has
        "Measure Tally (for FinCom support)".
    If not: the page's title and reason; keep "Send install log to FinCom" ticked and click Finish.
+
+1a. UPDATE NOW FOR JULY AND AUGUST 2026 ON GARG SHEKHAR & COMPANY (right after the install)
+   Do: in FinCom open GARG SHEKHAR & COMPANY and press Update now; let it read July and August 2026 (Show log: "day book
+       20260701-20260731" and "20260801-20260831" lines, or their halves).
+   You should see: if the four entries removed on 03-Oct (Journals FA/ELEC/013 and FA/2026-27/081 of 01-Jul-2026,
+       KIS/335 of 28-Jul-2026, Purchase 6009 of 01-Aug-2026) are in Tally, they come back with their lines, the live
+       count on FinCom's Tally page returns to 2,758 and the trial-balance difference stays 0. If they are not in Tally,
+       the count stays 2,754 and the Day Book of those dates shows why (deleted, cancelled, or another date).
+   Write down: the count before and after, and the TB difference.
+   If not: the log of the read and a screenshot of the Day Book of 01-Jul-2026.
+
+1b. NARRATION ROUND TRIP (ZZ TEST): the exact characters come back
+   Do: in FinCom post one approved ZZ TEST bill whose narration is exactly this string (copy it, between the quotes):
+       "Test 2.1.6 – en dash — em dash ₹ 1,250 किराया"
+       (an en dash U+2013, an em dash U+2014, the rupee sign U+20B9 and the Hindi word for rent). When it shows
+       "In Tally (verified)", read it back: either TallyPrime > Day Book of that date > Alt+E > XML and open the file,
+       or press Update now on ZZ TEST and open the bill's entry in FinCom's copy.
+   You should see: the narration back character for character (the bridge writes it first as "TDSDesk:<id> | ..."),
+       the two dashes, the rupee sign and the Hindi word intact in both the Day Book export and FinCom's copy.
+   Write down: PASS or FAIL, and if FAIL which character changed (a "?" or a box in its place is a FAIL).
+   If FAIL: 2.1.7 sends its requests to Tally in UTF-16, gated by this test; send the exported XML file.
 
 2. 30 IDLE MINUTES: NO REQUEST
    Do: right after installing, note icon > Status "Requests sent to Tally since the bridge started: N". Leave Tally and

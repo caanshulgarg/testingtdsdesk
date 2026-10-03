@@ -434,6 +434,16 @@ func jobWorker(dir string) {
 		finish("failed", "Failed: "+err.Error())
 		return
 	}
+	// round 11: PostOnly: a posting aimed at a company this computer may not post to is refused here, before one request
+	// goes to Tally (the pilot on NWS144 posts to ZZ TEST only)
+	if why := postOnlyRefusal(asked); why != "" {
+		for _, it := range itemsToSend(all, results) {
+			results = append(results, M{"id": it["id"], "kind": it["kind"], "ok": false, "refused": true, "postOnly": true, "state": "failed", "message": why})
+		}
+		writeLog("Posting job " + str(p["id"]) + ": " + why)
+		finish("failed", why)
+		return
+	}
 	if !waitTally(nil) {
 		return
 	}

@@ -57,6 +57,7 @@ func main() {
 	_ = fs.Bool("service", false, "")
 	_ = fs.String("mode", "", "")
 	_ = fs.String("fincom", "", "")
+	_ = fs.String("postonly", "", "") // the installer's -DPOSTONLY (round 11)
 	for _, f := range []string{"company", "out", "ledgers", "snapshot", "month", "compare"} {
 		_ = fs.String(f, "", "measure") // FinComBridge.exe measure ... (read again by measureCmd)
 	}
@@ -90,6 +91,7 @@ func main() {
 	case "tray":
 		os.Exit(runTray(rest))
 	case "install":
+		installPostOnly = flagValue(rest, "postonly")
 		os.Exit(installCmd(rest))
 	case "uninstall":
 		os.Exit(uninstallCmd(rest))

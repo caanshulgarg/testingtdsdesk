@@ -59,6 +59,7 @@ type standTally struct {
 // a ledger master of the stand-in Tally (its stored fields only)
 type tLed struct {
 	guid, name, parent, open, gstin, pan string
+	state                                string // LEDSTATENAME (round 11)
 	mid, alter                           int64
 }
 
@@ -208,7 +209,7 @@ func newStandTally(t *testing.T) *standTally {
 			for _, l := range f.led {
 				if l.mid > after && (upto < 0 || l.mid <= upto) {
 					fmt.Fprintf(&o, `<LEDGER NAME="%s" RESERVEDNAME=""><GUID>%s</GUID><MASTERID> %d</MASTERID><ALTERID> %d</ALTERID><PARENT>%s</PARENT><OPENINGBALANCE>%s</OPENINGBALANCE>`+
-						`<PARTYGSTIN>%s</PARTYGSTIN><INCOMETAXNUMBER>%s</INCOMETAXNUMBER></LEDGER>`, esc(l.name), l.guid, l.mid, l.alter, esc(l.parent), l.open, l.gstin, l.pan)
+						`<PARTYGSTIN>%s</PARTYGSTIN><INCOMETAXNUMBER>%s</INCOMETAXNUMBER><LEDSTATENAME>%s</LEDSTATENAME></LEDGER>`, esc(l.name), l.guid, l.mid, l.alter, esc(l.parent), l.open, l.gstin, l.pan, esc(l.state))
 				}
 			}
 		case "FinComGroups":
