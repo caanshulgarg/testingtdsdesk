@@ -17,8 +17,8 @@ revoked; `begin; ... commit;`; safe to run twice) and is shown to the owner befo
 
 ## The two valid orders (both end with the same function texts: `tests/run_migration_order.py` asserts it)
 
-- staging: 32 → 33 → 35 → 34 (first) → 36b → 37 → **36 → 38**
-- a fresh database: 32 → 33 → 35 → 34 (reviewed) → 36 → 36b → 37 → 38
+- staging: 32 → 33 → 35 → 34 (first) → 36b → 37 → 36 → 38 (all applied by 03-Oct evening) → **39**
+- a fresh database: 32 → 33 → 35 → 34 (reviewed) → 36 → 36b → 37 → 38 → 39
 
 | # | File | What it adds |
 |---|---|---|
@@ -30,6 +30,7 @@ revoked; `begin; ... commit;`; safe to run twice) and is shown to the owner befo
 | 36b | `migration-36b-post-acceptance.sql` (run on staging 03-Oct) | an id Tally accepted is never freed by `tally_post_ids_sync` (`accepted_at`, stamped through `tally_post_id_accept` by tally-ingest); the owner's `tally_post_job_mark_posted` and `tally_post_id_release_owner` (append-only `tally_post_marks`); `released_at` / `released_by` / `released_why`; never sent again: `tally_post_job_accepted`, the trigger `tally_post_jobs_resend_guard`, `tally_post_requeue` holding a stale accepted posting; `tally_post_id_match`; `tally_post_take` clearing `seq`; `tally_post_jobs.seq`; `tally_post_enqueue`'s Retry refusing a live id elsewhere; the backfill of `accepted_at` / live |
 | 37 | `migration-37-follow-ups.sql` (run on staging 03-Oct) | the migration-32 follow-ups (id release, versions with lines, baseline clear, soft delete in `tally_ingest_day`, lease release, balances as on a date, the FinCom tag column, withdrawn releases); its readers carry the same `d.merged_into is null` filter as 36's copies, so either order ends identical |
 | 38 | `migration-38-post-followups.sql` | `tally_post_ids_sync` keeps an id live when the posting's results / items carry an acceptance for it (`tally_post_job_accepted`), stamped or not; `tally_post_marks`' two foreign keys re-made ON DELETE RESTRICT (a job with a mark cannot be deleted); `tally_ingest_day` marks nothing on a short read (no entries, or fewer than `p_n`), answering `refused: 'short read: n of p_n'` (tally-ingest logs it) |
+| 39 | `migration-39-rename-map-empty-day.sql` | (1) `tally_ledger_rename` also carries the saved choices keyed by the ledger's name in the same transaction (`tally_ledger_carry_choices`: client_book_items `map` / `ledInfo` / `gstins` / `pans` items `'.' || name` — new-name item added, old kept and marked `carriedTo`, a clash noted; `clients.data->'choices'`: `flow:<new>` added, choice values that were the old name take the new one with `prev`), flags `tally_ledgers.needs_confirm` and `before_clean.renamed[].confirm: true`; the owner clears it with `tally_ledger_rename_confirm(book, name)`; (2) `tally_ingest_day(…, p_empty boolean)` (8 args; the 7-arg one passes null): `p_n = 0` with `p_empty = true` marks the day's entries deleted (`empty: true`), without the flag a short read as 38; (3) `tally_post_ids_sync` keeps an id live when its result or item is confirmed or ok, stamped or not. Ledger names FinCom keeps elsewhere and NOT carried (the browser's BankDB rules, a bill's snapshot lines, posting payloads, snapshots): listed in the file's header |
 
 ## tally-ingest (server/tally-cloud/index.ts): which kind calls which function, with which arguments
 
@@ -41,12 +42,12 @@ revoked; `begin; ... commit;`; safe to run twice) and is shown to the owner befo
 | `tally_ledgers_mark_gone` | `p_book uuid, p_round text` (2; the 3-argument one is the first 34's, untouched) | `ledger_list`, the last batch of a round |
 | `tally_ingest_ledgers_g` | `p_book, p_from, p_open_as_on, p_ledgers, p_groups, p_list, p_complete, p_count` (8; 6 and 5 as fallbacks) | `ledgers` (a full list) |
 | `tally_year_openings` | `p_book uuid` | `ledger_list` (rows added or openings changed), `ledgers` |
-| `tally_ingest_day` | `p_book uuid, p_day date, p_vouchers jsonb, p_lines jsonb, p_n int, p_alter bigint, p_bytes int` | `days` (and the re-read of kept files) |
+| `tally_ingest_day` | `p_book uuid, p_day date, p_vouchers jsonb, p_lines jsonb, p_n int, p_alter bigint, p_bytes int` (+ `p_empty bool` when the bridge sends `empty: true`; 39) | `days` (and the re-read of kept files) |
 | `tally_post_take` | `p_device uuid` | `posts_take` (the answer carries the owner's releases in force) |
 | `tally_post_id_accept` | `p_job uuid, p_id text, p_vch text` (`p_at` unused, kept in the signature) | `posts_update`, once per accepted id not yet stamped or released |
 | `tally_post_id_release` | `p_job uuid, p_id text, p_why text` | `posts_update`, once per refused / not-found id not yet released |
 | `tally_lease_take` / `tally_lease_release` | as migration 32 / 37 | `lease_take` / `lease_release` |
-| `tally_read_stop` / `tally_read_resume`, `tally_release_*`, `tally_baseline_clear`, the owner's `tally_post_job_mark_posted` / `tally_post_id_release_owner`, the readers | members (the app), not tally-ingest | — |
+| `tally_read_stop` / `tally_read_resume`, `tally_release_*`, `tally_baseline_clear`, the owner's `tally_post_job_mark_posted` / `tally_post_id_release_owner` / `tally_ledger_rename_confirm`, the readers | members (the app), not tally-ingest | — |
 
 ## The rule: never re-run 35 after 34
 
@@ -75,6 +76,7 @@ Each file also has its own test: `run_migration32.py`, `run_migration33.py`, `ru
 state: the 35 as run there, then 34), `run_migration35.py` (35, then 34 after it for the release checks),
 `run_migration36.py` (staging's order with the first 34, then the made-up books through the real ingest path, the renames, the
 readers without a zero line for an old name, the first round), `run_migration38.py` (staging's order then 38: ids live by
-the words, marks never cascade, short reads mark nothing),
+the words, marks never cascade, short reads mark nothing), `run_migration39.py` (the made-up books: a GST ledger's rename keeps
+the GST summary, the owner's confirm, the empty-day flag, ids live by a confirmation),
 `run_migration36b.py` (acceptance, the owner's mark and release, the four routes a posting Tally accepted can never be sent
 again by: Retry, Post again, the requeue, a new posting for the same id), `run_migration37.py` (36b applied before 37).

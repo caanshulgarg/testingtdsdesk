@@ -648,9 +648,14 @@ async function ingestDaysRaw(firm: string, book: string, daysIn: unknown): Promi
     const path = `${firm}/${book}/${d.day.slice(0, 6)}/${d.day}.xml.gz`;
     const up = await db.storage.from("tally-days").upload(path, gz, { upsert: true, contentType: "application/gzip" });
     if (up.error) throw new Error("storage: " + up.error.message);
-    const { data: dayAns, error } = await db.rpc("tally_ingest_day", { p_book: book, p_day: iso(d.day),
-      p_vouchers: dayVouchers(r), p_lines: dayLines(r), p_n: r.n, p_alter: r.alterMax, p_bytes: gz.length });
+    // migration 39: the bridge says when it positively read the day and Tally listed no entries (empty: true): the cloud
+    // then marks the day's entries deleted; without the flag an empty file is a short read (nothing marked, migration 38).
+    // A cloud without 39 has no p_empty: the 7-argument call as before
+    const dayArgs = { p_book: book, p_day: iso(d.day), p_vouchers: dayVouchers(r), p_lines: dayLines(r), p_n: r.n, p_alter: r.alterMax, p_bytes: gz.length };
+    let { data: dayAns, error } = d.empty === true ? await db.rpc("tally_ingest_day", { ...dayArgs, p_empty: true }) : await db.rpc("tally_ingest_day", dayArgs);
+    if (error && d.empty === true && /p_empty|could not find|does not exist|schema cache/i.test(String(error.message || ""))) ({ data: dayAns, error } = await db.rpc("tally_ingest_day", dayArgs));
     if (error) throw new Error(error.message);
+    if ((dayAns as any)?.empty) console.log("tally-ingest day empty (the bridge vouched for it): " + String((dayAns as any).marked || 0) + " marked deleted", book, d.day);
     // migration 38 (item 9): a short read (no entries, or fewer than the bridge counted) upserted what came and marked nothing; said in the log
     if ((dayAns as any)?.refused) console.log("tally-ingest day " + String((dayAns as any).refused) + ": nothing marked deleted", book, String((dayAns as any).day || ""));
     done.push(d.day);

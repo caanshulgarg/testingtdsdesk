@@ -282,6 +282,13 @@ try:
     c, r = call({"kind": "days", "version": "2.1.5", "bridge": main, "company": "ZZ CO", "days": [{"day": "20260302", "gz": base64.b64encode(gzip.compress(xml.encode()).decode() if False else gzip.compress(xml.encode())).decode()}]})
     ing = (F.ARGS.get("tally_ingest_day") or [{}])[-1]; vs = {v.get("guid"): v for v in (ing.get("p_vouchers") or [])}
     ok(c == 200 and vs.get("g-fid-1", {}).get("fid") == "emu.qtw-0683g" and "fid" in vs.get("g-fid-2", {}) and vs["g-fid-2"]["fid"] is None, "a day's vouchers carry fid: the TDSDesk tag from the narration, null without one (%s %s %s %s)" % (c, {g: v.get("fid") for g, v in vs.items()}, r, sorted(F.ARGS)))
+    # round 10 (migration 39): a day the bridge positively read as empty (empty: true) goes with p_empty; a plain day without it
+    n_ing = len(F.ARGS.get("tally_ingest_day") or [])
+    c, r = call({"kind": "days", "version": "2.1.8", "bridge": main, "company": "ZZ CO", "days": [{"day": "20260303", "gz": base64.b64encode(gzip.compress(b"<ENVELOPE><BODY></BODY></ENVELOPE>")).decode(), "empty": True},
+                                                                                          {"day": "20260304", "gz": base64.b64encode(gzip.compress(xml.replace("20260302", "20260304").encode())).decode()}]})
+    ings = (F.ARGS.get("tally_ingest_day") or [])[n_ing:]
+    ok(c == 200 and len(ings) == 2 and ings[0].get("p_empty") is True and ings[0].get("p_n") == 0 and "p_empty" not in ings[1] and ings[1].get("p_n") == 2,
+       "39. an empty day with the bridge's flag: tally_ingest_day(…, p_empty: true); a day with entries: the 7-argument call (%s)" % [{k: a.get(k) for k in ("p_day", "p_n", "p_empty")} for a in ings])
     dev["main_bridge"] = "go-aaaaaaaaaaaa"
     # install logs
     import zipfile, io

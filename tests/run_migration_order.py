@@ -1,6 +1,6 @@
 """python3 run_migration_order.py - the order the cloud migrations run in on a fresh database (03-Oct-2026, round 4 items
 1-3; docs/MIGRATION-ORDER.md): BOTH valid orders, each applied TWICE on its own database: staging's (32 -> 33 -> 35 -> 34 as FIRST run there, commit 2105b2d
--> 36b -> 37 -> 36 -> 38) and a fresh database's (32 -> 33 -> 35 -> 34 reviewed -> 36 -> 36b -> 37 -> 38); the function texts
+-> 36b -> 37 -> 36 -> 38 -> 39) and a fresh database's (32 -> 33 -> 35 -> 34 reviewed -> 36 -> 36b -> 37 -> 38 -> 39); the function texts
 the two orders end with are compared and must be identical (round 9), on a throwaway PostgreSQL (pg_stand)
 with the tables as on staging (run_migration33's schema, tally_devices, tally_bills) and made-up rows; never on staging.
 Checks: every file runs, twice, and deletes nothing; after the run the release functions are migration-34's
@@ -14,9 +14,9 @@ import pg_stand
 SQLDIR = os.path.join(HERE, "..", "server", "tally-cloud")
 BASE = [(32, "migration-32-sync-safety.sql"), (33, "migration-33-ledger-lists.sql"), (35, "migration-35-bridge-control.sql")]
 # the two valid orders (docs/MIGRATION-ORDER.md): staging's (the FIRST 34, commit 2105b2d, then 36b and 37 run on 03-Oct, then 36 and 38) and a fresh database's
-ORDERS = {"staging": BASE + [("34 (first, as on staging)", os.path.join("..", "..", "tests", "fixtures", "migration-34-as-run-on-staging.sql")), ("36b", "migration-36b-post-acceptance.sql"), (37, "migration-37-follow-ups.sql"), (36, "migration-36-ledger-rename.sql"), (38, "migration-38-post-followups.sql")],
-          "fresh": BASE + [(34, "migration-34-ledger-safety.sql"), (36, "migration-36-ledger-rename.sql"), ("36b", "migration-36b-post-acceptance.sql"), (37, "migration-37-follow-ups.sql"), (38, "migration-38-post-followups.sql")]}
-READERS = ["tally_tb", "tally_period", "tally_mis", "tally_gst_summary", "tally_ledger", "tally_balances_on", "tally_ledger_hold_reason", "tally_ledgers_a_guard", "tally_ledger_round_seen", "tally_ledger_rename", "tally_ledger_carry", "tally_post_ids_sync", "tally_ingest_day"]
+ORDERS = {"staging": BASE + [("34 (first, as on staging)", os.path.join("..", "..", "tests", "fixtures", "migration-34-as-run-on-staging.sql")), ("36b", "migration-36b-post-acceptance.sql"), (37, "migration-37-follow-ups.sql"), (36, "migration-36-ledger-rename.sql"), (38, "migration-38-post-followups.sql"), (39, "migration-39-rename-map-empty-day.sql")],
+          "fresh": BASE + [(34, "migration-34-ledger-safety.sql"), (36, "migration-36-ledger-rename.sql"), ("36b", "migration-36b-post-acceptance.sql"), (37, "migration-37-follow-ups.sql"), (38, "migration-38-post-followups.sql"), (39, "migration-39-rename-map-empty-day.sql")]}
+READERS = ["tally_tb", "tally_period", "tally_mis", "tally_gst_summary", "tally_ledger", "tally_balances_on", "tally_ledger_hold_reason", "tally_ledgers_a_guard", "tally_ledger_round_seen", "tally_ledger_rename", "tally_ledger_carry", "tally_post_ids_sync", "tally_ingest_day", "tally_ledger_carry_choices", "tally_ledger_rename_confirm"]
 texts = {}
 fails = []
 def ok(c, w):
@@ -61,8 +61,11 @@ def run_order(label, ORDER):
                 if r.returncode: raise SystemExit("cannot go on: migration-%s failed" % n)
             k = counts()
             ok(all(k.get(t) == v for t, v in before.items()), "pass %d: nothing deleted (%s rows kept)" % (round_, sum(before.values())))
-        for fn in READERS: texts.setdefault(fn, {})[label] = re.sub(r"\s+", " ", fdef(fn))
-        ok("tally_post_job_accepted" in fdef("tally_post_ids_sync") and "short read" in fdef("tally_ingest_day"), "migration-38's sync and tally_ingest_day are in force")
+        for fn in READERS: texts.setdefault(fn, {})[label] = re.sub(r"\s+", " ", fdef(fn, "uuid, date, jsonb, jsonb, integer, bigint, integer, boolean") if fn == "tally_ingest_day" else fdef(fn))
+        ok("tally_post_job_accepted" in fdef("tally_post_ids_sync") and "tally_post_result_confirmed" in fdef("tally_post_ids_sync"), "migration-39's sync (38's words + a confirmation) is in force")
+        ok("short read" in fdef("tally_ingest_day", "uuid, date, jsonb, jsonb, integer, bigint, integer, boolean") and "p_empty" in fdef("tally_ingest_day", "uuid, date, jsonb, jsonb, integer, bigint, integer, boolean")
+           and "null::boolean" in fdef("tally_ingest_day", "uuid, date, jsonb, jsonb, integer, bigint, integer"), "39: tally_ingest_day with p_empty (8), the 7-argument one passing null")
+        ok("tally_ledger_carry_choices" in fdef("tally_ledger_rename") and db.one("select count(*) from information_schema.columns where table_name = 'tally_ledgers' and column_name = 'needs_confirm'") == "1", "39: the rename carries the choices; tally_ledgers.needs_confirm")
         ok(db.one("select string_agg(confdeltype::text, '') from pg_constraint where conrelid = 'public.tally_post_marks'::regclass and contype = 'f'") == "rr", "38: tally_post_marks' foreign keys restrict (no cascade)")
         for fn in ("tally_tb", "tally_period", "tally_balances_on"): ok("d.merged_into is null" in fdef(fn), "%s hides the twins" % fn)
         if label != "fresh": return
