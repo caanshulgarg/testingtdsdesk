@@ -458,6 +458,7 @@ async function applyLedgerList(firm: string, book: string, body: any, dev?: any,
   const m32 = await hasCols("tally_ledgers", "tally_guid, alter_id, deleted_at");
   const m31 = await hasCols("tally_ledgers", "before_clean");
   const m28 = await hasCols("tally_ledgers", "gstin, pan");
+  const m40 = await hasCols("tally_ledgers", "state");            // migration 40: Tally's LEDSTATENAME (the bridge's 10th column)
   const notes: string[] = [];
   const out = { ok: true, ledgers: 0, added: 0, renamed: 0, deleted: 0, deletesHeld: 0, deletedIgnored: 0, groups: 0, round: "", notes };
   const now = new Date().toISOString();
@@ -467,7 +468,7 @@ async function applyLedgerList(firm: string, book: string, body: any, dev?: any,
   const rows = (Array.isArray(body.ledgers) ? body.ledgers : []).slice(0, 5000).map((l: any) => ({
     guid: s(l?.[0], 100).trim(), alter: Math.max(0, Math.floor(Number(l?.[2]) || 0)), name: cleanName(s(l?.[3], 300)),
     parent: cleanName(s(l?.[4], 300)).replace(/^\W*Primary$/i, ""), open: Math.round(amt(l?.[5]) * 100) / 100,
-    gstin: s(l?.[6], 15).trim().toUpperCase(), pan: s(l?.[7], 10).trim().toUpperCase(), oc: !!Number(l?.[8]) }))
+    gstin: s(l?.[6], 15).trim().toUpperCase(), pan: s(l?.[7], 10).trim().toUpperCase(), oc: !!Number(l?.[8]), state: s(l?.[9], 60).trim() }))
     .filter((r: any) => r.name && !seen.has(r.name) && seen.add(r.name));
   out.ledgers = rows.length;
   // 0. migration-34: this call is one batch of a read of the whole list (round); the bridge says whether the read is
@@ -561,6 +562,7 @@ async function applyLedgerList(firm: string, book: string, body: any, dev?: any,
     const c = chain(r.parent);
     const o: Record<string, unknown> = { book_id: book, firm_id: firm, name: r.name, parent: r.parent, chain: c, primary_group: c.length ? c[c.length - 1] : "" };
     if (m28) { o.gstin = r.gstin || null; o.pan = r.pan || null; }
+    if (m40 && r.state) o.state = r.state;      // absent or empty: left as it is
     if (m32) { o.tally_guid = r.guid && (!owner.has(r.guid) || owner.get(r.guid) === r.name) ? r.guid : null; o.alter_id = r.alter; o.deleted_at = null; }
     return o;
   };
@@ -1107,7 +1109,9 @@ Deno.serve(async (req) => {
           // bridge 2.1.5 (round 7): an entry of a partly made batch not found yet by its tag: held, never sent again, looked for
           held: !!r?.held,
           // the 2.1.5 bridge's counts of Tally's reply, and the company Tally put the entry into when not the one asked
-          created: Math.max(0, Math.floor(Number(r?.created) || 0)), altered: Math.max(0, Math.floor(Number(r?.altered) || 0)), wrongCompany: s(r?.wrongCompany, 200) }));
+          created: Math.max(0, Math.floor(Number(r?.created) || 0)), altered: Math.max(0, Math.floor(Number(r?.altered) || 0)), wrongCompany: s(r?.wrongCompany, 200),
+          // round 11 bridge: a plain refusal (PostOnly: this computer posts to one company only): never an acceptance, the id released
+          refused: !!r?.refused, postOnly: !!r?.postOnly }));
         // 02-Oct-2026: each entry's state as the bridge sees it (waiting / sending / sent / in_tally / failed, with why)
         const STATES = ["waiting", "sending", "sent", "in_tally", "failed", "unknown", "notfound"];   // notfound (migration 37): checked and not in Tally
         const items = Array.isArray(body.items) ? body.items.slice(0, 5000).map((x: any) => ({ id: s(x?.id, 200), kind: s(x?.kind, 10),

@@ -227,6 +227,17 @@ try:
     job["status"] = "running"; acc.clear()
     c, r = call({"kind": "posts_update", "version": "2.1.7", "bridge": main, "id": "p-1", "status": "failed", "results": [{"id": "v8", "ok": False, "lastVchId": "1"}], "items": [{"id": "v8", "state": "failed", "reason": "r" * 600}]})
     ok(len(job["items"][0]["reason"]) <= 500, "INFO. an item's reason stays under 500 (%d)" % len(job["items"][0]["reason"]))
+    # round 11 bridge: a PostOnly refusal (this computer posts to one company only) is a plain refusal: no acceptance in its
+    # words, the id released with the reason, the posting failed
+    job["status"] = "running"; acc.clear(); rel7.clear(); F.rpc = rpc7
+    PO = "This computer posts only to ZZ CO (PostOnly); posting to OTHER CO refused"
+    c, r = call({"kind": "posts_update", "version": "2.1.9", "bridge": main, "id": "p-1", "status": "failed", "message": "1 refused",
+                 "results": [{"id": "v11", "ok": False, "refused": True, "postOnly": True, "state": "failed", "reason": PO}], "items": [{"id": "v11", "state": "failed", "reason": PO}]})
+    rs = {x["id"]: x for x in job["results"]}; it = {x["id"]: x for x in job["items"]}
+    ok(c == 200 and job["status"] == "failed" and job.get("checking") is False and it["v11"]["state"] == "failed" and rs["v11"].get("refused") is True and rs["v11"].get("postOnly") is True and rs["v11"]["state"] == "failed",
+       "11. a PostOnly refusal: stored failed as a plain refusal, refused / postOnly kept (%s)" % job["status"])
+    ok(acc == [] and [strip(a) for a in rel7] == [{"p_job": "p-1", "p_id": "v11", "p_why": PO}], "11. never accepted (no CREATED / ALTERED in its words), the id released with the reason (%s, %s)" % (acc, rel7))
+    F.rpc = real7
     # F2 (a): posts_take hands the bridge the ids an owner released for the posting, so it sends them once and does not
     # mark them accepted from its memory
     F.T["tally_post_jobs"].append({"id": "p-2", "firm_id": FIRM, "device_id": "d-1", "company": "ZZ CO", "status": "waiting", "payload": {"vouchers": [{"id": "sid-3"}]}, "created_at": "2026-10-03T10:00:00Z"})
@@ -368,6 +379,13 @@ try:
        "a cloud without migration-34: nothing marked, nothing updated directly, 'migration-34 not applied' said (%s)" % r.get("notes"))
     ok(len(F.ARGS["tally_ledger_round_seen"]) == n_seen, "and tally_ledger_round_seen not asked of it")
     NO34["on"] = False
+    # round 11 (migration 40): the bridge's 10th column is the ledger's state (LEDSTATENAME): stored when sent, left as it is when absent or empty
+    c, r = lst({"round": "r-2s", "complete": False, "last": False, "seen": ["g1", "g2", "g9"], "ledgers": [row("g1", "Alpha") + ["Uttar Pradesh"], row("g2", "Beta"), row("g9", "Iota") + [""]]})
+    led = {x["name"]: x for x in F.T["tally_ledgers"] if x.get("book_id") == BOOK}
+    ok(c == 200 and led.get("Alpha", {}).get("state") == "Uttar Pradesh" and "state" not in led.get("Iota", {}) and led.get("Beta", {}).get("state") in (None, ""), "40. a row with a state: stored (Alpha: Uttar Pradesh); without one, or empty: left as it is (%s)" % {k: led.get(k, {}).get("state") for k in ("Alpha", "Beta", "Iota")})
+    c, r = lst({"round": "r-2s", "complete": False, "last": False, "seen": ["g1"], "ledgers": [row("g1", "Alpha")]})
+    led = {x["name"]: x for x in F.T["tally_ledgers"] if x.get("book_id") == BOOK}
+    ok(c == 200 and led["Alpha"].get("state") == "Uttar Pradesh", "40. the same row sent again without a state: the state kept")
     # at most 60 ledger_list calls a minute from one computer (a rogue key cannot bloat the rounds)
     codes = [lst({"round": "r-3", "complete": False, "last": False, "seen": [], "ledgers": []})[0] for i in range(70)]
     c, r = lst({"round": "r-3", "complete": False, "last": False, "seen": [], "ledgers": []})
