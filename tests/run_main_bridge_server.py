@@ -261,6 +261,67 @@ try:
     it = {x["id"]: x for x in job["items"]}
     ok(c == 200 and job["status"] == "failed" and it["v12"]["state"] == "failed" and it["v12"].get("postOnly") is True and acc == [] and [a["p_id"] for a in rel7] == ["v12"], "M5. 'Created 1 Pvt Ltd' in a PostOnly refusal: never accepted, failed, the id released (%s)" % acc)
     F.rpc = real7
+    # round 15 (build 2.1.8, migration 43): the bridge posts by Tally's reply. A result may carry byReply, vchId, batchEnd,
+    # batchN, needsReview, accepted, created, altered, exceptions, ignored, errors, lineError, lastVchId, company, sentAt,
+    # secondsReq; the update may carry reqs:[{n, seconds, created, altered, exceptions, ignored, lastVchId}] and secondsTotal
+    # (stored in tally_post_jobs.timing). A byReply ok result: tally_post_id_accept_reply(job, id, vchId, batchEnd, batchN)
+    # and the entry is taken (never held open); needsReview + accepted: tally_post_id_accept(job, id, lastVchId), unconfirmed
+    # (the posting held, done + checking); needsReview without accepted: the id released 'needs review: ' + message
+    rep15, acc15, rel15, NOREPLY = [], [], [], {"on": False}
+    def rpc15(fn, a):
+        if fn == "tally_post_id_accept_reply":
+            if NOREPLY["on"]: raise RuntimeError("Could not find the function public.tally_post_id_accept_reply(p_batch_end, p_batch_n, p_id, p_job, p_vch) in the schema cache")
+            rep15.append(a); return {"ok": True, "stamped": 1}
+        if fn == "tally_post_id_accept": acc15.append(a); return {"ok": True, "stamped": 1}
+        if fn == "tally_post_id_release": rel15.append(a); return {"ok": True, "released": True}
+        return real7(fn, a)
+    F.rpc = rpc15; job["status"] = "running"; job["checking"] = False; job["results"] = []; job["items"] = []; job.pop("timing", None)
+    R15 = [{"id": "b1", "ok": True, "byReply": True, "vchId": "26500", "batchEnd": "26500", "batchN": 1, "created": 1, "altered": 0, "exceptions": 0, "ignored": 0, "errors": 0, "lastVchId": "26500", "company": "ZZ CO", "sentAt": "2026-10-03T09:00:01Z", "secondsReq": 1.25, "message": "Tally replied CREATED 1 LASTVCHID 26500"},
+           {"id": "b2", "ok": True, "byReply": True, "vchId": "", "batchEnd": "26503", "batchN": 3, "created": 3, "message": "in a batch of 3 ending at 26503"},
+           {"id": "b3", "ok": False, "needsReview": True, "accepted": True, "lastVchId": "26504", "created": 1, "exceptions": 1, "lineError": "Ledger 'Freight' does not exist", "state": "unknown", "message": "CREATED 1 with 1 exception"},
+           {"id": "b4", "ok": False, "needsReview": True, "accepted": False, "created": 0, "errors": 1, "lineError": "Voucher number duplicate" + "x" * 400, "message": "Tally created nothing: 1 error"}]
+    I15 = [{"id": "b1", "state": "sent"}, {"id": "b2", "state": "sent"}, {"id": "b3", "state": "unknown", "reason": "needs review"}, {"id": "b4", "state": "failed", "reason": "needs review"}]
+    REQS15 = [{"n": 1, "seconds": 1.25, "created": 1, "altered": 0, "exceptions": 0, "ignored": 0, "lastVchId": "26500"}, {"n": 3, "seconds": 2.5, "created": 3, "altered": 0, "exceptions": 0, "ignored": 0, "lastVchId": "26503"}, {"n": "x", "seconds": -1, "junk": True}]
+    c, r = call({"kind": "posts_update", "version": "2.1.8", "bridge": dict(main, version="2.1.8"), "id": "p-1", "status": "failed", "seq": 20, "message": "Posted 2 of 4; 2 need review", "results": R15, "items": I15, "reqs": REQS15, "secondsTotal": 3.75})
+    rs = {x["id"]: x for x in job.get("results") or []}; it = {x["id"]: x for x in job.get("items") or []}
+    ok(c == 200 and rs["b1"].get("byReply") is True and rs["b1"].get("vchId") == "26500" and rs["b1"].get("batchEnd") == "26500" and rs["b1"].get("batchN") == 1 and rs["b1"].get("created") == 1 and rs["b1"].get("lastVchId") == "26500"
+       and rs["b1"].get("company") == "ZZ CO" and rs["b1"].get("sentAt") == "2026-10-03T09:00:01Z" and rs["b1"].get("secondsReq") == 1.25 and rs["b1"].get("exceptions") == 0 and rs["b1"].get("ignored") == 0 and rs["b1"].get("errors") == 0,
+       "15. the reply fields of a result are stored: byReply, vchId, batchEnd, batchN, created, lastVchId, company, sentAt, secondsReq, exceptions, ignored, errors (%s)" % {k: rs["b1"].get(k) for k in ("byReply", "vchId", "batchEnd", "batchN", "secondsReq")})
+    ok(rs["b3"].get("needsReview") is True and rs["b3"].get("accepted") is True and rs["b3"].get("lineError") == "Ledger 'Freight' does not exist" and rs["b4"].get("needsReview") is True and rs["b4"].get("accepted") is False and len(rs["b4"].get("lineError", "")) <= 300,
+       "15. needsReview, accepted and lineError stored (lineError cut to 300) (%s)" % {k: rs["b3"].get(k) for k in ("needsReview", "accepted", "lineError")})
+    ok(rs["b2"].get("vchId") == "" and rs["b2"].get("batchN") == 3 and rs["b2"].get("batchEnd") == "26503", "15. a result of a batch of 3: no vchId of its own, batchEnd and batchN (%s)" % {k: rs["b2"].get(k) for k in ("vchId", "batchEnd", "batchN")})
+    tm = job.get("timing") or {}
+    ok(tm.get("secondsTotal") == 3.75 and tm.get("reqs") == [{"n": 1, "seconds": 1.25, "created": 1, "altered": 0, "exceptions": 0, "ignored": 0, "lastVchId": "26500"}, {"n": 3, "seconds": 2.5, "created": 3, "altered": 0, "exceptions": 0, "ignored": 0, "lastVchId": "26503"}, {"n": 0, "seconds": 0, "created": 0, "altered": 0, "exceptions": 0, "ignored": 0, "lastVchId": ""}],
+       "15. tally_post_jobs.timing = {reqs: [{n, seconds, created, altered, exceptions, ignored, lastVchId}], secondsTotal}, cleaned (%s)" % json.dumps(tm)[:160])
+    ok([strip(a) for a in rep15] == [{"p_job": "p-1", "p_id": "b1", "p_vch": "26500", "p_batch_end": "26500", "p_batch_n": 1}, {"p_job": "p-1", "p_id": "b2", "p_vch": None, "p_batch_end": "26503", "p_batch_n": 3}],
+       "15. tally_post_id_accept_reply(job, id, vchId or null, batchEnd, batchN) for each byReply ok result (%s)" % rep15)
+    ok([strip(a) for a in acc15] == [{"p_job": "p-1", "p_id": "b3", "p_vch": "26504"}], "15. a needsReview + accepted result: tally_post_id_accept(job, id, lastVchId), as an accepted unconfirmed id (%s)" % acc15)
+    ok([strip(a) for a in rel15] == [{"p_job": "p-1", "p_id": "b4", "p_why": "needs review: Tally created nothing: 1 error"}], "15. a needsReview result without accepted (created 0): the id released with 'needs review: ' + message (%s)" % rel15)
+    ok(job["status"] == "done" and job.get("checking") is True and it["b3"]["state"] == "unknown" and it["b1"]["state"] == "sent" and it["b2"]["state"] == "sent" and it["b4"]["state"] == "failed" and rs["b1"]["ok"] is True and rs["b2"]["ok"] is True,
+       "15. the posting is held for the accepted unconfirmed entry alone (done + checking); the byReply ok entries are taken (sent, ok), never held open; the needsReview-without-accepted entry failed (%s %s)" % (job["status"], {k: it[k]["state"] for k in it}))
+    # byReply ok entries alone (no needsReview): the posting is done as the bridge says, never held open as unconfirmed
+    job["status"] = "running"; job["checking"] = False; rep15.clear(); acc15.clear(); rel15.clear()
+    c, r = call({"kind": "posts_update", "version": "2.1.8", "bridge": dict(main, version="2.1.8"), "id": "p-1", "status": "done", "seq": 21, "message": "Posted 2 of 2", "results": [dict(R15[0]), dict(R15[1])], "items": [{"id": "b1", "state": "sent"}, {"id": "b2", "state": "sent"}], "reqs": REQS15[:2], "secondsTotal": 3.75})
+    ok(c == 200 and job["status"] == "done" and job.get("checking") is False and job["message"] == "Posted 2 of 2" and [a["p_id"] for a in rep15] == ["b1", "b2"] and acc15 == [], "15. byReply ok results alone: done, no checking, stamped through the reply function alone (%s)" % job["status"])
+    # a cloud without migration 43: tally_post_id_accept_reply is missing (PostgREST: 'Could not find the function'): the plain stamp is used, and timing is dropped
+    NOREPLY["on"] = True; job["status"] = "running"; job["checking"] = False; rep15.clear(); acc15.clear(); job.pop("timing", None)
+    _patch15 = F.H.do_PATCH
+    def patch15(self):
+        from urllib.parse import urlparse as _u
+        if _u(self.path).path.endswith("/tally_post_jobs"):
+            raw = self.body()
+            if b'"timing"' in raw: return self.send(400, {"code": "PGRST204", "message": "Could not find the 'timing' column of 'tally_post_jobs' in the schema cache"})
+            qq = __import__("urllib.parse", fromlist=["parse_qs"]).parse_qs(_u(self.path).query, keep_blank_values=True)
+            for rw in F.T["tally_post_jobs"]:
+                if F.match(rw, qq): rw.update(json.loads(raw))
+            return self.send(204)
+        return _patch15(self)
+    F.H.do_PATCH = patch15
+    c, r = call({"kind": "posts_update", "version": "2.1.8", "bridge": dict(main, version="2.1.8"), "id": "p-1", "status": "done", "seq": 22, "message": "Posted 1 of 1", "results": [dict(R15[0])], "items": [{"id": "b1", "state": "sent"}], "reqs": REQS15[:1], "secondsTotal": 1.25})
+    F.H.do_PATCH = _patch15
+    ok(c == 200 and job["status"] == "done" and job["message"] == "Posted 1 of 1" and "timing" not in job and [strip(a) for a in acc15] == [{"p_job": "p-1", "p_id": "b1", "p_vch": "26500"}] and rep15 == [],
+       "15. without migration 43: the update lands without timing, and the byReply ok id is stamped with tally_post_id_accept(job, id, vchId) instead (%s, %s)" % (job.get("message"), acc15))
+    NOREPLY["on"] = False; F.rpc = real7; job["results"] = []; job["items"] = []
     # F2 (a): posts_take hands the bridge the ids an owner released for the posting, so it sends them once and does not
     # mark them accepted from its memory
     F.T["tally_post_jobs"].append({"id": "p-2", "firm_id": FIRM, "device_id": "d-1", "company": "ZZ CO", "status": "waiting", "payload": {"vouchers": [{"id": "sid-3"}]}, "created_at": "2026-10-03T10:00:00Z"})

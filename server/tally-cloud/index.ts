@@ -60,6 +60,15 @@
 //   {kind:"posts_take"}                              -> {job: {id, company, payload} | null}: the next posting queued in
 //                                                       FinCom for this computer (build 199); the beat says how many wait
 //   {kind:"posts_update", id, status, done, message, results, checking} -> how a posting taken by this computer is going
+//    FinCom Bridge 2.1.8 (round 15, migration 43: posting by Tally's reply): a result may also carry byReply, vchId, batchEnd,
+//    batchN, needsReview, accepted, created, altered, exceptions, ignored, errors, lineError, lastVchId, company, sentAt,
+//    secondsReq (stored); the update may carry reqs:[{n, seconds, created, altered, exceptions, ignored, lastVchId}] and
+//    secondsTotal (stored in tally_post_jobs.timing). A byReply + ok result is taken: tally_post_id_accept_reply(job, id,
+//    vchId | null, batchEnd, batchN) (tally_post_id_accept when 43 is missing); needsReview + accepted: tally_post_id_accept
+//    (job, id, lastVchId), unconfirmed (the posting held, done + checking); needsReview without accepted: the id released
+//    'needs review: ' + message. The beat's answer carries settings:{postOnly, postBatchBills, postBatchBank, at} (the
+//    owner's per-computer posting settings, tally_device_post_settings; null fields without 43) and the beat may carry
+//    postOnly, postBatchBills, postBatchBank, settingsAt (the values applied; kept in info.beat and the bridge's entry)
 //   {kind:"make_main", bridge}                        -> this bridge (FinCom Bridge 2.x, its menu) is the main one: only it posts
 //   every call of FinCom Bridge 2.x carries bridge:{id, computer, user, mode, runMode, version} (bridgeOf); the beat's
 //   answer says makeMain (made the main one on FinCom's Tally page) or notMain (another bridge posts on this computer)
@@ -163,7 +172,19 @@ function bridgeOf(dev: any, body: any, shadow: boolean) {
     // 2.1.5: its request timings, whether it stopped reading, and (round 2) its allow-list state
     reqs: cleanReqs(body?.reqs), readStopped: cleanReadStopped(body?.readStopped), allowlist: cleanAllowlist(body?.allowlist),
     // 2.1.6 (round 11): the companies this bridge posts to (PostOnly); [] when any; absent on an older bridge
-    ...(Array.isArray(body?.postOnly) ? { postOnly: cleanPostOnly(body.postOnly) } : {}) } };
+    ...(Array.isArray(body?.postOnly) ? { postOnly: cleanPostOnly(body.postOnly) } : {}),
+    // 2.1.8 (round 15, migration 43): the posting settings this bridge applied (batch sizes, when), absent on an older bridge
+    ...postSettingsApplied(body) } };
+}
+// 2.1.8: the owner's per-computer posting settings as the bridge applied them, said in its beat: postBatchBills /
+// postBatchBank (1..500, or null when not a number), settingsAt (a string, cut to 40); nothing kept when none is sent
+function postSettingsApplied(b: any) {
+  if (!b || typeof b !== "object" || !("postBatchBills" in b || "postBatchBank" in b || "settingsAt" in b)) return {};
+  return { postBatchBills: cleanBatch(b.postBatchBills), postBatchBank: cleanBatch(b.postBatchBank), settingsAt: typeof b.settingsAt === "string" ? b.settingsAt.slice(0, 40) : "" };
+}
+function cleanBatch(v: unknown) {
+  if (v === null || v === undefined || v === "" || typeof v === "boolean" || !Number.isFinite(Number(v))) return null;
+  return Math.max(1, Math.min(500, Math.floor(Number(v))));
 }
 // postOnly: an array of company names, strings only, trimmed, each cut to 200, at most 20, blanks dropped
 function cleanPostOnly(x: unknown) {
@@ -1047,7 +1068,9 @@ Deno.serve(async (req) => {
           // round 2 (migration-34): its allow-list state
           reqs: cleanReqs(b.reqs), readStopped: cleanReadStopped(b.readStopped), allowlist: cleanAllowlist(b.allowlist),
           // FinCom Bridge 2.1.6 (round 11): the companies this computer posts to (PostOnly); [] when any; absent on an older bridge
-          ...(Array.isArray(b.postOnly) ? { postOnly: cleanPostOnly(b.postOnly) } : {}) };
+          ...(Array.isArray(b.postOnly) ? { postOnly: cleanPostOnly(b.postOnly) } : {}),
+          // FinCom Bridge 2.1.8 (round 15, migration 43): the posting settings it applied (postBatchBills, postBatchBank, settingsAt)
+          ...postSettingsApplied(b) };
         const prevInfo = ((dev as any).info && typeof (dev as any).info === "object") ? (dev as any).info : {};
         const me = bridgeOf(dev, body, false);
         // migration-35: Stop reading from FinCom, Resume, the version it may install (and the pilot's evidence)
@@ -1062,13 +1085,19 @@ Deno.serve(async (req) => {
         // instead of when a page next looks at tally_devices. Only the times and states, nothing of the books or keys
         const pb = (prevInfo.beat && typeof prevInfo.beat === "object") ? prevInfo.beat : {};
         const said = (x: any, stop: unknown) => JSON.stringify([x.lastRead || "", !!x.updating, x.tallyState || "", !!x.paused, x.notAnsweringSince || "",
-          (Array.isArray(x.companies) ? x.companies : []).map((c: any) => [c.name, c.lastRead || "", c.at || ""]), x.reqs ?? null, x.readStopped ?? null, stop ?? null, x.postOnly ?? null]);
+          (Array.isArray(x.companies) ? x.companies : []).map((c: any) => [c.name, c.lastRead || "", c.at || ""]), x.reqs ?? null, x.readStopped ?? null, stop ?? null, x.postOnly ?? null, x.postBatchBills ?? null, x.postBatchBank ?? null, x.settingsAt ?? null]);
         if (said(pb, prevInfo.readStop) !== said(beat, (info as any).readStop)) {
           await broadcast("fincom-tally-" + firm, "beat", { device: dev.id, beat: { at: beat.at, every: beat.every, lastRead: beat.lastRead, updating: beat.updating, tallyState: beat.tallyState,
             tally: beat.tally, paused: beat.paused, notAnsweringSince: beat.notAnsweringSince, busySince: beat.busySince, open: beat.open,
             companies: beat.companies.map((c: any) => ({ name: c.name, open: c.open, at: c.at, phase: c.phase, waiting: c.waiting, lastRead: c.lastRead })),
-            bridge: me.id, reqs: beat.reqs, readStopped: beat.readStopped, readStop: (info as any).readStop ?? null, postOnly: (beat as any).postOnly ?? null } });
+            bridge: me.id, reqs: beat.reqs, readStopped: beat.readStopped, readStop: (info as any).readStop ?? null, postOnly: (beat as any).postOnly ?? null,
+            postBatchBills: (beat as any).postBatchBills ?? null, postBatchBank: (beat as any).postBatchBank ?? null, settingsAt: (beat as any).settingsAt ?? null } });
         }
+        // 2.1.8 (round 15, migration 43): the owner's per-computer posting settings (tally_device_post_settings), read from the
+        // device's row: postOnly (null = no restriction, [] = any company, else the names), the batch sizes, and when they were
+        // set. On a cloud without the columns every field is null; the beat never fails for them
+        const settings = { postOnly: Array.isArray((dev as any).post_only) ? (dev as any).post_only : null, postBatchBills: cleanBatch((dev as any).post_batch_bills), postBatchBank: cleanBatch((dev as any).post_batch_bank),
+          at: typeof (dev as any).post_settings_at === "string" ? (dev as any).post_settings_at : null };
         const { count: waiting } = await db.from("tally_post_jobs").select("id", { count: "exact", head: true }).eq("device_id", dev.id).eq("status", "waiting");
         const posts = mayPost(dev, me.id) ? waiting : 0;
         // fast-sync (bridge 1.15.0): the computer's own Realtime channel, where the database wakes it the moment a
@@ -1085,7 +1114,7 @@ Deno.serve(async (req) => {
         const { data: lastJob } = await db.from("tally_post_jobs").select("updated_at").eq("device_id", dev.id).order("updated_at", { ascending: false }).limit(1);
         const activityAt = [prevInfo.activityAt, want, lastJob && lastJob[0] && lastJob[0].updated_at].filter((x) => x && !isNaN(Date.parse(String(x))))
           .map((x) => new Date(String(x)).toISOString()).sort().pop() || "";
-        return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, ledgers, activityAt, ...(mayPost(dev, me.id) ? {} : { notMain: true }), ...ctl.out });
+        return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, ledgers, activityAt, settings, ...(mayPost(dev, me.id) ? {} : { notMain: true }), ...ctl.out });
       }
       case "make_main": return await makeMain(dev, bridgeOf(dev, body, false).id);
       case "posts_take": {
@@ -1106,6 +1135,9 @@ Deno.serve(async (req) => {
         if (!mayPost(dev, bridgeOf(dev, body, false).id)) return reply(403, { ok: false, notMain: true, error: "Another bridge is the main bridge on this computer now (chosen in FinCom); this one reads only and does not post." });
         const st = ["taken", "running", "done", "failed"].includes(body.status) ? body.status : "running";
         const s = (v: unknown, n: number) => typeof v === "string" ? v.slice(0, n) : "";
+        const int = (v: unknown, max: number) => Math.max(0, Math.min(max, Math.floor(Number(v)) || 0));
+        const secs = (v: unknown) => Math.max(0, Math.min(86400 * 30, Math.round((Number(v) || 0) * 1000) / 1000));
+        const REPLY_KEYS = ["byReply", "vchId", "batchEnd", "batchN", "needsReview", "exceptions", "ignored", "errors", "lineError", "company", "sentAt", "secondsReq"];
         const results = (Array.isArray(body.results) ? body.results : []).slice(0, 5000).map((r: any) => ({ id: s(r?.id, 200), ok: !!r?.ok, verified: r?.verified === true ? true : r?.verified === false ? false : null,
           message: s(r?.message, 1000), vchNumber: s(r?.vchNumber, 60), vchType: s(r?.vchType, 100), guid: s(r?.guid, 100), masterId: s(r?.masterId, 30), vchDate: s(r?.vchDate, 8),
           optional: !!r?.optional, alreadyThere: !!r?.alreadyThere, kind: s(r?.kind, 10), state: s(r?.state, 12), reason: s(r?.reason, 500),
@@ -1123,7 +1155,16 @@ Deno.serve(async (req) => {
           // the 2.1.5 bridge's counts of Tally's reply, and the company Tally put the entry into when not the one asked
           created: Math.max(0, Math.floor(Number(r?.created) || 0)), altered: Math.max(0, Math.floor(Number(r?.altered) || 0)), wrongCompany: s(r?.wrongCompany, 200),
           // round 11 bridge: a plain refusal (PostOnly: this computer posts to one company only): never an acceptance, the id released
-          refused: !!r?.refused, postOnly: !!r?.postOnly }));
+          refused: !!r?.refused, postOnly: !!r?.postOnly,
+          // 2.1.8 (round 15, migration 43): posting by Tally's reply: byReply (ok decided by the reply's counts), vchId (Tally's
+          // exact voucher id when the request held this voucher alone), batchEnd / batchN (the request's LASTVCHID and size),
+          // needsReview (Tally created something with exceptions, or nothing), the reply's counts, the line in error, the
+          // company Tally answered for, when it was sent and how long the request took. Kept only when the bridge sends them
+          ...(REPLY_KEYS.some((k) => r && typeof r === "object" && k in r) ? { byReply: !!r?.byReply, vchId: s(r?.vchId, 30), batchEnd: s(r?.batchEnd, 30), batchN: int(r?.batchN, 500), needsReview: !!r?.needsReview,
+            exceptions: int(r?.exceptions, 1e6), ignored: int(r?.ignored, 1e6), errors: int(r?.errors, 1e6), lineError: s(r?.lineError, 300), company: s(r?.company, 200), sentAt: s(r?.sentAt, 40), secondsReq: secs(r?.secondsReq) } : {}) }));
+        // 2.1.8: the bridge's request timings of the posting, for tally_post_jobs.timing (migration 43; dropped on an older cloud)
+        const reqs = Array.isArray(body.reqs) ? body.reqs.slice(0, 1000).map((x: any) => ({ n: int(x?.n, 500), seconds: secs(x?.seconds), created: int(x?.created, 1e6), altered: int(x?.altered, 1e6), exceptions: int(x?.exceptions, 1e6), ignored: int(x?.ignored, 1e6), lastVchId: s(x?.lastVchId, 30) })) : null;
+        const timing = reqs || body.secondsTotal !== undefined ? { reqs: reqs || [], secondsTotal: secs(body.secondsTotal) } : null;
         // 02-Oct-2026: each entry's state as the bridge sees it (waiting / sending / sent / in_tally / failed, with why)
         const STATES = ["waiting", "sending", "sent", "in_tally", "failed", "unknown", "notfound"];   // notfound (migration 37): checked and not in Tally
         const items = Array.isArray(body.items) ? body.items.slice(0, 5000).map((x: any) => ({ id: s(x?.id, 200), kind: s(x?.kind, 10),
@@ -1166,16 +1207,19 @@ Deno.serve(async (req) => {
         // found in '…'": that build sent no voucher id; it is the build on NWS144)
         const acceptedMsg = (m: string) => (/\b(CREATED|ALTERED)\b/i.test(m) && (/\b(LASTVCHID|VCHID|MASTERID|voucher(?: no\.?| number| id)?)\D{0,6}[1-9]\d*/i.test(m) || /\b(CREATED|ALTERED)\b\D{0,4}[1-9]\d*/i.test(m) || /cannot be found/i.test(m)))
           || /replied '(created|altered)'/i.test(m);
-        const acceptedRes = (r: any) => !(r.refused === true && r.postOnly === true) && !!(r.ok || r.accepted || r.held || r.created > 0 || r.altered > 0 || r.lastVchId || r.vchNumber || r.masterId || r.guid || acceptedMsg(r.message) || acceptedMsg(r.reason));
+        // 2.1.8: a needsReview result WITHOUT accepted (Tally created nothing) is never an acceptance, whatever its counts or words
+        const acceptedRes = (r: any) => !(r.refused === true && r.postOnly === true) && !(r.needsReview === true && r.accepted !== true)
+          && !!(r.ok || r.accepted || r.held || r.created > 0 || r.altered > 0 || r.lastVchId || r.vchNumber || r.masterId || r.guid || acceptedMsg(r.message) || acceptedMsg(r.reason));
         const accepted = new Set<string>(results.filter((r: any) => r.id && acceptedRes(r)).map((r: any) => fid(r.id)));
-        const vchOf = (r: any) => String(r.lastVchId || r.vchNumber || r.masterId || ((String(r.message || "") + " " + String(r.reason || "")).match(/\b(?:LASTVCHID|VCHID|MASTERID|voucher(?: no\.?| number)?)\D{0,6}([1-9]\d*)/i) || [])[1] || "");
+        const vchOf = (r: any) => String(r.vchId || r.lastVchId || r.vchNumber || r.masterId || ((String(r.message || "") + " " + String(r.reason || "")).match(/\b(?:LASTVCHID|VCHID|MASTERID|voucher(?: no\.?| number)?)\D{0,6}([1-9]\d*)/i) || [])[1] || "");
         if (items) for (const x of items as any[]) if (x.id && !x.postOnly && (x.state === "failed" || x.state === "notfound") && acceptedMsg(x.reason)) accepted.add(fid(x.id));
         // the accepted entries not confirmed: the ones that hold the posting
         const itemOf = (a: string) => ((items || []) as any[]).find((x) => fid(x.id) === a);
         const unconfirmed = new Set<string>();
         for (const a of accepted) {
           const r0 = (results as any[]).find((r) => fid(r.id) === a), x0 = itemOf(a);
-          const confirmed = (r0 && r0.verified === true) || ["in_tally", "sent"].includes(String((r0 && r0.state) || "")) || ["in_tally", "sent"].includes(String((x0 && x0.state) || ""));
+          // 2.1.8: an entry posted by Tally's reply (byReply + ok) is taken: it never holds the posting open (tally_post_result_taken, migration 43)
+          const confirmed = (r0 && r0.verified === true) || (r0 && r0.byReply === true && r0.ok === true) || ["in_tally", "sent"].includes(String((r0 && r0.state) || "")) || ["in_tally", "sent"].includes(String((x0 && x0.state) || ""));
           if (!confirmed) unconfirmed.add(a);
         }
         let heldOpen = false;
@@ -1212,10 +1256,11 @@ Deno.serve(async (req) => {
         if (heldOpen) row.message = s("Posted, not yet confirmed: Tally accepted " + unconfirmed.size + (unconfirmed.size === 1 ? " entry" : " entries") + " the bridge reported failed; held for checking, not posted again. " + s(body.message, 300), 500);
         if (mergedItems) row.items = mergedItems;
         if (seq !== null) row.seq = seq;
+        if (timing) row.timing = timing;
         // F3: the posting's ids read once; only an id not yet stamped is stamped, only one not yet released is released
         // (the bridge reports every few seconds). Not readable (an older cloud): every one, as before
         let known: any[] | null = null;
-        if (accepted.size || (items || []).some((x: any) => x.state === "failed" || x.state === "notfound")) {
+        if (accepted.size || (items || []).some((x: any) => x.state === "failed" || x.state === "notfound") || (results as any[]).some((r) => r.needsReview)) {
           const { data: idRows, error: idErr } = await db.from("tally_post_ids").select("fincom_id, entry_id, accepted_at, released_at").eq("job_id", id);
           if (!idErr) known = idRows || [];
         }
@@ -1229,20 +1274,41 @@ Deno.serve(async (req) => {
           // a new acceptance after a Retry clears the release (36b judges by its own clock and the posting's taken_at)
           if (known && k && k.accepted_at && !k.released_at) continue;
           const r0 = (results as any[]).find((r) => fid(r.id) === a) || {}, x0 = itemOf(a) || {};
-          const { data: accData, error: accErr } = await db.rpc("tally_post_id_accept", { p_job: id, p_id: a, p_vch: vchOf(r0) || vchOf(x0) });
-          if (accErr && !/tally_post_id_accept|schema cache|does not exist/i.test(accErr.message)) console.error("tally_post_id_accept", accErr.message);
-          else if (!accErr && accData && typeof accData === "object" && (accData as any).stamped === 0) console.warn("tally_post_id_accept: stamped 0 for " + a + " (" + s(r0.id || x0.id, 60) + ") in posting " + id + ": no id of the posting matches");
+          // 2.1.8 (migration 43): an entry posted by Tally's reply is stamped with the reply (the exact voucher id when the
+          // request held it alone, the request's LASTVCHID and size): tally_post_id_accept_reply; on a cloud without 43 the
+          // function is missing ('Could not find the function', as missing34 reads it) and the plain stamp is used
+          let accData: unknown = null, accErr: any = null, fnName = "tally_post_id_accept";
+          if (r0.byReply === true && r0.ok === true) {
+            fnName = "tally_post_id_accept_reply";
+            ({ data: accData, error: accErr } = await db.rpc("tally_post_id_accept_reply", { p_job: id, p_id: a, p_vch: r0.vchId || null, p_batch_end: r0.batchEnd || null, p_batch_n: r0.batchN || null }));
+            if (accErr && /tally_post_id_accept_reply|could not find|does not exist|schema cache/i.test(String(accErr.message || ""))) fnName = "tally_post_id_accept";
+          }
+          if (fnName === "tally_post_id_accept") ({ data: accData, error: accErr } = await db.rpc("tally_post_id_accept", { p_job: id, p_id: a, p_vch: vchOf(r0) || vchOf(x0) }));
+          if (accErr && !/tally_post_id_accept|schema cache|does not exist/i.test(accErr.message)) console.error(fnName, accErr.message);
+          else if (!accErr && accData && typeof accData === "object" && (accData as any).stamped === 0) console.warn(fnName + ": stamped 0 for " + a + " (" + s(r0.id || x0.id, 60) + ") in posting " + id + ": no id of the posting matches");
         }
         let { error } = await db.from("tally_post_jobs").update(row).eq("id", id).eq("device_id", dev.id).neq("status", "cancelled");
         // before migration-36b there is no seq column, before migration-24 no items column: the rest is kept as before
+        if (error && "timing" in row && /timing/.test(error.message)) { delete row.timing; ({ error } = await db.from("tally_post_jobs").update(row).eq("id", id).eq("device_id", dev.id).neq("status", "cancelled")); }
         if (error && "seq" in row && /seq/.test(error.message)) { delete row.seq; ({ error } = await db.from("tally_post_jobs").update(row).eq("id", id).eq("device_id", dev.id).neq("status", "cancelled")); }
         if (error && items && /items/.test(error.message)) { delete row.items; ({ error } = await db.from("tally_post_jobs").update(row).eq("id", id).eq("device_id", dev.id).neq("status", "cancelled")); }
         if (error) throw new Error(error.message);
         // migration 37 (item 7): an entry refused or not found in Tally releases its id (tally_post_id_release: job, id,
         // why), per entry, so Post again is offered for it alone. On the states after the guard above: never an unknown
         // entry, never one Tally accepted. Before migration 37 the function is missing: skipped
+        // 2.1.8 (migration 43): a needsReview result without accepted (Tally created nothing) releases its id with the reason
+        // 'needs review: ' + the bridge's message, once (its item, failed, is not released again below)
+        const releasedNow = new Set<string>();
+        for (const r of results as any[]) {
+          if (!r.id || r.needsReview !== true || r.accepted === true || accepted.has(fid(r.id))) continue;
+          const k = rowOf(fid(r.id));
+          if (known && k && k.released_at) continue;
+          releasedNow.add(fid(r.id));
+          const { error: relErr } = await db.rpc("tally_post_id_release", { p_job: id, p_id: r.id, p_why: ("needs review: " + String(r.message || r.reason || r.lineError || "")).slice(0, 500) });
+          if (relErr && !/tally_post_id_release|schema cache|does not exist/i.test(relErr.message)) console.error("tally_post_id_release", relErr.message);
+        }
         for (const x of (items || []) as any[]) {
-          if (!x.id || !(x.state === "failed" || x.state === "notfound") || accepted.has(fid(x.id))) continue;
+          if (!x.id || !(x.state === "failed" || x.state === "notfound") || accepted.has(fid(x.id)) || releasedNow.has(fid(x.id))) continue;
           const k = rowOf(fid(x.id));
           if (known && k && k.released_at) continue;
           const { error: relErr } = await db.rpc("tally_post_id_release", { p_job: id, p_id: x.id, p_why: String(x.reason || x.state).slice(0, 500) });

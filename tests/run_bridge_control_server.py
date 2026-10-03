@@ -225,6 +225,27 @@ try:
     c, r = beat(K1, GO17, allowlist={"measured": False, "hash": "h2"})
     ok(c == 200 and rel17["pilot_beats"] == 2 and rel17.get("pilot_allowlist_hash") == "abc", "a cloud with migration-35 but not 34: the beat still counts, the allow-list columns left alone (%s)" % rel17["pilot_beats"])
     NO34["on"] = False
+    # 7. round 15 (build 2.1.8, migration 43): the owner's per-computer posting settings travel in the beat's answer,
+    # settings: {postOnly, postBatchBills, postBatchBank, at} read from tally_devices (post_only, post_batch_bills,
+    # post_batch_bank, post_settings_at); null fields on a cloud without the columns, the beat never fails for them. The
+    # bridge's beat may carry the values it applied (postOnly, postBatchBills, postBatchBank, settingsAt): kept in info.beat
+    # and the bridge's entry, so the app shows them
+    GO18 = dict(GO1, version="2.1.8")
+    c, r = beat(K1, GO18)
+    ok(c == 200 and r.get("settings") == {"postOnly": None, "postBatchBills": None, "postBatchBank": None, "at": None}, "15. no settings yet (or a cloud without migration 43): settings with null fields, the beat answered (%s)" % r.get("settings"))
+    dev1["post_only"] = ["ZZ CO", "ZZ TWO"]; dev1["post_batch_bills"] = 50; dev1["post_batch_bank"] = 20; dev1["post_settings_at"] = "2026-10-03T08:00:00Z"
+    c, r = beat(K1, GO18, postOnly=["ZZ CO"], postBatchBills=25, postBatchBank=10, settingsAt="2026-10-03T07:00:00Z")
+    ok(c == 200 and r.get("settings") == {"postOnly": ["ZZ CO", "ZZ TWO"], "postBatchBills": 50, "postBatchBank": 20, "at": "2026-10-03T08:00:00Z"}, "15. the owner's settings in the answer: settings: {postOnly, postBatchBills, postBatchBank, at} (%s)" % r.get("settings"))
+    b1 = dev1["info"]["beat"]; e1 = dev1["info"]["bridges"][GO1["id"]]
+    ok(b1.get("postOnly") == ["ZZ CO"] and b1.get("postBatchBills") == 25 and b1.get("postBatchBank") == 10 and b1.get("settingsAt") == "2026-10-03T07:00:00Z", "15. the values the bridge applied kept in info.beat: postOnly, postBatchBills, postBatchBank, settingsAt (%s)" % {k: b1.get(k) for k in ("postOnly", "postBatchBills", "postBatchBank", "settingsAt")})
+    ok(e1.get("postBatchBills") == 25 and e1.get("postBatchBank") == 10 and e1.get("settingsAt") == "2026-10-03T07:00:00Z", "15. and on the bridge's entry (info.bridges)")
+    dev1["post_only"] = []; dev1["post_batch_bills"] = None
+    c, r = beat(K1, GO18, postBatchBills="x", postBatchBank=1e9, settingsAt=12)
+    ok(r.get("settings", {}).get("postOnly") == [] and r.get("settings", {}).get("postBatchBills") is None and r["settings"]["postBatchBank"] == 20, "15. [] (any company) travels as []; a cleared batch size as null (%s)" % r.get("settings"))
+    b1 = dev1["info"]["beat"]
+    ok(b1.get("postBatchBills") is None and b1.get("postBatchBank") == 500 and b1.get("settingsAt") == "" and "postOnly" not in b1, "15. the applied values cleaned: a number that is not one is null, bounded to 1..500, a time that is not a string is empty, postOnly absent when not sent (%s)" % {k: b1.get(k) for k in ("postBatchBills", "postBatchBank", "settingsAt")})
+    c, r = beat(K1, GO1)
+    ok(c == 200 and "settings" in r and dev1["info"]["beat"].get("postBatchBills") is None and dev1["info"]["beat"].get("settingsAt") is None, "15. an older bridge (no fields): nothing kept of them, the answer still carries settings")
     # the rest of the answer as before
     c, r = beat(K1, GO1)
     ok(all(k in r for k in ("updateNow", "posts", "wake", "opened", "ledgers", "activityAt")), "the rest of the answer unchanged (%s)" % sorted(r))
