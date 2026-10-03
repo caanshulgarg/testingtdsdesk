@@ -22,7 +22,8 @@ GOOS=windows GOARCH=amd64 CGO_ENABLED=0 GOTOOLCHAIN=local go build -trimpath -ld
 sign() { if [ -n "$SIGN_CMD" ]; then $SIGN_CMD "$1" -out "$1.signed" && mv "$1.signed" "$1"; fi; }
 sign dist/FinComBridge.exe
 OUT="dist/FinComBridge-Setup-$VERSION.exe"
-# POSTONLY (round 11): the companies the installed bridge may post to, e.g. POSTONLY="ZZ TEST" for the pilot; empty: any
+# POSTONLY (round 11): the companies the installed bridge may post to, e.g. POSTONLY="ZZ TEST" for the pilot; empty: the
+# settings are left as they are; POSTONLY="any" (round 12): an installer-set list is cleared and marked the owner's
 ( cd installer && makensis -V2 -DVERSION="$VERSION" -DFINCOM="$FINCOM" -DPOSTONLY="${POSTONLY:-}" -DOUTFILE="../$OUT" FinComBridge.nsi )
 sign "$OUT"
 ( cd dist && sha256sum "FinComBridge-Setup-$VERSION.exe" > "FinComBridge-Setup-$VERSION.exe.sha256" )

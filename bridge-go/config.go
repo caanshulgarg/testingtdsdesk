@@ -329,6 +329,17 @@ func postOnlyUnpostRefusal(company string) string {
 var installPostOnly string
 
 func setPostOnly(c *Ordered, v string) {
+	// round 12 (03-Oct-2026, the owner's decision): POSTONLY="any" clears an installer-set list (an empty list: any
+	// company) and marks it the owner's, so a later installer never puts a list back; a list set by hand, or one
+	// already marked the owner's, is left as it is
+	if strings.EqualFold(strings.TrimSpace(v), "any") {
+		if c.Has("PostOnly") && str(c.Get("PostOnlyBy")) != "installer" {
+			return
+		}
+		c.Set("PostOnly", []any{})
+		c.Set("PostOnlyBy", "owner")
+		return
+	}
 	var names []any
 	for _, n := range strings.Split(v, ";") {
 		if n = strings.TrimSpace(n); n != "" {

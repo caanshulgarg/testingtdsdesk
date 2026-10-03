@@ -171,3 +171,30 @@ func TestAnswerHeadTagsOnly(t *testing.T) {
 		t.Fatalf("a long answer: %d %q", len(h), h)
 	}
 }
+
+// round 12 (the owner's decision, 03-Oct night): an installer built with POSTONLY="any" clears an installer-set list
+// (PostOnly [] = any company) and marks it the owner's, so a later installer never puts a list back; a list set by
+// hand, or already marked the owner's, is left as it is
+func TestInstallPostOnlyAnyClearsInstallerList(t *testing.T) {
+	c := newOrdered()
+	setPostOnly(c, "ZZ TEST")
+	setPostOnly(c, "any")
+	if len(strs(c.Get("PostOnly"))) != 0 || str(c.Get("PostOnlyBy")) != "owner" {
+		t.Fatalf("POSTONLY=any did not clear the installer-set list and mark it the owner's: %v / %v", c.Get("PostOnly"), c.Get("PostOnlyBy"))
+	}
+	setPostOnly(c, "ZZ TEST") // a later installer with a list: the owner's clearing stands
+	if len(strs(c.Get("PostOnly"))) != 0 || str(c.Get("PostOnlyBy")) != "owner" {
+		t.Fatalf("a later installer put a list back over the owner's clearing: %v", c.Get("PostOnly"))
+	}
+	n := newOrdered() // no PostOnly at all: "any" writes the empty list marked the owner's, so a later installer leaves it
+	setPostOnly(n, " ANY ")
+	if !n.Has("PostOnly") || len(strs(n.Get("PostOnly"))) != 0 || str(n.Get("PostOnlyBy")) != "owner" {
+		t.Fatalf("on a fresh settings file: %v / %v", n.Get("PostOnly"), n.Get("PostOnlyBy"))
+	}
+	h := newOrdered()
+	h.Set("PostOnly", []any{"BY HAND"})
+	setPostOnly(h, "any")
+	if strings.Join(strs(h.Get("PostOnly")), "|") != "BY HAND" || h.Has("PostOnlyBy") {
+		t.Fatalf("a hand-set list was cleared by an installer: %v", h.Get("PostOnly"))
+	}
+}
