@@ -1,5 +1,5 @@
 // Posting to Tally: masters first, then entries, each with its own answer; every entry posted is read back by its
-// FinCom tag (TDSDesk:<id>) in the narration. As bridge 1.15.0 (Invoke-Import, Read-ImportResult, Remove-TallyVoucher).
+// FinCom tag (TDSDesk:<id>, first in the narration). As bridge 1.15.0 (Invoke-Import, Read-ImportResult, Remove-TallyVoucher).
 package main
 
 import (
@@ -226,7 +226,7 @@ func invokeImport(p M) (M, error) {
 			var hit M
 			if tag != "" {
 				for _, h := range heads {
-					if strings.Contains(str(h["narration"]), tag) {
+					if hasTag(str(h["narration"]), tag) {
 						hit = h
 						break
 					}
@@ -264,7 +264,7 @@ func invokeImport(p M) (M, error) {
 							}
 							if other, e := tagHeadsOn(port, cn, dates); e == nil {
 								for _, h := range other {
-									if strings.Contains(str(h["narration"]), tag) {
+									if hasTag(str(h["narration"]), tag) {
 										elsewhere = cn
 										break
 									}
@@ -374,7 +374,7 @@ func findPostedTags(port int, company string, items []M, ledger string) map[stri
 			continue
 		}
 		for _, h := range heads {
-			if strings.Contains(str(h["narration"]), tag) {
+			if hasTag(str(h["narration"]), tag) {
 				found[str(it["id"])] = h
 				break
 			}

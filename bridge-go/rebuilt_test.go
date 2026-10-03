@@ -285,9 +285,10 @@ type standCloud struct {
 	held      bool
 	kinds     []string
 	guard     []M
-	ledList   []M // the ledger lists sent (kind ledger_list)
-	lastBeat  M   // the last heartbeat
-	beatReply M   // added to the heartbeat's answer (readStop, readResume, release)
+	raw       []string // every body as sent (round 4: null against 0 in read_guard)
+	ledList   []M      // the ledger lists sent (kind ledger_list)
+	lastBeat  M        // the last heartbeat
+	beatReply M        // added to the heartbeat's answer (readStop, readResume, release)
 }
 
 func newStandCloud(t *testing.T) *standCloud {
@@ -299,6 +300,7 @@ func newStandCloud(t *testing.T) *standCloud {
 		defer c.mu.Unlock()
 		k := str(o["kind"])
 		c.kinds = append(c.kinds, k)
+		c.raw = append(c.raw, string(b))
 		out := M{"ok": true}
 		switch k {
 		case "companies":
@@ -610,7 +612,7 @@ func TestFinComIDStampedAndExactDuplicateRefused(t *testing.T) {
 		}
 	}
 	f.mu.Unlock()
-	if !strings.Contains(imp, "<NARRATION>Electricity | TDSDesk:bill77</NARRATION>") {
+	if !strings.Contains(imp, "<NARRATION>TDSDesk:bill77 | Electricity</NARRATION>") { // round 4: the tag first
 		t.Fatalf("the FinCom id was not stamped: %s", cut(imp, 600))
 	}
 	// the same FinCom id again, other details changed (another amount and number): refused on the id alone

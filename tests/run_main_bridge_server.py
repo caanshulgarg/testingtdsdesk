@@ -96,6 +96,31 @@ try:
     ok(c == 200 and r.get("cancelled") is True and job["status"] == "cancelled", "a posting cancelled in FinCom: the bridge is told (cancelled), nothing changes")
     c, r = call({"kind": "posts_update", "version": "2.1.0", "bridge": main, "id": "no-such", "status": "taken"})
     ok(c == 200 and r.get("gone") is True, "a posting no longer there: the bridge is told (gone)")
+    # 03-Oct-2026 (round 4): Tally accepted an entry (CREATED with LASTVCHID 26298) but the bridge reported the posting
+    # failed; the cloud never stores that as failed: the entry's state is forced to unknown while not verified, the posting
+    # stays running with checking, the id is stamped accepted_at (migration-36-post-acceptance) so the sync keeps it live
+    job["status"] = "running"
+    F.T["tally_post_ids"] = [{"job_id": "p-1", "fincom_id": "v1", "firm_id": FIRM, "live": True, "accepted_at": None}, {"job_id": "p-1", "fincom_id": "v2", "firm_id": FIRM, "live": True, "accepted_at": None}]
+    c, r = call({"kind": "posts_update", "version": "2.1.5", "bridge": main, "id": "p-1", "status": "failed", "done": 0, "message": "1 entry failed",
+                 "results": [{"id": "v1", "ok": False, "verified": False, "message": "Tally replied CREATED 1 LASTVCHID 26298; the read-back did not find it"}, {"id": "v2", "ok": False, "message": "Tally refused it: ledger missing"}],
+                 "items": [{"id": "v1", "state": "failed", "reason": "read-back failed"}, {"id": "v2", "state": "failed", "reason": "ledger missing"}]})
+    it = {x["id"]: x for x in job.get("items") or []}; rs = {x["id"]: x for x in job.get("results") or []}
+    ok(c == 200 and job["status"] == "running" and job.get("checking") is True and "accepted" in job.get("message", "").lower(), "an entry Tally accepted: the posting is stored running with checking, never failed (%s, %s)" % (job["status"], job.get("message")))
+    ok(it.get("v1", {}).get("state") == "unknown" and rs.get("v1", {}).get("outcomeUnknown") is True and rs["v1"].get("state") == "unknown" and rs["v1"].get("ok") is False, "the accepted entry is unknown (checking), not failed (%s)" % it.get("v1"))
+    ok(it.get("v2", {}).get("state") == "failed" and rs.get("v2", {}).get("state") != "unknown", "the entry Tally refused stays failed")
+    ids = {x["fincom_id"]: x for x in F.T["tally_post_ids"]}
+    ok(ids["v1"].get("accepted_at") and not ids["v2"].get("accepted_at"), "tally_post_ids: v1 stamped accepted_at, v2 not (%s)" % ids["v1"].get("accepted_at"))
+    c, r = call({"kind": "posts_update", "version": "2.1.5", "bridge": main, "id": "p-1", "status": "failed", "results": [{"id": "v1", "ok": True, "verified": True, "vchNumber": "26298"}, {"id": "v2", "ok": False, "message": "refused"}],
+                 "items": [{"id": "v1", "state": "in_tally"}, {"id": "v2", "state": "failed", "reason": "refused"}]})
+    it = {x["id"]: x for x in job.get("items") or []}
+    ok(c == 200 and job["status"] == "running" and it["v1"]["state"] == "in_tally", "verified in Tally: in_tally kept; the posting still never stored failed while an accepted entry is in it")
+    c, r = call({"kind": "posts_update", "version": "2.1.5", "bridge": main, "id": "p-1", "status": "failed", "message": "refused", "results": [{"id": "v2", "ok": False, "message": "CREATED 0 ALTERED 0 ERRORS 1"}], "items": [{"id": "v2", "state": "failed", "reason": "refused"}]})
+    ok(c == 200 and job["status"] == "failed" and job.get("checking") is False, "no acceptance (CREATED 0 is not one): failed is stored as before")
+    for k in ("vchNumber", "masterId", "guid"):
+        job["status"] = "running"
+        c, r = call({"kind": "posts_update", "version": "2.1.5", "bridge": main, "id": "p-1", "status": "failed", "results": [{"id": "v2", "ok": False, k: "77", "message": "x"}], "items": [{"id": "v2", "state": "failed"}]})
+        ok(job["status"] == "running" and job["items"][0]["state"] == "unknown", "a %s in a result is an acceptance too" % k)
+    job["status"] = "cancelled"
     dev["main_bridge"] = "go-aaaaaaaaaaaa"
     # install logs
     import zipfile, io
@@ -112,12 +137,16 @@ try:
     # through tally_ledger_rename, and on the last batch calls tally_ledgers_mark_gone(book, round) once: the cloud marks
     # by what the round saw. A 'deleted' list is ignored for marking (counted deletedIgnored). Without migration-34 it
     # marks nothing and says so. At most 60 ledger_list calls a minute from one computer
-    NO34 = {"on": False}; real_rpc = F.rpc
+    # migration-36 (03-Oct-2026, round 4 item 6): the batch is recorded first (counts), the rows upserted, and only THEN
+    # the GUIDs seen are stamped (tally_ledger_round_seen) - so a first round on a copy whose rows had no GUID yet stamps
+    # every row and tally_ledgers_mark_gone (last batch) finds nothing unseen. SEQ: each RPC with its place among the calls
+    NO34 = {"on": False}; NO36 = {"on": False}; real_rpc = F.rpc; SEQ = []
     def rpc34(fn, a):
-        if fn in ("tally_ledger_round_batch", "tally_ledgers_mark_gone", "tally_ledger_rename"):
-            F.ARGS.setdefault(fn, []).append(a)
-            if NO34["on"]: raise RuntimeError("Could not find the function public.%s(...) in the schema cache" % fn)
+        if fn in ("tally_ledger_round_batch", "tally_ledgers_mark_gone", "tally_ledger_rename", "tally_ledger_round_seen"):
+            F.ARGS.setdefault(fn, []).append(a); SEQ.append((fn, len(F.CALLS) - 1))
+            if NO34["on"] or (NO36["on"] and fn == "tally_ledger_round_seen"): raise RuntimeError("Could not find the function public.%s(...) in the schema cache" % fn)
             if fn == "tally_ledger_round_batch": return {"ok": True, "round": a["p_round"], "batches": 1, "rows": a["p_rows"], "seen": len(a.get("p_seen") or [])}
+            if fn == "tally_ledger_round_seen": return {"ok": True, "stamped": len(a.get("p_seen") or [])}
             if fn == "tally_ledgers_mark_gone": return {"ok": True, "marked": 2, "held": 1, "gone": 3, "note": "1 kept by the guard (entries or an opening)"}
             return {"ok": True, "renamed": True, "from": a["p_from"], "to": a["p_to"]}
         return real_rpc(fn, a)
@@ -137,22 +166,35 @@ try:
     a = (F.ARGS.get("tally_ledger_rename") or [{}])[-1]
     ok(a == {"p_book": BOOK, "p_guid": "g2", "p_from": "Old Beta", "p_to": "Beta"} and r.get("renamed") == 1, "a rename goes through tally_ledger_rename (%s)" % a)
     ok("tally_ledgers_mark_gone" not in F.ARGS and r.get("deleted") == 0, "not the last batch: tally_ledgers_mark_gone not called")
+    a = (F.ARGS.get("tally_ledger_round_seen") or [{}])[-1]
+    ok(a == {"p_book": BOOK, "p_round": "r-1", "p_seen": ["g1", "g2", "g9"]}, "the GUIDs seen are stamped through tally_ledger_round_seen with the same seen array (%s)" % a)
+    at = lambda fn: [i for f, i in SEQ if f == fn]
+    ups = [i for i, c in enumerate(F.CALLS) if c == ("POST", "/rest/v1/tally_ledgers")]
+    ok(at("tally_ledger_round_batch") and ups and at("tally_ledger_round_seen") and at("tally_ledger_round_batch")[0] < ups[0] and ups[-1] < at("tally_ledger_round_seen")[0],
+       "the order: round_batch (counts) -> the rows upserted -> round_seen (the stamp AFTER the upsert) (batch %s, upserts %s, seen %s)" % (at("tally_ledger_round_batch"), ups, at("tally_ledger_round_seen")))
     c, r = lst({"round": "r-1", "complete": True, "rowsRead": 3, "last": True, "seen": ["g3"], "ledgers": [], "deleted": [["g7", "Gone One"], ["g8", "Gone Two"]]})
     a = (F.ARGS.get("tally_ledger_round_batch") or [{}])[-1]
     ok(c == 200 and a.get("p_round") == "r-1" and a.get("p_complete") is True and a.get("p_rows_read") == 3 and a.get("p_rows") == 0 and a.get("p_seen") == ["g3"], "the last batch: complete, rowsRead and its seen recorded (%s)" % a)
     a = F.ARGS.get("tally_ledgers_mark_gone") or []
     ok(len(a) == 1 and a[0] == {"p_book": BOOK, "p_round": "r-1"} and r.get("deleted") == 2 and r.get("deletesHeld") == 1 and any("guard" in n for n in r.get("notes", [])),
        "on the last batch tally_ledgers_mark_gone(book, round) is called once; its marked / held / note answered (%s %s)" % (a, {k: r.get(k) for k in ("deleted", "deletesHeld", "notes")}))
+    ok(at("tally_ledger_round_seen")[-1] < at("tally_ledgers_mark_gone")[-1] and (F.ARGS["tally_ledger_round_seen"][-1]["p_seen"] == ["g3"]), "on the last batch: its seen stamped (after the upsert) before tally_ledgers_mark_gone")
+    NO36["on"] = True
+    c, r = lst({"round": "r-1b", "complete": True, "rowsRead": 3, "last": True, "seen": ["g3"], "ledgers": [row("g3", "Gamma")]})
+    ok(c == 200 and r.get("ok") and any("migration-36" in n for n in r.get("notes", [])) and len(F.ARGS["tally_ledgers_mark_gone"]) == 2, "a cloud with 34 but without 36: the batch still goes through (34's batch stamps as before), 'migration-36 not applied' said (%s)" % r.get("notes"))
+    NO36["on"] = False
+    n_seen = len(F.ARGS["tally_ledger_round_seen"])
     ok(r.get("deletedIgnored") == 2 and any("ignored" in n for n in r.get("notes", [])), "the bridge's deleted list is ignored for marking and said (%s)" % r.get("notes"))
     ok(len(patched()) == n0, "tally_ledgers never updated directly (no PATCH) on the migration-34 path")
     c, r = call({"kind": "ledger_list", "version": "2.1.4", "bridge": main, "company": "ZZ CO", "last": True, "ledgers": [row("g1", "Alpha")], "deleted": [["g7", "Gone One"]]})
     sent["ok"] += c == 200
-    ok(c == 200 and r.get("deleted") == 0 and r.get("deletedIgnored") == 1 and any("round" in n for n in r.get("notes", [])) and len(F.ARGS["tally_ledgers_mark_gone"]) == 1 and len(F.ARGS["tally_ledger_round_batch"]) == 2,
-       "a bridge sending no round (2.1.4): no round recorded, nothing marked and said (%s)" % r.get("notes"))
+    ok(c == 200 and r.get("deleted") == 0 and r.get("deletedIgnored") == 1 and any("round" in n for n in r.get("notes", [])) and len(F.ARGS["tally_ledgers_mark_gone"]) == 2 and len(F.ARGS["tally_ledger_round_batch"]) == 3 and len(F.ARGS["tally_ledger_round_seen"]) == n_seen,
+       "a bridge sending no round (2.1.4): no round recorded, nothing stamped, nothing marked and said (%s)" % r.get("notes"))
     NO34["on"] = True
     c, r = lst({"round": "r-2", "complete": True, "rowsRead": 1, "last": True, "seen": ["g1"], "ledgers": [row("g1", "Alpha")], "deleted": [["g7", "Gone One"], ["g8", "Gone Two"]]})
-    ok(c == 200 and r.get("ok") and r.get("deleted") == 0 and r.get("deletedIgnored") == 2 and any("migration-34" in n for n in r.get("notes", [])) and len(patched()) == n0 and len(F.ARGS["tally_ledgers_mark_gone"]) == 1,
+    ok(c == 200 and r.get("ok") and r.get("deleted") == 0 and r.get("deletedIgnored") == 2 and any("migration-34" in n for n in r.get("notes", [])) and len(patched()) == n0 and len(F.ARGS["tally_ledgers_mark_gone"]) == 2,
        "a cloud without migration-34: nothing marked, nothing updated directly, 'migration-34 not applied' said (%s)" % r.get("notes"))
+    ok(len(F.ARGS["tally_ledger_round_seen"]) == n_seen, "and tally_ledger_round_seen not asked of it")
     NO34["on"] = False
     # at most 60 ledger_list calls a minute from one computer (a rogue key cannot bloat the rounds)
     codes = [lst({"round": "r-3", "complete": False, "last": False, "seen": [], "ledgers": []})[0] for i in range(70)]

@@ -105,8 +105,8 @@ with sync_playwright() as p:
     errs = bills_in("errors")
     ok(errs == ["fa", "u1", "x1"], "Errors: FA/ELEC/013 (needs attention), the unknown one and the refused one (%s)" % errs)
     u1 = txt('#app [data-post-panel="errors"] [data-bill-row="u1"]')
-    ok("Checking whether it reached Tally" in u1 and pg.locator('#app [data-post-panel="errors"] [data-bill-row="u1"]').get_attribute("data-attn-kind") == "unknown",
-       "Errors: the entry sent when Tally stopped answering says 'Checking whether it reached Tally' (%s)" % u1[:120])
+    ok("Posted, not yet confirmed — checking whether it reached Tally" in u1 and pg.locator('#app [data-post-panel="errors"] [data-bill-row="u1"]').get_attribute("data-attn-kind") == "unknown",
+       "Errors: the entry Tally took but the bridge could not confirm says 'Posted, not yet confirmed — checking whether it reached Tally' (%s)" % u1[:120])
     ok(pg.locator('#app [data-post-panel="errors"] [data-bill-row="u1"] button[data-post-again], #app [data-post-panel="errors"] [data-bill-row="u1"] button[data-retry-bill]').count() == 0,
        "Errors: no way to post the unknown one again while it is looked for")
     x1 = txt('#app [data-post-panel="errors"] [data-bill-row="x1"]')
@@ -176,6 +176,84 @@ with sync_playwright() as p:
       j.items = [{id: "u1", state: "in_tally"}]; CloudJobs.changed(); }""")
     pg.wait_for_timeout(1500)
     ok("u1" not in bills_in("errors") and "u1" in entries_posted(), "the unknown one found in Tally: off Errors, under Posted")
+    # ---- 03-Oct-2026 (owner's report): after a posting ended failed (one entry Tally took but the bridge could not confirm),
+    # Post for a DIFFERENT bill did nothing on the page and queued nothing. Every press of Post must end in one of two
+    # visible results: a job row ("Sent to Tally") or a named row on the Errors tab (what happened, what to do), never silence.
+    E("""() => {
+      const G = "GARG SHEKHAR & COMPANY", t = window.__t;
+      // the Tally computer's ledgers in the cloud copy, so the bills' ledgers are known here
+      window.__leds = ["Alpha Consultants", "Kashi IT Solutions", "New Bill Co", "Second Bill Co", "Third Bill Co", "Professional Charges", "TDS Payable - Professional"].map(n => ({name: n, parent: /Charges/.test(n) ? "Indirect Expenses" : /TDS/.test(n) ? "Duties & Taxes" : "Sundry Creditors", chain: []}));
+      TCloud.restAll = async (u) => /tally_post_jobs/.test(u) ? JSON.parse(JSON.stringify(window.__jobs)) : /tally_ledgers/.test(u) ? JSON.parse(JSON.stringify(window.__leds)) : [];
+      // FinCom's cloud: tally_post_enqueue makes the job row; the Tally computer finishes it at once (every entry verified)
+      const rpc0 = TCloud.rpc;
+      TCloud.rpc = async (fn, a) => { if (fn === "tally_post_enqueue" && a && a.p_payload && (a.p_payload.vouchers || []).length){ const ids = a.p_payload.vouchers.map(v => v.id);
+          window.__jobs.unshift({id: a.p_id, client_id: a.p_client, company: G, status: "done", done: ids.length, n: ids.length, message: ids.length + " of " + ids.length + " sent to Tally", created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+            entry_ids: ids, results: ids.map(id => ({id, ok: true, verified: true, vchNumber: "V/" + id})), items: ids.map(id => ({id, state: "in_tally"}))}); window.__rpc.push([fn, {p_id: a.p_id, p_client: a.p_client, ids}]); return {ok: true}; }
+        if (fn === "tally_vouchers_in") return [];
+        return rpc0(fn, a); };
+      Cloud.api = async (p) => { const m = /tally_post_jobs\\?.*id=eq\\.([^&]+)/.exec(p); return m ? JSON.parse(JSON.stringify(window.__jobs.filter(j => j.id === m[1]))) : []; };
+      window.__toasts = []; const t0 = window.toast; window.toast = (m) => { window.__toasts.push(String(m)); return t0 && t0(m); };
+      Ledgers.st[S.coId] = null; delete Ledgers.busy[S.coId];
+      const mk = (id, n, no, amt) => { const e = newEntry("Manual entry"); e.id = id; Object.assign(e.x, {vendorName: n, vendorGstin: "", invoiceNo: no, invoiceDate: "2026-07-01", taxable: amt, total: amt});
+        e.natureId = "professional"; e.partyLedger = n; e.expenseLedger = "Professional Charges"; S.data[S.coId].entries[e.id] = e; approve(e); e.approvedAt = t(400); return e; };
+      mk("n1", "New Bill Co", "N/1", 30000); mk("n2", "Second Bill Co", "N/2", 40000); mk("n3", "Third Bill Co", "N/3", 50000);
+      refreshStats(S.coId); render(); }""")
+    pg.wait_for_timeout(500)
+    tab("topost")
+    ok(pg.locator('#app [data-post-panel="errors"], #app [data-post-tabs] [data-post-tab="errors"].bad').count() >= 1 and badge("errors") >= 1 and badge("topost") == 3, "an earlier failed posting is on the list (Errors %d) and three new bills are ready" % badge("errors"))
+    def press_post(sel="#app [data-post-main]"):
+        pg.click(sel); pg.wait_for_timeout(700)
+        if pg.locator('#confirmBox [data-cbx="yes"]').count(): pg.click('#confirmBox [data-cbx="yes"]')
+        for i in range(30):
+            pg.wait_for_timeout(300)
+            if not E("!!(S.billPost && S.billPost.busy)") and not pg.locator('#confirmBox [data-cbx="yes"]').count(): break
+        pg.wait_for_timeout(500)
+    # 1. the plain press: a job row is made (the fake cloud sees the insert) and the bill is under Posted
+    E("() => { window.__rpc = []; }")
+    press_post()
+    enq = [a for f, a in E("window.__rpc") if f == "tally_post_enqueue"]
+    ok(len(enq) == 1 and sorted(enq[0]["ids"]) == ["n1", "n2", "n3"] and enq[0]["p_client"] == cid, "Post with an earlier failed posting on the list: tally_post_enqueue makes the job row (%s)" % enq)
+    ok("in Tally (verified)" in txt("#app [data-post-result]") and set(entries_posted()) >= {"n1", "n2", "n3"}, "and the three bills are under Posted (%s)" % txt("#app [data-post-result]")[:80])
+    # 2. the cause found by reading the path (src/js/59 postAllToTally, src/js/24 postBillsToTally): anything thrown before
+    # the preview (the voucher's XML, the preview's own HTML) was an unhandled rejection: no dialog, no job, no message
+    E("""() => { window.__vx = window.voucherXml; window.voucherXml = () => { throw new TypeError("Cannot read properties of undefined (reading 'lines')"); };
+      const mk = (id, n, no, amt) => { const e = newEntry("Manual entry"); e.id = id; Object.assign(e.x, {vendorName: n, vendorGstin: "", invoiceNo: no, invoiceDate: "2026-07-01", taxable: amt, total: amt});
+        e.natureId = "professional"; e.partyLedger = n; e.expenseLedger = "Professional Charges"; S.data[S.coId].entries[e.id] = e; approve(e); e.approvedAt = window.__t(400); return e; };
+      mk("n4", "New Bill Co", "N/4", 1000); refreshStats(S.coId); window.__rpc = []; render(); }""")
+    pg.wait_for_timeout(400); tab("topost")
+    press_post()
+    row = txt('#app [data-post-panel="errors"] [data-attn-kind="post-refused"]')
+    ok(on() == "errors" and pg.locator('#app [data-post-panel="errors"] [data-attn-kind="post-refused"]').count() == 1, "an error thrown on the way to Tally: the Errors tab opens with a named row (%s)" % row[:160])
+    ok("TypeError" in row and "reading 'lines'" in row and ("What to do" in row or "what to do" in row.lower()) and "Nothing was sent" in row,
+       "the row names the error, what happened (nothing was sent) and what to do (%s)" % row[:200])
+    ok(not [a for f, a in E("window.__rpc") if f == "tally_post_enqueue"] and not E("!!(S.billPost && S.billPost.busy)") and E("!document.querySelector('#app [data-post-main]') || !document.querySelector('#app [data-post-main]').disabled"),
+       "nothing was queued, the page is not left busy, and Post can be pressed again")
+    # the same for an error thrown after "Loading ledgers" (postBillsToTally, before its own try): it used to leave the page busy for good
+    E("""() => { window.voucherXml = window.__vx; window.__cb = window.canonicalizeBills; window.canonicalizeBills = () => { throw new RangeError("Invalid array length"); }; window.__rpc = []; render(); }""")
+    tab("topost"); press_post()
+    row = txt('#app [data-post-panel="errors"] [data-attn-kind="post-refused"]')
+    ok(on() == "errors" and "RangeError" in row and not E("!!(S.billPost && S.billPost.busy)"), "an error after 'Loading ledgers': the named row, the page not left busy (%s)" % row[:160])
+    E("() => { window.canonicalizeBills = window.__cb; }")
+    # the row goes when the next posting works
+    tab("topost"); E("() => { window.__rpc = []; }"); press_post()
+    enq = [a for f, a in E("window.__rpc") if f == "tally_post_enqueue"]
+    ok(len(enq) == 1 and enq[0]["ids"] == ["n4"] and pg.locator('#app [data-attn-kind="post-refused"]').count() == 0, "the next press posts, and the error row goes (%s)" % enq)
+    # 3. a gate's refusal is a row too, never silence: the Tally company this client may post to is not confirmed
+    E("""() => { const co = CO(); co.choices = Object.assign({}, co.choices || {}); window.__pt = co.choices.postTo; co.choices.postTo = Object.assign({}, co.choices.postTo || {}, {state: "guess"});
+      const mk = (id, n, no, amt) => { const e = newEntry("Manual entry"); e.id = id; Object.assign(e.x, {vendorName: n, vendorGstin: "", invoiceNo: no, invoiceDate: "2026-07-01", taxable: amt, total: amt});
+        e.natureId = "professional"; e.partyLedger = n; e.expenseLedger = "Professional Charges"; S.data[S.coId].entries[e.id] = e; approve(e); e.approvedAt = window.__t(400); return e; };
+      mk("n5", "New Bill Co", "N/5", 1000); refreshStats(S.coId); window.__rpc = []; render(); }""")
+    tab("topost"); press_post()
+    shown = pg.locator('#app [data-post-problem], #app [data-attn-kind="post-refused"]').count()
+    ok(shown >= 1 and not [a for f, a in E("window.__rpc") if f == "tally_post_enqueue"], "a gate's refusal (the Tally company not confirmed) is shown on the page, nothing queued (%d)" % shown)
+    E("() => { CO().choices.postTo = window.__pt; S.postStop = null; render(); }")
+    # 4. an entry Tally took but the bridge could not confirm: "Posted, not yet confirmed — checking whether it reached Tally", no Retry or Post again
+    E("""() => { window.__jobs.unshift({id: "jK", client_id: S.coId, company: "GARG SHEKHAR & COMPANY", status: "failed", done: 0, n: 1, message: "1 entry sent to Tally; could not confirm it", created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+      entry_ids: ["n5"], results: [{id: "n5", ok: false, outcomeUnknown: true, message: "Tally took it; not read back"}], items: [{id: "n5", state: "unknown", reason: "Tally took it; not read back"}]}); CloudJobs.changed(); }""")
+    pg.wait_for_timeout(1500); tab("errors")
+    k = txt('#app [data-post-panel="errors"] [data-bill-row="n5"]')
+    ok("Posted, not yet confirmed — checking whether it reached Tally" in k and pg.locator('#app [data-post-panel="errors"] [data-bill-row="n5"] button').count() == 0,
+       "Errors: 'Posted, not yet confirmed — checking whether it reached Tally', no button (%s)" % k[:160])
     ok(not errors, "no page errors %s" % errors[:2])
     br.close()
 print("\nall passed" if not fails else "\nFAILED: %d" % len(fails)); raise SystemExit(1 if fails else 0)

@@ -542,7 +542,17 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 		}
 		return wakeLedgers(c, "the ledger chooser opened in FinCom on this computer", false), nil
 	case "/measure", "/tray/measure":
-		// "Measure Tally (for FinCom support)": POST starts it (one request at a time, through the queue), GET says how far
+		// "Measure Tally (for FinCom support)": POST starts it (one request at a time, through the queue), GET says how far.
+		// Round 4 (03-Oct-2026): started by a person only. Both addresses are for the tray icon (/tray/measure) and the
+		// measure command typed in a console (/measure): programs on this computer, which send no Origin and no Sec-Fetch
+		// header. A web page, FinCom's own included, is refused; so is the Windows service (it never measures)
+		if r.Header.Get("Origin") != "" || r.Header.Get("Sec-Fetch-Site") != "" || r.Header.Get("Sec-Fetch-Mode") != "" || r.Header.Get("Sec-Fetch-Dest") != "" {
+			writeLog("Refused a measure request from a web page (" + path + ", " + r.Header.Get("Origin") + ").")
+			return nil, &httpErr{403, M{"ok": false, "error": "Measure Tally is started from the FinCom Bridge tray icon or the measure command only, never from a web page."}}
+		}
+		if runMode == "service" {
+			return M{"ok": false, "error": "The measuring tool is not run by the Windows service: start it from the FinCom Bridge tray icon (Measure Tally), or type FinComBridge.exe measure in a console."}, nil
+		}
 		if r.Method == "POST" {
 			o, _ := bodyObj(body)
 			m := measureOpts{company: str(o["company"]), out: str(o["out"]), ledgers: str(o["ledgers"]), snapshot: str(o["snapshot"]), month: str(o["month"])}

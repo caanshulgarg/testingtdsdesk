@@ -46,7 +46,9 @@
 //                                                       renamed (old name kept), never removed. 2.1.5 (migration-34): each call
 //                                                       is one batch of a read (round) carrying the GUIDs it read (seen); the
 //                                                       batch is recorded with them (tally_ledger_round_batch), renames go
-//                                                       through tally_ledger_rename, and on the last batch
+//                                                       through tally_ledger_rename (migration-36: the entries follow the
+//                                                       name), the rows are upserted, THEN the GUIDs seen are stamped
+//                                                       (tally_ledger_round_seen, migration-36), and on the last batch
 //                                                       tally_ledgers_mark_gone(book, round) marks what the round did not see
 //                                                       (complete round, every batch arrived, the bulk limit, the guard). The
 //                                                       bridge's deleted list is ignored for marking (deletedIgnored). Without
@@ -419,8 +421,9 @@ async function bridgeSafety(dev: any, firm: string, body: any) {
 //   renamed [guid, from, to]: the row renamed (found by GUID, else by the old name), the old name kept in before_clean
 //     (migration-31: {renamed: [{from, at}]}); the row's entries take the new name when the bridge sends their days
 //     again. A row with the new name already there: the old row is marked deleted, the other takes the GUID
-//   seen [guid]: the GUIDs the bridge read in this batch (migration-34): stamped on the rows; on the last batch the
-//     cloud marks the live rows with a GUID the round did not see (tally_ledgers_mark_gone), never removed
+//   seen [guid]: the GUIDs the bridge read in this batch (migration-34): counted on the round first, stamped on the rows
+//     after the upsert (migration-36: so a first round stamps rows that had no GUID yet); on the last batch the cloud
+//     marks the live rows with a GUID the round did not see (tally_ledgers_mark_gone), never removed
 //   deleted [guid, name]: ignored for marking (counted in deletedIgnored; a bridge before the seen contract)
 //   groups [name, parent]: upserted (none removed)
 // Without migration-32 (no tally_guid / deleted_at): renames by name, nothing fails. Without migration-34: nothing
@@ -511,6 +514,13 @@ async function applyLedgerList(firm: string, book: string, body: any, dev?: any,
         if (data?.refused || data?.merged) notes.push(String(data.note || "").slice(0, 300));
         return;
       }
+      if (/trial balance|rolled back/i.test(String(error.message || ""))) {
+        // migration-36: the rename was rolled back (the trial balance would not tie, or the book's does not); said,
+        // the batch goes on, and the next round asks again (the GUID is still under the old name)
+        notes.push(("rename " + from + " -> " + to + " not made: " + String(error.message || "")).slice(0, 300));
+        console.log("tally-ingest ledger_list: rename rolled back", book, from, "->", to, String(error.message || "").slice(0, 200));
+        return;
+      }
       if (!missing34(error)) throw new Error(error.message);
       m34 = false;
     }
@@ -564,6 +574,15 @@ async function applyLedgerList(firm: string, book: string, body: any, dev?: any,
     }
   }
   out.added = fresh.length;
+  // 3b. migration-36: the GUIDs this batch read are stamped on the rows NOW, after the upsert (which gave a row its GUID
+  // when it had none): a first round on a copy whose rows had no GUID yet stamps every row, so the last batch's
+  // tally_ledgers_mark_gone finds nothing unseen and logs no 'held' burst. Before 36, tally_ledger_round_batch stamped
+  // before the upsert and missed them all. A cloud with 34 but not 36: the batch stamped as before, said in the notes
+  if (round && m34 !== false && seenIn.length) {
+    const { error } = await db.rpc("tally_ledger_round_seen", { p_book: book, p_round: round, p_seen: seenIn });
+    if (error && /tally_ledger_round_seen|could not find|does not exist|schema cache/i.test(String(error.message || ""))) notes.push("seen stamped by the batch before the upsert: migration-36 (tally_ledger_round_seen) is not applied");
+    else if (error) throw new Error(error.message);
+  }
   // 4. deletions: marked, never removed, and only by tally_ledgers_mark_gone(book, round) on the last batch of a round
   // (migration-34): the cloud marks the live ledgers with a GUID the round did not see, when the round is complete and
   // every batch arrived, within the bulk limit, each row past the guard. The bridge's deleted list is ignored for
@@ -1079,8 +1098,30 @@ Deno.serve(async (req) => {
         const { data: cur } = await db.from("tally_post_jobs").select("status").eq("id", id).eq("device_id", dev.id).maybeSingle();
         if (!cur) return reply(200, { ok: false, gone: true, error: "This posting is no longer in FinCom." });
         if (cur.status === "cancelled") return reply(200, { ok: false, cancelled: true, error: "This posting was cancelled in FinCom." });
-        const row: Record<string, unknown> = { status: st, done: Math.max(0, Math.floor(Number(body.done) || 0)), message: s(body.message, 500), results, checking: !!body.checking, updated_at: new Date().toISOString() };
+        // 03-Oct-2026 (round 4): an entry Tally accepted is never stored as failed. An acceptance is ok, a voucher number /
+        // master id / GUID, or CREATED / ALTERED with a voucher id in Tally's words ("CREATED 0" is not one). The fault
+        // of the day: Tally replied CREATED with LASTVCHID 26298, the bridge reported the posting failed, and the sync
+        // freed the id (a duplicate risk). Here: the entry's state is unknown (checking) while not verified, the posting
+        // is stored running with checking (never failed while such an entry is in it), and the id is stamped accepted_at
+        // on tally_post_ids (migration-36-post-acceptance: the sync keeps it live; before it, the column is missing and
+        // the stamp is skipped)
+        const fid = (v: string) => String(v || "").replace(/[^A-Za-z0-9]/g, "");
+        const acceptedMsg = (m: string) => /\b(CREATED|ALTERED)\b/i.test(m) && (/\b(LASTVCHID|VCHID|MASTERID|voucher(?: no\.?| number)?)\D{0,6}[1-9]\d*/i.test(m) || /\b(CREATED|ALTERED)\b\D{0,4}[1-9]\d*/i.test(m));
+        const acceptedRes = (r: any) => !!(r.ok || r.vchNumber || r.masterId || r.guid || acceptedMsg(r.message));
+        const accepted = new Set(results.filter((r: any) => r.id && acceptedRes(r)).map((r: any) => fid(r.id)));
+        let heldOpen = false;
+        if (accepted.size) {
+          for (const r of results as any[]) if (accepted.has(fid(r.id)) && r.verified !== true && !r.ok) { r.state = "unknown"; r.outcomeUnknown = true; r.reason = r.reason || "Tally accepted it; being checked"; }
+          if (items) for (const x of items as any[]) if (accepted.has(fid(x.id)) && x.state === "failed") { x.state = "unknown"; x.reason = "Tally accepted it (" + (x.reason || "the bridge reported it failed") + "); being checked"; x.outcomeUnknown = true; }
+          heldOpen = st === "failed";
+        }
+        const row: Record<string, unknown> = { status: heldOpen ? "running" : st, done: Math.max(0, Math.floor(Number(body.done) || 0)), message: s(body.message, 500), results, checking: heldOpen || !!body.checking, updated_at: new Date().toISOString() };
+        if (heldOpen) row.message = s("Tally accepted " + accepted.size + (accepted.size === 1 ? " entry" : " entries") + " the bridge reported failed; held for checking, not posted again. " + s(body.message, 300), 500);
         if (items) row.items = items;
+        if (accepted.size) {
+          const { error: accErr } = await db.from("tally_post_ids").update({ accepted_at: new Date().toISOString() }).eq("job_id", id).in("fincom_id", [...accepted]).is("accepted_at", null);
+          if (accErr && !/accepted_at/.test(accErr.message)) console.error("accepted_at", accErr.message);
+        }
         let { error } = await db.from("tally_post_jobs").update(row).eq("id", id).eq("device_id", dev.id).neq("status", "cancelled");
         // before migration-24 there is no items column: the rest is kept as before
         if (error && items && /items/.test(error.message)) { delete row.items; ({ error } = await db.from("tally_post_jobs").update(row).eq("id", id).eq("device_id", dev.id).neq("status", "cancelled")); }

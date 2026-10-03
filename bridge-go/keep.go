@@ -728,23 +728,24 @@ func (k *keepRun) step(company string, port int, booksFrom string) error {
 		return nil
 	}
 	// the company's GUID: the one held for it, or nothing is read (a restored or re-created company, another company of
-	// the same name)
-	if !k.told["guid:"+company] {
+	// the same name). Round 4 (03-Oct-2026): the check is made once per ROUND (k.id), not once per keeper, so the rewind
+	// guard sent at the round's end carries the company's highest AlterID as of this round, never a stale one
+	if ck := "check:" + company + ":" + k.id; !k.told[ck] {
 		g, err := companyCheck(k.tc, company, port)
 		if err != nil {
 			return err
 		}
 		if err := guardCompanyGUID(company, g); err != nil {
-			k.told["guid:"+company] = true
+			k.told[ck], k.told["guid:"+company] = true, true
 			st["trouble"] = M{"at": nowS(), "why": err.Error()}
 			save()
 			writeLog("Keeping " + company + ": nothing read: " + err.Error())
 			k.caughtUp = true
 			return nil
 		}
-		k.told["guid:"+company] = true
+		k.told[ck], k.told["guid:"+company] = true, true
 		st["guid"] = g
-		k.alter[company] = toI64(companyAlter(company))
+		k.alter[company] = companyAlter(company)
 	}
 	// 2.1.4 (02-Oct-2026): the plain ledger and group lists (ledgers.go), in chunks, before the day book
 	done, err := k.ledgerList(company, port, dir, st, inBudget, save)
@@ -826,8 +827,9 @@ func (k *keepRun) step(company string, port int, booksFrom string) error {
 	st["next"], st["roundAt"], st["trouble"] = addDays(td, 1), nowS(), nil
 	save()
 	writeLog(fmt.Sprintf("Keeping %s: the day book from %s to %s read (%d entries); %d day(s) changed since the last read", company, str(st["from"]), td, toInt(st["roundN"]), toInt(st["roundDays"])))
-	// the rewind guard: the company's GUID, its highest AlterID and the entries read, to FinCom's cloud
-	sendReadGuard(company, str(st["guid"]), k.alter[company], toInt(st["roundN"]))
+	// the rewind guard: the company's GUID, its highest AlterID (the latest company check's, this round's or a later
+	// one's; null when none is known) and the entries read, to FinCom's cloud
+	sendReadGuard(company, str(st["guid"]), companyAlter(company), toInt(st["roundN"]))
 	k.caughtUp = true
 	return nil
 }

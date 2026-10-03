@@ -40,8 +40,10 @@ What is new in 2.1.4 (since 2.1.3)
     nothing is sent except one small check (the company's name and GUID), at most once a minute, until Tally answers it.
   - The company's GUID is held: a company of the same name with another GUID (restored, re-created) is neither read nor
     posted to.
-  - Every voucher posted carries its FinCom id at the end of its narration ("TDSDesk:<id>"); before posting, Tally is
-    looked through for that id on the voucher's date first, then the party / bill / date / amount check of 2.1.4.
+  - Every voucher posted carries its FinCom id in its narration ("TDSDesk:<id>"; since the 03-Oct rebuild of 2.1.5 it
+    is written FIRST, "TDSDesk:<id> | <narration>", so a narration cut short can never lose it, and it is found wherever
+    it stands); before posting, Tally is looked through for that id on the voucher's date first, then the party / bill /
+    date / amount check of 2.1.4.
   - A posting sent when Tally stopped answering shows "Checking whether it reached Tally" and is not sent again until
     Tally answers and the id has been looked for: found -> In Tally; not found -> sent once more.
   - Only one bridge reads or posts a company at a time (a lease in FinCom's cloud, once migration-32 is applied).
@@ -50,6 +52,8 @@ What is new in 2.1.4 (since 2.1.3)
 Use ZZ TEST for every posting below, never GARG SHEKHAR & COMPANY.
 
 0. START THE PILOT IN FINCOM (before downloading anything)
+   The first postings on the pilot go to the ZZ TEST company only, never real books: steps 4, 5 and 6 post ZZ TEST bills
+       and nothing else. GARG SHEKHAR & COMPANY is only read (Update now), never posted to, until step 10 passes.
    Do: in FinCom (staging), as the owner, open All clients > Tally. Find NWS144's line and press "Try version 2.1.5 on
        this computer" (only the owner sees the button).
    You should see: the line now says "on trial on NWS144 since <date, time>". From then on the setup below is the one
@@ -85,9 +89,9 @@ Use ZZ TEST for every posting below, never GARG SHEKHAR & COMPANY.
        the same months, "0 day(s) changed".
    If not: the log from "Update from Tally: asked for now".
 
-4. A POSTING DURING A READ GOES AT ONCE (TIMED IN SECONDS)
-   Do: press Update now on GARG SHEKHAR & COMPANY (a long read), and while its "day book ..." lines appear, post one
-       approved ZZ TEST bill from FinCom. Start a stopwatch (or note the clock to the second) the moment you press Post.
+4. A POSTING DURING A READ GOES AT ONCE (TIMED IN SECONDS) - the posting goes to ZZ TEST
+   Do: press Update now on GARG SHEKHAR & COMPANY (a long read, nothing is posted to it), and while its "day book ..."
+       lines appear, post one approved ZZ TEST bill (client ZZ TEST in FinCom) from FinCom. Start a stopwatch (or note the clock to the second) the moment you press Post.
        Stop it when FinCom shows the bill "In Tally (verified)".
    Write down: the seconds from Post to "In Tally (verified)": ____ s. From Show log, the time of "Posting job ..." and
        of "Posting job ... done" (to the second).
@@ -97,8 +101,9 @@ Use ZZ TEST for every posting below, never GARG SHEKHAR & COMPANY.
    FAIL if: more than 10 seconds, or "busy with another FinCom request", or the read starts again from April.
    If not: what FinCom showed, the seconds you timed, and the log of that minute.
 
-5. A POSTING WITH TALLY SHOWING A MESSAGE BOX
-   Do: in TallyPrime press Alt+F4 so the "Quit?" box shows; leave it. In FinCom post another approved ZZ TEST bill.
+5. A POSTING WITH TALLY SHOWING A MESSAGE BOX - the posting goes to ZZ TEST
+   Do: in TallyPrime (ZZ TEST open) press Alt+F4 so the "Quit?" box shows; leave it. In FinCom post another approved
+       ZZ TEST bill (client ZZ TEST, never GARG SHEKHAR & COMPANY).
    You should see: either "Could not check Tally, not posted. Try again." (the check was not answered; nothing sent), or,
        if the bill had already been sent when Tally stopped answering, "Checking whether it reached Tally" on the Post page
        (the entry's state "unknown"). The log: "Tally 9000 is busy (no answer in 20s); nothing more is sent to it until it
@@ -108,14 +113,18 @@ Use ZZ TEST for every posting below, never GARG SHEKHAR & COMPANY.
        TallyPrime's Day Book: the bill ONCE.
    If not: what FinCom showed, the Day Book of that date, and the log of those minutes.
 
-6. THE SAME BILL AGAIN (THE FINCOM ID)
-   Do: after step 4, press Post again on the same bill in a second browser tab that still shows it as not posted.
+6. THE SAME BILL AGAIN (THE FINCOM ID) - on ZZ TEST
+   Do: after step 4, press Post again on the same ZZ TEST bill in a second browser tab that still shows it as not posted.
    You should see: "Already in Tally (voucher no. X, dd-mm-yyyy)"; the log: "duplicate check ...: NOT POSTED, its FinCom
-       id is in Tally already". In TallyPrime the voucher's narration ends with "TDSDesk:<id>". Still ONE voucher.
+       id is in Tally already". In TallyPrime (ZZ TEST) the voucher's narration BEGINS with "TDSDesk:<id> | ...". Still
+       ONE voucher.
    If not: a screenshot of both tabs, the Day Book of that date, and the log.
 
 7. MEASURE TALLY
-   Do: icon > Measure Tally (for FinCom support) with GARG SHEKHAR & COMPANY open; wait (a few minutes).
+   Do: icon > Measure Tally (for FinCom support) with GARG SHEKHAR & COMPANY open; wait (a few minutes). Only the tray
+       item or "FinComBridge.exe measure" typed in a Command Prompt starts it; the Windows service and FinCom's web page
+       cannot. If a request does not answer in 20 s the run stops there: the report has a "waiting for Tally to answer
+       the company check" line and "the run stopped at the first request that did not answer", and nothing after it.
    You should see: a report opens (measure-...txt in the bridge's folder) with lines a, b, c1, c2, d, e (and its fields)
        and f0, each with ms, bytes and count, and a line "f696.." saying the single ledgers are not run by default. No
        f696-f699 lines: those four ledgers (the ones that hung Tally on 02-Oct) are measured only after working hours,

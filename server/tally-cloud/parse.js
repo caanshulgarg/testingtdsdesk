@@ -24,8 +24,13 @@ function shortNarr(t){
   const m = t.match(/TDSDesk:[A-Za-z0-9._-]+\s*$/);
   return m ? t.slice(0, 300 - m[0].length - 3) + " | " + m[0] : t.slice(0, 300);
 }
+// FinCom's own mark on an entry it posted, "TDSDesk:<id>", read from the FULL narration (migration-37 item 14: the
+// cloud keeps it in tally_vouchers.fincom_id, so the checks before posting and the bridge's read-back do not depend on
+// where in a long narration the tag sits); null when there is none
+function fincomId(t){ const m = String(t || "").match(/TDSDesk:([A-Za-z0-9._-]+)/); return m ? m[1] : null; }
 function takeVoucher(s){
   const id = String(one(s, "GUID") || (s.match(/REMOTEID="([^"]*)"/) || [])[1] || "").replace(/[^\w\-.:]/g, "");
+  const narrFull = one(s, "NARRATION");
   const v = {
     guid: id,
     date: one(s, "DATE"),
@@ -33,7 +38,8 @@ function takeVoucher(s){
     type: (s.match(/VCHTYPE="([^"]*)"/) || [])[1] || one(s, "VOUCHERTYPENAME"),
     no: one(s, "VOUCHERNUMBER"),
     party: one(s, "PARTYNAME") || one(s, "PARTYLEDGERNAME"),
-    narr: shortNarr(one(s, "NARRATION")),
+    narr: shortNarr(narrFull),
+    fid: fincomId(narrFull),
     cancel: one(s, "ISCANCELLED") === "Yes",
     opt: one(s, "ISOPTIONAL") === "Yes",
     // review of 01-Oct-2026: the party's GSTIN and the place of supply, kept in the cloud copy too

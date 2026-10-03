@@ -3,7 +3,10 @@ MEASURING TALLY FOR FINCOM (FinCom Bridge 2.1.4) - STEP BY STEP
 Why: nobody can measure Tally from FinCom's side. Before FinCom reads only what changed in Tally (by Tally's change
 number, the AlterID), the owner wants measured numbers: how long each kind of request takes on a real Tally, how big it
 is, which ledger hangs Tally, and what moves the AlterID. The bridge does the measuring itself, one request at a time,
-each stopped after 20 s, and nothing is written to Tally.
+each stopped after 20 s, and nothing is written to Tally. A run stops at the FIRST request that does not answer in 20 s:
+nothing more is sent but the small company check (waited for, up to 10 minutes), and the run ends with that in the
+report. The tool is started by a person only: the tray item, or the measure command typed in a Command Prompt; the
+Windows service never runs it, and no web page (FinCom's own included) can start it.
 
 Where the numbers go: a plain text report in the bridge's folder (for "Just for me" installs:
 %LOCALAPPDATA%\FinCom Bridge), named measure-<company>-<date-time>.txt. Snapshots are measure-snap-<label>.json there.
@@ -44,8 +47,11 @@ A3. THE LEDGERS 696-699 - AFTER WORKING HOURS ONLY, OPTIONAL, ONE LEDGER AT A TI
        FinComBridge.exe measure --company "GARG SHEKHAR & COMPANY" --ledgers 699
    You should see, per run: f<N>-check (the company check), f<N>-fields (that ledger's master fields: parent, is
        revenue, affects stock, bill-wise, cost centres), f<N>-opening (the opening its master stores). A request that
-       does not answer in 20 s says HANGS; the bridge then sends nothing but the small company check (once a minute)
-       until Tally answers. If Tally does not come back within a few minutes, close and reopen it before the next run.
+       does not answer in 20 s says HANGS; the run stops at that first request: the bridge then sends nothing but the
+       small company check until Tally answers it (it waits up to 10 minutes), and the report ends with "waiting for
+       Tally to answer the company check ... answered: true/false after N check(s)" and "the run stopped at the first
+       request that did not answer". Nothing after the hang is measured in that run. If Tally does not come back
+       within a few minutes, close and reopen it before the next run.
    Write down: for each of the four, the ms, bytes and count of its lines, and which (if any) says HANGS, with its
        fields.
    If not: send the report files and icon > Show log.

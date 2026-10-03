@@ -6,7 +6,7 @@
 //     posts to it, and also from the company list. The first GUID seen is held (sync\company-guids.json) and sent to
 //     FinCom's cloud; a company of the same name with another GUID (a restored, re-created or other company) is refused:
 //     nothing is read from it or posted to it until it is confirmed (POST /companyguid {company, accept: true}).
-//   - The FinCom id. Every voucher posted carries "TDSDesk:<id>" at the end of its narration (FinCom writes it; the
+//   - The FinCom id. Every voucher posted carries "TDSDesk:<id>" first in its narration (FinCom writes it; the
 //     bridge adds it when it is missing, from the entry's id). Narration is used, not a UDF: a UDF needs a TDL installed
 //     in Tally to be kept. Before a voucher is posted, Tally is read for that id on the voucher's date (FinComTag: the
 //     date's entries, heads and narration only); found: not posted ("Already in Tally ..."). Then the 2.1.4 check of
@@ -170,14 +170,15 @@ func noteCompanyAlts(company, raw string) {
 // --- the FinCom id in the narration
 const tagCheckID = "FinComTag"
 
-// the voucher with its FinCom id at the end of its narration ("TDSDesk:<id>"): FinCom's own when it wrote one, else the
-// entry's id (letters and digits only, as FinCom reads tags), else one made from the voucher itself
+// the voucher with its FinCom id FIRST in its narration ("TDSDesk:<id> | <rest>", so a narration cut at 300 characters
+// can never lose it): FinCom's own when it wrote one (moved to the front when it is elsewhere in the narration), else
+// the entry's id (letters and digits only, as FinCom reads tags), else one made from the voucher itself
 func stampFinComID(x string, id any) (string, string) {
 	if !re(`^\s*<VOUCHER\b`).MatchString(x) {
 		return x, ""
 	}
 	if t := reTag.FindString(x); t != "" {
-		return x, t
+		return tagFirst(x, t), t
 	}
 	k := re(`[^A-Za-z0-9]`).ReplaceAllString(fmt.Sprint(id), "")
 	if k == "" || id == nil {
@@ -185,13 +186,13 @@ func stampFinComID(x string, id any) (string, string) {
 		k = "B" + strings.ToUpper(hex.EncodeToString(h[:]))[:16]
 	}
 	tag := "TDSDesk:" + k
-	if loc := re(`</NARRATION>`).FindStringIndex(x); loc != nil {
-		pre := x[:loc[0]]
+	if loc := re(`<NARRATION>`).FindStringIndex(x); loc != nil {
+		rest := x[loc[1]:]
 		sep := " | "
-		if re(`<NARRATION>\s*$`).MatchString(pre) {
+		if re(`^\s*</NARRATION>`).MatchString(rest) {
 			sep = ""
 		}
-		return pre + sep + tag + x[loc[0]:], tag
+		return x[:loc[1]] + tag + sep + rest, tag
 	}
 	if loc := re(`<NARRATION\s*/>`).FindStringIndex(x); loc != nil {
 		return x[:loc[0]] + "<NARRATION>" + tag + "</NARRATION>" + x[loc[1]:], tag
@@ -201,6 +202,40 @@ func stampFinComID(x string, id any) (string, string) {
 	}
 	open := re(`^\s*<VOUCHER\b[^>]*>`).FindString(x)
 	return open + "<NARRATION>" + tag + "</NARRATION>" + x[len(open):], tag
+}
+
+// the voucher's narration with its tag (already in it) moved to the front: "TDSDesk:<id> | <the rest>"; the rest keeps
+// its words, less the separator that stood next to the tag. A tag outside the narration is left where it is
+func tagFirst(x, tag string) string {
+	m := re(`<NARRATION>([\s\S]*?)</NARRATION>`).FindStringSubmatchIndex(x)
+	if m == nil {
+		return x
+	}
+	n := x[m[2]:m[3]]
+	if !hasTag(n, tag) || strings.HasPrefix(n, tag) {
+		return x
+	}
+	rest := strings.Replace(n, tag, "", 1)
+	rest = re(`\s*\|\s*\|\s*`).ReplaceAllString(rest, " | ") // two separators left touching where the tag stood
+	rest = strings.TrimSpace(re(`^\s*\|\s*|\s*\|\s*$`).ReplaceAllString(rest, ""))
+	n = tag
+	if rest != "" {
+		n = tag + " | " + rest
+	}
+	return x[:m[2]] + n + x[m[3]:]
+}
+
+// whether a narration carries this FinCom tag, anywhere in it and exactly (TDSDesk:ab1 is not TDSDesk:ab12)
+func hasTag(narration, tag string) bool {
+	if tag == "" {
+		return false
+	}
+	for _, t := range reTag.FindAllString(narration, -1) {
+		if t == tag {
+			return true
+		}
+	}
+	return false
 }
 
 func tagCheckRequest(company, date string) string {
@@ -286,11 +321,16 @@ func leasesHeld() []string {
 }
 
 // --- the rewind guard: what this read saw, for FinCom's cloud
+// (round 4: an AlterID not known, 0 or less, goes as null, never as 0: 0 would read as a rewind on the cloud)
 func sendReadGuard(company, guid string, alter int64, count int) {
 	if !cloudOn() {
 		return
 	}
-	r := invokeCloud(M{"kind": "read_guard", "company": company, "guid": guid, "alter": alter, "count": count}, 30)
+	var alt any
+	if alter > 0 {
+		alt = alter
+	}
+	r := invokeCloud(M{"kind": "read_guard", "company": company, "guid": guid, "alter": alt, "count": count}, 30)
 	if r.code == 200 && r.json != nil && str(r.json["state"]) == "needs_baseline" {
 		writeLog("Keeping " + company + ": FinCom's cloud marks this company as needing its books again (" + str(r.json["why"]) + ")")
 		setKeepTrouble(company, "FinCom's cloud marks this company as needing its books again: "+str(r.json["why"]))

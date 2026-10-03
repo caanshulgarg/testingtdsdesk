@@ -158,7 +158,7 @@ func newPostJob(pl M) (M, error) {
 	}
 	for _, v := range arr(pl["vouchers"]) {
 		if o := obj(v); o != nil {
-			// every voucher carries its FinCom id ("TDSDesk:<id>" at the end of its narration): FinCom's, else the entry's id
+			// every voucher carries its FinCom id ("TDSDesk:<id>" first in its narration): FinCom's, else the entry's id
 			x, _ := stampFinComID(str(o["xml"]), str(o["id"]))
 			items = append(items, M{"id": str(o["id"]), "kind": "voucher", "xml": x})
 		}

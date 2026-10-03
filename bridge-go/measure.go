@@ -5,9 +5,12 @@
 //	FinComBridge.exe measure --company "<name>" --snapshot <label> [--month yyyymm]
 //	FinComBridge.exe measure --compare <label1> <label2>
 //
-// One request at a time, each with its own cap (TallyMaxSec, 20 s), through the bridge's own queue (a posting still goes first), with
-// the "is Tally free?" rule after a request that does not answer. Nothing is written to Tally. The report is plain text
-// in the bridge's folder: times in ms, bytes, counts, errors.
+// One request at a time, each with its own cap (TallyMaxSec, 20 s), through the bridge's own queue (a posting still goes first).
+// Round 4 (03-Oct-2026): the run STOPS at the first request that does not answer in that time: nothing more is sent but
+// the small company check, which is waited for (up to 10 minutes), and the run ends with that in the report. The tool
+// is started by a person only: the tray item, or "FinComBridge.exe measure" typed in a console; never under the Windows
+// service (runMode service), and never from a web page (the measure routes refuse an Origin or Sec-Fetch header).
+// Nothing is written to Tally. The report is plain text in the bridge's folder: times in ms, bytes, counts, errors.
 //
 //	a. the company-level check: its GUID and highest AlterIDs (the voucher count is not asked: Tally gives none cheaply)
 //	b. entries with an AlterID above (highest - 500) over the whole financial year: about 500 entries
@@ -16,8 +19,8 @@
 //	e. one entry with every field FinCom needs; its size, and which fields came back
 //	f. the hanging-ledger check: the opening each ledger master stores (the master's field, no period, never a balance
 //	   worked out) of the ledgers numbered 696-699 in name order, one at a time, the company check between them; their
-//	   other master fields first, on their own, so a hang shows which part hangs; it stops after two hangs. Only with
-//	   --ledgers (after working hours, one ledger a run: --ledgers 696, then 697...); the default run measures f0 only
+//	   other master fields first, on their own, so a hang shows which part hangs. Only with --ledgers (after working
+//	   hours, one ledger a run: --ledgers 696, then 697...); the default run measures f0 only
 //	g. snapshots (each entry's GUID, MasterID and AlterID for a month, the company's GUID and highest AlterID) and their
 //	   comparison, for the owner's manual tests (docs/tally-measure-sheet.txt)
 package main
@@ -142,6 +145,14 @@ func measureWaitFree(port int, company string, maxWait time.Duration) (bool, int
 	return false, tries
 }
 
+// the measuring tool is started by a person (the tray, or the measure command typed in a console), never by the service
+func measureAllowed() error {
+	if runMode == "service" {
+		return errors.New("The measuring tool is not run by the Windows service: start it from the FinCom Bridge tray icon (Measure Tally), or type FinComBridge.exe measure in a console.")
+	}
+	return readsAllowed()
+}
+
 func fyBounds(t time.Time) (string, string) {
 	a := fyStart(t)
 	return tallyDate(a), tallyDate(a.AddDate(1, 0, -1))
@@ -155,7 +166,7 @@ func runMeasure(o measureOpts) (M, error) {
 	if o.snapshot != "" {
 		return measureSnapshot(o)
 	}
-	if err := readsAllowed(); err != nil {
+	if err := measureAllowed(); err != nil {
 		return nil, err
 	}
 	measuring.Add(1)
@@ -178,6 +189,24 @@ func runMeasure(o measureOpts) (M, error) {
 	mA, mZ := month+"01", monthEnd(month)
 	writeLog(fmt.Sprintf("Measure Tally: %s (for FinCom support): one request at a time, %d s each at most", company, tallyMaxSec()))
 
+	// round 4: the run stops at the FIRST request that does not answer in tallyMaxSec (or that left Tally unanswered):
+	// nothing more is sent but the small company check, waited for up to 10 minutes; then the report
+	stopped := func(it *mItem) bool {
+		if !it.timedOut && !needProbe(port) {
+			return false
+		}
+		if !it.timedOut {
+			it.timedOut = true
+		}
+		it.note = strings.TrimSpace(fmt.Sprintf("HANGS (no answer in %d s) %s", tallyMaxSec(), it.note))
+		ok, tries := measureWaitFree(port, company, 10*time.Minute)
+		add(&mItem{key: "-", what: "waiting for Tally to answer the company check after a request that did not answer", note: fmt.Sprintf("answered: %v after %d check(s)", ok, tries)})
+		add(&mItem{key: "-", what: fmt.Sprintf("the run stopped at the first request that did not answer in %d s (%s): nothing more was measured in this run", tallyMaxSec(), it.key),
+			note: "run the tool again when Tally answers; a single ledger only with --ledgers N, after working hours"})
+		writeLog(fmt.Sprintf("Measure Tally: %s: the run stopped at the first request that did not answer in %d s (%s); the company check answered: %v", company, tallyMaxSec(), it.key, ok))
+		return true
+	}
+
 	// a. the company-level check
 	it, raw := measureOne(port, "a", "the company check: its GUID and highest AlterIDs (one tiny request)", companyCheckRequest(company), "COMPANY")
 	guid, altV, altM := "", int64(0), int64(0)
@@ -188,6 +217,9 @@ func runMeasure(o measureOpts) (M, error) {
 	}
 	it.note = fmt.Sprintf("company GUID %s; highest AlterID: entries %d, masters %d; the voucher count is not asked (Tally does not give it cheaply)", or(guid, "(not given)"), altV, altM)
 	add(it)
+	if stopped(it) {
+		return measureReport(o, company, port, items, started)
+	}
 
 	// b. AlterID above (highest - 500), the whole year
 	after := altV - 500
@@ -200,26 +232,18 @@ func runMeasure(o measureOpts) (M, error) {
 		it.note = fmt.Sprintf("%d bytes an entry on average", it.bytes/it.n)
 	}
 	add(it)
-	freeOrStop := func() bool {
-		if needProbe(port) {
-			ok, tries := measureWaitFree(port, company, 10*time.Minute)
-			add(&mItem{key: "-", what: "waiting for Tally to answer the company check after a request that did not answer", note: fmt.Sprintf("answered: %v after %d check(s)", ok, tries)})
-			return ok
-		}
-		return true
-	}
-	if !freeOrStop() {
+	if stopped(it) {
 		return measureReport(o, company, port, items, started)
 	}
 
 	// c. the same, one month: this month, and the busiest month of the year
-	cReq := func(key, a, z string) {
+	cReq := func(key, a, z string) *mItem {
 		it, _ := measureOne(port, key, fmt.Sprintf("entries with AlterID above %d, %s-%s only", after, a, z),
 			measureReqC(company, a, z, after), "VOUCHER")
 		add(it)
+		return it
 	}
-	cReq("c1", td[:6]+"01", td)
-	if !freeOrStop() {
+	if stopped(cReq("c1", td[:6]+"01", td)) {
 		return measureReport(o, company, port, items, started)
 	}
 	busy, how := "", ""
@@ -254,7 +278,7 @@ func runMeasure(o measureOpts) (M, error) {
 		}
 		add(it)
 		how = "from the year's dates"
-		if !freeOrStop() {
+		if stopped(it) {
 			return measureReport(o, company, port, items, started)
 		}
 	}
@@ -263,9 +287,9 @@ func runMeasure(o measureOpts) (M, error) {
 		if e > td {
 			e = td
 		}
-		cReq("c2", busy+"01", e)
-		items[len(items)-1].note = "the busiest month, " + how
-		if !freeOrStop() {
+		it := cReq("c2", busy+"01", e)
+		it.note = "the busiest month, " + how
+		if stopped(it) {
 			return measureReport(o, company, port, items, started)
 		}
 	}
@@ -274,7 +298,7 @@ func runMeasure(o measureOpts) (M, error) {
 	it, _ = measureOne(port, "d", "the list of GUIDs only, "+mA+"-"+mZ,
 		measureReqD(company, mA, mZ), "VOUCHER")
 	add(it)
-	if !freeOrStop() {
+	if stopped(it) {
 		return measureReport(o, company, port, items, started)
 	}
 
@@ -304,11 +328,11 @@ func runMeasure(o measureOpts) (M, error) {
 		it.note = "no entry with that AlterID came back (the highest AlterID may be a master's)"
 	}
 	add(it)
-	if !freeOrStop() {
+	if stopped(it) {
 		return measureReport(o, company, port, items, started)
 	}
 
-	// f. the hanging-ledger check
+	// f. the hanging-ledger check (round 4: the run ends at the first hang, the check waited for; one ledger a run)
 	a, b := measureLedgerRange(o.ledgers)
 	it, raw = measureOne(port, "f0", "every ledger's name (to number them in name order)", measureReqNames(company), "LEDGER")
 	var names []string
@@ -320,19 +344,21 @@ func runMeasure(o measureOpts) (M, error) {
 	names = uniqSorted(names)
 	it.note = fmt.Sprintf("%d ledgers", len(names))
 	add(it)
-	hangs := 0
+	if stopped(it) {
+		return measureReport(o, company, port, items, started)
+	}
 	if a == 0 {
 		add(&mItem{key: "f696..", what: "the per-ledger items (ledgers 696-699: fields, then the stored opening) are not run by default",
 			note: `after working hours only, one ledger at a time: FinComBridge.exe measure --company "<name>" --ledgers 696, then --ledgers 697, 698, 699, each on its own`})
 	}
-	for i := a; a > 0 && i <= b && i <= len(names) && hangs < 2; i++ {
+	for i := a; a > 0 && i <= b && i <= len(names); i++ {
 		n := names[i-1]
-		if !freeOrStop() {
-			break
-		}
 		// the company check between them
 		pi, _ := measureOne(port, fmt.Sprintf("f%d-check", i), "the company check", companyCheckRequest(company), "COMPANY")
 		add(pi)
+		if stopped(pi) {
+			return measureReport(o, company, port, items, started)
+		}
 		fi, fraw := measureOne(port, fmt.Sprintf("f%d-fields", i), fmt.Sprintf("ledger %d %q: its master's fields (no opening)", i, n),
 			measureReqLedF(company, n), "LEDGER")
 		for _, l := range xmlDoc(fraw).All("LEDGER") {
@@ -341,29 +367,19 @@ func runMeasure(o measureOpts) (M, error) {
 				or(nt(l, "ISDEEMEDPOSITIVE"), "-"), nt(l, "RESERVEDNAME"), nt(l, "GUID"))
 		}
 		add(fi)
-		if fi.timedOut {
-			hangs++
-			fi.note = fmt.Sprintf("HANGS (no answer in %d s) ", tallyMaxSec()) + fi.note
-			continue
-		}
-		if !freeOrStop() {
-			break
+		if stopped(fi) {
+			return measureReport(o, company, port, items, started)
 		}
 		oi, oraw := measureOne(port, fmt.Sprintf("f%d-opening", i), fmt.Sprintf("ledger %d %q: the opening its master stores (the field only, no period)", i, n),
 			measureReqLedO(company, n), "LEDGER")
 		for _, l := range xmlDoc(oraw).All("LEDGER") {
 			oi.note = "stored opening " + or(nt(l, "OPENINGBALANCE"), "(empty)")
 		}
-		if oi.timedOut {
-			hangs++
-			oi.note = fmt.Sprintf("HANGS (no answer in %d s)", tallyMaxSec())
-		}
 		add(oi)
+		if stopped(oi) {
+			return measureReport(o, company, port, items, started)
+		}
 	}
-	if hangs >= 2 {
-		add(&mItem{key: "-", what: "the hanging-ledger check stopped after two hangs"})
-	}
-	freeOrStop() // Tally left answering (the check waited for) before the report is written
 	return measureReport(o, company, port, items, started)
 }
 
@@ -378,7 +394,7 @@ func measureReport(o measureOpts, company string, port int, items []*mItem, star
 	var b strings.Builder
 	fmt.Fprintf(&b, "FinCom Bridge %s - Tally measured for FinCom support\nCompany: %s   Tally port: %d   Computer: %s\nStarted %s, took %s\n",
 		BridgeVersion, company, port, computerName(), started.Format("2006-01-02 15:04:05"), time.Since(started).Round(time.Second))
-	fmt.Fprintf(&b, "Each request on its own, %d s at most; after a request that did not answer, nothing until the company check answered.\n", tallyMaxSec())
+	fmt.Fprintf(&b, "Each request on its own, %d s at most; the run stops at the first request that does not answer: nothing more is sent until the company check answers, and the run ends there.\n", tallyMaxSec())
 	if n := measureOver.Load(); n > 0 {
 		fmt.Fprintf(&b, "%d request(s) took more than %d s (the limit that stops reading on this computer); reading was not stopped, as the measuring tool was running.\n", n, selfStopSec())
 	}
@@ -423,7 +439,7 @@ func snapFile(label string) string {
 }
 
 func measureSnapshot(o measureOpts) (M, error) {
-	if err := readsAllowed(); err != nil {
+	if err := measureAllowed(); err != nil {
 		return nil, err
 	}
 	measuring.Add(1)
@@ -622,7 +638,11 @@ func measureCmd(args []string) int {
 	port := toInt(cfg("Port"))
 	if pingLocal(port, 3*time.Second) != nil {
 		body := M{"company": o.company, "out": o.out, "ledgers": o.ledgers, "snapshot": o.snapshot, "month": o.month}
-		if r := localCall("POST", "/measure", body); r != nil && r["ok"] != false {
+		r := localCall("POST", "/measure", body)
+		if r != nil && r["ok"] == false && str(r["error"]) != "" {
+			fmt.Println("The running bridge did not take it (" + str(r["error"]) + "); measuring from this console instead.")
+		}
+		if r != nil && r["ok"] != false {
 			fmt.Println("Measuring " + o.company + " through the running bridge (one request at a time)...")
 			for i := 0; i < 1800; i++ {
 				time.Sleep(2 * time.Second)
