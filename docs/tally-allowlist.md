@@ -30,7 +30,7 @@ conservative guess until the phase 1 measurement replaces it.
 
 First table: not yet measured; allowed for 2.1.7 only by the owner's decision of 2026-10-03 (open for every computer; the owner decides per build from now on); this line is replaced per build by the owner's decision, and removed once the table carries times.
 
-(re-measured on 2026-10-02: no times yet; the table's rows and shapes as of this build)
+(re-measured on 2026-10-03: no times yet; the table's rows and shapes are unchanged since the 2.1.6 build; only the owner's decision line above changed for 2.1.7)
 
 <!-- allowlist:begin -->
 | id | purpose | shape | worst case (s) | measured on | used by |
