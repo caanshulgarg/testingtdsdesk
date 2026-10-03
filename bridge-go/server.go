@@ -569,6 +569,19 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 			return startMeasure(m), nil
 		}
 		return measureStatus(), nil
+	case "/tray/readtest":
+		// round 13 (03-Oct-2026): "Test reading from Tally": three requests for one day of the open company, their
+		// counts and heads logged (readtest.go). Started by a person only, as the measuring tool is: a web page, FinCom's
+		// own included, is refused; the tray icon (a program on this computer) sends no Origin and no Sec-Fetch header
+		if r.Header.Get("Origin") != "" || r.Header.Get("Sec-Fetch-Site") != "" || r.Header.Get("Sec-Fetch-Mode") != "" || r.Header.Get("Sec-Fetch-Dest") != "" {
+			writeLog("Refused a read test request from a web page (" + path + ", " + r.Header.Get("Origin") + ").")
+			return nil, &httpErr{403, M{"ok": false, "error": "Test reading from Tally is started from the FinCom Bridge tray icon only, never from a web page."}}
+		}
+		if r.Method != "POST" {
+			return nil, &httpErr{405, M{"ok": false, "error": "Use POST."}}
+		}
+		o, _ := bodyObj(body)
+		return runReadTest(str(o["company"]))
 	case "/companyguid":
 		// a company whose Tally GUID changed (restored, re-created): confirmed on this computer, its new GUID is held
 		if err := needPost(r, "Use POST."); err != nil {

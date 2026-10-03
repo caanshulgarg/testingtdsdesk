@@ -178,7 +178,10 @@ var tr = &tray{since: map[string]time.Time{}, told: map[string]bool{}, started: 
 var taskbarCreated uintptr
 
 // --- talking to the service
-func trayCall(method, path string, body any) M {
+func trayCall(method, path string, body any) M { return trayCallT(method, path, body, 20*time.Second) }
+
+// the same with its own wait: the read test (round 13) sends Tally three requests of up to 60 s each
+func trayCallT(method, path string, body any, timeout time.Duration) M {
 	loadConfigRO()
 	var rd io.Reader
 	if body != nil {
@@ -187,7 +190,7 @@ func trayCall(method, path string, body any) M {
 	req, _ := http.NewRequest(method, fmt.Sprintf("http://127.0.0.1:%d%s", toInt(cfg("Port")), path), rd)
 	req.Header.Set("X-Bridge-Key", cfgS("Key"))
 	req.Header.Set("Content-Type", "application/json")
-	c := &http.Client{Timeout: 20 * time.Second, Transport: &http.Transport{Proxy: nil}}
+	c := &http.Client{Timeout: timeout, Transport: &http.Transport{Proxy: nil}}
 	r, err := c.Do(req)
 	if err != nil {
 		return nil
@@ -436,6 +439,7 @@ func (t *tray) menu() {
 	add(2, "Open FinCom", mfString)
 	add(11, "Test connection", mfString)
 	add(16, "Measure Tally (for FinCom support)", mfString)
+	add(18, "Test reading from Tally", mfString)
 	add(5, "Show log", mfString)
 	switch {
 	case st != nil && truthy(st["testMode"]) && truthy(st["switching"]):
@@ -602,6 +606,28 @@ func (t *tray) command(id int, st M) {
 				return
 			}
 		}
+	case 18:
+		// round 13: three requests for one day, one after the other (up to 60 s each), the answer waited for here
+		r := trayCallT("POST", "/tray/readtest", M{}, 4*time.Minute)
+		if r == nil {
+			msgBox("FinCom Bridge - Test reading from Tally", "The bridge is not answering.", mbIconWarning)
+			return
+		}
+		if r["ok"] != true {
+			msgBox("FinCom Bridge - Test reading from Tally", str(r["error"]), mbIconWarning)
+			return
+		}
+		var lines []string
+		for _, x := range arr(r["results"]) {
+			m := obj(x)
+			if e := str(m["error"]); e != "" {
+				lines = append(lines, str(m["label"])+": not answered: "+e)
+				continue
+			}
+			lines = append(lines, fmt.Sprintf("%s: %d vouchers, %d bytes, %.1f s", str(m["label"]), toInt(m["vouchers"]), toInt(m["bytes"]), num(m["seconds"])))
+		}
+		lines = append(lines, "", "The full lines, with the answer heads, are in Show log. Send that log to FinCom.")
+		msgBox("FinCom Bridge - Test reading from Tally", str(r["company"])+", "+str(r["day"])+"\n\n"+strings.Join(lines, "\n"), mbIconInfo)
 	case 12:
 		if !yesNo("FinCom Bridge", "Make FinCom Bridge "+BridgeVersion+" the main bridge on this computer? Bridge 1.15.0 is stopped and no longer starts; FinCom Bridge then reads and posts. Its pairing, settings and copy are kept.") {
 			return

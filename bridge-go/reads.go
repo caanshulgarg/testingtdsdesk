@@ -90,6 +90,21 @@ func dayBookRequest(company, from, to string) string {
 		"<SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><EXPLODEFLAG>Yes</EXPLODEFLAG></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>"
 }
 
+// round 13 (03-Oct-2026): the same Day Book request with both dates as d-MMM-yyyy (1-Jul-2026), the form Tally's own
+// screens show; the "Test reading from Tally" tray item sends it beside the yyyymmdd form to show which one a Tally
+// that answers the Day Book empty takes. The same REPORTNAME, so it is the allow-list's "Day Book" row
+func dayBookRequestDMY(company, from, to string) string {
+	return dayBookRequest(company, tallyDMY(from), tallyDMY(to))
+}
+
+// a yyyymmdd date as d-MMM-yyyy (no leading zero on the day, the English 3-letter month); anything else as given
+func tallyDMY(d string) string {
+	if !isTallyDate(d) {
+		return d
+	}
+	return fromTallyDate(d).Format("2-Jan-2006")
+}
+
 // vouchers from the Day Book, a month at a time; optionally only those touching one ledger
 func getVouchers(company, from, to, ledger, types string, pref int) (M, error) {
 	if err := readsAllowed(); err != nil {
