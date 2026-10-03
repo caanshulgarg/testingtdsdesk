@@ -154,15 +154,17 @@ try:
     # F2: the time of Tally's reply (acceptedAt) travels with the stamp (p_at), so an owner's release made after it is kept
     job["status"] = "running"; acc.clear()
     c, r = call({"kind": "posts_update", "version": "2.1.7", "bridge": main, "id": "p-1", "status": "failed", "results": [{"id": "v2", "ok": False, "accepted": True, "lastVchId": "26298", "acceptedAt": "2026-10-03T04:23:00Z", "state": "unknown"}], "items": [{"id": "v2", "state": "unknown"}]})
-    ok(acc and acc[0].get("p_at") == "2026-10-03T04:23:00Z", "F2. tally_post_id_accept carries p_at = the bridge's time of Tally's reply (%s)" % acc)
+    ok(acc and "p_at" not in acc[0], "F2/R5. tally_post_id_accept is called without the bridge's clock: the cloud stamps its own time (%s)" % acc)
     # F3: the posting's ids are read once; only ids not yet stamped are stamped (300 ok results, 298 stamped: 2 calls), and
     # only ids not yet released are released
     F.T["tally_post_ids"] = [{"job_id": "p-1", "fincom_id": "v%d" % i, "entry_id": "v%d" % i, "accepted_at": None if i > 298 else "2026-10-03T04:00:00Z", "released_at": None} for i in range(1, 301)]
     F.T["tally_post_ids"].append({"job_id": "p-1", "fincom_id": "w-1", "entry_id": "w-1", "accepted_at": None, "released_at": "2026-10-03T04:00:00Z"})
+    # R1: v298 was accepted once and then released by the owner (accepted_at kept as history): stamped again, so a new acceptance can clear the release
+    F.T["tally_post_ids"][297]["released_at"] = "2026-10-03T05:00:00Z"; F.T["tally_post_ids"][297]["released_by"] = "owner"
     job["status"] = "running"; acc.clear(); rel7.clear()
     c, r = call({"kind": "posts_update", "version": "2.1.7", "bridge": main, "id": "p-1", "status": "done", "results": [{"id": "v%d" % i, "ok": True, "verified": True, "vchNumber": str(i)} for i in range(1, 301)] + [{"id": "w-1", "ok": False, "message": "refused"}, {"id": "w2", "ok": False, "message": "refused"}],
                  "items": [{"id": "w-1", "state": "failed", "reason": "refused"}, {"id": "w2", "state": "failed", "reason": "refused"}]})
-    ok(c == 200 and sorted(a["p_id"] for a in acc) == ["v299", "v300"], "F3. 300 accepted entries, 298 already stamped: tally_post_id_accept called for the 2 new ones alone (%d calls)" % len(acc))
+    ok(c == 200 and sorted(a["p_id"] for a in acc) == ["v298", "v299", "v300"], "F3/R1. 300 accepted entries, 297 stamped and not released: tally_post_id_accept called for the 2 new ones and the released one alone (%d calls)" % len(acc))
     ok([a["p_id"] for a in rel7] == ["w2"], "F3. the id already released (w-1) is not released again; the new one is (%s)" % rel7)
     F.T["tally_post_ids"] = []
     # F4: a late update never goes back in time: a lower seq is ignored, and done / failed never return to running / taken
@@ -188,6 +190,24 @@ try:
     rs = {x["id"]: x for x in job["results"]}; it = {x["id"]: x for x in job["items"]}
     ok(c == 200 and rs["v1"].get("byOwner") is True and rs["v1"]["ok"] is True and it["v1"]["state"] == "in_tally" and rs["v2"]["ok"] is True and it["v2"]["state"] == "in_tally" and rs["v3"].get("byOwner") is True and it["v3"]["state"] == "notfound",
        "H1. per entry: the owner's v1 stands, the bridge's v2 is stored, the owner's v3 (no longer named) stays (%s)" % sorted(rs))
+    # R1: the bridge's entry newer than the owner's stamp (byOwnerAt) wins: it sent the entry once more after the release
+    job["status"] = "running"; job["checking"] = False
+    job["results"] = [{"id": "v3", "ok": False, "state": "notfound", "byOwner": True, "byOwnerAt": "2026-10-03T05:00:00Z"}]; job["items"] = [{"id": "v3", "state": "notfound", "byOwner": True, "byOwnerAt": "2026-10-03T05:00:00Z"}]
+    c, r = call({"kind": "posts_update", "version": "2.1.7", "bridge": main, "id": "p-1", "status": "running", "seq": 10, "updatedAt": "2026-10-03T05:30:00Z", "results": [{"id": "v3", "ok": True, "verified": True, "vchNumber": "26400", "acceptedAt": "2026-10-03T05:29:00Z"}], "items": [{"id": "v3", "state": "in_tally"}]})
+    rs = {x["id"]: x for x in job["results"]}; it = {x["id"]: x for x in job["items"]}
+    ok(c == 200 and rs["v3"]["ok"] is True and rs["v3"].get("byOwner") is not True and it["v3"]["state"] == "in_tally", "R1. a bridge result newer than the owner's release shows the bridge's state (%s)" % rs["v3"].get("state"))
+    job["results"] = []; job["items"] = []
+    # R2: a posting held (done + checking) keeps checking while the bridge still sends running updates; its final update lands
+    job["status"] = "done"; job["checking"] = True
+    c, r = call({"kind": "posts_update", "version": "2.1.7", "bridge": main, "id": "p-1", "status": "running", "seq": 11, "checking": False, "message": "sending", "results": [], "items": []})
+    ok(c == 200 and job["status"] == "done" and job["checking"] is True and r.get("stale") is True, "R2. clamped to done: checking kept true (%s)" % job.get("checking"))
+    c, r = call({"kind": "posts_update", "version": "2.1.7", "bridge": main, "id": "p-1", "status": "done", "seq": 12, "checking": False, "message": "1 of 1 in Tally", "results": [{"id": "v1", "ok": True, "verified": True}], "items": [{"id": "v1", "state": "in_tally"}]})
+    ok(c == 200 and not r.get("stale") and job["checking"] is False and job["message"] == "1 of 1 in Tally", "R2. the bridge's final update lands (%s)" % job["message"])
+    # R4: held: true (a partial fast batch, not found by tag) is an acceptance: stamped, unconfirmed, the posting held
+    job["status"] = "running"; job["checking"] = False; acc.clear(); rel7.clear()
+    c, r = call({"kind": "posts_update", "version": "2.1.7", "bridge": main, "id": "p-1", "status": "failed", "results": [{"id": "v9", "ok": False, "held": True, "message": "in a batch Tally took; not found by tag yet"}], "items": [{"id": "v9", "state": "failed", "reason": "not found by tag"}]})
+    it = {x["id"]: x for x in job["items"]}
+    ok(c == 200 and job["status"] == "done" and job["checking"] is True and it["v9"]["state"] == "unknown" and [a["p_id"] for a in acc] == ["v9"] and acc[0]["p_vch"] == "" and rel7 == [], "R4. held: stamped (no voucher), unknown, the posting held, never released (%s)" % job["status"])
     job["results"] = []; job["items"] = []
     # M2: the 2.1.5 bridge's exact words (the build on NWS144), no voucher id, no accepted flag: held, the id stamped
     T215 = "Tally replied 'created', but the entry cannot be found in 'ZZ CO'. It was not sent again: look for it in Tally (another company open in Tally, or an Optional voucher)."
@@ -211,10 +231,11 @@ try:
     # mark them accepted from its memory
     F.T["tally_post_jobs"].append({"id": "p-2", "firm_id": FIRM, "device_id": "d-1", "company": "ZZ CO", "status": "waiting", "payload": {"vouchers": [{"id": "sid-3"}]}, "created_at": "2026-10-03T10:00:00Z"})
     F.T["tally_post_ids"] = [{"job_id": "p-2", "fincom_id": "h9f8e7", "entry_id": "sid-3", "accepted_at": "2026-10-03T04:23:00Z", "released_at": "2026-10-03T05:00:00Z", "released_by": "owner", "released_why": "not in the Day Book"},
-                             {"job_id": "p-2", "fincom_id": "h2", "entry_id": "sid-4", "accepted_at": None, "released_at": "2026-10-03T05:00:00Z", "released_by": "bridge", "released_why": "refused"}]
+                             {"job_id": "p-2", "fincom_id": "h2", "entry_id": "sid-4", "accepted_at": None, "released_at": "2026-10-03T05:00:00Z", "released_by": "bridge", "released_why": "refused"},
+                             {"job_id": "p-2", "fincom_id": "h3", "entry_id": "sid-5", "accepted_at": "2026-10-03T06:00:00Z", "released_at": None, "released_by": "owner", "released_why": "cleared since"}]
     c, r = call({"kind": "posts_take", "version": "2.1.7", "bridge": main})
     ok(c == 200 and (r.get("job") or {}).get("id") == "p-2" and r["job"].get("released") == [{"id": "sid-3", "at": "2026-10-03T05:00:00Z", "by": "owner", "why": "not in the Day Book"}],
-       "F2. posts_take: the job carries released: [{id, at, by, why}] for the owner's releases alone (%s)" % (r.get("job") or {}).get("released"))
+       "F2/R5. posts_take: the job carries released: [{id, at, by, why}] for the owner's releases still in force alone (%s)" % (r.get("job") or {}).get("released"))
     F.T["tally_post_ids"] = []; F.T["tally_post_jobs"][-1]["status"] = "cancelled"
     F.rpc = real7
     # S4: the cloud says stamped 0 (the id in tally_post_ids spelt otherwise): said in the log, so it is seen

@@ -114,12 +114,11 @@ $function$;
 create or replace function public.tally_post_accept_text(p text) returns boolean language sql immutable as $function$
   select (coalesce(p, '') ~* '\m(CREATED|ALTERED)\M' and (coalesce(p, '') ~* '\m(LASTVCHID|VCHID|MASTERID|voucher( no\.?| number| id)?)\D{0,6}[1-9]\d*' or coalesce(p, '') ~* '\m(CREATED|ALTERED)\M\D{0,4}[1-9]\d*'))
       or coalesce(p, '') ~* 'replied ''(created|altered)'''
-      or (coalesce(p, '') ~* '\m(CREATED|ALTERED)\M' and coalesce(p, '') ~* 'cannot be found')
 $function$;
 -- a result of the bridge carries an acceptance by Tally: accepted, created / altered > 0, a voucher id / number, a master
 -- id, a GUID, or Tally's / the bridge's words
 create or replace function public.tally_post_result_accepted(r jsonb) returns boolean language sql immutable as $function$
-  select tally_post_bool(r->>'accepted')
+  select tally_post_bool(r->>'accepted') or tally_post_bool(r->>'held')
       or (coalesce(r->>'created', '') ~ '^\d+$' and (r->>'created')::int > 0) or (coalesce(r->>'altered', '') ~ '^\d+$' and (r->>'altered')::int > 0)
       or coalesce(r->>'lastVchId', '') <> '' or coalesce(r->>'vchNumber', '') <> '' or coalesce(r->>'masterId', '') <> '' or coalesce(r->>'guid', '') <> ''
       or tally_post_accept_text(r->>'message') or tally_post_accept_text(r->>'reason')
@@ -137,7 +136,7 @@ create or replace function public.tally_post_job_accepted(p_job uuid, p_results 
 language sql stable security definer set search_path to 'public', 'pg_temp' as $function$
   with ids as (select fincom_id, entry_id, accepted_at, released_at from tally_post_ids where job_id = p_job),
   res as (select r->>'id' id, tally_post_result_accepted(r) acc, tally_post_result_confirmed(r) conf from jsonb_array_elements(coalesce(p_results, '[]'::jsonb)) r where r->>'id' is not null),
-  its as (select i->>'id' id, (tally_post_bool(i->>'accepted') or tally_post_accept_text(i->>'reason')) acc, tally_post_result_confirmed(i) conf from jsonb_array_elements(coalesce(p_items, '[]'::jsonb)) i where i->>'id' is not null),
+  its as (select i->>'id' id, (tally_post_bool(i->>'accepted') or tally_post_bool(i->>'held') or tally_post_accept_text(i->>'reason')) acc, tally_post_result_confirmed(i) conf from jsonb_array_elements(coalesce(p_items, '[]'::jsonb)) i where i->>'id' is not null),
   conf as (select id from res where conf union select id from its where conf),
   sig as (select id from res where acc union select id from its where acc),
   hits as (select coalesce(entry_id, fincom_id) id from ids i where accepted_at is not null and released_at is null
@@ -187,31 +186,35 @@ end $function$;
 revoke all on function public.tally_post_requeue() from public, anon, authenticated;
 revoke all on function public.tally_post_job_accepted(uuid, jsonb, jsonb) from public, anon, authenticated;
 
--- tally-ingest saw Tally accept an entry: the id is stamped (and made live again if the sync had freed it); a release
--- is cleared — Tally has the voucher after all — unless an OWNER released it after the acceptance (p_at: the bridge's
--- time of Tally's reply; the bridge's memory of a first send must not undo what the owner saw later). Service role.
--- p_id: the tag's spelling, the bridge's (letters and digits) or FinCom's entry id; stamped 0 when none of the posting's
--- ids matches (tally-ingest logs it).
+-- tally-ingest saw Tally accept an entry: the id is stamped with the SERVER's time of the first report that carried the
+-- acceptance (the cloud is the one judge of time; p_at, the bridge's clock, is taken no more and kept in the signature
+-- only) and made live again if the sync had freed it. A release is cleared — Tally has the voucher after all — unless an
+-- OWNER released it after that first stamp and the posting has not been handed to a bridge since (taken_at): then the
+-- report is the bridge's memory of the first send and the owner's word stands. Once the posting is taken again (Retry
+-- after the release: the bridge sends the entry once more), a reported acceptance is a new one and clears the release.
+-- Service role. p_id: the tag's spelling, the bridge's (letters and digits) or FinCom's entry id; stamped 0 when none of
+-- the posting's ids matches (tally-ingest logs it).
 create or replace function public.tally_post_id_accept(p_job uuid, p_id text, p_vch text, p_at timestamptz default null)
 returns jsonb language plpgsql security definer set search_path to 'public', 'pg_temp' as $function$
-declare n int; at timestamptz := coalesce(p_at, now()); vch text := nullif(left(btrim(coalesce(p_vch, '')), 60), '');
+declare n int; vch text := nullif(left(btrim(coalesce(p_vch, '')), 60), ''); retaken timestamptz;
 begin
   if auth.role() <> 'service_role' then raise exception 'service role only' using errcode = '42501'; end if;
   if regexp_replace(coalesce(p_id, ''), '[^A-Za-z0-9]', '', 'g') = '' then return jsonb_build_object('ok', false, 'error', 'no id'); end if;
+  select taken_at into retaken from tally_post_jobs where id = p_job;
   begin
-    update tally_post_ids set accepted_at = coalesce(accepted_at, at), accepted_vch = coalesce(vch, accepted_vch),
-           live = case when released_by = 'owner' and released_at >= at then live else true end,
-           released_at = case when released_by = 'owner' and released_at >= at then released_at end,
-           released_by = case when released_by = 'owner' and released_at >= at then released_by end,
-           released_why = case when released_by = 'owner' and released_at >= at then released_why end
+    update tally_post_ids set accepted_at = coalesce(accepted_at, now()), accepted_vch = coalesce(vch, accepted_vch),
+           live = case when released_by = 'owner' and (accepted_at is null or released_at >= accepted_at) and (retaken is null or retaken <= released_at) then live else true end,
+           released_at = case when released_by = 'owner' and (accepted_at is null or released_at >= accepted_at) and (retaken is null or retaken <= released_at) then released_at end,
+           released_by = case when released_by = 'owner' and (accepted_at is null or released_at >= accepted_at) and (retaken is null or retaken <= released_at) then released_by end,
+           released_why = case when released_by = 'owner' and (accepted_at is null or released_at >= accepted_at) and (retaken is null or retaken <= released_at) then released_why end
      where job_id = p_job and tally_post_id_match(fincom_id, entry_id, p_id);
     get diagnostics n = row_count;
   exception when unique_violation then
     -- another posting holds the id live: stamped all the same, so that it is never freed here either
-    update tally_post_ids set accepted_at = coalesce(accepted_at, at), accepted_vch = coalesce(vch, accepted_vch),
-           released_at = case when released_by = 'owner' and released_at >= at then released_at end,
-           released_by = case when released_by = 'owner' and released_at >= at then released_by end,
-           released_why = case when released_by = 'owner' and released_at >= at then released_why end
+    update tally_post_ids set accepted_at = coalesce(accepted_at, now()), accepted_vch = coalesce(vch, accepted_vch),
+           released_at = case when released_by = 'owner' and (accepted_at is null or released_at >= accepted_at) and (retaken is null or retaken <= released_at) then released_at end,
+           released_by = case when released_by = 'owner' and (accepted_at is null or released_at >= accepted_at) and (retaken is null or retaken <= released_at) then released_by end,
+           released_why = case when released_by = 'owner' and (accepted_at is null or released_at >= accepted_at) and (retaken is null or retaken <= released_at) then released_why end
      where job_id = p_job and tally_post_id_match(fincom_id, entry_id, p_id);
     get diagnostics n = row_count;
   end;
@@ -221,7 +224,7 @@ revoke all on function public.tally_post_id_accept(uuid, text, text, timestamptz
 
 -- what a posting becomes after the owner's mark or release: {status, checking, posted, total}. Done when every entry is
 -- posted. A posting still with the bridge (running, taken) or held for checking is settled by the entries left: one still
--- on its way (no word yet, waiting, sending) leaves it to the bridge; one still unknown holds it (done + checking); else
+-- on its way (no word yet, waiting, sending, or sent and not read back) leaves it to the bridge; one still unknown holds it (done + checking); else
 -- it is failed. Finished postings (done, failed, cancelled, waiting) keep their status.
 create or replace function public.tally_post_job_settle(p_status text, p_checking boolean, p_payload jsonb, p_results jsonb, p_items jsonb)
 returns jsonb language plpgsql immutable as $function$
@@ -237,7 +240,7 @@ begin
           exists (select 1 from jsonb_array_elements(coalesce(p_results, '[]'::jsonb)) r where tally_post_id_match(fk, ek, r->>'id')) has_result
         from v)
   select count(*), count(*) filter (where is_posted),
-         count(*) filter (where not is_posted and (state in ('waiting', 'sending') or (state is null and not has_result))),
+         count(*) filter (where not is_posted and (state in ('waiting', 'sending', 'sent') or (state is null and not has_result))),
          count(*) filter (where not is_posted and state = 'unknown')
     into total, posted, pending, unknown from e;
   if posted >= total then st := 'done'; chk := false;
@@ -266,15 +269,15 @@ begin
   if vch = '' then raise exception 'give the voucher number as Tally shows it'; end if;
   select v->>'id' into eid from jsonb_array_elements(coalesce(j.payload->'vouchers', '[]'::jsonb)) v where tally_post_id_match(tally_fincom_id(v), v->>'id', p_id) limit 1;
   if eid is null then raise exception 'the entry % is not in this posting', p_id; end if;
-  stamp := jsonb_build_object('ok', true, 'verified', true, 'state', 'in_tally', 'outcomeUnknown', false, 'reason', '', 'vchNumber', vch, 'byOwner', true,
+  stamp := jsonb_build_object('ok', true, 'verified', true, 'state', 'in_tally', 'outcomeUnknown', false, 'reason', '', 'vchNumber', vch, 'byOwner', true, 'byOwnerAt', to_char(now() at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
                               'message', 'Marked posted by the owner on ' || to_char(now(), 'DD-Mon-YYYY') || ': in Tally as voucher ' || vch || case when note <> '' then ' (' || note || ')' else '' end);
   -- results and items (2.1.x bridges): the entry's element updated, or added
   select coalesce(jsonb_agg(case when tally_post_id_match(r->>'id', r->>'id', eid) or regexp_replace(coalesce(r->>'id', ''), '[^A-Za-z0-9]', '', 'g') = fid then r || stamp else r end), '[]'::jsonb) into res from jsonb_array_elements(coalesce(j.results, '[]'::jsonb)) r;
   if not exists (select 1 from jsonb_array_elements(res) r where tally_post_bool(r->>'byOwner') and (r->>'id' = eid or regexp_replace(coalesce(r->>'id', ''), '[^A-Za-z0-9]', '', 'g') = fid))
     then res := res || jsonb_build_array(jsonb_build_object('id', eid, 'kind', 'voucher') || stamp); end if;
-  select coalesce(jsonb_agg(case when tally_post_id_match(i->>'id', i->>'id', eid) or regexp_replace(coalesce(i->>'id', ''), '[^A-Za-z0-9]', '', 'g') = fid then i || jsonb_build_object('state', 'in_tally', 'reason', '', 'byOwner', true) else i end), '[]'::jsonb) into its from jsonb_array_elements(coalesce(j.items, '[]'::jsonb)) i;
+  select coalesce(jsonb_agg(case when tally_post_id_match(i->>'id', i->>'id', eid) or regexp_replace(coalesce(i->>'id', ''), '[^A-Za-z0-9]', '', 'g') = fid then i || jsonb_build_object('state', 'in_tally', 'reason', '', 'byOwner', true, 'byOwnerAt', stamp->>'byOwnerAt') else i end), '[]'::jsonb) into its from jsonb_array_elements(coalesce(j.items, '[]'::jsonb)) i;
   if not exists (select 1 from jsonb_array_elements(its) i where tally_post_bool(i->>'byOwner') and (i->>'id' = eid or regexp_replace(coalesce(i->>'id', ''), '[^A-Za-z0-9]', '', 'g') = fid))
-    then its := its || jsonb_build_array(jsonb_build_object('id', eid, 'kind', 'voucher', 'state', 'in_tally', 'reason', '', 'byOwner', true)); end if;
+    then its := its || jsonb_build_array(jsonb_build_object('id', eid, 'kind', 'voucher', 'state', 'in_tally', 'reason', '', 'byOwner', true, 'byOwnerAt', stamp->>'byOwnerAt')); end if;
   o := tally_post_job_settle(j.status, j.checking, j.payload, res, its);
   -- the id stays live, accepted, a release cleared (another posting holding it live is a conflict the owner must clear
   -- first: cancel that one)
@@ -317,14 +320,14 @@ begin
   update tally_post_ids set live = false, released_at = now(), released_by = 'owner', released_why = why
    where job_id = p_job and tally_post_id_match(fincom_id, entry_id, p_id);
   get diagnostics n = row_count;
-  stamp := jsonb_build_object('ok', false, 'verified', false, 'state', 'notfound', 'outcomeUnknown', false, 'byOwner', true,
+  stamp := jsonb_build_object('ok', false, 'verified', false, 'state', 'notfound', 'outcomeUnknown', false, 'byOwner', true, 'byOwnerAt', to_char(now() at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
                               'reason', 'Not in Tally: released by the owner on ' || to_char(now(), 'DD-Mon-YYYY') || ' (' || why || ')');
   select coalesce(jsonb_agg(case when r->>'id' = eid or regexp_replace(coalesce(r->>'id', ''), '[^A-Za-z0-9]', '', 'g') = fid then r || stamp else r end), '[]'::jsonb) into res from jsonb_array_elements(coalesce(j.results, '[]'::jsonb)) r;
   if not exists (select 1 from jsonb_array_elements(res) r where tally_post_bool(r->>'byOwner') and (r->>'id' = eid or regexp_replace(coalesce(r->>'id', ''), '[^A-Za-z0-9]', '', 'g') = fid))
     then res := res || jsonb_build_array(jsonb_build_object('id', eid, 'kind', 'voucher') || stamp); end if;
-  select coalesce(jsonb_agg(case when i->>'id' = eid or regexp_replace(coalesce(i->>'id', ''), '[^A-Za-z0-9]', '', 'g') = fid then i || jsonb_build_object('state', 'notfound', 'reason', stamp->>'reason', 'outcomeUnknown', false, 'byOwner', true) else i end), '[]'::jsonb) into its from jsonb_array_elements(coalesce(j.items, '[]'::jsonb)) i;
+  select coalesce(jsonb_agg(case when i->>'id' = eid or regexp_replace(coalesce(i->>'id', ''), '[^A-Za-z0-9]', '', 'g') = fid then i || jsonb_build_object('state', 'notfound', 'reason', stamp->>'reason', 'outcomeUnknown', false, 'byOwner', true, 'byOwnerAt', stamp->>'byOwnerAt') else i end), '[]'::jsonb) into its from jsonb_array_elements(coalesce(j.items, '[]'::jsonb)) i;
   if not exists (select 1 from jsonb_array_elements(its) i where tally_post_bool(i->>'byOwner') and (i->>'id' = eid or regexp_replace(coalesce(i->>'id', ''), '[^A-Za-z0-9]', '', 'g') = fid))
-    then its := its || jsonb_build_array(jsonb_build_object('id', eid, 'kind', 'voucher', 'state', 'notfound', 'reason', stamp->>'reason', 'byOwner', true)); end if;
+    then its := its || jsonb_build_array(jsonb_build_object('id', eid, 'kind', 'voucher', 'state', 'notfound', 'reason', stamp->>'reason', 'byOwner', true, 'byOwnerAt', stamp->>'byOwnerAt')); end if;
   o := tally_post_job_settle(j.status, j.checking, j.payload, res, its);
   insert into tally_post_marks (firm_id, job_id, entry_id, action, vch, note, by_user) values (f, p_job, eid, 'released', null, why, auth.uid());
   update tally_post_jobs set results = res, items = its, status = o->>'status', checking = (o->>'checking')::boolean,
@@ -334,6 +337,16 @@ begin
 end $function$;
 revoke all on function public.tally_post_id_release_owner(uuid, text, text) from public, anon;
 grant execute on function public.tally_post_id_release_owner(uuid, text, text) to authenticated;
+
+-- tally_post_take as migration 5, with one change (R6): the posting's update counter (seq) is cleared when it is handed
+-- out, so a bridge starting afresh (a new job folder after a Retry) is not dropped as late
+create or replace function public.tally_post_take(p_device uuid)
+returns setof public.tally_post_jobs language sql security definer set search_path = public, pg_temp as $$
+  update tally_post_jobs set status = 'taken', taken_at = now(), updated_at = now(), seq = null, message = 'Taken by the Tally computer'
+   where id = (select id from tally_post_jobs where device_id = p_device and status = 'waiting' order by created_at limit 1 for update skip locked)
+  returning *;
+$$;
+revoke all on function public.tally_post_take(uuid) from public, anon, authenticated;
 
 -- tally_post_enqueue as migration 24, with one change in its Retry branch (L2): a failed or cancelled posting is not
 -- queued again while one of its ids is live in another posting (the bill would be sent from two postings); the id named.
@@ -397,6 +410,22 @@ begin
    where i.job_id = j.id and i.accepted_at is null and i.released_by is distinct from 'owner' and tally_post_id_match(i.fincom_id, i.entry_id, a.id);
   get diagnostics n = row_count;
   raise notice 'migration 36b backfill: % id(s) stamped accepted_at', n;
+end $$;
+-- R7: an accepted id not released is live again (the voucher is in Tally; the sync had freed it when the posting failed),
+-- one row at a time: a row another posting holds live is skipped and said in the log, the rest go through
+do $$
+declare r record; n int := 0; k int := 0;
+begin
+  for r in select fincom_id, job_id from tally_post_ids where accepted_at is not null and released_at is null and not live loop
+    begin
+      update tally_post_ids set live = true where job_id = r.job_id and fincom_id = r.fincom_id;
+      n := n + 1;
+    exception when unique_violation then
+      k := k + 1;
+      raise notice 'migration 36b backfill: % of posting % is live in another posting; left as it is', r.fincom_id, r.job_id;
+    end;
+  end loop;
+  raise notice 'migration 36b backfill: % accepted id(s) live again, % skipped', n, k;
 end $$;
 
 commit;
