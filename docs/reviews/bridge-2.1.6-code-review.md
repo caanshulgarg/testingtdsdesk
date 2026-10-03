@@ -50,3 +50,5 @@ R5. (risk) bridge and server clocks compared: the cloud is the single judge (ser
 R6. (risk) a bridge with no folder for a handed-back job started seq at 1 and lost every update: posts_take clears seq.
 R7. (risk) the backfill left live as it was: restored where accepted and not released.
 R8, R9. (nits) accept-text clause accepting CREATED 0; wording for a non-Go listener on the port.
+
+Range: be5542f..5c10789 (bridge-go/, server/tally-cloud/index.ts, migrations 36, 36b, 37, src/js post and queue files, app/src Post and Tally screens)
