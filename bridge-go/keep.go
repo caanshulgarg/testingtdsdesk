@@ -561,6 +561,7 @@ func renameKeepLedger(dir string, st M, old, nw string) int {
 // an entry FinCom posted and the read-back found (with its GUID and change number): noted for the copier, which puts it
 // into the copy and sends its day to the cloud without reading the day from Tally
 func addPostedForCopy(company string, head M, xml string) {
+	noteVerified(acceptedKey("", xml), company, head) // round 6: a confirmed FinCom id is never sent again by any job
 	g, a, d := str(head["guid"]), strings.TrimSpace(str(head["alter"])), str(head["date"])
 	if g == "" || !re(`^\d+$`).MatchString(a) || !isTallyDate(d) || xml == "" {
 		return

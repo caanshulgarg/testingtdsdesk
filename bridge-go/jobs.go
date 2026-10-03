@@ -128,10 +128,19 @@ func newPostJob(pl M) (M, error) {
 		v := jobView(dir)
 		// Retry (the same job sent again after it failed or was cancelled): the entries not in Tally go again; whatever
 		// reached Tally is found by its tag first and never sent twice
-		if st := str(v["status"]); (st == "failed" || st == "cancelled") && !jobAlive(id) {
+		// Round 6: the same job handed back by the cloud (requeue) while entries Tally accepted await confirmation: run
+		// again too, which only looks for them (itemsToSend never queues an accepted entry)
+		var rs []M
+		for _, r := range arr(v["results"]) {
+			if o := obj(r); o != nil {
+				rs = append(rs, o)
+			}
+		}
+		st := str(v["status"])
+		if ((st == "failed" || st == "cancelled") || (st == "done" && len(acceptedUnconfirmed(rs)) > 0)) && !jobAlive(id) {
 			var kept []any
-			for _, r := range arr(v["results"]) {
-				if confirmedResult(obj(r)) {
+			for _, r := range rs {
+				if confirmedResult(r) {
 					kept = append(kept, r)
 				}
 			}
@@ -141,7 +150,7 @@ func newPostJob(pl M) (M, error) {
 			_ = os.Remove(filepath.Join(dir, "cancel"))
 			v["results"], v["done"], v["resumed"], v["status"], v["message"], v["finishedAt"] = kept, len(kept), true, "queued", "Retrying", ""
 			startJob(id, dir, v)
-			writeLog(fmt.Sprintf("Posting job %s: retried (%d already in Tally kept)", id, len(kept)))
+			writeLog(fmt.Sprintf("Posting job %s: %s (%d already in Tally or accepted by it kept, never sent again)", id, map[bool]string{true: "handed back; its accepted entries are looked for again", false: "retried"}[st == "done"], len(kept)))
 			return jobView(dir), nil
 		}
 		return v, nil
@@ -313,6 +322,9 @@ func jobWorker(dir string) {
 				if r["accepted"] == true {
 					// fault 1: Tally accepted it (CREATED with a voucher id): being checked, never sent again
 					e["accepted"], e["lastVchId"], e["reason"] = true, str(r["lastVchId"]), "Tally accepted it (voucher id "+or(str(r["lastVchId"]), "not given")+"); being checked, not sent again"
+					if r["acceptedBefore"] == true {
+						e["reason"] = str(r["message"]) // names the earlier job that Tally accepted it in
+					}
 				}
 			} else if r != nil && r["ok"] != true {
 				e["reason"] = failedLine(str(r["message"]))
@@ -470,6 +482,35 @@ func jobWorker(dir string) {
 			}
 		}
 		todo = left
+	}
+	// Round 6: an entry whose FinCom id Tally accepted before, in any job on this computer (sync\posted-ids.json): never
+	// sent; confirmed ones are counted as already in Tally, the rest are looked for again at the end of this job
+	{
+		var left []M
+		for _, it := range todo {
+			key := acceptedKey(str(it["id"]), str(it["xml"]))
+			a := acceptedInfo(key)
+			if str(it["kind"]) != "voucher" || a == nil {
+				left = append(left, it)
+				continue
+			}
+			k := str(it["id"])
+			if a["verified"] == true {
+				// confirmed in Tally before: the duplicate check before sending finds it there by its id and refuses it with
+				// Tally's voucher number ("Already in Tally (voucher no. ...)"), which FinCom already understands
+				writeLog("  voucher " + k + ": confirmed in Tally before (job " + str(a["job"]) + ", voucher id " + str(a["masterId"]) + "); the check before sending looks for it")
+				left = append(left, it)
+				continue
+			}
+			lv := str(a["lastVchId"])
+			r := M{"id": k, "kind": "voucher", "ok": false, "verified": nil, "outcomeUnknown": true, "accepted": true, "acceptedBefore": true, "state": "unknown", "lastVchId": lv, "company": company, "port": port,
+				"message": "Tally accepted this entry before (job " + str(a["job"]) + ", voucher id " + or(lv, "not given") + ") and it is not confirmed yet; being checked, not sent again"}
+			results = append(results, r)
+			noteAccepted(key, company, str(p["id"]), lv)
+			writeLog("  voucher " + k + ": ACCEPTED BEFORE in job " + str(a["job"]) + " (voucher id " + or(lv, "none") + "), not confirmed yet; not sent again, looked for again at the end of this job")
+		}
+		todo = left
+		save()
 	}
 	p["resumed"] = true
 	round = 0
@@ -752,6 +793,9 @@ func jobWorker(dir string) {
 		for _, r := range res {
 			delete(r, "replySnip")
 			k := str(r["id"])
+			if r["accepted"] == true {
+				noteAccepted(acceptedKey(k, ""), company, str(p["id"]), str(r["lastVchId"]))
+			}
 			delete(sending, k)
 			if resIDs[k] {
 				// shown live already: brought up to date (read back since)

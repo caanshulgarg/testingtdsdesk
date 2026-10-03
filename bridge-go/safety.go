@@ -324,6 +324,17 @@ func otherTag(narration, tag string) bool {
 // voucher id in its month. found: the head and how; not found: nil, ""; Tally not answering: an error (nothing is decided)
 func findAccepted(port int, company, xml, lv string) (M, string, error) {
 	date, tag := group(`<DATE>(\d{8})</DATE>`, xml, 1), reTag.FindString(xml)
+	// first Tally's own voucher id, looked up directly (round 6)
+	if lv != "" {
+		k, err := voucherByMaster(port, company, date, lv)
+		if err != nil {
+			return nil, "", err
+		}
+		if k != nil && !k.cancelled && !otherTag(k.narration, tag) {
+			return headOfKey(*k), "voucher id", nil
+		}
+	}
+	// then the day's entries, by the tag
 	var heads []M
 	if date != "" {
 		ks, err := tagsOnDate(port, company, date)
@@ -336,15 +347,6 @@ func findAccepted(port int, company, xml, lv string) (M, string, error) {
 	}
 	if h, how := matchHead(heads, tag, lv); h != nil {
 		return h, how, nil
-	}
-	if lv != "" {
-		k, err := voucherByMaster(port, company, date, lv)
-		if err != nil {
-			return nil, "", err
-		}
-		if k != nil && !k.cancelled && !otherTag(k.narration, tag) {
-			return headOfKey(*k), "voucher id", nil
-		}
 	}
 	return nil, "", nil
 }
@@ -367,6 +369,7 @@ func markAccepted(r M, company, lv string, heads []M, lookedUp string) {
 		said = "altered"
 	}
 	r["message"] = fmt.Sprintf("Tally replied '%s' (voucher id %s) but the entry was not found yet in '%s' on %s; it is being checked and is not sent again", said, or(lv, "not given"), company, ddmmyyyy(date))
+	noteAccepted(acceptedKey(id, xs), company, str(r["job"]), lv) // on disk: never sent again by any later job either
 	var ids []string
 	for _, h := range heads {
 		ids = append(ids, str(h["masterId"]))

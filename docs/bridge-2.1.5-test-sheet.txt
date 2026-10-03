@@ -40,6 +40,11 @@ What is new in 2.1.4 (since 2.1.3)
     nothing is sent except one small check (the company's name and GUID), at most once a minute, until Tally answers it.
   - The company's GUID is held: a company of the same name with another GUID (restored, re-created) is neither read nor
     posted to.
+  - (03-Oct rebuild, after job 3b03cc5e was sent twice on NWS144) Every FinCom id Tally accepted or that was confirmed in
+    Tally is written to sync\posted-ids.json on the Tally computer; an entry whose id is there is never sent again by any
+    route (the cloud handing the job back, Post again, Retry, a restart): it is only looked for, first by the voucher id
+    Tally gave (LASTVCHID, request FinComByMaster), then by its tag on its date, and shows "unknown (accepted)" until
+    found. Before any send Tally is still asked for the id (the "Already in Tally" check).
   - Every voucher posted carries its FinCom id in its narration ("TDSDesk:<id>"; since the 03-Oct rebuild of 2.1.5 it
     is written FIRST, "TDSDesk:<id> | <narration>", so a narration cut short can never lose it, and it is found wherever
     it stands); before posting, Tally is looked through for that id on the voucher's date first, then the party / bill /

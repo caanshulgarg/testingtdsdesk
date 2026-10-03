@@ -970,7 +970,7 @@ func TestPostedTagFoundByDate(t *testing.T) {
 	}
 	for _, id := range f.ids()[n1:] {
 		switch id {
-		case "FinComCompany", "TDSDeskCompanies", "TDSDeskCompanyInfo", dupCheckID, "FinComTag", "Import":
+		case "FinComCompany", "TDSDeskCompanies", "TDSDeskCompanyInfo", dupCheckID, "FinComTag", "Import", masterCheckID: // round 6: Tally's voucher id looked up first
 		default:
 			t.Fatalf("the posting asked %q (%v)", id, f.ids()[n1:])
 		}

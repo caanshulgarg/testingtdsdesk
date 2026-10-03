@@ -299,12 +299,13 @@ func TestConfirmByLastVchId(t *testing.T) {
 	if logLines("voucher emu6: confirmed by Tally's voucher id "+master) < 1 {
 		t.Fatal("the log does not say the entry was confirmed by Tally's voucher id (looked up)")
 	}
+	// (round 6: the lookup by Tally's voucher id now runs first for every entry, so one per posting)
 	bm := f.bodiesOf("FinComByMaster")
-	if len(bm) != 1 || !strings.Contains(bm[0], "$MasterID = "+master) {
+	if len(bm) != 2 || !strings.Contains(bm[1], "$MasterID = "+master) {
 		t.Fatalf("the voucher-id lookup: %v", bm)
 	}
-	if !strings.Contains(bm[0], "<SVFROMDATE>"+f1Date[:6]+"01</SVFROMDATE><SVTODATE>"+monthEnd(f1Date[:6])+"</SVTODATE>") {
-		t.Fatalf("the voucher-id lookup is not limited to the voucher's month: %s", cut(bm[0], 400))
+	if !strings.Contains(bm[1], "<SVFROMDATE>"+f1Date[:6]+"01</SVFROMDATE><SVTODATE>"+monthEnd(f1Date[:6])+"</SVTODATE>") {
+		t.Fatalf("the voucher-id lookup is not limited to the voucher's month: %s", cut(bm[1], 400))
 	}
 	a, ok := tallyAllowList["FinComByMaster"]
 	if !ok || a.measureOnly {

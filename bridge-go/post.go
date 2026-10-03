@@ -194,10 +194,42 @@ func invokeImport(p M) (M, error) {
 			writeLog("  " + g.kind + " " + str(id) + ": " + st)
 		}
 	}
-	// one read-back for everything just posted
+	// one read-back for everything just posted. Round 6 (03-Oct-2026): FIRST each entry by the voucher id Tally gave
+	// (LASTVCHID, looked up directly with FinComByMaster); the tag read-back (the day's entries) is the second check
+	byID := map[string]M{}            // id -> the head found by Tally's voucher id
+	lookedUpBy := map[string]string{} // id -> what the lookup said when it did not confirm
+	var unresolved []M
+	for _, r := range pending {
+		xs := str(r["xmlSent"])
+		tag, lv := reTag.FindString(xs), str(r["lastVchId"])
+		if lv == "" {
+			unresolved = append(unresolved, r)
+			continue
+		}
+		k, e := voucherByMaster(port, company, group(`<DATE>(\d{8})</DATE>`, xs, 1), lv)
+		switch {
+		case e != nil:
+			lookedUpBy[str(r["id"])] = "Tally did not answer (" + cut(e.Error(), 80) + ")"
+		case k == nil:
+			lookedUpBy[str(r["id"])] = "not found in its month"
+		case k.cancelled:
+			lookedUpBy[str(r["id"])] = "found, but cancelled"
+		case otherTag(k.narration, tag):
+			lookedUpBy[str(r["id"])] = "found, but it carries another entry's tag"
+		default:
+			byID[str(r["id"])] = headOfKey(*k)
+			if hasTag(k.narration, tag) {
+				writeLog("  voucher " + str(r["id"]) + ": confirmed by Tally's voucher id " + lv + " (looked up directly; its narration carries " + tag + ")")
+			} else {
+				writeLog("  voucher " + str(r["id"]) + ": confirmed by Tally's voucher id " + lv + " (looked up directly; its narration in Tally does not carry " + or(tag, "a tag") + ")")
+			}
+			continue
+		}
+		unresolved = append(unresolved, r)
+	}
 	if len(pending) > 0 {
 		var dates []string
-		for _, r := range pending {
+		for _, r := range unresolved {
 			if d := group(`<DATE>(\d{8})</DATE>`, str(r["xmlSent"]), 1); d != "" {
 				dates = append(dates, d)
 			}
@@ -223,30 +255,17 @@ func invokeImport(p M) (M, error) {
 		for _, r := range pending {
 			xs := str(r["xmlSent"])
 			tag, lv := reTag.FindString(xs), str(r["lastVchId"])
-			// by the tag wherever it is in the narration; else by Tally's voucher id (fault 1: a head whose narration came
-			// back without the tag), never one carrying another entry's tag
-			hit, how := matchHead(heads, tag, lv)
-			if hit != nil && how == "voucher id" {
-				writeLog("  voucher " + str(r["id"]) + ": confirmed by Tally's voucher id " + lv + " (its narration in Tally does not carry " + or(tag, "a tag") + ")")
-			}
-			lookedUp := ""
-			if hit == nil && lv != "" && acceptedByTally(r) {
-				// the day's list did not show it: Tally's own voucher id, in the voucher's month (FinComByMaster)
-				k, e := voucherByMaster(port, company, group(`<DATE>(\d{8})</DATE>`, xs, 1), lv)
-				switch {
-				case e != nil:
-					lookedUp = "Tally did not answer (" + cut(e.Error(), 80) + ")"
-				case k == nil:
-					lookedUp = "not found in its month"
-				case k.cancelled:
-					lookedUp = "found, but cancelled"
-				case otherTag(k.narration, tag):
-					lookedUp = "found, but it carries another entry's tag"
-				default:
-					hit, how = headOfKey(*k), "voucher id"
-					writeLog("  voucher " + str(r["id"]) + ": confirmed by Tally's voucher id " + lv + " (looked up in its month; its narration in Tally does not carry " + or(tag, "a tag") + ")")
+			lookedUp := lookedUpBy[str(r["id"])]
+			// first the head Tally's voucher id gave; else the day's list: by the tag wherever it is in the narration, else
+			// by the voucher id among the heads (never one carrying another entry's tag)
+			hit, how := byID[str(r["id"])], "voucher id"
+			if hit == nil {
+				hit, how = matchHead(heads, tag, lv)
+				if hit != nil && how == "voucher id" {
+					writeLog("  voucher " + str(r["id"]) + ": confirmed by Tally's voucher id " + lv + " among the day's entries (its narration in Tally does not carry " + or(tag, "a tag") + ")")
 				}
 			}
+			_ = how
 			switch {
 			case hit != nil:
 				addPostedForCopy(company, hit, xs)
