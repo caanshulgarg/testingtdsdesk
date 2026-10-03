@@ -823,7 +823,8 @@ func cloudPostTake() {
 		j := obj(r.json["job"])
 		pl := obj(j["payload"])
 		id := str(j["id"])
-		v, err := newPostJob(M{"jobId": id, "company": str(j["company"]), "masters": arr(pl["masters"]), "vouchers": arr(pl["vouchers"]), "ledger": str(pl["ledger"]), "checkFirst": true})
+		// round 7 (F2): the owner's releases ("Not in Tally — release") for the job's ids come with it
+		v, err := newPostJob(M{"jobId": id, "company": str(j["company"]), "masters": arr(pl["masters"]), "vouchers": arr(pl["vouchers"]), "ledger": str(pl["ledger"]), "checkFirst": true, "released": arr(j["released"])})
 		if err != nil {
 			invokeCloud(M{"kind": "posts_update", "id": id, "status": "failed", "done": 0, "message": "The Tally computer could not start this posting: " + err.Error(), "results": []any{}}, 30)
 			continue
@@ -897,11 +898,14 @@ func syncCloudPosts() {
 				// FinCom id found in Tally already (sameId); the company's GUID not the one held (guidMismatch)
 				"outcomeUnknown": truthy(r["outcomeUnknown"]), "sameId": truthy(r["sameId"]), "guidMismatch": truthy(r["guidMismatch"]),
 				// fault 1: accepted by Tally (CREATED/ALTERED with a voucher id), not confirmed yet: never failed, never sent again
-				"accepted": truthy(r["accepted"]), "lastVchId": str(r["lastVchId"]),
+				"accepted": truthy(r["accepted"]), "lastVchId": str(r["lastVchId"]), "acceptedAt": str(r["acceptedAt"]), "held": truthy(r["held"]),
 				"state": itemState(r, false), "reason": map[bool]string{true: "", false: failedLine(str(r["message"]))}[r["ok"] == true]})
 		}
 		// items: every entry's state (waiting, sending, sent, in_tally, failed with its reason), for FinCom to show live
-		r := invokeCloud(M{"kind": "posts_update", "id": id, "status": st, "done": toInt(v["done"]), "message": str(v["message"]), "results": res, "items": arr(v["items"]), "checking": v["checking"] == true}, 30)
+		// round 7 (F4): seq (per job, from progress.json, growing with every change) and updatedAt: the cloud ignores an
+		// update whose seq is lower than the one it holds
+		r := invokeCloud(M{"kind": "posts_update", "id": id, "status": st, "done": toInt(v["done"]), "message": str(v["message"]), "results": res, "items": arr(v["items"]), "checking": v["checking"] == true,
+			"seq": toInt(v["seq"]), "updatedAt": str(v["updatedAt"])}, 30)
 		if r.json != nil && (truthy(r.json["cancelled"]) || truthy(r.json["gone"])) {
 			// cancelled in FinCom (or no longer there): it stops, also while it waits for Tally
 			_, _ = cancelJob(id, "cancelled in FinCom")

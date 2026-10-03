@@ -52,6 +52,8 @@ type standTally struct {
 	ansi          bool                     // answers in Windows-1252 bytes (an em dash as 0x97), as a real Tally does for non-ASCII text
 	lastMaster    string                   // the MasterID of the last voucher an Import made (LASTVCHID)
 	importAltered bool                     // an Import answers ALTERED n (CREATED 0): this Tally altered an entry it had
+	importSkip    func(x string) bool      // round 7: a voucher of a batch this Tally refuses (counted in ERRORS, not made)
+	storeParty    func(p string) string    // round 7: the party as this Tally keeps it (nil: as sent)
 }
 
 // a ledger master of the stand-in Tally (its stored fields only)
@@ -261,19 +263,26 @@ func newStandTally(t *testing.T) *standTally {
 			if imp != nil {
 				create, delay = imp(id, body)
 			}
-			made := 0
+			made, errs := 0, 0
 			if create {
 				for _, m := range regexp.MustCompile(`<LEDGER NAME="([^"]+)"[^>]*>[\s\S]*?<PARENT>([^<]*)</PARENT>`).FindAllStringSubmatch(body, -1) {
 					f.addLedLocked(html.UnescapeString(m[1]), html.UnescapeString(m[2]), "0.00")
 					made++
 				}
 				for _, x := range regexp.MustCompile(`<VOUCHER\b[\s\S]*?</VOUCHER>`).FindAllString(body, -1) {
+					if f.importSkip != nil && f.importSkip(x) {
+						errs++
+						continue
+					}
 					narr := html.UnescapeString(group(`<NARRATION>([^<]*)</NARRATION>`, x, 1))
 					if f.storeNarr != nil {
 						narr = f.storeNarr(narr)
 					}
-					v := f.add(group(`<DATE>(\d{8})</DATE>`, x, 1), html.UnescapeString(group(`<PARTYLEDGERNAME>([^<]*)</PARTYLEDGERNAME>`, x, 1)), group(`<VOUCHERNUMBER>([^<]*)</VOUCHERNUMBER>`, x, 1),
-						narr, "-1.00")
+					party := html.UnescapeString(group(`<PARTYLEDGERNAME>([^<]*)</PARTYLEDGERNAME>`, x, 1))
+					if f.storeParty != nil {
+						party = f.storeParty(party)
+					}
+					v := f.add(group(`<DATE>(\d{8})</DATE>`, x, 1), party, group(`<VOUCHERNUMBER>([^<]*)</VOUCHERNUMBER>`, x, 1), narr, "-1.00")
 					f.lastMaster = v.master
 					made++
 				}
@@ -293,7 +302,7 @@ func newStandTally(t *testing.T) *standTally {
 			if f.importAltered {
 				created, altered = 0, made
 			}
-			_, _ = w.Write([]byte(fmt.Sprintf("<ENVELOPE><BODY><DATA><IMPORTRESULT><CREATED>%d</CREATED><ALTERED>%d</ALTERED><ERRORS>0</ERRORS><EXCEPTIONS>0</EXCEPTIONS>%s</IMPORTRESULT></DATA></BODY></ENVELOPE>", created, altered, lv)))
+			_, _ = w.Write([]byte(fmt.Sprintf("<ENVELOPE><BODY><DATA><IMPORTRESULT><CREATED>%d</CREATED><ALTERED>%d</ALTERED><ERRORS>%d</ERRORS><EXCEPTIONS>0</EXCEPTIONS>%s</IMPORTRESULT></DATA></BODY></ENVELOPE>", created, altered, errs, lv)))
 			return
 		}
 		ansi := f.ansi
@@ -322,6 +331,8 @@ type standCloud struct {
 	ledList   []M      // the ledger lists sent (kind ledger_list)
 	lastBeat  M        // the last heartbeat
 	beatReply M        // added to the heartbeat's answer (readStop, readResume, release)
+	takeJobs  []M      // round 7: jobs posts_take hands out, one per call
+	posts     []M      // round 7: every posts_update body
 }
 
 func newStandCloud(t *testing.T) *standCloud {
@@ -352,6 +363,13 @@ func newStandCloud(t *testing.T) *standCloud {
 		case "read_guard":
 			c.guard = append(c.guard, o)
 			out["state"] = "ok"
+		case "posts_take":
+			if len(c.takeJobs) > 0 {
+				out["job"] = c.takeJobs[0]
+				c.takeJobs = c.takeJobs[1:]
+			}
+		case "posts_update":
+			c.posts = append(c.posts, o)
 		case "ledger_list":
 			c.ledList = append(c.ledList, o)
 			out["added"], out["renamed"], out["deleted"] = len(arr(o["ledgers"])), len(arr(o["renamed"])), 0
@@ -402,6 +420,7 @@ func standBridge(t *testing.T, f *standTally, extra string) string {
 	altMu.Lock()
 	companyAlts, companyAltsM = map[string]int64{}, map[string]int64{}
 	altMu.Unlock()
+	acceptedReset()
 	return dir
 }
 

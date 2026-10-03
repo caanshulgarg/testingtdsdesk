@@ -30,6 +30,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"path/filepath"
 	"sort"
@@ -633,9 +634,8 @@ func measureCmd(args []string) int {
 		return 2
 	}
 	port := toInt(cfg("Port"))
-	bridgeUp := pingLocal(port, 3*time.Second) != nil
 	body := M{"company": o.company, "out": o.out, "ledgers": o.ledgers, "snapshot": o.snapshot, "month": o.month}
-	code, said := consoleMeasure(o, bridgeUp,
+	code, said := consoleMeasure(o, bridgeState(port),
 		func() M { return localCall("POST", "/measure", body) },
 		func() M { return localCall("GET", "/measure", nil) },
 		func() (M, error) { loadConfig(); return runMeasure(o) })
@@ -646,9 +646,41 @@ func measureCmd(args []string) int {
 // the console command's decision (C5, round 5): through the running bridge when one answers; one that refuses or is
 // busy ends the command with its reason (never measured here in parallel with that bridge's reads and postings, which
 // go through its one-at-a-time gate); only when no bridge answers at all is Tally measured from this process
-func consoleMeasure(o measureOpts, bridgeUp bool, post func() M, status func() M, local func() (M, error)) (int, string) {
+// the bridge on this computer: "up" (its /ping answers), "none" (nothing listens on its port), "busy" (a listener that
+// does not answer in time)
+func bridgeState(port int) string {
+	c := &http.Client{Timeout: 3 * time.Second, Transport: &http.Transport{Proxy: nil}}
+	r, err := c.Get(fmt.Sprintf("http://127.0.0.1:%d/ping", port))
+	if err != nil {
+		var oe *net.OpError
+		if errors.As(err, &oe) && strings.Contains(strings.ToLower(oe.Error()), "refused") {
+			return "none"
+		}
+		if strings.Contains(strings.ToLower(err.Error()), "connection refused") || strings.Contains(strings.ToLower(err.Error()), "actively refused") {
+			return "none"
+		}
+		return "busy" // a listener that did not answer in time (or answered oddly): a bridge may be at work
+	}
+	defer r.Body.Close()
+	b, _ := io.ReadAll(io.LimitReader(r.Body, 1<<16))
+	if o := parseObj(string(b)); o != nil && str(o["impl"]) == "go" {
+		return "up"
+	}
+	return "busy"
+}
+
+var (
+	measureFollowEvery = 2 * time.Second
+	measureFollowMax   = 25 * time.Minute
+)
+
+func consoleMeasure(o measureOpts, bridge string, post func() M, status func() M, local func() (M, error)) (int, string) {
 	var out strings.Builder
-	if bridgeUp {
+	if bridge == "busy" {
+		fmt.Fprintln(&out, "Not measured: the bridge on this computer is busy (it listens on its port but did not answer in 3 s). Nothing is measured from this console while a bridge runs: its reads and postings go one at a time through that bridge. Try again in a minute.")
+		return 1, out.String()
+	}
+	if bridge == "up" {
 		r := post()
 		if r == nil {
 			fmt.Fprintln(&out, "Not measured: the bridge running on this computer did not take the request (busy, or not answering). Nothing is measured from this console while a bridge runs: its reads and postings go one at a time through that bridge. Try again in a minute, or stop the bridge first.")
@@ -660,10 +692,8 @@ func consoleMeasure(o measureOpts, bridgeUp bool, post func() M, status func() M
 		}
 		{
 			fmt.Fprintln(&out, "Measuring "+o.company+" through the running bridge (one request at a time)...")
-			for i := 0; i < 1800; i++ {
-				if i > 0 {
-					time.Sleep(2 * time.Second)
-				}
+			for t0 := time.Now(); time.Since(t0) < measureFollowMax; {
+				time.Sleep(measureFollowEvery)
 				s := status()
 				if s == nil {
 					continue
@@ -678,7 +708,7 @@ func consoleMeasure(o measureOpts, bridgeUp bool, post func() M, status func() M
 					return 1, out.String()
 				}
 			}
-			fmt.Fprintln(&out, "Still measuring after an hour; the report will be in "+Home)
+			fmt.Fprintln(&out, "Still measuring after "+measureFollowMax.Round(time.Minute).String()+": still running in the bridge; see the tray (the report opens there, and lands in "+Home+")")
 			return 1, out.String()
 		}
 	}

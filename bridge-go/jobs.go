@@ -55,6 +55,7 @@ func writeProgress(dir string, p M) {
 	progMu.Lock()
 	defer progMu.Unlock()
 	p["updatedAt"] = time.Now().Format(time.RFC3339Nano)
+	p["seq"] = toInt(p["seq"]) + 1 // round 7 (F4): grows with every change of the job, kept across restarts
 	_ = saveFile(filepath.Join(dir, "progress.json"), jsonText(p))
 }
 func jobAlive(id string) bool {
@@ -137,6 +138,13 @@ func newPostJob(pl M) (M, error) {
 			}
 		}
 		st := str(v["status"])
+		if rel := arr(pl["released"]); len(rel) > 0 && !jobAlive(id) {
+			// round 7 (F2): the owner's releases that came with this hand-back, for the worker to see
+			if pay := readObjFile(filepath.Join(dir, "payload.json")); pay != nil {
+				pay["released"] = rel
+				_ = saveFile(filepath.Join(dir, "payload.json"), jsonText(pay))
+			}
+		}
 		if ((st == "failed" || st == "cancelled") || (st == "done" && len(acceptedUnconfirmed(rs)) > 0)) && !jobAlive(id) {
 			var kept []any
 			for _, r := range rs {
@@ -173,7 +181,7 @@ func newPostJob(pl M) (M, error) {
 		}
 	}
 	// the port FinCom chose is kept only as a hint, and never as 0 (0 means "find it", which happens on every try anyway)
-	payload := M{"company": str(pl["company"]), "ledger": str(pl["ledger"]), "checkFirst": truthy(pl["checkFirst"]), "items": items}
+	payload := M{"company": str(pl["company"]), "ledger": str(pl["ledger"]), "checkFirst": truthy(pl["checkFirst"]), "items": items, "released": arr(pl["released"])}
 	if pt := toInt(pl["port"]); pt > 0 {
 		payload["port"] = pt
 	}
@@ -325,6 +333,8 @@ func jobWorker(dir string) {
 					if r["acceptedBefore"] == true {
 						e["reason"] = str(r["message"]) // names the earlier job that Tally accepted it in
 					}
+				} else if r["held"] == true {
+					e["held"], e["reason"] = true, str(r["message"]) // round 7 (F5): held after a partial batch
 				}
 			} else if r != nil && r["ok"] != true {
 				e["reason"] = failedLine(str(r["message"]))
@@ -503,10 +513,18 @@ func jobWorker(dir string) {
 				continue
 			}
 			lv := str(a["lastVchId"])
-			r := M{"id": k, "kind": "voucher", "ok": false, "verified": nil, "outcomeUnknown": true, "accepted": true, "acceptedBefore": true, "state": "unknown", "lastVchId": lv, "company": company, "port": port,
+			if rel := releaseFor(arr(pl["released"]), key, k, a); rel != nil {
+				// round 7 (F2): the owner released it ("Not in Tally") after Tally's acceptance: sent ONCE more, through the
+				// check before sending; the new acceptance or confirmation then writes a new note
+				writeLog("  entry " + k + ": released by " + or(str(rel["by"]), "the owner") + " at " + str(rel["at"]) + " (" + str(rel["why"]) + "); sent once more")
+				acceptedForget(key)
+				left = append(left, it)
+				continue
+			}
+			r := M{"id": k, "kind": "voucher", "ok": false, "verified": nil, "outcomeUnknown": true, "accepted": true, "acceptedBefore": true, "state": "unknown", "lastVchId": lv, "company": company, "port": port, "acceptedAt": str(a["acceptedAt"]),
 				"message": "Tally accepted this entry before (job " + str(a["job"]) + ", voucher id " + or(lv, "not given") + ") and it is not confirmed yet; being checked, not sent again"}
 			results = append(results, r)
-			noteAccepted(key, company, str(p["id"]), lv)
+			_ = noteAccepted(key, company, str(p["id"]), lv)
 			writeLog("  voucher " + k + ": ACCEPTED BEFORE in job " + str(a["job"]) + " (voucher id " + or(lv, "none") + "), not confirmed yet; not sent again, looked for again at the end of this job")
 		}
 		todo = left
@@ -674,11 +692,16 @@ func jobWorker(dir string) {
 							if len(fast) == 1 {
 								lv = str(rr["lastVchId"]) // one entry: Tally's last voucher id is its own
 							}
-							markAccepted(r, company, lv, nil, "not asked yet")
+							markAccepted(r, company, str(p["id"]), lv, nil, "not asked yet")
 							delete(r, "xml")
 							res = append(res, r)
 						} else {
-							vouchers = append(vouchers, v)
+							// round 7 (F5): Tally made some of the batch and this one was not found: which ones it made is not known,
+							// so it is HELD (unknown), never imported again one by one; the later checks look for it by its tag
+							r := M{"id": k, "kind": "voucher", "ok": false, "verified": nil, "outcomeUnknown": true, "held": true, "state": "unknown", "company": company, "port": port,
+								"message": fmt.Sprintf("Tally made %d of %d entries sent together and this one was not found yet by its tag; held (not sent again) and checked later", toInt(rr["created"]), len(fast))}
+							writeLog(fmt.Sprintf("  voucher %s: HELD: Tally made %d of %d of the batch (errors %d) and this entry was not found by its tag on its date; not sent again, checked later", k, toInt(rr["created"]), len(fast), toInt(rr["errors"])))
+							res = append(res, r)
 						}
 					}
 				}
@@ -695,7 +718,7 @@ func jobWorker(dir string) {
 			for _, v := range vouchers {
 				vs = append(vs, M{"id": v["id"], "xml": v["xml"]})
 			}
-			r, err := invokeImport(M{"company": company, "port": port, "masters": ms, "vouchers": vs, "guidChecked": true, "onItem": func(x M) {
+			r, err := invokeImport(M{"company": company, "port": port, "masters": ms, "vouchers": vs, "guidChecked": true, "job": str(p["id"]), "onItem": func(x M) {
 				// "created" is shown at once; its read-back follows for the whole batch
 				if x["ok"] != true {
 					live(x)
@@ -793,9 +816,6 @@ func jobWorker(dir string) {
 		for _, r := range res {
 			delete(r, "replySnip")
 			k := str(r["id"])
-			if r["accepted"] == true {
-				noteAccepted(acceptedKey(k, ""), company, str(p["id"]), str(r["lastVchId"]))
-			}
 			delete(sending, k)
 			if resIDs[k] {
 				// shown live already: brought up to date (read back since)
@@ -817,8 +837,8 @@ func jobWorker(dir string) {
 		for _, r := range results {
 			if r["ok"] == true {
 				okN++
-			} else if r["accepted"] == true {
-				// accepted by Tally, not confirmed yet: neither posted nor failed (unknown, being checked)
+			} else if r["accepted"] == true || r["held"] == true {
+				// accepted by Tally (or held after a partial batch), not confirmed yet: neither posted nor failed (unknown)
 			} else {
 				failN++
 				if first == "" {
@@ -837,7 +857,7 @@ func jobWorker(dir string) {
 		finish("done", postedLine(okN, total, len(toConfirm) > 0))
 	}
 	if len(toConfirm) > 0 {
-		confirmPosted(port, company, toConfirm, results, all, ledger)
+		confirmPosted(port, company, str(p["id"]), toConfirm, results, all, ledger)
 		for _, r := range results {
 			delete(r, "pendingCheck")
 		}
@@ -880,7 +900,7 @@ func jobWorker(dir string) {
 
 // entries Tally said it created are read back together: found -> confirmed with Tally's voucher number; not found ->
 // not sent again, said so; no answer -> left unconfirmed
-func confirmPosted(port int, company string, pending []string, results []M, items []M, ledger string) {
+func confirmPosted(port int, company, job string, pending []string, results []M, items []M, ledger string) {
 	byID := map[string]M{}
 	for _, it := range items {
 		byID[str(it["id"])] = it
@@ -909,7 +929,7 @@ func confirmPosted(port int, company string, pending []string, results []M, item
 			r["message"] = "Tally said it created this, but did not answer the check afterwards. Use 'Check Tally' before posting it again."
 		} else if h, ok := there[k]; ok {
 			if it := byID[k]; it != nil {
-				addPostedForCopy(company, h, str(it["xml"]))
+				confirmedInTally(company, h, str(it["xml"]), "tag", k)
 			}
 			r["verified"], r["vchNumber"], r["vchType"], r["masterId"], r["guid"], r["vchDate"], r["message"] = true, str(h["number"]), str(h["type"]), str(h["masterId"]), str(h["guid"]), str(h["date"]), ""
 		} else {
@@ -917,7 +937,7 @@ func confirmPosted(port int, company string, pending []string, results []M, item
 			if it := byID[k]; it != nil {
 				r["xml"] = str(it["xml"])
 			}
-			markAccepted(r, company, str(r["lastVchId"]), nil, "not asked yet")
+			markAccepted(r, company, job, str(r["lastVchId"]), nil, "not asked yet")
 			delete(r, "xml")
 		}
 	}
@@ -975,7 +995,8 @@ func recheckAccepted(port int, company string, items []M, results []M, pause fun
 				writeLog(fmt.Sprintf("  voucher %s: check %d: not found yet by its tag on its date nor by Tally's voucher id %s; checked again later, not sent again", k, i+1, or(str(r["lastVchId"]), "none")))
 				still = append(still, r)
 			default:
-				addPostedForCopy(company, h, xml)
+				confirmedInTally(company, h, xml, how, k)
+				delete(r, "held")
 				r["ok"], r["verified"], r["optional"] = true, true, strings.EqualFold(str(h["optional"]), "yes")
 				r["vchNumber"], r["vchType"], r["guid"], r["masterId"], r["vchDate"] = str(h["number"]), str(h["type"]), str(h["guid"]), str(h["masterId"]), str(h["date"])
 				delete(r, "outcomeUnknown")

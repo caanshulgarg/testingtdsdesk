@@ -51,6 +51,7 @@ type vchKey struct {
 	total  int64    // the voucher's total in paise (half the sum of every line); -1 unknown
 	ids    []string // voucher number, reference, bill allocation names, folded
 	tag    string   // TDSDesk:<id> in the narration
+	alter  string   // Tally's ALTERID (digits), for the copy (round 7: it was missing, so a confirmed posting never reached the copy)
 	ledger map[string]bool
 	// the existing voucher in Tally (for the answer)
 	guid, masterID, number, vtype, rawDate string
@@ -94,7 +95,7 @@ func normDate(s string) string {
 // a voucher (FinCom's XML or one Tally sent back) as its key
 func keyOfVoucher(v *Node) vchKey {
 	k := vchKey{party: foldName(nt(v, "PARTYLEDGERNAME")), date: normDate(nt(v, "DATE")), amount: -1, total: -1,
-		tag: reTag.FindString(nt(v, "NARRATION")), guid: nt(v, "GUID"), masterID: nt(v, "MASTERID"), number: nt(v, "VOUCHERNUMBER"),
+		tag: reTag.FindString(nt(v, "NARRATION")), alter: re(`\D`).ReplaceAllString(nt(v, "ALTERID"), ""), guid: nt(v, "GUID"), masterID: nt(v, "MASTERID"), number: nt(v, "VOUCHERNUMBER"),
 		vtype: voucherType(v), rawDate: nt(v, "DATE"), narration: nt(v, "NARRATION"), ledger: map[string]bool{}, optional: strings.EqualFold(nt(v, "ISOPTIONAL"), "Yes"), cancelled: strings.EqualFold(nt(v, "ISCANCELLED"), "Yes")}
 	seen := map[string]bool{}
 	addID := func(s string) {

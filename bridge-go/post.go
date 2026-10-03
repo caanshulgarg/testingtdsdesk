@@ -64,7 +64,7 @@ func invokeImport(p M) (M, error) {
 	if err := postingAllowed(); err != nil {
 		return nil, err
 	}
-	company := str(p["company"])
+	company, job := str(p["company"]), str(p["job"])
 	if company == "" {
 		return nil, errors.New("No company given.")
 	}
@@ -265,10 +265,9 @@ func invokeImport(p M) (M, error) {
 					writeLog("  voucher " + str(r["id"]) + ": confirmed by Tally's voucher id " + lv + " among the day's entries (its narration in Tally does not carry " + or(tag, "a tag") + ")")
 				}
 			}
-			_ = how
 			switch {
 			case hit != nil:
-				addPostedForCopy(company, hit, xs)
+				confirmedInTally(company, hit, xs, how, str(r["id"]))
 				r["verified"], r["optional"] = true, strings.EqualFold(str(hit["optional"]), "yes")
 				r["vchNumber"], r["vchType"], r["guid"], r["masterId"], r["vchDate"] = str(hit["number"]), str(hit["type"]), str(hit["guid"]), str(hit["masterId"]), str(hit["date"])
 			case re(`<ISOPTIONAL>\s*Yes`).MatchString(xs) && !listSeesOptional:
@@ -311,12 +310,12 @@ func invokeImport(p M) (M, error) {
 					writeLog("  WRONG COMPANY: " + tag + " went into '" + elsewhere + "' instead of '" + company + "'")
 				} else if acceptedByTally(r) {
 					// fault 1 (03-Oct-2026): Tally accepted it (CREATED with a voucher id): never failed, never sent again
-					markAccepted(r, company, lv, heads, lookedUp)
+					markAccepted(r, company, job, lv, heads, lookedUp)
 				} else {
 					r["message"] = "Tally replied 'created', but the entry cannot be found in '" + company + "' or in any other company open in this Tally. It was not marked as posted. Tally's reply: " + str(r["replySnip"])
 				}
 			case acceptedByTally(r):
-				markAccepted(r, company, lv, heads, or(lookedUp, "Tally listed no vouchers for those dates"))
+				markAccepted(r, company, job, lv, heads, or(lookedUp, "Tally listed no vouchers for those dates"))
 			default:
 				r["verified"] = nil
 				r["verifyNote"] = "Tally listed no vouchers for those dates"
@@ -436,7 +435,7 @@ func headOfKey(k vchKey) M {
 		}
 		return "No"
 	}
-	return M{"guid": k.guid, "masterId": k.masterID, "date": k.rawDate, "type": k.vtype, "number": k.number, "narration": k.narration,
+	return M{"guid": k.guid, "masterId": k.masterID, "alter": k.alter, "date": k.rawDate, "type": k.vtype, "number": k.number, "narration": k.narration, "party": k.party,
 		"optional": yn(k.optional), "cancelled": yn(k.cancelled)}
 }
 

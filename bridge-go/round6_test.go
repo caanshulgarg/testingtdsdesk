@@ -136,7 +136,10 @@ func TestRetryKeepsAcceptedEntry(t *testing.T) {
 		return true, 0
 	}
 	standBridge(t, f, `,"PostRecheckMs":200,"PostRecheckTries":1`)
-	vch := []any{M{"id": "emuqtw0683g090", "xml": f1Voucher("emuqtw0683g090", "")}, M{"id": "bad1", "xml": finVoucher("bad1", fgParty, "B-1", td, "5.00")}}
+	// (round 7, F5: two tagged entries would go as one batch, where a refusal cannot be told apart from a success and both
+	// are held; the refused one is an Optional voucher here, which goes on its own)
+	bad := strings.Replace(finVoucher("bad1", fgParty, "B-1", td, "5.00"), "<ISOPTIONAL>No</ISOPTIONAL>", "<ISOPTIONAL>Yes</ISOPTIONAL>", 1)
+	vch := []any{M{"id": "emuqtw0683g090", "xml": f1Voucher("emuqtw0683g090", "")}, M{"id": "bad1", "xml": bad}}
 	if _, err := newPostJob(M{"jobId": "job-retry", "company": zz, "vouchers": vch}); err != nil {
 		t.Fatal(err)
 	}

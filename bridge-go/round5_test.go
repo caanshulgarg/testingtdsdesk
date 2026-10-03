@@ -50,18 +50,18 @@ func TestConsoleMeasureNeverParallel(t *testing.T) {
 	local := 0
 	localRun := func() (M, error) { local++; return M{"report": "r", "file": "f"}, nil }
 	// a running bridge that refuses
-	code, said := consoleMeasure(measureOpts{company: zz}, true, func() M { return M{"ok": false, "error": "busy with a posting"} }, nil, localRun)
+	code, said := consoleMeasure(measureOpts{company: zz}, "up", func() M { return M{"ok": false, "error": "busy with a posting"} }, nil, localRun)
 	if code == 0 || local != 0 || !strings.Contains(said, "busy with a posting") || !strings.Contains(strings.ToLower(said), "not measured") {
 		t.Fatalf("a refusing bridge: code %d, local runs %d, said %q", code, local, said)
 	}
 	// a running bridge that does not answer the start (busy)
-	code, said = consoleMeasure(measureOpts{company: zz}, true, func() M { return nil }, nil, localRun)
+	code, said = consoleMeasure(measureOpts{company: zz}, "up", func() M { return nil }, nil, localRun)
 	if code == 0 || local != 0 || !strings.Contains(strings.ToLower(said), "not measured") {
 		t.Fatalf("a bridge not answering the start: code %d, local runs %d, said %q", code, local, said)
 	}
 	// a running bridge that takes it: followed to the end, nothing local
 	n := 0
-	code, said = consoleMeasure(measureOpts{company: zz}, true, func() M { return M{"ok": true, "state": "running"} }, func() M {
+	code, said = consoleMeasure(measureOpts{company: zz}, "up", func() M { return M{"ok": true, "state": "running"} }, func() M {
 		n++
 		return M{"state": "done", "report": "the report", "file": "x.txt"}
 	}, localRun)
@@ -69,7 +69,7 @@ func TestConsoleMeasureNeverParallel(t *testing.T) {
 		t.Fatalf("through the bridge: code %d, local %d, polls %d, said %q", code, local, n, said)
 	}
 	// no bridge at all: measured here
-	code, _ = consoleMeasure(measureOpts{company: zz}, false, nil, nil, localRun)
+	code, _ = consoleMeasure(measureOpts{company: zz}, "none", nil, nil, localRun)
 	if code != 0 || local != 1 {
 		t.Fatalf("no bridge: code %d, local runs %d", code, local)
 	}

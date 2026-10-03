@@ -554,7 +554,8 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 		}
 		if r.Method == "POST" {
 			o, _ := bodyObj(body)
-			m := measureOpts{company: str(o["company"]), out: str(o["out"]), ledgers: str(o["ledgers"]), snapshot: str(o["snapshot"]), month: str(o["month"])}
+			// M3 (round 7): no report path from a caller (the service would write it as SYSTEM): always Home, the safe name
+			m := measureOpts{company: str(o["company"]), ledgers: str(o["ledgers"]), snapshot: str(o["snapshot"]), month: str(o["month"])}
 			if m.company == "" {
 				m.company = trayMeasureCompany()
 			}

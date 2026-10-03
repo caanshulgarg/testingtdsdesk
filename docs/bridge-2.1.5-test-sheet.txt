@@ -44,7 +44,10 @@ What is new in 2.1.4 (since 2.1.3)
     Tally is written to sync\posted-ids.json on the Tally computer; an entry whose id is there is never sent again by any
     route (the cloud handing the job back, Post again, Retry, a restart): it is only looked for, first by the voucher id
     Tally gave (LASTVCHID, request FinComByMaster), then by its tag on its date, and shows "unknown (accepted)" until
-    found. Before any send Tally is still asked for the id (the "Already in Tally" check).
+    found. Before any send Tally is still asked for the id (the "Already in Tally" check). An owner's release in FinCom
+    ("Not in Tally — release", with a reason) made AFTER Tally's acceptance lets the entry go once more; the log says
+    "entry <id>: released by <who> at <when> (<why>); sent once more". An entry of a batch Tally made only partly is
+    held (unknown), never sent again one by one. The measure routes write the report under the bridge's folder only.
   - Every voucher posted carries its FinCom id in its narration ("TDSDesk:<id>"; since the 03-Oct rebuild of 2.1.5 it
     is written FIRST, "TDSDesk:<id> | <narration>", so a narration cut short can never lose it, and it is found wherever
     it stands); before posting, Tally is looked through for that id on the voucher's date first, then the party / bill /

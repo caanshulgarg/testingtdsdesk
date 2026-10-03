@@ -354,7 +354,7 @@ func findAccepted(port int, company, xml, lv string) (M, string, error) {
 // the result of an entry Tally accepted (CREATED/ALTERED with a voucher id) that the read-back could not confirm:
 // never failed, never sent again; "unknown" (accepted, being checked) until it is found by its tag or by Tally's voucher
 // id. heads: what the day's list held (for the log); lookedUp: what the voucher-id lookup said
-func markAccepted(r M, company, lv string, heads []M, lookedUp string) {
+func markAccepted(r M, company, job, lv string, heads []M, lookedUp string) {
 	id, xs := str(r["id"]), str(r["xmlSent"])
 	if xs == "" {
 		xs = str(r["xml"])
@@ -368,28 +368,45 @@ func markAccepted(r M, company, lv string, heads []M, lookedUp string) {
 	if toInt(r["altered"]) > 0 && toInt(r["created"]) == 0 {
 		said = "altered"
 	}
-	r["message"] = fmt.Sprintf("Tally replied '%s' (voucher id %s) but the entry was not found yet in '%s' on %s; it is being checked and is not sent again", said, or(lv, "not given"), company, ddmmyyyy(date))
-	noteAccepted(acceptedKey(id, xs), company, str(r["job"]), lv) // on disk: never sent again by any later job either
+	r["message"] = fmt.Sprintf("Tally replied '%s' (voucher id %s) in job %s but the entry was not found yet in '%s' on %s; it is being checked and is not sent again", said, or(lv, "not given"), or(job, "-"), company, ddmmyyyy(date))
+	key := acceptedKey(id, xs)              // one key everywhere: the id in the tag (round 7, F9)
+	_ = noteAccepted(key, company, job, lv) // on disk: never sent again by any later job either
+	if a := acceptedInfo(key); a != nil {
+		r["acceptedAt"] = str(a["acceptedAt"])
+	}
 	var ids []string
 	for _, h := range heads {
 		ids = append(ids, str(h["masterId"]))
 	}
-	writeLog(fmt.Sprintf("  voucher %s: ACCEPTED BUT UNCONFIRMED: Tally replied CREATED %d ALTERED %d (LASTVCHID %s) for '%s' on %s; the day's list has %d entr%s (voucher ids: %s), none carrying %s; looked up by voucher id %s: %s; marked unknown (accepted, being checked), not sent again",
-		id, toInt(r["created"]), toInt(r["altered"]), or(lv, "none"), company, date, len(heads), map[bool]string{true: "y", false: "ies"}[len(heads) == 1], or(strings.Join(ids, ", "), "-"), or(tag, "no tag"), or(lv, "none"), or(lookedUp, "not asked")))
+	writeLog(fmt.Sprintf("  voucher %s: ACCEPTED BUT UNCONFIRMED: Tally replied CREATED %d ALTERED %d (LASTVCHID %s) for '%s' on %s (job %s); the day's list has %d entr%s (voucher ids: %s), none carrying %s; looked up by voucher id %s: %s; marked unknown (accepted, being checked), not sent again",
+		id, toInt(r["created"]), toInt(r["altered"]), or(lv, "none"), company, date, or(job, "-"), len(heads), map[bool]string{true: "y", false: "ies"}[len(heads) == 1], or(strings.Join(ids, ", "), "-"), or(tag, "no tag"), or(lv, "none"), or(lookedUp, "not asked")))
 }
 
 // an entry Tally accepted: CREATED or ALTERED above 0 (a voucher id with it when Tally gave one)
 func acceptedByTally(r M) bool { return toInt(r["created"]) > 0 || toInt(r["altered"]) > 0 }
 
-// the results of entries Tally accepted that are not confirmed yet (looked for again later, never sent again)
+// the results of entries Tally accepted, or held after a partial batch (round 7, F5), that are not confirmed yet:
+// looked for again later, never sent again
 func acceptedUnconfirmed(results []M) []M {
 	var o []M
 	for _, r := range results {
-		if r["accepted"] == true && r["verified"] != true {
+		if (r["accepted"] == true || r["held"] == true) && r["verified"] != true {
 			o = append(o, r)
 		}
 	}
 	return o
+}
+
+// an entry confirmed in Tally (its head h, found by how): noted on disk, and put in the copy. Round 7 (F6): a
+// confirmation by Tally's voucher id with no tag in the narration goes into the copy only when the head's type, date
+// and party are the entry's; otherwise the keeper reads the day
+func confirmedInTally(company string, h M, xml, how, id string) {
+	_ = noteVerified(acceptedKey(id, xml), company, h)
+	if how == "voucher id" && !hasTag(str(h["narration"]), reTag.FindString(xml)) && !headMatchesXML(h, xml) {
+		writeLog(fmt.Sprintf("  voucher %s: confirmed by Tally's voucher id %s, but the entry Tally lists (%s, %s, party %q) is not the one sent by type, date and party: not put in the copy; the keeper reads that day", id, str(h["masterId"]), str(h["type"]), str(h["date"]), str(h["party"])))
+		return
+	}
+	addPostedForCopy(company, h, xml)
 }
 
 // the entries in Tally on that date, heads and narration only, each with its FinCom id (an error when Tally did not
@@ -484,4 +501,25 @@ func sendReadGuard(company, guid string, alter int64, count int) {
 		writeLog("Keeping " + company + ": FinCom's cloud marks this company as needing its books again (" + str(r.json["why"]) + ")")
 		setKeepTrouble(company, "FinCom's cloud marks this company as needing its books again: "+str(r.json["why"]))
 	}
+}
+
+// the head Tally gave is the entry sent (its type, date and party): for the copy (round 7, F6: a confirmation by voucher
+// id with no tag in the narration is put in the copy only when they match; else the keeper reads the day)
+func headMatchesXML(h M, xml string) bool {
+	vt := strings.TrimSpace(group(`<VOUCHERTYPENAME>([^<]*)</VOUCHERTYPENAME>`, xml, 1))
+	if vt == "" {
+		vt = group(`VCHTYPE="([^"]*)"`, xml, 1)
+	}
+	if !strings.EqualFold(strings.TrimSpace(html.UnescapeString(vt)), strings.TrimSpace(str(h["type"]))) {
+		return false
+	}
+	if normDate(str(h["date"])) != group(`<DATE>(\d{8})</DATE>`, xml, 1) {
+		return false
+	}
+	party := foldName(html.UnescapeString(group(`<PARTYLEDGERNAME>([^<]*)</PARTYLEDGERNAME>`, xml, 1)))
+	hp := str(h["party"])
+	if party != "" && hp != "" && party != hp {
+		return false
+	}
+	return true
 }

@@ -155,7 +155,9 @@ func itemState(r M, sending bool) string {
 
 // confirmed in Tally (or already there), or accepted by Tally (CREATED/ALTERED with a voucher id, not confirmed yet):
 // never sent again, on any retry, resume or restart
-func confirmedResult(r M) bool { return r != nil && (r["ok"] == true || r["accepted"] == true) }
+func confirmedResult(r M) bool {
+	return r != nil && (r["ok"] == true || r["accepted"] == true || r["held"] == true)
+}
 
 // what is left to send: every item without a result (an entry that failed is not sent again within the same job; Retry
 // in FinCom starts it again, where whatever reached Tally is found by its tag first)
@@ -164,7 +166,7 @@ func itemsToSend(all []M, results []M) []M {
 	for _, r := range results {
 		// an entry whose outcome is unknown is not finished: it is looked for in Tally (by its FinCom id) first. One Tally
 		// accepted (CREATED with a voucher id; fault 1) is never sent again, confirmed or not
-		if r["outcomeUnknown"] != true || r["accepted"] == true {
+		if r["outcomeUnknown"] != true || r["accepted"] == true || r["held"] == true {
 			had[str(r["id"])] = true
 		}
 	}
