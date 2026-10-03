@@ -92,7 +92,10 @@ with sync_playwright() as p:
     ok(any(u.startswith("tally_balances") for u in E("window.__rest")), "1. worked out from the view tally_balances")
     t = app()
     ok(LINE in t and pg.locator("#app [data-copy-line]").count() >= 1, "1. the answer carries \"%s …\"" % LINE)
-    ok("from FinCom's copy" in t and "from Tally" not in t and "Tally, live" not in t and "Read again" not in t, "1. the source is called FinCom's copy; no \"from Tally\" or \"Tally, live\"")
+    # round 14 (03-Oct-2026): the owner's current-year note ("Current year not yet read from Tally; figures incomplete.",
+    # [data-books-year-note]) is not a source label; the check leaves it out
+    t_src = t.replace("Current year not yet read from Tally; figures incomplete.", "")
+    ok("from FinCom's copy" in t_src and "from Tally" not in t_src and "Tally, live" not in t_src and "Read again" not in t_src, "1. the source is called FinCom's copy; no \"from Tally\" or \"Tally, live\"")
     # a date inside the copy (before its last day): the view's openings plus the entries to the date (tally_period from the
     # book's first day); tally_tb is not asked while the view is there
     E("async () => { window.__rpc = []; window.__rest = []; const x = LK.st(); Object.assign(x, {kind: 'tb', asOn: '20260215', src: ''}); x.res = null; await LK.run('auto'); }"); pg.wait_for_timeout(500)
