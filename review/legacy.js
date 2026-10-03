@@ -4348,7 +4348,10 @@ function initialsOf(name){ return String(name || "").replace(/[^A-Za-z ]/g, " ")
 function voucherXml(e, co){
   const note = e.noteKind === "credit";                 // a supplier's credit note: a Debit Note in Tally, every line reversed
   const s = e.snapshot, vt = xesc(note ? (co.debitNoteType || "Debit Note") : (co.voucherType || "Journal")), d = toTallyDate(e.x.invoiceDate);
-  let x = '<VOUCHER VCHTYPE="' + vt + '" ACTION="Create" OBJVIEW="Accounting Voucher View">\n';
+  // round 14c (owner item 4, a test): "Send a FinCom reference id (REMOTEID) with each voucher" on the Post page puts the
+  // entry's FinCom id (the same as the TDSDesk:<id> tag) as REMOTEID on the voucher; off (the default), nothing changes
+  const rid = co.postRemoteId === true && e.id ? ' REMOTEID="' + xesc(String(e.id)) + '"' : "";
+  let x = '<VOUCHER VCHTYPE="' + vt + '" ACTION="Create" OBJVIEW="Accounting Voucher View"' + rid + '>\n';
   x += "<DATE>" + d + "</DATE>\n<EFFECTIVEDATE>" + d + "</EFFECTIVEDATE>\n";
   x += "<VOUCHERTYPENAME>" + vt + "</VOUCHERTYPENAME>\n";
   const vno = vchNoFor(e, co);
@@ -14848,7 +14851,7 @@ async function postBillsToTally(opts){
       dup.forEach(e => { e.exportedAt = now; e.postNote = "Already in Tally"; Store.saveEntry(co.id, e); });
       todo = todo.filter(e => !dup.includes(e));
     }
-    let ok = 0, optionalN = 0, unverified = 0, altered = 0, checkFailed = 0;
+    let ok = 0, optionalN = 0, unverified = 0, altered = 0, checkFailed = 0, replyWords = "";
     const masterWords = [];
     if (todo.length){
       const used = new Set(todo.flatMap(e => e.snapshot.lines.map(l => String(l.ledger).toLowerCase())));
@@ -14865,6 +14868,7 @@ async function postBillsToTally(opts){
         refreshStats(co.id); render(); return;
       }
       const byId = new Map([].concat(j.results || []).map(x => [x.id, x]));
+      replyWords = typeof postReply === "function" ? postReply(Array.from(byId.values())).text : "";   // round 14c (C7): Tally's reply words
       masters.forEach(l => { const x = byId.get("led:" + l.name); if (x && x.ok){ l.sent = true; l.sentAt = now; } if (x) masterWords.push({name: l.name, word: x.ok ? postWord(x) : "Failed: " + plainMsg(x.message)});
         if (x && x.ok && !x.existed) logPosting({what: "ledger", id: "led:" + l.name, action: postAltered(x) ? "altered" : "created", co: co.id, ref: l.name, party: l.group || "", amount: 0, tally: {company: x.company || tname}, by: (Cloud.st && Cloud.st.email) || ""}); });
       saveBank({newLed: true});
@@ -14896,7 +14900,8 @@ async function postBillsToTally(opts){
         Store.saveEntry(co.id, e);
       });
     }
-    S.billPost = {done: true, ok, bad: failed.length, dup: dup.length, failed, optional: optionalN, unverified, altered, checkFailed, masters: masterWords, company: tname};
+    S.billPost = {done: true, ok, bad: failed.length, dup: dup.length, failed, optional: optionalN, unverified, altered, checkFailed, masters: masterWords, company: tname,
+      reply: replyWords};
     toast(ok + " posted to " + tname + (altered ? " (" + altered + " altered in Tally)" : "") + (optionalN ? " (" + optionalN + " as Optional vouchers)" : "") + (dup.length ? ", " + dup.length + " already there" : "") + (checkFailed ? ", " + checkFailed + " not posted: Tally could not be checked first" : "") + (failed.length ? ", " + failed.length + " not posted" : "") + ".");
   } catch (e){
     if (e && e.code === "cancelled"){ S.billPost = {cancelled: e.message}; toast(e.message); }
@@ -17188,11 +17193,33 @@ function canDeleteBills(){
   if (!Cloud.on() || !S.account) return true;
   return S.account.superadmin === true || ((S.account.me || {}).role === "owner");
 }
+// round 14c (C5b): a bill with a live posting (in Tally, posted and not yet confirmed, or its FinCom id still held by the
+// cloud's tally_post_ids / a finished posting of the cloud): the voucher Tally gave it, or "being checked"
+function billLivePosting(e, cid){
+  if (!e) return null;
+  cid = cid || S.coId;
+  const vch = (e.tallyVchNo || (e.tally && (e.tally.vchNo || e.tally.number)) || "").toString().trim();
+  if (e.exportedAt || e.postUnconfirmed) return {vch};
+  if (typeof postIdReleased === "function" && postIdReleased(e.id, cid) === false) return {vch};
+  if (typeof CloudJobs === "object" && CloudJobs.list && CloudJobs.forClient(cid).some(j => CloudJobs.okIn(j).has(String(e.id)))){
+    const r = [].concat(...CloudJobs.forClient(cid).map(j => j.results || [])).find(x => x && String(x.id) === String(e.id) && x.ok);
+    return {vch: vch || (r && (r.vchNumber || r.vchNo)) || ""};
+  }
+  return null;
+}
 function billDelete(id){
   const e = D().entries[id];
   if (!e) return;
-  if (e.exportedAt){ toast("This bill is in Tally. Take it back from Tally first (Posted \u2192 Take it back), then delete it."); return; }
   if (!canDeleteBills()){ toast("Only the firm\u2019s owner can delete a bill. Mark it \u201cNo entry\u201d instead, or ask the owner."); return; }
+  const live = billLivePosting(e, S.coId);
+  if (live){
+    const words = "This bill is posted to Tally (voucher id " + (live.vch ? esc(live.vch) : "being checked") + "). Deleting it here does not remove it from Tally. Delete anyway?";
+    confirmTyped({title: "Delete a bill posted to Tally?", ok: "Delete anyway", body: '<p class="note" data-delete-posted="">' + words + "</p>"}).then(r => { if (r) billDeleteAsk(e); });
+    return;
+  }
+  billDeleteAsk(e);
+}
+function billDeleteAsk(e){
   askConfirm({title: "Delete this bill?", ok: "Delete", danger: true,
     body: '<p class="note">' + esc(e.x.vendorName || e.fileName || "") + (e.x.invoiceNo ? " \u00b7 " + esc(e.x.invoiceNo) : "") + ". It moves to \u201cDeleted\u201d with its document, and can be restored from there.</p>" +
       '<label class="f" style="margin-top:8px"><span>Why is it deleted?</span><input type="text" id="delWhy" maxlength="200" placeholder="For example: uploaded twice, not this client\u2019s bill"></label>',
@@ -17225,6 +17252,29 @@ function billRestore(id){
   Store.saveEntry(S.coId, e);
   auditEvent("bill_restore", (e.x.vendorName || e.fileName || "") + " " + (e.x.invoiceNo || e.id), S.coId);
   S.filter = "draft"; S.selected = e.id; refreshStats(S.coId); toast("Restored to To review."); render();
+}
+// round 14c (C1, C2): the items of compute().missing that are a box on the bill (data-focus-field on its input), and the
+// click that puts the cursor there; the first missing one is marked bk-missing when the bill opens
+const MISSING_FIELD = {"invoice date": "invoiceDate", "supplier name": "vendorName", "taxable value": "taxable", "party ledger": "partyLedger", "expense ledger": "expenseLedger", "TDS ledger": "tdsLedger"};
+function missingField(item){ return MISSING_FIELD[String(item || "").trim()] || ""; }
+function firstMissingField(missing){ for (const m of (missing || [])){ const k = missingField(m); if (k) return k; } return ""; }
+function focusBillField(key){
+  const host = document.querySelector("#app aside.drawer") || document.getElementById("app") || document;
+  const el = host.querySelector('[data-focus-field="' + key + '"]');
+  if (!el) return false;
+  try { el.scrollIntoView({block: "center"}); } catch (e){}
+  el.focus();
+  return true;
+}
+// C1 (the bulk buttons): why no bill is ready, counted from the drafts' missing lists: "No bill is ready: 2 need an invoice
+// date, 1 a party ledger"
+function noneReadyWords(rows){
+  const counts = new Map();
+  (rows || []).forEach(r => { const c = r.c || compute(r.e), seen = new Set(); (c.missing || []).forEach(m => { if (seen.has(m)) return; seen.add(m); counts.set(m, (counts.get(m) || 0) + 1); }); });
+  if (!counts.size) return "";
+  const art = m => /^(your |a |an |confirmation)/.test(m) ? m : /^[aeiou]/i.test(m) ? "an " + m : "a " + m;
+  const parts = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).map(([m, n], i) => n + " " + (i === 0 ? (n === 1 ? "needs " : "need ") : "") + art(m));
+  return "No bill is ready: " + parts.join(", ") + ".";
 }
 // the bills in the list as shown (Invoices.jsx orders them the same way), and a step to the next or previous one
 function billList(){
@@ -20838,8 +20888,8 @@ function vrExcel(){ vendorReconExcel().catch(e => toast("Could not make the file
 // the bank reconciliation's Excel (app/src/parts/BankChecks.jsx)
 function reconExcelGo(){ bankReconExcel().catch(e => toast("Could not make the file: " + (e.message || e))); }
 /* ================================================================== */
-/* Two-step sign-in (an authenticator-app code) and signing out when  */
-/* nobody has used the page for a while                                */
+/* Two-step sign-in (an authenticator-app code), where the session is */
+/* kept, one token refresh at a time across tabs, and signing out     */
 /* ================================================================== */
 // Optional for firm work: once someone turns it on, the server shows nothing of the firm without the code
 // (my_firm() is empty). Platform administration (all firms, credit, secrets) always needs it: is_superadmin() is
@@ -20848,6 +20898,102 @@ Cloud.aal = function(){
   const s = this.sess();
   try { return JSON.parse(atob(String(s.access_token).split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).aal || "aal1"; } catch (e){ return "aal1"; }
 };
+
+/* ---------- the session: where it is kept, and one refresh at a time across tabs (section D, 03-Oct-2026) ---------- */
+// Cloud.sess/setSess/refreshToken/signIn are first written in src/js/27 and completed here. "Keep me signed in" (the
+// tick box on the sign-in form, ticked by default) keeps the session in localStorage, shared by every tab of this
+// browser and still there tomorrow; unticked keeps it in sessionStorage: this tab only, gone when the browser closes.
+// A refresh keeps the session where it is. Nothing signs anyone out by itself (the idle timer of earlier builds is gone).
+const SESS_KEY = "tdsdesk-test:cloudsess";
+Cloud.keep = function(){ return lsGet("tdsdesk-test:keep") !== "0"; };
+Cloud.sess = function(){
+  let raw = null;
+  try { raw = sessionStorage.getItem(SESS_KEY); } catch (e){}
+  if (raw == null) raw = lsGet(SESS_KEY);
+  try { return JSON.parse(raw || "null"); } catch (e){ return null; }
+};
+Cloud.setSess = function(s){
+  if (!s){ lsDel(SESS_KEY); try { sessionStorage.removeItem(SESS_KEY); } catch (e){} return; }
+  const txt = JSON.stringify(s);
+  if (this.keep()){ lsSet(SESS_KEY, txt); try { sessionStorage.removeItem(SESS_KEY); } catch (e){} }
+  else { try { sessionStorage.setItem(SESS_KEY, txt); lsDel(SESS_KEY); } catch (e){ lsSet(SESS_KEY, txt); } }
+};
+const cloudSignInBase = Cloud.signIn;
+Cloud.signIn = async function(email, password){
+  const box = document.querySelector('[data-cloud="keep"]');
+  if (box) lsSet("tdsdesk-test:keep", box.checked ? "1" : "0");
+  const r = await cloudSignInBase.call(this, email, password);
+  S.signedOutWhy = "";
+  setTimeout(flushAuditLater, 2500);       // a sign-out the server could not be told of at the time (its token was dead)
+  return r;
+};
+// The lock: tdsdesk-test:refreshing in localStorage names the tab refreshing now. A second tab waits (a storage event, or
+// 300 ms) and then finds the session the first tab wrote. Why: Supabase rotates refresh tokens, and a refresh token
+// offered a second time (two tabs refreshing in the same moment) is refused and ends the whole session, in every tab.
+const sessLock = {
+  id: Math.random().toString(36).slice(2),
+  held(){ try { const l = JSON.parse(lsGet("tdsdesk-test:refreshing") || "null"); return l && Date.now() - num(l.at) < 15000 ? l : null; } catch (e){ return null; } },
+  async take(){
+    const t0 = Date.now();
+    while (Date.now() - t0 < 12000){
+      const l = this.held();
+      if (!l){ lsSet("tdsdesk-test:refreshing", JSON.stringify({at: Date.now(), by: this.id})); await new Promise(r => setTimeout(r, 25)); const m = this.held(); if (m && m.by === this.id) return true; continue; }
+      if (l.by === this.id) return true;
+      await new Promise(r => { let t; const done = () => { window.removeEventListener("storage", h); clearTimeout(t); r(); };
+        const h = ev => { if (ev.key === "tdsdesk-test:refreshing" || ev.key === SESS_KEY) done(); }; window.addEventListener("storage", h); t = setTimeout(done, 300); });
+    }
+    return false;    // waited 12 s: the other tab must have stopped; go ahead
+  },
+  free(){ const l = this.held(); if (l && l.by === this.id) lsDel("tdsdesk-test:refreshing"); }
+};
+const SESS_REFUSED = /refresh token|invalid_grant|invalid grant|already used|not found|revoked|session/i;
+Cloud.refreshToken = function(used){
+  const s0 = this.sess();
+  if (used && s0 && s0.access_token && s0.access_token !== used) return Promise.resolve();   // already newer (another request or tab did it)
+  if (this._refreshing) return this._refreshing;
+  this._refreshing = (async () => {
+    const s = this.sess();
+    if (!s || !s.refresh_token) throw new Error("Signed out");
+    const shared = !!lsGet(SESS_KEY);
+    if (shared) await sessLock.take();
+    try {
+      const now = this.sess();
+      if (!now || !now.refresh_token) throw new Error("Signed out");
+      if (now.access_token !== s.access_token || now.refresh_token !== s.refresh_token) return;   // another tab refreshed while we waited: use its session
+      let j;
+      try { j = await this.authCall("token?grant_type=refresh_token", {refresh_token: s.refresh_token}); }
+      catch (e){
+        const again = this.sess();
+        if (again && again.refresh_token !== s.refresh_token) return;   // refused, but another tab holds a newer session: that one is used
+        if (!SESS_REFUSED.test(String(e.message))) throw e;             // the network, not the server: the session stays, the next call tries again
+        sessionEnded("the firm account no longer accepts this sign-in (" + e.message + ")");
+        throw new Error("Signed out");
+      }
+      const cur = this.sess();
+      if (!cur || cur.refresh_token !== s.refresh_token) return;        // signed out meanwhile, or another tab got there first
+      this.setSess(Object.assign({}, s, {access_token: j.access_token, refresh_token: j.refresh_token || s.refresh_token, at: Date.now(), expires_in: j.expires_in || 3600}));
+    } finally { if (shared) sessLock.free(); }
+  })().finally(() => { this._refreshing = null; });
+  return this._refreshing;
+};
+// a session that cannot continue: said in words on the sign-in page, the page kept for after signing in, nothing lost
+function sessionEnded(reason){
+  if (!Cloud.sess()) return;
+  if (typeof Route === "object" && !signInNeeded()) Route.pending = Route.of();
+  signOutHere("Your sign-in ended: " + reason, false, "Your sign-in ended: " + reason + ". Sign in again; your work is kept.");
+}
+// the other tabs of this browser: signed out there means signed out here, said so; signed in there brings this tab in
+window.addEventListener("storage", ev => {
+  if (!ev || ev.key !== SESS_KEY) return;
+  if (!ev.newValue){
+    if (Cloud.st.state === "off" && !Cloud.st.firm && !Cloud.st.email) return;   // this tab was not signed in
+    if (typeof Route === "object" && !signInNeeded()) Route.pending = Route.of();
+    signOutHere("Signed out in another tab.", false, "Your sign-in ended: you signed out in another tab or window. Sign in again; your work is kept.", true);
+  } else if (!ev.oldValue && Cloud.st.state === "off" && !Cloud.st.firm){
+    S.signedOutWhy = ""; Cloud.st.error = ""; Cloud.st.busy = ""; S.cloudForm = null;
+    startCloudSync(); loadAccount(true).then(() => render(), () => render()); render();
+  }
+});
 Cloud.authApi = async function(path, method, body, retry){
   if (!retry) await this.fresh().catch(() => {});
   const c = this.cfg(), s = this.sess();
@@ -20904,7 +21050,7 @@ async function mfaAction(act){
     const code = ((document.getElementById("mfaCode") || {}).value || "").trim();
     if (!/^\d{6}$/.test(code.replace(/\s+/g, ""))){ toast("Type the 6-digit code from the app."); return; }
     Cloud.st.busy = "1"; Cloud.st.error = ""; render();
-    try { await Cloud.mfaVerify(code); toast("Two-step sign-in done."); auditEvent("signin.mfa", ""); startCloudSync(); loadAccount(true).then(() => render()); }
+    try { await Cloud.mfaVerify(code); toast("Two-step sign-in done."); auditEvent("signin.mfa", ""); setTimeout(flushAuditLater, 2500); startCloudSync(); loadAccount(true).then(() => render()); }
     catch (e){ Cloud.st.error = /invalid|expired/i.test(e.message) ? "That code did not match. Check the phone’s clock is right and try the newest code." : e.message; }
     done();
   } else if (act === "mfaCancel"){ Cloud.st.mfa = null; Cloud.st.error = ""; render(); }
@@ -20932,18 +21078,51 @@ function auditEvent(what, detail, cid){
     body: {firm_id: Cloud.st.firm, client_id: String(cid || ""), what: String(what).slice(0, 60), detail: String(detail || "").slice(0, 500)}}).catch(() => {});
 }
 
-/* ---------- signing out: everywhere it happens, and after a quiet spell ---------- */
-function signOutHere(msg, clearLocal){
-  auditEvent("signout", msg || "");
+/* ---------- signing out: everywhere it happens, always with its reason ---------- */
+// msg: the reason, as written to the activity log; why: what the sign-in page says (empty when the person chose to
+// sign out); local: another tab already told the server (the storage listener above)
+function signOutHere(msg, clearLocal, why, local){
   const s = Cloud.sess();
+  if (!local) auditSignOut(msg || "Signed out.", s);
   // tell the server too, so the refresh token cannot be used again
-  if (s && s.access_token){ const c = Cloud.cfg(); fetch(c.url.replace(/\/+$/, "") + "/auth/v1/logout", {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token}}).catch(() => {}); }
+  if (!local && s && s.access_token){ const c = Cloud.cfg(); fetch(c.url.replace(/\/+$/, "") + "/auth/v1/logout", {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token}}).catch(() => {}); }
   Cloud.signOut(); clearInterval(cloudTimer); S.account = null; S.adminData = null; S.backups = null; S.settingsTab = null;
   Cloud.setCfg({gate: true});
+  S.signedOutWhy = why || "";
   S.view = "home"; S.coId = null;
   const after = () => { toast(msg || "Signed out."); render(); };
   // the page is reloaded after clearing, so nothing of the firm stays in memory either
   if (clearLocal) clearLocalCopy().then(() => location.reload(), () => location.reload()); else after();
+}
+// The sign-out goes to the activity log with the token in hand, before the session is cleared (auditEvent would read
+// the session after it is gone and send nothing: the log showed sign-ins and never a sign-out). When the server will
+// not take it now (the token is dead), it is kept and sent after the next sign-in.
+function auditSignOut(detail, s){
+  const firm = Cloud.st.firm;
+  if (!s || !s.access_token || !firm) return;
+  const row = {firm_id: firm, client_id: "", what: "signout", detail: String(detail || "").slice(0, 500)};
+  const keep = () => { try { const q = JSON.parse(lsGet("tdsdesk-test:auditlater") || "[]"); q.push(row); lsSet("tdsdesk-test:auditlater", JSON.stringify(q.slice(-20))); } catch (e){} };
+  const c = Cloud.cfg();
+  try {
+    fetch(c.url.replace(/\/+$/, "") + "/rest/v1/activity", {method: "POST", keepalive: true, headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": "application/json", Prefer: "return=minimal"}, body: JSON.stringify(row)})
+      .then(r => { if (!r.ok) keep(); }, keep);
+  } catch (e){ keep(); }
+}
+function flushAuditLater(){
+  if (!Cloud.on() || !Cloud.st.firm || Cloud.st.mfa) return;
+  let q = []; try { q = JSON.parse(lsGet("tdsdesk-test:auditlater") || "[]"); } catch (e){}
+  if (!q.length) return;
+  lsDel("tdsdesk-test:auditlater");
+  q.forEach(row => auditEvent(row.what, row.detail + " (recorded after signing in again)"));
+}
+// Settings → Firm account, the owner: every computer and phone signed in to this account is signed out (Settings
+// screen: app/src/screens/Account.jsx)
+async function signOutAll(){
+  const a = await askConfirm({title: "Sign out of all devices?", ok: "Sign out everywhere", body: '<p class="note">Every computer and phone signed in to your account is signed out, this one too. Work already synced stays in the firm account.</p>'});
+  if (!a) return;
+  try { await Cloud.authApi("logout?scope=global", "POST"); }
+  catch (e){ toast("Could not reach the firm account: " + e.message); return; }
+  signOutHere("Signed out of all devices.", false, "");
 }
 // removes this firm's copy from this browser (only after everything has reached the firm account)
 async function clearLocalCopy(){
@@ -20954,23 +21133,9 @@ async function clearLocalCopy(){
   try { Object.keys(localStorage).filter(k => /^tdsdesk-test:/.test(k) && !/^tdsdesk-test:(cloud|bridge)$/.test(k)).forEach(k => localStorage.removeItem(k)); } catch (e){}
   S.companies = {}; S.data = {}; S.inbox = {}; S.docq = {};
 }
-const IDLE_MIN_DEFAULT = 30;
-let idleLast = Date.now();
-["pointerdown", "keydown", "wheel", "touchstart"].forEach(e => document.addEventListener(e, () => { idleLast = Date.now(); }, {passive: true, capture: true}));
-setInterval(() => {
-  if (!Cloud.on() || window.claude) return;
-  const mins = num(lsGet("tdsdesk-test:idlemin")) || IDLE_MIN_DEFAULT;
-  if (Date.now() - idleLast > mins * 60000){
-    idleLast = Date.now();
-    // the page open now comes back after signing in again; the sign-in page says why (it is not an error)
-    if (typeof Route === "object" && !signInNeeded()) Route.pending = Route.of();
-    S.signedOutWhy = "Signed out after " + mins + " minutes without use, as set in Settings \u2192 Sign-in and people. Sign in again to carry on where you were.";
-    signOutHere("Signed out after " + mins + " minutes without use. Sign in again to carry on.");
-  }
-}, 30000);
-// Settings, how long before signing out (app/src/screens/Account.jsx)
-function idleMin(){ return num(lsGet("tdsdesk-test:idlemin")) || IDLE_MIN_DEFAULT; }
-function idleSet(v){ lsSet("tdsdesk-test:idlemin", String(Math.max(5, Math.min(240, num(v) || IDLE_MIN_DEFAULT)))); toast("Saved: sign out after " + v + " minutes without use."); render(); }
+// There is no automatic sign-out (section D, 03-Oct-2026): the idle timer of earlier builds (30 minutes without a
+// click, Settings 5-240) signed out every tab of the browser from a tab left in the background, and the person at
+// the keyboard landed on the sign-in page at their next click without a word of why.
 
 /* ---------- last sign-in: shown after signing in, so a sign-in you did not make stands out ---------- */
 function deviceName(ua){
@@ -23217,6 +23382,21 @@ function booksFresh(b, cid){
     (skipped.length ? "; " + skipped.length + (skipped.length === 1 ? " day" : " days") + " not read from Tally yet (" + skipped.slice(0, 3).map(day).join(", ") + (skipped.length > 3 ? " and " + (skipped.length - 3) + " more" : "") + ")" : "") + ".";
   return {last, checked, at, skipped, text};
 }
+// round 14c (C6, owner item 5): the cloud copy of a client may hold no entries for the current financial year. The one
+// note for every screen that shows the books' figures (BooksAsOf, app/src/parts/TallyLine.jsx): the last entry known
+// (the books here, else the cloud copy's end) is before 01-Apr of the current year. "" when there is nothing to say
+function booksYearNote(cid){
+  cid = cid || S.coId;
+  const b = S.books && S.books.cid === cid ? S.books : null;
+  let last = "";
+  if (b) (b.vouchers || []).forEach(v => { if (v && !v.cancel && String(v.date) > last) last = String(v.date); });
+  const bk = typeof TCloud === "object" && cid ? TCloud.book(cid) : null;
+  const d8 = x => String(x || "").replace(/-/g, "").slice(0, 8);
+  if (!last && bk) last = [d8(bk.to), d8((bk.state || {}).doneTo)].filter(Boolean).sort().pop() || "";
+  if (!last) return "";
+  const start = d8(fyStartEnd(fyOf(null)).from);
+  return last < start ? "Current year not yet read from Tally; figures incomplete." : "";
+}
 function tallyStatus(co){
   if (typeof TLight === "object") TLight.refresh();
   const local = typeof Bridge === "object" && Bridge.on() && Bridge.up();
@@ -23441,13 +23621,19 @@ const CloudJobs = {
   },
   // a change to a posting, from the live connection: read again (a burst of changes is read once)
   changed(){ clearTimeout(this.chT); this.chT = setTimeout(() => this.load(true), 800); },
-  // Retry: the same posting again under its id; entries already in Tally are found by FinCom's tag, not posted twice
+  // Retry: the same posting again under its id; entries already in Tally are found by FinCom's tag, not posted twice.
+  // Round 14c: a bill of it deleted in FinCom since (C5a): refused here, no call; any refusal is kept on the row
+  // (refused[job id], shown by Post.jsx beside Retry), not said in a toast alone (C3)
+  refused: {},
   async retry(j){
+    const no = typeof postRetryRefusal === "function" ? postRetryRefusal(j) : "";
+    if (no){ this.refused[j.id] = no; render(); return; }
     try {
       const r = await TCloud.rpc("tally_post_enqueue", {p_id: j.id, p_client: j.client_id, p_payload: {}});
       if (!r || !r.ok) throw new Error((r && r.error) || "It could not be queued again.");
+      delete this.refused[j.id];
       toast("Queued again for the Tally computer.");
-    } catch (e){ toast((e && e.message) || String(e)); }
+    } catch (e){ this.refused[j.id] = "Retry not possible: " + plainMsg((e && e.message) || String(e)); toast(this.refused[j.id]); }
     await this.load(true);
   },
   // Dismiss (request of 02-Oct-2026): a failed or cancelled posting off the list; kept on the server with who and when
@@ -25703,6 +25889,37 @@ function postJobHeld(j){
   if (typeof CloudJobs !== "object") return false;
   const ids = (CloudJobs.idsOf(j) || []).filter(id => !CloudJobs.inTally(j, id));
   return ids.some(id => postIdReleased(id, j.client_id) === false);
+}
+// round 14c (C5a): a failed posting of the cloud cannot be retried while a bill of it (one still to send) is deleted in
+// FinCom: the words for the row, else ""
+function postRetryRefusal(j){
+  if (!j || typeof CloudJobs !== "object") return "";
+  const d = S.data[j.client_id], ents = (d && d.entries) || {};
+  const ids = (CloudJobs.idsOf(j) || []).filter(id => !CloudJobs.inTally(j, id));
+  for (const id of ids){
+    const e = ents[id];
+    if (e && e.status === "deleted"){
+      const dl = e.deleted || {}, when = dl.at ? fmtDate(String(dl.at).slice(0, 10)) : "an unknown date";
+      return "Retry not possible: this bill was deleted in FinCom on " + when + " (" + (dl.reason || "no reason given") + "). Restore it first.";
+    }
+  }
+  return "";
+}
+// what the row of a posting says beside Retry: the refusal of the last press, or the standing one (a deleted bill)
+function postRetryWhy(j){ return (j && typeof CloudJobs === "object" && CloudJobs.refused && CloudJobs.refused[j.id]) || postRetryRefusal(j) || ""; }
+// round 14c (C7): Tally's reply for a posting, summed over its entries' results: {created, altered, exceptions, ignored,
+// has (any count came back), messages}; the words for the page in .text ("" when Tally said nothing countable)
+function postReply(results){
+  const out = {created: 0, altered: 0, exceptions: 0, ignored: 0, has: false, messages: [], text: ""};
+  [].concat(results || []).forEach(r => {
+    if (!r || r.kind === "master" || /^led:|^vt:/.test(String(r.id || ""))) return;
+    ["created", "altered", "exceptions", "ignored"].forEach(k => { if (r[k] != null && r[k] !== ""){ out[k] += num(r[k]); out.has = true; } });
+    const m = plainMsg(r.message || "");
+    if (m && !out.messages.includes(m)) out.messages.push(m);
+  });
+  if (!out.has) return out;
+  out.text = "Tally\u2019s reply: created " + out.created + " \u00b7 altered " + out.altered + " \u00b7 exceptions " + out.exceptions + " \u00b7 ignored " + out.ignored + (out.messages.length ? " \u00b7 " + out.messages.slice(0, 3).join("; ") : "");
+  return out;
 }
 // round 5 (S3, C6): an owner settles an entry Tally accepted but nobody confirmed, or one not found in Tally whose id
 // FinCom's cloud still holds. "Mark posted (voucher no.)" -> tally_post_job_mark_posted(job, id, vch, note) (migration
