@@ -321,8 +321,14 @@ const TCloud = {
     try {
       // main_bridge from migration-22 on; without it, the list as before
       const cols = "id,name,created_at,last_seen,version,info,revoked";
-      p.devices = await Cloud.api("tally_devices?select=" + cols + ",main_bridge&order=created_at.desc").catch(e => {
-        if (/main_bridge/.test(String(e && e.message))) { p.noMain = true; return Cloud.api("tally_devices?select=" + cols + "&order=created_at.desc"); }
+      // round 15 (F3): the posting settings an owner saved for the computer (migration 43: post_only, post_batch_bills,
+      // post_batch_bank, post_settings_at, post_settings_by); without the columns the page says they are not available
+      const PS = ",post_only,post_batch_bills,post_batch_bank,post_settings_at,post_settings_by", noPS = m => /post_only|post_batch|post_settings/.test(m);
+      const read = extra => Cloud.api("tally_devices?select=" + cols + extra + "&order=created_at.desc");
+      p.devices = await read(",main_bridge" + PS).then(r => { p.noPostSettings = false; return r; }).catch(e => {
+        const m = String(e && e.message);
+        if (noPS(m)){ p.noPostSettings = true; return read(",main_bridge").catch(e2 => { if (/main_bridge/.test(String(e2 && e2.message))){ p.noMain = true; return read(""); } throw e2; }); }
+        if (/main_bridge/.test(m)){ p.noMain = true; return read(PS).then(r => { p.noPostSettings = false; return r; }).catch(e2 => { if (noPS(String(e2 && e2.message))){ p.noPostSettings = true; return read(""); } throw e2; }); }
         throw e; });
       p.companies = await this.restAll("tally_companies?select=company,client_id,device_id,gstin,last_seen,linked_at&order=company.asc");
       // migration-35: the stops and resumes from FinCom with who and when (round 4, item 24: the latest 300 rows; the
@@ -431,12 +437,30 @@ const TCloud = {
       p.ctl = {ok: done};
       toast(done);
     } catch (e){
-      const m = String((e && e.message) || e);
-      const mig = {tally_release_withdraw: 37, tally_baseline_clear: 37}[fn] || 35;
-      p.ctl = {err: /PGRST202|Could not find the function|schema cache|does not exist|\b404\b/i.test(m) ? "FinCom\u2019s cloud is not ready for this yet (migration " + mig + " is not applied)."
+      const m = String((e && e.message) || e), missing = /PGRST202|Could not find the function|schema cache|does not exist|\b404\b/i.test(m);
+      const mig = {tally_release_withdraw: 37, tally_baseline_clear: 37, tally_device_post_settings: 43}[fn] || 35;
+      p.ctl = {err: missing && fn === "tally_device_post_settings" ? "Posting settings are not available until migration 43 runs."
+        : missing ? "FinCom\u2019s cloud is not ready for this yet (migration " + mig + " is not applied)."
         : m.replace(/^ERROR:\s*/i, "").replace(/^./, c => c.toUpperCase())};
     }
     await this.refreshPane();
+  },
+  // round 15 (F3): the posting settings of a computer, saved by an owner -> tally_device_post_settings(p_device, p_post_only
+  // (names; [] = any company), p_bills, p_bank (1..500)); the bridge applies them at its next heartbeat (info.beat.postOnly,
+  // postBatchBills, postBatchBank, settingsAt). Checked here first: the words stay on the line, nothing is sent
+  postSettingsCheck(v){
+    const n = k => { const x = Math.floor(num(v[k])); return x >= 1 && x <= 500 ? x : null; };
+    if (!n("bills")) return "Bills per request must be a number from 1 to 500.";
+    if (!n("bank")) return "Bank lines per request must be a number from 1 to 500.";
+    return "";
+  },
+  postSettingsNames(text){ const seen = new Set(); return String(text || "").split(/[,\n;]/).map(x => x.trim()).filter(x => x && !seen.has(x.toUpperCase()) && seen.add(x.toUpperCase())).slice(0, 20); },
+  async postSettings(dev, v){
+    const why = this.postSettingsCheck(v);
+    if (why) return why;
+    await this.control("tally_device_post_settings", {p_device: dev.id, p_post_only: this.postSettingsNames(v.only), p_bills: Math.floor(num(v.bills)), p_bank: Math.floor(num(v.bank))},
+      "Saved for " + (dev.name || "the computer") + "; the bridge applies it within a minute.");
+    return "";
   },
   async readStop(r){
     const all = !r, where = all ? "every computer" : r.computer;

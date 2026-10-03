@@ -28,12 +28,18 @@ function RowLedger({ r }) {
     const canUndo = r.state === "sent" && r.tally && r.tally.guid && live();
     // with no Tally ledger chosen for the account, a line is not said to be gone from Tally (review of 02-Oct-2026)
     const noLed = !bankLedgerReady(CO(), accountFor(curStmt() || {}));
+    // round 15 (B1): bridge 2.1.8 said Tally's voucher id (or the batch's last id) when the line went: that, with the
+    // company, the time in IST and who pressed Post; an older line as before
+    const mark = r.state === "sent" && !r.goneFromTally && typeof postMarkOf === "function" ? postMarkOf(r) : null, words = mark ? postMarkWords(mark) : "";
+    const matched = r.state === "sent" && typeof postMatched === "function" ? postMatched(r.id, b.cid) : null;
     const status = r.goneFromTally && noLed ? "Not found in Tally · choose this account’s Tally ledger to check and post"
       : r.goneFromTally ? "Not in Tally any more (deleted there?) · " + (r.state === "intally" ? "was found when reconciling" : "posted " + (r.sentAt ? shortDate(r.sentAt.slice(0, 10)) : ""))
+      : words ? words + (r.checking ? " · checking in Tally…" : "")
       : r.state === "sent" && !bankMatched(r) ? (r.postedVia === "bridge" ? "Sent to Tally " : "In a Tally file ") + (r.sentAt ? shortDate(r.sentAt.slice(0, 10)) : "") + (r.checking ? " · checking in Tally…" : " · not found in Tally yet")
       : r.state === "sent" ? "In Tally · posted " + (r.sentAt ? shortDate(r.sentAt.slice(0, 10)) : "") + (r.tally && r.tally.number ? " · voucher " + r.tally.number : "")
       : r.state === "intally" ? "Already in Tally" + (r.tallyRef ? ": " + r.tallyRef : "") + (r.tallyHow ? " (" + r.tallyHow + ")" : "") : "Ignored";
-    return <><span className="lgtext">{r.ledger || "—"}</span><span className="src muted">{status}
+    return <><span className="lgtext">{r.ledger || "—"}</span><span className="src muted" data-posted-line={words ? "" : undefined} data-batch-n={mark && mark.batchN || undefined}>{status}
+      {matched && <> <span className="tag ok" data-matched="">Matched with Tally</span></>}
       {canUndo && <> <button className="linkbtn" onClick={() => bankRowAct("unpost", r.id)}>Take it back</button></>}</span></>;
   }
   const held = b.postedTags && String(b.postedTags[fpHash(r.fp || r.id)] || "").startsWith("unconfirmed");

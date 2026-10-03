@@ -1050,7 +1050,8 @@ async function postBankToTally(ids){
   try {
     const j = await Bridge.post({company: tname, client: co.id, ledger: acc.ledger,
       masters: masters.map(l => ({id: "led:" + l.name, xml: ledgerMasterXml(l)})),
-      vouchers: rows.map(r => ({id: r.id, xml: bankVoucherXml(r, acc, co)}))}, pj => { b.busy = postingLine(pj, tname); refreshBusy(); },
+      // round 15: bank: true tells bridge 2.1.8 to batch these by its bank-lines-per-request setting (bills carry nothing)
+      vouchers: rows.map(r => ({id: r.id, xml: bankVoucherXml(r, acc, co), bank: true}))}, pj => { b.busy = postingLine(pj, tname); refreshBusy(); },
       chk => bankAfterCheck(b.cid, st.id, chk, tname));
     // B14: stopped by the check of the company this client may post to: nothing sent, the lines stay ready
     if (j.notAllowed){
@@ -1076,6 +1077,9 @@ async function postBankToTally(ids){
         b.postedTags = b.postedTags || {}; b.postedTags[fpHash(r.fp || r.id)] = now;
         logPosting({what: "bank", id: r.id, action: "posted", co: b.cid, ref: r.narr.slice(0, 40), party: r.ledger, amount: num(r.debit || r.credit), tally: {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", company: tname}, by: (Cloud.st && Cloud.st.email) || ""});
         r.tally = {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", at: now, by: (Cloud.st && Cloud.st.email) || "", company: tname};
+        // round 15 (B1): Tally's voucher id, or the batch's last id, from bridge 2.1.8
+        const mk = typeof postTallyMark === "function" ? postTallyMark(x, {company: tname, at: now, by: postMyName()}) : null;
+        if (mk) Object.assign(r.tally, mk);
         if (x.optional) optionalN++;
         if (r.billId && D(b.cid).entries[r.billId]){ const e = D(b.cid).entries[r.billId]; e.paidBy = r.id; Store.saveEntry(b.cid, e); }
         markSalesReceived(r);
@@ -1231,6 +1235,9 @@ function billPosted(cid, e, x, tname, now){
   logPosting({what: "bill", id: e.id, action: postAltered(x) ? "altered" : "posted", co: cid, ref: e.x.invoiceNo, party: e.x.vendorName, amount: num(e.x.total), tally: {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", company: x.company || tname}, by: (Cloud.st && Cloud.st.email) || ""});
   e.exportedAt = now; e.postError = ""; e.postUnconfirmed = null; e.postCheckFailed = null; e.postedVia = "bridge"; e.postedInto = x.company || tname; e.postedOptional = !!x.optional; e.postVerified = x.verified === true; e.postAltered = postAltered(x); e.tallyVchNo = x.vchNumber || "";
   e.tally = {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", at: now, by: (Cloud.st && Cloud.st.email) || "", company: x.company || tname};
+  // round 15 (B1): bridge 2.1.8 says Tally's exact voucher id (one voucher a request) or the batch's last id: kept here
+  const mk = typeof postTallyMark === "function" ? postTallyMark(x, {company: x.company || tname, at: now, by: postMyName()}) : null;
+  if (mk) Object.assign(e.tally, mk);
 }
 // already in Tally (bridge 2.1.4 checks Tally for the same party, bill no., date and amount at every posting): marked as
 // in Tally with Tally's voucher, as a verified posting is, and said "Already in Tally"

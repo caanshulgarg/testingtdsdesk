@@ -66,6 +66,8 @@ try:
         # an entry an earlier build left in Tally under another date
         tag0 = pg.evaluate("fpHash('fp-e2e-0')")
         fake_tally.POSTED.append(("20260927", "old | TDSDesk:" + tag0, "501", re.sub(r"<DATE>[^<]*</DATE>", "<DATE></DATE>", x)))
+        # round 15: the payload's bank-line vouchers carry bank: true (bridge 2.1.8 batches them by its bank-lines-per-request setting)
+        pg.evaluate("() => { window.__bp0 = Bridge.post.bind(Bridge); Bridge.post = (p, ...a) => { window.__payloads = (window.__payloads || []).concat([JSON.parse(JSON.stringify(p))]); return window.__bp0(p, ...a); }; }")
         pg.evaluate("postBankToTally()"); pg.wait_for_timeout(500)
         d = pg.evaluate("S.dupFind && {w: S.dupFind.wrongDate.length, e: S.dupFind.extra.length, when: S.dupFind.wrongDate[0] && S.dupFind.wrongDate[0].date}")
         ok(d and d["w"] == 1 and d["when"] == "20260927" and len(fake_tally.POSTED) == 1, "Post first looks through Tally beyond the statement's dates: the wrong-date entry is found and nothing is posted (%s)" % d)
@@ -84,6 +86,8 @@ try:
         fake_tally.CTRL["read_delay"] = 0
         fake_tally.CTRL["read_delay_after_import"] = 3; fake_tally.CTRL["_imported"] = False
         t0 = time.time(); pg.evaluate("postBankToTally()"); dt = time.time() - t0
+        pl = pg.evaluate("window.__payloads || []")
+        ok(pl and all(v.get("bank") is True for p in pl for v in p.get("vouchers", [])) and sum(len(p.get("vouchers", [])) for p in pl) >= 1, "round 15: every bank-line voucher in the posting payload carries bank: true (%d payloads)" % len(pl))
         ok(pg.evaluate("B().postReport.checking") is True and "not yet read back" in pg.inner_text("#app"), "posting ends as soon as the entries are sent (%.1fs); the read-back runs in the background" % dt)
         for i in range(60):
             if pg.evaluate("!B().rows.some(r => r.checking) && !B().balBusy && !!curStmt().tallyBal"): break

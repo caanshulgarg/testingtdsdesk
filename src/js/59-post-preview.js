@@ -175,7 +175,9 @@ function gstinKeyOf(g){ const k = String(g || "").toUpperCase().replace(/[^0-9A-
 // "Postings in FinCom's cloud" lists every posting (migration-27; an older cloud without it: nothing recorded, no error)
 const PostRecord = {
   missing: false,
-  clean(r){ const o = {}; ["id", "ok", "kind", "message", "verified", "vchNumber", "vchType", "guid", "masterId", "vchDate", "optional", "altered", "created", "existed", "pendingCheck", "already", "checkFailed", "vchNo"].forEach(k => { if (r[k] !== undefined) o[k] = r[k]; }); if (o.message) o.message = String(o.message).slice(0, 400); return o; },
+  clean(r){ const o = {}; ["id", "ok", "kind", "message", "verified", "vchNumber", "vchType", "guid", "masterId", "vchDate", "optional", "altered", "created", "existed", "pendingCheck", "already", "checkFailed", "vchNo",
+    // bridge 2.1.8 (round 15): Tally's reply counted it, its exact voucher id or the batch's last id, and what needs review
+    "byReply", "vchId", "batchEnd", "batchN", "company", "sentAt", "secondsReq", "needsReview", "accepted", "exceptions", "ignored", "errors", "lineError", "lastVchId"].forEach(k => { if (r[k] !== undefined) o[k] = r[k]; }); if (o.message) o.message = String(o.message).slice(0, 400); return o; },
   async save(co, payload, out){
     if (this.missing || !co || !out || typeof TCloud !== "object" || !TCloud.on()) return false;
     const uuidOk = s => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(s || ""));
@@ -232,12 +234,16 @@ function postJobStates(cid){
       if (out.has(id)) return;
       const it = items.find(x => String(x.id) === id), r = results.find(x => String(x.id) === id);
       let st = "", reason = "";
-      if ((r && (r.ok || postAlready(r))) || (it && it.state === "in_tally")) st = "posted";
+      if ((r && (r.ok || postAlready(r))) || (it && (it.state === "in_tally" || it.state === "posted"))) st = "posted";
+      // round 15 (B2): Tally accepted the request but its reply needs a look (bridge 2.1.8: ok false, needsReview true;
+      // item state needs_review): under Errors with Tally's words, settled by an owner, never sent again while accepted
+      else if ((r && postNeedsReview(r)) || (it && it.state === "needs_review")) { st = "review"; reason = plainMsg(r && r.message) || (it && it.reason) || "Tally\u2019s reply needs a look"; }
       else if ((it && it.state === "unknown") || (r && r.outcomeUnknown)) { st = "unknown"; reason = (it && it.reason) || "Checking whether it reached Tally"; }
       else if (live && (!it || ["waiting", "sending", "sent"].includes(it.state))) st = "sending";
       else if (byPerson || j.status === "cancelled") st = "";
       else if ((it && it.state === "failed") || (r && !r.ok) || j.status === "failed") { st = "refused"; reason = (it && it.reason) || plainMsg(r && r.message) || plainMsg(j.message) || "Tally did not take it"; }
-      out.set(id, {st, job: j, reason});
+      // bridge 2.1.8: a record refusal (alreadySent: the bridge's own record says it went from that computer) is not Tally's word
+      out.set(id, {st, job: j, reason, alreadySent: !!(r && r.alreadySent)});
     });
   });
   return out;
@@ -261,6 +267,7 @@ function postBucket(e, ctx){
   // keeps postedVia, and is waiting again)
   if (js && js.st === "posted" && !e.postedVia) return "intally";
   if (js && js.st === "unknown") return "unknown";
+  if (js && js.st === "review") return "review";
   if ((js && js.st === "sending") || (ctx && ctx.sending && ctx.sending.has(e.id))) return "sending";
   // refused in a posting made after this approval (a bill sent back to review and approved again starts afresh)
   if (js && js.st === "refused" && String(js.job.created_at || "") >= String(e.approvedAt || "")) return "refused";
@@ -273,9 +280,9 @@ function postBills(cid){
   const d = S.data[cid];
   if (!d || !d.loaded) return null;
   const jobs = postJobStates(cid);
-  const ctx = {jobs, ledgers: postLedgerList(cid)}, out = {ready: [], attention: [], sending: [], unknown: [], refused: [], jobs: [], why: {}};
-  Object.values(d.entries).forEach(e => { const b = postBucket(e, ctx); if (out[b]){ out[b].push(e); if (b === "unknown" || b === "refused") out.why[e.id] = jobs.get(String(e.id)); } });
-  ["ready", "attention", "sending", "unknown", "refused"].forEach(k => out[k].sort(byDate));
+  const ctx = {jobs, ledgers: postLedgerList(cid)}, out = {ready: [], attention: [], sending: [], unknown: [], refused: [], review: [], jobs: [], why: {}};
+  Object.values(d.entries).forEach(e => { const b = postBucket(e, ctx); if (out[b]){ out[b].push(e); if (b === "unknown" || b === "refused" || b === "review") out.why[e.id] = jobs.get(String(e.id)); } });
+  ["ready", "attention", "sending", "unknown", "refused", "review"].forEach(k => out[k].sort(byDate));
   out.jobs = typeof CloudJobs === "object" ? CloudJobs.needing(cid) : [];
   return out;
 }
@@ -284,7 +291,7 @@ function postRefusedAlone(b){ const need = new Set(b.jobs.map(j => j.id)); retur
 // the counts: from the bills when they are here, else from the client's stats (kept by refreshStats with postBucket)
 function postCounts(cid){
   const b = postBills(cid);
-  if (b) return {ready: b.ready.length, attention: b.attention.length + b.jobs.length + b.unknown.length + postRefusedAlone(b).length};
+  if (b) return {ready: b.ready.length, attention: b.attention.length + b.jobs.length + b.unknown.length + (b.review || []).length + postRefusedAlone(b).length};
   const st = (S.companies[cid] || {}).stats || {};
   return {ready: num(st.ready != null ? st.ready : st.waiting), attention: num(st.attention)};
 }
@@ -533,14 +540,22 @@ const PostIds = {
     this.busy[cid] = true;
     try {
       const q = cols => "tally_post_ids?select=" + cols + "&job_id=in.(" + key + ")";
+      // round 15 (B5, B1): matched_at / matched_vch ("Matched with Tally", nothing writes it yet) and Tally's ids as the
+      // cloud keeps them (reply_vch, batch_end, batch_n), from migration 43; an older cloud is read as before
+      const base = "job_id,fincom_id,entry_id,live", tries = [base + ",released_at,released_why,matched_at,matched_vch,reply_vch,batch_end,batch_n", base + ",released_at,released_why", base];
       let rows;
-      try { rows = await TCloud.restAll(q("job_id,fincom_id,entry_id,live,released_at,released_why")); }
-      catch (e){ if (!/released_at|released_why|42703/i.test(String(e && e.message))) throw e; rows = await TCloud.restAll(q("job_id,fincom_id,entry_id,live")); }
-      const held = new Map();
-      [].concat(rows || []).forEach(r => { const h = !!r.live && !r.released_at; [r.fincom_id, r.entry_id].filter(Boolean).forEach(k => held.set(String(k), held.get(String(k)) || h)); });
-      const sig = JSON.stringify([...held.entries()].sort());
+      for (let i = 0; ; i++){
+        try { rows = await TCloud.restAll(q(tries[i])); break; }
+        catch (e){ if (i >= tries.length - 1 || !/released_at|released_why|matched_at|matched_vch|reply_vch|batch_end|batch_n|42703/i.test(String(e && e.message))) throw e; }
+      }
+      const held = new Map(), matched = new Map(), ids = new Map();
+      [].concat(rows || []).forEach(r => { const h = !!r.live && !r.released_at, ks = [r.fincom_id, r.entry_id].filter(Boolean).map(String);
+        ks.forEach(k => held.set(k, held.get(k) || h));
+        if (r.matched_at) ks.forEach(k => matched.set(k, {at: r.matched_at, vch: r.matched_vch == null ? "" : String(r.matched_vch)}));
+        if (r.reply_vch != null || r.batch_end != null) ks.forEach(k => { if (!ids.has(k)) ids.set(k, r.reply_vch != null ? {vch: r.reply_vch} : {batchEnd: r.batch_end, batchN: num(r.batch_n)}); }); });
+      const sig = JSON.stringify([[...held.entries()].sort(), [...matched.entries()].sort(), [...ids.entries()].sort()]);
       const changed = !s || s.sig !== sig;
-      this.by[cid] = {at: Date.now(), key, held, sig}; this.readable = true;
+      this.by[cid] = {at: Date.now(), key, held, matched, ids, sig}; this.readable = true;
       if (changed) render();
     } catch (e){ this.readable = false; this.by[cid] = {at: Date.now(), key, held: null, sig: ""}; render(); }
     finally { delete this.busy[cid]; }
@@ -573,6 +588,9 @@ function postRetryRefusal(j){
       return "Retry not possible: this bill was deleted in FinCom on " + when + " (" + (dl.reason || "no reason given") + "). Restore it first.";
     }
   }
+  // round 15 (B2): an entry Tally accepted whose reply needs review is never sent again by a Retry
+  const rev = [].concat(j.results || []).filter(r => postNeedsReview(r) && r.accepted === true && ids.includes(String(r.id)));
+  if (rev.length) return "Retry not possible: Tally accepted " + rev.length + (rev.length === 1 ? " entry that needs" : " entries that need") + " review first (Mark posted, or Not in Tally \u2014 release, under Errors).";
   return "";
 }
 // what the row of a posting says beside Retry: the refusal of the last press, or the standing one (a deleted bill)
@@ -591,6 +609,111 @@ function postReply(results){
   out.text = "Tally\u2019s reply: created " + out.created + " \u00b7 altered " + out.altered + " \u00b7 exceptions " + out.exceptions + " \u00b7 ignored " + out.ignored + (out.messages.length ? " \u00b7 " + out.messages.slice(0, 3).join("; ") : "");
   return out;
 }
+// ---------- round 15 (B1–B5): what Tally confirmed, kept on the entry and said on the page
+// A result of bridge 2.1.8 says how Tally counted the request: vchId is Tally's exact voucher id (only when the request
+// held one voucher), batchEnd the last Tally id of a request of several (batchN of them). An id is never inferred for an
+// entry of a batch: the page says the batch's end. {vch | batchEnd, batchN, company, at, by} from a result, or null for
+// an older result (verified by read-back, vchNumber/masterId), which keeps showing as before
+function postTallyMark(x, more){
+  if (!x) return null;
+  more = more || {};
+  const has = v => v != null && v !== "";
+  if (!has(x.vchId) && !has(x.batchEnd)) return null;
+  const m = {company: x.company || more.company || "", at: x.sentAt || more.at || "", by: more.by || ""};
+  if (has(x.vchId)) m.vch = x.vchId; else { m.batchEnd = x.batchEnd; m.batchN = num(x.batchN) || 0; }
+  return m;
+}
+function postNeedsReview(x){ return !!x && !x.ok && x.needsReview === true; }
+// a moment in Indian time, as the owner reads Tally's clock: "03-Oct-2026 14:05 IST"
+function fmtIST(t){
+  const ms = typeof t === "number" ? t : Date.parse(String(t || ""));
+  if (!ms) return "";
+  const p = {};
+  try { new Intl.DateTimeFormat("en-GB", {timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false}).formatToParts(ms).forEach(q => { p[q.type] = q.value; }); }
+  catch (e){ return fmtDateTime(ms); }
+  return p.day + "-" + String(p.month).replace(/^Sept$/, "Sep") + "-" + p.year + " " + (p.hour === "24" ? "00" : p.hour) + ":" + p.minute + " IST";
+}
+// the words for a mark: "Posted to Tally: voucher id N" or "Posted to Tally, batch ending Tally id N", then
+// " · <company> · <date time IST> · by <name>"; "" without a mark
+function postMarkWords(m){
+  if (!m || (m.vch == null && m.batchEnd == null)) return "";
+  const head = m.vch != null ? "Posted to Tally: voucher id " + m.vch : "Posted to Tally, batch ending Tally id " + m.batchEnd;
+  return head + (m.company ? " · " + m.company : "") + (m.at ? " · " + fmtIST(m.at) : "") + (m.by ? " · by " + m.by : "");
+}
+// the mark kept on an entry or a bank line (e.tally: set with exportedAt / sentAt when the result arrived here)
+function postMarkOf(e){ const t = e && e.tally; return t && (t.vch != null || t.batchEnd != null) ? {vch: t.vch, batchEnd: t.batchEnd, batchN: t.batchN, company: t.company, at: t.at, by: t.by} : null; }
+// the mark from a posting of the cloud (seen from any computer): the entry's result, the job's company, when, and the
+// person who pressed Post (created_by); else the ids the cloud kept in tally_post_ids
+function postMarkFromJob(j, id){
+  if (!j) return null;
+  const r = [].concat(j.results || []).find(x => x && String(x.id) === String(id));
+  const by = j.created_by ? memberName(j.created_by) : "";
+  const m = postTallyMark(r, {company: j.company, at: j.updated_at || j.created_at, by});
+  if (m) return m;
+  const s = typeof PostIds === "object" && PostIds.by[j.client_id], k = s && s.ids && s.ids.get(String(id));
+  return k ? Object.assign({company: j.company || "", at: j.updated_at || j.created_at || "", by}, k) : null;
+}
+function postMarkFor(cid, id, e){ return postMarkOf(e) || postMarkFromJob(typeof postJobOf === "function" ? postJobOf(cid, id) : null, id); }
+// the name for "by <name>" when the result comes through this browser: the member's name, else the e-mail
+function postMyName(){
+  const st = (typeof Cloud === "object" && Cloud.st) || {}, me = (st.members || []).find(m => m.email && m.email === st.email);
+  return (me && me.name) || st.email || "";
+}
+// B5: "Matched with Tally" is said only when tally_post_ids carries matched_at for the entry: {at, vch} or null
+function postMatched(id, cid){
+  const s = PostIds.by[cid || S.coId], m = s && s.matched && s.matched.get(String(id));
+  return m || null;
+}
+// Tally's counts for one entry's reply: "created 1 · altered 0 · exceptions 1 · ignored 0" ("" when none came back)
+function postReplyCounts(x){
+  return ["created", "altered", "exceptions", "ignored"].filter(k => x && x[k] != null && x[k] !== "").map(k => k + " " + num(x[k])).join(" · ");
+}
+// Tally's line errors on a reply (bridge 2.1.8: lineError, an array of texts, or one text): the first three, as one line
+function postLineErrors(x){
+  const l = x && x.lineError, arr = Array.isArray(l) ? l : l ? [l] : [];
+  return arr.map(t => plainMsg(String(t || ""))).filter(Boolean).slice(0, 3).join("; ");
+}
+// B2: the posting's line: "Posted N of M" / "Posted N of M; K need review"
+function postJobCount(j){
+  const rs = [].concat((j && j.results) || []).filter(r => r && r.kind !== "master" && !/^led:|^vt:/.test(String(r.id || "")));
+  const ok = rs.filter(r => r.ok || postAlready(r)).length, rev = rs.filter(postNeedsReview).length;
+  const n = Math.max(num(j && j.n) || 0, ((typeof CloudJobs === "object" && CloudJobs.idsOf(j)) || []).length, rs.length);
+  return "Posted " + ok + " of " + n + (rev ? "; " + rev + (rev === 1 ? " needs review" : " need review") : "");
+}
+// B4: the timing the bridge wrote on the job (tally_post_jobs.timing = {reqs: [{n, seconds, …}], secondsTotal}): "K requests, T s"
+function postTimingWords(j){
+  const t = j && j.timing;
+  if (!t || typeof t !== "object") return "";
+  const k = Array.isArray(t.reqs) ? t.reqs.length : num(t.reqs), s = t.secondsTotal != null ? num(t.secondsTotal) : (Array.isArray(t.reqs) ? t.reqs.reduce((a, q) => a + num(q.seconds), 0) : 0);
+  if (!k && !s) return "";
+  return k + (k === 1 ? " request, " : " requests, ") + (Math.round(s * 10) / 10) + " s";
+}
+// T: test bills on ZZ TEST (the owner's timing). Only for a client whose confirmed postTo company begins with "ZZ TEST"
+function postTestCopiesOk(co){
+  return !!co && typeof choiceState === "function" && choiceState(co, "postTo") === "confirmed" && String(co.postTo || "").toUpperCase().startsWith("ZZ TEST");
+}
+// N copies of a ready bill: new ids, invoice numbers "<no>-T1".."-TN", the same amounts, ledgers and date, x.testCopy
+// true, ready to post. {ok, ids} or {ok: false, error}
+function postTestCopies(cid, id, n){
+  const co = S.companies[cid], d = S.data[cid], src = d && d.entries && d.entries[id];
+  if (!postOwner()) return {ok: false, error: "Only an owner of the firm makes test copies."};
+  if (!co || !postTestCopiesOk(co)) return {ok: false, error: "Test copies are made only for a client posting to ZZ TEST."};
+  if (!src) return {ok: false, error: "Choose a bill first."};
+  n = Math.floor(num(n));
+  if (!(n >= 1 && n <= 100)) return {ok: false, error: "Choose a number from 1 to 100."};
+  if (src.status !== "approved" || src.exportedAt || src.postUnconfirmed) return {ok: false, error: "Choose a bill that is ready to post."};
+  const now = new Date().toISOString(), no = src.x.invoiceNo || "T", ids = [];
+  for (let i = 1; i <= n; i++){
+    const e = JSON.parse(JSON.stringify(src));
+    e.id = uid("e"); e.createdAt = now; e.approvedAt = now; e.fileName = "Test copy " + i + " of " + no; e.notDuplicate = true;
+    e.x.invoiceNo = no + "-T" + i; e.x.testCopy = true;
+    ["exportedAt", "postUnconfirmed", "postCheckFailed", "postError", "postNote", "postAlreadyMsg", "tally", "tallyVchNo", "tallyCheck", "postVerified", "postAltered", "postedVia", "postedInto", "postedOptional", "goneFromTally", "postFailedAt", "paidBy", "vchNo", "docPath", "dupOf"].forEach(k => { delete e[k]; });
+    d.entries[e.id] = e; Store.saveEntry(cid, e); ids.push(e.id);
+  }
+  refreshStats(cid); render();
+  return {ok: true, ids};
+}
+
 // round 5 (S3, C6): an owner settles an entry Tally accepted but nobody confirmed, or one not found in Tally whose id
 // FinCom's cloud still holds. "Mark posted (voucher no.)" -> tally_post_job_mark_posted(job, id, vch, note) (migration
 // 36b: results and items say in_tally, the id stays accepted); "Not in Tally — release (reason)" -> tally_post_id_release_

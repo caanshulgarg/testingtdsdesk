@@ -153,6 +153,42 @@ function postOnlyOf(r) {
   const list = Array.isArray(b.postOnly) ? b.postOnly : Array.isArray((info.beat || {}).postOnly) ? info.beat.postOnly : [];
   return list.map((x) => String(x || "").trim()).filter(Boolean);
 }
+// round 15 (F3): the posting settings of a computer. The line shows the values the bridge APPLIED (its heartbeat:
+// postOnly, postBatchBills, postBatchBank, settingsAt on info.bridges[id], else info.beat); an owner edits them (Posts
+// only to: names, empty = any company; bills per request, default 10; bank lines per request, default 50) -> TCloud
+// .postSettings -> tally_device_post_settings; while the saved values (tally_devices.post_*) differ from the applied
+// ones the line says "waiting for the bridge to apply (within a minute)". A member sees the values. Without migration
+// 43 (the columns or the RPC missing) the line says so
+const PS_NAMES = (v) => Array.isArray(v) ? v.map((x) => String(x || "").trim()).filter(Boolean) : null;
+function postApplied(r) {
+  const info = (r.device && r.device.info) || {}, b = (info.bridges || {})[r.id] || {}, bt = info.beat || {};
+  const pick = (k) => b[k] !== undefined ? b[k] : bt[k];
+  return { only: PS_NAMES(pick("postOnly")), bills: pick("postBatchBills"), bank: pick("postBatchBank"), at: pick("settingsAt") || "" };
+}
+function PostSettings({ r, owner }) {
+  const [edit, setEdit] = useState(false), [v, setV] = useState({ only: "", bills: "", bank: "" }), [why, setWhy] = useState("");
+  const d = r.device || {}, p = TCloud.pane;
+  if (p.noPostSettings) return <span className="note" data-post-settings="" data-not-ready="">Posting settings: not available until migration 43 runs</span>;
+  const ap = postApplied(r), saved = { only: PS_NAMES(d.post_only), bills: d.post_batch_bills, bank: d.post_batch_bank };
+  const shown = { only: ap.only || saved.only || [], bills: num(ap.bills) || num(saved.bills) || 10, bank: num(ap.bank) || num(saved.bank) || 50 };
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const waiting = !!d.post_settings_at && !(same(saved.only || [], ap.only || []) && (num(saved.bills) || 10) === (num(ap.bills) || 10) && (num(saved.bank) || 50) === (num(ap.bank) || 50));
+  const open = () => { setV({ only: (saved.only || ap.only || []).join(", "), bills: String(num(saved.bills) || shown.bills), bank: String(num(saved.bank) || shown.bank) }); setWhy(""); setEdit(true); };
+  const save = async () => { const w = await TCloud.postSettings(d, v); setWhy(w); if (!w) setEdit(false); };
+  return <span className="note" data-post-settings="" data-ps-waiting={waiting ? "" : undefined}>
+    {"Posting settings: posts only to " + (shown.only.length ? shown.only.join(", ") : "any company") + " · " + shown.bills + " bills per request · " + shown.bank + " bank lines per request"}
+    {waiting && <> <span className="bk-warn" data-ps-waiting="">{"— waiting for the bridge to apply (within a minute): saved " + (saved.only ? (saved.only.length ? saved.only.join(", ") : "any company") : "") + (saved.bills != null ? " · " + saved.bills + " bills" : "") + (saved.bank != null ? " · " + saved.bank + " bank lines" : "")}</span></>}
+    {owner && !edit && <> <button className="linkbtn" data-ps-edit="" onClick={open}>Edit</button></>}
+    {owner && edit && <span className="row" style={{ display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginLeft: 6 }}>
+      <input type="text" data-ps-only="" aria-label="Posts only to (company names, comma-separated; empty = any company)" placeholder="Posts only to (names, comma-separated; empty = any)" value={v.only} style={{ width: 260 }} onChange={(ev) => setV({ ...v, only: ev.target.value })} />
+      <input type="number" data-ps-bills="" aria-label="Bills per request" min="1" max="500" value={v.bills} style={{ width: 64 }} onChange={(ev) => setV({ ...v, bills: ev.target.value })} /><span>bills</span>
+      <input type="number" data-ps-bank="" aria-label="Bank lines per request" min="1" max="500" value={v.bank} style={{ width: 64 }} onChange={(ev) => setV({ ...v, bank: ev.target.value })} /><span>bank lines per request</span>
+      <button className="btn small primary" data-ps-save="" onClick={save}>Save</button>
+      <button className="btn small" data-ps-cancel="" onClick={() => setEdit(false)}>Cancel</button>
+      {why && <span className="bk-warn" data-ps-why="">{why}</span>}
+    </span>}
+  </span>;
+}
 function BridgeLines({ rows, latest }) {
   const [open, setOpen] = useState(false);
   const owner = S.account && S.account.me && S.account.me.role === "owner";
@@ -183,6 +219,7 @@ function BridgeLines({ rows, latest }) {
             : <button className="btn small" data-read-stop={r.device.id} onClick={() => TCloud.readStop(r)}>Stop reading on this computer</button>)}
           {owner && latest && !piloting && vnum(latest) > vnum(r.version) && <button className="btn small" data-release-pilot={r.device.id} onClick={() => TCloud.releasePilot(latest, r)}>{"Try version " + latest + " on this computer"}</button>}
         </div>}
+        {live && <div className="row" style={{ alignItems: "center", gap: 8, flexWrap: "wrap", marginLeft: 16 }}><PostSettings r={r} owner={owner} /></div>}
         {live && <Baselines r={r} owner={owner} />}
       </div>; })}
     <Release rows={rows} latest={latest} owner={owner} />

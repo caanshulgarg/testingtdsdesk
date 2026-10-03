@@ -19,13 +19,15 @@ def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
     if not c: fails.append(w)
 # the firm's computers as tally_devices keeps them (made-up): times are "ago:<minutes>"
-def dev(i, comp, beat=None, extra=None, at="ago:0.5", version="2.1.4"):
+def dev(i, comp, beat=None, extra=None, at="ago:0.5", version="2.1.4", post=None):
     b = {"at": at, "version": version, "computer": comp, "user": "tally", "mode": "main", "runMode": "user", "tally": True, "tallyState": "open", "open": ["ZZ TEST"]}
     bt = {"at": at, "every": 30, "tally": True, "tallyState": "open", "open": ["ZZ TEST"], "paused": False}
     bt.update(beat or {}); b.update({k: v for k, v in (beat or {}).items() if k in ("reqs", "readStopped", "paused")})
     info = {"computer": comp, "user": "tally", "beat": bt, "bridges": {"go-" + i: b}}
     info.update(extra or {})
-    return {"id": i, "name": comp, "revoked": False, "last_seen": at, "version": version, "main_bridge": "go-" + i, "info": info, "created_at": "2026-09-01T00:00:00Z"}
+    d = {"id": i, "name": comp, "revoked": False, "last_seen": at, "version": version, "main_bridge": "go-" + i, "info": info, "created_at": "2026-09-01T00:00:00Z"}
+    d.update(post or {})
+    return d
 REQS = {"day": "TODAY", "last": {"kind": "vouchers", "ms": 1234, "at": "ago:2"}, "longest": {"kind": "ledgers", "ms": 8400, "at": "ago:120"}, "over20": 0, "n": 41}
 DEVS = [
     dev("d0000000-0000-4000-8000-000000000001", "NWS144", {"reqs": REQS}),
@@ -41,6 +43,14 @@ D1, D2, D3, D4, D5 = [d["id"] for d in DEVS]
 DEVS[0]["info"]["bridges"]["go-" + D1]["postOnly"] = ["ZZ TEST"]
 DEVS[1]["info"]["bridges"]["go-" + D2]["postOnly"] = []
 DEVS[2]["info"]["bridges"]["go-" + D3]["postOnly"] = ["ZZ TEST", "ABC LTD"]
+# round 15 (F3): the posting settings saved by an owner (tally_devices.post_only / post_batch_bills / post_batch_bank, migration
+# 43) and the values the bridge APPLIED (info.beat.postOnly / postBatchBills / postBatchBank / settingsAt). NWS144: saved and
+# applied agree; ACCTS2: saved 20 bills, the bridge still applies 10 (waiting); TALLYSRV: nothing saved, the bridge's defaults
+DEVS[0].update({"post_only": ["ZZ TEST"], "post_batch_bills": 10, "post_batch_bank": 50, "post_settings_at": "ago:30", "post_settings_by": "u-1"})
+DEVS[0]["info"]["beat"].update({"postOnly": ["ZZ TEST"], "postBatchBills": 10, "postBatchBank": 50, "settingsAt": "ago:30"})
+DEVS[2].update({"post_only": ["ZZ TEST", "ABC LTD"], "post_batch_bills": 20, "post_batch_bank": 50, "post_settings_at": "ago:0.3", "post_settings_by": "u-1"})
+DEVS[2]["info"]["beat"].update({"postOnly": ["ZZ TEST", "ABC LTD"], "postBatchBills": 10, "postBatchBank": 50, "settingsAt": "ago:5"})
+DEVS[1]["info"]["beat"].update({"postOnly": [], "postBatchBills": 10, "postBatchBank": 50})
 STOPS = [{"id": 7, "device_id": D4, "action": "stop", "reason": "Tally hangs on the bank ledger", "stopped_at": "ago:40", "cleared_at": None}]
 SETUP = """([devs, stops, releases, role, extra]) => {
   extra = extra || {};
@@ -106,6 +116,47 @@ with sync_playwright() as p:
     ok("Posts only to: ZZ TEST" in l1 and "ABC LTD" not in l1, "PostOnly: a bridge restricted to ZZ TEST says Posts only to: ZZ TEST (%s)" % l1)
     ok("Posts only to" not in l2 and "Posts only to" not in l4 and "Posts only to" not in l5, "PostOnly: an empty or absent list says nothing")
     ok("Posts only to: ZZ TEST, ABC LTD" in l3, "PostOnly: two names, joined with a comma (%s)" % l3)
+    # ---- round 15 (F3): Posting settings on the computer's line: the applied values (info.beat), the owner's editor,
+    # Save -> tally_device_post_settings(p_device, p_post_only, p_bills, p_bank), "waiting for the bridge to apply" while
+    # the saved values differ from the applied ones; a member sees the values only; without migration 43 the page says so
+    PS = lambda d: '#app [data-computer="%s"] [data-post-settings]' % d
+    ps1, ps2, ps3 = txt(PS(D1)), txt(PS(D2)), txt(PS(D3))
+    ok(pg.locator(PS(D1)).count() == 1 and "Posting settings" in ps1 and "ZZ TEST" in ps1 and "10 bills per request" in ps1 and "50 bank lines per request" in ps1 and "waiting for the bridge" not in ps1,
+       "F3. NWS144: Posting settings: posts only to ZZ TEST · 10 bills per request · 50 bank lines per request, applied (%s)" % ps1)
+    ok("any company" in ps2 and "10 bills per request" in ps2 and "50 bank lines per request" in ps2 and "waiting" not in ps2, "F3. TALLYSRV: nothing saved: posts to any company, the bridge's 10 and 50 (%s)" % ps2)
+    ok("10 bills per request" in ps3 and "20 bills" not in ps3.split("waiting")[0] and "waiting for the bridge to apply (within a minute)" in ps3 and pg.locator(PS(D3) + " [data-ps-waiting]").count() == 1,
+       "F3. ACCTS2: the line shows the APPLIED 10 bills, and 'waiting for the bridge to apply (within a minute)' for the saved 20 (%s)" % ps3)
+    ok("Posts only to: ZZ TEST, ABC LTD" in line(D3), "F3. the old 'Posts only to' display stays (the applied value)")
+    ok(pg.locator(PS(D1) + " [data-ps-edit]").count() == 1, "F3. the owner has Edit")
+    pg.click(PS(D1) + " [data-ps-edit]"); pg.wait_for_timeout(300)
+    ok(pg.locator(PS(D1) + " input[data-ps-only]").count() == 1 and pg.locator(PS(D1) + " input[data-ps-bills]").count() == 1 and pg.locator(PS(D1) + " input[data-ps-bank]").count() == 1 and pg.locator(PS(D1) + " [data-ps-save]").count() == 1,
+       "F3. the editor: Posts only to, bills per request, bank lines per request, Save")
+    ok(pg.input_value(PS(D1) + " input[data-ps-only]") == "ZZ TEST" and pg.input_value(PS(D1) + " input[data-ps-bills]") == "10" and pg.input_value(PS(D1) + " input[data-ps-bank]") == "50", "F3. the editor starts from the saved values")
+    pg.fill(PS(D1) + " input[data-ps-bills]", "600"); pg.click(PS(D1) + " [data-ps-save]"); pg.wait_for_timeout(300)
+    ok(not [c for c in E("window.__calls") if c[0] == "tally_device_post_settings"] and "1 to 500" in txt(PS(D1)), "F3. 600 bills a request: refused here (1 to 500), nothing sent (%s)" % txt(PS(D1))[-80:])
+    pg.fill(PS(D1) + " input[data-ps-only]", "ZZ TEST, ABC LTD , ZZ TEST"); pg.fill(PS(D1) + " input[data-ps-bills]", "25"); pg.fill(PS(D1) + " input[data-ps-bank]", "100"); pg.click(PS(D1) + " [data-ps-save]"); pg.wait_for_timeout(600)
+    calls = [c for c in E("window.__calls") if c[0] == "tally_device_post_settings"]
+    ok(calls == [["tally_device_post_settings", {"p_device": D1, "p_post_only": ["ZZ TEST", "ABC LTD"], "p_bills": 25, "p_bank": 100}]], "F3. Save -> tally_device_post_settings(p_device, p_post_only [names, trimmed, no repeats], p_bills, p_bank) (%s)" % calls)
+    E("() => { window.__calls = []; }")
+    pg.click(PS(D1) + " [data-ps-edit]"); pg.wait_for_timeout(300); pg.fill(PS(D1) + " input[data-ps-only]", ""); pg.click(PS(D1) + " [data-ps-save]"); pg.wait_for_timeout(600)
+    calls = [c for c in E("window.__calls") if c[0] == "tally_device_post_settings"]
+    ok(len(calls) == 1 and calls[0][1]["p_post_only"] == [] and calls[0][1]["p_device"] == D1, "F3. an empty 'Posts only to' is sent as [] (any company) (%s)" % calls)
+    # the RPC missing (migration 43 not run): plain words, not an error code
+    E("() => { window.__calls = []; window.__fail = 'Could not find the function public.tally_device_post_settings(p_bank, p_bills, p_device, p_post_only) in the schema cache (PGRST202)'; }")
+    pg.click(PS(D1) + " [data-ps-edit]"); pg.wait_for_timeout(300); pg.click(PS(D1) + " [data-ps-save]"); pg.wait_for_timeout(600)
+    ok("not available until migration 43 runs" in txt("#app [data-control-err]") + txt(PS(D1)), "F3. the RPC missing: 'not available until migration 43 runs' (%s)" % (txt("#app [data-control-err]") or txt(PS(D1)))[-120:])
+    E("() => { window.__fail = null; }")
+    # a member: the values, no editor
+    E(SETUP, [DEVS, STOPS, [], "member"]); pg.wait_for_timeout(600); side.first.click(); pg.wait_for_timeout(1200)
+    ok(pg.locator(PS(D1)).count() == 1 and "10 bills per request" in txt(PS(D1)) and pg.locator(PS(D1) + " [data-ps-edit], " + PS(D1) + " input, " + PS(D1) + " [data-ps-save]").count() == 0, "F3. a member sees the values, no editor (%s)" % txt(PS(D1)))
+    # the columns missing (migration 43 not run): the page still works, and says so
+    E("""() => { window.__api0 = Cloud.api; Cloud.api = async (path) => { if (/^tally_devices/.test(path) && /post_only/.test(path)) throw new Error("column tally_devices.post_only does not exist (42703)"); return window.__api0(path); }; TCloud.pane.at = 0; }""")
+    E(SETUP, [DEVS, STOPS, [], "owner"]); pg.wait_for_timeout(400)
+    E("() => { Cloud.api = async (path) => { if (/^tally_devices/.test(path) && /post_only/.test(path)) throw new Error('column tally_devices.post_only does not exist (42703)'); window.__asked.push(path); if (/^tally_devices/.test(path)) return JSON.parse(JSON.stringify(window.__devs)); return []; }; TCloud.pane.devices = null; TCloud.pane.at = 0; TCloud.pane.busy = ''; }")
+    side.first.click(); pg.wait_for_timeout(1500)
+    ok(pg.locator("#app [data-computer]").count() == 5 and "not available until migration 43 runs" in txt(PS(D1)) and pg.locator(PS(D1) + " [data-ps-edit]").count() == 0 and "Posts only to: ZZ TEST" in line(D1),
+       "F3. without the columns: one line a computer still, 'not available until migration 43 runs', the applied Posts only to stays (%s)" % txt(PS(D1)))
+    E(SETUP, [DEVS, STOPS, [], "owner"]); pg.wait_for_timeout(300); side.first.click(); pg.wait_for_timeout(1200)
     # ---- the owner's buttons
     sel = lambda s: pg.locator("#app " + s)
     ok(sel('[data-read-stop="%s"]' % D1).count() == 1 and sel('[data-read-stop="%s"]' % D2).count() == 1 and sel('[data-read-resume="%s"]' % D3).count() == 1 and sel('[data-read-resume="%s"]' % D4).count() == 1

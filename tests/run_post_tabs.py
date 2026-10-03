@@ -420,6 +420,92 @@ with sync_playwright() as p:
     rp = txt('#app [data-post-panel="posted"] [data-job="jT"] [data-post-reply]')
     ok("created 0" in rp and "altered 1" in rp and "exceptions 0" in rp and "ignored 0" in rp and "Altered in Tally: it existed already" in rp,
        "C7. the Posted row says Tally's reply: created 0 · altered 1 · exceptions 0 · ignored 0 · the message (%s)" % rp)
+    # ---- round 15 (B1–B5): Tally's confirmation in FinCom. A result of bridge 2.1.8 carries vchId (the exact voucher
+    # id: that request held one voucher) or batchEnd (the last Tally id of the request; never an inferred id per entry),
+    # company, sentAt; a job carries timing; an entry Tally accepted but whose reply needs a look is ok:false needsReview
+    E("() => { S.account = {me: {role: 'owner'}, firm: {name: 'Firm'}}; render(); }")
+    E("""() => { const G = "GARG SHEKHAR & COMPANY", t = window.__t, c = S.coId;
+      Cloud.st.members = [{user_id: "u-1", name: "Anshul"}, {user_id: "u-2", name: "Priya"}];
+      // Tally's ledger list is at hand since the posting above: the suppliers here are in it, so approve goes through
+      ["Voucher Co", "Batch Co", "Review Co"].forEach(n => { const l = {name: n, parent: "Sundry Creditors", group: "Sundry Creditors", chain: []}; if (window.__leds) window.__leds.push(l); if (S.bank && S.bank.ledgers && S.bank.ledgers.list) S.bank.ledgers.list.push(l); });
+      window.__mkSaid = []; const t0 = window.toast; window.toast = m => { window.__mkSaid.push(String(m)); return t0(m); };
+      const mk = (id, n, no, amt) => { const e = newEntry("Manual entry"); e.id = id; Object.assign(e.x, {vendorName: n, vendorGstin: "", invoiceNo: no, invoiceDate: "2026-07-01", taxable: amt, total: amt});
+        e.natureId = "professional"; e.partyLedger = n; e.expenseLedger = "Professional Charges"; e.notDuplicate = true; S.data[c].entries[e.id] = e; approve(e); e.approvedAt = t(400); return e; };
+      mk("pv1", "Voucher Co", "V/1", 1000); mk("pb1", "Batch Co", "B/1", 2000); mk("pb2", "Batch Co", "B/2", 3000); mk("pn1", "Review Co", "N/1", 4000); mk("pn2", "Review Co", "N/2", 5000);
+      const base = {client_id: c, company: G, status: "done", created_by: "u-2"};
+      window.__jobs.unshift(
+        Object.assign({id: "jPV", done: 1, n: 1, message: "1 of 1 sent to Tally", created_at: t(3), updated_at: t(2), entry_ids: ["pv1"],
+          results: [{id: "pv1", ok: true, byReply: true, vchId: 1234, vchDate: "20260701", vchType: "Journal", company: G, sentAt: "2026-10-03T08:35:00Z", secondsReq: 1.2}], items: [{id: "pv1", state: "posted"}],
+          timing: {reqs: [{n: 1, seconds: 1.2, created: 1, altered: 0, exceptions: 0, ignored: 0, lastVchId: 1234}], secondsTotal: 1.2}}, base),
+        Object.assign({id: "jPB", done: 2, n: 2, message: "2 of 2 sent to Tally", created_at: t(2.5), updated_at: t(1.5), entry_ids: ["pb1", "pb2"],
+          results: [{id: "pb1", ok: true, byReply: true, batchEnd: 1300, batchN: 2, company: G, sentAt: "2026-10-03T08:40:00Z"}, {id: "pb2", ok: true, byReply: true, batchEnd: 1300, batchN: 2, company: G, sentAt: "2026-10-03T08:40:00Z"}],
+          items: [{id: "pb1", state: "posted"}, {id: "pb2", state: "posted"}], timing: {reqs: [{n: 2, seconds: 2.2, created: 2, lastVchId: 1300}, {n: 0, seconds: 1.2}], secondsTotal: 3.4}}, base),
+        Object.assign({id: "jPN", done: 1, n: 2, message: "1 of 2 sent to Tally; 1 needs review", created_at: t(2), updated_at: t(1), entry_ids: ["pn1", "pn2"],
+          results: [{id: "pn1", ok: true, byReply: true, vchId: 1400, company: G, sentAt: "2026-10-03T08:45:00Z"},
+            {id: "pn2", ok: false, needsReview: true, accepted: true, created: 1, altered: 0, exceptions: 1, ignored: 0, lastVchId: 1401, lineError: "LINEERROR: Voucher Number 'N/2' already exists!", message: "Voucher Number 'N/2' already exists!"}],
+          items: [{id: "pn1", state: "posted"}, {id: "pn2", state: "needs_review", reason: "Voucher Number 'N/2' already exists!"}]}, base));
+      window.toast = t0; refreshStats(c); CloudJobs.changed(); }"""); pg.wait_for_timeout(1500)
+    st5 = E("['pv1', 'pb1', 'pb2', 'pn1', 'pn2'].map(id => id + ':' + D().entries[id].status)")
+    ok(all(x.endswith(":approved") for x in st5), "B. the five bills of this round are approved (%s; %s)" % (st5, E("window.__mkSaid")))
+    tab("posted")
+    JV, JB, JN = ['#app [data-post-panel="posted"] [data-job="%s"]' % j for j in ("jPV", "jPB", "jPN")]
+    v1 = txt(JV + " [data-posted-entry='pv1']")
+    ok("Posted to Tally: voucher id 1234" in v1 and "· GARG SHEKHAR & COMPANY ·" in v1 and "03-Oct-2026 14:05 IST" in v1 and "· by Priya" in v1,
+       "B1. a result with vchId: 'Posted to Tally: voucher id 1234 · GARG SHEKHAR & COMPANY · 03-Oct-2026 14:05 IST · by Priya' (%s)" % v1)
+    b1, b2 = txt(JB + " [data-posted-entry='pb1']"), txt(JB + " [data-posted-entry='pb2']")
+    ok("Posted to Tally, batch ending Tally id 1300" in b1 and "Posted to Tally, batch ending Tally id 1300" in b2 and "voucher id" not in txt(JB) and "1299" not in txt(JB),
+       "B1. a batch: both entries say 'Posted to Tally, batch ending Tally id 1300', never an inferred id (%s)" % b1)
+    ok("14:10 IST" in b1 and "by Priya" in b1, "B1. the batch line has the IST time and who pressed Post (%s)" % b1)
+    old2 = txt('#app [data-post-panel="posted"] [data-job="jC"] [data-posted-entry="old2"]')
+    ok("Posted to Tally" not in old2 and "batch" not in old2, "B1. an older result (verified by read-back) shows as before, no invented id (%s)" % old2)
+    ok("Posted 1 of 1" in txt(JV + " [data-job-count]") and "Posted 2 of 2" in txt(JB + " [data-job-count]") and "Posted 1 of 2; 1 needs review" in txt(JN + " [data-job-count]"),
+       "B2. the job line: 'Posted 1 of 1' / 'Posted 2 of 2' / 'Posted 1 of 2; 1 needs review' (%s | %s | %s)" % (txt(JV + " [data-job-count]"), txt(JB + " [data-job-count]"), txt(JN + " [data-job-count]")))
+    ok("1 request, 1.2 s" in txt(JV + " [data-job-timing]") and "2 requests, 3.4 s" in txt(JB + " [data-job-timing]"), "B4. the owner reads the timing on the job line: '1 request, 1.2 s', '2 requests, 3.4 s' (%s)" % txt(JB + " [data-job-timing]"))
+    ok("Posted to Tally: voucher id 1400" in txt(JN + " [data-posted-entry='pn1']") and pg.locator(JN + " [data-posted-entry='pn2']").count() == 0, "B2. under the partly posted jPN: pn1 with its voucher id, pn2 not listed as posted")
+    # B2: the needsReview entry under Errors, with Tally's words and counts, the owner's two actions, never Retry / Post again while accepted
+    tab("errors")
+    N2 = '#app [data-post-panel="errors"] [data-bill-row="pn2"]'
+    n2 = txt(N2)
+    ok(pg.locator(N2).count() == 1 and pg.locator(N2).get_attribute("data-attn-kind") == "review" and "Voucher Number 'N/2' already exists!" in n2 and "created 1" in n2 and "exceptions 1" in n2,
+       "B2. Errors: the needsReview entry with Tally's words and created/altered/exceptions/ignored (%s | %s)" % (n2[:160], E("(() => { const e = D().entries.pn2, js = postJobStates(S.coId); return [e.status, postBucket(e, {jobs: js}), JSON.stringify(js.get('pn2') && {st: js.get('pn2').st, job: js.get('pn2').job.id}), Object.keys(postBills(S.coId))].join(' / '); })()")))
+    ok(pg.locator(N2 + " [data-mark-posted]").count() == 1 and pg.locator(N2 + " [data-release-owner]").count() == 1 and pg.locator(N2 + " [data-retry], " + N2 + " [data-post-again], " + N2 + " [data-retry-bill]").count() == 0,
+       "B2. the owner's Mark posted / Not in Tally — release, and no Retry or Post again while accepted is true")
+    ok(badge("errors") == E("postCounts(S.coId).attention") and "pn2" in bills_in("errors") and "pn2" not in bills_in("topost") and "pn2" not in entries_posted(), "B2. pn2 is counted under Errors, on no other tab")
+    E("() => { S.account = {me: {role: 'staff'}, firm: {name: 'Firm'}}; render(); }"); pg.wait_for_timeout(300); tab("errors")
+    ok(pg.locator(N2).count() == 1 and pg.locator(N2 + " button").count() == 0, "B2. a staff member: the words, no button")
+    tab("posted")
+    ok(pg.locator('#app [data-post-panel="posted"] [data-job-timing]').count() == 0, "B4. a staff member: no timing")
+    E("() => { S.account = {me: {role: 'owner'}, firm: {name: 'Firm'}}; render(); }"); pg.wait_for_timeout(300); tab("posted")
+    # B3: a search box over the posted entries: FinCom id, Tally id, party, bill number
+    jobs_shown = lambda: E("Array.from(document.querySelectorAll('#app [data-post-panel=\"posted\"] [data-job]')).map(r => r.getAttribute('data-job'))")
+    before = jobs_shown()
+    SB = '#app [data-post-panel="posted"] [data-posted-search]'
+    ok(pg.locator(SB).count() == 1, "B3. a search box on the Posted tab")
+    pg.fill(SB, "1300"); pg.wait_for_timeout(400)
+    ok(jobs_shown() == ["jPB"] and pg.locator(JB + " [data-posted-entry]").count() == 2, "B3. search by Tally id 1300: the batch posting, both entries (%s)" % jobs_shown())
+    pg.fill(SB, "pv1"); pg.wait_for_timeout(400)
+    ok(jobs_shown() == ["jPV"], "B3. search by FinCom id pv1 (%s)" % jobs_shown())
+    pg.fill(SB, "review co"); pg.wait_for_timeout(400)
+    ok(jobs_shown() == ["jPN"] and pg.locator(JN + " [data-posted-entry='pn1']").count() == 1, "B3. search by party (any case) (%s)" % jobs_shown())
+    pg.fill(SB, "B/2"); pg.wait_for_timeout(400)
+    ok(jobs_shown() == ["jPB"] and pg.locator(JB + " [data-posted-entry]").count() == 1 and pg.locator(JB + " [data-posted-entry='pb2']").count() == 1, "B3. search by bill number: the posting, that entry alone (%s)" % jobs_shown())
+    pg.fill(SB, "zzz-none"); pg.wait_for_timeout(400)
+    ok(jobs_shown() == [] and pg.locator('#app [data-post-panel="posted"] [data-post-nomatch]').count() == 1, "B3. nothing found: says so")
+    pg.fill(SB, ""); pg.wait_for_timeout(400)
+    ok(jobs_shown() == before, "B3. cleared: every posting is back")
+    # B5: "Matched with Tally" is said only when tally_post_ids carries matched_at (nothing writes it yet)
+    ok("Matched with Tally" not in txt('#app [data-post-panel="posted"]'), "B5. nothing matched: the words are nowhere")
+    asked = E("(window.__idsAsked || []).slice(-1)")
+    ok(asked and "matched_at" in asked[0] and "matched_vch" in asked[0], "B5. tally_post_ids is read with matched_at, matched_vch (%s)" % asked)
+    E("""() => { window.__postIds.push({job_id: "jPV", fincom_id: "pv1", entry_id: "pv1", live: true, released_at: null, matched_at: "2026-10-03T09:00:00Z", matched_vch: "1234"}); PostIds.load(S.coId, true); }"""); pg.wait_for_timeout(800)
+    ok(pg.locator(JV + " [data-posted-entry='pv1'] [data-matched]").count() == 1 and "Matched with Tally" in txt(JV + " [data-posted-entry='pv1']") and pg.locator('#app [data-post-panel="posted"] [data-matched]').count() == 1,
+       "B5. pv1 with matched_at: 'Matched with Tally' on it alone (%s)" % txt(JV + " [data-posted-entry='pv1']"))
+    # a cloud without the matched columns: read without them, the page as before
+    E("""() => { window.__postIds.forEach(r => { delete r.matched_at; delete r.matched_vch; }); window.__restAll2 = TCloud.restAll; window.__idsAsked = []; TCloud.restAll = async (u) => { if (/tally_post_ids/.test(u)) window.__idsAsked.push(u); if (/tally_post_ids/.test(u) && /matched_at/.test(u)) throw new Error("column tally_post_ids.matched_at does not exist (42703)"); return window.__restAll2(u); }; PostIds.load(S.coId, true); }"""); pg.wait_for_timeout(800)
+    asked = E("window.__idsAsked || []")
+    ok(len(asked) >= 2 and "matched_at" not in asked[-1] and "released_at" in asked[-1] and pg.locator('#app [data-post-panel="posted"] [data-matched]').count() == 0 and pg.locator(JV + " [data-posted-entry='pv1']").count() == 1,
+       "B5. without the columns: read again without them, no mark, the rows stay (%s; readable %s)" % ([a.split("select=")[1].split("&")[0] for a in asked], E("[PostIds.readable, Object.keys(PostIds.busy), !!(PostIds.by[S.coId] && PostIds.by[S.coId].held), [...(PostIds.by[S.coId].matched || new Map()).keys()], document.querySelectorAll('#app [data-post-panel=\"posted\"] [data-matched]').length, document.querySelectorAll('#app [data-post-panel=\"posted\"] [data-job=\"jPV\"] [data-posted-entry=\"pv1\"]').length]")))
+    E("() => { TCloud.restAll = window.__restAll2; }")
     ok(not errors, "no page errors %s" % errors[:2])
     br.close()
 print("\nall passed" if not fails else "\nFAILED: %d" % len(fails)); raise SystemExit(1 if fails else 0)

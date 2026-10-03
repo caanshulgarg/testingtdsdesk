@@ -134,6 +134,18 @@ with sync_playwright() as p:
     ok(pg.evaluate("window.__rx") is True, "the reconciliation as Excel")
     pg.click('.recon button:text-is("Close")'); pg.wait_for_timeout(300)
     ok(pg.evaluate("S.recon") is None, "and closed")
+    # round 15 (B1): a bank line posted by bridge 2.1.8 keeps Tally's confirmation (r.tally.vch, or batchEnd for a batch)
+    # and its posted state says it with the company, the time in IST and who pressed Post; an older line as before
+    pg.evaluate("""() => { const b = B(); const r5 = b.rows.find(r => r.id === "r5"), r13 = b.rows.find(r => r.id === "r13");
+      r5.tally = {guid: "g5", vch: 777, company: "ZZ TEST", at: "2026-10-03T08:35:00Z", by: "Anshul"}; r5.sentAt = "2026-10-03T08:35:10Z"; r5.postedVia = "bridge";
+      r13.tally = {guid: "g13", batchEnd: 900, batchN: 50, company: "ZZ TEST", at: "2026-10-03T08:40:00Z", by: "Anshul"}; r13.sentAt = "2026-10-03T08:40:10Z"; r13.postedVia = "bridge";
+      b.q = ""; b.filter = "done"; b.grouped = false; render(); }"""); pg.wait_for_timeout(500)
+    row = lambda utr: pg.inner_text('#app table.bk-table tbody tr:has-text("%s")' % utr).replace("\n", " ") if pg.locator('#app table.bk-table tbody tr:has-text("%s")' % utr).count() else ""
+    t5, t13, t21 = row("UTR100005"), row("UTR100013"), row("UTR100021")
+    ok("Posted to Tally: voucher id 777" in t5 and "· ZZ TEST ·" in t5 and "03-Oct-2026 14:05 IST" in t5 and "· by Anshul" in t5 and pg.locator('#app tr:has-text("UTR100005") [data-posted-line]').count() == 1,
+       "B1. a bank line with vchId: 'Posted to Tally: voucher id 777 · ZZ TEST · 03-Oct-2026 14:05 IST · by Anshul' (%s)" % t5[-150:])
+    ok("Posted to Tally, batch ending Tally id 900" in t13 and "voucher id" not in t13 and "14:10 IST" in t13, "B1. a line of a batch: 'Posted to Tally, batch ending Tally id 900', no inferred id (%s)" % t13[-150:])
+    ok("Posted to Tally" not in t21 and "In Tally" in t21 and pg.locator('#app tr:has-text("UTR100021") [data-posted-line]').count() == 0, "B1. an older posted line shows as before (%s)" % t21[-100:])
     # a second statement, and a bank account with no Tally ledger yet
     pg.evaluate("""() => { const b = B(); b.stmts.push({id: "s2", acctId: "a2", bank: "HDFC", acct: "9911", from: "2026-05-01", to: "2026-05-31", opening: 0, closing: 0});
       CO().bankAccounts.push({id: "a2", bank: "HDFC", last4: "9911", ledger: ""}); render(); }""")

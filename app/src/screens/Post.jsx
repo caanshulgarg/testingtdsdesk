@@ -77,7 +77,7 @@ function Ready({ co, bills, canPost, more }) {
         return <tr key={e.id} data-post-row={e.id} data-bill-row={e.id} data-kind="bill">
           <td>{fmtDate(e.x.invoiceDate)}{cp.length > 0 && <> <span className="tag warn cp-tag" title={"Closed period: " + cp.join("; ")}>closed period</span></>}</td>
           <td>{e.x.vendorName}{e.noteKind && <> <span className="tag">{e.noteKind === "credit" ? "credit note" : "debit note"}</span></>}</td>
-          <td>{e.x.invoiceNo || ""}</td><td className="n">{money(num(e.x.total))}</td>
+          <td>{e.x.invoiceNo || ""}{e.x.testCopy === true && <> <span className="tag" data-test-copy="">test copy</span></>}</td><td className="n">{money(num(e.x.total))}</td>
           <td className="led" data-ledgers="">{postLedgerLine(e)}</td>
           <td className="ac" style={{ whiteSpace: "nowrap" }}>
             <button className="linkbtn" data-preview="" onClick={() => postPreviewOne("bill", e.id)}>Preview</button>{" · "}
@@ -120,6 +120,31 @@ function RemoteIdBox({ co }) {
       onChange={(ev) => { co.postRemoteIdFixed = ev.target.value.trim().slice(0, 80); Store.saveCompany(co); render(); }} />
   </label>}
   </>;
+}
+
+// round 15 (T): test bills for the owner's timing (NWS144): "Make N test copies of this bill", owners only, and only when
+// the client's confirmed postTo company begins with "ZZ TEST" (postTestCopiesOk / postTestCopies, src/js/59). Never on
+// any other client
+function TestCopies({ co, bills }) {
+  const [pick, setPick] = useState(""), [n, setN] = useState(10), [note, setNote] = useState("");
+  if (!(typeof postOwner === "function" && postOwner() && typeof postTestCopiesOk === "function" && postTestCopiesOk(co))) return null;
+  const ready = bills.ready || [], id = pick && ready.some((e) => e.id === pick) ? pick : (ready[0] || {}).id || "";
+  const make = () => {
+    const r = postTestCopies(co.id, id, n);
+    setNote(r.ok ? "Made " + r.ids.length + " test copies; they are in Ready to post." : r.error || "Not made.");
+  };
+  return <section className="post-sec" data-test-copies="">
+    <h3>Test bills on ZZ TEST</h3>
+    <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+      <select data-tc-bill="" aria-label="Bill to copy" value={id} onChange={(ev) => setPick(ev.target.value)}>
+        {ready.map((e) => <option key={e.id} value={e.id}>{(e.x.invoiceNo || e.id) + " · " + (e.x.vendorName || "") + " · " + money(num(e.x.total))}</option>)}
+      </select>
+      <input type="number" data-tc-n="" aria-label="How many copies" min="1" max="100" value={n} style={{ width: 70 }} onChange={(ev) => setN(ev.target.value)} />
+      <button className="btn small" data-tc-make="" disabled={!id} onClick={make}>{"Make " + (num(n) || 0) + " test copies of this bill"}</button>
+      <span className="note">1 to 100: new bills numbered “&lt;no&gt;-T1” onwards, the same amounts, ledgers and date, marked test copy.</span>
+    </div>
+    {note && <p className="note" data-tc-note="" style={{ margin: "6px 0 0" }}>{note}</p>}
+  </section>;
 }
 
 // a ledger of a waiting bill that Tally does not have: choose Tally's ledger (for every bill using it), or create it
@@ -178,7 +203,7 @@ function Attention({ co, bills, canPost }) {
   const inJob = (j) => refused.filter((e) => why[e.id] && why[e.id].job.id === j.id);
   const alone = typeof postRefusedAlone === "function" ? postRefusedAlone(bills) : refused;
   const refusedRow = (e, nested) => <li key={e.id} data-attn-row="" data-bill-row={e.id} data-attn-kind="refused">
-    <BillWhy e={e} why={"Tally refused it" + (why[e.id] && why[e.id].job.created_at ? " (posting of " + tallyHm(why[e.id].job.created_at) + ")" : "") + ": " + ((why[e.id] && why[e.id].reason) || "Tally did not take it")} />
+    <BillWhy e={e} why={(why[e.id] && why[e.id].alreadySent ? "Not sent again" : "Tally refused it") + (why[e.id] && why[e.id].job.created_at ? " (posting of " + tallyHm(why[e.id].job.created_at) + ")" : "") + ": " + ((why[e.id] && why[e.id].reason) || "Tally did not take it")} />
     <span className="acts">
       {!nested && canPost && (held(e.id, co.id) ? <Wait /> : <button className="btn small primary" data-post-again="" onClick={() => postAllToTally({ kind: "bill", id: e.id })}>Post again</button>)}
       <button className="btn small" data-back="" onClick={() => postBackToReview("bill", e.id)}>Back to review</button>
@@ -186,7 +211,8 @@ function Attention({ co, bills, canPost }) {
   </li>;
   // 03-Oct-2026: a press of Post that ended in neither a job nor a result (an error on the way, a stop said only in a toast)
   const pr = typeof postRefusedFor === "function" ? postRefusedFor(co.id) : null;
-  if (!rows.length && !bills.jobs.length && !unknown.length && !refused.length && !pr) return <p className="note" data-post-noerrors="">Nothing needs your attention.</p>;
+  const review = bills.review || [], resultOf = (e) => { const w = why[e.id]; return (w && w.job && [].concat(w.job.results || []).find((x) => x && String(x.id) === String(e.id))) || {}; };
+  if (!rows.length && !bills.jobs.length && !unknown.length && !refused.length && !review.length && !pr) return <p className="note" data-post-noerrors="">Nothing needs your attention.</p>;
   return <section className="post-sec" data-post-attention="">
     <h3>Needs your attention</h3>
     <ul className="post-attn">
@@ -203,6 +229,17 @@ function Attention({ co, bills, canPost }) {
         return <li key={e.id} data-attn-row="" data-bill-row={e.id} data-attn-kind="unknown">
           <BillWhy e={e} why={"Posted, not yet confirmed — checking whether it reached Tally" + (rs && !/^Checking whether/i.test(rs) ? " (" + rs.replace(/…$/, "") + ")" : "") + ". It is not sent again until the Tally computer has answered, or an owner has settled it here."} />
           {typeof postOwner === "function" && postOwner() && <span className="acts"><OwnerActs co={co} e={e} /></span>}
+        </li>; })}
+      {/* round 15 (B2): Tally accepted the request but its reply needs a look (bridge 2.1.8, needsReview): Tally's words and
+          counts; an owner settles it (Mark posted / Not in Tally — release); never Retry or Post again while accepted */}
+      {review.map((e) => { const r = resultOf(e), w = why[e.id] || {}, counts = typeof postReplyCounts === "function" ? postReplyCounts(r) : "", lines = typeof postLineErrors === "function" ? postLineErrors(r) : "";
+        return <li key={e.id} data-attn-row="" data-bill-row={e.id} data-attn-kind="review" data-accepted={r.accepted === true ? "" : undefined}>
+          <BillWhy e={e} why={"Needs review" + (w.job && w.job.created_at ? " (posting of " + tallyHm(w.job.created_at) + ")" : "") + " — Tally said: " + (w.reason || "its reply needs a look") + (counts ? " · " + counts : "") + (lines && !String(w.reason || "").includes(lines) ? " · " + lines : "") + (r.lastVchId != null ? " · last Tally id " + r.lastVchId : "")
+            + (r.accepted === true ? ". Tally created something: it is not sent again until an owner settles it here." : "")} />
+          <span className="acts">
+            {r.accepted !== true && canPost && (held(e.id, co.id) ? <Wait /> : <button className="btn small primary" data-post-again="" onClick={() => postAllToTally({ kind: "bill", id: e.id })}>Post again</button>)}
+            <OwnerActs co={co} e={e} />
+          </span>
         </li>; })}
       {alone.map((e) => refusedRow(e, false))}
       {bills.jobs.map((j) => { const left = CloudJobs.leftToSend(j), all = (CloudJobs.idsOf(j) || []).length, mine = inJob(j);
@@ -238,29 +275,51 @@ const NTH = ["", "second try", "third try", "fourth try"];
 function PostedEntries({ co, job, ents }) {
   const owner = typeof postOwner === "function" && postOwner();
   return <ul className="post-attn post-attn-in" data-posted-entries="">
-    {ents.map((x) => <li key={x.id} data-posted-entry={x.id} data-post-released={x.idState === "released" ? "" : undefined}>
-      <span className="why"><b>{x.no}</b>{x.e.x && x.e.x.vendorName ? " · " + x.e.x.vendorName : ""}{x.idState === "released" ? " — released; it can be posted again" : ""}</span>
+    {ents.map((x) => <li key={x.id} data-posted-entry={x.id} data-post-released={x.idState === "released" ? "" : undefined} data-batch-n={x.mark && x.mark.batchN || undefined}>
+      <span className="why"><b>{x.no}</b>{x.e.x && x.e.x.vendorName ? " · " + x.e.x.vendorName : ""}{x.idState === "released" ? " — released; it can be posted again" : ""}
+        {/* round 15 (B1): Tally's exact voucher id, or the batch's last id (never an inferred id), company, time in IST, who pressed Post; B5: Matched with Tally */}
+        {x.words ? <span className="note" data-posted-mark="" style={{ display: "block" }}>{x.words}</span> : null}
+        {x.matched && <> <span className="tag ok" data-matched="" title={"Matched with Tally " + (x.matched.vch ? "voucher " + x.matched.vch + " " : "") + fmtIST(x.matched.at)}>Matched with Tally</span></>}
+      </span>
       {owner && x.idState !== "released" && x.idState !== "none" && <span className="acts">
         <button className="btn small" data-release-owner="" onClick={() => PostOwner.release(co.id, x.e, job)}>Not in Tally — release (reason)</button>
       </span>}
     </li>)}
   </ul>;
 }
+// round 15 (B1–B5): each entry under its posting with Tally's id (or the batch's end), company, time, by; the job line
+// says "Posted N of M" ("; K need review") and, to the owner, the bridge's timing ("K requests, T s"); a search box
+// (FinCom id, Tally id, party, bill number) keeps the postings with a matching entry, and those entries alone
 function History({ co }) {
+  const [q, setQ] = useState("");
   const h = typeof postPostedRows === "function" ? postPostedRows(co.id) : CloudJobs.history(co.id);
   if (!h.length) return <p className="note" data-post-noposted="">{"Nothing posted through FinCom’s cloud yet for this client."}</p>;
+  const owner = typeof postOwner === "function" && postOwner(), needle = q.trim().toLowerCase();
+  const entsOf = (j) => (typeof postPostedEntries === "function" ? postPostedEntries(co.id, j) : []).map((x) => {
+    const mark = typeof postMarkFor === "function" ? (postMarkFromJob(j, x.id) || postMarkOf(x.e)) : null, matched = typeof postMatched === "function" ? postMatched(x.id, co.id) : null;
+    return { ...x, mark, words: mark ? postMarkWords(mark) : "", matched };
+  });
+  const hit = (x) => !needle || [x.id, x.no, x.e.x && x.e.x.vendorName, x.mark && (x.mark.vch != null ? x.mark.vch : x.mark.batchEnd), x.matched && x.matched.vch]
+    .some((v) => v != null && v !== "" && String(v).toLowerCase().includes(needle));
+  const rows = h.map((x) => { const all = entsOf(x.job); return { ...x, ents: needle ? all.filter(hit) : all }; }).filter((x) => !needle || x.ents.length);
   return <section className="post-sec post-hist" data-post-history="" data-history-n={h.length}>
-    <ul>{h.map((x) => { const j = x.job, tries = x.tries.length, at = tallyHm(x.at);
+    <label className="post-search" style={{ display: "block", margin: "0 0 8px" }}>
+      <input type="search" data-posted-search="" aria-label="Search the posted entries" placeholder="Search: FinCom id, Tally id, party, bill no." value={q} onChange={(ev) => setQ(ev.target.value)} style={{ width: "100%", maxWidth: 420 }} />
+    </label>
+    {needle && !rows.length && <p className="note" data-post-nomatch="">{"Nothing posted matches “" + q.trim() + "”."}</p>}
+    <ul>{rows.map((x) => { const j = x.job, tries = x.tries.length, at = tallyHm(x.at);
       const text = x.state === "posted" ? "Posted " + at + (tries ? " (" + (NTH[tries] || "after " + (tries + 1) + " tries") + ")" : "")
-        : x.state === "partly" ? "Posted " + x.ok + " of " + x.n + " at " + at
+        : x.state === "partly" ? "Partly posted " + at
         : x.state === "nothing" ? (j.status === "cancelled" ? "Cancelled" : "Failed") + " " + at + "; every entry was put in Tally another way"
         : (j.status === "cancelled" ? "Cancelled " : "Failed ") + at + (j.dismissed_at ? ", dismissed by " + memberName(j.dismissed_by) + " " + tallyHm(j.dismissed_at) : "");
-      const ents = typeof postPostedEntries === "function" ? postPostedEntries(co.id, j) : [];
+      const timing = owner && typeof postTimingWords === "function" ? postTimingWords(j) : "";
       return <li key={j.id} data-job={j.id} data-hist-state={x.state} data-entries={[...CloudJobs.okIn(j)].join(" ")}>
-        <span data-hist-text="">{text}</span>{" · " + plural(Math.max(x.ok, x.state === "posted" ? x.n : 0) || x.n, "entry", "entries") + " · " + j.company}
+        <span data-hist-text="">{text}</span>{" · "}<span data-job-count="">{typeof postJobCount === "function" ? postJobCount(j) : plural(x.n, "entry", "entries")}</span>{" · " + j.company}
+        {j.created_by ? " · by " + memberName(j.created_by) : ""}
+        {timing && <>{" · "}<span className="note" data-job-timing="" title="The bridge's requests to Tally for this posting, and their time in all">{timing}</span></>}
         {j.dismissed_at && !j.dismiss_auto && x.state !== "posted" && <>{" "}<button className="linkbtn" data-undismiss="" onClick={() => CloudJobs.undismiss(j)}>Show under Errors</button></>}
         <Reply j={j} />
-        {ents.length > 0 && <PostedEntries co={co} job={j} ents={ents} />}
+        {x.ents.length > 0 && <PostedEntries co={co} job={j} ents={x.ents} />}
       </li>; })}</ul>
   </section>;
 }
@@ -333,6 +392,7 @@ export function PostStep() {
       <PostTabs now={tab} counts={counts} pick={pick} />
       {tab === "topost" && <div data-post-panel="topost" role="tabpanel">
         <Ready co={co} bills={bills} canPost={canPost} more={more} />
+        <TestCopies co={co} bills={bills} />
         {(nb > 0 || ns > 0) && <p className="note" data-post-others="" style={{ margin: "8px 0 0" }}>{"Also ready, posted from their own pages: "}
           {nb > 0 && <button className="linkbtn" onClick={() => goStep("post", "bank")}>{plural(nb, "bank line", "bank lines")}</button>}{nb > 0 && ns > 0 && " · "}
           {ns > 0 && <button className="linkbtn" onClick={() => goDocType("sales")}>{plural(ns, "sales invoice", "sales invoices")}</button>}</p>}

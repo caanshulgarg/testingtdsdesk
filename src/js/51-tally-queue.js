@@ -125,11 +125,12 @@ const CloudJobs = {
     this.busy = true;
     try {
       const cols = "id,client_id,company,status,done,n,message,results,created_by,created_at,updated_at,attempts";
-      // each entry's state (items) from migration-24 on; the entries' ids and dismissing from migration-26 on
-      const more = [",items,entry_ids,dismissed_at,dismissed_by,dismiss_note,dismiss_auto", ",items", ""];
+      // each entry's state (items) from migration-24 on; the entries' ids and dismissing from migration-26 on; the
+      // bridge's timing of the posting (round 15, B4: {reqs: [{n, seconds, …}], secondsTotal}) from migration 43 on
+      const dis = ",items,entry_ids,dismissed_at,dismissed_by,dismiss_note,dismiss_auto", more = [dis + ",timing", dis, ",items", ""];
       for (let i = 0; ; i++){
-        try { this.list = await TCloud.restAll("tally_post_jobs?select=" + cols + more[i] + "&order=created_at.desc"); this.dismissOk = i === 0; break; }
-        catch (e){ if (i < more.length - 1 && /items|entry_ids|dismiss|column/i.test(String(e && e.message))) continue; throw e; }
+        try { this.list = await TCloud.restAll("tally_post_jobs?select=" + cols + more[i] + "&order=created_at.desc"); this.dismissOk = i <= 1; break; }
+        catch (e){ if (i < more.length - 1 && /items|entry_ids|dismiss|timing|column/i.test(String(e && e.message))) continue; throw e; }
       }
       this.err = ""; this.at = Date.now();
     } catch (e){ this.err = (e && e.message) || String(e); this.at = Date.now(); }

@@ -280,9 +280,21 @@ function Slip({ e, c, ro, snap, miss }) {
       {ro ? <div className="narr">{e.narration}</div>
         : <label className="f" style={{ marginTop: 10 }}><span>Narration</span><input type="text" data-fk="e:narration" value={e.narration || ""} onChange={(ev) => billSetText(e, "narration", ev.target.value)} /></label>}
       {e.status === "approved" && <div className="stampmark">{e.exportedAt ? "Sent to Tally" : "Approved"}<small>{fmtDate((e.exportedAt || e.approvedAt || "").slice(0, 10))}</small></div>}
+      {e.status === "approved" && <PostedLine e={e} />}
       {e.status === "rejected" && <div className="stampmark rej">No entry</div>}
     </div></section>
   );
+}
+
+// round 15 (B1, B5): what Tally confirmed, from the mark kept on the bill when the result arrived (e.tally.vch: Tally's
+// exact voucher id; e.tally.batchEnd: the last id of a batch, never an id inferred for this bill) or from the cloud's
+// posting naming it; "Matched with Tally" only when tally_post_ids carries matched_at. An older posting: nothing extra
+function PostedLine({ e }) {
+  const m = typeof postMarkFor === "function" ? postMarkFor(S.coId, e.id, e) : null, words = m ? postMarkWords(m) : "";
+  const mt = typeof postMatched === "function" ? postMatched(e.id, S.coId) : null;
+  if (!words && !mt) return null;
+  return <p className="note" data-posted-line="" data-batch-n={m && m.batchN || undefined} style={{ margin: "8px 0 0" }}>{words}
+    {mt && <> <span className="tag ok" data-matched="" title={"Matched with Tally " + (mt.vch ? "voucher " + mt.vch + " " : "") + fmtIST(mt.at)}>Matched with Tally</span></>}</p>;
 }
 
 // a duplicate with its original beside it, and the two choices (review of 02-Oct-2026)
