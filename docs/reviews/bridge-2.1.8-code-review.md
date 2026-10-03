@@ -171,4 +171,77 @@ releasing an id, timing stored only from the owning device.
 - Finding 11: the app offers Post again (not Retry) on a done job with needs-review entries.
 - A note in docs: Check Tally in FinCom is the only settlement of a no-answer entry in 2.1.8.
 
-Range: 7162400..a11a37e (bridge-go/, server/tally-cloud/index.ts, server/tally-cloud/migration-43-posting-reply.sql)
+## Fixes reviewed (a11a37e..f15332f)
+Read: the diff a11a37e..f15332f (bridge-go: post.go, jobs.go, tally.go, selfwatch.go, config.go, round15_test.go,
+rebuilt_test.go; 633c47f: index.ts, tests/run_main_bridge_server.py). go vet and go test -count=1 ./... green on f15332f
+(145 s); run_main_bridge_server.py's new CR checks read. Verdict per finding:
+1. CLOSED. post.go sendImport notes every voucher as sent BEFORE invokeTally (the no-answer note, batchN, no id), and
+   jobs.go writes the request's ids as p["inflight"] and saves before the gate (jobs.go, "the request's ids on disk before
+   it goes"); the resume block at the top of jobWorker turns every inflight id without a result into an unknown result
+   (sent, no answer, "Check Tally") and notes it, never sends it. TestRestartMidRequestNeverResends (the files snapshotted
+   during the request: inflight named, both notes sent; the resumed job: imports stay 1, done, "2 sent with no answer").
+   What it opened, see F1, F2 and the notes below.
+2. CLOSED. jobs.go: `okN > 0 || acceptedN > 0 || unknownN > 0` -> done; TestNoAnswerPlusRefusedEndsDone. The cloud half is
+   done too: index.ts stores "done" for a "failed" update carrying a not-ok result with outcomeUnknown / sent / state sent
+   that is not accepted (noAnswer); CR2 (stored done, checking false, the no-answer id neither stamped nor released, the
+   refused one released; a failed update without one still failed).
+3. CLOSED. index.ts STATES gains "posted" and "needs_review"; CR3 (both kept, an unknown state still waiting).
+4. CLOSED. index.ts vchOf: an entry with batchN > 1 gives vchId alone (never lastVchId, never the words); an alreadySent
+   gives vchId only when batchN == 1; CR4 (batch of 3 with LASTVCHID 120: stamped with no id; batchN 1 with vchId 121:
+   stamped 121; a byReply batch entry on a cloud without 43: no id). post.go sentBeforeRefusal hands on lastVchId only when
+   it is the entry's own (vchId or masterId), never a batch end.
+5. CLOSED. index.ts: alreadySent is cleaned (REPLY_KEYS), is an acceptance (acceptedRes), is confirmed (never held open,
+   never rewritten "being checked"), stamped with vchId only when batchN == 1, never released; CR5 (three checks, the
+   no-id case included). The bridge's refusal now carries sent: true (confirmedResult and itemsToSend keep it on Retry).
+   A forged alreadySent from a bridge: posts_update reads the job with .eq("device_id", dev.id) and tally_post_id_accept
+   stamps `where job_id = p_job`, so it can lock only an id of that bridge's own job, which the job already holds live (an
+   id cannot be live in two postings: the unique rule in tally_post_ids_sync); the worst case is an entry of its own
+   posting the owner must release by hand. Not exploitable against another computer's posting.
+6. CLOSED. post.go replyLine: the first 3 LINEERROR texts, each cut to 200, "and N more"; lineErrorKept: at most 5 per
+   entry; TestNeedsReviewMessageCapped (a 50-voucher batch with 50 line errors: message under the cap, lineError 5,
+   progress.json not quadratic, a long text cut). index.ts lineErrs (finding 8) takes the array: CR8.
+7. CLOSED. post.go importTimeoutSec (PostTimeoutSec default 120, or PostTimeoutBaseSec 20 + n/2 s, cap 300) passed to
+   invokeTally; tally.go exempts isImportRequest(x) from the TallyMaxSec cap; selfwatch.go does not count an import's time
+   as an over-the-limit read; TestImportTimeoutScalesWithBatch (defaults, the setting, the cap; a 3 s import under a 1 s
+   read cap is trusted; the self-watch and over20 untouched; a read is still cut at the cap). Can a non-import pass as an
+   import? isImportRequest is strings.HasPrefix(x, importHead), the same fixed start the allow-list's Import fast path
+   matches; only importEnvelope produces it (sendImport and removeTallyVoucher, both person-started postings; the allow-list
+   test is unchanged and green). A read request cannot carry it. Noted: a delete by removeTallyVoucher is exempt too
+   (timeout 0 -> TallyTimeoutSec / 120 s), harmless.
+9. CLOSED (later item done early): config.go bounds the cloud's list to 20 names of 200; TestBeatSettingsBounded.
+
+What the fixes opened (new):
+- F1, MEDIUM, must fix: the pre-send record is written with its error ignored. post.go sendImport: `_ = noteSent(...)`
+  before invokeTally, and jobs.go's save() before the gate is `_ = saveFile(...)` (writeProgress). When posted-ids.json
+  or progress.json cannot be written (the disk full, the folder locked by a backup or an antivirus: acceptedWriteOrLog
+  logs "POSTED IDS NOT SAVED" and goes on) the request still goes to Tally with nothing on disk, and a restart in that
+  window is finding 1 again. Minimal fix: when any pre-send note or the inflight save fails, sendImport returns an error
+  that is not tallyNoAnswer ("the record could not be written; nothing sent") so the job waits and tries again (the
+  not-reached path), and /import says so. Test: TestNoSendWhenRecordNotWritable (acceptedFile() made a directory, or the
+  sync folder read-only: zero imports, the job waiting, the log line).
+- F2, MEDIUM, must fix: the /import route keeps the pre-send notes after "Tally not reached". post.go invokeImport, the
+  branch `o.err != nil && !tallyNoAnswer(o.err)` (notSent results) does not call acceptedForget as jobs.go now does
+  (jobs.go: "nothing reached Tally: the notes made before the send go again"). After a probe hold, a connection refused or
+  a read stop refusal the browser's retry is refused by sentBeforeRefusal with "already sent from this computer on ...
+  (Tally id not given)" for an entry that never reached Tally, until an owner releases it. Minimal fix: move the forget
+  into sendImport's error branch (`if err != nil { if !tallyNoAnswer(err) { forget the request's notes }; return }`) so
+  both callers get it, and drop the copy in jobs.go. Test: TestImportNotReachedForgetsNotes (a /import while the probe
+  holds: notSent, acceptedInfo nil, a second /import after the probe sends it once).
+- Informational: a false "unknown". The inflight ids are on disk from before the Tally lock (enterTallyLock may wait for a
+  preempted read, GentleMs, the probe) until the reply; a bridge that dies in the part of that window before the body was
+  sent marks the entries unknown and locked though Tally never saw them. Safe direction (a Check Tally, never a second
+  copy); it could be narrowed by writing inflight just before cl.Do in tallyRaw. Later.
+- Informational: acceptedForget deletes the whole note, the "honoured" releases list included. Reachable only for an id
+  that had a note before this request, which the A5 block lets through only after a release was honoured; forgetting it
+  after a not-reached or a nothing-made reply lets the same release be honoured once more on a later Retry, which is still
+  one effective send per release (nothing reached Tally, or Tally made nothing). Noted, no change.
+- Performance, later: noteSent rewrites posted-ids.json once per voucher, now twice per voucher (before and after the
+  request): on the stand 100 bills in one request went from 105 ms (a11a37e) to 308 ms; with a real file of thousands of
+  notes each rewrite is larger. Fix: a noteSentMany(keys, ...) that writes once per request, and the same for the reply.
+  Test: TestPostNotesWrittenOncePerRequest (count the renames).
+
+## Fix before build, after the fixes (must)
+1. F1: no request goes when the pre-send record (posted-ids.json, progress.json) could not be written.
+2. F2: /import forgets the pre-send notes on "Tally not reached" (the forget moved into sendImport).
+
+Range: 7162400..f15332f (bridge-go/, server/tally-cloud/index.ts, server/tally-cloud/migration-43-posting-reply.sql, tests/run_main_bridge_server.py)

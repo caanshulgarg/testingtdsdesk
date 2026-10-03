@@ -79,4 +79,26 @@ that does not own the job; the migration's grants.
 - FinCom's pages on the new result fields (byReply, needs_review, batchEnd) and the Retry / Post again choice on a done
   job with needs-review entries (code review, finding 11): app code is outside this range.
 
-Range: 7162400..a11a37e (bridge-go/, server/tally-cloud/index.ts, server/tally-cloud/migration-43-posting-reply.sql)
+## Fixes reviewed (a11a37e..f15332f)
+The six fixes read hunk by hunk with the code review's verdicts (all six closed; two new must-fix items there, F1 and F2,
+both correctness). Security angles the coordinator asked about:
+- The in-flight record written before invokeTally: a failed write is ignored and the request still goes (code review F1);
+  not exploitable from outside, but a full disk or a locked sync folder reopens the restart window. Must fix.
+- The resume path marking inflight ids unknown: it can mark an entry whose request was in fact never sent (the bridge died
+  between the inflight save and the body going: the lock wait, GentleMs, a refusal), which locks the entry and asks for a
+  Check Tally; it never resends. Fails closed. A "not reached" error in a running bridge clears the inflight list and
+  forgets the notes (jobs.go) but the /import route does not forget them (code review F2): a false "already sent" refusal,
+  not a second copy. Must fix.
+- The import timeout exemption: isImportRequest is the fixed importHead prefix the allow-list's Import fast path matches;
+  no read request can carry it, and the allow-list hash test is unchanged and green. An import (or an unpost delete) may
+  now hold Tally up to 300 s (PostTimeoutSec, cap 300): a person-started posting, FinCom first by design; the probe hold
+  after a timeout still stands; the self-watch no longer stops reading for a long import (selfwatch.go), which is right:
+  an import's time is not a read fault.
+- The alreadySent acceptance in index.ts: posts_update reads and writes the job .eq("device_id", dev.id) and the stamp is
+  `where job_id = p_job`, so a forged alreadySent can lock only an id of the sending bridge's own job, which that job holds
+  live already (an id is live in one posting at a time: tally_post_ids_sync's unique rule). It cannot touch another
+  computer's posting. The owner can still release such an id. Not exploitable.
+- Bounds: the cloud's PostOnly list bounded in Go (20 x 200, TestBeatSettingsBounded); lineError 5 x 200 on both sides; the
+  needs-review message capped. The beat and posts_update bodies are smaller than before the fixes.
+
+Range: 7162400..f15332f (bridge-go/, server/tally-cloud/index.ts, server/tally-cloud/migration-43-posting-reply.sql, tests/run_main_bridge_server.py)
