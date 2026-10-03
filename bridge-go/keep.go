@@ -181,14 +181,15 @@ func copyKeepDays(tc *TC, company string, port int, dir, from, to string) (float
 }
 
 // a stretch of the day book (from Tally, or from a day book file) kept as one file a day; a day with nothing is kept empty
+// (a stretch that is not a full read of Tally: the seed file chosen in FinCom; no day of it is marked as read in full)
 func saveKeepDays(dir, from, to, x string) int {
-	n, _ := saveKeepDaysChanged(dir, from, to, x)
+	n, _ := saveKeepDaysChanged(dir, from, to, x, false)
 	return n
 }
 
 // the same, and how many days changed: only a day whose text differs from the copy's is written again and goes to the
 // cloud (an Update now that reads the year again sends only what changed, deleted entries included)
-func saveKeepDaysChanged(dir, from, to, x string) (int, int) {
+func saveKeepDaysChanged(dir, from, to, x string, full bool) (int, int) {
 	by := map[string]*strings.Builder{}
 	for _, m := range re(`<VOUCHER\b[\s\S]*?</VOUCHER>`).FindAllString(x, -1) {
 		d := group(`<DATE>(\d{8})</DATE>`, m, 1)
@@ -211,14 +212,14 @@ func saveKeepDaysChanged(dir, from, to, x string) (int, int) {
 			t = b.String()
 			n += countVouchers(t)
 		}
-		if m := dayFullMark(dir, d); !exists(m) {
-			_ = saveFile(m, nowS()) // this day's answer came in full (the caller threw away any other)
-		}
 		df := filepath.Join(days, d+".xml")
 		if exists(df) && readText(df) == t {
+			if full && !exists(dayFullMark(dir, d)) {
+				_ = saveFile(dayFullMark(dir, d), nowS()) // unchanged, and now known to be read in full
+			}
 			continue
 		}
-		_ = saveFile(df, t)
+		writeDayFile(dir, d, t, full)
 		ix := indexText(t)
 		_ = saveFile(filepath.Join(days, d+".idx"), ix)
 		whereMu.Lock()
@@ -652,7 +653,7 @@ func useKeepPosted(dir string, st M) int {
 				keep.WriteString("<TALLYMESSAGE>" + v + "</TALLYMESSAGE>")
 			}
 			t2 := keep.String()
-			_ = saveFile(df, t2)
+			writeDayFile(dir, day, t2, false) // not a read: the day's full-read mark goes
 			_ = saveFile(strings.TrimSuffix(df, ".xml")+".idx", indexText(t2))
 			touched[day] = true
 		}
@@ -838,7 +839,7 @@ func (k *keepRun) step(company string, port int, booksFrom string) error {
 			return fmt.Errorf("Tally did not give %s (%s); try %d of 3", f, err.Error(), toInt(st["dayFail"]))
 		}
 		sec := time.Since(t1).Seconds()
-		n, changed := saveKeepDaysChanged(dir, f, t, x)
+		n, changed := saveKeepDaysChanged(dir, f, t, x, true) // a full answer (checked above): the days are marked read in full
 		var left []string
 		for _, s := range strs(st["skipped"]) {
 			if s < f || s > t {
@@ -1345,4 +1346,19 @@ func testKeepMonth(company, ym string, pref int) (M, error) {
 		}
 	}
 	return M{"ok": true, "ym": ym, "tally": len(tl), "copy": len(h), "missing": missing, "differ": differ, "extra": extra, "firstDays": d3, "dayBook": len(dbG), "list": len(lsG), "listMatchesDayBook": same, "fixing": fixing}, nil
+}
+
+// a day's file of the copy (round 11 review, items 3 and 4): written by a full read of Tally (full: the day's mark is
+// set, so an empty day may go to the cloud as empty:true) or by anything else, a seed file or a posting's read-back
+// (the mark goes: an emptied day is then sent as readFailed, never as empty)
+func writeDayFile(dir, d, text string, full bool) {
+	_ = saveFile(filepath.Join(dir, "days", d+".xml"), text)
+	m := dayFullMark(dir, d)
+	if full {
+		if !exists(m) {
+			_ = saveFile(m, nowS())
+		}
+		return
+	}
+	_ = os.Remove(m)
 }

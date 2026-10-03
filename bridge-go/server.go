@@ -264,6 +264,10 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 			return nil, err
 		}
 		company := str(o["company"])
+		if why := postOnlyUnpostRefusal(company); why != "" { // security M1 (round 11): PostOnly covers removing too
+			writeLog("Unpost from '" + company + "': " + why)
+			return nil, errors.New(why)
+		}
 		port, err := findCompanyPort(company, qint(qs, "port"))
 		if err != nil {
 			return nil, err

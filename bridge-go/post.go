@@ -59,12 +59,24 @@ func postingAllowed() error {
 	return nil
 }
 
+// posting to this company: allowed at all, and the company within PostOnly (security M1, round 11: every import path,
+// the local /import route included, refuses here before anything is asked of Tally)
+func postingAllowedFor(company string) error {
+	if err := postingAllowed(); err != nil {
+		return err
+	}
+	if why := postOnlyRefusal(company); why != "" {
+		return errors.New(why)
+	}
+	return nil
+}
+
 // masters first, then vouchers, one request each so every item gets its own result
 func invokeImport(p M) (M, error) {
-	if err := postingAllowed(); err != nil {
+	company, job := str(p["company"]), str(p["job"])
+	if err := postingAllowedFor(company); err != nil {
 		return nil, err
 	}
-	company, job := str(p["company"]), str(p["job"])
 	if company == "" {
 		return nil, errors.New("No company given.")
 	}

@@ -98,7 +98,8 @@ func TestInstallerPostOnly(t *testing.T) {
 	if strings.Join(strs(c.Get("PostOnly")), "|") != "ZZ TEST" {
 		t.Fatalf("PostOnly written: %v", c.Get("PostOnly"))
 	}
-	c.Set("PostOnly", []any{"BY HAND"})
+	c.Set("PostOnly", []any{"BY HAND"}) // a hand edit: the owner's list, marked as such (PostOnlyBy not "installer")
+	c.Set("PostOnlyBy", "owner")
 	setPostOnly(c, "ZZ TEST")
 	if strings.Join(strs(c.Get("PostOnly")), "|") != "BY HAND" {
 		t.Fatalf("an existing PostOnly was overwritten: %v", c.Get("PostOnly"))
@@ -142,5 +143,53 @@ func TestLedgerListCarriesState(t *testing.T) {
 		if len(a) != 10 || str(at(a, 9)) != want {
 			t.Fatalf("the row of %s: %v (want 10 columns, state %q)", f.led[i].name, a, want)
 		}
+	}
+}
+
+// --- security M1 (round 11): PostOnly covers every import path, the local /import route and /unpost included
+func TestPostOnlyCoversLocalImport(t *testing.T) {
+	f := newStandTally(t)
+	standBridge(t, f, `,"Key":"tray-test-key","PostOnly":["ZZ TEST"]`)
+	before := f.n("")
+	body := jsonText(M{"company": "GARG SHEKHAR & COMPANY", "vouchers": []any{M{"id": "li1", "xml": finVoucher("li1", fgParty, "LI-1", today(), "1.00")}}})
+	code, res := callLocal(t, "POST", "/import", "", body)
+	want := "This computer posts only to ZZ TEST (PostOnly); posting to GARG SHEKHAR & COMPANY refused"
+	if code == 200 && res["ok"] != false {
+		t.Fatalf("POST /import for another company was taken: %d %v", code, res)
+	}
+	if !strings.Contains(str(res["error"])+str(res["message"]), want) {
+		t.Fatalf("the refusal does not carry the words: %d %v", code, res)
+	}
+	if f.n("") != before {
+		t.Fatalf("%d request(s) reached Tally", f.n("")-before)
+	}
+	// invokeImport itself (any caller) refuses too
+	if _, err := invokeImport(M{"company": "GARG SHEKHAR & COMPANY", "vouchers": []any{M{"id": "li2", "xml": finVoucher("li2", fgParty, "LI-2", today(), "2.00")}}}); err == nil || err.Error() != want {
+		t.Fatalf("invokeImport: %v", err)
+	}
+	if f.n("") != before {
+		t.Fatalf("%d request(s) reached Tally", f.n("")-before)
+	}
+	// the company in the list still posts
+	if r := postOne(t, "li3", finVoucher("li3", fgParty, "LI-3", today(), "3.00")); r["ok"] != true {
+		t.Fatalf("ZZ TEST refused: %v", r)
+	}
+}
+
+func TestPostOnlyCoversUnpost(t *testing.T) {
+	f := newStandTally(t)
+	standBridge(t, f, `,"Key":"tray-test-key","PostOnly":["ZZ TEST"]`)
+	before := f.n("")
+	body := jsonText(M{"company": "GARG SHEKHAR & COMPANY", "guid": "g-1", "masterId": "1", "vchType": "Journal", "vchDate": today(), "vchNumber": "1"})
+	code, res := callLocal(t, "POST", "/unpost", "", body)
+	want := "This computer posts only to ZZ TEST (PostOnly); removing from GARG SHEKHAR & COMPANY refused"
+	if code == 200 && res["ok"] != false {
+		t.Fatalf("POST /unpost for another company was taken: %d %v", code, res)
+	}
+	if !strings.Contains(str(res["error"])+str(res["message"]), want) {
+		t.Fatalf("the refusal does not carry the words: %d %v", code, res)
+	}
+	if f.n("") != before || f.n("Import") != 0 {
+		t.Fatalf("%d request(s) reached Tally", f.n("")-before)
 	}
 }

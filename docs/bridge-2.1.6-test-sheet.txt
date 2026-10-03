@@ -63,7 +63,8 @@ What is new in 2.1.4 (since 2.1.3)
   - (03-Oct, owner-approved) PostOnly: the settings may name the companies this computer posts to ("PostOnly": ["ZZ
     TEST"]); the pilot installer sets it to ZZ TEST. A posting aimed at any other company is refused before one request
     goes to Tally, every entry failed with "This computer posts only to ZZ TEST (PostOnly); posting to <company>
-    refused"; the heartbeat carries the list (postOnly). The full-answer rule: a day counts as read only when Tally's
+    refused"; the heartbeat carries the list (postOnly). PostOnly covers every path: the posting queue, the local
+    /import route (any program on this computer with the bridge key) and /unpost ("... removing from <company> refused"). The full-answer rule: a day counts as read only when Tally's
     answer came in full (see the gap-2 item above); only an empty day read in full is sent as empty.
   - The ledger list sent to FinCom carries each ledger's state (LEDSTATENAME) as its 10th column.
   - Every voucher posted carries its FinCom id in its narration ("TDSDesk:<id>"; since 2.1.6 it
@@ -83,7 +84,8 @@ Use ZZ TEST for every posting below, never GARG SHEKHAR & COMPANY.
    2.1.6 on NWS144 posts only to ZZ TEST (PostOnly set by the installer: "PostOnly": ["ZZ TEST"] in the settings); a
        posting aimed at any other company is refused with the words "This computer posts only to ZZ TEST (PostOnly);
        posting to <company> refused" before one request goes to Tally, and FinCom shows the posting failed with them.
-       The bridge's heartbeat tells FinCom the list (postOnly). Only the owner lifts it (the setting edited by hand).
+       The bridge's heartbeat tells FinCom the list (postOnly). Only the owner lifts it (the setting edited by hand: set "PostOnlyBy": "owner" with it, so a later installer never
+       replaces the list; the installer marks its own list "PostOnlyBy": "installer" and replaces only that).
    Do: in FinCom (staging), as the owner, open All clients > Tally. Find NWS144's line and press "Try version 2.1.6 on
        this computer" (only the owner sees the button).
    You should see: the line now says "on trial on NWS144 since <date, time>". From then on the setup below is the one

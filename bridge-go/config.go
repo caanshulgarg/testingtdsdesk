@@ -316,6 +316,14 @@ func postOnlyRefusal(company string) string {
 	return "This computer posts only to " + strings.Join(list, ", ") + " (PostOnly); posting to " + company + " refused"
 }
 
+// why removing an entry from this company (/unpost) is refused by PostOnly ("" when it may go)
+func postOnlyUnpostRefusal(company string) string {
+	if why := postOnlyRefusal(company); why != "" {
+		return strings.Replace(why, "; posting to "+company+" refused", "; removing from "+company+" refused", 1)
+	}
+	return ""
+}
+
 // the installer's -DPOSTONLY (one name, or names separated by ';'): written into the settings when given, never over a
 // PostOnly set by hand
 var installPostOnly string
@@ -327,8 +335,13 @@ func setPostOnly(c *Ordered, v string) {
 			names = append(names, n)
 		}
 	}
-	if len(names) == 0 || c.Has("PostOnly") {
+	if len(names) == 0 {
+		return
+	}
+	// a list set by hand (no PostOnlyBy, or one that is not "installer") is never replaced; an installer-set one is
+	if c.Has("PostOnly") && str(c.Get("PostOnlyBy")) != "installer" {
 		return
 	}
 	c.Set("PostOnly", names)
+	c.Set("PostOnlyBy", "installer")
 }

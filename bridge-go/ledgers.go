@@ -149,7 +149,7 @@ func loadLedList(dir string) map[string]ledRow {
 func saveLedList(dir string, m map[string]ledRow) {
 	o := M{}
 	for g, r := range m {
-		o[g] = r.arr()
+		o[g] = append(r.arr(), r.state) // the state too (round 11 review: without it every ledger with a state read as changed)
 	}
 	_ = saveFile(ledListFile(dir), jsonText(o))
 }
