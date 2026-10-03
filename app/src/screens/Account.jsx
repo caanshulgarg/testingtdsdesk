@@ -3,8 +3,10 @@
 // administrators. Was viewAccount, walletHtml, viewCloudSettings, viewAccountPeopleOnly, viewPeople, viewBackups and
 // viewSuperadmin (src/js/27), viewDocsSettings and viewDropKeys (src/js/19). The work is Cloud and loadAccount; buttons go
 // through doAct (cloudSignIn, cloudSync, cloudPassword, addPerson, backupNow…), which read the boxes by their id or
-// data-cloud as before, and acctPerson, acctBackup, acctDropOff, adminAct, adminPlan, cloudAuto, idleSet, docsKeep,
+// data-cloud as before, and acctPerson, acctBackup, acctDropOff, adminAct, adminPlan, cloudAuto, signOutAll, docsKeep,
 // docYearsSet (src/js/27, 19, 43).
+
+import { KeepBox } from "./SignIn.jsx";
 
 const Act = ({ act, className = "btn small", children, disabled, title }) => <button className={className} disabled={disabled} title={title} onClick={() => doAct(act)}>{children}</button>;
 const H3 = ({ children, top = 16 }) => <h3 style={{ margin: top + "px 0 " + (top === 14 ? 4 : 6) + "px", fontSize: 15 }}>{children}</h3>;
@@ -43,21 +45,25 @@ export function FirmAccount() {
     <p className="note" style={{ margin: "0 0 10px" }}>Sign in to share clients, bills, bank statements and sales invoices with the rest of the firm. Without signing in, everything stays on this computer only.</p>
     <div className="grid"><label className="f"><span>Email</span><input type="email" data-cloud="email" data-fk="cloudemail" aria-label="Email" defaultValue={form.email || c.email || ""} autoComplete="username" onChange={(ev) => cloudForm("email", ev.target.value)} /></label>
       <label className="f"><span>Password</span><input type="password" data-cloud="password" data-fk="cloudpw" aria-label="Password" defaultValue={form.password || ""} autoComplete="current-password" onChange={(ev) => cloudForm("password", ev.target.value)} /></label></div>
+    <KeepBox />
     <div className="row" style={{ marginTop: 10 }}><Act act="cloudSignIn" className="btn small primary">Sign in</Act></div>
     {st.error && <p className="bk-warn" style={{ marginTop: 10 }}>{st.error}</p>}</div>;
-  const pending = st.pending, aal2 = Cloud.aal() === "aal2", idle = idleMin(), mi = st.mfaInfo || {};
+  const pending = st.pending, aal2 = Cloud.aal() === "aal2", mi = st.mfaInfo || {}, a = S.account, owner = !!(a && ((a.me || {}).role === "owner" || a.superadmin === true));
   return <div className="pane"><h2>Firm account (shared data)</h2>
     <p className="note" style={{ margin: "0 0 8px" }}>Signed in as <b>{st.email}</b>{(st.role ? " (" + st.role + ")" : "") + (st.lastSync ? " · last sync " + fmtTime(st.lastSync) : "") + (pending ? " · " + pending + " change" + (pending > 1 ? "s" : "") + " waiting to be sent" : " · everything is sent")}</p>
     {st.error && <p className="bk-warn">{st.error}</p>}
     <label className="chk"><input type="checkbox" checked={c.auto !== false} onChange={(ev) => cloudAuto(ev.target.checked)} /> Keep in sync automatically (every 45 seconds)</label>
-    <div className="row" style={{ marginTop: 10 }}><Act act="cloudSync" className="btn small primary" disabled={!!st.busy}>{st.busy ? "Syncing…" : "Sync now"}</Act><Act act="cloudSignOut">Sign out</Act></div>
+    <div className="row" style={{ marginTop: 10 }}><Act act="cloudSync" className="btn small primary" disabled={!!st.busy}>{st.busy ? "Syncing…" : "Sync now"}</Act><Act act="cloudSignOut">Sign out</Act>
+      {owner && <button className="btn small" title="Every computer and phone signed in to your account is signed out" onClick={() => signOutAll()}>Sign out of all devices</button>}</div>
+    {/* section D (03-Oct-2026): there is no automatic sign-out. The idle timer (30 minutes without a click, and its setting here) is gone:
+        from a tab left in the background it signed out every tab of the browser, with no word of why. */}
+    <p className="note" style={{ margin: "8px 0 0" }}>FinCom does not sign you out by itself. You stay signed in on this computer until you sign out{owner ? " (or sign out of all devices)" : ""}; without “Keep me signed in” at sign-in, until the browser is closed.</p>
     <H3 top={14}>Change password</H3><div className="bk-form two"><label><span>New password (8 characters or more)</span><input type="password" data-cloud="newpw" data-fk="cloudnewpw" aria-label="New password" autoComplete="new-password" /></label>
       <label><span>Repeat it</span><input type="password" data-cloud="newpw2" data-fk="cloudnewpw2" aria-label="Repeat the new password" autoComplete="new-password" /></label></div>
     <div className="row" style={{ marginTop: 8 }}><Act act="cloudPassword">Change password</Act></div>
     <H3 top={14}>Two-step sign-in (optional)</H3><p className="note" style={{ margin: "0 0 6px" }}>{aal2 ? <><span className="tag ok">On</span> This sign-in used a code from your authenticator app.</> : mi.enrolled ? "On for this account." : <>Off. For extra safety you can add a code from an authenticator app on your phone. <button className="btn small" onClick={() => mfaAction("mfaOptIn")}>Turn it on</button></>}</p>
     {mi.admin && !aal2 && <p className="bk-warn" style={{ margin: "6px 0" }}>Platform administration is locked until you give the code from your phone. <button className="btn small primary" onClick={() => mfaAction("mfaAdmin")}>Unlock administration</button></p>}
     {S.lastSignIn && <p className="note" style={{ margin: "0 0 6px" }}>{"Your last sign-in: " + fmtDateTime(S.lastSignIn.at) + ", " + S.lastSignIn.device + "."}</p>}
-    <label className="f" style={{ maxWidth: 320 }}><span>Sign out after this many minutes without use</span><select aria-label="Sign out after" value={idle} onChange={(ev) => idleSet(ev.target.value)}>{[10, 15, 30, 60, 120].map((n) => <option key={n} value={n}>{n + " minutes"}</option>)}</select></label>
     {/* the people table with its actions (New password, Reset two-step, Switch off) is drawn below by PeopleEtc; this plain list only stands in until that loads */}
     {!S.account && (st.members || []).length > 0 && <><H3 top={14}>People in the firm</H3><table className="data"><thead><tr><th>Name</th><th>Email</th><th>Role</th></tr></thead><tbody>
       {st.members.map((m) => <tr key={m.email}><td>{m.name || "—"}</td><td>{m.email}</td><td>{m.role + (m.active ? "" : " (off)")}</td></tr>)}</tbody></table></>}

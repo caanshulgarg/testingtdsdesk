@@ -143,13 +143,19 @@ const CloudJobs = {
   },
   // a change to a posting, from the live connection: read again (a burst of changes is read once)
   changed(){ clearTimeout(this.chT); this.chT = setTimeout(() => this.load(true), 800); },
-  // Retry: the same posting again under its id; entries already in Tally are found by FinCom's tag, not posted twice
+  // Retry: the same posting again under its id; entries already in Tally are found by FinCom's tag, not posted twice.
+  // Round 14c: a bill of it deleted in FinCom since (C5a): refused here, no call; any refusal is kept on the row
+  // (refused[job id], shown by Post.jsx beside Retry), not said in a toast alone (C3)
+  refused: {},
   async retry(j){
+    const no = typeof postRetryRefusal === "function" ? postRetryRefusal(j) : "";
+    if (no){ this.refused[j.id] = no; render(); return; }
     try {
       const r = await TCloud.rpc("tally_post_enqueue", {p_id: j.id, p_client: j.client_id, p_payload: {}});
       if (!r || !r.ok) throw new Error((r && r.error) || "It could not be queued again.");
+      delete this.refused[j.id];
       toast("Queued again for the Tally computer.");
-    } catch (e){ toast((e && e.message) || String(e)); }
+    } catch (e){ this.refused[j.id] = "Retry not possible: " + plainMsg((e && e.message) || String(e)); toast(this.refused[j.id]); }
     await this.load(true);
   },
   // Dismiss (request of 02-Oct-2026): a failed or cancelled posting off the list; kept on the server with who and when

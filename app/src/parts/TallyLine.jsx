@@ -23,11 +23,15 @@ export default function TallyLine({ co, update = true }) {
   </span>;
 }
 
+// round 14c (C6, owner item 5): the cloud copy may hold no entries for the current financial year; one note here, the
+// piece every books screen shows (booksYearNote, src/js/49), none when the copy has current-year entries
+const YearNote = ({ cid }) => { const t = typeof booksYearNote === "function" ? booksYearNote(cid) : ""; return t ? <span className="books-year-note" data-books-year-note="">{t}</span> : null; };
 export function BooksAsOf({ cid }) {
   if (typeof booksAsOf !== "function") return null;
   const a = booksAsOf(cid);
-  if (!a) return null;
+  if (!a) return <YearNote cid={cid} />;
   return <span className="books-asof" data-books-asof="" title={a.say}>
     <b>{a.text}</b>{" · "}<button className="linkbtn" data-update-now="" onClick={() => tallyUpdateNow(cid)}>Update now</button>
+    {" "}<YearNote cid={cid} />
   </span>;
 }

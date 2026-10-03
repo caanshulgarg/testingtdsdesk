@@ -1170,6 +1170,21 @@ function booksFresh(b, cid){
     (skipped.length ? "; " + skipped.length + (skipped.length === 1 ? " day" : " days") + " not read from Tally yet (" + skipped.slice(0, 3).map(day).join(", ") + (skipped.length > 3 ? " and " + (skipped.length - 3) + " more" : "") + ")" : "") + ".";
   return {last, checked, at, skipped, text};
 }
+// round 14c (C6, owner item 5): the cloud copy of a client may hold no entries for the current financial year. The one
+// note for every screen that shows the books' figures (BooksAsOf, app/src/parts/TallyLine.jsx): the last entry known
+// (the books here, else the cloud copy's end) is before 01-Apr of the current year. "" when there is nothing to say
+function booksYearNote(cid){
+  cid = cid || S.coId;
+  const b = S.books && S.books.cid === cid ? S.books : null;
+  let last = "";
+  if (b) (b.vouchers || []).forEach(v => { if (v && !v.cancel && String(v.date) > last) last = String(v.date); });
+  const bk = typeof TCloud === "object" && cid ? TCloud.book(cid) : null;
+  const d8 = x => String(x || "").replace(/-/g, "").slice(0, 8);
+  if (!last && bk) last = [d8(bk.to), d8((bk.state || {}).doneTo)].filter(Boolean).sort().pop() || "";
+  if (!last) return "";
+  const start = d8(fyStartEnd(fyOf(null)).from);
+  return last < start ? "Current year not yet read from Tally; figures incomplete." : "";
+}
 function tallyStatus(co){
   if (typeof TLight === "object") TLight.refresh();
   const local = typeof Bridge === "object" && Bridge.on() && Bridge.up();

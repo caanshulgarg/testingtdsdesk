@@ -4029,7 +4029,10 @@ function initialsOf(name){ return String(name || "").replace(/[^A-Za-z ]/g, " ")
 function voucherXml(e, co){
   const note = e.noteKind === "credit";                 // a supplier's credit note: a Debit Note in Tally, every line reversed
   const s = e.snapshot, vt = xesc(note ? (co.debitNoteType || "Debit Note") : (co.voucherType || "Journal")), d = toTallyDate(e.x.invoiceDate);
-  let x = '<VOUCHER VCHTYPE="' + vt + '" ACTION="Create" OBJVIEW="Accounting Voucher View">\n';
+  // round 14c (owner item 4, a test): "Send a FinCom reference id (REMOTEID) with each voucher" on the Post page puts the
+  // entry's FinCom id (the same as the TDSDesk:<id> tag) as REMOTEID on the voucher; off (the default), nothing changes
+  const rid = co.postRemoteId === true && e.id ? ' REMOTEID="' + xesc(String(e.id)) + '"' : "";
+  let x = '<VOUCHER VCHTYPE="' + vt + '" ACTION="Create" OBJVIEW="Accounting Voucher View"' + rid + '>\n';
   x += "<DATE>" + d + "</DATE>\n<EFFECTIVEDATE>" + d + "</EFFECTIVEDATE>\n";
   x += "<VOUCHERTYPENAME>" + vt + "</VOUCHERTYPENAME>\n";
   const vno = vchNoFor(e, co);

@@ -185,6 +185,13 @@ with sync_playwright() as p:
     E("""() => { const r = window.__postIds.find(x => x.fincom_id === "r2"); r.live = false; r.released_at = new Date().toISOString(); r.released_why = "not in Tally"; PostIds.load(S.coId, true); }"""); pg.wait_for_timeout(600)
     jr = txt('#app [data-post-panel="errors"] [data-job="jR"]')
     ok("Waiting for the bridge" not in jr and pg.locator('#app [data-post-panel="errors"] [data-job="jR"] [data-retry]').count() == 1, "7. released by the bridge: Retry is back (%s)" % jr[:120])
+    # round 14c (C3): Retry refused (the cloud's answer): the refusal is on the row, not a toast only; Retry stays for another try
+    E("""() => { window.__rpc1 = TCloud.rpc; TCloud.rpc = async (fn, a) => { if (fn === "tally_post_enqueue") throw new Error("Only the firm's owner may queue a posting again"); return window.__rpc1(fn, a); }; }""")
+    pg.click('#app [data-post-panel="errors"] [data-job="jR"] [data-retry]'); pg.wait_for_timeout(900)
+    jr = txt('#app [data-post-panel="errors"] [data-job="jR"]')
+    ok(pg.locator('#app [data-post-panel="errors"] [data-job="jR"] [data-retry-why]').count() == 1 and "Retry not possible: Only the firm's owner may queue a posting again" in jr and pg.locator('#app [data-post-panel="errors"] [data-job="jR"] [data-retry]').count() == 1,
+       "C3. Retry refused: 'Retry not possible: <the cloud's words>' on the row, Retry still there (%s)" % jr[-160:])
+    E("() => { TCloud.rpc = window.__rpc1; }")
     # tally_post_ids unreadable (RLS, an older cloud): as before, the buttons shown
     E("""() => { window.__postIdsFail = "permission denied for table tally_post_ids (42501)"; PostIds.load(S.coId, true); }"""); pg.wait_for_timeout(600)
     ok(pg.locator('#app [data-post-panel="errors"] [data-job="jR"] [data-retry]').count() == 1 and E("PostIds.readable") is False, "7. tally_post_ids unreadable: today's behaviour, Retry shown")
@@ -268,9 +275,11 @@ with sync_playwright() as p:
       const mk = (id, n, no, amt) => { const e = newEntry("Manual entry"); e.id = id; Object.assign(e.x, {vendorName: n, vendorGstin: "", invoiceNo: no, invoiceDate: "2026-07-01", taxable: amt, total: amt});
         e.natureId = "professional"; e.partyLedger = n; e.expenseLedger = "Professional Charges"; S.data[S.coId].entries[e.id] = e; approve(e); e.approvedAt = window.__t(400); return e; };
       mk("n5", "New Bill Co", "N/5", 1000); refreshStats(S.coId); window.__rpc = []; render(); }""")
-    tab("topost"); press_post()
-    shown = pg.locator('#app [data-post-problem], #app [data-attn-kind="post-refused"]').count()
-    ok(shown >= 1 and not [a for f, a in E("window.__rpc") if f == "tally_post_enqueue"], "a gate's refusal (the Tally company not confirmed) is shown on the page, nothing queued (%d)" % shown)
+    tab("topost")
+    # round 14c (C3): the gate's words (postToProblem) are beside the disabled Post button, not only in a toast or after a press
+    why = txt("#app [data-post-why]")
+    ok(pg.locator("#app [data-post-main]").count() == 1 and pg.locator("#app [data-post-main]").is_disabled() and "Confirm the Tally company" in why and not [a for f, a in E("window.__rpc") if f == "tally_post_enqueue"],
+       "a gate's refusal (the Tally company not confirmed) is said beside the disabled Post button, nothing queued (%s)" % why[:120])
     E("() => { CO().choices.postTo = window.__pt; S.postStop = null; render(); }")
     # 4. an entry Tally took but the bridge could not confirm: "Posted, not yet confirmed — checking whether it reached Tally", no Retry or Post again
     E("""() => { window.__jobs.unshift({id: "jK", client_id: S.coId, company: "GARG SHEKHAR & COMPANY", status: "failed", done: 0, n: 1, message: "1 entry sent to Tally; could not confirm it", created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
@@ -364,6 +373,44 @@ with sync_playwright() as p:
     tab("posted")
     ok(pg.locator("#app [data-post-panel='posted'] [data-job='jC'] [data-posted-entry='old2']").count() == 1 and pg.locator("#app [data-post-panel='posted'] [data-job='jC'] [data-release-owner], #app [data-post-panel='posted'] [data-job='jC'] [data-post-released]").count() == 0,
        "P6. an older posting whose id the cloud never held (jC, old2): the entry listed, nothing to release, not called released")
+    # ---- round 14c (C5a): a failed posting whose bill was deleted in FinCom since: no Retry, the row says why, and
+    # CloudJobs.retry makes no tally_post_enqueue call
+    E("""() => { const e = newEntry("Manual entry"); e.id = "del1"; Object.assign(e.x, {vendorName: "Gone Co", vendorGstin: "", invoiceNo: "G/1", invoiceDate: "2026-07-01", taxable: 900, total: 900});
+      e.natureId = "professional"; e.partyLedger = "Gone Co"; e.expenseLedger = "Professional Charges"; S.data[S.coId].entries[e.id] = e; approve(e); e.approvedAt = window.__t(400);
+      e.status = "deleted"; e.deleted = {at: "2026-10-02T09:30:00Z", by: "Anshul", reason: "uploaded twice", status: "approved"};
+      window.__jobs.unshift({id: "jDel", client_id: S.coId, company: "GARG SHEKHAR & COMPANY", status: "failed", done: 0, n: 1, message: "Tally did not answer", created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+        entry_ids: ["del1"], results: [{id: "del1", ok: false, message: "Tally did not answer"}], items: [{id: "del1", state: "failed", reason: "Tally did not answer"}]});
+      window.__rpc = []; CloudJobs.changed(); }"""); pg.wait_for_timeout(1500); tab("errors")
+    JD = '#app [data-post-panel="errors"] [data-job="jDel"]'
+    jd = txt(JD); want = "Retry not possible: this bill was deleted in FinCom on " + E("fmtDate('2026-10-02')") + " (uploaded twice). Restore it first."
+    ok(pg.locator(JD).count() == 1 and pg.locator(JD + " [data-retry]").count() == 0 and pg.locator(JD + " [data-retry-why]").count() == 1 and want in jd,
+       "C5a. a deleted bill's failed posting: no Retry, '%s' (%s)" % (want, jd[-200:]))
+    E("() => CloudJobs.retry(window.__jobs.find(j => j.id === 'jDel'))"); pg.wait_for_timeout(600)
+    ok(not [c for c in E("window.__rpc") if c[0] == "tally_post_enqueue"], "C5a. CloudJobs.retry on it makes no tally_post_enqueue call")
+    # ---- round 14c (C7, owner item 4): "Send a FinCom reference id (REMOTEID) with each voucher (test)", owner only, off
+    # by default, kept on the client; on, the voucher XML carries REMOTEID="<the entry's FinCom id>"; nothing else changes
+    RB = '#app [data-remoteid-test] input[type="checkbox"]'
+    tab("topost")
+    ok(pg.locator(RB).count() == 1 and not pg.is_checked(RB) and "Send a FinCom reference id (REMOTEID) with each voucher (test)" in txt("#app [data-remoteid-test]"),
+       "C7. an owner sees the tick box, off by default (%s)" % txt("#app [data-remoteid-test]"))
+    xml_off = E("voucherXml(D().entries['r2'], CO())")
+    ok("REMOTEID" not in xml_off and "TDSDesk:r2" in xml_off, "C7. off: no REMOTEID in the voucher XML (the TDSDesk tag as before)")
+    pg.click(RB); pg.wait_for_timeout(400)
+    xml_on = E("voucherXml(D().entries['r2'], CO())")
+    ok(pg.is_checked(RB) and E("CO().postRemoteId === true") and re.search(r'<VOUCHER [^>]*REMOTEID="r2"[^>]*>', xml_on) is not None and xml_on.replace(' REMOTEID="r2"', "") == xml_off,
+       "C7. on: the VOUCHER tag carries REMOTEID=\"r2\" and nothing else changes (%s)" % xml_on[:100])
+    pg.click(RB); pg.wait_for_timeout(400)
+    ok(not pg.is_checked(RB) and E("voucherXml(D().entries['r2'], CO())") == xml_off, "C7. off again: the XML as before")
+    E("() => { S.account = {me: {role: 'staff'}, firm: {name: 'Firm'}}; render(); }"); pg.wait_for_timeout(300); tab("topost")
+    ok(pg.locator(RB).count() == 0, "C7. a staff member: no tick box")
+    E("() => { S.account = {me: {role: 'owner'}, firm: {name: 'Firm'}}; render(); }")
+    # Tally's reply per posting (created / altered / exceptions / ignored and the message), so a second import of the
+    # same REMOTEID can be read as CREATED, ALTERED, COMBINED or IGNORED
+    E("""() => { window.__jobs.unshift({id: "jT", client_id: S.coId, company: "GARG SHEKHAR & COMPANY", status: "done", done: 1, n: 1, message: "1 of 1 sent to Tally", created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+      entry_ids: ["in1"], results: [{id: "in1", ok: true, verified: true, created: 0, altered: 1, exceptions: 0, ignored: 0, message: "Altered in Tally: it existed already"}], items: [{id: "in1", state: "in_tally"}]}); CloudJobs.changed(); }"""); pg.wait_for_timeout(1500); tab("posted")
+    rp = txt('#app [data-post-panel="posted"] [data-job="jT"] [data-post-reply]')
+    ok("created 0" in rp and "altered 1" in rp and "exceptions 0" in rp and "ignored 0" in rp and "Altered in Tally: it existed already" in rp,
+       "C7. the Posted row says Tally's reply: created 0 · altered 1 · exceptions 0 · ignored 0 · the message (%s)" % rp)
     ok(not errors, "no page errors %s" % errors[:2])
     br.close()
 print("\nall passed" if not fails else "\nFAILED: %d" % len(fails)); raise SystemExit(1 if fails else 0)

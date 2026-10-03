@@ -55,6 +55,8 @@ function RunLine({ co }) {
       {(bp.masters || []).length > 0 && <span data-post-masters="">{" · Ledgers: " + bp.masters.map((m) => m.name + ": " + m.word).join(", ")}</span>}
       {bp.optional > 0 && <span>{" · " + bp.optional + " went in as Optional vouchers. " + OPTIONAL_HELP}</span>}
     </p>}
+    {/* round 14c (C7): Tally's own reply counts for the run, on a line of their own (the result line keeps saying each entry's state in FinCom's words: ALTERED is never "created") */}
+    {bp.done && !bp.notAllowed && bp.reply && <p className="note" data-post-reply="" style={{ margin: "0 0 8px" }}>{bp.reply}</p>}
     {note && <p className={"note" + (note.level === "bad" ? " bad" : "")} data-post-note="" style={{ margin: "0 0 8px" }}>{note.text}</p>}
     {bc.error && <p className="note bad" style={{ margin: "0 0 8px" }}>{bc.error}</p>}
     {bc.at && <p className="note" data-post-check="" style={{ margin: "0 0 8px" }}>{bc.checked + " sent bills checked in " + bc.company + " at " + tallyHm(bc.at) + ": " + bc.found + " found"}
@@ -66,7 +68,7 @@ function RunLine({ co }) {
 // 2. Ready to post
 function Ready({ co, bills, canPost, more }) {
   const closed = (e) => typeof ClosedP === "object" ? ClosedP.note(e.x.invoiceDate, !!(e.snapshot && e.snapshot.tds)) : [];
-  const n = bills.ready.length;
+  const n = bills.ready.length, why = n > 0 ? postWhyBlocked(co, canPost) : null;
   return <section className="post-sec" data-post-ready="">
     <h3>Ready to post</h3>
     {n ? <div className="tblwrap"><table className="data" data-post-table="">
@@ -85,11 +87,29 @@ function Ready({ co, bills, canPost, more }) {
     </table></div> : <p className="note" data-post-empty="">Nothing waiting to post</p>}
     {bills.sending.length > 0 && <p className="note" data-post-sending="" style={{ margin: "8px 0 0" }}>{"On its way to Tally: " + bills.sending.map((e) => e.x.invoiceNo || e.x.vendorName).join(", ")}</p>}
     <div className="row" style={{ marginTop: 10, gap: 8, alignItems: "center" }}>
-      {n > 0 && <button className="btn primary" data-post-main="" disabled={!canPost || !!(S.billPost && S.billPost.busy)} onClick={() => doAct("postAll")}>{"Post " + n + " to Tally"}</button>}
-      {n > 0 && !canPost && <span className="note">No Tally to post to from here: use More → Download Tally file.</span>}
+      {n > 0 && <button className="btn primary" data-post-main="" disabled={!!why} onClick={() => doAct("postAll")}>{"Post " + n + " to Tally"}</button>}
+      {n > 0 && why && <span className={"note" + (why.kind === "busy" ? "" : " bad")} data-post-why={why.kind}>{why.text}</span>}
       {more}
     </div>
+    <RemoteIdBox co={co} />
   </section>;
+}
+// round 14c (C3): why Post is blocked, in plain words beside the button (the gate's own words, postToProblem, not only a
+// toast after a press): null when it can be pressed
+function postWhyBlocked(co, canPost) {
+  if (S.billPost && S.billPost.busy) return { kind: "busy", text: S.billPost.busy };
+  if (!canPost) return { kind: "nowhere", text: "No Tally to post to from here: use More → Download Tally file." };
+  const gate = typeof postToProblem === "function" && co.postTo ? postToProblem(co, "") : "";
+  return gate ? { kind: "gate", text: gate } : null;
+}
+// round 14c (C7, owner item 4, a test): "Send a FinCom reference id (REMOTEID) with each voucher (test)", owners only,
+// off by default, kept on the client (co.postRemoteId; voucherXml, src/js/01 puts REMOTEID="<the entry's FinCom id>")
+function RemoteIdBox({ co }) {
+  if (!(typeof postOwner === "function" && postOwner())) return null;
+  return <label className="chk note" data-remoteid-test="" style={{ display: "inline-flex", gap: 6, alignItems: "center", marginTop: 8 }}>
+    <input type="checkbox" checked={co.postRemoteId === true} onChange={(ev) => { co.postRemoteId = !!ev.target.checked; Store.saveCompany(co); render(); }} />
+    {"Send a FinCom reference id (REMOTEID) with each voucher (test)"}
+  </label>;
 }
 
 // a ledger of a waiting bill that Tally does not have: choose Tally's ledger (for every bill using it), or create it
@@ -180,15 +200,24 @@ function Attention({ co, bills, canPost }) {
           <span className="why"><b>{"Posting of " + fmtDateTime(j.created_at)}</b>{" · " + (j.status === "cancelled" ? "cancelled" : "failed") + ": "}<span data-why="">{plainMsg(j.message) || "Tally did not take it"}</span>
             {left ? <span className="nr">{" · " + left + " of " + all + " still to send"}</span> : null}</span>
           <span className="acts">
-            {typeof postJobHeld === "function" && postJobHeld(j) ? <Wait /> : <button className="btn small primary" data-retry="" onClick={() => CloudJobs.retry(j)}>Retry</button>}
+            {typeof postJobHeld === "function" && postJobHeld(j) ? <Wait /> : (typeof postRetryRefusal === "function" && postRetryRefusal(j)) ? null : <button className="btn small primary" data-retry="" onClick={() => CloudJobs.retry(j)}>Retry</button>}
             {CloudJobs.dismissOk && <button className="btn small" data-dismiss="" onClick={() => CloudJobs.dismiss(j)}>Dismiss</button>}
           </span>
+          {/* round 14c (C3, C5a): why Retry is refused, on the row */}
+          {typeof postRetryWhy === "function" && postRetryWhy(j) && <span className="bk-warn" data-retry-why="">{postRetryWhy(j)}</span>}
+          <Reply j={j} />
           {mine.length > 0 && <ul className="post-attn post-attn-in">{mine.map((e) => refusedRow(e, true))}</ul>}
         </li>; })}
     </ul>
   </section>;
 }
 
+// round 14c (C7): Tally's reply for a posting (created / altered / exceptions / ignored and its words), so a second import
+// of the same REMOTEID can be read as CREATED, ALTERED, COMBINED or IGNORED
+function Reply({ j }) {
+  const r = typeof postReply === "function" ? postReply(j.results) : null;
+  return r && r.text ? <span className="note" data-post-reply="" style={{ display: "block" }}>{r.text}</span> : null;
+}
 // 5. Posted: the postings of FinCom's cloud that need nothing, newest first (a failed posting finished by a later one is
 // one line with it); each names the entries it put in Tally (data-entries)
 const NTH = ["", "second try", "third try", "fourth try"];
@@ -220,6 +249,7 @@ function History({ co }) {
       return <li key={j.id} data-job={j.id} data-hist-state={x.state} data-entries={[...CloudJobs.okIn(j)].join(" ")}>
         <span data-hist-text="">{text}</span>{" · " + plural(Math.max(x.ok, x.state === "posted" ? x.n : 0) || x.n, "entry", "entries") + " · " + j.company}
         {j.dismissed_at && !j.dismiss_auto && x.state !== "posted" && <>{" "}<button className="linkbtn" data-undismiss="" onClick={() => CloudJobs.undismiss(j)}>Show under Errors</button></>}
+        <Reply j={j} />
         {ents.length > 0 && <PostedEntries co={co} job={j} ents={ents} />}
       </li>; })}</ul>
   </section>;

@@ -97,9 +97,12 @@ export function ReviewTable() {
 function ReviewBar() {
   const rows = draftRows(), sel = S.revSel || new Set(), live = bridgeLive();
   const picked = rows.filter((r) => sel.has(r.e.id)), ready = rows.filter((r) => !needsLook(r));
+  // round 14c (C1): when no bill is ready, the bulk Approve says why in plain words, counted from the drafts' missing lists
+  const noneReady = (list) => list.length && !list.some((r) => !(r.c.missing || []).length) ? noneReadyWords(list) : "";
   if (picked.length) return (
     <div className="actionbar bk-actionbar">
-      <div className="ab-left"><b>{picked.length} selected</b> <span className="muted">· TDS {money(r2(picked.reduce((a, r) => a + num(r.c.tds), 0)))}</span> <button className="linkbtn" onClick={() => doAct("revNone")}>Clear</button></div>
+      <div className="ab-left"><b>{picked.length} selected</b> <span className="muted">· TDS {money(r2(picked.reduce((a, r) => a + num(r.c.tds), 0)))}</span> <button className="linkbtn" onClick={() => doAct("revNone")}>Clear</button>
+        {noneReady(picked) && <div className="none-ready" data-none-ready="">{noneReady(picked)}</div>}</div>
       <div className="ab-right">
         <button className="btn" onClick={() => doAct("revTdsOn")}>Book TDS</button>
         <button className="btn" onClick={() => doAct("revTdsOff")}>Do not book TDS</button>
@@ -111,7 +114,8 @@ function ReviewBar() {
   );
   return (
     <div className="actionbar bk-actionbar">
-      <div className="ab-left"><span className="bk-stat"><b>{rows.length}</b> to review</span><span className="bk-stat"><b>{ready.length}</b> ready to approve</span></div>
+      <div className="ab-left"><span className="bk-stat"><b>{rows.length}</b> to review</span><span className="bk-stat"><b>{ready.length}</b> ready to approve</span>
+        {!ready.length && noneReady(rows) && <div className="none-ready" data-none-ready="">{noneReady(rows)}</div>}</div>
       <div className="ab-right">
         <button className="btn" disabled={!live} onClick={() => doAct("revCheckTallyAll")}>Check the year in Tally for all</button>
         <button className="btn primary" disabled={!ready.length} onClick={() => doAct("revApproveAll")}>Approve all that are ready ({ready.length})</button>
@@ -141,9 +145,17 @@ function BillBar({ e }) {
     const items = todo.map(([k, el]) => <span key={k} style={{ display: "contents" }}>{el} </span>);
     left = todo.length && !todo.every((t) => t[2]) ? <><b>To do:</b> {items}</>
       : <><span className="tag ok">Ready to approve</span> <span className="note">{c.skip ? "No TDS booked (would be " + money0(c.tdsWould) + ")" : "TDS " + money(c.tds)} · {c.rule.label}</span> {items}</>;
+    // round 14c (C1, C2): a disabled Approve says why in plain words beside it (the title too); an item that is a box on
+    // the bill is a click to it (focusBillField)
+    const cannot = c.missing.length > 0 && <div className="cannot-approve" data-cannot-approve="">{"Cannot approve: "}
+      {c.missing.map((m, i) => { const k = missingField(m);
+        return <span key={m}>{i ? ", " : ""}{k ? <button type="button" className="linkbtn" data-focus-field={k} onClick={() => focusBillField(k)}>{m}</button> : m}</span>; })}</div>;
     right = <>
       <button className="btn" onClick={() => doAct("reject")}>No entry needed</button>
-      <button className="btn primary" disabled={c.missing.length > 0} title={c.missing.length ? "Still needed: " + c.missing.join(", ") : undefined} onClick={() => doAct("approve")}>Approve <kbd>Ctrl+Enter</kbd></button>
+      <span className="approve-wrap" style={{ display: "inline-flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
+        <button className="btn primary" disabled={c.missing.length > 0} title={c.missing.length ? "Still needed: " + c.missing.join(", ") : undefined} onClick={() => doAct("approve")}>Approve <kbd>Ctrl+Enter</kbd></button>
+        {cannot}
+      </span>
       {next}
     </>;
   } else if (e.status === "duplicate") {

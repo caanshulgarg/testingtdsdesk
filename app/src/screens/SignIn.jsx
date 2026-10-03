@@ -13,6 +13,10 @@ const Field = ({ label, k, type = "text", fk, auto, first }) => {
     defaultValue={f[k] || (k === "email" ? c.email || "" : "")} onChange={(ev) => cloudForm(k, ev.target.value)} /></label>;
 };
 const Err = () => Cloud.st.error ? <p className="bk-warn" style={{ marginTop: 10 }}>{Cloud.st.error}</p> : null;
+// "Keep me signed in" (section D, 03-Oct-2026): ticked, the session is kept on this computer (localStorage) until you sign
+// out; unticked, in this tab only (sessionStorage), gone when the browser closes. Read by Cloud.signIn (src/js/43).
+// Nothing signs you out by itself either way.
+export const KeepBox = () => <label className="chk" style={{ marginTop: 10, display: "block" }}><input type="checkbox" data-cloud="keep" defaultChecked /> Keep me signed in on this computer <span className="note">(untick on a shared computer: the sign-in ends when the browser is closed)</span></label>;
 
 function SignUp() {
   const st = Cloud.st;
@@ -60,9 +64,10 @@ export default function SignIn() {
   return <Box><h1>FinCom</h1>
     <p className="note">{S.firm && S.firm.firmName ? S.firm.firmName : "Finance and compliance, in one place"}</p>
     <p className="note" style={{ margin: "2px 0 0" }}><a href="welcome/">What is FinCom?</a></p>
-    {S.signedOutWhy ? <p className="bk-alert" style={{ margin: "10px 0 14px" }}>{S.signedOutWhy}</p>
+    {S.signedOutWhy ? <p className="bk-alert" data-signed-out-why="" style={{ margin: "10px 0 14px" }}>{S.signedOutWhy}</p>
       : <p className="note" style={{ margin: "10px 0 14px" }}>Sign in to see your firm’s work. Nothing is shown before that.</p>}
     <Field label="Email" k="email" type="email" fk="cloudemail" auto="username" first /><Field label="Password" k="password" type="password" fk="cloudpw" auto="current-password" />
+    <KeepBox />
     <div className="row" style={{ marginTop: 12 }}><Act act="cloudSignIn" disabled={!!st.busy}>{st.busy ? "Signing in…" : "Sign in"}</Act></div><Err />
     <p className="note" style={{ marginTop: 14 }}>Forgotten the password? Ask the person who runs your firm’s account to send you a reset link. After 5 wrong passwords the account is locked for 15 minutes.</p>
     <p className="note" style={{ marginTop: 10 }}>No internet on this computer? <Act act="useOffline" className="linkbtn">Use it here without an account</Act> — the work stays on this computer only.</p>

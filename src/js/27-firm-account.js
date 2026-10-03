@@ -822,11 +822,33 @@ function canDeleteBills(){
   if (!Cloud.on() || !S.account) return true;
   return S.account.superadmin === true || ((S.account.me || {}).role === "owner");
 }
+// round 14c (C5b): a bill with a live posting (in Tally, posted and not yet confirmed, or its FinCom id still held by the
+// cloud's tally_post_ids / a finished posting of the cloud): the voucher Tally gave it, or "being checked"
+function billLivePosting(e, cid){
+  if (!e) return null;
+  cid = cid || S.coId;
+  const vch = (e.tallyVchNo || (e.tally && (e.tally.vchNo || e.tally.number)) || "").toString().trim();
+  if (e.exportedAt || e.postUnconfirmed) return {vch};
+  if (typeof postIdReleased === "function" && postIdReleased(e.id, cid) === false) return {vch};
+  if (typeof CloudJobs === "object" && CloudJobs.list && CloudJobs.forClient(cid).some(j => CloudJobs.okIn(j).has(String(e.id)))){
+    const r = [].concat(...CloudJobs.forClient(cid).map(j => j.results || [])).find(x => x && String(x.id) === String(e.id) && x.ok);
+    return {vch: vch || (r && (r.vchNumber || r.vchNo)) || ""};
+  }
+  return null;
+}
 function billDelete(id){
   const e = D().entries[id];
   if (!e) return;
-  if (e.exportedAt){ toast("This bill is in Tally. Take it back from Tally first (Posted \u2192 Take it back), then delete it."); return; }
   if (!canDeleteBills()){ toast("Only the firm\u2019s owner can delete a bill. Mark it \u201cNo entry\u201d instead, or ask the owner."); return; }
+  const live = billLivePosting(e, S.coId);
+  if (live){
+    const words = "This bill is posted to Tally (voucher id " + (live.vch ? esc(live.vch) : "being checked") + "). Deleting it here does not remove it from Tally. Delete anyway?";
+    confirmTyped({title: "Delete a bill posted to Tally?", ok: "Delete anyway", body: '<p class="note" data-delete-posted="">' + words + "</p>"}).then(r => { if (r) billDeleteAsk(e); });
+    return;
+  }
+  billDeleteAsk(e);
+}
+function billDeleteAsk(e){
   askConfirm({title: "Delete this bill?", ok: "Delete", danger: true,
     body: '<p class="note">' + esc(e.x.vendorName || e.fileName || "") + (e.x.invoiceNo ? " \u00b7 " + esc(e.x.invoiceNo) : "") + ". It moves to \u201cDeleted\u201d with its document, and can be restored from there.</p>" +
       '<label class="f" style="margin-top:8px"><span>Why is it deleted?</span><input type="text" id="delWhy" maxlength="200" placeholder="For example: uploaded twice, not this client\u2019s bill"></label>',
@@ -859,6 +881,29 @@ function billRestore(id){
   Store.saveEntry(S.coId, e);
   auditEvent("bill_restore", (e.x.vendorName || e.fileName || "") + " " + (e.x.invoiceNo || e.id), S.coId);
   S.filter = "draft"; S.selected = e.id; refreshStats(S.coId); toast("Restored to To review."); render();
+}
+// round 14c (C1, C2): the items of compute().missing that are a box on the bill (data-focus-field on its input), and the
+// click that puts the cursor there; the first missing one is marked bk-missing when the bill opens
+const MISSING_FIELD = {"invoice date": "invoiceDate", "supplier name": "vendorName", "taxable value": "taxable", "party ledger": "partyLedger", "expense ledger": "expenseLedger", "TDS ledger": "tdsLedger"};
+function missingField(item){ return MISSING_FIELD[String(item || "").trim()] || ""; }
+function firstMissingField(missing){ for (const m of (missing || [])){ const k = missingField(m); if (k) return k; } return ""; }
+function focusBillField(key){
+  const host = document.querySelector("#app aside.drawer") || document.getElementById("app") || document;
+  const el = host.querySelector('[data-focus-field="' + key + '"]');
+  if (!el) return false;
+  try { el.scrollIntoView({block: "center"}); } catch (e){}
+  el.focus();
+  return true;
+}
+// C1 (the bulk buttons): why no bill is ready, counted from the drafts' missing lists: "No bill is ready: 2 need an invoice
+// date, 1 a party ledger"
+function noneReadyWords(rows){
+  const counts = new Map();
+  (rows || []).forEach(r => { const c = r.c || compute(r.e), seen = new Set(); (c.missing || []).forEach(m => { if (seen.has(m)) return; seen.add(m); counts.set(m, (counts.get(m) || 0) + 1); }); });
+  if (!counts.size) return "";
+  const art = m => /^(your |a |an |confirmation)/.test(m) ? m : /^[aeiou]/i.test(m) ? "an " + m : "a " + m;
+  const parts = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).map(([m, n], i) => n + " " + (i === 0 ? (n === 1 ? "needs " : "need ") : "") + art(m));
+  return "No bill is ready: " + parts.join(", ") + ".";
 }
 // the bills in the list as shown (Invoices.jsx orders them the same way), and a step to the next or previous one
 function billList(){

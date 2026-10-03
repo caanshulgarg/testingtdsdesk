@@ -1,6 +1,7 @@
 // A purchase bill: what was read from it, GST, the TDS decision and the draft entry for Tally. Editable while it is a
 // draft. Was viewDetail() and its helpers (field, docWarnHtml, itemsHtml, partyHistHtml, ytdSourceHtml,
 // rereadButtons, viewGst) in src/js/19, 01 and 27. Every change goes through billSet…/billGst/… in src/js/27.
+import { useEffect } from "react";
 import ReadBadge from "../parts/ReadBadge.jsx";
 import BillDoc from "../parts/BillDoc.jsx";
 
@@ -8,15 +9,19 @@ const money_ = (n) => money(n);
 const isFree = (m) => /^(free (OCR|\(PDF)|Google OCR$)/.test(m);
 const costNote = (m) => /^free (OCR|\(PDF)/.test(m) ? ": no cost" : m === "Google OCR" ? ": Google OCR, no Claude cost" : /text only/.test(m) ? ": low Claude cost" : /^Claude/.test(m) ? ": normal Claude cost" : "";
 
-function Field({ e, label, k, ro, type = "text", wide, value }) {
+// round 14c (C4): the reader found no date on the page (its trace or freeWhy says "date not found") and none is typed
+const dateNotFound = (e) => !e.x.invoiceDate && e.status === "draft" && (/date not found/i.test(e.freeWhy || "") || (e.readTrace || []).some((t) => t && /date not found/i.test(t.note || "")));
+function Field({ e, label, k, ro, type = "text", wide, value, miss }) {
   const unsure = !ro && e.uncertain && e.uncertain.indexOf(k) >= 0;
   const v = value !== undefined ? value : e.x[k];
+  const noDate = k === "invoiceDate" && !ro && dateNotFound(e);
   return (
     <label className={"f" + (wide ? " wide" : "") + (unsure ? " unsure" : "")}>
       <span>{label}</span>
-      <input type={type} value={v == null ? "" : v} readOnly={ro} data-fk={"x:" + k}
+      <input type={type} value={v == null ? "" : v} readOnly={ro} data-fk={"x:" + k} data-focus-field={k} className={miss === k ? "bk-missing" : undefined}
         {...(type === "number" ? { step: "0.01", inputMode: "decimal" } : {})}
         onChange={(ev) => billSetX(e, k, ev.target.value)} />
+      {noDate && <span className="bk-warn" data-date-not-found="">Date not found on this page; please type it.</span>}
     </label>
   );
 }
@@ -214,7 +219,7 @@ function GuessedFromSetup({ e, l }) {
   return <div className="cfm-guess" data-led-guess={ck}><span className="tag warn">guessed, confirm</span> <span className="note">Client setup’s ledger, found by FinCom: not posted until confirmed.</span>{" "}
     <button type="button" className="linkbtn" data-choice-confirm={ck} onClick={() => { choiceConfirm(co, ck, l.ledger); toast("Confirmed for every bill: " + l.ledger + "."); render(); }}>{"Confirm “" + l.ledger + "”"}</button></div>;
 }
-function LedgerCell({ e, l, ro, tallyCtx }) {
+function LedgerCell({ e, l, ro, tallyCtx, miss }) {
   const tax = TAX_ROLES.includes(l.role);
   const edit = !ro && (l.role === "expense" || l.role === "party" || (tax && !!l.key));
   const key = l.role === "expense" ? "expenseLedger" : "partyLedger";
@@ -225,9 +230,10 @@ function LedgerCell({ e, l, ro, tallyCtx }) {
   const fix = (n) => tax && edit ? billSetTaxLed(e, l.key, n) : billFixLedger(l.role, l.ledger, n);
   return <>
     {edit ? (tax
-      ? <input type="text" data-tl={l.key} data-fk={"tl:" + l.key} data-ac="1" data-acrole={l.role} autoComplete="off" value={val}
+      ? <input type="text" data-tl={l.key} data-fk={"tl:" + l.key} data-ac="1" data-acrole={l.role} autoComplete="off" value={val} data-focus-field={l.role === "tds" ? "tdsLedger" : undefined}
+          className={miss && miss === (l.role === "tds" ? "tdsLedger" : "") ? "bk-missing" : undefined}
           aria-label={label} placeholder={l.ask || label} onChange={(ev) => billSetTaxLed(e, l.key, ev.target.value)} />
-      : <input type="text" data-e={key} data-fk={"e:" + key} data-ac="1" data-acrole={l.role} autoComplete="off" value={val}
+      : <input type="text" data-e={key} data-fk={"e:" + key} data-ac="1" data-acrole={l.role} autoComplete="off" value={val} data-focus-field={key} className={miss === key ? "bk-missing" : undefined}
           aria-label={label} placeholder={label} onChange={(ev) => billSetText(e, key, ev.target.value)} />)
       : l.ledger ? l.ledger : <span className="missing">{l.ask || "Ledger not set"}</span>}
     {edit && l.role === "party" && e.partyNote && e.partyFrom && <div className="note" data-led-note="party">{e.partyNote}</div>}
@@ -253,7 +259,7 @@ function LedgerCell({ e, l, ro, tallyCtx }) {
   </>;
 }
 
-function Slip({ e, c, ro, snap }) {
+function Slip({ e, c, ro, snap, miss }) {
   const co = CO(), x = e.x, lines = snap ? snap.lines : c.lines;
   const tot = lines.reduce((a, l) => { a[l.side] += l.amt; return a; }, { Dr: 0, Cr: 0 });
   const tallyCtx = ledgerListFor(S.coId);
@@ -263,7 +269,7 @@ function Slip({ e, c, ro, snap }) {
       <table className="vtbl">
         <thead><tr><th></th><th>Ledger</th><th className="n">Debit ₹</th><th className="n">Credit ₹</th></tr></thead>
         <tbody>{lines.map((l, i) => (
-          <tr key={i}><td className="by">{l.side}</td><td><LedgerCell e={e} l={l} ro={ro} tallyCtx={tallyCtx} /></td>
+          <tr key={i}><td className="by">{l.side}</td><td><LedgerCell e={e} l={l} ro={ro} tallyCtx={tallyCtx} miss={miss} /></td>
             <td className="n">{l.side === "Dr" ? INR.format(l.amt) : ""}</td><td className="n">{l.side === "Cr" ? INR.format(l.amt) : ""}</td></tr>
         ))}</tbody>
         <tfoot><tr><td></td><td>Total</td><td className="n">{INR.format(r2(tot.Dr))}</td><td className="n">{INR.format(r2(tot.Cr))}</td></tr></tfoot>
@@ -297,6 +303,10 @@ function DupBeside({ e }) {
     </div></section>;
 }
 
+function FocusMissing({ id, miss }) {
+  useEffect(() => { if (miss && typeof focusBillField === "function") setTimeout(() => focusBillField(miss), 0); }, [id]);
+  return null;
+}
 export default function BillDetail({ id }) {
   const e = D().entries[id];
   if (!e) return null;
@@ -317,9 +327,12 @@ export default function BillDetail({ id }) {
     : { applicable: c.applicable, tds: c.tds, tdsWould: c.tdsWould, skip: c.skip, why: c.why, meter: c.meter, ref: c.rule.ref, old: c.rule.old, pan: c.pan, indHuf: c.indHuf, fy: c.fy,
       base: c.base, tdsBase: c.tdsBase, rate: c.rate, rateNote: c.rateNote, never: c.rule.basis === "never", flags: e.status === "draft" ? c.flags : [], catchUp: c.catchUp, anyway: c.anyway };
   const closed = typeof ClosedP === "object" && x.invoiceDate && e.status !== "rejected" && !e.exportedAt ? ClosedP.note(x.invoiceDate, !!(e.snapshot && e.snapshot.tds)) : [];
-  const f = (label, k, o = {}) => <Field e={e} label={label} k={k} ro={ro} {...o} />;
+  // round 14c (C2): the first missing field is marked (bk-missing) and gets the cursor when the bill opens with missing items
+  const miss = e.status === "draft" && typeof firstMissingField === "function" ? firstMissingField(c.missing) : "";
+  const f = (label, k, o = {}) => <Field e={e} label={label} k={k} ro={ro} miss={miss} {...o} />;
   return (
     <div className="detail">
+      <FocusMissing id={e.id} miss={miss} />
       <section className="dhead">
         <div>
           <h2>{x.vendorName || "New invoice"}</h2>
@@ -368,9 +381,11 @@ export default function BillDetail({ id }) {
       <Gst e={e} c={c} ro={ro} snap={snap} />
       <Tds e={e} c={c} v={v} ro={ro} />
       {v.flags.length > 0 && <section><h3>Check before approving</h3><ul className="flags">{v.flags.map((fl, i) => <li key={i} className={fl.lvl}>{fl.t}</li>)}</ul></section>}
-      <Slip e={e} c={c} ro={ro} snap={snap} />
+      <Slip e={e} c={c} ro={ro} snap={snap} miss={miss} />
       {e.status === "deleted" && <section><p className="banner" style={{ margin: 0 }}>Deleted {fmtDateTime(e.deleted && e.deleted.at)} by {(e.deleted && e.deleted.by) || "—"}: {(e.deleted && e.deleted.reason) || "no reason given"}.{" "}
-        {canDeleteBills() && <button className="btn small" onClick={() => billRestore(e.id)}>Restore</button>}</p></section>}
+        {/* round 14c (C3): a member sees Restore blocked with why beside it, not a toast on click */}
+        <button className="btn small" disabled={!canDeleteBills()} onClick={() => billRestore(e.id)}>Restore</button>
+        {!canDeleteBills() && <span className="bk-warn" data-restore-why="">Only the firm’s owner can restore a deleted bill.</span>}</p></section>}
       {e.status === "duplicate" && <DupBeside e={e} />}
     </div>
   );

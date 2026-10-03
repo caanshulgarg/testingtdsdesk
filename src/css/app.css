@@ -720,6 +720,10 @@ label.chk.small{font-size:13px;margin-top:8px;color:var(--muted)}
 .jname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}
 .dot.sm{display:inline-block;width:6px;height:6px;margin-right:5px;vertical-align:middle}
 label.f.unsure input{border-color:var(--flag);background:var(--flag-soft)}
+.books-year-note{color:var(--bad,#b42318);font-weight:600;white-space:normal}
+input.bk-missing{border-color:var(--bad,#b42318);box-shadow:0 0 0 2px var(--bad-soft,rgba(180,35,24,.15))}
+.cannot-approve,.none-ready{color:var(--bad,#b42318);font-size:13px}
+.cannot-approve .linkbtn{color:inherit;text-decoration:underline}
 label.f.unsure > span::after{content:" · check";color:var(--flag)}
 .withprev{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:16px;align-items:start}
 @media (max-width:1000px){.withprev{grid-template-columns:minmax(0,1fr)}}

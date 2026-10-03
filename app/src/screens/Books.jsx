@@ -164,7 +164,7 @@ function FreshLine({ b }) {
   // build 197: from any computer: on the Tally computer through its bridge, elsewhere through the cloud
   const can = (typeof Bridge === "object" && Bridge.on() && Bridge.up()) || (typeof TCloud === "object" && S.coId && TCloud.has(S.coId));
   // one sentence on every page (booksFresh, src/js/49): the last entry, how far it was checked with Tally, days not read
-  const f = booksFresh(b, S.coId), asOf = typeof booksAsOf === "function" && booksAsOf(S.coId);
+  const f = booksFresh(b, S.coId), asOf = (typeof booksAsOf === "function" && booksAsOf(S.coId)) || (typeof booksYearNote === "function" && booksYearNote(S.coId));
   // 2.1.3: "Books as of 15:34 · Update now" first: Tally cannot send its changes, so old figures are never shown as now
   return <>
     {asOf && <p className="note" style={{ margin: "0 0 4px" }} data-books-asof-line=""><BooksAsOf cid={S.coId} /></p>}

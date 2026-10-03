@@ -1,5 +1,5 @@
 """Two-step sign-in is optional: without it, signing in goes straight in; turning it on (QR code and key, then the 6-digit
-code) makes the next sign-in ask for the code; a wrong code is refused; signing out tells the server; idle sign-out;
+code) makes the next sign-in ask for the code; a wrong code is refused; signing out tells the server; no idle sign-out;
 the audit trail gets sign-in and Tally writes. The firm account is stood in by routes."""
 import json, os, re, threading, functools, http.server, base64
 from playwright.sync_api import sync_playwright
@@ -67,9 +67,9 @@ with sync_playwright() as p:
     ok(not any("/rest/v1/records" in c[1] for c in ST["calls"][-6:]), "no firm data is asked for before the code")
     pg.fill("#mfaCode", "123456"); pg.keyboard.press("Enter"); pg.wait_for_timeout(2000)
     ok(pg.evaluate("Cloud.aal()") == "aal2", "code accepted with Enter")
-    # idle: pretend 31 minutes have passed
-    pg.evaluate("() => { idleLast = Date.now() - 31 * 60000; }"); pg.wait_for_timeout(31000)
-    ok(pg.locator('[data-act="cloudSignIn"]').count() == 1 and ST["logout"] == 2, "signed out after 30 minutes without use")
+    # no automatic sign-out (section D, 03-Oct-2026): 31 minutes without a click, still signed in
+    pg.evaluate("() => { const t = Date.now; Date.now = () => t() + 31 * 60000; }"); pg.wait_for_timeout(31000)
+    ok(pg.locator('[data-act="cloudSignIn"]').count() == 0 and ST["logout"] == 1, "not signed out after 31 minutes without use")
     ok(not errors, "no page errors " + str(errors[:2]))
     br.close()
 print(("%d failed" % len(fails)) if fails else "all passed")

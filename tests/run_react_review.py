@@ -90,6 +90,38 @@ with sync_playwright() as p:
     pg.click('#app button[aria-label="Open this bill"] >> nth=0'); pg.wait_for_timeout(500)
     pg.click('#app .drawer-head button:has-text("Close")'); pg.wait_for_timeout(500)
     ok(pg.locator("#app aside.drawer").count() == 0, "↗ opens it, Close closes it")
+    # ---- round 14c (C1, C2, C4): a bill that cannot be approved says why beside the disabled Approve, in plain words
+    # (the items of compute().missing); the first missing field is marked and has the cursor when the bill opens, and
+    # each item of the line is a click to its box; a date the reader did not find is said next to the date field
+    did = pg.evaluate("""() => { const e = newEntry("Manual entry"); Object.assign(e.x, {vendorName: "Delta Missing", invoiceNo: "D/1", taxable: 1000, total: 1000}); e.x.invoiceDate = "";
+      e.natureId = "professional"; e.partyLedger = "Delta Missing"; e.expenseLedger = "Professional Charges"; e.freeWhy = "date not found"; e.readTrace = [{step: "Free OCR", ok: false, note: "date not found"}];
+      S.data[S.coId].entries[e.id] = e; refreshStats(S.coId); revOpen(e.id); return e.id; }""")
+    pg.wait_for_timeout(800)
+    DR = "#app aside.drawer "
+    cant = pg.locator("#app .actionbar [data-cannot-approve]")
+    ok(cant.count() == 1 and cant.inner_text().startswith("Cannot approve: ") and "invoice date" in cant.inner_text() and pg.locator('#app .actionbar button:has-text("Approve")').is_disabled(),
+       "C1. beside the disabled Approve: 'Cannot approve: invoice date' (%s)" % (cant.inner_text() if cant.count() else "-"))
+    date_in = pg.locator(DR + '[data-focus-field="invoiceDate"]')
+    ok(date_in.count() == 1 and "bk-missing" in (date_in.get_attribute("class") or "") and pg.evaluate("document.activeElement && document.activeElement.getAttribute('data-focus-field')") == "invoiceDate",
+       "C2. the first missing field (invoice date) is marked bk-missing and has the cursor when the bill opens")
+    ok(pg.locator(DR + "[data-date-not-found]").count() == 1 and "Date not found on this page; please type it." in pg.inner_text(DR + "[data-date-not-found]"), "C4. the reader missed the date: said next to the date field")
+    pg.click(DR + 'label:has-text("Supplier name") input'); pg.wait_for_timeout(200)
+    pg.click('#app .actionbar [data-cannot-approve] [data-focus-field="invoiceDate"]'); pg.wait_for_timeout(300)
+    ok(pg.evaluate("document.activeElement && document.activeElement.tagName === 'INPUT' && document.activeElement.getAttribute('data-focus-field')") == "invoiceDate", "C2. clicking 'invoice date' in the line puts the cursor in the date box")
+    pg.fill(DR + 'label:has-text("Invoice date") input', "2026-09-12"); pg.wait_for_timeout(600)
+    ok(pg.locator("#app .actionbar [data-cannot-approve]").count() == 0 and pg.locator(DR + "[data-date-not-found]").count() == 0 and not pg.locator('#app .actionbar button:has-text("Approve")').is_disabled(),
+       "C1/C4. the date typed: the line and the note go, Approve is live")
+    pg.keyboard.press("Escape"); pg.wait_for_timeout(400)
+    # C1. the bulk buttons: nothing ready says why, counted from the drafts' missing lists
+    pg.evaluate("""() => { window.__dates = {}; Object.values(D().entries).filter(e => e.status === "draft").forEach(e => { window.__dates[e.id] = e.x.invoiceDate; e.x.invoiceDate = ""; }); render(); }"""); pg.wait_for_timeout(500)
+    nr = pg.locator("#app .actionbar [data-none-ready]")
+    ok("Approve all that are ready (0)" in bar() and nr.count() == 1 and nr.inner_text().startswith("No bill is ready: ") and "need an invoice date" in nr.inner_text(),
+       "C1. 'Approve all that are ready (0)': 'No bill is ready: 4 need an invoice date' (%s)" % (nr.inner_text() if nr.count() else "-"))
+    pg.click('#app input[aria-label="Select Delta Missing"]'); pg.wait_for_timeout(400)
+    nr = pg.locator("#app .actionbar [data-none-ready]")
+    ok("Approve 1" in bar() and nr.count() == 1 and "1 needs an invoice date" in nr.inner_text(), "C1. one ticked, not ready: 'No bill is ready: 1 needs an invoice date' (%s)" % (nr.inner_text() if nr.count() else "-"))
+    pg.click('#app .actionbar button:has-text("Clear")'); pg.wait_for_timeout(300)
+    pg.evaluate("""(id) => { Object.entries(window.__dates).forEach(([k, d]) => { if (D().entries[k]) D().entries[k].x.invoiceDate = d; }); delete D().entries[id]; S.selected = null; S.drawerOpen = false; refreshStats(S.coId); render(); }""", did); pg.wait_for_timeout(500)
     # approve one from its row, delete one
     n = rows().count()
     ready_row = pg.locator('#app table.revtbl tbody tr button:has-text("Approve")')

@@ -560,6 +560,37 @@ function postJobHeld(j){
   const ids = (CloudJobs.idsOf(j) || []).filter(id => !CloudJobs.inTally(j, id));
   return ids.some(id => postIdReleased(id, j.client_id) === false);
 }
+// round 14c (C5a): a failed posting of the cloud cannot be retried while a bill of it (one still to send) is deleted in
+// FinCom: the words for the row, else ""
+function postRetryRefusal(j){
+  if (!j || typeof CloudJobs !== "object") return "";
+  const d = S.data[j.client_id], ents = (d && d.entries) || {};
+  const ids = (CloudJobs.idsOf(j) || []).filter(id => !CloudJobs.inTally(j, id));
+  for (const id of ids){
+    const e = ents[id];
+    if (e && e.status === "deleted"){
+      const dl = e.deleted || {}, when = dl.at ? fmtDate(String(dl.at).slice(0, 10)) : "an unknown date";
+      return "Retry not possible: this bill was deleted in FinCom on " + when + " (" + (dl.reason || "no reason given") + "). Restore it first.";
+    }
+  }
+  return "";
+}
+// what the row of a posting says beside Retry: the refusal of the last press, or the standing one (a deleted bill)
+function postRetryWhy(j){ return (j && typeof CloudJobs === "object" && CloudJobs.refused && CloudJobs.refused[j.id]) || postRetryRefusal(j) || ""; }
+// round 14c (C7): Tally's reply for a posting, summed over its entries' results: {created, altered, exceptions, ignored,
+// has (any count came back), messages}; the words for the page in .text ("" when Tally said nothing countable)
+function postReply(results){
+  const out = {created: 0, altered: 0, exceptions: 0, ignored: 0, has: false, messages: [], text: ""};
+  [].concat(results || []).forEach(r => {
+    if (!r || r.kind === "master" || /^led:|^vt:/.test(String(r.id || ""))) return;
+    ["created", "altered", "exceptions", "ignored"].forEach(k => { if (r[k] != null && r[k] !== ""){ out[k] += num(r[k]); out.has = true; } });
+    const m = plainMsg(r.message || "");
+    if (m && !out.messages.includes(m)) out.messages.push(m);
+  });
+  if (!out.has) return out;
+  out.text = "Tally\u2019s reply: created " + out.created + " \u00b7 altered " + out.altered + " \u00b7 exceptions " + out.exceptions + " \u00b7 ignored " + out.ignored + (out.messages.length ? " \u00b7 " + out.messages.slice(0, 3).join("; ") : "");
+  return out;
+}
 // round 5 (S3, C6): an owner settles an entry Tally accepted but nobody confirmed, or one not found in Tally whose id
 // FinCom's cloud still holds. "Mark posted (voucher no.)" -> tally_post_job_mark_posted(job, id, vch, note) (migration
 // 36b: results and items say in_tally, the id stays accepted); "Not in Tally — release (reason)" -> tally_post_id_release_
