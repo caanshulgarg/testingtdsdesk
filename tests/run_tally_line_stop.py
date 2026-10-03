@@ -65,10 +65,10 @@ with sync_playwright() as p:
       window.__dev.info.readStop = {by: "fincom", reason: "Tally hangs on the bank ledger", at: new Date(Date.now() - 40 * 60000).toISOString()}; }""")
     refresh()
     l = E("(id) => tallyLine(S.companies[id])", cid)
-    ok(l and l["state"] == "stopped" and l["text"] == "Reading stopped by Anshul at %s: Tally hangs on the bank ledger" % hm(40), "tallyLine: state stopped, 'Reading stopped by <name> at <time>: <reason>' (%s)" % l)
+    ok(l and l["state"] == "stopped" and l["text"] in ["Reading stopped by Anshul at %s: Tally hangs on the bank ledger" % hm(m) for m in (40, 41)], "tallyLine: state stopped, 'Reading stopped by <name> at <time>: <reason>' (%s)" % l)
     E("() => { S.homeTab = 'tally'; navHome('tally'); }"); pg.wait_for_timeout(1200)
     cl = lambda c: txt('#app [data-client-line="%s"]' % c)
-    ok(("Reading stopped by Anshul at %s: Tally hangs on the bank ledger" % hm(40)) in cl(cid) and ("Reading stopped by Anshul" in cl(oid)), "Tally page: every client of that computer says so (%s | %s)" % (cl(cid), cl(oid)))
+    ok(any(("Reading stopped by Anshul at %s: Tally hangs on the bank ledger" % hm(m)) in cl(cid) for m in (40, 41)) and ("Reading stopped by Anshul" in cl(oid)), "Tally page: every client of that computer says so (%s | %s)" % (cl(cid), cl(oid)))
     ok(pg.locator('#app [data-client-line="%s"] [data-update-now]' % cid).count() == 0 and txt('#app [data-client-line="%s"] [data-read-resume-line]' % cid) == "Resume", "the line has Resume, not Update now (owner)")
     pg.click('#app [data-client-line="%s"] [data-read-resume-line]' % cid); pg.wait_for_timeout(600)
     ok(["tally_read_resume", {"p_device": DEV}] in E("window.__rpc"), "Resume -> tally_read_resume(p_device) for the computer (%s)" % E("window.__rpc"))
@@ -84,12 +84,12 @@ with sync_playwright() as p:
     # the Post page's second line
     E("async (id) => { await openCompany(id); goStep('post', 'bills'); }", cid); pg.wait_for_timeout(700)
     pp = txt("#app [data-post-problem]")
-    ok(pg.get_attribute("#app [data-post-problem]", "data-post-problem") == "stopped" and pp.startswith("Reading stopped by Anshul at %s: Tally hangs on the bank ledger" % hm(40)) and "Tally page" in pp, "Post page: the second line says it, and where to resume (%s)" % pp)
+    ok(pg.get_attribute("#app [data-post-problem]", "data-post-problem") == "stopped" and any(pp.startswith("Reading stopped by Anshul at %s: Tally hangs on the bank ledger" % hm(m)) for m in (40, 41)) and "Tally page" in pp, "Post page: the second line says it, and where to resume (%s)" % pp)
     # ---- a stop for all computers: Resume resumes all
     E("""() => { window.__stops = [{id: 8, device_id: null, action: "stop", reason: "Bridge update", stopped_at: new Date(Date.now() - 2 * 60000).toISOString(), stopped_by: "u-neha", cleared_at: null, cleared_by: null}]; delete window.__dev.info.readStop; }""")
     refresh()
     E("() => { navHome('tally'); }"); pg.wait_for_timeout(1200)
-    ok(("Reading stopped by neha@fincom.in at %s: Bridge update" % hm(2)) in cl(cid), "a stop for all computers: said with who and when (%s)" % cl(cid))
+    ok(any(("Reading stopped by neha@fincom.in at %s: Bridge update" % hm(m)) in cl(cid) for m in (2, 3)), "a stop for all computers: said with who and when (%s)" % cl(cid))
     E("() => { window.__rpc = []; }"); pg.click('#app [data-client-line="%s"] [data-read-resume-line]' % cid); pg.wait_for_timeout(600)
     ok(["tally_read_resume", {"p_device": None}] in E("window.__rpc"), "Resume on an all-computers stop -> tally_read_resume(null)")
     # ---- a member: the words, no Resume; Update now refused the same way
@@ -103,7 +103,8 @@ with sync_playwright() as p:
       window.__dev.info.readStop = {by: "fincom", reason: "Tally hangs on the bank ledger", at: new Date(Date.now() - 40 * 60000).toISOString()}; }""")
     refresh()
     l = E("(id) => tallyLine(S.companies[id])", cid)
-    ok(l and l["state"] == "stopped" and l["text"] == "Reading stopped from FinCom at %s: Tally hangs on the bank ledger" % hm(40), "older cloud: the beat's readStop alone: 'Reading stopped from FinCom at <time>: <reason>' (%s)" % l)
+    # the minute may tick over between the stop's time stamp and this check: either minute is right
+    ok(l and l["state"] == "stopped" and l["text"] in ["Reading stopped from FinCom at %s: Tally hangs on the bank ledger" % hm(m) for m in (40, 41)], "older cloud: the beat's readStop alone: 'Reading stopped from FinCom at <time>: <reason>' (%s)" % l)
     ok(not errors, "no page errors %s" % errors[:2])
     br.close()
 print("\nall passed" if not fails else "\nFAILED: %d" % len(fails)); raise SystemExit(1 if fails else 0)
