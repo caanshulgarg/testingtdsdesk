@@ -6364,11 +6364,11 @@ const MIS = {
   // working (V, raised whenever a figure is worked out differently). A saved run from other books or other working is
   // worked out again when MIS opens, and its figures are not shown meanwhile (review of 02-Oct-2026: MIS showed the run of
   // 01-Oct, result code 1FB42BF2, with figures since corrected)
-  V: 7,                                                       // 4: GST without cancelled entries, cash flow and ratios redone; 5: open bills net of amounts on account, GST paid and RCM, expense credits (review of 02-Oct-2026); 6: expense credits set off in their head (MIS.plRule), GST per GSTIN, March's TDS on 30 April; 7: the cash flow's lines by Tally group, not ledger names (finding 5)
+  V: 8,                                                       // 4: GST without cancelled entries, cash flow and ratios redone; 5: open bills net of amounts on account, GST paid and RCM, expense credits (review of 02-Oct-2026); 6: expense credits set off in their head (MIS.plRule), GST per GSTIN, March's TDS on 30 April; 7: the cash flow's lines by Tally group, not ledger names (finding 5); 8: the owner's rules of 03-Oct-2026 (round 4, items 26-29): Loan given marks, salaries by a ledger's name directly under Current Liabilities, a partner's sub-group under Loans, grouping notes
   basis(b){
     b = b || S.books || {};
     const vs = b.vouchers || [], alt = vs.reduce((a, v) => Math.max(a, num(v.alter || v.alterId || 0)), 0);
-    return Audit.hash(JSON.stringify([this.V, vs.length, alt, (b.tb || {}).at || "", b.mapV || 0, (b.meta || {}).to || "", (b.meta || {}).at || "", Object.keys(b.ledInfo || {}).length]));
+    return Audit.hash(JSON.stringify([this.V, vs.length, alt, (b.tb || {}).at || "", b.mapV || 0, (b.meta || {}).to || "", (b.meta || {}).at || "", Object.keys(b.ledInfo || {}).length, this.flowMarks((S.companies || {})[b.cid || S.coId])]));
   },
   stale(b){ const r = b && b.mis && b.mis.last; return !!r && r.basis !== this.basis(b); },
   due(b){
@@ -6410,11 +6410,45 @@ Object.assign(MIS, {
     const path = Audit.path(l);
     for (let i = 0; i < path.length; i++){
       const hit = this.FLOW_GROUPS.find(([re]) => re.test(String(path[i]).trim()));
-      if (hit) return {kind: hit[1], own: path.slice(0, i)};
+      if (hit) return {kind: hit[1], own: path.slice(0, i), top: String(path[i]).trim()};
     }
     // the company's own primary group (no reserved group above it): by Tally's flags for it
     const top = path[path.length - 1], gi = top ? ledLook((S.books || {}).groupInfo, top) : null;
-    return {kind: gi && gi.rev ? (gi.dr ? "expense" : "income") : path.length ? "other" : "", own: path};
+    return {kind: gi && gi.rev ? (gi.dr ? "expense" : "income") : path.length ? "other" : "", own: path, top: ""};
+  },
+  // The owner's rules of 03-Oct-2026 (round 4, items 26-29), each decided by Tally's group first:
+  //  26. Loans & Advances (Asset) is operating ("Loans and advances (asset)"); investing ("Loans given") only for a ledger
+  //      the owner marks "Loan given" on the Mapping tab: co.choices["flow:<ledger>"] = loan_given, confirmed by a person
+  //      (never guessed; the choice model of 60-choices.js).
+  //  27. Current Liabilities: the sub-group's own name decides a salary, wages, ESI / PF, imprest or payroll ledger
+  //      ("Salaries and staff"); a ledger directly under Current Liabilities, with no sub-group, is decided by its own
+  //      name, and that is flagged.
+  //  28. Loans (Liability): a sub-group that is a partner's own (its name is the person of a Capital Account ledger,
+  //      "Anshul Garg" for "Anshul Garg Capital", or it says Partner) is "Partners' accounts" (financing); other loans stay
+  //      "Loans". The match on a Capital Account ledger is flagged.
+  //  29. flowHead returns a third element for a flagged line ("mark", "name", "partner:<capital ledger>"); flowNotes lists
+  //      every such ledger for the "Grouping notes" box under the cash flow. A note never blocks anything.
+  STAFF_RE: /SALAR|WAGES|BONUS|STAFF|IMPREST|EMPLOYEE|PROVIDENT|\bE?PFO?\b|\bESIC?\b|GRATUITY|PAYROLL/i,
+  flowCo(){ if (this._co !== undefined) return this._co; const b = S.books || {}, cs = S.companies || {}; return cs[b.cid] || cs[S.coId] || null; },
+  // the owner's mark on a ledger: "loan_given", or ""; a confirmed choice only
+  flowMark(l){
+    const co = this.flowCo(); if (!co) return "";
+    const k = "flow:" + l;
+    if (typeof choiceUsable === "function") return choiceUsable(co, k);
+    const r = co.choices && co.choices[k]; return r && r.state === "confirmed" ? r.value || "" : "";
+  },
+  flowMarks(co){ const ch = (co && co.choices) || {}; return Object.keys(ch).filter(k => k.indexOf("flow:") === 0).sort().map(k => [k, (ch[k] || {}).value || "", (ch[k] || {}).state || ""]); },
+  // a name cleaned for the partner match: CAPITAL, A/C, ACCOUNT, CURRENT and punctuation dropped, capitals
+  flowClean(n){ return String(n || "").toUpperCase().replace(/\bA\/C\b/g, " ").replace(/\b(CAPITAL|ACCOUNT|CURRENT)\b/g, " ").replace(/[^A-Z0-9]+/g, " ").trim(); },
+  // the people named by the Capital Account ledgers: cleaned name -> ledger ("Capital" alone names no one)
+  flowPartners(){
+    const b = S.books || {}, u = b.under || {}, n = Object.keys(u).length;
+    if (!this._fp || this._fp.u !== u || this._fp.n !== n){
+      const people = {};
+      Object.keys(u).forEach(l => { const p = Audit.path(l); if (p.some(g => /^capital account$/i.test(String(g).trim())) && !/reserves/i.test(String(p[0] || ""))){ const c = this.flowClean(l); if (c) people[c] = l; } });
+      this._fp = {u, n, people};
+    }
+    return this._fp.people;
   },
   flowHead(l){
     const m = Books.ledgerOf(l), g = this.flowGroup(l), own = g.own.join(" | ");
@@ -6422,7 +6456,13 @@ Object.assign(MIS, {
     if (g.kind === "creditor") return ["op", "Paid to suppliers"];
     if (g.kind === "fixed") return ["inv", "Fixed assets"];
     if (g.kind === "invest") return ["inv", "Investments and deposits"];
-    if (g.kind === "loan") return ["fin", "Loans"];
+    if (g.kind === "lent" && this.flowMark(l) === "loan_given") return ["inv", "Loans given", "mark"];
+    if (g.kind === "loan"){
+      const P = this.flowPartners(), hit = g.own.map(x => this.flowClean(x)).find(c => c && P[c]);
+      if (hit) return ["fin", "Partners' accounts", "partner:" + P[hit]];
+      if (/PARTNER/i.test(own)) return ["fin", "Partners' accounts"];
+      return ["fin", "Loans"];
+    }
     if (g.kind === "capital") return ["fin", "Capital and drawings"];
     // operating: GST paid to the government by the same rule as Compliance (MIS.gstPaidTo); other GST ledgers on a bank
     // line (input tax paid with a bill, interest and late fees) on lines of their own
@@ -6431,16 +6471,35 @@ Object.assign(MIS, {
     if (/^(gst|gst_common|ineligible|gst_rcm|gst_import|gst_control)$/.test(m.what || "") || m.kind === "gst" || m.kind === "gst_common") return ["op", "Input GST paid with bills"];
     if (/^tds_|^tcs_/.test(m.kind || m.what || "") || /\bTDS\b|\bTCS\b/i.test(own)) return ["op", "TDS and TCS"];
     if (/INCOME TAX|ADVANCE TAX|SELF ASSESSMENT/i.test(own)) return ["op", "Income tax"];
-    if (/SALAR|WAGES|BONUS|STAFF|IMPREST|EMPLOYEE|PROVIDENT|\bPF\b|\bESI|ESIC|GRATUITY/i.test(own)) return ["op", "Salaries and staff"];
+    if (this.STAFF_RE.test(own)) return ["op", "Salaries and staff"];
+    if (g.kind === "other" && /^current liabilities$/i.test(g.top) && !g.own.length && this.STAFF_RE.test(l)) return ["op", "Salaries and staff", "name"];
     if (g.kind === "expense" && /INTEREST|FINANCE COST|BORROWING COST/i.test(own)) return ["fin", "Interest paid"];
     if (g.kind === "lent") return ["op", "Loans and advances (asset)"];
     if (g.kind === "income") return ["op", "Other income received"];
     if (g.kind === "expense") return ["op", "Expenses paid"];
     return ["op", "Other receipts and payments"];
   },
+  flowWhy(h){
+    const w = h[2] || "";
+    if (w === "mark") return "marked Loan given on the Mapping tab";
+    if (w === "name") return "directly under Current Liabilities with no sub-group, so its own name decided";
+    if (w.indexOf("partner:") === 0) return "its sub-group is named for a partner: the Capital Account ledger \u201c" + w.slice(8) + "\u201d";
+    return w;
+  },
+  // the grouping notes: [{ledger, group, line, why}] for every ledger whose line came from a name word, the partner match
+  // or a Loan-given mark (all the books' ledgers, or the ones given)
+  flowNotes(co, ledgers){
+    const b = S.books || {}, prev = this._co;
+    if (co) this._co = co;
+    try {
+      const list = ledgers || Array.from(new Set(Object.keys(b.under || {}).concat(Object.keys(b.ledInfo || {})))), out = [];
+      list.forEach(l => { const h = this.flowHead(l); if (h[2]) out.push({ledger: l, group: Audit.path(l).join(" \u2190 "), line: h[1], why: this.flowWhy(h)}); });
+      return out.sort((a, c) => a.ledger.localeCompare(c.ledger));
+    } finally { this._co = prev; }
+  },
   // money in and out of cash and bank, month by month, by what it was for (the direct method)
   cashActual(from, to){
-    const months = this.monthsOf(from, to), rows = {};
+    const months = this.monthsOf(from, to), rows = {}, seen = new Set();
     (S.books.vouchers || []).forEach(v => {
       if (v.date < from || v.date > to || v.opt || v.cancel) return;
       const cb = v.ent.filter(e => Audit.isCash(e.l) || Audit.isBankL(e.l)), other = v.ent.filter(e => !(Audit.isCash(e.l) || Audit.isBankL(e.l)));
@@ -6461,7 +6520,7 @@ Object.assign(MIS, {
         // (review of 02-Oct-2026: "Expenses paid" showed +13,216.62 in Jan-2026 and +734.76 in Mar-2026)
         else if (share > 0 && lab === "Expenses paid") lab = "Expenses refunded or recovered";
         const k = sec + "|" + lab, x = rows[k] = rows[k] || {sec, lab, t: 0, m: {}, led: {}};
-        x.t = r2(x.t + share); x.m[ym] = r2((x.m[ym] || 0) + share); x.led[e.l] = r2((x.led[e.l] || 0) + share);
+        x.t = r2(x.t + share); x.m[ym] = r2((x.m[ym] || 0) + share); x.led[e.l] = r2((x.led[e.l] || 0) + share); seen.add(e.l);
       });
     });
     const list = Object.values(rows).sort((a, c) => ["op", "inv", "fin"].indexOf(a.sec) - ["op", "inv", "fin"].indexOf(c.sec) || c.t - a.t);
@@ -6473,7 +6532,8 @@ Object.assign(MIS, {
     try { const B = Audit.balances(from, to); if (B.ok){ const cb = at => r2(Object.keys(at).filter(l => Audit.isCash(l) || Audit.isBankL(l)).reduce((a, l) => a - num(at[l]), 0));
       open = cb(B.at(Audit.dayBefore(from))); close = cb(B.at(to)); } } catch (e){}
     const diff = open == null ? null : r2(close - open - net);
-    return {months, rows: list, op: sec("op"), inv: sec("inv"), fin: sec("fin"), net, open, close, diff, ties: diff == null || Math.abs(diff) < 1};
+    // the grouping notes (round 4, item 29) for the ledgers that moved money in the period
+    return {months, rows: list, op: sec("op"), inv: sec("inv"), fin: sec("fin"), net, open, close, diff, ties: diff == null || Math.abs(diff) < 1, notes: this.flowNotes(null, Array.from(seen))};
   },
   median(a){ if (!a.length) return null; const s2 = a.slice().sort((x, y) => x - y), k = Math.floor(s2.length / 2); return s2.length % 2 ? s2[k] : Math.round((s2[k - 1] + s2[k]) / 2); },
   // how long each party takes to settle a bill, from the bills settled in the books
@@ -17662,10 +17722,13 @@ function doAct(act, t){
     case "booksPick": { const i = document.getElementById("booksIn"); if (i){ i.value = ""; i.click(); } break; }
     case "mastersPick": { const i = document.getElementById("mastersIn"); if (i){ i.value = ""; i.click(); } break; }
     case "setupKeepOn": LK.keepOn(true).then(() => { (S.setupKeep || {})[S.coId] = null; render(); }); break;
-    case "keepNow":
+    case "keepNow": {
+      // 03-Oct-2026 (item 25): reading stopped from FinCom for this client's computer: nothing is asked, the toast says who and why
+      const stopped = typeof tallyStopFor === "function" && tallyStopFor(S.coId);
+      if (stopped){ toast("Reading is stopped by " + (stopped.who || "FinCom") + " (" + (stopped.reason || "no reason given") + "); resume it on the Tally page"); break; }
       if (Bridge.on() && (Bridge.up() || !TCloud.has(S.coId))) LK.keepSet({now: true}, "Updating from Tally now. The books here follow in a few minutes.");
       else TCloud.rpc("tally_want_update", {p_client: S.coId}).then(j => toast(j && j.ok ? "The Tally computer is asked to update; it starts within a minute, and the books here follow in a few minutes." : "No Tally computer is linked to this client yet."), e => toast("Could not ask the Tally computer: " + ((e && e.message) || e)));
-      break;
+      break; }
     case "setupModeBridge": case "setupModeFiles":
       Bridge.call("/keepmode" + (Bridge.pinQ() ? "?" + Bridge.pinQ().slice(1) : ""), {company: BridgeSeed.company(), mode: act === "setupModeBridge" ? "bridge" : "files"}, 20000)
         .then(j => { (S.setupKeep = S.setupKeep || {})[S.coId] = {at: Date.now(), st: j}; toast(act === "setupModeBridge" ? "The bridge will copy the year from Tally in the evening, or when nobody is at the computer." : "The bridge waits for the day book files."); render(); }, e => toast("The bridge could not do it: " + ((e && e.message) || e) + (/Unknown|No such/i.test(String(e && e.message)) ? " (it needs FinCom Bridge 2.1: install it from the Tally page)" : "")));
@@ -22308,13 +22371,29 @@ const TCloud = {
       p.devices = await Cloud.api("tally_devices?select=" + cols + ",main_bridge&order=created_at.desc").catch(e => {
         if (/main_bridge/.test(String(e && e.message))) { p.noMain = true; return Cloud.api("tally_devices?select=" + cols + "&order=created_at.desc"); }
         throw e; });
-      p.companies = await this.restAll("tally_companies?select=company,client_id,gstin,last_seen,linked_at&order=company.asc");
-      // migration-35: the stops from FinCom still standing, and the bridge versions on trial or approved (members may read
-      // both); without the migration, none (the lines still show what each computer's heartbeat says)
-      try { p.stops = [].concat(await Cloud.api("tally_read_stops?select=id,device_id,action,reason,stopped_at,cleared_at&action=eq.stop&cleared_at=is.null&order=id.desc") || []); p.noControl = false; }
-      catch (e){ p.stops = []; p.noControl = true; }
-      try { p.releases = [].concat(await Cloud.api("tally_bridge_releases?select=version,pilot_device,pilot_started_at,pilot_seen_at,pilot_self_stop,approved_at&order=pilot_started_at.desc") || []); }
-      catch (e){ p.releases = []; }
+      p.companies = await this.restAll("tally_companies?select=company,client_id,device_id,gstin,last_seen,linked_at&order=company.asc");
+      // migration-35: the stops and resumes from FinCom with who and when (round 4, item 24: the latest 300 rows; the
+      // standing stops and the latest resume a computer are taken out here), and the bridge versions on trial, approved
+      // or withdrawn (members may read both); without the migration, none (the lines still show what each heartbeat says)
+      try {
+        const all = [].concat(await Cloud.api("tally_read_stops?select=id,device_id,action,reason,stopped_at,stopped_by,cleared_at,cleared_by&order=id.desc&limit=300") || []);
+        p.stops = all.filter(x => x.action !== "resume" && !x.cleared_at); p.resumes = resumeRows(all); p.noControl = false;
+      } catch (e){ p.stops = []; p.resumes = {}; p.noControl = true; }
+      const relCols = "version,pilot_device,pilot_started_at,pilot_by,pilot_seen_at,pilot_self_stop,approved_at,approved_by";
+      try { p.releases = [].concat(await Cloud.api("tally_bridge_releases?select=" + relCols + ",withdrawn_at,withdrawn_by,withdrawn_why&order=pilot_started_at.desc") || []); p.noWithdraw = false; }
+      catch (e){
+        // migration 37 not applied: no withdrawal columns yet (the page says FinCom's cloud is not ready for a withdrawal)
+        if (/withdrawn|42703/i.test(String(e && e.message))){ p.noWithdraw = true; try { p.releases = [].concat(await Cloud.api("tally_bridge_releases?select=" + relCols + "&order=pilot_started_at.desc") || []); } catch (e2){ p.releases = []; } }
+        else p.releases = [];
+      }
+      // migration-37 (item 10): each book's reading state (needs_baseline: since when, why; cleared by whom, with the note)
+      // and the books, to list them under their computer. Not readable (an older cloud, no select for members): nothing shown
+      try { p.cursors = [].concat(await Cloud.api("tally_sync_cursor?select=book_id,state,state_why,state_at,cleared_at,cleared_by,cleared_note") || []); p.noBaselineClear = false; }
+      catch (e){
+        if (/cleared_note|cleared_by|cleared_at|42703/i.test(String(e && e.message))){ p.noBaselineClear = true; try { p.cursors = [].concat(await Cloud.api("tally_sync_cursor?select=book_id,state,state_why,state_at") || []); } catch (e2){ p.cursors = null; } }
+        else p.cursors = null;
+      }
+      try { p.books = p.cursors && p.cursors.length ? [].concat(await this.restAll("tally_books?select=book_id,client_id,company&order=company.asc") || []) : []; } catch (e){ p.books = []; }
       p.err = ""; p.at = Date.now();
       linkByGstin(p.companies);
     } catch (e){ p.err = /tally_devices|does not exist|schema cache/i.test(String(e && e.message)) ? "The cloud copy is not set up in this database yet." : (e && e.message) || String(e); }
@@ -22367,6 +22446,26 @@ const TCloud = {
     return rs ? {device_id: devId, reason: rs.reason || ""} : null;
   },
   stoppedAll(){ return Array.isArray(this.pane.stops) && !this.pane.noControl && this.pane.stops.some(s => !s.device_id && !s.cleared_at); },
+  // the latest resume that holds for a computer (its own, or one for all computers, whichever is later): {by, at}, or null
+  resumeFor(devId){
+    const r = this.pane.resumes || {}, own = r[devId], all = r.all;
+    if (own && all) return String(own.at || "") >= String(all.at || "") ? own : all;
+    return own || all || null;
+  },
+  // item 10: the books of a computer's companies whose reading needs a fresh baseline (tally_sync_cursor.state), and the
+  // ones cleared in the last week (who, when, the note): [{book, company, cur}]
+  baselines(devId){
+    const p = this.pane;
+    if (!Array.isArray(p.cursors) || !p.cursors.length) return [];
+    const cos = (p.companies || []).filter(c => c.device_id === devId), week = Date.now() - 7 * 86400000, out = [];
+    (p.books || []).forEach(b => {
+      if (!cos.some(c => c.company === b.company && (!c.client_id || !b.client_id || String(c.client_id) === String(b.client_id)))) return;
+      const cur = p.cursors.find(x => x.book_id === b.book_id);
+      if (!cur) return;
+      if (cur.state === "needs_baseline" || (cur.cleared_at && Date.parse(cur.cleared_at) > week)) out.push({book: b.book_id, company: b.company, cur});
+    });
+    return out;
+  },
   // a request's line: "vouchers 1.2 s at 15:34"
   reqSay(q){ if (!q || !q.kind) return ""; const ms = Number(q.ms) || 0; return q.kind + " " + (ms < 1000 ? ms + " ms" : (ms / 1000).toFixed(1) + " s") + (q.at ? " at " + tallyHm(q.at) : ""); },
   // Stop reading / Resume reading / a pilot / approval (owners; the cloud checks it again): migration-35's RPCs. What
@@ -22380,7 +22479,8 @@ const TCloud = {
       toast(done);
     } catch (e){
       const m = String((e && e.message) || e);
-      p.ctl = {err: /PGRST202|Could not find the function|schema cache|does not exist|\b404\b/i.test(m) ? "FinCom\u2019s cloud is not ready for this yet (migration 35 is not applied)."
+      const mig = {tally_release_withdraw: 37, tally_baseline_clear: 37}[fn] || 35;
+      p.ctl = {err: /PGRST202|Could not find the function|schema cache|does not exist|\b404\b/i.test(m) ? "FinCom\u2019s cloud is not ready for this yet (migration " + mig + " is not applied)."
         : m.replace(/^ERROR:\s*/i, "").replace(/^./, c => c.toUpperCase())};
     }
     await this.refreshPane();
@@ -22408,6 +22508,25 @@ const TCloud = {
       body: "<p>Every computer of the firm installs FinCom Bridge " + esc(v) + " at its next check. FinCom\u2019s cloud allows it only after a working day on the pilot computer with no stop by itself.</p>"});
     if (!a || !a.ok) return;
     await this.control("tally_release_approve", {p_version: v}, "Version " + v + " is approved for all computers.");
+  },
+  // round 4, item 23: an owner withdraws a version on trial or approved (a reason is required; the cloud's beat gives it
+  // to no computer any more; a new pilot of it is allowed)
+  async releaseWithdraw(v){
+    const a = await askConfirm({title: "Withdraw version " + v + "?", ok: "Withdraw it",
+      body: "<p>No computer of the firm gets FinCom Bridge " + esc(v) + " from FinCom\u2019s cloud any more; the ones running it keep running. It can be tried on one computer again later.</p>" +
+        '<div class="bk-form one"><label><span>Why (kept with the version, shown on this page)</span><input id="withdrawWhy" maxlength="500" placeholder="What went wrong"></label></div>',
+      read: () => ({why: ((document.getElementById("withdrawWhy") || {}).value || "").trim()}), validate: d => d && d.why ? "" : "Say why the version is withdrawn."});
+    if (!a || !a.ok) return;
+    await this.control("tally_release_withdraw", {p_version: v, p_why: a.data.why}, "Version " + v + " is withdrawn.");
+  },
+  // item 10: an owner clears "needs a fresh baseline" on a book (with a note); the bridge reads the company afresh
+  async baselineClear(book, company){
+    const a = await askConfirm({title: "Clear the baseline of " + company + "?", ok: "Clear it",
+      body: "<p>FinCom\u2019s cloud stops holding " + esc(company) + " back; the bridge reads the whole company again from Tally at its next round, and the copy here follows it.</p>" +
+        '<div class="bk-form one"><label><span>Note (why it is cleared; kept with the book)</span><input id="baselineNote" maxlength="500" placeholder="What happened in Tally"></label></div>',
+      read: () => ({note: ((document.getElementById("baselineNote") || {}).value || "").trim()})});
+    if (!a || !a.ok) return;
+    await this.control("tally_baseline_clear", {p_book: book, p_note: (a.data && a.data.note) || ""}, "The baseline of " + company + " is cleared; the bridge reads it afresh.");
   },
   // "Make this the main bridge": an owner, asked first; tally-ingest gives postings only to it from then on, tells the
   // bridge (its next heartbeat) to switch itself over, which stops bridge 1.15.0 on that computer
@@ -22481,6 +22600,17 @@ const TCloud = {
 
 };
 
+// the latest resume a computer (and for all computers, key "all") out of tally_read_stops: a 'resume' row, or a stop
+// cleared (cleared_by, cleared_at): {by, at}
+function resumeRows(all){
+  const out = {};
+  [].concat(all || []).forEach(x => {
+    const k = x.device_id || "all";
+    const r = x.action === "resume" ? {by: x.stopped_by || "", at: x.stopped_at || ""} : x.cleared_at ? {by: x.cleared_by || "", at: x.cleared_at} : null;
+    if (r && (!out[k] || String(r.at) > String(out[k].at))) out[k] = r;
+  });
+  return out;
+}
 // FinCom opened by FinCom Bridge's "Connect FinCom on this computer": the page's address carries the bridge's
 // one-time connect code (#pair=123456). It is taken off the address at once, and used to connect to the bridge.
 (function(){
@@ -22698,9 +22828,12 @@ const TLight = {
     // every 30 s (a small database call; nothing is asked of Tally): a beat comes every 30 s, and "offline" is three missed
     if (!TCloud.on() || this.st.busy || Date.now() - this.st.at < 30000) return this.st.p || Promise.resolve();
     this.st.busy = true;
-    return this.st.p = Promise.all([TCloud.restAll("tally_companies?select=company,client_id,device_id,gstin,linked_at&order=company.asc"), Cloud.api("tally_devices?select=id,name,last_seen,info,revoked")])
-      .then(([cos, devs]) => {
-        this.st.devs = (devs || []).filter(d => !d.revoked); this.st.cos = cos || [];
+    // round 4, item 25: the stops from FinCom still standing, with who and when (null when they cannot be read: before
+    // migration-35; then the computer's info.readStop alone says it)
+    return this.st.p = Promise.all([TCloud.restAll("tally_companies?select=company,client_id,device_id,gstin,linked_at&order=company.asc"), Cloud.api("tally_devices?select=id,name,last_seen,info,revoked"),
+        Cloud.api("tally_read_stops?select=id,device_id,action,reason,stopped_at,stopped_by&action=eq.stop&cleared_at=is.null&order=id.desc").then(r => [].concat(r || []), () => null)])
+      .then(([cos, devs, stops]) => {
+        this.st.devs = (devs || []).filter(d => !d.revoked); this.st.cos = cos || []; this.st.stops = stops;
         this.st.by = this.work((cos || []).filter(c => c.client_id), devs || [], Date.now());
         linkByGstin(this.st.cos);
       }, () => {})
@@ -22787,10 +22920,34 @@ function tallyLine(co){
   const reading = updating || !!(ask && now - ask.at < 180000 && !((Date.parse(read || 0) || 0) > ask.before));
   const o = (state, level, text) => ({state, level, text, computer: comp, read, reading});
   if (bridge === "offline" || bridge === "none") return o("offline", "bad", comp + " is offline");
+  // round 4, item 25: a stop from FinCom on the client's computer (or on all computers) comes before everything but
+  // offline: "Reading stopped by <name> at <time>: <reason>"; the line's Resume (owners) and Update now look at .stop
+  const stop = dev ? tallyStopOn(dev) : null;
+  if (stop) return Object.assign(o("stopped", "bad", "Reading stopped " + (stop.who ? "by " + stop.who : "from FinCom") + (stop.at ? " at " + tallyHm(stop.at) : "") + ": " + (stop.reason || "no reason given")), {stop});
   if (tally === "closed") return o("closed", "warn", "Tally is closed on " + comp);
   if (since) return o("notanswering", "bad", "Tally is not answering on " + comp + " since " + tallyHm(since));
   if (paused) return o("paused", "warn", "Background reading paused on " + comp);
   return o("open", "ok", "Tally open on " + comp + (read ? " \u00b7 last read " + tallyHm(read) : ""));
+}
+// the stop from FinCom standing on a computer, as the per-client line needs it: the one for all computers, else the
+// computer's own (tally_read_stops read by TLight, or by the Tally page), else the computer's info.readStop from its
+// heartbeat (no name then). {who, at, reason, all, deviceId, computer} or null
+function tallyStopOn(dev){
+  const st = (typeof TLight === "object" && TLight.st) || {}, lists = [st.stops, typeof TCloud === "object" && TCloud.pane && !TCloud.pane.noControl ? TCloud.pane.stops : null];
+  const list = lists.find(l => Array.isArray(l));
+  let row = null, all = false;
+  if (list){ const a = list.find(x => !x.device_id && !x.cleared_at), own = list.find(x => x.device_id === dev.id && !x.cleared_at); row = a || own || null; all = !!a; }
+  // with a list at hand it decides (a computer's readStop can lag a resume by one heartbeat); without one, the heartbeat
+  const rs = !list && dev.info ? dev.info.readStop : null;
+  if (!row && !(rs && (rs.by === "fincom" || (rs.reason && !rs.by)))) return null;
+  const who = row && row.stopped_by && typeof memberName === "function" ? memberName(row.stopped_by) : "";
+  return {who, at: (row && row.stopped_at) || (rs && rs.at) || "", reason: (row && row.reason) || (rs && rs.reason) || "", all, deviceId: dev.id, computer: (dev.info && dev.info.computer) || dev.name || ""};
+}
+// the stop standing on the computer that keeps a client's company (null when none)
+function tallyStopFor(cid){
+  const co = S.companies && S.companies[cid];
+  const l = co ? tallyLine(co) : null;
+  return l && l.state === "stopped" ? l.stop : null;
 }
 // Update now asked here, per client: {at, before (the last read then)}, for "Reading now…" until a newer read comes in
 const TallyAsk = {};
@@ -22879,10 +23036,26 @@ Object.assign(TCloud, {
   //     (tally_period over the same day totals the view sums, tally_ledger_day; amount = credit - debit).
   // Only where the view is missing (an older cloud without migration-32), or for a date before this book begins (an
   // earlier year, another book), the trial balance function tally_tb, as before
+  // migration-37 (item 13): tally_balances_on(p_book, p_as_on) answers a date inside the copy in one request (opening,
+  // movement and closing a ledger; deleted and merged ledgers left out). null when the function is not on this cloud
+  // (then the view plus tally_period, as before); any other error is an error
+  hasBalOn: null,
+  async balOn(bk, asOn){
+    if (this.hasBalOn === false || !bk || !bk.book) return null;
+    try { const rows = await this.rpcAll("tally_balances_on", {p_book: bk.book, p_as_on: this.iso(asOn)}); this.hasBalOn = true; return [].concat(rows || []); }
+    catch (e){
+      if (!/tally_balances_on|PGRST202|Could not find the function|schema cache|does not exist|404/i.test(String((e && e.message) || e))) throw e;
+      this.hasBalOn = false; return null;
+    }
+  },
   async balRows(cid, asOn){
     const bk = this.book(cid), from = bk ? this.d8(bk.from || "") : "", last = bk ? this.d8(bk.to || "") : "";
     asOn = String(asOn);
     if (bk && from && asOn >= from){
+      if (!(last && asOn >= last)){
+        const on = await this.balOn(bk, asOn);
+        if (on) return on.map(r => ({ledger: r.ledger, parent: r.parent || "", open: num(r.open), movement: r2(num(r.movement)), closing: r2(num(r.closing))}));
+      }
       const v = await this.viewRows(bk);
       if (v){
         if (last && asOn >= last) return v.map(r => ({ledger: r.ledger, parent: r.parent || "", open: r.open, movement: r2(num(r.closing) - num(r.open)), closing: r.closing}));
@@ -22959,6 +23132,10 @@ function bankNotReadBack(rows, cid){
 // FinCom's cloud (the bridge reads at once, also while its background reading is paused)
 function tallyUpdateNow(cid){
   cid = cid || S.coId;
+  // round 4, item 25: while FinCom has stopped reading on the client's computer, nothing is asked (the bridge would not
+  // read anyway); the Tally page is where an owner resumes it
+  const stop = tallyStopFor(cid);
+  if (stop) return toast("Reading is stopped by " + (stop.who || "FinCom") + " (" + (stop.reason || "no reason given") + "); resume it on the Tally page");
   tallyAskedRead(cid); render();
   if (cid === S.coId) return doAct("keepNow");
   if (typeof TCloud !== "object" || !TCloud.on()) return toast("Sign in to the firm account to ask the Tally computer.");
@@ -23402,6 +23579,22 @@ function memberName(uid){
 // those still to be read) and its voucher is not there; found again, it counts again.
 const TallyProof = {
   at: {},
+  // round 5 (C3): the cloud copy keeps an entry deleted in Tally, marked (tally_vouchers.deleted_at, migration-32/37): the
+  // proof reads live entries only. A cloud without the column (hasDel false after a 42703) is read as before.
+  hasDel: null,
+  async live(path){
+    if (this.hasDel !== false){
+      try { const r = await Cloud.api(path + "&deleted_at=is.null"); this.hasDel = true; return r; }
+      catch (e){ if (!/deleted_at|42703/i.test(String((e && e.message) || e))) throw e; this.hasDel = false; }
+    }
+    return Cloud.api(path);
+  },
+  // the GUIDs of the day's entries deleted in Tally (none on a cloud without the column)
+  async deletedOn(book, day){
+    if (this.hasDel === false) return new Set();
+    try { const r = await Cloud.api("tally_vouchers?select=guid&book_id=eq." + encodeURIComponent(book) + "&day=eq." + day + "&deleted_at=not.is.null"); this.hasDel = true; return new Set((r || []).map(x => x.guid)); }
+    catch (e){ if (/deleted_at|42703/i.test(String((e && e.message) || e))) this.hasDel = false; return new Set(); }
+  },
   async check(cid, force){
     if (typeof TCloud !== "object" || !TCloud.on() || !TCloud.has(cid)) return 0;
     if (!force && Date.now() - (this.at[cid] || 0) < 5 * 60000) return 0;
@@ -23414,7 +23607,7 @@ const TallyProof = {
     let found = new Set();
     for (let i = 0; i < list.length; i += 80){
       const g = list.slice(i, i + 80).map(e => '"' + String(e.tally.guid).replace(/"/g, "") + '"').join(",");
-      const rows = await Cloud.api("tally_vouchers?select=guid,cancelled&book_id=eq." + encodeURIComponent(bk.book) + "&guid=in.(" + encodeURIComponent(g) + ")");
+      const rows = await this.live("tally_vouchers?select=guid,cancelled&book_id=eq." + encodeURIComponent(bk.book) + "&guid=in.(" + encodeURIComponent(g) + ")");
       (rows || []).forEach(r => { if (!r.cancelled) found.add(r.guid); });
     }
     let n = 0;
@@ -23442,13 +23635,15 @@ const TallyProof = {
     const withId = rows.filter(r => r.tally && r.tally.guid), found = new Set();
     for (let i = 0; i < withId.length; i += 80){
       const g = withId.slice(i, i + 80).map(r => '"' + String(r.tally.guid).replace(/"/g, "") + '"').join(",");
-      const got = await Cloud.api("tally_vouchers?select=guid,cancelled&book_id=eq." + encodeURIComponent(bk.book) + "&guid=in.(" + encodeURIComponent(g) + ")");
+      const got = await this.live("tally_vouchers?select=guid,cancelled&book_id=eq." + encodeURIComponent(bk.book) + "&guid=in.(" + encodeURIComponent(g) + ")");
       (got || []).forEach(x => { if (!x.cancelled) found.add(x.guid); });
     }
     // no voucher id: the account's ledger on that day, for that amount
     const noId = rows.filter(r => !(r.tally && r.tally.guid)), lines = {};
+    // the lines of an entry deleted in Tally stay in the cloud copy (migration-37) and are left out here by its GUID
     for (const day of Array.from(new Set(noId.map(r => d8(r.date)))).filter(Boolean)){
-      lines[day] = await Cloud.api("tally_lines?select=ledger,amount&book_id=eq." + encodeURIComponent(bk.book) + "&day=eq." + Audit.iso(day)) || [];
+      const gone = await this.deletedOn(bk.book, Audit.iso(day));
+      lines[day] = (await Cloud.api("tally_lines?select=ledger,amount,guid&book_id=eq." + encodeURIComponent(bk.book) + "&day=eq." + Audit.iso(day)) || []).filter(x => !gone.has(x.guid));
     }
     const ledOf = r => { const s2 = (b.stmts || []).find(x => x.id === String(r.id || "").split("-")[0]) || {}; return ledNm(accountFor(s2).ledger || "").toLowerCase(); };
     let n = 0;
@@ -25249,7 +25444,7 @@ function postPostedRows(cid){
 }
 // the three tab counts: To post and Errors are postCounts (the step bar's badges, the chip, the dashboard), Posted the
 // postings listed under it
-function postTabCounts(cid){ const c = postCounts(cid); return {topost: c.ready, posted: postPostedRows(cid).length, errors: c.attention}; }
+function postTabCounts(cid){ const c = postCounts(cid); return {topost: c.ready, posted: postPostedRows(cid).length, errors: c.attention + (postRefusedFor(cid) ? 1 : 0)}; }
 // a bill's ledgers on one line, the party first; a Round Off of nothing is left out
 function postLedgerLine(e){
   const ls = (e.snapshot ? e.snapshot.lines : []).filter(l => l.ledger && !((l.role === "roundoff" || /^round\s*(ed\s*)?off\b/i.test(l.ledger)) && Math.abs(num(l.amt)) < 0.005));
@@ -25311,7 +25506,8 @@ function postStatusFor(co){
     const T = {offline: [l.text + ": start that computer, or FinCom Bridge on it. Nothing can be posted or checked until then.", "", null],
       closed: [l.text + ": open TallyPrime there, with " + pl.company + ".", "", null],
       notanswering: [l.text + ": close any message box in Tally there; FinCom carries on by itself.", "", null],
-      paused: [l.text + ": resume it from the FinCom Bridge icon there. Update now still reads.", "Update now", () => tallyUpdateNow(co.id)]}[l.state] || [l.text, "", null];
+      paused: [l.text + ": resume it from the FinCom Bridge icon there. Update now still reads.", "Update now", () => tallyUpdateNow(co.id)],
+      stopped: [l.text + ". An owner resumes it on the Tally page; posting goes on, Update now does not read until then.", "", null]}[l.state] || [l.text, "", null];
     out.problem = p(T[0], T[1], T[2], l.state); return out;
   }
   if (!pl.state && pl.action){ out.problem = p(pl.action + ".", pl.go === "tally" ? "Open the Tally page" : "", pl.go === "tally" ? goTallyPage : null, "bridge"); return out; }
@@ -25450,6 +25646,100 @@ const PostCheck = {
     return true;
   }
 };
+// round 4, item 7 (migration-37): the FinCom ids FinCom's cloud holds for the client's postings (tally_post_ids). An
+// entry Tally refused, or one not found at a fresh read, is posted again only once its id is released (live = false, or
+// released_at set: the bridge said it is not in Tally, or the posting failed as a whole); until then the Errors tab says
+// "Waiting for the bridge to confirm it is not in Tally" and has no button. When the table cannot be read at all (an
+// older cloud, or no select for members: readable = false), the buttons are shown as before migration-37: nothing is
+// held back for want of a column, and nothing is posted twice either (the bridge checks Tally for the id as it posts).
+const PostIds = {
+  by: {}, readable: null, busy: {},
+  jobsKey(cid){ return (typeof CloudJobs === "object" ? CloudJobs.forClient(cid) : []).slice(0, 40).map(j => j.id).join(","); },
+  async load(cid, force){
+    if (!cid || typeof TCloud !== "object" || !TCloud.on() || this.readable === false || this.busy[cid]) return;
+    const key = this.jobsKey(cid), s = this.by[cid];
+    if (!key || (!force && s && s.key === key && Date.now() - s.at < 60000)) return;
+    this.busy[cid] = true;
+    try {
+      const q = cols => "tally_post_ids?select=" + cols + "&job_id=in.(" + key + ")";
+      let rows;
+      try { rows = await TCloud.restAll(q("job_id,fincom_id,entry_id,live,released_at,released_why")); }
+      catch (e){ if (!/released_at|released_why|42703/i.test(String(e && e.message))) throw e; rows = await TCloud.restAll(q("job_id,fincom_id,entry_id,live")); }
+      const held = new Map();
+      [].concat(rows || []).forEach(r => { const h = !!r.live && !r.released_at; [r.fincom_id, r.entry_id].filter(Boolean).forEach(k => held.set(String(k), held.get(String(k)) || h)); });
+      const sig = JSON.stringify([...held.entries()].sort());
+      const changed = !s || s.sig !== sig;
+      this.by[cid] = {at: Date.now(), key, held, sig}; this.readable = true;
+      if (changed) render();
+    } catch (e){ this.readable = false; this.by[cid] = {at: Date.now(), key, held: null, sig: ""}; render(); }
+    finally { delete this.busy[cid]; }
+  }
+};
+// true: the id is released (or the cloud holds no row for it); false: still held live; null: not known (tally_post_ids
+// not readable, or not read yet): then the page behaves as before
+function postIdReleased(id, cid){
+  cid = cid || S.coId;
+  const s = PostIds.by[cid];
+  if (PostIds.readable === false || !s || !s.held) return null;
+  return !s.held.get(String(id));
+}
+// a failed posting of the cloud: one of the entries still to send is held live
+function postJobHeld(j){
+  if (typeof CloudJobs !== "object") return false;
+  const ids = (CloudJobs.idsOf(j) || []).filter(id => !CloudJobs.inTally(j, id));
+  return ids.some(id => postIdReleased(id, j.client_id) === false);
+}
+// round 5 (S3, C6): an owner settles an entry Tally accepted but nobody confirmed, or one not found in Tally whose id
+// FinCom's cloud still holds. "Mark posted (voucher no.)" -> tally_post_job_mark_posted(job, id, vch, note) (migration
+// 36b: results and items say in_tally, the id stays accepted); "Not in Tally — release (reason)" -> tally_post_id_release_
+// owner(job, id, why) (the id freed, the entry notfound, a mark 'released'). Both ask for the text first; the cloud
+// refuses anyone but an owner, and the page shows the buttons to owners only. A cloud without 36b says so.
+// owners of the firm alone (the cloud accepts only an active member with role owner; a superadmin who is not one is refused there)
+function postOwner(){ return !!(S.account && ((S.account.me || {}).role === "owner")); }
+// the posting of FinCom's cloud that holds the entry: the newest naming it (by entry_ids, results or items)
+function postJobOf(cid, id){
+  const js = postJobStates(cid).get(String(id));
+  if (js && js.job) return js.job;
+  if (typeof CloudJobs !== "object") return null;
+  return CloudJobs.forClient(cid).slice().sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))
+    .find(j => (CloudJobs.idsOf(j) || []).includes(String(id)) || [].concat(j.results || [], j.items || []).some(x => x && String(x.id) === String(id))) || null;
+}
+const PostOwner = {
+  notReady(m){ return /tally_post_job_mark_posted|tally_post_id_release_owner|PGRST202|Could not find the function|schema cache|does not exist|\b404\b/i.test(String(m || "")); },
+  async call(cid, fn, args, done){
+    try {
+      const r = await TCloud.rpc(fn, args);
+      if (r && r.ok === false) throw new Error(r.error || "It was not done.");
+      toast(done);
+    } catch (e){
+      const m = String((e && e.message) || e);
+      toast(this.notReady(m) ? "FinCom\u2019s cloud is not ready for this yet (migration 36b)." : m.replace(/^ERROR:\s*/i, ""));
+    }
+    if (typeof CloudJobs === "object") await CloudJobs.load(true);
+    if (typeof PostIds === "object") PostIds.load(cid, true);
+    render();
+  },
+  async markPosted(cid, e, job){
+    const no = (e.x && e.x.invoiceNo) || e.id;
+    const a = await askConfirm({title: "Mark " + no + " as posted in Tally?", ok: "Mark posted",
+      body: "<p>You saw this entry in Tally. FinCom records it as posted, with who marked it and when; nothing is sent to Tally.</p>" +
+        '<div class="bk-form one"><label><span>Voucher no. in Tally</span><input id="markVch" maxlength="60" placeholder="As in the Day Book"></label>' +
+        '<label><span>Note (optional)</span><input id="markNote" maxlength="300" placeholder="Where you saw it"></label></div>',
+      read: () => ({vch: ((document.getElementById("markVch") || {}).value || "").trim(), note: ((document.getElementById("markNote") || {}).value || "").trim()}),
+      validate: d => d && d.vch ? "" : "Give the voucher number as Tally shows it."});
+    if (!a || !a.ok) return;
+    await this.call(cid, "tally_post_job_mark_posted", {p_job: job.id, p_id: String(e.id), p_vch: a.data.vch, p_note: a.data.note}, no + " is marked posted.");
+  },
+  async release(cid, e, job){
+    const no = (e.x && e.x.invoiceNo) || e.id;
+    const a = await askConfirm({title: no + " is not in Tally: release it?", ok: "Release it", danger: true,
+      body: "<p>You looked in Tally and this entry is not there. FinCom frees its id so it can be posted again; the reason is kept with the entry. Nothing is sent to Tally now.</p>" +
+        '<div class="bk-form one"><label><span>Why (what you saw in Tally)</span><input id="releaseWhy" maxlength="500" placeholder="Not in the Day Book of …"></label></div>',
+      read: () => ({why: ((document.getElementById("releaseWhy") || {}).value || "").trim()}), validate: d => d && d.why ? "" : "Say what you saw in Tally."});
+    if (!a || !a.ok) return;
+    await this.call(cid, "tally_post_id_release_owner", {p_job: job.id, p_id: String(e.id), p_why: a.data.why}, no + " is released; it can be posted again.");
+  }
+};
 // one line on the page after a check or a posting ("Already in Tally (voucher no. …)"): S.postNote
 function postNote(cid, text, level){ S.postNote = {cid, text, level: level || "", at: Date.now()}; }
 
@@ -25528,23 +25818,56 @@ async function postPreview(co, rows, opts){
 // "Post N to Tally": the bills ready to post (review of 02-Oct-2026: "Ready to post" is approved bills only; bank lines
 // and sales are posted from their own pages), each shown first as it goes to Tally. only: one bill (Retry of one whose
 // check of Tally failed, Post again of one not found in Tally at a fresh read)
+// 03-Oct-2026 (the owner's report: with an earlier posting ended failed on the list, Post for another bill did nothing on
+// the page and queued nothing). The cause, read from the path: anything thrown on the way to the queue was never caught.
+// Before the preview (the voucher's XML, voucherXml; the preview's own HTML, PostGate.html) it was an unhandled promise
+// rejection of the button's click: no dialog, no job, no message. After "Loading ledgers…" (postBillsToTally: the ledger
+// read, autoMapCompanyLedgers, canonicalizeBills, billGuessedWhy run before its own try) it also left S.billPost busy, so
+// the Post button stayed disabled and every later press did nothing at all, until the page was reloaded. And a stop with
+// a toast only (ensureTallyCompany) was gone a moment later. Rule now: every press of Post ends in a job row ("Sent to
+// Tally") or a row on the Errors tab with the error's name, what happened and what to do (S.postRefused); never silence.
 async function postAllToTally(only){
   const co = CO();
   if (!co) return;
-  if (!co.postTo) await autoPostTo(co);
-  if (!co.postTo || postToProblem(co, "")){ postStopped(postToProblem(co, ""), co.id); render(); return; }
-  if (!S.bank || S.bank.cid !== co.id) await loadBank(co.id);
-  const b = postBills(co.id) || {ready: [], attention: []};
-  let list = b.ready;
-  if (only){ const e = D(co.id).entries[only.id]; list = e && e.status === "approved" && !e.exportedAt && (b.ready.includes(e) || (b.refused || []).includes(e) || e.postCheckFailed) ? [e] : []; }
-  const all = postRows(co), rows = list.map(e => all.find(r => r.kind === "bill" && r.id === e.id) || {kind: "bill", id: e.id, no: e.x.invoiceNo, party: e.x.vendorName, e});
-  if (!rows.length){ toast("Nothing is waiting to be posted."); return; }
-  S.postStop = null; S.postNote = null;
-  if (!(await postPreview(co, rows))) return;
-  rows.forEach(r => { if (r.e.postCheckFailed){ r.e.postCheckFailed = null; Store.saveEntry(co.id, r.e); } });
-  await postBillsToTally({ids: rows.map(r => r.id)});
+  S.postRefused = null;
+  const said = [], t0 = toast;
+  window.toast = m => { said.push(String(m)); return t0(m); };
+  try {
+    if (!co.postTo) await autoPostTo(co);
+    if (!co.postTo || postToProblem(co, "")){ postStopped(postToProblem(co, ""), co.id); render(); return; }
+    if (!S.bank || S.bank.cid !== co.id) await loadBank(co.id);
+    const b = postBills(co.id) || {ready: [], attention: []};
+    let list = b.ready;
+    if (only){ const e = D(co.id).entries[only.id]; list = e && e.status === "approved" && !e.exportedAt && (b.ready.includes(e) || (b.refused || []).includes(e) || e.postCheckFailed) ? [e] : []; }
+    const all = postRows(co), rows = list.map(e => all.find(r => r.kind === "bill" && r.id === e.id) || {kind: "bill", id: e.id, no: e.x.invoiceNo, party: e.x.vendorName, e});
+    if (!rows.length){ toast("Nothing is waiting to be posted."); return; }
+    S.postStop = null; S.postNote = null;
+    if (!(await postPreview(co, rows))) return;
+    rows.forEach(r => { if (r.e.postCheckFailed){ r.e.postCheckFailed = null; Store.saveEntry(co.id, r.e); } });
+    S.billPost = null;
+    await postBillsToTally({ids: rows.map(r => r.id)});
+    // back with nothing on the page (a toast only: Tally not connected, no company open, no entry waiting): kept as a row
+    if (!S.billPost && !S.postStop) postRefusedShow(co.id, {name: "Not sent", message: said[said.length - 1] || "The posting stopped before anything was sent."});
+  } catch (err){
+    postRefusedShow(co.id, err);
+  } finally {
+    window.toast = t0;
+    if (S.billPost && S.billPost.busy) S.billPost = null;
+    render();
+  }
+}
+// the row on the Errors tab when a press of Post ended in neither a job nor a result line: {cid, at, name, why, what}
+function postRefusedShow(cid, err, what){
+  const e = err || {}, msg = plainMsg((e && e.message) || (typeof err === "string" ? err : "")) || "no reason given";
+  const name = e.name && e.name !== "Error" ? String(e.name) : e.code ? String(e.code) : "Error";
+  S.postRefused = {cid, at: Date.now(), name, why: msg,
+    what: what || (/^Not sent$/.test(name) ? "Put right what the line says, then press Post again." : "Press Post again. If it stops the same way, send this line to FinCom support: nothing is lost, the bills are still waiting here.")};
+  if (S.billPost && S.billPost.busy) S.billPost = null;
+  S.postTabs = S.postTabs || {}; S.postTabs[cid] = "errors";
+  try { console.error("Post did not go through:", err); } catch (x){}
   render();
 }
+function postRefusedFor(cid){ const r = S.postRefused; return r && r.cid === cid ? r : null; }
 function postPreviewOne(kind, id){
   const co = CO(), row = postRows(co).find(r => r.kind === kind && r.id === id);
   if (row) postPreview(co, [row], {view: true});
@@ -25932,7 +26255,11 @@ const Ledgers = {
     if (typeof TCloud === "object" && TCloud.on() && TCloud.has(cid)){
       m[g] = "";
       const bkc = TCloud.book(cid);
-      Cloud.api("tally_vouchers?select=party,guid&book_id=eq." + encodeURIComponent(bkc.book) + "&gstin=eq." + encodeURIComponent(g) + "&order=day.desc&limit=20").then(async rows => {
+      // round 9 (owner item 10): the cloud copy keeps an entry deleted in Tally (tally_vouchers.deleted_at, migration-37):
+      // only live entries are read here, so a deleted entry's lines (a direct read of tally_lines) are never read or used.
+      // TallyProof.live adds the filter and reads as before on a cloud without the column (42703, hasDel false).
+      const live = p => typeof TallyProof === "object" && TallyProof && typeof TallyProof.live === "function" ? TallyProof.live(p) : Cloud.api(p);
+      live("tally_vouchers?select=party,guid&book_id=eq." + encodeURIComponent(bkc.book) + "&gstin=eq." + encodeURIComponent(g) + "&order=day.desc&limit=20").then(async rows => {
         rows = [].concat(rows || []);
         let found = "";
         for (const r of rows){
@@ -26043,7 +26370,10 @@ const Ledgers = {
 //    page change (Route.sync → Drafts.onPage), a panel closed (Drafts.guard), and closing the tab (beforeunload).
 
 /* ---------- the choice model ---------- */
-const CHOICE_LABEL = {postTo: "Tally company to post to", gst: "GST ledger", tds: "TDS ledger", exp: "default expense ledger", bank: "bank account's Tally ledger", sales: "default sales ledger"};
+// "flow:<ledger name>" (round 4, 03-Oct-2026): the owner's mark on a ledger for the cash flow ("loan_given": a Loans &
+// Advances (Asset) ledger shown under investing, MIS.flowHead). Set only by a person on the Mapping tab (choiceConfirm),
+// never guessed; it has no old field to keep in step
+const CHOICE_LABEL = {postTo: "Tally company to post to", gst: "GST ledger", tds: "TDS ledger", exp: "default expense ledger", bank: "bank account's Tally ledger", sales: "default sales ledger", flow: "cash-flow line of a ledger"};
 function choiceSplit(key){ const i = String(key).indexOf(":"); return i < 0 ? [key, ""] : [key.slice(0, i), key.slice(i + 1)]; }
 function choiceAcc(co, id){ return ((co && co.bankAccounts) || []).find(a => a.id === id) || null; }
 // the old field a choice is kept in step with (undefined: none)
