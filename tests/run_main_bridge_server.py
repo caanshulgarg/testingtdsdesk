@@ -100,26 +100,35 @@ try:
     # failed; the cloud never stores that as failed: the entry's state is forced to unknown while not verified, the posting
     # stays running with checking, the id is stamped accepted_at (migration-36-post-acceptance) so the sync keeps it live
     job["status"] = "running"
-    F.T["tally_post_ids"] = [{"job_id": "p-1", "fincom_id": "v1", "firm_id": FIRM, "live": True, "accepted_at": None}, {"job_id": "p-1", "fincom_id": "v2", "firm_id": FIRM, "live": True, "accepted_at": None}]
+    acc = []; real_rpc36 = F.rpc
+    def rpc36(fn, a):
+        if fn == "tally_post_id_accept": acc.append(a); return {"ok": True, "stamped": 1}
+        return real_rpc36(fn, a)
+    F.rpc = rpc36
     c, r = call({"kind": "posts_update", "version": "2.1.5", "bridge": main, "id": "p-1", "status": "failed", "done": 0, "message": "1 entry failed",
                  "results": [{"id": "v1", "ok": False, "verified": False, "message": "Tally replied CREATED 1 LASTVCHID 26298; the read-back did not find it"}, {"id": "v2", "ok": False, "message": "Tally refused it: ledger missing"}],
                  "items": [{"id": "v1", "state": "failed", "reason": "read-back failed"}, {"id": "v2", "state": "failed", "reason": "ledger missing"}]})
     it = {x["id"]: x for x in job.get("items") or []}; rs = {x["id"]: x for x in job.get("results") or []}
-    ok(c == 200 and job["status"] == "running" and job.get("checking") is True and "accepted" in job.get("message", "").lower(), "an entry Tally accepted: the posting is stored running with checking, never failed (%s, %s)" % (job["status"], job.get("message")))
+    ok(c == 200 and job["status"] == "running" and job.get("checking") is True and job.get("message", "").startswith("Posted, not yet confirmed:"), "an entry Tally accepted: the posting is stored running with checking, never failed; 'Posted, not yet confirmed: …' (%s, %s)" % (job["status"], job.get("message")))
     ok(it.get("v1", {}).get("state") == "unknown" and rs.get("v1", {}).get("outcomeUnknown") is True and rs["v1"].get("state") == "unknown" and rs["v1"].get("ok") is False, "the accepted entry is unknown (checking), not failed (%s)" % it.get("v1"))
     ok(it.get("v2", {}).get("state") == "failed" and rs.get("v2", {}).get("state") != "unknown", "the entry Tally refused stays failed")
-    ids = {x["fincom_id"]: x for x in F.T["tally_post_ids"]}
-    ok(ids["v1"].get("accepted_at") and not ids["v2"].get("accepted_at"), "tally_post_ids: v1 stamped accepted_at, v2 not (%s)" % ids["v1"].get("accepted_at"))
+    ok(acc == [{"p_job": "p-1", "p_id": "v1", "p_vch": "26298"}], "tally_post_id_accept(job, id, voucher) called for v1 alone, with the voucher from Tally's words (%s)" % acc)
     c, r = call({"kind": "posts_update", "version": "2.1.5", "bridge": main, "id": "p-1", "status": "failed", "results": [{"id": "v1", "ok": True, "verified": True, "vchNumber": "26298"}, {"id": "v2", "ok": False, "message": "refused"}],
                  "items": [{"id": "v1", "state": "in_tally"}, {"id": "v2", "state": "failed", "reason": "refused"}]})
     it = {x["id"]: x for x in job.get("items") or []}
     ok(c == 200 and job["status"] == "running" and it["v1"]["state"] == "in_tally", "verified in Tally: in_tally kept; the posting still never stored failed while an accepted entry is in it")
     c, r = call({"kind": "posts_update", "version": "2.1.5", "bridge": main, "id": "p-1", "status": "failed", "message": "refused", "results": [{"id": "v2", "ok": False, "message": "CREATED 0 ALTERED 0 ERRORS 1"}], "items": [{"id": "v2", "state": "failed", "reason": "refused"}]})
     ok(c == 200 and job["status"] == "failed" and job.get("checking") is False, "no acceptance (CREATED 0 is not one): failed is stored as before")
+    acc.clear()
     for k in ("vchNumber", "masterId", "guid"):
         job["status"] = "running"
         c, r = call({"kind": "posts_update", "version": "2.1.5", "bridge": main, "id": "p-1", "status": "failed", "results": [{"id": "v2", "ok": False, k: "77", "message": "x"}], "items": [{"id": "v2", "state": "failed"}]})
         ok(job["status"] == "running" and job["items"][0]["state"] == "unknown", "a %s in a result is an acceptance too" % k)
+    ok(len(acc) == 3 and acc[0]["p_vch"] == "77" and acc[2]["p_vch"] == "", "each stamped the id (the voucher when there is one)")
+    job["status"] = "running"
+    c, r = call({"kind": "posts_update", "version": "2.1.5", "bridge": main, "id": "p-1", "status": "failed", "items": [{"id": "v2", "state": "failed", "reason": "CREATED 1 ALTERED 0; LASTVCHID 26300; then the read-back timed out"}]})
+    ok(job["status"] == "running" and job["items"][0]["state"] == "unknown" and len(acc) == 4 and acc[3]["p_vch"] == "26300", "an acceptance in an item's reason (no result) counts too")
+    F.rpc = real_rpc36
     # migration 37 (item 7): an entry the bridge reports failed (or not found) releases its id through tally_post_id_release
     # (job, id, why), once per entry — never an unknown one, and never one Tally accepted (forced to unknown first)
     rel = []; real_rpc37 = F.rpc

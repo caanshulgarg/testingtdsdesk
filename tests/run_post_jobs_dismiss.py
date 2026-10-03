@@ -38,7 +38,8 @@ SETUP = """() => {
     Object.assign({}, base, {id: "j-oldfail", status: "failed", message: "Old failure, never dealt with", created_at: t(480), updated_at: t(480), entry_ids: ["b7"], results: []})];
   window.__reads = 0; window.__rpc = [];
   TCloud.on = () => true; TCloud.has = () => true;
-  TCloud.restAll = async (u) => { window.__reads++; window.__url = u; return JSON.parse(JSON.stringify(window.__jobs)); };
+  // round 4: the page also reads tally_post_ids (item 7); only the postings list is counted and kept here
+  TCloud.restAll = async (u) => { if (!/tally_post_jobs/.test(u)) return []; window.__reads++; window.__url = u; return JSON.parse(JSON.stringify(window.__jobs)); };
   TCloud.rpc = async (fn, a) => { window.__rpc.push([fn, a]); if (fn === "tally_post_dismiss" && !a.p_auto){ const j = window.__jobs.find(x => x.id === a.p_id); j.dismissed_at = new Date().toISOString(); j.dismissed_by = "u-1"; j.dismiss_note = "Dismissed"; } return {ok: true}; };
   Cloud.st.members = [{user_id: "u-1", name: "Anshul"}]; CloudJobs.list = null; CloudJobs.at = 0; CloudJobs.tried = {};
   refreshStats(c.id); goStep("post"); render();

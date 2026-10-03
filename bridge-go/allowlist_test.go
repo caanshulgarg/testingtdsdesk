@@ -63,6 +63,8 @@ func driveEveryRequest(t *testing.T) *standTally {
 	must("dup check", err)
 	_, err = tagsOnDate(f.port, zz, td)
 	must("tag check", err)
+	_, err = voucherByMaster(f.port, zz, td, "1")
+	must("voucher-id check", err)
 	_, err = removeTallyVoucher(f.port, zz, "g-1", "1", "Journal", td, "D-0")
 	must("delete", err)
 	// the measuring tool (before Update now: with no copy here it reads the year's dates) and its snapshot

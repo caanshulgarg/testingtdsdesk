@@ -477,11 +477,11 @@ const MIS = {
   // working (V, raised whenever a figure is worked out differently). A saved run from other books or other working is
   // worked out again when MIS opens, and its figures are not shown meanwhile (review of 02-Oct-2026: MIS showed the run of
   // 01-Oct, result code 1FB42BF2, with figures since corrected)
-  V: 7,                                                       // 4: GST without cancelled entries, cash flow and ratios redone; 5: open bills net of amounts on account, GST paid and RCM, expense credits (review of 02-Oct-2026); 6: expense credits set off in their head (MIS.plRule), GST per GSTIN, March's TDS on 30 April; 7: the cash flow's lines by Tally group, not ledger names (finding 5)
+  V: 8,                                                       // 4: GST without cancelled entries, cash flow and ratios redone; 5: open bills net of amounts on account, GST paid and RCM, expense credits (review of 02-Oct-2026); 6: expense credits set off in their head (MIS.plRule), GST per GSTIN, March's TDS on 30 April; 7: the cash flow's lines by Tally group, not ledger names (finding 5); 8: the owner's rules of 03-Oct-2026 (round 4, items 26-29): Loan given marks, salaries by a ledger's name directly under Current Liabilities, a partner's sub-group under Loans, grouping notes
   basis(b){
     b = b || S.books || {};
     const vs = b.vouchers || [], alt = vs.reduce((a, v) => Math.max(a, num(v.alter || v.alterId || 0)), 0);
-    return Audit.hash(JSON.stringify([this.V, vs.length, alt, (b.tb || {}).at || "", b.mapV || 0, (b.meta || {}).to || "", (b.meta || {}).at || "", Object.keys(b.ledInfo || {}).length]));
+    return Audit.hash(JSON.stringify([this.V, vs.length, alt, (b.tb || {}).at || "", b.mapV || 0, (b.meta || {}).to || "", (b.meta || {}).at || "", Object.keys(b.ledInfo || {}).length, this.flowMarks((S.companies || {})[b.cid || S.coId])]));
   },
   stale(b){ const r = b && b.mis && b.mis.last; return !!r && r.basis !== this.basis(b); },
   due(b){
@@ -523,11 +523,45 @@ Object.assign(MIS, {
     const path = Audit.path(l);
     for (let i = 0; i < path.length; i++){
       const hit = this.FLOW_GROUPS.find(([re]) => re.test(String(path[i]).trim()));
-      if (hit) return {kind: hit[1], own: path.slice(0, i)};
+      if (hit) return {kind: hit[1], own: path.slice(0, i), top: String(path[i]).trim()};
     }
     // the company's own primary group (no reserved group above it): by Tally's flags for it
     const top = path[path.length - 1], gi = top ? ledLook((S.books || {}).groupInfo, top) : null;
-    return {kind: gi && gi.rev ? (gi.dr ? "expense" : "income") : path.length ? "other" : "", own: path};
+    return {kind: gi && gi.rev ? (gi.dr ? "expense" : "income") : path.length ? "other" : "", own: path, top: ""};
+  },
+  // The owner's rules of 03-Oct-2026 (round 4, items 26-29), each decided by Tally's group first:
+  //  26. Loans & Advances (Asset) is operating ("Loans and advances (asset)"); investing ("Loans given") only for a ledger
+  //      the owner marks "Loan given" on the Mapping tab: co.choices["flow:<ledger>"] = loan_given, confirmed by a person
+  //      (never guessed; the choice model of 60-choices.js).
+  //  27. Current Liabilities: the sub-group's own name decides a salary, wages, ESI / PF, imprest or payroll ledger
+  //      ("Salaries and staff"); a ledger directly under Current Liabilities, with no sub-group, is decided by its own
+  //      name, and that is flagged.
+  //  28. Loans (Liability): a sub-group that is a partner's own (its name is the person of a Capital Account ledger,
+  //      "Anshul Garg" for "Anshul Garg Capital", or it says Partner) is "Partners' accounts" (financing); other loans stay
+  //      "Loans". The match on a Capital Account ledger is flagged.
+  //  29. flowHead returns a third element for a flagged line ("mark", "name", "partner:<capital ledger>"); flowNotes lists
+  //      every such ledger for the "Grouping notes" box under the cash flow. A note never blocks anything.
+  STAFF_RE: /SALAR|WAGES|BONUS|STAFF|IMPREST|EMPLOYEE|PROVIDENT|\bE?PFO?\b|\bESIC?\b|GRATUITY|PAYROLL/i,
+  flowCo(){ if (this._co !== undefined) return this._co; const b = S.books || {}, cs = S.companies || {}; return cs[b.cid] || cs[S.coId] || null; },
+  // the owner's mark on a ledger: "loan_given", or ""; a confirmed choice only
+  flowMark(l){
+    const co = this.flowCo(); if (!co) return "";
+    const k = "flow:" + l;
+    if (typeof choiceUsable === "function") return choiceUsable(co, k);
+    const r = co.choices && co.choices[k]; return r && r.state === "confirmed" ? r.value || "" : "";
+  },
+  flowMarks(co){ const ch = (co && co.choices) || {}; return Object.keys(ch).filter(k => k.indexOf("flow:") === 0).sort().map(k => [k, (ch[k] || {}).value || "", (ch[k] || {}).state || ""]); },
+  // a name cleaned for the partner match: CAPITAL, A/C, ACCOUNT, CURRENT and punctuation dropped, capitals
+  flowClean(n){ return String(n || "").toUpperCase().replace(/\bA\/C\b/g, " ").replace(/\b(CAPITAL|ACCOUNT|CURRENT)\b/g, " ").replace(/[^A-Z0-9]+/g, " ").trim(); },
+  // the people named by the Capital Account ledgers: cleaned name -> ledger ("Capital" alone names no one)
+  flowPartners(){
+    const b = S.books || {}, u = b.under || {}, n = Object.keys(u).length;
+    if (!this._fp || this._fp.u !== u || this._fp.n !== n){
+      const people = {};
+      Object.keys(u).forEach(l => { const p = Audit.path(l); if (p.some(g => /^capital account$/i.test(String(g).trim())) && !/reserves/i.test(String(p[0] || ""))){ const c = this.flowClean(l); if (c) people[c] = l; } });
+      this._fp = {u, n, people};
+    }
+    return this._fp.people;
   },
   flowHead(l){
     const m = Books.ledgerOf(l), g = this.flowGroup(l), own = g.own.join(" | ");
@@ -535,7 +569,13 @@ Object.assign(MIS, {
     if (g.kind === "creditor") return ["op", "Paid to suppliers"];
     if (g.kind === "fixed") return ["inv", "Fixed assets"];
     if (g.kind === "invest") return ["inv", "Investments and deposits"];
-    if (g.kind === "loan") return ["fin", "Loans"];
+    if (g.kind === "lent" && this.flowMark(l) === "loan_given") return ["inv", "Loans given", "mark"];
+    if (g.kind === "loan"){
+      const P = this.flowPartners(), hit = g.own.map(x => this.flowClean(x)).find(c => c && P[c]);
+      if (hit) return ["fin", "Partners' accounts", "partner:" + P[hit]];
+      if (/PARTNER/i.test(own)) return ["fin", "Partners' accounts"];
+      return ["fin", "Loans"];
+    }
     if (g.kind === "capital") return ["fin", "Capital and drawings"];
     // operating: GST paid to the government by the same rule as Compliance (MIS.gstPaidTo); other GST ledgers on a bank
     // line (input tax paid with a bill, interest and late fees) on lines of their own
@@ -544,16 +584,35 @@ Object.assign(MIS, {
     if (/^(gst|gst_common|ineligible|gst_rcm|gst_import|gst_control)$/.test(m.what || "") || m.kind === "gst" || m.kind === "gst_common") return ["op", "Input GST paid with bills"];
     if (/^tds_|^tcs_/.test(m.kind || m.what || "") || /\bTDS\b|\bTCS\b/i.test(own)) return ["op", "TDS and TCS"];
     if (/INCOME TAX|ADVANCE TAX|SELF ASSESSMENT/i.test(own)) return ["op", "Income tax"];
-    if (/SALAR|WAGES|BONUS|STAFF|IMPREST|EMPLOYEE|PROVIDENT|\bPF\b|\bESI|ESIC|GRATUITY/i.test(own)) return ["op", "Salaries and staff"];
+    if (this.STAFF_RE.test(own)) return ["op", "Salaries and staff"];
+    if (g.kind === "other" && /^current liabilities$/i.test(g.top) && !g.own.length && this.STAFF_RE.test(l)) return ["op", "Salaries and staff", "name"];
     if (g.kind === "expense" && /INTEREST|FINANCE COST|BORROWING COST/i.test(own)) return ["fin", "Interest paid"];
     if (g.kind === "lent") return ["op", "Loans and advances (asset)"];
     if (g.kind === "income") return ["op", "Other income received"];
     if (g.kind === "expense") return ["op", "Expenses paid"];
     return ["op", "Other receipts and payments"];
   },
+  flowWhy(h){
+    const w = h[2] || "";
+    if (w === "mark") return "marked Loan given on the Mapping tab";
+    if (w === "name") return "directly under Current Liabilities with no sub-group, so its own name decided";
+    if (w.indexOf("partner:") === 0) return "its sub-group is named for a partner: the Capital Account ledger \u201c" + w.slice(8) + "\u201d";
+    return w;
+  },
+  // the grouping notes: [{ledger, group, line, why}] for every ledger whose line came from a name word, the partner match
+  // or a Loan-given mark (all the books' ledgers, or the ones given)
+  flowNotes(co, ledgers){
+    const b = S.books || {}, prev = this._co;
+    if (co) this._co = co;
+    try {
+      const list = ledgers || Array.from(new Set(Object.keys(b.under || {}).concat(Object.keys(b.ledInfo || {})))), out = [];
+      list.forEach(l => { const h = this.flowHead(l); if (h[2]) out.push({ledger: l, group: Audit.path(l).join(" \u2190 "), line: h[1], why: this.flowWhy(h)}); });
+      return out.sort((a, c) => a.ledger.localeCompare(c.ledger));
+    } finally { this._co = prev; }
+  },
   // money in and out of cash and bank, month by month, by what it was for (the direct method)
   cashActual(from, to){
-    const months = this.monthsOf(from, to), rows = {};
+    const months = this.monthsOf(from, to), rows = {}, seen = new Set();
     (S.books.vouchers || []).forEach(v => {
       if (v.date < from || v.date > to || v.opt || v.cancel) return;
       const cb = v.ent.filter(e => Audit.isCash(e.l) || Audit.isBankL(e.l)), other = v.ent.filter(e => !(Audit.isCash(e.l) || Audit.isBankL(e.l)));
@@ -574,7 +633,7 @@ Object.assign(MIS, {
         // (review of 02-Oct-2026: "Expenses paid" showed +13,216.62 in Jan-2026 and +734.76 in Mar-2026)
         else if (share > 0 && lab === "Expenses paid") lab = "Expenses refunded or recovered";
         const k = sec + "|" + lab, x = rows[k] = rows[k] || {sec, lab, t: 0, m: {}, led: {}};
-        x.t = r2(x.t + share); x.m[ym] = r2((x.m[ym] || 0) + share); x.led[e.l] = r2((x.led[e.l] || 0) + share);
+        x.t = r2(x.t + share); x.m[ym] = r2((x.m[ym] || 0) + share); x.led[e.l] = r2((x.led[e.l] || 0) + share); seen.add(e.l);
       });
     });
     const list = Object.values(rows).sort((a, c) => ["op", "inv", "fin"].indexOf(a.sec) - ["op", "inv", "fin"].indexOf(c.sec) || c.t - a.t);
@@ -586,7 +645,8 @@ Object.assign(MIS, {
     try { const B = Audit.balances(from, to); if (B.ok){ const cb = at => r2(Object.keys(at).filter(l => Audit.isCash(l) || Audit.isBankL(l)).reduce((a, l) => a - num(at[l]), 0));
       open = cb(B.at(Audit.dayBefore(from))); close = cb(B.at(to)); } } catch (e){}
     const diff = open == null ? null : r2(close - open - net);
-    return {months, rows: list, op: sec("op"), inv: sec("inv"), fin: sec("fin"), net, open, close, diff, ties: diff == null || Math.abs(diff) < 1};
+    // the grouping notes (round 4, item 29) for the ledgers that moved money in the period
+    return {months, rows: list, op: sec("op"), inv: sec("inv"), fin: sec("fin"), net, open, close, diff, ties: diff == null || Math.abs(diff) < 1, notes: this.flowNotes(null, Array.from(seen))};
   },
   median(a){ if (!a.length) return null; const s2 = a.slice().sort((x, y) => x - y), k = Math.floor(s2.length / 2); return s2.length % 2 ? s2[k] : Math.round((s2[k - 1] + s2[k]) / 2); },
   // how long each party takes to settle a bill, from the bills settled in the books

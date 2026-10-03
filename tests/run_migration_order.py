@@ -1,5 +1,5 @@
 """python3 run_migration_order.py - the order the cloud migrations run in on a fresh database (03-Oct-2026, round 4 items
-1-3; docs/MIGRATION-ORDER.md): 32 -> 33 -> 35 -> 34 -> 36, applied TWICE in that order on a throwaway PostgreSQL (pg_stand)
+1-3; docs/MIGRATION-ORDER.md): 32 -> 33 -> 35 -> 34 -> 36 -> 36b, applied TWICE in that order on a throwaway PostgreSQL (pg_stand)
 with the tables as on staging (run_migration33's schema, tally_devices, tally_bills) and made-up rows; never on staging.
 Checks: every file runs, twice, and deletes nothing; after the run the release functions are migration-34's
 (tally_release_approve checks pilot_allowlist_measured; tally_release_pilot clears it), which holds only because the
@@ -10,7 +10,7 @@ import os, re, sys, subprocess
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import pg_stand
 SQLDIR = os.path.join(HERE, "..", "server", "tally-cloud")
-ORDER = [(32, "migration-32-sync-safety.sql"), (33, "migration-33-ledger-lists.sql"), (35, "migration-35-bridge-control.sql"), (34, "migration-34-ledger-safety.sql"), (36, "migration-36-ledger-rename.sql")]
+ORDER = [(32, "migration-32-sync-safety.sql"), (33, "migration-33-ledger-lists.sql"), (35, "migration-35-bridge-control.sql"), (34, "migration-34-ledger-safety.sql"), (36, "migration-36-ledger-rename.sql"), ("36b", "migration-36b-post-acceptance.sql")]
 fails = []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
@@ -46,8 +46,8 @@ try:
     for round_ in (1, 2):
         for n, f in ORDER:
             r = psql_file(os.path.join(SQLDIR, f))
-            ok(r.returncode == 0, "pass %d: migration-%d runs %s" % (round_, n, (r.stderr or "").strip()[-400:] if r.returncode else ""))
-            if r.returncode: raise SystemExit("cannot go on: migration-%d failed" % n)
+            ok(r.returncode == 0, "pass %d: migration-%s runs %s" % (round_, n, (r.stderr or "").strip()[-400:] if r.returncode else ""))
+            if r.returncode: raise SystemExit("cannot go on: migration-%s failed" % n)
         k = counts()
         ok(all(k.get(t) == v for t, v in before.items()), "pass %d: nothing deleted (%s rows kept)" % (round_, sum(before.values())))
     # the release functions are migration-34's, because 35 ran before 34 and no longer defines them

@@ -47,6 +47,10 @@ type standTally struct {
 	coName    string                                                             // the company's name as this Tally gives it ("" : ZZ TEST)
 	grp       [][2]string
 	mid       int64 // the last MasterID given
+	// fault 1 (03-Oct-2026, NWS144): how this Tally stores and answers
+	storeNarr  func(narr string) string // the narration as Tally keeps it (nil: as sent)
+	ansi       bool                     // answers in Windows-1252 bytes (an em dash as 0x97), as a real Tally does for non-ASCII text
+	lastMaster string                   // the MasterID of the last voucher an Import made (LASTVCHID)
 }
 
 // a ledger master of the stand-in Tally (its stored fields only)
@@ -234,6 +238,13 @@ func newStandTally(t *testing.T) *standTally {
 					o.WriteString(v.xml())
 				}
 			}
+		case "FinComByMaster":
+			want := group(`\$MasterID = (\d+)`, body, 1)
+			for _, v := range f.vch {
+				if inDates(v) && v.master == want {
+					o.WriteString(v.xml())
+				}
+			}
 		case "FinComMeasureNames":
 			for _, n := range f.ledgers {
 				fmt.Fprintf(&o, `<LEDGER NAME="%s"><NAME>%s</NAME></LEDGER>`, esc(n), esc(n))
@@ -256,9 +267,13 @@ func newStandTally(t *testing.T) *standTally {
 					made++
 				}
 				for _, x := range regexp.MustCompile(`<VOUCHER\b[\s\S]*?</VOUCHER>`).FindAllString(body, -1) {
-					v := f.add(group(`<DATE>(\d{8})</DATE>`, x, 1), group(`<PARTYLEDGERNAME>([^<]*)</PARTYLEDGERNAME>`, x, 1), group(`<VOUCHERNUMBER>([^<]*)</VOUCHERNUMBER>`, x, 1),
-						group(`<NARRATION>([^<]*)</NARRATION>`, x, 1), "-1.00")
-					_ = v
+					narr := html.UnescapeString(group(`<NARRATION>([^<]*)</NARRATION>`, x, 1))
+					if f.storeNarr != nil {
+						narr = f.storeNarr(narr)
+					}
+					v := f.add(group(`<DATE>(\d{8})</DATE>`, x, 1), html.UnescapeString(group(`<PARTYLEDGERNAME>([^<]*)</PARTYLEDGERNAME>`, x, 1)), group(`<VOUCHERNUMBER>([^<]*)</VOUCHERNUMBER>`, x, 1),
+						narr, "-1.00")
+					f.lastMaster = v.master
 					made++
 				}
 			}
@@ -266,11 +281,24 @@ func newStandTally(t *testing.T) *standTally {
 			if delay > 0 && !wait(delay) {
 				return
 			}
-			_, _ = w.Write([]byte(fmt.Sprintf("<ENVELOPE><BODY><DATA><IMPORTRESULT><CREATED>%d</CREATED><ALTERED>0</ALTERED><ERRORS>0</ERRORS><EXCEPTIONS>0</EXCEPTIONS></IMPORTRESULT></DATA></BODY></ENVELOPE>", made)))
+			f.mu.Lock()
+			lastMaster := f.lastMaster
+			f.mu.Unlock()
+			lv := ""
+			if made > 0 && lastMaster != "" {
+				lv = "<LASTVCHID>" + lastMaster + "</LASTVCHID>"
+			}
+			_, _ = w.Write([]byte(fmt.Sprintf("<ENVELOPE><BODY><DATA><IMPORTRESULT><CREATED>%d</CREATED><ALTERED>0</ALTERED><ERRORS>0</ERRORS><EXCEPTIONS>0</EXCEPTIONS>%s</IMPORTRESULT></DATA></BODY></ENVELOPE>", made, lv)))
 			return
 		}
+		ansi := f.ansi
 		f.mu.Unlock()
 		o.WriteString("</COLLECTION></DATA></BODY></ENVELOPE>")
+		if ansi {
+			// a real Tally answers non-ASCII text in its Windows code page: an em dash is the one byte 0x97
+			_, _ = w.Write(cp1252Bytes(o.String()))
+			return
+		}
 		_, _ = w.Write([]byte(o.String()))
 	}))
 	f.port = f.srv.Listener.Addr().(*net.TCPAddr).Port
@@ -944,4 +972,24 @@ func TestPostedTagFoundByDate(t *testing.T) {
 	}
 	f.noLedgerCollection(t)
 	f.noBalance(t)
+}
+
+// text as a Windows-1252 Tally writes it: the em dash, en dash and curly quotes as their one-byte codes
+func cp1252Bytes(s string) []byte {
+	var b []byte
+	for _, r := range s {
+		switch {
+		case r == '\u2014':
+			b = append(b, 0x97)
+		case r == '\u2013':
+			b = append(b, 0x96)
+		case r == '\u2019':
+			b = append(b, 0x92)
+		case r < 0x80:
+			b = append(b, byte(r))
+		default:
+			b = append(b, '?')
+		}
+	}
+	return b
 }

@@ -243,6 +243,134 @@ func tagCheckRequest(company, date string) string {
 		"GUID, MASTERID, ALTERID, DATE, VOUCHERTYPENAME, VOUCHERNUMBER, NARRATION, ISOPTIONAL, ISCANCELLED", "")
 }
 
+// fault 1 (03-Oct-2026): the read-back by Tally's own voucher id (LASTVCHID in the import's answer = the voucher's
+// MasterID), one month (the voucher's) filtered to that one id, heads and narration only
+const masterCheckID = "FinComByMaster"
+
+func masterCheckRequest(company, a, z string, master string) string {
+	m := re(`\D`).ReplaceAllString(master, "")
+	if m == "" {
+		m = "0"
+	}
+	return fcCollection(masterCheckID, company, "<SVFROMDATE>"+a+"</SVFROMDATE><SVTODATE>"+z+"</SVTODATE>", "Voucher",
+		"GUID, MASTERID, ALTERID, DATE, VOUCHERTYPENAME, VOUCHERNUMBER, NARRATION, ISOPTIONAL, ISCANCELLED", "$MasterID = "+m)
+}
+
+// the voucher with that MasterID in Tally, looked for in the month of the date given: nil when Tally lists none; an
+// error when Tally did not answer properly
+func voucherByMaster(port int, company, date, master string) (*vchKey, error) {
+	if !isTallyDate(date) || re(`\D`).ReplaceAllString(master, "") == "" {
+		return nil, nil
+	}
+	raw, err := invokeTally(fin, port, masterCheckRequest(company, date[:6]+"01", monthEnd(date[:6]), master), 0)
+	if err != nil {
+		return nil, err
+	}
+	if !goodDupAnswer(raw) {
+		return nil, errors.New("Tally's answer could not be read: " + cut(flat(raw), 120))
+	}
+	for _, v := range xmlDoc(raw).All("VOUCHER") {
+		k := keyOfVoucher(v)
+		if strings.TrimSpace(k.masterID) == strings.TrimSpace(master) {
+			return &k, nil
+		}
+	}
+	return nil, nil
+}
+
+// the head among those read back that is this entry: by its tag (wherever it is in the narration); else, when Tally
+// gave a voucher id, the head with that MasterID provided its narration carries no OTHER FinCom tag (Tally's "last
+// voucher id" can point at an older entry). how: "tag" or "voucher id"
+func matchHead(heads []M, tag, lv string) (M, string) {
+	if tag != "" {
+		for _, h := range heads {
+			if hasTag(str(h["narration"]), tag) {
+				return h, "tag"
+			}
+		}
+	}
+	if lv != "" {
+		for _, h := range heads {
+			if str(h["masterId"]) == lv && !otherTag(str(h["narration"]), tag) {
+				return h, "voucher id"
+			}
+		}
+	}
+	return nil, ""
+}
+
+// a FinCom tag in the narration that is not this entry's
+func otherTag(narration, tag string) bool {
+	for _, t := range reTag.FindAllString(narration, -1) {
+		if t != tag {
+			return true
+		}
+	}
+	return false
+}
+
+// an accepted entry (CREATED/ALTERED with a voucher id) looked for in Tally: by its tag on its date, then by Tally's
+// voucher id in its month. found: the head and how; not found: nil, ""; Tally not answering: an error (nothing is decided)
+func findAccepted(port int, company, xml, lv string) (M, string, error) {
+	date, tag := group(`<DATE>(\d{8})</DATE>`, xml, 1), reTag.FindString(xml)
+	var heads []M
+	if date != "" {
+		ks, err := tagsOnDate(port, company, date)
+		if err != nil {
+			return nil, "", err
+		}
+		for _, k := range ks {
+			heads = append(heads, headOfKey(k))
+		}
+	}
+	if h, how := matchHead(heads, tag, lv); h != nil {
+		return h, how, nil
+	}
+	if lv != "" {
+		k, err := voucherByMaster(port, company, date, lv)
+		if err != nil {
+			return nil, "", err
+		}
+		if k != nil && !k.cancelled && !otherTag(k.narration, tag) {
+			return headOfKey(*k), "voucher id", nil
+		}
+	}
+	return nil, "", nil
+}
+
+// the result of an entry Tally accepted (CREATED/ALTERED with a voucher id) that the read-back could not confirm:
+// never failed, never sent again; "unknown" (accepted, being checked) until it is found by its tag or by Tally's voucher
+// id. heads: what the day's list held (for the log); lookedUp: what the voucher-id lookup said
+func markAccepted(r M, company, lv string, heads []M, lookedUp string) {
+	id, xs := str(r["id"]), str(r["xmlSent"])
+	if xs == "" {
+		xs = str(r["xml"])
+	}
+	date, tag := group(`<DATE>(\d{8})</DATE>`, xs, 1), reTag.FindString(xs)
+	r["ok"], r["verified"], r["outcomeUnknown"], r["accepted"], r["state"], r["lastVchId"] = true, nil, true, true, "unknown", lv
+	r["message"] = fmt.Sprintf("Tally replied 'created' (voucher id %s) but the entry was not found yet in '%s' on %s; it is being checked and is not sent again", or(lv, "not given"), company, ddmmyyyy(date))
+	var ids []string
+	for _, h := range heads {
+		ids = append(ids, str(h["masterId"]))
+	}
+	writeLog(fmt.Sprintf("  voucher %s: ACCEPTED BUT UNCONFIRMED: Tally replied CREATED %d ALTERED %d (LASTVCHID %s) for '%s' on %s; the day's list has %d entr%s (voucher ids: %s), none carrying %s; looked up by voucher id %s: %s; marked unknown (accepted, being checked), not sent again",
+		id, toInt(r["created"]), toInt(r["altered"]), or(lv, "none"), company, date, len(heads), map[bool]string{true: "y", false: "ies"}[len(heads) == 1], or(strings.Join(ids, ", "), "-"), or(tag, "no tag"), or(lv, "none"), or(lookedUp, "not asked")))
+}
+
+// an entry Tally accepted: CREATED or ALTERED above 0 (a voucher id with it when Tally gave one)
+func acceptedByTally(r M) bool { return toInt(r["created"]) > 0 || toInt(r["altered"]) > 0 }
+
+// the results of entries Tally accepted that are not confirmed yet (looked for again later, never sent again)
+func acceptedUnconfirmed(results []M) []M {
+	var o []M
+	for _, r := range results {
+		if r["accepted"] == true && r["verified"] != true {
+			o = append(o, r)
+		}
+	}
+	return o
+}
+
 // the entries in Tally on that date, heads and narration only, each with its FinCom id (an error when Tally did not
 // answer properly)
 func tagsOnDate(port int, company, date string) ([]vchKey, error) {

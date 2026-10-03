@@ -37,6 +37,16 @@ function Head({ c, years, fy, d }) {
   </section>;
 }
 
+// round 4 (03-Oct-2026), item 26: a ledger under Loans & Advances (Asset) can be marked "Loan given": the cash flow then puts
+// it under investing (MIS.flowHead). The mark is a per-ledger choice, co.choices["flow:<ledger>"] = loan_given, confirmed
+// by the person who ticks it (choiceConfirm: who and when, saved at once, never guessed); unticked, it is forgotten
+const isLent = (l) => FS.nature(l).path.some((g) => /^loans & advances \(asset\)$/i.test(String(g).trim()));
+function loanGiven(l, on) {
+  const co = CO(); if (!co) return;
+  if (on) choiceConfirm(co, "flow:" + l, "loan_given"); else choiceForget(co, "flow:" + l);
+  toast(on ? l + ": marked Loan given; the cash flow shows it under investing." : l + ": the Loan given mark removed.");
+  render();
+}
 // every ledger, its Tally group, its amount and the line it goes to; a line chosen by hand can go back to the rule
 function Mapping({ c, d }) {
   const lines = FS.LINES[c.kind === "co" ? "co" : "nc"].concat(FS.PL.map((z) => [z[0], "P&L: " + z[1], "PL"]));
@@ -59,7 +69,8 @@ function Mapping({ c, d }) {
     <div className="bk-tablewrap"><table className="bk-table"><thead><tr><th>Ledger</th><th>Tally group</th><th className="n">Amount</th><th>Goes to</th></tr></thead><tbody>
       {page.map(([l, k, v], i) => <tr key={l + ":" + i} data-key={l}><td>{l}{c.map[l] && <>{" "}<span className="tag">by hand</span></>}</td><td className="note">{FS.nature(l).path.join(" ← ")}</td><td className="n">{m(v)}</td>
         <td><select aria-label={"Goes to: " + l} style={{ width: "auto" }} value={k} onChange={(ev) => fsMapSet(l, ev.target.value)}>{lines.map((z) => <option key={z[0]} value={z[0]}>{z[1]}</option>)}</select>
-          {c.map[l] && <>{" "}<button className="linkbtn" onClick={() => fsUnmap(l)}>by rule</button></>}</td></tr>)}
+          {c.map[l] && <>{" "}<button className="linkbtn" onClick={() => fsUnmap(l)}>by rule</button></>}
+          {isLent(l) && <>{" "}<label className="note" style={{ whiteSpace: "nowrap" }}><input type="checkbox" aria-label={"Loan given (investing): " + l} checked={MIS.flowMark(l) === "loan_given"} onChange={(ev) => loanGiven(l, ev.target.checked)} /> Loan given (investing)</label></>}</td></tr>)}
     </tbody></table></div>
     {pager}
   </Confirm>;

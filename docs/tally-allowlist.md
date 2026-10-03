@@ -34,6 +34,7 @@ First table: not yet measured; allowed for 2.1.5 only; re-measured on 2026-10-02
 | id | purpose | shape | worst case (s) | measured on | used by |
 |---|---|---|---|---|---|
 | Day Book | the day book of one company for one month at most (Update now, the nightly run, a FinCom read) | fbbe1dd6e139 | not yet measured | - | bridge |
+| FinComByMaster | the posting read-back by Tally's voucher id (LASTVCHID): one month's entries filtered to that one MasterID, heads and narration only | 3a3e60c1e890 | not yet measured | - | bridge |
 | FinComCompany | the company check: one company's name, GUID and highest AlterIDs (also the small check after a timeout) | 0aae177f8654 | not yet measured | - | bridge |
 | FinComFree | the small check after a timeout when no company is named: the companies' names and GUIDs | fc989c00dda9 | not yet measured | - | bridge |
 | FinComGroups | the group list, stored master fields only | 91fea7a2c04a | not yet measured | - | bridge |
@@ -60,4 +61,4 @@ First table: not yet measured; allowed for 2.1.5 only; re-measured on 2026-10-02
 | TDSDeskVchHeads | voucher heads (Optional ones too) of one company for one month at most, no ledger lines | 53fc675a1641 | not yet measured | - | bridge |
 <!-- allowlist:end -->
 
-Table hash (SHA-256): aebe4e13d0acfced576de1f1da8c6fc98fc8d37c105eac3f0f3212dd68bd0b4f
+Table hash (SHA-256): 4a004725c87a50b1b46e100a560affd60d7719d5a8053eb1d8a68f58ad5ef09a

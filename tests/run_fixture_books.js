@@ -95,7 +95,7 @@ const same = (a, b, w) => ok(JSON.stringify(a) === JSON.stringify(b), w + ": " +
   // under Indirect Expenses: their refunds are expenses refunded, not "Loans" (nor "Salaries and staff")
   eq(line("Expenses refunded or recovered"), 29500, "FINDING 5: expenses refunded (the travel refund 3,000, the processing fee 25,000, the staff loan fee 1,500)");
   const onLine = (lab, l) => ((r.p2.cash.rows.find(z => z.lab === lab) || {led: {}}).led[l]);
-  ok(!r.p2.cash.rows.some(z => z.lab === "Loans") && !r.p2.cash.rows.some(z => z.sec === "fin"), "FINDING 5: no \"Loans\" line and nothing under financing: no loan was taken or repaid in cash");
+  ok(!r.p2.cash.rows.some(z => z.lab === "Loans") && r.p2.cash.rows.filter(z => z.sec === "fin").every(z => z.lab === "Partners' accounts"), "FINDING 5: no \"Loans\" line; under financing only the director's loan (round 4): no other loan was taken or repaid in cash");
   ok(onLine("Expenses refunded or recovered", "Staff Loan Processing Fee Refund") === 1500 && onLine("Expenses paid", "Staff Loan Processing Fee Refund") === -1500 && !r.p2.cash.rows.some(z => z.lab !== "Expenses refunded or recovered" && z.lab !== "Expenses paid" && z.led["Staff Loan Processing Fee Refund"] != null),
     "FINDING 5: Staff Loan Processing Fee Refund (Indirect Expenses): 1,500 refunded, 1,500 paid, on no other line");
   ok(onLine("Expenses refunded or recovered", "Loan Processing Fees") === 25000, "FINDING 5: Loan Processing Fees' refund of 25,000 under expenses refunded");
@@ -111,7 +111,8 @@ const same = (a, b, w) => ok(JSON.stringify(a) === JSON.stringify(b), w + ": " +
   eq(line("Other receipts and payments"), -1000, "27. ESI Payable - Employees Share under the sub-group \"Statutory dues\": the sub-group decides (no staff word in it), so Other receipts and payments, not flagged");
   ok(x.MIS.flowHead("ESI Payable - Employees Share").join() === "op,Other receipts and payments", "27. ESI under Statutory dues: by the sub-group, no flag (" + x.MIS.flowHead("ESI Payable - Employees Share").join() + ")");
   eq(line("Partners' accounts"), 50000, "28. the loan from Devika Larkspur: her sub-group under Loans (Liability) matches her Capital Account ledger, so Partners' accounts (financing)");
-  ok(x.MIS.flowHead("Devika Larkspur - Loan").join() === "fin,Partners' accounts,partner" && x.MIS.flowHead("Hemant Zaverchand (Loan)").join() === "fin,Loans", "28. flagged as the partner match; Hemant's loan (Unsecured Loans) stays on Loans");
+  const dh = x.MIS.flowHead("Devika Larkspur - Loan");
+  ok(dh.slice(0, 2).join() === "fin,Partners' accounts" && dh[2] === "partner:Devika Larkspur Capital A/c" && x.MIS.flowHead("Hemant Zaverchand (Loan)").join() === "fin,Loans", "28. flagged as the partner match, naming the Capital Account ledger; Hemant's loan (Unsecured Loans) stays on Loans (" + dh.join() + ")");
   eq(line("Loans and advances (asset)"), -50000, "26. the staff loan given: Loans and advances (asset), operating, by default (no mark)");
   eq(r.p2.cash.op.t, -11950, "operating: 38,050 less the 50,000 lent"); eq(r.p2.cash.fin.t, 50000, "financing: the 50,000 from the director"); eq(r.p2.cash.inv.t, 0, "investing: nothing without a mark");
   const notes = x.MIS.flowNotes(ctx.S.companies.t);

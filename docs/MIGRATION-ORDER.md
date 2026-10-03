@@ -4,7 +4,7 @@ The cloud copy's SQL lives in `server/tally-cloud/migration-*.sql`. Each file is
 revoked; `begin; ... commit;`; safe to run twice) and is shown to the owner before it runs on staging
 (project `qbocskaiewaxqcvaunzc`). From migration 32 on, the files depend on one another, and one pair is order-sensitive.
 
-## A fresh database: 32 → 33 → 35 → 34 → 36 (→ 37 when it exists)
+## A fresh database: 32 → 33 → 35 → 34 → 36 → 36b (→ 37 when it exists)
 
 | # | File | What it adds |
 |---|---|---|
@@ -13,6 +13,7 @@ revoked; `begin; ... commit;`; safe to run twice) and is shown to the owner befo
 | 35 | `migration-35-bridge-control.sql` | Stop reading / Resume (`tally_read_stops`, `tally_read_stop`, `tally_read_resume`) and the staged-release table `tally_bridge_releases`. It no longer defines the release functions (see the rule below) |
 | 34 | `migration-34-ledger-safety.sql` | the guard (a ledger with entries, an opening or a recent rename is never marked), rounds (`tally_ledger_rounds`, `tally_ledger_round_batch`, `tally_ledgers_mark_gone`), renames by GUID, full lists marking only when declared complete, and in **part E** the release functions `tally_release_pilot` / `tally_release_approve` with the allow-list check (`pilot_allowlist_measured`) |
 | 36 | `migration-36-ledger-rename.sql` | a rename carries the entries (lines, bills, parties, day totals as nil twins) and checks the trial balance before and after; the guard ignores nil twin day rows; `tally_ledger_round_batch` counts only and the new `tally_ledger_round_seen` stamps the GUIDs after tally-ingest's upsert, so a first round marks nothing |
+| 36b | `migration-36b-post-acceptance.sql` | an id Tally accepted is never freed by `tally_post_ids_sync` (`accepted_at`, stamped through `tally_post_id_accept` by tally-ingest); the owner's `tally_post_job_mark_posted` marks an entry seen in Tally as posted (append-only `tally_post_marks`). Independent of 36; run it after 36 and before 37 |
 | 37 | `migration-37-*.sql` (when it exists) | the migration-32 follow-ups (id release, versions with lines, baseline clear, soft delete in `tally_ingest_day`, lease release, balances as on a date, the FinCom tag column, withdrawn releases) |
 
 Before 32 the files are independent of this order and were run long ago (`migration.sql` … `migration-31-clean-names.sql`).

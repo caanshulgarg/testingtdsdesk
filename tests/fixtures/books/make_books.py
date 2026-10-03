@@ -52,8 +52,12 @@ GROUPS = [
     ("Suspense A/c", "", 0, 0, 0), ("Misc. Expenses (ASSET)", "", 0, 0, 1), ("Branch / Divisions", "", 0, 0, 0),
     # the company's own: a primary group of expenses, and a group two steps below a primary one
     ("Employee Benefit Expenses", "", 1, 0, 1), ("Office Costs", "Indirect Expenses", 1, 0, 1),
+    # round 4 (03-Oct-2026): a director's own sub-group under Loans (Liability), named as her Capital Account ledger names
+    # her (the partner case of the cash flow's rule 28); a sub-group of Current Liabilities for statutory dues (rule 27:
+    # the sub-group's name decides, so an ESI ledger under it is not "Salaries and staff")
+    ("Devika Larkspur", "Loans (Liability)", 0, 0, 0), ("Statutory dues", "Current Liabilities", 0, 0, 0),
 ]
-RESERVED = {g[0] for g in GROUPS} - {"Employee Benefit Expenses", "Office Costs"}
+RESERVED = {g[0] for g in GROUPS} - {"Employee Benefit Expenses", "Office Costs", "Devika Larkspur", "Statutory dues"}
 
 # ---------------------------------------------------------------- ledgers: name, parent, opening (Tally's sign: a debit negative), details
 L = []
@@ -68,6 +72,15 @@ led(BANK, "Bank Accounts", -178700)
 led(CASH, "Cash-in-Hand", -15000)
 led("Kaveri Bank - CA 0815", "Bank Accounts")     # a second bank account with no entries, nil balance (the bank-posting tests post to it)
 led("Security Deposit - Office Rent", "Loans & Advances (Asset)", -60000)
+# round 4 (03-Oct-2026), the cash flow's rules 26-28: a director's capital ledger (nil; it names her for the partner match),
+# her loan under her own sub-group, a loan given to a staff member (operating unless marked "Loan given"), the net salary
+# payable directly under Current Liabilities (by its name: "Salaries and staff", flagged) and the employees' ESI share under
+# the sub-group Statutory dues (by its sub-group: not salaries)
+led("Devika Larkspur Capital A/c", "Capital Account")
+led("Devika Larkspur - Loan", "Devika Larkspur", pan="AEXPL7321K")
+led("Loan to Staff - Ravi Menon", "Loans & Advances (Asset)")
+led("Salary Payable", "Current Liabilities")
+led("ESI Payable - Employees Share", "Statutory dues")
 # customers
 led(QUILL, "Sundry Debtors", -40000, state="Delhi", gst=gstin("07AAJFQ3158R1Z"), billwise=True, obills=[("QW/24-25/88", "20250210", -40000)])
 led(ORCHID, "Sundry Debtors", -70000, state="Uttar Pradesh", gst=gstin("09AACCO6624H1Z"), billwise=True, regdetails=True, obills=[("OL/24-25/31", "20250305", -70000)])
@@ -218,7 +231,10 @@ sale("20260320", "LFE/25-26/015", ORCHID, [("Event Management Services", 50000, 
      bills=[b("LFE/25-26/015", "New Ref", -59000, 45)])
 pay("20260325", [(SALT, 25000, {"bills": [b("SS/ADV/3", "Advance", -25000)]})], "Advance for next year's licence")
 rcpt("20260331", [("Interest on Bank Deposit", 4200, {})], "Interest on the sweep deposit")
-pay("20260331", [("Staff Salaries", 45000, {})], "Salaries for January to March 2026")
+# round 4 (03-Oct-2026): the last quarter's salaries through Salary Payable, the employees' ESI share deducted and paid
+jv("20260331", [("Staff Salaries", -45000, {}), ("Salary Payable", 44000, {}), ("ESI Payable - Employees Share", 1000, {})], "Salaries for January to March 2026: net pay to Salary Payable, the employees' ESI share deducted")
+pay("20260331", [("Salary Payable", 44000, {})], "Salaries for January to March 2026 paid")
+pay("20260331", [("ESI Payable - Employees Share", 1000, {})], "ESI, the employees' share for the quarter, paid")
 jv("20260331", [("Interest on Unsecured Loans", -20000, {}), (HEMANT, 18000, {}), ("TDS ON INTEREST 194A", 2000, {})], "Interest on the loan for 2025-26, TDS at 10%", party=HEMANT)
 jv("20260331", [("Depreciation", -60000, {}), ("Laptops and Computers", 40000, {}), ("Event Software Licence", 20000, {})], "Depreciation for the year 2025-26")
 jv("20260331", [(PERE, -7500, {"bills": [b("PTW/OLD/17", "Agst Ref", -7500)]}), ("Sundry Balances Written Off", 7500, {})], "Old balance of 2023 written back", party=PERE)
@@ -249,6 +265,12 @@ rcpt("20260320", [("Staff Loan Processing Fee Refund", 1500, {})], "Processing f
 sale("20260324", "LFE/25-26/016", WIST, [("Sale of Decor Goods", 100000, {"hsn": "6304", "rate": 5, "cc": [("Weddings", 100000)]}),
                                          ("Event Management Services", 50000, o(EVENT, cc=[("Corporate", 50000)])), ("07 CGST OUTPUT", 7000, {}), ("07 SGST OUTPUT", 7000, {})], bills=[])
 rcpt("20260330", [(WIST, 164000, {})], "Received against LFE/25-26/016")
+
+# round 4 (03-Oct-2026): a loan from the director Devika Larkspur (her own sub-group under Loans (Liability): "Partners'
+# accounts" on the cash flow, by the match with her Capital Account ledger), and a loan given to a staff member (Loans &
+# Advances (Asset): operating by default, investing only when marked "Loan given" on the Mapping tab)
+rcpt("20260210", [("Devika Larkspur - Loan", 50000, {})], "Loan from Devika Larkspur for the February payroll")
+pay("20260215", [("Loan to Staff - Ravi Menon", 50000, {})], "Loan given to Ravi Menon, repayable from July 2026 in instalments")
 
 # ---------------------------------------------------------------- writing
 def esc(s): return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;").replace("&amp;#", "&#")

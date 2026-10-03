@@ -161,8 +161,9 @@ func confirmedResult(r M) bool { return r != nil && r["ok"] == true }
 func itemsToSend(all []M, results []M) []M {
 	had := map[string]bool{}
 	for _, r := range results {
-		// an entry whose outcome is unknown is not finished: it is looked for in Tally (by its FinCom id) first
-		if r["outcomeUnknown"] != true {
+		// an entry whose outcome is unknown is not finished: it is looked for in Tally (by its FinCom id) first. One Tally
+		// accepted (CREATED with a voucher id; fault 1) is never sent again, confirmed or not
+		if r["outcomeUnknown"] != true || r["accepted"] == true {
 			had[str(r["id"])] = true
 		}
 	}

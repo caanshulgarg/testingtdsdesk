@@ -45,6 +45,10 @@ All amounts are in rupees. Dates are in 2025-26, and the books run from 01-Apr-2
 | Reverse charge with IGST in March on the Delhi registration: legal services from an advocate in Rajasthan | Keshav Rathore, Advocate, 12-Mar; paid 25-Mar |
 | An invoice at two rates (5% and 18%) to a customer with bill-wise off, paid in the month | Wisteria Banquets Pvt Ltd, LFE/25-26/016, 24-Mar |
 | A bill unpaid 180 days after its date (rule 37) | Nightjar's NSL/112 of 08-May-2025: November 2025 |
+| A director's loan under her own sub-group of Loans (Liability), named as her Capital Account ledger names her (the cash flow's rule 28: Partners' accounts, flagged) | Devika Larkspur - Loan (sub-group Devika Larkspur; Devika Larkspur Capital A/c, nil), 10-Feb, 50,000 |
+| A loan given to a staff member, under Loans & Advances (Asset) (rule 26: operating by default; investing "Loans given" only when marked on the Mapping tab) | Loan to Staff - Ravi Menon, 15-Feb, 50,000 |
+| Net salary through a payable ledger directly under Current Liabilities (rule 27: its name decides, flagged) | Salary Payable, 31-Mar: 44,000 credited and paid |
+| The employees' ESI share under a sub-group of Current Liabilities whose name says nothing of staff (rule 27: the sub-group decides, so not salaries) | ESI Payable - Employees Share under Statutory dues, 31-Mar: 1,000 credited and paid |
 
 ## Opening balances (01-Apr-2025)
 
@@ -121,10 +125,10 @@ There is no interest cover, since finance costs are nil.
 |---|---:|---|---:|
 | Share capital | 10,00,000 | Property, plant and equipment (laptops: 1,50,000 + 80,000 - 40,000) | 1,90,000 |
 | Reserves and surplus (-8,00,000 + 3,94,550) | -4,05,450 | Intangible assets (licence: 1,20,000 - 20,000) | 1,00,000 |
-| Long-term borrowings (Hemant 2,18,000 incl. 18,000 net interest; Nirmala 1,00,000) | 3,18,000 | Trade receivables | 7,18,200 |
+| Long-term borrowings (Hemant 2,18,000 incl. 18,000 net interest; Nirmala 1,00,000; Devika Larkspur 50,000) | 3,68,000 | Trade receivables | 7,18,200 |
 | Trade payables (Nightjar 2,90,000; Juniper 32,400) | 3,22,400 | Cash and cash equivalents (bank 2,19,250; cash 12,500) | 2,31,750 |
-| Other current liabilities (Zinnia's advance 59,000; output GST 1,88,600; reverse charge payable 10,800; TDS 10,000) | 2,68,400 | Short-term loans and advances (deposit 60,000; advance to Saltmarsh 25,000; input GST 1,78,400) | 2,63,400 |
-| **Total** | **15,03,350** | **Total** | **15,03,350** |
+| Other current liabilities (Zinnia's advance 59,000; output GST 1,88,600; reverse charge payable 10,800; TDS 10,000; Salary Payable and ESI nil, paid on 31-Mar) | 2,68,400 | Short-term loans and advances (deposit 60,000; advance to Saltmarsh 25,000; input GST 1,78,400; the staff loan 50,000) | 3,13,400 |
+| **Total** | **15,53,350** | **Total** | **15,53,350** |
 
 Output GST is 07 CGST 77,200 + 07 SGST 77,200 + 07 IGST 30,600 + 09 CGST 1,800 + 09 SGST 1,800 = 1,88,600. Reverse
 charge payable is March's tax, paid in April: 07 RCM CGST 1,800 (credited 1,000 + 1,800 x 3, paid 1,800 + 2,800), 07 RCM
@@ -136,8 +140,10 @@ are larger than this year's profit, so "Negative on the balance sheet" is expect
 The last-year column (the opening balances) totals 5,38,700 on each side. Equity and liabilities: 10,00,000 - 8,00,000 +
 3,00,000 + 37,500 + 1,200. Assets: 1,50,000 + 1,35,000 + 1,93,700 + 60,000.
 
-The bank works out like this. Opening 1,78,700, plus receipts 13,24,000, less payments 12,83,450, is 2,19,250. Receipts are
-the earlier 11,35,000, Wisteria's 1,64,000 and the refunded fee 25,000. Payments are the earlier 11,76,250 plus:
+The bank works out like this. Opening 1,78,700, plus receipts 13,74,000, less payments 13,33,450, is 2,19,250. Receipts are
+the earlier 11,35,000, Wisteria's 1,64,000, the refunded fee 25,000 and the director's loan 50,000 (round 4). Payments are
+the earlier 11,76,250, the staff loan 50,000 (round 4; the March salary of 45,000 now goes out as 44,000 through Salary
+Payable and 1,000 through ESI Payable, the same money) plus:
 
 - the reverse charge on January's rent, 3,600, paid on 20-Feb;
 - the godown rent's share of the 20-Mar payment, 3,600 (5,600 in all);
@@ -233,8 +239,14 @@ which is week 5, not week 1 (finding 2, fixed on 02-Oct-2026).
 | **Input GST paid with bills** (the bank payment of input IGST on 18-Sep; credit taken, not tax paid) | **-3,600** |
 | GST interest and late fees | -200 |
 | TDS and TCS (1,200 + 10,000) | -11,200 |
-| Salaries and staff | -1,80,000 |
+| Salaries and staff (Staff Salaries 1,35,000 by its group; Salary Payable 44,000 by its name, directly under Current Liabilities: flagged) | -1,79,000 |
 | Expenses paid (travel 12,000, rent 1,20,000, printing 2,500 in cash, the staff loan fee 1,500, interest on TDS 450: an Indirect Expenses ledger) | -1,36,450 |
+| Other receipts and payments (ESI Payable - Employees Share: its sub-group Statutory dues decides, and says nothing of staff) | -1,000 |
+| Loans and advances (asset) (the staff loan given; operating until marked "Loan given") | -50,000 |
+| **From operations** | **-11,950** |
+| **From investing** (nothing; with the Loan-given mark on Ravi Menon's loan: Loans given -50,000, and operations 38,050) | **0** |
+| Partners' accounts (the director's loan: her sub-group under Loans (Liability) matches her Capital Account ledger; flagged) | 50,000 |
+| **From financing** | **50,000** |
 | **Net change in cash and bank** | **38,050** |
 
 Cash and bank go from 1,93,700 to 2,31,750, a change of 38,050, which agrees. The payments for the laptops (94,400) and
@@ -246,6 +258,15 @@ Loan Processing Fee Refund are under Indirect Expenses, so neither is on "Loans"
 on TDS, also under Indirect Expenses, is in "Expenses paid". Staff Salaries is on "Salaries and staff" by its group,
 Employee Benefit Expenses. No loan was taken or repaid through cash or bank, so there is nothing under financing.
 GST Late Fee is on "GST interest and late fees" by the ledger map (a GST interest or late fee ledger), not its group.
+
+Round 4 (03-Oct-2026), the owner's rules 26-29, each decided by Tally's group first: a Loans & Advances (Asset) ledger is
+operating unless the owner marks it "Loan given" on the Mapping tab (a confirmed per-ledger choice, never a guess); under
+Current Liabilities the sub-group's own name decides a staff ledger, and only a ledger directly under Current Liabilities
+is decided by its own name (Salary Payable, flagged; ESI Payable - Employees Share under Statutory dues is not salaries);
+under Loans (Liability) a sub-group named for a person of a Capital Account ledger (or saying Partner) is "Partners'
+accounts" (Devika Larkspur, flagged); Hemant's and Nirmala's loans under Unsecured Loans stay "Loans" (no cash moved on
+them). The "Grouping notes" under the cash flow list Salary Payable and Devika Larkspur - Loan (and Ravi Menon's loan when
+marked); they never block anything.
 
 ## GST by month (output, credit, reverse charge, worked out to pay)
 

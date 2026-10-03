@@ -222,22 +222,29 @@ func invokeImport(p M) (M, error) {
 		}
 		for _, r := range pending {
 			xs := str(r["xmlSent"])
-			tag := reTag.FindString(xs)
-			var hit M
-			if tag != "" {
-				for _, h := range heads {
-					if hasTag(str(h["narration"]), tag) {
-						hit = h
-						break
-					}
-				}
-			} else if lv := str(r["lastVchId"]); lv != "" {
-				// Tally's "last voucher id" can point at an older voucher, so it is trusted only for an entry without a tag
-				for _, h := range heads {
-					if str(h["masterId"]) == lv {
-						hit = h
-						break
-					}
+			tag, lv := reTag.FindString(xs), str(r["lastVchId"])
+			// by the tag wherever it is in the narration; else by Tally's voucher id (fault 1: a head whose narration came
+			// back without the tag), never one carrying another entry's tag
+			hit, how := matchHead(heads, tag, lv)
+			if hit != nil && how == "voucher id" {
+				writeLog("  voucher " + str(r["id"]) + ": confirmed by Tally's voucher id " + lv + " (its narration in Tally does not carry " + or(tag, "a tag") + ")")
+			}
+			lookedUp := ""
+			if hit == nil && lv != "" && acceptedByTally(r) {
+				// the day's list did not show it: Tally's own voucher id, in the voucher's month (FinComByMaster)
+				k, e := voucherByMaster(port, company, group(`<DATE>(\d{8})</DATE>`, xs, 1), lv)
+				switch {
+				case e != nil:
+					lookedUp = "Tally did not answer (" + cut(e.Error(), 80) + ")"
+				case k == nil:
+					lookedUp = "not found in its month"
+				case k.cancelled:
+					lookedUp = "found, but cancelled"
+				case otherTag(k.narration, tag):
+					lookedUp = "found, but it carries another entry's tag"
+				default:
+					hit, how = headOfKey(*k), "voucher id"
+					writeLog("  voucher " + str(r["id"]) + ": confirmed by Tally's voucher id " + lv + " (looked up in its month; its narration in Tally does not carry " + or(tag, "a tag") + ")")
 				}
 			}
 			switch {
@@ -283,9 +290,14 @@ func invokeImport(p M) (M, error) {
 					r["wrongCompany"] = elsewhere
 					r["message"] = "Tally put this entry into '" + elsewhere + "', not '" + company + "'. Delete it from '" + elsewhere + "' in Tally, close that company (or make '" + company + "' the active one), then post again."
 					writeLog("  WRONG COMPANY: " + tag + " went into '" + elsewhere + "' instead of '" + company + "'")
+				} else if acceptedByTally(r) {
+					// fault 1 (03-Oct-2026): Tally accepted it (CREATED with a voucher id): never failed, never sent again
+					markAccepted(r, company, lv, heads, lookedUp)
 				} else {
 					r["message"] = "Tally replied 'created', but the entry cannot be found in '" + company + "' or in any other company open in this Tally. It was not marked as posted. Tally's reply: " + str(r["replySnip"])
 				}
+			case acceptedByTally(r):
+				markAccepted(r, company, lv, heads, or(lookedUp, "Tally listed no vouchers for those dates"))
 			default:
 				r["verified"] = nil
 				r["verifyNote"] = "Tally listed no vouchers for those dates"

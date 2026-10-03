@@ -310,6 +310,10 @@ func jobWorker(dir string) {
 			if r != nil && r["outcomeUnknown"] == true {
 				// sent when Tally stopped answering: looked for by its FinCom id before anything is sent again
 				e["outcomeUnknown"], e["reason"] = true, unknownLine
+				if r["accepted"] == true {
+					// fault 1: Tally accepted it (CREATED with a voucher id): being checked, never sent again
+					e["accepted"], e["lastVchId"], e["reason"] = true, str(r["lastVchId"]), "Tally accepted it (voucher id "+or(str(r["lastVchId"]), "not given")+"); being checked, not sent again"
+				}
 			} else if r != nil && r["ok"] != true {
 				e["reason"] = failedLine(str(r["message"]))
 				// 2.1.4: not posted by the duplicate check (FinCom marks the bill as in Tally, or offers Try again)
@@ -623,7 +627,15 @@ func jobWorker(dir string) {
 						if h, ok := there[k]; ok {
 							res = append(res, M{"id": k, "kind": "voucher", "ok": true, "verified": true, "created": 1, "company": company, "port": port, "vchNumber": str(h["number"]), "vchType": str(h["type"]), "masterId": str(h["masterId"]), "guid": str(h["guid"]), "vchDate": str(h["date"]), "message": ""})
 						} else if toInt(rr["created"]) >= len(fast) {
-							res = append(res, M{"id": k, "kind": "voucher", "ok": false, "verified": false, "message": "Tally replied 'created', but the entry cannot be found in '" + company + "'. It was not sent again: look for it in Tally (another company open in Tally, or an Optional voucher)."})
+							// fault 1: Tally made it (CREATED counts every one): never failed, never sent again; checked later
+							r := M{"id": k, "kind": "voucher", "created": 1, "company": company, "port": port, "xml": str(v["xml"])}
+							lv := ""
+							if len(fast) == 1 {
+								lv = str(rr["lastVchId"]) // one entry: Tally's last voucher id is its own
+							}
+							markAccepted(r, company, lv, nil, "not asked yet")
+							delete(r, "xml")
+							res = append(res, r)
 						} else {
 							vouchers = append(vouchers, v)
 						}
@@ -791,6 +803,31 @@ func jobWorker(dir string) {
 			finish("done", postedLine(okN, total, false))
 		}
 	}
+	// fault 1 (03-Oct-2026): entries Tally accepted but the read-back could not confirm: the job stays checking and looks
+	// for them again (by tag, then by Tally's voucher id) for about 20 minutes; they are never sent again either way
+	if acc := acceptedUnconfirmed(results); len(acc) > 0 {
+		p["checking"] = true
+		count()
+		if failN > 0 {
+			finish("failed", jobFailedLine(failN, total, first))
+		} else {
+			finish("done", postedLine(okN, total, true))
+		}
+		writeLog(fmt.Sprintf("Posting job %s: %d entr%s accepted by Tally but not confirmed yet; checked again (never sent again)", str(p["id"]), len(acc), map[bool]string{true: "y", false: "ies"}[len(acc) == 1]))
+		done := recheckAccepted(port, company, all, results, pause, save)
+		if cancelled() {
+			return
+		}
+		if done {
+			p["checking"] = false
+		}
+		count()
+		if failN > 0 {
+			finish("failed", jobFailedLine(failN, total, first))
+		} else {
+			finish("done", postedLine(okN, total, !done))
+		}
+	}
 }
 
 // entries Tally said it created are read back together: found -> confirmed with Tally's voucher number; not found ->
@@ -828,10 +865,87 @@ func confirmPosted(port int, company string, pending []string, results []M, item
 			}
 			r["verified"], r["vchNumber"], r["vchType"], r["masterId"], r["guid"], r["vchDate"], r["message"] = true, str(h["number"]), str(h["type"]), str(h["masterId"]), str(h["guid"]), str(h["date"]), ""
 		} else {
-			r["ok"], r["verified"] = false, false
-			r["message"] = "Tally replied 'created', but the entry cannot be found in '" + company + "'. It was not sent again: look for it in Tally (another company open in Tally, or an Optional voucher)."
+			// fault 1: Tally made it: never failed, never sent again; looked for again later (by tag and by voucher id)
+			if it := byID[k]; it != nil {
+				r["xml"] = str(it["xml"])
+			}
+			markAccepted(r, company, str(r["lastVchId"]), nil, "not asked yet")
+			delete(r, "xml")
 		}
 	}
+}
+
+// the pauses between the later checks of an accepted, unconfirmed entry (fault 1): 2 s to 10 min, about 20 minutes in
+// all; PostRecheckMs (tests) makes every pause that long, PostRecheckTries that many
+func recheckPauses() []time.Duration {
+	n := keepNum("PostRecheckTries", 0)
+	if ms := keepNum("PostRecheckMs", 0); ms > 0 {
+		if n <= 0 {
+			n = 4
+		}
+		o := make([]time.Duration, n)
+		for i := range o {
+			o[i] = time.Duration(ms) * time.Millisecond
+		}
+		return o
+	}
+	o := []time.Duration{2 * time.Second, 5 * time.Second, 10 * time.Second, 30 * time.Second, time.Minute, 2 * time.Minute, 5 * time.Minute, 10 * time.Minute}
+	if n > 0 && n < len(o) {
+		o = o[:n]
+	}
+	return o
+}
+
+// the entries Tally accepted that are not confirmed yet, looked for again: by the tag on their date, then by Tally's
+// voucher id in their month; each one found is confirmed in place. true when none is left
+func recheckAccepted(port int, company string, items []M, results []M, pause func(time.Duration) bool, save func()) bool {
+	byID := map[string]M{}
+	for _, it := range items {
+		byID[str(it["id"])] = it
+	}
+	left := acceptedUnconfirmed(results)
+	if len(left) == 0 {
+		return true
+	}
+	for i, d := range recheckPauses() {
+		if !pause(d) {
+			return false
+		}
+		var still []M
+		for _, r := range left {
+			k := str(r["id"])
+			xml := ""
+			if it := byID[k]; it != nil {
+				xml = str(it["xml"])
+			}
+			h, how, err := findAccepted(port, company, xml, str(r["lastVchId"]))
+			switch {
+			case err != nil:
+				writeLog(fmt.Sprintf("  voucher %s: check %d: Tally did not answer (%s); checked again later", k, i+1, cut(err.Error(), 100)))
+				still = append(still, r)
+			case h == nil:
+				writeLog(fmt.Sprintf("  voucher %s: check %d: not found yet by its tag on its date nor by Tally's voucher id %s; checked again later, not sent again", k, i+1, or(str(r["lastVchId"]), "none")))
+				still = append(still, r)
+			default:
+				addPostedForCopy(company, h, xml)
+				r["verified"], r["optional"] = true, strings.EqualFold(str(h["optional"]), "yes")
+				r["vchNumber"], r["vchType"], r["guid"], r["masterId"], r["vchDate"] = str(h["number"]), str(h["type"]), str(h["guid"]), str(h["masterId"]), str(h["date"])
+				delete(r, "outcomeUnknown")
+				delete(r, "state")
+				r["message"] = ""
+				writeLog(fmt.Sprintf("  voucher %s: confirmed in Tally at check %d by its %s (%s no. %s, voucher id %s)", k, i+1, how, str(h["type"]), str(h["number"]), str(h["masterId"])))
+			}
+		}
+		left = still
+		save()
+		if len(left) == 0 {
+			return true
+		}
+	}
+	for _, r := range left {
+		writeLog(fmt.Sprintf("  voucher %s: still not confirmed after the checks; it stays unknown (accepted by Tally, voucher id %s) and is never sent again; Check Tally in FinCom looks again", str(r["id"]), or(str(r["lastVchId"]), "none")))
+	}
+	return false
 }
 
 // a posting sent when Tally stopped answering: what FinCom shows until it is found in Tally or sent again

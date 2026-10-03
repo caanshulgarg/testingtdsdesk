@@ -1,19 +1,19 @@
-"""python3 run_migration36_posting.py - migration-36-post-acceptance (03-Oct-2026, round 4, the real-books fault of the
+"""python3 run_migration36b.py - migration-36b-post-acceptance (03-Oct-2026, round 4, the real-books fault of the
 day: the bridge reported a posting failed although Tally had replied CREATED with LASTVCHID 26298, and tally_post_ids_sync
 then set the id live = false, so the same bill could be posted twice). On a throwaway PostgreSQL (pg_stand) with the
 cloud tables as on staging (the schema of run_migration32.py, then migration-32 itself), then this file twice.
-Checks: the file runs twice and deletes nothing; tally_post_ids gets accepted_at (set by tally-ingest when it sees an
-acceptance) and confirmed_at / by / note / vch (the owner's mark); tally_post_ids_sync never frees an id with accepted_at
-set, whatever the job's status becomes (failed, cancelled) — only tally_post_id_release (migration 37) may; an id without
-an acceptance is freed as before; tally_post_job_mark_posted(job, id, vch, note) is owner-only (a staff member and an
-owner of another firm are refused), marks the entry posted and verified in results and items with the voucher number,
-keeps the id live with accepted_at and records who / when / note, and sets the job done only when every entry is posted;
-nothing is deleted or re-sent."""
+Checks: the file runs twice and deletes nothing; tally_post_ids gets accepted_at and accepted_vch, set through
+tally_post_id_accept(job, id, vch) (service role only; tally-ingest calls it when it sees an acceptance); tally_post_ids_sync
+never frees an id with accepted_at set, whatever the job's status becomes (failed, cancelled) — only tally_post_id_release
+(migration 37) may; an id without an acceptance is freed as before; tally_post_job_mark_posted(job, id, vch, note) is
+owner-only (a staff member and an owner of another firm are refused), marks the entry posted and verified in results and
+items with the voucher number, keeps the id live with accepted_at, records who / when / note / voucher in the append-only
+tally_post_marks, and sets the job done only when every entry is posted; nothing is deleted or re-sent."""
 import os, re, sys, json, subprocess
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import pg_stand
 SQLDIR = os.path.join(HERE, "..", "server", "tally-cloud")
-M32, M36 = [os.path.join(SQLDIR, f) for f in ("migration-32-sync-safety.sql", "migration-36-post-acceptance.sql")]
+M32, M36 = [os.path.join(SQLDIR, f) for f in ("migration-32-sync-safety.sql", "migration-36b-post-acceptance.sql")]
 fails = []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
@@ -54,18 +54,22 @@ try:
     # 1. the file as the owner runs it (psql, stop at the first error), twice
     for i in (1, 2):
         r = psql_file(M36)
-        ok(r.returncode == 0, "migration-36-post-acceptance runs (%d) %s" % (i, (r.stderr or "").strip()[-600:] if r.returncode else ""))
+        ok(r.returncode == 0, "migration-36b-post-acceptance runs (%d) %s" % (i, (r.stderr or "").strip()[-600:] if r.returncode else ""))
     if not os.path.exists(M36) or r.returncode: raise SystemExit("cannot go on without the migration")
     ok(counts() == before, "nothing deleted by the migration (%s)" % counts())
     body = open(M36).read().lower(); code = " ".join(l for l in body.split("\n") if not l.strip().startswith("--"))
-    ok(not any(w in code for w in ["drop table", "drop view", "drop function", "drop column", "delete from"]) and not re.search(r"truncate\s", code), "the file drops and deletes nothing")
+    ok(not any(w in code for w in ["drop table", "drop view", "drop function", "drop column", "delete from"]) and not re.search(r"truncate\s+(table\s+)?(public\.)?tally_", code), "the file drops and deletes nothing")
     ok(code.strip().startswith("begin;") and code.strip().endswith("commit;"), "one transaction (begin; ... commit;)")
     cols = {r["column_name"] for r in db.rows("select column_name from information_schema.columns where table_name = 'tally_post_ids'")}
-    ok({"accepted_at", "confirmed_at", "confirmed_by", "confirmed_note", "confirmed_vch"} <= cols, "tally_post_ids: accepted_at and the owner's confirmed_at / by / note / vch (%s)" % sorted(cols))
+    ok({"accepted_at", "accepted_vch"} <= cols, "tally_post_ids: accepted_at and accepted_vch (%s)" % sorted(cols))
+    ok(db.one("select count(*) from information_schema.tables where table_name = 'tally_post_marks'") == "1", "tally_post_marks exists")
 
     # 2. an accepted id is never freed by the sync
     ok(live(J(1), "A1") == "t" and live(J(1), "A2") == "t", "both ids of the running posting live")
-    db.sql("update tally_post_ids set accepted_at = now() where job_id = %s and fincom_id = 'A1'" % q(J(1)))     # what tally-ingest does on an acceptance
+    good, out = as_user(STAFF, "select tally_post_id_accept(%s::uuid, 'A1', '26298')::text" % q(J(1)))
+    ok(not good and ("42501" in out or "service role" in out or "permission denied" in out), "tally_post_id_accept is the service role's, not a person's (%s)" % out[-80:])
+    acc = json.loads(db.one("select tally_post_id_accept(%s::uuid, 'A-1', '26298')::text" % q(J(1))))     # what tally-ingest does on an acceptance (the id in letters and digits, as stamped)
+    ok(acc.get("ok") is True and acc.get("stamped") == 1 and col(J(1), "A1", "accepted_vch") == "26298" and col(J(1), "A1", "accepted_at"), "tally_post_id_accept stamps accepted_at and the voucher (%s)" % acc)
     db.sql("update tally_post_jobs set status = 'failed' where id = %s" % q(J(1)))
     ok(live(J(1), "A1") == "t" and live(J(1), "A2") == "f", "the posting reported failed: A1 (Tally accepted it) stays live, A2 is freed")
     try:
@@ -88,20 +92,24 @@ try:
     ok(R.get("A1", {}).get("ok") is True and R["A1"].get("verified") is True and R["A1"].get("vchNumber") == "26298" and R["A1"].get("state") == "in_tally", "results: A1 ok, verified, voucher 26298, in_tally (%s)" % R.get("A1"))
     ok(I.get("A1", {}).get("state") == "in_tally" and "A2" not in R, "items: A1 in_tally; A2 untouched (%s)" % I)
     ok(j1["status"] == "failed" and j1["checking"] == "f", "the posting stays as it was while A2 is not posted (%s)" % j1["status"])
-    ok(live(J(1), "A1") == "t" and col(J(1), "A1", "confirmed_by") == OWNER and col(J(1), "A1", "confirmed_vch") == "26298" and col(J(1), "A1", "confirmed_note").startswith("Tally replied") and col(J(1), "A1", "confirmed_at") and col(J(1), "A1", "accepted_at"),
-       "tally_post_ids: A1 live, who / when / note / voucher recorded, accepted_at kept")
+    mk = db.rows("select entry_id, action, vch, note, by_user, at from tally_post_marks where job_id = %s order by id" % q(J(1)))
+    ok(live(J(1), "A1") == "t" and col(J(1), "A1", "accepted_at") and len(mk) == 1 and mk[0]["entry_id"] == "A1" and mk[0]["action"] == "posted" and mk[0]["vch"] == "26298" and mk[0]["by_user"] == OWNER and mk[0]["note"].startswith("Tally replied") and mk[0]["at"],
+       "tally_post_ids: A1 live with accepted_at; tally_post_marks: who / when / note / voucher (%s)" % mk)
+    good, out = as_user(OWNER, "update tally_post_marks set note = 'x'"); good2, out2 = as_user(OWNER, "delete from tally_post_marks")
+    ok(not good and not good2 and db.one("select count(*) from tally_post_marks") == "1", "the marks are append-only: a person can neither change nor delete one")
     good, out = mark(OWNER, J(1), "a-2"); ok(not good, "an id is matched exactly in letters and digits: 'a-2' is not A2 (%s)" % out[-80:])
     good, out = mark(OWNER, J(1), "A2", "26299", "")
     ok(not good and "another posting" in out, "A2 is live in another posting: refused until that one is cancelled (%s)" % out[-120:])
     db.sql("update tally_post_jobs set status = 'cancelled' where id = %s" % q(J(3)))
     good, out = mark(OWNER, J(1), "A2", "26299", ""); res = json.loads(out) if good else {}
     ok(good and res.get("posted") == 2 and res.get("status") == "done" and db.one("select status from tally_post_jobs where id = %s" % q(J(1))) == "done", "every entry posted: the posting is done (%s)" % out[-200:])
-    ok(live(J(1), "A2") == "t" and col(J(1), "A2", "accepted_at") and col(J(1), "A2", "confirmed_vch") == "26299", "A2 live with accepted_at, voucher 26299")
-    good, out = mark(OWNER, J(1), "A1"); ok(good, "marking again does no harm (%s)" % out[-100:])
+    ok(live(J(1), "A2") == "t" and col(J(1), "A2", "accepted_at") and col(J(1), "A2", "accepted_vch") == "26299" and db.one("select count(*) from tally_post_marks") == "2", "A2 live with accepted_at, voucher 26299, a second mark")
+    good, out = mark(OWNER, J(1), "A1"); ok(good and db.one("select count(*) from tally_post_marks") == "3", "marking again does no harm; a third mark is appended (%s)" % out[-100:])
     ok(all(int(counts()[t]) >= int(before[t]) for t in before) and db.one("select count(*) from tally_post_ids where job_id = %s" % q(J(1))) == "2", "nothing deleted: the test added a posting, no row went (%s)" % counts())
     fn = db.one("select pg_get_functiondef('tally_post_job_mark_posted'::regproc)")
     ok("SECURITY DEFINER" in fn and "search_path" in fn and "pg_temp" in fn, "the function is security definer with search_path = public, pg_temp")
     ok(db.one("select has_function_privilege('anon', 'tally_post_job_mark_posted(uuid, text, text, text)', 'execute')") == "f", "anon cannot call it")
+    ok(db.one("select has_function_privilege('authenticated', 'tally_post_id_accept(uuid, text, text)', 'execute')") == "f", "a signed-in person cannot call tally_post_id_accept")
 finally:
     db.stop()
 print("\nall passed" if not fails else "\nFAILED: %d" % len(fails)); sys.exit(1 if fails else 0)

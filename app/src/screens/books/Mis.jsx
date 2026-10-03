@@ -208,7 +208,11 @@ function CashFlow({ b, r, p2 }) {
       {/* review of 02-Oct-2026: opening + net change = closing, checked against the cash and bank ledgers */}
       {C.open != null && (C.ties ? <p className="note" data-cf-ties="yes">{"Opening " + m(C.open) + " + net change " + m(C.net) + " = closing " + m(C.close) + ": agrees with the cash and bank ledgers."}</p>
         : <p className="bk-alert" data-cf-ties="no">{"Opening " + m(C.open) + " + net change " + m(C.net) + " = " + m(C.open + C.net) + ", but the cash and bank ledgers close at " + m(C.close) + " (" + m(C.diff) + " not explained): an entry moved cash or bank with no line on the other side."}</p>)}
-      <p className="note">Each receipt or payment is placed by the ledger on the other side of it: customers, suppliers, taxes, staff, fixed assets, loans or capital. Moves between cash and bank are left out.</p></Card>
+      <p className="note">Each receipt or payment is placed by the ledger on the other side of it: customers, suppliers, taxes, staff, fixed assets, loans or capital. Moves between cash and bank are left out.</p>
+      {/* round 4 (03-Oct-2026), item 29: the ledgers whose line was not decided by Tally's group alone; a note, never a block */}
+      {C.notes && C.notes.length > 0 && <div className="note" data-cf-notes="" style={{ marginTop: 8, padding: "8px 10px", border: "1px solid var(--line)", borderRadius: 6 }}>
+        <b>Grouping notes</b> — the lines follow Tally's groups; these were decided by a name word, a partner match or a Loan-given mark:
+        <ul style={{ margin: "4px 0 0 18px" }}>{C.notes.map((n) => <li key={n.ledger}>{n.ledger} <span className="note">({n.group})</span> → {n.line}: {n.why}</li>)}</ul></div>}</Card>
     <Card top title={"The next 13 weeks, from " + d(F.start)}>
       {F.opening != null ? <p className="note">{"Starting with cash and bank of ₹" + m(F.opening) + (F.low ? "; the lowest point is ₹" + m(F.low.close) + " in the week of " + d(F.low.from) + "." : ".")}</p>
         : <p className="note">The cash in hand at the start is not known here (see the Summary); the table shows what comes in and goes out.</p>}

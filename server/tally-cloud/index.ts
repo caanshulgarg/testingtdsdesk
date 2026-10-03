@@ -1107,8 +1107,10 @@ Deno.serve(async (req) => {
         // the stamp is skipped)
         const fid = (v: string) => String(v || "").replace(/[^A-Za-z0-9]/g, "");
         const acceptedMsg = (m: string) => /\b(CREATED|ALTERED)\b/i.test(m) && (/\b(LASTVCHID|VCHID|MASTERID|voucher(?: no\.?| number)?)\D{0,6}[1-9]\d*/i.test(m) || /\b(CREATED|ALTERED)\b\D{0,4}[1-9]\d*/i.test(m));
-        const acceptedRes = (r: any) => !!(r.ok || r.vchNumber || r.masterId || r.guid || acceptedMsg(r.message));
+        const acceptedRes = (r: any) => !!(r.ok || r.vchNumber || r.masterId || r.guid || acceptedMsg(r.message) || acceptedMsg(r.reason));
         const accepted = new Set(results.filter((r: any) => r.id && acceptedRes(r)).map((r: any) => fid(r.id)));
+        const vchOf = (r: any) => String(r.vchNumber || r.masterId || ((String(r.message || "") + " " + String(r.reason || "")).match(/\b(?:LASTVCHID|VCHID|MASTERID|voucher(?: no\.?| number)?)\D{0,6}([1-9]\d*)/i) || [])[1] || "");
+        if (items) for (const x of items as any[]) if (x.id && (x.state === "failed" || x.state === "notfound") && acceptedMsg(x.reason)) accepted.add(fid(x.id));
         let heldOpen = false;
         if (accepted.size) {
           for (const r of results as any[]) if (accepted.has(fid(r.id)) && r.verified !== true && !r.ok) { r.state = "unknown"; r.outcomeUnknown = true; r.reason = r.reason || "Tally accepted it; being checked"; }
@@ -1116,11 +1118,14 @@ Deno.serve(async (req) => {
           heldOpen = st === "failed";
         }
         const row: Record<string, unknown> = { status: heldOpen ? "running" : st, done: Math.max(0, Math.floor(Number(body.done) || 0)), message: s(body.message, 500), results, checking: heldOpen || !!body.checking, updated_at: new Date().toISOString() };
-        if (heldOpen) row.message = s("Tally accepted " + accepted.size + (accepted.size === 1 ? " entry" : " entries") + " the bridge reported failed; held for checking, not posted again. " + s(body.message, 300), 500);
+        if (heldOpen) row.message = s("Posted, not yet confirmed: Tally accepted " + accepted.size + (accepted.size === 1 ? " entry" : " entries") + " the bridge reported failed; held for checking, not posted again. " + s(body.message, 300), 500);
         if (items) row.items = items;
-        if (accepted.size) {
-          const { error: accErr } = await db.from("tally_post_ids").update({ accepted_at: new Date().toISOString() }).eq("job_id", id).in("fincom_id", [...accepted]).is("accepted_at", null);
-          if (accErr && !/accepted_at/.test(accErr.message)) console.error("accepted_at", accErr.message);
+        // the id is stamped accepted (tally_post_id_accept, migration 36b: the sync then never frees it); before 36b the
+        // function is missing and the stamp is skipped
+        for (const a of accepted) {
+          const r0 = (results as any[]).find((r) => fid(r.id) === a) || {}, x0 = ((items || []) as any[]).find((x) => fid(x.id) === a) || {};
+          const { error: accErr } = await db.rpc("tally_post_id_accept", { p_job: id, p_id: a, p_vch: vchOf(r0) || vchOf(x0) });
+          if (accErr && !/tally_post_id_accept|schema cache|does not exist/i.test(accErr.message)) console.error("tally_post_id_accept", accErr.message);
         }
         let { error } = await db.from("tally_post_jobs").update(row).eq("id", id).eq("device_id", dev.id).neq("status", "cancelled");
         // before migration-24 there is no items column: the rest is kept as before

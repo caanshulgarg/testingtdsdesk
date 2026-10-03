@@ -19,6 +19,7 @@ import (
 	"sync/atomic"
 	"time"
 	"unicode/utf16"
+	"unicode/utf8"
 )
 
 // --- text from Tally: UTF-16 with or without a mark, or UTF-8
@@ -38,8 +39,36 @@ func textFromBytes(b []byte) string {
 	if n > 10 && zeros > n/4 {
 		return utf16le(b)
 	}
+	if !utf8.Valid(b) {
+		// fault 1 (03-Oct-2026): Tally answers non-ASCII text in its Windows code page (an em dash as the one byte 0x97);
+		// read as Windows-1252, so the XML decoder never stops at it (it cut a narration, and every voucher after it)
+		return fromCP1252(b)
+	}
 	return string(b)
 }
+
+// Windows-1252 bytes as text: 0x80-0x9F by their table (the dashes, curly quotes, euro), the rest as Latin-1
+func fromCP1252(b []byte) string {
+	var o strings.Builder
+	o.Grow(len(b) + 16)
+	for _, c := range b {
+		switch {
+		case c < 0x80:
+			o.WriteByte(c)
+		case c >= 0xA0:
+			o.WriteRune(rune(c))
+		default:
+			if r := cp1252High[c-0x80]; r != 0 {
+				o.WriteRune(r)
+			}
+		}
+	}
+	return o.String()
+}
+
+var cp1252High = [32]rune{0x20AC, 0, 0x201A, 0x0192, 0x201E, 0x2026, 0x2020, 0x2021, 0x02C6, 0x2030, 0x0160, 0x2039, 0x0152, 0, 0x017D, 0,
+	0, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014, 0x02DC, 0x2122, 0x0161, 0x203A, 0x0153, 0, 0x017E, 0x0178}
+
 func utf16le(b []byte) string {
 	u := make([]uint16, len(b)/2)
 	for i := range u {
@@ -50,6 +79,9 @@ func utf16le(b []byte) string {
 
 // Tally sometimes sends characters that are not allowed in XML (ConvertTo-CleanXml)
 func cleanXML(t string) string {
+	if !utf8.ValidString(t) {
+		t = fromCP1252([]byte(t)) // text that did not come through textFromBytes (a file, a test): the same rule
+	}
 	t = re(`&#(x0*[0-8bBcCeEfF]|x0*1[0-9a-fA-F]|0*[0-8]|0*1[1-2]|0*1[4-9]|0*2[0-9]|0*3[01]);`).ReplaceAllString(t, "")
 	t = re("[\x00-\x08\x0B\x0C\x0E-\x1F]").ReplaceAllString(t, "")
 	// a bare & that is not part of an entity

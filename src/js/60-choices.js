@@ -26,7 +26,10 @@
 //    page change (Route.sync → Drafts.onPage), a panel closed (Drafts.guard), and closing the tab (beforeunload).
 
 /* ---------- the choice model ---------- */
-const CHOICE_LABEL = {postTo: "Tally company to post to", gst: "GST ledger", tds: "TDS ledger", exp: "default expense ledger", bank: "bank account's Tally ledger", sales: "default sales ledger"};
+// "flow:<ledger name>" (round 4, 03-Oct-2026): the owner's mark on a ledger for the cash flow ("loan_given": a Loans &
+// Advances (Asset) ledger shown under investing, MIS.flowHead). Set only by a person on the Mapping tab (choiceConfirm),
+// never guessed; it has no old field to keep in step
+const CHOICE_LABEL = {postTo: "Tally company to post to", gst: "GST ledger", tds: "TDS ledger", exp: "default expense ledger", bank: "bank account's Tally ledger", sales: "default sales ledger", flow: "cash-flow line of a ledger"};
 function choiceSplit(key){ const i = String(key).indexOf(":"); return i < 0 ? [key, ""] : [key.slice(0, i), key.slice(i + 1)]; }
 function choiceAcc(co, id){ return ((co && co.bankAccounts) || []).find(a => a.id === id) || null; }
 // the old field a choice is kept in step with (undefined: none)

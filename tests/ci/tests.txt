@@ -59,6 +59,7 @@ run_main_bridge_server.py             120
 run_migration31.py                    120
 run_migration34.py                    180
 run_migration35.py                    120
+run_migration36b.py                   120
 run_migration36.py                    240
 run_migration_order.py                180
 run_mis.js                            120
@@ -113,6 +114,7 @@ run_supinv.py                         120
 run_support_ui.py                     120  TDSDESK_SITE=../app/dist-test
 run_tally_computers.py                120
 run_tally_events.py                   120
+run_tally_line_stop.py                120  TDSDESK_SITE=../app/dist-test
 run_tally_states.py                   120
 run_tcloud_ui.py                      120  TDSDESK_SITE=../app/dist-test
 run_tds_accuracy.py                   120
