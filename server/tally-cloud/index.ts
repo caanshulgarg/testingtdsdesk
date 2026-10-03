@@ -1095,6 +1095,8 @@ Deno.serve(async (req) => {
           // bridge 2.1.6 (round 5): Tally replied CREATED / ALTERED with a voucher id (lastVchId) but the entry is not
           // confirmed yet: ok false, accepted true, state unknown. Only a confirmed entry has ok true
           accepted: !!r?.accepted, lastVchId: s(r?.lastVchId, 30), acceptedAt: s(r?.acceptedAt, 40),
+          // bridge 2.1.5 (round 7): an entry of a partly made batch not found yet by its tag: held, never sent again, looked for
+          held: !!r?.held,
           // the 2.1.5 bridge's counts of Tally's reply, and the company Tally put the entry into when not the one asked
           created: Math.max(0, Math.floor(Number(r?.created) || 0)), altered: Math.max(0, Math.floor(Number(r?.altered) || 0)), wrongCompany: s(r?.wrongCompany, 200) }));
         // 02-Oct-2026: each entry's state as the bridge sees it (waiting / sending / sent / in_tally / failed, with why)
