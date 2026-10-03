@@ -104,10 +104,15 @@ function LedgerPick({ name, role }) {
   </>;
 }
 
+// round 4, item 7: an entry is posted again only once FinCom's cloud has released its FinCom id (tally_post_ids: the
+// bridge said it is not in Tally, or the posting failed as a whole; postIdReleased, src/js/59). Not known (an older
+// cloud, the table not readable): as before. Held: these words, no button
+const held = (id, cid) => typeof postIdReleased === "function" && postIdReleased(id, cid) === false;
+const Wait = () => <span className="note" data-post-wait="">Waiting for the bridge to confirm it is not in Tally</span>;
 // one bill needing attention: {kind, why, acts}
 function billItem(co, e, canPost) {
   if (e.postCheckFailed) return { kind: "checkfailed", why: e.postCheckFailed.message || "Could not check Tally, not posted. Try again.",
-    acts: canPost ? <button className="btn small primary" data-retry-bill="" onClick={() => postAllToTally({ kind: "bill", id: e.id })}>Retry</button> : null };
+    acts: canPost ? (held(e.id, co.id) ? <Wait /> : <button className="btn small primary" data-retry-bill="" onClick={() => postAllToTally({ kind: "bill", id: e.id })}>Retry</button>) : null };
   const miss = !e.exportedAt && !e.postUnconfirmed ? postMissingLedgers(e) : [];
   if (miss.length) return { kind: "ledger", why: "Ledger “" + miss[0].ledger + "” is not in Tally" + (miss.length > 1 ? " (and " + (miss.length - 1) + " more)" : ""),
     acts: <LedgerPick name={miss[0].ledger} role={miss[0].role} /> };
@@ -116,7 +121,7 @@ function billItem(co, e, canPost) {
   const why = (v.state === "notfound" ? "" : was + (PostCheck.postedAt(e) ? " " + tallyHm(PostCheck.postedAt(e)) : "") + ", not confirmed in Tally. ") + v.text + (v.state === "notfound" ? "." : "");
   const check = <button className="btn small" data-check-now="" onClick={() => PostCheck.run(co, e, true)}>Check now</button>;
   return { kind: e.goneFromTally ? "gone" : e.exportedAt ? "sent" : "unread", state: v.state, why,
-    acts: v.state === "checking" ? null : v.state === "notfound" ? <>{canPost && <button className="btn small primary" data-post-again="" onClick={() => PostCheck.repost(co, e)}>Post again</button>}{check}</> : check };
+    acts: v.state === "checking" ? null : v.state === "notfound" ? <>{canPost && (held(e.id, co.id) ? <Wait /> : <button className="btn small primary" data-post-again="" onClick={() => PostCheck.repost(co, e)}>Post again</button>)}{check}</> : check };
 }
 
 // a bill row of Errors: number, party, date, amount — why
@@ -132,7 +137,7 @@ function Attention({ co, bills, canPost }) {
   const refusedRow = (e, nested) => <li key={e.id} data-attn-row="" data-bill-row={e.id} data-attn-kind="refused">
     <BillWhy e={e} why={"Tally refused it" + (why[e.id] && why[e.id].job.created_at ? " (posting of " + tallyHm(why[e.id].job.created_at) + ")" : "") + ": " + ((why[e.id] && why[e.id].reason) || "Tally did not take it")} />
     <span className="acts">
-      {!nested && canPost && <button className="btn small primary" data-post-again="" onClick={() => postAllToTally({ kind: "bill", id: e.id })}>Post again</button>}
+      {!nested && canPost && (held(e.id, co.id) ? <Wait /> : <button className="btn small primary" data-post-again="" onClick={() => postAllToTally({ kind: "bill", id: e.id })}>Post again</button>)}
       <button className="btn small" data-back="" onClick={() => postBackToReview("bill", e.id)}>Back to review</button>
     </span>
   </li>;
@@ -161,7 +166,7 @@ function Attention({ co, bills, canPost }) {
           <span className="why"><b>{"Posting of " + fmtDateTime(j.created_at)}</b>{" · " + (j.status === "cancelled" ? "cancelled" : "failed") + ": "}<span data-why="">{plainMsg(j.message) || "Tally did not take it"}</span>
             {left ? <span className="nr">{" · " + left + " of " + all + " still to send"}</span> : null}</span>
           <span className="acts">
-            <button className="btn small primary" data-retry="" onClick={() => CloudJobs.retry(j)}>Retry</button>
+            {typeof postJobHeld === "function" && postJobHeld(j) ? <Wait /> : <button className="btn small primary" data-retry="" onClick={() => CloudJobs.retry(j)}>Retry</button>}
             {CloudJobs.dismissOk && <button className="btn small" data-dismiss="" onClick={() => CloudJobs.dismiss(j)}>Dismiss</button>}
           </span>
           {mine.length > 0 && <ul className="post-attn post-attn-in">{mine.map((e) => refusedRow(e, true))}</ul>}
@@ -223,6 +228,7 @@ export function PostStep() {
   // a bill sent and not confirmed is read afresh before it is called missing (PostCheck, src/js/59); the cloud copy's
   // check (TallyProof) and the company found by itself as before
   setTimeout(() => {
+    if (typeof PostIds === "object") PostIds.load(co.id);
     TallyProof.check(co.id).catch(() => {});
     if (!co.postTo) autoPostTo(co).catch(() => {});
     bills.attention.filter((e) => (e.exportedAt || e.postUnconfirmed) && PostCheck.due(e)).forEach((e) => PostCheck.run(co, e).catch(() => {}));

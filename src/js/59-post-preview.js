@@ -362,7 +362,8 @@ function postStatusFor(co){
     const T = {offline: [l.text + ": start that computer, or FinCom Bridge on it. Nothing can be posted or checked until then.", "", null],
       closed: [l.text + ": open TallyPrime there, with " + pl.company + ".", "", null],
       notanswering: [l.text + ": close any message box in Tally there; FinCom carries on by itself.", "", null],
-      paused: [l.text + ": resume it from the FinCom Bridge icon there. Update now still reads.", "Update now", () => tallyUpdateNow(co.id)]}[l.state] || [l.text, "", null];
+      paused: [l.text + ": resume it from the FinCom Bridge icon there. Update now still reads.", "Update now", () => tallyUpdateNow(co.id)],
+      stopped: [l.text + ". An owner resumes it on the Tally page; posting goes on, Update now does not read until then.", "", null]}[l.state] || [l.text, "", null];
     out.problem = p(T[0], T[1], T[2], l.state); return out;
   }
   if (!pl.state && pl.action){ out.problem = p(pl.action + ".", pl.go === "tally" ? "Open the Tally page" : "", pl.go === "tally" ? goTallyPage : null, "bridge"); return out; }
@@ -501,6 +502,49 @@ const PostCheck = {
     return true;
   }
 };
+// round 4, item 7 (migration-37): the FinCom ids FinCom's cloud holds for the client's postings (tally_post_ids). An
+// entry Tally refused, or one not found at a fresh read, is posted again only once its id is released (live = false, or
+// released_at set: the bridge said it is not in Tally, or the posting failed as a whole); until then the Errors tab says
+// "Waiting for the bridge to confirm it is not in Tally" and has no button. When the table cannot be read at all (an
+// older cloud, or no select for members: readable = false), the buttons are shown as before migration-37: nothing is
+// held back for want of a column, and nothing is posted twice either (the bridge checks Tally for the id as it posts).
+const PostIds = {
+  by: {}, readable: null, busy: {},
+  jobsKey(cid){ return (typeof CloudJobs === "object" ? CloudJobs.forClient(cid) : []).slice(0, 40).map(j => j.id).join(","); },
+  async load(cid, force){
+    if (!cid || typeof TCloud !== "object" || !TCloud.on() || this.readable === false || this.busy[cid]) return;
+    const key = this.jobsKey(cid), s = this.by[cid];
+    if (!key || (!force && s && s.key === key && Date.now() - s.at < 60000)) return;
+    this.busy[cid] = true;
+    try {
+      const q = cols => "tally_post_ids?select=" + cols + "&job_id=in.(" + key + ")";
+      let rows;
+      try { rows = await TCloud.restAll(q("job_id,fincom_id,entry_id,live,released_at,released_why")); }
+      catch (e){ if (!/released_at|released_why|42703/i.test(String(e && e.message))) throw e; rows = await TCloud.restAll(q("job_id,fincom_id,entry_id,live")); }
+      const held = new Map();
+      [].concat(rows || []).forEach(r => { const h = !!r.live && !r.released_at; [r.fincom_id, r.entry_id].filter(Boolean).forEach(k => held.set(String(k), held.get(String(k)) || h)); });
+      const sig = JSON.stringify([...held.entries()].sort());
+      const changed = !s || s.sig !== sig;
+      this.by[cid] = {at: Date.now(), key, held, sig}; this.readable = true;
+      if (changed) render();
+    } catch (e){ this.readable = false; this.by[cid] = {at: Date.now(), key, held: null, sig: ""}; render(); }
+    finally { delete this.busy[cid]; }
+  }
+};
+// true: the id is released (or the cloud holds no row for it); false: still held live; null: not known (tally_post_ids
+// not readable, or not read yet): then the page behaves as before
+function postIdReleased(id, cid){
+  cid = cid || S.coId;
+  const s = PostIds.by[cid];
+  if (PostIds.readable === false || !s || !s.held) return null;
+  return !s.held.get(String(id));
+}
+// a failed posting of the cloud: one of the entries still to send is held live
+function postJobHeld(j){
+  if (typeof CloudJobs !== "object") return false;
+  const ids = (CloudJobs.idsOf(j) || []).filter(id => !CloudJobs.inTally(j, id));
+  return ids.some(id => postIdReleased(id, j.client_id) === false);
+}
 // one line on the page after a check or a posting ("Already in Tally (voucher no. …)"): S.postNote
 function postNote(cid, text, level){ S.postNote = {cid, text, level: level || "", at: Date.now()}; }
 

@@ -324,13 +324,29 @@ const TCloud = {
       p.devices = await Cloud.api("tally_devices?select=" + cols + ",main_bridge&order=created_at.desc").catch(e => {
         if (/main_bridge/.test(String(e && e.message))) { p.noMain = true; return Cloud.api("tally_devices?select=" + cols + "&order=created_at.desc"); }
         throw e; });
-      p.companies = await this.restAll("tally_companies?select=company,client_id,gstin,last_seen,linked_at&order=company.asc");
-      // migration-35: the stops from FinCom still standing, and the bridge versions on trial or approved (members may read
-      // both); without the migration, none (the lines still show what each computer's heartbeat says)
-      try { p.stops = [].concat(await Cloud.api("tally_read_stops?select=id,device_id,action,reason,stopped_at,cleared_at&action=eq.stop&cleared_at=is.null&order=id.desc") || []); p.noControl = false; }
-      catch (e){ p.stops = []; p.noControl = true; }
-      try { p.releases = [].concat(await Cloud.api("tally_bridge_releases?select=version,pilot_device,pilot_started_at,pilot_seen_at,pilot_self_stop,approved_at&order=pilot_started_at.desc") || []); }
-      catch (e){ p.releases = []; }
+      p.companies = await this.restAll("tally_companies?select=company,client_id,device_id,gstin,last_seen,linked_at&order=company.asc");
+      // migration-35: the stops and resumes from FinCom with who and when (round 4, item 24: the latest 300 rows; the
+      // standing stops and the latest resume a computer are taken out here), and the bridge versions on trial, approved
+      // or withdrawn (members may read both); without the migration, none (the lines still show what each heartbeat says)
+      try {
+        const all = [].concat(await Cloud.api("tally_read_stops?select=id,device_id,action,reason,stopped_at,stopped_by,cleared_at,cleared_by&order=id.desc&limit=300") || []);
+        p.stops = all.filter(x => x.action !== "resume" && !x.cleared_at); p.resumes = resumeRows(all); p.noControl = false;
+      } catch (e){ p.stops = []; p.resumes = {}; p.noControl = true; }
+      const relCols = "version,pilot_device,pilot_started_at,pilot_by,pilot_seen_at,pilot_self_stop,approved_at,approved_by";
+      try { p.releases = [].concat(await Cloud.api("tally_bridge_releases?select=" + relCols + ",withdrawn_at,withdrawn_by,withdrawn_why&order=pilot_started_at.desc") || []); p.noWithdraw = false; }
+      catch (e){
+        // migration 37 not applied: no withdrawal columns yet (the page says FinCom's cloud is not ready for a withdrawal)
+        if (/withdrawn|42703/i.test(String(e && e.message))){ p.noWithdraw = true; try { p.releases = [].concat(await Cloud.api("tally_bridge_releases?select=" + relCols + "&order=pilot_started_at.desc") || []); } catch (e2){ p.releases = []; } }
+        else p.releases = [];
+      }
+      // migration-37 (item 10): each book's reading state (needs_baseline: since when, why; cleared by whom, with the note)
+      // and the books, to list them under their computer. Not readable (an older cloud, no select for members): nothing shown
+      try { p.cursors = [].concat(await Cloud.api("tally_sync_cursor?select=book_id,state,state_why,state_at,cleared_at,cleared_by,cleared_note") || []); p.noBaselineClear = false; }
+      catch (e){
+        if (/cleared_note|cleared_by|cleared_at|42703/i.test(String(e && e.message))){ p.noBaselineClear = true; try { p.cursors = [].concat(await Cloud.api("tally_sync_cursor?select=book_id,state,state_why,state_at") || []); } catch (e2){ p.cursors = null; } }
+        else p.cursors = null;
+      }
+      try { p.books = p.cursors && p.cursors.length ? [].concat(await this.restAll("tally_books?select=book_id,client_id,company&order=company.asc") || []) : []; } catch (e){ p.books = []; }
       p.err = ""; p.at = Date.now();
       linkByGstin(p.companies);
     } catch (e){ p.err = /tally_devices|does not exist|schema cache/i.test(String(e && e.message)) ? "The cloud copy is not set up in this database yet." : (e && e.message) || String(e); }
@@ -383,6 +399,26 @@ const TCloud = {
     return rs ? {device_id: devId, reason: rs.reason || ""} : null;
   },
   stoppedAll(){ return Array.isArray(this.pane.stops) && !this.pane.noControl && this.pane.stops.some(s => !s.device_id && !s.cleared_at); },
+  // the latest resume that holds for a computer (its own, or one for all computers, whichever is later): {by, at}, or null
+  resumeFor(devId){
+    const r = this.pane.resumes || {}, own = r[devId], all = r.all;
+    if (own && all) return String(own.at || "") >= String(all.at || "") ? own : all;
+    return own || all || null;
+  },
+  // item 10: the books of a computer's companies whose reading needs a fresh baseline (tally_sync_cursor.state), and the
+  // ones cleared in the last week (who, when, the note): [{book, company, cur}]
+  baselines(devId){
+    const p = this.pane;
+    if (!Array.isArray(p.cursors) || !p.cursors.length) return [];
+    const cos = (p.companies || []).filter(c => c.device_id === devId), week = Date.now() - 7 * 86400000, out = [];
+    (p.books || []).forEach(b => {
+      if (!cos.some(c => c.company === b.company && (!c.client_id || !b.client_id || String(c.client_id) === String(b.client_id)))) return;
+      const cur = p.cursors.find(x => x.book_id === b.book_id);
+      if (!cur) return;
+      if (cur.state === "needs_baseline" || (cur.cleared_at && Date.parse(cur.cleared_at) > week)) out.push({book: b.book_id, company: b.company, cur});
+    });
+    return out;
+  },
   // a request's line: "vouchers 1.2 s at 15:34"
   reqSay(q){ if (!q || !q.kind) return ""; const ms = Number(q.ms) || 0; return q.kind + " " + (ms < 1000 ? ms + " ms" : (ms / 1000).toFixed(1) + " s") + (q.at ? " at " + tallyHm(q.at) : ""); },
   // Stop reading / Resume reading / a pilot / approval (owners; the cloud checks it again): migration-35's RPCs. What
@@ -396,7 +432,8 @@ const TCloud = {
       toast(done);
     } catch (e){
       const m = String((e && e.message) || e);
-      p.ctl = {err: /PGRST202|Could not find the function|schema cache|does not exist|\b404\b/i.test(m) ? "FinCom\u2019s cloud is not ready for this yet (migration 35 is not applied)."
+      const mig = {tally_release_withdraw: 37, tally_baseline_clear: 37}[fn] || 35;
+      p.ctl = {err: /PGRST202|Could not find the function|schema cache|does not exist|\b404\b/i.test(m) ? "FinCom\u2019s cloud is not ready for this yet (migration " + mig + " is not applied)."
         : m.replace(/^ERROR:\s*/i, "").replace(/^./, c => c.toUpperCase())};
     }
     await this.refreshPane();
@@ -424,6 +461,25 @@ const TCloud = {
       body: "<p>Every computer of the firm installs FinCom Bridge " + esc(v) + " at its next check. FinCom\u2019s cloud allows it only after a working day on the pilot computer with no stop by itself.</p>"});
     if (!a || !a.ok) return;
     await this.control("tally_release_approve", {p_version: v}, "Version " + v + " is approved for all computers.");
+  },
+  // round 4, item 23: an owner withdraws a version on trial or approved (a reason is required; the cloud's beat gives it
+  // to no computer any more; a new pilot of it is allowed)
+  async releaseWithdraw(v){
+    const a = await askConfirm({title: "Withdraw version " + v + "?", ok: "Withdraw it",
+      body: "<p>No computer of the firm gets FinCom Bridge " + esc(v) + " from FinCom\u2019s cloud any more; the ones running it keep running. It can be tried on one computer again later.</p>" +
+        '<div class="bk-form one"><label><span>Why (kept with the version, shown on this page)</span><input id="withdrawWhy" maxlength="500" placeholder="What went wrong"></label></div>',
+      read: () => ({why: ((document.getElementById("withdrawWhy") || {}).value || "").trim()}), validate: d => d && d.why ? "" : "Say why the version is withdrawn."});
+    if (!a || !a.ok) return;
+    await this.control("tally_release_withdraw", {p_version: v, p_why: a.data.why}, "Version " + v + " is withdrawn.");
+  },
+  // item 10: an owner clears "needs a fresh baseline" on a book (with a note); the bridge reads the company afresh
+  async baselineClear(book, company){
+    const a = await askConfirm({title: "Clear the baseline of " + company + "?", ok: "Clear it",
+      body: "<p>FinCom\u2019s cloud stops holding " + esc(company) + " back; the bridge reads the whole company again from Tally at its next round, and the copy here follows it.</p>" +
+        '<div class="bk-form one"><label><span>Note (why it is cleared; kept with the book)</span><input id="baselineNote" maxlength="500" placeholder="What happened in Tally"></label></div>',
+      read: () => ({note: ((document.getElementById("baselineNote") || {}).value || "").trim()})});
+    if (!a || !a.ok) return;
+    await this.control("tally_baseline_clear", {p_book: book, p_note: (a.data && a.data.note) || ""}, "The baseline of " + company + " is cleared; the bridge reads it afresh.");
   },
   // "Make this the main bridge": an owner, asked first; tally-ingest gives postings only to it from then on, tells the
   // bridge (its next heartbeat) to switch itself over, which stops bridge 1.15.0 on that computer
@@ -497,6 +553,17 @@ const TCloud = {
 
 };
 
+// the latest resume a computer (and for all computers, key "all") out of tally_read_stops: a 'resume' row, or a stop
+// cleared (cleared_by, cleared_at): {by, at}
+function resumeRows(all){
+  const out = {};
+  [].concat(all || []).forEach(x => {
+    const k = x.device_id || "all";
+    const r = x.action === "resume" ? {by: x.stopped_by || "", at: x.stopped_at || ""} : x.cleared_at ? {by: x.cleared_by || "", at: x.cleared_at} : null;
+    if (r && (!out[k] || String(r.at) > String(out[k].at))) out[k] = r;
+  });
+  return out;
+}
 // FinCom opened by FinCom Bridge's "Connect FinCom on this computer": the page's address carries the bridge's
 // one-time connect code (#pair=123456). It is taken off the address at once, and used to connect to the bridge.
 (function(){
@@ -714,9 +781,12 @@ const TLight = {
     // every 30 s (a small database call; nothing is asked of Tally): a beat comes every 30 s, and "offline" is three missed
     if (!TCloud.on() || this.st.busy || Date.now() - this.st.at < 30000) return this.st.p || Promise.resolve();
     this.st.busy = true;
-    return this.st.p = Promise.all([TCloud.restAll("tally_companies?select=company,client_id,device_id,gstin,linked_at&order=company.asc"), Cloud.api("tally_devices?select=id,name,last_seen,info,revoked")])
-      .then(([cos, devs]) => {
-        this.st.devs = (devs || []).filter(d => !d.revoked); this.st.cos = cos || [];
+    // round 4, item 25: the stops from FinCom still standing, with who and when (null when they cannot be read: before
+    // migration-35; then the computer's info.readStop alone says it)
+    return this.st.p = Promise.all([TCloud.restAll("tally_companies?select=company,client_id,device_id,gstin,linked_at&order=company.asc"), Cloud.api("tally_devices?select=id,name,last_seen,info,revoked"),
+        Cloud.api("tally_read_stops?select=id,device_id,action,reason,stopped_at,stopped_by&action=eq.stop&cleared_at=is.null&order=id.desc").then(r => [].concat(r || []), () => null)])
+      .then(([cos, devs, stops]) => {
+        this.st.devs = (devs || []).filter(d => !d.revoked); this.st.cos = cos || []; this.st.stops = stops;
         this.st.by = this.work((cos || []).filter(c => c.client_id), devs || [], Date.now());
         linkByGstin(this.st.cos);
       }, () => {})
@@ -803,10 +873,34 @@ function tallyLine(co){
   const reading = updating || !!(ask && now - ask.at < 180000 && !((Date.parse(read || 0) || 0) > ask.before));
   const o = (state, level, text) => ({state, level, text, computer: comp, read, reading});
   if (bridge === "offline" || bridge === "none") return o("offline", "bad", comp + " is offline");
+  // round 4, item 25: a stop from FinCom on the client's computer (or on all computers) comes before everything but
+  // offline: "Reading stopped by <name> at <time>: <reason>"; the line's Resume (owners) and Update now look at .stop
+  const stop = dev ? tallyStopOn(dev) : null;
+  if (stop) return Object.assign(o("stopped", "bad", "Reading stopped " + (stop.who ? "by " + stop.who : "from FinCom") + (stop.at ? " at " + tallyHm(stop.at) : "") + ": " + (stop.reason || "no reason given")), {stop});
   if (tally === "closed") return o("closed", "warn", "Tally is closed on " + comp);
   if (since) return o("notanswering", "bad", "Tally is not answering on " + comp + " since " + tallyHm(since));
   if (paused) return o("paused", "warn", "Background reading paused on " + comp);
   return o("open", "ok", "Tally open on " + comp + (read ? " \u00b7 last read " + tallyHm(read) : ""));
+}
+// the stop from FinCom standing on a computer, as the per-client line needs it: the one for all computers, else the
+// computer's own (tally_read_stops read by TLight, or by the Tally page), else the computer's info.readStop from its
+// heartbeat (no name then). {who, at, reason, all, deviceId, computer} or null
+function tallyStopOn(dev){
+  const st = (typeof TLight === "object" && TLight.st) || {}, lists = [st.stops, typeof TCloud === "object" && TCloud.pane && !TCloud.pane.noControl ? TCloud.pane.stops : null];
+  const list = lists.find(l => Array.isArray(l));
+  let row = null, all = false;
+  if (list){ const a = list.find(x => !x.device_id && !x.cleared_at), own = list.find(x => x.device_id === dev.id && !x.cleared_at); row = a || own || null; all = !!a; }
+  // with a list at hand it decides (a computer's readStop can lag a resume by one heartbeat); without one, the heartbeat
+  const rs = !list && dev.info ? dev.info.readStop : null;
+  if (!row && !(rs && (rs.by === "fincom" || (rs.reason && !rs.by)))) return null;
+  const who = row && row.stopped_by && typeof memberName === "function" ? memberName(row.stopped_by) : "";
+  return {who, at: (row && row.stopped_at) || (rs && rs.at) || "", reason: (row && row.reason) || (rs && rs.reason) || "", all, deviceId: dev.id, computer: (dev.info && dev.info.computer) || dev.name || ""};
+}
+// the stop standing on the computer that keeps a client's company (null when none)
+function tallyStopFor(cid){
+  const co = S.companies && S.companies[cid];
+  const l = co ? tallyLine(co) : null;
+  return l && l.state === "stopped" ? l.stop : null;
 }
 // Update now asked here, per client: {at, before (the last read then)}, for "Reading now…" until a newer read comes in
 const TallyAsk = {};
@@ -895,10 +989,26 @@ Object.assign(TCloud, {
   //     (tally_period over the same day totals the view sums, tally_ledger_day; amount = credit - debit).
   // Only where the view is missing (an older cloud without migration-32), or for a date before this book begins (an
   // earlier year, another book), the trial balance function tally_tb, as before
+  // migration-37 (item 13): tally_balances_on(p_book, p_as_on) answers a date inside the copy in one request (opening,
+  // movement and closing a ledger; deleted and merged ledgers left out). null when the function is not on this cloud
+  // (then the view plus tally_period, as before); any other error is an error
+  hasBalOn: null,
+  async balOn(bk, asOn){
+    if (this.hasBalOn === false || !bk || !bk.book) return null;
+    try { const rows = await this.rpcAll("tally_balances_on", {p_book: bk.book, p_as_on: this.iso(asOn)}); this.hasBalOn = true; return [].concat(rows || []); }
+    catch (e){
+      if (!/tally_balances_on|PGRST202|Could not find the function|schema cache|does not exist|404/i.test(String((e && e.message) || e))) throw e;
+      this.hasBalOn = false; return null;
+    }
+  },
   async balRows(cid, asOn){
     const bk = this.book(cid), from = bk ? this.d8(bk.from || "") : "", last = bk ? this.d8(bk.to || "") : "";
     asOn = String(asOn);
     if (bk && from && asOn >= from){
+      if (!(last && asOn >= last)){
+        const on = await this.balOn(bk, asOn);
+        if (on) return on.map(r => ({ledger: r.ledger, parent: r.parent || "", open: num(r.open), movement: r2(num(r.movement)), closing: r2(num(r.closing))}));
+      }
       const v = await this.viewRows(bk);
       if (v){
         if (last && asOn >= last) return v.map(r => ({ledger: r.ledger, parent: r.parent || "", open: r.open, movement: r2(num(r.closing) - num(r.open)), closing: r.closing}));
@@ -975,6 +1085,10 @@ function bankNotReadBack(rows, cid){
 // FinCom's cloud (the bridge reads at once, also while its background reading is paused)
 function tallyUpdateNow(cid){
   cid = cid || S.coId;
+  // round 4, item 25: while FinCom has stopped reading on the client's computer, nothing is asked (the bridge would not
+  // read anyway); the Tally page is where an owner resumes it
+  const stop = tallyStopFor(cid);
+  if (stop) return toast("Reading is stopped by " + (stop.who || "FinCom") + " (" + (stop.reason || "no reason given") + "); resume it on the Tally page");
   tallyAskedRead(cid); render();
   if (cid === S.coId) return doAct("keepNow");
   if (typeof TCloud !== "object" || !TCloud.on()) return toast("Sign in to the firm account to ask the Tally computer.");

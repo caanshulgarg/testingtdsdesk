@@ -99,24 +99,58 @@ function Reqs({ r }) {
   if (!last && !long) return null;
   return <span className="note" data-reqs="">{[last && "Last request: " + last, long && "Longest today: " + long, today && q.over20 ? q.over20 + " over 20 s" : ""].filter(Boolean).join(" · ")}</span>;
 }
+// who did it (round 4, item 24): the firm member's name, else e-mail (memberName, src/js/51)
+const who = (uid) => typeof memberName === "function" ? memberName(uid) : "a member of the firm";
+const NOT_READY = "FinCom’s cloud is not ready for this yet";
 function Release({ rows, latest, owner }) {
   if (!latest || !TCloud.on()) return null;
   const rel = (TCloud.pane.releases || []).find((x) => x.version === latest);
   const behind = rows.some((r) => r.go && !r.old && vnum(r.version) < vnum(latest));
   if (!rel && !behind) return null;
-  const pilot = rel && rel.pilot_started_at && !rel.approved_at ? rows.find((r) => r.device.id === rel.pilot_device) : null;
+  const wd = !!(rel && rel.withdrawn_at);
+  const pilot = rel && rel.pilot_device ? rows.find((r) => r.device.id === rel.pilot_device) : null;
+  // round 4 (items 23, 24): who started the pilot, who approved, who withdrew and why
+  const lines = rel ? [rel.pilot_started_at && "Pilot started by " + who(rel.pilot_by) + " at " + tallyHm(rel.pilot_started_at) + " on " + (pilot ? pilot.computer : "the pilot computer") + ".",
+    rel.approved_at && "Approved by " + who(rel.approved_by) + " at " + tallyHm(rel.approved_at) + ".",
+    wd && "Withdrawn by " + who(rel.withdrawn_by) + " at " + tallyHm(rel.withdrawn_at) + ": " + (rel.withdrawn_why || "no reason given")].filter(Boolean) : [];
   return <div className="row" data-release="" style={{ alignItems: "center", gap: 8, flexWrap: "wrap", margin: "6px 0 2px" }}>
-    {rel && rel.approved_at ? <span className="note">{"Version " + latest + " is approved for all computers (" + fmtDateTime(rel.approved_at) + ")."}</span>
+    {wd ? <span className="note" data-release-withdrawn="">{"Version " + latest + " is withdrawn: no computer gets it from FinCom’s cloud. Once it is put right, try it on one computer again."}</span>
+      : rel && rel.approved_at ? <span className="note">{"Version " + latest + " is approved for all computers (" + fmtDateTime(rel.approved_at) + ")."}</span>
       : rel && rel.pilot_started_at ? <span className="note">{"Version " + latest + " on trial on " + (pilot ? pilot.computer : "the pilot computer") + " since " + fmtDateTime(rel.pilot_started_at) + "."}</span>
       : <span className="note">{"Version " + latest + " is ready: try it on one computer first."}</span>}
-    {owner && !(rel && rel.approved_at) && <button className="btn small" data-release-approve="" onClick={() => TCloud.releaseApprove(latest)}>{"Approve version " + latest + " for all computers"}</button>}
+    {lines.length > 0 && <span className="note" data-release-who="">{lines.join(" ")}</span>}
+    {owner && !wd && !(rel && rel.approved_at) && <button className="btn small" data-release-approve="" onClick={() => TCloud.releaseApprove(latest)}>{"Approve version " + latest + " for all computers"}</button>}
+    {owner && rel && !wd && (rel.pilot_started_at || rel.approved_at) && (TCloud.pane.noWithdraw
+      ? <span className="note" data-not-ready="">{NOT_READY + " (withdrawing a version needs migration 37)."}</span>
+      : <button className="btn small" data-release-withdraw="" onClick={() => TCloud.releaseWithdraw(latest)}>{"Withdraw version " + latest}</button>)}
   </div>;
+}
+// item 24: on a computer's line, who stopped reading from FinCom (or resumed it) and when
+function ReadWho({ r }) {
+  const st = TCloud.stopFor ? TCloud.stopFor(r.device.id) : null;
+  if (st && (st.stopped_by || st.stopped_at)) return <span className="note" data-read-who="">{"Stopped by " + who(st.stopped_by) + (st.stopped_at ? " at " + tallyHm(st.stopped_at) : "") + ": " + (st.reason || "no reason given") + (st.device_id ? "" : " (all computers)")}</span>;
+  if (st) return null;
+  const rs = TCloud.resumeFor ? TCloud.resumeFor(r.device.id) : null;
+  return rs && rs.at ? <span className="note" data-read-who="">{"Resumed by " + who(rs.by) + " at " + tallyHm(rs.at)}</span> : null;
+}
+// item 10: under a computer, its companies whose reading needs a fresh baseline (why, since when) with the owner's
+// Clear (note), and the ones cleared this week (by whom, when, the note)
+function Baselines({ r, owner }) {
+  const list = TCloud.baselines ? TCloud.baselines(r.device.id) : [];
+  if (!list.length) return null;
+  return <div style={{ marginLeft: 16 }}>{list.map(({ book, company, cur }) => <div key={book} className="row" data-baseline={book} style={{ alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+    {cur.state === "needs_baseline" ? <><span className="tag bad">{company}</span><span className="note">{"Needs a fresh baseline since " + tallyHm(cur.state_at) + ": " + (cur.state_why || "no reason given")}</span>
+        {owner && (TCloud.pane.noBaselineClear ? <span className="note" data-not-ready="">{NOT_READY + " (clearing a baseline needs migration 37)."}</span>
+          : <button className="btn small" data-baseline-clear={book} onClick={() => TCloud.baselineClear(book, company)}>Clear (note)</button>)}</>
+      : <><span className="tag ok">{company}</span><span className="note" data-baseline-cleared="">{"Cleared by " + who(cur.cleared_by) + " at " + tallyHm(cur.cleared_at) + ": " + (cur.cleared_note || "no note")}</span></>}
+  </div>)}</div>;
 }
 function BridgeLines({ rows, latest }) {
   const [open, setOpen] = useState(false);
   const owner = S.account && S.account.me && S.account.me.role === "owner";
   const p = TCloud.pane, ctl = p.ctl || {}, allStopped = TCloud.stoppedAll && TCloud.stoppedAll();
-  const rel = latest ? (p.releases || []).find((x) => x.version === latest) : null, piloting = !!(rel && (rel.approved_at || rel.pilot_started_at));
+  // a withdrawn version (item 23) is on trial nowhere: a new pilot is allowed
+  const rel = latest ? (p.releases || []).find((x) => x.version === latest) : null, piloting = !!(rel && !rel.withdrawn_at && (rel.approved_at || rel.pilot_started_at));
   // the computer's main bridge, else its newest
   const byDev = new Map();
   rows.forEach((r) => { const k = r.device.id, h = byDev.get(k); if (!h || (r.main && r.go && !(h.main && h.go)) || (r.go && !h.go)) byDev.set(k, r); });
@@ -129,6 +163,7 @@ function BridgeLines({ rows, latest }) {
           <b>{r.computer}</b><span className="note">·</span><span>{r.user || "—"}</span><span className="note">·</span><span>{live ? "FinCom Bridge " + (r.version || "") : "Older bridge"}</span><span className="note">·</span>
           <span className={"tag " + st.cls} data-bridge-state="">{st.text}</span>
           {live && r.online && <span className={"tag " + (RS_CLS[rd.state] || "warn")} data-read-text="">{rd.text}</span>}
+          {live && <ReadWho r={r} />}
           {st.act && <span className="note" data-bridge-act="">{st.act}</span>}
           {st.makeMain && <button className="btn small primary" data-make-main={r.id} onClick={() => TCloud.makeMain(r)}>Make this the main bridge</button>}
         </div>
@@ -139,6 +174,7 @@ function BridgeLines({ rows, latest }) {
             : <button className="btn small" data-read-stop={r.device.id} onClick={() => TCloud.readStop(r)}>Stop reading on this computer</button>)}
           {owner && latest && !piloting && vnum(latest) > vnum(r.version) && <button className="btn small" data-release-pilot={r.device.id} onClick={() => TCloud.releasePilot(latest, r)}>{"Try version " + latest + " on this computer"}</button>}
         </div>}
+        {live && <Baselines r={r} owner={owner} />}
       </div>; })}
     <Release rows={rows} latest={latest} owner={owner} />
     {owner && TCloud.on() && <div className="row" style={{ gap: 8, margin: "6px 0 2px" }}>
