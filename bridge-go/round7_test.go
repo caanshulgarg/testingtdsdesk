@@ -307,9 +307,8 @@ func TestMeasureRouteIgnoresOut(t *testing.T) {
 	}
 }
 
-// --- L1. posted-ids.json: loaded once, written through atomically; a write failure is logged loudly and the record
-// stays in memory (a second job is still refused, nothing sent); verified notes older than 180 days are pruned,
-// unverified ones never
+// --- L1. posted-ids.json: loaded once, written through atomically; a write failure is logged loudly and stops every
+// send (F1 of the fix review); verified notes older than 180 days are pruned, unverified ones never
 func TestPostedIdsWriteFailureHolds(t *testing.T) {
 	f := r6Tally(t, func() bool { return true })
 	standBridge(t, f, "")
@@ -339,7 +338,9 @@ func TestPostedIdsWriteFailureHolds(t *testing.T) {
 			t.Fatalf("an older note did not refuse %s: %v", id, r)
 		}
 	}
-	// a write failure: the file's place taken by a directory
+	// a write failure: the file's place taken by a directory. Fix review of 2.1.8 (F1): nothing goes to Tally without the
+	// record on disk: the job waits ("record not written; nothing sent"), sends nothing, and goes on once the file can be
+	// written (TestNoSendWhenRecordNotWritable); here it is cancelled while waiting
 	_ = os.Remove(acceptedFile())
 	_ = os.MkdirAll(acceptedFile(), 0o755)
 	t.Cleanup(func() { _ = os.RemoveAll(acceptedFile()) })
@@ -348,20 +349,29 @@ func TestPostedIdsWriteFailureHolds(t *testing.T) {
 	if _, err := newPostJob(M{"jobId": "job-wf-1", "company": zz, "vouchers": vch}); err != nil {
 		t.Fatal(err)
 	}
-	p := r6Done(t, "job-wf-1")
-	if logLines("posted-ids.json") < 1 || logLines("could not be written") < 1 {
+	jd, _ := jobDir("job-wf-1")
+	var p M
+	for i := 0; i < 100; i++ {
+		p = readProgress(jd)
+		if p != nil && str(p["status"]) == "waiting" {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if str(p["status"]) != "waiting" || f.n("Import") != 0 {
+		t.Fatalf("with the record unwritable: %v %q (%d imports)", p["status"], p["message"], f.n("Import"))
+	}
+	if logLines("posted-ids.json") < 1 || logLines("could not be written") < 1 || logLines("record not written; nothing sent") < 1 {
 		t.Fatal("the write failure is not logged loudly")
 	}
-	if r6States(p)[id] != "posted" {
-		t.Fatalf("the entry: %v", r6States(p))
-	}
-	// held in memory: a second job for the id is still refused, nothing sent
-	if _, err := newPostJob(M{"jobId": "job-wf-2", "company": zz, "vouchers": vch}); err != nil {
+	if _, err := cancelJob("job-wf-1", "test"); err != nil {
 		t.Fatal(err)
 	}
-	p = r6Done(t, "job-wf-2")
-	if f.n("Import") != 1 || r6States(p)[id] != "failed" {
-		t.Fatalf("after the write failure the entry went again: %d imports, %v", f.n("Import"), r6States(p))
+	for i := 0; i < 60 && jobAlive("job-wf-1"); i++ {
+		time.Sleep(100 * time.Millisecond)
+	}
+	if f.n("Import") != 0 {
+		t.Fatalf("sent without the record on disk (%d imports)", f.n("Import"))
 	}
 }
 

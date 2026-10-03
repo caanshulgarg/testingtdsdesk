@@ -9,6 +9,7 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -858,5 +859,91 @@ func TestBeatSettingsBounded(t *testing.T) {
 	}
 	if !strings.HasPrefix(list[19], "Company 19 ") {
 		t.Fatalf("the first 20 are not the ones kept: %q", list[19])
+	}
+}
+
+// --- the fix review of 2.1.8, F1 and F2
+
+// F1: nothing goes to Tally without the record on disk: posted-ids.json unwritable (a directory in its place) → the job
+// waits ("record not written; nothing sent"), 0 imports; writable again → it posts. The /import route says so too
+func TestNoSendWhenRecordNotWritable(t *testing.T) {
+	td := today()
+	f := newStandTally(t)
+	standBridge(t, f, `,"PostWaitMs":200`)
+	_ = os.MkdirAll(acceptedFile(), 0o755)
+	t.Cleanup(func() { _ = os.RemoveAll(acceptedFile()) })
+	acceptedReset()
+	r := postOne(t, "nw0", finVoucher("nw0", fgParty, "NW-0", td, "1.00"))
+	if r["ok"] == true || r["notSent"] != true || !strings.Contains(str(r["message"]), "record not written; nothing sent") || f.n("Import") != 0 {
+		t.Fatalf("/import with the record unwritable: %v (%d imports)", r, f.n("Import"))
+	}
+	if _, err := newPostJob(M{"jobId": "job-r15-norecord", "company": zz, "vouchers": r15Bills("nw", td, 2)}); err != nil {
+		t.Fatal(err)
+	}
+	jd, _ := jobDir("job-r15-norecord")
+	var p M
+	for i := 0; i < 100; i++ {
+		p = readProgress(jd)
+		if p != nil && str(p["status"]) == "waiting" {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if str(p["status"]) != "waiting" || f.n("Import") != 0 {
+		t.Fatalf("the job with the record unwritable: %v %q (%d imports)", p["status"], p["message"], f.n("Import"))
+	}
+	if logLines("record not written; nothing sent") < 1 {
+		t.Fatal("the log does not say why nothing was sent")
+	}
+	_ = os.RemoveAll(acceptedFile())
+	acceptedReset()
+	p = waitJob(t, "job-r15-norecord")
+	if str(p["status"]) != "done" || f.n("Import") != 1 {
+		t.Fatalf("after the record is writable again: %s %q (%d imports)", p["status"], p["message"], f.n("Import"))
+	}
+	if a := acceptedInfo("nw1"); a == nil || a["sent"] != true {
+		t.Fatalf("the record after the posting: %v", a)
+	}
+}
+
+// F2: "Tally not reached" (a probe hold here) inside sendImport forgets the pre-send notes on both routes, so a browser
+// retry is not refused as "already sent"
+func TestImportNotReachedForgetsNotes(t *testing.T) {
+	td := today()
+	f := newStandTally(t)
+	f.slow = func(id, body string) time.Duration {
+		if id == "TDSDeskNames" {
+			return 3 * time.Second
+		}
+		return 0
+	}
+	standBridge(t, f, `,"TallyMaxSec":1,"TallyProbeEverySec":1`)
+	if _, err := findCompanyPort(zz, 0); err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	nowFn = func() time.Time { return start }
+	if _, err := getLedgerNames(fin, zz, f.port); err == nil {
+		t.Fatal("the slow read answered")
+	}
+	// within the minute: the import is held (nothing reached Tally); the note made before the send is forgotten
+	imports := f.n("Import")
+	res, err := invokeImport(M{"company": zz, "guidChecked": true, "vouchers": []any{M{"id": "nr1", "xml": finVoucher("nr1", fgParty, "NR-1", td, "1.00")}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := obj(arr(res["results"])[0])
+	if r["ok"] == true || r["notSent"] != true || f.n("Import") != imports {
+		t.Fatalf("held import: %v", r)
+	}
+	if acceptedInfo("nr1") != nil {
+		t.Fatalf("the note stayed though nothing reached Tally: %v", acceptedInfo("nr1"))
+	}
+	// the probe may go and Tally is free: the retry posts, not refused as already sent
+	nowFn = func() time.Time { return start.Add(2 * time.Minute) }
+	r = postOne(t, "nr1", finVoucher("nr1", fgParty, "NR-1", td, "1.00"))
+	nowFn = time.Now
+	if r["ok"] != true || r["alreadySent"] == true {
+		t.Fatalf("the retry: %v", r)
 	}
 }

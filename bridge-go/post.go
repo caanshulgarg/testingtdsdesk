@@ -150,6 +150,18 @@ type importReq struct {
 	items        []M
 }
 
+// the record keys of the request's entries
+func (r importReq) keys() []string {
+	var o []string
+	for _, it := range r.items {
+		o = append(o, acceptedKey(str(it["id"]), str(it["xml"])))
+	}
+	return o
+}
+
+// the record (posted-ids.json) could not be written before a send: nothing is sent (never tallyNoAnswer: the job waits)
+var errRecordNotWritten = errors.New("the record of what was sent (posted-ids.json) could not be written: record not written; nothing sent")
+
 func (r importReq) envelope(company string) string {
 	var b strings.Builder
 	b.WriteString(`<TALLYMESSAGE xmlns:UDF="TallyUDF">`)
@@ -273,10 +285,12 @@ type importOutcome struct {
 // as sent on this computer, so no later job sends it again
 func sendImport(port int, company, job string, r importReq) importOutcome {
 	// review of 2.1.8, finding 1: every voucher is on the record as sent (no answer yet) BEFORE the request goes, so a
-	// bridge that dies while the request is in flight never sends them again; the reply rewrites the note
+	// bridge that dies while the request is in flight never sends them again; the reply rewrites the note. The record
+	// not written (F1): nothing is sent (a "not reached" error: the job waits and tries later)
+	keys := r.keys()
 	if r.kind == "voucher" {
-		for _, it := range r.items {
-			_ = noteSent(acceptedKey(str(it["id"]), str(it["xml"])), company, job, "", len(r.items), "", "")
+		if err := noteSentMany(keys, company, job, "", len(r.items), "", ""); err != nil {
+			return importOutcome{err: errRecordNotWritten}
 		}
 	}
 	t0 := time.Now()
@@ -284,6 +298,9 @@ func sendImport(port int, company, job string, r importReq) importOutcome {
 	raw, err := invokeTally(fin, port, r.envelope(company), importTimeoutSec(len(r.items)))
 	secs := round3(time.Since(t0).Seconds())
 	if err != nil {
+		if !tallyNoAnswer(err) && r.kind == "voucher" {
+			acceptedForgetMany(keys) // nothing reached Tally (F2): the notes made before the send go, on every route
+		}
 		return importOutcome{err: err, seconds: secs}
 	}
 	rr := readImportResult(raw)
@@ -322,14 +339,18 @@ func sendImport(port int, company, job string, r importReq) importOutcome {
 			b["lineError"] = toAny(lineErrorKept(lineErr))
 			b["message"] = replyLine(s, rr, lineErr)
 		}
-		if r.kind == "voucher" {
-			if trusted || created+altered > 0 {
-				_ = noteSent(acceptedKey(str(id), x), company, job, lv, s, lv, vchID)
-			} else {
-				acceptedForget(acceptedKey(str(id), x)) // Tally made nothing of the request: not on the record, may go again
-			}
-		}
 		out = append(out, b)
+	}
+	if r.kind == "voucher" {
+		if trusted || created+altered > 0 {
+			vchID := ""
+			if s == 1 && lv != "" {
+				vchID = lv
+			}
+			_ = noteSentMany(keys, company, job, lv, s, lv, vchID) // one write for the request
+		} else {
+			acceptedForgetMany(keys) // Tally made nothing of the request: not on the record, may go again
+		}
 	}
 	return importOutcome{results: out, note: note, seconds: secs}
 }
@@ -632,6 +653,9 @@ func headOfKey(k vchKey) M {
 
 // a failure in words
 func tallyTrouble(msg string) string {
+	if strings.Contains(msg, "record not written") {
+		return msg
+	}
 	if re(`timed out|timeout|operation has timed`).MatchString(msg) {
 		return "Tally is busy and did not answer in time (a report, a pop-up or another user may be holding it)."
 	}

@@ -50,12 +50,12 @@ func readProgress(dir string) M {
 
 var progMu sync.Mutex
 
-func writeProgress(dir string, p M) {
+func writeProgress(dir string, p M) error {
 	progMu.Lock()
 	defer progMu.Unlock()
 	p["updatedAt"] = time.Now().Format(time.RFC3339Nano)
 	p["seq"] = toInt(p["seq"]) + 1 // round 7 (F4): grows with every change of the job, kept across restarts
-	_ = saveFile(filepath.Join(dir, "progress.json"), jsonText(p))
+	return saveFile(filepath.Join(dir, "progress.json"), jsonText(p))
 }
 func jobAlive(id string) bool {
 	jobsMu.Lock()
@@ -396,10 +396,11 @@ func jobWorker(dir string) {
 		}
 		p["items"] = items
 	}
-	save := func() {
+	save := func() error {
 		setRes()
-		writeProgress(dir, p)
+		err := writeProgress(dir, p)
 		postsDirty.Store(true)
+		return err
 	}
 	setStatus := func(st, msg string) {
 		changed := str(p["status"]) != st || str(p["message"]) != msg
@@ -597,11 +598,16 @@ func jobWorker(dir string) {
 			inflight = append(inflight, str(it["id"]))
 		}
 		p["inflight"] = inflight
-		save()
-		gate := postGate(port) // the browser's /import and this job never interleave a record check and a send
-		gate.Lock()
-		o := sendImport(port, company, jobID, r)
-		gate.Unlock()
+		var o importOutcome
+		if err := save(); err != nil {
+			// F1: the job's progress (its in-flight ids) could not be written: nothing is sent; waited for like Tally
+			o = importOutcome{err: fmt.Errorf("%w (progress.json: %v)", errRecordNotWritten, err)}
+		} else {
+			gate := postGate(port) // the browser's /import and this job never interleave a record check and a send
+			gate.Lock()
+			o = sendImport(port, company, jobID, r)
+			gate.Unlock()
+		}
 		p["inflight"] = []any{}
 		what := fmt.Sprintf("%d vouchers", len(r.items))
 		if r.kind == "master" {
@@ -614,9 +620,6 @@ func jobWorker(dir string) {
 			// nothing reached Tally (refused here, Tally not reachable, or held after a timeout): the same request goes
 			// again after a wait; nothing is recorded
 			writeLog(fmt.Sprintf("Posting job %s: request %d of %d (%s) not sent: %s; waiting for Tally", jobID, i+1, K, what, tallyTrouble(o.err.Error())))
-			for _, it := range r.items { // nothing reached Tally: the notes made before the send go again
-				acceptedForget(acceptedKey(str(it["id"]), str(it["xml"])))
-			}
 			setStatus("waiting", waitingLine(asked, o.err))
 			if !pause(waitPause(round)) {
 				cancelled()

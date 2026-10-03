@@ -12,6 +12,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -172,6 +173,56 @@ func noteSent(key, company, jobID, lv string, batchN int, batchEnd, vchID string
 	}
 	all[key] = e
 	return acceptedWriteOrLog("sent " + key)
+}
+
+// the same for every voucher of one request, written to posted-ids.json ONCE (fix review of 2.1.8); an error when the
+// file could not be written: nothing may then be sent
+func noteSentMany(keys []string, company, jobID, lv string, batchN int, batchEnd, vchID string) error {
+	if len(keys) == 0 {
+		return nil
+	}
+	acceptedMu.Lock()
+	defer acceptedMu.Unlock()
+	all := acceptedAll()
+	now := time.Now().Format(time.RFC3339)
+	for _, key := range keys {
+		if key == "" {
+			continue
+		}
+		e := obj(all[key])
+		if e == nil {
+			e = M{"at": nowS(), "acceptedAt": now}
+		}
+		if str(e["acceptedAt"]) == "" || e["resendOpen"] == true {
+			e["acceptedAt"] = now
+			delete(e, "resendOpen")
+		}
+		e["sent"], e["sentAt"], e["company"], e["job"], e["batchN"] = true, now, company, or(jobID, str(e["job"])), batchN
+		e["lastVchId"], e["batchEnd"], e["vchId"] = lv, batchEnd, vchID
+		delete(e, "held")
+		if e["verified"] != true {
+			e["verified"] = false
+		}
+		all[key] = e
+	}
+	return acceptedWriteOrLog(fmt.Sprintf("sent %d entr%s", len(keys), map[bool]string{true: "y", false: "ies"}[len(keys) == 1]))
+}
+
+// the notes of a request that never reached Tally go, in one write
+func acceptedForgetMany(keys []string) {
+	acceptedMu.Lock()
+	defer acceptedMu.Unlock()
+	all := acceptedAll()
+	n := 0
+	for _, key := range keys {
+		if _, ok := all[key]; ok && key != "" {
+			delete(all, key)
+			n++
+		}
+	}
+	if n > 0 {
+		_ = acceptedWriteOrLog(fmt.Sprintf("%d entr%s not sent after all", n, map[bool]string{true: "y", false: "ies"}[n == 1]))
+	}
 }
 
 // the entry was confirmed in Tally (its head): kept so a later job never sends it again
