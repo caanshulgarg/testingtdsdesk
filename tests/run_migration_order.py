@@ -29,7 +29,9 @@ def psql_file(path):
     if not os.path.exists(path): return subprocess.CompletedProcess([], 1, "", "no such file: " + path)
     return subprocess.run(["runuser", "-u", "postgres", "--", pg_stand.BIN + "/psql", "-h", "127.0.0.1", "-p", str(db.port), "-U", "postgres", "-d", "postgres",
                            "-v", "ON_ERROR_STOP=1", "-q", "-f", "-"], input=open(path).read(), capture_output=True, text=True)
-fdef = lambda fn: db.one("select pg_get_functiondef(%s::regproc)" % q("public." + fn)) or ""
+def fdef(fn, args=None):
+    """the text of a function; args (a type list) when the name is overloaded"""
+    return db.one("select pg_get_functiondef(%s::%s)" % (q("public." + fn + ("(" + args + ")" if args else "")), "regprocedure" if args else "regproc")) or ""
 try:
     db.sql(SCHEMA33); db.sql(SCHEMA35); db.sql(BILLS)
     db.sql("insert into firms values (%s, 'Firm') on conflict do nothing; insert into members values (%s, %s, 'Me', 'owner', true);" % (q(F), q(U), q(F)))
@@ -59,7 +61,7 @@ try:
     for fn in ["tally_ledger_rename", "tally_ledger_round_seen", "tally_ledger_round_batch", "tally_ledgers_mark_gone", "tally_ledger_hold_reason", "tally_read_stop", "tally_ingest_ledgers_g"]:
         ok(db.one("select count(*) from pg_proc where proname = %s and pronamespace = 'public'::regnamespace" % q(fn)) not in (None, "0"), "%s is there" % fn)
     ok("tally_balances" in fdef("tally_ledger_rename") and "trial balance" in fdef("tally_ledger_rename"), "tally_ledger_rename is migration-36's (the trial-balance check)")
-    ok("seen_round" not in fdef("tally_ledger_round_batch") and "seen_round" in fdef("tally_ledger_round_seen"), "the batch counts, the stamp is tally_ledger_round_seen's (migration-36)")
+    ok("seen_round" not in fdef("tally_ledger_round_batch", "uuid, text, integer, integer, boolean, uuid, text, jsonb") and "seen_round" in fdef("tally_ledger_round_seen"), "the batch counts, the stamp is tally_ledger_round_seen's (migration-36)")
     # every function of 35, 34 and 36: security definer, search_path = public, pg_temp (32 and 33 ran on staging with 'public';
     # 34 replaces their ingest functions)
     n = 0

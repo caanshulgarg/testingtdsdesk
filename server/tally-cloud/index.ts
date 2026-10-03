@@ -373,7 +373,7 @@ async function bookFor(firm: string, company: string) {
 
 // a day's entries and lines as tally_ingest_day takes them. Ledger and party names are cleaned (migration-23: no line
 // breaks; other spaces kept as Tally has them), as the masters are, so an entry meets its ledger's opening in every report
-const dayVouchers = (r: any) => r.vouchers.map((v: any) => ({ guid: v.guid, alter: v.alter, type: v.type, no: v.no, party: cleanName(v.party), narr: v.narr, cancel: v.cancel, opt: v.opt, gstin: v.gstin, pos: v.pos, ref: v.ref, refDate: v.refDate, cmp: v.cmp }));
+const dayVouchers = (r: any) => r.vouchers.map((v: any) => ({ guid: v.guid, alter: v.alter, type: v.type, no: v.no, party: cleanName(v.party), narr: v.narr, cancel: v.cancel, opt: v.opt, gstin: v.gstin, pos: v.pos, ref: v.ref, refDate: v.refDate, cmp: v.cmp, fid: v.fid ?? null }));   // fid (migration 37): the TDSDesk id from the full narration
 const dayLines = (r: any) => r.lines.map((l: any[]) => [l[0], cleanName(l[1]), ...l.slice(2)]);
 // a list of [name, parent] (ledgers or groups) with the names cleaned (migration-23); "Primary" as a parent is none. Two
 // that are one once cleaned are kept once: the one with a parent, else the one already clean
@@ -1086,7 +1086,7 @@ Deno.serve(async (req) => {
           // "Checking whether it reached Tally"); its FinCom id already in Tally; the company's GUID not the one held
           outcomeUnknown: !!r?.outcomeUnknown, sameId: !!r?.sameId, guidMismatch: !!r?.guidMismatch }));
         // 02-Oct-2026: each entry's state as the bridge sees it (waiting / sending / sent / in_tally / failed, with why)
-        const STATES = ["waiting", "sending", "sent", "in_tally", "failed", "unknown"];
+        const STATES = ["waiting", "sending", "sent", "in_tally", "failed", "unknown", "notfound"];   // notfound (migration 37): checked and not in Tally
         const items = Array.isArray(body.items) ? body.items.slice(0, 5000).map((x: any) => ({ id: s(x?.id, 200), kind: s(x?.kind, 10),
           state: STATES.includes(x?.state) ? x.state : "waiting", reason: s(x?.reason, 500),
           // bridge 2.1.4: a failed item that was not posted because the same bill is in Tally (with its voucher), or
@@ -1126,6 +1126,14 @@ Deno.serve(async (req) => {
         // before migration-24 there is no items column: the rest is kept as before
         if (error && items && /items/.test(error.message)) { delete row.items; ({ error } = await db.from("tally_post_jobs").update(row).eq("id", id).eq("device_id", dev.id).neq("status", "cancelled")); }
         if (error) throw new Error(error.message);
+        // migration 37 (item 7): an entry refused or not found in Tally releases its id (tally_post_id_release: job, id,
+        // why), per entry, so Post again is offered for it alone. On the states after the guard above: never an unknown
+        // entry, never one Tally accepted. Before migration 37 the function is missing: skipped
+        for (const x of (items || []) as any[]) {
+          if (!x.id || !(x.state === "failed" || x.state === "notfound") || accepted.has(fid(x.id))) continue;
+          const { error: relErr } = await db.rpc("tally_post_id_release", { p_job: id, p_id: x.id, p_why: String(x.reason || x.state).slice(0, 500) });
+          if (relErr && !/tally_post_id_release|schema cache|does not exist/i.test(relErr.message)) console.error("tally_post_id_release", relErr.message);
+        }
         return reply(200, { ok: true });
       }
       case "companies": {
