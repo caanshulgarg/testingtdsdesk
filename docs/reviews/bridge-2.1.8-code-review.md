@@ -284,4 +284,54 @@ What it opened (none must-fix):
 - Wording (informational): the status reads "Waiting for Tally: the record ... could not be written" though Tally is not
   the cause; a "Waiting: ..." line for this case would be truer. No safety effect.
 
-Range: 7162400..e383608 (bridge-go/, server/tally-cloud/index.ts, server/tally-cloud/migration-43-posting-reply.sql, tests/run_main_bridge_server.py)
+## App reviewed (e383608..4cb9789)
+Read: the diff e383608..4cb9789 -- app/src src/js (Post.jsx, Bill.jsx, Bank.jsx, Tally.jsx; 59-post-preview.js,
+24-tally-bridge.js, 51-tally-queue.js, 49-tally-cloud.js), for posting safety and the owner's rules only.
+1. Retry / Post again for an entry Tally may hold: HOLDS, with one gap. needsReview + accepted: the review row offers
+   Post again only when r.accepted !== true (Post.jsx, the review map) and postRetryRefusal refuses a Retry naming such an
+   entry (59: "Retry not possible: Tally accepted N entries that need review first"); byReply ok: st "posted" -> the
+   bill is "intally", no button; unknown: owner acts only, as before. alreadySent: the row says "Not sent again" but
+   keeps the Post again button unless held(e.id) (the cloud's id live and not released); with the cloud fix of 633c47f the
+   id is stamped accepted, so held() shows Wait; on an older cloud, or while PostIds is unreadable (postIdReleased
+   returns null -> held false), Post again is offered for an entry this computer sent. Pressing it is harmless (the bridge
+   refuses on its record; the cloud's unique rule keeps a live id out of a second posting), so LOW: hide Post again when
+   why[e.id].alreadySent (owner acts instead). Later. Test (run_post_tabs): an alreadySent refusal shows no Post again.
+2. No inferred id shown: HOLDS. postTallyMark takes vchId when the bridge gave one (only for a request of one) else
+   batchEnd + batchN; postMarkWords says "voucher id N" for vch and "batch ending Tally id N" for a batch; PostIds reads
+   reply_vch (set by the SQL only when batch_n = 1) else batch_end / batch_n; the review row shows r.lastVchId as "last
+   Tally id N" (the request's last id, so labelled; for a batch it would read better as "batch ending"), informational.
+   The history search matches the batch end, which is a search aid, not a claim.
+3. Test copies and REMOTEID: HOLDS. postTestCopies / TestCopies: postOwner() and postTestCopiesOk(co) (choiceState
+   postTo "confirmed" and postTo beginning "ZZ TEST"), 1..100, an approved bill without exportedAt / postUnconfirmed; the
+   copies get uid("e"), new createdAt / approvedAt, invoiceNo "<no>-T<i>", x.testCopy true, and every posting field
+   deleted (exportedAt, postUnconfirmed, postCheckFailed, postError, postNote, postAlreadyMsg, tally, tallyVchNo,
+   tallyCheck, postVerified, postAltered, postedVia, postedInto, postedOptional, goneFromTally, postFailedAt, paidBy,
+   vchNo, docPath, dupOf). postOwner is the client-side role (S.account.me.role); a spoofed role makes test bills on a
+   ZZ TEST client only (local entries; the postTo confirmation is the client's), nothing the cloud trusts. The REMOTEID box
+   is round 14c's code, not in this diff; remoteIdFor keeps "" for a client not posting to ZZ TEST.
+4. tally_device_post_settings: one MEDIUM gap. TCloud.postSettings checks 1..500 for both sizes before anything is sent,
+   p_post_only is postSettingsNames (trimmed, de-duplicated, at most 20) and [] when the box is empty, never null. The
+   gap: Tally.jsx's Edit prefills "Posts only to" from the SAVED row else the APPLIED beat value; when neither names a
+   list (a computer whose PostOnly came from the installer or the owner's file and whose bridge has not beaten yet, or
+   is offline, or the cloud row is fresh) the box opens empty, and a Save meant only for a batch size sends
+   p_post_only [] = any company: the bridge then clears its installer-set list (applyCloudSettings takes a non-null
+   value) and the pilot posts to any company. That widens PostOnly as a side effect, not as the owner's choice. Fix
+   (small): send p_post_only only when the owner changed the box (null leaves the row's value, as the function allows),
+   and when a Save would change a named list to [] ask once ("Allow posting to any company from this computer?"). Test
+   (run_tally_computers): a Save of batch sizes alone sends p_post_only null; clearing the names asks. MUST before build.
+5. bank: true: HOLDS. Only postBankToTally (24) marks its vouchers; the bill paths carry nothing; the bridge falls back
+   to the voucher type for unmarked lines.
+6. No new path to Tally or the cloud: HOLDS. Bridge.post (the existing /jobs route) with one more field; the settings
+   go through TCloud.control (the existing RPC path); the rest are selects on tally_devices, tally_post_jobs and
+   tally_post_ids and local rendering. The REMOTEID and company checks are untouched.
+7. Select fallbacks: HOLD. 49: a missing-column message (post_only / post_batch / post_settings, main_bridge) narrows the
+   select once per column set and every other error is rethrown; 51: the four variants fall back only on
+   items / entry_ids / dismiss / timing / column messages and the last variant throws; PostIds: the three tries throw on
+   anything but the named columns or 42703 and on the last try. A real error whose text happens to contain "column" (a
+   permission message) would narrow 51's select once and then surface on the last variant; acceptable.
+
+## Fix before build, app (must)
+1. Item 4: the posting-settings Save never sends p_post_only [] unless the owner cleared or changed the names box; a
+   change from a named list to "any company" is confirmed.
+
+Range: 7162400..4cb9789 (bridge-go/, server/tally-cloud/index.ts, server/tally-cloud/migration-43-posting-reply.sql, tests/run_main_bridge_server.py, app/src, src/js)

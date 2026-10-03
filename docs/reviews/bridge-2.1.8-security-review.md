@@ -112,4 +112,16 @@ requeue, but cannot be cancelled from FinCom until the bridge is stopped (the ca
 local path can reach the job's message when progress.json fails once and is written later. Both low, listed in the code
 review as later items; neither sends anything to Tally or anywhere but FinCom's own cloud.
 
-Range: 7162400..e383608 (bridge-go/, server/tally-cloud/index.ts, server/tally-cloud/migration-43-posting-reply.sql, tests/run_main_bridge_server.py)
+## App reviewed (e383608..4cb9789)
+Read with the code review's items. Security angles: the owner-only actions (test copies, posting settings) rest on the
+client-side role for what is shown and on the cloud for what matters (tally_device_post_settings checks the owner, the
+firm's device and the bounds in SQL); test copies are local bills on a ZZ TEST client with every posting field removed
+and new ids; nothing new reaches Tally or the cloud outside Bridge.post and TCloud.control; no inferred voucher id is
+shown (vchId / reply_vch only for a request of one, else "batch ending"). One must-fix with a safety edge: the settings
+form can send p_post_only [] (any company) from an empty box when the owner only meant to change a batch size (the box
+is empty whenever neither the saved row nor the bridge's beat names a list), which makes the bridge drop an installer-
+set PostOnly at its next beat: a widening the owner did not choose (code review, app item 4). Low: Post again stays
+visible on an alreadySent refusal when the cloud's ids are unreadable (harmless: the bridge's record and the cloud's
+unique rule refuse the send).
+
+Range: 7162400..4cb9789 (bridge-go/, server/tally-cloud/index.ts, server/tally-cloud/migration-43-posting-reply.sql, tests/run_main_bridge_server.py, app/src, src/js)
