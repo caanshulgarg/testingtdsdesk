@@ -29,3 +29,13 @@ Not verified: Windows ACLs on the install folders; my_firm() from an earlier mig
 - Not verified: Windows ACLs on the bridge's folders; the tray's identity beyond the bridge key (a local process with the key can start a measure, which reads only and is capped).
 
 Range: be5542f..5c10789 (bridge-go/, server/tally-cloud/index.ts, migrations 36, 36b, 37, src/js post and queue files, app/src Post and Tally screens)
+
+## Rounds 9 to 11 (5c10789 to the range below) reviewed 03-Oct-2026, read-only; fixes test-first before the 2.1.6 build
+- HIGH: none.
+- MEDIUM (fixed): PostOnly was enforced only in the posting worker; the bridge's local /import and /unpost routes bypassed it: enforced in postingAllowedFor for every import path and in /unpost. MEDIUM (noted, owner decision): the service runs as LocalSystem but reads the installing user's settings file, so that user (or a process as them) can remove PostOnly; no web-page path exists; a server-side per-device allow list set by the owner is the durable fix (proposed for a later file). MEDIUM (fixed): the short-read guard of 38 was dead because tally-ingest passed its own parsed count as the bridge's: the bridge's per-day count is passed (bounded) and logged.
+- LOW (fixed): an empty-day marking left no record: tally_days.empty_at and note, and a day with more than 25 entries is marked only on a second consecutive empty read. LOW (fixed): a PostOnly refusal naming a company such as "Created 1 Pvt Ltd" could read as an acceptance: refused+postOnly is never accepted, in tally-ingest and in SQL. LOW (fixed): the carry could revive a soft-deleted item under the new name: a clash instead. LOW (noted): clients.data choices are rewritten whole inside the rename (last writer wins against a concurrent app save).
+- INFO (fixed): the ledgers page showed Confirm to a superadmin who is not an owner: owners only.
+- Found safe: every SECURITY DEFINER function of 36, 38, 39, 40 and 41 sets search_path public, pg_temp; service-only functions check auth.role() and are revoked/granted explicitly; the owner functions (confirm, release from Posted) check active members.role = 'owner' and my_firm(); the carry writes only rows of the book's own firm and client with parameters, never built SQL; a rogue bridge cannot free an id Tally accepted (the accept guard wins over a fake refusal); the empty-day flag marks soft only and a later file un-marks; release-check.sh's new exception rules have no smuggling path; the installer never overwrites a hand-set PostOnly.
+- Not verified: Windows ACLs on the settings file (see the MEDIUM noted above).
+
+Range: be5542f..27aa360 (bridge-go/, server/tally-cloud/index.ts, migrations 36 to 41, src/js post, queue and ledger files, app/src Post, Tally and Ledgers screens)

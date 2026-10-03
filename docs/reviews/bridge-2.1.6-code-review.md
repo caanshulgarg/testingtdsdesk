@@ -52,3 +52,19 @@ R7. (risk) the backfill left live as it was: restored where accepted and not rel
 R8, R9. (nits) accept-text clause accepting CREATED 0; wording for a non-Go listener on the port.
 
 Range: be5542f..5c10789 (bridge-go/, server/tally-cloud/index.ts, migrations 36, 36b, 37, src/js post and queue files, app/src Post and Tally screens)
+
+## Rounds 9 to 11 (5c10789 to the range below): migrations 36 (rewritten for staging), 38, 39, 40, 41; empty-day rule; PostOnly; ledger state; owner release from Posted; ledgers confirm line
+Reviewed 03-Oct-2026 by the code-review skill (read-only, the branch diff). 10 findings, all fixed test-first before the 2.1.6 build (3108e59, the bridge commit after it, d528041):
+1. (bug) the held ledger list dropped the new state column, so every ledger with a state was "changed" every round: saved with the state; two-round test.
+2. (bug) a choice value carried by a rename was reverted by the app's own merge (same 'at'): the carry stamps a new 'at' and by 'rename'.
+3. (bug) the day-book file seed wrote the full-read mark for every day of the range, so a short file could send empty days: the mark is written only on the step path after the full-answer check.
+4. (risk) a day file rewritten by the posting read-back beside a stale full-read mark could be sent as empty: every other writer of a day file removes the mark.
+5. (risk) the rename demanded a trial balance of exactly 0 before and after, blocking any book whose sum is off for good while the bridge re-sent the rename each round: it raises only when the sum would change; a non-zero sum is a note.
+6. (risk) the old map item stayed live after a carry (a zero line and a double count in the tax summaries): soft-deleted with its carried mark; a clash marked as such.
+7. (nit) the value rewrite was key-blind: limited to the ledger-valued keys.
+8. (nit) the renamed line and Confirm were rendered twice per ledger: once.
+9. (nit) tally-ingest's fallback to the 7-argument day import triggered on any "does not exist": only on the missing 8-argument function.
+10. (nit) an installer-set PostOnly could never be replaced by a later installer: PostOnlyBy "installer" recorded; a hand-set list is never touched.
+Found sound: migration 36 reads no column it does not add; both forms of the round and mark_gone functions coexist; the hold reason leaves nil twins out; the empty-day rule marks only on p_n 0 with the bridge's flag and a file with entries ignores the flag; the bridge sends empty only for a day read in full; PostOnly refuses before any lease or request; the Posted-tab release cannot be overwritten by a later bridge update; no row is deleted; money figures unchanged (the rename moves lines under a trial-balance bracket).
+
+Range: be5542f..27aa360 (bridge-go/, server/tally-cloud/index.ts, migrations 36 to 41, src/js post, queue and ledger files, app/src Post, Tally and Ledgers screens)
