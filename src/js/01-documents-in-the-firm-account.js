@@ -4026,12 +4026,24 @@ function vchNoFor(e, co){
   return String(e.vchNo || e.x.invoiceNo || "").trim().slice(0, 60);
 }
 function initialsOf(name){ return String(name || "").replace(/[^A-Za-z ]/g, " ").split(/\s+/).filter(w => w.length > 2 && !/^(pvt|ltd|private|limited|and|the|co|llp)$/i.test(w)).map(w => w[0].toUpperCase()).join("").slice(0, 4) || "X"; }
+// the REMOTEID a voucher carries ("" = none): the test box on, the client posting to ZZ TEST (confirmed), the typed
+// value or the entry's FinCom id
+function remoteIdFor(e, co){
+  if (!co || co.postRemoteId !== true || !e || !e.id) return "";
+  const ch = typeof choiceGet === "function" ? choiceGet(co, "postTo") : {value: co.postTo, state: "confirmed"};
+  const to = String((ch && ch.value) || "").trim();
+  if (!/^zz test\b/i.test(to) || (ch && ch.state && ch.state !== "confirmed")) return "";
+  return String(co.postRemoteIdFixed || "").trim().slice(0, 80) || String(e.id);
+}
 function voucherXml(e, co){
   const note = e.noteKind === "credit";                 // a supplier's credit note: a Debit Note in Tally, every line reversed
   const s = e.snapshot, vt = xesc(note ? (co.debitNoteType || "Debit Note") : (co.voucherType || "Journal")), d = toTallyDate(e.x.invoiceDate);
   // round 14c (owner item 4, a test): "Send a FinCom reference id (REMOTEID) with each voucher" on the Post page puts the
   // entry's FinCom id (the same as the TDSDesk:<id> tag) as REMOTEID on the voucher; off (the default), nothing changes
-  const rid = co.postRemoteId === true && e.id ? ' REMOTEID="' + xesc(String(e.id)) + '"' : "";
+  // entry's FinCom id as REMOTEID, or the value typed in "REMOTEID to send instead" (the second-send test: the first
+  // bill's id typed on a Duplicate of it); only for a client whose confirmed posting company is ZZ TEST (never real books)
+  const ridVal = remoteIdFor(e, co);
+  const rid = ridVal ? ' REMOTEID="' + xesc(ridVal) + '"' : "";
   let x = '<VOUCHER VCHTYPE="' + vt + '" ACTION="Create" OBJVIEW="Accounting Voucher View"' + rid + '>\n';
   x += "<DATE>" + d + "</DATE>\n<EFFECTIVEDATE>" + d + "</EFFECTIVEDATE>\n";
   x += "<VOUCHERTYPENAME>" + vt + "</VOUCHERTYPENAME>\n";

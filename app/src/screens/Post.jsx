@@ -106,10 +106,20 @@ function postWhyBlocked(co, canPost) {
 // off by default, kept on the client (co.postRemoteId; voucherXml, src/js/01 puts REMOTEID="<the entry's FinCom id>")
 function RemoteIdBox({ co }) {
   if (!(typeof postOwner === "function" && postOwner())) return null;
-  return <label className="chk note" data-remoteid-test="" style={{ display: "inline-flex", gap: 6, alignItems: "center", marginTop: 8 }}>
+  return <><label className="chk note" data-remoteid-test="" style={{ display: "inline-flex", gap: 6, alignItems: "center", marginTop: 8 }}>
     <input type="checkbox" checked={co.postRemoteId === true} onChange={(ev) => { co.postRemoteId = !!ev.target.checked; Store.saveCompany(co); render(); }} />
     {"Send a FinCom reference id (REMOTEID) with each voucher (test)"}
-  </label>;
+  </label>
+  {co.postRemoteId === true && <span className="note" data-remoteid-note="" style={{ display: "block", marginTop: 4 }}>
+    {"Works only for a client posting to ZZ TEST (confirmed in Client setup → Tally); on any other client the box does nothing. "}
+    {typeof remoteIdFor === "function" && remoteIdFor({ id: "x" }, co) === "" ? "This client does not post to ZZ TEST: no REMOTEID is sent." : ""}
+  </span>}
+  {co.postRemoteId === true && <label className="note" data-remoteid-fixed="" style={{ display: "block", marginTop: 4 }}>
+    {"REMOTEID to send instead of the FinCom id (the second-send test: type the first bill's id here, post its Duplicate): "}
+    <input type="text" value={co.postRemoteIdFixed || ""} placeholder="empty = each bill's own id" style={{ width: 220 }}
+      onChange={(ev) => { co.postRemoteIdFixed = ev.target.value.trim().slice(0, 80); Store.saveCompany(co); render(); }} />
+  </label>}
+  </>;
 }
 
 // a ledger of a waiting bill that Tally does not have: choose Tally's ledger (for every bill using it), or create it

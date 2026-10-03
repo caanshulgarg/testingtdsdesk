@@ -396,9 +396,18 @@ with sync_playwright() as p:
     xml_off = E("voucherXml(D().entries['r2'], CO())")
     ok("REMOTEID" not in xml_off and "TDSDesk:r2" in xml_off, "C7. off: no REMOTEID in the voucher XML (the TDSDesk tag as before)")
     pg.click(RB); pg.wait_for_timeout(400)
+    xml_real = E("voucherXml(D().entries['r2'], CO())")
+    ok(pg.is_checked(RB) and xml_real == xml_off and "does not post to ZZ TEST" in txt("#app [data-remoteid-note]"),
+       "C7. on, but the client posts to GARG SHEKHAR: no REMOTEID, and the note says so")
+    E("() => { window.__pt2 = CO().choices.postTo; choiceConfirm(CO(), 'postTo', 'ZZ TEST'); render(); }"); pg.wait_for_timeout(300)
     xml_on = E("voucherXml(D().entries['r2'], CO())")
-    ok(pg.is_checked(RB) and E("CO().postRemoteId === true") and re.search(r'<VOUCHER [^>]*REMOTEID="r2"[^>]*>', xml_on) is not None and xml_on.replace(' REMOTEID="r2"', "") == xml_off,
-       "C7. on: the VOUCHER tag carries REMOTEID=\"r2\" and nothing else changes (%s)" % xml_on[:100])
+    ok(E("CO().postRemoteId === true") and re.search(r'<VOUCHER [^>]*REMOTEID="r2"[^>]*>', xml_on) is not None and xml_on.replace(' REMOTEID="r2"', "") == xml_off,
+       "C7. on, posting to ZZ TEST: the VOUCHER tag carries REMOTEID=\"r2\" and nothing else changes (%s)" % xml_on[:100])
+    pg.fill('#app [data-remoteid-fixed] input', "r1"); pg.wait_for_timeout(400)
+    xml_fx = E("voucherXml(D().entries['r2'], CO())")
+    ok(E("CO().postRemoteIdFixed === 'r1'") and ' REMOTEID="r1"' in xml_fx and "TDSDesk:r2" in xml_fx, "C7. a typed REMOTEID (the second-send test) replaces the id; the TDSDesk tag stays the bill's own")
+    pg.fill('#app [data-remoteid-fixed] input', ""); pg.wait_for_timeout(300)
+    E("() => { CO().choices.postTo = window.__pt2; render(); }"); pg.wait_for_timeout(300)
     pg.click(RB); pg.wait_for_timeout(400)
     ok(not pg.is_checked(RB) and E("voucherXml(D().entries['r2'], CO())") == xml_off, "C7. off again: the XML as before")
     E("() => { S.account = {me: {role: 'staff'}, firm: {name: 'Firm'}}; render(); }"); pg.wait_for_timeout(300); tab("topost")
