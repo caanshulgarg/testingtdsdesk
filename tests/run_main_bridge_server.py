@@ -337,6 +337,10 @@ try:
     a = (F.ARGS.get("tally_ledger_round_batch") or [{}])[-1]
     ok(c == 200 and a.get("p_round") == "r-1" and a.get("p_complete") is True and a.get("p_rows_read") == 3 and a.get("p_rows") == 0 and a.get("p_seen") == ["g3"], "the last batch: complete, rowsRead and its seen recorded (%s)" % a)
     a = F.ARGS.get("tally_ledgers_mark_gone") or []
+    # round 9: the calls have the shapes the rewritten migration 36 defines (staging's first 34 had a 7-argument batch and a
+    # 3-argument mark_gone): batch with 8 named arguments (p_seen), mark_gone with exactly (p_book, p_round), round_seen (book, round, seen)
+    ok(a and set(a[-1]) == {"p_book", "p_round"} and set(F.ARGS["tally_ledger_round_batch"][-1]) == {"p_book", "p_round", "p_rows", "p_rows_read", "p_complete", "p_device", "p_bridge", "p_seen"} and set(F.ARGS["tally_ledger_round_seen"][-1]) == {"p_book", "p_round", "p_seen"},
+       "round 9: tally_ledgers_mark_gone(book, round), tally_ledger_round_batch with p_seen (8), tally_ledger_round_seen(book, round, seen): the arguments migration 36 defines")
     ok(len(a) == 1 and a[0] == {"p_book": BOOK, "p_round": "r-1"} and r.get("deleted") == 2 and r.get("deletesHeld") == 1 and any("guard" in n for n in r.get("notes", [])),
        "on the last batch tally_ledgers_mark_gone(book, round) is called once; its marked / held / note answered (%s %s)" % (a, {k: r.get(k) for k in ("deleted", "deletesHeld", "notes")}))
     ok(r.get("deletedIgnored") == 2 and any("ignored" in n for n in r.get("notes", [])), "the bridge's deleted list is ignored for marking and said (%s)" % r.get("notes"))

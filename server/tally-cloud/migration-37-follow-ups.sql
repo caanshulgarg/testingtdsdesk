@@ -19,6 +19,10 @@
 --                         else on the row)
 --   10. clear baseline    tally_sync_cursor + cleared_at, cleared_by, cleared_note; tally_baseline_clear(book, note) for an
 --                         owner of the firm: state back to 'ok' with the note (an empty note refused); who and when kept
+--   twins (round 9)      every reader that lists ledger names from tally_ledger_day (tally_tb, tally_period, tally_mis,
+--                         tally_gst_summary, tally_ledger, tally_balances_on) reads `d.merged_into is null`: the nil rows a
+--                         rename leaves under the old name (migration 36) are not listed as a zero line. Migration 36
+--                         carries the same six texts, so 36 -> 37 and 37 -> 36 end identical
 --   11. soft delete       tally_ingest_day no longer deletes entries. The day's entries are upserted by (book, GUID) with
 --                         deleted_at = null; the day's entries NOT in the file get deleted_at = now() and stay (their lines
 --                         and bills stay too); the lines and bills of a RE-SENT entry are replaced, after the lines it had
@@ -231,7 +235,7 @@ begin
   return query
     with lg as (select tally_nm(t.name) as name, max(t.parent) as parent, sum(t.open) as open from tally_ledgers t
                  where t.book_id = bk and t.merged_into is null group by 1),
-    mv as (select tally_nm(d.ledger) as ledger, sum(d.amount) m from tally_ledger_day d where d.book_id = bk and d.day between b.from_date and p_as_on group by 1)
+    mv as (select tally_nm(d.ledger) as ledger, sum(d.amount) m from tally_ledger_day d where d.book_id = bk and d.merged_into is null and d.day between b.from_date and p_as_on group by 1)
     select coalesce(lg.name, mv.ledger), coalesce(lg.parent, ''), coalesce(lg.open, 0)::numeric, coalesce(mv.m, 0)::numeric, (coalesce(lg.open, 0) + coalesce(mv.m, 0))::numeric
       from lg full join mv on mv.ledger = lg.name;
 end $function$;
@@ -244,9 +248,9 @@ begin
   if bk is null then return; end if;
   select * into b from tally_books where book_id = bk;
   return query
-  with names as (select l.name as n from tally_ledgers l where l.book_id = bk union select d.ledger from tally_ledger_day d where d.book_id = bk),
-  before as (select d.ledger as n, sum(d.amount) as a from tally_ledger_day d where d.book_id = bk and d.day >= b.from_date and d.day < p_from group by d.ledger),
-  inside as (select d.ledger as n, sum(d.dr) as dr, sum(d.cr) as cr from tally_ledger_day d where d.book_id = bk and d.day between greatest(p_from, b.from_date) and p_to group by d.ledger)
+  with names as (select l.name as n from tally_ledgers l where l.book_id = bk union select d.ledger from tally_ledger_day d where d.book_id = bk and d.merged_into is null),
+  before as (select d.ledger as n, sum(d.amount) as a from tally_ledger_day d where d.book_id = bk and d.merged_into is null and d.day >= b.from_date and d.day < p_from group by d.ledger),
+  inside as (select d.ledger as n, sum(d.dr) as dr, sum(d.cr) as cr from tally_ledger_day d where d.book_id = bk and d.merged_into is null and d.day between greatest(p_from, b.from_date) and p_to group by d.ledger)
   select x.n, t.parent, coalesce(t.open, 0) + coalesce(be.a, 0), coalesce(i.dr, 0), coalesce(i.cr, 0)
     from names x left join tally_ledgers t on t.book_id = bk and t.name = x.n left join before be on be.n = x.n left join inside i on i.n = x.n
    order by x.n;
@@ -266,7 +270,7 @@ begin
            exists (select 1 from unnest(l.chain) g where lower(g) in ('bank accounts', 'cash-in-hand', 'bank od a/c', 'bank occ a/c')) as cash
       from tally_ledgers l where l.book_id = bk and l.merged_into is null),
   mv as (select d.ledger, to_char(d.day, 'YYYYMM') as ym, sum(d.amount) as a from tally_ledger_day d
-          where d.book_id = bk and d.day between greatest(p_from, b.from_date) and p_to group by 1, 2),
+          where d.book_id = bk and d.merged_into is null and d.day between greatest(p_from, b.from_date) and p_to group by 1, 2),
   sg as (select * from (values ('rev', 1), ('oth', 1), ('pur', -1), ('dir', -1), ('emp', -1), ('exp', -1), ('fin', -1), ('dep', -1), ('tax', -1)) s(hd, sign)),
   hm as (select l.hd, m.ym, round(sum(m.a * s.sign), 2) as v from mv m join led l on l.name = m.ledger join sg s on s.hd = l.hd group by 1, 2),
   ht as (select hd, round(sum(v), 2) as t, jsonb_object_agg(ym, v) as m from hm group by hd),
@@ -285,7 +289,7 @@ begin
            from tally_lines t join led l on l.name = t.ledger and l.sales join tally_vouchers v on v.book_id = t.book_id and v.guid = t.guid
           where t.book_id = bk and t.day between greatest(p_from, b.from_date) and p_to and v.deleted_at is null and not v.cancelled and not v.optional group by 1),
   -- balances on the last date
-  bal as (select l.name, l.deb, l.cred, l.cash, l.open + coalesce((select sum(d.amount) from tally_ledger_day d where d.book_id = bk and d.ledger = l.name and d.day between b.from_date and p_to), 0) as c
+  bal as (select l.name, l.deb, l.cred, l.cash, l.open + coalesce((select sum(d.amount) from tally_ledger_day d where d.book_id = bk and d.merged_into is null and d.ledger = l.name and d.day between b.from_date and p_to), 0) as c
             from led l where l.deb or l.cred or l.cash)
   select jsonb_build_object(
     'from', to_char(greatest(p_from, b.from_date), 'YYYYMMDD'), 'to', to_char(p_to, 'YYYYMMDD'), 'company', b.company,
@@ -335,7 +339,7 @@ begin
           where t.book_id = bk and t.day between greatest(p_from, b.from_date) and p_to
             and ((k.side = 'output' and docs.outward) or (k.side <> 'output' and docs.doc)) group by 1, 2, 3, 4),
   sv as (select to_char(d.day, 'YYYYMM') as ym, sum(d.amount) as v from tally_ledger_day d join sales s on s.name = d.ledger
-          where d.book_id = bk and d.day between greatest(p_from, b.from_date) and p_to group by 1),
+          where d.book_id = bk and d.merged_into is null and d.day between greatest(p_from, b.from_date) and p_to group by 1),
   heads as (select * from (values ('CGST'), ('SGST'), ('IGST'), ('CESS')) h(tax)),
   per as (select mo.ym,
     (select jsonb_object_agg(h.tax, coalesce((select round(sum(net), 2) from tx where tx.ym = mo.ym and side = 'output' and what = 'gst' and (tx.tax = h.tax or (h.tax = 'SGST' and tx.tax = 'UTGST'))), 0)) from heads h) as out_tax,
@@ -357,7 +361,7 @@ begin
   if bk is null then return jsonb_build_object('none', true); end if;
   select * into b from tally_books where book_id = bk;
   select coalesce((select sum(t.open) from tally_ledgers t where t.book_id = bk and t.merged_into is null and tally_nm(t.name) = nm), 0)
-       + coalesce((select sum(d.amount) from tally_ledger_day d where d.book_id = bk and tally_nm(d.ledger) = nm and d.day >= b.from_date and d.day < p_from), 0)
+       + coalesce((select sum(d.amount) from tally_ledger_day d where d.book_id = bk and d.merged_into is null and tally_nm(d.ledger) = nm and d.day >= b.from_date and d.day < p_from), 0)
     into ob;
   select coalesce(jsonb_agg(jsonb_build_array(to_char(l.day, 'YYYYMMDD'), v.vtype, v.vno, v.party, v.narration, l.amount, l.guid) order by l.day, v.vno), '[]'::jsonb)
     into lines
@@ -466,7 +470,7 @@ begin
   return query
     with lg as (select l.name, l.parent, l.primary_group, coalesce(l.open, 0) as open from tally_ledgers l
                  where l.book_id = p_book and l.merged_into is null and l.deleted_at is null),
-    mv as (select d.ledger as name, sum(d.amount) as m from tally_ledger_day d where d.book_id = p_book and d.day >= b.from_date and d.day <= p_as_on group by d.ledger)
+    mv as (select d.ledger as name, sum(d.amount) as m from tally_ledger_day d where d.book_id = p_book and d.merged_into is null and d.day >= b.from_date and d.day <= p_as_on group by d.ledger)
     select coalesce(lg.name, mv.name), coalesce(lg.parent, ''), coalesce(lg.primary_group, ''), coalesce(lg.open, 0)::numeric, coalesce(mv.m, 0)::numeric, (coalesce(lg.open, 0) + coalesce(mv.m, 0))::numeric
       from lg full join mv on mv.name = lg.name
      where lg.name is not null

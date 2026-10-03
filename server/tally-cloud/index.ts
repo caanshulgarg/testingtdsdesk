@@ -648,9 +648,11 @@ async function ingestDaysRaw(firm: string, book: string, daysIn: unknown): Promi
     const path = `${firm}/${book}/${d.day.slice(0, 6)}/${d.day}.xml.gz`;
     const up = await db.storage.from("tally-days").upload(path, gz, { upsert: true, contentType: "application/gzip" });
     if (up.error) throw new Error("storage: " + up.error.message);
-    const { error } = await db.rpc("tally_ingest_day", { p_book: book, p_day: iso(d.day),
+    const { data: dayAns, error } = await db.rpc("tally_ingest_day", { p_book: book, p_day: iso(d.day),
       p_vouchers: dayVouchers(r), p_lines: dayLines(r), p_n: r.n, p_alter: r.alterMax, p_bytes: gz.length });
     if (error) throw new Error(error.message);
+    // migration 38 (item 9): a short read (no entries, or fewer than the bridge counted) upserted what came and marked nothing; said in the log
+    if ((dayAns as any)?.refused) console.log("tally-ingest day " + String((dayAns as any).refused) + ": nothing marked deleted", book, String((dayAns as any).day || ""));
     done.push(d.day);
   }
   return { done, bad };
@@ -685,9 +687,11 @@ async function reparseMonthRaw(firm: string, book: string, monthIn: unknown) {
     try { z = await gunzip(gz, MAX_DAY); } catch (e) { bad.push({ day, error: String((e as Error)?.message || e).slice(0, 200) }); continue; }
     const r = parseDay(z.text);
     if (r.dates.some((x: string) => x !== day)) { bad.push({ day, error: "entries of other dates" }); continue; }
-    const { error } = await db.rpc("tally_ingest_day", { p_book: book, p_day: iso(day),
+    const { data: dayAns, error } = await db.rpc("tally_ingest_day", { p_book: book, p_day: iso(day),
       p_vouchers: dayVouchers(r), p_lines: dayLines(r), p_n: r.n, p_alter: r.alterMax, p_bytes: gz.length });
     if (error) throw new Error(error.message);
+    // migration 38 (item 9): a short read (no entries, or fewer than the bridge counted) upserted what came and marked nothing; said in the log
+    if ((dayAns as any)?.refused) console.log("tally-ingest day " + String((dayAns as any).refused) + ": nothing marked deleted", book, String((dayAns as any).day || ""));
     done.push(day);
   }
   const next = all.find((m: string) => m > month) || null;

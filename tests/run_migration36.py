@@ -1,6 +1,7 @@
-"""python3 run_migration36.py - migration-36-ledger-rename (03-Oct-2026, round 4 items 4-6). On a throwaway PostgreSQL
-(pg_stand) with the cloud tables and functions as on staging (run_migration33's schema, tally_bills and tally_ingest_day
-as deployed, migration-31's raw_* columns), then 32 -> 33 -> 35 -> 34 -> 36 (36 twice), with the MADE-UP BOOKS
+"""python3 run_migration36.py - migration-36-ledger-rename as REWRITTEN in round 9 (03-Oct-2026) against what staging really
+has: 32 -> 33 -> 35 -> 34 AS FIRST RUN ON STAGING (tests/fixtures/migration-34-as-run-on-staging.sql = commit 2105b2d)
+-> 36b -> 37 -> 36 (36 twice), on a throwaway PostgreSQL (pg_stand) with the cloud tables and functions as on staging
+(run_migration33's schema, tally_bills and tally_ingest_day as deployed, migration-31's raw_* columns), with the MADE-UP BOOKS
 (tests/fixtures/books: Master.xml and DayBook.xml) loaded through the real tally_ingest_ledgers_g / tally_ingest_day
 path (the day book read by server/tally-cloud/parse.js under Deno, day by day, as tally-ingest does); never on staging.
 Checks: the file runs twice, drops and deletes nothing; the trial balance of the loaded book ties (sum of closing 0);
@@ -13,13 +14,18 @@ rename that would break the trial balance (the new name is a twin row, which the
 trial balance does not tie) is raised and rolled back, nothing changed; the first-round fix: tally_ledger_round_batch
 counts but no longer stamps, tally_ledger_round_seen stamps by GUID after the rows have theirs, so a first round on a
 GUID-less copy marks nothing and logs nothing; the service role only; run again over the rows, all kept.
+Round 9: the 8-argument batch, round_seen and the 2-argument mark_gone work over staging's first 34 (the 7-argument batch
+and the 3-argument mark_gone still answer); tally_ledger_hold_reason exists and the guard calls it; after a rename the
+readers that list names from tally_ledger_day (tally_tb, tally_period, tally_balances_on) show no zero line for the old
+name; the merge branch succeeds.
 Needs Deno (DENO, default /opt/deno/deno) for the day book."""
 import os, re, sys, json, html, subprocess, shutil, tempfile
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import pg_stand
 SQLDIR = os.path.join(HERE, "..", "server", "tally-cloud")
-M = {n: os.path.join(SQLDIR, f) for n, f in [(32, "migration-32-sync-safety.sql"), (33, "migration-33-ledger-lists.sql"), (34, "migration-34-ledger-safety.sql"),
-                                              (35, "migration-35-bridge-control.sql"), (36, "migration-36-ledger-rename.sql")]}
+M = {n: os.path.join(SQLDIR, f) for n, f in [(32, "migration-32-sync-safety.sql"), (33, "migration-33-ledger-lists.sql"), (35, "migration-35-bridge-control.sql"),
+                                              (36, "migration-36-ledger-rename.sql"), ("36b", "migration-36b-post-acceptance.sql"), (37, "migration-37-follow-ups.sql")]}
+M[34] = os.path.join(HERE, "fixtures", "migration-34-as-run-on-staging.sql")      # staging runs the FIRST migration 34 (commit 2105b2d), not the reviewed one
 BOOKS = os.path.join(HERE, "fixtures", "books")
 DENO = os.environ.get("DENO") or shutil.which("deno") or ("/opt/deno/deno" if os.path.exists("/opt/deno/deno") else None)
 if not DENO: print("skipped: no deno (set DENO)"); raise SystemExit(0)
@@ -38,6 +44,7 @@ def sql_function(path, name):
     return s[i:j]
 SCHEMA33 = part(os.path.join(HERE, "run_migration33.py"), "SCHEMA")
 SCHEMA35 = part(os.path.join(HERE, "run_migration35.py"), "SCHEMA")
+SCHEMA37 = part(os.path.join(HERE, "run_migration37.py"), "SCHEMA_X")      # what 36b / 37 need beyond these (tally_bills as staging, tally_d8, tally_led_kinds, tally_mis_head, grants)
 # as on staging beside run_migration33's tables: tally_bills (migration-7), tally_d8 (migration-11), migration-31's raw_* columns,
 # tally_ingest_day as deployed (migration-23's body)
 EXTRA = """
@@ -45,7 +52,7 @@ create table if not exists tally_bills (book_id uuid not null references tally_b
   ledger text not null, name text not null default '', type text not null default '', amount numeric not null, bill_date date, credit_days integer, due date);
 create index if not exists tally_bills_book_party on tally_bills (book_id, ledger, name);
 """ + sql_function(os.path.join(SQLDIR, "migration-11-ref-cmp.sql"), "tally_d8") + """
-alter table tally_ledgers add column if not exists raw_name text; alter table tally_ledgers add column if not exists before_clean jsonb;
+alter table tally_ledgers add column if not exists raw_name text;      -- staging's tally_ledgers has NO before_clean (read 03-Oct): migration 36 adds it
 alter table tally_vouchers add column if not exists raw_party text; alter table tally_lines add column if not exists raw_ledger text;
 alter table tally_bills add column if not exists raw_ledger text;
 alter table tally_ledger_day add column if not exists raw_ledger text; alter table tally_ledger_day add column if not exists merged_into text;
@@ -125,8 +132,13 @@ try:
         r = psql_file(M[n]); ok(r.returncode == 0, "migration-%d runs %s" % (n, (r.stderr or "").strip()[-300:] if r.returncode else ""))
     db.sql(SCHEMA35)
     db.sql("insert into tally_devices (id, firm_id, name, key_hash, version) values (%s, %s, 'NWS144', 'h1', '2.1.5');" % (q(DEV), q(F)))
-    for n in (35, 34):
-        r = psql_file(M[n]); ok(r.returncode == 0, "migration-%d runs %s" % (n, (r.stderr or "").strip()[-300:] if r.returncode else ""))
+    db.sql(SCHEMA37)
+    db.sql("insert into client_book_items (firm_id, client_id, key, item, data) values (%s, 'c1', 'map', '.CGST Output', '{\"kind\": \"gst\", \"side\": \"output\", \"tax\": \"CGST\"}') on conflict do nothing;" % q(F))
+    for n in (35, 34, "36b", 37):
+        r = psql_file(M[n]); ok(r.returncode == 0, "migration-%s runs (%s) %s" % (n, "staging's first 34" if n == 34 else "as on staging", (r.stderr or "").strip()[-300:] if r.returncode else ""))
+    ok(db.one("select count(*) from pg_proc where proname = 'tally_ledger_round_seen'") == "0" and db.one("select count(*) from pg_proc where proname = 'tally_ledger_hold_reason'") == "0"
+       and db.one("select count(*) from information_schema.columns where table_name = 'tally_ledgers' and column_name in ('renamed_at', 'seen_round', 'before_clean')") == "0",
+       "(as staging on 03-Oct: no round_seen, no hold_reason, no renamed_at / seen_round / before_clean)")
     # 1. the file as the owner runs it (psql, stop at the first error), twice
     before = counts()
     for i in (1, 2):
@@ -138,6 +150,18 @@ try:
     code = " ".join(l for l in body.split("\n") if not l.strip().startswith("--"))
     ok(not any(w in code for w in ["drop table", "drop view", "drop function", "drop trigger", "drop policy", "drop column", "delete from"]) and not re.search(r"truncate\s+(table\s+)?(public\.)?tally_", code), "the file drops and deletes nothing")
     ok(code.strip().startswith("begin;") and code.strip().endswith("commit;"), "one transaction (begin; ... commit;)")
+    ok(re.search(r"(?i)what staging had on 03-oct", body) is not None and "2105b2d" in body, "the header says what staging had on 03-Oct (the first 34, 2105b2d)")
+    fns = {r["a"]: 1 for r in db.rows("select proname || '(' || pg_get_function_identity_arguments(oid) || ')' as a from pg_proc where pronamespace = 'public'::regnamespace and proname in ('tally_ledger_round_batch', 'tally_ledgers_mark_gone', 'tally_ledger_round_seen', 'tally_ledger_hold_reason')")}
+    ok(all(k in fns for k in ["tally_ledger_round_batch(p_book uuid, p_round text, p_rows integer, p_rows_read integer, p_complete boolean, p_device uuid, p_bridge text, p_seen jsonb)",
+                               "tally_ledger_round_batch(p_book uuid, p_round text, p_rows integer, p_rows_read integer, p_complete boolean, p_device uuid, p_bridge text)",
+                               "tally_ledgers_mark_gone(p_book uuid, p_round text)", "tally_ledgers_mark_gone(p_book uuid, p_round text, p_gone jsonb)",
+                               "tally_ledger_round_seen(p_book uuid, p_round text, p_seen jsonb)", "tally_ledger_hold_reason(l tally_ledgers)"]), "the functions with the arguments tally-ingest calls, beside staging's 7- and 3-argument ones (%s)" % sorted(fns))
+    ok("tally_ledger_hold_reason" in db.one("select pg_get_functiondef('tally_ledgers_a_guard'::regproc)") and "merged_into is null" in db.one("select pg_get_functiondef('tally_ledger_hold_reason'::regproc)"), "the guard calls tally_ledger_hold_reason, which leaves nil twin rows out")
+    ok({"renamed_at", "seen_round", "seen_at", "before_clean"} <= {r["c"] for r in db.rows("select column_name as c from information_schema.columns where table_name = 'tally_ledgers'")}
+       and db.one("select count(*) from information_schema.columns where table_name = 'tally_ledger_rounds' and column_name = 'seen_n'") == "1"
+       and {"raw_ledger", "merged_into", "before_clean"} <= {r["c"] for r in db.rows("select column_name as c from information_schema.columns where table_name = 'tally_ledger_day'")}, "the columns added")
+    for fn in ("tally_tb", "tally_period", "tally_mis", "tally_gst_summary", "tally_ledger", "tally_balances_on"):
+        ok("d.merged_into is null" in db.one("select pg_get_functiondef(%s::regproc)" % q("public." + fn)), "%s hides the twins (d.merged_into is null)" % fn)
 
     # 2. the made-up books through the real path: the masters as a full list, the day book day by day
     leds, grps, guids = read_master()
@@ -178,6 +202,13 @@ try:
     L = led(X2)
     ok(L["renamed_at"] != "" and [h.get("from") for h in json.loads(L["hist"]).get("renamed", [])][-1:] == [X], "renamed_at stamped and the old name kept in before_clean.renamed")
     ok(one("select count(*) from tally_ledger_marks where book_id = %s and ledger = %s" % (q(B), q(X2))) == "0", "no 'held' or 'marked' mark written by a rename")
+    # round 9, item 5: the readers list no zero line for the old name (the nil twin rows are hidden)
+    low = lambda rows: {str(r["ledger"]).lower() for r in rows}
+    t_tb = low(db.rows("select ledger from tally_tb('c1', '2026-03-31')", U)); t_pd = low(db.rows("select ledger from tally_period('c1', '2025-04-01', '2026-03-31')", U)); t_bo = low(db.rows("select ledger from tally_balances_on(%s, '2026-03-31')" % q(B), U))
+    ok(X.lower() not in t_tb and X2.lower() in t_tb, "tally_tb: the new name listed, no zero line for the old one")
+    ok(X.lower() not in t_pd and X2.lower() in t_pd, "tally_period: the same")
+    ok(X.lower() not in t_bo and X2.lower() in t_bo, "tally_balances_on: the same")
+    ok(abs(sum(float(r["closing"]) for r in db.rows("select closing from tally_tb('c1', '2026-03-31')", U))) < 0.005, "tally_tb ties")
 
     # 4. a rename onto an existing name (a merge): one ledger, the entries and the opening combined
     Y, Z = [x["ledger"] for x in db.rows("""select l.ledger from tally_lines l join tally_ledgers t on t.book_id = l.book_id and t.name = l.ledger
@@ -281,7 +312,9 @@ try:
     good, r = call("tally_ledger_round_seen(%s, 'r-1', %s)" % (q(BIG), js(G)))
     ok(good and r.get("stamped") == 0, "stamped again for the same round: nothing to do")
     good, r = call("tally_ledger_round_batch(%s, 'r-1', 1, null, null, %s, 'go-abc123')" % (q(BIG), q(DEV)))
-    ok(good and r["batches"] == 2, "the 7-argument batch call still answers")
+    ok(good and r["batches"] == 2 and r["seen"] == 40, "the 7-argument batch call (staging's first 34) still answers, through the 8-argument one (nothing more seen)")
+    good, r = call("tally_ledgers_mark_gone(%s, 'r-1', '[]'::jsonb)" % q(BIG))
+    ok(good and r["marked"] == 0, "the 3-argument mark_gone of the first 34 still answers (left as it is)")
     # a later round that misses one: marked as before (the stamp order changes nothing there)
     call("tally_ledger_round_batch(%s, 'r-2', 39, 39, true, %s, 'go-abc123', %s)" % (q(BIG), q(DEV), js(G[:39])))
     call("tally_ledger_round_seen(%s, 'r-2', %s)" % (q(BIG), js(G[:39])))
