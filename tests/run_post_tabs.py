@@ -306,6 +306,14 @@ with sync_playwright() as p:
     pg.click(N5 + " [data-release-owner]"); pg.wait_for_timeout(300); pg.fill("#confirmBox input#releaseWhy", "x"); pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(800)
     ok(any("not ready for this yet (migration 36b)" in t for t in E("window.__toasts")), "S3. a cloud without migration 36b: 'FinCom's cloud is not ready for this yet (migration 36b)' (%s)" % E("window.__toasts")[-2:])
     E("() => { TCloud.rpc = window.__rpc0; }")
+    # F11 (round 7): the buttons are for owners alone (the cloud accepts only an active owner), not a superadmin who is not
+    # one; Mark posted needs the voucher number
+    E("() => { S.account = {superadmin: true, me: {role: 'staff'}, firm: {name: 'Firm'}}; render(); }"); pg.wait_for_timeout(400); tab("errors")
+    ok(pg.locator(N5 + " [data-mark-posted]").count() == 0, "F11. a superadmin who is not an owner of the firm: no buttons")
+    E("() => { S.account = {me: {role: 'owner'}, firm: {name: 'Firm'}}; window.__rpc = []; render(); }"); pg.wait_for_timeout(400); tab("errors")
+    pg.click(N5 + " [data-mark-posted]"); pg.wait_for_timeout(300); pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(300)
+    ok(pg.locator("#confirmBox input#markVch").count() == 1 and pg.locator("#confirmBox .cbx-err").count() == 1 and not [c for c in E("window.__rpc") if c[0] == "tally_post_job_mark_posted"], "F11. Mark posted without the voucher number: not sent, the box says so")
+    pg.click('#confirmBox [data-cbx="no"]'); pg.wait_for_timeout(300)
     # ---- round 5 (C6): a bill posted, read afresh and not found, whose id FinCom's cloud still holds: it used to say
     # "Waiting for the bridge…" for good (nothing releases the id of a finished posting). Now: "Posted, not yet confirmed.
     # If it is not in Tally, an owner can release it here." with the owner's two buttons; a staff member sees the words

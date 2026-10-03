@@ -112,7 +112,8 @@ try:
     ok(c == 200 and job["status"] == "done" and job.get("checking") is True and job.get("message", "").startswith("Posted, not yet confirmed:"), "an entry Tally accepted: the posting is stored 'done' with checking (never failed, never 'running': the requeue would send it again); 'Posted, not yet confirmed: …' (%s, %s)" % (job["status"], job.get("message")))
     ok(it.get("v1", {}).get("state") == "unknown" and rs.get("v1", {}).get("outcomeUnknown") is True and rs["v1"].get("state") == "unknown" and rs["v1"].get("ok") is False, "the accepted entry is unknown (checking), not failed (%s)" % it.get("v1"))
     ok(it.get("v2", {}).get("state") == "failed" and rs.get("v2", {}).get("state") != "unknown", "the entry Tally refused stays failed")
-    ok(acc == [{"p_job": "p-1", "p_id": "v1", "p_vch": "26298"}], "tally_post_id_accept(job, id, voucher) called for v1 alone, with the voucher from Tally's words (%s)" % acc)
+    strip = lambda a: {k: v for k, v in a.items() if k != "p_at"}
+    ok([strip(a) for a in acc] == [{"p_job": "p-1", "p_id": "v1", "p_vch": "26298"}], "tally_post_id_accept(job, id, voucher) called for v1 alone, with the voucher from Tally's words (%s)" % acc)
     c, r = call({"kind": "posts_update", "version": "2.1.5", "bridge": main, "id": "p-1", "status": "failed", "results": [{"id": "v1", "ok": True, "verified": True, "vchNumber": "26298"}, {"id": "v2", "ok": False, "message": "refused"}],
                  "items": [{"id": "v1", "state": "in_tally"}, {"id": "v2", "state": "failed", "reason": "refused"}]})
     it = {x["id"]: x for x in job.get("items") or []}
@@ -149,7 +150,72 @@ try:
     ok(c == 200 and job["status"] == "done" and job.get("checking") is True and it["v2"]["state"] == "unknown" and rs["v2"].get("accepted") is True and rs["v2"].get("lastVchId") == "26298" and rs["v2"].get("ok") is False,
        "C7. ok false + accepted true + lastVchId: item unknown, the result kept with accepted and lastVchId, the posting 'done' + checking, never failed, never running (%s)" % job["status"])
     ok(job["status"] not in ("running", "taken", "waiting"), "C7/owner: an accepted, unconfirmed posting is never parked where tally_post_requeue or tally_post_take would send it again (%s)" % job["status"])
-    ok(acc == [{"p_job": "p-1", "p_id": "v2", "p_vch": "26298"}] and rel7 == [], "C7. the id stamped accepted with the voucher id, never released (%s, %s)" % (acc, rel7))
+    ok([strip(a) for a in acc] == [{"p_job": "p-1", "p_id": "v2", "p_vch": "26298"}] and rel7 == [], "C7. the id stamped accepted with the voucher id, never released (%s, %s)" % (acc, rel7))
+    # F2: the time of Tally's reply (acceptedAt) travels with the stamp (p_at), so an owner's release made after it is kept
+    job["status"] = "running"; acc.clear()
+    c, r = call({"kind": "posts_update", "version": "2.1.7", "bridge": main, "id": "p-1", "status": "failed", "results": [{"id": "v2", "ok": False, "accepted": True, "lastVchId": "26298", "acceptedAt": "2026-10-03T04:23:00Z", "state": "unknown"}], "items": [{"id": "v2", "state": "unknown"}]})
+    ok(acc and acc[0].get("p_at") == "2026-10-03T04:23:00Z", "F2. tally_post_id_accept carries p_at = the bridge's time of Tally's reply (%s)" % acc)
+    # F3: the posting's ids are read once; only ids not yet stamped are stamped (300 ok results, 298 stamped: 2 calls), and
+    # only ids not yet released are released
+    F.T["tally_post_ids"] = [{"job_id": "p-1", "fincom_id": "v%d" % i, "entry_id": "v%d" % i, "accepted_at": None if i > 298 else "2026-10-03T04:00:00Z", "released_at": None} for i in range(1, 301)]
+    F.T["tally_post_ids"].append({"job_id": "p-1", "fincom_id": "w-1", "entry_id": "w-1", "accepted_at": None, "released_at": "2026-10-03T04:00:00Z"})
+    job["status"] = "running"; acc.clear(); rel7.clear()
+    c, r = call({"kind": "posts_update", "version": "2.1.7", "bridge": main, "id": "p-1", "status": "done", "results": [{"id": "v%d" % i, "ok": True, "verified": True, "vchNumber": str(i)} for i in range(1, 301)] + [{"id": "w-1", "ok": False, "message": "refused"}, {"id": "w2", "ok": False, "message": "refused"}],
+                 "items": [{"id": "w-1", "state": "failed", "reason": "refused"}, {"id": "w2", "state": "failed", "reason": "refused"}]})
+    ok(c == 200 and sorted(a["p_id"] for a in acc) == ["v299", "v300"], "F3. 300 accepted entries, 298 already stamped: tally_post_id_accept called for the 2 new ones alone (%d calls)" % len(acc))
+    ok([a["p_id"] for a in rel7] == ["w2"], "F3. the id already released (w-1) is not released again; the new one is (%s)" % rel7)
+    F.T["tally_post_ids"] = []
+    # F4: a late update never goes back in time: a lower seq is ignored, and done / failed never return to running / taken
+    job["status"] = "running"; job.pop("seq", None)
+    c, r = call({"kind": "posts_update", "version": "2.1.7", "bridge": main, "id": "p-1", "status": "running", "seq": 5, "message": "5 of 9", "results": [], "items": []})
+    ok(c == 200 and job.get("seq") == 5 and job["message"] == "5 of 9", "F4. seq stored with the update (%s)" % job.get("seq"))
+    c, r = call({"kind": "posts_update", "version": "2.1.7", "bridge": main, "id": "p-1", "status": "running", "seq": 3, "message": "late: 3 of 9", "results": [], "items": []})
+    ok(c == 200 and r.get("stale") is True and job["message"] == "5 of 9" and job.get("seq") == 5, "F4. an update with a lower seq is ignored, said so (stale) (%s)" % job["message"])
+    c, r = call({"kind": "posts_update", "version": "2.1.7", "bridge": main, "id": "p-1", "status": "done", "seq": 6, "message": "9 of 9", "results": [{"id": "v1", "ok": True, "verified": True}], "items": []})
+    ok(job["status"] == "done" and job.get("seq") == 6, "F4. done at seq 6")
+    c, r = call({"kind": "posts_update", "version": "2.1.7", "bridge": main, "id": "p-1", "status": "running", "seq": 7, "message": "running again?", "results": [], "items": []})
+    ok(c == 200 and job["status"] == "done" and r.get("stale") is True, "F4. done never goes back to running (%s)" % job["status"])
+    job["status"] = "failed"
+    c, r = call({"kind": "posts_update", "version": "2.1.7", "bridge": main, "id": "p-1", "status": "taken", "seq": 8, "results": [], "items": []})
+    ok(job["status"] == "failed", "F4. failed never goes back to taken (%s)" % job["status"])
+    c, r = call({"kind": "posts_update", "version": "2.1.5", "bridge": main, "id": "p-1", "status": "running", "message": "an older bridge, no seq", "results": [], "items": []})
+    ok(job["status"] == "failed" and job.get("seq") == 6 and r.get("stale") is True, "F4/H1. a finished posting (failed, nothing being checked) takes no update at all, with or without seq (%s)" % job.get("seq"))
+    # H1 (c): the owner's settlement of an entry (byOwner) is never written over by the bridge; one the bridge no longer names stays
+    job["status"] = "running"; job["checking"] = False
+    job["results"] = [{"id": "v1", "ok": True, "verified": True, "state": "in_tally", "vchNumber": "26298", "byOwner": True}, {"id": "v3", "ok": False, "state": "notfound", "byOwner": True}]
+    job["items"] = [{"id": "v1", "state": "in_tally", "byOwner": True}, {"id": "v3", "state": "notfound", "byOwner": True}]
+    c, r = call({"kind": "posts_update", "version": "2.1.7", "bridge": main, "id": "p-1", "status": "running", "seq": 9, "results": [{"id": "v1", "ok": False, "message": "late: refused"}, {"id": "v2", "ok": True, "verified": True}], "items": [{"id": "v1", "state": "failed", "reason": "late"}, {"id": "v2", "state": "in_tally"}]})
+    rs = {x["id"]: x for x in job["results"]}; it = {x["id"]: x for x in job["items"]}
+    ok(c == 200 and rs["v1"].get("byOwner") is True and rs["v1"]["ok"] is True and it["v1"]["state"] == "in_tally" and rs["v2"]["ok"] is True and it["v2"]["state"] == "in_tally" and rs["v3"].get("byOwner") is True and it["v3"]["state"] == "notfound",
+       "H1. per entry: the owner's v1 stands, the bridge's v2 is stored, the owner's v3 (no longer named) stays (%s)" % sorted(rs))
+    job["results"] = []; job["items"] = []
+    # M2: the 2.1.5 bridge's exact words (the build on NWS144), no voucher id, no accepted flag: held, the id stamped
+    T215 = "Tally replied 'created', but the entry cannot be found in 'ZZ CO'. It was not sent again: look for it in Tally (another company open in Tally, or an Optional voucher)."
+    job["status"] = "running"; acc.clear()
+    c, r = call({"kind": "posts_update", "version": "2.1.5", "bridge": main, "id": "p-1", "status": "failed", "message": "1 failed", "results": [{"id": "v5", "ok": False, "verified": False, "message": T215}], "items": [{"id": "v5", "state": "failed", "reason": T215}]})
+    it = {x["id"]: x for x in job["items"]}
+    ok(c == 200 and job["status"] == "done" and job.get("checking") is True and it["v5"]["state"] == "unknown" and [a["p_id"] for a in acc] == ["v5"], "M2. the 2.1.5 text alone: held (done + checking), unknown, the id stamped (%s)" % job["status"])
+    job["status"] = "running"; acc.clear()
+    c, r = call({"kind": "posts_update", "version": "2.1.5", "bridge": main, "id": "p-1", "status": "failed", "results": [{"id": "v6", "ok": False, "created": 1, "message": "x"}], "items": [{"id": "v6", "state": "failed"}]})
+    ok(job["status"] == "done" and [a["p_id"] for a in acc] == ["v6"], "M2. created > 0 in a result is an acceptance too")
+    # L4: Tally created it in another company: held (the voucher is in Tally), the words say so, not 'post again'
+    job["status"] = "running"; acc.clear()
+    c, r = call({"kind": "posts_update", "version": "2.1.7", "bridge": main, "id": "p-1", "status": "failed", "results": [{"id": "v7", "ok": False, "wrongCompany": "OTHER CO", "lastVchId": "26350", "message": "Tally put this entry into 'OTHER CO', not 'ZZ CO'. Delete it ... then post again."}], "items": [{"id": "v7", "state": "failed", "reason": "wrong company"}]})
+    it = {x["id"]: x for x in job["items"]}; rs = {x["id"]: x for x in job["results"]}
+    ok(job["status"] == "done" and it["v7"]["state"] == "unknown" and it["v7"]["reason"].startswith("Tally created it in OTHER CO instead; an owner marks it posted or releases it") and rs["v7"]["reason"].startswith("Tally created it in OTHER CO instead") and [a["p_id"] for a in acc] == ["v7"],
+       "L4. held, the reason reworded for the owner (%s)" % it["v7"]["reason"][:90])
+    job["status"] = "running"; acc.clear()
+    c, r = call({"kind": "posts_update", "version": "2.1.7", "bridge": main, "id": "p-1", "status": "failed", "results": [{"id": "v8", "ok": False, "lastVchId": "1"}], "items": [{"id": "v8", "state": "failed", "reason": "r" * 600}]})
+    ok(len(job["items"][0]["reason"]) <= 500, "INFO. an item's reason stays under 500 (%d)" % len(job["items"][0]["reason"]))
+    # F2 (a): posts_take hands the bridge the ids an owner released for the posting, so it sends them once and does not
+    # mark them accepted from its memory
+    F.T["tally_post_jobs"].append({"id": "p-2", "firm_id": FIRM, "device_id": "d-1", "company": "ZZ CO", "status": "waiting", "payload": {"vouchers": [{"id": "sid-3"}]}, "created_at": "2026-10-03T10:00:00Z"})
+    F.T["tally_post_ids"] = [{"job_id": "p-2", "fincom_id": "h9f8e7", "entry_id": "sid-3", "accepted_at": "2026-10-03T04:23:00Z", "released_at": "2026-10-03T05:00:00Z", "released_by": "owner", "released_why": "not in the Day Book"},
+                             {"job_id": "p-2", "fincom_id": "h2", "entry_id": "sid-4", "accepted_at": None, "released_at": "2026-10-03T05:00:00Z", "released_by": "bridge", "released_why": "refused"}]
+    c, r = call({"kind": "posts_take", "version": "2.1.7", "bridge": main})
+    ok(c == 200 and (r.get("job") or {}).get("id") == "p-2" and r["job"].get("released") == [{"id": "sid-3", "at": "2026-10-03T05:00:00Z", "by": "owner", "why": "not in the Day Book"}],
+       "F2. posts_take: the job carries released: [{id, at, by, why}] for the owner's releases alone (%s)" % (r.get("job") or {}).get("released"))
+    F.T["tally_post_ids"] = []; F.T["tally_post_jobs"][-1]["status"] = "cancelled"
     F.rpc = real7
     # S4: the cloud says stamped 0 (the id in tally_post_ids spelt otherwise): said in the log, so it is seen
     def rpc36z(fn, a):

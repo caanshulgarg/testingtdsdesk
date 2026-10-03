@@ -87,11 +87,11 @@ begin
   -- it); never one Tally accepted (36b: accepted_at): the voucher is in Tally, and freeing the id would let it be doubled
   update tally_post_ids set live = false, released_at = now(), released_by = 'bridge', released_why = left(btrim(coalesce(p_why, '')), 500)
    where job_id = p_job and released_at is null and accepted_at is null
-     and (fincom_id = p_id or entry_id = p_id or (k is not null and regexp_replace(fincom_id, '[^A-Za-z0-9]', '', 'g') = k));
+     and (fincom_id = p_id or entry_id = p_id or (k is not null and (regexp_replace(fincom_id, '[^A-Za-z0-9]', '', 'g') = k or regexp_replace(coalesce(entry_id, ''), '[^A-Za-z0-9]', '', 'g') = k)));
   get diagnostics n = row_count;
   if n = 0 then
     select count(*) into acc from tally_post_ids where job_id = p_job and accepted_at is not null and released_at is null
-       and (fincom_id = p_id or entry_id = p_id or (k is not null and regexp_replace(fincom_id, '[^A-Za-z0-9]', '', 'g') = k));
+       and (fincom_id = p_id or entry_id = p_id or (k is not null and (regexp_replace(fincom_id, '[^A-Za-z0-9]', '', 'g') = k or regexp_replace(coalesce(entry_id, ''), '[^A-Za-z0-9]', '', 'g') = k)));
     if acc > 0 then return jsonb_build_object('ok', true, 'released', false, 'n', 0, 'why', 'accepted by Tally'); end if;
   end if;
   return jsonb_build_object('ok', true, 'released', n > 0, 'n', n);

@@ -550,7 +550,8 @@ function postJobHeld(j){
 // 36b: results and items say in_tally, the id stays accepted); "Not in Tally — release (reason)" -> tally_post_id_release_
 // owner(job, id, why) (the id freed, the entry notfound, a mark 'released'). Both ask for the text first; the cloud
 // refuses anyone but an owner, and the page shows the buttons to owners only. A cloud without 36b says so.
-function postOwner(){ return !!(S.account && (S.account.superadmin === true || ((S.account.me || {}).role === "owner"))); }
+// owners of the firm alone (the cloud accepts only an active member with role owner; a superadmin who is not one is refused there)
+function postOwner(){ return !!(S.account && ((S.account.me || {}).role === "owner")); }
 // the posting of FinCom's cloud that holds the entry: the newest naming it (by entry_ids, results or items)
 function postJobOf(cid, id){
   const js = postJobStates(cid).get(String(id));
@@ -580,7 +581,8 @@ const PostOwner = {
       body: "<p>You saw this entry in Tally. FinCom records it as posted, with who marked it and when; nothing is sent to Tally.</p>" +
         '<div class="bk-form one"><label><span>Voucher no. in Tally</span><input id="markVch" maxlength="60" placeholder="As in the Day Book"></label>' +
         '<label><span>Note (optional)</span><input id="markNote" maxlength="300" placeholder="Where you saw it"></label></div>',
-      read: () => ({vch: ((document.getElementById("markVch") || {}).value || "").trim(), note: ((document.getElementById("markNote") || {}).value || "").trim()})});
+      read: () => ({vch: ((document.getElementById("markVch") || {}).value || "").trim(), note: ((document.getElementById("markNote") || {}).value || "").trim()}),
+      validate: d => d && d.vch ? "" : "Give the voucher number as Tally shows it."});
     if (!a || !a.ok) return;
     await this.call(cid, "tally_post_job_mark_posted", {p_job: job.id, p_id: String(e.id), p_vch: a.data.vch, p_note: a.data.note}, no + " is marked posted.");
   },

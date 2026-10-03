@@ -1070,7 +1070,14 @@ Deno.serve(async (req) => {
         const { data, error } = await db.rpc("tally_post_take", { p_device: dev.id });
         if (error) throw new Error(error.message);
         const j = (data || [])[0];
-        return reply(200, { ok: true, job: j ? { id: j.id, company: j.company, payload: j.payload } : null });
+        // round 7 (F2): the ids of this posting an owner released (Not in Tally) travel with it, so the bridge sends them
+        // once and does not mark them accepted from its memory of a first send; none on a cloud without migration 36b
+        let released: unknown[] = [];
+        if (j) {
+          const { data: rel, error: relErr } = await db.from("tally_post_ids").select("entry_id, fincom_id, released_at, released_by, released_why").eq("job_id", j.id).eq("released_by", "owner");
+          if (!relErr) released = (rel || []).map((r: any) => ({ id: r.entry_id || r.fincom_id, at: r.released_at, by: r.released_by, why: r.released_why }));
+        }
+        return reply(200, { ok: true, job: j ? { id: j.id, company: j.company, payload: j.payload, released } : null });
       }
       case "posts_update": {
         if (!mayPost(dev, bridgeOf(dev, body, false).id)) return reply(403, { ok: false, notMain: true, error: "Another bridge is the main bridge on this computer now (chosen in FinCom); this one reads only and does not post." });
@@ -1087,7 +1094,9 @@ Deno.serve(async (req) => {
           outcomeUnknown: !!r?.outcomeUnknown, sameId: !!r?.sameId, guidMismatch: !!r?.guidMismatch,
           // bridge 2.1.6 (round 5): Tally replied CREATED / ALTERED with a voucher id (lastVchId) but the entry is not
           // confirmed yet: ok false, accepted true, state unknown. Only a confirmed entry has ok true
-          accepted: !!r?.accepted, lastVchId: s(r?.lastVchId, 30) }));
+          accepted: !!r?.accepted, lastVchId: s(r?.lastVchId, 30), acceptedAt: s(r?.acceptedAt, 40),
+          // the 2.1.5 bridge's counts of Tally's reply, and the company Tally put the entry into when not the one asked
+          created: Math.max(0, Math.floor(Number(r?.created) || 0)), altered: Math.max(0, Math.floor(Number(r?.altered) || 0)), wrongCompany: s(r?.wrongCompany, 200) }));
         // 02-Oct-2026: each entry's state as the bridge sees it (waiting / sending / sent / in_tally / failed, with why)
         const STATES = ["waiting", "sending", "sent", "in_tally", "failed", "unknown", "notfound"];   // notfound (migration 37): checked and not in Tally
         const items = Array.isArray(body.items) ? body.items.slice(0, 5000).map((x: any) => ({ id: s(x?.id, 200), kind: s(x?.kind, 10),
@@ -1098,9 +1107,21 @@ Deno.serve(async (req) => {
           ...(x?.outcomeUnknown ? { outcomeUnknown: true } : {}) })) : null;
         // a posting cancelled in FinCom, or gone: the bridge is told, and stops waiting for Tally
         const id = String(body.id || "");
-        const { data: cur } = await db.from("tally_post_jobs").select("status").eq("id", id).eq("device_id", dev.id).maybeSingle();
+        let cur: any = null;
+        {
+          // seq (migration 36b) may be missing on an older cloud: read without it then
+          let q = await db.from("tally_post_jobs").select("status, checking, seq, results, items").eq("id", id).eq("device_id", dev.id).maybeSingle();
+          if (q.error && /seq/.test(q.error.message)) q = await db.from("tally_post_jobs").select("status, checking, results, items").eq("id", id).eq("device_id", dev.id).maybeSingle();
+          cur = q.data;
+        }
         if (!cur) return reply(200, { ok: false, gone: true, error: "This posting is no longer in FinCom." });
         if (cur.status === "cancelled") return reply(200, { ok: false, cancelled: true, error: "This posting was cancelled in FinCom." });
+        // round 7 (F4, H1): an update never goes back in time. The bridge numbers its updates per posting (seq): a lower
+        // one is late and ignored. A posting finished (done or failed, nothing being checked) takes no bridge update at
+        // all: what is there (an owner's settlement among it) stands
+        const seq = body.seq === undefined || body.seq === null || !Number.isFinite(Number(body.seq)) ? null : Math.floor(Number(body.seq));
+        if (seq !== null && typeof cur.seq === "number" && seq < cur.seq) return reply(200, { ok: true, stale: true, seq: cur.seq });
+        if (["done", "failed"].includes(cur.status) && !cur.checking) return reply(200, { ok: true, stale: true, settled: true, status: cur.status });
         // 03-Oct-2026 (round 4): an entry Tally accepted is never stored as failed. An acceptance is ok, accepted (bridge
         // 2.1.6), a voucher id (lastVchId) / voucher number / master id / GUID, or CREATED / ALTERED with a voucher id in
         // Tally's words ("CREATED 0" is not one). The fault of the day: Tally replied CREATED with LASTVCHID 26298, the
@@ -1114,8 +1135,11 @@ Deno.serve(async (req) => {
         // never looks at 'done'; the app treats a job with checking as still going on). A verified entry holds nothing:
         // a posting with one verified and one plainly refused entry is failed, as before.
         const fid = (v: string) => String(v || "").replace(/[^A-Za-z0-9]/g, "");
-        const acceptedMsg = (m: string) => /\b(CREATED|ALTERED)\b/i.test(m) && (/\b(LASTVCHID|VCHID|MASTERID|voucher(?: no\.?| number)?)\D{0,6}[1-9]\d*/i.test(m) || /\b(CREATED|ALTERED)\b\D{0,4}[1-9]\d*/i.test(m));
-        const acceptedRes = (r: any) => !!(r.ok || r.accepted || r.lastVchId || r.vchNumber || r.masterId || r.guid || acceptedMsg(r.message) || acceptedMsg(r.reason));
+        // Tally's words with a voucher id, or the 2.1.5 bridge's own ("Tally replied 'created', but the entry cannot be
+        // found in '…'": that build sent no voucher id; it is the build on NWS144)
+        const acceptedMsg = (m: string) => (/\b(CREATED|ALTERED)\b/i.test(m) && (/\b(LASTVCHID|VCHID|MASTERID|voucher(?: no\.?| number| id)?)\D{0,6}[1-9]\d*/i.test(m) || /\b(CREATED|ALTERED)\b\D{0,4}[1-9]\d*/i.test(m) || /cannot be found/i.test(m)))
+          || /replied '(created|altered)'/i.test(m);
+        const acceptedRes = (r: any) => !!(r.ok || r.accepted || r.created > 0 || r.altered > 0 || r.lastVchId || r.vchNumber || r.masterId || r.guid || acceptedMsg(r.message) || acceptedMsg(r.reason));
         const accepted = new Set<string>(results.filter((r: any) => r.id && acceptedRes(r)).map((r: any) => fid(r.id)));
         const vchOf = (r: any) => String(r.lastVchId || r.vchNumber || r.masterId || ((String(r.message || "") + " " + String(r.reason || "")).match(/\b(?:LASTVCHID|VCHID|MASTERID|voucher(?: no\.?| number)?)\D{0,6}([1-9]\d*)/i) || [])[1] || "");
         if (items) for (const x of items as any[]) if (x.id && (x.state === "failed" || x.state === "notfound") && acceptedMsg(x.reason)) accepted.add(fid(x.id));
@@ -1129,24 +1153,55 @@ Deno.serve(async (req) => {
         }
         let heldOpen = false;
         if (unconfirmed.size) {
-          for (const r of results as any[]) if (unconfirmed.has(fid(r.id)) && !r.ok) { r.state = "unknown"; r.outcomeUnknown = true; r.reason = r.reason || "Tally accepted it; being checked"; }
-          if (items) for (const x of items as any[]) if (unconfirmed.has(fid(x.id)) && (x.state === "failed" || x.state === "notfound")) { x.state = "unknown"; x.reason = "Tally accepted it (" + (x.reason || "the bridge reported it failed") + "); being checked"; x.outcomeUnknown = true; }
+          // L4: Tally created it in another company: the voucher IS in Tally (held, never sent again), the words say so
+          const wrong = (r: any) => r && r.wrongCompany ? "Tally created it in " + r.wrongCompany + " instead; an owner marks it posted or releases it" : "";
+          for (const r of results as any[]) if (unconfirmed.has(fid(r.id)) && !r.ok) { r.state = "unknown"; r.outcomeUnknown = true; r.reason = s(wrong(r) || r.reason || "Tally accepted it; being checked", 500); if (wrong(r)) r.message = s(wrong(r) + ". " + r.message, 1000); }
+          if (items) for (const x of items as any[]) if (unconfirmed.has(fid(x.id)) && (x.state === "failed" || x.state === "notfound")) {
+            const w = wrong((results as any[]).find((r) => fid(r.id) === fid(x.id)));
+            x.state = "unknown"; x.reason = s(w || "Tally accepted it (" + (x.reason || "the bridge reported it failed") + "); being checked", 500); x.outcomeUnknown = true; }
           heldOpen = st === "failed";
         }
-        const row: Record<string, unknown> = { status: heldOpen ? "done" : st, done: Math.max(0, Math.floor(Number(body.done) || 0)), message: s(body.message, 500), results, checking: heldOpen || !!body.checking, updated_at: new Date().toISOString() };
+        // H1: an owner's settlement of an entry (Mark posted, Not in Tally: byOwner on the result and item, migration 36b)
+        // is never written over by the bridge: per entry id, the owner's stands, and one the bridge no longer names stays
+        const ownerOf = (list: any[]) => (Array.isArray(list) ? list : []).filter((x) => x && x.byOwner === true && x.id);
+        const merge = (mine: any[], theirs: any[]) => {
+          const by = new Map(theirs.map((x) => [fid(x.id), x]));
+          const out = mine.map((x) => by.get(fid(x.id)) || x);
+          for (const x of theirs) if (!mine.some((m) => fid(m.id) === fid(x.id))) out.push(x);
+          return out;
+        };
+        const mergedResults = merge(results as any[], ownerOf(cur.results)), mergedItems = items ? merge(items as any[], ownerOf(cur.items)) : null;
+        let stale = false;
+        let status = heldOpen ? "done" : st;
+        // done or failed never goes back to running or taken (a late update of the bridge while the posting is being checked)
+        if (["done", "failed"].includes(cur.status) && ["running", "taken"].includes(status)) { status = cur.status; stale = true; }
+        const row: Record<string, unknown> = { status, done: Math.max(0, Math.floor(Number(body.done) || 0)), message: s(body.message, 500), results: mergedResults, checking: heldOpen || !!body.checking, updated_at: new Date().toISOString() };
         if (heldOpen) row.message = s("Posted, not yet confirmed: Tally accepted " + unconfirmed.size + (unconfirmed.size === 1 ? " entry" : " entries") + " the bridge reported failed; held for checking, not posted again. " + s(body.message, 300), 500);
-        if (items) row.items = items;
+        if (mergedItems) row.items = mergedItems;
+        if (seq !== null) row.seq = seq;
+        // F3: the posting's ids read once; only an id not yet stamped is stamped, only one not yet released is released
+        // (the bridge reports every few seconds). Not readable (an older cloud): every one, as before
+        let known: any[] | null = null;
+        if (accepted.size || (items || []).some((x: any) => x.state === "failed" || x.state === "notfound")) {
+          const { data: idRows, error: idErr } = await db.from("tally_post_ids").select("fincom_id, entry_id, accepted_at, released_at").eq("job_id", id);
+          if (!idErr) known = idRows || [];
+        }
+        const rowOf = (a: string) => known ? known.find((r) => fid(r.fincom_id) === a || fid(r.entry_id) === a) : undefined;
         // the id of every accepted entry is stamped (tally_post_id_accept, migration 36b: the sync then never frees it);
         // before 36b the function is missing and the stamp is skipped. Stamped 0 (36b matches the tag's spelling, the
         // bridge's and FinCom's entry id; none of the posting's ids is this one) is said in the log
         for (const a of accepted) {
+          const k = rowOf(a);
+          if (known && k && k.accepted_at) continue;
           const r0 = (results as any[]).find((r) => fid(r.id) === a) || {}, x0 = itemOf(a) || {};
-          const { data: accData, error: accErr } = await db.rpc("tally_post_id_accept", { p_job: id, p_id: a, p_vch: vchOf(r0) || vchOf(x0) });
+          // p_at: the bridge's time of Tally's reply, so an owner's release made after it is kept (36b)
+          const { data: accData, error: accErr } = await db.rpc("tally_post_id_accept", { p_job: id, p_id: a, p_vch: vchOf(r0) || vchOf(x0), p_at: r0.acceptedAt || s(body.updatedAt, 40) || null });
           if (accErr && !/tally_post_id_accept|schema cache|does not exist/i.test(accErr.message)) console.error("tally_post_id_accept", accErr.message);
           else if (!accErr && accData && typeof accData === "object" && (accData as any).stamped === 0) console.warn("tally_post_id_accept: stamped 0 for " + a + " (" + s(r0.id || x0.id, 60) + ") in posting " + id + ": no id of the posting matches");
         }
         let { error } = await db.from("tally_post_jobs").update(row).eq("id", id).eq("device_id", dev.id).neq("status", "cancelled");
-        // before migration-24 there is no items column: the rest is kept as before
+        // before migration-36b there is no seq column, before migration-24 no items column: the rest is kept as before
+        if (error && "seq" in row && /seq/.test(error.message)) { delete row.seq; ({ error } = await db.from("tally_post_jobs").update(row).eq("id", id).eq("device_id", dev.id).neq("status", "cancelled")); }
         if (error && items && /items/.test(error.message)) { delete row.items; ({ error } = await db.from("tally_post_jobs").update(row).eq("id", id).eq("device_id", dev.id).neq("status", "cancelled")); }
         if (error) throw new Error(error.message);
         // migration 37 (item 7): an entry refused or not found in Tally releases its id (tally_post_id_release: job, id,
@@ -1154,10 +1209,12 @@ Deno.serve(async (req) => {
         // entry, never one Tally accepted. Before migration 37 the function is missing: skipped
         for (const x of (items || []) as any[]) {
           if (!x.id || !(x.state === "failed" || x.state === "notfound") || accepted.has(fid(x.id))) continue;
+          const k = rowOf(fid(x.id));
+          if (known && k && k.released_at) continue;
           const { error: relErr } = await db.rpc("tally_post_id_release", { p_job: id, p_id: x.id, p_why: String(x.reason || x.state).slice(0, 500) });
           if (relErr && !/tally_post_id_release|schema cache|does not exist/i.test(relErr.message)) console.error("tally_post_id_release", relErr.message);
         }
-        return reply(200, { ok: true });
+        return reply(200, stale ? { ok: true, stale: true, status } : { ok: true });
       }
       case "companies": {
         const list = (Array.isArray(body.companies) ? body.companies : []).slice(0, 200)

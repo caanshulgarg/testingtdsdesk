@@ -282,6 +282,10 @@ try:
     ok(good and db.one("select live from tally_post_ids where job_id = %s and fincom_id = 'ACC1'" % q(J(4))) == "f", "S3. the owner's release (36b) frees the accepted id under 37 (%s)" % out[-100:])
     db.sql("update tally_post_jobs set status = 'failed' where id = %s; update tally_post_jobs set status = 'waiting' where id = %s" % (q(J(4)), q(J(4))))
     ok(liv() == {"ACC1": "f", "REF-2.b": "f"}, "S3. Retry: neither released id is revived (%s)" % liv())
+    # F1: a bank line's entry id with a hash tag: released by the bridge's spelling of the entry id
+    db.sql("insert into tally_post_jobs (id, firm_id, client_id, company, payload, n, status) values (%s, %s, 'c1', 'ZZ CO', %s, 1, 'running');" % (q(J(5)), q(F), js({"vouchers": [{"id": "abc-9", "xml": "<VOUCHER><NARRATION>Bank | TDSDesk:h7e6d5</NARRATION></VOUCHER>"}]})))
+    r = j("select tally_post_id_release(%s, 'abc9', 'Tally refused it')::text" % q(J(5)))
+    ok(r["released"] is True and db.one("select live from tally_post_ids where job_id = %s and fincom_id = 'h7e6d5'" % q(J(5))) == "f", "F1. released by the bridge's 'abc9' for entry abc-9 with the hash tag h7e6d5 (%s)" % r)
 
     # 7. item 12: the lease released is kept; take reuses it
     take = lambda holder: j("select tally_lease_take(%s, %s, %s, null, 120, '{\"computer\": \"PC\"}')::text" % (q(F), q(B), q(holder)))

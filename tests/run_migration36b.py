@@ -52,6 +52,9 @@ try:
     db.sql("insert into tally_books (book_id, firm_id, client_id, company, from_date, open_as_on) values (%s, %s, 'c1', 'ZZ CO', '2026-04-01', '2026-03-31');" % (q(B), q(F)))
     r = psql_file(M32); ok(r.returncode == 0, "migration-32 (as on staging) runs %s" % ((r.stderr or "").strip()[-300:] if r.returncode else ""))
     db.sql(job(J(1), [vch("A1"), vch("A2")]) + job(J(9), [vch("Z1")], firm=F2))
+    # F12: a posting from before 36b whose results carry an acceptance (the fault of 03-Oct), and one plainly refused
+    db.sql(job(J(30), [vch("K1"), vch("K2")]) + "update tally_post_jobs set status = 'failed', results = %s where id = %s" % (q(json.dumps([
+        {"id": "K1", "ok": False, "message": "Tally replied 'created' but not found. Tally's reply: <CREATED>1</CREATED> <LASTVCHID>26340</LASTVCHID>"}, {"id": "K2", "ok": False, "message": "Tally refused it: ledger missing"}])), q(J(30))))
     counts = lambda: {t: db.one("select count(*) from %s" % t) for t in ["tally_post_jobs", "tally_post_ids", "tally_books", "members"]}
     before = counts()
     # 1. the file as the owner runs it (psql, stop at the first error), twice
@@ -66,6 +69,10 @@ try:
     cols = {r["column_name"] for r in db.rows("select column_name from information_schema.columns where table_name = 'tally_post_ids'")}
     ok({"accepted_at", "accepted_vch"} <= cols, "tally_post_ids: accepted_at and accepted_vch (%s)" % sorted(cols))
     ok(db.one("select count(*) from information_schema.tables where table_name = 'tally_post_marks'") == "1", "tally_post_marks exists")
+    ok(col(J(30), "K1", "accepted_at") and col(J(30), "K1", "accepted_vch") == "26340" and not col(J(30), "K2", "accepted_at") and not col(J(1), "A2", "accepted_at"),
+       "F12. the backfill stamps accepted_at (and the voucher id) on the ids whose results carry an acceptance, nothing else (%s)" % col(J(30), "K1", "accepted_vch"))
+    ok(re.search(r"backfill.*\b1\b", r.stderr or "") is None or "backfill" in (r.stderr or ""), "F12. the count is said in the log (%s)" % (r.stderr or "").strip()[-120:])
+    ok("tally_post_jobs" in db.one("select string_agg(table_name, ',') from information_schema.columns where column_name = 'seq' and table_name = 'tally_post_jobs'"), "F4. tally_post_jobs.seq is there")
 
     # 2. an accepted id is never freed by the sync
     ok(live(J(1), "A1") == "t" and live(J(1), "A2") == "t", "both ids of the running posting live")
@@ -112,7 +119,7 @@ try:
     fn = db.one("select pg_get_functiondef('tally_post_job_mark_posted'::regproc)")
     ok("SECURITY DEFINER" in fn and "search_path" in fn and "pg_temp" in fn, "the function is security definer with search_path = public, pg_temp")
     ok(db.one("select has_function_privilege('anon', 'tally_post_job_mark_posted(uuid, text, text, text)', 'execute')") == "f", "anon cannot call it")
-    ok(db.one("select has_function_privilege('authenticated', 'tally_post_id_accept(uuid, text, text)', 'execute')") == "f", "a signed-in person cannot call tally_post_id_accept")
+    ok(db.one("select has_function_privilege('authenticated', 'tally_post_id_accept(uuid, text, text, timestamptz)', 'execute')") == "f", "a signed-in person cannot call tally_post_id_accept")
 
     # 4. round 5 (S4): an id with '.' and '-' in it. The narration tag keeps them (tally_fincom_id: INV-2026.07), the bridge
     # stamps the id in letters and digits (INV202607): accept, release and the owner's mark match either spelling, or the
@@ -186,7 +193,7 @@ try:
     db.sql("update tally_post_jobs set updated_at = now() - interval '31 minutes', taken_at = now() - interval '40 minutes' where id in (%s, %s, %s)" % (q(J(17)), q(J(18)), q(J(19))))
     n = int(db.one("select tally_post_requeue()"))
     rows = {r["id"]: r for r in db.rows("select id, status, attempts, checking, message, updated_at > now() - interval '1 minute' as touched from tally_post_jobs where id in (%s, %s, %s)" % (q(J(17)), q(J(18)), q(J(19))))}
-    ok(n == 1 and rows[J(17)]["status"] == "running" and rows[J(17)]["attempts"] == "0" and rows[J(17)]["touched"] == "f", "route (c) requeue: the accepted posting left for 31 minutes is not re-queued (status unchanged, not touched) (%s)" % rows[J(17)])
+    ok(n == 1 and rows[J(17)]["status"] == "done" and rows[J(17)]["checking"] == "t" and rows[J(17)]["attempts"] == "0" and rows[J(17)]["message"].startswith("Held: Tally accepted Q1"), "route (c) requeue: the accepted posting left for 31 minutes is never re-queued: held as done + checking with the message, attempts untouched (%s)" % rows[J(17)])
     ok(rows[J(18)]["status"] == "waiting" and rows[J(18)]["attempts"] == "1" and "again" in rows[J(18)]["message"], "a plain stale posting is re-queued as before (%s)" % rows[J(18)]["status"])
     ok(rows[J(19)]["status"] == "done" and rows[J(19)]["checking"] == "t" and rows[J(19)]["touched"] == "f", "a posting parked 'done' + checking (tally-ingest's hold) is never touched")
     taken = db.rows("select id from tally_post_take(%s::uuid)" % q(DEV))
@@ -206,7 +213,84 @@ try:
     fn = db.one("select pg_get_functiondef('tally_post_id_release_owner'::regproc)")
     ok("SECURITY DEFINER" in fn and "pg_temp" in fn and db.one("select has_function_privilege('anon', 'tally_post_id_release_owner(uuid, text, text)', 'execute')") == "f", "tally_post_id_release_owner: security definer, search_path public, pg_temp; anon cannot call it")
     ok(db.one("select count(*) from tally_post_marks") == "8", "every mark kept: 3 posted, 4 released, 1 posted again (%s)" % db.one("select count(*) from tally_post_marks"))
+    # ---- round 7 (the review of round 5)
+    # F1: a bank line's entry id (abc-1) with a hash tag as its FinCom id: the bridge stamps 'abc1'; it must find the row
+    hv = lambda eid, tag: {"id": eid, "xml": "<VOUCHER><NARRATION>Bank | TDSDesk:%s</NARRATION></VOUCHER>" % tag}
+    st_of = lambda jid: db.rows("select status, checking, message from tally_post_jobs where id = %s" % q(jid))[0]
+    db.sql(job(J(40), [hv("abc-1", "h9f8e7"), hv("abc-2", "h1a2b3")]))
+    db.sql("update tally_post_jobs set status = 'running' where id = %s" % q(J(40)))
+    acc = json.loads(db.one("select tally_post_id_accept(%s::uuid, 'abc1', '26310')::text" % q(J(40))))
+    ok(acc.get("stamped") == 1 and col(J(40), "h9f8e7", "accepted_at"), "F1. the bridge's 'abc1' stamps the row whose entry id is abc-1 and FinCom id the hash h9f8e7 (%s)" % acc)
+    good, out = mark(OWNER, J(40), "abc1", "26310", "seen"); ok(good and st_of(J(40))["status"] == "running", "F1. mark_posted by the same spelling; the posting still running (abc-2 not processed yet) (%s)" % out[-80:])
+    # F2: an owner's release is not wiped by an acceptance older than it (the bridge's memory of the first send)
+    good, out = rel(OWNER, J(40), "abc-2", "not in Tally, looked at 10:00")
+    ok(good and live(J(40), "h1a2b3") == "f" and st_of(J(40))["status"] == "failed", "F2/F8. the owner releases abc-2; nothing left to process: the running posting is settled failed (%s)" % st_of(J(40)))
+    acc = json.loads(db.one("select tally_post_id_accept(%s::uuid, 'abc2', '26311', now() - interval '1 hour')::text" % q(J(40))))
+    row = db.rows("select live, released_by, accepted_at, accepted_vch from tally_post_ids where job_id = %s and fincom_id = 'h1a2b3'" % q(J(40)))[0]
+    ok(acc.get("stamped") == 1 and row["live"] == "f" and row["released_by"] == "owner" and row["accepted_at"] and row["accepted_vch"] == "26311", "F2. an acceptance from before the release: stamped, the release kept, not live (%s)" % row)
+    acc = json.loads(db.one("select tally_post_id_accept(%s::uuid, 'abc2', '26312', now() + interval '1 second')::text" % q(J(40))))
+    row = db.rows("select live, released_by, released_at from tally_post_ids where job_id = %s and fincom_id = 'h1a2b3'" % q(J(40)))[0]
+    ok(row["live"] == "t" and row["released_by"] == "" and row["released_at"] == "", "F2. an acceptance after the release (Tally took it again): the release cleared, live (%s)" % row)
+    # F7: Retry of a posting with one entry confirmed in Tally and one plainly refused is allowed (the bridge never re-sends
+    # a confirmed entry); one accepted and not confirmed blocks it, named alone
+    db.sql(job(J(41), [vch("P1"), vch("P2")]) + "update tally_post_jobs set status = 'failed', results = %s, items = %s where id = %s" % (
+        q(json.dumps([{"id": "P1", "ok": True, "verified": True, "vchNumber": "26320"}, {"id": "P2", "ok": False, "message": "Tally refused it: ledger missing"}])),
+        q(json.dumps([{"id": "P1", "state": "in_tally"}, {"id": "P2", "state": "failed", "reason": "ledger missing"}])), q(J(41))))
+    db.one("select tally_post_id_accept(%s::uuid, 'P1', '26320')::text" % q(J(41)))      # tally-ingest stamps every accepted entry, the confirmed one too
+    db.sql("update tally_post_jobs set status = 'waiting' where id = %s" % q(J(41)))
+    ok(st_of(J(41))["status"] == "waiting", "F7. Retry allowed: one confirmed (stamped accepted_at) and one refused")
+    db.sql("update tally_post_jobs set status = 'failed', results = %s where id = %s" % (q(json.dumps([{"id": "P1", "ok": True, "verified": True, "vchNumber": "26320"}, {"id": "P2", "ok": False, "accepted": True, "lastVchId": "26321", "state": "unknown"}])), q(J(41))))
+    try: db.sql("update tally_post_jobs set status = 'waiting' where id = %s" % q(J(41))); ok(False, "F7. an accepted, unconfirmed entry did not block Retry")
+    except RuntimeError as e: ok("P2" in str(e) and "P1" not in str(e).split("accepted")[1][:60], "F7. accepted and not confirmed: Retry refused, P2 named, not the confirmed P1 (%s)" % str(e)[-140:])
+    db.sql("update tally_post_jobs set status = 'cancelled' where id = %s" % q(J(41)))
+    # F8: the requeue holds a stale running posting with an accepted entry (done + checking, a message), never waiting
+    db.sql(job(J(42), [vch("R1")]) + "update tally_post_jobs set status = 'running', device_id = %s, results = %s, updated_at = now() - interval '31 minutes' where id = %s" % (q(DEV), q(json.dumps([{"id": "R1", "ok": False, "accepted": True, "lastVchId": "26330", "state": "unknown"}])), q(J(42))))
+    db.one("select tally_post_requeue()")
+    r42 = st_of(J(42))
+    ok(r42["status"] == "done" and r42["checking"] == "t" and r42["message"].startswith("Held: Tally accepted") and db.rows("select id from tally_post_take(%s::uuid)" % q(DEV)) == [], "F8. requeue: held as done + checking with the message, nothing to take (%s)" % r42)
+    # F8: the owner's release / mark settle a running or taken posting whose bridge died, as the other entries dictate
+    db.sql(job(J(43), [vch("S1"), vch("S2")]) + "update tally_post_jobs set status = 'running', results = %s, items = %s where id = %s" % (
+        q(json.dumps([{"id": "S1", "ok": False, "accepted": True, "state": "unknown"}, {"id": "S2", "ok": False, "message": "refused"}])), q(json.dumps([{"id": "S1", "state": "unknown"}, {"id": "S2", "state": "failed", "reason": "refused"}])), q(J(43))))
+    good, out = rel(OWNER, J(43), "S1", "not there"); r43 = st_of(J(43))
+    ok(good and r43["status"] == "failed" and r43["checking"] == "f", "F8. release on a running posting: the other entry refused, so failed (%s)" % r43)
+    db.sql(job(J(44), [vch("T1"), vch("T2")]) + "update tally_post_jobs set status = 'taken', items = %s where id = %s" % (q(json.dumps([{"id": "T1", "state": "unknown"}, {"id": "T2", "state": "unknown"}])), q(J(44))))
+    good, out = mark(OWNER, J(44), "T1", "26331", ""); r44 = st_of(J(44))
+    ok(good and r44["status"] == "done" and r44["checking"] == "t", "F8. mark on a taken posting with another entry unknown: held as done + checking, never taken (%s)" % r44)
+    good, out = mark(OWNER, J(44), "T2", "26332", ""); r44 = st_of(J(44))
+    ok(good and r44["status"] == "done" and r44["checking"] == "f", "F8. the last entry marked: done, checking off (%s)" % r44)
+    db.sql(job(J(45), [vch("U1"), vch("U2")]) + "update tally_post_jobs set status = 'running', items = %s where id = %s" % (q(json.dumps([{"id": "U1", "state": "unknown"}, {"id": "U2", "state": "sending"}])), q(J(45))))
+    good, out = rel(OWNER, J(45), "U1", "not there"); r45 = st_of(J(45))
+    ok(good and r45["status"] == "running", "F8. an entry still on its way (sending): the posting is left to the bridge (%s)" % r45["status"])
+    # M2: the 2.1.5 bridge's exact words (the build on NWS144; no voucher id in them) are an acceptance: the stale posting
+    # is held, its id stamped by the backfill, never re-queued, Retry refused
+    T215 = "Tally replied 'created', but the entry cannot be found in 'ZZ CO'. It was not sent again: look for it in Tally (another company open in Tally, or an Optional voucher)."
+    db.sql(job(J(46), [vch("M1")]) + "update tally_post_jobs set status = 'running', device_id = %s, results = %s, items = %s, updated_at = now() - interval '31 minutes' where id = %s"
+           % (q(DEV), q(json.dumps([{"id": "M1", "ok": False, "verified": False, "message": T215}])), q(json.dumps([{"id": "M1", "state": "failed", "reason": T215}])), q(J(46))))
+    ok(db.one("select tally_post_accept_text(%s)" % q(T215)) == "t" and db.one("select tally_post_accept_text('CREATED 0 ALTERED 0 ERRORS 1')") == "f", "M2. the 2.1.5 text is read as an acceptance; 'CREATED 0' is not")
+    db.one("select tally_post_requeue()"); r46 = st_of(J(46))
+    ok(r46["status"] == "done" and r46["checking"] == "t" and db.rows("select id from tally_post_take(%s::uuid)" % q(DEV)) == [], "M2. the stale posting with that text is held, not re-queued, nothing to take (%s)" % r46["status"])
+    try: db.sql("update tally_post_jobs set status = 'waiting' where id = %s" % q(J(46))); ok(False, "M2. Retry went through")
+    except RuntimeError as e: ok("M1" in str(e), "M2. Retry refused (%s)" % str(e)[-80:])
+    ok(db.one("select coalesce(tally_post_job_accepted(%s::uuid, %s::jsonb, '[]'::jsonb), '')" % (q(J(46)), q(json.dumps([{"id": "M1", "accepted": "yes", "created": "many"}])))) in ("", "M1", None), "INFO. a non-boolean 'accepted' / 'created' text raises nothing (%r)" % db.one("select coalesce(tally_post_job_accepted(%s::uuid, %s::jsonb, '[]'::jsonb), '-')" % (q(J(46)), q(json.dumps([{"id": "M1", "accepted": "yes", "created": "many"}])))))
+    # L2: Retry of a posting while one of its ids is live in another posting is refused, the id named
+    db.sql("""create table if not exists tally_companies (firm_id uuid, company text, client_id text, device_id uuid, last_seen timestamptz, book_id uuid, gstin text, linked_at timestamptz);
+      create table if not exists clients (id text, firm_id uuid, name text, data jsonb, deleted boolean default false, tally_name text, gstin text);""")
+    db.sql("create or replace function public.tally_nm(p text) returns text language sql immutable as 'select lower(btrim(coalesce($1, '''')))'")   # as staging has it (migration 3), for tally_post_enqueue
+    db.sql("insert into tally_companies (firm_id, company, client_id, device_id, last_seen) values (%s, 'ZZ CO', 'c1', %s, now()); insert into clients (id, firm_id, name, data) values ('c1', %s, 'ZZ', '{\"postTo\": \"ZZ CO\"}');" % (q(F), q(DEV), q(F)))
+    db.sql(job(J(47), [vch("L1"), vch("L2")]) + "update tally_post_jobs set status = 'running' where id = %s" % q(J(47)))
+    good, out = rel(OWNER, J(47), "L1", "not there"); db.sql("update tally_post_jobs set status = 'failed' where id = %s" % q(J(47)))
+    db.sql(job(J(48), [vch("L1")]))
+    good, out = as_user(OWNER, "select tally_post_enqueue(%s::uuid, 'c1', '{}'::jsonb)::text" % q(J(47))); r = json.loads(out) if good else {}
+    ok(good and r.get("ok") is False and "L1" in r.get("error", "") and st_of(J(47))["status"] == "failed", "L2. Retry while L1 is live in another posting: refused, L1 named (%s | %s)" % (r.get("error"), out[-900:]))
+    db.sql("update tally_post_jobs set status = 'cancelled' where id = %s" % q(J(48)))
+    good, out = as_user(OWNER, "select tally_post_enqueue(%s::uuid, 'c1', '{}'::jsonb)::text" % q(J(47))); r = json.loads(out) if good else {}
+    ok(good and r.get("retry") is True and st_of(J(47))["status"] == "waiting" and live(J(47), "L1") == "f" and live(J(47), "L2") == "t", "L2. the other posting cancelled: Retry goes through; the released L1 stays released, L2 live (%s)" % r)
+    good, out = mark(OWNER, J(47), "L2", "", ""); ok(not good and "voucher number" in out, "INFO/F11. mark_posted needs the voucher number (%s)" % out[-60:])
+    # F12 again: an id the owner released is never stamped by the backfill (the third run below)
+    db.sql(job(J(31), [vch("K3")]) + "update tally_post_jobs set status = 'failed', results = %s where id = %s" % (q(json.dumps([{"id": "K3", "ok": False, "message": "CREATED 1 LASTVCHID 26341; not found"}])), q(J(31))))
+    good, out = rel(OWNER, J(31), "K3", "not in the Day Book"); ok(good and not col(J(31), "K3", "accepted_at"), "F12. an id released by the owner, with CREATED in its results, before the run again")
     r = psql_file(M36); ok(r.returncode == 0, "migration-36b runs a third time over used tables %s" % ((r.stderr or "").strip()[-300:] if r.returncode else ""))
+    ok(not col(J(31), "K3", "accepted_at") and col(J(30), "K1", "accepted_at") and col(J(46), "M1", "accepted_at"), "F12. the run again stamps nothing the owner released, keeps what it stamped, and stamps the 2.1.5 text's id (M1)")
 finally:
     db.stop()
 print("\nall passed" if not fails else "\nFAILED: %d" % len(fails)); sys.exit(1 if fails else 0)
