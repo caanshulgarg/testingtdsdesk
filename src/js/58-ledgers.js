@@ -263,7 +263,8 @@ const Ledgers = {
     return s;
   },
   // only an owner of the firm may confirm (the RPC refuses anyone else)
-  canConfirmRename(){ return !!(S.account && (S.account.superadmin === true || ((S.account.me || {}).role === "owner"))); },
+  // owners only, as tally_ledger_rename_confirm itself (a superadmin who is not an owner of the firm would be refused)
+  canConfirmRename(){ return !!(S.account && ((S.account.me || {}).role === "owner")); },
   async confirmRename(cid, name){
     cid = cid || this.cid();
     const bk = typeof TCloud === "object" && TCloud.on() && TCloud.has(cid) ? TCloud.book(cid) : null;
