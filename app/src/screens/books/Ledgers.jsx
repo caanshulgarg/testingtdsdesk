@@ -30,8 +30,10 @@ function RenameLine({ cid, name }) {
   return <div className="nr" style={{ whiteSpace: "normal" }} data-renamed={l.name}>{Ledgers.renameLine(l.renamed)}
     {Ledgers.canConfirmRename() && <>{" "}<button className="btn small" data-rename-confirm={l.name} disabled={busy} onClick={() => Ledgers.confirmRename(cid, l.name)}>{busy ? "Confirming…" : "Confirm"}</button></>}</div>;
 }
+// review nit 8: a ledger in the books' map has its line in its table row (List), so this section lists only the flagged
+// ledgers without a row, and is not rendered when every one has a row — one line and one Confirm per ledger on the page.
 function Renamed({ b }) {
-  const rows = Ledgers.renamed(b.cid);
+  const map = b.map || {}, rows = Ledgers.renamed(b.cid).filter((l) => !map[l.name]);
   if (!rows.length) return null;
   return <section className="bk-alert" style={{ marginBottom: 12 }} data-renamed-list=""><b>{rows.length === 1 ? "A ledger was renamed in Tally." : rows.length + " ledgers were renamed in Tally."}</b> Their saved choices (GST, TDS, bank, flow) followed the new name; check and confirm each.
     {rows.map((l) => <div key={l.name} style={{ marginTop: 4 }}><b>{l.name}</b><RenameLine cid={b.cid} name={l.name} /></div>)}

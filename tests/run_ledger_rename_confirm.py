@@ -2,6 +2,8 @@
 carried (tally_ledgers.needs_confirm, before_clean.renamed[]) is shown on the Tally ledgers tab with one line under its
 name; an owner sees a Confirm button that calls tally_ledger_rename_confirm(p_book, p_name) and the line goes; staff see
 the words only; a cloud without the column (42703) is read as before. The cloud is stubbed in the page.
+Round 11 (review nit 8): one line per ledger on the page: a flagged ledger in the books' map has its line in its table row
+only; the Renamed section above lists only flagged ledgers without a row, and is not rendered when every one has a row.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_ledger_rename_confirm.py"""
 import os, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -16,8 +18,8 @@ def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
     if not c: fails.append(w)
 
-NEW, OLD = "Kashi IT Solutions", "Kashi IT Solution"
-SETUP = """([NEW, OLD]) => {
+NEW, OLD, UNMAP = "Kashi IT Solutions", "Kashi IT Solution", "Old Vendor Ltd"
+SETUP = """([NEW, OLD, UNMAP]) => {
   const c = newCompany({name: "Testing AAD", gstin: "09AANFG3202D1ZR"}); c.id = "c_rn"; c.tallyName = c.name; S.companies[c.id] = c; S.coId = c.id; S.view = "company"; S.tab = "books"; S.loadingCo = false;
   S.data[c.id] = {parties: {}, entries: {}, loaded: true};
   S.books = {cid: c.id, loading: false, meta: {}, challans: [], alloc: {}, map: {}, ledInfo: {},
@@ -30,7 +32,9 @@ SETUP = """([NEW, OLD]) => {
   window.__col = true; window.__sel = []; window.__rpc = [];
   window.__rows = [
     {name: NEW, parent: "Sundry Creditors", needs_confirm: true, before_clean: {renamed: [{from: OLD, at: "2026-10-02T05:26:00Z", confirm: true, carried: {items: 1, flow: 1, values: 0, clash: ["map"]}}]}},
-    {name: "HDFC Bank", parent: "Bank Accounts", needs_confirm: false, before_clean: null}];
+    {name: "HDFC Bank", parent: "Bank Accounts", needs_confirm: false, before_clean: null},
+    // flagged but not in the books' map: no table row, so the Renamed section is where its line goes
+    {name: UNMAP, parent: "Sundry Creditors", needs_confirm: true, before_clean: {renamed: [{from: "Old Vendor", at: "2026-10-02T05:26:00Z", confirm: true, carried: {items: 0, flow: 0, values: 0, clash: []}}]}}];
   TCloud.restAll = async (p) => {
     if (/^tally_ledgers/.test(p)){
       const sel = decodeURIComponent((p.match(/select=([^&]*)/) || [])[1] || ""); window.__sel.push(sel);
@@ -39,7 +43,7 @@ SETUP = """([NEW, OLD]) => {
     }
     return /^tally_groups/.test(p) ? [{name: "Sundry Creditors", parent: "Current Liabilities"}] : [];
   };
-  TCloud.rpc = async (fn, args) => { window.__rpc.push([fn, args]); if (fn === "tally_ledger_rename_confirm"){ window.__rows[0].needs_confirm = false; return {ok: true, cleared: 1}; } return []; };
+  TCloud.rpc = async (fn, args) => { window.__rpc.push([fn, args]); if (fn === "tally_ledger_rename_confirm"){ window.__rows.filter(r => r.name === args.p_name).forEach(r => { r.needs_confirm = false; }); return {ok: true, cleared: 1}; } return []; };
   Cloud.api = async () => [];
   S.booksTab = "ledgers"; S.lmView = "other"; render(); return c.id; }"""
 LOAD = "async (cid) => { const r = await Ledgers.load(cid, {force: true}); render(); await new Promise(r => setTimeout(r, 300)); return r; }"
@@ -47,10 +51,10 @@ LOAD = "async (cid) => { const r = await Ledgers.load(cid, {force: true}); rende
 with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1440, "height": 950}); pg.on("pageerror", lambda e: errors.append(str(e)))
     pg.goto("http://localhost:8233/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
-    cid = pg.evaluate(SETUP, [NEW, OLD]); pg.wait_for_timeout(600)
+    cid = pg.evaluate(SETUP, [NEW, OLD, UNMAP]); pg.wait_for_timeout(600)
     E = lambda js, *a: pg.evaluate(js, *a)
     r = E(LOAD, cid)
-    ok(r.get("ok") and r.get("n") == 2, "the ledger list is read from the stubbed cloud (%s)" % r)
+    ok(r.get("ok") and r.get("n") == 3, "the ledger list is read from the stubbed cloud (%s)" % r)
     ok(any("needs_confirm" in s and "before_clean" in s for s in E("window.__sel")), "the REST read asks for needs_confirm and before_clean: %s" % E("window.__sel"))
     # the line under the name, once per rename
     line = pg.locator("#app [data-renamed='%s']" % NEW)
@@ -60,13 +64,24 @@ with sync_playwright() as p:
     ok(want in txt, "the line: " + txt[:200])
     ok("the new name already had a map choice; the new name's stands" in txt, "the clash is said: " + txt[:200])
     ok(pg.locator("#lmTable tr[data-key='%s'] [data-renamed]" % NEW).count() == 1, "the line sits under the ledger's name in its row")
+    # review nit 8: one line and one Confirm per ledger on the whole page; the section above only lists ledgers without a row
+    ok(line.count() == 1, "a flagged ledger in the map has exactly one line on the page (%d)" % line.count())
+    ok(pg.locator("#app button[data-rename-confirm='%s']" % NEW).count() == 1, "and exactly one Confirm button (%d)" % pg.locator("#app button[data-rename-confirm='%s']" % NEW).count())
+    ok(pg.locator("#lmTable tr[data-key='%s']" % UNMAP).count() == 0, "a flagged ledger not in the map has no table row")
+    ok(pg.locator("#app [data-renamed='%s']" % UNMAP).count() == 1 and pg.locator("#app [data-renamed-list] [data-renamed='%s']" % UNMAP).count() == 1, "it has exactly one line, in the Renamed section (%d on the page)" % pg.locator("#app [data-renamed='%s']" % UNMAP).count())
+    ok(pg.locator("#app [data-renamed-list] [data-renamed='%s']" % NEW).count() == 0, "the Renamed section does not repeat the one with a row")
     ok(pg.locator("#app [data-renamed='HDFC Bank']").count() == 0, "a ledger not flagged has no line")
     btn = pg.locator("#lmTable tr[data-key='%s'] button[data-rename-confirm]" % NEW)
     ok(btn.count() == 1 and btn.first.inner_text().strip() == "Confirm", "an owner sees a Confirm button")
     btn.first.click(); pg.wait_for_timeout(1200)
     calls = E("window.__rpc")
     ok(calls == [["tally_ledger_rename_confirm", {"p_book": "bk-aad", "p_name": NEW}]], "Confirm calls tally_ledger_rename_confirm with p_book and p_name: %s" % calls)
-    ok(pg.locator("#app [data-renamed]").count() == 0, "after confirm the list is read again and the line is gone")
+    ok(pg.locator("#app [data-renamed='%s']" % NEW).count() == 0, "after confirm the list is read again and the line is gone")
+    ok(pg.locator("#app [data-renamed='%s']" % UNMAP).count() == 1, "the other ledger's line stays in the Renamed section")
+    # when every flagged ledger has a row, the section is not rendered
+    E("() => { window.__rows[0].needs_confirm = true; window.__rows[2].needs_confirm = false; }"); E(LOAD, cid)
+    ok(pg.locator("#app [data-renamed='%s']" % NEW).count() == 1 and pg.locator("#app [data-renamed-list]").count() == 0, "with every flagged ledger in the table there is no Renamed section (%d)" % pg.locator("#app [data-renamed-list]").count())
+    E("() => { window.__rows[2].needs_confirm = true; }")
     # staff: the words only
     E("() => { window.__rows[0].needs_confirm = true; S.account = {me: {role: 'staff'}}; }"); E(LOAD, cid)
     ok(pg.locator("#app [data-renamed='%s']" % NEW).count() >= 1 and want in pg.locator("#app [data-renamed='%s']" % NEW).first.inner_text(), "staff see the line")
@@ -75,7 +90,7 @@ with sync_playwright() as p:
     E("() => { window.__col = false; window.__sel = []; Ledgers.hasConfirm = null; S.account = {me: {role: 'owner'}}; }")
     r = E(LOAD, cid)
     sel = E("window.__sel")
-    ok(r.get("ok") and r.get("n") == 2, "a cloud without the column: the list is read as before (%s)" % r)
+    ok(r.get("ok") and r.get("n") == 3, "a cloud without the column: the list is read as before (%s)" % r)
     ok(len(sel) >= 2 and "needs_confirm" in sel[0] and "needs_confirm" not in sel[-1], "42703: read again without the columns: %s" % sel)
     ok(pg.locator("#app [data-renamed]").count() == 0 and pg.locator("#app button[data-rename-confirm]").count() == 0, "no line and no button without the column")
     E("window.__sel = []"); E(LOAD, cid)
