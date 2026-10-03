@@ -1,7 +1,7 @@
 FINCOM BRIDGE 2.1.6 - TEST SHEET (NWS144, staging)
 
 File:        FinComBridge-Setup-2.1.6.exe
-Fingerprint: (filled in at the build; compare with the .sha256 file next to the setup) (SHA-256)
+Fingerprint: 101d793d483ae972b697cd592f02a5b1670cb1f7329524bb6cef4516ceb17c68 (SHA-256; compare with the .sha256 file next to the setup)
 Link:        https://staging.fincom.live/review/assets/bridge-go/FinComBridge-Setup-2.1.6.exe
 (2.1.4 was built but never handed out. 2.1.5 was published on 03-Oct-2026 at 01:30 UTC, installed on NWS144 and held back
  the same morning after two faults on real books: an entry Tally had created was reported failed, then sent again. 2.1.6
