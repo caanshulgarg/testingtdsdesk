@@ -25442,6 +25442,21 @@ function postPostedRows(cid){
   if (typeof CloudJobs !== "object") return [];
   return CloudJobs.history(cid).filter(x => !(x.state === "partly" && !x.ok));
 }
+// round 11 (owner item 6): the entries a finished posting put in Tally, as the Posted tab lists them under it, each with
+// where its FinCom id stands in tally_post_ids: held (the cloud still holds it live: an owner may release it, the entry
+// having been deleted in Tally by hand since it was verified), released (freed: Post again is back), none (the cloud
+// holds no row for it: an older posting), or null (not known). e is the local entry, or a stub naming the id, enough
+// for PostOwner.release (id, invoice no.)
+function postPostedEntries(cid, j){
+  if (typeof CloudJobs !== "object") return [];
+  const d = S.data[cid], s = typeof PostIds === "object" ? PostIds.by[cid] : null;
+  return [...CloudJobs.okIn(j)].map(id => {
+    const e = (d && d.entries && d.entries[id]) || {id, x: {}};
+    const rel = postIdReleased(id, cid);
+    const idState = rel === null ? null : rel === false ? "held" : s && s.held && s.held.has(String(id)) ? "released" : "none";
+    return {id, e, no: (e.x && e.x.invoiceNo) || id, idState};
+  });
+}
 // the three tab counts: To post and Errors are postCounts (the step bar's badges, the chip, the dashboard), Posted the
 // postings listed under it
 function postTabCounts(cid){ const c = postCounts(cid); return {topost: c.ready, posted: postPostedRows(cid).length, errors: c.attention + (postRefusedFor(cid) ? 1 : 0)}; }
@@ -26174,7 +26189,8 @@ const Ledgers = {
     return s;
   },
   // only an owner of the firm may confirm (the RPC refuses anyone else)
-  canConfirmRename(){ return !!(S.account && (S.account.superadmin === true || ((S.account.me || {}).role === "owner"))); },
+  // owners only, as tally_ledger_rename_confirm itself (a superadmin who is not an owner of the firm would be refused)
+  canConfirmRename(){ return !!(S.account && ((S.account.me || {}).role === "owner")); },
   async confirmRename(cid, name){
     cid = cid || this.cid();
     const bk = typeof TCloud === "object" && TCloud.on() && TCloud.has(cid) ? TCloud.book(cid) : null;
