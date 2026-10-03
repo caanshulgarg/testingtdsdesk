@@ -106,6 +106,36 @@ with sync_playwright() as p:
     E("TallyProof.checkBank(S.coId, true)"); pg.wait_for_timeout(500)
     qs = E("window.__q")
     ok(qs and all("deleted_at=is.null" in u for u in qs if "tally_vouchers?select=guid,cancelled" in u) and not E("!!S.bank.rows[0].goneFromTally"), "C3. the bank lines' vouchers read live only; the line found stays (%s)" % [u[-70:] for u in qs][:2])
+    # round 9 (owner item 10): a bank line without a voucher id is looked for among the day's lines (tally_lines, a direct
+    # read): the lines of an entry deleted in Tally (tally_vouchers.deleted_at, migration-37) are left out, so a line whose
+    # only match is such an entry is gone from Tally
+    E("""() => { CO().bankAccounts = [{id: "a1", ledger: "HDFC Bank", bank: "HDFC", last4: "1234"}];
+      S.bank = {cid: S.coId, rows: [{id: "s2-1", state: "intally", date: "2026-07-01", debit: 100}], stmts: [{id: "s2", acctId: "a1", bank: "HDFC"}], ledgers: {list: []}};
+      window.saveBank = () => {}; window.__q = []; TallyProof.hasDel = null; TallyProof.bankAt = {};
+      Cloud.api = async (u) => { window.__q.push(u);
+        if (/deleted_at=not\\.is\\.null/.test(u)) return [{guid: "g-del"}];
+        if (/tally_lines/.test(u)) return [{ledger: "HDFC Bank", amount: 100, guid: "g-del"}];
+        return []; }; }""")
+    E("TallyProof.checkBank(S.coId, true)"); pg.wait_for_timeout(500)
+    qs = E("window.__q")
+    ok(any("tally_lines" in u for u in qs) and E("!!S.bank.rows[0].goneFromTally"), "10. a bank line matched only by the line of an entry deleted in Tally: that line is left out, the bank line is gone (%s)" % [u[-60:] for u in qs][:3])
+    # 10. the ledgers page's other direct read of tally_lines (the party ledger of a GSTIN, from the cloud copy's entries
+    # carrying it): the lines of an entry deleted in Tally are not read or used; a cloud without the column is read as before
+    G = "09ZZZZZ0000Z1Z1"
+    STUB = """(bad) => { window.__q = []; TallyProof.hasDel = null; Ledgers.gstinMap = {};
+      Cloud.api = async (u) => { window.__q.push(u);
+        if (bad && /deleted_at/.test(u)) throw new Error('column tally_vouchers.deleted_at does not exist (42703)');
+        if (/tally_vouchers\\?select=party,guid/.test(u)) return /deleted_at=is\\.null/.test(u) ? [] : [{party: "Zed Deleted Party", guid: "g-del"}];
+        if (/tally_lines/.test(u)) return [{ledger: "Zed Deleted Party"}];
+        return []; }; }"""
+    E(STUB, False); E("(g) => Ledgers.gstinParty(S.coId, g)", G); pg.wait_for_timeout(500)
+    qs = E("window.__q")
+    ok(any("tally_vouchers?select=party,guid" in u and "deleted_at=is.null" in u for u in qs) and not any("tally_lines" in u and "g-del" in u for u in qs) and E("(g) => Ledgers.gstinMap[S.coId][g]", G) == "",
+       "10. the GSTIN's vouchers are read live only: the deleted entry's lines are not read, no party from them (%s)" % [u[-70:] for u in qs][:3])
+    E(STUB, True); E("(g) => Ledgers.gstinParty(S.coId, g)", G); pg.wait_for_timeout(500)
+    qs = E("window.__q")
+    ok(any("tally_vouchers?select=party,guid" in u and "deleted_at" not in u for u in qs) and any("tally_lines" in u and "g-del" in u for u in qs) and E("TallyProof.hasDel") is False,
+       "10. without the column (42703): read again without it, the entry's lines read as before (%s)" % [u[-60:] for u in qs][:3])
     E("() => { S.tab = 'invoices'; S.filter = 'draft'; S.reviewTable = false; render(); }"); pg.wait_for_timeout(300)
     bar = pg.inner_text("header nav.sbar") if pg.locator("header nav.sbar").count() else pg.inner_text("nav.sbar[aria-label=Status]")
     # second pass of 02-Oct-2026: the tab counts what is ready to post (none); the two bills not confirmed in Tally are a

@@ -344,7 +344,11 @@ const Ledgers = {
     if (typeof TCloud === "object" && TCloud.on() && TCloud.has(cid)){
       m[g] = "";
       const bkc = TCloud.book(cid);
-      Cloud.api("tally_vouchers?select=party,guid&book_id=eq." + encodeURIComponent(bkc.book) + "&gstin=eq." + encodeURIComponent(g) + "&order=day.desc&limit=20").then(async rows => {
+      // round 9 (owner item 10): the cloud copy keeps an entry deleted in Tally (tally_vouchers.deleted_at, migration-37):
+      // only live entries are read here, so a deleted entry's lines (a direct read of tally_lines) are never read or used.
+      // TallyProof.live adds the filter and reads as before on a cloud without the column (42703, hasDel false).
+      const live = p => typeof TallyProof === "object" && TallyProof && typeof TallyProof.live === "function" ? TallyProof.live(p) : Cloud.api(p);
+      live("tally_vouchers?select=party,guid&book_id=eq." + encodeURIComponent(bkc.book) + "&gstin=eq." + encodeURIComponent(g) + "&order=day.desc&limit=20").then(async rows => {
         rows = [].concat(rows || []);
         let found = "";
         for (const r of rows){
