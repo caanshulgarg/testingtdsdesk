@@ -96,7 +96,14 @@ for i in "${!T[@]}"; do
   tail -n 3 "$log"
   echo "::endgroup::"
   printf '%-8s %4ss  %s\n' "$res" "$secs" "$t"
-  if [ "$res" != "pass" ]; then echo "---- last lines of $t ----"; tail -n 40 "$log"; echo "----"; fi
+  if [ "$res" != "pass" ]; then
+    echo "---- last lines of $t ----"; tail -n 40 "$log"; echo "----"
+    # on GitHub, also as a check annotation (readable through the API when the job log is not): the FAIL lines, else the tail
+    if [ -n "${GITHUB_ACTIONS:-}" ]; then
+      msg="$( { grep -a "FAIL\|Traceback\|Error" "$log" | head -n 12; echo "-- tail:"; tail -n 8 "$log"; } | cut -c1-300 | tr -d '\r' | sed ':a;N;$!ba;s/\n/%0A/g' | cut -c1-3800)"
+      echo "::error file=tests/$t,title=$res $t::$msg"
+    fi
+  fi
   R+=("$res"); S+=("$secs")
 done
 
