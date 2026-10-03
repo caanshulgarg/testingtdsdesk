@@ -1,7 +1,7 @@
 FINCOM BRIDGE 2.1.7 - TEST SHEET (any computer, staging)
 
 File:        FinComBridge-Setup-2.1.7.exe
-Fingerprint: (filled in at the build; compare with the .sha256 file next to the setup) (SHA-256)
+Fingerprint: 948426b56ae8d3a5f2a5027d65d6d2ce7306e5356cfd6dda8ab81c435679f5b6 (SHA-256; compare with the .sha256 file next to the setup)
 Link:        https://staging.fincom.live/review/assets/bridge-go/FinComBridge-Setup-2.1.7.exe
 (2.1.6 was installed on NWS144 on 03-Oct-2026 at 20:18 IST with PostOnly ZZ TEST. 2.1.7 replaces it the same night by
  the owner's decision: open for every computer, posting to any company. Install 2.1.7 over 2.1.6; the installer replaces
