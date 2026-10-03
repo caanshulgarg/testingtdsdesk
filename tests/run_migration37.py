@@ -21,6 +21,7 @@ import pg_stand
 SQLDIR = os.path.join(HERE, "..", "server", "tally-cloud")
 M32, M33, M34, M35, M36, M37 = [os.path.join(SQLDIR, f) for f in ("migration-32-sync-safety.sql", "migration-33-ledger-lists.sql", "migration-34-ledger-safety.sql",
                                                                   "migration-35-bridge-control.sql", "migration-36-rename-rounds.sql", "migration-37-follow-ups.sql")]
+M36B = os.path.join(SQLDIR, "migration-36b-post-acceptance.sql")
 if not os.path.exists(M36):
     cands = [f for f in os.listdir(SQLDIR) if f.startswith("migration-36")]
     if cands: M36 = os.path.join(SQLDIR, sorted(cands)[0])
@@ -132,6 +133,7 @@ try:
     if os.path.exists(M36):
         r = psql_file(M36); ok(r.returncode == 0, "%s runs %s" % (os.path.basename(M36), (r.stderr or "").strip()[-300:] if r.returncode else ""))
     else: print("  note: migration-36 is not in the tree yet; 37 tested over 32, 33, 35, 34 only")
+    r = psql_file(M36B); ok(r.returncode == 0, "%s runs (before 37) %s" % (os.path.basename(M36B), (r.stderr or "").strip()[-300:] if r.returncode else ""))
     j("select tally_ingest_ledgers_g(%s, '2026-04-01', '2026-03-31', %s, %s)::text" % (q(B), js(LEDGERS), js(GROUPS)))
     db.sql("update tally_ledgers set merged_into = 'Alpha Traders' where book_id = %s and name = 'Old Twin'; update tally_ledgers set deleted_at = now() where book_id = %s and name = 'Gone Co';" % (q(B), q(B)))
     # rows from before 37: an entry whose narration carries the tag (fincom_id to be backfilled), a lease and a posting
@@ -259,6 +261,27 @@ try:
     good, out = fails_with("set fincom.role = 'authenticated'; select tally_post_id_release(%s, 'X2', 'x')" % q(J(1)), ["not allowed"])
     ok(good, "a member cannot release an id")
     ok(int(db.one("select count(*) from tally_post_ids")) == 3, "no id row removed")
+    # round 5 (S1, S2, S4): 37 runs after 36b and keeps its rule: an id Tally accepted is never freed by the sync, and
+    # tally_post_id_release never frees it either (the owner's tally_post_id_release_owner, 36b, is the only way)
+    db.sql(job(J(4), ["ACC1", "REF-2.b"])); db.sql("update tally_post_jobs set status = 'running' where id = %s" % q(J(4)))
+    acc = j("select tally_post_id_accept(%s, 'ACC1', '26298')::text" % q(J(4)))
+    ok(acc.get("stamped") == 1, "36b's tally_post_id_accept still stamps under 37 (%s)" % acc)
+    liv = lambda: {x["fincom_id"]: x["live"] for x in db.rows("select fincom_id, live from tally_post_ids where job_id = %s" % q(J(4)))}
+    db.sql("update tally_post_jobs set status = 'failed' where id = %s" % q(J(4)))
+    ok(liv() == {"ACC1": "t", "REF-2.b": "f"}, "S1. the posting failed under 37's sync: the accepted ACC1 stays live, REF-2.b is freed (%s)" % liv())
+    db.sql("update tally_post_jobs set status = 'cancelled' where id = %s" % q(J(4)))
+    ok(liv()["ACC1"] == "t", "S1. cancelled: ACC1 still live")
+    ok("accepted_at" in db.one("select pg_get_functiondef('tally_post_ids_sync'::regproc)"), "37's tally_post_ids_sync carries the accepted_at guard")
+    db.sql("update tally_post_jobs set status = 'running' where id = %s" % q(J(4)))
+    r = j("select tally_post_id_release(%s, 'ACC1', 'the bridge says failed')::text" % q(J(4)))
+    row = db.rows("select live, released_at, released_why from tally_post_ids where job_id = %s and fincom_id = 'ACC1'" % q(J(4)))[0]
+    ok(r["released"] is False and "accepted" in str(r.get("why", "")) and row["live"] == "t" and row["released_at"] == "", "S2. tally_post_id_release never frees an accepted id: released false, why 'accepted by Tally' (%s | %s)" % (r, row))
+    r = j("select tally_post_id_release(%s, 'REF2b', 'Tally refused it')::text" % q(J(4)))     # the bridge's spelling (letters and digits) of the tag's REF-2.b
+    ok(r["released"] is True and db.one("select released_by from tally_post_ids where job_id = %s and fincom_id = 'REF-2.b'" % q(J(4))) == "bridge", "S4. released by the id as the bridge spells it (REF2b for the tag's REF-2.b) (%s)" % r)
+    good, out = as_user(OWNER, "select tally_post_id_release_owner(%s::uuid, 'ACC1', 'looked: not in Tally')::text" % q(J(4)))
+    ok(good and db.one("select live from tally_post_ids where job_id = %s and fincom_id = 'ACC1'" % q(J(4))) == "f", "S3. the owner's release (36b) frees the accepted id under 37 (%s)" % out[-100:])
+    db.sql("update tally_post_jobs set status = 'failed' where id = %s; update tally_post_jobs set status = 'waiting' where id = %s" % (q(J(4)), q(J(4))))
+    ok(liv() == {"ACC1": "f", "REF-2.b": "f"}, "S3. Retry: neither released id is revived (%s)" % liv())
 
     # 7. item 12: the lease released is kept; take reuses it
     take = lambda holder: j("select tally_lease_take(%s, %s, %s, null, 120, '{\"computer\": \"PC\"}')::text" % (q(F), q(B), q(holder)))

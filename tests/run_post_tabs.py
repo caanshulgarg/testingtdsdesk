@@ -7,6 +7,9 @@ Checked: each tab's rows and count (the counts are postCounts, the same as the s
 tab with work opens by itself (Errors when there are any); a posting moves To post -> Posted as FinCom's cloud updates
 it (a made-up job update); one Tally refuses lands in Errors; one whose outcome is unknown is in Errors with "Checking
 whether it reached Tally"; no entry is in two tabs; the tab chosen is kept for the client; status line on top always.
+Round 5 (03-Oct): an owner settles an entry Tally accepted but nobody confirmed (Mark posted / Not in Tally — release, each
+asking for its text; staff see the words); a bill not found in Tally whose id the cloud still holds says an owner can
+release it here (C6).
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_post_tabs.py"""
 import os, re, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -276,6 +279,56 @@ with sync_playwright() as p:
     k = txt('#app [data-post-panel="errors"] [data-bill-row="n5"]')
     ok("Posted, not yet confirmed — checking whether it reached Tally" in k and pg.locator('#app [data-post-panel="errors"] [data-bill-row="n5"] button').count() == 0,
        "Errors: 'Posted, not yet confirmed — checking whether it reached Tally', no button (%s)" % k[:160])
+    # ---- round 5 (S3): an owner can settle an entry Tally accepted but nobody confirmed: "Mark posted (voucher no.)" ->
+    # tally_post_job_mark_posted(job, id, vch, note), "Not in Tally — release (reason)" -> tally_post_id_release_owner(job, id,
+    # why); both ask for the text first. A staff member sees the words only. A cloud without migration 36b says so.
+    N5 = '#app [data-post-panel="errors"] [data-bill-row="n5"]'
+    E("() => { S.account = {me: {role: 'staff'}, firm: {name: 'Firm'}}; render(); }"); pg.wait_for_timeout(400); tab("errors")
+    ok("Posted, not yet confirmed" in txt(N5) and pg.locator(N5 + " button").count() == 0, "S3. a staff member: the words only, no button")
+    E("() => { S.account = {me: {role: 'owner'}, firm: {name: 'Firm'}}; render(); }"); pg.wait_for_timeout(400); tab("errors")
+    ok(pg.locator(N5 + " [data-mark-posted]").count() == 1 and pg.locator(N5 + " [data-release-owner]").count() == 1 and "Mark posted" in txt(N5 + " [data-mark-posted]") and "release" in txt(N5 + " [data-release-owner]"),
+       "S3. an owner: 'Mark posted (voucher no.)' and 'Not in Tally — release (reason)' (%s)" % txt(N5)[-120:])
+    E("() => { window.__rpc = []; window.__toasts = []; }")
+    pg.click(N5 + " [data-mark-posted]"); pg.wait_for_timeout(400)
+    ok(pg.locator("#confirmBox input#markVch").count() == 1, "S3. Mark posted asks for the voucher no. first")
+    pg.fill("#confirmBox input#markVch", "26298"); pg.fill("#confirmBox input#markNote", "seen in the Day Book")
+    pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(800)
+    calls = [c for c in E("window.__rpc") if c[0] == "tally_post_job_mark_posted"]
+    ok(calls == [["tally_post_job_mark_posted", {"p_job": "jK", "p_id": "n5", "p_vch": "26298", "p_note": "seen in the Day Book"}]], "S3. tally_post_job_mark_posted(job, id, voucher, note) (%s)" % calls)
+    pg.click(N5 + " [data-release-owner]"); pg.wait_for_timeout(400)
+    ok(pg.locator("#confirmBox input#releaseWhy").count() == 1, "S3. release asks why first")
+    pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(300)
+    ok(pg.locator("#confirmBox input#releaseWhy").count() == 1 and pg.locator("#confirmBox .cbx-err").count() == 1 and not [c for c in E("window.__rpc") if c[0] == "tally_post_id_release_owner"], "S3. no reason: not sent, the box says so")
+    pg.fill("#confirmBox input#releaseWhy", "not in Tally on 03-Oct"); pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(800)
+    calls = [c for c in E("window.__rpc") if c[0] == "tally_post_id_release_owner"]
+    ok(calls == [["tally_post_id_release_owner", {"p_job": "jK", "p_id": "n5", "p_why": "not in Tally on 03-Oct"}]], "S3. tally_post_id_release_owner(job, id, why) (%s)" % calls)
+    E("() => { window.__rpc0 = TCloud.rpc; TCloud.rpc = async (fn, a) => { if (/tally_post_id_release_owner|tally_post_job_mark_posted/.test(fn)) throw new Error('Could not find the function public.' + fn + ' in the schema cache (PGRST202)'); return window.__rpc0(fn, a); }; window.__toasts = []; }")
+    pg.click(N5 + " [data-release-owner]"); pg.wait_for_timeout(300); pg.fill("#confirmBox input#releaseWhy", "x"); pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(800)
+    ok(any("not ready for this yet (migration 36b)" in t for t in E("window.__toasts")), "S3. a cloud without migration 36b: 'FinCom's cloud is not ready for this yet (migration 36b)' (%s)" % E("window.__toasts")[-2:])
+    E("() => { TCloud.rpc = window.__rpc0; }")
+    # ---- round 5 (C6): a bill posted, read afresh and not found, whose id FinCom's cloud still holds: it used to say
+    # "Waiting for the bridge…" for good (nothing releases the id of a finished posting). Now: "Posted, not yet confirmed.
+    # If it is not in Tally, an owner can release it here." with the owner's two buttons; a staff member sees the words
+    E("""() => { window.__jobs.push({id: "jF", client_id: S.coId, company: "GARG SHEKHAR & COMPANY", status: "done", done: 1, n: 1, message: "1 of 1 sent to Tally", created_at: "2026-09-29T03:58:50Z", updated_at: "2026-09-29T03:58:56Z",
+        entry_ids: ["fa"], results: [{id: "fa", ok: true, verified: true, guid: "g-66b4"}], items: [{id: "fa", state: "in_tally"}]});
+      window.__postIds.push({job_id: "jF", fincom_id: "fa", entry_id: "fa", live: true, released_at: null, released_why: null});
+      TCloud.restAll = async (u) => /^tally_post_ids/.test(u) ? JSON.parse(JSON.stringify(window.__postIds)) : /tally_post_jobs/.test(u) ? JSON.parse(JSON.stringify(window.__jobs)) : /tally_ledgers/.test(u) ? JSON.parse(JSON.stringify(window.__leds)) : [];
+      PostIds.readable = null;
+      PostCheck.st["fa"] = {busy: false, at: Date.now(), ok: true, found: null, readAt: new Date().toISOString(), why: "", via: "cloud"};
+      CloudJobs.changed(); PostIds.load(S.coId, true); }"""); pg.wait_for_timeout(1500); tab("errors")
+    FA = '#app [data-post-panel="errors"] [data-bill-row="fa"]'
+    fa = txt(FA)
+    ok(pg.locator(FA).get_attribute("data-attn-state") == "notfound" and "Posted, not yet confirmed. If it is not in Tally, an owner can release it here." in fa and "Waiting for the bridge" not in fa and pg.locator(FA + " [data-post-again]").count() == 0,
+       "C6. the bill not found in Tally whose id is still held: 'Posted, not yet confirmed. If it is not in Tally, an owner can release it here.', no Post again (%s)" % fa[-160:])
+    ok(pg.locator(FA + " [data-mark-posted]").count() == 1 and pg.locator(FA + " [data-release-owner]").count() == 1, "C6. the owner's two buttons are there too")
+    E("() => { window.__rpc = []; }"); pg.click(FA + " [data-release-owner]"); pg.wait_for_timeout(300); pg.fill("#confirmBox input#releaseWhy", "not in the Day Book"); pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(800)
+    calls = [c for c in E("window.__rpc") if c[0] == "tally_post_id_release_owner"]
+    ok(calls == [["tally_post_id_release_owner", {"p_job": "jF", "p_id": "fa", "p_why": "not in the Day Book"}]], "C6. release names the posting that holds the id (jF) (%s)" % calls)
+    E("""() => { const r = window.__postIds.find(x => x.fincom_id === "fa"); r.live = false; r.released_at = new Date().toISOString(); r.released_by = "owner"; PostIds.load(S.coId, true); }"""); pg.wait_for_timeout(800)
+    ok(pg.locator(FA + " [data-post-again]").count() == 1 and pg.locator(FA + " [data-release-owner]").count() == 0, "C6. released: Post again is back, the owner's buttons go")
+    E("() => { S.account = {me: {role: 'staff'}, firm: {name: 'Firm'}}; const r = window.__postIds.find(x => x.fincom_id === 'fa'); r.live = true; r.released_at = null; PostIds.load(S.coId, true); }"); pg.wait_for_timeout(800)
+    fa = txt(FA)
+    ok("an owner can release it here" in fa and pg.locator(FA + " button[data-release-owner], " + FA + " button[data-mark-posted], " + FA + " [data-post-again]").count() == 0, "C6. a staff member: the words, no button (%s)" % fa[-120:])
     ok(not errors, "no page errors %s" % errors[:2])
     br.close()
 print("\nall passed" if not fails else "\nFAILED: %d" % len(fails)); raise SystemExit(1 if fails else 0)

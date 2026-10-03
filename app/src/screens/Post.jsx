@@ -109,6 +109,19 @@ function LedgerPick({ name, role }) {
 // cloud, the table not readable): as before. Held: these words, no button
 const held = (id, cid) => typeof postIdReleased === "function" && postIdReleased(id, cid) === false;
 const Wait = () => <span className="note" data-post-wait="">Waiting for the bridge to confirm it is not in Tally</span>;
+// round 5 (S3, C6): an owner settles an entry Tally accepted but nobody confirmed (PostOwner, src/js/59): Mark posted
+// (voucher no.) or Not in Tally — release (reason). Others see the words only; without a posting of the cloud naming the
+// entry there is nothing to mark
+function OwnerActs({ co, e }) {
+  const job = typeof postJobOf === "function" ? postJobOf(co.id, e.id) : null;
+  if (!job || typeof postOwner !== "function" || !postOwner()) return null;
+  return <>
+    <button className="btn small" data-mark-posted="" onClick={() => PostOwner.markPosted(co.id, e, job)}>Mark posted (voucher no.)</button>
+    <button className="btn small" data-release-owner="" onClick={() => PostOwner.release(co.id, e, job)}>Not in Tally — release (reason)</button>
+  </>;
+}
+// C6: a bill not found in Tally whose id the cloud still holds; nothing of the bridge releases the id of a finished posting
+const Unconfirmed = ({ co, e }) => <><span className="note" data-post-wait="" data-post-unconfirmed="">Posted, not yet confirmed. If it is not in Tally, an owner can release it here.</span><OwnerActs co={co} e={e} /></>;
 // one bill needing attention: {kind, why, acts}
 function billItem(co, e, canPost) {
   if (e.postCheckFailed) return { kind: "checkfailed", why: e.postCheckFailed.message || "Could not check Tally, not posted. Try again.",
@@ -121,7 +134,7 @@ function billItem(co, e, canPost) {
   const why = (v.state === "notfound" ? "" : was + (PostCheck.postedAt(e) ? " " + tallyHm(PostCheck.postedAt(e)) : "") + ", not confirmed in Tally. ") + v.text + (v.state === "notfound" ? "." : "");
   const check = <button className="btn small" data-check-now="" onClick={() => PostCheck.run(co, e, true)}>Check now</button>;
   return { kind: e.goneFromTally ? "gone" : e.exportedAt ? "sent" : "unread", state: v.state, why,
-    acts: v.state === "checking" ? null : v.state === "notfound" ? <>{canPost && (held(e.id, co.id) ? <Wait /> : <button className="btn small primary" data-post-again="" onClick={() => PostCheck.repost(co, e)}>Post again</button>)}{check}</> : check };
+    acts: v.state === "checking" ? null : v.state === "notfound" ? <>{canPost && (held(e.id, co.id) ? <Unconfirmed co={co} e={e} /> : <button className="btn small primary" data-post-again="" onClick={() => PostCheck.repost(co, e)}>Post again</button>)}{check}</> : check };
 }
 
 // a bill row of Errors: number, party, date, amount — why
@@ -158,7 +171,8 @@ function Attention({ co, bills, canPost }) {
       {unknown.map((e) => { const rs = (why[e.id] && why[e.id].reason) || "";
         // Tally took it, the bridge could not confirm it: the cloud keeps it in state unknown and looks again; no Retry or Post again
         return <li key={e.id} data-attn-row="" data-bill-row={e.id} data-attn-kind="unknown">
-          <BillWhy e={e} why={"Posted, not yet confirmed — checking whether it reached Tally" + (rs && !/^Checking whether/i.test(rs) ? " (" + rs.replace(/…$/, "") + ")" : "") + ". It is not sent again until the Tally computer has answered."} />
+          <BillWhy e={e} why={"Posted, not yet confirmed — checking whether it reached Tally" + (rs && !/^Checking whether/i.test(rs) ? " (" + rs.replace(/…$/, "") + ")" : "") + ". It is not sent again until the Tally computer has answered, or an owner has settled it here."} />
+          {typeof postOwner === "function" && postOwner() && <span className="acts"><OwnerActs co={co} e={e} /></span>}
         </li>; })}
       {alone.map((e) => refusedRow(e, false))}
       {bills.jobs.map((j) => { const left = CloudJobs.leftToSend(j), all = (CloudJobs.idsOf(j) || []).length, mine = inJob(j);

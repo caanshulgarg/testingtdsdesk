@@ -1,5 +1,5 @@
 """python3 run_migration_order.py - the order the cloud migrations run in on a fresh database (03-Oct-2026, round 4 items
-1-3; docs/MIGRATION-ORDER.md): 32 -> 33 -> 35 -> 34 -> 36 -> 36b, applied TWICE in that order on a throwaway PostgreSQL (pg_stand)
+1-3; docs/MIGRATION-ORDER.md): 32 -> 33 -> 35 -> 34 -> 36 -> 36b -> 37, applied TWICE in that order on a throwaway PostgreSQL (pg_stand)
 with the tables as on staging (run_migration33's schema, tally_devices, tally_bills) and made-up rows; never on staging.
 Checks: every file runs, twice, and deletes nothing; after the run the release functions are migration-34's
 (tally_release_approve checks pilot_allowlist_measured; tally_release_pilot clears it), which holds only because the
@@ -10,7 +10,7 @@ import os, re, sys, subprocess
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import pg_stand
 SQLDIR = os.path.join(HERE, "..", "server", "tally-cloud")
-ORDER = [(32, "migration-32-sync-safety.sql"), (33, "migration-33-ledger-lists.sql"), (35, "migration-35-bridge-control.sql"), (34, "migration-34-ledger-safety.sql"), (36, "migration-36-ledger-rename.sql"), ("36b", "migration-36b-post-acceptance.sql")]
+ORDER = [(32, "migration-32-sync-safety.sql"), (33, "migration-33-ledger-lists.sql"), (35, "migration-35-bridge-control.sql"), (34, "migration-34-ledger-safety.sql"), (36, "migration-36-ledger-rename.sql"), ("36b", "migration-36b-post-acceptance.sql"), (37, "migration-37-follow-ups.sql")]
 fails = []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
@@ -21,6 +21,7 @@ def part(path, name):
     i = s.index('"""', i) + 3; return s[i:s.index('"""', i)]
 SCHEMA33 = part(os.path.join(HERE, "run_migration33.py"), "SCHEMA")
 SCHEMA35 = part(os.path.join(HERE, "run_migration35.py"), "SCHEMA")
+SCHEMA37 = part(os.path.join(HERE, "run_migration37.py"), "SCHEMA_X")      # what 37's functions need beyond the two (tally_bills, tally_d8, …)
 BILLS = """create table if not exists tally_bills (book_id uuid not null references tally_books (book_id) on delete cascade, firm_id uuid not null, guid text not null, day date not null,
   ledger text not null, name text not null default '', type text not null default '', amount numeric not null, bill_date date, credit_days integer, due date);"""
 F, U, B, DEV = "99999999-9999-9999-9999-999999999999", "55555555-5555-5555-5555-555555555555", "11111111-1111-1111-1111-111111111111", "d1000000-0000-0000-0000-000000000001"
@@ -33,7 +34,7 @@ def fdef(fn, args=None):
     """the text of a function; args (a type list) when the name is overloaded"""
     return db.one("select pg_get_functiondef(%s::%s)" % (q("public." + fn + ("(" + args + ")" if args else "")), "regprocedure" if args else "regproc")) or ""
 try:
-    db.sql(SCHEMA33); db.sql(SCHEMA35); db.sql(BILLS)
+    db.sql(SCHEMA33); db.sql(SCHEMA35); db.sql(BILLS); db.sql(SCHEMA37)
     db.sql("insert into firms values (%s, 'Firm') on conflict do nothing; insert into members values (%s, %s, 'Me', 'owner', true);" % (q(F), q(U), q(F)))
     db.sql("insert into tally_books (book_id, firm_id, client_id, company, from_date, open_as_on) values (%s, %s, 'c1', 'ZZ CO', '2026-04-01', '2026-03-31');" % (q(B), q(F)))
     db.sql("insert into tally_devices (id, firm_id, name, key_hash, version) values (%s, %s, 'NWS144', 'h1', '2.1.5');" % (q(DEV), q(F)))
@@ -72,6 +73,18 @@ try:
                 n += 1
                 if row["conf"].replace(" ", "") != "search_path=public,pg_temp": ok(False, "%s (%s): search_path = %r" % (fn, f, row["conf"]))
     ok(n >= 20, "%d security definer functions all search public, pg_temp" % n)
+    # round 5 (S1): after 36 -> 36b -> 37, an id Tally accepted stays live when the posting is failed or cancelled; a plain one is freed
+    J1 = "00000001-0000-0000-0000-000000000000"
+    db.sql("insert into tally_post_jobs (id, firm_id, client_id, company, payload, n, status) values (%s, %s, 'c1', 'ZZ CO', %s, 2, 'running')"
+           % (q(J1), q(F), q('{"vouchers": [{"id": "A1", "xml": "<NARRATION>TDSDesk:A1</NARRATION>"}, {"id": "A2", "xml": "<NARRATION>TDSDesk:A2</NARRATION>"}]}')))
+    db.one("select tally_post_id_accept(%s::uuid, 'A1', '26298')::text" % q(J1))
+    liv = lambda: {x["fincom_id"]: x["live"] for x in db.rows("select fincom_id, live from tally_post_ids where job_id = %s" % q(J1))}
+    db.sql("update tally_post_jobs set status = 'failed' where id = %s" % q(J1))
+    ok(liv() == {"A1": "t", "A2": "f"}, "S1. 36b then 37: the posting failed, the accepted A1 stays live, A2 is freed (%s)" % liv())
+    db.sql("update tally_post_jobs set status = 'cancelled' where id = %s" % q(J1))
+    ok(liv()["A1"] == "t", "S1. cancelled: A1 still live (%s)" % liv())
+    ok("accepted_at" in fdef("tally_post_ids_sync") and "released_at" in fdef("tally_post_ids_sync"), "the sync in force (37's) keeps both guards: accepted_at and released_at")
+    ok(db.one("select count(*) from pg_proc where proname = 'tally_post_id_release_owner'") == "1", "tally_post_id_release_owner (36b) is there")
 finally:
     db.stop()
 print("\n%d failure(s)" % len(fails) if fails else "\nall checks passed")

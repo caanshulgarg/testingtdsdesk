@@ -1,14 +1,18 @@
 -- Migration 37 (03-Oct-2026, round 4: the migration-32 follow-ups 7, 8, 10, 11, 12, 13, 14 and the Tally page's item
--- 23). Runs AFTER 32 -> 33 -> 35 -> 34 -> 36 (docs/MIGRATION-ORDER.md); it needs nothing of 36 beyond its being there.
+-- 23). Runs AFTER 32 -> 33 -> 35 -> 34 -> 36 -> 36b (docs/MIGRATION-ORDER.md); it needs nothing of 36 beyond its being
+-- there, and keeps 36b's rule (an id Tally accepted, accepted_at, is never freed by the sync or by the bridge's release).
 -- Adds only: columns, one index, functions (new, or replaced with the same arguments) and policies where missing.
 -- Nothing is dropped, deleted or revoked from what is there; safe to run again (every step is "if not exists" or a
 -- replace). To be shown to the owner before it runs. Every function here: security definer, search_path = public, pg_temp.
 --
---   7.  id release        tally_post_ids + released_at, released_by ('bridge'), released_why. tally_post_id_release(job,
---                         id, why) (tally-ingest, service role): ONE entry's id set free (live = false) when Tally refused
---                         it or it was not found there, the other entries of the posting untouched. tally_post_ids_sync
+--   7.  id release        tally_post_ids + released_at, released_by ('bridge'), released_why (36b adds the same columns).
+--                         tally_post_id_release(job, id, why) (tally-ingest, service role): ONE entry's id set free (live =
+--                         false) when Tally refused it or it was not found there, the other entries of the posting
+--                         untouched; never an id Tally accepted (accepted_at, 36b: released false, why 'accepted by
+--                         Tally'; only the owner's tally_post_id_release_owner frees it). The id is matched as the tag
+--                         spells it, as the bridge stamps it (letters and digits) or by FinCom's entry id. tally_post_ids_sync
 --                         (the trigger that follows the posting's status) never turns a released id live again, so a
---                         Retry of the posting leaves it free and the bill can be queued afresh
+--                         Retry of the posting leaves it free and the bill can be queued afresh; an accepted id stays live
 --   8.  versions + lines  tally_voucher_versions + lines jsonb: [ledger, amount, hsn, rate, bills] of the entry as it was
 --                         in that version, filled by tally_ingest_day after it has the lines; filled once, never changed
 --                         (the append-only trigger lets exactly that one fill through: lines from null to a value, nothing
@@ -50,6 +54,8 @@ begin;
 alter table public.tally_post_ids add column if not exists released_at timestamptz;
 alter table public.tally_post_ids add column if not exists released_by text;              -- 'bridge' (tally-ingest) | 'owner'
 alter table public.tally_post_ids add column if not exists released_why text;
+alter table public.tally_post_ids add column if not exists accepted_at timestamptz;        -- 36b's; here too so the functions below hold on a cloud without 36b
+alter table public.tally_post_ids add column if not exists accepted_vch text;
 alter table public.tally_voucher_versions add column if not exists lines jsonb;            -- [[ledger, amount, hsn, rate, bills], ...]
 alter table public.tally_sync_cursor add column if not exists cleared_at timestamptz;
 alter table public.tally_sync_cursor add column if not exists cleared_by uuid;
@@ -74,17 +80,25 @@ grant select on public.tally_post_ids, public.tally_sync_cursor to authenticated
 -- ---------------------------------------------------------------- 7. an id released per entry
 create or replace function public.tally_post_id_release(p_job uuid, p_id text, p_why text)
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
-declare n int; k text := nullif(regexp_replace(coalesce(p_id, ''), '[^A-Za-z0-9]', '', 'g'), '');
+declare n int; acc int; k text := nullif(regexp_replace(coalesce(p_id, ''), '[^A-Za-z0-9]', '', 'g'), '');
 begin
   if auth.role() <> 'service_role' then raise exception 'not allowed' using errcode = '42501'; end if;
-  -- the entry by its FinCom id (the tag), by FinCom's entry id, or by that id in letters and digits (as the bridge stamps it)
+  -- the entry by its FinCom id (the tag), by FinCom's entry id, or by that id in letters and digits (as the bridge stamps
+  -- it); never one Tally accepted (36b: accepted_at): the voucher is in Tally, and freeing the id would let it be doubled
   update tally_post_ids set live = false, released_at = now(), released_by = 'bridge', released_why = left(btrim(coalesce(p_why, '')), 500)
-   where job_id = p_job and released_at is null and (fincom_id = p_id or entry_id = p_id or (k is not null and fincom_id = k));
+   where job_id = p_job and released_at is null and accepted_at is null
+     and (fincom_id = p_id or entry_id = p_id or (k is not null and regexp_replace(fincom_id, '[^A-Za-z0-9]', '', 'g') = k));
   get diagnostics n = row_count;
+  if n = 0 then
+    select count(*) into acc from tally_post_ids where job_id = p_job and accepted_at is not null and released_at is null
+       and (fincom_id = p_id or entry_id = p_id or (k is not null and regexp_replace(fincom_id, '[^A-Za-z0-9]', '', 'g') = k));
+    if acc > 0 then return jsonb_build_object('ok', true, 'released', false, 'n', 0, 'why', 'accepted by Tally'); end if;
+  end if;
   return jsonb_build_object('ok', true, 'released', n > 0, 'n', n);
 end $function$;
 
--- as migration-32, plus: a released id never turns live again (a Retry of the posting leaves it free)
+-- as migration-32, plus: a released id never turns live again (a Retry of the posting leaves it free), and an id Tally
+-- accepted (36b, accepted_at) is never freed by a failed or cancelled posting (the same text as 36b's)
 create or replace function public.tally_post_ids_sync() returns trigger language plpgsql security definer set search_path = public, pg_temp as $function$
 begin
   if tg_op = 'INSERT' then
@@ -92,8 +106,9 @@ begin
     select distinct on (tally_fincom_id(v)) new.firm_id, new.client_id, tally_fincom_id(v), new.id, v->>'id', new.status not in ('failed', 'cancelled')
       from jsonb_array_elements(coalesce(new.payload->'vouchers', '[]'::jsonb)) v where tally_fincom_id(v) is not null;
   elsif new.status is distinct from old.status then
-    -- failed or cancelled: the ids may be queued again; waiting again (Retry): live again, unless another posting has them
-    update tally_post_ids set live = new.status not in ('failed', 'cancelled') and released_at is null where job_id = new.id;
+    -- failed or cancelled: the ids may be queued again; waiting again (Retry): live again, unless another posting has them.
+    -- An id Tally accepted (accepted_at) is never freed here (36b); a released id is never revived
+    update tally_post_ids set live = (accepted_at is not null and released_at is null) or (new.status not in ('failed', 'cancelled') and released_at is null) where job_id = new.id;
   end if;
   return new;
 exception when unique_violation then

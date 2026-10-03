@@ -545,6 +545,55 @@ function postJobHeld(j){
   const ids = (CloudJobs.idsOf(j) || []).filter(id => !CloudJobs.inTally(j, id));
   return ids.some(id => postIdReleased(id, j.client_id) === false);
 }
+// round 5 (S3, C6): an owner settles an entry Tally accepted but nobody confirmed, or one not found in Tally whose id
+// FinCom's cloud still holds. "Mark posted (voucher no.)" -> tally_post_job_mark_posted(job, id, vch, note) (migration
+// 36b: results and items say in_tally, the id stays accepted); "Not in Tally — release (reason)" -> tally_post_id_release_
+// owner(job, id, why) (the id freed, the entry notfound, a mark 'released'). Both ask for the text first; the cloud
+// refuses anyone but an owner, and the page shows the buttons to owners only. A cloud without 36b says so.
+function postOwner(){ return !!(S.account && (S.account.superadmin === true || ((S.account.me || {}).role === "owner"))); }
+// the posting of FinCom's cloud that holds the entry: the newest naming it (by entry_ids, results or items)
+function postJobOf(cid, id){
+  const js = postJobStates(cid).get(String(id));
+  if (js && js.job) return js.job;
+  if (typeof CloudJobs !== "object") return null;
+  return CloudJobs.forClient(cid).slice().sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))
+    .find(j => (CloudJobs.idsOf(j) || []).includes(String(id)) || [].concat(j.results || [], j.items || []).some(x => x && String(x.id) === String(id))) || null;
+}
+const PostOwner = {
+  notReady(m){ return /tally_post_job_mark_posted|tally_post_id_release_owner|PGRST202|Could not find the function|schema cache|does not exist|\b404\b/i.test(String(m || "")); },
+  async call(cid, fn, args, done){
+    try {
+      const r = await TCloud.rpc(fn, args);
+      if (r && r.ok === false) throw new Error(r.error || "It was not done.");
+      toast(done);
+    } catch (e){
+      const m = String((e && e.message) || e);
+      toast(this.notReady(m) ? "FinCom\u2019s cloud is not ready for this yet (migration 36b)." : m.replace(/^ERROR:\s*/i, ""));
+    }
+    if (typeof CloudJobs === "object") await CloudJobs.load(true);
+    if (typeof PostIds === "object") PostIds.load(cid, true);
+    render();
+  },
+  async markPosted(cid, e, job){
+    const no = (e.x && e.x.invoiceNo) || e.id;
+    const a = await askConfirm({title: "Mark " + no + " as posted in Tally?", ok: "Mark posted",
+      body: "<p>You saw this entry in Tally. FinCom records it as posted, with who marked it and when; nothing is sent to Tally.</p>" +
+        '<div class="bk-form one"><label><span>Voucher no. in Tally</span><input id="markVch" maxlength="60" placeholder="As in the Day Book"></label>' +
+        '<label><span>Note (optional)</span><input id="markNote" maxlength="300" placeholder="Where you saw it"></label></div>',
+      read: () => ({vch: ((document.getElementById("markVch") || {}).value || "").trim(), note: ((document.getElementById("markNote") || {}).value || "").trim()})});
+    if (!a || !a.ok) return;
+    await this.call(cid, "tally_post_job_mark_posted", {p_job: job.id, p_id: String(e.id), p_vch: a.data.vch, p_note: a.data.note}, no + " is marked posted.");
+  },
+  async release(cid, e, job){
+    const no = (e.x && e.x.invoiceNo) || e.id;
+    const a = await askConfirm({title: no + " is not in Tally: release it?", ok: "Release it", danger: true,
+      body: "<p>You looked in Tally and this entry is not there. FinCom frees its id so it can be posted again; the reason is kept with the entry. Nothing is sent to Tally now.</p>" +
+        '<div class="bk-form one"><label><span>Why (what you saw in Tally)</span><input id="releaseWhy" maxlength="500" placeholder="Not in the Day Book of …"></label></div>',
+      read: () => ({why: ((document.getElementById("releaseWhy") || {}).value || "").trim()}), validate: d => d && d.why ? "" : "Say what you saw in Tally."});
+    if (!a || !a.ok) return;
+    await this.call(cid, "tally_post_id_release_owner", {p_job: job.id, p_id: String(e.id), p_why: a.data.why}, no + " is released; it can be posted again.");
+  }
+};
 // one line on the page after a check or a posting ("Already in Tally (voucher no. …)"): S.postNote
 function postNote(cid, text, level){ S.postNote = {cid, text, level: level || "", at: Date.now()}; }
 

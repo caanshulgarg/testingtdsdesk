@@ -281,6 +281,22 @@ function memberName(uid){
 // those still to be read) and its voucher is not there; found again, it counts again.
 const TallyProof = {
   at: {},
+  // round 5 (C3): the cloud copy keeps an entry deleted in Tally, marked (tally_vouchers.deleted_at, migration-32/37): the
+  // proof reads live entries only. A cloud without the column (hasDel false after a 42703) is read as before.
+  hasDel: null,
+  async live(path){
+    if (this.hasDel !== false){
+      try { const r = await Cloud.api(path + "&deleted_at=is.null"); this.hasDel = true; return r; }
+      catch (e){ if (!/deleted_at|42703/i.test(String((e && e.message) || e))) throw e; this.hasDel = false; }
+    }
+    return Cloud.api(path);
+  },
+  // the GUIDs of the day's entries deleted in Tally (none on a cloud without the column)
+  async deletedOn(book, day){
+    if (this.hasDel === false) return new Set();
+    try { const r = await Cloud.api("tally_vouchers?select=guid&book_id=eq." + encodeURIComponent(book) + "&day=eq." + day + "&deleted_at=not.is.null"); this.hasDel = true; return new Set((r || []).map(x => x.guid)); }
+    catch (e){ if (/deleted_at|42703/i.test(String((e && e.message) || e))) this.hasDel = false; return new Set(); }
+  },
   async check(cid, force){
     if (typeof TCloud !== "object" || !TCloud.on() || !TCloud.has(cid)) return 0;
     if (!force && Date.now() - (this.at[cid] || 0) < 5 * 60000) return 0;
@@ -293,7 +309,7 @@ const TallyProof = {
     let found = new Set();
     for (let i = 0; i < list.length; i += 80){
       const g = list.slice(i, i + 80).map(e => '"' + String(e.tally.guid).replace(/"/g, "") + '"').join(",");
-      const rows = await Cloud.api("tally_vouchers?select=guid,cancelled&book_id=eq." + encodeURIComponent(bk.book) + "&guid=in.(" + encodeURIComponent(g) + ")");
+      const rows = await this.live("tally_vouchers?select=guid,cancelled&book_id=eq." + encodeURIComponent(bk.book) + "&guid=in.(" + encodeURIComponent(g) + ")");
       (rows || []).forEach(r => { if (!r.cancelled) found.add(r.guid); });
     }
     let n = 0;
@@ -321,13 +337,15 @@ const TallyProof = {
     const withId = rows.filter(r => r.tally && r.tally.guid), found = new Set();
     for (let i = 0; i < withId.length; i += 80){
       const g = withId.slice(i, i + 80).map(r => '"' + String(r.tally.guid).replace(/"/g, "") + '"').join(",");
-      const got = await Cloud.api("tally_vouchers?select=guid,cancelled&book_id=eq." + encodeURIComponent(bk.book) + "&guid=in.(" + encodeURIComponent(g) + ")");
+      const got = await this.live("tally_vouchers?select=guid,cancelled&book_id=eq." + encodeURIComponent(bk.book) + "&guid=in.(" + encodeURIComponent(g) + ")");
       (got || []).forEach(x => { if (!x.cancelled) found.add(x.guid); });
     }
     // no voucher id: the account's ledger on that day, for that amount
     const noId = rows.filter(r => !(r.tally && r.tally.guid)), lines = {};
+    // the lines of an entry deleted in Tally stay in the cloud copy (migration-37) and are left out here by its GUID
     for (const day of Array.from(new Set(noId.map(r => d8(r.date)))).filter(Boolean)){
-      lines[day] = await Cloud.api("tally_lines?select=ledger,amount&book_id=eq." + encodeURIComponent(bk.book) + "&day=eq." + Audit.iso(day)) || [];
+      const gone = await this.deletedOn(bk.book, Audit.iso(day));
+      lines[day] = (await Cloud.api("tally_lines?select=ledger,amount,guid&book_id=eq." + encodeURIComponent(bk.book) + "&day=eq." + Audit.iso(day)) || []).filter(x => !gone.has(x.guid));
     }
     const ledOf = r => { const s2 = (b.stmts || []).find(x => x.id === String(r.id || "").split("-")[0]) || {}; return ledNm(accountFor(s2).ledger || "").toLowerCase(); };
     let n = 0;

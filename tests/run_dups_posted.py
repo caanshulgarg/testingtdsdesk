@@ -86,6 +86,26 @@ with sync_playwright() as p:
     E("TallyProof.check(S.coId, true)"); pg.wait_for_timeout(500)
     st = E("[billInTally(S.data[S.coId].entries.orig), !!S.data[S.coId].entries.orig.goneFromTally, billInTally(S.data[S.coId].entries.p81), billInTally(S.data[S.coId].entries.p90), CO().stats.inTally, CO().stats.waiting]")
     ok(st == [False, True, True, False, 1, 2], "8. In Tally: 1 (081, confirmed and still there); FA/ELEC/013 gone from Tally and the unconfirmed Tally file not counted; 2 to post (%s)" % st)
+    # round 5 (C3): the cloud copy keeps an entry deleted in Tally, marked (deleted_at, migration-32/37): the check reads
+    # live entries only; a cloud without the column is read as before
+    qs = E("window.__q")
+    ok(qs and all("deleted_at=is.null" in u for u in qs if "tally_vouchers" in u), "C3. tally_vouchers read with deleted_at=is.null (%s)" % [u[:90] for u in qs][:2])
+    E("""() => { window.__q = []; Cloud.api = async (u) => { window.__q.push(u); if (/deleted_at/.test(u)) throw new Error('column tally_vouchers.deleted_at does not exist (42703)'); return /tally_vouchers/.test(u) ? [{guid: 'g-66b7', cancelled: false}] : []; };
+      TallyProof.hasDel = null; TallyProof.at = {}; }""")
+    E("TallyProof.check(S.coId, true)"); pg.wait_for_timeout(500)
+    st2 = E("[billInTally(S.data[S.coId].entries.orig), billInTally(S.data[S.coId].entries.p81)]"); qs = E("window.__q")
+    ok(st2 == [False, True] and any("tally_vouchers" in u and "deleted_at" not in u for u in qs) and E("TallyProof.hasDel") is False, "C3. without the column: read again without it, the same answer (%s)" % [u[-60:] for u in qs])
+    E("""() => { window.__q = []; Cloud.api = async (u) => { window.__q.push(u); return /tally_vouchers/.test(u) ? [{guid: 'g-66b7', cancelled: false}] : []; }; TallyProof.hasDel = null; TallyProof.at = {}; }""")
+    E("TallyProof.check(S.coId, true)"); pg.wait_for_timeout(500)
+    ok(E("!!S.data[S.coId].entries.orig.goneFromTally"), "C3. an entry deleted in Tally (not answered) stays gone")
+    # the bank lines' check (checkBank) reads the same way: vouchers by id without deleted entries, and the day's lines
+    # without those of a deleted entry
+    E("""() => { S.bank = {cid: S.coId, rows: [{id: "s1-1", state: "sent", date: "2026-07-01", debit: 100, tally: {guid: "g-b1", at: "2026-07-02T00:00:00Z"}, sentAt: "2026-07-02T00:00:00Z"}], stmts: [{id: "s1"}], ledgers: {list: []}};
+      window.saveBank = () => {}; window.__q = []; TallyProof.hasDel = null; TallyProof.bankAt = {};
+      Cloud.api = async (u) => { window.__q.push(u); return /tally_vouchers\\?select=guid,cancelled/.test(u) ? [{guid: "g-b1", cancelled: false}] : []; }; }""")
+    E("TallyProof.checkBank(S.coId, true)"); pg.wait_for_timeout(500)
+    qs = E("window.__q")
+    ok(qs and all("deleted_at=is.null" in u for u in qs if "tally_vouchers?select=guid,cancelled" in u) and not E("!!S.bank.rows[0].goneFromTally"), "C3. the bank lines' vouchers read live only; the line found stays (%s)" % [u[-70:] for u in qs][:2])
     E("() => { S.tab = 'invoices'; S.filter = 'draft'; S.reviewTable = false; render(); }"); pg.wait_for_timeout(300)
     bar = pg.inner_text("header nav.sbar") if pg.locator("header nav.sbar").count() else pg.inner_text("nav.sbar[aria-label=Status]")
     # second pass of 02-Oct-2026: the tab counts what is ready to post (none); the two bills not confirmed in Tally are a
@@ -126,4 +146,4 @@ with sync_playwright() as p:
        "8. the bills not counted as in Tally need attention, each once; the one not found in the cloud copy says 'Not checked yet' with Check now, no Post again (%s)" % o.replace("\n", " ")[:160])
     ok(not errors, "no page errors %s" % errors[:2])
     br.close()
-print("\nall passed" if not fails else "\nFAILED: %d" % len(fails))
+print("\nall passed" if not fails else "\nFAILED: %d" % len(fails)); raise SystemExit(1 if fails else 0)
