@@ -854,9 +854,26 @@ func (k *keepRun) step(company string, port int, booksFrom string) error {
 			} else if cn := copyVouchers(dir, f, t); countVouchers(x) == 0 && cn > 0 {
 				// round 12 (03-Oct-2026): a whole envelope that lists NO voucher for days whose copy holds some is not
 				// trusted (Tally answered the owner's Day Book request so for every month of a company of ~2,750
-				// entries): it fails like a timeout, nothing of it is kept, no day of it is marked full or sent as empty
-				writeLog(fmt.Sprintf("Keeping %s: day book %s-%s: Tally listed no entries but the copy holds %d for these days; the answer is not trusted (%s); nothing kept, it is read again", company, f, t, cn, answerHead(x)))
-				err = fmt.Errorf("Tally listed no entries but the copy holds %d for these days; the answer is not trusted", cn)
+				// entries): it fails like a timeout, nothing of it is kept, no day of it is marked full or sent as empty.
+				// Round 13b: a day whose every entry was really removed in Tally (a posted test entry deleted later) must
+				// not be distrusted for ever: on the third try of a one-day slice Tally is asked once more with a
+				// different request kind, FinComTag (the posting read-back's collection); when that lists none either,
+				// the empty day is trusted and goes the normal way (written empty, marked full, sent as empty:true)
+				more := ""
+				if f == t && toInt(st["dayFail"]) >= 2 {
+					if raw, e := invokeTally(k.tc, port, tagCheckRequest(company, f), 60); e != nil || !goodDupAnswer(raw) {
+						more = "; the entry list did not answer"
+					} else if ln := len(xmlDoc(raw).All("VOUCHER")); ln > 0 {
+						more = fmt.Sprintf("; the entry list (FinComTag) lists %d", ln)
+					} else {
+						writeLog(fmt.Sprintf("Keeping %s: day book %s: Tally listed no entries three times and its entry list (FinComTag) lists none either; the day is taken as empty", company, f))
+						more = "ok"
+					}
+				}
+				if more != "ok" {
+					writeLog(fmt.Sprintf("Keeping %s: day book %s-%s: Tally listed no entries but the copy holds %d for these days; the answer is not trusted (%s); nothing kept, it is read again%s", company, f, t, cn, answerHead(x), more))
+					err = fmt.Errorf("Tally listed no entries but the copy holds %d for these days; the answer is not trusted", cn)
+				}
 			} else if st := readStop(); st != nil {
 				writeLog(fmt.Sprintf("Keeping %s: day book %s-%s: reading was stopped on this computer while it was read (%s); nothing of it is kept", company, f, t, str(st["reason"])))
 				err = errors.New("reading stopped: " + str(st["reason"]))

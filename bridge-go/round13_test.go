@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // the stand answers every Day Book request (either date form) with a whole envelope and no voucher
@@ -54,9 +55,23 @@ func TestReadTestThreeRequestsLogged(t *testing.T) {
 	outBefore := readText(outFile)
 	days0, guard0 := c.count("days"), c.count("read_guard")
 
+	// 13b: POST starts it and answers at once; GET says how far; the tray polls (the stand answers instantly)
 	code, res := callLocal(t, "POST", "/tray/readtest", "", `{"company":"ZZ TEST"}`)
-	if code != 200 || res["ok"] != true {
+	if code != 200 || res["ok"] != true || res["started"] != true || str(res["company"]) != zz || str(res["day"]) != d {
 		t.Fatalf("POST /tray/readtest from the tray: %d %v", code, res)
+	}
+	for i := 0; i < 200; i++ {
+		code, res = callLocal(t, "GET", "/tray/readtest", "", "")
+		if code != 200 || str(res["state"]) == "failed" {
+			t.Fatalf("GET /tray/readtest: %d %v", code, res)
+		}
+		if str(res["state"]) == "done" {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if str(res["state"]) != "done" || res["ok"] != true {
+		t.Fatalf("the test did not finish: %v", res)
 	}
 	if str(res["company"]) != zz || str(res["day"]) != d {
 		t.Fatalf("company/day: %v", res)
@@ -137,6 +152,9 @@ func TestReadTestThreeRequestsLogged(t *testing.T) {
 func TestReadTestNotFromWebPage(t *testing.T) {
 	f := newStandTally(t)
 	standBridge(t, f, `,"Key":"tray-test-key"`)
+	readTestMu.Lock()
+	readTestLast = nil
+	readTestMu.Unlock()
 	for _, origin := range []string{"https://app.fincom.live", "http://localhost:5173", "https://evil.example"} {
 		for _, method := range []string{"POST", "GET"} {
 			code, res := callLocal(t, method, "/tray/readtest", origin, `{"company":"ZZ TEST"}`)
@@ -149,8 +167,8 @@ func TestReadTestNotFromWebPage(t *testing.T) {
 	if code != 403 || !strings.Contains(str(res["error"]), "tray icon only") {
 		t.Fatalf("POST /tray/readtest with a Sec-Fetch header: %d %v (want 403)", code, res)
 	}
-	if code, res := callLocal(t, "GET", "/tray/readtest", "", ""); code == 200 && res["ok"] == true {
-		t.Fatalf("GET /tray/readtest ran the test: %d %v", code, res)
+	if code, res := callLocal(t, "GET", "/tray/readtest", "", ""); code != 200 || str(res["state"]) != "none" {
+		t.Fatalf("GET /tray/readtest from the tray with no test run: %d %v", code, res)
 	}
 	if f.n("Day Book") != 0 || f.n("FinComTag") != 0 {
 		t.Fatalf("a refused request reached Tally: %v", f.ids())

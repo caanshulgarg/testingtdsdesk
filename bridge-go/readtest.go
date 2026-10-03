@@ -16,7 +16,52 @@ import (
 	"time"
 )
 
-var readTestMu sync.Mutex
+// 13b: as the measuring tool (measure.go startMeasure): the tray's POST starts the test in the bridge and is answered at
+// once; its GET says how far it is; the tray polls (the three requests, each up to 60 s plus the wait for Tally behind a
+// copier or posting request, can outlast one tray call)
+var (
+	readTestMu   sync.Mutex
+	readTestLast M
+)
+
+// POST /tray/readtest: {ok, started, company, day} at once; {ok:false} while one runs or when no company is open
+func startReadTest(company string) M {
+	if company == "" {
+		company = trayMeasureCompany()
+	}
+	if company == "" {
+		return M{"ok": false, "error": "No company is open in Tally: open the company to test, then try again."}
+	}
+	readTestMu.Lock()
+	defer readTestMu.Unlock()
+	if readTestLast != nil && str(readTestLast["state"]) == "running" {
+		return M{"ok": false, "error": "A test is already running; wait for its message box."}
+	}
+	d := readTestDay(company)
+	readTestLast = M{"ok": true, "state": "running", "company": company, "day": d, "at": nowS()}
+	go func() {
+		r, err := runReadTest(company)
+		readTestMu.Lock()
+		defer readTestMu.Unlock()
+		if err != nil {
+			readTestLast = M{"ok": false, "state": "failed", "error": err.Error(), "company": company, "day": d, "at": nowS()}
+			return
+		}
+		r["state"] = "done"
+		readTestLast = r
+	}()
+	return M{"ok": true, "started": true, "company": company, "day": d}
+}
+
+// GET /tray/readtest: {state: none | running | done | failed, ...the result when done, error when failed}
+func readTestStatus() M {
+	readTestMu.Lock()
+	defer readTestMu.Unlock()
+	if readTestLast == nil {
+		return M{"ok": true, "state": "none"}
+	}
+	return readTestLast
+}
 
 // the day to test with: the newest day file of the copy that holds a voucher; today when there is none
 func readTestDay(company string) string {
@@ -34,7 +79,7 @@ func readTestDay(company string) string {
 }
 
 // the three requests, one at a time, through the same gate as FinCom's reads (one request to Tally at a time); each
-// answer counted and its head logged, nothing kept
+// answer counted and its head logged, nothing kept. Run by startReadTest (one at a time); callable directly too
 func runReadTest(company string) (M, error) {
 	if company == "" {
 		company = trayMeasureCompany()
@@ -42,10 +87,6 @@ func runReadTest(company string) (M, error) {
 	if company == "" {
 		return nil, errors.New("No company is open in Tally: open the company to test, then try again.")
 	}
-	if !readTestMu.TryLock() {
-		return nil, errors.New("A test is already running; wait for its message box.")
-	}
-	defer readTestMu.Unlock()
 	// as the measuring tool runs: a slow answer here is evidence, not a reason for the self-watch to stop reading
 	measuring.Add(1)
 	defer measuring.Add(-1)

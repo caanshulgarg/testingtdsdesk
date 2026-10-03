@@ -178,10 +178,7 @@ var tr = &tray{since: map[string]time.Time{}, told: map[string]bool{}, started: 
 var taskbarCreated uintptr
 
 // --- talking to the service
-func trayCall(method, path string, body any) M { return trayCallT(method, path, body, 20*time.Second) }
-
-// the same with its own wait: the read test (round 13) sends Tally three requests of up to 60 s each
-func trayCallT(method, path string, body any, timeout time.Duration) M {
+func trayCall(method, path string, body any) M {
 	loadConfigRO()
 	var rd io.Reader
 	if body != nil {
@@ -190,7 +187,7 @@ func trayCallT(method, path string, body any, timeout time.Duration) M {
 	req, _ := http.NewRequest(method, fmt.Sprintf("http://127.0.0.1:%d%s", toInt(cfg("Port")), path), rd)
 	req.Header.Set("X-Bridge-Key", cfgS("Key"))
 	req.Header.Set("Content-Type", "application/json")
-	c := &http.Client{Timeout: timeout, Transport: &http.Transport{Proxy: nil}}
+	c := &http.Client{Timeout: 20 * time.Second, Transport: &http.Transport{Proxy: nil}}
 	r, err := c.Do(req)
 	if err != nil {
 		return nil
@@ -607,8 +604,9 @@ func (t *tray) command(id int, st M) {
 			}
 		}
 	case 18:
-		// round 13: three requests for one day, one after the other (up to 60 s each), the answer waited for here
-		r := trayCallT("POST", "/tray/readtest", M{}, 4*time.Minute)
+		// round 13: three requests for one day, one after the other (up to 60 s each, plus the wait for Tally behind a
+		// copier or posting request); 13b: started in the bridge and polled, as Measure Tally is
+		r := trayCall("POST", "/tray/readtest", M{})
 		if r == nil {
 			msgBox("FinCom Bridge - Test reading from Tally", "The bridge is not answering.", mbIconWarning)
 			return
@@ -617,6 +615,27 @@ func (t *tray) command(id int, st M) {
 			msgBox("FinCom Bridge - Test reading from Tally", str(r["error"]), mbIconWarning)
 			return
 		}
+		t.balloon("FinCom Bridge", "Testing reading from Tally: "+str(r["company"])+", "+str(r["day"])+": three requests, one at a time, up to a few minutes. The result opens when it is done.", false)
+		var s M
+		for i := 0; i < 450; i++ {
+			time.Sleep(2 * time.Second)
+			s = trayCall("GET", "/tray/readtest", nil)
+			if s == nil {
+				continue
+			}
+			if str(s["state"]) == "done" {
+				break
+			}
+			if str(s["state"]) == "failed" {
+				msgBox("FinCom Bridge - Test reading from Tally", "Not tested: "+str(s["error"]), mbIconWarning)
+				return
+			}
+		}
+		if s == nil || str(s["state"]) != "done" {
+			msgBox("FinCom Bridge - Test reading from Tally", "The test is still running after 15 minutes; its lines are in Show log when it ends.", mbIconWarning)
+			return
+		}
+		r = s
 		var lines []string
 		for _, x := range arr(r["results"]) {
 			m := obj(x)

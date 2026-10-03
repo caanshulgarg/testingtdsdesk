@@ -577,11 +577,12 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 			writeLog("Refused a read test request from a web page (" + path + ", " + r.Header.Get("Origin") + ").")
 			return nil, &httpErr{403, M{"ok": false, "error": "Test reading from Tally is started from the FinCom Bridge tray icon only, never from a web page."}}
 		}
-		if r.Method != "POST" {
-			return nil, &httpErr{405, M{"ok": false, "error": "Use POST."}}
+		// 13b: as the measuring tool: POST starts it in the bridge and answers at once, GET says how far (the tray polls)
+		if r.Method == "POST" {
+			o, _ := bodyObj(body)
+			return startReadTest(str(o["company"])), nil
 		}
-		o, _ := bodyObj(body)
-		return runReadTest(str(o["company"]))
+		return readTestStatus(), nil
 	case "/companyguid":
 		// a company whose Tally GUID changed (restored, re-created): confirmed on this computer, its new GUID is held
 		if err := needPost(r, "Use POST."); err != nil {
