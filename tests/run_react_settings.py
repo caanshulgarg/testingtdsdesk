@@ -138,9 +138,8 @@ with sync_playwright() as p:
     ok(pg.locator("#confirmBox .cbx").is_visible(), "switching a drop key off asks first")
     pg.click('#confirmBox button[data-cbx="yes"]'); pg.wait_for_timeout(400)
     ok(["revoke_drop_key", {"p_id": 3}] in calls(), "and switches it off")
-    pg.select_option('select[aria-label="Sign out after"]', "60"); pg.wait_for_timeout(200)
-    pg.evaluate("render()"); pg.wait_for_timeout(200)
-    ok(pg.input_value('select[aria-label="Sign out after"]') == "60", "how long before signing out is kept")
+    # section D (03-Oct-2026): the idle sign-out and its "Sign out after" setting are gone; the page says so
+    ok(pg.locator('select[aria-label="Sign out after"]').count() == 0 and "does not sign you out by itself" in pg.inner_text("#app"), "no idle sign-out setting; the page says FinCom does not sign you out by itself")
     pg.uncheck('label:has-text("Keep in sync automatically") input'); pg.wait_for_timeout(200)
     ok(["cfg", {"auto": False}] in calls(), "syncing by itself switched off")
     pg.uncheck('label:has-text("Keep documents in the firm account") input'); pg.wait_for_timeout(200)
