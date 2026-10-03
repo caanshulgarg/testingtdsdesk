@@ -8,13 +8,13 @@
 #   red 4    the review range ends before a bridge-go/ change     -> fails "files outside docs/ changed after it"
 #   red 5    the allow-list changed with no "re-measured on" line -> fails "4 allow-list"
 #   red 6    the version already has a setup in assets-test       -> fails "1 version"
-#   green 2  a "not yet measured" row, and the line "allowed for 2.1.6 only" (this version, 2.1.6) -> passes
+#   green 2  a "not yet measured" row, and the line "allowed for 2.1.6 only by the owner's decision of <date>" (this version) -> passes
 #   red 7    the same line naming another version (2.1.5)        -> fails "4 allow-list" (not yet measured)
 #   red 8    a "not yet measured" row and no "allowed for" line  -> fails "4 allow-list" (not yet measured)
 #   red 9    the allow-list table has a header but no row the check can parse (rows without the leading pipe)
 #                                                                 -> fails "4 allow-list" (no rows parsed)
-#   green 3  BridgeVersion 2.1.6 with the one exception line (round 11) -> passes check 4
-#   red 10   BridgeVersion 2.1.7 with an exception line               -> fails "no build after 2.1.6 gets an exception"
+#   green 3  BridgeVersion 2.1.7 with the owner's decision line naming 2.1.7 (round 13) -> passes check 4
+#   red 10   BridgeVersion 2.1.7 with an "allowed for 2.1.7 only" line WITHOUT the owner's decision words -> fails "owner's decision"
 #   red 11   an exception line naming two versions                    -> fails "names more than one version"
 # Nothing outside the temp folder is touched. Run: bash bridge-go/release_check_test.sh
 # (RELEASE_CHECK_SCRIPT=<file> tests another copy of the script, e.g. one that always passes, to see this test fail.)
@@ -102,24 +102,24 @@ expect "red 5: allow-list changed, not re-measured" 1 "has no 're-measured on YY
 setup; : >"$R/assets-test/bridge-go/FinComBridge-Setup-9.9.9.exe"; g add -A; g commit -qm "setup exists"
 expect "red 6: version already has a setup" 1 "BridgeVersion 9.9.9 is not new"
 
-setup; withver 2.1.6; unmeasured "First table: not yet measured; allowed for 2.1.6 only; re-measured on 2026-10-02 (no times)"
-expect "green 2: unmeasured row allowed for this version" 0 "allowed for 2.1.6"
+setup; withver 2.1.6; unmeasured "First table: not yet measured; allowed for 2.1.6 only by the owner's decision of 2026-10-03; re-measured on 2026-10-02 (no times)"
+expect "green 2: unmeasured row allowed for this version by the owner's decision" 0 "allowed for 2.1.6"
 
-setup; withver 2.1.6; unmeasured "First table: not yet measured; allowed for 2.1.5 only; re-measured on 2026-10-02 (no times)"
+setup; withver 2.1.6; unmeasured "First table: not yet measured; allowed for 2.1.5 only by the owner's decision of 2026-10-03; re-measured on 2026-10-02 (no times)"
 expect "red 7: the exception names another version" 1 "not yet measured"
 
 setup; unmeasured "re-measured on 2026-10-02"
 expect "red 8: unmeasured row, no exception for this version" 1 "not yet measured"
 
-# round 11: the exception may name exactly one version, this one; no build after 2.1.6 gets one
-LINE="First table: not yet measured; allowed for VER only; pilot on NWS144 only; posting to ZZ TEST only until the owner says otherwise; A1 and A2 of docs/tally-measure-sheet.txt filled on VER within the pilot week; this line is removed once the table carries times; no build after 2.1.6 gets an exception."
-setup; withver 2.1.6; unmeasured "$(echo "$LINE" | sed 's/VER/2.1.6/g')
-re-measured on 2026-10-02 (no times)"
-expect "green 3: 2.1.6 with the exception line passes check 4" 0 "allowed for 2.1.6"
-
+# round 13: the exception may name exactly one version, this one, and must carry the owner's decision words
+LINE="First table: not yet measured; allowed for VER only by the owner's decision of 2026-10-03 (open for every computer); this line is replaced per build by the owner's decision, and removed once the table carries times."
 setup; withver 2.1.7; unmeasured "$(echo "$LINE" | sed 's/VER/2.1.7/g')
 re-measured on 2026-10-02 (no times)"
-expect "red 10: 2.1.7 with an exception line" 1 "no build after 2.1.6 gets an exception"
+expect "green 3: 2.1.7 with the owner's decision line passes check 4" 0 "allowed for 2.1.7"
+
+setup; withver 2.1.7; unmeasured "First table: not yet measured; allowed for 2.1.7 only; pilot on NWS144 only; no build after 2.1.6 gets an exception.
+re-measured on 2026-10-02 (no times)"
+expect "red 10: 2.1.7 with a line without the owner's decision words" 1 "owner's decision"
 
 setup; withver 2.1.6; unmeasured "First table: not yet measured; allowed for 2.1.6 only; allowed for 2.1.5 only; re-measured on 2026-10-02 (no times)"
 expect "red 11: an exception naming two versions" 1 "names more than one version"

@@ -10,11 +10,11 @@ only while the measuring tool (Measure Tally, for FinCom support) is running.
 - **worst case (s)**: the longest time measured on ZZ BIG TEST (`tests/fixtures/big/make_big_company.py`) on NWS144,
   with **measured on** its date. "not yet measured" until the phase 1 measurement (`docs/tally-measure-sheet.txt`) fills it.
 
-The line above the table ("First table: not yet measured; allowed for <version> only; re-measured on <date>") is the
-first build's exception: `release-check.sh` (check 4) accepts "not yet measured" rows only for the one version that line
-names; any other version needs a worst case above 0 in every row. The bridge tells FinCom's cloud in every heartbeat
-whether its table is measured (`allowlist: {measured, hash}`), and the cloud refuses to approve a version whose pilot
-bridge reports it unmeasured, so an unmeasured build never leaves the pilot computer.
+The line above the table ("First table: not yet measured; allowed for <version> only by the owner's decision of
+<date>") is the owner's per-build exception (round 13, 03-Oct-2026: the owner decides per build which computers get a
+build): `release-check.sh` (check 4) accepts "not yet measured" rows only for the one version that line names, and only
+with the owner's decision words; any other version needs a worst case above 0 in every row. The bridge still tells
+FinCom's cloud in every heartbeat whether its table is measured (`allowlist: {measured, hash}`).
 
 `TestAllowListUnchanged` (in `bridge-go/allowlist_test.go`, run on every build and by `release-check.sh`) fails when
 this table and the Go table differ. A new or changed request is therefore measured on ZZ BIG TEST again, its time and
@@ -28,7 +28,7 @@ without a period) is a stored field, not a computed one.
 The size test (`bridge-go/size_test.go`) uses a cost per row returned (`tallyPerRowMs` in `allowlist.go`): a
 conservative guess until the phase 1 measurement replaces it.
 
-First table: not yet measured; allowed for 2.1.6 only; pilot on NWS144 only; posting to ZZ TEST only until the owner says otherwise; A1 and A2 of docs/tally-measure-sheet.txt filled on 2.1.6 within the pilot week; this line is removed once the table carries times; no build after 2.1.6 gets an exception.
+First table: not yet measured; allowed for 2.1.7 only by the owner's decision of 2026-10-03 (open for every computer; the owner decides per build from now on); this line is replaced per build by the owner's decision, and removed once the table carries times.
 
 (re-measured on 2026-10-02: no times yet; the table's rows and shapes as of this build)
 

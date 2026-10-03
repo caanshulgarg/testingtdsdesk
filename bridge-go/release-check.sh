@@ -19,8 +19,9 @@
 #   3 go.mod      go mod tidy -diff shows nothing (it changes no file).
 #   4 allow-list  the table in docs/tally-allowlist.md parses (a header naming the worst-case column and at least one
 #                 row, each starting with '|'; "no rows parsed" fails) and every row has a worst case > 0 ("not yet
-#                 measured" fails), unless the file carries the line "not yet measured; allowed for <v> only" naming THIS BridgeVersion
-#                 (the first build's exception: accepted for that one version, never for another); and sha256 of the
+#                 measured" fails), unless the file carries the line "not yet measured; allowed for <v> only by the owner's
+#                 decision of YYYY-MM-DD" naming THIS BridgeVersion (round 13: the owner decides per build; a line naming
+#                 another version, or without the owner's decision words, is refused); and sha256 of the
 #                 file equals the hash in the last release log row of docs/RELEASE-CHECKLIST.md; if it differs (or
 #                 there is no earlier hash) the file must carry a line "re-measured on YYYY-MM-DD" dated on or after
 #                 that last release.
@@ -143,25 +144,23 @@ case "$parsed" in
 esac
 unmeasured="$parsed"
 EXC=""
-# round 11: the exception line ("not yet measured; allowed for <version> only") may name exactly one version, and it must
-# be this BridgeVersion; no build after 2.1.6 gets an exception of any kind
+# round 13 (the owner's decision of 03-Oct-2026): the owner decides per build. The exception line ("not yet measured;
+# allowed for <version> only by the owner's decision of YYYY-MM-DD") may name exactly one version, and it must be this
+# BridgeVersion; without the owner's decision words it is not an exception
 excs="$(grep -oiE 'allowed for [0-9][0-9.]* only' "$ALLOWLIST" | grep -oE '[0-9][0-9.]*' | sort -u)"
 nexc="$(printf '%s\n' "$excs" | grep -c .)"
-newest="$(printf '%s\n2.1.6\n' "$V" | sort -V | tail -1)"
-if [ "$nexc" -gt 0 ] && [ "$newest" != "2.1.6" ]; then
-  fail "4 allow-list" "no build after 2.1.6 gets an exception: docs/tally-allowlist.md still carries an 'allowed for ... only' line and this is $V" \
-    "Measure every request on ZZ BIG TEST (docs/tally-measure-sheet.txt), put the times in allowlist.go and the table, and remove the exception line."
-fi
 if [ "$nexc" -gt 1 ]; then
   fail "4 allow-list" "the exception line names more than one version ($(printf '%s' "$excs" | tr '\n' ' ')): it may name exactly one, this BridgeVersion ($V)"
 fi
 if [ -n "$unmeasured" ]; then
-  exc="$(grep -oiE 'not yet measured[^|]*allowed for [0-9.]+ only' "$ALLOWLIST" | grep -oE 'allowed for [0-9.]+ only' | head -1)"
+  exc="$(grep -oiE "not yet measured[^|]*allowed for [0-9.]+ only by the owner'?s decision of [0-9]{4}-[0-9]{2}-[0-9]{2}" "$ALLOWLIST" | grep -oE 'allowed for [0-9.]+ only' | head -1)"
+  excdate="$(grep -oiE "allowed for $V only by the owner'?s decision of [0-9]{4}-[0-9]{2}-[0-9]{2}" "$ALLOWLIST" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' | head -1)"
   if [ "$exc" = "allowed for $V only" ]; then
-    EXC=" (not yet measured: $exc, the first build's exception)"
+    EXC=" (not yet measured: $exc by the owner's decision of $excdate)"
   else
-    why="No exception line names $V (the line 'not yet measured; allowed for $V only' would accept it for this version alone)."
+    why="No exception line names $V (the line 'not yet measured; allowed for $V only by the owner's decision of YYYY-MM-DD' would accept it for this version alone)."
     [ -n "$exc" ] && why="The exception line says '$exc', not $V: it holds for that version only."
+    grep -qiE 'allowed for [0-9.]+ only' "$ALLOWLIST" && ! grep -qiE "allowed for [0-9.]+ only by the owner'?s decision of [0-9]{4}-[0-9]{2}-[0-9]{2}" "$ALLOWLIST" && why="The 'allowed for ... only' line carries no owner's decision (\"by the owner's decision of YYYY-MM-DD\"): it is not an exception."
     fail "4 allow-list" "docs/tally-allowlist.md has rows not yet measured (no worst case above 0):" \
       "$(echo "$unmeasured" | tr '\n' ';' | sed 's/;$//; s/;/; /g')" "$why" \
       "Measure every request on ZZ BIG TEST (docs/tally-measure-sheet.txt) and put the times and dates in allowlist.go and the table."

@@ -1,7 +1,7 @@
 # FinCom Bridge release checklist
 
 Every new FinCom Bridge (the Windows program that reads and posts to Tally) goes through these steps in this order.
-Do not skip a step, and do not hand the setup to any computer before the owner approves it in FinCom.
+Do not skip a step. Which computers get a build is the owner's decision, made per build (03-Oct-2026).
 
 `bridge-go/release-check.sh` checks steps 1 to 7 by itself. It stops at the first one that fails, and no installer
 may be built until it passes. Its self-test is `bash bridge-go/release_check_test.sh`.
@@ -23,11 +23,10 @@ may be built until it passes. Its self-test is `bash bridge-go/release_check_tes
    - no request asks Tally to compute a figure;
    - the list matches `docs/tally-allowlist.md`.
 5. **The allow-list is measured, and unchanged or re-measured.** Every row of the table in `docs/tally-allowlist.md`
-   must have a worst case above 0; a "not yet measured" row fails the check. The one exception is the first build:
-   the line `First table: not yet measured; allowed for <version> only; re-measured on YYYY-MM-DD` above the table
-   is accepted only when `<version>` is the `BridgeVersion` being built (2.1.5); the next version needs real times in
-   every row. The bridge reports in every heartbeat whether its table is measured, and FinCom refuses to approve a
-   version whose pilot bridge says it is not, so an unmeasured build stays on the pilot computer.
+   must have a worst case above 0; a "not yet measured" row fails the check. The exception is the owner's, per build:
+   the line `First table: not yet measured; allowed for <version> only by the owner's decision of YYYY-MM-DD` above
+   the table is accepted only when `<version>` is the `BridgeVersion` being built and the owner's decision words are
+   there; the line is replaced per build. The bridge reports in every heartbeat whether its table is measured.
    The script also compares the SHA-256 of `docs/tally-allowlist.md` with the hash in the last row of the release
    log. If the file changed, measure the changed requests on ZZ BIG TEST first. Then add a line
    `re-measured on YYYY-MM-DD` to the file, dated on or after the last release.
@@ -46,20 +45,16 @@ may be built until it passes. Its self-test is `bash bridge-go/release_check_tes
 10. **Build** with `bridge-go/build.sh` only after `release-check.sh` passes. Then add the row to the release log
     below. Use the allow-list hash the script printed, plus the review note names and the date.
 11. **Publish to the review site only.** Run `FINCOM_SHIP_BRIDGE=1 app/publish-preview.sh review "<banner>"`.
-12. **Pilot on NWS144 for one full working day.** Mark NWS144 as the pilot computer for this version in FinCom (All
-    clients, then Tally), then work through the test sheet on it. For a whole working day, watch:
-    - the longest request;
-    - any self-stop;
-    - posting while reading.
-    Write the pilot start date in the release log and fill in the acceptance record
-    (`docs/bridge-<version>-acceptance.md`).
-13. **The owner approves it in FinCom before any other computer gets it.** Approval needs at least one working day on
-    the pilot. No other computer gets the new version until then. Write who approved it, and when, in the release log.
+12. **The owner decides per build which computers get it** (03-Oct-2026; the pilot rule of 2.1.5 and 2.1.6 is
+    dropped). A pilot on one computer, with the test sheet and the acceptance record (`docs/bridge-<version>-acceptance.md`),
+    is the owner's choice, not a rule. Write the decision in the release log row.
+13. **FinCom's release rows** (Try version / Approve on the Tally page) stay as a mechanism for the bridge's own
+    updater; a setup installed by hand needs neither. Write who approved it in FinCom, and when, when that is used.
 
 ## Never
 
-- **Never auto-update.** A computer installs only the version FinCom names for it, and only after it is approved
-  (the pilot computer gets it once it is marked for pilot). The signed `latest.json` is still checked as well.
+- **Never auto-update.** A computer installs by itself only the version FinCom names for it in the release rows. The
+  signed `latest.json` is still checked as well. A setup run by hand is the owner's decision.
 - Never build a published version number again.
 - Never hand out a setup that `release-check.sh` did not pass.
 
@@ -72,4 +67,4 @@ is compared with.
 | Version | Date | Allow-list hash | Review notes | Pilot start | Approved (by, date) |
 |---|---|---|---|---|---|
 | 2.1.5 | 2026-10-02 | aef526b9297155888057da9fb06cd9ef8e043d8a586999a02d39249a426d8d1e | reviews now in docs/reviews/bridge-2.1.6-{code,security}-review.md (first section, range f21b29f to be5542f), built at e6e070b; allow-list not yet measured (first-build exception). Published 03-Oct 01:30 UTC, installed on NWS144, held back the same morning (two faults on real books, see the 2.1.6 notes); never approved | 2026-10-03 (installed by hand, no pilot row) | withdrawn |
-| 2.1.6 | 2026-10-03 | 7e721e8d616a630a14ccf7b509bd029bbe37fa1f0a6e738190aa5d8c2471d5d3 | docs/reviews/bridge-2.1.6-{code,security}-review.md, range be5542f..27aa360 (rounds 4 to 11); built at 27aa360 (bridge sources), setup SHA-256 101d793d483ae972b697cd592f02a5b1670cb1f7329524bb6cef4516ceb17c68; allow-list not yet measured (exception for 2.1.6 only; no later build gets one); PostOnly ZZ TEST written by the installer (pilot) | (owner presses Try version 2.1.6 on NWS144) | |
+| 2.1.6 | 2026-10-03 | 7e721e8d616a630a14ccf7b509bd029bbe37fa1f0a6e738190aa5d8c2471d5d3 | docs/reviews/bridge-2.1.6-{code,security}-review.md, range be5542f..27aa360 (rounds 4 to 11); built at 27aa360 (bridge sources), setup SHA-256 101d793d483ae972b697cd592f02a5b1670cb1f7329524bb6cef4516ceb17c68; allow-list not yet measured (exception for 2.1.6 only; no later build gets one); PostOnly ZZ TEST written by the installer (pilot). Installed on NWS144 03-Oct 20:18 IST; superseded by 2.1.7 the same night (the owner: open for every computer, no PostOnly) | 2026-10-03 (installed by hand) | superseded |
