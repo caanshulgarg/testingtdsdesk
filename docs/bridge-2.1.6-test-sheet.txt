@@ -93,7 +93,7 @@ Use ZZ TEST for every posting below, never GARG SHEKHAR & COMPANY.
        download until it is).
    If not: a screenshot of the Tally page.
 
-1. DOWNLOAD AND INSTALL OVER 2.1.3 (OR 2.1.4)
+1. DOWNLOAD AND INSTALL OVER 2.1.5 (NWS144; or over 2.1.3 on another computer)
    Do: TallyPrime open with ZZ TEST. Open the Link, then in PowerShell:
        Get-FileHash $env:USERPROFILE\Downloads\FinComBridge-Setup-2.1.6.exe
        Double-click the setup; "Windows protected your PC" > More info > Run anyway; "Just for me"; Next.
