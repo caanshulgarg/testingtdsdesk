@@ -26057,19 +26057,26 @@ const Ledgers = {
       render(); return r;
     });
   },
+  // hasConfirm: migration 39's needs_confirm / before_clean columns: null not known yet, true there, false not there
+  // (a 42703 from the first read: read again without them, as TallyProof.hasDel does)
+  hasConfirm: null,
   async readCloud(cid, bk){
     const q = sel => "tally_ledgers?select=" + sel + "&merged_into=is.null&book_id=eq." + encodeURIComponent(bk.book) + "&order=name.asc";
     let rows = null, last = null;
-    // gstin and pan from migration-27 on; chain and primary_group from migration-6 on
-    for (const sel of ["name,parent,chain,gstin,pan", "name,parent,chain", "name,parent"]){
-      try { rows = await TCloud.restAll(q(sel)); break; } catch (e){ last = e; }
+    // needs_confirm and before_clean from migration-39 on; gstin and pan from migration-27 on; chain and primary_group from migration-6 on
+    const sels = (this.hasConfirm === false ? [] : ["name,parent,chain,gstin,pan,needs_confirm,before_clean"]).concat(["name,parent,chain,gstin,pan", "name,parent,chain", "name,parent"]);
+    for (const sel of sels){
+      try { rows = await TCloud.restAll(q(sel)); if (/needs_confirm/.test(sel)) this.hasConfirm = true; break; }
+      catch (e){ last = e; if (/needs_confirm/.test(sel) && /needs_confirm|before_clean|42703/i.test(String((e && (e.message || e.code)) || e))) this.hasConfirm = false; }
     }
     if (!rows) throw last || {message: "The cloud copy did not answer."};
     const by = new Map();
     [].concat(rows || []).forEach(r => {
       const n = ledNm(r.name);
       if (!n || by.has(n)) return;
-      by.set(n, {name: n, group: ledNm(r.parent || ""), chain: Array.isArray(r.chain) ? r.chain.map(ledNm) : undefined, gstin: String(r.gstin || "").toUpperCase(), pan: String(r.pan || "").toUpperCase()});
+      const l = {name: n, group: ledNm(r.parent || ""), chain: Array.isArray(r.chain) ? r.chain.map(ledNm) : undefined, gstin: String(r.gstin || "").toUpperCase(), pan: String(r.pan || "").toUpperCase()};
+      const rn = this.renameOf(r); if (rn) l.renamed = rn;
+      by.set(n, l);
     });
     let parents = {};
     try { (await TCloud.restAll("tally_groups?select=name,parent&book_id=eq." + encodeURIComponent(bk.book) + "&order=name.asc") || []).forEach(g => { if (g && g.name) parents[ledNm(g.name)] = ledNm(g.parent || ""); }); } catch (e){ parents = {}; }
@@ -26143,6 +26150,47 @@ const Ledgers = {
   },
   // "1,110 ledgers from Tally · 02-Oct 10:56"
   when(at){ if (!at) return ""; const d = new Date(at); return isNaN(d) ? "" : String(d.getDate()).padStart(2, "0") + "-" + MONTHS3[d.getMonth()] + " " + fmtTime(d); },
+
+  // ---------- a rename in Tally that carried the ledger's saved choices (migration 39) ----------
+  // tally_ledgers.needs_confirm is true until an owner confirms; the rename's entry (before_clean.renamed[], confirm: true)
+  // says from which name, when, and what was carried ({items, flow, values, clash}). Shown once per rename: a row
+  // without the flag (confirmed, or a cloud without the column) shows nothing.
+  renameOf(r){
+    if (!r || !(r.needs_confirm === true || r.needs_confirm === "true")) return null;
+    const list = r.before_clean && Array.isArray(r.before_clean.renamed) ? r.before_clean.renamed : [];
+    const e = list.filter(x => x && (x.confirm === true || x.confirm === "true")).pop() || list[list.length - 1] || {};
+    const c = e.carried && typeof e.carried === "object" ? e.carried : {};
+    return {from: ledNm(e.from || e.mergedFrom || ""), at: e.at || "", carried: c, clash: Array.isArray(c.clash) ? c.clash.map(String) : [], merged: !!e.mergedFrom};
+  },
+  renamed(cid){ return this.list(cid || this.cid()).filter(l => l && l.renamed); },
+  renamedOf(cid, name){ const k = String(name || "").toLowerCase(); return this.list(cid || this.cid()).find(l => l && l.renamed && l.name.toLowerCase() === k) || null; },
+  // "Renamed in Tally from X on 02-Oct-2026: its saved choices were carried; confirm" (and the clash, when both names had one)
+  CLASH_KEY: {map: "map", ledInfo: "ledger-info", gstins: "GSTIN", pans: "PAN"},
+  renameLine(rn){
+    if (!rn) return "";
+    const day = rn.at ? (typeof fmtDate === "function" ? fmtDate(String(rn.at).slice(0, 10)) : String(rn.at).slice(0, 10)) : "";
+    let s = (rn.merged ? "Merged in Tally with " : "Renamed in Tally from ") + (rn.from || "another name") + (day ? " on " + day : "") + ": its saved choices were carried; confirm";
+    if (rn.clash.length) s += " (the new name already had a " + rn.clash.map(k => this.CLASH_KEY[k] || k).join(" and ") + " choice; the new name's stands)";
+    return s;
+  },
+  // only an owner of the firm may confirm (the RPC refuses anyone else)
+  canConfirmRename(){ return !!(S.account && (S.account.superadmin === true || ((S.account.me || {}).role === "owner"))); },
+  async confirmRename(cid, name){
+    cid = cid || this.cid();
+    const bk = typeof TCloud === "object" && TCloud.on() && TCloud.has(cid) ? TCloud.book(cid) : null;
+    if (!bk || !bk.book){ toast("This client's ledgers are not in FinCom's cloud."); return null; }
+    const key = cid + "|" + name;
+    if (this.confirming && this.confirming[key]) return null;
+    (this.confirming = this.confirming || {})[key] = true; render();
+    try {
+      const r = await TCloud.rpc("tally_ledger_rename_confirm", {p_book: bk.book, p_name: name});
+      toast(name + ": the rename is confirmed.");
+      // the list read again: the flag is cleared in the cloud, so the line goes
+      await this.load(cid, {force: true});
+      return r;
+    } catch (e){ toast("Could not confirm: " + ((e && e.message) || String(e))); return null; }
+    finally { delete this.confirming[key]; render(); }
+  },
 
   // a ledger's GSTIN and PAN: as Tally has them now (the cloud's ledger list from migration 28, or a bridge read), and
   // as the books copy has them (ledger masters read with the books: ledInfo, gstins, pans; staging client_book_items)
