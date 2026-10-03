@@ -68,7 +68,11 @@
 //    (job, id, lastVchId), unconfirmed (the posting held, done + checking); needsReview without accepted: the id released
 //    'needs review: ' + message. The beat's answer carries settings:{postOnly, postBatchBills, postBatchBank, at} (the
 //    owner's per-computer posting settings, tally_device_post_settings; null fields without 43) and the beat may carry
-//    postOnly, postBatchBills, postBatchBank, settingsAt (the values applied; kept in info.beat and the bridge's entry)
+//    postOnly, postBatchBills, postBatchBank, settingsAt (the values applied; kept in info.beat and the bridge's entry).
+//    The code review of 2.1.8 (docs/reviews/bridge-2.1.8-code-review.md): item states posted / needs_review kept; lineError
+//    an array (at most 5 texts of 200); an entry of a batch (batchN > 1) is stamped with vchId alone, never the request's
+//    LASTVCHID; an alreadySent refusal (this computer sent it before) is an acceptance kept locked, never released nor
+//    rewritten as being checked; a 'failed' update carrying an entry sent with no answer from Tally is stored done
 //   {kind:"make_main", bridge}                        -> this bridge (FinCom Bridge 2.x, its menu) is the main one: only it posts
 //   every call of FinCom Bridge 2.x carries bridge:{id, computer, user, mode, runMode, version} (bridgeOf); the beat's
 //   answer says makeMain (made the main one on FinCom's Tally page) or notMain (another bridge posts on this computer)
@@ -1137,7 +1141,9 @@ Deno.serve(async (req) => {
         const s = (v: unknown, n: number) => typeof v === "string" ? v.slice(0, n) : "";
         const int = (v: unknown, max: number) => Math.max(0, Math.min(max, Math.floor(Number(v)) || 0));
         const secs = (v: unknown) => Math.max(0, Math.min(86400 * 30, Math.round((Number(v) || 0) * 1000) / 1000));
-        const REPLY_KEYS = ["byReply", "vchId", "batchEnd", "batchN", "needsReview", "exceptions", "ignored", "errors", "lineError", "company", "sentAt", "secondsReq"];
+        const REPLY_KEYS = ["byReply", "vchId", "batchEnd", "batchN", "needsReview", "exceptions", "ignored", "errors", "lineError", "company", "sentAt", "secondsReq", "alreadySent"];
+        // the review of 2.1.8 (finding 8): the bridge's lineError is an array of Tally's LINEERROR texts: at most 5, each cut to 200; a lone text is one
+        const lineErrs = (v: unknown) => (Array.isArray(v) ? v : typeof v === "string" ? [v] : []).filter((x) => typeof x === "string" && x).slice(0, 5).map((x) => String(x).slice(0, 200));
         const results = (Array.isArray(body.results) ? body.results : []).slice(0, 5000).map((r: any) => ({ id: s(r?.id, 200), ok: !!r?.ok, verified: r?.verified === true ? true : r?.verified === false ? false : null,
           message: s(r?.message, 1000), vchNumber: s(r?.vchNumber, 60), vchType: s(r?.vchType, 100), guid: s(r?.guid, 100), masterId: s(r?.masterId, 30), vchDate: s(r?.vchDate, 8),
           optional: !!r?.optional, alreadyThere: !!r?.alreadyThere, kind: s(r?.kind, 10), state: s(r?.state, 12), reason: s(r?.reason, 500),
@@ -1161,12 +1167,15 @@ Deno.serve(async (req) => {
           // needsReview (Tally created something with exceptions, or nothing), the reply's counts, the line in error, the
           // company Tally answered for, when it was sent and how long the request took. Kept only when the bridge sends them
           ...(REPLY_KEYS.some((k) => r && typeof r === "object" && k in r) ? { byReply: !!r?.byReply, vchId: s(r?.vchId, 30), batchEnd: s(r?.batchEnd, 30), batchN: int(r?.batchN, 500), needsReview: !!r?.needsReview,
-            exceptions: int(r?.exceptions, 1e6), ignored: int(r?.ignored, 1e6), errors: int(r?.errors, 1e6), lineError: s(r?.lineError, 300), company: s(r?.company, 200), sentAt: s(r?.sentAt, 40), secondsReq: secs(r?.secondsReq) } : {}) }));
+            exceptions: int(r?.exceptions, 1e6), ignored: int(r?.ignored, 1e6), errors: int(r?.errors, 1e6), lineError: lineErrs(r?.lineError), company: s(r?.company, 200), sentAt: s(r?.sentAt, 40), secondsReq: secs(r?.secondsReq),
+            // the review of 2.1.8 (finding 5): this computer sent the entry before (its own record): a refusal that is an acceptance, kept locked
+            alreadySent: !!r?.alreadySent } : {}) }));
         // 2.1.8: the bridge's request timings of the posting, for tally_post_jobs.timing (migration 43; dropped on an older cloud)
         const reqs = Array.isArray(body.reqs) ? body.reqs.slice(0, 1000).map((x: any) => ({ n: int(x?.n, 500), seconds: secs(x?.seconds), created: int(x?.created, 1e6), altered: int(x?.altered, 1e6), exceptions: int(x?.exceptions, 1e6), ignored: int(x?.ignored, 1e6), lastVchId: s(x?.lastVchId, 30) })) : null;
         const timing = reqs || body.secondsTotal !== undefined ? { reqs: reqs || [], secondsTotal: secs(body.secondsTotal) } : null;
         // 02-Oct-2026: each entry's state as the bridge sees it (waiting / sending / sent / in_tally / failed, with why)
-        const STATES = ["waiting", "sending", "sent", "in_tally", "failed", "unknown", "notfound"];   // notfound (migration 37): checked and not in Tally
+        // notfound (migration 37): checked and not in Tally; posted / needs_review (bridge 2.1.8, by Tally's reply; the review's finding 3)
+        const STATES = ["waiting", "sending", "sent", "in_tally", "failed", "unknown", "notfound", "posted", "needs_review"];
         const items = Array.isArray(body.items) ? body.items.slice(0, 5000).map((x: any) => ({ id: s(x?.id, 200), kind: s(x?.kind, 10),
           state: STATES.includes(x?.state) ? x.state : "waiting", reason: s(x?.reason, 500),
           // bridge 2.1.4: a failed item that was not posted because the same bill is in Tally (with its voucher), or
@@ -1208,10 +1217,17 @@ Deno.serve(async (req) => {
         const acceptedMsg = (m: string) => (/\b(CREATED|ALTERED)\b/i.test(m) && (/\b(LASTVCHID|VCHID|MASTERID|voucher(?: no\.?| number| id)?)\D{0,6}[1-9]\d*/i.test(m) || /\b(CREATED|ALTERED)\b\D{0,4}[1-9]\d*/i.test(m) || /cannot be found/i.test(m)))
           || /replied '(created|altered)'/i.test(m);
         // 2.1.8: a needsReview result WITHOUT accepted (Tally created nothing) is never an acceptance, whatever its counts or words
-        const acceptedRes = (r: any) => !(r.refused === true && r.postOnly === true) && !(r.needsReview === true && r.accepted !== true)
-          && !!(r.ok || r.accepted || r.held || r.created > 0 || r.altered > 0 || r.lastVchId || r.vchNumber || r.masterId || r.guid || acceptedMsg(r.message) || acceptedMsg(r.reason));
+        // (finding 5) an alreadySent refusal (this computer sent the entry before, on its own record) is an acceptance: locked, never released
+        const acceptedRes = (r: any) => r.alreadySent === true || (!(r.refused === true && r.postOnly === true) && !(r.needsReview === true && r.accepted !== true)
+          && !!(r.ok || r.accepted || r.held || r.created > 0 || r.altered > 0 || r.lastVchId || r.vchNumber || r.masterId || r.guid || acceptedMsg(r.message) || acceptedMsg(r.reason)));
         const accepted = new Set<string>(results.filter((r: any) => r.id && acceptedRes(r)).map((r: any) => fid(r.id)));
-        const vchOf = (r: any) => String(r.vchId || r.lastVchId || r.vchNumber || r.masterId || ((String(r.message || "") + " " + String(r.reason || "")).match(/\b(?:LASTVCHID|VCHID|MASTERID|voucher(?: no\.?| number)?)\D{0,6}([1-9]\d*)/i) || [])[1] || "");
+        // the voucher id to stamp: the exact one (vchId); lastVchId only when the result is not an entry of a batch (finding 4: the
+        // bridge puts the request's LASTVCHID on every entry of a batch, and a batch end is never an entry's voucher id); an
+        // alreadySent refusal gives vchId alone, and only when its request held one voucher (never an inferred id)
+        const batchN = (r: any) => Math.floor(Number(r && r.batchN) || 0);
+        const vchOf = (r: any) => r.alreadySent === true ? (batchN(r) === 1 ? String(r.vchId || "") : "")
+          : batchN(r) > 1 ? String(r.vchId || "")     // an entry of a batch: its words name the request's LASTVCHID, not its own id
+          : String(r.vchId || r.lastVchId || r.vchNumber || r.masterId || ((String(r.message || "") + " " + String(r.reason || "")).match(/\b(?:LASTVCHID|VCHID|MASTERID|voucher(?: no\.?| number)?)\D{0,6}([1-9]\d*)/i) || [])[1] || "");
         if (items) for (const x of items as any[]) if (x.id && !x.postOnly && (x.state === "failed" || x.state === "notfound") && acceptedMsg(x.reason)) accepted.add(fid(x.id));
         // the accepted entries not confirmed: the ones that hold the posting
         const itemOf = (a: string) => ((items || []) as any[]).find((x) => fid(x.id) === a);
@@ -1219,7 +1235,8 @@ Deno.serve(async (req) => {
         for (const a of accepted) {
           const r0 = (results as any[]).find((r) => fid(r.id) === a), x0 = itemOf(a);
           // 2.1.8: an entry posted by Tally's reply (byReply + ok) is taken: it never holds the posting open (tally_post_result_taken, migration 43)
-          const confirmed = (r0 && r0.verified === true) || (r0 && r0.byReply === true && r0.ok === true) || ["in_tally", "sent"].includes(String((r0 && r0.state) || "")) || ["in_tally", "sent"].includes(String((x0 && x0.state) || ""));
+          // (finding 5) an alreadySent refusal holds nothing open and is never rewritten as being checked: it is kept as it came
+          const confirmed = (r0 && r0.verified === true) || (r0 && r0.byReply === true && r0.ok === true) || (r0 && r0.alreadySent === true) || ["in_tally", "sent"].includes(String((r0 && r0.state) || "")) || ["in_tally", "sent"].includes(String((x0 && x0.state) || ""));
           if (!confirmed) unconfirmed.add(a);
         }
         let heldOpen = false;
@@ -1247,7 +1264,11 @@ Deno.serve(async (req) => {
         };
         const mergedResults = merge(results as any[], ownerOf(cur.results)), mergedItems = items ? merge(items as any[], ownerOf(cur.items)) : null;
         let stale = false;
-        let status = heldOpen ? "done" : st;
+        // the review of 2.1.8 (finding 2, the cloud half): a 'failed' update that carries an entry sent with no answer from Tally
+        // (outcomeUnknown, or sent / state sent, not ok) is stored done: the posting never goes to 'failed' while an entry may be
+        // in Tally (tally_post_ids_sync would free its id, and Post again could double it). The bridge sends done too
+        const noAnswer = st === "failed" && (results as any[]).some((r) => !r.ok && (r.outcomeUnknown === true || r.sent === true || r.state === "sent") && !accepted.has(fid(r.id)));
+        let status = heldOpen || noAnswer ? "done" : st;
         // done or failed never goes back to running or taken (a late update of the bridge while the posting is being checked)
         let checking = heldOpen || !!body.checking;
         // (R2) a posting held for checking (done + checking) keeps that while the bridge is still sending running updates
@@ -1283,7 +1304,7 @@ Deno.serve(async (req) => {
             ({ data: accData, error: accErr } = await db.rpc("tally_post_id_accept_reply", { p_job: id, p_id: a, p_vch: r0.vchId || null, p_batch_end: r0.batchEnd || null, p_batch_n: r0.batchN || null }));
             if (accErr && /tally_post_id_accept_reply|could not find|does not exist|schema cache/i.test(String(accErr.message || ""))) fnName = "tally_post_id_accept";
           }
-          if (fnName === "tally_post_id_accept") ({ data: accData, error: accErr } = await db.rpc("tally_post_id_accept", { p_job: id, p_id: a, p_vch: vchOf(r0) || vchOf(x0) }));
+          if (fnName === "tally_post_id_accept") ({ data: accData, error: accErr } = await db.rpc("tally_post_id_accept", { p_job: id, p_id: a, p_vch: r0.alreadySent === true ? vchOf(r0) : (vchOf(r0) || vchOf(x0)) }));
           if (accErr && !/tally_post_id_accept|schema cache|does not exist/i.test(accErr.message)) console.error(fnName, accErr.message);
           else if (!accErr && accData && typeof accData === "object" && (accData as any).stamped === 0) console.warn(fnName + ": stamped 0 for " + a + " (" + s(r0.id || x0.id, 60) + ") in posting " + id + ": no id of the posting matches");
         }

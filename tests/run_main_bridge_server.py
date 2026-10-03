@@ -287,8 +287,8 @@ try:
     ok(c == 200 and rs["b1"].get("byReply") is True and rs["b1"].get("vchId") == "26500" and rs["b1"].get("batchEnd") == "26500" and rs["b1"].get("batchN") == 1 and rs["b1"].get("created") == 1 and rs["b1"].get("lastVchId") == "26500"
        and rs["b1"].get("company") == "ZZ CO" and rs["b1"].get("sentAt") == "2026-10-03T09:00:01Z" and rs["b1"].get("secondsReq") == 1.25 and rs["b1"].get("exceptions") == 0 and rs["b1"].get("ignored") == 0 and rs["b1"].get("errors") == 0,
        "15. the reply fields of a result are stored: byReply, vchId, batchEnd, batchN, created, lastVchId, company, sentAt, secondsReq, exceptions, ignored, errors (%s)" % {k: rs["b1"].get(k) for k in ("byReply", "vchId", "batchEnd", "batchN", "secondsReq")})
-    ok(rs["b3"].get("needsReview") is True and rs["b3"].get("accepted") is True and rs["b3"].get("lineError") == "Ledger 'Freight' does not exist" and rs["b4"].get("needsReview") is True and rs["b4"].get("accepted") is False and len(rs["b4"].get("lineError", "")) <= 300,
-       "15. needsReview, accepted and lineError stored (lineError cut to 300) (%s)" % {k: rs["b3"].get(k) for k in ("needsReview", "accepted", "lineError")})
+    ok(rs["b3"].get("needsReview") is True and rs["b3"].get("accepted") is True and rs["b3"].get("lineError") == ["Ledger 'Freight' does not exist"] and rs["b4"].get("needsReview") is True and rs["b4"].get("accepted") is False and rs["b4"].get("lineError") == [("Voucher number duplicate" + "x" * 400)[:200]],
+       "15. needsReview, accepted and lineError stored (lineError an array of texts, each cut to 200: the review's finding 8) (%s)" % {k: rs["b3"].get(k) for k in ("needsReview", "accepted", "lineError")})
     ok(rs["b2"].get("vchId") == "" and rs["b2"].get("batchN") == 3 and rs["b2"].get("batchEnd") == "26503", "15. a result of a batch of 3: no vchId of its own, batchEnd and batchN (%s)" % {k: rs["b2"].get(k) for k in ("vchId", "batchEnd", "batchN")})
     tm = job.get("timing") or {}
     ok(tm.get("secondsTotal") == 3.75 and tm.get("reqs") == [{"n": 1, "seconds": 1.25, "created": 1, "altered": 0, "exceptions": 0, "ignored": 0, "lastVchId": "26500"}, {"n": 3, "seconds": 2.5, "created": 3, "altered": 0, "exceptions": 0, "ignored": 0, "lastVchId": "26503"}, {"n": 0, "seconds": 0, "created": 0, "altered": 0, "exceptions": 0, "ignored": 0, "lastVchId": ""}],
@@ -322,6 +322,64 @@ try:
     ok(c == 200 and job["status"] == "done" and job["message"] == "Posted 1 of 1" and "timing" not in job and [strip(a) for a in acc15] == [{"p_job": "p-1", "p_id": "b1", "p_vch": "26500"}] and rep15 == [],
        "15. without migration 43: the update lands without timing, and the byReply ok id is stamped with tally_post_id_accept(job, id, vchId) instead (%s, %s)" % (job.get("message"), acc15))
     NOREPLY["on"] = False; F.rpc = real7; job["results"] = []; job["items"] = []
+    # the code review of 2.1.8 (docs/reviews/bridge-2.1.8-code-review.md, findings 3, 4, 5, 8 and 2's cloud half)
+    F.rpc = rpc15; rep15.clear(); acc15.clear(); rel15.clear()
+    # 3. the 2.1.8 bridge's item states posted and needs_review are kept (not read as waiting: the settle would leave the job running)
+    job["status"] = "running"; job["checking"] = False
+    c, r = call({"kind": "posts_update", "version": "2.1.8", "bridge": dict(main, version="2.1.8"), "id": "p-1", "status": "running", "seq": 30, "results": [], "items": [{"id": "s1", "state": "posted"}, {"id": "s2", "state": "needs_review", "reason": "1 exception"}, {"id": "s3", "state": "bogus"}]})
+    it = {x["id"]: x for x in job.get("items") or []}
+    ok(c == 200 and it["s1"]["state"] == "posted" and it["s2"]["state"] == "needs_review" and it["s3"]["state"] == "waiting", "CR3. item states posted and needs_review kept; an unknown one is still waiting (%s)" % {k: it[k]["state"] for k in it})
+    # 4. an inferred voucher id is never stamped: lastVchId on an entry of a batch (batchN > 1) is the request's LASTVCHID, not the entry's
+    job["status"] = "running"; job["checking"] = False; acc15.clear(); rep15.clear()
+    c, r = call({"kind": "posts_update", "version": "2.1.8", "bridge": dict(main, version="2.1.8"), "id": "p-1", "status": "failed", "seq": 31,
+                 "results": [{"id": "n1", "ok": False, "needsReview": True, "accepted": True, "lastVchId": "120", "batchEnd": "120", "batchN": 3, "created": 2, "exceptions": 1, "state": "unknown", "message": "CREATED 2 LASTVCHID 120 with 1 exception"}], "items": [{"id": "n1", "state": "needs_review"}]})
+    ok(c == 200 and [strip(a) for a in acc15] == [{"p_job": "p-1", "p_id": "n1", "p_vch": ""}], "CR4. needsReview + accepted in a batch of 3 (LASTVCHID 120, no vchId): stamped with no voucher id, never the batch end (%s)" % acc15)
+    job["status"] = "running"; job["checking"] = False; acc15.clear()
+    c, r = call({"kind": "posts_update", "version": "2.1.8", "bridge": dict(main, version="2.1.8"), "id": "p-1", "status": "failed", "seq": 32,
+                 "results": [{"id": "n2", "ok": False, "needsReview": True, "accepted": True, "lastVchId": "121", "vchId": "121", "batchN": 1, "created": 1, "exceptions": 1, "state": "unknown"}], "items": [{"id": "n2", "state": "needs_review"}]})
+    ok([strip(a) for a in acc15] == [{"p_job": "p-1", "p_id": "n2", "p_vch": "121"}], "CR4. the same with batchN 1 and vchId: the exact id stamped (%s)" % acc15)
+    NOREPLY["on"] = True; job["status"] = "running"; job["checking"] = False; acc15.clear(); rep15.clear()
+    F.H.do_PATCH = patch15
+    c, r = call({"kind": "posts_update", "version": "2.1.8", "bridge": dict(main, version="2.1.8"), "id": "p-1", "status": "done", "seq": 33, "results": [{"id": "n3", "ok": True, "byReply": True, "vchId": "", "lastVchId": "130", "batchEnd": "130", "batchN": 3}], "items": [{"id": "n3", "state": "posted"}]})
+    F.H.do_PATCH = _patch15; NOREPLY["on"] = False
+    ok(c == 200 and [strip(a) for a in acc15] == [{"p_job": "p-1", "p_id": "n3", "p_vch": ""}] and rep15 == [], "CR4. a byReply entry of a batch on a cloud without 43: the plain stamp carries no voucher id either (%s)" % acc15)
+    # 5. an alreadySent refusal (this computer sent the entry before): accepted and kept locked, never released, never rewritten "being checked", the posting not held open
+    job["status"] = "running"; job["checking"] = False; acc15.clear(); rep15.clear(); rel15.clear()
+    AS = "already sent from this computer on 03-Oct-2026 10:02 (request of 3, LASTVCHID 26600); not sent again"
+    c, r = call({"kind": "posts_update", "version": "2.1.8", "bridge": dict(main, version="2.1.8"), "id": "p-1", "status": "done", "seq": 34, "message": "Posted 0 of 2; 1 sent before",
+                 "results": [{"id": "a1", "ok": False, "alreadySent": True, "refused": True, "lastVchId": "26600", "batchEnd": "26600", "batchN": 3, "state": "failed", "reason": AS, "message": AS},
+                             {"id": "a2", "ok": False, "alreadySent": True, "refused": True, "vchId": "26601", "lastVchId": "26601", "batchN": 1, "state": "failed", "reason": AS}],
+                 "items": [{"id": "a1", "state": "failed", "reason": AS}, {"id": "a2", "state": "failed", "reason": AS}]})
+    rs = {x["id"]: x for x in job.get("results") or []}; it = {x["id"]: x for x in job.get("items") or []}
+    ok(c == 200 and rs["a1"].get("alreadySent") is True and rs["a1"].get("refused") is True and rs["a1"].get("state") == "failed" and "being checked" not in rs["a1"].get("reason", "") and it["a1"]["state"] == "failed" and it["a1"]["reason"] == AS,
+       "CR5. an alreadySent refusal is stored as it came (alreadySent, refused, failed), never rewritten as being checked (%s / %s)" % (rs["a1"].get("state"), it["a1"]["reason"][:40]))
+    ok(sorted((a["p_id"], a["p_vch"]) for a in acc15) == [("a1", ""), ("a2", "26601")] and rep15 == [] and rel15 == [], "CR5. kept locked: tally_post_id_accept with the exact id only when batchN is 1, never a batch end; never released; not the reply stamp (%s %s %s)" % (acc15, rep15, rel15))
+    ok(job["status"] == "done" and job.get("checking") is False and job["message"] == "Posted 0 of 2; 1 sent before", "CR5. the posting is not held open for it (%s, checking %s)" % (job["status"], job.get("checking")))
+    job["status"] = "running"; job["checking"] = False; acc15.clear(); rel15.clear()
+    c, r = call({"kind": "posts_update", "version": "2.1.8", "bridge": dict(main, version="2.1.8"), "id": "p-1", "status": "failed", "seq": 35, "results": [{"id": "a3", "ok": False, "alreadySent": True, "refused": True, "batchN": 3, "state": "failed", "reason": AS}], "items": [{"id": "a3", "state": "failed", "reason": AS}]})
+    ok(c == 200 and [strip(a) for a in acc15] == [{"p_job": "p-1", "p_id": "a3", "p_vch": ""}] and rel15 == [] and job["items"][0]["state"] == "failed", "CR5. without any voucher id (the first send got no answer): still locked, not released (%s %s)" % (acc15, rel15))
+    # 8. lineError arrives as an array of texts: kept as an array, at most 5 texts of at most 200 characters; a lone text becomes one
+    job["status"] = "running"; job["checking"] = False; rel15.clear()
+    c, r = call({"kind": "posts_update", "version": "2.1.8", "bridge": dict(main, version="2.1.8"), "id": "p-1", "status": "failed", "seq": 36,
+                 "results": [{"id": "l1", "ok": False, "needsReview": True, "created": 0, "lineError": ["Ledger 'Freight' does not exist", "x" * 300, 7, None, "e4", "e5", "e6", "e7"], "message": "nothing created"}, {"id": "l2", "ok": False, "needsReview": True, "created": 0, "lineError": "one text"}, {"id": "l3", "ok": False, "needsReview": True, "created": 0, "lineError": 5}],
+                 "items": [{"id": "l1", "state": "needs_review"}, {"id": "l2", "state": "needs_review"}, {"id": "l3", "state": "needs_review"}]})
+    rs = {x["id"]: x for x in job.get("results") or []}
+    ok(c == 200 and rs["l1"].get("lineError") == ["Ledger 'Freight' does not exist", "x" * 200, "e4", "e5", "e6"] and rs["l2"].get("lineError") == ["one text"] and rs["l3"].get("lineError") == [],
+       "CR8. lineError: an array cleaned to at most 5 texts of 200 (strings only), a lone text wrapped, anything else [] (%s)" % json.dumps(rs["l1"].get("lineError"))[:80])
+    ok(sorted(a["p_id"] for a in rel15) == ["l1", "l2", "l3"], "CR8. the needs-review entries without accepted are released as before (%s)" % [a["p_id"] for a in rel15])
+    # 2 (cloud half): a 'failed' update that carries an entry sent with no answer from Tally (outcomeUnknown, or state sent)
+    # is stored done (checking false): the posting never goes to 'failed' while an entry may be in Tally (the sync would free its id)
+    job["status"] = "running"; job["checking"] = False; acc15.clear(); rel15.clear()
+    c, r = call({"kind": "posts_update", "version": "2.1.8", "bridge": dict(main, version="2.1.8"), "id": "p-1", "status": "failed", "seq": 37, "message": "Posted 0 of 2; 1 need review; 1 sent with no answer from Tally",
+                 "results": [{"id": "uf1", "ok": False, "outcomeUnknown": True, "sent": True, "state": "unknown", "batchN": 1, "message": "sent, no answer from Tally in 20 s"}, {"id": "uf2", "ok": False, "needsReview": True, "created": 0, "message": "refused"}],
+                 "items": [{"id": "uf1", "state": "unknown", "reason": "no answer"}, {"id": "uf2", "state": "needs_review"}]})
+    it = {x["id"]: x for x in job.get("items") or []}
+    ok(c == 200 and job["status"] == "done" and job.get("checking") is False and job["message"].startswith("Posted 0 of 2") and it["uf1"]["state"] == "unknown" and [a["p_id"] for a in rel15] == ["uf2"] and acc15 == [],
+       "CR2. failed + a no-answer entry: stored done (not failed), checking false, the message kept; the no-answer id neither stamped nor released, the refused one released (%s, %s)" % (job["status"], rel15))
+    job["status"] = "running"; job["checking"] = False
+    c, r = call({"kind": "posts_update", "version": "2.1.8", "bridge": dict(main, version="2.1.8"), "id": "p-1", "status": "failed", "seq": 38, "message": "1 refused", "results": [{"id": "uf3", "ok": False, "needsReview": True, "created": 0}], "items": [{"id": "uf3", "state": "needs_review"}]})
+    ok(c == 200 and job["status"] == "failed", "CR2. a failed update without a no-answer entry is still stored failed (%s)" % job["status"])
+    F.rpc = real7; job["results"] = []; job["items"] = []
     # F2 (a): posts_take hands the bridge the ids an owner released for the posting, so it sends them once and does not
     # mark them accepted from its memory
     F.T["tally_post_jobs"].append({"id": "p-2", "firm_id": FIRM, "device_id": "d-1", "company": "ZZ CO", "status": "waiting", "payload": {"vouchers": [{"id": "sid-3"}]}, "created_at": "2026-10-03T10:00:00Z"})
