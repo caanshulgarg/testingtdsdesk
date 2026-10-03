@@ -35,8 +35,13 @@ def part(path, name):
 SCHEMA33 = part(os.path.join(HERE, "run_migration33.py"), "SCHEMA")
 SCHEMA35 = part(os.path.join(HERE, "run_migration35.py"), "SCHEMA")
 # migration-35 as the owner ran it on staging (its functions with search_path 'public'); the revised file otherwise
-try: M35_ORIG = subprocess.run(["git", "-C", HERE, "show", "195c885:server/tally-cloud/migration-35-bridge-control.sql"], capture_output=True, text=True, check=True).stdout
-except Exception: M35_ORIG = open(M35).read()
+# kept as a file (tests/fixtures/migration-35-as-run-on-staging.sql, from git show 195c885) because CI's checkout is
+# shallow and cannot show that commit; git only when the file is missing, the revised file as the last resort
+M35_FIX = os.path.join(HERE, "fixtures", "migration-35-as-run-on-staging.sql")
+if os.path.exists(M35_FIX): M35_ORIG = open(M35_FIX).read()
+else:
+    try: M35_ORIG = subprocess.run(["git", "-C", HERE, "show", "195c885:server/tally-cloud/migration-35-bridge-control.sql"], capture_output=True, text=True, check=True).stdout
+    except Exception: M35_ORIG = open(M35).read()
 ok("search_path to 'public'" in M35_ORIG, "the original migration-35 (as run on staging) found in git")
 
 F, F2, U, U2 = "99999999-9999-9999-9999-999999999999", "88888888-8888-8888-8888-888888888888", "55555555-5555-5555-5555-555555555555", "44444444-4444-4444-4444-444444444444"
