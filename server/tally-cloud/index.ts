@@ -659,9 +659,13 @@ async function ingestDaysRaw(firm: string, book: string, daysIn: unknown): Promi
     // migration 39: the bridge says when it positively read the day and Tally listed no entries (empty: true): the cloud
     // then marks the day's entries deleted; without the flag an empty file is a short read (nothing marked, migration 38).
     // A cloud without 39 has no p_empty: the 7-argument call as before
-    const dayArgs = { p_book: book, p_day: iso(d.day), p_vouchers: dayVouchers(r), p_lines: dayLines(r), p_n: r.n, p_alter: r.alterMax, p_bytes: gz.length };
+    // migration 38/39's short-read guard works only against the bridge's OWN count of the day (d.n, counted in the text it
+    // kept): with the parsed count alone (r.n) the two could never differ. The parsed count is used when the bridge sends none
+    const nBridge = Number.isInteger(Number(d.n)) && Number(d.n) >= 0 && Number(d.n) <= 100000 && d.n !== null && d.n !== "" ? Number(d.n) : null;
+    if (nBridge !== null && r.n < nBridge) console.log("tally-ingest day " + d.day + ": parsed " + r.n + " of the bridge's " + nBridge + " entries (short read: the cloud marks nothing)", book);
+    const dayArgs = { p_book: book, p_day: iso(d.day), p_vouchers: dayVouchers(r), p_lines: dayLines(r), p_n: nBridge ?? r.n, p_alter: r.alterMax, p_bytes: gz.length };
     let { data: dayAns, error } = d.empty === true ? await db.rpc("tally_ingest_day", { ...dayArgs, p_empty: true }) : await db.rpc("tally_ingest_day", dayArgs);
-    if (error && d.empty === true && /p_empty|could not find|does not exist|schema cache/i.test(String(error.message || ""))) ({ data: dayAns, error } = await db.rpc("tally_ingest_day", dayArgs));
+    if (error && d.empty === true && /p_empty|tally_ingest_day.*(schema cache|does not exist)/i.test(String(error.message || ""))) ({ data: dayAns, error } = await db.rpc("tally_ingest_day", dayArgs));   // only "no such 8-argument function", never any other error
     if (error) throw new Error(error.message);
     if ((dayAns as any)?.empty) console.log("tally-ingest day empty (the bridge vouched for it): " + String((dayAns as any).marked || 0) + " marked deleted", book, d.day);
     // migration 38 (item 9): a short read (no entries, or fewer than the bridge counted) upserted what came and marked nothing; said in the log
@@ -1127,7 +1131,7 @@ Deno.serve(async (req) => {
           // bridge 2.1.4: a failed item that was not posted because the same bill is in Tally (with its voucher), or
           // because Tally could not be checked first
           ...(x?.already ? { already: true, guid: s(x?.guid, 100), vchNo: s(x?.vchNo, 60), vchDate: s(x?.vchDate, 8) } : {}), ...(x?.checkFailed ? { checkFailed: true } : {}),
-          ...(x?.outcomeUnknown ? { outcomeUnknown: true } : {}) })) : null;
+          ...(x?.outcomeUnknown ? { outcomeUnknown: true } : {}), ...(x?.postOnly ? { postOnly: true, refused: true } : {}) })) : null;
         // a posting cancelled in FinCom, or gone: the bridge is told, and stops waiting for Tally
         const id = String(body.id || "");
         let cur: any = null;
@@ -1162,10 +1166,10 @@ Deno.serve(async (req) => {
         // found in '…'": that build sent no voucher id; it is the build on NWS144)
         const acceptedMsg = (m: string) => (/\b(CREATED|ALTERED)\b/i.test(m) && (/\b(LASTVCHID|VCHID|MASTERID|voucher(?: no\.?| number| id)?)\D{0,6}[1-9]\d*/i.test(m) || /\b(CREATED|ALTERED)\b\D{0,4}[1-9]\d*/i.test(m) || /cannot be found/i.test(m)))
           || /replied '(created|altered)'/i.test(m);
-        const acceptedRes = (r: any) => !!(r.ok || r.accepted || r.held || r.created > 0 || r.altered > 0 || r.lastVchId || r.vchNumber || r.masterId || r.guid || acceptedMsg(r.message) || acceptedMsg(r.reason));
+        const acceptedRes = (r: any) => !(r.refused === true && r.postOnly === true) && !!(r.ok || r.accepted || r.held || r.created > 0 || r.altered > 0 || r.lastVchId || r.vchNumber || r.masterId || r.guid || acceptedMsg(r.message) || acceptedMsg(r.reason));
         const accepted = new Set<string>(results.filter((r: any) => r.id && acceptedRes(r)).map((r: any) => fid(r.id)));
         const vchOf = (r: any) => String(r.lastVchId || r.vchNumber || r.masterId || ((String(r.message || "") + " " + String(r.reason || "")).match(/\b(?:LASTVCHID|VCHID|MASTERID|voucher(?: no\.?| number)?)\D{0,6}([1-9]\d*)/i) || [])[1] || "");
-        if (items) for (const x of items as any[]) if (x.id && (x.state === "failed" || x.state === "notfound") && acceptedMsg(x.reason)) accepted.add(fid(x.id));
+        if (items) for (const x of items as any[]) if (x.id && !x.postOnly && (x.state === "failed" || x.state === "notfound") && acceptedMsg(x.reason)) accepted.add(fid(x.id));
         // the accepted entries not confirmed: the ones that hold the posting
         const itemOf = (a: string) => ((items || []) as any[]).find((x) => fid(x.id) === a);
         const unconfirmed = new Set<string>();

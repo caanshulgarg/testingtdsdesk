@@ -252,6 +252,14 @@ try:
     ok(c == 200 and job["status"] == "failed" and job.get("checking") is False and it["v11"]["state"] == "failed" and rs["v11"].get("refused") is True and rs["v11"].get("postOnly") is True and rs["v11"]["state"] == "failed",
        "11. a PostOnly refusal: stored failed as a plain refusal, refused / postOnly kept (%s)" % job["status"])
     ok(acc == [] and [strip(a) for a in rel7] == [{"p_job": "p-1", "p_id": "v11", "p_why": PO}], "11. never accepted (no CREATED / ALTERED in its words), the id released with the reason (%s, %s)" % (acc, rel7))
+    # round 11s (M5): even a company named "Created 1 Pvt Ltd" in the refusal's words is never an acceptance: refused + postOnly
+    # are read before the heuristics, on the result and on the item
+    job["status"] = "running"; acc.clear(); rel7.clear()
+    PO2 = "This computer posts only to Created 1 Pvt Ltd (PostOnly); posting to ZZ CO refused"
+    c, r = call({"kind": "posts_update", "version": "2.1.9", "bridge": main, "id": "p-1", "status": "failed", "message": "1 refused",
+                 "results": [{"id": "v12", "ok": False, "refused": True, "postOnly": True, "state": "failed", "reason": PO2, "message": PO2}], "items": [{"id": "v12", "state": "failed", "postOnly": True, "reason": PO2}]})
+    it = {x["id"]: x for x in job["items"]}
+    ok(c == 200 and job["status"] == "failed" and it["v12"]["state"] == "failed" and it["v12"].get("postOnly") is True and acc == [] and [a["p_id"] for a in rel7] == ["v12"], "M5. 'Created 1 Pvt Ltd' in a PostOnly refusal: never accepted, failed, the id released (%s)" % acc)
     F.rpc = real7
     # F2 (a): posts_take hands the bridge the ids an owner released for the posting, so it sends them once and does not
     # mark them accepted from its memory
@@ -315,6 +323,32 @@ try:
     ings = (F.ARGS.get("tally_ingest_day") or [])[n_ing:]
     ok(c == 200 and len(ings) == 2 and ings[0].get("p_empty") is True and ings[0].get("p_n") == 0 and "p_empty" not in ings[1] and ings[1].get("p_n") == 2,
        "39. an empty day with the bridge's flag: tally_ingest_day(…, p_empty: true); a day with entries: the 7-argument call (%s)" % [{k: a.get(k) for k in ("p_day", "p_n", "p_empty")} for a in ings])
+    # round 11s (M3): the short-read guard works against the bridge's OWN count of the day (n): a day the bridge counted 3 whose
+    # file parses 2 goes with p_n = 3 (the cloud then refuses: 'short read: 2 of 3', nothing marked); no count: the parsed one
+    n_ing = len(F.ARGS.get("tally_ingest_day") or []); n_log = len(log)
+    c, r = call({"kind": "days", "version": "2.1.8", "bridge": main, "company": "ZZ CO", "days": [{"day": "20260305", "n": 3, "gz": base64.b64encode(gzip.compress(xml.replace("20260302", "20260305").encode())).decode()},
+                                                                                          {"day": "20260306", "gz": base64.b64encode(gzip.compress(xml.replace("20260302", "20260306").encode())).decode()},
+                                                                                          {"day": "20260307", "n": "nonsense", "gz": base64.b64encode(gzip.compress(xml.replace("20260302", "20260307").encode())).decode()}]})
+    ings = (F.ARGS.get("tally_ingest_day") or [])[n_ing:]; time.sleep(0.3)
+    ok(c == 200 and [a.get("p_n") for a in ings] == [3, 2, 2] and len(ings[0].get("p_vouchers") or []) == 2, "M3. p_n = the bridge's count when sent (3 for a file of 2), else the parsed count (%s)" % [a.get("p_n") for a in ings])
+    ok(any("parsed 2 of the bridge's 3" in l for l in log[n_log:]), "M3. the short read is logged (parsed 2 of the bridge's 3)")
+    # 9 (code review): the fall-back to the 7-argument call only when the 8-argument function is missing, never on another error
+    real9 = F.rpc; errs9 = {"text": ""}
+    def rpc9(fn, a):
+        if fn == "tally_ingest_day" and "p_empty" in a and errs9["text"]: F.ARGS.setdefault(fn, []).append(a); raise RuntimeError(errs9["text"])
+        return real9(fn, a)
+    F.rpc = rpc9
+    errs9["text"] = "Could not find the function public.tally_ingest_day(p_alter, p_book, p_bytes, p_day, p_empty, p_lines, p_n, p_vouchers) in the schema cache"
+    n_ing = len(F.ARGS.get("tally_ingest_day") or [])
+    c, r = call({"kind": "days", "version": "2.1.8", "bridge": main, "company": "ZZ CO", "days": [{"day": "20260308", "gz": base64.b64encode(gzip.compress(b"<ENVELOPE><BODY></BODY></ENVELOPE>")).decode(), "empty": True}]})
+    ings = (F.ARGS.get("tally_ingest_day") or [])[n_ing:]
+    ok(c == 200 and len(ings) == 2 and "p_empty" in ings[0] and "p_empty" not in ings[1], "9. no 8-argument function on the cloud: the 7-argument call follows (%d calls)" % len(ings))
+    errs9["text"] = "relation \"tally_days\" does not exist"
+    n_ing = len(F.ARGS.get("tally_ingest_day") or [])
+    c, r = call({"kind": "days", "version": "2.1.8", "bridge": main, "company": "ZZ CO", "days": [{"day": "20260309", "gz": base64.b64encode(gzip.compress(b"<ENVELOPE><BODY></BODY></ENVELOPE>")).decode(), "empty": True}]})
+    ings = (F.ARGS.get("tally_ingest_day") or [])[n_ing:]
+    ok(c != 200 and len(ings) == 1, "9. any other error of the 8-argument call is not papered over by a 7-argument retry (%s)" % c)
+    F.rpc = real9
     dev["main_bridge"] = "go-aaaaaaaaaaaa"
     # install logs
     import zipfile, io

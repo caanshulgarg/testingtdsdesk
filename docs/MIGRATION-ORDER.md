@@ -17,8 +17,8 @@ revoked; `begin; ... commit;`; safe to run twice) and is shown to the owner befo
 
 ## The two valid orders (both end with the same function texts: `tests/run_migration_order.py` asserts it)
 
-- staging: 32 → 33 → 35 → 34 (first) → 36b → 37 → 36 → 38 → 39 (applied 03-Oct, **except 39's tally_ingest_day part**: both forms are still 38's) → **40** (does not touch tally_ingest_day; runs before or after that part)
-- a fresh database: 32 → 33 → 35 → 34 (reviewed) → 36 → 36b → 37 → 38 → 39 → 40
+- staging: 32 → 33 → 35 → 34 (first) → 36b → 37 → 36 → 38 → 39 (applied 03-Oct, **except 39's tally_ingest_day part**: both forms are still 38's) → 40 → **41** (its 8-argument `tally_ingest_day` supersedes 39's: on staging, where 39's day-import part was never run, running 41 is enough)
+- a fresh database: 32 → 33 → 35 → 34 (reviewed) → 36 → 36b → 37 → 38 → 39 → 40 → 41
 
 | # | File | What it adds |
 |---|---|---|
@@ -32,6 +32,7 @@ revoked; `begin; ... commit;`; safe to run twice) and is shown to the owner befo
 | 38 | `migration-38-post-followups.sql` | `tally_post_ids_sync` keeps an id live when the posting's results / items carry an acceptance for it (`tally_post_job_accepted`), stamped or not; `tally_post_marks`' two foreign keys re-made ON DELETE RESTRICT (a job with a mark cannot be deleted); `tally_ingest_day` marks nothing on a short read (no entries, or fewer than `p_n`), answering `refused: 'short read: n of p_n'` (tally-ingest logs it) |
 | 39 | `migration-39-rename-map-empty-day.sql` | (1) `tally_ledger_rename` also carries the saved choices keyed by the ledger's name in the same transaction (`tally_ledger_carry_choices`: client_book_items `map` / `ledInfo` / `gstins` / `pans` items `'.' || name` — new-name item added, old kept and marked `carriedTo`, a clash noted; `clients.data->'choices'`: `flow:<new>` added, choice values that were the old name take the new one with `prev`), flags `tally_ledgers.needs_confirm` and `before_clean.renamed[].confirm: true`; the owner clears it with `tally_ledger_rename_confirm(book, name)`; (2) `tally_ingest_day(…, p_empty boolean)` (8 args; the 7-arg one passes null): `p_n = 0` with `p_empty = true` marks the day's entries deleted (`empty: true`), without the flag a short read as 38; (3) `tally_post_ids_sync` keeps an id live when its result or item is confirmed or ok, stamped or not. Ledger names FinCom keeps elsewhere and NOT carried (the browser's BankDB rules, a bill's snapshot lines, posting payloads, snapshots): listed in the file's header |
 | 40 | `migration-40-states-carried.sql` | `client_book_items.carried jsonb`: `tally_ledger_carry_choices` carries `states` too and marks every old item in `carried` = {to, at} instead of writing into `data` (the app's value stays byte-identical); `tally_ledgers.state` (Tally's LEDSTATENAME, the bridge's 10th column, upserted by tally-ingest's ledger_list when sent); `tally_post_result_taken` with `tally_post_result_confirmed` kept as its wrapper, `tally_post_job_accepted` and `tally_post_ids_sync` re-created calling it (behaviour unchanged). Does not touch `tally_ingest_day` |
+| 41 | `migration-41-day-counts.sql` | the security review of rounds 9-11: `tally_post_result_accepted` / `tally_post_job_accepted` never read a `postOnly: true` refusal as an acceptance (a company may be named "Created 1 Pvt Ltd"); `tally_days.empty_at` / `note`: the 8-argument `tally_ingest_day` (39's text, superseded here; the 7-argument wrapper kept) records an empty read when it marks, and a day that held more than 25 entries is emptied only on the second consecutive empty read (the first is refused `'empty day with N entries before: confirm by a second empty read'`, `emptyPending: true`); `tally_ledger_carry_choices` treats a soft-deleted new-name item as a clash (never revived). tally-ingest sends the bridge's own day count as `p_n` (M3), so the short-read guard can fire |
 
 ## tally-ingest (server/tally-cloud/index.ts): which kind calls which function, with which arguments
 
@@ -80,5 +81,6 @@ readers without a zero line for an old name, the first round), `run_migration38.
 the words, marks never cascade, short reads mark nothing), `run_migration39.py` (the made-up books: a GST ledger's rename keeps
 the GST summary, the owner's confirm, the empty-day flag, ids live by a confirmation), `run_migration40.py` (string- and object-valued
 items carried with `carried` set and data untouched, the clash, the taken/confirmed names, a version row without lines filled on the next read),
+`run_migration41.py` (PostOnly never accepted, the empty-read record and its cap, a deleted item never revived),
 `run_migration36b.py` (acceptance, the owner's mark and release, the four routes a posting Tally accepted can never be sent
 again by: Retry, Post again, the requeue, a new posting for the same id), `run_migration37.py` (36b applied before 37).
