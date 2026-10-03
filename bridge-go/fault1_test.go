@@ -9,13 +9,12 @@ package main
 // back as the one byte 0x97, which is not UTF-8; Go's XML decoder stops at that byte, so the NARRATION's text (and every
 // voucher after it in the answer) was lost: the tag at the END of the narration was never seen. Rules from here:
 //   - Tally's bytes that are not UTF-8 (nor UTF-16) are read as Windows-1252, never cut
-//   - CREATED/ALTERED with a voucher id is never FAILED and never sent again: the entry is "unknown" (accepted, being
-//     checked), the job stays checking, and the entry is looked for again later, by its tag on its date AND by Tally's
-//     own voucher id (LASTVCHID = MasterID, FinComByMaster, allow-listed)
+//   - CREATED/ALTERED with a voucher id is never FAILED and never sent again. Round 15 (03-Oct-2026, the owner's
+//     decision): Tally's reply is trusted outright: the entry is POSTED by the reply (no read-back, no checking cycle,
+//     no voucher-id lookup from a posting); FinComByMaster and FinComTag stay allow-listed for Check Tally and the
+//     read test only
 
 import (
-	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -76,71 +75,47 @@ func TestNarrationWithEmDashParsed(t *testing.T) {
 	}
 }
 
-// --- a posting Tally accepted (CREATED with LASTVCHID) that the read-back cannot confirm: never failed, never sent
-// again; "unknown" (accepted, being checked); the job stays checking and confirms it later
-func TestCreatedButUnconfirmedIsNotFailed(t *testing.T) {
+// --- a posting Tally accepted (CREATED with LASTVCHID) whose tag this Tally does not keep in the narration: posted by
+// Tally's reply, at once, with Tally's voucher id; nothing is read back and no checking cycle starts (round 15: the
+// owner's decision of 03-Oct-2026 replaces the "accepted, being checked" state of round 5)
+func TestCreatedReplyIsPostedWithoutReadBack(t *testing.T) {
 	f := newStandTally(t)
 	f.ansi = true
-	f.storeNarr = f1NoTag // this Tally kept the narration without the tag
-	noMaster := true      // neither the day's list nor the voucher-id lookup shows it, until Tally is set right
-	f.behave = func(w http.ResponseWriter, r *http.Request, id, body string) bool {
-		if (id == "FinComByMaster" || id == "FinComTag") && noMaster {
-			_, _ = w.Write([]byte("<ENVELOPE><BODY><DATA><COLLECTION></COLLECTION></DATA></BODY></ENVELOPE>"))
-			return true
-		}
-		return false
-	}
-	standBridge(t, f, `,"PostRecheckMs":300`)
-	j, err := newPostJob(M{"jobId": "job-f1-unconfirmed", "company": zz, "vouchers": []any{M{"id": "emu1", "xml": f1Voucher("emu1", "")}}})
+	f.storeNarr = f1NoTag // this Tally keeps the narration without the tag: a read-back would never have found it
+	standBridge(t, f, "")
+	j, err := newPostJob(M{"jobId": "job-f1-posted", "company": zz, "vouchers": []any{M{"id": "emu1", "xml": f1Voucher("emu1", "")}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	dir, _ := jobDir(str(j["id"]))
-	var p M
-	for i := 0; i < 100; i++ {
-		p = readProgress(dir)
-		if p != nil && (str(p["status"]) == "done" || str(p["status"]) == "failed") {
-			break
-		}
-		time.Sleep(50 * time.Millisecond)
+	p := waitJob(t, str(j["id"]))
+	if str(p["status"]) != "done" || p["checking"] == true {
+		t.Fatalf("the job: %v", p)
 	}
-	if p == nil || str(p["status"]) == "failed" {
-		t.Fatalf("the job FAILED although Tally replied CREATED with a voucher id: %v", p)
-	}
+	f.mu.Lock()
+	master := f.lastMaster
+	f.mu.Unlock()
 	r := obj(arr(p["results"])[0])
 	e := obj(arr(p["items"])[0])
-	// round 5 (C7): ok false (not posted as far as FinCom knows), accepted true (never failed, never sent again)
-	if r["ok"] != false || r["outcomeUnknown"] != true || r["accepted"] != true || r["verified"] != nil || str(r["lastVchId"]) == "" {
-		t.Fatalf("the accepted entry is not 'unknown, accepted': %v", r)
+	if r["ok"] != true || r["byReply"] != true || r["verified"] != false || str(r["vchId"]) != master || str(r["lastVchId"]) != master {
+		t.Fatalf("not posted by Tally's reply: %v", r)
 	}
-	if str(e["state"]) != "unknown" || p["checking"] != true {
-		t.Fatalf("FinCom is not shown unknown + checking: item %v, checking %v", e, p["checking"])
+	if str(e["state"]) != "posted" || str(e["vchId"]) != master {
+		t.Fatalf("the item: %v", e)
 	}
-	if !strings.Contains(strings.ToLower(str(r["message"])), "not sent again") || strings.Contains(strings.ToLower(str(r["message"])), "cannot be found") {
-		t.Fatalf("the message: %q", r["message"])
+	if f.n("Import") != 1 || f.n(masterCheckID) != 0 || f.n(tagCheckID) != 0 || f.n(dupCheckID) != 0 {
+		t.Fatalf("requests: %v", f.ids())
 	}
-	if logLines("ACCEPTED BUT UNCONFIRMED") < 1 || logLines("LASTVCHID "+str(r["lastVchId"])) < 1 {
-		t.Fatal("the log does not name the accepted, unconfirmed entry with Tally's voucher id")
+	if logLines("ACCEPTED BUT UNCONFIRMED") > 0 || logLines("being checked") > 0 {
+		t.Fatal("the checking cycle of round 5 ran")
 	}
-	if f.n("Import") != 1 {
-		t.Fatalf("sent %d times", f.n("Import"))
+	if a := acceptedInfo("emu1"); a == nil || a["sent"] != true || str(a["vchId"]) != master {
+		t.Fatalf("the record: %v", a)
 	}
-	// Tally answers the voucher-id lookup from now on: the later check confirms it, nothing is sent again
-	f.mu.Lock()
-	noMaster = false
-	f.mu.Unlock()
-	p = waitJob(t, str(j["id"]))
-	r = obj(arr(p["results"])[0])
-	if r["verified"] != true || r["outcomeUnknown"] == true || str(r["masterId"]) == "" || p["checking"] == true {
-		t.Fatalf("not confirmed later: %v (checking %v)", r, p["checking"])
-	}
-	if f.n("Import") != 1 {
-		t.Fatalf("sent again while being checked (%d imports)", f.n("Import"))
-	}
+	onlyPostingRequests(t, f, 0)
 }
 
-// --- a date in the previous financial year: the read-back asks for that very date (never clamped to this FY)
-func TestConfirmPreviousFYByDate(t *testing.T) {
+// --- a date in the previous financial year goes to Tally as it is (never clamped to this FY); nothing is read back
+func TestPreviousFYDateSentAsIs(t *testing.T) {
 	f := newStandTally(t)
 	f.ansi = true
 	standBridge(t, f, "")
@@ -148,86 +123,61 @@ func TestConfirmPreviousFYByDate(t *testing.T) {
 		t.Fatalf("the test date %s is not in a previous FY", f1Date)
 	}
 	r := postOne(t, "emu2", f1Voucher("emu2", ""))
-	if r["ok"] != true || r["verified"] != true {
-		t.Fatalf("a previous-FY entry was not confirmed: %v", r)
+	if r["ok"] != true || r["byReply"] != true || str(r["vchDate"]) != f1Date {
+		t.Fatalf("a previous-FY entry: %v", r)
 	}
-	tags := f.bodiesOf("FinComTag")
-	if len(tags) == 0 {
-		t.Fatal("no FinComTag read-back")
+	imp := f.bodiesOf("Import")
+	if len(imp) != 1 || !strings.Contains(imp[0], "<DATE>"+f1Date+"</DATE>") {
+		t.Fatalf("the import does not carry the voucher's own date: %v", imp)
 	}
-	for _, b := range tags {
-		if !strings.Contains(b, "<SVFROMDATE>"+f1Date+"</SVFROMDATE><SVTODATE>"+f1Date+"</SVTODATE>") {
-			t.Fatalf("the read-back does not ask for the voucher's own date: %s", cut(b, 400))
-		}
-	}
-	for _, b := range f.bodiesOf(dupCheckID) {
-		if !strings.Contains(b, "<SVFROMDATE>"+f1Date+"</SVFROMDATE>") {
-			t.Fatalf("the duplicate check does not ask for the voucher's own date: %s", cut(b, 400))
-		}
+	if len(f.bodiesOf(tagCheckID))+len(f.bodiesOf(dupCheckID))+len(f.bodiesOf(masterCheckID)) != 0 {
+		t.Fatalf("a read went with the posting: %v", f.ids())
 	}
 }
 
-// --- a party with "&": the check's formula carries it escaped once; the entry is confirmed, and refused the second time
-func TestConfirmPartyWithAmpersand(t *testing.T) {
+// --- a party with "&": the import carries it escaped once; the entry is posted, and refused the second time on this
+// computer's record
+func TestPartyWithAmpersandPosted(t *testing.T) {
 	f := newStandTally(t)
 	f.ansi = true
 	standBridge(t, f, "")
 	r := postOne(t, "emu3", f1Voucher("emu3", "(bill no. 7)"))
-	if r["ok"] != true || r["verified"] != true {
-		t.Fatalf("not confirmed: %v", r)
+	if r["ok"] != true || r["byReply"] != true {
+		t.Fatalf("not posted: %v", r)
 	}
-	for _, b := range f.bodiesOf(dupCheckID) {
-		formula := group(`<SYSTEM TYPE="Formulae" NAME="TDSDeskDupParty">([^<]*)</SYSTEM>`, b, 1)
-		if formula == "" || !strings.Contains(formula, "GUPTA &amp; ASSOCIATES") || strings.Contains(formula, "&amp;amp;") {
-			t.Fatalf("the party formula: %q", formula)
-		}
+	imp := f.bodiesOf("Import")
+	if len(imp) != 1 || !strings.Contains(imp[0], "<PARTYLEDGERNAME>VIVEK GUPTA &amp; ASSOCIATES</PARTYLEDGERNAME>") || strings.Contains(imp[0], "&amp;amp;") {
+		t.Fatalf("the party in the import: %s", cut(imp[0], 600))
 	}
 	again := postOne(t, "emu3", f1Voucher("emu3", "(bill no. 7)"))
-	if again["ok"] == true || again["sameId"] != true || f.n("Import") != 1 {
+	if again["ok"] == true || again["alreadySent"] != true || f.n("Import") != 1 {
 		t.Fatalf("the same id again: %v (%d imports)", again, f.n("Import"))
 	}
 }
 
-// --- an accepted, unconfirmed entry is never queued again: not by the worker's list of what is left, nor by a resume
-func TestUnconfirmedNeverQueuedTwice(t *testing.T) {
+// --- an entry sent is never queued again: not by the worker's list of what is left, nor by a resume after a restart
+func TestSentNeverQueuedTwice(t *testing.T) {
 	all := []M{{"id": "a", "kind": "voucher"}, {"id": "b", "kind": "voucher"}, {"id": "c", "kind": "voucher"}}
 	left := itemsToSend(all, []M{
-		{"id": "a", "ok": true, "outcomeUnknown": true, "accepted": true, "lastVchId": "26298"}, // Tally accepted it: never again
-		{"id": "b", "ok": false, "outcomeUnknown": true},                                        // the answer was lost: looked for, then maybe sent
+		{"id": "a", "ok": true, "byReply": true, "lastVchId": "26298"}, // posted by Tally's reply: never again
+		{"id": "b", "ok": false, "outcomeUnknown": true, "sent": true}, // sent, no answer: never again
 	})
-	if len(left) != 2 || str(left[0]["id"]) != "b" || str(left[1]["id"]) != "c" {
+	if len(left) != 1 || str(left[0]["id"]) != "c" {
 		t.Fatalf("what is left to send: %v", left)
 	}
-	// the job: accepted but unconfirmed, the bridge restarts, the job is resumed: nothing is imported again
+	// the job: posted, the bridge restarts, the job is resumed: nothing is imported again
 	f := newStandTally(t)
 	f.ansi = true
 	f.storeNarr = f1NoTag
-	f.behave = func(w http.ResponseWriter, r *http.Request, id, body string) bool {
-		if id == "FinComByMaster" || id == "FinComTag" {
-			_, _ = w.Write([]byte("<ENVELOPE><BODY><DATA><COLLECTION></COLLECTION></DATA></BODY></ENVELOPE>"))
-			return true
-		}
-		return false
-	}
-	standBridge(t, f, `,"PostRecheckMs":200,"PostRecheckTries":2`)
+	standBridge(t, f, "")
 	j, err := newPostJob(M{"jobId": "job-f1-resume", "company": zz, "vouchers": []any{M{"id": "emu4", "xml": f1Voucher("emu4", "")}}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	id := str(j["id"])
 	dir, _ := jobDir(id)
-	var p M
-	for i := 0; i < 200; i++ {
-		p = readProgress(dir)
-		if p != nil && str(p["status"]) == "done" && !jobAlive(id) {
-			break
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	if p == nil || str(p["status"]) != "done" || jobAlive(id) {
-		t.Fatalf("the job did not end its checks: %v", p)
-	}
-	if obj(arr(p["results"])[0])["accepted"] != true || f.n("Import") != 1 {
+	p := waitJob(t, id)
+	if obj(arr(p["results"])[0])["byReply"] != true || f.n("Import") != 1 {
 		t.Fatalf("results %v, %d imports", p["results"], f.n("Import"))
 	}
 	// as after a restart part-way: the worker gone, the job running
@@ -239,77 +189,53 @@ func TestUnconfirmedNeverQueuedTwice(t *testing.T) {
 	if _, err := resumePostJob(id); err != nil {
 		t.Fatal(err)
 	}
-	// the resumed job ends still checking (Tally never shows the entry here): done, worker gone, nothing imported again
-	for i := 0; i < 300; i++ {
-		p = readProgress(dir)
-		if p != nil && str(p["status"]) == "done" && !jobAlive(id) && p["resumed"] == true && str(p["message"]) != "Resuming" {
-			break
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	if p == nil || str(p["status"]) != "done" || jobAlive(id) {
-		t.Fatalf("the resumed job did not end: %v", p)
-	}
-	if f.n("Import") != 1 {
-		t.Fatalf("the resume sent the accepted entry again (%d imports)", f.n("Import"))
+	p = waitJob(t, id)
+	if str(p["status"]) != "done" || f.n("Import") != 1 {
+		t.Fatalf("the resume sent the posted entry again (%d imports): %v", f.n("Import"), p["message"])
 	}
 	r := obj(arr(p["results"])[0])
-	if r["ok"] != false || r["verified"] != nil || r["accepted"] != true {
+	if r["ok"] != true || r["byReply"] != true {
 		t.Fatalf("after the resume: %v", r)
 	}
-	_ = os.Remove(filepath.Join(dir, "cancel"))
 }
 
-// --- Tally's own voucher id (LASTVCHID = MasterID) confirms an entry whose narration came back without the tag
-func TestConfirmByLastVchId(t *testing.T) {
+// --- Tally's own voucher id (LASTVCHID) is the entry's vchId only when the request held that one entry; FinComByMaster
+// stays on the allow-list for Check Tally, and no posting sends it
+func TestLastVchIdNeverInferred(t *testing.T) {
 	f := newStandTally(t)
 	f.ansi = true
 	f.storeNarr = f1NoTag
-	hideDay := false
-	f.behave = func(w http.ResponseWriter, r *http.Request, id, body string) bool {
-		if id == "FinComTag" && hideDay {
-			_, _ = w.Write([]byte("<ENVELOPE><BODY><DATA><COLLECTION></COLLECTION></DATA></BODY></ENVELOPE>"))
-			return true
-		}
-		return false
-	}
 	standBridge(t, f, "")
-	// (a) the day's list shows the entry (its narration without the tag): confirmed by Tally's voucher id among the heads
 	r := postOne(t, "emu5", f1Voucher("emu5", ""))
 	f.mu.Lock()
 	master := f.lastMaster
 	f.mu.Unlock()
-	if r["ok"] != true || r["verified"] != true || str(r["masterId"]) != master {
-		t.Fatalf("not confirmed by the voucher id %s: %v", master, r)
+	if r["ok"] != true || str(r["vchId"]) != master || toInt(r["batchN"]) != 1 {
+		t.Fatalf("one entry: %v", r)
 	}
-	if logLines("voucher emu5: confirmed by Tally's voucher id "+master) < 1 {
-		t.Fatal("the log does not say the entry was confirmed by Tally's voucher id")
+	j, err := newPostJob(M{"jobId": "job-f1-two", "company": zz, "vouchers": []any{M{"id": "emu6", "xml": f1Voucher("emu6", "(a)")}, M{"id": "emu7", "xml": f1Voucher("emu7", "(b)")}}})
+	if err != nil {
+		t.Fatal(err)
 	}
-	// (b) the day's list does not show it at all: the voucher-id lookup in its month (FinComByMaster) confirms it
-	f.mu.Lock()
-	hideDay = true
-	f.mu.Unlock()
-	r = postOne(t, "emu6", f1Voucher("emu6", "(second)"))
+	p := waitJob(t, str(j["id"]))
 	f.mu.Lock()
 	master = f.lastMaster
 	f.mu.Unlock()
-	if r["ok"] != true || r["verified"] != true || str(r["masterId"]) != master {
-		t.Fatalf("not confirmed by the voucher-id lookup %s: %v", master, r)
+	for _, x := range arr(p["results"]) {
+		r := obj(x)
+		if _, has := r["vchId"]; has {
+			t.Fatalf("a voucher id was inferred for an entry of a request of 2: %v", r)
+		}
+		if str(r["batchEnd"]) != master || toInt(r["batchN"]) != 2 || r["ok"] != true {
+			t.Fatalf("the entry: %v", r)
+		}
 	}
-	if logLines("voucher emu6: confirmed by Tally's voucher id "+master) < 1 {
-		t.Fatal("the log does not say the entry was confirmed by Tally's voucher id (looked up)")
-	}
-	// (round 6: the lookup by Tally's voucher id now runs first for every entry, so one per posting)
-	bm := f.bodiesOf("FinComByMaster")
-	if len(bm) != 2 || !strings.Contains(bm[1], "$MasterID = "+master) {
-		t.Fatalf("the voucher-id lookup: %v", bm)
-	}
-	if !strings.Contains(bm[1], "<SVFROMDATE>"+f1Date[:6]+"01</SVFROMDATE><SVTODATE>"+monthEnd(f1Date[:6])+"</SVTODATE>") {
-		t.Fatalf("the voucher-id lookup is not limited to the voucher's month: %s", cut(bm[1], 400))
+	if f.n(masterCheckID) != 0 {
+		t.Fatal("a posting looked an entry up by Tally's voucher id")
 	}
 	a, ok := tallyAllowList["FinComByMaster"]
 	if !ok || a.measureOnly {
-		t.Fatal("FinComByMaster is not on the allow-list for the bridge")
+		t.Fatal("FinComByMaster is not on the allow-list for Check Tally")
 	}
 	if f.n("Import") != 2 {
 		t.Fatalf("%d imports", f.n("Import"))

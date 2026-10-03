@@ -1,13 +1,14 @@
 package main
 
-// FinCom Bridge 2.1.4: the duplicate check at the moment of every posting, failing closed. A stand-in Tally that keeps
-// what it is sent: an import adds its vouchers, and the check (and the read-back) lists them for the date and party asked.
+// The duplicate check before a posting. Until 2.1.7 it read Tally live (TDSDeskDupCheck, FinComTag) and failed closed.
+// Round 15 (03-Oct-2026, the owner's decision): posting is never held by a read; the check is this computer's own
+// record of what it sent (sync\posted-ids.json; sentBeforeRefusal), and the cloud's tally_post_ids lock refuses a bill
+// already posted when it is queued. The Tally-request cases of 2.1.4 are gone from here; the matching rule
+// (sameVoucher) stays tested because the request stays in the program for Check Tally and the read test.
 
 import (
 	"fmt"
-	"html"
 	"io"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -17,103 +18,6 @@ import (
 	"testing"
 	"time"
 )
-
-type bookTally struct {
-	standIn
-	vouchers []string // the vouchers in Tally, as Tally would give them back
-	imports  int      // import requests received
-	checks   []string // the check requests received
-	onCheck  func(w http.ResponseWriter) bool
-}
-
-func (b *bookTally) importsN() int {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.imports
-}
-
-func (b *bookTally) add(x string) {
-	n := len(b.vouchers) + 1
-	if !strings.Contains(x, "<VOUCHERNUMBER>") {
-		x = strings.Replace(x, "</DATE>", fmt.Sprintf("</DATE><VOUCHERNUMBER>%d</VOUCHERNUMBER>", n), 1)
-	}
-	x = strings.Replace(x, "</DATE>", fmt.Sprintf("</DATE><GUID>guid-%d</GUID><MASTERID>%d</MASTERID>", n, 100+n), 1)
-	b.vouchers = append(b.vouchers, x)
-}
-
-var reTestParty = re(`\$PartyLedgerName = "([^"]*)"`)
-
-func newBookTally(t *testing.T) *bookTally {
-	b := &bookTally{}
-	b.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		raw, _ := io.ReadAll(r.Body)
-		body := string(raw)
-		id := group(`<ID>([^<]+)</ID>`, body, 1)
-		if strings.Contains(body, "Import Data") {
-			id = "Import"
-		}
-		b.mu.Lock()
-		b.reqs = append(b.reqs, id)
-		b.bodies = append(b.bodies, body)
-		slow, onCheck := b.slow, b.onCheck
-		if id == dupCheckID {
-			b.checks = append(b.checks, body)
-		}
-		b.mu.Unlock()
-		if id == dupCheckID && onCheck != nil && onCheck(w) {
-			return
-		}
-		if slow != nil {
-			if d := slow(id, body); d > 0 {
-				select {
-				case <-time.After(d):
-				case <-r.Context().Done():
-					return
-				}
-			}
-		}
-		out := "<ENVELOPE></ENVELOPE>"
-		switch id {
-		case "TDSDeskCompanies":
-			out = `<ENVELOPE><COLLECTION><COMPANY NAME="` + zz + `"><NAME>` + zz + `</NAME><STARTINGFROM>20260401</STARTINGFROM><ENDINGAT>20270331</ENDINGAT><GUID>g-1</GUID></COMPANY></COLLECTION></ENVELOPE>`
-		case "Import":
-			b.mu.Lock()
-			b.imports++
-			n := 0
-			for _, m := range re(`(?s)<VOUCHER\b.*?</VOUCHER>`).FindAllString(body, -1) {
-				b.add(m)
-				n++
-			}
-			n += strings.Count(body, "<LEDGER ")
-			b.mu.Unlock()
-			out = fmt.Sprintf("<ENVELOPE><BODY><DATA><IMPORTRESULT><CREATED>%d</CREATED><ALTERED>0</ALTERED><ERRORS>0</ERRORS><EXCEPTIONS>0</EXCEPTIONS></IMPORTRESULT></DATA></BODY></ENVELOPE>", n)
-		case dupCheckID, "TDSDeskVchHeads", tagCheckID:
-			from, to := group(`<SVFROMDATE>(\d+)</SVFROMDATE>`, body, 1), group(`<SVTODATE>(\d+)</SVTODATE>`, body, 1)
-			party := ""
-			if m := reTestParty.FindStringSubmatch(body); m != nil {
-				party = foldName(html.UnescapeString(m[1]))
-			}
-			var l strings.Builder
-			b.mu.Lock()
-			for _, v := range b.vouchers {
-				d := group(`<DATE>(\d+)</DATE>`, v, 1)
-				if d < from || d > to {
-					continue
-				}
-				if party != "" && foldName(group(`<PARTYLEDGERNAME>([^<]*)</PARTYLEDGERNAME>`, v, 1)) != party {
-					continue
-				}
-				l.WriteString(v)
-			}
-			b.mu.Unlock()
-			out = "<ENVELOPE><COLLECTION>" + l.String() + "</COLLECTION></ENVELOPE>"
-		}
-		_, _ = w.Write([]byte(out))
-	}))
-	b.port = b.srv.Listener.Addr().(*net.TCPAddr).Port
-	t.Cleanup(b.srv.Close)
-	return b
-}
 
 // a FinCom voucher: a supplier's bill (the party credited, its bill allocation named as the bill)
 func finVoucher(id, party, bill, date, amt string) string {
@@ -145,11 +49,25 @@ func postOne(t *testing.T, id, x string) M {
 	return obj(rs[0])
 }
 
+func waitJob(t *testing.T, id string) M {
+	t.Helper()
+	dir, _ := jobDir(id)
+	for i := 0; i < 300; i++ {
+		p := readProgress(dir)
+		if p != nil && (str(p["status"]) == "done" || str(p["status"]) == "failed") && p["checking"] != true && !jobAlive(id) {
+			return p
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	t.Fatalf("the job %s did not finish", id)
+	return nil
+}
+
 // (a) the same voucher posted from two browser tabs (the second with stale data), at the same moment and once more
-// after: the first posts, the others are refused "Already in Tally" with the first one's number; Tally got one import
+// after: the first posts, the others are refused on this computer's record; Tally got one import and no read
 func TestDupSecondTabRefused(t *testing.T) {
-	b := newBookTally(t)
-	bridgeFor(t, &b.standIn, "")
+	f := newStandTally(t)
+	standBridge(t, f, "")
 	x := finVoucher("e1", fgParty, fgBill, fgDate, fgAmt)
 	var wg sync.WaitGroup
 	out := make([]M, 2)
@@ -174,14 +92,13 @@ func TestDupSecondTabRefused(t *testing.T) {
 	if posted == nil || refused == nil {
 		t.Fatalf("want one posted and one refused: %v", out)
 	}
-	if b.importsN() != 1 {
-		t.Fatalf("Tally received %d imports, want 1", b.importsN())
+	if f.n("Import") != 1 {
+		t.Fatalf("Tally received %d imports, want 1", f.n("Import"))
 	}
-	if posted["verified"] != true || str(posted["vchNumber"]) != fgBill {
-		t.Fatalf("the first was not read back: %v", posted)
+	if posted["byReply"] != true || posted["verified"] != false || str(posted["vchId"]) == "" {
+		t.Fatalf("the first was not posted by Tally's reply: %v", posted)
 	}
-	want := "Already in Tally (voucher no. FA/ELEC/013, 01-07-2026)"
-	if refused["already"] != true || str(refused["message"]) != want || str(refused["vchNo"]) != fgBill || str(refused["guid"]) != "guid-1" || refused["checkFailed"] == true {
+	if refused["alreadySent"] != true || !strings.HasPrefix(str(refused["message"]), "already sent from this computer on ") || !strings.Contains(str(refused["message"]), "(Tally id "+str(posted["vchId"])+")") {
 		t.Fatalf("the second tab: %v", refused)
 	}
 	// the stale tab again, later, through a background job (Post again)
@@ -191,147 +108,43 @@ func TestDupSecondTabRefused(t *testing.T) {
 	}
 	p := waitJob(t, str(jr["id"]))
 	r := obj(arr(p["results"])[0])
-	if r["ok"] == true || r["already"] != true || str(r["message"]) != want || str(r["guid"]) != "guid-1" {
+	if r["ok"] == true || r["alreadySent"] != true || str(r["message"]) != str(refused["message"]) {
 		t.Fatalf("the job: %v", r)
 	}
-	if it := obj(arr(p["items"])[0]); it["already"] != true || str(it["vchNo"]) != fgBill || str(it["reason"]) != want {
+	if it := obj(arr(p["items"])[0]); it["alreadySent"] != true || str(it["state"]) != "failed" || str(it["reason"]) != str(refused["message"]) {
 		t.Fatalf("the job's item: %v", it)
 	}
-	if b.importsN() != 1 {
-		t.Fatalf("Tally received %d imports, want 1", b.importsN())
+	if f.n("Import") != 1 {
+		t.Fatalf("Tally received %d imports, want 1", f.n("Import"))
 	}
-	// the check was one date, one party
-	b.mu.Lock()
-	c := b.checks[0]
-	b.mu.Unlock()
-	if !strings.Contains(c, "<SVFROMDATE>20260701</SVFROMDATE><SVTODATE>20260701</SVTODATE>") || !strings.Contains(c, `$PartyLedgerName = "Fingate"`) {
-		t.Fatalf("the check was not for one date and the party: %s", c)
-	}
-	// 2.1.5: the stand-in answers FinComTag too, so the same FinCom id is found by the exact check first
-	if n := logLines("NOT POSTED, already in Tally") + logLines("NOT POSTED, its FinCom id is in Tally already"); n != 2 {
-		t.Fatalf("the log: %d lines", n)
+	onlyPostingRequests(t, f, 0)
+	if logLines("NOT SENT: already sent from this computer") != 2 {
+		t.Fatalf("the log: %d lines", logLines("NOT SENT: already sent from this computer"))
 	}
 }
 
-func waitJob(t *testing.T, id string) M {
-	t.Helper()
-	dir, _ := jobDir(id)
-	for i := 0; i < 300; i++ {
-		p := readProgress(dir)
-		if p != nil && (str(p["status"]) == "done" || str(p["status"]) == "failed") && p["checking"] != true && !jobAlive(id) {
-			return p
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-	t.Fatalf("the job %s did not finish", id)
-	return nil
-}
-
-// (b) Tally times out on the check: nothing imported, checkFailed; Tally then left alone (busy): the next posting is not
-// sent either
-func TestDupCheckTimeoutNotPosted(t *testing.T) {
-	b := newBookTally(t)
-	b.slow = func(id, body string) time.Duration {
-		if id == dupCheckID {
-			return 3 * time.Second
-		}
-		return 0
-	}
-	bridgeFor(t, &b.standIn, `,"TallyMaxSec":1`)
-	r := postOne(t, "e2", finVoucher("e2", fgParty, fgBill, fgDate, fgAmt))
-	if r["ok"] == true || r["checkFailed"] != true || str(r["message"]) != "Could not check Tally, not posted. Try again." || r["already"] == true {
-		t.Fatalf("timeout: %v", r)
-	}
-	// busy (Tally did not answer a moment ago): the next posting's check is not answered either: not posted
-	b.mu.Lock()
-	b.slow = nil
-	b.mu.Unlock()
-	r = postOne(t, "e3", finVoucher("e3", fgParty, "FA/ELEC/099", fgDate, fgAmt))
-	if r["ok"] == true || r["checkFailed"] != true {
-		t.Fatalf("busy: %v", r)
-	}
-	if b.importsN() != 0 || b.count("Import") != 0 {
-		t.Fatalf("Tally received %d imports", b.importsN())
-	}
-	if logLines("NOT POSTED, could not check Tally") != 2 {
-		t.Fatal("the log does not say so")
-	}
-	if failedLine(str(r["message"])) != "Could not check Tally, not posted. Try again." {
-		t.Fatal(failedLine(str(r["message"])))
-	}
-}
-
-// (b) a bad answer to the check (an error line, with or without the party filter): not posted
-func TestDupCheckBadAnswerNotPosted(t *testing.T) {
-	b := newBookTally(t)
-	b.onCheck = func(w http.ResponseWriter) bool {
-		_, _ = w.Write([]byte("<RESPONSE>Unknown Request, cannot be processed</RESPONSE>"))
-		return true
-	}
-	bridgeFor(t, &b.standIn, "")
-	r := postOne(t, "e4", finVoucher("e4", fgParty, fgBill, fgDate, fgAmt))
-	if r["ok"] == true || r["checkFailed"] != true || b.importsN() != 0 {
-		t.Fatalf("bad answer: %v, %d imports", r, b.importsN())
-	}
-	b.mu.Lock()
-	n := len(b.checks)
-	unfiltered := !strings.Contains(b.checks[len(b.checks)-1], "PartyLedgerName")
-	b.mu.Unlock()
-	if n != 2 || !unfiltered {
-		t.Fatalf("the check is tried once more without the party filter: %d checks", n)
-	}
-}
-
-// (c) Tally closed during the check (the connection dropped, the program gone): nothing posted, checkFailed
-func TestDupCheckTallyClosed(t *testing.T) {
-	b := newBookTally(t)
-	b.onCheck = func(w http.ResponseWriter) bool {
-		_ = b.srv.Listener.Close()
-		if hj, ok := w.(http.Hijacker); ok {
-			if c, _, err := hj.Hijack(); err == nil {
-				_ = c.Close()
-			}
-		}
-		return true
-	}
-	bridgeFor(t, &b.standIn, "")
-	r := postOne(t, "e5", finVoucher("e5", fgParty, fgBill, fgDate, fgAmt))
-	if r["ok"] == true || r["checkFailed"] != true || str(r["message"]) != dupCheckFailedMsg {
-		t.Fatalf("closed: %v", r)
-	}
-	if b.importsN() != 0 || b.count("Import") != 0 {
-		t.Fatal("posted while Tally closed")
-	}
-}
-
-// (d) the same party and date, but a different amount, or a different bill number: not a duplicate
-func TestDupOnlyTheSameVoucher(t *testing.T) {
-	b := newBookTally(t)
-	bridgeFor(t, &b.standIn, "")
-	// in Tally: entered by hand (no FinCom tag), Tally's own number 13, the bill as its reference
-	b.mu.Lock()
-	b.add(strings.Replace(strings.Replace(finVoucher("x", fgParty, fgBill, fgDate, fgAmt), "<VOUCHERNUMBER>"+fgBill, "<VOUCHERNUMBER>13", 1), " | TDSDesk:x", "", 1))
-	b.mu.Unlock()
-	for _, c := range []struct{ id, party, bill, date, amt string }{
-		{"d1", fgParty, fgBill, fgDate, "25536.00"},         // another amount
-		{"d2", fgParty, "FA/ELEC/014", fgDate, fgAmt},       // another bill
-		{"d3", fgParty, fgBill, "20260702", fgAmt},          // another date
-		{"d4", "Fingate Two", fgBill, fgDate, fgAmt},        // another party
-		{"d5", fgParty, "fa/elec/014 ", fgDate, "25536.00"}, // both
-	} {
-		if r := postOne(t, c.id, finVoucher(c.id, c.party, c.bill, c.date, c.amt)); r["ok"] != true || r["already"] == true {
-			t.Fatalf("%s was taken for a duplicate: %v", c.id, r)
+// (b) an id in Tally that this computer never sent (entered by hand, or sent from another computer): not read for, sent
+// (the cloud's lock is the judge of what is posted); a different id with the same party, bill, date and amount: sent too
+func TestDupRecordNotTally(t *testing.T) {
+	f := newStandTally(t)
+	f.add(fgDate, fgParty, "13", "Electricity", "-"+fgAmt) // in Tally by hand: no FinCom tag
+	f.add(fgDate, fgParty, fgBill, "Electricity | TDSDesk:other1", "-"+fgAmt)
+	standBridge(t, f, "")
+	for _, id := range []string{"d1", "other1"} {
+		if r := postOne(t, id, finVoucher(id, fgParty, fgBill, fgDate, fgAmt)); r["ok"] != true {
+			t.Fatalf("%s: %v", id, r)
 		}
 	}
-	if b.importsN() != 5 {
-		t.Fatalf("imports %d", b.importsN())
+	if f.n("Import") != 2 || f.n(dupCheckID) != 0 || f.n(tagCheckID) != 0 {
+		t.Fatalf("requests: %v", f.ids())
 	}
-	// and the same one (its bill a reference in Tally, spaces and capitals aside): refused, with Tally's number 13
-	r := postOne(t, "d6", finVoucher("d6", " fingate", "fa/elec/013", fgDate, "25,535.00"))
-	if r["ok"] == true || r["already"] != true || str(r["vchNo"]) != "13" || str(r["guid"]) != "guid-1" || str(r["message"]) != "Already in Tally (voucher no. 13, 01-07-2026)" {
-		t.Fatalf("the same bill: %v", r)
+	// and now each is on the record: refused, nothing sent
+	for _, id := range []string{"d1", "other1"} {
+		if r := postOne(t, id, finVoucher(id, fgParty, "ANOTHER-NO", "20260702", "1.00")); r["alreadySent"] != true {
+			t.Fatalf("%s again: %v", id, r)
+		}
 	}
-	if b.importsN() != 5 {
+	if f.n("Import") != 2 {
 		t.Fatal("posted twice")
 	}
 	// a ledger (a master) is not checked this way
@@ -339,9 +152,11 @@ func TestDupOnlyTheSameVoucher(t *testing.T) {
 	if err != nil || obj(arr(res["results"])[0])["ok"] != true {
 		t.Fatalf("a master: %v %v", res, err)
 	}
+	onlyPostingRequests(t, f, 0)
 }
 
-// the rule itself, with what Tally writes (signs, commas, dates in words, an Optional or a cancelled voucher)
+// the matching rule itself, with what Tally writes (signs, commas, dates in words, an Optional or a cancelled voucher):
+// kept for Check Tally and the read test; no posting calls it (round 15)
 func TestDupMatchingRule(t *testing.T) {
 	k := func(x string) vchKey { return keyOfVoucher(xmlDoc(x).All("VOUCHER")[0]) }
 	p := k(finVoucher("a", fgParty, fgBill, fgDate, fgAmt))
@@ -382,10 +197,37 @@ func TestDupMatchingRule(t *testing.T) {
 	}
 }
 
-// (e) a posting from FinCom's cloud queue goes through the same check: the duplicate is not posted (it was entered in
-// Tally another way, so no FinCom tag finds it), the new bill is; FinCom's queue hears already:true with the GUID
+// (c) the read for Check Tally and the read test still works and still asks one date (and one party): a reader's
+// request, never a posting's
+func TestDupReadForCheckTally(t *testing.T) {
+	f := newStandTally(t)
+	f.add(fgDate, fgParty, "13", "Electricity", "-"+fgAmt)
+	f.add(fgDate, "Someone", "14", "Rent", "-1.00")
+	standBridge(t, f, "")
+	there, err := vouchersOnDate(f.port, zz, fgDate, fgParty)
+	if err != nil || len(there) != 2 { // the stand does not filter by party; the rule does
+		t.Fatalf("the read: %v %v", there, err)
+	}
+	b := f.bodiesOf(dupCheckID)
+	if len(b) != 1 || !strings.Contains(b[0], "<SVFROMDATE>20260701</SVFROMDATE><SVTODATE>20260701</SVTODATE>") || !strings.Contains(b[0], `$PartyLedgerName = "Fingate"`) {
+		t.Fatalf("the check was not for one date and the party: %v", b)
+	}
+	p := keyOfVoucher(xmlDoc(finVoucher("x", fgParty, "13", fgDate, fgAmt)).All("VOUCHER")[0])
+	n := 0
+	for _, e := range there {
+		if sameVoucher(p, e) {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Fatalf("%d of the day's entries match the bill (want the one)", n)
+	}
+}
+
+// (d) a posting from FinCom's cloud queue goes through the same record check: an id this computer sent before is
+// refused (FinCom's queue hears alreadySent), the new bills go in one request
 func TestDupCloudQueueChecked(t *testing.T) {
-	b := newBookTally(t)
+	f := newStandTally(t)
 	var cmu sync.Mutex
 	var updates []M
 	taken := false
@@ -401,7 +243,7 @@ func TestDupCloudQueueChecked(t *testing.T) {
 				_, _ = w.Write([]byte(jsonText(M{"job": M{"id": "cloud-job-00000001", "company": zz, "payload": M{"vouchers": []any{
 					M{"id": "c1", "xml": finVoucher("c1", fgParty, fgBill, fgDate, fgAmt)},
 					M{"id": "c2", "xml": finVoucher("c2", fgParty, "FA/ELEC/020", fgDate, "1200.00")},
-					M{"id": "c3", "xml": finVoucher("c3", fgParty, "FA/ELEC/020", fgDate, "1200.00")}, // the same bill twice in one batch
+					M{"id": "c3", "xml": finVoucher("c3", fgParty, "FA/ELEC/021", fgDate, "1300.00")},
 				}}}})))
 				return
 			}
@@ -411,31 +253,31 @@ func TestDupCloudQueueChecked(t *testing.T) {
 		_, _ = w.Write([]byte(`{"ok":true}`))
 	}))
 	t.Cleanup(cloud.Close)
-	bridgeFor(t, &b.standIn, fmt.Sprintf(`,"CloudUrl":"%s","CloudKey":"plain:test-key"`, cloud.URL))
-	b.mu.Lock()
-	b.add(strings.Replace(finVoucher("old", fgParty, fgBill, fgDate, fgAmt), "<VOUCHERNUMBER>"+fgBill, "<VOUCHERNUMBER>13", 1))
-	b.mu.Unlock()
+	standBridge(t, f, fmt.Sprintf(`,"CloudUrl":"%s","CloudKey":"plain:test-key"`, cloud.URL))
+	if err := noteSent("c1", zz, "job-earlier", "13", 1, "13", "13"); err != nil {
+		t.Fatal(err)
+	}
 	cloudPostTake()
 	p := waitJob(t, "cloud-job-00000001")
 	byID := map[string]M{}
 	for _, x := range arr(p["results"]) {
 		byID[str(obj(x)["id"])] = obj(x)
 	}
-	if r := byID["c1"]; r["ok"] == true || r["already"] != true || str(r["vchNo"]) != "13" || str(r["guid"]) != "guid-1" {
+	if r := byID["c1"]; r["ok"] == true || r["alreadySent"] != true || !strings.Contains(str(r["message"]), "(Tally id 13)") {
 		t.Fatalf("the duplicate from the queue: %v", r)
 	}
-	if r := byID["c2"]; r["ok"] != true {
+	if r := byID["c2"]; r["ok"] != true || toInt(r["batchN"]) != 2 {
 		t.Fatalf("the new bill: %v", r)
 	}
-	if r := byID["c3"]; r["ok"] == true || r["already"] != true {
-		t.Fatalf("the same bill twice in one batch: %v", r)
+	if r := byID["c3"]; r["ok"] != true {
+		t.Fatalf("the other new bill: %v", r)
 	}
-	if b.importsN() != 1 {
-		t.Fatalf("imports %d, want 1 (the new bill only)", b.importsN())
+	if f.n("Import") != 1 {
+		t.Fatalf("imports %d, want 1 (the two new bills in one request)", f.n("Import"))
 	}
-	b.mu.Lock()
-	inTally := len(b.vouchers)
-	b.mu.Unlock()
+	f.mu.Lock()
+	inTally := len(f.vch)
+	f.mu.Unlock()
 	if inTally != 2 {
 		t.Fatalf("%d vouchers in Tally, want 2", inTally)
 	}
@@ -450,7 +292,10 @@ func TestDupCloudQueueChecked(t *testing.T) {
 	for _, x := range arr(last["results"]) {
 		r := obj(x)
 		if str(r["id"]) == "c1" {
-			found = r["already"] == true && str(r["guid"]) == "guid-1" && str(r["vchNo"]) == "13" && r["ok"] == false
+			found = r["alreadySent"] == true && r["ok"] == false && str(r["state"]) == "failed"
+		}
+		if str(r["id"]) == "c2" && (r["byReply"] != true || str(r["state"]) != "posted") {
+			t.Fatalf("the queue's report of a posted bill: %v", r)
 		}
 	}
 	if !found {

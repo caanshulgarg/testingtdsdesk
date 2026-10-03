@@ -55,7 +55,7 @@ func driveEveryRequest(t *testing.T) *standTally {
 	must("names", err)
 	_, err = getVouchers(zz, td, td, "", "", f.port)
 	must("vouchers", err)
-	// a posting: the duplicate check, the tag check, the import, the read-back; then a deletion
+	// a posting (the import alone, round 15); the reads kept for Check Tally and the read test; then a deletion
 	if r := postOne(t, "every1", finVoucher("every1", fgParty, "EV-1", td, "3.00")); r["ok"] != true {
 		t.Fatalf("posting: %v", r)
 	}

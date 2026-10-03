@@ -2,10 +2,12 @@
 // the installed 2.1.5 could not read the answer back (fault 1) and reported the entry failed; the cloud handed the job
 // back (tally_post_requeue) and the same entry was sent again (voucher id 26299). From here every FinCom id Tally
 // accepted or that was confirmed in Tally is written to sync\posted-ids.json on this computer, across jobs and restarts,
-// and an entry whose id is there is never sent again by any route: it is only looked for (by Tally's voucher id, then
-// by its tag) until it is confirmed. Round 7: loaded once into memory and written through (a temporary file renamed
-// over the old one; on a failure the old file stays and the log says so loudly); verified notes older than 180 days
-// are pruned, unverified ones never; an owner's release newer than the acceptance lets the entry go once more.
+// and an entry whose id is there is never sent again by any route. Round 7: loaded once into memory and written through
+// (a temporary file renamed over the old one; on a failure the old file stays and the log says so loudly); verified
+// notes older than 180 days are pruned, unverified ones never; an owner's release handed by the cloud lets the entry go
+// once more. Round 15 (03-Oct-2026, the owner's decision): the record is the ONLY duplicate check before a posting
+// (noteSent / sentBeforeRefusal): every voucher sent is noted with its request's size and Tally's last voucher id;
+// nothing is looked for in Tally from a posting any more.
 package main
 
 import (
@@ -139,6 +141,37 @@ func noteAccepted(key, company, jobID, lv string) error {
 	}
 	all[key] = e
 	return acceptedWriteOrLog("Tally accepted " + key)
+}
+
+// Round 15 (03-Oct-2026, the owner's decision): the entry was SENT to Tally in this job and Tally's reply accepted it
+// (or no answer came): recorded with the request's size (batchN), Tally's last voucher id (batchEnd) and the entry's
+// own id when the request held it alone (vchId; never inferred otherwise). A later posting of the same id on this
+// computer is refused on this record; nothing is read back
+func noteSent(key, company, jobID, lv string, batchN int, batchEnd, vchID string) error {
+	if key == "" {
+		return errors.New("no key")
+	}
+	acceptedMu.Lock()
+	defer acceptedMu.Unlock()
+	all := acceptedAll()
+	e := obj(all[key])
+	now := time.Now().Format(time.RFC3339)
+	if e == nil {
+		e = M{"at": nowS(), "acceptedAt": now}
+	}
+	if str(e["acceptedAt"]) == "" || e["resendOpen"] == true {
+		// the first send, or the new one after a release was honoured: it replaces the note's send
+		e["acceptedAt"] = now
+		delete(e, "resendOpen")
+	}
+	e["sent"], e["sentAt"], e["company"], e["job"], e["batchN"] = true, now, company, or(jobID, str(e["job"])), batchN
+	e["lastVchId"], e["batchEnd"], e["vchId"] = lv, batchEnd, vchID
+	delete(e, "held")
+	if e["verified"] != true {
+		e["verified"] = false
+	}
+	all[key] = e
+	return acceptedWriteOrLog("sent " + key)
 }
 
 // the entry was confirmed in Tally (its head): kept so a later job never sends it again

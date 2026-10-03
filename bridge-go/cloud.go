@@ -717,8 +717,9 @@ func beatOnce() {
 			return
 		}
 		shadowOK.Store(true)
-		applyReadControl(r.json) // FinCom's stop or resume of reading on this computer
-		applyRelease(r.json)     // the version this computer may take (update.go)
+		applyReadControl(r.json)   // FinCom's stop or resume of reading on this computer
+		applyRelease(r.json)       // the version this computer may take (update.go)
+		applyCloudSettings(r.json) // round 15: PostOnly and the batch sizes set in FinCom
 		// made the main bridge on FinCom's Tally page: this test bridge switches itself to main, once
 		if testMode() && truthy(r.json["makeMain"]) && makeMainSeen.CompareAndSwap(false, true) {
 			writeLog("FinCom made this the main bridge")
@@ -781,7 +782,9 @@ func beatBody(tally bool, tstate, tsince string, open, ports, cos []any) M {
 	return M{"reqs": beatReqs(), "readStopped": readStopAny(), "kind": "beat", "tally": tally, "tallyState": tstate, "busySince": tsince, "every": beatEvery(), "open": open, "ports": ports, "companies": cos,
 		"updating": keepRunning(), "dailyAt": keepDailyAt(), "nightlyAt": keepDailyAt(), "lastRun": keepLastRun(), "paused": paused(), "notAnsweringSince": notAnsweringSince(),
 		"lastRead": lastReadAt(), "events": true, "computer": computerName(), "allowlist": allowListBeat(),
-		"postOnly": toAny(postOnlyList())} // round 11: the companies this computer may post to (empty: any)
+		"postOnly": toAny(postOnlyList()), // round 11: the companies this computer may post to (empty: any)
+		// round 15: the batch sizes applied (the file's, or FinCom's), and when FinCom last set them
+		"postBatchBills": postBatchBills(), "postBatchBank": postBatchBank(), "settingsAt": cfgS("SettingsAt")}
 }
 
 // --- the posting queue (build 199): postings queued in FinCom on any computer, taken one at a time
@@ -836,7 +839,7 @@ func cloudPostTake() {
 		pl := obj(j["payload"])
 		id := str(j["id"])
 		// round 7 (F2): the owner's releases ("Not in Tally — release") for the job's ids come with it
-		v, err := newPostJob(M{"jobId": id, "company": str(j["company"]), "masters": arr(pl["masters"]), "vouchers": arr(pl["vouchers"]), "ledger": str(pl["ledger"]), "checkFirst": true, "released": arr(j["released"])})
+		v, err := newPostJob(M{"jobId": id, "company": str(j["company"]), "masters": arr(pl["masters"]), "vouchers": arr(pl["vouchers"]), "released": arr(j["released"])})
 		if err != nil {
 			invokeCloud(M{"kind": "posts_update", "id": id, "status": "failed", "done": 0, "message": "The Tally computer could not start this posting: " + err.Error(), "results": []any{}}, 30)
 			continue
@@ -911,13 +914,20 @@ func syncCloudPosts() {
 				"outcomeUnknown": truthy(r["outcomeUnknown"]), "sameId": truthy(r["sameId"]), "guidMismatch": truthy(r["guidMismatch"]),
 				// fault 1: accepted by Tally (CREATED/ALTERED with a voucher id), not confirmed yet: never failed, never sent again
 				"accepted": truthy(r["accepted"]), "lastVchId": str(r["lastVchId"]), "acceptedAt": str(r["acceptedAt"]), "held": truthy(r["held"]),
+				// round 15 (03-Oct-2026): posted by Tally's reply (byReply, batchN, batchEnd, vchId only when the request held one
+				// voucher), needs review (Tally's counts and words), sent without an answer, or refused on this computer's record
+				"byReply": truthy(r["byReply"]), "batchN": toInt(r["batchN"]), "batchEnd": str(r["batchEnd"]), "vchId": str(r["vchId"]), "sentAt": str(r["sentAt"]), "secondsReq": num(r["secondsReq"]),
+				"needsReview": truthy(r["needsReview"]), "created": toInt(r["created"]), "altered": toInt(r["altered"]), "errors": toInt(r["errors"]), "exceptions": toInt(r["exceptions"]), "ignored": toInt(r["ignored"]),
+				"lineError": arr(r["lineError"]), "sent": truthy(r["sent"]), "alreadySent": truthy(r["alreadySent"]), "sentOn": str(r["sentOn"]),
 				"state": itemState(r, false), "reason": map[bool]string{true: "", false: failedLine(str(r["message"]))}[r["ok"] == true]})
 		}
 		// items: every entry's state (waiting, sending, sent, in_tally, failed with its reason), for FinCom to show live
 		// round 7 (F4): seq (per job, from progress.json, growing with every change) and updatedAt: the cloud ignores an
 		// update whose seq is lower than the one it holds
 		r := invokeCloud(M{"kind": "posts_update", "id": id, "status": st, "done": toInt(v["done"]), "message": str(v["message"]), "results": res, "items": arr(v["items"]), "checking": v["checking"] == true,
-			"seq": toInt(v["seq"]), "updatedAt": str(v["updatedAt"])}, 30)
+			"seq": toInt(v["seq"]), "updatedAt": str(v["updatedAt"]),
+			// round 15: every request's timing ({n, seconds, created, altered, exceptions, ignored, lastVchId}) and the total
+			"reqs": arr(v["reqs"]), "secondsTotal": num(v["secondsTotal"])}, 30)
 		if r.json != nil && (truthy(r.json["cancelled"]) || truthy(r.json["gone"])) {
 			// cancelled in FinCom (or no longer there): it stops, also while it waits for Tally
 			_, _ = cancelJob(id, "cancelled in FinCom")

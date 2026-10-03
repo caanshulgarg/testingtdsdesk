@@ -71,9 +71,11 @@ func TestPostingLines(t *testing.T) {
 	cases := map[string]string{
 		waitingLine(co, &tallyWait{"notopen", "x"}):                                         "Waiting for Tally: GARG SHEKHAR & COMPANY is not open — open it in TallyPrime; it will be posted automatically",
 		waitingLine(co, errors.New("dial tcp 127.0.0.1:9000: connect: connection refused")): "Waiting for Tally: TallyPrime is not open — open TallyPrime with GARG SHEKHAR & COMPANY; it will be posted automatically",
-		sendingLine(2, 5):                                                       "Sending 2 of 5 to Tally",
-		postedLine(5, 5, false):                                                 "Posted 5 of 5 (verified in Tally)",
-		postedLine(5, 5, true):                                                  "Posted 5 of 5 (being checked in Tally)",
+		sendingLine(2, 5): "Sending 2 of 5 to Tally",
+		// round 15 (the owner's decision of 03-Oct-2026): nothing is read back; the line names Tally's reply
+		postedLine(5, 5, 0, 0):                                                  "Posted 5 of 5 (Tally's reply)",
+		postedLine(3, 5, 2, 0):                                                  "Posted 3 of 5; 2 need review",
+		postedLine(3, 5, 0, 2):                                                  "Posted 3 of 5 (Tally's reply); 2 sent with no answer from Tally — Check Tally in FinCom",
 		failedLine("Ledger 'X' does not exist!"):                                "Failed: ledger 'X' is not in Tally — create it, then press Retry in FinCom",
 		failedLine("Voucher Type 'Journal-2' does not exist!"):                  "Failed: voucher type 'Journal-2' is not in Tally — create it, then press Retry in FinCom",
 		failedLine("The entry has no valid date, so it was not sent to Tally."): "Failed: the entry's date is not within the company's books in Tally — correct the date, then press Retry in FinCom",
@@ -96,15 +98,17 @@ func TestPostingLines(t *testing.T) {
 		r    M
 		send bool
 		want string
-	}{{nil, false, "waiting"}, {nil, true, "sending"}, {M{"ok": true, "verified": true}, false, "in_tally"}, {M{"ok": true, "pendingCheck": true}, false, "sent"}, {M{"ok": false}, false, "failed"}} {
+	}{{nil, false, "waiting"}, {nil, true, "sending"}, {M{"ok": true, "verified": true}, false, "in_tally"}, {M{"ok": true, "byReply": true, "verified": false}, false, "posted"},
+		{M{"ok": false, "needsReview": true}, false, "needs_review"}, {M{"ok": false, "outcomeUnknown": true, "sent": true}, false, "unknown"}, {M{"ok": false}, false, "failed"}} {
 		if itemState(c.r, c.send) != c.want {
 			t.Fatalf("%v -> %s", c.r, itemState(c.r, c.send))
 		}
 	}
 }
 
-// nothing is posted twice: what has a result is never sent again; a lost answer is sent again only when Tally was read
-// and the entry's tag is not there; an entry without a tag is never sent again on a guess
+// nothing is posted twice: what has a result is never sent again. Round 15 (the owner's decision of 03-Oct-2026): a
+// lost answer is never sent again either (the entry is recorded as sent; Check Tally or the comparison settles it);
+// the read-and-resend rule (resendLost) is gone
 func TestNoDoublePost(t *testing.T) {
 	v := func(id string) M {
 		return M{"id": id, "kind": "voucher", "xml": "<VOUCHER><DATE>20260401</DATE><NARRATION>x TDSDesk:" + id + "</NARRATION></VOUCHER>"}
@@ -114,23 +118,22 @@ func TestNoDoublePost(t *testing.T) {
 	if len(left) != 2 || str(left[0]["id"]) != "c" || str(left[1]["id"]) != "m" {
 		t.Fatalf("left %v", left)
 	}
-	if again, _ := resendLost(v("c"), true, true); again {
-		t.Fatal("found in Tally, sent again")
+	// sent without an answer, posted by Tally's reply, accepted (needs review): all finished, never queued again
+	left = itemsToSend(all, []M{{"id": "a", "ok": false, "outcomeUnknown": true, "sent": true}, {"id": "b", "ok": true, "byReply": true}, {"id": "c", "ok": false, "needsReview": true, "accepted": true}})
+	if len(left) != 1 || str(left[0]["id"]) != "m" {
+		t.Fatalf("a sent entry was queued again: %v", left)
 	}
-	if again, _ := resendLost(v("c"), false, false); again {
-		t.Fatal("sent again without a read of Tally")
+	// a reply that made nothing (needs review, not accepted) is finished within the job too; Retry sends it again
+	if left := itemsToSend(all[:1], []M{{"id": "a", "ok": false, "needsReview": true, "accepted": false}}); len(left) != 0 {
+		t.Fatalf("queued again within the job: %v", left)
 	}
-	if again, _ := resendLost(v("c"), true, false); !again {
-		t.Fatal("read, not there: should go")
+	for _, r := range []M{{"ok": true}, {"ok": false, "sent": true, "outcomeUnknown": true}, {"ok": false, "needsReview": true, "accepted": true}} {
+		if !confirmedResult(r) {
+			t.Fatalf("not kept on Retry: %v", r)
+		}
 	}
-	if again, why := resendLost(M{"id": "u", "kind": "voucher", "xml": "<VOUCHER><DATE>20260401</DATE></VOUCHER>"}, true, false); again || why == "" {
-		t.Fatal("an entry without a tag was sent again")
-	}
-	if again, _ := resendLost(all[3], true, false); !again {
-		t.Fatal("a master")
-	}
-	if !confirmedResult(M{"ok": true}) || confirmedResult(M{"ok": false}) || confirmedResult(nil) {
-		t.Fatal("confirmed")
+	if confirmedResult(M{"ok": false}) || confirmedResult(M{"ok": false, "needsReview": true, "accepted": false}) || confirmedResult(M{"ok": false, "alreadySent": true}) || confirmedResult(nil) {
+		t.Fatal("kept on Retry though not sent")
 	}
 }
 

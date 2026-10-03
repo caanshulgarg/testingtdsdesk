@@ -1,7 +1,7 @@
 // Posting in plain words, and the rules that keep it safe, kept apart from Tally and Windows so the tests can read them:
 //   - the one status line for a posting, the same in the job, /status, the tray and FinCom: "Waiting for Tally: ...",
 //     "Sending 2 of 5 to Tally", "Posted 5 of 5 (verified in Tally)", "Failed: ... - ..., then press Retry in FinCom";
-//   - each entry's state: waiting, sending, sent (Tally said created, being read back), in_tally (read back), failed;
+//   - each entry's state: waiting, sending, posted (Tally's reply, round 15), needs_review, unknown, in_tally, failed;
 //   - the company: exactly the one the posting names (spaces, line breaks and capitals aside), never "whichever is open";
 //   - Tally's ports: never 0 in anything saved (0 means "find it"), found again on every try.
 package main
@@ -89,20 +89,28 @@ func sendingLine(n, total int) string {
 	return fmt.Sprintf("Sending %d of %d to Tally", n, total)
 }
 
-// all sent: "Posted 5 of 5 (verified in Tally)", or still being read back
-func postedLine(ok, total int, checking bool) string {
-	if checking {
-		return fmt.Sprintf("Posted %d of %d (being checked in Tally)", ok, total)
+// all sent: "Posted 5 of 5 (Tally's reply)"; round 15 (03-Oct-2026): nothing is read back, so the line names Tally's
+// reply; with entries that need review: "Posted 3 of 5; 2 need review" (the job is done, neither posted nor failed);
+// the entries sent without an answer (unknown) named when there are any
+func postedLine(ok, total, review, unknown int) string {
+	l := fmt.Sprintf("Posted %d of %d (Tally's reply)", ok, total)
+	if review > 0 {
+		l = fmt.Sprintf("Posted %d of %d; %d need review", ok, total, review)
 	}
-	return fmt.Sprintf("Posted %d of %d (verified in Tally)", ok, total)
+	if unknown > 0 {
+		l += fmt.Sprintf("; %d sent with no answer from Tally — Check Tally in FinCom", unknown)
+	}
+	return l
 }
 
 // Tally's refusal of one entry, in plain words: "Failed: ledger 'X' is not in Tally — create it, then press Retry in FinCom"
 func failedLine(tallySaid string) string {
 	m := strings.TrimSpace(tallySaid)
 	const retry = ", then press Retry in FinCom"
-	// 2.1.4: the duplicate check before posting said so itself
-	if strings.HasPrefix(m, "Already in Tally (") || m == dupCheckFailedMsg || strings.HasPrefix(m, "This computer posts only to ") {
+	// 2.1.4: the duplicate check before posting said so itself; round 15: this computer's record, and Tally's reply in
+	// its own words (needs review), go as they are
+	if strings.HasPrefix(m, "Already in Tally (") || m == dupCheckFailedMsg || strings.HasPrefix(m, "This computer posts only to ") ||
+		strings.HasPrefix(m, "already sent from this computer on ") || strings.HasPrefix(m, "Tally's reply: ") || m == unknownLine {
 		return m
 	}
 	if g := group(`(?i)ledger\s*'([^']+)'\s*does\s*not\s*exist`, m, 1); g != "" {
@@ -144,19 +152,23 @@ func itemState(r M, sending bool) string {
 	case r == nil:
 		return "waiting"
 	case r["outcomeUnknown"] == true:
-		return "unknown" // sent when Tally stopped answering; being looked for by its FinCom id
+		return "unknown" // sent when Tally stopped answering; recorded as sent, settled by Check Tally or the comparison
+	case r["needsReview"] == true:
+		return "needs_review" // round 15: Tally's reply did not match the request; Tally's words in the reason
 	case r["ok"] != true:
 		return "failed"
 	case r["verified"] == true:
 		return "in_tally"
+	case r["byReply"] == true:
+		return "posted" // round 15: posted by Tally's reply (nothing read back)
 	}
 	return "sent"
 }
 
-// confirmed in Tally (or already there), or accepted by Tally (CREATED/ALTERED with a voucher id, not confirmed yet):
-// never sent again, on any retry, resume or restart
+// posted (Tally's reply, or confirmed in Tally before), accepted by Tally (a reply that needs review but made some), or
+// sent without an answer: never sent again, on any retry, resume or restart (round 15: "sent" is the record)
 func confirmedResult(r M) bool {
-	return r != nil && (r["ok"] == true || r["accepted"] == true || r["held"] == true)
+	return r != nil && (r["ok"] == true || r["accepted"] == true || r["held"] == true || r["sent"] == true)
 }
 
 // what is left to send: every item without a result (an entry that failed is not sent again within the same job; Retry
@@ -164,9 +176,9 @@ func confirmedResult(r M) bool {
 func itemsToSend(all []M, results []M) []M {
 	had := map[string]bool{}
 	for _, r := range results {
-		// an entry whose outcome is unknown is not finished: it is looked for in Tally (by its FinCom id) first. One Tally
-		// accepted (CREATED with a voucher id; fault 1) is never sent again, confirmed or not
-		if r["outcomeUnknown"] != true || r["accepted"] == true || r["held"] == true {
+		// round 15: an entry sent to Tally (an answer or not) is finished within the job: never sent again. Older notes:
+		// one Tally accepted or held is never sent again either
+		if r["outcomeUnknown"] != true || r["accepted"] == true || r["held"] == true || r["sent"] == true {
 			had[str(r["id"])] = true
 		}
 	}
@@ -177,25 +189,6 @@ func itemsToSend(all []M, results []M) []M {
 		}
 	}
 	return o
-}
-
-// an entry whose answer was lost (Tally did not answer): may it be sent again? Only when a read of Tally answered and did
-// not find it (by its FinCom tag); a voucher without a tag can never be looked for, so it is never sent again on a guess.
-// A master (ledger, group) sent twice is refused by Tally as a duplicate, so it may.
-func resendLost(it M, checked bool, found bool) (resend bool, why string) {
-	if found {
-		return false, ""
-	}
-	if str(it["kind"]) == "master" {
-		return true, ""
-	}
-	if reTag.FindString(str(it["xml"])) == "" {
-		return false, "Tally did not answer, and this entry has no FinCom tag to look for, so it is not known whether it arrived. It was not sent again: look in Tally before posting it again."
-	}
-	if !checked {
-		return false, ""
-	}
-	return true, ""
 }
 
 // --- Tally's ports: a list of real ports, or "auto" (found on every try); never 0

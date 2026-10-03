@@ -53,7 +53,7 @@ func TestPostOnlyEmptyAllowsAll(t *testing.T) {
 	for _, extra := range []string{"", `,"PostOnly":[]`, `,"PostOnly":"  "`, `,"PostOnly":["zz   test"]`} {
 		f := newStandTally(t)
 		standBridge(t, f, extra)
-		if r := postOne(t, "ok1", finVoucher("ok1", fgParty, "OK-1", today(), "1.00")); r["ok"] != true || r["verified"] != true {
+		if r := postOne(t, "ok1", finVoucher("ok1", fgParty, "OK-1", today(), "1.00")); r["ok"] != true || r["byReply"] != true {
 			t.Fatalf("with %q the posting to ZZ TEST was refused: %v", extra, r)
 		}
 		j, err := newPostJob(M{"jobId": "job-postonly-ok", "company": zz, "vouchers": []any{M{"id": "ok2", "xml": finVoucher("ok2", fgParty, "OK-2", today(), "2.00")}}})

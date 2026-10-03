@@ -356,3 +356,48 @@ func setPostOnly(c *Ordered, v string) {
 	c.Set("PostOnly", names)
 	c.Set("PostOnlyBy", "installer")
 }
+
+// --- settings from FinCom (round 15, 03-Oct-2026): the beat's answer may carry settings: {postOnly: array|null,
+// postBatchBills: n|null, postBatchBank: n|null, at}. A non-null value is applied at once over the file's value, kept in
+// the file (PostOnlyBy / PostBatchBy "fincom", SettingsAt) so it survives a restart, and logged once per change
+func applyCloudSettings(j M) {
+	st := obj(j["settings"])
+	if st == nil {
+		return
+	}
+	at := str(st["at"])
+	changed := false
+	if v, ok := st["postOnly"]; ok && v != nil {
+		var names []string
+		for _, n := range strs(v) {
+			if n = strings.TrimSpace(n); n != "" {
+				names = append(names, n)
+			}
+		}
+		if strings.Join(names, "|") != strings.Join(postOnlyList(), "|") || cfgS("PostOnlyBy") != "fincom" {
+			setCfg("PostOnly", toAny(names))
+			setCfg("PostOnlyBy", "fincom")
+			changed = true
+		}
+	}
+	for key, k := range map[string]string{"postBatchBills": "PostBatchBills", "postBatchBank": "PostBatchBank"} {
+		if v, ok := st[key]; ok && v != nil {
+			n := clampBatch(toInt(v)) // bounds 1..500
+			if toInt(cfg(k)) != n || cfgS("PostBatchBy") != "fincom" {
+				setCfg(k, float64(n))
+				setCfg("PostBatchBy", "fincom")
+				changed = true
+			}
+		}
+	}
+	if at != "" && cfgS("SettingsAt") != at {
+		setCfg("SettingsAt", at)
+		changed = true
+	}
+	if !changed {
+		return
+	}
+	saveConfig()
+	writeLog(fmt.Sprintf("Settings from FinCom: posts only to %s; bills per request %d; bank lines per request %d (set at %s)",
+		or(strings.Join(postOnlyList(), ", "), "any company"), postBatchBills(), postBatchBank(), or(at, "-")))
+}

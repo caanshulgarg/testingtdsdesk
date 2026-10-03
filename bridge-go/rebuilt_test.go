@@ -670,28 +670,26 @@ func TestFinComIDStampedAndExactDuplicateRefused(t *testing.T) {
 	if !strings.Contains(imp, "<NARRATION>TDSDesk:bill77 | Electricity</NARRATION>") { // round 4: the tag first
 		t.Fatalf("the FinCom id was not stamped: %s", cut(imp, 600))
 	}
-	// the same FinCom id again, other details changed (another amount and number): refused on the id alone
+	// the same FinCom id again, other details changed (another amount and number): refused on the id alone (round 15,
+	// the owner's decision of 03-Oct-2026: on this computer's record of what it sent, not on a read of Tally)
 	again := strings.Replace(finVoucher("bill77", fgParty, "S-1-REV", td, "55.00"), "Electricity |", "Electricity revised |", 1)
 	imports := f.n("Import")
+	n0 := f.n("")
 	r = postOne(t, "bill-77", again)
-	if r["ok"] == true || r["already"] != true || r["sameId"] != true {
+	if r["ok"] == true || r["alreadySent"] != true || !strings.HasPrefix(str(r["message"]), "already sent from this computer on ") {
 		t.Fatalf("the same FinCom id was posted again: %v", r)
 	}
 	if f.n("Import") != imports {
 		t.Fatal("an import was sent for it")
 	}
-	// the exact check came before the party, bill, date and amount check
-	ids := f.ids()
-	last := ids[len(ids)-1]
-	if last != "FinComTag" {
-		t.Fatalf("the last request was %s (want the exact id check to decide)", last)
-	}
+	onlyPostingRequests(t, f, n0)
 	f.noBalance(t)
 }
 
-// --- a posting whose answer was lost: "Checking whether it reached Tally" (state unknown, outcomeUnknown) and never
-// sent again until Tally answers the check and the entry is looked for by its FinCom id; found: posted; not found: sent
-// again once
+// --- a posting whose answer was lost (Tally took the import and did not answer): round 15 (the owner's decision of
+// 03-Oct-2026): the entry is "unknown" (outcomeUnknown, state unknown), recorded as sent and NEVER sent again by this
+// bridge, whether Tally made it or not; no checking starts (Check Tally or the next comparison settles it); the job
+// ends done, saying so
 func TestTimedOutPostingOutcomeUnknown(t *testing.T) {
 	for _, made := range []bool{true, false} {
 		t.Run(fmt.Sprintf("reached-%v", made), func(t *testing.T) {
@@ -708,34 +706,23 @@ func TestTimedOutPostingOutcomeUnknown(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			dir, _ := jobDir(str(j["id"]))
-			seen := false
-			for i := 0; i < 150 && !seen; i++ {
-				if p := readProgress(dir); p != nil {
-					for _, x := range arr(p["items"]) {
-						e := obj(x)
-						if str(e["state"]) == "unknown" && e["outcomeUnknown"] == true && str(e["reason"]) == "Checking whether it reached Tally" {
-							seen = true
-						}
-					}
-					for _, x := range arr(p["results"]) {
-						if r := obj(x); r["outcomeUnknown"] == true && str(r["state"]) == "unknown" {
-							imports := f.n("Import")
-							if imports != 1 {
-								t.Errorf("sent again while its outcome was unknown (%d imports)", imports)
-							}
-						}
-					}
-				}
-				time.Sleep(50 * time.Millisecond)
-			}
-			if !seen {
-				t.Fatal("the entry was never shown as Checking whether it reached Tally")
-			}
 			p := waitJob(t, str(j["id"]))
+			if str(p["status"]) != "done" || !strings.Contains(str(p["message"]), "1 sent with no answer from Tally") {
+				t.Fatalf("the job: %s %q", p["status"], p["message"])
+			}
 			r := obj(arr(p["results"])[0])
-			if r["ok"] != true || r["outcomeUnknown"] == true {
-				t.Fatalf("not resolved: %v", r)
+			e := obj(arr(p["items"])[0])
+			if r["ok"] == true || r["outcomeUnknown"] != true || r["sent"] != true || str(r["message"]) != unknownLine {
+				t.Fatalf("the entry: %v", r)
+			}
+			if str(e["state"]) != "unknown" || str(e["reason"]) != unknownLine {
+				t.Fatalf("the item: %v", e)
+			}
+			if f.n("Import") != 1 {
+				t.Fatalf("sent again after no answer (%d imports)", f.n("Import"))
+			}
+			if a := acceptedInfo("u1"); a == nil || a["sent"] != true || str(a["vchId"]) != "" {
+				t.Fatalf("not recorded as sent: %v", a)
 			}
 			n := 0
 			f.mu.Lock()
@@ -745,14 +732,15 @@ func TestTimedOutPostingOutcomeUnknown(t *testing.T) {
 				}
 			}
 			f.mu.Unlock()
-			if n != 1 {
-				t.Fatalf("%d copies in Tally", n)
+			if (made && n != 1) || (!made && n != 0) {
+				t.Fatalf("%d copies in Tally (made %v)", n, made)
 			}
-			if made && f.n("Import") != 1 {
-				t.Fatalf("found in Tally, yet sent again (%d imports)", f.n("Import"))
+			// the same id again (Retry in FinCom, a new job): refused on the record, nothing sent
+			if r := postOne(t, "u1", finVoucher("u1", fgParty, "U-1", td, "70.00")); r["alreadySent"] != true || f.n("Import") != 1 {
+				t.Fatalf("sent again after an unknown outcome: %v (%d imports)", r, f.n("Import"))
 			}
-			if !made && f.n("Import") != 2 {
-				t.Fatalf("not found: sent again once, got %d imports", f.n("Import"))
+			if f.n(tagCheckID)+f.n(masterCheckID)+f.n(dupCheckID) != 0 {
+				t.Fatalf("a read went with the posting: %v", f.ids())
 			}
 			f.noBalance(t)
 		})
@@ -959,7 +947,8 @@ func TestNoLedgerCollectionAsked(t *testing.T) {
 	f.noBalance(t)
 }
 
-// --- a posting is confirmed by its FinCom id through FinComTag alone: one request per date, that date only
+// --- the tag read for Check Tally (findPostedTags) asks FinComTag alone: one request per date, that date only; a posting
+// never calls it (round 15)
 func TestPostedTagFoundByDate(t *testing.T) {
 	d1, d2 := "20260701", "20260705"
 	f := newStandTally(t)
@@ -985,18 +974,12 @@ func TestPostedTagFoundByDate(t *testing.T) {
 			t.Fatalf("request %d is not for %s alone: %s", i, d, cut(bodies[i], 400))
 		}
 	}
-	// a posting: read back by FinComTag alone too
+	// a posting: no read-back at all (round 15, the owner's decision of 03-Oct-2026)
 	n1 := f.n("")
-	if r := postOne(t, "t4", finVoucher("t4", fgParty, "T-4", d1, "4.00")); r["ok"] != true || r["verified"] != true {
+	if r := postOne(t, "t4", finVoucher("t4", fgParty, "T-4", d1, "4.00")); r["ok"] != true || r["byReply"] != true {
 		t.Fatalf("posting: %v", r)
 	}
-	for _, id := range f.ids()[n1:] {
-		switch id {
-		case "FinComCompany", "TDSDeskCompanies", "TDSDeskCompanyInfo", dupCheckID, "FinComTag", "Import", masterCheckID: // round 6: Tally's voucher id looked up first
-		default:
-			t.Fatalf("the posting asked %q (%v)", id, f.ids()[n1:])
-		}
-	}
+	onlyPostingRequests(t, f, n1)
 	f.noLedgerCollection(t)
 	f.noBalance(t)
 }

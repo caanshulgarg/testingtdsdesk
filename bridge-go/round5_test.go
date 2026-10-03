@@ -3,7 +3,6 @@ package main
 // Round 5 (03-Oct-2026): the code and security reviews of round 4, bridge side (C4, C5, C7, C8, S5)
 
 import (
-	"net/http"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -75,112 +74,68 @@ func TestConsoleMeasureNeverParallel(t *testing.T) {
 	}
 }
 
-// --- C7. an entry Tally ALTERED (or created) that the read-back cannot confirm is "unknown": ok false, accepted true,
-// verified nil, with Tally's voucher id; never "posted" to the app, never failed, never sent again
-func TestAlteredUnconfirmedIsUnknown(t *testing.T) {
+// --- C7. an entry Tally ALTERED: round 15 (the owner's decision of 03-Oct-2026) trusts Tally's reply: ALTERED counts as
+// posted (CREATED + ALTERED == the request's size), marked altered1, with Tally's voucher id; nothing is read back and
+// no "unknown, accepted" state remains (round 5's rule is replaced)
+func TestAlteredReplyIsPosted(t *testing.T) {
 	f := newStandTally(t)
 	f.ansi = true
 	f.importAltered = true
 	f.storeNarr = f1NoTag
-	f.behave = func(w http.ResponseWriter, r *http.Request, id, body string) bool {
-		if id == "FinComByMaster" || id == "FinComTag" {
-			_, _ = w.Write([]byte("<ENVELOPE><BODY><DATA><COLLECTION></COLLECTION></DATA></BODY></ENVELOPE>"))
-			return true
-		}
-		return false
-	}
-	standBridge(t, f, `,"PostRecheckMs":200,"PostRecheckTries":1`)
+	standBridge(t, f, "")
 	r := postOne(t, "alt1", f1Voucher("alt1", ""))
-	if r["ok"] != false || r["accepted"] != true || r["verified"] != nil || str(r["state"]) != "unknown" || str(r["lastVchId"]) == "" || r["outcomeUnknown"] != true {
-		t.Fatalf("an ALTERED, unconfirmed entry: %v", r)
+	if r["ok"] != true || r["byReply"] != true || r["altered1"] != true || toInt(r["altered"]) != 1 || toInt(r["created"]) != 0 || str(r["vchId"]) == "" {
+		t.Fatalf("an ALTERED entry: %v", r)
 	}
-	if toInt(r["altered"]) != 1 {
-		t.Fatalf("the test did not go through ALTERED: %v", r)
-	}
-	if itemState(r, false) != "unknown" || !confirmedResult(r) {
+	if itemState(r, false) != "posted" || !confirmedResult(r) {
 		t.Fatalf("state %s, kept on Retry %v", itemState(r, false), confirmedResult(r))
 	}
 	if left := itemsToSend([]M{{"id": "alt1", "kind": "voucher"}}, []M{r}); len(left) != 0 {
 		t.Fatalf("queued again: %v", left)
 	}
-	// the job: not failed, done and checking, the item unknown with Tally's voucher id
+	// the job: done, nothing checking, the item posted with Tally's voucher id
 	j, err := newPostJob(M{"jobId": "job-c7-altered", "company": zz, "vouchers": []any{M{"id": "alt2", "xml": f1Voucher("alt2", "")}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	id := str(j["id"])
-	dir, _ := jobDir(id)
-	var p M
-	for i := 0; i < 200; i++ {
-		p = readProgress(dir)
-		if p != nil && (str(p["status"]) == "done" || str(p["status"]) == "failed") && !jobAlive(id) {
-			break
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	if p == nil || str(p["status"]) != "done" || p["checking"] != true {
+	p := waitJob(t, str(j["id"]))
+	if str(p["status"]) != "done" || p["checking"] == true {
 		t.Fatalf("the job: %v", p)
 	}
 	e := obj(arr(p["items"])[0])
-	if str(e["state"]) != "unknown" || e["accepted"] != true || str(e["lastVchId"]) == "" {
+	if str(e["state"]) != "posted" || e["byReply"] != true || str(e["vchId"]) == "" {
 		t.Fatalf("the item: %v", e)
 	}
-	if !strings.Contains(str(p["message"]), "being checked") {
+	if strings.Contains(str(p["message"]), "being checked") {
 		t.Fatalf("the job's line: %q", p["message"])
 	}
-	if f.n("Import") != 2 {
-		t.Fatalf("%d imports (one per posting, never again)", f.n("Import"))
+	if f.n("Import") != 2 || f.n(masterCheckID)+f.n(tagCheckID) != 0 {
+		t.Fatalf("requests: %v", f.ids())
 	}
 }
 
-// --- C8. a cancel arriving during the later checks only stops the checks: the posting stays done, its results kept
-func TestCancelDuringRecheckKeepsDone(t *testing.T) {
+// --- C8. a cancel arriving after the posting is done changes nothing: there are no later checks to stop (round 15),
+// the posting stays done, its results kept
+func TestCancelAfterDoneKeepsDone(t *testing.T) {
 	f := newStandTally(t)
 	f.ansi = true
-	f.storeNarr = func(n string) string { // only the previous-FY entry loses its tag in this Tally
-		if strings.Contains(n, "TDSDesk:un1") {
-			return f1NoTag(n)
-		}
-		return n
-	}
-	hide := true
-	f.behave = func(w http.ResponseWriter, r *http.Request, id, body string) bool {
-		if (id == "FinComByMaster" || id == "FinComTag") && hide && strings.Contains(body, f1Date) {
-			_, _ = w.Write([]byte("<ENVELOPE><BODY><DATA><COLLECTION></COLLECTION></DATA></BODY></ENVELOPE>"))
-			return true
-		}
-		return false
-	}
-	standBridge(t, f, `,"PostRecheckMs":4000,"PostRecheckTries":3`)
+	standBridge(t, f, "")
 	td := today()
 	j, err := newPostJob(M{"jobId": "job-c8-cancel", "company": zz, "vouchers": []any{
-		M{"id": "ok1", "xml": finVoucher("ok1", fgParty, "OK-1", td, "10.00")}, // confirmed at once
-		M{"id": "un1", "xml": f1Voucher("un1", "")},                            // accepted, unconfirmed: checked later
+		M{"id": "ok1", "xml": finVoucher("ok1", fgParty, "OK-1", td, "10.00")},
+		M{"id": "un1", "xml": f1Voucher("un1", "")},
 	}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	id := str(j["id"])
 	dir, _ := jobDir(id)
-	var p M
-	for i := 0; i < 200; i++ {
-		p = readProgress(dir)
-		if p != nil && str(p["status"]) == "done" && p["checking"] == true {
-			break
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	if p == nil || str(p["status"]) != "done" || p["checking"] != true || !jobAlive(id) {
-		t.Fatalf("the job is not done-and-checking with its worker alive: %v", p)
+	p := waitJob(t, id)
+	if str(p["status"]) != "done" || jobAlive(id) {
+		t.Fatalf("the job: %v", p)
 	}
 	if _, err := cancelJob(id, "the owner pressed Cancel"); err != nil {
 		t.Fatal(err)
-	}
-	for i := 0; i < 200 && jobAlive(id); i++ {
-		time.Sleep(50 * time.Millisecond)
-	}
-	if jobAlive(id) {
-		t.Fatal("the checks did not stop on the cancel")
 	}
 	p = readProgress(dir)
 	if str(p["status"]) != "done" {
@@ -191,11 +146,11 @@ func TestCancelDuringRecheckKeepsDone(t *testing.T) {
 		e := obj(x)
 		states[str(e["id"])] = str(e["state"])
 	}
-	if states["ok1"] != "in_tally" || states["un1"] != "unknown" {
+	if states["ok1"] != "posted" || states["un1"] != "posted" {
 		t.Fatalf("the items after the cancel: %v", states)
 	}
-	if logLines("the later checks stopped") < 1 || logLines("Posting job "+id+" cancelled:") > 0 {
-		t.Fatal("the log: the checks' stop is not named, or the job was finished as cancelled")
+	if logLines("Posting job "+id+" cancelled:") > 0 {
+		t.Fatal("the job was finished as cancelled")
 	}
 	_ = filepath.Join(dir, "cancel")
 }

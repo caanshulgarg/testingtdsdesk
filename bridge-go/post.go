@@ -1,5 +1,6 @@
-// Posting to Tally: masters first, then entries, each with its own answer; every entry posted is read back by its
-// FinCom tag (TDSDesk:<id>, first in the narration). As bridge 1.15.0 (Invoke-Import, Read-ImportResult, Remove-TallyVoucher).
+// Posting to Tally: masters first (one request each), then the vouchers in batched requests; Tally's import reply is
+// trusted (round 15, 03-Oct-2026: no read-back, no duplicate check against Tally). As bridge 1.15.0 (Invoke-Import,
+// Read-ImportResult, Remove-TallyVoucher).
 package main
 
 import (
@@ -8,7 +9,6 @@ import (
 	"html"
 	"regexp"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -34,7 +34,8 @@ func readImportResult(text string) M {
 			msg = "Tally did not create it."
 		}
 	}
-	return M{"ok": ok, "created": created, "altered": altered, "errors": errors_, "exceptions": exceptions, "ignored": ignored, "message": msg, "lastVchId": group(`<LASTVCHID>\s*(\d+)\s*</LASTVCHID>`, text, 1)}
+	return M{"ok": ok, "created": created, "altered": altered, "errors": errors_, "exceptions": exceptions, "ignored": ignored, "message": msg, "lastVchId": group(`<LASTVCHID>\s*(\d+)\s*</LASTVCHID>`, text, 1),
+		"lineErrors": toAny(errs)} // round 15: the LINEERROR texts themselves
 }
 
 // the fixed start of every Import Data request (importEnvelope): the allow-list's Import fast path matches only this,
@@ -71,7 +72,275 @@ func postingAllowedFor(company string) error {
 	return nil
 }
 
-// masters first, then vouchers, one request each so every item gets its own result
+// --- round 15 (03-Oct-2026, the owner's decision): posting is fast and never held by a read-back; Tally's import
+// reply is trusted; no voucher id is ever inferred. Nothing in the posting path asks Tally anything but the one
+// company check and the imports: no duplicate check against Tally (TDSDeskDupCheck), no tag read-back (FinComTag), no
+// voucher-id lookup (FinComByMaster), no "checking" cycle. Those requests stay in the code for the read test and the
+// owner-started Check Tally only. The duplicate check is this computer's own record (sync\posted-ids.json).
+
+const (
+	defaultBatchBills = 10
+	defaultBatchBank  = 50
+	maxBatch          = 500
+)
+
+// a batch size within 1..500
+func clampBatch(n int) int {
+	if n < 1 {
+		return 1
+	}
+	if n > maxBatch {
+		return maxBatch
+	}
+	return n
+}
+
+// bills (vouchers that are not bank lines) per import request: PostBatchBills (the file, or FinCom's beat), default 10
+func postBatchBills() int { return clampBatch(keepNum("PostBatchBills", defaultBatchBills)) }
+
+// bank lines per import request: PostBatchBank, default 50
+func postBatchBank() int { return clampBatch(keepNum("PostBatchBank", defaultBatchBank)) }
+
+// a bank line: marked so by FinCom (bank: true), else a Payment, Receipt or Contra voucher
+func isBankItem(it M) bool {
+	if truthy(it["bank"]) {
+		return true
+	}
+	x := str(it["xml"])
+	vt := group(`<VOUCHERTYPENAME>([^<]*)</VOUCHERTYPENAME>`, x, 1)
+	if strings.TrimSpace(vt) == "" {
+		vt = group(`VCHTYPE="([^"]*)"`, x, 1)
+	}
+	switch strings.ToLower(strings.TrimSpace(html.UnescapeString(vt))) {
+	case "payment", "receipt", "contra":
+		return true
+	}
+	return false
+}
+
+// why an entry cannot be sent at all ("" when it can): no valid date, or not a VOUCHER, LEDGER or GROUP (a voucher type
+// may only have its numbering changed: no other field, and only an Alter)
+func cannotSend(x string) string {
+	vtOnly := false
+	if re(`^\s*<VOUCHERTYPE\b`).MatchString(x) {
+		inner := re(`(?s)^\s*<VOUCHERTYPE[^>]*>|</VOUCHERTYPE>\s*$`).ReplaceAllString(x, "")
+		tags := re(`<([A-Z.]+)>`).FindAllStringSubmatch(inner, -1)
+		other := false
+		for _, t := range tags {
+			if t[1] != "NAME" && t[1] != "NUMBERINGMETHOD" && t[1] != "PREVENTDUPLICATES" {
+				other = true
+			}
+		}
+		vtOnly = strings.Contains(x, `ACTION="Alter"`) && len(tags) > 0 && !other
+	}
+	// a voucher without a proper date never reaches Tally (Tally answers "Voucher date is missing" but may still make it)
+	if re(`^\s*<VOUCHER\b`).MatchString(x) && !re(`<DATE>(19|20)\d\d(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])</DATE>`).MatchString(x) {
+		return "The entry has no valid date, so it was not sent to Tally."
+	}
+	if !re(`^\s*<(VOUCHER|LEDGER|GROUP)\b`).MatchString(x) && !vtOnly {
+		return "Only VOUCHER, LEDGER or GROUP objects can be posted, or a voucher type's numbering changed."
+	}
+	return ""
+}
+
+// one import request: its kind, Tally's report, and the entries ({id, xml}) it carries in one TALLYMESSAGE
+type importReq struct {
+	kind, report string
+	bank         bool
+	items        []M
+}
+
+func (r importReq) envelope(company string) string {
+	var b strings.Builder
+	b.WriteString(`<TALLYMESSAGE xmlns:UDF="TallyUDF">`)
+	for _, it := range r.items {
+		b.WriteString(str(it["xml"]))
+	}
+	b.WriteString("</TALLYMESSAGE>")
+	return importEnvelope(r.report, company, b.String())
+}
+
+// the requests for these entries: each master on its own (as always), then the bills in requests of PostBatchBills,
+// then the bank lines in requests of PostBatchBank
+func planImports(masters, vouchers []M) []importReq {
+	var o []importReq
+	for _, m := range masters {
+		o = append(o, importReq{kind: "master", report: "All Masters", items: []M{m}})
+	}
+	var bills, bank []M
+	for _, v := range vouchers {
+		if isBankItem(v) {
+			bank = append(bank, v)
+		} else {
+			bills = append(bills, v)
+		}
+	}
+	chunk := func(a []M, n int, isBank bool) {
+		for len(a) > 0 {
+			k := minI(n, len(a))
+			o = append(o, importReq{kind: "voucher", report: "Vouchers", bank: isBank, items: a[:k]})
+			a = a[k:]
+		}
+	}
+	chunk(bills, postBatchBills(), false)
+	chunk(bank, postBatchBank(), true)
+	return o
+}
+
+// Tally's reply in one line: "Tally's reply: created 3 of 5, errors 2: <LINEERROR>"
+func replyLine(s int, rr M, lineErr []string) string {
+	l := fmt.Sprintf("Tally's reply: created %d of %d", toInt(rr["created"]), s)
+	for _, k := range []string{"altered", "errors", "exceptions", "ignored"} {
+		if n := toInt(rr[k]); n > 0 {
+			l += fmt.Sprintf(", %s %d", k, n)
+		}
+	}
+	if len(lineErr) > 0 {
+		l += ": " + strings.Join(lineErr, " | ")
+	}
+	return l
+}
+
+func round3(f float64) float64 { return float64(int64(f*1000+0.5)) / 1000 }
+
+// the voucher's date (yyyymmdd) and type, from the XML sent
+func voucherDateType(x string) (string, string) {
+	vt := strings.TrimSpace(group(`<VOUCHERTYPENAME>([^<]*)</VOUCHERTYPENAME>`, x, 1))
+	if vt == "" {
+		vt = strings.TrimSpace(group(`VCHTYPE="([^"]*)"`, x, 1))
+	}
+	return group(`<DATE>(\d{8})</DATE>`, x, 1), html.UnescapeString(vt)
+}
+
+// what one import request came to
+type importOutcome struct {
+	results []M     // one per entry (nil when err is set)
+	note    M       // {n, kind, seconds, created, altered, exceptions, ignored, errors, lastVchId} for the job view
+	err     error   // Tally not reached, or it did not answer (tallyNoAnswer tells which)
+	seconds float64 // how long the request took
+}
+
+// one import request to Tally, and the rule on its reply (A2): CREATED + ALTERED == S, ERRORS 0, EXCEPTIONS 0 and no
+// LINEERROR -> every entry is posted (ok, byReply, verified false; vchId only when S == 1); anything else -> every entry
+// needs review with Tally's counts and words, accepted when Tally made any. Every voucher Tally accepted is recorded
+// as sent on this computer, so no later job sends it again
+func sendImport(port int, company, job string, r importReq) importOutcome {
+	t0 := time.Now()
+	sentAt := t0.Format(time.RFC3339)
+	raw, err := invokeTally(fin, port, r.envelope(company), 0)
+	secs := round3(time.Since(t0).Seconds())
+	if err != nil {
+		return importOutcome{err: err, seconds: secs}
+	}
+	rr := readImportResult(raw)
+	shown := re(`^.*?(<IMPORTRESULT>|<RESPONSE>)`).ReplaceAllString(flat(raw), "$1")
+	writeLog("    Tally replied: " + cut(shown, 400))
+	s := len(r.items)
+	created, altered, errs, exc, ign, lv := toInt(rr["created"]), toInt(rr["altered"]), toInt(rr["errors"]), toInt(rr["exceptions"]), toInt(rr["ignored"]), str(rr["lastVchId"])
+	lineErr := strs(rr["lineErrors"])
+	trusted := created+altered == s && errs == 0 && exc == 0 && len(lineErr) == 0
+	note := M{"n": s, "kind": r.kind, "seconds": secs, "created": created, "altered": altered, "exceptions": exc, "ignored": ign, "errors": errs, "lastVchId": lv}
+	var out []M
+	for _, it := range r.items {
+		id, x := it["id"], str(it["xml"])
+		b := M{"id": id, "kind": r.kind, "company": company, "port": port, "lastVchId": lv, "created": created, "altered": altered, "errors": errs, "exceptions": exc, "ignored": ign,
+			"sentAt": sentAt, "secondsReq": secs, "batchN": s, "batchEnd": lv}
+		vchID := ""
+		if s == 1 && lv != "" {
+			vchID = lv // one entry in the request: Tally's last voucher id is its own; never inferred for more
+		}
+		if r.kind == "voucher" {
+			b["vchDate"], b["vchType"] = voucherDateType(x)
+		}
+		if trusted {
+			b["ok"], b["verified"], b["byReply"], b["message"] = true, false, true, ""
+			if vchID != "" {
+				b["vchId"] = vchID
+			}
+			if altered > 0 && created == 0 {
+				b["altered1"] = true
+				if r.kind != "voucher" {
+					b["message"] = "Altered in Tally: it existed already"
+				}
+			}
+		} else {
+			b["ok"], b["needsReview"], b["accepted"] = false, true, created+altered > 0
+			b["lineError"] = toAny(lineErr)
+			b["message"] = replyLine(s, rr, lineErr)
+		}
+		if r.kind == "voucher" && (trusted || created+altered > 0) {
+			_ = noteSent(acceptedKey(str(id), x), company, job, lv, s, lv, vchID)
+		}
+		out = append(out, b)
+	}
+	return importOutcome{results: out, note: note, seconds: secs}
+}
+
+// Tally took the request and did not answer: the outcome of every entry is unknown. Each is recorded as sent (never
+// sent again by this bridge); no "checking" starts: the owner's Check Tally, or the next comparison of the books,
+// settles it
+const unknownLine = "Sent to Tally, but no answer came; not sent again by this bridge. Check Tally in FinCom (or the next comparison of the books) settles whether it is there"
+
+func unknownResults(port int, company, job string, r importReq, err error, secs float64) []M {
+	sentAt := time.Now().Add(-time.Duration(secs * float64(time.Second))).Format(time.RFC3339)
+	var out []M
+	for _, it := range r.items {
+		id, x := it["id"], str(it["xml"])
+		b := M{"id": id, "kind": r.kind, "company": company, "port": port, "ok": false, "outcomeUnknown": true, "sent": true, "state": "unknown", "message": unknownLine,
+			"detail": tallyTrouble(err.Error()), "sentAt": sentAt, "secondsReq": secs, "batchN": len(r.items)}
+		if r.kind == "voucher" {
+			b["vchDate"], b["vchType"] = voucherDateType(x)
+			_ = noteSent(acceptedKey(str(id), x), company, job, "", len(r.items), "", "")
+		}
+		out = append(out, b)
+	}
+	return out
+}
+
+// A5: the FinCom-side duplicate check, before sending: an id this computer already sent (posted-ids.json) is refused
+// with the date and Tally's id when known; nil when it may go. Nothing is asked of Tally
+func sentBeforeRefusal(id any, xml string) M {
+	key := acceptedKey(str(id), xml)
+	a := acceptedInfo(key)
+	if a == nil {
+		return nil
+	}
+	when := str(a["sentAt"])
+	if when == "" {
+		when = str(a["acceptedAt"])
+	}
+	if when == "" {
+		when = str(a["at"])
+	}
+	day := when
+	if t, ok := parseTime(when); ok {
+		day = t.Format("02-01-2006")
+	}
+	tid := ""
+	switch {
+	case str(a["vchId"]) != "":
+		tid = "(Tally id " + str(a["vchId"]) + ")"
+	case str(a["masterId"]) != "":
+		tid = "(Tally id " + str(a["masterId"]) + ")"
+	case str(a["batchEnd"]) != "" && toInt(a["batchN"]) > 1:
+		tid = fmt.Sprintf("(Tally ids up to %s, sent in a batch of %d)", str(a["batchEnd"]), toInt(a["batchN"]))
+	case str(a["lastVchId"]) != "":
+		tid = "(Tally id " + str(a["lastVchId"]) + ")"
+	default:
+		tid = "(Tally id not given)"
+	}
+	msg := "already sent from this computer on " + day + " " + tid
+	if j := str(a["job"]); j != "" {
+		msg += ", job " + j
+	}
+	return M{"id": id, "kind": "voucher", "ok": false, "alreadySent": true, "refused": true, "state": "failed", "message": msg,
+		"sentOn": when, "vchId": str(a["vchId"]), "lastVchId": or(str(a["lastVchId"]), str(a["batchEnd"])), "sentJob": str(a["job"])}
+}
+
+// POST /import (the browser's one-request way): masters first, one each; then the vouchers in batched requests. The
+// company's GUID is checked once (unless the caller did); each voucher is checked against this computer's record; the
+// reply decides (sendImport). Tally not answering a request: its entries are unknown (recorded as sent); Tally not
+// reached at all: nothing was sent, said so
 func invokeImport(p M) (M, error) {
 	company, job := str(p["company"]), str(p["job"])
 	if err := postingAllowedFor(company); err != nil {
@@ -85,14 +354,14 @@ func invokeImport(p M) (M, error) {
 		return nil, err
 	}
 	// the company's GUID (a job checked it already): another company of the same name is never posted to; Tally not
-	// answering the check: nothing is posted (each entry says so, as the duplicate check does)
+	// answering the check: nothing is posted (each entry says so)
 	var stopAll M
 	if !truthy(p["guidChecked"]) {
 		g, err := companyCheck(fin, company, port)
 		switch {
 		case err != nil:
 			writeLog("  company check of " + company + ": NOT POSTED, could not check Tally: " + tallyTrouble(err.Error()))
-			stopAll = M{"ok": false, "checkFailed": true, "message": dupCheckFailedMsg, "detail": tallyTrouble(err.Error())}
+			stopAll = M{"ok": false, "checkFailed": true, "message": "Could not check Tally, not posted. Try again.", "detail": tallyTrouble(err.Error())}
 		case guardCompanyGUID(company, g) != nil:
 			gerr := guardCompanyGUID(company, g)
 			writeLog("  NOT POSTED: " + gerr.Error())
@@ -100,7 +369,6 @@ func invokeImport(p M) (M, error) {
 		}
 	}
 	results := []M{}
-	// the job follows each entry as Tally answers it (FinCom shows it live)
 	onItem, _ := p["onItem"].(func(M))
 	add := func(r M) {
 		results = append(results, r)
@@ -108,19 +376,39 @@ func invokeImport(p M) (M, error) {
 			onItem(r)
 		}
 	}
-	var pending []M
-	groups := []struct {
-		kind, report string
-		items        []any
-	}{{"master", "All Masters", arr(p["masters"])}, {"voucher", "Vouchers", arr(p["vouchers"])}}
-	for _, g := range groups {
+	var masters, vouchers []M
+	// one posting at a time per Tally from the record check to the end of its imports: two tabs posting the same voucher
+	// at once cannot both pass the check before either is recorded
+	gate := postGate(port)
+	gate.Lock()
+	defer gate.Unlock()
+	for _, g := range []struct {
+		kind  string
+		items []any
+	}{{"master", arr(p["masters"])}, {"voucher", arr(p["vouchers"])}} {
 		for _, itv := range g.items {
 			it := obj(itv)
 			if it == nil {
 				continue
 			}
-			x := str(it["xml"])
-			id := it["id"]
+			x, id := str(it["xml"]), it["id"]
+			if g.kind == "voucher" {
+				x, _ = stampFinComID(x, id) // its FinCom id at the end of its narration, when FinCom did not write one
+			}
+			if why := cannotSend(x); why != "" {
+				add(M{"id": id, "kind": g.kind, "ok": false, "message": why})
+				continue
+			}
+			// this computer's record first: it needs nothing of Tally, so a known duplicate is refused even while Tally
+			// is not answering
+			if g.kind == "voucher" {
+				if r := sentBeforeRefusal(id, x); r != nil {
+					r["company"], r["port"] = company, port
+					writeLog("  voucher " + str(id) + ": NOT SENT: " + str(r["message"]))
+					add(r)
+					continue
+				}
+			}
 			if stopAll != nil {
 				r := M{"id": id, "kind": g.kind, "company": company, "port": port}
 				for k, v := range stopAll {
@@ -130,209 +418,34 @@ func invokeImport(p M) (M, error) {
 				continue
 			}
 			if g.kind == "voucher" {
-				x, _ = stampFinComID(x, id) // its FinCom id at the end of its narration, when FinCom did not write one
-			}
-			// a voucher type may only have its numbering changed: no other field, and only an Alter
-			vtOnly := false
-			if re(`^\s*<VOUCHERTYPE\b`).MatchString(x) {
-				inner := re(`(?s)^\s*<VOUCHERTYPE[^>]*>|</VOUCHERTYPE>\s*$`).ReplaceAllString(x, "")
-				tags := re(`<([A-Z.]+)>`).FindAllStringSubmatch(inner, -1)
-				other := false
-				for _, t := range tags {
-					if t[1] != "NAME" && t[1] != "NUMBERINGMETHOD" && t[1] != "PREVENTDUPLICATES" {
-						other = true
-					}
-				}
-				vtOnly = strings.Contains(x, `ACTION="Alter"`) && len(tags) > 0 && !other
-			}
-			// a voucher without a proper date never reaches Tally (Tally answers "Voucher date is missing" but may still make it)
-			if re(`^\s*<VOUCHER\b`).MatchString(x) && !re(`<DATE>(19|20)\d\d(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])</DATE>`).MatchString(x) {
-				add(M{"id": id, "kind": g.kind, "ok": false, "message": "The entry has no valid date, so it was not sent to Tally."})
-				continue
-			}
-			if !re(`^\s*<(VOUCHER|LEDGER|GROUP)\b`).MatchString(x) && !vtOnly {
-				add(M{"id": id, "kind": g.kind, "ok": false, "message": "Only VOUCHER, LEDGER or GROUP objects can be posted, or a voucher type's numbering changed."})
-				continue
-			}
-			// 2.1.4: every voucher is looked for in Tally immediately before it is sent (one posting at a time per Tally
-			// from the check to the end of its import); found, or Tally not answering the check: not sent
-			isVch := g.kind == "voucher" && re(`^\s*<VOUCHER\b`).MatchString(x)
-			var gate *sync.Mutex
-			if isVch {
-				gate = postGate(port)
-				gate.Lock()
-				if r := dupCheck(port, company, id, x); r != nil {
-					gate.Unlock()
-					add(r)
-					continue
-				}
-			}
-			raw, err := invokeTally(fin, port, importEnvelope(g.report, company, `<TALLYMESSAGE xmlns:UDF="TallyUDF">`+x+"</TALLYMESSAGE>"), 0)
-			if gate != nil {
-				gate.Unlock()
-			}
-			if err != nil {
-				add(M{"id": id, "kind": g.kind, "ok": false, "message": "Tally did not answer: " + err.Error()})
-				continue
-			}
-			r := readImportResult(raw)
-			f := flat(raw)
-			r["replySnip"] = cut(f, 300)
-			shown := re(`^.*?(<IMPORTRESULT>|<RESPONSE>)`).ReplaceAllString(f, "$1")
-			writeLog("    Tally replied: " + cut(shown, 400))
-			r["id"], r["kind"], r["company"], r["port"] = id, g.kind, company, port
-			if r["ok"] == true && g.kind == "voucher" {
-				r["xmlSent"] = x
-				pending = append(pending, r)
-			}
-			add(r)
-			// one clear word for what Tally did (02-Oct-2026: "created (not read back)" was followed by "verified in Tally",
-			// and a ledger that existed already was logged as created though Tally answered ALTERED)
-			st := "FAILED " + str(r["message"])
-			if r["ok"] == true {
-				switch {
-				case toInt(r["altered"]) > 0 && toInt(r["created"]) == 0:
-					st = "altered in Tally (it existed already)"
-					r["altered1"] = true
-					if g.kind != "voucher" {
-						r["message"] = "Altered in Tally: it existed already"
-					}
-				case g.kind == "voucher":
-					st = "sent to Tally; reading it back"
-				default:
-					st = "created in Tally"
-				}
-			}
-			writeLog("  " + g.kind + " " + str(id) + ": " + st)
-		}
-	}
-	// one read-back for everything just posted. Round 6 (03-Oct-2026): FIRST each entry by the voucher id Tally gave
-	// (LASTVCHID, looked up directly with FinComByMaster); the tag read-back (the day's entries) is the second check
-	byID := map[string]M{}            // id -> the head found by Tally's voucher id
-	lookedUpBy := map[string]string{} // id -> what the lookup said when it did not confirm
-	var unresolved []M
-	for _, r := range pending {
-		xs := str(r["xmlSent"])
-		tag, lv := reTag.FindString(xs), str(r["lastVchId"])
-		if lv == "" {
-			unresolved = append(unresolved, r)
-			continue
-		}
-		k, e := voucherByMaster(port, company, group(`<DATE>(\d{8})</DATE>`, xs, 1), lv)
-		switch {
-		case e != nil:
-			lookedUpBy[str(r["id"])] = "Tally did not answer (" + cut(e.Error(), 80) + ")"
-		case k == nil:
-			lookedUpBy[str(r["id"])] = "not found in its month"
-		case k.cancelled:
-			lookedUpBy[str(r["id"])] = "found, but cancelled"
-		case otherTag(k.narration, tag):
-			lookedUpBy[str(r["id"])] = "found, but it carries another entry's tag"
-		default:
-			byID[str(r["id"])] = headOfKey(*k)
-			if hasTag(k.narration, tag) {
-				writeLog("  voucher " + str(r["id"]) + ": confirmed by Tally's voucher id " + lv + " (looked up directly; its narration carries " + tag + ")")
+				vouchers = append(vouchers, M{"id": id, "xml": x, "bank": it["bank"]})
 			} else {
-				writeLog("  voucher " + str(r["id"]) + ": confirmed by Tally's voucher id " + lv + " (looked up directly; its narration in Tally does not carry " + or(tag, "a tag") + ")")
+				masters = append(masters, M{"id": id, "xml": x})
 			}
-			continue
 		}
-		unresolved = append(unresolved, r)
 	}
-	if len(pending) > 0 {
-		var dates []string
-		for _, r := range unresolved {
-			if d := group(`<DATE>(\d{8})</DATE>`, str(r["xmlSent"]), 1); d != "" {
-				dates = append(dates, d)
+	reqs := planImports(masters, vouchers)
+	for i, r := range reqs {
+		o := sendImport(port, company, job, r)
+		var res []M
+		switch {
+		case o.err != nil && !tallyNoAnswer(o.err):
+			// nothing reached Tally (refused here, or Tally not reachable): not sent, said so; the browser may try again
+			msg := "Tally did not answer: " + tallyTrouble(o.err.Error())
+			for _, it := range r.items {
+				res = append(res, M{"id": it["id"], "kind": r.kind, "ok": false, "notSent": true, "company": company, "port": port, "message": msg})
 			}
+			writeLog(fmt.Sprintf("  request %d of %d (%d %s): not sent: %s", i+1, len(reqs), len(r.items), r.kind, tallyTrouble(o.err.Error())))
+		case o.err != nil:
+			res = unknownResults(port, company, job, r, o.err, o.seconds)
+			writeLog(fmt.Sprintf("  request %d of %d (%d %s): no answer in %.1f s; outcome unknown, recorded as sent, not sent again", i+1, len(reqs), len(r.items), r.kind, o.seconds))
+		default:
+			res = o.results
+			writeLog(fmt.Sprintf("  request %d of %d: %d %s in %.1f s (created %d, altered %d, exceptions %d, ignored %d, last Tally id %s)", i+1, len(reqs), len(r.items), r.kind, o.seconds,
+				toInt(o.note["created"]), toInt(o.note["altered"]), toInt(o.note["exceptions"]), toInt(o.note["ignored"]), or(str(o.note["lastVchId"]), "none")))
 		}
-		dates = uniqSorted(dates)
-		var heads []M
-		listSeesOptional := false
-		from, to := "", ""
-		if len(dates) > 0 {
-			from, to = dates[0], dates[len(dates)-1]
-			// 2.1.5: read back by FinComTag alone (each date's entries, heads and narration)
-			if h, e := tagHeadsOn(port, company, dates); e == nil {
-				heads = h
-				for _, x := range h {
-					if strings.EqualFold(str(x["optional"]), "yes") {
-						listSeesOptional = true
-						break
-					}
-				}
-			}
-			writeLog(fmt.Sprintf("  read-back for the batch: %d vouchers listed for %s to %s", len(heads), from, to))
-		}
-		for _, r := range pending {
-			xs := str(r["xmlSent"])
-			tag, lv := reTag.FindString(xs), str(r["lastVchId"])
-			lookedUp := lookedUpBy[str(r["id"])]
-			// first the head Tally's voucher id gave; else the day's list: by the tag wherever it is in the narration, else
-			// by the voucher id among the heads (never one carrying another entry's tag)
-			hit, how := byID[str(r["id"])], "voucher id"
-			if hit == nil {
-				hit, how = matchHead(heads, tag, lv)
-				if hit != nil && how == "voucher id" {
-					writeLog("  voucher " + str(r["id"]) + ": confirmed by Tally's voucher id " + lv + " among the day's entries (its narration in Tally does not carry " + or(tag, "a tag") + ")")
-				}
-			}
-			switch {
-			case hit != nil:
-				confirmedInTally(company, hit, xs, how, str(r["id"]))
-				r["verified"], r["optional"] = true, strings.EqualFold(str(hit["optional"]), "yes")
-				r["vchNumber"], r["vchType"], r["guid"], r["masterId"], r["vchDate"] = str(hit["number"]), str(hit["type"]), str(hit["guid"]), str(hit["masterId"]), str(hit["date"])
-			case re(`<ISOPTIONAL>\s*Yes`).MatchString(xs) && !listSeesOptional:
-				r["verified"] = nil
-				r["verifyNote"] = "posted as an Optional voucher, which this Tally does not list"
-				r["message"] = "Tally created this as an Optional voucher, which does not show in the Day Book and cannot be read back here. Look for it in Display More Reports > Exception Reports > Optional Vouchers before posting it again."
-			case len(heads) > 0:
-				r["verified"], r["ok"] = false, false
-				elsewhere := ""
-				if tag != "" {
-					for _, sx := range openCompanies(false) {
-						if toInt(sx["port"]) != port {
-							continue
-						}
-						for _, cx := range sessCompanies(sx) {
-							cn := str(cx["name"])
-							if cn == "" || sameCompany(cn, company) {
-								continue
-							}
-							if other, e := tagHeadsOn(port, cn, dates); e == nil {
-								for _, h := range other {
-									if hasTag(str(h["narration"]), tag) {
-										elsewhere = cn
-										break
-									}
-								}
-							}
-							if elsewhere != "" {
-								break
-							}
-						}
-						if elsewhere != "" {
-							break
-						}
-					}
-				}
-				if elsewhere != "" {
-					r["wrongCompany"] = elsewhere
-					r["message"] = "Tally put this entry into '" + elsewhere + "', not '" + company + "'. Delete it from '" + elsewhere + "' in Tally, close that company (or make '" + company + "' the active one), then post again."
-					writeLog("  WRONG COMPANY: " + tag + " went into '" + elsewhere + "' instead of '" + company + "'")
-				} else if acceptedByTally(r) {
-					// fault 1 (03-Oct-2026): Tally accepted it (CREATED with a voucher id): never failed, never sent again
-					markAccepted(r, company, job, lv, heads, lookedUp)
-				} else {
-					r["message"] = "Tally replied 'created', but the entry cannot be found in '" + company + "' or in any other company open in this Tally. It was not marked as posted. Tally's reply: " + str(r["replySnip"])
-				}
-			case acceptedByTally(r):
-				markAccepted(r, company, job, lv, heads, or(lookedUp, "Tally listed no vouchers for those dates"))
-			default:
-				r["verified"] = nil
-				r["verifyNote"] = "Tally listed no vouchers for those dates"
-			}
-			delete(r, "xmlSent")
+		for _, x := range res {
+			add(x)
 		}
 	}
 	okN := 0
@@ -341,7 +454,7 @@ func invokeImport(p M) (M, error) {
 			okN++
 		}
 	}
-	writeLog(fmt.Sprintf("Import into '%s': %d of %d created", company, okN, len(results)))
+	writeLog(fmt.Sprintf("Import into '%s': %d of %d posted by Tally's reply", company, okN, len(results)))
 	out := make([]any, len(results))
 	for i, r := range results {
 		out[i] = r

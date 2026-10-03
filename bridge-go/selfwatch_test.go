@@ -109,7 +109,7 @@ func TestPostingWorksWhenStopped(t *testing.T) {
 	liveFrom(td)
 	setReadStop("self", "a request to Tally (Day Book) took 21 s")
 	n0 := f.n("")
-	if r := postOne(t, "st1", finVoucher("st1", fgParty, "ST-1", td, "5.00")); r["ok"] != true || r["verified"] != true {
+	if r := postOne(t, "st1", finVoucher("st1", fgParty, "ST-1", td, "5.00")); r["ok"] != true || r["byReply"] != true {
 		t.Fatalf("a posting while reading is stopped: %v", r)
 	}
 	for _, id := range f.ids()[n0:] {
@@ -120,8 +120,8 @@ func TestPostingWorksWhenStopped(t *testing.T) {
 	if f.n("Import") != 1 {
 		t.Fatal("not posted")
 	}
-	// the same id again: the exact check still works, not posted
-	if r := postOne(t, "st1", finVoucher("st1", fgParty, "ST-1", td, "5.00")); r["ok"] == true || r["already"] != true {
+	// the same id again: this computer's record still refuses it (round 15), not posted
+	if r := postOne(t, "st1", finVoucher("st1", fgParty, "ST-1", td, "5.00")); r["ok"] == true || r["alreadySent"] != true {
 		t.Fatalf("posted twice: %v", r)
 	}
 	readsRefused(t, f)

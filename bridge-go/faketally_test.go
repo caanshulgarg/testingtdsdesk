@@ -327,7 +327,7 @@ func Test02OctPostingDuringRead(t *testing.T) {
 	t0 := time.Now()
 	r := postOne(t, "dr1", finVoucher("dr1", fgParty, "DR-1", td, "7.00"))
 	el := time.Since(t0)
-	if r["ok"] != true || r["verified"] != true {
+	if r["ok"] != true || r["byReply"] != true { // round 15: posted by Tally's reply, nothing read back
 		t.Fatalf("the posting during the read: %v", r)
 	}
 	if el > 3*time.Second {

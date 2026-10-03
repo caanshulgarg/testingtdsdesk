@@ -152,7 +152,7 @@ func TestTagFoundAnywhere(t *testing.T) {
 			t.Errorf("hasTag(%q, %q) = %v, want %v", cs.n, cs.tag, !cs.want, cs.want)
 		}
 	}
-	// the read-back after a posting (findPostedTags): each tag found wherever it is; a prefix is not a match
+	// the tag read (findPostedTags, kept for Check Tally; round 15: no posting calls it): each tag found wherever it is; a prefix is not a match
 	item := func(id, tag string) M {
 		return M{"id": id, "kind": "voucher", "xml": `<VOUCHER ACTION="Create"><DATE>` + td + `</DATE><NARRATION>` + tag + ` | x</NARRATION></VOUCHER>`}
 	}
@@ -172,13 +172,8 @@ func TestTagFoundAnywhere(t *testing.T) {
 	if r["sameId"] != true {
 		t.Fatalf("the duplicate check did not find the id in the middle of the narration: %v", r)
 	}
-	// a lost posting is sent again only when its tag (wherever it is) was looked for and not found
-	if again, _ := resendLost(M{"kind": "voucher", "xml": `<VOUCHER><NARRATION>TDSDesk:q9 | x</NARRATION></VOUCHER>`}, true, false); !again {
-		t.Fatal("a tagged entry, looked for and not found, is sent again")
-	}
-	if again, why := resendLost(M{"kind": "voucher", "xml": `<VOUCHER><NARRATION>x</NARRATION></VOUCHER>`}, true, false); again || why == "" {
-		t.Fatal("an entry without a tag is never sent again on a guess")
-	}
+	// (round 15, the owner's decision of 03-Oct-2026: a lost posting is never sent again; resendLost is gone. The
+	// read-back and the duplicate check above are tested as reads, for Check Tally; no posting calls them)
 }
 
 // --- 18b. the measuring tool stops at the FIRST request that does not answer: nothing more is sent (the small company
