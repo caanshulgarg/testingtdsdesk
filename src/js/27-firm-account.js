@@ -1356,10 +1356,13 @@ function doAct(act, t){
     case "booksPick": { const i = document.getElementById("booksIn"); if (i){ i.value = ""; i.click(); } break; }
     case "mastersPick": { const i = document.getElementById("mastersIn"); if (i){ i.value = ""; i.click(); } break; }
     case "setupKeepOn": LK.keepOn(true).then(() => { (S.setupKeep || {})[S.coId] = null; render(); }); break;
-    case "keepNow":
+    case "keepNow": {
+      // 03-Oct-2026 (item 25): reading stopped from FinCom for this client's computer: nothing is asked, the toast says who and why
+      const stopped = typeof tallyStopFor === "function" && tallyStopFor(S.coId);
+      if (stopped){ toast("Reading is stopped by " + (stopped.who || "FinCom") + " (" + (stopped.reason || "no reason given") + "); resume it on the Tally page"); break; }
       if (Bridge.on() && (Bridge.up() || !TCloud.has(S.coId))) LK.keepSet({now: true}, "Updating from Tally now. The books here follow in a few minutes.");
       else TCloud.rpc("tally_want_update", {p_client: S.coId}).then(j => toast(j && j.ok ? "The Tally computer is asked to update; it starts within a minute, and the books here follow in a few minutes." : "No Tally computer is linked to this client yet."), e => toast("Could not ask the Tally computer: " + ((e && e.message) || e)));
-      break;
+      break; }
     case "setupModeBridge": case "setupModeFiles":
       Bridge.call("/keepmode" + (Bridge.pinQ() ? "?" + Bridge.pinQ().slice(1) : ""), {company: BridgeSeed.company(), mode: act === "setupModeBridge" ? "bridge" : "files"}, 20000)
         .then(j => { (S.setupKeep = S.setupKeep || {})[S.coId] = {at: Date.now(), st: j}; toast(act === "setupModeBridge" ? "The bridge will copy the year from Tally in the evening, or when nobody is at the computer." : "The bridge waits for the day book files."); render(); }, e => toast("The bridge could not do it: " + ((e && e.message) || e) + (/Unknown|No such/i.test(String(e && e.message)) ? " (it needs FinCom Bridge 2.1: install it from the Tally page)" : "")));

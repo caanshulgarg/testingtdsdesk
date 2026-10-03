@@ -78,6 +78,9 @@ with sync_playwright() as p:
        "Update now (another client of the computer): nothing asked, 'Reading is stopped by <name> (<reason>); resume it on the Tally page' (%s)" % E("window.__toasts"))
     E("() => { window.__rpc = []; window.__toasts = []; window.__keep = []; tallyUpdateNow(S.coId); }"); pg.wait_for_timeout(400)
     ok(not E("window.__rpc") and not E("window.__keep") and E("window.__toasts") and E("window.__toasts")[0].startswith("Reading is stopped by Anshul"), "Update now for the open client (keepNow's way): refused the same way, the bridge here not asked")
+    # the other callers of keepNow (TopBar "Refresh books", FromTally "Update now", Books): the same refusal, the bridge here not asked
+    E("() => { window.__rpc = []; window.__toasts = []; window.__keep = []; doAct('keepNow'); }"); pg.wait_for_timeout(400)
+    ok(not E("window.__rpc") and not E("window.__keep") and E("window.__toasts") and E("window.__toasts")[0].startswith("Reading is stopped by Anshul"), "doAct('keepNow') (Refresh books, FromTally's Update now): refused the same way (%s)" % E("window.__toasts"))
     # the Post page's second line
     E("async (id) => { await openCompany(id); goStep('post', 'bills'); }", cid); pg.wait_for_timeout(700)
     pp = txt("#app [data-post-problem]")
