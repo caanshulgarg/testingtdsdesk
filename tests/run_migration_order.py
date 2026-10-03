@@ -5,7 +5,7 @@ Checks: every file runs, twice, and deletes nothing; after the run the release f
 (tally_release_approve checks pilot_allowlist_measured; tally_release_pilot clears it), which holds only because the
 revised migration-35 no longer defines tally_release_pilot / tally_release_approve (asserted on the file's text: running
 35 after 34 would otherwise put back the older functions without the allow-list check); migration-36's functions are
-there; every function of the five files is security definer with search_path = public, pg_temp."""
+there; every function of 35, 34 and 36 is security definer with search_path = public, pg_temp."""
 import os, re, sys, subprocess
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import pg_stand
@@ -60,9 +60,10 @@ try:
         ok(db.one("select count(*) from pg_proc where proname = %s and pronamespace = 'public'::regnamespace" % q(fn)) not in (None, "0"), "%s is there" % fn)
     ok("tally_balances" in fdef("tally_ledger_rename") and "trial balance" in fdef("tally_ledger_rename"), "tally_ledger_rename is migration-36's (the trial-balance check)")
     ok("seen_round" not in fdef("tally_ledger_round_batch") and "seen_round" in fdef("tally_ledger_round_seen"), "the batch counts, the stamp is tally_ledger_round_seen's (migration-36)")
-    # every function of the five files: security definer, search_path = public, pg_temp
+    # every function of 35, 34 and 36: security definer, search_path = public, pg_temp (32 and 33 ran on staging with 'public';
+    # 34 replaces their ingest functions)
     n = 0
-    for _, f in ORDER:
+    for _, f in ORDER[2:]:
         for fn in sorted(set(re.findall(r"function\s+public\.(\w+)\s*\(", open(os.path.join(SQLDIR, f)).read()))):
             for row in db.rows("select prosecdef, coalesce(array_to_string(proconfig, ','), '') as conf from pg_proc where proname = %s and pronamespace = 'public'::regnamespace" % q(fn)):
                 if row["prosecdef"] != "t": continue       # plain trigger functions touch no table

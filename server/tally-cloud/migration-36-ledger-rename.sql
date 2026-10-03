@@ -141,8 +141,9 @@ begin
     if hist then
       execute 'update tally_ledgers set before_clean = coalesce(before_clean, ''{}''::jsonb) || jsonb_build_object(''renamed'', coalesce(before_clean->''renamed'', ''[]''::jsonb) || $1) where book_id = $2 and name = $3'
         using jsonb_build_object('from', row_name, 'to', dst, 'at', now(), 'merged', true, 'guid', g, 'open', o_open, 'moved', moved), p_book, row_name;
-      execute 'update tally_ledgers set before_clean = coalesce(before_clean, ''{}''::jsonb) || jsonb_build_object(''renamed'', coalesce(before_clean->''renamed'', ''[]''::jsonb) || $1) where book_id = $2 and name = $3'
-        using jsonb_build_object('from', row_name, 'at', now(), 'merged', true, 'guid', g, 'moved', moved), p_book, dst;
+      -- on the row that stays: what came in (under 'merged', not 'renamed': the merged name is not an old name of this row)
+      execute 'update tally_ledgers set before_clean = coalesce(before_clean, ''{}''::jsonb) || jsonb_build_object(''merged'', coalesce(before_clean->''merged'', ''[]''::jsonb) || $1) where book_id = $2 and name = $3'
+        using jsonb_build_object('from', row_name, 'at', now(), 'guid', g, 'open', o_open, 'moved', moved), p_book, dst;
     end if;
   else
     -- a plain rename: the row keeps everything under the new name; its entries follow

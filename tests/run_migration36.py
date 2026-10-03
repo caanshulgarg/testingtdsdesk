@@ -185,6 +185,10 @@ try:
           and not exists (select 1 from tally_vouchers v where v.book_id = l.book_id and v.party = l.ledger) group by l.ledger order by count(*) desc, l.ledger limit 2""" % (q(B), q(X2)))]
     YG = led(Y)["tally_guid"]
     db.sql("update tally_ledgers set tally_guid = null where book_id = %s and name = %s" % (q(B), q(Z)))     # the row with the new name has no GUID yet (as a row made by name)
+    # openings on both (balanced against the renamed ledger, so the book still ties): the merge must carry them
+    db.sql("""update tally_ledgers set open = -500, open_sent = -500 where book_id = %(B)s and name = %(Y)s; update tally_ledgers set open = 300, open_sent = 300 where book_id = %(B)s and name = %(Z)s;
+              update tally_ledgers set open = open + 200, open_sent = coalesce(open_sent, open) + 200 where book_id = %(B)s and name = %(X)s;""" % {"B": q(B), "Y": q(Y), "Z": q(Z), "X": q(X2)})
+    ok(tb() == 0, "(openings put on both rows; the book ties)")
     yl, zl, ys, zs, yo, zo = lines_n(Y), lines_n(Z), lines_sum(Y), lines_sum(Z), led(Y), led(Z)
     ydays = {o["day"]: float(o["amount"]) for o in day_rows(Y)}; zdays = {o["day"]: float(o["amount"]) for o in day_rows(Z)}
     good, r = ren(YG, Y, Z)

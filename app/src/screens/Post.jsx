@@ -120,6 +120,7 @@ function billItem(co, e, canPost) {
 }
 
 // a bill row of Errors: number, party, date, amount — why
+const BillWhyText = ({ text }) => <span className="why">{text}</span>;
 const BillWhy = ({ e, why }) => <span className="why"><b>{e.x.invoiceNo || "—"}</b>{" · " + e.x.vendorName + " · " + fmtDate(e.x.invoiceDate) + " · " + money(num(e.x.total)) + " — "}<span data-why="">{why}</span></span>;
 // 3. Needs your attention: the bills to look at, the ones sent when Tally stopped answering, the ones Tally refused, and
 // the failed postings of the cloud (a refused bill of such a posting is listed inside it)
@@ -135,17 +136,25 @@ function Attention({ co, bills, canPost }) {
       <button className="btn small" data-back="" onClick={() => postBackToReview("bill", e.id)}>Back to review</button>
     </span>
   </li>;
-  if (!rows.length && !bills.jobs.length && !unknown.length && !refused.length) return <p className="note" data-post-noerrors="">Nothing needs your attention.</p>;
+  // 03-Oct-2026: a press of Post that ended in neither a job nor a result (an error on the way, a stop said only in a toast)
+  const pr = typeof postRefusedFor === "function" ? postRefusedFor(co.id) : null;
+  if (!rows.length && !bills.jobs.length && !unknown.length && !refused.length && !pr) return <p className="note" data-post-noerrors="">Nothing needs your attention.</p>;
   return <section className="post-sec" data-post-attention="">
     <h3>Needs your attention</h3>
     <ul className="post-attn">
+      {pr && <li data-attn-row="" data-attn-kind="post-refused">
+        <BillWhyText text={<><b>{"Post did not go through at " + tallyHm(pr.at) + " (" + pr.name + ")"}</b>{" — "}<span data-why="">{pr.why}</span>{" Nothing was sent to Tally. What to do: " + pr.what}</>} />
+        <span className="acts"><button className="btn small" data-dismiss="" onClick={() => { S.postRefused = null; render(); }}>Dismiss</button></span>
+      </li>}
       {rows.map((r) => <li key={r.e.id} data-attn-row="" data-bill-row={r.e.id} data-attn-kind={r.kind} data-attn-state={r.state || ""}>
         <BillWhy e={r.e} why={r.why} />
         {r.acts && <span className="acts">{r.acts}</span>}
       </li>)}
-      {unknown.map((e) => <li key={e.id} data-attn-row="" data-bill-row={e.id} data-attn-kind="unknown">
-        <BillWhy e={e} why={"Sent when Tally stopped answering. " + ((why[e.id] && why[e.id].reason) || "Checking whether it reached Tally") + (/…$/.test((why[e.id] && why[e.id].reason) || "") ? "" : "…") + " It is not sent again until Tally answers."} />
-      </li>)}
+      {unknown.map((e) => { const rs = (why[e.id] && why[e.id].reason) || "";
+        // Tally took it, the bridge could not confirm it: the cloud keeps it in state unknown and looks again; no Retry or Post again
+        return <li key={e.id} data-attn-row="" data-bill-row={e.id} data-attn-kind="unknown">
+          <BillWhy e={e} why={"Posted, not yet confirmed — checking whether it reached Tally" + (rs && !/^Checking whether/i.test(rs) ? " (" + rs.replace(/…$/, "") + ")" : "") + ". It is not sent again until the Tally computer has answered."} />
+        </li>; })}
       {alone.map((e) => refusedRow(e, false))}
       {bills.jobs.map((j) => { const left = CloudJobs.leftToSend(j), all = (CloudJobs.idsOf(j) || []).length, mine = inJob(j);
         return <li key={j.id} data-attn-row="" data-job={j.id} data-attn-kind="job">

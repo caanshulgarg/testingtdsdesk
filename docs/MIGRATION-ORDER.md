@@ -1,0 +1,43 @@
+# Cloud migrations: the order they run in
+
+The cloud copy's SQL lives in `server/tally-cloud/migration-*.sql`. Each file is add-only (nothing dropped, deleted or
+revoked; `begin; ... commit;`; safe to run twice) and is shown to the owner before it runs on staging
+(project `qbocskaiewaxqcvaunzc`). From migration 32 on, the files depend on one another, and one pair is order-sensitive.
+
+## A fresh database: 32 → 33 → 35 → 34 → 36 (→ 37 when it exists)
+
+| # | File | What it adds |
+|---|---|---|
+| 32 | `migration-32-sync-safety.sql` | the posting ids (`tally_post_ids`), the company lease, the sync cursor and rewind guard, `deleted_at` / `origin` / `tally_guid` / `alter_id` on entries and ledgers, voucher versions, the `tally_balances` view |
+| 33 | `migration-33-ledger-lists.sql` | ledger lists and marks (`tally_ledger_lists`, `tally_ledger_marks`, the mark log trigger), `tally_balances` without deleted ledgers, the year's openings in any capitals, `tally_ingest_ledgers_list` / `_g` with the list's source |
+| 35 | `migration-35-bridge-control.sql` | Stop reading / Resume (`tally_read_stops`, `tally_read_stop`, `tally_read_resume`) and the staged-release table `tally_bridge_releases`. It no longer defines the release functions (see the rule below) |
+| 34 | `migration-34-ledger-safety.sql` | the guard (a ledger with entries, an opening or a recent rename is never marked), rounds (`tally_ledger_rounds`, `tally_ledger_round_batch`, `tally_ledgers_mark_gone`), renames by GUID, full lists marking only when declared complete, and in **part E** the release functions `tally_release_pilot` / `tally_release_approve` with the allow-list check (`pilot_allowlist_measured`) |
+| 36 | `migration-36-ledger-rename.sql` | a rename carries the entries (lines, bills, parties, day totals as nil twins) and checks the trial balance before and after; the guard ignores nil twin day rows; `tally_ledger_round_batch` counts only and the new `tally_ledger_round_seen` stamps the GUIDs after tally-ingest's upsert, so a first round marks nothing |
+| 37 | `migration-37-*.sql` (when it exists) | the migration-32 follow-ups (id release, versions with lines, baseline clear, soft delete in `tally_ingest_day`, lease release, balances as on a date, the FinCom tag column, withdrawn releases) |
+
+Before 32 the files are independent of this order and were run long ago (`migration.sql` … `migration-31-clean-names.sql`).
+
+## The rule: never re-run 35 after 34
+
+Migration 34 was written after 35 and replaces the two release functions with the allow-list check. Running the old
+migration 35 after 34 put back the older functions without that check (staging, 02-Oct: 32, 33, 35, 34, a revised 35,
+then 34 part E again by hand). So:
+
+- the two functions were **taken out of migration 35** (round 4); they live in migration 34 part E only, and the top of
+  the 35 file says so;
+- on a fresh database 35 still runs **before** 34 (34 needs `tally_bridge_releases` and `tally_devices`);
+- **never run 35 after 34.** If it happens anyway, run 34 again at once;
+- `tests/fixtures/migration-35-as-run-on-staging.sql` is the text as it ran on staging, kept as history (run_migration34
+  loads it to start from staging's state); it is not a file to run.
+
+## How to test the order
+
+`python3 tests/run_migration_order.py` (pg_stand: a throwaway PostgreSQL, never staging) applies 32, 33, 35, 34, 36 in
+that order twice over made-up rows and asserts: every file runs twice and deletes nothing; `tally_release_approve` is
+migration-34's (`pg_get_functiondef` contains `pilot_allowlist_measured`) and `tally_release_pilot` clears it; the 35
+file no longer contains `create or replace function public.tally_release_`; migration-36's functions are there; every
+function of 35, 34 and 36 is security definer with `search_path = public, pg_temp`. It runs in CI (`tests/ci/tests.txt`).
+
+Each file also has its own test: `run_migration32.py`, `run_migration33.py`, `run_migration34.py` (starts from staging's
+state: the 35 as run there, then 34), `run_migration35.py` (35, then 34 after it for the release checks),
+`run_migration36.py` (the made-up books through the real ingest path, then the renames and the first round).

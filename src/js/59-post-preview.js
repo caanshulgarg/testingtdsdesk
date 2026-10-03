@@ -300,7 +300,7 @@ function postPostedRows(cid){
 }
 // the three tab counts: To post and Errors are postCounts (the step bar's badges, the chip, the dashboard), Posted the
 // postings listed under it
-function postTabCounts(cid){ const c = postCounts(cid); return {topost: c.ready, posted: postPostedRows(cid).length, errors: c.attention}; }
+function postTabCounts(cid){ const c = postCounts(cid); return {topost: c.ready, posted: postPostedRows(cid).length, errors: c.attention + (postRefusedFor(cid) ? 1 : 0)}; }
 // a bill's ledgers on one line, the party first; a Round Off of nothing is left out
 function postLedgerLine(e){
   const ls = (e.snapshot ? e.snapshot.lines : []).filter(l => l.ledger && !((l.role === "roundoff" || /^round\s*(ed\s*)?off\b/i.test(l.ledger)) && Math.abs(num(l.amt)) < 0.005));
@@ -579,23 +579,56 @@ async function postPreview(co, rows, opts){
 // "Post N to Tally": the bills ready to post (review of 02-Oct-2026: "Ready to post" is approved bills only; bank lines
 // and sales are posted from their own pages), each shown first as it goes to Tally. only: one bill (Retry of one whose
 // check of Tally failed, Post again of one not found in Tally at a fresh read)
+// 03-Oct-2026 (the owner's report: with an earlier posting ended failed on the list, Post for another bill did nothing on
+// the page and queued nothing). The cause, read from the path: anything thrown on the way to the queue was never caught.
+// Before the preview (the voucher's XML, voucherXml; the preview's own HTML, PostGate.html) it was an unhandled promise
+// rejection of the button's click: no dialog, no job, no message. After "Loading ledgers…" (postBillsToTally: the ledger
+// read, autoMapCompanyLedgers, canonicalizeBills, billGuessedWhy run before its own try) it also left S.billPost busy, so
+// the Post button stayed disabled and every later press did nothing at all, until the page was reloaded. And a stop with
+// a toast only (ensureTallyCompany) was gone a moment later. Rule now: every press of Post ends in a job row ("Sent to
+// Tally") or a row on the Errors tab with the error's name, what happened and what to do (S.postRefused); never silence.
 async function postAllToTally(only){
   const co = CO();
   if (!co) return;
-  if (!co.postTo) await autoPostTo(co);
-  if (!co.postTo || postToProblem(co, "")){ postStopped(postToProblem(co, ""), co.id); render(); return; }
-  if (!S.bank || S.bank.cid !== co.id) await loadBank(co.id);
-  const b = postBills(co.id) || {ready: [], attention: []};
-  let list = b.ready;
-  if (only){ const e = D(co.id).entries[only.id]; list = e && e.status === "approved" && !e.exportedAt && (b.ready.includes(e) || (b.refused || []).includes(e) || e.postCheckFailed) ? [e] : []; }
-  const all = postRows(co), rows = list.map(e => all.find(r => r.kind === "bill" && r.id === e.id) || {kind: "bill", id: e.id, no: e.x.invoiceNo, party: e.x.vendorName, e});
-  if (!rows.length){ toast("Nothing is waiting to be posted."); return; }
-  S.postStop = null; S.postNote = null;
-  if (!(await postPreview(co, rows))) return;
-  rows.forEach(r => { if (r.e.postCheckFailed){ r.e.postCheckFailed = null; Store.saveEntry(co.id, r.e); } });
-  await postBillsToTally({ids: rows.map(r => r.id)});
+  S.postRefused = null;
+  const said = [], t0 = toast;
+  window.toast = m => { said.push(String(m)); return t0(m); };
+  try {
+    if (!co.postTo) await autoPostTo(co);
+    if (!co.postTo || postToProblem(co, "")){ postStopped(postToProblem(co, ""), co.id); render(); return; }
+    if (!S.bank || S.bank.cid !== co.id) await loadBank(co.id);
+    const b = postBills(co.id) || {ready: [], attention: []};
+    let list = b.ready;
+    if (only){ const e = D(co.id).entries[only.id]; list = e && e.status === "approved" && !e.exportedAt && (b.ready.includes(e) || (b.refused || []).includes(e) || e.postCheckFailed) ? [e] : []; }
+    const all = postRows(co), rows = list.map(e => all.find(r => r.kind === "bill" && r.id === e.id) || {kind: "bill", id: e.id, no: e.x.invoiceNo, party: e.x.vendorName, e});
+    if (!rows.length){ toast("Nothing is waiting to be posted."); return; }
+    S.postStop = null; S.postNote = null;
+    if (!(await postPreview(co, rows))) return;
+    rows.forEach(r => { if (r.e.postCheckFailed){ r.e.postCheckFailed = null; Store.saveEntry(co.id, r.e); } });
+    S.billPost = null;
+    await postBillsToTally({ids: rows.map(r => r.id)});
+    // back with nothing on the page (a toast only: Tally not connected, no company open, no entry waiting): kept as a row
+    if (!S.billPost && !S.postStop) postRefusedShow(co.id, {name: "Not sent", message: said[said.length - 1] || "The posting stopped before anything was sent."});
+  } catch (err){
+    postRefusedShow(co.id, err);
+  } finally {
+    window.toast = t0;
+    if (S.billPost && S.billPost.busy) S.billPost = null;
+    render();
+  }
+}
+// the row on the Errors tab when a press of Post ended in neither a job nor a result line: {cid, at, name, why, what}
+function postRefusedShow(cid, err, what){
+  const e = err || {}, msg = plainMsg((e && e.message) || (typeof err === "string" ? err : "")) || "no reason given";
+  const name = e.name && e.name !== "Error" ? String(e.name) : e.code ? String(e.code) : "Error";
+  S.postRefused = {cid, at: Date.now(), name, why: msg,
+    what: what || (/^Not sent$/.test(name) ? "Put right what the line says, then press Post again." : "Press Post again. If it stops the same way, send this line to FinCom support: nothing is lost, the bills are still waiting here.")};
+  if (S.billPost && S.billPost.busy) S.billPost = null;
+  S.postTabs = S.postTabs || {}; S.postTabs[cid] = "errors";
+  try { console.error("Post did not go through:", err); } catch (x){}
   render();
 }
+function postRefusedFor(cid){ const r = S.postRefused; return r && r.cid === cid ? r : null; }
 function postPreviewOne(kind, id){
   const co = CO(), row = postRows(co).find(r => r.kind === kind && r.id === id);
   if (row) postPreview(co, [row], {view: true});

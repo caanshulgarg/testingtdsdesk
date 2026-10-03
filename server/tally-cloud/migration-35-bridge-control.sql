@@ -1,3 +1,9 @@
+-- ORDER (03-Oct-2026, docs/MIGRATION-ORDER.md): on a fresh database this file runs after 33 and BEFORE 34. The release
+-- functions tally_release_pilot / tally_release_approve are defined in migration-34 part E (this file only makes the
+-- table they use). NEVER run this file after migration 34: it would put back the older functions without the allow-list
+-- check. (Staging, 02-Oct: 32, 33, 35, 34, then a revised 35 and 34 part E again - which is why the two functions were
+-- taken out of this file; tests/fixtures/migration-35-as-run-on-staging.sql is the text as it ran, kept as history.)
+--
 -- Bridge control, 02-Oct-2026 (plan items 11 and 12: so a hanging Tally cannot recur). Two things an owner of the firm
 -- can do from FinCom's Tally page, and the heartbeat (tally-ingest, kind "beat") passes on within one beat (30 s):
 --
@@ -15,12 +21,12 @@
 --      tally_bridge_releases            (firm, version): the pilot computer, when the pilot started and who started it,
 --                                       what the pilot computer showed on that version (the beat records it), when the
 --                                       version was approved for all and by whom
---      tally_release_pilot(version, device)  an owner makes a computer the pilot for a version
---      tally_release_approve(version)        an owner approves it for every computer. Refused until the pilot ran a
---                                       working day: 20 hours since the pilot started, the pilot computer seen on that
---                                       version (its first beat on it after the pilot started), its beats on it
---                                       spanning 6 hours or more (it was used, not started once), and it did not stop
---                                       reading by itself while on it.
+--      tally_release_pilot(version, device)  (migration-34 part E) an owner makes a computer the pilot for a version
+--      tally_release_approve(version)        (migration-34 part E) an owner approves it for every computer. Refused
+--                                       until the pilot ran a working day: 20 hours since the pilot started, the pilot
+--                                       computer seen on that version (its first beat on it after the pilot started),
+--                                       its beats on it spanning 6 hours or more (it was used, not started once), it
+--                                       did not stop reading by itself while on it, and (34) its allow-list is measured.
 -- Owner-only exactly as tally_bridge_make_main (migration-22). Members of the firm read both tables; nobody writes them
 -- directly (only these functions, and tally-ingest with the service key). Adds only: nothing is dropped, deleted or
 -- revoked from what is there; safe to run again. To be shown to the owner before it runs.
@@ -124,58 +130,9 @@ begin
   return jsonb_build_object('ok', true, 'cleared', n, 'id', nid);
 end $function$;
 
-create or replace function public.tally_release_pilot(p_version text, p_device uuid)
-returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
-declare f uuid := my_firm(); v text := btrim(coalesce(p_version, '')); r tally_bridge_releases%rowtype;
-begin
-  if f is null or not exists (select 1 from members m where m.user_id = auth.uid() and m.firm_id = f and m.role = 'owner' and coalesce(m.active, true))
-    then raise exception 'only an owner of the firm can start a pilot' using errcode = '42501'; end if;
-  if v !~ '^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}$' then raise exception 'not a bridge version (like 2.1.5)'; end if;
-  if p_device is null or not exists (select 1 from tally_devices d where d.id = p_device and d.firm_id = f and not coalesce(d.revoked, false))
-    then raise exception 'not a computer of your firm'; end if;
-  select * into r from tally_bridge_releases where firm_id = f and version = v for update;
-  if found and r.approved_at is not null then raise exception 'version % is approved for all computers already', v; end if;
-  if found and r.pilot_device = p_device and r.pilot_started_at is not null then
-    return jsonb_build_object('ok', true, 'version', v, 'pilot', p_device, 'started', r.pilot_started_at, 'already', true);
-  end if;
-  -- a new pilot (or another pilot computer): the working day starts again, with no evidence yet
-  insert into tally_bridge_releases (firm_id, version, pilot_device, pilot_started_at, pilot_by) values (f, v, p_device, now(), auth.uid())
-  on conflict (firm_id, version) do update set pilot_device = excluded.pilot_device, pilot_started_at = excluded.pilot_started_at, pilot_by = excluded.pilot_by,
-    pilot_seen_at = null, pilot_last_seen_at = null, pilot_beats = 0, pilot_self_stop = null;
-  return jsonb_build_object('ok', true, 'version', v, 'pilot', p_device, 'started', now());
-end $function$;
+-- (tally_release_pilot and tally_release_approve: migration-34 part E, see the top of this file)
 
-create or replace function public.tally_release_approve(p_version text)
-returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
-declare f uuid := my_firm(); v text := btrim(coalesce(p_version, '')); r tally_bridge_releases%rowtype; pc text;
-begin
-  if f is null or not exists (select 1 from members m where m.user_id = auth.uid() and m.firm_id = f and m.role = 'owner' and coalesce(m.active, true))
-    then raise exception 'only an owner of the firm can approve a bridge version' using errcode = '42501'; end if;
-  select * into r from tally_bridge_releases where firm_id = f and version = v for update;
-  if not found or r.pilot_started_at is null or r.pilot_device is null then raise exception 'version % has not been on a pilot computer; start a pilot first', v; end if;
-  if r.approved_at is not null then return jsonb_build_object('ok', true, 'version', v, 'approved', r.approved_at, 'already', true); end if;
-  select name into pc from tally_devices where id = r.pilot_device;
-  pc := coalesce(pc, 'the pilot computer');
-  -- a working day on the pilot: 20 hours since it started, seen on the version, used on it for 6 hours, never self-stopped
-  if r.pilot_started_at > now() - interval '20 hours' then
-    raise exception 'the pilot of % on % has not run a working day yet: it started %; approve after %', v, pc,
-      to_char(r.pilot_started_at at time zone 'Asia/Kolkata', 'DD-Mon HH24:MI'), to_char((r.pilot_started_at + interval '20 hours') at time zone 'Asia/Kolkata', 'DD-Mon HH24:MI');
-  end if;
-  if r.pilot_seen_at is null or r.pilot_seen_at < r.pilot_started_at then
-    raise exception '% has not been seen running % since the pilot started; it must run it first', pc, v;
-  end if;
-  if coalesce(r.pilot_last_seen_at, r.pilot_seen_at) < r.pilot_seen_at + interval '6 hours' then
-    raise exception '% has run % for less than 6 hours (seen % to %); let it run a working day', pc, v,
-      to_char(r.pilot_seen_at at time zone 'Asia/Kolkata', 'DD-Mon HH24:MI'), to_char(coalesce(r.pilot_last_seen_at, r.pilot_seen_at) at time zone 'Asia/Kolkata', 'DD-Mon HH24:MI');
-  end if;
-  if r.pilot_self_stop is not null then
-    raise exception '% stopped reading by itself while on % (%); not approved', pc, v, coalesce(r.pilot_self_stop ->> 'reason', '');
-  end if;
-  update tally_bridge_releases set approved_at = now(), approved_by = auth.uid() where firm_id = f and version = v;
-  return jsonb_build_object('ok', true, 'version', v, 'approved', now());
-end $function$;
-
-revoke all on function public.tally_read_stop(uuid, text), public.tally_read_resume(uuid), public.tally_release_pilot(text, uuid), public.tally_release_approve(text) from public, anon;
-grant execute on function public.tally_read_stop(uuid, text), public.tally_read_resume(uuid), public.tally_release_pilot(text, uuid), public.tally_release_approve(text) to authenticated;
+revoke all on function public.tally_read_stop(uuid, text), public.tally_read_resume(uuid) from public, anon;
+grant execute on function public.tally_read_stop(uuid, text), public.tally_read_resume(uuid) to authenticated;
 
 commit;

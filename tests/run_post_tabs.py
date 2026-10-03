@@ -188,7 +188,7 @@ with sync_playwright() as p:
       const rpc0 = TCloud.rpc;
       TCloud.rpc = async (fn, a) => { if (fn === "tally_post_enqueue" && a && a.p_payload && (a.p_payload.vouchers || []).length){ const ids = a.p_payload.vouchers.map(v => v.id);
           window.__jobs.unshift({id: a.p_id, client_id: a.p_client, company: G, status: "done", done: ids.length, n: ids.length, message: ids.length + " of " + ids.length + " sent to Tally", created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
-            entry_ids: ids, results: ids.map(id => ({id, ok: true, verified: true, vchNumber: "V/" + id})), items: ids.map(id => ({id, state: "in_tally"}))}); window.__rpc.push([fn, {p_id: a.p_id, p_client: a.p_client, ids}]); return {ok: true}; }
+            entry_ids: ids, results: ids.map(id => ({id, ok: true, verified: true, vchNumber: "V/" + id})), items: ids.map(id => ({id, state: "in_tally"}))}); window.__rpc.push([fn, {p_id: a.p_id, p_client: a.p_client, ids}]); CloudJobs.changed(); return {ok: true}; }
         if (fn === "tally_vouchers_in") return [];
         return rpc0(fn, a); };
       Cloud.api = async (p) => { const m = /tally_post_jobs\\?.*id=eq\\.([^&]+)/.exec(p); return m ? JSON.parse(JSON.stringify(window.__jobs.filter(j => j.id === m[1]))) : []; };
@@ -229,11 +229,11 @@ with sync_playwright() as p:
     ok(not [a for f, a in E("window.__rpc") if f == "tally_post_enqueue"] and not E("!!(S.billPost && S.billPost.busy)") and E("!document.querySelector('#app [data-post-main]') || !document.querySelector('#app [data-post-main]').disabled"),
        "nothing was queued, the page is not left busy, and Post can be pressed again")
     # the same for an error thrown after "Loading ledgers" (postBillsToTally, before its own try): it used to leave the page busy for good
-    E("""() => { window.voucherXml = window.__vx; window.__cb = window.canonicalizeBills; window.canonicalizeBills = () => { throw new RangeError("Invalid array length"); }; window.__rpc = []; render(); }""")
+    E("""() => { window.voucherXml = window.__vx; window.__cb = window.autoMapCompanyLedgers; window.autoMapCompanyLedgers = () => { throw new RangeError("Invalid array length"); }; window.__rpc = []; render(); }""")
     tab("topost"); press_post()
     row = txt('#app [data-post-panel="errors"] [data-attn-kind="post-refused"]')
     ok(on() == "errors" and "RangeError" in row and not E("!!(S.billPost && S.billPost.busy)"), "an error after 'Loading ledgers': the named row, the page not left busy (%s)" % row[:160])
-    E("() => { window.canonicalizeBills = window.__cb; }")
+    E("() => { window.autoMapCompanyLedgers = window.__cb; }")
     # the row goes when the next posting works
     tab("topost"); E("() => { window.__rpc = []; }"); press_post()
     enq = [a for f, a in E("window.__rpc") if f == "tally_post_enqueue"]

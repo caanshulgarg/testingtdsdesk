@@ -1,5 +1,8 @@
 """python3 run_migration35.py - migration-35-bridge-control (02-Oct-2026: a hanging Tally must not recur). On a throwaway
-PostgreSQL (pg_stand) with tally_devices as on staging (migration.sql + migration-22) and made-up rows; never on staging.
+PostgreSQL (pg_stand) with the cloud tables as on staging (run_migration33's schema, migration-32 and 33) and tally_devices
+(migration.sql + migration-22), made-up rows; never on staging. The order of a fresh database (docs/MIGRATION-ORDER.md):
+35 runs BEFORE 34, and the release functions (tally_release_pilot, tally_release_approve) come from migration-34 part E
+(round 4: taken out of 35, which must never run after 34), so 34 is loaded after 35 here before the release checks.
 Checks: the file runs twice, drops and deletes nothing; Stop reading / Resume (tally_read_stop, tally_read_resume) and
 the staged release (tally_release_pilot, tally_release_approve) are for an owner of the firm only (a staff member, an
 owner of another firm and someone with no firm are refused, 42501), for a computer of the firm only (not another firm's,
@@ -11,7 +14,14 @@ allowed; anon cannot call the functions."""
 import os, re, sys, subprocess
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import pg_stand
-SQL = os.path.join(HERE, "..", "server", "tally-cloud", "migration-35-bridge-control.sql")
+SQLDIR = os.path.join(HERE, "..", "server", "tally-cloud")
+SQL = os.path.join(SQLDIR, "migration-35-bridge-control.sql")
+M32, M33, M34 = [os.path.join(SQLDIR, f) for f in ("migration-32-sync-safety.sql", "migration-33-ledger-lists.sql", "migration-34-ledger-safety.sql")]
+def part(path, name):
+    """the SCHEMA text of another test (one source for the tables as on staging)"""
+    s = open(path).read(); i = s.index(name + ' = r"""') if (name + ' = r"""') in s else s.index(name + ' = """')
+    i = s.index('"""', i) + 3; return s[i:s.index('"""', i)]
+SCHEMA33 = part(os.path.join(HERE, "run_migration33.py"), "SCHEMA")
 fails = []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
@@ -49,10 +59,15 @@ def refused(uid, stmt):
     if uid == OTHER: return (not good) and ("not a computer of your firm" in out or "start a pilot first" in out), out
     return (not good) and ("42501" in out or "only an owner" in out), out
 try:
-    db.sql(SCHEMA)
+    db.sql(SCHEMA33)
     db.sql("""insert into firms values (%(F)s, 'Firm'), (%(F2)s, 'Other') on conflict do nothing;
-      insert into members values (%(O)s, %(F)s, 'Owner', 'owner', true), (%(S)s, %(F)s, 'Staff', 'staff', true), (%(X)s, %(F2)s, 'Them', 'owner', true), (%(G)s, %(F)s, 'Left', 'owner', false);
-      insert into tally_devices (id, firm_id, name, key_hash, version) values (%(D1)s, %(F)s, 'NWS144', 'h1', '2.1.5'), (%(D2)s, %(F)s, 'OFFICE-2', 'h2', '2.1.4'),
+      insert into members values (%(O)s, %(F)s, 'Owner', 'owner', true), (%(S)s, %(F)s, 'Staff', 'staff', true), (%(X)s, %(F2)s, 'Them', 'owner', true), (%(G)s, %(F)s, 'Left', 'owner', false);"""
+           % {"F": q(F), "F2": q(F2), "O": q(OWNER), "S": q(STAFF), "X": q(OTHER), "G": q(GONE)})
+    db.sql("insert into tally_books (book_id, firm_id, client_id, company, from_date, open_as_on) values ('11111111-1111-1111-1111-111111111111', %s, 'c1', 'ZZ CO', '2026-04-01', '2026-03-31');" % q(F))
+    for path in (M32, M33):
+        r = psql_file(path); ok(r.returncode == 0, "%s runs (before 35) %s" % (os.path.basename(path), (r.stderr or "").strip()[-300:] if r.returncode else ""))
+    db.sql(SCHEMA)
+    db.sql("""insert into tally_devices (id, firm_id, name, key_hash, version) values (%(D1)s, %(F)s, 'NWS144', 'h1', '2.1.5'), (%(D2)s, %(F)s, 'OFFICE-2', 'h2', '2.1.4'),
         (%(D3)s, %(F2)s, 'THEIRS', 'h3', '2.1.4');
       insert into tally_devices (id, firm_id, name, key_hash, revoked) values (%(DR)s, %(F)s, 'OLD-PC', 'h4', true);""" % {
         "F": q(F), "F2": q(F2), "O": q(OWNER), "S": q(STAFF), "X": q(OTHER), "G": q(GONE), "D1": q(D1), "D2": q(D2), "D3": q(D3), "DR": q(DREV)})
@@ -70,6 +85,13 @@ try:
     ok(not any(w in code for w in ["drop table", "drop view", "drop function", "drop trigger", "drop policy", "drop column", "delete from"]) and not re.search(r"truncate\s+(table\s+)?(public\.)?tally_", code),
        "the file drops and deletes nothing")
     ok(code.strip().startswith("begin;") and code.strip().endswith("commit;"), "one transaction (begin; ... commit;)")
+    ok("create or replace function public.tally_release_" not in body and re.search(r"never run this file after migration 34", body) is not None,
+       "the file no longer defines the release functions and says so at its top (they are migration-34's; never run 35 after 34)")
+    # migration-34 after 35, as a fresh database runs them: the release functions come from its part E
+    r = psql_file(M34)
+    ok(r.returncode == 0, "migration-34 runs after 35 %s" % (r.stderr or "").strip()[-600:])
+    ok("pilot_allowlist_measured" in (db.one("select pg_get_functiondef('public.tally_release_approve'::regproc)") or ""), "tally_release_approve is migration-34's (the allow-list check)")
+    ok(counts() == before, "nothing deleted by 34 either")
 
     # 2. Stop reading: owner only, the firm's computers only
     stop = lambda dev, why="Tally hung": "select tally_read_stop(%s, %s)::text;" % ("null" if dev is None else q(dev) + "::uuid", q(why))
@@ -165,6 +187,9 @@ try:
     good, out = as_user(OWNER, approve("2.1.5"))
     ok(not good and "stopped" in out, "the pilot stopped reading by itself during the pilot: refused (%s)" % out.strip()[-160:])
     db.sql("update tally_bridge_releases set pilot_self_stop = null")
+    good, out = as_user(OWNER, approve("2.1.5"))
+    ok(not good and "allow" in out, "(migration-34) the pilot's bridge has not reported its allow-list measured: refused (%s)" % out.strip()[-120:])
+    db.sql("update tally_bridge_releases set pilot_allowlist_measured = true, pilot_allowlist_hash = 'h1'")
     good, out = as_user(STAFF, approve("2.1.5"))
     ok(not good, "a staff member still cannot approve it")
     good, out = as_user(OWNER, approve("2.1.5"))
@@ -205,11 +230,15 @@ try:
             if kind == "definer":
                 definers += 1
                 ok(conf.replace(" ", "") == "search_path=public,pg_temp", "%s: security definer with search_path = public, pg_temp (has %r)" % (fn, conf))
-    ok(definers >= 4, "the security definer functions checked: %d" % definers)
-    # 7. run once more over the rows: nothing lost
+    ok(definers >= 2, "the security definer functions checked: %d" % definers)
+    # 7. run once more over the rows: nothing lost. (The rule is never to run 35 after 34; were it run again by mistake,
+    # 34 follows it - and since 35 no longer defines the release functions, 34's approve rule is still there either way)
     n = {t: db.one("select count(*) from %s" % t) for t in ["tally_read_stops", "tally_bridge_releases"]}
     r = psql_file(SQL)
     ok(r.returncode == 0 and {t: db.one("select count(*) from %s" % t) for t in n} == n, "run again over the rows: they are all kept (%s)" % n)
+    ok("pilot_allowlist_measured" in (db.one("select pg_get_functiondef('public.tally_release_approve'::regproc)") or ""), "the revised 35 run again leaves migration-34's approve in place")
+    r = psql_file(M34)
+    ok(r.returncode == 0 and {t: db.one("select count(*) from %s" % t) for t in n} == n, "and 34 after it: all kept")
 finally:
     db.stop()
 print("\n%d failure(s)" % len(fails) if fails else "\nall checks passed")
