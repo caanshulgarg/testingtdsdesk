@@ -48,9 +48,10 @@ type standTally struct {
 	grp       [][2]string
 	mid       int64 // the last MasterID given
 	// fault 1 (03-Oct-2026, NWS144): how this Tally stores and answers
-	storeNarr  func(narr string) string // the narration as Tally keeps it (nil: as sent)
-	ansi       bool                     // answers in Windows-1252 bytes (an em dash as 0x97), as a real Tally does for non-ASCII text
-	lastMaster string                   // the MasterID of the last voucher an Import made (LASTVCHID)
+	storeNarr     func(narr string) string // the narration as Tally keeps it (nil: as sent)
+	ansi          bool                     // answers in Windows-1252 bytes (an em dash as 0x97), as a real Tally does for non-ASCII text
+	lastMaster    string                   // the MasterID of the last voucher an Import made (LASTVCHID)
+	importAltered bool                     // an Import answers ALTERED n (CREATED 0): this Tally altered an entry it had
 }
 
 // a ledger master of the stand-in Tally (its stored fields only)
@@ -288,7 +289,11 @@ func newStandTally(t *testing.T) *standTally {
 			if made > 0 && lastMaster != "" {
 				lv = "<LASTVCHID>" + lastMaster + "</LASTVCHID>"
 			}
-			_, _ = w.Write([]byte(fmt.Sprintf("<ENVELOPE><BODY><DATA><IMPORTRESULT><CREATED>%d</CREATED><ALTERED>0</ALTERED><ERRORS>0</ERRORS><EXCEPTIONS>0</EXCEPTIONS>%s</IMPORTRESULT></DATA></BODY></ENVELOPE>", made, lv)))
+			created, altered := made, 0
+			if f.importAltered {
+				created, altered = 0, made
+			}
+			_, _ = w.Write([]byte(fmt.Sprintf("<ENVELOPE><BODY><DATA><IMPORTRESULT><CREATED>%d</CREATED><ALTERED>%d</ALTERED><ERRORS>0</ERRORS><EXCEPTIONS>0</EXCEPTIONS>%s</IMPORTRESULT></DATA></BODY></ENVELOPE>", created, altered, lv)))
 			return
 		}
 		ansi := f.ansi

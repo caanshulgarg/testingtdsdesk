@@ -212,11 +212,22 @@ func tagFirst(x, tag string) string {
 		return x
 	}
 	n := x[m[2]:m[3]]
-	if !hasTag(n, tag) || strings.HasPrefix(n, tag) {
+	if !hasTag(n, tag) {
 		return x
 	}
-	rest := strings.Replace(n, tag, "", 1)
+	if first := reTag.FindStringIndex(n); first != nil && first[0] == 0 && n[:first[1]] == tag {
+		return x // the exact tag is first already (not a longer tag starting with it)
+	}
+	// the exact token (never the prefix of a longer tag: TDSDesk:ab1 inside TDSDesk:ab12), spliced out
+	rest := n
+	for _, loc := range reTag.FindAllStringIndex(n, -1) {
+		if n[loc[0]:loc[1]] == tag {
+			rest = n[:loc[0]] + n[loc[1]:]
+			break
+		}
+	}
 	rest = re(`\s*\|\s*\|\s*`).ReplaceAllString(rest, " | ") // two separators left touching where the tag stood
+	rest = re(`\s{2,}`).ReplaceAllString(rest, " ")          // the two spaces left where a tag stood between words
 	rest = strings.TrimSpace(re(`^\s*\|\s*|\s*\|\s*$`).ReplaceAllString(rest, ""))
 	n = tag
 	if rest != "" {
@@ -347,8 +358,15 @@ func markAccepted(r M, company, lv string, heads []M, lookedUp string) {
 		xs = str(r["xml"])
 	}
 	date, tag := group(`<DATE>(\d{8})</DATE>`, xs, 1), reTag.FindString(xs)
-	r["ok"], r["verified"], r["outcomeUnknown"], r["accepted"], r["state"], r["lastVchId"] = true, nil, true, true, "unknown", lv
-	r["message"] = fmt.Sprintf("Tally replied 'created' (voucher id %s) but the entry was not found yet in '%s' on %s; it is being checked and is not sent again", or(lv, "not given"), company, ddmmyyyy(date))
+	// ok false (round 5, C7): not posted as far as FinCom knows (an ALTERED one must not count as posted); accepted true:
+	// never failed, never sent again (itemsToSend, confirmedResult, the job's count)
+	r["ok"], r["verified"], r["outcomeUnknown"], r["accepted"], r["state"], r["lastVchId"] = false, nil, true, true, "unknown", lv
+	delete(r, "altered1")
+	said := "created"
+	if toInt(r["altered"]) > 0 && toInt(r["created"]) == 0 {
+		said = "altered"
+	}
+	r["message"] = fmt.Sprintf("Tally replied '%s' (voucher id %s) but the entry was not found yet in '%s' on %s; it is being checked and is not sent again", said, or(lv, "not given"), company, ddmmyyyy(date))
 	var ids []string
 	for _, h := range heads {
 		ids = append(ids, str(h["masterId"]))

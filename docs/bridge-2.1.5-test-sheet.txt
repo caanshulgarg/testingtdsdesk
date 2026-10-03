@@ -122,8 +122,9 @@ Use ZZ TEST for every posting below, never GARG SHEKHAR & COMPANY.
 
 7. MEASURE TALLY
    Do: icon > Measure Tally (for FinCom support) with GARG SHEKHAR & COMPANY open; wait (a few minutes). Only the tray
-       item or "FinComBridge.exe measure" typed in a Command Prompt starts it; the Windows service and FinCom's web page
-       cannot. If a request does not answer in 20 s the run stops there: the report has a "waiting for Tally to answer
+       item or "FinComBridge.exe measure" typed in a Command Prompt starts it (in every run mode, the service's too);
+       FinCom's web page cannot, and the bridge never starts one by itself. The command goes through the running bridge;
+       if that bridge is busy it says "Not measured" and nothing is measured beside it. If a request does not answer in 20 s the run stops there: the report has a "waiting for Tally to answer
        the company check" line and "the run stopped at the first request that did not answer", and nothing after it.
    You should see: a report opens (measure-...txt in the bridge's folder) with lines a, b, c1, c2, d, e (and its fields)
        and f0, each with ms, bytes and count, and a line "f696.." saying the single ledgers are not run by default. No

@@ -197,7 +197,8 @@ func TestSizeBigCompany(t *testing.T) {
 		t.Fatal("a refused read reached Tally")
 	}
 	// a posting: its checks are one date
-	if r := postOne(t, "big1", finVoucher("big1", fgParty, "BIG-1", td, "1.00")); r["ok"] != true {
+	// (the simulated Tally does not keep what is posted: the entry is "accepted, being checked", never failed)
+	if r := postOne(t, "big1", finVoucher("big1", fgParty, "BIG-1", td, "1.00")); r["ok"] != true && r["accepted"] != true {
 		t.Fatalf("posting: %v", r)
 	}
 

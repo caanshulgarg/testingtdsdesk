@@ -317,40 +317,10 @@ func TestMeasureNotFromHTTP(t *testing.T) {
 	}
 }
 
-// --- 18c. under the Windows service the tool is refused (the tray's route, the command's route, and the run itself)
-func TestMeasureRefusedAsService(t *testing.T) {
-	f := newStandTally(t)
-	standBridge(t, f, `,"Key":"tray-test-key"`)
-	was := runMode
-	runMode = "service"
-	t.Cleanup(func() { runMode = was })
-	for _, p := range []string{"/measure", "/tray/measure"} {
-		code, res := callLocal(t, "POST", p, "", `{"company":"ZZ TEST"}`)
-		if code == 200 && res["ok"] != false {
-			t.Fatalf("POST %s under the service: %d %v (want a refusal)", p, code, res)
-		}
-		if !strings.Contains(strings.ToLower(str(res["error"])), "service") {
-			t.Fatalf("the refusal does not say why: %v", res)
-		}
-	}
-	if _, err := runMeasure(measureOpts{company: zz}); err == nil || !strings.Contains(err.Error(), "service") {
-		t.Fatalf("runMeasure under the service: %v", err)
-	}
-	if _, err := measureSnapshot(measureOpts{company: zz, snapshot: "s"}); err == nil || !strings.Contains(err.Error(), "service") {
-		t.Fatalf("measureSnapshot under the service: %v", err)
-	}
-	if st := measureStatus(); str(st["state"]) != "none" {
-		t.Fatalf("the service started the measuring tool: %v", st)
-	}
-	if f.n("FinComMeasureB") != 0 || f.n("FinComSnapshot") != 0 {
-		t.Fatal("a measuring request reached Tally under the service")
-	}
-	// the tray and the command work again as the per-user bridge
-	runMode = "user"
-	if code, res := callLocal(t, "GET", "/tray/measure", "", ""); code != 200 || str(res["state"]) != "none" {
-		t.Fatalf("GET /tray/measure as the user bridge: %d %v", code, res)
-	}
-}
+// --- 18c, round 5 (C4): TestMeasureRefusedAsService was dropped. There is no start of the measuring tool that is not
+// tray- or console-originated (nothing in the bridge's own loops calls runMeasure), and under the Windows service the
+// tray is a program of its own calling the service's web server, so a service-mode refusal would only break the tray's
+// Measure Tally item. See TestMeasureFromTrayUnderService (round5_test.go).
 
 // a request to the bridge's web server with the given headers (a browser sends Sec-Fetch headers even without an Origin)
 func callLocalHeaders(t *testing.T, method, path string, headers map[string]string, body string) (int, M) {

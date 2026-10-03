@@ -5,8 +5,9 @@ number, the AlterID), the owner wants measured numbers: how long each kind of re
 is, which ledger hangs Tally, and what moves the AlterID. The bridge does the measuring itself, one request at a time,
 each stopped after 20 s, and nothing is written to Tally. A run stops at the FIRST request that does not answer in 20 s:
 nothing more is sent but the small company check (waited for, up to 10 minutes), and the run ends with that in the
-report. The tool is started by a person only: the tray item, or the measure command typed in a Command Prompt; the
-Windows service never runs it, and no web page (FinCom's own included) can start it.
+report. The tool is started by a person only: the tray item, or the measure command typed in a Command Prompt (both go
+through the running bridge, whatever its run mode); the bridge never starts one by itself, no web page (FinCom's own
+included) can start it, and the command never measures beside a running bridge (a busy bridge: "Not measured", try later).
 
 Where the numbers go: a plain text report in the bridge's folder (for "Just for me" installs:
 %LOCALAPPDATA%\FinCom Bridge), named measure-<company>-<date-time>.txt. Snapshots are measure-snap-<label>.json there.

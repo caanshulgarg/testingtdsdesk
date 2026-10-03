@@ -896,6 +896,8 @@ func syncCloudPosts() {
 				// rebuilt 2.1.4: sent when Tally stopped answering, being looked for by its FinCom id (state "unknown"); the
 				// FinCom id found in Tally already (sameId); the company's GUID not the one held (guidMismatch)
 				"outcomeUnknown": truthy(r["outcomeUnknown"]), "sameId": truthy(r["sameId"]), "guidMismatch": truthy(r["guidMismatch"]),
+				// fault 1: accepted by Tally (CREATED/ALTERED with a voucher id), not confirmed yet: never failed, never sent again
+				"accepted": truthy(r["accepted"]), "lastVchId": str(r["lastVchId"]),
 				"state": itemState(r, false), "reason": map[bool]string{true: "", false: failedLine(str(r["message"]))}[r["ok"] == true]})
 		}
 		// items: every entry's state (waiting, sending, sent, in_tally, failed with its reason), for FinCom to show live

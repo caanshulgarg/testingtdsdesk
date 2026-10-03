@@ -773,6 +773,8 @@ func jobWorker(dir string) {
 		for _, r := range results {
 			if r["ok"] == true {
 				okN++
+			} else if r["accepted"] == true {
+				// accepted by Tally, not confirmed yet: neither posted nor failed (unknown, being checked)
 			} else {
 				failN++
 				if first == "" {
@@ -800,7 +802,7 @@ func jobWorker(dir string) {
 		if failN > 0 {
 			finish("failed", jobFailedLine(failN, total, first))
 		} else {
-			finish("done", postedLine(okN, total, false))
+			finish("done", postedLine(okN, total, len(acceptedUnconfirmed(results)) > 0))
 		}
 	}
 	// fault 1 (03-Oct-2026): entries Tally accepted but the read-back could not confirm: the job stays checking and looks
@@ -815,8 +817,10 @@ func jobWorker(dir string) {
 		}
 		writeLog(fmt.Sprintf("Posting job %s: %d entr%s accepted by Tally but not confirmed yet; checked again (never sent again)", str(p["id"]), len(acc), map[bool]string{true: "y", false: "ies"}[len(acc) == 1]))
 		done := recheckAccepted(port, company, all, results, pause, save)
-		if cancelled() {
-			return
+		if !done && (jobCancelled(dir) || stopping()) {
+			// C8 (round 5): a cancel (or the bridge stopping) during the later checks only stops the checks: the posting
+			// is done already and stays so, every result kept; the entries still unknown are looked for by Check Tally
+			writeLog("Posting job " + str(p["id"]) + ": the later checks stopped (cancelled in FinCom, or the bridge is stopping); the posting stays done, nothing is sent again")
 		}
 		if done {
 			p["checking"] = false
@@ -928,7 +932,7 @@ func recheckAccepted(port int, company string, items []M, results []M, pause fun
 				still = append(still, r)
 			default:
 				addPostedForCopy(company, h, xml)
-				r["verified"], r["optional"] = true, strings.EqualFold(str(h["optional"]), "yes")
+				r["ok"], r["verified"], r["optional"] = true, true, strings.EqualFold(str(h["optional"]), "yes")
 				r["vchNumber"], r["vchType"], r["guid"], r["masterId"], r["vchDate"] = str(h["number"]), str(h["type"]), str(h["guid"]), str(h["masterId"]), str(h["date"])
 				delete(r, "outcomeUnknown")
 				delete(r, "state")

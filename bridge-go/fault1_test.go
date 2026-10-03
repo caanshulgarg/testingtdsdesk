@@ -109,7 +109,8 @@ func TestCreatedButUnconfirmedIsNotFailed(t *testing.T) {
 	}
 	r := obj(arr(p["results"])[0])
 	e := obj(arr(p["items"])[0])
-	if r["ok"] != true || r["outcomeUnknown"] != true || r["accepted"] != true || r["verified"] == true || str(r["lastVchId"]) == "" {
+	// round 5 (C7): ok false (not posted as far as FinCom knows), accepted true (never failed, never sent again)
+	if r["ok"] != false || r["outcomeUnknown"] != true || r["accepted"] != true || r["verified"] != nil || str(r["lastVchId"]) == "" {
 		t.Fatalf("the accepted entry is not 'unknown, accepted': %v", r)
 	}
 	if str(e["state"]) != "unknown" || p["checking"] != true {
@@ -253,7 +254,7 @@ func TestUnconfirmedNeverQueuedTwice(t *testing.T) {
 		t.Fatalf("the resume sent the accepted entry again (%d imports)", f.n("Import"))
 	}
 	r := obj(arr(p["results"])[0])
-	if r["ok"] != true || r["verified"] == true || r["accepted"] != true {
+	if r["ok"] != false || r["verified"] != nil || r["accepted"] != true {
 		t.Fatalf("after the resume: %v", r)
 	}
 	_ = os.Remove(filepath.Join(dir, "cancel"))

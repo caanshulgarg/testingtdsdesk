@@ -8,8 +8,9 @@
 // One request at a time, each with its own cap (TallyMaxSec, 20 s), through the bridge's own queue (a posting still goes first).
 // Round 4 (03-Oct-2026): the run STOPS at the first request that does not answer in that time: nothing more is sent but
 // the small company check, which is waited for (up to 10 minutes), and the run ends with that in the report. The tool
-// is started by a person only: the tray item, or "FinComBridge.exe measure" typed in a console; never under the Windows
-// service (runMode service), and never from a web page (the measure routes refuse an Origin or Sec-Fetch header).
+// is started by a person only: the tray item, or "FinComBridge.exe measure" typed in a console (both reach the running
+// bridge's web server, whatever its run mode); never by the bridge itself, and never from a web page (the measure
+// routes refuse an Origin or Sec-Fetch header). The console never measures in parallel with a running bridge.
 // Nothing is written to Tally. The report is plain text in the bridge's folder: times in ms, bytes, counts, errors.
 //
 //	a. the company-level check: its GUID and highest AlterIDs (the voucher count is not asked: Tally gives none cheaply)
@@ -145,13 +146,9 @@ func measureWaitFree(port int, company string, maxWait time.Duration) (bool, int
 	return false, tries
 }
 
-// the measuring tool is started by a person (the tray, or the measure command typed in a console), never by the service
-func measureAllowed() error {
-	if runMode == "service" {
-		return errors.New("The measuring tool is not run by the Windows service: start it from the FinCom Bridge tray icon (Measure Tally), or type FinComBridge.exe measure in a console.")
-	}
-	return readsAllowed()
-}
+// the measuring tool is started by a person: the tray item or the measure command typed in a console reach the running
+// bridge's web server (server.go refuses a web page); the bridge itself, the service included, never starts one
+func measureAllowed() error { return readsAllowed() }
 
 func fyBounds(t time.Time) (string, string) {
 	a := fyStart(t)
@@ -636,44 +633,64 @@ func measureCmd(args []string) int {
 		return 2
 	}
 	port := toInt(cfg("Port"))
-	if pingLocal(port, 3*time.Second) != nil {
-		body := M{"company": o.company, "out": o.out, "ledgers": o.ledgers, "snapshot": o.snapshot, "month": o.month}
-		r := localCall("POST", "/measure", body)
-		if r != nil && r["ok"] == false && str(r["error"]) != "" {
-			fmt.Println("The running bridge did not take it (" + str(r["error"]) + "); measuring from this console instead.")
+	bridgeUp := pingLocal(port, 3*time.Second) != nil
+	body := M{"company": o.company, "out": o.out, "ledgers": o.ledgers, "snapshot": o.snapshot, "month": o.month}
+	code, said := consoleMeasure(o, bridgeUp,
+		func() M { return localCall("POST", "/measure", body) },
+		func() M { return localCall("GET", "/measure", nil) },
+		func() (M, error) { loadConfig(); return runMeasure(o) })
+	fmt.Print(said)
+	return code
+}
+
+// the console command's decision (C5, round 5): through the running bridge when one answers; one that refuses or is
+// busy ends the command with its reason (never measured here in parallel with that bridge's reads and postings, which
+// go through its one-at-a-time gate); only when no bridge answers at all is Tally measured from this process
+func consoleMeasure(o measureOpts, bridgeUp bool, post func() M, status func() M, local func() (M, error)) (int, string) {
+	var out strings.Builder
+	if bridgeUp {
+		r := post()
+		if r == nil {
+			fmt.Fprintln(&out, "Not measured: the bridge running on this computer did not take the request (busy, or not answering). Nothing is measured from this console while a bridge runs: its reads and postings go one at a time through that bridge. Try again in a minute, or stop the bridge first.")
+			return 1, out.String()
 		}
-		if r != nil && r["ok"] != false {
-			fmt.Println("Measuring " + o.company + " through the running bridge (one request at a time)...")
+		if r["ok"] == false {
+			fmt.Fprintln(&out, "Not measured: the bridge running on this computer did not take it ("+or(str(r["error"]), "no reason given")+"). Nothing is measured from this console while a bridge runs.")
+			return 1, out.String()
+		}
+		{
+			fmt.Fprintln(&out, "Measuring "+o.company+" through the running bridge (one request at a time)...")
 			for i := 0; i < 1800; i++ {
-				time.Sleep(2 * time.Second)
-				s := localCall("GET", "/measure", nil)
+				if i > 0 {
+					time.Sleep(2 * time.Second)
+				}
+				s := status()
 				if s == nil {
 					continue
 				}
 				switch str(s["state"]) {
 				case "done":
-					fmt.Print(str(s["report"]))
-					fmt.Println("\nReport: " + str(s["file"]))
-					return 0
+					out.WriteString(str(s["report"]))
+					fmt.Fprintln(&out, "\nReport: "+str(s["file"]))
+					return 0, out.String()
 				case "failed":
-					fmt.Println("Not measured: " + str(s["error"]))
-					return 1
+					fmt.Fprintln(&out, "Not measured: "+str(s["error"]))
+					return 1, out.String()
 				}
 			}
-			fmt.Println("Still measuring after an hour; the report will be in " + Home)
-			return 1
+			fmt.Fprintln(&out, "Still measuring after an hour; the report will be in "+Home)
+			return 1, out.String()
 		}
 	}
-	// no bridge running: measured here
-	loadConfig()
-	r, err := runMeasure(o)
+	// no bridge answers at all: measured here
+	r, err := local()
 	if err != nil {
-		fmt.Println("Not measured: " + err.Error())
-		return 1
+		fmt.Fprintln(&out, "Not measured: "+err.Error())
+		return 1, out.String()
 	}
-	fmt.Print(str(r["report"]))
-	fmt.Println("\nReport: " + str(r["file"]))
-	return 0
+	out.WriteString(str(r["report"]))
+	fmt.Fprintln(&out, "\nReport: "+str(r["file"]))
+	return 0, out.String()
 }
 
 // a call to the bridge running on this computer, with its key

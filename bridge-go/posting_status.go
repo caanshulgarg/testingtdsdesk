@@ -153,8 +153,9 @@ func itemState(r M, sending bool) string {
 	return "sent"
 }
 
-// confirmed in Tally (or already there): never sent again, on any retry, resume or restart
-func confirmedResult(r M) bool { return r != nil && r["ok"] == true }
+// confirmed in Tally (or already there), or accepted by Tally (CREATED/ALTERED with a voucher id, not confirmed yet):
+// never sent again, on any retry, resume or restart
+func confirmedResult(r M) bool { return r != nil && (r["ok"] == true || r["accepted"] == true) }
 
 // what is left to send: every item without a result (an entry that failed is not sent again within the same job; Retry
 // in FinCom starts it again, where whatever reached Tally is found by its tag first)
