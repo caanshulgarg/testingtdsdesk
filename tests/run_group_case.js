@@ -41,6 +41,8 @@ async function books(spell){
   ok(Z.x.TallyRead.primaryOf(zb, "Travelling Expenses").toLowerCase() === "indirect expenses" && Z.x.TallyRead.primaryOf(zb, "Cash") === "Current Assets" && Z.x.TallyRead.NOMINAL.map(g => g.toLowerCase()).includes(Z.x.TallyRead.primaryOf(zb, "Sale of Decor Goods").toLowerCase()), "TallyRead.primaryOf: up through the list's spelling to the primary group, which counts as income or expense in any capitals");
   ok(Z.x.MIS.flowHead("Quillfeather Weddings LLP")[1] === "Received from customers" && Z.x.MIS.flowHead("Share Capital").join() === "fin,Capital and drawings" && Z.x.MIS.flowHead("Travelling Expenses")[1] === "Expenses paid",
     "MIS.flowHead: \"sundry debtors\", \"capital account\", \"INDIRECT EXPENSES\" read as Tally's groups");
+  ok(Z.x.MIS.flowHead("Devika Larkspur - Loan").join() === "fin,Partners' accounts,partner" && Z.x.MIS.flowHead("Salary Payable").join() === "op,Salaries and staff,name" && Z.x.MIS.flowHead("ESI Payable - Employees Share").join() === "op,Other receipts and payments",
+    "MIS.flowHead (round 4): the partner match finds the Capital Account ledger under \"capital account\"; Salary Payable by its name under Current Liabilities; ESI by its sub-group");
 
   console.log("the reports come out the same");
   const run = X => { const r = X.x.MIS.run("20250401", "20260331", "test"); return {sales: r.sales.total, heads: Object.fromEntries(Object.entries(r.pl.heads).map(([k, v]) => [k, v.t])), pbt: r.pl.pbt.t, recv: r.recv.sum, pay: r.pay.sum,

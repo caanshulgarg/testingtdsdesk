@@ -42,7 +42,13 @@ SETUP = """async () => {
       results: [{id: "u1", ok: false, outcomeUnknown: true, state: "unknown", message: "Checking whether it reached Tally"}], items: [{id: "u1", state: "unknown", reason: "Checking whether it reached Tally", outcomeUnknown: true}]},
     {id: "jX", client_id: c.id, company: G, status: "done", done: 0, n: 1, message: "0 of 1 sent to Tally", created_at: t(30), updated_at: t(29), entry_ids: ["x1"],
       results: [{id: "x1", ok: false, message: "Voucher date is outside the period of the company"}], items: [{id: "x1", state: "failed", reason: "Voucher date is outside the period of the company"}]}];
-  TCloud.restAll = async (u) => /tally_post_jobs/.test(u) ? JSON.parse(JSON.stringify(window.__jobs)) : [];
+  // tally_post_ids (migration-32; released_at from migration-37): the FinCom ids the cloud holds for the client's postings.
+  // jD's old3 and jX's x1 were released (the job failed / the bridge said not in Tally); a row with live=true is still held
+  window.__postIds = [{job_id: "jD", fincom_id: "old3", entry_id: "old3", live: false, released_at: t(118), released_why: "job failed"},
+    {job_id: "jX", fincom_id: "x1", entry_id: "x1", live: false, released_at: t(28), released_why: "refused: Voucher date is outside the period of the company"}];
+  window.__postIdsFail = "";
+  TCloud.restAll = async (u) => { if (/^tally_post_ids/.test(u)){ if (window.__postIdsFail) throw new Error(window.__postIdsFail); window.__idsAsked = (window.__idsAsked || []).concat([u]); return JSON.parse(JSON.stringify(window.__postIds)); }
+    return /tally_post_jobs/.test(u) ? JSON.parse(JSON.stringify(window.__jobs)) : []; };
   window.__rpc = [];
   TCloud.rpc = async (fn, a) => { window.__rpc.push([fn, JSON.parse(JSON.stringify(a || {}))]); if (fn === "tally_status") return TCloud.st[a.p_client] ? TCloud.st[a.p_client].books : [];
     return /^tally_(want_update|post_enqueue|post_dismiss|post_undismiss|post_record)$/.test(fn) ? {ok: true} : null; };
@@ -112,7 +118,10 @@ with sync_playwright() as p:
     x1 = txt('#app [data-post-panel="errors"] [data-bill-row="x1"]')
     ok("Voucher date is outside the period" in x1 and pg.locator('#app [data-post-panel="errors"] [data-bill-row="x1"]').get_attribute("data-attn-kind") == "refused",
        "Errors: the one Tally refused, with Tally's reason (%s)" % x1[:120])
-    ok(pg.locator('#app [data-post-panel="errors"] [data-job="jD"] [data-retry]').count() == 1, "Errors: the posting still failed (jD), with Retry")
+    ok(pg.locator('#app [data-post-panel="errors"] [data-job="jD"] [data-retry]').count() == 1, "Errors: the posting still failed (jD), with Retry (its id old3 is released in tally_post_ids)")
+    ok(pg.locator('#app [data-post-panel="errors"] [data-bill-row="x1"] [data-post-again]').count() == 1, "Errors: the refused one (x1, released) has Post again")
+    asked = E("window.__idsAsked || []")
+    ok(asked and all("job_id=in.(" in u and "released_at" in u for u in asked[:1]), "tally_post_ids read for the client's postings (%s)" % asked[:1])
     ok(pg.locator('#app [data-post-panel="errors"] li').evaluate_all("ls => ls.every(l => l.querySelectorAll(':scope > .acts button').length <= 2)"), "Errors: at most two buttons a row")
     top = bills_in("topost")
     ok(top == ["r1", "r2"] and txt("#app [data-post-main]") == "Post 2 to Tally", "To post: the two ready bills, Post 2 to Tally (%s)" % top)
@@ -163,7 +172,20 @@ with sync_playwright() as p:
     errs, tp = bills_in("errors"), bills_in("topost")
     tab("errors"); r2t = txt('#app [data-post-panel="errors"] [data-bill-row="r2"]')
     ok("r2" in errs and "r2" not in tp and "does not exist" in r2t and pg.locator('#app [data-post-panel="errors"] [data-job="jR"] [data-bill-row="r2"]').count() == 1,
-       "refused: K/7 is under Errors with Tally's words (inside its failed posting, with Retry), not under To post (%s | %s | %s)" % (errs, tp, r2t[:100]))
+       "refused: K/7 is under Errors with Tally's words (inside its failed posting), not under To post (%s | %s | %s)" % (errs, tp, r2t[:100]))
+    # item 7: Post again / Retry only once the entry's FinCom id is released (tally_post_ids.live = false or released_at);
+    # until the bridge has said so, the words "Waiting for the bridge to confirm it is not in Tally" and no button
+    E("""() => { window.__postIds.push({job_id: "jR", fincom_id: "r2", entry_id: "r2", live: true, released_at: null, released_why: null}); PostIds.load(S.coId, true); }"""); pg.wait_for_timeout(600)
+    jr = txt('#app [data-post-panel="errors"] [data-job="jR"]')
+    ok("Waiting for the bridge to confirm it is not in Tally" in jr and pg.locator('#app [data-post-panel="errors"] [data-job="jR"] [data-retry], #app [data-post-panel="errors"] [data-job="jR"] [data-post-again]').count() == 0,
+       "7. the id still held: 'Waiting for the bridge to confirm it is not in Tally', no Retry, no Post again (%s)" % jr[:160])
+    E("""() => { const r = window.__postIds.find(x => x.fincom_id === "r2"); r.live = false; r.released_at = new Date().toISOString(); r.released_why = "not in Tally"; PostIds.load(S.coId, true); }"""); pg.wait_for_timeout(600)
+    jr = txt('#app [data-post-panel="errors"] [data-job="jR"]')
+    ok("Waiting for the bridge" not in jr and pg.locator('#app [data-post-panel="errors"] [data-job="jR"] [data-retry]').count() == 1, "7. released by the bridge: Retry is back (%s)" % jr[:120])
+    # tally_post_ids unreadable (RLS, an older cloud): as before, the buttons shown
+    E("""() => { window.__postIdsFail = "permission denied for table tally_post_ids (42501)"; PostIds.load(S.coId, true); }"""); pg.wait_for_timeout(600)
+    ok(pg.locator('#app [data-post-panel="errors"] [data-job="jR"] [data-retry]').count() == 1 and E("PostIds.readable") is False, "7. tally_post_ids unreadable: today's behaviour, Retry shown")
+    E("""() => { window.__postIdsFail = ""; PostIds.readable = null; PostIds.load(S.coId, true); }"""); pg.wait_for_timeout(600)
     tab("topost")
     ok(txt("#app [data-post-empty]") == "Nothing waiting to post" and pg.locator("#app [data-post-main]").count() == 0, "To post: nothing waiting, no Post button")
     pc = E("postCounts(S.coId)")

@@ -37,20 +37,28 @@ DEVS = [
     dev("d0000000-0000-4000-8000-000000000005", "LAPTOP", {}, None, at="ago:180", version="2.1.3")]
 D1, D2, D3, D4, D5 = [d["id"] for d in DEVS]
 STOPS = [{"id": 7, "device_id": D4, "action": "stop", "reason": "Tally hangs on the bank ledger", "stopped_at": "ago:40", "cleared_at": None}]
-SETUP = """([devs, stops, releases, role]) => {
+SETUP = """([devs, stops, releases, role, extra]) => {
+  extra = extra || {};
   const now = Date.now(), ago = m => new Date(now - m * 60000).toISOString();
   const fix = (o) => JSON.parse(JSON.stringify(o), (k, v) => typeof v === "string" && v.startsWith("ago:") ? ago(Number(v.slice(4))) : v === "TODAY" ? new Date().toISOString().slice(0, 10) : v);
   window.__fix = fix; window.__devs = fix(devs); window.__stops = fix(stops); window.__releases = fix(releases);
-  window.__calls = []; window.__fail = null;
-  Cloud.on = () => true; Cloud.st.firm = "f-1";
+  window.__calls = []; window.__fail = null; window.__asked = [];
+  window.__cursors = fix(extra.cursors || []); window.__books = fix(extra.books || []); window.__companies = fix(extra.companies || []); window.__old = !!extra.old;
+  Cloud.on = () => true; Cloud.st.firm = "f-1"; Cloud.st.members = extra.members || [];
   TCloud.on = () => true;
+  const copy = (o) => JSON.parse(JSON.stringify(o));
   Cloud.api = async (path) => {
-    if (/^tally_devices/.test(path)) return JSON.parse(JSON.stringify(window.__devs));
-    if (/^tally_read_stops/.test(path)) return JSON.parse(JSON.stringify(window.__stops));
-    if (/^tally_bridge_releases/.test(path)) return JSON.parse(JSON.stringify(window.__releases));
+    window.__asked.push(path);
+    if (/^tally_devices/.test(path)) return copy(window.__devs);
+    if (/^tally_read_stops/.test(path)) return copy(window.__stops);
+    // an older cloud (before migration 37): no withdrawn_* columns, and tally_sync_cursor cannot be read by members
+    if (/^tally_bridge_releases/.test(path)){ if (window.__old && /withdrawn/.test(path)) throw new Error("column tally_bridge_releases.withdrawn_at does not exist (42703)"); return copy(window.__releases); }
+    if (/^tally_sync_cursor/.test(path)){ if (window.__old) throw new Error("permission denied for table tally_sync_cursor (42501)"); return copy(window.__cursors); }
+    if (/^tally_books/.test(path)) return copy(window.__books);
+    if (/^tally_companies/.test(path)) return copy(window.__companies);
     return [];
   };
-  TCloud.restAll = async () => [];
+  TCloud.restAll = async (u) => Cloud.api(u);
   TCloud.rpc = async (fn, a) => { window.__calls.push([fn, JSON.parse(JSON.stringify(a || {}))]); if (window.__fail) throw new Error(window.__fail); return {ok: true}; };
   S.account = Object.assign(S.account || {}, {me: Object.assign((S.account || {}).me || {}, {role})});
   TCloud.pane.devices = null; TCloud.pane.at = 0; TCloud.pane.err = "";
@@ -155,6 +163,79 @@ with sync_playwright() as p:
     l2 = line(D2)
     ok(("Stopped by itself: " + XR) in l2 and ("Last request: " + XK) in l2 and pg.locator('#app [data-computer="%s"] img' % D2).count() == 0 and not dialogs,
        "a reason and a request kind with HTML in them are shown as text (%s; dialogs %s)" % (l2, dialogs))
+    # ---- round 4 (plan items 24, 23, 10): who and when, Withdraw version X, a fresh baseline
+    MEMBERS = [{"user_id": "u-anshul", "name": "Anshul"}, {"user_id": "u-neha", "email": "neha@fincom.in"}]
+    STOPS2 = [{"id": 7, "device_id": D4, "action": "stop", "reason": "Tally hangs on the bank ledger", "stopped_at": "ago:40", "stopped_by": "u-anshul", "cleared_at": None, "cleared_by": None},
+              {"id": 6, "device_id": D2, "action": "stop", "reason": "Month end", "stopped_at": "ago:200", "stopped_by": "u-anshul", "cleared_at": "ago:100", "cleared_by": "u-neha"},
+              {"id": 5, "device_id": None, "action": "resume", "reason": "", "stopped_at": "ago:300", "stopped_by": "u-neha", "cleared_at": None, "cleared_by": None}]
+    REL = [{"version": "2.1.5", "pilot_device": D1, "pilot_started_at": "ago:300", "pilot_by": "u-anshul", "approved_at": None, "approved_by": None, "withdrawn_at": None, "withdrawn_by": None, "withdrawn_why": None}]
+    BOOKS = [{"book_id": "b0000000-0000-4000-8000-000000000001", "client_id": "c1", "company": "ZZ TEST"}]
+    COS = [{"company": "ZZ TEST", "client_id": "c1", "device_id": D1, "gstin": "", "last_seen": "ago:1", "linked_at": "ago:9000"}]
+    CUR = [{"book_id": BOOKS[0]["book_id"], "state": "needs_baseline", "state_why": "AlterID went backwards (a restore in Tally?)", "state_at": "ago:50", "cleared_at": None, "cleared_by": None, "cleared_note": None}]
+    X = {"members": MEMBERS, "books": BOOKS, "companies": COS, "cursors": CUR}
+    E(SETUP, [DEVS, STOPS2, REL, "owner", X]); pg.wait_for_timeout(300)
+    E("() => navHome('tally')"); pg.wait_for_timeout(1500)
+    l4, l2, l1 = line(D4), line(D2), line(D1)
+    ok(("Stopped by Anshul at %s: Tally hangs on the bank ledger" % hm(40)) in l4, "24. a computer stopped from FinCom: Stopped by <name> at <time>: <reason> (%s)" % l4)
+    ok(("Resumed by neha@fincom.in at %s" % hm(100)) in l2, "24. a computer resumed: Resumed by <name> at <time>, the member's e-mail when there is no name (%s)" % l2)
+    ok(("Resumed by neha@fincom.in at %s" % hm(300)) in l1, "24. a resume of all computers shows on a computer with no own stop or resume since (%s)" % l1)
+    rel = txt("#app [data-release]")
+    ok(("Pilot started by Anshul at %s on NWS144" % hm(300)) in rel, "24. the release: Pilot started by <name> at <time> on <computer> (%s)" % rel)
+    ok(txt("#app [data-release-withdraw]") == "Withdraw version 2.1.5", "23. owner: Withdraw version 2.1.5")
+    sel("[data-release-withdraw]").click(); pg.wait_for_timeout(400)
+    pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(300)
+    ok(pg.locator("#confirmBox .cbx-err").count() == 1 and not [c for c in E("window.__calls") if c[0] == "tally_release_withdraw"], "23. Withdraw without a reason: asked for one, nothing sent")
+    pg.fill("#confirmBox #withdrawWhy", "Crashes on NWS144 at the bank ledger"); pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(600)
+    ok(["tally_release_withdraw", {"p_version": "2.1.5", "p_why": "Crashes on NWS144 at the bank ledger"}] in E("window.__calls"), "23. Withdraw version 2.1.5 -> tally_release_withdraw(p_version, p_why) (%s)" % E("window.__calls"))
+    # withdrawn (after an approval): said with who, when and why; no Approve, no Withdraw; a new pilot is allowed
+    REL_W = [dict(REL[0], approved_at="ago:10", approved_by="u-neha", withdrawn_at="ago:1", withdrawn_by="u-anshul", withdrawn_why="Crashes on NWS144 at the bank ledger")]
+    E(SETUP, [DEVS, STOPS2, REL_W, "owner", X]); pg.wait_for_timeout(300)
+    E("() => navHome('tally')"); pg.wait_for_timeout(1500)
+    rel = txt("#app [data-release]")
+    ok(("Withdrawn by Anshul at %s: Crashes on NWS144 at the bank ledger" % hm(1)) in rel and "withdrawn" in rel.lower(), "23. withdrawn: Withdrawn by <name> at <time>: <why> (%s)" % rel)
+    ok(sel("[data-release-approve]").count() == 0 and sel("[data-release-withdraw]").count() == 0 and txt('#app [data-release-pilot="%s"]' % D1) == "Try version 2.1.5 on this computer",
+       "23. withdrawn: no Approve, no Withdraw; Try version 2.1.5 on this computer is back")
+    # approved, not withdrawn: Approved by <name> at <time>, and Withdraw stays
+    REL_A = [dict(REL[0], approved_at="ago:10", approved_by="u-neha")]
+    E(SETUP, [DEVS, STOPS2, REL_A, "owner", X]); pg.wait_for_timeout(300)
+    E("() => navHome('tally')"); pg.wait_for_timeout(1500)
+    rel = txt("#app [data-release]")
+    ok(("Approved by neha@fincom.in at %s" % hm(10)) in rel and ("Pilot started by Anshul at %s on NWS144" % hm(300)) in rel and sel("[data-release-withdraw]").count() == 1 and sel("[data-release-approve]").count() == 0,
+       "24. approved: Approved by <name> at <time>, the pilot line kept, Withdraw stays (%s)" % rel)
+    # 10. a company of the computer needing a fresh baseline
+    bl = txt('#app [data-computer="%s"] [data-baseline="%s"]' % (D1, BOOKS[0]["book_id"]))
+    ok(("ZZ TEST" in bl) and ("Needs a fresh baseline since %s: AlterID went backwards (a restore in Tally?)" % hm(50)) in bl, "10. under the computer: <company>: Needs a fresh baseline since <time>: <why> (%s)" % bl)
+    ok(txt('#app [data-baseline-clear="%s"]' % BOOKS[0]["book_id"]).startswith("Clear"), "10. owner: Clear (note)")
+    sel('[data-baseline-clear="%s"]' % BOOKS[0]["book_id"]).click(); pg.wait_for_timeout(400)
+    pg.fill("#confirmBox #baselineNote", "Tally restored from the 30-Sep backup; read it afresh"); pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(600)
+    ok(["tally_baseline_clear", {"p_book": BOOKS[0]["book_id"], "p_note": "Tally restored from the 30-Sep backup; read it afresh"}] in E("window.__calls"), "10. Clear -> tally_baseline_clear(p_book, p_note)")
+    CUR_OK = [dict(CUR[0], state="ok", cleared_at="ago:0.5", cleared_by="u-anshul", cleared_note="Tally restored from the 30-Sep backup; read it afresh")]
+    E(SETUP, [DEVS, STOPS2, REL, "owner", dict(X, cursors=CUR_OK)]); pg.wait_for_timeout(300)
+    E("() => navHome('tally')"); pg.wait_for_timeout(1500)
+    bl = txt('#app [data-computer="%s"] [data-baseline="%s"]' % (D1, BOOKS[0]["book_id"]))
+    ok(("Cleared by Anshul at %s: Tally restored from the 30-Sep backup; read it afresh" % hm(0.5)) in bl and sel("[data-baseline-clear]").count() == 0, "10. afterwards: Cleared by <name> at <time>: <note>, no button (%s)" % bl)
+    # a member sees the words, none of the buttons
+    E(SETUP, [DEVS, STOPS2, REL_A, "member", X]); pg.wait_for_timeout(300)
+    E("() => navHome('tally')"); pg.wait_for_timeout(1500)
+    ok(("Stopped by Anshul at %s" % hm(40)) in line(D4) and "Approved by neha@fincom.in" in txt("#app [data-release]") and "Needs a fresh baseline since" in txt('#app [data-baseline="%s"]' % BOOKS[0]["book_id"]),
+       "a member sees who and when, the withdrawal and the baseline words")
+    ok(sel("[data-release-withdraw], [data-baseline-clear]").count() == 0, "a member has no Withdraw and no Clear")
+    # an older cloud (migration 37 not applied): the page works, and says FinCom's cloud is not ready for what it cannot do
+    E(SETUP, [DEVS, STOPS2, REL, "owner", dict(X, old=True)]); pg.wait_for_timeout(300)
+    E("() => navHome('tally')"); pg.wait_for_timeout(1500)
+    rel = txt("#app [data-release]")
+    ok(pg.locator("#app [data-computer]").count() == 5 and ("Pilot started by Anshul at %s on NWS144" % hm(300)) in rel and "Stopped by Anshul" in line(D4), "older cloud: the lines, who and when still shown (%s)" % rel)
+    nr = txt("#app [data-release] [data-not-ready]")
+    ok(sel("[data-release-withdraw]").count() == 0 and nr.startswith("FinCom’s cloud is not ready for this yet"), "older cloud: no Withdraw; 'FinCom's cloud is not ready for this yet' (%s)" % nr)
+    ok(sel("[data-baseline]").count() == 0 and not txt("#app [data-bridge-lines]").count("permission denied"), "older cloud: no baseline rows and no error from tally_sync_cursor")
+    E("() => { window.__fail = 'Could not find the function public.tally_release_withdraw(p_version, p_why) in the schema cache'; }")
+    E(SETUP, [DEVS, STOPS2, REL, "owner", X]); E("() => { window.__fail = 'Could not find the function public.tally_release_withdraw(p_version, p_why) in the schema cache'; }"); pg.wait_for_timeout(300)
+    E("() => navHome('tally')"); pg.wait_for_timeout(1500)
+    sel("[data-release-withdraw]").click(); pg.wait_for_timeout(400)
+    pg.fill("#confirmBox #withdrawWhy", "x"); pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(600)
+    err = txt("#app [data-control-err]")
+    ok(err.startswith("FinCom’s cloud is not ready for this yet"), "the RPC missing: 'FinCom's cloud is not ready for this yet' (%s)" % err)
+    E("() => { window.__fail = null; }")
     ok(not errors, "no page errors %s" % errors[:2])
     br.close()
 print("\nall passed" if not fails else "\nFAILED: %d" % len(fails)); raise SystemExit(1 if fails else 0)

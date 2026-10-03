@@ -5,7 +5,7 @@
 const fs = require("fs"), path = require("path"), {load, openBlob, HTML, FIXTURE_DIR} = require("./harness");
 // the fixture's day book as the app reads it: the harness keeps it up to date in fixture mode; with a real export here, made now
 const CACHE = (() => { const h = require("./harness"); if (!h.FIXTURE) require("child_process").execFileSync(process.execPath, [path.join(__dirname, "fixture_cache.js"), h.FIXTURE_CACHE], {stdio: "inherit"}); return h.FIXTURE_CACHE; })();
-const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "Audit", "MIS", "Parties", "FS", "TDS", "Certs", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "GSTSet", "GSTF", "GSTQ"];
+const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "Audit", "MIS", "Parties", "FS", "TDS", "Certs", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "GSTSet", "GSTF", "GSTQ", "choiceSplit", "choiceAcc", "choiceLegacy", "choiceDerive", "choiceRec", "choiceGet", "choiceUsable"];
 let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 const eq = (a, b, w) => ok(Math.abs((+a || 0) - b) < 0.01, w + ": " + a + (Math.abs((+a || 0) - b) < 0.01 ? "" : " (by hand " + b + ")"));
 const same = (a, b, w) => ok(JSON.stringify(a) === JSON.stringify(b), w + ": " + JSON.stringify(a) + (JSON.stringify(a) === JSON.stringify(b) ? "" : " (by hand " + JSON.stringify(b) + ")"));
@@ -15,11 +15,13 @@ const same = (a, b, w) => ok(JSON.stringify(a) === JSON.stringify(b), w + ": " +
   const ms = await x.Books.importMasters(await openBlob(path.join(FIXTURE_DIR, "Master.xml")));
   Object.assign(b, {ledInfo: ms.info, under: ms.under, groups: ms.groups, groupInfo: ms.groupInfo, gstins: ms.gstins, pans: ms.pans, states: ms.states, challans: [], alloc: {}});
   b.map = x.Books.mapLedgers(b.vouchers, {}); ctx.S.books = b; ctx.S.coId = "t";
-  ctx.CO = () => ({name: "Larkspur Fixture Events Private Limited", gstin: "07AAGCL4827M1Z3"});
+  // the client record, for the per-ledger choices of round 4 (co.choices["flow:<ledger>"])
+  ctx.S.companies = {t: {id: "t", name: "Larkspur Fixture Events Private Limited", gstin: "07AAGCL4827M1Z3", choices: {}}};
+  ctx.CO = () => ctx.S.companies.t;
   x.LedMaster.refresh(b);
   const ORCHID = "Orchid Lane Hospitality Pvt Ltd (Noida)", QUILL = "Quillfeather Weddings LLP";
   console.log("reading the files");
-  ok(b.vouchers.length === 73 && b.meta.from === "20250401" && b.meta.to === "20260331", "73 entries, 01-Apr-2025 to 31-Mar-2026");
+  ok(b.vouchers.length === 77 && b.meta.from === "20250401" && b.meta.to === "20260331", "77 entries, 01-Apr-2025 to 31-Mar-2026");
   same(b.meta.gstins.slice().sort(), ["07AAGCL4827M1Z3", "09AAGCL4827M1ZZ"], "the company's two registrations, from CMPGSTIN");
   ok(ms.info[ORCHID] && b.vouchers.some(v => v.party === ORCHID) && !Object.keys(ms.info).some(n => /&#|\r|\n/.test(n)), "a name with a line break (&#13;&#10;) reads the same in the masters and the day book");
   ok(ms.info[ORCHID].gstin === "09AACCO6624H1ZC" && ms.info[ORCHID].pan === "" && ms.info[ORCHID].panFrom === "GSTIN", "a GSTIN in TallyPrime's dated registration details; the PAN taken from it");
@@ -59,9 +61,9 @@ const same = (a, b, w) => ok(JSON.stringify(a) === JSON.stringify(b), w + ": " +
   ok(/Loan Processing Fees <span class="tag warn" data-fs-flag="">expense ledger with a credit balance<\/span><\/td><td class="n">-25,000.00/.test(noteFin) && /Less: credit balances set off in the head<\/td><td class="n">-25,000.00/.test(noteFin) && /data-fs-moved><td class="note">Excess credit moved to Other income<\/td><td class="n">5,000.00/.test(noteFin) && /Total<\/b><\/td><td class="n"><b>0.00/.test(noteFin),
     "the note to finance costs: each ledger (the credit negative, flagged), the set-off, the excess moved and a total of nil");
   ok(/data-fs-excess="fin"><td class="note">Excess credit in Finance costs<\/td><td class="n">5,000.00/.test(html), "the note to other income says which head the 5,000 came from");
-  eq(P("share"), 1000000, "share capital"); eq(P("reserves"), -405450, "reserves and surplus"); eq(P("ltb"), 318000, "long-term borrowings"); eq(P("tp"), 322400, "trade payables"); eq(P("ocl"), 268400, "other current liabilities");
-  eq(P("ppe"), 190000, "property, plant and equipment"); eq(P("intang"), 100000, "intangible assets"); eq(P("tr"), 718200, "trade receivables"); eq(P("cash"), 231750, "cash and cash equivalents"); eq(P("stla"), 263400, "short-term loans and advances");
-  eq(d.eqL, 1503350, "equity and liabilities"); eq(d.assets, 1503350, "assets");
+  eq(P("share"), 1000000, "share capital"); eq(P("reserves"), -405450, "reserves and surplus"); eq(P("ltb"), 368000, "long-term borrowings (with the director's loan 50,000)"); eq(P("tp"), 322400, "trade payables"); eq(P("ocl"), 268400, "other current liabilities");
+  eq(P("ppe"), 190000, "property, plant and equipment"); eq(P("intang"), 100000, "intangible assets"); eq(P("tr"), 718200, "trade receivables"); eq(P("cash"), 231750, "cash and cash equivalents"); eq(P("stla"), 313400, "short-term loans and advances (with the staff loan 50,000)");
+  eq(d.eqL, 1553350, "equity and liabilities"); eq(d.assets, 1553350, "assets");
   const pyE = d.lines.filter(z => ["EQ", "NCL", "CL"].includes(z[2])).reduce((a, z) => a + (d.py[z[0]] || 0), 0), pyA = d.lines.filter(z => ["NCA", "CA"].includes(z[2])).reduce((a, z) => a + (d.py[z[0]] || 0), 0);
   eq(pyE, 538700, "last year's column, equity and liabilities"); eq(pyA, 538700, "last year's column, assets");
   same(d.fa.map(f => [f.l, f.k, f.open, f.add, f.del, f.close]), [["Event Software Licence", "intang", 0, 120000, 20000, 100000], ["Laptops and Computers", "ppe", 150000, 80000, 40000, 190000]], "fixed assets, the intangible one on its own line");
@@ -102,6 +104,31 @@ const same = (a, b, w) => ok(JSON.stringify(a) === JSON.stringify(b), w + ": " +
   eq(line("Expenses paid"), -136450, "expenses paid (travel 12,000, rent 1,20,000, printing 2,500 in cash, the staff loan fee 1,500, interest on TDS 450)");
   eq(line("TDS and TCS"), -11200, "TDS and TCS (1,200 + 10,000; interest on TDS, an expense ledger, is in expenses paid)");
   eq(r.p2.cash.net, 38050, "net change in cash and bank"); ok(r.p2.cash.ties, "opening + change = closing");
+  // round 4 (03-Oct-2026), the owner's rules 26-29 (EXPECTED.md, "Cash flow"): decided by Tally's group first
+  ok(x.MIS.V >= 8, "MIS.V bumped for the rules of round 4 (" + x.MIS.V + ")");
+  eq(line("Salaries and staff"), -179000, "27. salaries: Staff Salaries 1,35,000 by its group + Salary Payable 44,000 (directly under Current Liabilities, by its name)");
+  ok(onLine("Salaries and staff", "Salary Payable") === -44000 && x.MIS.flowHead("Salary Payable").join() === "op,Salaries and staff,name", "27. Salary Payable: Salaries and staff, flagged as decided by the name");
+  eq(line("Other receipts and payments"), -1000, "27. ESI Payable - Employees Share under the sub-group \"Statutory dues\": the sub-group decides (no staff word in it), so Other receipts and payments, not flagged");
+  ok(x.MIS.flowHead("ESI Payable - Employees Share").join() === "op,Other receipts and payments", "27. ESI under Statutory dues: by the sub-group, no flag (" + x.MIS.flowHead("ESI Payable - Employees Share").join() + ")");
+  eq(line("Partners' accounts"), 50000, "28. the loan from Devika Larkspur: her sub-group under Loans (Liability) matches her Capital Account ledger, so Partners' accounts (financing)");
+  ok(x.MIS.flowHead("Devika Larkspur - Loan").join() === "fin,Partners' accounts,partner" && x.MIS.flowHead("Hemant Zaverchand (Loan)").join() === "fin,Loans", "28. flagged as the partner match; Hemant's loan (Unsecured Loans) stays on Loans");
+  eq(line("Loans and advances (asset)"), -50000, "26. the staff loan given: Loans and advances (asset), operating, by default (no mark)");
+  eq(r.p2.cash.op.t, -11950, "operating: 38,050 less the 50,000 lent"); eq(r.p2.cash.fin.t, 50000, "financing: the 50,000 from the director"); eq(r.p2.cash.inv.t, 0, "investing: nothing without a mark");
+  const notes = x.MIS.flowNotes(ctx.S.companies.t);
+  same(notes.map(n => [n.ledger, n.line]).sort(), [["Devika Larkspur - Loan", "Partners' accounts"], ["Salary Payable", "Salaries and staff"]], "29. grouping notes: the two ledgers decided by a name word or the partner match, no other");
+  ok(notes.every(n => n.group && n.why) && /name/.test(notes.find(n => n.ledger === "Salary Payable").why) && /partner|Capital/.test(notes.find(n => n.ledger === "Devika Larkspur - Loan").why), "29. each note says the Tally group and why (" + JSON.stringify(notes) + ")");
+  same((r.p2.cash.notes || []).map(n => n.ledger).sort(), ["Devika Larkspur - Loan", "Salary Payable"], "29. the cash flow carries the notes for the ledgers that moved");
+  // 26. the owner's mark "Loan given" on the Mapping tab: a confirmed choice; a guess is never one
+  const K = "flow:Loan to Staff - Ravi Menon";
+  ctx.S.companies.t.choices[K] = {value: "loan_given", state: "guessed", by: "FinCom", at: "2026-10-03T00:00:00Z"};
+  ok(x.MIS.flowHead("Loan to Staff - Ravi Menon").join() === "op,Loans and advances (asset)", "26. a guessed mark counts for nothing: still operating");
+  ctx.S.companies.t.choices[K] = {value: "loan_given", state: "confirmed", by: "the owner", at: "2026-10-03T00:00:00Z"};
+  ok(x.MIS.flowHead("Loan to Staff - Ravi Menon").join() === "inv,Loans given,mark", "26. marked Loan given: investing, Loans given, flagged as a mark");
+  const r4 = x.MIS.cashActual("20250401", "20260331"), l4 = l => (r4.rows.find(z => z.lab === l) || {t: 0}).t;
+  eq(l4("Loans given"), -50000, "26. with the mark: Loans given -50,000 under investing"); ok(!r4.rows.some(z => z.lab === "Loans and advances (asset)"), "26. and nothing left on Loans and advances (asset)");
+  eq(r4.inv.t, -50000, "investing -50,000"); eq(r4.op.t, 38050, "operating 38,050"); eq(r4.net, 38050, "the net unchanged"); ok(r4.ties, "opening + change = closing");
+  same(r4.notes.map(n => n.ledger).sort(), ["Devika Larkspur - Loan", "Loan to Staff - Ravi Menon", "Salary Payable"], "29. the mark is a grouping note too");
+  ok(x.MIS.basis(b) !== (delete ctx.S.companies.t.choices[K], x.MIS.basis(b)), "a mark changes the MIS basis, so the MIS knows it is stale");
 
   console.log("GST by month");
   const want = {"202504": [72000, 0, 0, 72000, 0], "202505": [0, 36000, 0, 0, 72000], "202506": [27000, 3600, 0, 5400, 0], "202507": [18000, 14400, 0, 0, 5400], "202508": [9000, 21600, 0, 0, 0],

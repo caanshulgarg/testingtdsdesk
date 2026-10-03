@@ -35,7 +35,7 @@ SETUP = """async () => {
   S.books = {cid: c.id, loading: false, challans: [], alloc: {}, vouchers: [], meta: {}, groups: {}, under: {}};
   window.__readAt = new Date(Date.now() - 10 * 60000).toISOString();
   const book = () => [{from: "2025-04-01", to: "2026-03-31", book: "bk1", company: "GARG SHEKHAR & COMPANY", entries: 2754, state: {readAt: window.__readAt}}];
-  window.__rpc = []; window.__rest = []; window.__bridge = []; window.__view = true; window.__ledgerNone = false;
+  window.__rpc = []; window.__rest = []; window.__bridge = []; window.__view = true; window.__ledgerNone = false; window.__balOn = false;
   Cloud.on = () => true; Cloud.st.firm = {id: "f-1"}; Cloud.st.members = [];
   TCloud.st[c.id] = {at: Date.now(), books: book()};
   const V = [{ledger: "ICICI Bank", parent: "Bank Accounts", open: -350458.92, closing: -276467.36},
@@ -58,6 +58,9 @@ SETUP = """async () => {
     if (fn === "tally_tb") return V.map(r => ({ledger: r.ledger, parent: r.parent, open: r.open, movement: r.closing - r.open, closing: r.closing}));
     if (fn === "tally_ledger"){ if (window.__ledgerNone) return {none: true}; const r = V.find(x => x.ledger === a.p_ledger) || {open: 0, closing: 0};
       return {open: a.p_from > "2026-03-31" ? r.closing : r.open, lines: [["20250415", "Receipt", "7", "AAR ESS EXIM PRIVATE LIMITED", "", r.closing - r.open, "g1"]], company: "GARG SHEKHAR & COMPANY", from: "2025-04-01", to: "2026-03-31"}; }
+    // migration-37: tally_balances_on(p_book, p_as_on), one request for a date inside the copy; absent on an older cloud
+    if (fn === "tally_balances_on"){ if (!window.__balOn) throw new Error("Could not find the function public.tally_balances_on(p_book, p_as_on) in the schema cache (PGRST202)");
+      return V.map(r => ({ledger: r.ledger, parent: r.parent, primary_group: "", open: r.open, movement: r.closing - r.open, closing: r.closing})); }
     if (fn === "tally_period") return V.map(r => ({ledger: r.ledger, parent: r.parent, open: r.open, dr: r.closing < r.open ? r.open - r.closing : 0, cr: r.closing > r.open ? r.closing - r.open : 0}));
     if (fn === "tally_monthly") return [];
     return null; };
@@ -96,6 +99,15 @@ with sync_playwright() as p:
     r = E("({src: S.lk.res.src, n: S.lk.res.rows.length, dr: S.lk.res.dr, cr: S.lk.res.cr, rpc: window.__rpc.map(z => z[0]), per: (window.__rpc.find(z => z[0] === 'tally_period') || [0, {}])[1]})")
     ok(r["src"] == "cloud" and r["n"] == 4 and r["dr"] == r["cr"] == 995762.65 and "tally_tb" not in r["rpc"] and r["per"].get("p_from") == "2025-04-01" and r["per"].get("p_to") == "2026-02-15" and any(u.startswith("tally_balances") for u in E("window.__rest")),
        "1. a date inside the copy (15-Feb-2026): the view's openings plus tally_period from 01-Apr-2025, never tally_tb (%s)" % r)
+    # with migration-37's function: one request, tally_balances_on(p_book, p_as_on), no tally_period; the same figures
+    E("async () => { window.__balOn = true; TCloud.hasBalOn = null; window.__rpc = []; window.__rest = []; const x = LK.st(); Object.assign(x, {kind: 'tb', asOn: '20260215', src: ''}); x.res = null; await LK.run('auto'); }"); pg.wait_for_timeout(500)
+    r = E("({src: S.lk.res.src, n: S.lk.res.rows.length, dr: S.lk.res.dr, cr: S.lk.res.cr, rpc: window.__rpc.map(z => z[0]), on: (window.__rpc.find(z => z[0] === 'tally_balances_on') || [0, {}])[1]})")
+    ok(r["src"] == "cloud" and r["n"] == 4 and r["dr"] == r["cr"] == 995762.65 and r["rpc"].count("tally_balances_on") == 1 and "tally_period" not in r["rpc"] and "tally_tb" not in r["rpc"]
+       and r["on"] == {"p_book": "bk1", "p_as_on": "2026-02-15"} and not any(u.startswith("tally_balances?") for u in E("window.__rest")),
+       "1. with tally_balances_on (migration-37): one request for the date, no view read, no tally_period (%s)" % r)
+    E("async () => { window.__balOn = false; TCloud.hasBalOn = null; window.__rpc = []; const x = LK.st(); x.res = null; await LK.run('auto'); }"); pg.wait_for_timeout(500)
+    r = E("({dr: S.lk.res.dr, rpc: window.__rpc.map(z => z[0]), on: TCloud.hasBalOn})")
+    ok(r["dr"] == 995762.65 and "tally_period" in r["rpc"] and r["on"] is False, "1. the function missing (an older cloud): the view plus tally_period again, the same figures (%s)" % r)
     E("() => { LK.st().asOn = '20260331'; }")
     # no view on this cloud (migration-32 not applied): the trial balance function
     E("async () => { window.__view = false; TCloud.hasView = null; window.__rpc = []; S.lk.res = null; await LK.run('auto'); }"); pg.wait_for_timeout(400)

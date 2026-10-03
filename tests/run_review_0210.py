@@ -84,6 +84,13 @@ with sync_playwright() as p:
     g = E("""(() => { const i = {'TDS Magic Seva': {group: 'Loans & Advances (Asset)', taxType: 'Others'}, 'TDS Pentagon': {group: 'Loans & Advances (Asset)', taxType: 'Others'}, 'Intrest On TDS': {group: 'Indirect Expenses', taxType: 'Others'}};
       return Object.keys(i).map(n => LedMaster.propose(n, i[n], null, ['09']).what); })()""")
     ok(g == ["tds_receivable", "tds_receivable", "tds_interest"], "12. TDS Magic Seva and TDS Pentagon: TDS receivable; Intrest On TDS: interest, not TDS payable (%s)" % g)
+    # round 4 (03-Oct-2026), item 28 on Testing AAD: the Loans (Liability) sub-groups "Anshul Garg" and "Ankit Garg" are not a
+    # partner's by the rule (the only Capital Account ledger is "Capital", which names no one; neither sub-group says
+    # Partner), so their ledgers stay on Loans; "Partner's Loan A/c" is a ledger directly under Loans (Liability), not a
+    # sub-group, so it stays too. Nothing is flagged by a partner match
+    h = E("""['Anshul Garg Loan', 'Anshul Garg Bajaj Loan A/c', 'Salary Ankit Garg', 'Ankit Garg Imprest', "Partner's Loan A/c", 'Yottacto'].map(l => MIS.flowHead(l).join('|'))""")
+    ok(h == ["fin|Loans"] * 6, "28. Anshul Garg's and Ankit Garg's ledgers, Partner's Loan A/c and Yottacto all on Loans (%s)" % h)
+    ok(E("MIS.flowNotes(CO()).filter(n => /partner/i.test(n.why)).length") == 0 and E("MIS.flowNotes(CO()).some(n => n.ledger === 'Salary Payable' && n.line === 'Salaries and staff')"), "28, 29. no partner note; Salary Payable's name note is there")
 
     # 8, 13, 15. Bank: cloud ledgers, In Tally only when matched, tabs at the top
     E("""() => { const c = CO(); c.bankAccounts = [{id: 'a1', bank: 'HDFC', acct: '1234', ledger: ''}];

@@ -27,8 +27,8 @@ with sync_playwright() as p:
     t = pg.inner_text("#app")
     ok("The balance sheet tallies" in t and "Schedule III" in t and "Statement of Profit and Loss" in t, "Schedule III statements, tallied")
     ok("Negative on the balance sheet" in t, "a negative line is flagged")
-    if FIXTURE:   # EXPECTED.md: balance sheet totals 15,03,350 each side; profit 3,94,550; reserves -4,05,450
-        ok("15,03,350.00" in t and "3,94,550.00" in t and "Reserves and surplus -4,05,450.00" in t, "fixture: the totals worked out by hand (15,03,350; profit 3,94,550; reserves -4,05,450)")
+    if FIXTURE:   # EXPECTED.md: balance sheet totals 15,53,350 each side; profit 3,94,550; reserves -4,05,450
+        ok("15,53,350.00" in t and "3,94,550.00" in t and "Reserves and surplus -4,05,450.00" in t, "fixture: the totals worked out by hand (15,53,350; profit 3,94,550; reserves -4,05,450)")
     pg.screenshot(path=OUT + "/fs.png", full_page=False)
     pg.click('nav[aria-label="Accounts"] button:text-is("Mapping")'); pg.wait_for_timeout(600)
     sel = pg.locator('select[aria-label^="Goes to: "]').first; l = sel.get_attribute("aria-label")[9:]
@@ -36,6 +36,23 @@ with sync_playwright() as p:
     ok(pg.evaluate("S.books.fs.map[%s]" % json.dumps(l)) == "oca" and "by hand" in pg.inner_text("#app"), "a ledger placed by hand: " + l)
     pg.click('tr[data-key=%s] button:text-is("by rule")' % json.dumps(l)); pg.wait_for_timeout(2500)
     ok(l not in pg.evaluate("Object.keys(S.books.fs.map)"), "and back to the rule")
+    if FIXTURE:
+        # round 4 (03-Oct-2026), item 26: a ledger under Loans & Advances (Asset) gets a tick "Loan given (investing)", a
+        # per-ledger choice (co.choices["flow:<ledger>"] = loan_given) confirmed by the person; the cash flow then puts it
+        # under investing, Loans given. No other ledger has the tick
+        pg.fill("#fsq", "Ravi Menon"); pg.wait_for_timeout(800)
+        box = pg.locator('input[aria-label="Loan given (investing): Loan to Staff - Ravi Menon"]')
+        ok(box.count() == 1 and not box.is_checked() and pg.locator('#app tr[data-key]').count() == 1, "Mapping: the Loans & Advances (Asset) ledger has a Loan given tick, unticked")
+        pg.fill("#fsq", "Office Rent"); pg.wait_for_timeout(800)
+        ok(pg.locator('input[aria-label^="Loan given (investing): "]').count() == 0, "a ledger of another group has no tick")
+        pg.fill("#fsq", "Ravi Menon"); pg.wait_for_timeout(800)
+        box.check(); pg.wait_for_timeout(900)
+        c = pg.evaluate("(CO().choices || {})['flow:Loan to Staff - Ravi Menon']")
+        ok(bool(c) and c["value"] == "loan_given" and c["state"] == "confirmed" and bool(c["by"]) and bool(c["at"]), "ticked: co.choices['flow:Loan to Staff - Ravi Menon'] = loan_given, confirmed, by whom and when (%s)" % c)
+        ok(pg.evaluate("MIS.flowHead('Loan to Staff - Ravi Menon').slice(0, 2)") == ["inv", "Loans given"] and box.is_checked(), "the cash flow puts it under investing, Loans given")
+        box.uncheck(); pg.wait_for_timeout(900)
+        ok(pg.evaluate("!(CO().choices || {})['flow:Loan to Staff - Ravi Menon']") and pg.evaluate("MIS.flowHead('Loan to Staff - Ravi Menon')[1]") == "Loans and advances (asset)", "unticked: the choice forgotten, back to operating")
+        pg.fill("#fsq", ""); pg.wait_for_timeout(500)
     pg.click('nav[aria-label="Accounts"] button:text-is("Statements")'); pg.wait_for_timeout(400)
     pg.select_option('select[aria-label="Format"]', "nc"); pg.wait_for_timeout(300); pg.click('section[data-fs-head] button:text-is("Run now")'); pg.wait_for_timeout(3000)
     ok("Owners' funds" in pg.inner_text("#app") and "Non-Corporate" in pg.inner_text("#app"), "the non-corporate format")
