@@ -337,6 +337,33 @@ with sync_playwright() as p:
     E("() => { S.account = {me: {role: 'staff'}, firm: {name: 'Firm'}}; const r = window.__postIds.find(x => x.fincom_id === 'fa'); r.live = true; r.released_at = null; PostIds.load(S.coId, true); }"); pg.wait_for_timeout(800)
     fa = txt(FA)
     ok("an owner can release it here" in fa and pg.locator(FA + " button[data-release-owner], " + FA + " button[data-mark-posted], " + FA + " [data-post-again]").count() == 0, "C6. a staff member: the words, no button (%s)" % fa[-120:])
+    # ---- round 11 (owner item 6): an entry verified in Tally and deleted there by hand since. On the POSTED tab, each
+    # entry of a finished posting is listed under it; an owner sees "Not in Tally — release (reason)" there too (the same
+    # box and validation as on Errors) -> tally_post_id_release_owner(job, id, why); staff see nothing extra. Released:
+    # the entry says so and the button goes (Post again comes back on Errors by the postIdReleased gating)
+    JF = '#app [data-post-panel="posted"] [data-job="jF"]'
+    tab("posted")
+    ok(pg.locator(JF).count() == 1 and pg.locator(JF + " [data-posted-entry='fa']").count() == 1, "P6. Posted: the finished posting jF lists its entry fa (%s)" % txt(JF)[:120])
+    ok(pg.locator(JF + " [data-release-owner]").count() == 0 and pg.locator("#app [data-post-panel='posted'] button[data-release-owner], #app [data-post-panel='posted'] button[data-mark-posted]").count() == 0,
+       "P6. a staff member: nothing extra on Posted")
+    E("() => { S.account = {me: {role: 'owner'}, firm: {name: 'Firm'}}; window.__rpc = []; render(); }"); pg.wait_for_timeout(400); tab("posted")
+    ok(pg.locator(JF + " [data-posted-entry='fa'] [data-release-owner]").count() == 1 and "release" in txt(JF + " [data-release-owner]") and pg.locator(JF + " [data-mark-posted]").count() == 0,
+       "P6. an owner: 'Not in Tally — release (reason)' on the Posted row's entry, no Mark posted (%s)" % txt(JF)[-120:])
+    pg.click(JF + " [data-posted-entry='fa'] [data-release-owner]"); pg.wait_for_timeout(400)
+    ok(pg.locator("#confirmBox input#releaseWhy").count() == 1, "P6. it asks why first")
+    pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(300)
+    ok(pg.locator("#confirmBox input#releaseWhy").count() == 1 and pg.locator("#confirmBox .cbx-err").count() == 1 and not [c for c in E("window.__rpc") if c[0] == "tally_post_id_release_owner"], "P6. no reason: not sent, the box says so")
+    pg.fill("#confirmBox input#releaseWhy", "deleted in Tally by hand"); pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(800)
+    calls = [c for c in E("window.__rpc") if c[0] == "tally_post_id_release_owner"]
+    ok(calls == [["tally_post_id_release_owner", {"p_job": "jF", "p_id": "fa", "p_why": "deleted in Tally by hand"}]], "P6. tally_post_id_release_owner(job, id, why) from Posted (%s)" % calls)
+    E("""() => { const r = window.__postIds.find(x => x.fincom_id === "fa"); r.live = false; r.released_at = new Date().toISOString(); r.released_by = "owner"; PostIds.load(S.coId, true); }"""); pg.wait_for_timeout(800); tab("posted")
+    ok(pg.locator(JF + " [data-posted-entry='fa'][data-post-released]").count() == 1 and pg.locator(JF + " [data-release-owner]").count() == 0 and "released" in txt(JF + " [data-posted-entry='fa']").lower(),
+       "P6. released: the entry says so, the button goes (%s)" % txt(JF + " [data-posted-entry='fa']"))
+    tab("errors")
+    ok(pg.locator(FA + " [data-post-again]").count() == 1 and pg.locator(FA + " [data-release-owner]").count() == 0, "P6. and Post again is back on Errors for fa")
+    tab("posted")
+    ok(pg.locator("#app [data-post-panel='posted'] [data-job='jC'] [data-posted-entry='old2']").count() == 1 and pg.locator("#app [data-post-panel='posted'] [data-job='jC'] [data-release-owner], #app [data-post-panel='posted'] [data-job='jC'] [data-post-released]").count() == 0,
+       "P6. an older posting whose id the cloud never held (jC, old2): the entry listed, nothing to release, not called released")
     ok(not errors, "no page errors %s" % errors[:2])
     br.close()
 print("\nall passed" if not fails else "\nFAILED: %d" % len(fails)); raise SystemExit(1 if fails else 0)

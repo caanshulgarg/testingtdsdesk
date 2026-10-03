@@ -192,6 +192,21 @@ function Attention({ co, bills, canPost }) {
 // 5. Posted: the postings of FinCom's cloud that need nothing, newest first (a failed posting finished by a later one is
 // one line with it); each names the entries it put in Tally (data-entries)
 const NTH = ["", "second try", "third try", "fourth try"];
+// round 11 (owner item 6): the entries a finished posting put in Tally, listed under it (postPostedEntries, src/js/59).
+// One verified in Tally can be deleted there by hand since: an owner sees "Not in Tally — release (reason)" here too, the
+// same box and call as on Errors (PostOwner.release); released, the entry says so and Post again is back by the
+// postIdReleased gating. Staff see the entries only. An id the cloud never held (an older posting) has nothing to release
+function PostedEntries({ co, job, ents }) {
+  const owner = typeof postOwner === "function" && postOwner();
+  return <ul className="post-attn post-attn-in" data-posted-entries="">
+    {ents.map((x) => <li key={x.id} data-posted-entry={x.id} data-post-released={x.idState === "released" ? "" : undefined}>
+      <span className="why"><b>{x.no}</b>{x.e.x && x.e.x.vendorName ? " · " + x.e.x.vendorName : ""}{x.idState === "released" ? " — released; it can be posted again" : ""}</span>
+      {owner && x.idState !== "released" && x.idState !== "none" && <span className="acts">
+        <button className="btn small" data-release-owner="" onClick={() => PostOwner.release(co.id, x.e, job)}>Not in Tally — release (reason)</button>
+      </span>}
+    </li>)}
+  </ul>;
+}
 function History({ co }) {
   const h = typeof postPostedRows === "function" ? postPostedRows(co.id) : CloudJobs.history(co.id);
   if (!h.length) return <p className="note" data-post-noposted="">{"Nothing posted through FinCom’s cloud yet for this client."}</p>;
@@ -201,9 +216,11 @@ function History({ co }) {
         : x.state === "partly" ? "Posted " + x.ok + " of " + x.n + " at " + at
         : x.state === "nothing" ? (j.status === "cancelled" ? "Cancelled" : "Failed") + " " + at + "; every entry was put in Tally another way"
         : (j.status === "cancelled" ? "Cancelled " : "Failed ") + at + (j.dismissed_at ? ", dismissed by " + memberName(j.dismissed_by) + " " + tallyHm(j.dismissed_at) : "");
+      const ents = typeof postPostedEntries === "function" ? postPostedEntries(co.id, j) : [];
       return <li key={j.id} data-job={j.id} data-hist-state={x.state} data-entries={[...CloudJobs.okIn(j)].join(" ")}>
         <span data-hist-text="">{text}</span>{" · " + plural(Math.max(x.ok, x.state === "posted" ? x.n : 0) || x.n, "entry", "entries") + " · " + j.company}
         {j.dismissed_at && !j.dismiss_auto && x.state !== "posted" && <>{" "}<button className="linkbtn" data-undismiss="" onClick={() => CloudJobs.undismiss(j)}>Show under Errors</button></>}
+        {ents.length > 0 && <PostedEntries co={co} job={j} ents={ents} />}
       </li>; })}</ul>
   </section>;
 }
