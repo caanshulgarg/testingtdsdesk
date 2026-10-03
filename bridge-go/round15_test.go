@@ -9,7 +9,9 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -661,5 +663,200 @@ func TestNothingMadeEndsFailed(t *testing.T) {
 		if r["needsReview"] != true || r["accepted"] != false || acceptedInfo(id) != nil {
 			t.Fatalf("%s: %v", id, r)
 		}
+	}
+}
+
+// --- the code review of 2.1.8 (docs/reviews/bridge-2.1.8-code-review.md), findings 1, 2, 6, 7, 9
+
+// finding 1: the bridge dies while a request is in flight (the reply delayed, progress.json and posted-ids.json as they
+// stood during the request, the worker gone): the resumed job never sends the vouchers again; they are unknown (sent,
+// no answer) with "Check Tally"
+func TestRestartMidRequestNeverResends(t *testing.T) {
+	td := today()
+	f := newStandTally(t)
+	f.importAt = func(id, body string) (bool, time.Duration) { return true, 2 * time.Second }
+	dir := standBridge(t, f, "")
+	if _, err := newPostJob(M{"jobId": "job-r15-crash", "company": zz, "vouchers": r15Bills("cr", td, 2)}); err != nil {
+		t.Fatal(err)
+	}
+	jd, _ := jobDir("job-r15-crash")
+	// during the request: snapshot the files as a crash would leave them
+	var inReq bool
+	for i := 0; i < 200 && !inReq; i++ {
+		f.mu.Lock()
+		inReq = f.inflight > 0 && len(f.reqs) > 0 && f.reqs[len(f.reqs)-1] == "Import"
+		f.mu.Unlock()
+		time.Sleep(20 * time.Millisecond)
+	}
+	if !inReq {
+		t.Fatal("the import never went")
+	}
+	time.Sleep(200 * time.Millisecond) // the progress written before the request lands
+	prog, notes := readText(filepath.Join(jd, "progress.json")), readText(acceptedFile())
+	p0 := parseObj(prog)
+	if ids := strs(p0["inflight"]); len(ids) != 2 || ids[0] != "cr1" {
+		t.Fatalf("progress.json during the request does not name the in-flight entries: %v", p0["inflight"])
+	}
+	n0 := parseObj(notes)
+	if obj(n0["cr1"]) == nil || obj(n0["cr1"])["sent"] != true || obj(n0["cr2"]) == nil {
+		t.Fatalf("posted-ids.json during the request does not hold the entries as sent: %s", notes)
+	}
+	waitJob(t, "job-r15-crash")
+	// the crash: the files as snapshotted, the worker gone
+	p0["status"], p0["updatedAt"] = "running", time.Now().Add(-time.Minute).Format(time.RFC3339Nano)
+	_ = saveFile(filepath.Join(jd, "progress.json"), jsonText(p0))
+	_ = saveFile(acceptedFile(), notes)
+	acceptedReset()
+	if str(jobView(jd)["status"]) != "interrupted" {
+		t.Fatal("not seen as interrupted")
+	}
+	if _, err := resumePostJob("job-r15-crash"); err != nil {
+		t.Fatal(err)
+	}
+	p := waitJob(t, "job-r15-crash")
+	if f.n("Import") != 1 {
+		t.Fatalf("the resumed job sent the in-flight vouchers again (%d imports)", f.n("Import"))
+	}
+	if str(p["status"]) != "done" || !strings.Contains(str(p["message"]), "2 sent with no answer from Tally") {
+		t.Fatalf("the resumed job: %s %q", p["status"], p["message"])
+	}
+	for _, x := range arr(p["items"]) {
+		if e := obj(x); str(e["state"]) != "unknown" || !strings.Contains(str(e["reason"]), "Check Tally") {
+			t.Fatalf("the item after the resume: %v", e)
+		}
+	}
+	if _, has := p["inflight"]; has && len(arr(p["inflight"])) != 0 {
+		t.Fatalf("inflight left after the job: %v", p["inflight"])
+	}
+	_ = dir
+}
+
+// finding 2: a job whose only answered request Tally refused (nothing made) and whose other request got no answer ends
+// "done", never "failed" (the cloud frees the no-answer ids on a failed row)
+func TestNoAnswerPlusRefusedEndsDone(t *testing.T) {
+	td := today()
+	f := newStandTally(t)
+	var once sync.Once
+	f.importAt = func(id, body string) (bool, time.Duration) {
+		d := time.Duration(0)
+		once.Do(func() { d = 3 * time.Second })
+		return true, d
+	}
+	f.importSkip = func(x string) bool { return strings.Contains(x, "TDSDesk:uf2") }
+	standBridge(t, f, `,"PostBatchBills":1,"TallyMaxSec":1,"PostTimeoutSec":1,"PostTimeoutBaseSec":1,"TallyProbeEverySec":2,"PostWaitMs":200`)
+	p := r15Job(t, "job-r15-unknown-refused", r15Bills("uf", td, 2))
+	if str(p["status"]) != "done" || str(p["message"]) != "Posted 0 of 2; 1 need review; 1 sent with no answer from Tally — Check Tally in FinCom" {
+		t.Fatalf("the job: %s %q", p["status"], p["message"])
+	}
+	st := r6States(p)
+	if st["uf1"] != "unknown" || st["uf2"] != "needs_review" {
+		t.Fatalf("states: %v", st)
+	}
+}
+
+// finding 6: the needs-review message and lineError are capped (a request of 50 with 50 line errors)
+func TestNeedsReviewMessageCapped(t *testing.T) {
+	td := today()
+	f := newStandTally(t)
+	var errs strings.Builder
+	for i := 1; i <= 50; i++ {
+		fmt.Fprintf(&errs, "<LINEERROR>Ledger &apos;Some Long Ledger Name Number %02d That Does Not Exist In This Company&apos; does not exist!</LINEERROR>", i)
+	}
+	f.behave = importReply("<ENVELOPE><BODY><DATA><IMPORTRESULT><CREATED>0</CREATED><ALTERED>0</ALTERED><ERRORS>50</ERRORS><EXCEPTIONS>0</EXCEPTIONS></IMPORTRESULT>" + errs.String() + "</DATA></BODY></ENVELOPE>")
+	standBridge(t, f, `,"PostBatchBills":50`)
+	p := r15Job(t, "job-r15-capped", r15Bills("cp", td, 50))
+	for id, r := range r15Results(p) {
+		m := str(r["message"])
+		if len(m) >= 1000 || !strings.HasPrefix(m, "Tally's reply: created 0 of 50, errors 50: ") || !strings.Contains(m, "and 47 more") || !strings.Contains(m, "Number 01") || strings.Contains(m, "Number 04") {
+			t.Fatalf("%s: the message (%d bytes): %q", id, len(m), m)
+		}
+		if le := arr(r["lineError"]); len(le) != 5 {
+			t.Fatalf("%s: lineError holds %d texts (want 5)", id, len(le))
+		}
+	}
+	if len(readText(filepath.Join(jobsDir(), "job-r15-capped", "progress.json"))) > 200000 {
+		t.Fatal("progress.json grew with the square of the batch")
+	}
+	// a long single LINEERROR is cut to 200
+	long := strings.Repeat("x", 500)
+	l := replyLine(1, M{"created": 0, "errors": 1}, []string{long})
+	if len(l) > 260 || !strings.HasSuffix(l, strings.Repeat("x", 200)+"...") {
+		t.Fatalf("a long LINEERROR is not cut: %d bytes", len(l))
+	}
+}
+
+// finding 7: an import request has its own timeout (PostTimeoutSec, default 120 s, or 20 s + 0.5 s per voucher, whichever
+// is larger, capped at 300 s), not the 20 s read cap; a slow import is trusted, not unknown, and the self-watch does not
+// stop reading for it
+func TestImportTimeoutScalesWithBatch(t *testing.T) {
+	setCfg("PostTimeoutSec", nil)
+	if importTimeoutSec(1) != 120 || importTimeoutSec(500) != 270 {
+		t.Fatalf("defaults: %d %d", importTimeoutSec(1), importTimeoutSec(500))
+	}
+	setCfg("PostTimeoutSec", float64(30))
+	if importTimeoutSec(1) != 30 || importTimeoutSec(100) != 70 {
+		t.Fatalf("PostTimeoutSec 30: %d %d", importTimeoutSec(1), importTimeoutSec(100))
+	}
+	setCfg("PostTimeoutSec", float64(400))
+	if importTimeoutSec(1) != 300 {
+		t.Fatalf("the cap: %d", importTimeoutSec(1))
+	}
+	setCfg("PostTimeoutSec", nil)
+	td := today()
+	f := newStandTally(t)
+	f.importAt = func(id, body string) (bool, time.Duration) { return true, 3 * time.Second }
+	standBridge(t, f, `,"TallyMaxSec":1,"TallyProbeEverySec":1,"PostBatchBills":50,"SelfStopSec":1`)
+	p := r15Job(t, "job-r15-slow-import", r15Bills("sl", td, 50))
+	if str(p["status"]) != "done" || !strings.HasPrefix(str(p["message"]), "Posted 50 of 50") {
+		t.Fatalf("a 3 s import with a 1 s read cap: %s %q", p["status"], p["message"])
+	}
+	if readStopped() {
+		t.Fatalf("the self-watch stopped reading for an import: %v", readStop())
+	}
+	if toInt(beatReqs()["over20"]) != 0 {
+		t.Fatalf("the import counted in over20: %v", beatReqs())
+	}
+	if logLines("an import request") < 1 {
+		t.Fatal("the slow import is not logged as an import time")
+	}
+	// a read is still cut at the read cap
+	f.mu.Lock()
+	f.slow = func(id, body string) time.Duration {
+		if id == "TDSDeskNames" {
+			return 3 * time.Second
+		}
+		return 0
+	}
+	f.mu.Unlock()
+	t0 := time.Now()
+	if _, err := getLedgerNames(fin, zz, f.port); err == nil || time.Since(t0) > 2500*time.Millisecond {
+		t.Fatalf("a read was not cut at the read cap: %v after %s", err, time.Since(t0))
+	}
+}
+
+// finding 9: the cloud's PostOnly list is bounded here too (20 names, 200 characters each)
+func TestBeatSettingsBounded(t *testing.T) {
+	f := newStandTally(t)
+	c := newStandCloud(t)
+	standBridge(t, f, c.cfg())
+	var names []any
+	for i := 0; i < 30; i++ {
+		names = append(names, fmt.Sprintf("Company %02d %s", i, strings.Repeat("x", 300)))
+	}
+	c.mu.Lock()
+	c.beatReply = M{"settings": M{"postOnly": names, "at": "2026-10-03T13:00:00Z"}}
+	c.mu.Unlock()
+	beatOnce()
+	list := postOnlyList()
+	if len(list) != 20 {
+		t.Fatalf("%d names kept (want 20)", len(list))
+	}
+	for _, n := range list {
+		if len(n) > 200 {
+			t.Fatalf("a name of %d characters kept", len(n))
+		}
+	}
+	if !strings.HasPrefix(list[19], "Company 19 ") {
+		t.Fatalf("the first 20 are not the ones kept: %q", list[19])
 	}
 }

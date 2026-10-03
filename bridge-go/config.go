@@ -370,7 +370,13 @@ func applyCloudSettings(j M) {
 	if v, ok := st["postOnly"]; ok && v != nil {
 		var names []string
 		for _, n := range strs(v) {
+			if len(names) >= 20 { // review finding 9: the same bounds as the cloud's function (20 names, 200 characters)
+				break
+			}
 			if n = strings.TrimSpace(n); n != "" {
+				if len(n) > 200 {
+					n = n[:200]
+				}
 				names = append(names, n)
 			}
 		}

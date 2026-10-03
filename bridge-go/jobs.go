@@ -326,6 +326,34 @@ func jobWorker(dir string) {
 		}
 	}
 	sending := map[string]bool{}
+	// review of 2.1.8, finding 1: a request in flight when the bridge died (its ids in progress.json as inflight, no
+	// result): every such entry is unknown (sent, no answer), never sent again
+	if ids := strs(p["inflight"]); len(ids) > 0 {
+		have := map[string]bool{}
+		for _, r := range results {
+			have[str(r["id"])] = true
+		}
+		byID := map[string]M{}
+		for _, it := range all {
+			byID[str(it["id"])] = it
+		}
+		for _, k := range ids {
+			it := byID[k]
+			if have[k] || it == nil {
+				continue
+			}
+			x := str(it["xml"])
+			r := M{"id": k, "kind": str(it["kind"]), "company": str(p["tallyCompany"]), "port": toInt(p["port"]), "ok": false, "outcomeUnknown": true, "sent": true, "state": "unknown",
+				"message": unknownLine, "detail": "the bridge stopped while this request was at Tally", "batchN": len(ids)}
+			if str(it["kind"]) == "voucher" {
+				r["vchDate"], r["vchType"] = voucherDateType(x)
+				_ = noteSent(acceptedKey(k, x), str(p["tallyCompany"]), jobID, "", len(ids), "", "")
+			}
+			results = append(results, r)
+			writeLog("  entry " + k + ": was at Tally when the bridge stopped; outcome unknown, recorded as sent, not sent again")
+		}
+		p["inflight"] = []any{}
+	}
 	setRes := func() {
 		a := make([]any, len(results))
 		byID := map[string]M{}
@@ -563,10 +591,18 @@ func jobWorker(dir string) {
 		}
 		setStatus("running", sendingLine(len(results)+1, total))
 		save()
+		// the request's ids on disk before it goes (finding 1): a restart mid-request finds them as inflight
+		var inflight []any
+		for _, it := range r.items {
+			inflight = append(inflight, str(it["id"]))
+		}
+		p["inflight"] = inflight
+		save()
 		gate := postGate(port) // the browser's /import and this job never interleave a record check and a send
 		gate.Lock()
 		o := sendImport(port, company, jobID, r)
 		gate.Unlock()
+		p["inflight"] = []any{}
 		what := fmt.Sprintf("%d vouchers", len(r.items))
 		if r.kind == "master" {
 			what = "1 master"
@@ -578,6 +614,9 @@ func jobWorker(dir string) {
 			// nothing reached Tally (refused here, Tally not reachable, or held after a timeout): the same request goes
 			// again after a wait; nothing is recorded
 			writeLog(fmt.Sprintf("Posting job %s: request %d of %d (%s) not sent: %s; waiting for Tally", jobID, i+1, K, what, tallyTrouble(o.err.Error())))
+			for _, it := range r.items { // nothing reached Tally: the notes made before the send go again
+				acceptedForget(acceptedKey(str(it["id"]), str(it["xml"])))
+			}
 			setStatus("waiting", waitingLine(asked, o.err))
 			if !pause(waitPause(round)) {
 				cancelled()
@@ -638,7 +677,8 @@ func jobWorker(dir string) {
 		}
 	}
 	p["checking"] = false
-	if okN > 0 || acceptedN > 0 {
+	// (review finding 2) a no-answer entry makes the job done too: on a failed row the cloud would free its id
+	if okN > 0 || acceptedN > 0 || unknownN > 0 {
 		finish("done", postedLine(okN, total, reviewN, unknownN))
 	} else if failN+reviewN > 0 {
 		finish("failed", jobFailedLine(failN+reviewN, total, first))

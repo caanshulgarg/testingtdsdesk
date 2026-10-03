@@ -701,7 +701,7 @@ func TestTimedOutPostingOutcomeUnknown(t *testing.T) {
 				once.Do(func() { create, d = made, 3*time.Second })
 				return create, d
 			}
-			standBridge(t, f, `,"TallyMaxSec":1,"TallyProbeEverySec":2,"PostWaitMs":200`)
+			standBridge(t, f, `,"TallyMaxSec":1,"PostTimeoutSec":1,"PostTimeoutBaseSec":1,"TallyProbeEverySec":2,"PostWaitMs":200`) // the import's own timeout (review finding 7)
 			j, err := newPostJob(M{"jobId": "job-unknown-" + fmt.Sprint(made), "company": zz, "vouchers": []any{M{"id": "u1", "xml": finVoucher("u1", fgParty, "U-1", td, "70.00")}}})
 			if err != nil {
 				t.Fatal(err)

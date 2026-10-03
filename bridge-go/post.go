@@ -187,7 +187,15 @@ func planImports(masters, vouchers []M) []importReq {
 	return o
 }
 
-// Tally's reply in one line: "Tally's reply: created 3 of 5, errors 2: <LINEERROR>"
+// the caps on Tally's words (review of 2.1.8, finding 6: a request of 500 with 500 line errors must not grow
+// progress.json and every posts_update with the square of the batch)
+const (
+	replyLineErrors = 3   // LINEERROR texts in the message
+	replyLineCut    = 200 // characters of each
+	lineErrorKeep   = 5   // LINEERROR texts kept per entry (lineError)
+)
+
+// Tally's reply in one line: "Tally's reply: created 3 of 5, errors 2: <LINEERROR> | <LINEERROR> | <LINEERROR> and N more"
 func replyLine(s int, rr M, lineErr []string) string {
 	l := fmt.Sprintf("Tally's reply: created %d of %d", toInt(rr["created"]), s)
 	for _, k := range []string{"altered", "errors", "exceptions", "ignored"} {
@@ -196,9 +204,48 @@ func replyLine(s int, rr M, lineErr []string) string {
 		}
 	}
 	if len(lineErr) > 0 {
-		l += ": " + strings.Join(lineErr, " | ")
+		var parts []string
+		for i, e := range lineErr {
+			if i >= replyLineErrors {
+				parts = append(parts, fmt.Sprintf("and %d more", len(lineErr)-replyLineErrors))
+				break
+			}
+			if len(e) > replyLineCut {
+				e = e[:replyLineCut] + "..."
+			}
+			parts = append(parts, e)
+		}
+		l += ": " + strings.Join(parts, " | ")
 	}
 	return l
+}
+
+// the LINEERROR texts kept on an entry: the first few, each cut
+func lineErrorKept(lineErr []string) []string {
+	var o []string
+	for i, e := range lineErr {
+		if i >= lineErrorKeep {
+			break
+		}
+		if len(e) > replyLineCut {
+			e = e[:replyLineCut] + "..."
+		}
+		o = append(o, e)
+	}
+	return o
+}
+
+// an import request's own timeout (review of 2.1.8, finding 7): PostTimeoutSec (default 120 s) or 20 s + 0.5 s per
+// voucher, whichever is larger, capped at 300 s; not the 20 s read cap (TallyMaxSec), so the owner's batch bounds can be used
+func importTimeoutSec(n int) int {
+	t := keepNum("PostTimeoutSec", 120)
+	if byN := keepNum("PostTimeoutBaseSec", 20) + n/2; byN > t { // the 20 s base is a setting only so the tests can shorten it
+		t = byN
+	}
+	if t > 300 {
+		t = 300
+	}
+	return t
 }
 
 func round3(f float64) float64 { return float64(int64(f*1000+0.5)) / 1000 }
@@ -225,9 +272,16 @@ type importOutcome struct {
 // needs review with Tally's counts and words, accepted when Tally made any. Every voucher Tally accepted is recorded
 // as sent on this computer, so no later job sends it again
 func sendImport(port int, company, job string, r importReq) importOutcome {
+	// review of 2.1.8, finding 1: every voucher is on the record as sent (no answer yet) BEFORE the request goes, so a
+	// bridge that dies while the request is in flight never sends them again; the reply rewrites the note
+	if r.kind == "voucher" {
+		for _, it := range r.items {
+			_ = noteSent(acceptedKey(str(it["id"]), str(it["xml"])), company, job, "", len(r.items), "", "")
+		}
+	}
 	t0 := time.Now()
 	sentAt := t0.Format(time.RFC3339)
-	raw, err := invokeTally(fin, port, r.envelope(company), 0)
+	raw, err := invokeTally(fin, port, r.envelope(company), importTimeoutSec(len(r.items)))
 	secs := round3(time.Since(t0).Seconds())
 	if err != nil {
 		return importOutcome{err: err, seconds: secs}
@@ -265,11 +319,15 @@ func sendImport(port int, company, job string, r importReq) importOutcome {
 			}
 		} else {
 			b["ok"], b["needsReview"], b["accepted"] = false, true, created+altered > 0
-			b["lineError"] = toAny(lineErr)
+			b["lineError"] = toAny(lineErrorKept(lineErr))
 			b["message"] = replyLine(s, rr, lineErr)
 		}
-		if r.kind == "voucher" && (trusted || created+altered > 0) {
-			_ = noteSent(acceptedKey(str(id), x), company, job, lv, s, lv, vchID)
+		if r.kind == "voucher" {
+			if trusted || created+altered > 0 {
+				_ = noteSent(acceptedKey(str(id), x), company, job, lv, s, lv, vchID)
+			} else {
+				acceptedForget(acceptedKey(str(id), x)) // Tally made nothing of the request: not on the record, may go again
+			}
 		}
 		out = append(out, b)
 	}
@@ -333,8 +391,16 @@ func sentBeforeRefusal(id any, xml string) M {
 	if j := str(a["job"]); j != "" {
 		msg += ", job " + j
 	}
-	return M{"id": id, "kind": "voucher", "ok": false, "alreadySent": true, "refused": true, "state": "failed", "message": msg,
-		"sentOn": when, "vchId": str(a["vchId"]), "lastVchId": or(str(a["lastVchId"]), str(a["batchEnd"])), "sentJob": str(a["job"])}
+	// (review finding 5) the result says sent, and carries a Tally id only when it is the entry's own: a batch end is never
+	// handed on as an entry's id
+	r := M{"id": id, "kind": "voucher", "ok": false, "alreadySent": true, "refused": true, "sent": true, "state": "failed", "message": msg,
+		"sentOn": when, "vchId": str(a["vchId"]), "sentJob": str(a["job"]), "batchN": toInt(a["batchN"]), "batchEnd": str(a["batchEnd"])}
+	if str(a["vchId"]) != "" {
+		r["lastVchId"] = str(a["vchId"])
+	} else if str(a["masterId"]) != "" {
+		r["lastVchId"] = str(a["masterId"])
+	}
+	return r
 }
 
 // POST /import (the browser's one-request way): masters first, one each; then the vouchers in batched requests. The

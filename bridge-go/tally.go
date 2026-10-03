@@ -308,8 +308,8 @@ func tallyRaw(ctx context.Context, port int, x string, timeoutSec int) (string, 
 			timeoutSec = 120
 		}
 	}
-	if m := tallyMaxSec(); timeoutSec > m {
-		timeoutSec = m
+	if m := tallyMaxSec(); timeoutSec > m && !isImportRequest(x) {
+		timeoutSec = m // the read cap (2.1.5: 20 s); an import request keeps its own timeout (importTimeoutSec)
 	}
 	if ms := toInt(cfg("GentleMs")); ms > 0 {
 		select {
