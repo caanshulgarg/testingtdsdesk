@@ -13487,9 +13487,10 @@ async function bringDayBookFile(f, from0, to0, opts){
           part.cloud = "going to the cloud…";
           try {
             // fast-sync: handed to FinCom's server, which reads it into the cloud copy even if this page is closed
-            const r = await TCloudUp.handOver(await f.text(), {from, to}, step, who, f.name);
+            // round 20: the file itself goes (through Storage, resumable); its text is read only for the old hand-over
+            const r = await TCloudUp.handOver(f, {from, to}, step, who, f.name);
             part.cloud = r && r.job ? "with FinCom’s server (" + r.days + " days), read in by the server" : r && r.days != null ? "in the cloud (" + r.days + " days)" : (r && r.skipped) || "";
-            if (r && r.days != null){ await TCloudUp.drop(wait); toast(r.job ? f.name + ": all " + r.days + " days are with FinCom’s server, which reads them into the cloud copy now. You can close this page." : f.name + ": all " + r.days + " days, " + fmtDate(tallyDate(from)) + " to " + fmtDate(tallyDate(to)) + ", are in FinCom’s cloud."); }
+            if (r && r.days != null){ await TCloudUp.drop(wait); toast(r.storage ? f.name + " is in FinCom’s cloud; FinCom’s server reads its " + r.days + " days into the cloud copy now. You can close this page." : r.job ? f.name + ": all " + r.days + " days are with FinCom’s server, which reads them into the cloud copy now. You can close this page." : f.name + ": all " + r.days + " days, " + fmtDate(tallyDate(from)) + " to " + fmtDate(tallyDate(to)) + ", are in FinCom’s cloud."); }
           }
           catch (e){ part.cloud = "not sent: " + ((e && e.message) || e); toast("It could not go to FinCom’s cloud just now (" + ((e && e.message) || e) + "). It goes on its own the next time this client is opened."); }
           finally { window.removeEventListener("beforeunload", stay); TCloudUp.live.delete(wait); }
@@ -22565,6 +22566,13 @@ const TCloud = {
     this.jobsPoll(r.client_id);
   },
   jobLine(j){
+    // round 20 (d.2): a Day Book that went through Storage, split into days by FinCom's server
+    if (j.kind === "upload"){
+      const per = typeof TCloudUp === "object" ? TCloudUp.periodOf(j) : "", head = "Day Book" + (per ? " " + per : "");
+      if (j.status === "failed") return head + ": stopped. " + (j.message || "");
+      if (!num(j.total) && j.status !== "done") return head + ": in FinCom’s cloud, being split into days. It carries on if this page is closed.";
+      return head + ": " + num(j.done) + " of " + num(j.total) + " days read" + (j.bad && j.bad.length ? " (" + j.bad.length + " could not be read)" : "") + (j.status === "done" ? ", " + fmtTime(Date.parse(j.updated_at)) + "." : "");
+    }
     const unit = j.kind === "reparse" ? "month" : "day", n = j.total, pl = x => x + " " + unit + (x === 1 ? "" : "s");
     const what = j.kind === "reparse" ? "Reading the kept day books again" : "Reading the day book" + (j.message && j.status !== "failed" ? " " + j.message : "");
     if (j.status === "done") return what + ": done, " + pl(j.done) + (j.bad && j.bad.length ? " (" + j.bad.length + " could not be read)" : "") + ", " + fmtTime(Date.parse(j.updated_at)) + ".";
@@ -22721,6 +22729,13 @@ const TCloud = {
         (p.devices || []).forEach(d => { if (by.has(d.id)) d.trial_tools = by.get(d.id) === true; });
         p.noTrialTools = false;
       } catch (e){ p.noTrialTools = /trial_tools|42703/.test(String(e && e.message)); }
+      // round 20 (d.3): where a computer's changes come from (migration 47: tally_devices.recorder_source, addon |
+      // alterid | both, default addon), read apart: without the column nothing is shown
+      try {
+        const rs = [].concat(await Cloud.api("tally_devices?select=id,recorder_source") || []), by = new Map(rs.map(x => [x.id, x.recorder_source]));
+        (p.devices || []).forEach(d => { if (by.has(d.id)) d.recorder_source = by.get(d.id) || "addon"; });
+        p.noRecorderSource = false;
+      } catch (e){ p.noRecorderSource = true; }
       p.companies = await this.restAll("tally_companies?select=company,client_id,device_id,gstin,last_seen,linked_at&order=company.asc");
       // migration-35: the stops and resumes from FinCom with who and when (round 4, item 24: the latest 300 rows; the
       // standing stops and the latest resume a computer are taken out here), and the bridge versions on trial, approved
@@ -22829,9 +22844,10 @@ const TCloud = {
       toast(done);
     } catch (e){
       const m = String((e && e.message) || e), missing = /PGRST202|Could not find the function|schema cache|does not exist|\b404\b/i.test(m);
-      const mig = {tally_release_withdraw: 37, tally_baseline_clear: 37, tally_device_post_settings: 43, tally_device_trial_tools: 46}[fn] || 35;
+      const mig = {tally_release_withdraw: 37, tally_baseline_clear: 37, tally_device_post_settings: 43, tally_device_trial_tools: 46, tally_device_recorder_source: 47}[fn] || 35;
       p.ctl = {err: missing && fn === "tally_device_post_settings" ? "Posting settings are not available until migration 43 runs."
         : missing && fn === "tally_device_trial_tools" ? "Trial tools on this computer: not available until migration 46 runs."
+        : missing && fn === "tally_device_recorder_source" ? "Changes come from: not available until migration 47 runs."
         : missing ? "FinCom\u2019s cloud is not ready for this yet (migration " + mig + " is not applied)."
         : m.replace(/^ERROR:\s*/i, "").replace(/^./, c => c.toUpperCase())};
     }
@@ -22867,6 +22883,15 @@ const TCloud = {
   async trialTools(dev, on){
     await this.control("tally_device_trial_tools", {p_device: dev.id, p_on: !!on},
       "Trial tools " + (on ? "on" : "off") + " for " + (dev.name || "the computer") + "; the bridge applies it within 30 seconds.");
+  },
+  // round 20 (d.3): an owner picks where a computer's changes come from -> tally_device_recorder_source(p_device,
+  // p_source) (migration 47; owner only there too); the bridge takes it from its next heartbeat's answer
+  RECORDER_SOURCES: [["addon", "the add-on"], ["alterid", "Tally’s change list"], ["both", "both"]],
+  async recorderSource(dev, src){
+    const w = (this.RECORDER_SOURCES.find(x => x[0] === src) || [])[1];
+    if (!w) return;
+    await this.control("tally_device_recorder_source", {p_device: dev.id, p_source: src},
+      "Changes on " + (dev.name || "the computer") + " now come from " + w + "; the bridge takes it within 30 seconds.");
   },
   async readStop(r){
     const all = !r, where = all ? "every computer" : r.computer;
@@ -23029,9 +23054,9 @@ const TCloudUp = {
     await Cloud.fresh().catch(() => {});
     const c = Cloud.cfg(), s = Cloud.sess();
     if (!s) throw new Error("Sign in to the firm account first.");
-    const r = await fetch(TCloud.ingestUrl(), {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": "application/json"}, body: JSON.stringify(Object.assign(who || {client: S.coId, company: BridgeSeed.company()}, body))});
+    const r = await fetch(TCloud.ingestUrl(), {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": "application/json"}, body: JSON.stringify(Object.assign({}, who || {client: S.coId, company: BridgeSeed.company()}, body))});
     const j = await r.json().catch(() => ({}));
-    if (!r.ok || j.ok === false) throw new Error(j.error || ("FinCom's cloud answered with error " + r.status));
+    if (!r.ok || j.ok === false){ const e = new Error(j.error || ("FinCom's cloud answered with error " + r.status)); e.status = r.status; throw e; }
     return j;
   },
   async days(text, range, onStep, who){
@@ -23070,7 +23095,7 @@ const TCloudUp = {
     this.retrying = true; let sent = 0;
     try {
       for (const [k, x] of list){
-        try { const r = await this.handOver(await x.blob.text(), {from: x.from, to: x.to}, onStep, x.who, x.name); if (r && r.days != null){ await this.drop(k); sent++; } }
+        try { const r = await this.handOver(x.blob, {from: x.from, to: x.to}, onStep, x.who, x.name); if (r && r.days != null){ await this.drop(k); sent++; } }
         catch (e){ toast("A day book (" + (x.name || "file") + ") is still waiting to go to FinCom’s cloud: " + ((e && e.message) || e)); }
       }
     } finally { this.retrying = false; }
@@ -23085,9 +23110,17 @@ const TCloudUp = {
     const all = []; for (let d = range.from; d <= range.to; d = BridgeSeed.add(d, 1)) all.push(d);
     return {all, byDay};
   },
-  async handOver(text, range, onStep, who, name){
+  // round 20 (d.2): src is the file (a Blob) or its text. The file goes to Storage first (storageUp); a cloud without
+  // upload_new gets the old hand-over below, a part at a time
+  async handOver(src, range, onStep, who, name){
     if (!this.on()) return {skipped: "not signed in to the firm account"};
     who = who || {client: S.coId, company: BridgeSeed.company()};
+    if (typeof Blob === "function" && typeof IDBStore === "object"){
+      const up = await this.storageUp(src instanceof Blob ? src : new Blob([String(src)], {type: "text/xml"}), range, onStep, who, name);
+      if (up) return up;
+    }
+    // a Tally export is often UTF-16LE: decoded by its byte-order mark (Blob.text() is UTF-8 only)
+    const text = typeof src === "string" ? src : (await Books.decoder(src)).decode(new Uint8Array(await src.arrayBuffer()));
     const {all, byDay} = this.split(text, range);
     let job;
     try { job = (await this.post({kind: "job_new", total: all.length, name: String(name || "").slice(0, 120)}, who)).job; }
@@ -23104,6 +23137,108 @@ const TCloudUp = {
     await flush(true);
     try { TCloud.jobsLoad(who.client); } catch (e){}
     return {days: all.length, job};
+  },
+  // ---------- round 20 (d.2): a Day Book through Storage (migration 47: the bucket tally-uploads, the job kind upload).
+  // tally-ingest upload_new {client, name, size} -> {job, path}; the file goes to Storage by the resumable (TUS 1.0.0)
+  // protocol in 6 MB chunks (a cut connection: HEAD for the server's offset, then on from there; the upload's address is
+  // kept in this browser's store under "tus:<client>:<from>-<to>:<size>", so a reload goes on where it stopped); then
+  // upload_done {job, path}, and FinCom's server splits it into days even if this page is closed. Its progress is the
+  // tally_jobs row (jobLine: "Day Book 2026-27: 143 of 365 days read"). null: the cloud has no upload_new (400 "unknown
+  // kind", or 404), and the caller hands it over the old way
+  CHUNK: 6 * 1024 * 1024,
+  tusWait: [1000, 3000, 8000, 15000, 30000],
+  prog: {},                // client -> {name, sent, size} while its Day Book goes to Storage (the progress bar)
+  periods: {},             // job -> the period its line says
+  unknownKind(e){ return /unknown kind/i.test(String((e && e.message) || e)) || (e && e.status === 404); },
+  period(range){
+    const f = String(range.from || ""), t = String(range.to || ""), y = num(f.slice(0, 4));
+    if (f.slice(4) === "0401" && t === (y + 1) + "0331") return y + "-" + String(y + 1).slice(2);
+    return fmtDate(tallyDate(f)) + " to " + fmtDate(tallyDate(t));
+  },
+  periodSave(job, range){
+    this.periods[job] = this.period(range);
+    try { const m = JSON.parse(localStorage.getItem("tcup-periods") || "{}"); m[job] = this.periods[job]; const ks = Object.keys(m); ks.slice(0, Math.max(0, ks.length - 50)).forEach(k => delete m[k]); localStorage.setItem("tcup-periods", JSON.stringify(m)); } catch (e){}
+  },
+  periodOf(j){
+    if (this.periods[j.id]) return this.periods[j.id];
+    try { const m = JSON.parse(localStorage.getItem("tcup-periods") || "{}"); if (m[j.id]) return (this.periods[j.id] = m[j.id]); } catch (e){}
+    return "";
+  },
+  async storageUp(blob, range, onStep, who, name){
+    const key = "tus:" + who.client + ":" + range.from + "-" + range.to + ":" + blob.size;
+    const keep = async rec => { try { await IDBStore.write([[key, rec]]); } catch (e){} };
+    let rec = null;
+    try { rec = await IDBStore.get(key); } catch (e){}
+    if (!rec || !rec.job || !rec.path){
+      let j;
+      try { j = await this.post({kind: "upload_new", name: String(name || "").slice(0, 120), size: blob.size, from: range.from, to: range.to}, who); }
+      catch (e){ if (this.unknownKind(e)) return null; throw e; }
+      if (!j || !j.job || !j.path) return null;
+      rec = {job: j.job, path: j.path, url: "", size: blob.size, name: String(name || ""), at: new Date().toISOString()};
+      await keep(rec);
+    }
+    this.periodSave(rec.job, range);
+    if (!rec.uploaded){
+      try { await this.tus(blob, rec, keep, who.client, onStep); }
+      finally { delete this.prog[who.client]; if (typeof render === "function") render(); }
+      rec.uploaded = true; await keep(rec);
+    }
+    if (onStep) onStep("The day book is in FinCom’s cloud; FinCom’s server reads it now…");
+    await this.post({kind: "upload_done", job: rec.job, path: rec.path}, who);
+    try { await IDBStore.write([[key, null]]); } catch (e){}
+    let days = 0; for (let d = range.from; d <= range.to; d = BridgeSeed.add(d, 1)) days++;
+    try { TCloud.jobsLoad(who.client); } catch (e){}
+    return {days, job: rec.job, storage: true};
+  },
+  async tusHeaders(){
+    await Cloud.fresh().catch(() => {});
+    const c = Cloud.cfg(), s = Cloud.sess();
+    if (!s) throw new Error("Sign in to the firm account first.");
+    return {apikey: c.key, authorization: "Bearer " + s.access_token, "Tus-Resumable": "1.0.0"};
+  },
+  // the server's offset of an upload: a number, or null when the upload is gone (expired, or never made)
+  async tusHead(url){
+    const r = await fetch(url, {method: "HEAD", headers: await this.tusHeaders(), cache: "no-store"});
+    if (r.status === 404 || r.status === 410 || r.status === 403) return null;
+    if (!r.ok) throw new Error("Storage answered " + r.status);
+    const o = Number(r.headers.get("Upload-Offset"));
+    return Number.isFinite(o) ? o : 0;
+  },
+  async tusCreate(blob, rec, keep){
+    const base = Cloud.cfg().url.replace(/\/+$/, "") + "/storage/v1/upload/resumable";
+    const b64 = v => btoa(unescape(encodeURIComponent(String(v))));
+    const meta = [["bucketName", "tally-uploads"], ["objectName", rec.path], ["contentType", blob.type || "text/xml"]].map(([k, v]) => k + " " + b64(v)).join(",");
+    const r = await fetch(base, {method: "POST", headers: Object.assign(await this.tusHeaders(), {"Upload-Length": String(blob.size), "Upload-Metadata": meta, "x-upsert": "false"})});
+    if (!r.ok){ const t = await r.text().catch(() => ""); throw new Error("Storage did not take the day book (" + r.status + (t ? ": " + t.slice(0, 160) : "") + ")"); }
+    const loc = r.headers.get("Location");
+    if (!loc) throw new Error("Storage gave no address for the upload.");
+    rec.url = new URL(loc, base).href;
+    await keep(rec);
+  },
+  async tus(blob, rec, keep, cid, onStep){
+    const size = blob.size, name = rec.name || "the day book";
+    let off = 0, fails = 0;
+    if (rec.url){ const h = await this.tusHead(rec.url).catch(() => undefined); if (h === null) rec.url = ""; else if (typeof h === "number") off = h; }
+    if (!rec.url) await this.tusCreate(blob, rec, keep);
+    const say = () => { this.prog[cid] = {name, sent: off, size}; if (onStep) onStep("Sending the day book to FinCom’s cloud (" + Math.floor(off * 100 / (size || 1)) + "%)…"); if (typeof render === "function") render(); };
+    while (off < size){
+      say();
+      const end = Math.min(size, off + this.CHUNK);
+      let why = "";
+      try {
+        const r = await fetch(rec.url, {method: "PATCH", headers: Object.assign(await this.tusHeaders(), {"Upload-Offset": String(off), "Content-Type": "application/offset+octet-stream"}), body: blob.slice(off, end)});
+        if (r.ok){ const o = Number(r.headers.get("Upload-Offset")); off = Number.isFinite(o) && o > off && o <= size ? o : end; fails = 0; continue; }
+        why = "Storage answered " + r.status;
+      } catch (e){ why = (e && e.message) || String(e); }
+      if (fails >= this.tusWait.length) throw new Error("The day book stopped at " + Math.floor(off * 100 / (size || 1)) + "% on its way to FinCom’s cloud (" + why + "). It goes on from there the next time this client is opened.");
+      await new Promise(ok => setTimeout(ok, this.tusWait[fails++]));
+      // where the server is: on from there (a cut chunk may have arrived in part); gone: made again from the start
+      let h;
+      try { h = await this.tusHead(rec.url); } catch (e){ h = undefined; }
+      if (h === null){ off = 0; await this.tusCreate(blob, rec, keep); }
+      else if (typeof h === "number") off = h;
+    }
+    this.prog[cid] = {name, sent: size, size};
   },
   // migration-34 (round 2): the ledgers here come from a trial balance file (TBFile.read, Books → From Tally), which may
   // leave out ledgers with a nil balance; so the list is never declared complete (complete:false, no count) and the cloud
@@ -27732,7 +27867,7 @@ const Rec = {
   stateWords(r){
     const why = r.held_why ? ": " + r.held_why : "";
     return r.state === "applied" ? "applied" : r.state === "duplicate" ? "duplicate" : r.state === "stale" ? "stale (older than the copy)" : r.state === "held" ? "held" + why
-      : r.state === "failed" ? "failed" + why : r.state === "received" ? "waiting" : String(r.state || "");
+      : r.state === "failed" ? "failed" + why : r.state === "received" ? "waiting" : r.state === "queued" ? "queued" : String(r.state || "");
   },
   // the computer a line came from, from the firm's computers as the Tally page or the Tally light read them
   devOf(id){ return [].concat((typeof TCloud === "object" && TCloud.pane.devices) || [], (typeof TLight === "object" && TLight.st.devs) || []).find(d => d && d.id === id) || null; },
@@ -27852,6 +27987,42 @@ const Rec = {
     catch (e){ s.rows = []; if (this.missing(e)) s.none = true; }
     s.busy = false; s.at = Date.now(); render();
   },
+
+  // ---------------------------------------------------------------- round 20 (d.1): alerts (migration 47)
+  // tally_alerts (kind gap | silent | summary; RLS: the firm reads its own), the latest 100, read again after a minute;
+  // shown unread first, newest first. An owner or staff marks one read: tally_alert_read(p_id). The table or a column
+  // missing (42P01, 42703, PGRST20x): nothing anywhere, no words
+  alerts: {},              // {rows, at, busy, none, msg}
+  alertsOf(){
+    const a = this.alerts;
+    if (typeof TCloud === "object" && TCloud.on() && !a.busy && !a.none && Date.now() - (a.at || 0) > 60000){ a.at = Date.now(); setTimeout(() => this.alertsLoad(), 0); }
+    if (a.none) return [];
+    return [].concat(a.rows || []).sort((x, y) => (!!x.read_at - !!y.read_at) || String(y.at || "").localeCompare(String(x.at || "")) || num(y.id) - num(x.id));
+  },
+  async alertsLoad(){
+    const a = this.alerts;
+    a.busy = true;
+    try {
+      a.rows = [].concat(await Cloud.api("tally_alerts?select=id,client_id,book_id,device_id,kind,day,words,data,at,read_at,read_by&firm_id=eq." + encodeURIComponent(this.firm()) + "&order=at.desc&limit=100") || []);
+      a.none = false;
+    } catch (e){ a.rows = []; if (this.missing(e)) a.none = true; }
+    a.busy = false; a.at = Date.now(); render();
+  },
+  clientAlerts(cid){ return this.alertsOf().filter(x => !x.read_at && cid && String(x.client_id || "") === String(cid)); },
+  async alertRead(x){
+    const a = this.alerts;
+    if (!this.canWrite()) return;
+    a.msg = {busy: true, id: x.id}; render();
+    try {
+      const r = await TCloud.rpc("tally_alert_read", {p_id: x.id});
+      if (r && r.ok === false) throw new Error(r.error || "It was not marked read.");
+      const row = (a.rows || []).find(y => y.id === x.id);
+      if (row && !row.read_at) row.read_at = new Date().toISOString();
+      a.msg = null;
+    } catch (e){ a.msg = {err: this.missing(e) ? "Marking an alert read: not available until migration 47 runs." : this.say(e)}; }
+    await this.alertsLoad();
+  },
+  alertKind(k){ return {gap: "Changes not received", silent: "Silent", summary: "Today"}[k] || String(k || ""); },
 
   // ---------------------------------------------------------------- H52: Tally not responding
   notResponding(r){
