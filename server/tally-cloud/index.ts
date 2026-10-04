@@ -98,6 +98,11 @@
 //    with parse.js, the line's GUID and AlterID overriding, into the line's vouchers / lines as a full body
 //    (short: true). The database matches it to the posting (tally_post_ids.matched_*) and builds the entry once by GUID; a
 //    FinCom id matching no posting is held there. Without 45 the fetch is skipped (the line is held for want of a body)
+//    round 20 (migration 47): more than 50 FULL lines in one request (an entry body read from the xml; short lines do not
+//    count) go on the pgmq queue tally_recorder as ONE message (tally_recorder_enqueue(firm, book, device, lines)) and are
+//    answered at once {ok, queued: n, failed, msg, results: [{line_id, state: "queued" | "failed", why}]}; the database's
+//    drain (tally_recorder_drain, pg_cron every 30 s) applies them in order, each line's state then in tally_recorder_lines
+//    (Sync activity). 50 or fewer, or short lines only: applied directly as before. Without 47: applied directly
 //   the beat's companies may carry altvchid, altmstid, recorderSeen, recorderLastAt (at: the check's time): each company with
 //   altvchid is checked (tally_recorder_gap_check) and the answer carries recorder:{company: {gap, missing, needsBaseline?,
 //   startRecorded?}}; recorderSeen kept per bridge in info.bridges[id].recorder = {company: {seen, lastAt}}
@@ -108,7 +113,8 @@
 //   keeps it once) before the gap check. A zoneless time from the bridge is IST. A failed call is logged with the company and
 //   the error (console.error); a function the database lacks is said once per cold start. The beat's answer carries
 //   trialTools: true / false (tally_devices.trial_tools, migration 46: the owner's switch "Trial tools on this computer";
-//   false without the column)
+//   false without the column); and (round 20, migration 47) recorderSource: addon | alterid | both (tally_devices.
+//   recorder_source, the owner's tally_device_recorder_source), left out without the column
 //   {kind:"start_point", company, guid?, altvchid, altmstid, at} -> {set, startVoucher, startMaster, guid, at, state}: the
 //                                                       bridge's starting point (reading is prospective), kept once per book
 //                                                       and company GUID on tally_sync_cursor (tally_start_point)
@@ -127,6 +133,16 @@
 //                                                       read the ledger list; at most one a minute per company ({debounced})
 //   {kind:"upload_days", client, company?, days:[{day, gz}]}
 //   {kind:"upload_ledgers", client, company?, from, openAsOn, ledgers:[[name, parent, open]], groups?}
+//   {kind:"upload_new", client, name, size, from, to} -> (round 20, migration 47) {job, path '<firm>/<job>.xml', bucket
+//                                                       'tally-uploads', days}: a tally_jobs row kind upload (total: the
+//                                                       period's days; the path, period, size and name on tally_jobs.upload)
+//                                                       for the app's resumable (TUS) upload to Storage; 413 over 2 GB; a
+//                                                       cloud without 47: 400 'unknown kind' (the app hands the file over the
+//                                                       old way)
+//   {kind:"upload_done", client, job, path}       -> the file is in Storage (its size checked): the job sealed and the
+//                                                       split's first piece queued on tally_work {job, firm, book, upload:
+//                                                       {path, size, from, range}}; the worker reads the file by byte ranges
+//                                                       and queues the days pieces (uploadPiece); a second call: {already}
 //   {kind:"reparse", client, month?}               -> the day books kept in the bucket read again into entries and
 //                                                       lines (review of 01-Oct-2026: GSTIN, place of supply, HSN and
 //                                                       rate were not kept before); one month a call, owners only;
@@ -853,7 +869,7 @@ async function postWindow(firm: string, dev: any, job: string, w: any) {
 // refDate, cmp, fid, day}] and [[guid, ledger, amount, hsn, rate, bills]]), then tally_recorder_apply stores every line
 // and applies it once (the same change from two computers: 'duplicate'). A line with no GUID is held there, never a new row
 const RECORDER_EVENTS = new Set(["created", "altered", "deleted", "cancelled", "imported", "ledger_created", "ledger_altered", "ledger_renamed", "ledger_deleted"]);
-const MAX_RECORDER_LINES = 500, MAX_RECORDER_XML = 2 * 1024 * 1024;
+const MAX_RECORDER_LINES = 500, MAX_RECORDER_XML = 2 * 1024 * 1024, QUEUE_OVER = 50;
 const notReady44 = (e: any) => !!e && /tally_recorder_apply|tally_start_point|could not find|does not exist|schema cache/i.test(String(e.message || ""));
 function cleanRecorderLine(x: any, me: { id: string }): { line?: Record<string, unknown>; bad?: string } {
   const s = (v: unknown, n: number) => typeof v === "string" || typeof v === "number" ? String(v).trim().slice(0, n) : "";
@@ -897,6 +913,22 @@ async function recorderLines(dev: any, firm: string, book: string, body: any) {
     else { send.push({ ...c.line, company }); at.push(i); }
   });
   if (send.length) await shortBodies(firm, book, send);
+  // round 20 (migration 47): more than 50 FULL lines (an entry body read from the add-on's XML; short lines' bodies built from
+  // the posting do not count) go on the queue as ONE message and are answered {queued: n} at once; the database's drain
+  // (tally_recorder_drain, pg_cron every 30 s) applies them in order and Sync activity shows each line's state. 50 or fewer,
+  // or short lines only: applied directly as before. A cloud without 47: applied directly (said in the log)
+  const full = send.filter((l: any) => Array.isArray(l.vouchers) && l.short !== true).length;
+  if (full > QUEUE_OVER) {
+    const { data, error } = await db.rpc("tally_recorder_enqueue", { p_firm: firm, p_book: book, p_device: dev.id, p_lines: send });
+    if (!error) {
+      send.forEach((l: any, k: number) => { results[at[k]] = { line_id: String(l.line_id ?? ""), state: "queued", why: null }; });
+      const failed = results.filter((r) => r?.state === "failed").length;
+      console.log("tally-ingest recorder_lines queued", book, JSON.stringify({ n: send.length, full, failed, msg: (data as any)?.msg ?? null }));
+      return reply(200, { ok: true, queued: send.length, failed, msg: (data as any)?.msg ?? null, results });
+    }
+    if (!/tally_recorder_enqueue|could not find|does not exist|schema cache/i.test(String(error.message || ""))) throw new Error(error.message);
+    console.log("tally-ingest recorder_lines: no queue in this cloud (migration 47): " + send.length + " lines applied directly", book);
+  }
   if (send.length) {
     const { data, error } = await db.rpc("tally_recorder_apply", { p_firm: firm, p_book: book, p_device: dev.id, p_lines: send });
     if (error && notReady44(error)) return reply(503, { ok: false, notReady: true, error: "The cloud does not take recorder lines yet (migration 44)." });
@@ -1153,8 +1185,9 @@ async function ingestLedgers(book: string, body: any, firm?: string, from?: List
   return reply(200, { ok: true, ...data, ...(idsOut || {}) });
 }
 // ---------- fast-sync (migration-13): the work done by the server, from a queue (pgmq tally_work), so it finishes even
-// when the browser that handed it over is closed. A piece is {job, firm, book, days:[{day, gz}]} (a part of a day book)
-// or {job, firm, book, month} (a month of the kept day books read again). A piece that fails is seen again after its
+// when the browser that handed it over is closed. A piece is {job, firm, book, days:[{day, gz}]} (a part of a day book),
+// {job, firm, book, month} (a month of the kept day books read again) or {job, firm, book, upload: {...}} (a byte range of a
+// Day Book uploaded to Storage: uploadPiece, round 20). A piece that fails is seen again after its
 // time is up (VT seconds) and tried up to 5 times; then the job says what failed. Done pieces are archived (kept).
 // Run by: the hand-over itself (in the background, after answering) and the database's timer every 30 seconds.
 const VT = Number(Deno.env.get("TALLY_WORK_VT") || 240), TRIES = 5;      // seconds a piece is hidden while worked on (tests: shorter)
@@ -1174,7 +1207,142 @@ async function workPiece(m: any) {
   } else if (/^\d{6}$/.test(String(m.month || ""))) {
     const r = await reparseMonthRaw(firm, book, m.month);
     await jobStep(job, 1, r.bad || []);
+  } else if (m.upload && typeof m.upload === "object") {
+    await uploadPiece(job, firm, book, m.upload);
   }
+}
+// ---------- round 20 (migration 47): a Day Book uploaded to Storage (bucket tally-uploads, '<firm>/<job>.xml', by the app's
+// resumable upload) is split into days HERE, from the queue, a piece of a few MB at a time, so the page can be closed.
+// A piece {job, firm, book, upload: {path, size, from, range: {from, to}, enc, tail, tailAt, pend, seen, late, ext, top}}
+// reads the bytes [from, from + PIECE) of the stored file (Range), decodes them (UTF-16LE with or without the BOM, UTF-8 with
+// or without; a range end inside a character is moved back to the character's start), and cuts the text into vouchers with
+// the browser's own rule (TCloudUp.split, src/js/49-tally-cloud.js: /<VOUCHER\b[\s\S]*?<\/VOUCHER>/, the first <DATE>, inside
+// the period only). The text after the last whole voucher (a voucher cut at the range end) is carried in the next piece's
+// message ("tail"). A Day Book is in date order, so the vouchers of the latest date met so far are carried too ("pend": its
+// day may go on in the next range) and every earlier day is complete: it becomes the browser's day file
+// ("<ENVELOPE><BODY><DATA>" + each voucher in <TALLYMESSAGE> + "</DATA></BODY></ENVELOPE>"), packed and queued as the existing
+// days pieces ({days: [{day, gz}]}, at most 31 days or 4 MB a piece, as the browser's hand-over). The last piece queues
+// the rest and every day of the period with no entry (an empty file, as the browser sends). A file NOT in date order: a
+// voucher of a day already queued marks that day "late"; after the last piece a second pass reads again the byte ranges
+// where the late days' vouchers were ("ext": per day, the range boundaries around them) and queues each late day WHOLE
+// (the job's total grows by those days). Progress: tally_job_step on the job (done counts the days read by tally_ingest_day).
+// Each piece logs the time of its own work (decoding, cutting, building and packing; not the waits for Storage or the queue).
+const UPLOAD_BUCKET = "tally-uploads", UPLOAD_MAX = 2 * 1024 * 1024 * 1024;
+const PIECE = Math.max(65536, Math.min(16 * 1024 * 1024, Math.floor(Number(Deno.env.get("TALLY_UPLOAD_PIECE")) || 4 * 1024 * 1024)));
+const MAX_CARRY = 24 * 1024 * 1024;           // characters a piece's message may carry (an open day, a cut voucher)
+const addDay = (d: string, n: number) => new Date(Date.UTC(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6, 8) + n)).toISOString().slice(0, 10).replace(/-/g, "");
+const realDay = (d: unknown) => isDay(d) && addDay(d as string, 0) === d;
+function periodDays(from: string, to: string) { const out: string[] = []; for (let d = from; d <= to && out.length <= 4000; d = addDay(d, 1)) out.push(d); return out; }
+function bytesB64(u: Uint8Array) { let s = ""; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode(...u.subarray(i, i + 0x8000)); return btoa(s); }
+// [from, to] of a stored upload (Supabase Storage answers a Range with 206 and Content-Range "bytes a-b/size"); null: not there
+async function storageRange(path: string, from: number, to: number): Promise<{ bytes: Uint8Array; size: number } | null> {
+  const r = await fetch(URL.replace(/\/+$/, "") + "/storage/v1/object/authenticated/" + UPLOAD_BUCKET + "/" + path.split("/").map(encodeURIComponent).join("/"),
+    { headers: { apikey: SERVICE, Authorization: "Bearer " + SERVICE, Range: "bytes=" + from + "-" + to } });
+  const total = (h: string | null) => Number(((h || "").match(/\/(\d+)\s*$/) || [])[1] || 0);
+  if (r.status === 404 || r.status === 400) { await r.body?.cancel(); return null; }
+  if (r.status === 416) { await r.body?.cancel(); return { bytes: new Uint8Array(0), size: total(r.headers.get("content-range")) }; }
+  if (!r.ok) throw new Error("storage: " + r.status + " " + (await r.text()).slice(0, 200));
+  const all = new Uint8Array(await r.arrayBuffer());
+  if (r.status === 206) return { bytes: all, size: total(r.headers.get("content-range")) || from + all.length };
+  return { bytes: all.subarray(from, to + 1), size: all.length };          // a server that ignored the Range: the whole object
+}
+// the bytes of whole characters only (a range end inside a character moves back to its start)
+function wholeChars(b: Uint8Array, enc: string) {
+  if (enc === "utf-16le") {
+    let c = b.length & ~1;
+    if (c >= 2) { const u = b[c - 2] | (b[c - 1] << 8); if (u >= 0xD800 && u <= 0xDBFF) c -= 2; }        // a surrogate pair cut in two
+    return c;
+  }
+  let k = b.length - 1, back = 0;
+  while (k >= 0 && (b[k] & 0xC0) === 0x80 && back < 3) { k--; back++; }
+  if (k < 0) return b.length;
+  const need = b[k] >= 0xF0 ? 4 : b[k] >= 0xE0 ? 3 : b[k] >= 0xC0 ? 2 : 1;
+  return k + need > b.length ? k : b.length;
+}
+const dayXml = (vs: string[]) => "<ENVELOPE><BODY><DATA>" + vs.map((v) => "<TALLYMESSAGE>" + v + "</TALLYMESSAGE>").join("") + "</DATA></BODY></ENVELOPE>";
+async function uploadPiece(job: string, firm: string, book: string, u: any) {
+  const t0 = performance.now(); let wait = 0;
+  const timed = async <T>(p: PromiseLike<T>): Promise<T> => { const t = performance.now(); try { return await p; } finally { wait += performance.now() - t; } };
+  const rf = String(u?.range?.from || ""), rt = String(u?.range?.to || ""), path = String(u?.path || ""), late = u?.pass === "late";
+  if (!path || !realDay(rf) || !realDay(rt)) throw new Error("the upload's piece is incomplete (path, period)");
+  const from = Math.max(0, Math.floor(Number(u.from) || 0)), size0 = Math.floor(Number(u.size) || 0);
+  const end = late ? Math.min(Math.floor(Number(u.end) || 0), size0) : size0;
+  const got = from < end ? await timed(storageRange(path, from, Math.min(end, from + PIECE) - 1)) : { bytes: new Uint8Array(0), size: size0 };
+  if (!got) throw new Error("The uploaded Day Book is not in FinCom's storage any more (" + path + ").");
+  const bytes = got.bytes;
+  let enc = String(u.enc || "");
+  if (!enc) {
+    if (bytes[0] === 0xFE && bytes[1] === 0xFF) throw new Error("The file is UTF-16 big-endian, which Tally does not write: export the Day Book from Tally again.");
+    enc = (bytes[0] === 0xFF && bytes[1] === 0xFE) || (bytes.length > 1 && bytes[1] === 0 && bytes[0] !== 0) ? "utf-16le" : "utf-8";
+  }
+  const isLast = from + bytes.length >= end;
+  const cut = isLast ? bytes.length : wholeChars(bytes, enc);
+  if (!isLast && cut === 0) throw new Error("a piece of the upload holds no whole character");
+  const nextFrom = from + cut;
+  const tail0 = typeof u.tail === "string" ? u.tail : "", tailLen = tail0.length, tailAt0 = Number.isFinite(Number(u.tailAt)) ? Number(u.tailAt) : from;
+  // only the very start of the file may hold the BOM (dropped); elsewhere U+FEFF is text
+  const text = tail0 + new TextDecoder(enc, { ignoreBOM: from > 0 }).decode(bytes.subarray(0, cut));
+  const pend: Record<string, string[]> = (u.pend && typeof u.pend === "object") ? u.pend : {};
+  const seen = new Set<string>(Array.isArray(u.seen) ? u.seen : []), lateDays = new Set<string>(Array.isArray(u.late) ? u.late : []), only = new Set<string>(Array.isArray(u.only) ? u.only : []);
+  const ext: Record<string, number[]> = (u.ext && typeof u.ext === "object") ? u.ext : {};
+  let top = String(u.top || ""), lastEnd = 0, n = 0, m: RegExpExecArray | null;
+  const re = /<VOUCHER\b[\s\S]*?<\/VOUCHER>/g;
+  while ((m = re.exec(text))) {
+    lastEnd = re.lastIndex;
+    const v = m[0], d = (v.match(/<DATE>(\d{8})<\/DATE>/) || [])[1];
+    if (!d || d < rf || d > rt) continue;
+    n++;
+    if (late) { if (only.has(d)) (pend[d] = pend[d] || []).push(v); continue; }
+    const at = m.index < tailLen ? tailAt0 : from, e = ext[d];
+    ext[d] = e ? [Math.min(e[0], at), Math.max(e[1], nextFrom)] : [at, nextFrom];
+    if (seen.has(d)) { lateDays.add(d); continue; }
+    (pend[d] = pend[d] || []).push(v);
+    if (d > top) top = d;
+  }
+  // the text after the last whole voucher: from a voucher's start (cut at the range end), else its last characters
+  const k = text.slice(lastEnd).search(/<VOUCHER\b/);
+  const tailStart = k >= 0 ? lastEnd + k : Math.max(lastEnd, text.length - 16);
+  const tail = text.slice(tailStart), tailAt = tailStart < tailLen ? tailAt0 : from;
+  // the days complete now: every day before the latest met (a Day Book is in date order); at the end, all
+  const emit = late ? (isLast ? [...only].sort() : []) : Object.keys(pend).filter((d) => isLast || d < top).sort();
+  const files: { day: string; vs: string[] }[] = emit.map((d) => ({ day: d, vs: pend[d] || [] }));
+  for (const d of emit) delete pend[d];
+  if (!late) {
+    for (const d of emit) seen.add(d);
+    if (isLast) for (const d of periodDays(rf, rt)) if (!seen.has(d)) { files.push({ day: d, vs: [] }); seen.add(d); }
+  }
+  let carry = tail.length; for (const d in pend) for (const v of pend[d]) carry += v.length;
+  if (carry > MAX_CARRY) throw new Error("A day of the Day Book is larger than FinCom reads in one piece (" + Math.round(carry / 1048576) + " M characters).");
+  // a file not in date order: the late days are read again whole after this (a second pass over the ranges their vouchers
+  // were in); the job's total grows by them first, so the job is not done before they are
+  const lt = !late && isLast ? [...lateDays].sort() : [];
+  if (lt.length) {
+    const { data: jr } = await timed(db.from("tally_jobs").select("total").eq("id", job).single());
+    await timed(db.from("tally_jobs").update({ total: Number((jr as any)?.total || 0) + lt.length, updated_at: new Date().toISOString() }).eq("id", job));
+  }
+  let batch: { day: string; gz: string }[] = [], bsize = 0, queued = 0;
+  const flush = async () => {
+    if (!batch.length) return;
+    const { error } = await timed(db.rpc("tally_work_send", { p_msg: { job, firm, book, days: batch } }));
+    if (error) throw new Error(error.message);
+    queued += batch.length; batch = []; bsize = 0;
+  };
+  for (const f of files) {
+    const gz = bytesB64(await gzipBytes(new TextEncoder().encode(dayXml(f.vs))));
+    if (batch.length && (bsize + gz.length > 4e6 || batch.length >= 31)) await flush();
+    batch.push({ day: f.day, gz }); bsize += gz.length;
+  }
+  await flush();
+  let next: Record<string, unknown> | null = null;
+  if (!isLast) next = { ...u, from: nextFrom, enc, tail, tailAt, pend, seen: [...seen], late: [...lateDays].sort(), ext, top };
+  else if (lt.length) {
+    const a = Math.min(...lt.map((d) => ext[d][0])), b = Math.max(...lt.map((d) => ext[d][1]));
+    next = { path, size: size0, range: { from: rf, to: rt }, enc, pass: "late", from: a, end: b, only: lt, pend: {}, tail: "", tailAt: a };
+    console.log("tally-ingest upload not in date order: " + lt.length + " day(s) read again whole", job, lt.slice(0, 10).join(","));
+  }
+  if (next) { const { error } = await timed(db.rpc("tally_work_send", { p_msg: { job, firm, book, upload: next } })); if (error) throw new Error(error.message); }
+  await timed(jobStep(job, 0, []));
+  console.log("tally-ingest upload piece", job, "from", from, cut, "bytes", "work", (performance.now() - t0 - wait).toFixed(1), "ms", "vouchers", n, "days", queued, late ? "late pass" : "", isLast ? "last" : "");
 }
 async function work(budgetMs: number) {
   const until = Date.now() + budgetMs; let n = 0;
@@ -1211,6 +1379,40 @@ async function queueJob(firm: string, client: string, book: string, user: string
     }
     later(work(110000));
     return reply(200, { ok: true, queued: days.length });
+  }
+  // round 20 (migration 47): a Day Book through Storage. upload_new: the job (kind upload, its total the period's days) and
+  // the path the app's resumable upload writes to; the period, size and name kept on the job (tally_jobs.upload). A cloud
+  // without 47 answers 'unknown kind' (the app then hands the file over the old way)
+  if (body.kind === "upload_new") {
+    const from = String(body.from || ""), to = String(body.to || ""), size = Number(body.size), name = String(body.name || "").slice(0, 200);
+    if (!realDay(from) || !realDay(to) || from > to || periodDays(from, to).length > 3700) return reply(400, { ok: false, error: "Give the Day Book's period: from and to as yyyymmdd, from not after to." });
+    if (!Number.isInteger(size) || size <= 0) return reply(400, { ok: false, error: "Give the file's size in bytes." });
+    if (size > UPLOAD_MAX) return reply(413, { ok: false, error: "The file is larger than 2 GB; export the Day Book in two parts." });
+    const id = crypto.randomUUID(), path = `${firm}/${id}.xml`, total = periodDays(from, to).length;
+    const { error } = await db.from("tally_jobs").insert({ id, firm_id: firm, client_id: client, book_id: book, kind: "upload", total, created_by: user, message: name, upload: { path, from, to, size, name } });
+    if (error && /check constraint|tally_jobs_kind|upload|column|schema cache/i.test(String(error.message || ""))) {
+      console.log("tally-ingest upload_new: the cloud does not take uploads yet (migration 47)", String(error.message || "").slice(0, 160));
+      return reply(400, { ok: false, error: "unknown kind: this cloud does not take Day Book uploads yet (migration 47)" });
+    }
+    if (error) throw new Error(error.message);
+    return reply(200, { ok: true, job: id, path, bucket: UPLOAD_BUCKET, days: total });
+  }
+  // upload_done: the file is in Storage; the job sealed and its first piece queued (once: a second call changes nothing)
+  if (body.kind === "upload_done") {
+    const { data: j } = await db.from("tally_jobs").select("id, firm_id, client_id, kind, sealed, total, upload").eq("id", String(body.job || "")).maybeSingle();
+    const up = (j as any)?.upload;
+    if (!j || j.firm_id !== firm || j.client_id !== client || j.kind !== "upload" || !up || typeof up.path !== "string") return reply(404, { ok: false, error: "No such upload for this client." });
+    if (body.path !== undefined && String(body.path) !== up.path) return reply(409, { ok: false, error: "That is not this upload's file." });
+    if (j.sealed) return reply(200, { ok: true, job: j.id, already: true });
+    const head = await storageRange(up.path, 0, 0);
+    if (!head || !head.size) return reply(404, { ok: false, error: "The Day Book is not in FinCom's storage yet: finish the upload first." });
+    if (Number(up.size) && head.size !== Number(up.size)) return reply(409, { ok: false, error: "The stored file is " + head.size + " bytes, not the " + up.size + " the upload began with: upload it again." });
+    await db.from("tally_jobs").update({ sealed: true, status: "running", updated_at: new Date().toISOString() }).eq("id", j.id);
+    const { error } = await db.rpc("tally_work_send", { p_msg: { job: j.id, firm, book, upload: { path: up.path, size: head.size, from: 0, range: { from: up.from, to: up.to } } } });
+    if (error) throw new Error(error.message);
+    console.log("tally-ingest upload_done: the split queued", j.id, up.path, head.size, "bytes", up.from + "-" + up.to);
+    later(work(110000));
+    return reply(200, { ok: true, job: j.id, queued: true, size: head.size, days: j.total });
   }
   if (body.kind === "reparse_queue") {
     if (!(await isOwner())) return reply(403, { ok: false, error: "Only the firm's owner can read the kept day books again." });
@@ -1469,7 +1671,10 @@ Deno.serve(async (req) => {
         // round 19 (migration 46): the owner's switch "Trial tools on this computer" (tally_devices.trial_tools); a cloud
         // without the column answers false
         const trialTools = (dev as any).trial_tools === true;
-        return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, ledgers, activityAt, settings, trialTools, ...(Object.keys(recorder).length ? { recorder } : {}), ...(mayPost(dev, me.id) ? {} : { notMain: true }), ...ctl.out });
+        // round 20 (migration 47): where this computer's changes come from (the owner's tally_device_recorder_source): addon,
+        // alterid or both; left out when the cloud has no column (the bridge keeps its own default)
+        const rs = (dev as any).recorder_source, recorderSource = rs === "addon" || rs === "alterid" || rs === "both" ? rs : null;
+        return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, ledgers, activityAt, settings, trialTools, ...(recorderSource ? { recorderSource } : {}), ...(Object.keys(recorder).length ? { recorder } : {}), ...(mayPost(dev, me.id) ? {} : { notMain: true }), ...ctl.out });
       }
       case "make_main": return await makeMain(dev, bridgeOf(dev, body, false).id);
       case "posts_take": {

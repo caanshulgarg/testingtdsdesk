@@ -140,3 +140,6 @@ run_migration46.py                    120
 run_alerts.py                         120  TDSDESK_SITE=../app/dist-test
 run_upload_storage.py                 180  TDSDESK_SITE=../app/dist-test
 run_recorder_source_switch.py         120  TDSDESK_SITE=../app/dist-test
+run_migration47.py                    120
+run_migration48.py                    180
+run_upload_split.py                   180

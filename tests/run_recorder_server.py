@@ -31,6 +31,12 @@ different GUIDs, beats alternating: the starting point never moves, needs_baseli
 with no gap check (logged once), no false gap on the real company; a start without a GUID then a GUID: stamped, not moved, the
 gap kept. M1 tally_book_for once per company in the window over 10 beats. M2 a check time ahead of now taken as now (a restore
 then flagged). L2 the check's time from changeNumbers.at only. L3 only the bridge's exact zone-less form read as IST.
+Round 20 (migration 47; docs/cloud-recorder-plan.md 1): more than 50 full lines in one request (bodies read with parse.js; short
+lines' bodies built as before) go on the queue as one message (tally_recorder_enqueue) and are answered {queued: n} at once;
+50 or fewer, or short lines only, are applied directly as before; the drain (tally_recorder_drain) applies the message in
+order; a cloud without 47 applies them directly. The beat answers recorderSource (tally_devices.recorder_source; left out
+without the column or for another value). The bridge's own recorder_lines body (tests/fixtures/recorder-lines-2.2.0.json, when
+bridge-go has written it) is fed through.
 Needs Deno (DENO, default: the deno on the PATH or /opt/deno/deno)."""
 import os, sys, json, time, hashlib, subprocess, urllib.request, shutil, threading
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -43,7 +49,8 @@ SQLDIR = os.path.join(HERE, "..", "server", "tally-cloud")
 FILES = [os.path.join(SQLDIR, f) for f in ("migration-32-sync-safety.sql", "migration-33-ledger-lists.sql", "migration-35-bridge-control.sql")] + \
         [os.path.join(HERE, "fixtures", "migration-34-as-run-on-staging.sql")] + \
         [os.path.join(SQLDIR, f) for f in ("migration-36b-post-acceptance.sql", "migration-37-follow-ups.sql", "migration-36-ledger-rename.sql", "migration-38-post-followups.sql", "migration-39-rename-map-empty-day.sql",
-                                           "migration-40-states-carried.sql", "migration-41-day-counts.sql", "migration-42-empty-day-second-read.sql", "migration-43-posting-reply.sql", "migration-44-recorder.sql", "migration-45-bulk-posting.sql", "migration-46-trial-tools.sql")]
+                                           "migration-40-states-carried.sql", "migration-41-day-counts.sql", "migration-42-empty-day-second-read.sql", "migration-43-posting-reply.sql", "migration-44-recorder.sql", "migration-45-bulk-posting.sql", "migration-46-trial-tools.sql",
+                                           "migration-47-recorder-queue-alerts.sql")]
 fails = []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
@@ -61,6 +68,7 @@ db = pg_stand.start(55452)
 fn = None
 try:
     db.sql(part(os.path.join(HERE, "run_migration33.py"), "SCHEMA")); db.sql(part(os.path.join(HERE, "run_migration35.py"), "SCHEMA")); db.sql(part(os.path.join(HERE, "run_migration37.py"), "SCHEMA_X"))
+    db.sql(part(os.path.join(HERE, "run_migration47.py"), "SCHEMA47"))      # pgmq, pg_cron, Storage and tally_jobs as migration 47 needs them
     db.sql("""insert into firms values (%(F)s, 'Firm'); insert into members values (%(O)s, %(F)s, 'Owner', 'owner', true);
       insert into tally_books (book_id, firm_id, client_id, company, from_date, open_as_on) values (%(B)s, %(F)s, 'c1', 'ZZ CO', '2026-04-01', '2026-03-31');
       insert into tally_devices (id, firm_id, name, key_hash, version) values (%(A)s, %(F)s, 'PC-A', 'ha', '2.2.0'), (%(D)s, %(F)s, 'PC-B', 'hb', '2.2.0');
@@ -86,7 +94,7 @@ try:
     real = FS.rpc
     name_is_array = [False]
     def rpc(name, a):
-        if name in ("tally_recorder_apply", "tally_start_point", "tally_recorder_gap_check", "tally_post_window_save", "tally_post_xml_for", "tally_post_id_accept_reply", "tally_post_id_accept", "tally_recorder_short_held", "tally_recorder_short_retry"):
+        if name in ("tally_recorder_apply", "tally_start_point", "tally_recorder_gap_check", "tally_post_window_save", "tally_post_xml_for", "tally_post_id_accept_reply", "tally_post_id_accept", "tally_recorder_short_held", "tally_recorder_short_retry", "tally_recorder_enqueue"):
             FS.ARGS.setdefault(name, []).append(a)
             name_is_array[0] = name == "tally_post_xml_for"
             try: return json.loads(db.one("select public.%s(%s)::text" % (name, ", ".join("%s => %s" % (k, lit(v)) for k, v in a.items()))))
@@ -483,6 +491,66 @@ try:
         ok(curR(BL).get("match_now") == "t", "R46-L3. a zone-less time in another form (%r): not read, taken as now (%s)" % (form, curR(BL).get("last_match_at")))
     b10(KA, [co("ZZ FORM", "cg-F", 10)], cl(10, "2026-10-04T09:00:00+05:30"))
     ok(db.one("select to_char(last_match_at at time zone 'UTC', 'YYYY-MM-DD HH24:MI') from tally_sync_cursor where book_id = %s" % q(BL)) == "2026-10-04 03:30", "R46-L3. a time with its zone read as it says")
+    # ---------------------------------------------------------------- round 20 (migration 47): the recorder queue; the beat's recorderSource
+    BQ = "1a0aaaaa-2222-2222-2222-222222222222"; newbook(BQ, "ZZ QUEUE")
+    recq = lambda lines, key=KA: call({"kind": "recorder_lines", "company": "ZZ QUEUE", "version": "2.2.0", "bridge": GA, "lines": lines}, key)
+    nq = lambda: len(FS.ARGS.get("tally_recorder_enqueue", []))
+    qst = lambda prefix: [(x["line_id"], x["state"]) for x in db.rows("select line_id, state from tally_recorder_lines where book_id = %s and line_id like %s order by id" % (q(BQ), q(prefix + "%")))]
+    vq = lambda g: (db.rows("select alter_id, deleted_at from tally_vouchers where book_id = %s and guid = %s" % (q(BQ), q(g))) or [{}])[0]
+    n0 = nq()
+    c, r = recq([line("D%02d" % i, "created", "qd-%d" % i, 3000 + i, amt=10 + i) for i in range(50)])
+    ok(c == 200 and r.get("applied") == 50 and not r.get("queued") and nq() == n0 and len(qst("D")) == 50, "20. 50 full lines: applied directly, as before (%s)" % {k: r.get(k) for k in ("applied", "queued")})
+    shorts = [{"line_id": "H%02d" % i, "event": "created", "saved_at": "2026-10-04T12:00:00+05:30", "company_guid": "cg-q", "object_guid": "qh-%d" % i, "master_id": str(i), "alter_id": 3100 + i, "fid": "NOPOST%02d" % i} for i in range(60)]
+    c, r = recq(shorts)
+    ok(c == 200 and r.get("held") == 60 and not r.get("queued") and nq() == n0, "20. 60 short lines (FinCom's own entries, no body of their own): applied directly (held: no posting) (%s)" % {k: r.get(k) for k in ("held", "queued")})
+    many = [line("Q%02d" % i, "created", "qq-%d" % i, 4000 + i, amt=5 + i) for i in range(60)] + [line("Q60", "altered", "qq-0", 4100, amt=99), line("Qbad", "exploded", "qq-x", 1)]
+    t0 = time.time(); c, r = recq(many); took = time.time() - t0
+    res = {x.get("line_id"): x.get("state") for x in r.get("results") or []}
+    ok(c == 200 and r.get("ok") is True and r.get("queued") == 61 and r.get("failed") == 1 and nq() == n0 + 1 and qst("Q") == [] and res.get("Q00") == "queued" and res.get("Qbad") == "failed",
+       "20. 61 full lines (and a bad one): one message on the queue, answered {queued: 61} at once (%.2f s), the bad line failed, nothing applied yet (%s)" % (took, {k: r.get(k) for k in ("queued", "failed", "applied")}))
+    sent = (FS.ARGS.get("tally_recorder_enqueue") or [{}])[-1]
+    ok(sent.get("p_book") == BQ and sent.get("p_device") == DA and len(sent.get("p_lines") or []) == 61 and (sent["p_lines"][0].get("vouchers") or [{}])[0].get("guid") == "qq-0" and "xml" not in sent["p_lines"][0]
+       and (sent["p_lines"][0].get("lines") or [[None]])[0][0] == "qq-0", "20. the message holds the cleaned lines with their bodies read (parse.js), not the XML")
+    d = json.loads(db.one("select tally_recorder_drain(20000)::text"))
+    ok(d.get("done") == 1 and qst("Q") == [("Q%02d" % i, "applied") for i in range(60)] + [("Q60", "applied")] and vq("qq-0").get("alter_id") == "4100"
+       and db.one("select coalesce(sum(amount), 0) from tally_ledger_day where book_id = %s and ledger = 'Sales'" % q(BQ)) == str(sum(10 + i for i in range(50)) + sum(5 + i for i in range(1, 60)) + 99),
+       "20. the drain applies the message in order (Q00..Q59, then Q60 altering qq-0), the day cache follows (%s)" % d)
+    ok(db.one("select count(*) from pgmq.a_tally_recorder") == "1" and db.one("select count(*) from pgmq.q_tally_recorder") == "0", "20. the message archived")
+    real20 = FS.rpc
+    def no47(name, a):
+        if name == "tally_recorder_enqueue": raise RuntimeError("Could not find the function public.tally_recorder_enqueue(p_book, p_device, p_firm, p_lines) in the schema cache")
+        return real20(name, a)
+    FS.rpc = no47; n_log = len(log)
+    c, r = recq([line("F%02d" % i, "created", "qf-%d" % i, 5000 + i, amt=1) for i in range(55)])
+    FS.rpc = real20
+    time.sleep(0.2)
+    ok(c == 200 and r.get("applied") == 55 and not r.get("queued") and any("migration 47" in l for l in log[n_log:]), "20. a cloud without 47 (no queue): 55 full lines applied directly, said in the log (%s)" % {k: r.get(k) for k in ("applied", "queued")})
+    devA = next(x for x in FS.T["tally_devices"] if x["id"] == DA)
+    beat20 = lambda: call({"kind": "beat", "version": "2.2.0", "bridge": GA, "tally": True, "open": []})
+    devA["recorder_source"] = "both"; c, r = beat20()
+    ok(c == 200 and r.get("recorderSource") == "both", "20. the beat answers recorderSource from tally_devices.recorder_source ('both') (%s)" % r.get("recorderSource"))
+    devA["recorder_source"] = "alterid"; c, r = beat20()
+    ok(r.get("recorderSource") == "alterid", "20. ... 'alterid'")
+    devA.pop("recorder_source"); c, r = beat20()
+    ok(c == 200 and "recorderSource" not in r, "20. a cloud without the column: recorderSource left out of the answer")
+    devA["recorder_source"] = "nonsense"; c, r = beat20(); devA.pop("recorder_source")
+    ok("recorderSource" not in r, "20. a value that is not addon, alterid or both: left out")
+    FX = os.path.join(HERE, "fixtures", "recorder-lines-2.2.0.json")
+    if os.path.exists(FX):
+        fx = json.load(open(FX)); body = fx.get("body", fx) if isinstance(fx, dict) else {"lines": fx}
+        body = dict(body); body.setdefault("kind", "recorder_lines"); body.setdefault("bridge", GA)
+        if body.get("company") and not any(x["company"] == body["company"] for x in FS.T["tally_companies"]):
+            newbook("1a1aaaaa-2222-2222-2222-222222222222", body["company"])
+        body.setdefault("company", "ZZ QUEUE")
+        n = len(body.get("lines") or [])
+        c, r = call(body, KA)
+        states = [x.get("state") for x in r.get("results") or []]
+        ok(c == 200 and n > 0 and len(states) == n and all(s_ in ("applied", "held", "duplicate", "stale", "failed", "queued") for s_ in states) and (r.get("queued") == n - states.count("failed") or not r.get("queued")),
+           "20. the bridge's own recorder_lines body (tests/fixtures/recorder-lines-2.2.0.json, %d lines): every line answered (%s)" % (n, {k: r.get(k) for k in ("applied", "held", "duplicate", "stale", "failed", "queued")}))
+        if r.get("queued"):
+            d = json.loads(db.one("select tally_recorder_drain(20000)::text")); ok(d.get("done") == 1, "20. ... and the drain applies it (%s)" % d)
+    else:
+        print("  (20: tests/fixtures/recorder-lines-2.2.0.json not there yet: the bridge's own body is not fed)")
 finally:
     if fn: fn.terminate()
     db.stop()

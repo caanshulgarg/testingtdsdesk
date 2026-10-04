@@ -1,6 +1,7 @@
 """A stand-in for Supabase (REST, auth, storage, and the queue functions of migration-13) on port 9300, in memory, for
 running the cloud function tally-ingest (server/tally-cloud/index.ts) under Deno in the tests. Only what that function
-asks is answered, the way PostgREST, GoTrue and Storage answer it."""
+asks is answered, the way PostgREST, GoTrue and Storage answer it (Storage: also a GET with Range: bytes=a-b, answered 206
+with Content-Range, as Supabase Storage does)."""
 import json, time, threading, http.server, re, uuid, itertools
 from urllib.parse import urlparse, parse_qs, unquote
 PORT = 9300
@@ -8,6 +9,7 @@ SERVICE = "service-key"
 T = {"members": [], "clients": [], "tally_companies": [], "tally_jobs": [], "tally_devices": [], "tally_post_jobs": [], "tally_books": []}
 USERS = {}            # bearer token -> {id, email}
 FILES = {}            # bucket/path -> bytes
+RANGES = []           # (bucket/path, from, to) of each ranged GET (Range: bytes=from-to)
 QUEUE = []            # {msg_id, vt, read_ct, message, archived}
 DAYS = []             # (book, day, n) of each tally_ingest_day
 FAIL = {}             # day -> times tally_ingest_day fails for it before it works
@@ -134,7 +136,16 @@ class H(http.server.BaseHTTPRequestHandler):
         if path.startswith("/storage/v1/object/"):
             key = unquote(path[len("/storage/v1/object/"):]).replace("authenticated/", "", 1)
             if method == "POST" or method == "PUT": FILES[key] = raw; return self.send(200, {"Key": key})
-            if method == "GET": return self.send(200, raw=FILES[key], headers={"Content-Type": "application/gzip"}) if key in FILES else self.send(404, {"message": "not found"})
+            if method == "GET":
+                if key not in FILES: return self.send(404, {"message": "not found"})
+                rg = re.match(r"bytes=(\d+)-(\d*)$", (self.headers.get("Range") or "").strip())
+                if rg:                                                    # a byte range (tally-ingest's upload worker, round 20)
+                    data = FILES[key]; a = int(rg.group(1)); b = int(rg.group(2)) if rg.group(2) else len(data) - 1
+                    RANGES.append((key, a, b))
+                    if a >= len(data): return self.send(416, {"message": "range not satisfiable"}, {"Content-Range": "bytes */%d" % len(data)})
+                    b = min(b, len(data) - 1)
+                    return self.send(206, raw=data[a:b + 1], headers={"Content-Type": "application/octet-stream", "Content-Range": "bytes %d-%d/%d" % (a, b, len(data))})
+                return self.send(200, raw=FILES[key], headers={"Content-Type": "application/gzip"})
         self.send(404, {"message": "no such path " + path})
     def do_GET(self): self.handle_any("GET")
     def do_HEAD(self): self.handle_any("HEAD")
