@@ -48,7 +48,11 @@ Run on staging (corrected 04-Oct-2026, evening):
   (tally_recorder_lines, tally_month_locks, tally_tieouts).
 - tally-ingest **v33** deployed on 04-Oct-2026 from commit `2aa42bd` (v31 was the deploy after 43).
 - 46: written 04-Oct-2026 (round 19), not yet run on staging. It runs after 45; tally-ingest does not depend on it (without
-- 47: written 04-Oct-2026 (round 20 part c), not yet run on staging. It runs after 46; Claude runs it after its review and checks
+- **47: run on staging by Claude on 04-Oct-2026 (~19:45 IST) from d41237f; all 19 function md5s matched the file; cron jobs listed;
+  the drain and the gap scan ran under pg_cron and succeeded. 48: run by the owner on 04-Oct-2026; its five md5s matched; figures
+  unchanged (2,754 live entries, 7,040 lines, ledger-day total 0.00). tally-ingest v35 deployed from d41237f, four files
+  byte-identical (index.ts 16bb6760...).** History below.
+- 47: written 04-Oct-2026 (round 20 part c). It runs after 46; Claude runs it after its review and checks
   md5(prosrc) of its nine functions against the file (the numbers are printed by `tests/run_migration47.py`, and listed in the
   round's report), then lists `cron.job` (four jobs: tally-recorder-drain `30 seconds`, tally-alert-gaps `*/10 * * * *`,
   tally-alert-silent `*/30 3-13 * * 1-6`, tally-alert-summary `30 13 * * *`) and runs one gap scan. tally-ingest (round 20) works
