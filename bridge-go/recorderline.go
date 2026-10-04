@@ -19,7 +19,7 @@ import (
 
 type recLine struct {
 	Ev, T0, Tw, CGUID, CName, User, Obj, GUID, MID, AID, VType, VNo, VDate, Name, Parent, Narr, T1 string
-	Src string // 2.2.0: "live" from the live add-on (FinComRecorder.tdl writes "|src=live" after t1); "" from the trial's
+	Src                                                                                            string // 2.2.0: "live" from the live add-on (FinComRecorder.tdl writes "|src=live" after t1); "" from the trial's
 }
 
 var recKeys = []string{"ev", "t0", "tw", "cguid", "cname", "user", "obj", "guid", "mid", "aid", "vtype", "vno", "vdate", "name", "parent"}

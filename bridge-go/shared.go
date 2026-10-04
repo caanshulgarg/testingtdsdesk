@@ -9,6 +9,10 @@
 //   - a file another program holds locked is not waited for: an error at once, logged "recorder file busy, read later".
 //
 // The bridge never opens a holding file for writing, never creates, renames or deletes one (TestNoWriteToRecorderFiles).
+// 2.2.0 (review M7): whether Tally's own append can fail while the bridge reads depends on how Tally opens the file
+// (its OPEN FILE share mode, not known); the bridge shares read, write and delete, opens a file only when it grew, and
+// holds it for the read alone. A line Tally could not write goes to failed.txt (the add-on tries once, never loops),
+// which the bridge reads too.
 package main
 
 import (
@@ -37,7 +41,7 @@ func readSharedFrom(path string, off, maxBytes int64) ([]byte, int64, error) {
 	if off < 0 {
 		off = 0
 	}
-	return readSharedAt(path, off, maxBytes, true)
+	return readSharedAt(path, off, maxBytes, false) // the live reader says "held" itself, once in 10 minutes (review Low 14)
 }
 
 // off < 0: the file's last maxBytes; else from off

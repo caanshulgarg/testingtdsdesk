@@ -339,4 +339,66 @@ Verdict:
 - Findings 4 and 5 may follow, but before source B is offered to any owner.
 - Findings 9 to 18 are Low and may wait.
 
+
+## Status after the fixes (04-Oct-2026, by the builder; each test written first, red runs in the session's tdd/b221.*.red)
+
+1. HIGH, Fixed (TestUnlinkedCompanyNoBodyNoStall, TestLiveQueueCapPerCompany). Before any body is asked of Tally or any
+   line of a company is sent, the uploader asks the cloud whether the company is linked with an empty recorder_lines call
+   (`lines: []`: nothing of the company leaves the computer). A 409 notLinked (then, or on any later call) marks the
+   company not linked for an hour: its waiting lines leave the queue, new lines are counted and skipped (the offset
+   moves on), nothing is fetched or sent; the beat's recorderState says `notLinked: true, skipped: N, words: "not
+   linked: N lines skipped"`; after an hour it is asked again. The queue cap is per company GUID (RecorderQueueMax,
+   5,000): a company at its cap stops only its own file. Left: re-checking when the beat's company list changes (that
+   list names only open or kept companies; the hourly re-check covers every company).
+2. HIGH, Fixed (TestRollbackVerifiesKeptVersion, TestRecorderRollbackAfterSetup). The SHA-256 of the replaced program is
+   recorded while it is the running one (update-pending.json at the update; at a setup install the setup copies the
+   program it replaces to FinComBridge.previous.exe and the install step records its SHA-256 and the version the
+   registry held). The rollback refuses with words when the kept program's SHA-256 differs or was never recorded, and
+   checks the code signature when RequireSignedUpdates is on. It is set up as an update: the running program goes to
+   FinComBridge.old.exe with update-pending.json {from: 2.2.0}, so undoFailedUpdate puts it back if the previous one
+   does not start (a copy also stays as FinComBridge.rolledback.exe).
+3. MEDIUM, Fixed (TestForgedLineDropped). A line counts only when its cguid starts its file's name (failed.txt: the
+   file the add-on meant) and, when the company has a held GUID, equals it; otherwise it is dropped with one log line
+   per file and GUID. An "FCR1|" physical line after a line still open (its t1 not yet written: a narration over
+   several lines) starts a new line only when it is of the file's own company with a t0 not before the open line's;
+   else it is narration text. Nothing is asked for an entry whose AlterID is at or below the starting point, and a
+   fetched body is used only when its GUID is the line's and its ALTERID is above the starting point. Limit kept: a
+   Tally user of the same company can still write a same-company line with a later t0 into a narration (no more than
+   that user can do in Tally itself); the recorder folder's ACL (Users may add files) stays by design (Tally runs as
+   the user).
+4. MEDIUM, Fixed (TestSourceBSkipsOwnPosting). A posting window in which ALTVCHID rose by exactly the entries the job
+   created is FinCom's own: sources B and C move past it and skip its AlterIDs, and no request is made for it. Left:
+   skipping by "TDSDesk:" in the narration (source B's list carries no narration; adding it would enlarge the request).
+5. MEDIUM, Fixed (TestSourceBBounded). Source B starts at max(starting point, highest AlterID received from the
+   add-on); a rise above 500 is not asked ("too many changes for Source B (N); the gap check and Day Book cover them");
+   the request's limit is 5 s (RecorderBTimeoutSec).
+6. MEDIUM, Fixed (TestSourceBNeverBackWithoutOwner, TestSourceBBackOnOwnerSwitch). Only a present, valid recorderSource
+   counts; an answer without it keeps the owner's last choice, which is kept on disk (sync\recorder-source.json) and
+   survives a restart; the off state stores the source in force (not the raw answer) and is persisted; the spacing is
+   persisted.
+7. MEDIUM, Fixed (TestLiveOldAndFailedLines). Daily files up to 31 days old are read when they hold bytes not read;
+   failed.txt is read (each write_failed line's inner line, checked against the file it was meant for); a file is
+   opened only when its size grew. Left: an `unreadOlder` beat flag (the beat lists the files read, recorderFiles).
+8. MEDIUM, Fixed (TestLiveOtherNameForms). The reader takes every <GUID>-<anything>.txt (a line counts only in its own
+   GUID's file), the beat lists the file names read (recorderFiles), the TDL comment names the fallback, and
+   docs/recorder-live-sheet.txt PART 1 has the step "check the new file's name ends in today's yyyymmdd".
+9. LOW, Fixed in part: a body fetch refused for a passing reason (reading stopped, Tally left alone) is tried again, 3
+   times at most. Left: a log line for an empty vchDate.
+10. LOW, Fixed (TestLiveLowsPairAndNarration): the pairs are kept per company GUID, so a save across midnight pairs.
+11. LOW, Fixed (TestLiveLowsPairAndNarration): the narration is cut at 4,000 characters; with the per-company cap this
+    bounds memory. Left: a separate byte budget.
+12. LOW, Fixed: each body request gets the time left of the 20 s (at least 2 s).
+13. LOW, Left: the run's own maps (sent ids, files) are rebuilt at each restart; the files map is bounded by 31 days of
+    files read.
+14. LOW, Fixed: readSharedFrom no longer logs a held file; the reader says "held by another program" once per file in
+    10 minutes, without the word "trial".
+15. LOW, Left: the brief requires the trial's events in the live add-on (the trial measures their cost); dropping
+    before_* and start/end_import is for after the trial's numbers.
+16. LOW, Fixed in part: no posting window when the job's last request had no answer from Tally. Left: reading a0 after
+    the writer lock (one more FinComCompany read per job).
+17. LOW, Fixed: without a company GUID the add-on writes to "noguid-<date>.txt", never a name in a path; the line keeps
+    cname.
+18. LOW, Fixed (TestRecorderLinesFixture): the bridge identity in the fixture is fixed; the test compares and fails on
+    a difference; it writes only with FINCOM_WRITE_FIXTURES=1.
+
 Range: bdfe261..3fbc965

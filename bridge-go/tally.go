@@ -294,7 +294,7 @@ func datedRefused(tc *TC, x string) error {
 	if !strings.Contains(x, "<SVFROMDATE") && !strings.Contains(x, "<SVTODATE") {
 		return nil
 	}
-	if voucherByMasterExact(x) {
+	if voucherByMasterExact(x) || sliceExact(x) { // and source C's month slice in the kept form (recorder_probes.go)
 		return nil
 	}
 	return readsOffErr()

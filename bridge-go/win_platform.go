@@ -529,7 +529,8 @@ func applyUpdate(exe string, b []byte) error {
 		_ = os.Rename(old, exe)
 		return err
 	}
-	_ = saveFile(filepath.Join(dir, "update-pending.json"), jsonText(M{"from": BridgeVersion, "at": nowS(), "starts": 0}))
+	// review H2 (2.2.0): the SHA-256 of the program replaced, recorded while it is the running one, for the rollback
+	_ = saveFile(filepath.Join(dir, "update-pending.json"), jsonText(M{"from": BridgeVersion, "at": nowS(), "starts": 0, "sha256": fileSHA256(old)}))
 	return nil
 }
 

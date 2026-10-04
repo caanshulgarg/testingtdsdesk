@@ -364,7 +364,7 @@ func runBridge(console bool) int {
 	go updateLoop()
 	go beatLoop()
 	go recorderWatchLoop() // round 18: the recorder trial's folder watch (file times only; Tally is not asked)
-	go recorderLiveLoop() // 2.2.0: the live recorder's uploader (the reader is the watch's turn)
+	go recorderLiveLoop()  // 2.2.0: the live recorder's uploader (the reader is the watch's turn)
 	for !stopping() {
 		loopAt.Store(time.Now().Unix())
 		sleepOrStop(100 * time.Millisecond)

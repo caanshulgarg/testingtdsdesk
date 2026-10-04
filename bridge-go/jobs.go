@@ -758,6 +758,11 @@ func jobWindow(p M, notes []any, company string, port int) {
 		writeLog("Posting job " + str(p["id"]) + ": the change numbers after the job could not be read (" + err.Error() + "); no posting window")
 		return
 	}
+	if n := len(notes); n > 0 && truthy(obj(notes[n-1])["noAnswer"]) {
+		// review Low 16: Tally may still be importing the last request: its numbers now are not the job's
+		writeLog("Posting job " + str(p["id"]) + ": the last request had no answer from Tally; no posting window")
+		return
+	}
 	a0, a1 := toI64(p["a0"]), companyAlter(company)
 	vc, mc := 0, 0
 	for _, x := range notes {
@@ -773,5 +778,6 @@ func jobWindow(p M, notes []any, company string, port int) {
 		return
 	}
 	p["window"] = M{"a0": a0, "a1": a1, "vouchersCreated": vc, "mastersCreated": mc, "guid": str(p["windowGuid"])}
+	liveAfterWindow(company, str(p["windowGuid"]), a0, a1, vc) // review M4: sources B and C skip FinCom's own entries
 	writeLog(fmt.Sprintf("Posting job %s: posting window ALTVCHID %d to %d, %d voucher(s) and %d master(s) created", str(p["id"]), a0, a1, vc, mc))
 }

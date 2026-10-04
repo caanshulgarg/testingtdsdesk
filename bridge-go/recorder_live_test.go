@@ -162,6 +162,7 @@ func TestLiveAddonFile(t *testing.T) {
 		s = s[strings.Index(s, "    01 : SET"):]
 		s = strings.ReplaceAll(s, `@@FCRFolder + ##vGuid + "-" + @@FCRDay + ".txt"`, `@@FCRFolder + ##vGuid + ".txt"`)
 		s = strings.ReplaceAll(s, `"|t1=" + ##vT1 + "|src=live"`, `"|t1=" + ##vT1`)
+		s = strings.ReplaceAll(s, `SET : vGuid : "noguid"`, `SET : vGuid : "name-" + ##SVCurrentCompany`) // review Low 17
 		return regexp.MustCompile(`(?m)^\s*;;.*\n`).ReplaceAllString(s, "")
 	}
 	if body(tdl) != body(trial) {
@@ -342,10 +343,11 @@ func TestLiveRestartResume(t *testing.T) {
 	}
 }
 
-// --- 2d. only the newest 7 days of daily files are read; the trial's files (no date) are not
+// --- 2d. the newest 7 days of daily files are read, older ones only up to 31 days and only for bytes not read yet
+// (review M7); the trial's files (<GUID>.txt) give nothing
 func TestLiveOnlyNewest7Days(t *testing.T) {
 	rec, _, _ := liveBridge(t, "")
-	old := nowFn().AddDate(0, 0, -8).Format("20060102")
+	old := nowFn().AddDate(0, 0, -35).Format("20060102")
 	recent := nowFn().AddDate(0, 0, -6).Format("20060102")
 	liveAppend(t, liveFilePath(rec, old), vchLine("after_delete", "g-old", "1", "1", ""))
 	liveAppend(t, liveFilePath(rec, recent), vchLine("after_delete", "g-recent", "2", "2", ""))
@@ -467,21 +469,22 @@ func TestLiveSourceSwitchKeepsUploader(t *testing.T) {
 	if recorderSource() != "alterid" {
 		t.Fatal("the beat's answer")
 	}
+	// review M6: a bad value or an answer without the field keeps the owner's last choice (kept on disk)
 	applyRecorderSource(M{"recorderSource": "nonsense"})
-	if recorderSource() != "both" {
-		t.Fatalf("a bad answer keeps the config: %s", recorderSource())
+	if recorderSource() != "alterid" {
+		t.Fatalf("a bad answer: %s", recorderSource())
 	}
-	applyRecorderSource(M{"recorderSource": "alterid"})
 	applyRecorderSource(M{})
-	if recorderSource() != "both" {
-		t.Fatalf("absent keeps the config: %s", recorderSource())
+	if recorderSource() != "alterid" {
+		t.Fatalf("an answer without the field: %s", recorderSource())
 	}
+	applyRecorderSource(M{"recorderSource": "addon"})
 	setCfg("RecorderSource", "addon")
 	// lines read from the add-on, then the source switched: the queued lines still go, by the same uploader
-	liveAppend(t, liveFilePath(rec, ""), vchLine("after_delete", "g-x", "9", "9", "from the add-on"))
+	liveAppend(t, liveFilePath(rec, ""), vchLine("after_delete", "g-x", "9", "1", "from the add-on"))
 	liveReadOnce()
 	applyRecorderSource(M{"recorderSource": "alterid"})
-	liveAppend(t, liveFilePath(rec, ""), vchLine("after_delete", "g-y", "10", "10", "not read now"))
+	liveAppend(t, liveFilePath(rec, ""), vchLine("after_delete", "g-y", "10", "1", "not read now"))
 	if n := liveReadOnce(); n != 0 {
 		t.Fatal("the add-on's file read with the source alterid")
 	}
@@ -514,7 +517,7 @@ func TestLiveSourceSwitchKeepsUploader(t *testing.T) {
 		t.Fatalf("the two sources' lines differ in shape:\n%s\n%s", keys(sent[0]), keys(sent[1]))
 	}
 	// back to the add-on: the line written meanwhile is read then
-	applyRecorderSource(M{})
+	applyRecorderSource(M{"recorderSource": "addon"})
 	if n := liveReadOnce(); n != 1 {
 		t.Fatalf("back to the add-on: %d", n)
 	}
@@ -758,12 +761,17 @@ func TestRecorderLinesFixture(t *testing.T) {
 	liveReadOnce()
 	uploadAll(t)
 	c.mu.Lock()
-	if len(c.recRaw) != 1 {
-		c.mu.Unlock()
-		t.Fatalf("calls: %d", len(c.recRaw))
+	var raws []string
+	for _, r := range c.recRaw {
+		if len(arr(parseObj(r)["lines"])) > 0 { // the empty call before is the link check (review H1)
+			raws = append(raws, r)
+		}
 	}
-	raw := c.recRaw[0]
 	c.mu.Unlock()
+	if len(raws) != 1 {
+		t.Fatalf("calls: %d", len(raws))
+	}
+	raw := raws[0]
 	b := parseObj(raw)
 	if str(b["kind"]) != "recorder_lines" || str(b["company"]) != zz || str(b["company_guid"]) != b220CoGUID {
 		t.Fatalf("the body: %s", cut(raw, 300))
@@ -784,18 +792,22 @@ func TestRecorderLinesFixture(t *testing.T) {
 	if str(l0["event"]) != "created" || str(l0["vch_date"]) != "20261004" || str(l0["saved_at"]) != "2026-10-04T10:15:03+05:30" || toInt(l0["alter_id"]) != 9001 || str(l0["pc"]) != "NWS144" {
 		t.Fatalf("the first line: %v", l0)
 	}
-	// the request as sent, the bridge's own bytes: what the cloud's tests read
+	// the request as sent, the bridge's identity fixed (it is machine-dependent: review Low 18); compared with the
+	// fixture the cloud's tests read, written only with FINCOM_WRITE_FIXTURES=1
+	b["bridge"] = M{"computer": "NWS144", "id": "go-fixture000000", "mode": "main", "runMode": "service", "user": "owner", "version": BridgeVersion}
 	var pretty bytes.Buffer
-	if err := json.Indent(&pretty, []byte(raw), "", "  "); err != nil {
+	if err := json.Indent(&pretty, []byte(jsonText(b)), "", "  "); err != nil {
 		t.Fatal(err)
 	}
 	pretty.WriteString("\n")
 	fx := filepath.Join("..", "tests", "fixtures", "recorder-lines-2.2.0.json")
-	if cur, _ := os.ReadFile(fx); !bytes.Equal(cur, pretty.Bytes()) {
+	if os.Getenv("FINCOM_WRITE_FIXTURES") == "1" {
 		if err := os.WriteFile(fx, pretty.Bytes(), 0o644); err != nil {
 			t.Fatal(err)
 		}
 		t.Logf("wrote %s", fx)
+	} else if cur, _ := os.ReadFile(fx); !bytes.Equal(cur, pretty.Bytes()) {
+		t.Fatalf("the recorder_lines request differs from %s (run with FINCOM_WRITE_FIXTURES=1 when the change is meant):\n%s", fx, pretty.String())
 	}
 }
 
@@ -1066,6 +1078,7 @@ func TestRecorderRollbackItem(t *testing.T) {
 	}
 	// an update that ran well keeps the previous program (no longer deleted)
 	_ = os.WriteFile(filepath.Join(dir, "FinComBridge.old.exe"), []byte("old 2.1.10"), 0o755)
+	_ = saveFile(filepath.Join(dir, "update-pending.json"), jsonText(M{"from": "2.1.10", "sha256": fileSHA256(filepath.Join(dir, "FinComBridge.old.exe"))}))
 	keepPreviousVersion(dir, "2.1.10")
 	if exists(filepath.Join(dir, "FinComBridge.old.exe")) || readText(filepath.Join(dir, "FinComBridge.previous.exe")) != "old 2.1.10" {
 		t.Fatal("the previous program is not kept")

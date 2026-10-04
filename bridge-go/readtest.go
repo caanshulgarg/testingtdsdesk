@@ -153,8 +153,9 @@ func onlyDay(raw, d string) bool {
 // the four date forms (each that answers the day with only that day's entries is asked an empty day too), FinComTag,
 // FinComCompany (the change numbers), one measurement of the entries above the starting point with no dates, and
 // FinComCompany sent as UTF-16 and as UTF-8 (when TallyRequestUTF16 is off). It logs which form answered the anchor day
-// with exactly its entries and CHANGES NOTHING: no form is switched, no file written, nothing goes to the cloud (the
-// owner's rule of 04-Oct-2026). Run by startReadTest (one at a time); callable directly too
+// with exactly its entries; nothing goes to the cloud. 2.2.0 (the owner's additions): the collection date forms on a
+// past-year month, the first that passes KEPT per company and Tally program (sync\date-forms.json, for source C), and
+// one Edit Log probe (recorder_probes.go). Run by startReadTest (one at a time); callable directly too
 func runReadTest(company string) (M, error) {
 	if company == "" {
 		company = trayMeasureCompany()
@@ -220,7 +221,7 @@ func runReadTest(company string) (M, error) {
 		passed = "none"
 		writeLog(fmt.Sprintf("%sDates on this Tally: none of the %d forms answered %s with exactly its entries", pre, len(dateForms), d))
 	}
-	ask("FinComTag (the posting read-back's request)", tagCheckRequest(company, d), readTestTC)
+	_, traw := ask("FinComTag (the posting read-back's request)", tagCheckRequest(company, d), readTestTC) // also the Edit Log probe's entry when none is above the starting point
 	// the change numbers, read here without being kept (the starting point is not touched by the test)
 	cm, craw := ask("FinComCompany (change numbers)", companyCheckRequest(company), readTestTC)
 	altV, altM := int64(-1), int64(-1)
@@ -239,7 +240,11 @@ func runReadTest(company string) (M, error) {
 		after = maxI64(0, altV)
 		label = fmt.Sprintf("Entries above the starting point (TDSDeskKeepList, AlterID above %d, the current ALTVCHID: no starting point recorded yet, no dates)", after)
 	}
-	ask(label, keepListAboveRequest(company, after), readTestTC)
+	_, kraw := ask(label, keepListAboveRequest(company, after), readTestTC)
+	// 2.2.0 (the owner's additions A and C): the collection date forms on a past-year month (the first that passes is
+	// kept for source C), then Tally's program and one Edit Log probe for the newest changed entry
+	readTestCollectionForms(port, company)
+	readTestEditLogProbe(port, company, kraw, traw)
 	// item 89: FinComCompany sent once as UTF-16 and once as UTF-8 (when the bridge sends UTF-8)
 	if !cfgB("TallyRequestUTF16") {
 		const lb = "FinComCompany sent as UTF-16 and as UTF-8"

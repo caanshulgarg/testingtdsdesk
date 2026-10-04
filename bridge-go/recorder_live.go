@@ -52,7 +52,7 @@ const (
 	liveMaxLines   = 500                     // lines per recorder_lines call (the cloud's MAX_RECORDER_LINES)
 	liveMaxBytes   = 1 << 20                 // bytes per recorder_lines call
 	liveReadMax    = 1 << 20                 // bytes read from one file per turn
-	liveQueueMax   = 20000                   // changes waiting in memory; the files are read on once they go
+	liveNarrMax    = 4000                    // characters of a narration kept (the cloud reads 1,000; review Low 11)
 	liveFetchField = "GUID, MASTERID, ALTERID, DATE, VOUCHERTYPENAME, VOUCHERNUMBER, PARTYLEDGERNAME, NARRATION, ISCANCELLED, ISOPTIONAL, " +
 		"ALLLEDGERENTRIES.LEDGERNAME, ALLLEDGERENTRIES.AMOUNT, ALLLEDGERENTRIES.ISDEEMEDPOSITIVE, ALLLEDGERENTRIES.BILLALLOCATIONS.NAME, " +
 		"ALLLEDGERENTRIES.BILLALLOCATIONS.BILLTYPE, ALLLEDGERENTRIES.BILLALLOCATIONS.AMOUNT, ALLLEDGERENTRIES.BILLALLOCATIONS.BILLCREDITPERIOD"
@@ -73,6 +73,7 @@ type change struct {
 	during    bool      // read while a posting was going (the touched-ledger hook)
 	bKey      string    // source B: its company key
 	alterN    int64     // source B: its AlterID
+	tries     int       // body fetches that did not go for a passing reason (review Low 9: 3 at most)
 }
 
 func (c *change) key() string { return c.company + "|" + c.companyGuid }
@@ -103,6 +104,8 @@ type liveFileSt struct {
 
 type livePending struct {
 	l          recLine
+	file       string // the file its first half is in (a pair may cross midnight: pending is kept per company, review Low 10)
+	gen        int
 	start, end int64
 	seen       time.Time
 }
@@ -110,18 +113,20 @@ type livePending struct {
 type liveBSt struct {
 	company, guid          string
 	after, seen, maxMaster int64
-	// the owner's rule (04-Oct): off by itself after a list that took more than 2 s (persisted; back on only when the
-	// owner switches the source to another value than offBeat, the beat's value in force when it stopped); lastAsk:
-	// 60 s at least between two requests
-	off                    bool
-	offSecs                float64
-	offAt, offWhy, offBeat string
-	lastAsk                time.Time
+	// the owner's rule (04-Oct): 60 s at least between two requests (the 2 s switch-off: live.off, recorder_probes.go)
+	lastAsk time.Time
 }
 
 type liveCoSt struct {
 	read, sent      int
 	lastError, last string
+	skipped         int // lines of a company not linked to FinCom, skipped (review H1)
+}
+
+// a company's link to FinCom as the cloud's answer to recorder_lines said (review H1): linked, or not linked (409) at
+type liveLinkSt struct {
+	linked bool
+	at     time.Time
 }
 
 type liveState struct {
@@ -133,6 +138,14 @@ type liveState struct {
 	queued   map[string]bool
 	sent     map[string]bool
 	b        map[string]*liveBSt
+	c        map[string]*liveCSt    // source C, per company key
+	off      map[string]*liveOffSt  // method|company key -> off by the 2 s rule
+	links    map[string]*liveLinkSt // company key -> linked or not (review H1)
+	qcount   map[string]int         // company GUID -> changes waiting (the cap per company, review H1)
+	high     map[string]int64       // company key -> the highest AlterID received from the add-on (source B's start, M5)
+	windows  map[string][][2]int64  // company key -> FinCom's clean posting windows (a0, a1] (M4)
+	busyAt   map[string]time.Time   // file -> when "busy" was last logged (review Low 14)
+	srcDir   string                 // the sync folder the owner's source (recorder-source.json) was read from
 	co       map[string]*liveCoSt
 	back     map[string]keepBack
 	gapSet   bool
@@ -154,7 +167,7 @@ var (
 // a restart, as far as the live recorder is concerned (the tests; the state reloads from disk at its next use)
 func liveResetState() {
 	live.mu.Lock()
-	live.dir = ""
+	live.dir, live.srcDir = "", ""
 	live.mu.Unlock()
 	liveSrc.Store("")
 }
@@ -174,6 +187,8 @@ func liveFresh() {
 	live.dir = d
 	live.files, live.pending, live.queue, live.queued = map[string]*liveFileSt{}, map[string]*livePending{}, nil, map[string]bool{}
 	live.sent, live.b, live.co, live.back = map[string]bool{}, map[string]*liveBSt{}, map[string]*liveCoSt{}, map[string]keepBack{}
+	live.c, live.off = map[string]*liveCSt{}, map[string]*liveOffSt{}
+	live.links, live.qcount, live.high, live.windows, live.busyAt = map[string]*liveLinkSt{}, map[string]int{}, map[string]int64{}, map[string][][2]int64{}, map[string]time.Time{}
 	live.touched, live.logged, live.gapSet, live.lastPost = map[string]map[string]bool{}, map[string]bool{}, false, time.Time{}
 	o := readObjFile(liveOffsetsFile())
 	for k, v := range obj(o["files"]) {
@@ -182,12 +197,23 @@ func liveFresh() {
 	}
 	for k, v := range obj(o["alterid"]) {
 		e := obj(v)
-		st := &liveBSt{company: str(e["company"]), guid: str(e["guid"]), after: toI64(e["after"]), seen: toI64(e["after"]), maxMaster: toI64(e["maxMaster"]),
-			off: e["off"] == true, offSecs: num(e["offSeconds"]), offAt: str(e["offAt"]), offWhy: str(e["offWhy"]), offBeat: str(e["offBeat"])}
+		st := &liveBSt{company: str(e["company"]), guid: str(e["guid"]), after: toI64(e["after"]), seen: toI64(e["after"]), maxMaster: toI64(e["maxMaster"])}
 		if t, err := time.Parse(time.RFC3339Nano, str(e["lastAsk"])); err == nil {
 			st.lastAsk = t
 		}
 		live.b[k] = st
+	}
+	for k, v := range obj(o["slices"]) {
+		e := obj(v)
+		st := &liveCSt{company: str(e["company"]), guid: str(e["guid"]), seen: toI64(e["seen"]), maxMaster: toI64(e["maxMaster"])}
+		if t, err := time.Parse(time.RFC3339Nano, str(e["lastAsk"])); err == nil {
+			st.lastAsk = t
+		}
+		live.c[k] = st
+	}
+	for k, v := range obj(o["off"]) {
+		e := obj(v)
+		live.off[k] = &liveOffSt{method: str(e["method"]), company: str(e["company"]), secs: num(e["seconds"]), at: str(e["at"]), why: str(e["why"]), beat: str(e["beat"])}
 	}
 	for _, id := range liveLoadSent() {
 		live.sent[id] = true
@@ -242,8 +268,10 @@ func liveSaveOffsets() {
 	files := M{}
 	for name, st := range live.files {
 		off := st.off
-		if p := live.pending[name]; p != nil && p.start < off {
-			off = p.start
+		for _, p := range live.pending {
+			if p.file == name && p.start < off {
+				off = p.start
+			}
 		}
 		for _, c := range live.queue {
 			if c.file == name && c.start < off {
@@ -263,24 +291,56 @@ func liveSaveOffsets() {
 		if after < st.after {
 			after = st.after
 		}
-		e := M{"company": st.company, "guid": st.guid, "after": after, "maxMaster": st.maxMaster, "off": st.off, "offSeconds": st.offSecs, "offAt": st.offAt,
-			"offWhy": st.offWhy, "offBeat": st.offBeat}
+		e := M{"company": st.company, "guid": st.guid, "after": after, "maxMaster": st.maxMaster}
 		if !st.lastAsk.IsZero() {
 			e["lastAsk"] = st.lastAsk.Format(time.RFC3339Nano)
 		}
 		bs[k] = e
 	}
+	cs := M{}
+	for k, st := range live.c {
+		e := M{"company": st.company, "guid": st.guid, "seen": st.seen, "maxMaster": st.maxMaster}
+		if !st.lastAsk.IsZero() {
+			e["lastAsk"] = st.lastAsk.Format(time.RFC3339Nano)
+		}
+		cs[k] = e
+	}
+	offs := M{}
+	for k, o := range live.off {
+		offs[k] = M{"method": o.method, "company": o.company, "seconds": o.secs, "at": o.at, "why": o.why, "beat": o.beat}
+	}
 	path := liveOffsetsFile()
 	live.mu.Unlock()
-	if err := saveFile(path, jsonText(M{"files": files, "alterid": bs, "at": nowS()})); err != nil {
+	if err := saveFile(path, jsonText(M{"files": files, "alterid": bs, "slices": cs, "off": offs, "at": nowS()})); err != nil {
 		writeLog("Recorder: " + path + " could not be written: " + err.Error())
 	}
 }
 
 // --- the source
-func validSource(s string) bool { return s == "addon" || s == "alterid" || s == "both" }
+// addon (the default), alterid (source B), slices (source C), both (the add-on and the slices: the owner, 04-Oct)
+func validSource(s string) bool {
+	return s == "addon" || s == "alterid" || s == "slices" || s == "both"
+}
+
+func liveSourceFile() string { return sp("recorder-source.json") }
+
+// the owner's choice, kept in sync\recorder-source.json (review M6: it survives a restart; only the owner changes it)
+func liveSrcLoad() {
+	live.mu.Lock()
+	d := syncDir()
+	if live.srcDir != d {
+		live.srcDir = d
+		v := strings.ToLower(strings.TrimSpace(str(readObjFile(liveSourceFile())["source"])))
+		if !validSource(v) {
+			v = ""
+		}
+		liveSrc.Store(v)
+	}
+	live.mu.Unlock()
+}
 
 func recorderSource() string {
+	liveSrcLoad()
 	if s, _ := liveSrc.Load().(string); validSource(s) {
 		return s
 	}
@@ -292,52 +352,70 @@ func recorderSource() string {
 
 func sourceHas(s string) bool {
 	r := recorderSource()
-	return r == s || r == "both"
+	return r == s || (r == "both" && (s == "addon" || s == "slices"))
 }
 
-// the beat's answer: recorderSource (the owner's per-computer choice in FinCom); absent or not one of the three: the
-// setting's value
+// the beat's answer: recorderSource (the owner's per-computer choice in FinCom). Review M6: only a present, valid value
+// counts; an answer without it (or with anything else) keeps the owner's last choice (kept on disk), which keeps the
+// setting's value until the owner first chooses
 func applyRecorderSource(j M) {
 	if j == nil {
 		return
 	}
 	s := strings.ToLower(strings.TrimSpace(str(j["recorderSource"])))
 	if !validSource(s) {
-		s = ""
+		return
 	}
-	liveBOnAgain(s)
+	liveSrcLoad()
+	liveOnAgain(s)
 	was, _ := liveSrc.Load().(string)
 	if was != s {
 		liveSrc.Store(s)
-		if s != "" {
-			writeLog("Recorder: FinCom sets where the changes come from on this computer: " + s)
-		} else if was != "" {
-			writeLog("Recorder: the changes come from " + recorderSource() + " (the setting) again")
+		if err := saveFile(liveSourceFile(), jsonText(M{"source": s, "at": nowS()})); err != nil {
+			writeLog("Recorder: " + liveSourceFile() + " could not be written: " + err.Error())
 		}
+		writeLog("Recorder: FinCom sets where the changes come from on this computer: " + s)
 	}
 }
 
 // --- source A: the daily files
 var reLiveFile = regexp.MustCompile(`^(.+)-(\d{8}|\d{4}-\d{2}-\d{2})\.txt$`)
 
-// the live add-on's daily files of the newest 7 days, oldest first (the trial's files, without a date, are not read);
-// none when the recorder folder fails its check (recorder.go)
+// the add-on's files to read, oldest first: (review M8) every .txt with a "-" in its name (the date part in any form:
+// a line is taken only when its company GUID starts the name, so the trial's <GUID>.txt gives nothing), dated by its
+// name (yyyymmdd or yyyy-mm-dd) or else by its last write; those of the last 7 days, and (review M7) those of the
+// last 31 days with bytes not read yet; and failed.txt, where the add-on puts a line it could not write. None when the
+// recorder folder fails its check (recorder.go)
 func liveFiles() []string {
 	d, ok := recorderDirChecked()
 	if !ok {
 		return nil
 	}
 	m, _ := filepath.Glob(filepath.Join(d, "*.txt"))
-	from, to := nowFn().AddDate(0, 0, -6).Format("20060102"), nowFn().AddDate(0, 0, 1).Format("20060102")
+	now := nowFn()
+	from, to, oldest := now.AddDate(0, 0, -6).Format("20060102"), now.AddDate(0, 0, 1).Format("20060102"), now.AddDate(0, 0, -31).Format("20060102")
 	type df struct{ day, path string }
 	var out []df
 	for _, f := range m {
-		g := reLiveFile.FindStringSubmatch(filepath.Base(f))
-		if g == nil {
+		n := filepath.Base(f)
+		fi, err := os.Lstat(f)
+		if err != nil || !fi.Mode().IsRegular() {
 			continue
 		}
-		day := strings.ReplaceAll(g[2], "-", "")
-		if day < from || day > to {
+		if strings.EqualFold(n, "failed.txt") {
+			if liveUnread(n, fi.Size()) {
+				out = append(out, df{to, f})
+			}
+			continue
+		}
+		if !strings.Contains(strings.TrimSuffix(n, ".txt"), "-") {
+			continue
+		}
+		day := fi.ModTime().Format("20060102")
+		if g := reLiveFile.FindStringSubmatch(n); g != nil {
+			day = strings.ReplaceAll(g[2], "-", "")
+		}
+		if day > to || day < oldest || (day < from && !liveUnread(n, fi.Size())) {
 			continue
 		}
 		out = append(out, df{day, f})
@@ -353,6 +431,15 @@ func liveFiles() []string {
 		o = append(o, x.path)
 	}
 	return o
+}
+
+// a file has bytes the reader has not taken (as its offsets say; a file never read has all of them)
+func liveUnread(name string, size int64) bool {
+	live.mu.Lock()
+	defer live.mu.Unlock()
+	liveFresh()
+	st := live.files[name]
+	return st == nil || size > st.off
 }
 
 // one turn of the reader (the 1 s watch): the new complete lines of each daily file; the changes found
@@ -376,13 +463,18 @@ func liveReadOnce() int {
 // the new lines of one daily file, read through readSharedFrom alone
 func liveReadFile(path string, posting bool) int {
 	name := filepath.Base(path)
+	// review M7: opened only when it grew (the add-on's file is touched as little as possible)
+	fi, err := os.Lstat(path)
+	if err != nil {
+		return 0
+	}
 	live.mu.Lock()
 	liveFresh()
-	if len(live.queue) >= liveQueueMax {
+	st := live.files[name]
+	if st != nil && st.enc != "" && fi.Size() == st.off {
 		live.mu.Unlock()
 		return 0
 	}
-	st := live.files[name]
 	if st == nil {
 		st = &liveFileSt{}
 		live.files[name] = st
@@ -398,6 +490,18 @@ func liveReadFile(path string, posting bool) int {
 	}
 	b, size, err := readSharedFrom(path, off, liveReadMax)
 	if err != nil {
+		if isSharingViolation(err) {
+			// review Low 14: a file held by another program is said once per file every 10 minutes
+			live.mu.Lock()
+			said := live.busyAt[name]
+			if time.Since(said) >= 10*time.Minute {
+				live.busyAt[name] = time.Now()
+			}
+			live.mu.Unlock()
+			if time.Since(said) >= 10*time.Minute {
+				writeLog("Recorder: " + name + " is held by another program; read later")
+			}
+		}
 		return 0
 	}
 	live.mu.Lock()
@@ -413,7 +517,7 @@ func liveReadFile(path string, posting bool) int {
 	if off > st.off {
 		st.off = off // past the byte order mark
 	}
-	lines, upto := liveLogical(b, off, enc == "utf16")
+	lines, upto := liveLogical(b, off, enc == "utf16", liveStarts(name))
 	if upto > st.off {
 		st.off = upto
 	}
@@ -423,10 +527,47 @@ func liveReadFile(path string, posting bool) int {
 		writeLog("Recorder: " + name + ": a megabyte without a complete line was passed over")
 	}
 	n := 0
+	held := map[string]string{}
 	for _, l := range lines {
-		n += liveTake(name, st.gen, l, posting)
+		k := liveTake(name, st.gen, l, posting, held)
+		if k < 0 {
+			// review H1: this company has its cap of changes waiting; the file is read on from this line once they go
+			if l.start < st.off {
+				st.off = l.start
+			}
+			break
+		}
+		n += k
 	}
 	return n
+}
+
+func liveQueueCap() int { return keepNum("RecorderQueueMax", 5000) }
+
+// review M3: whether an "FCR1|" line in a file may start a new line after one still open (its t1 not seen yet: a
+// narration over several lines): only a line of the file's own company (its GUID starts the file name; failed.txt:
+// the file the add-on meant) whose t0 is not before the open line's. Anything else is the narration's text
+func liveStarts(name string) func(open, next string) bool {
+	return func(open, next string) bool {
+		g := group(`\|cguid=([^|]*)\|`, next, 1)
+		if !liveOwnFile(name, next, g) {
+			return false
+		}
+		a, b := liveTime(group(`^FCR1\|ev=[^|]*\|t0=([^|]*)\|`, open, 1)), liveTime(group(`^FCR1\|ev=[^|]*\|t0=([^|]*)\|`, next, 1))
+		return a.IsZero() || b.IsZero() || !b.Before(a)
+	}
+}
+
+// a line's company GUID is its file's: the file name starts with "<GUID>-"; in failed.txt, the name of the file the add-on
+// meant (file=)
+func liveOwnFile(name, text, cguid string) bool {
+	if cguid == "" {
+		return false
+	}
+	if strings.EqualFold(name, "failed.txt") {
+		name = filepath.Base(strings.ReplaceAll(group(`\|file=([^|]*)\|`, text, 1), "\\", "/"))
+	}
+	return strings.HasPrefix(name, cguid+"-")
 }
 
 // the encoding of a daily file from its first bytes, and where its text starts
@@ -459,7 +600,7 @@ var reLiveDone = regexp.MustCompile(`\|t1=[^|\n]*(\|src=[A-Za-z]+)?\s*$`)
 // the complete logical lines in bytes read from off: physical lines end with a line feed (a partial last one waits); a
 // line not starting "FCR1|" continues the one before (a narration over several lines); the last logical line is
 // complete when it ends with its t1 (and src). upto: the offset up to which the lines are taken
-func liveLogical(b []byte, off int64, wide bool) ([]liveLogicalLine, int64) {
+func liveLogical(b []byte, off int64, wide bool, starts func(open, next string) bool) ([]liveLogicalLine, int64) {
 	var phys []liveLogicalLine
 	start := 0
 	step := 1
@@ -487,7 +628,7 @@ func liveLogical(b []byte, off int64, wide bool) ([]liveLogicalLine, int64) {
 	upto := off
 	var cur *liveLogicalLine
 	for _, p := range phys {
-		if strings.HasPrefix(p.text, "FCR1|") {
+		if strings.HasPrefix(p.text, "FCR1|") && (cur == nil || reLiveDone.MatchString(cur.text) || starts == nil || starts(cur.text, p.text)) {
 			if cur != nil {
 				out = append(out, *cur)
 				upto = cur.end
@@ -517,28 +658,77 @@ func utf8Valid(b []byte) bool { return strings.ToValidUTF8(string(b), "\uFFFD") 
 // the second half of each pair
 var livePair = map[string]string{"voucher_accept_pre": "voucher_accept_post", "ledger_accept_pre": "ledger_accept_post", "import_object": "after_import_object"}
 
-// one logical line: mapped, paired, queued (under live.mu)
-func liveTake(file string, gen int, ll liveLogicalLine, posting bool) int {
-	l, ok := parseRecorderLine(ll.text)
+// one logical line: mapped, paired, queued (under live.mu). -1: its company has its cap of changes waiting (the line is
+// read again later). held: the company GUIDs held, looked up once per read
+func liveTake(file string, gen int, ll liveLogicalLine, posting bool, held map[string]string) int {
+	text := ll.text
+	if strings.HasPrefix(text, "FCR1|ev=write_failed|") {
+		// review M7: a line the add-on could not write to its file, kept in failed.txt: the line itself is after "was="
+		meant := filepath.Base(strings.ReplaceAll(group(`\|file=([^|]*)\|`, text, 1), "\\", "/"))
+		i := strings.Index(text, "|was=")
+		if i < 0 || meant == "" {
+			return 0
+		}
+		text = text[i+len("|was="):]
+		if !strings.HasPrefix(meant, onlyField(text, "cguid")+"-") {
+			liveForeign(file, onlyField(text, "cguid"))
+			return 0
+		}
+	}
+	l, ok := parseRecorderLine(text)
 	if !ok {
 		return 0
 	}
+	// review M3: a line counts only in its own company's file, and when the company's GUID held here is its GUID
+	if !strings.EqualFold(file, "failed.txt") && !liveOwnFile(file, ll.text, l.CGUID) {
+		liveForeign(file, l.CGUID)
+		return 0
+	}
+	if _, had := held[l.CName]; !had {
+		held[l.CName] = heldGUID(l.CName)
+	}
+	if h := held[l.CName]; h != "" && !strings.HasPrefix(l.CGUID, "name-") && l.CGUID != "noguid" && h != l.CGUID {
+		liveForeign(file, l.CGUID)
+		return 0
+	}
+	if live.qcount[liveGUID(l.CGUID)] >= liveQueueCap() {
+		return -1
+	}
+	if a := toI64(onlyDigits(l.AID)); a > 0 {
+		if k := companyKey(strings.TrimSpace(l.CName)) + "|" + strings.TrimSpace(l.CGUID); a > live.high[k] {
+			live.high[k] = a
+		}
+	}
 	n := 0
-	if p := live.pending[file]; p != nil {
+	pk := l.CGUID // review Low 10: the pairs are kept per company (a save across midnight spans two daily files)
+	if p := live.pending[pk]; p != nil {
 		if livePair[p.l.Ev] == l.Ev {
-			delete(live.pending, file)
+			delete(live.pending, pk)
 			m, ev := liveMerge(p.l, l)
 			return liveEmit(m, ev, file, gen, p.start, ll.start, ll.end, posting)
 		}
-		delete(live.pending, file)
-		n += liveFlush(p, file, gen, posting)
+		delete(live.pending, pk)
+		n += liveFlush(p, posting)
 	}
 	if _, first := livePair[l.Ev]; first {
-		live.pending[file] = &livePending{l: l, start: ll.start, end: ll.end, seen: nowFn()}
+		live.pending[pk] = &livePending{l: l, file: file, gen: gen, start: ll.start, end: ll.end, seen: nowFn()}
 		return n
 	}
 	m, ev := liveSingle(l)
 	return n + liveEmit(m, ev, file, gen, ll.start, ll.start, ll.end, posting)
+}
+
+// one field of a line ("" when it is not there)
+func onlyField(text, key string) string { return group(`\|`+key+`=([^|]*)\|`, text, 1) }
+
+// a line naming another company than its file's: not taken; said once per file and GUID
+func liveForeign(file, cguid string) {
+	k := "foreign|" + file + "|" + cguid
+	if live.logged[k] {
+		return
+	}
+	live.logged[k] = true
+	writeLog("Recorder: " + file + ": a line naming another company (" + cguid + ") is not taken")
 }
 
 // a line on its own (no first half before it)
@@ -599,8 +789,8 @@ func liveMerge(pre, post recLine) (recLine, string) {
 
 // a first half whose second never came: a pre with a GUID is an alteration, an import an import; a pre without a GUID
 // (nothing saved) is dropped
-func liveFlush(p *livePending, file string, gen int, posting bool) int {
-	l := p.l
+func liveFlush(p *livePending, posting bool) int {
+	l, file, gen := p.l, p.file, p.gen
 	switch {
 	case l.Ev == "import_object":
 		ev := "imported"
@@ -628,14 +818,10 @@ func liveFlushStale() int {
 	liveFresh()
 	n := 0
 	wait := time.Duration(keepNum("RecorderPairSec", 10)) * time.Second
-	for file, p := range live.pending {
+	for k, p := range live.pending {
 		if nowFn().Sub(p.seen) >= wait {
-			delete(live.pending, file)
-			gen := 0
-			if st := live.files[file]; st != nil {
-				gen = st.gen
-			}
-			n += liveFlush(p, file, gen, false)
+			delete(live.pending, k)
+			n += liveFlush(p, false)
 		}
 	}
 	return n
@@ -672,8 +858,15 @@ func liveEmit(l recLine, ev, file string, gen int, start, lineStart, end int64, 
 		alterId: onlyDigits(l.AID), vchType: strings.TrimSpace(l.VType), vchNo: strings.TrimSpace(l.VNo), vchDate: normDate(l.VDate), name: strings.TrimSpace(l.Name),
 		parent: strings.TrimSpace(l.Parent), narr: l.Narr, user: strings.TrimSpace(l.User), source: "addon", lineId: id, file: file, start: start, saveMs: -1,
 		readAt: nowFn(), during: posting}
-	if strings.HasPrefix(c.companyGuid, "name-") {
-		c.companyGuid = "" // the add-on had no GUID for the company: its name only
+	c.companyGuid = liveGUID(c.companyGuid)
+	if r := []rune(c.narr); len(r) > liveNarrMax {
+		c.narr = string(r[:liveNarrMax]) // review Low 11
+	}
+	if liveNotLinkedLocked(c.key()) {
+		// review H1: a company FinCom says is not linked: its lines are counted and skipped (the offset moves on)
+		liveCo(c.company).skipped++
+		live.sent[id] = true
+		return 0
 	}
 	if !c.isLedger() {
 		if m := reLiveFid.FindStringSubmatch(c.narr); m != nil {
@@ -702,18 +895,46 @@ func liveEmit(l recLine, ev, file string, gen int, start, lineStart, end int64, 
 	return 1
 }
 
+// the company GUID a line names; "" when the add-on had none ("name-..." from the trial, "noguid" from the live add-on)
+func liveGUID(g string) string {
+	if strings.HasPrefix(g, "name-") || g == "noguid" {
+		return ""
+	}
+	return g
+}
+
 func onlyDigits(s string) string { return re(`\D`).ReplaceAllString(s, "") }
 
 // under live.mu
 func liveQueueAdd(c *change) {
 	live.queue = append(live.queue, c)
 	live.queued[c.lineId] = true
-	cs := live.co[c.company]
+	live.qcount[c.companyGuid]++
+	liveCo(c.company).read++
+}
+
+// under live.mu
+func liveCo(company string) *liveCoSt {
+	cs := live.co[company]
 	if cs == nil {
 		cs = &liveCoSt{}
-		live.co[c.company] = cs
+		live.co[company] = cs
 	}
-	cs.read++
+	return cs
+}
+
+// under live.mu: FinCom said this company is not linked, less than an hour ago
+func liveNotLinkedLocked(key string) bool {
+	l := live.links[key]
+	return l != nil && !l.linked && nowFn().Sub(l.at) < time.Hour
+}
+
+// the company's link as the cloud said it (the tests set it too)
+func liveLinkedMark(company, guid string, on bool) {
+	live.mu.Lock()
+	liveFresh()
+	live.links[company+"|"+guid] = &liveLinkSt{linked: on, at: nowFn()}
+	live.mu.Unlock()
 }
 
 // the changes waiting (copies; the tests)
@@ -731,13 +952,22 @@ func liveQueue() []change {
 // --- source B: the change numbers
 // after the light check (startpoint.go): when the source includes alterid and ALTVCHID is above what was received
 func liveAfterLightCheck(company string, port int) {
-	if !sourceHas("alterid") || postingGoing() {
+	if postingGoing() {
 		return
 	}
-	if n, err := liveSourceB(company, port); err != nil && !gaveWay(err) {
-		writeLog("Recorder (Tally's change list) for " + company + ": " + cutRunes(err.Error(), 200))
-	} else if n > 0 {
-		writeLog(fmt.Sprintf("Recorder (Tally's change list) for %s: %d change(s) found", company, n))
+	if sourceHas("alterid") {
+		if n, err := liveSourceB(company, port); err != nil && !gaveWay(err) {
+			writeLog("Recorder (Tally's change list) for " + company + ": " + cutRunes(err.Error(), 200))
+		} else if n > 0 {
+			writeLog(fmt.Sprintf("Recorder (Tally's change list) for %s: %d change(s) found", company, n))
+		}
+	}
+	if sourceHas("slices") {
+		if n, err := liveSourceC(company, port); err != nil && !gaveWay(err) {
+			writeLog("Recorder (month slices) for " + company + ": " + cutRunes(err.Error(), 200))
+		} else if n > 0 {
+			writeLog(fmt.Sprintf("Recorder (month slices) for %s: %d change(s) found", company, n))
+		}
 	}
 }
 
@@ -762,11 +992,24 @@ func liveSourceB(company string, port int) (int, error) {
 			live.mu.Unlock()
 			return 0, nil
 		}
+		// review M5: from the starting point, or the highest AlterID received since (the add-on's lines), whichever is higher
+		if h := live.high[key]; h > sp {
+			sp = h
+		}
 		st = &liveBSt{company: company, guid: guid, after: sp, seen: sp}
 		live.b[key] = st
 	}
+	liveSkipWindows(key, &st.seen)
 	above := st.seen
-	if st.off || v <= above {
+	if span := v - above; span > int64(keepNum("RecorderBMaxSpan", 500)) && !liveIsOffLocked("B", key) {
+		// review M5: too many to ask for in one list; left to the gap check and the Day Book
+		st.seen, st.after = v, v
+		live.mu.Unlock()
+		writeLog(fmt.Sprintf("Recorder (Tally's change list) for %s: too many changes for Source B (%d); the gap check and Day Book cover them", company, span))
+		liveSaveOffsets()
+		return 0, nil
+	}
+	if liveIsOffLocked("B", key) || v <= above {
 		live.mu.Unlock()
 		return 0, nil // off by the 2 s rule (the owner switches it back on), or nothing above what was received
 	}
@@ -782,9 +1025,9 @@ func liveSourceB(company string, port int) (int, error) {
 	live.mu.Unlock()
 	took := -1.0
 	tc := &TC{copier: true, yield: func() bool { return postingGoing() || importsInFlight.Load() > 0 }, timed: func(sec float64) { took = sec }}
-	raw, err := invokeTally(tc, port, keepListAboveRequest(company, above), 60)
-	if took > float64(keepNum("RecorderBLimitMs", 2000))/1000 {
-		liveBTurnOff(key, company, took)
+	raw, err := invokeTally(tc, port, keepListAboveRequest(company, above), keepNum("RecorderBTimeoutSec", 5)) // review M5: 5 s
+	if took > liveLimitSec() {
+		liveTurnOff("B", key, company, took)
 	}
 	if err != nil {
 		return 0, err
@@ -800,7 +1043,7 @@ func liveSourceB(company string, port int) (int, error) {
 	for _, m := range re(`<VOUCHER\b[\s\S]*?</VOUCHER>`).FindAllString(raw, -1) {
 		g := strings.TrimSpace(html.UnescapeString(group(`<GUID>([^<]*)</GUID>`, m, 1)))
 		a, mid := toI64(group(`<ALTERID>\s*(\d+)`, m, 1)), toI64(group(`<MASTERID>\s*(\d+)`, m, 1))
-		if g == "" || a <= above {
+		if g == "" || a <= above || liveInWindow(key, a) { // review M4: FinCom's own postings are not foreign changes
 			continue
 		}
 		es = append(es, ent{g, normDate(group(`<DATE>([^<]*)</DATE>`, m, 1)), mid, a})
@@ -847,6 +1090,55 @@ func liveSourceB(company string, port int) (int, error) {
 	return n, nil
 }
 
+// --- review M4: FinCom's own postings. A posting window in which Tally's ALTVCHID rose by exactly the entries the job
+// created (nobody else changed anything meanwhile) is FinCom's own: sources B and C move past it and skip its AlterIDs
+func liveAfterWindow(company, guid string, a0, a1 int64, created int) {
+	if a1 <= a0 || a1-a0 != int64(created) {
+		return
+	}
+	key := companyKey(company) + "|" + guid
+	live.mu.Lock()
+	liveFresh()
+	w := append(live.windows[key], [2]int64{a0, a1})
+	if len(w) > 50 {
+		w = w[len(w)-50:]
+	}
+	live.windows[key] = w
+	if st := live.b[key]; st != nil && st.seen >= a0 && st.seen < a1 {
+		st.seen = a1
+	}
+	if st := live.c[key]; st != nil && st.round == nil && st.seen >= a0 && st.seen < a1 {
+		st.seen = a1
+	}
+	if a0 >= live.high[key] {
+		live.high[key] = a1 // source B's first start (review M5) begins after it too
+	}
+	live.mu.Unlock()
+	liveSaveOffsets()
+}
+
+// under live.mu: seen moved past the clean windows that start at or below it
+func liveSkipWindows(key string, seen *int64) {
+	for moved := true; moved; {
+		moved = false
+		for _, w := range live.windows[key] {
+			if *seen >= w[0] && *seen < w[1] {
+				*seen, moved = w[1], true
+			}
+		}
+	}
+}
+
+// under live.mu: an AlterID inside one of FinCom's clean posting windows
+func liveInWindow(key string, a int64) bool {
+	for _, w := range live.windows[key] {
+		if a > w[0] && a <= w[1] {
+			return true
+		}
+	}
+	return false
+}
+
 // --- the body fetch
 // FinComVoucherByMaster: the vouchers with these MasterIDs (at most 50), the date's period (one day), the fields the
 // cloud's day parse reads (parse.js parseDay), nothing Tally works out
@@ -888,7 +1180,11 @@ func liveBodySec() int { return keepNum("RecorderBodySec", 20) }
 
 // the vouchers Tally gives for these MasterIDs on that date: MasterID -> the voucher's XML (<VOUCHER ...>...</VOUCHER>)
 func fetchVouchersByMaster(tc *TC, company string, port int, date string, mids []string) (map[string]string, error) {
-	raw, err := invokeTally(tc, port, voucherByMasterRequest(company, date, mids), liveBodySec())
+	return fetchVouchersByMasterIn(tc, company, port, date, mids, liveBodySec())
+}
+
+func fetchVouchersByMasterIn(tc *TC, company string, port int, date string, mids []string, sec int) (map[string]string, error) {
+	raw, err := invokeTally(tc, port, voucherByMasterRequest(company, date, mids), sec)
 	if err != nil {
 		return nil, err
 	}
@@ -941,14 +1237,39 @@ func voucherLedgerNames(x string) []string {
 
 // the bodies of these changes (all of one company), asked of Tally as a background read: it gives way to a posting
 // (those not asked yet stay so), 20 s in all at most; a failure is logged and the changes go without a body
-func liveFetchBodies(need []*change) {
+// sp: the company's starting point (0: not known): review M3, a body is used only when it is the line's entry (its
+// GUID) and its ALTERID is above the starting point
+func liveFetchBodies(need []*change, sp int64) {
 	if len(need) == 0 {
 		return
 	}
-	company := need[0].company
+	company, key := need[0].company, need[0].key()
 	deadline := time.Now().Add(time.Duration(liveBodySec()) * time.Second)
+	left := func() int { return maxI(2, int(time.Until(deadline).Seconds()+0.999)) } // review Low 12: the 20 s in all
+	// review Low 9: a reason that passes (reading stopped, Tally left alone after a timeout) is not a failure: asked
+	// again, 3 times at most
+	passing := func(err error) bool {
+		return err != nil && (errors.Is(err, errBackoff) || re(`(?i)reading .*stopped|left alone|the small check|not answer`).MatchString(err.Error()))
+	}
+	again := func(cs []*change) bool {
+		live.mu.Lock()
+		defer live.mu.Unlock()
+		for _, c := range cs {
+			c.tries++
+			if c.tries >= 3 {
+				return false
+			}
+		}
+		return true
+	}
 	yield := func() bool { return postingGoing() || importsInFlight.Load() > 0 }
-	tc := &TC{copier: true, yield: yield}
+	slow := false
+	tc := &TC{copier: true, yield: yield, timed: func(sec float64) {
+		if sec > liveLimitSec() && !slow {
+			slow = true
+			liveTurnOff("bodies", key, company, sec)
+		}
+	}}
 	failed := func(cs []*change, why string) {
 		live.mu.Lock()
 		for _, c := range cs {
@@ -993,9 +1314,16 @@ func liveFetchBodies(need []*change) {
 			for _, c := range part {
 				mids = append(mids, c.masterId)
 			}
-			got, err := fetchVouchersByMaster(tc, company, port, d, mids)
+			if slow {
+				failed(part, "the body fetch is off for this company (the 2 s rule)")
+				continue
+			}
+			got, err := fetchVouchersByMasterIn(tc, company, port, d, mids, left())
 			if gaveWay(err) {
 				return // a posting goes first: asked again after it
+			}
+			if passing(err) && again(part) {
+				return
 			}
 			if err != nil {
 				failed(part, err.Error())
@@ -1005,7 +1333,8 @@ func liveFetchBodies(need []*change) {
 			live.mu.Lock()
 			for _, c := range part {
 				x := got[c.masterId]
-				if x == "" {
+				xg := strings.TrimSpace(html.UnescapeString(group(`<GUID>([^<]*)</GUID>`, x, 1)))
+				if x == "" || (c.guid != "" && xg != c.guid) || (sp > 0 && toI64(group(`<ALTERID>\s*(\d+)`, x, 1)) <= sp) {
 					missing = append(missing, c)
 					continue
 				}
@@ -1031,13 +1360,13 @@ func liveFetchBodies(need []*change) {
 			}
 			live.mu.Unlock()
 			if len(missing) > 0 {
-				failed(missing, "Tally gave no entry with that MasterID on that date")
+				failed(missing, "Tally gave no entry with that MasterID on that date above the starting point, or another entry")
 			}
 		}
 	}
 	for _, c := range ledgers {
-		if time.Now().After(deadline) {
-			failed([]*change{c}, "20 s passed")
+		if time.Now().After(deadline) || slow {
+			failed([]*change{c}, "20 s passed, or the body fetch is off")
 			continue
 		}
 		x, err := fetchLedgerByMaster(tc, company, port, toI64(c.masterId))
@@ -1108,8 +1437,51 @@ func liveRecorderLinesBody(company, guid string, group []*change) M {
 func liveUploadOnce() int {
 	liveUpMu.Lock()
 	defer liveUpMu.Unlock()
+	for i := 0; i < 8; i++ {
+		n, again := liveUploadStep()
+		if !again {
+			return n
+		}
+	}
+	return 0
+}
+
+// under live.mu: a company not linked: its waiting lines leave the queue, counted (review H1)
+func liveDropCompany(key string) int {
+	n := 0
+	q := live.queue[:0]
+	for _, c := range live.queue {
+		if c.key() == key {
+			n++
+			delete(live.queued, c.lineId)
+			live.qcount[c.companyGuid]--
+			liveCo(c.company).skipped++
+			continue
+		}
+		q = append(q, c)
+	}
+	for i := len(q); i < len(live.queue); i++ {
+		live.queue[i] = nil
+	}
+	live.queue = q
+	return n
+}
+
+// review H1: FinCom said the company is not linked (409 notLinked): its lines are skipped for an hour, then asked again
+func liveNotLinked(key, company string) {
+	live.mu.Lock()
+	live.links[key] = &liveLinkSt{linked: false, at: nowFn()}
+	n := liveDropCompany(key)
+	delete(live.back, key)
+	live.mu.Unlock()
+	writeLog(fmt.Sprintf("Recorder: %s is not linked to a FinCom client: its lines are skipped (%d now; nothing of it is asked of Tally or sent; asked again in an hour)", company, n))
+	liveSaveOffsets()
+}
+
+// one step: a group sent (its lines), or 0; again: try the next step at once (a company found not linked, or linked)
+func liveUploadStep() (int, bool) {
 	if !cloudOn() || importsInFlight.Load() > 0 {
-		return 0
+		return 0, false
 	}
 	posting := postingGoing()
 	gap := importGaps.Load()
@@ -1119,23 +1491,51 @@ func liveUploadOnce() int {
 		live.lastPost = time.Now()
 		if live.gapSet && live.gap == gap {
 			live.mu.Unlock()
-			return 0 // one group per gap between imports
+			return 0, false // one group per gap between imports
 		}
 	} else {
 		live.gapSet = false
 	}
 	now := nowFn()
-	key := ""
+	key, head := "", (*change)(nil)
 	for _, c := range live.queue {
 		if b, had := live.back[c.key()]; had && now.Before(b.until) {
 			continue
 		}
-		key = c.key()
+		key, head = c.key(), c
 		break
 	}
 	if key == "" {
 		live.mu.Unlock()
-		return 0
+		return 0, false
+	}
+	if liveNotLinkedLocked(key) {
+		liveDropCompany(key)
+		live.mu.Unlock()
+		return 0, true
+	}
+	if l := live.links[key]; l == nil || !l.linked {
+		// review H1: is the company linked? An empty recorder_lines call (nothing of the company goes) before any body
+		// is asked of Tally or any line sent
+		company, guid := head.company, head.companyGuid
+		live.mu.Unlock()
+		r := invokeCloud(M{"kind": "recorder_lines", "company": company, "company_guid": guid, "lines": []any{}}, 30)
+		switch {
+		case r.code == 409 && r.json != nil && truthy(r.json["notLinked"]):
+			liveNotLinked(key, company)
+			return 0, true
+		case r.code == 200:
+			liveLinkedMark(company, guid, true)
+			return 0, true
+		}
+		live.mu.Lock()
+		b := live.back[key]
+		b.n++
+		b.until = nowFn().Add(time.Duration(math.Min(1800, float64(keepNum("RecorderRetrySec", 30))*math.Pow(2, float64(b.n)))) * time.Second)
+		live.back[key] = b
+		liveCo(company).lastError = or(r.err, fmt.Sprint("HTTP ", r.code))
+		live.mu.Unlock()
+		return 0, false
 	}
 	var group []*change
 	size := 600
@@ -1151,14 +1551,31 @@ func liveUploadOnce() int {
 		size += s
 	}
 	var need []*change
+	bodiesOff := liveIsOffLocked("bodies", key)
 	for _, c := range group {
 		if c.needsBody() {
+			if bodiesOff {
+				c.bodyTried = true // the body fetch is off for this company (the 2 s rule): the line goes without
+				continue
+			}
 			need = append(need, c)
 		}
 	}
 	live.mu.Unlock()
 	if len(need) > 0 && !posting {
-		liveFetchBodies(need)
+		// review M3: nothing is asked for an entry whose AlterID is not above the company's starting point
+		sp, _ := startPointOf(need[0].company)
+		var ask []*change
+		live.mu.Lock()
+		for _, c := range need {
+			if a := toI64(c.alterId); sp > 0 && a > 0 && a <= sp {
+				c.bodyTried = true
+				continue
+			}
+			ask = append(ask, c)
+		}
+		live.mu.Unlock()
+		liveFetchBodies(ask, sp)
 	}
 	// a change whose body is still to be asked holds the group there (the order is kept)
 	live.mu.Lock()
@@ -1179,12 +1596,16 @@ func liveUploadOnce() int {
 	body := liveRecorderLinesBody(company, guid, group)
 	live.mu.Unlock()
 	if len(group) == 0 || importsInFlight.Load() > 0 {
-		return 0
+		return 0, false
 	}
 	if liveSendHook != nil {
 		liveSendHook()
 	}
 	r := invokeCloud(body, 30)
+	if r.code == 409 && r.json != nil && truthy(r.json["notLinked"]) {
+		liveNotLinked(key, company)
+		return 0, true
+	}
 	ok := r.code == 200 && r.json != nil && (r.json["results"] != nil || r.json["queued"] != nil)
 	live.mu.Lock()
 	cs := live.co[company]
@@ -1208,7 +1629,7 @@ func liveUploadOnce() int {
 		if first {
 			writeLog(fmt.Sprintf("Recorder: %d line(s) of %s not taken by FinCom (%s); tried again in %ds, nothing is lost", len(group), company, cutRunes(why, 160), int(w)))
 		}
-		return 0
+		return 0, false
 	}
 	sentIDs := make([]string, 0, len(group))
 	gone := map[*change]bool{}
@@ -1216,6 +1637,7 @@ func liveUploadOnce() int {
 		gone[c] = true
 		live.sent[c.lineId] = true
 		delete(live.queued, c.lineId)
+		live.qcount[c.companyGuid]--
 		sentIDs = append(sentIDs, c.lineId)
 	}
 	q := live.queue[:0]
@@ -1237,7 +1659,7 @@ func liveUploadOnce() int {
 	live.mu.Unlock()
 	liveSaveSent(sentIDs)
 	liveSaveOffsets()
-	return len(group)
+	return len(group), false
 }
 
 // --- the touched-ledger hook: the ledgers named by lines read during a posting, handed over once after the last job
@@ -1289,11 +1711,11 @@ func liveTouchedTick() {
 // --- the beat: per company, lines read and sent (this run), waiting, the oldest waiting, the source and the cloud's
 // last refusal
 func liveBeat() M {
+	src := recorderSource() // before live.mu: it takes it to read the owner's choice
 	live.mu.Lock()
 	defer live.mu.Unlock()
 	liveFresh()
 	out := M{}
-	src := recorderSource()
 	waiting, oldest := map[string]int{}, map[string]time.Time{}
 	for _, c := range live.queue {
 		waiting[c.company]++
@@ -1303,12 +1725,32 @@ func liveBeat() M {
 	}
 	for co, cs := range live.co {
 		e := M{"read": cs.read, "sent": cs.sent, "waiting": waiting[co], "oldestWaiting": "", "source": src, "lastSent": cs.last, "lastError": cs.lastError}
+		if cs.skipped > 0 {
+			e["notLinked"], e["skipped"] = true, cs.skipped
+			e["words"] = fmt.Sprintf("not linked: %d lines skipped", cs.skipped)
+		}
 		if o, had := oldest[co]; had {
 			e["oldestWaiting"] = o.Format("2006-01-02T15:04:05")
 		}
 		out[co] = e
 	}
 	return out
+}
+
+// review M8: the add-on's file names the reader has seen in the last 31 days (at most 50), for the beat
+func liveFilesSeen() []any {
+	live.mu.Lock()
+	defer live.mu.Unlock()
+	liveFresh()
+	var ns []string
+	for n := range live.files {
+		ns = append(ns, n)
+	}
+	sort.Strings(ns)
+	if len(ns) > 50 {
+		ns = ns[len(ns)-50:]
+	}
+	return toAny(ns)
 }
 
 // --- the loop: the uploader and the hook, every quarter second while the bridge runs (the reader is the 1 s watch)
@@ -1326,51 +1768,4 @@ func recorderLiveLoop() {
 		}()
 		sleepOrStop(250 * time.Millisecond)
 	}
-}
-
-// the owner's rule: a list that took more than 2 s turns source B off on this computer for that company, until the
-// owner switches the source (liveBOnAgain)
-func liveBTurnOff(key, company string, took float64) {
-	why := fmt.Sprintf("Tally took %.1f s for the changed-entries list (limit %g s)", took, float64(keepNum("RecorderBLimitMs", 2000))/1000)
-	live.mu.Lock()
-	if st := live.b[key]; st != nil {
-		st.off, st.offSecs, st.offAt, st.offWhy = true, math.Round(took*10)/10, nowFn().Format("2006-01-02T15:04:05"), why
-		st.offBeat, _ = liveSrc.Load().(string)
-	}
-	live.mu.Unlock()
-	writeLog("Source B off: " + why + " (" + company + "; on again when the owner switches where the changes come from)")
-	liveSaveOffsets()
-}
-
-// the beat's source value: a value other than the one in force when source B stopped turns it on again
-func liveBOnAgain(s string) {
-	live.mu.Lock()
-	liveFresh()
-	var back []string
-	for _, st := range live.b {
-		if st.off && st.offBeat != s {
-			st.off, st.offSecs, st.offAt, st.offWhy, st.offBeat = false, 0, "", "", ""
-			st.lastAsk = time.Time{}
-			back = append(back, st.company)
-		}
-	}
-	live.mu.Unlock()
-	for _, c := range back {
-		writeLog("Source B on again for " + c + ": the owner switched where the changes come from (" + or(s, "the setting") + ")")
-	}
-	if len(back) > 0 {
-		liveSaveOffsets()
-	}
-}
-
-// the beat: per company, whether source B is off by the 2 s rule {off, seconds, at, why}
-func liveBeatB() M {
-	live.mu.Lock()
-	defer live.mu.Unlock()
-	liveFresh()
-	out := M{}
-	for _, st := range live.b {
-		out[st.company] = M{"off": st.off, "seconds": st.offSecs, "at": st.offAt, "why": st.offWhy}
-	}
-	return out
 }

@@ -175,4 +175,25 @@ Verdict:
 - S4 should be fixed before 2.2.0 reaches computers other than the pilot.
 - S7 to S9 may wait.
 
+
+## Status after the fixes (04-Oct-2026, by the builder; details in the code review's status section)
+
+- S1 (HIGH): Fixed with code review 1 (TestUnlinkedCompanyNoBodyNoStall, TestLiveQueueCapPerCompany): nothing of a
+  company leaves the computer before the cloud has said it is linked (an empty recorder_lines call); not linked: its
+  lines are skipped for an hour, counted in the beat; the cap is per company.
+- S2 (MEDIUM): Fixed with code review 3 (TestForgedLineDropped). The folder ACL ("Users may add files") stays by design:
+  Tally runs as the user and must append; a planted file's lines are taken only for the company whose GUID starts its
+  name and is held, and only entries above the starting point are asked of Tally.
+- S3 (HIGH): Fixed with code review 2 (TestRollbackVerifiesKeptVersion, TestRecorderRollbackAfterSetup).
+- S4 (MEDIUM): Fixed in the bridge (TestRecorderAutoUpdateInBeat): the beat carries `autoUpdate` (false while
+  NoAutoUpdate is set) and `rolledBack` (update-undone.json); an answer with `autoUpdateOn: true` (top-level or in
+  release) clears NoAutoUpdate, logged. The cloud side (the owner's action, the field in the answer) is the
+  coordinator's. Left: hiding the tray item behind a cloud switch.
+- S5 (MEDIUM): Fixed with code review 6.
+- S6 (MEDIUM): Fixed with code review 7.
+- S7 (LOW): Fixed in words: docs/recorder-live-sheet.txt says nothing removes the files and how an administrator may
+  delete daily files older than 31 days by hand once nothing waits.
+- S8 (LOW): Fixed with code review 17 ("noguid", never a name in a path).
+- S9 (LOW): Fixed with code review 14.
+
 Range: bdfe261..3fbc965

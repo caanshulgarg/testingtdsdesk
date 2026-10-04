@@ -409,6 +409,8 @@ func installCmd(args []string) int {
 		_ = k.SetStringValue("Owner", o.name)
 		_ = k.SetStringValue("OwnerSid", o.sid)
 		_ = k.SetStringValue("Mode", mode)
+		was, _, _ := k.GetStringValue("Version")
+		notePreviousFromSetup(filepath.Dir(exe), was) // 2.2.0: the program the setup replaced, for the rollback
 		_ = k.SetStringValue("Version", BridgeVersion)
 		k.Close()
 	}
@@ -593,7 +595,7 @@ func retireOldShortcuts(o ownerInfo) {
 		}
 	}
 	dirs := map[string]string{
-		filepath.Join(o.profile, `Desktop`): "Desktop",
+		filepath.Join(o.profile, `Desktop`):                                                       "Desktop",
 		filepath.Join(o.profile, `AppData\Roaming\Microsoft\Windows\Start Menu\Programs`):         "Start menu",
 		filepath.Join(o.profile, `AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup`): "Startup",
 	}

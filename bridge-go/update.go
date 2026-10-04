@@ -251,8 +251,20 @@ var (
 
 func previousExe(dir string) string { return filepath.Join(dir, "FinComBridge.previous.exe") }
 
-// after an update ran well (updateHealth): FinComBridge.old.exe kept as FinComBridge.previous.exe
+// the SHA-256 of a file as hex ("" when it cannot be read)
+func fileSHA256(f string) string {
+	b, err := os.ReadFile(f)
+	if err != nil {
+		return ""
+	}
+	h := sha256.Sum256(b)
+	return hex.EncodeToString(h[:])
+}
+
+// after an update ran well (updateHealth): FinComBridge.old.exe kept as FinComBridge.previous.exe, with the SHA-256 the
+// update recorded while that program was the running one (update-pending.json, review H2)
 func keepPreviousVersion(dir, from string) {
+	sum := str(readObjFile(filepath.Join(dir, "update-pending.json"))["sha256"])
 	old := filepath.Join(dir, "FinComBridge.old.exe")
 	if !exists(old) {
 		return
@@ -264,7 +276,7 @@ func keepPreviousVersion(dir, from string) {
 		writeLog("Update: the previous version could not be kept for a rollback: " + err.Error())
 		return
 	}
-	_ = saveFile(filepath.Join(dir, "previous-version.json"), jsonText(M{"version": from, "at": nowS()}))
+	_ = saveFile(filepath.Join(dir, "previous-version.json"), jsonText(M{"version": from, "at": nowS(), "sha256": sum}))
 	writeLog("Update: the previous version (" + or(from, "not known") + ") is kept for \"Roll back to the previous version\"")
 }
 
@@ -276,7 +288,18 @@ func rollbackPreview() (M, error) {
 	if exe == "" || err != nil || !fi.Mode().IsRegular() {
 		return nil, errors.New("No previous version is kept on this computer (one is kept from the next update on).")
 	}
-	v := str(readObjFile(filepath.Join(dir, "previous-version.json"))["version"])
+	pv := readObjFile(filepath.Join(dir, "previous-version.json"))
+	v := str(pv["version"])
+	// review H2: the kept program must be the one recorded when it was kept (its SHA-256), and signed when updates must be
+	if want := str(pv["sha256"]); want == "" || fileSHA256(previousExe(dir)) != want {
+		return nil, errors.New("The kept previous version has changed since it was kept (or was kept without its fingerprint), so it is not put back. Nothing was changed. Run the setup of the version you want instead.")
+	}
+	if cfgB("RequireSignedUpdates") {
+		b, _ := os.ReadFile(previousExe(dir))
+		if err := checkCodeSignature(b); err != nil {
+			return nil, errors.New("The kept previous version is not signed by FinCom (" + err.Error() + "), so it is not put back. Nothing was changed.")
+		}
+	}
 	return M{"ok": true, "version": v, "confirm": "Roll FinCom Bridge back from " + BridgeVersion + " to " + or(v, "the previous version") + "?\n\n" +
 		"The bridge stops, the previous program is put back and starts in a few seconds. Automatic updates are turned off on this computer until FinCom support turns them on again. " +
 		"A posting going on resumes after the restart; nothing is posted twice."}, nil
@@ -289,20 +312,60 @@ func rollBackBridge() (M, error) {
 	}
 	exe := exePathFn()
 	dir := filepath.Dir(exe)
-	bad := filepath.Join(dir, "FinComBridge.rolledback.exe")
-	_ = os.Remove(bad)
-	if err := os.Rename(exe, bad); err != nil {
+	// review H2: set up as an update: the running program goes aside as FinComBridge.old.exe with update-pending.json,
+	// so a previous version that does not start is undone by undoFailedUpdate (three starts) and this one comes back;
+	// a copy stays as FinComBridge.rolledback.exe
+	old := filepath.Join(dir, "FinComBridge.old.exe")
+	cur := fileSHA256(exe)
+	_ = os.Remove(old)
+	if err := os.Rename(exe, old); err != nil {
 		return nil, errors.New("The program could not be moved aside: " + err.Error())
 	}
 	if err := os.Rename(previousExe(dir), exe); err != nil {
-		_ = os.Rename(bad, exe)
+		_ = os.Rename(old, exe)
 		return nil, errors.New("The previous version could not be put back: " + err.Error())
 	}
+	if b, err := os.ReadFile(old); err == nil {
+		_ = os.WriteFile(filepath.Join(dir, "FinComBridge.rolledback.exe"), b, 0o755)
+	}
+	_ = saveFile(filepath.Join(dir, "update-pending.json"), jsonText(M{"from": BridgeVersion, "at": nowS(), "starts": 0, "rollback": true, "sha256": cur}))
 	setCfg("NoAutoUpdate", true)
 	saveConfig()
-	_ = os.Remove(filepath.Join(dir, "update-pending.json"))
 	_ = saveFile(filepath.Join(dir, "update-undone.json"), jsonText(M{"version": BridgeVersion, "back": str(pv["version"]), "at": nowS(), "by": "tray"}))
 	writeLog("Rolled back from " + BridgeVersion + " to " + or(str(pv["version"]), "the previous version") + " from the tray icon; automatic updates are off on this computer (NoAutoUpdate); starting again")
 	go rollbackRestart()
 	return M{"ok": true, "version": str(pv["version"])}, nil
+}
+
+// 2.2.0: after an install by the setup over an earlier version, the program it replaced (the setup copied it to
+// FinComBridge.previous.exe) is named by the version the registry held before this install; the same version installed
+// again is not a previous version (the copy is removed)
+func notePreviousFromSetup(dir, oldVersion string) {
+	prev := previousExe(dir)
+	if !exists(prev) {
+		return
+	}
+	if oldVersion != "" && oldVersion != BridgeVersion {
+		// review H2: its SHA-256 now, while it is the copy of the program that ran until this install
+		_ = saveFile(filepath.Join(dir, "previous-version.json"), jsonText(M{"version": oldVersion, "at": nowS(), "by": "setup", "sha256": fileSHA256(prev)}))
+		return
+	}
+	// the same version installed again, or no version known: not a previous version
+	_ = os.Remove(prev)
+	_ = os.Remove(filepath.Join(dir, "previous-version.json"))
+}
+
+// --- review S4: whether automatic updates are on, and the last rollback, go in the beat; FinCom's answer (the owner's
+// action, autoUpdateOn: true, top-level or in release) turns them on again
+func autoUpdateBeat() (bool, M) {
+	return !cfgB("NoAutoUpdate"), readObjFile(filepath.Join(filepath.Dir(exePathFn()), "update-undone.json"))
+}
+
+func applyAutoUpdateOn(j M) {
+	if j == nil || !(truthy(j["autoUpdateOn"]) || truthy(obj(j["release"])["autoUpdateOn"])) || !cfgB("NoAutoUpdate") {
+		return
+	}
+	setCfg("NoAutoUpdate", false)
+	saveConfig()
+	writeLog("Automatic updates turned on again by FinCom (the owner's choice on the Tally page)")
 }

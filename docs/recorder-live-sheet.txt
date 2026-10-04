@@ -15,7 +15,9 @@ While it is loaded, the live add-on writes for every company you open in Tally (
 For each save, alteration, deletion, cancellation or import, it adds one short line (the heads only: the entry's
 type, number, date, narration and Tally's ids; for a ledger, its name and group; the Tally user name) to a daily file
     C:\ProgramData\FinCom\recorder\<company GUID>-<yyyymmdd>.txt
-That folder is readable by every Windows user on this PC.
+That folder is readable by every Windows user on this PC, and nothing removes the files: the bridge never deletes
+them. When FinCom's Tally page shows nothing waiting for this computer, daily files older than 31 days may be deleted
+by hand (an administrator, in File Explorer); the newest 31 days are kept.
 It does nothing else inside Tally: no message, no menu, no network, and it never makes a save wait. If its file is
 held by another program, the line goes to failed.txt or is dropped; the save goes on.
 
@@ -42,7 +44,10 @@ PART 1  -  LOAD THE LIVE ADD-ON
 4. Accept the screen (Ctrl+A, or Yes to "Accept?").
 5. Back on TDLs & Add-Ons, the file is listed and its status says  Loaded.
    If it says anything else (an error): do PART 2 to unload it, then tray icon > "Send install log to FinCom".
-6. Check: save one entry in any company (for example a Payment of Rs 1). Within a minute, FinCom's Tally page shows
+6. Check the file name: save one entry in any company, then open C:\ProgramData\FinCom\recorder in File Explorer
+   (only look). A file changed just now must end in today's date as yyyymmdd, for example ...-20261006.txt. If it ends
+   otherwise (for example ...-6-Oct-2026.txt), the bridge still reads it, but tell FinCom what it looks like.
+7. Check: save one entry in any company (for example a Payment of Rs 1). Within a minute, FinCom's Tally page shows
    lines received from this computer. (Changes come from: the add-on.)
 
 

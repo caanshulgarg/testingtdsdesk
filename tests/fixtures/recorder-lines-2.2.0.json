@@ -1,10 +1,10 @@
 {
   "bridge": {
-    "computer": "vm",
-    "id": "go-c7bdd73fe236",
+    "computer": "NWS144",
+    "id": "go-fixture000000",
     "mode": "main",
-    "runMode": "window",
-    "user": "",
+    "runMode": "service",
+    "user": "owner",
     "version": "2.2.0"
   },
   "company": "ZZ TEST",

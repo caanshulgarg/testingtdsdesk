@@ -373,6 +373,11 @@ Function PutFiles
   ; the program, if a bridge did not stop: moved aside (Windows allows that for a running program) so the new one fits
   Delete "$INSTDIR\FinComBridge.setup-old.exe"
   ${If} ${FileExists} "$INSTDIR\FinComBridge.exe"
+    ; 2.2.0: the program being replaced is kept for "Roll back to the previous version" (the install step names its
+    ; version, update.go notePreviousFromSetup); a failed copy only means no rollback
+    Delete "$INSTDIR\FinComBridge.previous.exe"
+    Delete "$INSTDIR\previous-version.json"
+    CopyFiles /SILENT "$INSTDIR\FinComBridge.exe" "$INSTDIR\FinComBridge.previous.exe"
     ClearErrors
     Rename "$INSTDIR\FinComBridge.exe" "$INSTDIR\FinComBridge.setup-old.exe"
     ${If} ${Errors}
@@ -717,6 +722,9 @@ Section "Uninstall"
   Delete "$INSTDIR\FinComBridge.old.exe"
   Delete "$INSTDIR\FinComBridge.new.exe"
   Delete "$INSTDIR\FinComBridge.failed.exe"
+  Delete "$INSTDIR\FinComBridge.previous.exe"
+  Delete "$INSTDIR\FinComBridge.rolledback.exe"
+  Delete "$INSTDIR\previous-version.json"
   Delete "$INSTDIR\FinComBridge.setup-old.exe"
   Delete "$INSTDIR\update-pending.json"
   Delete "$INSTDIR\update-undone.json"

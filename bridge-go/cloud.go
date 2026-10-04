@@ -706,9 +706,10 @@ func beatOnce() {
 			return
 		}
 		shadowOK.Store(true)
-		applyReadControl(r.json)   // FinCom's stop or resume of reading on this computer
-		applyRelease(r.json)       // the version this computer may take (update.go)
-		applyCloudSettings(r.json) // round 15: PostOnly and the batch sizes set in FinCom
+		applyReadControl(r.json)    // FinCom's stop or resume of reading on this computer
+		applyRelease(r.json)        // the version this computer may take (update.go)
+		applyCloudSettings(r.json)  // round 15: PostOnly and the batch sizes set in FinCom
+		applyAutoUpdateOn(r.json)   // review S4: the owner turns automatic updates on again
 		applyRecorderSource(r.json) // 2.2.0: where the recorder's changes come from (the owner's choice; absent: the setting)
 		// made the main bridge on FinCom's Tally page: this test bridge switches itself to main, once
 		if testMode() && truthy(r.json["makeMain"]) && makeMainSeen.CompareAndSwap(false, true) {
@@ -878,6 +879,7 @@ func beatMissedSince() time.Time { _, f := beatTimes(); return f }
 // the heartbeat (2.1.3): also whether background reading is paused, since when Tally has not answered, the hour of the
 // nightly catch-up, the last read of each company, and that this bridge reads Tally only after an event
 func beatBody(tally bool, tstate, tsince string, open, ports, cos []any) M {
+	au, rb := autoUpdateBeat()
 	return M{"reqs": beatReqs(), "readStopped": readStopAny(), "kind": "beat", "tally": tally, "tallyState": tstate, "busySince": tsince, "every": beatEvery(), "open": open, "ports": ports, "companies": cos,
 		"updating": keepRunning(), "dailyAt": keepDailyAt(), "nightlyAt": keepDailyAt(), "lastRun": keepLastRun(), "paused": paused(), "notAnsweringSince": notAnsweringSince(),
 		"lastRead": lastReadAt(), "events": true, "computer": computerName(), "allowlist": allowListBeat(),
@@ -892,7 +894,9 @@ func beatBody(tally bool, tstate, tsince string, open, ports, cos []any) M {
 		// 2.2.0: the live recorder per company (lines read, sent, waiting, the oldest waiting, the source) and its source
 		"recorderState": liveBeat(), "recorderSource": recorderSource(),
 		// the owner's rule: source B off by itself after a list that took more than 2 s, per company
-		"recorderSourceB": liveBeatB()}
+		"recorderSourceB": liveBeatOff("B"), "recorderSourceC": liveBeatOff("C"), "recorderBodyFetch": liveBeatOff("bodies"),
+		// review M8: the add-on's file names read; review S4: whether automatic updates are on, and the last rollback
+		"recorderFiles": liveFilesSeen(), "autoUpdate": au, "rolledBack": rb}
 }
 
 // --- the posting queue (build 199): postings queued in FinCom on any computer, taken one at a time

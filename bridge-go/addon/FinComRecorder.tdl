@@ -37,7 +37,9 @@
 ;; the fallback is to build it from the date's parts:
 ;;     $$ZeroFill:($$YearOfDate:$$MachineDate):4 + $$ZeroFill:($$MonthOfDate:$$MachineDate):2
 ;;       + $$ZeroFill:($$DayOfDate:$$MachineDate):2
-;; The bridge reads <GUID>-yyyymmdd.txt (and also <GUID>-yyyy-mm-dd.txt), so either form works.
+;; The bridge reads every <GUID>-<anything>.txt (a line counts only when its own cguid starts its file's name), so
+;; any date form still works; the beat names the files it read. After loading, check once that
+;; C:\ProgramData\FinCom\recorder\ shows a new file ending in today's yyyymmdd (docs/recorder-live-sheet.txt).
 
 ;; ---------------------------------------------------------------- the gate: a company is current
 [System: Formula]
@@ -85,10 +87,11 @@
 
     01 : SET    : vT0   : ($$String:$$MachineDate) + " " + ($$String:$$MachineTime)
 
-    ;; company GUID; if Tally gives none here, the company name is used and marked "name-"
+    ;; company GUID; if Tally gives none here, "noguid" (never the company's name in a file path: review Low 17; the
+    ;; line still carries cname)
     02 : SET    : vGuid : $Guid:Company:##SVCurrentCompany
     03 : IF     : $$IsEmpty:##vGuid
-    04 :    SET : vGuid : "name-" + ##SVCurrentCompany
+    04 :    SET : vGuid : "noguid"
     05 : END IF
     ;; the daily file: <company GUID>-<yyyymmdd>.txt
     06 : SET    : vFile : @@FCRFolder + ##vGuid + "-" + @@FCRDay + ".txt"

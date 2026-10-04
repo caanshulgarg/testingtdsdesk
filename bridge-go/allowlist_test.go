@@ -69,6 +69,15 @@ func driveEveryRequest(t *testing.T) *standTally {
 	// 2.2.0: the recorder's body fetch (the entries just changed, by MasterID, the line's own date)
 	_, err = fetchVouchersByMaster(&TC{copier: true}, zz, f.port, td, []string{"1"})
 	must("body fetch", err)
+	// 2.2.0: source C's month slice, the read test's date-form probe and Edit Log probe
+	_, err = invokeTally(&TC{copier: true}, f.port, sliceRequest(zz, formPlain, td[:6], 0), 20)
+	must("month slice", err)
+	measuring.Add(1)
+	_, err = invokeTally(readTestTC, f.port, datesProbeRequest(zz, collFilterBtw, td, td), 20)
+	must("dates probe", err)
+	_, err = invokeTally(readTestTC, f.port, editLogProbeRequest(zz, "1"), 20)
+	must("edit log probe", err)
+	measuring.Add(-1)
 	_, err = removeTallyVoucher(f.port, zz, "g-1", "1", "Journal", td, "D-0")
 	must("delete", err)
 	// the measuring tool (before Update now: with no copy here it reads the year's dates) and its snapshot
@@ -186,7 +195,8 @@ func computedFigure(x string) string {
 		}
 	}
 	for _, m := range reDollar.FindAllStringSubmatch(x, -1) {
-		if m[1] != "SysName" {
+		// 2.2.0 (the owner's date forms): $$Date (a date literal) and $$IsBetween (a comparison) compute no figure
+		if m[1] != "SysName" && m[1] != "Date" && m[1] != "IsBetween" {
 			return m[0]
 		}
 	}

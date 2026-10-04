@@ -58,6 +58,9 @@ type standTally struct {
 	// the Content-Type of every request (the stand decodes a body sent as UTF-16 by its Content-Type)
 	dates  func(id, body string) (from, to string)
 	ctypes []string
+	// 2.2.0: the Voucher collections of the date-form probe and source C: svIgnored, SVFROMDATE/SVTODATE are ignored
+	// (Tally's current period: every entry); filterDates, a TDL filter on $Date with $$Date literals is applied
+	svIgnored, filterDates bool
 }
 
 // a ledger master of the stand-in Tally (its stored fields only)
@@ -267,6 +270,32 @@ func newStandTally(t *testing.T) *standTally {
 					o.WriteString(v.xml())
 				}
 			}
+		case datesProbeID, sliceID:
+			a, z := from, to
+			if f.svIgnored {
+				a, z = "", ""
+			}
+			if f.filterDates {
+				if m := regexp.MustCompile(`\$\$Date:&#34;([^&]+)&#34;\S* AND \$Date &lt;= \$\$Date:&#34;([^&]+)&#34;|\$\$IsBetween:\$Date:\$\$Date:&#34;([^&]+)&#34;:\$\$Date:&#34;([^&]+)&#34;`).FindStringSubmatch(body); m != nil {
+					a, z = normDate(m[1]+m[3]), normDate(m[2]+m[4])
+				}
+			}
+			above := int64(-1)
+			if m := reAltAbove.FindStringSubmatch(body); m != nil {
+				above = toI64(m[2])
+			}
+			for _, v := range f.vch {
+				if (a == "" || (v.date >= a && v.date <= z)) && v.alter > above {
+					o.WriteString(v.xml())
+				}
+			}
+		case editLogProbeID:
+			want := group(`\$MasterID = (\d+)`, body, 1)
+			for _, v := range f.vch {
+				if v.master == want {
+					fmt.Fprintf(&o, `<VOUCHER REMOTEID="%s"><GUID>%s</GUID><MASTERID>%s</MASTERID><EDITLOG.LIST><ALTERID>%d</ALTERID><USERNAME>owner</USERNAME></EDITLOG.LIST></VOUCHER>`, v.guid, v.guid, v.master, v.alter)
+				}
+			}
 		case "FinComByMaster":
 			want := group(`\$MasterID = (\d+)`, body, 1)
 			for _, v := range f.vch {
@@ -425,7 +454,9 @@ func newStandCloud(t *testing.T) *standCloud {
 			for _, x := range arr(o["lines"]) {
 				res = append(res, M{"line_id": obj(x)["line_id"], "state": "applied", "why": nil})
 			}
-			c.recBodies = append(c.recBodies, o)
+			if len(res) > 0 { // an empty call is the bridge's link check
+				c.recBodies = append(c.recBodies, o)
+			}
 			out["results"], out["applied"] = res, len(res)
 		case "days":
 			c.dayPosts = append(c.dayPosts, o)

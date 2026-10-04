@@ -1,8 +1,9 @@
 {
   "allowlist": {
-    "hash": "2f2102620df9dad1105ecca5b115fa1436ab9c3caaf45862daf29f85d5608075",
+    "hash": "d8f1bd06dcdd44c5135ebccd3f547bb9218c63742a95b151d22743df6f5a8859",
     "measured": false
   },
+  "autoUpdate": true,
   "busySince": "",
   "changeNumbers": {
     "GARG SHEKHAR & COMPANY": {
@@ -55,8 +56,11 @@
   "postOnly": [],
   "readDays": false,
   "readStopped": null,
+  "recorderBodyFetch": {},
+  "recorderFiles": [],
   "recorderSource": "addon",
   "recorderSourceB": {},
+  "recorderSourceC": {},
   "recorderState": {},
   "reqs": {
     "day": "2026-10-04",
@@ -73,6 +77,7 @@
     "n": 3,
     "over20": 0
   },
+  "rolledBack": null,
   "settingsAt": "",
   "startPoint": {
     "GARG SHEKHAR & COMPANY": {
