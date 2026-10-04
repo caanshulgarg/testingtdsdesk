@@ -70,7 +70,10 @@ func driveEveryRequest(t *testing.T) *standTally {
 	_, err = fetchVouchersByMaster(&TC{copier: true}, zz, f.port, td, []string{"1"})
 	must("body fetch", err)
 	// 2.2.0: source C's month slice, the read test's date-form probe and Edit Log probe
-	_, err = invokeTally(&TC{copier: true}, f.port, sliceRequest(zz, formPlain, td[:6], 0), 20)
+	// (round 3 R3-1: a slice goes only as built, with the form kept and an AlterID from the starting point on)
+	saveDateForm(zz, formPlain, td[:6], 1)
+	spv, _ := startPointOf(zz)
+	_, err = invokeTally(&TC{copier: true}, f.port, sliceRequest(zz, formPlain, td[:6], spv), 20)
 	must("month slice", err)
 	measuring.Add(1)
 	_, err = invokeTally(readTestTC, f.port, datesProbeRequest(zz, collFilterBtw, td, td), 20)

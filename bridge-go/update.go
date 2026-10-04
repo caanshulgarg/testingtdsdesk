@@ -395,7 +395,12 @@ func notePreviousFromSetup(dir string) {
 		return // the same program installed again: the kept pair stays
 	}
 	v := exeVersionFn(old)
-	if !reBridgeVersion.MatchString(v) || v == BridgeVersion {
+	if v == BridgeVersion {
+		// round 3 R3-3: another build of the same version (not the same bytes): not a version to roll back to
+		installLogFn("Install: the program replaced is the same version (" + v + ") as the one installed, another build of it: it is not kept for a rollback; the version kept is left as it was")
+		return
+	}
+	if !reBridgeVersion.MatchString(v) {
 		installLogFn("Install: the version of the program replaced could not be read (" + or(v, "no answer") + "); the version kept for a rollback is left as it was")
 		return
 	}

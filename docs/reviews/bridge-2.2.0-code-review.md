@@ -752,4 +752,17 @@ Verdict, round 3:
 - R3-2 should go with the R3-1 fix (the stray log is in bridge-go/, so it is not a docs-only change).
 - R3-3 may wait.
 
+
+### Status after the round 3 fixes (by the builder; tests first, red run tdd/b223.1.red)
+
+- R3-1 MEDIUM, Fixed (TestSliceGuardEveryForm): datedRefused checks FinComVoucherByMaster and FinComSlice by their id,
+  always (whatever ReadDays says and whatever date form): only the exact request with its values in bounds goes. Every
+  bad case of the slice guard is refused in each of the seven forms, the filter-only one included. A request whose
+  dates are only in a TDL filter ($Date compared, $$IsBetween, a $$Date literal) counts as dated and is refused with
+  ReadDays off unless it is one of the two exceptions; a FinComVoucherByMaster without its period is refused.
+- R3-2 LOW, Fixed (TestNoLogInPackageFolder): the tests that run the setup's copy step capture its log lines;
+  bridge-go/tds-bridge.log is removed from the index and the folder and named in .gitignore; the test fails if the file
+  is there.
+- R3-3 LOW, Fixed (TestSetupSameVersionOtherBytes): another build of the same version is said so in the install log.
+
 Range: bdfe261..41edc65

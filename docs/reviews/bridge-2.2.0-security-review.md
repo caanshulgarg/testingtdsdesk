@@ -357,4 +357,11 @@ Verdict, round 3:
 - R3-S1 is Medium (R2-S2 left open for one kept form) and blocks the build.
 - R2-S1, R2-S3 and R2-S4 are confirmed fixed; the round 2 Lows are confirmed.
 
+
+### Status after the round 3 fixes (by the builder; details in the code review's round 3 status)
+
+- R3-1 MEDIUM: Fixed (TestSliceGuardEveryForm).
+- R3-2 LOW: Fixed (TestNoLogInPackageFolder).
+- R3-3 LOW: Fixed (TestSetupSameVersionOtherBytes).
+
 Range: bdfe261..41edc65

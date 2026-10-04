@@ -111,6 +111,9 @@ func TestFailedTxtForgedDropped(t *testing.T) {
 // --- R2-4: the setup's kept copy: verified against the program it replaced, labelled by that program's own version,
 // replacing a good kept pair only then; the same program installed again keeps the kept pair
 func TestSetupKeepsGoodPrevious(t *testing.T) {
+	oldL := installLogFn
+	installLogFn = func(string) {} // round 3 R3-2: never the bridge's log (it would land in the package folder)
+	defer func() { installLogFn = oldL }()
 	nsi := readText("installer/FinComBridge.nsi")
 	cp := strings.Index(nsi, `CopyFiles /SILENT "$INSTDIR\FinComBridge.exe" "$INSTDIR\FinComBridge.previous.new"`)
 	rn := strings.Index(nsi, `Rename "$INSTDIR\FinComBridge.exe" "$INSTDIR\FinComBridge.setup-old.exe"`)

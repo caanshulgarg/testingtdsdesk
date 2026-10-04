@@ -374,6 +374,9 @@ func TestBodyFetchOffAfterSlowAnswer(t *testing.T) {
 // --- the rollback after an install by the setup: round 2 R2-4 replaced this test's checks with TestSetupKeepsGoodPrevious
 // (review220b_test.go): the copy goes to a temporary name, is verified, and is labelled by the replaced program itself
 func TestRecorderRollbackAfterSetup(t *testing.T) {
+	oldL := installLogFn
+	installLogFn = func(string) {} // round 3 R3-2: never the bridge's log (it would land in the package folder)
+	defer func() { installLogFn = oldL }()
 	for _, f := range []string{"win_service.go", "win_user.go"} {
 		if !strings.Contains(readText(f), "notePreviousFromSetup(") {
 			t.Fatalf("%s: the install step does not take the setup's copy", f)

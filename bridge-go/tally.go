@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -287,17 +288,34 @@ type TC struct {
 // 2.2.0 (the owner's rule, prospective only): one narrow exception, the recorder's body fetch (FinComVoucherByMaster):
 // it asks only the entries just changed, by MasterID, with the line's own date as the period; it passes only when it is
 // exactly what voucherByMasterRequest builds for one day and 1 to 50 MasterIDs (recorder_live.go). Never a day's list
+//
+// Round 3 R3-1: the two exceptions are checked by their id, always (whatever ReadDays says, whatever date form they use):
+// a FinComVoucherByMaster or FinComSlice that is not exactly as built, with its values in bounds, never goes. And a
+// request with its dates only in a TDL filter ($Date compared, $$IsBetween, a $$Date literal) is dated too
 func datedRefused(tc *TC, x string) error {
-	if tc.person || readDaysOn() {
-		return nil
+	switch tallyRequestID(x) {
+	case vchByMasterID:
+		if voucherByMasterExact(x) {
+			return nil
+		}
+		return readsOffErr()
+	case sliceID:
+		if sliceExact(x) { // source C's month slice in the kept form, its values checked (recorder_probes.go)
+			return nil
+		}
+		return readsOffErr()
 	}
-	if !strings.Contains(x, "<SVFROMDATE") && !strings.Contains(x, "<SVTODATE") {
-		return nil
-	}
-	if voucherByMasterExact(x) || sliceExact(x) { // and source C's month slice in the kept form (recorder_probes.go)
+	if tc.person || readDaysOn() || !requestDated(x) {
 		return nil
 	}
 	return readsOffErr()
+}
+
+var reFilterDate = regexp.MustCompile(`\$Date\b|\$\$IsBetween|\$\$Date:`)
+
+// a request carries a period: SVFROMDATE / SVTODATE, or dates in a TDL filter
+func requestDated(x string) bool {
+	return strings.Contains(x, "<SVFROMDATE") || strings.Contains(x, "<SVTODATE") || reFilterDate.MatchString(x)
 }
 
 // round 18 (item 89, evaluation only): the request body as Tally gets it. TallyRequestUTF16 (default off): UTF-16LE
