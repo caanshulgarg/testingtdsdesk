@@ -1,0 +1,96 @@
+FINCOM RECORDER TRIAL  -  instruction sheet for NWS144
+=====================================================
+
+What this is
+------------
+A small Tally add-on that writes down, on the test company ZZ TEST only, every save,
+change, cancel, delete and import that Tally reports. It shows nothing on screen and adds no
+menus or keys. It writes nothing for any other company.
+IMPORTANT: while it is loaded, it also sits on the voucher and ledger screens of EVERY company
+in this Tally (it only writes for ZZ TEST, but it is on those screens). So: never open a real
+company (GARG SHEKHAR or any client) while it is loaded. Do PART 4 (unload) as soon as the
+script is done, and before you open any real company again.
+You only use Tally's own menus and the FinCom tray icon. You do not open or edit any file.
+
+Before you start
+----------------
+- Bridge 2.1.9 must be installed on this PC (its installer puts the add-on at
+  C:\ProgramData\FinCom\addon\FinComRecorderTrial.tdl).
+- Leave the antivirus exactly as it is (real-time scanning ON). We want the real delay.
+- Close every company except ZZ TEST before starting. Open ZZ TEST only, and keep only ZZ TEST
+  open until PART 4 is done.
+
+
+PART 1  -  LOAD THE ADD-ON IN TALLYPRIME
+----------------------------------------
+1. In TallyPrime press F1 (Help) at the top right.
+2. Choose  TDLs & Add-Ons.
+   (If you do not see it: press Alt+G (Go To), type  TDL  and choose  TDLs & Add-Ons.)
+3. Press F4  (Manage Local TDLs)  -  shown at the right side of the screen.
+4. Set  "Load selected TDL files on startup"  to  Yes.
+5. In  "List of TDL files to preload on startup"  go to the first empty line and type exactly:
+       C:\ProgramData\FinCom\addon\FinComRecorderTrial.tdl
+   Press Enter, then accept the screen (Ctrl+A, or answer Yes to "Accept?").
+6. Back on the TDLs & Add-Ons screen, the file is listed. Its status must say  Loaded.
+   - If it says anything else (for example an error), stop here and use the tray:
+     "Recorder trial: send results". That sends the error to us. Then do PART 4 to unload it.
+
+Names in other TallyPrime versions (same screen, slightly different words):
+   - TallyPrime 1.x / 2.x:  F1: Help > TDLs & Add-Ons > F4: Manage Local TDLs
+   - TallyPrime 3.x / 4.x / 5.x:  F1: Help > TDLs & Add-Ons > F4: Manage Local TDLs
+     (the first line may read "Load TDL files on startup" instead of
+      "Load selected TDL files on startup" - it is the same Yes/No.)
+   - Older Tally.ERP 9 (not expected on NWS144): Gateway > F12: Configure > Product & Features
+     > F4: Manage Local TDLs.
+
+
+PART 2  -  THE TEST, ON ZZ TEST, IN THIS ORDER
+----------------------------------------------
+Do one step at a time. Wait a few seconds between steps.
+
+ 1. Tray icon > "Recorder trial: note change numbers".
+ 2. Create one voucher (for example a Payment of Rs 1 from Cash to any expense). Save it.
+    Then open the Day Book and check that the voucher appears ONCE (not twice).
+ 3. Open that same voucher again, change the narration, save it.
+ 4. Tray icon > "Recorder trial: note change numbers".
+ 5. Cancel a voucher: open a voucher, press Alt+X (Cancel Vch), answer Yes.
+ 6. Tray icon > "Recorder trial: note change numbers".
+ 7. Delete a voucher: open a voucher, press Alt+D (Delete), answer Yes.
+ 8. Tray icon > "Recorder trial: note change numbers".
+ 9. Import one voucher: post one test bill to ZZ TEST from FinCom (this reaches Tally as an
+    import through Tally's port, the same way all FinCom postings arrive).
+10. Ledgers, one after the other:
+      a. create a new ledger  "ZZ Recorder Test"  (any group), save;
+      b. open it again, change anything (for example the address), save;
+      c. open it again, rename it to  "ZZ Recorder Test 2", save;
+      d. open it again and delete it (Alt+D, Yes).
+11. Tray icon > "Recorder trial: send results".
+
+If Tally shows ANY message you have not seen before during these steps, write down the words
+on paper, finish the steps you can, and still do step 11.
+
+
+PART 3  -  SECOND PC (only if another PC runs Tally on the same data)
+---------------------------------------------------------------------
+On the second PC (bridge 2.1.9 installed there too, add-on loaded there as in PART 1):
+ a. Repeat step 2 (create a voucher) and step 7 (delete a voucher) there.
+ b. Once: open the same voucher on both PCs, change the narration on both, and press save on
+    both PCs at the same moment (two people, count "1, 2, 3, save").
+ c. On the second PC: Tray icon > "Recorder trial: send results".
+ d. On NWS144: Tray icon > "Recorder trial: send results" again.
+
+
+PART 4  -  UNLOAD THE ADD-ON (when we say the trial is over, or if PART 1 showed an error)
+----------------------------------------------------------------------------------------
+1. F1 (Help) > TDLs & Add-Ons > F4 (Manage Local TDLs).
+2. Either: go to the line  C:\ProgramData\FinCom\addon\FinComRecorderTrial.tdl  and clear it
+   (remove the line: Alt+R or blank it out), or set "Load selected TDL files on startup" to No
+   (this turns off every TDL in the list - use it only if this was the only one).
+3. Accept the screen. The file should no longer show as Loaded.
+   If it still shows, close TallyPrime and open it again.
+
+
+What to send us
+---------------
+Only the tray message that appears after "Recorder trial: send results" (from each PC that
+took part), plus the words of any Tally message you wrote down. Nothing else.

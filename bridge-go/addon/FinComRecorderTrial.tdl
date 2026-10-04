@@ -1,0 +1,118 @@
+;; FinComRecorderTrial.tdl  -  FinCom recorder TRIAL add-on (owner's section B, items 10-12, 99, 101, 102)
+;;
+;; Purpose: on the test company ZZ TEST only, append one line per Tally event to
+;;     C:\ProgramData\FinCom\recorder\<company GUID>.txt
+;; so the bridge can show which events Tally fires and roughly how long the add-on adds to a save.
+;;
+;; Rules kept here:
+;;   - silent: no menus, no keys, no buttons, no Message / Log / Query actions, no pop-ups;
+;;   - never blocks a save, delete, cancel or import: every function returns Yes, and the form
+;;     events always run Tally's own Form Accept;
+;;   - acts only when the current company is "ZZ TEST" (TDL "=" on strings ignores case);
+;;   - no network, no AI, nothing but a local file append.
+;;
+;; NOT RUN ON A REAL TALLY. Written from the TDL reference; see docs/recorder-trial-review.md
+;; for each construct, the confidence in it and the alternative to try if Tally rejects it.
+;;
+;; Line format (one line per event, fields always in this order, separator "|", key=value):
+;;   FCR1|ev=|t0=|tw=|cguid=|cname=|user=|obj=|guid=|mid=|aid=|vtype=|vno=|vdate=|name=|parent=|narr=|t1=
+;;   t0 = time at the start of the handler, tw = time just before the write, t1 = time after the
+;;   main part of the line was written (written last, on the same line).
+;;   narr is free text and may itself contain "|" or line breaks: a reader must take narr as
+;;   everything between "|narr=" and the LAST "|t1=", and must join any line that does not start
+;;   with "FCR1|" onto the line before it.
+;; File character set: UNICODE as Tally writes it (UTF-16 little-endian), fixed by the 5th
+;; parameter of OPEN FILE below. Change "Unicode" to "ASCII" there to get 8-bit text instead
+;; (non-English narration would then be lost).
+
+;; ---------------------------------------------------------------- the ZZ TEST gate
+[System: Formula]
+    FCRIsTrial  : ##SVCurrentCompany = "ZZ TEST"
+    FCRFolder   : "C:\ProgramData\FinCom\recorder\"
+
+;; ---------------------------------------------------------------- system events
+;; Syntax: <label> : <event> : <condition> : <action> : <action parameters>
+[System: Events]
+    FCRDelBefore  : Before Delete Object : @@FCRIsTrial : Call : FCRLog : "before_delete"
+    FCRDelAfter   : After Delete Object  : @@FCRIsTrial : Call : FCRLog : "after_delete"
+    FCRCanBefore  : Before Cancel Object : @@FCRIsTrial : Call : FCRLog : "before_cancel"
+    FCRCanAfter   : After Cancel Object  : @@FCRIsTrial : Call : FCRLog : "after_cancel"
+    FCRImpStart   : Start Import         : @@FCRIsTrial : Call : FCRLog : "start_import"
+    FCRImpObject  : Import Object        : @@FCRIsTrial : Call : FCRLog : "import_object"
+    FCRImpAfter   : After Import Object  : @@FCRIsTrial : Call : FCRLog : "after_import_object"
+    FCRImpEnd     : End Import           : @@FCRIsTrial : Call : FCRLog : "end_import"
+
+;; ---------------------------------------------------------------- create / alter on screen
+;; Once a form has any "On : Form Accept" line, Tally's own save happens only through the
+;; "Form Accept" action, so the middle line is required and is unconditional.
+;; "_pre" is logged before Tally saves (a new entry has no GUID / MasterID yet; the name is the
+;; name as typed, i.e. the NEW name on a rename), "_post" after the save.
+[#Form: Voucher]
+    On : Form Accept : @@FCRIsTrial : Call : FCRLog : "voucher_accept_pre"
+    On : Form Accept : Yes          : Form Accept
+    On : Form Accept : @@FCRIsTrial : Call : FCRLog : "voucher_accept_post"
+
+[#Form: Ledger]
+    On : Form Accept : @@FCRIsTrial : Call : FCRLog : "ledger_accept_pre"
+    On : Form Accept : Yes          : Form Accept
+    On : Form Accept : @@FCRIsTrial : Call : FCRLog : "ledger_accept_post"
+
+;; ---------------------------------------------------------------- the one writer
+[Function: FCRLog]
+    Parameter : pEvent : String
+    Variable  : vT0    : String
+    Variable  : vTW    : String
+    Variable  : vT1    : String
+    Variable  : vGuid  : String
+    Variable  : vFile  : String
+    Variable  : vObj   : String
+    Variable  : vLine  : String
+    Returns   : Logical
+
+    01 : SET    : vT0   : ($$String:$$MachineDate) + " " + ($$String:$$MachineTime)
+
+    ;; company GUID; if Tally gives none here, the company name is used and marked "name-"
+    02 : SET    : vGuid : $Guid:Company:##SVCurrentCompany
+    03 : IF     : $$IsEmpty:##vGuid
+    04 :    SET : vGuid : "name-" + ##SVCurrentCompany
+    05 : END IF
+    06 : SET    : vFile : @@FCRFolder + ##vGuid + ".txt"
+
+    ;; object type: Voucher if it has a voucher type, Master if it has a name, else None
+    07 : SET    : vObj  : "None"
+    08 : IF     : NOT $$IsEmpty:$Name
+    09 :    SET : vObj  : "Master"
+    10 : END IF
+    11 : IF     : NOT $$IsEmpty:$VoucherTypeName
+    12 :    SET : vObj  : "Voucher"
+    13 : END IF
+
+    ;; the line (heads only; ledger lines of the entry are for the real add-on)
+    14 : SET    : vLine : "FCR1|ev=" + ##pEvent + "|t0=" + ##vT0
+    15 : SET    : vTW   : ($$String:$$MachineDate) + " " + ($$String:$$MachineTime)
+    16 : SET    : vLine : ##vLine + "|tw=" + ##vTW
+    17 : SET    : vLine : ##vLine + "|cguid=" + ##vGuid + "|cname=" + ##SVCurrentCompany
+    18 : SET    : vLine : ##vLine + "|user=" + ($$String:$$CmpUserName) + "|obj=" + ##vObj
+    19 : SET    : vLine : ##vLine + "|guid=" + ($$String:$Guid) + "|mid=" + ($$String:$MasterID)
+    20 : SET    : vLine : ##vLine + "|aid=" + ($$String:$AlterID)
+    21 : SET    : vLine : ##vLine + "|vtype=" + ($$String:$VoucherTypeName)
+    22 : SET    : vLine : ##vLine + "|vno=" + ($$String:$VoucherNumber)
+    23 : SET    : vLine : ##vLine + "|vdate=" + ($$String:$Date)
+    24 : SET    : vLine : ##vLine + "|name=" + ($$String:$Name) + "|parent=" + ($$String:$Parent)
+    25 : SET    : vLine : ##vLine + "|narr=" + ($$String:$Narration)
+
+    ;; write: main file; if it cannot be opened, try failed.txt once; if that fails too, give up
+    ;; quietly. Never a message.
+    26 : OPEN FILE : ##vFile : Text : Write : Unicode
+    27 : IF     : NOT $$LastResult
+    28 :    SET : vLine : "FCR1|ev=write_failed|file=" + ##vFile + "|was=" + ##vLine
+    29 :    OPEN FILE : @@FCRFolder + "failed.txt" : Text : Write : Unicode
+    30 :    IF  : NOT $$LastResult
+    31 :       RETURN : Yes
+    32 :    END IF
+    33 : END IF
+    34 : WRITE FILE      : ##vLine
+    35 : SET             : vT1 : ($$String:$$MachineDate) + " " + ($$String:$$MachineTime)
+    36 : WRITE FILE LINE : "|t1=" + ##vT1
+    37 : CLOSE TARGET FILE
+    38 : RETURN : Yes
