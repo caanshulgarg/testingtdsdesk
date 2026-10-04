@@ -1069,9 +1069,10 @@ async function bringDayBookFile(f, from0, to0, opts){
           part.cloud = "going to the cloud…";
           try {
             // fast-sync: handed to FinCom's server, which reads it into the cloud copy even if this page is closed
-            const r = await TCloudUp.handOver(await f.text(), {from, to}, step, who, f.name);
+            // round 20: the file itself goes (through Storage, resumable); its text is read only for the old hand-over
+            const r = await TCloudUp.handOver(f, {from, to}, step, who, f.name);
             part.cloud = r && r.job ? "with FinCom’s server (" + r.days + " days), read in by the server" : r && r.days != null ? "in the cloud (" + r.days + " days)" : (r && r.skipped) || "";
-            if (r && r.days != null){ await TCloudUp.drop(wait); toast(r.job ? f.name + ": all " + r.days + " days are with FinCom’s server, which reads them into the cloud copy now. You can close this page." : f.name + ": all " + r.days + " days, " + fmtDate(tallyDate(from)) + " to " + fmtDate(tallyDate(to)) + ", are in FinCom’s cloud."); }
+            if (r && r.days != null){ await TCloudUp.drop(wait); toast(r.storage ? f.name + " is in FinCom’s cloud; FinCom’s server reads its " + r.days + " days into the cloud copy now. You can close this page." : r.job ? f.name + ": all " + r.days + " days are with FinCom’s server, which reads them into the cloud copy now. You can close this page." : f.name + ": all " + r.days + " days, " + fmtDate(tallyDate(from)) + " to " + fmtDate(tallyDate(to)) + ", are in FinCom’s cloud."); }
           }
           catch (e){ part.cloud = "not sent: " + ((e && e.message) || e); toast("It could not go to FinCom’s cloud just now (" + ((e && e.message) || e) + "). It goes on its own the next time this client is opened."); }
           finally { window.removeEventListener("beforeunload", stay); TCloudUp.live.delete(wait); }

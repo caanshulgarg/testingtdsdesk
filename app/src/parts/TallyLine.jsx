@@ -54,9 +54,15 @@ export function RecorderNotes({ cid }) {
   if (typeof Rec !== "object" || !cid || typeof TCloud !== "object" || !TCloud.on()) return null;
   const off = [...new Set(Rec.clientNotRecording(cid).map((x) => x.pc))];
   const gaps = Rec.gapFor(cid);
-  if (!off.length && !gaps.length) return null;
+  // round 20 (d.1): this client's unread alerts (tally_alerts, migration 47), a line each, with Mark read for owner and staff
+  const alerts = Rec.clientAlerts(cid), can = Rec.canWrite(), msg = Rec.alerts.msg;
+  if (!off.length && !gaps.length && !alerts.length) return null;
   return <div data-recorder-notes="" style={{ margin: "0 0 10px" }}>
     {off.map((pc) => <p key={pc} className="bk-alert bad" data-recorder-banner="" style={{ margin: "4px 0" }}>{"Tally changes are not being recorded on " + pc}</p>)}
+    {alerts.map((x) => <p key={x.id} className="bk-alert warn" data-client-alert={String(x.id)} style={{ margin: "4px 0" }}>
+      {Rec.alertKind(x.kind) + ": " + (x.words || "") + (x.at ? " (" + fmtDateTime(x.at) + ")" : "") + " "}
+      {can && <button className="linkbtn" data-alert-read="" disabled={!!(msg && msg.busy)} onClick={() => Rec.alertRead(x)}>Mark read</button>}</p>)}
+    {msg && msg.err && alerts.length > 0 && <p className="bk-alert bad" data-alerts-msg="" style={{ margin: "4px 0" }}>{msg.err}</p>}
     <GapLine cid={cid} />
     <button className="linkbtn note" data-sync-open="" onClick={() => Rec.openActivity(cid)}>See this client’s sync activity</button>
   </div>;

@@ -201,7 +201,7 @@ const Rec = {
   stateWords(r){
     const why = r.held_why ? ": " + r.held_why : "";
     return r.state === "applied" ? "applied" : r.state === "duplicate" ? "duplicate" : r.state === "stale" ? "stale (older than the copy)" : r.state === "held" ? "held" + why
-      : r.state === "failed" ? "failed" + why : r.state === "received" ? "waiting" : String(r.state || "");
+      : r.state === "failed" ? "failed" + why : r.state === "received" ? "waiting" : r.state === "queued" ? "queued" : String(r.state || "");
   },
   // the computer a line came from, from the firm's computers as the Tally page or the Tally light read them
   devOf(id){ return [].concat((typeof TCloud === "object" && TCloud.pane.devices) || [], (typeof TLight === "object" && TLight.st.devs) || []).find(d => d && d.id === id) || null; },
@@ -321,6 +321,42 @@ const Rec = {
     catch (e){ s.rows = []; if (this.missing(e)) s.none = true; }
     s.busy = false; s.at = Date.now(); render();
   },
+
+  // ---------------------------------------------------------------- round 20 (d.1): alerts (migration 47)
+  // tally_alerts (kind gap | silent | summary; RLS: the firm reads its own), the latest 100, read again after a minute;
+  // shown unread first, newest first. An owner or staff marks one read: tally_alert_read(p_id). The table or a column
+  // missing (42P01, 42703, PGRST20x): nothing anywhere, no words
+  alerts: {},              // {rows, at, busy, none, msg}
+  alertsOf(){
+    const a = this.alerts;
+    if (typeof TCloud === "object" && TCloud.on() && !a.busy && !a.none && Date.now() - (a.at || 0) > 60000){ a.at = Date.now(); setTimeout(() => this.alertsLoad(), 0); }
+    if (a.none) return [];
+    return [].concat(a.rows || []).sort((x, y) => (!!x.read_at - !!y.read_at) || String(y.at || "").localeCompare(String(x.at || "")) || num(y.id) - num(x.id));
+  },
+  async alertsLoad(){
+    const a = this.alerts;
+    a.busy = true;
+    try {
+      a.rows = [].concat(await Cloud.api("tally_alerts?select=id,client_id,book_id,device_id,kind,day,words,data,at,read_at,read_by&firm_id=eq." + encodeURIComponent(this.firm()) + "&order=at.desc&limit=100") || []);
+      a.none = false;
+    } catch (e){ a.rows = []; if (this.missing(e)) a.none = true; }
+    a.busy = false; a.at = Date.now(); render();
+  },
+  clientAlerts(cid){ return this.alertsOf().filter(x => !x.read_at && cid && String(x.client_id || "") === String(cid)); },
+  async alertRead(x){
+    const a = this.alerts;
+    if (!this.canWrite()) return;
+    a.msg = {busy: true, id: x.id}; render();
+    try {
+      const r = await TCloud.rpc("tally_alert_read", {p_id: x.id});
+      if (r && r.ok === false) throw new Error(r.error || "It was not marked read.");
+      const row = (a.rows || []).find(y => y.id === x.id);
+      if (row && !row.read_at) row.read_at = new Date().toISOString();
+      a.msg = null;
+    } catch (e){ a.msg = {err: this.missing(e) ? "Marking an alert read: not available until migration 47 runs." : this.say(e)}; }
+    await this.alertsLoad();
+  },
+  alertKind(k){ return {gap: "Changes not received", silent: "Silent", summary: "Today"}[k] || String(k || ""); },
 
   // ---------------------------------------------------------------- H52: Tally not responding
   notResponding(r){

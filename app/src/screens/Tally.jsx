@@ -205,6 +205,41 @@ function TrialTools({ r, owner }) {
     {owner && <> <button className="btn small" data-trial-tools-switch="" disabled={!!(p.ctl && p.ctl.busy)} onClick={() => TCloud.trialTools(d, !on)}>{on ? "Switch off" : "Switch on"}</button></>}
   </span>;
 }
+// round 20 (d.3): where this computer's changes come from (tally_devices.recorder_source, migration 47; addon |
+// alterid | both, the add-on when not set). An owner picks it -> TCloud.recorderSource -> tally_device_recorder_source;
+// staff see the value only; without the column (p.noRecorderSource) nothing is shown
+function RecorderSource({ r, owner }) {
+  const d = r.device || {}, p = TCloud.pane;
+  if (p.noRecorderSource || !p.devices) return null;
+  const v = TCloud.RECORDER_SOURCES.some(([k]) => k === d.recorder_source) ? d.recorder_source : "addon";
+  const words = (TCloud.RECORDER_SOURCES.find(([k]) => k === v) || [])[1];
+  if (!owner) return <span className="note" data-recorder-source="">{"Changes come from: " + words}</span>;
+  return <span className="note" data-recorder-source="">{"Changes come from: "}
+    <select data-recorder-source-pick="" aria-label={"Where the changes on " + r.computer + " come from"} value={v} disabled={!!(p.ctl && p.ctl.busy)}
+      onChange={(ev) => TCloud.recorderSource(d, ev.target.value)}>
+      {TCloud.RECORDER_SOURCES.map(([k, w]) => <option key={k} value={k}>{w}</option>)}</select></span>;
+}
+// round 20 (d.1): Tally's alerts (tally_alerts, migration 47): unread first, newest first; owner and staff mark one
+// read (tally_alert_read). Nothing at all when there are none, or without the table
+function Alerts() {
+  const rows = TCloud.on() ? Rec.alertsOf() : [];
+  if (!rows.length) return null;
+  const can = Rec.canWrite(), msg = Rec.alerts.msg, unread = rows.filter((x) => !x.read_at).length;
+  const coName = (cid) => (cid && S.companies && S.companies[cid] && S.companies[cid].name) || "";
+  return <div className="pane" data-alerts="" style={{ padding: "8px 16px" }}>
+    <h3 style={{ margin: "0 0 6px" }}>{"Alerts" + (unread ? " (" + unread + " unread)" : "")}</h3>
+    {msg && msg.err && <p className="bk-alert bad" data-alerts-msg="" style={{ margin: "4px 0" }}>{msg.err}</p>}
+    {rows.map((x) => <div key={x.id} className="row" data-alert={String(x.id)} data-alert-unread={x.read_at ? undefined : ""} data-alert-kind={x.kind}
+      style={{ alignItems: "center", gap: 8, flexWrap: "wrap", margin: "2px 0", opacity: x.read_at ? 0.7 : 1 }}>
+      <span className={"tag " + (x.read_at ? "no" : x.kind === "summary" ? "ok" : "warn")}>{Rec.alertKind(x.kind)}</span>
+      {x.read_at ? <span>{x.words || ""}</span> : <b>{x.words || ""}</b>}
+      {coName(x.client_id) && <span className="note">{"· " + coName(x.client_id)}</span>}
+      <span className="note">{"· " + (x.at ? fmtDateTime(x.at) : "")}</span>
+      {x.read_at && <span className="note">{"· read by " + who(x.read_by)}</span>}
+      {!x.read_at && can && <button className="linkbtn" data-alert-read="" disabled={!!(msg && msg.busy)} onClick={() => Rec.alertRead(x)}>Mark read</button>}
+    </div>)}
+  </div>;
+}
 // phase 2 (F36, N102): is Tally's change recorder working on this computer, per company open there (the bridge's
 // heartbeat: info.bridges[id].recorder, FinCom Bridge 2.1.9 on). Nothing for a computer whose bridges report no recorder
 function RecorderLine({ r }) {
@@ -258,6 +293,7 @@ function BridgeLines({ rows, latest }) {
         {live && <RecorderLine r={r} />}
         {live && <div className="row" style={{ alignItems: "center", gap: 8, flexWrap: "wrap", marginLeft: 16 }}><PostSettings r={r} owner={owner} /></div>}
         {live && <div className="row" style={{ alignItems: "center", gap: 8, flexWrap: "wrap", marginLeft: 16 }}><TrialTools r={r} owner={owner} /></div>}
+        {live && <div className="row" style={{ alignItems: "center", gap: 8, flexWrap: "wrap", marginLeft: 16 }}><RecorderSource r={r} owner={owner} /></div>}
         {live && <Baselines r={r} owner={owner} />}
       </div>; })}
     <Release rows={rows} latest={latest} owner={owner} />
@@ -514,7 +550,7 @@ export default function TallyHome() {
       <button key={id} data-tally-tab={id} aria-selected={tab === id} onClick={() => { S.tallyTab = id; if (id === "activity") Rec.act.at = 0; render(); }}>{label}</button>)}</nav>
     {tab === "activity" ? <SyncActivity />
       : tab === "sent" ? <PostLog />
-      : <><Silent />
+      : <><Alerts /><Silent />
         {rows.length > 0 && <BridgeLines rows={rows} latest={latest} />}
         <ClientLines />
         {needCard ? <BridgeDownload m={m} /> : <DetailsCard m={m} />}

@@ -74,6 +74,11 @@ export function JobsNote({ cid }) {
   if (TCloud.jobs[cid] === undefined && TCloud.jobsOk !== false) { TCloud.jobs[cid] = []; setTimeout(() => TCloud.jobsLoad(cid), 0); }
   const day = Date.now() - 86400000;
   const list = (TCloud.jobs[cid] || []).filter((j) => j.status === "queued" || j.status === "running" || Date.parse(j.updated_at) > day).slice(0, 3);
-  if (!list.length) return null;
-  return <div data-jobs>{list.map((j) => <p key={j.id} className={"note" + (j.status === "failed" ? " bad" : "")} style={{ margin: "4px 0" }} data-job={j.status}>{TCloud.jobLine(j)}</p>)}</div>;
+  // round 20 (d.2): a Day Book on its way to Storage from this page: its progress bar
+  const up = typeof TCloudUp === "object" && TCloudUp.prog ? TCloudUp.prog[cid] : null;
+  const pct = up && up.size ? Math.floor((up.sent * 100) / up.size) : 0;
+  const bar = up ? <div data-upload-progress="" style={{ margin: "4px 0" }}><span className="note">{"Sending " + up.name + " to FinCom’s cloud: " + pct + "% (" + (up.sent / 1048576).toFixed(1) + " of " + (up.size / 1048576).toFixed(1) + " MB). If the page is closed, it goes on from here the next time this client is opened."}</span>
+    <progress data-upload-bar="" max={100} value={pct} style={{ display: "block", width: "100%", maxWidth: 420 }} /></div> : null;
+  if (!list.length) return bar;
+  return <div data-jobs>{bar}{list.map((j) => <p key={j.id} className={"note" + (j.status === "failed" ? " bad" : "")} style={{ margin: "4px 0" }} data-job={j.status}>{TCloud.jobLine(j)}</p>)}</div>;
 }

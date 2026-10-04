@@ -5,7 +5,8 @@
 import { useState } from "react";
 
 const FILTERS = [["all", "All"], ["waiting", "Waiting"], ["mismatch", "Mismatch"], ["today", "Today"]];
-const STATE_CLS = { applied: "ok", duplicate: "no", stale: "no", held: "warn", received: "warn", failed: "bad" };
+// round 20 (d.4): "queued": the cloud queued the line (over 50 at once); its drain fills the state later
+const STATE_CLS = { applied: "ok", duplicate: "no", stale: "no", held: "warn", received: "warn", queued: "warn", failed: "bad" };
 
 export default function SyncActivity() {
   const [f, setF] = useState("all");
