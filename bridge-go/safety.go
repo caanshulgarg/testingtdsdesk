@@ -135,6 +135,12 @@ func companyAlterM(company string) int64 {
 // the company-level check: its GUID (and its highest AlterIDs), one tiny request naming the company. "" when Tally
 // does not list it that way (nothing to compare)
 func companyCheck(tc *TC, company string, port int) (string, error) {
+	g, _, err := companyCheckNumbers(tc, company, port)
+	return g, err
+}
+
+// the company check; given: Tally gave change numbers above 0 this time (round 5 R5-3)
+func companyCheckNumbers(tc *TC, company string, port int) (string, bool, error) {
 	// 2.2.0 (the owner's finding): the change numbers by the form kept for the company (a: NATIVEMETHOD; b: the report);
 	// form a answering the company without numbers: form b once. Each request 15 s at most (CompanyCheckSec)
 	sec := keepNum("CompanyCheckSec", 15)
@@ -152,7 +158,7 @@ func companyCheck(tc *TC, company string, port int) (string, error) {
 		raw, err := invokeTally(tc, port, x, sec)
 		if err != nil {
 			if !listed {
-				return guid, err
+				return guid, false, err
 			}
 			break
 		}
@@ -168,16 +174,16 @@ func companyCheck(tc *TC, company string, port int) (string, error) {
 			}
 			if setCompanyAlts(company, c) {
 				cnFormSay(company, form)
-				return guid, nil
+				return guid, true, nil
 			}
 			break
 		}
 		if !found && form == "a" {
-			return "", nil // Tally does not list it that way: nothing to compare
+			return "", false, nil // Tally does not list it that way: nothing to compare
 		}
 	}
 	cnFormMiss(company, heads)
-	return guid, nil
+	return guid, false, nil
 }
 
 // --- the form that gave the change numbers, kept per company (sync\change-number-forms.json)

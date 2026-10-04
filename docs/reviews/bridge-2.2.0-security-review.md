@@ -472,4 +472,11 @@ Verdict, round 5:
 - R5-S1 and R5-S2 are Medium and block the build. R5-S1 has a path in today's code (the measuring tool).
 - R4-S1 is confirmed for the dated ids; the change-number forms meet the owner's rules as built.
 
+
+### Status after the round 5 fixes
+
+- R5-1 MEDIUM: Fixed (TestKeepAboveNeedsStartPoint). R5-2 MEDIUM: Fixed by pinning every id to its builder
+  (TestEveryIdPinned). R5-3 LOW: Fixed (TestNoteChangeNumbersNotGiven). R5-4 LOW: Left by design. Details in the code
+  review's round 5 status.
+
 Range: bdfe261..184cb61

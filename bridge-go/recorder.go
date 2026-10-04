@@ -420,11 +420,17 @@ func recorderNoteChangeNumbers() (M, error) {
 		for _, c := range sessCompanies(s) {
 			name := str(c["name"])
 			// 2.2.0: the company check with its two forms (safety.go companyCheck: NATIVEMETHOD, then the report)
-			if _, err := companyCheck(fin, name, port); err != nil {
+			_, given, err := companyCheckNumbers(fin, name, port)
+			if err != nil {
 				missed = append(missed, name+": "+err.Error())
 				continue
 			}
-			line := fmt.Sprintf("%s: ALTVCHID=%d, ALTMSTID=%d, at %s", name, companyAlter(name), companyAlterM(name), time.Now().Format("2006-01-02 15:04:05"))
+			// round 5 R5-3: what this check gave, never a number kept from before
+			v, m := "not given", "not given"
+			if given {
+				v, m = fmt.Sprint(companyAlter(name)), fmt.Sprint(companyAlterM(name))
+			}
+			line := fmt.Sprintf("%s: ALTVCHID=%s, ALTMSTID=%s, at %s", name, v, m, time.Now().Format("2006-01-02 15:04:05"))
 			b.WriteString(line + "\r\n")
 			noted = append(noted, line)
 		}

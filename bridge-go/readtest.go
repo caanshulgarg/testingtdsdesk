@@ -237,12 +237,16 @@ func runReadTest(company string) (M, error) {
 	ask("FinComCompanyNumbers (change numbers, form b: the report)", companyNumbersRequest(company), readTestTC)
 	// measurement only: the entries above the starting point, the AlterID filter alone, no dates
 	after, how := startPointOf(company)
-	label := fmt.Sprintf("Entries above the starting point (TDSDeskKeepList, AlterID above %d, no dates)", after)
-	if !how {
-		after = maxI64(0, altV)
-		label = fmt.Sprintf("Entries above the starting point (TDSDeskKeepList, AlterID above %d, the current ALTVCHID: no starting point recorded yet, no dates)", after)
+	kraw := ""
+	if how {
+		_, kraw = ask(fmt.Sprintf("Entries above the starting point (TDSDeskKeepList, AlterID above %d, no dates)", after), keepListAboveRequest(company, after), readTestTC)
+	} else {
+		// round 5 R5-1: never without a starting point (a list above anything lower is a full read)
+		why := "not sent: no starting point is recorded (Tally gave no change numbers yet)"
+		writeLog(pre + "Entries above the starting point (TDSDeskKeepList): " + why)
+		results = append(results, M{"label": "Entries above the starting point (TDSDeskKeepList)", "vouchers": 0, "bytes": 0, "seconds": 0.0, "head": "", "error": why})
 	}
-	_, kraw := ask(label, keepListAboveRequest(company, after), readTestTC)
+	_ = altV
 	// 2.2.0 (the owner's additions A and C): the collection date forms on a past-year month (the first that passes is
 	// kept for source C), then Tally's program and one Edit Log probe for the newest changed entry
 	readTestCollectionForms(port, company)

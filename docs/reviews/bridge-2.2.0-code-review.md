@@ -973,4 +973,32 @@ Verdict, round 5:
   built, and 0 or empty never becomes a starting point.
 - R5-3 and R5-4 are Low.
 
+
+### Status after the round 5 fixes (by the builder; tests first: tdd/b226.1.red (compile), b226.2.red (every id
+without a rebuild, the examples passing))
+
+- R5-2 MEDIUM, and the class behind rounds 2 to 5, Fixed (TestEveryIdPinned): every allow-list id is pinned to its
+  builder (bridge-go/pinned.go, requestRebuild). checkAllowed refuses any request that is not byte-identical to what
+  the bridge's own builder makes for that id from the request's own parameters (company, period in any of the bridge's
+  date forms, AlterID, MasterID range or list, party or ledger name); the test fails for an id without a rebuild.
+  Import (free content) is held to its fixed envelope: the Import Data header, one of the bridge's two reports
+  (Vouchers, All Masters), the company, and one TALLYMESSAGE holding VOUCHER and LEDGER objects only, none carrying a
+  request's own markup (TDL, COLLECTION, REPORT, SYSTEM, ENVELOPE...). Refused: FinComCompanyNumbers as a Voucher report
+  with $Amount/$Narration or with $ClosingBalance, FinComCompany as an unfiltered Voucher collection, TDSDeskCompanies
+  with an $EffectiveDate filter, the ledger list over vouchers, an Import with TDL or a stock item or under another
+  report, and one character more in a request's markup; the earlier proved bypasses stay refused. Every request the
+  bridge builds still goes (TestEveryRequestOnList drives every builder; the whole suite runs through the same check).
+  Two older tests that hand-built requests the bridge never builds (a bare <TALLYMESSAGE>, a TDSDeskNames and a
+  TDSDeskGroups with other fields) now use the builders. The id-based ReadDays-off guard and the value checks stay on top. No request shape changed: the allow-list table
+  and its hash are unchanged.
+- R5-1 MEDIUM, Fixed (TestKeepAboveNeedsStartPoint): TDSDeskKeepList above an AlterID goes only with the company's
+  starting point and an AlterID at or above it, whoever asks (source B, the measuring tool, the read test). The
+  measuring tool reads the change numbers with both forms and does not ask the list without a starting point ("the
+  entries above the starting point are not asked: no starting point is recorded"); the read test says the same. The
+  NWS144 case (form a empty, no starting point) sends no keep list.
+- R5-3 LOW, Fixed (TestNoteChangeNumbersNotGiven): "note change numbers" writes "not given" when neither form gave
+  numbers in this check, never 0 or a number kept from before.
+- R5-4 LOW, Left by design: a company with no entries yet gets its starting point at the first check that sees one;
+  the entries up to then are the Day Book upload's (prospective only).
+
 Range: bdfe261..184cb61

@@ -102,6 +102,10 @@ func checkAllowed(x string) error {
 	if a.measureOnly && measuring.Load() == 0 {
 		return &notAllowedError{id, "measure-only, and the measuring tool is not running"}
 	}
+	// round 5 of the 2.2.0 reviews: the request must be exactly what the bridge's builder makes for this id (pinned.go)
+	if !pinnedToBuilder(id, x) {
+		return &notAllowedError{id, "it is not exactly as the bridge builds it"}
+	}
 	if id == "Import" {
 		return nil
 	}

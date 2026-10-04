@@ -618,17 +618,17 @@ func TestOneAtATimePostingsFirst(t *testing.T) {
 	wg.Add(3)
 	go func() {
 		defer wg.Done()
-		_, _ = invokeTally(fin, f.port, collectionRequest("TDSDeskNames", "Ledger", "NAME", zz, ""), 0)
+		_, _ = invokeTally(fin, f.port, namesRequest(zz, 0, 2000), 0)
 	}()
 	time.Sleep(300 * time.Millisecond)
 	go func() {
 		defer wg.Done()
-		_, _ = invokeTally(fin, f.port, collectionRequest("TDSDeskGroups", "Group", "NAME", zz, ""), 0)
+		_, _ = invokeTally(fin, f.port, groupsFullRequest(zz), 0)
 	}()
 	time.Sleep(200 * time.Millisecond)
 	go func() {
 		defer wg.Done()
-		_, _ = invokeTally(fin, f.port, importEnvelope("Vouchers", zz, `<TALLYMESSAGE>`+finVoucher("p1", fgParty, fgBill, fgDate, fgAmt)+`</TALLYMESSAGE>`), 0)
+		_, _ = invokeTally(fin, f.port, importEnvelope("Vouchers", zz, `<TALLYMESSAGE xmlns:UDF="TallyUDF">`+finVoucher("p1", fgParty, fgBill, fgDate, fgAmt)+`</TALLYMESSAGE>`), 0)
 	}()
 	wg.Wait()
 	got := f.ids()

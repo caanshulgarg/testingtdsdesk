@@ -96,10 +96,12 @@ func TestTrayRoutesRefuseBrowserOrigin(t *testing.T) {
 
 // the Import fast path is the fixed header importEnvelope starts with, not '<TALLYREQUEST>Import' anywhere
 func TestImportPathAnchored(t *testing.T) {
-	if id := tallyRequestID(importEnvelope("Vouchers", "ZZ", "<TALLYMESSAGE/>")); id != "Import" {
+	// 2.2.0 (round 5: every id pinned to its builder): the posting as importEnvelope and the bridge's TALLYMESSAGE make it
+	posting := importEnvelope("Vouchers", "ZZ", `<TALLYMESSAGE xmlns:UDF="TallyUDF"></TALLYMESSAGE>`)
+	if id := tallyRequestID(posting); id != "Import" {
 		t.Fatalf("a posting's id: %q", id)
 	}
-	if err := checkAllowed(importEnvelope("Vouchers", "ZZ", "<TALLYMESSAGE/>")); err != nil {
+	if err := checkAllowed(posting); err != nil {
 		t.Fatalf("a posting refused: %v", err)
 	}
 	// a collection not on the list, with the Import header's text inside a value

@@ -321,6 +321,14 @@ func datedRefused(tc *TC, x string) error {
 			return nil
 		}
 		return readsOffErr()
+	case "TDSDeskKeepList":
+		// round 5 R5-1: the undated list above an AlterID always needs the starting point (whoever asks)
+		if !requestDated(x) {
+			if keepAboveExact(x) {
+				return nil
+			}
+			return readsOffErr()
+		}
 	}
 	if tc.person || readDaysOn() {
 		return nil
@@ -347,7 +355,10 @@ func keepAboveExact(x string) bool {
 		return false
 	}
 	co := html.UnescapeString(group(`<SVCURRENTCOMPANY>([^<]*)</SVCURRENTCOMPANY>`, x, 1))
-	return x == keepListAboveRequest(co, toI64(m[1]))
+	// round 5 R5-1: only from the company's starting point on (no starting point: never; a lower AlterID would be a full
+	// read of everything changed since)
+	sp, ok := startPointOf(co)
+	return ok && toI64(m[1]) >= sp && x == keepListAboveRequest(co, toI64(m[1]))
 }
 
 var reFilterDate = regexp.MustCompile(`\$date\b|\$\$isbetween|\$\$date:|<svfromdate|<svtodate`)

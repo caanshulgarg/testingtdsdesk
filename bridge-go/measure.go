@@ -234,32 +234,46 @@ func runMeasure(o measureOpts) (M, error) {
 	}
 
 	// a. the company-level check
-	it, raw := measureOne(port, "a", "the company check: its GUID and highest AlterIDs (one tiny request)", companyCheckRequest(company), "COMPANY")
-	guid, altV, altM := "", int64(0), int64(0)
-	for _, c := range xmlDoc(raw).All("COMPANY") {
-		if n := nameOf(c); n == "" || sameCompany(n, company) {
-			guid, altV, altM = nt(c, "GUID"), toI64(re(`\D`).ReplaceAllString(nt(c, "ALTVCHID"), "")), toI64(re(`\D`).ReplaceAllString(nt(c, "ALTMSTID"), ""))
+	// round 5 R5-1: the two forms of the change numbers (form a: NATIVEMETHOD; form b, the report, when a gives none)
+	read := func(raw string) (string, int64, int64) {
+		for _, c := range xmlDoc(raw).All("COMPANY") {
+			if n := nameOf(c); n == "" || sameCompany(n, company) {
+				return nt(c, "GUID"), toI64(re(`\D`).ReplaceAllString(cnTag(c, "ALTVCHID"), "")), toI64(re(`\D`).ReplaceAllString(cnTag(c, "ALTMSTID"), ""))
+			}
 		}
+		return "", 0, 0
 	}
+	it, raw := measureOne(port, "a", "the company check: its GUID and highest AlterIDs (one tiny request; form a)", companyCheckRequest(company), "COMPANY")
+	guid, altV, altM := read(raw)
 	it.note = fmt.Sprintf("company GUID %s; highest AlterID: entries %d, masters %d; the voucher count is not asked (Tally does not give it cheaply)", or(guid, "(not given)"), altV, altM)
 	add(it)
 	if stopped(it) {
 		return measureReport(o, company, port, items, started)
 	}
+	if altV <= 0 && altM <= 0 {
+		itb, rawb := measureOne(port, "a-b", "the change numbers, form b (a report over the company)", companyNumbersRequest(company), "COMPANY")
+		_, altV, altM = read(rawb)
+		itb.note = fmt.Sprintf("highest AlterID: entries %d, masters %d", altV, altM)
+		add(itb)
+		if stopped(itb) {
+			return measureReport(o, company, port, items, started)
+		}
+	}
 
 	// a2. round 18 (the owner's rule of 04-Oct-2026, measurement only): the entries above the company's starting point,
 	// the AlterID filter alone with NO dates (TDSDeskKeepList); the time says whether Tally answers it without looking
 	// at every entry of its books (only NWS144 can say; a stand-in cannot)
-	spAfter, had := startPointOf(company)
-	spHow := "the starting point"
-	if !had {
-		spAfter, spHow = altV, "the current ALTVCHID (no starting point recorded yet)"
-	}
-	it, _ = measureOne(port, "a2", fmt.Sprintf("entries with AlterID above %s %d, no dates (TDSDeskKeepList)", spHow, spAfter),
-		keepListAboveRequest(company, spAfter), "VOUCHER")
-	add(it)
-	if stopped(it) {
-		return measureReport(o, company, port, items, started)
+	// round 5 R5-1: only from a recorded starting point (never above a lower number: that would be a full read)
+	if spAfter, had := startPointOf(company); had {
+		it, _ = measureOne(port, "a2", fmt.Sprintf("entries with AlterID above the starting point %d, no dates (TDSDeskKeepList)", spAfter),
+			keepListAboveRequest(company, spAfter), "VOUCHER")
+		add(it)
+		if stopped(it) {
+			return measureReport(o, company, port, items, started)
+		}
+	} else {
+		add(&mItem{key: "a2", what: "entries above the starting point (TDSDeskKeepList)", note: "not asked: no starting point is recorded"})
+		writeLog("Measure Tally: " + company + ": the entries above the starting point are not asked: no starting point is recorded (Tally gave no change numbers yet)")
 	}
 
 	dtc := measureDatedTC(o)
