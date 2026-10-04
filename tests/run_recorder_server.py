@@ -10,18 +10,26 @@ computers; a ledger rename line -> tally_ledger_rename (renamed_at, the lines fo
 -> failed, not stored; a line with no GUID -> held, never a new row; the starting point kept once; the gap: PC A's lines reach 50
 (start 40), PC B's beat says 53 with recorderSeen false -> gap {missing 3 (up to: an upper bound), since the last match}, B's recorder state kept in
 info.bridges; A's lines up to 53 -> the next beat clears it; a number below the starting point -> needs_baseline, never a gap.
+Migration 45 (docs/recorder-bulk-posting.md 3 and 4): posts_update carrying window {a0, a1, vouchersCreated, mastersCreated}
+on the job's last update -> tally_post_window_save (a bad window: not stored, a log line, the update still answered); start
+1000, a job of 100 accepted, window 1000..1100, no recorder line, the beat says 1100 -> no gap. A job of 500 accepted bills with
+payload XML, 500 SHORT lines (company_guid, object_guid, master_id, alter_id, fid, event, saved_at) -> tally-ingest fetches the
+posted XML (tally_post_xml_for), reads it with parse.js with the line's GUID and AlterID -> 500 applied, 500 matched, 500 entries
+with their lines, 0 held; again -> 500 duplicate; the day book of that day (kind days) -> still 500, versions kept, the trial
+balance unchanged; a short line whose FinCom id (here in its narration) matches nothing -> held.
 Needs Deno (DENO, default: the deno on the PATH or /opt/deno/deno)."""
 import os, sys, json, time, hashlib, subprocess, urllib.request, shutil, threading
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import fake_supabase as FS
-import pg_stand
+import pg_stand, csv
+csv.field_size_limit(1 << 30)     # the posted XML of 500 entries is one field (tally_post_xml_for)
 DENO = os.environ.get("DENO") or shutil.which("deno") or ("/opt/deno/deno" if os.path.exists("/opt/deno/deno") else None)
 if not DENO: print("skipped: no deno (set DENO)"); raise SystemExit(0)
 SQLDIR = os.path.join(HERE, "..", "server", "tally-cloud")
 FILES = [os.path.join(SQLDIR, f) for f in ("migration-32-sync-safety.sql", "migration-33-ledger-lists.sql", "migration-35-bridge-control.sql")] + \
         [os.path.join(HERE, "fixtures", "migration-34-as-run-on-staging.sql")] + \
         [os.path.join(SQLDIR, f) for f in ("migration-36b-post-acceptance.sql", "migration-37-follow-ups.sql", "migration-36-ledger-rename.sql", "migration-38-post-followups.sql", "migration-39-rename-map-empty-day.sql",
-                                           "migration-40-states-carried.sql", "migration-41-day-counts.sql", "migration-42-empty-day-second-read.sql", "migration-43-posting-reply.sql", "migration-44-recorder.sql")]
+                                           "migration-40-states-carried.sql", "migration-41-day-counts.sql", "migration-42-empty-day-second-read.sql", "migration-43-posting-reply.sql", "migration-44-recorder.sql", "migration-45-bulk-posting.sql")]
 fails = []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
@@ -58,12 +66,15 @@ try:
         if v is None: return "null"
         if isinstance(v, bool): return "true" if v else "false"
         if isinstance(v, (int, float)): return repr(v)
+        if isinstance(v, list) and name_is_array[0]: return "array[%s]::text[]" % ",".join(q(x) for x in v) if v else "'{}'::text[]"
         if isinstance(v, (dict, list)): return q(json.dumps(v)) + "::jsonb"
         return q(v)
     real = FS.rpc
+    name_is_array = [False]
     def rpc(name, a):
-        if name in ("tally_recorder_apply", "tally_start_point", "tally_recorder_gap_check"):
+        if name in ("tally_recorder_apply", "tally_start_point", "tally_recorder_gap_check", "tally_post_window_save", "tally_post_xml_for", "tally_post_id_accept_reply", "tally_post_id_accept"):
             FS.ARGS.setdefault(name, []).append(a)
+            name_is_array[0] = name == "tally_post_xml_for"
             try: return json.loads(db.one("select public.%s(%s)::text" % (name, ", ".join("%s => %s" % (k, lit(v)) for k, v in a.items()))))
             except RuntimeError as e: raise RuntimeError(str(e).split("\n")[0][:300])
         return real(name, a)
@@ -198,6 +209,71 @@ try:
     db.sql("update tally_month_locks set unlocked_at = now() where month = '2026-07-01'")
     c, r = call({"kind": "days", "company": "ZZ CO", "days": [day]})
     ok(c == 200 and r.get("done") == ["20260702"] and not r.get("locked") and vrow("dy1").get("day") == "2026-07-02" and db.one("select count(*) from tally_vouchers where guid = 'dy1'") == "1", "R-M3. after the unlock the day sent again applies once (%s)" % {k: r.get(k) for k in ("done", "locked")})
+
+    # ---------------------------------------------------------------- migration 45: bulk posting with the recorder loaded
+    B2, B3 = "12222222-1111-1111-1111-111111111111", "13333333-1111-1111-1111-111111111111"
+    db.sql("insert into tally_books (book_id, firm_id, client_id, company, from_date, open_as_on) values (%s, %s, 'c1', 'ZZ TWO', '2026-04-01', '2026-03-31'), (%s, %s, 'c1', 'ZZ SIX', '2026-04-01', '2026-03-31')" % (q(B2), q(FIRM), q(B3), q(FIRM)))
+    FS.T["tally_companies"] += [{"firm_id": FIRM, "company": "ZZ TWO", "client_id": "c1", "book_id": B2}, {"firm_id": FIRM, "company": "ZZ SIX", "client_id": "c1", "book_id": B3}]
+    def vxml(fid, n, day="20260814", amt=100, guid=None, alter=None, vno=None):
+        extra = ("<GUID>%s</GUID>\n<ALTERID>%d</ALTERID>\n" % (guid, alter) if guid else "") + ("<VOUCHERNUMBER>%s</VOUCHERNUMBER>\n" % vno if vno else "")
+        return ('<VOUCHER VCHTYPE="Journal" ACTION="Create" OBJVIEW="Accounting Voucher View">\n<DATE>%s</DATE>\n<EFFECTIVEDATE>%s</EFFECTIVEDATE>\n%s<VOUCHERTYPENAME>Journal</VOUCHERTYPENAME>\n'
+                '<REFERENCE>INV-%d</REFERENCE>\n<REFERENCEDATE>%s</REFERENCEDATE>\n<PARTYLEDGERNAME>Supplier</PARTYLEDGERNAME>\n<NARRATION>Bill %d | TDSDesk:%s</NARRATION>\n'
+                '<ALLLEDGERENTRIES.LIST>\n<LEDGERNAME>Rent</LEDGERNAME>\n<ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>\n<AMOUNT>-%d.00</AMOUNT>\n</ALLLEDGERENTRIES.LIST>\n'
+                '<ALLLEDGERENTRIES.LIST>\n<LEDGERNAME>Supplier</LEDGERNAME>\n<ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>\n<AMOUNT>%d.00</AMOUNT>\n</ALLLEDGERENTRIES.LIST>\n</VOUCHER>\n') % (day, day, extra, n, day, n, fid, amt, amt)
+    def post_job(jid, company, fids, status):
+        payload = {"vouchers": [{"id": f, "xml": vxml(f, i + 1)} for i, f in enumerate(fids)], "masters": [], "ledger": ""}
+        db.sql("insert into tally_post_jobs (id, firm_id, client_id, company, device_id, payload, n, status, taken_at) values (%s, %s, 'c1', %s, %s, %s::jsonb, %d, %s, now())"
+               % (q(jid), q(FIRM), q(company), q(DA), q(json.dumps(payload)), len(fids), q(status)))
+        FS.T["tally_post_jobs"].append({"id": jid, "firm_id": FIRM, "client_id": "c1", "company": company, "device_id": DA, "payload": payload, "n": len(fids), "status": status, "checking": False, "results": [], "items": []})
+    # 3. the posting window
+    c, r = call({"kind": "beat", "version": "2.2.0", "bridge": GA, "tally": True, "open": ["ZZ TWO"], "companies": [{"name": "ZZ TWO", "open": True, "altvchid": 1000, "at": "2026-10-04T11:00:00+05:30"}]})
+    ok(c == 200 and ((r.get("recorder") or {}).get("ZZ TWO") or {}).get("startRecorded") is True, "45-3. ZZ TWO's starting point 1000 from the beat (%s)" % r.get("recorder"))
+    J3 = "00000003-0000-0000-0000-000000000003"
+    fids3 = ["W%03d" % i for i in range(100)]
+    post_job(J3, "ZZ TWO", fids3, "running")
+    upd = lambda jid, results, **kw: call(dict({"kind": "posts_update", "id": jid, "status": "done", "done": len(results), "message": "Posted", "results": results, "bridge": GA}, **kw))
+    res3 = [{"id": f, "ok": True, "byReply": True, "created": 1, "vchId": str(5000 + i), "batchN": 50, "kind": "voucher"} for i, f in enumerate(fids3)]
+    c, r = upd(J3, res3, window={"a0": 1000, "a1": 1100, "vouchersCreated": 100, "mastersCreated": 0})
+    wrow = (db.rows("select book_id, device_id, a0, a1, created_vch, created_mst from tally_post_windows where job_id = %s" % q(J3)) or [{}])[0]
+    ok(c == 200 and r.get("ok") is True and wrow == {"book_id": B2, "device_id": DA, "a0": "1000", "a1": "1100", "created_vch": "100", "created_mst": "0"}, "45-3. posts_update's window stored per book (%s, %s)" % (r, wrow))
+    ok(db.one("select count(*) from tally_post_ids where job_id = %s and accepted_at is not null" % q(J3)) == "100", "45-3. the 100 accepted (tally_post_id_accept_reply)")
+    c, r = call({"kind": "beat", "version": "2.2.0", "bridge": GA, "tally": True, "open": ["ZZ TWO"], "companies": [{"name": "ZZ TWO", "open": True, "altvchid": 1100, "at": "2026-10-04T11:30:00+05:30"}]})
+    cur2 = (db.rows("select gap::text as gap, last_match_at from tally_sync_cursor where book_id = %s" % q(B2)) or [{}])[0]
+    ok(c == 200 and ((r.get("recorder") or {}).get("ZZ TWO") or {}).get("gap") is None and ((r.get("recorder") or {}).get("ZZ TWO") or {}).get("missing") == 0 and not cur2.get("gap") and str(cur2.get("last_match_at")).startswith("2026-10-04 06:00"),
+       "45-3. posting 100 with no recorder line, the beat says 1100: no gap flag, last_match_at set (%s; %s)" % (r.get("recorder"), cur2))
+    J3b = "00000003-0000-0000-0000-00000000003b"
+    post_job(J3b, "ZZ TWO", ["WB1"], "running")
+    n_win, n_log = db.one("select count(*) from tally_post_windows"), len(log)
+    c, r = upd(J3b, [{"id": "WB1", "ok": True, "byReply": True, "created": 1}], window={"a0": 1100, "a1": 1e16, "vouchersCreated": 1, "mastersCreated": 0})
+    time.sleep(0.3)
+    ok(c == 200 and r.get("ok") is True and db.one("select count(*) from tally_post_windows") == n_win and any("window" in l for l in log[n_log:]), "45-3. a window out of bounds: not stored, a log line, the update answered (%s)" % [l.strip()[:120] for l in log[n_log:]])
+    # 4. 500 posted entries, 500 short lines
+    N = 500
+    J4 = "00000004-0000-0000-0000-000000000004"
+    fids4 = ["S%03d" % i for i in range(N)]
+    post_job(J4, "ZZ SIX", fids4, "done")
+    db.sql("update tally_post_ids set accepted_at = now() where job_id = %s" % q(J4))
+    shorts = [{"line_id": "s%d" % i, "event": "created", "saved_at": "2026-10-04T12:00:00+05:30", "company_guid": "cg-6", "object_guid": "gs-%d" % i, "master_id": str(9000 + i), "alter_id": 2001 + i, "fid": fids4[i]} for i in range(N)]
+    rec6 = lambda lines, key=KA, bridge=GA: call({"kind": "recorder_lines", "company": "ZZ SIX", "version": "2.2.0", "bridge": bridge, "lines": lines}, key)
+    nv6 = lambda: int(db.one("select count(*) from tally_vouchers where book_id = %s" % q(B3)))
+    tb6 = lambda: {x["ledger"]: x["s"] for x in db.rows("select ledger, sum(amount)::text as s from tally_ledger_day where book_id = %s group by ledger order by 1" % q(B3))}
+    c, r = rec6(shorts)
+    m6 = (db.rows("select count(*) filter (where matched_at is not null) as at, count(*) filter (where matched_guid like 'gs-%%' and matched_mid ~ '^9[0-9]{3}$' and matched_alter between 2001 and 2500) as ids from tally_post_ids where job_id = " + q(J4)) or [{}])[0]
+    ok(c == 200 and r.get("applied") == N and r.get("held") == 0 and r.get("duplicate") == 0 and r.get("failed") == 0, "45-4. 500 short lines: 500 applied, 0 held, 0 duplicate (%s)" % {k: r.get(k) for k in ("applied", "held", "duplicate", "failed")})
+    ok(m6 == {"at": "500", "ids": "500"}, "45-4. 500 matched on tally_post_ids (matched_at, GUID, MasterID, AlterID) (%s)" % m6)
+    v6 = (db.rows("select count(*) as n, count(*) filter (where origin = 'fincom' and fincom_id like 'S%%' and day = '2026-08-14' and alter_id between 2001 and 2500 and guid like 'gs-%%') as good from tally_vouchers where book_id = " + q(B3)) or [{}])[0]
+    ok(v6 == {"n": "500", "good": "500"} and db.one("select count(*) from tally_lines where book_id = %s" % q(B3)) == "1000", "45-4. 500 entries built from FinCom's posted XML (parse.js), with the line's GUID and AlterID; 1000 lines (%s)" % v6)
+    tb0 = tb6(); ver0 = db.one("select count(*) from tally_voucher_versions where book_id = %s" % q(B3))
+    c, r = rec6(shorts)
+    ok(r.get("duplicate") == N and r.get("applied") == 0 and nv6() == N, "45-4. the same 500 again: 500 duplicate, still 500 entries (%s)" % {k: r.get(k) for k in ("applied", "duplicate", "held")})
+    dayx = "".join(vxml(fids4[i], i + 1, guid="gs-%d" % i, alter=2001 + i, vno="J-%d" % (i + 1)) for i in range(N))
+    c, r = call({"kind": "days", "company": "ZZ SIX", "days": [{"day": "20260814", "b64": base64.b64encode(dayx.encode()).decode(), "n": N}]})
+    ok(c == 200 and r.get("done") == ["20260814"] and nv6() == N and db.one("select count(*) from tally_vouchers where book_id = %s and deleted_at is null" % q(B3)) == "500", "45-4. the day book of that day uploaded: still 500 entries (%s)" % {k: r.get(k) for k in ("done", "bad")})
+    ok(db.one("select count(*) from tally_voucher_versions where book_id = %s" % q(B3)) == ver0 == "500" and tb6() == tb0 and tb0.get("Rent") == "-50000", "45-4. versions kept (500), the trial balance unchanged (%s)" % tb6())
+    c, r = rec6([{"line_id": "nar1", "event": "created", "company_guid": "cg-6", "object_guid": "gz-1", "master_id": "1", "alter_id": 3001, "narration": "Bill | TDSDesk:NOSUCH9", "saved_at": "2026-10-04T12:00:00+05:30"}])
+    ok(st(r) == {"nar1": "held"} and "FinCom id NOSUCH9 matches no posting of this firm" in str((r.get("results") or [{}])[0].get("why")) and vrow("gz-1") == {}, "45-4. a short line whose FinCom id (in its narration) matches nothing: held with words, no entry (%s)" % r.get("results"))
+    c, r = rec6([{"line_id": "bad1", "event": "created", "object_guid": "gz-2", "alter_id": 3002, "fid": "bad id with spaces"}])
+    ok(st(r) == {"bad1": "held"} and vrow("gz-2") == {}, "45-4. a FinCom id outside the bounds is no FinCom id: no body, held (%s)" % r.get("results"))
 finally:
     if fn: fn.terminate()
     db.stop()

@@ -73,6 +73,10 @@
 //    an array (at most 5 texts of 200); an entry of a batch (batchN > 1) is stamped with vchId alone, never the request's
 //    LASTVCHID; an alreadySent refusal (this computer sent it before) is an acceptance kept locked, never released nor
 //    rewritten as being checked; a 'failed' update carrying an entry sent with no answer from Tally is stored done
+//    FinCom Bridge 2.2.0 (migration 45, docs/recorder-bulk-posting.md 3): the job's last update may carry window {a0, a1,
+//    vouchersCreated, mastersCreated} (Tally's ALTVCHID before and after the job, the counts of Tally's replies): kept per
+//    book by tally_post_window_save(firm, job, device, a0, a1, vch, mst), so the gap check counts FinCom's own postings.
+//    Each a whole number 0..10^15 (below) and a1 not below a0, else ignored with a log line; never fails the update
 //   Phase 2, the Tally change recorder (migration 44; without it both answer 503 {notReady}):
 //   {kind:"recorder_lines", company, lines:[{line_id, event, saved_at, pc, user, company_guid, object_guid, master_id,
 //    alter_id, vch_type, vch_no, vch_date, xml?, ledgers?, save_ms, name?, from?, to?}]} -> {ok, results:[{line_id, state,
@@ -85,6 +89,12 @@
 //                                                       and lines; vch_date yyyymmdd (or yyyy-mm-dd); ledgers [{name, guid}];
 //                                                       name (ledger_*), from / to (ledger_renamed); save_ms the delay added
 //                                                       to saving. tally_recorder_apply(firm, book, device, lines)
+//    migration 45 (docs/recorder-bulk-posting.md 4): a SHORT line, FinCom's own entry (the add-on writes only company_guid,
+//    object_guid, master_id, alter_id, fid (or narration carrying "TDSDesk:<id>"), event, saved_at; no xml): the posted XML
+//    of its FinCom id is fetched (tally_post_xml_for(firm, book, fids): the live, accepted posting of this firm for this
+//    book) and read with parse.js, the line's GUID and AlterID overriding, into the line's vouchers / lines as a full body
+//    (short: true). The database matches it to the posting (tally_post_ids.matched_*) and builds the entry once by GUID; a
+//    FinCom id matching no posting is held there. Without 45 the fetch is skipped (the line is held for want of a body)
 //   the beat's companies may carry altvchid, altmstid, recorderSeen, recorderLastAt (at: the check's time): each company with
 //   altvchid is checked (tally_recorder_gap_check) and the answer carries recorder:{company: {gap, missing, needsBaseline?,
 //   startRecorded?}}; recorderSeen kept per bridge in info.bridges[id].recorder = {company: {seen, lastAt}}
@@ -701,6 +711,22 @@ async function applyLedgerList(firm: string, book: string, body: any, dev?: any,
   console.log("tally-ingest ledger_list", book, JSON.stringify({ ...out, notes: notes.slice(0, 5) }));
   return reply(200, out);
 }
+// Migration 45: the posting window of a job's last posts_update, {a0, a1, vouchersCreated, mastersCreated}: whole numbers
+// 0..10^15 (below), a1 not below a0; anything else ignored with a log line. Never fails the update (a cloud without 45: skipped)
+const WIN_MAX = 1e15;
+const winNum = (v: unknown) => typeof v === "number" && Number.isInteger(v) && v >= 0 && v < WIN_MAX ? v : typeof v === "string" && /^\d{1,15}$/.test(v) && Number(v) < WIN_MAX ? Number(v) : null;
+async function postWindow(firm: string, dev: any, job: string, w: any) {
+  const a0 = winNum(w?.a0), a1 = winNum(w?.a1), vch = winNum(w?.vouchersCreated ?? 0), mst = winNum(w?.mastersCreated ?? 0);
+  if (!w || typeof w !== "object" || a0 === null || a1 === null || vch === null || mst === null || a1 < a0) {
+    console.log("tally-ingest posts_update: posting window ignored (whole numbers 0..10^15, a1 not below a0)", job, JSON.stringify(w).slice(0, 200));
+    return;
+  }
+  try {
+    const { data, error } = await db.rpc("tally_post_window_save", { p_firm: firm, p_job: job, p_device: dev.id, p_a0: a0, p_a1: a1, p_vch: vch, p_mst: mst });
+    if (error) { if (!/could not find|does not exist|schema cache|no such function/i.test(String(error.message || ""))) console.log("tally-ingest posts_update: posting window", job, String(error.message || "").slice(0, 200)); return; }
+    if ((data as any)?.ok === false) console.log("tally-ingest posts_update: posting window not kept", job, String((data as any)?.error || "").slice(0, 200));
+  } catch (e) { console.log("tally-ingest posts_update: posting window", job, (e as Error).message); }
+}
 // Phase 2 (migration 44): the recorder's lines. Each line is cleaned (strings cut, known events only, the voucher's XML
 // read with parse.js into the days path's shape: [{guid, alter, type, no, party, narr, cancel, opt, gstin, pos, ref,
 // refDate, cmp, fid, day}] and [[guid, ledger, amount, hsn, rate, bills]]), then tally_recorder_apply stores every line
@@ -721,6 +747,11 @@ function cleanRecorderLine(x: any, me: { id: string }): { line?: Record<string, 
     vch_type: s(x?.vch_type, 60), vch_no: s(x?.vch_no, 60), vch_date: day, ledgers, save_ms: Number.isFinite(ms) && ms >= 0 && ms < 3.6e6 ? Math.round(ms * 1000) / 1000 : null };
   if (event.startsWith("ledger_")) { line.name = cleanName(s(x?.name, 300)) || null; line.from = cleanName(s(x?.from, 300)) || null; line.to = cleanName(s(x?.to, 300)) || null; }
   const xml = typeof x?.xml === "string" ? x.xml : "";
+  // migration 45: a short line (FinCom's own entry): its FinCom id as fid, or the text after "TDSDesk:" in the narration it
+  // carries (the rule of parse.js); an id outside [A-Za-z0-9._-]{1,80} is none
+  const fidRaw = s(x?.fid, 120), narr = s(x?.narration, 1000);
+  const fid = /^[A-Za-z0-9._-]{1,80}$/.test(fidRaw) ? fidRaw : ((narr.match(/TDSDesk:([A-Za-z0-9._-]{1,80})/) || [])[1] || "");
+  if (fid && !event.startsWith("ledger_")) { line.fid = fid; if (!xml) line.short = true; }
   line.payload = { ...line, xmlBytes: xml.length || undefined };
   if (xml && ["created", "altered", "imported"].includes(event)) {
     if (xml.length > MAX_RECORDER_XML) return { bad: "the entry's XML is larger than FinCom takes (" + xml.length + " characters)" };
@@ -744,6 +775,7 @@ async function recorderLines(dev: any, firm: string, book: string, body: any) {
     if (c.bad) results[i] = { line_id: String(x?.line_id ?? "").slice(0, 80), state: "failed", why: c.bad };
     else { send.push({ ...c.line, company }); at.push(i); }
   });
+  if (send.length) await shortBodies(firm, book, send);
   if (send.length) {
     const { data, error } = await db.rpc("tally_recorder_apply", { p_firm: firm, p_book: book, p_device: dev.id, p_lines: send });
     if (error && notReady44(error)) return reply(503, { ok: false, notReady: true, error: "The cloud does not take recorder lines yet (migration 44)." });
@@ -754,6 +786,39 @@ async function recorderLines(dev: any, firm: string, book: string, body: any) {
   for (const k of ["applied", "held", "duplicate", "stale", "failed"]) out[k] = results.filter((r) => r?.state === k).length;
   if (out.held || out.failed) console.log("tally-ingest recorder_lines", book, JSON.stringify({ n: results.length, held: out.held, failed: out.failed, why: results.filter((r) => r && r.state !== "applied" && r.state !== "duplicate").slice(0, 3).map((r) => r.why) }));
   return reply(200, out);
+}
+// migration 45: the short lines' entries from FinCom's own posted XML (tally_post_xml_for: the live, accepted posting of
+// each FinCom id for this firm and book), read with parse.js as a day book is, the line's GUID and AlterID overriding (the
+// posted XML has none: Tally gives them), its voucher number when the XML has none; dated by the XML, else by the line.
+// A FinCom id with no posting gets no body (the database holds the line with its words). Without 45: skipped
+const xesc = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+function withIds(xml: string, guid: string, alter: number | null) {
+  const open = xml.match(/<VOUCHER\b[^>]*>/);
+  if (!open || open.index === undefined) return "";
+  let body = xml.slice(open.index + open[0].length).replace(/<GUID>[^<]*<\/GUID>/g, "").replace(/<ALTERID>[^<]*<\/ALTERID>/g, "");
+  const head = open[0].replace(/\sREMOTEID="[^"]*"/g, "");
+  body = "<GUID>" + xesc(guid) + "</GUID>" + (alter !== null ? "<ALTERID>" + alter + "</ALTERID>" : "") + body;
+  const out = xml.slice(0, open.index) + head + body;
+  return out.indexOf("</VOUCHER>") >= 0 ? out : "";
+}
+async function shortBodies(firm: string, book: string, send: Record<string, any>[]) {
+  const want = send.filter((l) => l.short === true && l.fid && l.object_guid && ["created", "altered", "imported"].includes(String(l.event)));
+  if (!want.length) return;
+  const { data, error } = await db.rpc("tally_post_xml_for", { p_firm: firm, p_book: book, p_fids: [...new Set(want.map((l) => String(l.fid)))].slice(0, 1000) });
+  if (error) { if (!/could not find|does not exist|schema cache|no such function/i.test(String(error.message || ""))) console.log("tally-ingest recorder_lines: posted XML", book, String(error.message || "").slice(0, 200)); return; }
+  const byFid = new Map<string, string>();
+  for (const p of ((data as any)?.posts || []) as any[]) if (p && typeof p.fid === "string" && typeof p.xml === "string" && p.xml.length <= MAX_RECORDER_XML) byFid.set(p.fid, p.xml);
+  let unread = 0;
+  for (const l of want) {
+    const xml = byFid.get(String(l.fid));
+    if (!xml) continue;
+    const og = String(l.object_guid), r = parseDay(withIds(xml, og, typeof l.alter_id === "number" ? l.alter_id : null));
+    const vs = r.vouchers.filter((v: any) => v?.guid === og);
+    if (!vs.length) { unread++; continue; }
+    l.vouchers = vs.map((v: any) => { const d = dayVouchers({ vouchers: [v] })[0]; return { ...d, no: d.no || l.vch_no || "", day: isDay(v.date) ? iso(v.date) : l.vch_date }; });
+    l.lines = dayLines(r).filter((x: any) => Array.isArray(x) && x[0] === og);
+  }
+  if (unread) console.log("tally-ingest recorder_lines: posted XML not readable for " + unread + " short line(s)", book);
 }
 // the bridge's starting point (the owner's change of 04-Oct: reading is prospective): kept once per book and company GUID
 async function startPoint(dev: any, firm: string, book: string, body: any) {
@@ -1327,6 +1392,8 @@ Deno.serve(async (req) => {
           cur = q.data;
         }
         if (!cur) return reply(200, { ok: false, gone: true, error: "This posting is no longer in FinCom." });
+        // migration 45: the posting window (Tally's change numbers before and after the job), whatever the job's state: a fact of Tally
+        if (body.window !== undefined && body.window !== null) await postWindow(firm, dev, id, body.window);
         if (cur.status === "cancelled") return reply(200, { ok: false, cancelled: true, error: "This posting was cancelled in FinCom." });
         // round 7 (F4, H1): an update never goes back in time. The bridge numbers its updates per posting (seq): a lower
         // one is late and ignored. A posting finished (done or failed, nothing being checked) takes no bridge update at
