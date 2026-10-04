@@ -66,6 +66,9 @@ func driveEveryRequest(t *testing.T) *standTally {
 	must("tag check", err)
 	_, err = voucherByMaster(f.port, zz, td, "1")
 	must("voucher-id check", err)
+	// 2.2.0: the recorder's body fetch (the entries just changed, by MasterID, the line's own date)
+	_, err = fetchVouchersByMaster(&TC{copier: true}, zz, f.port, td, []string{"1"})
+	must("body fetch", err)
 	_, err = removeTallyVoucher(f.port, zz, "g-1", "1", "Journal", td, "D-0")
 	must("delete", err)
 	// the measuring tool (before Update now: with no copy here it reads the year's dates) and its snapshot

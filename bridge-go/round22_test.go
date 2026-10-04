@@ -112,8 +112,9 @@ func TestAddonUpgradeLeavesOldFileAlone(t *testing.T) {
 	for _, e := range es {
 		names = append(names, e.Name())
 	}
-	if strings.Join(names, ",") != anyAddonName {
-		t.Fatalf("the add-on files shipped: %v (want %s only)", names, anyAddonName)
+	// 2.2.0: the live add-on FinComRecorder.tdl ships beside it (recorder_live_test.go); the 2.1.9 name never
+	if strings.Join(names, ",") != liveAddonName+","+anyAddonName {
+		t.Fatalf("the add-on files shipped: %v (want %s and %s)", names, liveAddonName, anyAddonName)
 	}
 	if !strings.Contains(readText(filepath.Join("addon", anyAddonName)), anyGate) {
 		t.Fatal("the new add-on lacks the any-company gate")

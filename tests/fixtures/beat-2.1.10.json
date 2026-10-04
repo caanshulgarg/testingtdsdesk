@@ -1,6 +1,6 @@
 {
   "allowlist": {
-    "hash": "b8dae6491978cebd405f98223cdff4d97451f4388c7bdf56089bb0e7941e643c",
+    "hash": "2f2102620df9dad1105ecca5b115fa1436ab9c3caaf45862daf29f85d5608075",
     "measured": false
   },
   "busySince": "",
@@ -55,6 +55,9 @@
   "postOnly": [],
   "readDays": false,
   "readStopped": null,
+  "recorderSource": "addon",
+  "recorderSourceB": {},
+  "recorderState": {},
   "reqs": {
     "day": "2026-10-04",
     "last": {
@@ -83,5 +86,5 @@
   "tallyState": "open",
   "trialTools": false,
   "updating": false,
-  "version": "2.1.10"
+  "version": "2.2.0"
 }

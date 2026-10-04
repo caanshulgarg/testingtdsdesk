@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -243,7 +244,10 @@ func syncConfig() {
 	cfgMu.Unlock()
 }
 
-// --- the log: never holds keys, codes or passwords; rotated at 5 MB keeping 5 old copies
+// --- the log: never holds keys, codes or passwords. 2.2.0: kept 30 days: at the first line of a new day the log is
+// renamed to <log>.<yyyy-mm-dd> (its last day), and at 5 MB within a day to <log>.<yyyy-mm-dd>-2, -3...; at each such
+// rotation the bridge's own date-named copies (and its old numbered ones, <log>.1 to .5) older than 30 days are deleted.
+// Nothing else in the folder is touched
 var logMu sync.Mutex
 
 func protectLogText(msg string) string {
@@ -275,15 +279,39 @@ func writeLog(msg string) {
 		fmt.Println(line)
 	}
 	f := logFile()
-	if fi, err := os.Stat(f); err == nil && fi.Size() > 5*1024*1024 {
-		for i := 4; i >= 1; i-- {
-			if exists(fmt.Sprintf("%s.%d", f, i)) {
-				_ = os.Rename(fmt.Sprintf("%s.%d", f, i), fmt.Sprintf("%s.%d", f, i+1))
-			}
+	if fi, err := os.Stat(f); err == nil && fi.Mode().IsRegular() {
+		day := fi.ModTime().Format("2006-01-02")
+		if day != time.Now().Format("2006-01-02") || fi.Size() > 5*1024*1024 {
+			rotateLog(f, day)
 		}
-		_ = os.Rename(f, f+".1")
 	}
 	_ = appendText(f, line+"\r\n")
+}
+
+// the log renamed to its date (a second one that day: -2, -3...), then the bridge's own old copies pruned
+func rotateLog(f, day string) {
+	to := f + "." + day
+	for i := 2; exists(to) && i < 1000; i++ {
+		to = fmt.Sprintf("%s.%s-%d", f, day, i)
+	}
+	_ = os.Rename(f, to)
+	pruneLogs(f, 30*24*time.Hour)
+}
+
+// the bridge's own copies of its log older than keep: <log>.<yyyy-mm-dd>[-n] and <log>.1 to .9, regular files only
+func pruneLogs(f string, keep time.Duration) {
+	base := filepath.Base(f)
+	m, _ := filepath.Glob(filepath.Join(filepath.Dir(f), base+".*"))
+	own := regexp.MustCompile(`^` + regexp.QuoteMeta(base) + `\.(\d{4}-\d{2}-\d{2}(-\d+)?|[1-9])$`)
+	for _, p := range m {
+		fi, err := os.Lstat(p)
+		if err != nil || !fi.Mode().IsRegular() || !own.MatchString(filepath.Base(p)) {
+			continue
+		}
+		if time.Since(fi.ModTime()) > keep {
+			_ = os.Remove(p)
+		}
+	}
 }
 
 // --- PostOnly (round 11, 03-Oct-2026): the companies this computer may post to. The setting is a JSON array of company

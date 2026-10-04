@@ -257,6 +257,16 @@ func newStandTally(t *testing.T) *standTally {
 					o.WriteString(v.xml())
 				}
 			}
+		case vchByMasterID: // 2.2.0: the recorder's body fetch, every MasterID named (one day)
+			want := map[string]bool{}
+			for _, m := range regexp.MustCompile(`\$MasterID = (\d+)`).FindAllStringSubmatch(body, -1) {
+				want[m[1]] = true
+			}
+			for _, v := range f.vch {
+				if inDates(v) && want[v.master] {
+					o.WriteString(v.xml())
+				}
+			}
 		case "FinComByMaster":
 			want := group(`\$MasterID = (\d+)`, body, 1)
 			for _, v := range f.vch {
@@ -350,6 +360,12 @@ type standCloud struct {
 	takeJobs  []M      // round 7: jobs posts_take hands out, one per call
 	posts     []M      // round 7: every posts_update body
 	dayPosts  []M      // round 10: every "days" body (per day: day, n, empty / readFailed)
+	// 2.2.0: recorder_lines: the bodies answered 200 with results (recBodies) and every body as sent (recRaw); recReply
+	// answers instead (nil: results, every line applied); recDelay: how long each answer takes
+	recBodies []M
+	recRaw    []string
+	recReply  func(b M) (int, M)
+	recDelay  time.Duration
 }
 
 func newStandCloud(t *testing.T) *standCloud {
@@ -390,6 +406,27 @@ func newStandCloud(t *testing.T) *standCloud {
 		case "ledger_list":
 			c.ledList = append(c.ledList, o)
 			out["added"], out["renamed"], out["deleted"] = len(arr(o["ledgers"])), len(arr(o["renamed"])), 0
+		case "recorder_lines":
+			c.recRaw = append(c.recRaw, string(b))
+			if c.recDelay > 0 {
+				c.mu.Unlock()
+				time.Sleep(c.recDelay)
+				c.mu.Lock()
+			}
+			if c.recReply != nil {
+				code, ans := c.recReply(o)
+				if code != 200 {
+					w.WriteHeader(code)
+				}
+				_, _ = w.Write([]byte(jsonText(ans)))
+				return
+			}
+			res := []any{}
+			for _, x := range arr(o["lines"]) {
+				res = append(res, M{"line_id": obj(x)["line_id"], "state": "applied", "why": nil})
+			}
+			c.recBodies = append(c.recBodies, o)
+			out["results"], out["applied"] = res, len(res)
 		case "days":
 			c.dayPosts = append(c.dayPosts, o)
 			done := []any{}

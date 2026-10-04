@@ -18,6 +18,7 @@ import (
 	"math/big"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -234,4 +235,74 @@ func releaseRefuses(version string) string {
 		return "FinCom has not allowed it on this computer yet (the pilot computer takes a new version first; the others after the owner approves it)"
 	}
 	return ""
+}
+
+// --- 2.2.0: "Roll back to the previous version" (the tray, for anyone at the computer; it asks yes/no first). An update
+// that ran well keeps the program it replaced as FinComBridge.previous.exe (one, the latest; before 2.2.0 it was
+// deleted), with its version in previous-version.json. The rollback puts it back the way an update that does not start
+// is undone (win_service.go undoFailedUpdate): the running program renamed aside (FinComBridge.rolledback.exe), the
+// previous one put in its place, then the bridge starts again. Automatic updates are turned off on this computer
+// (NoAutoUpdate), else the previous version would take the newer one again at once. (putBackOldBridge, the uninstall's
+// step, puts back bridge 1.15.0's TDSBridge.ps1; it is not this.)
+var (
+	exePathFn       = func() string { e, _ := os.Executable(); return e }
+	rollbackRestart = func() { time.Sleep(time.Second); requestStop(3) }
+)
+
+func previousExe(dir string) string { return filepath.Join(dir, "FinComBridge.previous.exe") }
+
+// after an update ran well (updateHealth): FinComBridge.old.exe kept as FinComBridge.previous.exe
+func keepPreviousVersion(dir, from string) {
+	old := filepath.Join(dir, "FinComBridge.old.exe")
+	if !exists(old) {
+		return
+	}
+	prev := previousExe(dir)
+	_ = os.Remove(prev)
+	if err := os.Rename(old, prev); err != nil {
+		_ = os.Remove(old)
+		writeLog("Update: the previous version could not be kept for a rollback: " + err.Error())
+		return
+	}
+	_ = saveFile(filepath.Join(dir, "previous-version.json"), jsonText(M{"version": from, "at": nowS()}))
+	writeLog("Update: the previous version (" + or(from, "not known") + ") is kept for \"Roll back to the previous version\"")
+}
+
+// the tray's yes/no: the version it would go back to
+func rollbackPreview() (M, error) {
+	exe := exePathFn()
+	dir := filepath.Dir(exe)
+	fi, err := os.Lstat(previousExe(dir))
+	if exe == "" || err != nil || !fi.Mode().IsRegular() {
+		return nil, errors.New("No previous version is kept on this computer (one is kept from the next update on).")
+	}
+	v := str(readObjFile(filepath.Join(dir, "previous-version.json"))["version"])
+	return M{"ok": true, "version": v, "confirm": "Roll FinCom Bridge back from " + BridgeVersion + " to " + or(v, "the previous version") + "?\n\n" +
+		"The bridge stops, the previous program is put back and starts in a few seconds. Automatic updates are turned off on this computer until FinCom support turns them on again. " +
+		"A posting going on resumes after the restart; nothing is posted twice."}, nil
+}
+
+func rollBackBridge() (M, error) {
+	pv, err := rollbackPreview()
+	if err != nil {
+		return nil, err
+	}
+	exe := exePathFn()
+	dir := filepath.Dir(exe)
+	bad := filepath.Join(dir, "FinComBridge.rolledback.exe")
+	_ = os.Remove(bad)
+	if err := os.Rename(exe, bad); err != nil {
+		return nil, errors.New("The program could not be moved aside: " + err.Error())
+	}
+	if err := os.Rename(previousExe(dir), exe); err != nil {
+		_ = os.Rename(bad, exe)
+		return nil, errors.New("The previous version could not be put back: " + err.Error())
+	}
+	setCfg("NoAutoUpdate", true)
+	saveConfig()
+	_ = os.Remove(filepath.Join(dir, "update-pending.json"))
+	_ = saveFile(filepath.Join(dir, "update-undone.json"), jsonText(M{"version": BridgeVersion, "back": str(pv["version"]), "at": nowS(), "by": "tray"}))
+	writeLog("Rolled back from " + BridgeVersion + " to " + or(str(pv["version"]), "the previous version") + " from the tray icon; automatic updates are off on this computer (NoAutoUpdate); starting again")
+	go rollbackRestart()
+	return M{"ok": true, "version": str(pv["version"])}, nil
 }

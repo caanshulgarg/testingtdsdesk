@@ -1,0 +1,107 @@
+{
+  "bridge": {
+    "computer": "vm",
+    "id": "go-c7bdd73fe236",
+    "mode": "main",
+    "runMode": "window",
+    "user": "",
+    "version": "2.2.0"
+  },
+  "company": "ZZ TEST",
+  "company_guid": "co-guid-1",
+  "kind": "recorder_lines",
+  "lines": [
+    {
+      "alter_id": 9001,
+      "company_guid": "co-guid-1",
+      "event": "created",
+      "fid": "",
+      "ledgers": [
+        {
+          "guid": "",
+          "name": "Landlord A"
+        },
+        {
+          "guid": "",
+          "name": "HDFC Bank"
+        }
+      ],
+      "line_id": "3031d889d007d61672be2d55989baf62",
+      "master_id": "4101",
+      "narration": "Rent for October",
+      "object_guid": "c1d2e3f4-0001",
+      "pc": "NWS144",
+      "save_ms": 1000,
+      "saved_at": "2026-10-04T10:15:03+05:30",
+      "source": "addon",
+      "user": "owner",
+      "vch_date": "20261004",
+      "vch_no": "17",
+      "vch_type": "Payment",
+      "xml": "<VOUCHER REMOTEID=\"c1d2e3f4-0001\" VCHTYPE=\"Payment\"><DATE>20261004</DATE><GUID>c1d2e3f4-0001</GUID><MASTERID>4101</MASTERID><ALTERID> 9001</ALTERID><VOUCHERTYPENAME>Payment</VOUCHERTYPENAME><VOUCHERNUMBER>17</VOUCHERNUMBER><PARTYLEDGERNAME>Landlord A</PARTYLEDGERNAME><NARRATION>Rent for October</NARRATION><ISOPTIONAL>No</ISOPTIONAL><ISCANCELLED>No</ISCANCELLED><ALLLEDGERENTRIES.LIST><LEDGERNAME>Landlord A</LEDGERNAME><AMOUNT>25000.00</AMOUNT></ALLLEDGERENTRIES.LIST><ALLLEDGERENTRIES.LIST><LEDGERNAME>HDFC Bank</LEDGERNAME><AMOUNT>-25000.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>"
+    },
+    {
+      "alter_id": 9002,
+      "company_guid": "co-guid-1",
+      "event": "imported",
+      "fid": "abc123",
+      "ledgers": [],
+      "line_id": "90ac48b931c6c3fb2588e0923b314162",
+      "master_id": "4102",
+      "narration": "TDSDesk:abc123 | TDS on rent",
+      "object_guid": "c1d2e3f4-0002",
+      "pc": "NWS144",
+      "save_ms": 1000,
+      "saved_at": "2026-10-04T10:15:03+05:30",
+      "source": "addon",
+      "user": "owner",
+      "vch_date": "20261004",
+      "vch_no": "J-5",
+      "vch_type": "Journal",
+      "xml": ""
+    },
+    {
+      "alter_id": 9003,
+      "company_guid": "co-guid-1",
+      "event": "deleted",
+      "fid": "",
+      "ledgers": [],
+      "line_id": "27e241734ef7d8b9c4c8d9074b4979d3",
+      "master_id": "4103",
+      "narration": "old sale",
+      "object_guid": "c1d2e3f4-0003",
+      "pc": "NWS144",
+      "save_ms": 1000,
+      "saved_at": "2026-10-04T10:15:03+05:30",
+      "source": "addon",
+      "user": "owner",
+      "vch_date": "20261003",
+      "vch_no": "S-9",
+      "vch_type": "Sales",
+      "xml": ""
+    },
+    {
+      "alter_id": 1,
+      "company_guid": "co-guid-1",
+      "event": "ledger_created",
+      "fid": "",
+      "ledgers": [],
+      "line_id": "9513efec2e5617ffa8e6a65061f6f0bf",
+      "master_id": "1",
+      "name": "Landlord B",
+      "narration": "",
+      "object_guid": "led-1",
+      "parent": "Sundry Creditors",
+      "pc": "NWS144",
+      "save_ms": 1000,
+      "saved_at": "2026-10-04T10:15:03+05:30",
+      "source": "addon",
+      "user": "owner",
+      "vch_date": "",
+      "vch_no": "",
+      "vch_type": "",
+      "xml": "<LEDGER NAME=\"Landlord B\" RESERVEDNAME=\"\"><GUID>led-1</GUID><MASTERID> 1</MASTERID><ALTERID> 1</ALTERID><PARENT>Sundry Creditors</PARENT><OPENINGBALANCE>0.00</OPENINGBALANCE><PARTYGSTIN></PARTYGSTIN><INCOMETAXNUMBER></INCOMETAXNUMBER><LEDSTATENAME></LEDSTATENAME></LEDGER>"
+    }
+  ],
+  "version": "2.2.0"
+}

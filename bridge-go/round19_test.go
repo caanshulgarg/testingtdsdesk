@@ -568,7 +568,7 @@ func TestNoWriteToRecorderFiles(t *testing.T) {
 			}
 			names := false
 			ast.Inspect(fd.Body, func(n ast.Node) bool {
-				if id, ok := n.(*ast.Ident); ok && (id.Name == "recorderDirFn" || id.Name == "recorderFiles") {
+				if id, ok := n.(*ast.Ident); ok && (id.Name == "recorderDirFn" || id.Name == "recorderFiles" || id.Name == "recorderDirChecked" || id.Name == "liveFiles") /* 2.2.0: the live reader */ {
 					names = true
 				}
 				return true

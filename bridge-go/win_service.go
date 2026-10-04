@@ -126,9 +126,11 @@ func updateHealth() {
 	if stopping() {
 		return
 	}
+	from := str(readObjFile(pf)["from"])
 	_ = os.Remove(pf)
-	_ = os.Remove(filepath.Join(filepath.Dir(exe), "FinComBridge.old.exe"))
-	writeLog("Update: FinCom Bridge " + BridgeVersion + " runs well; the previous version was removed")
+	// 2.2.0: the previous version is kept for "Roll back to the previous version" (update.go), no longer removed
+	keepPreviousVersion(filepath.Dir(exe), from)
+	writeLog("Update: FinCom Bridge " + BridgeVersion + " runs well")
 }
 
 // --- the tray icon in the owner's session(s): started by the service, and again if it stops; not after Quit

@@ -276,15 +276,25 @@ type TC struct {
 	// round 19 (review finding 8): a background read asks this right after it took the Tally lock; true: it gives the
 	// lock back and backs off (a posting job started, or the company's lease was taken, while it waited)
 	yield func() bool
+	// 2.2.0 (the owner's rule for the recorder's source B): told the wall time from the send to the full answer (or
+	// the failure), the wait for Tally's lock not counted
+	timed func(seconds float64)
 }
 
 // round 19 (review finding 1, the owner's rule "reading is prospective only", by any route): a request carrying a period
 // (SVFROMDATE / SVTODATE, any date form) goes to Tally only when ReadDays is on or a person started it
+//
+// 2.2.0 (the owner's rule, prospective only): one narrow exception, the recorder's body fetch (FinComVoucherByMaster):
+// it asks only the entries just changed, by MasterID, with the line's own date as the period; it passes only when it is
+// exactly what voucherByMasterRequest builds for one day and 1 to 50 MasterIDs (recorder_live.go). Never a day's list
 func datedRefused(tc *TC, x string) error {
 	if tc.person || readDaysOn() {
 		return nil
 	}
 	if !strings.Contains(x, "<SVFROMDATE") && !strings.Contains(x, "<SVTODATE") {
+		return nil
+	}
+	if voucherByMasterExact(x) {
 		return nil
 	}
 	return readsOffErr()
@@ -728,6 +738,9 @@ func invokeTally(tc *TC, port int, x string, timeoutSec int) (string, error) {
 	setInflight(port, true)
 	r, err := tallyRaw(ctx, port, x, timeoutSec)
 	setInflight(port, false)
+	if tc.timed != nil && !errors.Is(err, errPreempted) {
+		tc.timed(time.Since(t0).Seconds())
+	}
 	fail := ""
 	if errors.Is(err, errPreempted) {
 		// stopped for FinCom's request: not Tally's fault, nothing to note

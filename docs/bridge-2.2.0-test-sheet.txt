@@ -1,0 +1,86 @@
+FINCOM BRIDGE 2.2.0 - TEST SHEET (NWS144, staging)
+
+File:        FinComBridge-Setup-2.2.0.exe
+Fingerprint: SHA-256 (filled in when the setup is built; compare with the .sha256 file next to the setup)
+Link:        https://staging.fincom.live/review/assets/bridge-go/FinComBridge-Setup-2.2.0.exe
+(2.1.10 is installed on NWS144. Install 2.2.0 over it; the installer replaces the program and keeps the pairing, the
+ settings and the copy. 2.2.0 is published only after the owner's recorder trial results are in.)
+
+In this sheet, "the company you test on" is the one company you choose: it must be linked to a FinCom client. The
+sheet names no company.
+
+What is new in 2.2.0 (over 2.1.10)
+  - The live recorder. A new add-on, C:\ProgramData\FinCom\addon\FinComRecorder.tdl, written by the install next to
+    the trial's FinComRecorderAnyCompany.tdl (which is not changed). While it is loaded in Tally it appends one short
+    line per save, alteration, deletion, cancellation or import, for every company open, to
+    C:\ProgramData\FinCom\recorder\<company GUID>-<yyyymmdd>.txt. Nothing else happens inside Tally.
+      - The bridge reads the newest 7 days of those files once a second (never writing, locking, renaming or deleting
+        them), turns the lines into changes (created, altered, deleted, cancelled, imported; ledger created, altered,
+        deleted), and sends them to FinCom in groups of at most 500 lines. A line counts as sent only when FinCom
+        answers that it took it; otherwise it is sent again later. After a restart nothing is sent twice.
+      - For an entry someone typed in Tally (not FinCom's own posting), the bridge asks Tally for that one entry by its
+        Tally id, on its own date (a new, small request: FinComVoucherByMaster, at most 50 entries at a time). For a
+        ledger created or altered, that one ledger. A posting always goes first: these requests wait for it, and give
+        up after 20 s (the line then goes without the entry's body; FinCom holds it until the Day Book brings it).
+      - While a posting runs, the lines go only between Tally's import requests, at most one group each time; the
+        posting never waits for them.
+      - FinCom can choose per computer where the changes come from: the add-on (the default), Tally's change list (no
+        add-on: the bridge asks Tally for the entries changed since the last answer, every 10 minutes or so), or both.
+        Tally's change list never runs unless the owner chooses it for this computer. It asks Tally at most once a
+        minute and never during a posting; if Tally takes more than 2 s for one answer, it turns itself off for that
+        company (the log says "Source B off: Tally took X.X s for the changed-entries list (limit 2 s)"; it stays off
+        after a restart) until the owner chooses the source again on FinCom's Tally page.
+  - The posting window: before each posting the company check notes Tally's change number (ALTVCHID); after the last
+    import one more company check notes it again; the two numbers and how many entries and masters Tally created go
+    with the job's last report, so FinCom's gap check does not count FinCom's own postings as missing.
+  - "Roll back to the previous version" in the tray (always there; it asks yes/no first, naming the version). From
+    2.2.0 on, the version an update replaced is kept; the rollback puts it back, starts it, and turns automatic
+    updates off on this computer until FinCom support turns them on again.
+  - The bridge's log is kept 30 days: each day's log is renamed to its date the next day (tds-bridge.log.yyyy-mm-dd);
+    copies older than 30 days are deleted (only the bridge's own log copies).
+  - The heartbeat tells FinCom, per company, how many recorder lines were read, sent and are waiting, the oldest
+    waiting, and where the changes come from.
+  - The trial tools and the trial add-on are unchanged. Posting is unchanged.
+
+0. BEFORE THE INSTALL
+   The recorder trial is done (docs/recorder-trial-sheet.txt) and its add-on unloaded: in TallyPrime F1 (Help) >
+   TDLs & Add-Ons > F4 (Manage Local TDLs): no line with FinComRecorderAnyCompany.tdl or FinComRecorderTrial.tdl.
+   TallyPrime open with the company you test on.
+
+1. DOWNLOAD AND INSTALL OVER 2.1.10
+   Do: open the Link, check the fingerprint if you can (PowerShell: Get-FileHash <file>). Double-click the setup;
+       "Windows protected your PC" > More info > Run anyway; "Just for me" (as before); Next.
+   You should see: "FinCom Bridge 2.2.0 is installed and running", "Main bridge: reading and posting".
+   Check: the file C:\ProgramData\FinCom\addon\FinComRecorder.tdl exists (File Explorer, only look).
+   Check: right-click the FinCom icon near the clock: "Roll back to the previous version" is in the menu.
+
+2. LOAD THE LIVE ADD-ON
+   Do: PART 1 of docs/recorder-live-sheet.txt (load C:\ProgramData\FinCom\addon\FinComRecorder.tdl; never together with
+       the trial add-on).
+   You should see: on TDLs & Add-Ons the file shows as Loaded.
+
+3. A CHANGE TYPED IN TALLY
+   Do: in the company you test on, make a Payment of Rs 1 (narration "TRIAL live 1"), save it. Then open it, change the
+       narration to "TRIAL live 1 changed", save. Then cancel it (Alt+X, Yes).
+   You should see: within a minute, the client in FinCom shows the entry made, changed and cancelled, without a Day
+       Book upload. In "Show log" no line starting "Recorder:" says a body was not read.
+   Note: how long each save took, compared with before the add-on was loaded (write it down if it felt slower).
+
+4. A POSTING WHILE LINES ARE WRITTEN
+   Do: post 20 bills from FinCom to the client linked to the company you test on (the add-on stays loaded).
+   You should see: "Posted 20 of 20" as quickly as with 2.1.10. Within a minute after it, the client shows the 20
+       entries once each (not twice), and FinCom's Tally page shows no "changes not received" for them.
+
+5. A RESTART
+   Do: tray > Restart. While it restarts, save one more Payment of Rs 1 in Tally ("TRIAL live 2").
+   You should see: after the restart that entry reaches FinCom once; nothing from before is sent again.
+
+6. ROLL BACK (only if the owner asks for it)
+   Do: tray > "Roll back to the previous version". A yes/no names the version it goes back to (2.1.10). Answer No
+       to leave it; Yes only when asked to roll back.
+   On a computer that was installed fresh with 2.2.0 it says "No previous version is kept on this computer".
+
+7. UNLOAD (to switch the live add-on off)
+   PART 2 of docs/recorder-live-sheet.txt. The bridge still sends the lines already written.
+
+If anything is not as written: tray > "Send install log to FinCom", and note the step number.

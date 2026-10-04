@@ -50,6 +50,14 @@ func removeOwnFiles(home, mode string, keepPairing bool) []string {
 	for i := 1; i <= 5; i++ {
 		rm(filepath.Join(home, fmt.Sprintf("go-bridge.log.%d", i)))
 	}
+	// 2.2.0: the log's date-named copies (config.go rotateLog)
+	if m, _ := filepath.Glob(filepath.Join(home, "go-bridge.log.20*")); len(m) > 0 {
+		for _, p := range m {
+			if re(`^go-bridge\.log\.\d{4}-\d{2}-\d{2}(-\d+)?$`).MatchString(filepath.Base(p)) {
+				rm(p)
+			}
+		}
+	}
 	var shadows []string
 	_ = filepath.WalkDir(home, func(p string, d fs.DirEntry, err error) error {
 		if err == nil && !d.IsDir() && re(`^shadow-.*\.json$`).MatchString(d.Name()) {

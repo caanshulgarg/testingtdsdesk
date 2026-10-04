@@ -193,9 +193,18 @@ func recorderWatchOnce() {
 }
 
 // once a second while the bridge runs; nothing while the folder is not there or fails the check (recorderFiles)
+// 2.2.0: each turn also reads the live add-on's new lines (recorder_live.go: readSharedFrom only, never a write)
 func recorderWatchLoop() {
 	for !stopping() {
 		recorderWatchOnce()
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					writeLog(fmt.Sprint("Recorder: ", r))
+				}
+			}()
+			liveReadOnce()
+		}()
 		sleepOrStop(time.Second)
 	}
 }

@@ -709,6 +709,7 @@ func beatOnce() {
 		applyReadControl(r.json)   // FinCom's stop or resume of reading on this computer
 		applyRelease(r.json)       // the version this computer may take (update.go)
 		applyCloudSettings(r.json) // round 15: PostOnly and the batch sizes set in FinCom
+		applyRecorderSource(r.json) // 2.2.0: where the recorder's changes come from (the owner's choice; absent: the setting)
 		// made the main bridge on FinCom's Tally page: this test bridge switches itself to main, once
 		if testMode() && truthy(r.json["makeMain"]) && makeMainSeen.CompareAndSwap(false, true) {
 			writeLog("FinCom made this the main bridge")
@@ -887,7 +888,11 @@ func beatBody(tally bool, tstate, tsince string, open, ports, cos []any) M {
 		// days are read at all (off by the owner's rule of 04-Oct-2026)
 		"startPoint": startPointBeat(), "changeNumbers": changeNumbersBeat(), "readDays": readDaysOn(),
 		// round 21 (2.1.10): whether the owner's trial tools are on here (as FinCom's last answer said)
-		"trialTools": trialTools()}
+		"trialTools": trialTools(),
+		// 2.2.0: the live recorder per company (lines read, sent, waiting, the oldest waiting, the source) and its source
+		"recorderState": liveBeat(), "recorderSource": recorderSource(),
+		// the owner's rule: source B off by itself after a list that took more than 2 s, per company
+		"recorderSourceB": liveBeatB()}
 }
 
 // --- the posting queue (build 199): postings queued in FinCom on any computer, taken one at a time
@@ -1027,10 +1032,16 @@ func syncCloudPosts() {
 		// items: every entry's state (waiting, sending, sent, in_tally, failed with its reason), for FinCom to show live
 		// round 7 (F4): seq (per job, from progress.json, growing with every change) and updatedAt: the cloud ignores an
 		// update whose seq is lower than the one it holds
-		r := invokeCloud(M{"kind": "posts_update", "id": id, "status": st, "done": toInt(v["done"]), "message": str(v["message"]), "results": res, "items": arr(v["items"]), "checking": v["checking"] == true,
+		up := M{"kind": "posts_update", "id": id, "status": st, "done": toInt(v["done"]), "message": str(v["message"]), "results": res, "items": arr(v["items"]), "checking": v["checking"] == true,
 			"seq": toInt(v["seq"]), "updatedAt": str(v["updatedAt"]),
 			// round 15: every request's timing ({n, seconds, created, altered, exceptions, ignored, lastVchId}) and the total
-			"reqs": arr(v["reqs"]), "secondsTotal": num(v["secondsTotal"])}, 30)
+			"reqs": arr(v["reqs"]), "secondsTotal": num(v["secondsTotal"])}
+		// 2.2.0: the posting window with the job's last update (index.ts postWindow: {a0, a1, vouchersCreated,
+		// mastersCreated, guid})
+		if w := obj(v["window"]); w != nil && (st == "done" || st == "failed") {
+			up["window"] = w
+		}
+		r := invokeCloud(up, 30)
 		if r.json != nil && (truthy(r.json["cancelled"]) || truthy(r.json["gone"])) {
 			// cancelled in FinCom (or no longer there): it stops, also while it waits for Tally
 			_, _ = cancelJob(id, "cancelled in FinCom")

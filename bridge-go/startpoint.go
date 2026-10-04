@@ -515,6 +515,8 @@ func lightCheckOpen(sessions []M) {
 				continue
 			}
 			lightLogResult(name, had)
+			// 2.2.0: the recorder's source B (Tally's change list), when it is the source or one of them
+			liveAfterLightCheck(name, port)
 		}
 	}
 }

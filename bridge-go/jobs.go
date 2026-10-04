@@ -489,9 +489,11 @@ func jobWorker(dir string) {
 	// the company's GUID: one light request before anything is sent; the one held for it, or the whole job is refused
 	// with words and nothing is sent (a restored, re-created or other company of the same name); Tally not answering
 	// the check is waited for
+	coGUID := ""
 	for {
 		g, err := companyCheck(fin, company, port)
 		if err == nil {
+			coGUID = g
 			if gerr := guardCompanyGUID(company, g); gerr != nil {
 				for _, it := range itemsToSend(all, results) {
 					results = append(results, M{"id": it["id"], "kind": it["kind"], "ok": false, "guidMismatch": true, "message": "Not posted: " + gerr.Error()})
@@ -504,6 +506,11 @@ func jobWorker(dir string) {
 		if !waitTally(err) {
 			return
 		}
+	}
+	// 2.2.0: the posting window's a0, Tally's ALTVCHID from the company check before the job (a resumed job keeps the
+	// first one), and the company GUID it gave
+	if _, had := p["a0"]; !had {
+		p["a0"], p["windowGuid"] = companyAlter(company), coGUID
 	}
 	// one writer per Tally: wait for another posting to the same Tally to finish
 	lk, _ := tallyWriter.LoadOrStore(port, &sync.Mutex{})
@@ -654,6 +661,11 @@ func jobWorker(dir string) {
 		i++
 	}
 	writeLog(fmt.Sprintf("Posting job %s: %d requests, %d vouchers, %.1f s total", jobID, K, nVouchers, secondsTotal))
+	// 2.2.0: the posting window, after the last request (never during the job): a1 by one FinComCompany read now, the
+	// counts from Tally's replies; sent with the job's last posts_update (cloud.go)
+	if K > 0 {
+		jobWindow(p, notes, company, port)
+	}
 	// the end: "done" when anything was posted, or Tally created something of a request that needs review (neither
 	// posted nor failed: "Posted N of M; K need review"); "failed" only when nothing was posted and nothing accepted (a
 	// "failed" from the bridge stands in the cloud)
@@ -735,4 +747,31 @@ func postingGoing() bool {
 		}
 	}
 	return false
+}
+
+// 2.2.0 (plan round 20, b.4): the posting window {a0, a1, vouchersCreated, mastersCreated, guid}: a0 the ALTVCHID of the
+// company check before the job, a1 the ALTVCHID of one FinComCompany read after its last request, the counts the sum
+// of CREATED in Tally's replies by kind. The cloud's gap check counts FinCom's own postings by it (index.ts postWindow).
+// a1 not read (Tally did not answer): no window
+func jobWindow(p M, notes []any, company string, port int) {
+	if _, err := companyCheck(fin, company, port); err != nil {
+		writeLog("Posting job " + str(p["id"]) + ": the change numbers after the job could not be read (" + err.Error() + "); no posting window")
+		return
+	}
+	a0, a1 := toI64(p["a0"]), companyAlter(company)
+	vc, mc := 0, 0
+	for _, x := range notes {
+		n := obj(x)
+		if str(n["kind"]) == "master" {
+			mc += toInt(n["created"])
+		} else {
+			vc += toInt(n["created"])
+		}
+	}
+	if a1 < a0 {
+		writeLog(fmt.Sprintf("Posting job %s: ALTVCHID went from %d to %d during the job; no posting window", str(p["id"]), a0, a1))
+		return
+	}
+	p["window"] = M{"a0": a0, "a1": a1, "vouchersCreated": vc, "mastersCreated": mc, "guid": str(p["windowGuid"])}
+	writeLog(fmt.Sprintf("Posting job %s: posting window ALTVCHID %d to %d, %d voucher(s) and %d master(s) created", str(p["id"]), a0, a1, vc, mc))
 }

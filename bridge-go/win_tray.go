@@ -470,6 +470,7 @@ func (t *tray) menu() {
 	}
 	add(4, "Restart", mfString)
 	add(6, "Check for updates", mfString)
+	add(23, "Roll back to the previous version", mfString) // 2.2.0: always shown; asks yes/no first
 	if st != nil && truthy(st["testMode"]) {
 		add(8, "Compare with bridge 1.15.0", mfString)
 	}
@@ -766,6 +767,30 @@ func (t *tray) command(id int, st M) {
 		default:
 			t.balloon("FinCom Bridge", "Becoming the main bridge: bridge 1.15.0 is stopped and FinCom Bridge starts again on its own. The icon is back in about a minute.", false)
 		}
+	case 23:
+		// 2.2.0: the kept previous program put back (update.go rollBackBridge); the question names the version
+		title := "FinCom Bridge - Roll back"
+		pv := trayCall("POST", "/tray/rollback", M{"preview": true})
+		if pv == nil || pv["ok"] != true {
+			why := "The bridge is not answering."
+			if pv != nil {
+				why = str(pv["error"])
+			}
+			msgBox(title, why, mbIconWarning)
+			return
+		}
+		if !yesNo(title, str(pv["confirm"])) {
+			return
+		}
+		if r := trayCall("POST", "/tray/rollback", M{"confirm": true}); r == nil || r["ok"] != true {
+			why := "The bridge is not answering."
+			if r != nil {
+				why = str(r["error"])
+			}
+			msgBox(title, why, mbIconWarning)
+			return
+		}
+		t.balloon("FinCom Bridge", "Rolling back to "+or(str(pv["version"]), "the previous version")+"; the bridge is back in a few seconds.", false)
 	case 14:
 		// sendlog shows its own message (sent, with the reference; or what to do)
 		exe, _ := os.Executable()

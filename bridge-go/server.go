@@ -684,6 +684,24 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 			return M{"ok": false, "error": err.Error()}, nil
 		}
 		return res, nil
+	case "/tray/rollback":
+		// 2.2.0: "Roll back to the previous version" (update.go): the tray item, for whoever is at the computer, always
+		// shown; it asks yes/no first ({preview: true} gives the question, {confirm: true} does it). A web page is refused
+		if r.Header.Get("Origin") != "" || r.Header.Get("Sec-Fetch-Site") != "" || r.Header.Get("Sec-Fetch-Mode") != "" || r.Header.Get("Sec-Fetch-Dest") != "" {
+			writeLog("Refused a rollback request from a web page (" + r.Header.Get("Origin") + ").")
+			return nil, &httpErr{403, M{"ok": false, "error": "The rollback is chosen in the FinCom Bridge tray icon only, never from a web page."}}
+		}
+		if err := needPost(r, "Use POST."); err != nil {
+			return nil, err
+		}
+		o, _ := bodyObj(body)
+		switch {
+		case truthy(o["preview"]):
+			return rollbackPreview()
+		case o["confirm"] == true:
+			return rollBackBridge()
+		}
+		return nil, &httpErr{400, M{"ok": false, "error": "The bridge asks first: choose Roll back to the previous version in the FinCom tray icon. Nothing was changed."}}
 	case "/companyguid":
 		// a company whose Tally GUID changed (restored, re-created): confirmed on this computer, its new GUID is held
 		if err := needPost(r, "Use POST."); err != nil {

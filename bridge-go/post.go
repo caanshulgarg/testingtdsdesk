@@ -285,6 +285,10 @@ type importOutcome struct {
 // needs review with Tally's counts and words, accepted when Tally made any. Every voucher Tally accepted is recorded
 // as sent on this computer, so no later job sends it again
 func sendImport(port int, company, job string, r importReq) importOutcome {
+	// 2.2.0: an import at Tally (a job's too): the recorder's uploader never starts a send meanwhile; each one ended is
+	// a new gap between imports (one group of lines may go in it while a posting is going)
+	importsInFlight.Add(1)
+	defer func() { importsInFlight.Add(-1); importGaps.Add(1) }()
 	// review of 2.1.8, finding 1: every voucher is on the record as sent (no answer yet) BEFORE the request goes, so a
 	// bridge that dies while the request is in flight never sends them again; the reply rewrites the note. The record
 	// not written (F1): nothing is sent (a "not reached" error: the job waits and tries later)

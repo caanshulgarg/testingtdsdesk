@@ -253,8 +253,11 @@ func TestPostNoReadBackRequests(t *testing.T) {
 		t.Fatalf("the job: %v", p["message"])
 	}
 	onlyPostingRequests(t, f, 0)
-	if f.n("FinComCompany") != 1 {
-		t.Fatalf("the company check went %d times (want once per job): %v", f.n("FinComCompany"), f.ids())
+	// 2.2.0 (plan round 20, b.4): the company check once before the job, and once after its last import (the posting
+	// window's a1), never between the imports
+	ids := f.ids()
+	if f.n("FinComCompany") != 2 || ids[len(ids)-1] != "FinComCompany" {
+		t.Fatalf("the company check went %d times (want once before the job and once after it): %v", f.n("FinComCompany"), ids)
 	}
 	if f.n("Import") != 2 { // the master, then the five bills in one request
 		t.Fatalf("%d imports: %v", f.n("Import"), f.ids())

@@ -154,13 +154,16 @@ func readsOffErr() error {
 	return &httpErr{409, M{"ok": false, "error": readsOffWords, "readDays": false}}
 }
 
-// round 18, measurement only (the read test and the measuring tool): the entries above an AlterID with NO period at all
-// (no SVFROMDATE/SVTODATE), as GUID, AlterID and date; the same collection as the copy's check
+// round 18 (the read test and the measuring tool; 2.2.0 also the recorder's source B): the entries above an AlterID
+// with NO period at all (no SVFROMDATE/SVTODATE), as GUID, MasterID, AlterID and date; the same collection as the
+// copy's check
+// 2.2.0: MASTERID is fetched too (the recorder's source B turns each entry into a created or altered change by it, and
+// the body fetch asks Tally by it); still undated, the AlterID filter only
 func keepListAboveRequest(company string, after int64) string {
 	return "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TDSDeskKeepList</ID></HEADER>" +
 		"<BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>" + esc(company) + "</SVCURRENTCOMPANY>" +
 		"</STATICVARIABLES><TDL><TDLMESSAGE>" +
-		`<COLLECTION NAME="TDSDeskKeepList" ISMODIFY="No"><TYPE>Voucher</TYPE><FETCH>GUID,ALTERID,DATE</FETCH><FILTERS>TDSDeskKeepNew</FILTERS></COLLECTION>` +
+		`<COLLECTION NAME="TDSDeskKeepList" ISMODIFY="No"><TYPE>Voucher</TYPE><FETCH>GUID,MASTERID,ALTERID,DATE</FETCH><FILTERS>TDSDeskKeepNew</FILTERS></COLLECTION>` +
 		fmt.Sprintf(`<SYSTEM TYPE="Formulae" NAME="TDSDeskKeepNew">$AlterID &gt; %d</SYSTEM>`, after) +
 		"</TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>"
 }

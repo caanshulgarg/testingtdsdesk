@@ -28,7 +28,7 @@ without a period) is a stored field, not a computed one.
 The size test (`bridge-go/size_test.go`) uses a cost per row returned (`tallyPerRowMs` in `allowlist.go`): a
 conservative guess until the phase 1 measurement replaces it.
 
-First table: re-measured on 2026-10-04 on the stand; not yet measured on NWS144; allowed for 2.1.10 only by the owner's decision of 2026-10-04 (trial tools for any company; the light check while paused; no request shape changed); this line is replaced per build by the owner's decision, and removed once the table carries times.
+First table: re-measured on 2026-10-04 on the stand; not yet measured on NWS144; allowed for 2.2.0 only by the owner's decision of 2026-10-04 (the live recorder, plan round 20: one new request, FinComVoucherByMaster, the body of the entries just changed by MasterID with the line's own date as the period, the one dated request allowed with ReadDays off and only exactly as built; the undated TDSDeskKeepList above an AlterID also fetches MASTERID); this line is replaced per build by the owner's decision, and removed once the table carries times.
 
 (re-measured on 2026-10-03: no times yet; the table's rows and shapes are unchanged since the 2.1.6 build; only the owner's decision line above changed for 2.1.7, and again for 2.1.8: no request shape changed; the duplicate check against Tally left the posting path, its request stays on the list for Check Tally)
 
@@ -53,6 +53,7 @@ First table: re-measured on 2026-10-04 on the stand; not yet measured on NWS144;
 | FinComMeasureYear | measure: the year's entries, dates only | a71140d1c723 | not yet measured | - | measure-only |
 | FinComSnapshot | measure: one month's entries as GUID, AlterID, date, type and number | c48421c1f84f | not yet measured | - | measure-only |
 | FinComTag | the FinCom id check: one date's entries, heads and narration only | c6adb1e0d825 | not yet measured | - | bridge |
+| FinComVoucherByMaster | the recorder's body fetch (2.2.0): the entries just changed, by MasterID (50 at most), the line's own date as the period, the fields FinCom's day parse reads | b6b4d3b5f221 | not yet measured | - | bridge |
 | Import | a posting or a deletion (Import Data) | 907a02740d6e | not yet measured | - | bridge |
 | TDSDeskCompanies | the companies loaded in Tally (name, books' period, GUID) | a1fe973a9650 | not yet measured | - | bridge |
 | TDSDeskCompanyInfo | one company's GSTIN and PAN, once when it is first seen | cacb15508aea | not yet measured | - | bridge |
@@ -65,4 +66,4 @@ First table: re-measured on 2026-10-04 on the stand; not yet measured on NWS144;
 | TDSDeskVchHeads | voucher heads (Optional ones too) of one company for one month at most, no ledger lines | 53fc675a1641 | not yet measured | - | bridge |
 <!-- allowlist:end -->
 
-Table hash (SHA-256): b8dae6491978cebd405f98223cdff4d97451f4388c7bdf56089bb0e7941e643c
+Table hash (SHA-256): 2f2102620df9dad1105ecca5b115fa1436ab9c3caaf45862daf29f85d5608075

@@ -4,6 +4,9 @@
 //
 //	FCR1|ev=|t0=|tw=|cguid=|cname=|user=|obj=|guid=|mid=|aid=|vtype=|vno=|vdate=|name=|parent=|narr=|t1=
 //
+// 2.2.0: the live add-on (FinComRecorder.tdl) writes "|src=live" after t1, on the same line, in daily files
+// <company GUID>-<yyyymmdd>.txt (recorder_live.go).
+//
 // narr is free text from "|narr=" to the LAST "|t1=" (it may hold "|"); a physical line that does not start with
 // "FCR1|" continues the line before it (a narration over several lines). t0, tw and t1 are seconds ($$MachineTime).
 // Read here for the trial's summary; 2.2.0 reads the same lines.
@@ -16,6 +19,7 @@ import (
 
 type recLine struct {
 	Ev, T0, Tw, CGUID, CName, User, Obj, GUID, MID, AID, VType, VNo, VDate, Name, Parent, Narr, T1 string
+	Src string // 2.2.0: "live" from the live add-on (FinComRecorder.tdl writes "|src=live" after t1); "" from the trial's
 }
 
 var recKeys = []string{"ev", "t0", "tw", "cguid", "cname", "user", "obj", "guid", "mid", "aid", "vtype", "vno", "vdate", "name", "parent"}
@@ -93,8 +97,12 @@ func parseRecorderLine(l string) (recLine, bool) {
 			pos++ // the "|"
 		}
 	}
+	src := ""
+	if i := strings.LastIndex(t1, "|src="); i >= 0 {
+		t1, src = t1[:i], strings.TrimSpace(t1[i+len("|src="):])
+	}
 	return recLine{Ev: vals[0], T0: vals[1], Tw: vals[2], CGUID: vals[3], CName: vals[4], User: vals[5], Obj: vals[6], GUID: vals[7], MID: vals[8], AID: vals[9],
-		VType: vals[10], VNo: vals[11], VDate: vals[12], Name: vals[13], Parent: vals[14], Narr: narr, T1: strings.TrimSpace(t1)}, true
+		VType: vals[10], VNo: vals[11], VDate: vals[12], Name: vals[13], Parent: vals[14], Narr: narr, T1: strings.TrimSpace(t1), Src: src}, true
 }
 
 // every FCR1 line of a recorder file's text

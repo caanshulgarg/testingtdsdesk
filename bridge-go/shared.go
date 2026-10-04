@@ -26,43 +26,69 @@ func readShared(path string, maxBytes int64) ([]byte, error) { return readTail(p
 
 // the last maxBytes of a regular file, read as readShared says; busyLog: a held file is logged
 func readTail(path string, maxBytes int64, busyLog bool) ([]byte, error) {
+	b, _, err := readSharedAt(path, -1, maxBytes, busyLog)
+	return b, err
+}
+
+// 2.2.0 (the live recorder): the bytes of a holding file from the offset off (at most maxBytes), and the file's size
+// now; the same rules as readShared (a regular file, opened for reading only with every sharing, the one looked at,
+// one name, never waited for). Bytes the add-on writes meanwhile are read next time
+func readSharedFrom(path string, off, maxBytes int64) ([]byte, int64, error) {
+	if off < 0 {
+		off = 0
+	}
+	return readSharedAt(path, off, maxBytes, true)
+}
+
+// off < 0: the file's last maxBytes; else from off
+func readSharedAt(path string, off, maxBytes int64, busyLog bool) ([]byte, int64, error) {
 	fi, err := os.Lstat(path)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	if !fi.Mode().IsRegular() || isReparse(path, fi) {
-		return nil, fmt.Errorf("%s is not a plain file (a link, a folder or another kind): not read", path)
+		return nil, 0, fmt.Errorf("%s is not a plain file (a link, a folder or another kind): not read", path)
 	}
 	f, err := openShared(path)
 	if err != nil {
 		if busyLog && isSharingViolation(err) {
 			writeLog("Recorder trial: recorder file busy, read later: " + path)
 		}
-		return nil, err
+		return nil, 0, err
 	}
 	defer f.Close()
 	st, err := f.Stat()
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	if !os.SameFile(fi, st) || !st.Mode().IsRegular() {
-		return nil, fmt.Errorf("%s changed while it was opened: not read", path)
+		return nil, 0, fmt.Errorf("%s changed while it was opened: not read", path)
 	}
 	if linkCount(f) > 1 {
-		return nil, fmt.Errorf("%s has more than one name (a hard link): not read", path)
+		return nil, 0, fmt.Errorf("%s has more than one name (a hard link): not read", path)
 	}
 	if readSharedHold != nil {
 		readSharedHold(path)
 	}
 	if maxBytes <= 0 {
-		return nil, errors.New("nothing to read")
+		return nil, st.Size(), errors.New("nothing to read")
 	}
-	if sz := st.Size(); sz > maxBytes {
+	sz := st.Size()
+	switch {
+	case off < 0 && sz > maxBytes:
 		if _, err := f.Seek(sz-maxBytes, io.SeekStart); err != nil {
-			return nil, err
+			return nil, sz, err
+		}
+	case off > 0:
+		if off >= sz {
+			return nil, sz, nil
+		}
+		if _, err := f.Seek(off, io.SeekStart); err != nil {
+			return nil, sz, err
 		}
 	}
-	return io.ReadAll(io.LimitReader(f, maxBytes))
+	b, err := io.ReadAll(io.LimitReader(f, maxBytes))
+	return b, sz, err
 }
 
 // round 20 (the re-review's Low 3): an append that does not follow a link: whatever is at the path must be a regular
