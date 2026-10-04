@@ -1,7 +1,8 @@
 // Round 18 (2.1.9, the owner's rule of 04-Oct-2026): reading is prospective only. Each company's starting point is its
 // highest AlterIDs (ALTVCHID for entries, ALTMSTID for masters) on the first FinComCompany answer the bridge sees for it,
 // kept in sync\start-point.json once: never moved. Round 19: one entry per company and GUID, never overwritten (another
-// GUID gets its own entry); a file that cannot be read is never rewritten. The heartbeat carries the starting points and, from every later FinComCompany
+// GUID gets its own entry); a file that cannot be read is never rewritten. Round 20: while it cannot be read the first
+// numbers seen are kept for the run and written once it can be (never the later, higher ones); saveFile never removes it. The heartbeat carries the starting points and, from every later FinComCompany
 // answer, the latest numbers too; FinCom's cloud compares them. Nothing here asks Tally anything.
 package main
 
@@ -20,6 +21,9 @@ var (
 	spLatestD string                   // the sync folder spLatest belongs to (a test's own folder starts it afresh)
 	spGUID    = map[string]string{}    // company -> the GUID its latest FinComCompany answer gave
 	spChecked = map[string]time.Time{} // company -> when its light check last went (this run)
+	// round 20 (the re-review's Low 2): companyKey|guid -> the numbers first seen while start-point.json could not be
+	// read (this run); written, never replaced by later numbers, once the file can be read again
+	spPending = map[string]M{}
 )
 
 func startPointFile() string { return sp("start-point.json") }
@@ -68,10 +72,17 @@ func noteStartPoint(company, guid string, altV, altM int64) {
 	}
 	all, ok := readStartPoints()
 	if !ok {
+		// round 20 (Low 2): the first numbers seen are kept for the run (later, higher ones never replace them)
+		if k := companyKey(company) + "|" + guid; spPending[k] == nil {
+			spPending[k] = M{"company": company, "guid": guid, "altvchid": altV, "altmstid": altM, "at": nowS()}
+		}
 		if spBadLogged != startPointFile() {
 			spBadLogged = startPointFile()
 			writeLog(fmt.Sprintf("Company %s: %s could not be read (cut short, or held by another program): it is not rewritten; the starting point is recorded when the file can be read again", company, startPointFile()))
 		}
+		return
+	}
+	if !spRecordPending(all) {
 		return
 	}
 	mine := startPointsOf(all, company)
@@ -106,6 +117,64 @@ func noteStartPoint(company, guid string, altV, altM int64) {
 	} else {
 		writeLog(fmt.Sprintf("Company %s: Tally gave another GUID (%s); its own starting point is recorded: ALTVCHID=%d, ALTMSTID=%d; the starting point of every other GUID is kept", company, guid, altV, altM))
 	}
+}
+
+// round 20 (Low 2): the numbers first seen while the file could not be read, written now that it can be (under spMu, the
+// file read as all): an entry already recorded for that company and GUID is kept and the pending one dropped. False:
+// the file could not be written (the pending numbers stay for the next answer)
+func spRecordPending(all M) bool {
+	if len(spPending) == 0 {
+		return true
+	}
+	var added []M
+	for k, e := range spPending {
+		company, guid := str(e["company"]), str(e["guid"])
+		mine := startPointsOf(all, company)
+		had := guid == "" && len(mine) > 0
+		for _, x := range mine {
+			if str(x["guid"]) == guid {
+				had = true
+			}
+		}
+		if had {
+			delete(spPending, k)
+			continue
+		}
+		all[k] = e
+		added = append(added, e)
+	}
+	if len(added) == 0 {
+		return true
+	}
+	if err := saveFile(startPointFile(), jsonText(all)); err != nil {
+		writeLog(fmt.Sprintf("The starting points first seen while %s could not be read are not written yet: %s", startPointFile(), err.Error()))
+		for _, e := range added {
+			delete(all, companyKey(str(e["company"]))+"|"+str(e["guid"]))
+		}
+		return false
+	}
+	spBadLogged = ""
+	for _, e := range added {
+		delete(spPending, companyKey(str(e["company"]))+"|"+str(e["guid"]))
+		writeLog(fmt.Sprintf("Company %s: its starting point is recorded: ALTVCHID=%d, ALTMSTID=%d, the numbers first seen at %s while %s could not be read (reading is prospective only: the bridge follows what changes after this)",
+			str(e["company"]), toI64(e["altvchid"]), toI64(e["altmstid"]), str(e["at"]), startPointFile()))
+	}
+	return true
+}
+
+// the starting points as the file has them, with the numbers still pending (first seen while it could not be read)
+// added where the file has none: the beat and startPointOf carry them meanwhile (under spMu)
+func spWithPending(all M) M {
+	out := M{}
+	for k, v := range all {
+		out[k] = v
+	}
+	for k, e := range spPending {
+		if _, ok := out[k]; !ok {
+			out[k] = e
+		}
+	}
+	return out
 }
 
 // the entry the bridge goes by for a company: the GUID it holds (or the person confirmed), else the GUID of the latest
@@ -143,7 +212,9 @@ func startPointOf(company string) (int64, bool) {
 	held := heldGUID(company)
 	spMu.Lock()
 	defer spMu.Unlock()
+	spFresh()
 	all, _ := readStartPoints()
+	all = spWithPending(all)
 	e, _ := startPointPick(startPointsOf(all, company), held, spGUID[company])
 	if e == nil {
 		return 0, false
@@ -153,7 +224,13 @@ func startPointOf(company string) (int64, bool) {
 
 // for the heartbeat: {company: {altvchid, altmstid, at, guid, otherGuids?: [{guid, altvchid, altmstid, at}]}}
 func startPointBeat() M {
-	all, _ := func() (M, bool) { spMu.Lock(); defer spMu.Unlock(); return readStartPoints() }()
+	all := func() M {
+		spMu.Lock()
+		defer spMu.Unlock()
+		spFresh()
+		a, _ := readStartPoints()
+		return spWithPending(a)
+	}()
 	names := map[string]string{}
 	for _, v := range all {
 		if e := obj(v); e != nil && str(e["company"]) != "" {
@@ -187,6 +264,7 @@ func startPointBeat() M {
 func spFresh() {
 	if spLatestD != syncDir() {
 		spLatest, spGUID, spChecked, spLatestD = map[string]M{}, map[string]string{}, map[string]time.Time{}, syncDir()
+		spPending = map[string]M{}
 	}
 }
 
@@ -238,8 +316,13 @@ func recorderHolding(company, guid string) (bool, string) {
 	if plainFileName(company) {
 		names = append(names, "name-"+company+".txt")
 	}
+	// round 20 (the re-review's Medium 1): C:\ProgramData\FinCom and recorder\ checked first
+	dir, ok := recorderDirChecked()
+	if !ok {
+		return false, ""
+	}
 	for _, n := range names {
-		if fi, err := os.Lstat(filepath.Join(recorderDirFn(), n)); err == nil && fi.Mode().IsRegular() && fi.ModTime().After(newest) {
+		if fi, err := os.Lstat(filepath.Join(dir, n)); err == nil && fi.Mode().IsRegular() && fi.ModTime().After(newest) {
 			newest = fi.ModTime()
 		}
 	}

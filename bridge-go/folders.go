@@ -12,7 +12,9 @@
 // followed): a link, a junction or another reparse point, a file, or (for all users) a FinCom folder not owned by SYSTEM
 // or Administrators is moved aside (renamed, kept, logged) and the folder is made anew; when it cannot be moved aside the
 // step stops and nothing more is made. The permissions are set with icacls /L (the folder itself, never a target) and
-// inheritance removed. FinCom is made safe first, so nothing can be swapped inside it afterwards. A setup just for one
+// inheritance removed. Round 20 (the re-review's Low 5): each folder's ACL is reset first (icacls /reset /L: every
+// explicit entry dropped, an administrator's stray Everyone or named user too), then the grants set; a /reset that
+// fails stops the step. FinCom is made safe first, so nothing can be swapped inside it afterwards. A setup just for one
 // user (not elevated) makes the folders the same way, links refused, and leaves their permissions as Windows gives them.
 package main
 
@@ -54,7 +56,7 @@ func programDataDir() string {
 
 // the install step: the folders made, the .tdl written, each line in the install log; a failure is logged and the
 // install goes on (only the recorder trial needs them)
-func installFinComFolders(allUsers bool, log func(string)) {
+func installFinComFolders(allUsers bool, log func(string)) error {
 	lines, err := prepareFinComFolders(programDataDir(), allUsers)
 	for _, l := range lines {
 		log(l)
@@ -62,6 +64,29 @@ func installFinComFolders(allUsers bool, log func(string)) {
 	if err != nil {
 		log("Install: the recorder trial's folders were NOT made (" + err.Error() + "); the bridge works without them")
 	}
+	return err
+}
+
+// round 20 (the re-review's Medium 1): the bridge's own update (applyUpdate) swaps the program and never runs
+// `FinComBridge.exe install`, so a PC that updated itself from 2.1.8 had no safe FinCom folders. The service runs the
+// folder step once at its first start of each version: the version is kept in this marker in its own folder (Program
+// Files\FinCom Bridge, administrators only), written only when the step succeeded (a failure: tried at the next start)
+const foldersMarkerName = "fincom-folders-version.txt"
+
+// true when the step ran (the marker named another version or none)
+func foldersAfterUpdate(dir string, log func(string)) bool {
+	marker := filepath.Join(dir, foldersMarkerName)
+	if strings.TrimSpace(readText(marker)) == BridgeVersion {
+		return false
+	}
+	log("FinCom Bridge " + BridgeVersion + ", its first start: the recorder trial's folders in " + programDataDir() + "\\FinCom are checked and made safe")
+	if err := installFinComFolders(true, log); err != nil {
+		return true
+	}
+	if err := saveFile(marker, BridgeVersion); err != nil {
+		log("The folders' marker " + marker + " could not be written: " + err.Error() + " (the step runs again at the next start)")
+	}
+	return true
 }
 
 func prepareFinComFolders(base string, allUsers bool) ([]string, error) {
@@ -73,7 +98,7 @@ func prepareFinComFolders(base string, allUsers bool) ([]string, error) {
 		return lines, err
 	}
 	if allUsers {
-		if err := setACL(say, fc, [][]string{{"/inheritance:r", "/grant:r", sidSystem + ":(OI)(CI)F", sidAdmins + ":(OI)(CI)F", sidUsers + ":(OI)(CI)RX"}, {"/setowner", sidAdmins}}); err != nil {
+		if err := setACL(say, fc, [][]string{{"/reset"}, {"/inheritance:r", "/grant:r", sidSystem + ":(OI)(CI)F", sidAdmins + ":(OI)(CI)F", sidUsers + ":(OI)(CI)RX"}, {"/setowner", sidAdmins}}); err != nil {
 			return lines, err
 		}
 	}
@@ -85,12 +110,13 @@ func prepareFinComFolders(base string, allUsers bool) ([]string, error) {
 	}
 	if allUsers {
 		if err := setACL(say, rec, [][]string{
+			{"/reset"},
 			{"/inheritance:r", "/grant:r", sidSystem + ":(OI)(CI)F", sidAdmins + ":(OI)(CI)F", sidUsers + ":(RX,WD)"},
 			{"/grant", sidUsers + ":(OI)(IO)M"},
 			{"/setowner", sidAdmins}}); err != nil {
 			return lines, err
 		}
-		if err := setACL(say, add, [][]string{{"/inheritance:r", "/grant:r", sidSystem + ":(OI)(CI)F", sidAdmins + ":(OI)(CI)F", sidUsers + ":(OI)(CI)RX"}, {"/setowner", sidAdmins}}); err != nil {
+		if err := setACL(say, add, [][]string{{"/reset"}, {"/inheritance:r", "/grant:r", sidSystem + ":(OI)(CI)F", sidAdmins + ":(OI)(CI)F", sidUsers + ":(OI)(CI)RX"}, {"/setowner", sidAdmins}}); err != nil {
 			return lines, err
 		}
 	}

@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 )
 
 // a hook for the tests: called while readShared holds the file open
@@ -62,4 +63,54 @@ func readTail(path string, maxBytes int64, busyLog bool) ([]byte, error) {
 		}
 	}
 	return io.ReadAll(io.LimitReader(f, maxBytes))
+}
+
+// round 20 (the re-review's Low 3): an append that does not follow a link: whatever is at the path must be a regular
+// file with one name (no link, junction, reparse point or hard link); opened without following the last element
+// (O_NOFOLLOW; on Windows FILE_FLAG_OPEN_REPARSE_POINT), and the opened file must be the one looked at
+func appendNoFollow(path, s string) error {
+	_ = os.MkdirAll(filepath.Dir(path), 0o755)
+	fi, lerr := os.Lstat(path)
+	switch {
+	case lerr == nil && (!fi.Mode().IsRegular() || isReparse(path, fi)):
+		return fmt.Errorf("%s is not a plain file (a link, a folder or another kind): not written", path)
+	case lerr != nil && !os.IsNotExist(lerr):
+		return lerr
+	}
+	f, err := openAppendNoFollow(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	st, err := f.Stat()
+	if err != nil {
+		return err
+	}
+	if !st.Mode().IsRegular() || (lerr == nil && !os.SameFile(fi, st)) {
+		return fmt.Errorf("%s changed while it was opened: not written", path)
+	}
+	if linkCount(f) > 1 {
+		return fmt.Errorf("%s has more than one name (a hard link): not written", path)
+	}
+	_, err = f.WriteString(s)
+	return err
+}
+
+// round 20 (the re-review's Low 4): the file the trial's lock holds must be the one looked at: a regular file (no link
+// or reparse point), the same file once opened, with one name only (a hard link swapped in is not held)
+func lockCheck(path string, fi os.FileInfo, f *os.File) error {
+	if !fi.Mode().IsRegular() || isReparse(path, fi) {
+		return fmt.Errorf("%s is not a plain file: not locked", path)
+	}
+	st, err := f.Stat()
+	if err != nil {
+		return err
+	}
+	if !st.Mode().IsRegular() || !os.SameFile(fi, st) {
+		return fmt.Errorf("%s changed while it was opened: not locked", path)
+	}
+	if linkCount(f) != 1 {
+		return fmt.Errorf("%s has more than one name (a hard link): not locked", path)
+	}
+	return nil
 }

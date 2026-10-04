@@ -2,7 +2,8 @@
 // C:\ProgramData\FinCom\recorder (recorderline.go). Two tray items, for a person only (as Test reading from Tally):
 //   - "Recorder trial: note change numbers": FinComCompany for each company open in Tally, one tiny request each; the
 //     line "<company>: ALTVCHID=…, ALTMSTID=…, at <time>" appended to sync\recorder-changenumbers.txt, the bridge's own
-//     folder (round 19: never in the recorder folder, which Users may change) (the owner presses it before and after a
+//     folder (the installing user's; round 19: never in the recorder folder, which Users may add to; round 20: the
+//     append does not follow a link) (the owner presses it before and after a
 //     delete and a cancel).
 //   - "Recorder trial: send results": the recorder folder's .txt files, Tally's tdlerror.log, tally.imp and tally.ini
 //     (read only, from the folder of the running tally.exe under Program Files, round 19), the last 500 lines of the bridge's log and a summary the
@@ -84,11 +85,84 @@ func recorderWatchReset() {
 	recWatchMu.Unlock()
 }
 
-// the recorder folder's .txt files (the first 50 by name); none when the folder itself is a link or a junction
+// round 20 (the re-review's Medium 1, RS1): before anything in the recorder folder is listed, looked at, read or locked,
+// C:\ProgramData\FinCom and its recorder\ are checked: each a plain folder by os.Lstat (no link, no junction, no other
+// reparse point: on Windows FILE_ATTRIBUTE_REPARSE_POINT too), each owned by SYSTEM or Administrators when the bridge
+// runs as the service (the install step and the first start after an update make them so), and the recorder folder's
+// final path (GetFinalPathNameByHandle on Windows, every link followed; EvalSymlinks elsewhere) the expected one: the
+// final path of the folder holding FinCom, then FinCom\recorder. Else nothing is done there and the log says why (once
+// per reason). A folder that is not there is not an error (no trial on this computer).
+var (
+	recorderAsService     = runningAsService // a function so the tests can say "as the service"
+	recorderRefusedMu     sync.Mutex
+	recorderRefusedLogged string
+)
+
+func recorderDirChecked() (string, bool) {
+	d := filepath.Clean(recorderDirFn())
+	fc := filepath.Dir(d)
+	why := ""
+	for _, p := range []string{fc, d} {
+		fi, err := os.Lstat(p)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return d, false
+			}
+			why = p + " could not be looked at: " + err.Error()
+			break
+		}
+		if isReparse(p, fi) {
+			why = p + " is a link or junction"
+			break
+		}
+		if !fi.IsDir() {
+			why = p + " is not a folder"
+			break
+		}
+		if recorderAsService() {
+			if ok, owner := ownerIsAdmin(p); !ok {
+				why = p + " is owned by " + owner + ", not by SYSTEM or Administrators"
+				break
+			}
+		}
+	}
+	if why == "" {
+		got, err := finalPathFn(d)
+		base, err2 := finalPathFn(filepath.Dir(fc))
+		want := filepath.Join(base, filepath.Base(fc), filepath.Base(d))
+		switch {
+		case err != nil || err2 != nil:
+			why = "its final path could not be read"
+		case !samePath(got, want):
+			why = "its final path is " + got + ", not " + want
+		}
+	}
+	recorderRefusedMu.Lock()
+	defer recorderRefusedMu.Unlock()
+	if why == "" {
+		recorderRefusedLogged = ""
+		return d, true
+	}
+	if recorderRefusedLogged != why {
+		recorderRefusedLogged = why
+		writeLog("Recorder trial: the recorder folder " + d + " is not read: " + why + " (run the setup again as an administrator to make the folders anew)")
+	}
+	return d, false
+}
+
+// two paths name the same place (without case on Windows)
+func samePath(a, b string) bool {
+	a, b = filepath.Clean(a), filepath.Clean(b)
+	if filepath.Separator == '\\' {
+		return strings.EqualFold(a, b)
+	}
+	return a == b
+}
+
+// the recorder folder's .txt files (the first 50 by name); none when the folder or C:\ProgramData\FinCom fails the check
 func recorderFiles() []string {
-	d := recorderDirFn()
-	fi, err := os.Lstat(d)
-	if err != nil || !fi.IsDir() || isReparse(d, fi) {
+	d, ok := recorderDirChecked()
+	if !ok {
 		return nil
 	}
 	m, _ := filepath.Glob(filepath.Join(d, "*.txt"))
@@ -118,12 +192,10 @@ func recorderWatchOnce() {
 	}
 }
 
-// once a second while the bridge runs; nothing while the folder is not there
+// once a second while the bridge runs; nothing while the folder is not there or fails the check (recorderFiles)
 func recorderWatchLoop() {
 	for !stopping() {
-		if fi, err := os.Stat(recorderDirFn()); err == nil && fi.IsDir() {
-			recorderWatchOnce()
-		}
+		recorderWatchOnce()
 		sleepOrStop(time.Second)
 	}
 }
@@ -253,7 +325,10 @@ func recorderSendResults() (M, error) {
 	return M{"ok": true, "files": files, "lines": lines, "ref": ref}, nil
 }
 
-// round 19 (S1): the change numbers are kept in the bridge's own sync folder (not writable by Users), never in recorder\
+// round 19 (S1): the change numbers are kept in the bridge's own sync folder, never in recorder\. Round 20 (the
+// re-review's Low 3): that folder is the installing user's (the service's Home is that user's %LOCALAPPDATA%\TDS Desk
+// Bridge), so it is not writable by every member of Users, but that one user can change it; the append does not follow
+// a link (appendNoFollow)
 func changeNumbersFile() string { return sp("recorder-changenumbers.txt") }
 
 // "Recorder trial: note change numbers": FinComCompany for each company open in Tally; a company that does not answer
@@ -296,7 +371,7 @@ func recorderNoteChangeNumbers() (M, error) {
 		return nil, errors.New("No company is open in Tally: open the company, then try again.")
 	}
 	f := changeNumbersFile()
-	if err := appendText(f, b.String()); err != nil {
+	if err := appendNoFollow(f, b.String()); err != nil {
 		return nil, err
 	}
 	writeLog("Recorder trial: change numbers noted: " + strings.Join(strs(noted), "; "))

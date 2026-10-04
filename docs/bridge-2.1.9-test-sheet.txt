@@ -86,6 +86,10 @@ What is new in 2.1.9 (over 2.1.8) - the owner's rule of 04-Oct-2026: reading is 
 5b. CAN THE ADD-ON HANG OR SLOW TALLY
    The three short tests of PART 3C of the trial sheet (time saving with and without the add-on, the file locked for
    30 s while you save, the add-on unloaded without closing Tally).
+   ZZ TEST stays linked to its FinCom client. The 100 journals of "time saving" are test entries in ZZ TEST
+   (narration "FinCom bench <n>", no FinCom tag). FinCom reads no old entries, so they reach FinCom only if a ZZ TEST
+   Day Book is uploaded. Afterwards the ZZ TEST client may show "up to 100 changes not received": that is these
+   journals and is expected; nothing else is needed.
 
 6. A POSTING (unchanged)
    Do: post one bill from FinCom to ZZ TEST as in 2.1.8.

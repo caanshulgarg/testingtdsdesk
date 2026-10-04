@@ -129,6 +129,10 @@ off is instant and safe. Only ZZ TEST is touched. Three short tests, in this ord
 
 Before you start
  - Only ZZ TEST open in Tally. Bridge 2.1.9 running (FinCom icon near the clock).
+ - ZZ TEST stays linked to its FinCom client. The 100 journals of test 1 (time saving) are test
+   entries in ZZ TEST (narration "FinCom bench <n>", no FinCom tag). FinCom reads no old entries, so
+   they reach FinCom only if a ZZ TEST Day Book is uploaded. Afterwards the ZZ TEST client may show
+   "up to 100 changes not received": that is these journals and is expected.
 
 Test 1 - the time a save takes, with and without the add-on
  1a. The add-on loaded (as after PART 1).

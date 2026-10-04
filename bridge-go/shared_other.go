@@ -6,6 +6,7 @@ package main
 import (
 	"errors"
 	"os"
+	"path/filepath"
 	"syscall"
 	"time"
 )
@@ -14,6 +15,18 @@ import (
 func openShared(path string) (*os.File, error) {
 	return os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
 }
+
+// opened to append (created when missing); a link at the last element is not followed
+func openAppendNoFollow(path string) (*os.File, error) {
+	return os.OpenFile(path, os.O_WRONLY|os.O_APPEND|os.O_CREATE|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0o644)
+}
+
+// the final path of a folder, every link followed (on Windows GetFinalPathNameByHandle); a function so the tests can
+// give another
+var finalPathFn = filepath.EvalSymlinks
+
+// running as the Windows service (never here)
+func runningAsService() bool { return false }
 
 // how many names the open file has (a hard link planted to another file has more than one)
 func linkCount(f *os.File) int {
@@ -40,11 +53,18 @@ var ownerIsAdmin = func(path string) (bool, string) { return true, "" }
 
 // the recorder trial's lock: on Windows share mode 0; here (the tests) an exclusive flock for d
 func lockExclusive(path string, d time.Duration, started func()) error {
+	fi, err := os.Lstat(path)
+	if err != nil {
+		return err
+	}
 	f, err := openShared(path)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
+	if err := lockCheck(path, fi, f); err != nil {
+		return err
+	}
 	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		return errors.New("the file is held by another program: " + err.Error())
 	}

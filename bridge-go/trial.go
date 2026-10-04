@@ -42,11 +42,16 @@ func recorderLockHolding(company string) (M, error) {
 	if company != benchCompany {
 		return nil, errors.New("The holding file is locked for " + benchCompany + " only.")
 	}
+	// round 20 (the re-review's Medium 1): the recorder folder and C:\ProgramData\FinCom checked first
+	dir, ok := recorderDirChecked()
+	if !ok {
+		return nil, errors.New("The recorder folder " + recorderDirFn() + " is not there or is not safe to use (see the log): nothing is locked.")
+	}
 	guid := heldGUID(benchCompany)
 	if !plainFileName(guid) {
 		return nil, errors.New("The bridge does not hold " + benchCompany + "'s Tally GUID yet: open " + benchCompany + " in Tally, wait a minute, then try again.")
 	}
-	p := filepath.Join(recorderDirFn(), guid+".txt")
+	p := filepath.Join(dir, guid+".txt")
 	if fi, err := os.Lstat(p); err != nil || !fi.Mode().IsRegular() || isReparse(p, fi) {
 		return nil, errors.New("No holding file for " + benchCompany + " (" + p + "): load the add-on and save one voucher in " + benchCompany + " first.")
 	}
@@ -136,8 +141,10 @@ func benchStatus() M {
 	return benchLast
 }
 
-// a person's request (the tray item): no read-back afterwards (TC.bench), nothing for the cloud
-var benchTC = &TC{person: true, bench: true}
+// the tray item's requests: no read-back afterwards (TC.bench), nothing for the cloud. Round 20 (the re-review's Low 4):
+// not a "person" request: the bench sends only imports (no period), so a dated request added here later is still
+// refused while ReadDays is off
+var benchTC = &TC{bench: true}
 
 const benchDr, benchCr = "ZZ Bench Dr", "ZZ Bench Cr"
 

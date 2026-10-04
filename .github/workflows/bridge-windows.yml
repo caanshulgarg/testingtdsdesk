@@ -351,6 +351,46 @@ jobs:
           Write-Host $acl
           Check (($acl -notmatch '\(OI\)\(CI\)\(M\)') -and ($acl -match '\(OI\)\(IO\)\(M\)')) 'Users may add and change files in the recorder folder, not delete the folder'
 
+      - name: As fctest, the recorder folder (make and append a file; the folder not deleted, renamed or given a subfolder)
+        # round 20 (the re-review's Low 6): what the recorder trial needs, as a Windows user who is not an administrator
+        # (Tally's add-on runs as the desk user): a holding file made and appended in recorder\; the folder itself not
+        # deleted, renamed or given a subfolder; nothing written in addon\ or FinCom\
+        run: |
+          . "$env:RUNNER_TEMP\fc.ps1"
+          $fc = "$env:ProgramData\FinCom"; $rec = "$fc\recorder"
+          Check (Test-Path $rec) "the recorder folder is there ($rec)"
+          Check (@(Get-ChildItem $rec -Force -ErrorAction SilentlyContinue).Count -eq 0) 'the recorder folder is empty before the check (so a refused delete is the permissions, not "not empty")'
+          @'
+          $fc = Join-Path $env:ProgramData 'FinCom'; $rec = Join-Path $fc 'recorder'
+          $r = [ordered]@{}
+          function Try-It([string]$name, [scriptblock]$b) {
+            try { & $b; $r[$name] = 'done' } catch { $r[$name] = 'refused: ' + $_.Exception.Message }
+          }
+          Try-It 'deleteFolder' { [System.IO.Directory]::Delete($rec, $false) }
+          Try-It 'create' { [System.IO.File]::WriteAllText((Join-Path $rec 'fctest-check.txt'), "FCR1|first`r`n") }
+          Try-It 'append' { [System.IO.File]::AppendAllText((Join-Path $rec 'fctest-check.txt'), "FCR1|second`r`n") }
+          Try-It 'renameFolder' { [System.IO.Directory]::Move($rec, (Join-Path $fc 'recorder-renamed')) }
+          Try-It 'subfolder' { [System.IO.Directory]::CreateDirectory((Join-Path $rec 'sub')) | Out-Null }
+          Try-It 'writeAddon' { [System.IO.File]::WriteAllText((Join-Path $fc 'addon\fctest.txt'), 'x') }
+          Try-It 'writeFinCom' { [System.IO.File]::WriteAllText((Join-Path $fc 'fctest.txt'), 'x') }
+          $r | ConvertTo-Json | Set-Content C:\fcsetup\rec.json
+          '@ | Set-Content C:\fcsetup\rec.ps1
+          Remove-Item C:\fcsetup\rec.json -ErrorAction SilentlyContinue
+          $code = Invoke-AsTest 'powershell.exe' @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'C:\fcsetup\rec.ps1')
+          Check ($code -eq 0 -and (Test-Path C:\fcsetup\rec.json)) "the check ran as fctest (code $code)"
+          $r = Get-Content C:\fcsetup\rec.json -Raw | ConvertFrom-Json
+          Write-Host ($r | ConvertTo-Json)
+          Check ($r.create -eq 'done') "fctest made a file in recorder ($($r.create))"
+          Check ($r.append -eq 'done') "fctest appended to it ($($r.append))"
+          Check (((Get-Content "$rec\fctest-check.txt") -join '|') -eq 'FCR1|first|FCR1|second') 'the file holds both lines'
+          Check ($r.deleteFolder -like 'refused*') "fctest cannot delete the recorder folder ($($r.deleteFolder))"
+          Check ($r.renameFolder -like 'refused*') "fctest cannot rename the recorder folder ($($r.renameFolder))"
+          Check ($r.subfolder -like 'refused*' -and -not (Test-Path "$rec\sub")) "fctest cannot make a subfolder in it ($($r.subfolder))"
+          Check ($r.writeAddon -like 'refused*') "fctest cannot write in addon ($($r.writeAddon))"
+          Check ($r.writeFinCom -like 'refused*') "fctest cannot write in FinCom ($($r.writeFinCom))"
+          Check ((Test-Path $rec) -and -not (Test-Path "$fc\recorder-renamed")) 'the recorder folder is still in its place'
+          Remove-Item "$rec\fctest-check.txt" -Force
+
       - name: As administrator, uninstall (/S)
         run: |
           . "$env:RUNNER_TEMP\fc.ps1"

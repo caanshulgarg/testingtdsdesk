@@ -218,17 +218,29 @@ func contains(a []string, s string) bool {
 
 // --- files
 // written whole, then moved into place, so a reader never sees half a file (Save-KeepFile)
+// the rename that puts a saved file in place (a function so the tests can refuse it). os.Rename replaces the old file
+// in one step: MoveFileEx with MOVEFILE_REPLACE_EXISTING on Windows, rename(2) elsewhere
+var renameFn = os.Rename
+
+// a file written whole: the text in a temporary file beside it, then put in place by one rename. Round 20 (the
+// re-review's Low 2): the old file is never removed first; a rename refused (an antivirus or a backup holding the file)
+// is tried again a few times, and if it still fails the old file stays as it was and the temporary file goes
 func saveFile(path, text string) error {
 	_ = os.MkdirAll(filepath.Dir(path), 0o755)
 	tmp := fmt.Sprintf("%s.%d.tmp", path, os.Getpid())
 	if err := os.WriteFile(tmp, []byte(text), 0o644); err != nil {
+		_ = os.Remove(tmp)
 		return err
 	}
-	if err := os.Rename(tmp, path); err != nil {
-		_ = os.Remove(path)
-		return os.Rename(tmp, path)
+	var err error
+	for i := 0; i < 4; i++ {
+		if err = renameFn(tmp, path); err == nil {
+			return nil
+		}
+		time.Sleep(time.Duration(i+1) * 50 * time.Millisecond)
 	}
-	return nil
+	_ = os.Remove(tmp)
+	return err
 }
 func readText(f string) string {
 	b, err := os.ReadFile(f)

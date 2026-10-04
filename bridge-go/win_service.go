@@ -41,6 +41,11 @@ func (service) Execute(args []string, req <-chan svc.ChangeRequest, st chan<- sv
 				done <- 9
 			}
 		}()
+		// round 20 (the re-review's Medium 1): at the first start of a new version (a bridge that updated itself never
+		// ran the install step) the recorder trial's folders are checked and made safe, once, before anything runs
+		if exe, err := os.Executable(); err == nil {
+			foldersAfterUpdate(filepath.Dir(exe), writeLog)
+		}
 		done <- runBridge(false)
 	}()
 	go updateHealth()

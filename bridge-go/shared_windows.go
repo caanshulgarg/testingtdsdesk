@@ -6,6 +6,7 @@ package main
 import (
 	"errors"
 	"os"
+	"strings"
 	"time"
 
 	"golang.org/x/sys/windows"
@@ -26,6 +27,57 @@ func openShared(path string) (*os.File, error) {
 	}
 	return os.NewFile(uintptr(h), path), nil
 }
+
+// opened to append (created when missing), sharing read and write; a reparse point at the path is opened as itself,
+// never followed (appendNoFollow then refuses it)
+func openAppendNoFollow(path string) (*os.File, error) {
+	p, err := windows.UTF16PtrFromString(path)
+	if err != nil {
+		return nil, err
+	}
+	h, err := windows.CreateFile(p, windows.FILE_APPEND_DATA|windows.FILE_READ_ATTRIBUTES|windows.SYNCHRONIZE, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE, nil,
+		windows.OPEN_ALWAYS, windows.FILE_ATTRIBUTE_NORMAL|windows.FILE_FLAG_OPEN_REPARSE_POINT, 0)
+	if err != nil {
+		return nil, &os.PathError{Op: "open", Path: path, Err: err}
+	}
+	return os.NewFile(uintptr(h), path), nil
+}
+
+// the final path of a folder (opened with FILE_FLAG_BACKUP_SEMANTICS, every junction and link followed), as
+// GetFinalPathNameByHandle gives it, without the \\?\ prefix; a function so the tests can give another
+var finalPathFn = func(path string) (string, error) {
+	p, err := windows.UTF16PtrFromString(path)
+	if err != nil {
+		return "", err
+	}
+	h, err := windows.CreateFile(p, windows.FILE_READ_ATTRIBUTES, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil,
+		windows.OPEN_EXISTING, windows.FILE_FLAG_BACKUP_SEMANTICS, 0)
+	if err != nil {
+		return "", err
+	}
+	defer windows.CloseHandle(h)
+	buf := make([]uint16, 512)
+	for {
+		n, err := windows.GetFinalPathNameByHandle(h, &buf[0], uint32(len(buf)), 0) // FILE_NAME_NORMALIZED | VOLUME_NAME_DOS (both 0)
+		if err != nil {
+			return "", err
+		}
+		if int(n) < len(buf) {
+			s := windows.UTF16ToString(buf[:n])
+			switch {
+			case strings.HasPrefix(s, `\\?\UNC\`):
+				s = `\\` + s[len(`\\?\UNC\`):]
+			case strings.HasPrefix(s, `\\?\`):
+				s = s[len(`\\?\`):]
+			}
+			return s, nil
+		}
+		buf = make([]uint16, n+1)
+	}
+}
+
+// running as the Windows service (started by Windows as LocalSystem)
+func runningAsService() bool { return asService }
 
 func linkCount(f *os.File) int {
 	var fi windows.ByHandleFileInformation
@@ -78,11 +130,20 @@ func lockExclusive(path string, d time.Duration, started func()) error {
 	if err != nil {
 		return err
 	}
+	fi, err := os.Lstat(path)
+	if err != nil {
+		return err
+	}
 	h, err := windows.CreateFile(p, windows.GENERIC_READ, 0, nil, windows.OPEN_EXISTING, windows.FILE_ATTRIBUTE_NORMAL|windows.FILE_FLAG_OPEN_REPARSE_POINT, 0)
 	if err != nil {
 		return err
 	}
-	defer windows.CloseHandle(h)
+	// round 20 (the re-review's Low 4): the handle's file is the one looked at, with one name (os.File closes h)
+	f := os.NewFile(uintptr(h), path)
+	defer f.Close()
+	if err := lockCheck(path, fi, f); err != nil {
+		return err
+	}
 	if started != nil {
 		started()
 	}
