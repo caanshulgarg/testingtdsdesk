@@ -1154,7 +1154,7 @@ func TestRecorderVersion220Sheets(t *testing.T) {
 	}
 	sheet := strings.Join(strings.Fields(readText("../docs/bridge-2.2.0-test-sheet.txt")), " ")
 	live := strings.Join(strings.Fields(readText("../docs/recorder-live-sheet.txt")), " ")
-	for _, s := range []string{"2.2.0", `C:\ProgramData\FinCom\addon\FinComRecorder.tdl`, "Roll back to the previous version", "recorder-live-sheet.txt", "(filled in when the setup is built"} {
+	for _, s := range []string{"2.2.0", `C:\ProgramData\FinCom\addon\FinComRecorder.tdl`, "Roll back to the previous version", "recorder-live-sheet.txt"} {
 		if !strings.Contains(sheet, s) {
 			t.Errorf("the 2.2.0 test sheet does not say %q", s)
 		}
@@ -1169,6 +1169,10 @@ func TestRecorderVersion220Sheets(t *testing.T) {
 		if strings.Contains(f, "ZZ TEST") || strings.Contains(f, "GARG") {
 			t.Error("a sheet names a company")
 		}
+	}
+	// the fingerprint: the placeholder until the build, then the setup's SHA-256 (as the 2.1.10 sheet test)
+	if !strings.Contains(sheet, "(filled in when the setup is built") && !regexp.MustCompile(`Fingerprint: SHA-256 [0-9a-f]{64} \(FinComBridge-Setup-2\.2\.0\.exe`).MatchString(sheet) {
+		t.Error("the 2.2.0 test sheet has neither the fingerprint placeholder nor the setup's SHA-256")
 	}
 	al := readText("../docs/tally-allowlist.md")
 	if !regexp.MustCompile(`not yet measured[^;]*; allowed for 2\.2\.0 only by the owner's decision of \d{4}-\d{2}-\d{2}`).MatchString(al) || !strings.Contains(al, vchByMasterID) {
