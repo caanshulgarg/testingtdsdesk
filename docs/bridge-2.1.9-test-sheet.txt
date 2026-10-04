@@ -1,7 +1,7 @@
 FINCOM BRIDGE 2.1.9 - TEST SHEET (NWS144, staging)
 
 File:        FinComBridge-Setup-2.1.9.exe
-Fingerprint: (filled in when the setup is built; compare with the .sha256 file next to the setup)
+Fingerprint: SHA-256 73bd1aa52f7078da3187da850fc3c98f307a862d66d5355b519cbc7ce8be630a (FinComBridge-Setup-2.1.9.exe; compare with the .sha256 file next to the setup)
 Link:        https://staging.fincom.live/review/assets/bridge-go/FinComBridge-Setup-2.1.9.exe
 (2.1.8 is installed on NWS144. Install 2.1.9 over it; the installer replaces the program and keeps the pairing, the
  settings and the copy.)
